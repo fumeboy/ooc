@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<config>
+  <ai>
+    <provider>zhipuai</provider>
+    <api_key>8341a4f7be8d48dcb698529953e3360f.KiHiuRNcZjC1J0Kj</api_key>
+    <base_url>https://open.bigmodel.cn/api/coding/paas/v4/</base_url>
+    <model>glm-4.6</model>
+    <max_tokens>40000</max_tokens>
+    <timeout>300</timeout>
+  </ai>
+</config>
