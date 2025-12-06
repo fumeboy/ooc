@@ -1,0 +1,136 @@
+// Package server 提供 HTTP API 服务。
+package server
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+
+	"ooc/internal/agent"
+	"ooc/internal/session"
+
+	"github.com/labstack/echo/v4"
+)
+
+// ConversationResponse 获取 Conversation 的响应。
+type ConversationResponse struct {
+	ID        string                  `json:"id"`
+	From      string                  `json:"from"`
+	To        string                  `json:"to"`
+	Title     string                  `json:"title,omitempty"`
+	Desc      string                  `json:"desc,omitempty"`
+	Request   CommonParamsResponse    `json:"request"`
+	Response  CommonParamsResponse    `json:"response"`
+	Questions []QuestionResponse      `json:"questions"`
+	Actions   []ActionResponse        `json:"actions"`
+	Status    string                  `json:"status"`
+	Error     string                  `json:"error,omitempty"` // 错误信息（当 Status 为 error 时）
+}
+
+// CommonParamsResponse CommonParams 的响应格式。
+type CommonParamsResponse struct {
+	Title      string            `json:"title,omitempty"`
+	Content    string            `json:"content,omitempty"`
+	References map[string]string `json:"references,omitempty"`
+}
+
+// QuestionResponse Question 的响应格式。
+type QuestionResponse struct {
+	ID       int64                `json:"id"`
+	Question CommonParamsResponse `json:"question"`
+	Answer   CommonParamsResponse `json:"answer"`
+}
+
+// ActionResponse Action 的响应格式。
+type ActionResponse struct {
+	Typ string `json:"typ"` // talk or act
+
+	// when typ is talk
+	ConversationID string `json:"conversation_id,omitempty"`
+
+	// when typ is act
+	Object   string          `json:"object,omitempty"`
+	Method   string          `json:"method,omitempty"`
+	Request  json.RawMessage  `json:"request,omitempty"`
+	Response CommonParamsResponse `json:"response,omitempty"`
+}
+
+// GetConversation 获取 Conversation 详细信息（GET /sessions/{id}/conversations/{conversation_id}）。
+func (s *Server) GetConversation(c echo.Context) error {
+	sessionID := session.SessionID(c.Param("id"))
+	conversationID := agent.ConversationID(c.Param("conversation_id"))
+
+	// 验证 Session 存在。
+	sess, ok := s.store.GetSession(sessionID)
+	if !ok {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": fmt.Sprintf("session %s not found", sessionID)})
+	}
+
+	// 获取 Conversation。
+	registry := agent.GetRegistry(sess.Engine)
+	conv, ok := registry.GetConversation(conversationID)
+	if !ok {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": fmt.Sprintf("conversation %s not found", conversationID)})
+	}
+
+	// 构建响应。
+	questions := make([]QuestionResponse, len(conv.Questions))
+	for i, q := range conv.Questions {
+		questions[i] = QuestionResponse{
+			ID: q.Id,
+			Question: CommonParamsResponse{
+				Title:      q.Question.Title,
+				Content:    q.Question.Content,
+				References: q.Question.References,
+			},
+			Answer: CommonParamsResponse{
+				Title:      q.Answer.Title,
+				Content:    q.Answer.Content,
+				References: q.Answer.References,
+			},
+		}
+	}
+
+	actions := make([]ActionResponse, len(conv.Actions))
+	for i, a := range conv.Actions {
+		actionResp := ActionResponse{
+			Typ: a.Typ,
+		}
+		if a.Typ == "talk" {
+			actionResp.ConversationID = string(a.ConversationID)
+		} else if a.Typ == "act" {
+			actionResp.Object = string(a.Object)
+			actionResp.Method = a.Method
+			actionResp.Request = a.Request
+			actionResp.Response = CommonParamsResponse{
+				Title:      a.Response.Title,
+				Content:    a.Response.Content,
+				References: a.Response.References,
+			}
+		}
+		actions[i] = actionResp
+	}
+
+	return c.JSON(http.StatusOK, ConversationResponse{
+		ID:    string(conv.ID),
+		From:  string(conv.From),
+		To:    string(conv.To),
+		Title: conv.Title,
+		Desc:  conv.Desc,
+		Request: CommonParamsResponse{
+			Title:      conv.Request.Title,
+			Content:    conv.Request.Content,
+			References: conv.Request.References,
+		},
+		Response: CommonParamsResponse{
+			Title:      conv.Response.Title,
+			Content:    conv.Response.Content,
+			References: conv.Response.References,
+		},
+		Questions: questions,
+		Actions:   actions,
+		Status:    conv.Status,
+		Error:     conv.Error,
+	})
+}
+

@@ -1,0 +1,10 @@
+conversation copy for talk after respond
+test storybook
+impl frontend
+
+TODO
+1. 允许在 conversation 的 prompt 中告知 conv From 信息
+2. 允许信息对象 Talk With User，实现逻辑和 向 User 发起 Ask 类似
+3. 原来的 LLM 附身功能进行更通用化的升级：使 Conversation 支持三种模式：人工模式（由用户进行输入和回复），也可以支持“托管”模式，令 Root Conversation 执行 thinkloop 由 LLM 进行自动行动，也可以支持 “半托管” 模式，由 LLM 给出要执行的行动，然后由用户确认（可以修改）后再执行；原先的 LLM 附身功能相当于对所有 conversation 开启了 半托管 模式，保留原来的 LLM 附身开关，开启时，所有 conversation 都进入 半托管 模式
+4. session 的 root conversation 默认为 人工模式，当前的 server.ContinueConversation 相当于是发起一次 Talk With System 行动 
+5. 修改前端界面，原来的 Continue 输入窗口、LLM Requests 界面 整合到新的界面，这个界面用于处理 人工模式和半人工模式 的 think 请求

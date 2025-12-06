@@ -51,18 +51,7 @@ Conversation 的 思考循环 过程中，不需要告诉 LLM Conversation.From 
 4. Ask: 当 LLM 需要向 Conversation.From 对象询问问题时，LLM 会输出特殊的 Method: Ask 来询问问题，Conversation.From 对象会收到 Ask 消息，并返回回答
 5. Focus: 当 LLM 需要聚焦到一个子问题时，可以通过该方法创建一个 子 Conversation，这个 Conversation 的 From 和 To 都是自己，Content 是子问题，Ref 由 LLM 根据当前上下文生成
 
-Conversation 的 LLM 在执行 Method 时，并不直接构造 Method 的 Arguments，毕竟构造 LLM 的输入时，只告诉了它 Method 的 Name 和 Description，并没有告诉它 Method 的 Parameters，因此执行 Method 时，还会再次创建一个 Action 对象
-
-Action 由四个参数构造:
-    From 参数：从哪个 Conversation 中发起的 Action
-    Object: 要执行 Method 的可交互信息对象
-    Method: 要执行的 Method
-    Request: 自然语言描述的 执行 Method 的请求
-    References: 可能和这次方法执行有关的可交互信息对象列表
-
-Action 可以认为是特殊化的、更专注于方法执行的 Conversation
-它一样具有思考循环过程，也和 Conversation 具有完全一样的行为逻辑，Action 思考过程中，也可以和其他可交互信息对象进行 Talk 交互来得到更多信息以构造 Method 的 Arguments
-和 Conversation 唯一的区别只是 Action 输入给 LLM 的上下文中，还会展示要执行的这个 Method 的 Document 和 Parameters 信息
+Conversation 的 LLM 在执行 Conversation.To 这个信息对象的 Method 时，并不直接构造 Method 的 Arguments，毕竟构造 LLM 的输入时，只告诉了它 Method 的 Name 和 Description，并没有告诉它 Method 的 Parameters，因此要执行 Method 前，还会再次创建一个 Conversation 对象，这个过程通过 Talk With Method 来实现：Method 也是一个信息对象，当 Method 作为 Conversation.To 时，上下文会展示这个 Method 的完整文档和参数，LLM 可以基于这个信息构造 Method 的 Arguments
 
 ## 用户交互
 
