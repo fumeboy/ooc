@@ -38,17 +38,17 @@ func (s *Server) RegisterRoutes(e *echo.Echo) {
 	api.POST("/sessions", s.CreateSession)
 	api.GET("/sessions", s.ListSessions)
 	api.GET("/sessions/:id", s.GetSession)
-	api.POST("/sessions/:id/continue", s.ContinueConversation)
-	api.POST("/sessions/:id/ask", s.AnswerAsk)
+	api.POST("/sessions/:id/talk", s.Talk)
+	api.POST("/sessions/:id/answer", s.Answer)
 	api.GET("/sessions/:id/info/:info_id", s.GetInfo)
 	api.GET("/sessions/:id/infos", s.ListInfos)
 	api.GET("/sessions/:id/conversations", s.ListConversations)
 	api.GET("/sessions/:id/conversations/:conversation_id", s.GetConversation)
 
 	// 附身功能相关路由
-	api.POST("/sessions/:id/possess", s.StartPossess)
-	api.GET("/sessions/:id/possess/request", s.GetPossessRequest)
-	api.POST("/sessions/:id/possess/respond", s.RespondPossess)
+	api.POST("/sessions/:id/possess", s.SetPossess)
+	api.GET("/sessions/:id/waiting_manual_conversations", s.GetWaitingManualConversations)
+	api.POST("/sessions/:id/manual_think", s.RespondManualThink)
 
 	// 配置信息路由
 	api.GET("/conf", s.GetConfig)

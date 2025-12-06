@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"ooc/internal/client/llm"
 )
@@ -22,14 +23,17 @@ type Engine struct {
 	executor     *ModuleManager
 	maxLoopCount int
 
-	conversations []*Conversation // 用户与系统的对话列表（From: User, To: System）
-	mu            sync.Mutex      // 保护 conversations 的并发访问
-
-	// 附身功能相关字段
-	possessCallback PossessCallback // 附身回调函数，用于保存请求到 Session（nil 表示未附身）
+	User *UserInfo // User 信息对象，管理所有与 User 相关的 Conversation
 
 	// Session 状态更新回调（当 conversation 状态变化时调用）
 	sessionStatusCallback func(status string)
+
+	// 状态监听：当 Conversation 状态变更为 StatusRunning 时，自动启动 thinkloop
+	runningConversations map[ConversationID]*Conversation
+	runningMu            sync.Mutex
+
+	// 附身功能相关字段
+	Possessed bool // 是否全局开启半托管模式
 }
 
 // PossessRequest 附身请求，等待用户回复。
@@ -56,12 +60,21 @@ func New(client llm.Client) *Engine {
 		registry:  reg,
 		providers: make(map[string]ModuleProvider),
 	}
-	var e = &Engine{
-		registry: reg,
-		llm:      client,
-		executor: m,
+
+	userInfo := &UserInfo{
+		engine:        nil, // 稍后设置
+		conversations: make([]*Conversation, 0),
 	}
 
+	var e = &Engine{
+		registry:             reg,
+		llm:                  client,
+		executor:             m,
+		User:                 userInfo,
+		runningConversations: make(map[ConversationID]*Conversation),
+	}
+
+	userInfo.engine = e
 	m.Register(&ModuleBase{e: e})
 	return e
 }
@@ -75,76 +88,44 @@ func (e *Engine) SetSessionStatusCallback(callback func(status string)) {
 	e.sessionStatusCallback = callback
 }
 
-// updateSessionStatusOnError 更新 Session 状态为失败。
-func (e *Engine) updateSessionStatusOnError() {
-	if e.sessionStatusCallback != nil {
-		e.sessionStatusCallback("failed")
-	}
-}
-
-// SetPossess 设置附身状态。
-func (e *Engine) SetPossess(possess bool, callback PossessCallback) {
-	if possess {
-		e.possessCallback = callback
-	} else {
-		e.possessCallback = nil
-	}
-}
-
-// IsPossessed 检查是否处于附身状态。
-func (e *Engine) IsPossessed() bool {
-	return e.possessCallback != nil
-}
-
-func (e *Engine) Run(UserRequest CommonParams) {
-	// 如果提供了初始请求，立即创建 conversation
-	if UserRequest.Content != "" {
-		e.Continue(UserRequest)
-	}
-}
-
-// Continue 用户继续对话，创建新的 conversation（From: User, To: System）
-func (e *Engine) Continue(userRequest CommonParams) {
-	// 创建新的 conversation（From: User, To: System）
-	conv := &Conversation{
-		engine: e,
-		From:   WrapInfoID("user", "User"),
-		To:     WrapInfoID("system", "System"),
-		Request: CommonParams{
-			Title:      userRequest.Title,
-			Content:    userRequest.Content,
-			References: userRequest.References,
-		},
+// UserTalk 让 User 执行一次 Talk 方法
+// 创建一个临时的 conversation（From: User），然后执行 Talk 方法
+func (e *Engine) UserTalk(talkWith string, title string, content string, references map[string]string) (ConversationID, error) {
+	// 执行 Talk 方法
+	methodTalk := &MethodTalk{
+		e:          e,
+		Title:      title,
+		Content:    content,
+		References: references,
+		TalkWith:   talkWith,
 	}
 
-	_, _ = e.registry.RegisterConversation(conv)
-
-	// 添加到 conversations 列表
-	e.mu.Lock()
-	e.conversations = append(e.conversations, conv)
-	e.mu.Unlock()
-
-	// 执行思考循环
-	go e.ThinkLoop(conv)
-}
-
-// GetLastConversationID 获取最后一个 conversation 的 ID
-func (e *Engine) GetLastConversationID() ConversationID {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if len(e.conversations) == 0 {
-		return ""
+	action, err := methodTalk.execute(WrapInfoID2(e.User))
+	if err != nil {
+		return "", fmt.Errorf("execute talk failed: %w", err)
 	}
-	return e.conversations[len(e.conversations)-1].ID
+
+	return action.ConversationID, nil
 }
 
-// GetConversations 获取所有 conversation 列表
+// GetLastConversationCreatedByUser 获取 User 作为 From 创建的最后一个 conversation 的 ID
+func (e *Engine) GetLastConversationCreatedByUser() ConversationID {
+	userID := WrapInfoID("user", "user")
+	convs := e.User.GetConversations()
+
+	// 从后往前查找，找到最后一个 User 作为 From 的 conversation
+	for i := len(convs) - 1; i >= 0; i-- {
+		if convs[i].From == userID {
+			return convs[i].ID
+		}
+	}
+
+	return ""
+}
+
+// GetConversations 获取 User 的所有 conversation 列表
 func (e *Engine) GetConversations() []*Conversation {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	result := make([]*Conversation, len(e.conversations))
-	copy(result, e.conversations)
-	return result
+	return e.User.GetConversations()
 }
 
 func (e *Engine) Answer(convID ConversationID, QuestionID int64, Answer CommonParams) {
@@ -162,23 +143,32 @@ func (e *Engine) Answer(convID ConversationID, QuestionID int64, Answer CommonPa
 		}
 	}
 	conv.UpdateStatus()
-	go e.ThinkLoop(conv)
+
+	// 如果状态变为 StatusRunning，触发 thinkloop
+	if conv.Status == StatusRunning {
+		e.NotifyConversationRunning(conv)
+	}
 }
 
-// ResumePossess 恢复附身后的思考循环（用户回复后调用）。
-func (e *Engine) ResumePossess(convID ConversationID, possessResp *PossessResponse) error {
-	if possessResp.Error != nil {
-		return fmt.Errorf("possess response error: %w", possessResp.Error)
-	}
-
+// ResumeManualThink 恢复手动思考（用户回复后调用）。
+// 用于处理 StatusWaitingManualThink 状态的 conversation
+func (e *Engine) ResumeManualThink(convID ConversationID, method string, parameters json.RawMessage) error {
 	// 获取指定的 conversation
 	conv, ok := e.registry.GetConversation(convID)
 	if !ok {
 		return fmt.Errorf("conversation %s not found", convID)
 	}
 
+	if conv.Status != StatusWaitingManualThink {
+		return fmt.Errorf("conversation %s is not in waiting_manual_think status", convID)
+	}
+
+	// 清除等待手动思考的请求
+	conv.WaitingManualThinkRequest = nil
+	conv.Status = StatusRunning
+
 	// 使用用户确认/修改后的结果执行方法
-	action, err := e.executor.ExecuteMethod(possessResp.Method, conv, possessResp.Parameters)
+	action, err := e.executor.ExecuteMethod(method, conv, parameters)
 	if err != nil {
 		return fmt.Errorf("execute method failed: %w", err)
 	}
@@ -186,10 +176,13 @@ func (e *Engine) ResumePossess(convID ConversationID, possessResp *PossessRespon
 	// respond 等特殊方法没有返回 Action，无需处理
 	if action != nil {
 		conv.Actions = append(conv.Actions, action)
+		conv.UpdatedAt = time.Now()
 	}
 
-	// 继续思考循环
-	go e.ThinkLoop(conv)
+	if conv.Status == StatusRunning {
+		e.NotifyConversationRunning(conv)
+	}
+
 	return nil
 }
 
@@ -247,7 +240,33 @@ func (e *Engine) Think(conv *Conversation) error {
 		}
 	}
 
-	// 3. 先调用 LLM 获取输出
+	toolNames := make([]string, len(tools))
+	for i, tool := range tools {
+		toolNames[i] = tool.Name
+	}
+
+	// 3. 检查 Conversation 的模式
+	actualMode := conv.Mode
+	if actualMode == "" {
+		actualMode = ConversationModeHosted // 默认为自动托管模式
+	}
+
+	// 如果 Engine.Possessed 为 true 且当前 conversation 的 mode 为 hosted，则变更为 semi_hosted
+	if e.Possessed && actualMode == ConversationModeHosted {
+		actualMode = ConversationModeSemiHosted
+	}
+
+	if actualMode == ConversationModeManual {
+		conv.Status = StatusWaitingManualThink
+		conv.WaitingManualThinkRequest = &ManualThinkRequest{
+			ConversationID: conv.ID,
+			Prompt:         req,
+			Tools:          toolNames,
+		}
+		return nil
+	}
+
+	// 4. 调用 LLM 获取输出
 	resp, err := e.llm.Call(&llm.Request{
 		Prompt: req,
 		Tools:  tools,
@@ -256,30 +275,24 @@ func (e *Engine) Think(conv *Conversation) error {
 		return fmt.Errorf("llm call failed: %w", err)
 	}
 
-	// 4. 检查是否处于附身状态
-	if e.possessCallback != nil {
-		// 附身模式：将 LLM 输出转发给用户，等待用户确认/修改
-		toolNames := make([]string, len(tools))
-		for i, tool := range tools {
-			toolNames[i] = tool.Name
-		}
+	// 半托管模式：设置状态为 StatusWaitingManualThink，记录 LLM 输出
+	if actualMode == ConversationModeSemiHosted {
 
-		possessReq := &PossessRequest{
+		conv.Status = StatusWaitingManualThink
+		conv.WaitingManualThinkRequest = &ManualThinkRequest{
 			ConversationID: conv.ID,
 			Prompt:         req,
 			Tools:          toolNames,
 			LLMMethod:      resp.Method,
 			LLMParams:      resp.Parameters,
 		}
+		conv.UpdatedAt = time.Now()
 
-		// 调用回调函数保存请求到 Session
-		e.possessCallback(possessReq)
-
-		// 返回特殊错误让 ThinkLoop 退出，等待用户回复
-		return fmt.Errorf("possess_request_sent")
+		// 退出 thinkloop，等待用户手动思考
+		return nil
 	}
 
-	// 正常模式：直接使用 LLM 输出
+	// 托管模式：直接使用 LLM 输出
 
 	// 5. 处理响应
 	action, err := e.executor.ExecuteMethod(resp.Method, conv, json.RawMessage(resp.Parameters))
@@ -297,100 +310,111 @@ func (e *Engine) Think(conv *Conversation) error {
 	return nil
 }
 
+// NotifyConversationRunning 当 Conversation 状态变更为 StatusRunning 时，启动 thinkloop
+func (e *Engine) NotifyConversationRunning(conv *Conversation) {
+	e.runningMu.Lock()
+	defer e.runningMu.Unlock()
+
+	// 检查是否已经在运行
+	if _, exists := e.runningConversations[conv.ID]; exists {
+		return
+	}
+
+	// 记录正在运行的 conversation
+	e.runningConversations[conv.ID] = conv
+
+	// 启动 thinkloop
+	go func() {
+		defer func() {
+			e.runningMu.Lock()
+			delete(e.runningConversations, conv.ID)
+			e.runningMu.Unlock()
+		}()
+		e.ThinkLoop(conv)
+	}()
+}
+
 // ThinkLoop 执行思考循环，直到对话完成或遇到 Ask。
-func (e *Engine) ThinkLoop(conv *Conversation) error {
+// 根据 Conversation 的模式决定是否自动执行：
+// - 人工模式：不自动执行，等待用户手动触发 Think
+// - 托管模式：自动执行思考循环
+// - 半托管模式：自动执行，但在执行 Method 前等待用户确认
+func (e *Engine) ThinkLoop(conv *Conversation) (err error) {
+	// 使用 defer 统一处理 session 状态更新
+	defer func() {
+		// thinkloop 结束时更新 session 状态
+		e.updateSessionStatus()
+	}()
+
+	// 托管模式或半托管模式：自动执行思考循环
 	for ; e.maxLoopCount < 300; e.maxLoopCount++ {
 		// 如果对话已完成、等待用户或出错，直接返回。
 		if conv.Status == StatusCompleted {
-			// 检查是否是用户与系统的对话（From: User, To: System），如果是，更新 session 状态
-			e.checkAndUpdateSessionStatus(conv)
 			return nil
 		}
 		if conv.Status == StatusWaitingAnswer {
-			// 检查是否是用户与系统的对话，如果是，更新 session 状态
-			if e.isUserSystemConversation(conv) {
-				if e.sessionStatusCallback != nil {
-					e.sessionStatusCallback("waiting_answer")
-				}
-			}
+			return nil
+		}
+		if conv.Status == StatusWaitingManualThink {
 			return nil
 		}
 		if conv.Status == StatusError {
-			return fmt.Errorf("conversation error: %s", conv.Error)
-		}
-
-		// 执行一次思考。
-		err := e.Think(conv)
-		if err != nil {
-			// 检查是否是附身请求发送错误（需要退出循环等待用户回复）
-			if err.Error() == "possess_request_sent" {
-				// 如果是用户与系统的对话，需要更新 session 状态为 waiting_possess
-				if e.isUserSystemConversation(conv) {
-					if e.sessionStatusCallback != nil {
-						e.sessionStatusCallback("waiting_possess")
-					}
-				}
-				// 退出循环，等待用户回复
-				return nil
-			}
-			// 其他错误：设置错误状态
-			conv.Status = StatusError
-			conv.Error = err.Error()
-			// 如果是用户与系统的对话，需要更新 session 状态
-			if e.isUserSystemConversation(conv) {
-				e.updateSessionStatusOnError()
-			}
+			err = fmt.Errorf("conversation error: %s", conv.Error)
 			return err
 		}
 
-		if conv.Status == StatusCompleted {
-			// 检查是否是用户与系统的对话，如果是，更新 session 状态
-			e.checkAndUpdateSessionStatus(conv)
-			return nil
-		}
-		if conv.Status == StatusWaitingAnswer {
-			// 检查是否是用户与系统的对话，如果是，更新 session 状态
-			if e.isUserSystemConversation(conv) {
-				if e.sessionStatusCallback != nil {
-					e.sessionStatusCallback("waiting_answer")
-				}
-			}
-			return nil
-		}
-		if conv.Status == StatusError {
-			return fmt.Errorf("conversation error: %s", conv.Error)
+		// 执行一次思考。
+		err = e.Think(conv)
+		if err != nil {
+			conv.Status = StatusError
+			conv.Error = err.Error()
+			return err
 		}
 
 		// 继续循环
 	}
 
 	// 超时错误
-	err := fmt.Errorf("think loop timeout")
+	err = fmt.Errorf("think loop timeout")
 	conv.Status = StatusError
 	conv.Error = err.Error()
-	// 如果是用户与系统的对话，需要更新 session 状态
-	if e.isUserSystemConversation(conv) {
-		e.updateSessionStatusOnError()
-	}
 	return err
 }
 
-// isUserSystemConversation 检查 conversation 是否是用户与系统的对话（From: User, To: System）
-func (e *Engine) isUserSystemConversation(conv *Conversation) bool {
-	return conv.From == WrapInfoID("user", "User") && conv.To == WrapInfoID("system", "System")
-}
-
-// checkAndUpdateSessionStatus 检查并更新 session 状态
-func (e *Engine) checkAndUpdateSessionStatus(conv *Conversation) {
+// updateSessionStatus 根据 UserInfo 的 Conversations 状态聚合更新 session 状态
+// 状态优先级从高到低为：waiting_manual_think、waiting_answer、running、error、completed
+func (e *Engine) updateSessionStatus() {
 	if e.sessionStatusCallback == nil {
 		return
 	}
 
-	// 如果是用户与系统的对话且已完成，更新 session 状态
-	if e.isUserSystemConversation(conv) && conv.Status == StatusCompleted {
-		// 检查是否有 response，如果有，说明已经 respond
-		if conv.Response.Content != "" {
-			e.sessionStatusCallback("completed")
+	conversations := e.User.GetConversations()
+	if len(conversations) == 0 {
+		return
+	}
+
+	// 状态优先级映射：数字越小优先级越高
+	statusPriority := map[string]int{
+		StatusWaitingManualThink: 1,
+		StatusWaitingAnswer:      2,
+		StatusRunning:            3,
+		StatusError:              4,
+		StatusCompleted:          5,
+	}
+
+	// 找到最高优先级的状态
+	highestPriority := 999
+	highestStatus := ""
+	for _, conv := range conversations {
+		priority, exists := statusPriority[conv.Status]
+		if exists && priority < highestPriority {
+			highestPriority = priority
+			highestStatus = conv.Status
 		}
+	}
+
+	// 如果找到了状态，更新 session
+	if highestStatus != "" {
+		e.sessionStatusCallback(highestStatus)
 	}
 }

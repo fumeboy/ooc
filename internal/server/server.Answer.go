@@ -11,16 +11,16 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// AskRequest 用户回答 Ask 的请求。
-type AskRequest struct {
+// AnswerRequest 用户回答 Ask 的请求。
+type AnswerRequest struct {
 	ConversationID string            `json:"conversation_id"` // 对话 ID（多轮交互下需要指定）
 	QuestionId     int64             `json:"question_id"`
 	Answer         string            `json:"answer"`
 	References     map[string]string `json:"references,omitempty"` // key = info id, value = reason
 }
 
-// AnswerAsk 用户回答 Ask（POST /sessions/{id}/ask）。
-func (s *Server) AnswerAsk(c echo.Context) error {
+// Answer 用户回答 Ask（POST /sessions/{id}/answer）。
+func (s *Server) Answer(c echo.Context) error {
 	sessionID := session.SessionID(c.Param("id"))
 
 	sess, ok := s.store.GetSession(sessionID)
@@ -31,7 +31,7 @@ func (s *Server) AnswerAsk(c echo.Context) error {
 	engine := sess.Engine
 
 	// 解析请求。
-	var req AskRequest
+	var req AnswerRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("invalid request: %v", err)})
 	}

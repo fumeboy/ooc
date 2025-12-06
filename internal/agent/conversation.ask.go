@@ -51,8 +51,6 @@ func (l *MethodAsk) Parameters() string {
 	}`
 }
 
-const StatusWaitingAnswer = "waiting_answer"
-
 func (t *MethodAsk) Execute(conv *Conversation) (*Action, error) {
 	conv.Questions = append(conv.Questions, &Question{
 		Id: int64(len(conv.Questions)) + 1,

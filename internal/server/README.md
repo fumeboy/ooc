@@ -9,14 +9,14 @@
 ## 路由
 - `POST /sessions`：创建 Session
 - `GET /sessions/{id}`：查询 Session 状态。
-- `POST /sessions/{id}/ask`：用户回答 Ask。
+- `POST /sessions/{id}/answer`：用户回答 Ask。
 - `GET /sessions/{id}/info/{info_id}`：获取 Session 下的 Info 信息。
 
 ## 文件结构（遵循单一职责原则）
 - `server.go`：基础文件，包含 Server 结构体、NewServer、RegisterRoutes、辅助方法
 - `server.CreateSession.go`：CreateSession 方法实现（POST /sessions）。
 - `server.GetSession.go`：GetSession 方法实现（GET /sessions/{id}）。
-- `server.AnswerAsk.go`：AnswerAsk 方法实现（POST /sessions/{id}/ask）。
+- `server.AnswerAsk.go`：AnswerAsk 方法实现（POST /sessions/{id}/answer）。
 - `server.GetInfo.go`：GetInfo 方法实现（GET /sessions/{id}/info/{info_id}）。
 
 ## 核心实现

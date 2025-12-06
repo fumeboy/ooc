@@ -3,6 +3,7 @@ package server
 
 import (
 	"net/http"
+	"time"
 
 	"ooc/internal/agent"
 	"ooc/internal/session"
@@ -82,7 +83,19 @@ func (s *Server) conversationToResponse(conv *agent.Conversation) ConversationRe
 		actions[i] = actionResp
 	}
 
-	return ConversationResponse{
+	mode := string(conv.Mode)
+	if mode == "" {
+		mode = string(agent.ConversationModeHosted)
+	}
+
+	// 格式化 UpdatedAt 为 ISO 8601 格式
+	updatedAtStr := conv.UpdatedAt.Format(time.RFC3339)
+	if conv.UpdatedAt.IsZero() {
+		// 如果 UpdatedAt 为零值，使用当前时间
+		updatedAtStr = time.Now().Format(time.RFC3339)
+	}
+
+	response := ConversationResponse{
 		ID:    string(conv.ID),
 		From:  string(conv.From),
 		To:    string(conv.To),
@@ -102,6 +115,20 @@ func (s *Server) conversationToResponse(conv *agent.Conversation) ConversationRe
 		Actions:   actions,
 		Status:    conv.Status,
 		Error:     conv.Error,
+		Mode:      mode,
+		UpdatedAt: updatedAtStr,
 	}
-}
 
+	// 如果状态是 waiting_manual_think，包含 ManualThinkRequest
+	if conv.Status == agent.StatusWaitingManualThink && conv.WaitingManualThinkRequest != nil {
+		response.WaitingManualThinkRequest = &ManualThinkRequestResponse{
+			ConversationID: string(conv.WaitingManualThinkRequest.ConversationID),
+			Prompt:         conv.WaitingManualThinkRequest.Prompt,
+			Tools:          conv.WaitingManualThinkRequest.Tools,
+			LLMMethod:      conv.WaitingManualThinkRequest.LLMMethod,
+			LLMParams:      conv.WaitingManualThinkRequest.LLMParams,
+		}
+	}
+
+	return response
+}

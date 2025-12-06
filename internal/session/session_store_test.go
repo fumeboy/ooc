@@ -5,28 +5,24 @@ import "testing"
 // TestMemoryStoreSaveLoad 验证会话保存与加载流程。
 func TestMemoryStoreSaveLoad(t *testing.T) {
 	store := NewMemoryStore()
-	sess := &Session{
-		UserRequest: "Hello",
-	}
+	sess := &Session{}
 
 	id, err := store.SaveSession(sess)
 	if err != nil {
 		t.Fatalf("save session failed: %v", err)
 	}
 
-	loaded, ok := store.GetSession(id)
+	_, ok := store.GetSession(id)
 	if !ok {
 		t.Fatalf("session not found")
 	}
-	if loaded.UserRequest != sess.UserRequest {
-		t.Fatalf("unexpected user request")
-	}
+	// UserRequest 字段已移除，测试通过
 }
 
 // TestMemoryStoreAppendEvent 验证事件追加与顺序。
 func TestMemoryStoreAppendEvent(t *testing.T) {
 	store := NewMemoryStore()
-	id, err := store.SaveSession(&Session{UserRequest: "Goal"})
+	id, err := store.SaveSession(&Session{})
 	if err != nil {
 		t.Fatalf("save session failed: %v", err)
 	}

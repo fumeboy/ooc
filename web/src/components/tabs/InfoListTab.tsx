@@ -4,6 +4,7 @@ import type { InfoListItem, Info } from '../../types/api'
 
 interface InfoListTabProps {
   sessionId: string
+  onViewConversation?: (conversationId: string) => void
 }
 
 export default function InfoListTab({ sessionId, onViewConversation }: InfoListTabProps) {

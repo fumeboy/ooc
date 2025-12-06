@@ -13,10 +13,14 @@ import type {
   Info,
   ListInfosResponse,
   AskRequest,
-  StartPossessRequest,
-  StartPossessResponse,
+  SetPossessRequest,
+  SetPossessResponse,
   GetPossessRequestResponse,
   RespondPossessRequest,
+  TalkRequest,
+  TalkResponse,
+  RespondManualThinkRequest,
+  GetWaitingManualConversationsResponse,
   ContinueConversationRequest,
   ConfigResponse,
 } from '../types/api';
@@ -110,7 +114,7 @@ export const conversationApi = {
    * 回答 Ask 问题
    */
   answerAsk: (sessionId: string, data: AskRequest): Promise<void> => {
-    return request<void>(`/sessions/${sessionId}/ask`, {
+    return request<void>(`/sessions/${sessionId}/answer`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -139,28 +143,63 @@ export const infoApi = {
   },
 };
 
+// ========== Talk API ==========
+
+export const talkApi = {
+  /**
+   * 用户发起 Talk
+   */
+  talk: (sessionId: string, data: TalkRequest): Promise<TalkResponse> => {
+    return request<TalkResponse>(`/sessions/${sessionId}/talk`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+// ========== Manual Think API ==========
+
+export const manualThinkApi = {
+  /**
+   * 获取等待手动思考的 conversations
+   */
+  getWaitingManualConversations: (sessionId: string): Promise<GetWaitingManualConversationsResponse> => {
+    return request<GetWaitingManualConversationsResponse>(`/sessions/${sessionId}/waiting_manual_conversations`);
+  },
+
+  /**
+   * 回复手动思考请求
+   */
+  respond: (sessionId: string, data: RespondManualThinkRequest): Promise<void> => {
+    return request<void>(`/sessions/${sessionId}/manual_think`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 // ========== Possess API ==========
 
 export const possessApi = {
   /**
-   * 开始或停止附身
+   * 设置附身状态
    */
-  start: (sessionId: string, data: StartPossessRequest): Promise<StartPossessResponse> => {
-    return request<StartPossessResponse>(`/sessions/${sessionId}/possess`, {
+  setPossess: (sessionId: string, data: SetPossessRequest): Promise<SetPossessResponse> => {
+    return request<SetPossessResponse>(`/sessions/${sessionId}/possess`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   },
 
   /**
-   * 获取当前的附身请求
+   * 获取当前的附身请求（已废弃，使用 manualThinkApi.getWaitingManualConversations）
    */
   getRequest: (sessionId: string): Promise<GetPossessRequestResponse> => {
     return request<GetPossessRequestResponse>(`/sessions/${sessionId}/possess/request`);
   },
 
   /**
-   * 回复附身请求
+   * 回复附身请求（已废弃，使用 manualThinkApi.respond）
    */
   respond: (sessionId: string, data: RespondPossessRequest): Promise<void> => {
     return request<void>(`/sessions/${sessionId}/possess/respond`, {

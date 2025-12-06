@@ -1,6 +1,8 @@
 // Package agent 的 conversation.focus.go 处理 Focus 特殊方法。
 package agent
 
+import "time"
+
 type MethodRespond struct {
 	e          *Engine
 	Content    string            `json:"content,omitempty"`
@@ -63,9 +65,6 @@ func (l *MethodRespond) Parameters() string {
 	}`
 }
 
-const StatusCompleted = "completed"
-const StatusError = "error"
-
 func (t *MethodRespond) Execute(conv *Conversation) (*Action, error) {
 	conv.Response = CommonParams{
 		Content:    t.Content,
@@ -78,6 +77,21 @@ func (t *MethodRespond) Execute(conv *Conversation) (*Action, error) {
 	}
 
 	conv.Status = StatusCompleted
+	conv.UpdatedAt = time.Now()
+
+	// 通知发起方：如果发起方是 Conversation，将其从 StatusWaitingRespond 切换为 StatusRunning
+	fromInfo, ok := conv.engine.registry.GetInfo(conv.From)
+	if ok {
+		// 检查发起方是否是 Conversation
+		if fromInfo.Class() == "conversation" {
+			fromConv, ok := conv.engine.registry.GetConversation(ConversationID(fromInfo.Name()))
+			if ok && fromConv.Status == StatusWaitingRespond {
+				fromConv.Status = StatusRunning
+				// 触发 thinkloop
+				conv.engine.NotifyConversationRunning(fromConv)
+			}
+		}
+	}
 
 	return nil, nil
 }

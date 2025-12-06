@@ -1,6 +1,6 @@
 import { infoApi } from '../api/client'
 import type { InfoListItem } from '../types/api'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, memo, useCallback, useMemo } from 'react'
 
 interface ReferenceListProps {
   sessionId: string
@@ -8,7 +8,7 @@ interface ReferenceListProps {
   onViewConversation?: (conversationId: string) => void // 点击 conversation 引用时的回调
 }
 
-export default function ReferenceList({ sessionId, references, onViewConversation }: ReferenceListProps) {
+function ReferenceList({ sessionId, references, onViewConversation }: ReferenceListProps) {
   // 从 InfoID 中提取 ConversationID（如果是 conversation::xxx 格式）
   const extractConversationId = (infoId: string): string | null => {
     if (infoId.startsWith('conversation::')) {
@@ -17,14 +17,14 @@ export default function ReferenceList({ sessionId, references, onViewConversatio
     return null
   }
 
-  const handleClick = (infoId: string) => {
-    const convId = extractConversationId(infoId)
-    if (convId && onViewConversation) {
-      onViewConversation(convId)
-    }
-  }
   const [infos, setInfos] = useState<Map<string, InfoListItem>>(new Map())
   const [loading, setLoading] = useState(false)
+
+  // 使用 useMemo 缓存 references 的键，避免每次渲染都重新计算
+  const referencesKeys = useMemo(() => {
+    if (!references) return ''
+    return Object.keys(references).sort().join(',')
+  }, [references])
 
   useEffect(() => {
     if (!references || Object.keys(references).length === 0) {
@@ -48,7 +48,16 @@ export default function ReferenceList({ sessionId, references, onViewConversatio
     }
 
     loadInfos()
-  }, [sessionId, references])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, referencesKeys])
+
+  // 使用 useCallback 缓存 handleClick，避免每次渲染都创建新函数
+  const handleClick = useCallback((infoId: string) => {
+    const convId = extractConversationId(infoId)
+    if (convId && onViewConversation) {
+      onViewConversation(convId)
+    }
+  }, [onViewConversation])
 
   if (!references || Object.keys(references).length === 0) {
     return null
@@ -92,4 +101,39 @@ export default function ReferenceList({ sessionId, references, onViewConversatio
     </div>
   )
 }
+
+// 使用 React.memo 优化组件，只在 props 真正变化时才重新渲染
+export default memo(ReferenceList, (prevProps, nextProps) => {
+  // 比较 sessionId
+  if (prevProps.sessionId !== nextProps.sessionId) {
+    return false
+  }
+  
+  // 比较 onViewConversation 引用
+  if (prevProps.onViewConversation !== nextProps.onViewConversation) {
+    return false
+  }
+  
+  // 深度比较 references
+  const prevRefs = prevProps.references || {}
+  const nextRefs = nextProps.references || {}
+  
+  const prevKeys = Object.keys(prevRefs).sort()
+  const nextKeys = Object.keys(nextRefs).sort()
+  
+  if (prevKeys.length !== nextKeys.length) {
+    return false
+  }
+  
+  for (let i = 0; i < prevKeys.length; i++) {
+    if (prevKeys[i] !== nextKeys[i]) {
+      return false
+    }
+    if (prevRefs[prevKeys[i]] !== nextRefs[nextKeys[i]]) {
+      return false
+    }
+  }
+  
+  return true // props 相同，不需要重新渲染
+})
 

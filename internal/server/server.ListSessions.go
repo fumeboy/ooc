@@ -10,12 +10,11 @@ import (
 
 // SessionListItem Session 列表项。
 type SessionListItem struct {
-	ID          string    `json:"id"`
-	UserRequest string    `json:"user_request"`
-	Status      string    `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	Possessed   bool      `json:"possessed"`
+	ID        string    `json:"id"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Possessed bool      `json:"possessed"`
 }
 
 // ListSessionsResponse 获取所有 Session 列表的响应。
@@ -31,13 +30,16 @@ func (s *Server) ListSessions(c echo.Context) error {
 	// 构建响应。
 	sessions := make([]SessionListItem, len(allSessions))
 	for i, sess := range allSessions {
+		possessed := false
+		if sess.Engine != nil {
+			possessed = sess.Engine.Possessed
+		}
 		sessions[i] = SessionListItem{
-			ID:          string(sess.ID),
-			UserRequest: sess.UserRequest,
-			Status:      string(sess.Status),
-			CreatedAt:   sess.CreatedAt,
-			UpdatedAt:   sess.UpdatedAt,
-			Possessed:   sess.Possessed,
+			ID:        string(sess.ID),
+			Status:    string(sess.Status),
+			CreatedAt: sess.CreatedAt,
+			UpdatedAt: sess.UpdatedAt,
+			Possessed: possessed,
 		}
 	}
 
@@ -45,4 +47,3 @@ func (s *Server) ListSessions(c echo.Context) error {
 		Sessions: sessions,
 	})
 }
-

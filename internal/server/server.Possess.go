@@ -3,7 +3,6 @@ package server
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -13,18 +12,18 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// StartPossessRequest 开始附身的请求。
-type StartPossessRequest struct {
+// SetPossessRequest 设置附身状态的请求。
+type SetPossessRequest struct {
 	Possess bool `json:"possess"`
 }
 
-// StartPossessResponse 开始附身的响应。
-type StartPossessResponse struct {
+// SetPossessResponse 设置附身状态的响应。
+type SetPossessResponse struct {
 	Possessed bool `json:"possessed"`
 }
 
-// StartPossess 开始或停止附身（POST /sessions/{id}/possess）。
-func (s *Server) StartPossess(c echo.Context) error {
+// SetPossess 设置附身状态（POST /sessions/{id}/possess）。
+func (s *Server) SetPossess(c echo.Context) error {
 	sessionID := session.SessionID(c.Param("id"))
 
 	sess, ok := s.store.GetSession(sessionID)
@@ -32,37 +31,32 @@ func (s *Server) StartPossess(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "session not found"})
 	}
 
-	var req StartPossessRequest
+	var req SetPossessRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("invalid request: %v", err)})
 	}
 
-	// 设置附身状态。
-	sess.Engine.SetPossess(req.Possess, func(req *agent.PossessRequest) {
-		// 回调函数：将附身请求保存到 Session
-		sess.PossessRequest = req
-		s.store.SaveSession(sess)
-	})
-	sess.Possessed = req.Possess
-	sess.PossessRequest = nil
+	engine := sess.Engine
+	if engine == nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "engine not found"})
+	}
+
+	engine.Possessed = req.Possess
 	s.store.SaveSession(sess)
 
-	return c.JSON(http.StatusOK, StartPossessResponse{
+	return c.JSON(http.StatusOK, SetPossessResponse{
 		Possessed: req.Possess,
 	})
 }
 
-// GetPossessRequestResponse 获取附身请求的响应。
-type GetPossessRequestResponse struct {
-	HasRequest bool            `json:"has_request"`
-	Prompt     string          `json:"prompt,omitempty"`
-	Tools      []string        `json:"tools,omitempty"`
-	LLMMethod  string          `json:"llm_method,omitempty"` // LLM 输出的方法名
-	LLMParams  json.RawMessage `json:"llm_params,omitempty"` // LLM 输出的参数
+// GetWaitingManualConversationsResponse 获取等待手动思考的 conversations 的响应。
+type GetWaitingManualConversationsResponse struct {
+	Conversations []ConversationResponse `json:"conversations"`
 }
 
-// GetPossessRequest 获取当前的附身请求（GET /sessions/{id}/possess/request）。
-func (s *Server) GetPossessRequest(c echo.Context) error {
+// GetWaitingManualConversations 获取等待手动思考的 conversations（GET /sessions/{id}/waiting_manual_conversations）。
+// 遍历所有 conversation，找出其中状态为 StatusWaitingManualThink 的
+func (s *Server) GetWaitingManualConversations(c echo.Context) error {
 	sessionID := session.SessionID(c.Param("id"))
 
 	sess, ok := s.store.GetSession(sessionID)
@@ -70,34 +64,36 @@ func (s *Server) GetPossessRequest(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "session not found"})
 	}
 
-	if !sess.Possessed {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "session is not possessed"})
+	engine := sess.Engine
+	if engine == nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "engine not found"})
 	}
 
-	if sess.PossessRequest == nil {
-		return c.JSON(http.StatusOK, GetPossessRequestResponse{
-			HasRequest: false,
-		})
+	// 遍历所有 conversation，找出状态为 StatusWaitingManualThink 的
+	conversations := engine.GetConversations()
+	items := make([]ConversationResponse, 0)
+
+	for _, conv := range conversations {
+		if conv.Status == agent.StatusWaitingManualThink {
+			items = append(items, s.conversationToResponse(conv))
+		}
 	}
 
-	return c.JSON(http.StatusOK, GetPossessRequestResponse{
-		HasRequest: true,
-		Prompt:     sess.PossessRequest.Prompt,
-		Tools:      sess.PossessRequest.Tools,
-		LLMMethod:  sess.PossessRequest.LLMMethod,
-		LLMParams:  sess.PossessRequest.LLMParams,
+	return c.JSON(http.StatusOK, GetWaitingManualConversationsResponse{
+		Conversations: items,
 	})
 }
 
-// RespondPossessRequest 回复附身请求（POST /sessions/{id}/possess/respond）。
-type RespondPossessRequest struct {
-	Method     string          `json:"method"`
-	Parameters json.RawMessage `json:"parameters"`
-	Error      string          `json:"error,omitempty"`
+// ManualThinkRequest 用户回复手动思考的请求。
+type ManualThinkRequest struct {
+	ConversationID string          `json:"conversation_id"` // 对话 ID
+	Method         string          `json:"method"`          // 方法名
+	Parameters     json.RawMessage `json:"parameters"`      // 参数（JSON 格式）
 }
 
-// RespondPossess 回复附身请求。
-func (s *Server) RespondPossess(c echo.Context) error {
+// RespondManualThink 用户回复手动思考（POST /sessions/{id}/manual_think）。
+// 用于处理 StatusWaitingManualThink 状态的 conversation
+func (s *Server) RespondManualThink(c echo.Context) error {
 	sessionID := session.SessionID(c.Param("id"))
 
 	sess, ok := s.store.GetSession(sessionID)
@@ -105,47 +101,49 @@ func (s *Server) RespondPossess(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "session not found"})
 	}
 
-	if !sess.Possessed {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "session is not possessed"})
+	engine := sess.Engine
+	if engine == nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "engine not found"})
 	}
 
-	if sess.PossessRequest == nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "no possess request pending"})
-	}
-
-	var req RespondPossessRequest
+	// 解析请求。
+	var req ManualThinkRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("invalid request: %v", err)})
 	}
 
-	// 构建回复。
-	var resp *agent.PossessResponse
-	if req.Error != "" {
-		resp = &agent.PossessResponse{
-			Error: errors.New(req.Error),
-		}
-	} else {
-		resp = &agent.PossessResponse{
-			Method:     req.Method,
-			Parameters: req.Parameters,
-		}
+	if req.ConversationID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "conversation_id is required"})
 	}
 
-	// 保存 ConversationID（在清空 PossessRequest 之前）
-	convID := sess.PossessRequest.ConversationID
-	if convID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "conversation id not found in possess request"})
+	if req.Method == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "method is required"})
 	}
 
-	// 清空附身请求。
-	sess.PossessRequest = nil
-	sess.Status = session.SessionStatusPending
+	// 获取 Conversation。
+	convID := agent.ConversationID(req.ConversationID)
+	conv, ok := agent.GetRegistry(engine).GetConversation(convID)
+	if !ok {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "conversation not found"})
+	}
+
+	// 验证状态。
+	if conv.Status != agent.StatusWaitingManualThink {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "conversation is not waiting for manual think"})
+	}
+
+	// 记录用户响应事件。
+	s.store.AppendEvent(sessionID, &session.Event{
+		Type:    session.EventRespondSent,
+		Payload: req.Method,
+	})
+
+	// 恢复手动思考
+	if err := engine.ResumeManualThink(convID, req.Method, req.Parameters); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("resume manual think failed: %v", err)})
+	}
+
 	s.store.SaveSession(sess)
-
-	// 恢复思考循环
-	if err := sess.Engine.ResumePossess(convID, resp); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("resume possess failed: %v", err)})
-	}
 
 	return c.String(http.StatusOK, "")
 }

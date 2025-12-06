@@ -52,9 +52,25 @@ func (conv *Conversation) Prompt() string {
 # Conversation 机制
 Conversation 是 OOC（Object-Oriented Context）的核心概念，它记录了一次对话的上下文。
 在 OOC 中，一切信息对象都是可对话的，包括 Conversation 本身、包括信息对象的可执行方法。而 Conversation 是两个信息对象之间的对话记录。
-Conversation 有两个角色，From 和 To，From 是发起对话的信息对象，To 是被对话的信息对象。From 的信息会被隐藏，你不需要知道 From 的信息，但是你可以通过 ask 来向 From 提问。
-在下文中，列出了 你（对应角色 Conversation To） 的信息以及这一次 Conversation 的信息
+Conversation 有两个角色，From 和 To，From 是发起对话的信息对象，To 是被对话的信息对象。
+在下文中，列出了 你（对应角色 Conversation To） 的信息、发起对话的信息对象（From）的信息以及这一次 Conversation 的信息
 `) // 说明 Conversation 机制
+
+	// 0. 展示 Conversation.From 的信息
+	fromInfo, ok := conv.engine.registry.GetInfo(conv.From)
+	if ok && fromInfo != nil {
+		prompt.WriteString("\n## 发起对话的信息对象（From）\n")
+		prompt.WriteString("ID: " + conv.From + "\n")
+		prompt.WriteString("类型: " + fromInfo.Class() + "\n")
+		prompt.WriteString("名称: " + fromInfo.Name() + "\n")
+		if description := fromInfo.Description(); description != "" {
+			prompt.WriteString("描述: " + description + "\n")
+		}
+		if p := fromInfo.Prompt(); p != "" {
+			prompt.WriteString("提示词:\n" + p + "\n")
+		}
+		prompt.WriteString("\n")
+	}
 
 	// 如果 Conversation 处于错误状态，展示错误信息
 	if conv.Status == StatusError && conv.Error != "" {

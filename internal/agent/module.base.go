@@ -1,5 +1,9 @@
 package agent
 
+import (
+	"sync"
+)
+
 var _ ModuleProvider = (*ModuleBase)(nil)
 
 type ModuleBase struct {
@@ -40,7 +44,7 @@ func (m *ModuleBase) Name() string {
 type SystemInfo struct{}
 
 func (*SystemInfo) Class() string         { return "system" }
-func (s *SystemInfo) Name() string        { return "System" }
+func (s *SystemInfo) Name() string        { return "system" }
 func (s *SystemInfo) Description() string { return "系统核心对象" }
 func (s *SystemInfo) Prompt() string {
 	return `你是 System，OOC（Object-Oriented Context）系统的核心协调者。你的职责是理解用户需求，协调各个模块，高效完成用户任务。
@@ -154,14 +158,53 @@ func (s *SystemInfo) Methods() []MethodI {
 }
 
 // UserInfo 实现 User InfoI（meta.md 69）。
-type UserInfo struct{}
+// UserInfo 管理所有与 User 相关的 Conversation：
+// - 从 User 发起的（User 作为 From）
+// - 向 User 发起的（User 作为 To）
+type UserInfo struct {
+	engine        *Engine
+	conversations []*Conversation // 与 User 相关的所有 Conversation
+	mu            sync.Mutex      // 保护 conversations 的并发访问
+}
 
-func (*UserInfo) Class() string         { return "user" }
-func (u *UserInfo) Name() string        { return "User" }
+func (u *UserInfo) Class() string       { return "user" }
+func (u *UserInfo) Name() string        { return "user" }
 func (u *UserInfo) Description() string { return "用户对象" }
 func (u *UserInfo) Prompt() string {
 	return ""
 }
 func (u *UserInfo) Methods() []MethodI {
 	return nil
+}
+
+// AddConversation 添加 Conversation 到 UserInfo
+// 包括从 User 发起的（User 作为 From）和向 User 发起的（User 作为 To）
+// 如果 conversation 已存在（通过 ID 判断），则不会重复添加
+func (u *UserInfo) AddConversation(conv *Conversation) {
+	if conv == nil {
+		return
+	}
+
+	u.mu.Lock()
+	defer u.mu.Unlock()
+
+	// 检查是否已存在（通过 ID 判断）
+	for _, existing := range u.conversations {
+		if existing.ID == conv.ID {
+			// 已存在，不重复添加
+			return
+		}
+	}
+
+	// 不存在，添加
+	u.conversations = append(u.conversations, conv)
+}
+
+// GetConversations 获取所有与 User 相关的 Conversation
+func (u *UserInfo) GetConversations() []*Conversation {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	result := make([]*Conversation, len(u.conversations))
+	copy(result, u.conversations)
+	return result
 }

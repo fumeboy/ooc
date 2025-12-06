@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import ConversationTreeTab from './tabs/ConversationTreeTab'
+import ConversationViewer from './tabs/ConversationViewer'
 import InfoListTab from './tabs/InfoListTab'
-import LLMRequestsTab from './tabs/LLMRequestsTab'
-import { sessionApi, possessApi } from '../api/client'
+import WaitingManualConversations from './tabs/WaitingManualConversations'
+import { manualThinkApi } from '../api/client'
 
 interface LeftPanelProps {
   sessionId: string | null
@@ -12,34 +12,28 @@ type TabType = 'conversation' | 'info' | 'llm'
 
 export default function LeftPanel({ sessionId }: LeftPanelProps) {
   const [activeTab, setActiveTab] = useState<TabType>('conversation')
-  const [hasPossessRequest, setHasPossessRequest] = useState(false)
-  const [viewingConversationId, setViewingConversationId] = useState<string | null>(null)
+  const [hasWaitingManualConversations, setHasWaitingManualConversations] = useState(false)
 
-  // 检查是否有待处理的附身请求
+  // 检查是否有待处理的手动思考请求
   useEffect(() => {
     if (!sessionId) {
-      setHasPossessRequest(false)
+      setHasWaitingManualConversations(false)
       return
     }
 
-    const checkPossessRequest = async () => {
+    const checkWaitingManualConversations = async () => {
       try {
-        const session = await sessionApi.get(sessionId)
-        if (session.possessed) {
-          const request = await possessApi.getRequest(sessionId)
-          setHasPossessRequest(request.has_request)
-        } else {
-          setHasPossessRequest(false)
-        }
+        const response = await manualThinkApi.getWaitingManualConversations(sessionId)
+        setHasWaitingManualConversations(response.conversations.length > 0)
       } catch (error) {
-        console.error('Failed to check possess request:', error)
-        setHasPossessRequest(false)
+        console.error('Failed to check waiting manual conversations:', error)
+        setHasWaitingManualConversations(false)
       }
     }
 
-    checkPossessRequest()
+    checkWaitingManualConversations()
     // 每2秒检查一次
-    const interval = setInterval(checkPossessRequest, 2000)
+    const interval = setInterval(checkWaitingManualConversations, 2000)
     return () => clearInterval(interval)
   }, [sessionId])
 
@@ -72,33 +66,29 @@ export default function LeftPanel({ sessionId }: LeftPanelProps) {
           className={`tab-button ${activeTab === 'llm' ? 'active' : ''}`}
           onClick={() => setActiveTab('llm')}
         >
-          LLM Requests
-          {hasPossessRequest && <span className="tab-button-badge"></span>}
+          Waiting Manual
+          {hasWaitingManualConversations && <span className="tab-button-badge"></span>}
         </button>
       </div>
       <div className="left-panel-content">
         {activeTab === 'conversation' && (
-          <ConversationTreeTab 
+          <ConversationViewer 
             sessionId={sessionId} 
-            viewingConversationId={viewingConversationId}
-            onViewConversation={(conversationId) => {
-              setViewingConversationId(conversationId)
-            }}
-            onCloseConversation={() => {
-              setViewingConversationId(null)
-            }}
           />
         )}
         {activeTab === 'info' && (
           <InfoListTab 
             sessionId={sessionId} 
-            onViewConversation={(conversationId) => {
-              setViewingConversationId(conversationId)
+          />
+        )}
+        {activeTab === 'llm' && (
+          <WaitingManualConversations 
+            sessionId={sessionId}
+            onViewConversation={() => {
               setActiveTab('conversation')
             }}
           />
         )}
-        {activeTab === 'llm' && <LLMRequestsTab sessionId={sessionId} />}
       </div>
     </div>
   )

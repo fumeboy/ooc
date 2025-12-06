@@ -27,34 +27,31 @@ type SessionID string
 type EventID string
 
 // SessionStatus 描述当前状态。
+// 与 Conversation 的状态枚举保持一致
 type SessionStatus string
 
 const (
-	// SessionStatusPending 会话正在进行。
-	SessionStatusPending SessionStatus = "pending"
-	// SessionStatusCompleted 会话完成。
-	SessionStatusCompleted SessionStatus = "completed"
+	// SessionStatusRunning 会话正在运行。
+	SessionStatusRunning SessionStatus = "running"
 	// SessionStatusWaitingAnswer 会话等待用户回答。
 	SessionStatusWaitingAnswer SessionStatus = "waiting_answer"
-	// SessionStatusWaitingPossess 会话等待用户确认/修改 LLM 输出（附身模式）。
-	SessionStatusWaitingPossess SessionStatus = "waiting_possess"
-	// SessionStatusFailed 会话失败。
-	SessionStatusFailed SessionStatus = "failed"
+	// SessionStatusWaitingRespond 会话等待响应。
+	SessionStatusWaitingRespond SessionStatus = "waiting_respond"
+	// SessionStatusWaitingManualThink 会话等待用户手动思考。
+	SessionStatusWaitingManualThink SessionStatus = "waiting_manual_think"
+	// SessionStatusCompleted 会话完成。
+	SessionStatusCompleted SessionStatus = "completed"
+	// SessionStatusError 会话出错。
+	SessionStatusError SessionStatus = "error"
 )
 
 // Session 记录一次用户请求的整体信息。
 type Session struct {
-	ID          SessionID
-	UserRequest string
-	Result      *agent.CommonParams
-	Status      SessionStatus
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	Engine      *agent.Engine
-
-	// 附身功能相关字段
-	Possessed      bool                  // 是否处于附身状态
-	PossessRequest *agent.PossessRequest // 当前的附身请求（等待用户回复）
+	ID        SessionID
+	Status    SessionStatus
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Engine    *agent.Engine
 }
 
 // EventType 区分不同事件。
@@ -125,7 +122,7 @@ func (m *MemoryStore) SaveSession(sess *Session) (SessionID, error) {
 		sess.UpdatedAt = now
 	}
 	if sess.Status == "" {
-		sess.Status = SessionStatusPending
+		sess.Status = SessionStatusRunning
 	}
 	m.sessions[sess.ID] = sess
 	return sess.ID, nil

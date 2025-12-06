@@ -98,9 +98,8 @@ func (sb *Storybook) RunStoryByName(name string) error {
 
 	// 创建 Session。
 	sess := &session.Session{
-		UserRequest: story.Request,
-		Status:      session.SessionStatusPending,
-		Engine:      sb.engine,
+		Status: session.SessionStatusRunning,
+		Engine: sb.engine,
 	}
 	sessID, err := sb.store.SaveSession(sess)
 	if err != nil {
@@ -119,9 +118,7 @@ func (sb *Storybook) RunStoryByName(name string) error {
 	sess.Engine = engine
 
 	// 运行请求。
-	engine.Run(agent.CommonParams{
-		Content: story.Request,
-	})
+	engine.UserTalk("system::system", "", story.Request, nil)
 
 	// 等待完成或超时。
 	timeout := time.After(story.MaxWait)
@@ -131,17 +128,17 @@ func (sb *Storybook) RunStoryByName(name string) error {
 	for {
 		select {
 		case <-timeout:
-			sess.Status = session.SessionStatusFailed
+			sess.Status = session.SessionStatusError
 			sb.store.SaveSession(sess)
 			return fmt.Errorf("story timeout after %v", story.MaxWait)
 		case <-ticker.C:
 			// 检查对话状态。
-			if engine.ConversationID != "" {
-				conv, ok := agent.GetRegistry(engine).GetConversation(engine.ConversationID)
+			convID := engine.GetLastConversationCreatedByUser()
+			if convID != "" {
+				conv, ok := agent.GetRegistry(engine).GetConversation(convID)
 				if ok {
 					if conv.Status == agent.StatusCompleted {
 						// 对话完成。
-						sess.Result = &conv.Response
 						sess.Status = session.SessionStatusCompleted
 						sb.store.SaveSession(sess)
 

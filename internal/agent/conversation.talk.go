@@ -3,6 +3,7 @@ package agent
 
 import (
 	"fmt"
+	"time"
 )
 
 type MethodTalk struct {
@@ -65,7 +66,26 @@ func (l *MethodTalk) Parameters() string {
 }
 
 func (t *MethodTalk) Execute(current *Conversation) (*Action, error) {
-	// 验证目标对象存在。
+	a, err := t.execute(current.To)
+	if err != nil {
+		return nil, err
+	}
+	// 将新对话的 ID 添加到当前对话的 Response.References
+	if current.Response.References == nil {
+		current.Response.References = make(map[string]string)
+	}
+	current.Response.References[string(a.ConversationID)] = "created by Talk"
+
+	// 发起 Talk 的 conversation 状态变更为 StatusWaitingRespond
+	current.Status = StatusWaitingRespond
+	return a, nil
+}
+
+func (t *MethodTalk) execute(From InfoID) (*Action, error) {
+	// 验证目标对象存在
+	userID := WrapInfoID("user", "user")
+	isTalkWithUser := t.TalkWith == userID
+
 	_, ok := t.e.registry.GetInfo(t.TalkWith)
 	if !ok {
 		return nil, fmt.Errorf("target info %s not found", t.TalkWith)
@@ -87,38 +107,43 @@ func (t *MethodTalk) Execute(current *Conversation) (*Action, error) {
 		}
 	}
 
+	// 创建新 conversation，初始状态为 StatusRunning
 	newConv := &Conversation{
 		engine: t.e,
 		Title:  t.Title,
-		From:   current.To, // 当前对话的 To 作为新对话的 From
+		From:   From,
 		To:     t.TalkWith,
 		Request: CommonParams{
 			Content:    t.Content,
 			References: validRefs,
 		},
+		Status:    StatusRunning,
+		Mode:      ConversationModeHosted,
+		UpdatedAt: time.Now(),
 	}
 
+	// 如果 Talk With User，设置为人工模式，状态为 StatusWaitingManualThink
+	if isTalkWithUser {
+		newConv.Mode = ConversationModeManual
+		newConv.Status = StatusWaitingManualThink
+		// 记录到 UserInfo（User 作为 To）
+		t.e.User.AddConversation(newConv)
+	}
+
+	// 注册 conversation
 	newConvID, err := t.e.registry.RegisterConversation(newConv)
 	if err != nil {
 		return nil, fmt.Errorf("register talk conversation failed: %w", err)
 	}
 
-	// 执行新对话。
-	err = t.e.ThinkLoop(newConv)
-	if err != nil {
-		return nil, fmt.Errorf("talk failed: %w", err)
+	// 如果发起方是 User，记录到 UserInfo（User 作为 From）
+	if From == userID {
+		t.e.User.AddConversation(newConv)
 	}
 
-	// 将新对话的 ID 添加到当前对话的 Response.References。
-	if current.Response.References == nil {
-		current.Response.References = make(map[string]string)
-	}
-	current.Response.References[string(newConvID)] = "created by Talk"
-
-	// 继续当前对话的思考循环。
-	err = t.e.Think(current)
-	if err != nil {
-		return nil, fmt.Errorf("think failed: %w", err)
+	// 如果新 conversation 状态是 StatusRunning，触发 thinkloop
+	if newConv.Status == StatusRunning {
+		t.e.NotifyConversationRunning(newConv)
 	}
 
 	return &Action{

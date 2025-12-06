@@ -38,8 +38,7 @@ func (s *Server) CreateSession(c echo.Context) error {
 
 	// 创建 Session。
 	sess := &session.Session{
-		UserRequest: req.UserRequest,
-		Status:      session.SessionStatusPending,
+		Status: session.SessionStatusRunning,
 	}
 	sessionID, err := s.store.SaveSession(sess)
 	if err != nil {
@@ -62,38 +61,23 @@ func (s *Server) CreateSession(c echo.Context) error {
 	engine := agent.New(s.llmClient)
 	agent.GetModuleManager(engine).Register(notebook.NewModule())
 
-	// 设置 Session 状态更新回调（当 root conversation 状态变化时更新 session 状态）
+	// 控制是否全局开启半托管模式
+	engine.Possessed = req.Possess
+
+	// 设置 Session 状态更新回调（当 conversation 状态变化时更新 session 状态）
 	engine.SetSessionStatusCallback(func(status string) {
-		switch status {
-		case "failed":
-			sess.Status = session.SessionStatusFailed
-		case "waiting_possess":
-			sess.Status = session.SessionStatusWaitingPossess
-		}
+		sess.Status = session.SessionStatus(status)
 		s.store.SaveSession(sess)
 	})
 
 	sess.Engine = engine
 
-	// 如果请求中指定了立即附身，则开启附身
-	if req.Possess {
-		sess.Engine.SetPossess(true, func(req *agent.PossessRequest) {
-			// 回调函数：将附身请求保存到 Session
-			sess.PossessRequest = req
-			s.store.SaveSession(sess)
-		})
-		sess.Possessed = true
-	}
-
 	// 创建 root conversation，如果提供了初始请求则立即发送
-	engine.Run(agent.CommonParams{
-		Content:    req.UserRequest,
-		References: references,
-	})
+	engine.UserTalk("system::system", "", req.UserRequest, references)
 	s.store.SaveSession(sess)
 
 	return c.JSON(http.StatusOK, CreateSessionResponse{
 		SessionID: string(sessionID),
-		Status:    "pending",
+		Status:    "running",
 	})
 }

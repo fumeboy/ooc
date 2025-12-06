@@ -66,6 +66,14 @@ export interface Action {
   response?: CommonParams;
 }
 
+export interface ManualThinkRequest {
+  conversation_id: string;
+  prompt?: string;
+  tools?: string[];
+  llm_method?: string;
+  llm_params?: unknown;
+}
+
 export interface Conversation {
   id: string;
   from: string;
@@ -77,6 +85,9 @@ export interface Conversation {
   questions: Question[];
   actions: Action[];
   status: string;
+  mode?: string; // 对话执行模式（manual/hosted/semi_hosted）
+  waiting_manual_think_request?: ManualThinkRequest; // 等待手动思考的请求（当 status 为 waiting_manual_think 时）
+  updated_at: string; // 最后更新时间（ISO 8601 格式）
 }
 
 // ========== Info 相关 ==========
@@ -111,11 +122,11 @@ export interface AskRequest {
 
 // ========== Possess 相关 ==========
 
-export interface StartPossessRequest {
+export interface SetPossessRequest {
   possess: boolean;
 }
 
-export interface StartPossessResponse {
+export interface SetPossessResponse {
   possessed: boolean;
 }
 
@@ -132,6 +143,31 @@ export interface RespondPossessRequest {
   parameters: unknown;
   references?: Record<string, string>; // key = info id, value = reason
   error?: string;
+}
+
+// ========== Talk 相关 ==========
+
+export interface TalkRequest {
+  talk_with: string;
+  title?: string;
+  content: string;
+  references?: Record<string, string>; // key = info id, value = reason
+}
+
+export interface TalkResponse {
+  conversation_id: string;
+}
+
+// ========== Manual Think 相关 ==========
+
+export interface RespondManualThinkRequest {
+  conversation_id: string;
+  method: string;
+  parameters: unknown;
+}
+
+export interface GetWaitingManualConversationsResponse {
+  conversations: Conversation[];
 }
 
 // ========== Continue Conversation 相关 ==========

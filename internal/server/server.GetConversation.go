@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"ooc/internal/agent"
 	"ooc/internal/session"
@@ -12,19 +13,31 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// ManualThinkRequestResponse ManualThinkRequest 的响应格式。
+type ManualThinkRequestResponse struct {
+	ConversationID string          `json:"conversation_id"`
+	Prompt         string          `json:"prompt,omitempty"`
+	Tools          []string        `json:"tools,omitempty"`
+	LLMMethod      string          `json:"llm_method,omitempty"`
+	LLMParams      json.RawMessage `json:"llm_params,omitempty"`
+}
+
 // ConversationResponse 获取 Conversation 的响应。
 type ConversationResponse struct {
-	ID        string                  `json:"id"`
-	From      string                  `json:"from"`
-	To        string                  `json:"to"`
-	Title     string                  `json:"title,omitempty"`
-	Desc      string                  `json:"desc,omitempty"`
-	Request   CommonParamsResponse    `json:"request"`
-	Response  CommonParamsResponse    `json:"response"`
-	Questions []QuestionResponse      `json:"questions"`
-	Actions   []ActionResponse        `json:"actions"`
-	Status    string                  `json:"status"`
-	Error     string                  `json:"error,omitempty"` // 错误信息（当 Status 为 error 时）
+	ID                        string                      `json:"id"`
+	From                      string                      `json:"from"`
+	To                        string                      `json:"to"`
+	Title                     string                      `json:"title,omitempty"`
+	Desc                      string                      `json:"desc,omitempty"`
+	Request                   CommonParamsResponse        `json:"request"`
+	Response                  CommonParamsResponse        `json:"response"`
+	Questions                 []QuestionResponse          `json:"questions"`
+	Actions                   []ActionResponse            `json:"actions"`
+	Status                    string                      `json:"status"`
+	Error                     string                      `json:"error,omitempty"`                        // 错误信息（当 Status 为 error 时）
+	Mode                      string                      `json:"mode,omitempty"`                         // 对话执行模式（manual/hosted/semi_hosted）
+	WaitingManualThinkRequest *ManualThinkRequestResponse `json:"waiting_manual_think_request,omitempty"` // 等待手动思考的请求（当 Status 为 waiting_manual_think 时）
+	UpdatedAt                 string                      `json:"updated_at"`                             // 最后更新时间（ISO 8601 格式）
 }
 
 // CommonParamsResponse CommonParams 的响应格式。
@@ -49,9 +62,9 @@ type ActionResponse struct {
 	ConversationID string `json:"conversation_id,omitempty"`
 
 	// when typ is act
-	Object   string          `json:"object,omitempty"`
-	Method   string          `json:"method,omitempty"`
-	Request  json.RawMessage  `json:"request,omitempty"`
+	Object   string               `json:"object,omitempty"`
+	Method   string               `json:"method,omitempty"`
+	Request  json.RawMessage      `json:"request,omitempty"`
 	Response CommonParamsResponse `json:"response,omitempty"`
 }
 
@@ -111,7 +124,19 @@ func (s *Server) GetConversation(c echo.Context) error {
 		actions[i] = actionResp
 	}
 
-	return c.JSON(http.StatusOK, ConversationResponse{
+	mode := string(conv.Mode)
+	if mode == "" {
+		mode = string(agent.ConversationModeManual)
+	}
+
+	// 格式化 UpdatedAt 为 ISO 8601 格式
+	updatedAtStr := conv.UpdatedAt.Format(time.RFC3339)
+	if conv.UpdatedAt.IsZero() {
+		// 如果 UpdatedAt 为零值，使用当前时间
+		updatedAtStr = time.Now().Format(time.RFC3339)
+	}
+
+	response := ConversationResponse{
 		ID:    string(conv.ID),
 		From:  string(conv.From),
 		To:    string(conv.To),
@@ -131,6 +156,20 @@ func (s *Server) GetConversation(c echo.Context) error {
 		Actions:   actions,
 		Status:    conv.Status,
 		Error:     conv.Error,
-	})
-}
+		Mode:      mode,
+		UpdatedAt: updatedAtStr,
+	}
 
+	// 如果状态是 waiting_manual_think，包含 ManualThinkRequest
+	if conv.Status == agent.StatusWaitingManualThink && conv.WaitingManualThinkRequest != nil {
+		response.WaitingManualThinkRequest = &ManualThinkRequestResponse{
+			ConversationID: string(conv.WaitingManualThinkRequest.ConversationID),
+			Prompt:         conv.WaitingManualThinkRequest.Prompt,
+			Tools:          conv.WaitingManualThinkRequest.Tools,
+			LLMMethod:      conv.WaitingManualThinkRequest.LLMMethod,
+			LLMParams:      conv.WaitingManualThinkRequest.LLMParams,
+		}
+	}
+
+	return c.JSON(http.StatusOK, response)
+}
