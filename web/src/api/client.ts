@@ -1,236 +1,131 @@
-/**
- * API 客户端
- * 封装所有与后端的 HTTP 请求
- */
-
+// HTTP 适配层：封装与 /api 后端的交互，提供类型安全的请求函数。
 import type {
-  Session,
+  AnswerRequest,
+  ConversationResponse,
   CreateSessionRequest,
   CreateSessionResponse,
-  ListSessionsResponse,
-  Conversation,
+  GetSessionResponse,
+  InfoResponse,
   ListConversationsResponse,
-  Info,
   ListInfosResponse,
-  AskRequest,
-  SetPossessRequest,
+  ListSessionsResponse,
+  ManualThinkRequestPayload,
   SetPossessResponse,
-  GetPossessRequestResponse,
-  RespondPossessRequest,
   TalkRequest,
   TalkResponse,
-  RespondManualThinkRequest,
   GetWaitingManualConversationsResponse,
-  ContinueConversationRequest,
-  ConfigResponse,
-} from '../types/api';
+  ApiError,
+} from '../types/api'
 
-const API_BASE = '/api';
+const DEFAULT_TIMEOUT = 10_000
 
-/**
- * 通用请求函数
- */
-async function request<T>(
-  endpoint: string,
-  options?: RequestInit
-): Promise<T> {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
+async function request<T>(path: string, init: RequestInit & { timeoutMs?: number } = {}): Promise<T> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), init.timeoutMs ?? DEFAULT_TIMEOUT)
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(error.error || `HTTP ${response.status}`);
-  }
-
-  // 读取响应文本
-  const text = await response.text();
-  
-  // 如果响应为空，返回空对象（对于 void 类型的响应）
-  if (!text || text.trim() === '') {
-    return {} as T;
-  }
-
-  // 尝试解析 JSON
   try {
-    return JSON.parse(text) as T;
-  } catch (e) {
-    // 如果解析失败，返回空对象
-    console.warn('Failed to parse JSON response:', e);
-    return {} as T;
+    const res = await fetch(path, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(init.headers ?? {}),
+      },
+    })
+
+    if (!res.ok) {
+      const err: ApiError = new Error(res.statusText || 'Request failed')
+      err.status = res.status
+      throw err
+    }
+
+    const contentType = res.headers.get('Content-Type') || ''
+    if (contentType.includes('application/json')) {
+      return (await res.json()) as T
+    }
+    // 某些接口返回空字符串，例如 Answer/RespondManualThink
+    const text = await res.text()
+    return text as unknown as T
+  } catch (error) {
+    if ((error as Error).name === 'AbortError') {
+      const err: ApiError = new Error('Request timed out')
+      err.status = 408
+      throw err
+    }
+    throw error
+  } finally {
+    clearTimeout(timer)
   }
 }
 
-// ========== Session API ==========
+export function createSession(body: CreateSessionRequest) {
+  return request<CreateSessionResponse>('/api/sessions', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
 
-export const sessionApi = {
-  /**
-   * 创建新的 Session
-   */
-  create: (data: CreateSessionRequest): Promise<CreateSessionResponse> => {
-    return request<CreateSessionResponse>('/sessions', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
+export function listSessions() {
+  return request<ListSessionsResponse>('/api/sessions', { method: 'GET' })
+}
 
-  /**
-   * 获取所有 Session 列表
-   */
-  list: (): Promise<ListSessionsResponse> => {
-    return request<ListSessionsResponse>('/sessions');
-  },
+export function getSession(sessionId: string) {
+  return request<GetSessionResponse>(`/api/sessions/${sessionId}`, { method: 'GET' })
+}
 
-  /**
-   * 获取 Session 详情
-   */
-  get: (id: string): Promise<Session> => {
-    return request<Session>(`/sessions/${id}`);
-  },
-};
+export function talk(sessionId: string, body: TalkRequest) {
+  return request<TalkResponse>(`/api/sessions/${sessionId}/talk`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
 
-// ========== Conversation API ==========
+export function answer(sessionId: string, body: AnswerRequest) {
+  return request<string>(`/api/sessions/${sessionId}/answer`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
 
-export const conversationApi = {
-  /**
-   * 获取 Session 的所有 Conversation 列表
-   */
-  list: (sessionId: string): Promise<ListConversationsResponse> => {
-    return request<ListConversationsResponse>(`/sessions/${sessionId}/conversations`);
-  },
+export function listConversations(sessionId: string) {
+  return request<ListConversationsResponse>(`/api/sessions/${sessionId}/conversations`, { method: 'GET' })
+}
 
-  /**
-   * 获取 Conversation 详情
-   */
-  get: (sessionId: string, conversationId: string): Promise<Conversation> => {
-    return request<Conversation>(`/sessions/${sessionId}/conversations/${conversationId}`);
-  },
+export function getConversation(sessionId: string, conversationId: string) {
+  return request<ConversationResponse>(`/api/sessions/${sessionId}/conversations/${conversationId}`, { method: 'GET' })
+}
 
-  /**
-   * 回答 Ask 问题
-   */
-  answerAsk: (sessionId: string, data: AskRequest): Promise<void> => {
-    return request<void>(`/sessions/${sessionId}/answer`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
-};
+export function listInfos(sessionId: string) {
+  return request<ListInfosResponse>(`/api/sessions/${sessionId}/infos`, { method: 'GET' })
+}
 
-// ========== Info API ==========
+export function getInfo(sessionId: string, infoId: string, detail = true) {
+  const suffix = detail ? '?detail=true' : ''
+  return request<InfoResponse>(`/api/sessions/${sessionId}/info/${infoId}${suffix}`, { method: 'GET' })
+}
 
-export const infoApi = {
-  /**
-   * 获取所有 Info 列表
-   */
-  list: (sessionId: string): Promise<ListInfosResponse> => {
-    return request<ListInfosResponse>(`/sessions/${sessionId}/infos`);
-  },
+export function setPossess(sessionId: string, possess: boolean) {
+  return request<SetPossessResponse>(`/api/sessions/${sessionId}/possess`, {
+    method: 'POST',
+    body: JSON.stringify({ possess }),
+  })
+}
 
-  /**
-   * 获取 Info 详情
-   * @param detail 是否获取详细信息（prompt 和 methods），默认为 false
-   */
-  get: (sessionId: string, infoId: string, detail: boolean = false): Promise<Info> => {
-    const url = detail 
-      ? `/sessions/${sessionId}/info/${infoId}?detail=true`
-      : `/sessions/${sessionId}/info/${infoId}`;
-    return request<Info>(url);
-  },
-};
+export function getWaitingManualConversations(sessionId: string) {
+  return request<GetWaitingManualConversationsResponse>(
+    `/api/sessions/${sessionId}/waiting_manual_conversations`,
+    { method: 'GET' }
+  )
+}
 
-// ========== Talk API ==========
+export function respondManualThink(sessionId: string, payload: ManualThinkRequestPayload) {
+  return request<string>(`/api/sessions/${sessionId}/manual_think`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
 
-export const talkApi = {
-  /**
-   * 用户发起 Talk
-   */
-  talk: (sessionId: string, data: TalkRequest): Promise<TalkResponse> => {
-    return request<TalkResponse>(`/sessions/${sessionId}/talk`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
-};
-
-// ========== Manual Think API ==========
-
-export const manualThinkApi = {
-  /**
-   * 获取等待手动思考的 conversations
-   */
-  getWaitingManualConversations: (sessionId: string): Promise<GetWaitingManualConversationsResponse> => {
-    return request<GetWaitingManualConversationsResponse>(`/sessions/${sessionId}/waiting_manual_conversations`);
-  },
-
-  /**
-   * 回复手动思考请求
-   */
-  respond: (sessionId: string, data: RespondManualThinkRequest): Promise<void> => {
-    return request<void>(`/sessions/${sessionId}/manual_think`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
-};
-
-// ========== Possess API ==========
-
-export const possessApi = {
-  /**
-   * 设置附身状态
-   */
-  setPossess: (sessionId: string, data: SetPossessRequest): Promise<SetPossessResponse> => {
-    return request<SetPossessResponse>(`/sessions/${sessionId}/possess`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
-
-  /**
-   * 获取当前的附身请求（已废弃，使用 manualThinkApi.getWaitingManualConversations）
-   */
-  getRequest: (sessionId: string): Promise<GetPossessRequestResponse> => {
-    return request<GetPossessRequestResponse>(`/sessions/${sessionId}/possess/request`);
-  },
-
-  /**
-   * 回复附身请求（已废弃，使用 manualThinkApi.respond）
-   */
-  respond: (sessionId: string, data: RespondPossessRequest): Promise<void> => {
-    return request<void>(`/sessions/${sessionId}/possess/respond`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
-};
-
-// ========== Continue Conversation API ==========
-
-export const continueApi = {
-  /**
-   * 继续对话
-   */
-  continue: (sessionId: string, data: ContinueConversationRequest): Promise<void> => {
-    return request<void>(`/sessions/${sessionId}/continue`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
-};
-
-// ========== Config API ==========
-
-export const configApi = {
-  /**
-   * 获取系统配置
-   */
-  get: (): Promise<ConfigResponse> => {
-    return request<ConfigResponse>('/conf');
-  },
-};
+export function getConfig() {
+  return request<Record<string, unknown>>('/api/conf', { method: 'GET' })
+}
 

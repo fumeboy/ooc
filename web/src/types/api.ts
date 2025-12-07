@@ -1,195 +1,143 @@
-/**
- * API 相关的 TypeScript 类型定义
- * 对应后端 server 包中的响应结构
- */
-
-// ========== Session 相关 ==========
-
-export interface Session {
-  id: string;
-  user_request: string;
-  result: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-  possessed: boolean;
-}
+// 本文件定义后端 HTTP API 的请求/响应类型，便于前端统一引用。
 
 export interface SessionListItem {
-  id: string;
-  user_request: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-  possessed: boolean;
-}
-
-export interface CreateSessionRequest {
-  user_request: string;
-  references?: string[];
-  possess?: boolean;
-}
-
-export interface CreateSessionResponse {
-  session_id: string;
-  status: string;
+  id: string
+  status: string
+  created_at: string
+  updated_at: string
+  possessed: boolean
 }
 
 export interface ListSessionsResponse {
-  sessions: SessionListItem[];
+  sessions: SessionListItem[]
 }
 
-// ========== Conversation 相关 ==========
-
-export interface ListConversationsResponse {
-  conversations: Conversation[];
+export interface CreateSessionRequest {
+  user_request: string
+  references?: string[]
+  possess?: boolean
 }
 
-export interface CommonParams {
-  title?: string;
-  content?: string;
-  references?: Record<string, string>;
+export interface CreateSessionResponse {
+  session_id: string
+  status: string
 }
 
-export interface Question {
-  id: number;
-  question: CommonParams;
-  answer: CommonParams;
+export interface GetSessionResponse {
+  id: string
+  status: string
+  created_at: string
+  updated_at: string
+  possessed: boolean
 }
-
-export interface Action {
-  typ: 'talk' | 'act';
-  conversation_id?: string;
-  object?: string;
-  method?: string;
-  request?: unknown;
-  response?: CommonParams;
-}
-
-export interface ManualThinkRequest {
-  conversation_id: string;
-  prompt?: string;
-  tools?: string[];
-  llm_method?: string;
-  llm_params?: unknown;
-}
-
-export interface Conversation {
-  id: string;
-  from: string;
-  to: string;
-  title?: string;
-  desc?: string;
-  request: CommonParams;
-  response: CommonParams;
-  questions: Question[];
-  actions: Action[];
-  status: string;
-  mode?: string; // 对话执行模式（manual/hosted/semi_hosted）
-  waiting_manual_think_request?: ManualThinkRequest; // 等待手动思考的请求（当 status 为 waiting_manual_think 时）
-  updated_at: string; // 最后更新时间（ISO 8601 格式）
-}
-
-// ========== Info 相关 ==========
-
-export interface Info {
-  id: string;
-  name: string;
-  description: string;
-  prompt?: string; // 可选，仅在 detail=true 时返回
-  methods?: string[]; // 可选，仅在 detail=true 时返回
-}
-
-export interface InfoListItem {
-  id: string;
-  name: string;
-  description: string;
-  class: string;
-}
-
-export interface ListInfosResponse {
-  infos: InfoListItem[];
-}
-
-// ========== Ask 相关 ==========
-
-export interface AskRequest {
-  conversation_id: string; // 对话 ID（多轮交互下需要指定）
-  question_id: number;
-  answer: string;
-  references?: Record<string, string>;
-}
-
-// ========== Possess 相关 ==========
-
-export interface SetPossessRequest {
-  possess: boolean;
-}
-
-export interface SetPossessResponse {
-  possessed: boolean;
-}
-
-export interface GetPossessRequestResponse {
-  has_request: boolean;
-  prompt?: string;
-  tools?: string[];
-  llm_method?: string; // LLM 输出的方法名
-  llm_params?: unknown; // LLM 输出的参数（JSON 格式）
-}
-
-export interface RespondPossessRequest {
-  method: string;
-  parameters: unknown;
-  references?: Record<string, string>; // key = info id, value = reason
-  error?: string;
-}
-
-// ========== Talk 相关 ==========
 
 export interface TalkRequest {
-  talk_with: string;
-  title?: string;
-  content: string;
-  references?: Record<string, string>; // key = info id, value = reason
+  talk_with: string
+  title?: string
+  content: string
+  references?: Record<string, string>
 }
 
 export interface TalkResponse {
-  conversation_id: string;
+  conversation_id: string
 }
 
-// ========== Manual Think 相关 ==========
+export interface CommonParamsResponse {
+  title?: string
+  content?: string
+  references?: Record<string, string>
+}
 
-export interface RespondManualThinkRequest {
-  conversation_id: string;
-  method: string;
-  parameters: unknown;
+export interface QuestionResponse {
+  id: number
+  question: CommonParamsResponse
+  answer: CommonParamsResponse
+}
+
+export interface ActionResponse {
+  typ: 'talk' | 'act'
+  conversation_id?: string
+  object?: string
+  method?: string
+  request?: unknown
+  response?: CommonParamsResponse
+}
+
+export interface ManualThinkRequestResponse {
+  conversation_id: string
+  prompt?: string
+  tools?: string[]
+  llm_method?: string
+  llm_params?: unknown
+}
+
+export interface ConversationResponse {
+  id: string
+  from: string
+  to: string
+  title?: string
+  desc?: string
+  request: CommonParamsResponse
+  response: CommonParamsResponse
+  questions: QuestionResponse[]
+  actions: ActionResponse[]
+  status: string
+  error?: string
+  mode?: string
+  waiting_manual_think_request?: ManualThinkRequestResponse
+  updated_at: string
+}
+
+export interface ListConversationsResponse {
+  conversations: ConversationResponse[]
 }
 
 export interface GetWaitingManualConversationsResponse {
-  conversations: Conversation[];
+  conversations: ConversationResponse[]
 }
 
-// ========== Continue Conversation 相关 ==========
-
-export interface ContinueConversationRequest {
-  content: string;
-  title?: string;
-  references?: Record<string, string>; // key = info id, value = reason
+export interface InfoListItem {
+  id: string
+  name: string
+  description: string
+  class: string
 }
 
-// ========== Config 相关 ==========
-
-export interface AIConfig {
-  provider: string;
-  api_key: string;
-  base_url: string;
-  model: string;
-  max_tokens: number;
-  timeout: number;
+export interface ListInfosResponse {
+  infos: InfoListItem[]
 }
 
-export interface ConfigResponse {
-  ai: AIConfig;
+export interface InfoResponse {
+  id: string
+  name: string
+  description: string
+  prompt?: string
+  methods?: string[]
+  class?: string
+}
+
+export interface SetPossessRequest {
+  possess: boolean
+}
+
+export interface SetPossessResponse {
+  possessed: boolean
+}
+
+export interface AnswerRequest {
+  conversation_id: string
+  question_id: number
+  answer: string
+  references?: Record<string, string>
+}
+
+export interface ManualThinkRequestPayload {
+  conversation_id: string
+  method: string
+  parameters: unknown
+}
+
+export interface ApiError extends Error {
+  status?: number
 }
 
