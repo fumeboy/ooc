@@ -8,22 +8,44 @@
 
 ## 路由
 - `POST /sessions`：创建 Session
-- `GET /sessions/{id}`：查询 Session 状态。
-- `POST /sessions/{id}/answer`：用户回答 Ask。
-- `GET /sessions/{id}/info/{info_id}`：获取 Session 下的 Info 信息。
+- `GET /sessions`：获取所有 Session 列表
+- `GET /sessions/{id}`：查询 Session 状态
+- `POST /sessions/{id}/talk`：用户发起对话（Talk）
+- `POST /sessions/{id}/answer`：用户回答 Ask
+- `GET /sessions/{id}/conversations`：获取 Session 下的所有 Conversation 列表
+- `GET /sessions/{id}/conversations/{conversation_id}`：获取指定 Conversation 详情
+- `GET /sessions/{id}/info/{info_id}`：获取 Session 下的 Info 信息
+- `GET /sessions/{id}/infos`：获取 Session 下的所有 Info 列表
+- `POST /sessions/{id}/possess`：设置附身状态（SetPossess）
+- `GET /sessions/{id}/waiting_manual_conversations`：获取等待手动思考的 Conversation 列表
+- `POST /sessions/{id}/manual_think`：回复手动思考请求（RespondManualThink）
+- `GET /conf`：获取配置信息
 
 ## 文件结构（遵循单一职责原则）
 - `server.go`：基础文件，包含 Server 结构体、NewServer、RegisterRoutes、辅助方法
-- `server.CreateSession.go`：CreateSession 方法实现（POST /sessions）。
-- `server.GetSession.go`：GetSession 方法实现（GET /sessions/{id}）。
-- `server.AnswerAsk.go`：AnswerAsk 方法实现（POST /sessions/{id}/answer）。
-- `server.GetInfo.go`：GetInfo 方法实现（GET /sessions/{id}/info/{info_id}）。
+- `server.CreateSession.go`：CreateSession 方法实现（POST /sessions）
+- `server.ListSessions.go`：ListSessions 方法实现（GET /sessions）
+- `server.GetSession.go`：GetSession 方法实现（GET /sessions/{id}）
+- `server.Talk.go`：Talk 方法实现（POST /sessions/{id}/talk）
+- `server.Answer.go`：Answer 方法实现（POST /sessions/{id}/answer）
+- `server.ListConversations.go`：ListConversations 方法实现（GET /sessions/{id}/conversations）
+- `server.GetConversation.go`：GetConversation 方法实现（GET /sessions/{id}/conversations/{conversation_id}）
+- `server.GetInfo.go`：GetInfo 方法实现（GET /sessions/{id}/info/{info_id}）
+- `server.ListInfos.go`：ListInfos 方法实现（GET /sessions/{id}/infos）
+- `server.Possess.go`：附身功能相关方法实现
+  - `SetPossess`：设置附身状态（POST /sessions/{id}/possess）
+  - `GetWaitingManualConversations`：获取等待手动思考的 Conversation 列表（GET /sessions/{id}/waiting_manual_conversations）
+  - `RespondManualThink`：回复手动思考请求（POST /sessions/{id}/manual_think）
 
 ## 核心实现
-- `Server`：HTTP 服务器，包含 Registry、Store、LLM Client、Manager、Engine。
-- `CreateSession`：创建 Session 和 Conversation，启动思考循环（异步）。
-- `GetSession`：获取 Session 状态和结果。
-- `AnswerAsk`：处理用户回答，继续思考循环。
+- `Server`：HTTP 服务器，包含 Store、LLM Client、Config
+- `CreateSession`：创建 Session 和 Engine，初始化 User 和 System 对象
+- `GetSession`：获取 Session 状态和结果，包括附身状态
+- `Talk`：用户发起对话，创建新的 Conversation 并启动思考循环
+- `Answer`：处理用户回答 Ask 问题，继续思考循环
+- `SetPossess`：设置 Session 的附身状态（开启/关闭）
+- `GetWaitingManualConversations`：获取所有状态为 `waiting_manual_think` 的 Conversation
+- `RespondManualThink`：处理用户对手动思考请求的回复，恢复思考循环
 
 ## 使用方式
 ```go

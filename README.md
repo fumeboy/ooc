@@ -71,12 +71,17 @@
 - `ModuleManager`：模块注册与调度
 - `ModuleProvider` 接口：`Executor(methodName string) MethodI`
 - `Conversation.Prompt()`：实现对话上下文组装，包含目标对象 Prompt、可交互对象列表、Action 模式下的方法文档、请求内容和执行历史
-- **LLM 附身功能**：允许用户介入 LLM 的决策过程
+- **对话模式管理**：支持三种对话执行模式
+  - `manual`：完全手动模式，每次思考都需要用户确认
+  - `hosted`：完全托管模式，自动执行思考循环
+  - `semi_hosted`：半托管模式，在附身状态下需要用户确认
+- **附身功能**：允许用户介入 LLM 的决策过程
+  - 通过 `SetPossess` API 开启/关闭附身模式
   - 附身模式下，每次思考时先调用 LLM 获取输出（方法名和参数）
   - 将 LLM 输出转发给用户，允许用户查看、修改或确认
   - 用户确认后，使用修改后的结果继续执行
-  - 附身时 ThinkLoop 会退出并更新 Session 状态为 `waiting_possess`
-  - 用户回复后通过 `ResumePossess` 恢复思考循环
+  - 附身时 ThinkLoop 会退出并更新 Conversation 状态为 `waiting_manual_think`
+  - 用户回复后通过 `ResumeManualThink` 恢复思考循环
 
 #### ✅ `internal/module/notebook`
 - `Module` 实现 `InfoI` 和 `Provider` 接口
@@ -87,12 +92,14 @@
 - `Session` 和 `Event` 数据结构
 - `MemoryStore` 实现，支持会话和事件存储
 - Session 状态管理：
-  - `pending`：会话正在进行
+  - `running`：会话正在进行
   - `completed`：会话完成
   - `waiting_answer`：等待用户回答 Ask 问题
-  - `waiting_possess`：等待用户确认/修改 LLM 输出（附身模式）
-  - `failed`：会话失败
-- 附身功能支持：Session 保存附身请求（`PossessRequest`），包含 LLM 的输出结果
+  - `waiting_manual_think`：等待用户确认/修改 LLM 输出（附身模式）
+  - `error`：会话失败
+- Session 状态聚合：从所有 Conversation 的状态中聚合，按优先级取最高状态
+  - 优先级（从高到低）：`waiting_manual_think` > `waiting_answer` > `running` > `error` > `completed`
+- 附身功能支持：通过 `Engine.Possessed` 字段控制附身状态，Conversation 保存手动思考请求（`WaitingManualThinkRequest`），包含 LLM 的输出结果
 
 #### ✅ `cmd/storybook`
 - Story Runner 实现，支持运行单个或所有测试用例
@@ -103,12 +110,13 @@
 #### ✅ `internal/server`
 - HTTP API 服务（使用 Echo 框架）
 - Session 管理 API：创建、查询、列表
-- Conversation 和 Info 查询 API
+- Conversation 管理 API：创建（Talk）、查询、列表
+- Info 查询 API：单个查询、列表查询
 - Ask 回答 API：处理 LLM 提出的问题
 - **附身功能 API**：
-  - `POST /api/sessions/:id/possess`：开启/关闭附身模式
-  - `GET /api/sessions/:id/possess/request`：获取当前的附身请求（包含 LLM 输出结果）
-  - `POST /api/sessions/:id/possess/respond`：回复附身请求（用户确认/修改后的结果）
+  - `POST /api/sessions/:id/possess`：设置附身状态（SetPossess），开启/关闭附身模式
+  - `GET /api/sessions/:id/waiting_manual_conversations`：获取等待手动思考的 Conversation 列表
+  - `POST /api/sessions/:id/manual_think`：回复手动思考请求（RespondManualThink），用户确认/修改后的结果
 
 ### 待实现模块
 - `internal/module/terminal`：shell 窗口控制
@@ -116,7 +124,9 @@
 - `internal/module/database`：数据持久化
 - `internal/module/browser`：网页读取
 - `cmd/server`：主程序入口
-- `web`：前端代码
+
+### 进行中
+- `web`：前端代码（布局/状态/测试规划已写入 `web/README.md` 与 `web/src/README.md`）
 
 ### 下一步
 - 实现其他模块（terminal/filesystem/database/browser）
