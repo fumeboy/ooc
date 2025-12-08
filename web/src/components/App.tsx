@@ -1,9 +1,11 @@
 // App 组件：提供整体布局、主题切换与左右分栏拖拽。
 import { useAtom } from 'jotai'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Main from './Main'
 import SessionListPanel from './session/SessionListPanel'
-import { layoutAtom } from '../atoms'
+import Homepage from './Homepage'
+import { selectedSessionIdAtom } from '../atoms'
 import type { ThemeMode } from '../styles/theme'
 import { applyTheme, toggleTheme } from '../styles/theme'
 
@@ -13,15 +15,57 @@ interface Props {
 
 export default function App({ initialTheme }: Props) {
   const [theme, setTheme] = useState<ThemeMode>(initialTheme)
-  const [layout, setLayout] = useAtom(layoutAtom)
+  const [selectedSessionId, setSelectedSessionId] = useAtom(selectedSessionIdAtom)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [showSessionList, setShowSessionList] = useState(false)
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { id: sessionIdFromPath } = useParams<{ id?: string }>()
+  const [searchParams] = useSearchParams()
+  const sessionIdFromQuery = searchParams.get('sessionId')
+
+  const initialSessionId = useMemo(() => {
+    if (sessionIdFromPath) return sessionIdFromPath
+    if (sessionIdFromQuery) return sessionIdFromQuery
+    const fromStorage = window.localStorage.getItem('lastSessionId')
+    return fromStorage || null
+  }, [sessionIdFromPath, sessionIdFromQuery])
+
+  const hasTabQuery = useMemo(() => {
+    return searchParams.has('tab') || searchParams.has('convTab') || searchParams.has('infoTab')
+  }, [searchParams])
 
   useEffect(() => {
     applyTheme(theme)
   }, [theme])
 
-  const columns = useMemo(() => `100%`, [])
+  useLayoutEffect(() => {
+    if (!selectedSessionId && initialSessionId) {
+      setSelectedSessionId(initialSessionId)
+    }
+  }, [selectedSessionId, initialSessionId, setSelectedSessionId])
+
+  useEffect(() => {
+    if (selectedSessionId) {
+      window.localStorage.setItem('lastSessionId', selectedSessionId)
+    }
+  }, [selectedSessionId])
+
+  useEffect(() => {
+    if (!selectedSessionId) return
+    const currentId = sessionIdFromPath || sessionIdFromQuery
+    if (currentId === selectedSessionId) return
+    const params = new URLSearchParams(location.search)
+    params.delete('sessionId')
+    const search = params.toString()
+    navigate(
+      {
+        pathname: `/session/${encodeURIComponent(selectedSessionId)}`,
+        search: search ? `?${search}` : '',
+      },
+      { replace: true }
+    )
+  }, [selectedSessionId, sessionIdFromPath, sessionIdFromQuery, navigate, location.search])
 
   return (
     <div className="min-h-screen w-full relative overflow-hidden" style={{ background: 'transparent' }}>
@@ -57,7 +101,11 @@ export default function App({ initialTheme }: Props) {
           height: '100%',
           width: '100%',
         }}>
-          <Main onToggleSessionList={() => setShowSessionList((v) => !v)} />
+          {(selectedSessionId || initialSessionId || hasTabQuery) ? (
+            <Main onToggleSessionList={() => setShowSessionList((v) => !v)} />
+          ) : (
+            <Homepage />
+          )}
           <SessionListPanel
             visible={showSessionList}
             onClose={() => setShowSessionList(false)}

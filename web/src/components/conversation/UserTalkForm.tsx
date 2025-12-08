@@ -8,9 +8,10 @@ import type { InfoListItem } from '../../types/api'
 interface Props {
   sessionId: string
   onSent?: () => void
+  floating?: boolean
 }
 
-export default function UserTalkForm({ sessionId, onSent }: Props) {
+export default function UserTalkForm({ sessionId, onSent, floating = true }: Props) {
   const [content, setContent] = useState('')
   const [talkWith, setTalkWith] = useState('system::system')
   const [title, setTitle] = useState('')
@@ -100,24 +101,22 @@ export default function UserTalkForm({ sessionId, onSent }: Props) {
     })
   }
 
+  const baseStyle = {
+    width: 'min(900px, 100%)',
+    background: 'var(--bg-soft)',
+    backdropFilter: 'blur(18px) saturate(150%)',
+    border: '1px solid #ddd',
+    borderRadius: '12px',
+    boxShadow: '0 2px 2px rgba(0,0,0,0.10)',
+    zIndex: 5,
+  } as const
+
+  const floatingStyle = floating
+    ? { position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: '22px', ...baseStyle }
+    : { ...baseStyle, position: 'relative' as const }
+
   return (
-    <form
-      onSubmit={handleSubmit}
-      style={{
-        position: 'absolute',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        bottom: '22px',
-        width: 'min(880px, 94%)',
-        background: 'var(--bg-soft)',
-        backdropFilter: 'blur(18px) saturate(150%)',
-        border: '1px solid #ddd',
-        borderRadius: '12px',
-        boxShadow: '0 2px 2px rgba(0,0,0,0.10)',
-        zIndex: 5,
-      }}
-      className="talk-form p-1"
-    >
+    <form onSubmit={handleSubmit} style={floatingStyle} className="talk-form p-1">
       <div className="flex items-center gap-2 mb-2 flex-wrap px-3">
         <span aria-hidden style={{ fontSize: '16px' }}>💬</span>
         <h4 className="font-semibold text-sm">Talk</h4>

@@ -43,6 +43,7 @@ func (m *ModuleBase) Name() string {
 // SystemInfo 实现 System InfoI（meta.md 69-71）。
 type SystemInfo struct{}
 
+func (*SystemInfo) ID() string            { return WrapInfoID("system", "system") }
 func (*SystemInfo) Class() string         { return "system" }
 func (s *SystemInfo) Name() string        { return "system" }
 func (s *SystemInfo) Description() string { return "系统核心对象" }
@@ -167,6 +168,7 @@ type UserInfo struct {
 	mu            sync.Mutex      // 保护 conversations 的并发访问
 }
 
+func (u *UserInfo) ID() string          { return WrapInfoID("user", "user") }
 func (u *UserInfo) Class() string       { return "user" }
 func (u *UserInfo) Name() string        { return "user" }
 func (u *UserInfo) Description() string { return "用户对象" }
@@ -190,7 +192,7 @@ func (u *UserInfo) AddConversation(conv *Conversation) {
 
 	// 检查是否已存在（通过 ID 判断）
 	for _, existing := range u.conversations {
-		if existing.ID == conv.ID {
+		if existing.IDValue == conv.IDValue {
 			// 已存在，不重复添加
 			return
 		}

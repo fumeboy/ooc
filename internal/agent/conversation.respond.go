@@ -65,7 +65,7 @@ func (l *MethodRespond) Parameters() string {
 	}`
 }
 
-func (t *MethodRespond) Execute(conv *Conversation) (*Action, error) {
+func (t *MethodRespond) Execute(conv *Conversation) (*Activity, error) {
 	conv.Response = CommonParams{
 		Content:    t.Content,
 		References: t.References,

@@ -19,11 +19,8 @@ import (
 // InfoID 唯一标识一个信息对象。
 type InfoID = string
 
-func WrapInfoID(class string, name string) InfoID {
-	return fmt.Sprintf("%s::%s", class, name)
-}
-func WrapInfoID2(info InfoI) InfoID {
-	return fmt.Sprintf("%s::%s", info.Class(), info.Name())
+func WrapInfoID(class string, id string) InfoID {
+	return fmt.Sprintf("%s::%s", class, id)
 }
 
 // ConversationID 唯一标识一个对话。
@@ -31,6 +28,7 @@ type ConversationID = string
 
 // InfoI 定义可交互信息对象的接口（参考 meta.md 5-23）。
 type InfoI interface {
+	ID() string
 	Class() string
 	Name() string
 	Description() string
@@ -43,8 +41,8 @@ type MethodI interface {
 	Name() string
 	Description() string
 	Document() string
-	Parameters() string                          // JSON Schema
-	Execute(conv *Conversation) (*Action, error) // 执行方法（Action 模式的 Conversation）
+	Parameters() string                            // JSON Schema
+	Execute(conv *Conversation) (*Activity, error) // 执行方法（Activity 模式的 Conversation）
 }
 
 // Method 的执行默认会经过额外一轮 thinkloop 来帮助 Agent 构造 Method 的参数
@@ -84,9 +82,11 @@ const StatusError = "error"
 type Conversation struct {
 	engine *Engine
 
-	ID   ConversationID // 对话唯一标识
-	From InfoID         // 发起对话的信息对象 ID
-	To   InfoID         // 对话目标信息对象 ID
+	IDValue ConversationID // 对话唯一标识（含 class 前缀）
+	From    InfoID         // 发起对话的信息对象 ID
+	To      InfoID         // 对话目标信息对象 ID
+	// Parent 父级 Conversation ID（用于追问场景，将子会话串联到父会话）
+	Parent ConversationID
 
 	Title string // 对话标题
 	Desc  string // 对话描述
@@ -96,7 +96,7 @@ type Conversation struct {
 
 	Questions []*Question // 角色 To 向 From 提出的问题
 
-	Actions []*Action // 对话行动列表
+	Activities []*Activity // 对话活动列表（talk/act/ask 等）
 
 	Status string // 对话状态（如 completed、waiting_answer、error）
 	Error  string // 错误信息（当 Status 为 error 时）
@@ -119,8 +119,8 @@ type ManualThinkRequest struct {
 	LLMParams      json.RawMessage // LLM 输出的参数
 }
 
-type Action struct {
-	Typ string // talk or act
+type Activity struct {
+	Typ string // talk / act / ask
 
 	// when typ is talk
 	ConversationID ConversationID
@@ -130,6 +130,9 @@ type Action struct {
 	Method   string
 	Request  json.RawMessage
 	Response CommonParams
+
+	// when typ is ask
+	QuestionID int64
 }
 
 type Question struct {
@@ -171,6 +174,10 @@ func (c *Conversation) UpdateTimestamp() {
 
 type methodAsInfo struct {
 	MethodI
+}
+
+func (m *methodAsInfo) ID() string {
+	return WrapInfoID(m.Class(), m.Name())
 }
 
 func (m *methodAsInfo) Class() string {

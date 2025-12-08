@@ -1,28 +1,40 @@
 // Info 表格视图。
 import { useAtom } from 'jotai'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable, type ColumnPinningState, type ColumnSizingState } from '@tanstack/react-table'
-import { infosBySessionAtom, selectedInfoBySessionAtom } from '../../atoms'
+import { infosBySessionAtom, selectedInfoBySessionAtom, infoActiveTabBySessionAtom, infoDetailTabsBySessionAtom } from '../../atoms'
 import { getInfo, listInfos } from '../../api/client'
 import type { InfoListItem, InfoResponse } from '../../types/api'
 import TabSwitcher from '../common/TabSwitcher'
 import Tag from '../common/Tag'
 import { LuSearch } from "react-icons/lu";
 import { BsTable } from "react-icons/bs";
+import PageLayout from '../common/PageLayout'
+import LoadingSpinner from '../common/LoadingSpinner'
 
 interface Props {
   sessionId: string
+  onOpenConversation?: (conversationId: string) => void
+  initialActiveTab?: string
+  onActiveTabChange?: (tab: string) => void
 }
 
-export default function InfoTableTab({ sessionId }: Props) {
+export default function InfoTableTab({
+  sessionId,
+  onOpenConversation,
+  initialActiveTab = 'index',
+  onActiveTabChange,
+}: Props) {
   const [infosMap, setInfosMap] = useAtom(infosBySessionAtom)
   const [selectedMap, setSelectedMap] = useAtom(selectedInfoBySessionAtom)
+  const [activeTabMap, setActiveTabMap] = useAtom(infoActiveTabBySessionAtom)
+  const [detailTabsMap, setDetailTabsMap] = useAtom(infoDetailTabsBySessionAtom)
+
   const [detailMap, setDetailMap] = useState<Record<string, InfoResponse>>({})
   const [loading, setLoading] = useState(false)
   const [loadingDetails, setLoadingDetails] = useState<Record<string, boolean>>({})
-  const [activeTab, setActiveTab] = useState<string>('index')
-  const [detailTabs, setDetailTabs] = useState<string[]>([])
+  
   const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({ right: ['action'] })
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({
     id: 160,
@@ -32,7 +44,28 @@ export default function InfoTableTab({ sessionId }: Props) {
     action: 60,
   })
   const infos: InfoListItem[] = infosMap[sessionId] || []
-  const selectedId = selectedMap[sessionId] || null
+  // const selectedId = selectedMap[sessionId] || null
+  const activeTab = activeTabMap[sessionId] || 'index'
+  const detailTabs = detailTabsMap[sessionId] || []
+
+  const setActive = useCallback(
+    (key: string) => {
+      setActiveTabMap((prev) => ({ ...prev, [sessionId]: key }))
+      onActiveTabChange?.(key)
+    },
+    [sessionId, setActiveTabMap, onActiveTabChange]
+  )
+  
+  const setDetailTabsUpdater = useCallback(
+    (updater: (prev: string[]) => string[]) => {
+      setDetailTabsMap((prev) => {
+        const current = prev[sessionId] || []
+        const next = updater(current)
+        return { ...prev, [sessionId]: next }
+      })
+    },
+    [sessionId, setDetailTabsMap]
+  )
 
   useEffect(() => {
     let mounted = true
@@ -53,9 +86,9 @@ export default function InfoTableTab({ sessionId }: Props) {
     }
   }, [sessionId, setInfosMap])
 
-  const viewDetail = async (id: string) => {
-    setActiveTab(id)
-    setDetailTabs((prev) => (prev.includes(id) ? prev : [...prev, id]))
+  const viewDetail = useCallback(async (id: string) => {
+    setActive(id)
+    setDetailTabsUpdater((prev) => (prev.includes(id) ? prev : [...prev, id]))
     setSelectedMap((prev) => ({ ...prev, [sessionId]: id }))
     setLoadingDetails((prev) => ({ ...prev, [id]: true }))
     try {
@@ -64,14 +97,14 @@ export default function InfoTableTab({ sessionId }: Props) {
     } finally {
       setLoadingDetails((prev) => ({ ...prev, [id]: false }))
     }
-  }
+  }, [sessionId, setActive, setDetailTabsUpdater, setSelectedMap])
 
-  const closeDetailTab = (key: string) => {
-    setDetailTabs((prev) => prev.filter((id) => id !== key))
+  const closeDetailTab = useCallback((key: string) => {
+    setDetailTabsUpdater((prev) => prev.filter((id) => id !== key))
     if (activeTab === key) {
-      setActiveTab('index')
+      setActive('index')
     }
-  }
+  }, [activeTab, setActive, setDetailTabsUpdater])
 
   const tabs = useMemo(() => {
     const base = [{ key: 'index', label: 'Index' }]
@@ -83,13 +116,30 @@ export default function InfoTableTab({ sessionId }: Props) {
     return [...base, ...details]
   }, [detailTabs])
 
+  useEffect(() => {
+    if (!sessionId || !initialActiveTab) return
+    if (activeTab === initialActiveTab) return // Guard against infinite loop
+
+    if (initialActiveTab === 'index') {
+      setActive('index')
+      return
+    }
+    setActive(initialActiveTab)
+    setDetailTabsUpdater((prev) => (prev.includes(initialActiveTab) ? prev : [...prev, initialActiveTab]))
+    viewDetail(initialActiveTab)
+  }, [initialActiveTab, sessionId, setActive, setDetailTabsUpdater, viewDetail, activeTab])
+
+  // Removed onActiveTabChange effect as it's now handled in setActive callback
+  
+  // Removed initialActiveTab forcing logic as it's handled above
+
   const palette = ['#2563eb', '#16a34a', '#f59e0b', '#f97316', '#8b5cf6', '#0ea5e9', '#14b8a6', '#ef4444']
-  const classColor = (cls: string) => {
+  const classColor = useCallback((cls: string) => {
     let hash = 0
     for (let i = 0; i < cls.length; i++) hash = (hash * 31 + cls.charCodeAt(i)) >>> 0
     const idx = hash % palette.length
     return palette[idx]
-  }
+  }, [])
 
   const columnHelper = createColumnHelper<InfoListItem>()
 
@@ -131,7 +181,7 @@ export default function InfoTableTab({ sessionId }: Props) {
         meta: { pinned: true },
       }),
     ],
-    [classColor, columnSizing]
+    [classColor, columnSizing, viewDetail]
   )
 
   const table = useReactTable({
@@ -150,6 +200,9 @@ export default function InfoTableTab({ sessionId }: Props) {
 
   const renderDetail = (id: string) => {
     const detail = detailMap[id]
+    const fallbackCls = infos.find((i) => i.id === id)?.class
+    const cls = detail?.class || fallbackCls || ''
+    const isConversation = cls.toLowerCase().includes('conversation')
     if (loadingDetails[id]) {
       return <TabPage>加载中...</TabPage>
     }
@@ -161,6 +214,15 @@ export default function InfoTableTab({ sessionId }: Props) {
         <div className="space-y-2 text-sm">
           <div className="font-semibold">{detail.name}</div>
           <div className="text-slate-500">{detail.description}</div>
+          {isConversation && (
+            <button
+              className="btn-primary text-xs"
+              style={{ width: 'fit-content', padding: '6px 12px', borderRadius: '10px' }}
+              onClick={() => onOpenConversation?.(id)}
+            >
+              查看会话详情
+            </button>
+          )}
           {detail.prompt && (
             <div>
               <div className="text-xs text-slate-500">Prompt</div>
@@ -184,17 +246,22 @@ export default function InfoTableTab({ sessionId }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between mb-2" id='InfosTabHeader'>
-        <div className="flex items-center gap-3 px-1">
-          <BsTable size={20} color="green" />
-          <h4 className="font-semibold">Infos</h4>
-        </div>
-        <TabSwitcher tabs={tabs} activeKey={activeTab} onChange={setActiveTab} onClose={closeDetailTab} />
-      </div>
+    <PageLayout
+      header={
+        <>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-4 rounded-lg border border-gray-300">
+              <BsTable size={18} color="green" />
+              <h4 className="font-semibold">Infos</h4>
+            </div>
+            <LoadingSpinner loading={loading} text="加载中..." />
+          </div>
+          <TabSwitcher tabs={tabs} activeKey={activeTab} onChange={setActive} onClose={closeDetailTab} />
+        </>
+      }
+    >
       {activeTab === 'index' ? (
-        <div className="card scroll-area" style={{ maxHeight: '520px' }}>
-          {loading && <span className="text-xs text-slate-500">加载中...</span>}
+        <TabPage className="" style={{}}>
           <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
@@ -255,11 +322,11 @@ export default function InfoTableTab({ sessionId }: Props) {
             </tbody>
           </table>
           {infos.length === 0 && <div className="text-sm text-slate-500 mt-2">暂无 Info</div>}
-        </div>
+        </TabPage>
       ) : (
         renderDetail(activeTab)
       )}
-    </div>
+    </PageLayout>
   )
 }
 
@@ -282,11 +349,11 @@ const TabPage = styled.div`
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  padding: 12px;
-  box-shadow: var(--shadow);
-  overflow: auto;
+  /* background: var(--bg-secondary); */
+  /* border: 1px solid var(--border-color); */
+  /* border-radius: var(--radius); */
+  /* padding: 12px; */
+  /* box-shadow: var(--shadow); */
+  overflow-y: scroll;
 `;
 

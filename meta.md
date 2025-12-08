@@ -39,7 +39,7 @@ Conversation 的上下文包括:
 - Conversation.To 的 Prompt: 可交互信息对象的私有提示词
 - Request: 用户输入的原始需求
 - Request.References: 用户输入的原始需求引用的其他相关的可交互信息对象
-- Actions: 思考循环过程中的执行记录
+- Activities: 思考循环过程中的执行记录
 - Methods: 可执行动作的列表
 
 Conversation 的 思考循环 过程中，不需要告诉 LLM Conversation.From 是谁，只需要告诉 LLM 需要做出回复

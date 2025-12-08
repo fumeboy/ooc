@@ -2,9 +2,9 @@
 @import "tailwindcss";
 
 :root {
-  --html-bg: #eeeeee;
+  --html-bg: #ebece8;
   --bg-primary: rgba(255, 255, 255, 0.58);
-  --bg-secondary: rgba(255, 255, 255, 0.38);
+  --bg-secondary: #f8f8f6;
   --bg-blur: rgba(255, 255, 255, 0.45);
   --bg-deep: #f1f1f1;
   --bg-soft: #fafafa;
@@ -12,9 +12,9 @@
   --text-primary: #1f2937;
   --text-secondary: #6a788c;
   --text-tertiary: #6b7280;
-  --border-color: rgba(0, 0, 0, 0.08);
+  --border-color: #e7e7e5;
   --accent-color: #2563eb;
-  --radius: 6px;
+  --radius: 10px;
   --shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   --shadow-hover: 0 6px 14px rgba(0, 0, 0, 0.18);
   color-scheme: light;
@@ -80,7 +80,7 @@ body {
 }
 
 .btn-secondary {
-  background: #bdbdbd17;
+  background: #ffffff;
   color: var(--text-primary);
   border-color: rgba(0, 0, 0, 0.08);
 }
@@ -128,7 +128,7 @@ body {
 
 .tab-active {
   background: var(--bg-moredeep);
-  border-color: rgba(0, 0, 0, 0.18);
+  border-color: transparent;
   color: var(--text-primary);
 }
 

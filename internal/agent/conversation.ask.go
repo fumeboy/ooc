@@ -51,9 +51,10 @@ func (l *MethodAsk) Parameters() string {
 	}`
 }
 
-func (t *MethodAsk) Execute(conv *Conversation) (*Action, error) {
+func (t *MethodAsk) Execute(conv *Conversation) (*Activity, error) {
+	qid := int64(len(conv.Questions)) + 1
 	conv.Questions = append(conv.Questions, &Question{
-		Id: int64(len(conv.Questions)) + 1,
+		Id: qid,
 		Question: CommonParams{
 			Content:    t.Content,
 			References: t.References,
@@ -63,5 +64,8 @@ func (t *MethodAsk) Execute(conv *Conversation) (*Action, error) {
 
 	conv.Status = StatusWaitingAnswer
 
-	return nil, nil
+	return &Activity{
+		Typ:        "ask",
+		QuestionID: qid,
+	}, nil
 }

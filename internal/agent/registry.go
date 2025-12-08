@@ -14,6 +14,7 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -45,7 +46,10 @@ func (r *Registry) RegisterInfo(info InfoI) (InfoID, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	id := WrapInfoID(info.Class(), info.Name())
+	id := info.ID()
+	if id == "" {
+		return "", errors.New("info id is empty")
+	}
 	r.infos[id] = info
 	return id, nil
 }
@@ -71,16 +75,21 @@ func (r *Registry) ReleaseInfo(id InfoID) error {
 
 // RegisterConversation 注册对话。
 func (r *Registry) RegisterConversation(conv *Conversation) (ConversationID, error) {
-	if conv.ID == "" {
-		conv.ID = ConversationID(r.idGen.next("conv"))
+	if conv.IDValue == "" {
+		raw := r.idGen.next("conv")
+		conv.IDValue = ConversationID(WrapInfoID(conv.Class(), raw))
 	}
 	r.RegisterInfo(conv)
-	return conv.ID, nil
+	return conv.IDValue, nil
 }
 
 // GetConversation 返回对话。
 func (r *Registry) GetConversation(id ConversationID) (*Conversation, bool) {
-	info, ok := r.GetInfo(WrapInfoID("conversation", id))
+	key := string(id)
+	if !strings.Contains(key, "::") {
+		key = WrapInfoID("conversation", key)
+	}
+	info, ok := r.GetInfo(key)
 	if !ok {
 		return nil, false
 	}

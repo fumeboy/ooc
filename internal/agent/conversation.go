@@ -13,19 +13,26 @@ func (c *Conversation) Class() string {
 	return "conversation"
 }
 
+// ID 返回 Conversation 的完整 ID（含 class 前缀）。
+func (c *Conversation) ID() string {
+	return string(c.IDValue)
+}
+
 // Name 返回 Conversation 的名称。
 func (c *Conversation) Name() string {
-	return c.ID
+	if c.Title != "" {
+		return c.Title
+	}
+	return strings.TrimPrefix(string(c.IDValue), c.Class()+"::")
 }
 
 // Description 返回 Conversation 的描述。
 func (c *Conversation) Description() string {
 	var desc strings.Builder
-	if c.Title != "" {
-		desc.WriteString("标题: " + c.Title + "; ")
-	}
 	if c.Desc != "" {
 		desc.WriteString("描述: " + c.Desc + "; ")
+	} else if c.Title != "" {
+		desc.WriteString("标题: " + c.Title + "; ")
 	}
 	if desc.Len() > 0 {
 		return desc.String()
@@ -44,33 +51,23 @@ func (c *Conversation) Methods() []MethodI {
 	}
 }
 
+// conversationSystemPrompt 返回通用的 system prompt，介绍 Conversation 机制与可用方法。
+func conversationSystemPrompt() string {
+	var prompt strings.Builder
+	prompt.WriteString("# Conversation 机制\n")
+	prompt.WriteString("Conversation 记录 From（会话发起者）与 To（被对话者）之间的一次对话，。“你” 是其中的被对话者，需要根据对方输入的信息和你自己的信息进行思考和行动。\n")
+	prompt.WriteString("\n## 可用方法\n")
+	prompt.WriteString("- respond: 完成当前对话并返回结果给会话发起者。\n")
+	prompt.WriteString("- talk: 向其他信息对象发起新的对话; 所有信息对象都可对话，特别地，对象的方法本身也可作为可谈话的对象、而 Conversation 对象本身也可以对话（你可以向这个谈话过程进行追问更多信息）。\n")
+	prompt.WriteString("- ask: 向会话发起者提出问题，等待回答。\n")
+	prompt.WriteString("- focus: 聚焦子问题。\n")
+	return prompt.String()
+}
+
 // Prompt 组装对话上下文。
 // 如果是 Action 模式，会包含 Method 的 Document 和 Parameters（meta.md 65）。
 func (conv *Conversation) Prompt() string {
 	var prompt strings.Builder
-	prompt.WriteString(`
-# Conversation 机制
-Conversation 是 OOC（Object-Oriented Context）的核心概念，它记录了一次对话的上下文。
-在 OOC 中，一切信息对象都是可对话的，包括 Conversation 本身、包括信息对象的可执行方法。而 Conversation 是两个信息对象之间的对话记录。
-Conversation 有两个角色，From 和 To，From 是发起对话的信息对象，To 是被对话的信息对象。
-在下文中，列出了 你（对应角色 Conversation To） 的信息、发起对话的信息对象（From）的信息以及这一次 Conversation 的信息
-`) // 说明 Conversation 机制
-
-	// 0. 展示 Conversation.From 的信息
-	fromInfo, ok := conv.engine.registry.GetInfo(conv.From)
-	if ok && fromInfo != nil {
-		prompt.WriteString("\n## 发起对话的信息对象（From）\n")
-		prompt.WriteString("ID: " + conv.From + "\n")
-		prompt.WriteString("类型: " + fromInfo.Class() + "\n")
-		prompt.WriteString("名称: " + fromInfo.Name() + "\n")
-		if description := fromInfo.Description(); description != "" {
-			prompt.WriteString("描述: " + description + "\n")
-		}
-		if p := fromInfo.Prompt(); p != "" {
-			prompt.WriteString("提示词:\n" + p + "\n")
-		}
-		prompt.WriteString("\n")
-	}
 
 	// 如果 Conversation 处于错误状态，展示错误信息
 	if conv.Status == StatusError && conv.Error != "" {
@@ -97,7 +94,7 @@ Conversation 有两个角色，From 和 To，From 是发起对话的信息对象
 					prompt.WriteString("参数 Schema:\n" + method.Parameters() + "\n\n")
 				}
 			}
-		} else {
+		} else if toInfo.Class() != "conversation" { // 避免套娃
 			prompt.WriteString("## 当前信息对象（你）\n")
 			prompt.WriteString("ID: " + conv.To + "\n")
 			prompt.WriteString("类型: " + toInfo.Class() + "\n")
@@ -129,12 +126,13 @@ Conversation 有两个角色，From 和 To，From 是发起对话的信息对象
 			}
 		}
 
-		// 从 Actions 中收集引用的信息对象
-		for _, action := range conv.Actions {
-			if action.Typ == "talk" {
-				// talk 类型的 Action 会创建新的 Conversation，从子对话中收集引用
-				if subConv, exists := conv.engine.registry.GetConversation(action.ConversationID); exists {
-					refInfos[WrapInfoID(subConv.Class(), string(subConv.ID))] = subConv
+		// 从 Activities 中收集引用的信息对象
+		for _, activity := range conv.Activities {
+			switch activity.Typ {
+			case "talk", "focus":
+				// talk 类型的 Activity 会创建新的 Conversation，从子对话中收集引用
+				if subConv, exists := conv.engine.registry.GetConversation(activity.ConversationID); exists {
+					refInfos[subConv.ID()] = subConv
 					for refID := range subConv.Request.References {
 						if info, exists := conv.engine.registry.GetInfo(InfoID(refID)); exists {
 							refInfos[InfoID(refID)] = info
@@ -146,12 +144,12 @@ Conversation 有两个角色，From 和 To，From 是发起对话的信息对象
 						}
 					}
 				}
-			} else if action.Typ == "act" {
-				// act 类型的 Action 会引用 Object
-				if info, exists := conv.engine.registry.GetInfo(action.Object); exists {
-					refInfos[action.Object] = info
+			case "act":
+				// act 类型的 Activity 会引用 Object
+				if info, exists := conv.engine.registry.GetInfo(activity.Object); exists {
+					refInfos[activity.Object] = info
 				}
-				for refID := range action.Response.References {
+				for refID := range activity.Response.References {
 					if info, exists := conv.engine.registry.GetInfo(InfoID(refID)); exists {
 						refInfos[InfoID(refID)] = info
 					}
@@ -182,39 +180,58 @@ Conversation 有两个角色，From 和 To，From 是发起对话的信息对象
 		}
 	}
 
-	// 2. Request.Content + Request.References
-	prompt.WriteString("## 用户请求\n")
-	prompt.WriteString("内容: " + conv.Request.Content + "\n")
-	if len(conv.Request.References) > 0 {
-		prompt.WriteString("引用的信息对象:\n")
-		for refID, reason := range conv.Request.References {
-			if info, exists := conv.engine.registry.GetInfo(InfoID(refID)); exists {
-				prompt.WriteString("- 信息对象ID: " + refID + "\n")
-				prompt.WriteString("  类型: " + info.Class() + "\n")
-				prompt.WriteString("  名称: " + info.Name() + "\n")
-				prompt.WriteString("  引用原因: " + reason + "\n")
-				prompt.WriteString("\n")
+	// step 计数器放在 renderActivities 外层，因为可能存在父会话，需要连通多个会话的 step 序号
+	step := 1
+
+	// 2. Conversation.Activities（支持父会话 + 当前会话的连续展示，将 Request/Activities/Response 串联）
+	renderActivities := func(target *Conversation, title string) {
+		prompt.WriteString(title)
+
+		renderRefs := func(refs map[string]string) {
+			if len(refs) == 0 {
+				return
 			}
+			prompt.WriteString("引用的信息对象:\n")
+			for refID, reason := range refs {
+				if info, exists := target.engine.registry.GetInfo(InfoID(refID)); exists {
+					prompt.WriteString("- 信息对象ID: " + refID + "\n")
+					prompt.WriteString("  类型: " + info.Class() + "\n")
+					prompt.WriteString("  名称: " + info.Name() + "\n")
+					prompt.WriteString("  引用原因: " + reason + "\n")
+				}
+			}
+			prompt.WriteString("\n")
 		}
-	}
-	prompt.WriteString("\n")
 
-	// 3. Conversation.Actions
-	if len(conv.Actions) > 0 {
-		prompt.WriteString("## 执行过程\n")
-		for i, action := range conv.Actions {
-			prompt.WriteString(fmt.Sprintf("### 步骤 %d\n", i+1))
+		// Request 作为首个 activity
+		if target.Request.Content != "" || len(target.Request.References) > 0 {
+			prompt.WriteString(fmt.Sprintf("### Activity %d (Request)\n", step))
+			step++
+			prompt.WriteString("类型: Request\n")
+			prompt.WriteString("内容: " + target.Request.Content + "\n")
+			renderRefs(target.Request.References)
+		}
 
-			if action.Typ == "talk" {
-				// 3.1 对于 talk 类型的 Action，展示 sub conversation 的 Request + Questions + Response
-				prompt.WriteString("类型: Talk\n")
-				if subConv, exists := conv.engine.registry.GetConversation(action.ConversationID); exists {
-					prompt.WriteString("子对话 ID: " + string(action.ConversationID) + "\n")
+		// 中间的 activities
+		for _, activity := range target.Activities {
+			prompt.WriteString(fmt.Sprintf("### Activity %d\n", step))
+			step++
 
-					convTo, _ := conv.engine.registry.GetInfo(subConv.To)
+			if activity.Typ == "talk" || activity.Typ == "focus" {
+				// 对于 talk 类型的 Activity，展示子对话的 Request + Questions + Response
+				if activity.Typ == "focus" {
+					prompt.WriteString("类型: Focus（子问题）\n")
+				} else {
+					prompt.WriteString("类型: Talk\n")
+				}
+				if subConv, exists := target.engine.registry.GetConversation(activity.ConversationID); exists {
+					prompt.WriteString("子对话 ID: " + string(activity.ConversationID) + "\n")
 
-					prompt.WriteString("对话目标: " + WrapInfoID(convTo.Class(), convTo.Name()) + "\n")
-					prompt.WriteString("对话目标描述: " + convTo.Description() + "\n")
+					convTo, _ := target.engine.registry.GetInfo(subConv.To)
+					if convTo != nil {
+						prompt.WriteString("对话目标: " + convTo.ID() + "\n")
+						prompt.WriteString("对话目标描述: " + convTo.Description() + "\n")
+					}
 					prompt.WriteString("对话标题: " + subConv.Title + "\n")
 					prompt.WriteString("请求: " + subConv.Request.Content + "\n")
 
@@ -232,37 +249,37 @@ Conversation 有两个角色，From 和 To，From 是发起对话的信息对象
 						prompt.WriteString("对话目标的最终回复: " + subConv.Response.Content + "\n")
 					}
 				}
-			} else if action.Typ == "act" {
-				// 3.2 对于 act 类型的 Action，展示 Object.Name + Object.Description + Object.Method + Object.Method.Description + Request + Response
+			} else if activity.Typ == "act" {
+				// 对于 act 类型的 Activity，展示 Object 信息与执行摘要
 				prompt.WriteString("类型: Act\n")
-				if objInfo, exists := conv.engine.registry.GetInfo(action.Object); exists {
-					prompt.WriteString("信息对象ID: " + string(action.Object) + "\n")
+				if objInfo, exists := target.engine.registry.GetInfo(activity.Object); exists {
+					prompt.WriteString("信息对象ID: " + string(activity.Object) + "\n")
 					prompt.WriteString("类型: " + objInfo.Class() + "\n")
 					prompt.WriteString("名称: " + objInfo.Name() + "\n")
 					prompt.WriteString("对象描述: " + objInfo.Description() + "\n")
 				}
-				prompt.WriteString("执行方法: " + action.Method + "\n")
+				prompt.WriteString("执行方法: " + activity.Method + "\n")
 
 				// 尝试获取方法的描述
-				if objInfo, exists := conv.engine.registry.GetInfo(action.Object); exists {
+				if objInfo, exists := target.engine.registry.GetInfo(activity.Object); exists {
 					for _, method := range objInfo.Methods() {
-						if method.Name() == action.Method {
+						if method.Name() == activity.Method {
 							prompt.WriteString("方法描述: " + method.Description() + "\n")
 							break
 						}
 					}
 				}
 
-				if len(action.Request) > 0 {
-					prompt.WriteString("请求参数: " + string(action.Request) + "\n")
+				if len(activity.Request) > 0 {
+					prompt.WriteString("请求参数: " + string(activity.Request) + "\n")
 				}
-				if action.Response.Content != "" {
-					prompt.WriteString("响应: " + action.Response.Content + "\n")
+				if activity.Response.Content != "" {
+					prompt.WriteString("响应: " + activity.Response.Content + "\n")
 				}
-				if len(action.Response.References) > 0 {
+				if len(activity.Response.References) > 0 {
 					prompt.WriteString("响应引用的信息对象:\n")
-					for refID, reason := range action.Response.References {
-						if info, exists := conv.engine.registry.GetInfo(InfoID(refID)); exists {
+					for refID, reason := range activity.Response.References {
+						if info, exists := target.engine.registry.GetInfo(InfoID(refID)); exists {
 							prompt.WriteString("- 信息对象ID: " + refID + "\n")
 							prompt.WriteString("  类型: " + info.Class() + "\n")
 							prompt.WriteString("  名称: " + info.Name() + "\n")
@@ -270,29 +287,48 @@ Conversation 有两个角色，From 和 To，From 是发起对话的信息对象
 						}
 					}
 				}
+			} else if activity.Typ == "ask" {
+				prompt.WriteString("类型: Ask\n")
+				// 查找问题详情
+				var question *Question
+				for _, q := range target.Questions {
+					if q.Id == activity.QuestionID {
+						question = q
+						break
+					}
+				}
+				if question != nil {
+					prompt.WriteString(fmt.Sprintf("问题 ID: %d\n", question.Id))
+					prompt.WriteString("问题: " + question.Question.Content + "\n")
+					renderRefs(question.Question.References)
+					if question.Answer.Content != "" {
+						prompt.WriteString("回答: " + question.Answer.Content + "\n")
+						renderRefs(question.Answer.References)
+					} else {
+						prompt.WriteString("回答: (等待中)\n")
+					}
+				} else {
+					prompt.WriteString(fmt.Sprintf("问题未找到 (ID: %d)\n", activity.QuestionID))
+				}
 			}
 			prompt.WriteString("\n")
+		}
+
+		// Response 作为末尾 activity
+		if target.Response.Content != "" || len(target.Response.References) > 0 {
+			prompt.WriteString(fmt.Sprintf("### Activity %d (Response)\n", step))
+			prompt.WriteString("类型: Response\n")
+			prompt.WriteString("内容: " + target.Response.Content + "\n")
+			renderRefs(target.Response.References)
 		}
 	}
 
-	// 注意 conv.Questions 是对外提出的问题，是需要等待用户回答的
-	if len(conv.Questions) > 0 {
-		var hasAnswer bool
-		for _, q := range conv.Questions {
-			if q.Answer.Content != "" {
-				hasAnswer = true
-				break
-			}
-		}
-		if hasAnswer {
-			prompt.WriteString("## 当前 Conversation 中, 你向对方提出的并被回答的问题\n")
-			for _, q := range conv.Questions {
-				prompt.WriteString("- 问题: " + q.Question.Content + "\n")
-				prompt.WriteString("  回答: " + q.Answer.Content + "\n")
-			}
-			prompt.WriteString("\n")
+	if conv.Parent != "" {
+		if parentConv, exists := conv.engine.registry.GetConversation(conv.Parent); exists {
+			renderActivities(parentConv, "## 父对话的执行过程\n")
 		}
 	}
+	renderActivities(conv, "## 执行过程\n")
 
 	return prompt.String()
 }

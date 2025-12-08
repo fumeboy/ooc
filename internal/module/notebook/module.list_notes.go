@@ -36,7 +36,7 @@ func (l *ListNotes) Parameters() string {
 }
 
 // Execute 执行列出笔记操作（实现 agent.MethodI.Execute）。
-func (l *ListNotes) Execute(conv *agent.Conversation) (*agent.Action, error) {
+func (l *ListNotes) Execute(conv *agent.Conversation) (*agent.Activity, error) {
 	if l.Module == nil {
 		return nil, fmt.Errorf("module is nil")
 	}
@@ -48,7 +48,7 @@ func (l *ListNotes) Execute(conv *agent.Conversation) (*agent.Action, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &agent.Action{
+	return &agent.Activity{
 		Response: agent.CommonParams{
 			Content: string(data),
 		},

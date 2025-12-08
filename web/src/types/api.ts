@@ -54,13 +54,14 @@ export interface QuestionResponse {
   answer: CommonParamsResponse
 }
 
-export interface ActionResponse {
-  typ: 'talk' | 'act'
+export interface ActivityResponse {
+  typ: 'talk' | 'act' | 'ask' | 'focus'
   conversation_id?: string
   object?: string
   method?: string
   request?: unknown
   response?: CommonParamsResponse
+  question_id?: number
 }
 
 export interface ManualThinkRequestResponse {
@@ -80,7 +81,7 @@ export interface ConversationResponse {
   request: CommonParamsResponse
   response: CommonParamsResponse
   questions: QuestionResponse[]
-  actions: ActionResponse[]
+  activities: ActivityResponse[]
   status: string
   error?: string
   mode?: string

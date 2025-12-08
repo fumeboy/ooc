@@ -100,7 +100,7 @@ func (e *Engine) UserTalk(talkWith string, title string, content string, referen
 		TalkWith:   talkWith,
 	}
 
-	action, err := methodTalk.execute(WrapInfoID2(e.User))
+	action, err := methodTalk.execute(e.User.ID())
 	if err != nil {
 		return "", fmt.Errorf("execute talk failed: %w", err)
 	}
@@ -116,7 +116,7 @@ func (e *Engine) GetLastConversationCreatedByUser() ConversationID {
 	// 从后往前查找，找到最后一个 User 作为 From 的 conversation
 	for i := len(convs) - 1; i >= 0; i-- {
 		if convs[i].From == userID {
-			return convs[i].ID
+			return convs[i].IDValue
 		}
 	}
 
@@ -175,7 +175,7 @@ func (e *Engine) ResumeManualThink(convID ConversationID, method string, paramet
 
 	// respond 等特殊方法没有返回 Action，无需处理
 	if action != nil {
-		conv.Actions = append(conv.Actions, action)
+		conv.Activities = append(conv.Activities, action)
 		conv.UpdatedAt = time.Now()
 	}
 
@@ -190,6 +190,7 @@ func (e *Engine) ResumeManualThink(convID ConversationID, method string, paramet
 func (e *Engine) Think(conv *Conversation) error {
 	// 1. AssembleContext：构造 LLM 输入
 	req := conv.Prompt()
+	systemPrompt := conversationSystemPrompt()
 
 	// 2. 准备工具列表
 	tools := make([]llm.Tool, 0, len(conv.Methods()))
@@ -259,7 +260,7 @@ func (e *Engine) Think(conv *Conversation) error {
 	if actualMode == ConversationModeManual {
 		conv.Status = StatusWaitingManualThink
 		conv.WaitingManualThinkRequest = &ManualThinkRequest{
-			ConversationID: conv.ID,
+			ConversationID: conv.IDValue,
 			Prompt:         req,
 			Tools:          toolNames,
 		}
@@ -270,6 +271,9 @@ func (e *Engine) Think(conv *Conversation) error {
 	resp, err := e.llm.Call(&llm.Request{
 		Prompt: req,
 		Tools:  tools,
+		Messages: []llm.Message{
+			{Role: "system", Content: systemPrompt},
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("llm call failed: %w", err)
@@ -280,7 +284,7 @@ func (e *Engine) Think(conv *Conversation) error {
 
 		conv.Status = StatusWaitingManualThink
 		conv.WaitingManualThinkRequest = &ManualThinkRequest{
-			ConversationID: conv.ID,
+			ConversationID: conv.IDValue,
 			Prompt:         req,
 			Tools:          toolNames,
 			LLMMethod:      resp.Method,
@@ -306,7 +310,7 @@ func (e *Engine) Think(conv *Conversation) error {
 	}
 
 	// 5. 更新 conv
-	conv.Actions = append(conv.Actions, action)
+	conv.Activities = append(conv.Activities, action)
 	return nil
 }
 
@@ -316,18 +320,18 @@ func (e *Engine) NotifyConversationRunning(conv *Conversation) {
 	defer e.runningMu.Unlock()
 
 	// 检查是否已经在运行
-	if _, exists := e.runningConversations[conv.ID]; exists {
+	if _, exists := e.runningConversations[conv.IDValue]; exists {
 		return
 	}
 
 	// 记录正在运行的 conversation
-	e.runningConversations[conv.ID] = conv
+	e.runningConversations[conv.IDValue] = conv
 
 	// 启动 thinkloop
 	go func() {
 		defer func() {
 			e.runningMu.Lock()
-			delete(e.runningConversations, conv.ID)
+			delete(e.runningConversations, conv.IDValue)
 			e.runningMu.Unlock()
 		}()
 		e.ThinkLoop(conv)

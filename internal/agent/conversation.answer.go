@@ -58,7 +58,7 @@ func (l *MethodAnswer) Parameters() string {
 	}`
 }
 
-func (t *MethodAnswer) Execute(conv *Conversation) (*Action, error) {
+func (t *MethodAnswer) Execute(conv *Conversation) (*Activity, error) {
 	var question *Question
 	for _, q := range conv.Questions {
 		if q.Id == t.QuestionID {
@@ -66,7 +66,7 @@ func (t *MethodAnswer) Execute(conv *Conversation) (*Action, error) {
 			break
 		}
 	}
-	if question.Id == 0 {
+	if question == nil || question.Id == 0 {
 		return nil, fmt.Errorf("question %d not found", t.QuestionID)
 	}
 

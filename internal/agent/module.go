@@ -69,7 +69,7 @@ func (m *ModuleManager) Register(p ModuleProvider) error {
 }
 
 // ExecuteMethod 实现 MethodExecutor 接口。
-func (m *ModuleManager) ExecuteMethod(methodName string, conv *Conversation, request json.RawMessage) (*Action, error) {
+func (m *ModuleManager) ExecuteMethod(methodName string, conv *Conversation, request json.RawMessage) (*Activity, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -83,19 +83,23 @@ func (m *ModuleManager) ExecuteMethod(methodName string, conv *Conversation, req
 				return nil, err
 			}
 			// 调用方法的 Execute
-			action, err := method.Execute(conv)
+			activity, err := method.Execute(conv)
 			if err != nil {
 				return nil, err
 			}
 
-			// action 可能为 nil（如 Respond 方法）
-			if action != nil && action.Typ != "talk" {
-				action.Request = request
-				action.Typ = "act"
-				action.Object = conv.To
-				action.Method = methodName
+			// activity 可能为 nil（如 Respond 方法）
+			if activity != nil {
+				if activity.Typ == "" {
+					activity.Typ = "act"
+				}
+				if activity.Typ == "act" {
+					activity.Request = request
+					activity.Object = conv.To
+					activity.Method = methodName
+				}
 			}
-			return action, nil
+			return activity, nil
 		}
 	}
 

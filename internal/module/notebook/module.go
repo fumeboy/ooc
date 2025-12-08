@@ -34,6 +34,9 @@ type Module struct {
 var _ agent.InfoI = (*Module)(nil)
 var _ agent.ModuleProvider = (*Module)(nil)
 
+// ID 返回模块的唯一标识。
+func (m *Module) ID() string { return ModuleName }
+
 func (m *Module) Class() string { return "notebook" }
 
 // Name 返回模块名称。

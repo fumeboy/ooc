@@ -106,23 +106,39 @@ export default function ConversationDetailTab({ sessionId, conversationId, onClo
         </div>
       )}
 
-      {detail.actions.length > 0 && (
+      {detail.activities.length > 0 && (
         <div className="card">
-          <div className="font-semibold mb-1">Actions</div>
-          {detail.actions.map((a, idx) => (
-            <div key={`${a.typ}-${idx}`} className="text-sm border-b border-slate-100 py-1">
-              {a.typ === 'talk' && <div>Talk → {a.conversation_id}</div>}
-              {a.typ === 'act' && (
-                <div>
+          <div className="font-semibold mb-1">Activities</div>
+          {detail.activities.map((a, idx) => {
+            const question =
+              a.typ === 'ask' && a.question_id
+                ? detail.questions.find((q) => q.id === a.question_id)
+                : undefined
+            return (
+              <div key={`${a.typ}-${idx}`} className="text-sm border-b border-slate-100 py-1">
+                {a.typ === 'talk' && <div>Talk → {a.conversation_id}</div>}
+                {a.typ === 'focus' && <div>Focus → {a.conversation_id}</div>}
+                {a.typ === 'act' && (
                   <div>
-                    Act {a.object}::{a.method}
+                    <div>
+                      Act {a.object}::{a.method}
+                    </div>
+                    <div className="text-xs text-slate-500 whitespace-pre-wrap">{JSON.stringify(a.request, null, 2)}</div>
+                    <div className="text-xs text-slate-500 whitespace-pre-wrap">{a.response?.content}</div>
                   </div>
-                  <div className="text-xs text-slate-500 whitespace-pre-wrap">{JSON.stringify(a.request, null, 2)}</div>
-                  <div className="text-xs text-slate-500 whitespace-pre-wrap">{a.response?.content}</div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+                {a.typ === 'ask' && (
+                  <div>
+                    <div>Ask Q{a.question_id}</div>
+                    {question && <div className="text-xs text-slate-500 whitespace-pre-wrap">{question.question.content}</div>}
+                    {question?.answer?.content && (
+                      <div className="text-xs text-emerald-600 whitespace-pre-wrap">Answer: {question.answer.content}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 

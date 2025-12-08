@@ -63,14 +63,15 @@ func (s *Server) conversationToResponse(conv *agent.Conversation) ConversationRe
 		}
 	}
 
-	actions := make([]ActionResponse, len(conv.Actions))
-	for i, a := range conv.Actions {
-		actionResp := ActionResponse{
+	activities := make([]ActivityResponse, len(conv.Activities))
+	for i, a := range conv.Activities {
+		actionResp := ActivityResponse{
 			Typ: a.Typ,
 		}
-		if a.Typ == "talk" {
+		switch a.Typ {
+		case "talk", "focus":
 			actionResp.ConversationID = string(a.ConversationID)
-		} else if a.Typ == "act" {
+		case "act":
 			actionResp.Object = string(a.Object)
 			actionResp.Method = a.Method
 			actionResp.Request = a.Request
@@ -79,8 +80,10 @@ func (s *Server) conversationToResponse(conv *agent.Conversation) ConversationRe
 				Content:    a.Response.Content,
 				References: a.Response.References,
 			}
+		case "ask":
+			actionResp.QuestionID = a.QuestionID
 		}
-		actions[i] = actionResp
+		activities[i] = actionResp
 	}
 
 	mode := string(conv.Mode)
@@ -96,7 +99,7 @@ func (s *Server) conversationToResponse(conv *agent.Conversation) ConversationRe
 	}
 
 	response := ConversationResponse{
-		ID:    string(conv.ID),
+		ID:    string(conv.IDValue),
 		From:  string(conv.From),
 		To:    string(conv.To),
 		Title: conv.Title,
@@ -111,12 +114,12 @@ func (s *Server) conversationToResponse(conv *agent.Conversation) ConversationRe
 			Content:    conv.Response.Content,
 			References: conv.Response.References,
 		},
-		Questions: questions,
-		Actions:   actions,
-		Status:    conv.Status,
-		Error:     conv.Error,
-		Mode:      mode,
-		UpdatedAt: updatedAtStr,
+		Questions:  questions,
+		Activities: activities,
+		Status:     conv.Status,
+		Error:      conv.Error,
+		Mode:       mode,
+		UpdatedAt:  updatedAtStr,
 	}
 
 	// 如果状态是 waiting_manual_think，包含 ManualThinkRequest

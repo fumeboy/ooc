@@ -120,7 +120,7 @@
   - 显示 Conversation 完整信息
   - 每 2 秒自动刷新
   - 支持回复手动思考请求
-  - 显示 Questions 和 Actions
+  - 显示 Questions 和 Activities
 - **Props**:
   - `conversationId`: Conversation ID
   - `onClose`: 关闭回调
@@ -226,3 +226,17 @@
   - 显示可选的 Info 列表
   - 支持多选 Info 作为引用
   - 显示已选中的引用
+
+### 路由与 URL 约定（前端）
+- Session 选择：
+  - `/session/:id` 或 `?sessionId=:id`：初始选中该 Session；否则尝试从 localStorage `lastSessionId` 恢复。
+- Tab 页 初始状态（两层 tab 页，都需要支持路由，ConversationsPage 和 InfosPage 内部有子 tab 页）：
+  - `tab=user|info`：主 Tab；若 `convTab` 是详情则强制 user，若 `infoTab` 是详情则强制 info。
+  - `convTab=index|waiting|<conversationId>`：会话页初始 tab，具体 id 时自动打开详情。
+  - `infoTab=index|<infoId>`：Info 页初始 tab，具体 id 时自动打开详情。
+
+### 路由实现方案（执行中）
+- 选型：`react-router-dom@6`，用 `BrowserRouter + useSearchParams` 管理路径与查询参数。
+- 路径：`/` 与 `/session/:id` 复用同一布局；会话选择优先顺序为 path param > `?sessionId` > localStorage。
+- 查询参数：`tab/convTab/infoTab` 由 URL 作为单一事实来源，UI 交互通过更新 search params 保持同步；当 `convTab` 为详情时强制 `tab=user`，当 `infoTab` 为详情时强制 `tab=info`。
+- 兼容性：保留原有 localStorage `lastSessionId` 回退；不破坏现有未携带查询参数的访问。

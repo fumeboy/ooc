@@ -9,6 +9,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -66,6 +67,17 @@ func main() {
 	}
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
+
+	{
+		os.MkdirAll("./.log", 0o755)
+		f, err := os.Create("./.log/access.log")
+		if err != nil {
+			log.Fatalf("open access.log failed: %v", err)
+		}
+		e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
+			Output: io.MultiWriter(f), // 需要也输出 stdout 可用 io.MultiWriter(f, os.Stdout)
+		}))
+	}
 
 	// 注册路由。
 	srv.RegisterRoutes(e)

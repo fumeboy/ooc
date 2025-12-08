@@ -4,7 +4,7 @@ import "ooc/internal/agent"
 
 // Note 代表单条笔记，实现 InfoI 接口（参考 meta.md 99-105）。
 type Note struct {
-	ID        string `json:"id"`         // 唯一标识
+	Id        string `json:"id"`         // 唯一标识
 	Title     string `json:"title"`      // 标题
 	Summary   string `json:"summary"`    // 摘要（meta.md 102）
 	Content   string `json:"content"`    // 内容
@@ -17,8 +17,11 @@ var _ agent.InfoI = (*Note)(nil)
 
 func (n *Note) Class() string { return "note" }
 
+// ID 返回笔记的唯一标识。
+func (n *Note) ID() string { return n.Id }
+
 // Name 返回笔记名称。
-func (n *Note) Name() string { return n.ID }
+func (n *Note) Name() string { return n.Title }
 
 // Description 返回笔记描述（优先使用 summary，其次 title）。
 func (n *Note) Description() string {
@@ -28,7 +31,7 @@ func (n *Note) Description() string {
 	if n.Title != "" {
 		return n.Title
 	}
-	return "笔记 " + n.ID
+	return "笔记 " + n.Id
 }
 
 // Prompt 返回笔记的私有提示词。

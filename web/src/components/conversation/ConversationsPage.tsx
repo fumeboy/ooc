@@ -1,26 +1,71 @@
 // User Conversations 视图：轮询列表 + 发起 Talk。
 import { useAtom } from 'jotai'
-import { useCallback, useMemo, useState } from 'react'
-import { conversationsBySessionAtom } from '../../atoms'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { conversationsBySessionAtom, conversationActiveTabBySessionAtom, conversationDetailTabsBySessionAtom } from '../../atoms'
 import { listConversations } from '../../api/client'
 import ConversationSummary from './ConversationSummary'
-import UserTalkForm from './UserTalkForm'
 import WaitingManualConversationsTab from './WaitingManualConversationsTab'
 import { useAutoRefresh } from '../../hooks/useAutoRefresh'
 import TabSwitcher from '../common/TabSwitcher'
 import ConversationDetailTab from './ConversationDetailTab'
 import { BsChatQuoteFill } from "react-icons/bs";
+import LoadingSpinner from '../common/LoadingSpinner'
+import PageLayout from '../common/PageLayout'
 
 interface Props {
   sessionId: string
+  onRegisterRefresh?: (fn: () => void) => void
+  onRegisterOpenDetail?: (fn: (id: string) => void) => void
+  openConversationId?: string | null
+  onConsumeOpenConversation?: () => void
+  initialActiveTab?: string
+  onActiveTabChange?: (tab: string) => void
 }
 
-export default function ConversationsPage({ sessionId }: Props) {
+export default function ConversationsPage({
+  sessionId,
+  onRegisterRefresh,
+  onRegisterOpenDetail,
+  openConversationId,
+  onConsumeOpenConversation,
+  initialActiveTab = 'index',
+  onActiveTabChange,
+}: Props) {
   const [conversationsMap, setConversationsMap] = useAtom(conversationsBySessionAtom)
+  const [activeTabMap, setActiveTabMap] = useAtom(conversationActiveTabBySessionAtom)
+  const [detailTabsMap, setDetailTabsMap] = useAtom(conversationDetailTabsBySessionAtom)
+  
   const [loading, setLoading] = useState(false)
+  
   const conversations = conversationsMap[sessionId] || []
-  const [activeTab, setActiveTab] = useState('index')
-  const [detailTabs, setDetailTabs] = useState<string[]>([])
+  const activeTab = activeTabMap[sessionId] || 'index'
+  const detailTabs = detailTabsMap[sessionId] || []
+
+  const setActive = useCallback(
+    (key: string) => {
+      setActiveTabMap((prev) => ({ ...prev, [sessionId]: key }))
+      onActiveTabChange?.(key)
+    },
+    [sessionId, setActiveTabMap, onActiveTabChange]
+  )
+  
+  // const setDetailTabs = useCallback(
+  //   (tabs: string[]) => {
+  //     setDetailTabsMap((prev) => ({ ...prev, [sessionId]: tabs }))
+  //   },
+  //   [sessionId, setDetailTabsMap]
+  // )
+
+  const setDetailTabsUpdater = useCallback(
+    (updater: (prev: string[]) => string[]) => {
+      setDetailTabsMap((prev) => {
+        const current = prev[sessionId] || []
+        const next = updater(current)
+        return { ...prev, [sessionId]: next }
+      })
+    },
+    [sessionId, setDetailTabsMap]
+  )
 
   const refresh = useCallback(async () => {
     if (!sessionId) return
@@ -35,19 +80,75 @@ export default function ConversationsPage({ sessionId }: Props) {
 
   useAutoRefresh(refresh, 2000, Boolean(sessionId))
 
-  const openDetail = (id: string) => {
-    setDetailTabs((prev) => (prev.includes(id) ? prev : [...prev, id]))
-    setActiveTab(id)
-  }
+  useEffect(() => {
+    onRegisterRefresh?.(refresh)
+    return () => {
+      onRegisterRefresh?.(() => {})
+    }
+  }, [refresh, onRegisterRefresh])
 
-  const closeDetail = (key: string) => {
-    setDetailTabs((prev) => prev.filter((id) => id !== key))
-    if (activeTab === key) setActiveTab('index')
-  }
+  useEffect(() => {
+    onRegisterOpenDetail?.(openDetail)
+    return () => {
+      onRegisterOpenDetail?.(() => {})
+    }
+  }, [onRegisterOpenDetail])
+
+  useEffect(() => {
+    if (!sessionId || !initialActiveTab) return
+    // Only update if current active tab is different from initialActiveTab
+    // This breaks the loop because setActive updates the Atom which triggers re-render, 
+    // but on next render activeTab will match initialActiveTab (if sync is fast enough) 
+    // or we just check against the prop to avoid redundant updates.
+    
+    // Actually, the issue is likely that initialActiveTab comes from parent (URL state)
+    // and setActive updates Atom state. If Atom update triggers parent re-render or 
+    // if parent passes new reference, this effect runs again.
+    
+    // We should only sync FROM props TO atom if they mismatch significantly.
+    
+    if (activeTab === initialActiveTab) return
+    
+    // Also check if initialActiveTab is valid (e.g. part of details or index/waiting)
+    
+    if (initialActiveTab === 'index' || initialActiveTab === 'waiting') {
+      setActive(initialActiveTab)
+      return
+    }
+    
+    setActive(initialActiveTab)
+    setDetailTabsUpdater((prev) => (prev.includes(initialActiveTab) ? prev : [...prev, initialActiveTab]))
+  }, [initialActiveTab, sessionId, setActive, setDetailTabsUpdater, activeTab])
+
+  useEffect(() => {
+    if (openConversationId) {
+      openDetail(openConversationId)
+      onConsumeOpenConversation?.()
+    }
+  }, [openConversationId, onConsumeOpenConversation])
+
+  // Removed localStorage logic as jotai persistence or atoms should handle state
+  // If we really need localStorage persistence for tabs, we should implement it in atoms or a separate effect
+  // For now, let's rely on atoms in memory and URL as source of truth for current active tab
+
+  const openDetail = useCallback((id: string) => {
+    setDetailTabsUpdater((prev) => (prev.includes(id) ? prev : [...prev, id]))
+    setActive(id)
+  }, [setActive, setDetailTabsUpdater])
+
+  const closeDetail = useCallback((key: string) => {
+    setDetailTabsUpdater((prev) => prev.filter((id) => id !== key))
+    
+    // Check current active tab from the atom map directly in the updater if possible, 
+    // but here we are in a callback. We can check the prop `activeTab` which is from atom.
+    if (activeTab === key) {
+        setActive('index')
+    }
+  }, [activeTab, setActive, setDetailTabsUpdater])
 
   const tabs = useMemo(() => {
     const base = [
-      { key: 'index', label: 'Conversations' },
+      { key: 'index', label: 'TalkWithYou' },
       { key: 'waiting', label: '等待手动' },
     ]
     const details = detailTabs.map((id) => ({
@@ -59,51 +160,43 @@ export default function ConversationsPage({ sessionId }: Props) {
   }, [detailTabs])
 
   return (
-    <div className="relative flex flex-1 flex-col gap-2 h-full">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <BsChatQuoteFill className="text-blue-600" size={20}/>
-          <h4 className="font-semibold">Conversations</h4>
-        </div>
-        <TabSwitcher tabs={tabs} activeKey={activeTab} onChange={setActiveTab} onClose={closeDetail} />
-      </div>
-
-      {activeTab === 'index' && (
+    <PageLayout
+      header={
         <>
-          {sessionId ? (
-            <UserTalkForm sessionId={sessionId} onSent={refresh} />
-          ) : (
-            <div className="card" style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: '24px' }}>
-              请先选择 Session
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-4 rounded-lg border border-gray-300">
+              <BsChatQuoteFill className="text-blue-600" size={18} />
+              <h4 className="font-semibold">Conversations</h4>
             </div>
-          )}
-          <div className="flex items-center justify-between">
-            <h4 className="font-semibold">列表</h4>
-            {loading && <span className="text-xs text-slate-500">刷新中...</span>}
+            <LoadingSpinner loading={loading} text="刷新中..." />
           </div>
-          <div
-            className="scroll-area"
-          >
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                gap: '16px',
-              }}
-            >
-              {conversations.map((conv) => (
-                <ConversationSummary
-                  key={conv.id}
-                  sessionId={sessionId}
-                  conversation={conv}
-                  onViewDetail={openDetail}
-                  layout="vertical"
-                />
-              ))}
-            </div>
-            {conversations.length === 0 && <div className="text-sm text-slate-500 card mt-2">暂无 Conversation</div>}
-          </div>
+          <TabSwitcher tabs={tabs} activeKey={activeTab} onChange={setActive} onClose={closeDetail} />
         </>
+      }
+    >
+      {activeTab === 'index' && (
+        <div
+          className="scroll-area"
+        >
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+              gap: '16px',
+            }}
+          >
+            {conversations.map((conv) => (
+              <ConversationSummary
+                key={conv.id}
+                sessionId={sessionId}
+                conversation={conv}
+                onViewDetail={openDetail}
+                layout="vertical"
+              />
+            ))}
+          </div>
+          {conversations.length === 0 && <div className="text-sm text-slate-500 card mt-2">暂无 Conversation</div>}
+        </div>
       )}
       {activeTab === 'waiting' && (
         <WaitingManualConversationsTab sessionId={sessionId} onViewDetail={openDetail} />
@@ -111,7 +204,7 @@ export default function ConversationsPage({ sessionId }: Props) {
       {activeTab !== 'index' && activeTab !== 'waiting' && (
         <ConversationDetailTab sessionId={sessionId} conversationId={activeTab} onClose={() => closeDetail(activeTab)} />
       )}
-    </div>
+    </PageLayout>
   )
 }
 

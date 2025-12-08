@@ -5,6 +5,7 @@ import { selectedSessionIdAtom, sessionsAtom, waitingManualConversationsAtom } f
 import { getWaitingManualConversations, setPossess } from '../../api/client'
 import ConversationSummary from './ConversationSummary'
 import { useAutoRefresh } from '../../hooks/useAutoRefresh'
+import LoadingSpinner from '../common/LoadingSpinner'
 
 interface Props {
   sessionId: string
@@ -55,7 +56,7 @@ export default function WaitingManualConversationsTab({ sessionId, onViewDetail 
           <button className="btn-secondary text-xs" onClick={togglePossess}>
             附身：{currentSession?.possessed ? '开' : '关'}
           </button>
-          {loading && <span className="text-xs text-slate-500">刷新中</span>}
+          <LoadingSpinner loading={loading} text="刷新中" />
         </div>
       </div>
       <div className="scroll-area" style={{ maxHeight: '520px' }}>

@@ -50,7 +50,7 @@ func (c *CreateNote) Parameters() string {
 }
 
 // Execute 执行创建笔记操作（实现 agent.MethodI.Execute）。
-func (c *CreateNote) Execute(conv *agent.Conversation) (*agent.Action, error) {
+func (c *CreateNote) Execute(conv *agent.Conversation) (*agent.Activity, error) {
 	if c.Module == nil {
 		return nil, fmt.Errorf("module is nil")
 	}
@@ -64,7 +64,7 @@ func (c *CreateNote) Execute(conv *agent.Conversation) (*agent.Action, error) {
 	c.Module.next++
 	now := time.Now().Format(time.RFC3339)
 	note := Note{
-		ID:        fmt.Sprintf("note-%d", c.Module.next),
+		Id:        fmt.Sprintf("note-%d", c.Module.next),
 		Title:     c.Title,
 		Content:   c.Content,
 		Summary:   "", // 后续由 LLM 生成（meta.md 108）
@@ -73,8 +73,8 @@ func (c *CreateNote) Execute(conv *agent.Conversation) (*agent.Action, error) {
 	}
 	c.Module.notes = append(c.Module.notes, note)
 
-	msg := fmt.Sprintf("created note %s", note.ID)
-	return &agent.Action{
+	msg := fmt.Sprintf("created note %s", note.Id)
+	return &agent.Activity{
 		Response: agent.CommonParams{
 			Content: msg,
 		},

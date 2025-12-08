@@ -25,6 +25,12 @@ export const submittingManualThinkByConversationAtom = atom<Record<string, boole
 
 export const openConversationTabsAtom = atom<string[]>([])
 
+export const conversationActiveTabBySessionAtom = atom<Record<string, string>>({})
+export const conversationDetailTabsBySessionAtom = atom<Record<string, string[]>>({})
+
+export const infoActiveTabBySessionAtom = atom<Record<string, string>>({})
+export const infoDetailTabsBySessionAtom = atom<Record<string, string[]>>({})
+
 const defaultLayout = { left: 68, right: 32 }
 
 function loadLayout() {

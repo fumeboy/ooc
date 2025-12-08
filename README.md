@@ -8,18 +8,18 @@
 - 文档先行 + TDD：所有模块先在 README 中定义数据结构与测试，再实现代码。
 
 ## 内核对象模型
-- **InfoI**：可交互信息对象接口，提供名称、描述、私有 Prompt 以及一组 Method。
+- **InfoI**：可交互信息对象接口，提供名称、描述、私有 Prompt、完整 ID（`ID()` 返回含 class 前缀），以及一组 Method。
 - **MethodI**：方法接口，提供名称、描述、文档、参数 JSON Schema，以及 `Execute` 方法。
-- **Conversation**：一次 Talk 的上下文，记录 from/to、content、references、action history。
-- **Action**：Method 执行的特化对话（特殊化的 Conversation），包含 method 文档与参数 schema，负责把自然语言转成结构化参数。
+- **Conversation**：一次 Talk 的上下文，记录 from/to、content、references、activity history。
+- **Activity**：对话过程中的一次行动记录（talk/act/ask 等），包含方法执行或子对话信息。
 - **Session**：封装一次用户请求到完成的整个生命周期，追踪所有衍生对象。
 - **附身机制**：允许用户介入 LLM 决策过程，查看和修改 LLM 的输出结果后再继续执行。
 
 ## 任务拆分
 1. **文档管控**：维护本 README 及所有目录 README，确保方案与实现同步。
-2. **对象注册与存储**：负责 Info/Conversation/Action 的注册、引用计数、持久化接口。
+2. **对象注册与存储**：负责 Info/Conversation/Activity 的注册、引用计数、持久化接口。
 3. **思考循环**：实现 AssembleContext → LLM Call → ApplyResult 的有限状态机。
-4. **Action 执行**：构建参数、调度模块 Method、写回结果。
+4. **Activity 执行**：构建参数、调度模块 Method、写回结果。
 5. **模块管理**：Notebook/Terminal/Filesystem/Database/Browser 的统一注册与生命周期。
 6. **Session & Story Runner**：执行 `meta.md` 中定义的故事用例，驱动端到端测试。
 7. **前端/Server 接口**：暴露 HTTP API、事件流，供 UI 响应 Ask/Respond。
@@ -61,16 +61,18 @@
 - `HTTPClient` 实现，对接 zhipu ai API
 
 #### ✅ `internal/agent`
-- 核心数据结构：`InfoI`、`MethodI`、`ConversationState`、`ActionState`
-- `Registry`：管理 Info/Conversation/Action 的生命周期
+- 核心数据结构：`InfoI`、`MethodI`、`ConversationState`、`Activity`
+- `Registry`：管理 Info/Conversation/Activity 的生命周期
 - `ConversationEngine`：实现思考循环（Think/ThinkLoop）
   - 支持普通 Conversation 和 Action 模式
   - 实现 Talk/Ask/Focus/Respond 特殊方法
   - Action 完全复用 Conversation 的能力
+- Conversation 支持 `Parent` 字段，将追问场景的子对话串联到父对话并在 Prompt 中连续展示行动历史
 - `MethodI` 包含 `Execute` 方法，直接通过方法实例执行
+- `conversationSystemPrompt`：提供系统级提示，说明 Conversation 机制与可用方法（Respond/Talk/Ask/Focus），在 Think 中作为 system message 发送
+- `Conversation.Prompt()`：仅组装当前对话上下文（参与对象、引用、请求内容、历史 Activities 等），作为 user message
 - `ModuleManager`：模块注册与调度
 - `ModuleProvider` 接口：`Executor(methodName string) MethodI`
-- `Conversation.Prompt()`：实现对话上下文组装，包含目标对象 Prompt、可交互对象列表、Action 模式下的方法文档、请求内容和执行历史
 - **对话模式管理**：支持三种对话执行模式
   - `manual`：完全手动模式，每次思考都需要用户确认
   - `hosted`：完全托管模式，自动执行思考循环
@@ -126,7 +128,7 @@
 - `cmd/server`：主程序入口
 
 ### 进行中
-- `web`：前端代码（布局/状态/测试规划已写入 `web/README.md` 与 `web/src/README.md`）
+- `web`：前端代码（布局/状态/测试规划已写入 `web/README.md`）；路由已切到 `react-router-dom@6`，URL 成为 tab/Session 选择的唯一来源，并补充路由解析单元测试。
 
 ### 下一步
 - 实现其他模块（terminal/filesystem/database/browser）

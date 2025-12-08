@@ -4,7 +4,7 @@ import styled from 'styled-components'
 const Tag = styled.span<{ bg?: string; border?: string; color?: string }>`
   padding: 4px 10px;
   border-radius: 6px;
-  background: ${({ bg }) => bg ?? '#bdbdbd17'};
+  background: ${({ bg }) => bg ?? '#fff'};
   border: 1px solid ${({ border }) => border ?? 'rgba(0, 0, 0, 0.08)'};
   color: ${({ color }) => color ?? '#1f2937'};
   font-size: 12px;

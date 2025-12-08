@@ -56,13 +56,17 @@ func (l *MethodFocus) Parameters() string {
 	}`
 }
 
-func (t *MethodFocus) Execute(conv *Conversation) (*Action, error) {
+func (t *MethodFocus) Execute(conv *Conversation) (*Activity, error) {
 	var talk MethodTalk
 	talk.e = t.e
 	talk.Title = t.Title
 	talk.Content = t.Content
 	talk.References = t.References
-	talk.TalkWith = conv.ID
+	talk.TalkWith = conv.ID()
 
-	return talk.Execute(conv)
+	activity, err := talk.Execute(conv)
+	if activity != nil {
+		activity.Typ = "focus"
+	}
+	return activity, err
 }

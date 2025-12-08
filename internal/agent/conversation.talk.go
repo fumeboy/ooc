@@ -65,7 +65,7 @@ func (l *MethodTalk) Parameters() string {
 	}`
 }
 
-func (t *MethodTalk) Execute(current *Conversation) (*Action, error) {
+func (t *MethodTalk) Execute(current *Conversation) (*Activity, error) {
 	a, err := t.execute(current.To)
 	if err != nil {
 		return nil, err
@@ -81,12 +81,12 @@ func (t *MethodTalk) Execute(current *Conversation) (*Action, error) {
 	return a, nil
 }
 
-func (t *MethodTalk) execute(From InfoID) (*Action, error) {
+func (t *MethodTalk) execute(From InfoID) (*Activity, error) {
 	// 验证目标对象存在
 	userID := WrapInfoID("user", "user")
 	isTalkWithUser := t.TalkWith == userID
 
-	_, ok := t.e.registry.GetInfo(t.TalkWith)
+	targetInfo, ok := t.e.registry.GetInfo(t.TalkWith)
 	if !ok {
 		return nil, fmt.Errorf("target info %s not found", t.TalkWith)
 	}
@@ -108,11 +108,17 @@ func (t *MethodTalk) execute(From InfoID) (*Action, error) {
 	}
 
 	// 创建新 conversation，初始状态为 StatusRunning
+	var parentConvID ConversationID
+	if targetInfo != nil && targetInfo.Class() == "conversation" {
+		parentConvID = ConversationID(targetInfo.ID())
+	}
+
 	newConv := &Conversation{
 		engine: t.e,
 		Title:  t.Title,
 		From:   From,
 		To:     t.TalkWith,
+		Parent: parentConvID,
 		Request: CommonParams{
 			Content:    t.Content,
 			References: validRefs,
@@ -146,7 +152,7 @@ func (t *MethodTalk) execute(From InfoID) (*Action, error) {
 		t.e.NotifyConversationRunning(newConv)
 	}
 
-	return &Action{
+	return &Activity{
 		Typ:            "talk",
 		ConversationID: newConvID,
 	}, nil

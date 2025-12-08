@@ -32,7 +32,7 @@ type ConversationResponse struct {
 	Request                   CommonParamsResponse        `json:"request"`
 	Response                  CommonParamsResponse        `json:"response"`
 	Questions                 []QuestionResponse          `json:"questions"`
-	Actions                   []ActionResponse            `json:"actions"`
+	Activities                []ActivityResponse          `json:"activities"`
 	Status                    string                      `json:"status"`
 	Error                     string                      `json:"error,omitempty"`                        // 错误信息（当 Status 为 error 时）
 	Mode                      string                      `json:"mode,omitempty"`                         // 对话执行模式（manual/hosted/semi_hosted）
@@ -54,11 +54,11 @@ type QuestionResponse struct {
 	Answer   CommonParamsResponse `json:"answer"`
 }
 
-// ActionResponse Action 的响应格式。
-type ActionResponse struct {
-	Typ string `json:"typ"` // talk or act
+// ActivityResponse Activity 的响应格式。
+type ActivityResponse struct {
+	Typ string `json:"typ"` // talk / act / ask / focus
 
-	// when typ is talk
+	// when typ is talk/focus
 	ConversationID string `json:"conversation_id,omitempty"`
 
 	// when typ is act
@@ -66,6 +66,9 @@ type ActionResponse struct {
 	Method   string               `json:"method,omitempty"`
 	Request  json.RawMessage      `json:"request,omitempty"`
 	Response CommonParamsResponse `json:"response,omitempty"`
+
+	// when typ is ask
+	QuestionID int64 `json:"question_id,omitempty"`
 }
 
 // GetConversation 获取 Conversation 详细信息（GET /sessions/{id}/conversations/{conversation_id}）。
@@ -104,12 +107,12 @@ func (s *Server) GetConversation(c echo.Context) error {
 		}
 	}
 
-	actions := make([]ActionResponse, len(conv.Actions))
-	for i, a := range conv.Actions {
-		actionResp := ActionResponse{
+	activities := make([]ActivityResponse, len(conv.Activities))
+	for i, a := range conv.Activities {
+		actionResp := ActivityResponse{
 			Typ: a.Typ,
 		}
-		if a.Typ == "talk" {
+		if a.Typ == "talk" || a.Typ == "focus" {
 			actionResp.ConversationID = string(a.ConversationID)
 		} else if a.Typ == "act" {
 			actionResp.Object = string(a.Object)
@@ -120,8 +123,10 @@ func (s *Server) GetConversation(c echo.Context) error {
 				Content:    a.Response.Content,
 				References: a.Response.References,
 			}
+		} else if a.Typ == "ask" {
+			actionResp.QuestionID = a.QuestionID
 		}
-		actions[i] = actionResp
+		activities[i] = actionResp
 	}
 
 	mode := string(conv.Mode)
@@ -137,7 +142,7 @@ func (s *Server) GetConversation(c echo.Context) error {
 	}
 
 	response := ConversationResponse{
-		ID:    string(conv.ID),
+		ID:    string(conv.IDValue),
 		From:  string(conv.From),
 		To:    string(conv.To),
 		Title: conv.Title,
@@ -152,12 +157,12 @@ func (s *Server) GetConversation(c echo.Context) error {
 			Content:    conv.Response.Content,
 			References: conv.Response.References,
 		},
-		Questions: questions,
-		Actions:   actions,
-		Status:    conv.Status,
-		Error:     conv.Error,
-		Mode:      mode,
-		UpdatedAt: updatedAtStr,
+		Questions:  questions,
+		Activities: activities,
+		Status:     conv.Status,
+		Error:      conv.Error,
+		Mode:       mode,
+		UpdatedAt:  updatedAtStr,
 	}
 
 	// 如果状态是 waiting_manual_think，包含 ManualThinkRequest

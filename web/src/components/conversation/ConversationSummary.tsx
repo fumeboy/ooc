@@ -29,10 +29,11 @@ export default function ConversationSummary({ sessionId, conversation, onViewDet
 
   return (
     <div
-      className="card mb-2 relative"
+      className="card mb-2 relative flex flex-col"
       style={{
-        padding: '6px 10px',
+        padding: '8px 8px',
         minHeight: '96px',
+        boxShadow: '0 1px 10px rgba(0, 0, 0, 0.05)', // 轻微的阴影
       }}
     >
       <div className="flex items-start justify-between px-1 gap-2">
@@ -77,11 +78,12 @@ export default function ConversationSummary({ sessionId, conversation, onViewDet
         </div>
       </div>
       <div
-        className="mt-2 text-xs"
+        className="mt-1 text-xs flex-1"
         style={{
-          background: '#f5f6f8',
+          background: '#fff',
           borderRadius: '8px',
-          padding: '6px 8px',
+          border: '1px solid var(--border-color)',
+          padding: '12px 12px',
           display: 'grid',
           gridTemplateColumns: isVertical ? '1fr' : '1fr 1fr',
           gap: '6px',

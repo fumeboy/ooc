@@ -12,6 +12,7 @@ type testInfo struct {
 	methods     []MethodI
 }
 
+func (t *testInfo) ID() string          { return WrapInfoID("test", t.name) }
 func (t *testInfo) Class() string       { return "test" }
 func (t *testInfo) Name() string        { return t.name }
 func (t *testInfo) Description() string { return t.description }
