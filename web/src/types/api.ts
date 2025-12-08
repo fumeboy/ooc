@@ -57,6 +57,14 @@ export interface QuestionResponse {
 export interface ActivityResponse {
   typ: 'talk' | 'act' | 'ask' | 'focus'
   conversation_id?: string
+  conversation?: {
+    title?: string
+    desc?: string
+    status?: string
+    error?: string
+    request?: CommonParamsResponse
+    response?: CommonParamsResponse
+  }
   object?: string
   method?: string
   request?: unknown

@@ -62,7 +62,7 @@ func (t *MethodFocus) Execute(conv *Conversation) (*Activity, error) {
 	talk.Title = t.Title
 	talk.Content = t.Content
 	talk.References = t.References
-	talk.TalkWith = conv.ID()
+	talk.TalkWith = conv.To
 
 	activity, err := talk.Execute(conv)
 	if activity != nil {

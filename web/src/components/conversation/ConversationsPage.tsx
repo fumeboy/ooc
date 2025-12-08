@@ -181,7 +181,7 @@ export default function ConversationsPage({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
               gap: '16px',
             }}
           >
@@ -202,7 +202,12 @@ export default function ConversationsPage({
         <WaitingManualConversationsTab sessionId={sessionId} onViewDetail={openDetail} />
       )}
       {activeTab !== 'index' && activeTab !== 'waiting' && (
-        <ConversationDetailTab sessionId={sessionId} conversationId={activeTab} onClose={() => closeDetail(activeTab)} />
+        <ConversationDetailTab
+          sessionId={sessionId}
+          conversationId={activeTab}
+          onClose={() => closeDetail(activeTab)}
+          onOpenConversation={openDetail}
+        />
       )}
     </PageLayout>
   )

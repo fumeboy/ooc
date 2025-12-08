@@ -2,7 +2,7 @@
 import { useAtom } from 'jotai'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
-import { createColumnHelper, flexRender, getCoreRowModel, useReactTable, type ColumnPinningState, type ColumnSizingState } from '@tanstack/react-table'
+import { createColumnHelper, flexRender, getCoreRowModel, getExpandedRowModel, getGroupedRowModel, useReactTable, type ColumnPinningState, type ColumnSizingState, type GroupingState, type ExpandedState } from '@tanstack/react-table'
 import { infosBySessionAtom, selectedInfoBySessionAtom, infoActiveTabBySessionAtom, infoDetailTabsBySessionAtom } from '../../atoms'
 import { getInfo, listInfos } from '../../api/client'
 import type { InfoListItem, InfoResponse } from '../../types/api'
@@ -43,6 +43,8 @@ export default function InfoTableTab({
     description: 320,
     action: 60,
   })
+  const [grouping, setGrouping] = useState<GroupingState>(['class'])
+  const [expanded, setExpanded] = useState<ExpandedState>(true)
   const infos: InfoListItem[] = infosMap[sessionId] || []
   // const selectedId = selectedMap[sessionId] || null
   const activeTab = activeTabMap[sessionId] || 'index'
@@ -61,6 +63,7 @@ export default function InfoTableTab({
       setDetailTabsMap((prev) => {
         const current = prev[sessionId] || []
         const next = updater(current)
+        if (JSON.stringify(current) === JSON.stringify(next)) return prev
         return { ...prev, [sessionId]: next }
       })
     },
@@ -70,14 +73,18 @@ export default function InfoTableTab({
   useEffect(() => {
     let mounted = true
     const load = async () => {
+      if (!sessionId) return
       setLoading(true)
       try {
         const res = await listInfos(sessionId)
         if (mounted) {
           setInfosMap((prev) => ({ ...prev, [sessionId]: res.infos }))
         }
+      } catch (e) {
+        console.error('Failed to list infos', e)
+        // optionally handle 404 or other errors
       } finally {
-        setLoading(false)
+        if (mounted) setLoading(false)
       }
     }
     load()
@@ -151,11 +158,7 @@ export default function InfoTableTab({
       }),
       columnHelper.accessor('class', {
         header: 'Class',
-        cell: (info) => {
-          const cls = info.getValue()
-          const color = classColor(cls)
-          return <Tag bg={`${color}22`} border={`${color}55`} color={color}>{cls}</Tag>
-        },
+        enableGrouping: true,
       }),
       columnHelper.accessor('name', {
         header: 'Name',
@@ -188,12 +191,18 @@ export default function InfoTableTab({
     data: infos,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getGroupedRowModel: getGroupedRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
     state: {
       columnPinning,
       columnSizing,
+      grouping,
+      expanded,
     },
     onColumnPinningChange: setColumnPinning,
     onColumnSizingChange: setColumnSizing,
+    onGroupingChange: setGrouping,
+    onExpandedChange: setExpanded,
     enableColumnPinning: true,
     columnResizeMode: 'onChange',
   })
@@ -292,33 +301,69 @@ export default function InfoTableTab({
               ))}
             </thead>
             <tbody>
-              {table.getRowModel().rows.map((row) => (
-                <tr key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <td
-                      key={cell.id}
-                      style={{
-                        borderBottom: '1px solid var(--border-color)',
-                        borderRight: '1px solid var(--border-color)',
-                        padding: '3px 8px',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        width: `${cell.column.getSize()}px`,
-                        minWidth: `${cell.column.getSize()}px`,
-                        maxWidth: `${cell.column.getSize()}px`,
-                        position: cell.column.getIsPinned() ? 'sticky' : undefined,
-                        right: cell.column.getIsPinned() === 'right' ? 0 : undefined,
-                        left: cell.column.getIsPinned() === 'left' ? 0 : undefined,
-                        background: cell.column.getIsPinned() ? 'var(--bg-primary)' : undefined,
-                        zIndex: cell.column.getIsPinned() ? 1 : undefined,
-                      }}
-                    >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              {table.getRowModel().rows.map((row) => {
+                if (row.getIsGrouped()) {
+                  return (
+                    <tr key={row.id} style={{ background: '#f9fafb' }}>
+                      <td colSpan={row.getVisibleCells().length} style={{ padding: '8px 12px', fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>
+                        <div className="flex items-center gap-2">
+                          <span
+                            style={{ cursor: 'pointer' }}
+                            onClick={row.getToggleExpandedHandler()}
+                          >
+                            {row.getIsExpanded() ? '▼' : '▶'}
+                          </span>
+                          <span>
+                            {row.groupingValue as string}
+                          </span>
+                          <span className="text-xs text-slate-400 font-normal">({row.subRows.length})</span>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                }
+                return (
+                  <tr key={row.id}>
+                    {row.getVisibleCells().map((cell) => {
+                      if (cell.getIsGrouped()) return null
+                      // 修复：直接移除 placeholder 检查，或者在 grouped 场景下谨慎处理
+                      // 在分组模式下，某些 cell 可能确实是 placeholder，但在渲染时应该安全
+                      if (cell.getIsPlaceholder()) {
+                        return (
+                          <td key={cell.id} style={{
+                            borderBottom: '1px solid var(--border-color)',
+                            borderRight: '1px solid var(--border-color)',
+                            padding: '3px 8px',
+                          }} />
+                        )
+                      }
+                      return (
+                        <td
+                          key={cell.id}
+                          style={{
+                            borderBottom: '1px solid var(--border-color)',
+                            borderRight: '1px solid var(--border-color)',
+                            padding: '3px 8px',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            width: `${cell.column.getSize()}px`,
+                            minWidth: `${cell.column.getSize()}px`,
+                            maxWidth: `${cell.column.getSize()}px`,
+                            position: cell.column.getIsPinned() ? 'sticky' : undefined,
+                            right: cell.column.getIsPinned() === 'right' ? 0 : undefined,
+                            left: cell.column.getIsPinned() === 'left' ? 0 : undefined,
+                            background: cell.column.getIsPinned() ? 'var(--bg-primary)' : undefined,
+                            zIndex: cell.column.getIsPinned() ? 1 : undefined,
+                          }}
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
           {infos.length === 0 && <div className="text-sm text-slate-500 mt-2">暂无 Info</div>}

@@ -5,16 +5,16 @@ import { buildTabSearchParams, parseTabState } from '../routing/tabState'
 describe('tab routing state', () => {
   it('falls back to defaults when no params given', () => {
     const params = new URLSearchParams()
-    expect(parseTabState(params)).toEqual({ tab: 'user', convTab: 'index', infoTab: 'index' })
+    expect(parseTabState(params)).toEqual({ tab: 'conversation', convTab: 'index', infoTab: 'index' })
   })
 
-  it('forces user tab when convTab is detail', () => {
+  it('forces conversation tab when convTab is detail', () => {
     const params = new URLSearchParams({ tab: 'info', convTab: '123', infoTab: 'index' })
-    expect(parseTabState(params)).toEqual({ tab: 'user', convTab: '123', infoTab: 'index' })
+    expect(parseTabState(params)).toEqual({ tab: 'conversation', convTab: '123', infoTab: 'index' })
   })
 
   it('forces info tab when infoTab is detail and conv is not detail', () => {
-    const params = new URLSearchParams({ tab: 'user', infoTab: 'abc' })
+    const params = new URLSearchParams({ tab: 'conversation', infoTab: 'abc' })
     expect(parseTabState(params)).toEqual({ tab: 'info', convTab: 'index', infoTab: 'abc' })
   })
 
@@ -29,7 +29,7 @@ describe('tab routing state', () => {
     expect(parseTabState(withInfoDetail)).toEqual({ tab: 'info', convTab: 'index', infoTab: 'abc' })
 
     const withConvDetail = buildTabSearchParams(base, { convTab: '42' })
-    expect(parseTabState(withConvDetail)).toEqual({ tab: 'user', convTab: '42', infoTab: 'index' })
+    expect(parseTabState(withConvDetail)).toEqual({ tab: 'conversation', convTab: '42', infoTab: 'index' })
   })
 })
 

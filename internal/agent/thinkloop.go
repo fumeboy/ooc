@@ -22,6 +22,7 @@ type Engine struct {
 	llm          llm.Client
 	executor     *ModuleManager
 	maxLoopCount int
+	maxConvs     int
 
 	User *UserInfo // User 信息对象，管理所有与 User 相关的 Conversation
 
@@ -72,11 +73,19 @@ func New(client llm.Client) *Engine {
 		executor:             m,
 		User:                 userInfo,
 		runningConversations: make(map[ConversationID]*Conversation),
+		maxConvs:             50,
 	}
 
+	reg.SetMaxConversations(e.maxConvs)
 	userInfo.engine = e
 	m.Register(&ModuleBase{e: e})
 	return e
+}
+
+// SetMaxConversations 设置最大 conversation 数量（<=0 表示不限制）。
+func (e *Engine) SetMaxConversations(n int) {
+	e.maxConvs = n
+	e.registry.SetMaxConversations(n)
 }
 
 func GetRegistry(e *Engine) *Registry {
@@ -353,16 +362,10 @@ func (e *Engine) ThinkLoop(conv *Conversation) (err error) {
 	// 托管模式或半托管模式：自动执行思考循环
 	for ; e.maxLoopCount < 300; e.maxLoopCount++ {
 		// 如果对话已完成、等待用户或出错，直接返回。
-		if conv.Status == StatusCompleted {
+		switch conv.Status {
+		case StatusCompleted, StatusWaitingAnswer, StatusWaitingManualThink, StatusWaitingRespond:
 			return nil
-		}
-		if conv.Status == StatusWaitingAnswer {
-			return nil
-		}
-		if conv.Status == StatusWaitingManualThink {
-			return nil
-		}
-		if conv.Status == StatusError {
+		case StatusError:
 			err = fmt.Errorf("conversation error: %s", conv.Error)
 			return err
 		}
@@ -374,7 +377,6 @@ func (e *Engine) ThinkLoop(conv *Conversation) (err error) {
 			conv.Error = err.Error()
 			return err
 		}
-
 		// 继续循环
 	}
 

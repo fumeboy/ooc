@@ -1,12 +1,12 @@
 // 路由状态工具：集中解析与生成 tab/convTab/infoTab，保持 URL 为唯一事实来源。
-export type TabKey = 'user' | 'info'
+export type TabKey = 'conversation' | 'info'
 export interface TabState {
   tab: TabKey
   convTab: string
   infoTab: string
 }
 
-const DEFAULT_TAB: TabKey = 'user'
+const DEFAULT_TAB: TabKey = 'conversation'
 const DEFAULT_CONV_TAB = 'index'
 const DEFAULT_INFO_TAB = 'index'
 
@@ -20,7 +20,7 @@ export function parseTabState(searchParams: URLSearchParams): TabState {
 
   let tab: TabKey = DEFAULT_TAB
   if (convIsDetail) {
-    tab = 'user'
+    tab = 'conversation'
   } else if (infoIsDetail) {
     tab = 'info'
   } else if (tabParam === 'info') {
@@ -41,7 +41,7 @@ export function buildTabSearchParams(base: URLSearchParams, next: Partial<TabSta
   const infoIsDetail = infoTab !== 'index'
 
   if (convIsDetail) {
-    tab = 'user'
+    tab = 'conversation'
   } else if (infoIsDetail) {
     tab = 'info'
   }

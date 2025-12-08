@@ -60,6 +60,14 @@ type ActivityResponse struct {
 
 	// when typ is talk/focus
 	ConversationID string `json:"conversation_id,omitempty"`
+	Conversation   struct {
+		Title    string               `json:"title,omitempty"`
+		Desc     string               `json:"desc,omitempty"`
+		Status   string               `json:"status,omitempty"`
+		Error    string               `json:"error,omitempty"`
+		Request  CommonParamsResponse `json:"request,omitempty"`
+		Response CommonParamsResponse `json:"response,omitempty"`
+	} `json:"conversation,omitempty"`
 
 	// when typ is act
 	Object   string               `json:"object,omitempty"`
@@ -114,6 +122,23 @@ func (s *Server) GetConversation(c echo.Context) error {
 		}
 		if a.Typ == "talk" || a.Typ == "focus" {
 			actionResp.ConversationID = string(a.ConversationID)
+			// 补全关联的 Conversation 信息
+			if relatedConv, exists := registry.GetConversation(a.ConversationID); exists {
+				actionResp.Conversation.Title = relatedConv.Title
+				actionResp.Conversation.Desc = relatedConv.Desc
+				actionResp.Conversation.Status = string(relatedConv.Status)
+				actionResp.Conversation.Error = relatedConv.Error
+				actionResp.Conversation.Request = CommonParamsResponse{
+					Title:      relatedConv.Request.Title,
+					Content:    relatedConv.Request.Content,
+					References: relatedConv.Request.References,
+				}
+				actionResp.Conversation.Response = CommonParamsResponse{
+					Title:      relatedConv.Response.Title,
+					Content:    relatedConv.Response.Content,
+					References: relatedConv.Response.References,
+				}
+			}
 		} else if a.Typ == "act" {
 			actionResp.Object = string(a.Object)
 			actionResp.Method = a.Method

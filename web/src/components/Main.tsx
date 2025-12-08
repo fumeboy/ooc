@@ -40,13 +40,13 @@ export default function Main({ onToggleSessionList }: Props) {
 
   const tabs = useMemo(() => {
     return [
-      { key: 'user', label: 'User Conversations' },
-      { key: 'info', label: 'Info 表格' },
+      { key: 'conversation', label: 'Conversations' },
+      { key: 'info', label: 'Infos' },
     ]
   }, [])
 
   const renderContent = () => {
-    if (activeKey === 'user')
+    if (activeKey === 'conversation')
       return (
         <ConversationsPage
           sessionId={selectedSessionId || ''}
@@ -59,7 +59,7 @@ export default function Main({ onToggleSessionList }: Props) {
           }}
           openConversationId={pendingOpenConvId}
           onConsumeOpenConversation={() => setPendingOpenConvId(null)}
-          onActiveTabChange={(key) => syncSearchParams({ convTab: key, tab: 'user' })}
+          onActiveTabChange={(key) => syncSearchParams({ convTab: key, tab: 'conversation' })}
         />
       )
     if (activeKey === 'info')
@@ -69,7 +69,7 @@ export default function Main({ onToggleSessionList }: Props) {
           initialActiveTab={parsed.infoTab}
           onActiveTabChange={(key) => syncSearchParams({ infoTab: key })}
           onOpenConversation={(id) => {
-            syncSearchParams({ convTab: id, tab: 'user', infoTab: 'index' })
+            syncSearchParams({ convTab: id, tab: 'conversation', infoTab: 'index' })
             setPendingOpenConvId(id)
             openConvRef.current?.(id)
           }}
@@ -96,7 +96,7 @@ export default function Main({ onToggleSessionList }: Props) {
   useEffect(() => {
     if (initialApplied.current) return
     initialApplied.current = true
-    if (activeKey === 'user' && parsed.convTab && parsed.convTab !== 'index' && parsed.convTab !== 'waiting') {
+    if (activeKey === 'conversation' && parsed.convTab && parsed.convTab !== 'index' && parsed.convTab !== 'waiting') {
       setPendingOpenConvId(parsed.convTab)
     }
   }, [activeKey, parsed.convTab])
