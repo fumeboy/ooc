@@ -1,0 +1,154 @@
+/**
+ * 消息路由器 (G8 — 对象协作)
+ *
+ * 管理对象间的消息路由，支持 A→B 对话和共享文件读写。
+ * talk() 是同步消息投递（fire-and-forget），立即返回状态字符串。
+ *
+ * @ref .ooc/docs/哲学文档/gene.md#G8 — implements — 三种 Effect 方向（talk 消息、readShared/writeShared 共享文件）
+ * @ref src/flow/flow.ts — references — Flow.deliverMessage 消息投递
+ */
+
+import { join } from "node:path";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { consola } from "consola";
+
+/** 协作 API —— 注入到沙箱的跨对象能力 */
+export interface CollaborationAPI {
+  /** 向另一个对象发消息（同步投递，fire-and-forget） */
+  talk: (message: string, target: string, replyTo?: string) => string;
+  /** 读取指定对象的 shared 文件 */
+  readShared: (targetName: string, filename: string) => string | null;
+  /** 写入自己的 shared 文件 */
+  writeShared: (filename: string, content: string) => void;
+  /** 向自己的 SelfMeta Flow 发消息（自我对话，双向） */
+  talkToSelf: (message: string) => string;
+  /** SelfMeta 专用：回复发起对话的 Flow（双向对话的反向通道） */
+  replyToFlow: (taskId: string, message: string) => string;
+}
+
+/** Router 所需的 World 接口（避免循环依赖） */
+export interface Routable {
+  /**
+   * 投递消息到目标对象（异步，不运行 ThinkLoop）
+   * @param sessionId - 所属 session 的 ID（支持并发 session）
+   */
+  deliverMessage: (targetName: string, message: string, from: string, replyTo?: string, sessionId?: string) => void;
+  /** 获取对象目录路径 */
+  getObjectDir: (name: string) => string | null;
+  /** 向对象的 SelfMeta Flow 投递消息 */
+  deliverToSelfMeta: (stoneName: string, message: string, fromTaskId: string) => string;
+  /** SelfMeta 回复发起对话的 Flow
+   * @param sessionId - 所属 session 的 ID（支持并发 session）
+   */
+  deliverFromSelfMeta: (stoneName: string, targetTaskId: string, message: string, sessionId?: string) => string;
+}
+
+/** 最大对话轮次（防止无限对话） */
+const MAX_ROUNDS = 100;
+
+/** 共享轮次计数器 —— 同一 TaskSession 内所有 CollaborationAPI 共享 */
+export interface SharedRoundCounter {
+  count: number;
+}
+
+/** 创建一个新的共享轮次计数器 */
+export function createSharedRoundCounter(): SharedRoundCounter {
+  return { count: 0 };
+}
+
+/**
+ * 创建协作 API
+ *
+ * @param roundCounter - 可选的共享轮次计数器。同一 TaskSession 内的所有 Flow 应共享同一个计数器，
+ *                       防止 sub-flow 创建时计数器重置导致轮次限制失效。
+ * @param currentFlowTaskId - 当前 Flow 的 taskId（用于 talkToSelf 标识发起方）
+ * @param sessionId - 所属 session 的 ID（支持并发 session）
+ */
+export function createCollaborationAPI(
+  world: Routable,
+  currentObjectName: string,
+  currentObjectDir: string,
+  roundCounter?: SharedRoundCounter,
+  currentFlowTaskId?: string,
+  sessionId?: string,
+): CollaborationAPI {
+  const currentSharedDir = join(currentObjectDir, "shared");
+
+  /** 对话轮次计数器 —— 优先使用共享计数器，否则创建局部计数器（兼容测试场景） */
+  const counter = roundCounter ?? { count: 0 };
+
+  return {
+    talk: (message: string, target: string, replyTo?: string): string => {
+      counter.count++;
+      if (counter.count > MAX_ROUNDS) {
+        const errMsg = `[Router] 对话轮次超限 (${counter.count}/${MAX_ROUNDS})，拒绝 ${currentObjectName} → ${target}`;
+        consola.warn(errMsg);
+        return `[错误] 对话轮次过多，无法继续。`;
+      }
+
+      if (target === currentObjectName) {
+        return "[错误] 不能向自己发消息，请使用 talkToSelf()";
+      }
+
+      consola.info(`[Router] ${currentObjectName} → ${target} (round: ${counter.count})`);
+
+      try {
+        world.deliverMessage(target, message, currentObjectName, replyTo, sessionId);
+        return `[消息已发送给 ${target}]`;
+      } catch (e) {
+        const errMsg = `[Router] 对话失败: ${(e as Error).message}`;
+        consola.error(errMsg);
+        return `[错误] ${(e as Error).message}`;
+      }
+    },
+
+    readShared: (targetName: string, filename: string): string | null => {
+      const targetDir = world.getObjectDir(targetName);
+      if (!targetDir) {
+        consola.warn(`[Router] readShared: 对象 "${targetName}" 不存在`);
+        return null;
+      }
+
+      const filePath = join(targetDir, "shared", filename);
+      if (!existsSync(filePath)) return null;
+
+      try {
+        return readFileSync(filePath, "utf-8");
+      } catch {
+        return null;
+      }
+    },
+
+    writeShared: (filename: string, content: string): void => {
+      if (!existsSync(currentSharedDir)) {
+        mkdirSync(currentSharedDir, { recursive: true });
+      }
+      const filePath = join(currentSharedDir, filename);
+      writeFileSync(filePath, content, "utf-8");
+      consola.info(`[Router] writeShared: ${currentObjectName} → ${filename}`);
+    },
+
+    talkToSelf: (message: string): string => {
+      if (!currentFlowTaskId) {
+        return "[错误] 无法确定当前 Flow，talkToSelf 不可用";
+      }
+      try {
+        return world.deliverToSelfMeta(currentObjectName, message, currentFlowTaskId);
+      } catch (e) {
+        const errMsg = `[Router] talkToSelf 失败: ${(e as Error).message}`;
+        consola.error(errMsg);
+        return `[错误] ${(e as Error).message}`;
+      }
+    },
+
+    replyToFlow: (taskId: string, message: string): string => {
+      try {
+        return world.deliverFromSelfMeta(currentObjectName, taskId, message, sessionId);
+      } catch (e) {
+        const errMsg = `[Router] replyToFlow 失败: ${(e as Error).message}`;
+        consola.error(errMsg);
+        return `[错误] ${(e as Error).message}`;
+      }
+    },
+  };
+}

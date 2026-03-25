@@ -1,0 +1,35 @@
+/**
+ * SSE 事件总线
+ *
+ * 全局事件发射器，用于将系统内部事件推送到前端 SSE 连接。
+ * 各模块（World, ThinkLoop, Flow, Scheduler）在关键节点调用 emitSSE()，
+ * SSE handler 监听并推送给所有连接的客户端。
+ *
+ * @ref .ooc/docs/哲学文档/gene.md#G11 — references — SSE 是前端实时感知对象状态变化的通道
+ * @ref src/types/flow.ts — references — Action, FlowMessage, FlowStatus 事件数据类型
+ */
+
+import { EventEmitter } from "node:events";
+import type { Action, FlowMessage, FlowStatus } from "../types/index.js";
+
+/** SSE 事件类型 */
+export type SSEEvent =
+  | { type: "flow:start"; objectName: string; taskId: string }
+  | { type: "flow:action"; objectName: string; taskId: string; action: Action }
+  | { type: "flow:message"; objectName: string; taskId: string; message: FlowMessage }
+  | { type: "flow:status"; objectName: string; taskId: string; status: FlowStatus }
+  | { type: "flow:end"; objectName: string; taskId: string; status: FlowStatus }
+  | { type: "stream:thought"; objectName: string; taskId: string; chunk: string }
+  | { type: "stream:talk"; objectName: string; taskId: string; target: string; chunk: string }
+  | { type: "stream:thought:end"; objectName: string; taskId: string }
+  | { type: "stream:talk:end"; objectName: string; taskId: string; target: string }
+  | { type: "object:created"; name: string }
+  | { type: "object:updated"; name: string };
+
+/** 全局事件总线 */
+export const eventBus = new EventEmitter();
+
+/** 发出 SSE 事件 */
+export function emitSSE(event: SSEEvent): void {
+  eventBus.emit("sse", event);
+}
