@@ -4,7 +4,7 @@
  * 管理对象间的消息路由，支持 A→B 对话和共享文件读写。
  * talk() 是同步消息投递（fire-and-forget），立即返回状态字符串。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G8 — implements — 三种 Effect 方向（talk 消息、readShared/writeShared 共享文件）
+ * @ref docs/哲学文档/gene.md#G8 — implements — 三种 Effect 方向（talk 消息、readShared/writeShared 共享文件）
  * @ref src/flow/flow.ts — references — Flow.deliverMessage 消息投递
  */
 

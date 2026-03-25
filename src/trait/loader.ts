@@ -4,8 +4,8 @@
  * 从文件系统的 traits/ 目录加载 Trait 定义。
  * 每个 Trait 是一个目录：readme.md（文档/bias）+ 可选 index.ts（方法）。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G3 — implements — Trait 从文件系统加载（readme.md + index.ts）
- * @ref .ooc/docs/哲学文档/gene.md#G7 — references — Trait 目录即 Trait 存在
+ * @ref docs/哲学文档/gene.md#G3 — implements — Trait 从文件系统加载（readme.md + index.ts）
+ * @ref docs/哲学文档/gene.md#G7 — references — Trait 目录即 Trait 存在
  * @ref src/types/trait.ts — references — TraitDefinition, TraitMethod 类型
  */
 
@@ -17,7 +17,7 @@ import type { TraitDefinition, TraitMethod, TraitHookEvent, TraitHook } from "..
 /**
  * 从单个 trait 目录加载 Trait 定义
  *
- * @param traitDir - trait 目录路径（如 .ooc/objects/researcher/traits/web_search/）
+ * @param traitDir - trait 目录路径（如 stones/researcher/traits/web_search/）
  * @param traitName - trait 名称
  * @returns TraitDefinition，若目录无效返回 null
  */

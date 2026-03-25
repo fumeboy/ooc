@@ -4,8 +4,8 @@
  * 将行为树渲染为 LLM 可读的文本表示。
  * Focus 路径上的节点显示详细信息，其余只显示摘要。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G5 — implements — Context 中的 process 字段（focus 路径详细、其余摘要）
- * @ref .ooc/docs/哲学文档/gene.md#G9 — implements — 行为树可视化渲染
+ * @ref docs/哲学文档/gene.md#G5 — implements — Context 中的 process 字段（focus 路径详细、其余摘要）
+ * @ref docs/哲学文档/gene.md#G9 — implements — 行为树可视化渲染
  * @ref src/process/tree.ts — references — getPathToNode, findNode
  * @ref src/process/focus.ts — references — isProcessComplete
  * @ref src/types/process.ts — references — Process, ProcessNode 类型

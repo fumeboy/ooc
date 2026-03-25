@@ -9,8 +9,8 @@
  * 错误传播：当 sub-flow 失败或超时时，自动向 initiatedBy 投递错误消息，
  * 让发送方的 LLM 感知到协作对象的失败。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G8 — implements — 多 Flow 调度与错误传播
- * @ref .ooc/docs/哲学文档/gene.md#G2 — references — Flow 状态机驱动调度决策
+ * @ref docs/哲学文档/gene.md#G8 — implements — 多 Flow 调度与错误传播
+ * @ref docs/哲学文档/gene.md#G2 — references — Flow 状态机驱动调度决策
  * @ref src/flow/flow.ts — references — Flow 实例
  * @ref src/flow/thinkloop.ts — references — runThinkLoop 执行引擎
  */

@@ -8,7 +8,7 @@
  * 使用 Vite define 注入的 __OOC_ROOT__ 构建 /@fs/ 绝对 URL，
  * 绕过 @vite-ignore 导致的路径解析问题。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达
+ * @ref docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达
  */
 import React, { Component, Suspense, useMemo } from "react";
 

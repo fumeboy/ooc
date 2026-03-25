@@ -4,9 +4,9 @@
  * 行为树是 Flow 的唯一 action 存储。
  * 所有 action 记录在节点上，通过 focus 机制实现结构化遗忘。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G9 — implements — ProcessNode, Process, TodoItem 行为树结构
- * @ref .ooc/docs/哲学文档/gene.md#G5 — implements — focus 光标驱动结构化遗忘
- * @ref .ooc/docs/哲学文档/gene.md#G10 — references — actions 字段存储不可变事件
+ * @ref docs/哲学文档/gene.md#G9 — implements — ProcessNode, Process, TodoItem 行为树结构
+ * @ref docs/哲学文档/gene.md#G5 — implements — focus 光标驱动结构化遗忘
+ * @ref docs/哲学文档/gene.md#G10 — references — actions 字段存储不可变事件
  * @ref src/types/flow.ts — references — Action 类型定义
  */
 

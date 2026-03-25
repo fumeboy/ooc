@@ -4,8 +4,8 @@
  * 行为树是 Flow 的结构化计划与执行机制。
  * Flow 可以一次性创建庞大的行为树，然后逐步执行。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G9 — implements — 行为树节点 CRUD（createProcess, addNode, removeNode, editNode）
- * @ref .ooc/docs/哲学文档/gene.md#G10 — implements — appendAction 将事件挂载到节点
+ * @ref docs/哲学文档/gene.md#G9 — implements — 行为树节点 CRUD（createProcess, addNode, removeNode, editNode）
+ * @ref docs/哲学文档/gene.md#G10 — implements — appendAction 将事件挂载到节点
  * @ref src/types/process.ts — references — Process, ProcessNode, TodoItem 类型
  */
 

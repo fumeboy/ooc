@@ -1,7 +1,7 @@
 /**
  * Flow 状态管理（Jotai atoms）
  *
- * @ref .ooc/docs/哲学文档/gene.md#G2 — references — Flow 列表与选中状态
+ * @ref docs/哲学文档/gene.md#G2 — references — Flow 列表与选中状态
  */
 import { atom } from "jotai";
 import type { FlowSummary, FlowData } from "../api/types";

@@ -3,7 +3,7 @@
  *
  * 将结构化 Context 转换为 LLM 可读的纯文本 prompt。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G5 — implements — Context → system prompt + messages 格式化
+ * @ref docs/哲学文档/gene.md#G5 — implements — Context → system prompt + messages 格式化
  * @ref src/types/context.ts — references — Context 类型
  */
 

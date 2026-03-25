@@ -4,7 +4,7 @@
  * 将对象（Stone）和任务执行（Flow）的状态写入文件系统。
  * 持久化目录就是对象的物理存在。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G7 — implements — 将对象写入文件系统（writeStone, writeFlow）
+ * @ref docs/哲学文档/gene.md#G7 — implements — 将对象写入文件系统（writeStone, writeFlow）
  * @ref src/persistence/frontmatter.ts — references — serializeReadme frontmatter 序列化
  * @ref src/types/object.ts — references — StoneData 类型
  * @ref src/types/flow.ts — references — FlowData 类型
@@ -55,7 +55,7 @@ export function writeStone(dir: string, stone: StoneData): void {
  * process 数据单独写入 process.json（包含所有 action），
  * data.json 存储元数据（状态、消息等）。
  *
- * @param dir - Flow 目录路径（如 .ooc/objects/researcher/effects/task_001/）
+ * @param dir - Flow 目录路径（如 stones/researcher/effects/task_001/）
  * @param flow - Flow 数据
  */
 export function writeFlow(dir: string, flow: FlowData): void {

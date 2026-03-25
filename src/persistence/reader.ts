@@ -4,7 +4,7 @@
  * 从文件系统读取对象（Stone）和任务执行（Flow）的状态。
  * 目录存在 = 对象存在。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G7 — implements — 从文件系统读取对象（readStone, readFlow, listObjects）
+ * @ref docs/哲学文档/gene.md#G7 — implements — 从文件系统读取对象（readStone, readFlow, listObjects）
  * @ref src/persistence/frontmatter.ts — references — parseReadme frontmatter 解析
  * @ref src/types/object.ts — references — StoneData 类型
  * @ref src/types/flow.ts — references — FlowData 类型
@@ -19,7 +19,7 @@ import type { StoneData, FlowData, Relation } from "../types/index.js";
 /**
  * 从目录读取 Stone 对象
  *
- * @param dir - 对象目录路径（如 .ooc/objects/researcher/）
+ * @param dir - 对象目录路径（如 stones/researcher/）
  * @returns Stone 数据，若目录不存在返回 null
  */
 export function readStone(dir: string): StoneData | null {
@@ -88,7 +88,7 @@ export function readStone(dir: string): StoneData | null {
  * 自动合并 process.json 到 FlowData.process 字段。
  * 旧版数据若无 process.json，自动创建默认 process。
  *
- * @param dir - Flow 目录路径（如 .ooc/objects/researcher/effects/task_001/）
+ * @param dir - Flow 目录路径（如 stones/researcher/effects/task_001/）
  * @returns Flow 数据，若目录不存在返回 null
  */
 export function readFlow(dir: string): FlowData | null {
@@ -132,7 +132,7 @@ export function readFlow(dir: string): FlowData | null {
 /**
  * 列出顶层 flows/ 目录下所有 session ID
  *
- * @param flowsDir - 顶层 flows 目录路径（如 .ooc/flows/）
+ * @param flowsDir - 顶层 flows 目录路径（如 flows/）
  * @returns session ID 列表
  */
 export function listFlowSessions(flowsDir: string): string[] {
@@ -146,7 +146,7 @@ export function listFlowSessions(flowsDir: string): string[] {
 /**
  * 列出所有对象名称
  *
- * @param objectsRoot - 对象根目录（如 .ooc/objects/）
+ * @param objectsRoot - 对象根目录（如 stones/）
  * @returns 对象名称列表
  */
 export function listObjects(objectsRoot: string): string[] {

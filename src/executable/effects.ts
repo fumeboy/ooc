@@ -4,8 +4,8 @@
  * 统一追踪沙箱中所有有副作用的 API 调用。
  * 新增 API 时只需声明 effect 格式化函数，无需修改追踪逻辑。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G4 — implements — 程序执行副作用追踪（effects 反馈给 LLM）
- * @ref .ooc/docs/哲学文档/gene.md#G8 — references — Effect 概念（对象如何影响世界）
+ * @ref docs/哲学文档/gene.md#G4 — implements — 程序执行副作用追踪（effects 反馈给 LLM）
+ * @ref docs/哲学文档/gene.md#G8 — references — Effect 概念（对象如何影响世界）
  */
 
 /** 副作用回执格式化函数：接收调用参数和返回值，输出一行回执文本 */

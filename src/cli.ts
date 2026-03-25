@@ -12,12 +12,13 @@
  */
 
 import { join } from "node:path";
+import { existsSync } from "node:fs";
 import { consola } from "consola";
 import { World } from "./world/index.js";
 import { startServer } from "./server/server.js";
 
-/** .ooc 根目录（相对于项目根目录） */
-const OOC_ROOT = join(process.cwd(), ".ooc");
+/** user repo 根目录（即 cwd） */
+const OOC_ROOT = process.cwd();
 
 /** 主入口 */
 async function main(): Promise<void> {
@@ -26,6 +27,12 @@ async function main(): Promise<void> {
 
   if (!command) {
     printUsage();
+    process.exit(1);
+  }
+
+  /* 验证 kernel submodule 存在 */
+  if (!existsSync(join(OOC_ROOT, "kernel"))) {
+    consola.error("kernel/ 目录不存在。请确保从 user repo 根目录运行，且已初始化 submodule: git submodule update --init");
     process.exit(1);
   }
 
@@ -84,7 +91,7 @@ async function main(): Promise<void> {
 
       const stone = world.createObject(name, whoAmI);
       consola.info(`对象 "${stone.name}" 创建成功`);
-      consola.info(`目录: .ooc/objects/${stone.name}/`);
+      consola.info(`目录: stones/${stone.name}/`);
       break;
     }
 

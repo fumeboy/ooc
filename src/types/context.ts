@@ -4,8 +4,8 @@
  * Context 是系统为 Flow 构建的结构化输入。
  * 对象不知道 Context 之外的任何事情。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G5 — implements — Context 结构（whoAmI, process, messages, windows, directory, status）
- * @ref .ooc/docs/哲学文档/gene.md#G3 — references — ContextWindow 来自 Trait 的 readme 内容
+ * @ref docs/哲学文档/gene.md#G5 — implements — Context 结构（whoAmI, process, messages, windows, directory, status）
+ * @ref docs/哲学文档/gene.md#G3 — references — ContextWindow 来自 Trait 的 readme 内容
  * @ref src/types/object.ts — references — TalkableFunction, DirectoryEntry 中的对象接口
  * @ref src/types/flow.ts — references — FlowMessage, FlowStatus, Action 类型
  */

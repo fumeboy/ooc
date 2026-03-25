@@ -1,8 +1,8 @@
 /**
  * ObjectDetail —— 对象详情页（Readme/Data/Effects/Shared/UI 标签页）
  *
- * @ref .ooc/docs/哲学文档/gene.md#G1 — renders — 对象的完整组成（thinkable, talkable, data, traits, effects）
- * @ref .ooc/docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达（含自定义 UI 标签页）
+ * @ref docs/哲学文档/gene.md#G1 — renders — 对象的完整组成（thinkable, talkable, data, traits, effects）
+ * @ref docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达（含自定义 UI 标签页）
  * @ref src/types/object.ts — references — StoneData 类型
  */
 import { useState, useEffect, useMemo } from "react";

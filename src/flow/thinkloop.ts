@@ -6,13 +6,13 @@
  * G13: 认知栈 — create_plan_node/finish_plan_node 管理计划节点，
  *      作用域链驱动 trait 激活，before/after hooks。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G4 — implements — ThinkLoop 思考-执行循环（提取程序、沙箱执行、反馈）
- * @ref .ooc/docs/哲学文档/gene.md#G5 — implements — 每轮构建 Context 作为 LLM 输入
- * @ref .ooc/docs/哲学文档/gene.md#G8 — implements — 协作 API 注入（talk, readShared, writeShared）
- * @ref .ooc/docs/哲学文档/gene.md#G9 — implements — 行为树 API 注入（createPlan, create_plan_node, finish_plan_node, moveFocus）
- * @ref .ooc/docs/哲学文档/gene.md#G10 — implements — recordAction 记录 thought/program 事件
- * @ref .ooc/docs/哲学文档/gene.md#G3 — implements — Trait 元编程 API（readTrait, listTraits, activateTrait, reloadTrait）
- * @ref .ooc/docs/哲学文档/gene.md#G13 — implements — 认知栈 create_plan_node/finish_plan_node + before/after hooks
+ * @ref docs/哲学文档/gene.md#G4 — implements — ThinkLoop 思考-执行循环（提取程序、沙箱执行、反馈）
+ * @ref docs/哲学文档/gene.md#G5 — implements — 每轮构建 Context 作为 LLM 输入
+ * @ref docs/哲学文档/gene.md#G8 — implements — 协作 API 注入（talk, readShared, writeShared）
+ * @ref docs/哲学文档/gene.md#G9 — implements — 行为树 API 注入（createPlan, create_plan_node, finish_plan_node, moveFocus）
+ * @ref docs/哲学文档/gene.md#G10 — implements — recordAction 记录 thought/program 事件
+ * @ref docs/哲学文档/gene.md#G3 — implements — Trait 元编程 API（readTrait, listTraits, activateTrait, reloadTrait）
+ * @ref docs/哲学文档/gene.md#G13 — implements — 认知栈 create_plan_node/finish_plan_node + before/after hooks
  * @ref src/flow/flow.ts — references — Flow 实例操作
  * @ref src/flow/parser.ts — references — extractPrograms, detectDirectives
  * @ref src/context/builder.ts — references — buildContext 构建上下文

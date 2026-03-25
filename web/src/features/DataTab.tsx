@@ -1,8 +1,8 @@
 /**
  * DataTab —— 对象数据展示（data 键值对）
  *
- * @ref .ooc/docs/哲学文档/gene.md#G1 — renders — 对象的 data 动态键值对
- * @ref .ooc/docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达
+ * @ref docs/哲学文档/gene.md#G1 — renders — 对象的 data 动态键值对
+ * @ref docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达
  */
 import { useState } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";

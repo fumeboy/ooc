@@ -1,8 +1,8 @@
 /**
  * TraitsTab —— 对象 Trait 列表展示
  *
- * @ref .ooc/docs/哲学文档/gene.md#G3 — renders — Trait 定义（when, readme, methods）
- * @ref .ooc/docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达
+ * @ref docs/哲学文档/gene.md#G3 — renders — Trait 定义（when, readme, methods）
+ * @ref docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达
  */
 import { useState, useEffect } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";

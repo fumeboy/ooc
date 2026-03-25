@@ -6,7 +6,7 @@
  * - OpenAICompatibleClient：支持智谱 AI 及任何 OpenAI 兼容 API
  * - MockLLMClient：用于测试
  *
- * @ref .ooc/docs/哲学文档/gene.md#G4 — references — LLM 是 ThinkLoop 的思考引擎
+ * @ref docs/哲学文档/gene.md#G4 — references — LLM 是 ThinkLoop 的思考引擎
  * @ref src/thinkable/config.ts — references — LLMConfig 配置
  */
 

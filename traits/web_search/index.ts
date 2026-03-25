@@ -3,7 +3,7 @@
  *
  * 提供 DuckDuckGo 搜索和网页抓取能力，任何对象激活即可用。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G3 — implements — Trait 方法扩展对象能力
+ * @ref docs/哲学文档/gene.md#G3 — implements — Trait 方法扩展对象能力
  */
 
 /** 将 HTML 转换为可读的纯文本 */

@@ -4,7 +4,7 @@
  * 每个线程是一个独立的 focus cursor，可以在行为树上独立推进。
  * 默认两个线程：frontend（对外沟通）、backend（内部工作）。
  *
- * @ref .ooc/docs/哲学文档/meta.md — implements — 多线程概念
+ * @ref docs/哲学文档/meta.md — implements — 多线程概念
  */
 
 import type { Process, ThreadState, Signal } from "../types/index.js";

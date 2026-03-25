@@ -4,7 +4,7 @@
  * 对象的运行时是一个混合栈，每个栈帧同时携带过程（做什么）和思维（用什么来想）。
  * 活跃 traits 由作用域链自动计算：focus 路径上所有节点的 traits + activatedTraits。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G13 — implements — 认知栈作用域链计算
+ * @ref docs/哲学文档/gene.md#G13 — implements — 认知栈作用域链计算
  * @ref src/process/tree.ts — references — getPathToNode, findNode
  * @ref src/types/process.ts — references — Process, ProcessNode
  * @ref src/types/trait.ts — references — TraitDefinition, TraitHook

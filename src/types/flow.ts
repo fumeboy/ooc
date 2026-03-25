@@ -4,9 +4,9 @@
  * Flow 是 Stone 在执行任务时的动态派生。
  * 拥有思考能力、执行能力、状态机、消息记录。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G2 — implements — Flow 动态形态（FlowData, FlowStatus）
- * @ref .ooc/docs/哲学文档/gene.md#G8 — implements — PendingMessage 异步消息投递
- * @ref .ooc/docs/哲学文档/gene.md#G10 — implements — Action 不可变事件记录
+ * @ref docs/哲学文档/gene.md#G2 — implements — Flow 动态形态（FlowData, FlowStatus）
+ * @ref docs/哲学文档/gene.md#G8 — implements — PendingMessage 异步消息投递
+ * @ref docs/哲学文档/gene.md#G10 — implements — Action 不可变事件记录
  * @ref src/types/process.ts — references — Process 行为树类型
  */
 

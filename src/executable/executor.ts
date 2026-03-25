@@ -6,7 +6,7 @@
  * 捕获返回值、console.log 输出和异常。
  * 执行完毕后自动删除临时文件。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G4 — implements — 程序沙箱执行（临时文件 + dynamic import + 结果捕获）
+ * @ref docs/哲学文档/gene.md#G4 — implements — 程序沙箱执行（临时文件 + dynamic import + 结果捕获）
  */
 
 import { mkdirSync, writeFileSync, unlinkSync } from "node:fs";

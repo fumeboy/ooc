@@ -13,8 +13,8 @@
  * ---
  * 你是一个研究员，擅长信息检索和分析...
  *
- * @ref .ooc/docs/哲学文档/gene.md#G1 — implements — readme.md 格式（thinkable 正文 + talkable frontmatter）
- * @ref .ooc/docs/哲学文档/gene.md#G7 — implements — readme.md 是对象身份的物理载体
+ * @ref docs/哲学文档/gene.md#G1 — implements — readme.md 格式（thinkable 正文 + talkable frontmatter）
+ * @ref docs/哲学文档/gene.md#G7 — implements — readme.md 是对象身份的物理载体
  */
 
 import matter from "gray-matter";

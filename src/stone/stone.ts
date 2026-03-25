@@ -5,10 +5,10 @@
  * 它拥有身份、数据、行为、关系，但不会主动做任何事。
  * Stone 就像一块刻了字的石头：信息在那里，但石头不会自己读出来。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G1 — implements — 对象的组成部分（name, thinkable, talkable, data, relations）
- * @ref .ooc/docs/哲学文档/gene.md#G2 — implements — Stone 静态形态（不会主动行动）
- * @ref .ooc/docs/哲学文档/gene.md#G6 — implements — addRelation 有向关系管理
- * @ref .ooc/docs/哲学文档/gene.md#G7 — implements — 持久化目录即物理存在（load/save/create）
+ * @ref docs/哲学文档/gene.md#G1 — implements — 对象的组成部分（name, thinkable, talkable, data, relations）
+ * @ref docs/哲学文档/gene.md#G2 — implements — Stone 静态形态（不会主动行动）
+ * @ref docs/哲学文档/gene.md#G6 — implements — addRelation 有向关系管理
+ * @ref docs/哲学文档/gene.md#G7 — implements — 持久化目录即物理存在（load/save/create）
  * @ref src/types/object.ts — references — StoneData, Talkable, Thinkable, Relation 类型
  * @ref src/persistence/reader.ts — references — readStone 加载
  * @ref src/persistence/writer.ts — references — writeStone 保存
@@ -35,7 +35,7 @@ export class Stone {
   /**
    * 从持久化目录加载 Stone
    *
-   * @param dir - 对象目录路径（如 .ooc/objects/researcher/）
+   * @param dir - 对象目录路径（如 stones/researcher/）
    * @returns Stone 实例，若目录不存在返回 null
    */
   static load(dir: string): Stone | null {

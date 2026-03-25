@@ -7,7 +7,7 @@
  * 1. 结构化段落格式（优先）：[thought] / [program] / [talk/目标] / [finish] / [wait] / [break]
  * 2. Markdown 代码块格式（兼容）：```javascript ... ```
  *
- * @ref .ooc/docs/哲学文档/gene.md#G4 — implements — 从 LLM 输出中提取程序和指令
+ * @ref docs/哲学文档/gene.md#G4 — implements — 从 LLM 输出中提取程序和指令
  */
 
 /** 提取结果 */

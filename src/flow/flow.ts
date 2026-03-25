@@ -7,10 +7,10 @@
  *
  * 所有 action 存储在行为树节点上，通过 focus 机制实现结构化遗忘。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G2 — implements — Flow 动态形态（状态机 running→waiting→finished/failed）
- * @ref .ooc/docs/哲学文档/gene.md#G8 — implements — 异步消息投递（deliverMessage, drainPendingMessages）
- * @ref .ooc/docs/哲学文档/gene.md#G10 — implements — recordAction 不可变事件记录
- * @ref .ooc/docs/哲学文档/gene.md#G7 — implements — Flow 持久化（save/load → effects/{taskId}/）
+ * @ref docs/哲学文档/gene.md#G2 — implements — Flow 动态形态（状态机 running→waiting→finished/failed）
+ * @ref docs/哲学文档/gene.md#G8 — implements — 异步消息投递（deliverMessage, drainPendingMessages）
+ * @ref docs/哲学文档/gene.md#G10 — implements — recordAction 不可变事件记录
+ * @ref docs/哲学文档/gene.md#G7 — implements — Flow 持久化（save/load → effects/{taskId}/）
  * @ref src/types/flow.ts — references — FlowData, FlowStatus, Action, PendingMessage 类型
  * @ref src/process/tree.ts — references — createProcess, appendAction, collectAllActions
  * @ref src/persistence/writer.ts — references — writeFlow 持久化
@@ -65,7 +65,7 @@ export class Flow {
    *
    * 自动创建根 process，所有 action 将记录在行为树节点上。
    *
-   * @param flowsDir - 顶层 flows/ 目录（如 .ooc/flows/）
+   * @param flowsDir - 顶层 flows/ 目录（如 flows/）
    * @param stoneName - 所属 Stone 名称
    * @param initialMessage - 触发任务的初始消息
    * @param from - 消息发送者
@@ -116,9 +116,9 @@ export class Flow {
    * 同一 Stone 在同一 session 下只有一个 sub-flow。
    * Sub-flow 复用 session 的 shared/ 目录。
    *
-   * @ref .ooc/docs/建模/meta_thought.md#五 — implements — Sub-flow 持久化在 session 子目录
+   * @ref docs/建模/meta_thought.md#五 — implements — Sub-flow 持久化在 session 子目录
    *
-   * @param sessionDir - session 根目录（如 .ooc/flows/{taskId}/）
+   * @param sessionDir - session 根目录（如 flows/{taskId}/）
    * @param stoneName - sub-flow 所属的 Stone 名称
    * @param initialMessage - 触发消息
    * @param from - 消息发送者
@@ -177,7 +177,7 @@ export class Flow {
    * taskId 固定为 `_reflect`，初始 status 为 waiting。
    * 如果已存在则 load，不重复创建。
    *
-   * @param reflectDir - Stone 的 reflect/ 目录（如 .ooc/stones/{name}/reflect/）
+   * @param reflectDir - Stone 的 reflect/ 目录（如 stones/{name}/reflect/）
    * @param stoneName - 所属 Stone 名称
    * @returns ReflectFlow 实例
    */

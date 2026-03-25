@@ -4,7 +4,7 @@
  * 提供 OOC 系统的 HTTP API + SSE 实时事件推送。
  * 使用 Bun 原生 HTTP 服务器。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G11 — references — 前端通过 API 获取对象数据进行 UI 渲染
+ * @ref docs/哲学文档/gene.md#G11 — references — 前端通过 API 获取对象数据进行 UI 渲染
  * @ref src/world/world.ts — references — World 根对象（API 操作入口）
  * @ref src/server/events.ts — references — SSE 事件总线
  */
@@ -472,13 +472,13 @@ async function handleRoute(
 
   /* ========== 文件树 API ========== */
 
-  /* GET /api/tree — 返回 .ooc/ 根目录的文件树 */
+  /* GET /api/tree — 返回 user 根目录的文件树 */
   if (method === "GET" && path === "/api/tree") {
     const tree = buildFileTree(world.rootDir, "", 6);
     return json({ success: true, data: tree });
   }
 
-  /* GET /api/tree/file?path=xxx — 读取 .ooc/ 下指定相对路径的文件内容 */
+  /* GET /api/tree/file?path=xxx — 读取 user 根目录下指定相对路径的文件内容 */
   if (method === "GET" && path === "/api/tree/file") {
     const url = new URL(req.url);
     const relPath = url.searchParams.get("path");
@@ -815,7 +815,7 @@ const MARKER_FILES = new Set([".stone", ".flow"]);
  * 递归构建文件树 JSON
  *
  * @param absDir - 要扫描的绝对路径
- * @param relativePath - 相对于 .ooc/ 的路径前缀
+ * @param relativePath - 相对于 user 根目录的路径前缀
  * @param maxDepth - 最大递归深度（防止过深）
  */
 function buildFileTree(absDir: string, relativePath: string, maxDepth = 8): FileTreeNode | null {

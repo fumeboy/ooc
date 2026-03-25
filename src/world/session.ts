@@ -4,8 +4,8 @@
  * 跟踪一个顶层任务中所有参与对象的 Flow。
  * 同一 Stone 在同一任务中只有一个 Flow（sub-flow 复用）。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G2 — implements — 一个 Stone 可同时拥有多个 Flow，但同一任务中只有一个
- * @ref .ooc/docs/哲学文档/gene.md#G8 — references — sub-flow 机制（协作链中的 Flow 管理）
+ * @ref docs/哲学文档/gene.md#G2 — implements — 一个 Stone 可同时拥有多个 Flow，但同一任务中只有一个
+ * @ref docs/哲学文档/gene.md#G8 — references — sub-flow 机制（协作链中的 Flow 管理）
  * @ref src/flow/flow.ts — references — Flow 实例
  */
 

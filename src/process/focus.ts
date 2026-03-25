@@ -8,8 +8,8 @@
  * 关键规则：focus 离开一个 doing 节点时，自动为该节点生成摘要。
  * 这是「结构化遗忘」的核心——离开即遗忘细节，只保留摘要。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G9 — implements — focus 光标移动规则（深度优先、依赖感知、完成回退）
- * @ref .ooc/docs/哲学文档/gene.md#G5 — implements — 结构化遗忘（栈进加载/栈出回收）
+ * @ref docs/哲学文档/gene.md#G9 — implements — focus 光标移动规则（深度优先、依赖感知、完成回退）
+ * @ref docs/哲学文档/gene.md#G5 — implements — 结构化遗忘（栈进加载/栈出回收）
  * @ref src/process/tree.ts — references — findNode, getParentNode 节点查找
  * @ref src/types/process.ts — references — Process, ProcessNode 类型
  */

@@ -6,9 +6,9 @@
  * 激活 = readme.md 完整内容注入 context（instructions + knowledge）。
  * 方法注册不受激活影响（全量注册）。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G3 — implements — Trait 激活逻辑（always/never/条件）
- * @ref .ooc/docs/哲学文档/gene.md#G13 — implements — 认知栈作用域链驱动 trait 激活
- * @ref .ooc/docs/哲学文档/gene.md#G5 — references — 激活决定 context 中注入哪些 Trait 内容
+ * @ref docs/哲学文档/gene.md#G3 — implements — Trait 激活逻辑（always/never/条件）
+ * @ref docs/哲学文档/gene.md#G13 — implements — 认知栈作用域链驱动 trait 激活
+ * @ref docs/哲学文档/gene.md#G5 — references — 激活决定 context 中注入哪些 Trait 内容
  * @ref src/types/trait.ts — references — TraitDefinition 类型
  */
 

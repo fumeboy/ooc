@@ -4,9 +4,9 @@
  * OOC 中的一切实体都是对象。
  * 本文件定义 Stone（静态对象）的数据结构。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G1 — implements — 对象的组成部分（name, thinkable, talkable, data, relations, traits）
- * @ref .ooc/docs/哲学文档/gene.md#G2 — implements — StoneData 是 Stone 的静态形态定义
- * @ref .ooc/docs/哲学文档/gene.md#G6 — implements — Relation 有向关系类型
+ * @ref docs/哲学文档/gene.md#G1 — implements — 对象的组成部分（name, thinkable, talkable, data, relations, traits）
+ * @ref docs/哲学文档/gene.md#G2 — implements — StoneData 是 Stone 的静态形态定义
+ * @ref docs/哲学文档/gene.md#G6 — implements — Relation 有向关系类型
  */
 
 /** 对外公开的方法描述（仅名称+描述，不含参数） */

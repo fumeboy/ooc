@@ -7,8 +7,8 @@
  * 设计哲学：Mirror 不是命令（"你该反思了"），而是镜子（"看看你在做什么"）。
  * LLM 看到事实后会自己做出判断。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G12 — implements — 经验沉淀的觉察前提
- * @ref .ooc/docs/哲学文档/gene.md#G5 — references — 注入 Context 的行为观察窗口
+ * @ref docs/哲学文档/gene.md#G12 — implements — 经验沉淀的觉察前提
+ * @ref docs/哲学文档/gene.md#G5 — references — 注入 Context 的行为观察窗口
  */
 
 import type { FlowData, Action } from "../types/index.js";

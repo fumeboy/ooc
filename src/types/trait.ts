@@ -4,8 +4,8 @@
  * Trait 是对象的能力单元。
  * 每个 Trait 是一个目录：readme.md（文档/bias）+ 可选 index.ts（方法）。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G3 — implements — Trait 自我定义单元（TraitDefinition, TraitWhen, TraitMethod）
- * @ref .ooc/docs/哲学文档/gene.md#G12 — references — Trait 是经验沉淀的载体
+ * @ref docs/哲学文档/gene.md#G3 — implements — Trait 自我定义单元（TraitDefinition, TraitWhen, TraitMethod）
+ * @ref docs/哲学文档/gene.md#G12 — references — Trait 是经验沉淀的载体
  */
 
 /** Trait 方法参数定义 */

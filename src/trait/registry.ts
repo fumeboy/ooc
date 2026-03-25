@@ -5,7 +5,7 @@
  * 关键规则：方法注册是全量的，不受 Trait 激活状态影响。
  * 因为 trait 的方法可能被其他对象调用或被自身其他方法依赖。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G3 — implements — Trait 方法全量注册（不受激活影响）
+ * @ref docs/哲学文档/gene.md#G3 — implements — Trait 方法全量注册（不受激活影响）
  * @ref src/types/trait.ts — references — TraitDefinition, TraitMethod, TraitMethodParam 类型
  */
 

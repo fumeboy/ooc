@@ -1,8 +1,8 @@
 /**
  * Sidebar —— 对象列表侧边栏
  *
- * @ref .ooc/docs/哲学文档/gene.md#G1 — renders — 系统中所有对象的列表
- * @ref .ooc/docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达
+ * @ref docs/哲学文档/gene.md#G1 — renders — 系统中所有对象的列表
+ * @ref docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达
  */
 import { useAtom } from "jotai";
 import { selectedObjectAtom } from "../store/objects";

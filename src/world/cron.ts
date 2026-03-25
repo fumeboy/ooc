@@ -4,7 +4,7 @@
  * 定时任务本质是"在指定时间点给 OOC Object 发消息"。
  * 由 World 集成，通过 setInterval 每秒检查到期任务。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G8 — extends — 定时消息投递
+ * @ref docs/哲学文档/gene.md#G8 — extends — 定时消息投递
  */
 
 import { consola } from "consola";

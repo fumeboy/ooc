@@ -5,10 +5,10 @@
  * 对象不知道 Context 之外的任何事情。
  * G13: 使用认知栈作用域链驱动 trait 激活。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G5 — implements — Context 构建（whoAmI, process, messages, windows, directory）
- * @ref .ooc/docs/哲学文档/gene.md#G3 — implements — Trait 激活内容注入 context（instructions + knowledge）
- * @ref .ooc/docs/哲学文档/gene.md#G9 — references — 行为树渲染为 process 文本
- * @ref .ooc/docs/哲学文档/gene.md#G13 — implements — 认知栈作用域链驱动 trait 激活
+ * @ref docs/哲学文档/gene.md#G5 — implements — Context 构建（whoAmI, process, messages, windows, directory）
+ * @ref docs/哲学文档/gene.md#G3 — implements — Trait 激活内容注入 context（instructions + knowledge）
+ * @ref docs/哲学文档/gene.md#G9 — references — 行为树渲染为 process 文本
+ * @ref docs/哲学文档/gene.md#G13 — implements — 认知栈作用域链驱动 trait 激活
  * @ref src/trait/activator.ts — references — getActiveTraits
  * @ref src/process/cognitive-stack.ts — references — computeScopeChain
  * @ref src/process/render.ts — references — renderProcess 行为树文本渲染
@@ -177,7 +177,7 @@ function resolveDynamicWindows(flow: FlowData, stoneDir?: string): ContextWindow
  * 读取 session 中所有 sub-flow 的 process.json，排除 supervisor 自身，
  * 生成各 flow 的状态摘要，帮助 supervisor 掌握全局进展。
  *
- * @param sessionDir - session 根目录（如 .ooc/flows/{taskId}/）
+ * @param sessionDir - session 根目录（如 flows/{taskId}/）
  * @param supervisorName - supervisor 的 stone 名称（排除自身）
  * @returns 格式化的概览文本
  */

@@ -4,7 +4,7 @@
  * 加载最近 N 个 flow 的摘要，供 context 注入，实现跨 flow 记忆。
  * 只读取有 summary 字段的 flow，跳过无摘要的。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G5 — implements — 跨 flow 记忆注入 context
+ * @ref docs/哲学文档/gene.md#G5 — implements — 跨 flow 记忆注入 context
  * @ref src/persistence/reader.ts — references — listFlowSessions, readFlow
  */
 
@@ -22,7 +22,7 @@ interface FlowSummaryEntry {
 /**
  * 加载最近 N 个 flow 的摘要
  *
- * @param flowsDir - 顶层 flows/ 目录（如 .ooc/flows/）
+ * @param flowsDir - 顶层 flows/ 目录（如 flows/）
  * @param stoneName - 对象名称（筛选该对象参与的 flow）
  * @param currentTaskId - 当前 flow 的 taskId（排除自身）
  * @param maxFlows - 最多加载多少个有摘要的 flow

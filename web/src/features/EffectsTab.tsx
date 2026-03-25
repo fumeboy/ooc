@@ -1,9 +1,9 @@
 /**
  * EffectsTab —— Sessions（Flow 列表）展示
  *
- * @ref .ooc/docs/哲学文档/gene.md#G2 — renders — Flow 列表（taskId, status, 时间）
- * @ref .ooc/docs/哲学文档/gene.md#G8 — renders — flows/ 目录下的任务执行记录
- * @ref .ooc/docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达
+ * @ref docs/哲学文档/gene.md#G2 — renders — Flow 列表（taskId, status, 时间）
+ * @ref docs/哲学文档/gene.md#G8 — renders — flows/ 目录下的任务执行记录
+ * @ref docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达
  */
 import { useState, useEffect } from "react";
 import { useAtomValue } from "jotai";

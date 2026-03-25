@@ -5,9 +5,9 @@
  * World 不是「生态中的一个对象」，而是「生态本身」。
  * 但它仍然遵循 G1——它有 readme.md、data.json，它是一个 OOC Object。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G1 — implements — World 本身也是对象
- * @ref .ooc/docs/哲学文档/gene.md#G7 — implements — .ooc/ 目录即 World 的物理存在
- * @ref .ooc/docs/哲学文档/gene.md#G8 — implements — 消息投递（talk/talkInSpace）、对象创建
+ * @ref docs/哲学文档/gene.md#G1 — implements — World 本身也是对象
+ * @ref docs/哲学文档/gene.md#G7 — implements — .ooc/ 目录即 World 的物理存在
+ * @ref docs/哲学文档/gene.md#G8 — implements — 消息投递（talk/talkInSpace）、对象创建
  * @ref src/world/registry.ts — references — Registry 对象注册表
  * @ref src/world/router.ts — references — CollaborationAPI 消息路由
  * @ref src/world/session.ts — references — TaskSession 任务会话
@@ -31,7 +31,7 @@ import { emitSSE } from "../server/events.js";
 
 /** World 配置 */
 export interface WorldConfig {
-  /** .ooc 根目录路径 */
+  /** user repo 根目录路径 */
   rootDir: string;
   /** LLM 配置（可选，默认使用 DefaultConfig） */
   llmConfig?: LLMConfig;
@@ -39,7 +39,7 @@ export interface WorldConfig {
 
 /** World 实例 —— 实现 Routable 接口支持对象间协作 */
 export class World implements Routable {
-  /** .ooc 根目录 */
+  /** user repo 根目录 */
   private readonly _rootDir: string;
   /** 对象注册表 */
   private readonly _registry: Registry;
@@ -73,12 +73,12 @@ export class World implements Routable {
   /**
    * 初始化 World 目录结构
    *
-   * 如果 .ooc/ 不存在，创建完整的目录结构。
+   * 如果 user repo 根目录结构不存在，创建完整的目录结构。
    * 如果已存在，加载所有对象。
    */
   init(): void {
     if (!existsSync(this._rootDir)) {
-      consola.info("[World] 创建 .ooc/ 目录结构");
+      consola.info("[World] 创建目录结构");
       this._createDirectoryStructure();
     }
 
@@ -161,7 +161,7 @@ export class World implements Routable {
   /**
    * 创建 Kernel Traits
    *
-   * 从 .ooc/kernel/traits/ 目录的实际文件复制。
+   * 从 kernel/traits/ 目录的实际文件复制。
    * 如果文件已存在则跳过，避免覆盖手动更新的文档。
    */
   private _createKernelTraits(): void {

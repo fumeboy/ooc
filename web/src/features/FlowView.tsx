@@ -4,7 +4,7 @@
  * 类似 ObjectDetail 的布局，展示 Flow 的消息列表和行为树。
  * 点击文件树中带 .flow marker 的目录时展示此组件。
  *
- * @ref .ooc/docs/哲学文档/gene.md#G2 — renders — Flow 状态机
+ * @ref docs/哲学文档/gene.md#G2 — renders — Flow 状态机
  */
 import { useState, useEffect } from "react";
 import { useAtomValue } from "jotai";
