@@ -4,10 +4,12 @@
  * @ref docs/哲学文档/gene.md#G11 — references — SSE 驱动前端实时更新
  * @ref src/server/events.ts — references — 后端 SSE 事件类型
  */
-import { useEffect } from "react";
-import { useSetAtom } from "jotai";
+import { useEffect, useRef } from "react";
+import { useSetAtom, useAtomValue } from "jotai";
 import { sseConnectedAtom, lastFlowEventAtom, streamingThoughtAtom, streamingTalkAtom } from "../store/session";
+import { activeSessionIdAtom } from "../store/session";
 import { objectsAtom } from "../store/objects";
+import { flowProgressAtom } from "../store/progress";
 import { connectSSE, fetchObjects } from "../api/client";
 
 /**
@@ -22,6 +24,10 @@ export function useSSE() {
   const setLastFlowEvent = useSetAtom(lastFlowEventAtom);
   const setStreamingThought = useSetAtom(streamingThoughtAtom);
   const setStreamingTalk = useSetAtom(streamingTalkAtom);
+  const setFlowProgress = useSetAtom(flowProgressAtom);
+  const activeSessionId = useAtomValue(activeSessionIdAtom);
+  const activeSessionIdRef = useRef(activeSessionId);
+  activeSessionIdRef.current = activeSessionId;
 
   useEffect(() => {
     /* 防止并发 fetchObjects 竞争：只应用最新请求的结果 */
@@ -47,12 +53,31 @@ export function useSSE() {
           refreshObjects();
           break;
         case "flow:start":
-        case "flow:end":
         case "flow:status":
         case "flow:action":
         case "flow:message":
-          /* 推送到全局 atom，组件自行订阅 */
           setLastFlowEvent(event);
+          break;
+        case "flow:end":
+          setLastFlowEvent(event);
+          /* 清空进度（仅匹配当前跟踪的 Flow） */
+          setFlowProgress((prev) =>
+            prev?.taskId === event.taskId ? null : prev,
+          );
+          break;
+
+        case "flow:progress":
+          /* 只跟踪当前活跃 session 的入口 Flow 进度（通过 ref 读取，避免 SSE 重连） */
+          if (event.taskId === activeSessionIdRef.current) {
+            setFlowProgress({
+              objectName: event.objectName,
+              taskId: event.taskId,
+              iterations: event.iterations,
+              maxIterations: event.maxIterations,
+              totalIterations: event.totalIterations,
+              maxTotalIterations: event.maxTotalIterations,
+            });
+          }
           break;
 
         /* 流式 thought chunk */
@@ -97,5 +122,5 @@ export function useSSE() {
       disconnect();
       setConnected(false);
     };
-  }, [setConnected, setObjects, setLastFlowEvent, setStreamingThought, setStreamingTalk]);
+  }, [setConnected, setObjects, setLastFlowEvent, setStreamingThought, setStreamingTalk, setFlowProgress]);
 }
