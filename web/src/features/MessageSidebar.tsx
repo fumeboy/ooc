@@ -21,6 +21,7 @@ import { ObjectAvatar } from "../components/ui/ObjectAvatar";
 import { cn } from "../lib/utils";
 import { Send, PanelRightClose, PanelRightOpen, X } from "lucide-react";
 import type { FlowMessage } from "../api/types";
+import { ProgressIndicator } from "../components/ProgressIndicator";
 
 const DEFAULT_TARGET = "supervisor";
 
@@ -281,6 +282,9 @@ export function MessageSidebar() {
           <PanelRightClose className="w-4 h-4" />
         </button>
       </div>
+
+      {/* 迭代进度 */}
+      <ProgressIndicator />
 
       {/* 消息列表 */}
       <div ref={scrollRef} className="flex-1 overflow-auto px-4 py-3 space-y-3">
