@@ -114,7 +114,7 @@ export class Flow {
    *
    * Sub-flow 是完整的 Flow 对象，持久化在 session 的 flows/{stoneName}/ 下。
    * 同一 Stone 在同一 session 下只有一个 sub-flow。
-   * Sub-flow 复用 session 的 shared/ 目录。
+   * Sub-flow 使用自己的 shared/ 目录（flows/{taskId}/flows/{stoneName}/shared/）。
    *
    * @ref docs/建模/meta_thought.md#五 — implements — Sub-flow 持久化在 session 子目录
    *
@@ -152,10 +152,9 @@ export class Flow {
     };
 
     const dir = join(sessionDir, "flows", stoneName);
-    const mainSharedDir = join(sessionDir, "shared");
     writeFlow(dir, data);
     writeFileSync(join(dir, ".flow"), "", "utf-8");
-    return new Flow(dir, data, mainSharedDir);
+    return new Flow(dir, data);
   }
 
   /**

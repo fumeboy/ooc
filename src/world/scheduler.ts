@@ -164,6 +164,11 @@ export class Scheduler {
           break;
         }
         if (status === "waiting" && !this._hasOtherActiveFlows(entryFlowName)) {
+          /* 入口 Flow 自身有 pending messages 时不终止，继续调度 */
+          if (entryEntry.flow.hasPendingMessages) {
+            entryEntry.flow.setStatus("running");
+            continue;
+          }
           if (entryFlowName === "user") {
             /* user 对象不参与 ThinkLoop，子 flow 全部完成后自动结束 */
             consola.info(`[Scheduler] user 入口 Flow waiting 且无其他活跃 Flow，标记为 finished`);
