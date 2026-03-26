@@ -64,6 +64,8 @@ export interface ThinkLoopConfig {
   maxIterations: number;
   /** 暂停检查回调（由 World 注入，检查对象是否被用户暂停） */
   isPaused?: () => boolean;
+  /** 是否发射 flow:progress 事件（默认 true，Scheduler 模式下传 false 避免重复） */
+  emitProgress?: boolean;
 }
 
 /** ThinkLoop 默认配置 */
@@ -114,6 +116,20 @@ export async function runThinkLoop(
 
   while (flow.status === "running" && iteration < config.maxIterations) {
     iteration++;
+
+    /* 发射进度事件（独立模式下，Scheduler 模式由 Scheduler 统一发射） */
+    if (config.emitProgress !== false) {
+      emitSSE({
+        type: "flow:progress",
+        objectName: stone.name,
+        taskId: flow.taskId,
+        iterations: iteration,
+        maxIterations: config.maxIterations,
+        totalIterations: iteration,
+        maxTotalIterations: config.maxIterations,
+      });
+    }
+
     consola.info(`[ThinkLoop] 第 ${iteration} 轮思考`);
 
     /* 0. 检查并处理 pending messages（中断机制） */
