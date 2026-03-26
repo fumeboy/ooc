@@ -85,6 +85,10 @@ function renderNode(
   if (node.summary) {
     line += ` (${node.summary})`;
   }
+  /* 已完成节点如果有 locals（artifacts），显示 key 列表 */
+  if (node.status === "done" && node.locals && Object.keys(node.locals).length > 0) {
+    line += ` [artifacts: ${Object.keys(node.locals).join(", ")}]`;
+  }
 
   const lines: string[] = [line];
 

@@ -143,13 +143,34 @@ finish_plan_node("收集了 5 篇论文的关键数据");
 认知栈的另一套操作接口，用调用栈的隐喻来管理计划节点。与上面的 `createPlan` / `finish_plan_node` 等价但语义更清晰。
 
 - `add_stack_frame(title, description?)` — 压栈：在当前 focus 下创建子节点（等价于 `create_plan_node`）
-- `stack_return(summary?)` — 弹栈：完成当前帧，执行 `when_stack_pop` hooks，focus 回到父节点
+- `stack_return(summary?, artifacts?)` — 弹栈：完成当前帧，执行 `when_stack_pop` hooks，focus 回到父节点。`artifacts` 是可选的 `{key: value}` 对象，会写入父节点的 locals，父帧可通过 `local.key` 访问
 - `go(nodeId)` — 跳转：移动 focus 到指定节点。离开 doing 状态的节点会触发 `when_yield`
 - `compress(actionIds)` — 折叠：将指定 actions 移入子帧，自动生成 summary，减少上下文占用
 - `stack_throw(error)` — 抛出异常：沿栈向上冒泡，触发 `when_error` hook
 - `stack_catch(handler)` — 注册 `when_error` hook，捕获当前帧及子帧的异常
 - `summary(text)` — 设置当前节点的摘要文本
 - `create_hook(when, type, handler)` — 注册栈帧级 hook。`when`: 触发时机（`when_stack_pop` / `when_yield` / `when_error`）；`type`: hook 类型；`handler`: 回调函数
+
+#### stack_return 摘要技巧
+
+好的摘要 = 结论 + 关键中间产物。
+
+**反模式**：
+- `stack_return("已完成")` — 太空洞，下文不知道完成了什么
+- `stack_return("分析了 G5 和 G12")` — 只有动作，没有结论
+
+**正确做法**：
+- 结论要具体：`stack_return("G5 和 G12 不矛盾，是互补的选择机制")`
+- 有中间结果时用 artifacts 保留：
+  ```javascript
+  stack_return("G5 和 G12 不矛盾", {
+    analysis: "G5 管遗忘（出口），G12 管沉淀（入口）",
+    evidence: "gene.md 第 200-250 行"
+  })
+  ```
+- artifacts 的 key 要有语义：用 `sophia_reply` 而非 `data1`
+- 只保留下文可能需要的：搜索结果、计算输出、收到的回复、关键路径
+- 不保留过程性信息：思考过程、尝试失败的方案
 
 ### 多线程 API
 

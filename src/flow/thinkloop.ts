@@ -923,7 +923,7 @@ function buildExecutionContext(
     },
     {
       name: "stack_return",
-      fn: (summary?: string) => {
+      fn: (summary?: string, artifacts?: Record<string, unknown>) => {
         const process = flow.process;
         if (!process) return false;
         const focusNode = getFocusNode(process);
@@ -943,6 +943,15 @@ function buildExecutionContext(
           }
         }
 
+        /* 将 artifacts 写入父节点 locals（pop 后父帧可直接通过 local.key 访问） */
+        if (artifacts && typeof artifacts === "object") {
+          const parent = getParentNode(process.root, focusNode.id);
+          if (parent) {
+            if (!parent.locals) parent.locals = {};
+            Object.assign(parent.locals, artifacts);
+          }
+        }
+
         const ok = completeProcessNode(process, process.focusId, summary ?? "");
         if (ok) {
           advanceFocus(process);
@@ -950,7 +959,11 @@ function buildExecutionContext(
         }
         return ok;
       },
-      effect: (args, result) => `stack_return("${args[0] ?? ""}") → ${result ? "OK" : "失败"}`,
+      effect: (args, result) => {
+        const artifactKeys = args[1] && typeof args[1] === "object" ? Object.keys(args[1] as object) : [];
+        const artifactHint = artifactKeys.length > 0 ? ` [artifacts: ${artifactKeys.join(", ")}]` : "";
+        return `stack_return("${args[0] ?? ""}")${artifactHint} → ${result ? "OK" : "失败"}`;
+      },
     },
     {
       name: "go",
