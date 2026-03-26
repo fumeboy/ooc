@@ -18,6 +18,7 @@
 import { consola } from "consola";
 import { Flow } from "../flow/index.js";
 import { runThinkLoop } from "../flow/thinkloop.js";
+import { emitSSE } from "../server/events.js";
 import type { CollaborationAPI } from "./router.js";
 import type { LLMClient } from "../thinkable/client.js";
 import type { StoneData, DirectoryEntry, TraitDefinition } from "../types/index.js";
@@ -135,7 +136,7 @@ export class Scheduler {
           this._llm,
           this._directory,
           entry.traits,
-          { maxIterations: 1, isPaused: this._isPaused ? () => this._isPaused!(name) : undefined },
+          { maxIterations: 1, isPaused: this._isPaused ? () => this._isPaused!(name) : undefined, emitProgress: false },
           entry.collaboration,
           this._cron,
           this._flowsDir,
@@ -143,6 +144,17 @@ export class Scheduler {
 
         entry.iterations++;
         totalIterations++;
+
+        /* 发射进度事件（Scheduler 统一发射，包含全局计数） */
+        emitSSE({
+          type: "flow:progress",
+          objectName: name,
+          taskId: entry.flow.taskId,
+          iterations: entry.iterations,
+          maxIterations: this._config.maxIterationsPerFlow,
+          totalIterations,
+          maxTotalIterations: this._config.maxTotalIterations,
+        });
 
         /* 同步 persistData 写入的数据到 stone（仅显式持久化的 key） */
         for (const [key, value] of Object.entries(updatedData)) {
