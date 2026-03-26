@@ -135,6 +135,7 @@ export type SSEEvent =
   | { type: "stream:thought:end"; objectName: string; taskId: string }
   | { type: "stream:talk:end"; objectName: string; taskId: string; target: string }
   | { type: "object:created"; name: string }
+  | { type: "flow:progress"; objectName: string; taskId: string; iterations: number; maxIterations: number; totalIterations: number; maxTotalIterations: number }
   | { type: "object:updated"; name: string };
 
 /** 统一时间线条目 */
