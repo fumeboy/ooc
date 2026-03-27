@@ -43,12 +43,13 @@ export function computeScopeChain(process: Process): string[] {
  * 收集栈帧级 hooks（before/after）的注入文本
  *
  * 从作用域链中的 traits 收集指定事件的 hooks，
- * 跳过已触发的 once hooks，合并注入文本。
+ * 跳过已触发的 once hooks（per-node 粒度），合并注入文本。
  *
  * @param event - "before" 或 "after"
  * @param traits - 所有已加载的 trait 定义
  * @param scopeChain - 当前作用域链中的 trait 名称
  * @param firedHooks - 已触发的 hook ID 集合（会被修改）
+ * @param focusNodeId - 当前 focus 节点 ID（用于 per-node once 语义）
  * @returns 合并后的注入文本，无 hook 时返回 null
  */
 export function collectFrameHooks(
@@ -56,6 +57,7 @@ export function collectFrameHooks(
   traits: TraitDefinition[],
   scopeChain: string[],
   firedHooks: Set<string>,
+  focusNodeId?: string,
 ): string | null {
   const scopeSet = new Set(scopeChain);
   const injections: string[] = [];
@@ -68,9 +70,12 @@ export function collectFrameHooks(
     const hook = trait.hooks[event];
     if (!hook) continue;
 
-    const hookId = `${trait.name}:${event}`;
+    /* per-node key: 同一 hook 在不同节点上各触发一次 */
+    const hookId = focusNodeId
+      ? `${trait.name}:${event}:${focusNodeId}`
+      : `${trait.name}:${event}`;
 
-    /* once: true 的 hook 只触发一次 */
+    /* once: true 的 hook 只触发一次（per-node 粒度） */
     if (hook.once !== false && firedHooks.has(hookId)) continue;
 
     injections.push(hook.inject);

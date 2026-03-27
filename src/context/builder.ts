@@ -70,7 +70,7 @@ export function buildContext(
   const whoAmI = stone.thinkable.whoAmI;
 
   /* 区分 kernel traits（系统指令）和 user traits（领域知识） */
-  const KERNEL_TRAIT_NAMES = new Set(["computable", "talkable", "object_creation", "verifiable", "debuggable", "plannable", "reflective", "web_search", "testable", "reviewable"]);
+  const KERNEL_TRAIT_NAMES = new Set(["computable", "talkable", "object_creation", "verifiable", "debuggable", "plannable", "reflective", "web_search", "testable", "reviewable", "cognitive-style"]);
 
   /* Progressive Disclosure: 有 description 的 trait 只在 focus 路径或 always-on 时注入完整 readme */
   const instructions: ContextWindow[] = activeTraits

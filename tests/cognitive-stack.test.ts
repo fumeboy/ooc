@@ -15,6 +15,7 @@ import {
   advanceFocus,
 } from "../src/process/index.js";
 import { computeScopeChain, collectFrameHooks } from "../src/process/cognitive-stack.js";
+import { getActiveTraits } from "../src/trait/activator.js";
 import type { TraitDefinition } from "../src/types/index.js";
 
 beforeEach(() => {
@@ -174,6 +175,25 @@ describe("collectFrameHooks", () => {
     const fired = new Set<string>();
     expect(collectFrameHooks("before", traits, [], fired)).toBeNull();
   });
+
+  test("once hook 在不同 focusNodeId 下各触发一次", () => {
+    const traits = [
+      makeTrait("plannable", { before: { inject: "评估任务", once: true } }),
+    ];
+    const fired = new Set<string>();
+
+    // 第一个节点触发
+    const r1 = collectFrameHooks("before", traits, [], fired, "node-1");
+    expect(r1).toContain("评估任务");
+
+    // 同一节点不再触发
+    const r2 = collectFrameHooks("before", traits, [], fired, "node-1");
+    expect(r2).toBeNull();
+
+    // 不同节点再次触发
+    const r3 = collectFrameHooks("before", traits, [], fired, "node-2");
+    expect(r3).toContain("评估任务");
+  });
 });
 
 /* ========== focus_push / focus_pop 语义集成测试 ========== */
@@ -243,5 +263,124 @@ describe("focus_push / focus_pop 语义", () => {
 
     chain = computeScopeChain(p);
     expect(chain).not.toContain("dynamic_trait");
+  });
+});
+
+/* ========== cognitive-style trait 激活 ========== */
+
+describe("cognitive-style trait 激活", () => {
+  test("cognitive-style (when: always) 始终被激活", () => {
+    const traits: TraitDefinition[] = [
+      {
+        name: "cognitive-style",
+        when: "always",
+        description: "认知栈思维模式",
+        readme: "...",
+        methods: [],
+        deps: [],
+      },
+      {
+        name: "plannable",
+        when: "当任务包含多个步骤时",
+        description: "规划能力",
+        readme: "...",
+        methods: [],
+        deps: [],
+        hooks: { before: { inject: "评估任务", once: true } },
+      },
+    ];
+
+    // 空 scopeChain — cognitive-style 仍然激活
+    const active = getActiveTraits(traits, []);
+    const names = active.map(t => t.name);
+    expect(names).toContain("cognitive-style");
+    expect(names).not.toContain("plannable");
+  });
+
+  test("plannable 在 scopeChain 中时被激活，before hook 可触发", () => {
+    const traits: TraitDefinition[] = [
+      {
+        name: "cognitive-style",
+        when: "always",
+        description: "认知栈思维模式",
+        readme: "...",
+        methods: [],
+        deps: [],
+      },
+      {
+        name: "plannable",
+        when: "当任务包含多个步骤时",
+        description: "规划能力",
+        readme: "...",
+        methods: [],
+        deps: [],
+        hooks: { before: { inject: "评估任务", once: true } },
+      },
+    ];
+
+    const active = getActiveTraits(traits, ["plannable"]);
+    const names = active.map(t => t.name);
+    expect(names).toContain("cognitive-style");
+    expect(names).toContain("plannable");
+
+    // before hook 可触发
+    const plannable = active.find(t => t.name === "plannable")!;
+    expect(plannable.hooks?.before?.inject).toContain("评估任务");
+  });
+});
+
+/* ========== before hook 注入集成 ========== */
+
+describe("before hook 注入集成", () => {
+  const makeTrait = (name: string, when: string, hooks?: TraitDefinition["hooks"]): TraitDefinition => ({
+    name,
+    when,
+    description: "",
+    readme: "",
+    methods: [],
+    deps: [],
+    hooks,
+  });
+
+  test("plannable before hook 通过 collectFrameHooks 注入到 chatMessages", () => {
+    const traits: TraitDefinition[] = [
+      makeTrait("plannable", "当任务包含多个步骤时", {
+        before: { inject: "你刚进入一个新的任务节点。在开始执行之前，先评估", once: true },
+      }),
+    ];
+
+    const fired = new Set<string>();
+    // 模拟 plannable 在 scopeChain 中
+    const result = collectFrameHooks("before", traits, ["plannable"], fired, "node-1");
+
+    // 验证注入文本包含评估提示
+    expect(result).not.toBeNull();
+    expect(result).toContain("你刚进入一个新的任务节点");
+    expect(result).toContain("先评估");
+
+    // 模拟将注入文本追加到 chatMessages
+    const chatMessages: Array<{ role: string; content: string }> = [
+      { role: "user", content: "请帮我调研 AI 安全" },
+    ];
+    if (result) {
+      chatMessages.push({ role: "user", content: result });
+    }
+
+    // 验证 chatMessages 包含 before hook 注入
+    expect(chatMessages).toHaveLength(2);
+    expect(chatMessages[1]!.content).toContain("先评估");
+  });
+
+  test("before hook 不在 scopeChain 中时不注入", () => {
+    const traits: TraitDefinition[] = [
+      makeTrait("plannable", "当任务包含多个步骤时", {
+        before: { inject: "评估任务", once: true },
+      }),
+    ];
+
+    const fired = new Set<string>();
+    // plannable 不在 scopeChain 中
+    const result = collectFrameHooks("before", traits, [], fired, "node-1");
+    expect(result).toBeNull();
   });
 });

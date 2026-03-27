@@ -74,6 +74,19 @@ const DEFAULT_CONFIG: ThinkLoopConfig = {
 };
 
 /**
+ * 检测文本是否疑似乱码（非中英文/代码字符占比超过阈值）
+ *
+ * LLM 在 context 过载时可能输出 token 乱码，需要及时检测并终止循环。
+ */
+function isGarbled(text: string, threshold = 0.3): boolean {
+  if (!text || text.length < 20) return false;
+  /* 匹配中文、英文、数字、常见标点、代码符号 */
+  const validChars = text.match(/[\u4e00-\u9fff\u3000-\u303fa-zA-Z0-9\s.,;:!?'"()\[\]{}<>\/\\@#$%^&*+=\-_`~|。，；：！？、""''（）【】《》\n\r\t]/g);
+  const validRatio = (validChars?.length ?? 0) / text.length;
+  return validRatio < (1 - threshold);
+}
+
+/**
  * 运行 ThinkLoop（增强版，集成 Trait + 协作 + 元编程系统）
  *
  * @param flow - 要执行的 Flow
@@ -99,6 +112,8 @@ export async function runThinkLoop(
 ): Promise<Record<string, unknown>> {
   const executor = new CodeExecutor();
   let iteration = 0;
+  /** 连续无有效指令的轮次计数（乱码/截断防护） */
+  let consecutiveEmptyRounds = 0;
   /** 累积所有轮次的持久化数据（保留接口兼容，ReflectFlow 机制下普通 Flow 不再直接写 Stone） */
   const persistedData: Record<string, unknown> = {};
   /** 已触发的 hooks（从 flow.data 恢复，防止 Scheduler 多次调用时丢失） */
@@ -192,6 +207,12 @@ export async function runThinkLoop(
       systemPrompt = formatContextAsSystem(ctx);
       chatMessages = formatContextAsMessages(ctx);
 
+      /* 1.5 注入 before hooks（G13 认知栈：进入新节点时的提示） */
+      const beforeInjection = collectAndFireHooks(traits, flow, "before", firedHooks);
+      if (beforeInjection) {
+        chatMessages.push({ role: "user", content: beforeInjection });
+      }
+
       /* 2. 调用 LLM（优先使用流式） */
       const messages: Message[] = [
         { role: "system", content: systemPrompt },
@@ -269,6 +290,7 @@ export async function runThinkLoop(
         flow.recordAction({ type: "message_out" as const, content: `[talk/${t.target}] ${t.message}` });
       }
       hasDeliveredOutput = true;
+      consecutiveEmptyRounds = 0;
     }
 
     /* 5. 无程序时，指令立即生效 */
@@ -299,17 +321,47 @@ export async function runThinkLoop(
         flow.save();
         return persistedData;
       }
-      /* 无程序、无指令 → 可能是 LLM 输出被截断（max_tokens），继续下一轮让 LLM 完成 */
+      /* 无程序、无指令 → 可能是 LLM 输出被截断（max_tokens）或乱码 */
+
+      /* 防护层 1: 乱码检测 — LLM context 过载时可能输出 token 乱码 */
+      if (replyContent && isGarbled(replyContent)) {
+        consola.warn(`[ThinkLoop] 检测到 LLM 输出乱码，异常终止`);
+        flow.recordAction({ type: "thought" as const, content: "[系统检测到输出异常，已终止]" });
+        if (collaboration) {
+          collaboration.talk("[系统] 处理过程中出现异常（LLM 输出乱码），请重试。", "user");
+        }
+        flow.setStatus("failed");
+        flow.save();
+        return persistedData;
+      }
+
+      /* 防护层 2: 连续空轮计数 — 防止截断/乱码循环消耗迭代次数 */
       if (replyContent && iteration < config.maxIterations) {
-        consola.info(`[ThinkLoop] 纯思考输出（无指令），可能被截断，继续下一轮`);
+        consecutiveEmptyRounds++;
+        if (consecutiveEmptyRounds >= 3) {
+          consola.warn(`[ThinkLoop] 连续 ${consecutiveEmptyRounds} 轮无有效指令，异常终止`);
+          if (collaboration && !hasDeliveredOutput) {
+            collaboration.talk("[系统] 连续多轮未能产生有效操作，任务已终止。请尝试简化你的请求。", "user");
+          }
+          flow.setStatus("failed");
+          flow.save();
+          return persistedData;
+        }
+        consola.info(`[ThinkLoop] 纯思考输出（无指令，第 ${consecutiveEmptyRounds}/3 轮），可能被截断，继续下一轮`);
         continue;
       }
-      flow.setStatus("finished");
+
+      /* 防护层 3: 迭代耗尽时通知用户 */
+      if (!hasDeliveredOutput && collaboration) {
+        collaboration.talk("[系统] 任务处理超时，未能完成。请尝试简化你的请求。", "user");
+      }
+      flow.setStatus(hasDeliveredOutput ? "finished" : "failed");
       flow.save();
       return persistedData;
     }
 
     /* 6. 执行程序：按语言分别执行 */
+    consecutiveEmptyRounds = 0; /* 有 program 输出，重置空轮计数 */
     const hasShell = programs.some(p => p.lang === "shell");
 
     if (!hasShell) {
@@ -592,10 +644,10 @@ async function consumeStream(
 }
 
 /**
- * 收集并触发指定事件的 Trait Hooks（Flow 级：when_finish/when_wait/when_error）
+ * 收集并触发指定事件的 Trait Hooks
  *
  * 从当前激活的 traits 中收集指定事件的 hooks，
- * 跳过已触发的 once hooks，合并注入文本。
+ * 跳过已触发的 once hooks（per-node 粒度），合并注入文本。
  *
  * @returns 合并后的注入文本，如果没有 hook 需要触发则返回 null
  */
@@ -610,15 +662,17 @@ function collectAndFireHooks(
   const activeTraits = getActiveTraits(traits, scopeChain);
 
   const injections: string[] = [];
+  const focusNodeId = flow.process.focusId;
 
   for (const trait of activeTraits) {
     if (!trait.hooks) continue;
     const hook = trait.hooks[event];
     if (!hook) continue;
 
-    const hookId = `${trait.name}:${event}`;
+    /* per-node key: 同一 hook 在不同节点上各触发一次 */
+    const hookId = `${trait.name}:${event}:${focusNodeId}`;
 
-    /* once: true 的 hook 只触发一次 */
+    /* once: true 的 hook 只触发一次（per-node 粒度） */
     if (hook.once !== false && firedHooks.has(hookId)) continue;
 
     injections.push(hook.inject);
