@@ -67,7 +67,7 @@ describe("ThinkLoop", () => {
     };
 
     const llm = new MockLLMClient({
-      responses: ["你好！很高兴见到你！"],
+      responses: ["[thought]\n你好！很高兴见到你！\n\n[finish]"],
     });
 
     await runThinkLoop(flow, stone, TEST_DIR, llm, []);

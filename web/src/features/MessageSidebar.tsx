@@ -391,7 +391,7 @@ function MessageBubble({ message }: { message: FlowMessage }) {
               : "bg-[var(--accent)]",
           )}
         >
-          <MarkdownContent content={message.content} />
+          <MarkdownContent content={message.content} invertLinks={isUser} />
         </div>
       </div>
     </div>

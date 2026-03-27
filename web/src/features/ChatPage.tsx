@@ -236,15 +236,25 @@ export function ChatPage() {
           </div>
         ) : (
           <WelcomePage
-            onSend={(t, msg) => {
+            onSend={async (t, msg) => {
               setTarget(t);
               setInput(msg);
               setSending(true);
-              talkTo(t, msg).catch((e) => {
+              pendingSendRef.current = t;
+              try {
+                const result = await talkTo(t, msg);
+                /* 直接用返回的 taskId 导航，不依赖 SSE flow:start */
+                if (result.taskId) {
+                  pendingSendRef.current = null;
+                  setActiveId(result.taskId);
+                  setSending(false);
+                  fetchSessions().then(setSessions).catch(console.error);
+                }
+              } catch (e) {
                 console.error(e);
                 setSending(false);
-              });
-              pendingSendRef.current = t;
+                pendingSendRef.current = null;
+              }
             }}
             sending={sending}
           />
@@ -647,7 +657,7 @@ function MessageBubble({ msg, prevMsg }: { msg: FlowMessage; prevMsg?: FlowMessa
                 you → {msg.to}
               </p>
             )}
-            <MarkdownContent content={msg.content} />
+            <MarkdownContent content={msg.content} invertLinks={isUser} />
           </div>
           {/* 响应耗时 */}
           {responseTime > 500 && (

@@ -159,9 +159,7 @@ export async function fetchStoneTree(name: string): Promise<FileTreeNode> {
  * 开发模式下 Vite proxy 会 buffer SSE 流导致事件延迟，
  * 因此直连后端。后端已配置 CORS，不会有跨域问题。
  */
-const SSE_URL = import.meta.env.DEV
-  ? "http://localhost:8080/api/sse"
-  : `${BASE}/sse`;
+const SSE_URL = `${BASE}/sse`;
 
 /** 创建 SSE 连接 */
 export function connectSSE(onEvent: (event: SSEEvent) => void): () => void {

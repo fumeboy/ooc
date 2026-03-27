@@ -18,6 +18,8 @@ import { OocNavigateCard } from "../OocNavigateCard";
 interface MarkdownContentProps {
   content: string;
   className?: string;
+  /** 是否在深色背景上（如用户消息气泡），链接颜色会自适应 */
+  invertLinks?: boolean;
 }
 
 /** 将纯文本中的 ooc://xxx URL 转为 markdown 链接（已在 []() 中的不重复处理） */
@@ -29,7 +31,10 @@ function linkifyOocUrls(text: string): string {
 }
 
 /** ReactMarkdown 自定义组件配置 */
-function markdownComponents(setOocLink: (url: string) => void) {
+function markdownComponents(setOocLink: (url: string) => void, invertLinks = false) {
+  const linkClass = invertLinks
+    ? "text-inherit underline underline-offset-2 opacity-90 hover:opacity-100 cursor-pointer"
+    : "text-[var(--primary)] underline cursor-pointer";
   return {
     p: ({ children }: any) => <p className="my-1 leading-relaxed">{children}</p>,
     pre: ({ children }: any) => (
@@ -75,7 +80,7 @@ function markdownComponents(setOocLink: (url: string) => void) {
         return (
           <a
             href={href}
-            className="text-[var(--primary)] underline cursor-pointer"
+            className={linkClass}
             onClick={(e: MouseEvent) => {
               e.preventDefault();
               setOocLink(href);
@@ -86,7 +91,7 @@ function markdownComponents(setOocLink: (url: string) => void) {
         );
       }
       return (
-        <a href={href} className="text-[var(--primary)] underline" target="_blank" rel="noopener noreferrer">
+        <a href={href} className={invertLinks ? linkClass : "text-[var(--primary)] underline"} target="_blank" rel="noopener noreferrer">
           {children}
         </a>
       );
@@ -96,7 +101,7 @@ function markdownComponents(setOocLink: (url: string) => void) {
   };
 }
 
-export function MarkdownContent({ content, className }: MarkdownContentProps) {
+export function MarkdownContent({ content, className, invertLinks }: MarkdownContentProps) {
   const setOocLink = useSetAtom(oocLinkUrlAtom);
 
   /* 预提取 [navigate] 块，替换为占位符 */
@@ -108,7 +113,7 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
       <div className={cn("prose prose-sm max-w-none break-words", className)}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
-          components={markdownComponents(setOocLink)}
+          components={markdownComponents(setOocLink, invertLinks)}
         >
           {linkifyOocUrls(content)}
         </ReactMarkdown>
@@ -130,7 +135,7 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
 
     if (before.trim()) {
       parts.push(
-        <ReactMarkdown key={`md-${i}`} remarkPlugins={[remarkGfm]} components={markdownComponents(setOocLink)}>
+        <ReactMarkdown key={`md-${i}`} remarkPlugins={[remarkGfm]} components={markdownComponents(setOocLink, invertLinks)}>
           {before}
         </ReactMarkdown>,
       );
@@ -144,7 +149,7 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
 
   if (remaining.trim()) {
     parts.push(
-      <ReactMarkdown key="md-last" remarkPlugins={[remarkGfm]} components={markdownComponents(setOocLink)}>
+      <ReactMarkdown key="md-last" remarkPlugins={[remarkGfm]} components={markdownComponents(setOocLink, invertLinks)}>
         {remaining}
       </ReactMarkdown>,
     );

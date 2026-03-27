@@ -3,8 +3,8 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
-/** user repo 根目录（kernel/web/ → 上两级 → user/） */
-const USER_ROOT = path.resolve(__dirname, "../..");
+/** user repo 根目录（kernel/web/ → 上两级 → ooc/ → user/） */
+const USER_ROOT = path.resolve(__dirname, "../../user");
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -25,6 +25,11 @@ export default defineConfig({
         target: "http://localhost:8080",
         changeOrigin: true,
       },
+    },
+    hmr: {
+      /* 远程访问时（如 frpc），允许 HMR 通过任意 host 连接 */
+      host: "0.0.0.0",
+      clientPort: 18080,
     },
     fs: {
       allow: [
