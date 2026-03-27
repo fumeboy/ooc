@@ -83,18 +83,25 @@ ooc/                          ← user repo（用户仓库，git 根）
 
 ## 快速开始
 
+OOC Kernel 需要搭配一个 OOC World（用户仓库）使用。可以用 [ooc-0](https://github.com/fumeboy/ooc-0) 作为起点：
+
 ```bash
-# 克隆（含 kernel submodule）
-git clone --recursive <repo-url>
+# 克隆初始 World（含 kernel submodule）
+git clone --recursive https://github.com/fumeboy/ooc-0.git
+cd ooc-0
 
 # 安装后端依赖
-cd ooc && bun install
+bun install
 
 # 安装前端依赖
 cd kernel/web && bun install && cd ../..
 
-# 配置 API Key
-echo "ANTHROPIC_API_KEY=your-key" > .env
+# 配置环境变量（参考 kernel/.env）
+cp kernel/.env .env
+# 编辑 .env，填入你的 API Key 和模型配置：
+#   OOC_API_KEY=your-api-key
+#   OOC_BASE_URL=https://api.anthropic.com
+#   OOC_MODEL=claude-opus-4-6
 
 # 启动服务
 bun kernel/src/cli.ts start 8080
