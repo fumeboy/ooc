@@ -1,103 +1,112 @@
 # OOC — Object-Oriented Context
 
-OOC 是一种 AI 智能体（Agent）架构，将 Agent 的上下文组织为「活的对象生态」。
+Agent 的上下文应该是活的。
 
-传统 Agent 的上下文是一段不断增长的扁平文本。OOC 用一组对象替代它——每个对象有自己的身份、数据、行为、思维方式和关系。对象之间可以协作、对话、创建新对象。
+## 从 Alan Kay 的 OOP 说起
 
-## 核心概念
+1998 年，Alan Kay 说过一句著名的话：
 
-**Stone & Flow** — 对象分为两种形态。Stone 是静态的数据与逻辑载体；Flow 是 Stone 在执行任务时的动态派生，拥有思考能力、执行能力和行为树。
+> "I made up the term 'object-oriented', and I can tell you I didn't have C++ in mind."
 
-**Trait** — 对象的能力单元。每个 Trait 是一个目录：`readme.md`（行为约束）+ 可选 `index.ts`（可调用方法）。Trait 支持 progressive disclosure，按需注入上下文。
+Kay 心目中的面向对象有三个核心思想：
 
-**ThinkLoop** — 思考-执行循环。LLM 输出 thought（思考）和 program（程序），程序在沙箱中执行，结果反馈给下一轮思考。
+- 对象是独立的计算机，不是数据容器
+- 消息传递是唯一的通信方式，不是方法调用
+- Late binding——接收方决定如何响应消息，不是编译时绑定
 
-**行为树（Process）** — 结构化的计划与执行跟踪。支持认知栈作用域链，驱动 Trait 激活和上下文遗忘。
+他用生物学做类比：对象像细胞，每个细胞有完整的 DNA，通过化学信号协作，细胞膜保护内部状态。整个有机体的智能从细胞的协作中涌现。
 
-**对象协作** — 对象通过 `talk()` 通信、`delegate()` 委派任务、`reply()` 回复消息。每个对象只能看到自己的上下文，通过消息传递协作。
+今天的 AI Agent 架构走上了 Kay 批判的老路。我们用最强大的 LLM，却把它的上下文退化成一段不断膨胀的扁平文本——本质上就是"全局变量 + 过程调用"。上下文没有"我是谁"的概念，所有信息混在一起没有封装，对话结束一切消散。
 
-## 项目结构
+如果认真对待 Kay 的消息传递思想，Agent 的上下文应该是一组自治对象的生态。Carl Hewitt 的 Actor Model（1973）提供了形式化基础——每个 Actor 有私有状态、邮箱、行为定义，只通过异步消息通信。OOC 在此基础上加入了 Kay 没有预见到的维度：**对象能从经历中改写自身结构**。这不是 OOP，也不是 Actor Model——这是把"认知"作为一等公民的对象系统。Smalltalk 的 late binding 在这里走到了极致：对象收到消息后，由 LLM（而非编译器）决定如何响应。
+
+## 多对象协作体系
+
+OOC 中的一切实体都是对象——研究员、文件系统、项目空间、甚至世界本身。
+
+每个对象有身份（我是谁）、数据（我知道什么）、能力（我会做什么）、关系（我认识谁）。对象通过消息协作：`talk`（对话）、`delegate`（委托）、`reply`（回复）。每个对象只能看到自己的上下文，通过消息传递了解他者——这正是 Kay 所说的"封装"的真正含义。
+
+对象的关系汇聚成社交网络，协作从网络中涌现。
+
+## Stone 与 Flow
+
+对象有两种形态，如同物质的势能与动能。
+
+Stone 是对象的静态形态——身份、数据、能力都已定义，但它不会主动做任何事。Stone 就像一块刻了字的石头：信息在那里，但石头不会自己读出来。
+
+Flow 是 Stone 被任务唤醒后的动态形态。它拥有思考能力（调用 LLM）、执行能力（运行程序）、行为树（结构化的计划与执行跟踪）。一个 Stone 可以同时拥有多个 Flow——每个任务对应一个，互不干扰。
+
+用认知栈的视角看：Stone 是空闲的栈，Flow 是忙碌的栈。同一个栈，不同时刻。
+
+每个 Flow 只能写自己的工作目录。想把工作中的收获沉淀为长期记忆，唯一的方式是 `reflect()`——向自己的 ReflectFlow 发消息，由它审视后决定是否写入 Stone。沉淀不是机械的数据搬运，而是一次自我对话。
+
+## 思维与成长机制
+
+对象通过 ThinkLoop 与世界交互：思考 → 输出程序 → 沙箱执行 → 反馈 → 再思考。对象不直接操作世界，间接层带来可审计、可中断、可反思。
+
+对象的运行时是一个认知栈。每帧同时包含"做什么"（过程）和"用什么来想"（思维）——就像编程语言的调用栈，每个 stack frame 同时包含指令指针和局部变量。深入子任务 = push，完成 = pop，遗忘 = pop 时释放局部信息。
+
+Trait 是对象的自我定义单元。思考风格、行为规则、知识、方法都是 Trait。对象通过 Trait 定义"我是什么样的存在"。
+
+对象从经历中学习。通过"自我对话"（`reflect()` → ReflectFlow 审视），有价值的经验被沉淀为新的 Trait。Trait 在原地成长：知识（readme-only）→ 能力（readme + code）→ 直觉（always-on）。智慧 = 帧 0 的厚度——新手需要很多帧才能完成一件事，专家的帧 0 已经内联了大量经验。
+
+## 人机交互
+
+对象的持久化目录就是它的物理存在。人类可以直接编辑 `readme.md` 改变对象的身份，编辑 `traits/` 改变它的思维方式，编辑 `data.json` 改变它的状态。即使系统没有运行，人类也可以通过编辑文件来"改造"对象。
+
+Pause 机制让人类可以介入对象的思考过程：对象暂停时，系统写出完整的 Context 和 LLM 输出，人类查看、修改后恢复执行。
+
+UI 是对象的面孔。对象自己决定如何被人类看见，编写自己的 React 组件。
+
+## 双仓库架构
+
+OOC 采用 user repo + kernel submodule 结构，用户数据与内核代码分离：
 
 ```
-src/
-├── cli.ts              # CLI 入口
-├── server/             # Web API 服务器
-├── world/              # 世界管理器（对象注册、路由、消息分发）
-├── stone/              # Stone 持久化与管理
-├── flow/               # Flow 生命周期与 ThinkLoop
-├── trait/              # Trait 加载、激活、方法注册
-├── context/            # Context 构建与格式化
-├── process/            # 行为树、认知栈
-├── executable/         # Program 沙箱执行器
-├── thinkable/          # LLM 集成（Claude API）
-├── persistence/        # 数据持久化
-├── integrations/       # 外部集成（MCP 等）
-└── types/              # 类型定义
-
-.ooc/
-├── docs/               # 所有文档
-│   ├── meta.md         # 全局架构索引
-│   ├── 哲学文档/       # 核心哲学（gene.md, emergence.md）
-│   ├── feature/        # Feature 设计（已完成/进行中/草稿）
-│   ├── 组织/           # 1+3 组织结构
-│   ├── 体验用例/       # 用户体验测试用例
-│   ├── 参考/           # 学习笔记与外部分析
-│   └── 理想与现实/     # 愿景与现状
-├── kernel/traits/      # 内核 Trait（computable, talkable, reflective 等）
-├── stones/             # 对象定义
-├── flows/              # 运行时 Flow 数据
-└── web/                # Web UI（React + Vite）
+ooc/                          ← user repo（用户仓库，git 根）
+├── .env                      ← 环境变量（API Key 等）
+├── kernel/                   ← git submodule（内核仓库）
+│   ├── src/                  ← 后端（TypeScript, Bun）
+│   ├── web/                  ← 前端（React + Vite）
+│   ├── traits/               ← Kernel Traits（基础能力）
+│   └── tests/                ← 测试
+├── docs/                     ← 文档（哲学、架构、设计）
+├── stones/                   ← 对象持久化目录
+└── flows/                    ← 会话数据
 ```
+
+为什么这样分：
+- `stones/`、`flows/`、`docs/` 属于用户，`kernel/` 属于系统
+- 用户仓库记录对象的成长历史，内核仓库记录系统的演进
+- 更新 kernel submodule 不影响用户的对象和文档
+- 从 user repo 根目录执行所有命令
 
 ## 快速开始
 
 ```bash
-# 安装依赖
-bun install
+# 克隆（含 kernel submodule）
+git clone --recursive <repo-url>
 
-# 启动 CLI
-bun run start
+# 安装后端依赖
+cd ooc && bun install
 
-# 启动 Web 服务器
-bun run server
+# 安装前端依赖
+cd kernel/web && bun install && cd ../..
 
-# 启动 Web UI（开发模式）
-cd .ooc/web && bun install && bun run dev
+# 配置 API Key
+echo "ANTHROPIC_API_KEY=your-key" > .env
 
-# 运行测试
-bun test
+# 启动服务
+bun kernel/src/cli.ts start 8080
 ```
-
-## 内核 Traits
-
-| Trait | 描述 |
-|-------|------|
-| computable | 思考-执行循环核心 API，Program 语法和方法定义 |
-| talkable | 对象间通信协议，talk/delegate/reply 消息传递 |
-| reflective | 经验结晶与自我反思，ReflectFlow 驱动的持续学习 |
-| verifiable | 证据先于结论，完成前必须运行验证 |
-| debuggable | 系统化调试四阶段流程，根因先于修复 |
-| plannable | 任务拆解和行为树规划 |
-| testable | RED-GREEN-REFACTOR 循环，测试驱动开发 |
-| reviewable | 两阶段审查：合规性 + 质量 |
-| web_search | 互联网搜索和网页抓取能力 |
-| object_creation | 创建新对象或完善对象身份的指南 |
 
 ## 文档
 
-所有文档统一在 `.ooc/docs/` 下：
+| 文档 | 路径 | 内容 |
+|------|------|------|
+| 核心基因 | `docs/哲学文档/gene.md` | 13 条基因——OOC 的全部规则 |
+| 涌现能力 | `docs/哲学文档/emergence.md` | 基因组合涌现的高阶能力 |
+| 概念树 | `docs/meta.md` | 完整概念结构与工程子树 |
+| 组织结构 | `docs/组织/` | 1+3 组织模型（Sophia/Kernel/Iris/Nexus） |
 
-- `.ooc/docs/meta.md` — 全局架构索引
-- `.ooc/docs/哲学文档/` — 核心哲学（gene.md 13 条基因、emergence.md 涌现能力）
-- `.ooc/docs/feature/` — Feature 设计（已完成/进行中/草稿）
-- `.ooc/docs/规范/` — 编码与交叉引用规范
-- `.ooc/docs/组织/` — 1+3 组织结构（Sophia/Kernel/Iris/Nexus）
-- `.ooc/docs/体验用例/` — 用户体验测试用例
-- `.ooc/docs/参考/` — 学习笔记与外部分析
-
-## 技术栈
-
-- Runtime: [Bun](https://bun.sh)
-- LLM: Claude API (Anthropic)
-- Web UI: React + Vite + Tailwind CSS
-- Language: TypeScript
+TypeScript · Bun · Claude API · React · Vite
