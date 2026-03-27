@@ -17,6 +17,7 @@ import {
   Box,
   GitBranch,
   LayoutList,
+  Palette,
 } from "lucide-react";
 import type { FileTreeNode } from "../../api/types";
 
@@ -54,6 +55,7 @@ export function FileTree({ root, onSelect, selectedPath, defaultExpanded = true 
 
 /** 文件图标选择 */
 function FileIcon({ name }: { name: string }) {
+  if (name === "ui") return <Palette className="w-3.5 h-3.5 text-pink-500 shrink-0" />;
   if (name === "index") return <LayoutList className="w-3.5 h-3.5 text-blue-500 shrink-0" />;
   if (name.endsWith(".json")) return <FileJson2 className="w-3.5 h-3.5 text-yellow-600 shrink-0" />;
   if (/\.(png|jpg|jpeg|gif|svg|webp)$/i.test(name)) return <FileImage className="w-3.5 h-3.5 text-purple-500 shrink-0" />;

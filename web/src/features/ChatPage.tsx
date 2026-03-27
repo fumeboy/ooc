@@ -17,7 +17,7 @@ import {
   chatRefsAtom,
 } from "../store/session";
 import { objectsAtom } from "../store/objects";
-import { fetchSessions, fetchFlow, talkTo, resumeFlow, pauseObject } from "../api/client";
+import { fetchSessions, fetchFlow, talkTo, resumeFlow } from "../api/client";
 import { ProcessView } from "./ProcessView";
 import { ObjectReadmeView } from "./ObjectReadmeView";
 import { DataTab } from "./DataTab";
@@ -66,6 +66,7 @@ export function ChatPage() {
   /* 选中会话时加载 Flow 详情 */
   useEffect(() => {
     if (activeId) {
+      setActiveFlow(null);  // 立即清空旧数据，避免闪烁上一个 session 的内容
       fetchFlow(activeId).then(setActiveFlow).catch(console.error);
     } else {
       setActiveFlow(null);
@@ -403,7 +404,6 @@ function ChatContent({ flow, onRef }: { flow: FlowData; onRef?: (id: string, obj
   const [resuming, setResuming] = useState(false);
   const selectedObject = useAtomValue(chatSelectedObjectAtom);
   const tabContentRef = useRef<HTMLDivElement>(null);
-  const [paused, setPaused] = useState(false);
 
   /* 信息级别配置：每个对象的 action 展示模式 */
   const [objectMode, setObjectMode] = useState<Record<string, ActionDisplayMode>>({});
@@ -530,14 +530,6 @@ function ChatContent({ flow, onRef }: { flow: FlowData; onRef?: (id: string, obj
                 {tab === t && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[var(--foreground)] rounded-full" />}
               </button>
             ))}
-            {/* 暂停/继续 switcher */}
-            <PauseSwitcher paused={paused} setPaused={setPaused} activeObj={activeObj} flow={flow} />
-          </div>
-        )}
-        {/* All 模式：暂停按钮独立显示 */}
-        {!activeObj && (
-          <div className="flex items-center justify-end px-2 pb-2 shrink-0">
-            <PauseSwitcher paused={paused} setPaused={setPaused} activeObj={activeObj} flow={flow} />
           </div>
         )}
 
@@ -1028,49 +1020,6 @@ function TimelineView({
         )}
       </div>
     </div>
-  );
-}
-
-/** PauseSwitcher — 暂停/继续 toggle */
-function PauseSwitcher({
-  paused, setPaused, activeObj, flow,
-}: {
-  paused: boolean;
-  setPaused: (v: boolean) => void;
-  activeObj: string | null;
-  flow: FlowData;
-}) {
-  return (
-    <button
-      onClick={async () => {
-        const objName = activeObj ?? flow.stoneName;
-        if (paused) {
-          await resumeFlow(objName, flow.taskId).catch(console.error);
-          setPaused(false);
-        } else {
-          await pauseObject(objName).catch(console.error);
-          setPaused(true);
-        }
-      }}
-      title={paused ? "继续执行" : "暂停对象执行"}
-      className={cn(
-        "ml-auto mr-2 flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] transition-colors",
-        paused
-          ? "bg-[var(--warm)]/15 text-[var(--warm)]"
-          : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--accent)]",
-      )}
-    >
-      <span className={cn(
-        "relative w-6 h-3.5 rounded-full transition-colors",
-        paused ? "bg-[var(--warm)]" : "bg-[var(--muted-foreground)]/30",
-      )}>
-        <span className={cn(
-          "absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-all",
-          paused ? "left-[13px]" : "left-0.5",
-        )} />
-      </span>
-      <span>{paused ? "paused now" : "click to pause"}</span>
-    </button>
   );
 }
 

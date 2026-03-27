@@ -9,11 +9,12 @@
 import { useState, useEffect } from "react";
 import { useAtomValue } from "jotai";
 import { lastFlowEventAtom } from "../store/session";
-import { fetchFlow, fetchSessionTree } from "../api/client";
+import { fetchFlow, fetchSessionTree, fetchFileContent } from "../api/client";
 import { StatusBadge } from "../components/ui/Badge";
 import { ProcessView } from "./ProcessView";
 import { DynamicUI } from "./DynamicUI";
 import { ActionCard, TalkCard } from "../components/ui/ActionCard";
+import { CodeMirrorViewer } from "../components/ui/CodeMirrorViewer";
 import { cn } from "../lib/utils";
 import type { FlowData, FlowMessage, Action, TimelineEntry } from "../api/types";
 
@@ -22,25 +23,32 @@ interface FlowViewProps {
   sessionId: string;
   /** flow 所属的对象名称 */
   objectName: string;
+  /** 初始 tab（由路由指定） */
+  initialTab?: string;
 }
 
-const BASE_TABS = ["Timeline", "Process"] as const;
-type Tab = "Timeline" | "Process" | "UI";
+const BASE_TABS = ["Timeline", "Process", "Data"] as const;
+type Tab = "Timeline" | "Process" | "Data" | "UI";
 
-export function FlowView({ sessionId, objectName }: FlowViewProps) {
+export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
   const [flow, setFlow] = useState<FlowData | null>(null);
-  const [tab, setTab] = useState<Tab>("Timeline");
+  const [tab, setTab] = useState<Tab>((initialTab as Tab) || "Timeline");
   const [hasUI, setHasUI] = useState(false);
   const lastEvent = useAtomValue(lastFlowEventAtom);
 
   useEffect(() => {
     setFlow(null);
-    setTab("Timeline");
+    setTab((initialTab as Tab) || "Timeline");
     fetchFlow(sessionId).then((data) => {
       /* 如果请求的是 sub-flow 对象，从 subFlows 中找到对应的 process */
       setFlow(data);
     }).catch(console.error);
   }, [sessionId, objectName]);
+
+  /* initialTab 变化时切换 tab（同一 FlowView 内切换子文件） */
+  useEffect(() => {
+    if (initialTab) setTab(initialTab as Tab);
+  }, [initialTab]);
 
   /* SSE 实时更新 */
   useEffect(() => {
@@ -165,6 +173,9 @@ export function FlowView({ sessionId, objectName }: FlowViewProps) {
           </div>
         )}
         {tab === "Process" && <ProcessView process={process} />}
+        {tab === "Data" && (
+          <FlowDataTab sessionId={sessionId} objectName={objectName} />
+        )}
         {tab === "UI" && (
           <DynamicUI
             importPath={`@flows/${sessionId}/flows/${objectName}/shared/ui/index.tsx`}
@@ -174,4 +185,26 @@ export function FlowView({ sessionId, objectName }: FlowViewProps) {
       </div>
     </div>
   );
+}
+
+/** Flow Data Tab — 展示 flow 的 data.json */
+function FlowDataTab({ sessionId, objectName }: { sessionId: string; objectName: string }) {
+  const [content, setContent] = useState<string | null>(null);
+  const refreshKey = useAtomValue(lastFlowEventAtom);
+
+  useEffect(() => {
+    const path = `flows/${sessionId}/flows/${objectName}/data.json`;
+    fetchFileContent(path)
+      .then((raw) => {
+        try { setContent(JSON.stringify(JSON.parse(raw), null, 2)); }
+        catch { setContent(raw); }
+      })
+      .catch(() => setContent("(无法加载 data.json)"));
+  }, [sessionId, objectName, refreshKey]);
+
+  if (content === null) {
+    return <p className="text-sm text-[var(--muted-foreground)]">加载中...</p>;
+  }
+
+  return <CodeMirrorViewer content={content} ext="json" />;
 }

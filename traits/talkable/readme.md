@@ -7,6 +7,7 @@ hooks:
       在你 [wait] 之前，回顾一下你刚才执行的 actions：
       - 如果你已经用 talk() 回复了所有需要回复的消息（effects 中显示"已投递"），那就直接 [wait]，不要重复发送。
       - 如果你收到了来自其他对象的消息但还没有用 talk() 回复，先回复再 [wait]。
+      - 如果你刚才写了 UI（写入了 ui/index.tsx）或生成了文档到 shared/，你是否在 talk 消息中包含了导航卡片？格式：[navigate title="标题" description="描述"]ooc://...[/navigate]。用户需要导航卡片才能方便地跳转查看。
       重复发送相同内容是严重的体验问题。
     once: true
   when_finish:
@@ -14,6 +15,7 @@ hooks:
       在你 [finish] 之前，检查一下：你是否已经用 talk() 把任务结果发送给了请求者（user 或其他对象）？
       如果还没有发送结果，你必须先 talk() 给请求者，然后再 [finish]。
       只写到 shared 文件或 setData 是不够的——请求者看不到这些，他们只能看到你 talk() 发送的消息。
+      如果你写了 UI 或文档，talk 消息中必须包含导航卡片：[navigate title="标题"]ooc://...[/navigate]。
     once: true
 ---
 

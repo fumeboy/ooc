@@ -99,6 +99,42 @@ export function App() {
 
   /* 打开文件 tab */
   const openFileTab = useCallback((path: string, node: FileTreeNode) => {
+    /* Flow 子文件（ui/data.json/process.json）→ 合并到 FlowView tab */
+    const flowSubMatch = path.match(/^(flows\/[^/]+\/flows\/[^/]+)\/(shared\/ui|data\.json|process\.json)$/);
+    if (flowSubMatch) {
+      const parentPath = flowSubMatch[1]!;
+      const parentName = parentPath.split("/").pop()!;
+      /* 用原始 path 作为 activePath（ViewRouter 据此选择 initialTab），但 tab 用父路径 */
+      setActivePath(path);
+      setTabs((prev) => {
+        /* 如果父 tab 已存在，更新其 path 以触发 initialTab 切换 */
+        const existing = prev.find((t) => t.path.startsWith(parentPath));
+        if (existing) {
+          return prev.map((t) => t === existing ? { ...t, path } : t);
+        }
+        return [...prev, { path, label: parentName }];
+      });
+      if (isMobile) setSheetOpen(false);
+      return;
+    }
+
+    /* Stone 子文件（readme.md/data.json/traits/shared）→ 合并到 StoneView tab */
+    const stoneSubMatch = path.match(/^(stones\/[^/]+)\/(readme\.md|data\.json|traits|shared)/);
+    if (stoneSubMatch) {
+      const parentPath = stoneSubMatch[1]!;
+      const parentName = parentPath.split("/").pop()!;
+      setActivePath(path);
+      setTabs((prev) => {
+        const existing = prev.find((t) => t.path.startsWith(parentPath));
+        if (existing) {
+          return prev.map((t) => t === existing ? { ...t, path } : t);
+        }
+        return [...prev, { path, label: parentName }];
+      });
+      if (isMobile) setSheetOpen(false);
+      return;
+    }
+
     setActivePath(path);
     setTabs((prev) => {
       if (prev.some((t) => t.path === path)) return prev;
@@ -300,7 +336,7 @@ export function App() {
           "relative z-10 flex-1 overflow-hidden",
           isMobile
             ? "mt-12 safe-bottom"
-            : "m-3 rounded-xl border",
+            : "my-3 mx-1 rounded-xl border",
         )}
         style={isMobile ? {} : { backgroundColor: "#fefefe", borderColor: "#eee" }}
       >

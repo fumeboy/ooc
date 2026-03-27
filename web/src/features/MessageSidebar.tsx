@@ -14,10 +14,11 @@ import {
   streamingTalkAtom,
   messageSidebarOpenAtom,
 } from "../store/session";
-import { talkTo, fetchFlow, fetchSessions, fetchObjects } from "../api/client";
+import { talkTo, fetchFlow, fetchSessions, fetchObjects, pauseObject, resumeFlow } from "../api/client";
 import { userSessionsAtom } from "../store/session";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { ObjectAvatar } from "../components/ui/ObjectAvatar";
+import { TalkCard } from "../components/ui/ActionCard";
 import { cn } from "../lib/utils";
 import { Send, PanelRightClose, PanelRightOpen, X } from "lucide-react";
 import type { FlowMessage } from "../api/types";
@@ -36,6 +37,7 @@ export function MessageSidebar() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [target, setTarget] = useState(DEFAULT_TARGET);
+  const [paused, setPaused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pendingSendRef = useRef<boolean>(false);
@@ -267,35 +269,73 @@ export function MessageSidebar() {
   }
 
   return (
-    <div className="flex flex-col w-[360px] shrink-0 bg-[var(--background)]">
+    <div className="flex flex-col w-[400px] shrink-0 bg-[var(--background)]">
       {/* 头部 */}
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
         <div className="flex items-center gap-2">
           <ObjectAvatar name={target} size="sm" />
           <span className="text-sm font-medium">{target}</span>
         </div>
-        <button
-          onClick={() => setSidebarOpen(false)}
-          className="p-1 rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
-          title="收起消息面板"
-        >
-          <PanelRightClose className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          {/* 暂停/继续 toggle */}
+          {activeFlow && (
+            <button
+              onClick={async () => {
+                const objName = activeFlow.stoneName;
+                if (paused) {
+                  await resumeFlow(objName, activeFlow.taskId).catch(console.error);
+                  setPaused(false);
+                } else {
+                  await pauseObject(objName).catch(console.error);
+                  setPaused(true);
+                }
+              }}
+              title={paused ? "继续执行" : "暂停对象执行"}
+              className={cn(
+                "flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] transition-colors",
+                paused
+                  ? "bg-[var(--warm)]/15 text-[var(--warm)]"
+                  : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--accent)]",
+              )}
+            >
+              <span className={cn(
+                "relative w-6 h-3.5 rounded-full transition-colors",
+                paused ? "bg-[var(--warm)]" : "bg-[var(--muted-foreground)]/30",
+              )}>
+                <span className={cn(
+                  "absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-all",
+                  paused ? "left-[13px]" : "left-0.5",
+                )} />
+              </span>
+              <span>{paused ? "paused" : "pause"}</span>
+            </button>
+          )}
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="p-1 rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+            title="收起消息面板"
+          >
+            <PanelRightClose className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* 迭代进度 */}
       <ProgressIndicator />
 
       {/* 消息列表 */}
-      <div ref={scrollRef} className="flex-1 overflow-auto px-4 py-3 space-y-3">
+      <div ref={scrollRef} className="flex-1 overflow-auto px-2 py-3 space-y-3">
         {messages.length === 0 && !activeStreamingTalk && (
           <p className="text-xs text-[var(--muted-foreground)] text-center py-8">
             输入消息开始对话，输入 @ 选择对象
           </p>
         )}
-        {messages.map((msg, i) => (
-          <MessageBubble key={`${msg.timestamp}-${i}`} message={msg} />
-        ))}
+        {messages.map((msg, i) => {
+          const isUser = msg.from === "user" || msg.from === "human";
+          return isUser
+            ? <MessageBubble key={`${msg.timestamp}-${i}`} message={msg} />
+            : <TalkCard key={`${msg.timestamp}-${i}`} msg={msg} maxHeight="60vh" />;
+        })}
         {/* 流式 talk */}
         {activeStreamingTalk && (
           <div className="flex gap-2">
@@ -372,26 +412,17 @@ export function MessageSidebar() {
   );
 }
 
-/** 单条消息气泡 */
+/** 用户消息气泡（仅 user/human 消息使用） */
 function MessageBubble({ message }: { message: FlowMessage }) {
-  const isUser = message.from === "user" || message.from === "human";
-
   return (
-    <div className={cn("flex gap-2", isUser && "flex-row-reverse")}>
-      <ObjectAvatar name={isUser ? "user" : message.from} size="sm" />
-      <div className={cn("flex-1 min-w-0", isUser && "text-right")}>
+    <div className="flex gap-2 flex-row-reverse">
+      <ObjectAvatar name="user" size="sm" />
+      <div className="flex-1 min-w-0 text-right">
         <span className="text-[10px] text-[var(--muted-foreground)]">
           {message.from} → {message.to}
         </span>
-        <div
-          className={cn(
-            "mt-0.5 text-sm rounded-xl px-3 py-2 inline-block max-w-full text-left",
-            isUser
-              ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
-              : "bg-[var(--accent)]",
-          )}
-        >
-          <MarkdownContent content={message.content} invertLinks={isUser} />
+        <div className="mt-0.5 text-sm rounded-xl px-3 py-2 inline-block max-w-full text-left bg-[var(--primary)] text-[var(--primary-foreground)]">
+          <MarkdownContent content={message.content} invertLinks />
         </div>
       </div>
     </div>

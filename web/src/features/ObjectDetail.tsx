@@ -21,10 +21,11 @@ type Tab = (typeof BASE_TABS)[number] | "Memory" | "UI";
 
 interface ObjectDetailProps {
   objectName: string;
+  initialTab?: string;
 }
 
-export function ObjectDetail({ objectName }: ObjectDetailProps) {
-  const [tab, setTab] = useState<Tab>("Readme");
+export function ObjectDetail({ objectName, initialTab }: ObjectDetailProps) {
+  const [tab, setTab] = useState<Tab>((initialTab as Tab) || "Readme");
   const [stone, setStone] = useState<StoneData | null>(null);
 
   const tabs = useMemo<Tab[]>(() => {
@@ -36,9 +37,9 @@ export function ObjectDetail({ objectName }: ObjectDetailProps) {
 
   useEffect(() => {
     setStone(null);
-    setTab("Readme");
+    setTab((initialTab as Tab) || "Readme");
     fetchObject(objectName).then(setStone).catch(console.error);
-  }, [objectName]);
+  }, [objectName, initialTab]);
 
   if (!stone) {
     return (

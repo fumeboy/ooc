@@ -95,7 +95,7 @@ interface ActionCardProps {
   action: Action;
   /** 显示 object 头像和名称（Timeline 模式） */
   objectName?: string;
-  maxHeight?: number;
+  maxHeight?: number | string;
   /** 引用回调：点击 Ref 按钮时触发 */
   onRef?: (id: string, objectName: string) => void;
 }
@@ -103,6 +103,7 @@ interface ActionCardProps {
 export function ActionCard({ action, objectName, maxHeight = 220, onRef }: ActionCardProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
   const isProgram = action.type === "program";
   const badgeColor = ACTION_BADGE[action.type] ?? DEFAULT_BADGE;
@@ -124,7 +125,8 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef }: Actio
         )}
         style={{ borderRadius: `${R}px`, ...(focused ? { borderColor: "color-mix(in srgb, var(--foreground) 40%, transparent)" } : {}) }}
         onClick={() => setFocused(true)}
-        onMouseLeave={() => setFocused(false)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => { setFocused(false); setHovered(false); }}
       >
         {/* header */}
         <div className="flex items-stretch min-h-[28px]">
@@ -199,7 +201,7 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef }: Actio
           />
           {isProgram ? (
             <div className="flex divide-x divide-[var(--border)]">
-              <div className="flex-1 min-w-0" style={{ maxHeight: `${maxHeight}px`, overflow: bodyOverflow }}>
+              <div className="flex-1 min-w-0" style={{ maxHeight: `${typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight}`, overflow: bodyOverflow }}>
                 <div className="px-3 py-2">
                   <p className="text-[10px] text-[var(--muted-foreground)] mb-1 font-medium flex items-center">
                     Program
@@ -209,7 +211,7 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef }: Actio
                 </div>
               </div>
               {action.result && (
-                <div className="flex-1 min-w-0" style={{ maxHeight: `${maxHeight}px`, overflow: bodyOverflow }}>
+                <div className="flex-1 min-w-0" style={{ maxHeight: `${typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight}`, overflow: bodyOverflow }}>
                   <div className="px-3 py-2">
                     <p className="text-[10px] text-[var(--muted-foreground)] mb-1 font-medium flex items-center">
                       Output
@@ -221,10 +223,17 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef }: Actio
               )}
             </div>
           ) : (
-            <div style={{ maxHeight: `${maxHeight}px`, overflow: bodyOverflow }}>
+            <div style={{ maxHeight: `${typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight}`, overflow: bodyOverflow }}>
               <div className="px-3 py-4">
                 <MarkdownContent content={action.content} className="text-sm leading-relaxed" />
               </div>
+            </div>
+          )}
+          {/* Click to Scroll 提示 */}
+          {hovered && !focused && (
+            <div className="absolute bottom-0 left-0 right-0 flex items-end justify-center pb-2 pt-8 pointer-events-none"
+              style={{ background: "linear-gradient(transparent, var(--card))", borderRadius: `0 0 ${R}px ${R}px` }}>
+              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[var(--muted)] text-[var(--muted-foreground)]">Click to Scroll</span>
             </div>
           )}
         </div>
@@ -278,7 +287,7 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef }: Actio
 
 interface TalkCardProps {
   msg: FlowMessage;
-  maxHeight?: number;
+  maxHeight?: number | string;
   /** 引用回调：点击 Ref 按钮时触发 */
   onRef?: (id: string, objectName: string) => void;
 }
@@ -286,6 +295,7 @@ interface TalkCardProps {
 export function TalkCard({ msg, maxHeight = 300, onRef }: TalkCardProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
   const R = 8;
   const ts = new Date(msg.timestamp).toLocaleTimeString([], {
@@ -303,7 +313,8 @@ export function TalkCard({ msg, maxHeight = 300, onRef }: TalkCardProps) {
         )}
         style={{ borderRadius: `${R}px`, ...(focused ? { borderColor: "color-mix(in srgb, var(--foreground) 40%, transparent)" } : {}) }}
         onClick={() => setFocused(true)}
-        onMouseLeave={() => setFocused(false)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => { setFocused(false); setHovered(false); }}
       >
         {/* header */}
         <div className="flex items-stretch min-h-[28px]">
@@ -364,11 +375,18 @@ export function TalkCard({ msg, maxHeight = 300, onRef }: TalkCardProps) {
               background: `radial-gradient(circle at 0% 100%, transparent ${R}px, var(--card) ${R}px)`,
             }}
           />
-          <div style={{ maxHeight: `${maxHeight}px`, overflow: focused ? "auto" : "hidden" }}>
+          <div style={{ maxHeight: `${typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight}`, overflow: focused ? "auto" : "hidden" }}>
             <div className="px-3 py-4">
               <MarkdownContent content={msg.content} className="text-sm leading-relaxed" />
             </div>
           </div>
+          {/* Click to Scroll 提示 */}
+          {hovered && !focused && (
+            <div className="absolute bottom-0 left-0 right-0 flex items-end justify-center pb-2 pt-8 pointer-events-none"
+              style={{ background: "linear-gradient(transparent, var(--card))", borderRadius: `0 0 ${R}px ${R}px` }}>
+              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[var(--muted)] text-[var(--muted-foreground)]">Click to Scroll</span>
+            </div>
+          )}
         </div>
       </div>
 

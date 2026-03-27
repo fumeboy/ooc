@@ -35,18 +35,39 @@ function parseRoute(path: string): {
   objectName?: string;
   sessionId?: string;
   ext?: string;
+  initialTab?: string;
 } {
   /* stones/{objectId} — 目录级别 */
   const stoneMatch = path.match(/^stones\/([^/]+)$/);
   if (stoneMatch) return { type: "stone", objectName: stoneMatch[1] };
 
-  /* stones/{objectId}/readme.md — 也指向 StoneView */
+  /* stones/{objectId}/readme.md — 指向 StoneView Readme tab */
   const stoneReadmeMatch = path.match(/^stones\/([^/]+)\/readme\.md$/);
-  if (stoneReadmeMatch) return { type: "stone", objectName: stoneReadmeMatch[1] };
+  if (stoneReadmeMatch) return { type: "stone", objectName: stoneReadmeMatch[1], initialTab: "Readme" };
 
-  /* flows/{sessionId}/flows/{objectName}/shared/ui — Flow 自渲染 UI */
+  /* stones/{objectId}/data.json — 指向 StoneView Data tab */
+  const stoneDataMatch = path.match(/^stones\/([^/]+)\/data\.json$/);
+  if (stoneDataMatch) return { type: "stone", objectName: stoneDataMatch[1], initialTab: "Data" };
+
+  /* stones/{objectId}/traits — 指向 StoneView Effects tab */
+  const stoneTraitsMatch = path.match(/^stones\/([^/]+)\/traits/);
+  if (stoneTraitsMatch) return { type: "stone", objectName: stoneTraitsMatch[1], initialTab: "Effects" };
+
+  /* stones/{objectId}/shared — 指向 StoneView Shared tab */
+  const stoneSharedMatch = path.match(/^stones\/([^/]+)\/shared/);
+  if (stoneSharedMatch) return { type: "stone", objectName: stoneSharedMatch[1], initialTab: "Shared" };
+
+  /* flows/{sessionId}/flows/{objectName}/shared/ui — Flow UI tab */
   const flowUIMatch = path.match(/^flows\/([^/]+)\/flows\/([^/]+)\/shared\/ui$/);
-  if (flowUIMatch) return { type: "flow-ui", sessionId: flowUIMatch[1], objectName: flowUIMatch[2] };
+  if (flowUIMatch) return { type: "flow-detail", sessionId: flowUIMatch[1], objectName: flowUIMatch[2], initialTab: "UI" };
+
+  /* flows/{sessionId}/flows/{objectName}/process.json — Flow Process tab */
+  const flowProcessMatch = path.match(/^flows\/([^/]+)\/flows\/([^/]+)\/process\.json$/);
+  if (flowProcessMatch) return { type: "flow-detail", sessionId: flowProcessMatch[1], objectName: flowProcessMatch[2], initialTab: "Process" };
+
+  /* flows/{sessionId}/flows/{objectName}/data.json — Flow Timeline tab (default) */
+  const flowDataMatch = path.match(/^flows\/([^/]+)\/flows\/([^/]+)\/data\.json$/);
+  if (flowDataMatch) return { type: "flow-detail", sessionId: flowDataMatch[1], objectName: flowDataMatch[2], initialTab: "Timeline" };
 
   /* process.json 特殊处理：任何路径下的 process.json 都用 ProcessView */
   if (path.endsWith("/process.json")) {
@@ -95,30 +116,15 @@ export function ViewRouter({ filePath }: ViewRouterProps) {
         <DynamicUI
           importPath={`@stones/${name}/shared/ui/index.tsx`}
           componentProps={stoneUIProps}
-          fallback={<ObjectDetail objectName={name} />}
+          fallback={<ObjectDetail objectName={name} initialTab={route.initialTab} />}
         />
       );
     }
-    return <ObjectDetail objectName={name} />;
+    return <ObjectDetail objectName={name} initialTab={route.initialTab} />;
   }
 
   if (route.type === "flow-detail" && route.sessionId && route.objectName) {
-    return <FlowView sessionId={route.sessionId} objectName={route.objectName} />;
-  }
-
-  if (route.type === "flow-ui" && route.sessionId && route.objectName) {
-    const flowImportPath = `@flows/${route.sessionId}/flows/${route.objectName}/shared/ui/index.tsx`;
-    return (
-      <DynamicUI
-        importPath={flowImportPath}
-        componentProps={{ sessionId: route.sessionId, objectName: route.objectName }}
-        fallback={
-          <div className="flex items-center justify-center h-full text-sm text-[var(--muted-foreground)]">
-            该对象尚未生成自渲染 UI
-          </div>
-        }
-      />
-    );
+    return <FlowView sessionId={route.sessionId} objectName={route.objectName} initialTab={route.initialTab} />;
   }
 
   if (route.type === "flow-session" && route.sessionId) {
