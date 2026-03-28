@@ -45,7 +45,6 @@ export function buildMirror(flow: FlowData, stone: StoneData): string | null {
   const usedSetData = allContent.includes("setData(") || allContent.includes("setData(");
   const usedPersistData = allContent.includes("persistData(");
   const usedCreateTrait = allContent.includes("createTrait(");
-  const usedWriteShared = allContent.includes("writeShared(");
   const usedCreatePlan = allContent.includes("createPlan(");
   const usedCompleteStep = allContent.includes("completeStep(");
 
@@ -60,7 +59,6 @@ export function buildMirror(flow: FlowData, stone: StoneData): string | null {
   const hasVerification = recentPrograms.some(a =>
     a.content.includes("print(") && (
       a.content.includes("getData(") ||
-      a.content.includes("readShared(") ||
       a.content.includes("验证") ||
       a.content.includes("检查")
     )

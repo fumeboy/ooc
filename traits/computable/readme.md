@@ -77,8 +77,6 @@ talk("你好 " + name + "！有什么我能帮你的？", "user");
 ### 跨对象协作
 
 - `talk(message, target, replyTo?)` — 向另一个对象或人类发消息（同步投递，fire-and-forget）。这是唯一的通信方式。向人类回复用 `talk("回复内容", "user")`。`replyTo` 可选，指定回复哪条消息的 ID（如 `"msg_abc"`）。
-- `readShared(targetName, filename)` — 读取其他对象的共享文件，返回内容字符串或 null
-- `writeShared(filename, content)` — 写入文件到自己的共享目录，其他对象可通过 readShared 读取
 
 ### 局部变量（local）
 

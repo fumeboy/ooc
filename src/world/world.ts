@@ -92,6 +92,11 @@ export class World implements Routable {
 
     /* 启动定时任务管理器 */
     this._cron.start();
+
+    /* 异步恢复未完成的 session（不阻塞服务器启动） */
+    this._autoResumeSessions().catch(e => {
+      consola.error("[World] 自动恢复 session 失败:", (e as Error).message);
+    });
   }
 
   /**
@@ -222,8 +227,6 @@ export class World implements Routable {
           "### 跨对象协作",
           "",
           "- `await talk(targetName, message)` — 向另一个对象发消息并等待回复（异步，必须 await）",
-          "- `readShared(targetName, filename)` — 读取其他对象的共享文件，返回内容字符串或 null",
-          "- `writeShared(filename, content)` — 写入文件到自己的共享目录",
           "",
           "### 局部变量",
           "",
@@ -343,11 +346,6 @@ export class World implements Routable {
           "4. 继续你被中断前的工作",
           "",
           "重要：处理完消息后，别忘了继续做之前的事情。待办队列会提醒你接下来该做什么。",
-          "",
-          "## 共享文件",
-          "",
-          '- `writeShared("文件名", "内容")` — 写入共享文件',
-          '- `readShared("对象名", "文件名")` — 读取其他对象的共享文件',
           "",
         ].join("\n"),
         "utf-8",
@@ -1020,6 +1018,172 @@ export class World implements Routable {
     const traits = await loadAllTraits(objectTraitsDir, kernelTraitsDir, libraryTraitsDir);
     consola.info(`[World] 加载 ${traits.length} 个 traits: ${traits.map(t => t.name).join(", ")}`);
     return traits;
+  }
+
+  /**
+   * 服务启动时自动恢复未完成的 session
+   *
+   * 扫描 flows/ 目录，找到 running 或 waiting+有消息 的 flow，
+   * 创建 Scheduler 恢复调度。不追加新消息。
+   */
+  private async _autoResumeSessions(): Promise<void> {
+    if (!existsSync(this.flowsDir)) return;
+
+    const sessionDirs = readdirSync(this.flowsDir, { withFileTypes: true });
+    const toResume: Array<{ sessionDir: string; sessionId: string; objectName: string; mainFlow: Flow; targetFlow: Flow }> = [];
+
+    for (const entry of sessionDirs) {
+      if (!entry.isDirectory()) continue;
+      const sessionId = entry.name;
+      const sessionDir = join(this.flowsDir, sessionId);
+      const flowsSubDir = join(sessionDir, "flows");
+      if (!existsSync(flowsSubDir)) continue;
+
+      /* 扫描 session 下所有 flow */
+      const flowEntries = readdirSync(flowsSubDir, { withFileTypes: true });
+      let needsResume = false;
+      let entryObjectName: string | null = null;
+
+      for (const fe of flowEntries) {
+        if (!fe.isDirectory() || fe.name === "user") continue;
+        const flow = Flow.load(join(flowsSubDir, fe.name));
+        if (!flow) continue;
+
+        if (flow.status === "running") {
+          needsResume = true;
+          entryObjectName = fe.name;
+          break;
+        }
+        if (flow.status === "waiting" && flow.hasPendingMessages) {
+          needsResume = true;
+          entryObjectName = fe.name;
+        }
+      }
+
+      if (!needsResume || !entryObjectName) continue;
+
+      /* 加载 main flow (user) 和 target flow */
+      const mainFlow = Flow.load(join(flowsSubDir, "user"));
+      if (!mainFlow) continue;
+
+      const targetFlow = Flow.load(join(flowsSubDir, entryObjectName));
+      if (!targetFlow) continue;
+
+      /* 跳过已完成的 session */
+      if (targetFlow.status === "finished" || targetFlow.status === "failed") continue;
+
+      toResume.push({ sessionDir, sessionId, objectName: entryObjectName, mainFlow, targetFlow });
+    }
+
+    if (toResume.length === 0) return;
+
+    consola.info(`[World] 发现 ${toResume.length} 个未完成的 session，开始恢复`);
+
+    /* 串行恢复，避免同时消耗大量 LLM 配额 */
+    for (const { sessionDir, sessionId, objectName, mainFlow, targetFlow } of toResume) {
+      try {
+        await this._autoResumeSession(sessionDir, sessionId, objectName, mainFlow, targetFlow);
+      } catch (e) {
+        consola.error(`[World] 恢复 session ${sessionId} 失败:`, (e as Error).message);
+      }
+    }
+  }
+
+  /**
+   * 自动恢复单个 session（不追加新消息）
+   *
+   * 逻辑与 _resumeAndRunFlow 类似，但跳过消息追加步骤。
+   */
+  private async _autoResumeSession(
+    sessionDir: string,
+    sessionId: string,
+    objectName: string,
+    mainFlow: Flow,
+    targetFlow: Flow,
+  ): Promise<void> {
+    const stone = this._registry.get(objectName);
+    if (!stone) {
+      consola.warn(`[World] 自动恢复跳过: 对象 "${objectName}" 不存在`);
+      return;
+    }
+
+    /* 设置为 running */
+    targetFlow.setStatus("running");
+    consola.info(`[World] 自动恢复 session ${sessionId}, 入口对象: ${objectName}`);
+    emitSSE({ type: "flow:start", objectName, taskId: mainFlow.taskId });
+
+    /* 创建 SessionContext */
+    const session = new TaskSession(mainFlow.taskId, sessionDir);
+    const roundCounter = createSharedRoundCounter();
+    const traitsCache = new Map<string, import("../types/index.js").TraitDefinition[]>();
+    if (mainFlow !== targetFlow) {
+      session.register("user", mainFlow);
+    }
+    session.register(objectName, targetFlow);
+
+    /* 恢复已有的 sub-flows */
+    this._loadExistingSubFlows(session, sessionDir, objectName);
+
+    /* 加载 Traits 并缓存 */
+    const traits = await this._loadTraits(stone);
+    traitsCache.set(objectName, traits);
+
+    for (const otherStone of this._registry.all()) {
+      if (otherStone.name !== objectName && !traitsCache.has(otherStone.name)) {
+        const otherTraits = await this._loadTraits(otherStone);
+        traitsCache.set(otherStone.name, otherTraits);
+      }
+    }
+
+    /* 确保 ReflectFlow 存在 */
+    this._ensureReflectFlow(stone, session);
+
+    /* 构建协作 API */
+    const collaboration = createCollaborationAPI(this, objectName, stone.dir, roundCounter, targetFlow.taskId, sessionId);
+    const directory = this._registry.buildDirectory();
+
+    /* 创建 Scheduler 并注册 */
+    const scheduler = new Scheduler(this._llm, directory, undefined, (name) => this._pauseRequests.has(name), this._cron, this.flowsDir);
+    scheduler.register(objectName, targetFlow, stone.toJSON(), stone.dir, traits, collaboration);
+
+    /* 注册到 activeSessions */
+    this._activeSessions.set(sessionId, { session, scheduler, roundCounter, traitsCache });
+
+    try {
+      const updatedData = await scheduler.run(objectName);
+
+      /* 同步所有参与对象的数据 */
+      for (const { stoneName } of session.allFlows()) {
+        const s = this._registry.get(stoneName);
+        if (s) s.save();
+      }
+
+      for (const [key, value] of Object.entries(updatedData)) {
+        stone.setData(key, value);
+      }
+      stone.save();
+
+      /* 同步 main flow 状态 */
+      if (mainFlow !== targetFlow) {
+        mainFlow.setStatus(targetFlow.status);
+        mainFlow.save();
+      }
+
+      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.taskId, status: targetFlow.status });
+      consola.info(`[World] session ${sessionId} 恢复完成, 状态: ${targetFlow.status}`);
+    } catch (e) {
+      consola.error(`[World] _autoResumeSession 异常:`, (e as Error).message);
+      for (const { flow: f } of session.allFlows()) {
+        if (f.status === "running") {
+          f.setStatus("failed");
+          f.recordAction({ type: "thought", content: `[系统异常] ${(e as Error).message}` });
+          f.save();
+        }
+      }
+      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.taskId, status: "failed" });
+    } finally {
+      this._activeSessions.delete(sessionId);
+    }
   }
 
   /**

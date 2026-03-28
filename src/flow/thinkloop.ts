@@ -8,7 +8,7 @@
  *
  * @ref docs/哲学文档/gene.md#G4 — implements — ThinkLoop 思考-执行循环（提取程序、沙箱执行、反馈）
  * @ref docs/哲学文档/gene.md#G5 — implements — 每轮构建 Context 作为 LLM 输入
- * @ref docs/哲学文档/gene.md#G8 — implements — 协作 API 注入（talk, readShared, writeShared）
+ * @ref docs/哲学文档/gene.md#G8 — implements — 协作 API 注入（talk, talkToSelf）
  * @ref docs/哲学文档/gene.md#G9 — implements — 行为树 API 注入（createPlan, create_plan_node, finish_plan_node, moveFocus）
  * @ref docs/哲学文档/gene.md#G10 — implements — recordAction 记录 thought/program 事件
  * @ref docs/哲学文档/gene.md#G3 — implements — Trait 元编程 API（readTrait, listTraits, activateTrait, reloadTrait）
@@ -1375,26 +1375,6 @@ function buildExecutionContext(
         name: "talkToSelf",
         fn: (message: string) => collaboration.talkToSelf(message),
         effect: () => `✓ 消息已投递给 ReflectFlow`,
-      },
-      {
-        name: "readShared",
-        fn: (targetName: string, filename: string) => {
-          const result = collaboration.readShared(targetName, filename);
-          const deprecation = `\n[deprecated] readShared 将在未来版本移除，请改用文件系统 API：直接读取 world_dir 下对应对象的 files/ 目录`;
-          return typeof result === "string" ? `${result}${deprecation}` : result;
-        },
-      },
-      {
-        name: "writeShared",
-        fn: (filename: string, content: string) => {
-          const result = collaboration.writeShared(filename, content);
-          const deprecation = `\n[deprecated] writeShared 将在未来版本移除，请改用文件系统 API：直接写入 self_files_dir`;
-          return typeof result === "string" ? `${result}${deprecation}` : result;
-        },
-        effect: (args) => {
-          const bytes = typeof args[1] === "string" ? Buffer.byteLength(args[1] as string, "utf-8") : "?";
-          return `✓ 文件已写入 ${args[0]} (${bytes} 字节)`;
-        },
       },
     ]);
 
