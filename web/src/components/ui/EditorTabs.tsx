@@ -1,7 +1,7 @@
 /**
  * EditorTabs — IDE 风格的文件标签栏
  *
- * 类似 VSCode 的 tabs，支持切换和关闭。
+ * 顶部展示当前 active path（面包屑），下方是 tab 切换栏。
  */
 import { useAtom } from "jotai";
 import { editorTabsAtom, activeFilePathAtom } from "../../store/session";
@@ -23,28 +23,33 @@ export function EditorTabs() {
     }
   };
 
+  /* 将 path 拆分为面包屑段 */
+
   return (
-    <div className="flex items-center border-b border-[var(--border)] bg-[var(--background)] overflow-x-auto scrollbar-hide shrink-0">
-      {tabs.map((tab) => (
-        <button
-          key={tab.path}
-          onClick={() => setActivePath(tab.path)}
-          className={cn(
-            "group flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-[var(--border)] transition-colors shrink-0 max-w-[180px]",
-            activePath === tab.path
-              ? "bg-[var(--background)] text-[var(--foreground)]"
-              : "bg-[var(--muted)]/50 text-[var(--muted-foreground)] hover:bg-[var(--accent)]/40",
-          )}
-        >
-          <span className="truncate">{tab.label}</span>
-          <span
-            onClick={(e) => handleClose(tab.path, e)}
-            className="rounded p-0.5 hover:bg-[var(--accent)] opacity-0 group-hover:opacity-100 transition-opacity"
+    <div className="shrink-0">
+      {/* Tab 栏 */}
+      <div className="flex items-center gap-1 px-1 py-1 overflow-x-auto scrollbar-hide">
+        {tabs.map((tab) => (
+          <button
+            key={tab.path}
+            onClick={() => setActivePath(tab.path)}
+            className={cn(
+              "group flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-sm transition-colors shrink-0 max-w-[180px]",
+              activePath === tab.path
+                ? "bg-[var(--accent)] text-[var(--foreground)] font-medium"
+                : "text-[var(--muted-foreground)] hover:bg-[var(--accent)]/50",
+            )}
           >
-            <X className="w-3 h-3" />
-          </span>
-        </button>
-      ))}
+            <span className="truncate">{tab.label}</span>
+            <span
+              onClick={(e) => handleClose(tab.path, e)}
+              className="rounded-xl p-0.5 hover:bg-[var(--background)] opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <X className="w-3 h-3" />
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

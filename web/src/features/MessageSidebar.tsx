@@ -107,6 +107,12 @@ export function MessageSidebar() {
     }, 300);
   }, [activeId, setSessions, setActiveFlow]);
 
+  /* activeId 变化时重新加载 flow 数据 */
+  useEffect(() => {
+    if (!activeId) return;
+    fetchFlow(activeId).then(setActiveFlow).catch(console.error);
+  }, [activeId]);
+
   /* SSE 实时更新 */
   useEffect(() => {
     if (!lastEvent) return;

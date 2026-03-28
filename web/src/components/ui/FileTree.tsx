@@ -2,9 +2,9 @@
  * FileTree — 通用文件目录树组件
  *
  * 递归展开/折叠，支持文件选中回调。
- * 复用 ProcessView 中 MiniTree 的交互模式。
+ * 右键菜单支持复制文件路径。
  */
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { cn } from "../../lib/utils";
 import {
   Folder,
@@ -18,6 +18,8 @@ import {
   GitBranch,
   LayoutList,
   Palette,
+  Copy,
+  Check,
 } from "lucide-react";
 import type { FileTreeNode } from "../../api/types";
 
@@ -29,8 +31,10 @@ interface FileTreeProps {
 }
 
 export function FileTree({ root, onSelect, selectedPath, defaultExpanded = true }: FileTreeProps) {
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; path: string } | null>(null);
+
   return (
-    <div className="text-xs select-none">
+    <div className="text-xs select-none relative" onClick={() => setContextMenu(null)}>
       {root.children?.map((child) => (
         <TreeNode
           key={child.path}
@@ -39,6 +43,10 @@ export function FileTree({ root, onSelect, selectedPath, defaultExpanded = true 
           selectedPath={selectedPath}
           depth={0}
           defaultExpanded={defaultExpanded}
+          onContextMenu={(e, path) => {
+            e.preventDefault();
+            setContextMenu({ x: e.clientX, y: e.clientY, path });
+          }}
         />
       )) ?? (
         <TreeNode
@@ -47,8 +55,69 @@ export function FileTree({ root, onSelect, selectedPath, defaultExpanded = true 
           selectedPath={selectedPath}
           depth={0}
           defaultExpanded={defaultExpanded}
+          onContextMenu={(e, path) => {
+            e.preventDefault();
+            setContextMenu({ x: e.clientX, y: e.clientY, path });
+          }}
         />
       )}
+
+      {/* 右键菜单 */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          path={contextMenu.path}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** 右键菜单 */
+function ContextMenu({ x, y, path, onClose }: { x: number; y: number; path: string; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
+
+  /* 点击外部关闭 */
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  /* Esc 关闭 */
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(path);
+    setCopied(true);
+    setTimeout(() => { setCopied(false); onClose(); }, 600);
+  };
+
+  return (
+    <div
+      ref={ref}
+      className="fixed z-50 bg-[var(--popover)] border border-[var(--border)] rounded-lg shadow-lg py-1 min-w-[160px]"
+      style={{ left: x, top: y }}
+    >
+      <button
+        onClick={handleCopy}
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left hover:bg-[var(--accent)] transition-colors"
+      >
+        {copied
+          ? <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+          : <Copy className="w-3.5 h-3.5 text-[var(--muted-foreground)] shrink-0" />
+        }
+        <span>{copied ? "已复制" : "复制路径"}</span>
+      </button>
     </div>
   );
 }
@@ -68,18 +137,19 @@ interface TreeNodeProps {
   selectedPath?: string;
   depth: number;
   defaultExpanded: boolean;
+  onContextMenu?: (e: React.MouseEvent, path: string) => void;
 }
 
-function TreeNode({ node, onSelect, selectedPath, depth, defaultExpanded }: TreeNodeProps) {
+function TreeNode({ node, onSelect, selectedPath, depth, defaultExpanded, onContextMenu }: TreeNodeProps) {
   const [expanded, setExpanded] = useState(defaultExpanded && depth < 1);
   const isDir = node.type === "directory";
   const isSelected = selectedPath === node.path;
 
   const handleClick = () => {
     if (isDir) {
-      /* 带 marker 的目录：展开 + 打开对应视图 */
+      /* 带 marker 的目录：切换展开 + 打开对应视图 */
       if (node.marker) {
-        if (!expanded) setExpanded(true);
+        setExpanded(!expanded);
         onSelect?.(node.path, node);
         return;
       }
@@ -93,6 +163,7 @@ function TreeNode({ node, onSelect, selectedPath, depth, defaultExpanded }: Tree
     <div>
       <button
         onClick={handleClick}
+        onContextMenu={(e) => onContextMenu?.(e, node.path)}
         className={cn(
           "w-full text-left flex items-center gap-1.5 py-[3px] px-1.5 rounded-[4px] transition-colors hover:bg-[var(--accent)]/60",
           isSelected && "bg-[var(--accent)] font-medium",
@@ -139,6 +210,7 @@ function TreeNode({ node, onSelect, selectedPath, depth, defaultExpanded }: Tree
               selectedPath={selectedPath}
               depth={depth + 1}
               defaultExpanded={defaultExpanded}
+              onContextMenu={onContextMenu}
             />
           ))}
         </div>

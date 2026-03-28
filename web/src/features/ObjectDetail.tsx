@@ -1,5 +1,5 @@
 /**
- * ObjectDetail —— 对象详情页（Readme/Data/Effects/Files/UI 标签页）
+ * ObjectDetail —— 对象详情页（Readme/Data/Effects/UI 标签页）
  *
  * @ref docs/哲学文档/gene.md#G1 — renders — 对象的完整组成（thinkable, talkable, data, traits, effects）
  * @ref docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达（含自定义 UI 标签页）
@@ -10,13 +10,13 @@ import { fetchObject } from "../api/client";
 import { ObjectReadmeView } from "./ObjectReadmeView";
 import { DataTab } from "./DataTab";
 import { EffectsTab } from "./EffectsTab";
-import { FilesTab } from "./FilesTab";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
+import { ObjectAvatar } from "../components/ui/ObjectAvatar";
 import { cn } from "../lib/utils";
 import { objectUIs, hasCustomUI } from "../objects";
 import type { StoneData } from "../api/types";
 
-const BASE_TABS = ["Readme", "Data", "Effects", "Files"] as const;
+const BASE_TABS = ["Readme", "Data", "Effects"] as const;
 type Tab = (typeof BASE_TABS)[number] | "Memory" | "UI";
 
 interface ObjectDetailProps {
@@ -55,36 +55,29 @@ export function ObjectDetail({ objectName, initialTab }: ObjectDetailProps) {
 
   return (
     <div className="h-full flex flex-col">
-      {/* 头部 */}
-      <div className="px-4 sm:px-8 pt-6 sm:pt-10 pb-0">
-        <h2
-          className="text-2xl sm:text-3xl font-bold"
-          style={{ fontFamily: "var(--heading-font)" }}
-        >
-          {stone.name}
-        </h2>
-        {stone.talkable.whoAmI && (
-          <p className="text-[var(--muted-foreground)] mt-1 text-sm sm:text-base">
-            {stone.talkable.whoAmI}
-          </p>
-        )}
-        {/* Tab 栏 — underline style, 移动端可横向滚动 */}
-        <div className="flex gap-0 mt-4 sm:mt-6 border-b border-[var(--border)] overflow-x-auto scrollbar-hide">
+      {/* 头部：左侧信息 + 右侧 Tabs 同行 */}
+      <div className="flex items-center justify-between px-4 sm:px-8 py-2 gap-4 border-b border-[var(--border)] shrink-0">
+        <div className="flex items-center gap-3 shrink-0 min-w-0">
+          <ObjectAvatar name={stone.name} size="md" />
+          <h2 className="text-lg sm:text-xl font-bold leading-none truncate" style={{ fontFamily: "var(--heading-font)" }}>
+            {stone.name}
+          </h2>
+        </div>
+
+        {/* Tab 按钮组 */}
+        <div className="flex items-center bg-[var(--accent)] rounded-lg p-0.5 overflow-x-auto scrollbar-hide">
           {tabs.map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={cn(
-                "px-3 pb-2 text-sm transition-colors relative whitespace-nowrap",
+                "px-3 py-1 text-xs rounded-md transition-all whitespace-nowrap",
                 tab === t
-                  ? "text-[var(--foreground)] font-medium"
+                  ? "bg-[var(--card)] text-[var(--foreground)] font-medium shadow-sm"
                   : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]",
               )}
             >
               {t}
-              {tab === t && (
-                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[var(--foreground)] rounded-full" />
-              )}
             </button>
           ))}
         </div>
@@ -95,7 +88,6 @@ export function ObjectDetail({ objectName, initialTab }: ObjectDetailProps) {
         {tab === "Readme" && <ObjectReadmeView objectName={objectName} />}
         {tab === "Data" && <DataTab data={stone.data} />}
         {tab === "Effects" && <EffectsTab objectName={objectName} />}
-        {tab === "Files" && <FilesTab objectName={objectName} />}
         {tab === "Memory" && stone.memory && (
           <div className="prose prose-sm max-w-none">
             <MarkdownContent content={stone.memory} />

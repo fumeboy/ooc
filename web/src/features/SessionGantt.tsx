@@ -1,48 +1,135 @@
 /**
  * SessionGantt — Session 级甘特图视图
  *
- * 横轴：时间线（session 的 createdAt → updatedAt）
- * 纵轴：每行一个参与的 Object
- * 条形：该 Object 的 actions，按 timestamp 排列，颜色按 action type 区分
+ * 每行一个参与的 Object，每个块代表一个 focus 事项（ProcessNode）。
+ * 块按开始时间排序后分列放置，固定宽度展示 title/summary。
+ * 点击块弹出模态卡片，可跳转到对应 Object 的 Process tab。
  *
- * 点击条形跳转到对应 Object 的 FlowView。
+ * @ref docs/哲学文档/gene.md#G9 — renders — 行为树节点可视化
  */
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { lastFlowEventAtom, editorTabsAtom, activeFilePathAtom } from "../store/session";
 import { fetchFlow } from "../api/client";
 import { StatusBadge } from "../components/ui/Badge";
+import { ObjectAvatar } from "../components/ui/ObjectAvatar";
 import { cn } from "../lib/utils";
-import type { FlowData, Action, ProcessNode } from "../api/types";
+import type { FlowData, ProcessNode } from "../api/types";
+import { X, ArrowRight } from "lucide-react";
 
-/** action type → 条形颜色 */
-const ACTION_COLORS: Record<string, string> = {
-  thought: "#d97706",
-  program: "#2563eb",
-  inject: "#ea580c",
-  message_in: "#16a34a",
-  message_out: "#0d9488",
-  pause: "#9ca3af",
-};
-const DEFAULT_COLOR = "#6b7280";
+/* ── 数据模型 ── */
 
-/** 从 process tree 递归收集所有 actions */
-function collectActions(node: ProcessNode): Action[] {
-  const actions: Action[] = [...(node.actions ?? [])];
-  for (const child of node.children ?? []) {
-    actions.push(...collectActions(child));
-  }
-  return actions;
+/** 甘特图块：对应一个 ProcessNode（focus 事项） */
+interface GanttBlock {
+  objectName: string;
+  nodeId: string;
+  title: string;
+  summary: string | null;
+  status: "todo" | "doing" | "done";
+  startTime: number;
+  endTime: number | null;
+  /** 布局算法计算出的列索引 */
+  column: number;
 }
 
-/** 每个 Object 的甘特行数据 */
+/** 每行一个 Object */
 interface GanttRow {
   objectName: string;
-  status: string;
-  actions: Action[];
-  minTime: number;
-  maxTime: number;
+  flowStatus: string;
+  blocks: GanttBlock[];
 }
+
+/* ── 状态颜色 ── */
+
+const STATUS_COLORS: Record<string, { bg: string; border: string; text: string }> = {
+  done: { bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-700" },
+  doing: { bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-700" },
+  todo: { bg: "bg-gray-50", border: "border-gray-200", text: "text-gray-500" },
+};
+
+/* ── 从 ProcessNode 递归收集所有非 root 节点 ── */
+
+function collectNodes(node: ProcessNode, objectName: string): GanttBlock[] {
+  const blocks: GanttBlock[] = [];
+
+  for (const child of node.children ?? []) {
+    const actions = child.actions ?? [];
+    const timestamps = actions.map((a) => a.timestamp).filter(Boolean);
+    const startTime = timestamps.length > 0 ? Math.min(...timestamps) : 0;
+    const endTime = child.status === "doing"
+      ? null
+      : timestamps.length > 0 ? Math.max(...timestamps) : startTime;
+
+    if (startTime > 0 || child.status !== "todo") {
+      blocks.push({
+        objectName,
+        nodeId: child.id,
+        title: child.title,
+        summary: child.summary ?? null,
+        status: child.status,
+        startTime,
+        endTime,
+        column: 0,
+      });
+    }
+
+    /* 递归收集子节点 */
+    blocks.push(...collectNodes(child, objectName));
+  }
+
+  return blocks;
+}
+
+/* ── 列布局算法 ── */
+
+function assignColumns(blocks: GanttBlock[]): number {
+  if (blocks.length === 0) return 0;
+
+  /* 按开始时间排序 */
+  const sorted = [...blocks].sort((a, b) => a.startTime - b.startTime);
+
+  let columnIndex = 0;
+  /** 每列中已放置块的最小结束时间 */
+  let minEndTime = Infinity;
+
+  for (const block of sorted) {
+    /* 第一个块或结束时间未知时，初始化 minEndTime */
+    if (minEndTime === Infinity) {
+      minEndTime = block.endTime ?? Infinity;
+      block.column = columnIndex;
+      continue;
+    }
+
+    if (block.startTime > minEndTime) {
+      columnIndex++;
+    }
+
+    block.column = columnIndex;
+
+    const blockEnd = block.endTime ?? Infinity;
+    if (blockEnd < minEndTime) {
+      minEndTime = blockEnd;
+    }
+  }
+
+  return columnIndex + 1;
+}
+
+/* ── 格式化时间 ── */
+
+function formatTime(ts: number): string {
+  const d = new Date(ts);
+  return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+/* ── 块宽度（固定） ── */
+const BLOCK_W = 120;
+const BLOCK_H = 40;
+const BLOCK_GAP = 4;
+const COL_W = BLOCK_W + BLOCK_GAP;
+const LABEL_W = 140;
+
+/* ── 主组件 ── */
 
 interface SessionGanttProps {
   sessionId: string;
@@ -50,10 +137,10 @@ interface SessionGanttProps {
 
 export function SessionGantt({ sessionId }: SessionGanttProps) {
   const [flow, setFlow] = useState<FlowData | null>(null);
+  const [selectedBlock, setSelectedBlock] = useState<GanttBlock | null>(null);
   const lastEvent = useAtomValue(lastFlowEventAtom);
   const setTabs = useSetAtom(editorTabsAtom);
   const setActivePath = useSetAtom(activeFilePathAtom);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   /* 加载 flow 数据 */
   useEffect(() => {
@@ -70,57 +157,60 @@ export function SessionGantt({ sessionId }: SessionGanttProps) {
   }, [lastEvent, sessionId]);
 
   /* 构建甘特行数据 */
-  const { rows, globalMin, globalMax } = useMemo(() => {
-    if (!flow) return { rows: [], globalMin: 0, globalMax: 0 };
+  const { rows, totalColumns } = useMemo(() => {
+    if (!flow) return { rows: [], totalColumns: 0 };
 
-    const rowMap = new Map<string, GanttRow>();
+    const allBlocks: GanttBlock[] = [];
+    const rowMap = new Map<string, { flowStatus: string }>();
 
     /* 主 flow */
-    const mainActions = collectActions(flow.process.root);
-    if (mainActions.length > 0) {
-      rowMap.set(flow.stoneName, {
-        objectName: flow.stoneName,
-        status: flow.status,
-        actions: mainActions,
-        minTime: Math.min(...mainActions.map((a) => a.timestamp)),
-        maxTime: Math.max(...mainActions.map((a) => a.timestamp)),
-      });
+    const mainBlocks = collectNodes(flow.process.root, flow.stoneName);
+    allBlocks.push(...mainBlocks);
+    if (mainBlocks.length > 0) {
+      rowMap.set(flow.stoneName, { flowStatus: flow.status });
     }
 
     /* sub-flows */
     for (const sf of flow.subFlows ?? []) {
       if (sf.stoneName === flow.stoneName) continue;
-      const actions = collectActions(sf.process.root);
-      if (actions.length > 0) {
-        rowMap.set(sf.stoneName, {
-          objectName: sf.stoneName,
-          status: sf.status,
-          actions,
-          minTime: Math.min(...actions.map((a) => a.timestamp)),
-          maxTime: Math.max(...actions.map((a) => a.timestamp)),
-        });
+      const blocks = collectNodes(sf.process.root, sf.stoneName);
+      allBlocks.push(...blocks);
+      if (blocks.length > 0) {
+        rowMap.set(sf.stoneName, { flowStatus: sf.status });
       }
     }
 
-    const rows = Array.from(rowMap.values()).sort((a, b) => a.minTime - b.minTime);
-    const allTimes = rows.flatMap((r) => [r.minTime, r.maxTime]);
-    const globalMin = allTimes.length > 0 ? Math.min(...allTimes) : 0;
-    const globalMax = allTimes.length > 0 ? Math.max(...allTimes) : 0;
+    /* 分配列 */
+    const totalColumns = assignColumns(allBlocks);
 
-    return { rows, globalMin, globalMax };
+    /* 按 Object 分组 */
+    const rows: GanttRow[] = [];
+    for (const [objectName, meta] of rowMap) {
+      const blocks = allBlocks
+        .filter((b) => b.objectName === objectName)
+        .sort((a, b) => a.column - b.column || a.startTime - b.startTime);
+      rows.push({ objectName, flowStatus: meta.flowStatus, blocks });
+    }
+
+    /* 按第一个块的开始时间排序 */
+    rows.sort((a, b) => {
+      const aMin = a.blocks[0]?.startTime ?? 0;
+      const bMin = b.blocks[0]?.startTime ?? 0;
+      return aMin - bMin;
+    });
+
+    return { rows, totalColumns };
   }, [flow]);
 
-  /* 点击 action → 跳转到对应 FlowView */
-  const navigateToFlow = (objectName: string) => {
-    const path = `flows/${sessionId}/flows/${objectName}`;
+  /* 跳转到 Object 的 Process tab */
+  const navigateToProcess = (objectName: string) => {
+    const path = `flows/${sessionId}/flows/${objectName}/process.json`;
     setActivePath(path);
     setTabs((prev) => {
-      if (prev.some((t) => t.path.startsWith(`flows/${sessionId}/flows/${objectName}`))) {
-        return prev.map((t) =>
-          t.path.startsWith(`flows/${sessionId}/flows/${objectName}`)
-            ? { ...t, path }
-            : t,
-        );
+      const parentPath = `flows/${sessionId}/flows/${objectName}`;
+      const existing = prev.find((t) => t.path.startsWith(parentPath));
+      if (existing) {
+        return prev.map((t) => t === existing ? { ...t, path } : t);
       }
       return [...prev, { path, label: objectName }];
     });
@@ -141,16 +231,6 @@ export function SessionGantt({ sessionId }: SessionGanttProps) {
       </div>
     );
   }
-
-  const timeSpan = globalMax - globalMin || 1;
-  /* 给两端留 5% 的 padding */
-  const padded = timeSpan * 0.05;
-  const tMin = globalMin - padded;
-  const tMax = globalMax + padded;
-  const tSpan = tMax - tMin;
-
-  /* 时间轴刻度 */
-  const ticks = generateTicks(globalMin, globalMax, 6);
 
   return (
     <div className="h-full flex flex-col">
@@ -173,148 +253,166 @@ export function SessionGantt({ sessionId }: SessionGanttProps) {
         )}
 
         {/* 图例 */}
-        <div className="flex flex-wrap gap-3 mt-4">
-          {Object.entries(ACTION_COLORS).map(([type, color]) => (
-            <div key={type} className="flex items-center gap-1.5">
-              <span
-                className="w-3 h-2 rounded-sm"
-                style={{ backgroundColor: color }}
-              />
-              <span className="text-[10px] text-[var(--muted-foreground)]">{type}</span>
+        <div className="flex gap-4 mt-4">
+          {Object.entries(STATUS_COLORS).map(([status, colors]) => (
+            <div key={status} className="flex items-center gap-1.5">
+              <span className={cn("w-3 h-2 rounded-sm border", colors.bg, colors.border)} />
+              <span className="text-[10px] text-[var(--muted-foreground)]">{status}</span>
             </div>
           ))}
         </div>
       </div>
 
       {/* 甘特图区域 */}
-      <div ref={containerRef} className="flex-1 overflow-auto px-4 sm:px-8 pb-8">
-        {/* 时间轴刻度 */}
-        <div className="flex ml-[120px] sm:ml-[160px] mb-1 relative h-5">
-          {ticks.map((t) => {
-            const left = ((t - tMin) / tSpan) * 100;
-            return (
-              <span
-                key={t}
-                className="absolute text-[10px] text-[var(--muted-foreground)] -translate-x-1/2 whitespace-nowrap"
-                style={{ left: `${left}%` }}
-              >
-                {formatTime(t)}
-              </span>
-            );
-          })}
-        </div>
-
-        {/* 行 */}
-        <div className="space-y-1">
+      <div className="flex-1 overflow-auto px-4 sm:px-8 pb-8">
+        <div className="space-y-2">
           {rows.map((row) => (
-            <GanttRowView
-              key={row.objectName}
-              row={row}
-              tMin={tMin}
-              tSpan={tSpan}
-              onClick={() => navigateToFlow(row.objectName)}
-            />
+            <div key={row.objectName} className="flex items-start gap-0">
+              {/* Object 标签 */}
+              <div
+                className="shrink-0 flex items-center gap-2 px-2 py-2 text-xs"
+                style={{ width: LABEL_W }}
+              >
+                <ObjectAvatar name={row.objectName} size="sm" />
+                <div className="min-w-0">
+                  <span className="block truncate font-medium">{row.objectName}</span>
+                  <span className={cn(
+                    "text-[10px]",
+                    row.flowStatus === "finished" ? "text-emerald-600"
+                      : row.flowStatus === "running" ? "text-amber-600"
+                      : row.flowStatus === "failed" ? "text-red-600"
+                      : "text-[var(--muted-foreground)]",
+                  )}>
+                    {row.flowStatus}
+                  </span>
+                </div>
+              </div>
+
+              {/* 块区域 */}
+              <div
+                className="flex flex-wrap gap-1 py-1"
+                style={{ minWidth: totalColumns * COL_W }}
+              >
+                {row.blocks.map((block) => {
+                  const colors = STATUS_COLORS[block.status] ?? STATUS_COLORS.todo!;
+                  return (
+                    <button
+                      key={block.nodeId}
+                      onClick={() => setSelectedBlock(block)}
+                      className={cn(
+                        "rounded-md border px-2 py-1 text-left transition-all hover:shadow-sm hover:scale-[1.02] cursor-pointer",
+                        colors.bg, colors.border,
+                      )}
+                      style={{ width: BLOCK_W, height: BLOCK_H }}
+                      title={block.title}
+                    >
+                      <span className={cn("block text-[11px] font-medium truncate", colors.text)}>
+                        {block.title}
+                      </span>
+                      {block.summary && (
+                        <span className="block text-[9px] text-[var(--muted-foreground)] truncate">
+                          {block.summary}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           ))}
         </div>
       </div>
+
+      {/* 模态卡片 */}
+      {selectedBlock && (
+        <SummaryModal
+          block={selectedBlock}
+          onClose={() => setSelectedBlock(null)}
+          onNavigate={() => {
+            navigateToProcess(selectedBlock.objectName);
+            setSelectedBlock(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-/** 单行甘特图 */
-function GanttRowView({
-  row,
-  tMin,
-  tSpan,
-  onClick,
+/* ── Summary 模态卡片 ── */
+
+function SummaryModal({
+  block,
+  onClose,
+  onNavigate,
 }: {
-  row: GanttRow;
-  tMin: number;
-  tSpan: number;
-  onClick: () => void;
+  block: GanttBlock;
+  onClose: () => void;
+  onNavigate: () => void;
 }) {
-  const [hovered, setHovered] = useState<Action | null>(null);
+  const colors = STATUS_COLORS[block.status] ?? STATUS_COLORS.todo!;
 
   return (
-    <div className="flex items-center gap-0 group">
-      {/* Object 名称 */}
-      <button
-        onClick={onClick}
-        className="w-[120px] sm:w-[160px] shrink-0 text-left text-xs truncate px-2 py-2 rounded-l-lg hover:bg-[var(--accent)]/60 transition-colors flex items-center gap-2"
-      >
-        <span className={cn(
-          "w-2 h-2 rounded-full shrink-0",
-          row.status === "finished" ? "bg-green-500"
-            : row.status === "running" ? "bg-[var(--warm)]"
-            : row.status === "failed" ? "bg-red-500"
-            : "bg-[var(--muted-foreground)] opacity-40",
-        )} />
-        <span className="truncate">{row.objectName}</span>
-        <span className="text-[10px] text-[var(--muted-foreground)] ml-auto shrink-0">
-          {row.actions.length}
-        </span>
-      </button>
-
-      {/* 甘特条形区域 */}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+      onClick={onClose}
+    >
       <div
-        className="flex-1 relative h-8 bg-[var(--accent)]/20 rounded-r-lg border-l border-[var(--border)]"
+        className="bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xl w-[400px] max-w-[90vw] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
       >
-        {row.actions.map((action, i) => {
-          const left = ((action.timestamp - tMin) / tSpan) * 100;
-          const color = ACTION_COLORS[action.type] ?? DEFAULT_COLOR;
-          /* 条形宽度：用一个最小宽度，避免太窄看不见 */
-          const minWidthPx = 4;
-
-          return (
-            <div
-              key={i}
-              className="absolute top-1 bottom-1 rounded-sm cursor-pointer transition-opacity hover:opacity-80"
-              style={{
-                left: `${left}%`,
-                minWidth: `${minWidthPx}px`,
-                width: `${minWidthPx}px`,
-                backgroundColor: color,
-              }}
-              title={`${action.type} @ ${formatTime(action.timestamp)}${action.content ? "\n" + action.content.slice(0, 80) : ""}`}
-              onMouseEnter={() => setHovered(action)}
-              onMouseLeave={() => setHovered(null)}
-              onClick={(e) => { e.stopPropagation(); onClick(); }}
-            />
-          );
-        })}
-
-        {/* Hover tooltip */}
-        {hovered && (
-          <div className="absolute z-20 top-full mt-1 left-1/2 -translate-x-1/2 bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg px-3 py-2 text-xs max-w-[300px] pointer-events-none">
-            <div className="flex items-center gap-2 mb-1">
-              <span
-                className="w-2 h-2 rounded-sm"
-                style={{ backgroundColor: ACTION_COLORS[hovered.type] ?? DEFAULT_COLOR }}
-              />
-              <span className="font-medium">{hovered.type}</span>
-              <span className="text-[var(--muted-foreground)] ml-auto">{formatTime(hovered.timestamp)}</span>
+        {/* 头部 */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
+          <div className="flex items-center gap-3 min-w-0">
+            <ObjectAvatar name={block.objectName} size="sm" />
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold truncate">{block.title}</h3>
+              <span className="text-[10px] text-[var(--muted-foreground)]">{block.objectName}</span>
             </div>
-            {hovered.content && (
-              <p className="text-[var(--muted-foreground)] line-clamp-3 whitespace-pre-wrap">
-                {hovered.content.slice(0, 200)}
-              </p>
-            )}
           </div>
-        )}
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* 内容 */}
+        <div className="px-5 py-4 space-y-3">
+          {/* 状态 */}
+          <div className="flex items-center gap-2">
+            <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium border", colors.bg, colors.border, colors.text)}>
+              {block.status}
+            </span>
+            <span className="text-[10px] text-[var(--muted-foreground)]">
+              {formatTime(block.startTime)}
+              {block.endTime ? ` → ${formatTime(block.endTime)}` : " → 进行中"}
+            </span>
+          </div>
+
+          {/* Summary */}
+          {block.summary ? (
+            <p className="text-sm text-[var(--foreground)] leading-relaxed whitespace-pre-wrap">
+              {block.summary}
+            </p>
+          ) : (
+            <p className="text-sm text-[var(--muted-foreground)] italic">
+              {block.status === "doing" ? "正在执行中..." : "暂无摘要"}
+            </p>
+          )}
+        </div>
+
+        {/* 底部操作 */}
+        <div className="px-5 py-3 border-t border-[var(--border)] flex justify-end">
+          <button
+            onClick={onNavigate}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 transition-opacity"
+          >
+            查看 Process
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   );
-}
-
-/** 生成时间轴刻度 */
-function generateTicks(min: number, max: number, count: number): number[] {
-  if (min === max) return [min];
-  const step = (max - min) / (count - 1);
-  return Array.from({ length: count }, (_, i) => min + step * i);
-}
-
-/** 格式化时间戳为 HH:MM:SS */
-function formatTime(ts: number): string {
-  const d = new Date(ts);
-  return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }

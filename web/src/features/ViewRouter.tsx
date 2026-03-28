@@ -53,10 +53,6 @@ function parseRoute(path: string): {
   const stoneTraitsMatch = path.match(/^stones\/([^/]+)\/traits/);
   if (stoneTraitsMatch) return { type: "stone", objectName: stoneTraitsMatch[1], initialTab: "Effects" };
 
-  /* stones/{objectId}/files — 指向 StoneView Files tab */
-  const stoneFilesMatch = path.match(/^stones\/([^/]+)\/files/);
-  if (stoneFilesMatch) return { type: "stone", objectName: stoneFilesMatch[1], initialTab: "Files" };
-
   /* flows/{sessionId}/flows/{objectName}/files/ui — Flow UI tab */
   const flowUIMatch = path.match(/^flows\/([^/]+)\/flows\/([^/]+)\/files\/ui$/);
   if (flowUIMatch) return { type: "flow-detail", sessionId: flowUIMatch[1], objectName: flowUIMatch[2], initialTab: "UI" };

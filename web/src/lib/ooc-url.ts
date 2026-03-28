@@ -17,7 +17,7 @@ export function parseOocUrl(url: string): OocUrl | null {
     return { type: "object", name: objectMatch[1]! };
   }
 
-  const fileMatch = url.match(/^ooc:\/\/file\/(?:objects|stones)\/([^/]+)\/files\/(.+)$/);
+  const fileMatch = url.match(/^ooc:\/\/file\/(?:objects|stones)\/([^/]+)\/(?:files|shared)\/(.+)$/);
   if (fileMatch) {
     return { type: "file", objectName: fileMatch[1]!, filename: decodeURIComponent(fileMatch[2]!) };
   }

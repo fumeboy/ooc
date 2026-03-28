@@ -23,7 +23,7 @@ import type { AppTab } from "./store/session";
 import { fetchObjects, fetchProjectTree, updateFlowTitle } from "./api/client";
 import type { FileTreeNode } from "./api/types";
 import { ChatPage } from "./features/ChatPage";
-import { ViewRouter } from "./features/ViewRouter";
+import { viewRegistry, registerAllViews } from "./router";
 import { SessionsList } from "./features/SessionsList";
 import { SessionFileTree } from "./features/SessionFileTree";
 import { MessageSidebar } from "./features/MessageSidebar";
@@ -36,7 +36,11 @@ import { CommandPalette } from "./components/CommandPalette";
 import { OocLogo } from "./components/OocLogo";
 import { Sheet, SheetContent, SheetTrigger } from "./components/ui/sheet";
 import { cn } from "./lib/utils";
-import { GitBranch, Box, Globe, List, Menu, RotateCw, ChevronDown } from "lucide-react";
+import { GitBranch, Box, Globe, List, Menu, RotateCw, ChevronDown, ChevronRight } from "lucide-react";
+import bgSvg from "./assets/bg.svg";
+
+/* 初始化视图注册表（只执行一次） */
+registerAllViews();
 
 const TABS: { id: AppTab; label: string; icon: typeof GitBranch }[] = [
   { id: "flows", label: "Flows", icon: GitBranch },
@@ -97,51 +101,36 @@ export function App() {
     }
   };
 
-  /* 打开文件 tab */
+  /* 打开文件 tab（通过 ViewRegistry 统一路由） */
   const openFileTab = useCallback((path: string, node: FileTreeNode) => {
-    /* Flow 子文件（ui/data.json/process.json）→ 合并到 FlowView tab */
-    const flowSubMatch = path.match(/^(flows\/[^/]+\/flows\/[^/]+)\/(files\/ui|data\.json|process\.json)$/);
-    if (flowSubMatch) {
-      const parentPath = flowSubMatch[1]!;
-      const parentName = parentPath.split("/").pop()!;
-      /* 用原始 path 作为 activePath（ViewRouter 据此选择 initialTab），但 tab 用父路径 */
-      setActivePath(path);
-      setTabs((prev) => {
-        /* 如果父 tab 已存在，更新其 path 以触发 initialTab 切换 */
-        const existing = prev.find((t) => t.path.startsWith(parentPath));
-        if (existing) {
-          return prev.map((t) => t === existing ? { ...t, path } : t);
-        }
-        return [...prev, { path, label: parentName }];
-      });
-      if (isMobile) setSheetOpen(false);
-      return;
+    /* .stone 虚拟节点在 Flows 上下文中 → 重定向到 FlowView 路径 */
+    let resolvedPath = path;
+    if (activeTab === "flows" && activeId && node.marker === "stone") {
+      const stoneMatch = path.match(/^stones\/([^/]+)$/);
+      if (stoneMatch) {
+        resolvedPath = `flows/${activeId}/flows/${stoneMatch[1]!}`;
+      }
     }
 
-    /* Stone 子文件（readme.md/data.json/traits/files）→ 合并到 StoneView tab */
-    const stoneSubMatch = path.match(/^(stones\/[^/]+)\/(readme\.md|data\.json|traits|files)/);
-    if (stoneSubMatch) {
-      const parentPath = stoneSubMatch[1]!;
-      const parentName = parentPath.split("/").pop()!;
-      setActivePath(path);
-      setTabs((prev) => {
-        const existing = prev.find((t) => t.path.startsWith(parentPath));
-        if (existing) {
-          return prev.map((t) => t === existing ? { ...t, path } : t);
-        }
-        return [...prev, { path, label: parentName }];
-      });
-      if (isMobile) setSheetOpen(false);
-      return;
-    }
+    const result = viewRegistry.resolve(resolvedPath);
+    if (!result) return;
 
-    setActivePath(path);
+    const { tabKey, tabLabel } = result;
+    setActivePath(resolvedPath);
     setTabs((prev) => {
-      if (prev.some((t) => t.path === path)) return prev;
-      return [...prev, { path, label: node.name }];
+      const existing = prev.find((t) => {
+        /* 用 tabKey 匹配：检查已有 tab 的 tabKey 是否相同 */
+        const existingResult = viewRegistry.resolve(t.path);
+        return existingResult && existingResult.tabKey === tabKey;
+      });
+      if (existing) {
+        /* 复用已有 tab，更新 path（触发组件内部子路由切换） */
+        return prev.map((t) => t === existing ? { ...t, path: resolvedPath } : t);
+      }
+      return [...prev, { path: resolvedPath, label: tabLabel }];
     });
     if (isMobile) setSheetOpen(false);
-  }, [setActivePath, setTabs, isMobile]);
+  }, [activeTab, activeId, setActivePath, setTabs, isMobile]);
 
   /* 侧边栏文件树内容 */
   const renderSidebarTree = () => {
@@ -186,24 +175,42 @@ export function App() {
       return <ChatPage />;
     }
 
-    /* 如果有打开的 editor tab，展示 ViewRouter */
+    /* 如果有打开的 editor tab，通过 ViewRegistry 渲染 */
     if (activePath && tabs.length > 0) {
+      const resolved = viewRegistry.resolve(activePath);
+      const ViewComponent = resolved?.registration.component;
+
       return (
-        <div className="flex flex-col h-full">
-          <div className="flex items-center shrink-0">
+        <div className="flex flex-col h-full gap-2 p-2">
+          <div className="flex items-center shrink-0 rounded-md bg-[var(--card)] border border-[var(--border)]">
             <div className="flex-1 overflow-hidden">
               <EditorTabs />
             </div>
             <button
               onClick={() => setRefreshKey((k) => k + 1)}
-              className="px-2 py-1.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)]/40 transition-colors shrink-0"
+              className="px-2 py-1.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)]/40 transition-colors shrink-0 rounded-lg mr-1"
               title="刷新内容"
             >
               <RotateCw className="w-3.5 h-3.5" />
             </button>
           </div>
-          <div className="flex-1 overflow-auto">
-            <ViewRouter filePath={activePath} />
+
+          {/* 路径面包屑 */}
+          <div className="flex items-center gap-0.5 px-2 text-[10px] text-[var(--muted-foreground)] overflow-x-auto scrollbar-hide shrink-0">
+            {activePath!.split("/").filter(Boolean).map((seg, i, arr) => (
+              <span key={i} className="flex items-center gap-0.5 shrink-0">
+                {i > 0 && <ChevronRight className="w-2.5 h-2.5 opacity-40" />}
+                <span className={i === arr.length - 1 ? "text-[var(--foreground)]" : ""}>{seg}</span>
+              </span>
+            ))}
+          </div>
+
+          <div className="flex-1 overflow-auto rounded-md bg-[var(--card)] border border-[var(--border)]">
+            {ViewComponent ? <ViewComponent path={activePath} /> : (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-sm text-[var(--muted-foreground)]">无法识别的路径: {activePath}</p>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -293,7 +300,21 @@ export function App() {
   );
 
   return (
-    <div className="relative flex h-screen overflow-hidden bg-[var(--background)]">
+    <div
+      className="relative flex h-screen overflow-hidden bg-[var(--background)]"
+    >
+      {/* 全局 SVG 背景层 */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{
+          backgroundImage: `url(${bgSvg})`,
+          backgroundSize: "300px",
+          backgroundRepeat: "repeat",
+          backgroundPosition: "center",
+          opacity: 0.03,
+        }}
+      />
       {/* ====== 移动端顶部栏 ====== */}
       {isMobile && (
         <div className="fixed top-0 left-0 right-0 z-40 flex items-center gap-3 px-4 h-12 bg-[var(--background)] border-b border-[var(--border)] safe-top">
@@ -330,15 +351,12 @@ export function App() {
         </aside>
       )}
 
-      {/* ====== 右侧主内容区（页中页样式） ====== */}
+      {/* ====== 右侧主内容区 ====== */}
       <main
         className={cn(
           "relative z-10 flex-1 overflow-hidden",
-          isMobile
-            ? "mt-12 safe-bottom"
-            : "my-3 mx-1 rounded-xl border",
+          isMobile && "mt-12 safe-bottom",
         )}
-        style={isMobile ? {} : { backgroundColor: "#fefefe", borderColor: "#eee" }}
       >
         {/* 纹理背景层 */}
         <div

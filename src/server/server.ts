@@ -911,18 +911,23 @@ function handleOocResolve(oocUrl: string, world: World): Response {
     return json({ success: true, data: { type: "object", ...stone.toJSON() } });
   }
 
-  /* ooc://file/objects/{name}/files/{path} 或 ooc://file/stones/{name}/files/{path} */
-  const fileMatch = oocUrl.match(/^ooc:\/\/file\/(?:objects|stones)\/([^/]+)\/files\/(.+)$/);
+  /* ooc://file/objects/{name}/files/{path} 或 ooc://file/stones/{name}/files/{path}（兼容旧 shared 路径） */
+  const fileMatch = oocUrl.match(/^ooc:\/\/file\/(?:objects|stones)\/([^/]+)\/(?:files|shared)\/(.+)$/);
   if (fileMatch) {
     const objectName = fileMatch[1]!;
     const filename = decodeURIComponent(fileMatch[2]!);
     const stone = world.getObject(objectName);
     if (!stone) return errorResponse(`对象 "${objectName}" 不存在`, 404);
-    const filePath = join(stone.dir, "files", filename);
+    /* 优先查找 files/ 目录，fallback 到 stone 根目录 */
+    let filePath = join(stone.dir, "files", filename);
+    let baseDir = join(stone.dir, "files");
+    if (!existsSync(filePath)) {
+      filePath = join(stone.dir, filename);
+      baseDir = stone.dir;
+    }
     if (!existsSync(filePath)) return errorResponse(`文件 "${filename}" 不存在`, 404);
     /* 安全检查 */
-    const filesDir = join(stone.dir, "files");
-    if (!filePath.startsWith(filesDir)) return errorResponse("非法路径", 403);
+    if (!filePath.startsWith(baseDir)) return errorResponse("非法路径", 403);
     const content = readFileSync(filePath, "utf-8");
     return json({ success: true, data: { type: "file", objectName, filename, content } });
   }
