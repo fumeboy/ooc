@@ -1,10 +1,10 @@
 /**
  * 消息路由器 (G8 — 对象协作)
  *
- * 管理对象间的消息路由，支持 A→B 对话和共享文件读写。
+ * 管理对象间的消息路由，支持 A→B 对话和文件读写。
  * talk() 是同步消息投递（fire-and-forget），立即返回状态字符串。
  *
- * @ref docs/哲学文档/gene.md#G8 — implements — 三种 Effect 方向（talk 消息、readShared/writeShared 共享文件）
+ * @ref docs/哲学文档/gene.md#G8 — implements — 三种 Effect 方向（talk 消息、readShared/writeShared 文件）
  * @ref src/flow/flow.ts — references — Flow.deliverMessage 消息投递
  */
 
@@ -16,9 +16,9 @@ import { consola } from "consola";
 export interface CollaborationAPI {
   /** 向另一个对象发消息（同步投递，fire-and-forget） */
   talk: (message: string, target: string, replyTo?: string) => string;
-  /** 读取指定对象的 shared 文件 */
+  /** 读取指定对象的 files 文件 */
   readShared: (targetName: string, filename: string) => string | null;
-  /** 写入自己的 shared 文件 */
+  /** 写入自己的 files 文件 */
   writeShared: (filename: string, content: string) => void;
   /** 向自己的 SelfMeta Flow 发消息（自我对话，双向） */
   talkToSelf: (message: string) => string;
@@ -72,7 +72,7 @@ export function createCollaborationAPI(
   currentFlowTaskId?: string,
   sessionId?: string,
 ): CollaborationAPI {
-  const currentSharedDir = join(currentObjectDir, "shared");
+  const currentFilesDir = join(currentObjectDir, "files");
 
   /** 对话轮次计数器 —— 优先使用共享计数器，否则创建局部计数器（兼容测试场景） */
   const counter = roundCounter ?? { count: 0 };
@@ -109,7 +109,7 @@ export function createCollaborationAPI(
         return null;
       }
 
-      const filePath = join(targetDir, "shared", filename);
+      const filePath = join(targetDir, "files", filename);
       if (!existsSync(filePath)) return null;
 
       try {
@@ -120,10 +120,10 @@ export function createCollaborationAPI(
     },
 
     writeShared: (filename: string, content: string): void => {
-      if (!existsSync(currentSharedDir)) {
-        mkdirSync(currentSharedDir, { recursive: true });
+      if (!existsSync(currentFilesDir)) {
+        mkdirSync(currentFilesDir, { recursive: true });
       }
-      const filePath = join(currentSharedDir, filename);
+      const filePath = join(currentFilesDir, filename);
       writeFileSync(filePath, content, "utf-8");
       consola.info(`[Router] writeShared: ${currentObjectName} → ${filename}`);
     },

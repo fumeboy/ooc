@@ -241,19 +241,26 @@ function parseFirstParam(source: string): Map<string, boolean> {
 }
 
 /**
- * 加载一个对象的所有 Traits（对象自身 + kernel）
+ * 加载一个对象的所有 Traits（kernel → library → 对象自身）
+ *
+ * 加载优先级（同名后者覆盖前者）：
+ * 1. kernel traits — 系统级基础能力
+ * 2. library traits — 用户级公共能力
+ * 3. object traits — 对象自定义能力
  *
  * @param objectTraitsDir - 对象的 traits/ 目录
  * @param kernelTraitsDir - kernel traits 目录
- * @returns 合并后的 Trait 列表（同名时对象版本覆盖 kernel）
+ * @param libraryTraitsDir - library traits 目录（可选）
+ * @returns 合并后的 Trait 列表
  */
 export async function loadAllTraits(
   objectTraitsDir: string,
   kernelTraitsDir: string,
+  libraryTraitsDir?: string,
 ): Promise<TraitDefinition[]> {
   const traitMap = new Map<string, TraitDefinition>();
 
-  /* 先加载 kernel traits */
+  /* 1. 加载 kernel traits */
   if (existsSync(kernelTraitsDir)) {
     const kernelNames = readdirSync(kernelTraitsDir, { withFileTypes: true })
       .filter((d) => d.isDirectory())
@@ -265,7 +272,19 @@ export async function loadAllTraits(
     }
   }
 
-  /* 再加载对象 traits（同名覆盖 kernel） */
+  /* 2. 加载 library traits（同名覆盖 kernel） */
+  if (libraryTraitsDir && existsSync(libraryTraitsDir)) {
+    const libraryNames = readdirSync(libraryTraitsDir, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+
+    for (const name of libraryNames) {
+      const trait = await loadTrait(join(libraryTraitsDir, name), name);
+      if (trait) traitMap.set(name, trait);
+    }
+  }
+
+  /* 3. 加载对象 traits（同名覆盖 library 和 kernel） */
   if (existsSync(objectTraitsDir)) {
     const objectNames = readdirSync(objectTraitsDir, { withFileTypes: true })
       .filter((d) => d.isDirectory())

@@ -2,8 +2,8 @@
  * DynamicUI — 统一动态加载自渲染 UI 组件
  *
  * 支持 Stone 级别和 Flow 级别的动态 import：
- * - Stone: @stones/{name}/shared/ui/index.tsx
- * - Flow:  @flows/{sid}/flows/{name}/shared/ui/index.tsx
+ * - Stone: @stones/{name}/files/ui/index.tsx
+ * - Flow:  @flows/{sid}/flows/{name}/files/ui/index.tsx
  *
  * 使用 Vite define 注入的 __OOC_ROOT__ 构建 /@fs/ 绝对 URL，
  * 绕过 @vite-ignore 导致的路径解析问题。

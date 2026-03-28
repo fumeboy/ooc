@@ -4,7 +4,7 @@
  * 用于 ProcessView 和 ChatPage Timeline 两处渲染。
  * 包含工具栏：ID 显示、Zoom-in、Copy、Ref 按钮。
  */
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { cn } from "../../lib/utils";
 import { MarkdownContent } from "./MarkdownContent";
 import { ObjectAvatar } from "./ObjectAvatar";
@@ -104,6 +104,14 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef }: Actio
   const [sheetOpen, setSheetOpen] = useState(false);
   const [focused, setFocused] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [overflows, setOverflows] = useState(false);
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    setOverflows(el.scrollHeight > el.clientHeight);
+  });
 
   const isProgram = action.type === "program";
   const badgeColor = ACTION_BADGE[action.type] ?? DEFAULT_BADGE;
@@ -201,7 +209,7 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef }: Actio
           />
           {isProgram ? (
             <div className="flex divide-x divide-[var(--border)]">
-              <div className="flex-1 min-w-0" style={{ maxHeight: `${typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight}`, overflow: bodyOverflow }}>
+              <div ref={contentRef} className="flex-1 min-w-0" style={{ maxHeight: `${typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight}`, overflow: bodyOverflow }}>
                 <div className="px-3 py-2">
                   <p className="text-[10px] text-[var(--muted-foreground)] mb-1 font-medium flex items-center">
                     Program
@@ -223,16 +231,22 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef }: Actio
               )}
             </div>
           ) : (
-            <div style={{ maxHeight: `${typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight}`, overflow: bodyOverflow }}>
+            <div ref={contentRef} style={{ maxHeight: `${typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight}`, overflow: bodyOverflow }}>
               <div className="px-3 py-4">
                 <MarkdownContent content={action.content} className="text-sm leading-relaxed" />
               </div>
             </div>
           )}
           {/* Click to Scroll 提示 */}
-          {hovered && !focused && (
-            <div className="absolute bottom-0 left-0 right-0 flex items-end justify-center pb-2 pt-8 pointer-events-none"
-              style={{ background: "linear-gradient(transparent, var(--card))", borderRadius: `0 0 ${R}px ${R}px` }}>
+          {overflows && (
+            <div
+              className="absolute bottom-0 left-0 right-0 flex items-end justify-center pb-2 pt-8 pointer-events-none transition-opacity duration-200"
+              style={{
+                background: "linear-gradient(transparent, var(--card))",
+                borderRadius: `0 0 ${R}px ${R}px`,
+                opacity: hovered && !focused ? 1 : 0,
+              }}
+            >
               <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[var(--muted)] text-[var(--muted-foreground)]">Click to Scroll</span>
             </div>
           )}
@@ -296,6 +310,14 @@ export function TalkCard({ msg, maxHeight = 300, onRef }: TalkCardProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [focused, setFocused] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [overflows, setOverflows] = useState(false);
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    setOverflows(el.scrollHeight > el.clientHeight);
+  });
 
   const R = 8;
   const ts = new Date(msg.timestamp).toLocaleTimeString([], {
@@ -375,15 +397,21 @@ export function TalkCard({ msg, maxHeight = 300, onRef }: TalkCardProps) {
               background: `radial-gradient(circle at 0% 100%, transparent ${R}px, var(--card) ${R}px)`,
             }}
           />
-          <div style={{ maxHeight: `${typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight}`, overflow: focused ? "auto" : "hidden" }}>
+          <div ref={contentRef} style={{ maxHeight: `${typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight}`, overflow: focused ? "auto" : "hidden" }}>
             <div className="px-3 py-4">
               <MarkdownContent content={msg.content} className="text-sm leading-relaxed" />
             </div>
           </div>
           {/* Click to Scroll 提示 */}
-          {hovered && !focused && (
-            <div className="absolute bottom-0 left-0 right-0 flex items-end justify-center pb-2 pt-8 pointer-events-none"
-              style={{ background: "linear-gradient(transparent, var(--card))", borderRadius: `0 0 ${R}px ${R}px` }}>
+          {overflows && (
+            <div
+              className="absolute bottom-0 left-0 right-0 flex items-end justify-center pb-2 pt-8 pointer-events-none transition-opacity duration-200"
+              style={{
+                background: "linear-gradient(transparent, var(--card))",
+                borderRadius: `0 0 ${R}px ${R}px`,
+                opacity: hovered && !focused ? 1 : 0,
+              }}
+            >
               <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[var(--muted)] text-[var(--muted-foreground)]">Click to Scroll</span>
             </div>
           )}

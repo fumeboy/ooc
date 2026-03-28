@@ -23,8 +23,8 @@ export interface MethodContext {
   print(...args: unknown[]): void;
   /** 当前任务 ID */
   readonly taskId: string;
-  /** shared/ 目录路径 */
-  readonly sharedDir: string;
+  /** files/ 目录路径 */
+  readonly filesDir: string;
 }
 
 /** 注册表中的方法条目 */

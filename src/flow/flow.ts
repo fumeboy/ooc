@@ -49,13 +49,13 @@ export class Flow {
   private readonly _dir: string;
   /** 当前数据 */
   private _data: FlowData;
-  /** 覆盖的 shared 目录（sub-flow 复用 main flow 的 shared/） */
-  private _sharedDirOverride?: string;
+  /** 覆盖的 files 目录（sub-flow 复用 main flow 的 files/） */
+  private _filesDirOverride?: string;
 
-  private constructor(dir: string, data: FlowData, sharedDirOverride?: string) {
+  private constructor(dir: string, data: FlowData, filesDirOverride?: string) {
     this._dir = dir;
     this._data = data;
-    this._sharedDirOverride = sharedDirOverride;
+    this._filesDirOverride = filesDirOverride;
   }
 
   /* ========== 静态工厂方法 ========== */
@@ -114,7 +114,7 @@ export class Flow {
    *
    * Sub-flow 是完整的 Flow 对象，持久化在 session 的 flows/{stoneName}/ 下。
    * 同一 Stone 在同一 session 下只有一个 sub-flow。
-   * Sub-flow 使用自己的 shared/ 目录（flows/{taskId}/flows/{stoneName}/shared/）。
+   * Sub-flow 使用自己的 files/ 目录（flows/{taskId}/flows/{stoneName}/files/）。
    *
    * @ref docs/建模/meta_thought.md#五 — implements — Sub-flow 持久化在 session 子目录
    *
@@ -210,7 +210,7 @@ export class Flow {
   get dir(): string { return this._dir; }
   /** session 根目录（flows/{taskId}/），所有同 session 的 flow 共享此目录 */
   get sessionDir(): string { return resolve(this._dir, "..", ".."); }
-  get sharedDir(): string { return this._sharedDirOverride ?? join(this._dir, "shared"); }
+  get filesDir(): string { return this._filesDirOverride ?? join(this._dir, "files"); }
   get process(): Process { return this._data.process; }
   get initiatedBy(): string | undefined { return this._data.initiatedBy; }
 
@@ -252,12 +252,22 @@ export class Flow {
    * 记录一个事件到当前 focus 节点
    */
   recordAction(action: Omit<Action, "timestamp" | "id">): void {
+    this.recordActionAt(this._data.process.focusId, action);
+  }
+
+  /**
+   * 记录一个事件到指定节点（并发 focus cursor 使用）
+   *
+   * @param nodeId - 目标节点 ID
+   * @param action - 事件数据
+   */
+  recordActionAt(nodeId: string, action: Omit<Action, "timestamp" | "id">): void {
     const fullAction: Action = {
       id: generateActionId(),
       ...action,
       timestamp: Date.now(),
     };
-    appendAction(this._data.process, this._data.process.focusId, fullAction);
+    appendAction(this._data.process, nodeId, fullAction);
     this._data = {
       ...this._data,
       updatedAt: Date.now(),

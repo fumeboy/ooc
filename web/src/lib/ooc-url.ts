@@ -3,7 +3,7 @@
  *
  * 支持格式：
  * - ooc://object/{name} 或 ooc://stone/{name} — 引用对象
- * - ooc://file/objects/{name}/shared/{path} 或 ooc://file/stones/{name}/shared/{path} — 引用对象的 shared 文件
+ * - ooc://file/objects/{name}/files/{path} 或 ooc://file/stones/{name}/files/{path} — 引用对象的 files 文件
  */
 
 export type OocUrl =
@@ -17,7 +17,7 @@ export function parseOocUrl(url: string): OocUrl | null {
     return { type: "object", name: objectMatch[1]! };
   }
 
-  const fileMatch = url.match(/^ooc:\/\/file\/(?:objects|stones)\/([^/]+)\/shared\/(.+)$/);
+  const fileMatch = url.match(/^ooc:\/\/file\/(?:objects|stones)\/([^/]+)\/files\/(.+)$/);
   if (fileMatch) {
     return { type: "file", objectName: fileMatch[1]!, filename: decodeURIComponent(fileMatch[2]!) };
   }

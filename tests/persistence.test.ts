@@ -83,7 +83,7 @@ describe("readFlow / writeFlow", () => {
     writeFlow(dir, flow);
     expect(existsSync(join(dir, "data.json"))).toBe(true);
     expect(existsSync(join(dir, "process.json"))).toBe(true);
-    expect(existsSync(join(dir, "shared"))).toBe(true);
+    expect(existsSync(join(dir, "files"))).toBe(true);
 
     const loaded = readFlow(dir);
     expect(loaded).not.toBeNull();

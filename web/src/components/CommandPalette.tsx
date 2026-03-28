@@ -12,18 +12,18 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { commandPaletteOpenAtom } from "../store/session";
 import { objectsAtom } from "../store/objects";
 import { oocLinkUrlAtom } from "../store/ooc-link";
-import { fetchObject, fetchSharedFiles, fetchSharedFile } from "../api/client";
+import { fetchObject, fetchFiles, fetchFile } from "../api/client";
 import { MarkdownContent } from "./ui/MarkdownContent";
 import { ObjectAvatar } from "./ui/ObjectAvatar";
 import { cn } from "../lib/utils";
 import { Search, Box, FileText, ArrowRight, Loader } from "lucide-react";
-import type { ObjectSummary, StoneData, SharedFileInfo } from "../api/types";
+import type { ObjectSummary, StoneData, FileInfo } from "../api/types";
 
 type PaletteMode = "search" | "object-detail" | "file-detail";
 
 interface ObjectDetail {
   data: StoneData;
-  sharedFiles: SharedFileInfo[];
+  files: FileInfo[];
 }
 
 export function CommandPalette() {
@@ -82,11 +82,11 @@ export function CommandPalette() {
     setMode("object-detail");
     setDetailLoading(true);
     try {
-      const [data, sharedFiles] = await Promise.all([
+      const [data, files] = await Promise.all([
         fetchObject(name),
-        fetchSharedFiles(name).catch(() => [] as SharedFileInfo[]),
+        fetchFiles(name).catch(() => [] as FileInfo[]),
       ]);
-      setObjectDetail({ data, sharedFiles });
+      setObjectDetail({ data, files });
     } catch (e) {
       console.error(e);
     } finally {
@@ -100,7 +100,7 @@ export function CommandPalette() {
     setFileLoading(true);
     setFileTitle(filename);
     try {
-      const content = await fetchSharedFile(objectName, filename);
+      const content = await fetchFile(objectName, filename);
       setFileContent(content);
     } catch (e) {
       console.error(e);
@@ -316,7 +316,7 @@ function ObjectDetailView({
   }
   if (!detail) return null;
 
-  const { data, sharedFiles } = detail;
+  const { data, files } = detail;
 
   return (
     <div className="px-5 py-4 space-y-4">
@@ -373,12 +373,12 @@ function ObjectDetailView({
         </div>
       )}
 
-      {/* Shared Files */}
-      {sharedFiles.length > 0 && (
+      {/* Files */}
+      {files.length > 0 && (
         <div>
-          <p className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-1">Shared Files</p>
+          <p className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-1">Files</p>
           <div className="space-y-0.5">
-            {sharedFiles.map((f) => (
+            {files.map((f) => (
               <button
                 key={f.name}
                 onClick={() => onOpenFile(data.name, f.name)}

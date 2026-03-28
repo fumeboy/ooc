@@ -16,7 +16,7 @@ import { fetchFileContent } from "../api/client";
 import { ObjectDetail } from "./ObjectDetail";
 import { DynamicUI } from "./DynamicUI";
 import { FlowView } from "./FlowView";
-import { ChatPage } from "./ChatPage";
+import { SessionGantt } from "./SessionGantt";
 import { ProcessView } from "./ProcessView";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { CodeMirrorViewer } from "../components/ui/CodeMirrorViewer";
@@ -53,12 +53,12 @@ function parseRoute(path: string): {
   const stoneTraitsMatch = path.match(/^stones\/([^/]+)\/traits/);
   if (stoneTraitsMatch) return { type: "stone", objectName: stoneTraitsMatch[1], initialTab: "Effects" };
 
-  /* stones/{objectId}/shared — 指向 StoneView Shared tab */
-  const stoneSharedMatch = path.match(/^stones\/([^/]+)\/shared/);
-  if (stoneSharedMatch) return { type: "stone", objectName: stoneSharedMatch[1], initialTab: "Shared" };
+  /* stones/{objectId}/files — 指向 StoneView Files tab */
+  const stoneFilesMatch = path.match(/^stones\/([^/]+)\/files/);
+  if (stoneFilesMatch) return { type: "stone", objectName: stoneFilesMatch[1], initialTab: "Files" };
 
-  /* flows/{sessionId}/flows/{objectName}/shared/ui — Flow UI tab */
-  const flowUIMatch = path.match(/^flows\/([^/]+)\/flows\/([^/]+)\/shared\/ui$/);
+  /* flows/{sessionId}/flows/{objectName}/files/ui — Flow UI tab */
+  const flowUIMatch = path.match(/^flows\/([^/]+)\/flows\/([^/]+)\/files\/ui$/);
   if (flowUIMatch) return { type: "flow-detail", sessionId: flowUIMatch[1], objectName: flowUIMatch[2], initialTab: "UI" };
 
   /* flows/{sessionId}/flows/{objectName}/process.json — Flow Process tab */
@@ -114,7 +114,7 @@ export function ViewRouter({ filePath }: ViewRouterProps) {
       };
       return (
         <DynamicUI
-          importPath={`@stones/${name}/shared/ui/index.tsx`}
+          importPath={`@stones/${name}/files/ui/index.tsx`}
           componentProps={stoneUIProps}
           fallback={<ObjectDetail objectName={name} initialTab={route.initialTab} />}
         />
@@ -128,7 +128,7 @@ export function ViewRouter({ filePath }: ViewRouterProps) {
   }
 
   if (route.type === "flow-session" && route.sessionId) {
-    return <ChatPage />;
+    return <SessionGantt sessionId={route.sessionId} />;
   }
 
   if (route.type === "process-json") {

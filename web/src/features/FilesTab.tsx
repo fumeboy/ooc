@@ -1,17 +1,17 @@
 /**
- * SharedTab —— 对象 shared 文件浏览
+ * FilesTab —— 对象 files 文件浏览
  *
  * 左侧文件列表，右侧内容预览（.md 用 MarkdownContent 渲染）。
  */
 import { useState, useEffect } from "react";
-import { fetchSharedFiles, fetchSharedFile } from "../api/client";
+import { fetchFiles, fetchFile } from "../api/client";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { cn } from "../lib/utils";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import type { SharedFileInfo } from "../api/types";
+import type { FileInfo } from "../api/types";
 
-interface SharedTabProps {
+interface FilesTabProps {
   objectName: string;
 }
 
@@ -22,8 +22,8 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function SharedTab({ objectName }: SharedTabProps) {
-  const [files, setFiles] = useState<SharedFileInfo[]>([]);
+export function FilesTab({ objectName }: FilesTabProps) {
+  const [files, setFiles] = useState<FileInfo[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [content, setContent] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -36,7 +36,7 @@ export function SharedTab({ objectName }: SharedTabProps) {
     setSelected(null);
     setContent("");
     setLoading(true);
-    fetchSharedFiles(objectName)
+    fetchFiles(objectName)
       .then((f) => {
         setFiles(f);
         setLoading(false);
@@ -48,7 +48,7 @@ export function SharedTab({ objectName }: SharedTabProps) {
   useEffect(() => {
     if (!selected) return;
     setContent("");
-    fetchSharedFile(objectName, selected)
+    fetchFile(objectName, selected)
       .then(setContent)
       .catch(() => setContent("（加载失败）"));
   }, [objectName, selected]);
@@ -62,7 +62,7 @@ export function SharedTab({ objectName }: SharedTabProps) {
   if (files.length === 0) {
     return (
       <div className="text-sm text-[var(--muted-foreground)]">
-        该对象没有共享文件
+        该对象没有文件
       </div>
     );
   }
@@ -122,7 +122,7 @@ export function SharedTab({ objectName }: SharedTabProps) {
         <div className="flex gap-4 h-full min-h-0">
           <div className="w-56 shrink-0 overflow-auto border-r border-[var(--border)] pr-3">
             <div className="text-xs text-[var(--muted-foreground)] mb-2 font-medium">
-              共享文件 ({files.length})
+              文件 ({files.length})
             </div>
             {files.map((f) => (
               <button

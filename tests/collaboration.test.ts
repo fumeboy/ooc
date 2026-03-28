@@ -127,7 +127,7 @@ describe("createCollaborationAPI", () => {
 });
 
 describe("writeShared / readShared", () => {
-  test("writeShared: 写入文件到对象级 shared/ 目录", () => {
+  test("writeShared: 写入文件到对象级 files/ 目录", () => {
     const objects = new Map([["alice", "AI 助手"]]);
     const world = createMockWorld(objects);
     const aliceDir = join(TEST_DIR, "stones", "alice");
@@ -136,13 +136,13 @@ describe("writeShared / readShared", () => {
     const api = createCollaborationAPI(world, "alice", aliceDir);
     api.writeShared("report.txt", "这是报告内容");
 
-    /* 验证文件写入到 对象级 shared/ 目录 */
-    const filePath = join(aliceDir, "shared", "report.txt");
+    /* 验证文件写入到 对象级 files/ 目录 */
+    const filePath = join(aliceDir, "files", "report.txt");
     expect(existsSync(filePath)).toBe(true);
     expect(readFileSync(filePath, "utf-8")).toBe("这是报告内容");
   });
 
-  test("writeShared: 自动创建 shared/ 目录", () => {
+  test("writeShared: 自动创建 files/ 目录", () => {
     const objects = new Map([["alice", "AI 助手"]]);
     const world = createMockWorld(objects);
     const aliceDir = join(TEST_DIR, "nested", "deep", "alice");
@@ -151,7 +151,7 @@ describe("writeShared / readShared", () => {
     const api = createCollaborationAPI(world, "alice", aliceDir);
     api.writeShared("data.json", '{"key":"value"}');
 
-    expect(existsSync(join(aliceDir, "shared", "data.json"))).toBe(true);
+    expect(existsSync(join(aliceDir, "files", "data.json"))).toBe(true);
   });
 
   test("readShared: 读取其他对象的共享文件", () => {
@@ -161,10 +161,10 @@ describe("writeShared / readShared", () => {
     ]);
     const world = createMockWorld(objects);
 
-    /* 先为 bob 创建 shared 文件（对象级 shared/） */
-    const bobSharedDir = join(TEST_DIR, "stones", "bob", "shared");
-    mkdirSync(bobSharedDir, { recursive: true });
-    writeFileSync(join(bobSharedDir, "notes.txt"), "Bob 的笔记", "utf-8");
+    /* 先为 bob 创建 files 文件（对象级 files/） */
+    const bobFilesDir = join(TEST_DIR, "stones", "bob", "files");
+    mkdirSync(bobFilesDir, { recursive: true });
+    writeFileSync(join(bobFilesDir, "notes.txt"), "Bob 的笔记", "utf-8");
 
     const aliceDir = join(TEST_DIR, "stones", "alice");
     mkdirSync(aliceDir, { recursive: true });
@@ -181,13 +181,13 @@ describe("writeShared / readShared", () => {
     ]);
     const world = createMockWorld(objects);
 
-    /* alice 写入 shared 文件 */
+    /* alice 写入 files 文件 */
     const aliceDir = join(TEST_DIR, "stones", "alice");
     mkdirSync(aliceDir, { recursive: true });
     const aliceApi = createCollaborationAPI(world, "alice", aliceDir);
     aliceApi.writeShared("result.txt", "Alice 的结果");
 
-    /* bob 读取 alice 的 shared 文件 */
+    /* bob 读取 alice 的 files 文件 */
     const bobDir = join(TEST_DIR, "stones", "bob");
     mkdirSync(bobDir, { recursive: true });
     const bobApi = createCollaborationAPI(world, "bob", bobDir);
@@ -215,7 +215,7 @@ describe("writeShared / readShared", () => {
     ]);
     const world = createMockWorld(objects);
 
-    /* bob 的目录存在但 shared 文件不存在 */
+    /* bob 的目录存在但 files 文件不存在 */
     mkdirSync(join(TEST_DIR, "stones", "bob"), { recursive: true });
 
     const aliceDir = join(TEST_DIR, "stones", "alice");

@@ -34,7 +34,7 @@ async function enhanceTree(tree: FileTreeNode, sessionId: string): Promise<FileT
   };
   enhanced.children.unshift(indexNode);
 
-  /* 2. 查找 flows/ 目录 + 为有 shared/ui/ 的 flow 对象注入 ui 虚拟节点 */
+  /* 2. 查找 flows/ 目录 + 为有 files/ui/ 的 flow 对象注入 ui 虚拟节点 */
   const flowsDir = enhanced.children.find(
     (c) => c.type === "directory" && c.name === "flows"
   );
@@ -42,14 +42,14 @@ async function enhanceTree(tree: FileTreeNode, sessionId: string): Promise<FileT
     for (const child of flowsDir.children) {
       if (child.type === "directory" && child.marker === "flow") {
         const hasUI = child.children?.some(
-          (c) => c.type === "directory" && c.name === "shared" &&
+          (c) => c.type === "directory" && c.name === "files" &&
             c.children?.some((sc) => sc.type === "directory" && sc.name === "ui")
         );
         if (hasUI) {
           const uiNode: FileTreeNode = {
             name: "ui",
             type: "file",
-            path: `flows/${sessionId}/flows/${child.name}/shared/ui`,
+            path: `flows/${sessionId}/flows/${child.name}/files/ui`,
             size: 0,
           };
           child.children = [uiNode, ...(child.children ?? [])];

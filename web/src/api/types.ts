@@ -148,8 +148,8 @@ export type TimelineEntry =
 /** 每个对象的 action 展示模式 */
 export type ActionDisplayMode = "full" | "compact" | "hidden";
 
-/** 共享文件信息 */
-export interface SharedFileInfo {
+/** 文件信息 */
+export interface FileInfo {
   name: string;
   size: number;
   modifiedAt: number;

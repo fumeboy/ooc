@@ -37,7 +37,7 @@ export function OocNavigateCard({ title, description, url }: OocNavigateCardProp
       });
       setActiveFilePath(path);
     } else if (parsed.type === "file") {
-      const path = `stones/${parsed.objectName}/shared/${parsed.filename}`;
+      const path = `stones/${parsed.objectName}/files/${parsed.filename}`;
       setEditorTabs((prev) => {
         if (prev.some((t) => t.path === path)) return prev;
         return [...prev, { path, label: parsed.filename }];

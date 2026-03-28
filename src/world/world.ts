@@ -133,6 +133,10 @@ export class World implements Routable {
       join(this._rootDir, "flows"),
       join(this._rootDir, "kernel"),
       join(this._rootDir, "kernel", "traits"),
+      join(this._rootDir, "library"),
+      join(this._rootDir, "library", "traits"),
+      join(this._rootDir, "library", "skills"),
+      join(this._rootDir, "library", "ui-components"),
     ];
 
     for (const dir of dirs) {
@@ -1007,12 +1011,13 @@ export class World implements Routable {
   }
 
   /**
-   * 加载对象的 Traits（对象自身 + kernel）
+   * 加载对象的 Traits（kernel → library → 对象自身）
    */
   private async _loadTraits(stone: Stone) {
     const kernelTraitsDir = join(this._rootDir, "kernel", "traits");
+    const libraryTraitsDir = join(this._rootDir, "library", "traits");
     const objectTraitsDir = join(stone.dir, "traits");
-    const traits = await loadAllTraits(objectTraitsDir, kernelTraitsDir);
+    const traits = await loadAllTraits(objectTraitsDir, kernelTraitsDir, libraryTraitsDir);
     consola.info(`[World] 加载 ${traits.length} 个 traits: ${traits.map(t => t.name).join(", ")}`);
     return traits;
   }

@@ -21,7 +21,7 @@ import { runThinkLoop } from "../flow/thinkloop.js";
 import { emitSSE } from "../server/events.js";
 import type { CollaborationAPI } from "./router.js";
 import type { LLMClient } from "../thinkable/client.js";
-import type { StoneData, DirectoryEntry, TraitDefinition } from "../types/index.js";
+import type { StoneData, DirectoryEntry, TraitDefinition, ThreadState } from "../types/index.js";
 import type { CronManager } from "./cron.js";
 
 /** Scheduler 中的 Flow 条目 */
@@ -113,7 +113,7 @@ export class Scheduler {
         break;
       }
 
-      /* 轮询每个 ready Flow，各跑一轮 */
+      /* 轮询每个 ready Flow，支持并发线程 */
       for (const name of readyFlows) {
         if (totalIterations >= this._config.maxTotalIterations) break;
 
@@ -127,23 +127,64 @@ export class Scheduler {
           continue;
         }
 
-        /* 运行一轮 ThinkLoop（maxIterations=1） */
-        consola.info(`[Scheduler] 调度 ${name} (第 ${entry.iterations + 1} 轮)`);
-        const updatedData = await runThinkLoop(
-          entry.flow,
-          entry.stone,
-          entry.stoneDir,
-          this._llm,
-          this._directory,
-          entry.traits,
-          { maxIterations: 1, isPaused: this._isPaused ? () => this._isPaused!(name) : undefined, emitProgress: false },
-          entry.collaboration,
-          this._cron,
-          this._flowsDir,
-        );
+        /* 检查是否有多个活跃线程需要并发执行 */
+        const activeThreads = this._getActiveThreads(entry.flow);
 
-        entry.iterations++;
-        totalIterations++;
+        if (activeThreads.length > 1) {
+          /* 并发模式：多个线程同时发起 LLM 请求 */
+          consola.info(`[Scheduler] 并发调度 ${name}: ${activeThreads.length} 个线程 (${activeThreads.map(t => t.name).join(", ")})`);
+
+          const promises = activeThreads.map((thread) =>
+            runThinkLoop(
+              entry.flow,
+              entry.stone,
+              entry.stoneDir,
+              this._llm,
+              this._directory,
+              entry.traits,
+              { maxIterations: 1, isPaused: this._isPaused ? () => this._isPaused!(name) : undefined, emitProgress: false, threadId: thread.name },
+              entry.collaboration,
+              this._cron,
+              this._flowsDir,
+            ),
+          );
+
+          const results = await Promise.all(promises);
+
+          /* 合并所有线程的 persistedData */
+          for (const updatedData of results) {
+            for (const [key, value] of Object.entries(updatedData)) {
+              entry.stone.data[key] = value;
+            }
+          }
+
+          entry.iterations += activeThreads.length;
+          totalIterations += activeThreads.length;
+        } else {
+          /* 单线程模式（默认）：运行一轮 ThinkLoop */
+          const threadId = activeThreads.length === 1 ? activeThreads[0]!.name : undefined;
+          consola.info(`[Scheduler] 调度 ${name} (第 ${entry.iterations + 1} 轮${threadId ? `, thread: ${threadId}` : ""})`);
+          const updatedData = await runThinkLoop(
+            entry.flow,
+            entry.stone,
+            entry.stoneDir,
+            this._llm,
+            this._directory,
+            entry.traits,
+            { maxIterations: 1, isPaused: this._isPaused ? () => this._isPaused!(name) : undefined, emitProgress: false, threadId },
+            entry.collaboration,
+            this._cron,
+            this._flowsDir,
+          );
+
+          entry.iterations++;
+          totalIterations++;
+
+          /* 同步 persistData 写入的数据到 stone（仅显式持久化的 key） */
+          for (const [key, value] of Object.entries(updatedData)) {
+            entry.stone.data[key] = value;
+          }
+        }
 
         /* 发射进度事件（Scheduler 统一发射，包含全局计数） */
         emitSSE({
@@ -155,11 +196,6 @@ export class Scheduler {
           totalIterations,
           maxTotalIterations: this._config.maxTotalIterations,
         });
-
-        /* 同步 persistData 写入的数据到 stone（仅显式持久化的 key） */
-        for (const [key, value] of Object.entries(updatedData)) {
-          entry.stone.data[key] = value;
-        }
 
         /* 检查 ThinkLoop 后是否失败，传播错误 */
         if (entry.flow.status === "failed") {
@@ -258,5 +294,17 @@ export class Scheduler {
       if (entry.flow.status === "waiting" && entry.flow.hasPendingMessages) return true;
     }
     return false;
+  }
+
+  /**
+   * 获取 Flow 中所有活跃的线程
+   *
+   * 如果 Flow 没有初始化 threads，返回空数组（走默认单线程路径）。
+   * 只返回 status 为 "running" 的线程。
+   */
+  private _getActiveThreads(flow: Flow): ThreadState[] {
+    const threads = flow.process.threads;
+    if (!threads || Object.keys(threads).length === 0) return [];
+    return Object.values(threads).filter((t) => t.status === "running");
   }
 }

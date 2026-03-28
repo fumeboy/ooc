@@ -66,6 +66,8 @@ export interface ThinkLoopConfig {
   isPaused?: () => boolean;
   /** 是否发射 flow:progress 事件（默认 true，Scheduler 模式下传 false 避免重复） */
   emitProgress?: boolean;
+  /** 并发线程 ID — 指定后使用该线程的 focusId 而非 process.focusId */
+  threadId?: string;
 }
 
 /** ThinkLoop 默认配置 */
@@ -124,13 +126,42 @@ export async function runThinkLoop(
   const methodRegistry = new MethodRegistry();
   methodRegistry.registerAll(traits);
 
-  consola.info(`[ThinkLoop] 开始 — ${stone.name}/${flow.taskId}`);
+  consola.info(`[ThinkLoop] 开始 — ${stone.name}/${flow.taskId}${config.threadId ? ` (thread: ${config.threadId})` : ""}`);
 
   /** 标记是否已有有效产出（message_out 或 program 执行成功），用于 catch 降级判断 */
   let hasDeliveredOutput = false;
 
+  /**
+   * 并发线程支持：
+   * 当 threadId 指定时，每轮迭代开始前将 process.focusId 切换到该线程的 focusId，
+   * 迭代结束后将 process.focusId 的变化同步回线程状态。
+   * 这样所有读取 process.focusId 的现有代码无需修改。
+   */
+  const threadId = config.threadId;
+
+  /** 在迭代开始前，将 process.focusId 切换到线程的 focusId */
+  const syncThreadFocusIn = () => {
+    if (!threadId) return;
+    const thread = flow.process.threads?.[threadId];
+    if (thread) {
+      flow.process.focusId = thread.focusId;
+    }
+  };
+
+  /** 在迭代结束后，将 process.focusId 的变化同步回线程状态 */
+  const syncThreadFocusOut = () => {
+    if (!threadId) return;
+    const thread = flow.process.threads?.[threadId];
+    if (thread) {
+      thread.focusId = flow.process.focusId;
+    }
+  };
+
   while (flow.status === "running" && iteration < config.maxIterations) {
     iteration++;
+
+    /* 并发线程：切换到线程的 focusId */
+    syncThreadFocusIn();
 
     /* 发射进度事件（独立模式下，Scheduler 模式由 Scheduler 统一发射） */
     if (config.emitProgress !== false) {
@@ -521,6 +552,7 @@ export async function runThinkLoop(
     }
 
     /* 6. 保存中间状态 */
+    syncThreadFocusOut();
     flow.save();
 
     /* ★ 调试模式检查点：每轮执行完毕后自动暂停 */
@@ -535,9 +567,11 @@ export async function runThinkLoop(
   if (iteration >= config.maxIterations && config.maxIterations > 1) {
     consola.warn(`[ThinkLoop] 达到最大轮次 ${config.maxIterations}，强制结束`);
     flow.setStatus("finished");
+    syncThreadFocusOut();
     flow.save();
   }
 
+  syncThreadFocusOut();
   return persistedData;
 }
 
@@ -720,16 +754,16 @@ function buildExecutionContext(
   const TRAIT_NAME_RE = /^[a-z0-9_-]+$/;
 
   const context: Record<string, unknown> = {
-    /** 获取 shared/ 目录路径 */
-    sharedDir: flow.sharedDir,
+    /** 获取 files/ 目录路径 */
+    filesDir: flow.filesDir,
     /** 获取任务 ID */
     taskId: flow.taskId,
     /** 文件系统路径（替代高层 API，直接用 Bun/Node 原生文件操作） */
     self_dir: stoneDir,
     self_traits_dir: join(stoneDir, "traits"),
-    self_shared_dir: join(stoneDir, "shared"),
+    self_files_dir: join(stoneDir, "files"),
     world_dir: join(stoneDir, "..", ".."),
-    task_shared_dir: flow.sharedDir,
+    task_files_dir: flow.filesDir,
   };
 
   /* ── 基础 API ── */
@@ -836,7 +870,7 @@ function buildExecutionContext(
         },
         print: printFn,
         taskId: flow.taskId,
-        sharedDir: flow.sharedDir,
+        filesDir: flow.filesDir,
       } as MethodContext,
       "data",
       { get: () => getMergedData(), enumerable: true },
@@ -1223,6 +1257,70 @@ function buildExecutionContext(
       },
       effect: (args, result) => `ack_signal("${args[0]}"${args[1] ? `, "${args[1]}"` : ""}) → ${result ? "OK" : "失败"}`,
     },
+    {
+      /** 并发分叉：为指定的多个节点各创建一个线程，全部设为 running */
+      name: "fork_threads",
+      fn: (nodeIds: string[]) => {
+        const process = flow.process;
+        if (!process) return false;
+        if (!Array.isArray(nodeIds) || nodeIds.length < 2) return false;
+
+        if (!process.threads) process.threads = {};
+
+        const created: string[] = [];
+        for (const nodeId of nodeIds) {
+          const node = findNode(process.root, nodeId);
+          if (!node) continue;
+          /* 线程名用节点 ID，保证唯一 */
+          const threadName = `t_${nodeId}`;
+          if (process.threads[threadName]) continue;
+          process.threads[threadName] = {
+            name: threadName,
+            focusId: nodeId,
+            status: "running",
+            signals: [],
+          };
+          /* 将节点标记为 doing */
+          if (node.status === "todo") node.status = "doing";
+          created.push(threadName);
+        }
+
+        if (created.length > 0) flow.setProcess({ ...process });
+        return created;
+      },
+      effect: (args, result) => `fork_threads([${(args[0] as string[]).join(", ")}]) → ${Array.isArray(result) ? result.length + " threads" : "失败"}`,
+    },
+    {
+      /** 等待所有指定线程完成（检查线程状态是否都为 finished） */
+      name: "join_threads",
+      fn: (threadNames: string[]) => {
+        const process = flow.process;
+        if (!process || !process.threads) return false;
+        if (!Array.isArray(threadNames)) return false;
+
+        const allFinished = threadNames.every((name) => {
+          const thread = process.threads?.[name];
+          return thread?.status === "finished";
+        });
+
+        return allFinished;
+      },
+      effect: (args, result) => `join_threads([${(args[0] as string[]).join(", ")}]) → ${result ? "全部完成" : "仍在执行"}`,
+    },
+    {
+      /** 标记当前线程为 finished */
+      name: "finish_thread",
+      fn: () => {
+        const process = flow.process;
+        if (!process || !process.threads) return false;
+        const currentThread = Object.values(process.threads).find(t => t.status === "running");
+        if (!currentThread) return false;
+        currentThread.status = "finished";
+        flow.setProcess({ ...process });
+        return true;
+      },
+      effect: (_args, result) => `finish_thread() → ${result ? "OK" : "失败"}`,
+    },
   ]);
 
   /* ── TodoList 管理 API ── */
@@ -1282,7 +1380,7 @@ function buildExecutionContext(
         name: "readShared",
         fn: (targetName: string, filename: string) => {
           const result = collaboration.readShared(targetName, filename);
-          const deprecation = `\n[deprecated] readShared 将在未来版本移除，请改用文件系统 API：直接读取 world_dir 下对应对象的 shared/ 目录`;
+          const deprecation = `\n[deprecated] readShared 将在未来版本移除，请改用文件系统 API：直接读取 world_dir 下对应对象的 files/ 目录`;
           return typeof result === "string" ? `${result}${deprecation}` : result;
         },
       },
@@ -1290,7 +1388,7 @@ function buildExecutionContext(
         name: "writeShared",
         fn: (filename: string, content: string) => {
           const result = collaboration.writeShared(filename, content);
-          const deprecation = `\n[deprecated] writeShared 将在未来版本移除，请改用文件系统 API：直接写入 self_shared_dir`;
+          const deprecation = `\n[deprecated] writeShared 将在未来版本移除，请改用文件系统 API：直接写入 self_files_dir`;
           return typeof result === "string" ? `${result}${deprecation}` : result;
         },
         effect: (args) => {

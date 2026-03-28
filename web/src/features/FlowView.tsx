@@ -58,14 +58,17 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
     }
   }, [lastEvent]);
 
-  /* 检查该对象是否有 shared/ui/ 目录（通过文件树数据判断） */
+  /* 检查该对象是否有 files/ui/ 目录（通过文件树数据判断） */
   useEffect(() => {
     fetchSessionTree(sessionId).then((tree) => {
       const flowsDir = tree.children?.find((c) => c.name === "flows");
       const objectDir = flowsDir?.children?.find((c) => c.name === objectName);
-      const sharedDir = objectDir?.children?.find((c) => c.name === "shared");
-      const uiDir = sharedDir?.children?.find((c) => c.name === "ui");
-      setHasUI(!!uiDir);
+      const filesDir = objectDir?.children?.find((c) => c.name === "files");
+      const uiDir = filesDir?.children?.find((c) => c.name === "ui");
+      const found = !!uiDir;
+      setHasUI(found);
+      /* 有自定义 UI 且无外部指定 tab 时，默认展示 UI Tab */
+      if (found && !initialTab) setTab("UI");
     }).catch(() => setHasUI(false));
   }, [sessionId, objectName]);
 
@@ -178,7 +181,7 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
         )}
         {tab === "UI" && (
           <DynamicUI
-            importPath={`@flows/${sessionId}/flows/${objectName}/shared/ui/index.tsx`}
+            importPath={`@flows/${sessionId}/flows/${objectName}/files/ui/index.tsx`}
             componentProps={{ sessionId, objectName }}
           />
         )}

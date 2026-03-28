@@ -6,12 +6,12 @@ import { parseNavigateBlocks } from "../web/src/lib/navigate-parser";
 
 describe("parseNavigateBlocks", () => {
   test("extracts single navigate block with title and description", () => {
-    const input = `请查看：\n[navigate title="项目看板" description="当前进度"]ooc://file/objects/supervisor/shared/kanban.md[/navigate]`;
+    const input = `请查看：\n[navigate title="项目看板" description="当前进度"]ooc://file/objects/supervisor/files/kanban.md[/navigate]`;
     const result = parseNavigateBlocks(input);
     expect(result.blocks).toHaveLength(1);
     expect(result.blocks[0]!.title).toBe("项目看板");
     expect(result.blocks[0]!.description).toBe("当前进度");
-    expect(result.blocks[0]!.url).toBe("ooc://file/objects/supervisor/shared/kanban.md");
+    expect(result.blocks[0]!.url).toBe("ooc://file/objects/supervisor/files/kanban.md");
     expect(result.cleanText).toContain("<!--ooc-nav-0-->");
     expect(result.cleanText).not.toContain("[navigate");
   });

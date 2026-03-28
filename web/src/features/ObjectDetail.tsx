@@ -1,5 +1,5 @@
 /**
- * ObjectDetail —— 对象详情页（Readme/Data/Effects/Shared/UI 标签页）
+ * ObjectDetail —— 对象详情页（Readme/Data/Effects/Files/UI 标签页）
  *
  * @ref docs/哲学文档/gene.md#G1 — renders — 对象的完整组成（thinkable, talkable, data, traits, effects）
  * @ref docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达（含自定义 UI 标签页）
@@ -10,13 +10,13 @@ import { fetchObject } from "../api/client";
 import { ObjectReadmeView } from "./ObjectReadmeView";
 import { DataTab } from "./DataTab";
 import { EffectsTab } from "./EffectsTab";
-import { SharedTab } from "./SharedTab";
+import { FilesTab } from "./FilesTab";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { cn } from "../lib/utils";
 import { objectUIs, hasCustomUI } from "../objects";
 import type { StoneData } from "../api/types";
 
-const BASE_TABS = ["Readme", "Data", "Effects", "Shared"] as const;
+const BASE_TABS = ["Readme", "Data", "Effects", "Files"] as const;
 type Tab = (typeof BASE_TABS)[number] | "Memory" | "UI";
 
 interface ObjectDetailProps {
@@ -25,7 +25,9 @@ interface ObjectDetailProps {
 }
 
 export function ObjectDetail({ objectName, initialTab }: ObjectDetailProps) {
-  const [tab, setTab] = useState<Tab>((initialTab as Tab) || "Readme");
+  /* 有自定义 UI 时默认展示 UI Tab */
+  const defaultTab: Tab = hasCustomUI(objectName) ? "UI" : "Readme";
+  const [tab, setTab] = useState<Tab>((initialTab as Tab) || defaultTab);
   const [stone, setStone] = useState<StoneData | null>(null);
 
   const tabs = useMemo<Tab[]>(() => {
@@ -37,7 +39,9 @@ export function ObjectDetail({ objectName, initialTab }: ObjectDetailProps) {
 
   useEffect(() => {
     setStone(null);
-    setTab((initialTab as Tab) || "Readme");
+    /* 有自定义 UI 时默认展示 UI Tab */
+    const resetDefault: Tab = hasCustomUI(objectName) ? "UI" : "Readme";
+    setTab((initialTab as Tab) || resetDefault);
     fetchObject(objectName).then(setStone).catch(console.error);
   }, [objectName, initialTab]);
 
@@ -91,7 +95,7 @@ export function ObjectDetail({ objectName, initialTab }: ObjectDetailProps) {
         {tab === "Readme" && <ObjectReadmeView objectName={objectName} />}
         {tab === "Data" && <DataTab data={stone.data} />}
         {tab === "Effects" && <EffectsTab objectName={objectName} />}
-        {tab === "Shared" && <SharedTab objectName={objectName} />}
+        {tab === "Files" && <FilesTab objectName={objectName} />}
         {tab === "Memory" && stone.memory && (
           <div className="prose prose-sm max-w-none">
             <MarkdownContent content={stone.memory} />

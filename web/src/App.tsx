@@ -4,7 +4,7 @@
  * 水平布局：「网站左边栏」（Logo + Tab 切换 + 文件树）+ 右侧主内容区（EditorTabs + ViewRouter/ChatPage）。
  * 三个 Tab：Flows / Stones / World，各自展示对应的文件树。
  *
- * @ref ooc://file/stones/sophia/shared/哲学文档/gene.md#G11 — implements — 前端整体布局
+ * @ref ooc://file/stones/sophia/files/哲学文档/gene.md#G11 — implements — 前端整体布局
  */
 import { useEffect, useState, useCallback } from "react";
 import { useAtom, useSetAtom, useAtomValue } from "jotai";
@@ -100,7 +100,7 @@ export function App() {
   /* 打开文件 tab */
   const openFileTab = useCallback((path: string, node: FileTreeNode) => {
     /* Flow 子文件（ui/data.json/process.json）→ 合并到 FlowView tab */
-    const flowSubMatch = path.match(/^(flows\/[^/]+\/flows\/[^/]+)\/(shared\/ui|data\.json|process\.json)$/);
+    const flowSubMatch = path.match(/^(flows\/[^/]+\/flows\/[^/]+)\/(files\/ui|data\.json|process\.json)$/);
     if (flowSubMatch) {
       const parentPath = flowSubMatch[1]!;
       const parentName = parentPath.split("/").pop()!;
@@ -118,8 +118,8 @@ export function App() {
       return;
     }
 
-    /* Stone 子文件（readme.md/data.json/traits/shared）→ 合并到 StoneView tab */
-    const stoneSubMatch = path.match(/^(stones\/[^/]+)\/(readme\.md|data\.json|traits|shared)/);
+    /* Stone 子文件（readme.md/data.json/traits/files）→ 合并到 StoneView tab */
+    const stoneSubMatch = path.match(/^(stones\/[^/]+)\/(readme\.md|data\.json|traits|files)/);
     if (stoneSubMatch) {
       const parentPath = stoneSubMatch[1]!;
       const parentName = parentPath.split("/").pop()!;

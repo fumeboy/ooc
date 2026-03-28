@@ -10,7 +10,7 @@ import type {
   FlowSummary,
   FlowData,
   TraitInfo,
-  SharedFileInfo,
+  FileInfo,
   FileTreeNode,
   SSEEvent,
 } from "./types";
@@ -115,15 +115,15 @@ export async function resumeFlow(name: string, flowId: string): Promise<{
   return post(`/stones/${name}/resume`, { flowId });
 }
 
-/** 列出对象的 shared 文件 */
-export async function fetchSharedFiles(name: string): Promise<SharedFileInfo[]> {
-  const data = await get<{ files: SharedFileInfo[] }>(`/stones/${name}/shared`);
+/** 列出对象的 files 文件 */
+export async function fetchFiles(name: string): Promise<FileInfo[]> {
+  const data = await get<{ files: FileInfo[] }>(`/stones/${name}/files`);
   return data.files;
 }
 
-/** 读取单个 shared 文件内容 */
-export async function fetchSharedFile(name: string, filename: string): Promise<string> {
-  const data = await get<{ name: string; content: string }>(`/stones/${name}/shared/${encodeURIComponent(filename)}`);
+/** 读取单个 files 文件内容 */
+export async function fetchFile(name: string, filename: string): Promise<string> {
+  const data = await get<{ name: string; content: string }>(`/stones/${name}/files/${encodeURIComponent(filename)}`);
   return data.content;
 }
 

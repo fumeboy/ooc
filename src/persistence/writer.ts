@@ -70,8 +70,8 @@ export function writeFlow(dir: string, flow: FlowData): void {
   /* 写入 process.json */
   writeFileSync(join(dir, "process.json"), JSON.stringify(process, null, 2), "utf-8");
 
-  /* 确保 shared/ 目录存在 */
-  ensureDir(join(dir, "shared"));
+  /* 确保 files/ 目录存在 */
+  ensureDir(join(dir, "files"));
 }
 
 /**

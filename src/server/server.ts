@@ -441,31 +441,31 @@ async function handleRoute(
     return json({ success: true, data: { sessions } });
   }
 
-  /* ========== Shared 文件 ========== */
+  /* ========== Files 文件 ========== */
 
-  /* GET /api/stones/:name/shared — 列出对象的 shared 文件 */
-  const sharedListMatch = path.match(/^\/api\/stones\/([^/]+)\/shared$/);
-  if (method === "GET" && sharedListMatch) {
-    const name = sharedListMatch[1]!;
+  /* GET /api/stones/:name/files — 列出对象的 files 文件 */
+  const filesListMatch = path.match(/^\/api\/stones\/([^/]+)\/files$/);
+  if (method === "GET" && filesListMatch) {
+    const name = filesListMatch[1]!;
     const stone = world.getObject(name);
     if (!stone) return errorResponse(`对象 "${name}" 不存在`, 404);
-    const sharedDir = join(stone.dir, "shared");
-    const files = listSharedFiles(sharedDir);
+    const filesDir = join(stone.dir, "files");
+    const files = listFilesInDir(filesDir);
     return json({ success: true, data: { files } });
   }
 
-  /* GET /api/stones/:name/shared/* — 读取单个 shared 文件 */
-  const sharedFileMatch = path.match(/^\/api\/stones\/([^/]+)\/shared\/(.+)$/);
-  if (method === "GET" && sharedFileMatch) {
-    const name = sharedFileMatch[1]!;
-    const filename = decodeURIComponent(sharedFileMatch[2]!);
+  /* GET /api/stones/:name/files/* — 读取单个 files 文件 */
+  const filesFileMatch = path.match(/^\/api\/stones\/([^/]+)\/files\/(.+)$/);
+  if (method === "GET" && filesFileMatch) {
+    const name = filesFileMatch[1]!;
+    const filename = decodeURIComponent(filesFileMatch[2]!);
     const stone = world.getObject(name);
     if (!stone) return errorResponse(`对象 "${name}" 不存在`, 404);
-    const filePath = join(stone.dir, "shared", filename);
+    const filePath = join(stone.dir, "files", filename);
     if (!existsSync(filePath)) return errorResponse(`文件 "${filename}" 不存在`, 404);
     /* 安全检查：防止路径穿越 */
-    const sharedDir = join(stone.dir, "shared");
-    if (!filePath.startsWith(sharedDir)) return errorResponse("非法路径", 403);
+    const filesDir = join(stone.dir, "files");
+    if (!filePath.startsWith(filesDir)) return errorResponse("非法路径", 403);
     const content = readFileSync(filePath, "utf-8");
     return json({ success: true, data: { name: filename, content } });
   }
@@ -863,28 +863,28 @@ function buildFileTree(absDir: string, relativePath: string, maxDepth = 8): File
   return node;
 }
 
-/* ========== Shared 文件辅助函数 ========== */
+/* ========== Files 文件辅助函数 ========== */
 
-/** Shared 文件信息 */
-interface SharedFileInfo {
+/** 文件信息 */
+interface FileInfo {
   name: string;
   size: number;
   modifiedAt: number;
 }
 
 /**
- * 递归列出 shared 目录下的所有文件
+ * 递归列出 files 目录下的所有文件
  */
-function listSharedFiles(sharedDir: string, prefix = ""): SharedFileInfo[] {
-  if (!existsSync(sharedDir)) return [];
-  const entries = readdirSync(sharedDir, { withFileTypes: true });
-  const files: SharedFileInfo[] = [];
+function listFilesInDir(filesDir: string, prefix = ""): FileInfo[] {
+  if (!existsSync(filesDir)) return [];
+  const entries = readdirSync(filesDir, { withFileTypes: true });
+  const files: FileInfo[] = [];
 
   for (const entry of entries) {
-    const entryPath = join(sharedDir, entry.name);
+    const entryPath = join(filesDir, entry.name);
     const relativeName = prefix ? `${prefix}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
-      files.push(...listSharedFiles(entryPath, relativeName));
+      files.push(...listFilesInDir(entryPath, relativeName));
     } else {
       const stat = statSync(entryPath);
       files.push({
@@ -911,18 +911,18 @@ function handleOocResolve(oocUrl: string, world: World): Response {
     return json({ success: true, data: { type: "object", ...stone.toJSON() } });
   }
 
-  /* ooc://file/objects/{name}/shared/{path} 或 ooc://file/stones/{name}/shared/{path} */
-  const fileMatch = oocUrl.match(/^ooc:\/\/file\/(?:objects|stones)\/([^/]+)\/shared\/(.+)$/);
+  /* ooc://file/objects/{name}/files/{path} 或 ooc://file/stones/{name}/files/{path} */
+  const fileMatch = oocUrl.match(/^ooc:\/\/file\/(?:objects|stones)\/([^/]+)\/files\/(.+)$/);
   if (fileMatch) {
     const objectName = fileMatch[1]!;
     const filename = decodeURIComponent(fileMatch[2]!);
     const stone = world.getObject(objectName);
     if (!stone) return errorResponse(`对象 "${objectName}" 不存在`, 404);
-    const filePath = join(stone.dir, "shared", filename);
+    const filePath = join(stone.dir, "files", filename);
     if (!existsSync(filePath)) return errorResponse(`文件 "${filename}" 不存在`, 404);
     /* 安全检查 */
-    const sharedDir = join(stone.dir, "shared");
-    if (!filePath.startsWith(sharedDir)) return errorResponse("非法路径", 403);
+    const filesDir = join(stone.dir, "files");
+    if (!filePath.startsWith(filesDir)) return errorResponse("非法路径", 403);
     const content = readFileSync(filePath, "utf-8");
     return json({ success: true, data: { type: "file", objectName, filename, content } });
   }

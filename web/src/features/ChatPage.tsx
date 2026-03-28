@@ -21,7 +21,7 @@ import { fetchSessions, fetchFlow, talkTo, resumeFlow } from "../api/client";
 import { ProcessView } from "./ProcessView";
 import { ObjectReadmeView } from "./ObjectReadmeView";
 import { DataTab } from "./DataTab";
-import { SharedTab } from "./SharedTab";
+import { FilesTab } from "./FilesTab";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { ActionCard, TalkCard } from "../components/ui/ActionCard";
 import { ObjectAvatar } from "../components/ui/ObjectAvatar";
@@ -400,7 +400,7 @@ export function ChatPage() {
 }
 
 function ChatContent({ flow, onRef }: { flow: FlowData; onRef?: (id: string, objectName: string) => void }) {
-  const [tab, setTab] = useState<"messages" | "timeline" | "process" | "readme" | "data" | "shared">("messages");
+  const [tab, setTab] = useState<"messages" | "timeline" | "process" | "readme" | "data" | "files">("messages");
   const [resuming, setResuming] = useState(false);
   const selectedObject = useAtomValue(chatSelectedObjectAtom);
   const tabContentRef = useRef<HTMLDivElement>(null);
@@ -517,7 +517,7 @@ function ChatContent({ flow, onRef }: { flow: FlowData; onRef?: (id: string, obj
         {/* Tab bar — 仅选中对象时显示 */}
         {activeObj && (
           <div className="flex items-center gap-0 mb-0 border-b border-[var(--border)] shrink-0">
-            {(["messages", "process", "readme", "data", "shared"] as const).map((t) => (
+            {(["messages", "process", "readme", "data", "files"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -526,7 +526,7 @@ function ChatContent({ flow, onRef }: { flow: FlowData; onRef?: (id: string, obj
                   tab === t ? "text-[var(--foreground)] font-medium" : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]",
                 )}
               >
-                {t === "messages" ? `Messages (${chatMessages.length})` : t === "process" ? "Process" : t === "readme" ? "Readme" : t === "data" ? "Data" : "Shared"}
+                {t === "messages" ? `Messages (${chatMessages.length})` : t === "process" ? "Process" : t === "readme" ? "Readme" : t === "data" ? "Data" : "Files"}
                 {tab === t && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[var(--foreground)] rounded-full" />}
               </button>
             ))}
@@ -578,9 +578,9 @@ function ChatContent({ flow, onRef }: { flow: FlowData; onRef?: (id: string, obj
             <div className="px-6 py-4">
               <DataTab data={flow.data ?? {}} />
             </div>
-          ) : tab === "shared" ? (
+          ) : tab === "files" ? (
             <div className="px-2">
-              <SharedTab objectName={activeObj ?? flow.stoneName} />
+              <FilesTab objectName={activeObj ?? flow.stoneName} />
             </div>
           ) : null}
           {/* 底部空白块 — 替代原先 pb-32，为浮动输入框留出空间 */}

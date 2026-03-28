@@ -1,7 +1,7 @@
 /**
  * 对象自渲染 UI 的 Props 类型
  *
- * 对象在 shared/ui/index.tsx 中编写 React 组件，
+ * 对象在 files/ui/index.tsx 中编写 React 组件，
  * 前端通过 Vite 动态 import 加载，自动热更新。
  */
 
