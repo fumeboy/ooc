@@ -31,7 +31,7 @@ import { join, resolve, basename } from "node:path";
 import matter from "gray-matter";
 import { Flow } from "./flow.js";
 import { parseLLMOutput } from "./parser.js";
-import type { ExtractedTalk } from "./parser.js";
+import type { ExtractedTalk, ExtractedAction } from "./parser.js";
 import { emitSSE } from "../server/events.js";
 import { buildContext } from "../context/builder.js";
 import { loadFlowSummaries } from "../context/history.js";
@@ -305,7 +305,7 @@ export async function runThinkLoop(
 
     /* 3. 解析 LLM 输出（结构化段落 or legacy markdown 代码块） */
     const parsed = parseLLMOutput(llmOutput);
-    const { programs, talks, directives } = parsed;
+    const { programs, talks, actions, directives } = parsed;
     /* 结构化格式下，thought 就是 [thought] 段落内容；legacy 下是去掉代码块后的文本 */
     const replyContent = parsed.thought;
 
@@ -324,8 +324,83 @@ export async function runThinkLoop(
       consecutiveEmptyRounds = 0;
     }
 
-    /* 5. 无程序时，指令立即生效 */
-    if (programs.length === 0) {
+    /* 4.6 处理 [action/toolName] 结构化工具调用 */
+    if (actions.length > 0 && methodRegistry) {
+      for (const act of actions) {
+        let params: Record<string, unknown>;
+        try {
+          params = JSON.parse(act.params.trim());
+        } catch (e: any) {
+          /* JSON 解析失败，记录错误但不中断 */
+          flow.recordAction({
+            type: "action" as const,
+            content: `[action/${act.toolName}] ${act.params}`,
+            result: `JSON 解析失败: ${e.message}`,
+            success: false,
+          });
+          continue;
+        }
+
+        /* 从 registry 查找方法 */
+        const method = methodRegistry.get(act.toolName);
+        if (!method) {
+          flow.recordAction({
+            type: "action" as const,
+            content: `[action/${act.toolName}] ${act.params}`,
+            result: `未找到工具方法: ${act.toolName}`,
+            success: false,
+          });
+          continue;
+        }
+
+        /* 构建 methodCtx（与 buildExecutionContext 中一致） */
+        const actionMethodCtx: MethodContext = Object.defineProperty(
+          {
+            setData: (key: string, value: unknown) => { flow.setFlowData(key, value); },
+            getData: (key: string) => {
+              const flowData = flow.toJSON().data;
+              if (key in flowData) return flowData[key];
+              return stone.data[key];
+            },
+            print: (...args: unknown[]) => { /* action 模式下 print 输出记录到 result */ },
+            taskId: flow.taskId,
+            filesDir: flow.filesDir,
+            rootDir: resolve(stoneDir, "../.."),
+            selfDir: stoneDir,
+            stoneName: basename(stoneDir),
+          } as MethodContext,
+          "data",
+          { get: () => ({ ...stone.data, ...flow.toJSON().data }), enumerable: true },
+        );
+
+        /* 执行方法 */
+        try {
+          const args = method.params.map(p => params[p.name]);
+          const result = method.needsCtx
+            ? await method.fn(actionMethodCtx, ...args)
+            : await method.fn(...args);
+
+          flow.recordAction({
+            type: "action" as const,
+            content: `[action/${act.toolName}] ${JSON.stringify(params)}`,
+            result: JSON.stringify(result, null, 2),
+            success: true,
+          });
+        } catch (e: any) {
+          flow.recordAction({
+            type: "action" as const,
+            content: `[action/${act.toolName}] ${JSON.stringify(params)}`,
+            result: `执行失败: ${e.message}`,
+            success: false,
+          });
+        }
+      }
+      hasDeliveredOutput = true;
+      consecutiveEmptyRounds = 0;
+    }
+
+    /* 5. 无程序且无 action 时，指令立即生效 */
+    if (programs.length === 0 && actions.length === 0) {
       if (directives.finish) {
         /* Hook: when_finish */
         const hookInjection = collectAndFireHooks(traits, flow, "when_finish", firedHooks);

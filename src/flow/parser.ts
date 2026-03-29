@@ -30,6 +30,14 @@ export interface ExtractedTalk {
   message: string;
 }
 
+/** action 段落提取结果（结构化工具调用） */
+export interface ExtractedAction {
+  /** 工具方法名（从 [action/xxx] 提取） */
+  toolName: string;
+  /** JSON 参数字符串（段落内容） */
+  params: string;
+}
+
 /** 结构化解析结果 */
 export interface ParsedOutput {
   /** 思考内容（[thought] 段落） */
@@ -38,6 +46,8 @@ export interface ParsedOutput {
   programs: ExtractedProgram[];
   /** talk 消息列表（[talk/目标] 段落） */
   talks: ExtractedTalk[];
+  /** action 工具调用列表（[action/工具名] 段落） */
+  actions: ExtractedAction[];
   /** 指令 */
   directives: { finish: boolean; wait: boolean; break_: boolean };
   /** 是否使用了结构化格式 */
@@ -62,11 +72,23 @@ const TALK_OPEN_RE = /^\s*\[talk\/([a-zA-Z0-9_-]+)\]\s*$/;
 const TALK_CLOSE_RE = /^\s*\[\/talk\]\s*$/;
 
 /**
- * 检测结构化格式的正则：[thought]、[program]、[talk/xxx] 才算结构化格式
+ * action 开始标记正则：匹配 [action/工具方法名]
+ * 方法名只允许字母、数字、下划线、连字符
+ */
+const ACTION_OPEN_RE = /^\s*\[action\/([a-zA-Z0-9_-]+)\]\s*$/;
+
+/**
+ * action 结束标记正则：匹配 [/action]
+ */
+const ACTION_CLOSE_RE = /^\s*\[\/action\]\s*$/;
+
+/**
+ * 检测结构化格式的正则：[thought]、[program]、[talk/xxx]、[action/xxx] 才算结构化格式
  * [finish]/[wait]/[break] 在两种格式中都存在，不能作为判断依据
  */
 const STRUCTURED_TAG_RE = /^\s*\[(thought|program(?:\/(?:javascript|shell))?)\]\s*$/;
 const STRUCTURED_TALK_RE = /^\s*\[talk\/[a-zA-Z0-9_-]+\]\s*$/;
+const STRUCTURED_ACTION_RE = /^\s*\[action\/[a-zA-Z0-9_-]+\]\s*$/;
 
 /**
  * 解析 LLM 输出（统一入口）
@@ -86,10 +108,14 @@ export function parseLLMOutput(output: string): ParsedOutput {
   cleaned = cleaned.replace(/([^\n`])\[talk\//g, "$1\n[talk/");
   cleaned = cleaned.replace(/([^\n`])\[\/talk\]/g, "$1\n[/talk]");
   cleaned = cleaned.replace(/\[\/talk\]([^\n`])/g, "[/talk]\n$1");
+  /* 同样处理 [action/xxx] 和 [/action] 的内联情况 */
+  cleaned = cleaned.replace(/([^\n`])\[action\//g, "$1\n[action/");
+  cleaned = cleaned.replace(/([^\n`])\[\/action\]/g, "$1\n[/action]");
+  cleaned = cleaned.replace(/\[\/action\]([^\n`])/g, "[/action]\n$1");
 
-  /* 检测是否包含结构化段落标记（[thought]、[program]、[talk/xxx]） */
+  /* 检测是否包含结构化段落标记（[thought]、[program]、[talk/xxx]、[action/xxx]） */
   const lines = cleaned.split("\n");
-  const hasStructuredTags = lines.some(line => STRUCTURED_TAG_RE.test(line) || STRUCTURED_TALK_RE.test(line));
+  const hasStructuredTags = lines.some(line => STRUCTURED_TAG_RE.test(line) || STRUCTURED_TALK_RE.test(line) || STRUCTURED_ACTION_RE.test(line));
 
   if (hasStructuredTags) {
     return parseStructured(cleaned, lines);
@@ -116,12 +142,14 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
   const thoughtParts: string[] = [];
   const programs: ExtractedProgram[] = [];
   const talks: ExtractedTalk[] = [];
+  const actions: ExtractedAction[] = [];
   let finish = false;
   let wait = false;
   let break_ = false;
 
-  let currentSection: "thought" | "program" | "talk" | null = null;
+  let currentSection: "thought" | "program" | "talk" | "action" | null = null;
   let currentTalkTarget: string | null = null;
+  let currentActionToolName: string | null = null;
   let currentLang: "javascript" | "shell" = "javascript";
   let currentContent: string[] = [];
   let sectionStartLine = 0;
@@ -144,9 +172,15 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
       if (message) {
         talks.push({ target: currentTalkTarget, message });
       }
+    } else if (currentSection === "action" && currentActionToolName) {
+      const params = currentContent.join("\n").trim();
+      if (params) {
+        actions.push({ toolName: currentActionToolName, params });
+      }
     }
     currentSection = null;
     currentTalkTarget = null;
+    currentActionToolName = null;
     currentContent = [];
   };
 
@@ -155,9 +189,14 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
     const match = SECTION_TAG_RE.exec(line);
     const talkOpenMatch = TALK_OPEN_RE.exec(line);
     const talkCloseMatch = TALK_CLOSE_RE.test(line);
+    const actionOpenMatch = ACTION_OPEN_RE.exec(line);
+    const actionCloseMatch = ACTION_CLOSE_RE.test(line);
 
     if (talkCloseMatch && currentSection === "talk") {
       /* [/talk] 结束当前 talk 段落 */
+      flushSection(i);
+    } else if (actionCloseMatch && currentSection === "action") {
+      /* [/action] 结束当前 action 段落 */
       flushSection(i);
     } else if (talkOpenMatch) {
       /* [talk/target] 开始新的 talk 段落 */
@@ -165,6 +204,13 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
       seenTag = true;
       currentSection = "talk";
       currentTalkTarget = talkOpenMatch[1]!;
+      sectionStartLine = i + 1;
+    } else if (actionOpenMatch) {
+      /* [action/toolName] 开始新的 action 段落 */
+      flushSection(i);
+      seenTag = true;
+      currentSection = "action";
+      currentActionToolName = actionOpenMatch[1]!;
       sectionStartLine = i + 1;
     } else if (match) {
       flushSection(i);
@@ -197,14 +243,17 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
   /* flush 最后一个 section */
   flushSection(lines.length);
 
-  /* 互斥校验：[talk] 和 [program] 不能并存。
-   * 如果同时出现，忽略 talk 段落（program 优先，保持向后兼容） */
+  /* 互斥校验：[talk] 和 [program] 不能并存；[action] 和 [program] 不能并存。
+   * 如果同时出现，忽略 talk/action 段落（program 优先，保持向后兼容）。
+   * [action] 和 [talk] 可以共存。 */
   const finalTalks = programs.length > 0 ? [] : talks;
+  const finalActions = programs.length > 0 ? [] : actions;
 
   return {
     thought: thoughtParts.join("\n"),
     programs,
     talks: finalTalks,
+    actions: finalActions,
     directives: { finish, wait, break_ },
     isStructured: true,
   };
@@ -229,6 +278,7 @@ function parseLegacy(output: string): ParsedOutput {
     thought,
     programs,
     talks: [],
+    actions: [],
     directives,
     isStructured: false,
   };

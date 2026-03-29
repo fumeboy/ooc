@@ -14,7 +14,7 @@
 export type FlowStatus = "running" | "waiting" | "pausing" | "finished" | "failed";
 
 /** 事件类型 (G10) */
-export type ActionType = "thought" | "program" | "message_in" | "message_out" | "pause" | "inject";
+export type ActionType = "thought" | "program" | "action" | "message_in" | "message_out" | "pause" | "inject";
 
 /** 不可变事件记录 (G10) */
 export interface Action {

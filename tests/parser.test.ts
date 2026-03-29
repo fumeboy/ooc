@@ -321,3 +321,77 @@ print(x);`;
     expect(parsed.programs[0]!.code).toContain("const x = 1 + 2");
   });
 });
+
+describe("parseLLMOutput — [action/toolName] 段落", () => {
+  test("解析单个 action", () => {
+    const output = `[thought]\n需要编辑文件\n\n[action/editFile]\n{"path": "test.ts", "old": "foo", "new": "bar"}`;
+    const parsed = parseLLMOutput(output);
+    expect(parsed.isStructured).toBe(true);
+    expect(parsed.actions.length).toBe(1);
+    expect(parsed.actions[0]!.toolName).toBe("editFile");
+    expect(JSON.parse(parsed.actions[0]!.params)).toEqual({ path: "test.ts", old: "foo", new: "bar" });
+  });
+
+  test("解析多个 action", () => {
+    const output = `[action/readFile]\n{"path": "a.ts"}\n\n[action/readFile]\n{"path": "b.ts"}`;
+    const parsed = parseLLMOutput(output);
+    expect(parsed.actions.length).toBe(2);
+    expect(parsed.actions[0]!.toolName).toBe("readFile");
+    expect(parsed.actions[1]!.toolName).toBe("readFile");
+  });
+
+  test("action 和 program 互斥，program 优先", () => {
+    const output = `[action/readFile]\n{"path": "a.ts"}\n\n[program]\nconsole.log("hi")`;
+    const parsed = parseLLMOutput(output);
+    expect(parsed.actions.length).toBe(0);
+    expect(parsed.programs.length).toBe(1);
+  });
+
+  test("action 和 talk 可以共存", () => {
+    const output = `[action/readFile]\n{"path": "a.ts"}\n\n[talk/user]\n结果如下\n[/talk]`;
+    const parsed = parseLLMOutput(output);
+    expect(parsed.actions.length).toBe(1);
+    expect(parsed.talks.length).toBe(1);
+  });
+
+  test("action 带 [/action] 结束标记", () => {
+    const output = `[action/editFile]\n{"path": "test.ts", "old": "a", "new": "b"}\n[/action]`;
+    const parsed = parseLLMOutput(output);
+    expect(parsed.actions.length).toBe(1);
+    expect(parsed.actions[0]!.toolName).toBe("editFile");
+  });
+
+  test("action 无结束标记（流到末尾自动结束）", () => {
+    const output = `[action/glob]\n{"pattern": "**/*.ts"}`;
+    const parsed = parseLLMOutput(output);
+    expect(parsed.actions.length).toBe(1);
+    expect(parsed.actions[0]!.toolName).toBe("glob");
+    expect(parsed.actions[0]!.params).toBe('{"pattern": "**/*.ts"}');
+  });
+
+  test("action 和 thought 并存", () => {
+    const output = `[thought]\n我需要读取配置文件。\n\n[action/readFile]\n{"path": "config.ts"}`;
+    const parsed = parseLLMOutput(output);
+    expect(parsed.thought).toBe("我需要读取配置文件。");
+    expect(parsed.actions.length).toBe(1);
+  });
+
+  test("空 action 段落被忽略", () => {
+    const output = `[action/readFile]\n[/action]\n\n[wait]`;
+    const parsed = parseLLMOutput(output);
+    expect(parsed.actions.length).toBe(0);
+  });
+
+  test("仅有 action 段落也触发结构化解析", () => {
+    const output = `[action/readFile]\n{"path": "a.ts"}\n[/action]`;
+    const parsed = parseLLMOutput(output);
+    expect(parsed.isStructured).toBe(true);
+  });
+
+  test("legacy 格式不解析 action", () => {
+    const output = `普通文本\n\n\`\`\`javascript\nprint("hello");\n\`\`\`\n\n[finish]`;
+    const parsed = parseLLMOutput(output);
+    expect(parsed.isStructured).toBe(false);
+    expect(parsed.actions.length).toBe(0);
+  });
+});
