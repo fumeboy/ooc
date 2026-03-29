@@ -27,7 +27,7 @@
 
 import { consola } from "consola";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve, basename } from "node:path";
 import matter from "gray-matter";
 import { Flow } from "./flow.js";
 import { parseLLMOutput } from "./parser.js";
@@ -872,6 +872,9 @@ function buildExecutionContext(
         print: printFn,
         taskId: flow.taskId,
         filesDir: flow.filesDir,
+        rootDir: resolve(stoneDir, "../.."),
+        selfDir: stoneDir,
+        stoneName: basename(stoneDir),
       } as MethodContext,
       "data",
       { get: () => getMergedData(), enumerable: true },

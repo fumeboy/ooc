@@ -231,4 +231,50 @@ describe("MethodRegistry", () => {
     const result = await methods.multiply!(3, 4);
     expect(result).toBe(12);
   });
+
+  test("buildSandboxMethods 传递 rootDir/selfDir/stoneName", async () => {
+    const registry = new MethodRegistry();
+    const traits: TraitDefinition[] = [
+      {
+        name: "inspector",
+        when: "always",
+        description: "",
+        readme: "",
+        methods: [
+          {
+            name: "inspectCtx",
+            description: "返回 ctx 中的新字段",
+            params: [],
+            /** 方法接收 ctx，返回三个新字段 */
+            fn: async (ctx: Record<string, unknown>) => ({
+              rootDir: ctx.rootDir,
+              selfDir: ctx.selfDir,
+              stoneName: ctx.stoneName,
+            }),
+          },
+        ],
+        deps: [],
+      },
+    ];
+
+    registry.registerAll(traits);
+
+    const ctx = {
+      data: {},
+      getData: () => undefined,
+      setData: () => {},
+      print: () => {},
+      taskId: "t1",
+      filesDir: "/tmp/files",
+      rootDir: "/home/user/project",
+      selfDir: "/home/user/project/stones/alice",
+      stoneName: "alice",
+    };
+
+    const methods = registry.buildSandboxMethods(ctx);
+    const result = (await methods.inspectCtx!()) as Record<string, unknown>;
+    expect(result.rootDir).toBe("/home/user/project");
+    expect(result.selfDir).toBe("/home/user/project/stones/alice");
+    expect(result.stoneName).toBe("alice");
+  });
 });

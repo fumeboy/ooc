@@ -25,6 +25,12 @@ export interface MethodContext {
   readonly taskId: string;
   /** files/ 目录路径 */
   readonly filesDir: string;
+  /** world_dir（用户仓库根目录） */
+  readonly rootDir: string;
+  /** stones/{name}/（对象自身目录） */
+  readonly selfDir: string;
+  /** 对象名称 */
+  readonly stoneName: string;
 }
 
 /** 注册表中的方法条目 */
