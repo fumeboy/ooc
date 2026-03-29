@@ -47,3 +47,6 @@ export type {
   HookType,
   FrameHook,
 } from "./process.js";
+
+export type { ToolResult } from "./tool-result.js";
+export { toolOk, toolErr } from "./tool-result.js";
