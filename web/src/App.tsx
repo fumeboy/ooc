@@ -1,17 +1,18 @@
 /**
  * App — OOC 前端根组件
  *
- * 水平布局：「网站左边栏」（Logo + Tab 切换 + 文件树）+ 右侧主内容区（面包屑 + ViewRouter/ChatPage）。
+ * 水平布局：「网站左边栏」（Logo + Tab 切换 + 文件树）+ 右侧主内容区（面包屑 + ViewRouter/ChatPage）+ MessageSidebar。
  * 三个 Tab：Flows / Stones / World，各自展示对应的文件树。
  *
  * @ref ooc://file/stones/sophia/files/哲学文档/gene.md#G11 — implements — 前端整体布局
  */
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom, useSetAtom, useAtomValue } from "jotai";
 import { objectsAtom } from "./store/objects";
 import {
   activeTabAtom,
   sseConnectedAtom,
+  activeSessionFlowAtom,
   activeSessionIdAtom,
   editorTabsAtom,
   activeFilePathAtom,
@@ -20,11 +21,13 @@ import {
   userSessionsAtom,
 } from "./store/session";
 import type { AppTab } from "./store/session";
-import { fetchObjects, fetchProjectTree, fetchSessions } from "./api/client";
+import { fetchObjects, fetchProjectTree, fetchSessions, updateFlowTitle } from "./api/client";
 import type { FileTreeNode } from "./api/types";
 import { ChatPage } from "./features/ChatPage";
 import { viewRegistry, registerAllViews } from "./router";
+import { SessionsList } from "./features/SessionsList";
 import { SessionFileTree } from "./features/SessionFileTree";
+import { MessageSidebar } from "./features/MessageSidebar";
 import { FileTree } from "./components/ui/FileTree";
 import { useSSE } from "./hooks/useSSE";
 import { useIsMobile } from "./hooks/useIsMobile";
@@ -33,7 +36,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { OocLogo } from "./components/OocLogo";
 import { Sheet, SheetContent, SheetTrigger } from "./components/ui/sheet";
 import { cn } from "./lib/utils";
-import { GitBranch, Box, Globe, Menu, RotateCw, ChevronRight } from "lucide-react";
+import { GitBranch, Box, Globe, List, Menu, RotateCw, ChevronDown, ChevronRight } from "lucide-react";
 import bgSvg from "./assets/bg.svg";
 
 /* 初始化视图注册表（只执行一次） */
@@ -51,7 +54,6 @@ interface RecentFile {
 function getRecentFiles(): RecentFile[] {
   try {
     const raw = JSON.parse(localStorage.getItem(RECENT_FILES_KEY) || "[]");
-    /* 兼容旧格式（纯字符串数组） */
     if (raw.length > 0 && typeof raw[0] === "string") {
       return raw.map((p: string) => ({ path: p, label: p.split("/").pop() || p }));
     }
@@ -65,7 +67,7 @@ function addRecentFile(path: string, label?: string) {
   localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(recent.slice(0, MAX_RECENT)));
 }
 
-/** 过滤 Stones 文件树：隐藏 stone 级冗余文件 + reflect 目录中的 data.json/process.json */
+/** 过滤 Stones 文件树 */
 const STONE_HIDDEN_FILES = new Set(["readme.md", "memory.md", "data.json"]);
 const STONE_HIDDEN_DIRS = new Set(["traits"]);
 const FLOW_HIDDEN_FILES = new Set(["data.json", "process.json"]);
@@ -74,11 +76,8 @@ function filterStoneTree(node: FileTreeNode): FileTreeNode {
   if (!node.children) return node;
   const filtered = node.children
     .filter((c) => {
-      /* 每个 stone 子目录下隐藏冗余文件 */
       if (c.type === "file" && node.marker === "stone" && STONE_HIDDEN_FILES.has(c.name)) return false;
-      /* 每个 stone 子目录下隐藏 traits 目录 */
       if (c.type === "directory" && node.marker === "stone" && STONE_HIDDEN_DIRS.has(c.name)) return false;
-      /* reflect 目录下隐藏 data.json/process.json */
       if (c.type === "file" && node.name === "reflect" && FLOW_HIDDEN_FILES.has(c.name)) return false;
       return true;
     })
@@ -96,6 +95,7 @@ export function App() {
   const setObjects = useSetAtom(objectsAtom);
   const [activeTab, setActiveTab] = useAtom(activeTabAtom);
   const [sseConnected] = useAtom(sseConnectedAtom);
+  const [activeFlow, setActiveFlow] = useAtom(activeSessionFlowAtom);
   const [activeId, setActiveId] = useAtom(activeSessionIdAtom);
   const [tabs, setTabs] = useAtom(editorTabsAtom);
   const [activePath, setActivePath] = useAtom(activeFilePathAtom);
@@ -114,8 +114,16 @@ export function App() {
     return map;
   }, [sessions]);
 
+  /* Flows tab: sessions 列表 vs session 文件树 */
+  const [showSessions, setShowSessions] = useState(true);
+
   /* 移动端 Sheet 开关 */
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  /* 当选中会话时自动切到文件树，取消选中时切回 sessions */
+  useEffect(() => {
+    setShowSessions(!activeId);
+  }, [activeId]);
 
   /* 加载对象列表 + sessions */
   useEffect(() => {
@@ -126,30 +134,37 @@ export function App() {
   /* SSE 连接 */
   useSSE();
 
-  /* World tab: 加载 .ooc/ 项目文件树 */
+  /* World tab: 加载项目文件树 */
   useEffect(() => {
     if (activeTab === "world" || activeTab === "stones") {
       fetchProjectTree().then(setSidebarTree).catch(console.error);
     }
   }, [activeTab, setSidebarTree]);
 
-  /* Session title 编辑 */
+  /* Session title */
+  const sessionTitle = activeFlow?.title
+    || activeFlow?.messages?.[0]?.content?.slice(0, 40)
+    || "";
+
+  const handleTitleSave = async (newTitle: string) => {
+    if (!activeFlow) return;
+    try {
+      await updateFlowTitle(activeFlow.taskId, newTitle);
+      setActiveFlow({ ...activeFlow, title: newTitle });
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   /* 打开文件 tab（通过 ViewRegistry 统一路由） */
   const openFileTab = useCallback((path: string, node: FileTreeNode) => {
     let resolvedPath = path;
 
-    /* 从 flows/ 路径中提取 sessionId 并设置 activeId */
-    const sessionMatch = path.match(/^flows\/([^/]+)/);
-    if (sessionMatch) {
-      setActiveId(sessionMatch[1]!);
-    }
-
     /* .stone 虚拟节点在 Flows 上下文中 → 重定向到 FlowView 路径 */
-    if (activeTab === "flows" && node.marker === "stone") {
+    if (activeTab === "flows" && activeId && node.marker === "stone") {
       const stoneMatch = path.match(/^stones\/([^/]+)$/);
-      if (stoneMatch && sessionMatch) {
-        resolvedPath = `flows/${sessionMatch[1]!}/flows/${stoneMatch[1]!}`;
+      if (stoneMatch) {
+        resolvedPath = `flows/${activeId}/flows/${stoneMatch[1]!}`;
       }
     }
 
@@ -166,12 +181,10 @@ export function App() {
 
     setTabs((prev) => {
       const existing = prev.find((t) => {
-        /* 用 tabKey 匹配：检查已有 tab 的 tabKey 是否相同 */
         const existingResult = viewRegistry.resolve(t.path);
         return existingResult && existingResult.tabKey === tabKey;
       });
       if (existing) {
-        /* 复用已有 tab，更新 path（触发组件内部子路由切换） */
         return prev.map((t) => t === existing ? { ...t, path: resolvedPath } : t);
       }
       return [...prev, { path: resolvedPath, label: tabLabel }];
@@ -182,6 +195,10 @@ export function App() {
   /* 侧边栏文件树内容 */
   const renderSidebarTree = () => {
     if (activeTab === "flows") {
+      if (showSessions || !activeId) {
+        return <SessionsList onSelect={() => isMobile && setSheetOpen(false)} />;
+      }
+
       const recentPaths = getRecentFiles();
       const recentRoot: FileTreeNode | null = recentPaths.length > 0 ? {
         name: "__root__",
@@ -208,6 +225,7 @@ export function App() {
             </div>
           )}
           <SessionFileTree
+            sessionId={activeId}
             onSelect={openFileTab}
             selectedPath={activePath ?? undefined}
           />
@@ -217,7 +235,6 @@ export function App() {
 
     if (activeTab === "stones") {
       if (!sidebarTree) return <p className="px-3 py-4 text-xs text-[var(--muted-foreground)] text-center">加载中...</p>;
-      /* 只展示 stones/ 子树，过滤冗余文件 */
       const stonesNode = sidebarTree.children?.find((c) => c.name === "stones");
       if (!stonesNode) return <p className="px-3 py-4 text-xs text-[var(--muted-foreground)] text-center">无 stones</p>;
       const filtered = filterStoneTree(stonesNode);
@@ -343,6 +360,18 @@ export function App() {
         </nav>
       </div>
 
+      {/* Session Bar（仅 Flows 模式有活跃会话时显示） */}
+      {activeTab === "flows" && activeFlow && (
+        <div className="px-3 pb-2 shrink-0 w-full">
+          <SessionBar
+            title={sessionTitle}
+            showSessions={showSessions}
+            onToggleSessions={() => setShowSessions(!showSessions)}
+            onSave={handleTitleSave}
+          />
+        </div>
+      )}
+
       {/* 列表/文件树区域 */}
       <div className="flex-1 overflow-auto w-full">
         {renderSidebarTree()}
@@ -381,7 +410,7 @@ export function App() {
           </Sheet>
           <span className="text-sm font-medium truncate flex-1">
             {activeTab === "flows"
-              ? "Flows"
+              ? (sessionTitle || "Flows")
               : activeTab === "stones" ? "Stones" : "World"}
           </span>
           <span
@@ -422,10 +451,93 @@ export function App() {
         {renderMainContent()}
       </main>
 
+      {/* 右侧消息侧边栏 */}
+      {activeTab === "flows" && activeId && !isMobile && (
+        <MessageSidebar />
+      )}
+
       {/* ooc:// 链接弹窗 */}
       <OocLinkPreview />
       {/* Cmd+K 命令面板 */}
       <CommandPalette />
+    </div>
+  );
+}
+
+/** Session Bar — 整合 session list 切换 + title 编辑 */
+function SessionBar({
+  title,
+  showSessions,
+  onToggleSessions,
+  onSave,
+}: {
+  title: string;
+  showSessions: boolean;
+  onToggleSessions: () => void;
+  onSave: (t: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(title);
+  const inputRef = { current: null as HTMLInputElement | null };
+
+  useEffect(() => { setDraft(title); }, [title]);
+  useEffect(() => { if (editing) inputRef.current?.select(); }, [editing]);
+
+  const commit = () => {
+    setEditing(false);
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== title) onSave(trimmed);
+    else setDraft(title);
+  };
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-1.5 rounded-lg transition-colors",
+        "bg-[var(--accent)]/40 hover:bg-[var(--accent)]",
+      )}
+    >
+      <button
+        onClick={onToggleSessions}
+        className={cn(
+          "p-1.5 pl-2.5 rounded-l-lg transition-colors shrink-0",
+          showSessions
+            ? "text-[var(--foreground)]"
+            : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]",
+        )}
+        title={showSessions ? "Show file tree" : "Show sessions"}
+      >
+        <List className="w-3.5 h-3.5" />
+      </button>
+
+      {editing ? (
+        <input
+          ref={(el) => { inputRef.current = el; }}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") { setDraft(title); setEditing(false); }
+          }}
+          className="flex-1 min-w-0 bg-transparent text-xs text-[var(--foreground)] py-1.5 outline-none"
+        />
+      ) : (
+        <button
+          onClick={() => setEditing(true)}
+          className="flex-1 min-w-0 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] py-1.5 truncate text-left transition-colors"
+          title="Click to rename"
+        >
+          {title || "Untitled session"}
+        </button>
+      )}
+
+      <button
+        onClick={onToggleSessions}
+        className="p-1.5 pr-2.5 rounded-r-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors shrink-0"
+      >
+        <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showSessions && "rotate-180")} />
+      </button>
     </div>
   );
 }

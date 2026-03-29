@@ -2,14 +2,15 @@
  * ActionCard / TalkCard — 统一的 action 和 talk 卡片组件
  *
  * 用于 ProcessView 和 ChatPage Timeline 两处渲染。
- * 包含工具栏：ID 显示、Zoom-in、Copy、Ref 按钮。
+ * 包含工具栏：Zoom-in、Copy、Ref 按钮。
+ * ID + 时间显示在卡片底部（边框外）。
+ * Zoom-in 使用居中模态窗展示。
  */
 import { useState, useRef, useEffect } from "react";
 import { cn } from "../../lib/utils";
 import { MarkdownContent } from "./MarkdownContent";
 import { ObjectAvatar } from "./ObjectAvatar";
-import { Maximize2, Copy, Link, Check } from "lucide-react";
-import { Sheet, SheetContent } from "./sheet";
+import { Maximize2, Copy, Link, Check, X, Loader2 } from "lucide-react";
 import type { Action, FlowMessage } from "../../api/types";
 
 const ACTION_BADGE: Record<string, string> = {
@@ -87,21 +88,43 @@ function InlineCopyBtn({ text, title = "复制" }: { text: string; title?: strin
   );
 }
 
+/* ── 居中模态窗 ── */
+function Modal({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50" />
+      <div
+        className="relative bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-2xl w-[680px] max-w-[90vw] max-h-[85vh] overflow-y-auto p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 /* ================================================================
  *  ActionCard
  * ================================================================ */
 
 interface ActionCardProps {
   action: Action;
-  /** 显示 object 头像和名称（Timeline 模式） */
   objectName?: string;
   maxHeight?: number | string;
-  /** 引用回调：点击 Ref 按钮时触发 */
   onRef?: (id: string, objectName: string) => void;
+  /** 是否正在通过 SSE 更新 */
+  loading?: boolean;
 }
 
-export function ActionCard({ action, objectName, maxHeight = 220, onRef }: ActionCardProps) {
-  const [sheetOpen, setSheetOpen] = useState(false);
+export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading }: ActionCardProps) {
+  const [modalOpen, setModalOpen] = useState(false);
   const [focused, setFocused] = useState(false);
   const [hovered, setHovered] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -123,6 +146,9 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef }: Actio
   });
 
   const bodyOverflow = focused ? "auto" : "hidden";
+  const maxHeightStyle = maxHeight != null
+    ? typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight
+    : undefined;
 
   return (
     <div className="text-xs">
@@ -150,6 +176,7 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef }: Actio
               </>
             )}
             <span className={cn("text-[11px] font-mono", badgeColor)}>[{action.type}]</span>
+            {loading && <Loader2 className="w-3 h-3 animate-spin text-[var(--muted-foreground)]" />}
             {isProgram && action.success !== undefined && (
               <span
                 className={cn(
@@ -171,28 +198,17 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef }: Actio
             />
           </div>
 
-          {/* 右侧：ID + 时间 + 工具栏 */}
-          <div className="flex-1 flex items-center justify-end gap-1.5 px-3">
-            {action.id && (
-              <span className="text-[9px] font-mono text-[var(--muted-foreground)] opacity-60 truncate max-w-[80px]">
-                {action.id}
-              </span>
-            )}
-            <span className="text-[10px] text-[var(--muted-foreground)]">{ts}</span>
-            <div className="flex items-center gap-0.5">
-              {/* Zoom-in */}
-              <ToolbarBtn title="展开详情" onClick={() => setSheetOpen(true)}>
-                <Maximize2 className="w-3 h-3" />
+          {/* 右侧：工具栏 */}
+          <div className="flex-1 flex items-center justify-end gap-0.5 px-3">
+            <ToolbarBtn title="展开详情" onClick={() => setModalOpen(true)}>
+              <Maximize2 className="w-3 h-3" />
+            </ToolbarBtn>
+            {!isProgram && <CopyBtn text={action.content} title="复制内容" />}
+            {action.id && objectName && (
+              <ToolbarBtn title="引用" onClick={() => onRef?.(action.id!, objectName)}>
+                <Link className="w-3 h-3" />
               </ToolbarBtn>
-              {/* Copy（非 program 类型才在 header 显示） */}
-              {!isProgram && <CopyBtn text={action.content} title="复制内容" />}
-              {/* Ref */}
-              {action.id && objectName && (
-                <ToolbarBtn title="引用" onClick={() => onRef?.(action.id!, objectName)}>
-                  <Link className="w-3 h-3" />
-                </ToolbarBtn>
-              )}
-            </div>
+            )}
           </div>
         </div>
 
@@ -208,8 +224,9 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef }: Actio
             }}
           />
           {isProgram ? (
-            <div className="flex divide-x divide-[var(--border)]">
-              <div ref={contentRef} className="flex-1 min-w-0" style={{ maxHeight: `${typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight}`, overflow: bodyOverflow }}>
+            <div className="@container">
+              <div className="flex flex-col @[600px]:flex-row divide-y @[600px]:divide-y-0 @[600px]:divide-x divide-[var(--border)]">
+              <div ref={contentRef} className="flex-1 min-w-0" style={{ maxHeight: maxHeightStyle, overflow: maxHeightStyle ? bodyOverflow : undefined }}>
                 <div className="px-3 py-2">
                   <p className="text-[10px] text-[var(--muted-foreground)] mb-1 font-medium flex items-center">
                     Program
@@ -219,7 +236,7 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef }: Actio
                 </div>
               </div>
               {action.result && (
-                <div className="flex-1 min-w-0" style={{ maxHeight: `${typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight}`, overflow: bodyOverflow }}>
+                <div className="flex-1 min-w-0" style={{ maxHeight: maxHeightStyle, overflow: maxHeightStyle ? bodyOverflow : undefined }}>
                   <div className="px-3 py-2">
                     <p className="text-[10px] text-[var(--muted-foreground)] mb-1 font-medium flex items-center">
                       Output
@@ -229,15 +246,15 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef }: Actio
                   </div>
                 </div>
               )}
+              </div>
             </div>
           ) : (
-            <div ref={contentRef} style={{ maxHeight: `${typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight}`, overflow: bodyOverflow }}>
+            <div ref={contentRef} style={{ maxHeight: maxHeightStyle, overflow: maxHeightStyle ? bodyOverflow : undefined }}>
               <div className="px-3 py-4">
                 <MarkdownContent content={action.content} className="text-sm leading-relaxed" />
               </div>
             </div>
           )}
-          {/* Click to Scroll 提示 */}
           {overflows && (
             <div
               className="absolute bottom-0 left-0 right-0 flex items-end justify-center pb-2 pt-8 pointer-events-none transition-opacity duration-200"
@@ -253,44 +270,52 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef }: Actio
         </div>
       </div>
 
-      {/* Zoom-in Sheet 弹窗 */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="right" className="w-[520px] max-w-[90vw] overflow-y-auto p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <span className={cn("text-xs font-mono", badgeColor)}>[{action.type}]</span>
-            {isProgram && action.success !== undefined && (
-              <span
-                className={cn(
-                  "text-xs font-semibold",
-                  action.success === false ? "text-red-500 dark:text-red-400" : "text-green-500 dark:text-green-400",
-                )}
-              >
-                {action.success === false ? "FAIL" : "OK"}
-              </span>
-            )}
-            <span className="text-xs text-[var(--muted-foreground)]">{ts}</span>
-            {action.id && (
-              <span className="text-[10px] font-mono text-[var(--muted-foreground)] opacity-60">{action.id}</span>
+      {/* 卡片尾部：ID + 时间（边框外） */}
+      <div className="flex items-center gap-1.5 px-2 pt-1">
+        {action.id && (
+          <span className="text-[9px] font-mono text-[var(--muted-foreground)] opacity-50 truncate max-w-[100px]">
+            {action.id}
+          </span>
+        )}
+        <span className="text-[9px] text-[var(--muted-foreground)] opacity-50">{ts}</span>
+      </div>
+
+      {/* Zoom-in 模态窗 */}
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
+        <div className="flex items-center gap-2 mb-4">
+          <span className={cn("text-xs font-mono", badgeColor)}>[{action.type}]</span>
+          {isProgram && action.success !== undefined && (
+            <span
+              className={cn(
+                "text-xs font-semibold",
+                action.success === false ? "text-red-500 dark:text-red-400" : "text-green-500 dark:text-green-400",
+              )}
+            >
+              {action.success === false ? "FAIL" : "OK"}
+            </span>
+          )}
+          <span className="text-xs text-[var(--muted-foreground)]">{ts}</span>
+          {action.id && (
+            <span className="text-[10px] font-mono text-[var(--muted-foreground)] opacity-60">{action.id}</span>
+          )}
+        </div>
+        {isProgram ? (
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs text-[var(--muted-foreground)] mb-1 font-medium">Program</p>
+              <pre className="text-xs font-mono whitespace-pre-wrap break-all leading-relaxed">{action.content}</pre>
+            </div>
+            {action.result && (
+              <div>
+                <p className="text-xs text-[var(--muted-foreground)] mb-1 font-medium">Output</p>
+                <pre className="text-xs font-mono whitespace-pre-wrap break-all leading-relaxed">{action.result}</pre>
+              </div>
             )}
           </div>
-          {isProgram ? (
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs text-[var(--muted-foreground)] mb-1 font-medium">Program</p>
-                <pre className="text-xs font-mono whitespace-pre-wrap break-all leading-relaxed">{action.content}</pre>
-              </div>
-              {action.result && (
-                <div>
-                  <p className="text-xs text-[var(--muted-foreground)] mb-1 font-medium">Output</p>
-                  <pre className="text-xs font-mono whitespace-pre-wrap break-all leading-relaxed">{action.result}</pre>
-                </div>
-              )}
-            </div>
-          ) : (
-            <MarkdownContent content={action.content} className="text-sm leading-relaxed" />
-          )}
-        </SheetContent>
-      </Sheet>
+        ) : (
+          <MarkdownContent content={action.content} className="text-sm leading-relaxed" />
+        )}
+      </Modal>
     </div>
   );
 }
@@ -302,12 +327,11 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef }: Actio
 interface TalkCardProps {
   msg: FlowMessage;
   maxHeight?: number | string;
-  /** 引用回调：点击 Ref 按钮时触发 */
   onRef?: (id: string, objectName: string) => void;
 }
 
 export function TalkCard({ msg, maxHeight = 300, onRef }: TalkCardProps) {
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [focused, setFocused] = useState(false);
   const [hovered, setHovered] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -325,6 +349,9 @@ export function TalkCard({ msg, maxHeight = 300, onRef }: TalkCardProps) {
     minute: "2-digit",
     second: "2-digit",
   });
+  const maxHeightStyle = maxHeight != null && maxHeight !== 0
+    ? typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight
+    : undefined;
 
   return (
     <div className="text-xs">
@@ -361,28 +388,17 @@ export function TalkCard({ msg, maxHeight = 300, onRef }: TalkCardProps) {
             />
           </div>
 
-          {/* 右侧：ID + 时间 + 工具栏 */}
-          <div className="flex-1 flex items-center justify-end gap-1.5 px-3">
+          {/* 右侧：工具栏 */}
+          <div className="flex-1 flex items-center justify-end gap-0.5 px-3">
+            <ToolbarBtn title="展开详情" onClick={() => setModalOpen(true)}>
+              <Maximize2 className="w-3 h-3" />
+            </ToolbarBtn>
+            <CopyBtn text={msg.content} title="复制内容" />
             {msg.id && (
-              <span className="text-[9px] font-mono text-[var(--muted-foreground)] opacity-60 truncate max-w-[80px]">
-                {msg.id}
-              </span>
-            )}
-            <span className="text-[10px] text-[var(--muted-foreground)]">{ts}</span>
-            <div className="flex items-center gap-0.5">
-              {/* Zoom-in */}
-              <ToolbarBtn title="展开详情" onClick={() => setSheetOpen(true)}>
-                <Maximize2 className="w-3 h-3" />
+              <ToolbarBtn title="引用" onClick={() => onRef?.(msg.id!, msg.from)}>
+                <Link className="w-3 h-3" />
               </ToolbarBtn>
-              {/* Copy */}
-              <CopyBtn text={msg.content} title="复制内容" />
-              {/* Ref */}
-              {msg.id && (
-                <ToolbarBtn title="引用" onClick={() => onRef?.(msg.id!, msg.from)}>
-                  <Link className="w-3 h-3" />
-                </ToolbarBtn>
-              )}
-            </div>
+            )}
           </div>
         </div>
 
@@ -397,12 +413,11 @@ export function TalkCard({ msg, maxHeight = 300, onRef }: TalkCardProps) {
               background: `radial-gradient(circle at 0% 100%, transparent ${R}px, var(--card) ${R}px)`,
             }}
           />
-          <div ref={contentRef} style={{ maxHeight: `${typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight}`, overflow: focused ? "auto" : "hidden" }}>
+          <div ref={contentRef} style={{ maxHeight: maxHeightStyle, overflow: maxHeightStyle ? (focused ? "auto" : "hidden") : undefined }}>
             <div className="px-3 py-4">
               <MarkdownContent content={msg.content} className="text-sm leading-relaxed" />
             </div>
           </div>
-          {/* Click to Scroll 提示 */}
           {overflows && (
             <div
               className="absolute bottom-0 left-0 right-0 flex items-end justify-center pb-2 pt-8 pointer-events-none transition-opacity duration-200"
@@ -418,23 +433,31 @@ export function TalkCard({ msg, maxHeight = 300, onRef }: TalkCardProps) {
         </div>
       </div>
 
-      {/* Zoom-in Sheet 弹窗 */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="right" className="w-[520px] max-w-[90vw] overflow-y-auto p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <ObjectAvatar name={msg.from} size="sm" />
-            <span className="text-xs text-[var(--muted-foreground)]">{msg.from}</span>
-            <span className="text-[var(--border)]">→</span>
-            <span className="text-xs text-[var(--muted-foreground)]">{msg.to}</span>
-            <span className="text-xs font-mono text-violet-700 dark:text-violet-300">[talk]</span>
-            <span className="text-xs text-[var(--muted-foreground)]">{ts}</span>
-            {msg.id && (
-              <span className="text-[10px] font-mono text-[var(--muted-foreground)] opacity-60">{msg.id}</span>
-            )}
-          </div>
-          <MarkdownContent content={msg.content} className="text-sm leading-relaxed" />
-        </SheetContent>
-      </Sheet>
+      {/* 卡片尾部：ID + 时间（边框外） */}
+      <div className="flex items-center gap-1.5 px-2 pt-1">
+        {msg.id && (
+          <span className="text-[9px] font-mono text-[var(--muted-foreground)] opacity-50 truncate max-w-[100px]">
+            {msg.id}
+          </span>
+        )}
+        <span className="text-[9px] text-[var(--muted-foreground)] opacity-50">{ts}</span>
+      </div>
+
+      {/* Zoom-in 模态窗 */}
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
+        <div className="flex items-center gap-2 mb-4">
+          <ObjectAvatar name={msg.from} size="sm" />
+          <span className="text-xs text-[var(--muted-foreground)]">{msg.from}</span>
+          <span className="text-[var(--border)]">→</span>
+          <span className="text-xs text-[var(--muted-foreground)]">{msg.to}</span>
+          <span className="text-xs font-mono text-violet-700 dark:text-violet-300">[talk]</span>
+          <span className="text-xs text-[var(--muted-foreground)]">{ts}</span>
+          {msg.id && (
+            <span className="text-[10px] font-mono text-[var(--muted-foreground)] opacity-60">{msg.id}</span>
+          )}
+        </div>
+        <MarkdownContent content={msg.content} className="text-sm leading-relaxed" />
+      </Modal>
     </div>
   );
 }

@@ -1,30 +1,28 @@
 /**
- * SessionFileTree — 所有 sessions 的文件目录树（侧边栏）
+ * SessionFileTree — 当前 session 的文件目录树（侧边栏）
  *
- * 在 flows tab 中展示 flows/ 下所有 session 的文件结构。
- * 每个 session 显示为一个目录节点，名称为 session title。
+ * 在 flows tab 中，当有活跃 session 时展示该 session 的文件结构。
  * 注入虚拟节点：
  * - index（session 根级）→ 打开 Chat "all" 视图
  * - .stone（每个 flow 对象目录下）→ 展示对应 stones/{objectId}/ 的文件树
- * - ui（有 files/ui/ 的 flow 对象下）→ 打开自渲染 UI
  */
 import { useState, useEffect } from "react";
 import { useAtomValue } from "jotai";
 import { lastFlowEventAtom } from "../store/session";
-import { fetchSessions, fetchSessionTree, fetchStoneTree } from "../api/client";
+import { fetchSessionTree, fetchStoneTree } from "../api/client";
 import { FileTree } from "../components/ui/FileTree";
 import type { FileTreeNode } from "../api/types";
-import type { FlowSummary } from "../api/types";
 
 interface SessionFileTreeProps {
+  sessionId: string;
   onSelect?: (path: string, node: FileTreeNode) => void;
   selectedPath?: string;
 }
 
 /**
- * 增强单个 session 的文件树：注入 index + .stone + ui 虚拟节点
+ * 增强文件树：注入 index 虚拟节点 + .stone 虚拟目录 + 过滤冗余文件
  */
-async function enhanceSessionTree(tree: FileTreeNode, sessionId: string): Promise<FileTreeNode> {
+async function enhanceTree(tree: FileTreeNode, sessionId: string): Promise<FileTreeNode> {
   const enhanced = { ...tree, children: [...(tree.children ?? [])] };
 
   /* 1. 在根级插入 index 虚拟节点 */
@@ -100,73 +98,38 @@ async function enhanceSessionTree(tree: FileTreeNode, sessionId: string): Promis
   return enhanced;
 }
 
-export function SessionFileTree({ onSelect, selectedPath }: SessionFileTreeProps) {
+export function SessionFileTree({ sessionId, onSelect, selectedPath }: SessionFileTreeProps) {
   const [tree, setTree] = useState<FileTreeNode | null>(null);
   const [loading, setLoading] = useState(true);
   const lastEvent = useAtomValue(lastFlowEventAtom);
 
-  /* 构建所有 sessions 的文件树 */
-  const buildTree = async () => {
-    const sessions = await fetchSessions();
-    /* 按更新时间倒序（API 已排序） */
-    const sessionNodes: FileTreeNode[] = [];
-
-    for (const session of sessions) {
-      const title = session.title
-        || session.firstMessage?.slice(0, 40)
-        || session.taskId.slice(0, 16);
-
-      const sessionNode: FileTreeNode = {
-        name: title,
-        type: "directory",
-        path: `flows/${session.taskId}`,
-        marker: "flow",
-        children: [],
-      };
-
-      /* 尝试加载并增强 session 内部文件树 */
-      try {
-        const rawTree = await fetchSessionTree(session.taskId);
-        const enhanced = await enhanceSessionTree(rawTree, session.taskId);
-        sessionNode.children = enhanced.children;
-      } catch {
-        /* 加载失败，保留空目录 */
-      }
-
-      sessionNodes.push(sessionNode);
-    }
-
-    const root: FileTreeNode = {
-      name: "flows",
-      type: "directory",
-      path: "flows",
-      children: sessionNodes,
-    };
-
-    return root;
-  };
-
-  /* 初始加载 */
+  /* 加载 session 文件树 + 增强 */
   useEffect(() => {
     setLoading(true);
-    buildTree()
+    fetchSessionTree(sessionId)
+      .then((raw) => enhanceTree(raw, sessionId))
       .then(setTree)
       .catch(() => setTree(null))
       .finally(() => setLoading(false));
-  }, []);
+  }, [sessionId]);
 
   /* SSE 事件触发刷新 */
   useEffect(() => {
-    if (!lastEvent) return;
-    buildTree().then(setTree).catch(() => {});
-  }, [lastEvent]);
+    if (!lastEvent || !("taskId" in lastEvent)) return;
+    if (lastEvent.taskId === sessionId) {
+      fetchSessionTree(sessionId)
+        .then((raw) => enhanceTree(raw, sessionId))
+        .then(setTree)
+        .catch(() => {});
+    }
+  }, [lastEvent, sessionId]);
 
   if (loading) {
     return <p className="px-3 py-4 text-xs text-[var(--muted-foreground)] text-center">加载中...</p>;
   }
 
   if (!tree) {
-    return <p className="px-3 py-4 text-xs text-[var(--muted-foreground)] text-center">无会话</p>;
+    return <p className="px-3 py-4 text-xs text-[var(--muted-foreground)] text-center">无文件</p>;
   }
 
   return (

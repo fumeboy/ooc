@@ -7,14 +7,13 @@ hooks:
       在你 [wait] 之前，回顾一下你刚才执行的 actions：
       - 如果你已经用 talk() 回复了所有需要回复的消息（effects 中显示"已投递"），那就直接 [wait]，不要重复发送。
       - 如果你收到了来自其他对象的消息但还没有用 talk() 回复，先回复再 [wait]。
-      - 如果你刚才写了 UI（写入了 ui/index.tsx）或生成了文档到 shared/，你是否在 talk 消息中包含了导航卡片？格式：[navigate title="标题" description="描述"]ooc://...[/navigate]。用户需要导航卡片才能方便地跳转查看。
+      - 如果你刚才写了 UI（写入了 ui/index.tsx）或生成了文档到 files/，你是否在 talk 消息中包含了导航卡片？格式：[navigate title="标题" description="描述"]ooc://...[/navigate]。用户需要导航卡片才能方便地跳转查看。
       重复发送相同内容是严重的体验问题。
     once: true
   when_finish:
     inject: |
       在你 [finish] 之前，检查一下：你是否已经用 talk() 把任务结果发送给了请求者（user 或其他对象）？
       如果还没有发送结果，你必须先 talk() 给请求者，然后再 [finish]。
-      只写到 shared 文件或 setData 是不够的——请求者看不到这些，他们只能看到你 talk() 发送的消息。
       如果你写了 UI 或文档，talk 消息中必须包含导航卡片：[navigate title="标题"]ooc://...[/navigate]。
     once: true
 ---
@@ -86,7 +85,7 @@ B → A: "结果：[...]"
 
 - 这是异步的：调用方发出请求后需要 `[wait]`，等待对方回复
 - 如果函数不存在或参数错误，被调用方应明确告知
-- 结果较大时，可以写入 shared 文件并告知 `ooc://` 协议文件路径
+- 结果较大时，可以写入 files 文件并告知 `ooc://` 协议文件路径
 
 ## 跨对象对话
 
@@ -187,7 +186,7 @@ talk("你的回复内容", "user");
 错误示例：
 - ❌ talk 给对方 "我完成了任务，学到了很多"
 - ❌ talk 给对方 "我的反思：这个任务让我意识到..."
-- ❌ 把结果写到 shared 文件但只 talk 给对方一句"已完成"
+- ❌ 把结果写到 files 文件但只 talk 给对方一句"已完成"
 - ❌ 执行完代码后直接 [wait]，不告知对方结果
 
 如果结果内容很长（超过 2000 字），可以：
@@ -210,7 +209,7 @@ talk("你的回复内容", "user");
 2. 汇总为一份完整的结果
 3. talk 给请求方最终的汇总结果
 
-不要让请求方自己去各个对象的 shared 目录里拼凑结果。
+不要让请求方自己去各个对象的 files 目录里拼凑结果。
 
 ## 消息中断与恢复
 
@@ -232,9 +231,9 @@ talk("你的回复内容", "user");
 OOC 系统使用 `ooc://` 协议来引用系统内的对象和文件。在文档、消息和 `@ref` 标签中使用这种格式：
 
 - `ooc://object/{name}` — 引用一个对象（如 `ooc://object/sophia`）
-- `ooc://file/objects/{name}/shared/{path}` — 引用对象的共享文件（如 `ooc://file/objects/sophia/shared/哲学文档/gene.md`）
+- `ooc://file/objects/{name}/files/{path}` — 引用对象的共享文件（如 `ooc://file/objects/sophia/files/foo/bar.md`）
 
-路径中的 `{name}` 是对象名，`{path}` 是 shared 目录下的相对路径。这些链接可以被前端和 API 解析为实际内容。
+路径中的 `{name}` 是对象名，`{path}` 是 files 目录下的相对路径。这些链接可以被前端和 API 解析为实际内容。
 
 ## 导航卡片
 
@@ -256,7 +255,7 @@ OOC 系统使用 `ooc://` 协议来引用系统内的对象和文件。在文档
 [talk/user]
 我已经为你生成了项目看板，请查看：
 
-[navigate title="项目看板" description="当前任务进度总览"]ooc://file/objects/supervisor/shared/kanban.md[/navigate]
+[navigate title="项目看板" description="当前任务进度总览"]ooc://file/objects/supervisor/files/kanban.md[/navigate]
 [/talk]
 ```
 
@@ -264,7 +263,7 @@ OOC 系统使用 `ooc://` 协议来引用系统内的对象和文件。在文档
 [talk/user]
 分析报告已完成：
 
-[navigate title="分析报告"]ooc://file/objects/researcher/shared/report.md[/navigate]
+[navigate title="分析报告"]ooc://file/objects/researcher/files/report.md[/navigate]
 [/talk]
 ```
 
@@ -272,6 +271,6 @@ OOC 系统使用 `ooc://` 协议来引用系统内的对象和文件。在文档
 
 - 你生成了文档或报告，需要引导用户查看
 - 你创建了自渲染 UI，需要引导用户访问
-- 你完成了任务，结果保存在 shared 文件中
+- 你完成了任务，结果保存在 files 文件中
 
 普通引用用 `ooc://` 链接即可（会渲染为可点击的文本链接），导航卡片用于"我做了一个东西，请你来看"的场景。
