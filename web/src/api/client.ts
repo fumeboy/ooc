@@ -73,6 +73,24 @@ export async function fetchSessions(): Promise<FlowSummary[]> {
   return data.sessions;
 }
 
+/** 分组配置类型 */
+export interface GroupConfig {
+  groups: Array<{
+    groupName: string;
+    members: Array<{ memberId: string; description?: string }>;
+  }>;
+}
+
+/** 获取 sessions 分组配置 */
+export async function fetchFlowGroups(): Promise<GroupConfig> {
+  return get<GroupConfig>("/flows/groups");
+}
+
+/** 获取 stones 分组配置 */
+export async function fetchStoneGroups(): Promise<GroupConfig> {
+  return get<GroupConfig>("/stones/groups");
+}
+
 /** 获取单个 Flow 详情 */
 export async function fetchFlow(taskId: string): Promise<FlowData> {
   const data = await get<{ flow: FlowData; subFlows?: FlowData["subFlows"] }>(`/flows/${taskId}`);

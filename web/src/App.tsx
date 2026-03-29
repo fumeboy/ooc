@@ -21,7 +21,7 @@ import {
   userSessionsAtom,
 } from "./store/session";
 import type { AppTab } from "./store/session";
-import { fetchObjects, fetchProjectTree, fetchSessions, updateFlowTitle, talkTo } from "./api/client";
+import { fetchObjects, fetchProjectTree, fetchSessions, updateFlowTitle, talkTo, fetchFlowGroups, fetchStoneGroups, type GroupConfig } from "./api/client";
 import type { FileTreeNode } from "./api/types";
 import { WelcomePage } from "./features/WelcomePage";
 import { viewRegistry, registerAllViews } from "./router";
@@ -36,7 +36,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { OocLogo } from "./components/OocLogo";
 import { Sheet, SheetContent, SheetTrigger } from "./components/ui/sheet";
 import { cn } from "./lib/utils";
-import { GitBranch, Box, Globe, List, Menu, RotateCw, ChevronDown, ChevronRight } from "lucide-react";
+import { GitBranch, Box, Globe, List, Menu, RotateCw, ChevronDown, ChevronRight, Settings } from "lucide-react";
 import bgSvg from "./assets/bg.svg";
 
 /* 初始化视图注册表（只执行一次） */
@@ -85,6 +85,50 @@ function filterStoneTree(node: FileTreeNode): FileTreeNode {
   return { ...node, children: filtered };
 }
 
+/** 按分组配置重组文件树 children 为虚拟目录 */
+function applyGroups(root: FileTreeNode, groups: GroupConfig["groups"]): FileTreeNode {
+  if (!root.children || groups.length === 0) return root;
+
+  const memberToGroup = new Map<string, string>();
+  for (const g of groups) {
+    for (const m of g.members) {
+      memberToGroup.set(m.memberId, g.groupName);
+    }
+  }
+
+  const groupedChildren = new Map<string, FileTreeNode[]>();
+  const ungrouped: FileTreeNode[] = [];
+
+  for (const child of root.children) {
+    const groupName = memberToGroup.get(child.name);
+    if (groupName) {
+      if (!groupedChildren.has(groupName)) groupedChildren.set(groupName, []);
+      groupedChildren.get(groupName)!.push(child);
+    } else {
+      ungrouped.push(child);
+    }
+  }
+
+  const newChildren: FileTreeNode[] = [];
+
+  /* 分组虚拟目录 */
+  for (const g of groups) {
+    const items = groupedChildren.get(g.groupName);
+    if (!items || items.length === 0) continue;
+    newChildren.push({
+      name: g.groupName,
+      type: "directory",
+      path: `__group__/${g.groupName}`,
+      children: items,
+    });
+  }
+
+  /* 未分组的放在后面 */
+  newChildren.push(...ungrouped);
+
+  return { ...root, children: newChildren };
+}
+
 const TABS: { id: AppTab; label: string; icon: typeof GitBranch }[] = [
   { id: "flows", label: "Flows", icon: GitBranch },
   { id: "stones", label: "Stones", icon: Box },
@@ -120,16 +164,18 @@ export function App() {
   /* 移动端 Sheet 开关 */
   const [sheetOpen, setSheetOpen] = useState(false);
   const [welcomeSending, setWelcomeSending] = useState(false);
+  const [stoneGroups, setStoneGroups] = useState<GroupConfig["groups"]>([]);
 
   /* 当选中会话时自动切到文件树，取消选中时切回 sessions */
   useEffect(() => {
     setShowSessions(!activeId);
   }, [activeId]);
 
-  /* 加载对象列表 + sessions */
+  /* 加载对象列表 + sessions + stone groups */
   useEffect(() => {
     fetchObjects().then(setObjects).catch(console.error);
     fetchSessions().then(setSessions).catch(console.error);
+    fetchStoneGroups().then((c) => setStoneGroups(c.groups ?? [])).catch(() => {});
   }, [setObjects, setSessions]);
 
   /* SSE 连接 */
@@ -197,7 +243,19 @@ export function App() {
   const renderSidebarTree = () => {
     if (activeTab === "flows") {
       if (showSessions || !activeId) {
-        return <SessionsList onSelect={() => isMobile && setSheetOpen(false)} />;
+        return <SessionsList
+          onSelect={() => isMobile && setSheetOpen(false)}
+          onEditGroups={() => {
+            /* 确保文件存在（groups API 会自动创建） */
+            fetchFlowGroups().then(() => {
+              setActivePath("flows/.flows.json");
+              setTabs((prev) => {
+                if (prev.some((t) => t.path === "flows/.flows.json")) return prev;
+                return [...prev, { path: "flows/.flows.json", label: ".flows.json" }];
+              });
+            }).catch(console.error);
+          }}
+        />;
       }
 
       const recentPaths = getRecentFiles();
@@ -239,10 +297,36 @@ export function App() {
       const stonesNode = sidebarTree.children?.find((c) => c.name === "stones");
       if (!stonesNode) return <p className="px-3 py-4 text-xs text-[var(--muted-foreground)] text-center">无 stones</p>;
       const filtered = filterStoneTree(stonesNode);
+
+      /* 按分组重组 */
+      const regrouped = applyGroups(filtered, stoneGroups);
+
       return (
-        <div className="overflow-auto px-1">
-          <FileTree root={filtered} onSelect={openFileTab} selectedPath={activePath ?? undefined} />
-        </div>
+        <>
+          <div className="px-3 pb-1.5 flex items-center justify-between">
+            <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase tracking-wide">
+              Stones
+            </span>
+            <button
+              onClick={() => {
+                fetchStoneGroups().then(() => {
+                  setActivePath("stones/.stones.json");
+                  setTabs((prev) => {
+                    if (prev.some((t) => t.path === "stones/.stones.json")) return prev;
+                    return [...prev, { path: "stones/.stones.json", label: ".stones.json" }];
+                  });
+                }).catch(console.error);
+              }}
+              className="p-0.5 rounded hover:bg-[var(--accent)] transition-colors text-[var(--muted-foreground)]"
+              title="编辑分组配置"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="overflow-auto px-1">
+            <FileTree root={regrouped} onSelect={openFileTab} selectedPath={activePath ?? undefined} />
+          </div>
+        </>
       );
     }
 

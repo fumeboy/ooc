@@ -44,13 +44,34 @@ export function OocLogo({ size = "sm", px }: { size?: keyof typeof SIZES; px?: n
         <path d={SPIRAL_D} fill="none" stroke="currentColor" strokeWidth={spiralW} strokeLinecap="round" transform="rotate(60 60 60)" />
       </svg>
       {/* 主图：三个不同大小的圆（对象）+ 连线（关系） */}
-      <svg viewBox="18 12 72 80" className="relative" style={{ width: dim * 0.65, height: dim * 0.65 }} aria-label="OOC Logo">
+      {/* <svg viewBox="18 12 72 80" className="relative" style={{ width: dim * 0.65, height: dim * 0.65 }} aria-label="OOC Logo">
         <line x1="58" y1="32" x2="38" y2="65" stroke="currentColor" strokeWidth="3" />
         <line x1="58" y1="32" x2="75" y2="72" stroke="currentColor" strokeWidth="3" />
         <line x1="38" y1="65" x2="75" y2="72" stroke="currentColor" strokeWidth="3" />
         <circle cx="58" cy="32" r="13" fill="currentColor" />
         <circle cx="38" cy="65" r="9" fill="currentColor" />
         <circle cx="75" cy="72" r="14" fill="currentColor" />
+      </svg> */}
+      <svg xmlns="http://www.w3.org/2000/svg" transform="rotate(95 0 0)" viewBox="0 0 200 200" width="200" height="200">
+        <path d="M 98 36
+           L 98 02
+           A 2 2 0 0 1 102 02
+           L 102 36
+           A 62 62 0 0 0 164 98
+           L 178 98
+           A 2 2 0 0 1 178 102
+           L 164 102
+           A 62 62 0 0 0 102 164
+           L 102 198
+           A 2 2 0 0 1 98 198
+           L 98 164
+           A 62 62 0 0 0 36 102
+           L 22 102
+           A 2 2 0 0 1 22 98
+           L 36 98
+           A 62 62 0 0 0 98 36
+           Z"
+          fill="#000" />
       </svg>
     </div>
   );

@@ -328,6 +328,30 @@ async function handleRoute(
     return json({ success: true, data: await getTraitsInfo(stone.dir, world.rootDir) });
   }
 
+  /* GET /api/flows/groups — 读取 sessions 分组配置 */
+  if (method === "GET" && path === "/api/flows/groups") {
+    const configPath = join(world.flowsDir, ".flows.json");
+    if (!existsSync(configPath)) {
+      writeFileSync(configPath, JSON.stringify({ groups: [] }, null, 2));
+    }
+    try {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      return json({ success: true, data: config });
+    } catch { return json({ success: true, data: { groups: [] } }); }
+  }
+
+  /* GET /api/stones/groups — 读取 stones 分组配置 */
+  if (method === "GET" && path === "/api/stones/groups") {
+    const configPath = join(world.rootDir, "stones", ".stones.json");
+    if (!existsSync(configPath)) {
+      writeFileSync(configPath, JSON.stringify({ groups: [] }, null, 2));
+    }
+    try {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      return json({ success: true, data: config });
+    } catch { return json({ success: true, data: { groups: [] } }); }
+  }
+
   /* GET /api/flows/:taskId — 获取单个 Flow 详情 */
   const flowDetailMatch = path.match(/^\/api\/flows\/([^/]+)$/);
   if (method === "GET" && flowDetailMatch) {
