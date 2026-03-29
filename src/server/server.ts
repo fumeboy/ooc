@@ -533,6 +533,29 @@ async function handleRoute(
     return json({ success: true, data: tree });
   }
 
+  /* ========== UI 验证 ========== */
+
+  /* POST /api/validate-ui — 验证 TSX 文件是否能编译成功 */
+  if (method === "POST" && path === "/api/validate-ui") {
+    const body = await req.json() as Record<string, unknown>;
+    const filePath = body.path as string;
+    if (!filePath) return errorResponse("缺少 path 参数");
+
+    const absPath = join(world.rootDir, filePath);
+    if (!absPath.startsWith(world.rootDir)) return errorResponse("非法路径", 403);
+    if (!existsSync(absPath)) return errorResponse(`文件不存在: ${filePath}`, 404);
+
+    try {
+      const code = readFileSync(absPath, "utf-8");
+      const transpiler = new Bun.Transpiler({ loader: "tsx" });
+      transpiler.transformSync(code);
+      return json({ success: true, data: { valid: true } });
+    } catch (e) {
+      const msg = (e as Error).message || "未知编译错误";
+      return json({ success: true, data: { valid: false, error: msg } });
+    }
+  }
+
   /* ========== ooc:// 协议解析 ========== */
 
   /* GET /api/resolve?url=ooc://... — 解析 ooc:// URL */
