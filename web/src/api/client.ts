@@ -85,6 +85,11 @@ export async function updateFlowTitle(taskId: string, title: string): Promise<Fl
   return data.flow;
 }
 
+/** 更新 session title（写入 .session.json） */
+export async function updateSessionTitle(taskId: string, title: string): Promise<void> {
+  await patch<Record<string, unknown>>(`/sessions/${taskId}`, { title });
+}
+
 /** 创建对象 */
 export async function createObject(name: string, whoAmI: string): Promise<StoneData> {
   return post<StoneData>("/stones", { name, whoAmI });

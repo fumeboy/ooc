@@ -441,6 +441,25 @@ async function handleRoute(
     return json({ success: true, data: { sessions } });
   }
 
+  /* PATCH /api/sessions/:taskId — 更新 session title */
+  const sessionPatchMatch = path.match(/^\/api\/sessions\/([^/]+)$/);
+  if (method === "PATCH" && sessionPatchMatch) {
+    const taskId = sessionPatchMatch[1]!;
+    const sessionDir = join(world.flowsDir, taskId);
+    if (!existsSync(sessionDir)) return errorResponse(`Session "${taskId}" 不存在`, 404);
+
+    const body = await req.json() as Record<string, unknown>;
+    const sessionFile = join(sessionDir, ".session.json");
+    const existing = existsSync(sessionFile)
+      ? JSON.parse(readFileSync(sessionFile, "utf-8"))
+      : {};
+    if (typeof body.title === "string") {
+      existing.title = body.title;
+    }
+    writeFileSync(sessionFile, JSON.stringify(existing, null, 2));
+    return json({ success: true, data: existing });
+  }
+
   /* ========== Files 文件 ========== */
 
   /* GET /api/stones/:name/files — 列出对象的 files 文件 */
@@ -756,10 +775,20 @@ function getSessionsSummary(flowsDir: string): Array<{
     }
     if (!flow) continue;
 
+    /* 读取 .session.json 中的 title（优先于 flow.title） */
+    let sessionTitle = flow.title;
+    const sessionFile = join(flowsDir, sessionId, ".session.json");
+    if (existsSync(sessionFile)) {
+      try {
+        const meta = JSON.parse(readFileSync(sessionFile, "utf-8"));
+        if (typeof meta.title === "string") sessionTitle = meta.title;
+      } catch { /* 忽略解析错误 */ }
+    }
+
     const firstIn = flow.messages.find((m) => m.direction === "in");
     summaries.push({
       taskId: flow.taskId,
-      title: flow.title,
+      title: sessionTitle,
       status: flow.status,
       firstMessage: firstIn?.content ?? "",
       messageCount: flow.messages.length,

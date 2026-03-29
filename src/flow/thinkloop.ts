@@ -763,6 +763,7 @@ function buildExecutionContext(
     self_traits_dir: join(stoneDir, "traits"),
     self_files_dir: join(stoneDir, "files"),
     world_dir: join(stoneDir, "..", ".."),
+    task_dir: flow.dir,
     task_files_dir: flow.filesDir,
   };
 

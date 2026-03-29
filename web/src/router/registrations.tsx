@@ -15,7 +15,7 @@ import { viewRegistry, type ViewProps } from "./registry";
 import { cn } from "../lib/utils";
 import { ObjectDetail } from "../features/ObjectDetail";
 import { FlowView } from "../features/FlowView";
-import { SessionGantt } from "../features/SessionGantt";
+import { SessionIndex } from "../features/SessionIndex";
 import { DynamicUI } from "../features/DynamicUI";
 import { ProcessView } from "../features/ProcessView";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
@@ -68,10 +68,10 @@ function FlowViewAdapter({ path }: ViewProps) {
   return <FlowView sessionId={sessionId} objectName={objectName} initialTab={initialTab} />;
 }
 
-/** SessionGantt 适配器 */
-function SessionGanttAdapter({ path }: ViewProps) {
+/** SessionIndex 适配器 */
+function SessionIndexAdapter({ path }: ViewProps) {
   const sessionId = path.match(/^flows\/([^/]+)$/)?.[1] ?? "";
-  return <SessionGantt sessionId={sessionId} />;
+  return <SessionIndex sessionId={sessionId} />;
 }
 
 /** ReflectFlow 适配器 — stones/{name}/reflect/ 下的 Process + Data 视图 */
@@ -197,10 +197,10 @@ export function registerAllViews(): void {
     tabLabel: (p) => p.match(/flows\/[^/]+\/flows\/([^/]+)/)?.[1] ?? "Flow",
   });
 
-  /* SessionGantt — flows/{sid}（精确匹配） */
+  /* SessionIndex — flows/{sid}（精确匹配） */
   viewRegistry.register({
-    name: "SessionGantt",
-    component: SessionGanttAdapter,
+    name: "SessionIndex",
+    component: SessionIndexAdapter,
     match: (p) => /^flows\/[^/]+$/.test(p),
     priority: 100,
     tabKey: (p) => p,

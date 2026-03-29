@@ -30,7 +30,7 @@ interface FileTreeProps {
   defaultExpanded?: boolean;
 }
 
-export function FileTree({ root, onSelect, selectedPath, defaultExpanded = true }: FileTreeProps) {
+export function FileTree({ root, onSelect, selectedPath, defaultExpanded = false }: FileTreeProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; path: string } | null>(null);
 
   return (

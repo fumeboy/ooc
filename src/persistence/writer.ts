@@ -61,14 +61,19 @@ export function writeStone(dir: string, stone: StoneData): void {
 export function writeFlow(dir: string, flow: FlowData): void {
   ensureDir(dir);
 
-  /* 分离 process，写入独立文件 */
-  const { process, ...flowWithoutProcess } = flow;
+  /* 分离 process 和 memory，写入独立文件 */
+  const { process, memory, ...flowCore } = flow;
 
-  /* 写入 data.json（不含 process） */
-  writeFileSync(join(dir, "data.json"), JSON.stringify(flowWithoutProcess, null, 2), "utf-8");
+  /* 写入 data.json（不含 process 和 memory） */
+  writeFileSync(join(dir, "data.json"), JSON.stringify(flowCore, null, 2), "utf-8");
 
   /* 写入 process.json */
   writeFileSync(join(dir, "process.json"), JSON.stringify(process, null, 2), "utf-8");
+
+  /* 写入 memory.md（如果有内容） */
+  if (memory !== undefined) {
+    writeFileSync(join(dir, "memory.md"), memory, "utf-8");
+  }
 
   /* 确保 files/ 目录存在 */
   ensureDir(join(dir, "files"));

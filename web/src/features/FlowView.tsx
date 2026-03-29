@@ -8,7 +8,7 @@
  */
 import { useState, useEffect } from "react";
 import { useAtomValue } from "jotai";
-import { lastFlowEventAtom } from "../store/session";
+import { lastFlowEventAtom, refreshKeyAtom } from "../store/session";
 import { fetchFlow, fetchSessionTree, fetchFileContent, fetchObject } from "../api/client";
 import { StatusBadge } from "../components/ui/Badge";
 import { ObjectAvatar } from "../components/ui/ObjectAvatar";
@@ -17,6 +17,7 @@ import { ProcessView } from "./ProcessView";
 import { DynamicUI } from "./DynamicUI";
 import { ActionCard, TalkCard } from "../components/ui/ActionCard";
 import { CodeMirrorViewer } from "../components/ui/CodeMirrorViewer";
+import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { cn } from "../lib/utils";
 import type { FlowData, FlowMessage, Action, TimelineEntry, StoneData } from "../api/types";
 
@@ -29,8 +30,8 @@ interface FlowViewProps {
   initialTab?: string;
 }
 
-const BASE_TABS = ["Timeline", "Process", "Readme", "Data"] as const;
-type Tab = "Timeline" | "Process" | "Readme" | "Data" | "UI";
+const BASE_TABS = ["Timeline", "Process", "Readme", "Data", "Memory"] as const;
+type Tab = "Timeline" | "Process" | "Readme" | "Data" | "Memory" | "UI";
 
 export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
   const [flow, setFlow] = useState<FlowData | null>(null);
@@ -38,6 +39,7 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
   const [tab, setTab] = useState<Tab>((initialTab as Tab) || "Timeline");
   const [hasUI, setHasUI] = useState(false);
   const lastEvent = useAtomValue(lastFlowEventAtom);
+  const refreshKey = useAtomValue(refreshKeyAtom);
 
   useEffect(() => {
     setFlow(null);
@@ -45,7 +47,7 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
     setTab((initialTab as Tab) || "Timeline");
     fetchFlow(sessionId).then(setFlow).catch(console.error);
     fetchObject(objectName).then(setStone).catch(() => setStone(null));
-  }, [sessionId, objectName]);
+  }, [sessionId, objectName, refreshKey]);
 
   /* initialTab 变化时切换 tab（同一 FlowView 内切换子文件） */
   useEffect(() => {
@@ -167,6 +169,9 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
         {tab === "Data" && (
           <SplitDataTab sessionId={sessionId} objectName={objectName} stoneData={stone?.data} />
         )}
+        {tab === "Memory" && (
+          <FlowMemoryTab sessionId={sessionId} objectName={objectName} />
+        )}
         {tab === "UI" && (
           <DynamicUI
             importPath={`@flows/${sessionId}/flows/${objectName}/files/ui/index.tsx`}
@@ -229,6 +234,33 @@ function SplitDataTab({
           <CodeMirrorViewer content={stoneContent} ext="json" />
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Flow Memory Tab — 展示 flow 的 memory.md */
+function FlowMemoryTab({ sessionId, objectName }: { sessionId: string; objectName: string }) {
+  const [content, setContent] = useState<string | null>(null);
+  const refreshKey = useAtomValue(refreshKeyAtom);
+
+  useEffect(() => {
+    const path = `flows/${sessionId}/flows/${objectName}/memory.md`;
+    fetchFileContent(path)
+      .then(setContent)
+      .catch(() => setContent(""));
+  }, [sessionId, objectName, refreshKey]);
+
+  if (content === null) {
+    return <p className="text-sm text-[var(--muted-foreground)] p-4">加载中...</p>;
+  }
+
+  if (!content) {
+    return <p className="text-sm text-[var(--muted-foreground)] p-4">暂无记忆</p>;
+  }
+
+  return (
+    <div className="p-4 overflow-auto">
+      <MarkdownContent content={content} />
     </div>
   );
 }
