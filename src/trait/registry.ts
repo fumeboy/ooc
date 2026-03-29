@@ -2,8 +2,9 @@
  * Trait 方法注册表 (G3)
  *
  * 管理所有 Trait 方法的注册。
- * 关键规则：方法注册是全量的，不受 Trait 激活状态影响。
- * 因为 trait 的方法可能被其他对象调用或被自身其他方法依赖。
+ * 关键规则：方法注册是全量的（registerAll 注册所有 trait 的方法）。
+ * 但 buildSandboxMethods 支持按 activatedTraits 过滤，只注入已激活 trait 的方法到沙箱。
+ * 这确保对象只能调用自己有权限的工具，同时保留全量注册以支持跨 trait 方法依赖。
  *
  * @ref docs/哲学文档/gene.md#G3 — implements — Trait 方法全量注册（不受激活影响）
  * @ref src/types/trait.ts — references — TraitDefinition, TraitMethod, TraitMethodParam 类型
@@ -103,12 +104,18 @@ export class MethodRegistry {
    * 返回可以直接注入到执行上下文中的函数映射。
    *
    * @param ctx - 方法执行上下文
+   * @param activatedTraits - 可选，已激活的 trait 名称列表。传入时只注入这些 trait 的方法；不传则注入全部（向后兼容）
    * @returns 方法名 → 包装后的函数
    */
-  buildSandboxMethods(ctx: MethodContext): Record<string, (...args: unknown[]) => Promise<unknown>> {
+  buildSandboxMethods(
+    ctx: MethodContext,
+    activatedTraits?: string[],
+  ): Record<string, (...args: unknown[]) => Promise<unknown>> {
     const result: Record<string, (...args: unknown[]) => Promise<unknown>> = {};
+    const filterSet = activatedTraits ? new Set(activatedTraits) : null;
 
     for (const [name, method] of this._methods) {
+      if (filterSet && !filterSet.has(method.traitName)) continue;
       result[name] = method.needsCtx
         ? async (...args: unknown[]) => method.fn(ctx, ...args)
         : async (...args: unknown[]) => method.fn(...args);

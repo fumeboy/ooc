@@ -861,6 +861,12 @@ function buildExecutionContext(
 
   /* 注入 Trait 方法（Phase 2） */
   if (methodRegistry) {
+    /* G3: 按作用域链计算已激活 trait，只注入对应方法 */
+    const scopeChain = traits ? computeScopeChain(flow.process) : [];
+    const activeTraitNames = traits
+      ? getActiveTraits(traits, scopeChain).map(t => t.name)
+      : undefined;
+
     const methodCtx: MethodContext = Object.defineProperty(
       {
         setData: (key: string, value: unknown) => { flow.setFlowData(key, value); },
@@ -879,7 +885,7 @@ function buildExecutionContext(
       "data",
       { get: () => getMergedData(), enumerable: true },
     );
-    const sandboxMethods = methodRegistry.buildSandboxMethods(methodCtx);
+    const sandboxMethods = methodRegistry.buildSandboxMethods(methodCtx, activeTraitNames);
     Object.assign(context, sandboxMethods);
   }
 

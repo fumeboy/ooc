@@ -210,6 +210,40 @@ describe("loadTraitsByRef（_traits_ref 加载机制）", () => {
   });
 });
 
+describe("方法可见性过滤", () => {
+  test("buildSandboxMethods 只注入 activatedTraits 中的方法", async () => {
+    const registry = new MethodRegistry();
+    registry.registerAll([
+      {
+        name: "trait_a", when: "always", description: "", readme: "",
+        methods: [{ name: "methodA", description: "", params: [], fn: async () => "a", needsCtx: false }],
+        deps: [],
+      },
+      {
+        name: "trait_b", when: "always", description: "", readme: "",
+        methods: [{ name: "methodB", description: "", params: [], fn: async () => "b", needsCtx: false }],
+        deps: [],
+      },
+    ]);
+
+    const ctx = {
+      data: {}, getData: () => undefined, setData: () => {},
+      print: () => {}, taskId: "t", filesDir: "/tmp",
+      rootDir: "/tmp", selfDir: "/tmp", stoneName: "test",
+    } as any;
+
+    // 只激活 trait_a → 只注入 methodA
+    const sandbox = registry.buildSandboxMethods(ctx, ["trait_a"]);
+    expect(sandbox.methodA).toBeDefined();
+    expect(sandbox.methodB).toBeUndefined();
+
+    // 不传 filter → 注入全部（向后兼容）
+    const sandboxAll = registry.buildSandboxMethods(ctx);
+    expect(sandboxAll.methodA).toBeDefined();
+    expect(sandboxAll.methodB).toBeDefined();
+  });
+});
+
 describe("MethodRegistry", () => {
   test("注册并查找方法", () => {
     const registry = new MethodRegistry();
