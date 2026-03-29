@@ -24,7 +24,7 @@ import { Scheduler } from "./scheduler.js";
 import { CronManager } from "./cron.js";
 import { Stone } from "../stone/index.js";
 import { Flow } from "../flow/index.js";
-import { loadAllTraits } from "../trait/index.js";
+import { loadAllTraits, loadTraitsByRef } from "../trait/index.js";
 import { OpenAICompatibleClient, type LLMClient } from "../thinkable/client.js";
 import { DefaultConfig, type LLMConfig } from "../thinkable/config.js";
 import { emitSSE } from "../server/events.js";
@@ -1009,15 +1009,35 @@ export class World implements Routable {
   }
 
   /**
-   * 加载对象的 Traits（kernel → library → 对象自身）
+   * 加载对象的 Traits（kernel → library(ref) → 对象自身）
+   *
+   * library 层只加载 data._traits_ref 中引用的 trait，不再全量加载。
+   * 合并优先级：kernel → library(ref) → object（后者覆盖前者）
    */
   private async _loadTraits(stone: Stone) {
     const kernelTraitsDir = join(this._rootDir, "kernel", "traits");
     const libraryTraitsDir = join(this._rootDir, "library", "traits");
     const objectTraitsDir = join(stone.dir, "traits");
-    const traits = await loadAllTraits(objectTraitsDir, kernelTraitsDir, libraryTraitsDir);
-    consola.info(`[World] 加载 ${traits.length} 个 traits: ${traits.map(t => t.name).join(", ")}`);
-    return traits;
+
+    /* 读取 _traits_ref：只有显式引用的 library trait 才会被加载 */
+    const traitsRef: string[] = Array.isArray(stone.data._traits_ref)
+      ? stone.data._traits_ref.map(String)
+      : [];
+
+    /* 三层分别加载 */
+    const kernelTraits = await loadAllTraits("", kernelTraitsDir);
+    const libTraits = await loadTraitsByRef(libraryTraitsDir, traitsRef);
+    const objectTraits = await loadAllTraits(objectTraitsDir, "");
+
+    /* 合并：kernel → library → object（后者覆盖前者） */
+    const traitMap = new Map<string, import("../types/index.js").TraitDefinition>();
+    for (const t of kernelTraits) traitMap.set(t.name, t);
+    for (const t of libTraits) traitMap.set(t.name, t);
+    for (const t of objectTraits) traitMap.set(t.name, t);
+
+    const result = Array.from(traitMap.values());
+    consola.info(`[World] 加载 ${result.length} 个 traits (含 ${libTraits.length} 个 library ref): ${result.map(t => t.name).join(", ")}`);
+    return result;
   }
 
   /**

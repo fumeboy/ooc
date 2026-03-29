@@ -5,7 +5,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadTrait, loadAllTraits } from "../src/trait/loader.js";
+import { loadTrait, loadAllTraits, loadTraitsByRef } from "../src/trait/loader.js";
 import { MethodRegistry } from "../src/trait/registry.js";
 import { getActiveTraits } from "../src/trait/activator.js";
 import type { TraitDefinition } from "../src/types/index.js";
@@ -168,6 +168,45 @@ describe("getActiveTraits", () => {
     const active = getActiveTraits(traits);
     expect(active.map((t) => t.name)).toContain("base");
     expect(active.map((t) => t.name)).toContain("child");
+  });
+});
+
+describe("loadTraitsByRef（_traits_ref 加载机制）", () => {
+  test("只加载指定名称的 trait", async () => {
+    const libDir = join(TEST_DIR, "library");
+    /* 创建 3 个 trait，只引用其中 2 个 */
+    for (const name of ["search", "translate", "summarize"]) {
+      mkdirSync(join(libDir, name), { recursive: true });
+      writeFileSync(join(libDir, name, "readme.md"), `---\nwhen: always\n---\n${name}能力`, "utf-8");
+    }
+
+    const traits = await loadTraitsByRef(libDir, ["search", "summarize"]);
+    expect(traits).toHaveLength(2);
+    expect(traits.map(t => t.name).sort()).toEqual(["search", "summarize"]);
+  });
+
+  test("跳过不存在的 trait 名称", async () => {
+    const libDir = join(TEST_DIR, "lib_skip");
+    mkdirSync(join(libDir, "real"), { recursive: true });
+    writeFileSync(join(libDir, "real", "readme.md"), "---\nwhen: always\n---\n存在", "utf-8");
+
+    const traits = await loadTraitsByRef(libDir, ["real", "ghost", "phantom"]);
+    expect(traits).toHaveLength(1);
+    expect(traits[0]!.name).toBe("real");
+  });
+
+  test("空 refs 数组返回空列表", async () => {
+    const libDir = join(TEST_DIR, "lib_empty");
+    mkdirSync(join(libDir, "something"), { recursive: true });
+    writeFileSync(join(libDir, "something", "readme.md"), "---\nwhen: always\n---\n内容", "utf-8");
+
+    const traits = await loadTraitsByRef(libDir, []);
+    expect(traits).toHaveLength(0);
+  });
+
+  test("目录不存在时不报错", async () => {
+    const traits = await loadTraitsByRef(join(TEST_DIR, "nonexistent_lib"), ["a", "b"]);
+    expect(traits).toHaveLength(0);
   });
 });
 

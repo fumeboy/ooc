@@ -241,6 +241,29 @@ function parseFirstParam(source: string): Map<string, boolean> {
 }
 
 /**
+ * 按名称列表加载指定的 trait（用于 _traits_ref 机制）
+ *
+ * 只加载 refs 中列出的 trait，跳过不存在的目录。
+ *
+ * @param traitsDir - trait 所在的父目录（如 library/traits/）
+ * @param refs - 要加载的 trait 名称列表
+ * @returns 加载成功的 TraitDefinition 列表
+ */
+export async function loadTraitsByRef(
+  traitsDir: string,
+  refs: string[],
+): Promise<TraitDefinition[]> {
+  const results: TraitDefinition[] = [];
+  for (const name of refs) {
+    const traitDir = join(traitsDir, name);
+    if (!existsSync(traitDir)) continue;
+    const trait = await loadTrait(traitDir, name);
+    if (trait) results.push(trait);
+  }
+  return results;
+}
+
+/**
  * 加载一个对象的所有 Traits（kernel → library → 对象自身）
  *
  * 加载优先级（同名后者覆盖前者）：
