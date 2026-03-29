@@ -60,15 +60,22 @@ async function enhanceSessionTree(tree: FileTreeNode, sessionId: string): Promis
         /* 过滤 flow 目录下的冗余文件 */
         const filteredFlowChildren = filterChildren(child.children, FLOW_HIDDEN);
 
-        /* 注入 .stone 虚拟目录（过滤 stone 冗余文件） */
+        /* 注入 .stone 虚拟目录（过滤 stone 冗余文件 + reflect 目录冗余文件） */
         try {
           const stoneTree = await fetchStoneTree(objectName);
+          const stoneChildren = filterChildren(stoneTree.children, STONE_HIDDEN).map((c) => {
+            /* reflect 目录当作 flow 目录处理：隐藏 data.json/process.json */
+            if (c.type === "directory" && c.name === "reflect") {
+              return { ...c, children: filterChildren(c.children, FLOW_HIDDEN) };
+            }
+            return c;
+          });
           const stoneVirtual: FileTreeNode = {
             name: ".stone",
             type: "directory",
             path: `stones/${objectName}`,
             marker: "stone",
-            children: filterChildren(stoneTree.children, STONE_HIDDEN),
+            children: stoneChildren,
           };
           newFlowChildren.push({
             ...child,

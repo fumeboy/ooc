@@ -65,6 +65,24 @@ function addRecentFile(path: string, label?: string) {
   localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(recent.slice(0, MAX_RECENT)));
 }
 
+/** 过滤 Stones 文件树：隐藏 stone 级冗余文件 + reflect 目录中的 data.json/process.json */
+const STONE_HIDDEN_FILES = new Set(["readme.md", "memory.md", "data.json"]);
+const FLOW_HIDDEN_FILES = new Set(["data.json", "process.json"]);
+
+function filterStoneTree(node: FileTreeNode): FileTreeNode {
+  if (!node.children) return node;
+  const filtered = node.children
+    .filter((c) => {
+      /* 每个 stone 子目录下隐藏冗余文件 */
+      if (c.type === "file" && node.marker === "stone" && STONE_HIDDEN_FILES.has(c.name)) return false;
+      /* reflect 目录下隐藏 data.json/process.json */
+      if (c.type === "file" && node.name === "reflect" && FLOW_HIDDEN_FILES.has(c.name)) return false;
+      return true;
+    })
+    .map((c) => c.type === "directory" ? filterStoneTree(c) : c);
+  return { ...node, children: filtered };
+}
+
 const TABS: { id: AppTab; label: string; icon: typeof GitBranch }[] = [
   { id: "flows", label: "Flows", icon: GitBranch },
   { id: "stones", label: "Stones", icon: Box },
@@ -196,12 +214,13 @@ export function App() {
 
     if (activeTab === "stones") {
       if (!sidebarTree) return <p className="px-3 py-4 text-xs text-[var(--muted-foreground)] text-center">加载中...</p>;
-      /* 只展示 stones/ 子树 */
+      /* 只展示 stones/ 子树，过滤冗余文件 */
       const stonesNode = sidebarTree.children?.find((c) => c.name === "stones");
       if (!stonesNode) return <p className="px-3 py-4 text-xs text-[var(--muted-foreground)] text-center">无 stones</p>;
+      const filtered = filterStoneTree(stonesNode);
       return (
         <div className="overflow-auto px-1">
-          <FileTree root={stonesNode} onSelect={openFileTab} selectedPath={activePath ?? undefined} />
+          <FileTree root={filtered} onSelect={openFileTab} selectedPath={activePath ?? undefined} />
         </div>
       );
     }

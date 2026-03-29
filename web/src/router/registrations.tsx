@@ -74,17 +74,20 @@ function SessionIndexAdapter({ path }: ViewProps) {
   return <SessionIndex sessionId={sessionId} />;
 }
 
-/** ReflectFlow 适配器 — stones/{name}/reflect/ 下的 Process + Data 视图 */
+/** ReflectFlow 适配器 — stones/{name}/reflect/ 下的 Process + Data + Memory 视图 */
 function ReflectFlowAdapter({ path }: ViewProps) {
   const objectName = path.match(/stones\/([^/]+)/)?.[1] ?? "";
   const basePath = `stones/${objectName}/reflect`;
 
-  let initialTab: "Process" | "Data" = "Process";
+  type ReflectTab = "Process" | "Data" | "Memory";
+  let initialTab: ReflectTab = "Process";
   if (path.endsWith("/data.json")) initialTab = "Data";
+  else if (path.endsWith("/memory.md")) initialTab = "Memory";
 
-  const [tab, setTab] = useState<"Process" | "Data">(initialTab);
+  const [tab, setTab] = useState<ReflectTab>(initialTab);
   const [process, setProcess] = useState<Process | null>(null);
   const [dataContent, setDataContent] = useState<string | null>(null);
+  const [memoryContent, setMemoryContent] = useState<string | null>(null);
   const refreshKey = useAtomValue(refreshKeyAtom);
 
   useEffect(() => { setTab(initialTab); }, [path]);
@@ -96,6 +99,9 @@ function ReflectFlowAdapter({ path }: ViewProps) {
     fetchFileContent(`${basePath}/data.json`)
       .then((raw) => { try { setDataContent(JSON.stringify(JSON.parse(raw), null, 2)); } catch { setDataContent(raw); } })
       .catch(() => setDataContent(null));
+    fetchFileContent(`stones/${objectName}/memory.md`)
+      .then(setMemoryContent)
+      .catch(() => setMemoryContent(""));
   }, [basePath, refreshKey]);
 
   return (
@@ -108,7 +114,7 @@ function ReflectFlowAdapter({ path }: ViewProps) {
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">reflect</span>
         </div>
         <div className="flex items-center bg-[var(--accent)] rounded-lg p-0.5">
-          {(["Process", "Data"] as const).map((t) => (
+          {(["Process", "Data", "Memory"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -130,6 +136,11 @@ function ReflectFlowAdapter({ path }: ViewProps) {
         )}
         {tab === "Data" && (
           dataContent ? <CodeMirrorViewer content={dataContent} ext="json" /> : <p className="text-sm text-[var(--muted-foreground)]">加载中...</p>
+        )}
+        {tab === "Memory" && (
+          memoryContent
+            ? <div className="prose prose-sm max-w-none"><MarkdownContent content={memoryContent} /></div>
+            : <p className="text-sm text-[var(--muted-foreground)]">暂无记忆</p>
         )}
       </div>
     </div>
@@ -187,11 +198,11 @@ function FileViewerAdapter({ path }: ViewProps) {
 /* ── 注册所有视图 ── */
 
 export function registerAllViews(): void {
-  /* FlowView — flows/{sid}/flows/{obj} 及其子路径 */
+  /* FlowView — flows/{sid}/flows/{obj} 及其子路径（排除 files/ 下的具体文件） */
   viewRegistry.register({
     name: "FlowView",
     component: FlowViewAdapter,
-    match: (p) => /^flows\/[^/]+\/flows\/[^/]+/.test(p),
+    match: (p) => /^flows\/[^/]+\/flows\/[^/]+/.test(p) && !/\/files\/[^/]+\.[^/]+$/.test(p),
     priority: 100,
     tabKey: (p) => p.match(/^(flows\/[^/]+\/flows\/[^/]+)/)?.[1] ?? p,
     tabLabel: (p) => p.match(/flows\/[^/]+\/flows\/([^/]+)/)?.[1] ?? "Flow",
