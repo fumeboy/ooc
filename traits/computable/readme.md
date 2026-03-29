@@ -61,6 +61,25 @@ talk("你好 " + name + "！有什么我能帮你的？", "user");
 4. 不要使用 markdown 代码块（` ``` `）包裹代码，直接写在 `[program]` 后面
 5. 每次只输出一个 `[program]` 段落，观察结果后再决定下一步
 6. 代码执行成功且任务完成后，立即输出 `[wait]` 或 `[finish]`
+7. **优先使用高层工具方法**：系统提供了 `readFile`、`editFile`、`glob`、`grep`、`exec` 等工具方法，它们比底层 API（`Bun.file()`、`Bun.write()`、`readdirSync`）更可靠、更安全。除非工具方法无法满足需求，否则始终优先使用工具方法。
+
+### 工具方法 vs 底层 API
+
+```
+正确（优先使用工具方法）：
+  const file = await readFile("kernel/src/config.ts");
+  const result = await editFile("kernel/src/config.ts", "port: 3000", "port: 8080");
+  const files = await glob("**/*.ts");
+  const matches = await grep("ThinkLoop", { glob: "*.ts" });
+  const out = await exec("bun test");
+
+避免（除非工具方法不够用）：
+  const content = await Bun.file(world_dir + "/kernel/src/config.ts").text();
+  await Bun.write(path, newContent);
+  const entries = readdirSync(dir);
+```
+
+工具方法的优势：自动路径解析、结构化返回值、错误信息包含修正上下文、信息密度控制。
 
 ## 可用 API
 
@@ -79,10 +98,11 @@ talk("你好 " + name + "！有什么我能帮你的？", "user");
 
 使用示例：
 ```javascript
-// 读取自己的 readme
-const readme = await Bun.file(self_dir + "/readme.md").text();
-// 写入 flow 的 files 目录
-await Bun.write(task_files_dir + "/report.md", content);
+// 读取文件（推荐用 readFile 工具方法）
+const file = await readFile(self_dir + "/readme.md");
+
+// 写入 flow 的 files 目录（推荐用 writeFile 工具方法）
+await writeFile(task_files_dir + "/report.md", content);
 // 读取 world 下的其他对象
 const otherReadme = await Bun.file(world_dir + "/stones/sophia/readme.md").text();
 ```
