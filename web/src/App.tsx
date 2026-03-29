@@ -1,7 +1,7 @@
 /**
  * App — OOC 前端根组件
  *
- * 水平布局：「网站左边栏」（Logo + Tab 切换 + 文件树）+ 右侧主内容区（面包屑 + ViewRouter/ChatPage）+ MessageSidebar。
+ * 水平布局：「网站左边栏」（Logo + Tab 切换 + 文件树）+ 右侧主内容区（面包屑 + ViewRouter/WelcomePage）+ MessageSidebar。
  * 三个 Tab：Flows / Stones / World，各自展示对应的文件树。
  *
  * @ref ooc://file/stones/sophia/files/哲学文档/gene.md#G11 — implements — 前端整体布局
@@ -21,9 +21,9 @@ import {
   userSessionsAtom,
 } from "./store/session";
 import type { AppTab } from "./store/session";
-import { fetchObjects, fetchProjectTree, fetchSessions, updateFlowTitle } from "./api/client";
+import { fetchObjects, fetchProjectTree, fetchSessions, updateFlowTitle, talkTo } from "./api/client";
 import type { FileTreeNode } from "./api/types";
-import { ChatPage } from "./features/ChatPage";
+import { WelcomePage } from "./features/WelcomePage";
 import { viewRegistry, registerAllViews } from "./router";
 import { SessionsList } from "./features/SessionsList";
 import { SessionFileTree } from "./features/SessionFileTree";
@@ -119,6 +119,7 @@ export function App() {
 
   /* 移动端 Sheet 开关 */
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [welcomeSending, setWelcomeSending] = useState(false);
 
   /* 当选中会话时自动切到文件树，取消选中时切回 sessions */
   useEffect(() => {
@@ -256,57 +257,83 @@ export function App() {
 
   /* 主内容区 */
   const renderMainContent = () => {
-    /* Flows tab 且无活跃 session → Welcome 页面优先 */
-    if (activeTab === "flows" && !activeId) {
-      return <ChatPage />;
-    }
+    /* 确定要渲染的内容和面包屑 */
+    let breadcrumbSegments: string[] = [];
+    let content: React.ReactNode = null;
 
-    /* 如果有打开的 editor tab，通过 ViewRegistry 渲染 */
-    if (activePath && tabs.length > 0) {
+    if (activeTab === "flows" && !activeId) {
+      /* Welcome 页面 */
+      breadcrumbSegments = ["welcome"];
+      content = (
+        <WelcomePage
+          onSend={async (t, msg) => {
+            setWelcomeSending(true);
+            try {
+              const result = await talkTo(t, msg);
+              if (result.taskId) {
+                setActiveId(result.taskId);
+                setActivePath(`flows/${result.taskId}/flows/supervisor/files/ui`);
+                fetchSessions().then(setSessions).catch(console.error);
+              }
+            } catch (e) {
+              console.error(e);
+            } finally {
+              setWelcomeSending(false);
+            }
+          }}
+          sending={welcomeSending}
+        />
+      );
+    } else if (activePath && tabs.length > 0) {
+      /* ViewRegistry 渲染 */
+      breadcrumbSegments = activePath.split("/").filter(Boolean);
       const resolved = viewRegistry.resolve(activePath);
       const ViewComponent = resolved?.registration.component;
-
+      content = ViewComponent ? <ViewComponent path={activePath} /> : (
+        <div className="flex items-center justify-center h-full">
+          <p className="text-sm text-[var(--muted-foreground)]">无法识别的路径: {activePath}</p>
+        </div>
+      );
+    } else if (activeTab === "flows" && activeId) {
+      /* Session index → supervisor UI tab */
+      const indexPath = `flows/${activeId}/flows/supervisor/files/ui`;
+      breadcrumbSegments = indexPath.split("/").filter(Boolean);
+      const resolved = viewRegistry.resolve(indexPath);
+      const ViewComponent = resolved?.registration.component;
+      content = ViewComponent ? <ViewComponent path={indexPath} /> : null;
+    } else {
+      /* 空状态 */
       return (
-        <div className="flex flex-col h-full gap-2 p-2">
-          {/* 路径面包屑 + refresh */}
-          <div className="flex items-center gap-0.5 px-2 text-[10px] text-[var(--muted-foreground)] overflow-x-auto scrollbar-hide shrink-0">
-            {activePath!.split("/").filter(Boolean).map((seg, i, arr) => (
-              <span key={i} className="flex items-center gap-0.5 shrink-0">
-                {i > 0 && <ChevronRight className="w-2.5 h-2.5 opacity-40" />}
-                <span className={i === arr.length - 1 ? "text-[var(--foreground)]" : ""}>{sessionTitleMap.get(seg) || seg}</span>
-              </span>
-            ))}
-            <button
-              onClick={() => setRefreshKey((k) => k + 1)}
-              className="ml-auto px-1.5 py-0.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)]/40 transition-colors shrink-0 rounded"
-              title="刷新内容"
-            >
-              <RotateCw className="w-3 h-3" />
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-auto rounded-md bg-[var(--card)] border border-[var(--border)]">
-            {ViewComponent ? <ViewComponent path={activePath} /> : (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-sm text-[var(--muted-foreground)]">无法识别的路径: {activePath}</p>
-              </div>
-            )}
-          </div>
+        <div className="flex items-center justify-center h-full">
+          <p className="text-sm text-[var(--muted-foreground)]">
+            Select a file from the sidebar
+          </p>
         </div>
       );
     }
 
-    /* Flows tab 默认展示 ChatPage */
-    if (activeTab === "flows") {
-      return <ChatPage />;
-    }
-
-    /* 空状态 */
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-sm text-[var(--muted-foreground)]">
-          Select a file from the sidebar
-        </p>
+      <div className="flex flex-col h-full gap-2 p-2">
+        {/* 路径面包屑 + refresh */}
+        <div className="flex items-center gap-0.5 px-2 text-[10px] text-[var(--muted-foreground)] overflow-x-auto scrollbar-hide shrink-0">
+          {breadcrumbSegments.map((seg, i, arr) => (
+            <span key={i} className="flex items-center gap-0.5 shrink-0">
+              {i > 0 && <ChevronRight className="w-2.5 h-2.5 opacity-40" />}
+              <span className={i === arr.length - 1 ? "text-[var(--foreground)]" : ""}>{sessionTitleMap.get(seg) || seg}</span>
+            </span>
+          ))}
+          <button
+            onClick={() => setRefreshKey((k) => k + 1)}
+            className="ml-auto px-1.5 py-0.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)]/40 transition-colors shrink-0 rounded"
+            title="刷新内容"
+          >
+            <RotateCw className="w-3 h-3" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-auto rounded-md bg-[var(--card)] border border-[var(--border)]">
+          {content}
+        </div>
       </div>
     );
   };
