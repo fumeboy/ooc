@@ -49,7 +49,7 @@
   --radius: 0.75rem;
   --warm: #c86a0a;
   --warm-muted: #fdf5e6;
-  --heading-font: Georgia, "Times New Roman", serif;
+  --heading-font: sans;
   --main-bg: #fefefe;
 
   /* Object avatar colors */
@@ -84,7 +84,7 @@
   --ring: #e8e7e4;
   --warm: #f0a050;
   --warm-muted: #2d2518;
-  --heading-font: Georgia, "Times New Roman", serif;
+  --heading-font: sans;
   --main-bg: #1c1b18;
 
   --avatar-1: #4a3d2a;

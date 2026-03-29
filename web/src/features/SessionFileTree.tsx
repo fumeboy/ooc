@@ -29,7 +29,7 @@ async function enhanceTree(tree: FileTreeNode, sessionId: string): Promise<FileT
   const indexNode: FileTreeNode = {
     name: "index",
     type: "file",
-    path: `flows/${sessionId}`,
+    path: `flows/${sessionId}/flows/supervisor/files/ui`,
     size: 0,
   };
   enhanced.children.unshift(indexNode);

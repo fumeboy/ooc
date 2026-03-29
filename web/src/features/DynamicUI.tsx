@@ -28,19 +28,25 @@ function resolveImportPath(aliasPath: string): string {
   return aliasPath;
 }
 
-/** 从 importPath 中提取 sessionId 和 objectName */
-function extractFlowInfo(importPath: string): { sessionId: string; objectName: string } | null {
-  const match = importPath.match(/@flows\/([^/]+)\/flows\/([^/]+)/);
-  if (match) return { sessionId: match[1]!, objectName: match[2]! };
+/** 从 importPath 中提取通知目标信息 */
+function extractUITarget(importPath: string): { objectName: string; flowId?: string } | null {
+  /* Flow UI: @flows/{sid}/flows/{obj}/files/ui/index.tsx */
+  const flowMatch = importPath.match(/@flows\/([^/]+)\/flows\/([^/]+)/);
+  if (flowMatch) return { objectName: flowMatch[2]!, flowId: flowMatch[1]! };
+
+  /* Stone UI: @stones/{name}/files/ui/index.tsx → talk 给 ReflectFlow */
+  const stoneMatch = importPath.match(/@stones\/([^/]+)/);
+  if (stoneMatch) return { objectName: stoneMatch[1]! };
+
   return null;
 }
 
 /** 通知对象 UI 加载失败 */
 function notifyUIError(importPath: string, error: string) {
-  const info = extractFlowInfo(importPath);
-  if (!info) return;
+  const target = extractUITarget(importPath);
+  if (!target) return;
   const msg = `[系统通知] 你的 UI 组件加载失败，请修复 ui/index.tsx。\n\n错误信息：\n${error}`;
-  talkTo(info.objectName, msg, info.sessionId).catch(() => {});
+  talkTo(target.objectName, msg, target.flowId).catch(() => {});
 }
 
 /** Error Boundary for dynamic UI */

@@ -350,7 +350,7 @@ export function MessageSidebar() {
           {activeFlow && (
             <button
               onClick={async () => {
-                const objName = activeFlow.stoneName;
+                const objName = "supervisor";
                 if (paused) {
                   await resumeFlow(objName, activeFlow.taskId).catch(console.error);
                   setPaused(false);

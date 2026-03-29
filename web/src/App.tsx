@@ -388,7 +388,7 @@ export function App() {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 z-0"
         style={{
-          backgroundImage: `url(${bgSvg})`,
+          // backgroundImage: `url(${bgSvg})`,
           backgroundSize: "300px",
           backgroundRepeat: "repeat",
           backgroundPosition: "center",
