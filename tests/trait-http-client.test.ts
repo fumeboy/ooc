@@ -5,7 +5,7 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { httpGet, httpPost, httpRequest } from "../../user/library/traits/http_client/index";
+import { httpGet, httpPost, httpRequest } from "../../library/traits/http_client/index";
 
 /** 测试用本地服务器端口 */
 const PORT = 19876;
