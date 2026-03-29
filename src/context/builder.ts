@@ -46,6 +46,7 @@ export function buildContext(
   stoneDir?: string,
   recentHistory?: string,
   sessionDir?: string,
+  flowDir?: string,
 ): Context {
   /* G13: 从 focus 路径计算作用域链（替代旧的 _activeTraits） */
   const scopeChain = computeScopeChain(flow.process);
@@ -113,6 +114,16 @@ export function buildContext(
   /* 结构化遗忘：只展示 focus 节点的 actions */
   const actions = selectActionsForContext(flow);
 
+  /* 路径变量（注入到 STATUS 区域，让对象知道自己的物理位置） */
+  const paths: Record<string, string> | undefined = stoneDir ? {
+    self_dir: stoneDir,
+    self_files_dir: join(stoneDir, "files"),
+    self_traits_dir: join(stoneDir, "traits"),
+    world_dir: join(stoneDir, "..", ".."),
+    task_dir: flowDir ?? "",
+    task_files_dir: flowDir ? join(flowDir, "files") : "",
+  } : undefined;
+
   return {
     name: stone.name,
     whoAmI,
@@ -123,6 +134,7 @@ export function buildContext(
     knowledge: [traitCatalog, ...memoryWindows, ...userTraitWindows, ...extraWindows, ...dynamicWindows, ...mirrorWindows, ...sessionWindows],
     directory: directory.filter((d) => d.name !== stone.name),
     status: flow.status,
+    paths,
   };
 }
 

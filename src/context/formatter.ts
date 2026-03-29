@@ -65,6 +65,13 @@ export function formatContextAsSystem(ctx: Context): string {
 
   /* === STATUS === */
   parts.push(`=== STATUS: ${ctx.status} ===`);
+  if (ctx.paths) {
+    parts.push("");
+    parts.push("环境路径（[program] 中可直接使用这些变量）：");
+    for (const [key, value] of Object.entries(ctx.paths)) {
+      if (value) parts.push(`- ${key} = ${value}`);
+    }
+  }
 
   return parts.join("\n");
 }

@@ -74,4 +74,6 @@ export interface Context {
   directory: DirectoryEntry[];
   /** 当前状态 */
   status: FlowStatus;
+  /** 沙箱路径变量（注入到 STATUS 区域，让对象知道自己的物理位置） */
+  paths?: Record<string, string>;
 }

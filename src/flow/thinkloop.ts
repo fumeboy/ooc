@@ -234,7 +234,7 @@ export async function runThinkLoop(
 
       /* 1. 构建 Context（集成 Trait 激活 + 历史摘要） */
       const recentHistory = flowsDir ? loadFlowSummaries(flowsDir, stone.name, flow.taskId) : null;
-      const ctx = buildContext(stone, flow.toJSON(), directory, traits, [], stoneDir, recentHistory ?? undefined, flow.sessionDir);
+      const ctx = buildContext(stone, flow.toJSON(), directory, traits, [], stoneDir, recentHistory ?? undefined, flow.sessionDir, flow.dir);
       systemPrompt = formatContextAsSystem(ctx);
       chatMessages = formatContextAsMessages(ctx);
 
