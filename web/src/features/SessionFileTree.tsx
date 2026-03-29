@@ -43,12 +43,18 @@ async function enhanceSessionTree(tree: FileTreeNode, sessionId: string): Promis
 
   /* Stone 目录下隐藏的文件 */
   const STONE_HIDDEN = new Set(["readme.md", "memory.md", "data.json"]);
+  /* Stone 目录下隐藏的子目录 */
+  const STONE_HIDDEN_DIRS = new Set(["traits"]);
   /* Flow 目录下隐藏的文件 */
   const FLOW_HIDDEN = new Set(["data.json", "process.json"]);
 
-  const filterChildren = (children: FileTreeNode[] | undefined, hidden: Set<string>): FileTreeNode[] => {
+  const filterChildren = (children: FileTreeNode[] | undefined, hiddenFiles: Set<string>, hiddenDirs?: Set<string>): FileTreeNode[] => {
     if (!children) return [];
-    return children.filter((c) => !(c.type === "file" && hidden.has(c.name)));
+    return children.filter((c) => {
+      if (c.type === "file" && hiddenFiles.has(c.name)) return false;
+      if (c.type === "directory" && hiddenDirs?.has(c.name)) return false;
+      return true;
+    });
   };
 
   if (flowsDir?.children) {
@@ -63,7 +69,7 @@ async function enhanceSessionTree(tree: FileTreeNode, sessionId: string): Promis
         /* 注入 .stone 虚拟目录（过滤 stone 冗余文件 + reflect 目录冗余文件） */
         try {
           const stoneTree = await fetchStoneTree(objectName);
-          const stoneChildren = filterChildren(stoneTree.children, STONE_HIDDEN).map((c) => {
+          const stoneChildren = filterChildren(stoneTree.children, STONE_HIDDEN, STONE_HIDDEN_DIRS).map((c) => {
             /* reflect 目录当作 flow 目录处理：隐藏 data.json/process.json */
             if (c.type === "directory" && c.name === "reflect") {
               return { ...c, children: filterChildren(c.children, FLOW_HIDDEN) };

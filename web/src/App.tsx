@@ -67,6 +67,7 @@ function addRecentFile(path: string, label?: string) {
 
 /** 过滤 Stones 文件树：隐藏 stone 级冗余文件 + reflect 目录中的 data.json/process.json */
 const STONE_HIDDEN_FILES = new Set(["readme.md", "memory.md", "data.json"]);
+const STONE_HIDDEN_DIRS = new Set(["traits"]);
 const FLOW_HIDDEN_FILES = new Set(["data.json", "process.json"]);
 
 function filterStoneTree(node: FileTreeNode): FileTreeNode {
@@ -75,6 +76,8 @@ function filterStoneTree(node: FileTreeNode): FileTreeNode {
     .filter((c) => {
       /* 每个 stone 子目录下隐藏冗余文件 */
       if (c.type === "file" && node.marker === "stone" && STONE_HIDDEN_FILES.has(c.name)) return false;
+      /* 每个 stone 子目录下隐藏 traits 目录 */
+      if (c.type === "directory" && node.marker === "stone" && STONE_HIDDEN_DIRS.has(c.name)) return false;
       /* reflect 目录下隐藏 data.json/process.json */
       if (c.type === "file" && node.name === "reflect" && FLOW_HIDDEN_FILES.has(c.name)) return false;
       return true;
