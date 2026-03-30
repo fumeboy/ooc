@@ -166,9 +166,13 @@ export function App() {
   const [welcomeSending, setWelcomeSending] = useState(false);
   const [stoneGroups, setStoneGroups] = useState<GroupConfig["groups"]>([]);
 
-  /* 当选中会话时自动切到文件树，取消选中时切回 sessions */
+  /* 当选中会话时自动切到文件树，取消选中时切回 sessions 并清除编辑器状态 */
   useEffect(() => {
     setShowSessions(!activeId);
+    if (!activeId && activeTab === "flows") {
+      setActivePath(null);
+      setTabs([]);
+    }
   }, [activeId]);
 
   /* 加载对象列表 + sessions + stone groups */
@@ -365,8 +369,10 @@ export function App() {
             try {
               const result = await talkTo(t, msg);
               if (result.taskId) {
+                const path = `flows/${result.taskId}/flows/supervisor/files/ui`;
                 setActiveId(result.taskId);
-                setActivePath(`flows/${result.taskId}/flows/supervisor/files/ui`);
+                setActivePath(path);
+                setTabs([{ path, label: "supervisor" }]);
                 fetchSessions().then(setSessions).catch(console.error);
               }
             } catch (e) {

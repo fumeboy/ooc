@@ -110,6 +110,17 @@ export function DynamicUI({
         return { default: mod.default as React.ComponentType<any> };
       } catch (e) {
         const errorMsg = e instanceof Error ? e.message : String(e);
+        /* 文件不存在时显示"信息待产出"而非报错 */
+        const isNotFound = errorMsg.includes("404") || errorMsg.includes("Not Found") || errorMsg.includes("Failed to fetch");
+        if (isNotFound) {
+          return {
+            default: () => (
+              <div className="flex items-center justify-center h-full min-h-[200px]">
+                <p className="text-sm text-[var(--muted-foreground)]">信息待产出...</p>
+              </div>
+            ),
+          };
+        }
         notifyUIError(importPath, errorMsg);
         return {
           default: () => (
