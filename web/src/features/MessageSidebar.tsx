@@ -61,6 +61,16 @@ export function MessageSidebar() {
       .catch(console.error);
   }, []);
 
+  /* 从服务端同步 pause 状态 */
+  useEffect(() => {
+    fetchObjects()
+      .then((objs) => {
+        const supervisor = objs.find((o) => o.name === "supervisor");
+        if (supervisor) setPaused(!!supervisor.paused);
+      })
+      .catch(console.error);
+  }, [activeId]);
+
   /* 过滤 mention 候选 */
   const mentionCandidates = useMemo(() => {
     if (!showMention) return [];
