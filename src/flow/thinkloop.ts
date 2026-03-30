@@ -410,6 +410,14 @@ export async function runThinkLoop(
           continue;
         }
         consola.info(`[ThinkLoop] 对象声明任务完成`);
+        /* 自动触发 ReflectFlow：任务完成时发送摘要，确保经验沉淀（即使 LLM 没有主动 reflect） */
+        if (collaboration && !flow.isSelfMeta) {
+          const allActions = flow.actions;
+          const actionCount = allActions.length;
+          const errorCount = allActions.filter(a => a.success === false).length;
+          const summary = flow.toJSON().data._flowSummary || "(无摘要)";
+          collaboration.talkToSelf(`[自动反思] 任务完成。共 ${actionCount} 步，${errorCount} 个错误。摘要：${summary}`);
+        }
         flow.setStatus("finished");
         flow.save();
         return persistedData;
@@ -607,6 +615,14 @@ export async function runThinkLoop(
         continue;
       }
       consola.info(`[ThinkLoop] 代码执行完毕，对象声明任务完成`);
+      /* 自动触发 ReflectFlow：任务完成时发送摘要，确保经验沉淀 */
+      if (collaboration && !flow.isSelfMeta) {
+        const allActions = flow.actions;
+        const actionCount = allActions.length;
+        const errorCount = allActions.filter(a => a.success === false).length;
+        const summary = flow.toJSON().data._flowSummary || "(无摘要)";
+        collaboration.talkToSelf(`[自动反思] 任务完成。共 ${actionCount} 步，${errorCount} 个错误。摘要：${summary}`);
+      }
       flow.setStatus("finished");
       flow.save();
       return persistedData;
