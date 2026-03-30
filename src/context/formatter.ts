@@ -155,6 +155,15 @@ export function formatContextAsMessages(
           role: "user",
           content: action.content,
         });
+      } else if (action.type === "action") {
+        /* [action/toolName] 结构化工具调用结果 → user 反馈 */
+        const feedback = action.result || "(无结果)";
+        const idTag = action.id ? ` [${action.id}]` : "";
+        const statusTag = action.success === false ? " ❌" : " ✓";
+        msgs.push({
+          role: "user",
+          content: `[工具调用结果${statusTag}]${idTag}\n${feedback}`,
+        });
       } else if (action.type === "message_in") {
         /* 收到的消息 → user 反馈 */
         msgs.push({
