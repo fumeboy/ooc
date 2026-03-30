@@ -347,6 +347,13 @@ describe("parseLLMOutput — [action/toolName] 段落", () => {
     expect(parsed.programs.length).toBe(1);
   });
 
+  test("action 和空 program 共存时，空 program 被忽略，action 保留", () => {
+    const output = `[action/readFile]\n{"path": "a.ts"}\n\n[program]\n   \n`;
+    const parsed = parseLLMOutput(output);
+    expect(parsed.actions.length).toBe(1);
+    expect(parsed.programs.length).toBe(0);
+  });
+
   test("action 和 talk 可以共存", () => {
     const output = `[action/readFile]\n{"path": "a.ts"}\n\n[talk/user]\n结果如下\n[/talk]`;
     const parsed = parseLLMOutput(output);

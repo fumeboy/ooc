@@ -243,15 +243,19 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
   /* flush 最后一个 section */
   flushSection(lines.length);
 
+  /* 过滤空 program 块（只有空白的 program 不算有效 program） */
+  const nonEmptyPrograms = programs.filter(p => p.code.trim().length > 0);
+
   /* 互斥校验：[talk] 和 [program] 不能并存；[action] 和 [program] 不能并存。
    * 如果同时出现，忽略 talk/action 段落（program 优先，保持向后兼容）。
-   * [action] 和 [talk] 可以共存。 */
-  const finalTalks = programs.length > 0 ? [] : talks;
-  const finalActions = programs.length > 0 ? [] : actions;
+   * [action] 和 [talk] 可以共存。
+   * 注意：空 program 块不参与互斥判断。 */
+  const finalTalks = nonEmptyPrograms.length > 0 ? [] : talks;
+  const finalActions = nonEmptyPrograms.length > 0 ? [] : actions;
 
   return {
     thought: thoughtParts.join("\n"),
-    programs,
+    programs: nonEmptyPrograms,
     talks: finalTalks,
     actions: finalActions,
     directives: { finish, wait, break_ },
