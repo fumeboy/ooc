@@ -160,7 +160,15 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
       const text = currentContent.join("\n").trim();
       if (text) thoughtParts.push(text);
     } else if (currentSection === "program") {
-      const code = currentContent.join("\n").trim();
+      let code = currentContent.join("\n").trim();
+      /* 清理 LLM 额外输出的 markdown 代码块标记（```） */
+      if (code) {
+        /* 移除开头的 ``` 或 ```javascript 或 ```js 或 ```typescript 或 ```ts 或 ```shell 或 ```sh */
+        code = code.replace(/^```(javascript|js|typescript|ts|shell|sh|tsx|jsx)?\s*/, "");
+        /* 移除结尾的 ``` */
+        code = code.replace(/\s*```$/, "");
+        code = code.trim();
+      }
       if (code) {
         /* 计算在原文中的大致位置 */
         const startIndex = lines.slice(0, sectionStartLine).join("\n").length + 1;
