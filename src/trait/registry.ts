@@ -103,25 +103,36 @@ export class MethodRegistry {
    * 将注册的方法包装为 (ctx: MethodContext, ...args) → result 的形式，
    * 返回可以直接注入到执行上下文中的函数映射。
    *
+   * 调用方式：`traitName.methodName()`（两段式，避免命名冲突）
+   *
    * @param ctx - 方法执行上下文
-   * @param activatedTraits - 可选，已激活的 trait 名称列表。传入时只注入这些 trait 的方法；不传则注入全部（向后兼容）
-   * @returns 方法名 → 包装后的函数
+   * @param activatedTraits - 已激活的 trait 名称列表。只注入这些 trait 的方法。
+   * @returns 嵌套结构：{ traitName: { methodName: function, ... } }
    */
   buildSandboxMethods(
     ctx: MethodContext,
-    activatedTraits?: string[],
-  ): Record<string, (...args: unknown[]) => Promise<unknown>> {
-    const result: Record<string, (...args: unknown[]) => Promise<unknown>> = {};
-    const filterSet = activatedTraits ? new Set(activatedTraits) : null;
+    activatedTraits: string[],
+  ): Record<string, unknown> {
+    /* 嵌套映射：{ traitName: { methodName: function, ... } }（两段式调用） */
+    const nested: Record<string, Record<string, (...args: unknown[]) => Promise<unknown>>> = {};
+
+    const filterSet = new Set(activatedTraits);
 
     for (const [name, method] of this._methods) {
-      if (filterSet && !filterSet.has(method.traitName)) continue;
-      result[name] = method.needsCtx
+      if (!filterSet.has(method.traitName)) continue;
+
+      const wrapped = method.needsCtx
         ? async (...args: unknown[]) => method.fn(ctx, ...args)
         : async (...args: unknown[]) => method.fn(...args);
+
+      /* 两段式调用：traitName.methodName */
+      if (!nested[method.traitName]) {
+        nested[method.traitName] = {};
+      }
+      nested[method.traitName]![name] = wrapped;
     }
 
-    return result;
+    return nested;
   }
 
   /**

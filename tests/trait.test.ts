@@ -232,15 +232,24 @@ describe("方法可见性过滤", () => {
       rootDir: "/tmp", selfDir: "/tmp", stoneName: "test",
     } as any;
 
-    // 只激活 trait_a → 只注入 methodA
+    // 只激活 trait_a → 只注入 trait_a.methodA
     const sandbox = registry.buildSandboxMethods(ctx, ["trait_a"]);
-    expect(sandbox.methodA).toBeDefined();
+    expect(sandbox.trait_a).toBeDefined();
+    expect((sandbox.trait_a as any).methodA).toBeDefined();
+    expect(sandbox.trait_b).toBeUndefined();
+
+    // 验证两段式调用
+    const result = await (sandbox.trait_a as any).methodA();
+    expect(result).toBe("a");
+
+    // 扁平调用不再可用（避免命名冲突）
+    expect(sandbox.methodA).toBeUndefined();
     expect(sandbox.methodB).toBeUndefined();
 
-    // 不传 filter → 注入全部（向后兼容）
-    const sandboxAll = registry.buildSandboxMethods(ctx);
-    expect(sandboxAll.methodA).toBeDefined();
-    expect(sandboxAll.methodB).toBeDefined();
+    // 激活全部
+    const sandboxAll = registry.buildSandboxMethods(ctx, ["trait_a", "trait_b"]);
+    expect(sandboxAll.trait_a).toBeDefined();
+    expect(sandboxAll.trait_b).toBeDefined();
   });
 });
 
@@ -297,12 +306,20 @@ describe("MethodRegistry", () => {
       setData: () => {},
       print: () => {},
       taskId: "t1",
-      sharedDir: "/tmp",
-    };
+      filesDir: "/tmp",
+      rootDir: "/tmp",
+      selfDir: "/tmp",
+      stoneName: "test",
+    } as any;
 
-    const methods = registry.buildSandboxMethods(ctx);
-    const result = await methods.multiply!(3, 4);
+    // 两段式调用：traitName.methodName()
+    const methods = registry.buildSandboxMethods(ctx, ["math"]);
+    expect(methods.math).toBeDefined();
+    const result = await (methods.math as any).multiply(3, 4);
     expect(result).toBe(12);
+
+    // 扁平调用不再可用
+    expect(methods.multiply).toBeUndefined();
   });
 
   test("buildSandboxMethods 传递 rootDir/selfDir/stoneName", async () => {
@@ -342,12 +359,155 @@ describe("MethodRegistry", () => {
       rootDir: "/home/user/project",
       selfDir: "/home/user/project/stones/alice",
       stoneName: "alice",
-    };
+    } as any;
 
-    const methods = registry.buildSandboxMethods(ctx);
-    const result = (await methods.inspectCtx!()) as Record<string, unknown>;
+    // 两段式调用：inspector.inspectCtx()
+    const methods = registry.buildSandboxMethods(ctx, ["inspector"]);
+    expect(methods.inspector).toBeDefined();
+    const result = (await (methods.inspector as any).inspectCtx()) as Record<string, unknown>;
     expect(result.rootDir).toBe("/home/user/project");
     expect(result.selfDir).toBe("/home/user/project/stones/alice");
     expect(result.stoneName).toBe("alice");
+
+    // 扁平调用不再可用
+    expect(methods.inspectCtx).toBeUndefined();
+  });
+
+  test("两段式方法调用 traitName.methodName()", async () => {
+    const registry = new MethodRegistry();
+    const traits: TraitDefinition[] = [
+      {
+        name: "math_basic",
+        when: "never",
+        description: "基础数学",
+        readme: "",
+        methods: [
+          {
+            name: "add",
+            description: "加法",
+            params: [],
+            fn: async (_ctx: unknown, a: unknown, b: unknown) => (a as number) + (b as number),
+          },
+          {
+            name: "subtract",
+            description: "减法",
+            params: [],
+            fn: async (_ctx: unknown, a: unknown, b: unknown) => (a as number) - (b as number),
+          },
+        ],
+        deps: [],
+      },
+      {
+        name: "string_utils",
+        when: "never",
+        description: "字符串工具",
+        readme: "",
+        methods: [
+          {
+            name: "concat",
+            description: "连接字符串",
+            params: [],
+            fn: async (_ctx: unknown, a: unknown, b: unknown) => (a as string) + (b as string),
+          },
+        ],
+        deps: [],
+      },
+    ];
+
+    registry.registerAll(traits);
+
+    const ctx = {
+      data: {},
+      setData: () => {},
+      print: () => {},
+      taskId: "t1",
+      filesDir: "/tmp",
+      rootDir: "/tmp",
+      selfDir: "/tmp",
+      stoneName: "test",
+    } as any;
+
+    // 激活 math_basic 和 string_utils
+    const methods = registry.buildSandboxMethods(ctx, ["math_basic", "string_utils"]);
+
+    // 验证两段式调用：traitName.methodName()
+    expect(methods.math_basic).toBeDefined();
+    expect((methods.math_basic as any).add).toBeDefined();
+    expect((methods.math_basic as any).subtract).toBeDefined();
+    expect(methods.string_utils).toBeDefined();
+    expect((methods.string_utils as any).concat).toBeDefined();
+
+    // 验证两段式调用能正常工作
+    const addResult = await (methods.math_basic as any).add(2, 3);
+    expect(addResult).toBe(5);
+
+    const subtractResult = await (methods.math_basic as any).subtract(10, 3);
+    expect(subtractResult).toBe(7);
+
+    const concatResult = await (methods.string_utils as any).concat("Hello, ", "World!");
+    expect(concatResult).toBe("Hello, World!");
+
+    // 验证不再有扁平调用（避免命名冲突）
+    expect(methods.add).toBeUndefined();
+    expect(methods.subtract).toBeUndefined();
+    expect(methods.concat).toBeUndefined();
+  });
+
+  test("buildSandboxMethods 按 activatedTraits 过滤方法", async () => {
+    const registry = new MethodRegistry();
+    const traits: TraitDefinition[] = [
+      {
+        name: "trait_a",
+        when: "never",
+        description: "",
+        readme: "",
+        methods: [
+          { name: "methodA", description: "", params: [], fn: async () => "A" },
+        ],
+        deps: [],
+      },
+      {
+        name: "trait_b",
+        when: "never",
+        description: "",
+        readme: "",
+        methods: [
+          { name: "methodB", description: "", params: [], fn: async () => "B" },
+        ],
+        deps: [],
+      },
+    ];
+
+    registry.registerAll(traits);
+
+    const ctx = {
+      data: {},
+      setData: () => {},
+      print: () => {},
+      taskId: "t1",
+      filesDir: "/tmp",
+      rootDir: "/tmp",
+      selfDir: "/tmp",
+      stoneName: "test",
+    } as any;
+
+    // 只激活 trait_a
+    const methods = registry.buildSandboxMethods(ctx, ["trait_a"]);
+
+    // trait_a 的方法应该可用（两段式调用）
+    expect(methods.trait_a).toBeDefined();
+    expect((methods.trait_a as any).methodA).toBeDefined();
+
+    // trait_b 的方法应该不可用
+    expect(methods.trait_b).toBeUndefined();
+
+    // 不再有扁平调用（避免命名冲突）
+    expect(methods.methodA).toBeUndefined();
+    expect(methods.methodB).toBeUndefined();
+
+    // 激活全部时所有 trait 都可用
+    const allMethods = registry.buildSandboxMethods(ctx, ["trait_a", "trait_b"]);
+    expect(allMethods.trait_a).toBeDefined();
+    expect(allMethods.trait_b).toBeDefined();
   });
 });
