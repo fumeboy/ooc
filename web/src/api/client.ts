@@ -46,6 +46,17 @@ async function patch<T>(path: string, body: unknown): Promise<T> {
   return json.data as T;
 }
 
+async function put<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? "请求失败");
+  return json.data as T;
+}
+
 /** 列出所有对象 */
 export async function fetchObjects(): Promise<ObjectSummary[]> {
   return get<ObjectSummary[]>("/stones");
@@ -164,6 +175,11 @@ export async function fetchProjectTree(): Promise<FileTreeNode> {
 export async function fetchFileContent(path: string): Promise<string> {
   const data = await get<{ path: string; content: string; size: number }>(`/tree/file?path=${encodeURIComponent(path)}`);
   return data.content;
+}
+
+/** 写入 .ooc/ 下指定相对路径的文件内容 */
+export async function saveFileContent(path: string, content: string): Promise<void> {
+  await put<{ path: string }>("/tree/file", { path, content });
 }
 
 /** 获取指定 session 目录的文件树 */

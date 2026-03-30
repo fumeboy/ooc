@@ -345,7 +345,17 @@ export function App() {
     let breadcrumbSegments: string[] = [];
     let content: React.ReactNode = null;
 
-    if (activeTab === "flows" && !activeId) {
+    if (activePath && tabs.length > 0) {
+      /* ViewRegistry 渲染（优先级最高） */
+      breadcrumbSegments = activePath.split("/").filter(Boolean);
+      const resolved = viewRegistry.resolve(activePath);
+      const ViewComponent = resolved?.registration.component;
+      content = ViewComponent ? <ViewComponent path={activePath} /> : (
+        <div className="flex items-center justify-center h-full">
+          <p className="text-sm text-[var(--muted-foreground)]">无法识别的路径: {activePath}</p>
+        </div>
+      );
+    } else if (activeTab === "flows" && !activeId) {
       /* Welcome 页面 */
       breadcrumbSegments = ["welcome"];
       content = (
@@ -367,16 +377,6 @@ export function App() {
           }}
           sending={welcomeSending}
         />
-      );
-    } else if (activePath && tabs.length > 0) {
-      /* ViewRegistry 渲染 */
-      breadcrumbSegments = activePath.split("/").filter(Boolean);
-      const resolved = viewRegistry.resolve(activePath);
-      const ViewComponent = resolved?.registration.component;
-      content = ViewComponent ? <ViewComponent path={activePath} /> : (
-        <div className="flex items-center justify-center h-full">
-          <p className="text-sm text-[var(--muted-foreground)]">无法识别的路径: {activePath}</p>
-        </div>
       );
     } else if (activeTab === "flows" && activeId) {
       /* Session index → supervisor UI tab */

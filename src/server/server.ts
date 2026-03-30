@@ -537,6 +537,19 @@ async function handleRoute(
     return json({ success: true, data: { path: relPath, content, size: stat.size } });
   }
 
+  /* PUT /api/tree/file — 写入 user 根目录下指定相对路径的文件内容 */
+  if (method === "PUT" && path === "/api/tree/file") {
+    const body = await req.json() as Record<string, unknown>;
+    const relPath = body.path as string;
+    const content = body.content as string;
+    if (!relPath || typeof content !== "string") return errorResponse("缺少 path 或 content 参数");
+    if (relPath.includes("..")) return errorResponse("非法路径", 403);
+    const absPath = join(world.rootDir, relPath);
+    if (!absPath.startsWith(world.rootDir)) return errorResponse("非法路径", 403);
+    writeFileSync(absPath, content, "utf-8");
+    return json({ success: true, data: { path: relPath } });
+  }
+
   /* GET /api/flows/:sessionId/tree — 返回指定 session 目录的文件树 */
   const flowTreeMatch = path.match(/^\/api\/flows\/([^/]+)\/tree$/);
   if (method === "GET" && flowTreeMatch) {

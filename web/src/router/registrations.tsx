@@ -10,7 +10,7 @@
 import { useState, useEffect } from "react";
 import { useAtomValue } from "jotai";
 import { refreshKeyAtom } from "../store/session";
-import { fetchFileContent } from "../api/client";
+import { fetchFileContent, saveFileContent } from "../api/client";
 import { viewRegistry, type ViewProps } from "./registry";
 import { cn } from "../lib/utils";
 import { ObjectDetail } from "../features/ObjectDetail";
@@ -166,33 +166,88 @@ function ProcessJsonAdapter({ path }: ViewProps) {
   return <div className="h-full overflow-auto p-4"><ProcessView process={process} /></div>;
 }
 
-/** 通用文件查看器 */
+/** 通用文件查看器（支持编辑和保存） */
 function FileViewerAdapter({ path }: ViewProps) {
   const [content, setContent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
   const refreshKey = useAtomValue(refreshKeyAtom);
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
 
   useEffect(() => {
     setContent(null);
     setError(null);
+    setEditing(false);
     fetchFileContent(path)
-      .then(setContent)
+      .then((c) => { setContent(c); setDraft(c); })
       .catch((e) => setError(e.message));
   }, [path, refreshKey]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await saveFileContent(path, draft);
+      setContent(draft);
+      setEditing(false);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (error) return <div className="flex items-center justify-center h-full"><p className="text-sm text-red-500">{error}</p></div>;
   if (content === null) return <div className="flex items-center justify-center h-full"><p className="text-sm text-[var(--muted-foreground)]">加载中...</p></div>;
 
+  if (editing) {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="flex items-center justify-end gap-2 px-3 py-2 border-b border-[var(--border)] shrink-0">
+          <button
+            onClick={() => { setDraft(content); setEditing(false); }}
+            className="px-3 py-1 text-xs rounded-md text-[var(--muted-foreground)] hover:bg-[var(--accent)] transition-colors"
+          >
+            取消
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-3 py-1 text-xs rounded-md bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            {saving ? "保存中..." : "保存"}
+          </button>
+        </div>
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          className="flex-1 w-full p-4 bg-transparent text-xs font-mono outline-none resize-none"
+          spellCheck={false}
+        />
+      </div>
+    );
+  }
+
+  /* 只读模式 — 右上角编辑按钮 */
+  const editButton = (
+    <button
+      onClick={() => setEditing(true)}
+      className="absolute top-2 right-2 px-2.5 py-1 text-[10px] rounded-md bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors z-10"
+    >
+      编辑
+    </button>
+  );
+
   if (ext === "json") {
     let formatted = content;
     try { formatted = JSON.stringify(JSON.parse(content), null, 2); } catch { /* keep */ }
-    return <div className="h-full overflow-auto"><CodeMirrorViewer content={formatted} ext="json" /></div>;
+    return <div className="h-full overflow-auto relative">{editButton}<CodeMirrorViewer content={formatted} ext="json" /></div>;
   }
   if (ext === "md") {
-    return <div className="p-4 sm:p-8 overflow-auto h-full prose prose-sm max-w-none"><MarkdownContent content={content} /></div>;
+    return <div className="p-4 sm:p-8 overflow-auto h-full prose prose-sm max-w-none relative">{editButton}<MarkdownContent content={content} /></div>;
   }
-  return <div className="h-full overflow-auto"><CodeMirrorViewer content={content} ext={ext} /></div>;
+  return <div className="h-full overflow-auto relative">{editButton}<CodeMirrorViewer content={content} ext={ext} /></div>;
 }
 
 /* ── 注册所有视图 ── */
@@ -212,7 +267,7 @@ export function registerAllViews(): void {
   viewRegistry.register({
     name: "SessionGantt",
     component: SessionGanttAdapter,
-    match: (p) => /^flows\/[^/]+$/.test(p),
+    match: (p) => /^flows\/[^/]+$/.test(p) && !p.includes("/."),
     priority: 100,
     tabKey: (p) => p,
     tabLabel: () => "Session",
