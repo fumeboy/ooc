@@ -44,6 +44,8 @@ export type TraitHookEvent = "before" | "after" | "when_finish" | "when_wait" | 
 export interface TraitHook {
   /** 注入到 program output 的提示文本 */
   inject: string;
+  /** 简要描述这个 inject 是干嘛的（用于 UI 折叠展示） */
+  inject_title?: string;
   /** 是否只触发一次（默认 true） */
   once?: boolean;
 }

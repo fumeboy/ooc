@@ -262,6 +262,18 @@ export class Flow {
    * @param action - 事件数据
    */
   recordActionAt(nodeId: string, action: Omit<Action, "timestamp" | "id">): void {
+    /* message_out 去重：检查同一节点的最近 5 条 action 是否有相同 type+content */
+    if (action.type === "message_out" || action.type === "message_in") {
+      const node = findNode(this._data.process.root, nodeId);
+      if (node) {
+        const recent = node.actions.slice(-5);
+        const isDuplicate = recent.some(
+          a => a.type === action.type && a.content === action.content,
+        );
+        if (isDuplicate) return;
+      }
+    }
+
     const fullAction: Action = {
       id: generateActionId(),
       ...action,

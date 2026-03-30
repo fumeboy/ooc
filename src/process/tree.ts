@@ -200,16 +200,26 @@ export function compressActions(
  * 收集行为树中所有节点的 actions，按时间戳排序
  *
  * 用于需要扁平时间线的场景（API 响应、前端展示等）。
+ * 时间戳相同时，保持先序遍历中的原始顺序（稳定排序）。
  */
 export function collectAllActions(root: ProcessNode): Action[] {
-  const all: Action[] = [];
+  const all: (Action & { _index: number })[] = [];
+  let index = 0;
   const walk = (node: ProcessNode) => {
-    all.push(...node.actions);
+    for (const action of node.actions) {
+      all.push({ ...action, _index: index++ });
+    }
     for (const child of node.children) walk(child);
   };
   walk(root);
-  all.sort((a, b) => a.timestamp - b.timestamp);
-  return all;
+  all.sort((a, b) => {
+    if (a.timestamp !== b.timestamp) {
+      return a.timestamp - b.timestamp;
+    }
+    // 时间戳相同时，按先序遍历中的原始顺序排列
+    return a._index - b._index;
+  });
+  return all as Action[];
 }
 
 /**

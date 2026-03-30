@@ -326,11 +326,19 @@ export async function loadAllTraits(
 const VALID_HOOK_EVENTS = new Set<TraitHookEvent>(["before", "after", "when_finish", "when_wait", "when_error"]);
 
 /**
+ * 从 inject 文本提取默认的 inject_title（前 50 个字符）
+ */
+function extractDefaultTitle(inject: string): string {
+  const trimmed = inject.trim().replace(/^[\n\r]+/, "").replace(/[\n\r].*$/, "");
+  return trimmed.length > 50 ? trimmed.slice(0, 50) + "..." : trimmed;
+}
+
+/**
  * 从 frontmatter 的 hooks 字段解析 Trait Hooks
  *
  * 支持两种格式：
  * 1. 简写：hooks: { when_finish: "提示文本" }
- * 2. 完整：hooks: { when_finish: { inject: "提示文本", once: true } }
+ * 2. 完整：hooks: { when_finish: { inject: "提示文本", inject_title: "标题", once: true } }
  */
 function parseTraitHooks(raw: unknown): TraitDefinition["hooks"] {
   if (!raw || typeof raw !== "object") return undefined;
@@ -343,13 +351,18 @@ function parseTraitHooks(raw: unknown): TraitDefinition["hooks"] {
 
     if (typeof value === "string") {
       /* 简写格式 */
-      result[key as TraitHookEvent] = { inject: value, once: true };
+      result[key as TraitHookEvent] = {
+        inject: value,
+        inject_title: extractDefaultTitle(value),
+        once: true,
+      };
       hasAny = true;
     } else if (value && typeof value === "object") {
       const obj = value as Record<string, unknown>;
       if (typeof obj.inject === "string") {
         result[key as TraitHookEvent] = {
           inject: obj.inject,
+          inject_title: typeof obj.inject_title === "string" ? obj.inject_title : extractDefaultTitle(obj.inject),
           once: obj.once !== false, /* 默认 true */
         };
         hasAny = true;

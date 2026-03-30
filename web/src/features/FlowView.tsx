@@ -95,11 +95,18 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
     (m) => m.from === objectName || m.to === objectName
   );
 
-  const collectActions = (node: any): Action[] => {
-    const actions: Action[] = [...(node.actions ?? [])];
-    for (const child of node.children ?? []) {
-      actions.push(...collectActions(child));
-    }
+  const collectActions = (node: any): (Action & { _origIndex: number })[] => {
+    const actions: (Action & { _origIndex: number })[] = [];
+    let index = 0;
+    const walk = (n: any) => {
+      for (const a of n.actions ?? []) {
+        actions.push({ ...a, _origIndex: index++ });
+      }
+      for (const child of n.children ?? []) {
+        walk(child);
+      }
+    };
+    walk(node);
     return actions;
   };
   const actions = collectActions(process.root);
@@ -110,7 +117,14 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
   ].sort((a, b) => {
     const ta = a.kind === "message" ? a.data.timestamp : a.kind === "action" ? a.data.timestamp : 0;
     const tb = b.kind === "message" ? b.data.timestamp : b.kind === "action" ? b.data.timestamp : 0;
-    return ta - tb;
+    if (ta !== tb) return ta - tb;
+    // 时间戳相同时：
+    // - 如果都是 action，按先序遍历的原始顺序排列
+    // - 如果是 message 和 action，保持它们在原始数组中的相对顺序
+    if (a.kind === "action" && b.kind === "action") {
+      return (a.data as any)._origIndex - (b.data as any)._origIndex;
+    }
+    return 0;
   });
 
   return (
