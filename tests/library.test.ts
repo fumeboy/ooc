@@ -169,16 +169,16 @@ describe("library_index trait 方法", () => {
     expect(traits.sort()).toEqual(["coding", "web_search"]);
   });
 
-  test("searchLibrary 搜索 skills 和 traits", () => {
+  test("searchLibrary 搜索 traits（skills 目录已废弃）", () => {
     const rootDir = join(TEST_DIR, "root5");
-    mkdirSync(join(rootDir, "library", "skills"), { recursive: true });
     mkdirSync(join(rootDir, "library", "traits", "news_trait"), { recursive: true });
-    writeFileSync(join(rootDir, "library", "skills", "news.md"), "# 新闻聚合\n\n获取最新新闻", "utf-8");
-    writeFileSync(join(rootDir, "library", "traits", "news_trait", "readme.md"), "---\nwhen: always\n---\n新闻相关能力", "utf-8");
+    mkdirSync(join(rootDir, "library", "traits", "deep_reading"), { recursive: true });
+    writeFileSync(join(rootDir, "library", "traits", "news_trait", "readme.md"), "---\nwhen: never\n---\n新闻聚合，获取最新新闻", "utf-8");
+    writeFileSync(join(rootDir, "library", "traits", "deep_reading", "readme.md"), "---\nwhen: never\n---\n深度阅读，分析文章", "utf-8");
 
     const results = searchLibrary({ rootDir }, "新闻");
-    expect(results).toContain("[skill] news");
     expect(results).toContain("[trait] news_trait");
+    expect(results).not.toContain("deep_reading");
   });
 
   test("searchLibrary 无匹配返回提示", () => {
