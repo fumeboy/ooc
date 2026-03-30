@@ -5,12 +5,14 @@
  * 包含工具栏：Zoom-in、Copy、Ref 按钮。
  * ID + 时间显示在卡片底部（边框外）。
  * Zoom-in 使用居中模态窗展示。
+ *
+ * 特殊行为：type=inject 的卡片默认折叠，只显示 inject_title，点击展开。
  */
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { cn } from "../../lib/utils";
 import { MarkdownContent } from "./MarkdownContent";
 import { ObjectAvatar } from "./ObjectAvatar";
-import { Maximize2, Copy, Link, Check, X, Loader2 } from "lucide-react";
+import { Maximize2, Copy, Link, Check, X, Loader2, ChevronRight, ChevronDown } from "lucide-react";
 import type { Action, FlowMessage } from "../../api/types";
 
 const ACTION_BADGE: Record<string, string> = {
@@ -22,6 +24,31 @@ const ACTION_BADGE: Record<string, string> = {
   pause: "text-gray-600 dark:text-gray-300",
 };
 const DEFAULT_BADGE = "text-gray-600 dark:text-gray-300";
+
+/* ── 解析 inject content ── */
+
+/**
+ * 解析 inject 类型 action 的 content
+ * 格式: ">>> [系统提示 — event | title]\n内容..."
+ * 或旧格式: ">>> [系统提示 — event]\n内容..."
+ */
+function parseInjectContent(content: string): {
+  event: string | null;
+  title: string | null;
+  body: string;
+} {
+  const headerMatch = content.match(/^>>>\s*\[系统提示 — ([^\|\]]+)(?:\s*\|\s*([^\]]+))?\]\s*(\n|$)/);
+  if (headerMatch) {
+    const event = headerMatch[1]?.trim() || null;
+    const title = headerMatch[2]?.trim() || null;
+    const body = content.slice(headerMatch[0].length);
+    return { event, title, body };
+  }
+  // 旧格式或无法解析时，用第一行作为 fallback title
+  const firstLine = content.split("\n")[0] || "";
+  const fallbackTitle = firstLine.length > 50 ? firstLine.slice(0, 50) + "..." : firstLine;
+  return { event: null, title: fallbackTitle || null, body: content };
+}
 
 /* ── 小型工具栏按钮 ── */
 function ToolbarBtn({
@@ -130,6 +157,10 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading
   const contentRef = useRef<HTMLDivElement>(null);
   const [overflows, setOverflows] = useState(false);
 
+  // type=inject 类型默认折叠
+  const isInject = action.type === "inject";
+  const [injectCollapsed, setInjectCollapsed] = useState(true);
+
   useEffect(() => {
     const el = contentRef.current;
     if (!el) return;
@@ -137,6 +168,8 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading
   });
 
   const isProgram = action.type === "program";
+  const isAction = action.type === "action";
+  const isProgramOrAction = isProgram || isAction;
   const badgeColor = ACTION_BADGE[action.type] ?? DEFAULT_BADGE;
   const R = 8;
   const ts = new Date(action.timestamp).toLocaleTimeString([], {
@@ -144,6 +177,26 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading
     minute: "2-digit",
     second: "2-digit",
   });
+
+  // 解析 inject 内容
+  const injectParsed = useMemo(() => {
+    if (isInject) {
+      return parseInjectContent(action.content);
+    }
+    return { event: null, title: null, body: action.content };
+  }, [isInject, action.content]);
+
+  // inject 类型显示的标题：优先用 inject_title，其次用 event，最后用 fallback
+  const injectDisplayTitle = injectParsed.title || injectParsed.event || "系统提示";
+
+  // inject 类型的点击行为：切换折叠/展开
+  const handleCardClick = () => {
+    if (isInject) {
+      setInjectCollapsed((prev) => !prev);
+    } else {
+      setFocused(true);
+    }
+  };
 
   const bodyOverflow = focused ? "auto" : "hidden";
   const maxHeightStyle = maxHeight != null
@@ -156,9 +209,10 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading
         className={cn(
           "bg-[var(--muted)] overflow-hidden p-[4px] shadow-sm border transition-colors",
           focused ? "border-[var(--foreground)]" : "border-[var(--border)]",
+          isInject && "cursor-pointer",
         )}
         style={{ borderRadius: `${R}px`, ...(focused ? { borderColor: "color-mix(in srgb, var(--foreground) 40%, transparent)" } : {}) }}
-        onClick={() => setFocused(true)}
+        onClick={handleCardClick}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => { setFocused(false); setHovered(false); }}
       >
@@ -177,7 +231,7 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading
             )}
             <span className={cn("text-[11px] font-mono", badgeColor)}>[{action.type}]</span>
             {loading && <Loader2 className="w-3 h-3 animate-spin text-[var(--muted-foreground)]" />}
-            {isProgram && action.success !== undefined && (
+            {isProgramOrAction && action.success !== undefined && (
               <span
                 className={cn(
                   "text-[10px] font-semibold",
@@ -185,6 +239,12 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading
                 )}
               >
                 {action.success === false ? "FAIL" : "OK"}
+              </span>
+            )}
+            {/* inject 类型显示折叠/展开图标 */}
+            {isInject && (
+              <span className="ml-1 text-[var(--muted-foreground)]">
+                {injectCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </span>
             )}
             <div
@@ -203,7 +263,7 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading
             <ToolbarBtn title="展开详情" onClick={() => setModalOpen(true)}>
               <Maximize2 className="w-3 h-3" />
             </ToolbarBtn>
-            {!isProgram && <CopyBtn text={action.content} title="复制内容" />}
+            {!isProgramOrAction && <CopyBtn text={action.content} title="复制内容" />}
             {action.id && objectName && (
               <ToolbarBtn title="引用" onClick={() => onRef?.(action.id!, objectName)}>
                 <Link className="w-3 h-3" />
@@ -212,62 +272,88 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading
           </div>
         </div>
 
-        {/* body */}
-        <div className="relative bg-[var(--card)]" style={{ borderRadius: `0 ${R}px ${R}px ${R}px` }}>
-          <div
-            className="absolute top-0 z-10"
-            style={{
-              left: "-1px",
-              width: `${R}px`,
-              height: `${R}px`,
-              background: `radial-gradient(circle at 0% 100%, transparent ${R}px, var(--card) ${R}px)`,
-            }}
-          />
-          {isProgram ? (
-            <div className="@container">
-              <div className="flex flex-col @[600px]:flex-row divide-y @[600px]:divide-y-0 @[600px]:divide-x divide-[var(--border)]">
-              <div ref={contentRef} className="flex-1 min-w-0" style={{ maxHeight: maxHeightStyle, overflow: maxHeightStyle ? bodyOverflow : undefined }}>
-                <div className="px-3 py-2">
-                  <p className="text-[10px] text-[var(--muted-foreground)] mb-1 font-medium flex items-center">
-                    Program
-                    <InlineCopyBtn text={action.content} title="复制 Program" />
-                  </p>
-                  <pre className="text-[11px] font-mono whitespace-pre-wrap break-all leading-relaxed">{action.content}</pre>
-                </div>
-              </div>
-              {action.result && (
-                <div className="flex-1 min-w-0" style={{ maxHeight: maxHeightStyle, overflow: maxHeightStyle ? bodyOverflow : undefined }}>
-                  <div className="px-3 py-2">
-                    <p className="text-[10px] text-[var(--muted-foreground)] mb-1 font-medium flex items-center">
-                      Output
-                      <InlineCopyBtn text={action.result} title="复制 Output" />
-                    </p>
-                    <pre className="text-[11px] font-mono whitespace-pre-wrap break-all leading-relaxed">{action.result}</pre>
-                  </div>
-                </div>
-              )}
-              </div>
-            </div>
-          ) : (
-            <div ref={contentRef} style={{ maxHeight: maxHeightStyle, overflow: maxHeightStyle ? bodyOverflow : undefined }}>
-              <div className="px-3 py-4">
-                <MarkdownContent content={action.content} className="text-sm leading-relaxed" />
-              </div>
-            </div>
-          )}
-          {overflows && (
+        {/* inject 类型：折叠时只显示 title */}
+        {isInject && injectCollapsed ? (
+          <div className="relative bg-[var(--card)]" style={{ borderRadius: `0 ${R}px ${R}px ${R}px` }}>
             <div
-              className="absolute bottom-0 left-0 right-0 flex items-end justify-center pb-2 pt-8 pointer-events-none transition-opacity duration-200"
+              className="absolute top-0 z-10"
               style={{
-                background: "linear-gradient(transparent, var(--card))",
-                borderRadius: `0 0 ${R}px ${R}px`,
-                opacity: hovered && !focused ? 1 : 0,
+                left: "-1px",
+                width: `${R}px`,
+                height: `${R}px`,
+                background: `radial-gradient(circle at 0% 100%, transparent ${R}px, var(--card) ${R}px)`,
               }}
-            >
-              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[var(--muted)] text-[var(--muted-foreground)]">Click to Scroll</span>
+            />
+            <div className="px-3 py-2">
+              <span className="text-sm text-[var(--muted-foreground)]">
+                {injectDisplayTitle}
+              </span>
+              <span className="text-[10px] text-[var(--muted-foreground)] opacity-60 ml-2">
+                点击展开
+              </span>
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          /* body */
+          <div className="relative bg-[var(--card)]" style={{ borderRadius: `0 ${R}px ${R}px ${R}px` }}>
+            <div
+              className="absolute top-0 z-10"
+              style={{
+                left: "-1px",
+                width: `${R}px`,
+                height: `${R}px`,
+                background: `radial-gradient(circle at 0% 100%, transparent ${R}px, var(--card) ${R}px)`,
+              }}
+            />
+            {isProgramOrAction ? (
+              <div className="@container">
+                <div className="flex flex-col @[600px]:flex-row divide-y @[600px]:divide-y-0 @[600px]:divide-x divide-[var(--border)]">
+                  <div ref={contentRef} className="flex-1 min-w-0" style={{ maxHeight: maxHeightStyle, overflow: maxHeightStyle ? bodyOverflow : undefined }}>
+                    <div className="px-3 py-2">
+                      <p className="text-[10px] text-[var(--muted-foreground)] mb-1 font-medium flex items-center">
+                        {isProgram ? "Program" : "Action"}
+                        <InlineCopyBtn text={action.content} title={isProgram ? "复制 Program" : "复制 Action"} />
+                      </p>
+                      <pre className="text-[11px] font-mono whitespace-pre-wrap break-all leading-relaxed">{action.content}</pre>
+                    </div>
+                  </div>
+                  {action.result && (
+                    <div className="flex-1 min-w-0" style={{ maxHeight: maxHeightStyle, overflow: maxHeightStyle ? bodyOverflow : undefined }}>
+                      <div className="px-3 py-2">
+                        <p className="text-[10px] text-[var(--muted-foreground)] mb-1 font-medium flex items-center">
+                          Result
+                          <InlineCopyBtn text={action.result} title="复制 Result" />
+                        </p>
+                        <pre className="text-[11px] font-mono whitespace-pre-wrap break-all leading-relaxed">{action.result}</pre>
+                      </div>
+                    </div>
+                  )}
+                  </div>
+              </div>
+            ) : (
+              <div ref={contentRef} style={{ maxHeight: maxHeightStyle, overflow: maxHeightStyle ? bodyOverflow : undefined }}>
+                <div className="px-3 py-4">
+                  <MarkdownContent
+                    content={isInject ? injectParsed.body : action.content}
+                    className="text-sm leading-relaxed"
+                  />
+                </div>
+              </div>
+            )}
+            {overflows && (
+              <div
+                className="absolute bottom-0 left-0 right-0 flex items-end justify-center pb-2 pt-8 pointer-events-none transition-opacity duration-200"
+                style={{
+                  background: "linear-gradient(transparent, var(--card))",
+                  borderRadius: `0 0 ${R}px ${R}px`,
+                  opacity: hovered && !focused ? 1 : 0,
+                }}
+              >
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[var(--muted)] text-[var(--muted-foreground)]">Click to Scroll</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 卡片尾部：ID + 时间（边框外） */}
@@ -284,7 +370,7 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading
       <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
         <div className="flex items-center gap-2 mb-4">
           <span className={cn("text-xs font-mono", badgeColor)}>[{action.type}]</span>
-          {isProgram && action.success !== undefined && (
+          {isProgramOrAction && action.success !== undefined && (
             <span
               className={cn(
                 "text-xs font-semibold",
@@ -299,21 +385,24 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading
             <span className="text-[10px] font-mono text-[var(--muted-foreground)] opacity-60">{action.id}</span>
           )}
         </div>
-        {isProgram ? (
+        {isProgramOrAction ? (
           <div className="space-y-4">
             <div>
-              <p className="text-xs text-[var(--muted-foreground)] mb-1 font-medium">Program</p>
+              <p className="text-xs text-[var(--muted-foreground)] mb-1 font-medium">{isProgram ? "Program" : "Action"}</p>
               <pre className="text-xs font-mono whitespace-pre-wrap break-all leading-relaxed">{action.content}</pre>
             </div>
             {action.result && (
               <div>
-                <p className="text-xs text-[var(--muted-foreground)] mb-1 font-medium">Output</p>
+                <p className="text-xs text-[var(--muted-foreground)] mb-1 font-medium">Result</p>
                 <pre className="text-xs font-mono whitespace-pre-wrap break-all leading-relaxed">{action.result}</pre>
               </div>
             )}
           </div>
         ) : (
-          <MarkdownContent content={action.content} className="text-sm leading-relaxed" />
+          <MarkdownContent
+            content={isInject ? injectParsed.body : action.content}
+            className="text-sm leading-relaxed"
+          />
         )}
       </Modal>
     </div>

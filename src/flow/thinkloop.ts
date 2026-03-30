@@ -72,7 +72,7 @@ export interface ThinkLoopConfig {
 
 /** ThinkLoop 默认配置 */
 const DEFAULT_CONFIG: ThinkLoopConfig = {
-  maxIterations: 100,
+  maxIterations: 1000,
 };
 
 /**
@@ -308,6 +308,11 @@ export async function runThinkLoop(
     const { programs, talks, actions, directives } = parsed;
     /* 结构化格式下，thought 就是 [thought] 段落内容；legacy 下是去掉代码块后的文本 */
     const replyContent = parsed.thought;
+    const pendingWait = flow.toJSON().data._pendingWait === true;
+
+    if (pendingWait && (programs.length > 0 || talks.length > 0 || actions.length > 0 || directives.finish || directives.wait || directives.break_)) {
+      flow.setFlowData("_pendingWait", undefined);
+    }
 
     /* 4. 记录思考（recordAction 自动写入 focus 节点，只记录 [thought] 段落） */
     if (replyContent) {
@@ -428,9 +433,16 @@ export async function runThinkLoop(
         if (hookInjection) {
           consola.info(`[ThinkLoop] when_wait hook 触发，注入提示后继续`);
           flow.recordAction({ type: "inject", content: hookInjection });
+          flow.setFlowData("_pendingWait", true);
           continue;
         }
         consola.info(`[ThinkLoop] 对象请求等待外部输入`);
+        flow.setStatus("waiting");
+        flow.save();
+        return persistedData;
+      }
+      if (pendingWait && !directives.finish && !directives.wait && !directives.break_) {
+        flow.setFlowData("_pendingWait", undefined);
         flow.setStatus("waiting");
         flow.save();
         return persistedData;
@@ -496,6 +508,10 @@ export async function runThinkLoop(
       let output: string;
       if (result.success) {
         const effectLines = getEffects();
+        /* 检查是否调用了 talk()/talkToSelf()，如果有则标记为有有效产出 */
+        if (effectLines.some((e) => e.includes("消息已投递给"))) {
+          hasDeliveredOutput = true;
+        }
         const effectsSection = effectLines.length > 0
           ? `\n\n>>> effects:\n${effectLines.join("\n")}`
           : "";
@@ -572,6 +588,10 @@ export async function runThinkLoop(
           let output: string;
           if (result.success) {
             const effectLines = getEffects();
+            /* 检查是否调用了 talk()/talkToSelf()，如果有则标记为有有效产出 */
+            if (effectLines.some((e) => e.includes("消息已投递给"))) {
+              hasDeliveredOutput = true;
+            }
             const effectsSection = effectLines.length > 0
               ? `\n\n>>> effects:\n${effectLines.join("\n")}`
               : "";
@@ -787,6 +807,7 @@ function collectAndFireHooks(
   const activeTraits = getActiveTraits(traits, scopeChain);
 
   const injections: string[] = [];
+  const collectedTitles: string[] = [];
   const focusNodeId = flow.process.focusId;
 
   for (const trait of activeTraits) {
@@ -801,6 +822,9 @@ function collectAndFireHooks(
     if (hook.once !== false && firedHooks.has(hookId)) continue;
 
     injections.push(hook.inject);
+    if (hook.inject_title) {
+      collectedTitles.push(hook.inject_title);
+    }
     firedHooks.add(hookId);
   }
 
@@ -809,7 +833,15 @@ function collectAndFireHooks(
   /* 持久化 firedHooks 到 flow.data，防止 Scheduler 多次调用时丢失 */
   flow.setFlowData("_firedHooks", Array.from(firedHooks));
 
-  return `>>> [系统提示 — ${event}]\n${injections.join("\n\n")}`;
+  /* 格式化返回内容
+   * - 如果只有一个 hook 且有 inject_title: ">>> [系统提示 — event | title]\n内容"
+   * - 否则: ">>> [系统提示 — event]\n内容"
+   */
+  const titlePart = injections.length === 1 && collectedTitles.length === 1
+    ? ` | ${collectedTitles[0]}`
+    : "";
+
+  return `>>> [系统提示 — ${event}${titlePart}]\n${injections.join("\n\n")}`;
 }
 
 /**
@@ -1493,11 +1525,37 @@ function buildExecutionContext(
 
   /* ── Trait 元编程 API ── */
   const traitsDir = join(stoneDir, "traits");
+  /* 从 stones/{name}/ 向上两级到根目录 */
+  const rootDir = join(stoneDir, "..", "..");
+  const libraryTraitsDir = join(rootDir, "library", "traits");
+  const kernelTraitsDir = join(rootDir, "kernel", "traits");
+
+  /**
+   * 按优先级查找 trait 目录
+   * 优先级：自身 traits/ → library/traits/ → kernel/traits/
+   * 返回找到的目录路径，找不到返回 null
+   */
+  function findTraitDir(name: string): string | null {
+    const selfDir = join(traitsDir, name);
+    if (existsSync(selfDir)) return selfDir;
+
+    const libDir = join(libraryTraitsDir, name);
+    if (existsSync(libDir)) return libDir;
+
+    const kernelDir = join(kernelTraitsDir, name);
+    if (existsSync(kernelDir)) return kernelDir;
+
+    return null;
+  }
 
   /** 热加载：trait 文件变更后立即加载到当前任务（异步，下一轮思考生效） */
   const hotReloadTrait = (name: string) => {
     if (!traits || !methodRegistry) return;
-    const traitDir = join(traitsDir, name);
+    const traitDir = findTraitDir(name);
+    if (!traitDir) {
+      consola.warn(`[ThinkLoop] 热加载 trait "${name}" 失败：找不到该 trait`);
+      return;
+    }
     loadTrait(traitDir, name).then((loaded) => {
       if (!loaded) {
         consola.warn(`[ThinkLoop] 热加载 trait "${name}" 失败（可能存在语法错误）`);
@@ -1517,8 +1575,8 @@ function buildExecutionContext(
       name: "readTrait",
       fn: (name: string) => {
         if (!TRAIT_NAME_RE.test(name)) return `[错误] trait 名称无效: ${name}`;
-        const traitDir = join(traitsDir, name);
-        if (!existsSync(traitDir)) return `[错误] trait "${name}" 不存在`;
+        const traitDir = findTraitDir(name);
+        if (!traitDir) return `[错误] trait "${name}" 不存在（已检查：自身 traits/、library/traits/、kernel/traits/）`;
         const r: Record<string, unknown> = { name };
         const readmePath = join(traitDir, "readme.md");
         if (existsSync(readmePath)) {
@@ -1530,8 +1588,14 @@ function buildExecutionContext(
           r.readme = "";
           r.when = "never";
         }
-        const indexPath = join(traitDir, "index.ts");
-        r.code = existsSync(indexPath) ? readFileSync(indexPath, "utf-8") : null;
+        /* 记录来源位置（不返回 code，code 仅在 activateTrait 后由系统内部使用） */
+        if (traitDir.startsWith(libraryTraitsDir)) {
+          r.source = "library";
+        } else if (traitDir.startsWith(kernelTraitsDir)) {
+          r.source = "kernel";
+        } else {
+          r.source = "self";
+        }
         return r;
       },
     },
@@ -1551,10 +1615,9 @@ function buildExecutionContext(
     {
       name: "activateTrait",
       fn: (name: string) => {
-        /* 校验 trait 是否存在（对象自身 traits 或 kernel traits） */
-        const traitDir = join(traitsDir, name);
-        const kernelDir = join(stoneDir, "..", "..", "kernel", "traits", name);
-        if (!existsSync(traitDir) && !existsSync(kernelDir)) return `[错误] trait "${name}" 不存在，无法激活`;
+        /* 校验 trait 是否存在（按优先级：自身 → library → kernel） */
+        const traitDir = findTraitDir(name);
+        if (!traitDir) return `[错误] trait "${name}" 不存在，无法激活（已检查：自身 traits/、library/traits/、kernel/traits/）`;
 
         const process = flow.process;
         if (!process) return `[错误] 无行为树`;

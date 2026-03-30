@@ -91,29 +91,42 @@ export function MessageSidebar() {
     });
 
     /* 收集 supervisor 的 actions（从 subFlows 中提取） */
-    const collectActions = (node: any): Action[] => {
-      const actions: Action[] = [...(node.actions ?? [])];
-      for (const child of node.children ?? []) {
-        actions.push(...collectActions(child));
-      }
+    const collectActions = (node: any): (Action & { _origIndex: number })[] => {
+      const actions: (Action & { _origIndex: number })[] = [];
+      let index = 0;
+      const walk = (n: any) => {
+        for (const a of n.actions ?? []) {
+          actions.push({ ...a, _origIndex: index++ });
+        }
+        for (const child of n.children ?? []) {
+          walk(child);
+        }
+      };
+      walk(node);
       return actions;
     };
 
     const supervisorFlow = (activeFlow as any).subFlows?.find((sf: any) => sf.stoneName === "supervisor");
     const process = supervisorFlow?.process ?? activeFlow.process;
-    const allActions: Action[] = process?.root ? collectActions(process.root) : [];
+    const allActions = process?.root ? collectActions(process.root) : [];
     /* 过滤掉 message_in/message_out（messages 已包含这些信息） */
     const actions = allActions.filter((a) => a.type !== "message_in" && a.type !== "message_out");
 
     /* 合并并按时间排序 */
-    type Entry = { kind: "message"; data: FlowMessage } | { kind: "action"; data: Action };
+    type Entry = { kind: "message"; data: FlowMessage } | { kind: "action"; data: Action & { _origIndex?: number } };
     const entries: Entry[] = [
       ...msgs.map((m): Entry => ({ kind: "message", data: m })),
       ...actions.map((a): Entry => ({ kind: "action", data: a })),
     ].sort((a, b) => {
       const ta = a.data.timestamp ?? 0;
       const tb = b.data.timestamp ?? 0;
-      return ta - tb;
+      if (ta !== tb) return ta - tb;
+      // 时间戳相同时：
+      // - 如果都是 action，按先序遍历的原始顺序排列
+      if (a.kind === "action" && b.kind === "action") {
+        return (a.data._origIndex ?? 0) - (b.data._origIndex ?? 0);
+      }
+      return 0;
     });
 
     return entries;

@@ -14,10 +14,12 @@ hooks:
       4. 请用 updateFlowSummary 写一句话摘要，概括这次对话的主题和关键结论。
       5. 有没有犯错？根因是什么？
       确认后再输出 [finish]。
+    inject_title: "任务结束前反思：回顾学到的内容并沉淀经验"
     once: true
   after:
     inject: |
       这个步骤完成了。快速回顾：学到了什么？有没有值得记住的模式？需要更新会话记忆吗？
+    inject_title: "步骤完成后快速回顾"
     once: false
 ---
 
