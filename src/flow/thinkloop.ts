@@ -454,7 +454,7 @@ export async function runThinkLoop(
         consola.warn(`[ThinkLoop] 检测到 LLM 输出乱码，异常终止`);
         flow.recordAction({ type: "thought" as const, content: "[系统检测到输出异常，已终止]" });
         if (collaboration) {
-          collaboration.talk("[系统] 处理过程中出现异常（LLM 输出乱码），请重试。", "user");
+          collaboration.talk(`[系统] 处理过程中出现异常（LLM 输出乱码），当前已执行 ${iteration}/${config.maxIterations} 轮。请重试。`, "user");
         }
         flow.setStatus("failed");
         flow.save();
@@ -467,7 +467,7 @@ export async function runThinkLoop(
         if (consecutiveEmptyRounds >= 3) {
           consola.warn(`[ThinkLoop] 连续 ${consecutiveEmptyRounds} 轮无有效指令，异常终止`);
           if (collaboration && !hasDeliveredOutput) {
-            collaboration.talk("[系统] 连续多轮未能产生有效操作，任务已终止。请尝试简化你的请求。", "user");
+            collaboration.talk(`[系统] 连续 ${consecutiveEmptyRounds} 轮未能产生有效操作，当前已执行 ${iteration}/${config.maxIterations} 轮，任务已终止。请尝试简化你的请求。`, "user");
           }
           flow.setStatus("failed");
           flow.save();
@@ -479,7 +479,7 @@ export async function runThinkLoop(
 
       /* 防护层 3: 迭代耗尽时通知用户 */
       if (!hasDeliveredOutput && collaboration) {
-        collaboration.talk("[系统] 任务处理超时，未能完成。请尝试简化你的请求。", "user");
+        collaboration.talk(`[系统] 任务处理超时，已执行 ${iteration}/${config.maxIterations} 轮仍未完成。请尝试简化你的请求。`, "user");
       }
       flow.setStatus(hasDeliveredOutput ? "finished" : "failed");
       flow.save();
@@ -492,7 +492,7 @@ export async function runThinkLoop(
 
     if (!hasShell) {
       /* 纯 JavaScript：保持原有合并执行逻辑 */
-      const mergedCode = programs.map((p) => `{\n${p.code}\n}`).join("\n\n");
+      const mergedCode = programs.map((p) => `${p.code}`).join("\n\n");
       consola.info(`[ThinkLoop] 执行 JS 程序 (${mergedCode.length} 字符, ${programs.length} 个代码块合并)`);
 
       const { context: execContext, getOutputs, getEffects, getPersistedData } = buildExecutionContext(stone, flow, stoneDir, methodRegistry, collaboration, traits, llm, cron);
@@ -983,12 +983,10 @@ function buildExecutionContext(
   }
 
   /* 注入 Trait 方法（Phase 2） */
-  if (methodRegistry) {
+  if (methodRegistry && traits) {
     /* G3: 按作用域链计算已激活 trait，只注入对应方法 */
-    const scopeChain = traits ? computeScopeChain(flow.process) : [];
-    const activeTraitNames = traits
-      ? getActiveTraits(traits, scopeChain).map(t => t.name)
-      : undefined;
+    const scopeChain = computeScopeChain(flow.process);
+    const activeTraitNames = getActiveTraits(traits, scopeChain).map(t => t.name);
 
     const methodCtx: MethodContext = Object.defineProperty(
       {
