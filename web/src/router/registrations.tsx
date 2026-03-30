@@ -63,6 +63,7 @@ function FlowViewAdapter({ path }: ViewProps) {
   let initialTab: string | undefined;
   if (path.endsWith("/data.json")) initialTab = "Data";
   else if (path.endsWith("/process.json")) initialTab = "Process";
+  else if (path.endsWith("/memory.md")) initialTab = "Memory";
   else if (path.endsWith("/files/ui")) initialTab = "UI";
 
   return <FlowView sessionId={sessionId} objectName={objectName} initialTab={initialTab} />;
@@ -253,11 +254,21 @@ function FileViewerAdapter({ path }: ViewProps) {
 /* ── 注册所有视图 ── */
 
 export function registerAllViews(): void {
-  /* FlowView — flows/{sid}/flows/{obj} 及其子路径（排除 files/ 下的具体文件） */
+  /* FlowView — flows/{sid}/flows/{obj} 及其特定的 UI tabs 子路径 */
   viewRegistry.register({
     name: "FlowView",
     component: FlowViewAdapter,
-    match: (p) => /^flows\/[^/]+\/flows\/[^/]+/.test(p) && !/\/files\/[^/]+\.[^/]+$/.test(p),
+    match: (p) => {
+      const match = p.match(/^flows\/[^/]+\/flows\/[^/]+(.*)$/);
+      if (!match) return false;
+      const subPath = match[1] || "";
+      if (subPath === "" || subPath === "/") return true;
+      if (subPath === "/data.json") return true;
+      if (subPath === "/process.json") return true;
+      if (subPath === "/memory.md") return true;
+      if (subPath === "/files/ui") return true;
+      return false;
+    },
     priority: 100,
     tabKey: (p) => p.match(/^(flows\/[^/]+\/flows\/[^/]+)/)?.[1] ?? p,
     tabLabel: (p) => p.match(/flows\/[^/]+\/flows\/([^/]+)/)?.[1] ?? "Flow",
@@ -273,11 +284,20 @@ export function registerAllViews(): void {
     tabLabel: () => "Session",
   });
 
-  /* ReflectFlow — stones/{name}/reflect/ 及其子路径 */
+  /* ReflectFlow — stones/{name}/reflect/ 及其特定的 tabs 子路径 */
   viewRegistry.register({
     name: "ReflectFlow",
     component: ReflectFlowAdapter,
-    match: (p) => /^stones\/[^/]+\/reflect(\/|$)/.test(p),
+    match: (p) => {
+      const match = p.match(/^stones\/[^/]+\/reflect(.*)$/);
+      if (!match) return false;
+      const subPath = match[1] || "";
+      if (subPath === "" || subPath === "/") return true;
+      if (subPath === "/data.json") return true;
+      if (subPath === "/process.json") return true;
+      if (subPath === "/memory.md") return true;
+      return false;
+    },
     priority: 80,
     tabKey: (p) => p.match(/^(stones\/[^/]+\/reflect)/)?.[1] ?? p,
     tabLabel: (p) => {

@@ -15,9 +15,9 @@ import { consola } from "consola";
 
 /** 给 reader.read() 加 per-chunk 超时，防止流式读取无限挂起 */
 const readWithTimeout = async (
-  reader: ReadableStreamDefaultReader<Uint8Array>,
+  reader: any,
   timeoutMs: number,
-): Promise<ReadableStreamReadResult<Uint8Array>> => {
+): Promise<{ done: boolean; value?: Uint8Array }> => {
   let timer: ReturnType<typeof setTimeout>;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error("流式读取超时：长时间未收到数据")), timeoutMs);
@@ -77,10 +77,11 @@ export class OpenAICompatibleClient implements LLMClient {
   }
 
   async chat(messages: Message[]): Promise<LLMResponse> {
+    const maxTokens = Math.min(this._config.maxTokens, 131072);
     const payload = {
       model: this._config.model,
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
-      max_tokens: this._config.maxTokens,
+      max_tokens: maxTokens,
     };
     consola.info("LLM 请求", this._config.model, `${messages.length} messages`);
     const start = performance.now();
@@ -105,7 +106,10 @@ export class OpenAICompatibleClient implements LLMClient {
         }
 
         const data = (await resp.json()) as Record<string, any>;
-        const content = data.choices[0].message.content as string;
+        const msg = data.choices?.[0]?.message as Record<string, any> | undefined;
+        const content = (msg?.content as string | undefined) ?? "";
+        const reasoningContent = (msg?.reasoning_content as string | undefined) ?? "";
+        const finalContent = content.trim().length > 0 ? content : reasoningContent;
         const elapsed = (performance.now() - start) / 1000;
         const usage = (data.usage ?? {}) as Record<string, number>;
 
@@ -116,7 +120,7 @@ export class OpenAICompatibleClient implements LLMClient {
         );
 
         return {
-          content,
+          content: finalContent,
           model: (data.model as string) ?? this._config.model,
           usage,
           raw: data,
@@ -155,10 +159,11 @@ export class OpenAICompatibleClient implements LLMClient {
    * 内部自动重试（与 chat() 一致）。
    */
   async *chatStream(messages: Message[]): AsyncIterable<string> {
+    const maxTokens = Math.min(this._config.maxTokens, 131072);
     const payload = {
       model: this._config.model,
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
-      max_tokens: this._config.maxTokens,
+      max_tokens: maxTokens,
       stream: true,
     };
     consola.info("LLM 流式请求", this._config.model, `${messages.length} messages`);
@@ -188,6 +193,8 @@ export class OpenAICompatibleClient implements LLMClient {
 
         const decoder = new TextDecoder();
         let buffer = "";
+        let sawContent = false;
+        let reasoningBuffer = "";
 
         /* per-chunk 超时：至少 30s，或 config.timeout 的一半（秒→毫秒） */
         const chunkTimeoutMs = Math.max(30_000, this._config.timeout * 500);
@@ -208,9 +215,15 @@ export class OpenAICompatibleClient implements LLMClient {
 
             try {
               const json = JSON.parse(trimmed.slice(6)) as Record<string, any>;
-              const delta = json.choices?.[0]?.delta?.content;
-              if (typeof delta === "string" && delta.length > 0) {
-                yield delta;
+              const delta = json.choices?.[0]?.delta as Record<string, any> | undefined;
+              const deltaContent = delta?.content;
+              const deltaReasoning = delta?.reasoning_content;
+
+              if (typeof deltaContent === "string" && deltaContent.length > 0) {
+                sawContent = true;
+                yield deltaContent;
+              } else if (!sawContent && typeof deltaReasoning === "string" && deltaReasoning.length > 0) {
+                reasoningBuffer += deltaReasoning;
               }
             } catch {
               /* 忽略解析失败的行（可能是不完整的 JSON） */
@@ -222,11 +235,26 @@ export class OpenAICompatibleClient implements LLMClient {
         if (buffer.trim() && buffer.trim() !== "data: [DONE]" && buffer.trim().startsWith("data: ")) {
           try {
             const json = JSON.parse(buffer.trim().slice(6)) as Record<string, any>;
-            const delta = json.choices?.[0]?.delta?.content;
-            if (typeof delta === "string" && delta.length > 0) {
-              yield delta;
+            const delta = json.choices?.[0]?.delta as Record<string, any> | undefined;
+            const deltaContent = delta?.content;
+            const deltaReasoning = delta?.reasoning_content;
+
+            if (typeof deltaContent === "string" && deltaContent.length > 0) {
+              sawContent = true;
+              yield deltaContent;
+            } else if (!sawContent && typeof deltaReasoning === "string" && deltaReasoning.length > 0) {
+              reasoningBuffer += deltaReasoning;
             }
           } catch { /* 忽略 */ }
+        }
+
+        if (!sawContent) {
+          const response = await this.chat(messages);
+          if (response.content && response.content.trim().length > 0) {
+            yield response.content;
+          } else if (reasoningBuffer.trim().length > 0) {
+            yield reasoningBuffer;
+          }
         }
 
         const elapsed = (performance.now() - start) / 1000;
