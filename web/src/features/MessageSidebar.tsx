@@ -347,7 +347,14 @@ export function MessageSidebar() {
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
         <div className="flex items-center gap-2">
           <ObjectAvatar name={target} size="sm" />
-          <span className="text-sm font-medium">{target}</span>
+          <div className="flex flex-col">
+            <span className="text-sm font-medium">{target}</span>
+            {activeId && (
+              <span className="text-[9px] text-[var(--muted-foreground)] font-mono leading-none">
+                {activeId}
+              </span>
+            )}
+          </div>
           {/* 上/下消息导航 */}
           <div className="flex items-center gap-0.5 ml-1">
             <button
