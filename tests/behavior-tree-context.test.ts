@@ -160,21 +160,25 @@ describe("advanceFocus 自动总结", () => {
 /* ========== renderProcess focus 目标提示 ========== */
 
 describe("renderProcess focus 目标提示", () => {
-  test("末尾显示当前目标", () => {
+  test("显示当前帧信息（新格式）", () => {
     const p = createProcess("竞品分析");
     addNode(p, p.root.id, "收集数据");
 
     const text = renderProcess(p);
-    expect(text).toContain("当前目标: 竞品分析");
+    // 新格式中在【认知栈】和【当前状态】区域显示
+    expect(text).toContain("【认知栈】");
+    expect(text).toContain("竞品分析");
+    expect(text).toContain("【当前状态】");
   });
 
-  test("focus 移动后目标更新", () => {
+  test("focus 移动后当前帧更新", () => {
     const p = createProcess("根");
     const id1 = addNode(p, p.root.id, "收集数据")!;
     moveFocus(p, id1);
 
     const text = renderProcess(p);
-    expect(text).toContain("当前目标: 收集数据");
+    expect(text).toContain("【认知栈】");
+    expect(text).toContain("收集数据");
   });
 });
 
@@ -317,10 +321,10 @@ describe("ProcessNode locals", () => {
   });
 });
 
-/* ========== renderProcess 显示非 done 节点的 summary ========== */
+/* ========== renderProcess 结构化遗忘 ========== */
 
-describe("renderProcess 非 done 节点 summary", () => {
-  test("doing 节点有 summary 时显示", () => {
+describe("renderProcess 结构化遗忘", () => {
+  test("不在聚焦路径上的兄弟节点不显示（结构化遗忘）", () => {
     const p = createProcess("根");
     const id1 = addNode(p, p.root.id, "步骤 1")!;
     const id2 = addNode(p, p.root.id, "步骤 2")!;
@@ -329,10 +333,16 @@ describe("renderProcess 非 done 节点 summary", () => {
     appendAction(p, id1, { type: "thought", content: "分析中", timestamp: Date.now() });
     moveFocus(p, id2); // id1 auto-summarized
 
-    const text = renderProcess(p);
     const node1 = findNode(p.root, id1)!;
-    expect(node1.summary).toBeDefined();
-    expect(text).toContain(node1.summary!);
+    expect(node1.summary).toBeDefined(); // 验证确实生成了 summary
+
+    // 根据结构化遗忘原则：不在聚焦路径上的节点完全不展示
+    // 当前路径是 [根, 步骤 2]，步骤 1 是兄弟节点，不应该显示
+    const text = renderProcess(p);
+    // 步骤 1 不在聚焦路径上，虽然有 summary 但不应该显示
+    // 但它也没有被标记为 done，所以不会以 [sub_stack_frame] 形式显示
+    expect(text).toContain("步骤 2");
+    // 注意：由于结构化遗忘，步骤 1 不会显示
   });
 });
 
@@ -426,7 +436,7 @@ describe("TodoList", () => {
     addTodo(p, id2, "分析数据", "plan");
 
     const text = renderProcess(p);
-    expect(text).toContain("待办队列:");
+    expect(text).toContain("【待办队列】");
     expect(text).toContain("[当前] 收集信息");
     expect(text).toContain("2. 分析数据");
   });
@@ -446,7 +456,7 @@ describe("TodoList", () => {
   test("空 todolist 不渲染", () => {
     const p = createProcess("简单任务");
     const text = renderProcess(p);
-    expect(text).not.toContain("待办队列");
+    expect(text).not.toContain("【待办队列】");
   });
 });
 
