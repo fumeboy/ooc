@@ -306,29 +306,14 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading
               }}
             />
             {isProgramOrAction ? (
-              <div className="@container">
-                <div className="flex flex-col @[600px]:flex-row divide-y @[600px]:divide-y-0 @[600px]:divide-x divide-[var(--border)]">
-                  <div ref={contentRef} className="flex-1 min-w-0" style={{ maxHeight: maxHeightStyle, overflow: maxHeightStyle ? bodyOverflow : undefined }}>
-                    <div className="px-3 py-2">
-                      <p className="text-[10px] text-[var(--muted-foreground)] mb-1 font-medium flex items-center">
-                        {isProgram ? "Program" : "Action"}
-                        <InlineCopyBtn text={action.content} title={isProgram ? "复制 Program" : "复制 Action"} />
-                      </p>
-                      <pre className="text-[11px] font-mono whitespace-pre-wrap break-all leading-relaxed">{action.content}</pre>
-                    </div>
-                  </div>
-                  {action.result && (
-                    <div className="flex-1 min-w-0" style={{ maxHeight: maxHeightStyle, overflow: maxHeightStyle ? bodyOverflow : undefined }}>
-                      <div className="px-3 py-2">
-                        <p className="text-[10px] text-[var(--muted-foreground)] mb-1 font-medium flex items-center">
-                          Result
-                          <InlineCopyBtn text={action.result} title="复制 Result" />
-                        </p>
-                        <pre className="text-[11px] font-mono whitespace-pre-wrap break-all leading-relaxed">{action.result}</pre>
-                      </div>
-                    </div>
-                  )}
-                  </div>
+              <div ref={contentRef} className="min-w-0" style={{ maxHeight: maxHeightStyle, overflow: maxHeightStyle ? bodyOverflow : undefined }}>
+                <div className="px-3 py-2">
+                  <p className="text-[10px] text-[var(--muted-foreground)] mb-1 font-medium flex items-center">
+                    {isProgram ? "Program" : "Action"}
+                    <InlineCopyBtn text={action.content} title={isProgram ? "复制 Program" : "复制 Action"} />
+                  </p>
+                  <pre className="text-[11px] font-mono whitespace-pre-wrap break-all leading-relaxed">{action.content}</pre>
+                </div>
               </div>
             ) : (
               <div ref={contentRef} style={{ maxHeight: maxHeightStyle, overflow: maxHeightStyle ? bodyOverflow : undefined }}>

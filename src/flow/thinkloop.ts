@@ -699,17 +699,32 @@ async function consumeStream(
 ): Promise<string> {
   let fullOutput = "";
   /** 当前正在流式推送的段落类型 */
-  let streamingSection: "thought" | "talk" | null = null;
+  let streamingSection: "thought" | "talk" | "program" | "action" | null = null;
   /** 当前 talk 的目标对象名 */
   let streamingTalkTarget: string | null = null;
+  /** 当前 program 的语言类型 */
+  let streamingProgramLang: "javascript" | "shell" = "javascript";
+  /** 当前 action 的工具方法名 */
+  let streamingActionToolName: string | null = null;
   /** 行缓冲区：用于检测段落标记（标记必须独占一行） */
   let lineBuffer = "";
 
   /** 检查行缓冲区是否匹配段落标记，返回匹配类型 */
-  const checkLineTag = (line: string): { type: "thought" | "program" | "finish" | "wait" | "break" | "talk_open" | "talk_close" | null; target?: string } => {
+  const checkLineTag = (
+    line: string,
+  ): {
+    type: "thought" | "program" | "program_lang" | "finish" | "wait" | "break" | "talk_open" | "talk_close" | "action_open" | "action_close" | null;
+    target?: string;
+    lang?: "javascript" | "shell";
+    toolName?: string;
+  } => {
     const trimmed = line.trim();
     if (/^\[(thought|program|finish|wait|break)\]$/.test(trimmed)) {
       return { type: trimmed.slice(1, -1) as "thought" | "program" | "finish" | "wait" | "break" };
+    }
+    const programLangMatch = /^\[program\/(javascript|shell)\]$/.exec(trimmed);
+    if (programLangMatch) {
+      return { type: "program_lang", lang: programLangMatch[1] as "javascript" | "shell" };
     }
     const talkMatch = /^\[talk\/([a-zA-Z0-9_-]+)\]$/.exec(trimmed);
     if (talkMatch) {
@@ -717,6 +732,13 @@ async function consumeStream(
     }
     if (/^\[\/talk\]$/.test(trimmed)) {
       return { type: "talk_close" };
+    }
+    const actionMatch = /^\[action\/([a-zA-Z0-9_-]+)\]$/.exec(trimmed);
+    if (actionMatch) {
+      return { type: "action_open", toolName: actionMatch[1]! };
+    }
+    if (/^\[\/action\]$/.test(trimmed)) {
+      return { type: "action_close" };
     }
     return { type: null };
   };
@@ -727,9 +749,15 @@ async function consumeStream(
       emitSSE({ type: "stream:thought:end", objectName, taskId });
     } else if (streamingSection === "talk" && streamingTalkTarget) {
       emitSSE({ type: "stream:talk:end", objectName, taskId, target: streamingTalkTarget });
+    } else if (streamingSection === "program") {
+      emitSSE({ type: "stream:program:end", objectName, taskId });
+    } else if (streamingSection === "action" && streamingActionToolName) {
+      emitSSE({ type: "stream:action:end", objectName, taskId, toolName: streamingActionToolName });
     }
     streamingSection = null;
     streamingTalkTarget = null;
+    streamingProgramLang = "javascript";
+    streamingActionToolName = null;
   };
 
   for await (const chunk of stream) {
@@ -744,13 +772,23 @@ async function consumeStream(
         if (tag.type === "thought") {
           endCurrentSection();
           streamingSection = "thought";
+        } else if (tag.type === "program") {
+          endCurrentSection();
+          streamingSection = "program";
+          streamingProgramLang = "javascript";
+        } else if (tag.type === "program_lang") {
+          endCurrentSection();
+          streamingSection = "program";
+          streamingProgramLang = tag.lang!;
         } else if (tag.type === "talk_open") {
           endCurrentSection();
           streamingSection = "talk";
           streamingTalkTarget = tag.target!;
-        } else if (tag.type === "talk_close") {
+        } else if (tag.type === "action_open") {
           endCurrentSection();
-        } else if (tag.type === "program" || tag.type === "finish" || tag.type === "wait" || tag.type === "break") {
+          streamingSection = "action";
+          streamingActionToolName = tag.toolName!;
+        } else if (tag.type === "talk_close" || tag.type === "action_close" || tag.type === "finish" || tag.type === "wait" || tag.type === "break") {
           endCurrentSection();
         } else {
           /* 普通内容行：如果在流式段落中，推送内容（含换行） */
@@ -758,6 +796,14 @@ async function consumeStream(
             emitSSE({ type: "stream:thought", objectName, taskId, chunk: lineBuffer + "\n" });
           } else if (streamingSection === "talk" && streamingTalkTarget) {
             emitSSE({ type: "stream:talk", objectName, taskId, target: streamingTalkTarget, chunk: lineBuffer + "\n" });
+          } else if (streamingSection === "program") {
+            if (streamingProgramLang === "shell") {
+              emitSSE({ type: "stream:program", objectName, taskId, lang: "shell", chunk: lineBuffer + "\n" } as any);
+            } else {
+              emitSSE({ type: "stream:program", objectName, taskId, chunk: lineBuffer + "\n" });
+            }
+          } else if (streamingSection === "action" && streamingActionToolName) {
+            emitSSE({ type: "stream:action", objectName, taskId, toolName: streamingActionToolName, chunk: lineBuffer + "\n" });
           }
         }
 
@@ -771,13 +817,28 @@ async function consumeStream(
   /* 处理最后一行（没有换行符结尾的情况） */
   if (lineBuffer.length > 0) {
     const tag = checkLineTag(lineBuffer);
-    if (tag.type === "talk_close" || tag.type === "program" || tag.type === "finish" || tag.type === "wait" || tag.type === "break") {
+    if (
+      tag.type === "talk_close" ||
+      tag.type === "action_close" ||
+      tag.type === "program" ||
+      tag.type === "finish" ||
+      tag.type === "wait" ||
+      tag.type === "break"
+    ) {
       endCurrentSection();
     } else if (tag.type === null) {
       if (streamingSection === "thought") {
         emitSSE({ type: "stream:thought", objectName, taskId, chunk: lineBuffer });
       } else if (streamingSection === "talk" && streamingTalkTarget) {
         emitSSE({ type: "stream:talk", objectName, taskId, target: streamingTalkTarget, chunk: lineBuffer });
+      } else if (streamingSection === "program") {
+        if (streamingProgramLang === "shell") {
+          emitSSE({ type: "stream:program", objectName, taskId, lang: "shell", chunk: lineBuffer } as any);
+        } else {
+          emitSSE({ type: "stream:program", objectName, taskId, chunk: lineBuffer });
+        }
+      } else if (streamingSection === "action" && streamingActionToolName) {
+        emitSSE({ type: "stream:action", objectName, taskId, toolName: streamingActionToolName, chunk: lineBuffer });
       }
     }
   }

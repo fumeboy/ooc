@@ -13,6 +13,8 @@ import {
   lastFlowEventAtom,
   streamingTalkAtom,
   streamingThoughtAtom,
+  streamingProgramAtom,
+  streamingActionAtom,
   messageSidebarOpenAtom,
 } from "../store/session";
 import { talkTo, fetchFlow, fetchSessions, fetchObjects, pauseObject, resumeFlow } from "../api/client";
@@ -34,6 +36,8 @@ export function MessageSidebar() {
   const lastEvent = useAtomValue(lastFlowEventAtom);
   const streamingTalk = useAtomValue(streamingTalkAtom);
   const streamingThought = useAtomValue(streamingThoughtAtom);
+  const streamingProgram = useAtomValue(streamingProgramAtom);
+  const streamingAction = useAtomValue(streamingActionAtom);
   const [, setSessions] = useAtom(userSessionsAtom);
 
   const [input, setInput] = useState("");
@@ -47,12 +51,31 @@ export function MessageSidebar() {
   const pendingSendRef = useRef<boolean>(false);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /** 用户是否主动滚动到非底部位置 */
+  const [userScrolledUp, setUserScrolledUp] = useState(false);
+
+  /** 未读消息数量（用户不在底部期间新增的消息数） */
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  /** 滚动到顶部前的 timeline 长度，用于计算新增消息数 */
+  const lastKnownLengthRef = useRef(0);
+
+  /** 阈值：允许底部有多少像素偏差仍认为在底部 */
+  const SCROLL_THRESHOLD = 50;
+
   /* @对象 自动补全 */
   const [objectNames, setObjectNames] = useState<string[]>([]);
   const [showMention, setShowMention] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionIndex, setMentionIndex] = useState(0);
   const mentionRef = useRef<HTMLDivElement>(null);
+
+  /** 检测用户是否在滚动区域底部 */
+  const isUserAtBottom = useCallback(() => {
+    if (!scrollRef.current) return true;
+    const { scrollTop, clientHeight, scrollHeight } = scrollRef.current;
+    return scrollTop + clientHeight >= scrollHeight - SCROLL_THRESHOLD;
+  }, []);
 
   /* 加载对象列表（一次性） */
   useEffect(() => {
@@ -132,12 +155,38 @@ export function MessageSidebar() {
     return entries;
   }, [activeFlow]);
 
-  /* 滚动到底部 */
+  /* 监听滚动事件，检测用户是否手动向上滚动 */
   useEffect(() => {
-    if (scrollRef.current) {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+      const atBottom = isUserAtBottom();
+      if (atBottom && userScrolledUp) {
+        // 用户手动滚回底部，重置状态
+        setUserScrolledUp(false);
+        setUnreadCount(0);
+      } else if (!atBottom && !userScrolledUp) {
+        // 用户主动向上滚动
+        setUserScrolledUp(true);
+        lastKnownLengthRef.current = timeline.length;
+      }
+    };
+
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, [userScrolledUp, isUserAtBottom, timeline.length]);
+
+  /* 自动滚动逻辑：用户在底部时才自动滚动 */
+  useEffect(() => {
+    if (!userScrolledUp && scrollRef.current) {
+      // 用户在底部时，自动滚动到最新
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    } else if (userScrolledUp) {
+      // 用户不在底部时，更新未读计数
+      setUnreadCount(timeline.length - lastKnownLengthRef.current);
     }
-  }, [timeline.length, streamingTalk, streamingThought]);
+  }, [timeline.length, streamingTalk, streamingThought, streamingProgram, streamingAction, userScrolledUp]);
 
   /* debounced refresh */
   const debouncedRefresh = useCallback(() => {
@@ -206,6 +255,17 @@ export function MessageSidebar() {
     if (activeFlow.status !== "running") return null;
     return streamingTalk;
   }, [streamingTalk, activeFlow]);
+
+  /** 点击新消息按钮，滚动到底部 */
+  const handleScrollToNewMessages = useCallback(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+      // 状态会在 scroll 事件监听中自动重置
+    }
+  }, []);
 
   /* 选择 mention 对象 */
   /* 消息导航：上/下切换 */
@@ -422,8 +482,10 @@ export function MessageSidebar() {
       {/* 迭代进度 */}
       <ProgressIndicator />
 
-      {/* 消息列表 */}
-      <div ref={scrollRef} className="flex-1 overflow-auto px-2 py-3 space-y-3">
+      {/* 消息列表区域 */}
+      <div className="flex-1 flex flex-col relative min-h-0">
+        {/* 消息列表 */}
+        <div ref={scrollRef} className="flex-1 overflow-auto px-2 py-3 space-y-3">
         {timeline.length === 0 && !activeStreamingTalk && (
           <p className="text-xs text-[var(--muted-foreground)] text-center py-8">
             输入消息开始对话，输入 @ 选择对象
@@ -466,6 +528,24 @@ export function MessageSidebar() {
             loading
           />
         )}
+        {/* 流式 program（正在输出程序） */}
+        {streamingProgram && activeFlow?.status === "running" && (
+          <ActionCard
+            action={{ type: "program", content: streamingProgram.content, timestamp: Date.now() }}
+            objectName="supervisor"
+            maxHeight={200}
+            loading
+          />
+        )}
+        {/* 流式 action（正在输出 action） */}
+        {streamingAction && activeFlow?.status === "running" && (
+          <ActionCard
+            action={{ type: "action", content: streamingAction.content, timestamp: Date.now() }}
+            objectName="supervisor"
+            maxHeight={200}
+            loading
+          />
+        )}
         {/* 流式 talk（正在回复） */}
         {activeStreamingTalk && (
           <TalkCard
@@ -478,6 +558,17 @@ export function MessageSidebar() {
             }}
             maxHeight={0}
           />
+        )}
+        </div>
+
+        {/* 新消息按钮（悬浮在底部中央） */}
+        {userScrolledUp && unreadCount > 0 && (
+          <button
+            onClick={handleScrollToNewMessages}
+            className="absolute bottom-2 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] text-sm shadow-lg hover:opacity-90 transition-opacity z-10"
+          >
+            ↓ {unreadCount} 条新消息
+          </button>
         )}
       </div>
 
