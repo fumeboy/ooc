@@ -15,6 +15,13 @@ import type { Action } from "./flow.js";
 /** 行为树节点状态 */
 export type NodeStatus = "todo" | "doing" | "done";
 
+/** 节点类型（区分普通子栈帧和内联子节点） */
+export type NodeType =
+  | "frame"           // 普通子栈帧（默认）
+  | "inline_before"   // before 内联子节点（hook 自动触发）
+  | "inline_after"    // after 内联子节点（hook 自动触发）
+  | "inline_reflect"; // reflect 内联子节点（主动触发）
+
 /** 行为树节点 */
 export interface ProcessNode {
   /** 节点唯一 ID */
@@ -69,6 +76,10 @@ export interface ProcessNode {
    * 在构建 Context 时会被注入，让 LLM 明确知道上游节点提供了什么数据。
    */
   outputDescription?: string;
+  /** 节点类型（区分普通子栈帧和内联子节点） */
+  type?: NodeType;
+  /** plan 文本（当前节点的计划/目标，set_plan 写入） */
+  plan?: string;
   /** 栈帧级 Hook（运行时注册，触发时机由 HookTime 决定） */
   hooks?: FrameHook[];
 }
@@ -122,7 +133,12 @@ export interface Process {
 }
 
 /** Hook 触发时机 */
-export type HookTime = "when_stack_push" | "when_stack_pop" | "when_yield" | "when_error";
+export type HookTime =
+  | "when_stack_push"
+  | "when_stack_pop"
+  | "when_yield"
+  | "when_error"
+  | "reflect"; // reflect 内联子节点 hook
 
 /** Hook 类型 */
 export type HookType = "inject_message" | "create_todo";
