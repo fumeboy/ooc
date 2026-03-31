@@ -69,15 +69,13 @@ export interface ProcessNode {
   deps?: string[];
   actions: Action[];
   traits?: string[];
+  activatedTraits?: string[];
   summary?: string;
   locals?: Record<string, unknown>;
-
-  // 新增字段
-  type?: NodeType;           // 节点类型
-  plan?: string;             // plan 文本
-  outputs?: string[];        // 契约式编程：输出 key 列表
-  outputDescription?: string; // 输出描述
-  activatedTraits?: string[]; // 动态激活的 traits
+  outputs?: string[];
+  outputDescription?: string;
+  type?: NodeType;
+  plan?: string;
 }
 
 /** 待办项 */
