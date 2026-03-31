@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef } from "react";
 import { useSetAtom, useAtomValue } from "jotai";
-import { sseConnectedAtom, lastFlowEventAtom, streamingThoughtAtom, streamingTalkAtom, userSessionsAtom } from "../store/session";
+import { sseConnectedAtom, lastFlowEventAtom, streamingThoughtAtom, streamingTalkAtom, streamingProgramAtom, streamingActionAtom, userSessionsAtom } from "../store/session";
 import { activeSessionIdAtom } from "../store/session";
 import { objectsAtom } from "../store/objects";
 import { flowProgressAtom } from "../store/progress";
@@ -25,6 +25,8 @@ export function useSSE() {
   const setLastFlowEvent = useSetAtom(lastFlowEventAtom);
   const setStreamingThought = useSetAtom(streamingThoughtAtom);
   const setStreamingTalk = useSetAtom(streamingTalkAtom);
+  const setStreamingProgram = useSetAtom(streamingProgramAtom);
+  const setStreamingAction = useSetAtom(streamingActionAtom);
   const setFlowProgress = useSetAtom(flowProgressAtom);
   const activeSessionId = useAtomValue(activeSessionIdAtom);
   const activeSessionIdRef = useRef(activeSessionId);
@@ -105,9 +107,33 @@ export function useSSE() {
           );
           break;
 
+        /* 流式 program chunk */
+        case "stream:program":
+          setStreamingProgram((prev) => {
+            if (prev?.taskId === event.taskId) {
+              return { ...prev, content: prev.content + event.chunk };
+            }
+            const result: { taskId: string; content: string; lang?: "javascript" | "shell" } = {
+              taskId: event.taskId,
+              content: event.chunk,
+            };
+            if (event.lang) {
+              result.lang = event.lang;
+            }
+            return result;
+          });
+          break;
+
         /* 流式 thought 结束 */
         case "stream:thought:end":
           setStreamingThought((prev) =>
+            prev?.taskId === event.taskId ? null : prev,
+          );
+          break;
+
+        /* 流式 program 结束 */
+        case "stream:program:end":
+          setStreamingProgram((prev) =>
             prev?.taskId === event.taskId ? null : prev,
           );
           break;
@@ -121,6 +147,15 @@ export function useSSE() {
           );
           break;
 
+        /* 流式 action chunk */
+        case "stream:action":
+          setStreamingAction((prev) =>
+            prev?.taskId === event.taskId && prev.toolName === event.toolName
+              ? { ...prev, content: prev.content + event.chunk }
+              : { taskId: event.taskId, toolName: event.toolName, content: event.chunk },
+          );
+          break;
+
         /* 流式 talk 结束 — 不立即清除，等 flow:message 到达后由 ChatPage 清除
          * 避免 StreamingBubble 消失和正式消息出现之间的空窗期 */
         case "stream:talk:end":
@@ -131,6 +166,15 @@ export function useSSE() {
               : prev,
           );
           break;
+
+        /* 流式 action 结束 */
+        case "stream:action:end":
+          setStreamingAction((prev) =>
+            prev?.taskId === event.taskId && prev.toolName === event.toolName
+              ? null
+              : prev,
+          );
+          break;
       }
     });
 
@@ -138,5 +182,5 @@ export function useSSE() {
       disconnect();
       setConnected(false);
     };
-  }, [setConnected, setObjects, setSessions, setLastFlowEvent, setStreamingThought, setStreamingTalk, setFlowProgress]);
+  }, [setConnected, setObjects, setSessions, setLastFlowEvent, setStreamingThought, setStreamingTalk, setStreamingProgram, setStreamingAction, setFlowProgress]);
 }
