@@ -1,12 +1,12 @@
 /**
  * ProcessView —— 行为树可视化组件
  *
- * 左栏：选中节点的 actions 时间线（含 parent 链）
- * 右栏：节点树缩略视图（仅标题，可点击切换）
+ * 左栏：单栏时间线 —— 显示从 root 到 focus 节点的路径，每个节点用 NodeCard 展示
+ * 右栏：MiniTree 节点树缩略视图
  */
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { cn } from "../lib/utils";
-import { ActionCard } from "../components/ui/ActionCard";
+import { NodeCard } from "../components/ui/NodeCard";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import type { Process, ProcessNode } from "../api/types";
 
@@ -15,7 +15,7 @@ interface ProcessViewProps {
 }
 
 /** 从根节点找到目标节点的路径（含自身） */
-function findPath(node: ProcessNode, targetId: string): ProcessNode[] | null {
+export function findPath(node: ProcessNode, targetId: string): ProcessNode[] | null {
   if (node.id === targetId) return [node];
   for (const child of node.children) {
     const path = findPath(child, targetId);
@@ -36,12 +36,26 @@ function findDefaultId(root: ProcessNode, focusId: string): string {
   return root.id;
 }
 
+/** 构建聚焦路径 */
+function buildFocusPath(
+  node: ProcessNode,
+  focusId: string,
+  path: ProcessNode[] = []
+): ProcessNode[] | null {
+  const newPath = [...path, node];
+  if (node.id === focusId) return newPath;
+
+  for (const child of node.children) {
+    const result = buildFocusPath(child, focusId, newPath);
+    if (result) return result;
+  }
+  return null;
+}
+
 export function ProcessView({ process }: ProcessViewProps) {
   const [selectedId, setSelectedId] = useState<string>(() =>
     process?.root ? findDefaultId(process.root, process.focusId) : "",
   );
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const markerRef = useRef<HTMLDivElement>(null);
 
   if (!process?.root) {
     return (
@@ -51,73 +65,34 @@ export function ProcessView({ process }: ProcessViewProps) {
     );
   }
 
-  /* 收集 path 上所有节点的 actions */
-  const path = findPath(process.root, selectedId) || [process.root];
-  const actionGroups = path
-    .filter((n) => n.actions.length > 0)
-    .map((n) => ({ node: n, actions: n.actions, isCurrent: n.id === selectedId }));
-
-  /* 自动滚动到当前节点的第一个 action */
-  useEffect(() => {
-    setTimeout(() => {
-      markerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 50);
-  }, [selectedId]);
+  // 构建聚焦路径
+  const focusPath = buildFocusPath(process.root, process.focusId) || [process.root];
 
   return (
     <div className="flex gap-0 h-full">
-      {/* 左栏：Actions 时间线 */}
-      <div ref={scrollRef} className="flex-1 min-w-0 overflow-auto pr-4">
-        {actionGroups.length === 0 ? (
+      {/* 主时间线区域 */}
+      <div className="flex-1 min-w-0 overflow-auto pr-4">
+        {focusPath.length === 0 ? (
           <div className="flex items-center justify-center py-16">
-            <p className="text-xs text-[var(--muted-foreground)]">No actions recorded</p>
+            <p className="text-xs text-[var(--muted-foreground)]">No nodes</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {actionGroups.map((group) => (
-              <div key={group.node.id}>
-                {/* 节点标题 */}
-                <div
-                  ref={group.isCurrent ? markerRef : undefined}
-                  className="flex items-center gap-2 py-1.5 px-2 rounded-lg text-xs mb-2 sticky top-0 z-10"
-                >
-                  <span className={cn(
-                    "w-2 h-2 rounded-full shrink-0",
-                    group.node.status === "done" ? "bg-green-500" : group.node.status === "doing" ? "bg-[var(--warm)]" : "bg-[var(--muted-foreground)] opacity-40",
-                  )} />
-                  <span className={cn("truncate", group.isCurrent && "font-medium")}>{group.node.title}</span>
-                  {group.node.id === process.focusId && (
-                    <span className="text-[10px] text-[var(--warm)] shrink-0">(focus-on)</span>
-                  )}
-                  <span className="ml-auto text-[10px] text-[var(--muted-foreground)] shrink-0">
-                    {group.actions.length} {group.actions.length === 1 ? "action" : "actions"}
-                  </span>
-                </div>
-
-                {/* Actions */}
-                <div className="space-y-3 ml-1 border-l-2 border-[var(--border)] pl-3">
-                  {group.actions.map((action, i) => (
-                    <ActionCard key={i} action={action} maxHeight={240} />
-                  ))}
-                  {/* Node Summary */}
-                  {group.node.summary && (
-                    <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--accent)]/30 px-3 py-2 text-xs text-[var(--muted-foreground)]">
-                      <p className="text-[10px] font-medium uppercase tracking-wide mb-1 opacity-60">Summary</p>
-                      <p className="leading-relaxed whitespace-pre-wrap">{group.node.summary}</p>
-                    </div>
-                  )}
-                  {/* 末尾加一个空白块占据高度 */}
-                  <div className="p-32" />
-                </div>
-              </div>
+          <div className="space-y-4 pt-4">
+            {focusPath.map((node) => (
+              <NodeCard
+                key={node.id}
+                node={node}
+                isFocus={node.id === process.focusId}
+                defaultExpanded={node.id === process.focusId}
+              />
             ))}
           </div>
         )}
       </div>
 
-      {/* 右栏：节点树缩略视图 */}
+      {/* 右栏：MiniTree 节点树缩略视图 */}
       <aside className="w-56 shrink-0 border-l border-[var(--border)] pl-4 overflow-auto">
-        <h4 className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-2">
+        <h4 className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-2 pt-4">
           Nodes
         </h4>
         <MiniTree
@@ -143,7 +118,11 @@ export function MiniTree({
   onSelect: (id: string) => void;
   depth: number;
 }) {
-  const hasChildren = node.children.length > 0;
+  // 过滤掉内联节点，不独立显示
+  const visibleChildren = node.children.filter(c => !c.type || c.type === "frame");
+  const hasInlineChildren = node.children.some(c => c.type && c.type !== "frame");
+
+  const hasChildren = visibleChildren.length > 0;
   const [expanded, setExpanded] = useState(
     node.status === "doing" || node.id === focusId || depth < 2,
   );
@@ -183,6 +162,9 @@ export function MiniTree({
           node.status === "done" && "text-[var(--muted-foreground)]",
         )}>
           {node.title}
+          {hasInlineChildren && (
+            <span className="ml-1 text-amber-500 text-[10px]">+inline</span>
+          )}
         </span>
         {isFocus && (
           <span className="text-[10px] text-[var(--warm)] shrink-0">(focus-on)</span>
@@ -196,7 +178,7 @@ export function MiniTree({
 
       {expanded && hasChildren && (
         <div>
-          {node.children.map((child) => (
+          {visibleChildren.map((child) => (
             <MiniTree
               key={child.id}
               node={child}
