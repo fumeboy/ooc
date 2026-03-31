@@ -37,8 +37,38 @@ export interface ProcessNode {
   activatedTraits?: string[];
   /** 完成后的摘要 */
   summary?: string;
-  /** 节点局部变量（跨轮次持久化，随行为树栈入/栈出同步） */
+  /** 节点局部变量（跨轮次持久化，随行为树栈入/栈出同步）
+   *
+   * 当节点完成时，通过 finish_plan_node(summary, artifacts) 传递的数据会合并到父节点的 locals 中。
+   */
   locals?: Record<string, unknown>;
+  /** 【契约式编程】节点预期输出的 key 列表
+   *
+   * 定义该节点完成时应该通过 artifacts 传递给父节点的数据 key 列表。
+   * 这是一种"契约"，让上游节点明确知道自己应该产出什么，
+   * 下游节点明确知道可以使用哪些数据。
+   *
+   * 示例：
+   * ```javascript
+   * create_plan_node(root, "获取文档", {
+   *   outputs: ["docContent", "docMetadata"],
+   *   outputDescription: "文档内容和元数据"
+   * });
+   *
+   * // 完成时输出（与 outputs 契约对应）
+   * finish_plan_node("获取成功", {
+   *   docContent: "文档内容...",
+   *   docMetadata: { title: "...", author: "..." }
+   * });
+   * ```
+   */
+  outputs?: string[];
+  /** 【契约式编程】节点输出描述
+   *
+   * 描述该节点的输出是什么、如何使用。
+   * 在构建 Context 时会被注入，让 LLM 明确知道上游节点提供了什么数据。
+   */
+  outputDescription?: string;
   /** 栈帧级 Hook（运行时注册，触发时机由 HookTime 决定） */
   hooks?: FrameHook[];
 }

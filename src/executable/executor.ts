@@ -101,12 +101,31 @@ export class CodeExecutor {
       }
     }
 
-    // 生成临时模块：导出一个接收 context 参数的 async 函数
+    // 提取 import 语句（必须在模块顶层，不能在函数内部）
+    const importLines: string[] = [];
+    const nonImportLines: string[] = [];
+    for (const line of cleanCode.split("\n")) {
+      // 匹配 import 语句：
+      // - import { x } from "module"
+      // - import x from "module"
+      // - import "module"
+      // - const { x } = await import("module")
+      if (line.match(/^\s*import\s+/) || line.match(/await\s+import\s*\(/)) {
+        importLines.push(line);
+      } else {
+        nonImportLines.push(line);
+      }
+    }
+
+    // 生成临时模块：
+    // - import 语句在模块顶层
+    // - 其他代码在 async 函数内部
     const paramList = ["console", ...safeNames].join(", ");
     const moduleCode = [
+      ...importLines,
       `export default async function(${paramList}) {`,
       `  let _result_;`,
-      cleanCode,
+      nonImportLines.join("\n"),
       `  return _result_;`,
       `}`,
     ].join("\n");

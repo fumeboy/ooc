@@ -358,13 +358,13 @@ pwd
 {"path": "src/b.ts"}
 ```
 
-action 和 talk 可以共存：
+action 和 talk 不可以共存：
 
 ```
 [action/editFile]
 {"path": "config.ts", "old": "port: 3000", "new": "port: 8080"}
 
-[talk/user]
+[talk/user] // 不允许
 已将端口从 3000 改为 8080。
 [/talk]
 ```

@@ -53,7 +53,11 @@ export function renderProcess(process: Process): string {
   const focusNode = findNode(process.root, process.focusId);
   if (focusNode) {
     const desc = focusNode.description ? `\n说明: ${focusNode.description}` : "";
-    return `${tree}${todoText}\n\n当前目标: ${focusNode.title}${desc}`;
+    const outputDesc = focusNode.outputDescription ? `\n预期输出: ${focusNode.outputDescription}` : "";
+    const outputs = focusNode.outputs && focusNode.outputs.length > 0
+      ? `\n输出契约: ${focusNode.outputs.join(", ")}`
+      : "";
+    return `${tree}${todoText}\n\n当前目标: ${focusNode.title}${desc}${outputDesc}${outputs}`;
   }
 
   return `${tree}${todoText}`;
@@ -85,6 +89,12 @@ function renderNode(
   if (node.summary) {
     line += ` (${node.summary})`;
   }
+
+  /* 【契约式编程】显示 outputs 约定（任何状态都显示） */
+  if (node.outputs && node.outputs.length > 0) {
+    line += ` [outputs: ${node.outputs.join(", ")}]`;
+  }
+
   /* 已完成节点如果有 locals（artifacts），显示 key 列表 */
   if (node.status === "done" && node.locals && Object.keys(node.locals).length > 0) {
     line += ` [artifacts: ${Object.keys(node.locals).join(", ")}]`;

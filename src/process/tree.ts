@@ -67,6 +67,8 @@ export function createProcess(title: string, description?: string): Process {
  * @param deps - 依赖的节点 ID 列表
  * @param description - 节点详细说明
  * @param traits - 静态声明的 traits（认知栈：栈帧携带的思维）
+ * @param outputs - 【契约式编程】节点预期输出的 key 列表
+ * @param outputDescription - 【契约式编程】节点输出描述
  * @returns 新节点的 ID，若父节点不存在返回 null
  */
 export function addNode(
@@ -76,6 +78,8 @@ export function addNode(
   deps?: string[],
   description?: string,
   traits?: string[],
+  outputs?: string[],
+  outputDescription?: string,
 ): string | null {
   const parent = findNode(process.root, parentId);
   if (!parent) return null;
@@ -100,6 +104,8 @@ export function addNode(
     actions: [],
     deps: deps && deps.length > 0 ? deps : undefined,
     ...(traits && traits.length > 0 ? { traits } : {}),
+    ...(outputs && outputs.length > 0 ? { outputs } : {}),
+    ...(outputDescription ? { outputDescription } : {}),
     hooks: initialHooks,
   };
 
