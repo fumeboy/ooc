@@ -402,3 +402,195 @@ describe("parseLLMOutput — [action/toolName] 段落", () => {
     expect(parsed.actions.length).toBe(0);
   });
 });
+
+describe("parseLLMOutput — 认知栈 API 解析", () => {
+  test("解析 [cognize_stack_frame_push] 基本格式", () => {
+    const output = `[cognize_stack_frame_push]
+
+[cognize_stack_frame_push.title]
+获取文档内容
+[/cognize_stack_frame_push.title]
+
+[cognize_stack_frame_push.description]
+从飞书知识库获取指定文档的完整内容
+[/cognize_stack_frame_push.description]
+
+[/cognize_stack_frame_push]`;
+
+    const parsed = parseLLMOutput(output);
+    expect(parsed.isStructured).toBe(true);
+    expect(parsed.stackFrameOperations).toHaveLength(1);
+
+    const op = parsed.stackFrameOperations[0]!;
+    expect(op.type).toBe("cognize_stack_frame_push");
+    expect(op.title).toBe("获取文档内容");
+    expect(op.description).toBe("从飞书知识库获取指定文档的完整内容");
+  });
+
+  test("解析 [cognize_stack_frame_push] 完整属性", () => {
+    const output = `[cognize_stack_frame_push]
+
+[cognize_stack_frame_push.title]
+获取文档
+[/cognize_stack_frame_push.title]
+
+[cognize_stack_frame_push.traits]
+lark-wiki, web-search
+[/cognize_stack_frame_push.traits]
+
+[cognize_stack_frame_push.outputs]
+docContent, docTitle
+[/cognize_stack_frame_push.outputs]
+
+[cognize_stack_frame_push.outputDescription]
+文档内容和元数据
+[/cognize_stack_frame_push.outputDescription]
+
+[/cognize_stack_frame_push]`;
+
+    const parsed = parseLLMOutput(output);
+    expect(parsed.stackFrameOperations).toHaveLength(1);
+
+    const op = parsed.stackFrameOperations[0]!;
+    expect(op.type).toBe("cognize_stack_frame_push");
+    expect(op.title).toBe("获取文档");
+    expect(op.traits).toEqual(["lark-wiki", "web-search"]);
+    expect(op.outputs).toEqual(["docContent", "docTitle"]);
+    expect(op.outputDescription).toBe("文档内容和元数据");
+  });
+
+  test("解析 [cognize_stack_frame_pop] 带 artifacts", () => {
+    const output = `[cognize_stack_frame_pop]
+
+[cognize_stack_frame_pop.summary]
+成功获取文档内容
+[/cognize_stack_frame_pop.summary]
+
+[cognize_stack_frame_pop.artifacts]
+{
+  "docContent": "文档正文内容...",
+  "docTitle": "技术方案设计",
+  "author": "张三"
+}
+[/cognize_stack_frame_pop.artifacts]
+
+[/cognize_stack_frame_pop]`;
+
+    const parsed = parseLLMOutput(output);
+    expect(parsed.stackFrameOperations).toHaveLength(1);
+
+    const op = parsed.stackFrameOperations[0]!;
+    expect(op.type).toBe("cognize_stack_frame_pop");
+    expect(op.summary).toBe("成功获取文档内容");
+    expect(op.artifacts).toEqual({
+      docContent: "文档正文内容...",
+      docTitle: "技术方案设计",
+      author: "张三",
+    });
+  });
+
+  test("解析 [reflect_stack_frame_push]", () => {
+    const output = `[reflect_stack_frame_push]
+
+[reflect_stack_frame_push.title]
+反思当前执行路径
+[/reflect_stack_frame_push.title]
+
+[reflect_stack_frame_push.description]
+检查是否有更好的策略可以使用
+[/reflect_stack_frame_push.description]
+
+[/reflect_stack_frame_push]`;
+
+    const parsed = parseLLMOutput(output);
+    expect(parsed.stackFrameOperations).toHaveLength(1);
+
+    const op = parsed.stackFrameOperations[0]!;
+    expect(op.type).toBe("reflect_stack_frame_push");
+    expect(op.title).toBe("反思当前执行路径");
+    expect(op.description).toBe("检查是否有更好的策略可以使用");
+  });
+
+  test("解析 [set_plan]", () => {
+    const output = `[set_plan]
+重新规划当前任务：
+1. 先激活 lark-wiki trait
+2. 调用 wiki API 获取文档内容
+[/set_plan]`;
+
+    const parsed = parseLLMOutput(output);
+    expect(parsed.stackFrameOperations).toHaveLength(1);
+
+    const op = parsed.stackFrameOperations[0]!;
+    expect(op.type).toBe("set_plan");
+    expect(op.content).toContain("重新规划当前任务");
+    expect(op.content).toContain("1. 先激活 lark-wiki trait");
+    expect(op.content).toContain("2. 调用 wiki API 获取文档内容");
+  });
+
+  test("title 缺失时解析失败", () => {
+    const output = `[cognize_stack_frame_push]
+
+[cognize_stack_frame_push.description]
+只有 description，没有 title
+[/cognize_stack_frame_push.description]
+
+[/cognize_stack_frame_push]`;
+
+    const parsed = parseLLMOutput(output);
+    // title 缺失时，整个操作被忽略
+    expect(parsed.stackFrameOperations).toHaveLength(0);
+  });
+
+  test("artifacts JSON 无效时只忽略该字段", () => {
+    const output = `[cognize_stack_frame_pop]
+
+[cognize_stack_frame_pop.summary]
+执行完成
+[/cognize_stack_frame_pop.summary]
+
+[cognize_stack_frame_pop.artifacts]
+这不是有效的 JSON
+[/cognize_stack_frame_pop.artifacts]
+
+[/cognize_stack_frame_pop]`;
+
+    const parsed = parseLLMOutput(output);
+    expect(parsed.stackFrameOperations).toHaveLength(1);
+
+    const op = parsed.stackFrameOperations[0]!;
+    expect(op.type).toBe("cognize_stack_frame_pop");
+    expect(op.summary).toBe("执行完成");
+    // artifacts 解析失败，但操作仍然被解析，artifacts 为 undefined
+    expect(op.artifacts).toBeUndefined();
+  });
+
+  test("解析多个栈帧操作", () => {
+    const output = `[cognize_stack_frame_push]
+
+[cognize_stack_frame_push.title]
+第一个任务
+[/cognize_stack_frame_push.title]
+
+[/cognize_stack_frame_push]
+
+[cognize_stack_frame_pop]
+
+[cognize_stack_frame_pop.summary]
+第一个任务完成
+[/cognize_stack_frame_pop.summary]
+
+[/cognize_stack_frame_pop]
+
+[set_plan]
+调整计划
+[/set_plan]`;
+
+    const parsed = parseLLMOutput(output);
+    expect(parsed.stackFrameOperations).toHaveLength(3);
+
+    expect(parsed.stackFrameOperations[0]!.type).toBe("cognize_stack_frame_push");
+    expect(parsed.stackFrameOperations[1]!.type).toBe("cognize_stack_frame_pop");
+    expect(parsed.stackFrameOperations[2]!.type).toBe("set_plan");
+  });
+});

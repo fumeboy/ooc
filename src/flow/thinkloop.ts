@@ -54,7 +54,7 @@ import {
 import type { CollaborationAPI } from "../world/router.js";
 import type { CronManager } from "../world/cron.js";
 import type { LLMClient, Message, SimpleLLMOptions } from "../thinkable/client.js";
-import type { StoneData, DirectoryEntry, TraitDefinition, TraitHookEvent, HookTime, HookType } from "../types/index.js";
+import type { StoneData, DirectoryEntry, TraitDefinition, TraitHookEvent, HookTime, HookType, ProcessNode } from "../types/index.js";
 import { getActiveTraits } from "../trait/activator.js";
 import { loadTrait } from "../trait/loader.js";
 
@@ -238,11 +238,17 @@ export async function runThinkLoop(
       systemPrompt = formatContextAsSystem(ctx);
       chatMessages = formatContextAsMessages(ctx);
 
-      /* 1.5 注入 before hooks（G13 认知栈：进入新节点时的提示） */
-      const beforeInjection = collectAndFireHooks(traits, flow, "before", firedHooks);
-      if (beforeInjection) {
-        chatMessages.push({ role: "user", content: beforeInjection });
-      }
+      /* 1.5 before hooks（G13 认知栈：进入新节点时的提示）
+       *
+       * 【设计变更】before hooks 不再在 Context 构建时注入。
+       * 改为在 cognize_stack_frame_push 时创建 inline_before 内联节点触发。
+       * 这样 hooks 会被记录为独立的思维步骤，可以被追踪和管理。
+       *
+       * 当 LLM 执行 [stack/push] 时：
+       * 1. 检查是否有 before hooks
+       * 2. 如果有，创建 inline_before 节点，记录 hook 内容
+       * 3. 延迟执行原始的 addNode，直到 inline_before 完成
+       */
 
       /* 2. 调用 LLM（优先使用流式） */
       const messages: Message[] = [
@@ -312,6 +318,273 @@ export async function runThinkLoop(
 
     if (pendingWait && (programs.length > 0 || talks.length > 0 || actions.length > 0 || directives.finish || directives.wait || directives.break_)) {
       flow.setFlowData("_pendingWait", undefined);
+    }
+
+    /* 3.5 执行栈帧操作 */
+    for (const op of parsed.stackFrameOperations) {
+      if (op.type === "cognize_stack_frame_push") {
+        // 创建普通子栈帧（通过标准 addNode 流程，自动添加 hooks、深度检查）
+        const process = flow.process;
+        const parentId = process.focusId;
+        const parent = findNode(process.root, parentId);
+
+        if (!parent) {
+          consola.warn(`[cognize_stack_frame_push] parent node not found, parentId=${parentId}`);
+          flow.recordAction({ type: "inject", content: `[stack_push_failed] parent node not found` });
+          continue;
+        }
+
+        // 【G13】检查是否有 before hooks 需要触发
+        // 如果有，创建 inline_before 内联节点，延迟执行原始的 addNode
+        const beforeHooks = collectHooksForInline(traits, flow, "before", firedHooks, true);
+
+        if (beforeHooks) {
+          // 有 before hooks，创建 inline_before 内联节点
+          const nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          const inlineNode: ProcessNode = {
+            id: nodeId,
+            title: `[before] ${op.title}`,
+            description: op.description,
+            status: "doing",
+            type: "inline_before",
+            children: [],
+            actions: [{ type: "inject", content: beforeHooks.injection, timestamp: Date.now() }],
+            traits: op.traits,
+            outputs: op.outputs,
+            outputDescription: op.outputDescription,
+            // 内联节点默认不设置 hooks
+          };
+          parent.children.push(inlineNode);
+
+          // 保存原始的 cognize_stack_frame_push 参数，用于 inline_before 完成后执行
+          flow.setFlowData("_pendingStackPush", {
+            title: op.title,
+            description: op.description,
+            traits: op.traits,
+            outputs: op.outputs,
+            outputDescription: op.outputDescription,
+          });
+
+          // 移动 focus 到 inline_before 节点
+          moveProcessFocus(process, nodeId);
+          flow.setProcess({ ...process });
+
+          consola.info(`[cognize_stack_frame_push] created inline_before node for before hooks`);
+        } else {
+          // 没有 before hooks，正常执行 addNode
+          const nodeId = addNode(
+            process,
+            parentId,
+            op.title,
+            undefined,
+            op.description,
+            op.traits,
+            op.outputs,
+            op.outputDescription
+          );
+          if (nodeId) {
+            addProcessTodo(process, nodeId, op.title, "plan");
+            moveProcessFocus(process, nodeId);
+            flow.setProcess({ ...process });
+          } else {
+            // addNode 可能失败：父节点不存在 或 深度超过 20 层
+            consola.warn(`[cognize_stack_frame_push] addNode failed, parentId=${parentId}, title=${op.title}`);
+            flow.recordAction({ type: "inject", content: `[stack_push_failed] cannot create node "${op.title}" (parent not found or depth limit)` });
+          }
+        }
+      } else if (op.type === "reflect_stack_frame_push") {
+        // 创建 reflect 内联子节点
+        // 【设计说明】为什么绕过 addNode：
+        // 1. inline_reflect 节点是内联的"思维记录"，不是独立的计划节点
+        // 2. 不加入 todo 队列，不会被独立调度
+        // 3. 不需要默认 hooks（when_stack_pop 会触发 summary 等，但内联节点不需要）
+        // 4. 直接设置 status="doing"，跳过了 todo 状态
+        //
+        // 如果未来需要让内联节点也支持 hooks，可以：
+        // - 调用 addNode 创建节点
+        // - 然后设置 node.type = "inline_reflect"
+        // - 不调用 addProcessTodo
+        const process = flow.process;
+        const parentId = process.focusId;
+        const parent = findNode(process.root, parentId);
+        if (parent) {
+          const nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          const inlineNode: ProcessNode = {
+            id: nodeId,
+            title: op.title,
+            description: op.description,
+            status: "doing",
+            type: "inline_reflect",
+            children: [],
+            actions: [],
+            traits: op.traits,
+            outputs: op.outputs,
+            outputDescription: op.outputDescription,
+            // 内联节点默认不设置 hooks。如果用户通过 create_hook 显式添加，会被触发。
+          };
+          parent.children.push(inlineNode);
+          moveProcessFocus(process, nodeId);
+          flow.setProcess({ ...process });
+        } else {
+          consola.warn(`[reflect_stack_frame_push] parent node not found, parentId=${parentId}`);
+          flow.recordAction({ type: "inject", content: `[stack_push_failed] parent node not found for inline_reflect` });
+        }
+      } else if (op.type === "cognize_stack_frame_pop" || op.type === "reflect_stack_frame_pop") {
+        // 完成并弹出当前栈帧
+        const process = flow.process;
+        const currentId = process.focusId;
+        const currentNode = findNode(process.root, currentId);
+
+        if (currentNode && currentId !== process.root.id) {
+          // 【重要】在 completeProcessNode 之前触发 when_stack_pop hooks (LIFO 顺序)
+          // 必须在完成节点前执行，因为 recordAction 会写入当前 focus 节点
+          const hooks = collectFrameNodeHooks(currentNode, "when_stack_pop");
+          for (const hook of hooks) {
+            try {
+              if (hook.type === "inject_message") {
+                flow.recordAction({ type: "inject", content: `[when_stack_pop] ${hook.handler}` });
+              } else if (hook.type === "create_todo") {
+                addProcessTodo(process, currentNode.id, hook.handler, "manual");
+              }
+            } catch (e) {
+              flow.recordAction({ type: "inject", content: `[hook_error] ${hook.id}: ${String(e)}` });
+            }
+          }
+
+          // 处理 artifacts
+          if (op.artifacts && typeof op.artifacts === "object") {
+            if (!currentNode.locals) currentNode.locals = {};
+            Object.assign(currentNode.locals, op.artifacts);
+            // 合并到父节点 locals
+            const parent = getParentNode(process.root, currentId);
+            if (parent) {
+              if (!parent.locals) parent.locals = {};
+              Object.assign(parent.locals, op.artifacts);
+            }
+          }
+
+          // 完成节点
+          const ok = completeProcessNode(process, currentId, op.summary ?? "");
+          if (ok) {
+            // 检查是否是 inline_before 节点且有待执行的 stack push
+            const pendingPush = flow.toJSON().data._pendingStackPush as {
+              title: string;
+              description?: string;
+              traits?: string[];
+              outputs?: string[];
+              outputDescription?: string;
+            } | undefined;
+
+            if (currentNode.type === "inline_before" && pendingPush) {
+              // inline_before 完成后，执行延迟的 cognize_stack_frame_push
+              consola.info(`[stack_frame_pop] executing pending stack_push after inline_before`);
+
+              // 先获取父节点（完成后 focus 还在当前节点，但需要在父节点下创建子节点）
+              const parentNode = getParentNode(process.root, currentId);
+              if (parentNode) {
+                // 先 advanceFocus 让 focus 回到父节点
+                advanceFocus(process);
+
+                // 执行原始的 addNode
+                const nodeId = addNode(
+                  process,
+                  parentNode.id,
+                  pendingPush.title,
+                  undefined,
+                  pendingPush.description,
+                  pendingPush.traits,
+                  pendingPush.outputs,
+                  pendingPush.outputDescription
+                );
+
+                if (nodeId) {
+                  addProcessTodo(process, nodeId, pendingPush.title, "plan");
+                  moveProcessFocus(process, nodeId);
+                  consola.info(`[stack_frame_pop] pending stack_push executed, nodeId=${nodeId}`);
+                } else {
+                  consola.warn(`[stack_frame_pop] pending stack_push failed`);
+                  flow.recordAction({ type: "inject", content: `[stack_push_failed] cannot create node "${pendingPush.title}"` });
+                }
+              }
+
+              // 清除延迟操作
+              flow.setFlowData("_pendingStackPush", undefined);
+            } else if (currentNode.type?.startsWith("inline_")) {
+              // 其他内联节点（inline_reflect, inline_after）：正常推进 focus
+              advanceFocus(process);
+            } else {
+              // 普通节点完成后：检查 after hooks，然后处理 todo 队列
+
+              // 先处理 todo 队列（与原有逻辑一致）
+              const todo = process.todo ?? [];
+              const idx = todo.findIndex((t) => t.nodeId === currentId);
+              if (idx >= 0) removeProcessTodo(process, idx);
+
+              // 获取父节点
+              const parentNode = getParentNode(process.root, currentId);
+
+              if (parentNode) {
+                // 【G13】检查是否有 after hooks 需要触发
+                // after hooks 应该在父节点上下文中触发
+                // 所以先移动 focus 到父节点
+                moveProcessFocus(process, parentNode.id);
+
+                // 现在检查 after hooks（在父节点上下文中）
+                const afterHooks = collectHooksForInline(traits, flow, "after", firedHooks, true);
+
+                if (afterHooks) {
+                  // 有 after hooks，创建 inline_after 内联节点
+                  const nodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+                  const inlineNode: ProcessNode = {
+                    id: nodeId,
+                    title: `[after] ${currentNode.title}`,
+                    status: "doing",
+                    type: "inline_after",
+                    children: [],
+                    actions: [{ type: "inject", content: afterHooks.injection, timestamp: Date.now() }],
+                  };
+                  parentNode.children.push(inlineNode);
+
+                  // 移动 focus 到 inline_after 节点
+                  moveProcessFocus(process, nodeId);
+                  consola.info(`[stack_frame_pop] created inline_after node for after hooks`);
+                } else {
+                  // 没有 after hooks，检查 nextTodo
+                  const nextTodo = (process.todo ?? [])[0];
+                  if (nextTodo) {
+                    moveProcessFocus(process, nextTodo.nodeId);
+                  }
+                  // 如果没有 nextTodo，保持 focus 在父节点
+                }
+              } else {
+                // 没有父节点（不应该发生），正常推进
+                const nextTodo = (process.todo ?? [])[0];
+                if (nextTodo) {
+                  moveProcessFocus(process, nextTodo.nodeId);
+                } else {
+                  advanceFocus(process);
+                }
+              }
+            }
+            flow.setProcess({ ...process });
+          } else {
+            consola.warn(`[stack_frame_pop] completeProcessNode failed, nodeId=${currentId}`);
+          }
+        } else if (currentId === process.root.id) {
+          flow.recordAction({ type: "inject", content: `[stack_pop_ignored] cannot pop root node` });
+        } else {
+          consola.warn(`[stack_frame_pop] current node not found, nodeId=${currentId}`);
+          flow.recordAction({ type: "inject", content: `[stack_pop_failed] current node not found` });
+        }
+      } else if (op.type === "set_plan") {
+        // 更新当前节点的 plan 字段
+        const process = flow.process;
+        const currentNode = findNode(process.root, process.focusId);
+        if (currentNode) {
+          currentNode.plan = op.content;
+          flow.setProcess({ ...process });
+        }
+      }
     }
 
     /* 4. 记录思考（recordAction 自动写入 focus 节点，只记录 [thought] 段落） */
@@ -713,7 +986,7 @@ async function consumeStream(
   const checkLineTag = (
     line: string,
   ): {
-    type: "thought" | "program" | "program_lang" | "finish" | "wait" | "break" | "talk_open" | "talk_close" | "action_open" | "action_close" | null;
+    type: "thought" | "program" | "program_lang" | "finish" | "wait" | "break" | "talk_open" | "talk_close" | "action_open" | "action_close" | "stack_frame_open" | "stack_frame_close" | null;
     target?: string;
     lang?: "javascript" | "shell";
     toolName?: string;
@@ -721,6 +994,14 @@ async function consumeStream(
     const trimmed = line.trim();
     if (/^\[(thought|program|finish|wait|break)\]$/.test(trimmed)) {
       return { type: trimmed.slice(1, -1) as "thought" | "program" | "finish" | "wait" | "break" };
+    }
+    const stackFrameOpenMatch = /^\[(cognize_stack_frame_push|cognize_stack_frame_pop|reflect_stack_frame_push|reflect_stack_frame_pop|set_plan)\]$/.exec(trimmed);
+    if (stackFrameOpenMatch) {
+      return { type: "stack_frame_open" };
+    }
+    const stackFrameCloseMatch = /^\[\/(cognize_stack_frame_push|cognize_stack_frame_pop|reflect_stack_frame_push|reflect_stack_frame_pop|set_plan)\]$/.exec(trimmed);
+    if (stackFrameCloseMatch) {
+      return { type: "stack_frame_close" };
     }
     const programLangMatch = /^\[program\/(javascript|shell)\]$/.exec(trimmed);
     if (programLangMatch) {
@@ -772,6 +1053,11 @@ async function consumeStream(
         if (tag.type === "thought") {
           endCurrentSection();
           streamingSection = "thought";
+        } else if (tag.type === "stack_frame_open") {
+          endCurrentSection();
+          streamingSection = "thought";
+        } else if (tag.type === "stack_frame_close") {
+          endCurrentSection();
         } else if (tag.type === "program") {
           endCurrentSection();
           streamingSection = "program";
@@ -820,6 +1106,7 @@ async function consumeStream(
     if (
       tag.type === "talk_close" ||
       tag.type === "action_close" ||
+      tag.type === "stack_frame_close" ||
       tag.type === "program" ||
       tag.type === "finish" ||
       tag.type === "wait" ||
@@ -847,6 +1134,71 @@ async function consumeStream(
   endCurrentSection();
 
   return fullOutput;
+}
+
+/**
+ * 收集指定事件的 Trait Hooks（不标记已触发）
+ *
+ * 从当前激活的 traits 中收集指定事件的 hooks，
+ * 跳过已在 firedHooks 中的 once hooks，返回注入文本和涉及的 hook IDs。
+ *
+ * 用于 inline_before/inline_after 节点创建时检查和收集 hooks。
+ *
+ * @param markFired - 如果为 true，会将收集到的 hooks 标记到 firedHooks 中
+ * @returns 注入文本和 hook IDs，无 hook 时返回 null
+ */
+function collectHooksForInline(
+  traits: TraitDefinition[],
+  flow: Flow,
+  event: "before" | "after",
+  firedHooks: Set<string>,
+  markFired: boolean = true,
+): { injection: string; hookIds: string[] } | null {
+  /* G13: 使用作用域链驱动 trait 激活 */
+  const scopeChain = computeScopeChain(flow.process);
+  const activeTraits = getActiveTraits(traits, scopeChain);
+
+  const injections: string[] = [];
+  const collectedTitles: string[] = [];
+  const hookIds: string[] = [];
+  const focusNodeId = flow.process.focusId;
+
+  for (const trait of activeTraits) {
+    if (!trait.hooks) continue;
+    const hook = trait.hooks[event];
+    if (!hook) continue;
+
+    /* per-node key: 同一 hook 在不同节点上各触发一次 */
+    const hookId = `${trait.name}:${event}:${focusNodeId}`;
+
+    /* once: true 的 hook 只触发一次（per-node 粒度） */
+    if (hook.once !== false && firedHooks.has(hookId)) continue;
+
+    injections.push(hook.inject);
+    if (hook.inject_title) {
+      collectedTitles.push(hook.inject_title);
+    }
+    hookIds.push(hookId);
+  }
+
+  if (injections.length === 0) return null;
+
+  /* 标记为已触发 */
+  if (markFired) {
+    for (const id of hookIds) {
+      firedHooks.add(id);
+    }
+    flow.setFlowData("_firedHooks", Array.from(firedHooks));
+  }
+
+  /* 格式化返回内容 */
+  const titlePart = injections.length === 1 && collectedTitles.length === 1
+    ? ` | ${collectedTitles[0]}`
+    : "";
+
+  const injection = `>>> [系统提示 — ${event}${titlePart}]\n${injections.join("\n\n")}`;
+
+  return { injection, hookIds };
 }
 
 /**
@@ -1074,154 +1426,6 @@ function buildExecutionContext(
   /* ── 认知栈 API（G13） ── */
   tracker.register(context, [
     {
-      name: "createPlan",
-      fn: (title: string, description?: string) => {
-        const process = flow.process;
-        if (!process) return null;
-
-        /* 【重要】不替换整个 process，而是在当前 focus 节点下创建子节点作为计划容器
-         *
-         * 原来的行为：createProcess(title, description) + flow.setProcess(process)
-         * 问题：会完全替换原来的 process，导致已记录的 actions 全部丢失！
-         *
-         * 新行为：在当前 focus 节点下创建子节点作为计划容器
-         * 优点：保留所有历史 actions，root node id 保持不变
-         *
-         * 向后兼容：
-         * - createPlan() 返回新容器节点的 id
-         * - create_plan_node(parentId, ...) 用这个 id 作为 parent 添加步骤
-         * - 原来的使用方式完全不需要改变
-         *
-         * 注意：容器节点不加入 todo 列表（与原行为一致：根节点不在 todo 中）
-         * 只有 create_plan_node 创建的"步骤"节点才加入 todo 列表
-         */
-        const currentFocusId = process.focusId;
-
-        /* 在当前 focus 节点下创建子节点作为计划容器 */
-        const containerId = addNode(process, currentFocusId, title, undefined, description);
-        if (!containerId) return null;
-
-        /* 将 focus 移动到新创建的容器节点 */
-        const moveOk = moveProcessFocus(process, containerId);
-        if (!moveOk) {
-          consola.warn(`[ThinkLoop] createPlan: moveFocus to ${containerId} 失败`);
-        }
-
-        /* 注意：不将容器节点加入 todo 列表
-         * 与原行为一致：createPlan 创建的"根节点"不在 todo 中
-         * 只有后续 create_plan_node 创建的"步骤"节点才加入 todo 列表
-         */
-
-        flow.setProcess({ ...process });
-        return containerId;
-      },
-      effect: (args, result) => `createPlan("${args[0]}") → 创建计划容器节点: ${result}`,
-    },
-    {
-      name: "create_plan_node",
-      fn: (
-        parentId: string,
-        title: string,
-        description?: string,
-        traits?: string[],
-        outputs?: string[],
-        outputDescription?: string,
-      ) => {
-        const process = flow.process;
-        if (!process) return null;
-        const id = addNode(process, parentId, title, undefined, description, traits, outputs, outputDescription);
-        if (!id) return null;
-        addProcessTodo(process, id, title, "plan");
-        flow.setProcess({ ...process });
-        return id;
-      },
-      effect: (args, result) => {
-        const outputs = args[4] && Array.isArray(args[4]) ? ` [outputs: ${(args[4] as string[]).join(", ")}]` : "";
-        return result ? `create_plan_node("${args[1]}", parent=${args[0]})${outputs} → ${result}` : `create_plan_node("${args[1]}") → 失败`;
-      },
-    },
-    {
-      name: "finish_plan_node",
-      fn: (summary: string, artifacts?: Record<string, unknown>) => {
-        const process = flow.process;
-        if (!process) return false;
-        const currentId = process.focusId;
-        /* 不能完成根节点 */
-        if (currentId === process.root.id) return false;
-
-        /* 将 artifacts 同时写入：
-         * 1. 产出节点自身的 locals（用于 render 显示 [artifacts: ...]）
-         * 2. 父节点的 locals（用于下游节点通过 local.key 访问）
-         */
-        if (artifacts && typeof artifacts === "object") {
-          const currentNode = findNode(process.root, currentId);
-          if (currentNode) {
-            if (!currentNode.locals) currentNode.locals = {};
-            Object.assign(currentNode.locals, artifacts);
-          }
-          const parent = getParentNode(process.root, currentId);
-          if (parent) {
-            if (!parent.locals) parent.locals = {};
-            Object.assign(parent.locals, artifacts);
-          }
-        }
-
-        const ok = completeProcessNode(process, currentId, summary);
-        if (ok) {
-          const todo = process.todo ?? [];
-          const idx = todo.findIndex((t) => t.nodeId === currentId);
-          if (idx >= 0) removeProcessTodo(process, idx);
-          const nextTodo = (process.todo ?? [])[0];
-          if (nextTodo) {
-            moveProcessFocus(process, nextTodo.nodeId);
-          } else {
-            advanceFocus(process);
-          }
-          flow.setProcess({ ...process });
-        }
-        return ok;
-      },
-      effect: (args, result) => {
-        const artifactKeys = args[1] && typeof args[1] === "object" ? Object.keys(args[1] as object) : [];
-        const artifactHint = artifactKeys.length > 0 ? ` [artifacts: ${artifactKeys.join(", ")}]` : "";
-        return `finish_plan_node("${args[0] ?? ""}")${artifactHint} → ${result ? "OK" : "失败"}`;
-      },
-    },
-    {
-      name: "addStep",
-      fn: (parentId: string, title: string, deps?: string[], description?: string) => {
-        const process = flow.process;
-        if (!process) return null;
-        const id = addNode(process, parentId, title, deps, description);
-        if (id) addProcessTodo(process, id, title, "plan");
-        flow.setProcess({ ...process });
-        return id;
-      },
-      effect: (args, result) => result ? `addStep("${args[1]}") → ${result}` : `addStep("${args[1]}") → 失败`,
-    },
-    {
-      name: "completeStep",
-      fn: (nodeId: string, summary: string) => {
-        const process = flow.process;
-        if (!process) return false;
-        const ok = completeProcessNode(process, nodeId, summary);
-        if (ok) {
-          const todo = process.todo ?? [];
-          const idx = todo.findIndex((t) => t.nodeId === nodeId);
-          if (idx >= 0) removeProcessTodo(process, idx);
-          const nextTodo = (process.todo ?? [])[0];
-          if (nextTodo) {
-            moveProcessFocus(process, nextTodo.nodeId);
-          } else {
-            advanceFocus(process);
-          }
-          flow.setProcess({ ...process });
-        }
-        return ok;
-      },
-      effect: (args, result) => `completeStep("${args[0]}") → ${result ? "OK" : "失败"}`,
-    },
-    {
       name: "moveFocus",
       fn: (nodeId: string) => {
         const process = flow.process;
@@ -1230,157 +1434,6 @@ function buildExecutionContext(
         if (ok) flow.setProcess({ ...process });
         return ok;
       },
-    },
-    {
-      name: "isPlanComplete",
-      fn: () => {
-        const process = flow.process;
-        if (!process) return true;
-        return isProcessComplete(process);
-      },
-    },
-    {
-      name: "removeStep",
-      fn: (nodeId: string) => {
-        const process = flow.process;
-        if (!process) return false;
-        const ok = removeProcessNode(process, nodeId);
-        if (ok) {
-          const todo = process.todo ?? [];
-          const idx = todo.findIndex((t) => t.nodeId === nodeId);
-          if (idx >= 0) removeProcessTodo(process, idx);
-          flow.setProcess({ ...process });
-        }
-        return ok;
-      },
-      effect: (args, result) => `removeStep("${args[0]}") → ${result ? "OK" : "失败"}`,
-    },
-    {
-      name: "editStep",
-      fn: (nodeId: string, title: string) => {
-        const process = flow.process;
-        if (!process) return false;
-        const ok = editProcessNode(process, nodeId, title);
-        if (ok) {
-          const item = (process.todo ?? []).find((t) => t.nodeId === nodeId);
-          if (item) item.title = title;
-          flow.setProcess({ ...process });
-        }
-        return ok;
-      },
-      effect: (args, result) => `editStep("${args[0]}", "${args[1]}") → ${result ? "OK" : "失败"}`,
-    },
-    /* ── 栈帧语义 API（G13 增强）── */
-    {
-      name: "add_stack_frame",
-      fn: (
-        parentId: string,
-        title: string,
-        description?: string,
-        traits?: string[],
-        outputs?: string[],
-        outputDescription?: string,
-      ) => {
-        const process = flow.process;
-        if (!process) return null;
-        const id = addNode(process, parentId, title, undefined, description, traits, outputs, outputDescription);
-        if (!id) return null;
-        addProcessTodo(process, id, title, "plan");
-        flow.setProcess({ ...process });
-        return id;
-      },
-      effect: (args, result) => {
-        const outputs = args[4] && Array.isArray(args[4]) ? ` [outputs: ${(args[4] as string[]).join(", ")}]` : "";
-        return result ? `add_stack_frame("${args[1]}", parent=${args[0]})${outputs} → ${result}` : `add_stack_frame("${args[1]}") → 失败`;
-      },
-    },
-    {
-      name: "stack_return",
-      fn: (summary?: string, artifacts?: Record<string, unknown>) => {
-        const process = flow.process;
-        if (!process) return false;
-        const focusNode = getFocusNode(process);
-        if (!focusNode) return false;
-
-        // Execute when_stack_pop hooks (LIFO)
-        const hooks = collectFrameNodeHooks(focusNode, "when_stack_pop");
-        for (const hook of hooks) {
-          try {
-            if (hook.type === "inject_message") {
-              flow.recordAction({ type: "inject", content: `[when_stack_pop] ${hook.handler}` });
-            } else if (hook.type === "create_todo") {
-              addProcessTodo(process, focusNode.id, hook.handler, "manual");
-            }
-          } catch (e) {
-            flow.recordAction({ type: "inject", content: `[hook_error] ${hook.id}: ${String(e)}` });
-          }
-        }
-
-        /* 将 artifacts 同时写入：
-         * 1. 产出节点自身的 locals（用于 render 显示 [artifacts: ...]）
-         * 2. 父节点的 locals（用于下游节点通过 local.key 访问）
-         */
-        if (artifacts && typeof artifacts === "object") {
-          if (!focusNode.locals) focusNode.locals = {};
-          Object.assign(focusNode.locals, artifacts);
-          const parent = getParentNode(process.root, focusNode.id);
-          if (parent) {
-            if (!parent.locals) parent.locals = {};
-            Object.assign(parent.locals, artifacts);
-          }
-        }
-
-        const ok = completeProcessNode(process, process.focusId, summary ?? "");
-        if (ok) {
-          advanceFocus(process);
-          flow.setProcess({ ...process });
-        }
-        return ok;
-      },
-      effect: (args, result) => {
-        const artifactKeys = args[1] && typeof args[1] === "object" ? Object.keys(args[1] as object) : [];
-        const artifactHint = artifactKeys.length > 0 ? ` [artifacts: ${artifactKeys.join(", ")}]` : "";
-        return `stack_return("${args[0] ?? ""}")${artifactHint} → ${result ? "OK" : "失败"}`;
-      },
-    },
-    {
-      name: "go",
-      fn: (nodeId: string) => {
-        const process = flow.process;
-        if (!process) return false;
-        const result = moveProcessFocus(process, nodeId);
-        if (result.success && result.yieldedNodeId) {
-          const yieldedNode = findNode(process.root, result.yieldedNodeId);
-          if (yieldedNode) {
-            const hooks = collectFrameNodeHooks(yieldedNode, "when_yield");
-            for (const hook of hooks) {
-              try {
-                if (hook.type === "inject_message") {
-                  flow.recordAction({ type: "inject", content: `[when_yield] ${hook.handler}` });
-                } else if (hook.type === "create_todo") {
-                  addProcessTodo(process, yieldedNode.id, hook.handler, "manual");
-                }
-              } catch (e) {
-                flow.recordAction({ type: "inject", content: `[hook_error] ${hook.id}: ${String(e)}` });
-              }
-            }
-          }
-        }
-        flow.setProcess({ ...process });
-        return result.success;
-      },
-      effect: (args, result) => `go("${args[0]}") → ${result ? "OK" : "失败"}`,
-    },
-    {
-      name: "compress",
-      fn: (actionIds: string[]) => {
-        const process = flow.process;
-        if (!process) return null;
-        const childId = compressActions(process, process.focusId, actionIds);
-        if (childId) flow.setProcess({ ...process });
-        return childId;
-      },
-      effect: (args, result) => `compress(${(args[0] as string[]).length} actions) → ${result ?? "失败"}`,
     },
     {
       name: "stack_throw",
@@ -1432,15 +1485,6 @@ function buildExecutionContext(
         return true;
       },
       effect: (args) => `stack_throw("${args[0]}")`,
-    },
-    {
-      name: "stack_catch",
-      fn: (handler: string) => {
-        const process = flow.process;
-        if (!process) return false;
-        return createFrameHook(process, process.focusId, "when_error", "inject_message", handler);
-      },
-      effect: (args) => `stack_catch("${args[0]}")`,
     },
     {
       name: "summary",
