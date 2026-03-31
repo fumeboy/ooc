@@ -314,55 +314,171 @@ describe("isProcessComplete", () => {
 
 /* ========== render.ts 测试 ========== */
 
-describe("renderProcess", () => {
-  test("渲染单根节点", () => {
-    const p = createProcess("任务");
+describe("renderProcess (新设计：一维时间线)", () => {
+  test("渲染包含【认知栈】【聚焦路径】【当前状态】三个区域", () => {
+    const p = createProcess("测试任务");
     const text = renderProcess(p);
-    expect(text).toContain("[*] 任务");
-    expect(text).toContain("← focus");
+
+    expect(text).toContain("【认知栈】");
+    expect(text).toContain("【聚焦路径】");
+    expect(text).toContain("【当前状态】");
   });
 
-  test("渲染展开 focus 路径、折叠其他", () => {
-    const p = createProcess("根");
-    const id1 = addNode(p, p.root.id, "分支 A")!;
-    addNode(p, id1, "A-1");
-    addNode(p, id1, "A-2");
-    addNode(p, p.root.id, "分支 B");
+  test("按时间顺序排列 events", () => {
+    const p = createProcess("测试任务");
 
-    /* focus 在根 → 应展开所有子节点 */
+    // 添加 thought action
+    appendAction(p, p.root.id, {
+      type: "thought",
+      content: "开始思考",
+      timestamp: 1000,
+    });
+
+    // 添加 program action
+    appendAction(p, p.root.id, {
+      type: "program",
+      content: 'print("hello")',
+      timestamp: 2000,
+      success: true,
+      result: "hello",
+    });
+
     const text = renderProcess(p);
-    expect(text).toContain("分支 A");
-    expect(text).toContain("分支 B");
+
+    // 验证关键元素存在
+    expect(text).toContain("[thought]");
+    expect(text).toContain("[program]");
+    expect(text).toContain("✓ 成功");
+    expect(text).toContain("开始思考");
+    expect(text).toContain('print("hello")');
   });
 
-  test("已完成节点显示摘要", () => {
-    const p = createProcess("根");
-    const id1 = addNode(p, p.root.id, "步骤 1")!;
-    completeNode(p, id1, "成功完成");
+  test("展示 [push] 和 [sub_stack_frame]", () => {
+    const p = createProcess("根任务");
+    const childId = addNode(p, p.root.id, "子任务")!;
+
+    // 父节点 action
+    appendAction(p, p.root.id, {
+      type: "thought",
+      content: "父节点思考",
+      timestamp: 1000,
+    });
+
+    // 进入子节点
+    moveFocus(p, childId);
+
+    // 子节点 actions
+    appendAction(p, childId, {
+      type: "thought",
+      content: "子节点思考",
+      timestamp: 2000,
+    });
+
+    // 完成子节点
+    completeNode(p, childId, "子任务完成");
+    const child = findNode(p.root, childId)!;
+    child.locals = { result: "some data" };
+
+    // 回到父节点
+    moveFocus(p, p.root.id);
 
     const text = renderProcess(p);
-    expect(text).toContain("[✓] 步骤 1");
-    expect(text).toContain("成功完成");
+
+    expect(text).toContain("[push]");
+    expect(text).toContain("[sub_stack_frame]");
+    expect(text).toContain("✓ done");
+    expect(text).toContain("输出 summary:");
+    expect(text).toContain("输出 artifacts:");
   });
 
-  test("focus 在深层节点时折叠不在路径上的分支", () => {
+  test("【当前状态】只展示变量名，不展示值", () => {
+    const p = createProcess("测试任务");
+    p.root.locals = { secret: "should not show value" };
+    p.root.outputs = ["result"];
+    p.root.outputDescription = "测试输出";
+
+    const text = renderProcess(p);
+
+    // 应该展示 key，但不展示值
+    expect(text).toContain("可访问变量名:");
+    expect(text).toContain("secret");
+    expect(text).not.toContain("should not show value");
+
+    // 输出契约
+    expect(text).toContain("输出契约:");
+    expect(text).toContain("outputs: result");
+    expect(text).toContain("输出描述: 测试输出");
+  });
+
+  test("时间戳格式化 HH:MM:SS", () => {
+    // 导入内部函数进行测试
+    const { formatTimestamp } = require("../src/process/render.js");
+
+    // 构造一个特定时间的时间戳 (13:45:30)
+    const date = new Date();
+    date.setHours(13, 45, 30, 0);
+    const ts = date.getTime();
+
+    const formatted = formatTimestamp(ts);
+    expect(formatted).toBe("13:45:30");
+  });
+
+  test("展示激活的 traits", () => {
+    const p = createProcess("测试任务");
+    p.root.traits = ["lark-wiki"];
+    p.root.activatedTraits = ["git-ops"];
+
+    const text = renderProcess(p);
+    expect(text).toContain("激活 traits:");
+    expect(text).toContain("lark-wiki");
+    expect(text).toContain("git-ops");
+  });
+
+  test("program 失败时显示 ❌ 失败", () => {
+    const p = createProcess("测试任务");
+    appendAction(p, p.root.id, {
+      type: "program",
+      content: "errorCode()",
+      timestamp: Date.now(),
+      success: false,
+      result: "Error: something went wrong",
+    });
+
+    const text = renderProcess(p);
+    expect(text).toContain("❌ 失败");
+    expect(text).toContain("Error: something went wrong");
+  });
+
+  test("focus 在深层节点时展示 push 事件", () => {
     const p = createProcess("根");
     const idA = addNode(p, p.root.id, "分支 A")!;
     const idA1 = addNode(p, idA, "A-1")!;
-    const idB = addNode(p, p.root.id, "分支 B")!;
-    addNode(p, idB, "B-1");
-    addNode(p, idB, "B-2");
 
     moveFocus(p, idA1);
     const text = renderProcess(p);
-    /* 分支 A 和 A-1 应该展开 */
-    expect(text).toContain("分支 A");
-    expect(text).toContain("A-1");
-    expect(text).toContain("← focus");
 
-    /* 分支 B 应该折叠 */
-    expect(text).toContain("分支 B");
-    expect(text).toContain("子节点完成");
+    // 路径上的节点应该有 push 事件
+    expect(text).toContain("[push] 分支 A");
+    expect(text).toContain("[push] A-1");
+  });
+
+  test("结构化遗忘：不在聚焦路径上的节点完全不展示", () => {
+    const p = createProcess("根");
+    const idA = addNode(p, p.root.id, "分支 A")!;
+    const idB = addNode(p, p.root.id, "分支 B")!;
+    addNode(p, idB, "B-1");
+
+    // focus 在分支 A
+    moveFocus(p, idA);
+
+    const text = renderProcess(p);
+
+    // 分支 A 应该显示
+    expect(text).toContain("分支 A");
+
+    // 分支 B 不在聚焦路径上，不应该显示
+    expect(text).not.toContain("分支 B");
+    expect(text).not.toContain("B-1");
   });
 });
 
