@@ -36,6 +36,12 @@ export const streamingThoughtAtom = atom<{ taskId: string; content: string } | n
 /** 流式 talk 内容（逐步累积） */
 export const streamingTalkAtom = atom<{ taskId: string; target: string; from: string; content: string } | null>(null);
 
+/** 流式 program 内容（逐步累积） */
+export const streamingProgramAtom = atom<{ taskId: string; lang?: "javascript" | "shell"; content: string } | null>(null);
+
+/** 流式 action 内容（逐步累积） */
+export const streamingActionAtom = atom<{ taskId: string; toolName: string; content: string } | null>(null);
+
 /** Chat Ref 引用列表（用户通过 Ref 按钮收集的引用） */
 export interface ChatRef {
   id: string;
