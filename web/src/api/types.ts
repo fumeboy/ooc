@@ -52,6 +52,13 @@ export interface FlowMessage {
   timestamp: number;
 }
 
+/** 节点类型（区分普通子栈帧和内联子节点） */
+export type NodeType =
+  | "frame"           // 普通子栈帧（默认）
+  | "inline_before"   // before 内联子节点（hook 自动触发）
+  | "inline_after"    // after 内联子节点（hook 自动触发）
+  | "inline_reflect"; // reflect 内联子节点（主动触发）
+
 /** 行为树节点 */
 export interface ProcessNode {
   id: string;
@@ -64,6 +71,13 @@ export interface ProcessNode {
   traits?: string[];
   summary?: string;
   locals?: Record<string, unknown>;
+
+  // 新增字段
+  type?: NodeType;           // 节点类型
+  plan?: string;             // plan 文本
+  outputs?: string[];        // 契约式编程：输出 key 列表
+  outputDescription?: string; // 输出描述
+  activatedTraits?: string[]; // 动态激活的 traits
 }
 
 /** 待办项 */
