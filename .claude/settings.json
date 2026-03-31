@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "if": "Bash(git commit*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "parent_repo=\"$(dirname \"$(pwd)\")\"; if [ -z \"$(git -C \"$parent_repo\" status --porcelain docs/meta.md)\" ]; then echo '{\"continue\": false, \"stopReason\": \"请先更新父仓库中的 docs/meta.md 后再提交 kernel 代码。根据 OOC 项目规范，每次提交前必须同步更新架构文档。\", \"systemMessage\": \"提交被阻断：请先更新 ooc-1/docs/meta.md\"}'; else echo '{\"continue\": true}'; fi",
+            "statusMessage": "检查父仓库 docs/meta.md 是否已更新..."
+          }
+        ]
+      }
+    ]
+  }
+}

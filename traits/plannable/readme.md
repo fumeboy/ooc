@@ -6,26 +6,127 @@ deps: []
 
 # 规划能力
 
-## 规划 API
+## 段落标记式规划 API
 
-### createPlan(title, description)
+使用段落标记格式来创建和管理子栈帧，替代旧的函数调用式 API。
 
-在当前任务节点下创建一个多步骤计划容器（不替换已有内容）：
+### `[cognize_stack_frame_push]` — 创建普通子栈帧
 
-```javascript
-const root = createPlan("任务名称", "任务的具体目标描述");
+在当前节点下创建一个子栈帧，用于拆解复杂任务。
+
+**支持的属性段落**：
+
+| 属性段落 | 必填 | 说明 |
+|-----------|------|------|
+| `[cognize_stack_frame_push.title]` | 是 | 子栈帧标题 |
+| `[cognize_stack_frame_push.description]` | 否 | 详细描述 |
+| `[cognize_stack_frame_push.traits]` | 否 | trait 名称列表，逗号分隔 |
+| `[cognize_stack_frame_push.outputs]` | 否 | 输出 key 列表，逗号分隔 |
+| `[cognize_stack_frame_push.outputDescription]` | 否 | 输出描述 |
+
+**示例**：
+
+创建一个简单的子栈帧：
+```
+[cognize_stack_frame_push.title]
+收集信息
+[/cognize_stack_frame_push.title]
+
+[cognize_stack_frame_push.description]
+从 3 个来源收集数据
+[/cognize_stack_frame_push.description]
+
+[cognize_stack_frame_push.traits]
+web_search
+[/cognize_stack_frame_push.traits]
+
+[/cognize_stack_frame_push]
 ```
 
-**注意**：`createPlan` 不会替换当前行为树，而是在当前 focus 节点下创建子节点作为计划容器。这样可以保留已记录的 actions 和历史数据。
+当输出 `[/cognize_stack_frame_push]` 结束标记后，系统会创建子栈帧，focus 自动进入新节点开始执行。
 
-### create_plan_node(parentId, title, description?, traits?, outputs?, outputDescription?)
+### `[cognize_stack_frame_pop]` — 完成并退出当前子栈帧
 
-在计划中添加步骤，所有步骤挂在 root 下平级排列：
+完成当前子栈帧，将 summary 和可选的 artifacts 返回给父节点。
 
-```javascript
-create_plan_node(root, "收集信息", "从 3 个来源收集数据", ["web_search"]);
-create_plan_node(root, "分析数据", "对比各来源观点");
-create_plan_node(root, "撰写报告", "整理结论并回复用户");
+**支持的属性段落**：
+
+| 属性段落 | 必填 | 说明 |
+|-----------|------|------|
+| `[cognize_stack_frame_pop.summary]` | 否 | 完成摘要 |
+| `[cognize_stack_frame_pop.artifacts]` | 否 | JSON 格式的输出数据 |
+
+**示例**：
+
+```
+[cognize_stack_frame_pop.summary]
+从 3 个来源收集了关键数据
+[/cognize_stack_frame_pop.summary]
+
+[/cognize_stack_frame_pop]
+```
+
+### `[reflect_stack_frame_push]` — 进入 reflect 内联子栈帧
+
+用于主动调整 plan、traits 或审视上文的内联子栈帧。格式与 `[cognize_stack_frame_push]` 相同。
+
+在 reflect 环节可以使用 `create_hook` 注册 `when_error` hook：
+
+```
+[reflect_stack_frame_push.title]
+分析并修复错误
+[/reflect_stack_frame_push.title]
+
+[program]
+create_hook("when_error", "inject_message", "分析错误原因并尝试修复");
+[/program]
+
+[/reflect_stack_frame_push]
+```
+
+### `[reflect_stack_frame_pop]` — 退出 reflect 内联子栈帧
+
+格式与 `[cognize_stack_frame_pop]` 相同。
+
+### `[set_plan]` — 更新当前节点的 plan 文本
+
+直接更新当前 focus 节点的 plan 文本，用于重新规划当前任务。
+
+**示例**：
+
+```
+[set_plan]
+重新规划当前任务：
+1. 先激活 lark-wiki trait 获取访问能力
+2. 调用 wiki API 获取文档内容
+3. 解析文档结构并提取关键信息
+[/set_plan]
+```
+
+## 契约式编程（输出约定）
+
+创建子栈帧时可以声明该节点预期输出的数据，形成"上游产出什么、下游消费什么"的明确契约。
+
+### 声明输出约定
+
+```
+[cognize_stack_frame_push.title]
+获取文档
+[/cognize_stack_frame_push.title]
+
+[cognize_stack_frame_push.description]
+读取目标文档内容
+[/cognize_stack_frame_push.description]
+
+[cognize_stack_frame_push.outputs]
+docContent, docMetadata
+[/cognize_stack_frame_push.outputs]
+
+[cognize_stack_frame_push.outputDescription]
+文档内容（字符串）和元数据（对象）
+[/cognize_stack_frame_push.outputDescription]
+
+[/cognize_stack_frame_push]
 ```
 
 每个步骤应该：
@@ -34,32 +135,23 @@ create_plan_node(root, "撰写报告", "整理结论并回复用户");
 - 足够小（一两轮思考能完成）
 - 声明需要的 traits（让系统自动加载相关知识）
 
-## 契约式编程（输出约定）
-
-创建节点时可以声明该节点预期输出的数据，形成"上游产出什么、下游消费什么"的明确契约。
-
-### 声明输出约定
-
-```javascript
-create_plan_node(
-  root,
-  "获取文档",
-  "读取目标文档内容",
-  undefined, // traits
-  ["docContent", "docMetadata"], // outputs: 输出的 key 列表
-  "文档内容（字符串）和元数据（对象）" // outputDescription: 输出描述
-);
-```
-
 ### 完成时输出数据
 
-使用 `finish_plan_node(summary, artifacts)` 将数据传递给父节点：
+使用 `[cognize_stack_frame_pop.artifacts]` 将数据传递给父节点：
 
-```javascript
-finish_plan_node("获取成功", {
-  docContent: "文档的完整内容...",
-  docMetadata: { title: "...", author: "..." }
-});
+```
+[cognize_stack_frame_pop.summary]
+获取成功
+[/cognize_stack_frame_pop.summary]
+
+[cognize_stack_frame_pop.artifacts]
+{
+  "docContent": "文档的完整内容...",
+  "docMetadata": { "title": "...", "author": "..." }
+}
+[/cognize_stack_frame_pop.artifacts]
+
+[/cognize_stack_frame_pop]
 ```
 
 ### 数据如何传递
@@ -70,82 +162,82 @@ finish_plan_node("获取成功", {
 
 ### 示例：完整的数据流
 
-```javascript
-// 步骤1：获取配置
-const configNode = create_plan_node(
-  root,
-  "读取配置",
-  undefined,
-  undefined,
-  ["config"],
-  "项目配置对象"
-);
+步骤 1：创建获取配置的子栈帧
 
-// 步骤2：使用配置
-const processNode = create_plan_node(
-  root,
-  "处理文件",
-  "根据配置处理文件"
-);
+```
+[cognize_stack_frame_push.title]
+读取配置
+[/cognize_stack_frame_push.title]
 
-// 步骤1 完成后输出
-finish_plan_node("配置读取成功", {
-  config: { path: "/tmp/data", format: "json" }
-});
+[cognize_stack_frame_push.outputs]
+config
+[/cognize_stack_frame_push.outputs]
 
-// 步骤2 开始后，可以通过 local.config 访问
-// local.config.path === "/tmp/data"
-// local.config.format === "json"
+[cognize_stack_frame_push.outputDescription]
+项目配置对象
+[/cognize_stack_frame_push.outputDescription]
+
+[/cognize_stack_frame_push]
 ```
 
-### finish_plan_node(summary)
+步骤 1 完成后输出：
 
-完成当前步骤，focus 自动推进到下一个待办节点：
+```
+[cognize_stack_frame_pop.summary]
+配置读取成功
+[/cognize_stack_frame_pop.summary]
 
-```javascript
-finish_plan_node("从 3 个来源收集了关键数据");
+[cognize_stack_frame_pop.artifacts]
+{
+  "config": { "path": "/tmp/data", "format": "json" }
+}
+[/cognize_stack_frame_pop.artifacts]
+
+[/cognize_stack_frame_pop]
 ```
 
-## 栈帧语义 API
-
-### add_stack_frame(parentId, title, description?, traits?, outputs?, outputDescription?)
-
-压栈 — 快速创建子帧（createPlan 的轻量版）：
-
-```javascript
-const frameId = add_stack_frame(
-  currentNodeId,
-  "子任务",
-  "子任务描述",
-  undefined,                          // traits
-  ["result"],                          // outputs: 输出约定
-  "子任务的结果数据"                    // outputDescription
-);
-```
-
-### stack_return(summary?, artifacts?)
-
-弹栈 — 完成当前帧，返回数据给父帧：
-
-```javascript
-stack_return("子任务完成", {
-  result: { key: "value" }
-});
-```
-
-### 其他 API
-
-| API | 作用 |
-|-----|------|
-| `go(nodeId)` | 跳转到指定节点 |
-| `compress(actionIds)` | 折叠多条 actions 为摘要 |
+步骤 2 开始后，可以通过 `local.config` 访问：
+- `local.config.path === "/tmp/data"`
+- `local.config.format === "json"`
 
 ## 按步骤执行
 
 - 一次只做一步
-- 每步完成后用 `finish_plan_node(summary)` 标记，focus 自动推进到下一步
+- 每步完成后用 `[cognize_stack_frame_pop]` 标记，focus 自动推进到下一步
 - 验证当前步骤的结果后再进入下一步
-- 如果发现计划需要调整，用 `create_plan_node` 添加新步骤
+- 如果发现计划需要调整，用 `[cognize_stack_frame_push]` 创建新步骤
+
+## 典型工作流
+
+```
+[thought]
+这是一个复杂任务，我需要分步骤完成。
+
+[cognize_stack_frame_push.title]
+收集信息
+[/cognize_stack_frame_push.title]
+
+[cognize_stack_frame_push.description]
+从 3 个主要来源收集论文
+[/cognize_stack_frame_push.description]
+
+[cognize_stack_frame_push.traits]
+web_search
+[/cognize_stack_frame_push.traits]
+
+[/cognize_stack_frame_push]
+```
+
+子栈帧创建后，focus 自动进入该节点开始执行。
+
+完成后：
+```
+[cognize_stack_frame_pop.summary]
+收集了 5 篇论文的关键数据
+[/cognize_stack_frame_pop.summary]
+
+[/cognize_stack_frame_pop]
+```
 
 ## YAGNI 原则
 

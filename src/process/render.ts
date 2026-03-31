@@ -11,7 +11,7 @@
  * @ref src/types/process.ts — references — Process, ProcessNode 类型
  */
 
-import type { Process, ProcessNode } from "../types/index.js";
+import type { Process, ProcessNode, NodeType } from "../types/index.js";
 import type { Action } from "../types/flow.js";
 import { getPathToNode, findNode } from "./tree.js";
 import { isProcessComplete } from "./focus.js";
@@ -25,12 +25,13 @@ const SECTION_SEPARATOR =
  */
 type TimelineEvent =
   | { type: "action"; action: Action; nodeId: string; nodeTitle: string }
-  | { type: "push"; nodeId: string; nodeTitle: string; timestamp: number }
+  | { type: "push"; nodeId: string; nodeTitle: string; timestamp: number; nodeType?: NodeType }
   | {
       type: "pop";
       nodeId: string;
       nodeTitle: string;
       timestamp: number;
+      nodeType?: NodeType;
       summary?: string;
       description?: string;
       artifacts?: Record<string, unknown>;
@@ -99,6 +100,7 @@ function generateEventsForNode(
       nodeId: node.id,
       nodeTitle: node.title,
       timestamp: pushTs,
+      nodeType: node.type,
     });
   }
 
@@ -125,6 +127,7 @@ function generateEventsForNode(
       nodeId: node.id,
       nodeTitle: node.title,
       timestamp: popTs,
+      nodeType: node.type,
       summary: node.summary,
       description: node.description,
       artifacts: node.locals,
@@ -232,23 +235,58 @@ export function formatEvent(event: TimelineEvent): string[] {
   const lines: string[] = [];
 
   if (event.type === "push") {
-    lines.push(`[push] ${event.nodeTitle}`);
-    lines.push(`进入子栈帧: ${event.nodeTitle}`);
-    lines.push("");
-  } else if (event.type === "pop") {
-    lines.push(`[sub_stack_frame] ${event.nodeTitle} [✓ done]`);
-    const input = event.description || "(无)";
-    lines.push(`输入: ${input}`);
-    lines.push(`输出 summary: ${event.summary || "(无)"}`);
-    const artifactKeys = event.artifacts
-      ? Object.keys(event.artifacts).join(", ")
-      : "";
-    if (artifactKeys) {
-      lines.push(`输出 artifacts: ${artifactKeys} (已合并到父帧)`);
+    // 检查是否是内联节点
+    if (event.nodeType === "inline_before") {
+      lines.push(`[inline/before_start]`);
+      lines.push("");
+    } else if (event.nodeType === "inline_after") {
+      lines.push(`[inline/after_start]`);
+      lines.push("");
+    } else if (event.nodeType === "inline_reflect") {
+      lines.push(`[inline/reflect_start]`);
+      lines.push("");
     } else {
-      lines.push("输出 artifacts: (无)");
+      // 普通子栈帧
+      lines.push(`[push] ${event.nodeTitle}`);
+      lines.push(`进入子栈帧: ${event.nodeTitle}`);
+      lines.push("");
     }
-    lines.push("");
+  } else if (event.type === "pop") {
+    // 检查是否是内联节点
+    if (event.nodeType === "inline_before") {
+      lines.push(`[inline/before_end]`);
+      if (event.summary) {
+        lines.push(`  summary: ${event.summary}`);
+      }
+      lines.push("");
+    } else if (event.nodeType === "inline_after") {
+      lines.push(`[inline/after_end]`);
+      if (event.summary) {
+        lines.push(`  summary: ${event.summary}`);
+      }
+      lines.push("");
+    } else if (event.nodeType === "inline_reflect") {
+      lines.push(`[inline/reflect_end]`);
+      if (event.summary) {
+        lines.push(`  summary: ${event.summary}`);
+      }
+      lines.push("");
+    } else {
+      // 普通子栈帧 - 已完成
+      lines.push(`[sub_stack_frame] ${event.nodeTitle} [✓ done]`);
+      const input = event.description || "(无)";
+      lines.push(`输入: ${input}`);
+      lines.push(`输出 summary: ${event.summary || "(无)"}`);
+      const artifactKeys = event.artifacts
+        ? Object.keys(event.artifacts).join(", ")
+        : "";
+      if (artifactKeys) {
+        lines.push(`输出 artifacts: ${artifactKeys} (已合并到父帧)`);
+      } else {
+        lines.push("输出 artifacts: (无)");
+      }
+      lines.push("");
+    }
   } else if (event.type === "action") {
     const { action } = event;
     const ts = formatTimestamp(action.timestamp);
@@ -414,6 +452,13 @@ export function renderProcess(process: Process): string {
   );
   output.push(SECTION_SEPARATOR);
   output.push("");
+
+  // 新增：plan 字段展示
+  if (focusNode.plan) {
+    output.push("【当前计划】");
+    output.push(focusNode.plan);
+    output.push("");
+  }
 
   // 构建聚焦路径区域
   output.push("【聚焦路径】（按时间顺序排列）");

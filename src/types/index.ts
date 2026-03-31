@@ -38,6 +38,7 @@ export type {
 
 export type {
   NodeStatus,
+  NodeType,
   ProcessNode,
   TodoItem,
   Signal,

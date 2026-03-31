@@ -38,6 +38,40 @@ export interface ExtractedAction {
   params: string;
 }
 
+/** 栈帧 push 操作提取结果 */
+export interface ExtractedStackFramePush {
+  /** 操作类型：认知栈帧推入 或 反思栈帧推入 */
+  type: "cognize_stack_frame_push" | "reflect_stack_frame_push";
+  /** 栈帧标题 */
+  title: string;
+  /** 栈帧描述（可选） */
+  description?: string;
+  /** 特质列表（可选） */
+  traits?: string[];
+  /** 输出名称列表（可选） */
+  outputs?: string[];
+  /** 输出描述（可选） */
+  outputDescription?: string;
+}
+
+/** 栈帧 pop 操作提取结果 */
+export interface ExtractedStackFramePop {
+  /** 操作类型：认知栈帧弹出 或 反思栈帧弹出 */
+  type: "cognize_stack_frame_pop" | "reflect_stack_frame_pop";
+  /** 执行摘要（可选） */
+  summary?: string;
+  /** 产出物（可选，JSON 格式） */
+  artifacts?: Record<string, unknown>;
+}
+
+/** set_plan 操作提取结果 */
+export interface ExtractedSetPlan {
+  /** 操作类型：设置计划 */
+  type: "set_plan";
+  /** 计划内容 */
+  content: string;
+}
+
 /** 结构化解析结果 */
 export interface ParsedOutput {
   /** 思考内容（[thought] 段落） */
@@ -48,6 +82,12 @@ export interface ParsedOutput {
   talks: ExtractedTalk[];
   /** action 工具调用列表（[action/工具名] 段落） */
   actions: ExtractedAction[];
+  /** 栈帧操作列表 */
+  stackFrameOperations: Array<
+    ExtractedStackFramePush |
+    ExtractedStackFramePop |
+    ExtractedSetPlan
+  >;
   /** 指令 */
   directives: { finish: boolean; wait: boolean; break_: boolean };
   /** 是否使用了结构化格式 */
@@ -91,6 +131,56 @@ const STRUCTURED_TALK_RE = /^\s*\[talk\/[a-zA-Z0-9_-]+\]\s*$/;
 const STRUCTURED_ACTION_RE = /^\s*\[action\/[a-zA-Z0-9_-]+\]\s*$/;
 
 /**
+ * 认知栈操作标记正则
+ */
+
+/** 认知栈帧推入开始标记：[cognize_stack_frame_push] */
+const COGNIZE_PUSH_RE = /^\s*\[cognize_stack_frame_push\]\s*$/;
+/** 认知栈帧弹出开始标记：[cognize_stack_frame_pop] */
+const COGNIZE_POP_RE = /^\s*\[cognize_stack_frame_pop\]\s*$/;
+/** 反思栈帧推入开始标记：[reflect_stack_frame_push] */
+const REFLECT_PUSH_RE = /^\s*\[reflect_stack_frame_push\]\s*$/;
+/** 反思栈帧弹出开始标记：[reflect_stack_frame_pop] */
+const REFLECT_POP_RE = /^\s*\[reflect_stack_frame_pop\]\s*$/;
+/** 设置计划开始标记：[set_plan] */
+const SET_PLAN_RE = /^\s*\[set_plan\]\s*$/;
+
+/** 认知栈帧推入结束标记：[/cognize_stack_frame_push] */
+const COGNIZE_PUSH_CLOSE_RE = /^\s*\[\/cognize_stack_frame_push\]\s*$/;
+/** 认知栈帧弹出结束标记：[/cognize_stack_frame_pop] */
+const COGNIZE_POP_CLOSE_RE = /^\s*\[\/cognize_stack_frame_pop\]\s*$/;
+/** 反思栈帧推入结束标记：[/reflect_stack_frame_push] */
+const REFLECT_PUSH_CLOSE_RE = /^\s*\[\/reflect_stack_frame_push\]\s*$/;
+/** 反思栈帧弹出结束标记：[/reflect_stack_frame_pop] */
+const REFLECT_POP_CLOSE_RE = /^\s*\[\/reflect_stack_frame_pop\]\s*$/;
+/** 设置计划结束标记：[/set_plan] */
+const SET_PLAN_CLOSE_RE = /^\s*\[\/set_plan\]\s*$/;
+
+/** 认知栈帧推入属性段落标记：[cognize_stack_frame_push.title] 等 */
+const COGNIZE_PUSH_ATTR_RE = /^\s*\[cognize_stack_frame_push\.(title|description|traits|outputs|outputDescription)\]\s*$/;
+/** 认知栈帧弹出属性段落标记：[cognize_stack_frame_pop.summary] 等 */
+const COGNIZE_POP_ATTR_RE = /^\s*\[cognize_stack_frame_pop\.(summary|artifacts)\]\s*$/;
+/** 反思栈帧推入属性段落标记：[reflect_stack_frame_push.title] 等 */
+const REFLECT_PUSH_ATTR_RE = /^\s*\[reflect_stack_frame_push\.(title|description|traits|outputs|outputDescription)\]\s*$/;
+/** 反思栈帧弹出属性段落标记：[reflect_stack_frame_pop.summary] 等 */
+const REFLECT_POP_ATTR_RE = /^\s*\[reflect_stack_frame_pop\.(summary|artifacts)\]\s*$/;
+
+/** 认知栈帧推入属性段落结束标记：[/cognize_stack_frame_push.title] 等 */
+const COGNIZE_PUSH_ATTR_CLOSE_RE = /^\s*\[\/cognize_stack_frame_push\.(title|description|traits|outputs|outputDescription)\]\s*$/;
+/** 认知栈帧弹出属性段落结束标记：[/cognize_stack_frame_pop.summary] 等 */
+const COGNIZE_POP_ATTR_CLOSE_RE = /^\s*\[\/cognize_stack_frame_pop\.(summary|artifacts)\]\s*$/;
+/** 反思栈帧推入属性段落结束标记：[/reflect_stack_frame_push.title] 等 */
+const REFLECT_PUSH_ATTR_CLOSE_RE = /^\s*\[\/reflect_stack_frame_push\.(title|description|traits|outputs|outputDescription)\]\s*$/;
+/** 反思栈帧弹出属性段落结束标记：[/reflect_stack_frame_pop.summary] 等 */
+const REFLECT_POP_ATTR_CLOSE_RE = /^\s*\[\/reflect_stack_frame_pop\.(summary|artifacts)\]\s*$/;
+
+/**
+ * 检测栈帧操作的结构化格式正则
+ * 用于判断是否需要使用结构化解析路径
+ */
+const STRUCTURED_STACK_FRAME_RE = /^\s*\[(cognize_stack_frame_push|cognize_stack_frame_pop|reflect_stack_frame_push|reflect_stack_frame_pop|set_plan)\]\s*$/;
+
+/**
  * 解析 LLM 输出（统一入口）
  *
  * 优先尝试结构化段落格式，如果没有检测到 [thought] 或 [program] 标记则 fallback 到 markdown 代码块格式。
@@ -113,9 +203,32 @@ export function parseLLMOutput(output: string): ParsedOutput {
   cleaned = cleaned.replace(/([^\n`])\[\/action\]/g, "$1\n[/action]");
   cleaned = cleaned.replace(/\[\/action\]([^\n`])/g, "[/action]\n$1");
 
-  /* 检测是否包含结构化段落标记（[thought]、[program]、[talk/xxx]、[action/xxx]） */
+  /* 同样处理栈帧操作标记的内联情况 */
+  // 处理开始标记前：[cognize_xxx]、[reflect_xxx]（含属性版本 [xxx.title] 等）
+  cleaned = cleaned.replace(/([^\n`])\[(cognize_|reflect_)/g, "$1\n[$2");
+  // 处理开始标记前：[set_plan]
+  cleaned = cleaned.replace(/([^\n`])\[set_plan\]/g, "$1\n[set_plan]");
+  // 处理结束标记前：[/cognize_xxx]、[/reflect_xxx]
+  cleaned = cleaned.replace(/([^\n`])\[\/(cognize_|reflect_)/g, "$1\n[/$2");
+  // 处理结束标记前：[/set_plan]
+  cleaned = cleaned.replace(/([^\n`])\[\/set_plan\]/g, "$1\n[/set_plan]");
+  // 处理操作结束标记后面的字符（如 [/cognize_stack_frame_push]content）
+  cleaned = cleaned.replace(/(\[\/(?:cognize_stack_frame_push|cognize_stack_frame_pop|reflect_stack_frame_push|reflect_stack_frame_pop|set_plan)\])([^\n`])/g, "$1\n$2");
+  // 处理属性结束标记后面的字符（如 [/cognize_stack_frame_push.title]content）
+  cleaned = cleaned.replace(/(\[\/(?:cognize_stack_frame_push|cognize_stack_frame_pop|reflect_stack_frame_push|reflect_stack_frame_pop)(?:\.\w+)?\])([^\n`])/g, "$1\n$2");
+  // 处理开始/属性标记后面的字符（如 [cognize_stack_frame_push.title]content）
+  cleaned = cleaned.replace(/(\[(?:cognize_stack_frame_push|cognize_stack_frame_pop|reflect_stack_frame_push|reflect_stack_frame_pop)(?:\.\w+)?\])([^\n`])/g, "$1\n$2");
+  // 处理 [set_plan] 后面的字符
+  cleaned = cleaned.replace(/(\[set_plan\])([^\n`])/g, "$1\n$2");
+
+  /* 检测是否包含结构化段落标记（[thought]、[program]、[talk/xxx]、[action/xxx]、栈帧操作标记） */
   const lines = cleaned.split("\n");
-  const hasStructuredTags = lines.some(line => STRUCTURED_TAG_RE.test(line) || STRUCTURED_TALK_RE.test(line) || STRUCTURED_ACTION_RE.test(line));
+  const hasStructuredTags = lines.some(line =>
+    STRUCTURED_TAG_RE.test(line) ||
+    STRUCTURED_TALK_RE.test(line) ||
+    STRUCTURED_ACTION_RE.test(line) ||
+    STRUCTURED_STACK_FRAME_RE.test(line)
+  );
 
   if (hasStructuredTags) {
     return parseStructured(cleaned, lines);
@@ -123,6 +236,91 @@ export function parseLLMOutput(output: string): ParsedOutput {
 
   /* Fallback: markdown 代码块格式 */
   return parseLegacy(cleaned);
+}
+
+/** 栈帧解析状态 */
+type StackFrameParseState = {
+  /** 当前正在解析的操作类型 */
+  currentOp: "cognize_push" | "cognize_pop" | "reflect_push" | "reflect_pop" | "set_plan" | null;
+  /** 当前正在解析的属性名 */
+  currentAttr: string | null;
+  /** 属性内容收集 */
+  attrContent: string[];
+  /** 已收集的属性 */
+  collected: Record<string, string>;
+};
+
+/** 初始化栈帧解析状态 */
+function initStackFrameState(): StackFrameParseState {
+  return {
+    currentOp: null,
+    currentAttr: null,
+    attrContent: [],
+    collected: {},
+  };
+}
+
+/** 刷新当前属性内容到 collected */
+function flushAttr(state: StackFrameParseState): void {
+  if (state.currentAttr && state.attrContent.length > 0) {
+    const text = state.attrContent.join("\n").trim();
+    if (text) {
+      state.collected[state.currentAttr] = text;
+    }
+  }
+  state.currentAttr = null;
+  state.attrContent = [];
+}
+
+/** 从 collected 属性构建操作对象 */
+function buildStackFrameOp(
+  state: StackFrameParseState
+): ExtractedStackFramePush | ExtractedStackFramePop | ExtractedSetPlan | null {
+  const { currentOp, collected } = state;
+
+  if (currentOp === "set_plan") {
+    return {
+      type: "set_plan",
+      content: collected.content ?? "",
+    };
+  }
+
+  if (currentOp === "cognize_push" || currentOp === "reflect_push") {
+    // title 是必填项
+    if (!collected.title) {
+      return null; // 解析失败
+    }
+    const result: ExtractedStackFramePush = {
+      type: currentOp === "cognize_push" ? "cognize_stack_frame_push" : "reflect_stack_frame_push",
+      title: collected.title,
+    };
+    if (collected.description) result.description = collected.description;
+    if (collected.traits) {
+      result.traits = collected.traits.split(",").map((s) => s.trim()).filter((s) => s);
+    }
+    if (collected.outputs) {
+      result.outputs = collected.outputs.split(",").map((s) => s.trim()).filter((s) => s);
+    }
+    if (collected.outputDescription) result.outputDescription = collected.outputDescription;
+    return result;
+  }
+
+  if (currentOp === "cognize_pop" || currentOp === "reflect_pop") {
+    const result: ExtractedStackFramePop = {
+      type: currentOp === "cognize_pop" ? "cognize_stack_frame_pop" : "reflect_stack_frame_pop",
+    };
+    if (collected.summary) result.summary = collected.summary;
+    if (collected.artifacts) {
+      try {
+        result.artifacts = JSON.parse(collected.artifacts);
+      } catch {
+        // JSON 解析失败，只忽略 artifacts，保留其他字段
+      }
+    }
+    return result;
+  }
+
+  return null;
 }
 
 /**
@@ -155,7 +353,20 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
   let sectionStartLine = 0;
   let seenTag = false;
 
+  // 栈帧操作解析状态
+  const stackFrameState = initStackFrameState();
+  const stackFrameOperations: Array<
+    ExtractedStackFramePush |
+    ExtractedStackFramePop |
+    ExtractedSetPlan
+  > = [];
+
   const flushSection = (lineIndex: number) => {
+    // 先处理栈帧属性
+    if (stackFrameState.currentOp !== null) {
+      flushAttr(stackFrameState);
+    }
+
     if (currentSection === "thought") {
       const text = currentContent.join("\n").trim();
       if (text) thoughtParts.push(text);
@@ -200,12 +411,62 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
     const actionOpenMatch = ACTION_OPEN_RE.exec(line);
     const actionCloseMatch = ACTION_CLOSE_RE.test(line);
 
+    // 检测栈帧操作开始标记
+    const isCognizePush = COGNIZE_PUSH_RE.test(line);
+    const isCognizePop = COGNIZE_POP_RE.test(line);
+    const isReflectPush = REFLECT_PUSH_RE.test(line);
+    const isReflectPop = REFLECT_POP_RE.test(line);
+    const isSetPlan = SET_PLAN_RE.test(line);
+
+    // 检测栈帧操作结束标记
+    const isCognizePushClose = COGNIZE_PUSH_CLOSE_RE.test(line);
+    const isCognizePopClose = COGNIZE_POP_CLOSE_RE.test(line);
+    const isReflectPushClose = REFLECT_PUSH_CLOSE_RE.test(line);
+    const isReflectPopClose = REFLECT_POP_CLOSE_RE.test(line);
+    const isSetPlanClose = SET_PLAN_CLOSE_RE.test(line);
+
+    // 检测栈帧属性标记
+    const cognizePushAttrMatch = COGNIZE_PUSH_ATTR_RE.exec(line);
+    const cognizePopAttrMatch = COGNIZE_POP_ATTR_RE.exec(line);
+    const reflectPushAttrMatch = REFLECT_PUSH_ATTR_RE.exec(line);
+    const reflectPopAttrMatch = REFLECT_POP_ATTR_RE.exec(line);
+
+    // 检测栈帧属性结束标记
+    const isCognizePushAttrClose = COGNIZE_PUSH_ATTR_CLOSE_RE.test(line);
+    const isCognizePopAttrClose = COGNIZE_POP_ATTR_CLOSE_RE.test(line);
+    const isReflectPushAttrClose = REFLECT_PUSH_ATTR_CLOSE_RE.test(line);
+    const isReflectPopAttrClose = REFLECT_POP_ATTR_CLOSE_RE.test(line);
+    const isStackFrameAttrClose = isCognizePushAttrClose || isCognizePopAttrClose || isReflectPushAttrClose || isReflectPopAttrClose;
+
     if (talkCloseMatch && currentSection === "talk") {
       /* [/talk] 结束当前 talk 段落 */
       flushSection(i);
     } else if (actionCloseMatch && currentSection === "action") {
       /* [/action] 结束当前 action 段落 */
       flushSection(i);
+    } else if (
+      // 处理栈帧操作结束标记
+      (isCognizePushClose && stackFrameState.currentOp === "cognize_push") ||
+      (isCognizePopClose && stackFrameState.currentOp === "cognize_pop") ||
+      (isReflectPushClose && stackFrameState.currentOp === "reflect_push") ||
+      (isReflectPopClose && stackFrameState.currentOp === "reflect_pop") ||
+      (isSetPlanClose && stackFrameState.currentOp === "set_plan")
+    ) {
+      flushAttr(stackFrameState);
+      const op = buildStackFrameOp(stackFrameState);
+      if (op) {
+        stackFrameOperations.push(op);
+      }
+      // 重置状态
+      stackFrameState.currentOp = null;
+      stackFrameState.collected = {};
+      seenTag = true;
+      continue;
+    } else if (isStackFrameAttrClose && stackFrameState.currentOp !== null) {
+      // 处理栈帧属性结束标记（如 [/cognize_stack_frame_push.title]）
+      flushAttr(stackFrameState);
+      seenTag = true;
+      continue;
     } else if (talkOpenMatch) {
       /* [talk/target] 开始新的 talk 段落 */
       flushSection(i);
@@ -220,6 +481,46 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
       currentSection = "action";
       currentActionToolName = actionOpenMatch[1]!;
       sectionStartLine = i + 1;
+    } else if (isSetPlan) {
+      // 处理 set_plan 开始标记（内容直接收集，不需要属性段落）
+      // 嵌套检测：如果已有正在进行的栈帧操作，忽略内层操作（避免破坏外层状态）
+      if (stackFrameState.currentOp !== null) {
+        continue;
+      }
+      flushSection(i);
+      seenTag = true;
+      stackFrameState.currentOp = "set_plan";
+      stackFrameState.currentAttr = "content";
+      stackFrameState.attrContent = [];
+      continue;
+    } else if (isCognizePush || isCognizePop || isReflectPush || isReflectPop) {
+      // 处理栈帧操作开始标记
+      // 嵌套检测：如果已有正在进行的栈帧操作，忽略内层操作（避免破坏外层状态）
+      if (stackFrameState.currentOp !== null) {
+        continue;
+      }
+      flushSection(i);
+      seenTag = true;
+      if (isCognizePush) stackFrameState.currentOp = "cognize_push";
+      else if (isCognizePop) stackFrameState.currentOp = "cognize_pop";
+      else if (isReflectPush) stackFrameState.currentOp = "reflect_push";
+      else if (isReflectPop) stackFrameState.currentOp = "reflect_pop";
+      stackFrameState.collected = {};
+      continue;
+    } else if (cognizePushAttrMatch || cognizePopAttrMatch || reflectPushAttrMatch || reflectPopAttrMatch) {
+      // 处理栈帧属性段落开始标记
+      flushAttr(stackFrameState);
+      seenTag = true;
+      let attrName: string | null = null;
+      if (cognizePushAttrMatch) attrName = cognizePushAttrMatch[1]!;
+      else if (cognizePopAttrMatch) attrName = cognizePopAttrMatch[1]!;
+      else if (reflectPushAttrMatch) attrName = reflectPushAttrMatch[1]!;
+      else if (reflectPopAttrMatch) attrName = reflectPopAttrMatch[1]!;
+      if (attrName) {
+        stackFrameState.currentAttr = attrName;
+        stackFrameState.attrContent = [];
+      }
+      continue;
     } else if (match) {
       flushSection(i);
       seenTag = true;
@@ -239,6 +540,10 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
       } else if (tag === "break") {
         break_ = true;
       }
+    } else if (stackFrameState.currentOp !== null && stackFrameState.currentAttr !== null) {
+      // 如果正在解析栈帧操作，收集内容到当前属性
+      stackFrameState.attrContent.push(line);
+      continue;
     } else if (currentSection) {
       currentContent.push(line);
     } else if (!seenTag) {
@@ -266,6 +571,7 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
     programs: nonEmptyPrograms,
     talks: finalTalks,
     actions: finalActions,
+    stackFrameOperations,
     directives: { finish, wait, break_ },
     isStructured: true,
   };
@@ -291,6 +597,7 @@ function parseLegacy(output: string): ParsedOutput {
     programs,
     talks: [],
     actions: [],
+    stackFrameOperations: [],
     directives,
     isStructured: false,
   };
