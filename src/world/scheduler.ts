@@ -142,7 +142,7 @@ export class Scheduler {
               this._llm,
               this._directory,
               entry.traits,
-              { maxIterations: 1, isPaused: this._isPaused ? () => this._isPaused!(name) : undefined, emitProgress: false, threadId: thread.name },
+              { maxIterations: 1000, isPaused: this._isPaused ? () => this._isPaused!(name) : undefined, emitProgress: false, threadId: thread.name },
               entry.collaboration,
               this._cron,
               this._flowsDir,
@@ -161,7 +161,7 @@ export class Scheduler {
           entry.iterations += activeThreads.length;
           totalIterations += activeThreads.length;
         } else {
-          /* 单线程模式（默认）：运行一轮 ThinkLoop */
+          /* 单线程模式 */
           const threadId = activeThreads.length === 1 ? activeThreads[0]!.name : undefined;
           consola.info(`[Scheduler] 调度 ${name} (第 ${entry.iterations + 1} 轮${threadId ? `, thread: ${threadId}` : ""})`);
           const updatedData = await runThinkLoop(
@@ -171,7 +171,7 @@ export class Scheduler {
             this._llm,
             this._directory,
             entry.traits,
-            { maxIterations: 1, isPaused: this._isPaused ? () => this._isPaused!(name) : undefined, emitProgress: false, threadId },
+            { maxIterations: 1000, isPaused: this._isPaused ? () => this._isPaused!(name) : undefined, emitProgress: false, threadId },
             entry.collaboration,
             this._cron,
             this._flowsDir,

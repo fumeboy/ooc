@@ -58,12 +58,33 @@ export function buildContext(
   const activeTraitNames = new Set(activeTraits.map(t => t.name));
   const scopeSet = new Set(scopeChain);
   const catalogLines: string[] = ["## Available Traits"];
+
+  // 分类：active 和 inactive（when: never）
+  const activeLines: string[] = [];
+  const inactiveLines: string[] = [];
+
   for (const t of traits) {
-    if (t.when === "never") continue;
     const isActive = activeTraitNames.has(t.name);
-    const marker = isActive ? "[active] " : "";
     const desc = t.description || t.name;
-    catalogLines.push(`- ${marker}${t.name}: ${desc}`);
+
+    if (isActive) {
+      activeLines.push(`- ${t.name}: ${desc}`);
+    } else if (t.when === "never") {
+      // when: never 的 traits 也显示，但标记为 inactive
+      inactiveLines.push(`- ${t.name}: ${desc} (activateTrait to use)`);
+    } else {
+      // 其他激活策略的 traits
+      activeLines.push(`- ${t.name}: ${desc}`);
+    }
+  }
+
+  if (activeLines.length > 0) {
+    catalogLines.push("\n### Active");
+    catalogLines.push(...activeLines);
+  }
+  if (inactiveLines.length > 0) {
+    catalogLines.push("\n### Inactive (use activateTrait to enable)");
+    catalogLines.push(...inactiveLines);
   }
   const traitCatalog: ContextWindow = { name: "_trait_catalog", content: catalogLines.join("\n") };
 

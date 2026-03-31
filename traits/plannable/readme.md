@@ -10,13 +10,15 @@ deps: []
 
 ### createPlan(title, description)
 
-创建完整的多步骤计划，替换当前行为树：
+在当前任务节点下创建一个多步骤计划容器（不替换已有内容）：
 
 ```javascript
 const root = createPlan("任务名称", "任务的具体目标描述");
 ```
 
-### create_plan_node(parentId, title, description, traits?)
+**注意**：`createPlan` 不会替换当前行为树，而是在当前 focus 节点下创建子节点作为计划容器。这样可以保留已记录的 actions 和历史数据。
+
+### create_plan_node(parentId, title, description?, traits?, outputs?, outputDescription?)
 
 在计划中添加步骤，所有步骤挂在 root 下平级排列：
 
@@ -32,6 +34,70 @@ create_plan_node(root, "撰写报告", "整理结论并回复用户");
 - 足够小（一两轮思考能完成）
 - 声明需要的 traits（让系统自动加载相关知识）
 
+## 契约式编程（输出约定）
+
+创建节点时可以声明该节点预期输出的数据，形成"上游产出什么、下游消费什么"的明确契约。
+
+### 声明输出约定
+
+```javascript
+create_plan_node(
+  root,
+  "获取文档",
+  "读取目标文档内容",
+  undefined, // traits
+  ["docContent", "docMetadata"], // outputs: 输出的 key 列表
+  "文档内容（字符串）和元数据（对象）" // outputDescription: 输出描述
+);
+```
+
+### 完成时输出数据
+
+使用 `finish_plan_node(summary, artifacts)` 将数据传递给父节点：
+
+```javascript
+finish_plan_node("获取成功", {
+  docContent: "文档的完整内容...",
+  docMetadata: { title: "...", author: "..." }
+});
+```
+
+### 数据如何传递
+
+- 节点完成时，`artifacts` 会合并到**父节点**的 `locals` 中
+- 下游节点可以通过 `local.key` 访问这些数据
+- 上游已完成节点的 `outputs` 和 `artifacts` 会在 Context 的 process 区域显示
+
+### 示例：完整的数据流
+
+```javascript
+// 步骤1：获取配置
+const configNode = create_plan_node(
+  root,
+  "读取配置",
+  undefined,
+  undefined,
+  ["config"],
+  "项目配置对象"
+);
+
+// 步骤2：使用配置
+const processNode = create_plan_node(
+  root,
+  "处理文件",
+  "根据配置处理文件"
+);
+
+// 步骤1 完成后输出
+finish_plan_node("配置读取成功", {
+  config: { path: "/tmp/data", format: "json" }
+});
+
+// 步骤2 开始后，可以通过 local.config 访问
+// local.config.path === "/tmp/data"
+// local.config.format === "json"
+```
+
 ### finish_plan_node(summary)
 
 完成当前步骤，focus 自动推进到下一个待办节点：
@@ -42,12 +108,37 @@ finish_plan_node("从 3 个来源收集了关键数据");
 
 ## 栈帧语义 API
 
-| API | 作用 | 等价操作 |
-|-----|------|---------|
-| `add_stack_frame(title, description?)` | 压栈 — 快速创建子帧 | createPlan 的轻量版 |
-| `stack_return(summary?, artifacts?)` | 弹栈 — 完成当前帧 | finish_plan_node |
-| `go(nodeId)` | 跳转到指定节点 | moveFocus |
-| `compress(actionIds)` | 折叠多条 actions 为摘要 | — |
+### add_stack_frame(parentId, title, description?, traits?, outputs?, outputDescription?)
+
+压栈 — 快速创建子帧（createPlan 的轻量版）：
+
+```javascript
+const frameId = add_stack_frame(
+  currentNodeId,
+  "子任务",
+  "子任务描述",
+  undefined,                          // traits
+  ["result"],                          // outputs: 输出约定
+  "子任务的结果数据"                    // outputDescription
+);
+```
+
+### stack_return(summary?, artifacts?)
+
+弹栈 — 完成当前帧，返回数据给父帧：
+
+```javascript
+stack_return("子任务完成", {
+  result: { key: "value" }
+});
+```
+
+### 其他 API
+
+| API | 作用 |
+|-----|------|
+| `go(nodeId)` | 跳转到指定节点 |
+| `compress(actionIds)` | 折叠多条 actions 为摘要 |
 
 ## 按步骤执行
 

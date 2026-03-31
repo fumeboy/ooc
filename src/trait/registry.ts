@@ -103,16 +103,20 @@ export class MethodRegistry {
    * 将注册的方法包装为 (ctx: MethodContext, ...args) → result 的形式，
    * 返回可以直接注入到执行上下文中的函数映射。
    *
-   * 调用方式：`traitName.methodName()`（两段式，避免命名冲突）
+   * 支持两种调用方式：
+   * 1. 两段式调用：`traitName.methodName()`（避免命名冲突）
+   * 2. 直接调用：`methodName()`（方便使用，文档中描述的方式）
    *
    * @param ctx - 方法执行上下文
    * @param activatedTraits - 已激活的 trait 名称列表。只注入这些 trait 的方法。
-   * @returns 嵌套结构：{ traitName: { methodName: function, ... } }
+   * @returns 扁平化结构：{ methodName: function, ..., traitName: { methodName: function, ... } }
    */
   buildSandboxMethods(
     ctx: MethodContext,
     activatedTraits: string[],
   ): Record<string, unknown> {
+    /* 结果对象：同时包含扁平化方法和嵌套结构 */
+    const result: Record<string, unknown> = {};
     /* 嵌套映射：{ traitName: { methodName: function, ... } }（两段式调用） */
     const nested: Record<string, Record<string, (...args: unknown[]) => Promise<unknown>>> = {};
 
@@ -125,6 +129,11 @@ export class MethodRegistry {
         ? async (...args: unknown[]) => method.fn(ctx, ...args)
         : async (...args: unknown[]) => method.fn(...args);
 
+      /* 直接调用：methodName()（文档中描述的方式） */
+      if (!(name in result)) {
+        result[name] = wrapped;
+      }
+
       /* 两段式调用：traitName.methodName */
       if (!nested[method.traitName]) {
         nested[method.traitName] = {};
@@ -132,7 +141,12 @@ export class MethodRegistry {
       nested[method.traitName]![name] = wrapped;
     }
 
-    return nested;
+    /* 将嵌套结构也加入结果 */
+    for (const [traitName, methods] of Object.entries(nested)) {
+      result[traitName] = methods;
+    }
+
+    return result;
   }
 
   /**

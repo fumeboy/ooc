@@ -71,9 +71,14 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
       const uiDir = filesDir?.children?.find((c) => c.name === "ui");
       const found = !!uiDir;
       setHasUI(found);
-      if (found && !initialTab) setTab("UI");
+      if (found && !initialTab) {
+        setTab("UI");
+      } else if (!found && initialTab === "UI") {
+        /* initialTab 指定了 UI 但实际没有 UI 目录，回退到 Timeline */
+        setTab("Timeline");
+      }
     }).catch(() => setHasUI(false));
-  }, [sessionId, objectName]);
+  }, [sessionId, objectName, initialTab]);
 
   const tabs: Tab[] = hasUI ? [...BASE_TABS, "UI"] : [...BASE_TABS];
 

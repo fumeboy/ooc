@@ -6,11 +6,11 @@
  */
 import { useEffect, useRef } from "react";
 import { useSetAtom, useAtomValue } from "jotai";
-import { sseConnectedAtom, lastFlowEventAtom, streamingThoughtAtom, streamingTalkAtom } from "../store/session";
+import { sseConnectedAtom, lastFlowEventAtom, streamingThoughtAtom, streamingTalkAtom, userSessionsAtom } from "../store/session";
 import { activeSessionIdAtom } from "../store/session";
 import { objectsAtom } from "../store/objects";
 import { flowProgressAtom } from "../store/progress";
-import { connectSSE, fetchObjects } from "../api/client";
+import { connectSSE, fetchObjects, fetchSessions } from "../api/client";
 
 /**
  * SSE 连接 hook
@@ -21,6 +21,7 @@ import { connectSSE, fetchObjects } from "../api/client";
 export function useSSE() {
   const setConnected = useSetAtom(sseConnectedAtom);
   const setObjects = useSetAtom(objectsAtom);
+  const setSessions = useSetAtom(userSessionsAtom);
   const setLastFlowEvent = useSetAtom(lastFlowEventAtom);
   const setStreamingThought = useSetAtom(streamingThoughtAtom);
   const setStreamingTalk = useSetAtom(streamingTalkAtom);
@@ -39,6 +40,15 @@ export function useSSE() {
       }).catch(console.error);
     };
 
+    /* 防止并发 fetchSessions 竞争 */
+    let sessionsFetchId = 0;
+    const refreshSessions = () => {
+      const id = ++sessionsFetchId;
+      fetchSessions().then((data) => {
+        if (id === sessionsFetchId) setSessions(data);
+      }).catch(console.error);
+    };
+
     const disconnect = connectSSE((event) => {
       switch (event.type) {
         case "object:updated":
@@ -53,6 +63,10 @@ export function useSSE() {
           refreshObjects();
           break;
         case "flow:start":
+          setLastFlowEvent(event);
+          /* 新 flow 开始时刷新 sessions 列表（用于 Welcome 页创建新 session 后刷新侧边栏） */
+          refreshSessions();
+          break;
         case "flow:status":
         case "flow:action":
         case "flow:message":
@@ -60,6 +74,8 @@ export function useSSE() {
           break;
         case "flow:end":
           setLastFlowEvent(event);
+          /* flow 结束时也刷新 sessions 列表（更新状态） */
+          refreshSessions();
           /* 清空进度（仅匹配当前跟踪的 Flow） */
           setFlowProgress((prev) =>
             prev?.taskId === event.taskId ? null : prev,
@@ -122,5 +138,5 @@ export function useSSE() {
       disconnect();
       setConnected(false);
     };
-  }, [setConnected, setObjects, setLastFlowEvent, setStreamingThought, setStreamingTalk, setFlowProgress]);
+  }, [setConnected, setObjects, setSessions, setLastFlowEvent, setStreamingThought, setStreamingTalk, setFlowProgress]);
 }

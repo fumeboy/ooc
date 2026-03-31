@@ -369,11 +369,11 @@ export function App() {
             try {
               const result = await talkTo(t, msg);
               if (result.taskId) {
-                const path = `flows/${result.taskId}/flows/supervisor/files/ui`;
+                /* 使用基础路径，让 FlowView 根据实际存在的 tab 自动选择（新 session 可能还没有 files/ui） */
+                const path = `flows/${result.taskId}/flows/supervisor`;
                 setActiveId(result.taskId);
                 setActivePath(path);
                 setTabs([{ path, label: "supervisor" }]);
-                fetchSessions().then(setSessions).catch(console.error);
               }
             } catch (e) {
               console.error(e);

@@ -40,7 +40,7 @@ import { CodeExecutor, executeShell } from "../executable/executor.js";
 import { EffectTracker } from "../executable/effects.js";
 import { MethodRegistry, type MethodContext } from "../trait/registry.js";
 import {
-  createProcess, addNode, completeNode as completeProcessNode,
+  addNode, completeNode as completeProcessNode,
   moveFocus as moveProcessFocus, advanceFocus, isProcessComplete,
   removeNode as removeProcessNode, editNode as editProcessNode,
   getFocusNode, getPathToNode, findNode, getParentNode,
@@ -464,7 +464,7 @@ export async function runThinkLoop(
       /* 防护层 2: 连续空轮计数 — 防止截断/乱码循环消耗迭代次数 */
       if (replyContent && iteration < config.maxIterations) {
         consecutiveEmptyRounds++;
-        if (consecutiveEmptyRounds >= 3) {
+        if (consecutiveEmptyRounds >= 5) {
           consola.warn(`[ThinkLoop] 连续 ${consecutiveEmptyRounds} 轮无有效指令，异常终止`);
           if (collaboration && !hasDeliveredOutput) {
             collaboration.talk(`[系统] 连续 ${consecutiveEmptyRounds} 轮未能产生有效操作，当前已执行 ${iteration}/${config.maxIterations} 轮，任务已终止。请尝试简化你的请求。`, "user");
@@ -1015,33 +1015,96 @@ function buildExecutionContext(
     {
       name: "createPlan",
       fn: (title: string, description?: string) => {
-        const process = createProcess(title, description);
-        flow.setProcess(process);
-        return process.root.id;
+        const process = flow.process;
+        if (!process) return null;
+
+        /* 【重要】不替换整个 process，而是在当前 focus 节点下创建子节点作为计划容器
+         *
+         * 原来的行为：createProcess(title, description) + flow.setProcess(process)
+         * 问题：会完全替换原来的 process，导致已记录的 actions 全部丢失！
+         *
+         * 新行为：在当前 focus 节点下创建子节点作为计划容器
+         * 优点：保留所有历史 actions，root node id 保持不变
+         *
+         * 向后兼容：
+         * - createPlan() 返回新容器节点的 id
+         * - create_plan_node(parentId, ...) 用这个 id 作为 parent 添加步骤
+         * - 原来的使用方式完全不需要改变
+         *
+         * 注意：容器节点不加入 todo 列表（与原行为一致：根节点不在 todo 中）
+         * 只有 create_plan_node 创建的"步骤"节点才加入 todo 列表
+         */
+        const currentFocusId = process.focusId;
+
+        /* 在当前 focus 节点下创建子节点作为计划容器 */
+        const containerId = addNode(process, currentFocusId, title, undefined, description);
+        if (!containerId) return null;
+
+        /* 将 focus 移动到新创建的容器节点 */
+        const moveOk = moveProcessFocus(process, containerId);
+        if (!moveOk) {
+          consola.warn(`[ThinkLoop] createPlan: moveFocus to ${containerId} 失败`);
+        }
+
+        /* 注意：不将容器节点加入 todo 列表
+         * 与原行为一致：createPlan 创建的"根节点"不在 todo 中
+         * 只有后续 create_plan_node 创建的"步骤"节点才加入 todo 列表
+         */
+
+        flow.setProcess({ ...process });
+        return containerId;
       },
-      effect: (args, result) => `createPlan("${args[0]}") → process 已挂载 (root: ${result})`,
+      effect: (args, result) => `createPlan("${args[0]}") → 创建计划容器节点: ${result}`,
     },
     {
       name: "create_plan_node",
-      fn: (parentId: string, title: string, description?: string, traits?: string[]) => {
+      fn: (
+        parentId: string,
+        title: string,
+        description?: string,
+        traits?: string[],
+        outputs?: string[],
+        outputDescription?: string,
+      ) => {
         const process = flow.process;
         if (!process) return null;
-        const id = addNode(process, parentId, title, undefined, description, traits);
+        const id = addNode(process, parentId, title, undefined, description, traits, outputs, outputDescription);
         if (!id) return null;
         addProcessTodo(process, id, title, "plan");
         flow.setProcess({ ...process });
         return id;
       },
-      effect: (args, result) => result ? `create_plan_node("${args[1]}", parent=${args[0]}) → ${result}` : `create_plan_node("${args[1]}") → 失败`,
+      effect: (args, result) => {
+        const outputs = args[4] && Array.isArray(args[4]) ? ` [outputs: ${(args[4] as string[]).join(", ")}]` : "";
+        return result ? `create_plan_node("${args[1]}", parent=${args[0]})${outputs} → ${result}` : `create_plan_node("${args[1]}") → 失败`;
+      },
     },
     {
       name: "finish_plan_node",
-      fn: (summary: string) => {
+      fn: (summary: string, artifacts?: Record<string, unknown>) => {
         const process = flow.process;
         if (!process) return false;
         const currentId = process.focusId;
         /* 不能完成根节点 */
         if (currentId === process.root.id) return false;
+
+        /* 将 artifacts 同时写入：
+         * 1. 产出节点自身的 locals（用于 render 显示 [artifacts: ...]）
+         * 2. 父节点的 locals（用于下游节点通过 local.key 访问）
+         */
+        if (artifacts && typeof artifacts === "object") {
+          const currentNode = findNode(process.root, currentId);
+          if (currentNode) {
+            if (!currentNode.locals) currentNode.locals = {};
+            Object.assign(currentNode.locals, artifacts);
+          }
+          const parent = getParentNode(process.root, currentId);
+          if (parent) {
+            if (!parent.locals) parent.locals = {};
+            Object.assign(parent.locals, artifacts);
+          }
+        }
+
         const ok = completeProcessNode(process, currentId, summary);
         if (ok) {
           const todo = process.todo ?? [];
@@ -1057,7 +1120,11 @@ function buildExecutionContext(
         }
         return ok;
       },
-      effect: (args, result) => `finish_plan_node("${args[0]}") → ${result ? "OK" : "失败"}`,
+      effect: (args, result) => {
+        const artifactKeys = args[1] && typeof args[1] === "object" ? Object.keys(args[1] as object) : [];
+        const artifactHint = artifactKeys.length > 0 ? ` [artifacts: ${artifactKeys.join(", ")}]` : "";
+        return `finish_plan_node("${args[0] ?? ""}")${artifactHint} → ${result ? "OK" : "失败"}`;
+      },
     },
     {
       name: "addStep",
@@ -1145,16 +1212,26 @@ function buildExecutionContext(
     /* ── 栈帧语义 API（G13 增强）── */
     {
       name: "add_stack_frame",
-      fn: (parentId: string, title: string, description?: string, traits?: string[]) => {
+      fn: (
+        parentId: string,
+        title: string,
+        description?: string,
+        traits?: string[],
+        outputs?: string[],
+        outputDescription?: string,
+      ) => {
         const process = flow.process;
         if (!process) return null;
-        const id = addNode(process, parentId, title, undefined, description, traits);
+        const id = addNode(process, parentId, title, undefined, description, traits, outputs, outputDescription);
         if (!id) return null;
         addProcessTodo(process, id, title, "plan");
         flow.setProcess({ ...process });
         return id;
       },
-      effect: (args, result) => result ? `add_stack_frame("${args[1]}", parent=${args[0]}) → ${result}` : `add_stack_frame("${args[1]}") → 失败`,
+      effect: (args, result) => {
+        const outputs = args[4] && Array.isArray(args[4]) ? ` [outputs: ${(args[4] as string[]).join(", ")}]` : "";
+        return result ? `add_stack_frame("${args[1]}", parent=${args[0]})${outputs} → ${result}` : `add_stack_frame("${args[1]}") → 失败`;
+      },
     },
     {
       name: "stack_return",
@@ -1178,8 +1255,13 @@ function buildExecutionContext(
           }
         }
 
-        /* 将 artifacts 写入父节点 locals（pop 后父帧可直接通过 local.key 访问） */
+        /* 将 artifacts 同时写入：
+         * 1. 产出节点自身的 locals（用于 render 显示 [artifacts: ...]）
+         * 2. 父节点的 locals（用于下游节点通过 local.key 访问）
+         */
         if (artifacts && typeof artifacts === "object") {
+          if (!focusNode.locals) focusNode.locals = {};
+          Object.assign(focusNode.locals, artifacts);
           const parent = getParentNode(process.root, focusNode.id);
           if (parent) {
             if (!parent.locals) parent.locals = {};
@@ -1504,6 +1586,11 @@ function buildExecutionContext(
       },
       {
         name: "talkToSelf",
+        fn: (message: string) => collaboration.talkToSelf(message),
+        effect: () => `✓ 消息已投递给 ReflectFlow`,
+      },
+      {
+        name: "reflect",
         fn: (message: string) => collaboration.talkToSelf(message),
         effect: () => `✓ 消息已投递给 ReflectFlow`,
       },
