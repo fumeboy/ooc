@@ -23,6 +23,10 @@ export type SSEEvent =
   | { type: "stream:talk"; objectName: string; taskId: string; target: string; chunk: string }
   | { type: "stream:thought:end"; objectName: string; taskId: string }
   | { type: "stream:talk:end"; objectName: string; taskId: string; target: string }
+  | { type: "stream:program"; objectName: string; taskId: string; lang?: "javascript" | "shell"; chunk: string }
+  | { type: "stream:program:end"; objectName: string; taskId: string }
+  | { type: "stream:action"; objectName: string; taskId: string; toolName: string; chunk: string }
+  | { type: "stream:action:end"; objectName: string; taskId: string; toolName: string }
   | { type: "object:created"; name: string }
   | { type: "object:updated"; name: string }
   | { type: "flow:progress"; objectName: string; taskId: string; iterations: number; maxIterations: number; totalIterations: number; maxTotalIterations: number };
