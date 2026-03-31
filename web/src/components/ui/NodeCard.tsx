@@ -9,6 +9,8 @@ import { useState } from "react";
 import { cn } from "../../lib/utils";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import type { ProcessNode } from "../../api/types";
+import { InlineNode } from "./InlineNode";
+import { ActionCard } from "./ActionCard";
 
 interface NodeCardProps {
   node: ProcessNode;
@@ -205,11 +207,85 @@ function CollapsedContent({ node }: { node: ProcessNode }) {
   );
 }
 
-/* ── 展开状态内容（占位，在 Task 4 中完善） ── */
-function ExpandedContent({ node: _node }: { node: ProcessNode }) {
+/* ── 展开状态内容 ── */
+function ExpandedContent({ node }: { node: ProcessNode }) {
+  // 区分子节点类型
+  const inlineChildren = node.children.filter(c => c.type && c.type !== "frame");
+  const regularChildren = node.children.filter(c => !c.type || c.type === "frame");
+
   return (
-    <div className="text-sm text-gray-500">
-      展开状态内容（待完善）
-    </div>
+    <>
+      {/* Input 区域 */}
+      <div className="mb-3">
+        <div className="text-xs text-gray-500 uppercase font-semibold mb-1">Input</div>
+        <div className="text-sm text-gray-700 leading-relaxed">
+          <div><strong>title:</strong> {node.title}</div>
+          {node.description && (
+            <div className="mt-1 text-gray-500"><strong>description:</strong> {node.description}</div>
+          )}
+          {node.traits && node.traits.length > 0 && (
+            <div className="mt-1"><strong>traits:</strong> {node.traits.join(", ")}</div>
+          )}
+          {node.outputs && node.outputs.length > 0 && (
+            <div className="mt-1"><strong>outputs:</strong> {node.outputs.join(", ")}</div>
+          )}
+          {node.outputDescription && (
+            <div className="mt-1 text-gray-500"><strong>outputDescription:</strong> {node.outputDescription}</div>
+          )}
+        </div>
+      </div>
+
+      {/* 分隔线 */}
+      <div className="h-px bg-gray-100 my-3" />
+
+      {/* 内联节点（嵌入在 Actions 之前） */}
+      {inlineChildren.length > 0 && (
+        <div className="mb-3">
+          {inlineChildren.map(child => (
+            <InlineNode key={child.id} node={child} />
+          ))}
+        </div>
+      )}
+
+      {/* Actions 时间线 */}
+      {node.actions.length > 0 && (
+        <div className="mb-3">
+          <div className="text-xs text-gray-500 uppercase font-semibold mb-2">Actions 时间线</div>
+          <div className="border-l-2 border-gray-200 ml-3 pl-4 space-y-3">
+            {node.actions.map((action, i) => (
+              <ActionCard key={i} action={action} maxHeight={200} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 普通子节点 */}
+      {regularChildren.length > 0 && (
+        <div className="mb-3">
+          <div className="text-xs text-gray-500 uppercase font-semibold mb-2">子节点</div>
+          {regularChildren.map(child => (
+            <NodeCard key={child.id} node={child} defaultExpanded={false} />
+          ))}
+        </div>
+      )}
+
+      {/* 分隔线 */}
+      {node.summary && <div className="h-px bg-gray-100 my-3" />}
+
+      {/* Summary 区域 */}
+      {node.summary && (
+        <div>
+          <div className="text-xs text-gray-500 uppercase font-semibold mb-1">Summary</div>
+          <div className="text-sm text-gray-700 leading-relaxed pl-1 border-l-2 border-gray-200 whitespace-pre-wrap">
+            {node.summary}
+            {node.locals && Object.keys(node.locals).length > 0 && (
+              <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400">
+                <strong>artifacts:</strong> {Object.keys(node.locals).join(", ")}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
