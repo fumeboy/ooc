@@ -3,7 +3,7 @@
  *
  * 决定哪些 Trait 在当前 think 中被激活。
  * G13 认知栈：激活由作用域链驱动（focus 路径上节点声明的 traits）。
- * 激活 = readme.md 完整内容注入 context（instructions + knowledge）。
+ * 激活 = TRAIT.md 完整内容注入 context（instructions + knowledge）。
  * 方法注册不受激活影响（全量注册）。
  *
  * @ref docs/哲学文档/gene.md#G3 — implements — Trait 激活逻辑（always/never/条件）
@@ -15,34 +15,45 @@
 import type { TraitDefinition } from "../types/index.js";
 
 /**
+ * 获取 trait 的完整标识："namespace/name"
+ *
+ * @param trait - Trait 定义
+ * @returns "namespace/name" 格式的完整标识
+ */
+export function traitId(trait: TraitDefinition): string {
+  return `${trait.namespace}/${trait.name}`;
+}
+
+/**
  * 获取应该激活的 Traits（完整内容注入 context）
  *
  * 激活规则：
  * - when = "always" → 自动激活
  * - when = "never" → 不激活（除非被依赖）
- * - 其他（自然语言条件） → 仅当名称出现在 scopeChain 中时激活
+ * - 其他（自然语言条件） → 仅当 "namespace/name" 出现在 scopeChain 中时激活
  *
  * @param traits - 所有已加载的 Trait
- * @param scopeChain - 从 computeScopeChain 计算的栈帧 traits（含静态声明 + 动态激活）
+ * @param scopeChain - 从 computeScopeChain 计算的栈帧 traits（格式："namespace/name"）
  * @returns 应该激活的 Trait 列表
  */
 export function getActiveTraits(
   traits: TraitDefinition[],
   scopeChain: string[] = [],
 ): TraitDefinition[] {
-  const traitMap = new Map(traits.map((t) => [t.name, t]));
+  const traitMap = new Map(traits.map((t) => [traitId(t), t]));
   const scopeSet = new Set(scopeChain);
   const activated = new Set<string>();
   const result: TraitDefinition[] = [];
 
   /** 递归激活（处理依赖） */
   function activate(trait: TraitDefinition): void {
-    if (activated.has(trait.name)) return;
-    activated.add(trait.name);
+    const id = traitId(trait);
+    if (activated.has(id)) return;
+    activated.add(id);
 
     /* 先激活依赖 */
-    for (const depName of trait.deps) {
-      const dep = traitMap.get(depName);
+    for (const depRef of trait.deps) {
+      const dep = traitMap.get(depRef);
       if (dep) activate(dep);
     }
 
@@ -50,14 +61,16 @@ export function getActiveTraits(
   }
 
   for (const trait of traits) {
+    const id = traitId(trait);
+
     if (trait.when === "never") continue;
     if (trait.when === "always") {
       activate(trait);
       continue;
     }
 
-    /* 条件 trait：仅当出现在作用域链中时激活 */
-    if (scopeSet.has(trait.name)) {
+    /* 条件 trait：仅当 "namespace/name" 出现在作用域链中时激活 */
+    if (scopeSet.has(id)) {
       activate(trait);
     }
   }

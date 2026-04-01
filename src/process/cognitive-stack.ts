@@ -12,6 +12,7 @@
 
 import type { Process, ProcessNode, FrameHook, HookTime, TraitDefinition } from "../types/index.js";
 import { getPathToNode } from "./tree.js";
+import { traitId } from "../trait/activator.js";
 
 /**
  * 从 focus 路径计算作用域链（当前活跃的 traits 名称列表）
@@ -64,7 +65,7 @@ export function collectFrameHooks(
 
   for (const trait of traits) {
     /* 只收集作用域链中的 traits 或 always 激活的 traits */
-    if (trait.when !== "always" && !scopeSet.has(trait.name)) continue;
+    if (trait.when !== "always" && !scopeSet.has(traitId(trait))) continue;
     if (!trait.hooks) continue;
 
     const hook = trait.hooks[event];
@@ -72,8 +73,8 @@ export function collectFrameHooks(
 
     /* per-node key: 同一 hook 在不同节点上各触发一次 */
     const hookId = focusNodeId
-      ? `${trait.name}:${event}:${focusNodeId}`
-      : `${trait.name}:${event}`;
+      ? `${traitId(trait)}:${event}:${focusNodeId}`
+      : `${traitId(trait)}:${event}`;
 
     /* once: true 的 hook 只触发一次（per-node 粒度） */
     if (hook.once !== false && firedHooks.has(hookId)) continue;

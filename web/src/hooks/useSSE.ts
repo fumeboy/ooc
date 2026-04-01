@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef } from "react";
 import { useSetAtom, useAtomValue } from "jotai";
-import { sseConnectedAtom, lastFlowEventAtom, streamingThoughtAtom, streamingTalkAtom, streamingProgramAtom, streamingActionAtom, userSessionsAtom } from "../store/session";
+import { sseConnectedAtom, lastFlowEventAtom, streamingThoughtAtom, streamingTalkAtom, streamingProgramAtom, streamingActionAtom, streamingStackPushAtom, streamingStackPopAtom, streamingSetPlanAtom, userSessionsAtom } from "../store/session";
 import { activeSessionIdAtom } from "../store/session";
 import { objectsAtom } from "../store/objects";
 import { flowProgressAtom } from "../store/progress";
@@ -27,6 +27,9 @@ export function useSSE() {
   const setStreamingTalk = useSetAtom(streamingTalkAtom);
   const setStreamingProgram = useSetAtom(streamingProgramAtom);
   const setStreamingAction = useSetAtom(streamingActionAtom);
+  const setStreamingStackPush = useSetAtom(streamingStackPushAtom);
+  const setStreamingStackPop = useSetAtom(streamingStackPopAtom);
+  const setStreamingSetPlan = useSetAtom(streamingSetPlanAtom);
   const setFlowProgress = useSetAtom(flowProgressAtom);
   const activeSessionId = useAtomValue(activeSessionIdAtom);
   const activeSessionIdRef = useRef(activeSessionId);
@@ -175,6 +178,58 @@ export function useSSE() {
               : prev,
           );
           break;
+
+        /* 流式 stack_push chunk */
+        case "stream:stack_push":
+          setStreamingStackPush((prev) =>
+            prev?.taskId === event.taskId && prev.opType === event.opType && prev.attr === event.attr
+              ? { ...prev, content: prev.content + event.chunk }
+              : { taskId: event.taskId, opType: event.opType, attr: event.attr, content: event.chunk },
+          );
+          break;
+
+        /* 流式 stack_push 结束 */
+        case "stream:stack_push:end":
+          setStreamingStackPush((prev) =>
+            prev?.taskId === event.taskId && prev.opType === event.opType && prev.attr === event.attr
+              ? null
+              : prev,
+          );
+          break;
+
+        /* 流式 stack_pop chunk */
+        case "stream:stack_pop":
+          setStreamingStackPop((prev) =>
+            prev?.taskId === event.taskId && prev.opType === event.opType && prev.attr === event.attr
+              ? { ...prev, content: prev.content + event.chunk }
+              : { taskId: event.taskId, opType: event.opType, attr: event.attr, content: event.chunk },
+          );
+          break;
+
+        /* 流式 stack_pop 结束 */
+        case "stream:stack_pop:end":
+          setStreamingStackPop((prev) =>
+            prev?.taskId === event.taskId && prev.opType === event.opType && prev.attr === event.attr
+              ? null
+              : prev,
+          );
+          break;
+
+        /* 流式 set_plan chunk */
+        case "stream:set_plan":
+          setStreamingSetPlan((prev) =>
+            prev?.taskId === event.taskId
+              ? { ...prev, content: prev.content + event.chunk }
+              : { taskId: event.taskId, content: event.chunk },
+          );
+          break;
+
+        /* 流式 set_plan 结束 */
+        case "stream:set_plan:end":
+          setStreamingSetPlan((prev) =>
+            prev?.taskId === event.taskId ? null : prev,
+          );
+          break;
       }
     });
 
@@ -182,5 +237,5 @@ export function useSSE() {
       disconnect();
       setConnected(false);
     };
-  }, [setConnected, setObjects, setSessions, setLastFlowEvent, setStreamingThought, setStreamingTalk, setStreamingProgram, setStreamingAction, setFlowProgress]);
+  }, [setConnected, setObjects, setSessions, setLastFlowEvent, setStreamingThought, setStreamingTalk, setStreamingProgram, setStreamingAction, setStreamingStackPush, setStreamingStackPop, setStreamingSetPlan, setFlowProgress]);
 }

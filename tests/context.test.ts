@@ -6,7 +6,8 @@ import { describe, test, expect } from "bun:test";
 import { buildContext } from "../src/context/builder.js";
 import { formatContextAsSystem, formatContextAsMessages } from "../src/context/formatter.js";
 import { createProcess } from "../src/process/tree.js";
-import type { StoneData, FlowData } from "../src/types/index.js";
+import type { StoneData, FlowData, TraitDefinition } from "../src/types/index.js";
+import { traitId } from "../src/trait/activator.js";
 
 describe("buildContext", () => {
   test("构建基础 Context", () => {
@@ -49,14 +50,14 @@ describe("buildContext", () => {
 });
 
 describe("formatContextAsSystem", () => {
-  test("格式化为 system prompt", () => {
+  test("格式化为 system prompt（TOML 格式）", () => {
     const ctx = {
       name: "researcher",
       whoAmI: "你是一个研究员",
       process: "",
       messages: [],
       actions: [],
-      instructions: [{ name: "computable", content: "你可以执行代码" }],
+      instructions: [{ name: "kernel/computable", content: "你可以执行代码" }],
       knowledge: [{ name: "domain_info", content: "领域知识" }],
       directory: [
         { name: "browser", whoAmI: "浏览器", functions: [{ name: "search", description: "搜索" }] },
@@ -66,16 +67,18 @@ describe("formatContextAsSystem", () => {
 
     const text = formatContextAsSystem(ctx);
 
-    expect(text).toContain("WHO AM I");
+    // TOML 格式验证
+    expect(text).toContain("[identity]");
     expect(text).toContain("研究员");
-    expect(text).toContain("INSTRUCTIONS");
+    expect(text).toContain("[instructions.");
     expect(text).toContain("你可以执行代码");
-    expect(text).toContain("KNOWLEDGE");
-    expect(text).toContain("domain_info");
-    expect(text).toContain("DIRECTORY");
+    expect(text).toContain("[dynamic.domain_info]");
+    expect(text).toContain("领域知识");
+    expect(text).toContain("[directory]");
     expect(text).toContain("browser");
     expect(text).toContain("search");
-    expect(text).toContain("STATUS: running");
+    expect(text).toContain("[status]");
+    expect(text).toContain("running");
   });
 });
 
@@ -122,17 +125,18 @@ describe("progressive disclosure", () => {
       createdAt: 1,
       updatedAt: 1,
     };
-    const traits = [
-      { name: "computable", when: "always" as const, description: "核心 API", readme: "长内容", methods: [], deps: [] },
-      { name: "hidden", when: "never" as const, description: "隐藏", readme: "x", methods: [], deps: [] },
-      { name: "plannable", when: "条件" as const, description: "规划", readme: "y", methods: [], deps: [] },
+    const traits: TraitDefinition[] = [
+      { namespace: "kernel", name: "computable", type: "how_to_think", when: "always", description: "核心 API", readme: "长内容", methods: [], deps: [] },
+      { namespace: "ext", name: "hidden", type: "how_to_think", when: "never", description: "隐藏", readme: "x", methods: [], deps: [] },
+      { namespace: "kernel", name: "plannable", type: "how_to_think", when: "条件", description: "规划", readme: "y", methods: [], deps: [] },
     ];
     const ctx = buildContext(stone, flow, [], traits);
     const catalog = ctx.knowledge.find(w => w.name === "_trait_catalog");
     expect(catalog).toBeDefined();
-    expect(catalog!.content).toContain("[active] computable: 核心 API");
-    expect(catalog!.content).not.toContain("hidden");
-    expect(catalog!.content).toContain("plannable: 规划");
+    expect(catalog!.content).toContain("kernel/computable: 核心 API");
+    // inactive traits 会在 catalog 中显示为 "ext/hidden: 隐藏 (activateTrait to use)"
+    expect(catalog!.content).toContain("ext/hidden: 隐藏 (activateTrait to use)");
+    expect(catalog!.content).toContain("kernel/plannable: 规划");
   });
 
   test("无 description 的 trait fallback 到完整注入", () => {
@@ -154,11 +158,11 @@ describe("progressive disclosure", () => {
       createdAt: 1,
       updatedAt: 1,
     };
-    const traits = [
-      { name: "my_trait", when: "always" as const, description: "", readme: "无 description 应注入", methods: [], deps: [] },
+    const traits: TraitDefinition[] = [
+      { namespace: "custom", name: "my_trait", type: "how_to_think", when: "always", description: "", readme: "无 description 应注入", methods: [], deps: [] },
     ];
     const ctx = buildContext(stone, flow, [], traits);
-    const noDesc = ctx.knowledge.find(w => w.name === "my_trait");
+    const noDesc = ctx.knowledge.find(w => w.name === "custom/my_trait");
     expect(noDesc).toBeDefined();
   });
 });

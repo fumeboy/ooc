@@ -15,6 +15,9 @@ import {
   streamingThoughtAtom,
   streamingProgramAtom,
   streamingActionAtom,
+  streamingStackPushAtom,
+  streamingStackPopAtom,
+  streamingSetPlanAtom,
   messageSidebarOpenAtom,
 } from "../store/session";
 import { talkTo, fetchFlow, fetchSessions, fetchObjects, pauseObject, resumeFlow } from "../api/client";
@@ -38,6 +41,9 @@ export function MessageSidebar() {
   const streamingThought = useAtomValue(streamingThoughtAtom);
   const streamingProgram = useAtomValue(streamingProgramAtom);
   const streamingAction = useAtomValue(streamingActionAtom);
+  const streamingStackPush = useAtomValue(streamingStackPushAtom);
+  const streamingStackPop = useAtomValue(streamingStackPopAtom);
+  const streamingSetPlan = useAtomValue(streamingSetPlanAtom);
   const [, setSessions] = useAtom(userSessionsAtom);
 
   const [input, setInput] = useState("");
@@ -186,7 +192,7 @@ export function MessageSidebar() {
       // 用户不在底部时，更新未读计数
       setUnreadCount(timeline.length - lastKnownLengthRef.current);
     }
-  }, [timeline.length, streamingTalk, streamingThought, streamingProgram, streamingAction, userScrolledUp]);
+  }, [timeline.length, streamingTalk, streamingThought, streamingProgram, streamingAction, streamingStackPush, streamingStackPop, streamingSetPlan, userScrolledUp]);
 
   /* debounced refresh */
   const debouncedRefresh = useCallback(() => {
@@ -541,6 +547,45 @@ export function MessageSidebar() {
         {streamingAction && activeFlow?.status === "running" && (
           <ActionCard
             action={{ type: "action", content: streamingAction.content, timestamp: Date.now() }}
+            objectName="supervisor"
+            maxHeight={200}
+            loading
+          />
+        )}
+        {/* 流式 stack_push（正在推入栈帧） */}
+        {streamingStackPush && activeFlow?.status === "running" && (
+          <ActionCard
+            action={{
+              type: "stack_push",
+              content: `[${streamingStackPush.opType}.${streamingStackPush.attr}] ${streamingStackPush.content}`,
+              timestamp: Date.now(),
+            }}
+            objectName="supervisor"
+            maxHeight={200}
+            loading
+          />
+        )}
+        {/* 流式 stack_pop（正在弹出栈帧） */}
+        {streamingStackPop && activeFlow?.status === "running" && (
+          <ActionCard
+            action={{
+              type: "stack_pop",
+              content: `[${streamingStackPop.opType}.${streamingStackPop.attr}] ${streamingStackPop.content}`,
+              timestamp: Date.now(),
+            }}
+            objectName="supervisor"
+            maxHeight={200}
+            loading
+          />
+        )}
+        {/* 流式 set_plan（正在设置计划） */}
+        {streamingSetPlan && activeFlow?.status === "running" && (
+          <ActionCard
+            action={{
+              type: "set_plan",
+              content: streamingSetPlan.content,
+              timestamp: Date.now(),
+            }}
             objectName="supervisor"
             maxHeight={200}
             loading

@@ -11,6 +11,7 @@
  */
 
 import type { TraitDefinition, TraitMethod, TraitMethodParam } from "../types/index.js";
+import { traitId } from "./activator.js";
 
 /** 方法执行上下文（注入到每个 trait 方法中） */
 export interface MethodContext {
@@ -66,7 +67,7 @@ export class MethodRegistry {
       for (const method of trait.methods) {
         this._methods.set(method.name, {
           name: method.name,
-          traitName: trait.name,
+          traitName: traitId(trait),
           description: method.description,
           params: method.params,
           fn: method.fn,
@@ -129,12 +130,7 @@ export class MethodRegistry {
         ? async (...args: unknown[]) => method.fn(ctx, ...args)
         : async (...args: unknown[]) => method.fn(...args);
 
-      /* 直接调用：methodName()（文档中描述的方式） */
-      if (!(name in result)) {
-        result[name] = wrapped;
-      }
-
-      /* 两段式调用：traitName.methodName */
+      /* 仅支持两段式调用：namespace/traitName.methodName */
       if (!nested[method.traitName]) {
         nested[method.traitName] = {};
       }
