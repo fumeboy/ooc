@@ -2,55 +2,126 @@
  * Trait 加载器 (G3)
  *
  * 从文件系统的 traits/ 目录加载 Trait 定义。
- * 每个 Trait 是一个目录：readme.md（文档/bias）+ 可选 index.ts（方法）。
+ * 支持两种格式（优先级从高到低）：
+ * 1. TRAIT.md - 新格式（推荐）
+ * 2. SKILL.md - 兼容 superpowers skill 体系
  *
- * @ref docs/哲学文档/gene.md#G3 — implements — Trait 从文件系统加载（readme.md + index.ts）
+ * 目录结构：
+ * traits/
+ * └── {namespace}/             # namespace: 如 kernel, lark, web
+ *     └── {name}/               # name: 如 computable, wiki
+ *         ├── TRAIT.md
+ *         └── index.ts (可选)
+ *
+ * @ref docs/哲学文档/gene.md#G3 — implements — Trait 从文件系统加载（TRAIT.md/SKILL.md + index.ts）
  * @ref docs/哲学文档/gene.md#G7 — references — Trait 目录即 Trait 存在
- * @ref src/types/trait.ts — references — TraitDefinition, TraitMethod 类型
+ * @ref src/types/trait.ts — references — TraitDefinition 类型
  */
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import matter from "gray-matter";
-import type { TraitDefinition, TraitMethod, TraitHookEvent, TraitHook } from "../types/index.js";
+import type {
+  TraitDefinition,
+  TraitMethod,
+  TraitType,
+  TraitHook,
+  TraitHookEvent,
+} from "../types/index.js";
 
 /**
  * 从单个 trait 目录加载 Trait 定义
  *
- * @param traitDir - trait 目录路径（如 stones/researcher/traits/web_search/）
- * @param traitName - trait 名称
+ * @param traitDir - trait 目录路径
+ * @param traitName - trait 名称（可选，从目录名推断）
+ * @param namespace - 命名空间（可选，从父目录推断）
  * @returns TraitDefinition，若目录无效返回 null
  */
-export async function loadTrait(traitDir: string, traitName: string): Promise<TraitDefinition | null> {
+export async function loadTrait(
+  traitDir: string,
+  traitName?: string,
+  namespace?: string,
+): Promise<TraitDefinition | null> {
   if (!existsSync(traitDir)) return null;
 
-  const readmePath = join(traitDir, "readme.md");
-  const indexPath = join(traitDir, "index.ts");
+  // 确定 trait 名称
+  let name = traitName;
+  if (!name) {
+    const parts = traitDir.split(/[/\\]/);
+    name = parts[parts.length - 1] || "";
+  }
 
-  /* 解析 readme.md */
-  let readme = "";
+  // 尝试读取两种格式的文件
+  let content = "";
   let when: TraitDefinition["when"] = "never";
   let description = "";
+  let ns = namespace || "";
+  let type: TraitType = "how_to_think"; // 默认类型
+  let version: string | undefined;
   let deps: string[] = [];
   let hooks: TraitDefinition["hooks"];
 
-  if (existsSync(readmePath)) {
-    const raw = readFileSync(readmePath, "utf-8");
-    const { data, content } = matter(raw);
-    readme = content.trim();
-    when = typeof data.when === "string" ? data.when : "never";
+  const traitPath = join(traitDir, "TRAIT.md");
+  const skillPath = join(traitDir, "SKILL.md");
+
+  // 优先级：TRAIT.md > SKILL.md
+  if (existsSync(traitPath)) {
+    const raw = readFileSync(traitPath, "utf-8");
+    const { data, content: body } = matter(raw);
+    content = body.trim();
+    when = typeof data.when === "string" ? (data.when as TraitDefinition["when"]) : "never";
     description = typeof data.description === "string" ? data.description : "";
+    ns = typeof data.namespace === "string" ? data.namespace : (namespace || "");
+    type = parseTraitType(data.type);
+    version = typeof data.version === "string" ? data.version : undefined;
     deps = Array.isArray(data.deps) ? data.deps.map(String) : [];
     hooks = parseTraitHooks(data.hooks);
+  } else if (existsSync(skillPath)) {
+    // SKILL.md 格式兼容
+    const raw = readFileSync(skillPath, "utf-8");
+    const { data, content: body } = matter(raw);
+    content = body.trim();
+    when = typeof data.when === "string" ? (data.when as TraitDefinition["when"]) : "never";
+    description = typeof data.description === "string" ? data.description : "";
+    ns = typeof data.namespace === "string" ? data.namespace : (namespace || "");
+    type = parseTraitType(data.type);
+    version = typeof data.version === "string" ? data.version : undefined;
+    deps = Array.isArray(data.deps) ? data.deps.map(String) : [];
+    hooks = parseTraitHooks(data.hooks);
+  } else {
+    // 无有效文件
+    return null;
   }
 
   /* 加载 index.ts 中的方法 */
   let methods: TraitMethod[] = [];
+  const indexPath = join(traitDir, "index.ts");
   if (existsSync(indexPath)) {
     methods = await loadTraitMethods(indexPath);
   }
 
-  return { name: traitName, when, description, readme, methods, deps, hooks };
+  return {
+    namespace: ns,
+    name,
+    type,
+    version,
+    when,
+    description,
+    readme: content,
+    methods,
+    deps,
+    hooks,
+  };
+}
+
+/**
+ * 解析 Trait 类型
+ */
+function parseTraitType(type: unknown): TraitType {
+  if (type === "how_to_use_tool") return "how_to_use_tool";
+  if (type === "how_to_think") return "how_to_think";
+  if (type === "how_to_interact") return "how_to_interact";
+  return "how_to_think"; // 默认
 }
 
 /**
@@ -59,17 +130,13 @@ export async function loadTrait(traitDir: string, traitName: string): Promise<Tr
  * 支持两种格式：
  *
  * 1. 旧格式（结构化导出）：
- * ```
  * export const methods = {
  *   search: { description: "搜索", params: [...], fn: async (ctx, query) => { ... } }
  * };
- * ```
  *
  * 2. 新格式（TSDoc 注释 + 直接导出函数）：
- * ```
  * /** 搜索信息 @param query - 搜索关键词 *\/
  * export async function search(ctx, query) { ... }
- * ```
  * 系统从 TSDoc 注释自动解析 description 和 params。
  */
 async function loadTraitMethods(indexPath: string): Promise<TraitMethod[]> {
@@ -139,7 +206,7 @@ function loadMethodsFromStructured(exported: Record<string, unknown>): TraitMeth
 /** TSDoc 解析结果 */
 interface TSDocInfo {
   description: string;
-  params: TraitMethodParam[];
+  params: TraitMethod["params"];
   needsCtx: boolean;
 }
 
@@ -147,12 +214,10 @@ interface TSDocInfo {
  * 从源码中解析 TSDoc 注释
  *
  * 匹配模式：
- * ```
  * /** 描述文本
  *  * @param name - 参数描述
  *  *\/
  * export (async) function funcName(ctx, param1: type, param2: type) { ... }
- * ```
  *
  * @param source - TypeScript 源码
  * @returns Map<函数名, TSDocInfo>
@@ -161,7 +226,8 @@ export function parseTSDoc(source: string): Map<string, TSDocInfo> {
   const result = new Map<string, TSDocInfo>();
 
   /* 匹配 JSDoc 注释块 + 紧跟的 export function 声明 */
-  const pattern = /\/\*\*([\s\S]*?)\*\/\s*export\s+(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)/g;
+  const pattern =
+    /\/\*\*([\s\S]*?)\*\/\s*export\s+(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)/g;
 
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(source)) !== null) {
@@ -191,11 +257,15 @@ export function parseTSDoc(source: string): Map<string, TSDocInfo> {
     }
 
     /* 从函数签名中解析参数 */
-    const params: TraitMethodParam[] = [];
-    const rawParams = paramList.split(",").map((p) => p.trim()).filter((p) => p.length > 0);
+    const params: TraitMethod["params"] = [];
+    const rawParams = paramList
+      .split(",")
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
 
     /* 检测第一个参数是否是 ctx */
-    const firstParamName = rawParams[0]?.split(":")[0]?.split("=")[0]?.trim() ?? "";
+    const firstParamName =
+      rawParams[0]?.split(":")[0]?.split("=")[0]?.trim() ?? "";
     const needsCtx = firstParamName === "ctx";
     const startIdx = needsCtx ? 1 : 0; /* 有 ctx 则跳过第一个参数 */
 
@@ -234,7 +304,8 @@ function parseFirstParam(source: string): Map<string, boolean> {
   while ((match = pattern.exec(source)) !== null) {
     const funcName = match[1]!;
     const paramList = match[2]!;
-    const firstParam = paramList.split(",")[0]?.split(":")[0]?.split("=")[0]?.trim() ?? "";
+    const firstParam =
+      paramList.split(",")[0]?.split(":")[0]?.split("=")[0]?.trim() ?? "";
     result.set(funcName, firstParam === "ctx");
   }
   return result;
@@ -246,7 +317,7 @@ function parseFirstParam(source: string): Map<string, boolean> {
  * 只加载 refs 中列出的 trait，跳过不存在的目录。
  *
  * @param traitsDir - trait 所在的父目录（如 library/traits/）
- * @param refs - 要加载的 trait 名称列表
+ * @param refs - 要加载的 trait 名称列表，支持 "namespace/name" 格式
  * @returns 加载成功的 TraitDefinition 列表
  */
 export async function loadTraitsByRef(
@@ -254,10 +325,26 @@ export async function loadTraitsByRef(
   refs: string[],
 ): Promise<TraitDefinition[]> {
   const results: TraitDefinition[] = [];
-  for (const name of refs) {
-    const traitDir = join(traitsDir, name);
+  for (const ref of refs) {
+    let traitDir: string;
+    let traitName: string;
+    let ns: string;
+
+    // 解析 "namespace/name" 格式
+    if (ref.includes("/")) {
+      const parts = ref.split("/");
+      ns = parts[0]!;
+      traitName = parts[1]!;
+      traitDir = join(traitsDir, ns, traitName);
+    } else {
+      // 旧格式兼容：直接在 traitsDir 下查找
+      ns = "";
+      traitName = ref;
+      traitDir = join(traitsDir, ref);
+    }
+
     if (!existsSync(traitDir)) continue;
-    const trait = await loadTrait(traitDir, name);
+    const trait = await loadTrait(traitDir, traitName, ns);
     if (trait) results.push(trait);
   }
   return results;
@@ -285,45 +372,118 @@ export async function loadAllTraits(
 
   /* 1. 加载 kernel traits */
   if (existsSync(kernelTraitsDir)) {
-    const kernelNames = readdirSync(kernelTraitsDir, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d) => d.name);
-
-    for (const name of kernelNames) {
-      const trait = await loadTrait(join(kernelTraitsDir, name), name);
-      if (trait) traitMap.set(name, trait);
+    const kernelTraits = await loadTraitsFromDir(kernelTraitsDir, "kernel");
+    for (const trait of kernelTraits) {
+      const key = `${trait.namespace}/${trait.name}`;
+      traitMap.set(key, trait);
     }
   }
 
   /* 2. 加载 library traits（同名覆盖 kernel） */
   if (libraryTraitsDir && existsSync(libraryTraitsDir)) {
-    const libraryNames = readdirSync(libraryTraitsDir, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d) => d.name);
-
-    for (const name of libraryNames) {
-      const trait = await loadTrait(join(libraryTraitsDir, name), name);
-      if (trait) traitMap.set(name, trait);
+    const libraryTraits = await loadTraitsFromDir(libraryTraitsDir, "");
+    for (const trait of libraryTraits) {
+      const key = `${trait.namespace}/${trait.name}`;
+      traitMap.set(key, trait);
     }
   }
 
   /* 3. 加载对象 traits（同名覆盖 library 和 kernel） */
   if (existsSync(objectTraitsDir)) {
-    const objectNames = readdirSync(objectTraitsDir, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d) => d.name);
-
-    for (const name of objectNames) {
-      const trait = await loadTrait(join(objectTraitsDir, name), name);
-      if (trait) traitMap.set(name, trait);
+    const objectTraits = await loadTraitsFromDir(objectTraitsDir, "");
+    for (const trait of objectTraits) {
+      const key = `${trait.namespace}/${trait.name}`;
+      traitMap.set(key, trait);
     }
   }
 
   return Array.from(traitMap.values());
 }
 
+/**
+ * 从目录加载所有 traits（支持目录嵌套结构）
+ *
+ * 目录结构：
+ * traits/
+ * ├── {namespace}/             # namespace 目录
+ * │   ├── {name}/              # trait 名称
+ * │   │   └── TRAIT.md
+ * │   └── {name2}/
+ * │       └── TRAIT.md
+ * └── {namespace2}/
+ *     └── {name3}/
+ *         └── TRAIT.md
+ */
+async function loadTraitsFromDir(
+  traitsDir: string,
+  defaultNamespace: string,
+): Promise<TraitDefinition[]> {
+  if (!existsSync(traitsDir)) return [];
+
+  const results: TraitDefinition[] = [];
+  const entries = readdirSync(traitsDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith(".")) continue;
+
+    const entryPath = join(traitsDir, entry.name);
+
+    // 检查是否是 namespace 目录（包含子目录，且子目录中有 TRAIT.md/SKILL.md）
+    const isNamespaceDir = await checkIsNamespaceDir(entryPath);
+
+    if (isNamespaceDir) {
+      // 新格式：entry.name 是 namespace
+      const subEntries = readdirSync(entryPath, { withFileTypes: true });
+      for (const subEntry of subEntries) {
+        if (!subEntry.isDirectory()) continue;
+        if (subEntry.name.startsWith(".")) continue;
+        const traitDir = join(entryPath, subEntry.name);
+        const trait = await loadTrait(traitDir, subEntry.name, entry.name);
+        if (trait) results.push(trait);
+      }
+    } else {
+      // 扁平结构：entry.name 是 trait 名，使用 defaultNamespace
+      const trait = await loadTrait(entryPath, entry.name, defaultNamespace);
+      if (trait) results.push(trait);
+    }
+  }
+
+  return results;
+}
+
+/**
+ * 检查一个目录是否是 namespace 目录（包含子 trait 目录）
+ */
+async function checkIsNamespaceDir(dir: string): Promise<boolean> {
+  if (!existsSync(dir)) return false;
+
+  const entries = readdirSync(dir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+
+    const subPath = join(dir, entry.name);
+    // 检查子目录是否包含 TRAIT.md/SKILL.md
+    if (
+      existsSync(join(subPath, "TRAIT.md")) ||
+      existsSync(join(subPath, "SKILL.md"))
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /** 合法的 hook 事件名 */
-const VALID_HOOK_EVENTS = new Set<TraitHookEvent>(["before", "after", "when_finish", "when_wait", "when_error"]);
+const VALID_HOOK_EVENTS = new Set<TraitHookEvent>([
+  "before",
+  "after",
+  "when_finish",
+  "when_wait",
+  "when_error",
+]);
 
 /**
  * 从 inject 文本提取默认的 inject_title（前 50 个字符）
@@ -362,7 +522,10 @@ function parseTraitHooks(raw: unknown): TraitDefinition["hooks"] {
       if (typeof obj.inject === "string") {
         result[key as TraitHookEvent] = {
           inject: obj.inject,
-          inject_title: typeof obj.inject_title === "string" ? obj.inject_title : extractDefaultTitle(obj.inject),
+          inject_title:
+            typeof obj.inject_title === "string"
+              ? obj.inject_title
+              : extractDefaultTitle(obj.inject),
           once: obj.once !== false, /* 默认 true */
         };
         hasAny = true;

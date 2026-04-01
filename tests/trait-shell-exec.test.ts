@@ -6,7 +6,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { exec, ExecError } from "../traits/shell_exec/index";
+import { exec, ExecError } from "../traits/kernel/shell_exec/index";
 
 /** 模拟上下文，rootDir 指向 /tmp */
 const mockCtx = { rootDir: "/tmp" } as any;

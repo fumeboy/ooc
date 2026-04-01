@@ -15,11 +15,31 @@ import {
   advanceFocus,
 } from "../src/process/index.js";
 import { computeScopeChain, collectFrameHooks } from "../src/process/cognitive-stack.js";
-import { getActiveTraits } from "../src/trait/activator.js";
-import type { TraitDefinition } from "../src/types/index.js";
+import { getActiveTraits, traitId } from "../src/trait/activator.js";
+import type { TraitDefinition, TraitType } from "../src/types/index.js";
 
 beforeEach(() => {
   resetNodeCounter();
+});
+
+/** 创建测试用的 TraitDefinition (使用 namespace/name 格式) */
+const makeTrait = (
+  namespace: string,
+  name: string,
+  opts?: {
+    when?: string;
+    hooks?: TraitDefinition["hooks"];
+  },
+): TraitDefinition => ({
+  namespace,
+  name,
+  type: "how_to_think",
+  when: opts?.when ?? "always",
+  description: "",
+  readme: "",
+  methods: [],
+  deps: [],
+  hooks: opts?.hooks,
 });
 
 /* ========== computeScopeChain ========== */
@@ -32,12 +52,12 @@ describe("computeScopeChain", () => {
 
   test("从 focus 路径收集静态声明的 traits", () => {
     const p = createProcess("任务");
-    const id1 = addNode(p, p.root.id, "调研", undefined, undefined, ["research", "web_search"])!;
+    const id1 = addNode(p, p.root.id, "调研", undefined, undefined, ["research/core", "web/search"])!;
     moveFocus(p, id1);
 
     const chain = computeScopeChain(p);
-    expect(chain).toContain("research");
-    expect(chain).toContain("web_search");
+    expect(chain).toContain("research/core");
+    expect(chain).toContain("web/search");
   });
 
   test("从 focus 路径收集 activatedTraits", () => {
@@ -47,113 +67,165 @@ describe("computeScopeChain", () => {
 
     /* 模拟 activateTrait 写入 */
     const node = findNode(p.root, id1)!;
-    node.activatedTraits = ["analysis"];
+    node.activatedTraits = ["analysis/core"];
 
     const chain = computeScopeChain(p);
-    expect(chain).toContain("analysis");
+    expect(chain).toContain("analysis/core");
   });
 
   test("合并路径上所有节点的 traits（去重）", () => {
     const p = createProcess("任务");
-    p.root.traits = ["base"];
-    const id1 = addNode(p, p.root.id, "步骤1", undefined, undefined, ["base", "research"])!;
+    p.root.traits = ["base/core"];
+    const id1 = addNode(p, p.root.id, "步骤1", undefined, undefined, ["base/core", "research/core"])!;
     moveFocus(p, id1);
 
     const chain = computeScopeChain(p);
     /* base 出现在根和子节点，应去重 */
-    expect(chain.filter(t => t === "base")).toHaveLength(1);
-    expect(chain).toContain("research");
+    expect(chain.filter(t => t === "base/core")).toHaveLength(1);
+    expect(chain).toContain("research/core");
   });
 
   test("focus 不在路径上的节点 traits 不包含", () => {
     const p = createProcess("任务");
-    const id1 = addNode(p, p.root.id, "分支A", undefined, undefined, ["trait_a"])!;
-    addNode(p, p.root.id, "分支B", undefined, undefined, ["trait_b"]);
+    const id1 = addNode(p, p.root.id, "分支A", undefined, undefined, ["trait/a"])!;
+    addNode(p, p.root.id, "分支B", undefined, undefined, ["trait/b"]);
     moveFocus(p, id1);
 
     const chain = computeScopeChain(p);
-    expect(chain).toContain("trait_a");
-    expect(chain).not.toContain("trait_b");
+    expect(chain).toContain("trait/a");
+    expect(chain).not.toContain("trait/b");
   });
 
   test("深层嵌套路径收集所有祖先 traits", () => {
     const p = createProcess("任务");
-    p.root.traits = ["root_trait"];
-    const id1 = addNode(p, p.root.id, "L1", undefined, undefined, ["l1_trait"])!;
-    const id2 = addNode(p, id1, "L2", undefined, undefined, ["l2_trait"])!;
+    p.root.traits = ["root/trait"];
+    const id1 = addNode(p, p.root.id, "L1", undefined, undefined, ["l1/trait"])!;
+    const id2 = addNode(p, id1, "L2", undefined, undefined, ["l2/trait"])!;
     moveFocus(p, id2);
 
     const chain = computeScopeChain(p);
-    expect(chain).toContain("root_trait");
-    expect(chain).toContain("l1_trait");
-    expect(chain).toContain("l2_trait");
+    expect(chain).toContain("root/trait");
+    expect(chain).toContain("l1/trait");
+    expect(chain).toContain("l2/trait");
   });
 });
 
 /* ========== collectFrameHooks ========== */
 
 describe("collectFrameHooks", () => {
-  const makeTrait = (name: string, hooks?: TraitDefinition["hooks"]): TraitDefinition => ({
-    name,
-    when: "always",
-    description: "",
-    readme: "",
-    methods: [],
-    deps: [],
-    hooks,
-  });
-
   test("收集 before hooks", () => {
-    const traits = [
-      makeTrait("reflective", { before: { inject: "准备工作", once: false } }),
+    const traits: TraitDefinition[] = [
+      {
+        namespace: "reflect",
+        name: "reflective",
+        type: "how_to_think",
+        when: "always",
+        description: "",
+        readme: "",
+        methods: [],
+        deps: [],
+        hooks: { before: { inject: "准备工作", once: false } },
+      },
     ];
     const fired = new Set<string>();
     const result = collectFrameHooks("before", traits, [], fired);
-    expect(result).toContain("准备工作");
-    expect(fired.has("reflective:before")).toBe(true);
+    expect(result).not.toBeNull();
+    expect(result!).toContain("准备工作");
+    expect(fired.has("reflect/reflective:before")).toBe(true);
   });
 
   test("收集 after hooks", () => {
-    const traits = [
-      makeTrait("reflective", { after: { inject: "回顾总结", once: false } }),
+    const traits: TraitDefinition[] = [
+      {
+        namespace: "reflect",
+        name: "reflective",
+        type: "how_to_think",
+        when: "always",
+        description: "",
+        readme: "",
+        methods: [],
+        deps: [],
+        hooks: { after: { inject: "回顾总结", once: false } },
+      },
     ];
     const fired = new Set<string>();
     const result = collectFrameHooks("after", traits, [], fired);
-    expect(result).toContain("回顾总结");
+    expect(result).not.toBeNull();
+    expect(result!).toContain("回顾总结");
   });
 
   test("once hook 只触发一次", () => {
-    const traits = [
-      makeTrait("reflective", { before: { inject: "只触发一次", once: true } }),
+    const traits: TraitDefinition[] = [
+      {
+        namespace: "reflect",
+        name: "reflective",
+        type: "how_to_think",
+        when: "always",
+        description: "",
+        readme: "",
+        methods: [],
+        deps: [],
+        hooks: { before: { inject: "只触发一次", once: true } },
+      },
     ];
     const fired = new Set<string>();
 
     const r1 = collectFrameHooks("before", traits, [], fired);
-    expect(r1).toContain("只触发一次");
+    expect(r1).not.toBeNull();
+    expect(r1!).toContain("只触发一次");
 
     const r2 = collectFrameHooks("before", traits, [], fired);
     expect(r2).toBeNull();
   });
 
   test("once: false 的 hook 可重复触发", () => {
-    const traits = [
-      makeTrait("reflective", { after: { inject: "每次都触发", once: false } }),
+    const traits: TraitDefinition[] = [
+      {
+        namespace: "reflect",
+        name: "reflective",
+        type: "how_to_think",
+        when: "always",
+        description: "",
+        readme: "",
+        methods: [],
+        deps: [],
+        hooks: { after: { inject: "每次都触发", once: false } },
+      },
     ];
     const fired = new Set<string>();
 
     const r1 = collectFrameHooks("after", traits, [], fired);
-    expect(r1).toContain("每次都触发");
+    expect(r1).not.toBeNull();
+    expect(r1!).toContain("每次都触发");
 
     const r2 = collectFrameHooks("after", traits, [], fired);
-    expect(r2).toContain("每次都触发");
+    expect(r2).not.toBeNull();
+    expect(r2!).toContain("每次都触发");
   });
 
   test("只收集作用域链中或 always 的 traits", () => {
-    const traits = [
-      makeTrait("always_trait", { before: { inject: "always", once: false } }),
+    const traits: TraitDefinition[] = [
       {
-        ...makeTrait("conditional", { before: { inject: "conditional", once: false } }),
-        when: "当需要时" as const,
+        namespace: "always",
+        name: "always_trait",
+        type: "how_to_think",
+        when: "always",
+        description: "",
+        readme: "",
+        methods: [],
+        deps: [],
+        hooks: { before: { inject: "always", once: false } },
+      },
+      {
+        namespace: "cond",
+        name: "conditional",
+        type: "how_to_think",
+        when: "当需要时",
+        description: "",
+        readme: "",
+        methods: [],
+        deps: [],
+        hooks: { before: { inject: "conditional", once: false } },
       },
     ];
     const fired = new Set<string>();
@@ -165,26 +237,39 @@ describe("collectFrameHooks", () => {
 
     /* conditional 在 scopeChain 中，应触发 */
     const fired2 = new Set<string>();
-    const r2 = collectFrameHooks("before", traits, ["conditional"], fired2);
+    const r2 = collectFrameHooks("before", traits, ["cond/conditional"], fired2);
     expect(r2).toContain("always");
     expect(r2).toContain("conditional");
   });
 
   test("无 hook 时返回 null", () => {
-    const traits = [makeTrait("empty")];
+    const traits: TraitDefinition[] = [
+      { namespace: "test", name: "empty", type: "how_to_think", when: "always", description: "", readme: "", methods: [], deps: [] },
+    ];
     const fired = new Set<string>();
     expect(collectFrameHooks("before", traits, [], fired)).toBeNull();
   });
 
   test("once hook 在不同 focusNodeId 下各触发一次", () => {
-    const traits = [
-      makeTrait("plannable", { before: { inject: "评估任务", once: true } }),
+    const traits: TraitDefinition[] = [
+      {
+        namespace: "plan",
+        name: "plannable",
+        type: "how_to_think",
+        when: "always",
+        description: "",
+        readme: "",
+        methods: [],
+        deps: [],
+        hooks: { before: { inject: "评估任务", once: true } },
+      },
     ];
     const fired = new Set<string>();
 
     // 第一个节点触发
     const r1 = collectFrameHooks("before", traits, [], fired, "node-1");
-    expect(r1).toContain("评估任务");
+    expect(r1).not.toBeNull();
+    expect(r1!).toContain("评估任务");
 
     // 同一节点不再触发
     const r2 = collectFrameHooks("before", traits, [], fired, "node-1");
@@ -192,7 +277,8 @@ describe("collectFrameHooks", () => {
 
     // 不同节点再次触发
     const r3 = collectFrameHooks("before", traits, [], fired, "node-2");
-    expect(r3).toContain("评估任务");
+    expect(r3).not.toBeNull();
+    expect(r3!).toContain("评估任务");
   });
 });
 
@@ -202,13 +288,13 @@ describe("focus_push / focus_pop 语义", () => {
   test("focus_push: 在当前 focus 下创建子帧并进入", () => {
     const p = createProcess("任务");
     /* 模拟 focus_push */
-    const id = addNode(p, p.focusId, "调研", undefined, "搜索论文", ["web_search"])!;
+    const id = addNode(p, p.focusId, "调研", undefined, "搜索论文", ["web/search"])!;
     moveFocus(p, id);
 
     expect(p.focusId).toBe(id);
     const node = findNode(p.root, id)!;
     expect(node.status).toBe("doing");
-    expect(node.traits).toEqual(["web_search"]);
+    expect(node.traits).toEqual(["web/search"]);
     expect(node.description).toBe("搜索论文");
   });
 
@@ -231,19 +317,19 @@ describe("focus_push / focus_pop 语义", () => {
     const p = createProcess("任务");
 
     /* push 带 traits */
-    const id1 = addNode(p, p.focusId, "调研", undefined, undefined, ["research"])!;
+    const id1 = addNode(p, p.focusId, "调研", undefined, undefined, ["research/core"])!;
     const id2 = addNode(p, p.focusId, "撰写")!;
     moveFocus(p, id1);
 
     let chain = computeScopeChain(p);
-    expect(chain).toContain("research");
+    expect(chain).toContain("research/core");
 
     /* pop: 完成调研，focus 推进到撰写 */
     completeNode(p, id1, "完成");
     moveFocus(p, id2);
 
     chain = computeScopeChain(p);
-    expect(chain).not.toContain("research");
+    expect(chain).not.toContain("research/core");
   });
 
   test("activatedTraits 绑定在栈帧上，focus 离开后失效", () => {
@@ -253,16 +339,16 @@ describe("focus_push / focus_pop 语义", () => {
     moveFocus(p, id1);
 
     /* 模拟 activateTrait */
-    findNode(p.root, id1)!.activatedTraits = ["dynamic_trait"];
+    findNode(p.root, id1)!.activatedTraits = ["dynamic/trait"];
     let chain = computeScopeChain(p);
-    expect(chain).toContain("dynamic_trait");
+    expect(chain).toContain("dynamic/trait");
 
     /* 完成步骤1，移到步骤2 */
     completeNode(p, id1, "done");
     moveFocus(p, id2);
 
     chain = computeScopeChain(p);
-    expect(chain).not.toContain("dynamic_trait");
+    expect(chain).not.toContain("dynamic/trait");
   });
 });
 
@@ -272,7 +358,9 @@ describe("cognitive-style trait 激活", () => {
   test("cognitive-style (when: always) 始终被激活", () => {
     const traits: TraitDefinition[] = [
       {
+        namespace: "kernel",
         name: "cognitive-style",
+        type: "how_to_think",
         when: "always",
         description: "认知栈思维模式",
         readme: "...",
@@ -280,7 +368,9 @@ describe("cognitive-style trait 激活", () => {
         deps: [],
       },
       {
+        namespace: "kernel",
         name: "plannable",
+        type: "how_to_think",
         when: "当任务包含多个步骤时",
         description: "规划能力",
         readme: "...",
@@ -292,15 +382,17 @@ describe("cognitive-style trait 激活", () => {
 
     // 空 scopeChain — cognitive-style 仍然激活
     const active = getActiveTraits(traits, []);
-    const names = active.map(t => t.name);
-    expect(names).toContain("cognitive-style");
-    expect(names).not.toContain("plannable");
+    const ids = active.map(t => traitId(t));
+    expect(ids).toContain("kernel/cognitive-style");
+    expect(ids).not.toContain("kernel/plannable");
   });
 
   test("plannable 在 scopeChain 中时被激活，before hook 可触发", () => {
     const traits: TraitDefinition[] = [
       {
+        namespace: "kernel",
         name: "cognitive-style",
+        type: "how_to_think",
         when: "always",
         description: "认知栈思维模式",
         readme: "...",
@@ -308,7 +400,9 @@ describe("cognitive-style trait 激活", () => {
         deps: [],
       },
       {
+        namespace: "kernel",
         name: "plannable",
+        type: "how_to_think",
         when: "当任务包含多个步骤时",
         description: "规划能力",
         readme: "...",
@@ -318,13 +412,13 @@ describe("cognitive-style trait 激活", () => {
       },
     ];
 
-    const active = getActiveTraits(traits, ["plannable"]);
-    const names = active.map(t => t.name);
-    expect(names).toContain("cognitive-style");
-    expect(names).toContain("plannable");
+    const active = getActiveTraits(traits, ["kernel/plannable"]);
+    const ids = active.map(t => traitId(t));
+    expect(ids).toContain("kernel/cognitive-style");
+    expect(ids).toContain("kernel/plannable");
 
     // before hook 可触发
-    const plannable = active.find(t => t.name === "plannable")!;
+    const plannable = active.find(t => traitId(t) === "kernel/plannable")!;
     expect(plannable.hooks?.before?.inject).toContain("评估任务");
   });
 });
@@ -332,26 +426,17 @@ describe("cognitive-style trait 激活", () => {
 /* ========== before hook 注入集成 ========== */
 
 describe("before hook 注入集成", () => {
-  const makeTrait = (name: string, when: string, hooks?: TraitDefinition["hooks"]): TraitDefinition => ({
-    name,
-    when,
-    description: "",
-    readme: "",
-    methods: [],
-    deps: [],
-    hooks,
-  });
-
   test("plannable before hook 通过 collectFrameHooks 注入到 chatMessages", () => {
     const traits: TraitDefinition[] = [
-      makeTrait("plannable", "当任务包含多个步骤时", {
-        before: { inject: "你刚进入一个新的任务节点。在开始执行之前，先评估", once: true },
+      makeTrait("kernel", "plannable", {
+        when: "当任务包含多个步骤时",
+        hooks: { before: { inject: "你刚进入一个新的任务节点。在开始执行之前，先评估", once: true } },
       }),
     ];
 
     const fired = new Set<string>();
     // 模拟 plannable 在 scopeChain 中
-    const result = collectFrameHooks("before", traits, ["plannable"], fired, "node-1");
+    const result = collectFrameHooks("before", traits, ["kernel/plannable"], fired, "node-1");
 
     // 验证注入文本包含评估提示
     expect(result).not.toBeNull();
@@ -373,8 +458,9 @@ describe("before hook 注入集成", () => {
 
   test("before hook 不在 scopeChain 中时不注入", () => {
     const traits: TraitDefinition[] = [
-      makeTrait("plannable", "当任务包含多个步骤时", {
-        before: { inject: "评估任务", once: true },
+      makeTrait("kernel", "plannable", {
+        when: "当任务包含多个步骤时",
+        hooks: { before: { inject: "评估任务", once: true } },
       }),
     ];
 

@@ -3,12 +3,16 @@
  *
  * 从 LLM 输出中提取思考内容和可执行程序。
  *
- * 支持两种格式：
- * 1. 结构化段落格式（优先）：[thought] / [program] / [talk/目标] / [finish] / [wait] / [break]
- * 2. Markdown 代码块格式（兼容）：```javascript ... ```
+ * 支持三种格式：
+ * 1. TOML 格式（优先）：[thought] / [program] / [talk] 等 TOML 表
+ * 2. 结构化段落格式：[thought] / [program] / [talk/目标] / [finish] / [wait] / [break]
+ * 3. Markdown 代码块格式（兼容）：```javascript ... ```
  *
  * @ref docs/哲学文档/gene.md#G4 — implements — 从 LLM 输出中提取程序和指令
  */
+
+import { parseOutput as parseTomlOutput } from "../toml/parser.js";
+import type { ParsedOutput as TomlParsedOutput } from "../toml/parser.js";
 
 /** 提取结果 */
 export interface ExtractedProgram {
@@ -183,12 +187,19 @@ const STRUCTURED_STACK_FRAME_RE = /^\s*\[(cognize_stack_frame_push|cognize_stack
 /**
  * 解析 LLM 输出（统一入口）
  *
- * 优先尝试结构化段落格式，如果没有检测到 [thought] 或 [program] 标记则 fallback 到 markdown 代码块格式。
+ * 优先尝试 TOML 格式，然后是结构化段落格式，最后 fallback 到 markdown 代码块格式。
  */
 export function parseLLMOutput(output: string): ParsedOutput {
   /* 预处理：清理 LLM 内部标记（<think>、</think> 等） */
   let cleaned = output.replace(/<\/?think>/g, "");
 
+  /* 步骤 1：尝试 TOML 格式解析 */
+  const tomlResult = tryParseTomlFormat(cleaned);
+  if (tomlResult) {
+    return tomlResult;
+  }
+
+  /* 步骤 2：旧的结构化段落格式解析 */
   /* 预处理：将内联的段落标记拆分到独立行
    * 例如 "code();\n[thought]" 或 "code();[thought]" → "code();\n[thought]\n"
    * 排除被反引号包裹的标记（如 `[program]`），避免 thought 中提及标记名时被误拆 */
@@ -672,4 +683,208 @@ export function extractReplyContent(llmOutput: string, printOutputs?: string[]):
   }
 
   return "";
+}
+
+// ─── TOML 格式支持 ─────────────────────────────────────────────
+
+/**
+ * 检测是否可能是 TOML 格式
+ * 检查是否有 TOML 特有的模式：[section] 后接 key = value
+ */
+function looksLikeTomlFormat(output: string): boolean {
+  // 检查是否有 [thought] 或 [program] 或 [talk] 后接 content = 或 code = 等模式
+  const lines = output.split("\n");
+  let inTomlSection = false;
+  let tomlKeyCount = 0;
+
+  for (const line of lines) {
+    // 检测 TOML 段标题：[thought]、[program]、[talk]、[cognize_stack_frame_push] 等
+    const sectionMatch = line.match(/^\s*\[([a-zA-Z_][a-zA-Z0-9_]*)\]\s*$/);
+    if (sectionMatch) {
+      const sectionName = sectionMatch[1];
+      // 这些段名在旧格式和 TOML 格式中都存在
+      // 需要进一步检测是否有 key = value 模式
+      if (["thought", "program", "talk", "action", "finish", "wait", "break",
+           "cognize_stack_frame_push", "cognize_stack_frame_pop",
+           "reflect_stack_frame_push", "reflect_stack_frame_pop",
+           "set_plan", "directives"].includes(sectionName)) {
+        inTomlSection = true;
+        continue;
+      }
+    }
+
+    if (inTomlSection) {
+      // 检测 TOML 键值对模式：key = "value" 或 key = '''multiline''' 或 key = [...]
+      // 排除旧格式的标记行
+      if (line.match(/^\s*\[\/?[a-zA-Z_]/)) {
+        // 这是旧格式的段标记，不是 TOML
+        inTomlSection = false;
+        continue;
+      }
+
+      // 检测 key = value 模式
+      if (line.match(/^\s*[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*.+$/)) {
+        tomlKeyCount++;
+      }
+    }
+  }
+
+  // 如果有 2 个或更多 TOML 键值对，认为是 TOML 格式
+  return tomlKeyCount >= 2;
+}
+
+/**
+ * 尝试用 TOML 格式解析
+ * 如果成功且有有效内容，返回 ParsedOutput；否则返回 null
+ */
+function tryParseTomlFormat(output: string): ParsedOutput | null {
+  // 先快速检测是否可能是 TOML 格式
+  if (!looksLikeTomlFormat(output)) {
+    return null;
+  }
+
+  try {
+    const tomlParsed = parseTomlOutput(output) as TomlParsedOutput;
+
+    // 检查是否有有效内容
+    const hasContent =
+      tomlParsed.thought !== undefined ||
+      tomlParsed.program !== undefined ||
+      tomlParsed.talk !== undefined ||
+      (tomlParsed.actions && tomlParsed.actions.length > 0) ||
+      tomlParsed.cognize_stack_frame_push !== undefined ||
+      tomlParsed.cognize_stack_frame_pop !== undefined ||
+      tomlParsed.reflect_stack_frame_push !== undefined ||
+      tomlParsed.reflect_stack_frame_pop !== undefined ||
+      tomlParsed.set_plan !== undefined ||
+      (tomlParsed.directives && Object.keys(tomlParsed.directives).length > 0);
+
+    if (!hasContent) {
+      return null;
+    }
+
+    // 转换为 flow/parser 的 ParsedOutput 格式
+    return convertTomlToFlowFormat(tomlParsed);
+  } catch {
+    // TOML 解析失败，回退到旧格式
+    return null;
+  }
+}
+
+/**
+ * 将 TOML 解析结果转换为 flow/parser 的 ParsedOutput 格式
+ */
+function convertTomlToFlowFormat(toml: TomlParsedOutput): ParsedOutput {
+  const stackFrameOperations: Array<
+    ExtractedStackFramePush | ExtractedStackFramePop | ExtractedSetPlan
+  > = [];
+
+  // 转换 cognize_stack_frame_push
+  if (toml.cognize_stack_frame_push) {
+    const push = toml.cognize_stack_frame_push;
+    stackFrameOperations.push({
+      type: "cognize_stack_frame_push",
+      title: push.title ?? "",
+      description: push.description,
+      traits: push.traits,
+      outputs: push.outputs,
+      outputDescription: push.output_description, // 注意字段名不同：output_description vs outputDescription
+    });
+  }
+
+  // 转换 cognize_stack_frame_pop
+  if (toml.cognize_stack_frame_pop) {
+    const pop = toml.cognize_stack_frame_pop;
+    stackFrameOperations.push({
+      type: "cognize_stack_frame_pop",
+      summary: pop.summary,
+      artifacts: pop.artifacts,
+    });
+  }
+
+  // 转换 reflect_stack_frame_push
+  if (toml.reflect_stack_frame_push) {
+    const push = toml.reflect_stack_frame_push;
+    stackFrameOperations.push({
+      type: "reflect_stack_frame_push",
+      title: push.title ?? "",
+      description: push.description,
+    });
+  }
+
+  // 转换 reflect_stack_frame_pop
+  if (toml.reflect_stack_frame_pop) {
+    const pop = toml.reflect_stack_frame_pop;
+    stackFrameOperations.push({
+      type: "reflect_stack_frame_pop",
+      summary: pop.summary,
+    });
+  }
+
+  // 转换 set_plan
+  if (toml.set_plan) {
+    stackFrameOperations.push({
+      type: "set_plan",
+      content: toml.set_plan,
+    });
+  }
+
+  // 转换 programs
+  const programs: ExtractedProgram[] = [];
+  if (toml.program) {
+    const prog = toml.program;
+    // 规范化语言类型：typescript 映射到 javascript
+    let lang: "javascript" | "shell" = "javascript";
+    if (prog.lang === "shell") {
+      lang = "shell";
+    }
+    programs.push({
+      code: prog.code,
+      startIndex: 0, // TOML 解析不追踪位置
+      endIndex: 0,
+      lang,
+    });
+  }
+
+  // 转换 talks
+  const talks: ExtractedTalk[] = [];
+  if (toml.talk) {
+    talks.push({
+      target: toml.talk.target,
+      message: toml.talk.message,
+    });
+  }
+
+  // 转换 actions
+  const actions: ExtractedAction[] = [];
+  if (toml.actions && toml.actions.length > 0) {
+    for (const act of toml.actions) {
+      actions.push({
+        toolName: act.tool,
+        params: JSON.stringify(act.params), // 转换为 JSON 字符串
+      });
+    }
+  }
+
+  // 转换 directives
+  const directives = {
+    finish: toml.directives?.finish === true,
+    wait: toml.directives?.wait === true,
+    break_: toml.directives?.break === true,
+  };
+
+  // 互斥校验：program 和 talk/action 不能并存
+  const hasProgram = programs.length > 0 && programs[0]!.code.trim().length > 0;
+  const finalTalks = hasProgram ? [] : talks;
+  const finalActions = hasProgram ? [] : actions;
+
+  return {
+    thought: toml.thought ?? "",
+    programs: hasProgram ? programs : [],
+    talks: finalTalks,
+    actions: finalActions,
+    stackFrameOperations,
+    directives,
+    isStructured: true,
+  };
 }

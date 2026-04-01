@@ -1,21 +1,35 @@
 /**
- * Context 格式化器 (G5)
+ * Context 格式化器 (G5, Phase 2)
  *
  * 将结构化 Context 转换为 LLM 可读的纯文本 prompt。
+ * Phase 2: 切换到 TOML 格式输出。
  *
  * @ref docs/哲学文档/gene.md#G5 — implements — Context → system prompt + messages 格式化
  * @ref src/types/context.ts — references — Context 类型
+ * @ref src/toml/renderer.ts — references — TOML 格式渲染
  */
 
 import type { Context, Action, FlowMessage } from "../types/index.js";
+import { formatContextAsToml } from "../toml/renderer.js";
 
 /**
- * 将 Context 格式化为 system prompt
+ * 将 Context 格式化为 system prompt（TOML 格式）
  *
  * @param ctx - 结构化 Context
- * @returns LLM system prompt 文本
+ * @returns TOML 格式的 LLM system prompt 文本
  */
 export function formatContextAsSystem(ctx: Context): string {
+  // Phase 2: 切换到 TOML 格式
+  return formatContextAsToml(ctx);
+}
+
+/**
+ * 旧格式（标记分隔）的 Context 格式化
+ * 保留用于测试和调试
+ *
+ * @deprecated 使用 formatContextAsSystem（TOML 格式）替代
+ */
+export function formatContextAsSystemLegacy(ctx: Context): string {
   const parts: string[] = [];
 
   /* === WHO AM I === */

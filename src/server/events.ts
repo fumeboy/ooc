@@ -27,6 +27,15 @@ export type SSEEvent =
   | { type: "stream:program:end"; objectName: string; taskId: string }
   | { type: "stream:action"; objectName: string; taskId: string; toolName: string; chunk: string }
   | { type: "stream:action:end"; objectName: string; taskId: string; toolName: string }
+  // 认知栈操作流式事件（stack_push: cognize 或 reflect）
+  | { type: "stream:stack_push"; objectName: string; taskId: string; opType: "cognize" | "reflect"; attr: string; chunk: string }
+  | { type: "stream:stack_push:end"; objectName: string; taskId: string; opType: "cognize" | "reflect"; attr: string }
+  // 认知栈操作流式事件（stack_pop: cognize 或 reflect）
+  | { type: "stream:stack_pop"; objectName: string; taskId: string; opType: "cognize" | "reflect"; attr: string; chunk: string }
+  | { type: "stream:stack_pop:end"; objectName: string; taskId: string; opType: "cognize" | "reflect"; attr: string }
+  // set_plan 流式事件
+  | { type: "stream:set_plan"; objectName: string; taskId: string; chunk: string }
+  | { type: "stream:set_plan:end"; objectName: string; taskId: string }
   | { type: "object:created"; name: string }
   | { type: "object:updated"; name: string }
   | { type: "flow:progress"; objectName: string; taskId: string; iterations: number; maxIterations: number; totalIterations: number; maxTotalIterations: number };

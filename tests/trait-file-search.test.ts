@@ -9,7 +9,7 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { mkdtemp, rm, mkdir, writeFile as fsWriteFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
-import { glob, grep } from "../traits/file_search/index";
+import { glob, grep } from "../traits/kernel/file_search/index";
 
 /** 临时测试目录 */
 let tempDir: string;

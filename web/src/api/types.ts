@@ -30,7 +30,17 @@ export interface StoneData {
 export type FlowStatus = "running" | "waiting" | "pausing" | "finished" | "failed";
 
 /** Action 类型 */
-export type ActionType = "thought" | "program" | "message_in" | "message_out" | "pause" | "inject";
+export type ActionType =
+  | "thought"
+  | "program"
+  | "action"
+  | "message_in"
+  | "message_out"
+  | "pause"
+  | "inject"
+  | "stack_push"
+  | "stack_pop"
+  | "set_plan";
 
 /** Action */
 export interface Action {
@@ -146,10 +156,18 @@ export type SSEEvent =
   | { type: "stream:talk"; objectName: string; taskId: string; target: string; chunk: string }
   | { type: "stream:program"; objectName: string; taskId: string; lang?: "javascript" | "shell"; chunk: string }
   | { type: "stream:action"; objectName: string; taskId: string; toolName: string; chunk: string }
+  // 认知栈操作流式事件
+  | { type: "stream:stack_push"; objectName: string; taskId: string; opType: "cognize" | "reflect"; attr: string; chunk: string }
+  | { type: "stream:stack_pop"; objectName: string; taskId: string; opType: "cognize" | "reflect"; attr: string; chunk: string }
+  | { type: "stream:set_plan"; objectName: string; taskId: string; chunk: string }
   | { type: "stream:thought:end"; objectName: string; taskId: string }
   | { type: "stream:talk:end"; objectName: string; taskId: string; target: string }
   | { type: "stream:program:end"; objectName: string; taskId: string }
   | { type: "stream:action:end"; objectName: string; taskId: string; toolName: string }
+  // 认知栈操作流式结束事件
+  | { type: "stream:stack_push:end"; objectName: string; taskId: string; opType: "cognize" | "reflect"; attr: string }
+  | { type: "stream:stack_pop:end"; objectName: string; taskId: string; opType: "cognize" | "reflect"; attr: string }
+  | { type: "stream:set_plan:end"; objectName: string; taskId: string }
   | { type: "object:created"; name: string }
   | { type: "flow:progress"; objectName: string; taskId: string; iterations: number; maxIterations: number; totalIterations: number; maxTotalIterations: number }
   | { type: "object:updated"; name: string };
@@ -159,7 +177,10 @@ export type TimelineEntry =
   | { kind: "message"; data: FlowMessage; objectName: string }
   | { kind: "action"; data: Action; objectName: string }
   | { kind: "streaming-thought"; objectName: string; content: string }
-  | { kind: "streaming-talk"; from: string; target: string; content: string };
+  | { kind: "streaming-talk"; from: string; target: string; content: string }
+  | { kind: "streaming-stack-push"; objectName: string; opType: "cognize" | "reflect"; attr: string; content: string }
+  | { kind: "streaming-stack-pop"; objectName: string; opType: "cognize" | "reflect"; attr: string; content: string }
+  | { kind: "streaming-set-plan"; objectName: string; content: string };
 
 /** 每个对象的 action 展示模式 */
 export type ActionDisplayMode = "full" | "compact" | "hidden";

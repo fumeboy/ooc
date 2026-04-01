@@ -19,7 +19,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Context, DirectoryEntry, ContextWindow, WindowConfig, TraitDefinition } from "../types/index.js";
 import type { StoneData, FlowData } from "../types/index.js";
-import { getActiveTraits } from "../trait/activator.js";
+import { getActiveTraits, traitId } from "../trait/activator.js";
 import { computeScopeChain } from "../process/cognitive-stack.js";
 import { renderProcess } from "../process/render.js";
 import { findNode } from "../process/tree.js";
@@ -55,7 +55,7 @@ export function buildContext(
   const activeTraits = getActiveTraits(traits, scopeChain);
 
   /* Progressive Disclosure: 构建 trait catalog */
-  const activeTraitNames = new Set(activeTraits.map(t => t.name));
+  const activeTraitIds = new Set(activeTraits.map(t => traitId(t)));
   const scopeSet = new Set(scopeChain);
   const catalogLines: string[] = ["## Available Traits"];
 
@@ -64,17 +64,18 @@ export function buildContext(
   const inactiveLines: string[] = [];
 
   for (const t of traits) {
-    const isActive = activeTraitNames.has(t.name);
+    const id = traitId(t);
+    const isActive = activeTraitIds.has(id);
     const desc = t.description || t.name;
 
     if (isActive) {
-      activeLines.push(`- ${t.name}: ${desc}`);
+      activeLines.push(`- ${id}: ${desc}`);
     } else if (t.when === "never") {
       // when: never 的 traits 也显示，但标记为 inactive
-      inactiveLines.push(`- ${t.name}: ${desc} (activateTrait to use)`);
+      inactiveLines.push(`- ${id}: ${desc} (activateTrait to use)`);
     } else {
       // 其他激活策略的 traits
-      activeLines.push(`- ${t.name}: ${desc}`);
+      activeLines.push(`- ${id}: ${desc}`);
     }
   }
 
@@ -92,18 +93,30 @@ export function buildContext(
   const whoAmI = stone.thinkable.whoAmI;
 
   /* 区分 kernel traits（系统指令）和 user traits（领域知识） */
-  const KERNEL_TRAIT_NAMES = new Set(["computable", "talkable", "object_creation", "verifiable", "debuggable", "plannable", "reflective", "web_search", "testable", "reviewable", "cognitive-style"]);
+  const KERNEL_TRAIT_IDS = new Set([
+    "kernel/computable",
+    "kernel/talkable",
+    "kernel/object_creation",
+    "kernel/verifiable",
+    "kernel/debuggable",
+    "kernel/plannable",
+    "kernel/reflective",
+    "kernel/web_search",
+    "kernel/testable",
+    "kernel/reviewable",
+    "kernel/cognitive-style",
+  ]);
 
   /* Progressive Disclosure: 有 description 的 trait 只在 focus 路径或 always-on 时注入完整 readme */
   const instructions: ContextWindow[] = activeTraits
-    .filter((t) => t.readme && KERNEL_TRAIT_NAMES.has(t.name))
-    .filter((t) => !t.description || scopeSet.has(t.name) || t.when === "always")
-    .map((t) => ({ name: t.name, content: t.readme }));
+    .filter((t) => t.readme && KERNEL_TRAIT_IDS.has(traitId(t)))
+    .filter((t) => !t.description || scopeSet.has(traitId(t)) || t.when === "always")
+    .map((t) => ({ name: traitId(t), content: t.readme }));
 
   const userTraitWindows: ContextWindow[] = activeTraits
-    .filter((t) => t.readme && !KERNEL_TRAIT_NAMES.has(t.name))
-    .filter((t) => !t.description || scopeSet.has(t.name))
-    .map((t) => ({ name: t.name, content: t.readme }));
+    .filter((t) => t.readme && !KERNEL_TRAIT_IDS.has(traitId(t)))
+    .filter((t) => !t.description || scopeSet.has(traitId(t)))
+    .map((t) => ({ name: traitId(t), content: t.readme }));
 
   /* 解析 Flow 中的动态 windows */
   const dynamicWindows = resolveDynamicWindows(flow, stoneDir);

@@ -8,12 +8,13 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { loadAllTraits } from "../src/trait/loader.js";
+import { traitId } from "../src/trait/activator.js";
 import {
   listLibrarySkills,
   readLibrarySkill,
   listLibraryTraits,
   searchLibrary,
-} from "../traits/library_index/index.js";
+} from "../traits/kernel/library_index/index.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_library_test");
 
@@ -25,6 +26,19 @@ afterEach(() => {
   rmSync(TEST_DIR, { recursive: true, force: true });
 });
 
+/** 创建测试用的 TRAIT.md (新格式 */
+const createTrait = (parentDir: string, namespace: string, name: string, content: string, when = "always") => {
+  const traitDir = join(parentDir, namespace, name);
+  mkdirSync(traitDir, { recursive: true });
+  writeFileSync(join(traitDir, "TRAIT.md"), `---
+namespace: "${namespace}"
+name: "${name}"
+type: "how_to_think"
+when: ${when}
+---
+${content}`, "utf-8");
+};
+
 /* ========== 三层 trait 加载链 ========== */
 
 describe("loadAllTraits 三层加载", () => {
@@ -33,21 +47,21 @@ describe("loadAllTraits 三层加载", () => {
     const libraryDir = join(TEST_DIR, "library");
     const objectDir = join(TEST_DIR, "object");
 
-    /* kernel trait */
-    mkdirSync(join(kernelDir, "computable"), { recursive: true });
-    writeFileSync(join(kernelDir, "computable", "readme.md"), "---\nwhen: always\n---\nkernel computable", "utf-8");
+    /* kernel trait (新格式：namespace/name) */
+    createTrait(kernelDir, "kernel", "computable", "kernel computable");
 
     /* library trait */
-    mkdirSync(join(libraryDir, "web_search"), { recursive: true });
-    writeFileSync(join(libraryDir, "web_search", "readme.md"), "---\nwhen: always\n---\nlibrary web_search", "utf-8");
+    createTrait(libraryDir, "web", "search", "library web search");
 
     /* object trait */
-    mkdirSync(join(objectDir, "custom"), { recursive: true });
-    writeFileSync(join(objectDir, "custom", "readme.md"), "---\nwhen: always\n---\nobject custom", "utf-8");
+    createTrait(objectDir, "custom", "custom", "object custom");
 
     const traits = await loadAllTraits(objectDir, kernelDir, libraryDir);
     expect(traits).toHaveLength(3);
-    expect(traits.map((t) => t.name).sort()).toEqual(["computable", "custom", "web_search"]);
+    const ids = traits.map(traitId).sort();
+    expect(ids).toContain("kernel/computable");
+    expect(ids).toContain("web/search");
+    expect(ids).toContain("custom/custom");
   });
 
   test("library trait 覆盖 kernel 同名 trait", async () => {
@@ -55,11 +69,9 @@ describe("loadAllTraits 三层加载", () => {
     const libraryDir = join(TEST_DIR, "l1");
     const objectDir = join(TEST_DIR, "o1");
 
-    mkdirSync(join(kernelDir, "computable"), { recursive: true });
-    writeFileSync(join(kernelDir, "computable", "readme.md"), "---\nwhen: always\n---\nkernel版本", "utf-8");
+    createTrait(kernelDir, "kernel", "computable", "kernel版本");
 
-    mkdirSync(join(libraryDir, "computable"), { recursive: true });
-    writeFileSync(join(libraryDir, "computable", "readme.md"), "---\nwhen: always\n---\nlibrary覆盖版本", "utf-8");
+    createTrait(libraryDir, "kernel", "computable", "library覆盖版本");
 
     mkdirSync(objectDir, { recursive: true });
 
@@ -75,11 +87,9 @@ describe("loadAllTraits 三层加载", () => {
 
     mkdirSync(kernelDir, { recursive: true });
 
-    mkdirSync(join(libraryDir, "search"), { recursive: true });
-    writeFileSync(join(libraryDir, "search", "readme.md"), "---\nwhen: always\n---\nlibrary版本", "utf-8");
+    createTrait(libraryDir, "search", "search", "library版本");
 
-    mkdirSync(join(objectDir, "search"), { recursive: true });
-    writeFileSync(join(objectDir, "search", "readme.md"), "---\nwhen: always\n---\nobject覆盖版本", "utf-8");
+    createTrait(objectDir, "search", "search", "object覆盖版本");
 
     const traits = await loadAllTraits(objectDir, kernelDir, libraryDir);
     expect(traits).toHaveLength(1);
@@ -90,13 +100,10 @@ describe("loadAllTraits 三层加载", () => {
     const kernelDir = join(TEST_DIR, "k3");
     const objectDir = join(TEST_DIR, "o3");
 
-    mkdirSync(join(kernelDir, "computable"), { recursive: true });
-    writeFileSync(join(kernelDir, "computable", "readme.md"), "---\nwhen: always\n---\nkernel版本", "utf-8");
+    createTrait(kernelDir, "kernel", "computable", "kernel版本");
 
-    mkdirSync(join(objectDir, "computable"), { recursive: true });
-    writeFileSync(join(objectDir, "computable", "readme.md"), "---\nwhen: always\n---\nobject覆盖版本", "utf-8");
+    createTrait(objectDir, "kernel", "computable", "object覆盖版本");
 
-    /* 不传 libraryDir，向后兼容 */
     const traits = await loadAllTraits(objectDir, kernelDir);
     expect(traits).toHaveLength(1);
     expect(traits[0]!.readme).toBe("object覆盖版本");
@@ -106,27 +113,27 @@ describe("loadAllTraits 三层加载", () => {
     const kernelDir = join(TEST_DIR, "k4");
     const objectDir = join(TEST_DIR, "o4");
 
-    mkdirSync(join(kernelDir, "a"), { recursive: true });
-    writeFileSync(join(kernelDir, "a", "readme.md"), "---\nwhen: always\n---\nA", "utf-8");
+    createTrait(kernelDir, "test", "a", "A");
+
     mkdirSync(objectDir, { recursive: true });
 
     const traits = await loadAllTraits(objectDir, kernelDir, join(TEST_DIR, "nonexistent"));
     expect(traits).toHaveLength(1);
+    expect(traitId(traits[0]!)).toBe("test/a");
   });
 });
 
 /* ========== Library Index Trait 方法 ========== */
 
 describe("library_index trait 方法", () => {
-  test("listLibrarySkills 列出 skills", () => {
+  test("listLibrarySkills 已废弃返回空数组", () => {
     const rootDir = join(TEST_DIR, "root");
     mkdirSync(join(rootDir, "library", "skills"), { recursive: true });
     writeFileSync(join(rootDir, "library", "skills", "news.md"), "# News Skill", "utf-8");
-    writeFileSync(join(rootDir, "library", "skills", "search.md"), "# Search Skill", "utf-8");
-    writeFileSync(join(rootDir, "library", "skills", "index.md"), "# Index", "utf-8");
 
     const skills = listLibrarySkills({ rootDir });
-    expect(skills.sort()).toEqual(["news", "search"]);
+    // 已废弃的 API 返回空数组
+    expect(skills).toEqual([]);
   });
 
   test("listLibrarySkills 空目录返回空数组", () => {
@@ -143,13 +150,14 @@ describe("library_index trait 方法", () => {
     expect(skills).toEqual([]);
   });
 
-  test("readLibrarySkill 读取 skill 内容", () => {
+  test("readLibrarySkill 已废弃返回错误提示", () => {
     const rootDir = join(TEST_DIR, "root2");
     mkdirSync(join(rootDir, "library", "skills"), { recursive: true });
     writeFileSync(join(rootDir, "library", "skills", "deep-reading.md"), "# 深度阅读\n\n详细内容", "utf-8");
 
     const content = readLibrarySkill({ rootDir }, "deep-reading");
-    expect(content).toContain("深度阅读");
+    // 已废弃的 API 返回错误提示
+    expect(content).toContain("已废弃");
   });
 
   test("readLibrarySkill 不存在的 skill 返回错误提示", () => {
@@ -157,28 +165,30 @@ describe("library_index trait 方法", () => {
     mkdirSync(join(rootDir, "library", "skills"), { recursive: true });
 
     const content = readLibrarySkill({ rootDir }, "nonexistent");
-    expect(content).toContain("不存在");
+    expect(content).toContain("已废弃");
   });
 
-  test("listLibraryTraits 列出 traits", () => {
+  test("listLibraryTraits 列出 traits (新格式 namespace/name)", () => {
     const rootDir = join(TEST_DIR, "root4");
-    mkdirSync(join(rootDir, "library", "traits", "web_search"), { recursive: true });
-    mkdirSync(join(rootDir, "library", "traits", "coding"), { recursive: true });
+
+    // 新格式：library/traits/{namespace}/{name}/TRAIT.md
+    createTrait(join(rootDir, "library", "traits"), "web", "search", "web search");
+    createTrait(join(rootDir, "library", "traits"), "coding", "coding", "coding helper");
 
     const traits = listLibraryTraits({ rootDir });
-    expect(traits.sort()).toEqual(["coding", "web_search"]);
+    expect(traits.sort()).toEqual(["coding/coding", "web/search"]);
   });
 
-  test("searchLibrary 搜索 traits（skills 目录已废弃）", () => {
+  test("searchLibrary 搜索 traits（新格式）", () => {
     const rootDir = join(TEST_DIR, "root5");
-    mkdirSync(join(rootDir, "library", "traits", "news_trait"), { recursive: true });
-    mkdirSync(join(rootDir, "library", "traits", "deep_reading"), { recursive: true });
-    writeFileSync(join(rootDir, "library", "traits", "news_trait", "readme.md"), "---\nwhen: never\n---\n新闻聚合，获取最新新闻", "utf-8");
-    writeFileSync(join(rootDir, "library", "traits", "deep_reading", "readme.md"), "---\nwhen: never\n---\n深度阅读，分析文章", "utf-8");
+
+    // 新格式：library/traits/{namespace}/{name}/TRAIT.md
+    createTrait(join(rootDir, "library", "traits"), "news", "news_trait", "新闻聚合，获取最新新闻", "never");
+    createTrait(join(rootDir, "library", "traits"), "deep", "deep_reading", "深度阅读，分析文章", "never");
 
     const results = searchLibrary({ rootDir }, "新闻");
-    expect(results).toContain("[trait] news_trait");
-    expect(results).not.toContain("deep_reading");
+    expect(results).toContain("news/news_trait");
+    expect(results).not.toContain("deep/deep_reading");
   });
 
   test("searchLibrary 无匹配返回提示", () => {

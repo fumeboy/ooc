@@ -42,6 +42,15 @@ export const streamingProgramAtom = atom<{ taskId: string; lang?: "javascript" |
 /** 流式 action 内容（逐步累积） */
 export const streamingActionAtom = atom<{ taskId: string; toolName: string; content: string } | null>(null);
 
+/** 流式 stack_push 内容（逐步累积） */
+export const streamingStackPushAtom = atom<{ taskId: string; opType: "cognize" | "reflect"; attr: string; content: string } | null>(null);
+
+/** 流式 stack_pop 内容（逐步累积） */
+export const streamingStackPopAtom = atom<{ taskId: string; opType: "cognize" | "reflect"; attr: string; content: string } | null>(null);
+
+/** 流式 set_plan 内容（逐步累积） */
+export const streamingSetPlanAtom = atom<{ taskId: string; content: string } | null>(null);
+
 /** Chat Ref 引用列表（用户通过 Ref 按钮收集的引用） */
 export interface ChatRef {
   id: string;

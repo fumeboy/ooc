@@ -2,11 +2,14 @@
  * Trait 相关类型定义 (G3)
  *
  * Trait 是对象的能力单元。
- * 每个 Trait 是一个目录：readme.md（文档/bias）+ 可选 index.ts（方法）。
+ * 每个 Trait 是一个目录：TRAIT.md/SKILL.md/readme.md（文档/bias）+ 可选 index.ts（方法）。
  *
  * @ref docs/哲学文档/gene.md#G3 — implements — Trait 自我定义单元（TraitDefinition, TraitWhen, TraitMethod）
  * @ref docs/哲学文档/gene.md#G12 — references — Trait 是经验沉淀的载体
  */
+
+/** Trait 类型 */
+export type TraitType = "how_to_use_tool" | "how_to_think" | "how_to_interact";
 
 /** Trait 方法参数定义 */
 export interface TraitMethodParam {
@@ -50,20 +53,48 @@ export interface TraitHook {
   once?: boolean;
 }
 
+/** Trait 示例 */
+export interface TraitExample {
+  /** 示例标题 */
+  title: string;
+  /** 示例内容（通常是 shell 脚本或代码） */
+  content: string;
+}
+
+/** Trait 常见错误 */
+export interface TraitCommonMistake {
+  /** 错误类型 */
+  type: string;
+  /** 错误示例 */
+  wrong: string;
+  /** 正确示例 */
+  right: string;
+}
+
 /** Trait 的完整定义 */
 export interface TraitDefinition {
+  /** 命名空间（如 "kernel", "lark", "web"） */
+  namespace: string;
   /** Trait 名称 */
   name: string;
+  /** Trait 类型 */
+  type: TraitType;
+  /** 版本号 */
+  version?: string;
   /** 激活条件 */
   when: TraitWhen;
   /** 一行摘要（~50字），用于 trait catalog 展示 */
   description: string;
-  /** readme.md 的文本内容（用作 bias/context window） */
+  /** readme.md/TRAIT.md 的文本内容（用作 bias/context window） */
   readme: string;
   /** 从 index.ts 加载的方法列表 */
   methods: TraitMethod[];
-  /** 依赖的其他 trait 名称 */
+  /** 依赖的其他 trait（格式："namespace/name" 或 "name" 用于兼容） */
   deps: string[];
   /** 生命周期 hooks */
   hooks?: { [K in TraitHookEvent]?: TraitHook };
+  /** 使用示例（用于 Context 注入） */
+  examples?: TraitExample[];
+  /** 常见错误对比（正确 vs 错误） */
+  common_mistakes?: TraitCommonMistake[];
 }

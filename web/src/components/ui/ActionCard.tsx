@@ -18,10 +18,15 @@ import type { Action, FlowMessage } from "../../api/types";
 const ACTION_BADGE: Record<string, string> = {
   thought: "text-amber-700 dark:text-amber-300",
   program: "text-blue-700 dark:text-blue-300",
+  action: "text-sky-700 dark:text-sky-300",
   inject: "text-orange-700 dark:text-orange-300",
   message_in: "text-green-700 dark:text-green-300",
   message_out: "text-teal-700 dark:text-teal-300",
   pause: "text-gray-600 dark:text-gray-300",
+  // 认知栈操作
+  stack_push: "text-emerald-700 dark:text-emerald-300",
+  stack_pop: "text-cyan-700 dark:text-cyan-300",
+  set_plan: "text-violet-700 dark:text-violet-300",
 };
 const DEFAULT_BADGE = "text-gray-600 dark:text-gray-300";
 

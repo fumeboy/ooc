@@ -11,7 +11,7 @@ import {
   gitStatus,
   gitLog,
   gitDiff,
-} from "../../library/traits/git_ops/index";
+} from "../../library/traits/git/ops/index";
 
 /** 模拟上下文，rootDir 指向 kernel/ 目录（它是一个 git 仓库） */
 const mockCtx = { rootDir: join(process.cwd(), "kernel") } as any;
