@@ -383,6 +383,14 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
       if (text) thoughtParts.push(text);
     } else if (currentSection === "program") {
       let code = currentContent.join("\n").trim();
+      let resolvedLang = currentLang;
+
+      const embeddedTomlProgram = tryParseEmbeddedTomlProgram(code);
+      if (embeddedTomlProgram) {
+        code = embeddedTomlProgram.code;
+        resolvedLang = embeddedTomlProgram.lang;
+      }
+
       /* 清理 LLM 额外输出的 markdown 代码块标记（```） */
       if (code) {
         /* 移除开头的 ``` 或 ```javascript 或 ```js 或 ```typescript 或 ```ts 或 ```shell 或 ```sh */
@@ -395,7 +403,7 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
         /* 计算在原文中的大致位置 */
         const startIndex = lines.slice(0, sectionStartLine).join("\n").length + 1;
         const endIndex = lines.slice(0, lineIndex).join("\n").length;
-        programs.push({ code, startIndex, endIndex, lang: currentLang });
+        programs.push({ code, startIndex, endIndex, lang: resolvedLang });
       }
     } else if (currentSection === "talk" && currentTalkTarget) {
       const message = currentContent.join("\n").trim();
@@ -588,6 +596,26 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
   };
 }
 
+function tryParseEmbeddedTomlProgram(rawContent: string): { code: string; lang: "javascript" | "shell" } | null {
+  const trimmed = rawContent.trim();
+  if (!trimmed) return null;
+
+  const looksLikeEmbeddedToml = /(^|\n)\s*(code|lang)\s*=/.test(trimmed);
+  if (!looksLikeEmbeddedToml) return null;
+
+  try {
+    const parsed = parseTomlOutput(`[program]\n${trimmed}`) as TomlParsedOutput;
+    if (!parsed.program?.code?.trim()) return null;
+
+    return {
+      code: parsed.program.code,
+      lang: parsed.program.lang === "shell" ? "shell" : "javascript",
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Legacy 解析（markdown 代码块格式）
  *
@@ -696,12 +724,21 @@ function looksLikeTomlFormat(output: string): boolean {
   const lines = output.split("\n");
   let inTomlSection = false;
   let tomlKeyCount = 0;
+  let hasTomlOnlyStructure = false;
 
   for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (/^set_plan\s*=/.test(trimmed)) {
+      tomlKeyCount++;
+      hasTomlOnlyStructure = true;
+      continue;
+    }
+
     // 检测 TOML 段标题：[thought]、[program]、[talk]、[cognize_stack_frame_push] 等
     const sectionMatch = line.match(/^\s*\[([a-zA-Z_][a-zA-Z0-9_]*)\]\s*$/);
     if (sectionMatch) {
-      const sectionName = sectionMatch[1];
+      const sectionName = sectionMatch[1]!;
       // 这些段名在旧格式和 TOML 格式中都存在
       // 需要进一步检测是否有 key = value 模式
       if (["thought", "program", "talk", "action", "finish", "wait", "break",
@@ -709,6 +746,9 @@ function looksLikeTomlFormat(output: string): boolean {
            "reflect_stack_frame_push", "reflect_stack_frame_pop",
            "set_plan", "directives"].includes(sectionName)) {
         inTomlSection = true;
+        if (["talk", "finish", "wait", "break", "cognize_stack_frame_push", "cognize_stack_frame_pop", "reflect_stack_frame_push", "reflect_stack_frame_pop"].includes(sectionName)) {
+          hasTomlOnlyStructure = true;
+        }
         continue;
       }
     }
@@ -730,7 +770,7 @@ function looksLikeTomlFormat(output: string): boolean {
   }
 
   // 如果有 2 个或更多 TOML 键值对，认为是 TOML 格式
-  return tomlKeyCount >= 2;
+  return tomlKeyCount >= 2 || (tomlKeyCount >= 1 && hasTomlOnlyStructure);
 }
 
 /**
@@ -887,4 +927,527 @@ function convertTomlToFlowFormat(toml: TomlParsedOutput): ParsedOutput {
     directives,
     isStructured: true,
   };
+}
+
+export type LLMOutputStreamEvent =
+  | { type: "thought"; chunk: string }
+  | { type: "thought:end" }
+  | { type: "talk"; target: string; chunk: string }
+  | { type: "talk:end"; target: string }
+  | { type: "program"; lang?: "javascript" | "shell"; chunk: string }
+  | { type: "program:end" }
+  | { type: "action"; toolName: string; chunk: string }
+  | { type: "action:end"; toolName: string }
+  | { type: "stack_push"; opType: "cognize" | "reflect"; attr: string; chunk: string }
+  | { type: "stack_push:end"; opType: "cognize" | "reflect"; attr: string }
+  | { type: "stack_pop"; opType: "cognize" | "reflect"; attr: string; chunk: string }
+  | { type: "stack_pop:end"; opType: "cognize" | "reflect"; attr: string }
+  | { type: "set_plan"; chunk: string }
+  | { type: "set_plan:end" };
+
+type ActiveStreamState =
+  | { type: "thought" }
+  | { type: "talk"; target: string }
+  | { type: "program"; lang: "javascript" | "shell" }
+  | { type: "action"; toolName: string }
+  | { type: "stack_push"; opType: "cognize" | "reflect"; attr: string }
+  | { type: "stack_pop"; opType: "cognize" | "reflect"; attr: string }
+  | { type: "set_plan" };
+
+type PendingSectionState =
+  | { kind: "thought" }
+  | { kind: "program" }
+  | { kind: "talk" }
+  | { kind: "stack_push"; opType: "cognize" | "reflect" }
+  | { kind: "stack_pop"; opType: "cognize" | "reflect" };
+
+type TomlSectionState =
+  | { kind: "thought" }
+  | { kind: "program"; lang: "javascript" | "shell" }
+  | { kind: "talk"; target: string | null }
+  | { kind: "stack_push"; opType: "cognize" | "reflect" }
+  | { kind: "stack_pop"; opType: "cognize" | "reflect" };
+
+type MultilineStreamState = {
+  stream: ActiveStreamState;
+};
+
+function sameActiveStream(a: ActiveStreamState | null, b: ActiveStreamState): boolean {
+  if (!a || a.type !== b.type) return false;
+  switch (a.type) {
+    case "thought":
+    case "set_plan":
+      return true;
+    case "talk":
+      return a.target === (b as Extract<ActiveStreamState, { type: "talk" }>).target;
+    case "program":
+      return a.lang === (b as Extract<ActiveStreamState, { type: "program" }>).lang;
+    case "action":
+      return a.toolName === (b as Extract<ActiveStreamState, { type: "action" }>).toolName;
+    case "stack_push":
+    case "stack_pop":
+      return a.opType === (b as Extract<ActiveStreamState, { type: "stack_push" | "stack_pop" }>).opType
+        && a.attr === (b as Extract<ActiveStreamState, { type: "stack_push" | "stack_pop" }>).attr;
+  }
+}
+
+function parseTomlBasicString(raw: string): string | null {
+  const trimmed = raw.trim();
+  const match = trimmed.match(/^"([\s\S]*)"$/);
+  return match ? match[1] ?? "" : null;
+}
+
+function parseTomlStringArray(raw: string): string[] | null {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
+    return null;
+  }
+  const inner = trimmed.slice(1, -1).trim();
+  if (!inner) return [];
+  const values = inner.match(/"(?:\\.|[^"\\])*"/g);
+  if (!values) return null;
+  return values.map((item) => item.slice(1, -1));
+}
+
+function parseTomlKeyLine(line: string): { key: string; rawValue: string } | null {
+  const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+?)\s*$/);
+  if (!match) return null;
+  return { key: match[1]!, rawValue: match[2]! };
+}
+
+function normalizeProgramLang(lang: string | null): "javascript" | "shell" {
+  return lang === "shell" ? "shell" : "javascript";
+}
+
+function normalizePendingSectionFromHeader(header: string): PendingSectionState | null {
+  switch (header) {
+    case "thought":
+      return { kind: "thought" };
+    case "program":
+      return { kind: "program" };
+    case "talk":
+      return { kind: "talk" };
+    case "cognize_stack_frame_push":
+      return { kind: "stack_push", opType: "cognize" };
+    case "reflect_stack_frame_push":
+      return { kind: "stack_push", opType: "reflect" };
+    case "cognize_stack_frame_pop":
+      return { kind: "stack_pop", opType: "cognize" };
+    case "reflect_stack_frame_pop":
+      return { kind: "stack_pop", opType: "reflect" };
+    default:
+      return null;
+  }
+}
+
+function canPendingSectionUseToml(section: PendingSectionState, line: string): boolean {
+  const parsed = parseTomlKeyLine(line);
+  if (!parsed) return false;
+  switch (section.kind) {
+    case "thought":
+      return parsed.key === "content";
+    case "program":
+      return parsed.key === "lang" || parsed.key === "code";
+    case "talk":
+      return parsed.key === "target" || parsed.key === "message" || parsed.key === "reply_to";
+    case "stack_push":
+      return ["title", "description", "traits", "outputs", "output_description"].includes(parsed.key);
+    case "stack_pop":
+      return ["summary", "artifacts"].includes(parsed.key);
+  }
+}
+
+function createTomlSectionFromPending(section: PendingSectionState): TomlSectionState {
+  switch (section.kind) {
+    case "thought":
+      return { kind: "thought" };
+    case "program":
+      return { kind: "program", lang: "javascript" };
+    case "talk":
+      return { kind: "talk", target: null };
+    case "stack_push":
+      return { kind: "stack_push", opType: section.opType };
+    case "stack_pop":
+      return { kind: "stack_pop", opType: section.opType };
+  }
+}
+
+export function createLLMOutputStreamParser(): {
+  push: (chunk: string) => LLMOutputStreamEvent[];
+  done: () => LLMOutputStreamEvent[];
+} {
+  let lineBuffer = "";
+  let activeStream: ActiveStreamState | null = null;
+  let activeSyntax: "legacy" | "toml" | null = null;
+  let pendingSection: PendingSectionState | null = null;
+  let tomlSection: TomlSectionState | null = null;
+  let multilineStream: MultilineStreamState | null = null;
+
+  const endActiveStream = (events: LLMOutputStreamEvent[]) => {
+    if (!activeStream) return;
+    switch (activeStream.type) {
+      case "thought":
+        events.push({ type: "thought:end" });
+        break;
+      case "talk":
+        events.push({ type: "talk:end", target: activeStream.target });
+        break;
+      case "program":
+        events.push({ type: "program:end" });
+        break;
+      case "action":
+        events.push({ type: "action:end", toolName: activeStream.toolName });
+        break;
+      case "stack_push":
+        events.push({ type: "stack_push:end", opType: activeStream.opType, attr: activeStream.attr });
+        break;
+      case "stack_pop":
+        events.push({ type: "stack_pop:end", opType: activeStream.opType, attr: activeStream.attr });
+        break;
+      case "set_plan":
+        events.push({ type: "set_plan:end" });
+        break;
+    }
+    activeStream = null;
+    activeSyntax = null;
+  };
+
+  const emitChunk = (events: LLMOutputStreamEvent[], stream: ActiveStreamState, chunk: string, syntax: "legacy" | "toml" = "legacy") => {
+    if (!chunk) return;
+    if (!sameActiveStream(activeStream, stream)) {
+      endActiveStream(events);
+      activeStream = stream;
+    }
+    activeSyntax = syntax;
+    switch (stream.type) {
+      case "thought":
+        events.push({ type: "thought", chunk });
+        break;
+      case "talk":
+        events.push({ type: "talk", target: stream.target, chunk });
+        break;
+      case "program":
+        if (stream.lang === "shell") {
+          events.push({ type: "program", lang: "shell", chunk });
+        } else {
+          events.push({ type: "program", chunk });
+        }
+        break;
+      case "action":
+        events.push({ type: "action", toolName: stream.toolName, chunk });
+        break;
+      case "stack_push":
+        events.push({ type: "stack_push", opType: stream.opType, attr: stream.attr, chunk });
+        break;
+      case "stack_pop":
+        events.push({ type: "stack_pop", opType: stream.opType, attr: stream.attr, chunk });
+        break;
+      case "set_plan":
+        events.push({ type: "set_plan", chunk });
+        break;
+    }
+  };
+
+  const handleMultilineStart = (
+    events: LLMOutputStreamEvent[],
+    stream: ActiveStreamState,
+    rawValue: string,
+    appendNewline: boolean,
+  ) => {
+    const openingIndex = rawValue.indexOf('"""');
+    const afterOpening = rawValue.slice(openingIndex + 3);
+    const closingIndex = afterOpening.indexOf('"""');
+      if (closingIndex >= 0) {
+      emitChunk(events, stream, afterOpening.slice(0, closingIndex), "toml");
+      return;
+    }
+    if (afterOpening) {
+      emitChunk(events, stream, afterOpening + (appendNewline ? "\n" : ""), "toml");
+    }
+    multilineStream = { stream };
+  };
+
+  const processTomlLine = (events: LLMOutputStreamEvent[], line: string, appendNewline: boolean): boolean => {
+    if (!tomlSection) return false;
+    const parsed = parseTomlKeyLine(line);
+    if (!parsed) return false;
+
+    if (tomlSection.kind === "program" && parsed.key === "lang") {
+      tomlSection.lang = normalizeProgramLang(parseTomlBasicString(parsed.rawValue));
+      if (activeStream?.type === "program") {
+        activeStream = { type: "program", lang: tomlSection.lang };
+      }
+      return true;
+    }
+
+    if (tomlSection.kind === "talk" && parsed.key === "target") {
+      tomlSection.target = parseTomlBasicString(parsed.rawValue);
+      return true;
+    }
+
+    if (tomlSection.kind === "talk" && parsed.key === "reply_to") {
+      return true;
+    }
+
+    const openStringField = (stream: ActiveStreamState) => {
+      if (parsed.rawValue.trim().startsWith('"""')) {
+        handleMultilineStart(events, stream, parsed.rawValue, appendNewline);
+        return true;
+      }
+      const single = parseTomlBasicString(parsed.rawValue);
+      if (single !== null) {
+        emitChunk(events, stream, single, "toml");
+        return true;
+      }
+      return false;
+    };
+
+    if (tomlSection.kind === "thought" && parsed.key === "content") {
+      return openStringField({ type: "thought" });
+    }
+
+    if (tomlSection.kind === "program" && parsed.key === "code") {
+      return openStringField({ type: "program", lang: tomlSection.lang });
+    }
+
+    if (tomlSection.kind === "talk" && parsed.key === "message" && tomlSection.target) {
+      return openStringField({ type: "talk", target: tomlSection.target });
+    }
+
+    if (tomlSection.kind === "stack_push") {
+      if (["title", "description", "output_description"].includes(parsed.key)) {
+        return openStringField({ type: "stack_push", opType: tomlSection.opType, attr: parsed.key });
+      }
+      if (["traits", "outputs"].includes(parsed.key)) {
+        const values = parseTomlStringArray(parsed.rawValue);
+        if (values) {
+          emitChunk(events, { type: "stack_push", opType: tomlSection.opType, attr: parsed.key }, values.join(", "), "toml");
+          return true;
+        }
+      }
+    }
+
+    if (tomlSection.kind === "stack_pop") {
+      if (parsed.key === "summary") {
+        return openStringField({ type: "stack_pop", opType: tomlSection.opType, attr: "summary" });
+      }
+      if (parsed.key === "artifacts") {
+        emitChunk(events, { type: "stack_pop", opType: tomlSection.opType, attr: "artifacts" }, parsed.rawValue.trim(), "toml");
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  const startLegacySectionFromPending = (events: LLMOutputStreamEvent[]) => {
+    if (!pendingSection) return;
+    switch (pendingSection.kind) {
+      case "thought":
+        activeStream = { type: "thought" };
+        break;
+      case "program":
+        activeStream = { type: "program", lang: "javascript" };
+        break;
+      case "talk":
+        tomlSection = { kind: "talk", target: null };
+        break;
+      case "stack_push":
+      case "stack_pop":
+        tomlSection = createTomlSectionFromPending(pendingSection);
+        break;
+    }
+    if (pendingSection.kind === "thought" || pendingSection.kind === "program") {
+      tomlSection = null;
+    }
+    if (pendingSection.kind === "talk") {
+      // [talk] 只支持 TOML，新格式下必须等待 target/message
+    }
+    pendingSection = null;
+    void events;
+  };
+
+  const processLine = (line: string, appendNewline: boolean, events: LLMOutputStreamEvent[]) => {
+    if (multilineStream) {
+      const closingIndex = line.indexOf('"""');
+      if (closingIndex >= 0) {
+        emitChunk(events, multilineStream.stream, line.slice(0, closingIndex), "toml");
+        multilineStream = null;
+        return;
+      }
+      emitChunk(events, multilineStream.stream, line + (appendNewline ? "\n" : ""), "toml");
+      return;
+    }
+
+    const trimmed = line.trim();
+
+    if (!trimmed && activeSyntax === "toml") {
+      return;
+    }
+
+    if (trimmed.startsWith("set_plan")) {
+      const parsed = parseTomlKeyLine(line);
+      if (parsed?.key === "set_plan") {
+        tomlSection = null;
+        pendingSection = null;
+        if (parsed.rawValue.trim().startsWith('"""')) {
+          handleMultilineStart(events, { type: "set_plan" }, parsed.rawValue, appendNewline);
+        } else {
+          const single = parseTomlBasicString(parsed.rawValue);
+          if (single !== null) {
+            emitChunk(events, { type: "set_plan" }, single, "toml");
+          }
+        }
+        return;
+      }
+    }
+
+    const pushAttrOpenMatch = /^\[(cognize|reflect)_stack_frame_push\.(title|description|traits|outputs|outputDescription)\]$/.exec(trimmed);
+    if (pushAttrOpenMatch) {
+      endActiveStream(events);
+      activeStream = { type: "stack_push", opType: pushAttrOpenMatch[1] as "cognize" | "reflect", attr: pushAttrOpenMatch[2]! };
+      pendingSection = null;
+      tomlSection = null;
+      return;
+    }
+    const pushAttrCloseMatch = /^\[\/(cognize|reflect)_stack_frame_push\.(title|description|traits|outputs|outputDescription)\]$/.exec(trimmed);
+    if (pushAttrCloseMatch) {
+      endActiveStream(events);
+      return;
+    }
+    const popAttrOpenMatch = /^\[(cognize|reflect)_stack_frame_pop\.(summary|artifacts)\]$/.exec(trimmed);
+    if (popAttrOpenMatch) {
+      endActiveStream(events);
+      activeStream = { type: "stack_pop", opType: popAttrOpenMatch[1] as "cognize" | "reflect", attr: popAttrOpenMatch[2]! };
+      pendingSection = null;
+      tomlSection = null;
+      return;
+    }
+    const popAttrCloseMatch = /^\[\/(cognize|reflect)_stack_frame_pop\.(summary|artifacts)\]$/.exec(trimmed);
+    if (popAttrCloseMatch) {
+      endActiveStream(events);
+      return;
+    }
+
+    if (/^\[set_plan\]$/.test(trimmed)) {
+      endActiveStream(events);
+      activeStream = { type: "set_plan" };
+      pendingSection = null;
+      tomlSection = null;
+      return;
+    }
+    if (/^\[\/set_plan\]$/.test(trimmed)) {
+      endActiveStream(events);
+      return;
+    }
+
+    const sectionHeaderMatch = /^\s*\[([^\]]+)\]\s*$/.exec(line);
+    if (sectionHeaderMatch) {
+      const header = sectionHeaderMatch[1]!;
+      if (["finish", "wait", "break"].includes(header)) {
+        endActiveStream(events);
+        pendingSection = null;
+        tomlSection = null;
+        return;
+      }
+
+      const legacyProgramLang = /^program\/(javascript|shell)$/.exec(header);
+      if (legacyProgramLang) {
+        endActiveStream(events);
+        activeStream = { type: "program", lang: legacyProgramLang[1] as "javascript" | "shell" };
+        pendingSection = null;
+        tomlSection = null;
+        return;
+      }
+
+      const legacyTalk = /^talk\/([a-zA-Z0-9_-]+)$/.exec(header);
+      if (legacyTalk) {
+        endActiveStream(events);
+        activeStream = { type: "talk", target: legacyTalk[1]! };
+        pendingSection = null;
+        tomlSection = null;
+        return;
+      }
+
+      if (header === "/talk" || header === "/action" || header === "/cognize_stack_frame_push" || header === "/cognize_stack_frame_pop" || header === "/reflect_stack_frame_push" || header === "/reflect_stack_frame_pop") {
+        endActiveStream(events);
+        pendingSection = null;
+        tomlSection = null;
+        return;
+      }
+
+      const legacyAction = /^action\/([a-zA-Z0-9_-]+)$/.exec(header);
+      if (legacyAction) {
+        endActiveStream(events);
+        activeStream = { type: "action", toolName: legacyAction[1]! };
+        pendingSection = null;
+        tomlSection = null;
+        return;
+      }
+
+      const pending = normalizePendingSectionFromHeader(header);
+      if (pending) {
+        endActiveStream(events);
+        pendingSection = pending;
+        tomlSection = null;
+        return;
+      }
+    }
+
+    if (pendingSection) {
+      if (!trimmed) return;
+      if (canPendingSectionUseToml(pendingSection, line)) {
+        tomlSection = createTomlSectionFromPending(pendingSection);
+        pendingSection = null;
+        processTomlLine(events, line, appendNewline);
+        return;
+      }
+
+      if (pendingSection.kind === "thought") {
+        activeStream = { type: "thought" };
+        pendingSection = null;
+      } else if (pendingSection.kind === "program") {
+        activeStream = { type: "program", lang: "javascript" };
+        pendingSection = null;
+      } else {
+        tomlSection = createTomlSectionFromPending(pendingSection);
+        pendingSection = null;
+        processTomlLine(events, line, appendNewline);
+        return;
+      }
+    }
+
+    if (processTomlLine(events, line, appendNewline)) {
+      return;
+    }
+
+    if (activeStream) {
+      emitChunk(events, activeStream, line + (appendNewline ? "\n" : ""));
+    }
+  };
+
+  const push = (chunk: string): LLMOutputStreamEvent[] => {
+    const events: LLMOutputStreamEvent[] = [];
+    for (const char of chunk) {
+      if (char === "\n") {
+        processLine(lineBuffer, true, events);
+        lineBuffer = "";
+      } else {
+        lineBuffer += char;
+      }
+    }
+    return events;
+  };
+
+  const done = (): LLMOutputStreamEvent[] => {
+    const events: LLMOutputStreamEvent[] = [];
+    if (lineBuffer.length > 0) {
+      processLine(lineBuffer, false, events);
+      lineBuffer = "";
+    }
+    endActiveStream(events);
+    return events;
+  };
+
+  return { push, done };
 }

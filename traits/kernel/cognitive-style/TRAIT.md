@@ -13,18 +13,18 @@ deps: []
 
 ## 输出格式
 
-你的每次输出必须使用段落标记格式。可用的段落标记：
+你的每次输出必须使用 **TOML 表格式**。可用的段落：
 
 - `[thought]` — 你的思考过程（不会被执行）
-- `[program]` — 可执行的 JavaScript 代码（系统会执行）。等价于 `[program/javascript]`。**运行在 Bun 运行时**，你可以使用 Bun 提供的所有标准库和 API：
+- `[program]` — 可执行的 JavaScript 代码（系统会执行）。默认语言是 `javascript`。**运行在 Bun 运行时**，你可以使用 Bun 提供的所有标准库和 API：
   - `Bun.file(path)` / `await Bun.file(path).text()` — 读取文件
   - `await Bun.write(path, content)` — 写入文件
   - `import { join } from "node:path"` — 路径操作
   - `import { existsSync, mkdirSync, readdirSync } from "node:fs"` — 文件系统操作
   - `import { $ } from "bun"` — Shell 命令（`await $\`ls -la\``）
   - 所有 Node.js 兼容 API（`node:path`、`node:fs`、`node:child_process` 等）
-- `[program/shell]` — 可执行的 Shell 脚本（通过 sh -c 执行，timeout 30s）
-- `[action/工具名]` — 结构化工具调用（JSON 参数，系统自动执行）。与 `[program]` 互斥，与 `[talk]` 可共存。
+- `[program]` + `lang = "shell"` — 可执行的 Shell 脚本（通过 `sh -c` 执行，timeout 30s）
+- `[action]` — 结构化工具调用（填写 `tool` 与 `params` 字段）。与 `[program]` 互斥，与 `[talk]` 可共存。
 - `[cognize_stack_frame_push]` — 创建普通子栈帧（见下文"段落标记式 API"）
 - `[cognize_stack_frame_pop]` — 完成并退出当前子栈帧
 - `[reflect_stack_frame_push]` — 进入 reflect 内联子栈帧
@@ -33,43 +33,49 @@ deps: []
 - `[finish]` — 标记任务完成
 - `[wait]` — 暂停等待外部输入
 
-每个标记必须独占一行。标记后的内容属于该段落，直到遇到下一个标记。
+每个段都必须写成合法 TOML；正文统一放在字段中，例如 `content`、`code`、`message`、`summary`。
 
 ### 输出规则
 
-1. 每次输出最多一个 `[thought]` 段落和一个 `[program]` 段落
+1. 每次输出最多一个 `[thought]` 表和一个 `[program]` 表
 2. `[wait]` 和 `[finish]` 是终止指令，输出后本轮结束
 3. 如果输出 `[program]`，不要同时输出 `[wait]` 或 `[finish]` — 先执行代码，观察结果，下一轮再决定是否结束
-4. 不要在 `[program]` 段落中嵌入 `[thought]`、`[wait]`、`[finish]` 等标记
+4. 不要在 `code = """..."""` 中嵌入其他段落
 5. 不要输出 `</think>`、`<think>` 等内部标记
-6. `[program/shell]` 用于需要执行系统命令的场景（如 ls、curl、git 等），脚本在对象目录下执行
+6. 需要执行系统命令时，使用 `[program]` 并设置 `lang = "shell"`
 
 ### 输出示例
 
-```
+```toml
 [thought]
+content = """
 用户问好，我需要查询他的名字然后回复。
+"""
 
 [program]
+code = """
 const name = getData("name");
 talk("你好 " + name + "！有什么我能帮你的？", "user");
+"""
 ```
 
 下一轮（代码执行成功后）：
-```
+```toml
 [thought]
+content = """
 已经回复了用户，等待用户下一步指示。
+"""
 
 [wait]
 ```
 
 ### 重要规则
 
-1. 所有要执行的代码必须放在 `[program]` 段落中
-2. `[thought]` 段落是你的内部思考，不会被任何人看到
-3. 向人类或其他对象回复必须通过 `[program]` 中的 `talk()` 调用
-4. 不要使用 markdown 代码块（` ``` `）包裹代码，直接写在 `[program]` 后面
-5. 每次只输出一个 `[program]` 段落，观察结果后再决定下一步
+1. 所有要执行的代码必须放在 `[program].code` 中
+2. `[thought].content` 是你的内部思考，不会被任何人看到
+3. 向人类或其他对象回复可以使用 `[talk]`，也可以在 `[program].code` 中调用 `talk()`
+4. 不要使用 markdown 代码块包裹整份输出
+5. 每次只输出一个 `[program]` 表，观察结果后再决定下一步
 6. 代码执行成功且任务完成后，立即输出 `[wait]` 或 `[finish]`
 7. **优先使用高层工具方法**：系统提供了 `readFile`、`editFile`、`glob`、`grep`、`exec` 等工具方法，它们比底层 API（`Bun.file()`、`Bun.write()`、`readdirSync`）更可靠、更安全。除非工具方法无法满足需求，否则始终优先使用工具方法。
 
@@ -91,78 +97,58 @@ talk("你好 " + name + "！有什么我能帮你的？", "user");
 
 工具方法的优势：自动路径解析、结构化返回值、错误信息包含修正上下文、信息密度控制。
 
-## 段落标记式 API（认知栈操作）
+## TOML 栈帧 API（认知栈操作）
 
-认知栈操作使用段落标记格式，不再使用函数调用式 API。
+认知栈操作统一使用 TOML 表格式，不再使用旧的属性嵌套段。
 
 ### `[cognize_stack_frame_push]` — 创建普通子栈帧
 
 在当前 focus 节点下创建一个新的子栈帧，用于拆解复杂任务。
 
-**支持的属性段落**：
+**支持的字段**：
 
-| 属性段落 | 必填 | 说明 |
+| 字段 | 必填 | 说明 |
 |-----------|------|------|
-| `[cognize_stack_frame_push.title]` | 是 | 子栈帧标题 |
-| `[cognize_stack_frame_push.description]` | 否 | 详细描述 |
-| `[cognize_stack_frame_push.traits]` | 否 | trait 名称列表，逗号分隔 |
-| `[cognize_stack_frame_push.outputs]` | 否 | 输出 key 列表，逗号分隔 |
-| `[cognize_stack_frame_push.outputDescription]` | 否 | 输出描述 |
+| `title` | 是 | 子栈帧标题 |
+| `description` | 否 | 详细描述 |
+| `traits` | 否 | trait 名称数组 |
+| `outputs` | 否 | 输出 key 数组 |
+| `output_description` | 否 | 输出描述 |
 
 **示例**：
 
-```
-[cognize_stack_frame_push.title]
-获取文档内容
-[/cognize_stack_frame_push.title]
-
-[cognize_stack_frame_push.description]
+```toml
+[cognize_stack_frame_push]
+title = "获取文档内容"
+description = """
 从飞书知识库获取指定文档的完整内容
-[/cognize_stack_frame_push.description]
-
-[cognize_stack_frame_push.traits]
-lark-wiki
-[/cognize_stack_frame_push.traits]
-
-[cognize_stack_frame_push.outputs]
-docContent, docTitle
-[/cognize_stack_frame_push.outputs]
-
-[cognize_stack_frame_push.outputDescription]
-文档内容（字符串）和元数据（对象）
-[/cognize_stack_frame_push.outputDescription]
-
-[/cognize_stack_frame_push]
+"""
+traits = ["lark/wiki"]
+outputs = ["docContent", "docTitle"]
+output_description = "文档内容（字符串）和元数据（对象）"
 ```
 
-当输出 `[/cognize_stack_frame_push]` 结束标记后，系统会创建子栈帧，focus 自动进入新节点。
+当输出 `[cognize_stack_frame_push]` 表后，系统会创建子栈帧，focus 自动进入新节点。
 
 ### `[cognize_stack_frame_pop]` — 完成并退出当前子栈帧
 
 完成当前子栈帧，将 summary 和可选的 artifacts 返回给父节点，focus 自动回到父节点。
 
-**支持的属性段落**：
+**支持的字段**：
 
-| 属性段落 | 必填 | 说明 |
+| 字段 | 必填 | 说明 |
 |-----------|------|------|
-| `[cognize_stack_frame_pop.summary]` | 否 | 完成摘要 |
-| `[cognize_stack_frame_pop.artifacts]` | 否 | JSON 格式的输出数据 |
+| `summary` | 否 | 完成摘要 |
+| `artifacts` | 否 | TOML 对象格式的输出数据 |
 
 **示例**：
 
-```
-[cognize_stack_frame_pop.summary]
+```toml
+[cognize_stack_frame_pop]
+summary = """
 已成功获取文档内容，共 15000 字
-[/cognize_stack_frame_pop.summary]
-
-[cognize_stack_frame_pop.artifacts]
-{
-  "docContent": "文档完整内容...",
-  "docTitle": "飞书产品设计文档"
-}
-[/cognize_stack_frame_pop.artifacts]
-
-[/cognize_stack_frame_pop]
+"""
+artifacts = { docContent = "文档完整内容...", docTitle = "飞书产品设计文档" }
 ```
 
 **数据传递规则**：
@@ -176,16 +162,14 @@ docContent, docTitle
 
 在 reflect 环节可以使用 `create_hook` 注册 `when_error` hook：
 
-```
-[reflect_stack_frame_push.title]
-分析并修复错误
-[/reflect_stack_frame_push.title]
+```toml
+[reflect_stack_frame_push]
+title = "分析并修复错误"
 
 [program]
+code = """
 create_hook("when_error", "inject_message", "分析错误原因并尝试修复");
-[/program]
-
-[/reflect_stack_frame_push]
+"""
 ```
 
 ### `[reflect_stack_frame_pop]` — 退出 reflect 内联子栈帧
@@ -198,13 +182,14 @@ create_hook("when_error", "inject_message", "分析错误原因并尝试修复")
 
 **示例**：
 
-```
+```toml
 [set_plan]
+content = """
 重新规划当前任务：
 1. 先激活 lark-wiki trait 获取访问能力
 2. 调用 wiki API 获取文档内容
 3. 解析文档结构并提取关键信息
-[/set_plan]
+"""
 ```
 
 ### 摘要技巧
@@ -401,83 +386,90 @@ talk("请帮我分析一下 TypeScript 的类型系统", "researcher");
 
 ### 认知栈工作流
 
-```
+```toml
 [thought]
+content = """
 这是一个复杂任务，我需要分步骤完成。
+"""
 
-[cognize_stack_frame_push.title]
-收集数据
-[/cognize_stack_frame_push.title]
-
-[cognize_stack_frame_push.description]
+[cognize_stack_frame_push]
+title = "收集数据"
+description = """
 从网上搜索相关数据
-[/cognize_stack_frame_push.description]
-
-[cognize_stack_frame_push.traits]
-web_search
-[/cognize_stack_frame_push.traits]
-
-[/cognize_stack_frame_push]
+"""
+traits = ["web_search"]
 ```
 
 子栈帧创建后，focus 自动进入该节点开始执行。
 
 完成后：
-```
-[cognize_stack_frame_pop.summary]
+```toml
+[cognize_stack_frame_pop]
+summary = """
 收集了 5 篇论文的关键数据
-[/cognize_stack_frame_pop.summary]
-
-[/cognize_stack_frame_pop]
+"""
 ```
 
 ### Shell 脚本执行
 
-```
+```toml
 [thought]
+content = """
 用户需要查看目录结构，我用 shell 来执行。
+"""
 
-[program/shell]
+[program]
+lang = "shell"
+code = """
 ls -la
 echo "---"
 pwd
+"""
 ```
 
 ### 结构化工具调用
 
-当你需要调用单个工具方法时，可以使用 `[action/工具名]` 格式代替 `[program]`：
+当你需要调用单个工具方法时，可以使用 `[action]` 表代替 `[program]`：
 
-```
+```toml
 [thought]
+content = """
 我需要读取配置文件。
+"""
 
-[action/readFile]
-{"path": "kernel/src/server/config.ts", "offset": 1, "limit": 30}
+[action]
+tool = "readFile"
+params = { path = "kernel/src/server/config.ts", offset = 1, limit = 30 }
 ```
 
 多个 action 可以在同一轮输出中使用：
 
+```toml
+[action]
+tool = "readFile"
+params = { path = "src/a.ts" }
+
+[action]
+tool = "readFile"
+params = { path = "src/b.ts" }
 ```
-[action/readFile]
-{"path": "src/a.ts"}
 
-[action/readFile]
-{"path": "src/b.ts"}
-```
+`[action]` 和 `[talk]` 可以共存；常见用法是先调用工具，再向用户发送结果：
 
-action 和 talk 不可以共存：
+```toml
+[action]
+tool = "editFile"
+params = { path = "config.ts", old = "port: 3000", new = "port: 8080" }
 
-```
-[action/editFile]
-{"path": "config.ts", "old": "port: 3000", "new": "port: 8080"}
-
-[talk/user] // 不允许
+[talk]
+target = "user"
+message = """
 已将端口从 3000 改为 8080。
-[/talk]
+"""
 ```
 
 规则：
 1. `[action]` 和 `[program]` 互斥 — 同一轮输出中不能同时使用
-2. `[action]` 的参数必须是合法的 JSON 对象
+2. `[action]` 的参数必须写成合法的 TOML 内联表
 3. 工具名必须是当前可用的方法名（如 readFile、editFile、glob、grep、exec 等）
 4. 执行结果会在下一轮思考中可见

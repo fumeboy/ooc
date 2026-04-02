@@ -25,7 +25,7 @@ export interface ParsedOutput {
   cognize_stack_frame_push?: CognizeStackPushSection;
   cognize_stack_frame_pop?: CognizeStackPopSection;
   reflect_stack_frame_push?: ReflectStackFramePushSection;
-  reflect_stack_frame_pop?: ReflectStackFramePopSection;
+  reflect_stack_frame_pop?: ReflectStackPopSection;
   set_plan?: string;
 }
 
@@ -95,8 +95,10 @@ export interface ReflectStackPopSection {
  * @returns 解析后的结构化对象
  */
 export function parseOutput(tomlString: string): ParsedOutput {
+  const normalizedToml = unwrapTomlFence(tomlString);
+
   try {
-    const parsed = parse(tomlString) as Record<string, unknown>;
+    const parsed = parse(normalizedToml) as Record<string, unknown>;
     const result: ParsedOutput = {};
 
     // 解析 thought 段
@@ -132,13 +134,13 @@ export function parseOutput(tomlString: string): ParsedOutput {
 
     // 解析指令 (finish, wait, break)
     const directives: Directives = {};
-    if (parsed.finish === true || parsed.finish === "true") {
+    if (parsed.finish === true || parsed.finish === "true" || (typeof parsed.finish === "object" && parsed.finish !== null)) {
       directives.finish = true;
     }
-    if (parsed.wait === true || parsed.wait === "true") {
+    if (parsed.wait === true || parsed.wait === "true" || (typeof parsed.wait === "object" && parsed.wait !== null)) {
       directives.wait = true;
     }
-    if (parsed.break === true || parsed.break === "true") {
+    if (parsed.break === true || parsed.break === "true" || (typeof parsed.break === "object" && parsed.break !== null)) {
       directives.break = true;
     }
     if (Object.keys(directives).length > 0) {
@@ -185,8 +187,14 @@ export function parseOutput(tomlString: string): ParsedOutput {
     return result;
   } catch (err) {
     // 解析失败时，尝试做最小程度的解析
-    return parseOutputFallback(tomlString);
+    return parseOutputFallback(normalizedToml);
   }
+}
+
+function unwrapTomlFence(tomlString: string): string {
+  const trimmed = tomlString.trim();
+  const match = trimmed.match(/^```(?:toml)?\s*\n([\s\S]*?)\n```$/i);
+  return match?.[1] ?? tomlString;
 }
 
 /**
@@ -209,7 +217,7 @@ function parseOutputFallback(tomlString: string): ParsedOutput {
       if (currentSection && sectionContent.length > 0) {
         applySectionContent(result, currentSection, sectionContent.join("\n"));
       }
-      currentSection = sectionMatch[1];
+      currentSection = sectionMatch[1]!;
       sectionContent = [];
       continue;
     }
@@ -241,6 +249,12 @@ function applySectionContent(result: ParsedOutput, section: string, content: str
       result.program = {
         code: extractKeyValue(trimmed, "code") || trimmed,
       };
+      {
+        const lang = extractKeyValue(trimmed, "lang");
+        if (lang === "shell" || lang === "javascript" || lang === "typescript") {
+          result.program.lang = lang;
+        }
+      }
       break;
     case "talk":
       result.talk = {
@@ -267,6 +281,13 @@ function applySectionContent(result: ParsedOutput, section: string, content: str
  * 从文本中提取 key=value 或 key = """multiline""" 格式的值
  */
 function extractKeyValue(text: string, key: string): string | undefined {
+  // 优先匹配 TOML 标准的三引号多行字符串
+  const tripleDoubleQuotePattern = new RegExp(`^\\s*${key}\\s*=\\s*\"\"\"([\\s\\S]*?)\"\"\"`, "m");
+  const tripleDoubleQuoteMatch = text.match(tripleDoubleQuotePattern);
+  if (tripleDoubleQuoteMatch) {
+    return tripleDoubleQuoteMatch[1];
+  }
+
   // 尝试匹配多行字符串格式
   const multiLinePattern = new RegExp(`^\\s*${key}\\s*=\\s*'''([\\s\\S]*?)'''`, "m");
   const multiMatch = text.match(multiLinePattern);
@@ -334,7 +355,7 @@ export function createStreamParser(): {
             content: state.currentContent.join("\n"),
           });
         }
-        state.currentSection = sectionMatch[1];
+        state.currentSection = sectionMatch[1]!;
         state.currentContent = [];
 
         // 对于简单指令段（finish, wait, break），直接输出事件
@@ -360,8 +381,8 @@ export function createStreamParser(): {
     if (state.buffer.trim()) {
       const sectionMatch = state.buffer.match(/^\s*\[([^\]]+)\]\s*$/);
       if (sectionMatch) {
-        newEvents.push({ type: sectionMatch[1] });
-        events.push({ type: sectionMatch[1] });
+        newEvents.push({ type: sectionMatch[1]! });
+        events.push({ type: sectionMatch[1]! });
       } else if (state.currentSection) {
         state.currentContent.push(state.buffer);
       }

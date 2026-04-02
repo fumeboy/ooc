@@ -3,7 +3,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { extractPrograms, detectDirectives, extractReplyContent, parseLLMOutput } from "../src/flow/parser.js";
+import { createLLMOutputStreamParser, extractPrograms, detectDirectives, extractReplyContent, parseLLMOutput } from "../src/flow/parser.js";
 
 describe("extractPrograms", () => {
   test("提取单个 JavaScript 代码块", () => {
@@ -592,5 +592,80 @@ docContent, docTitle
     expect(parsed.stackFrameOperations[0]!.type).toBe("cognize_stack_frame_push");
     expect(parsed.stackFrameOperations[1]!.type).toBe("cognize_stack_frame_pop");
     expect(parsed.stackFrameOperations[2]!.type).toBe("set_plan");
+  });
+
+  test("解析被 ```toml 包裹的 TOML program/shell 输出", () => {
+    const output = "```toml\n[thought]\ncontent = \"\"\"\n准备执行 shell 命令\n\"\"\"\n\n[program]\nlang = \"shell\"\ncode = \"\"\"\nlark-cli docs +fetch --doc Z6Aqd5I37omXkDxYuVVcoFqsnWy\n\"\"\"\n```";
+
+    const parsed = parseLLMOutput(output);
+
+    expect(parsed.isStructured).toBe(true);
+    expect(parsed.thought).toContain("准备执行 shell 命令");
+    expect(parsed.programs).toHaveLength(1);
+    expect(parsed.programs[0]!.lang).toBe("shell");
+    expect(parsed.programs[0]!.code.trim()).toBe("lark-cli docs +fetch --doc Z6Aqd5I37omXkDxYuVVcoFqsnWy");
+  });
+
+  test("旧 [program] 段内嵌 TOML code/lang 字段时应提取真实代码", () => {
+    const output = `[thought]
+我要执行文档读取。
+
+[program]
+lang = "shell"
+code = """
+lark-cli wiki spaces get_node --params '{"token":"UbpdwXweyi86HHkRHCCcLPN4n8c"}'
+"""`;
+
+    const parsed = parseLLMOutput(output);
+
+    expect(parsed.isStructured).toBe(true);
+    expect(parsed.programs).toHaveLength(1);
+    expect(parsed.programs[0]!.lang).toBe("shell");
+    expect(parsed.programs[0]!.code.trim()).toBe("lark-cli wiki spaces get_node --params '{\"token\":\"UbpdwXweyi86HHkRHCCcLPN4n8c\"}'");
+  });
+
+  test("TOML 输出中的 [finish] 指令应被识别", () => {
+    const output = `[thought]
+content = """
+任务已完成
+"""
+
+[finish]`;
+
+    const parsed = parseLLMOutput(output);
+
+    expect(parsed.isStructured).toBe(true);
+    expect(parsed.thought).toBe("任务已完成\n");
+    expect(parsed.directives.finish).toBe(true);
+  });
+});
+
+describe("createLLMOutputStreamParser — TOML 流式输出", () => {
+  test("按新 TOML 格式流式产出语义事件", () => {
+    const parser = createLLMOutputStreamParser();
+    const events = [
+      ...parser.push(`[thought]\ncontent = """\n第一行思考\n第二行思考\n"""\n\n[talk]\ntarget = "user"\nmessage = """\n你好，`),
+      ...parser.push(`这是新的流式输出\n"""\n\n[program]\nlang = "shell"\ncode = """\necho hi\n"""\n\n[cognize_stack_frame_push]\ntitle = "拆解任务"\ntraits = ["lark/wiki", "web/search"]\noutput_description = """\n文档内容与摘要\n"""\n\nset_plan = """\n1. 阅读文档\n2. 输出总结\n"""\n\n[finish]`),
+      ...parser.done(),
+    ];
+
+    expect(events).toEqual([
+      { type: "thought", chunk: "第一行思考\n" },
+      { type: "thought", chunk: "第二行思考\n" },
+      { type: "thought:end" },
+      { type: "talk", target: "user", chunk: "你好，这是新的流式输出\n" },
+      { type: "talk:end", target: "user" },
+      { type: "program", lang: "shell", chunk: "echo hi\n" },
+      { type: "program:end" },
+      { type: "stack_push", opType: "cognize", attr: "title", chunk: "拆解任务" },
+      { type: "stack_push:end", opType: "cognize", attr: "title" },
+      { type: "stack_push", opType: "cognize", attr: "traits", chunk: "lark/wiki, web/search" },
+      { type: "stack_push:end", opType: "cognize", attr: "traits" },
+      { type: "stack_push", opType: "cognize", attr: "output_description", chunk: "文档内容与摘要\n" },
+      { type: "stack_push:end", opType: "cognize", attr: "output_description" },
+      { type: "set_plan", chunk: "1. 阅读文档\n" },
+      { type: "set_plan", chunk: "2. 输出总结\n" },
+      { type: "set_plan:end" },
+    ]);
   });
 });

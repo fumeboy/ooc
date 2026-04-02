@@ -5,7 +5,7 @@ type: how_to_think
 version: 1.0.0
 when: always
 description: 认知栈思维模式 — 用行为树结构化你的思考过程
-deps: []
+deps: ["kernel/output_format"]
 hooks:
   before:
     inject: |
@@ -22,184 +22,24 @@ hooks:
 
 你的行为树不只是任务清单，它是你的思维结构。每个节点是一个独立的认知帧，有自己的上下文、traits、局部变量。当一个子帧完成后，它的详细 actions 被遗忘，只留下 summary — 这让你的 context 保持精简。善用这个结构。
 
-## 输出格式（TOML）
+## 输出格式快速参考
 
-你的所有输出必须使用 **TOML 格式**。以下是所有可用的段：
+你的所有输出必须使用 **TOML 格式**。详见 `kernel/output_format` trait 的完整说明。
 
-### 格式概览
+| 用途 | TOML 格式 |
+|------|-----------|
+| 思考 | `[thought]` + `content = """..."""` |
+| 代码 | `[program]` + `code = """..."""` |
+| 消息 | `[talk]` + `target = "..."` + `message = """..."""` |
+| 子栈帧推入 | `[cognize_stack_frame_push]` + `title = "..."` |
+| 子栈帧弹出 | `[cognize_stack_frame_pop]` + `summary = """..."""` |
+| 完成 | `[finish]` |
+| 等待 | `[wait]` |
 
-```toml
-[thought]
-content = """
-你的思考过程（内部独白，不会发送给用户）
-"""
-
-[program]
-lang = "javascript"  # 可选，默认 javascript
-code = """
-要执行的代码
-"""
-
-[talk]
-target = "user"     # 或其他对象名
-message = """
-要发送的消息内容
-"""
-reply_to = "msg_xxx"  # 可选，回复特定消息
-
-[action]
-tool = "工具名"
-params = { key = "value" }
-
-[cognize_stack_frame_push]
-title = "子栈帧标题"
-description = """
-详细描述
-"""
-traits = ["lark/wiki", "lark/doc"]
-
-[cognize_stack_frame_pop]
-summary = """
-完成摘要
-"""
-artifacts = { key = "value" }
-
-[reflect_stack_frame_push]
-title = "反思标题"
-
-[reflect_stack_frame_pop]
-summary = """
-反思摘要
-"""
-
-[set_plan]
-content = """
-新的 plan 内容
-"""
-
-# 控制指令
-[finish]
-
-[wait]
-
-[break]
-```
-
-### 新旧格式对比
-
-| 用途 | 旧格式 | 新 TOML 格式 |
-|------|--------|--------------|
-| 思考 | `[thought]` 内容 `[/thought]` | `[thought]` + `content = """..."""` |
-| 代码 | `[program]` 代码 `[/program]` | `[program]` + `code = """..."""` |
-| 消息 | `[talk/user]` 消息 `[/talk]` | `[talk]` + `target = "user"` + `message = """..."""` |
-| 子栈帧 | `[cognize_stack_frame_push.title]` 标题 `[/...]` | `[cognize_stack_frame_push]` + `title = "..."` |
-| 完成 | `[finish]` | `[finish]`（段可以为空） |
-| 等待 | `[wait]` | `[wait]`（段可以为空） |
-
-### 完整示例
-
-**示例 1：思考 + 发送消息**
-
-```toml
-[thought]
-content = """
-用户问好，我需要友好地回复。
-"""
-
-[talk]
-target = "user"
-message = """
-你好！有什么我能帮你的？
-"""
-
-[wait]
-```
-
-**示例 2：执行代码**
-
-```toml
-[thought]
-content = """
-需要计算 1+1 的结果。
-"""
-
-[program]
-lang = "javascript"
-code = """
-const result = 1 + 1;
-print("1 + 1 = " + result);
-"""
-```
-
-**示例 3：创建子栈帧**
-
-```toml
-[thought]
-content = """
-这是一个复杂任务，需要分步骤完成。
-先创建子栈帧来获取文档内容。
-"""
-
-[cognize_stack_frame_push]
-title = "获取文档内容"
-description = """
-从飞书知识库获取指定文档的完整内容。
-需要先查询 wiki 节点，再获取文档内容。
-"""
-traits = ["lark/wiki", "lark/doc"]
-```
-
-### 常见错误对比
-
-#### 错误：使用旧格式的 `[talk/user]`
-
-```toml
-# ❌ 错误：旧格式
-[talk/user]
-你好！
-[/talk]
-
-# ✅ 正确：TOML 格式
-[talk]
-target = "user"
-message = """
-你好！
-"""
-```
-
-#### 错误：代码没有用 code 字段
-
-```toml
-# ❌ 错误：代码直接放在段内
-[program]
-const x = 1;
-
-# ✅ 正确：使用 code 字段
-[program]
-code = """
-const x = 1;
-"""
-```
-
-#### 错误：子栈帧使用嵌套段格式
-
-```toml
-# ❌ 错误：旧的嵌套段格式
-[cognize_stack_frame_push.title]
-获取文档
-[/cognize_stack_frame_push.title]
-
-[cognize_stack_frame_push.traits]
-lark/wiki
-[/cognize_stack_frame_push.traits]
-
-[/cognize_stack_frame_push]
-
-# ✅ 正确：TOML 表格式
-[cognize_stack_frame_push]
-title = "获取文档"
-traits = ["lark/wiki"]
-```
+**常见错误**：
+- ❌ 不要使用带目标后缀的旧消息段写法；统一使用 `[talk]` 表并填写 `target`
+- ❌ 不要使用旧的栈帧属性嵌套段写法；统一使用 `[cognize_stack_frame_push]` / `[cognize_stack_frame_pop]` 表
+- ❌ 代码要放在 `code = """..."""` 字段中，不是直接写在段内
 
 ## 什么时候应该创建子节点
 
@@ -371,3 +211,9 @@ artifacts = {
 - **Trait 按需激活**：不同子帧可以激活不同 traits（如"调研"帧激活 web_search）
 - **错误隔离**：出错时只影响当前子帧，不污染主流程
 - **可恢复性**：子帧失败可以重试，不需要从头开始
+
+## 相关 Traits
+
+- `kernel/output_format` — TOML 输出格式规范（完整说明）
+- `kernel/plannable` — 任务拆解和规划
+- `kernel/talkable` — 对象间通信协议

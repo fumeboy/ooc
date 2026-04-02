@@ -30,7 +30,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, unlink
 import { join, resolve, basename } from "node:path";
 import matter from "gray-matter";
 import { Flow } from "./flow.js";
-import { parseLLMOutput } from "./parser.js";
+import { createLLMOutputStreamParser, parseLLMOutput } from "./parser.js";
+import type { LLMOutputStreamEvent } from "./parser.js";
 import type { ExtractedTalk, ExtractedAction } from "./parser.js";
 import { emitSSE } from "../server/events.js";
 import { buildContext } from "../context/builder.js";
@@ -54,7 +55,7 @@ import {
 import type { CollaborationAPI } from "../world/router.js";
 import type { CronManager } from "../world/cron.js";
 import type { LLMClient, Message, SimpleLLMOptions } from "../thinkable/client.js";
-import type { StoneData, DirectoryEntry, TraitDefinition, TraitHookEvent, HookTime, HookType, ProcessNode } from "../types/index.js";
+import type { StoneData, DirectoryEntry, TraitDefinition, TraitHookEvent, HookTime, HookType, ProcessNode, Action } from "../types/index.js";
 import { getActiveTraits } from "../trait/activator.js";
 import { loadTrait } from "../trait/loader.js";
 
@@ -312,11 +313,12 @@ export async function runThinkLoop(
     /* 3. 解析 LLM 输出（结构化段落 or legacy markdown 代码块） */
     const parsed = parseLLMOutput(llmOutput);
     const { programs, talks, actions, directives } = parsed;
+    const hasStackFrameOperations = parsed.stackFrameOperations.length > 0;
     /* 结构化格式下，thought 就是 [thought] 段落内容；legacy 下是去掉代码块后的文本 */
     const replyContent = parsed.thought;
     const pendingWait = flow.toJSON().data._pendingWait === true;
 
-    if (pendingWait && (programs.length > 0 || talks.length > 0 || actions.length > 0 || directives.finish || directives.wait || directives.break_)) {
+    if (pendingWait && (programs.length > 0 || talks.length > 0 || actions.length > 0 || hasStackFrameOperations || directives.finish || directives.wait || directives.break_)) {
       flow.setFlowData("_pendingWait", undefined);
     }
 
@@ -538,6 +540,17 @@ export async function runThinkLoop(
                 );
 
                 if (nodeId) {
+                  const pendingNode = findNode(process.root, nodeId);
+                  if (pendingNode) {
+                    const carriedActions = collectInlineBeforeCarryoverActions(currentNode.actions);
+                    if (carriedActions.length > 0) {
+                      pendingNode.actions.push(...carriedActions);
+                    }
+                    if (currentNode.locals && Object.keys(currentNode.locals).length > 0) {
+                      pendingNode.locals = { ...(pendingNode.locals ?? {}), ...currentNode.locals };
+                    }
+                  }
+
                   addProcessTodo(process, nodeId, pendingPush.title, "plan");
                   moveProcessFocus(process, nodeId);
                   consola.info(`[stack_frame_pop] pending stack_push executed, nodeId=${nodeId}`);
@@ -738,6 +751,13 @@ export async function runThinkLoop(
 
     /* 5. 无程序且无 action 时，指令立即生效 */
     if (programs.length === 0 && actions.length === 0) {
+      const userOnlyTalks = talks.length > 0 && talks.every((t) => t.target === "user");
+
+      if (directives.break_) {
+        flow.setStatus("pausing");
+        flow.save();
+        return persistedData;
+      }
       if (directives.finish) {
         /* Hook: when_finish */
         const hookInjection = collectAndFireHooks(traits, flow, "when_finish", firedHooks);
@@ -779,6 +799,21 @@ export async function runThinkLoop(
         flow.save();
         return persistedData;
       }
+
+      if (userOnlyTalks && !hasStackFrameOperations) {
+        flow.setStatus("waiting");
+        syncThreadFocusOut();
+        flow.save();
+        return persistedData;
+      }
+
+      if (hasStackFrameOperations || talks.length > 0) {
+        consecutiveEmptyRounds = 0;
+        syncThreadFocusOut();
+        flow.save();
+        continue;
+      }
+
       /* 无程序、无指令 → 可能是 LLM 输出被截断（max_tokens）或乱码 */
 
       /* 防护层 1: 乱码检测 — LLM context 过载时可能输出 token 乱码 */
@@ -1030,274 +1065,70 @@ async function consumeStream(
   taskId: string,
 ): Promise<string> {
   let fullOutput = "";
-  /** 当前正在流式推送的段落类型 */
-  let streamingSection: "thought" | "talk" | "program" | "action" | "stack_push_attr" | "stack_pop_attr" | "set_plan" | null = null;
-  /** 当前 talk 的目标对象名 */
-  let streamingTalkTarget: string | null = null;
-  /** 当前 program 的语言类型 */
-  let streamingProgramLang: "javascript" | "shell" = "javascript";
-  /** 当前 action 的工具方法名 */
-  let streamingActionToolName: string | null = null;
-  /** 当前栈操作类型 (cognize/reflect) */
-  let streamingStackOpType: "cognize" | "reflect" | null = null;
-  /** 当前栈操作属性名 (title/description/traits/outputs/outputDescription/summary/artifacts) */
-  let streamingStackAttr: string | null = null;
-  /** 行缓冲区：用于检测段落标记（标记必须独占一行） */
-  let lineBuffer = "";
+  const streamParser = createLLMOutputStreamParser();
 
-  /** 检查行缓冲区是否匹配段落标记，返回匹配类型 */
-  const checkLineTag = (
-    line: string,
-  ): {
-    type:
-      | "thought" | "program" | "program_lang" | "finish" | "wait" | "break"
-      | "talk_open" | "talk_close" | "action_open" | "action_close"
-      | "stack_frame_open" | "stack_frame_close"
-      | "stack_push_attr_open" | "stack_push_attr_close"
-      | "stack_pop_attr_open" | "stack_pop_attr_close"
-      | "set_plan_open" | "set_plan_close"
-      | null;
-    target?: string;
-    lang?: "javascript" | "shell";
-    toolName?: string;
-    opType?: "cognize" | "reflect";
-    attr?: string;
-  } => {
-    const trimmed = line.trim();
-
-    // 基础标记
-    if (/^\[(thought|program|finish|wait|break)\]$/.test(trimmed)) {
-      return { type: trimmed.slice(1, -1) as "thought" | "program" | "finish" | "wait" | "break" };
+  const emitStreamEvent = (event: LLMOutputStreamEvent) => {
+    switch (event.type) {
+      case "thought":
+        emitSSE({ type: "stream:thought", objectName, taskId, chunk: event.chunk });
+        break;
+      case "thought:end":
+        emitSSE({ type: "stream:thought:end", objectName, taskId });
+        break;
+      case "talk":
+        emitSSE({ type: "stream:talk", objectName, taskId, target: event.target, chunk: event.chunk });
+        break;
+      case "talk:end":
+        emitSSE({ type: "stream:talk:end", objectName, taskId, target: event.target });
+        break;
+      case "program":
+        if (event.lang === "shell") {
+          emitSSE({ type: "stream:program", objectName, taskId, lang: "shell", chunk: event.chunk });
+        } else {
+          emitSSE({ type: "stream:program", objectName, taskId, chunk: event.chunk });
+        }
+        break;
+      case "program:end":
+        emitSSE({ type: "stream:program:end", objectName, taskId });
+        break;
+      case "action":
+        emitSSE({ type: "stream:action", objectName, taskId, toolName: event.toolName, chunk: event.chunk });
+        break;
+      case "action:end":
+        emitSSE({ type: "stream:action:end", objectName, taskId, toolName: event.toolName });
+        break;
+      case "stack_push":
+        emitSSE({ type: "stream:stack_push", objectName, taskId, opType: event.opType, attr: event.attr, chunk: event.chunk });
+        break;
+      case "stack_push:end":
+        emitSSE({ type: "stream:stack_push:end", objectName, taskId, opType: event.opType, attr: event.attr });
+        break;
+      case "stack_pop":
+        emitSSE({ type: "stream:stack_pop", objectName, taskId, opType: event.opType, attr: event.attr, chunk: event.chunk });
+        break;
+      case "stack_pop:end":
+        emitSSE({ type: "stream:stack_pop:end", objectName, taskId, opType: event.opType, attr: event.attr });
+        break;
+      case "set_plan":
+        emitSSE({ type: "stream:set_plan", objectName, taskId, chunk: event.chunk });
+        break;
+      case "set_plan:end":
+        emitSSE({ type: "stream:set_plan:end", objectName, taskId });
+        break;
     }
-
-    // === 认知栈操作属性标记（如 [cognize_stack_frame_push.title]）===
-    // push 属性开始标记: [cognize_stack_frame_push.title] 等
-    const pushAttrOpenMatch = /^\[(cognize|reflect)_stack_frame_push\.(title|description|traits|outputs|outputDescription)\]$/.exec(trimmed);
-    if (pushAttrOpenMatch) {
-      return {
-        type: "stack_push_attr_open",
-        opType: pushAttrOpenMatch[1] as "cognize" | "reflect",
-        attr: pushAttrOpenMatch[2],
-      };
-    }
-    // push 属性结束标记: [/cognize_stack_frame_push.title] 等
-    const pushAttrCloseMatch = /^\[\/(cognize|reflect)_stack_frame_push\.(title|description|traits|outputs|outputDescription)\]$/.exec(trimmed);
-    if (pushAttrCloseMatch) {
-      return {
-        type: "stack_push_attr_close",
-        opType: pushAttrCloseMatch[1] as "cognize" | "reflect",
-        attr: pushAttrCloseMatch[2],
-      };
-    }
-
-    // pop 属性开始标记: [cognize_stack_frame_pop.summary] 等
-    const popAttrOpenMatch = /^\[(cognize|reflect)_stack_frame_pop\.(summary|artifacts)\]$/.exec(trimmed);
-    if (popAttrOpenMatch) {
-      return {
-        type: "stack_pop_attr_open",
-        opType: popAttrOpenMatch[1] as "cognize" | "reflect",
-        attr: popAttrOpenMatch[2],
-      };
-    }
-    // pop 属性结束标记: [/cognize_stack_frame_pop.summary] 等
-    const popAttrCloseMatch = /^\[\/(cognize|reflect)_stack_frame_pop\.(summary|artifacts)\]$/.exec(trimmed);
-    if (popAttrCloseMatch) {
-      return {
-        type: "stack_pop_attr_close",
-        opType: popAttrCloseMatch[1] as "cognize" | "reflect",
-        attr: popAttrCloseMatch[2],
-      };
-    }
-
-    // set_plan 开始/结束标记
-    if (/^\[set_plan\]$/.test(trimmed)) {
-      return { type: "set_plan_open" };
-    }
-    if (/^\[\/set_plan\]$/.test(trimmed)) {
-      return { type: "set_plan_close" };
-    }
-
-    // 主标记（向后兼容）
-    const stackFrameOpenMatch = /^\[(cognize_stack_frame_push|cognize_stack_frame_pop|reflect_stack_frame_push|reflect_stack_frame_pop)\]$/.exec(trimmed);
-    if (stackFrameOpenMatch) {
-      return { type: "stack_frame_open" };
-    }
-    const stackFrameCloseMatch = /^\[\/(cognize_stack_frame_push|cognize_stack_frame_pop|reflect_stack_frame_push|reflect_stack_frame_pop)\]$/.exec(trimmed);
-    if (stackFrameCloseMatch) {
-      return { type: "stack_frame_close" };
-    }
-
-    // 其他标记
-    const programLangMatch = /^\[program\/(javascript|shell)\]$/.exec(trimmed);
-    if (programLangMatch) {
-      return { type: "program_lang", lang: programLangMatch[1] as "javascript" | "shell" };
-    }
-    const talkMatch = /^\[talk\/([a-zA-Z0-9_-]+)\]$/.exec(trimmed);
-    if (talkMatch) {
-      return { type: "talk_open", target: talkMatch[1]! };
-    }
-    if (/^\[\/talk\]$/.test(trimmed)) {
-      return { type: "talk_close" };
-    }
-    const actionMatch = /^\[action\/([a-zA-Z0-9_-]+)\]$/.exec(trimmed);
-    if (actionMatch) {
-      return { type: "action_open", toolName: actionMatch[1]! };
-    }
-    if (/^\[\/action\]$/.test(trimmed)) {
-      return { type: "action_close" };
-    }
-    return { type: null };
-  };
-
-  /** 结束当前流式段落，发送 end 事件 */
-  const endCurrentSection = () => {
-    if (streamingSection === "thought") {
-      emitSSE({ type: "stream:thought:end", objectName, taskId });
-    } else if (streamingSection === "talk" && streamingTalkTarget) {
-      emitSSE({ type: "stream:talk:end", objectName, taskId, target: streamingTalkTarget });
-    } else if (streamingSection === "program") {
-      emitSSE({ type: "stream:program:end", objectName, taskId });
-    } else if (streamingSection === "action" && streamingActionToolName) {
-      emitSSE({ type: "stream:action:end", objectName, taskId, toolName: streamingActionToolName });
-    } else if (streamingSection === "stack_push_attr" && streamingStackOpType && streamingStackAttr) {
-      emitSSE({ type: "stream:stack_push:end", objectName, taskId, opType: streamingStackOpType, attr: streamingStackAttr });
-    } else if (streamingSection === "stack_pop_attr" && streamingStackOpType && streamingStackAttr) {
-      emitSSE({ type: "stream:stack_pop:end", objectName, taskId, opType: streamingStackOpType, attr: streamingStackAttr });
-    } else if (streamingSection === "set_plan") {
-      emitSSE({ type: "stream:set_plan:end", objectName, taskId });
-    }
-    streamingSection = null;
-    streamingTalkTarget = null;
-    streamingProgramLang = "javascript";
-    streamingActionToolName = null;
-    streamingStackOpType = null;
-    streamingStackAttr = null;
   };
 
   for await (const chunk of stream) {
     fullOutput += chunk;
 
-    /* 逐字符处理，按换行符分割成行 */
-    for (const char of chunk) {
-      if (char === "\n") {
-        /* 一行结束，检查是否是段落标记 */
-        const tag = checkLineTag(lineBuffer);
-
-        if (tag.type === "thought") {
-          endCurrentSection();
-          streamingSection = "thought";
-        } else if (tag.type === "stack_frame_open") {
-          // 主标记（无内容），不切换流式状态，内容走后续属性标记
-        } else if (tag.type === "stack_frame_close") {
-          endCurrentSection();
-        } else if (tag.type === "stack_push_attr_open" && tag.opType && tag.attr) {
-          endCurrentSection();
-          streamingSection = "stack_push_attr";
-          streamingStackOpType = tag.opType;
-          streamingStackAttr = tag.attr;
-        } else if (tag.type === "stack_push_attr_close") {
-          endCurrentSection();
-        } else if (tag.type === "stack_pop_attr_open" && tag.opType && tag.attr) {
-          endCurrentSection();
-          streamingSection = "stack_pop_attr";
-          streamingStackOpType = tag.opType;
-          streamingStackAttr = tag.attr;
-        } else if (tag.type === "stack_pop_attr_close") {
-          endCurrentSection();
-        } else if (tag.type === "set_plan_open") {
-          endCurrentSection();
-          streamingSection = "set_plan";
-        } else if (tag.type === "set_plan_close") {
-          endCurrentSection();
-        } else if (tag.type === "program") {
-          endCurrentSection();
-          streamingSection = "program";
-          streamingProgramLang = "javascript";
-        } else if (tag.type === "program_lang") {
-          endCurrentSection();
-          streamingSection = "program";
-          streamingProgramLang = tag.lang!;
-        } else if (tag.type === "talk_open") {
-          endCurrentSection();
-          streamingSection = "talk";
-          streamingTalkTarget = tag.target!;
-        } else if (tag.type === "action_open") {
-          endCurrentSection();
-          streamingSection = "action";
-          streamingActionToolName = tag.toolName!;
-        } else if (tag.type === "talk_close" || tag.type === "action_close" || tag.type === "finish" || tag.type === "wait" || tag.type === "break") {
-          endCurrentSection();
-        } else {
-          /* 普通内容行：如果在流式段落中，推送内容（含换行） */
-          if (streamingSection === "thought") {
-            emitSSE({ type: "stream:thought", objectName, taskId, chunk: lineBuffer + "\n" });
-          } else if (streamingSection === "talk" && streamingTalkTarget) {
-            emitSSE({ type: "stream:talk", objectName, taskId, target: streamingTalkTarget, chunk: lineBuffer + "\n" });
-          } else if (streamingSection === "program") {
-            if (streamingProgramLang === "shell") {
-              emitSSE({ type: "stream:program", objectName, taskId, lang: "shell", chunk: lineBuffer + "\n" } as any);
-            } else {
-              emitSSE({ type: "stream:program", objectName, taskId, chunk: lineBuffer + "\n" });
-            }
-          } else if (streamingSection === "action" && streamingActionToolName) {
-            emitSSE({ type: "stream:action", objectName, taskId, toolName: streamingActionToolName, chunk: lineBuffer + "\n" });
-          } else if (streamingSection === "stack_push_attr" && streamingStackOpType && streamingStackAttr) {
-            emitSSE({ type: "stream:stack_push", objectName, taskId, opType: streamingStackOpType, attr: streamingStackAttr, chunk: lineBuffer + "\n" });
-          } else if (streamingSection === "stack_pop_attr" && streamingStackOpType && streamingStackAttr) {
-            emitSSE({ type: "stream:stack_pop", objectName, taskId, opType: streamingStackOpType, attr: streamingStackAttr, chunk: lineBuffer + "\n" });
-          } else if (streamingSection === "set_plan") {
-            emitSSE({ type: "stream:set_plan", objectName, taskId, chunk: lineBuffer + "\n" });
-          }
-        }
-
-        lineBuffer = "";
-      } else {
-        lineBuffer += char;
-      }
+    for (const event of streamParser.push(chunk)) {
+      emitStreamEvent(event);
     }
   }
 
-  /* 处理最后一行（没有换行符结尾的情况） */
-  if (lineBuffer.length > 0) {
-    const tag = checkLineTag(lineBuffer);
-    if (
-      tag.type === "talk_close" ||
-      tag.type === "action_close" ||
-      tag.type === "stack_frame_close" ||
-      tag.type === "stack_push_attr_close" ||
-      tag.type === "stack_pop_attr_close" ||
-      tag.type === "set_plan_close" ||
-      tag.type === "program" ||
-      tag.type === "finish" ||
-      tag.type === "wait" ||
-      tag.type === "break"
-    ) {
-      endCurrentSection();
-    } else if (tag.type === null) {
-      if (streamingSection === "thought") {
-        emitSSE({ type: "stream:thought", objectName, taskId, chunk: lineBuffer });
-      } else if (streamingSection === "talk" && streamingTalkTarget) {
-        emitSSE({ type: "stream:talk", objectName, taskId, target: streamingTalkTarget, chunk: lineBuffer });
-      } else if (streamingSection === "program") {
-        if (streamingProgramLang === "shell") {
-          emitSSE({ type: "stream:program", objectName, taskId, lang: "shell", chunk: lineBuffer } as any);
-        } else {
-          emitSSE({ type: "stream:program", objectName, taskId, chunk: lineBuffer });
-        }
-      } else if (streamingSection === "action" && streamingActionToolName) {
-        emitSSE({ type: "stream:action", objectName, taskId, toolName: streamingActionToolName, chunk: lineBuffer });
-      } else if (streamingSection === "stack_push_attr" && streamingStackOpType && streamingStackAttr) {
-        emitSSE({ type: "stream:stack_push", objectName, taskId, opType: streamingStackOpType, attr: streamingStackAttr, chunk: lineBuffer });
-      } else if (streamingSection === "stack_pop_attr" && streamingStackOpType && streamingStackAttr) {
-        emitSSE({ type: "stream:stack_pop", objectName, taskId, opType: streamingStackOpType, attr: streamingStackAttr, chunk: lineBuffer });
-      } else if (streamingSection === "set_plan") {
-        emitSSE({ type: "stream:set_plan", objectName, taskId, chunk: lineBuffer });
-      }
-    }
+  for (const event of streamParser.done()) {
+    emitStreamEvent(event);
   }
-
-  /* 确保流结束时关闭所有打开的段落 */
-  endCurrentSection();
 
   return fullOutput;
 }
@@ -1365,6 +1196,18 @@ function collectHooksForInline(
   const injection = `>>> [系统提示 — ${event}${titlePart}]\n${injections.join("\n\n")}`;
 
   return { injection, hookIds };
+}
+
+function collectInlineBeforeCarryoverActions(actions: Action[]): Action[] {
+  return actions
+    .filter((action) => action.type === "thought" || action.type === "program" || action.type === "action" || action.type === "message_in" || action.type === "message_out")
+    .map((action) => ({
+      type: action.type,
+      content: action.content,
+      timestamp: action.timestamp,
+      ...(action.result !== undefined ? { result: action.result } : {}),
+      ...(action.success !== undefined ? { success: action.success } : {}),
+    }));
 }
 
 /**
