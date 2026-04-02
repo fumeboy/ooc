@@ -105,6 +105,7 @@ export function buildContext(
     "kernel/testable",
     "kernel/reviewable",
     "kernel/cognitive-style",
+    "kernel/output_format",
   ]);
 
   /* Progressive Disclosure: 有 description 的 trait 只在 focus 路径或 always-on 时注入完整 readme */

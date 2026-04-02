@@ -5,7 +5,7 @@ type: how_to_interact
 version: 1.0.0
 when: always
 description: 对象间通信协议，talk/delegate/reply 消息传递
-deps: []
+deps: ["kernel/output_format"]
 hooks:
   when_wait:
     inject: >
@@ -30,13 +30,25 @@ hooks:
 ---
 # 通信能力
 
-## 输出格式（TOML）
+## 输出格式快速参考
 
-你的所有输出必须使用 **TOML 格式**。详见 `kernel/computable` trait 的完整说明。
+你的所有输出必须使用 **TOML 格式**。详见 `kernel/output_format` trait 的完整说明。
 
-### 发送消息的两种方式
+| 用途 | TOML 格式 |
+|------|-----------|
+| 思考 | `[thought]` + `content = """..."""` |
+| 代码 | `[program]` + `code = """..."""` |
+| 消息 | `[talk]` + `target = "..."` + `message = """..."""` |
+| 完成 | `[finish]` |
+| 等待 | `[wait]` |
 
-**方式一：`[talk]` 段格式（推荐用于简单消息）**
+**常见错误**：
+- ❌ 不要使用带目标后缀的旧消息段写法；统一使用 `[talk]` 表并填写 `target`
+- ❌ 不要把消息内容直接写在 `[talk]` 段内，要用 `message = """..."""` 字段
+
+## 发送消息的两种方式
+
+### 方式一：`[talk]` 段格式（推荐用于简单消息）
 
 ```toml
 [talk]
@@ -48,7 +60,7 @@ message = """
 [wait]
 ```
 
-**方式二：`talk()` 函数（在 program 中使用）**
+### 方式二：`talk()` 函数（在 program 中使用）
 
 ```toml
 [program]
@@ -61,16 +73,37 @@ talk("你的回复内容", "user");
 """
 ```
 
-### 新旧格式对比
+`talk()` 是同步消息投递（fire-and-forget）。消息发出后你可以继续做其他事情，对方的回复会在稍后作为新消息送达给你。
 
-| 用途 | 旧格式 | 新 TOML 格式 |
-|------|--------|--------------|
-| 发送消息 | `[talk/user]` 内容 `[/talk]` | `[talk]` + `target = "user"` + `message = """..."""` |
-| 回复特定消息 | `[talk/user]#msg_xxx` 内容 `[/talk]` | `[talk]` + `reply_to = "msg_xxx"` |
+## 回复特定消息
 
-**常见错误**：
-- ❌ 不要用 `[talk/user]` 旧格式，要用 `[talk]` + `target = "user"`
-- ❌ 不要把消息内容直接写在 `[talk]` 段内，要用 `message = """..."""` 字段
+收到消息时，系统会显示消息 ID（如 `#msg_xxx`）。你可以用 `reply_to` 字段指定回复哪条消息：
+
+### 方式一：`[talk]` 段
+
+```toml
+[talk]
+target = "helper"
+reply_to = "msg_abc"
+message = """
+收到，谢谢
+"""
+```
+
+### 方式二：`talk()` 函数
+
+```toml
+[program]
+code = """
+// 收到：[消息 #msg_abc 来自 helper] 分析结果如下...
+// 回复这条消息：
+talk("收到，谢谢", "helper", "msg_abc");
+"""
+```
+
+`replyTo` 是可选的。对方会看到你的回复关联了哪条消息。
+
+重要：`talk()` 是唯一的通信方式。无论是发起对话、回复消息、还是向人类回复，都必须用 `talk()`。`print()` 只用于调试输出，不会被任何人看到。
 
 ## 通讯录
 
@@ -147,88 +180,7 @@ B → A: "结果：[...]"
 
 ## 跨对象对话
 
-你有两种方式与其他对象通信：
-
-### 方式一：`[talk]` 段落格式（推荐用于简单消息）
-
-直接在输出中使用 `[talk]` 段落，消息内容会被流式推送：
-
-```toml
-[thought]
-content = """
-用户问好，我需要回复。
-"""
-
-[talk]
-target = "user"
-message = """
-你好！有什么我能帮你的？
-"""
-
-[wait]
-```
-
-```toml
-[thought]
-content = """
-我需要请 sophia 帮忙分析一个问题。
-"""
-
-[talk]
-target = "sophia"
-message = """
-请帮我分析一下这个架构设计的优缺点...
-"""
-
-[wait]
-```
-
-### 方式二：`talk()` 函数（在 program 中使用）
-
-使用 `talk()` 函数与其他对象通信：
-
-```toml
-[program]
-code = """
-// 发送消息（同步投递，不会阻塞等待回复）
-talk("你的消息", "对象名");
-
-// 向人类回复
-talk("你的回复内容", "user");
-"""
-```
-
-`talk()` 是同步消息投递（fire-and-forget）。消息发出后你可以继续做其他事情，对方的回复会在稍后作为新消息送达给你。
-
-### 回复特定消息
-
-收到消息时，系统会显示消息 ID（如 `#msg_xxx`）。你可以用 `reply_to` 字段指定回复哪条消息：
-
-**方式一：`[talk]` 段**
-
-```toml
-[talk]
-target = "helper"
-reply_to = "msg_abc"
-message = """
-收到，谢谢
-"""
-```
-
-**方式二：`talk()` 函数**
-
-```toml
-[program]
-code = """
-// 收到：[消息 #msg_abc 来自 helper] 分析结果如下...
-// 回复这条消息：
-talk("收到，谢谢", "helper", "msg_abc");
-"""
-```
-
-`replyTo` 是可选的。对方会看到你的回复关联了哪条消息。
-
-重要：`talk()` 是唯一的通信方式。无论是发起对话、回复消息、还是向人类回复，都必须用 `talk()`。`print()` 只用于调试输出，不会被任何人看到。
+你有两种方式与其他对象通信。详情见 `kernel/output_format` trait。
 
 ## 向人类回复
 
@@ -340,16 +292,6 @@ message = """
 """
 ```
 
-```toml
-[talk]
-target = "user"
-message = """
-分析报告已完成：
-
-[navigate title="分析报告"]ooc://file/objects/researcher/files/report.md[/navigate]
-"""
-```
-
 ### 使用场景
 
 - 你生成了文档或报告，需要引导用户查看
@@ -357,3 +299,9 @@ message = """
 - 你完成了任务，结果保存在 files 文件中
 
 普通引用用 `ooc://` 链接即可（会渲染为可点击的文本链接），导航卡片用于"我做了一个东西，请你来看"的场景。
+
+## 相关 Traits
+
+- `kernel/output_format` — TOML 输出格式规范（完整说明）
+- `kernel/computable` — 认知栈思维模式（核心）
+- `kernel/plannable` — 任务拆解和规划

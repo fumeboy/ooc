@@ -11,6 +11,7 @@ import { Flow } from "../src/flow/flow.js";
 import { runThinkLoop } from "../src/flow/thinkloop.js";
 import { MockLLMClient } from "../src/thinkable/client.js";
 import type { StoneData } from "../src/types/index.js";
+import type { TraitDefinition } from "../src/types/index.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_flow_test");
 
@@ -130,6 +131,140 @@ describe("ThinkLoop", () => {
     });
 
     await runThinkLoop(flow, stone, TEST_DIR, llm, []);
+    expect(flow.status).toBe("waiting");
+  });
+
+  test("带 before hook 的 cognize_stack_frame_push 不应被计为空轮", async () => {
+    const flowsDir = join(TEST_DIR, "flows4");
+    const flow = Flow.create(flowsDir, "supervisor", "分析飞书文档", "human");
+
+    const stone: StoneData = {
+      name: "supervisor",
+      thinkable: { whoAmI: "你是一个监督者" },
+      talkable: { whoAmI: "监督者", functions: [] },
+      data: {},
+      relations: [],
+      traits: [],
+    };
+
+    const traits: TraitDefinition[] = [
+      {
+        namespace: "debug",
+        name: "before_hook",
+        type: "how_to_think",
+        when: "always",
+        description: "在压栈前插入 before hook",
+        readme: "",
+        methods: [],
+        deps: [],
+        hooks: {
+          before: {
+            inject: "请先完成 before hook，再继续主任务。",
+            once: false,
+          },
+        },
+      },
+    ];
+
+    const llm = new MockLLMClient({
+      responses: [
+        `先创建子栈帧。\n\n[cognize_stack_frame_push]\n\n[cognize_stack_frame_push.title]\n获取文档\n[/cognize_stack_frame_push.title]\n\n[/cognize_stack_frame_push]`,
+        "继续思考第 1 轮。",
+        "继续思考第 2 轮。",
+        "继续思考第 3 轮。",
+        "继续思考第 4 轮。",
+        `before hook 结束。\n\n[cognize_stack_frame_pop]\n\n[cognize_stack_frame_pop.summary]\nbefore 完成\n[/cognize_stack_frame_pop.summary]\n\n[/cognize_stack_frame_pop]`,
+        "主任务已准备好。[finish]",
+      ],
+    });
+
+    await runThinkLoop(flow, stone, TEST_DIR, llm, [], traits, { maxIterations: 10 });
+
+    expect(flow.status).toBe("finished");
+    expect(flow.toJSON().data._pendingStackPush).toBeUndefined();
+    expect(flow.process.root.children.some((node) => node.title === "获取文档")).toBe(true);
+  });
+
+  test("inline_before 完成后应把已执行的 program 带入真实任务节点", async () => {
+    const flowsDir = join(TEST_DIR, "flows5");
+    const flow = Flow.create(flowsDir, "supervisor", "获取飞书文档", "human");
+
+    const stone: StoneData = {
+      name: "supervisor",
+      thinkable: { whoAmI: "你是一个监督者" },
+      talkable: { whoAmI: "监督者", functions: [] },
+      data: {},
+      relations: [],
+      traits: [],
+    };
+
+    const traits: TraitDefinition[] = [
+      {
+        namespace: "debug",
+        name: "before_hook",
+        type: "how_to_think",
+        when: "always",
+        description: "在压栈前插入 before hook",
+        readme: "",
+        methods: [],
+        deps: [],
+        hooks: {
+          before: {
+            inject: "请先完成 before hook，再继续主任务。",
+            once: false,
+          },
+        },
+      },
+    ];
+
+    const llm = new MockLLMClient({
+      responses: [
+        `先创建子栈帧。\n\n[cognize_stack_frame_push]\n\n[cognize_stack_frame_push.title]\n获取文档\n[/cognize_stack_frame_push.title]\n\n[/cognize_stack_frame_push]`,
+        `[program]\nprint("doc fetched")\n[/program]\n\n[cognize_stack_frame_pop]\n[/cognize_stack_frame_pop]`,
+        `[cognize_stack_frame_pop]\n[cognize_stack_frame_pop.summary]\n获取文档成功\n[/cognize_stack_frame_pop.summary]\n[/cognize_stack_frame_pop]\n[finish]`,
+      ],
+    });
+
+    await runThinkLoop(flow, stone, TEST_DIR, llm, [], traits, { maxIterations: 6 });
+
+    const taskNode = flow.process.root.children.find((node) => node.title === "获取文档");
+    expect(taskNode).toBeDefined();
+    expect(taskNode!.actions.some((action) => action.type === "program" && action.result?.includes("doc fetched"))).toBe(true);
+  });
+
+  test("仅向 user 发送 talk 时应自动进入 waiting", async () => {
+    const flowsDir = join(TEST_DIR, "flows6");
+    const flow = Flow.create(flowsDir, "assistant", "回答用户问题", "human");
+
+    const stone: StoneData = {
+      name: "assistant",
+      thinkable: { whoAmI: "你是一个回答问题的助手" },
+      talkable: { whoAmI: "回答助手", functions: [] },
+      data: {},
+      relations: [],
+      traits: [],
+    };
+
+    const llm = new MockLLMClient({
+      responses: [
+        `[thought]\n我已经准备好回复用户。\n\n[talk/user]\n这是答案。\n[/talk]`,
+      ],
+    });
+
+    const delivered: Array<{ message: string; target: string }> = [];
+    const collaboration = {
+      talk: (message: string, target: string) => {
+        delivered.push({ message, target });
+        return `[消息已发送给 ${target}]`;
+      },
+      talkToSelf: () => "[自我消息已发送]",
+      replyToFlow: () => "[已回复 flow]",
+    };
+
+    await runThinkLoop(flow, stone, TEST_DIR, llm, [], [], { maxIterations: 5 }, collaboration);
+
+    expect(delivered).toHaveLength(1);
+    expect(delivered[0]).toEqual({ message: "这是答案。", target: "user" });
     expect(flow.status).toBe("waiting");
   });
 });

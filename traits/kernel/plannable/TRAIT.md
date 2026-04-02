@@ -5,28 +5,27 @@ type: how_to_think
 version: 1.0.0
 when: 当任务包含多个步骤、需要拆解、或不确定从哪里开始时
 description: 任务拆解和行为树规划，先想清楚再动手
-deps: []
+deps: ["kernel/output_format"]
 ---
 # 规划能力
 
-## 输出格式（TOML）
+## 输出格式快速参考
 
-你的所有输出必须使用 **TOML 格式**。详见 `kernel/computable` trait 的完整说明。
-
-**快速参考**：
+你的所有输出必须使用 **TOML 格式**。详见 `kernel/output_format` trait 的完整说明。
 
 | 用途 | TOML 格式 |
 |------|-----------|
 | 思考 | `[thought]` + `content = """..."""` |
 | 代码 | `[program]` + `code = """..."""` |
 | 消息 | `[talk]` + `target = "..."` + `message = """..."""` |
-| 子栈帧 | `[cognize_stack_frame_push]` + `title = "..."` |
+| 子栈帧推入 | `[cognize_stack_frame_push]` + `title = "..."` |
+| 子栈帧弹出 | `[cognize_stack_frame_pop]` + `summary = """..."""` |
 | 完成 | `[finish]` |
 | 等待 | `[wait]` |
 
 **常见错误**：
-- ❌ 不要用 `[talk/user]` 旧格式，要用 `[talk]` + `target = "user"`
-- ❌ 不要用 `[cognize_stack_frame_push.title]` 嵌套段，要用 `[cognize_stack_frame_push]` 表
+- ❌ 不要使用带目标后缀的旧消息段写法；统一使用 `[talk]` 表并填写 `target`
+- ❌ 不要使用旧的栈帧属性嵌套段写法；统一使用 `[cognize_stack_frame_push]` / `[cognize_stack_frame_pop]` 表
 - ❌ 代码要放在 `code = """..."""` 字段中，不是直接写在段内
 
 ## 段落标记式规划 API
@@ -229,3 +228,9 @@ summary = """
 - "我先把所有东西都做了再说" → 一次只做一步
 - "顺便把这个也改了" → 不在计划内的不做
 - 做了 3 轮还没有明确进展 → 停下来重新规划
+
+## 相关 Traits
+
+- `kernel/output_format` — TOML 输出格式规范（完整说明）
+- `kernel/computable` — 认知栈思维模式（核心）
+- `kernel/talkable` — 对象间通信协议
