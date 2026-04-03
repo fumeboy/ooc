@@ -205,3 +205,53 @@ export interface FileTreeNode {
   /** 目录标记：stone 或 flow */
   marker?: "stone" | "flow";
 }
+
+// --- Session Kanban ---
+
+export type IssueStatus =
+  | "discussing" | "designing" | "reviewing"
+  | "executing" | "confirming" | "done" | "closed";
+
+export type TaskStatus = "running" | "done" | "closed";
+
+export interface KanbanComment {
+  id: string;
+  author: string;
+  content: string;
+  mentions?: string[];
+  createdAt: string;
+}
+
+export interface KanbanIssue {
+  id: string;
+  title: string;
+  status: IssueStatus;
+  description?: string;
+  participants: string[];
+  taskRefs: string[];
+  reportPages: string[];
+  hasNewInfo: boolean;
+  comments: KanbanComment[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface KanbanSubTask {
+  id: string;
+  title: string;
+  assignee?: string;
+  status: "pending" | "running" | "done";
+}
+
+export interface KanbanTask {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  description?: string;
+  issueRefs: string[];
+  reportPages: string[];
+  subtasks: KanbanSubTask[];
+  hasNewInfo: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

@@ -15,7 +15,7 @@ import { viewRegistry, type ViewProps } from "./registry";
 import { cn } from "../lib/utils";
 import { ObjectDetail } from "../features/ObjectDetail";
 import { FlowView } from "../features/FlowView";
-import { SessionGantt } from "../features/SessionGantt";
+import { SessionKanban } from "../features/SessionKanban";
 import { DynamicUI } from "../features/DynamicUI";
 import { ProcessView } from "../features/ProcessView";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
@@ -69,10 +69,32 @@ function FlowViewAdapter({ path }: ViewProps) {
   return <FlowView sessionId={sessionId} objectName={objectName} initialTab={initialTab} />;
 }
 
-/** SessionGantt 适配器 */
-function SessionGanttAdapter({ path }: ViewProps) {
+/** SessionKanban 适配器 */
+function SessionKanbanAdapter({ path }: ViewProps) {
   const sessionId = path.match(/^flows\/([^/]+)$/)?.[1] ?? "";
-  return <SessionGantt sessionId={sessionId} />;
+  return <SessionKanban sessionId={sessionId} />;
+}
+
+/** Issue 详情页适配器 */
+function IssueDetailAdapter({ path }: ViewProps) {
+  const m = path.match(/^flows\/([^/]+)\/issues\/([^/]+)$/);
+  return <IssueDetailPlaceholder sessionId={m?.[1] ?? ""} issueId={m?.[2] ?? ""} />;
+}
+
+/** Task 详情页适配器 */
+function TaskDetailAdapter({ path }: ViewProps) {
+  const m = path.match(/^flows\/([^/]+)\/tasks\/([^/]+)$/);
+  return <TaskDetailPlaceholder sessionId={m?.[1] ?? ""} taskId={m?.[2] ?? ""} />;
+}
+
+/** Issue 详情占位（Chunk 5 实现） */
+function IssueDetailPlaceholder({ sessionId, issueId }: { sessionId: string; issueId: string }) {
+  return <div className="p-6 text-muted-foreground">Issue: {issueId} (session: {sessionId})</div>;
+}
+
+/** Task 详情占位（Chunk 5 实现） */
+function TaskDetailPlaceholder({ sessionId, taskId }: { sessionId: string; taskId: string }) {
+  return <div className="p-6 text-muted-foreground">Task: {taskId} (session: {sessionId})</div>;
 }
 
 /** ReflectFlow 适配器 — stones/{name}/reflect/ 下的 Process + Data + Memory 视图 */
@@ -274,14 +296,34 @@ export function registerAllViews(): void {
     tabLabel: (p) => p.match(/flows\/[^/]+\/flows\/([^/]+)/)?.[1] ?? "Flow",
   });
 
-  /* SessionGantt — flows/{sid}（精确匹配） */
+  /* SessionKanban — flows/{sid}（替换 SessionGantt） */
   viewRegistry.register({
-    name: "SessionGantt",
-    component: SessionGanttAdapter,
+    name: "SessionKanban",
+    component: SessionKanbanAdapter,
     match: (p) => /^flows\/[^/]+$/.test(p) && !p.includes("/."),
-    priority: 100,
+    priority: 120,
     tabKey: (p) => p,
-    tabLabel: () => "Session",
+    tabLabel: () => "Kanban",
+  });
+
+  /* Issue 详情页 — flows/{sid}/issues/{issueId} */
+  viewRegistry.register({
+    name: "IssueDetail",
+    component: IssueDetailAdapter,
+    match: (p) => /^flows\/[^/]+\/issues\/[^/]+$/.test(p),
+    priority: 130,
+    tabKey: (p) => p,
+    tabLabel: (p) => p.match(/issues\/([^/]+)$/)?.[1] ?? "Issue",
+  });
+
+  /* Task 详情页 — flows/{sid}/tasks/{taskItemId} */
+  viewRegistry.register({
+    name: "TaskDetail",
+    component: TaskDetailAdapter,
+    match: (p) => /^flows\/[^/]+\/tasks\/[^/]+$/.test(p),
+    priority: 130,
+    tabKey: (p) => p,
+    tabLabel: (p) => p.match(/tasks\/([^/]+)$/)?.[1] ?? "Task",
   });
 
   /* ReflectFlow — stones/{name}/reflect/ 及其特定的 tabs 子路径 */
