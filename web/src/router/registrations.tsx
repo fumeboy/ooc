@@ -17,6 +17,8 @@ import { ObjectDetail } from "../features/ObjectDetail";
 import { FlowView } from "../features/FlowView";
 import { SessionKanban } from "../features/SessionKanban";
 import { DynamicUI } from "../features/DynamicUI";
+import { IssueDetailView } from "../features/IssueDetailView";
+import { TaskDetailView } from "../features/TaskDetailView";
 import { ProcessView } from "../features/ProcessView";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { CodeMirrorViewer } from "../components/ui/CodeMirrorViewer";
@@ -78,23 +80,13 @@ function SessionKanbanAdapter({ path }: ViewProps) {
 /** Issue 详情页适配器 */
 function IssueDetailAdapter({ path }: ViewProps) {
   const m = path.match(/^flows\/([^/]+)\/issues\/([^/]+)$/);
-  return <IssueDetailPlaceholder sessionId={m?.[1] ?? ""} issueId={m?.[2] ?? ""} />;
+  return <IssueDetailView sessionId={m?.[1] ?? ""} issueId={m?.[2] ?? ""} />;
 }
 
 /** Task 详情页适配器 */
 function TaskDetailAdapter({ path }: ViewProps) {
   const m = path.match(/^flows\/([^/]+)\/tasks\/([^/]+)$/);
-  return <TaskDetailPlaceholder sessionId={m?.[1] ?? ""} taskId={m?.[2] ?? ""} />;
-}
-
-/** Issue 详情占位（Chunk 5 实现） */
-function IssueDetailPlaceholder({ sessionId, issueId }: { sessionId: string; issueId: string }) {
-  return <div className="p-6 text-muted-foreground">Issue: {issueId} (session: {sessionId})</div>;
-}
-
-/** Task 详情占位（Chunk 5 实现） */
-function TaskDetailPlaceholder({ sessionId, taskId }: { sessionId: string; taskId: string }) {
-  return <div className="p-6 text-muted-foreground">Task: {taskId} (session: {sessionId})</div>;
+  return <TaskDetailView sessionId={m?.[1] ?? ""} taskId={m?.[2] ?? ""} />;
 }
 
 /** ReflectFlow 适配器 — stones/{name}/reflect/ 下的 Process + Data + Memory 视图 */
