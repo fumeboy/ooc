@@ -431,8 +431,8 @@ describe("方法可见性过滤", () => {
     const result = await (sandbox["t1/trait_a"] as any).methodA();
     expect(result).toBe("a");
 
-    // 扁平调用不再可用（避免命名冲突）
-    expect(sandbox.methodA).toBeUndefined();
+    // 扁平调用可用，但仅限已激活 trait 的方法
+    expect(typeof sandbox.methodA).toBe("function");
     expect(sandbox.methodB).toBeUndefined();
 
     // 激活全部
@@ -511,8 +511,8 @@ describe("MethodRegistry", () => {
     const result = await (methods["math/math"] as any).multiply(3, 4);
     expect(result).toBe(12);
 
-    // 扁平调用不再可用
-    expect(methods.multiply).toBeUndefined();
+    // 扁平调用同样可用
+    expect(typeof methods.multiply).toBe("function");
   });
 
   test("buildSandboxMethods 传递 rootDir/selfDir/stoneName", async () => {
@@ -564,8 +564,8 @@ describe("MethodRegistry", () => {
     expect(result.selfDir).toBe("/home/user/project/stones/alice");
     expect(result.stoneName).toBe("alice");
 
-    // 扁平调用不再可用
-    expect(methods.inspectCtx).toBeUndefined();
+    // 扁平调用同样可用
+    expect(typeof methods.inspectCtx).toBe("function");
   });
 
   test("两段式方法调用 namespace/traitName.methodName()", async () => {
@@ -646,10 +646,10 @@ describe("MethodRegistry", () => {
     const concatResult = await (methods["str/string_utils"] as any).concat("Hello, ", "World!");
     expect(concatResult).toBe("Hello, World!");
 
-    // 验证不再有扁平调用（避免命名冲突）
-    expect(methods.add).toBeUndefined();
-    expect(methods.subtract).toBeUndefined();
-    expect(methods.concat).toBeUndefined();
+    // 扁平调用同样可用
+    expect(typeof methods.add).toBe("function");
+    expect(typeof methods.subtract).toBe("function");
+    expect(typeof methods.concat).toBe("function");
   });
 
   test("buildSandboxMethods 按 activatedTraits 过滤方法", async () => {
@@ -704,8 +704,8 @@ describe("MethodRegistry", () => {
     // trait_b 的方法应该不可用
     expect(methods["ns2/trait_b"]).toBeUndefined();
 
-    // 不再有扁平调用（避免命名冲突）
-    expect(methods.methodA).toBeUndefined();
+    // 扁平调用仅暴露已激活 trait 的方法
+    expect(typeof methods.methodA).toBe("function");
     expect(methods.methodB).toBeUndefined();
 
     // 激活全部时所有 trait 都可用

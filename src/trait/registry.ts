@@ -130,7 +130,10 @@ export class MethodRegistry {
         ? async (...args: unknown[]) => method.fn(ctx, ...args)
         : async (...args: unknown[]) => method.fn(...args);
 
-      /* 仅支持两段式调用：namespace/traitName.methodName */
+      /* 兼容直接调用：methodName() */
+      result[name] = wrapped;
+
+      /* 同时支持两段式调用：namespace/traitName.methodName */
       if (!nested[method.traitName]) {
         nested[method.traitName] = {};
       }

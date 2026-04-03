@@ -36,12 +36,31 @@ export interface Message {
 }
 
 /** LLM 响应 */
-export interface LLMResponse {
-  content: string;
+export interface TokenUsage {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+}
+
+/** LLM 双通道结果 */
+export interface LLMResult {
+  assistantContent: string;
+  thinkingContent: string;
   model: string;
-  usage: Record<string, number>;
+  usage: TokenUsage;
   raw: Record<string, unknown>;
 }
+
+/** 向后兼容的 LLM 响应 */
+export interface LLMResponse extends LLMResult {
+  content: string;
+}
+
+/** LLM 流式事件 */
+export type LLMStreamEvent =
+  | { type: "assistant_chunk"; chunk: string }
+  | { type: "thinking_chunk"; chunk: string }
+  | { type: "done"; usage?: TokenUsage; raw?: Record<string, unknown> };
 
 /** simpleCall 简化调用选项 */
 export interface SimpleLLMOptions {
@@ -56,8 +75,232 @@ export interface LLMClient {
   chat(messages: Message[]): Promise<LLMResponse>;
   /** 流式聊天，返回 token 异步迭代器。不支持时 fallback 到 chat() */
   chatStream?(messages: Message[]): AsyncIterable<string>;
+  /** 流式聊天（双通道事件） */
+  chatEventStream?(messages: Message[]): AsyncIterable<LLMStreamEvent>;
+  /** 当前客户端是否启用了 provider-native thinking 语义 */
+  isThinkingEnabled?(): boolean;
+  /** 当前客户端是否应在开启 thinking 时退回非流式模式 */
+  preferNonStreamingThinking?(): boolean;
   /** 简化调用：传入 prompt 返回文本 */
   simpleCall?(prompt: string, options?: SimpleLLMOptions): Promise<string>;
+}
+
+function normalizeTextContent(content: unknown): string {
+  if (typeof content === "string") return content;
+
+  if (Array.isArray(content)) {
+    return content
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object" && "text" in item) {
+          const text = (item as { text?: unknown }).text;
+          return typeof text === "string" ? text : "";
+        }
+        return "";
+      })
+      .join("");
+  }
+
+  return "";
+}
+
+function previewText(content: string, max = 80): string {
+  const normalized = content.replace(/\s+/g, " ").trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, max)}…`;
+}
+
+export function detectProtocolMarkers(content: string): string[] {
+  const markers: string[] = [];
+  const trimmed = content.trim();
+  if (!trimmed) return markers;
+
+  if (trimmed.includes("```toml")) markers.push("fenced_toml");
+  if (/^```/.test(trimmed)) markers.push("leading_fence");
+  if (/^\[(program|talk|action|cognize_stack_frame_push|cognize_stack_frame_pop|reflect_stack_frame_push|reflect_stack_frame_pop|set_plan|finish|wait|break)\]/m.test(trimmed)) {
+    markers.push("protocol_section");
+  }
+  if (/\[talk\/user\]/.test(trimmed)) markers.push("legacy_talk_section");
+  if (/\[thought\]/.test(trimmed)) markers.push("deprecated_thought_section");
+
+  return markers;
+}
+
+export function normalizeUsage(usage: Record<string, unknown> | null | undefined): TokenUsage {
+  return {
+    promptTokens: typeof usage?.prompt_tokens === "number"
+      ? usage.prompt_tokens
+      : typeof usage?.promptTokens === "number"
+        ? usage.promptTokens
+        : undefined,
+    completionTokens: typeof usage?.completion_tokens === "number"
+      ? usage.completion_tokens
+      : typeof usage?.completionTokens === "number"
+        ? usage.completionTokens
+        : undefined,
+    totalTokens: typeof usage?.total_tokens === "number"
+      ? usage.total_tokens
+      : typeof usage?.totalTokens === "number"
+        ? usage.totalTokens
+        : undefined,
+  };
+}
+
+export function extractThinkingContent(message: Record<string, unknown> | null | undefined): string {
+  const directThinking = [
+    message?.reasoning_content,
+    message?.thinking_content,
+    message?.thinking,
+    message?.reasoning,
+  ];
+
+  for (const candidate of directThinking) {
+    const normalized = normalizeTextContent(candidate);
+    if (normalized) return normalized;
+  }
+
+  const thinkingObject = message?.thinking;
+  if (thinkingObject && typeof thinkingObject === "object" && "content" in thinkingObject) {
+    return normalizeTextContent((thinkingObject as { content?: unknown }).content);
+  }
+
+  const reasoningObject = message?.reasoning;
+  if (reasoningObject && typeof reasoningObject === "object" && "content" in reasoningObject) {
+    return normalizeTextContent((reasoningObject as { content?: unknown }).content);
+  }
+
+  return "";
+}
+
+function extractAssistantContent(message: Record<string, unknown> | null | undefined): string {
+  return normalizeTextContent(message?.content);
+}
+
+function buildThinkingCapabilityPayload(config: LLMConfig): Record<string, unknown> | null {
+  if (!config.thinking.enabled) return null;
+
+  /*
+   * thinking 能力分两层：
+   * 1. OOC 运行时启用 thinking 语义（允许捕获 provider 返回的 reasoning/thinking）
+   * 2. 是否向上游显式发送 thinking 参数，由 provider 兼容性决定
+   *
+   * 对 openai-compatible 网关，很多实现会默认返回 reasoning_content，
+   * 但不一定接受额外的 thinking payload。只有明确配置 mode/budget 时，
+   * 才向上游发送显式 thinking 参数，避免对兼容网关造成 500。
+   */
+  if (!config.thinking.mode && typeof config.thinking.budget !== "number") {
+    return null;
+  }
+
+  const thinkingPayload: Record<string, unknown> = {
+    type: config.thinking.mode ?? "enabled",
+  };
+
+  if (typeof config.thinking.budget === "number" && Number.isFinite(config.thinking.budget)) {
+    thinkingPayload.budget = config.thinking.budget;
+  }
+
+  return thinkingPayload;
+}
+
+export function buildChatPayload(
+  config: LLMConfig,
+  messages: Message[],
+  options?: { stream?: boolean },
+): Record<string, unknown> {
+  const maxTokens = Math.min(config.maxTokens, 131072);
+  const payload: Record<string, unknown> = {
+    model: config.model,
+    messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    max_tokens: maxTokens,
+  };
+
+  const thinkingPayload = buildThinkingCapabilityPayload(config);
+  if (thinkingPayload) {
+    payload.thinking = thinkingPayload;
+  }
+
+  if (options?.stream) {
+    payload.stream = true;
+  }
+
+  return payload;
+}
+
+function normalizeResult(
+  data: Record<string, unknown>,
+  fallbackModel: string,
+): LLMResponse {
+  const choices = Array.isArray(data.choices)
+    ? (data.choices as Array<Record<string, unknown>>)
+    : [];
+  const msg = (choices[0]?.message ?? null) as Record<string, unknown> | null;
+  const assistantContent = extractAssistantContent(msg);
+  const thinkingContent = extractThinkingContent(msg);
+  const thinkingMarkers = detectProtocolMarkers(thinkingContent);
+
+  if (thinkingContent.trim()) {
+    consola.info(
+      `[LLM][thinking][normalizeResult] len=${thinkingContent.length} markers=${thinkingMarkers.join(",") || "none"} preview=${JSON.stringify(previewText(thinkingContent))}`,
+    );
+    if (thinkingMarkers.length > 0) {
+      consola.warn(
+        `[LLM][thinking][normalizeResult] provider thinking contains protocol markers: ${thinkingMarkers.join(", ")}`,
+      );
+    }
+  }
+
+  return {
+    assistantContent,
+    thinkingContent,
+    content: assistantContent.trim().length > 0 ? assistantContent : thinkingContent,
+    model: typeof data.model === "string" ? data.model : fallbackModel,
+    usage: normalizeUsage((data.usage ?? null) as Record<string, unknown> | null),
+    raw: data,
+  };
+}
+
+function parseSSELine(line: string): Record<string, unknown> | null {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed === "data: [DONE]" || !trimmed.startsWith("data: ")) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(trimmed.slice(6)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function extractDeltaEvent(
+  json: Record<string, unknown>,
+): { assistantChunk?: string; thinkingChunk?: string; usage?: TokenUsage } {
+  const choices = Array.isArray(json.choices)
+    ? (json.choices as Array<Record<string, unknown>>)
+    : [];
+  const choice = choices[0];
+  const delta = (choice?.delta ?? choice?.message) as Record<string, unknown> | undefined;
+  const assistantChunk = extractAssistantContent(delta);
+  const thinkingChunk = extractThinkingContent(delta);
+  const thinkingMarkers = detectProtocolMarkers(thinkingChunk);
+
+  if (thinkingChunk) {
+    consola.info(
+      `[LLM][thinking][stream] len=${thinkingChunk.length} markers=${thinkingMarkers.join(",") || "none"} preview=${JSON.stringify(previewText(thinkingChunk))}`,
+    );
+    if (thinkingMarkers.length > 0) {
+      consola.warn(
+        `[LLM][thinking][stream] provider thinking chunk contains protocol markers: ${thinkingMarkers.join(", ")}`,
+      );
+    }
+  }
+
+  return {
+    assistantChunk: assistantChunk || undefined,
+    thinkingChunk: thinkingChunk || undefined,
+    usage: normalizeUsage((json.usage ?? null) as Record<string, unknown> | null),
+  };
 }
 
 /** OpenAI 兼容协议客户端 */
@@ -77,12 +320,7 @@ export class OpenAICompatibleClient implements LLMClient {
   }
 
   async chat(messages: Message[]): Promise<LLMResponse> {
-    const maxTokens = Math.min(this._config.maxTokens, 131072);
-    const payload = {
-      model: this._config.model,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
-      max_tokens: maxTokens,
-    };
+    const payload = buildChatPayload(this._config, messages);
     consola.info("LLM 请求", this._config.model, `${messages.length} messages`);
     const start = performance.now();
     const maxRetries = 3;
@@ -105,13 +343,9 @@ export class OpenAICompatibleClient implements LLMClient {
           throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
         }
 
-        const data = (await resp.json()) as Record<string, any>;
-        const msg = data.choices?.[0]?.message as Record<string, any> | undefined;
-        const content = (msg?.content as string | undefined) ?? "";
-        const reasoningContent = (msg?.reasoning_content as string | undefined) ?? "";
-        const finalContent = content.trim().length > 0 ? content : reasoningContent;
+        const data = (await resp.json()) as Record<string, unknown>;
         const elapsed = (performance.now() - start) / 1000;
-        const usage = (data.usage ?? {}) as Record<string, number>;
+        const result = normalizeResult(data, this._config.model);
 
         consola.info(
           "LLM 响应",
@@ -119,12 +353,7 @@ export class OpenAICompatibleClient implements LLMClient {
           `${elapsed.toFixed(3)}s`,
         );
 
-        return {
-          content: finalContent,
-          model: (data.model as string) ?? this._config.model,
-          usage,
-          raw: data,
-        };
+        return result;
       } catch (e) {
         lastError = e as Error;
         if (attempt < maxRetries - 1) continue;
@@ -134,6 +363,14 @@ export class OpenAICompatibleClient implements LLMClient {
     throw new Error(
       `LLM 调用失败（重试 ${maxRetries} 次）: ${lastError?.message}`,
     );
+  }
+
+  isThinkingEnabled(): boolean {
+    return this._config.thinking.enabled;
+  }
+
+  preferNonStreamingThinking(): boolean {
+    return this._config.thinking.enabled;
   }
 
   /**
@@ -153,19 +390,10 @@ export class OpenAICompatibleClient implements LLMClient {
   }
 
   /**
-   * 流式聊天 —— 返回 token 异步迭代器
-   *
-   * 使用 OpenAI 兼容的 stream: true 参数，逐 token 返回。
-   * 内部自动重试（与 chat() 一致）。
+   * 流式聊天 —— 返回双通道事件
    */
-  async *chatStream(messages: Message[]): AsyncIterable<string> {
-    const maxTokens = Math.min(this._config.maxTokens, 131072);
-    const payload = {
-      model: this._config.model,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
-      max_tokens: maxTokens,
-      stream: true,
-    };
+  async *chatEventStream(messages: Message[]): AsyncIterable<LLMStreamEvent> {
+    const payload = buildChatPayload(this._config, messages, { stream: true });
     consola.info("LLM 流式请求", this._config.model, `${messages.length} messages`);
     const start = performance.now();
     const maxRetries = 3;
@@ -193,11 +421,24 @@ export class OpenAICompatibleClient implements LLMClient {
 
         const decoder = new TextDecoder();
         let buffer = "";
-        let sawContent = false;
-        let reasoningBuffer = "";
+        let lastJson: Record<string, unknown> | null = null;
 
         /* per-chunk 超时：至少 30s，或 config.timeout 的一半（秒→毫秒） */
         const chunkTimeoutMs = Math.max(30_000, this._config.timeout * 500);
+
+        const emitEvents = async function* (
+          parsedJson: Record<string, unknown> | null,
+        ): AsyncIterable<LLMStreamEvent> {
+          if (!parsedJson) return;
+          lastJson = parsedJson;
+          const { assistantChunk, thinkingChunk } = extractDeltaEvent(parsedJson);
+          if (thinkingChunk) {
+            yield { type: "thinking_chunk", chunk: thinkingChunk };
+          }
+          if (assistantChunk) {
+            yield { type: "assistant_chunk", chunk: assistantChunk };
+          }
+        };
 
         while (true) {
           const { done, value } = await readWithTimeout(reader, chunkTimeoutMs);
@@ -205,61 +446,32 @@ export class OpenAICompatibleClient implements LLMClient {
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n");
-          /* 最后一行可能不完整，保留在 buffer 中 */
           buffer = lines.pop() ?? "";
 
           for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed === "data: [DONE]") continue;
-            if (!trimmed.startsWith("data: ")) continue;
-
-            try {
-              const json = JSON.parse(trimmed.slice(6)) as Record<string, any>;
-              const delta = json.choices?.[0]?.delta as Record<string, any> | undefined;
-              const deltaContent = delta?.content;
-              const deltaReasoning = delta?.reasoning_content;
-
-              if (typeof deltaContent === "string" && deltaContent.length > 0) {
-                sawContent = true;
-                yield deltaContent;
-              } else if (!sawContent && typeof deltaReasoning === "string" && deltaReasoning.length > 0) {
-                reasoningBuffer += deltaReasoning;
-              }
-            } catch {
-              /* 忽略解析失败的行（可能是不完整的 JSON） */
+            for await (const event of emitEvents(parseSSELine(line))) {
+              yield event;
             }
           }
         }
 
-        /* 处理 buffer 中剩余的数据 */
-        if (buffer.trim() && buffer.trim() !== "data: [DONE]" && buffer.trim().startsWith("data: ")) {
-          try {
-            const json = JSON.parse(buffer.trim().slice(6)) as Record<string, any>;
-            const delta = json.choices?.[0]?.delta as Record<string, any> | undefined;
-            const deltaContent = delta?.content;
-            const deltaReasoning = delta?.reasoning_content;
-
-            if (typeof deltaContent === "string" && deltaContent.length > 0) {
-              sawContent = true;
-              yield deltaContent;
-            } else if (!sawContent && typeof deltaReasoning === "string" && deltaReasoning.length > 0) {
-              reasoningBuffer += deltaReasoning;
-            }
-          } catch { /* 忽略 */ }
-        }
-
-        if (!sawContent) {
-          const response = await this.chat(messages);
-          if (response.content && response.content.trim().length > 0) {
-            yield response.content;
-          } else if (reasoningBuffer.trim().length > 0) {
-            yield reasoningBuffer;
+        if (buffer.trim()) {
+          for await (const event of emitEvents(parseSSELine(buffer))) {
+            yield event;
           }
         }
 
         const elapsed = (performance.now() - start) / 1000;
+        const doneUsage = lastJson
+          ? normalizeUsage((lastJson["usage"] ?? null) as Record<string, unknown> | null)
+          : undefined;
         consola.info("LLM 流式响应完成", this._config.model, `${elapsed.toFixed(3)}s`);
-        return; /* 成功，退出重试循环 */
+        yield {
+          type: "done",
+          usage: doneUsage,
+          raw: lastJson ?? undefined,
+        };
+        return;
       } catch (e) {
         lastError = e as Error;
         if (attempt < maxRetries - 1) continue;
@@ -270,11 +482,37 @@ export class OpenAICompatibleClient implements LLMClient {
       `LLM 流式调用失败（重试 ${maxRetries} 次）: ${lastError?.message}`,
     );
   }
+
+  /**
+   * 流式聊天 —— 返回 token 异步迭代器
+   *
+   * 使用 OpenAI 兼容的 stream: true 参数，逐 token 返回。
+   * 内部自动重试（与 chat() 一致）。
+   */
+  async *chatStream(messages: Message[]): AsyncIterable<string> {
+    let sawAssistantChunk = false;
+    let thinkingBuffer = "";
+
+    for await (const event of this.chatEventStream(messages)) {
+      if (event.type === "assistant_chunk") {
+        sawAssistantChunk = true;
+        yield event.chunk;
+      } else if (!sawAssistantChunk && event.type === "thinking_chunk") {
+        thinkingBuffer += event.chunk;
+      }
+    }
+
+    if (!sawAssistantChunk && thinkingBuffer.trim().length > 0) {
+      yield thinkingBuffer;
+    }
+  }
 }
 
 /** 测试用 Mock 客户端 */
 export class MockLLMClient implements LLMClient {
   private _responses: string[];
+  private _responseObjects: Array<Partial<LLMResult>>;
+  private _streamEvents: LLMStreamEvent[] | null;
   private _responseFn: ((messages: Message[]) => string) | null;
   private _callCount = 0;
   private _callHistory: Message[][] = [];
@@ -282,14 +520,38 @@ export class MockLLMClient implements LLMClient {
   constructor(params?: {
     responses?: string[];
     responseFn?: (messages: Message[]) => string;
+    responseObject?: Partial<LLMResult>;
+    responseObjects?: Array<Partial<LLMResult>>;
+    streamEvents?: LLMStreamEvent[];
   }) {
     this._responses = params?.responses ? [...params.responses] : [];
+    this._responseObjects = params?.responseObjects
+      ? [...params.responseObjects]
+      : params?.responseObject
+        ? [{ ...params.responseObject }]
+        : [];
+    this._streamEvents = params?.streamEvents ? [...params.streamEvents] : null;
     this._responseFn = params?.responseFn ?? null;
   }
 
   async chat(messages: Message[]): Promise<LLMResponse> {
     this._callHistory.push(messages);
     this._callCount++;
+
+    if (this._responseObjects.length > 0) {
+      const result = this._responseObjects.shift()!;
+      const assistantContent = result.assistantContent ?? "";
+      const thinkingContent = result.thinkingContent ?? "";
+
+      return {
+        assistantContent,
+        thinkingContent,
+        content: assistantContent.trim().length > 0 ? assistantContent : thinkingContent,
+        model: result.model ?? "mock",
+        usage: result.usage ?? {},
+        raw: (result.raw as Record<string, unknown> | undefined) ?? {},
+      };
+    }
 
     let content: string;
     if (this._responseFn) {
@@ -300,7 +562,14 @@ export class MockLLMClient implements LLMClient {
       content = `[MockLLM 默认响应 #${this._callCount}]`;
     }
 
-    return { content, model: "mock", usage: {}, raw: {} };
+    return {
+      assistantContent: content,
+      thinkingContent: "",
+      content,
+      model: "mock",
+      usage: {},
+      raw: {},
+    };
   }
 
   get callCount(): number {
@@ -310,14 +579,71 @@ export class MockLLMClient implements LLMClient {
     return this._callHistory;
   }
 
+  isThinkingEnabled(): boolean {
+    if (this._responseObjects.some((item) => (item.thinkingContent ?? "").trim().length > 0)) {
+      return true;
+    }
+    if (this._streamEvents?.some((event) => event.type === "thinking_chunk" && event.chunk.trim().length > 0)) {
+      return true;
+    }
+    return false;
+  }
+
+  preferNonStreamingThinking(): boolean {
+    return false;
+  }
+
   /** Mock 流式输出：将完整响应按字符逐个 yield */
   async *chatStream(messages: Message[]): AsyncIterable<string> {
-    const response = await this.chat(messages);
-    /* 模拟流式：每次 yield 一小段文本 */
-    const content = response.content;
-    const chunkSize = 10;
-    for (let i = 0; i < content.length; i += chunkSize) {
-      yield content.slice(i, i + chunkSize);
+    let sawAssistant = false;
+    let thinkingBuffer = "";
+
+    for await (const event of this.chatEventStream(messages)) {
+      if (event.type === "assistant_chunk") {
+        sawAssistant = true;
+        yield event.chunk;
+      } else if (!sawAssistant && event.type === "thinking_chunk") {
+        thinkingBuffer += event.chunk;
+      }
     }
+
+    if (!sawAssistant && thinkingBuffer) {
+      yield thinkingBuffer;
+    }
+  }
+
+  async *chatEventStream(messages: Message[]): AsyncIterable<LLMStreamEvent> {
+    if (this._streamEvents) {
+      for (const event of this._streamEvents) {
+        yield event;
+      }
+      if (this._streamEvents[this._streamEvents.length - 1]?.type !== "done") {
+        yield { type: "done" };
+      }
+      return;
+    }
+
+    const response = await this.chat(messages);
+    const chunkSize = 10;
+
+    if (response.thinkingContent) {
+      for (let i = 0; i < response.thinkingContent.length; i += chunkSize) {
+        yield {
+          type: "thinking_chunk",
+          chunk: response.thinkingContent.slice(i, i + chunkSize),
+        };
+      }
+    }
+
+    if (response.assistantContent) {
+      for (let i = 0; i < response.assistantContent.length; i += chunkSize) {
+        yield {
+          type: "assistant_chunk",
+          chunk: response.assistantContent.slice(i, i + chunkSize),
+        };
+      }
+    }
+
+    yield { type: "done", usage: response.usage, raw: response.raw };
   }
 }

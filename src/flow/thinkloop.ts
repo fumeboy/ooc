@@ -54,9 +54,10 @@ import {
 } from "../process/index.js";
 import type { CollaborationAPI } from "../world/router.js";
 import type { CronManager } from "../world/cron.js";
-import type { LLMClient, Message, SimpleLLMOptions } from "../thinkable/client.js";
+import { detectProtocolMarkers } from "../thinkable/client.js";
+import type { LLMClient, LLMStreamEvent, Message, SimpleLLMOptions } from "../thinkable/client.js";
 import type { StoneData, DirectoryEntry, TraitDefinition, TraitHookEvent, HookTime, HookType, ProcessNode, Action } from "../types/index.js";
-import { getActiveTraits } from "../trait/activator.js";
+import { getActiveTraits, traitId } from "../trait/activator.js";
 import { loadTrait } from "../trait/loader.js";
 
 /** ThinkLoop 配置 */
@@ -75,6 +76,12 @@ export interface ThinkLoopConfig {
 const DEFAULT_CONFIG: ThinkLoopConfig = {
   maxIterations: 1000,
 };
+
+function previewDebugText(content: string, max = 80): string {
+  const normalized = content.replace(/\s+/g, " ").trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, max)}…`;
+}
 
 /**
  * 检测文本是否疑似乱码（非中英文/代码字符占比超过阈值）
@@ -209,7 +216,9 @@ export async function runThinkLoop(
 
     /* ★ 恢复检查：是否有暂存的 LLM output 需要恢复执行 */
     const pendingOutput = flow.toJSON().data._pendingOutput as string | undefined;
+    const pendingThinkingOutput = flow.toJSON().data._pendingThinkingOutput as string | undefined;
     let llmOutput: string;
+    let providerThinkingOutput = "";
     let systemPrompt: string | undefined;
     let chatMessages: Message[] | undefined;
 
@@ -218,17 +227,23 @@ export async function runThinkLoop(
       consola.info(`[ThinkLoop] 恢复执行暂存的 LLM output`);
       const flowDir = flow.dir;
       const outputFile = join(flowDir, "llm.output.txt");
+      const thinkingFile = join(flowDir, "llm.thinking.txt");
       const inputFile = join(flowDir, "llm.input.txt");
       if (existsSync(outputFile)) {
         llmOutput = readFileSync(outputFile, "utf-8");
         unlinkSync(outputFile);
+        if (existsSync(thinkingFile)) {
+          providerThinkingOutput = readFileSync(thinkingFile, "utf-8");
+          unlinkSync(thinkingFile);
+        }
         if (existsSync(inputFile)) unlinkSync(inputFile);
       } else {
         llmOutput = pendingOutput;
+        providerThinkingOutput = pendingThinkingOutput ?? "";
       }
       flow.setFlowData("_pendingOutput", undefined);
+      flow.setFlowData("_pendingThinkingOutput", undefined);
       flow.setFlowData("_pausedContext", undefined);
-      llmOutput = pendingOutput;
       /* thought 在暂停时已经 recordAction 过，不再重复记录 */
     } else {
       /* 正常模式：构建 Context + 调用 LLM */
@@ -263,9 +278,20 @@ export async function runThinkLoop(
       }
 
       try {
-        if (llm.chatStream) {
-          /* 流式模式：逐 token 接收，实时检测 [thought] 和 [talk/xxx] 并推送 SSE */
-          llmOutput = await consumeStream(
+        const preferNonStreamingThinking = llm.preferNonStreamingThinking?.() === true;
+
+        if (llm.chatEventStream && !preferNonStreamingThinking) {
+          /* 流式双通道：provider thinking 直连 thought SSE，assistant 交给结构化解析器 */
+          const streamed = await consumeEventStream(
+            llm.chatEventStream(messages),
+            stone.name,
+            flow.taskId,
+          );
+          llmOutput = streamed.assistantContent;
+          providerThinkingOutput = streamed.thinkingContent;
+        } else if (llm.chatStream) {
+          /* 兼容旧单通道流式接口：仅解析 assistant 文本 */
+          llmOutput = await consumeAssistantStream(
             llm.chatStream(messages),
             stone.name,
             flow.taskId,
@@ -273,7 +299,15 @@ export async function runThinkLoop(
         } else {
           /* 非流式 fallback */
           const response = await llm.chat(messages);
-          llmOutput = response.content;
+          llmOutput = response.assistantContent;
+          providerThinkingOutput = response.thinkingContent;
+          if (providerThinkingOutput.trim()) {
+            emitSSE({ type: "stream:thought", objectName: stone.name, taskId: flow.taskId, chunk: providerThinkingOutput });
+            emitSSE({ type: "stream:thought:end", objectName: stone.name, taskId: flow.taskId });
+          }
+          await consumeAssistantStream((async function* () {
+            if (llmOutput) yield llmOutput;
+          })(), stone.name, flow.taskId);
         }
       } catch (e) {
         consola.error(`[ThinkLoop] LLM 调用失败:`, (e as Error).message);
@@ -289,10 +323,19 @@ export async function runThinkLoop(
         return persistedData;
       }
 
+      if (providerThinkingOutput.trim()) {
+        const markers = detectProtocolMarkers(providerThinkingOutput);
+        consola.info(
+          `[ThinkLoop][thought-source=provider] len=${providerThinkingOutput.length} markers=${markers.join(",") || "none"} preview=${JSON.stringify(previewDebugText(providerThinkingOutput))}`,
+        );
+        flow.recordAction({ type: "thought" as const, content: providerThinkingOutput });
+      }
+
       /* ★ 暂停检查点：LLM 调用返回后、程序执行前 */
       if (config.isPaused?.()) {
         consola.info(`[ThinkLoop] 收到暂停信号，暂存 LLM output`);
         flow.setFlowData("_pendingOutput", llmOutput);
+        flow.setFlowData("_pendingThinkingOutput", providerThinkingOutput);
         flow.setFlowData("_pausedContext", {
           systemPrompt,
           chatMessages: chatMessages.map(m => ({ role: m.role, content: m.content })),
@@ -304,6 +347,9 @@ export async function runThinkLoop(
         const inputContent = [systemPrompt, ...chatMessages.map(m => `--- ${m.role} ---\n${m.content}`)].join("\n\n");
         writeFileSync(join(flowDir, "llm.input.txt"), inputContent);
         writeFileSync(join(flowDir, "llm.output.txt"), llmOutput);
+        if (providerThinkingOutput.trim()) {
+          writeFileSync(join(flowDir, "llm.thinking.txt"), providerThinkingOutput);
+        }
 
         flow.save();
         return persistedData;
@@ -661,6 +707,10 @@ export async function runThinkLoop(
 
     /* 4. 记录思考（recordAction 自动写入 focus 节点，只记录 [thought] 段落） */
     if (replyContent) {
+      const markers = detectProtocolMarkers(replyContent);
+      consola.info(
+        `[ThinkLoop][thought-source=parser] len=${replyContent.length} markers=${markers.join(",") || "none"} preview=${JSON.stringify(previewDebugText(replyContent))}`,
+      );
       flow.recordAction({ type: "thought" as const, content: replyContent });
     }
 
@@ -1054,12 +1104,12 @@ export async function runThinkLoop(
 }
 
 /**
- * 消费 LLM 流式输出，实时检测 [thought] 和 [talk/xxx] 段落并推送 SSE
+ * 消费旧单通道 LLM 流式输出，只从 assistant 文本中解析结构化协议并推送 SSE
  *
  * 状态机逐 token 扫描，遇到段落标记时切换状态并开始推送对应的 SSE 事件。
- * 返回完整的 LLM 输出文本（供后续 parseLLMOutput 解析）。
+ * 返回完整的 assistant 输出文本（供后续 parseLLMOutput 解析）。
  */
-async function consumeStream(
+async function consumeAssistantStream(
   stream: AsyncIterable<string>,
   objectName: string,
   taskId: string,
@@ -1069,12 +1119,6 @@ async function consumeStream(
 
   const emitStreamEvent = (event: LLMOutputStreamEvent) => {
     switch (event.type) {
-      case "thought":
-        emitSSE({ type: "stream:thought", objectName, taskId, chunk: event.chunk });
-        break;
-      case "thought:end":
-        emitSSE({ type: "stream:thought:end", objectName, taskId });
-        break;
       case "talk":
         emitSSE({ type: "stream:talk", objectName, taskId, target: event.target, chunk: event.chunk });
         break;
@@ -1131,6 +1175,93 @@ async function consumeStream(
   }
 
   return fullOutput;
+}
+
+/**
+ * 消费双通道流式输出：thinking 直接映射为系统 thought SSE，assistant 进入结构化流式解析器。
+ */
+async function consumeEventStream(
+  stream: AsyncIterable<LLMStreamEvent>,
+  objectName: string,
+  taskId: string,
+): Promise<{ assistantContent: string; thinkingContent: string }> {
+  let assistantContent = "";
+  let thinkingContent = "";
+  let sawThinking = false;
+  const streamParser = createLLMOutputStreamParser();
+
+  const emitStructuredEvent = (event: LLMOutputStreamEvent) => {
+    switch (event.type) {
+      case "talk":
+        emitSSE({ type: "stream:talk", objectName, taskId, target: event.target, chunk: event.chunk });
+        break;
+      case "talk:end":
+        emitSSE({ type: "stream:talk:end", objectName, taskId, target: event.target });
+        break;
+      case "program":
+        if (event.lang === "shell") {
+          emitSSE({ type: "stream:program", objectName, taskId, lang: "shell", chunk: event.chunk });
+        } else {
+          emitSSE({ type: "stream:program", objectName, taskId, chunk: event.chunk });
+        }
+        break;
+      case "program:end":
+        emitSSE({ type: "stream:program:end", objectName, taskId });
+        break;
+      case "action":
+        emitSSE({ type: "stream:action", objectName, taskId, toolName: event.toolName, chunk: event.chunk });
+        break;
+      case "action:end":
+        emitSSE({ type: "stream:action:end", objectName, taskId, toolName: event.toolName });
+        break;
+      case "stack_push":
+        emitSSE({ type: "stream:stack_push", objectName, taskId, opType: event.opType, attr: event.attr, chunk: event.chunk });
+        break;
+      case "stack_push:end":
+        emitSSE({ type: "stream:stack_push:end", objectName, taskId, opType: event.opType, attr: event.attr });
+        break;
+      case "stack_pop":
+        emitSSE({ type: "stream:stack_pop", objectName, taskId, opType: event.opType, attr: event.attr, chunk: event.chunk });
+        break;
+      case "stack_pop:end":
+        emitSSE({ type: "stream:stack_pop:end", objectName, taskId, opType: event.opType, attr: event.attr });
+        break;
+      case "set_plan":
+        emitSSE({ type: "stream:set_plan", objectName, taskId, chunk: event.chunk });
+        break;
+      case "set_plan:end":
+        emitSSE({ type: "stream:set_plan:end", objectName, taskId });
+        break;
+    }
+  };
+
+  for await (const event of stream) {
+    switch (event.type) {
+      case "thinking_chunk":
+        thinkingContent += event.chunk;
+        sawThinking = true;
+        emitSSE({ type: "stream:thought", objectName, taskId, chunk: event.chunk });
+        break;
+      case "assistant_chunk":
+        assistantContent += event.chunk;
+        for (const parsedEvent of streamParser.push(event.chunk)) {
+          emitStructuredEvent(parsedEvent);
+        }
+        break;
+      case "done":
+        break;
+    }
+  }
+
+  for (const event of streamParser.done()) {
+    emitStructuredEvent(event);
+  }
+
+  if (sawThinking) {
+    emitSSE({ type: "stream:thought:end", objectName, taskId });
+  }
+
+  return { assistantContent, thinkingContent };
 }
 
 /**
@@ -1296,7 +1427,7 @@ function buildExecutionContext(
   };
 
   /** Trait name 安全校验 */
-  const TRAIT_NAME_RE = /^[a-z0-9_-]+$/;
+  const TRAIT_NAME_RE = /^[a-z0-9_-]+(?:\/[a-z0-9_-]+)*$/;
 
   const context: Record<string, unknown> = {
     /** 获取 files/ 目录路径 */
@@ -1408,7 +1539,7 @@ function buildExecutionContext(
   if (methodRegistry && traits) {
     /* G3: 按作用域链计算已激活 trait，只注入对应方法 */
     const scopeChain = computeScopeChain(flow.process);
-    const activeTraitNames = getActiveTraits(traits, scopeChain).map(t => t.name);
+    const activeTraitNames = getActiveTraits(traits, scopeChain).map((t) => traitId(t));
 
     const methodCtx: MethodContext = Object.defineProperty(
       {
@@ -1747,6 +1878,30 @@ function buildExecutionContext(
     return null;
   }
 
+  function normalizeTraitLookup(name: string): string[] {
+    const trimmed = name.trim();
+    if (!trimmed) return [];
+    const candidates = new Set<string>([trimmed]);
+    if (trimmed.includes("/")) {
+      candidates.add(trimmed.replaceAll("/", "-"));
+      const parts = trimmed.split("/");
+      const last = parts[parts.length - 1];
+      if (last) candidates.add(last);
+    }
+    return Array.from(candidates);
+  }
+
+  function findLoadedTrait(name: string): TraitDefinition | null {
+    const candidates = new Set(normalizeTraitLookup(name));
+    for (const trait of traits) {
+      const id = traitId(trait);
+      if (candidates.has(id) || candidates.has(trait.name)) {
+        return trait;
+      }
+    }
+    return null;
+  }
+
   /** 热加载：trait 文件变更后立即加载到当前任务（异步，下一轮思考生效） */
   const hotReloadTrait = (name: string) => {
     if (!traits || !methodRegistry) return;
@@ -1774,18 +1929,36 @@ function buildExecutionContext(
       name: "readTrait",
       fn: (name: string) => {
         if (!TRAIT_NAME_RE.test(name)) return `[错误] trait 名称无效: ${name}`;
+
+        const loadedTrait = findLoadedTrait(name);
+        if (loadedTrait) {
+          return {
+            name: traitId(loadedTrait),
+            readme: loadedTrait.readme,
+            when: loadedTrait.when,
+            description: loadedTrait.description,
+            source: loadedTrait.namespace === "kernel" ? "kernel" : loadedTrait.namespace ? "library" : "self",
+          };
+        }
+
         const traitDir = findTraitDir(name);
         if (!traitDir) return `[错误] trait "${name}" 不存在（已检查：自身 traits/、library/traits/、kernel/traits/）`;
         const r: Record<string, unknown> = { name };
-        const readmePath = join(traitDir, "readme.md");
-        if (existsSync(readmePath)) {
-          const raw = readFileSync(readmePath, "utf-8");
+        const traitDocPath = existsSync(join(traitDir, "TRAIT.md"))
+          ? join(traitDir, "TRAIT.md")
+          : existsSync(join(traitDir, "SKILL.md"))
+            ? join(traitDir, "SKILL.md")
+            : join(traitDir, "readme.md");
+        if (existsSync(traitDocPath)) {
+          const raw = readFileSync(traitDocPath, "utf-8");
           const { data, content } = matter(raw);
           r.readme = content.trim();
           r.when = data.when ?? "never";
+          r.description = data.description ?? "";
         } else {
           r.readme = "";
           r.when = "never";
+          r.description = "";
         }
         /* 记录来源位置（不返回 code，code 仅在 activateTrait 后由系统内部使用） */
         if (traitDir.startsWith(libraryTraitsDir)) {
@@ -1801,10 +1974,13 @@ function buildExecutionContext(
     {
       name: "listTraits",
       fn: () => {
-        if (!existsSync(traitsDir)) return [];
-        return readdirSync(traitsDir, { withFileTypes: true })
-          .filter((d) => d.isDirectory())
-          .map((d) => d.name);
+        const names = new Set<string>(traits.map((trait) => traitId(trait)));
+        if (existsSync(traitsDir)) {
+          for (const dir of readdirSync(traitsDir, { withFileTypes: true })) {
+            if (dir.isDirectory()) names.add(dir.name);
+          }
+        }
+        return Array.from(names).sort();
       },
     },
   ]);
@@ -1815,18 +1991,20 @@ function buildExecutionContext(
       name: "activateTrait",
       fn: (name: string) => {
         /* 校验 trait 是否存在（按优先级：自身 → library → kernel） */
-        const traitDir = findTraitDir(name);
-        if (!traitDir) return `[错误] trait "${name}" 不存在，无法激活（已检查：自身 traits/、library/traits/、kernel/traits/）`;
+        const loadedTrait = findLoadedTrait(name);
+        const canonicalName = loadedTrait ? traitId(loadedTrait) : name;
+        const traitDir = loadedTrait ? findTraitDir(canonicalName) ?? findTraitDir(name) : findTraitDir(name);
+        if (!loadedTrait && !traitDir) return `[错误] trait "${name}" 不存在，无法激活（已检查：自身 traits/、library/traits/、kernel/traits/）`;
 
         const process = flow.process;
         if (!process) return `[错误] 无行为树`;
         const node = findNode(process.root, process.focusId);
         if (!node) return `[错误] focus 节点不存在`;
         if (!node.activatedTraits) node.activatedTraits = [];
-        if (node.activatedTraits.includes(name)) return `trait "${name}" 已在当前栈帧激活`;
-        node.activatedTraits.push(name);
+        if (node.activatedTraits.includes(canonicalName)) return `trait "${canonicalName}" 已在当前栈帧激活`;
+        node.activatedTraits.push(canonicalName);
         flow.setProcess({ ...process });
-        return `trait "${name}" 已激活到当前栈帧，下次思考时将加载完整内容`;
+        return `trait "${canonicalName}" 已激活到当前栈帧，下次思考时将加载完整内容`;
       },
       effect: (args) => `activateTrait("${args[0]}") → OK`,
     },

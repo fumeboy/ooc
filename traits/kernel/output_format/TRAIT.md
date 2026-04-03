@@ -11,6 +11,13 @@ deps: []
 
 你的所有输出必须使用 **TOML 格式**。
 
+最高优先级规则：**assistant 最终输出必须是纯 TOML，不允许在 TOML 前后夹带任何解释性自然语言。**
+
+- 第一 个非空白字符必须是 `[`
+- 不要先写“我来帮你...”或“让我先...”之类的说明
+- 不要输出 `````toml` 或 ````` 围栏
+- 不要在 TOML 后再补充解释文字
+
 ## 为什么选择 TOML
 
 | 格式 | 优点 | 缺点 |
@@ -27,65 +34,61 @@ deps: []
 
 ## 格式概览
 
-```toml
-[thought]
-content = """
-你的思考过程（内部独白，不会发送给用户）
-"""
+注意：下面的示例内容只是文档展示。你真实输出时，必须**直接从 `[program]`、`[talk]`、`[action]` 等表开始输出**，不要在最外层包 `````toml` 或任何 markdown 代码块围栏。
 
-[program]
-lang = "javascript"  # 可选，默认 javascript
-code = """
-要执行的代码
-"""
+示例概览（真实输出时直接照此结构输出）：
 
-[talk]
-target = "user"     # 或其他对象名
-message = """
-要发送的消息内容
-"""
-reply_to = "msg_xxx"  # 可选，回复特定消息
+    [program]
+    lang = "javascript"  # 可选，默认 javascript
+    code = """
+    要执行的代码
+    """
 
-[action]
-tool = "工具名"
-params = { key = "value" }
+    [talk]
+    target = "user"     # 或其他对象名
+    message = """
+    要发送的消息内容
+    """
+    reply_to = "msg_xxx"  # 可选，回复特定消息
 
-[cognize_stack_frame_push]
-title = "子栈帧标题"
-description = """
-详细描述
-"""
-traits = ["lark/wiki", "lark/doc"]
+    [action]
+    tool = "工具名"
+    params = { key = "value" }
 
-[cognize_stack_frame_pop]
-summary = """
-完成摘要
-"""
-artifacts = { key = "value" }
+    [cognize_stack_frame_push]
+    title = "子栈帧标题"
+    description = """
+    详细描述
+    """
+    traits = ["lark/wiki", "lark/doc"]
 
-[reflect_stack_frame_push]
-title = "反思标题"
+    [cognize_stack_frame_pop]
+    summary = """
+    完成摘要
+    """
+    artifacts = { key = "value" }
 
-[reflect_stack_frame_pop]
-summary = """
-反思摘要
-"""
+    [reflect_stack_frame_push]
+    title = "反思标题"
 
-[set_plan]
-content = """
-新的 plan 内容
-"""
+    [reflect_stack_frame_pop]
+    summary = """
+    反思摘要
+    """
 
-# 控制指令
-[finish]
+    [set_plan]
+    content = """
+    新的 plan 内容
+    """
 
-[wait]
-
-[break]
-```
+    [finish]
+    [wait]
+    [break]
 
 ## 迁移原则
 
+- 模型思考由 provider 原生 thinking 通道产生，系统会自动采集并记录为 `thought`
+- assistant 最终输出中禁止显式编写 `[thought]`
 - 只输出 TOML 表格式
 - 每个段落的正文都写到显式字段里，例如 `content`、`code`、`message`
 - 栈帧操作统一写成单个表，不再拆成属性子段
@@ -93,77 +96,46 @@ content = """
 
 ## 完整示例
 
-### 示例 1：思考 + 发送消息
+### 示例 1：发送消息
 
-```toml
-[thought]
-content = """
-用户问好，我需要友好地回复。
-"""
+    [talk]
+    target = "user"
+    message = """
+    你好！有什么我能帮你的？
+    """
 
-[talk]
-target = "user"
-message = """
-你好！有什么我能帮你的？
-"""
-
-[wait]
-```
+    [wait]
 
 ### 示例 2：执行代码
 
-```toml
-[thought]
-content = """
-需要计算 1+1 的结果。
-"""
-
-[program]
-lang = "javascript"
-code = """
-const result = 1 + 1;
-print("1 + 1 = " + result);
-"""
-```
+    [program]
+    lang = "javascript"
+    code = """
+    const result = 1 + 1;
+    print("1 + 1 = " + result);
+    """
 
 ### 示例 3：创建子栈帧
 
-```toml
-[thought]
-content = """
-这是一个复杂任务，需要分步骤完成。
-先创建子栈帧来获取文档内容。
-"""
-
-[cognize_stack_frame_push]
-title = "获取文档内容"
-description = """
-从飞书知识库获取指定文档的完整内容。
-需要先查询 wiki 节点，再获取文档内容。
-"""
-traits = ["lark/wiki", "lark/doc"]
-```
+    [cognize_stack_frame_push]
+    title = "获取文档内容"
+    description = """
+    从飞书知识库获取指定文档的完整内容。
+    需要先查询 wiki 节点，再获取文档内容。
+    """
+    traits = ["lark/wiki", "lark/doc"]
 
 ## 各段说明
 
-### `[thought]` — 思考内容
+### 模型思考（系统自动采集）
 
-用于记录你的思考过程，是内部独白，不会发送给用户。
+你的内部思考不再通过 assistant 输出协议显式书写。请直接使用模型原生 thinking，系统会自动：
 
-**字段：**
-- `content` - 思考内容（字符串）
+- 记录为 `thought` action
+- 在流式阶段通过 `stream:thought` 推送到前端
+- 在 assistant 最终输出中只保留可执行协议
 
-**示例：**
-```toml
-[thought]
-content = """
-用户需要分析飞书文档链接。
-我需要：
-1. 先激活 lark/wiki trait
-2. 查询 wiki 节点信息
-3. 根据返回的 obj_type 调用对应 API
-"""
-```
+禁止在 assistant 最终输出里编写 `[thought]`。
 
 ### `[program]` — 程序执行
 
@@ -372,17 +344,19 @@ traits = ["lark/wiki"]
 
 ```toml
 # ❌ 错误：字符串没有引号
-[thought]
-content = 这是思考内容
+[talk]
+target = user
 
 # ✅ 正确：使用引号或多行字符串
-[thought]
-content = "这是思考内容"
+[talk]
+target = "user"
+message = "你好"
 
 # 或者：
-[thought]
-content = """
-这是思考内容
+[talk]
+target = "user"
+message = """
+你好
 """
 ```
 
@@ -396,29 +370,26 @@ content = """
 
 ## 流式输出
 
-TOML 格式支持流式输出，前端可以逐段解析和渲染。
+TOML 格式支持流式输出，前端可以逐段解析和渲染。模型思考则通过独立的 provider thinking 通道实时推送。
 
 **输出顺序建议：**
-1. 先输出 `[thought]` — 让用户看到你的思考过程
-2. 然后是 `[talk]` 或 `[program]` — 实际操作
-3. 最后是控制指令 — `[finish]` 或 `[wait]`
+1. 模型先在原生 thinking 通道中产生思考，系统会自动展示
+2. assistant 再输出 `[talk]`、`[program]`、`[action]` 或栈帧协议
+3. 最后输出控制指令 — `[finish]` 或 `[wait]`
 
 **流式示例：**
 
 第 1 块：
 ```toml
-[thought]
-content = """
-用户需要分析飞书文档链接。我需要先判断这是什么类型的链接...
+[cognize_stack_frame_push]
+title = "获取文档内容"
 ```
 
 第 2 块：
 ```toml
-这是一个 wiki 格式的链接，需要先查询 wiki 节点信息。
+description = """
+分析飞书文档链接，识别对象类型并读取正文。
 """
-
-[cognize_stack_frame_push]
-title = "获取文档内容"
 ```
 
 第 3 块：

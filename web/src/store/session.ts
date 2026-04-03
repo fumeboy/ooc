@@ -30,7 +30,7 @@ export const lastFlowEventAtom = atom<SSEEvent | null>(null);
 /** Chat 模式下，网站左边栏选中的参与对象（用于过滤消息/process） */
 export const chatSelectedObjectAtom = atom<string | null>(null);
 
-/** 流式 thought 内容（逐步累积） */
+/** 流式 thought 内容（来自 provider 原生 thinking 通道，逐步累积） */
 export const streamingThoughtAtom = atom<{ taskId: string; content: string } | null>(null);
 
 /** 流式 talk 内容（逐步累积） */

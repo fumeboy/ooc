@@ -28,7 +28,7 @@ hooks:
 
 | 用途 | TOML 格式 |
 |------|-----------|
-| 思考 | `[thought]` + `content = """..."""` |
+| 思考 | 不写协议；使用模型原生 thinking，由系统自动记录 |
 | 代码 | `[program]` + `code = """..."""` |
 | 消息 | `[talk]` + `target = "..."` + `message = """..."""` |
 | 子栈帧推入 | `[cognize_stack_frame_push]` + `title = "..."` |
@@ -40,6 +40,7 @@ hooks:
 - ❌ 不要使用带目标后缀的旧消息段写法；统一使用 `[talk]` 表并填写 `target`
 - ❌ 不要使用旧的栈帧属性嵌套段写法；统一使用 `[cognize_stack_frame_push]` / `[cognize_stack_frame_pop]` 表
 - ❌ 代码要放在 `code = """..."""` 字段中，不是直接写在段内
+- ❌ 不要在 assistant 最终输出中显式写 `[thought]`；思考来自模型原生 thinking 通道
 
 ## 什么时候应该创建子节点
 

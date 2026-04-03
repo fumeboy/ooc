@@ -14,6 +14,7 @@ import { MockLLMClient } from "../src/thinkable/client.js";
 import { buildContext } from "../src/context/builder.js";
 import { createProcess } from "../src/process/tree.js";
 import type { StoneData, FlowData } from "../src/types/index.js";
+import type { TraitDefinition } from "../src/types/index.js";
 
 const TEST_ROOT = join(import.meta.dir, ".tmp_meta_test");
 const TEST_DIR = join(TEST_ROOT, "stones", "tester");
@@ -39,6 +40,39 @@ afterEach(() => {
 /* ========== Trait 读取/列表/激活 ========== */
 
 describe("Trait API（通过 ThinkLoop 沙箱）", () => {
+  test("readTrait 支持读取已加载的 library trait 标识符", async () => {
+    const flowsDir = join(TEST_DIR, "flows");
+    const flow = Flow.create(flowsDir, "tester", "读取 library trait", "human");
+    const stone = makeStone();
+
+    const traits: TraitDefinition[] = [
+      {
+        namespace: "lark",
+        name: "wiki",
+        type: "how_to_use_tool",
+        when: "never",
+        description: "飞书 wiki 访问能力",
+        readme: "# lark/wiki\n可读取 wiki 节点并获取对象元信息。",
+        methods: [],
+        deps: [],
+      },
+    ];
+
+    const llm = new MockLLMClient({
+      responses: [
+        '```javascript\nconst info = readTrait("lark/wiki");\nprint(JSON.stringify(info));\n```',
+        "[finish]",
+      ],
+    });
+
+    await runThinkLoop(flow, stone, TEST_DIR, llm, [], traits);
+
+    const programs = flow.actions.filter((a) => a.type === "program");
+    expect(programs[0]!.result).toContain("lark/wiki");
+    expect(programs[0]!.result).toContain("飞书 wiki 访问能力");
+    expect(programs[0]!.result).toContain("可读取 wiki 节点");
+  });
+
   test("readTrait 返回完整信息", async () => {
     /* 先手动创建一个 trait */
     const traitDir = join(TEST_DIR, "traits", "existing");

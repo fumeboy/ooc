@@ -84,18 +84,19 @@ export class CodeExecutor {
       "import", "super", "implements", "interface", "let", "package", "private",
       "protected", "public", "static", "yield", "await",
     ]);
+    const IDENTIFIER_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
-    // 检查是否有保留字作为 context key
-    const hasReserved = paramNames.some((n) => RESERVED.has(n));
-    if (hasReserved) {
-      consola.warn(`[CodeExecutor] context 包含 JS 保留字 key: ${paramNames.filter(n => RESERVED.has(n)).join(", ")}，请重命名`);
+    // 检查是否有保留字或非法标识符作为 context key
+    const invalidKeys = paramNames.filter((n) => RESERVED.has(n) || !IDENTIFIER_RE.test(n));
+    if (invalidKeys.length > 0) {
+      consola.warn(`[CodeExecutor] context 包含无法作为函数参数的 key: ${invalidKeys.join(", ")}，将跳过这些 key 的直接注入`);
     }
 
-    // 过滤掉保留字参数（无法作为函数参数名）
+    // 过滤掉保留字/非法标识符（无法作为函数参数名）
     const safeNames: string[] = [];
     const safeValues: unknown[] = [];
     for (let i = 0; i < paramNames.length; i++) {
-      if (!RESERVED.has(paramNames[i]!)) {
+      if (!RESERVED.has(paramNames[i]!) && IDENTIFIER_RE.test(paramNames[i]!)) {
         safeNames.push(paramNames[i]!);
         safeValues.push(paramValues[i]);
       }

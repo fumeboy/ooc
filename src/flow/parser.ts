@@ -1,11 +1,11 @@
 /**
  * 程序提取器
  *
- * 从 LLM 输出中提取思考内容和可执行程序。
+ * 从 LLM 输出中提取可执行协议内容。
  *
  * 支持三种格式：
- * 1. TOML 格式（优先）：[thought] / [program] / [talk] 等 TOML 表
- * 2. 结构化段落格式：[thought] / [program] / [talk/目标] / [finish] / [wait] / [break]
+ * 1. TOML 格式（优先）：[program] / [talk] 等 TOML 表
+ * 2. 结构化段落格式：[program] / [talk/目标] / [finish] / [wait] / [break]
  * 3. Markdown 代码块格式（兼容）：```javascript ... ```
  *
  * @ref docs/哲学文档/gene.md#G4 — implements — 从 LLM 输出中提取程序和指令
@@ -78,7 +78,7 @@ export interface ExtractedSetPlan {
 
 /** 结构化解析结果 */
 export interface ParsedOutput {
-  /** 思考内容（[thought] 段落） */
+  /** 非协议文本或外部注入的思考内容 */
   thought: string;
   /** 可执行程序列表（[program] 段落） */
   programs: ExtractedProgram[];
@@ -99,10 +99,10 @@ export interface ParsedOutput {
 }
 
 /**
- * 段落标记正则：匹配 [thought]、[program]、[finish]、[wait]、[break]
+ * 段落标记正则：匹配 [program]、[finish]、[wait]、[break]
  * 标记必须独占一行（前后可有空白）
  */
-const SECTION_TAG_RE = /^\s*\[(thought|program(?:\/(?:javascript|shell))?|finish|wait|break)\]\s*$/;
+const SECTION_TAG_RE = /^\s*\[(program(?:\/(?:javascript|shell))?|finish|wait|break)\]\s*$/;
 
 /**
  * talk 开始标记正则：匹配 [talk/目标对象名]
@@ -127,12 +127,13 @@ const ACTION_OPEN_RE = /^\s*\[action\/([a-zA-Z0-9_-]+)\]\s*$/;
 const ACTION_CLOSE_RE = /^\s*\[\/action\]\s*$/;
 
 /**
- * 检测结构化格式的正则：[thought]、[program]、[talk/xxx]、[action/xxx] 才算结构化格式
+ * 检测结构化格式的正则：[program]、[talk/xxx]、[action/xxx] 才算结构化格式
  * [finish]/[wait]/[break] 在两种格式中都存在，不能作为判断依据
  */
-const STRUCTURED_TAG_RE = /^\s*\[(thought|program(?:\/(?:javascript|shell))?)\]\s*$/;
+const STRUCTURED_TAG_RE = /^\s*\[(program(?:\/(?:javascript|shell))?)\]\s*$/;
 const STRUCTURED_TALK_RE = /^\s*\[talk\/[a-zA-Z0-9_-]+\]\s*$/;
 const STRUCTURED_ACTION_RE = /^\s*\[action\/[a-zA-Z0-9_-]+\]\s*$/;
+const THOUGHT_SECTION_RE = /^\s*\[thought\]\s*$/;
 
 /**
  * 认知栈操作标记正则
@@ -193,6 +194,8 @@ export function parseLLMOutput(output: string): ParsedOutput {
   /* 预处理：清理 LLM 内部标记（<think>、</think> 等） */
   let cleaned = output.replace(/<\/?think>/g, "");
 
+  assertNoDeprecatedThoughtSection(cleaned);
+
   /* 步骤 1：尝试 TOML 格式解析 */
   const tomlResult = tryParseTomlFormat(cleaned);
   if (tomlResult) {
@@ -201,10 +204,12 @@ export function parseLLMOutput(output: string): ParsedOutput {
 
   /* 步骤 2：旧的结构化段落格式解析 */
   /* 预处理：将内联的段落标记拆分到独立行
-   * 例如 "code();\n[thought]" 或 "code();[thought]" → "code();\n[thought]\n"
-   * 排除被反引号包裹的标记（如 `[program]`），避免 thought 中提及标记名时被误拆 */
-  cleaned = cleaned.replace(/([^\n`])\[(thought|program(?:\/(?:javascript|shell))?|finish|wait|break)\](?!`)/g, "$1\n[$2]");
-  cleaned = cleaned.replace(/(?<!`)\[(thought|program(?:\/(?:javascript|shell))?|finish|wait|break)\]([^\n`])/g, "[$1]\n$2");
+   * 例如 "code();\n[program]" 或 "code();[program]" → "code();\n[program]\n"
+   * 排除被反引号包裹的标记（如 `[program]`），避免文本中提及标记名时被误拆 */
+  cleaned = cleaned.replace(/([^\n`])\[(program(?:\/(?:javascript|shell))?|finish|wait|break)\](?!`)/g, "$1\n[$2]");
+  cleaned = cleaned.replace(/(?<!`)\[(program(?:\/(?:javascript|shell))?|finish|wait|break)\]([^\n`])/g, "[$1]\n$2");
+
+  assertNoDeprecatedThoughtSection(cleaned);
   /* 同样处理 [talk/xxx] 和 [/talk] 的内联情况 */
   cleaned = cleaned.replace(/([^\n`])\[talk\//g, "$1\n[talk/");
   cleaned = cleaned.replace(/([^\n`])\[\/talk\]/g, "$1\n[/talk]");
@@ -232,7 +237,7 @@ export function parseLLMOutput(output: string): ParsedOutput {
   // 处理 [set_plan] 后面的字符
   cleaned = cleaned.replace(/(\[set_plan\])([^\n`])/g, "$1\n$2");
 
-  /* 检测是否包含结构化段落标记（[thought]、[program]、[talk/xxx]、[action/xxx]、栈帧操作标记） */
+  /* 检测是否包含结构化段落标记（[program]、[talk/xxx]、[action/xxx]、栈帧操作标记） */
   const lines = cleaned.split("\n");
   const hasStructuredTags = lines.some(line =>
     STRUCTURED_TAG_RE.test(line) ||
@@ -269,6 +274,16 @@ function initStackFrameState(): StackFrameParseState {
     attrContent: [],
     collected: {},
   };
+}
+
+function assertNoDeprecatedThoughtSection(output: string): void {
+  const normalized = output
+    .replace(/([^\n`])\[thought\](?!`)/g, "$1\n[thought]")
+    .replace(/(?<!`)\[thought\]([^\n`])/g, "[thought]\n$1");
+
+  if (normalized.split("\n").some(line => THOUGHT_SECTION_RE.test(line))) {
+    throw new Error("deprecated [thought] section: use model-native thinking instead");
+  }
 }
 
 /** 刷新当前属性内容到 collected */
@@ -338,9 +353,6 @@ function buildStackFrameOp(
  * 结构化段落解析
  *
  * 格式：
- * [thought]
- * 思考内容...
- *
  * [program]
  * const x = getData("key");
  * print(x);
@@ -356,7 +368,7 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
   let wait = false;
   let break_ = false;
 
-  let currentSection: "thought" | "program" | "talk" | "action" | null = null;
+  let currentSection: "program" | "talk" | "action" | null = null;
   let currentTalkTarget: string | null = null;
   let currentActionToolName: string | null = null;
   let currentLang: "javascript" | "shell" = "javascript";
@@ -378,10 +390,7 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
       flushAttr(stackFrameState);
     }
 
-    if (currentSection === "thought") {
-      const text = currentContent.join("\n").trim();
-      if (text) thoughtParts.push(text);
-    } else if (currentSection === "program") {
+    if (currentSection === "program") {
       let code = currentContent.join("\n").trim();
       let resolvedLang = currentLang;
 
@@ -544,10 +553,7 @@ function parseStructured(output: string, lines: string[]): ParsedOutput {
       flushSection(i);
       seenTag = true;
       const tag = match[1] as string;
-      if (tag === "thought") {
-        currentSection = "thought";
-        sectionStartLine = i + 1;
-      } else if (tag === "program" || tag.startsWith("program/")) {
+      if (tag === "program" || tag.startsWith("program/")) {
         currentSection = "program";
         /* 从标记提取语言: "program" → "javascript", "program/shell" → "shell", "program/javascript" → "javascript" */
         currentLang = tag === "program" || tag === "program/javascript" ? "javascript" : "shell";
@@ -625,7 +631,7 @@ function parseLegacy(output: string): ParsedOutput {
   const programs = extractPrograms(output);
   const directives = detectDirectives(output);
 
-  /* 提取 thought：移除代码块和指令后的文本 */
+  /* 提取非协议文本：移除代码块和指令后的文本 */
   let thought = output.replace(/```[\s\S]*?```/g, "");
   thought = thought.replace(/\[finish\]/g, "").replace(/\[wait\]/g, "").replace(/\[break\]/g, "");
   thought = thought.replace(/\[SYSTEM\]/g, "").replace(/<\/think>/g, "").replace(/<think>/g, "");
@@ -720,7 +726,7 @@ export function extractReplyContent(llmOutput: string, printOutputs?: string[]):
  * 检查是否有 TOML 特有的模式：[section] 后接 key = value
  */
 function looksLikeTomlFormat(output: string): boolean {
-  // 检查是否有 [thought] 或 [program] 或 [talk] 后接 content = 或 code = 等模式
+  // 检查是否有 [program] 或 [talk] 后接 content = 或 code = 等模式
   const lines = output.split("\n");
   let inTomlSection = false;
   let tomlKeyCount = 0;
@@ -735,13 +741,13 @@ function looksLikeTomlFormat(output: string): boolean {
       continue;
     }
 
-    // 检测 TOML 段标题：[thought]、[program]、[talk]、[cognize_stack_frame_push] 等
+    // 检测 TOML 段标题：[program]、[talk]、[cognize_stack_frame_push] 等
     const sectionMatch = line.match(/^\s*\[([a-zA-Z_][a-zA-Z0-9_]*)\]\s*$/);
     if (sectionMatch) {
       const sectionName = sectionMatch[1]!;
       // 这些段名在旧格式和 TOML 格式中都存在
       // 需要进一步检测是否有 key = value 模式
-      if (["thought", "program", "talk", "action", "finish", "wait", "break",
+      if (["program", "talk", "action", "finish", "wait", "break",
            "cognize_stack_frame_push", "cognize_stack_frame_pop",
            "reflect_stack_frame_push", "reflect_stack_frame_pop",
            "set_plan", "directives"].includes(sectionName)) {
@@ -788,7 +794,6 @@ function tryParseTomlFormat(output: string): ParsedOutput | null {
 
     // 检查是否有有效内容
     const hasContent =
-      tomlParsed.thought !== undefined ||
       tomlParsed.program !== undefined ||
       tomlParsed.talk !== undefined ||
       (tomlParsed.actions && tomlParsed.actions.length > 0) ||
@@ -919,7 +924,7 @@ function convertTomlToFlowFormat(toml: TomlParsedOutput): ParsedOutput {
   const finalActions = hasProgram ? [] : actions;
 
   return {
-    thought: toml.thought ?? "",
+    thought: "",
     programs: hasProgram ? programs : [],
     talks: finalTalks,
     actions: finalActions,
@@ -930,8 +935,6 @@ function convertTomlToFlowFormat(toml: TomlParsedOutput): ParsedOutput {
 }
 
 export type LLMOutputStreamEvent =
-  | { type: "thought"; chunk: string }
-  | { type: "thought:end" }
   | { type: "talk"; target: string; chunk: string }
   | { type: "talk:end"; target: string }
   | { type: "program"; lang?: "javascript" | "shell"; chunk: string }
@@ -946,7 +949,6 @@ export type LLMOutputStreamEvent =
   | { type: "set_plan:end" };
 
 type ActiveStreamState =
-  | { type: "thought" }
   | { type: "talk"; target: string }
   | { type: "program"; lang: "javascript" | "shell" }
   | { type: "action"; toolName: string }
@@ -955,14 +957,12 @@ type ActiveStreamState =
   | { type: "set_plan" };
 
 type PendingSectionState =
-  | { kind: "thought" }
   | { kind: "program" }
   | { kind: "talk" }
   | { kind: "stack_push"; opType: "cognize" | "reflect" }
   | { kind: "stack_pop"; opType: "cognize" | "reflect" };
 
 type TomlSectionState =
-  | { kind: "thought" }
   | { kind: "program"; lang: "javascript" | "shell" }
   | { kind: "talk"; target: string | null }
   | { kind: "stack_push"; opType: "cognize" | "reflect" }
@@ -975,7 +975,6 @@ type MultilineStreamState = {
 function sameActiveStream(a: ActiveStreamState | null, b: ActiveStreamState): boolean {
   if (!a || a.type !== b.type) return false;
   switch (a.type) {
-    case "thought":
     case "set_plan":
       return true;
     case "talk":
@@ -1021,8 +1020,6 @@ function normalizeProgramLang(lang: string | null): "javascript" | "shell" {
 
 function normalizePendingSectionFromHeader(header: string): PendingSectionState | null {
   switch (header) {
-    case "thought":
-      return { kind: "thought" };
     case "program":
       return { kind: "program" };
     case "talk":
@@ -1044,8 +1041,6 @@ function canPendingSectionUseToml(section: PendingSectionState, line: string): b
   const parsed = parseTomlKeyLine(line);
   if (!parsed) return false;
   switch (section.kind) {
-    case "thought":
-      return parsed.key === "content";
     case "program":
       return parsed.key === "lang" || parsed.key === "code";
     case "talk":
@@ -1059,8 +1054,6 @@ function canPendingSectionUseToml(section: PendingSectionState, line: string): b
 
 function createTomlSectionFromPending(section: PendingSectionState): TomlSectionState {
   switch (section.kind) {
-    case "thought":
-      return { kind: "thought" };
     case "program":
       return { kind: "program", lang: "javascript" };
     case "talk":
@@ -1086,9 +1079,6 @@ export function createLLMOutputStreamParser(): {
   const endActiveStream = (events: LLMOutputStreamEvent[]) => {
     if (!activeStream) return;
     switch (activeStream.type) {
-      case "thought":
-        events.push({ type: "thought:end" });
-        break;
       case "talk":
         events.push({ type: "talk:end", target: activeStream.target });
         break;
@@ -1120,9 +1110,6 @@ export function createLLMOutputStreamParser(): {
     }
     activeSyntax = syntax;
     switch (stream.type) {
-      case "thought":
-        events.push({ type: "thought", chunk });
-        break;
       case "talk":
         events.push({ type: "talk", target: stream.target, chunk });
         break;
@@ -1202,10 +1189,6 @@ export function createLLMOutputStreamParser(): {
       return false;
     };
 
-    if (tomlSection.kind === "thought" && parsed.key === "content") {
-      return openStringField({ type: "thought" });
-    }
-
     if (tomlSection.kind === "program" && parsed.key === "code") {
       return openStringField({ type: "program", lang: tomlSection.lang });
     }
@@ -1243,9 +1226,6 @@ export function createLLMOutputStreamParser(): {
   const startLegacySectionFromPending = (events: LLMOutputStreamEvent[]) => {
     if (!pendingSection) return;
     switch (pendingSection.kind) {
-      case "thought":
-        activeStream = { type: "thought" };
-        break;
       case "program":
         activeStream = { type: "program", lang: "javascript" };
         break;
@@ -1257,7 +1237,7 @@ export function createLLMOutputStreamParser(): {
         tomlSection = createTomlSectionFromPending(pendingSection);
         break;
     }
-    if (pendingSection.kind === "thought" || pendingSection.kind === "program") {
+    if (pendingSection.kind === "program") {
       tomlSection = null;
     }
     if (pendingSection.kind === "talk") {
@@ -1280,6 +1260,10 @@ export function createLLMOutputStreamParser(): {
     }
 
     const trimmed = line.trim();
+
+    if (THOUGHT_SECTION_RE.test(trimmed)) {
+      throw new Error("deprecated [thought] section: use model-native thinking instead");
+    }
 
     if (!trimmed && activeSyntax === "toml") {
       return;
@@ -1403,10 +1387,7 @@ export function createLLMOutputStreamParser(): {
         return;
       }
 
-      if (pendingSection.kind === "thought") {
-        activeStream = { type: "thought" };
-        pendingSection = null;
-      } else if (pendingSection.kind === "program") {
+      if (pendingSection.kind === "program") {
         activeStream = { type: "program", lang: "javascript" };
         pendingSection = null;
       } else {

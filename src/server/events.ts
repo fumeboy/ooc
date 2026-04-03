@@ -19,6 +19,7 @@ export type SSEEvent =
   | { type: "flow:message"; objectName: string; taskId: string; message: FlowMessage }
   | { type: "flow:status"; objectName: string; taskId: string; status: FlowStatus }
   | { type: "flow:end"; objectName: string; taskId: string; status: FlowStatus }
+  // provider 原生 thinking 通道的增量片段（不再来自 assistant 协议段）
   | { type: "stream:thought"; objectName: string; taskId: string; chunk: string }
   | { type: "stream:talk"; objectName: string; taskId: string; target: string; chunk: string }
   | { type: "stream:thought:end"; objectName: string; taskId: string }

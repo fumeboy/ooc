@@ -57,7 +57,13 @@ export function buildContext(
   /* Progressive Disclosure: 构建 trait catalog */
   const activeTraitIds = new Set(activeTraits.map(t => traitId(t)));
   const scopeSet = new Set(scopeChain);
-  const catalogLines: string[] = ["## Available Traits"];
+  const catalogLines: string[] = [
+    "## Available Traits",
+    "",
+    "Use this catalog to discover capabilities.",
+    "Traits listed under Inactive are still available in the system; read them with readTrait(name) and enable them with activateTrait(name) when needed.",
+    "Do not search library/traits directories to decide whether a trait exists.",
+  ];
 
   // 分类：active 和 inactive（when: never）
   const activeLines: string[] = [];

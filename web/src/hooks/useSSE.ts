@@ -16,7 +16,7 @@ import { connectSSE, fetchObjects, fetchSessions } from "../api/client";
  * SSE 连接 hook
  *
  * 监听后端事件，自动刷新相关数据。
- * 处理流式 thought/talk 事件，实时更新 streaming atoms。
+ * 处理流式 thinking/talk 事件，实时更新 streaming atoms。
  */
 export function useSSE() {
   const setConnected = useSetAtom(sseConnectedAtom);
@@ -101,7 +101,7 @@ export function useSSE() {
           }
           break;
 
-        /* 流式 thought chunk */
+        /* 流式 thought chunk：来自 provider 原生 thinking，而非 assistant 输出协议 */
         case "stream:thought":
           setStreamingThought((prev) =>
             prev?.taskId === event.taskId
@@ -127,7 +127,7 @@ export function useSSE() {
           });
           break;
 
-        /* 流式 thought 结束 */
+        /* 流式 thought 结束：provider thinking 通道本轮完成 */
         case "stream:thought:end":
           setStreamingThought((prev) =>
             prev?.taskId === event.taskId ? null : prev,

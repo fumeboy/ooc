@@ -15,7 +15,7 @@ deps: ["kernel/output_format"]
 
 | 用途 | TOML 格式 |
 |------|-----------|
-| 思考 | `[thought]` + `content = """..."""` |
+| 思考 | 不写协议；使用模型原生 thinking，由系统自动记录 |
 | 代码 | `[program]` + `code = """..."""` |
 | 消息 | `[talk]` + `target = "..."` + `message = """..."""` |
 | 子栈帧推入 | `[cognize_stack_frame_push]` + `title = "..."` |
@@ -27,6 +27,7 @@ deps: ["kernel/output_format"]
 - ❌ 不要使用带目标后缀的旧消息段写法；统一使用 `[talk]` 表并填写 `target`
 - ❌ 不要使用旧的栈帧属性嵌套段写法；统一使用 `[cognize_stack_frame_push]` / `[cognize_stack_frame_pop]` 表
 - ❌ 代码要放在 `code = """..."""` 字段中，不是直接写在段内
+- ❌ 不要在 assistant 最终输出中显式写 `[thought]`；思考来自模型原生 thinking 通道
 
 ## 段落标记式规划 API
 
@@ -51,12 +52,6 @@ deps: ["kernel/output_format"]
 创建一个简单的子栈帧：
 
 ```toml
-[thought]
-content = """
-这是一个复杂任务，需要分步骤完成。
-先收集信息，再分析数据。
-"""
-
 [cognize_stack_frame_push]
 title = "收集信息"
 description = """
@@ -189,12 +184,6 @@ artifacts = { config = { path = "/tmp/data", format = "json" } }
 ## 典型工作流
 
 ```toml
-[thought]
-content = """
-这是一个复杂任务，我需要分步骤完成。
-先创建子栈帧收集信息。
-"""
-
 [cognize_stack_frame_push]
 title = "收集信息"
 description = """
