@@ -31,6 +31,8 @@ export class Session {
   private readonly _flows = new Map<string, SessionEntry>();
   /** 捕获的回复：targetName → CapturedReply（B 回复 A 时存入，A 取走后清除） */
   private readonly _replies = new Map<string, CapturedReply>();
+  /** 文件写入队列：确保同一文件的并发写入串行化 */
+  private _fileWriteQueue = new Map<string, Promise<void>>();
   /** 顶层会话 ID */
   readonly sessionId: string;
   /** session 根目录（flows/{sessionId}/，所有 sub-flow 在此目录下的 flows/ 中创建） */
@@ -103,5 +105,13 @@ export class Session {
       stoneName,
       flow: entry.flow,
     }));
+  }
+
+  /** 串行化文件写入，确保同一文件的读-改-写是原子的 */
+  async serializedWrite(filePath: string, fn: () => Promise<void>): Promise<void> {
+    const prev = this._fileWriteQueue.get(filePath) ?? Promise.resolve();
+    const next = prev.then(fn, fn);
+    this._fileWriteQueue.set(filePath, next);
+    return next;
   }
 }
