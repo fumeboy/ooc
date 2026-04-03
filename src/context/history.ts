@@ -14,7 +14,7 @@ import { listFlowSessions } from "../persistence/reader.js";
 
 /** 单条 flow 摘要 */
 interface FlowSummaryEntry {
-  taskId: string;
+  sessionId: string;
   timestamp: number;
   summary: string;
 }
@@ -24,7 +24,7 @@ interface FlowSummaryEntry {
  *
  * @param flowsDir - 顶层 flows/ 目录（如 flows/）
  * @param stoneName - 对象名称（筛选该对象参与的 flow）
- * @param currentTaskId - 当前 flow 的 taskId（排除自身）
+ * @param currentSessionId - 当前 flow 的 sessionId（排除自身）
  * @param maxFlows - 最多加载多少个有摘要的 flow
  * @param maxChars - 摘要总长度上限
  * @returns 格式化的摘要文本，无摘要则返回 null
@@ -32,7 +32,7 @@ interface FlowSummaryEntry {
 export function loadFlowSummaries(
   flowsDir: string,
   stoneName: string,
-  currentTaskId: string,
+  currentSessionId: string,
   maxFlows: number = 5,
   maxChars: number = 2000,
 ): string | null {
@@ -43,7 +43,7 @@ export function loadFlowSummaries(
   const entries: FlowSummaryEntry[] = [];
 
   for (const sessionId of sessionIds) {
-    if (sessionId === currentTaskId) continue;
+    if (sessionId === currentSessionId) continue;
 
     /* 尝试读取 session 根目录的 data.json（main flow） */
     const dataPath = join(flowsDir, sessionId, "data.json");
@@ -53,7 +53,7 @@ export function loadFlowSummaries(
       const raw = JSON.parse(readFileSync(dataPath, "utf-8"));
       if (typeof raw.summary === "string" && raw.summary.trim()) {
         entries.push({
-          taskId: sessionId,
+          sessionId: sessionId,
           timestamp: raw.updatedAt ?? raw.createdAt ?? 0,
           summary: raw.summary.trim(),
         });
@@ -74,7 +74,7 @@ export function loadFlowSummaries(
 
   for (const entry of entries.slice(0, maxFlows)) {
     const time = new Date(entry.timestamp).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
-    const line = `- [${entry.taskId} ${time}] ${entry.summary}`;
+    const line = `- [${entry.sessionId} ${time}] ${entry.summary}`;
     if (totalChars + line.length > maxChars) break;
     lines.push(line);
     totalChars += line.length;

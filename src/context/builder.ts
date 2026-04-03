@@ -230,7 +230,7 @@ function resolveDynamicWindows(flow: FlowData, stoneDir?: string): ContextWindow
  * 读取 session 中所有 sub-flow 的 process.json，排除 supervisor 自身，
  * 生成各 flow 的状态摘要，帮助 supervisor 掌握全局进展。
  *
- * @param sessionDir - session 根目录（如 flows/{taskId}/）
+ * @param sessionDir - session 根目录（如 flows/{sessionId}/）
  * @param supervisorName - supervisor 的 stone 名称（排除自身）
  * @returns 格式化的概览文本
  */

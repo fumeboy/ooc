@@ -10,7 +10,7 @@
  * @ref docs/哲学文档/gene.md#G8 — implements — 消息投递（talk/talkInSpace）、对象创建
  * @ref src/world/registry.ts — references — Registry 对象注册表
  * @ref src/world/router.ts — references — CollaborationAPI 消息路由
- * @ref src/world/session.ts — references — TaskSession 任务会话
+ * @ref src/world/session.ts — references — Session 任务会话
  * @ref src/world/scheduler.ts — references — Scheduler 多 Flow 调度
  */
 
@@ -19,7 +19,7 @@ import { existsSync, mkdirSync, writeFileSync, readdirSync } from "node:fs";
 import { consola } from "consola";
 import { Registry } from "./registry.js";
 import { createCollaborationAPI, createSharedRoundCounter, type Routable, type SharedRoundCounter } from "./router.js";
-import { TaskSession } from "./session.js";
+import { Session } from "./session.js";
 import { Scheduler } from "./scheduler.js";
 import { CronManager } from "./cron.js";
 import { Stone } from "../stone/index.js";
@@ -45,9 +45,9 @@ export class World implements Routable {
   private readonly _registry: Registry;
   /** LLM 客户端 */
   private readonly _llm: LLMClient;
-  /** 活跃的 session 上下文（支持并发，key = mainFlow.taskId） */
+  /** 活跃的 session 上下文（支持并发，key = mainFlow.sessionId） */
   private readonly _activeSessions = new Map<string, {
-    session: TaskSession;
+    session: Session;
     scheduler: Scheduler;
     roundCounter: SharedRoundCounter;
     traitsCache: Map<string, import("../types/index.js").TraitDefinition[]>;
@@ -530,7 +530,7 @@ export class World implements Routable {
     }
 
     if (!session) {
-      throw new Error("[World] 没有活跃的 TaskSession");
+      throw new Error("[World] 没有活跃的 Session");
     }
 
     /* 复用或创建目标的 Flow */
@@ -595,7 +595,7 @@ export class World implements Routable {
     /* 通过 sessionId 定位 session（支持并发） */
     const ctx = sessionId ? this._activeSessions.get(sessionId) : null;
     const session = ctx?.session ?? null;
-    if (!session) return `[错误] 没有活跃的 TaskSession`;
+    if (!session) return `[错误] 没有活跃的 Session`;
 
     /* 遍历 session 中的所有 Flow，找到匹配 taskId 的 */
     for (const { flow } of session.allFlows()) {
@@ -610,7 +610,7 @@ export class World implements Routable {
   }
 
   /**
-   * 内部：创建 Flow、TaskSession 并通过 Scheduler 运行
+   * 内部：创建 Flow、Session 并通过 Scheduler 运行
    */
   private async _createAndRunFlow(
     objectName: string,
@@ -647,7 +647,7 @@ export class World implements Routable {
 
     /* 创建 SessionContext（支持并发） */
     const sessionId = mainFlow.taskId;
-    const session = new TaskSession(mainFlow.taskId, mainFlow.sessionDir);
+    const session = new Session(mainFlow.taskId, mainFlow.sessionDir);
     const roundCounter = createSharedRoundCounter();
     const traitsCache = new Map<string, import("../types/index.js").TraitDefinition[]>();
     if (from === "human") {
@@ -790,7 +790,7 @@ export class World implements Routable {
 
     /* 创建 SessionContext（支持并发） */
     const sessionId = mainFlow.taskId;
-    const session = new TaskSession(mainFlow.taskId, sessionDir);
+    const session = new Session(mainFlow.taskId, sessionDir);
     const roundCounter = createSharedRoundCounter();
     const traitsCache = new Map<string, import("../types/index.js").TraitDefinition[]>();
     if (from === "human" && mainFlow !== targetFlow) {
@@ -928,7 +928,7 @@ export class World implements Routable {
 
     /* 创建 SessionContext（支持并发） */
     const sessionId = mainFlow.taskId;
-    const session = new TaskSession(mainFlow.taskId, sessionDir);
+    const session = new Session(mainFlow.taskId, sessionDir);
     const roundCounter = createSharedRoundCounter();
     const traitsCache = new Map<string, import("../types/index.js").TraitDefinition[]>();
     if (mainFlow !== targetFlow) {
@@ -1122,7 +1122,7 @@ export class World implements Routable {
     emitSSE({ type: "flow:start", objectName, taskId: mainFlow.taskId });
 
     /* 创建 SessionContext */
-    const session = new TaskSession(mainFlow.taskId, sessionDir);
+    const session = new Session(mainFlow.taskId, sessionDir);
     const roundCounter = createSharedRoundCounter();
     const traitsCache = new Map<string, import("../types/index.js").TraitDefinition[]>();
     if (mainFlow !== targetFlow) {
@@ -1201,7 +1201,7 @@ export class World implements Routable {
    * 恢复对话时，需要把之前创建的 sub-flows 重新注册到 session，
    * 这样 deliverMessage 能正确复用已有的 sub-flow。
    */
-  private _loadExistingSubFlows(session: TaskSession, sessionDir: string, excludeName?: string): void {
+  private _loadExistingSubFlows(session: Session, sessionDir: string, excludeName?: string): void {
     const flowsDir = join(sessionDir, "flows");
     if (!existsSync(flowsDir)) return;
 
@@ -1226,7 +1226,7 @@ export class World implements Routable {
    * ReflectFlow 是对象的常驻 Flow，负责维护 Self（Stone）的长期数据。
    * 普通 Flow 通过 talkToSelf 向 ReflectFlow 发消息，ReflectFlow 是唯一可写 Self 目录的 Flow。
    */
-  private _ensureReflectFlow(stone: Stone, session: TaskSession): Flow {
+  private _ensureReflectFlow(stone: Stone, session: Session): Flow {
     const selfMetaFlow = Flow.ensureReflectFlow(stone.reflectDir, stone.name);
 
     /* 注册到 session（如果尚未注册） */

@@ -21,7 +21,7 @@ describe("buildContext", () => {
     };
 
     const flow: FlowData = {
-      taskId: "t1",
+      sessionId: "t1",
       stoneName: "researcher",
       status: "running",
       messages: [
@@ -116,7 +116,7 @@ describe("progressive disclosure", () => {
       traits: [],
     };
     const flow: FlowData = {
-      taskId: "t1",
+      sessionId: "t1",
       stoneName: "researcher",
       status: "running",
       messages: [],
@@ -149,7 +149,7 @@ describe("progressive disclosure", () => {
       traits: [],
     };
     const flow: FlowData = {
-      taskId: "t1",
+      sessionId: "t1",
       stoneName: "researcher",
       status: "running",
       messages: [],

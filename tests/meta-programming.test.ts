@@ -191,13 +191,13 @@ describe("ReflectFlow", () => {
     mkdirSync(reflectDir, { recursive: true });
 
     const selfMeta = Flow.ensureReflectFlow(reflectDir, "tester");
-    expect(selfMeta.taskId).toBe("_reflect");
+    expect(selfMeta.sessionId).toBe("_reflect");
     expect(selfMeta.isSelfMeta).toBe(true);
     expect(selfMeta.status).toBe("waiting");
 
     /* 再次调用应返回同一个（幂等） */
     const selfMeta2 = Flow.ensureReflectFlow(reflectDir, "tester");
-    expect(selfMeta2.taskId).toBe("_reflect");
+    expect(selfMeta2.sessionId).toBe("_reflect");
   });
 
   test("普通 Flow 的 isSelfMeta 为 false", () => {
@@ -309,7 +309,7 @@ describe("Context Window CRUD（通过 ThinkLoop 沙箱）", () => {
 describe("buildContext 动态 Window 解析", () => {
   test("解析静态 window", () => {
     const flowData: FlowData = {
-      taskId: "t1",
+      sessionId: "t1",
       stoneName: "tester",
       status: "running",
       messages: [],
@@ -334,7 +334,7 @@ describe("buildContext 动态 Window 解析", () => {
     writeFileSync(join(TEST_DIR, "data.txt"), "文件数据", "utf-8");
 
     const flowData: FlowData = {
-      taskId: "t2",
+      sessionId: "t2",
       stoneName: "tester",
       status: "running",
       messages: [],
@@ -356,7 +356,7 @@ describe("buildContext 动态 Window 解析", () => {
 
   test("解析函数型 window（占位符）", () => {
     const flowData: FlowData = {
-      taskId: "t3",
+      sessionId: "t3",
       stoneName: "tester",
       status: "running",
       messages: [],
@@ -378,7 +378,7 @@ describe("buildContext 动态 Window 解析", () => {
 
   test("无 _windows 时返回空", () => {
     const flowData: FlowData = {
-      taskId: "t4",
+      sessionId: "t4",
       stoneName: "tester",
       status: "running",
       messages: [],

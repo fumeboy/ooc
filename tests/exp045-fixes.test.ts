@@ -108,28 +108,28 @@ describe("Fix 3: loadFlowSummaries", () => {
     const flowsDir = join(TEST_DIR, "flows2");
 
     /* 创建 3 个 session：2 个有摘要，1 个无摘要 */
-    const flow1Dir = join(flowsDir, "task_001");
+    const flow1Dir = join(flowsDir, "session_001");
     mkdirSync(flow1Dir, { recursive: true });
     writeFileSync(join(flow1Dir, "data.json"), JSON.stringify({
-      taskId: "task_001",
+      sessionId: "session_001",
       summary: "讨论了 API 设计",
       updatedAt: 1000,
       createdAt: 1000,
     }));
 
-    const flow2Dir = join(flowsDir, "task_002");
+    const flow2Dir = join(flowsDir, "session_002");
     mkdirSync(flow2Dir, { recursive: true });
     writeFileSync(join(flow2Dir, "data.json"), JSON.stringify({
-      taskId: "task_002",
+      sessionId: "session_002",
       updatedAt: 2000,
       createdAt: 2000,
       /* 无 summary */
     }));
 
-    const flow3Dir = join(flowsDir, "task_003");
+    const flow3Dir = join(flowsDir, "session_003");
     mkdirSync(flow3Dir, { recursive: true });
     writeFileSync(join(flow3Dir, "data.json"), JSON.stringify({
-      taskId: "task_003",
+      sessionId: "session_003",
       summary: "完成了用户认证模块",
       updatedAt: 3000,
       createdAt: 3000,
@@ -141,7 +141,7 @@ describe("Fix 3: loadFlowSummaries", () => {
     expect(result!).toContain("API 设计");
     expect(result!).toContain("用户认证模块");
     /* 不应包含无摘要的 flow */
-    expect(result!).not.toContain("task_002");
+    expect(result!).not.toContain("session_002");
   });
 
   test("排除当前 flow", () => {
@@ -150,7 +150,7 @@ describe("Fix 3: loadFlowSummaries", () => {
     const flowDir = join(flowsDir, "current_task");
     mkdirSync(flowDir, { recursive: true });
     writeFileSync(join(flowDir, "data.json"), JSON.stringify({
-      taskId: "current_task",
+      sessionId: "current_task",
       summary: "当前任务摘要",
       updatedAt: 1000,
     }));
@@ -162,16 +162,16 @@ describe("Fix 3: loadFlowSummaries", () => {
   test("按时间倒序排列", () => {
     const flowsDir = join(TEST_DIR, "flows4");
 
-    const oldDir = join(flowsDir, "task_old");
+    const oldDir = join(flowsDir, "session_old");
     mkdirSync(oldDir, { recursive: true });
     writeFileSync(join(oldDir, "data.json"), JSON.stringify({
-      taskId: "task_old", summary: "旧任务", updatedAt: 1000,
+      sessionId: "session_old", summary: "旧任务", updatedAt: 1000,
     }));
 
-    const newDir = join(flowsDir, "task_new");
+    const newDir = join(flowsDir, "session_new");
     mkdirSync(newDir, { recursive: true });
     writeFileSync(join(newDir, "data.json"), JSON.stringify({
-      taskId: "task_new", summary: "新任务", updatedAt: 5000,
+      sessionId: "session_new", summary: "新任务", updatedAt: 5000,
     }));
 
     const result = loadFlowSummaries(flowsDir, "test", "other");
@@ -192,7 +192,7 @@ describe("Fix 3: loadFlowSummaries", () => {
       traits: [],
     };
     const flow = {
-      taskId: "t1",
+      sessionId: "t1",
       stoneName: "test",
       status: "running" as const,
       messages: [],
@@ -203,7 +203,7 @@ describe("Fix 3: loadFlowSummaries", () => {
     };
     const directory: DirectoryEntry[] = [];
 
-    const ctx = buildContext(stone, flow, directory, [], [], undefined, "- [task_old] 讨论了架构");
+    const ctx = buildContext(stone, flow, directory, [], [], undefined, "- [session_old] 讨论了架构");
     /* knowledge 中应包含 recent-conversations */
     const rcWindow = ctx.knowledge.find(w => w.name === "recent-conversations");
     expect(rcWindow).toBeDefined();
@@ -220,7 +220,7 @@ describe("Fix 3: loadFlowSummaries", () => {
       traits: [],
     };
     const flow = {
-      taskId: "t1",
+      sessionId: "t1",
       stoneName: "test",
       status: "running" as const,
       messages: [],

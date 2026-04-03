@@ -6,7 +6,7 @@ describe("frontend thinking stream semantics", () => {
     const sample: Extract<SSEEvent, { type: "stream:thought" }> = {
       type: "stream:thought",
       objectName: "supervisor",
-      taskId: "task_x",
+      sessionId: "session_x",
       chunk: "我正在思考下一步怎么做。",
     };
 

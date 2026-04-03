@@ -199,7 +199,7 @@ describe("buildContext 结构化遗忘", () => {
     moveFocus(process, id1);
 
     const flow: FlowData = {
-      taskId: "t1",
+      sessionId: "t1",
       stoneName: "tester",
       status: "running",
       messages: [],
@@ -224,7 +224,7 @@ describe("buildContext 结构化遗忘", () => {
     moveFocus(process, id1);
 
     const flow: FlowData = {
-      taskId: "t2",
+      sessionId: "t2",
       stoneName: "tester",
       status: "running",
       messages: [],

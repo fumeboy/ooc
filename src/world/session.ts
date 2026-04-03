@@ -1,10 +1,10 @@
 /**
- * TaskSession — 任务级会话管理
+ * Session — 会话级管理
  *
- * 跟踪一个顶层任务中所有参与对象的 Flow。
- * 同一 Stone 在同一任务中只有一个 Flow（sub-flow 复用）。
+ * 跟踪一个顶层会话中所有参与对象的 Flow。
+ * 同一 Stone 在同一会话中只有一个 Flow（sub-flow 复用）。
  *
- * @ref docs/哲学文档/gene.md#G2 — implements — 一个 Stone 可同时拥有多个 Flow，但同一任务中只有一个
+ * @ref docs/哲学文档/gene.md#G2 — implements — 一个 Stone 可同时拥有多个 Flow，但同一会话中只有一个
  * @ref docs/哲学文档/gene.md#G8 — references — sub-flow 机制（协作链中的 Flow 管理）
  * @ref src/flow/flow.ts — references — Flow 实例
  */
@@ -26,18 +26,18 @@ interface CapturedReply {
   content: string;
 }
 
-export class TaskSession {
+export class Session {
   /** stoneName → SessionEntry */
   private readonly _flows = new Map<string, SessionEntry>();
   /** 捕获的回复：targetName → CapturedReply（B 回复 A 时存入，A 取走后清除） */
   private readonly _replies = new Map<string, CapturedReply>();
-  /** 顶层任务 ID */
-  readonly taskId: string;
-  /** session 根目录（flows/{taskId}/，所有 sub-flow 在此目录下的 flows/ 中创建） */
+  /** 顶层会话 ID */
+  readonly sessionId: string;
+  /** session 根目录（flows/{sessionId}/，所有 sub-flow 在此目录下的 flows/ 中创建） */
   readonly sessionDir: string;
 
-  constructor(taskId: string, sessionDir: string) {
-    this.taskId = taskId;
+  constructor(sessionId: string, sessionDir: string) {
+    this.sessionId = sessionId;
     this.sessionDir = sessionDir;
   }
 
@@ -46,7 +46,7 @@ export class TaskSession {
    */
   register(stoneName: string, flow: Flow): void {
     this._flows.set(stoneName, { flow, active: false });
-    consola.info(`[TaskSession] 注册 ${stoneName} (flow: ${flow.taskId})`);
+    consola.info(`[Session] 注册 ${stoneName} (flow: ${flow.sessionId})`);
   }
 
   /**
@@ -83,7 +83,7 @@ export class TaskSession {
    */
   captureReply(targetName: string, from: string, content: string): void {
     this._replies.set(targetName, { from, content });
-    consola.info(`[TaskSession] 捕获 ${from} → ${targetName} 的回复`);
+    consola.info(`[Session] 捕获 ${from} → ${targetName} 的回复`);
   }
 
   /**

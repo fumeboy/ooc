@@ -60,9 +60,9 @@ describe("readStone / writeStone", () => {
 
 describe("readFlow / writeFlow", () => {
   test("写入并读取 Flow", () => {
-    const dir = join(TEST_DIR, "flows", "task_001");
+    const dir = join(TEST_DIR, "flows", "session_001");
     const flow: FlowData = {
-      taskId: "task_001",
+      sessionId: "session_001",
       stoneName: "researcher",
       status: "running",
       messages: [
@@ -87,7 +87,7 @@ describe("readFlow / writeFlow", () => {
 
     const loaded = readFlow(dir);
     expect(loaded).not.toBeNull();
-    expect(loaded!.taskId).toBe("task_001");
+    expect(loaded!.sessionId).toBe("session_001");
     expect(loaded!.status).toBe("running");
     expect(loaded!.messages).toHaveLength(1);
   });
@@ -95,9 +95,9 @@ describe("readFlow / writeFlow", () => {
 
 describe("process.json 分离", () => {
   test("process 写入独立 process.json", () => {
-    const dir = join(TEST_DIR, "flows", "task_process");
+    const dir = join(TEST_DIR, "flows", "session_process");
     const flow: FlowData = {
-      taskId: "task_process",
+      sessionId: "session_process",
       stoneName: "researcher",
       status: "running",
       messages: [],
@@ -124,7 +124,7 @@ describe("process.json 分离", () => {
     /* data.json 不应包含 process 字段 */
     const dataJson = JSON.parse(readFileSync(join(dir, "data.json"), "utf-8"));
     expect(dataJson.process).toBeUndefined();
-    expect(dataJson.taskId).toBe("task_process");
+    expect(dataJson.sessionId).toBe("session_process");
 
     /* process.json 包含行为树 */
     const processJson = JSON.parse(readFileSync(join(dir, "process.json"), "utf-8"));
@@ -133,9 +133,9 @@ describe("process.json 分离", () => {
   });
 
   test("readFlow 自动合并 process.json", () => {
-    const dir = join(TEST_DIR, "flows", "task_merge");
+    const dir = join(TEST_DIR, "flows", "session_merge");
     const flow: FlowData = {
-      taskId: "task_merge",
+      sessionId: "session_merge",
       stoneName: "researcher",
       status: "finished",
       messages: [],
@@ -159,19 +159,19 @@ describe("process.json 分离", () => {
     const loaded = readFlow(dir);
 
     expect(loaded).not.toBeNull();
-    expect(loaded!.taskId).toBe("task_merge");
+    expect(loaded!.sessionId).toBe("session_merge");
     expect(loaded!.process).toBeDefined();
     expect(loaded!.process.root.title).toBe("分析任务");
     expect(loaded!.process.focusId).toBe("root_2");
   });
 
   test("旧版数据无 process.json 时自动创建默认 process", () => {
-    const dir = join(TEST_DIR, "flows", "task_legacy");
+    const dir = join(TEST_DIR, "flows", "session_legacy");
     mkdirSync(dir, { recursive: true });
 
     /* 模拟旧版数据：只有 data.json，无 process.json */
     writeFileSync(join(dir, "data.json"), JSON.stringify({
-      taskId: "task_legacy",
+      sessionId: "session_legacy",
       stoneName: "researcher",
       status: "finished",
       messages: [],

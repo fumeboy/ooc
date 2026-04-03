@@ -10,7 +10,7 @@
  * @ref docs/哲学文档/gene.md#G2 — implements — Flow 动态形态（状态机 running→waiting→finished/failed）
  * @ref docs/哲学文档/gene.md#G8 — implements — 异步消息投递（deliverMessage, drainPendingMessages）
  * @ref docs/哲学文档/gene.md#G10 — implements — recordAction 不可变事件记录
- * @ref docs/哲学文档/gene.md#G7 — implements — Flow 持久化（save/load → effects/{taskId}/）
+ * @ref docs/哲学文档/gene.md#G7 — implements — Flow 持久化（save/load → effects/{sessionId}/）
  * @ref src/types/flow.ts — references — FlowData, FlowStatus, Action, PendingMessage 类型
  * @ref src/process/tree.ts — references — createProcess, appendAction, collectAllActions
  * @ref src/persistence/writer.ts — references — writeFlow 持久化
@@ -25,12 +25,12 @@ import { createProcess } from "../process/tree.js";
 import { collectAllActions, findNode, appendAction } from "../process/tree.js";
 import type { FlowData, FlowStatus, Action, FlowMessage, PendingMessage, Process } from "../types/index.js";
 
-/** 生成唯一任务 ID */
-function generateTaskId(): string {
+/** 生成唯一会话 ID */
+function generateSessionId(): string {
   const now = new Date();
   const ts = now.toISOString().replace(/[-:T.Z]/g, "").slice(0, 14);
   const rand = Math.random().toString(36).slice(2, 6);
-  return `task_${ts}_${rand}`;
+  return `session_${ts}_${rand}`;
 }
 
 /** 生成唯一消息 ID */
@@ -78,11 +78,11 @@ export class Flow {
     from: string = "human",
     initiatedBy?: string,
   ): Flow {
-    const taskId = generateTaskId();
+    const sessionId = generateSessionId();
     const now = Date.now();
 
     const data: FlowData = {
-      taskId,
+      sessionId,
       stoneName,
       status: "running",
       messages: [
@@ -101,8 +101,8 @@ export class Flow {
       updatedAt: now,
     };
 
-    /* main flow 目录：flows/{taskId}/flows/{stoneName}/ */
-    const sessionDir = join(flowsDir, taskId);
+    /* main flow 目录：flows/{sessionId}/flows/{stoneName}/ */
+    const sessionDir = join(flowsDir, sessionId);
     const dir = join(sessionDir, "flows", stoneName);
     writeFlow(dir, data);
     writeFileSync(join(dir, ".flow"), "", "utf-8");
@@ -114,11 +114,11 @@ export class Flow {
    *
    * Sub-flow 是完整的 Flow 对象，持久化在 session 的 flows/{stoneName}/ 下。
    * 同一 Stone 在同一 session 下只有一个 sub-flow。
-   * Sub-flow 使用自己的 files/ 目录（flows/{taskId}/flows/{stoneName}/files/）。
+   * Sub-flow 使用自己的 files/ 目录（flows/{sessionId}/flows/{stoneName}/files/）。
    *
    * @ref docs/建模/meta_thought.md#五 — implements — Sub-flow 持久化在 session 子目录
    *
-   * @param sessionDir - session 根目录（如 flows/{taskId}/）
+   * @param sessionDir - session 根目录（如 flows/{sessionId}/）
    * @param stoneName - sub-flow 所属的 Stone 名称
    * @param initialMessage - 触发消息
    * @param from - 消息发送者
@@ -133,14 +133,14 @@ export class Flow {
     initiatedBy?: string,
   ): Flow {
     const now = Date.now();
-    /* sub-flow 的 taskId 用 stoneName 标识（同一 session 下唯一） */
-    const taskId = `sub_${stoneName}_${now.toString(36)}`;
+    /* sub-flow 的 sessionId 用 stoneName 标识（同一 session 下唯一） */
+    const sessionId = `sub_${stoneName}_${now.toString(36)}`;
 
     /* 不在此处写入初始消息到 messages[]。
      * 调用方通过 deliverMessage() 投递到 pendingMessages，
      * ThinkLoop 消费时统一调用 addMessage() 写入，避免重复。 */
     const data: FlowData = {
-      taskId,
+      sessionId,
       stoneName,
       status: "running",
       messages: [],
@@ -173,7 +173,7 @@ export class Flow {
    * 创建或加载 ReflectFlow（原 SelfMeta）
    *
    * ReflectFlow 是对象的常驻 Flow，负责维护 Self（Stone）的长期数据。
-   * taskId 固定为 `_reflect`，初始 status 为 waiting。
+   * sessionId 固定为 `_reflect`，初始 status 为 waiting。
    * 如果已存在则 load，不重复创建。
    *
    * @param reflectDir - Stone 的 reflect/ 目录（如 stones/{name}/reflect/）
@@ -186,7 +186,7 @@ export class Flow {
 
     const now = Date.now();
     const data: FlowData = {
-      taskId: "_reflect",
+      sessionId: "_reflect",
       stoneName,
       status: "waiting",
       messages: [],
@@ -203,12 +203,12 @@ export class Flow {
 
   /* ========== 只读属性 ========== */
 
-  get taskId(): string { return this._data.taskId; }
+  get sessionId(): string { return this._data.sessionId; }
   get stoneName(): string { return this._data.stoneName; }
   get status(): FlowStatus { return this._data.status; }
   get messages(): readonly FlowMessage[] { return this._data.messages; }
   get dir(): string { return this._dir; }
-  /** session 根目录（flows/{taskId}/），所有同 session 的 flow 共享此目录 */
+  /** session 根目录（flows/{sessionId}/），所有同 session 的 flow 共享此目录 */
   get sessionDir(): string { return resolve(this._dir, "..", ".."); }
   get filesDir(): string { return this._filesDirOverride ?? join(this._dir, "files"); }
   get process(): Process { return this._data.process; }
@@ -245,7 +245,7 @@ export class Flow {
       status,
       updatedAt: Date.now(),
     };
-    emitSSE({ type: "flow:status", objectName: this.stoneName, taskId: this.taskId, status });
+    emitSSE({ type: "flow:status", objectName: this.stoneName, sessionId: this.sessionId, status });
   }
 
   /**
@@ -284,7 +284,7 @@ export class Flow {
       ...this._data,
       updatedAt: Date.now(),
     };
-    emitSSE({ type: "flow:action", objectName: this.stoneName, taskId: this.taskId, action: fullAction });
+    emitSSE({ type: "flow:action", objectName: this.stoneName, sessionId: this.sessionId, action: fullAction });
   }
 
   /**
@@ -308,7 +308,7 @@ export class Flow {
       messages: [...this._data.messages, fullMsg],
       updatedAt: Date.now(),
     };
-    emitSSE({ type: "flow:message", objectName: this.stoneName, taskId: this.taskId, message: fullMsg });
+    emitSSE({ type: "flow:message", objectName: this.stoneName, sessionId: this.sessionId, message: fullMsg });
   }
 
   /**

@@ -173,7 +173,7 @@ async function handleRoute(
     return json({
       success: true,
       data: {
-        taskId: flow.taskId,
+        sessionId: flow.taskId,
         status: flow.status,
         actions: [...flow.actions],
         messages: flow.messages,
@@ -202,7 +202,7 @@ async function handleRoute(
     return json({
       success: true,
       data: {
-        taskId: flow.taskId,
+        sessionId: flow.taskId,
         status: flow.status,
         actions: [...flow.actions],
         messages: flow.messages,
@@ -260,7 +260,7 @@ async function handleRoute(
     return json({
       success: true,
       data: {
-        taskId: flow.taskId,
+        sessionId: flow.taskId,
         status: flow.status,
         debugMode: flow.toJSON().data.debugMode ?? false,
       },
@@ -352,11 +352,11 @@ async function handleRoute(
     } catch { return json({ success: true, data: { groups: [] } }); }
   }
 
-  /* GET /api/flows/:taskId — 获取单个 Flow 详情 */
+  /* GET /api/flows/:sessionId — 获取单个 Flow 详情 */
   const flowDetailMatch = path.match(/^\/api\/flows\/([^/]+)$/);
   if (method === "GET" && flowDetailMatch) {
-    const taskId = flowDetailMatch[1]!;
-    const sessionDir = join(world.flowsDir, taskId);
+    const sessionId = flowDetailMatch[1]!;
+    const sessionDir = join(world.flowsDir, sessionId);
 
     /* 新结构：main flow 在 session/flows/user/ */
     let flow = readFlow(join(sessionDir, "flows", "user"));
@@ -364,7 +364,7 @@ async function handleRoute(
       /* 兼容旧数据：session 根目录 */
       flow = readFlow(sessionDir);
     }
-    if (!flow) return errorResponse(`Flow "${taskId}" 不存在`, 404);
+    if (!flow) return errorResponse(`Flow "${sessionId}" 不存在`, 404);
 
     /* 合并 sub-flow 的消息和 process（让前端能看到完整对话和所有对象的行为树） */
     const flowsDir = join(sessionDir, "flows");
@@ -394,10 +394,10 @@ async function handleRoute(
     return json({ success: true, data: { flow, subFlows } });
   }
 
-  /* PATCH /api/flows/:taskId — 更新 Flow 元数据（如 title） */
+  /* PATCH /api/flows/:sessionId — 更新 Flow 元数据（如 title） */
   if (method === "PATCH" && flowDetailMatch) {
-    const taskId = flowDetailMatch[1]!;
-    const sessionDir = join(world.flowsDir, taskId);
+    const sessionId = flowDetailMatch[1]!;
+    const sessionDir = join(world.flowsDir, sessionId);
     /* 新结构优先 */
     let flowDir = join(sessionDir, "flows", "user");
     let flow = readFlow(flowDir);
@@ -405,7 +405,7 @@ async function handleRoute(
       flowDir = sessionDir;
       flow = readFlow(flowDir);
     }
-    if (!flow) return errorResponse(`Flow "${taskId}" 不存在`, 404);
+    if (!flow) return errorResponse(`Flow "${sessionId}" 不存在`, 404);
 
     const body = await req.json() as Record<string, unknown>;
     if (typeof body.title === "string") {
@@ -417,10 +417,10 @@ async function handleRoute(
     return json({ success: true, data: { flow } });
   }
 
-  /* DELETE /api/flows/:taskId — 取消卡住的 Flow */
+  /* DELETE /api/flows/:sessionId — 取消卡住的 Flow */
   if (method === "DELETE" && flowDetailMatch) {
-    const taskId = flowDetailMatch[1]!;
-    const sessionDir = join(world.flowsDir, taskId);
+    const sessionId = flowDetailMatch[1]!;
+    const sessionDir = join(world.flowsDir, sessionId);
 
     /* 遍历 session 下所有 sub-flow，将 running 状态改为 failed */
     const flowsSubDir = join(sessionDir, "flows");
@@ -456,7 +456,7 @@ async function handleRoute(
       }
     }
 
-    return json({ success: true, data: { taskId, cancelled } });
+    return json({ success: true, data: { sessionId, cancelled } });
   }
 
   /* GET /api/flows — 获取 Flow 列表 */
@@ -465,12 +465,12 @@ async function handleRoute(
     return json({ success: true, data: { sessions } });
   }
 
-  /* PATCH /api/sessions/:taskId — 更新 session title */
+  /* PATCH /api/sessions/:sessionId — 更新 session title */
   const sessionPatchMatch = path.match(/^\/api\/sessions\/([^/]+)$/);
   if (method === "PATCH" && sessionPatchMatch) {
-    const taskId = sessionPatchMatch[1]!;
-    const sessionDir = join(world.flowsDir, taskId);
-    if (!existsSync(sessionDir)) return errorResponse(`Session "${taskId}" 不存在`, 404);
+    const sessionId = sessionPatchMatch[1]!;
+    const sessionDir = join(world.flowsDir, sessionId);
+    if (!existsSync(sessionDir)) return errorResponse(`Session "${sessionId}" 不存在`, 404);
 
     const body = await req.json() as Record<string, unknown>;
     const sessionFile = join(sessionDir, ".session.json");
@@ -780,7 +780,7 @@ async function getTraitsInfo(
  * 获取 sessions 摘要列表（从顶层 flows/ 目录读取）
  */
 function getSessionsSummary(flowsDir: string): Array<{
-  taskId: string;
+  sessionId: string;
   title?: string;
   status: FlowStatus;
   firstMessage: string;
@@ -792,7 +792,7 @@ function getSessionsSummary(flowsDir: string): Array<{
 }> {
   const sessionIds = listFlowSessions(flowsDir);
   const summaries: Array<{
-    taskId: string;
+    sessionId: string;
     title?: string;
     status: FlowStatus;
     firstMessage: string;
@@ -824,7 +824,7 @@ function getSessionsSummary(flowsDir: string): Array<{
 
     const firstIn = flow.messages.find((m) => m.direction === "in");
     summaries.push({
-      taskId: flow.taskId,
+      sessionId: flow.taskId,
       title: sessionTitle,
       status: flow.status,
       firstMessage: firstIn?.content ?? "",

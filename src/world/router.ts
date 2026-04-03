@@ -40,7 +40,7 @@ export interface Routable {
 /** 最大对话轮次（防止无限对话） */
 const MAX_ROUNDS = 100;
 
-/** 共享轮次计数器 —— 同一 TaskSession 内所有 CollaborationAPI 共享 */
+/** 共享轮次计数器 —— 同一 Session 内所有 CollaborationAPI 共享 */
 export interface SharedRoundCounter {
   count: number;
 }
@@ -53,9 +53,9 @@ export function createSharedRoundCounter(): SharedRoundCounter {
 /**
  * 创建协作 API
  *
- * @param roundCounter - 可选的共享轮次计数器。同一 TaskSession 内的所有 Flow 应共享同一个计数器，
+ * @param roundCounter - 可选的共享轮次计数器。同一 Session 内的所有 Flow 应共享同一个计数器，
  *                       防止 sub-flow 创建时计数器重置导致轮次限制失效。
- * @param currentFlowTaskId - 当前 Flow 的 taskId（用于 talkToSelf 标识发起方）
+ * @param currentFlowSessionId - 当前 Flow 的 sessionId（用于 talkToSelf 标识发起方）
  * @param sessionId - 所属 session 的 ID（支持并发 session）
  */
 export function createCollaborationAPI(
@@ -63,7 +63,7 @@ export function createCollaborationAPI(
   currentObjectName: string,
   _currentObjectDir: string,
   roundCounter?: SharedRoundCounter,
-  currentFlowTaskId?: string,
+  currentFlowSessionId?: string,
   sessionId?: string,
 ): CollaborationAPI {
   /** 对话轮次计数器 —— 优先使用共享计数器，否则创建局部计数器（兼容测试场景） */
@@ -95,11 +95,11 @@ export function createCollaborationAPI(
     },
 
     talkToSelf: (message: string): string => {
-      if (!currentFlowTaskId) {
+      if (!currentFlowSessionId) {
         return "[错误] 无法确定当前 Flow，talkToSelf 不可用";
       }
       try {
-        return world.deliverToSelfMeta(currentObjectName, message, currentFlowTaskId);
+        return world.deliverToSelfMeta(currentObjectName, message, currentFlowSessionId);
       } catch (e) {
         const errMsg = `[Router] talkToSelf 失败: ${(e as Error).message}`;
         consola.error(errMsg);

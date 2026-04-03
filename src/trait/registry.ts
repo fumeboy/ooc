@@ -23,8 +23,8 @@ export interface MethodContext {
   setData(key: string, value: unknown): void;
   /** 输出文本 */
   print(...args: unknown[]): void;
-  /** 当前任务 ID */
-  readonly taskId: string;
+  /** 当前会话 ID */
+  readonly sessionId: string;
   /** files/ 目录路径 */
   readonly filesDir: string;
   /** world_dir（用户仓库根目录） */

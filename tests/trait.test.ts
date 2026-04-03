@@ -417,7 +417,7 @@ describe("方法可见性过滤", () => {
 
     const ctx = {
       data: {}, getData: () => undefined, setData: () => {},
-      print: () => {}, taskId: "t", filesDir: "/tmp",
+      print: () => {}, sessionId: "t", filesDir: "/tmp",
       rootDir: "/tmp", selfDir: "/tmp", stoneName: "test",
     } as any;
 
@@ -498,7 +498,7 @@ describe("MethodRegistry", () => {
       data: {},
       setData: () => {},
       print: () => {},
-      taskId: "t1",
+      sessionId: "t1",
       filesDir: "/tmp",
       rootDir: "/tmp",
       selfDir: "/tmp",
@@ -549,7 +549,7 @@ describe("MethodRegistry", () => {
       getData: () => undefined,
       setData: () => {},
       print: () => {},
-      taskId: "t1",
+      sessionId: "t1",
       filesDir: "/tmp/files",
       rootDir: "/home/user/project",
       selfDir: "/home/user/project/stones/alice",
@@ -619,7 +619,7 @@ describe("MethodRegistry", () => {
       data: {},
       setData: () => {},
       print: () => {},
-      taskId: "t1",
+      sessionId: "t1",
       filesDir: "/tmp",
       rootDir: "/tmp",
       selfDir: "/tmp",
@@ -687,7 +687,7 @@ describe("MethodRegistry", () => {
       data: {},
       setData: () => {},
       print: () => {},
-      taskId: "t1",
+      sessionId: "t1",
       filesDir: "/tmp",
       rootDir: "/tmp",
       selfDir: "/tmp",

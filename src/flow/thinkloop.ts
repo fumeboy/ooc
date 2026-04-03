@@ -134,7 +134,7 @@ export async function runThinkLoop(
   const methodRegistry = new MethodRegistry();
   methodRegistry.registerAll(traits);
 
-  consola.info(`[ThinkLoop] 开始 — ${stone.name}/${flow.taskId}${config.threadId ? ` (thread: ${config.threadId})` : ""}`);
+  consola.info(`[ThinkLoop] 开始 — ${stone.name}/${flow.sessionId}${config.threadId ? ` (thread: ${config.threadId})` : ""}`);
 
   /** 标记是否已有有效产出（message_out 或 program 执行成功），用于 catch 降级判断 */
   let hasDeliveredOutput = false;
@@ -176,7 +176,7 @@ export async function runThinkLoop(
       emitSSE({
         type: "flow:progress",
         objectName: stone.name,
-        taskId: flow.taskId,
+        sessionId: flow.sessionId,
         iterations: iteration,
         maxIterations: config.maxIterations,
         totalIterations: iteration,
@@ -249,7 +249,7 @@ export async function runThinkLoop(
       /* 正常模式：构建 Context + 调用 LLM */
 
       /* 1. 构建 Context（集成 Trait 激活 + 历史摘要） */
-      const recentHistory = flowsDir ? loadFlowSummaries(flowsDir, stone.name, flow.taskId) : null;
+      const recentHistory = flowsDir ? loadFlowSummaries(flowsDir, stone.name, flow.sessionId) : null;
       const ctx = buildContext(stone, flow.toJSON(), directory, traits, [], stoneDir, recentHistory ?? undefined, flow.sessionDir, flow.dir);
       systemPrompt = formatContextAsSystem(ctx);
       chatMessages = formatContextAsMessages(ctx);
@@ -285,7 +285,7 @@ export async function runThinkLoop(
           const streamed = await consumeEventStream(
             llm.chatEventStream(messages),
             stone.name,
-            flow.taskId,
+            flow.sessionId,
           );
           llmOutput = streamed.assistantContent;
           providerThinkingOutput = streamed.thinkingContent;
@@ -294,7 +294,7 @@ export async function runThinkLoop(
           llmOutput = await consumeAssistantStream(
             llm.chatStream(messages),
             stone.name,
-            flow.taskId,
+            flow.sessionId,
           );
         } else {
           /* 非流式 fallback */
@@ -302,12 +302,12 @@ export async function runThinkLoop(
           llmOutput = response.assistantContent;
           providerThinkingOutput = response.thinkingContent;
           if (providerThinkingOutput.trim()) {
-            emitSSE({ type: "stream:thought", objectName: stone.name, taskId: flow.taskId, chunk: providerThinkingOutput });
-            emitSSE({ type: "stream:thought:end", objectName: stone.name, taskId: flow.taskId });
+            emitSSE({ type: "stream:thought", objectName: stone.name, sessionId: flow.sessionId, chunk: providerThinkingOutput });
+            emitSSE({ type: "stream:thought:end", objectName: stone.name, sessionId: flow.sessionId });
           }
           await consumeAssistantStream((async function* () {
             if (llmOutput) yield llmOutput;
-          })(), stone.name, flow.taskId);
+          })(), stone.name, flow.sessionId);
         }
       } catch (e) {
         consola.error(`[ThinkLoop] LLM 调用失败:`, (e as Error).message);
@@ -763,7 +763,7 @@ export async function runThinkLoop(
               return stone.data[key];
             },
             print: (...args: unknown[]) => { /* action 模式下 print 输出记录到 result */ },
-            taskId: flow.taskId,
+            sessionId: flow.sessionId,
             filesDir: flow.filesDir,
             rootDir: resolve(stoneDir, "../.."),
             selfDir: stoneDir,
@@ -1112,7 +1112,7 @@ export async function runThinkLoop(
 async function consumeAssistantStream(
   stream: AsyncIterable<string>,
   objectName: string,
-  taskId: string,
+  sessionId: string,
 ): Promise<string> {
   let fullOutput = "";
   const streamParser = createLLMOutputStreamParser();
@@ -1120,44 +1120,44 @@ async function consumeAssistantStream(
   const emitStreamEvent = (event: LLMOutputStreamEvent) => {
     switch (event.type) {
       case "talk":
-        emitSSE({ type: "stream:talk", objectName, taskId, target: event.target, chunk: event.chunk });
+        emitSSE({ type: "stream:talk", objectName, sessionId, target: event.target, chunk: event.chunk });
         break;
       case "talk:end":
-        emitSSE({ type: "stream:talk:end", objectName, taskId, target: event.target });
+        emitSSE({ type: "stream:talk:end", objectName, sessionId, target: event.target });
         break;
       case "program":
         if (event.lang === "shell") {
-          emitSSE({ type: "stream:program", objectName, taskId, lang: "shell", chunk: event.chunk });
+          emitSSE({ type: "stream:program", objectName, sessionId, lang: "shell", chunk: event.chunk });
         } else {
-          emitSSE({ type: "stream:program", objectName, taskId, chunk: event.chunk });
+          emitSSE({ type: "stream:program", objectName, sessionId, chunk: event.chunk });
         }
         break;
       case "program:end":
-        emitSSE({ type: "stream:program:end", objectName, taskId });
+        emitSSE({ type: "stream:program:end", objectName, sessionId });
         break;
       case "action":
-        emitSSE({ type: "stream:action", objectName, taskId, toolName: event.toolName, chunk: event.chunk });
+        emitSSE({ type: "stream:action", objectName, sessionId, toolName: event.toolName, chunk: event.chunk });
         break;
       case "action:end":
-        emitSSE({ type: "stream:action:end", objectName, taskId, toolName: event.toolName });
+        emitSSE({ type: "stream:action:end", objectName, sessionId, toolName: event.toolName });
         break;
       case "stack_push":
-        emitSSE({ type: "stream:stack_push", objectName, taskId, opType: event.opType, attr: event.attr, chunk: event.chunk });
+        emitSSE({ type: "stream:stack_push", objectName, sessionId, opType: event.opType, attr: event.attr, chunk: event.chunk });
         break;
       case "stack_push:end":
-        emitSSE({ type: "stream:stack_push:end", objectName, taskId, opType: event.opType, attr: event.attr });
+        emitSSE({ type: "stream:stack_push:end", objectName, sessionId, opType: event.opType, attr: event.attr });
         break;
       case "stack_pop":
-        emitSSE({ type: "stream:stack_pop", objectName, taskId, opType: event.opType, attr: event.attr, chunk: event.chunk });
+        emitSSE({ type: "stream:stack_pop", objectName, sessionId, opType: event.opType, attr: event.attr, chunk: event.chunk });
         break;
       case "stack_pop:end":
-        emitSSE({ type: "stream:stack_pop:end", objectName, taskId, opType: event.opType, attr: event.attr });
+        emitSSE({ type: "stream:stack_pop:end", objectName, sessionId, opType: event.opType, attr: event.attr });
         break;
       case "set_plan":
-        emitSSE({ type: "stream:set_plan", objectName, taskId, chunk: event.chunk });
+        emitSSE({ type: "stream:set_plan", objectName, sessionId, chunk: event.chunk });
         break;
       case "set_plan:end":
-        emitSSE({ type: "stream:set_plan:end", objectName, taskId });
+        emitSSE({ type: "stream:set_plan:end", objectName, sessionId });
         break;
     }
   };
@@ -1183,7 +1183,7 @@ async function consumeAssistantStream(
 async function consumeEventStream(
   stream: AsyncIterable<LLMStreamEvent>,
   objectName: string,
-  taskId: string,
+  sessionId: string,
 ): Promise<{ assistantContent: string; thinkingContent: string }> {
   let assistantContent = "";
   let thinkingContent = "";
@@ -1193,44 +1193,44 @@ async function consumeEventStream(
   const emitStructuredEvent = (event: LLMOutputStreamEvent) => {
     switch (event.type) {
       case "talk":
-        emitSSE({ type: "stream:talk", objectName, taskId, target: event.target, chunk: event.chunk });
+        emitSSE({ type: "stream:talk", objectName, sessionId, target: event.target, chunk: event.chunk });
         break;
       case "talk:end":
-        emitSSE({ type: "stream:talk:end", objectName, taskId, target: event.target });
+        emitSSE({ type: "stream:talk:end", objectName, sessionId, target: event.target });
         break;
       case "program":
         if (event.lang === "shell") {
-          emitSSE({ type: "stream:program", objectName, taskId, lang: "shell", chunk: event.chunk });
+          emitSSE({ type: "stream:program", objectName, sessionId, lang: "shell", chunk: event.chunk });
         } else {
-          emitSSE({ type: "stream:program", objectName, taskId, chunk: event.chunk });
+          emitSSE({ type: "stream:program", objectName, sessionId, chunk: event.chunk });
         }
         break;
       case "program:end":
-        emitSSE({ type: "stream:program:end", objectName, taskId });
+        emitSSE({ type: "stream:program:end", objectName, sessionId });
         break;
       case "action":
-        emitSSE({ type: "stream:action", objectName, taskId, toolName: event.toolName, chunk: event.chunk });
+        emitSSE({ type: "stream:action", objectName, sessionId, toolName: event.toolName, chunk: event.chunk });
         break;
       case "action:end":
-        emitSSE({ type: "stream:action:end", objectName, taskId, toolName: event.toolName });
+        emitSSE({ type: "stream:action:end", objectName, sessionId, toolName: event.toolName });
         break;
       case "stack_push":
-        emitSSE({ type: "stream:stack_push", objectName, taskId, opType: event.opType, attr: event.attr, chunk: event.chunk });
+        emitSSE({ type: "stream:stack_push", objectName, sessionId, opType: event.opType, attr: event.attr, chunk: event.chunk });
         break;
       case "stack_push:end":
-        emitSSE({ type: "stream:stack_push:end", objectName, taskId, opType: event.opType, attr: event.attr });
+        emitSSE({ type: "stream:stack_push:end", objectName, sessionId, opType: event.opType, attr: event.attr });
         break;
       case "stack_pop":
-        emitSSE({ type: "stream:stack_pop", objectName, taskId, opType: event.opType, attr: event.attr, chunk: event.chunk });
+        emitSSE({ type: "stream:stack_pop", objectName, sessionId, opType: event.opType, attr: event.attr, chunk: event.chunk });
         break;
       case "stack_pop:end":
-        emitSSE({ type: "stream:stack_pop:end", objectName, taskId, opType: event.opType, attr: event.attr });
+        emitSSE({ type: "stream:stack_pop:end", objectName, sessionId, opType: event.opType, attr: event.attr });
         break;
       case "set_plan":
-        emitSSE({ type: "stream:set_plan", objectName, taskId, chunk: event.chunk });
+        emitSSE({ type: "stream:set_plan", objectName, sessionId, chunk: event.chunk });
         break;
       case "set_plan:end":
-        emitSSE({ type: "stream:set_plan:end", objectName, taskId });
+        emitSSE({ type: "stream:set_plan:end", objectName, sessionId });
         break;
     }
   };
@@ -1240,7 +1240,7 @@ async function consumeEventStream(
       case "thinking_chunk":
         thinkingContent += event.chunk;
         sawThinking = true;
-        emitSSE({ type: "stream:thought", objectName, taskId, chunk: event.chunk });
+        emitSSE({ type: "stream:thought", objectName, sessionId, chunk: event.chunk });
         break;
       case "assistant_chunk":
         assistantContent += event.chunk;
@@ -1258,7 +1258,7 @@ async function consumeEventStream(
   }
 
   if (sawThinking) {
-    emitSSE({ type: "stream:thought:end", objectName, taskId });
+    emitSSE({ type: "stream:thought:end", objectName, sessionId });
   }
 
   return { assistantContent, thinkingContent };
@@ -1432,8 +1432,8 @@ function buildExecutionContext(
   const context: Record<string, unknown> = {
     /** 获取 files/ 目录路径 */
     filesDir: flow.filesDir,
-    /** 获取任务 ID */
-    taskId: flow.taskId,
+    /** 获取会话 ID */
+    sessionId: flow.sessionId,
     /** 文件系统路径（替代高层 API，直接用 Bun/Node 原生文件操作） */
     self_dir: stoneDir,
     self_traits_dir: join(stoneDir, "traits"),
@@ -1550,7 +1550,7 @@ function buildExecutionContext(
           return stone.data[key];
         },
         print: printFn,
-        taskId: flow.taskId,
+        sessionId: flow.sessionId,
         filesDir: flow.filesDir,
         rootDir: resolve(stoneDir, "../.."),
         selfDir: stoneDir,
@@ -1846,7 +1846,7 @@ function buildExecutionContext(
       tracker.register(context, [
         {
           name: "replyToFlow",
-          fn: (taskId: string, message: string) => collaboration.replyToFlow(taskId, message),
+          fn: (sessionId: string, message: string) => collaboration.replyToFlow(sessionId, message),
           effect: (args) => `✓ 回复已投递给 Flow ${args[0]}`,
         },
       ]);

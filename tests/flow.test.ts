@@ -111,8 +111,8 @@ describe("ThinkLoop", () => {
     });
 
     const sseEvents: Array<{ type: string; chunk?: string }> = [];
-    const listener = (event: { type: string; chunk?: string; taskId?: string }) => {
-      if (event.taskId === flow.taskId && (event.type === "stream:thought" || event.type === "stream:thought:end")) {
+    const listener = (event: { type: string; chunk?: string; sessionId?: string }) => {
+      if (event.sessionId === flow.sessionId && (event.type === "stream:thought" || event.type === "stream:thought:end")) {
         sseEvents.push({ type: event.type, chunk: event.chunk });
       }
     };

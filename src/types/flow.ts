@@ -79,8 +79,8 @@ export interface PendingMessage {
 
 /** Flow 的完整数据结构 (G2) */
 export interface FlowData {
-  /** 任务 ID */
-  taskId: string;
+  /** 会话 ID */
+  sessionId: string;
   /** 所属 Stone 名称 */
   stoneName: string;
   /** 用户自定义标题 */

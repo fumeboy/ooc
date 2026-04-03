@@ -66,7 +66,7 @@ async function main(): Promise<void> {
         process.exit(1);
       }
 
-      consola.info(`\n=== 任务 ${flow.taskId} 完成 ===`);
+      consola.info(`\n=== 任务 ${flow.sessionId} 完成 ===`);
       consola.info(`状态: ${flow.status}`);
 
       /* 输出最终消息 */
