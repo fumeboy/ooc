@@ -667,6 +667,41 @@ async function handleRoute(
     return json({ success: true });
   }
 
+  /* ========== Kanban（Session Issues / Tasks） ========== */
+
+  /* POST /api/sessions/:sessionId/issues/:issueId/comments — 用户评论 */
+  const issueCommentMatch = path.match(/^\/api\/sessions\/([^/]+)\/issues\/([^/]+)\/comments$/);
+  if (method === "POST" && issueCommentMatch) {
+    const [, sessionId, issueId] = issueCommentMatch;
+    const body = (await req.json()) as { content?: string; mentions?: string[] };
+    if (!body.content) return errorResponse("content is required");
+
+    const sessionDir = join(world.flowsDir, sessionId!);
+    const { commentOnIssue } = await import("../kanban/discussion.js");
+    const result = await commentOnIssue(sessionDir, issueId!, "user", body.content, body.mentions);
+    return json({ success: true, data: result.comment });
+  }
+
+  /* POST /api/sessions/:sessionId/issues/:issueId/ack — 清除 issue hasNewInfo */
+  const issueAckMatch = path.match(/^\/api\/sessions\/([^/]+)\/issues\/([^/]+)\/ack$/);
+  if (method === "POST" && issueAckMatch) {
+    const [, sessionId, issueId] = issueAckMatch;
+    const sessionDir = join(world.flowsDir, sessionId!);
+    const { setIssueNewInfo } = await import("../kanban/methods.js");
+    await setIssueNewInfo(sessionDir, issueId!, false);
+    return json({ success: true });
+  }
+
+  /* POST /api/sessions/:sessionId/tasks/:taskItemId/ack — 清除 task hasNewInfo */
+  const taskAckMatch = path.match(/^\/api\/sessions\/([^/]+)\/tasks\/([^/]+)\/ack$/);
+  if (method === "POST" && taskAckMatch) {
+    const [, sessionId, taskItemId] = taskAckMatch;
+    const sessionDir = join(world.flowsDir, sessionId!);
+    const { setTaskNewInfo } = await import("../kanban/methods.js");
+    await setTaskNewInfo(sessionDir, taskItemId!, false);
+    return json({ success: true });
+  }
+
   /* 404 */
   return errorResponse(`未知路由: ${method} ${path}`, 404);
 }
