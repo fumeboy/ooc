@@ -11,6 +11,13 @@ export interface LLMConfig {
   model: string;
   maxTokens: number;
   timeout: number;
+  thinking: ThinkingConfig;
+}
+
+export interface ThinkingConfig {
+  enabled: boolean;
+  mode?: string;
+  budget?: number;
 }
 
 /**
@@ -29,6 +36,8 @@ export function DefaultConfig(): LLMConfig {
     );
   }
 
+  const thinkingBudget = process.env.OOC_THINKING_BUDGET;
+
   return {
     provider: "openai-compatible",
     apiKey,
@@ -36,5 +45,10 @@ export function DefaultConfig(): LLMConfig {
     model: process.env.OOC_MODEL || "gpt-4o",
     maxTokens: 40*10000,
     timeout: 300,
+    thinking: {
+      enabled: process.env.OOC_THINKING_ENABLED === "1",
+      mode: process.env.OOC_THINKING_MODE || undefined,
+      budget: thinkingBudget ? Number(thinkingBudget) : undefined,
+    },
   };
 }

@@ -63,8 +63,9 @@ export async function loadTrait(
 
   const traitPath = join(traitDir, "TRAIT.md");
   const skillPath = join(traitDir, "SKILL.md");
+  const legacyReadmePath = join(traitDir, "readme.md");
 
-  // 优先级：TRAIT.md > SKILL.md
+  // 优先级：TRAIT.md > SKILL.md > readme.md（兼容旧 library skills）
   if (existsSync(traitPath)) {
     const raw = readFileSync(traitPath, "utf-8");
     const { data, content: body } = matter(raw);
@@ -76,6 +77,12 @@ export async function loadTrait(
     version = typeof data.version === "string" ? data.version : undefined;
     deps = Array.isArray(data.deps) ? data.deps.map(String) : [];
     hooks = parseTraitHooks(data.hooks);
+    ({ ns, name } = resolveLegacyTraitIdentity({
+      explicitNamespace: ns,
+      currentName: name,
+      frontmatterName: typeof data.name === "string" ? data.name : undefined,
+      traitDir,
+    }));
   } else if (existsSync(skillPath)) {
     // SKILL.md 格式兼容
     const raw = readFileSync(skillPath, "utf-8");
@@ -88,6 +95,28 @@ export async function loadTrait(
     version = typeof data.version === "string" ? data.version : undefined;
     deps = Array.isArray(data.deps) ? data.deps.map(String) : [];
     hooks = parseTraitHooks(data.hooks);
+    ({ ns, name } = resolveLegacyTraitIdentity({
+      explicitNamespace: ns,
+      currentName: name,
+      frontmatterName: typeof data.name === "string" ? data.name : undefined,
+      traitDir,
+    }));
+  } else if (existsSync(legacyReadmePath)) {
+    const raw = readFileSync(legacyReadmePath, "utf-8");
+    const { data, content: body } = matter(raw);
+    content = body.trim();
+    when = typeof data.when === "string" ? (data.when as TraitDefinition["when"]) : "never";
+    description = typeof data.description === "string" ? data.description : "";
+    type = parseTraitType(data.type);
+    version = typeof data.version === "string" ? data.version : undefined;
+    deps = Array.isArray(data.deps) ? data.deps.map(String) : [];
+    hooks = parseTraitHooks(data.hooks);
+    ({ ns, name } = resolveLegacyTraitIdentity({
+      explicitNamespace: ns,
+      currentName: name,
+      frontmatterName: typeof data.name === "string" ? data.name : undefined,
+      traitDir,
+    }));
   } else {
     // 无有效文件
     return null;
@@ -112,6 +141,37 @@ export async function loadTrait(
     deps,
     hooks,
   };
+}
+
+function resolveLegacyTraitIdentity(args: {
+  explicitNamespace: string;
+  currentName: string;
+  frontmatterName?: string;
+  traitDir: string;
+}): { ns: string; name: string } {
+  let ns = args.explicitNamespace;
+  let name = args.currentName;
+  const rawName = args.frontmatterName?.trim() || name;
+
+  if (ns) {
+    return { ns, name: rawName };
+  }
+
+  if (rawName.includes("/")) {
+    const [parsedNs, ...rest] = rawName.split("/");
+    if (parsedNs && rest.length > 0) {
+      return { ns: parsedNs, name: rest.join("/") };
+    }
+  }
+
+  if (rawName.includes("-")) {
+    const [parsedNs, ...rest] = rawName.split("-");
+    if (parsedNs && rest.length > 0) {
+      return { ns: parsedNs, name: rest.join("-") };
+    }
+  }
+
+  return { ns, name: rawName };
 }
 
 /**

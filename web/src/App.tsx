@@ -7,7 +7,7 @@
  * @ref ooc://file/stones/sophia/files/哲学文档/gene.md#G11 — implements — 前端整体布局
  */
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useAtom, useSetAtom, useAtomValue } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import { objectsAtom } from "./store/objects";
 import {
   activeTabAtom,
@@ -37,7 +37,6 @@ import { OocLogo } from "./components/OocLogo";
 import { Sheet, SheetContent, SheetTrigger } from "./components/ui/sheet";
 import { cn } from "./lib/utils";
 import { GitBranch, Box, Globe, List, Menu, RotateCw, ChevronDown, ChevronRight, Settings } from "lucide-react";
-import bgSvg from "./assets/bg.svg";
 
 /* 初始化视图注册表（只执行一次） */
 registerAllViews();

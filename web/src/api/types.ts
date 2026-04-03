@@ -13,6 +13,7 @@ export interface ObjectSummary {
   traits: string[];
   relations: { name: string; description: string }[];
   data: Record<string, unknown>;
+  paused?: boolean;
 }
 
 /** Stone 完整数据 */
@@ -152,6 +153,7 @@ export type SSEEvent =
   | { type: "flow:message"; objectName: string; taskId: string; message: FlowMessage }
   | { type: "flow:status"; objectName: string; taskId: string; status: FlowStatus }
   | { type: "flow:end"; objectName: string; taskId: string; status: FlowStatus }
+  /** provider 原生 thinking 通道的流式片段；assistant 协议本身不再显式输出 [thought] */
   | { type: "stream:thought"; objectName: string; taskId: string; chunk: string }
   | { type: "stream:talk"; objectName: string; taskId: string; target: string; chunk: string }
   | { type: "stream:program"; objectName: string; taskId: string; lang?: "javascript" | "shell"; chunk: string }
@@ -176,6 +178,7 @@ export type SSEEvent =
 export type TimelineEntry =
   | { kind: "message"; data: FlowMessage; objectName: string }
   | { kind: "action"; data: Action; objectName: string }
+  /** 前端正在展示的 provider thinking 流 */
   | { kind: "streaming-thought"; objectName: string; content: string }
   | { kind: "streaming-talk"; from: string; target: string; content: string }
   | { kind: "streaming-stack-push"; objectName: string; opType: "cognize" | "reflect"; attr: string; content: string }

@@ -137,10 +137,31 @@ describe("extractReplyContent", () => {
   });
 });
 
+describe("parseLLMOutput — 禁止 [thought] 协议", () => {
+  test("assistant 输出 legacy [thought] 段落时报协议错误", () => {
+    expect(() => parseLLMOutput(`[thought]\n这是不允许的\n\n[finish]`)).toThrow(
+      /deprecated \[thought\] section: use model-native thinking instead/i,
+    );
+  });
+
+  test("assistant 输出 TOML [thought] 段落时报协议错误", () => {
+    expect(() => parseLLMOutput(`[thought]\ncontent = "bad"\n\n[finish]`)).toThrow(
+      /deprecated \[thought\] section: use model-native thinking instead/i,
+    );
+  });
+
+  test("无 thought 时仍能解析 program 与 finish", () => {
+    const parsed = parseLLMOutput(`[program]\ncode = """\nprint(1)\n"""\n\n[finish]`);
+
+    expect(parsed.programs).toHaveLength(1);
+    expect(parsed.programs[0]!.code.trim()).toBe("print(1)");
+    expect(parsed.directives.finish).toBe(true);
+  });
+});
+
 describe("parseLLMOutput — [talk/target] 段落", () => {
   test("解析单个 talk 段落", () => {
-    const output = `[thought]
-我需要回复用户。
+    const output = `我需要回复用户。
 
 [talk/user]
 你好！有什么我能帮你的？
@@ -159,8 +180,7 @@ describe("parseLLMOutput — [talk/target] 段落", () => {
   });
 
   test("解析多个 talk 段落（发给不同对象）", () => {
-    const output = `[thought]
-需要通知两个对象。
+    const output = `需要通知两个对象。
 
 [talk/sophia]
 请帮我审查这个设计。
@@ -181,8 +201,7 @@ describe("parseLLMOutput — [talk/target] 段落", () => {
   });
 
   test("talk 和 program 互斥 — program 优先", () => {
-    const output = `[thought]
-测试互斥。
+    const output = `测试互斥。
 
 [talk/user]
 这条消息应该被忽略。
@@ -210,8 +229,7 @@ talk("通过 program 发送", "user");`;
   });
 
   test("talk 和 thought 并存", () => {
-    const output = `[thought]
-用户问了一个问题，我来回答。
+    const output = `用户问了一个问题，我来回答。
 
 [talk/user]
 答案是 42。
@@ -288,10 +306,9 @@ talk("hello", "user");
   });
 });
 
-describe("parseLLMOutput — thought 中提及段落标记名", () => {
+describe("parseLLMOutput — 文本中提及段落标记名", () => {
   test("反引号包裹的标记名不被误拆", () => {
-    const output = `[thought]
-上一轮的 \`[program]\` 段落执行失败了，\`[thought]\` 段落内容泄漏到了代码块中。
+    const output = `上一轮的 \`[program]\` 段落执行失败了，需要确保代码块中只有纯代码。
 
 [program]
 print("hello");
@@ -301,15 +318,13 @@ print("hello");
     const parsed = parseLLMOutput(output);
     expect(parsed.isStructured).toBe(true);
     expect(parsed.thought).toContain("`[program]`");
-    expect(parsed.thought).toContain("`[thought]`");
     expect(parsed.programs).toHaveLength(1);
     expect(parsed.programs[0]!.code).toBe('print("hello");');
     expect(parsed.directives.finish).toBe(true);
   });
 
-  test("thought 中多次提及标记名不影响解析", () => {
-    const output = `[thought]
-我发现 \`[program]\` 段落标记没有被解析器正确识别，导致 \`[thought]\` 内容泄漏。需要确保 \`[program]\` 段落中只有纯代码。
+  test("文本中多次提及标记名不影响解析", () => {
+    const output = `我发现 \`[program]\` 段落标记没有被解析器正确识别，需要确保 \`[program]\` 段落中只有纯代码。
 
 [program]
 const x = 1 + 2;
@@ -324,9 +339,10 @@ print(x);`;
 
 describe("parseLLMOutput — [action/toolName] 段落", () => {
   test("解析单个 action", () => {
-    const output = `[thought]\n需要编辑文件\n\n[action/editFile]\n{"path": "test.ts", "old": "foo", "new": "bar"}`;
+    const output = `需要编辑文件\n\n[action/editFile]\n{"path": "test.ts", "old": "foo", "new": "bar"}`;
     const parsed = parseLLMOutput(output);
     expect(parsed.isStructured).toBe(true);
+    expect(parsed.thought).toBe("需要编辑文件");
     expect(parsed.actions.length).toBe(1);
     expect(parsed.actions[0]!.toolName).toBe("editFile");
     expect(JSON.parse(parsed.actions[0]!.params)).toEqual({ path: "test.ts", old: "foo", new: "bar" });
@@ -377,7 +393,7 @@ describe("parseLLMOutput — [action/toolName] 段落", () => {
   });
 
   test("action 和 thought 并存", () => {
-    const output = `[thought]\n我需要读取配置文件。\n\n[action/readFile]\n{"path": "config.ts"}`;
+    const output = `我需要读取配置文件。\n\n[action/readFile]\n{"path": "config.ts"}`;
     const parsed = parseLLMOutput(output);
     expect(parsed.thought).toBe("我需要读取配置文件。");
     expect(parsed.actions.length).toBe(1);
@@ -595,22 +611,18 @@ docContent, docTitle
   });
 
   test("解析被 ```toml 包裹的 TOML program/shell 输出", () => {
-    const output = "```toml\n[thought]\ncontent = \"\"\"\n准备执行 shell 命令\n\"\"\"\n\n[program]\nlang = \"shell\"\ncode = \"\"\"\nlark-cli docs +fetch --doc Z6Aqd5I37omXkDxYuVVcoFqsnWy\n\"\"\"\n```";
+    const output = "```toml\n[program]\nlang = \"shell\"\ncode = \"\"\"\nlark-cli docs +fetch --doc Z6Aqd5I37omXkDxYuVVcoFqsnWy\n\"\"\"\n```";
 
     const parsed = parseLLMOutput(output);
 
     expect(parsed.isStructured).toBe(true);
-    expect(parsed.thought).toContain("准备执行 shell 命令");
     expect(parsed.programs).toHaveLength(1);
     expect(parsed.programs[0]!.lang).toBe("shell");
     expect(parsed.programs[0]!.code.trim()).toBe("lark-cli docs +fetch --doc Z6Aqd5I37omXkDxYuVVcoFqsnWy");
   });
 
   test("旧 [program] 段内嵌 TOML code/lang 字段时应提取真实代码", () => {
-    const output = `[thought]
-我要执行文档读取。
-
-[program]
+    const output = `[program]
 lang = "shell"
 code = """
 lark-cli wiki spaces get_node --params '{"token":"UbpdwXweyi86HHkRHCCcLPN4n8c"}'
@@ -625,9 +637,9 @@ lark-cli wiki spaces get_node --params '{"token":"UbpdwXweyi86HHkRHCCcLPN4n8c"}'
   });
 
   test("TOML 输出中的 [finish] 指令应被识别", () => {
-    const output = `[thought]
-content = """
-任务已完成
+    const output = `[program]
+code = """
+print("done")
 """
 
 [finish]`;
@@ -635,24 +647,29 @@ content = """
     const parsed = parseLLMOutput(output);
 
     expect(parsed.isStructured).toBe(true);
-    expect(parsed.thought).toBe("任务已完成\n");
+    expect(parsed.programs).toHaveLength(1);
     expect(parsed.directives.finish).toBe(true);
   });
 });
 
 describe("createLLMOutputStreamParser — TOML 流式输出", () => {
+  test("流式输出显式 [thought] 时抛出协议错误", () => {
+    const parser = createLLMOutputStreamParser();
+
+    expect(() => parser.push(`[thought]\ncontent = \"bad\"\n`)).toThrow(
+      /deprecated \[thought\] section: use model-native thinking instead/i,
+    );
+  });
+
   test("按新 TOML 格式流式产出语义事件", () => {
     const parser = createLLMOutputStreamParser();
     const events = [
-      ...parser.push(`[thought]\ncontent = """\n第一行思考\n第二行思考\n"""\n\n[talk]\ntarget = "user"\nmessage = """\n你好，`),
+      ...parser.push(`[talk]\ntarget = "user"\nmessage = """\n你好，`),
       ...parser.push(`这是新的流式输出\n"""\n\n[program]\nlang = "shell"\ncode = """\necho hi\n"""\n\n[cognize_stack_frame_push]\ntitle = "拆解任务"\ntraits = ["lark/wiki", "web/search"]\noutput_description = """\n文档内容与摘要\n"""\n\nset_plan = """\n1. 阅读文档\n2. 输出总结\n"""\n\n[finish]`),
       ...parser.done(),
     ];
 
     expect(events).toEqual([
-      { type: "thought", chunk: "第一行思考\n" },
-      { type: "thought", chunk: "第二行思考\n" },
-      { type: "thought:end" },
       { type: "talk", target: "user", chunk: "你好，这是新的流式输出\n" },
       { type: "talk:end", target: "user" },
       { type: "program", lang: "shell", chunk: "echo hi\n" },

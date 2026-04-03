@@ -5,11 +5,13 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { Flow } from "../src/flow/flow.js";
 import { runThinkLoop } from "../src/flow/thinkloop.js";
 import { MockLLMClient } from "../src/thinkable/client.js";
+import { eventBus } from "../src/server/events.js";
+import type { LLMClient, Message } from "../src/thinkable/client.js";
 import type { StoneData } from "../src/types/index.js";
 import type { TraitDefinition } from "../src/types/index.js";
 
@@ -54,6 +56,170 @@ describe("Flow", () => {
 });
 
 describe("ThinkLoop", () => {
+  test("provider thinking 会在非流式路径写入 flow thought action", async () => {
+    const flowsDir = join(TEST_DIR, "flows-thinking-nonstream");
+    const flow = Flow.create(flowsDir, "greeter", "你好", "human");
+
+    const stone: StoneData = {
+      name: "greeter",
+      thinkable: { whoAmI: "你是一个友好的问候者" },
+      talkable: { whoAmI: "问候者", functions: [] },
+      data: {},
+      relations: [],
+      traits: [],
+    };
+
+    const llm: LLMClient = {
+      async chat(_messages: Message[]) {
+        return {
+          assistantContent: "[finish]",
+          thinkingContent: "我已经完成全部任务。",
+          content: "[finish]",
+          model: "mock",
+          usage: {},
+          raw: {},
+        };
+      },
+    };
+
+    await runThinkLoop(flow, stone, TEST_DIR, llm, []);
+
+    expect(
+      flow.actions.some((action) => action.type === "thought" && action.content.includes("完成全部任务")),
+    ).toBe(true);
+    expect(flow.status).toBe("finished");
+  });
+
+  test("provider thinking 会在流式路径发出 stream:thought 并落盘为 thought action", async () => {
+    const flowsDir = join(TEST_DIR, "flows-thinking-stream");
+    const flow = Flow.create(flowsDir, "greeter", "你好", "human");
+
+    const stone: StoneData = {
+      name: "greeter",
+      thinkable: { whoAmI: "你是一个友好的问候者" },
+      talkable: { whoAmI: "问候者", functions: [] },
+      data: {},
+      relations: [],
+      traits: [],
+    };
+
+    const llm = new MockLLMClient({
+      streamEvents: [
+        { type: "thinking_chunk", chunk: "先分析用户意图。" },
+        { type: "assistant_chunk", chunk: "[finish]" },
+      ],
+    });
+
+    const sseEvents: Array<{ type: string; chunk?: string }> = [];
+    const listener = (event: { type: string; chunk?: string; taskId?: string }) => {
+      if (event.taskId === flow.taskId && (event.type === "stream:thought" || event.type === "stream:thought:end")) {
+        sseEvents.push({ type: event.type, chunk: event.chunk });
+      }
+    };
+    eventBus.on("sse", listener);
+
+    try {
+      await runThinkLoop(flow, stone, TEST_DIR, llm, []);
+    } finally {
+      eventBus.off("sse", listener);
+    }
+
+    expect(sseEvents).toEqual([
+      { type: "stream:thought", chunk: "先分析用户意图。" },
+      { type: "stream:thought:end", chunk: undefined },
+    ]);
+    expect(
+      flow.actions.some((action) => action.type === "thought" && action.content.includes("先分析用户意图")),
+    ).toBe(true);
+    expect(flow.status).toBe("finished");
+  });
+
+  test("provider 声明 preferNonStreamingThinking 时，优先走非流式避免 thinking 串流", async () => {
+    const flowsDir = join(TEST_DIR, "flows-thinking-prefer-nonstream");
+    const flow = Flow.create(flowsDir, "greeter", "你好", "human");
+
+    const stone: StoneData = {
+      name: "greeter",
+      thinkable: { whoAmI: "你是一个友好的问候者" },
+      talkable: { whoAmI: "问候者", functions: [] },
+      data: {},
+      relations: [],
+      traits: [],
+    };
+
+    let streamUsed = false;
+    const llm: LLMClient = {
+      async chat(_messages: Message[]) {
+        return {
+          assistantContent: "[finish]",
+          thinkingContent: "这是 provider 的原生思考。",
+          content: "[finish]",
+          model: "mock",
+          usage: {},
+          raw: {},
+        };
+      },
+      async *chatEventStream(_messages: Message[]) {
+        streamUsed = true;
+        yield { type: "thinking_chunk", chunk: "```toml\n" };
+        yield { type: "assistant_chunk", chunk: "[finish]" };
+      },
+      preferNonStreamingThinking() {
+        return true;
+      },
+    };
+
+    await runThinkLoop(flow, stone, TEST_DIR, llm, []);
+
+    expect(streamUsed).toBe(false);
+    expect(flow.actions.some((action) => action.type === "thought" && action.content.includes("provider 的原生思考"))).toBe(true);
+    expect(flow.actions.some((action) => action.type === "thought" && action.content.includes("```toml"))).toBe(false);
+    expect(flow.status).toBe("finished");
+  });
+
+  test("pause/resume 会持久化 provider thinking 调试产物且恢复时不重复记录", async () => {
+    const flowsDir = join(TEST_DIR, "flows-thinking-pause");
+    const flow = Flow.create(flowsDir, "greeter", "你好", "human");
+
+    const stone: StoneData = {
+      name: "greeter",
+      thinkable: { whoAmI: "你是一个友好的问候者" },
+      talkable: { whoAmI: "问候者", functions: [] },
+      data: {},
+      relations: [],
+      traits: [],
+    };
+
+    const llm: LLMClient = {
+      async chat(_messages: Message[]) {
+        return {
+          assistantContent: "[finish]",
+          thinkingContent: "先思考，再结束。",
+          content: "[finish]",
+          model: "mock",
+          usage: {},
+          raw: {},
+        };
+      },
+    };
+
+    await runThinkLoop(flow, stone, TEST_DIR, llm, [], [], { maxIterations: 5, isPaused: () => true });
+
+    expect(flow.status).toBe("pausing");
+    expect(flow.toJSON().data._pendingOutput).toBe("[finish]");
+    expect(flow.toJSON().data._pendingThinkingOutput).toBe("先思考，再结束。");
+    expect(existsSync(join(flow.dir, "llm.thinking.txt"))).toBe(true);
+    expect(readFileSync(join(flow.dir, "llm.thinking.txt"), "utf-8")).toBe("先思考，再结束。");
+    expect(flow.actions.filter((action) => action.type === "thought")).toHaveLength(1);
+
+    await runThinkLoop(flow, stone, TEST_DIR, llm, [], [], { maxIterations: 5, isPaused: () => false });
+
+    expect(flow.status).toBe("finished");
+    expect(flow.toJSON().data._pendingThinkingOutput).toBeUndefined();
+    expect(existsSync(join(flow.dir, "llm.thinking.txt"))).toBe(false);
+    expect(flow.actions.filter((action) => action.type === "thought")).toHaveLength(1);
+  });
+
   test("LLM 直接回复（无代码）→ finished", async () => {
     const flowsDir = join(TEST_DIR, "flows");
     const flow = Flow.create(flowsDir, "greeter", "你好", "human");
@@ -68,7 +234,10 @@ describe("ThinkLoop", () => {
     };
 
     const llm = new MockLLMClient({
-      responses: ["[thought]\n你好！很高兴见到你！\n\n[finish]"],
+      responseObject: {
+        assistantContent: "[finish]",
+        thinkingContent: "你好！很高兴见到你！",
+      },
     });
 
     await runThinkLoop(flow, stone, TEST_DIR, llm, []);
@@ -246,9 +415,10 @@ describe("ThinkLoop", () => {
     };
 
     const llm = new MockLLMClient({
-      responses: [
-        `[thought]\n我已经准备好回复用户。\n\n[talk/user]\n这是答案。\n[/talk]`,
-      ],
+      responseObject: {
+        thinkingContent: "我已经准备好回复用户。",
+        assistantContent: `[talk]\ntarget = "user"\nmessage = "这是答案。"`,
+      },
     });
 
     const delivered: Array<{ message: string; target: string }> = [];
@@ -266,5 +436,53 @@ describe("ThinkLoop", () => {
     expect(delivered).toHaveLength(1);
     expect(delivered[0]).toEqual({ message: "这是答案。", target: "user" });
     expect(flow.status).toBe("waiting");
+  });
+
+  test("激活 kernel/shell_exec 后可直接调用 exec", async () => {
+    const flowsDir = join(TEST_DIR, "flows-shell-exec");
+    const flow = Flow.create(flowsDir, "operator", "执行命令", "human");
+
+    const stone: StoneData = {
+      name: "operator",
+      thinkable: { whoAmI: "你是一个会执行命令的操作员" },
+      talkable: { whoAmI: "操作员", functions: [] },
+      data: {},
+      relations: [],
+      traits: [],
+    };
+
+    const traits: TraitDefinition[] = [
+      {
+        namespace: "kernel",
+        name: "shell_exec",
+        type: "how_to_use_tool",
+        when: "always",
+        description: "执行 shell 命令",
+        readme: "",
+        deps: [],
+        methods: [
+          {
+            name: "exec",
+            description: "执行命令",
+            params: [],
+            needsCtx: false,
+            fn: async () => "hello\n",
+          },
+        ],
+      },
+    ];
+
+    const llm = new MockLLMClient({
+      responses: [
+        '```javascript\nconst result = await exec("echo hello");\nprint(result);\n```',
+        "[finish]",
+      ],
+    });
+
+    await runThinkLoop(flow, stone, TEST_DIR, llm, [], traits);
+
+    const programs = flow.actions.filter((action) => action.type === "program");
+    expect(programs[0]!.result).toContain("hello");
+    expect(flow.status).toBe("finished");
   });
 });

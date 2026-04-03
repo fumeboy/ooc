@@ -36,7 +36,7 @@ hooks:
 
 | 用途 | TOML 格式 |
 |------|-----------|
-| 思考 | `[thought]` + `content = """..."""` |
+| 思考 | 不写协议；使用模型原生 thinking，由系统自动记录 |
 | 代码 | `[program]` + `code = """..."""` |
 | 消息 | `[talk]` + `target = "..."` + `message = """..."""` |
 | 完成 | `[finish]` |
@@ -45,6 +45,7 @@ hooks:
 **常见错误**：
 - ❌ 不要使用带目标后缀的旧消息段写法；统一使用 `[talk]` 表并填写 `target`
 - ❌ 不要把消息内容直接写在 `[talk]` 段内，要用 `message = """..."""` 字段
+- ❌ 不要在 assistant 最终输出中显式写 `[thought]`；思考来自模型原生 thinking 通道
 
 ## 发送消息的两种方式
 
@@ -125,11 +126,6 @@ B → A: "执行结果：[搜索结果内容]"
 ### 调用方（A）
 
 ```toml
-[thought]
-content = """
-我需要调用 researcher 的 search 函数来搜索信息。
-"""
-
 [talk]
 target = "researcher"
 message = """
@@ -150,11 +146,6 @@ message = """
 3. **执行并返回**：执行函数逻辑，将结果 talk 回给调用方
 
 ```toml
-[thought]
-content = """
-收到 A 的请求，要调用我的 search 函数，参数齐全，直接执行。
-"""
-
 [program]
 code = """
 // 执行函数逻辑
