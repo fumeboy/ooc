@@ -33,24 +33,28 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
   const setTabs = useSetAtom(editorTabsAtom);
   const setActivePath = useSetAtom(activeFilePathAtom);
 
-  const load = useCallback(async () => {
-    const [r, i, t] = await Promise.all([
-      fetchSessionReadme(sessionId),
+  /* readme 只在挂载时加载一次，避免反复 404 */
+  useEffect(() => {
+    fetchSessionReadme(sessionId).then(setReadme).catch(() => setReadme(""));
+  }, [sessionId]);
+
+  /* issues/tasks 在挂载和 SSE 事件时刷新 */
+  const loadKanban = useCallback(async () => {
+    const [i, t] = await Promise.all([
       fetchIssues(sessionId),
       fetchTasks(sessionId),
     ]);
-    setReadme(r);
     setIssues(i);
     setTasks(t);
   }, [sessionId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadKanban(); }, [loadKanban]);
 
   useEffect(() => {
     if (lastEvent && "sessionId" in lastEvent && lastEvent.sessionId === sessionId) {
-      load();
+      loadKanban();
     }
-  }, [lastEvent, sessionId, load]);
+  }, [lastEvent, sessionId, loadKanban]);
 
   const openTab = (path: string, label: string) => {
     setActivePath(path);
