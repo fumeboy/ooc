@@ -190,7 +190,7 @@ export class Scheduler {
         emitSSE({
           type: "flow:progress",
           objectName: name,
-          taskId: entry.flow.taskId,
+          taskId: entry.flow.sessionId,
           iterations: entry.iterations,
           maxIterations: this._config.maxIterationsPerFlow,
           totalIterations,

@@ -546,10 +546,10 @@ export class World implements Routable {
       if (scheduler) {
         const traitsCache = ctx?.traitsCache;
         const traits = traitsCache?.get(targetName) ?? [];
-        const collaboration = createCollaborationAPI(this, targetName, stone.dir, ctx?.roundCounter ?? undefined, targetFlow.taskId, sessionId);
+        const collaboration = createCollaborationAPI(this, targetName, stone.dir, ctx?.roundCounter ?? undefined, targetFlow.sessionId, sessionId);
         scheduler.register(targetName, targetFlow, stone.toJSON(), stone.dir, traits, collaboration);
       }
-      consola.info(`[World] 为 ${targetName} 创建 sub-flow ${targetFlow.taskId} (在 main flow 下)`);
+      consola.info(`[World] 为 ${targetName} 创建 sub-flow ${targetFlow.sessionId} (在 main flow 下)`);
     }
 
     /* 投递消息到 pending 队列（ThinkLoop 消费时会记录到消息历史和行为树） */
@@ -599,7 +599,7 @@ export class World implements Routable {
 
     /* 遍历 session 中的所有 Flow，找到匹配 taskId 的 */
     for (const { flow } of session.allFlows()) {
-      if (flow.taskId === targetTaskId) {
+      if (flow.sessionId === targetTaskId) {
         flow.deliverMessage("_reflect", `[ReflectFlow 回复] ${message}`);
         consola.info(`[World] ReflectFlow → ${stoneName}/${targetTaskId}`);
         return `[回复已发送给 ${targetTaskId}]`;
@@ -635,19 +635,19 @@ export class World implements Routable {
       /* 写入初始消息到 sub-flow 的 messages[]（createSubFlow 不写入，避免与 deliverMessage 路径重复） */
       targetFlow.addMessage({ direction: "in", from, to: stone.name, content: message });
       targetFlow.save();
-      consola.info(`[World] 人类发起对话 → main flow ${mainFlow.taskId}, sub-flow ${targetFlow.taskId} (${objectName})`);
+      consola.info(`[World] 人类发起对话 → main flow ${mainFlow.sessionId}, sub-flow ${targetFlow.sessionId} (${objectName})`);
     } else {
       /* 非人类发起（系统内部）：直接在 flows/ 下创建 */
       mainFlow = Flow.create(this.flowsDir, stone.name, message, from);
       targetFlow = mainFlow;
-      consola.info(`[World] 向 ${objectName} 发送消息，创建 Flow ${mainFlow.taskId}`);
+      consola.info(`[World] 向 ${objectName} 发送消息，创建 Flow ${mainFlow.sessionId}`);
     }
 
-    emitSSE({ type: "flow:start", objectName, taskId: mainFlow.taskId });
+    emitSSE({ type: "flow:start", objectName, taskId: mainFlow.sessionId });
 
     /* 创建 SessionContext（支持并发） */
-    const sessionId = mainFlow.taskId;
-    const session = new Session(mainFlow.taskId, mainFlow.sessionDir);
+    const sessionId = mainFlow.sessionId;
+    const session = new Session(mainFlow.sessionId, mainFlow.sessionDir);
     const roundCounter = createSharedRoundCounter();
     const traitsCache = new Map<string, import("../types/index.js").TraitDefinition[]>();
     if (from === "human") {
@@ -671,7 +671,7 @@ export class World implements Routable {
     this._ensureReflectFlow(stone, session);
 
     /* 构建协作 API */
-    const collaboration = createCollaborationAPI(this, objectName, stone.dir, roundCounter, targetFlow.taskId, sessionId);
+    const collaboration = createCollaborationAPI(this, objectName, stone.dir, roundCounter, targetFlow.sessionId, sessionId);
     const directory = this._registry.buildDirectory();
 
     /* 创建 Scheduler 并注册入口 Flow */
@@ -706,7 +706,7 @@ export class World implements Routable {
       }
 
       /* 发出 Flow 结束事件 */
-      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.taskId, status: targetFlow.status });
+      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.sessionId, status: targetFlow.status });
     } catch (e) {
       /* 异常时将所有 running 的 flow 标记为 failed，防止僵尸 */
       consola.error(`[World] _createAndRunFlow 异常:`, (e as Error).message);
@@ -717,7 +717,7 @@ export class World implements Routable {
           f.save();
         }
       }
-      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.taskId, status: "failed" });
+      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.sessionId, status: "failed" });
       throw e;
     } finally {
       /* 清理：从 Map 中移除（即使出错也要清理） */
@@ -785,12 +785,12 @@ export class World implements Routable {
     /* 追加新消息 */
     targetFlow.addMessage({ direction: "in", from, to: objectName, content: message });
     targetFlow.setStatus("running");
-    consola.info(`[World] 在 ${objectName} 的 Flow ${targetFlow.taskId} 上续写消息`);
-    emitSSE({ type: "flow:start", objectName, taskId: mainFlow.taskId });
+    consola.info(`[World] 在 ${objectName} 的 Flow ${targetFlow.sessionId} 上续写消息`);
+    emitSSE({ type: "flow:start", objectName, taskId: mainFlow.sessionId });
 
     /* 创建 SessionContext（支持并发） */
-    const sessionId = mainFlow.taskId;
-    const session = new Session(mainFlow.taskId, sessionDir);
+    const sessionId = mainFlow.sessionId;
+    const session = new Session(mainFlow.sessionId, sessionDir);
     const roundCounter = createSharedRoundCounter();
     const traitsCache = new Map<string, import("../types/index.js").TraitDefinition[]>();
     if (from === "human" && mainFlow !== targetFlow) {
@@ -816,7 +816,7 @@ export class World implements Routable {
     this._ensureReflectFlow(stone, session);
 
     /* 构建协作 API */
-    const collaboration = createCollaborationAPI(this, objectName, stone.dir, roundCounter, targetFlow.taskId, sessionId);
+    const collaboration = createCollaborationAPI(this, objectName, stone.dir, roundCounter, targetFlow.sessionId, sessionId);
     const directory = this._registry.buildDirectory();
 
     /* 创建 Scheduler 并注册 Flow */
@@ -851,7 +851,7 @@ export class World implements Routable {
       }
 
       /* 发出 Flow 结束事件 */
-      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.taskId, status: targetFlow.status });
+      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.sessionId, status: targetFlow.status });
     } catch (e) {
       /* 异常时将所有 running 的 flow 标记为 failed，防止僵尸 */
       consola.error(`[World] _resumeAndRunFlow 异常:`, (e as Error).message);
@@ -862,7 +862,7 @@ export class World implements Routable {
           f.save();
         }
       }
-      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.taskId, status: "failed" });
+      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.sessionId, status: "failed" });
       throw e;
     } finally {
       /* 清理 */
@@ -923,12 +923,12 @@ export class World implements Routable {
     }
 
     targetFlow.setStatus("running");
-    consola.info(`[World] 恢复 ${objectName} 的 Flow ${targetFlow.taskId}`);
-    emitSSE({ type: "flow:start", objectName, taskId: mainFlow.taskId });
+    consola.info(`[World] 恢复 ${objectName} 的 Flow ${targetFlow.sessionId}`);
+    emitSSE({ type: "flow:start", objectName, taskId: mainFlow.sessionId });
 
     /* 创建 SessionContext（支持并发） */
-    const sessionId = mainFlow.taskId;
-    const session = new Session(mainFlow.taskId, sessionDir);
+    const sessionId = mainFlow.sessionId;
+    const session = new Session(mainFlow.sessionId, sessionDir);
     const roundCounter = createSharedRoundCounter();
     const traitsCache = new Map<string, import("../types/index.js").TraitDefinition[]>();
     if (mainFlow !== targetFlow) {
@@ -954,7 +954,7 @@ export class World implements Routable {
     this._ensureReflectFlow(stone, session);
 
     /* 构建协作 API */
-    const collaboration = createCollaborationAPI(this, objectName, stone.dir, roundCounter, targetFlow.taskId, sessionId);
+    const collaboration = createCollaborationAPI(this, objectName, stone.dir, roundCounter, targetFlow.sessionId, sessionId);
     const directory = this._registry.buildDirectory();
 
     /* 创建 Scheduler 并注册 Flow */
@@ -987,7 +987,7 @@ export class World implements Routable {
         mainFlow.save();
       }
 
-      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.taskId, status: targetFlow.status });
+      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.sessionId, status: targetFlow.status });
     } catch (e) {
       /* 异常时将所有 running 的 flow 标记为 failed，防止僵尸 */
       consola.error(`[World] _resumePausedFlow 异常:`, (e as Error).message);
@@ -998,7 +998,7 @@ export class World implements Routable {
           f.save();
         }
       }
-      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.taskId, status: "failed" });
+      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.sessionId, status: "failed" });
       throw e;
     } finally {
       /* 清理 */
@@ -1119,10 +1119,10 @@ export class World implements Routable {
     /* 设置为 running */
     targetFlow.setStatus("running");
     consola.info(`[World] 自动恢复 session ${sessionId}, 入口对象: ${objectName}`);
-    emitSSE({ type: "flow:start", objectName, taskId: mainFlow.taskId });
+    emitSSE({ type: "flow:start", objectName, taskId: mainFlow.sessionId });
 
     /* 创建 SessionContext */
-    const session = new Session(mainFlow.taskId, sessionDir);
+    const session = new Session(mainFlow.sessionId, sessionDir);
     const roundCounter = createSharedRoundCounter();
     const traitsCache = new Map<string, import("../types/index.js").TraitDefinition[]>();
     if (mainFlow !== targetFlow) {
@@ -1148,7 +1148,7 @@ export class World implements Routable {
     this._ensureReflectFlow(stone, session);
 
     /* 构建协作 API */
-    const collaboration = createCollaborationAPI(this, objectName, stone.dir, roundCounter, targetFlow.taskId, sessionId);
+    const collaboration = createCollaborationAPI(this, objectName, stone.dir, roundCounter, targetFlow.sessionId, sessionId);
     const directory = this._registry.buildDirectory();
 
     /* 创建 Scheduler 并注册 */
@@ -1178,7 +1178,7 @@ export class World implements Routable {
         mainFlow.save();
       }
 
-      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.taskId, status: targetFlow.status });
+      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.sessionId, status: targetFlow.status });
       consola.info(`[World] session ${sessionId} 恢复完成, 状态: ${targetFlow.status}`);
     } catch (e) {
       consola.error(`[World] _autoResumeSession 异常:`, (e as Error).message);
@@ -1189,7 +1189,7 @@ export class World implements Routable {
           f.save();
         }
       }
-      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.taskId, status: "failed" });
+      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.sessionId, status: "failed" });
     } finally {
       this._activeSessions.delete(sessionId);
     }
@@ -1215,7 +1215,7 @@ export class World implements Routable {
       const subFlow = Flow.load(join(flowsDir, stoneName));
       if (subFlow) {
         session.register(stoneName, subFlow);
-        consola.info(`[World] 恢复 sub-flow: ${stoneName} (${subFlow.taskId})`);
+        consola.info(`[World] 恢复 sub-flow: ${stoneName} (${subFlow.sessionId})`);
       }
     }
   }

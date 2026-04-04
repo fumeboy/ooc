@@ -161,19 +161,19 @@ async function handleRoute(
     const objectName = talkMatch[1]!;
     const body = (await req.json()) as Record<string, unknown>;
     const message = body.message as string;
-    const flowId = body.flowId as string | undefined;
+    const flowId = (body.sessionId ?? body.flowId) as string | undefined;
     if (!message) return errorResponse("缺少 message 字段");
     const flow = await world.talk(objectName, message, "human", flowId);
 
     /* 通知 supervisor（非阻塞，仅用户直接消息且目标非 supervisor） */
     if (objectName !== "supervisor") {
-      notifySupervisor(world, objectName, message, flow.taskId);
+      notifySupervisor(world, objectName, message, flow.sessionId);
     }
 
     return json({
       success: true,
       data: {
-        sessionId: flow.taskId,
+        sessionId: flow.sessionId,
         status: flow.status,
         actions: [...flow.actions],
         messages: flow.messages,
@@ -196,13 +196,13 @@ async function handleRoute(
   if (method === "POST" && resumeMatch) {
     const name = resumeMatch[1]!;
     const body = (await req.json()) as Record<string, unknown>;
-    const flowId = body.flowId as string;
-    if (!flowId) return errorResponse("缺少 flowId 字段");
+    const flowId = (body.sessionId ?? body.flowId) as string;
+    if (!flowId) return errorResponse("缺少 sessionId 字段");
     const flow = await world.resumeFlow(name, flowId);
     return json({
       success: true,
       data: {
-        sessionId: flow.taskId,
+        sessionId: flow.sessionId,
         status: flow.status,
         actions: [...flow.actions],
         messages: flow.messages,
@@ -260,7 +260,7 @@ async function handleRoute(
     return json({
       success: true,
       data: {
-        sessionId: flow.taskId,
+        sessionId: flow.sessionId,
         status: flow.status,
         debugMode: flow.toJSON().data.debugMode ?? false,
       },
@@ -859,7 +859,7 @@ function getSessionsSummary(flowsDir: string): Array<{
 
     const firstIn = flow.messages.find((m) => m.direction === "in");
     summaries.push({
-      sessionId: flow.taskId,
+      sessionId: flow.sessionId,
       title: sessionTitle,
       status: flow.status,
       firstMessage: firstIn?.content ?? "",

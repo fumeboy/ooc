@@ -9,6 +9,8 @@ import { useAtom } from "jotai";
 import {
   userSessionsAtom,
   activeSessionIdAtom,
+  activeFilePathAtom,
+  editorTabsAtom,
 } from "../store/session";
 import { fetchSessions, fetchFlowGroups, type GroupConfig } from "../api/client";
 import { StatusBadge } from "../components/ui/Badge";
@@ -19,6 +21,8 @@ import type { FlowSummary } from "../api/types";
 export function SessionsList({ onSelect, onEditGroups }: { onSelect?: () => void; onEditGroups?: () => void } = {}) {
   const [sessions, setSessions] = useAtom(userSessionsAtom);
   const [activeId, setActiveId] = useAtom(activeSessionIdAtom);
+  const [, setActivePath] = useAtom(activeFilePathAtom);
+  const [, setTabs] = useAtom(editorTabsAtom);
   const [groups, setGroups] = useState<GroupConfig["groups"]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
@@ -65,7 +69,16 @@ export function SessionsList({ onSelect, onEditGroups }: { onSelect?: () => void
     return (
       <button
         key={s.sessionId}
-        onClick={() => { setActiveId(s.sessionId); onSelect?.(); }}
+        onClick={() => {
+            const path = `flows/${s.sessionId}`;
+            setActiveId(s.sessionId);
+            setActivePath(path);
+            setTabs((prev) => {
+              if (prev.some((t) => t.path === path)) return prev;
+              return [...prev, { path, label: "Kanban" }];
+            });
+            onSelect?.();
+          }}
         className={cn(
           "w-full text-left px-2.5 py-2 text-sm rounded-lg transition-colors",
           activeId === s.sessionId ? "bg-[var(--accent)]" : "hover:bg-[var(--accent)]/60",

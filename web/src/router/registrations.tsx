@@ -86,7 +86,7 @@ function IssueDetailAdapter({ path }: ViewProps) {
 /** Task 详情页适配器 */
 function TaskDetailAdapter({ path }: ViewProps) {
   const m = path.match(/^flows\/([^/]+)\/tasks\/([^/]+)$/);
-  return <TaskDetailView sessionId={m?.[1] ?? ""} sessionId={m?.[2] ?? ""} />;
+  return <TaskDetailView sessionId={m?.[1] ?? ""} taskId={m?.[2] ?? ""} />;
 }
 
 /** ReflectFlow 适配器 — stones/{name}/reflect/ 下的 Process + Data + Memory 视图 */

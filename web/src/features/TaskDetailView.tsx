@@ -13,7 +13,7 @@ const SUB_STATUS_COLORS: Record<string, string> = { pending: "bg-gray-400", runn
 
 type Tab = "description" | "subtasks" | "issues" | "reports";
 
-export function TaskDetailView({ sessionId, sessionId }: { sessionId: string; sessionId: string }) {
+export function TaskDetailView({ sessionId, taskId }: { sessionId: string; taskId: string }) {
   const [task, setTask] = useState<KanbanTask | null>(null);
   const [tab, setTab] = useState<Tab>("subtasks");
   const lastEvent = useAtomValue(lastFlowEventAtom);
@@ -22,8 +22,8 @@ export function TaskDetailView({ sessionId, sessionId }: { sessionId: string; se
 
   const load = useCallback(async () => {
     const tasks = await fetchTasks(sessionId);
-    setTask(tasks.find((t) => t.id === sessionId) ?? null);
-  }, [sessionId, sessionId]);
+    setTask(tasks.find((t) => t.id === taskId) ?? null);
+  }, [sessionId, taskId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -32,8 +32,8 @@ export function TaskDetailView({ sessionId, sessionId }: { sessionId: string; se
   }, [lastEvent, sessionId, load]);
 
   useEffect(() => {
-    if (task?.hasNewInfo) ackTask(sessionId, sessionId);
-  }, [task?.hasNewInfo, sessionId, sessionId]);
+    if (task?.hasNewInfo) ackTask(sessionId, taskId);
+  }, [task?.hasNewInfo, sessionId, taskId]);
 
   const openTab = (path: string, label: string) => {
     setActivePath(path);
