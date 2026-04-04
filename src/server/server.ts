@@ -669,6 +669,32 @@ async function handleRoute(
 
   /* ========== Kanban（Session Issues / Tasks） ========== */
 
+  /* POST /api/sessions/:sessionId/issues — 创建 Issue */
+  const createIssueMatch = path.match(/^\/api\/sessions\/([^/]+)\/issues$/);
+  if (method === "POST" && createIssueMatch) {
+    const [, sessionId] = createIssueMatch;
+    const body = (await req.json()) as { title?: string; description?: string; participants?: string[] };
+    if (!body.title) return errorResponse("title is required");
+
+    const sessionDir = join(world.flowsDir, sessionId!);
+    const { createIssue } = await import("../kanban/methods.js");
+    const issue = await createIssue(sessionDir, body.title, body.description, body.participants);
+    return json({ success: true, data: issue });
+  }
+
+  /* POST /api/sessions/:sessionId/tasks — 创建 Task */
+  const createTaskMatch = path.match(/^\/api\/sessions\/([^/]+)\/tasks$/);
+  if (method === "POST" && createTaskMatch) {
+    const [, sessionId] = createTaskMatch;
+    const body = (await req.json()) as { title?: string; description?: string; issueRefs?: string[] };
+    if (!body.title) return errorResponse("title is required");
+
+    const sessionDir = join(world.flowsDir, sessionId!);
+    const { createTask } = await import("../kanban/methods.js");
+    const task = await createTask(sessionDir, body.title, body.description, body.issueRefs);
+    return json({ success: true, data: task });
+  }
+
   /* POST /api/sessions/:sessionId/issues/:issueId/comments — 用户评论 */
   const issueCommentMatch = path.match(/^\/api\/sessions\/([^/]+)\/issues\/([^/]+)\/comments$/);
   if (method === "POST" && issueCommentMatch) {

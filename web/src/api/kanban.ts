@@ -62,3 +62,29 @@ export async function ackTask(sessionId: string, taskId: string): Promise<void> 
     method: "POST",
   });
 }
+
+/** 手动创建 Issue */
+export async function createIssue(
+  sessionId: string, title: string, description?: string,
+): Promise<KanbanIssue> {
+  const res = await fetch(`${API_BASE}/api/sessions/${sessionId}/issues`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, description }),
+  });
+  const json = await res.json();
+  return json.data as KanbanIssue;
+}
+
+/** 手动创建 Task */
+export async function createTask(
+  sessionId: string, title: string, description?: string, issueRefs?: string[],
+): Promise<KanbanTask> {
+  const res = await fetch(`${API_BASE}/api/sessions/${sessionId}/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, description, issueRefs }),
+  });
+  const json = await res.json();
+  return json.data as KanbanTask;
+}
