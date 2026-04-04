@@ -35,7 +35,7 @@ export class Session {
   private _fileWriteQueue = new Map<string, Promise<void>>();
   /** 顶层会话 ID */
   readonly sessionId: string;
-  /** session 根目录（flows/{sessionId}/，所有 sub-flow 在此目录下的 flows/ 中创建） */
+  /** session 根目录（flows/{sessionId}/，所有 sub-flow 在此目录下的 objects/ 中创建） */
   readonly sessionDir: string;
 
   constructor(sessionId: string, sessionDir: string) {

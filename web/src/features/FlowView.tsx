@@ -62,14 +62,14 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
     }
   }, [lastEvent]);
 
-  /* 检查该对象是否有 files/ui/ 目录 */
+  /* 检查该对象是否有 ui/pages/ 目录 */
   useEffect(() => {
     fetchSessionTree(sessionId).then((tree) => {
-      const flowsDir = tree.children?.find((c) => c.name === "flows");
-      const objectDir = flowsDir?.children?.find((c) => c.name === objectName);
-      const filesDir = objectDir?.children?.find((c) => c.name === "files");
-      const uiDir = filesDir?.children?.find((c) => c.name === "ui");
-      const found = !!uiDir;
+      const objectsDir = tree.children?.find((c) => c.name === "objects");
+      const objectDir = objectsDir?.children?.find((c) => c.name === objectName);
+      const uiDir = objectDir?.children?.find((c) => c.name === "ui");
+      const pagesDir = uiDir?.children?.find((c) => c.name === "pages");
+      const found = !!pagesDir;
       setHasUI(found);
       if (found && !initialTab) {
         setTab("UI");
@@ -193,7 +193,7 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
         )}
         {tab === "UI" && (
           <DynamicUI
-            importPath={`@flows/${sessionId}/flows/${objectName}/files/ui/index.tsx`}
+            importPath={`@flows/${sessionId}/objects/${objectName}/ui/pages/index.tsx`}
             componentProps={{ sessionId, objectName }}
           />
         )}
@@ -216,7 +216,7 @@ function SplitDataTab({
   const refreshKey = useAtomValue(lastFlowEventAtom);
 
   useEffect(() => {
-    const path = `flows/${sessionId}/flows/${objectName}/data.json`;
+    const path = `flows/${sessionId}/objects/${objectName}/data.json`;
     fetchFileContent(path)
       .then((raw) => {
         try { setFlowContent(JSON.stringify(JSON.parse(raw), null, 2)); }
@@ -263,7 +263,7 @@ function FlowMemoryTab({ sessionId, objectName }: { sessionId: string; objectNam
   const refreshKey = useAtomValue(refreshKeyAtom);
 
   useEffect(() => {
-    const path = `flows/${sessionId}/flows/${objectName}/memory.md`;
+    const path = `flows/${sessionId}/objects/${objectName}/memory.md`;
     fetchFileContent(path)
       .then(setContent)
       .catch(() => setContent(""));

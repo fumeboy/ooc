@@ -214,7 +214,7 @@ export function App() {
     if (activeTab === "flows" && activeId && node.marker === "stone") {
       const stoneMatch = path.match(/^stones\/([^/]+)$/);
       if (stoneMatch) {
-        resolvedPath = `flows/${activeId}/flows/${stoneMatch[1]!}`;
+        resolvedPath = `flows/${activeId}/objects/${stoneMatch[1]!}`;
       }
     }
 
@@ -369,7 +369,7 @@ export function App() {
               const result = await talkTo(t, msg);
               if (result.sessionId) {
                 /* 使用基础路径，让 FlowView 根据实际存在的 tab 自动选择（新 session 可能还没有 files/ui） */
-                const path = `flows/${result.sessionId}/flows/supervisor`;
+                const path = `flows/${result.sessionId}/objects/supervisor`;
                 setActiveId(result.sessionId);
                 setActivePath(path);
                 setTabs([{ path, label: "supervisor" }]);
@@ -385,7 +385,7 @@ export function App() {
       );
     } else if (activeTab === "flows" && activeId) {
       /* Session index → supervisor UI tab */
-      const indexPath = `flows/${activeId}/flows/supervisor/files/ui`;
+      const indexPath = `flows/${activeId}/objects/supervisor/ui/pages`;
       breadcrumbSegments = indexPath.split("/").filter(Boolean);
       const resolved = viewRegistry.resolve(indexPath);
       const ViewComponent = resolved?.registration.component;

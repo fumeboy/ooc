@@ -101,9 +101,9 @@ export class Flow {
       updatedAt: now,
     };
 
-    /* main flow 目录：flows/{sessionId}/flows/{stoneName}/ */
+    /* main flow 目录：flows/{sessionId}/objects/{stoneName}/ */
     const sessionDir = join(flowsDir, sessionId);
-    const dir = join(sessionDir, "flows", stoneName);
+    const dir = join(sessionDir, "objects", stoneName);
     writeFlow(dir, data);
     writeFileSync(join(dir, ".flow"), "", "utf-8");
     return new Flow(dir, data);
@@ -112,9 +112,9 @@ export class Flow {
   /**
    * 创建 Sub-flow（在 session 的 flows/ 子目录下）
    *
-   * Sub-flow 是完整的 Flow 对象，持久化在 session 的 flows/{stoneName}/ 下。
+   * Sub-flow 是完整的 Flow 对象，持久化在 session 的 objects/{stoneName}/ 下。
    * 同一 Stone 在同一 session 下只有一个 sub-flow。
-   * Sub-flow 使用自己的 files/ 目录（flows/{sessionId}/flows/{stoneName}/files/）。
+   * Sub-flow 使用自己的 files/ 目录（flows/{sessionId}/objects/{stoneName}/files/）。
    *
    * @ref docs/建模/meta_thought.md#五 — implements — Sub-flow 持久化在 session 子目录
    *
@@ -151,7 +151,7 @@ export class Flow {
       updatedAt: now,
     };
 
-    const dir = join(sessionDir, "flows", stoneName);
+    const dir = join(sessionDir, "objects", stoneName);
     writeFlow(dir, data);
     writeFileSync(join(dir, ".flow"), "", "utf-8");
     return new Flow(dir, data);
@@ -208,7 +208,7 @@ export class Flow {
   get status(): FlowStatus { return this._data.status; }
   get messages(): readonly FlowMessage[] { return this._data.messages; }
   get dir(): string { return this._dir; }
-  /** session 根目录（flows/{sessionId}/），所有同 session 的 flow 共享此目录 */
+  /** session 根目录（flows/{sessionId}/），所有同 session 的 objects 共享此目录 */
   get sessionDir(): string { return resolve(this._dir, "..", ".."); }
   get filesDir(): string { return this._filesDirOverride ?? join(this._dir, "files"); }
   get process(): Process { return this._data.process; }

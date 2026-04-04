@@ -226,7 +226,7 @@ async function handleRoute(
       const userFlowDir = join(world.flowsDir, flowId);
       const mainFlow = FlowClass.load(userFlowDir);
       if (mainFlow) {
-        const subFlowDir = join(mainFlow.dir, "flows", name);
+        const subFlowDir = join(mainFlow.dir, "objects", name);
         flow = FlowClass.load(subFlowDir);
         if (!flow && mainFlow.stoneName === name) flow = mainFlow;
       }
@@ -285,9 +285,9 @@ async function handleRoute(
     let flow: any = null;
     if (userStone) {
       /* 新结构：session/flows/user/ */
-      const mainFlow = FlowCls.load(join(sessionDir, "flows", "user"));
+      const mainFlow = FlowCls.load(join(sessionDir, "objects", "user"));
       if (mainFlow) {
-        const subFlowDir = join(sessionDir, "flows", name);
+        const subFlowDir = join(sessionDir, "objects", name);
         flow = FlowCls.load(subFlowDir);
         if (!flow && mainFlow.stoneName === name) flow = mainFlow;
       }
@@ -359,7 +359,7 @@ async function handleRoute(
     const sessionDir = join(world.flowsDir, sessionId);
 
     /* 新结构：main flow 在 session/flows/user/ */
-    let flow = readFlow(join(sessionDir, "flows", "user"));
+    let flow = readFlow(join(sessionDir, "objects", "user"));
     if (!flow) {
       /* 兼容旧数据：session 根目录 */
       flow = readFlow(sessionDir);
@@ -367,15 +367,15 @@ async function handleRoute(
     if (!flow) return errorResponse(`Flow "${sessionId}" 不存在`, 404);
 
     /* 合并 sub-flow 的消息和 process（让前端能看到完整对话和所有对象的行为树） */
-    const flowsDir = join(sessionDir, "flows");
+    const objectsDir = join(sessionDir, "objects");
     const subFlows: Array<{ stoneName: string; status: FlowStatus; process: unknown }> = [];
-    if (existsSync(flowsDir)) {
-      const subEntries = readdirSync(flowsDir, { withFileTypes: true });
+    if (existsSync(objectsDir)) {
+      const subEntries = readdirSync(objectsDir, { withFileTypes: true });
       for (const entry of subEntries) {
         if (!entry.isDirectory()) continue;
         /* 跳过 user（main flow 自身） */
         if (entry.name === "user") continue;
-        const subFlow = readFlow(join(flowsDir, entry.name));
+        const subFlow = readFlow(join(objectsDir, entry.name));
         if (subFlow) {
           flow.messages = mergeMessages(flow.messages, subFlow.messages);
           subFlows.push({
@@ -399,7 +399,7 @@ async function handleRoute(
     const sessionId = flowDetailMatch[1]!;
     const sessionDir = join(world.flowsDir, sessionId);
     /* 新结构优先 */
-    let flowDir = join(sessionDir, "flows", "user");
+    let flowDir = join(sessionDir, "objects", "user");
     let flow = readFlow(flowDir);
     if (!flow) {
       flowDir = sessionDir;
@@ -423,7 +423,7 @@ async function handleRoute(
     const sessionDir = join(world.flowsDir, sessionId);
 
     /* 遍历 session 下所有 sub-flow，将 running 状态改为 failed */
-    const flowsSubDir = join(sessionDir, "flows");
+    const objectsSubDir = join(sessionDir, "objects");
     let cancelled = 0;
     const cancelFlow = (dir: string) => {
       const flow = readFlow(dir);
@@ -443,15 +443,15 @@ async function handleRoute(
     };
 
     /* 取消 main flow */
-    const mainFlowDir = join(flowsSubDir, "user");
+    const mainFlowDir = join(objectsSubDir, "user");
     cancelFlow(mainFlowDir);
     if (!existsSync(mainFlowDir)) cancelFlow(sessionDir);
 
     /* 取消所有 sub-flows */
-    if (existsSync(flowsSubDir)) {
-      for (const entry of readdirSync(flowsSubDir, { withFileTypes: true })) {
+    if (existsSync(objectsSubDir)) {
+      for (const entry of readdirSync(objectsSubDir, { withFileTypes: true })) {
         if (entry.isDirectory() && entry.name !== "user") {
-          cancelFlow(join(flowsSubDir, entry.name));
+          cancelFlow(join(objectsSubDir, entry.name));
         }
       }
     }
@@ -840,7 +840,7 @@ function getSessionsSummary(flowsDir: string): Array<{
 
   for (const sessionId of sessionIds) {
     /* 新结构：session/flows/user/ */
-    let flow = readFlow(join(flowsDir, sessionId, "flows", "user"));
+    let flow = readFlow(join(flowsDir, sessionId, "objects", "user"));
     if (!flow) {
       /* 兼容旧数据：session 根目录 */
       flow = readFlow(join(flowsDir, sessionId));

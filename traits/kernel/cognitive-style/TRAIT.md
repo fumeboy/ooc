@@ -211,7 +211,7 @@ content = """
 - `self_files_dir` — 对象的 files 目录（`self_dir + "/files"`）
 - `self_traits_dir` — 对象的 traits 目录（`self_dir + "/traits"`）
 - `world_dir` — OOC World 根目录（user repo 根）
-- `task_dir` — 当前 flow 的根目录（如 `flows/{sessionId}/flows/{objectName}/`）
+- `task_dir` — 当前 flow 的根目录（如 `flows/{sessionId}/objects/{objectName}/`）
 - `task_files_dir` — 当前 flow 的 files 目录（`task_dir + "/files"`）
 - `sessionId` — 当前任务 ID
 - `filesDir` — 等同于 `task_files_dir`

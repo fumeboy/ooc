@@ -9,7 +9,7 @@ const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 /** 读取 session 的 issues.json */
 export async function fetchIssues(sessionId: string): Promise<KanbanIssue[]> {
   try {
-    const content = await fetchFileContent(`flows/${sessionId}/issues.json`);
+    const content = await fetchFileContent(`flows/${sessionId}/issues/index.json`);
     return JSON.parse(content) as KanbanIssue[];
   } catch {
     return [];
@@ -19,7 +19,7 @@ export async function fetchIssues(sessionId: string): Promise<KanbanIssue[]> {
 /** 读取 session 的 tasks.json */
 export async function fetchTasks(sessionId: string): Promise<KanbanTask[]> {
   try {
-    const content = await fetchFileContent(`flows/${sessionId}/tasks.json`);
+    const content = await fetchFileContent(`flows/${sessionId}/tasks/index.json`);
     return JSON.parse(content) as KanbanTask[];
   } catch {
     return [];

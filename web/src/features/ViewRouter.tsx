@@ -53,16 +53,16 @@ function parseRoute(path: string): {
   const stoneTraitsMatch = path.match(/^stones\/([^/]+)\/traits/);
   if (stoneTraitsMatch) return { type: "stone", objectName: stoneTraitsMatch[1], initialTab: "Effects" };
 
-  /* flows/{sessionId}/flows/{objectName}/files/ui — Flow UI tab */
-  const flowUIMatch = path.match(/^flows\/([^/]+)\/flows\/([^/]+)\/files\/ui$/);
+  /* flows/{sessionId}/objects/{objectName}/ui/pages — Flow UI tab */
+  const flowUIMatch = path.match(/^flows\/([^/]+)\/objects\/([^/]+)\/ui\/pages$/);
   if (flowUIMatch) return { type: "flow-detail", sessionId: flowUIMatch[1], objectName: flowUIMatch[2], initialTab: "UI" };
 
-  /* flows/{sessionId}/flows/{objectName}/process.json — Flow Process tab */
-  const flowProcessMatch = path.match(/^flows\/([^/]+)\/flows\/([^/]+)\/process\.json$/);
+  /* flows/{sessionId}/objects/{objectName}/process.json — Flow Process tab */
+  const flowProcessMatch = path.match(/^flows\/([^/]+)\/objects\/([^/]+)\/process\.json$/);
   if (flowProcessMatch) return { type: "flow-detail", sessionId: flowProcessMatch[1], objectName: flowProcessMatch[2], initialTab: "Process" };
 
-  /* flows/{sessionId}/flows/{objectName}/data.json — Flow Timeline tab (default) */
-  const flowDataMatch = path.match(/^flows\/([^/]+)\/flows\/([^/]+)\/data\.json$/);
+  /* flows/{sessionId}/objects/{objectName}/data.json — Flow Timeline tab (default) */
+  const flowDataMatch = path.match(/^flows\/([^/]+)\/objects\/([^/]+)\/data\.json$/);
   if (flowDataMatch) return { type: "flow-detail", sessionId: flowDataMatch[1], objectName: flowDataMatch[2], initialTab: "Timeline" };
 
   /* process.json 特殊处理：任何路径下的 process.json 都用 ProcessView */
@@ -70,8 +70,8 @@ function parseRoute(path: string): {
     return { type: "process-json" };
   }
 
-  /* flows/{sessionId}/flows/{objectId} — sub-flow 目录 */
-  const subFlowMatch = path.match(/^flows\/([^/]+)\/flows\/([^/]+)$/);
+  /* flows/{sessionId}/objects/{objectId} — sub-flow 目录 */
+  const subFlowMatch = path.match(/^flows\/([^/]+)\/objects\/([^/]+)$/);
   if (subFlowMatch) {
     const objectName = subFlowMatch[2]!;
     return { type: "flow-detail", sessionId: subFlowMatch[1], objectName };
@@ -110,7 +110,7 @@ export function ViewRouter({ filePath }: ViewRouterProps) {
       };
       return (
         <DynamicUI
-          importPath={`@stones/${name}/files/ui/index.tsx`}
+          importPath={`@stones/${name}/ui/index.tsx`}
           componentProps={stoneUIProps}
           fallback={<ObjectDetail objectName={name} initialTab={route.initialTab} />}
         />

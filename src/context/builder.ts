@@ -235,12 +235,12 @@ function resolveDynamicWindows(flow: FlowData, stoneDir?: string): ContextWindow
  * @returns 格式化的概览文本
  */
 export function buildSessionOverview(sessionDir: string, supervisorName: string): string {
-  const flowsDir = join(sessionDir, "flows");
-  if (!existsSync(flowsDir)) return "(no active flows)";
+  const objectsDir = join(sessionDir, "objects");
+  if (!existsSync(objectsDir)) return "(no active flows)";
 
   let dirNames: string[];
   try {
-    const entries = readdirSync(flowsDir, { withFileTypes: true });
+    const entries = readdirSync(objectsDir, { withFileTypes: true });
     dirNames = entries.filter(e => e.isDirectory()).map(e => e.name);
   } catch {
     return "(no active flows)";
@@ -251,7 +251,7 @@ export function buildSessionOverview(sessionDir: string, supervisorName: string)
   for (const name of dirNames) {
     if (name === supervisorName) continue;
 
-    const processPath = join(flowsDir, name, "process.json");
+    const processPath = join(objectsDir, name, "process.json");
     if (!existsSync(processPath)) continue;
 
     try {
@@ -303,12 +303,12 @@ export function buildSessionOverview(sessionDir: string, supervisorName: string)
  * @returns 格式化的消息时间线文本，无消息时返回 null
  */
 export function buildSessionMessages(sessionDir: string, supervisorName: string): string | null {
-  const flowsDir = join(sessionDir, "flows");
-  if (!existsSync(flowsDir)) return null;
+  const objectsDir = join(sessionDir, "objects");
+  if (!existsSync(objectsDir)) return null;
 
   let dirNames: string[];
   try {
-    const entries = readdirSync(flowsDir, { withFileTypes: true });
+    const entries = readdirSync(objectsDir, { withFileTypes: true });
     dirNames = entries.filter(e => e.isDirectory()).map(e => e.name);
   } catch {
     return null;
@@ -319,7 +319,7 @@ export function buildSessionMessages(sessionDir: string, supervisorName: string)
   const seen = new Set<string>();
 
   for (const name of dirNames) {
-    const dataPath = join(flowsDir, name, "data.json");
+    const dataPath = join(objectsDir, name, "data.json");
     if (!existsSync(dataPath)) continue;
 
     try {

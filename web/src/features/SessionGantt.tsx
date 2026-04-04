@@ -204,10 +204,10 @@ export function SessionGantt({ sessionId }: SessionGanttProps) {
 
   /* 跳转到 Object 的 Process tab */
   const navigateToProcess = (objectName: string) => {
-    const path = `flows/${sessionId}/flows/${objectName}/process.json`;
+    const path = `flows/${sessionId}/objects/${objectName}/process.json`;
     setActivePath(path);
     setTabs((prev) => {
-      const parentPath = `flows/${sessionId}/flows/${objectName}`;
+      const parentPath = `flows/${sessionId}/objects/${objectName}`;
       const existing = prev.find((t) => t.path.startsWith(parentPath));
       if (existing) {
         return prev.map((t) => t === existing ? { ...t, path } : t);

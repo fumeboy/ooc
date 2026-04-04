@@ -102,7 +102,7 @@ export function IssueDetailView({ sessionId, issueId }: { sessionId: string; iss
             {issue.reportPages.map((page) => (
               <div key={page} className="rounded-lg border border-border overflow-hidden">
                 <div className="px-3 py-2 bg-muted text-xs font-medium">{page}</div>
-                <DynamicUI importPath={`@flows/${sessionId}/flows/supervisor/files/ui/pages/${page}`} componentProps={{ sessionId }} />
+                <DynamicUI importPath={`@flows/${sessionId}/objects/supervisor/ui/pages/${page}`} componentProps={{ sessionId }} />
               </div>
             ))}
           </div>

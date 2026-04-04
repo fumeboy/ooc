@@ -35,8 +35,8 @@ async function enhanceTree(tree: FileTreeNode, sessionId: string): Promise<FileT
   enhanced.children.unshift(indexNode);
 
   /* 2. 过滤文件 + 注入 .stone 虚拟目录 */
-  const flowsDir = enhanced.children.find(
-    (c) => c.type === "directory" && c.name === "flows"
+  const objectsDir = enhanced.children.find(
+    (c) => c.type === "directory" && c.name === "objects"
   );
 
   /* Stone 目录下隐藏的文件 */
@@ -55,9 +55,9 @@ async function enhanceTree(tree: FileTreeNode, sessionId: string): Promise<FileT
     });
   };
 
-  if (flowsDir?.children) {
+  if (objectsDir?.children) {
     const newFlowChildren: FileTreeNode[] = [];
-    for (const child of flowsDir.children) {
+    for (const child of objectsDir.children) {
       if (child.type === "directory" && child.marker === "flow") {
         const objectName = child.name;
 
@@ -92,7 +92,7 @@ async function enhanceTree(tree: FileTreeNode, sessionId: string): Promise<FileT
         newFlowChildren.push(child);
       }
     }
-    flowsDir.children = newFlowChildren;
+    objectsDir.children = newFlowChildren;
   }
 
   return enhanced;

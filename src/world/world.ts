@@ -453,20 +453,20 @@ export class World implements Routable {
     let targetFlow: Flow | null = null;
 
     if (userStone) {
-      /* 新结构：session/flows/user/ */
-      const mainFlow = Flow.load(join(sessionDir, "flows", "user"));
+      /* 新结构：session/objects/user/ */
+      const mainFlow = Flow.load(join(sessionDir, "objects", "user"));
       if (!mainFlow) {
         /* 兼容旧数据 */
         const oldMain = Flow.load(sessionDir);
         if (oldMain) {
-          const subFlowDir = join(sessionDir, "flows", objectName);
+          const subFlowDir = join(sessionDir, "objects", objectName);
           targetFlow = Flow.load(subFlowDir);
           if (!targetFlow && oldMain.stoneName === objectName) {
             targetFlow = oldMain;
           }
         }
       } else {
-        const subFlowDir = join(sessionDir, "flows", objectName);
+        const subFlowDir = join(sessionDir, "objects", objectName);
         targetFlow = Flow.load(subFlowDir);
         if (!targetFlow && mainFlow.stoneName === objectName) {
           targetFlow = mainFlow;
@@ -538,7 +538,7 @@ export class World implements Routable {
     if (targetFlow) {
       consola.info(`[World] 复用 ${targetName} 的 Flow，投递消息 (from: ${from})`);
     } else {
-      /* 在 main flow 的 flows/ 子目录下创建 sub-flow */
+      /* 在 main flow 的 objects/ 子目录下创建 sub-flow */
       targetFlow = Flow.createSubFlow(session.sessionDir, stone.name, message, from, from);
       session.register(targetName, targetFlow);
       /* 注册到 Scheduler */
@@ -626,18 +626,33 @@ export class World implements Routable {
     let targetFlow: Flow;
 
     if (from === "human") {
-      /* 人类发起：main flow 在 flows/ 下，目标对象作为 sub-flow */
+      /* 人类发起：main flow 在 objects/ 下，目标对象作为 sub-flow */
       const userStone = this._registry.get("user");
       if (!userStone) throw new Error("user 对象不存在");
 
       mainFlow = Flow.create(this.flowsDir, "user", message, "human");
       targetFlow = Flow.createSubFlow(mainFlow.sessionDir, stone.name, message, "human", "human");
+
+      /* 确保 kanban 目录结构存在 */
+      const issuesDir = join(mainFlow.sessionDir, "issues");
+      const tasksDir = join(mainFlow.sessionDir, "tasks");
+      mkdirSync(issuesDir, { recursive: true });
+      mkdirSync(tasksDir, { recursive: true });
+      const issuesIndexPath = join(issuesDir, "index.json");
+      if (!existsSync(issuesIndexPath)) {
+        writeFileSync(issuesIndexPath, "[]", "utf-8");
+      }
+      const tasksIndexPath = join(tasksDir, "index.json");
+      if (!existsSync(tasksIndexPath)) {
+        writeFileSync(tasksIndexPath, "[]", "utf-8");
+      }
+
       /* 写入初始消息到 sub-flow 的 messages[]（createSubFlow 不写入，避免与 deliverMessage 路径重复） */
       targetFlow.addMessage({ direction: "in", from, to: stone.name, content: message });
       targetFlow.save();
       consola.info(`[World] 人类发起对话 → main flow ${mainFlow.sessionId}, sub-flow ${targetFlow.sessionId} (${objectName})`);
     } else {
-      /* 非人类发起（系统内部）：直接在 flows/ 下创建 */
+      /* 非人类发起（系统内部）：直接在 objects/ 下创建 */
       mainFlow = Flow.create(this.flowsDir, stone.name, message, from);
       targetFlow = mainFlow;
       consola.info(`[World] 向 ${objectName} 发送消息，创建 Flow ${mainFlow.sessionId}`);
@@ -744,7 +759,7 @@ export class World implements Routable {
       throw new Error(`对象 "${objectName}" 不存在`);
     }
 
-    /* 加载 flow（统一在 flows/{flowId}/ 下） */
+    /* 加载 flow（统一在 objects/{flowId}/ 下） */
     const sessionDir = join(this.flowsDir, flowId);
     let mainFlow: Flow | null = null;
     let targetFlow: Flow | null = null;
@@ -752,8 +767,8 @@ export class World implements Routable {
     if (from === "human") {
       const userStone = this._registry.get("user");
       if (!userStone) throw new Error("user 对象不存在");
-      /* main flow (user) 在 session/flows/user/ */
-      mainFlow = Flow.load(join(sessionDir, "flows", "user"));
+      /* main flow (user) 在 session/objects/user/ */
+      mainFlow = Flow.load(join(sessionDir, "objects", "user"));
       if (!mainFlow) {
         /* 兼容旧数据：session 根目录下直接有 data.json */
         mainFlow = Flow.load(sessionDir);
@@ -761,7 +776,7 @@ export class World implements Routable {
       if (!mainFlow) throw new Error(`Flow "${flowId}" 不存在`);
 
       /* 加载 sub-flow */
-      const subFlowDir = join(sessionDir, "flows", objectName);
+      const subFlowDir = join(sessionDir, "objects", objectName);
       targetFlow = Flow.load(subFlowDir);
       if (!targetFlow) {
         if (mainFlow.stoneName === objectName) {
@@ -772,8 +787,8 @@ export class World implements Routable {
         }
       }
     } else {
-      /* 非人类发起：flow 在 session/flows/{stoneName}/ */
-      mainFlow = Flow.load(join(sessionDir, "flows", objectName));
+      /* 非人类发起：flow 在 session/objects/{stoneName}/ */
+      mainFlow = Flow.load(join(sessionDir, "objects", objectName));
       if (!mainFlow) {
         /* 兼容旧数据 */
         mainFlow = Flow.load(sessionDir);
@@ -887,21 +902,21 @@ export class World implements Routable {
       throw new Error(`对象 "${objectName}" 不存在`);
     }
 
-    /* 尝试从 flows/ 加载 flow */
+    /* 尝试从 objects/ 加载 flow */
     const sessionDir = join(this.flowsDir, flowId);
     const userStone = this._registry.get("user");
     let mainFlow: Flow | null = null;
     let targetFlow: Flow | null = null;
 
     if (userStone) {
-      /* 新结构：session/flows/user/ */
-      mainFlow = Flow.load(join(sessionDir, "flows", "user"));
+      /* 新结构：session/objects/user/ */
+      mainFlow = Flow.load(join(sessionDir, "objects", "user"));
       if (!mainFlow) {
         /* 兼容旧数据：session 根目录 */
         mainFlow = Flow.load(sessionDir);
       }
       if (mainFlow) {
-        const subFlowDir = join(sessionDir, "flows", objectName);
+        const subFlowDir = join(sessionDir, "objects", objectName);
         targetFlow = Flow.load(subFlowDir);
         if (!targetFlow && mainFlow.stoneName === objectName) {
           targetFlow = mainFlow;
@@ -1032,7 +1047,7 @@ export class World implements Routable {
   /**
    * 服务启动时自动恢复未完成的 session
    *
-   * 扫描 flows/ 目录，找到 running 或 waiting+有消息 的 flow，
+   * 扫描 objects/ 目录，找到 running 或 waiting+有消息 的 flow，
    * 创建 Scheduler 恢复调度。不追加新消息。
    */
   private async _autoResumeSessions(): Promise<void> {
@@ -1045,7 +1060,7 @@ export class World implements Routable {
       if (!entry.isDirectory()) continue;
       const sessionId = entry.name;
       const sessionDir = join(this.flowsDir, sessionId);
-      const flowsSubDir = join(sessionDir, "flows");
+      const flowsSubDir = join(sessionDir, "objects");
       if (!existsSync(flowsSubDir)) continue;
 
       /* 扫描 session 下所有 flow */
@@ -1202,7 +1217,7 @@ export class World implements Routable {
    * 这样 deliverMessage 能正确复用已有的 sub-flow。
    */
   private _loadExistingSubFlows(session: Session, sessionDir: string, excludeName?: string): void {
-    const flowsDir = join(sessionDir, "flows");
+    const flowsDir = join(sessionDir, "objects");
     if (!existsSync(flowsDir)) return;
 
     const entries = readdirSync(flowsDir, { withFileTypes: true });

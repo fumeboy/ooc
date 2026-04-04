@@ -45,7 +45,7 @@ function StoneViewAdapter({ path }: ViewProps) {
     };
     return (
       <DynamicUI
-        importPath={`@stones/${name}/files/ui/index.tsx`}
+        importPath={`@stones/${name}/ui/index.tsx`}
         componentProps={stoneUIProps}
         fallback={<ObjectDetail objectName={name} initialTab={initialTab} />}
       />
@@ -56,7 +56,7 @@ function StoneViewAdapter({ path }: ViewProps) {
 
 /** FlowView 适配器 — 从 path 提取 sessionId, objectName, initialTab */
 function FlowViewAdapter({ path }: ViewProps) {
-  const match = path.match(/^flows\/([^/]+)\/flows\/([^/]+)/);
+  const match = path.match(/^flows\/([^/]+)\/objects\/([^/]+)/);
   if (!match) return null;
   const sessionId = match[1]!;
   const objectName = match[2]!;
@@ -66,7 +66,7 @@ function FlowViewAdapter({ path }: ViewProps) {
   if (path.endsWith("/data.json")) initialTab = "Data";
   else if (path.endsWith("/process.json")) initialTab = "Process";
   else if (path.endsWith("/memory.md")) initialTab = "Memory";
-  else if (path.endsWith("/files/ui")) initialTab = "UI";
+  else if (path.endsWith("/ui/pages")) initialTab = "UI";
 
   return <FlowView sessionId={sessionId} objectName={objectName} initialTab={initialTab} />;
 }
@@ -268,24 +268,24 @@ function FileViewerAdapter({ path }: ViewProps) {
 /* ── 注册所有视图 ── */
 
 export function registerAllViews(): void {
-  /* FlowView — flows/{sid}/flows/{obj} 及其特定的 UI tabs 子路径 */
+  /* FlowView — flows/{sid}/objects/{obj} 及其特定的 UI tabs 子路径 */
   viewRegistry.register({
     name: "FlowView",
     component: FlowViewAdapter,
     match: (p) => {
-      const match = p.match(/^flows\/[^/]+\/flows\/[^/]+(.*)$/);
+      const match = p.match(/^flows\/[^/]+\/objects\/[^/]+(.*)$/);
       if (!match) return false;
       const subPath = match[1] || "";
       if (subPath === "" || subPath === "/") return true;
       if (subPath === "/data.json") return true;
       if (subPath === "/process.json") return true;
       if (subPath === "/memory.md") return true;
-      if (subPath === "/files/ui") return true;
+      if (subPath === "/ui/pages") return true;
       return false;
     },
     priority: 100,
-    tabKey: (p) => p.match(/^(flows\/[^/]+\/flows\/[^/]+)/)?.[1] ?? p,
-    tabLabel: (p) => p.match(/flows\/[^/]+\/flows\/([^/]+)/)?.[1] ?? "Flow",
+    tabKey: (p) => p.match(/^(flows\/[^/]+\/objects\/[^/]+)/)?.[1] ?? p,
+    tabLabel: (p) => p.match(/flows\/[^/]+\/objects\/([^/]+)/)?.[1] ?? "Flow",
   });
 
   /* SessionKanban — flows/{sid}（替换 SessionGantt） */
@@ -350,11 +350,11 @@ export function registerAllViews(): void {
     tabLabel: (p) => p.match(/stones\/([^/]+)/)?.[1] ?? "Stone",
   });
 
-  /* ProcessJson — 任何路径下的 process.json（不在 flows/x/flows/x/ 和 stones/x/reflect/ 下的） */
+  /* ProcessJson — 任何路径下的 process.json（不在 flows/x/objects/x/ 和 stones/x/reflect/ 下的） */
   viewRegistry.register({
     name: "ProcessJson",
     component: ProcessJsonAdapter,
-    match: (p) => p.endsWith("/process.json") && !/^flows\/[^/]+\/flows\/[^/]+/.test(p) && !/^stones\/[^/]+\/reflect/.test(p),
+    match: (p) => p.endsWith("/process.json") && !/^flows\/[^/]+\/objects\/[^/]+/.test(p) && !/^stones\/[^/]+\/reflect/.test(p),
     priority: 40,
     tabKey: (p) => p,
     tabLabel: () => "Process",
