@@ -56,6 +56,8 @@ export class World implements Routable {
   private readonly _pauseRequests = new Set<string>();
   /** 定时任务管理器 */
   private _cron: CronManager;
+  /** trait 树形索引（loadAllTraits 后填充） */
+  private _traitTree: import("../types/index.js").TraitTree[] = [];
 
   constructor(config: WorldConfig) {
     this._rootDir = config.rootDir;
@@ -547,7 +549,7 @@ export class World implements Routable {
         const traitsCache = ctx?.traitsCache;
         const traits = traitsCache?.get(targetName) ?? [];
         const collaboration = createCollaborationAPI(this, targetName, stone.dir, ctx?.roundCounter ?? undefined, targetFlow.sessionId, sessionId);
-        scheduler.register(targetName, targetFlow, stone.toJSON(), stone.dir, traits, collaboration);
+        scheduler.register(targetName, targetFlow, stone.toJSON(), stone.dir, traits, collaboration, this._traitTree);
       }
       consola.info(`[World] 为 ${targetName} 创建 sub-flow ${targetFlow.sessionId} (在 main flow 下)`);
     }
@@ -691,7 +693,7 @@ export class World implements Routable {
 
     /* 创建 Scheduler 并注册入口 Flow */
     const scheduler = new Scheduler(this._llm, directory, undefined, (name) => this._pauseRequests.has(name), this._cron, this.flowsDir);
-    scheduler.register(objectName, targetFlow, stone.toJSON(), stone.dir, traits, collaboration);
+    scheduler.register(objectName, targetFlow, stone.toJSON(), stone.dir, traits, collaboration, this._traitTree);
 
     /* 注册到 activeSessions（在 Scheduler.run 之前，deliverMessage 需要访问） */
     this._activeSessions.set(sessionId, { session, scheduler, roundCounter, traitsCache });
@@ -836,7 +838,7 @@ export class World implements Routable {
 
     /* 创建 Scheduler 并注册 Flow */
     const scheduler = new Scheduler(this._llm, directory, undefined, (name) => this._pauseRequests.has(name), this._cron, this.flowsDir);
-    scheduler.register(objectName, targetFlow, stone.toJSON(), stone.dir, traits, collaboration);
+    scheduler.register(objectName, targetFlow, stone.toJSON(), stone.dir, traits, collaboration, this._traitTree);
 
     /* 注册到 activeSessions */
     this._activeSessions.set(sessionId, { session, scheduler, roundCounter, traitsCache });
@@ -974,7 +976,7 @@ export class World implements Routable {
 
     /* 创建 Scheduler 并注册 Flow */
     const scheduler = new Scheduler(this._llm, directory, undefined, (name) => this._pauseRequests.has(name), this._cron, this.flowsDir);
-    scheduler.register(objectName, targetFlow, stone.toJSON(), stone.dir, traits, collaboration);
+    scheduler.register(objectName, targetFlow, stone.toJSON(), stone.dir, traits, collaboration, this._traitTree);
 
     /* 注册到 activeSessions */
     this._activeSessions.set(sessionId, { session, scheduler, roundCounter, traitsCache });
@@ -1037,11 +1039,12 @@ export class World implements Routable {
     const objectTraitsDir = join(stone.dir, "traits");
 
     /* 三层加载：kernel（基座）→ library（公共库）→ object（自定义） */
-    const result = await loadAllTraits(objectTraitsDir, kernelTraitsDir, libraryTraitsDir);
+    const { traits, tree } = await loadAllTraits(objectTraitsDir, kernelTraitsDir, libraryTraitsDir);
+    this._traitTree = tree;
 
-    consola.info(`[World] 加载 ${result.length} 个 traits: ${result.map(t => t.name).join(", ")}`);
+    consola.info(`[World] 加载 ${traits.length} 个 traits: ${traits.map(t => t.name).join(", ")}`);
     consola.info(`[World] library traits 方法已全量注册，readme 通过 activateTrait() 按需激活`);
-    return result;
+    return traits;
   }
 
   /**
@@ -1168,7 +1171,7 @@ export class World implements Routable {
 
     /* 创建 Scheduler 并注册 */
     const scheduler = new Scheduler(this._llm, directory, undefined, (name) => this._pauseRequests.has(name), this._cron, this.flowsDir);
-    scheduler.register(objectName, targetFlow, stone.toJSON(), stone.dir, traits, collaboration);
+    scheduler.register(objectName, targetFlow, stone.toJSON(), stone.dir, traits, collaboration, this._traitTree);
 
     /* 注册到 activeSessions */
     this._activeSessions.set(sessionId, { session, scheduler, roundCounter, traitsCache });

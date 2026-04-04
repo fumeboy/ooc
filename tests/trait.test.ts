@@ -239,7 +239,7 @@ when: always
       "utf-8",
     );
 
-    const traits = await loadAllTraits(objectDir, kernelDir);
+    const { traits } = await loadAllTraits(objectDir, kernelDir);
     expect(traits).toHaveLength(2);
     expect(traits.map((t) => traitId(t)).sort()).toEqual(["kernel/computable", "search/search"]);
   });
@@ -274,7 +274,7 @@ when: always
       "utf-8",
     );
 
-    const traits = await loadAllTraits(objectDir, kernelDir);
+    const { traits } = await loadAllTraits(objectDir, kernelDir);
     expect(traits).toHaveLength(1);
     expect(traits[0]!.readme).toBe("对象覆盖版本");
   });

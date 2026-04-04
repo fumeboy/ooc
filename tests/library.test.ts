@@ -60,7 +60,7 @@ description: "飞书 wiki 能力"
 
 读取 wiki 节点信息`, "utf-8");
 
-    const traits = await loadAllTraits(objectDir, kernelDir, libraryDir);
+    const { traits } = await loadAllTraits(objectDir, kernelDir, libraryDir);
     expect(traits).toHaveLength(1);
     expect(traitId(traits[0]!)).toBe("lark/wiki");
     expect(traits[0]!.readme).toContain("读取 wiki 节点信息");
@@ -80,7 +80,7 @@ description: "飞书 wiki 能力"
     /* object trait */
     createTrait(objectDir, "custom", "custom", "object custom");
 
-    const traits = await loadAllTraits(objectDir, kernelDir, libraryDir);
+    const { traits } = await loadAllTraits(objectDir, kernelDir, libraryDir);
     expect(traits).toHaveLength(3);
     const ids = traits.map(traitId).sort();
     expect(ids).toContain("kernel/computable");
@@ -99,7 +99,7 @@ description: "飞书 wiki 能力"
 
     mkdirSync(objectDir, { recursive: true });
 
-    const traits = await loadAllTraits(objectDir, kernelDir, libraryDir);
+    const { traits } = await loadAllTraits(objectDir, kernelDir, libraryDir);
     expect(traits).toHaveLength(1);
     expect(traits[0]!.readme).toBe("library覆盖版本");
   });
@@ -115,7 +115,7 @@ description: "飞书 wiki 能力"
 
     createTrait(objectDir, "search", "search", "object覆盖版本");
 
-    const traits = await loadAllTraits(objectDir, kernelDir, libraryDir);
+    const { traits } = await loadAllTraits(objectDir, kernelDir, libraryDir);
     expect(traits).toHaveLength(1);
     expect(traits[0]!.readme).toBe("object覆盖版本");
   });
@@ -128,7 +128,7 @@ description: "飞书 wiki 能力"
 
     createTrait(objectDir, "kernel", "computable", "object覆盖版本");
 
-    const traits = await loadAllTraits(objectDir, kernelDir);
+    const { traits } = await loadAllTraits(objectDir, kernelDir);
     expect(traits).toHaveLength(1);
     expect(traits[0]!.readme).toBe("object覆盖版本");
   });
@@ -141,7 +141,7 @@ description: "飞书 wiki 能力"
 
     mkdirSync(objectDir, { recursive: true });
 
-    const traits = await loadAllTraits(objectDir, kernelDir, join(TEST_DIR, "nonexistent"));
+    const { traits } = await loadAllTraits(objectDir, kernelDir, join(TEST_DIR, "nonexistent"));
     expect(traits).toHaveLength(1);
     expect(traitId(traits[0]!)).toBe("test/a");
   });

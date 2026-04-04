@@ -21,7 +21,7 @@ import { runThinkLoop } from "../flow/thinkloop.js";
 import { emitSSE } from "../server/events.js";
 import type { CollaborationAPI } from "./router.js";
 import type { LLMClient } from "../thinkable/client.js";
-import type { StoneData, DirectoryEntry, TraitDefinition, ThreadState } from "../types/index.js";
+import type { StoneData, DirectoryEntry, TraitDefinition, TraitTree, ThreadState } from "../types/index.js";
 import type { CronManager } from "./cron.js";
 
 /** Scheduler 中的 Flow 条目 */
@@ -30,6 +30,8 @@ interface SchedulerEntry {
   stone: StoneData;
   stoneDir: string;
   traits: TraitDefinition[];
+  /** trait 树形索引（用于 Progressive Disclosure） */
+  traitTree: TraitTree[];
   collaboration: CollaborationAPI;
   /** 累计已执行的迭代次数 */
   iterations: number;
@@ -86,9 +88,10 @@ export class Scheduler {
     stoneDir: string,
     traits: TraitDefinition[],
     collaboration: CollaborationAPI,
+    traitTree: TraitTree[] = [],
   ): void {
     this._entries.set(stoneName, {
-      flow, stone, stoneDir, traits, collaboration, iterations: 0, errorPropagated: false,
+      flow, stone, stoneDir, traits, traitTree, collaboration, iterations: 0, errorPropagated: false,
     });
   }
 
@@ -146,6 +149,7 @@ export class Scheduler {
               entry.collaboration,
               this._cron,
               this._flowsDir,
+              entry.traitTree,
             ),
           );
 
@@ -175,6 +179,7 @@ export class Scheduler {
             entry.collaboration,
             this._cron,
             this._flowsDir,
+            entry.traitTree,
           );
 
           entry.iterations++;

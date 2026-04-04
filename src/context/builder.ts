@@ -17,7 +17,7 @@
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import type { Context, DirectoryEntry, ContextWindow, WindowConfig, TraitDefinition } from "../types/index.js";
+import type { Context, DirectoryEntry, ContextWindow, WindowConfig, TraitDefinition, TraitTree } from "../types/index.js";
 import type { StoneData, FlowData } from "../types/index.js";
 import { getActiveTraits, traitId } from "../trait/activator.js";
 import { computeScopeChain } from "../process/cognitive-stack.js";
@@ -47,53 +47,21 @@ export function buildContext(
   recentHistory?: string,
   sessionDir?: string,
   flowDir?: string,
+  traitTree?: TraitTree[],
 ): Context {
   /* G13: 从 focus 路径计算作用域链（替代旧的 _activeTraits） */
   const scopeChain = computeScopeChain(flow.process);
 
   /* 激活 Traits（由作用域链驱动） */
   const activeTraits = getActiveTraits(traits, scopeChain);
-
-  /* Progressive Disclosure: 构建 trait catalog */
   const activeTraitIds = new Set(activeTraits.map(t => traitId(t)));
   const scopeSet = new Set(scopeChain);
-  const catalogLines: string[] = [
-    "## Available Traits",
-    "",
-    "Use this catalog to discover capabilities.",
-    "Traits listed under Inactive are still available in the system; read them with readTrait(name) and enable them with activateTrait(name) when needed.",
-    "Do not search library/traits directories to decide whether a trait exists.",
-  ];
 
-  // 分类：active 和 inactive（when: never）
-  const activeLines: string[] = [];
-  const inactiveLines: string[] = [];
-
-  for (const t of traits) {
-    const id = traitId(t);
-    const isActive = activeTraitIds.has(id);
-    const desc = t.description || t.name;
-
-    if (isActive) {
-      activeLines.push(`- ${id}: ${desc}`);
-    } else if (t.when === "never") {
-      // when: never 的 traits 也显示，但标记为 inactive
-      inactiveLines.push(`- ${id}: ${desc} (activateTrait to use)`);
-    } else {
-      // 其他激活策略的 traits
-      activeLines.push(`- ${id}: ${desc}`);
-    }
-  }
-
-  if (activeLines.length > 0) {
-    catalogLines.push("\n### Active");
-    catalogLines.push(...activeLines);
-  }
-  if (inactiveLines.length > 0) {
-    catalogLines.push("\n### Inactive (use activateTrait to enable)");
-    catalogLines.push(...inactiveLines);
-  }
-  const traitCatalog: ContextWindow = { name: "_trait_catalog", content: catalogLines.join("\n") };
+  /* Progressive Disclosure: 构建树形 trait catalog */
+  const traitCatalog: ContextWindow = {
+    name: "_trait_catalog",
+    content: renderTraitCatalog(traits, activeTraitIds),
+  };
 
   /* whoAmI 只使用 Stone 自身的 thinkable 描述 */
   const whoAmI = stone.thinkable.whoAmI;
@@ -189,6 +157,64 @@ export function buildContext(
 function selectActionsForContext(flow: FlowData) {
   const focusNode = findNode(flow.process.root, flow.process.focusId);
   return focusNode?.actions ?? [];
+}
+
+/**
+ * 渲染树形 trait_catalog
+ *
+ * 核心规则（Progressive Disclosure）：
+ * - Active always-on 父 trait 的所有子 trait 描述自动可见（Level 2）
+ * - inactive parent 折叠展示（只提示可激活）
+ * - 树形缩进展示层级关系
+ */
+function renderTraitCatalog(
+  allTraits: TraitDefinition[],
+  activeTraitIds: Set<string>,
+): string {
+  const lines: string[] = [
+    "## Available Traits",
+    "",
+    "Use this catalog to discover capabilities.",
+    "Traits listed under Inactive are still available; readTrait(name) to view, activateTrait(name) to inject.",
+    "",
+  ];
+
+  // 找出根 trait（没有 parent 的）
+  const rootTraits = allTraits.filter((t) => !t.parent);
+
+  // 分离 active 和 inactive 根 trait
+  const rootActive = rootTraits.filter((t) => activeTraitIds.has(traitId(t)));
+  const rootInactive = rootTraits.filter((t) => !activeTraitIds.has(traitId(t)));
+
+  if (rootActive.length > 0) {
+    lines.push("### Active");
+    for (const t of rootActive) {
+      const desc = t.description || t.name;
+      lines.push(`- ${traitId(t)}: ${desc}`);
+      // 展开所有子 trait（active + inactive），因为父 trait 是 always-on
+      const allChildren = allTraits.filter((t2) => t2.parent === traitId(t));
+      for (const child of allChildren) {
+        const childDesc = child.description || child.name;
+        lines.push(`  → ${traitId(child)}: ${childDesc}`);
+      }
+    }
+    lines.push("");
+  }
+
+  if (rootInactive.length > 0) {
+    lines.push("### Inactive (activateTrait to enable)");
+    for (const t of rootInactive) {
+      const desc = t.description || t.name;
+      const hasChildren = allTraits.some((t2) => t2.parent === traitId(t));
+      if (hasChildren) {
+        lines.push(`- ${traitId(t)}: ${desc} → activateTrait to see sub-traits`);
+      } else {
+        lines.push(`- ${traitId(t)}: ${desc} (activateTrait to use)`);
+      }
+    }
+  }
+
+  return lines.join("\n");
 }
 
 /**

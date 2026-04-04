@@ -23,11 +23,13 @@ import { join } from "node:path";
 import matter from "gray-matter";
 import type {
   TraitDefinition,
+  TraitTree,
   TraitMethod,
   TraitType,
   TraitHook,
   TraitHookEvent,
 } from "../types/index.js";
+import { traitId } from "./activator.js";
 
 /**
  * 从单个 trait 目录加载 Trait 定义
@@ -140,6 +142,7 @@ export async function loadTrait(
     methods,
     deps,
     hooks,
+    dir: traitDir,
   };
 }
 
@@ -390,12 +393,12 @@ export async function loadTraitsByRef(
     let traitName: string;
     let ns: string;
 
-    // 解析 "namespace/name" 格式
+    // 解析 "namespace/name/sub/..." 格式（支持多级路径）
     if (ref.includes("/")) {
-      const parts = ref.split("/");
-      ns = parts[0]!;
-      traitName = parts[1]!;
-      traitDir = join(traitsDir, ns, traitName);
+      const slashIdx = ref.indexOf("/");
+      ns = ref.substring(0, slashIdx);
+      traitName = ref.substring(slashIdx + 1);
+      traitDir = join(traitsDir, ns, ...traitName.split("/"));
     } else {
       // 旧格式兼容：直接在 traitsDir 下查找
       ns = "";
@@ -427,7 +430,7 @@ export async function loadAllTraits(
   objectTraitsDir: string,
   kernelTraitsDir: string,
   libraryTraitsDir?: string,
-): Promise<TraitDefinition[]> {
+): Promise<{ traits: TraitDefinition[]; tree: TraitTree[] }> {
   const traitMap = new Map<string, TraitDefinition>();
 
   /* 1. 加载 kernel traits */
@@ -457,26 +460,34 @@ export async function loadAllTraits(
     }
   }
 
-  return Array.from(traitMap.values());
+  const traits = Array.from(traitMap.values());
+  const tree = buildTraitTree(traits);
+
+  return { traits, tree };
 }
 
 /**
- * 从目录加载所有 traits（支持目录嵌套结构）
+ * 从目录递归加载所有 traits（支持树形嵌套结构）
  *
  * 目录结构：
  * traits/
- * ├── {namespace}/             # namespace 目录
- * │   ├── {name}/              # trait 名称
+ * ├── computable/              ← trait（含 TRAIT.md）
+ * │   ├── TRAIT.md             ← 父 trait（精简版）
+ * │   ├── output_format/       ← 子 trait
  * │   │   └── TRAIT.md
- * │   └── {name2}/
+ * │   └── program_api/
  * │       └── TRAIT.md
- * └── {namespace2}/
- *     └── {name3}/
- *         └── TRAIT.md
+ * └── verifiable/
+ *     └── TRAIT.md
+ *
+ * @param traitsDir - traits 根目录
+ * @param defaultNamespace - 默认命名空间
+ * @param parentPath - 父路径（用于构建多级 name），内部递归使用
  */
-async function loadTraitsFromDir(
+export async function loadTraitsFromDir(
   traitsDir: string,
   defaultNamespace: string,
+  parentPath: string = "",
 ): Promise<TraitDefinition[]> {
   if (!existsSync(traitsDir)) return [];
 
@@ -488,52 +499,43 @@ async function loadTraitsFromDir(
     if (entry.name.startsWith(".")) continue;
 
     const entryPath = join(traitsDir, entry.name);
+    const traitName = parentPath ? `${parentPath}/${entry.name}` : entry.name;
 
-    // 检查是否是 namespace 目录（包含子目录，且子目录中有 TRAIT.md/SKILL.md）
-    const isNamespaceDir = await checkIsNamespaceDir(entryPath);
+    // 检查此目录本身是否是 trait（含 TRAIT.md/SKILL.md/readme.md）
+    const hasTraitFile =
+      existsSync(join(entryPath, "TRAIT.md")) ||
+      existsSync(join(entryPath, "SKILL.md")) ||
+      existsSync(join(entryPath, "readme.md"));
 
-    if (isNamespaceDir) {
-      // 新格式：entry.name 是 namespace
-      const subEntries = readdirSync(entryPath, { withFileTypes: true });
-      for (const subEntry of subEntries) {
-        if (!subEntry.isDirectory()) continue;
-        if (subEntry.name.startsWith(".")) continue;
-        const traitDir = join(entryPath, subEntry.name);
-        const trait = await loadTrait(traitDir, subEntry.name, entry.name);
-        if (trait) results.push(trait);
-      }
-    } else {
-      // 扁平结构：entry.name 是 trait 名，使用 defaultNamespace
-      const trait = await loadTrait(entryPath, entry.name, defaultNamespace);
+    if (hasTraitFile) {
+      // 此目录是 trait，加载它
+      const trait = await loadTrait(entryPath, traitName, defaultNamespace);
       if (trait) results.push(trait);
+    }
+
+    // 无论是否自身是 trait，都检查子目录是否含 trait（递归）
+    const subEntries = readdirSync(entryPath, { withFileTypes: true });
+    const hasSubTraits = subEntries.some(
+      (sub) =>
+        sub.isDirectory() &&
+        !sub.name.startsWith(".") &&
+        (existsSync(join(entryPath, sub.name, "TRAIT.md")) ||
+          existsSync(join(entryPath, sub.name, "SKILL.md")) ||
+          existsSync(join(entryPath, sub.name, "readme.md")))
+    );
+
+    if (hasSubTraits) {
+      // 递归加载子 trait
+      const childTraits = await loadTraitsFromDir(
+        entryPath,
+        defaultNamespace,
+        traitName,
+      );
+      results.push(...childTraits);
     }
   }
 
   return results;
-}
-
-/**
- * 检查一个目录是否是 namespace 目录（包含子 trait 目录）
- */
-async function checkIsNamespaceDir(dir: string): Promise<boolean> {
-  if (!existsSync(dir)) return false;
-
-  const entries = readdirSync(dir, { withFileTypes: true });
-
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-
-    const subPath = join(dir, entry.name);
-    // 检查子目录是否包含 TRAIT.md/SKILL.md
-    if (
-      existsSync(join(subPath, "TRAIT.md")) ||
-      existsSync(join(subPath, "SKILL.md"))
-    ) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 /** 合法的 hook 事件名 */
@@ -594,4 +596,58 @@ function parseTraitHooks(raw: unknown): TraitDefinition["hooks"] {
   }
 
   return hasAny ? result : undefined;
+}
+
+/**
+ * 从扁平的 TraitDefinition 列表构建树形索引
+ *
+ * @param traits - 所有已加载的 trait
+ * @returns 根节点列表（namespace 级别）
+ */
+export function buildTraitTree(traits: TraitDefinition[]): TraitTree[] {
+  const nodes = new Map<string, TraitTree>();
+
+  // 创建所有节点
+  for (const trait of traits) {
+    const id = traitId(trait);
+    const path = trait.dir || "";
+    const parts = trait.name.split("/");
+    nodes.set(id, {
+      id,
+      path,
+      trait,
+      children: [],
+      depth: parts.length - 1,
+    });
+  }
+
+  // 建立父子关系
+  const roots: TraitTree[] = [];
+  for (const [id, node] of nodes) {
+    const parentName = node.trait.name.includes("/")
+      ? node.trait.name.substring(0, node.trait.name.lastIndexOf("/"))
+      : null;
+
+    if (parentName) {
+      const parentId = `${node.trait.namespace}/${parentName}`;
+      const parent = nodes.get(parentId);
+      if (parent) {
+        parent.children.push(node);
+        node.trait.parent = parentId;
+      } else {
+        roots.push(node);
+      }
+    } else {
+      roots.push(node);
+    }
+  }
+
+  // 填充 children 字段到 TraitDefinition
+  for (const [, node] of nodes) {
+    if (node.children.length > 0) {
+      node.trait.children = node.children.map((c) => c.id);
+    }
+  }
+
+  return roots;
 }

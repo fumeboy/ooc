@@ -34,6 +34,7 @@ export type {
   TraitHookEvent,
   TraitHook,
   TraitDefinition,
+  TraitTree,
 } from "./trait.js";
 
 export type {

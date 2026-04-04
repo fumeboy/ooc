@@ -77,3 +77,19 @@ export function getActiveTraits(
 
   return result;
 }
+
+/**
+ * 获取指定父 trait 的子 trait 列表
+ *
+ * @param allTraits - 所有已加载的 trait
+ * @param parentId - 父 trait ID
+ * @returns 子 trait 列表
+ */
+export function getChildTraits(
+  allTraits: TraitDefinition[],
+  parentId: string,
+): TraitDefinition[] {
+  return allTraits.filter(
+    (t) => t.parent === parentId,
+  );
+}

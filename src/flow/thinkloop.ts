@@ -119,6 +119,7 @@ export async function runThinkLoop(
   collaboration?: CollaborationAPI,
   cron?: CronManager,
   flowsDir?: string,
+  traitTree?: import("../types/index.js").TraitTree[],
 ): Promise<Record<string, unknown>> {
   const executor = new CodeExecutor();
   let iteration = 0;
@@ -250,7 +251,7 @@ export async function runThinkLoop(
 
       /* 1. 构建 Context（集成 Trait 激活 + 历史摘要） */
       const recentHistory = flowsDir ? loadFlowSummaries(flowsDir, stone.name, flow.sessionId) : null;
-      const ctx = buildContext(stone, flow.toJSON(), directory, traits, [], stoneDir, recentHistory ?? undefined, flow.sessionDir, flow.dir);
+      const ctx = buildContext(stone, flow.toJSON(), directory, traits, [], stoneDir, recentHistory ?? undefined, flow.sessionDir, flow.dir, traitTree);
       systemPrompt = formatContextAsSystem(ctx);
       chatMessages = formatContextAsMessages(ctx);
 

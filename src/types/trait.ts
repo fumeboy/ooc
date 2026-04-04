@@ -91,10 +91,30 @@ export interface TraitDefinition {
   methods: TraitMethod[];
   /** 依赖的其他 trait（格式："namespace/name" 或 "name" 用于兼容） */
   deps: string[];
+  /** 子 trait 的 ID 列表（树形结构时自动填充） */
+  children?: string[];
+  /** 父 trait 的 ID（树形结构时自动填充） */
+  parent?: string;
+  /** trait 目录的绝对路径 */
+  dir?: string;
   /** 生命周期 hooks */
   hooks?: { [K in TraitHookEvent]?: TraitHook };
   /** 使用示例（用于 Context 注入） */
   examples?: TraitExample[];
   /** 常见错误对比（正确 vs 错误） */
   common_mistakes?: TraitCommonMistake[];
+}
+
+/** Trait 树节点 */
+export interface TraitTree {
+  /** 完整 trait ID（如 "kernel/computable/output_format"） */
+  id: string;
+  /** TRAIT.md 的文件系统绝对路径 */
+  path: string;
+  /** 解析后的 trait 定义 */
+  trait: TraitDefinition;
+  /** 子 trait 树节点 */
+  children: TraitTree[];
+  /** 在树中的深度（根 = 0） */
+  depth: number;
 }
