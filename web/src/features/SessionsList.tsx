@@ -41,7 +41,7 @@ export function SessionsList({ onSelect, onEditGroups }: { onSelect?: () => void
   const grouped = new Map<string, FlowSummary[]>();
   const ungrouped: FlowSummary[] = [];
   for (const s of sessions) {
-    const groupName = memberToGroup.get(s.taskId);
+    const groupName = memberToGroup.get(s.sessionId);
     if (groupName) {
       if (!grouped.has(groupName)) grouped.set(groupName, []);
       grouped.get(groupName)!.push(s);
@@ -60,15 +60,15 @@ export function SessionsList({ onSelect, onEditGroups }: { onSelect?: () => void
   };
 
   const renderSession = (s: FlowSummary) => {
-    const desc = memberDesc.get(s.taskId);
-    const label = desc || s.title || s.firstMessage || s.taskId.slice(0, 12);
+    const desc = memberDesc.get(s.sessionId);
+    const label = desc || s.title || s.firstMessage || s.sessionId.slice(0, 12);
     return (
       <button
-        key={s.taskId}
-        onClick={() => { setActiveId(s.taskId); onSelect?.(); }}
+        key={s.sessionId}
+        onClick={() => { setActiveId(s.sessionId); onSelect?.(); }}
         className={cn(
           "w-full text-left px-2.5 py-2 text-sm rounded-lg transition-colors",
-          activeId === s.taskId ? "bg-[var(--accent)]" : "hover:bg-[var(--accent)]/60",
+          activeId === s.sessionId ? "bg-[var(--accent)]" : "hover:bg-[var(--accent)]/60",
         )}
       >
         <div className="flex items-center gap-2">

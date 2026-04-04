@@ -22,7 +22,7 @@ import { cn } from "../lib/utils";
 import type { FlowData, FlowMessage, Action, TimelineEntry, StoneData } from "../api/types";
 
 interface FlowViewProps {
-  /** session ID（顶层 taskId） */
+  /** session ID（顶层 sessionId） */
   sessionId: string;
   /** flow 所属的对象名称 */
   objectName: string;
@@ -57,7 +57,7 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
   /* SSE 实时更新 */
   useEffect(() => {
     if (!lastEvent || !flow) return;
-    if ("taskId" in lastEvent && lastEvent.taskId === sessionId) {
+    if ("sessionId" in lastEvent && lastEvent.sessionId === sessionId) {
       fetchFlow(sessionId).then(setFlow).catch(console.error);
     }
   }, [lastEvent]);

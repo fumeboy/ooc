@@ -112,7 +112,7 @@ export interface SubFlowSummary {
 
 /** Flow 完整数据 */
 export interface FlowData {
-  taskId: string;
+  sessionId: string;
   stoneName: string;
   title?: string;
   status: FlowStatus;
@@ -126,7 +126,7 @@ export interface FlowData {
 
 /** Flow 摘要 */
 export interface FlowSummary {
-  taskId: string;
+  sessionId: string;
   title?: string;
   status: FlowStatus;
   firstMessage: string;
@@ -148,30 +148,30 @@ export interface TraitInfo {
 
 /** SSE 事件 */
 export type SSEEvent =
-  | { type: "flow:start"; objectName: string; taskId: string }
-  | { type: "flow:action"; objectName: string; taskId: string; action: Action }
-  | { type: "flow:message"; objectName: string; taskId: string; message: FlowMessage }
-  | { type: "flow:status"; objectName: string; taskId: string; status: FlowStatus }
-  | { type: "flow:end"; objectName: string; taskId: string; status: FlowStatus }
+  | { type: "flow:start"; objectName: string; sessionId: string }
+  | { type: "flow:action"; objectName: string; sessionId: string; action: Action }
+  | { type: "flow:message"; objectName: string; sessionId: string; message: FlowMessage }
+  | { type: "flow:status"; objectName: string; sessionId: string; status: FlowStatus }
+  | { type: "flow:end"; objectName: string; sessionId: string; status: FlowStatus }
   /** provider 原生 thinking 通道的流式片段；assistant 协议本身不再显式输出 [thought] */
-  | { type: "stream:thought"; objectName: string; taskId: string; chunk: string }
-  | { type: "stream:talk"; objectName: string; taskId: string; target: string; chunk: string }
-  | { type: "stream:program"; objectName: string; taskId: string; lang?: "javascript" | "shell"; chunk: string }
-  | { type: "stream:action"; objectName: string; taskId: string; toolName: string; chunk: string }
+  | { type: "stream:thought"; objectName: string; sessionId: string; chunk: string }
+  | { type: "stream:talk"; objectName: string; sessionId: string; target: string; chunk: string }
+  | { type: "stream:program"; objectName: string; sessionId: string; lang?: "javascript" | "shell"; chunk: string }
+  | { type: "stream:action"; objectName: string; sessionId: string; toolName: string; chunk: string }
   // 认知栈操作流式事件
-  | { type: "stream:stack_push"; objectName: string; taskId: string; opType: "cognize" | "reflect"; attr: string; chunk: string }
-  | { type: "stream:stack_pop"; objectName: string; taskId: string; opType: "cognize" | "reflect"; attr: string; chunk: string }
-  | { type: "stream:set_plan"; objectName: string; taskId: string; chunk: string }
-  | { type: "stream:thought:end"; objectName: string; taskId: string }
-  | { type: "stream:talk:end"; objectName: string; taskId: string; target: string }
-  | { type: "stream:program:end"; objectName: string; taskId: string }
-  | { type: "stream:action:end"; objectName: string; taskId: string; toolName: string }
+  | { type: "stream:stack_push"; objectName: string; sessionId: string; opType: "cognize" | "reflect"; attr: string; chunk: string }
+  | { type: "stream:stack_pop"; objectName: string; sessionId: string; opType: "cognize" | "reflect"; attr: string; chunk: string }
+  | { type: "stream:set_plan"; objectName: string; sessionId: string; chunk: string }
+  | { type: "stream:thought:end"; objectName: string; sessionId: string }
+  | { type: "stream:talk:end"; objectName: string; sessionId: string; target: string }
+  | { type: "stream:program:end"; objectName: string; sessionId: string }
+  | { type: "stream:action:end"; objectName: string; sessionId: string; toolName: string }
   // 认知栈操作流式结束事件
-  | { type: "stream:stack_push:end"; objectName: string; taskId: string; opType: "cognize" | "reflect"; attr: string }
-  | { type: "stream:stack_pop:end"; objectName: string; taskId: string; opType: "cognize" | "reflect"; attr: string }
-  | { type: "stream:set_plan:end"; objectName: string; taskId: string }
+  | { type: "stream:stack_push:end"; objectName: string; sessionId: string; opType: "cognize" | "reflect"; attr: string }
+  | { type: "stream:stack_pop:end"; objectName: string; sessionId: string; opType: "cognize" | "reflect"; attr: string }
+  | { type: "stream:set_plan:end"; objectName: string; sessionId: string }
   | { type: "object:created"; name: string }
-  | { type: "flow:progress"; objectName: string; taskId: string; iterations: number; maxIterations: number; totalIterations: number; maxTotalIterations: number }
+  | { type: "flow:progress"; objectName: string; sessionId: string; iterations: number; maxIterations: number; totalIterations: number; maxTotalIterations: number }
   | { type: "object:updated"; name: string };
 
 /** 统一时间线条目 */

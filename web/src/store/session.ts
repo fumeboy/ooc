@@ -12,7 +12,7 @@ export const commandPaletteOpenAtom = atom<boolean>(false);
 /** user 的 effects 列表（会话列表） */
 export const userSessionsAtom = atom<FlowSummary[]>([]);
 
-/** 当前活跃会话的 taskId */
+/** 当前活跃会话的 sessionId */
 export const activeSessionIdAtom = atom<string | null>(null);
 
 /** 当前活跃会话的 Flow 详情 */
@@ -31,25 +31,25 @@ export const lastFlowEventAtom = atom<SSEEvent | null>(null);
 export const chatSelectedObjectAtom = atom<string | null>(null);
 
 /** 流式 thought 内容（来自 provider 原生 thinking 通道，逐步累积） */
-export const streamingThoughtAtom = atom<{ taskId: string; content: string } | null>(null);
+export const streamingThoughtAtom = atom<{ sessionId: string; content: string } | null>(null);
 
 /** 流式 talk 内容（逐步累积） */
-export const streamingTalkAtom = atom<{ taskId: string; target: string; from: string; content: string } | null>(null);
+export const streamingTalkAtom = atom<{ sessionId: string; target: string; from: string; content: string } | null>(null);
 
 /** 流式 program 内容（逐步累积） */
-export const streamingProgramAtom = atom<{ taskId: string; lang?: "javascript" | "shell"; content: string } | null>(null);
+export const streamingProgramAtom = atom<{ sessionId: string; lang?: "javascript" | "shell"; content: string } | null>(null);
 
 /** 流式 action 内容（逐步累积） */
-export const streamingActionAtom = atom<{ taskId: string; toolName: string; content: string } | null>(null);
+export const streamingActionAtom = atom<{ sessionId: string; toolName: string; content: string } | null>(null);
 
 /** 流式 stack_push 内容（逐步累积） */
-export const streamingStackPushAtom = atom<{ taskId: string; opType: "cognize" | "reflect"; attr: string; content: string } | null>(null);
+export const streamingStackPushAtom = atom<{ sessionId: string; opType: "cognize" | "reflect"; attr: string; content: string } | null>(null);
 
 /** 流式 stack_pop 内容（逐步累积） */
-export const streamingStackPopAtom = atom<{ taskId: string; opType: "cognize" | "reflect"; attr: string; content: string } | null>(null);
+export const streamingStackPopAtom = atom<{ sessionId: string; opType: "cognize" | "reflect"; attr: string; content: string } | null>(null);
 
 /** 流式 set_plan 内容（逐步累积） */
-export const streamingSetPlanAtom = atom<{ taskId: string; content: string } | null>(null);
+export const streamingSetPlanAtom = atom<{ sessionId: string; content: string } | null>(null);
 
 /** Chat Ref 引用列表（用户通过 Ref 按钮收集的引用） */
 export interface ChatRef {

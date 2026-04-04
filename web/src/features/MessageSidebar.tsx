@@ -248,7 +248,7 @@ export function MessageSidebar() {
       });
     }
 
-    if ("taskId" in lastEvent) debouncedRefresh();
+    if ("sessionId" in lastEvent) debouncedRefresh();
   }, [lastEvent, debouncedRefresh]);
 
   useEffect(() => {
@@ -358,7 +358,7 @@ export function MessageSidebar() {
     setSending(true);
     setInput("");
 
-    const resumeFlowId = activeFlow ? activeFlow.taskId : undefined;
+    const resumeFlowId = activeFlow ? activeFlow.sessionId : undefined;
 
     const optimisticMsg: FlowMessage = {
       direction: "out",
@@ -448,7 +448,7 @@ export function MessageSidebar() {
               onClick={async () => {
                 const objName = "supervisor";
                 if (paused) {
-                  await resumeFlow(objName, activeFlow.taskId).catch(console.error);
+                  await resumeFlow(objName, activeFlow.sessionId).catch(console.error);
                   setPaused(false);
                 } else {
                   await pauseObject(objName).catch(console.error);

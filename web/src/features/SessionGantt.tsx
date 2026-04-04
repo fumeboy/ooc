@@ -150,8 +150,8 @@ export function SessionGantt({ sessionId }: SessionGanttProps) {
 
   /* SSE 实时更新 */
   useEffect(() => {
-    if (!lastEvent || !("taskId" in lastEvent)) return;
-    if (lastEvent.taskId === sessionId) {
+    if (!lastEvent || !("sessionId" in lastEvent)) return;
+    if (lastEvent.sessionId === sessionId) {
       fetchFlow(sessionId).then(setFlow).catch(console.error);
     }
   }, [lastEvent, sessionId]);
@@ -246,7 +246,7 @@ export function SessionGantt({ sessionId }: SessionGanttProps) {
           <StatusBadge status={flow.status} />
         </div>
         <p className="text-[var(--muted-foreground)] mt-1 text-xs font-mono">
-          {flow.taskId.slice(0, 20)}
+          {flow.sessionId.slice(0, 20)}
         </p>
         {flow.title && (
           <p className="text-sm mt-1">{flow.title}</p>

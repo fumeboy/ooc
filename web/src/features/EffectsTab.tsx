@@ -1,7 +1,7 @@
 /**
  * EffectsTab —— Sessions（Flow 列表）展示
  *
- * @ref docs/哲学文档/gene.md#G2 — renders — Flow 列表（taskId, status, 时间）
+ * @ref docs/哲学文档/gene.md#G2 — renders — Flow 列表（sessionId, status, 时间）
  * @ref docs/哲学文档/gene.md#G8 — renders — flows/ 目录下的任务执行记录
  * @ref docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达
  */
@@ -50,7 +50,7 @@ export function EffectsTab({ objectName }: EffectsTabProps) {
         >
           ← 返回列表
         </button>
-        <FlowDetail objectName={objectName} taskId={selectedTaskId} />
+        <FlowDetail objectName={objectName} sessionId={selectedTaskId} />
       </div>
     );
   }
@@ -63,8 +63,8 @@ export function EffectsTab({ objectName }: EffectsTabProps) {
     <div className="space-y-0.5">
       {effects.map((e) => (
         <button
-          key={e.taskId}
-          onClick={() => setSelectedTaskId(e.taskId)}
+          key={e.sessionId}
+          onClick={() => setSelectedTaskId(e.sessionId)}
           className={cn(
             "w-full text-left rounded px-3 py-2.5",
             "hover:bg-[var(--accent)] transition-colors",

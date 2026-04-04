@@ -17,13 +17,13 @@ import { ProcessView } from "./ProcessView";
 
 interface FlowDetailProps {
   objectName: string;
-  taskId: string;
+  sessionId: string;
 }
 
 const SUB_TABS = ["Messages", "Process"] as const;
 type SubTab = (typeof SUB_TABS)[number];
 
-export function FlowDetail({ objectName, taskId }: FlowDetailProps) {
+export function FlowDetail({ objectName, sessionId }: FlowDetailProps) {
   const [flow, setFlow] = useState<FlowData | null>(null);
   const [subTab, setSubTab] = useState<SubTab>("Messages");
   const [resuming, setResuming] = useState(false);
@@ -31,14 +31,14 @@ export function FlowDetail({ objectName, taskId }: FlowDetailProps) {
 
   useEffect(() => {
     setFlow(null);
-    fetchFlow(taskId).then(setFlow).catch(console.error);
-  }, [objectName, taskId]);
+    fetchFlow(sessionId).then(setFlow).catch(console.error);
+  }, [objectName, sessionId]);
 
   /* SSE 实时更新：当收到与当前 Flow 相关的事件时，重新 fetch */
   useEffect(() => {
     if (!lastEvent || !flow) return;
-    if ("taskId" in lastEvent && lastEvent.taskId === taskId) {
-      fetchFlow(taskId).then(setFlow).catch(console.error);
+    if ("sessionId" in lastEvent && lastEvent.sessionId === sessionId) {
+      fetchFlow(sessionId).then(setFlow).catch(console.error);
     }
   }, [lastEvent]);
 
@@ -52,8 +52,8 @@ export function FlowDetail({ objectName, taskId }: FlowDetailProps) {
   const handleResume = async () => {
     setResuming(true);
     try {
-      await resumeFlow(objectName, flow.taskId);
-      const updated = await fetchFlow(taskId);
+      await resumeFlow(objectName, flow.sessionId);
+      const updated = await fetchFlow(sessionId);
       setFlow(updated);
     } catch (e) {
       console.error(e);
@@ -65,7 +65,7 @@ export function FlowDetail({ objectName, taskId }: FlowDetailProps) {
   return (
     <div>
       <div className="flex items-center gap-2 mb-5">
-        <span className="text-sm font-mono text-[var(--muted-foreground)]">{flow.taskId.slice(0, 12)}</span>
+        <span className="text-sm font-mono text-[var(--muted-foreground)]">{flow.sessionId.slice(0, 12)}</span>
         <StatusBadge status={flow.status} />
       </div>
 

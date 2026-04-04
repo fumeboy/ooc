@@ -147,12 +147,12 @@ export function App() {
   const isMobile = useIsMobile();
   const [sessions, setSessions] = useAtom(userSessionsAtom);
 
-  /* taskId → session title 的 lookup（面包屑用） */
+  /* sessionId → session title 的 lookup（面包屑用） */
   const sessionTitleMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const s of sessions) {
-      const title = s.title || s.firstMessage?.slice(0, 40) || s.taskId.slice(0, 16);
-      map.set(s.taskId, title);
+      const title = s.title || s.firstMessage?.slice(0, 40) || s.sessionId.slice(0, 16);
+      map.set(s.sessionId, title);
     }
     return map;
   }, [sessions]);
@@ -199,7 +199,7 @@ export function App() {
   const handleTitleSave = async (newTitle: string) => {
     if (!activeFlow) return;
     try {
-      await updateFlowTitle(activeFlow.taskId, newTitle);
+      await updateFlowTitle(activeFlow.sessionId, newTitle);
       setActiveFlow({ ...activeFlow, title: newTitle });
     } catch (e) {
       console.error(e);
@@ -367,10 +367,10 @@ export function App() {
             setWelcomeSending(true);
             try {
               const result = await talkTo(t, msg);
-              if (result.taskId) {
+              if (result.sessionId) {
                 /* 使用基础路径，让 FlowView 根据实际存在的 tab 自动选择（新 session 可能还没有 files/ui） */
-                const path = `flows/${result.taskId}/flows/supervisor`;
-                setActiveId(result.taskId);
+                const path = `flows/${result.sessionId}/flows/supervisor`;
+                setActiveId(result.sessionId);
                 setActivePath(path);
                 setTabs([{ path, label: "supervisor" }]);
               }

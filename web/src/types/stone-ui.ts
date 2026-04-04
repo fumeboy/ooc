@@ -14,7 +14,7 @@ export interface StoneUIProps {
   };
   /** 当前活跃的 flow（如果有） */
   flow?: {
-    taskId: string;
+    sessionId: string;
     status: string;
     process: unknown;
     messages: unknown[];

@@ -9,7 +9,7 @@ import { atom } from "jotai";
 /** Flow 迭代进度 */
 export interface FlowProgress {
   objectName: string;
-  taskId: string;
+  sessionId: string;
   iterations: number;
   maxIterations: number;
   totalIterations: number;

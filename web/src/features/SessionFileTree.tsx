@@ -115,8 +115,8 @@ export function SessionFileTree({ sessionId, onSelect, selectedPath }: SessionFi
 
   /* SSE 事件触发刷新 */
   useEffect(() => {
-    if (!lastEvent || !("taskId" in lastEvent)) return;
-    if (lastEvent.taskId === sessionId) {
+    if (!lastEvent || !("sessionId" in lastEvent)) return;
+    if (lastEvent.sessionId === sessionId) {
       fetchSessionTree(sessionId)
         .then((raw) => enhanceTree(raw, sessionId))
         .then(setTree)

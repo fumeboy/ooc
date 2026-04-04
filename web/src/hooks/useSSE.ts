@@ -83,16 +83,16 @@ export function useSSE() {
           refreshSessions();
           /* 清空进度（仅匹配当前跟踪的 Flow） */
           setFlowProgress((prev) =>
-            prev?.taskId === event.taskId ? null : prev,
+            prev?.sessionId === event.sessionId ? null : prev,
           );
           break;
 
         case "flow:progress":
           /* 只跟踪当前活跃 session 的入口 Flow 进度（通过 ref 读取，避免 SSE 重连） */
-          if (event.taskId === activeSessionIdRef.current) {
+          if (event.sessionId === activeSessionIdRef.current) {
             setFlowProgress({
               objectName: event.objectName,
-              taskId: event.taskId,
+              sessionId: event.sessionId,
               iterations: event.iterations,
               maxIterations: event.maxIterations,
               totalIterations: event.totalIterations,
@@ -104,20 +104,20 @@ export function useSSE() {
         /* 流式 thought chunk：来自 provider 原生 thinking，而非 assistant 输出协议 */
         case "stream:thought":
           setStreamingThought((prev) =>
-            prev?.taskId === event.taskId
+            prev?.sessionId === event.sessionId
               ? { ...prev, content: prev.content + event.chunk }
-              : { taskId: event.taskId, content: event.chunk },
+              : { sessionId: event.sessionId, content: event.chunk },
           );
           break;
 
         /* 流式 program chunk */
         case "stream:program":
           setStreamingProgram((prev) => {
-            if (prev?.taskId === event.taskId) {
+            if (prev?.sessionId === event.sessionId) {
               return { ...prev, content: prev.content + event.chunk };
             }
-            const result: { taskId: string; content: string; lang?: "javascript" | "shell" } = {
-              taskId: event.taskId,
+            const result: { sessionId: string; content: string; lang?: "javascript" | "shell" } = {
+              sessionId: event.sessionId,
               content: event.chunk,
             };
             if (event.lang) {
@@ -130,32 +130,32 @@ export function useSSE() {
         /* 流式 thought 结束：provider thinking 通道本轮完成 */
         case "stream:thought:end":
           setStreamingThought((prev) =>
-            prev?.taskId === event.taskId ? null : prev,
+            prev?.sessionId === event.sessionId ? null : prev,
           );
           break;
 
         /* 流式 program 结束 */
         case "stream:program:end":
           setStreamingProgram((prev) =>
-            prev?.taskId === event.taskId ? null : prev,
+            prev?.sessionId === event.sessionId ? null : prev,
           );
           break;
 
         /* 流式 talk chunk */
         case "stream:talk":
           setStreamingTalk((prev) =>
-            prev?.taskId === event.taskId && prev.target === event.target
+            prev?.sessionId === event.sessionId && prev.target === event.target
               ? { ...prev, content: prev.content + event.chunk }
-              : { taskId: event.taskId, target: event.target, from: event.objectName, content: event.chunk },
+              : { sessionId: event.sessionId, target: event.target, from: event.objectName, content: event.chunk },
           );
           break;
 
         /* 流式 action chunk */
         case "stream:action":
           setStreamingAction((prev) =>
-            prev?.taskId === event.taskId && prev.toolName === event.toolName
+            prev?.sessionId === event.sessionId && prev.toolName === event.toolName
               ? { ...prev, content: prev.content + event.chunk }
-              : { taskId: event.taskId, toolName: event.toolName, content: event.chunk },
+              : { sessionId: event.sessionId, toolName: event.toolName, content: event.chunk },
           );
           break;
 
@@ -164,7 +164,7 @@ export function useSSE() {
         case "stream:talk:end":
           /* 标记为已结束但保留内容，ChatPage 收到 flow:message 后清除 */
           setStreamingTalk((prev) =>
-            prev?.taskId === event.taskId && prev.target === event.target
+            prev?.sessionId === event.sessionId && prev.target === event.target
               ? { ...prev, ended: true } as any
               : prev,
           );
@@ -173,7 +173,7 @@ export function useSSE() {
         /* 流式 action 结束 */
         case "stream:action:end":
           setStreamingAction((prev) =>
-            prev?.taskId === event.taskId && prev.toolName === event.toolName
+            prev?.sessionId === event.sessionId && prev.toolName === event.toolName
               ? null
               : prev,
           );
@@ -182,16 +182,16 @@ export function useSSE() {
         /* 流式 stack_push chunk */
         case "stream:stack_push":
           setStreamingStackPush((prev) =>
-            prev?.taskId === event.taskId && prev.opType === event.opType && prev.attr === event.attr
+            prev?.sessionId === event.sessionId && prev.opType === event.opType && prev.attr === event.attr
               ? { ...prev, content: prev.content + event.chunk }
-              : { taskId: event.taskId, opType: event.opType, attr: event.attr, content: event.chunk },
+              : { sessionId: event.sessionId, opType: event.opType, attr: event.attr, content: event.chunk },
           );
           break;
 
         /* 流式 stack_push 结束 */
         case "stream:stack_push:end":
           setStreamingStackPush((prev) =>
-            prev?.taskId === event.taskId && prev.opType === event.opType && prev.attr === event.attr
+            prev?.sessionId === event.sessionId && prev.opType === event.opType && prev.attr === event.attr
               ? null
               : prev,
           );
@@ -200,16 +200,16 @@ export function useSSE() {
         /* 流式 stack_pop chunk */
         case "stream:stack_pop":
           setStreamingStackPop((prev) =>
-            prev?.taskId === event.taskId && prev.opType === event.opType && prev.attr === event.attr
+            prev?.sessionId === event.sessionId && prev.opType === event.opType && prev.attr === event.attr
               ? { ...prev, content: prev.content + event.chunk }
-              : { taskId: event.taskId, opType: event.opType, attr: event.attr, content: event.chunk },
+              : { sessionId: event.sessionId, opType: event.opType, attr: event.attr, content: event.chunk },
           );
           break;
 
         /* 流式 stack_pop 结束 */
         case "stream:stack_pop:end":
           setStreamingStackPop((prev) =>
-            prev?.taskId === event.taskId && prev.opType === event.opType && prev.attr === event.attr
+            prev?.sessionId === event.sessionId && prev.opType === event.opType && prev.attr === event.attr
               ? null
               : prev,
           );
@@ -218,16 +218,16 @@ export function useSSE() {
         /* 流式 set_plan chunk */
         case "stream:set_plan":
           setStreamingSetPlan((prev) =>
-            prev?.taskId === event.taskId
+            prev?.sessionId === event.sessionId
               ? { ...prev, content: prev.content + event.chunk }
-              : { taskId: event.taskId, content: event.chunk },
+              : { sessionId: event.sessionId, content: event.chunk },
           );
           break;
 
         /* 流式 set_plan 结束 */
         case "stream:set_plan:end":
           setStreamingSetPlan((prev) =>
-            prev?.taskId === event.taskId ? null : prev,
+            prev?.sessionId === event.sessionId ? null : prev,
           );
           break;
       }

@@ -103,20 +103,20 @@ export async function fetchStoneGroups(): Promise<GroupConfig> {
 }
 
 /** 获取单个 Flow 详情 */
-export async function fetchFlow(taskId: string): Promise<FlowData> {
-  const data = await get<{ flow: FlowData; subFlows?: FlowData["subFlows"] }>(`/flows/${taskId}`);
+export async function fetchFlow(sessionId: string): Promise<FlowData> {
+  const data = await get<{ flow: FlowData; subFlows?: FlowData["subFlows"] }>(`/flows/${sessionId}`);
   return { ...data.flow, subFlows: data.subFlows };
 }
 
 /** 更新 Flow 标题 */
-export async function updateFlowTitle(taskId: string, title: string): Promise<FlowData> {
-  const data = await patch<{ flow: FlowData }>(`/flows/${taskId}`, { title });
+export async function updateFlowTitle(sessionId: string, title: string): Promise<FlowData> {
+  const data = await patch<{ flow: FlowData }>(`/flows/${sessionId}`, { title });
   return data.flow;
 }
 
 /** 更新 session title（写入 .session.json） */
-export async function updateSessionTitle(taskId: string, title: string): Promise<void> {
-  await patch<Record<string, unknown>>(`/sessions/${taskId}`, { title });
+export async function updateSessionTitle(sessionId: string, title: string): Promise<void> {
+  await patch<Record<string, unknown>>(`/sessions/${sessionId}`, { title });
 }
 
 /** 创建对象 */
@@ -126,7 +126,7 @@ export async function createObject(name: string, whoAmI: string): Promise<StoneD
 
 /** 向对象发消息（可选 flowId 续写已有对话） */
 export async function talkTo(objectName: string, message: string, flowId?: string): Promise<{
-  taskId: string;
+  sessionId: string;
   status: string;
   actions: unknown[];
   messages: unknown[];
@@ -141,7 +141,7 @@ export async function pauseObject(name: string): Promise<{ name: string; paused:
 
 /** 恢复暂停的 Flow */
 export async function resumeFlow(name: string, flowId: string): Promise<{
-  taskId: string;
+  sessionId: string;
   status: string;
   actions: unknown[];
   messages: unknown[];
