@@ -5,13 +5,13 @@ type: how_to_think
 version: 1.0.0
 when: 当任务包含多个步骤、需要拆解、或不确定从哪里开始时
 description: 任务拆解和行为树规划，先想清楚再动手
-deps: ["kernel/output_format"]
+deps: ["kernel/computable"]
 ---
 # 规划能力
 
 ## 输出格式快速参考
 
-你的所有输出必须使用 **TOML 格式**。详见 `kernel/output_format` trait 的完整说明。
+你的所有输出必须使用 **TOML 格式**。详见 `kernel/computable/output_format` trait 的完整说明。
 
 | 用途 | TOML 格式 |
 |------|-----------|
@@ -220,6 +220,6 @@ summary = """
 
 ## 相关 Traits
 
-- `kernel/output_format` — TOML 输出格式规范（完整说明）
+- `kernel/computable/output_format` — TOML 输出格式规范（完整说明）
 - `kernel/computable` — 认知栈思维模式（核心）
 - `kernel/talkable` — 对象间通信协议

@@ -352,14 +352,14 @@ describe("focus_push / focus_pop 语义", () => {
   });
 });
 
-/* ========== cognitive-style trait 激活 ========== */
+/* ========== computable trait 激活 ========== */
 
-describe("cognitive-style trait 激活", () => {
-  test("cognitive-style (when: always) 始终被激活", () => {
+describe("computable trait 激活", () => {
+  test("computable (when: always) 始终被激活", () => {
     const traits: TraitDefinition[] = [
       {
         namespace: "kernel",
-        name: "cognitive-style",
+        name: "computable",
         type: "how_to_think",
         when: "always",
         description: "认知栈思维模式",
@@ -380,10 +380,10 @@ describe("cognitive-style trait 激活", () => {
       },
     ];
 
-    // 空 scopeChain — cognitive-style 仍然激活
+    // 空 scopeChain — computable 仍然激活
     const active = getActiveTraits(traits, []);
     const ids = active.map(t => traitId(t));
-    expect(ids).toContain("kernel/cognitive-style");
+    expect(ids).toContain("kernel/computable");
     expect(ids).not.toContain("kernel/plannable");
   });
 
@@ -391,7 +391,7 @@ describe("cognitive-style trait 激活", () => {
     const traits: TraitDefinition[] = [
       {
         namespace: "kernel",
-        name: "cognitive-style",
+        name: "computable",
         type: "how_to_think",
         when: "always",
         description: "认知栈思维模式",
@@ -414,7 +414,7 @@ describe("cognitive-style trait 激活", () => {
 
     const active = getActiveTraits(traits, ["kernel/plannable"]);
     const ids = active.map(t => traitId(t));
-    expect(ids).toContain("kernel/cognitive-style");
+    expect(ids).toContain("kernel/computable");
     expect(ids).toContain("kernel/plannable");
 
     // before hook 可触发
