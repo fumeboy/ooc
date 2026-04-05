@@ -1,6 +1,5 @@
 ---
-namespace: kernel
-name: computable/program_api
+name: kernel/computable/program_api
 type: how_to_use_tool
 when: never
 description: 完整 API 参考文档 — 所有工具方法、沙箱环境变量、Trait 元编程、Context Window

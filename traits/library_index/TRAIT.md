@@ -1,6 +1,5 @@
 ---
-namespace: kernel
-name: library_index
+name: kernel/library_index
 type: how_to_use_tool
 version: 1.0.0
 when: always

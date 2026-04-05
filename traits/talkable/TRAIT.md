@@ -1,6 +1,5 @@
 ---
-namespace: kernel
-name: talkable
+name: kernel/talkable
 type: how_to_interact
 version: 1.0.0
 when: always

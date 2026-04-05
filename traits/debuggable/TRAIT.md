@@ -1,6 +1,5 @@
 ---
-namespace: kernel
-name: debuggable
+name: kernel/debuggable
 type: how_to_think
 version: 1.0.0
 when: 当遇到错误、失败、异常行为、程序执行不符合预期时

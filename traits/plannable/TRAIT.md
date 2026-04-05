@@ -1,6 +1,5 @@
 ---
-namespace: kernel
-name: plannable
+name: kernel/plannable
 type: how_to_think
 version: 1.0.0
 when: 当任务包含多个步骤、需要拆解、或不确定从哪里开始时

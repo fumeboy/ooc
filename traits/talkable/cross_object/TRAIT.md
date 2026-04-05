@@ -1,6 +1,5 @@
 ---
-namespace: kernel
-name: talkable/cross_object
+name: kernel/talkable/cross_object
 type: how_to_interact
 when: never
 description: 跨对象函数调用协议 — 多轮对话流程、调用方/被调用方规范

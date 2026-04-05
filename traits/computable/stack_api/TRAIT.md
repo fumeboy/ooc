@@ -1,6 +1,5 @@
 ---
-namespace: kernel
-name: computable/stack_api
+name: kernel/computable/stack_api
 type: how_to_think
 when: never
 description: 栈帧 API 详细说明 — push/pop/reflect、契约编程、摘要技巧、Hook 时机、反模式

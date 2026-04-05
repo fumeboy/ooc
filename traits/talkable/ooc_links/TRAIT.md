@@ -1,6 +1,5 @@
 ---
-namespace: kernel
-name: talkable/ooc_links
+name: kernel/talkable/ooc_links
 type: how_to_interact
 when: never
 description: ooc:// 链接协议和导航卡片格式

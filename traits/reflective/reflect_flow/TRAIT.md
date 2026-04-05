@@ -1,6 +1,5 @@
 ---
-namespace: kernel
-name: reflective/reflect_flow
+name: kernel/reflective/reflect_flow
 type: how_to_think
 when: never
 description: ReflectFlow 角色定义 — Self 数据的唯一守门人

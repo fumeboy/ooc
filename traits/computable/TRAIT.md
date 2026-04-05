@@ -1,6 +1,5 @@
 ---
-namespace: kernel
-name: computable
+name: kernel/computable
 type: how_to_think
 version: 1.0.0
 when: always

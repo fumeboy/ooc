@@ -1,6 +1,5 @@
 ---
-namespace: kernel
-name: testable
+name: kernel/testable
 type: how_to_think
 version: 1.0.0
 when: 当任务涉及编写或修改代码时

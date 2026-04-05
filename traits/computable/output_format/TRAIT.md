@@ -1,6 +1,5 @@
 ---
-namespace: kernel
-name: computable/output_format
+name: kernel/computable/output_format
 type: how_to_think
 when: never
 description: 完整 TOML 输出格式规范 — 各段字段说明、示例、常见错误、流式输出

@@ -1,6 +1,5 @@
 ---
-namespace: kernel
-name: reviewable
+name: kernel/reviewable
 type: how_to_think
 version: 1.0.0
 when: 当完成一个功能或修复后，需要审查质量时

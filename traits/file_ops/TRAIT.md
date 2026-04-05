@@ -1,6 +1,5 @@
 ---
-namespace: kernel
-name: file_ops
+name: kernel/file_ops
 type: how_to_use_tool
 version: 1.0.0
 when: always

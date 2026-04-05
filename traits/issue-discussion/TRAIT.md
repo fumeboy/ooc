@@ -1,6 +1,5 @@
 ---
-namespace: kernel
-name: issue-discussion
+name: kernel/issue-discussion
 type: how_to_think
 version: 1.0.0
 when: always

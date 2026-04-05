@@ -1,6 +1,5 @@
 ---
-namespace: kernel
-name: computable/multi_thread
+name: kernel/computable/multi_thread
 type: how_to_use_tool
 when: never
 description: 多线程 API — 创建/切换线程、信号通信、fork/join

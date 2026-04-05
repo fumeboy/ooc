@@ -1,6 +1,5 @@
 ---
-namespace: kernel
-name: reflective/memory_api
+name: kernel/reflective/memory_api
 type: how_to_use_tool
 when: never
 description: 记忆 API 详细文档 — Flow Summary、长期记忆、会话记忆、维护原则
