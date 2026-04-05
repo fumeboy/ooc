@@ -1,8 +1,8 @@
-// kernel/traits/kernel/issue-discussion/index.ts
+// kernel/traits/issue-discussion/index.ts
 // issue-discussion kernel trait — 所有对象共享的 Issue 讨论能力
 
-import type { MethodContext } from "../../../src/trait/registry";
-import * as d from "../../../src/kanban/discussion";
+import type { MethodContext } from "../../src/trait/registry";
+import * as d from "../../src/kanban/discussion";
 
 function sessionDir(ctx: MethodContext): string {
   return `${ctx.rootDir}/flows/${ctx.sessionId}`;

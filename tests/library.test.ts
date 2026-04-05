@@ -14,7 +14,7 @@ import {
   readLibrarySkill,
   listLibraryTraits,
   searchLibrary,
-} from "../traits/kernel/library_index/index.js";
+} from "../traits/library_index/index.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_library_test");
 

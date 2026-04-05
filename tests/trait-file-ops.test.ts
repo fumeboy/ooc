@@ -16,7 +16,7 @@ import {
   listDir,
   fileExists,
   deleteFile,
-} from "../traits/kernel/file_ops/index";
+} from "../traits/file_ops/index";
 
 /** 模拟上下文，rootDir 设为空字符串，测试中使用绝对路径 */
 const ctx = { rootDir: "" } as any;
