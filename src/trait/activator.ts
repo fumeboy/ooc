@@ -15,13 +15,17 @@
 import type { TraitDefinition } from "../types/index.js";
 
 /**
- * 获取 trait 的完整标识："namespace/name"
+ * 获取 trait 的完整标识
  *
  * @param trait - Trait 定义
- * @returns "namespace/name" 格式的完整标识
+ * @returns trait 的完整路径名（如 "kernel/computable"）
  */
 export function traitId(trait: TraitDefinition): string {
-  return `${trait.namespace}/${trait.name}`;
+  // 兼容旧格式：如果 name 不含 namespace 前缀但 namespace 存在，则拼接
+  if (trait.namespace && !trait.name.startsWith(trait.namespace + "/")) {
+    return `${trait.namespace}/${trait.name}`;
+  }
+  return trait.name;
 }
 
 /**

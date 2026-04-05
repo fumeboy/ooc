@@ -42,7 +42,7 @@ ${content}`, "utf-8");
 /* ========== 三层 trait 加载链 ========== */
 
 describe("loadAllTraits 三层加载", () => {
-  test("library 扁平 readme.md 技能可被加载并映射为 namespace/name", async () => {
+  test("library 扁平 TRAIT.md 技能可被加载并映射为 name", async () => {
     const kernelDir = join(TEST_DIR, "kernel_flat");
     const libraryDir = join(TEST_DIR, "library_flat");
     const objectDir = join(TEST_DIR, "object_flat");
@@ -51,7 +51,7 @@ describe("loadAllTraits 三层加载", () => {
     mkdirSync(objectDir, { recursive: true });
     const legacyDir = join(libraryDir, "lark-wiki");
     mkdirSync(legacyDir, { recursive: true });
-    writeFileSync(join(legacyDir, "readme.md"), `---
+    writeFileSync(join(legacyDir, "TRAIT.md"), `---
 name: lark-wiki
 description: "飞书 wiki 能力"
 ---

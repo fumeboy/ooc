@@ -35,14 +35,14 @@ import { traitId } from "./activator.js";
  * 从单个 trait 目录加载 Trait 定义
  *
  * @param traitDir - trait 目录路径
- * @param traitName - trait 名称（可选，从目录名推断）
- * @param namespace - 命名空间（可选，从父目录推断）
+ * @param traitName - trait 完整路径名（如 "kernel/computable"）
+ * @param _namespace - @deprecated 已废弃，保留参数签名兼容
  * @returns TraitDefinition，若目录无效返回 null
  */
 export async function loadTrait(
   traitDir: string,
   traitName?: string,
-  namespace?: string,
+  _namespace?: string,
 ): Promise<TraitDefinition | null> {
   if (!existsSync(traitDir)) return null;
 
@@ -57,7 +57,6 @@ export async function loadTrait(
   let content = "";
   let when: TraitDefinition["when"] = "never";
   let description = "";
-  let ns = namespace || "";
   let type: TraitType = "how_to_think"; // 默认类型
   let version: string | undefined;
   let deps: string[] = [];
@@ -74,17 +73,11 @@ export async function loadTrait(
     content = body.trim();
     when = typeof data.when === "string" ? (data.when as TraitDefinition["when"]) : "never";
     description = typeof data.description === "string" ? data.description : "";
-    ns = typeof data.namespace === "string" ? data.namespace : (namespace || "");
     type = parseTraitType(data.type);
     version = typeof data.version === "string" ? data.version : undefined;
     deps = Array.isArray(data.deps) ? data.deps.map(String) : [];
     hooks = parseTraitHooks(data.hooks);
-    ({ ns, name } = resolveLegacyTraitIdentity({
-      explicitNamespace: ns,
-      currentName: name,
-      frontmatterName: typeof data.name === "string" ? data.name : undefined,
-      traitDir,
-    }));
+    name = resolveTraitName(name, data);
   } else if (existsSync(skillPath)) {
     // SKILL.md 格式兼容
     const raw = readFileSync(skillPath, "utf-8");
@@ -92,17 +85,11 @@ export async function loadTrait(
     content = body.trim();
     when = typeof data.when === "string" ? (data.when as TraitDefinition["when"]) : "never";
     description = typeof data.description === "string" ? data.description : "";
-    ns = typeof data.namespace === "string" ? data.namespace : (namespace || "");
     type = parseTraitType(data.type);
     version = typeof data.version === "string" ? data.version : undefined;
     deps = Array.isArray(data.deps) ? data.deps.map(String) : [];
     hooks = parseTraitHooks(data.hooks);
-    ({ ns, name } = resolveLegacyTraitIdentity({
-      explicitNamespace: ns,
-      currentName: name,
-      frontmatterName: typeof data.name === "string" ? data.name : undefined,
-      traitDir,
-    }));
+    name = resolveTraitName(name, data);
   } else if (existsSync(legacyReadmePath)) {
     const raw = readFileSync(legacyReadmePath, "utf-8");
     const { data, content: body } = matter(raw);
@@ -113,12 +100,7 @@ export async function loadTrait(
     version = typeof data.version === "string" ? data.version : undefined;
     deps = Array.isArray(data.deps) ? data.deps.map(String) : [];
     hooks = parseTraitHooks(data.hooks);
-    ({ ns, name } = resolveLegacyTraitIdentity({
-      explicitNamespace: ns,
-      currentName: name,
-      frontmatterName: typeof data.name === "string" ? data.name : undefined,
-      traitDir,
-    }));
+    name = resolveTraitName(name, data);
   } else {
     // 无有效文件
     return null;
@@ -132,7 +114,6 @@ export async function loadTrait(
   }
 
   return {
-    namespace: ns,
     name,
     type,
     version,
@@ -146,35 +127,47 @@ export async function loadTrait(
   };
 }
 
-function resolveLegacyTraitIdentity(args: {
-  explicitNamespace: string;
-  currentName: string;
-  frontmatterName?: string;
-  traitDir: string;
-}): { ns: string; name: string } {
-  let ns = args.explicitNamespace;
-  let name = args.currentName;
-  const rawName = args.frontmatterName?.trim() || name;
+/**
+ * 解析 trait 的完整路径名
+ *
+ * 优先级：
+ * 1. frontmatter 中的 name 字段（如果包含 /，视为完整路径）
+ * 2. frontmatter 中的 namespace + name 拼接（兼容旧格式）
+ * 3. 调用方传入的 traitName（由 loadTraitsFromDir 根据目录结构构建）
+ *
+ * 旧格式兼容：
+ * - namespace: lark, name: doc → lark/doc
+ * - name: lark-wiki（连字符格式） → lark/wiki
+ */
+function resolveTraitName(callerName: string, data: Record<string, unknown>): string {
+  const fmName = typeof data.name === "string" ? data.name.trim() : "";
+  const fmNamespace = typeof data.namespace === "string" ? data.namespace.trim() : "";
 
-  if (ns) {
-    return { ns, name: rawName };
+  // 新格式：frontmatter name 已经是完整路径（包含 /）
+  if (fmName && fmName.includes("/")) {
+    return fmName;
   }
 
-  if (rawName.includes("/")) {
-    const [parsedNs, ...rest] = rawName.split("/");
-    if (parsedNs && rest.length > 0) {
-      return { ns: parsedNs, name: rest.join("/") };
+  // 旧格式兼容：namespace + name
+  if (fmNamespace && fmName) {
+    return `${fmNamespace}/${fmName}`;
+  }
+
+  // 调用方传入的名称已包含 prefix（由 loadTraitsFromDir 构建）
+  if (callerName && callerName.includes("/")) {
+    return callerName;
+  }
+
+  // 旧格式兼容：连字符分隔（如 lark-wiki → lark/wiki）
+  if (fmName && fmName.includes("-")) {
+    const [first, ...rest] = fmName.split("-");
+    if (first && rest.length > 0) {
+      return `${first}/${rest.join("-")}`;
     }
   }
 
-  if (rawName.includes("-")) {
-    const [parsedNs, ...rest] = rawName.split("-");
-    if (parsedNs && rest.length > 0) {
-      return { ns: parsedNs, name: rest.join("-") };
-    }
-  }
-
-  return { ns, name: rawName };
+  // fallback：使用 frontmatter name 或调用方名称
+  return fmName || callerName;
 }
 
 /**
@@ -380,7 +373,7 @@ function parseFirstParam(source: string): Map<string, boolean> {
  * 只加载 refs 中列出的 trait，跳过不存在的目录。
  *
  * @param traitsDir - trait 所在的父目录（如 library/traits/）
- * @param refs - 要加载的 trait 名称列表，支持 "namespace/name" 格式
+ * @param refs - 要加载的 trait 完整路径名列表（如 "lark/doc"）
  * @returns 加载成功的 TraitDefinition 列表
  */
 export async function loadTraitsByRef(
@@ -389,25 +382,11 @@ export async function loadTraitsByRef(
 ): Promise<TraitDefinition[]> {
   const results: TraitDefinition[] = [];
   for (const ref of refs) {
-    let traitDir: string;
-    let traitName: string;
-    let ns: string;
-
-    // 解析 "namespace/name/sub/..." 格式（支持多级路径）
-    if (ref.includes("/")) {
-      const slashIdx = ref.indexOf("/");
-      ns = ref.substring(0, slashIdx);
-      traitName = ref.substring(slashIdx + 1);
-      traitDir = join(traitsDir, ns, ...traitName.split("/"));
-    } else {
-      // 旧格式兼容：直接在 traitsDir 下查找
-      ns = "";
-      traitName = ref;
-      traitDir = join(traitsDir, ref);
-    }
+    // ref 就是完整路径，直接用 / 分割拼接目录
+    const traitDir = join(traitsDir, ...ref.split("/"));
 
     if (!existsSync(traitDir)) continue;
-    const trait = await loadTrait(traitDir, traitName, ns);
+    const trait = await loadTrait(traitDir, ref);
     if (trait) results.push(trait);
   }
   return results;
@@ -437,8 +416,7 @@ export async function loadAllTraits(
   if (existsSync(kernelTraitsDir)) {
     const kernelTraits = await loadTraitsFromDir(kernelTraitsDir, "kernel");
     for (const trait of kernelTraits) {
-      const key = `${trait.namespace}/${trait.name}`;
-      traitMap.set(key, trait);
+      traitMap.set(traitId(trait), trait);
     }
   }
 
@@ -446,8 +424,7 @@ export async function loadAllTraits(
   if (libraryTraitsDir && existsSync(libraryTraitsDir)) {
     const libraryTraits = await loadTraitsFromDir(libraryTraitsDir, "");
     for (const trait of libraryTraits) {
-      const key = `${trait.namespace}/${trait.name}`;
-      traitMap.set(key, trait);
+      traitMap.set(traitId(trait), trait);
     }
   }
 
@@ -455,8 +432,7 @@ export async function loadAllTraits(
   if (existsSync(objectTraitsDir)) {
     const objectTraits = await loadTraitsFromDir(objectTraitsDir, "");
     for (const trait of objectTraits) {
-      const key = `${trait.namespace}/${trait.name}`;
-      traitMap.set(key, trait);
+      traitMap.set(traitId(trait), trait);
     }
   }
 
@@ -481,12 +457,12 @@ export async function loadAllTraits(
  *     └── TRAIT.md
  *
  * @param traitsDir - traits 根目录
- * @param defaultNamespace - 默认命名空间
+ * @param prefix - 路径前缀（如 "kernel"），会拼接到目录名前面构成完整 name
  * @param parentPath - 父路径（用于构建多级 name），内部递归使用
  */
 export async function loadTraitsFromDir(
   traitsDir: string,
-  defaultNamespace: string,
+  prefix: string,
   parentPath: string = "",
 ): Promise<TraitDefinition[]> {
   if (!existsSync(traitsDir)) return [];
@@ -499,7 +475,9 @@ export async function loadTraitsFromDir(
     if (entry.name.startsWith(".")) continue;
 
     const entryPath = join(traitsDir, entry.name);
-    const traitName = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+    const relativeName = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+    // 完整 trait name = prefix/relativeName（如 kernel/computable）
+    const fullName = prefix ? `${prefix}/${relativeName}` : relativeName;
 
     // 检查此目录本身是否是 trait（含 TRAIT.md/SKILL.md/readme.md）
     const hasTraitFile =
@@ -509,7 +487,7 @@ export async function loadTraitsFromDir(
 
     if (hasTraitFile) {
       // 此目录是 trait，加载它
-      const trait = await loadTrait(entryPath, traitName, defaultNamespace);
+      const trait = await loadTrait(entryPath, fullName);
       if (trait) results.push(trait);
     }
 
@@ -528,8 +506,8 @@ export async function loadTraitsFromDir(
       // 递归加载子 trait
       const childTraits = await loadTraitsFromDir(
         entryPath,
-        defaultNamespace,
-        traitName,
+        prefix,
+        relativeName,
       );
       results.push(...childTraits);
     }
@@ -624,12 +602,13 @@ export function buildTraitTree(traits: TraitDefinition[]): TraitTree[] {
   // 建立父子关系
   const roots: TraitTree[] = [];
   for (const [id, node] of nodes) {
-    const parentName = node.trait.name.includes("/")
-      ? node.trait.name.substring(0, node.trait.name.lastIndexOf("/"))
-      : null;
+    const fullName = traitId(node.trait);
+    const lastSlash = fullName.lastIndexOf("/");
+    // 至少需要两段才有 parent（如 kernel/computable/output_format → parent = kernel/computable）
+    const secondLastSlash = lastSlash > 0 ? fullName.lastIndexOf("/", lastSlash - 1) : -1;
+    const parentId = secondLastSlash >= 0 ? fullName.substring(0, lastSlash) : null;
 
-    if (parentName) {
-      const parentId = `${node.trait.namespace}/${parentName}`;
+    if (parentId) {
       const parent = nodes.get(parentId);
       if (parent) {
         parent.children.push(node);

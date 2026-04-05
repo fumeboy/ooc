@@ -1938,7 +1938,7 @@ function buildExecutionContext(
             readme: loadedTrait.readme,
             when: loadedTrait.when,
             description: loadedTrait.description,
-            source: loadedTrait.namespace === "kernel" ? "kernel" : loadedTrait.namespace ? "library" : "self",
+            source: traitId(loadedTrait).startsWith("kernel/") ? "kernel" : traitId(loadedTrait).includes("/") ? "library" : "self",
           };
         }
 

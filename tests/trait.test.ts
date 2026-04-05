@@ -38,8 +38,7 @@ when: always
 
     const trait = await loadTrait(traitDir, "my_trait", "kernel");
     expect(trait).not.toBeNull();
-    expect(trait!.namespace).toBe("kernel");
-    expect(trait!.name).toBe("my_trait");
+    expect(trait!.name).toBe("kernel/my_trait");
     expect(trait!.type).toBe("how_to_think");
     expect(trait!.when).toBe("always");
     expect(trait!.readme).toBe("你应该认真思考。");
@@ -141,7 +140,7 @@ when: always
 
     const trait = await loadTrait(traitDir, "my_skill", "skills");
     expect(trait).not.toBeNull();
-    expect(trait!.namespace).toBe("skills");
+    expect(trait!.name).toBe("skills/my_skill");
     expect(trait!.type).toBe("how_to_use_tool");
   });
 
@@ -191,9 +190,8 @@ describe("traitId 函数", () => {
     expect(traitId(trait)).toBe("kernel/computable");
   });
 
-  test("空 namespace 也正确拼接", () => {
+  test("无 namespace 时直接返回 name", () => {
     const trait: TraitDefinition = {
-      namespace: "",
       name: "old_style",
       type: "how_to_think",
       when: "always",
@@ -202,7 +200,7 @@ describe("traitId 函数", () => {
       methods: [],
       deps: [],
     };
-    expect(traitId(trait)).toBe("/old_style");
+    expect(traitId(trait)).toBe("old_style");
   });
 });
 

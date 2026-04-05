@@ -73,9 +73,9 @@ export interface TraitCommonMistake {
 
 /** Trait 的完整定义 */
 export interface TraitDefinition {
-  /** 命名空间（如 "kernel", "lark", "web"） */
-  namespace: string;
-  /** Trait 名称 */
+  /** @deprecated 已废弃，请使用完整路径的 name 字段 */
+  namespace?: string;
+  /** Trait 完整路径名（如 "kernel/computable", "library/agent/browser", "lark/doc"） */
   name: string;
   /** Trait 类型 */
   type: TraitType;
