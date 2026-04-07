@@ -20,6 +20,8 @@ export interface CreateSubThreadDirective {
   title: string;
   description?: string;
   traits?: string[];
+  /** 从哪个线程派生（可选，不填则从当前线程派生） */
+  deriveFrom?: string;
 }
 
 /** return 指令 */
@@ -146,6 +148,9 @@ export function parseThreadOutput(output: string): ThreadParsedOutput {
     }
     if (Array.isArray(cst.traits)) {
       result.createSubThread.traits = cst.traits as string[];
+    }
+    if (typeof cst.derive_from_which_thread === "string") {
+      result.createSubThread.deriveFrom = cst.derive_from_which_thread;
     }
   }
 

@@ -71,6 +71,8 @@ export interface NewChildNode {
   parentId: string;
   /** 创建者线程 ID */
   creatorThreadId: string;
+  /** 从哪个线程派生（不填则从当前线程派生） */
+  deriveFrom?: string;
 }
 
 /** 单轮迭代的输出（纯数据，不含副作用） */
@@ -187,19 +189,28 @@ export function runThreadIteration(input: ThreadIterationInput): ThreadIteration
     const childId = `thread_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const cst = parsed.createSubThread;
 
+    /* deriveFrom 决定子线程挂在哪个节点下：
+     * - 不填：挂在当前线程下（普通 create_sub_thread）
+     * - 填了：挂在目标线程下（create_sub_thread_on_node 语义） */
+    const parentId = cst.deriveFrom ?? threadId;
+
     result.newChildNode = {
       id: childId,
       title: cst.title,
       description: cst.description,
       traits: cst.traits,
       status: "pending",
-      parentId: threadId,
+      parentId,
       creatorThreadId: threadId,
+      deriveFrom: cst.deriveFrom,
     };
 
+    const actionLabel = cst.deriveFrom
+      ? `[create_sub_thread derive_from=${cst.deriveFrom}] ${cst.title} → ${childId}`
+      : `[create_sub_thread] ${cst.title} → ${childId}`;
     result.newActions.push({
       type: "create_thread",
-      content: `[create_sub_thread] ${cst.title} → ${childId}`,
+      content: actionLabel,
       timestamp: Date.now(),
     });
 

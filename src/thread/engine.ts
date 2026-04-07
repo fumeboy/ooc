@@ -228,15 +228,40 @@ async function applyIterationResult(
   /* 7. 创建子线程 */
   if (result.newChildNode) {
     const child = result.newChildNode;
-    const childId = await tree.createSubThread(threadId, child.title, {
+    /* deriveFrom 决定子线程挂在哪个节点下 */
+    const parentForChild = child.deriveFrom ?? threadId;
+    const childId = await tree.createSubThread(parentForChild, child.title, {
       traits: child.traits,
       description: child.description,
       creatorThreadId: threadId,
+      creationMode: child.deriveFrom ? "sub_thread_on_node" : "sub_thread",
     });
 
     if (childId) {
       /* 设置子线程为 running */
       await tree.setNodeStatus(childId, "running");
+
+      /* deriveFrom 模式：将目标线程的 actions 注入子线程（让子线程看到目标线程的历史） */
+      if (child.deriveFrom) {
+        const targetData = tree.readThreadData(child.deriveFrom);
+        if (targetData && targetData.actions.length > 0) {
+          const childData = tree.readThreadData(childId);
+          if (childData) {
+            const summary = targetData.actions
+              .filter(a => a.type === "thought" || a.type === "thread_return" || a.type === "program")
+              .map(a => `[${a.type}] ${a.content?.slice(0, 200)}`)
+              .join("\n");
+            if (summary) {
+              childData.actions.push({
+                type: "inject",
+                content: `[派生自线程 ${child.deriveFrom} 的历史]\n${summary}`,
+                timestamp: Date.now(),
+              });
+              tree.writeThreadData(childId, childData);
+            }
+          }
+        }
+      }
 
       /* 注入 before hook */
       if (result.beforeHookInjection) {

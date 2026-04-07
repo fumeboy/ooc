@@ -59,6 +59,7 @@ deps: ["kernel/computable"]
 - `title` — 子线程标题（必填）
 - `description` — 子线程描述（可选）
 - `traits` — trait 名称数组（可选）
+- `derive_from_which_thread` — 从哪个线程派生（可选，线程 ID）。不填则从当前线程派生。填写后子线程会继承目标线程的执行历史，可用于"向另一个线程提问"或"基于已完成线程的结果继续工作"。
 
 ### `[set_plan]`
 - `text` — 新计划内容（必填）
@@ -130,6 +131,20 @@ content = "这个任务需要分解为子任务"
 [create_sub_thread]
 title = "调研 G1 基因的历史演变"
 description = "查阅 gene.md 和 discussions 目录，整理 G1 基因的演变过程"
+```
+
+### 基于另一个线程派生子线程（线程间对话）
+```toml
+[thought]
+content = """
+线程 th_abc123 已经完成了数据收集，我需要基于它的结果做进一步分析。
+通过 derive_from_which_thread 创建一个派生子线程，它会继承目标线程的执行历史。
+"""
+
+[create_sub_thread]
+title = "基于数据收集结果进行深度分析"
+description = "分析 th_abc123 收集的数据，提取关键洞察"
+derive_from_which_thread = "th_abc123"
 ```
 
 ## 流式输出
