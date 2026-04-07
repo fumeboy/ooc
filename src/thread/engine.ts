@@ -207,6 +207,9 @@ async function applyIterationResult(
   /* 2. 追加新 actions */
   threadData.actions.push(...result.newActions);
 
+  /* ID 映射表：thinkloop 假 ID → tree 真实 ID（当前轮次内） */
+  const idMap = new Map<string, string>();
+
   /* 3. 更新计划 */
   if (result.planUpdate !== null) {
     threadData.plan = result.planUpdate;
@@ -238,6 +241,17 @@ async function applyIterationResult(
     });
 
     if (childId) {
+      /* 将 action 日志中 thinkloop 生成的假 ID 替换为 tree 生成的真实 ID */
+      const fakeId = child.id;
+      if (fakeId !== childId) {
+        idMap.set(fakeId, childId);
+        for (const action of threadData.actions) {
+          if (action.content?.includes(fakeId)) {
+            action.content = action.content.replace(fakeId, childId);
+          }
+        }
+      }
+
       /* 设置子线程为 running */
       await tree.setNodeStatus(childId, "running");
 
@@ -296,7 +310,9 @@ async function applyIterationResult(
       result.returnResult.artifacts,
     );
   } else if (result.statusChange === "waiting" && result.awaitingChildren) {
-    await tree.awaitThreads(threadId, result.awaitingChildren);
+    /* 翻译假 ID → 真实 ID（处理同一轮内 create + await 的情况） */
+    const realIds = result.awaitingChildren.map(id => idMap.get(id) ?? id);
+    await tree.awaitThreads(threadId, realIds);
   } else if (result.statusChange === "failed") {
     await tree.setNodeStatus(threadId, "failed");
   }
