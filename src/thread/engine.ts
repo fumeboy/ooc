@@ -57,6 +57,20 @@ export interface EngineConfig {
   paths?: Record<string, string>;
   /** 检查对象是否暂停 */
   isPaused?: (name: string) => boolean;
+  /**
+   * 跨 Object talk 回调（由 World 注入）
+   *
+   * 当 LLM 输出 [talk] 且 target 不是当前 Object 时调用。
+   * World 负责路由：启动目标 Object 的线程树，等待完成，返回结果。
+   *
+   * @param targetObject - 目标对象名
+   * @param message - 消息内容
+   * @param fromObject - 发起方对象名
+   * @param fromThreadId - 发起方线程 ID
+   * @param sessionId - 当前 session ID
+   * @returns 目标对象的回复（summary）
+   */
+  onTalk?: (targetObject: string, message: string, fromObject: string, fromThreadId: string, sessionId: string) => Promise<string | null>;
   /** Scheduler 配置覆盖 */
   schedulerConfig?: {
     maxIterationsPerThread?: number;
@@ -607,6 +621,49 @@ export async function runWithThreadTree(
         }
 
         consola.info(`[Engine] program ${execResult.success ? "成功" : "失败"}: ${outputText.slice(0, 200) || execResult.error?.slice(0, 200)}`);
+      }
+
+      /* 执行 talk（如果有） */
+      if (iterResult.talks && config.onTalk) {
+        const talk = iterResult.talks;
+        const target = talk.target?.toLowerCase();
+
+        /* 跳过 talk to self（当前 Object） */
+        if (target !== objectName.toLowerCase()) {
+          consola.info(`[Engine] talk ${objectName} → ${talk.target}: ${talk.message.slice(0, 100)}`);
+
+          /* 记录 outbound message action */
+          const td = tree.readThreadData(threadId);
+          if (td) {
+            td.actions.push({
+              type: "message_out",
+              content: `[talk] → ${talk.target}: ${talk.message}`,
+              timestamp: Date.now(),
+            });
+            tree.writeThreadData(threadId, td);
+          }
+
+          /* 调用 World 路由 */
+          try {
+            const reply = await config.onTalk(talk.target, talk.message, objectName, threadId, sessionId);
+
+            /* 将回复写入当前线程的 inbox */
+            if (reply) {
+              tree.writeInbox(threadId, {
+                from: talk.target,
+                content: reply,
+                source: "talk",
+              });
+            }
+          } catch (e) {
+            consola.error(`[Engine] talk 失败: ${(e as Error).message}`);
+            tree.writeInbox(threadId, {
+              from: "system",
+              content: `[talk 失败] ${talk.target}: ${(e as Error).message}`,
+              source: "system",
+            });
+          }
+        }
       }
 
       /* debugMode 检查：单步执行后自动暂停 */
