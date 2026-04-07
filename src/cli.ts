@@ -36,10 +36,10 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  /* 初始化 World */
-  const useThreadTree = process.env.OOC_THREAD_TREE === "1";
+  /* 初始化 World — 线程树架构默认启用，OOC_THREAD_TREE=0 可回退 */
+  const useThreadTree = process.env.OOC_THREAD_TREE !== "0";
   const world = new World({ rootDir: OOC_ROOT, useThreadTree });
-  if (useThreadTree) consola.info("[CLI] 线程树架构已启用 (OOC_THREAD_TREE=1)");
+  if (!useThreadTree) consola.info("[CLI] 使用旧 Flow 架构 (OOC_THREAD_TREE=0)");
   world.init();
 
   switch (command) {

@@ -36,7 +36,7 @@ export interface WorldConfig {
   rootDir: string;
   /** LLM 配置（可选，默认使用 DefaultConfig） */
   llmConfig?: LLMConfig;
-  /** 是否使用线程树架构（默认 false，使用旧的 Flow 架构） */
+  /** 是否使用线程树架构（默认 true，OOC_THREAD_TREE=0 可回退旧 Flow 架构） */
   useThreadTree?: boolean;
 }
 
