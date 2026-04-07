@@ -28,9 +28,10 @@ deps: ["kernel/computable"]
 
 每个线程都有一个创建者（creator），在 Context 的「创建者」部分说明。
 
-- 任务完成后，用 `[return]` 或 `[talk] target="创建者"` 返回结果
-- `[talk] target=创建者` 等价于 `[return]`，系统会自动处理
+- 任务完成后，必须用 `[return]` 结束线程并返回结果
+- `[talk]` 是异步发消息，不会结束线程。用 `[talk]` 通知别人后，线程继续执行
 - 简单问答直接用 `[return]`，不需要 `[talk]`
+- 不要用 `[talk]` 代替 `[return]`
 
 ## 各段字段说明
 

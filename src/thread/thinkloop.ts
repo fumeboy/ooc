@@ -264,80 +264,24 @@ export function runThreadIteration(input: ThreadIterationInput): ThreadIteration
    *    本函数不执行它们（需要异步 IO），只标记解析结果。
    *    Scheduler 的 runOneIteration 负责调用 CodeExecutor / collaboration.talk()，
    *    并在执行后生成对应的 recordAction。
+   *
+   *    注意：[talk] 是纯异步发消息，不触发状态变更。
+   *    LLM 应该用 [return] 明确结束线程，而不是靠 [talk] 自动结束。
    */
   if (parsed.program) result.program = parsed.program;
   if (parsed.talk) {
     result.talks = parsed.talk;
-
-    /* talk(creator) = return：当 talk 的 target 是当前线程的创建者时，
-     * 自动视为 return（结果注入创建者的 process）。
-     *
-     * 判断逻辑：
-     * - root 线程的 creator 是 human/user → talk(user/human) = return
-     * - 跨 Object 创建的线程 → talk(creatorObjectName) = return
-     * - 同 Object 子线程 → talk(creatorThreadId) = return（较少见，LLM 通常不知道线程 ID）
-     */
-    const nodeMeta = tree.nodes[threadId];
-    const target = parsed.talk.target?.toLowerCase();
-    const isRoot = !nodeMeta?.parentId;
-    const isTargetCreator =
-      /* root 线程：target 是 user/human */
-      (isRoot && (target === "user" || target === "human")) ||
-      /* 跨 Object 线程：target 是创建者对象名 */
-      (nodeMeta?.creatorObjectName && target === nodeMeta.creatorObjectName.toLowerCase()) ||
-      /* 同 Object 子线程：target 是创建者线程 ID（罕见） */
-      (nodeMeta?.creatorThreadId && target === nodeMeta.creatorThreadId.toLowerCase());
-
-    if (isTargetCreator && !parsed.program && !parsed.createSubThread) {
-      result.statusChange = "done";
-      result.returnResult = {
-        summary: parsed.talk.message,
-        status: "done",
-      };
-      result.newActions.push({
-        type: "thread_return",
-        content: `[return via talk] ${parsed.talk.message}`,
-        timestamp: Date.now(),
-      });
-    }
   }
 
-  /* 10. 处理 talk_sync（同步 talk：发送消息后自动 wait）
-   *     talk_sync 也遵循 talk(creator) = return 规则。
-   *     如果 target 不是 creator，则发送消息后进入 waiting 状态。
-   */
+  /* 10. 处理 talk_sync（同步 talk：发送消息后自动 wait） */
   if (parsed.talkSync && !result.statusChange) {
     result.talks = parsed.talkSync;
-
-    const nodeMeta = tree.nodes[threadId];
-    const target = parsed.talkSync.target?.toLowerCase();
-    const isRoot = !nodeMeta?.parentId;
-    const isTargetCreator =
-      (isRoot && (target === "user" || target === "human")) ||
-      (nodeMeta?.creatorObjectName && target === nodeMeta.creatorObjectName.toLowerCase()) ||
-      (nodeMeta?.creatorThreadId && target === nodeMeta.creatorThreadId.toLowerCase());
-
-    if (isTargetCreator && !parsed.program && !parsed.createSubThread) {
-      /* talk_sync(creator) = return */
-      result.statusChange = "done";
-      result.returnResult = {
-        summary: parsed.talkSync.message,
-        status: "done",
-      };
-      result.newActions.push({
-        type: "thread_return",
-        content: `[return via talk_sync] ${parsed.talkSync.message}`,
-        timestamp: Date.now(),
-      });
-    } else {
-      /* 非 creator：发送消息后进入 waiting */
-      result.statusChange = "waiting";
-      result.newActions.push({
-        type: "message_out",
-        content: `[talk_sync] → ${parsed.talkSync.target}: ${parsed.talkSync.message}`,
-        timestamp: Date.now(),
-      });
-    }
+    result.statusChange = "waiting";
+    result.newActions.push({
+      type: "message_out",
+      content: `[talk_sync] → ${parsed.talkSync.target}: ${parsed.talkSync.message}`,
+      timestamp: Date.now(),
+    });
   }
 
   return result;
