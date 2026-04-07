@@ -151,7 +151,13 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>): Message[
 
   /* 子节点摘要 */
   if (ctx.childrenSummary) {
-    userParts.push(`## 子线程\n${ctx.childrenSummary}`);
+    /* 检查是否所有子线程都已完成 */
+    const allDone = ctx.childrenSummary.includes("[done]") && !ctx.childrenSummary.includes("[running]") && !ctx.childrenSummary.includes("[pending]") && !ctx.childrenSummary.includes("[waiting]");
+    let hint = "";
+    if (allDone) {
+      hint = "\n\n所有子线程已完成。请汇总子线程的结果，然后用 [return] 返回最终结果。";
+    }
+    userParts.push(`## 子线程\n${ctx.childrenSummary}${hint}`);
   }
 
   /* 祖先摘要 */
