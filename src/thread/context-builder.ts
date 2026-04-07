@@ -26,6 +26,7 @@ import type {
   ThreadStatus,
 } from "./types.js";
 import { getAncestorPath } from "./persistence.js";
+import { getActiveTraits, traitId as activatorTraitId } from "../trait/activator.js";
 
 /**
  * 获取 trait 的完整标识（本地版本，避免循环依赖）
@@ -35,24 +36,6 @@ function localTraitId(trait: TraitDefinition): string {
     return `${trait.namespace}/${trait.name}`;
   }
   return trait.name;
-}
-
-/**
- * 获取应该激活的 Traits（本地简化版）
- *
- * 激活规则：
- * - when = "always" → 自动激活
- * - 其他 → 仅当 trait ID 出现在 scopeChain 中时激活
- */
-function localGetActiveTraits(
-  traits: TraitDefinition[],
-  scopeChain: string[],
-): TraitDefinition[] {
-  const scopeSet = new Set(scopeChain);
-  return traits.filter(t => {
-    const id = localTraitId(t);
-    return t.when === "always" || scopeSet.has(id);
-  });
 }
 
 /** 线程 Context（双视角） */
@@ -125,12 +108,15 @@ export interface ThreadContextInput {
   targetNodeData?: ThreadDataFile;
 }
 
-/** 已知的 kernel trait ID 集合 */
-const KERNEL_TRAIT_IDS = new Set([
-  "kernel/computable", "kernel/talkable", "kernel/object_creation",
-  "kernel/verifiable", "kernel/debuggable", "kernel/plannable",
-  "kernel/reflective", "kernel/web_search", "kernel/testable", "kernel/reviewable",
-]);
+/**
+ * 判断是否为 kernel trait（前缀匹配）
+ *
+ * kernel trait 的 readme 注入到 instructions 区域（系统指令），
+ * 非 kernel trait 注入到 knowledge 区域（知识窗口）。
+ */
+function isKernelTrait(id: string): boolean {
+  return id.startsWith("kernel/");
+}
 
 /**
  * 构建线程 Context
@@ -148,15 +134,17 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
   /* 1. scope chain：沿祖先链合并 traits */
   const scopeChain = computeThreadScopeChain(tree, threadId);
 
-  /* 2. 激活 traits */
-  const activeTraits = localGetActiveTraits(traits, scopeChain);
+  /* 2. 激活 traits（使用完整版 activator，支持 deps 递归激活） */
+  const activeTraits = getActiveTraits(traits, scopeChain);
 
   const instructions: ContextWindow[] = activeTraits
-    .filter(t => t.readme && KERNEL_TRAIT_IDS.has(localTraitId(t)))
+    .filter(t => t.readme && isKernelTrait(localTraitId(t)))
+    /* 排除旧 output_format trait，线程树引擎会注入新版输出格式 */
+    .filter(t => localTraitId(t) !== "kernel/computable/output_format")
     .map(t => ({ name: localTraitId(t), content: t.readme }));
 
   const knowledge: ContextWindow[] = activeTraits
-    .filter(t => t.readme && !KERNEL_TRAIT_IDS.has(localTraitId(t)))
+    .filter(t => t.readme && !isKernelTrait(localTraitId(t)))
     .map(t => ({ name: localTraitId(t), content: t.readme }));
 
   if (extraWindows) knowledge.push(...extraWindows);

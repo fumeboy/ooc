@@ -13,8 +13,8 @@
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md
  */
 
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, existsSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { consola } from "consola";
 
 import { ThreadsTree } from "./tree.js";
@@ -22,6 +22,9 @@ import { ThreadScheduler, type SchedulerCallbacks } from "./scheduler.js";
 import { buildThreadContext, type ThreadContextInput } from "./context-builder.js";
 import { runThreadIteration, type ThreadIterationInput } from "./thinkloop.js";
 import { emitSSE } from "../server/events.js";
+import { CodeExecutor, executeShell } from "../executable/executor.js";
+import { MethodRegistry, type MethodContext } from "../trait/registry.js";
+import { getActiveTraits, traitId } from "../trait/activator.js";
 
 import type { LLMClient, Message } from "../thinkable/client.js";
 import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "../types/index.js";
@@ -81,6 +84,105 @@ function generateSessionId(): string {
   return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/* ========== 线程树输出格式规范 ========== */
+
+/**
+ * 线程树 TOML 输出格式说明
+ *
+ * 注入到 system prompt 中，告诉 LLM 如何用 TOML 格式输出线程树指令。
+ * 这是线程树架构独有的格式，替代旧的 cognize_stack_frame / finish / wait 等指令。
+ */
+const THREAD_TREE_OUTPUT_FORMAT = `# 输出格式
+
+你的所有输出必须使用 TOML 格式。第一个非空白字符必须是 \`[\`。
+
+## 可用指令
+
+| 段落 | 用途 |
+|------|------|
+| \`[thought]\` | 记录思考过程 |
+| \`[program]\` | 执行代码 |
+| \`[talk]\` | 向其他对象发送消息 |
+| \`[return]\` | 完成当前线程，返回结果 |
+| \`[create_sub_thread]\` | 创建子线程处理子任务 |
+| \`[set_plan]\` | 更新当前计划 |
+| \`[await]\` | 等待某个子线程完成 |
+| \`[await_all]\` | 等待多个子线程完成 |
+
+## 字段说明
+
+### \`[thought]\`
+- \`content\` — 思考内容（必填，多行字符串）
+
+### \`[program]\`
+- \`code\` — 代码内容（必填，多行字符串）
+
+### \`[talk]\`
+- \`target\` — 目标对象名（必填）
+- \`message\` — 消息内容（必填）
+
+### \`[return]\`
+- \`summary\` — 完成摘要（必填）
+- \`artifacts\` — 产出物字典（可选）
+
+### \`[create_sub_thread]\`
+- \`title\` — 子线程标题（必填）
+- \`description\` — 子线程描述（可选）
+- \`traits\` — trait 名称数组（可选）
+
+### \`[set_plan]\`
+- \`text\` — 新计划内容（必填）
+
+### \`[await]\`
+- \`thread_id\` — 等待的子线程 ID（必填）
+
+### \`[await_all]\`
+- \`thread_ids\` — 等待的子线程 ID 数组（必填）
+
+## 重要规则
+
+1. 每轮输出只能包含一个主指令（\`[return]\`、\`[create_sub_thread]\`、\`[program]\`、\`[talk]\` 选其一）
+2. \`[thought]\` 可以和任何主指令并存
+3. \`[set_plan]\` 可以和任何主指令并存
+4. 任务完成后必须用 \`[return]\` 结束，不要无限循环
+5. 简单问答直接用 \`[thought]\` + \`[return]\`，不需要 \`[talk]\`
+
+## 示例
+
+### 简单回答
+\`\`\`toml
+[thought]
+content = """
+用户问了一个简单的问题，我可以直接回答。
+"""
+
+[return]
+summary = "这里是对用户问题的回答内容"
+\`\`\`
+
+### 执行代码
+\`\`\`toml
+[thought]
+content = "需要读取文件来获取信息"
+
+[program]
+code = """
+const data = readFile("docs/gene.md");
+return data;
+"""
+\`\`\`
+
+### 创建子线程
+\`\`\`toml
+[thought]
+content = "这个任务需要分解为子任务"
+
+[create_sub_thread]
+title = "调研 G1 基因的历史演变"
+description = "查阅 gene.md 和 discussions 目录，整理 G1 基因的演变过程"
+\`\`\`
+`;
+
 /* ========== Context → LLM Messages 转换 ========== */
 
 /**
@@ -101,6 +203,9 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>): Message[
   for (const w of ctx.instructions) {
     systemParts.push(`\n## [指令] ${w.name}\n${w.content}`);
   }
+
+  /* 线程树输出格式规范（覆盖旧 output_format trait） */
+  systemParts.push(`\n## [指令] 输出格式\n${THREAD_TREE_OUTPUT_FORMAT}`);
 
   /* 知识窗口 */
   for (const w of ctx.knowledge) {
@@ -330,6 +435,78 @@ export async function runWithThreadTree(
   /* 4. 记录总迭代次数 */
   let totalIterations = 0;
 
+  /* 4.1 创建代码执行器 */
+  const executor = new CodeExecutor();
+
+  /* 4.2 注册 Trait 方法 */
+  const methodRegistry = new MethodRegistry();
+  methodRegistry.registerAll(config.traits);
+
+  /* 4.3 构建执行上下文工厂（每次 program 执行时调用） */
+  const buildExecContext = (threadId: string): { context: Record<string, unknown>; getOutputs: () => string[] } => {
+    const outputs: string[] = [];
+    const printFn = (...args: unknown[]) => { outputs.push(args.map(String).join(" ")); };
+
+    const stoneDir = config.paths?.stoneDir ?? "";
+    const rootDir = config.paths?.rootDir ?? config.rootDir;
+
+    const context: Record<string, unknown> = {
+      /* 基础路径 */
+      self_dir: stoneDir,
+      self_files_dir: join(stoneDir, "files"),
+      world_dir: rootDir,
+      filesDir: join(objectFlowDir, "files"),
+
+      /* 基础 API */
+      print: printFn,
+      getData: (key: string) => config.stone.data[key],
+      getAllData: () => ({ ...config.stone.data }),
+      setData: (key: string, value: unknown) => { config.stone.data[key] = value; },
+
+      /* 文件 API（沙箱内） */
+      readFile: (path: string) => {
+        const resolved = resolve(rootDir, path);
+        if (!existsSync(resolved)) return null;
+        return readFileSync(resolved, "utf-8");
+      },
+      writeFile: (path: string, content: string) => {
+        const resolved = resolve(rootDir, path);
+        mkdirSync(resolve(resolved, ".."), { recursive: true });
+        writeFileSync(resolved, content, "utf-8");
+      },
+      listFiles: (path: string) => {
+        const resolved = resolve(rootDir, path);
+        if (!existsSync(resolved)) return [];
+        return readdirSync(resolved);
+      },
+      fileExists: (path: string) => {
+        return existsSync(resolve(rootDir, path));
+      },
+
+      /* local 变量 */
+      local: tree.readThreadData(threadId)?.locals ?? {},
+    };
+
+    /* 注入 Trait 方法 */
+    const scopeChain = tree.getNode(threadId)?.traits ?? [];
+    const activeTraitNames = getActiveTraits(config.traits, scopeChain).map(t => traitId(t));
+    const methodCtx: MethodContext = {
+      setData: (key: string, value: unknown) => { config.stone.data[key] = value; },
+      getData: (key: string) => config.stone.data[key],
+      print: printFn,
+      sessionId,
+      filesDir: join(objectFlowDir, "files"),
+      rootDir,
+      selfDir: stoneDir,
+      stoneName: objectName,
+      data: { ...config.stone.data },
+    };
+    const sandboxMethods = methodRegistry.buildSandboxMethods(methodCtx, activeTraitNames);
+    Object.assign(context, sandboxMethods);
+
+    return { context, getOutputs: () => outputs };
+  };
+
   /* 5. 创建 Scheduler */
   const scheduler = new ThreadScheduler({
     maxIterationsPerThread: config.schedulerConfig?.maxIterationsPerThread ?? 100,
@@ -396,6 +573,47 @@ export async function runWithThreadTree(
 
       /* 应用结果到 tree */
       await applyIterationResult(tree, threadId, iterResult, objectName, sessionId, scheduler);
+
+      /* 执行 program（如果有） */
+      if (iterResult.program && iterResult.program.code) {
+        const { context: execCtx, getOutputs } = buildExecContext(threadId);
+        const lang = (iterResult.program as any).lang ?? "javascript";
+
+        let execResult;
+        if (lang === "shell") {
+          execResult = await executeShell(iterResult.program.code, config.rootDir);
+        } else {
+          execResult = await executor.execute(iterResult.program.code, execCtx);
+        }
+
+        /* 收集输出 */
+        const printOutputs = getOutputs();
+        const allOutputs = [...printOutputs];
+        if (execResult.stdout) allOutputs.push(execResult.stdout);
+        if (execResult.returnValue !== null && execResult.returnValue !== undefined) {
+          allOutputs.push(typeof execResult.returnValue === "string"
+            ? execResult.returnValue
+            : JSON.stringify(execResult.returnValue, null, 2));
+        }
+        const outputText = allOutputs.join("\n").trim();
+
+        /* 记录 program action */
+        const td = tree.readThreadData(threadId);
+        if (td) {
+          td.actions.push({
+            type: "program",
+            content: iterResult.program.code,
+            success: execResult.success,
+            result: execResult.success
+              ? (outputText ? `>>> output:\n${outputText}` : ">>> output: (无输出)")
+              : `>>> error: ${execResult.error}`,
+            timestamp: Date.now(),
+          });
+          tree.writeThreadData(threadId, td);
+        }
+
+        consola.info(`[Engine] program ${execResult.success ? "成功" : "失败"}: ${outputText.slice(0, 200) || execResult.error?.slice(0, 200)}`);
+      }
 
       /* 发射进度事件 */
       emitSSE({
