@@ -431,31 +431,73 @@ export async function runWithThreadTree(
       /* 读取树的内部结构用于 Context 构建 */
       const treeFile = buildTreeFileSnapshot(tree);
 
-      /* 构建 Context */
-      const context = buildThreadContext({
-        tree: treeFile,
-        threadId,
-        threadData,
-        stone: config.stone,
-        directory: config.directory,
-        traits: config.traits,
-        extraWindows: config.extraWindows,
-        paths: config.paths,
-      });
+      let llmOutput: string;
+      let thinkingContent: string | undefined;
 
-      /* 转换为 LLM Messages */
-      const messages = contextToMessages(context);
+      /* 检查是否有缓存的 LLM 输出（resume 模式） */
+      if (threadData._pendingOutput) {
+        llmOutput = threadData._pendingOutput;
+        thinkingContent = threadData._pendingThinkingOutput;
 
-      /* 调用 LLM */
-      const llmResult = await config.llm.chat(messages);
+        /* 清除缓存 */
+        delete threadData._pendingOutput;
+        delete threadData._pendingThinkingOutput;
+        tree.writeThreadData(threadId, threadData);
+
+        consola.info(`[Engine] 使用缓存输出 (resume), thread=${threadId}`);
+      } else {
+        /* 构建 Context */
+        const context = buildThreadContext({
+          tree: treeFile,
+          threadId,
+          threadData,
+          stone: config.stone,
+          directory: config.directory,
+          traits: config.traits,
+          extraWindows: config.extraWindows,
+          paths: config.paths,
+        });
+
+        /* 转换为 LLM Messages */
+        const messages = contextToMessages(context);
+
+        /* 调用 LLM */
+        const llmResult = await config.llm.chat(messages);
+        llmOutput = llmResult.content;
+        thinkingContent = llmResult.thinkingContent;
+
+        /* LLM 返回后检查暂停信号 */
+        if (config.isPaused?.(objectName)) {
+          /* 缓存 LLM 输出到线程数据 */
+          threadData._pendingOutput = llmOutput;
+          if (thinkingContent) {
+            threadData._pendingThinkingOutput = thinkingContent;
+          }
+          tree.writeThreadData(threadId, threadData);
+
+          /* 写入调试文件（与旧系统兼容） */
+          const debugDir = join(objectFlowDir, "threads", threadId);
+          mkdirSync(debugDir, { recursive: true });
+          writeFileSync(join(debugDir, "llm.output.txt"), llmOutput, "utf-8");
+          if (thinkingContent) {
+            writeFileSync(join(debugDir, "llm.thinking.txt"), thinkingContent, "utf-8");
+          }
+
+          consola.info(`[Engine] 暂停 thread=${threadId}, 输出已缓存`);
+
+          /* 通知 scheduler 暂停此对象 */
+          scheduler.pauseObject(objectName);
+          return;
+        }
+      }
 
       /* 发射 SSE 思考事件 */
-      if (llmResult.thinkingContent) {
+      if (thinkingContent) {
         emitSSE({
           type: "stream:thought",
           objectName,
           sessionId,
-          chunk: llmResult.thinkingContent,
+          chunk: thinkingContent,
         });
       }
 
@@ -464,7 +506,7 @@ export async function runWithThreadTree(
         tree: treeFile,
         threadId,
         threadData,
-        llmOutput: llmResult.content,
+        llmOutput,
         stone: config.stone,
         traits: config.traits,
       });
@@ -511,6 +553,12 @@ export async function runWithThreadTree(
         }
 
         consola.info(`[Engine] program ${execResult.success ? "成功" : "失败"}: ${outputText.slice(0, 200) || execResult.error?.slice(0, 200)}`);
+      }
+
+      /* debugMode 检查：单步执行后自动暂停 */
+      if (threadData._debugMode) {
+        consola.info(`[Engine] debugMode 单步完成, thread=${threadId}, 自动暂停`);
+        scheduler.pauseObject(objectName);
       }
 
       /* 发射进度事件 */
@@ -583,4 +631,250 @@ function buildTreeFileSnapshot(tree: ThreadsTree): ThreadsTreeFile {
     rootId: tree.rootId,
     nodes,
   };
+}
+
+/* ========== Resume / StepOnce ========== */
+
+/**
+ * 恢复暂停的线程树执行
+ *
+ * 从 session 目录加载 ThreadsTree，清除暂停状态，重新运行 Scheduler。
+ * 线程中缓存的 _pendingOutput 会被 runOneIteration 检测到并跳过 LLM 调用。
+ *
+ * @param objectName - 对象名称
+ * @param sessionId - 要恢复的 session ID
+ * @param config - 引擎配置
+ * @param modifiedOutput - 可选：替换缓存的 LLM 输出（用于人工干预）
+ * @returns 执行结果
+ */
+export async function resumeWithThreadTree(
+  objectName: string,
+  sessionId: string,
+  config: EngineConfig,
+  modifiedOutput?: string,
+): Promise<TalkResult> {
+  const sessionDir = join(config.flowsDir, sessionId);
+  const objectFlowDir = join(sessionDir, "objects", objectName);
+
+  /* 加载 ThreadsTree */
+  const tree = ThreadsTree.load(objectFlowDir);
+  if (!tree) {
+    throw new Error(`无法加载线程树: ${objectFlowDir}`);
+  }
+
+  consola.info(`[Engine] 恢复执行 ${objectName}, session=${sessionId}`);
+
+  /* 如果提供了修改后的输出，替换缓存 */
+  if (modifiedOutput !== undefined) {
+    /* 找到有 _pendingOutput 的线程 */
+    for (const nodeId of tree.nodeIds) {
+      const td = tree.readThreadData(nodeId);
+      if (td?._pendingOutput) {
+        td._pendingOutput = modifiedOutput;
+        tree.writeThreadData(nodeId, td);
+        consola.info(`[Engine] 替换缓存输出, thread=${nodeId}`);
+        break;
+      }
+    }
+  }
+
+  /* 将所有 running 状态的线程恢复（scheduler 需要它们） */
+  emitSSE({ type: "flow:start", objectName, sessionId });
+
+  let totalIterations = 0;
+  const executor = new CodeExecutor();
+  const methodRegistry = new MethodRegistry();
+  methodRegistry.registerAll(config.traits);
+
+  /* 复用 buildExecContext（与 runWithThreadTree 相同逻辑） */
+  const buildExecContext = (threadId: string): { context: Record<string, unknown>; getOutputs: () => string[] } => {
+    const outputs: string[] = [];
+    const printFn = (...args: unknown[]) => { outputs.push(args.map(String).join(" ")); };
+    const stoneDir = config.paths?.stoneDir ?? "";
+    const rootDir = config.paths?.rootDir ?? config.rootDir;
+
+    const context: Record<string, unknown> = {
+      self_dir: stoneDir,
+      self_files_dir: join(stoneDir, "files"),
+      world_dir: rootDir,
+      filesDir: join(objectFlowDir, "files"),
+      print: printFn,
+      getData: (key: string) => config.stone.data[key],
+      getAllData: () => ({ ...config.stone.data }),
+      setData: (key: string, value: unknown) => { config.stone.data[key] = value; },
+      readFile: (path: string) => {
+        const resolved = resolve(rootDir, path);
+        if (!existsSync(resolved)) return null;
+        return readFileSync(resolved, "utf-8");
+      },
+      writeFile: (path: string, content: string) => {
+        const resolved = resolve(rootDir, path);
+        mkdirSync(resolve(resolved, ".."), { recursive: true });
+        writeFileSync(resolved, content, "utf-8");
+      },
+      listFiles: (path: string) => {
+        const resolved = resolve(rootDir, path);
+        if (!existsSync(resolved)) return [];
+        return readdirSync(resolved);
+      },
+      fileExists: (path: string) => existsSync(resolve(rootDir, path)),
+      local: tree.readThreadData(threadId)?.locals ?? {},
+    };
+
+    const scopeChain = tree.getNode(threadId)?.traits ?? [];
+    const activeTraitNames = getActiveTraits(config.traits, scopeChain).map(t => traitId(t));
+    const methodCtx: MethodContext = {
+      setData: (key: string, value: unknown) => { config.stone.data[key] = value; },
+      getData: (key: string) => config.stone.data[key],
+      print: printFn,
+      sessionId,
+      filesDir: join(objectFlowDir, "files"),
+      rootDir,
+      selfDir: stoneDir,
+      stoneName: objectName,
+      data: { ...config.stone.data },
+    };
+    Object.assign(context, methodRegistry.buildSandboxMethods(methodCtx, activeTraitNames));
+    return { context, getOutputs: () => outputs };
+  };
+
+  const scheduler = new ThreadScheduler({
+    maxIterationsPerThread: config.schedulerConfig?.maxIterationsPerThread ?? 100,
+    maxTotalIterations: config.schedulerConfig?.maxTotalIterations ?? 500,
+    deadlockGracePeriodMs: config.schedulerConfig?.deadlockGracePeriodMs ?? 30_000,
+  });
+
+  const callbacks: SchedulerCallbacks = {
+    runOneIteration: async (threadId: string, _objectName: string) => {
+      totalIterations++;
+      const threadData = tree.readThreadData(threadId);
+      if (!threadData) throw new Error(`线程数据不存在: ${threadId}`);
+
+      const treeFile = buildTreeFileSnapshot(tree);
+      let llmOutput: string;
+      let thinkingContent: string | undefined;
+
+      if (threadData._pendingOutput) {
+        llmOutput = threadData._pendingOutput;
+        thinkingContent = threadData._pendingThinkingOutput;
+        delete threadData._pendingOutput;
+        delete threadData._pendingThinkingOutput;
+        tree.writeThreadData(threadId, threadData);
+        consola.info(`[Engine] 使用缓存输出 (resume), thread=${threadId}`);
+      } else {
+        const context = buildThreadContext({
+          tree: treeFile, threadId, threadData,
+          stone: config.stone, directory: config.directory,
+          traits: config.traits, extraWindows: config.extraWindows, paths: config.paths,
+        });
+        const messages = contextToMessages(context);
+        const llmResult = await config.llm.chat(messages);
+        llmOutput = llmResult.content;
+        thinkingContent = llmResult.thinkingContent;
+
+        if (config.isPaused?.(objectName)) {
+          threadData._pendingOutput = llmOutput;
+          if (thinkingContent) threadData._pendingThinkingOutput = thinkingContent;
+          tree.writeThreadData(threadId, threadData);
+          scheduler.pauseObject(objectName);
+          return;
+        }
+      }
+
+      if (thinkingContent) {
+        emitSSE({ type: "stream:thought", objectName, sessionId, chunk: thinkingContent });
+      }
+
+      const iterResult = runThreadIteration({
+        tree: treeFile, threadId, threadData, llmOutput,
+        stone: config.stone, traits: config.traits,
+      });
+
+      await applyIterationResult(tree, threadId, iterResult, objectName, sessionId, scheduler);
+
+      if (iterResult.program?.code) {
+        const { context: execCtx, getOutputs } = buildExecContext(threadId);
+        const lang = (iterResult.program as any).lang ?? "javascript";
+        const execResult = lang === "shell"
+          ? await executeShell(iterResult.program.code, config.rootDir)
+          : await executor.execute(iterResult.program.code, execCtx);
+
+        const allOutputs = [...getOutputs()];
+        if (execResult.stdout) allOutputs.push(execResult.stdout);
+        if (execResult.returnValue != null) {
+          allOutputs.push(typeof execResult.returnValue === "string"
+            ? execResult.returnValue : JSON.stringify(execResult.returnValue, null, 2));
+        }
+        const outputText = allOutputs.join("\n").trim();
+
+        const td = tree.readThreadData(threadId);
+        if (td) {
+          td.actions.push({
+            type: "program", content: iterResult.program.code,
+            success: execResult.success,
+            result: execResult.success
+              ? (outputText ? `>>> output:\n${outputText}` : ">>> output: (无输出)")
+              : `>>> error: ${execResult.error}`,
+            timestamp: Date.now(),
+          });
+          tree.writeThreadData(threadId, td);
+        }
+      }
+
+      if (threadData._debugMode) {
+        consola.info(`[Engine] debugMode 单步完成, thread=${threadId}`);
+        scheduler.pauseObject(objectName);
+      }
+    },
+    onThreadFinished: (threadId) => consola.info(`[Engine] 线程结束 ${threadId}`),
+    onThreadError: (threadId, _objectName, error) => {
+      tree.writeInbox(threadId, { from: "system", content: `[错误] ${error}`, source: "thread_error" });
+    },
+  };
+
+  await scheduler.run(objectName, tree, callbacks);
+
+  const rootNode = tree.getNode(tree.rootId);
+  const finalStatus = rootNode?.status ?? "failed";
+
+  emitSSE({
+    type: "flow:end", objectName, sessionId,
+    status: finalStatus === "done" ? "idle" : "error",
+  });
+
+  consola.info(`[Engine] 恢复执行结束 ${objectName}, status=${finalStatus}, iterations=${totalIterations}`);
+  return { sessionId, status: finalStatus, summary: rootNode?.summary, totalIterations };
+}
+
+/**
+ * 单步执行线程树
+ *
+ * 设置 debugMode，执行一轮后自动暂停。
+ * 可选替换缓存的 LLM 输出（人工干预）。
+ */
+export async function stepOnceWithThreadTree(
+  objectName: string,
+  sessionId: string,
+  config: EngineConfig,
+  modifiedOutput?: string,
+): Promise<TalkResult> {
+  const sessionDir = join(config.flowsDir, sessionId);
+  const objectFlowDir = join(sessionDir, "objects", objectName);
+
+  const tree = ThreadsTree.load(objectFlowDir);
+  if (!tree) throw new Error(`无法加载线程树: ${objectFlowDir}`);
+
+  /* 为所有 running 线程设置 debugMode */
+  for (const nodeId of tree.nodeIds) {
+    const node = tree.getNode(nodeId);
+    if (node?.status === "running") {
+      const td = tree.readThreadData(nodeId);
+      if (td) {
+        td._debugMode = true;
+        tree.writeThreadData(nodeId, td);
+      }
+    }
+  }
+
+  return resumeWithThreadTree(objectName, sessionId, config, modifiedOutput);
 }

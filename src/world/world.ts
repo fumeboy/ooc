@@ -28,7 +28,7 @@ import { loadAllTraits, loadTraitsByRef } from "../trait/index.js";
 import { OpenAICompatibleClient, type LLMClient } from "../thinkable/client.js";
 import { DefaultConfig, type LLMConfig } from "../thinkable/config.js";
 import { emitSSE } from "../server/events.js";
-import { runWithThreadTree, type EngineConfig, type TalkResult } from "../thread/engine.js";
+import { runWithThreadTree, resumeWithThreadTree, stepOnceWithThreadTree, type EngineConfig, type TalkResult } from "../thread/engine.js";
 
 /** World 配置 */
 export interface WorldConfig {
@@ -477,6 +477,29 @@ export class World implements Routable {
     return flow;
   }
 
+  /**
+   * 将线程树执行结果包装为兼容的 Flow 对象
+   */
+  private _wrapThreadTreeResult(result: TalkResult, objectName: string, sessionId: string): Flow {
+    const sessionDir = join(this.flowsDir, sessionId);
+    const flowDir = join(sessionDir, "objects", objectName);
+
+    let flow = Flow.load(flowDir);
+    if (!flow) {
+      flow = Flow.create(this.flowsDir, objectName, "", "system");
+      flow.setStatus(result.status === "done" ? "finished" : result.status === "failed" ? "failed" : "waiting");
+      if (result.summary) flow.setSummary(result.summary);
+      flow.save();
+    } else {
+      flow.setStatus(result.status === "done" ? "finished" : result.status === "failed" ? "failed" : "waiting");
+      if (result.summary) flow.setSummary(result.summary);
+      flow.save();
+    }
+
+    consola.info(`[World] 线程树执行完成: session=${sessionId}, status=${result.status}, iterations=${result.totalIterations}`);
+    return flow;
+  }
+
   /* ========== 暂停/恢复 ========== */
 
   /**
@@ -500,6 +523,32 @@ export class World implements Routable {
    */
   async resumeFlow(objectName: string, flowId: string): Promise<Flow> {
     this._pauseRequests.delete(objectName);
+
+    /* 线程树路由：检查 session 目录是否包含线程树数据 */
+    if (this._useThreadTree) {
+      const sessionDir = join(this.flowsDir, flowId);
+      const objectFlowDir = join(sessionDir, "objects", objectName);
+      const { ThreadsTree } = await import("../thread/tree.js");
+      const tree = ThreadsTree.load(objectFlowDir);
+      if (tree) {
+        const stone = this._registry.get(objectName);
+        if (!stone) throw new Error(`对象 "${objectName}" 不存在`);
+        const traits = await this._loadTraits(stone);
+        const engineConfig: EngineConfig = {
+          rootDir: this._rootDir,
+          flowsDir: this.flowsDir,
+          llm: this._llm,
+          directory: this._registry.buildDirectory(),
+          traits,
+          stone: stone.toJSON(),
+          paths: { stoneDir: stone.dir, rootDir: this._rootDir, flowsDir: this.flowsDir },
+          isPaused: (name) => this._pauseRequests.has(name),
+        };
+        const result = await resumeWithThreadTree(objectName, flowId, engineConfig);
+        return this._wrapThreadTreeResult(result, objectName, flowId);
+      }
+    }
+
     return this._resumePausedFlow(objectName, flowId);
   }
 
@@ -511,6 +560,31 @@ export class World implements Routable {
    */
   async stepOnce(objectName: string, flowId: string, modifiedOutput?: string): Promise<Flow> {
     this._pauseRequests.delete(objectName);
+
+    /* 线程树路由 */
+    if (this._useThreadTree) {
+      const sessionDir = join(this.flowsDir, flowId);
+      const objectFlowDir = join(sessionDir, "objects", objectName);
+      const { ThreadsTree } = await import("../thread/tree.js");
+      const tree = ThreadsTree.load(objectFlowDir);
+      if (tree) {
+        const stone = this._registry.get(objectName);
+        if (!stone) throw new Error(`对象 "${objectName}" 不存在`);
+        const traits = await this._loadTraits(stone);
+        const engineConfig: EngineConfig = {
+          rootDir: this._rootDir,
+          flowsDir: this.flowsDir,
+          llm: this._llm,
+          directory: this._registry.buildDirectory(),
+          traits,
+          stone: stone.toJSON(),
+          paths: { stoneDir: stone.dir, rootDir: this._rootDir, flowsDir: this.flowsDir },
+          isPaused: (name) => this._pauseRequests.has(name),
+        };
+        const result = await stepOnceWithThreadTree(objectName, flowId, engineConfig, modifiedOutput);
+        return this._wrapThreadTreeResult(result, objectName, flowId);
+      }
+    }
 
     const stone = this._registry.get(objectName);
     if (!stone) throw new Error(`对象 "${objectName}" 不存在`);

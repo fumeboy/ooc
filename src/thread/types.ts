@@ -71,6 +71,13 @@ export interface ThreadDataFile {
   inbox?: ThreadInboxMessage[];
   todos?: ThreadTodoItem[];
   hooks?: ThreadFrameHook[];
+
+  /** 暂停时缓存的 LLM 输出（resume 时使用，跳过 LLM 调用） */
+  _pendingOutput?: string;
+  /** 暂停时缓存的 thinking 输出 */
+  _pendingThinkingOutput?: string;
+  /** 单步调试模式：执行一轮后自动暂停 */
+  _debugMode?: boolean;
 }
 
 /**

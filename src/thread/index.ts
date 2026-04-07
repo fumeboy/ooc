@@ -35,4 +35,4 @@ export {
 } from "./collaboration.js";
 
 /* 阶段 6: 执行引擎（集成层） */
-export { runWithThreadTree, type EngineConfig, type TalkResult } from "./engine.js";
+export { runWithThreadTree, resumeWithThreadTree, stepOnceWithThreadTree, type EngineConfig, type TalkResult } from "./engine.js";
