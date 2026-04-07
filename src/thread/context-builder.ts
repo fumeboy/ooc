@@ -139,8 +139,6 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
 
   const instructions: ContextWindow[] = activeTraits
     .filter(t => t.readme && isKernelTrait(localTraitId(t)))
-    /* 排除旧 output_format trait，线程树引擎会注入新版输出格式 */
-    .filter(t => localTraitId(t) !== "kernel/computable/output_format")
     .map(t => ({ name: localTraitId(t), content: t.readme }));
 
   const knowledge: ContextWindow[] = activeTraits
