@@ -255,7 +255,26 @@ export function runThreadIteration(input: ThreadIterationInput): ThreadIteration
    *    并在执行后生成对应的 recordAction。
    */
   if (parsed.program) result.program = parsed.program;
-  if (parsed.talk) result.talks = parsed.talk;
+  if (parsed.talk) {
+    result.talks = parsed.talk;
+
+    /* 兼容：当 [talk] target 是 user/human 且没有其他主指令时，
+     * 自动视为 [return]（不同 LLM 对指令遵循程度不同，
+     * 有些 LLM 习惯用 [talk] 回复用户而非 [return]） */
+    const target = parsed.talk.target?.toLowerCase();
+    if ((target === "user" || target === "human") && !parsed.program && !parsed.createSubThread) {
+      result.statusChange = "done";
+      result.returnResult = {
+        summary: parsed.talk.message,
+        status: "done",
+      };
+      result.newActions.push({
+        type: "thread_return",
+        content: `[return] ${parsed.talk.message}`,
+        timestamp: Date.now(),
+      });
+    }
+  }
 
   return result;
 }
