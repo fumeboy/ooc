@@ -225,10 +225,7 @@ async function applyIterationResult(
     tree.addTodo(threadId, todo.content, todo.sourceMessageId);
   }
 
-  /* 6. 写回线程数据 */
-  tree.writeThreadData(threadId, threadData);
-
-  /* 7. 创建子线程 */
+  /* 6. 创建子线程（在写回 threadData 之前，因为需要替换假 ID） */
   if (result.newChildNode) {
     const child = result.newChildNode;
     /* deriveFrom 决定子线程挂在哪个节点下 */
@@ -301,6 +298,9 @@ async function applyIterationResult(
       } as any });
     }
   }
+
+  /* 7. 写回线程数据（在子线程创建和 ID 替换之后） */
+  tree.writeThreadData(threadId, threadData);
 
   /* 8. 处理状态变更 */
   if (result.statusChange === "done" && result.returnResult) {
