@@ -37,7 +37,9 @@ async function main(): Promise<void> {
   }
 
   /* 初始化 World */
-  const world = new World({ rootDir: OOC_ROOT });
+  const useThreadTree = process.env.OOC_THREAD_TREE === "1";
+  const world = new World({ rootDir: OOC_ROOT, useThreadTree });
+  if (useThreadTree) consola.info("[CLI] 线程树架构已启用 (OOC_THREAD_TREE=1)");
   world.init();
 
   switch (command) {
