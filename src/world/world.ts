@@ -28,6 +28,7 @@ import { loadAllTraits, loadTraitsByRef } from "../trait/index.js";
 import { OpenAICompatibleClient, type LLMClient } from "../thinkable/client.js";
 import { DefaultConfig, type LLMConfig } from "../thinkable/config.js";
 import { emitSSE } from "../server/events.js";
+import { runWithThreadTree, type EngineConfig, type TalkResult } from "../thread/engine.js";
 
 /** World 配置 */
 export interface WorldConfig {
@@ -35,6 +36,8 @@ export interface WorldConfig {
   rootDir: string;
   /** LLM 配置（可选，默认使用 DefaultConfig） */
   llmConfig?: LLMConfig;
+  /** 是否使用线程树架构（默认 false，使用旧的 Flow 架构） */
+  useThreadTree?: boolean;
 }
 
 /** World 实例 —— 实现 Routable 接口支持对象间协作 */
@@ -58,11 +61,14 @@ export class World implements Routable {
   private _cron: CronManager;
   /** trait 树形索引（loadAllTraits 后填充） */
   private _traitTree: import("../types/index.js").TraitTree[] = [];
+  /** 是否使用线程树架构 */
+  private readonly _useThreadTree: boolean;
 
   constructor(config: WorldConfig) {
     this._rootDir = config.rootDir;
     this._registry = new Registry(join(config.rootDir, "stones"));
     this._llm = new OpenAICompatibleClient(config.llmConfig ?? DefaultConfig());
+    this._useThreadTree = config.useThreadTree ?? false;
     this._cron = new CronManager((task) => {
       this.talk(task.targetObject, task.message, `cron:${task.createdBy}`).catch(err => {
         consola.error(`[Cron] 定时任务 ${task.id} 执行失败:`, err);
@@ -402,12 +408,72 @@ export class World implements Routable {
    * @returns Flow 实例
    */
   async talk(objectName: string, message: string, from: string = "human", flowId?: string): Promise<Flow> {
+    /* 线程树架构路径（新） */
+    if (this._useThreadTree && !flowId) {
+      return this._talkWithThreadTree(objectName, message, from);
+    }
+
+    /* 旧架构路径 */
     /* 如果指定了 flowId，在已有 Flow 上续写 */
     if (flowId) {
       return this._resumeAndRunFlow(objectName, message, from, flowId);
     }
     /* 否则创建新的 Flow */
     const flow = await this._createAndRunFlow(objectName, message, from);
+    return flow;
+  }
+
+  /**
+   * 线程树架构的 talk 实现
+   *
+   * 使用新的 thread/ 模块执行对话，返回兼容的 Flow 对象。
+   * 内部通过 runWithThreadTree 执行，结果包装为 Flow 以保持接口兼容。
+   */
+  private async _talkWithThreadTree(objectName: string, message: string, from: string): Promise<Flow> {
+    const stone = this._registry.get(objectName);
+    if (!stone) throw new Error(`对象 "${objectName}" 不存在`);
+
+    /* 加载 traits */
+    const traits = await this._loadTraits(stone);
+    const directory = this._registry.buildDirectory();
+
+    /* 构建引擎配置 */
+    const engineConfig: EngineConfig = {
+      rootDir: this._rootDir,
+      flowsDir: this.flowsDir,
+      llm: this._llm,
+      directory,
+      traits,
+      stone: stone.toJSON(),
+      paths: {
+        stoneDir: stone.dir,
+        rootDir: this._rootDir,
+        flowsDir: this.flowsDir,
+      },
+      isPaused: (name) => this._pauseRequests.has(name),
+    };
+
+    /* 运行线程树引擎 */
+    consola.info(`[World] 使用线程树架构处理 talk: ${from} → ${objectName}`);
+    const result: TalkResult = await runWithThreadTree(objectName, message, from, engineConfig);
+
+    /* 将结果包装为兼容的 Flow 对象 */
+    const sessionDir = join(this.flowsDir, result.sessionId);
+    const flowDir = join(sessionDir, "objects", objectName);
+
+    /* 尝试加载生成的 Flow（engine 会创建 session 目录结构） */
+    let flow = Flow.load(flowDir);
+    if (!flow) {
+      /* 如果 engine 没有创建 Flow 格式的数据，创建一个最小的 Flow 作为兼容层 */
+      flow = Flow.create(this.flowsDir, objectName, message, from);
+      flow.setStatus(result.status === "done" ? "finished" : result.status === "failed" ? "failed" : "waiting");
+      if (result.summary) {
+        flow.setSummary(result.summary);
+      }
+      flow.save();
+    }
+
+    consola.info(`[World] 线程树执行完成: session=${result.sessionId}, status=${result.status}, iterations=${result.totalIterations}`);
     return flow;
   }
 

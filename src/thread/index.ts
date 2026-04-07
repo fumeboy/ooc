@@ -33,3 +33,6 @@ export {
   type ThreadCollaborationAPI,
   type SharedTalkRoundCounter,
 } from "./collaboration.js";
+
+/* 阶段 6: 执行引擎（集成层） */
+export { runWithThreadTree, type EngineConfig, type TalkResult } from "./engine.js";
