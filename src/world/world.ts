@@ -457,21 +457,37 @@ export class World implements Routable {
     consola.info(`[World] 使用线程树架构处理 talk: ${from} → ${objectName}`);
     const result: TalkResult = await runWithThreadTree(objectName, message, from, engineConfig);
 
-    /* 将结果包装为兼容的 Flow 对象 */
+    /* 在线程树 session 目录下写入 Flow 兼容数据 */
     const sessionDir = join(this.flowsDir, result.sessionId);
     const flowDir = join(sessionDir, "objects", objectName);
+    const now = Date.now();
 
-    /* 尝试加载生成的 Flow（engine 会创建 session 目录结构） */
-    let flow = Flow.load(flowDir);
-    if (!flow) {
-      /* 如果 engine 没有创建 Flow 格式的数据，创建一个最小的 Flow 作为兼容层 */
-      flow = Flow.create(this.flowsDir, objectName, message, from);
-      flow.setStatus(result.status === "done" ? "finished" : result.status === "failed" ? "failed" : "waiting");
-      if (result.summary) {
-        flow.setSummary(result.summary);
-      }
-      flow.save();
+    const messages: Array<Record<string, unknown>> = [
+      { direction: "in", from, to: objectName, content: message, timestamp: now - 1 },
+    ];
+    if (result.summary) {
+      messages.push({ direction: "out", from: objectName, to: from, content: result.summary, timestamp: now });
     }
+
+    const flowData = {
+      sessionId: result.sessionId,
+      stoneName: objectName,
+      status: result.status === "done" ? "finished" : result.status === "failed" ? "failed" : "waiting",
+      messages,
+      process: { root: { id: "root", title: "task", status: "done", children: [] }, focusId: "root" },
+      data: {},
+      summary: result.summary ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    mkdirSync(flowDir, { recursive: true });
+    writeFileSync(join(flowDir, "data.json"), JSON.stringify(flowData, null, 2), "utf-8");
+    writeFileSync(join(flowDir, ".flow"), "", "utf-8");
+
+    /* 加载为 Flow 对象返回 */
+    const flow = Flow.load(flowDir);
+    if (!flow) throw new Error(`无法加载 Flow: ${flowDir}`);
 
     consola.info(`[World] 线程树执行完成: session=${result.sessionId}, status=${result.status}, iterations=${result.totalIterations}`);
     return flow;
@@ -483,17 +499,44 @@ export class World implements Routable {
   private _wrapThreadTreeResult(result: TalkResult, objectName: string, sessionId: string): Flow {
     const sessionDir = join(this.flowsDir, sessionId);
     const flowDir = join(sessionDir, "objects", objectName);
+    const now = Date.now();
 
+    /* 尝试加载已有 Flow 并更新 */
     let flow = Flow.load(flowDir);
-    if (!flow) {
-      flow = Flow.create(this.flowsDir, objectName, "", "system");
+    if (flow) {
       flow.setStatus(result.status === "done" ? "finished" : result.status === "failed" ? "failed" : "waiting");
-      if (result.summary) flow.setSummary(result.summary);
+      if (result.summary) {
+        flow.setSummary(result.summary);
+        /* 追加 outbound 消息（如果还没有） */
+        const flowJson = flow.toJSON();
+        const hasOutbound = flowJson.messages.some((m: any) => m.direction === "out");
+        if (!hasOutbound) {
+          flow.addMessage({ direction: "out", from: objectName, to: "human", content: result.summary, timestamp: now });
+        }
+      }
       flow.save();
     } else {
-      flow.setStatus(result.status === "done" ? "finished" : result.status === "failed" ? "failed" : "waiting");
-      if (result.summary) flow.setSummary(result.summary);
-      flow.save();
+      /* 创建兼容 Flow 数据 */
+      const messages: Array<Record<string, unknown>> = [];
+      if (result.summary) {
+        messages.push({ direction: "out", from: objectName, to: "human", content: result.summary, timestamp: now });
+      }
+      const flowData = {
+        sessionId,
+        stoneName: objectName,
+        status: result.status === "done" ? "finished" : result.status === "failed" ? "failed" : "waiting",
+        messages,
+        process: { root: { id: "root", title: "task", status: "done", children: [] }, focusId: "root" },
+        data: {},
+        summary: result.summary ?? null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      mkdirSync(flowDir, { recursive: true });
+      writeFileSync(join(flowDir, "data.json"), JSON.stringify(flowData, null, 2), "utf-8");
+      writeFileSync(join(flowDir, ".flow"), "", "utf-8");
+      flow = Flow.load(flowDir);
+      if (!flow) throw new Error(`无法加载 Flow: ${flowDir}`);
     }
 
     consola.info(`[World] 线程树执行完成: session=${sessionId}, status=${result.status}, iterations=${result.totalIterations}`);

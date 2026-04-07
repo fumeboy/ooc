@@ -358,8 +358,20 @@ async function handleRoute(
     const sessionId = flowDetailMatch[1]!;
     const sessionDir = join(world.flowsDir, sessionId);
 
-    /* 新结构：main flow 在 session/flows/user/ */
+    /* 新结构：main flow 在 session/objects/user/ */
     let flow = readFlow(join(sessionDir, "objects", "user"));
+    if (!flow) {
+      /* 线程树兼容：扫描 objects/ 下第一个有 data.json 的子目录 */
+      const objDir = join(sessionDir, "objects");
+      if (existsSync(objDir)) {
+        const entries = readdirSync(objDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          const subFlow = readFlow(join(objDir, entry.name));
+          if (subFlow) { flow = subFlow; break; }
+        }
+      }
+    }
     if (!flow) {
       /* 兼容旧数据：session 根目录 */
       flow = readFlow(sessionDir);
@@ -865,8 +877,20 @@ function getSessionsSummary(flowsDir: string): Array<{
   }> = [];
 
   for (const sessionId of sessionIds) {
-    /* 新结构：session/flows/user/ */
+    /* 新结构：session/objects/user/ */
     let flow = readFlow(join(flowsDir, sessionId, "objects", "user"));
+    if (!flow) {
+      /* 线程树兼容：扫描 objects/ 下第一个有 data.json 的子目录 */
+      const objectsDir = join(flowsDir, sessionId, "objects");
+      if (existsSync(objectsDir)) {
+        const entries = readdirSync(objectsDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          const subFlow = readFlow(join(objectsDir, entry.name));
+          if (subFlow) { flow = subFlow; break; }
+        }
+      }
+    }
     if (!flow) {
       /* 兼容旧数据：session 根目录 */
       flow = readFlow(join(flowsDir, sessionId));
