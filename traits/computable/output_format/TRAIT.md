@@ -16,12 +16,21 @@ deps: ["kernel/computable"]
 |------|------|
 | `[thought]` | 记录思考过程 |
 | `[program]` | 执行代码 |
-| `[talk]` | 向其他对象发送消息 |
-| `[return]` | 完成当前线程，返回结果 |
+| `[talk]` | 向其他对象发送消息（异步，发完继续执行） |
+| `[talk_sync]` | 向其他对象发送消息（同步，发完等待回复） |
+| `[return]` | 完成当前线程，返回结果给创建者 |
 | `[create_sub_thread]` | 创建子线程处理子任务 |
 | `[set_plan]` | 更新当前计划 |
 | `[await]` | 等待某个子线程完成 |
 | `[await_all]` | 等待多个子线程完成 |
+
+## 创建者与返回
+
+每个线程都有一个创建者（creator），在 Context 的「创建者」部分说明。
+
+- 任务完成后，用 `[return]` 或 `[talk] target="创建者"` 返回结果
+- `[talk] target=创建者` 等价于 `[return]`，系统会自动处理
+- 简单问答直接用 `[return]`，不需要 `[talk]`
 
 ## 各段字段说明
 
@@ -33,6 +42,12 @@ deps: ["kernel/computable"]
 - `lang` — 语言（可选）：`"javascript"` | `"shell"`，默认 `"javascript"`
 
 ### `[talk]`
+异步发送消息，发完后继续执行当前线程。
+- `target` — 目标对象名（必填）
+- `message` — 消息内容（必填）
+
+### `[talk_sync]`
+同步发送消息，发完后暂停当前线程，等待对方回复。适合"问一个问题然后等答案"的场景。
 - `target` — 目标对象名（必填）
 - `message` — 消息内容（必填）
 
@@ -56,11 +71,10 @@ deps: ["kernel/computable"]
 
 ## 互斥规则
 
-1. 每轮输出只能包含一个主指令（`[return]`、`[create_sub_thread]`、`[program]`、`[talk]` 选其一）
+1. 每轮输出只能包含一个主指令（`[return]`、`[create_sub_thread]`、`[program]`、`[talk]`、`[talk_sync]` 选其一）
 2. `[thought]` 可以和任何主指令并存
 3. `[set_plan]` 可以和任何主指令并存
 4. 任务完成后必须用 `[return]` 结束，不要无限循环
-5. 简单问答直接用 `[thought]` + `[return]`，不需要 `[talk]`
 
 ## 常见错误
 
@@ -71,7 +85,7 @@ deps: ["kernel/computable"]
 
 ## 示例
 
-### 简单回答
+### 简单回答（直接返回给创建者）
 ```toml
 [thought]
 content = """
@@ -94,11 +108,18 @@ return data;
 """
 ```
 
-### 向其他对象发消息
+### 异步通知其他对象
 ```toml
 [talk]
 target = "kernel"
 message = "请帮我检查一下 ThinkLoop 的实现"
+```
+
+### 同步询问其他对象（等待回复）
+```toml
+[talk_sync]
+target = "sophia"
+message = "G1 基因的最新定义是什么？"
 ```
 
 ### 创建子线程

@@ -58,6 +58,12 @@ export interface ThreadContext {
   /** 知识窗口（user trait readme + 动态 windows） */
   knowledge: ContextWindow[];
 
+  /* === 创建者信息 === */
+  /** 创建者标识（root 线程为 "human"，子线程为创建者线程 ID 或对象名） */
+  creator: string;
+  /** 创建方式 */
+  creationMode: "root" | "sub_thread" | "sub_thread_on_node" | "talk";
+
   /* === 规划视角 === */
   /** 子节点摘要 */
   childrenSummary: string;
@@ -182,6 +188,24 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
   const locals: Record<string, unknown> = {};
   if (threadData.locals) Object.assign(locals, threadData.locals);
 
+  /* 7. creator 信息 */
+  let creator = "human";
+  let creationMode: "root" | "sub_thread" | "sub_thread_on_node" | "talk" = "root";
+  if (nodeMeta.creatorObjectName) {
+    /* 跨 Object 创建（talk 场景）：creator 是发起 talk 的对象名 */
+    creator = nodeMeta.creatorObjectName;
+    creationMode = nodeMeta.creationMode ?? "talk";
+  } else if (nodeMeta.creatorThreadId && nodeMeta.creatorThreadId !== nodeMeta.parentId) {
+    /* create_sub_thread_on_node：creator 是调用方线程，不是父节点 */
+    creator = nodeMeta.creatorThreadId;
+    creationMode = nodeMeta.creationMode ?? "sub_thread_on_node";
+  } else if (nodeMeta.parentId) {
+    /* 普通 create_sub_thread：creator 是父线程 */
+    creator = nodeMeta.parentId;
+    creationMode = nodeMeta.creationMode ?? "sub_thread";
+  }
+  /* else: root 线程，creator = "human", creationMode = "root" */
+
   return {
     name: stone.name,
     whoAmI: stone.thinkable.whoAmI,
@@ -191,6 +215,8 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
     locals,
     instructions,
     knowledge,
+    creator,
+    creationMode,
     childrenSummary,
     ancestorSummary,
     siblingSummary,

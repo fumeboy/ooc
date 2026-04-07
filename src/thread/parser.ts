@@ -47,8 +47,10 @@ export interface ThreadParsedOutput {
   thought?: string;
   /** 程序执行 */
   program: ProgramSection | null;
-  /** 对话 */
+  /** 异步对话 */
   talk: TalkSection | null;
+  /** 同步对话（发送后自动 wait） */
+  talkSync: TalkSection | null;
   /** 工具调用 */
   actions: ActionSection[];
   /** 创建子线程 */
@@ -79,6 +81,7 @@ export function parseThreadOutput(output: string): ThreadParsedOutput {
     thought: undefined,
     program: null,
     talk: null,
+    talkSync: null,
     actions: [],
     createSubThread: null,
     threadReturn: null,
@@ -110,6 +113,15 @@ export function parseThreadOutput(output: string): ThreadParsedOutput {
   if (parsed.talk && typeof parsed.talk === "object") {
     const t = parsed.talk as Record<string, unknown>;
     result.talk = {
+      target: typeof t.target === "string" ? t.target : "",
+      message: typeof t.message === "string" ? t.message : "",
+    } as TalkSection;
+  }
+
+  /* talk_sync（同步 talk，发送后自动 wait） */
+  if (parsed.talk_sync && typeof parsed.talk_sync === "object") {
+    const t = parsed.talk_sync as Record<string, unknown>;
+    result.talkSync = {
       target: typeof t.target === "string" ? t.target : "",
       message: typeof t.message === "string" ? t.message : "",
     } as TalkSection;

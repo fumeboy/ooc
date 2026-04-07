@@ -117,6 +117,13 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>): Message[
     userParts.push(`## 任务\n${ctx.parentExpectation}`);
   }
 
+  /* 创建者信息 — 告诉 LLM 该向谁返回结果 */
+  if (ctx.creationMode === "root") {
+    userParts.push(`## 创建者\n你是根线程，由用户(human)发起。完成任务后用 [return] 返回结果给用户，或用 [talk] target="human" 回复用户。`);
+  } else {
+    userParts.push(`## 创建者\n你由 ${ctx.creator} 创建（${ctx.creationMode}）。完成任务后用 [return] 返回结果，或用 [talk] target="${ctx.creator}" 回复创建者。`);
+  }
+
   /* 当前计划 */
   if (ctx.plan) {
     userParts.push(`## 当前计划\n${ctx.plan}`);
