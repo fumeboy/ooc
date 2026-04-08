@@ -109,7 +109,11 @@ export function SessionsList({ onSelect, onEditGroups }: { onSelect?: () => void
             </button>
           )}
           <button
-            onClick={() => setActiveId(null)}
+            onClick={() => {
+              setActiveId(null);
+              setActivePath(null);
+              setTabs([]);
+            }}
             className="p-0.5 rounded hover:bg-[var(--accent)] transition-colors text-[var(--muted-foreground)]"
             title="New session"
           >

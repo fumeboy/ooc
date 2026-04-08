@@ -14,6 +14,7 @@ import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { parseReadme } from "./frontmatter.js";
 import { createProcess } from "../process/tree.js";
+import { threadsToProcess } from "./thread-adapter.js";
 import type { StoneData, FlowData, Relation } from "../types/index.js";
 
 /**
@@ -110,8 +111,14 @@ export function readFlow(dir: string): FlowData | null {
         flow.process = createProcess("task");
       }
     } else {
-      /* 旧版数据无 process.json，创建默认 */
-      flow.process = createProcess("task");
+      /* 尝试从线程树数据构建 process */
+      const threadProcess = threadsToProcess(dir);
+      if (threadProcess) {
+        flow.process = threadProcess;
+      } else {
+        /* 旧版数据无 process.json 也无线程树，创建默认 */
+        flow.process = createProcess("task");
+      }
     }
 
     /* 读取 memory.md（会话级记忆） */

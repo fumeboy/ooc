@@ -5,3 +5,4 @@
 export { parseReadme, serializeReadme } from "./frontmatter.js";
 export { readStone, readFlow, listFlowSessions, listObjects } from "./reader.js";
 export { writeStone, writeFlow, createObjectDir } from "./writer.js";
+export { threadsToProcess } from "./thread-adapter.js";
