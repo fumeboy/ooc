@@ -451,7 +451,27 @@ export class World implements Routable {
         flowsDir: this.flowsDir,
       },
       isPaused: (name) => this._pauseRequests.has(name),
-      onTalk: async (targetObject, message, fromObject, _fromThreadId, _sessionId) => {
+      onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId) => {
+        const target = targetObject.toLowerCase();
+
+        /* user/human 是系统用户（人类），不参与 ThinkLoop：只投递消息，不调度线程树 */
+        if (target === "user" || target === "human") {
+          emitSSE({
+            type: "flow:message",
+            objectName: fromObject,
+            sessionId,
+            message: {
+              direction: "out",
+              from: fromObject,
+              to: "user",
+              content: message,
+              timestamp: Date.now(),
+            },
+          });
+          consola.info(`[World] ${fromObject} → user: 已投递（不触发 user thinkloop）`);
+          return null;
+        }
+
         /* World 作为路由中间层：启动目标 Object 的线程树，等待完成，返回结果 */
         consola.info(`[World] 跨 Object talk: ${fromObject} → ${targetObject}`);
         try {
@@ -598,7 +618,24 @@ export class World implements Routable {
           stone: stone.toJSON(),
           paths: { stoneDir: stone.dir, rootDir: this._rootDir, flowsDir: this.flowsDir },
           isPaused: (name) => this._pauseRequests.has(name),
-          onTalk: async (targetObject, message, fromObject) => {
+          onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId) => {
+            const target = targetObject.toLowerCase();
+            if (target === "user" || target === "human") {
+              emitSSE({
+                type: "flow:message",
+                objectName: fromObject,
+                sessionId,
+                message: {
+                  direction: "out",
+                  from: fromObject,
+                  to: "user",
+                  content: message,
+                  timestamp: Date.now(),
+                },
+              });
+              consola.info(`[World] ${fromObject} → user: 已投递（不触发 user thinkloop）`);
+              return null;
+            }
             try {
               const flow = await this._talkWithThreadTree(targetObject, message, fromObject);
               const flowData = flow.toJSON();
@@ -642,7 +679,24 @@ export class World implements Routable {
           stone: stone.toJSON(),
           paths: { stoneDir: stone.dir, rootDir: this._rootDir, flowsDir: this.flowsDir },
           isPaused: (name) => this._pauseRequests.has(name),
-          onTalk: async (targetObject, message, fromObject) => {
+          onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId) => {
+            const target = targetObject.toLowerCase();
+            if (target === "user" || target === "human") {
+              emitSSE({
+                type: "flow:message",
+                objectName: fromObject,
+                sessionId,
+                message: {
+                  direction: "out",
+                  from: fromObject,
+                  to: "user",
+                  content: message,
+                  timestamp: Date.now(),
+                },
+              });
+              consola.info(`[World] ${fromObject} → user: 已投递（不触发 user thinkloop）`);
+              return null;
+            }
             try {
               const flow = await this._talkWithThreadTree(targetObject, message, fromObject);
               const flowData = flow.toJSON();

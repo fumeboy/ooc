@@ -6,6 +6,8 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { World } from "../src/world/index.js";
+import { MockLLMClient } from "../src/thinkable/client.js";
+import { eventBus } from "../src/server/events.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_world_test");
 
@@ -90,5 +92,45 @@ describe("World", () => {
     /* user + persistent = 2 */
     expect(objects).toHaveLength(2);
     expect(objects.map((o) => o.name).sort()).toEqual(["persistent", "user"]);
+  });
+
+  test("线程树：talk(user) 只投递消息，不触发 user thinkloop", async () => {
+    const events: any[] = [];
+    const onSse = (e: any) => events.push(e);
+    eventBus.on("sse", onSse);
+
+    try {
+      const world = new World({ rootDir: TEST_DIR, useThreadTree: true });
+      world.init();
+      world.createObject("supervisor", "你是一个测试 supervisor");
+
+      // 注入 mock LLM：第一轮发 [talk] 给 user，第二轮 [return] 结束
+      (world as any)._llm = new MockLLMClient({
+        responses: [
+          `[talk]\ntarget = "user"\nmessage = "你好"`,
+          `[return]\nsummary = "done"`,
+        ],
+      });
+
+      // 防回归：如果仍然会调度 user，会触发这里的 throw
+      const originalTalkWithThreadTree = (world as any)._talkWithThreadTree.bind(world);
+      (world as any)._talkWithThreadTree = async (objectName: string, message: string, from: string) => {
+        const lower = (objectName ?? "").toLowerCase();
+        if (lower === "user" || lower === "human") {
+          throw new Error("BUG: user/human 不应触发线程树执行");
+        }
+        return originalTalkWithThreadTree(objectName, message, from);
+      };
+
+      await world.talk("supervisor", "hi", "human");
+
+      // 断言：收到一条从 supervisor 发往 user 的 SSE 消息（无需 user 回复）
+      const msgEvents = events.filter(e => e.type === "flow:message");
+      expect(msgEvents.length).toBeGreaterThan(0);
+      const hasUserMsg = msgEvents.some(e => e.message?.direction === "out" && e.message?.from === "supervisor" && e.message?.to === "user" && e.message?.content === "你好");
+      expect(hasUserMsg).toBe(true);
+    } finally {
+      eventBus.off("sse", onSse);
+    }
   });
 });
