@@ -907,7 +907,8 @@ function getSessionsSummary(flowsDir: string): Array<{
       } catch { /* 忽略解析错误 */ }
     }
 
-    const firstIn = flow.messages.find((m) => m.direction === "in");
+    const firstIn = flow.messages.find((m) => m.direction === "in" && !m.content.startsWith("[系统通知]"))
+      ?? flow.messages.find((m) => m.direction === "in");
     summaries.push({
       sessionId: flow.sessionId,
       title: sessionTitle,

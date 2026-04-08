@@ -22,6 +22,11 @@ interface MarkdownContentProps {
   invertLinks?: boolean;
 }
 
+/** 过滤 HTML 注释（如 <!-- @ref ... -->），避免暴露内部标签 */
+function stripHtmlComments(text: string): string {
+  return text.replace(/<!--[\s\S]*?-->/g, "");
+}
+
 /** 将纯文本中的 ooc://xxx URL 转为 markdown 链接（已在 []() 中的不重复处理） */
 function linkifyOocUrls(text: string): string {
   return text.replace(
@@ -104,8 +109,9 @@ function markdownComponents(setOocLink: (url: string) => void, invertLinks = fal
 export function MarkdownContent({ content, className, invertLinks }: MarkdownContentProps) {
   const setOocLink = useSetAtom(oocLinkUrlAtom);
 
-  /* 预提取 [navigate] 块，替换为占位符 */
-  const { cleanText, blocks } = parseNavigateBlocks(content);
+  /* 过滤 HTML 注释 + 预提取 [navigate] 块 */
+  const cleaned = stripHtmlComments(content);
+  const { cleanText, blocks } = parseNavigateBlocks(cleaned);
 
   /* 如果没有 navigate 块，走原有渲染路径 */
   if (blocks.length === 0) {
@@ -115,7 +121,7 @@ export function MarkdownContent({ content, className, invertLinks }: MarkdownCon
           remarkPlugins={[remarkGfm]}
           components={markdownComponents(setOocLink, invertLinks)}
         >
-          {linkifyOocUrls(content)}
+          {linkifyOocUrls(cleaned)}
         </ReactMarkdown>
       </div>
     );

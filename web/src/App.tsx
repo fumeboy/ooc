@@ -395,7 +395,7 @@ export function App() {
       return (
         <div className="flex items-center justify-center h-full">
           <p className="text-sm text-[var(--muted-foreground)]">
-            Select a file from the sidebar
+            从侧边栏选择一个对象查看详情
           </p>
         </div>
       );
