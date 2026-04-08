@@ -197,16 +197,21 @@ export class ThreadScheduler {
    * 启动单个线程的独立循环
    */
   private _startThread(threadId: string, objectName: string): void {
-    if (this._trackers.has(threadId)) return; /* 防止重复启动 */
+    /* 如果 loop 正在运行，防止重复启动 */
+    if (this._activeLoops.has(threadId)) return;
 
-    const tracker: ThreadTracker = {
-      threadId,
-      objectName,
-      iterations: 0,
-      loopPromise: null,
-      errorPropagated: false,
-    };
-    this._trackers.set(threadId, tracker);
+    /* 复用或创建 tracker */
+    let tracker = this._trackers.get(threadId);
+    if (!tracker) {
+      tracker = {
+        threadId,
+        objectName,
+        iterations: 0,
+        loopPromise: null,
+        errorPropagated: false,
+      };
+      this._trackers.set(threadId, tracker);
+    }
 
     this._activeCount++;
     const loop = this._runThreadLoop(tracker).finally(() => {
