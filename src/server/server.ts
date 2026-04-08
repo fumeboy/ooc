@@ -28,12 +28,12 @@ function hasSupervisorStone(world: World): boolean {
 }
 
 /**
- * 通知 supervisor：用户向某个对象发送了消息
+ * 通知 supervisor：用户向某个对象发送了消息; 废弃
  *
  * 非阻塞、非关键路径。失败时仅打印日志，不影响主流程。
  * 仅在用户直接发消息（from === "human"）且目标不是 supervisor 时触发。
  */
-function notifySupervisor(
+function _notifySupervisor(
   world: World,
   objectName: string,
   message: string,
@@ -166,9 +166,9 @@ async function handleRoute(
     const flow = await world.talk(objectName, message, "human", flowId);
 
     /* 通知 supervisor（非阻塞，仅用户直接消息且目标非 supervisor） */
-    if (objectName !== "supervisor") {
-      notifySupervisor(world, objectName, message, flow.sessionId);
-    }
+    // if (objectName !== "supervisor") {
+    //   notifySupervisor(world, objectName, message, flow.sessionId);
+    // }
 
     return json({
       success: true,
@@ -560,6 +560,31 @@ async function handleRoute(
     if (!absPath.startsWith(world.rootDir)) return errorResponse("非法路径", 403);
     writeFileSync(absPath, content, "utf-8");
     return json({ success: true, data: { path: relPath } });
+  }
+
+  /* PUT /api/flows/:sessionId/threads/:threadId/pins — 更新线程图钉 */
+  const threadPinsMatch = path.match(/^\/api\/flows\/([^/]+)\/threads\/([^/]+)\/pins$/);
+  if (method === "PUT" && threadPinsMatch) {
+    const sessionId = threadPinsMatch[1]!;
+    const threadId = threadPinsMatch[2]!;
+    const body = (await req.json()) as { pins?: string[]; objectName?: string };
+    const pins = body.pins ?? [];
+    const objectName = body.objectName ?? "supervisor";
+
+    /* 找到 thread.json 并更新 pins */
+    const { readThreadsTree, getAncestorPath, readThreadData, writeThreadData, getThreadDir } = await import("../thread/persistence.js");
+    const objectFlowDir = join(world.flowsDir, sessionId, "objects", objectName);
+    const tree = readThreadsTree(objectFlowDir);
+    if (!tree || !tree.nodes[threadId]) return errorResponse(`Thread "${threadId}" 不存在`, 404);
+
+    const ancestorPath = getAncestorPath(tree, threadId);
+    const threadDir = getThreadDir(objectFlowDir, ancestorPath);
+    const threadData = readThreadData(threadDir);
+    if (!threadData) return errorResponse(`Thread data "${threadId}" 不存在`, 404);
+
+    threadData.pins = pins;
+    writeThreadData(threadDir, threadData);
+    return json({ success: true, data: { threadId, pins } });
   }
 
   /* GET /api/flows/:sessionId/tree — 返回指定 session 目录的文件树 */

@@ -72,6 +72,9 @@ export interface ThreadDataFile {
   todos?: ThreadTodoItem[];
   hooks?: ThreadFrameHook[];
 
+  /** 用户设置的颜色图钉（前端 UI 标记用） */
+  pins?: string[];
+
   /** 暂停时缓存的 LLM 输出（resume 时使用，跳过 LLM 调用） */
   _pendingOutput?: string;
   /** 暂停时缓存的 thinking 输出 */

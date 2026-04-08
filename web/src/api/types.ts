@@ -101,6 +101,8 @@ export interface Process {
   root: ProcessNode;
   focusId: string;
   todo?: TodoItem[];
+  /** 标记数据来源：true = 线程树架构，undefined/false = 旧 Flow 架构 */
+  isThreadTree?: boolean;
 }
 
 /** Sub-flow 摘要（参与对象的行为树） */

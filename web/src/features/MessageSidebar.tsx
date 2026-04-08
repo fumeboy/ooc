@@ -18,7 +18,7 @@ import {
   streamingStackPushAtom,
   streamingStackPopAtom,
   streamingSetPlanAtom,
-  messageSidebarOpenAtom,
+  messageSidebarModeAtom,
 } from "../store/session";
 import { talkTo, fetchFlow, fetchSessions, fetchObjects, pauseObject, resumeFlow } from "../api/client";
 import { userSessionsAtom } from "../store/session";
@@ -26,14 +26,14 @@ import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { ObjectAvatar } from "../components/ui/ObjectAvatar";
 import { TalkCard, ActionCard } from "../components/ui/ActionCard";
 import { cn } from "../lib/utils";
-import { Send, PanelRightClose, PanelRightOpen, X, ChevronUp, ChevronDown } from "lucide-react";
+import { Send, Maximize2, Minimize2, X, ChevronUp, ChevronDown } from "lucide-react";
 import type { FlowMessage, Action } from "../api/types";
 import { ProgressIndicator } from "../components/ProgressIndicator";
 
 const DEFAULT_TARGET = "supervisor";
 
 export function MessageSidebar() {
-  const [sidebarOpen, setSidebarOpen] = useAtom(messageSidebarOpenAtom);
+  const [sidebarMode, setSidebarMode] = useAtom(messageSidebarModeAtom);
   const activeId = useAtomValue(activeSessionIdAtom);
   const [activeFlow, setActiveFlow] = useAtom(activeSessionFlowAtom);
   const lastEvent = useAtomValue(lastFlowEventAtom);
@@ -392,23 +392,15 @@ export function MessageSidebar() {
     }
   };
 
-  /* 折叠按钮（始终可见） */
-  if (!sidebarOpen) {
-    return (
-      <div className="flex items-start pt-4 pr-1">
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="p-1.5 rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
-          title="打开消息面板"
-        >
-          <PanelRightOpen className="w-4 h-4" />
-        </button>
-      </div>
-    );
-  }
+  /* main 模式：全宽渲染（由 App.tsx 放在主内容区） */
+  /* sidebar 模式：固定宽度侧边栏 */
+  const isMain = sidebarMode === "main";
 
   return (
-    <div className="flex flex-col w-[400px] shrink-0 bg-[var(--background)]">
+    <div className={cn(
+      "flex flex-col bg-[var(--background)]",
+      isMain ? "h-full w-full" : "w-[400px] shrink-0",
+    )}>
       {/* 头部 */}
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
         <div className="flex items-center gap-2">
@@ -476,11 +468,11 @@ export function MessageSidebar() {
             </button>
           )}
           <button
-            onClick={() => setSidebarOpen(false)}
+            onClick={() => setSidebarMode(isMain ? "sidebar" : "main")}
             className="p-1 rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
-            title="收起消息面板"
+            title={isMain ? "切换到侧边展示" : "切换到主页展示"}
           >
-            <PanelRightClose className="w-4 h-4" />
+            {isMain ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
         </div>
       </div>

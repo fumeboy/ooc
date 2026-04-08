@@ -14,6 +14,7 @@ import { StatusBadge } from "../components/ui/Badge";
 import { ObjectAvatar } from "../components/ui/ObjectAvatar";
 import { ObjectReadmeView } from "./ObjectReadmeView";
 import { ProcessView } from "./ProcessView";
+import { ThreadsTreeView } from "./ThreadsTreeView";
 import { DynamicUI } from "./DynamicUI";
 import { ActionCard, TalkCard } from "../components/ui/ActionCard";
 import { CodeMirrorViewer } from "../components/ui/CodeMirrorViewer";
@@ -136,22 +137,22 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
     <div className="h-full flex flex-col">
       {/* 头部：左侧信息 + 右侧 Tabs 同行 */}
       <div className="flex items-center justify-between px-4 sm:px-8 py-2 gap-4 border-b border-[var(--border)] shrink-0">
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
           <ObjectAvatar name={objectName} size="md" />
-          <h2 className="text-lg sm:text-xl font-bold leading-none" style={{ fontFamily: "var(--heading-font)" }}>
+          <h2 className="text-lg sm:text-xl font-bold leading-none truncate" style={{ fontFamily: "var(--heading-font)" }}>
             {objectName}
           </h2>
           <StatusBadge status={status} />
         </div>
 
         {/* Tab 按钮组 */}
-        <div className="flex items-center bg-[var(--accent)] rounded-lg p-0.5 overflow-x-auto scrollbar-hide">
+        <div className="flex items-center bg-[var(--accent)] rounded-lg p-0.5 overflow-x-auto scrollbar-hide shrink-0">
           {tabs.map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={cn(
-                "px-3 py-1 text-xs rounded-md transition-all whitespace-nowrap",
+                "px-3 py-1 text-xs rounded-md transition-all whitespace-nowrap shrink-0",
                 tab === t
                   ? "bg-[var(--card)] text-[var(--foreground)] font-medium shadow-sm"
                   : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]",
@@ -183,7 +184,11 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
             })}
           </div>
         )}
-        {tab === "Process" && <ProcessView process={process} />}
+        {tab === "Process" && (
+          (process as any)?.isThreadTree
+            ? <ThreadsTreeView process={process} sessionId={sessionId} objectName={objectName} />
+            : <ProcessView process={process} />
+        )}
         {tab === "Readme" && <ObjectReadmeView objectName={objectName} />}
         {tab === "Data" && (
           <SplitDataTab sessionId={sessionId} objectName={objectName} stoneData={stone?.data} />

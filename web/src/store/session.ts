@@ -74,5 +74,6 @@ export const sidebarTreeAtom = atom<FileTreeNode | null>(null);
 /** 刷新计数器：递增触发 ViewRouter 内容重新加载 */
 export const refreshKeyAtom = atom(0);
 
-/** 右侧消息侧边栏是否打开 */
-export const messageSidebarOpenAtom = atom<boolean>(true);
+/** 右侧消息面板显示模式：main = 主页展示（占据主内容区），sidebar = 侧边展示 */
+export type MessageSidebarMode = "main" | "sidebar";
+export const messageSidebarModeAtom = atom<MessageSidebarMode>("sidebar");

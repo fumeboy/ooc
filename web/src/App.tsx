@@ -7,7 +7,7 @@
  * @ref ooc://file/stones/sophia/files/哲学文档/gene.md#G11 — implements — 前端整体布局
  */
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom, useSetAtom, useAtomValue } from "jotai";
 import { objectsAtom } from "./store/objects";
 import {
   activeTabAtom,
@@ -19,6 +19,7 @@ import {
   sidebarTreeAtom,
   refreshKeyAtom,
   userSessionsAtom,
+  messageSidebarModeAtom,
 } from "./store/session";
 import type { AppTab } from "./store/session";
 import { fetchObjects, fetchProjectTree, fetchSessions, updateFlowTitle, talkTo, fetchFlowGroups, fetchStoneGroups, type GroupConfig } from "./api/client";
@@ -146,6 +147,7 @@ export function App() {
   const setRefreshKey = useSetAtom(refreshKeyAtom);
   const isMobile = useIsMobile();
   const [sessions, setSessions] = useAtom(userSessionsAtom);
+  const sidebarMode = useAtomValue(messageSidebarModeAtom);
 
   /* sessionId → session title 的 lookup（面包屑用） */
   const sessionTitleMap = useMemo(() => {
@@ -344,6 +346,17 @@ export function App() {
 
   /* 主内容区 */
   const renderMainContent = () => {
+    /* main 模式：消息面板占据主内容区 */
+    if (sidebarMode === "main" && activeTab === "flows" && activeId && !isMobile) {
+      return (
+        <div className="flex flex-col h-full p-2">
+          <div className="flex-1 min-h-0 rounded-md bg-[var(--card)] border border-[var(--border)] overflow-hidden">
+            <MessageSidebar />
+          </div>
+        </div>
+      );
+    }
+
     /* 确定要渲染的内容和面包屑 */
     let breadcrumbSegments: string[] = [];
     let content: React.ReactNode = null;
@@ -567,8 +580,8 @@ export function App() {
         {renderMainContent()}
       </main>
 
-      {/* 右侧消息侧边栏 */}
-      {activeTab === "flows" && activeId && !isMobile && (
+      {/* 右侧消息侧边栏（仅 sidebar 模式） */}
+      {activeTab === "flows" && activeId && !isMobile && sidebarMode === "sidebar" && (
         <MessageSidebar />
       )}
 

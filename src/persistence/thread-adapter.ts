@@ -51,13 +51,15 @@ function buildNode(
 ): ProcessNode {
   const meta = tree.nodes[nodeId]!;
 
-  /* 读取该线程的 actions */
+  /* 读取该线程的 actions 和 pins */
   let actions: Action[] = [];
+  let pins: string[] = [];
   const threadJsonPath = join(threadsDir, nodeId, "thread.json");
   if (existsSync(threadJsonPath)) {
     try {
       const threadData = JSON.parse(readFileSync(threadJsonPath, "utf-8"));
       actions = (threadData.actions ?? []).map(mapAction);
+      pins = threadData.pins ?? [];
     } catch { /* 解析失败则无 actions */ }
   }
 
@@ -79,6 +81,16 @@ function buildNode(
     outputDescription: meta.outputDescription,
     summary: meta.summary,
     deps: [],
+    /* 线程元数据：通过 locals 传递给前端 ThreadsTreeView */
+    locals: {
+      _threadStatus: meta.status,
+      _creatorThreadId: meta.creatorThreadId ?? null,
+      _creationMode: meta.creationMode ?? null,
+      _awaitingChildren: meta.awaitingChildren ?? [],
+      _createdAt: meta.createdAt,
+      _updatedAt: meta.updatedAt,
+      _pins: pins,
+    },
   };
 }
 
@@ -113,5 +125,5 @@ export function threadsToProcess(dir: string): Process | null {
     }
   }
 
-  return { root, focusId };
+  return { root, focusId, isThreadTree: true };
 }

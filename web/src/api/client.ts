@@ -192,6 +192,16 @@ export async function fetchStoneTree(name: string): Promise<FileTreeNode> {
   return get<FileTreeNode>(`/stones/${name}/tree`);
 }
 
+/** 更新线程图钉 */
+export async function updateThreadPins(
+  sessionId: string,
+  threadId: string,
+  pins: string[],
+  objectName = "supervisor",
+): Promise<void> {
+  await put(`/flows/${sessionId}/threads/${threadId}/pins`, { pins, objectName });
+}
+
 /**
  * SSE 端点地址
  *

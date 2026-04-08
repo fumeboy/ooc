@@ -1,0 +1,436 @@
+/**
+ * ThreadsTreeView — 线程树可视化组件（TUI 风格）
+ *
+ * - 一行一个节点，CSS 连接线
+ * - 点击节点查看 thread 详情（actions 列表），左上角返回按钮
+ * - 右键添加颜色图钉（10 种可选），支持多图钉
+ * - 蓝色图钉自动标记最近查看的 5 个 thread
+ * - 图钉持久化到 thread.json
+ *
+ * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md
+ */
+import { useState, useCallback, useRef, useEffect } from "react";
+import { cn } from "../lib/utils";
+import { ArrowLeft } from "lucide-react";
+import { ActionCard } from "../components/ui/ActionCard";
+import { MarkdownContent } from "../components/ui/MarkdownContent";
+import { updateThreadPins } from "../api/client";
+import type { Process, ProcessNode } from "../api/types";
+
+interface ThreadsTreeViewProps {
+  process: Process;
+  /** sessionId（用于 pins API） */
+  sessionId?: string;
+  /** objectName（用于 pins API） */
+  objectName?: string;
+}
+
+/** 10 种用户可选图钉颜色 */
+const PIN_COLORS = [
+  { name: "red", color: "#ef4444" },
+  { name: "orange", color: "#f97316" },
+  { name: "amber", color: "#f59e0b" },
+  { name: "green", color: "#22c55e" },
+  { name: "teal", color: "#14b8a6" },
+  { name: "cyan", color: "#06b6d4" },
+  { name: "purple", color: "#a855f7" },
+  { name: "pink", color: "#ec4899" },
+  { name: "rose", color: "#f43f5e" },
+  { name: "indigo", color: "#6366f1" },
+] as const;
+
+/** 系统蓝色图钉（最近查看） */
+const RECENT_PIN = "recent";
+const RECENT_PIN_COLOR = "#3b82f6";
+const MAX_RECENT = 5;
+
+/** 状态指示符 */
+const STATUS_INDICATOR: Record<string, { color: string; symbol: string }> = {
+  running: { color: "text-blue-500", symbol: "●" },
+  waiting: { color: "text-amber-500", symbol: "◐" },
+  done:    { color: "text-green-600", symbol: "✓" },
+  failed:  { color: "text-red-500", symbol: "✗" },
+  pending: { color: "text-[var(--muted-foreground)]", symbol: "○" },
+};
+
+/** 从 ProcessNode.locals 读取线程元数据 */
+function getThreadMeta(node: ProcessNode) {
+  const locals = (node.locals ?? {}) as Record<string, unknown>;
+  return {
+    threadStatus: (locals._threadStatus as string) ?? null,
+    creationMode: (locals._creationMode as string) ?? null,
+    updatedAt: (locals._updatedAt as number) ?? 0,
+    pins: (locals._pins as string[]) ?? [],
+  };
+}
+
+/** 格式化时间戳 */
+function formatTime(ts: number): string {
+  if (!ts) return "";
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return "刚刚";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
+  return `${Math.floor(diff / 86_400_000)}d`;
+}
+
+/** 获取一句话摘要 */
+function getSummary(node: ProcessNode): string {
+  if (node.summary) return node.summary.split("\n")[0]!.replace(/^#+\s*/, "");
+  if (node.description) return node.description;
+  const meaningful = node.actions.filter(
+    (a) => a.type === "thought" || a.type === "message_out" || (a.type as string) === "thread_return"
+  );
+  const last = meaningful[meaningful.length - 1];
+  if (last) return last.content.split("\n")[0]!.slice(0, 80);
+  return "";
+}
+
+/** 递归查找节点 */
+function findNode(node: ProcessNode, id: string): ProcessNode | null {
+  if (node.id === id) return node;
+  for (const child of node.children) {
+    const found = findNode(child, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** 图钉圆点 */
+function PinDot({ color }: { color: string }) {
+  return (
+    <span
+      className="inline-block w-2 h-2 rounded-full shrink-0"
+      style={{ backgroundColor: color }}
+    />
+  );
+}
+
+/** 获取图钉颜色 */
+function getPinColor(pin: string): string {
+  if (pin === RECENT_PIN) return RECENT_PIN_COLOR;
+  const found = PIN_COLORS.find((p) => p.name === pin);
+  return found?.color ?? "#9ca3af";
+}
+
+export function ThreadsTreeView({ process, sessionId, objectName }: ThreadsTreeViewProps) {
+  const [detailNodeId, setDetailNodeId] = useState<string | null>(null);
+  const [recentViewed, setRecentViewed] = useState<string[]>([]);
+  /* 本地 pins 缓存（覆盖服务端数据，避免刷新延迟） */
+  const [localPins, setLocalPins] = useState<Map<string, string[]>>(new Map());
+  /* 右键菜单 */
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  /* 点击外部关闭右键菜单 */
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [contextMenu]);
+
+  if (!process?.root) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <p className="text-sm text-[var(--muted-foreground)]">No thread data</p>
+      </div>
+    );
+  }
+
+  /** 获取节点的有效 pins（本地缓存优先） */
+  const getNodePins = (node: ProcessNode): string[] => {
+    if (localPins.has(node.id)) return localPins.get(node.id)!;
+    const meta = getThreadMeta(node);
+    return meta.pins;
+  };
+
+  /** 合并 recent pins 到节点 pins */
+  const getDisplayPins = (node: ProcessNode): string[] => {
+    const userPins = getNodePins(node).filter((p) => p !== RECENT_PIN);
+    const isRecent = recentViewed.includes(node.id);
+    return isRecent ? [RECENT_PIN, ...userPins] : userPins;
+  };
+
+  /** 点击节点查看详情 */
+  const handleNodeClick = useCallback((nodeId: string) => {
+    setDetailNodeId(nodeId);
+    setRecentViewed((prev) => {
+      const next = [nodeId, ...prev.filter((id) => id !== nodeId)].slice(0, MAX_RECENT);
+      return next;
+    });
+  }, []);
+
+  /** 更新图钉 */
+  const handlePinToggle = useCallback((nodeId: string, pinColor: string) => {
+    const node = findNode(process.root, nodeId);
+    if (!node) return;
+    const current = localPins.has(nodeId) ? localPins.get(nodeId)! : getThreadMeta(node).pins;
+    const userPins = current.filter((p) => p !== RECENT_PIN);
+    const newPins = userPins.includes(pinColor)
+      ? userPins.filter((p) => p !== pinColor)
+      : [...userPins, pinColor];
+
+    setLocalPins((prev) => new Map(prev).set(nodeId, newPins));
+    setContextMenu(null);
+
+    /* 持久化 */
+    if (sessionId) {
+      updateThreadPins(sessionId, nodeId, newPins, objectName).catch(console.error);
+    }
+  }, [process.root, localPins, sessionId, objectName]);
+
+  /** 右键菜单 */
+  const handleContextMenu = useCallback((e: React.MouseEvent, nodeId: string) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, nodeId });
+  }, []);
+
+  /* 详情视图 */
+  if (detailNodeId) {
+    const node = findNode(process.root, detailNodeId);
+    if (!node) {
+      setDetailNodeId(null);
+      return null;
+    }
+    return (
+      <ThreadDetailView
+        node={node}
+        onBack={() => setDetailNodeId(null)}
+      />
+    );
+  }
+
+  /* 树视图 */
+  return (
+    <div className="py-3 font-mono text-[13px] leading-relaxed relative">
+      <ThreadNode
+        node={process.root}
+        focusId={process.focusId}
+        depth={0}
+        onNodeClick={handleNodeClick}
+        onContextMenu={handleContextMenu}
+        getDisplayPins={getDisplayPins}
+      />
+
+      {/* 右键图钉菜单 */}
+      {contextMenu && (
+        <div
+          ref={menuRef}
+          className="fixed z-50 rounded-lg border border-[var(--border)] bg-[var(--popover)] shadow-lg py-1.5 px-1"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <div className="px-2 py-1 text-[10px] text-[var(--muted-foreground)] uppercase tracking-wide">
+            图钉
+          </div>
+          <div className="grid grid-cols-5 gap-1 px-1.5 py-1">
+            {PIN_COLORS.map((pin) => {
+              const node = findNode(process.root, contextMenu.nodeId);
+              const currentPins = node ? (localPins.has(contextMenu.nodeId) ? localPins.get(contextMenu.nodeId)! : getThreadMeta(node).pins) : [];
+              const isActive = currentPins.includes(pin.name);
+              return (
+                <button
+                  key={pin.name}
+                  onClick={() => handlePinToggle(contextMenu.nodeId, pin.name)}
+                  className={cn(
+                    "w-6 h-6 rounded-full flex items-center justify-center transition-all",
+                    isActive ? "ring-2 ring-offset-1 ring-[var(--foreground)]/30" : "hover:scale-125",
+                  )}
+                  style={{ backgroundColor: pin.color }}
+                  title={pin.name}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 树节点行 */
+function ThreadNode({
+  node,
+  focusId,
+  depth,
+  onNodeClick,
+  onContextMenu,
+  getDisplayPins,
+}: {
+  node: ProcessNode;
+  focusId: string;
+  depth: number;
+  onNodeClick: (id: string) => void;
+  onContextMenu: (e: React.MouseEvent, id: string) => void;
+  getDisplayPins: (node: ProcessNode) => string[];
+}) {
+  const meta = getThreadMeta(node);
+  const status = meta.threadStatus ?? (node.status === "doing" ? "running" : node.status === "done" ? "done" : "pending");
+  const indicator = STATUS_INDICATOR[status] ?? STATUS_INDICATOR.pending!;
+  const hasChildren = node.children.length > 0;
+  const [expanded, setExpanded] = useState(
+    status === "running" || status === "waiting" || node.id === focusId || depth < 2
+  );
+  const summary = getSummary(node);
+  const actionCount = node.actions.length;
+  const pins = getDisplayPins(node);
+
+  return (
+    <div className="relative">
+      {/* 主行 */}
+      <div
+        className="flex items-baseline gap-0 rounded-sm -mx-1 px-1 group"
+        onContextMenu={(e) => onContextMenu(e, node.id)}
+      >
+        {/* 缩进 */}
+        <span className="shrink-0 select-none" style={{ width: depth * 24 }} />
+
+        {/* 展开/折叠 */}
+        <span
+          className="shrink-0 w-4 text-center select-none text-[var(--muted-foreground)] cursor-pointer"
+          onClick={(e) => { e.stopPropagation(); hasChildren && setExpanded(!expanded); }}
+        >
+          {hasChildren ? (expanded ? "▾" : "▸") : " "}
+        </span>
+
+        {/* 状态符号 */}
+        <span className={cn("shrink-0 w-4 text-center select-none", indicator.color)}>
+          {indicator.symbol}
+        </span>
+
+        {/* 图钉 */}
+        {pins.length > 0 && (
+          <span className="shrink-0 flex items-center gap-0.5 mr-1">
+            {pins.map((pin, i) => (
+              <PinDot key={`${pin}-${i}`} color={getPinColor(pin)} />
+            ))}
+          </span>
+        )}
+
+        {/* 标题（可点击） */}
+        <span
+          className={cn(
+            "shrink-0 mr-2 cursor-pointer hover:underline",
+            status === "done" && "text-[var(--foreground)]/70",
+            status === "failed" && "text-red-400",
+            status === "running" && "text-[var(--foreground)]",
+            status === "waiting" && "text-amber-400",
+            status === "pending" && "text-[var(--muted-foreground)]",
+          )}
+          onClick={() => onNodeClick(node.id)}
+        >
+          {node.title}
+        </span>
+
+        {/* 摘要 */}
+        {summary && (
+          <span className="truncate text-[var(--muted-foreground)]/50 mr-2">
+            {summary}
+          </span>
+        )}
+
+        {/* 右侧元数据 */}
+        <span className="shrink-0 ml-auto flex items-baseline gap-2 text-[11px] text-[var(--muted-foreground)]/50">
+          {actionCount > 0 && <span>{actionCount} actions</span>}
+          {meta.creationMode && meta.creationMode !== "sub_thread_on_node" && (
+            <span>{meta.creationMode}</span>
+          )}
+          {meta.updatedAt > 0 && <span>{formatTime(meta.updatedAt)}</span>}
+        </span>
+      </div>
+
+      {/* 子节点 */}
+      {expanded && hasChildren && (
+        <div className="relative">
+          {/* 竖线 */}
+          <div
+            className="absolute top-0 bottom-3 border-l border-[var(--border)]"
+            style={{ left: depth * 24 + 7 }}
+          />
+          {node.children.map((child) => (
+            <div key={child.id} className="relative">
+              {/* 拐角连接线 */}
+              <div
+                className="absolute border-b border-l border-[var(--border)] rounded-bl-[4px]"
+                style={{
+                  left: depth * 24 + 7,
+                  top: 0,
+                  width: 13,
+                  height: 14,
+                }}
+              />
+              <ThreadNode
+                node={child}
+                focusId={focusId}
+                depth={depth + 1}
+                onNodeClick={onNodeClick}
+                onContextMenu={onContextMenu}
+                getDisplayPins={getDisplayPins}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Thread 详情视图 */
+function ThreadDetailView({
+  node,
+  onBack,
+}: {
+  node: ProcessNode;
+  onBack: () => void;
+}) {
+  const meta = getThreadMeta(node);
+  const status = meta.threadStatus ?? node.status;
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* 头部 */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] shrink-0">
+        <button
+          onClick={onBack}
+          className="p-1 rounded-md text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+          title="返回线程树"
+        >
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-medium truncate">{node.title}</h3>
+            <span className="text-[10px] text-[var(--muted-foreground)] font-mono">{status}</span>
+          </div>
+          <span className="text-[10px] text-[var(--muted-foreground)] font-mono">{node.id}</span>
+        </div>
+      </div>
+
+      {/* 摘要 */}
+      {node.summary && (
+        <div className="px-4 py-3 border-b border-[var(--border)] text-sm">
+          <MarkdownContent content={node.summary} />
+        </div>
+      )}
+
+      {/* Actions 列表 */}
+      <div className="flex-1 overflow-auto px-4 py-3 space-y-2">
+        {node.actions.length === 0 ? (
+          <p className="text-sm text-[var(--muted-foreground)]">暂无 actions</p>
+        ) : (
+          node.actions.map((action, i) => (
+            <ActionCard
+              key={`${action.type}-${i}`}
+              action={action}
+              objectName={node.title}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}

@@ -130,6 +130,8 @@ export interface Process {
   threads?: Record<string, ThreadState>;
   /** 待办队列（驱动 focus 的执行顺序，头部 = 当前/下一个要做的） */
   todo?: TodoItem[];
+  /** 标记数据来源：true = 线程树架构 */
+  isThreadTree?: boolean;
 }
 
 /** Hook 触发时机 */
