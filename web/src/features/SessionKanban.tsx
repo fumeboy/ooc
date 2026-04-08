@@ -81,8 +81,9 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
         )}
       </div>
 
-      <div className="w-1/2 flex overflow-hidden">
-        <div className="flex-1 border-r border-border overflow-auto p-4">
+      <div className="w-1/2 overflow-auto p-4 space-y-6">
+        {/* Issues */}
+        <div>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Issues</h3>
             <button
@@ -111,7 +112,8 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
           {issues.length === 0 && <p className="text-muted-foreground text-sm">暂无 Issue</p>}
         </div>
 
-        <div className="flex-1 overflow-auto p-4">
+        {/* Tasks */}
+        <div>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tasks</h3>
             <button
