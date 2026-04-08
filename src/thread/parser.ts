@@ -43,6 +43,12 @@ export interface AddTodoDirective {
   sourceMessageId?: string;
 }
 
+/** continue_sub_thread 指令（向已创建的子线程追加消息） */
+export interface ContinueSubThreadDirective {
+  threadId: string;
+  message: string;
+}
+
 /** 线程输出解析结果 */
 export interface ThreadParsedOutput {
   /** 思考内容 */
@@ -65,6 +71,8 @@ export interface ThreadParsedOutput {
   mark: MarkDirective | null;
   /** 创建待办 */
   addTodo: AddTodoDirective | null;
+  /** 向已创建的子线程追加消息 */
+  continueSubThread: ContinueSubThreadDirective | null;
   /** 更新计划 */
   setPlan: string | null;
 }
@@ -90,6 +98,7 @@ export function parseThreadOutput(output: string): ThreadParsedOutput {
     awaitThreads: null,
     mark: null,
     addTodo: null,
+    continueSubThread: null,
     setPlan: null,
   };
 
@@ -200,6 +209,15 @@ export function parseThreadOutput(output: string): ThreadParsedOutput {
     if (typeof td.source_message_id === "string") {
       result.addTodo.sourceMessageId = td.source_message_id;
     }
+  }
+
+  /* continue_sub_thread */
+  if (parsed.continue_sub_thread && typeof parsed.continue_sub_thread === "object") {
+    const cst = parsed.continue_sub_thread as Record<string, unknown>;
+    result.continueSubThread = {
+      threadId: typeof cst.thread_id === "string" ? cst.thread_id : "",
+      message: typeof cst.message === "string" ? cst.message : "",
+    };
   }
 
   return result;

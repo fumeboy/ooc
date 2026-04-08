@@ -154,4 +154,31 @@ title = "分析数据"
     expect(result.createSubThread).not.toBeNull();
     expect(result.createSubThread!.title).toBe("分析数据");
   });
+
+  test("解析 continue_sub_thread 指令", () => {
+    const input = `
+[thought]
+content = "子线程结果不够全面，需要追问"
+
+[continue_sub_thread]
+thread_id = "th_abc123"
+message = "请补充 2024 年之后的论文"
+`;
+    const result = parseThreadOutput(input);
+    expect(result.thought).toBe("子线程结果不够全面，需要追问");
+    expect(result.continueSubThread).not.toBeNull();
+    expect(result.continueSubThread!.threadId).toBe("th_abc123");
+    expect(result.continueSubThread!.message).toBe("请补充 2024 年之后的论文");
+  });
+
+  test("continue_sub_thread 缺少字段时返回空字符串", () => {
+    const input = `
+[continue_sub_thread]
+thread_id = "th_xyz"
+`;
+    const result = parseThreadOutput(input);
+    expect(result.continueSubThread).not.toBeNull();
+    expect(result.continueSubThread!.threadId).toBe("th_xyz");
+    expect(result.continueSubThread!.message).toBe("");
+  });
 });

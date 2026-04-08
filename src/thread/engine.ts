@@ -319,6 +319,34 @@ async function applyIterationResult(
     }
   }
 
+  /* 6b. 执行 continue_sub_thread（向已有子线程追加消息并唤醒） */
+  if (result.continueSubThread) {
+    const { threadId: targetId, message } = result.continueSubThread;
+    const targetNode = tree.getNode(targetId);
+
+    if (targetNode) {
+      /* 写入目标线程的 inbox */
+      tree.writeInbox(targetId, {
+        from: objectName,
+        content: message,
+        source: "talk",
+      });
+
+      /* 如果目标线程已完成（done/failed），唤醒为 running */
+      if (targetNode.status === "done" || targetNode.status === "failed") {
+        await tree.setNodeStatus(targetId, "running");
+        scheduler.onThreadCreated(targetId, objectName);
+      }
+      /* 如果目标线程正在 running，消息已写入 inbox，下一轮自然看到 */
+
+      emitSSE({ type: "flow:action", objectName, sessionId, action: {
+        type: "action",
+        content: `[continue_sub_thread] → ${targetId}`,
+        timestamp: Date.now(),
+      } as any });
+    }
+  }
+
   /* 7. 写回线程数据（在子线程创建和 ID 替换之后） */
   tree.writeThreadData(threadId, threadData);
 

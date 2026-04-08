@@ -87,6 +87,8 @@ export interface ThreadIterationResult {
   awaitingChildren: string[] | null;
   /** 新创建的子节点（需要写入 threads.json） */
   newChildNode: NewChildNode | null;
+  /** 向已有子线程追加消息 */
+  continueSubThread: { threadId: string; message: string } | null;
   /** before hook 注入文本（需要写入子线程的首条 inject action） */
   beforeHookInjection: string | null;
   /** after hook 注入文本（需要写入创建者线程的下一轮 inject action） */
@@ -130,6 +132,7 @@ export function runThreadIteration(input: ThreadIterationInput): ThreadIteration
     returnResult: null,
     awaitingChildren: null,
     newChildNode: null,
+    continueSubThread: null,
     beforeHookInjection: null,
     afterHookInjection: null,
     inboxUpdates: [],
@@ -221,6 +224,30 @@ export function runThreadIteration(input: ThreadIterationInput): ThreadIteration
     const beforeInjection = collectBeforeHooks(traits, childScopeChain, firedHooks);
     if (beforeInjection) {
       result.beforeHookInjection = beforeInjection;
+    }
+  }
+
+  /* 6b. 处理 continue_sub_thread */
+  if (parsed.continueSubThread && parsed.continueSubThread.threadId) {
+    const cst = parsed.continueSubThread;
+
+    /* 安全检查：目标线程必须是当前线程的直接子线程 */
+    const targetNode = tree.nodes[cst.threadId];
+    if (targetNode && targetNode.creatorThreadId === threadId) {
+      result.continueSubThread = {
+        threadId: cst.threadId,
+        message: cst.message,
+      };
+
+      result.newActions.push({
+        type: "message_out",
+        content: `[continue_sub_thread] → ${cst.threadId}: ${cst.message}`,
+        timestamp: Date.now(),
+      });
+
+      /* 自动进入 waiting，等待子线程再次完成 */
+      result.statusChange = "waiting";
+      result.awaitingChildren = [cst.threadId];
     }
   }
 

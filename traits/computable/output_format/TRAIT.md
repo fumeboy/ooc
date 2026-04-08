@@ -20,6 +20,7 @@ deps: ["kernel/computable"]
 | `[talk_sync]` | 向其他对象发送消息（同步，发完等待回复） |
 | `[return]` | 完成当前线程，返回结果给创建者 |
 | `[create_sub_thread]` | 创建子线程处理子任务 |
+| `[continue_sub_thread]` | 向已创建的子线程追加消息（多次交互） |
 | `[set_plan]` | 更新当前计划 |
 | `[await]` | 等待某个子线程完成 |
 | `[await_all]` | 等待多个子线程完成 |
@@ -62,6 +63,13 @@ deps: ["kernel/computable"]
 - `traits` — trait 名称数组（可选）
 - `derive_from_which_thread` — 从哪个线程派生（可选，线程 ID）。不填则从当前线程派生。填写后子线程会继承目标线程的执行历史，可用于"向另一个线程提问"或"基于已完成线程的结果继续工作"。
 
+### `[continue_sub_thread]`
+向已创建的子线程追加消息。适合"子线程完成后需要追问或补充指令"的场景。
+- `thread_id` — 目标子线程 ID（必填，必须是当前线程创建的直接子线程）
+- `message` — 追加的消息内容（必填）
+
+使用后当前线程自动进入 waiting，等待子线程再次完成。
+
 ### `[set_plan]`
 - `text` — 新计划内容（必填）
 
@@ -73,7 +81,7 @@ deps: ["kernel/computable"]
 
 ## 互斥规则
 
-1. 每轮输出只能包含一个主指令（`[return]`、`[create_sub_thread]`、`[program]`、`[talk]`、`[talk_sync]` 选其一）
+1. 每轮输出只能包含一个主指令（`[return]`、`[create_sub_thread]`、`[continue_sub_thread]`、`[program]`、`[talk]`、`[talk_sync]` 选其一）
 2. `[thought]` 可以和任何主指令并存
 3. `[set_plan]` 可以和任何主指令并存
 4. 任务完成后必须用 `[return]` 结束，不要无限循环
@@ -146,6 +154,19 @@ content = """
 title = "基于数据收集结果进行深度分析"
 description = "分析 th_abc123 收集的数据，提取关键洞察"
 derive_from_which_thread = "th_abc123"
+```
+
+### 向已完成的子线程追问（多次交互）
+```toml
+[thought]
+content = """
+子线程 th_xyz789 已经完成了搜索，但结果不够全面，需要补充。
+用 continue_sub_thread 向它追加消息，它会被唤醒继续工作。
+"""
+
+[continue_sub_thread]
+thread_id = "th_xyz789"
+message = "请补充 2024 年之后的论文，特别关注 alignment 方向"
 ```
 
 ## 流式输出
