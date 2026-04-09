@@ -131,6 +131,94 @@ export class CodeExecutor {
       `}`,
     ].join("\n");
 
+    // moduleCode 中：用户代码从 (importLines + 2) 行之后开始
+    const userCodeLineOffset = importLines.length + 2;
+
+    // 预检：尽早捕获常见语法错误（例如未闭合引号），并给出更清晰的行号定位。
+    // 注意：这里仅检查“函数体代码”（nonImportLines），import 顶层语法错误仍由 Bun import() 阶段报错。
+    try {
+      const precheckSource = [
+        "return (async function(){",
+        nonImportLines.join("\n"),
+        "})();",
+      ].join("\n");
+      // eslint-disable-next-line no-new-func
+      new Function(precheckSource);
+    } catch (e) {
+      const err = e as Error;
+      const isSyntaxError = err.constructor.name === "SyntaxError";
+      if (isSyntaxError) {
+        const guessUnterminatedStringLine = (codeText: string): number | null => {
+          let line = 1;
+          let inStr: '"' | "'" | "`" | null = null;
+          let startLine = 1;
+          for (let i = 0; i < codeText.length; i++) {
+            const ch = codeText[i]!;
+            const next = codeText[i + 1];
+            if (ch === "\n") line++;
+
+            if (!inStr) {
+              // 跳过行注释
+              if (ch === "/" && next === "/") {
+                while (i < codeText.length && codeText[i] !== "\n") i++;
+                continue;
+              }
+              // 跳过块注释
+              if (ch === "/" && next === "*") {
+                i += 2;
+                while (i < codeText.length - 1) {
+                  if (codeText[i] === "\n") line++;
+                  if (codeText[i] === "*" && codeText[i + 1] === "/") { i++; break; }
+                  i++;
+                }
+                continue;
+              }
+              if (ch === '"' || ch === "'" || ch === "`") {
+                inStr = ch;
+                startLine = line;
+              }
+              continue;
+            }
+
+            // in string
+            if (ch === "\\") { i++; continue; }
+            if (ch === inStr) { inStr = null; continue; }
+          }
+          return inStr ? startLine : null;
+        };
+
+        let errorLine: number | null = null;
+        if (err.stack) {
+          const m = err.stack.match(/<anonymous>:(\d+):(\d+)/);
+          if (m) {
+            const stackLine = parseInt(m[1]!, 10);
+            const userLine = stackLine - 1; // wrapper 1 行：return (async function(){
+            if (userLine > 0) errorLine = userLine;
+          }
+        }
+        if (errorLine == null) {
+          const guessed = guessUnterminatedStringLine(nonImportLines.join("\n"));
+          if (guessed != null) errorLine = guessed;
+        }
+        let errorDetail = err.message;
+        if (errorLine != null) {
+          const lineText = nonImportLines[errorLine - 1];
+          if (lineText != null) {
+            errorDetail = `${errorDetail}\n\n(定位) 代码第 ${errorLine} 行：${lineText}`;
+          }
+        }
+        return {
+          success: false,
+          returnValue: null,
+          stdout: logs.join("\n"),
+          error: errorDetail,
+          errorType: err.constructor.name,
+          isSyntaxError: true,
+          errorLine,
+        };
+      }
+    }
+
     try {
       writeFileSync(filePath, moduleCode, "utf-8");
 
@@ -183,16 +271,25 @@ export class CodeExecutor {
         }
       }
 
-      // 提取运行时错误行号（从 stack trace 中解析）
-      // 模块包装头占 2 行（export default async function(...) { + let _result_;）
-      // 用户代码从第 3 行开始，所以 userLine = stackLine - 2
+      // 提取错误行号（SyntaxError 也尽量定位到用户代码行）
       let errorLine: number | null = null;
-      if (!isSyntaxError && err.stack) {
-        const match = err.stack.match(/:(\d+):\d+\)?/);
-        if (match) {
-          const stackLine = parseInt(match[1]!, 10);
-          const userLine = stackLine - 2;
-          if (userLine > 0) errorLine = userLine;
+      const tryParseLine = (text: string): number | null => {
+        // 例：/tmp/.../exec_xxx.mjs:12:34 或 file:///...:12:34
+        const m = text.match(/:(\d+):(\d+)/);
+        if (!m) return null;
+        const line = parseInt(m[1]!, 10);
+        return Number.isFinite(line) ? line : null;
+      };
+      const moduleLine = (err.stack && tryParseLine(err.stack)) || tryParseLine(errorDetail);
+      if (moduleLine != null) {
+        const userLine = moduleLine - userCodeLineOffset;
+        if (userLine > 0) {
+          errorLine = userLine;
+          // 为常见语法错误追加“就地可修复”的提示（不改变原始 message）
+          const lineText = nonImportLines[userLine - 1];
+          if (lineText != null) {
+            errorDetail = `${errorDetail}\n\n(定位) 代码第 ${userLine} 行：${lineText}`;
+          }
         }
       }
 

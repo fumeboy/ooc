@@ -20,6 +20,7 @@ deps: []
 - `options.cwd` — 工作目录（默认为对象的 rootDir）
 - `options.timeout` — 超时毫秒数（默认 120000，最大 600000）
 - `options.env` — 额外环境变量
+- `options.allowNonZero` — 允许非 0 exit code（默认 false）。用于 `grep/rg` 等“无匹配=1”的命令
 
 **返回值：**
 - 成功时返回 stdout 字符串
@@ -53,6 +54,13 @@ try {
   // 还可以访问: e.stdout, e.stderr, e.exitCode, e.timedOut
 }
 ```
+
+### sh(command, options?)
+
+执行一条 Shell 命令，返回结构化结果（不因非 0 exit code 直接抛错）：
+
+- 返回：`{ ok, exitCode, timedOut, stdout, stderr }`
+- 适合：`grep/rg` 等需要自行判断 exit code 的场景
 
 #### ExecError 类型
 

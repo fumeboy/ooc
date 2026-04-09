@@ -442,7 +442,17 @@ export async function runWithThreadTree(
   /* 4.3 构建执行上下文工厂（每次 program 执行时调用） */
   const buildExecContext = (threadId: string): { context: Record<string, unknown>; getOutputs: () => string[] } => {
     const outputs: string[] = [];
-    const printFn = (...args: unknown[]) => { outputs.push(args.map(String).join(" ")); };
+    const isThenable = (v: unknown): v is PromiseLike<unknown> =>
+      v != null && (typeof v === "object" || typeof v === "function") && "then" in (v as any);
+    const printFn = (...args: unknown[]) => {
+      const hasPromise = args.some(isThenable);
+      const text = args
+        .map(a => (isThenable(a) ? "[Promise]" : String(a)))
+        .join(" ");
+      outputs.push(hasPromise
+        ? `${text}\n(提示：检测到 Promise，请使用 \"await\" 获取值后再 print)`
+        : text);
+    };
 
     const stoneDir = config.paths?.stoneDir ?? "";
     const rootDir = config.paths?.rootDir ?? config.rootDir;
@@ -484,9 +494,36 @@ export async function runWithThreadTree(
       local: tree.readThreadData(threadId)?.locals ?? {},
     };
 
+    const normalizeTraitId = (input: string): string | null => {
+      const trimmed = input.trim();
+      if (!trimmed) return null;
+      const all = new Set(config.traits.map(t => traitId(t)));
+      if (all.has(trimmed)) return trimmed;
+      if (!trimmed.includes("/")) return null;
+      const cands = [`library/${trimmed}`, `kernel/${trimmed}`];
+      for (const c of cands) if (all.has(c)) return c;
+      return null;
+    };
+
+    const readTraitFile = (id: string): { path: string; content: string } | null => {
+      const base = id.startsWith("library/")
+        ? join(rootDir, "library", "traits", id.slice("library/".length))
+        : id.startsWith("kernel/")
+          ? join(rootDir, "kernel", "traits", id.slice("kernel/".length))
+          : null;
+      if (!base) return null;
+      const p = join(base, "TRAIT.md");
+      if (!existsSync(p)) return null;
+      return { path: p, content: readFileSync(p, "utf-8") };
+    };
+
+    const computeActiveTraitIds = (): string[] => {
+      const scopeChain = tree.computeScopeChain(threadId);
+      return getActiveTraits(config.traits, scopeChain).map(t => traitId(t));
+    };
+
     /* 注入 Trait 方法 */
-    const scopeChain = tree.getNode(threadId)?.traits ?? [];
-    const activeTraitNames = getActiveTraits(config.traits, scopeChain).map(t => traitId(t));
+    let activeTraitNames = computeActiveTraitIds();
     const methodCtx: MethodContext = {
       setData: (key: string, value: unknown) => { config.stone.data[key] = value; },
       getData: (key: string) => config.stone.data[key],
@@ -498,8 +535,73 @@ export async function runWithThreadTree(
       stoneName: objectName,
       data: { ...config.stone.data },
     };
-    const sandboxMethods = methodRegistry.buildSandboxMethods(methodCtx, activeTraitNames);
-    Object.assign(context, sandboxMethods);
+    const baseKeys = new Set(Object.keys(context));
+    let injectedKeys = new Set<string>();
+    const injectTraitMethods = (traitIds: string[]) => {
+      // 清理旧注入（避免 trait 切换后残留错误方法）
+      for (const k of injectedKeys) {
+        if (!baseKeys.has(k)) delete (context as any)[k];
+      }
+      injectedKeys = new Set();
+      const sandboxMethods = methodRegistry.buildSandboxMethods(methodCtx, traitIds);
+      Object.assign(context, sandboxMethods);
+      for (const k of Object.keys(sandboxMethods)) injectedKeys.add(k);
+    };
+
+    // 首次注入
+    injectTraitMethods(activeTraitNames);
+
+    // 管理/自省 API（避免 agent “猜 API”）
+    Object.assign(context, {
+      listLibraryTraits: () => config.traits.map(t => traitId(t)).sort(),
+      listTraits: () => config.traits.map(t => traitId(t)).sort(),
+      listActiveTraits: () => computeActiveTraitIds().sort(),
+      readTrait: (name: string) => {
+        const id = normalizeTraitId(name) ?? name;
+        return readTraitFile(id);
+      },
+      activateTrait: async (name: string) => {
+        const id = normalizeTraitId(name);
+        if (!id) {
+          return { ok: false, error: `未知 trait: ${name}` };
+        }
+        const changed = await tree.activateTrait(threadId, id);
+        activeTraitNames = computeActiveTraitIds();
+        injectTraitMethods(activeTraitNames);
+        return { ok: true, changed, traitId: id, activeTraits: activeTraitNames.sort() };
+      },
+      deactivateTrait: async (name: string) => {
+        const id = normalizeTraitId(name) ?? name;
+        const changed = await tree.deactivateTrait(threadId, id);
+        activeTraitNames = computeActiveTraitIds();
+        injectTraitMethods(activeTraitNames);
+        return { ok: true, changed, traitId: id, activeTraits: activeTraitNames.sort() };
+      },
+      methods: (trait?: string) => {
+        const act = new Set(computeActiveTraitIds());
+        const all = methodRegistry.all().filter(m => act.has(m.traitName));
+        const filtered = trait
+          ? all.filter(m => m.traitName === (normalizeTraitId(trait) ?? trait))
+          : all;
+        return filtered
+          .map(m => ({
+            name: m.name,
+            trait: m.traitName,
+            description: m.description,
+            params: m.params,
+          }))
+          .sort((a, b) => (a.trait + a.name).localeCompare(b.trait + b.name));
+      },
+      help: () => [
+        "可用沙箱自省/管理 API：",
+        "- listTraits() / listLibraryTraits()",
+        "- listActiveTraits()",
+        "- readTrait(name) -> { path, content }",
+        "- activateTrait(name) / deactivateTrait(name)",
+        "- methods(trait?) -> [{name, trait, description, params}]",
+        "提示：如 print 出现 [Promise]，请用 await 获取结果",
+      ].join("\n"),
+    });
 
     return { context, getOutputs: () => outputs };
   };
@@ -871,7 +973,17 @@ export async function resumeWithThreadTree(
   /* 复用 buildExecContext（与 runWithThreadTree 相同逻辑） */
   const buildExecContext = (threadId: string): { context: Record<string, unknown>; getOutputs: () => string[] } => {
     const outputs: string[] = [];
-    const printFn = (...args: unknown[]) => { outputs.push(args.map(String).join(" ")); };
+    const isThenable = (v: unknown): v is PromiseLike<unknown> =>
+      v != null && (typeof v === "object" || typeof v === "function") && "then" in (v as any);
+    const printFn = (...args: unknown[]) => {
+      const hasPromise = args.some(isThenable);
+      const text = args
+        .map(a => (isThenable(a) ? "[Promise]" : String(a)))
+        .join(" ");
+      outputs.push(hasPromise
+        ? `${text}\n(提示：检测到 Promise，请使用 \"await\" 获取值后再 print)`
+        : text);
+    };
     const stoneDir = config.paths?.stoneDir ?? "";
     const rootDir = config.paths?.rootDir ?? config.rootDir;
 
@@ -903,8 +1015,35 @@ export async function resumeWithThreadTree(
       local: tree.readThreadData(threadId)?.locals ?? {},
     };
 
-    const scopeChain = tree.getNode(threadId)?.traits ?? [];
-    const activeTraitNames = getActiveTraits(config.traits, scopeChain).map(t => traitId(t));
+    const normalizeTraitId = (input: string): string | null => {
+      const trimmed = input.trim();
+      if (!trimmed) return null;
+      const all = new Set(config.traits.map(t => traitId(t)));
+      if (all.has(trimmed)) return trimmed;
+      if (!trimmed.includes("/")) return null;
+      const cands = [`library/${trimmed}`, `kernel/${trimmed}`];
+      for (const c of cands) if (all.has(c)) return c;
+      return null;
+    };
+
+    const readTraitFile = (id: string): { path: string; content: string } | null => {
+      const base = id.startsWith("library/")
+        ? join(rootDir, "library", "traits", id.slice("library/".length))
+        : id.startsWith("kernel/")
+          ? join(rootDir, "kernel", "traits", id.slice("kernel/".length))
+          : null;
+      if (!base) return null;
+      const p = join(base, "TRAIT.md");
+      if (!existsSync(p)) return null;
+      return { path: p, content: readFileSync(p, "utf-8") };
+    };
+
+    const computeActiveTraitIds = (): string[] => {
+      const scopeChain = tree.computeScopeChain(threadId);
+      return getActiveTraits(config.traits, scopeChain).map(t => traitId(t));
+    };
+
+    let activeTraitNames = computeActiveTraitIds();
     const methodCtx: MethodContext = {
       setData: (key: string, value: unknown) => { config.stone.data[key] = value; },
       getData: (key: string) => config.stone.data[key],
@@ -916,7 +1055,63 @@ export async function resumeWithThreadTree(
       stoneName: objectName,
       data: { ...config.stone.data },
     };
-    Object.assign(context, methodRegistry.buildSandboxMethods(methodCtx, activeTraitNames));
+    const baseKeys = new Set(Object.keys(context));
+    let injectedKeys = new Set<string>();
+    const injectTraitMethods = (traitIds: string[]) => {
+      for (const k of injectedKeys) {
+        if (!baseKeys.has(k)) delete (context as any)[k];
+      }
+      injectedKeys = new Set();
+      const sandboxMethods = methodRegistry.buildSandboxMethods(methodCtx, traitIds);
+      Object.assign(context, sandboxMethods);
+      for (const k of Object.keys(sandboxMethods)) injectedKeys.add(k);
+    };
+
+    injectTraitMethods(activeTraitNames);
+
+    Object.assign(context, {
+      listLibraryTraits: () => config.traits.map(t => traitId(t)).sort(),
+      listTraits: () => config.traits.map(t => traitId(t)).sort(),
+      listActiveTraits: () => computeActiveTraitIds().sort(),
+      readTrait: (name: string) => {
+        const id = normalizeTraitId(name) ?? name;
+        return readTraitFile(id);
+      },
+      activateTrait: async (name: string) => {
+        const id = normalizeTraitId(name);
+        if (!id) return { ok: false, error: `未知 trait: ${name}` };
+        const changed = await tree.activateTrait(threadId, id);
+        activeTraitNames = computeActiveTraitIds();
+        injectTraitMethods(activeTraitNames);
+        return { ok: true, changed, traitId: id, activeTraits: activeTraitNames.sort() };
+      },
+      deactivateTrait: async (name: string) => {
+        const id = normalizeTraitId(name) ?? name;
+        const changed = await tree.deactivateTrait(threadId, id);
+        activeTraitNames = computeActiveTraitIds();
+        injectTraitMethods(activeTraitNames);
+        return { ok: true, changed, traitId: id, activeTraits: activeTraitNames.sort() };
+      },
+      methods: (trait?: string) => {
+        const act = new Set(computeActiveTraitIds());
+        const all = methodRegistry.all().filter(m => act.has(m.traitName));
+        const filtered = trait
+          ? all.filter(m => m.traitName === (normalizeTraitId(trait) ?? trait))
+          : all;
+        return filtered
+          .map(m => ({ name: m.name, trait: m.traitName, description: m.description, params: m.params }))
+          .sort((a, b) => (a.trait + a.name).localeCompare(b.trait + b.name));
+      },
+      help: () => [
+        "可用沙箱自省/管理 API：",
+        "- listTraits() / listLibraryTraits()",
+        "- listActiveTraits()",
+        "- readTrait(name) -> { path, content }",
+        "- activateTrait(name) / deactivateTrait(name)",
+        "- methods(trait?) -> [{name, trait, description, params}]",
+        "提示：如 print 出现 [Promise]，请用 await 获取结果",
+      ].join("\n"),
+    });
     return { context, getOutputs: () => outputs };
   };
 

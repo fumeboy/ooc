@@ -82,19 +82,16 @@ deps: ["kernel/computable"]
 - `removeTodo(index)` — 移除指定位置的待办
 - `getTodo()` — 获取当前待办队列
 
-## Trait 元编程（自我定义）
+## Trait 自省与动态激活
 
-- `createTrait(name, { when, readme, code? })` — 创建新 trait
-  - `name`: trait 名称（只允许小写字母、数字、下划线、连字符）
-  - `when`: 激活条件（"always" / "never" / 自然语言条件）
-  - `readme`: trait 文档内容（会注入 context window）
-  - `code`: index.ts 代码（可选，提供可调用方法）
-- `readTrait(name)` — 读取 trait，返回 `{ name, readme, when, code }`
-- `editTrait(name, { readme?, when?, code? })` — 部分更新 trait
-- `listTraits()` — 列出当前对象的所有 trait 名称
-- `activateTrait(name)` — 为当前栈帧动态添加 trait
+以下 API 用于减少“猜 API / 猜 trait 名称”的试错成本（在 `[program]` 中可用）：
 
-注意：不允许覆盖 kernel trait（computable、talkable）。
+- `listTraits()` / `listLibraryTraits()` — 列出当前 world 已加载的所有 trait ID（如 `library/http/client`）
+- `listActiveTraits()` — 列出当前 focus/线程作用域链下生效的 trait ID
+- `readTrait(name)` — 读取 trait 文档，返回 `{ path, content }`（读取 `TRAIT.md`）
+- `activateTrait(name)` / `deactivateTrait(name)` — 动态修改当前栈帧的 `activatedTraits`，并刷新可调用工具方法
+- `methods(trait?)` — 列出当前可调用的工具方法签名（按 trait 分组检索）
+- `help()` — 打印上述 API 的简短说明
 
 ## Context Window 管理
 

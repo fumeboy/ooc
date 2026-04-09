@@ -934,7 +934,44 @@ function getSessionsSummary(flowsDir: string): Array<{
       /* 兼容旧数据：session 根目录 */
       flow = readFlow(join(flowsDir, sessionId));
     }
-    if (!flow) continue;
+    if (!flow) {
+      // 线程树 session 可能只有 threads.json / thread.json 而没有兼容的 Flow data.json。
+      // 但只要存在 .session.json（或被 listFlowSessions 识别为旧结构 session），仍应出现在 sessions 列表。
+      const sessionDir = join(flowsDir, sessionId);
+      const sessionFile = join(sessionDir, ".session.json");
+      let title = "";
+      let createdAt = Date.now();
+      let updatedAt = Date.now();
+      try {
+        const dirStat = statSync(sessionDir);
+        createdAt = dirStat.birthtimeMs ? Math.floor(dirStat.birthtimeMs) : Date.now();
+        updatedAt = dirStat.mtimeMs ? Math.floor(dirStat.mtimeMs) : Date.now();
+      } catch { /* ignore */ }
+      if (existsSync(sessionFile)) {
+        try {
+          const meta = JSON.parse(readFileSync(sessionFile, "utf-8"));
+          if (typeof meta.title === "string") title = meta.title;
+        } catch { /* ignore */ }
+        try {
+          const fileStat = statSync(sessionFile);
+          const fileUpdatedAt = fileStat.mtimeMs ? Math.floor(fileStat.mtimeMs) : undefined;
+          if (fileUpdatedAt && fileUpdatedAt > updatedAt) updatedAt = fileUpdatedAt;
+        } catch { /* ignore */ }
+      }
+
+      summaries.push({
+        sessionId,
+        title,
+        status: "running",
+        firstMessage: "",
+        messageCount: 0,
+        actionCount: 0,
+        hasProcess: false,
+        createdAt,
+        updatedAt,
+      });
+      continue;
+    }
 
     /* 读取 .session.json 中的 title（优先于 flow.title） */
     let sessionTitle = flow.title;

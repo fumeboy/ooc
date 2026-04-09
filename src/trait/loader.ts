@@ -471,10 +471,19 @@ export async function loadTraitsFromDir(
   const entries = readdirSync(traitsDir, { withFileTypes: true });
 
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
     if (entry.name.startsWith(".")) continue;
 
     const entryPath = join(traitsDir, entry.name);
+
+    // 支持 symlink：只有指向目录的 symlink 才视为可递归的 trait 目录
+    if (entry.isSymbolicLink()) {
+      try {
+        if (!statSync(entryPath).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+    }
     const relativeName = parentPath ? `${parentPath}/${entry.name}` : entry.name;
     // 完整 trait name = prefix/relativeName（如 kernel/computable）
     const fullName = prefix ? `${prefix}/${relativeName}` : relativeName;
@@ -495,7 +504,9 @@ export async function loadTraitsFromDir(
     const subEntries = readdirSync(entryPath, { withFileTypes: true });
     const hasSubTraits = subEntries.some(
       (sub) =>
-        sub.isDirectory() &&
+        (sub.isDirectory() || (sub.isSymbolicLink() && (() => {
+          try { return statSync(join(entryPath, sub.name)).isDirectory(); } catch { return false; }
+        })())) &&
         !sub.name.startsWith(".") &&
         (existsSync(join(entryPath, sub.name, "TRAIT.md")) ||
           existsSync(join(entryPath, sub.name, "SKILL.md")) ||

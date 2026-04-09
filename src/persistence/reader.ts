@@ -147,7 +147,29 @@ export function listFlowSessions(flowsDir: string): string[] {
 
   return readdirSync(flowsDir, { withFileTypes: true })
     .filter((d) => d.isDirectory() || d.isSymbolicLink())
-    .map((d) => d.name);
+    .map((d) => d.name)
+    .filter((sessionId) => {
+      const sessionDir = join(flowsDir, sessionId);
+
+      // 新结构：以 flows/<sessionId>/.session.json 作为 session 存在的判定
+      if (existsSync(join(sessionDir, ".session.json"))) return true;
+
+      // 兼容旧结构：session 根目录存在 data.json
+      if (existsSync(join(sessionDir, "data.json"))) return true;
+
+      // 兼容：session/objects/<name>/data.json
+      const objectsDir = join(sessionDir, "objects");
+      if (!existsSync(objectsDir)) return false;
+      try {
+        for (const entry of readdirSync(objectsDir, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue;
+          if (existsSync(join(objectsDir, entry.name, "data.json"))) return true;
+        }
+      } catch {
+        return false;
+      }
+      return false;
+    });
 }
 
 /**

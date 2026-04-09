@@ -611,6 +611,55 @@ export class ThreadsTree {
     return data.todos.filter(t => t.status === "pending");
   }
 
+  /* ========== Trait 激活（认知栈） ========== */
+
+  /**
+   * 动态激活 trait（写入 activatedTraits）
+   *
+   * 说明：
+   * - 这是“运行时激活”，用于将某个 trait 加入当前节点（栈帧）的作用域链。
+   * - 激活后会影响 computeScopeChain() 以及下次构建沙箱方法注入。
+   *
+   * @param nodeId - 线程 ID
+   * @param traitId - trait 完整 ID（如 "lark/doc"）
+   * @returns 是否发生了变更
+   */
+  async activateTrait(nodeId: string, traitId: string): Promise<boolean> {
+    if (!this._tree.nodes[nodeId]) return false;
+    let changed = false;
+    await this._mutate((tree) => {
+      const node = tree.nodes[nodeId];
+      if (!node) return;
+      if (!node.activatedTraits) node.activatedTraits = [];
+      if (node.activatedTraits.includes(traitId)) return;
+      node.activatedTraits.push(traitId);
+      node.updatedAt = Date.now();
+      changed = true;
+    });
+    return changed;
+  }
+
+  /**
+   * 取消动态激活 trait（从 activatedTraits 移除）
+   * @param nodeId - 线程 ID
+   * @param traitId - trait 完整 ID
+   * @returns 是否发生了变更
+   */
+  async deactivateTrait(nodeId: string, traitId: string): Promise<boolean> {
+    if (!this._tree.nodes[nodeId]) return false;
+    let changed = false;
+    await this._mutate((tree) => {
+      const node = tree.nodes[nodeId];
+      if (!node?.activatedTraits || node.activatedTraits.length === 0) return;
+      const before = node.activatedTraits.length;
+      node.activatedTraits = node.activatedTraits.filter(t => t !== traitId);
+      if (node.activatedTraits.length === before) return;
+      node.updatedAt = Date.now();
+      changed = true;
+    });
+    return changed;
+  }
+
   /* ========== 内部：串行化写入 ========== */
 
   /**

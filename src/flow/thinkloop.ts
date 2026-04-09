@@ -1417,8 +1417,16 @@ function buildExecutionContext(
   const outputs: string[] = [];
   const tracker = new EffectTracker();
 
+  const isThenable = (v: unknown): v is PromiseLike<unknown> =>
+    v != null && (typeof v === "object" || typeof v === "function") && "then" in (v as any);
   const printFn = (...args: unknown[]) => {
-    outputs.push(args.map(String).join(" "));
+    const hasPromise = args.some(isThenable);
+    const text = args
+      .map(a => (isThenable(a) ? "[Promise]" : String(a)))
+      .join(" ");
+    outputs.push(hasPromise
+      ? `${text}\n(提示：检测到 Promise，请使用 \"await\" 获取值后再 print)`
+      : text);
   };
 
   /** 获取合并后的数据视图：flow.data 优先，stone.data 兜底 */
@@ -1539,8 +1547,12 @@ function buildExecutionContext(
   /* 注入 Trait 方法（Phase 2） */
   if (methodRegistry && traits) {
     /* G3: 按作用域链计算已激活 trait，只注入对应方法 */
-    const scopeChain = computeScopeChain(flow.process);
-    const activeTraitNames = getActiveTraits(traits, scopeChain).map((t) => traitId(t));
+    const rootDir = resolve(stoneDir, "../..");
+    const computeActiveTraitIds = (): string[] => {
+      const scopeChain = computeScopeChain(flow.process);
+      return getActiveTraits(traits, scopeChain).map((t) => traitId(t));
+    };
+    let activeTraitNames = computeActiveTraitIds();
 
     const methodCtx: MethodContext = Object.defineProperty(
       {
@@ -1553,15 +1565,107 @@ function buildExecutionContext(
         print: printFn,
         sessionId: flow.sessionId,
         filesDir: flow.filesDir,
-        rootDir: resolve(stoneDir, "../.."),
+        rootDir,
         selfDir: stoneDir,
         stoneName: basename(stoneDir),
       } as MethodContext,
       "data",
       { get: () => getMergedData(), enumerable: true },
     );
-    const sandboxMethods = methodRegistry.buildSandboxMethods(methodCtx, activeTraitNames);
-    Object.assign(context, sandboxMethods);
+
+    const normalizeTraitId = (input: string): string | null => {
+      const trimmed = input.trim();
+      if (!trimmed) return null;
+      const all = new Set(traits.map(t => traitId(t)));
+      if (all.has(trimmed)) return trimmed;
+      if (!trimmed.includes("/")) return null;
+      const cands = [`library/${trimmed}`, `kernel/${trimmed}`];
+      for (const c of cands) if (all.has(c)) return c;
+      return null;
+    };
+
+    const readTraitFile = (id: string): { path: string; content: string } | null => {
+      const base = id.startsWith("library/")
+        ? join(rootDir, "library", "traits", id.slice("library/".length))
+        : id.startsWith("kernel/")
+          ? join(rootDir, "kernel", "traits", id.slice("kernel/".length))
+          : null;
+      if (!base) return null;
+      const p = join(base, "TRAIT.md");
+      if (!existsSync(p)) return null;
+      return { path: p, content: readFileSync(p, "utf-8") };
+    };
+
+    const baseKeys = new Set(Object.keys(context));
+    let injectedKeys = new Set<string>();
+    const injectTraitMethods = (traitIds: string[]) => {
+      for (const k of injectedKeys) {
+        if (!baseKeys.has(k)) delete (context as any)[k];
+      }
+      injectedKeys = new Set();
+      const sandboxMethods = methodRegistry.buildSandboxMethods(methodCtx, traitIds);
+      Object.assign(context, sandboxMethods);
+      for (const k of Object.keys(sandboxMethods)) injectedKeys.add(k);
+    };
+
+    injectTraitMethods(activeTraitNames);
+
+    // 供 program 使用的 trait 管理/自省 API
+    Object.assign(context, {
+      listLibraryTraits: () => traits.map(t => traitId(t)).sort(),
+      listTraits: () => traits.map(t => traitId(t)).sort(),
+      listActiveTraits: () => computeActiveTraitIds().sort(),
+      readTrait: (name: string) => {
+        const id = normalizeTraitId(name) ?? name;
+        return readTraitFile(id);
+      },
+      activateTrait: (name: string) => {
+        const id = normalizeTraitId(name);
+        if (!id) return { ok: false, error: `未知 trait: ${name}` };
+        const process = flow.process;
+        const focus = getFocusNode(process);
+        if (!focus) return { ok: false, error: "focus 节点不存在" };
+        if (!focus.activatedTraits) focus.activatedTraits = [];
+        const changed = !focus.activatedTraits.includes(id);
+        if (changed) focus.activatedTraits.push(id);
+        flow.setProcess({ ...process });
+        activeTraitNames = computeActiveTraitIds();
+        injectTraitMethods(activeTraitNames);
+        return { ok: true, changed, traitId: id, activeTraits: activeTraitNames.sort() };
+      },
+      deactivateTrait: (name: string) => {
+        const id = normalizeTraitId(name) ?? name;
+        const process = flow.process;
+        const focus = getFocusNode(process);
+        if (!focus?.activatedTraits) return { ok: true, changed: false, traitId: id };
+        const before = focus.activatedTraits.length;
+        focus.activatedTraits = focus.activatedTraits.filter(t => t !== id);
+        const changed = focus.activatedTraits.length !== before;
+        if (changed) flow.setProcess({ ...process });
+        activeTraitNames = computeActiveTraitIds();
+        injectTraitMethods(activeTraitNames);
+        return { ok: true, changed, traitId: id, activeTraits: activeTraitNames.sort() };
+      },
+      methods: (trait?: string) => {
+        const act = new Set(computeActiveTraitIds());
+        const all = methodRegistry.all().filter(m => act.has(m.traitName));
+        const filtered = trait
+          ? all.filter(m => m.traitName === (normalizeTraitId(trait) ?? trait))
+          : all;
+        return filtered
+          .map(m => ({ name: m.name, trait: m.traitName, description: m.description, params: m.params }))
+          .sort((a, b) => (a.trait + a.name).localeCompare(b.trait + b.name));
+      },
+      help: () => [
+        "可用沙箱自省/管理 API：",
+        "- listTraits() / listLibraryTraits()",
+        "- listActiveTraits()",
+        "- readTrait(name) -> { path, content }",
+        "- activateTrait(name) / deactivateTrait(name)",
+        "- methods(trait?) -> [{name, trait, description, params}]",
+        "提示：如 print 出现 [Promise]，请用 await 获取结果",
+      ].join("\n"),
+    });
   }
 
   /* ── 认知栈 API（G13） ── */
