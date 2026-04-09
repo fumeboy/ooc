@@ -408,17 +408,19 @@ export class World implements Routable {
    * @returns Flow 实例
    */
   async talk(objectName: string, message: string, from: string = "human", flowId?: string): Promise<Flow> {
-    /* 线程树架构路径（新） */
-    if (this._useThreadTree && !flowId) {
-      return this._talkWithThreadTree(objectName, message, from);
+    /* 线程树架构路径 */
+    if (this._useThreadTree) {
+      if (!flowId) {
+        return this._talkWithThreadTree(objectName, message, from);
+      }
+      /* 有 flowId：可能是预创建的 session 或续写 */
+      return this._talkWithThreadTree(objectName, message, from, flowId);
     }
 
     /* 旧架构路径 */
-    /* 如果指定了 flowId，在已有 Flow 上续写 */
     if (flowId) {
       return this._resumeAndRunFlow(objectName, message, from, flowId);
     }
-    /* 否则创建新的 Flow */
     const flow = await this._createAndRunFlow(objectName, message, from);
     return flow;
   }
@@ -429,7 +431,7 @@ export class World implements Routable {
    * 使用新的 thread/ 模块执行对话，返回兼容的 Flow 对象。
    * 内部通过 runWithThreadTree 执行，结果包装为 Flow 以保持接口兼容。
    */
-  private async _talkWithThreadTree(objectName: string, message: string, from: string): Promise<Flow> {
+  private async _talkWithThreadTree(objectName: string, message: string, from: string, preSessionId?: string): Promise<Flow> {
     const stone = this._registry.get(objectName);
     if (!stone) throw new Error(`对象 "${objectName}" 不存在`);
 
@@ -487,7 +489,7 @@ export class World implements Routable {
 
     /* 运行线程树引擎 */
     consola.info(`[World] 使用线程树架构处理 talk: ${from} → ${objectName}`);
-    const result: TalkResult = await runWithThreadTree(objectName, message, from, engineConfig);
+    const result: TalkResult = await runWithThreadTree(objectName, message, from, engineConfig, preSessionId);
 
     /* 在线程树 session 目录下写入 Flow 兼容数据 */
     const sessionDir = join(this.flowsDir, result.sessionId);

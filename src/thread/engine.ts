@@ -407,8 +407,9 @@ export async function runWithThreadTree(
   message: string,
   from: string,
   config: EngineConfig,
+  preSessionId?: string,
 ): Promise<TalkResult> {
-  const sessionId = generateSessionId();
+  const sessionId = preSessionId ?? generateSessionId();
   const sessionDir = join(config.flowsDir, sessionId);
   const objectFlowDir = join(sessionDir, "objects", objectName);
   mkdirSync(objectFlowDir, { recursive: true });
