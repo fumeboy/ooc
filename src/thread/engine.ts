@@ -13,7 +13,7 @@
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md
  */
 
-import { mkdirSync, existsSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { mkdirSync, existsSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { consola } from "consola";
 
@@ -637,8 +637,24 @@ export async function runWithThreadTree(
 
       /* 检查是否有缓存的 LLM 输出（resume 模式） */
       if (threadData._pendingOutput) {
-        llmOutput = threadData._pendingOutput;
-        thinkingContent = threadData._pendingThinkingOutput;
+        /* 优先从文件读取（用户可能已修改） */
+        const debugDir = join(objectFlowDir, "threads", threadId);
+        const outputFile = join(debugDir, "llm.output.txt");
+        if (existsSync(outputFile)) {
+          llmOutput = readFileSync(outputFile, "utf-8");
+          unlinkSync(outputFile);
+          const thinkingFile = join(debugDir, "llm.thinking.txt");
+          if (existsSync(thinkingFile)) {
+            thinkingContent = readFileSync(thinkingFile, "utf-8");
+            unlinkSync(thinkingFile);
+          }
+          const inputFile = join(debugDir, "llm.input.txt");
+          if (existsSync(inputFile)) unlinkSync(inputFile);
+        } else {
+          /* fallback 到内存缓存 */
+          llmOutput = threadData._pendingOutput;
+          thinkingContent = threadData._pendingThinkingOutput;
+        }
 
         /* 清除缓存 */
         delete threadData._pendingOutput;
@@ -683,6 +699,9 @@ export async function runWithThreadTree(
           if (thinkingContent) {
             writeFileSync(join(debugDir, "llm.thinking.txt"), thinkingContent, "utf-8");
           }
+          /* 写入 Context 供人工查看 */
+          const inputContent = messages.map(m => `--- ${m.role} ---\n${m.content}`).join("\n\n");
+          writeFileSync(join(debugDir, "llm.input.txt"), inputContent, "utf-8");
 
           consola.info(`[Engine] 暂停 thread=${threadId}, 输出已缓存`);
 
@@ -1132,8 +1151,23 @@ export async function resumeWithThreadTree(
       let thinkingContent: string | undefined;
 
       if (threadData._pendingOutput) {
-        llmOutput = threadData._pendingOutput;
-        thinkingContent = threadData._pendingThinkingOutput;
+        /* 优先从文件读取（用户可能已修改） */
+        const debugDir = join(objectFlowDir, "threads", threadId);
+        const outputFile = join(debugDir, "llm.output.txt");
+        if (existsSync(outputFile)) {
+          llmOutput = readFileSync(outputFile, "utf-8");
+          unlinkSync(outputFile);
+          const thinkingFile = join(debugDir, "llm.thinking.txt");
+          if (existsSync(thinkingFile)) {
+            thinkingContent = readFileSync(thinkingFile, "utf-8");
+            unlinkSync(thinkingFile);
+          }
+          const inputFile = join(debugDir, "llm.input.txt");
+          if (existsSync(inputFile)) unlinkSync(inputFile);
+        } else {
+          llmOutput = threadData._pendingOutput;
+          thinkingContent = threadData._pendingThinkingOutput;
+        }
         delete threadData._pendingOutput;
         delete threadData._pendingThinkingOutput;
         tree.writeThreadData(threadId, threadData);
@@ -1153,6 +1187,18 @@ export async function resumeWithThreadTree(
           threadData._pendingOutput = llmOutput;
           if (thinkingContent) threadData._pendingThinkingOutput = thinkingContent;
           tree.writeThreadData(threadId, threadData);
+
+          /* 写入调试文件供人工查看/修改 */
+          const debugDir = join(objectFlowDir, "threads", threadId);
+          mkdirSync(debugDir, { recursive: true });
+          writeFileSync(join(debugDir, "llm.output.txt"), llmOutput, "utf-8");
+          if (thinkingContent) {
+            writeFileSync(join(debugDir, "llm.thinking.txt"), thinkingContent, "utf-8");
+          }
+          const inputContent = messages.map(m => `--- ${m.role} ---\n${m.content}`).join("\n\n");
+          writeFileSync(join(debugDir, "llm.input.txt"), inputContent, "utf-8");
+
+          consola.info(`[Engine] 暂停 thread=${threadId}, 输出已缓存`);
           scheduler.pauseObject(objectName);
           return;
         }

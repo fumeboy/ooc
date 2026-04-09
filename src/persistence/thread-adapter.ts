@@ -51,15 +51,17 @@ function buildNode(
 ): ProcessNode {
   const meta = tree.nodes[nodeId]!;
 
-  /* 读取该线程的 actions 和 pins */
+  /* 读取该线程的 actions、pins 和 pause 状态 */
   let actions: Action[] = [];
   let pins: string[] = [];
+  let hasPendingOutput = false;
   const threadJsonPath = join(threadsDir, nodeId, "thread.json");
   if (existsSync(threadJsonPath)) {
     try {
       const threadData = JSON.parse(readFileSync(threadJsonPath, "utf-8"));
       actions = (threadData.actions ?? []).map(mapAction);
       pins = threadData.pins ?? [];
+      hasPendingOutput = !!threadData._pendingOutput;
     } catch { /* 解析失败则无 actions */ }
   }
 
@@ -90,6 +92,7 @@ function buildNode(
       _createdAt: meta.createdAt,
       _updatedAt: meta.updatedAt,
       _pins: pins,
+      _hasPendingOutput: hasPendingOutput,
     },
   };
 }

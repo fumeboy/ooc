@@ -14,7 +14,7 @@ import { cn } from "../lib/utils";
 import { ArrowLeft } from "lucide-react";
 import { ActionCard } from "../components/ui/ActionCard";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
-import { updateThreadPins } from "../api/client";
+import { updateThreadPins, resumeFlow, fetchFileContent } from "../api/client";
 import type { Process, ProcessNode } from "../api/types";
 
 interface ThreadsTreeViewProps {
@@ -51,6 +51,7 @@ const STATUS_INDICATOR: Record<string, { color: string; symbol: string }> = {
   done:    { color: "text-green-600", symbol: "✓" },
   failed:  { color: "text-red-500", symbol: "✗" },
   pending: { color: "text-[var(--muted-foreground)]", symbol: "○" },
+  paused:  { color: "text-orange-400", symbol: "⏸" },
 };
 
 /** 从 ProcessNode.locals 读取线程元数据 */
@@ -61,6 +62,7 @@ function getThreadMeta(node: ProcessNode) {
     creationMode: (locals._creationMode as string) ?? null,
     updatedAt: (locals._updatedAt as number) ?? 0,
     pins: (locals._pins as string[]) ?? [],
+    hasPendingOutput: !!locals._hasPendingOutput,
   };
 }
 
@@ -201,6 +203,8 @@ export function ThreadsTreeView({ process, sessionId, objectName }: ThreadsTreeV
       <ThreadDetailView
         node={node}
         onBack={() => setDetailNodeId(null)}
+        sessionId={sessionId}
+        objectName={objectName}
       />
     );
   }
@@ -269,7 +273,7 @@ function ThreadNode({
   getDisplayPins: (node: ProcessNode) => string[];
 }) {
   const meta = getThreadMeta(node);
-  const status = meta.threadStatus ?? (node.status === "doing" ? "running" : node.status === "done" ? "done" : "pending");
+  const status = meta.hasPendingOutput ? "paused" : (meta.threadStatus ?? (node.status === "doing" ? "running" : node.status === "done" ? "done" : "pending"));
   const indicator = STATUS_INDICATOR[status] ?? STATUS_INDICATOR.pending!;
   const hasChildren = node.children.length > 0;
   const [expanded, setExpanded] = useState(
@@ -383,12 +387,44 @@ function ThreadNode({
 function ThreadDetailView({
   node,
   onBack,
+  sessionId,
+  objectName,
 }: {
   node: ProcessNode;
   onBack: () => void;
+  sessionId?: string;
+  objectName?: string;
 }) {
   const meta = getThreadMeta(node);
-  const status = meta.threadStatus ?? node.status;
+  const status = meta.hasPendingOutput ? "paused" : (meta.threadStatus ?? node.status);
+  const [resuming, setResuming] = useState(false);
+  const [showContext, setShowContext] = useState(false);
+  const [pauseFiles, setPauseFiles] = useState<{ output?: string; input?: string } | null>(null);
+
+  /* 加载暂停文件内容 */
+  useEffect(() => {
+    if (!meta.hasPendingOutput || !sessionId || !objectName) return;
+    const basePath = `flows/${sessionId}/objects/${objectName}/threads/${node.id}`;
+    Promise.all([
+      fetchFileContent(`${basePath}/llm.output.txt`).catch(() => undefined),
+      fetchFileContent(`${basePath}/llm.input.txt`).catch(() => undefined),
+    ]).then(([output, input]) => {
+      setPauseFiles({ output, input });
+    });
+  }, [meta.hasPendingOutput, sessionId, objectName, node.id]);
+
+  const handleResume = async () => {
+    if (!sessionId || !objectName) return;
+    setResuming(true);
+    try {
+      await resumeFlow(objectName, sessionId);
+      onBack();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setResuming(false);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -404,21 +440,56 @@ function ThreadDetailView({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-medium truncate">{node.title}</h3>
-            <span className="text-[10px] text-[var(--muted-foreground)] font-mono">{status}</span>
+            <span className={cn(
+              "text-[10px] font-mono",
+              status === "paused" ? "text-orange-400" : "text-[var(--muted-foreground)]",
+            )}>{status}</span>
           </div>
           <span className="text-[10px] text-[var(--muted-foreground)] font-mono">{node.id}</span>
         </div>
+        {meta.hasPendingOutput && sessionId && objectName && (
+          <button
+            onClick={handleResume}
+            disabled={resuming}
+            className="px-3 py-1 text-xs rounded bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-50 transition-opacity shrink-0"
+          >
+            {resuming ? "恢复中..." : "恢复执行"}
+          </button>
+        )}
       </div>
 
-      {/* 摘要 */}
-      {node.summary && (
-        <div className="px-4 py-3 border-b border-[var(--border)] text-sm">
-          <MarkdownContent content={node.summary} />
-        </div>
-      )}
-
-      {/* Actions 列表 */}
+      {/* 摘要 + 暂停面板 + Actions 合并滚动 */}
       <div className="flex-1 overflow-auto px-4 py-3 space-y-2">
+        {/* 暂停面板 */}
+        {meta.hasPendingOutput && pauseFiles && (
+          <div className="rounded bg-[var(--warm-muted)] p-3 mb-3">
+            <p className="text-xs font-medium mb-2">Thread 已暂停 — 待执行的 LLM Output:</p>
+            {pauseFiles.output ? (
+              <pre className="text-xs font-mono bg-[var(--card)] rounded p-2 overflow-auto max-h-60 whitespace-pre-wrap">{pauseFiles.output}</pre>
+            ) : (
+              <p className="text-xs text-[var(--muted-foreground)]">(无法读取 llm.output.txt)</p>
+            )}
+            {pauseFiles.input && (
+              <div className="mt-2">
+                <button
+                  onClick={() => setShowContext(!showContext)}
+                  className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                >
+                  {showContext ? "▾ 收起 Context" : "▸ 查看 Context"}
+                </button>
+                {showContext && (
+                  <pre className="mt-1 text-xs font-mono bg-[var(--card)] rounded p-2 overflow-auto max-h-60 whitespace-pre-wrap">{pauseFiles.input}</pre>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {node.summary && (
+          <div className="text-sm pb-3 mb-2 border-b border-[var(--border)]">
+            <MarkdownContent content={node.summary} />
+          </div>
+        )}
         {node.actions.length === 0 ? (
           <p className="text-sm text-[var(--muted-foreground)]">暂无 actions</p>
         ) : (
