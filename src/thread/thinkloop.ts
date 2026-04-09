@@ -176,6 +176,35 @@ export function runThreadIteration(input: ThreadIterationInput): ThreadIteration
     });
   }
 
+  /* 4b. 处理 talk/talk_sync 内联 mark（发送消息时顺带 ack） */
+  const talkMarkIds = parsed.talk?.mark?.message_ids ?? [];
+  if (talkMarkIds.length > 0) {
+    for (const messageId of talkMarkIds) {
+      result.inboxUpdates.push({
+        messageId,
+        mark: {
+          type: parsed.talk!.mark!.type ?? "ack",
+          tip: parsed.talk!.mark!.tip ?? "已回复",
+          markedAt: Date.now(),
+        },
+      });
+    }
+  }
+
+  const talkSyncMarkIds = parsed.talkSync?.mark?.message_ids ?? [];
+  if (talkSyncMarkIds.length > 0) {
+    for (const messageId of talkSyncMarkIds) {
+      result.inboxUpdates.push({
+        messageId,
+        mark: {
+          type: parsed.talkSync!.mark!.type ?? "ack",
+          tip: parsed.talkSync!.mark!.tip ?? "已回复",
+          markedAt: Date.now(),
+        },
+      });
+    }
+  }
+
   /* 5. 处理 addTodo */
   if (parsed.addTodo) {
     result.newTodos.push({

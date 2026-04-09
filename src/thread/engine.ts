@@ -153,7 +153,9 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>): Message[
 
   /* inbox */
   if (ctx.inbox.length > 0) {
-    const inboxLines = ctx.inbox.map(m => `- [${m.from}] ${m.content}`).join("\n");
+    const inboxLines = ctx.inbox
+      .map(m => `- #${m.id} [${m.from}] ${m.content}`)
+      .join("\n");
     userParts.push(`## 未读消息\n${inboxLines}`);
   }
 
@@ -656,6 +658,9 @@ export async function runWithThreadTree(
         const talk = iterResult.talks;
         const target = talk.target?.toLowerCase();
 
+        /* talk 内联 mark（如果存在） */
+        const explicitMarkIds = ((talk as any)?.mark?.message_ids as string[] | undefined) ?? [];
+
         /* 跳过 talk to self（当前 Object） */
         if (target !== objectName.toLowerCase()) {
           consola.info(`[Engine] talk ${objectName} → ${talk.target}: ${talk.message.slice(0, 100)}`);
@@ -674,6 +679,20 @@ export async function runWithThreadTree(
           /* 调用 World 路由 */
           try {
             const reply = await config.onTalk(talk.target, talk.message, objectName, threadId, sessionId);
+
+            /*
+             * 兜底：当且仅当满足以下条件时，自动 ack 已回复消息
+             * - talk 没有显式 mark
+             * - target 对应的未读消息只有 1 条
+             * - 该未读消息是 target 发给我的最新一条消息
+             */
+            if (explicitMarkIds.length === 0) {
+              const td = tree.readThreadData(threadId);
+              const autoAckId = getAutoAckMessageId(td, talk.target);
+              if (autoAckId) {
+                tree.markInbox(threadId, autoAckId, "ack", "已回复");
+              }
+            }
 
             /* 将回复写入当前线程的 inbox */
             if (reply) {
@@ -770,6 +789,29 @@ function buildTreeFileSnapshot(tree: ThreadsTree): ThreadsTreeFile {
     rootId: tree.rootId,
     nodes,
   };
+}
+
+/**
+ * 计算 talk 的自动 ack 目标（严格条件：只在明确“单条未读且为该对象最新消息”时生效）
+ */
+function getAutoAckMessageId(
+  td: { inbox?: Array<{ id: string; from: string; timestamp: number; status: string }> } | null,
+  talkTarget: string,
+): string | null {
+  if (!td?.inbox || td.inbox.length === 0) return null;
+  const target = (talkTarget ?? "").toLowerCase();
+  if (!target) return null;
+
+  const fromTarget = td.inbox.filter(m => (m.from ?? "").toLowerCase() === target);
+  if (fromTarget.length === 0) return null;
+
+  const unreadFromTarget = fromTarget.filter(m => m.status === "unread");
+  if (unreadFromTarget.length !== 1) return null;
+
+  const latestFromTarget = fromTarget.reduce((a, b) => (a.timestamp >= b.timestamp ? a : b));
+  if (latestFromTarget.id !== unreadFromTarget[0]!.id) return null;
+
+  return unreadFromTarget[0]!.id;
 }
 
 /* ========== Resume / StepOnce ========== */

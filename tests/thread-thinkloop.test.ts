@@ -251,6 +251,80 @@ source_message_id = "msg1"
   });
 });
 
+describe("runThreadIteration — talk mark", () => {
+  test("talk 段携带 mark_message_id 时自动产生 inboxUpdates", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: { r: makeNode("r") },
+    };
+    const threadData: ThreadDataFile = {
+      id: "r",
+      actions: [],
+      inbox: [
+        { id: "msg_123", from: "user", content: "hi", timestamp: 1000, source: "talk", status: "unread" },
+      ],
+    };
+
+    const llmOutput = `
+[talk]
+target = "user"
+message = "收到"
+mark_message_id = "msg_123"
+mark_type = "ack"
+mark_tip = "已回复"
+`;
+
+    const input: ThreadIterationInput = {
+      tree,
+      threadId: "r",
+      threadData,
+      llmOutput,
+      stone: { name: "obj", thinkable: { whoAmI: "test" } } as any,
+      traits: [],
+    };
+
+    const result = runThreadIteration(input);
+    expect(result.talks).not.toBeNull();
+    expect(result.inboxUpdates.some(u => u.messageId === "msg_123")).toBe(true);
+  });
+
+  test("talk 段携带 mark_message_ids 时自动产生多个 inboxUpdates", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: { r: makeNode("r") },
+    };
+    const threadData: ThreadDataFile = {
+      id: "r",
+      actions: [],
+      inbox: [
+        { id: "msg_a", from: "user", content: "a", timestamp: 1000, source: "talk", status: "unread" },
+        { id: "msg_b", from: "user", content: "b", timestamp: 1001, source: "talk", status: "unread" },
+      ],
+    };
+
+    const llmOutput = `
+[talk]
+target = "user"
+message = "收到"
+mark_message_ids = ["msg_a", "msg_b"]
+`;
+
+    const input: ThreadIterationInput = {
+      tree,
+      threadId: "r",
+      threadData,
+      llmOutput,
+      stone: { name: "obj", thinkable: { whoAmI: "test" } } as any,
+      traits: [],
+    };
+
+    const result = runThreadIteration(input);
+    const ids = result.inboxUpdates.map(u => u.messageId);
+    expect(ids).toContain("msg_a");
+    expect(ids).toContain("msg_b");
+  });
+});
+
 describe("runThreadIteration — set_plan", () => {
   test("set_plan 更新计划文本", () => {
     const tree: ThreadsTreeFile = {

@@ -120,11 +120,33 @@ print(result);
 [talk]
 target = "researcher"
 message = "请帮我搜索 AI Safety 论文"
+mark_message_id = "msg_123"
+mark_type = "ack"
+mark_tip = "已回复"
 `;
     const result = parseThreadOutput(input);
     expect(result.talk).not.toBeNull();
     expect(result.talk!.target).toBe("researcher");
     expect(result.talk!.message).toContain("AI Safety");
+    expect(result.talk!.mark).toBeDefined();
+    expect(result.talk!.mark!.message_ids).toEqual(["msg_123"]);
+    expect(result.talk!.mark!.type).toBe("ack");
+    expect(result.talk!.mark!.tip).toBe("已回复");
+  });
+
+  test("解析 talk 段：支持 mark_message_ids 数组", () => {
+    const input = `
+[talk]
+target = "researcher"
+message = "收到"
+mark_message_ids = ["msg_a", "msg_b"]
+mark_type = "ack"
+mark_tip = "已回复"
+`;
+    const result = parseThreadOutput(input);
+    expect(result.talk).not.toBeNull();
+    expect(result.talk!.mark).toBeDefined();
+    expect(result.talk!.mark!.message_ids).toEqual(["msg_a", "msg_b"]);
   });
 
   test("无有效指令时返回空结果", () => {

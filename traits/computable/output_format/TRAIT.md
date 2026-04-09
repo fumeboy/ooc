@@ -47,11 +47,19 @@ deps: ["kernel/computable"]
 异步发送消息，发完后继续执行当前线程。
 - `target` — 目标对象名（必填）
 - `message` — 消息内容（必填）
+- `mark_message_id` — 可选：本次发送用于回复哪条 inbox 消息（消息 ID）。提供后系统会自动将该消息 `ack`，避免下一轮重复回复。
+- `mark_message_ids` — 可选：同上，但支持一次标记多条消息（数组）。
+- `mark_type` — 可选：`"ack" | "ignore" | "todo"`（默认 `"ack"`）
+- `mark_tip` — 可选：标记说明（默认 `"已回复"`）
 
 ### `[talk_sync]`
 同步发送消息，发完后暂停当前线程，等待对方回复。适合"问一个问题然后等答案"的场景。
 - `target` — 目标对象名（必填）
 - `message` — 消息内容（必填）
+- `mark_message_id` — 可选：同 `[talk]`
+- `mark_message_ids` — 可选：同 `[talk]`
+- `mark_type` — 可选：同 `[talk]`
+- `mark_tip` — 可选：同 `[talk]`
 
 ### `[return]`
 - `summary` — 完成摘要（必填）

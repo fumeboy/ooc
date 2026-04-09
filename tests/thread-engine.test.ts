@@ -42,6 +42,7 @@ function makeConfig(overrides?: {
   directory?: DirectoryEntry[];
   traits?: TraitDefinition[];
   schedulerConfig?: EngineConfig["schedulerConfig"];
+  onTalk?: EngineConfig["onTalk"];
 }): EngineConfig {
   const llm = overrides?.responseFn
     ? new MockLLMClient({ responseFn: overrides.responseFn })
@@ -54,12 +55,18 @@ function makeConfig(overrides?: {
     directory: overrides?.directory ?? [],
     traits: overrides?.traits ?? [],
     stone: overrides?.stone ?? makeStone("test_obj"),
+    onTalk: overrides?.onTalk,
     schedulerConfig: overrides?.schedulerConfig ?? {
       maxIterationsPerThread: 20,
       maxTotalIterations: 50,
       deadlockGracePeriodMs: 0,
     },
   };
+}
+
+/** 生成 talk 的 TOML */
+function tomlTalk(target: string, message: string, extra?: string): string {
+  return `[talk]\ntarget = "${target}"\nmessage = "${message}"${extra ? `\n${extra}` : ""}`;
 }
 
 /** 生成 return 指令的 TOML */
@@ -169,6 +176,56 @@ describe("基础执行", () => {
     await runWithThreadTree("test_obj", "你好世界", "user", config);
 
     expect(receivedInbox).toBe(true);
+  });
+});
+
+describe("talk 自动 ack 兜底", () => {
+  test("仅当 target 只有一条未读且为最新消息，且 talk 未显式 mark 时自动 ack", async () => {
+    let callCount = 0;
+    let firstCallSawInboxId = false;
+    let secondCallHasInbox = false;
+
+    const config = makeConfig({
+      onTalk: async () => null,
+      responseFn: (messages: any[]) => {
+        callCount++;
+        const userMsg = messages.find((m: any) => m.role === "user")?.content ?? "";
+
+        if (callCount === 1) {
+          // 第一次应能看到未读消息行（含 #msg_ 前缀）
+          if (userMsg.includes("## 未读消息") && userMsg.includes("#msg_")) {
+            firstCallSawInboxId = true;
+          }
+          // 输出 talk（不带 mark），触发引擎兜底
+          return tomlTalk("user", "收到");
+        }
+
+        // 第二次：如果兜底 ack 生效，则不会再出现未读消息块
+        if (userMsg.includes("## 未读消息")) {
+          secondCallHasInbox = true;
+        }
+        return tomlReturn("done");
+      },
+    });
+
+    const result = await runWithThreadTree("test_obj", "hi", "user", config);
+    expect(result.status).toBe("done");
+    expect(callCount).toBe(2);
+    expect(firstCallSawInboxId).toBe(true);
+    expect(secondCallHasInbox).toBe(false);
+
+    // 读取落盘 thread.json，确认 inbox 状态已被标记
+    const sessionDir = join(FLOWS_DIR, result.sessionId);
+    const threadsJsonPath = join(sessionDir, "objects", "test_obj", "threads.json");
+    const threadsJson = JSON.parse(await Bun.file(threadsJsonPath).text());
+    const rootId = threadsJson.rootId as string;
+    const threadPath = join(sessionDir, "objects", "test_obj", "threads", rootId, "thread.json");
+    const thread = JSON.parse(await Bun.file(threadPath).text());
+    const inbox = thread.inbox as any[];
+    expect(Array.isArray(inbox)).toBe(true);
+    const marked = inbox.find((m) => m.status === "marked");
+    expect(marked).toBeTruthy();
+    expect(marked.mark?.type).toBe("ack");
   });
 });
 

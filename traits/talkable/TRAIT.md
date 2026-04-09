@@ -41,6 +41,11 @@ target = "user"
 message = """
 你的消息
 """
+
+# 可选：如果这条 talk 是在回复某条未读 inbox 消息，建议同时标记已回复，避免重复回复
+mark_message_ids = ["msg_xxx", "msg_yyy"]
+mark_type = "ack"
+mark_tip = "已回复"
 ```
 
 **方式二：`talk()` 函数（在 program 中）**

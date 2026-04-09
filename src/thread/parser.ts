@@ -127,6 +127,8 @@ export function parseThreadOutput(output: string): ThreadParsedOutput {
       target: typeof t.target === "string" ? t.target : "",
       message: typeof t.message === "string" ? t.message : "",
     } as TalkSection;
+    const mark = parseTalkMark(t);
+    if (mark) result.talk.mark = mark;
   }
 
   /* talk_sync（同步 talk，发送后自动 wait） */
@@ -136,6 +138,8 @@ export function parseThreadOutput(output: string): ThreadParsedOutput {
       target: typeof t.target === "string" ? t.target : "",
       message: typeof t.message === "string" ? t.message : "",
     } as TalkSection;
+    const mark = parseTalkMark(t);
+    if (mark) result.talkSync.mark = mark;
   }
 
   /* set_plan */
@@ -237,4 +241,65 @@ function safeParseToml(text: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * 从 [talk] / [talk_sync] 段中解析 mark 信息（可选）
+ *
+ * 支持两种写法：
+ * 1) 扁平字段：mark_message_id / mark_type / mark_tip
+ * 2) 内联表：mark = { message_id = "...", type = "ack", tip = "已回复" }
+ */
+function parseTalkMark(talk: Record<string, unknown>): TalkSection["mark"] | null {
+  /* 1) 内联表 mark = { ... } */
+  if (talk.mark && typeof talk.mark === "object") {
+    const m = talk.mark as Record<string, unknown>;
+    const ids: string[] = [];
+    if (typeof m.message_id === "string" && m.message_id) ids.push(m.message_id);
+    if (Array.isArray(m.message_ids)) {
+      for (const v of m.message_ids) {
+        if (typeof v === "string" && v) ids.push(v);
+      }
+    }
+
+    if (ids.length > 0) {
+      const mark: TalkSection["mark"] = { message_ids: ids };
+      if (typeof m.type === "string") {
+        const type = m.type as string;
+        if (type === "ack" || type === "ignore" || type === "todo") {
+          mark.type = type;
+        }
+      }
+      if (typeof m.tip === "string") {
+        mark.tip = m.tip;
+      }
+      return mark;
+    }
+  }
+
+  /* 2) 扁平字段 */
+  const ids: string[] = [];
+  if (typeof talk.mark_message_id === "string" && talk.mark_message_id) {
+    ids.push(talk.mark_message_id);
+  }
+  if (Array.isArray(talk.mark_message_ids)) {
+    for (const v of talk.mark_message_ids) {
+      if (typeof v === "string" && v) ids.push(v);
+    }
+  }
+  if (ids.length > 0) {
+    const mark: TalkSection["mark"] = { message_ids: ids };
+    if (typeof talk.mark_type === "string") {
+      const type = talk.mark_type as string;
+      if (type === "ack" || type === "ignore" || type === "todo") {
+        mark.type = type;
+      }
+    }
+    if (typeof talk.mark_tip === "string") {
+      mark.tip = talk.mark_tip as string;
+    }
+    return mark;
+  }
+
+  return null;
 }

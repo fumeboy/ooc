@@ -45,6 +45,19 @@ export interface TalkSection {
   message: string;
   /** 回复哪条消息（可选） */
   reply_to?: string;
+  /**
+   * 发送消息时顺带标记已处理的 inbox 消息（可选）
+   *
+   * 用于避免同一条未读消息在下一轮 Context 中再次出现，导致重复回复。
+   */
+  mark?: {
+    /** 要标记的 inbox 消息 ID 列表（必填，至少 1 个） */
+    message_ids: string[];
+    /** 标记类型（可选，默认 ack） */
+    type?: "ack" | "ignore" | "todo";
+    /** 标记说明（可选，默认 "已回复"） */
+    tip?: string;
+  };
 }
 
 /** action 段（结构化工具调用） */
@@ -129,6 +142,30 @@ export function parseOutput(tomlString: string): ParsedOutput {
       };
       if (typeof talk.reply_to === "string") {
         result.talk.reply_to = talk.reply_to;
+      }
+      if (talk.mark && typeof talk.mark === "object") {
+        const mark = talk.mark as Record<string, unknown>;
+        const ids: string[] = [];
+        if (typeof mark.message_id === "string" && mark.message_id) {
+          ids.push(mark.message_id);
+        }
+        if (Array.isArray(mark.message_ids)) {
+          for (const v of mark.message_ids) {
+            if (typeof v === "string" && v) ids.push(v);
+          }
+        }
+        if (ids.length > 0) {
+          result.talk.mark = { message_ids: ids };
+          if (typeof mark.type === "string") {
+            const t = mark.type as string;
+            if (t === "ack" || t === "ignore" || t === "todo") {
+              result.talk.mark.type = t;
+            }
+          }
+          if (typeof mark.tip === "string") {
+            result.talk.mark.tip = mark.tip;
+          }
+        }
       }
     }
 
