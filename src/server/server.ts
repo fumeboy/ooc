@@ -10,7 +10,7 @@
  */
 
 import { join } from "node:path";
-import { existsSync, readFileSync, readdirSync, writeFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync, statSync, mkdirSync } from "node:fs";
 import { consola } from "consola";
 import { eventBus, type SSEEvent } from "./events.js";
 import { readFlow, listFlowSessions } from "../persistence/index.js";
@@ -155,7 +155,24 @@ async function handleRoute(
     return json({ success: true, data: stone.toJSON() }, 201);
   }
 
-  /* POST /api/talk/:objectName — 向对象发消息 */
+  /* POST /api/sessions/create — 预创建 session，立即返回 sessionId */
+  if (method === "POST" && path === "/api/sessions/create") {
+    const body = (await req.json()) as Record<string, unknown>;
+    const objectName = (body.objectName as string) ?? "supervisor";
+    const stone = world.getObject(objectName);
+    if (!stone) return errorResponse(`对象 "${objectName}" 不存在`, 404);
+
+    const sessionId = `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const sessionDir = join(world.flowsDir, sessionId);
+    const objectFlowDir = join(sessionDir, "objects", objectName);
+    mkdirSync(objectFlowDir, { recursive: true });
+    /* 写入 .session.json 标记 */
+    writeFileSync(join(sessionDir, ".session.json"), JSON.stringify({ title: "" }, null, 2));
+
+    return json({ success: true, data: { sessionId } }, 201);
+  }
+
+  /* POST /api/talk/:objectName — 向对象发消息（异步，不等待执行完成） */
   const talkMatch = path.match(/^\/api\/talk\/([^/]+)$/);
   if (method === "POST" && talkMatch) {
     const objectName = talkMatch[1]!;
@@ -163,20 +180,17 @@ async function handleRoute(
     const message = body.message as string;
     const flowId = (body.sessionId ?? body.flowId) as string | undefined;
     if (!message) return errorResponse("缺少 message 字段");
-    const flow = await world.talk(objectName, message, "human", flowId);
 
-    /* 通知 supervisor（非阻塞，仅用户直接消息且目标非 supervisor） */
-    // if (objectName !== "supervisor") {
-    //   notifySupervisor(world, objectName, message, flow.sessionId);
-    // }
+    /* 异步执行，不阻塞 HTTP 响应 */
+    world.talk(objectName, message, "human", flowId).catch((e) => {
+      consola.error(`[Server] talk 异步执行失败: ${(e as Error).message}`);
+    });
 
     return json({
       success: true,
       data: {
-        sessionId: flow.sessionId,
-        status: flow.status,
-        actions: [...flow.actions],
-        messages: flow.messages,
+        sessionId: flowId ?? null,
+        status: "running",
       },
     });
   }

@@ -22,7 +22,7 @@ import {
   messageSidebarModeAtom,
 } from "./store/session";
 import type { AppTab } from "./store/session";
-import { fetchObjects, fetchProjectTree, fetchSessions, updateFlowTitle, talkTo, fetchFlowGroups, fetchStoneGroups, type GroupConfig } from "./api/client";
+import { fetchObjects, fetchProjectTree, fetchSessions, updateFlowTitle, talkTo, createSession, fetchFlowGroups, fetchStoneGroups, type GroupConfig } from "./api/client";
 import type { FileTreeNode } from "./api/types";
 import { WelcomePage } from "./features/WelcomePage";
 import { viewRegistry, registerAllViews } from "./router";
@@ -379,14 +379,14 @@ export function App() {
           onSend={async (t, msg) => {
             setWelcomeSending(true);
             try {
-              const result = await talkTo(t, msg);
-              if (result.sessionId) {
-                /* 使用基础路径，让 FlowView 根据实际存在的 tab 自动选择（新 session 可能还没有 files/ui） */
-                const path = `flows/${result.sessionId}/objects/supervisor`;
-                setActiveId(result.sessionId);
-                setActivePath(path);
-                setTabs([{ path, label: "supervisor" }]);
-              }
+              /* 先创建 session 拿到 sessionId，再异步 talk */
+              const { sessionId } = await createSession(t);
+              const path = `flows/${sessionId}/objects/supervisor`;
+              setActiveId(sessionId);
+              setActivePath(path);
+              setTabs([{ path, label: "supervisor" }]);
+              /* fire-and-forget：不等 LLM 执行完成 */
+              talkTo(t, msg, sessionId).catch(console.error);
             } catch (e) {
               console.error(e);
             } finally {

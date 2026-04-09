@@ -125,6 +125,11 @@ export async function createObject(name: string, whoAmI: string): Promise<StoneD
 }
 
 /** 向对象发消息（可选 flowId 续写已有对话） */
+/** 预创建 session，立即返回 sessionId */
+export async function createSession(objectName = "supervisor"): Promise<{ sessionId: string }> {
+  return post<{ sessionId: string }>("/sessions/create", { objectName });
+}
+
 export async function talkTo(objectName: string, message: string, flowId?: string): Promise<{
   sessionId: string;
   status: string;
