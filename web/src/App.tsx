@@ -417,9 +417,9 @@ export function App() {
     }
 
     return (
-      <div className="flex flex-col h-full gap-2 p-2">
-        {/* 路径面包屑 + refresh */}
-        <div className="flex items-center gap-0.5 px-2 text-[10px] text-[var(--muted-foreground)] overflow-x-auto scrollbar-hide shrink-0">
+      <div className="flex flex-col h-full gap-1.5">
+        {/* Header：路径面包屑 + refresh */}
+        <div className="flex items-center gap-0.5 px-3 py-2 text-[10px] text-[var(--muted-foreground)] overflow-x-auto scrollbar-hide shrink-0 bg-[var(--panel-bg)] rounded-[var(--panel-radius)]">
           {breadcrumbSegments.map((seg, i, arr) => (
             <span key={i} className="flex items-center gap-0.5 shrink-0">
               {i > 0 && <ChevronRight className="w-2.5 h-2.5 opacity-40" />}
@@ -435,7 +435,8 @@ export function App() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto rounded-md bg-[var(--card)] border border-[var(--border)]">
+        {/* Body：主内容 */}
+        <div className="flex-1 overflow-auto bg-[var(--panel-bg)] rounded-[var(--panel-radius)]">
           {content}
         </div>
       </div>
@@ -516,20 +517,8 @@ export function App() {
 
   return (
     <div
-      className="relative flex h-screen overflow-hidden bg-[var(--background)] gap-1.5 p-1.5"
+      className="relative flex h-screen overflow-hidden bg-[var(--background)] gap-1.5 p-2"
     >
-      {/* 全局 SVG 背景层 */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-0"
-        style={{
-          // backgroundImage: `url(${bgSvg})`,
-          backgroundSize: "300px",
-          backgroundRepeat: "repeat",
-          backgroundPosition: "center",
-          opacity: 0.03,
-        }}
-      />
       {/* ====== 移动端顶部栏 ====== */}
       {isMobile && (
         <div className="fixed top-0 left-0 right-0 z-40 flex items-center gap-3 px-4 h-12 bg-[var(--background)] border-b border-[var(--border)] safe-top">
@@ -569,20 +558,10 @@ export function App() {
       {/* ====== 右侧主内容区 ====== */}
       <main
         className={cn(
-          "relative z-10 flex-1 overflow-hidden bg-[var(--panel-bg)] rounded-[var(--panel-radius)]",
+          "relative z-10 flex-1 overflow-hidden flex flex-col gap-1.5",
           isMobile && "mt-12 safe-bottom",
         )}
       >
-        {/* 纹理背景层 */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
-          style={{
-            backgroundImage: "url(/textures/groovepaper.png)",
-            backgroundRepeat: "repeat",
-            opacity: 0.4,
-          }}
-        />
         {renderMainContent()}
       </main>
 
