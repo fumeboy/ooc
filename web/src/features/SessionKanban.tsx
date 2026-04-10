@@ -77,7 +77,7 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
         {readme ? (
           <MarkdownContent content={readme} />
         ) : (
-          <p className="text-muted-foreground text-sm">Session 工作状态待更新...</p>
+          <p className="text-muted-foreground text-sm">等待 Supervisor 更新工作状态...</p>
         )}
       </div>
 

@@ -168,6 +168,14 @@ async function handleRoute(
     mkdirSync(objectFlowDir, { recursive: true });
     /* 写入 .session.json 标记 */
     writeFileSync(join(sessionDir, ".session.json"), JSON.stringify({ title: "" }, null, 2));
+    /* 预创建 kanban 空文件，避免前端 404 */
+    const issuesDir = join(sessionDir, "issues");
+    const tasksDir = join(sessionDir, "tasks");
+    mkdirSync(issuesDir, { recursive: true });
+    mkdirSync(tasksDir, { recursive: true });
+    writeFileSync(join(issuesDir, "index.json"), "[]");
+    writeFileSync(join(tasksDir, "index.json"), "[]");
+    writeFileSync(join(sessionDir, "readme.md"), "");
 
     return json({ success: true, data: { sessionId } }, 201);
   }
