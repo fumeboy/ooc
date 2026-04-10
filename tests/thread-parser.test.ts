@@ -204,3 +204,38 @@ thread_id = "th_xyz"
     expect(result.continueSubThread!.message).toBe("");
   });
 });
+
+describe("parseThreadOutput — use_skill", () => {
+  test("解析 use_skill 指令", () => {
+    const input = `
+[use_skill]
+name = "commit"
+`;
+    const result = parseThreadOutput(input);
+    expect(result.useSkill).not.toBeNull();
+    expect(result.useSkill!.name).toBe("commit");
+  });
+
+  test("use_skill 缺少 name 时为 null", () => {
+    const input = `
+[use_skill]
+foo = "bar"
+`;
+    const result = parseThreadOutput(input);
+    expect(result.useSkill).toBeNull();
+  });
+
+  test("use_skill 可与 thought 共存", () => {
+    const input = `
+[thought]
+content = "需要加载 commit skill"
+
+[use_skill]
+name = "commit"
+`;
+    const result = parseThreadOutput(input);
+    expect(result.thought).toBe("需要加载 commit skill");
+    expect(result.useSkill).not.toBeNull();
+    expect(result.useSkill!.name).toBe("commit");
+  });
+});

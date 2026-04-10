@@ -28,6 +28,7 @@ import type {
   ThreadStatus,
 } from "./types.js";
 import { parseThreadOutput } from "./parser.js";
+import type { UseSkillDirective } from "./parser.js";
 import type { ProgramSection, TalkSection } from "../toml/parser.js";
 import { collectBeforeHooks, collectAfterHooks } from "./hooks.js";
 import { computeThreadScopeChain } from "./context-builder.js";
@@ -109,6 +110,11 @@ export interface ThreadIterationResult {
    * 本函数不执行 talk，只传递解析结果给调用方。
    */
   talks: TalkSection | null;
+  /**
+   * 解析出的 use_skill 指令（需要 engine 读取 SKILL.md body 并写入 inject action）
+   * 本函数不执行 IO，只传递解析结果给调用方。
+   */
+  useSkill: UseSkillDirective | null;
 }
 
 /**
@@ -140,6 +146,7 @@ export function runThreadIteration(input: ThreadIterationInput): ThreadIteration
     planUpdate: null,
     program: null,
     talks: null,
+    useSkill: null,
   };
 
   /* 1. 解析 LLM 输出 */
@@ -328,6 +335,9 @@ export function runThreadIteration(input: ThreadIterationInput): ThreadIteration
   if (parsed.talk) {
     result.talks = parsed.talk;
   }
+
+  /* 9b. 传递 useSkill 给调用方（engine 负责读取文件） */
+  if (parsed.useSkill) result.useSkill = parsed.useSkill;
 
   /* 10. 处理 talk_sync（同步 talk：发送消息后自动 wait） */
   if (parsed.talkSync && !result.statusChange) {

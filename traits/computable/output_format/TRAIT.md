@@ -24,6 +24,7 @@ deps: ["kernel/computable"]
 | `[set_plan]` | 更新当前计划 |
 | `[await]` | 等待某个子线程完成 |
 | `[await_all]` | 等待多个子线程完成 |
+| `[use_skill]` | 按需加载 Skill 的完整内容 |
 
 ## 创建者与返回
 
@@ -87,9 +88,20 @@ deps: ["kernel/computable"]
 ### `[await_all]`
 - `thread_ids` — 等待的子线程 ID 数组（必填）
 
+### `[use_skill]`
+
+按需加载 Skill 的完整内容。查看 Context 中的「可用 Skills」列表，选择需要的 skill：
+
+```toml
+[use_skill]
+name = "commit"
+```
+
+加载后，skill 的完整内容会出现在下一轮的执行历史中，按指导执行即可。
+
 ## 互斥规则
 
-1. 每轮输出只能包含一个主指令（`[return]`、`[create_sub_thread]`、`[continue_sub_thread]`、`[program]`、`[talk]`、`[talk_sync]` 选其一）
+1. 每轮输出只能包含一个主指令（`[return]`、`[create_sub_thread]`、`[continue_sub_thread]`、`[program]`、`[talk]`、`[talk_sync]`、`[use_skill]` 选其一）
 2. `[thought]` 可以和任何主指令并存
 3. `[set_plan]` 可以和任何主指令并存
 4. 任务完成后必须用 `[return]` 结束，不要无限循环
@@ -175,6 +187,15 @@ content = """
 [continue_sub_thread]
 thread_id = "th_xyz789"
 message = "请补充 2024 年之后的论文，特别关注 alignment 方向"
+```
+
+### 按需加载 Skill
+```toml
+[thought]
+content = "用户要求提交代码，我需要加载 commit skill 来获取流程指导"
+
+[use_skill]
+name = "commit"
 ```
 
 ## 流式输出

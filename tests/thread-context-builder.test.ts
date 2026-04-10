@@ -21,6 +21,7 @@ import type {
   ThreadInboxMessage,
   ThreadTodoItem,
 } from "../src/thread/types.js";
+import type { SkillDefinition } from "../src/skill/types.js";
 
 /** 辅助：创建节点元数据 */
 function makeNode(id: string, overrides?: Partial<ThreadsTreeNodeMeta>): ThreadsTreeNodeMeta {
@@ -380,5 +381,68 @@ describe("buildThreadContext", () => {
     /* Phase 5 完善：验证 targetNodeData 的 actions 被渲染到 Context 中 */
     expect(ctx.parentExpectation).toContain("已完成的任务");
     expect(ctx.parentExpectation).toContain("你产出的文档路径在哪？");
+  });
+});
+
+describe("buildThreadContext — skill index", () => {
+  test("skills 注入到 knowledge window（含 when 字段）", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: { r: makeNode("r") },
+    };
+    const skills: SkillDefinition[] = [
+      { name: "commit", description: "生成 commit message", dir: "/tmp/commit" },
+      { name: "review", description: "代码审查", when: "审查代码时", dir: "/tmp/review" },
+    ];
+    const ctx = buildThreadContext({
+      tree,
+      threadId: "r",
+      threadData: makeThreadData("r"),
+      stone: { name: "obj", thinkable: { whoAmI: "test" } } as any,
+      directory: [],
+      traits: [],
+      skills,
+    });
+    const skillWindow = ctx.knowledge.find(w => w.name === "available-skills");
+    expect(skillWindow).toBeDefined();
+    expect(skillWindow!.content).toContain("commit: 生成 commit message");
+    expect(skillWindow!.content).toContain("review: 代码审查");
+    expect(skillWindow!.content).toContain("审查代码时");
+    expect(skillWindow!.content).toContain("[use_skill]");
+  });
+
+  test("空 skills 列表不注入 window", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: { r: makeNode("r") },
+    };
+    const ctx = buildThreadContext({
+      tree,
+      threadId: "r",
+      threadData: makeThreadData("r"),
+      stone: { name: "obj", thinkable: { whoAmI: "test" } } as any,
+      directory: [],
+      traits: [],
+      skills: [],
+    });
+    const skillWindow = ctx.knowledge.find(w => w.name === "available-skills");
+    expect(skillWindow).toBeUndefined();
+  });
+
+  test("skills 未传入时不注入 window", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: { r: makeNode("r") },
+    };
+    const ctx = buildThreadContext({
+      tree,
+      threadId: "r",
+      threadData: makeThreadData("r"),
+      stone: { name: "obj", thinkable: { whoAmI: "test" } } as any,
+      directory: [],
+      traits: [],
+    });
+    const skillWindow = ctx.knowledge.find(w => w.name === "available-skills");
+    expect(skillWindow).toBeUndefined();
   });
 });

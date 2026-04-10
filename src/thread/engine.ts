@@ -28,6 +28,8 @@ import { getActiveTraits, traitId } from "../trait/activator.js";
 
 import type { LLMClient, Message } from "../thinkable/client.js";
 import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "../types/index.js";
+import type { SkillDefinition } from "../skill/types.js";
+import { loadSkillBody } from "../skill/loader.js";
 import type {
   ThreadsTreeFile,
   ThreadDataFile,
@@ -49,6 +51,8 @@ export interface EngineConfig {
   directory: DirectoryEntry[];
   /** 所有已加载的 trait 定义 */
   traits: TraitDefinition[];
+  /** 已加载的 Skill 定义列表 */
+  skills?: SkillDefinition[];
   /** Stone 数据 */
   stone: StoneData;
   /** 额外知识窗口 */
@@ -673,6 +677,7 @@ export async function runWithThreadTree(
           traits: config.traits,
           extraWindows: config.extraWindows,
           paths: config.paths,
+          skills: config.skills,
         });
 
         /* 转换为 LLM Messages */
@@ -833,6 +838,32 @@ export async function runWithThreadTree(
             });
           }
         }
+      }
+
+      /* 执行 useSkill（如果有） */
+      if (iterResult.useSkill) {
+        const skillName = iterResult.useSkill.name;
+        const skillDef = config.skills?.find(s => s.name === skillName);
+        let injectContent: string;
+
+        if (skillDef) {
+          const body = loadSkillBody(skillDef.dir);
+          injectContent = body ?? `[错误] Skill "${skillName}" 的 SKILL.md 内容为空`;
+        } else {
+          injectContent = `[错误] 未找到 Skill "${skillName}"。可用 skills: ${(config.skills ?? []).map(s => s.name).join(", ") || "(无)"}`;
+        }
+
+        const td = tree.readThreadData(threadId);
+        if (td) {
+          td.actions.push({
+            type: "inject",
+            content: injectContent,
+            timestamp: Date.now(),
+          });
+          tree.writeThreadData(threadId, td);
+        }
+
+        consola.info(`[Engine] useSkill "${skillName}" ${skillDef ? "已加载" : "未找到"}`);
       }
 
       /* debugMode 检查：单步执行后自动暂停 */
@@ -1177,6 +1208,7 @@ export async function resumeWithThreadTree(
           tree: treeFile, threadId, threadData,
           stone: config.stone, directory: config.directory,
           traits: config.traits, extraWindows: config.extraWindows, paths: config.paths,
+          skills: config.skills,
         });
         const messages = contextToMessages(context);
         const llmResult = await config.llm.chat(messages);
@@ -1242,6 +1274,32 @@ export async function resumeWithThreadTree(
           });
           tree.writeThreadData(threadId, td);
         }
+      }
+
+      /* 执行 useSkill（如果有） */
+      if (iterResult.useSkill) {
+        const skillName = iterResult.useSkill.name;
+        const skillDef = config.skills?.find(s => s.name === skillName);
+        let injectContent: string;
+
+        if (skillDef) {
+          const body = loadSkillBody(skillDef.dir);
+          injectContent = body ?? `[错误] Skill "${skillName}" 的 SKILL.md 内容为空`;
+        } else {
+          injectContent = `[错误] 未找到 Skill "${skillName}"。可用 skills: ${(config.skills ?? []).map(s => s.name).join(", ") || "(无)"}`;
+        }
+
+        const td = tree.readThreadData(threadId);
+        if (td) {
+          td.actions.push({
+            type: "inject",
+            content: injectContent,
+            timestamp: Date.now(),
+          });
+          tree.writeThreadData(threadId, td);
+        }
+
+        consola.info(`[Engine] useSkill "${skillName}" ${skillDef ? "已加载" : "未找到"}`);
       }
 
       if (threadData._debugMode) {

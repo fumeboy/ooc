@@ -429,3 +429,80 @@ title = "验证结果"
     expect(result.beforeHookInjection).toContain("验证标准");
   });
 });
+
+describe("runThreadIteration — use_skill", () => {
+  test("透传 useSkill 到结果", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: { r: makeNode("r") },
+    };
+    const threadData: ThreadDataFile = { id: "r", actions: [] };
+    const llmOutput = `
+[use_skill]
+name = "commit"
+`;
+    const input: ThreadIterationInput = {
+      tree,
+      threadId: "r",
+      threadData,
+      llmOutput,
+      stone: { name: "obj", thinkable: { whoAmI: "test" } } as any,
+      traits: [],
+    };
+    const result = runThreadIteration(input);
+    expect(result.useSkill).not.toBeNull();
+    expect(result.useSkill!.name).toBe("commit");
+  });
+
+  test("return 优先于 useSkill（return 后 useSkill 被忽略）", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: { r: makeNode("r") },
+    };
+    const threadData: ThreadDataFile = { id: "r", actions: [] };
+    const llmOutput = `
+[use_skill]
+name = "commit"
+
+[return]
+summary = "done"
+`;
+    const input: ThreadIterationInput = {
+      tree,
+      threadId: "r",
+      threadData,
+      llmOutput,
+      stone: { name: "obj", thinkable: { whoAmI: "test" } } as any,
+      traits: [],
+    };
+    const result = runThreadIteration(input);
+    expect(result.statusChange).toBe("done");
+    expect(result.useSkill).toBeNull();
+  });
+
+  test("await 优先于 useSkill", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: { r: makeNode("r") },
+    };
+    const threadData: ThreadDataFile = { id: "r", actions: [] };
+    const llmOutput = `
+[use_skill]
+name = "commit"
+
+[await]
+thread_id = "t1"
+`;
+    const input: ThreadIterationInput = {
+      tree,
+      threadId: "r",
+      threadData,
+      llmOutput,
+      stone: { name: "obj", thinkable: { whoAmI: "test" } } as any,
+      traits: [],
+    };
+    const result = runThreadIteration(input);
+    expect(result.statusChange).toBe("waiting");
+    expect(result.useSkill).toBeNull();
+  });
+});

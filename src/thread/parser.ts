@@ -43,6 +43,11 @@ export interface AddTodoDirective {
   sourceMessageId?: string;
 }
 
+/** use_skill 指令 */
+export interface UseSkillDirective {
+  name: string;
+}
+
 /** continue_sub_thread 指令（向已创建的子线程追加消息） */
 export interface ContinueSubThreadDirective {
   threadId: string;
@@ -75,6 +80,8 @@ export interface ThreadParsedOutput {
   continueSubThread: ContinueSubThreadDirective | null;
   /** 更新计划 */
   setPlan: string | null;
+  /** 使用 skill */
+  useSkill: UseSkillDirective | null;
 }
 
 /**
@@ -100,6 +107,7 @@ export function parseThreadOutput(output: string): ThreadParsedOutput {
     addTodo: null,
     continueSubThread: null,
     setPlan: null,
+    useSkill: null,
   };
 
   /* 单次 TOML 解析 */
@@ -222,6 +230,14 @@ export function parseThreadOutput(output: string): ThreadParsedOutput {
       threadId: typeof cst.thread_id === "string" ? cst.thread_id : "",
       message: typeof cst.message === "string" ? cst.message : "",
     };
+  }
+
+  /* use_skill */
+  if (parsed.use_skill && typeof parsed.use_skill === "object") {
+    const us = parsed.use_skill as Record<string, unknown>;
+    if (typeof us.name === "string" && us.name) {
+      result.useSkill = { name: us.name };
+    }
   }
 
   return result;

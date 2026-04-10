@@ -16,6 +16,7 @@
  */
 
 import type { StoneData, DirectoryEntry, ContextWindow, TraitDefinition } from "../types/index.js";
+import type { SkillDefinition } from "../skill/types.js";
 import type {
   ThreadsTreeFile,
   ThreadsTreeNodeMeta,
@@ -105,6 +106,8 @@ export interface ThreadContextInput {
   extraWindows?: ContextWindow[];
   /** 沙箱路径 */
   paths?: Record<string, string>;
+  /** 已加载的 Skill 定义列表 */
+  skills?: SkillDefinition[];
   /**
    * 目标节点数据（仅 create_sub_thread_on_node 场景使用）
    *
@@ -152,6 +155,14 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
     .map(t => ({ name: localTraitId(t), content: t.readme }));
 
   if (extraWindows) knowledge.push(...extraWindows);
+
+  /* Skill 索引注入 */
+  if (input.skills && input.skills.length > 0) {
+    knowledge.push({
+      name: "available-skills",
+      content: formatSkillIndex(input.skills),
+    });
+  }
 
   /* 3. parentExpectation
    *
@@ -449,4 +460,24 @@ export function renderThreadProcess(actions: ThreadAction[]): string {
 function formatTimestamp(timestamp: number): string {
   const d = new Date(timestamp);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+}
+
+/**
+ * 生成 Skill 索引文本
+ *
+ * 每个 skill 一行，格式：`- name: description (when: 场景)`
+ * 用于注入 knowledge window，让对象知道有哪些 skill 可用。
+ */
+function formatSkillIndex(skills: SkillDefinition[]): string {
+  const lines = [
+    "## 可用 Skills",
+    "",
+    "以下 skill 可通过 [use_skill] 指令按需加载完整内容：",
+  ];
+  for (const s of skills) {
+    let line = `- ${s.name}: ${s.description}`;
+    if (s.when) line += ` (when: ${s.when})`;
+    lines.push(line);
+  }
+  return lines.join("\n");
 }

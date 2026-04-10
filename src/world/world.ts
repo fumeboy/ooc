@@ -29,6 +29,7 @@ import { OpenAICompatibleClient, type LLMClient } from "../thinkable/client.js";
 import { DefaultConfig, type LLMConfig } from "../thinkable/config.js";
 import { emitSSE } from "../server/events.js";
 import { runWithThreadTree, resumeWithThreadTree, stepOnceWithThreadTree, type EngineConfig, type TalkResult } from "../thread/engine.js";
+import { loadSkills } from "../skill/index.js";
 
 /** World 配置 */
 export interface WorldConfig {
@@ -446,6 +447,7 @@ export class World implements Routable {
       llm: this._llm,
       directory,
       traits,
+      skills: loadSkills(join(this._rootDir, "library", "skills")),
       stone: stone.toJSON(),
       paths: {
         stoneDir: stone.dir,
@@ -618,6 +620,7 @@ export class World implements Routable {
           llm: this._llm,
           directory: this._registry.buildDirectory(),
           traits,
+          skills: loadSkills(join(this._rootDir, "library", "skills")),
           stone: stone.toJSON(),
           paths: { stoneDir: stone.dir, rootDir: this._rootDir, flowsDir: this.flowsDir },
           isPaused: (name) => this._pauseRequests.has(name),
@@ -679,6 +682,7 @@ export class World implements Routable {
           llm: this._llm,
           directory: this._registry.buildDirectory(),
           traits,
+          skills: loadSkills(join(this._rootDir, "library", "skills")),
           stone: stone.toJSON(),
           paths: { stoneDir: stone.dir, rootDir: this._rootDir, flowsDir: this.flowsDir },
           isPaused: (name) => this._pauseRequests.has(name),
