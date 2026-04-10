@@ -33,6 +33,7 @@ import { FileTree } from "./components/ui/FileTree";
 import { useSSE } from "./hooks/useSSE";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { useHashRouter } from "./hooks/useHashRouter";
+import { ActivityHeatmap } from "./components/ui/ActivityHeatmap";
 import { OocLinkPreview } from "./components/OocLinkPreview";
 import { CommandPalette } from "./components/CommandPalette";
 import { OocLogo } from "./components/OocLogo";
@@ -351,7 +352,7 @@ export function App() {
     /* main 模式：消息面板占据主内容区 */
     if (sidebarMode === "main" && activeTab === "flows" && activeId && !isMobile) {
       return (
-        <div className="flex flex-col h-full p-2">
+        <div className="flex flex-col h-full">
           <div className="flex-1 min-h-0 rounded-md bg-[var(--card)] border border-[var(--border)] overflow-hidden">
             <MessageSidebar />
           </div>
@@ -512,6 +513,9 @@ export function App() {
       <div className="flex-1 overflow-auto w-full">
         {renderSidebarTree()}
       </div>
+
+      {/* 当月使用热力图 */}
+      <ActivityHeatmap />
     </div>
   );
 
