@@ -88,7 +88,7 @@ export function ActivityHeatmap() {
           {WEEKDAY_LABELS.map((label, i) => (
             <div
               key={i}
-              className="w-3 h-3 flex items-center justify-center text-[7px] text-[var(--muted-foreground)]"
+              className="flex-1 h-3 flex items-center justify-center text-[7px] text-[var(--muted-foreground)]"
             >
               {label}
             </div>
@@ -103,7 +103,7 @@ export function ActivityHeatmap() {
               const isValidDay = dayNum >= 1 && dayNum <= days.length;
 
               if (!isValidDay) {
-                return <div key={col} className="w-3 h-3" />;
+                return <div key={col} className="flex-1 h-3" />;
               }
 
               const count = dayCounts.get(dayNum) ?? 0;
@@ -114,7 +114,7 @@ export function ActivityHeatmap() {
                 <div
                   key={col}
                   className={cn(
-                    "w-3 h-3 rounded-[2px] transition-colors",
+                    "flex-1 h-3 rounded-[2px] transition-colors",
                     HEAT_COLORS[level],
                     isToday && "ring-1 ring-[var(--foreground)] ring-offset-1 ring-offset-[var(--panel-bg)]",
                   )}
