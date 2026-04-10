@@ -444,7 +444,7 @@ export function App() {
 
   /* 侧边栏内容（桌面端和移动端共用） */
   const sidebarContent = (
-    <div className="flex flex-col items-center h-full pl-2" style={{ width: "inherit" }}>
+    <div className="flex flex-col items-center h-full" style={{ width: "inherit" }}>
       <div className="flex flex-col items-center gap-1 px-4 py-4 shrink-0">
         <OocLogo px={isMobile ? 80 : 120} />
         <div className="flex items-center gap-1.5">
@@ -516,7 +516,7 @@ export function App() {
 
   return (
     <div
-      className="relative flex h-screen overflow-hidden bg-[var(--background)]"
+      className="relative flex h-screen overflow-hidden bg-[var(--background)] gap-1.5 p-1.5"
     >
       {/* 全局 SVG 背景层 */}
       <div
@@ -561,7 +561,7 @@ export function App() {
 
       {/* ====== 桌面端网站左边栏 ====== */}
       {!isMobile && (
-        <aside className="relative z-10 flex flex-col items-center w-72 shrink-0">
+        <aside className="relative z-10 flex flex-col items-center w-72 shrink-0 bg-[var(--panel-bg)] rounded-[var(--panel-radius)] overflow-hidden">
           {sidebarContent}
         </aside>
       )}
@@ -569,7 +569,7 @@ export function App() {
       {/* ====== 右侧主内容区 ====== */}
       <main
         className={cn(
-          "relative z-10 flex-1 overflow-hidden",
+          "relative z-10 flex-1 overflow-hidden bg-[var(--panel-bg)] rounded-[var(--panel-radius)]",
           isMobile && "mt-12 safe-bottom",
         )}
       >

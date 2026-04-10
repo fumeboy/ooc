@@ -26,7 +26,7 @@
 .fade-out-0 { --tw-exit-opacity: 0; }
 
 :root {
-  --background: #f9f9f9;
+  --background: #e8e6e1;
   --foreground: #2c2b28;
   --card: #ffffff;
   --card-foreground: #2c2b28;
@@ -51,6 +51,8 @@
   --warm-muted: #fdf5e6;
   --heading-font: sans;
   --main-bg: #fefefe;
+  --panel-bg: #ffffff;
+  --panel-radius: 12px;
 
   /* Object avatar colors */
   --avatar-1: #e8d5b7;

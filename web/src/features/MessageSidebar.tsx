@@ -398,7 +398,7 @@ export function MessageSidebar() {
 
   return (
     <div className={cn(
-      "flex flex-col bg-[var(--background)]",
+      "flex flex-col bg-[var(--panel-bg)] rounded-[var(--panel-radius)] overflow-hidden",
       isMain ? "h-full w-full" : "w-[400px] shrink-0",
     )}>
       {/* 头部 */}
