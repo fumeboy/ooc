@@ -20,6 +20,7 @@ import { ActionCard, TalkCard } from "../components/ui/ActionCard";
 import { CodeMirrorViewer } from "../components/ui/CodeMirrorViewer";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { cn } from "../lib/utils";
+import { X } from "lucide-react";
 import type { FlowData, FlowMessage, Action, TimelineEntry, StoneData } from "../api/types";
 
 interface FlowViewProps {
@@ -31,13 +32,13 @@ interface FlowViewProps {
   initialTab?: string;
 }
 
-const BASE_TABS = ["Timeline", "Process", "Readme", "Data", "Memory"] as const;
-type Tab = "Timeline" | "Process" | "Readme" | "Data" | "Memory" | "UI";
+const BASE_TABS = ["Timeline", "Process", "Data", "Memory"] as const;
+type Tab = "Timeline" | "Process" | "Data" | "Memory" | "UI" | null;
 
 export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
   const [flow, setFlow] = useState<FlowData | null>(null);
   const [stone, setStone] = useState<StoneData | null>(null);
-  const [tab, setTab] = useState<Tab>((initialTab as Tab) || "Timeline");
+  const [tab, setTab] = useState<Tab>((initialTab as Tab) || null);
   const [hasUI, setHasUI] = useState(false);
   const lastEvent = useAtomValue(lastFlowEventAtom);
   const refreshKey = useAtomValue(refreshKeyAtom);
@@ -45,7 +46,7 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
   useEffect(() => {
     setFlow(null);
     setStone(null);
-    setTab((initialTab as Tab) || "Timeline");
+    setTab((initialTab as Tab) || null);
     fetchFlow(sessionId).then(setFlow).catch(console.error);
     fetchObject(objectName).then(setStone).catch(() => setStone(null));
   }, [sessionId, objectName, refreshKey]);
@@ -75,8 +76,8 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
       if (found && !initialTab) {
         setTab("UI");
       } else if (!found && initialTab === "UI") {
-        /* initialTab 指定了 UI 但实际没有 UI 目录，回退到 Timeline */
-        setTab("Timeline");
+        /* initialTab 指定了 UI 但实际没有 UI 目录，回退到 Readme */
+        setTab(null);
       }
     }).catch(() => setHasUI(false));
   }, [sessionId, objectName, initialTab]);
@@ -150,7 +151,7 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
           {tabs.map((t) => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => setTab(tab === t ? null : t)}
               className={cn(
                 "px-3 py-1 text-xs rounded-md transition-all whitespace-nowrap shrink-0",
                 tab === t
@@ -164,43 +165,70 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
         </div>
       </div>
 
-      {/* Tab 内容 */}
-      <div className="flex-1 overflow-auto px-4 sm:px-8 py-4 sm:py-6">
-        {tab === "Timeline" && (
-          <div className="space-y-2">
-            {timeline.length === 0 && (
-              <p className="text-sm text-[var(--muted-foreground)]">暂无记录</p>
-            )}
-            {timeline.map((entry, i) => {
-              if (entry.kind === "message") {
-                const m = entry.data as FlowMessage;
-                return <TalkCard key={`msg-${i}`} msg={m} />;
-              }
-              if (entry.kind === "action") {
-                const a = entry.data as Action;
-                return <ActionCard key={`act-${i}`} action={a} objectName={objectName} />;
-              }
-              return null;
-            })}
+      {/* 内容区：Readme 底层 + 抽屉覆盖 */}
+      <div className="flex-1 relative overflow-hidden">
+        {/* Readme 主内容（始终渲染） */}
+        <div className="absolute inset-0 overflow-auto px-4 sm:px-8 py-4 sm:py-6">
+          <ObjectReadmeView objectName={objectName} />
+        </div>
+
+        {/* 抽屉：从底部升起覆盖 Readme */}
+        {tab && (
+          <div
+            className="absolute inset-0 flex flex-col bg-[var(--card)] animate-in slide-in-from-bottom fade-in-0"
+            style={{ animationDuration: "200ms" }}
+          >
+            {/* 抽屉头部 */}
+            <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--border)] shrink-0">
+              <span className="text-xs font-medium text-[var(--muted-foreground)]">{tab}</span>
+              <button
+                onClick={() => setTab(null)}
+                className="w-6 h-6 flex items-center justify-center rounded text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+                title="关闭"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* 抽屉内容 */}
+            <div className="flex-1 overflow-auto px-4 sm:px-8 py-4 sm:py-6">
+              {tab === "Timeline" && (
+                <div className="space-y-2">
+                  {timeline.length === 0 && (
+                    <p className="text-sm text-[var(--muted-foreground)]">暂无记录</p>
+                  )}
+                  {timeline.map((entry, i) => {
+                    if (entry.kind === "message") {
+                      const m = entry.data as FlowMessage;
+                      return <TalkCard key={`msg-${i}`} msg={m} />;
+                    }
+                    if (entry.kind === "action") {
+                      const a = entry.data as Action;
+                      return <ActionCard key={`act-${i}`} action={a} objectName={objectName} />;
+                    }
+                    return null;
+                  })}
+                </div>
+              )}
+              {tab === "Process" && (
+                (process as any)?.isThreadTree
+                  ? <ThreadsTreeView process={process} sessionId={sessionId} objectName={objectName} />
+                  : <ProcessView process={process} />
+              )}
+              {tab === "Data" && (
+                <SplitDataTab sessionId={sessionId} objectName={objectName} stoneData={stone?.data} />
+              )}
+              {tab === "Memory" && (
+                <FlowMemoryTab sessionId={sessionId} objectName={objectName} />
+              )}
+              {tab === "UI" && (
+                <DynamicUI
+                  importPath={`@flows/${sessionId}/objects/${objectName}/ui/pages/index.tsx`}
+                  componentProps={{ sessionId, objectName }}
+                />
+              )}
+            </div>
           </div>
-        )}
-        {tab === "Process" && (
-          (process as any)?.isThreadTree
-            ? <ThreadsTreeView process={process} sessionId={sessionId} objectName={objectName} />
-            : <ProcessView process={process} />
-        )}
-        {tab === "Readme" && <ObjectReadmeView objectName={objectName} />}
-        {tab === "Data" && (
-          <SplitDataTab sessionId={sessionId} objectName={objectName} stoneData={stone?.data} />
-        )}
-        {tab === "Memory" && (
-          <FlowMemoryTab sessionId={sessionId} objectName={objectName} />
-        )}
-        {tab === "UI" && (
-          <DynamicUI
-            importPath={`@flows/${sessionId}/objects/${objectName}/ui/pages/index.tsx`}
-            componentProps={{ sessionId, objectName }}
-          />
         )}
       </div>
     </div>
