@@ -18,6 +18,24 @@ import { cn } from "../lib/utils";
 import { Plus, ChevronRight, ChevronDown, Folder, Settings } from "lucide-react";
 import type { FlowSummary } from "../api/types";
 
+/** 将时间戳转为日期分组标签 */
+function getDateLabel(ts: number): string {
+  const now = new Date();
+  const date = new Date(ts);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 86400000);
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  if (target.getTime() === today.getTime()) return "今天";
+  if (target.getTime() === yesterday.getTime()) return "昨天";
+
+  const diffDays = Math.floor((today.getTime() - target.getTime()) / 86400000);
+  if (diffDays < 7) return "最近 7 天";
+  if (diffDays < 30) return "最近 30 天";
+
+  return `${date.getFullYear()}年${date.getMonth() + 1}月`;
+}
+
 export function SessionsList({ onSelect, onEditGroups }: { onSelect?: () => void; onEditGroups?: () => void } = {}) {
   const [sessions, setSessions] = useAtom(userSessionsAtom);
   const [activeId, setActiveId] = useAtom(activeSessionIdAtom);
@@ -62,6 +80,15 @@ export function SessionsList({ onSelect, onEditGroups }: { onSelect?: () => void
       return next;
     });
   };
+
+  /* 按日期分组未分组的 sessions */
+  const dateGrouped = new Map<string, FlowSummary[]>();
+  for (const s of ungrouped) {
+    const label = getDateLabel(s.createdAt);
+    if (!dateGrouped.has(label)) dateGrouped.set(label, []);
+    dateGrouped.get(label)!.push(s);
+  }
+  const dateGroups = Array.from(dateGrouped.entries());
 
   const renderSession = (s: FlowSummary) => {
     const desc = memberDesc.get(s.sessionId);
@@ -152,8 +179,17 @@ export function SessionsList({ onSelect, onEditGroups }: { onSelect?: () => void
                 </div>
               );
             })}
-            {/* 未分组 */}
-            {ungrouped.map(renderSession)}
+            {/* 未分组：按日期分组 */}
+            {dateGroups.map(([label, items]) => (
+              <div key={label}>
+                <div className="px-2 pt-2 pb-1 text-[10px] font-medium text-[var(--muted-foreground)] uppercase tracking-wide">
+                  {label}
+                </div>
+                <div className="space-y-0.5">
+                  {items.map(renderSession)}
+                </div>
+              </div>
+            ))}
           </>
         )}
       </nav>
