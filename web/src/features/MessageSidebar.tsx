@@ -221,6 +221,7 @@ export function MessageSidebar() {
 
   /* activeId 变化时重新加载 flow 数据 */
   useEffect(() => {
+    setActiveFlow(null);  /* 立即清空旧数据，避免显示上一个 session 的内容 */
     if (!activeId) return;
     fetchFlow(activeId).then(setActiveFlow).catch(console.error);
   }, [activeId]);

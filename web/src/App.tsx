@@ -32,6 +32,7 @@ import { MessageSidebar } from "./features/MessageSidebar";
 import { FileTree } from "./components/ui/FileTree";
 import { useSSE } from "./hooks/useSSE";
 import { useIsMobile } from "./hooks/useIsMobile";
+import { useHashRouter } from "./hooks/useHashRouter";
 import { OocLinkPreview } from "./components/OocLinkPreview";
 import { CommandPalette } from "./components/CommandPalette";
 import { OocLogo } from "./components/OocLogo";
@@ -146,6 +147,7 @@ export function App() {
   const [sidebarTree, setSidebarTree] = useAtom(sidebarTreeAtom);
   const setRefreshKey = useSetAtom(refreshKeyAtom);
   const isMobile = useIsMobile();
+  useHashRouter();
   const [sessions, setSessions] = useAtom(userSessionsAtom);
   const sidebarMode = useAtomValue(messageSidebarModeAtom);
 
@@ -381,10 +383,10 @@ export function App() {
             try {
               /* 先创建 session 拿到 sessionId，再异步 talk */
               const { sessionId } = await createSession(t);
-              const path = `flows/${sessionId}/objects/supervisor`;
+              const path = `flows/${sessionId}`;
               setActiveId(sessionId);
               setActivePath(path);
-              setTabs([{ path, label: "supervisor" }]);
+              setTabs([{ path, label: "Kanban" }]);
               /* fire-and-forget：不等 LLM 执行完成 */
               talkTo(t, msg, sessionId).catch(console.error);
             } catch (e) {
