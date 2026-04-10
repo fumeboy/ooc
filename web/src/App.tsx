@@ -475,7 +475,11 @@ export function App() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setActivePath(null);
+                  setTabs([]);
+                }}
                 className={cn(
                   "flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-full text-xs transition-all",
                   activeTab === tab.id

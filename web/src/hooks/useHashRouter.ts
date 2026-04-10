@@ -12,6 +12,8 @@
  *   /#/flows/{sessionId}/tasks/{id}        → TaskDetailView
  *   /#/stones/{name}                       → ObjectDetail
  *   /#/stones/{name}/reflect               → ReflectFlowView
+ *   /#/stones                              → Stones tab
+ *   /#/world                               → World tab
  */
 import { useEffect, useRef } from "react";
 import { useAtom, useSetAtom } from "jotai";
@@ -35,6 +37,14 @@ function extractSessionId(path: string): string | null {
   return m ? m[1]! : null;
 }
 
+/** 根据 atoms 状态计算目标 hash */
+function computeHash(activeTab: string, activePath: string | null): string {
+  if (activePath) return "/" + activePath;
+  if (activeTab === "stones") return "/stones";
+  if (activeTab === "world") return "/world";
+  return "/";
+}
+
 export function useHashRouter() {
   const [activeTab, setActiveTab] = useAtom(activeTabAtom);
   const [activeId, setActiveId] = useAtom(activeSessionIdAtom);
@@ -42,46 +52,40 @@ export function useHashRouter() {
   const setActiveFlow = useSetAtom(activeSessionFlowAtom);
   const setTabs = useSetAtom(editorTabsAtom);
 
-  /* 防止循环更新 */
-  const suppressHashUpdate = useRef(false);
-  const suppressAtomUpdate = useRef(false);
+  /**
+   * 防循环：用 "source" 标记当前变更的来源。
+   * "hash" = 变更来自 URL，不要再写回 URL
+   * "atoms" = 变更来自状态，不要再写回状态
+   * null = 无锁
+   */
+  const sourceRef = useRef<"hash" | "atoms" | null>(null);
 
   /* atoms → hash：状态变化时更新 URL */
   useEffect(() => {
-    if (suppressAtomUpdate.current) {
-      suppressAtomUpdate.current = false;
+    if (sourceRef.current === "hash") {
+      sourceRef.current = null;
       return;
     }
-    suppressHashUpdate.current = true;
 
-    let hash = "/";
-    if (activePath) {
-      hash = "/" + activePath;
-    } else if (activeTab === "stones") {
-      hash = "/stones";
-    } else if (activeTab === "world") {
-      hash = "/world";
-    }
-
+    const hash = computeHash(activeTab, activePath);
     if (location.hash !== "#" + hash) {
+      sourceRef.current = "atoms";
       location.hash = hash;
     }
-
-    requestAnimationFrame(() => {
-      suppressHashUpdate.current = false;
-    });
   }, [activeTab, activeId, activePath]);
 
   /* hash → atoms：URL 变化时更新状态 */
   useEffect(() => {
     const applyHash = () => {
-      if (suppressHashUpdate.current) return;
-      suppressAtomUpdate.current = true;
+      if (sourceRef.current === "atoms") {
+        sourceRef.current = null;
+        return;
+      }
+      sourceRef.current = "hash";
 
       const path = parseHash();
 
       if (!path || path === "/") {
-        /* Welcome 页面 */
         setActiveTab("flows");
         setActiveId(null);
         setActivePath(null);
@@ -92,6 +96,7 @@ export function useHashRouter() {
 
       if (path === "stones") {
         setActiveTab("stones");
+        setActiveId(null);
         setActivePath(null);
         setTabs([]);
         return;
@@ -99,6 +104,7 @@ export function useHashRouter() {
 
       if (path === "world") {
         setActiveTab("world");
+        setActiveId(null);
         setActivePath(null);
         setTabs([]);
         return;
@@ -110,7 +116,6 @@ export function useHashRouter() {
         if (sid) {
           setActiveId(sid);
           setActivePath(path);
-          /* 自动创建 tab */
           const resolved = viewRegistry.resolve(path);
           if (resolved) {
             setTabs((prev) => {
