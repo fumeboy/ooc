@@ -489,6 +489,7 @@ export class World implements Routable {
 
     /* 运行线程树引擎 */
     consola.info(`[World] 使用线程树架构处理 talk: ${from} → ${objectName}`);
+    const messageTimestamp = Date.now();
     const result: TalkResult = await runWithThreadTree(objectName, message, from, engineConfig, preSessionId);
 
     /* 在线程树 session 目录下写入 Flow 兼容数据 */
@@ -497,7 +498,7 @@ export class World implements Routable {
     const now = Date.now();
 
     const messages: Array<Record<string, unknown>> = [
-      { direction: "in", from, to: objectName, content: message, timestamp: now - 1 },
+      { direction: "in", from, to: objectName, content: message, timestamp: messageTimestamp },
     ];
     if (result.summary) {
       messages.push({ direction: "out", from: objectName, to: from, content: result.summary, timestamp: now });

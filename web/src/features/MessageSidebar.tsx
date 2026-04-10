@@ -138,8 +138,8 @@ export function MessageSidebar() {
     const supervisorFlow = (activeFlow as any).subFlows?.find((sf: any) => sf.stoneName === "supervisor");
     const process = supervisorFlow?.process ?? activeFlow.process;
     const allActions = process?.root ? collectActions(process.root) : [];
-    /* 过滤掉 message_in/message_out（messages 已包含这些信息） */
-    const actions = allActions.filter((a) => a.type !== "message_in" && a.type !== "message_out");
+    /* 过滤掉 message_in/message_out（messages 已包含这些信息）和 thread_return */
+    const actions = allActions.filter((a) => a.type !== "message_in" && a.type !== "message_out" && a.type !== "thread_return");
 
     /* 合并并按时间排序 */
     type Entry = { kind: "message"; data: FlowMessage } | { kind: "action"; data: Action & { _origIndex?: number } };
