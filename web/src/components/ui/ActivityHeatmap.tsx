@@ -69,10 +69,6 @@ export function ActivityHeatmap() {
   const firstDayOfWeek = getFirstDayOfWeek(year, month);
   const today = new Date().getDate();
 
-  /* 构建网格：7 行（周日-周六）× N 列 */
-  const totalCells = firstDayOfWeek + days.length;
-  const cols = Math.ceil(totalCells / 7);
-
   return (
     <div className="px-3 py-3 shrink-0 w-full">
       {/* 标题 */}
@@ -85,30 +81,29 @@ export function ActivityHeatmap() {
         </span>
       </div>
 
-      {/* 热力图网格 */}
-      <div className="flex gap-[3px]">
-        {/* 周标签 */}
-        <div className="flex flex-col gap-[3px] shrink-0">
+      {/* 热力图网格：横向 7 列 × N 行 */}
+      <div>
+        {/* 周标签行 */}
+        <div className="flex gap-[3px] mb-[3px]">
           {WEEKDAY_LABELS.map((label, i) => (
             <div
               key={i}
               className="w-3 h-3 flex items-center justify-center text-[7px] text-[var(--muted-foreground)]"
             >
-              {i % 2 === 1 ? label : ""}
+              {label}
             </div>
           ))}
         </div>
 
-        {/* 格子列 */}
-        {Array.from({ length: cols }, (_, col) => (
-          <div key={col} className="flex flex-col gap-[3px]">
-            {Array.from({ length: 7 }, (_, row) => {
-              const cellIndex = col * 7 + row;
-              const dayNum = cellIndex - firstDayOfWeek + 1;
+        {/* 格子行 */}
+        {Array.from({ length: Math.ceil((firstDayOfWeek + days.length) / 7) }, (_, row) => (
+          <div key={row} className="flex gap-[3px] mb-[3px]">
+            {Array.from({ length: 7 }, (_, col) => {
+              const dayNum = row * 7 + col - firstDayOfWeek + 1;
               const isValidDay = dayNum >= 1 && dayNum <= days.length;
 
               if (!isValidDay) {
-                return <div key={row} className="w-3 h-3" />;
+                return <div key={col} className="w-3 h-3" />;
               }
 
               const count = dayCounts.get(dayNum) ?? 0;
@@ -117,7 +112,7 @@ export function ActivityHeatmap() {
 
               return (
                 <div
-                  key={row}
+                  key={col}
                   className={cn(
                     "w-3 h-3 rounded-[2px] transition-colors",
                     HEAT_COLORS[level],
