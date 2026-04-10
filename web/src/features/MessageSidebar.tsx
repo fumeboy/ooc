@@ -22,9 +22,8 @@ import {
 } from "../store/session";
 import { talkTo, fetchFlow, fetchSessions, fetchObjects, pauseObject, resumeFlow } from "../api/client";
 import { userSessionsAtom } from "../store/session";
-import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { ObjectAvatar } from "../components/ui/ObjectAvatar";
-import { TalkCard, ActionCard } from "../components/ui/ActionCard";
+import { TuiAction, TuiTalk, TuiUserMessage, TuiStreamingBlock } from "../components/ui/TuiBlock";
 import { cn } from "../lib/utils";
 import { Send, Maximize2, Minimize2, X, ChevronUp, ChevronDown } from "lucide-react";
 import type { FlowMessage, Action } from "../api/types";
@@ -484,9 +483,9 @@ export function MessageSidebar() {
       {/* 消息列表区域 */}
       <div className="flex-1 flex flex-col relative min-h-0">
         {/* 消息列表 */}
-        <div ref={scrollRef} className="flex-1 overflow-auto px-2 py-3 space-y-3">
+        <div ref={scrollRef} className="flex-1 overflow-auto px-3 py-3 space-y-1.5">
         {timeline.length === 0 && !activeStreamingTalk && (
-          <p className="text-xs text-[var(--muted-foreground)] text-center py-8">
+          <p className="text-xs text-[var(--muted-foreground)] text-center py-8 font-mono">
             输入消息开始对话，输入 @ 选择对象
           </p>
         )}
@@ -497,8 +496,8 @@ export function MessageSidebar() {
             return (
               <div key={`msg-${i}`} ref={(el) => { msgRefs.current[i] = el; }}>
                 {isUser
-                  ? <MessageBubble message={msg} />
-                  : <TalkCard msg={msg} maxHeight={0} />
+                  ? <TuiUserMessage msg={msg} />
+                  : <TuiTalk msg={msg} />
                 }
               </div>
             );
@@ -507,10 +506,9 @@ export function MessageSidebar() {
             const a = entry.data as Action;
             return (
               <div key={`act-${i}`} ref={(el) => { msgRefs.current[i] = el; }}>
-                <ActionCard
+                <TuiAction
                   action={a}
                   objectName="supervisor"
-                  maxHeight={360}
                   loading={activeFlow?.status === "running" && i === timeline.length - 1}
                 />
               </div>
@@ -518,75 +516,41 @@ export function MessageSidebar() {
           }
           return null;
         })}
-        {/* 流式 thought（正在思考） */}
+        {/* 流式 thought */}
         {streamingThought && activeFlow?.status === "running" && (
-          <ActionCard
-            action={{ type: "thought", content: streamingThought.content, timestamp: Date.now() }}
-            objectName="supervisor"
-            maxHeight={200}
-            loading
-          />
+          <TuiStreamingBlock type="thought" content={streamingThought.content} objectName="supervisor" />
         )}
-        {/* 流式 program（正在输出程序） */}
+        {/* 流式 program */}
         {streamingProgram && activeFlow?.status === "running" && (
-          <ActionCard
-            action={{ type: "program", content: streamingProgram.content, timestamp: Date.now() }}
-            objectName="supervisor"
-            maxHeight={200}
-            loading
-          />
+          <TuiStreamingBlock type="program" content={streamingProgram.content} objectName="supervisor" />
         )}
-        {/* 流式 action（正在输出 action） */}
+        {/* 流式 action */}
         {streamingAction && activeFlow?.status === "running" && (
-          <ActionCard
-            action={{ type: "action", content: streamingAction.content, timestamp: Date.now() }}
-            objectName="supervisor"
-            maxHeight={200}
-            loading
-          />
+          <TuiStreamingBlock type="action" content={streamingAction.content} objectName="supervisor" />
         )}
-        {/* 流式 stack_push（正在推入栈帧） */}
+        {/* 流式 stack_push */}
         {streamingStackPush && activeFlow?.status === "running" && (
-          <ActionCard
-            action={{
-              type: "stack_push",
-              content: `[${streamingStackPush.opType}.${streamingStackPush.attr}] ${streamingStackPush.content}`,
-              timestamp: Date.now(),
-            }}
+          <TuiStreamingBlock
+            type="stack_push"
+            content={`[${streamingStackPush.opType}.${streamingStackPush.attr}] ${streamingStackPush.content}`}
             objectName="supervisor"
-            maxHeight={200}
-            loading
           />
         )}
-        {/* 流式 stack_pop（正在弹出栈帧） */}
+        {/* 流式 stack_pop */}
         {streamingStackPop && activeFlow?.status === "running" && (
-          <ActionCard
-            action={{
-              type: "stack_pop",
-              content: `[${streamingStackPop.opType}.${streamingStackPop.attr}] ${streamingStackPop.content}`,
-              timestamp: Date.now(),
-            }}
+          <TuiStreamingBlock
+            type="stack_pop"
+            content={`[${streamingStackPop.opType}.${streamingStackPop.attr}] ${streamingStackPop.content}`}
             objectName="supervisor"
-            maxHeight={200}
-            loading
           />
         )}
-        {/* 流式 set_plan（正在设置计划） */}
+        {/* 流式 set_plan */}
         {streamingSetPlan && activeFlow?.status === "running" && (
-          <ActionCard
-            action={{
-              type: "set_plan",
-              content: streamingSetPlan.content,
-              timestamp: Date.now(),
-            }}
-            objectName="supervisor"
-            maxHeight={200}
-            loading
-          />
+          <TuiStreamingBlock type="set_plan" content={streamingSetPlan.content} objectName="supervisor" />
         )}
-        {/* 流式 talk（正在回复） */}
+        {/* 流式 talk */}
         {activeStreamingTalk && (
-          <TalkCard
+          <TuiTalk
             msg={{
               direction: "out",
               from: activeStreamingTalk.from,
@@ -594,7 +558,7 @@ export function MessageSidebar() {
               content: activeStreamingTalk.content,
               timestamp: Date.now(),
             }}
-            maxHeight={0}
+            loading
           />
         )}
         </div>
@@ -664,23 +628,6 @@ export function MessageSidebar() {
           >
             <Send className="w-3.5 h-3.5" />
           </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** 用户消息气泡（仅 user/human 消息使用） */
-function MessageBubble({ message }: { message: FlowMessage }) {
-  return (
-    <div className="flex gap-2 flex-row-reverse">
-      <ObjectAvatar name="user" size="sm" />
-      <div className="flex-1 min-w-0 text-right">
-        <span className="text-[10px] text-[var(--muted-foreground)]">
-          {message.from} → {message.to}
-        </span>
-        <div className="mt-0.5 text-sm rounded-xl px-3 py-2 inline-block max-w-full text-left bg-[var(--primary)] text-[var(--primary-foreground)]">
-          <MarkdownContent content={message.content} invertLinks />
         </div>
       </div>
     </div>

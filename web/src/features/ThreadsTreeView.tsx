@@ -12,7 +12,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { cn } from "../lib/utils";
 import { ArrowLeft } from "lucide-react";
-import { ActionCard } from "../components/ui/ActionCard";
+import { TuiAction } from "../components/ui/TuiBlock";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { updateThreadPins, resumeFlow, fetchFileContent } from "../api/client";
 import type { Process, ProcessNode } from "../api/types";
@@ -459,7 +459,7 @@ function ThreadDetailView({
       </div>
 
       {/* 摘要 + 暂停面板 + Actions 合并滚动 */}
-      <div className="flex-1 overflow-auto px-4 py-3 space-y-2">
+      <div className="flex-1 overflow-auto px-4 py-3 space-y-1.5">
         {/* 暂停面板 */}
         {meta.hasPendingOutput && pauseFiles && (
           <div className="rounded bg-[var(--warm-muted)] p-3 mb-3">
@@ -494,7 +494,7 @@ function ThreadDetailView({
           <p className="text-sm text-[var(--muted-foreground)]">暂无 actions</p>
         ) : (
           node.actions.map((action, i) => (
-            <ActionCard
+            <TuiAction
               key={`${action.type}-${i}`}
               action={action}
               objectName={node.title}
