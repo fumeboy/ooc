@@ -29,6 +29,7 @@ import { getActiveTraits, traitId } from "../trait/activator.js";
 import type { LLMClient, Message } from "../thinkable/client.js";
 import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "../types/index.js";
 import type { SkillDefinition } from "../skill/types.js";
+import { writeDebugLoop, computeContextStats, extractDirectiveTypes, getExistingLoopCount } from "./debug.js";
 import { loadSkillBody } from "../skill/loader.js";
 import type {
   ThreadsTreeFile,
@@ -75,6 +76,8 @@ export interface EngineConfig {
    * @returns 目标对象的回复（summary）
    */
   onTalk?: (targetObject: string, message: string, fromObject: string, fromThreadId: string, sessionId: string) => Promise<string | null>;
+  /** 是否开启 debug 模式（持久化每轮 ThinkLoop 的 LLM 输入/输出） */
+  debugEnabled?: boolean;
   /** Scheduler 配置覆盖 */
   schedulerConfig?: {
     maxIterationsPerThread?: number;
@@ -622,7 +625,10 @@ export async function runWithThreadTree(
     scheduler.pauseObject(objectName);
   }
 
-  /* 7. 创建 SchedulerCallbacks */
+  /* 7. debug 计数器 */
+  let debugLoopCounter = 0;
+
+  /* 8. 创建 SchedulerCallbacks */
   const callbacks: SchedulerCallbacks = {
     runOneIteration: async (threadId: string, _objectName: string) => {
       totalIterations++;
@@ -638,6 +644,11 @@ export async function runWithThreadTree(
 
       let llmOutput: string;
       let thinkingContent: string | undefined;
+      let llmLatencyMs = 0;
+      let llmModel = "unknown";
+      let llmUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } = {};
+      let context: ReturnType<typeof buildThreadContext> | undefined;
+      let messages: Message[] | undefined;
 
       /* 检查是否有缓存的 LLM 输出（resume 模式） */
       if (threadData._pendingOutput) {
@@ -668,7 +679,7 @@ export async function runWithThreadTree(
         consola.info(`[Engine] 使用缓存输出 (resume), thread=${threadId}`);
       } else {
         /* 构建 Context */
-        const context = buildThreadContext({
+        context = buildThreadContext({
           tree: treeFile,
           threadId,
           threadData,
@@ -681,12 +692,16 @@ export async function runWithThreadTree(
         });
 
         /* 转换为 LLM Messages */
-        const messages = contextToMessages(context);
+        messages = contextToMessages(context);
 
         /* 调用 LLM */
+        const llmStartTime = Date.now();
         const llmResult = await config.llm.chat(messages);
+        llmLatencyMs = Date.now() - llmStartTime;
         llmOutput = llmResult.content;
         thinkingContent = llmResult.thinkingContent;
+        llmModel = (llmResult as any).model || "unknown";
+        llmUsage = (llmResult as any).usage ?? {};
 
         /* LLM 返回后检查暂停信号 */
         if (config.isPaused?.(objectName)) {
@@ -735,6 +750,35 @@ export async function runWithThreadTree(
         stone: config.stone,
         traits: config.traits,
       });
+
+      /* debug 记录（仅在真实 LLM 调用路径且 context/messages 可用时） */
+      if (config.debugEnabled && context && messages) {
+        debugLoopCounter++;
+        const debugDir = join(objectFlowDir, "threads", threadId, "debug");
+        const ctxStats = computeContextStats(context);
+        const totalMessageChars = messages.reduce((sum, m) => sum + m.content.length, 0);
+        writeDebugLoop({
+          debugDir,
+          loopIndex: debugLoopCounter,
+          messages,
+          llmOutput,
+          thinkingContent,
+          source: "llm",
+          llmMeta: {
+            model: llmModel,
+            latencyMs: llmLatencyMs,
+            promptTokens: llmUsage.promptTokens ?? 0,
+            completionTokens: llmUsage.completionTokens ?? 0,
+            totalTokens: llmUsage.totalTokens ?? 0,
+          },
+          contextStats: { ...ctxStats, totalMessageChars },
+          activeTraits: context.scopeChain,
+          activeSkills: (config.skills ?? []).map(s => s.name),
+          parsedDirectives: extractDirectiveTypes(iterResult as unknown as Record<string, unknown>),
+          threadId,
+          objectName,
+        });
+      }
 
       /* 应用结果到 tree */
       await applyIterationResult(tree, threadId, iterResult, objectName, sessionId, scheduler);
@@ -1171,15 +1215,31 @@ export async function resumeWithThreadTree(
     deadlockGracePeriodMs: config.schedulerConfig?.deadlockGracePeriodMs ?? 30_000,
   });
 
+  /* debug 计数器（resume 场景需要从已有文件数初始化） */
+  let debugLoopCounter = 0;
+  let debugLoopCounterInitialized = false;
+
   const callbacks: SchedulerCallbacks = {
     runOneIteration: async (threadId: string, _objectName: string) => {
       totalIterations++;
       const threadData = tree.readThreadData(threadId);
       if (!threadData) throw new Error(`线程数据不存在: ${threadId}`);
 
+      /* 初始化 debug 计数器（仅首次） */
+      if (config.debugEnabled && !debugLoopCounterInitialized) {
+        const debugDir = join(objectFlowDir, "threads", threadId, "debug");
+        debugLoopCounter = getExistingLoopCount(debugDir);
+        debugLoopCounterInitialized = true;
+      }
+
       const treeFile = buildTreeFileSnapshot(tree);
       let llmOutput: string;
       let thinkingContent: string | undefined;
+      let llmLatencyMs = 0;
+      let llmModel = "unknown";
+      let llmUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } = {};
+      let context: ReturnType<typeof buildThreadContext> | undefined;
+      let messages: Message[] | undefined;
 
       if (threadData._pendingOutput) {
         /* 优先从文件读取（用户可能已修改） */
@@ -1204,16 +1264,20 @@ export async function resumeWithThreadTree(
         tree.writeThreadData(threadId, threadData);
         consola.info(`[Engine] 使用缓存输出 (resume), thread=${threadId}`);
       } else {
-        const context = buildThreadContext({
+        context = buildThreadContext({
           tree: treeFile, threadId, threadData,
           stone: config.stone, directory: config.directory,
           traits: config.traits, extraWindows: config.extraWindows, paths: config.paths,
           skills: config.skills,
         });
-        const messages = contextToMessages(context);
+        messages = contextToMessages(context);
+        const llmStartTime = Date.now();
         const llmResult = await config.llm.chat(messages);
+        llmLatencyMs = Date.now() - llmStartTime;
         llmOutput = llmResult.content;
         thinkingContent = llmResult.thinkingContent;
+        llmModel = (llmResult as any).model || "unknown";
+        llmUsage = (llmResult as any).usage ?? {};
 
         if (config.isPaused?.(objectName)) {
           threadData._pendingOutput = llmOutput;
@@ -1244,6 +1308,35 @@ export async function resumeWithThreadTree(
         tree: treeFile, threadId, threadData, llmOutput,
         stone: config.stone, traits: config.traits,
       });
+
+      /* debug 记录（仅在真实 LLM 调用路径且 context/messages 可用时） */
+      if (config.debugEnabled && context && messages) {
+        debugLoopCounter++;
+        const debugDir = join(objectFlowDir, "threads", threadId, "debug");
+        const ctxStats = computeContextStats(context);
+        const totalMessageChars = messages.reduce((sum, m) => sum + m.content.length, 0);
+        writeDebugLoop({
+          debugDir,
+          loopIndex: debugLoopCounter,
+          messages,
+          llmOutput,
+          thinkingContent,
+          source: "llm",
+          llmMeta: {
+            model: llmModel,
+            latencyMs: llmLatencyMs,
+            promptTokens: llmUsage.promptTokens ?? 0,
+            completionTokens: llmUsage.completionTokens ?? 0,
+            totalTokens: llmUsage.totalTokens ?? 0,
+          },
+          contextStats: { ...ctxStats, totalMessageChars },
+          activeTraits: context.scopeChain,
+          activeSkills: (config.skills ?? []).map(s => s.name),
+          parsedDirectives: extractDirectiveTypes(iterResult as unknown as Record<string, unknown>),
+          threadId,
+          objectName,
+        });
+      }
 
       await applyIterationResult(tree, threadId, iterResult, objectName, sessionId, scheduler);
 

@@ -787,6 +787,23 @@ async function handleRoute(
     return json({ success: true });
   }
 
+  /* POST /api/debug/enable — 开启 debug 模式 */
+  if (method === "POST" && path === "/api/debug/enable") {
+    world.enableDebug();
+    return json({ success: true, data: { debugEnabled: true } });
+  }
+
+  /* POST /api/debug/disable — 关闭 debug 模式 */
+  if (method === "POST" && path === "/api/debug/disable") {
+    world.disableDebug();
+    return json({ success: true, data: { debugEnabled: false } });
+  }
+
+  /* GET /api/debug/status — 查询 debug 模式状态 */
+  if (method === "GET" && path === "/api/debug/status") {
+    return json({ success: true, data: { debugEnabled: world.isDebugEnabled() } });
+  }
+
   /* 404 */
   return errorResponse(`未知路由: ${method} ${path}`, 404);
 }

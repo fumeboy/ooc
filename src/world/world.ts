@@ -64,6 +64,8 @@ export class World implements Routable {
   private _traitTree: import("../types/index.js").TraitTree[] = [];
   /** 是否使用线程树架构 */
   private readonly _useThreadTree: boolean;
+  /** debug 模式开关 */
+  private _debugEnabled = false;
 
   constructor(config: WorldConfig) {
     this._rootDir = config.rootDir;
@@ -76,6 +78,17 @@ export class World implements Routable {
       });
     });
   }
+
+  /* ========== Debug 模式 ========== */
+
+  /** 开启 debug 模式 */
+  enableDebug(): void { this._debugEnabled = true; }
+
+  /** 关闭 debug 模式 */
+  disableDebug(): void { this._debugEnabled = false; }
+
+  /** 查询 debug 模式状态 */
+  isDebugEnabled(): boolean { return this._debugEnabled; }
 
   /* ========== 初始化 ========== */
 
@@ -448,6 +461,7 @@ export class World implements Routable {
       directory,
       traits,
       skills: loadSkills(join(this._rootDir, "library", "skills")),
+      debugEnabled: this._debugEnabled,
       stone: stone.toJSON(),
       paths: {
         stoneDir: stone.dir,
@@ -621,6 +635,7 @@ export class World implements Routable {
           directory: this._registry.buildDirectory(),
           traits,
           skills: loadSkills(join(this._rootDir, "library", "skills")),
+          debugEnabled: this._debugEnabled,
           stone: stone.toJSON(),
           paths: { stoneDir: stone.dir, rootDir: this._rootDir, flowsDir: this.flowsDir },
           isPaused: (name) => this._pauseRequests.has(name),
@@ -683,6 +698,7 @@ export class World implements Routable {
           directory: this._registry.buildDirectory(),
           traits,
           skills: loadSkills(join(this._rootDir, "library", "skills")),
+          debugEnabled: this._debugEnabled,
           stone: stone.toJSON(),
           paths: { stoneDir: stone.dir, rootDir: this._rootDir, flowsDir: this.flowsDir },
           isPaused: (name) => this._pauseRequests.has(name),
