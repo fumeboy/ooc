@@ -385,6 +385,17 @@ export function App() {
               /* 先创建 session 拿到 sessionId，再异步 talk */
               const { sessionId } = await createSession(t);
               const path = `flows/${sessionId}`;
+              /* 乐观设置 flow 数据，让 MessageSidebar 立即显示用户消息 */
+              setActiveFlow({
+                sessionId,
+                stoneName: t,
+                status: "running",
+                messages: [{ direction: "in", from: "human", to: t, content: msg, timestamp: Date.now() }],
+                process: { root: { id: "root", title: "task", status: "doing", children: [], actions: [] }, focusId: "root" },
+                data: {},
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+              } as any);
               setActiveId(sessionId);
               setActivePath(path);
               setTabs([{ path, label: "Kanban" }]);

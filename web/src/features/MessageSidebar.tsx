@@ -220,9 +220,23 @@ export function MessageSidebar() {
 
   /* activeId 变化时重新加载 flow 数据 */
   useEffect(() => {
-    setActiveFlow(null);  /* 立即清空旧数据，避免显示上一个 session 的内容 */
+    /* 如果 activeFlow 已经匹配当前 session（乐观更新），不清空 */
+    if (!activeFlow || activeFlow.sessionId !== activeId) {
+      setActiveFlow(null);
+    }
     if (!activeId) return;
-    fetchFlow(activeId).then(setActiveFlow).catch(console.error);
+    fetchFlow(activeId).then((serverFlow) => {
+      setActiveFlow((prev) => {
+        if (!prev) return serverFlow;
+        /* 合并：保留乐观消息（如果服务端还没有） */
+        const serverMsgCount = serverFlow.messages.length;
+        const prevMsgCount = prev.messages.length;
+        if (prevMsgCount > serverMsgCount) {
+          return { ...serverFlow, messages: [...serverFlow.messages, ...prev.messages.slice(serverMsgCount)] };
+        }
+        return serverFlow;
+      });
+    }).catch(console.error);
   }, [activeId]);
 
   /* SSE 实时更新 */
