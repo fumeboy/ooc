@@ -7,7 +7,7 @@
  * - btn3（下）：灰色空置
  * - btn4（左）：全局 pause 切换
  *
- * Logo 颜色随状态变化：
+ * Logo 颜色随状态变化（带淡入淡出动画）：
  * - 默认：黑色
  * - debug on：黄色
  * - globalPause on：橙色
@@ -17,6 +17,7 @@ import { useAtom } from "jotai";
 import { useEffect } from "react";
 import { OocLogo } from "./OocLogo";
 import { debugEnabledAtom, globalPausedAtom } from "../store/session";
+import { cn } from "../lib/utils";
 import {
   enableDebug,
   disableDebug,
@@ -26,44 +27,52 @@ import {
   getGlobalPauseStatus,
 } from "../api/client";
 
-/** 药丸按钮 */
-function PillButton({
-  position,
+/** 带 toggle 开关的药丸按钮（横向，和 MessageSidebar 的 pause 按钮风格一致） */
+function TogglePill({
   active,
   activeColor,
-  onClick,
   label,
-  disabled,
+  activeLabel,
+  onClick,
 }: {
-  position: "top" | "right" | "bottom" | "left";
-  active?: boolean;
-  activeColor?: string;
-  onClick?: () => void;
-  label?: string;
-  disabled?: boolean;
+  active: boolean;
+  activeColor: string;
+  label: string;
+  activeLabel: string;
+  onClick: () => void;
 }) {
-  const posStyles: Record<string, React.CSSProperties> = {
-    top: { top: -6, left: "50%", transform: "translateX(-50%)", width: 28, height: 10 },
-    bottom: { bottom: -6, left: "50%", transform: "translateX(-50%)", width: 28, height: 10 },
-    left: { left: -6, top: "50%", transform: "translateY(-50%)", width: 10, height: 28 },
-    right: { right: -6, top: "50%", transform: "translateY(-50%)", width: 10, height: 28 },
-  };
-
   return (
     <button
       onClick={onClick}
-      disabled={disabled}
-      title={label}
-      style={{
-        ...posStyles[position],
-        position: "absolute",
-        borderRadius: 999,
-        border: "none",
-        cursor: disabled ? "default" : "pointer",
-        backgroundColor: active ? (activeColor ?? "#9CA3AF") : "#E5E7EB",
-        transition: "background-color 0.2s",
-        opacity: disabled ? 0.5 : 1,
-      }}
+      title={active ? activeLabel : label}
+      className={cn(
+        "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] transition-colors whitespace-nowrap",
+        active
+          ? `text-white`
+          : "bg-[var(--accent)] text-[var(--muted-foreground)] hover:bg-[var(--accent)]/80",
+      )}
+      style={active ? { backgroundColor: activeColor } : undefined}
+    >
+      {/* mini toggle */}
+      <span className="relative w-5 h-3 rounded-full bg-black/20 shrink-0">
+        <span
+          className={cn(
+            "absolute top-0.5 w-2 h-2 rounded-full bg-white transition-all",
+            active ? "left-[10px]" : "left-0.5",
+          )}
+        />
+      </span>
+      <span>{active ? activeLabel : label}</span>
+    </button>
+  );
+}
+
+/** 灰色空置药丸 */
+function PlaceholderPill() {
+  return (
+    <div
+      className="rounded-full bg-[var(--accent)]/50"
+      style={{ width: 28, height: 10 }}
     />
   );
 }
@@ -79,13 +88,14 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
   }, []);
 
   /* Logo 颜色 */
-  const logoColor = debugEnabled && globalPaused
-    ? "gradient"
-    : debugEnabled
-      ? "#EAB308"
-      : globalPaused
-        ? "#F97316"
-        : "#000";
+  const logoColor =
+    debugEnabled && globalPaused
+      ? "gradient"
+      : debugEnabled
+        ? "#EAB308"
+        : globalPaused
+          ? "#F97316"
+          : "#000";
 
   const logoPx = isMobile ? 80 : 120;
 
@@ -114,35 +124,38 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
   };
 
   return (
-    <div className="relative" style={{ width: logoPx + 16, height: logoPx + 16 }}>
-      {/* Logo 居中 */}
-      <div className="absolute" style={{ top: 8, left: 8 }}>
-        <OocLogo px={logoPx} color={logoColor} />
+    <div className="flex flex-col items-center gap-1.5">
+      {/* btn1（上）：空置 */}
+      <PlaceholderPill />
+
+      {/* 中间行：btn4 + Logo + btn2 */}
+      <div className="flex items-center gap-1.5">
+        {/* btn4（左）：全局 pause */}
+        <TogglePill
+          active={globalPaused}
+          activeColor="#F97316"
+          label="pause"
+          activeLabel="paused"
+          onClick={toggleGlobalPause}
+        />
+
+        {/* Logo（带颜色过渡动画） */}
+        <div style={{ transition: "filter 0.3s ease" }}>
+          <OocLogo px={logoPx} color={logoColor} />
+        </div>
+
+        {/* btn2（右）：debug 模式 */}
+        <TogglePill
+          active={debugEnabled}
+          activeColor="#EAB308"
+          label="debug"
+          activeLabel="debug"
+          onClick={toggleDebug}
+        />
       </div>
 
-      {/* btn1（上）：空置 */}
-      <PillButton position="top" disabled />
-
-      {/* btn2（右）：debug 模式 */}
-      <PillButton
-        position="right"
-        active={debugEnabled}
-        activeColor="#EAB308"
-        onClick={toggleDebug}
-        label={debugEnabled ? "关闭 Debug 模式" : "开启 Debug 模式"}
-      />
-
       {/* btn3（下）：空置 */}
-      <PillButton position="bottom" disabled />
-
-      {/* btn4（左）：全局 pause */}
-      <PillButton
-        position="left"
-        active={globalPaused}
-        activeColor="#F97316"
-        onClick={toggleGlobalPause}
-        label={globalPaused ? "关闭全局暂停" : "开启全局暂停"}
-      />
+      <PlaceholderPill />
     </div>
   );
 }
