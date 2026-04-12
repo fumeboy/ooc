@@ -29,10 +29,34 @@ const readWithTimeout = async (
   }
 };
 
-/** 聊天消息 */
+/** Tool Call（LLM 输出的工具调用） */
+export interface ToolCall {
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string; // JSON string
+  };
+}
+
+/** Tool 定义（传给 LLM 的工具 schema） */
+export interface ToolDefinition {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+/** 聊天消息（扩展支持 tool_calls 和 tool 结果） */
 export interface Message {
-  role: "system" | "user" | "assistant";
+  role: "system" | "user" | "assistant" | "tool";
   content: string;
+  /** assistant 消息中的 tool calls */
+  tool_calls?: ToolCall[];
+  /** tool 消息中的 tool_call_id */
+  tool_call_id?: string;
 }
 
 /** LLM 响应 */
@@ -54,6 +78,8 @@ export interface LLMResult {
 /** 向后兼容的 LLM 响应 */
 export interface LLMResponse extends LLMResult {
   content: string;
+  /** tool calls（如果 LLM 选择调用工具） */
+  toolCalls?: ToolCall[];
 }
 
 /** LLM 流式事件 */
@@ -72,7 +98,7 @@ export interface SimpleLLMOptions {
 
 /** LLM 客户端接口 */
 export interface LLMClient {
-  chat(messages: Message[]): Promise<LLMResponse>;
+  chat(messages: Message[], options?: { tools?: ToolDefinition[] }): Promise<LLMResponse>;
   /** 流式聊天，返回 token 异步迭代器。不支持时 fallback 到 chat() */
   chatStream?(messages: Message[]): AsyncIterable<string>;
   /** 流式聊天（双通道事件） */
@@ -206,18 +232,27 @@ function buildThinkingCapabilityPayload(config: LLMConfig): Record<string, unkno
 export function buildChatPayload(
   config: LLMConfig,
   messages: Message[],
-  options?: { stream?: boolean },
+  options?: { stream?: boolean; tools?: ToolDefinition[] },
 ): Record<string, unknown> {
   const maxTokens = Math.min(config.maxTokens, 131072);
   const payload: Record<string, unknown> = {
     model: config.model,
-    messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    messages: messages.map((m) => {
+      const msg: Record<string, unknown> = { role: m.role, content: m.content };
+      if (m.tool_calls) msg.tool_calls = m.tool_calls;
+      if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
+      return msg;
+    }),
     max_tokens: maxTokens,
   };
 
   const thinkingPayload = buildThinkingCapabilityPayload(config);
   if (thinkingPayload) {
     payload.thinking = thinkingPayload;
+  }
+
+  if (options?.tools?.length) {
+    payload.tools = options.tools;
   }
 
   if (options?.stream) {
@@ -250,12 +285,16 @@ function normalizeResult(
     }
   }
 
+  /* 提取 tool_calls */
+  const rawToolCalls = Array.isArray(msg?.tool_calls) ? (msg.tool_calls as ToolCall[]) : undefined;
+
   return {
     assistantContent,
     thinkingContent,
     content: assistantContent.trim().length > 0 ? assistantContent : thinkingContent,
     model: typeof data.model === "string" ? data.model : fallbackModel,
     usage: normalizeUsage((data.usage ?? null) as Record<string, unknown> | null),
+    toolCalls: rawToolCalls,
     raw: data,
   };
 }
@@ -319,8 +358,8 @@ export class OpenAICompatibleClient implements LLMClient {
     } catch { /* URL 解析失败时忽略 */ }
   }
 
-  async chat(messages: Message[]): Promise<LLMResponse> {
-    const payload = buildChatPayload(this._config, messages);
+  async chat(messages: Message[], options?: { tools?: ToolDefinition[] }): Promise<LLMResponse> {
+    const payload = buildChatPayload(this._config, messages, { tools: options?.tools });
     consola.info("LLM 请求", this._config.model, `${messages.length} messages`);
     const start = performance.now();
     const maxRetries = 3;
