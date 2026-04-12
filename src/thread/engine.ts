@@ -1040,8 +1040,10 @@ export async function runWithThreadTree(
               if (!method) {
                 resultText = `[错误] 方法 ${form.trait}.${form.functionName} 不存在`;
               } else {
-                const { context: execCtx } = buildExecContext(threadId);
-                const argValues = args && typeof args === "object" ? Object.values(args as Record<string, unknown>) : [];
+              const { context: execCtx } = buildExecContext(threadId);
+                /* 按方法 params 定义顺序从 args 中提取参数值 */
+                const argsObj = (args && typeof args === "object" ? args : {}) as Record<string, unknown>;
+                const argValues = method.params.map(p => argsObj[p.name]);
                 const result = method.needsCtx !== false
                   ? await method.fn(execCtx, ...argValues)
                   : await method.fn(...argValues);
@@ -1693,8 +1695,10 @@ export async function resumeWithThreadTree(
               if (!method) {
                 resultText = `[错误] 方法 ${form.trait}.${form.functionName} 不存在`;
               } else {
-                const { context: execCtx } = buildExecContext(threadId);
-                const argValues = args && typeof args === "object" ? Object.values(args as Record<string, unknown>) : [];
+              const { context: execCtx } = buildExecContext(threadId);
+                /* 按方法 params 定义顺序从 args 中提取参数值 */
+                const argsObj = (args && typeof args === "object" ? args : {}) as Record<string, unknown>;
+                const argValues = method.params.map(p => argsObj[p.name]);
                 const result = method.needsCtx !== false
                   ? await method.fn(execCtx, ...argValues)
                   : await method.fn(...argValues);
