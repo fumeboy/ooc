@@ -25,6 +25,8 @@ import { emitSSE } from "../server/events.js";
 import { CodeExecutor, executeShell } from "../executable/executor.js";
 import { MethodRegistry, type MethodContext } from "../trait/registry.js";
 import { getActiveTraits, traitId } from "../trait/activator.js";
+import { FormManager } from "./form.js";
+import { collectCommandTraits } from "./hooks.js";
 
 import type { LLMClient, Message } from "../thinkable/client.js";
 import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "../types/index.js";
@@ -118,7 +120,10 @@ function isEmptyIterResult(r: ReturnType<typeof runThreadIteration>): boolean {
     r.threadReturn === null &&
     r.awaitingChildren === null &&
     r.continueSubThread === null &&
-    r.planUpdate === null
+    r.planUpdate === null &&
+    r.formBegin === null &&
+    r.formSubmit === null &&
+    r.formCancel === null
   );
 }
 
@@ -650,6 +655,9 @@ export async function runWithThreadTree(
   /* 7. debug 计数器 */
   let debugLoopCounter = 0;
 
+  /* 7b. FormManager */
+  const formManager = new FormManager();
+
   /* 8. 创建 SchedulerCallbacks */
   const callbacks: SchedulerCallbacks = {
     runOneIteration: async (threadId: string, _objectName: string) => {
@@ -978,6 +986,92 @@ export async function runWithThreadTree(
         consola.info(`[Engine] useSkill "${skillName}" ${skillDef ? "已加载" : "未找到"}`);
       }
 
+      /* 处理 form 操作 */
+      if (iterResult.formBegin) {
+        const formId = formManager.begin(iterResult.formBegin.command, iterResult.formBegin.description);
+
+        /* 收集需要加载的 trait */
+        const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommands());
+        for (const traitName of traitsToLoad) {
+          await tree.activateTrait(threadId, traitName);
+        }
+
+        /* 持久化 form 状态 */
+        const td = tree.readThreadData(threadId);
+        if (td) {
+          td.activeForms = formManager.toData();
+          td.actions.push({
+            type: "inject",
+            content: `Form ${formId} 已创建（${iterResult.formBegin.command}）。相关知识已加载。`,
+            timestamp: Date.now(),
+          });
+          tree.writeThreadData(threadId, td);
+        }
+
+        consola.info(`[Engine] form.begin: ${iterResult.formBegin.command} → ${formId}`);
+      }
+
+      if (iterResult.formSubmit) {
+        const form = formManager.submit(iterResult.formSubmit.formId);
+        if (!form) {
+          /* form_id 无效 */
+          const td = tree.readThreadData(threadId);
+          if (td) {
+            td.actions.push({
+              type: "inject",
+              content: `[错误] Form ${iterResult.formSubmit.formId} 不存在。请重新 begin。`,
+              timestamp: Date.now(),
+            });
+            tree.writeThreadData(threadId, td);
+          }
+        } else {
+          /* TODO Phase 3+: 根据 form.command 执行对应指令逻辑 */
+          /* 当前兼容期：form submit 只做 trait 卸载，实际指令执行仍走旧路径 */
+
+          /* 检查是否需要卸载 trait（该 command 无其他活跃 form 时卸载） */
+          if (!formManager.activeCommands().has(form.command)) {
+            const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
+            for (const traitName of traitsToUnload) {
+              await tree.deactivateTrait(threadId, traitName);
+            }
+          }
+
+          /* 持久化 */
+          const td = tree.readThreadData(threadId);
+          if (td) {
+            td.activeForms = formManager.toData();
+            tree.writeThreadData(threadId, td);
+          }
+
+          consola.info(`[Engine] form.submit: ${form.command} (${form.formId})`);
+        }
+      }
+
+      if (iterResult.formCancel) {
+        const form = formManager.cancel(iterResult.formCancel.formId);
+        if (form) {
+          if (!formManager.activeCommands().has(form.command)) {
+            const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
+            for (const traitName of traitsToUnload) {
+              await tree.deactivateTrait(threadId, traitName);
+            }
+          }
+
+          const td = tree.readThreadData(threadId);
+          if (td) {
+            td.activeForms = formManager.toData();
+            td.actions.push({
+              type: "inject",
+              content: `Form ${form.formId} 已取消。`,
+              timestamp: Date.now(),
+            });
+            tree.writeThreadData(threadId, td);
+          }
+
+          consola.info(`[Engine] form.cancel: ${form.command} (${form.formId})`);
+        }
+      }
+
       /* debugMode 检查：单步执行后自动暂停 */
       if (threadData._debugMode) {
         consola.info(`[Engine] debugMode 单步完成, thread=${threadId}, 自动暂停`);
@@ -1287,6 +1381,9 @@ export async function resumeWithThreadTree(
   let debugLoopCounter = 0;
   let debugLoopCounterInitialized = false;
 
+  /* FormManager（resume 时从 threadData 恢复） */
+  let formManager: FormManager | null = null;
+
   const callbacks: SchedulerCallbacks = {
     runOneIteration: async (threadId: string, _objectName: string) => {
       totalIterations++;
@@ -1503,6 +1600,88 @@ export async function resumeWithThreadTree(
         }
 
         consola.info(`[Engine] useSkill "${skillName}" ${skillDef ? "已加载" : "未找到"}`);
+      }
+
+      /* 处理 form 操作（resume 时首次从 threadData 恢复 FormManager） */
+      if (!formManager) {
+        formManager = FormManager.fromData(threadData.activeForms ?? []);
+      }
+
+      if (iterResult.formBegin) {
+        const formId = formManager.begin(iterResult.formBegin.command, iterResult.formBegin.description);
+
+        const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommands());
+        for (const traitName of traitsToLoad) {
+          await tree.activateTrait(threadId, traitName);
+        }
+
+        const td = tree.readThreadData(threadId);
+        if (td) {
+          td.activeForms = formManager.toData();
+          td.actions.push({
+            type: "inject",
+            content: `Form ${formId} 已创建（${iterResult.formBegin.command}）。相关知识已加载。`,
+            timestamp: Date.now(),
+          });
+          tree.writeThreadData(threadId, td);
+        }
+
+        consola.info(`[Engine] form.begin: ${iterResult.formBegin.command} → ${formId}`);
+      }
+
+      if (iterResult.formSubmit) {
+        const form = formManager.submit(iterResult.formSubmit.formId);
+        if (!form) {
+          const td = tree.readThreadData(threadId);
+          if (td) {
+            td.actions.push({
+              type: "inject",
+              content: `[错误] Form ${iterResult.formSubmit.formId} 不存在。请重新 begin。`,
+              timestamp: Date.now(),
+            });
+            tree.writeThreadData(threadId, td);
+          }
+        } else {
+          if (!formManager.activeCommands().has(form.command)) {
+            const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
+            for (const traitName of traitsToUnload) {
+              await tree.deactivateTrait(threadId, traitName);
+            }
+          }
+
+          const td = tree.readThreadData(threadId);
+          if (td) {
+            td.activeForms = formManager.toData();
+            tree.writeThreadData(threadId, td);
+          }
+
+          consola.info(`[Engine] form.submit: ${form.command} (${form.formId})`);
+        }
+      }
+
+      if (iterResult.formCancel) {
+        const form = formManager.cancel(iterResult.formCancel.formId);
+        if (form) {
+          if (!formManager.activeCommands().has(form.command)) {
+            const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
+            for (const traitName of traitsToUnload) {
+              await tree.deactivateTrait(threadId, traitName);
+            }
+          }
+
+          const td = tree.readThreadData(threadId);
+          if (td) {
+            td.activeForms = formManager.toData();
+            td.actions.push({
+              type: "inject",
+              content: `Form ${form.formId} 已取消。`,
+              timestamp: Date.now(),
+            });
+            tree.writeThreadData(threadId, td);
+          }
+
+          consola.info(`[Engine] form.cancel: ${form.command} (${form.formId})`);
+        }
       }
 
       if (threadData._debugMode) {

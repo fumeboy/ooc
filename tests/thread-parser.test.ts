@@ -239,3 +239,84 @@ name = "commit"
     expect(result.useSkill!.name).toBe("commit");
   });
 });
+
+describe("parseThreadOutput — form operations", () => {
+  test("解析 [talk.begin]", () => {
+    const input = `
+[talk.begin]
+description = "通知 sophia"
+`;
+    const result = parseThreadOutput(input);
+    expect(result.formBegin).not.toBeNull();
+    expect(result.formBegin!.command).toBe("talk");
+    expect(result.formBegin!.description).toBe("通知 sophia");
+  });
+
+  test("解析 [talk.submit]", () => {
+    const input = `
+[talk.submit]
+form_id = "f_001"
+target = "sophia"
+message = "G1 已更新"
+`;
+    const result = parseThreadOutput(input);
+    expect(result.formSubmit).not.toBeNull();
+    expect(result.formSubmit!.command).toBe("talk");
+    expect(result.formSubmit!.formId).toBe("f_001");
+    expect(result.formSubmit!.params.target).toBe("sophia");
+    expect(result.formSubmit!.params.message).toBe("G1 已更新");
+  });
+
+  test("解析 [program.cancel]", () => {
+    const input = `
+[program.cancel]
+form_id = "f_002"
+`;
+    const result = parseThreadOutput(input);
+    expect(result.formCancel).not.toBeNull();
+    expect(result.formCancel!.command).toBe("program");
+    expect(result.formCancel!.formId).toBe("f_002");
+  });
+
+  test("form 操作与旧指令共存（兼容期）", () => {
+    const input = `
+[return]
+summary = "done"
+`;
+    const result = parseThreadOutput(input);
+    expect(result.threadReturn).not.toBeNull();
+    expect(result.formBegin).toBeNull();
+  });
+
+  test("[talk] 与 [talk.begin] 共存时两者都能解析", () => {
+    const input = `
+[talk]
+target = "sophia"
+message = "hello"
+
+[talk.begin]
+description = "准备发送消息"
+`;
+    const result = parseThreadOutput(input);
+    expect(result.talk).not.toBeNull();
+    expect(result.talk!.target).toBe("sophia");
+    expect(result.formBegin).not.toBeNull();
+    expect(result.formBegin!.command).toBe("talk");
+    expect(result.formBegin!.description).toBe("准备发送消息");
+  });
+
+  test("submit params 不包含 form_id", () => {
+    const input = `
+[talk.submit]
+form_id = "f_003"
+target = "sophia"
+message = "hi"
+priority = 1
+`;
+    const result = parseThreadOutput(input);
+    expect(result.formSubmit).not.toBeNull();
+    expect(result.formSubmit!.params).not.toHaveProperty("form_id");
+    expect(result.formSubmit!.params.target).toBe("sophia");
+    expect(result.formSubmit!.params.priority).toBe(1);
+  });
+});

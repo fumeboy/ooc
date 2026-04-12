@@ -81,6 +81,14 @@ export interface ThreadDataFile {
   _pendingThinkingOutput?: string;
   /** 单步调试模式：执行一轮后自动暂停 */
   _debugMode?: boolean;
+
+  /** 活跃的 form 列表（持久化，支持 resume） */
+  activeForms?: Array<{
+    formId: string;
+    command: string;
+    description: string;
+    createdAt: number;
+  }>;
 }
 
 /**

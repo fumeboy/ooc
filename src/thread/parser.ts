@@ -48,6 +48,25 @@ export interface UseSkillDirective {
   name: string;
 }
 
+/** form begin 指令 */
+export interface FormBeginDirective {
+  command: string;
+  description: string;
+}
+
+/** form submit 指令 */
+export interface FormSubmitDirective {
+  command: string;
+  formId: string;
+  params: Record<string, unknown>;
+}
+
+/** form cancel 指令 */
+export interface FormCancelDirective {
+  command: string;
+  formId: string;
+}
+
 /** continue_sub_thread 指令（向已创建的子线程追加消息） */
 export interface ContinueSubThreadDirective {
   threadId: string;
@@ -82,6 +101,12 @@ export interface ThreadParsedOutput {
   setPlan: string | null;
   /** 使用 skill */
   useSkill: UseSkillDirective | null;
+  /** form begin 操作 */
+  formBegin: FormBeginDirective | null;
+  /** form submit 操作 */
+  formSubmit: FormSubmitDirective | null;
+  /** form cancel 操作 */
+  formCancel: FormCancelDirective | null;
 }
 
 /**
@@ -108,6 +133,9 @@ export function parseThreadOutput(output: string): ThreadParsedOutput {
     continueSubThread: null,
     setPlan: null,
     useSkill: null,
+    formBegin: null,
+    formSubmit: null,
+    formCancel: null,
   };
 
   /* 单次 TOML 解析 */
@@ -237,6 +265,40 @@ export function parseThreadOutput(output: string): ThreadParsedOutput {
     const us = parsed.use_skill as Record<string, unknown>;
     if (typeof us.name === "string" && us.name) {
       result.useSkill = { name: us.name };
+    }
+  }
+
+  /* form 操作解析：TOML 中 [talk.begin] 解析为 { talk: { begin: { ... } } } */
+  const formActions = ["begin", "submit", "cancel"] as const;
+  for (const key of Object.keys(parsed)) {
+    const section = parsed[key];
+    if (!section || typeof section !== "object") continue;
+
+    const sectionObj = section as Record<string, unknown>;
+    for (const action of formActions) {
+      const actionData = sectionObj[action];
+      if (!actionData || typeof actionData !== "object") continue;
+
+      const data = actionData as Record<string, unknown>;
+
+      if (action === "begin" && !result.formBegin) {
+        result.formBegin = {
+          command: key,
+          description: typeof data.description === "string" ? data.description : "",
+        };
+      } else if (action === "submit" && !result.formSubmit) {
+        const formId = typeof data.form_id === "string" ? data.form_id : "";
+        const params: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(data)) {
+          if (k !== "form_id") params[k] = v;
+        }
+        result.formSubmit = { command: key, formId, params };
+      } else if (action === "cancel" && !result.formCancel) {
+        result.formCancel = {
+          command: key,
+          formId: typeof data.form_id === "string" ? data.form_id : "",
+        };
+      }
     }
   }
 

@@ -506,3 +506,95 @@ thread_id = "t1"
     expect(result.useSkill).toBeNull();
   });
 });
+
+describe("runThreadIteration — form operations", () => {
+  test("透传 formBegin", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: { r: makeNode("r") },
+    };
+    const threadData: ThreadDataFile = { id: "r", actions: [] };
+    const llmOutput = `
+[talk.begin]
+description = "通知 sophia"
+`;
+    const input: ThreadIterationInput = {
+      tree, threadId: "r", threadData, llmOutput,
+      stone: { name: "obj", thinkable: { whoAmI: "test" } } as any,
+      traits: [],
+    };
+    const result = runThreadIteration(input);
+    expect(result.formBegin).not.toBeNull();
+    expect(result.formBegin!.command).toBe("talk");
+    expect(result.formBegin!.description).toBe("通知 sophia");
+  });
+
+  test("透传 formSubmit", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: { r: makeNode("r") },
+    };
+    const threadData: ThreadDataFile = { id: "r", actions: [] };
+    const llmOutput = `
+[talk.submit]
+form_id = "f_001"
+target = "sophia"
+message = "hello"
+`;
+    const input: ThreadIterationInput = {
+      tree, threadId: "r", threadData, llmOutput,
+      stone: { name: "obj", thinkable: { whoAmI: "test" } } as any,
+      traits: [],
+    };
+    const result = runThreadIteration(input);
+    expect(result.formSubmit).not.toBeNull();
+    expect(result.formSubmit!.command).toBe("talk");
+    expect(result.formSubmit!.formId).toBe("f_001");
+    expect(result.formSubmit!.params.target).toBe("sophia");
+  });
+
+  test("透传 formCancel", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: { r: makeNode("r") },
+    };
+    const threadData: ThreadDataFile = { id: "r", actions: [] };
+    const llmOutput = `
+[program.cancel]
+form_id = "f_002"
+`;
+    const input: ThreadIterationInput = {
+      tree, threadId: "r", threadData, llmOutput,
+      stone: { name: "obj", thinkable: { whoAmI: "test" } } as any,
+      traits: [],
+    };
+    const result = runThreadIteration(input);
+    expect(result.formCancel).not.toBeNull();
+    expect(result.formCancel!.command).toBe("program");
+    expect(result.formCancel!.formId).toBe("f_002");
+  });
+
+  test("return 优先于 form 操作（return 后 form 被忽略）", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: { r: makeNode("r") },
+    };
+    const threadData: ThreadDataFile = { id: "r", actions: [] };
+    const llmOutput = `
+[talk.begin]
+description = "test"
+
+[return]
+summary = "done"
+`;
+    const input: ThreadIterationInput = {
+      tree, threadId: "r", threadData, llmOutput,
+      stone: { name: "obj", thinkable: { whoAmI: "test" } } as any,
+      traits: [],
+    };
+    const result = runThreadIteration(input);
+    expect(result.statusChange).toBe("done");
+    /* return 后 early exit，form 不会被透传 */
+    expect(result.formBegin).toBeNull();
+  });
+});

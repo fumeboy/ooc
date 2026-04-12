@@ -28,7 +28,7 @@ import type {
   ThreadStatus,
 } from "./types.js";
 import { parseThreadOutput } from "./parser.js";
-import type { UseSkillDirective } from "./parser.js";
+import type { UseSkillDirective, FormBeginDirective, FormSubmitDirective, FormCancelDirective } from "./parser.js";
 import type { ProgramSection, TalkSection } from "../toml/parser.js";
 import { collectBeforeHooks, collectAfterHooks } from "./hooks.js";
 import { computeThreadScopeChain } from "./context-builder.js";
@@ -115,6 +115,12 @@ export interface ThreadIterationResult {
    * 本函数不执行 IO，只传递解析结果给调用方。
    */
   useSkill: UseSkillDirective | null;
+  /** form begin 操作（engine 负责创建 form + 加载 trait） */
+  formBegin: FormBeginDirective | null;
+  /** form submit 操作（engine 负责执行指令 + 卸载 trait） */
+  formSubmit: FormSubmitDirective | null;
+  /** form cancel 操作（engine 负责取消 form + 卸载 trait） */
+  formCancel: FormCancelDirective | null;
 }
 
 /**
@@ -147,6 +153,9 @@ export function runThreadIteration(input: ThreadIterationInput): ThreadIteration
     program: null,
     talks: null,
     useSkill: null,
+    formBegin: null,
+    formSubmit: null,
+    formCancel: null,
   };
 
   /* 1. 解析 LLM 输出 */
@@ -338,6 +347,11 @@ export function runThreadIteration(input: ThreadIterationInput): ThreadIteration
 
   /* 9b. 传递 useSkill 给调用方（engine 负责读取文件） */
   if (parsed.useSkill) result.useSkill = parsed.useSkill;
+
+  /* 9c. 传递 form 操作给调用方（engine 负责 FormManager 管理） */
+  if (parsed.formBegin) result.formBegin = parsed.formBegin;
+  if (parsed.formSubmit) result.formSubmit = parsed.formSubmit;
+  if (parsed.formCancel) result.formCancel = parsed.formCancel;
 
   /* 10. 处理 talk_sync（同步 talk：发送消息后自动 wait） */
   if (parsed.talkSync && !result.statusChange) {
