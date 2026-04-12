@@ -245,15 +245,50 @@ export function parseThreadOutput(output: string): ThreadParsedOutput {
 
 /**
  * 安全解析 TOML（失败返回 null）
+ *
+ * 三层容错策略：
+ * 1. 提取所有 ```toml...``` 代码块内容合并后解析
+ * 2. 剥离纯文本前缀，从第一个 `[` 开始解析
+ * 3. 原始文本直接解析
  */
 function safeParseToml(text: string): Record<string, unknown> | null {
-  try {
-    /* 去掉 toml fence */
-    const trimmed = text.trim();
-    const match = trimmed.match(/^```(?:toml)?\s*\n([\s\S]*?)\n```$/i);
-    const raw = match?.[1] ?? text;
+  const trimmed = text.trim();
 
-    return parseToml(raw) as Record<string, unknown>;
+  /* 策略 1：提取所有 ```toml...``` 或 ```...``` 代码块，合并内容 */
+  const fencePattern = /```(?:toml)?\s*\n([\s\S]*?)```/gi;
+  const blocks: string[] = [];
+  let fenceMatch: RegExpExecArray | null;
+  while ((fenceMatch = fencePattern.exec(trimmed)) !== null) {
+    blocks.push(fenceMatch[1]!.trim());
+  }
+  if (blocks.length > 0) {
+    const merged = blocks.join("\n\n");
+    try {
+      return parseToml(merged) as Record<string, unknown>;
+    } catch { /* 继续下一策略 */ }
+  }
+
+  /* 策略 2：剥离纯文本前缀，从第一个行首 `[` 开始解析（仅当文本不以 [ 开头时） */
+  if (!trimmed.startsWith("[")) {
+    const firstBracket = trimmed.indexOf("\n[");
+    if (firstBracket >= 0) {
+      const fromBracket = trimmed.slice(firstBracket + 1);
+      try {
+        return parseToml(fromBracket) as Record<string, unknown>;
+      } catch { /* 继续下一策略 */ }
+    }
+  }
+
+  /* 策略 2b：文本以 [ 开头（标准 TOML，直接解析） */
+  if (trimmed.startsWith("[")) {
+    try {
+      return parseToml(trimmed) as Record<string, unknown>;
+    } catch { /* 继续下一策略 */ }
+  }
+
+  /* 策略 3：原始文本直接解析（兜底） */
+  try {
+    return parseToml(text) as Record<string, unknown>;
   } catch {
     return null;
   }
