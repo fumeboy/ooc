@@ -50,6 +50,29 @@ G1 基因已更新。
 | `use_skill` | 按需加载 Skill |
 | `call_function` | 直接调用 trait 方法（不需要写代码） |
 
+## call_function 用法
+
+直接调用 trait 方法，比 program 更简洁。
+
+begin 时必须指定 `trait`（完整路径）和 `function_name`：
+
+```toml
+[call_function.begin]
+trait = "kernel/computable/file_ops"
+function_name = "readFile"
+description = "读取 meta.md"
+```
+
+submit 时用 `args` 传参（TOML 内联表）：
+
+```toml
+[call_function.submit]
+form_id = "f_001"
+args = { path = "docs/meta.md", limit = 10 }
+```
+
+系统执行函数并将结果注入到执行历史中。
+
 ## 规则
 
 1. 每轮输出只能包含一个 form 操作（begin/submit/cancel 三选一）
