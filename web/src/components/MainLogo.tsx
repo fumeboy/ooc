@@ -1,13 +1,8 @@
 /**
  * MainLogo — 左边栏专用 Logo 组件
  *
- * 在 OocLogo 基础上增加 4 个药丸形状的卫星按钮，缓慢围绕 Logo 旋转。
- * - btn1（0°）：灰色空置
- * - btn2（90°）：debug 模式切换
- * - btn3（180°）：灰色空置
- * - btn4（270°）：全局 pause 切换
- *
- * Logo 颜色随状态变化（带淡入淡出动画）
+ * OocLogo + 三个药丸按钮（debug、pause、online）水平排列在 Logo 标题下方。
+ * Logo 颜色随状态变化（带淡入淡出动画）。
  */
 import { useAtom } from "jotai";
 import { useEffect } from "react";
@@ -24,7 +19,7 @@ import {
 } from "../api/client";
 
 /** 药丸按钮的统一尺寸 */
-const PILL_STYLE = "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] transition-colors whitespace-nowrap min-w-[52px] h-[18px] justify-center";
+const PILL_STYLE = "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] transition-colors whitespace-nowrap h-[18px] justify-center";
 
 /** 带 toggle 开关的药丸按钮 */
 function TogglePill({
@@ -50,7 +45,7 @@ function TogglePill({
           ? "text-white"
           : "bg-[var(--accent)] text-[var(--muted-foreground)] hover:bg-[var(--accent)]/80 opacity-70",
       )}
-      style={active ? { backgroundColor: activeColor+"90" } : undefined}
+      style={active ? { backgroundColor: activeColor + "90" } : undefined}
     >
       <span className="relative w-5 h-3 rounded-full bg-black/20 shrink-0">
         <span
@@ -62,13 +57,6 @@ function TogglePill({
       </span>
       <span>{active ? activeLabel : label}</span>
     </button>
-  );
-}
-
-/** 灰色空置药丸（和 TogglePill 相同尺寸） */
-function PlaceholderPill() {
-  return (
-    <div className={cn(PILL_STYLE, "bg-[var(--accent)]/50 opacity-70 cursor-default")} />
   );
 }
 
@@ -92,15 +80,6 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
           : "#000";
 
   const logoPx = isMobile ? 80 : 120;
-  const containerSize = logoPx + 40; // 紧凑容器，按钮会和 Logo 重叠
-  const r = logoPx * 0.45; // 按钮到中心的距离（紧贴 Logo）
-  const tilt = 5; // 整体倾斜角度（与 Logo 一致）
-
-  // 四角位置：左上(225°) 右上(315°) 左下(135°) 右下(45°)，加上 tilt 偏移
-  const positions = [225, 315, 135, 45].map((deg) => {
-    const rad = ((deg + tilt) * Math.PI) / 180;
-    return { x: Math.cos(rad) * r, y: Math.sin(rad) * r };
-  }); // 容器需要足够大容纳旋转的按钮
 
   const toggleDebug = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -119,48 +98,11 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
   };
 
   return (
-    <div
-      className="relative"
-      style={{ width: containerSize, height: containerSize }}
-    >
-      {/* Logo 居中 */}
-      <div
-        className="absolute"
-        style={{
-          top: (containerSize - logoPx) / 2,
-          left: (containerSize - logoPx) / 2,
-        }}
-      >
-        <OocLogo px={logoPx} color={logoColor} />
-      </div>
+    <div className="flex flex-col items-center">
+      <OocLogo px={logoPx} color={logoColor} />
 
-      {/* btn1（左上）：空置 */}
-      {/* <div className="absolute" style={{
-        top: "50%", left: "50%",
-        transform: `translate(calc(-50% + ${positions[0]!.x}px), calc(-50% + ${positions[0]!.y}px)) rotate(${tilt}deg)`,
-      }}>
-        <PlaceholderPill />
-      </div> */}
-
-      {/* btn2（右上）：debug */}
-      <div className="absolute" style={{
-        top: "50%", left: "60%",
-        transform: `translate(calc(-50% + ${positions[1]!.x}px), calc(-50% + ${positions[1]!.y}px)) rotate(${tilt}deg)`,
-      }}>
-        <TogglePill
-          active={debugEnabled}
-          activeColor="#8B5CF6"
-          label="debug"
-          activeLabel="debug"
-          onClick={toggleDebug}
-        />
-      </div>
-
-      {/* btn3（左下）：全局 pause */}
-      <div className="absolute" style={{
-        top: "50%", left: "40%",
-        transform: `translate(calc(-50% + ${positions[2]!.x}px), calc(-50% + ${positions[2]!.y}px)) rotate(${tilt+5}deg)`,
-      }}>
+      {/* 三个药丸按钮水平排列 */}
+      <div className="flex items-center gap-1 mt-1">
         <TogglePill
           active={globalPaused}
           activeColor="#F97316"
@@ -168,13 +110,13 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
           activeLabel="paused"
           onClick={toggleGlobalPause}
         />
-      </div>
-
-      {/* btn4（右下）：网络状态 */}
-      <div className="absolute" style={{
-        top: "50%", left: "50%",
-        transform: `translate(calc(-50% + ${positions[3]!.x}px), calc(-50% + ${positions[3]!.y}px)) rotate(${tilt}deg)`,
-      }}>
+        <TogglePill
+          active={debugEnabled}
+          activeColor="#8B5CF6"
+          label="debug"
+          activeLabel="debug"
+          onClick={toggleDebug}
+        />
         <div
           className={cn(
             PILL_STYLE,
