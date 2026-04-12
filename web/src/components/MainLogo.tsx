@@ -113,7 +113,7 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
     debugEnabled && globalPaused
       ? "gradient"
       : debugEnabled
-        ? "#EAB308"
+        ? "#8B5CF6"
         : globalPaused
           ? "#F97316"
           : "#000";
@@ -154,24 +154,24 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
         <OocLogo px={logoPx} color={logoColor} />
       </div>
 
-      {/* 旋转轨道（60s 一圈，初始倾斜 95° 与 Logo 星型一致） */}
+      {/* 旋转轨道（60s 一圈，初始倾斜 5° 与 Logo 星型一致） */}
       <div
         className="absolute inset-0"
-        style={{ animation: "spin 60s linear infinite", transform: "rotate(95deg)" }}
+        style={{ animation: "spin 60s linear infinite", transform: "rotate(5deg)" }}
       >
         {/* btn1（0° = 右）：空置 */}
         <SatelliteSlot angle={0} radius={orbitRadius}>
-          <div style={{ animation: "spin 60s linear infinite reverse", transform: "rotate(-95deg)" }}>
+          <div style={{ animation: "spin 60s linear infinite reverse", transform: "rotate(-5deg)" }}>
             <PlaceholderPill />
           </div>
         </SatelliteSlot>
 
         {/* btn2（90° = 下）：debug */}
         <SatelliteSlot angle={90} radius={orbitRadius}>
-          <div style={{ animation: "spin 60s linear infinite reverse", transform: "rotate(-95deg)" }}>
+          <div style={{ animation: "spin 60s linear infinite reverse", transform: "rotate(-5deg)" }}>
             <TogglePill
               active={debugEnabled}
-              activeColor="#EAB308"
+              activeColor="#8B5CF6"
               label="debug"
               activeLabel="debug"
               onClick={toggleDebug}
@@ -181,14 +181,14 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
 
         {/* btn3（180° = 左）：空置 */}
         <SatelliteSlot angle={180} radius={orbitRadius}>
-          <div style={{ animation: "spin 60s linear infinite reverse", transform: "rotate(-95deg)" }}>
+          <div style={{ animation: "spin 60s linear infinite reverse", transform: "rotate(-5deg)" }}>
             <PlaceholderPill />
           </div>
         </SatelliteSlot>
 
         {/* btn4（270° = 上）：全局 pause */}
         <SatelliteSlot angle={270} radius={orbitRadius}>
-          <div style={{ animation: "spin 60s linear infinite reverse", transform: "rotate(-95deg)" }}>
+          <div style={{ animation: "spin 60s linear infinite reverse", transform: "rotate(-5deg)" }}>
             <TogglePill
               active={globalPaused}
               activeColor="#F97316"
