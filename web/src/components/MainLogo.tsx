@@ -91,7 +91,15 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
           : "#000";
 
   const logoPx = isMobile ? 80 : 120;
-  const containerSize = logoPx + 80; // 容器需要足够大容纳旋转的按钮
+  const containerSize = logoPx + 40; // 紧凑容器，按钮会和 Logo 重叠
+  const r = logoPx * 0.45; // 按钮到中心的距离（紧贴 Logo）
+  const tilt = 5; // 整体倾斜角度（与 Logo 一致）
+
+  // 四角位置：左上(225°) 右上(315°) 左下(135°) 右下(45°)，加上 tilt 偏移
+  const positions = [225, 315, 135, 45].map((deg) => {
+    const rad = ((deg + tilt) * Math.PI) / 180;
+    return { x: Math.cos(rad) * r, y: Math.sin(rad) * r };
+  }); // 容器需要足够大容纳旋转的按钮
 
   const toggleDebug = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -126,12 +134,18 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
       </div>
 
       {/* btn1（左上）：空置 */}
-      <div className="absolute" style={{ top: 0, left: 0 }}>
+      <div className="absolute" style={{
+        top: "50%", left: "50%",
+        transform: `translate(calc(-50% + ${positions[0]!.x}px), calc(-50% + ${positions[0]!.y}px)) rotate(${tilt}deg)`,
+      }}>
         <PlaceholderPill />
       </div>
 
       {/* btn2（右上）：debug */}
-      <div className="absolute" style={{ top: 0, right: 0 }}>
+      <div className="absolute" style={{
+        top: "50%", left: "50%",
+        transform: `translate(calc(-50% + ${positions[1]!.x}px), calc(-50% + ${positions[1]!.y}px)) rotate(${tilt}deg)`,
+      }}>
         <TogglePill
           active={debugEnabled}
           activeColor="#8B5CF6"
@@ -142,12 +156,18 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
       </div>
 
       {/* btn3（左下）：空置 */}
-      <div className="absolute" style={{ bottom: 0, left: 0 }}>
+      <div className="absolute" style={{
+        top: "50%", left: "50%",
+        transform: `translate(calc(-50% + ${positions[2]!.x}px), calc(-50% + ${positions[2]!.y}px)) rotate(${tilt}deg)`,
+      }}>
         <PlaceholderPill />
       </div>
 
       {/* btn4（右下）：全局 pause */}
-      <div className="absolute" style={{ bottom: 0, right: 0 }}>
+      <div className="absolute" style={{
+        top: "50%", left: "50%",
+        transform: `translate(calc(-50% + ${positions[3]!.x}px), calc(-50% + ${positions[3]!.y}px)) rotate(${tilt}deg)`,
+      }}>
         <TogglePill
           active={globalPaused}
           activeColor="#F97316"
