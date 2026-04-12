@@ -72,34 +72,6 @@ function PlaceholderPill() {
   );
 }
 
-/** 卫星按钮定位（椭圆轨道：水平轴 = radius，垂直轴 = radius * 0.8） */
-function SatelliteSlot({
-  angle,
-  radius,
-  children,
-}: {
-  angle: number;
-  radius: number;
-  children: React.ReactNode;
-}) {
-  const rad = (angle * Math.PI) / 180;
-  const x = Math.cos(rad) * radius;
-  const y = Math.sin(rad) * radius * 0.8; // 垂直轴缩短 1/5
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: "50%",
-        top: "50%",
-        transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
 export function MainLogo({ isMobile }: { isMobile?: boolean }) {
   const [debugEnabled, setDebugEnabled] = useAtom(debugEnabledAtom);
   const [globalPaused, setGlobalPaused] = useAtom(globalPausedAtom);
@@ -119,7 +91,6 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
           : "#000";
 
   const logoPx = isMobile ? 80 : 120;
-  const orbitRadius = logoPx * 0.52; // 按钮轨道半径（紧贴 Logo）
   const containerSize = logoPx + 80; // 容器需要足够大容纳旋转的按钮
 
   const toggleDebug = async (e: React.MouseEvent) => {
@@ -154,50 +125,36 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
         <OocLogo px={logoPx} color={logoColor} />
       </div>
 
-      {/* 旋转轨道（60s 一圈，初始倾斜 5° 与 Logo 星型一致） */}
-      <div
-        className="absolute inset-0"
-        style={{ animation: "spin 60s linear infinite", transform: "rotate(5deg)" }}
-      >
-        {/* btn1（0° = 右）：空置 */}
-        <SatelliteSlot angle={0} radius={orbitRadius}>
-          <div style={{ animation: "spin 60s linear infinite reverse", transform: "rotate(-5deg)" }}>
-            <PlaceholderPill />
-          </div>
-        </SatelliteSlot>
+      {/* btn1（左上）：空置 */}
+      <div className="absolute" style={{ top: 0, left: 0 }}>
+        <PlaceholderPill />
+      </div>
 
-        {/* btn2（90° = 下）：debug */}
-        <SatelliteSlot angle={90} radius={orbitRadius}>
-          <div style={{ animation: "spin 60s linear infinite reverse", transform: "rotate(-5deg)" }}>
-            <TogglePill
-              active={debugEnabled}
-              activeColor="#8B5CF6"
-              label="debug"
-              activeLabel="debug"
-              onClick={toggleDebug}
-            />
-          </div>
-        </SatelliteSlot>
+      {/* btn2（右上）：debug */}
+      <div className="absolute" style={{ top: 0, right: 0 }}>
+        <TogglePill
+          active={debugEnabled}
+          activeColor="#8B5CF6"
+          label="debug"
+          activeLabel="debug"
+          onClick={toggleDebug}
+        />
+      </div>
 
-        {/* btn3（180° = 左）：空置 */}
-        <SatelliteSlot angle={180} radius={orbitRadius}>
-          <div style={{ animation: "spin 60s linear infinite reverse", transform: "rotate(-5deg)" }}>
-            <PlaceholderPill />
-          </div>
-        </SatelliteSlot>
+      {/* btn3（左下）：空置 */}
+      <div className="absolute" style={{ bottom: 0, left: 0 }}>
+        <PlaceholderPill />
+      </div>
 
-        {/* btn4（270° = 上）：全局 pause */}
-        <SatelliteSlot angle={270} radius={orbitRadius}>
-          <div style={{ animation: "spin 60s linear infinite reverse", transform: "rotate(-5deg)" }}>
-            <TogglePill
-              active={globalPaused}
-              activeColor="#F97316"
-              label="pause"
-              activeLabel="paused"
-              onClick={toggleGlobalPause}
-            />
-          </div>
-        </SatelliteSlot>
+      {/* btn4（右下）：全局 pause */}
+      <div className="absolute" style={{ bottom: 0, right: 0 }}>
+        <TogglePill
+          active={globalPaused}
+          activeColor="#F97316"
+          label="pause"
+          activeLabel="paused"
+          onClick={toggleGlobalPause}
+        />
       </div>
     </div>
   );
