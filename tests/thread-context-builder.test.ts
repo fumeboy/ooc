@@ -72,7 +72,7 @@ describe("computeThreadScopeChain", () => {
         b: makeNode("b", {
           parentId: "a",
           traits: ["domain/ai_safety"],
-          activatedTraits: ["kernel/web_search"],
+          activatedTraits: ["kernel/computable/web_search"],
         }),
       },
     };
@@ -81,7 +81,7 @@ describe("computeThreadScopeChain", () => {
     expect(chain).toContain("kernel/talkable");
     expect(chain).toContain("academic_writing");
     expect(chain).toContain("domain/ai_safety");
-    expect(chain).toContain("kernel/web_search");
+    expect(chain).toContain("kernel/computable/web_search");
   });
 
   test("去重：相同 trait 不重复", () => {

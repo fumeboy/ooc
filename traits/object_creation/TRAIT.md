@@ -2,7 +2,9 @@
 name: kernel/object_creation
 type: how_to_interact
 version: 1.0.0
-when: 当需要创建新对象或完善对象身份时
+when: never
+command_binding:
+  commands: ["create_sub_thread"]
 description: 创建新对象或完善对象身份的指南
 deps: []
 ---

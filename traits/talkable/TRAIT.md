@@ -2,7 +2,9 @@
 name: kernel/talkable
 type: how_to_interact
 version: 1.0.0
-when: always
+when: never
+command_binding:
+  commands: ["talk", "talk_sync", "return"]
 description: 对象间通信协议，talk/delegate/reply 消息传递
 deps: ["kernel/computable"]
 hooks:

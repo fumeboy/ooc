@@ -2,7 +2,9 @@
 name: kernel/reflective
 type: how_to_think
 version: 1.0.0
-when: always
+when: never
+command_binding:
+  commands: ["return"]
 description: 经验结晶与自我反思，ReflectFlow 驱动的持续学习
 deps: []
 hooks:

@@ -75,8 +75,8 @@ export function buildContext(
     "kernel/debuggable",
     "kernel/plannable",
     "kernel/reflective",
-    "kernel/web_search",
-    "kernel/testable",
+    "kernel/computable/web_search",
+    "kernel/computable/testable",
     "kernel/reviewable",
     "kernel/computable",
   ]);

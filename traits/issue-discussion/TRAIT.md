@@ -2,7 +2,9 @@
 name: kernel/issue-discussion
 type: how_to_think
 version: 1.0.0
-when: always
+when: never
+command_binding:
+  commands: ["talk", "talk_sync"]
 description: Issue 讨论能力，所有对象可通过此 trait 参与 issue 评论
 deps: []
 ---

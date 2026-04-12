@@ -6,8 +6,8 @@
  */
 
 import { resolve, relative } from "path";
-import { toolOk, toolErr } from "../../src/types/tool-result";
-import type { ToolResult } from "../../src/types/tool-result";
+import { toolOk, toolErr } from "../../../src/types/tool-result";
+import type { ToolResult } from "../../../src/types/tool-result";
 
 /** 默认忽略的目录列表 */
 const DEFAULT_IGNORE = ["node_modules", ".git", ".存档"];

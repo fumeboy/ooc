@@ -1,8 +1,8 @@
 ---
-name: kernel/file_ops
+name: kernel/computable/file_ops
 type: how_to_use_tool
 version: 1.0.0
-when: always
+when: never
 description: 文件读写、编辑、目录操作能力
 deps: []
 ---

@@ -1,8 +1,8 @@
 ---
-name: kernel/file_search
+name: kernel/computable/file_search
 type: how_to_use_tool
 version: 1.0.0
-when: always
+when: never
 description: 文件名模式匹配和内容搜索能力
 deps: []
 ---

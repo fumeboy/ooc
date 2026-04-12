@@ -2,7 +2,9 @@
 name: kernel/verifiable
 type: how_to_think
 version: 1.0.0
-when: always
+when: never
+command_binding:
+  commands: ["return"]
 description: 证据先于结论，完成前必须运行验证，禁止凭记忆声称通过
 deps: []
 hooks:

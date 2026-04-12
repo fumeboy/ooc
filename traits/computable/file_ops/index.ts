@@ -6,8 +6,8 @@
  */
 
 import { resolve } from "path";
-import { toolOk, toolErr } from "../../src/types/tool-result";
-import type { ToolResult } from "../../src/types/tool-result";
+import { toolOk, toolErr } from "../../../src/types/tool-result";
+import type { ToolResult } from "../../../src/types/tool-result";
 
 /** 路径解析：绝对路径直接用，相对路径基于 rootDir */
 const resolvePath = (rootDir: string, p: string) =>

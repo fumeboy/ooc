@@ -1,8 +1,8 @@
 ---
-name: kernel/web_search
+name: kernel/computable/web_search
 type: how_to_use_tool
 version: 1.0.0
-when: always
+when: never
 description: 互联网搜索和网页抓取能力
 deps: []
 ---

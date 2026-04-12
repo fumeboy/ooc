@@ -2,7 +2,9 @@
 name: kernel/reviewable
 type: how_to_think
 version: 1.0.0
-when: 当完成一个功能或修复后，需要审查质量时
+when: never
+command_binding:
+  commands: ["program"]
 description: 两阶段审查：先验证合规性（做对了吗），再验证质量（做好了吗）
 deps:
   - verifiable

@@ -2,7 +2,9 @@
 name: kernel/library_index
 type: how_to_use_tool
 version: 1.0.0
-when: always
+when: never
+command_binding:
+  commands: ["program"]
 description: Library 公共资源索引，让对象知道如何查找和使用 library 中的 traits 和 UI 组件
 deps: []
 ---

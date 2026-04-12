@@ -2,7 +2,9 @@
 name: kernel/computable
 type: how_to_think
 version: 1.0.0
-when: always
+when: never
+command_binding:
+  commands: ["program"]
 description: 认知栈思维模式 — 用行为树结构化你的思考过程
 deps: ["kernel/computable/output_format"]
 hooks:

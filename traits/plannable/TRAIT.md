@@ -2,7 +2,9 @@
 name: kernel/plannable
 type: how_to_think
 version: 1.0.0
-when: 当任务包含多个步骤、需要拆解、或不确定从哪里开始时
+when: never
+command_binding:
+  commands: ["create_sub_thread", "continue_sub_thread"]
 description: 任务拆解和行为树规划，先想清楚再动手
 deps: ["kernel/computable"]
 ---

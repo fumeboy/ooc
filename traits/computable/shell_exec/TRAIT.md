@@ -1,8 +1,8 @@
 ---
-name: kernel/shell_exec
+name: kernel/computable/shell_exec
 type: how_to_use_tool
 version: 1.0.0
-when: always
+when: never
 description: 执行 Shell 命令，支持自定义超时和工作目录
 deps: []
 ---
