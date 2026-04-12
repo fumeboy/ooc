@@ -1,17 +1,13 @@
 /**
  * MainLogo — 左边栏专用 Logo 组件
  *
- * 在 OocLogo 基础上增加 4 个药丸形状的卫星按钮：
- * - btn1（上）：灰色空置
- * - btn2（右）：debug 模式切换
- * - btn3（下）：灰色空置
- * - btn4（左）：全局 pause 切换
+ * 在 OocLogo 基础上增加 4 个药丸形状的卫星按钮，缓慢围绕 Logo 旋转。
+ * - btn1（0°）：灰色空置
+ * - btn2（90°）：debug 模式切换
+ * - btn3（180°）：灰色空置
+ * - btn4（270°）：全局 pause 切换
  *
- * Logo 颜色随状态变化（带淡入淡出动画）：
- * - 默认：黑色
- * - debug on：黄色
- * - globalPause on：橙色
- * - 两者都 on：黄→橙渐变
+ * Logo 颜色随状态变化（带淡入淡出动画）
  */
 import { useAtom } from "jotai";
 import { useEffect } from "react";
@@ -27,7 +23,10 @@ import {
   getGlobalPauseStatus,
 } from "../api/client";
 
-/** 带 toggle 开关的药丸按钮（横向，和 MessageSidebar 的 pause 按钮风格一致） */
+/** 药丸按钮的统一尺寸 */
+const PILL_STYLE = "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] transition-colors whitespace-nowrap min-w-[52px] h-[18px] justify-center";
+
+/** 带 toggle 开关的药丸按钮 */
 function TogglePill({
   active,
   activeColor,
@@ -39,21 +38,20 @@ function TogglePill({
   activeColor: string;
   label: string;
   activeLabel: string;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent) => void;
 }) {
   return (
     <button
       onClick={onClick}
       title={active ? activeLabel : label}
       className={cn(
-        "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] transition-colors whitespace-nowrap",
+        PILL_STYLE,
         active
-          ? `text-white`
-          : "bg-[var(--accent)] text-[var(--muted-foreground)] hover:bg-[var(--accent)]/80",
+          ? "text-white"
+          : "bg-[var(--accent)] text-[var(--muted-foreground)] hover:bg-[var(--accent)]/80 opacity-70",
       )}
       style={active ? { backgroundColor: activeColor } : undefined}
     >
-      {/* mini toggle */}
       <span className="relative w-5 h-3 rounded-full bg-black/20 shrink-0">
         <span
           className={cn(
@@ -67,13 +65,38 @@ function TogglePill({
   );
 }
 
-/** 灰色空置药丸 */
+/** 灰色空置药丸（和 TogglePill 相同尺寸） */
 function PlaceholderPill() {
   return (
+    <div className={cn(PILL_STYLE, "bg-[var(--accent)]/50 opacity-70 cursor-default")} />
+  );
+}
+
+/** 卫星按钮定位（绝对定位在轨道上，反向旋转保持文字水平） */
+function SatelliteSlot({
+  angle,
+  radius,
+  children,
+}: {
+  angle: number;
+  radius: number;
+  children: React.ReactNode;
+}) {
+  const rad = (angle * Math.PI) / 180;
+  const x = Math.cos(rad) * radius;
+  const y = Math.sin(rad) * radius;
+
+  return (
     <div
-      className="rounded-full bg-[var(--accent)]/50"
-      style={{ width: 28, height: 10 }}
-    />
+      style={{
+        position: "absolute",
+        left: "50%",
+        top: "50%",
+        transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`,
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -81,13 +104,11 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
   const [debugEnabled, setDebugEnabled] = useAtom(debugEnabledAtom);
   const [globalPaused, setGlobalPaused] = useAtom(globalPausedAtom);
 
-  /* 启动时同步状态 */
   useEffect(() => {
     getDebugStatus().then((r) => setDebugEnabled(r.debugEnabled)).catch(() => {});
     getGlobalPauseStatus().then((r) => setGlobalPaused(r.globalPaused)).catch(() => {});
   }, []);
 
-  /* Logo 颜色 */
   const logoColor =
     debugEnabled && globalPaused
       ? "gradient"
@@ -98,64 +119,85 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
           : "#000";
 
   const logoPx = isMobile ? 80 : 120;
+  const orbitRadius = logoPx * 0.52; // 按钮轨道半径（紧贴 Logo）
+  const containerSize = logoPx + 80; // 容器需要足够大容纳旋转的按钮
 
-  const toggleDebug = async () => {
+  const toggleDebug = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
-      if (debugEnabled) {
-        await disableDebug();
-        setDebugEnabled(false);
-      } else {
-        await enableDebug();
-        setDebugEnabled(true);
-      }
+      if (debugEnabled) { await disableDebug(); setDebugEnabled(false); }
+      else { await enableDebug(); setDebugEnabled(true); }
     } catch {}
   };
 
-  const toggleGlobalPause = async () => {
+  const toggleGlobalPause = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
-      if (globalPaused) {
-        await disableGlobalPause();
-        setGlobalPaused(false);
-      } else {
-        await enableGlobalPause();
-        setGlobalPaused(true);
-      }
+      if (globalPaused) { await disableGlobalPause(); setGlobalPaused(false); }
+      else { await enableGlobalPause(); setGlobalPaused(true); }
     } catch {}
   };
 
   return (
-    <div className="flex flex-col items-center gap-1.5">
-      {/* btn1（上）：空置 */}
-      <PlaceholderPill />
-
-      {/* 中间行：btn4 + Logo + btn2 */}
-      <div className="flex items-center gap-1.5">
-        {/* btn4（左）：全局 pause */}
-        <TogglePill
-          active={globalPaused}
-          activeColor="#F97316"
-          label="pause"
-          activeLabel="paused"
-          onClick={toggleGlobalPause}
-        />
-
-        {/* Logo（带颜色过渡动画） */}
-        <div style={{ transition: "filter 0.3s ease" }}>
-          <OocLogo px={logoPx} color={logoColor} />
-        </div>
-
-        {/* btn2（右）：debug 模式 */}
-        <TogglePill
-          active={debugEnabled}
-          activeColor="#EAB308"
-          label="debug"
-          activeLabel="debug"
-          onClick={toggleDebug}
-        />
+    <div
+      className="relative"
+      style={{ width: containerSize, height: containerSize }}
+    >
+      {/* Logo 居中 */}
+      <div
+        className="absolute"
+        style={{
+          top: (containerSize - logoPx) / 2,
+          left: (containerSize - logoPx) / 2,
+        }}
+      >
+        <OocLogo px={logoPx} color={logoColor} />
       </div>
 
-      {/* btn3（下）：空置 */}
-      <PlaceholderPill />
+      {/* 旋转轨道（60s 一圈） */}
+      <div
+        className="absolute inset-0 animate-[spin_60s_linear_infinite]"
+      >
+        {/* btn1（0° = 右）：空置 */}
+        <SatelliteSlot angle={0} radius={orbitRadius}>
+          <div style={{ transform: "rotate(0deg)", animation: "spin 60s linear infinite reverse" }}>
+            <PlaceholderPill />
+          </div>
+        </SatelliteSlot>
+
+        {/* btn2（90° = 下）：debug */}
+        <SatelliteSlot angle={90} radius={orbitRadius}>
+          <div style={{ animation: "spin 60s linear infinite reverse" }}>
+            <TogglePill
+              active={debugEnabled}
+              activeColor="#EAB308"
+              label="debug"
+              activeLabel="debug"
+              onClick={toggleDebug}
+            />
+          </div>
+        </SatelliteSlot>
+
+        {/* btn3（180° = 左）：空置 */}
+        <SatelliteSlot angle={180} radius={orbitRadius}>
+          <div style={{ animation: "spin 60s linear infinite reverse" }}>
+            <PlaceholderPill />
+          </div>
+        </SatelliteSlot>
+
+        {/* btn4（270° = 上）：全局 pause */}
+        <SatelliteSlot angle={270} radius={orbitRadius}>
+          <div style={{ animation: "spin 60s linear infinite reverse" }}>
+            <TogglePill
+              active={globalPaused}
+              activeColor="#F97316"
+              label="pause"
+              activeLabel="paused"
+              onClick={toggleGlobalPause}
+            />
+          </div>
+        </SatelliteSlot>
+      </div>
     </div>
   );
 }
