@@ -154,20 +154,21 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
         <OocLogo px={logoPx} color={logoColor} />
       </div>
 
-      {/* 旋转轨道（60s 一圈） */}
+      {/* 旋转轨道（60s 一圈，初始倾斜 95° 与 Logo 星型一致） */}
       <div
-        className="absolute inset-0 animate-[spin_60s_linear_infinite]"
+        className="absolute inset-0"
+        style={{ animation: "spin 60s linear infinite", transform: "rotate(95deg)" }}
       >
         {/* btn1（0° = 右）：空置 */}
         <SatelliteSlot angle={0} radius={orbitRadius}>
-          <div style={{ transform: "rotate(0deg)", animation: "spin 60s linear infinite reverse" }}>
+          <div style={{ animation: "spin 60s linear infinite reverse", transform: "rotate(-95deg)" }}>
             <PlaceholderPill />
           </div>
         </SatelliteSlot>
 
         {/* btn2（90° = 下）：debug */}
         <SatelliteSlot angle={90} radius={orbitRadius}>
-          <div style={{ animation: "spin 60s linear infinite reverse" }}>
+          <div style={{ animation: "spin 60s linear infinite reverse", transform: "rotate(-95deg)" }}>
             <TogglePill
               active={debugEnabled}
               activeColor="#EAB308"
@@ -180,14 +181,14 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
 
         {/* btn3（180° = 左）：空置 */}
         <SatelliteSlot angle={180} radius={orbitRadius}>
-          <div style={{ animation: "spin 60s linear infinite reverse" }}>
+          <div style={{ animation: "spin 60s linear infinite reverse", transform: "rotate(-95deg)" }}>
             <PlaceholderPill />
           </div>
         </SatelliteSlot>
 
         {/* btn4（270° = 上）：全局 pause */}
         <SatelliteSlot angle={270} radius={orbitRadius}>
-          <div style={{ animation: "spin 60s linear infinite reverse" }}>
+          <div style={{ animation: "spin 60s linear infinite reverse", transform: "rotate(-95deg)" }}>
             <TogglePill
               active={globalPaused}
               activeColor="#F97316"
