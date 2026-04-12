@@ -101,6 +101,14 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
     <div className="flex flex-col items-center">
       <OocLogo px={logoPx} color={logoColor} />
 
+      {/* Title */}
+      <h1
+        className="text-xs tracking-wide text-[var(--muted-foreground)] mt-1"
+        style={{ fontFamily: "monospace" }}
+      >
+        Oriented Object Context
+      </h1>
+
       {/* 三个药丸按钮水平排列 */}
       <div className="flex items-center gap-1 mt-1">
         <TogglePill

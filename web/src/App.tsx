@@ -461,14 +461,6 @@ export function App() {
     <div className="flex flex-col items-center h-full" style={{ width: "inherit" }}>
       <div className="flex flex-col items-center gap-1 px-4 py-4 shrink-0">
         <MainLogo isMobile={isMobile} />
-        <div className="flex items-center gap-1.5">
-          <h1
-            className="text-xs tracking-wide text-[var(--muted-foreground)]"
-            style={{ fontFamily: "monospace" }}
-          >
-            Oriented Object Context
-          </h1>
-        </div>
       </div>
 
       {/* Tab 切换 */}
