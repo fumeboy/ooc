@@ -28,11 +28,12 @@ function spiralPath(cx: number, cy: number, maxRadius: number, turns: number, st
 
 const SPIRAL_D = spiralPath(60, 60, 55, 4, 200);
 
-export function OocLogo({ size = "sm", px }: { size?: keyof typeof SIZES; px?: number }) {
+export function OocLogo({ size = "sm", px, color }: { size?: keyof typeof SIZES; px?: number; color?: string }) {
   const preset = SIZES[size];
   const dim = px ?? preset.px;
   const spiralW = "8";
   const radius = dim < 40 ? "rounded-lg" : dim < 80 ? "rounded-xl" : "rounded-2xl";
+  const fillColor = color ?? "#000";
 
   return (
     <div
@@ -41,18 +42,15 @@ export function OocLogo({ size = "sm", px }: { size?: keyof typeof SIZES; px?: n
     >
       {/* 底纹：阿基米德螺旋，从中心等距向外展开 4 圈，缓慢无限旋转 */}
       <svg viewBox="0 0 120 120" className="absolute inset-0 w-full h-full opacity-[0.15] animate-[spin_30s_linear_infinite]">
-        <path d={SPIRAL_D} fill="none" stroke="currentColor" strokeWidth={spiralW} strokeLinecap="round" transform="rotate(60 60 60)" />
+        <path d={SPIRAL_D} fill="none" stroke={fillColor} strokeWidth={spiralW} strokeLinecap="round" transform="rotate(60 60 60)" />
       </svg>
-      {/* 主图：三个不同大小的圆（对象）+ 连线（关系） */}
-      {/* <svg viewBox="18 12 72 80" className="relative" style={{ width: dim * 0.65, height: dim * 0.65 }} aria-label="OOC Logo">
-        <line x1="58" y1="32" x2="38" y2="65" stroke="currentColor" strokeWidth="3" />
-        <line x1="58" y1="32" x2="75" y2="72" stroke="currentColor" strokeWidth="3" />
-        <line x1="38" y1="65" x2="75" y2="72" stroke="currentColor" strokeWidth="3" />
-        <circle cx="58" cy="32" r="13" fill="currentColor" />
-        <circle cx="38" cy="65" r="9" fill="currentColor" />
-        <circle cx="75" cy="72" r="14" fill="currentColor" />
-      </svg> */}
       <svg xmlns="http://www.w3.org/2000/svg" transform="rotate(95 0 0)" viewBox="0 0 200 200" width="200" height="200">
+        <defs>
+          <linearGradient id="ooc-logo-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#EAB308" />
+            <stop offset="100%" stopColor="#F97316" />
+          </linearGradient>
+        </defs>
         <path d="M 98 36
            L 98 02
            A 2 2 0 0 1 102 02
@@ -71,7 +69,7 @@ export function OocLogo({ size = "sm", px }: { size?: keyof typeof SIZES; px?: n
            L 36 98
            A 62 62 0 0 0 98 36
            Z"
-          fill="#000" />
+          fill={fillColor === "gradient" ? "url(#ooc-logo-gradient)" : fillColor} />
       </svg>
     </div>
   );

@@ -234,3 +234,31 @@ export function connectSSE(onEvent: (event: SSEEvent) => void): () => void {
 
   return () => source.close();
 }
+
+/* ========== Debug 模式 ========== */
+
+export async function enableDebug(): Promise<{ debugEnabled: boolean }> {
+  return post("/debug/enable", {});
+}
+
+export async function disableDebug(): Promise<{ debugEnabled: boolean }> {
+  return post("/debug/disable", {});
+}
+
+export async function getDebugStatus(): Promise<{ debugEnabled: boolean }> {
+  return get("/debug/status");
+}
+
+/* ========== 全局暂停 ========== */
+
+export async function enableGlobalPause(): Promise<{ globalPaused: boolean }> {
+  return post("/global-pause/enable", {});
+}
+
+export async function disableGlobalPause(): Promise<{ globalPaused: boolean }> {
+  return post("/global-pause/disable", {});
+}
+
+export async function getGlobalPauseStatus(): Promise<{ globalPaused: boolean }> {
+  return get("/global-pause/status");
+}

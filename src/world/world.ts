@@ -66,6 +66,8 @@ export class World implements Routable {
   private readonly _useThreadTree: boolean;
   /** debug 模式开关 */
   private _debugEnabled = false;
+  /** 全局暂停开关 */
+  private _globalPaused = false;
 
   constructor(config: WorldConfig) {
     this._rootDir = config.rootDir;
@@ -89,6 +91,17 @@ export class World implements Routable {
 
   /** 查询 debug 模式状态 */
   isDebugEnabled(): boolean { return this._debugEnabled; }
+
+  /* ========== 全局暂停 ========== */
+
+  /** 开启全局暂停 */
+  enableGlobalPause(): void { this._globalPaused = true; }
+
+  /** 关闭全局暂停 */
+  disableGlobalPause(): void { this._globalPaused = false; }
+
+  /** 查询全局暂停状态 */
+  isGlobalPaused(): boolean { return this._globalPaused; }
 
   /* ========== 初始化 ========== */
 
@@ -468,7 +481,7 @@ export class World implements Routable {
         rootDir: this._rootDir,
         flowsDir: this.flowsDir,
       },
-      isPaused: (name) => this._pauseRequests.has(name),
+      isPaused: (name) => this._globalPaused || this._pauseRequests.has(name),
       onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId) => {
         const target = targetObject.toLowerCase();
 
@@ -638,7 +651,7 @@ export class World implements Routable {
           debugEnabled: this._debugEnabled,
           stone: stone.toJSON(),
           paths: { stoneDir: stone.dir, rootDir: this._rootDir, flowsDir: this.flowsDir },
-          isPaused: (name) => this._pauseRequests.has(name),
+          isPaused: (name) => this._globalPaused || this._pauseRequests.has(name),
           onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId) => {
             const target = targetObject.toLowerCase();
             if (target === "user" || target === "human") {
@@ -701,7 +714,7 @@ export class World implements Routable {
           debugEnabled: this._debugEnabled,
           stone: stone.toJSON(),
           paths: { stoneDir: stone.dir, rootDir: this._rootDir, flowsDir: this.flowsDir },
-          isPaused: (name) => this._pauseRequests.has(name),
+          isPaused: (name) => this._globalPaused || this._pauseRequests.has(name),
           onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId) => {
             const target = targetObject.toLowerCase();
             if (target === "user" || target === "human") {

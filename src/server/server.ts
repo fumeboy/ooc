@@ -804,6 +804,23 @@ async function handleRoute(
     return json({ success: true, data: { debugEnabled: world.isDebugEnabled() } });
   }
 
+  /* POST /api/global-pause/enable — 开启全局暂停 */
+  if (method === "POST" && path === "/api/global-pause/enable") {
+    world.enableGlobalPause();
+    return json({ success: true, data: { globalPaused: true } });
+  }
+
+  /* POST /api/global-pause/disable — 关闭全局暂停 */
+  if (method === "POST" && path === "/api/global-pause/disable") {
+    world.disableGlobalPause();
+    return json({ success: true, data: { globalPaused: false } });
+  }
+
+  /* GET /api/global-pause/status — 查询全局暂停状态 */
+  if (method === "GET" && path === "/api/global-pause/status") {
+    return json({ success: true, data: { globalPaused: world.isGlobalPaused() } });
+  }
+
   /* 404 */
   return errorResponse(`未知路由: ${method} ${path}`, 404);
 }

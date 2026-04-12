@@ -37,6 +37,7 @@ import { ActivityHeatmap } from "./components/ui/ActivityHeatmap";
 import { OocLinkPreview } from "./components/OocLinkPreview";
 import { CommandPalette } from "./components/CommandPalette";
 import { OocLogo } from "./components/OocLogo";
+import { MainLogo } from "./components/MainLogo";
 import { Sheet, SheetContent, SheetTrigger } from "./components/ui/sheet";
 import { cn } from "./lib/utils";
 import { GitBranch, Box, Globe, List, Menu, RotateCw, ChevronDown, ChevronRight, Settings } from "lucide-react";
@@ -459,7 +460,7 @@ export function App() {
   const sidebarContent = (
     <div className="flex flex-col items-center h-full" style={{ width: "inherit" }}>
       <div className="flex flex-col items-center gap-1 px-4 py-4 shrink-0">
-        <OocLogo px={isMobile ? 80 : 120} />
+        <MainLogo isMobile={isMobile} />
         <div className="flex items-center gap-1.5">
           <h1
             className="text-xs tracking-wide text-[var(--muted-foreground)]"
