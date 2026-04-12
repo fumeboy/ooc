@@ -27,8 +27,9 @@ import { MethodRegistry, type MethodContext } from "../trait/registry.js";
 import { getActiveTraits, traitId } from "../trait/activator.js";
 import { FormManager } from "./form.js";
 import { collectCommandTraits } from "./hooks.js";
+import { buildAvailableTools, BEGIN_TOOL_TO_COMMAND, SUBMIT_TOOL_TO_COMMAND, FORM_CANCEL_TOOL } from "./tools.js";
 
-import type { LLMClient, Message } from "../thinkable/client.js";
+import type { LLMClient, Message, ToolCall } from "../thinkable/client.js";
 import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "../types/index.js";
 import type { SkillDefinition } from "../skill/types.js";
 import { writeDebugLoop, computeContextStats, extractDirectiveTypes, getExistingLoopCount } from "./debug.js";
@@ -674,6 +675,7 @@ export async function runWithThreadTree(
 
       let llmOutput: string;
       let thinkingContent: string | undefined;
+      let toolCalls: ToolCall[] | undefined;
       let llmLatencyMs = 0;
       let llmModel = "unknown";
       let llmUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } = {};
@@ -724,14 +726,18 @@ export async function runWithThreadTree(
         /* 转换为 LLM Messages */
         messages = contextToMessages(context);
 
-        /* 调用 LLM */
+        /* 构建动态 tools 列表 */
+        const availableTools = buildAvailableTools(formManager.activeCommands());
+
+        /* 调用 LLM（带 tools） */
         const llmStartTime = Date.now();
-        const llmResult = await config.llm.chat(messages);
+        const llmResult = await config.llm.chat(messages, { tools: availableTools });
         llmLatencyMs = Date.now() - llmStartTime;
         llmOutput = llmResult.content;
         thinkingContent = llmResult.thinkingContent;
         llmModel = (llmResult as any).model || "unknown";
         llmUsage = (llmResult as any).usage ?? {};
+        toolCalls = llmResult.toolCalls;
 
         /* LLM 返回后检查暂停信号 */
         if (config.isPaused?.(objectName)) {
@@ -781,6 +787,259 @@ export async function runWithThreadTree(
           tree.writeThreadData(threadId, td);
         }
       }
+
+      /* ========== Tool Calling 路径 ========== */
+      if (toolCalls && toolCalls.length > 0) {
+        /* 非 tool 文本输出也记录为 thought */
+        if (llmOutput?.trim()) {
+          const td = tree.readThreadData(threadId);
+          if (td) {
+            td.actions.push({ type: "thought", content: llmOutput, timestamp: Date.now() });
+            tree.writeThreadData(threadId, td);
+          }
+        }
+
+        /* 处理第一个 tool call（每轮只处理一个） */
+        const tc = toolCalls[0]!;
+        let args: Record<string, unknown> = {};
+        try { args = JSON.parse(tc.function.arguments); } catch {}
+        const toolName = tc.function.name;
+
+        consola.info(`[Engine] tool_call: ${toolName}(${JSON.stringify(args).slice(0, 200)})`);
+
+        /* --- Begin --- */
+        if (toolName in BEGIN_TOOL_TO_COMMAND) {
+          const command = BEGIN_TOOL_TO_COMMAND[toolName]!;
+          const formId = formManager.begin(command, args.description as string ?? "", {
+            trait: args.trait as string,
+            functionName: args.function_name as string,
+          });
+
+          const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommands());
+          for (const traitName of traitsToLoad) {
+            await tree.activateTrait(threadId, traitName);
+          }
+
+          if (command === "call_function" && args.trait) {
+            await tree.activateTrait(threadId, args.trait as string);
+          }
+
+          if (command === "use_skill" && args.name) {
+            const skillDef = config.skills?.find(s => s.name === args.name);
+            if (skillDef) {
+              const body = loadSkillBody(skillDef.dir);
+              if (body) {
+                const td = tree.readThreadData(threadId);
+                if (td) {
+                  td.actions.push({ type: "inject", content: body, timestamp: Date.now() });
+                  tree.writeThreadData(threadId, td);
+                }
+              }
+            }
+          }
+
+          const td = tree.readThreadData(threadId);
+          if (td) {
+            td.activeForms = formManager.toData();
+            td.actions.push({ type: "inject", content: `Form ${formId} 已创建（${command}）。相关知识已加载。`, timestamp: Date.now() });
+            tree.writeThreadData(threadId, td);
+          }
+          consola.info(`[Engine] form.begin: ${command} → ${formId}`);
+        }
+
+        /* --- Submit --- */
+        else if (toolName in SUBMIT_TOOL_TO_COMMAND) {
+          const command = SUBMIT_TOOL_TO_COMMAND[toolName]!;
+          const form = formManager.submit(args.form_id as string ?? "");
+
+          if (!form) {
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.actions.push({ type: "inject", content: `[错误] Form ${args.form_id} 不存在。`, timestamp: Date.now() });
+              tree.writeThreadData(threadId, td);
+            }
+          } else {
+            /* program */
+            if (command === "program" && args.code) {
+              const { context: execCtx, getOutputs } = buildExecContext(threadId);
+              const lang = (args.lang as string) ?? "javascript";
+              const execResult = lang === "shell"
+                ? await executeShell(args.code as string, config.rootDir)
+                : await executor.execute(args.code as string, execCtx);
+              const allOutputs = [...getOutputs()];
+              if (execResult.stdout) allOutputs.push(execResult.stdout);
+              if (execResult.returnValue != null) {
+                allOutputs.push(typeof execResult.returnValue === "string"
+                  ? execResult.returnValue : JSON.stringify(execResult.returnValue, null, 2));
+              }
+              const outputText = allOutputs.join("\n").trim();
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.actions.push({
+                  type: "program", content: args.code as string, success: execResult.success,
+                  result: execResult.success
+                    ? (outputText ? `>>> output:\n${outputText}` : ">>> output: (无输出)")
+                    : `>>> error: ${execResult.error}`,
+                  timestamp: Date.now(),
+                });
+                tree.writeThreadData(threadId, td);
+              }
+              consola.info(`[Engine] program ${execResult.success ? "成功" : "失败"}`);
+            }
+
+            /* talk / talk_sync */
+            else if ((command === "talk" || command === "talk_sync") && config.onTalk) {
+              const target = (args.target as string)?.toLowerCase();
+              if (target && target !== objectName.toLowerCase()) {
+                const td = tree.readThreadData(threadId);
+                if (td) {
+                  td.actions.push({ type: "message_out", content: `[talk] → ${args.target}: ${args.message}`, timestamp: Date.now() });
+                  tree.writeThreadData(threadId, td);
+                }
+                try {
+                  const reply = await config.onTalk(args.target as string, args.message as string, objectName, threadId, sessionId);
+                  if (reply) tree.writeInbox(threadId, { from: args.target as string, content: reply, source: "talk" });
+                } catch (e) {
+                  tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" });
+                }
+                if (command === "talk_sync") tree.setNodeStatus(threadId, "waiting");
+              }
+            }
+
+            /* return */
+            else if (command === "return") {
+              tree.setNodeStatus(threadId, "done");
+              tree.setNodeSummary(threadId, args.summary as string ?? "");
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.actions.push({ type: "thread_return", content: `[return] ${args.summary}`, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+              scheduler.markDone(threadId);
+              consola.info(`[Engine] return: ${(args.summary as string)?.slice(0, 100)}`);
+            }
+
+            /* create_sub_thread */
+            else if (command === "create_sub_thread") {
+              const childId = `thread_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+              tree.createChild(threadId, childId, {
+                title: args.title as string,
+                description: args.description as string,
+                traits: args.traits as string[],
+              });
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.actions.push({ type: "create_thread", content: `[create_sub_thread] ${args.title} → ${childId}`, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+              consola.info(`[Engine] create_sub_thread: ${args.title} → ${childId}`);
+            }
+
+            /* continue_sub_thread */
+            else if (command === "continue_sub_thread") {
+              tree.writeInbox(args.thread_id as string, { from: objectName, content: args.message as string, source: "continue" });
+              tree.setNodeStatus(threadId, "waiting");
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.actions.push({ type: "message_out", content: `[continue_sub_thread] → ${args.thread_id}: ${args.message}`, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+            }
+
+            /* call_function */
+            else if (command === "call_function" && form.trait && form.functionName) {
+              const method = methodRegistry.all().find(m => m.name === form.functionName && m.traitName === form.trait);
+              let resultText: string;
+              if (!method) {
+                resultText = `[错误] 方法 ${form.trait}.${form.functionName} 不存在`;
+              } else {
+                try {
+                  const { context: execCtx } = buildExecContext(threadId);
+                  const argsObj = (args.args && typeof args.args === "object" ? args.args : {}) as Record<string, unknown>;
+                  const argValues = method.params.map(p => argsObj[p.name]);
+                  const result = method.needsCtx !== false
+                    ? await method.fn(execCtx, ...argValues) : await method.fn(...argValues);
+                  resultText = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+                } catch (e) {
+                  resultText = `[错误] ${form.trait}.${form.functionName} 执行失败: ${(e as Error).message}`;
+                }
+              }
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.actions.push({ type: "inject", content: `>>> ${form.trait}.${form.functionName} 结果:\n${resultText}`, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+              consola.info(`[Engine] call_function: ${form.trait}.${form.functionName}`);
+            }
+
+            /* set_plan */
+            else if (command === "set_plan") {
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.plan = args.text as string;
+                td.actions.push({ type: "set_plan", content: args.text as string, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+            }
+
+            /* await / await_all */
+            else if (command === "await" || command === "await_all") {
+              tree.setNodeStatus(threadId, "waiting");
+              const ids = command === "await" ? args.thread_id : (args.thread_ids as string[])?.join(", ");
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.actions.push({ type: "inject", content: `[${command}] ${ids}`, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+            }
+
+            /* trait 卸载 */
+            if (!formManager.activeCommands().has(form.command)) {
+              const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
+              for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName);
+            }
+
+            const tdAfter = tree.readThreadData(threadId);
+            if (tdAfter) { tdAfter.activeForms = formManager.toData(); tree.writeThreadData(threadId, tdAfter); }
+            consola.info(`[Engine] form.submit: ${command} (${form.formId})`);
+          }
+        }
+
+        /* --- Cancel --- */
+        else if (toolName === "form_cancel") {
+          const form = formManager.cancel(args.form_id as string ?? "");
+          if (form) {
+            if (!formManager.activeCommands().has(form.command)) {
+              const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
+              for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName);
+            }
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.activeForms = formManager.toData();
+              td.actions.push({ type: "inject", content: `Form ${form.formId} 已取消。`, timestamp: Date.now() });
+              tree.writeThreadData(threadId, td);
+            }
+            consola.info(`[Engine] form.cancel: ${form.command} (${form.formId})`);
+          }
+        }
+
+        /* debug 记录 */
+        if (config.debugEnabled && context && messages) {
+          debugLoopCounter++;
+          const debugDir = join(objectFlowDir, "threads", threadId, "debug");
+          const ctxStats = computeContextStats(context);
+          const totalMessageChars = messages.reduce((sum, m) => sum + m.content.length, 0);
+          writeDebugLoop({
+            debugDir, loopIndex: debugLoopCounter, messages, llmOutput, thinkingContent, source: "llm",
+            llmMeta: { model: llmModel, latencyMs: llmLatencyMs, promptTokens: llmUsage.promptTokens ?? 0, completionTokens: llmUsage.completionTokens ?? 0, totalTokens: llmUsage.totalTokens ?? 0 },
+            contextStats: { ...ctxStats, totalMessageChars },
+            activeTraits: context.scopeChain, activeSkills: (config.skills ?? []).map(s => s.name),
+            parsedDirectives: [toolName], threadId, objectName,
+          });
+        }
+
+      } else {
+      /* ========== TOML 路径（兼容，无 tool_calls 时走旧逻辑） ========== */
 
       /* 解析 LLM 输出（含格式错误重试） */
       let iterResult = runThreadIteration({
@@ -1109,6 +1368,8 @@ export async function runWithThreadTree(
           consola.info(`[Engine] form.cancel: ${form.command} (${form.formId})`);
         }
       }
+
+      } /* end TOML 路径 else */
 
       /* debugMode 检查：单步执行后自动暂停 */
       if (threadData._debugMode) {
