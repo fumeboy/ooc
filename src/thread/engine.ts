@@ -100,6 +100,28 @@ export interface TalkResult {
 
 /* ========== 辅助函数 ========== */
 
+/** 最大输出格式重试次数 */
+const MAX_FORMAT_RETRIES = 3;
+
+/**
+ * 判断 ThinkLoop 迭代结果是否为空（LLM 输出格式错误，parser 无法提取任何有效指令）
+ *
+ * 当所有关键字段都为 null/空时，说明 LLM 输出了内容但格式不符合 TOML 协议。
+ */
+function isEmptyIterResult(r: ReturnType<typeof runThreadIteration>): boolean {
+  return (
+    r.newActions.length === 0 &&
+    r.program === null &&
+    r.talks === null &&
+    r.useSkill === null &&
+    r.newChildNode === null &&
+    r.threadReturn === null &&
+    r.awaitingChildren === null &&
+    r.continueSubThread === null &&
+    r.planUpdate === null
+  );
+}
+
 /** 生成 session ID */
 function generateSessionId(): string {
   return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -741,8 +763,8 @@ export async function runWithThreadTree(
         });
       }
 
-      /* 解析 LLM 输出 */
-      const iterResult = runThreadIteration({
+      /* 解析 LLM 输出（含格式错误重试） */
+      let iterResult = runThreadIteration({
         tree: treeFile,
         threadId,
         threadData,
@@ -750,6 +772,41 @@ export async function runWithThreadTree(
         stone: config.stone,
         traits: config.traits,
       });
+
+      /* 格式错误重试：当 parser 无法提取任何有效指令时，追加错误提示重新调用 LLM */
+      if (isEmptyIterResult(iterResult) && llmOutput.trim().length > 0 && messages) {
+        for (let retry = 1; retry <= MAX_FORMAT_RETRIES; retry++) {
+          consola.warn(`[Engine] 输出格式错误 (retry ${retry}/${MAX_FORMAT_RETRIES}), thread=${threadId}`);
+
+          /* 追加错误提示到 messages */
+          const retryMessages: Message[] = [
+            ...messages,
+            { role: "assistant", content: llmOutput },
+            { role: "user", content: `[系统提示] 你的输出格式不正确，无法被解析。请严格使用 TOML 格式输出，不要用 \`\`\`toml 代码块包裹，不要在 TOML 前面加纯文本。正确格式示例：\n\n[thought]\ncontent = "你的思考内容"\n\n[program]\ncode = """\nyour code here\n"""` },
+          ];
+
+          const retryStart = Date.now();
+          const retryResult = await config.llm.chat(retryMessages);
+          llmLatencyMs += Date.now() - retryStart;
+          llmOutput = retryResult.content;
+          thinkingContent = retryResult.thinkingContent;
+          llmUsage = (retryResult as any).usage ?? {};
+
+          iterResult = runThreadIteration({
+            tree: treeFile,
+            threadId,
+            threadData,
+            llmOutput,
+            stone: config.stone,
+            traits: config.traits,
+          });
+
+          if (!isEmptyIterResult(iterResult)) {
+            consola.info(`[Engine] 格式重试成功 (retry ${retry}), thread=${threadId}`);
+            break;
+          }
+        }
+      }
 
       /* debug 记录（仅在真实 LLM 调用路径且 context/messages 可用时） */
       if (config.debugEnabled && context && messages) {
@@ -1304,10 +1361,41 @@ export async function resumeWithThreadTree(
         emitSSE({ type: "stream:thought", objectName, sessionId, chunk: thinkingContent });
       }
 
-      const iterResult = runThreadIteration({
+      /* 解析 LLM 输出（含格式错误重试） */
+      let iterResult = runThreadIteration({
         tree: treeFile, threadId, threadData, llmOutput,
         stone: config.stone, traits: config.traits,
       });
+
+      /* 格式错误重试（仅真实 LLM 调用路径） */
+      if (isEmptyIterResult(iterResult) && llmOutput.trim().length > 0 && messages) {
+        for (let retry = 1; retry <= MAX_FORMAT_RETRIES; retry++) {
+          consola.warn(`[Engine] 输出格式错误 (retry ${retry}/${MAX_FORMAT_RETRIES}), thread=${threadId}`);
+
+          const retryMessages: Message[] = [
+            ...messages,
+            { role: "assistant", content: llmOutput },
+            { role: "user", content: `[系统提示] 你的输出格式不正确，无法被解析。请严格使用 TOML 格式输出，不要用 \`\`\`toml 代码块包裹，不要在 TOML 前面加纯文本。正确格式示例：\n\n[thought]\ncontent = "你的思考内容"\n\n[program]\ncode = """\nyour code here\n"""` },
+          ];
+
+          const retryStart = Date.now();
+          const retryResult = await config.llm.chat(retryMessages);
+          llmLatencyMs += Date.now() - retryStart;
+          llmOutput = retryResult.content;
+          thinkingContent = retryResult.thinkingContent;
+          llmUsage = (retryResult as any).usage ?? {};
+
+          iterResult = runThreadIteration({
+            tree: treeFile, threadId, threadData, llmOutput,
+            stone: config.stone, traits: config.traits,
+          });
+
+          if (!isEmptyIterResult(iterResult)) {
+            consola.info(`[Engine] 格式重试成功 (retry ${retry}), thread=${threadId}`);
+            break;
+          }
+        }
+      }
 
       /* debug 记录（仅在真实 LLM 调用路径且 context/messages 可用时） */
       if (config.debugEnabled && context && messages) {
