@@ -72,7 +72,7 @@ function PlaceholderPill() {
   );
 }
 
-/** 卫星按钮定位（绝对定位在轨道上，反向旋转保持文字水平） */
+/** 卫星按钮定位（椭圆轨道：水平轴 = radius，垂直轴 = radius * 0.8） */
 function SatelliteSlot({
   angle,
   radius,
@@ -84,7 +84,7 @@ function SatelliteSlot({
 }) {
   const rad = (angle * Math.PI) / 180;
   const x = Math.cos(rad) * radius;
-  const y = Math.sin(rad) * radius;
+  const y = Math.sin(rad) * radius * 0.8; // 垂直轴缩短 1/5
 
   return (
     <div
