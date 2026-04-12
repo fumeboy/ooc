@@ -3,7 +3,7 @@ name: kernel/computable/output_format
 type: how_to_think
 when: never
 description: 线程树 TOML 输出格式规范 — 可用指令、字段说明、互斥规则、示例
-deps: ["kernel/computable"]
+deps: []
 ---
 
 # TOML 输出格式规范

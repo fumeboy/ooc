@@ -3,9 +3,7 @@ name: kernel/debuggable
 type: how_to_think
 version: 1.0.0
 when: never
-command_binding:
-  commands: ["program"]
-description: 系统化调试四阶段流程，根因先于修复
+description: 系统化调试四阶段流程，根因先于修复（需要时 activateTrait 加载）
 deps: []
 hooks:
   when_error:
