@@ -78,3 +78,39 @@ describe("FormManager", () => {
     expect(mgr.getForm("nonexistent")).toBeNull();
   });
 });
+
+describe("FormManager — call_function extra fields", () => {
+  test("begin 支持 trait 和 functionName 扩展字段", () => {
+    const mgr = new FormManager();
+    const formId = mgr.begin("call_function", "读取文件", {
+      trait: "kernel/computable/file_ops",
+      functionName: "readFile",
+    });
+    const form = mgr.getForm(formId);
+    expect(form).not.toBeNull();
+    expect(form!.trait).toBe("kernel/computable/file_ops");
+    expect(form!.functionName).toBe("readFile");
+  });
+
+  test("begin 不传 extra 时扩展字段为 undefined", () => {
+    const mgr = new FormManager();
+    const formId = mgr.begin("talk", "通知");
+    const form = mgr.getForm(formId);
+    expect(form).not.toBeNull();
+    expect(form!.trait).toBeUndefined();
+    expect(form!.functionName).toBeUndefined();
+  });
+
+  test("toData/fromData 保留扩展字段", () => {
+    const mgr = new FormManager();
+    mgr.begin("call_function", "读取文件", {
+      trait: "kernel/computable/file_ops",
+      functionName: "readFile",
+    });
+    const data = mgr.toData();
+    const restored = FormManager.fromData(data);
+    const form = restored.activeForms()[0]!;
+    expect(form.trait).toBe("kernel/computable/file_ops");
+    expect(form.functionName).toBe("readFile");
+  });
+});

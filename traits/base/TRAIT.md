@@ -48,6 +48,7 @@ G1 基因已更新。
 | `await_all` | 等待多个子线程完成 |
 | `set_plan` | 更新当前计划 |
 | `use_skill` | 按需加载 Skill |
+| `call_function` | 直接调用 trait 方法（不需要写代码） |
 
 ## 规则
 

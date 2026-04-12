@@ -52,6 +52,10 @@ export interface UseSkillDirective {
 export interface FormBeginDirective {
   command: string;
   description: string;
+  /** call_function 专用：目标 trait */
+  trait?: string;
+  /** call_function 专用：函数名 */
+  functionName?: string;
 }
 
 /** form submit 指令 */
@@ -282,10 +286,14 @@ export function parseThreadOutput(output: string): ThreadParsedOutput {
       const data = actionData as Record<string, unknown>;
 
       if (action === "begin" && !result.formBegin) {
-        result.formBegin = {
+        const directive: FormBeginDirective = {
           command: key,
           description: typeof data.description === "string" ? data.description : "",
         };
+        // call_function 专用字段
+        if (typeof data.trait === "string") directive.trait = data.trait;
+        if (typeof data.function_name === "string") directive.functionName = data.function_name;
+        result.formBegin = directive;
       } else if (action === "submit" && !result.formSubmit) {
         const formId = typeof data.form_id === "string" ? data.form_id : "";
         const params: Record<string, unknown> = {};

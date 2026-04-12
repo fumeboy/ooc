@@ -18,6 +18,10 @@ export interface ActiveForm {
   description: string;
   /** 创建时间戳 */
   createdAt: number;
+  /** call_function 专用：目标 trait */
+  trait?: string;
+  /** call_function 专用：函数名 */
+  functionName?: string;
 }
 
 /** 生成 form_id */
@@ -31,9 +35,12 @@ export class FormManager {
   private commandRefCount = new Map<string, number>();
 
   /** 开启 form，返回 form_id */
-  begin(command: string, description: string): string {
+  begin(command: string, description: string, extra?: { trait?: string; functionName?: string }): string {
     const formId = generateFormId();
-    this.forms.set(formId, { formId, command, description, createdAt: Date.now() });
+    this.forms.set(formId, {
+      formId, command, description, createdAt: Date.now(),
+      ...extra,
+    });
     this.commandRefCount.set(command, (this.commandRefCount.get(command) ?? 0) + 1);
     return formId;
   }

@@ -320,3 +320,54 @@ priority = 1
     expect(result.formSubmit!.params.priority).toBe(1);
   });
 });
+
+describe("parseThreadOutput — call_function form", () => {
+  test("解析 [call_function.begin] 含 trait 和 function_name", () => {
+    const input = `
+[call_function.begin]
+trait = "kernel/computable/file_ops"
+function_name = "readFile"
+description = "读取 meta.md"
+`;
+    const result = parseThreadOutput(input);
+    expect(result.formBegin).not.toBeNull();
+    expect(result.formBegin!.command).toBe("call_function");
+    expect(result.formBegin!.trait).toBe("kernel/computable/file_ops");
+    expect(result.formBegin!.functionName).toBe("readFile");
+    expect(result.formBegin!.description).toBe("读取 meta.md");
+  });
+
+  test("解析 [call_function.submit] 含 args（子表写法）", () => {
+    const input = `
+[call_function.submit]
+form_id = "f_001"
+
+[call_function.submit.args]
+path = "docs/meta.md"
+limit = 100
+`;
+    const result = parseThreadOutput(input);
+    expect(result.formSubmit).not.toBeNull();
+    expect(result.formSubmit!.command).toBe("call_function");
+    expect(result.formSubmit!.formId).toBe("f_001");
+    expect(result.formSubmit!.params.args).toBeDefined();
+    const args = result.formSubmit!.params.args as Record<string, unknown>;
+    expect(args.path).toBe("docs/meta.md");
+    expect(args.limit).toBe(100);
+  });
+
+  test("解析 [call_function.submit] 含 args（内联表写法）", () => {
+    const input = `
+[call_function.submit]
+form_id = "f_002"
+args = { path = "docs/meta.md", limit = 50 }
+`;
+    const result = parseThreadOutput(input);
+    expect(result.formSubmit).not.toBeNull();
+    expect(result.formSubmit!.command).toBe("call_function");
+    expect(result.formSubmit!.formId).toBe("f_002");
+    const args = result.formSubmit!.params.args as Record<string, unknown>;
+    expect(args.path).toBe("docs/meta.md");
+    expect(args.limit).toBe(50);
+  });
+});

@@ -988,7 +988,11 @@ export async function runWithThreadTree(
 
       /* 处理 form 操作 */
       if (iterResult.formBegin) {
-        const formId = formManager.begin(iterResult.formBegin.command, iterResult.formBegin.description);
+        const formId = formManager.begin(
+          iterResult.formBegin.command,
+          iterResult.formBegin.description,
+          { trait: iterResult.formBegin.trait, functionName: iterResult.formBegin.functionName },
+        );
 
         /* 收集需要加载的 trait */
         const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommands());
@@ -1025,8 +1029,40 @@ export async function runWithThreadTree(
             tree.writeThreadData(threadId, td);
           }
         } else {
-          /* TODO Phase 3+: 根据 form.command 执行对应指令逻辑 */
-          /* 当前兼容期：form submit 只做 trait 卸载，实际指令执行仍走旧路径 */
+          /* call_function：执行 trait 方法 */
+          if (form.command === "call_function" && form.trait && form.functionName) {
+            const args = iterResult.formSubmit.params.args;
+            let resultText: string;
+            try {
+              const method = methodRegistry.all().find(
+                m => m.name === form.functionName && m.traitName === form.trait,
+              );
+              if (!method) {
+                resultText = `[错误] 方法 ${form.trait}.${form.functionName} 不存在`;
+              } else {
+                const { context: execCtx } = buildExecContext(threadId);
+                const argValues = args && typeof args === "object" ? Object.values(args as Record<string, unknown>) : [];
+                const result = method.needsCtx !== false
+                  ? await method.fn(execCtx, ...argValues)
+                  : await method.fn(...argValues);
+                resultText = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+              }
+            } catch (e) {
+              resultText = `[错误] ${form.trait}.${form.functionName} 执行失败: ${(e as Error).message}`;
+            }
+
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.actions.push({
+                type: "inject",
+                content: `>>> ${form.trait}.${form.functionName} 结果:\n${resultText}`,
+                timestamp: Date.now(),
+              });
+              tree.writeThreadData(threadId, td);
+            }
+
+            consola.info(`[Engine] call_function: ${form.trait}.${form.functionName}`);
+          }
 
           /* 检查是否需要卸载 trait（该 command 无其他活跃 form 时卸载） */
           if (!formManager.activeCommands().has(form.command)) {
@@ -1608,7 +1644,11 @@ export async function resumeWithThreadTree(
       }
 
       if (iterResult.formBegin) {
-        const formId = formManager.begin(iterResult.formBegin.command, iterResult.formBegin.description);
+        const formId = formManager.begin(
+          iterResult.formBegin.command,
+          iterResult.formBegin.description,
+          { trait: iterResult.formBegin.trait, functionName: iterResult.formBegin.functionName },
+        );
 
         const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommands());
         for (const traitName of traitsToLoad) {
@@ -1642,6 +1682,41 @@ export async function resumeWithThreadTree(
             tree.writeThreadData(threadId, td);
           }
         } else {
+          /* call_function：执行 trait 方法 */
+          if (form.command === "call_function" && form.trait && form.functionName) {
+            const args = iterResult.formSubmit.params.args;
+            let resultText: string;
+            try {
+              const method = methodRegistry.all().find(
+                m => m.name === form.functionName && m.traitName === form.trait,
+              );
+              if (!method) {
+                resultText = `[错误] 方法 ${form.trait}.${form.functionName} 不存在`;
+              } else {
+                const { context: execCtx } = buildExecContext(threadId);
+                const argValues = args && typeof args === "object" ? Object.values(args as Record<string, unknown>) : [];
+                const result = method.needsCtx !== false
+                  ? await method.fn(execCtx, ...argValues)
+                  : await method.fn(...argValues);
+                resultText = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+              }
+            } catch (e) {
+              resultText = `[错误] ${form.trait}.${form.functionName} 执行失败: ${(e as Error).message}`;
+            }
+
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.actions.push({
+                type: "inject",
+                content: `>>> ${form.trait}.${form.functionName} 结果:\n${resultText}`,
+                timestamp: Date.now(),
+              });
+              tree.writeThreadData(threadId, td);
+            }
+
+            consola.info(`[Engine] call_function: ${form.trait}.${form.functionName}`);
+          }
+
           if (!formManager.activeCommands().has(form.command)) {
             const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
             for (const traitName of traitsToUnload) {
