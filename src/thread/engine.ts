@@ -753,7 +753,7 @@ export async function runWithThreadTree(
         }
       }
 
-      /* 发射 SSE 思考事件 */
+      /* 发射 SSE 思考事件 + 记录 thought action（从 thinking mode 获取） */
       if (thinkingContent) {
         emitSSE({
           type: "stream:thought",
@@ -761,6 +761,17 @@ export async function runWithThreadTree(
           sessionId,
           chunk: thinkingContent,
         });
+
+        /* 将 thinking 输出记录为 thought action */
+        const td = tree.readThreadData(threadId);
+        if (td) {
+          td.actions.push({
+            type: "thought",
+            content: thinkingContent,
+            timestamp: Date.now(),
+          });
+          tree.writeThreadData(threadId, td);
+        }
       }
 
       /* 解析 LLM 输出（含格式错误重试） */
@@ -782,7 +793,7 @@ export async function runWithThreadTree(
           const retryMessages: Message[] = [
             ...messages,
             { role: "assistant", content: llmOutput },
-            { role: "user", content: `[系统提示] 你的输出格式不正确，无法被解析。请严格使用 TOML 格式输出，不要用 \`\`\`toml 代码块包裹，不要在 TOML 前面加纯文本。正确格式示例：\n\n[thought]\ncontent = "你的思考内容"\n\n[program]\ncode = """\nyour code here\n"""` },
+            { role: "user", content: `[系统提示] 你的输出格式不正确，无法被解析。请严格使用 TOML 格式输出，不要用 \`\`\`toml 代码块包裹，不要在 TOML 前面加纯文本。你的思考过程会通过 thinking mode 自动记录，不需要输出 [thought] 段。正确格式示例：\n\n[program]\ncode = """\nyour code here\n"""\n\n或者直接返回结果：\n\n[return]\nsummary = "回答内容"` },
           ];
 
           const retryStart = Date.now();
@@ -1359,6 +1370,17 @@ export async function resumeWithThreadTree(
 
       if (thinkingContent) {
         emitSSE({ type: "stream:thought", objectName, sessionId, chunk: thinkingContent });
+
+        /* 将 thinking 输出记录为 thought action */
+        const td = tree.readThreadData(threadId);
+        if (td) {
+          td.actions.push({
+            type: "thought",
+            content: thinkingContent,
+            timestamp: Date.now(),
+          });
+          tree.writeThreadData(threadId, td);
+        }
       }
 
       /* 解析 LLM 输出（含格式错误重试） */
@@ -1375,7 +1397,7 @@ export async function resumeWithThreadTree(
           const retryMessages: Message[] = [
             ...messages,
             { role: "assistant", content: llmOutput },
-            { role: "user", content: `[系统提示] 你的输出格式不正确，无法被解析。请严格使用 TOML 格式输出，不要用 \`\`\`toml 代码块包裹，不要在 TOML 前面加纯文本。正确格式示例：\n\n[thought]\ncontent = "你的思考内容"\n\n[program]\ncode = """\nyour code here\n"""` },
+            { role: "user", content: `[系统提示] 你的输出格式不正确，无法被解析。请严格使用 TOML 格式输出，不要用 \`\`\`toml 代码块包裹，不要在 TOML 前面加纯文本。你的思考过程会通过 thinking mode 自动记录，不需要输出 [thought] 段。正确格式示例：\n\n[program]\ncode = """\nyour code here\n"""\n\n或者直接返回结果：\n\n[return]\nsummary = "回答内容"` },
           ];
 
           const retryStart = Date.now();

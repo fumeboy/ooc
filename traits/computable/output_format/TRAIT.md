@@ -11,10 +11,12 @@ deps: ["kernel/computable"]
 ## 格式概览
 
 所有输出必须使用 TOML 格式。第一个非空白字符必须是 `[`。
+不要用 ```toml 代码块包裹，不要在 TOML 前面加纯文本。
+
+你的思考过程会通过 thinking mode 自动记录，不需要在输出中写 `[thought]` 段。
 
 | 段落 | 用途 |
 |------|------|
-| `[thought]` | 记录思考过程 |
 | `[program]` | 执行代码 |
 | `[talk]` | 向其他对象发送消息（异步，发完继续执行） |
 | `[talk_sync]` | 向其他对象发送消息（同步，发完等待回复） |
@@ -36,9 +38,6 @@ deps: ["kernel/computable"]
 - 不要用 `[talk]` 代替 `[return]`
 
 ## 各段字段说明
-
-### `[thought]`
-- `content` — 思考内容（必填，多行字符串）
 
 ### `[program]`
 - `code` — 代码内容（必填，多行字符串）
@@ -102,38 +101,32 @@ name = "commit"
 ## 互斥规则
 
 1. 每轮输出只能包含一个主指令（`[return]`、`[create_sub_thread]`、`[continue_sub_thread]`、`[program]`、`[talk]`、`[talk_sync]`、`[use_skill]` 选其一）
-2. `[thought]` 可以和任何主指令并存
-3. `[set_plan]` 可以和任何主指令并存
-4. 任务完成后必须用 `[return]` 结束，不要无限循环
+2. `[set_plan]` 可以和任何主指令并存
+3. 任务完成后必须用 `[return]` 结束，不要无限循环
+4. 不要输出 `[thought]` 段——思考过程通过 thinking mode 自动记录
 
 ## 常见错误
 
 1. 消息正文必须写在 `message = """..."""` 字段中，不能直接写在段后
 2. 代码必须写在 `code = """..."""` 字段中
 3. 字符串值必须使用引号 `"..."` 或多行字符串 `"""..."""`
-4. 不要输出 `[finish]`、`[wait]`、`[break]` 等旧指令
+4. 不要输出 `[thought]`、`[finish]`、`[wait]`、`[break]` 等旧指令
+5. 不要用 ```toml 代码块包裹输出
+6. 不要在 TOML 前面加纯文本描述
 
 ## 示例
 
 ### 简单回答（直接返回给创建者）
 ```toml
-[thought]
-content = """
-用户问了一个简单的问题，我可以直接回答。
-"""
-
 [return]
 summary = "这里是对用户问题的回答内容"
 ```
 
 ### 执行代码
 ```toml
-[thought]
-content = "需要读取文件来获取信息"
-
 [program]
 code = """
-const data = readFile("docs/gene.md");
+const data = await readFile("docs/gene.md");
 return data;
 """
 ```
@@ -154,9 +147,6 @@ message = "G1 基因的最新定义是什么？"
 
 ### 创建子线程
 ```toml
-[thought]
-content = "这个任务需要分解为子任务"
-
 [create_sub_thread]
 title = "调研 G1 基因的历史演变"
 description = "查阅 gene.md 和 discussions 目录，整理 G1 基因的演变过程"
@@ -164,12 +154,6 @@ description = "查阅 gene.md 和 discussions 目录，整理 G1 基因的演变
 
 ### 基于另一个线程派生子线程（线程间对话）
 ```toml
-[thought]
-content = """
-线程 th_abc123 已经完成了数据收集，我需要基于它的结果做进一步分析。
-通过 derive_from_which_thread 创建一个派生子线程，它会继承目标线程的执行历史。
-"""
-
 [create_sub_thread]
 title = "基于数据收集结果进行深度分析"
 description = "分析 th_abc123 收集的数据，提取关键洞察"
@@ -178,12 +162,6 @@ derive_from_which_thread = "th_abc123"
 
 ### 向已完成的子线程追问（多次交互）
 ```toml
-[thought]
-content = """
-子线程 th_xyz789 已经完成了搜索，但结果不够全面，需要补充。
-用 continue_sub_thread 向它追加消息，它会被唤醒继续工作。
-"""
-
 [continue_sub_thread]
 thread_id = "th_xyz789"
 message = "请补充 2024 年之后的论文，特别关注 alignment 方向"
@@ -191,16 +169,13 @@ message = "请补充 2024 年之后的论文，特别关注 alignment 方向"
 
 ### 按需加载 Skill
 ```toml
-[thought]
-content = "用户要求提交代码，我需要加载 commit skill 来获取流程指导"
-
 [use_skill]
 name = "commit"
 ```
 
 ## 流式输出
 
-输出顺序建议：
-1. 模型先在原生 thinking 通道产生思考
-2. assistant 输出 `[thought]`（可选）+ 主指令
+输出顺序：
+1. 模型先在原生 thinking 通道产生思考（自动记录，不需要输出）
+2. assistant 直接输出主指令（`[program]`、`[return]`、`[talk]` 等）
 3. 任务完成时输出 `[return]`
