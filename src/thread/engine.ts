@@ -908,37 +908,33 @@ export async function runWithThreadTree(
 
             /* return */
             else if (command === "return") {
-              tree.setNodeStatus(threadId, "done");
-              tree.setNodeSummary(threadId, args.summary as string ?? "");
+              await tree.returnThread(threadId, args.summary as string ?? "");
               const td = tree.readThreadData(threadId);
               if (td) {
                 td.actions.push({ type: "thread_return", content: `[return] ${args.summary}`, timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
               }
-              scheduler.markDone(threadId);
               consola.info(`[Engine] return: ${(args.summary as string)?.slice(0, 100)}`);
             }
 
             /* create_sub_thread */
             else if (command === "create_sub_thread") {
-              const childId = `thread_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-              tree.createChild(threadId, childId, {
-                title: args.title as string,
+              const child = await tree.createSubThread(threadId, args.title as string, {
                 description: args.description as string,
                 traits: args.traits as string[],
               });
               const td = tree.readThreadData(threadId);
               if (td) {
-                td.actions.push({ type: "create_thread", content: `[create_sub_thread] ${args.title} → ${childId}`, timestamp: Date.now() });
+                td.actions.push({ type: "create_thread", content: `[create_sub_thread] ${args.title} → ${child?.id ?? "?"}`, timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
               }
-              consola.info(`[Engine] create_sub_thread: ${args.title} → ${childId}`);
+              consola.info(`[Engine] create_sub_thread: ${args.title}`);
             }
 
             /* continue_sub_thread */
             else if (command === "continue_sub_thread") {
               tree.writeInbox(args.thread_id as string, { from: objectName, content: args.message as string, source: "continue" });
-              tree.setNodeStatus(threadId, "waiting");
+              await tree.setNodeStatus(threadId, "waiting");
               const td = tree.readThreadData(threadId);
               if (td) {
                 td.actions.push({ type: "message_out", content: `[continue_sub_thread] → ${args.thread_id}: ${args.message}`, timestamp: Date.now() });
@@ -984,8 +980,9 @@ export async function runWithThreadTree(
 
             /* await / await_all */
             else if (command === "await" || command === "await_all") {
-              tree.setNodeStatus(threadId, "waiting");
-              const ids = command === "await" ? args.thread_id : (args.thread_ids as string[])?.join(", ");
+              const threadIds = command === "await" ? [args.thread_id as string] : (args.thread_ids as string[]) ?? [];
+              await tree.awaitThreads(threadId, threadIds);
+              const ids = threadIds.join(", ");
               const td = tree.readThreadData(threadId);
               if (td) {
                 td.actions.push({ type: "inject", content: `[${command}] ${ids}`, timestamp: Date.now() });
@@ -1866,8 +1863,9 @@ export async function resumeWithThreadTree(
             } else if (command === "set_plan") {
               const td = tree.readThreadData(threadId); if (td) { td.plan = args.text as string; td.actions.push({ type: "set_plan", content: args.text as string, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
             } else if (command === "await" || command === "await_all") {
-              tree.setNodeStatus(threadId, "waiting");
-              const ids = command === "await" ? args.thread_id : (args.thread_ids as string[])?.join(", ");
+              const threadIds = command === "await" ? [args.thread_id as string] : (args.thread_ids as string[]) ?? [];
+              await tree.awaitThreads(threadId, threadIds);
+              const ids = threadIds.join(", ");
               const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "inject", content: `[${command}] ${ids}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
             }
             if (!formManager.activeCommands().has(form.command)) { const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command])); for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName); }
