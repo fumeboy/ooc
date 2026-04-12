@@ -790,8 +790,8 @@ export async function runWithThreadTree(
 
       /* ========== Tool Calling 路径 ========== */
       if (toolCalls && toolCalls.length > 0) {
-        /* 非 tool 文本输出也记录为 thought */
-        if (llmOutput?.trim()) {
+        /* 非 tool 文本输出记录为 thought（跳过已被 thinking mode 记录的内容） */
+        if (llmOutput?.trim() && llmOutput !== thinkingContent) {
           const td = tree.readThreadData(threadId);
           if (td) {
             td.actions.push({ type: "thought", content: llmOutput, timestamp: Date.now() });
@@ -1787,7 +1787,7 @@ export async function resumeWithThreadTree(
 
       /* ========== Tool Calling 路径（resume） ========== */
       if (toolCalls && toolCalls.length > 0) {
-        if (llmOutput?.trim()) {
+        if (llmOutput?.trim() && llmOutput !== thinkingContent) {
           const td = tree.readThreadData(threadId);
           if (td) {
             td.actions.push({ type: "thought", content: llmOutput, timestamp: Date.now() });
