@@ -67,7 +67,7 @@ export function getActiveTraits(
   for (const trait of traits) {
     const id = traitId(trait);
 
-    if (trait.when === "never") continue;
+    if (trait.when === "never" && !scopeSet.has(id)) continue;
     if (trait.when === "always") {
       activate(trait);
       continue;

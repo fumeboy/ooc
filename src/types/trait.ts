@@ -99,6 +99,10 @@ export interface TraitDefinition {
   dir?: string;
   /** 生命周期 hooks */
   hooks?: { [K in TraitHookEvent]?: TraitHook };
+  /** 指令绑定：声明此 trait 在哪些指令执行时被加载（form 模型） */
+  commandBinding?: {
+    commands: string[];
+  };
   /** 使用示例（用于 Context 注入） */
   examples?: TraitExample[];
   /** 常见错误对比（正确 vs 错误） */

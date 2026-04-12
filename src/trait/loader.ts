@@ -61,6 +61,7 @@ export async function loadTrait(
   let version: string | undefined;
   let deps: string[] = [];
   let hooks: TraitDefinition["hooks"];
+  let commandBinding: TraitDefinition["commandBinding"];
 
   const traitPath = join(traitDir, "TRAIT.md");
   const skillPath = join(traitDir, "SKILL.md");
@@ -77,6 +78,7 @@ export async function loadTrait(
     version = typeof data.version === "string" ? data.version : undefined;
     deps = Array.isArray(data.deps) ? data.deps.map(String) : [];
     hooks = parseTraitHooks(data.hooks);
+    commandBinding = parseCommandBinding(data.command_binding);
     name = resolveTraitName(name, data);
   } else if (existsSync(skillPath)) {
     // SKILL.md 格式兼容
@@ -89,6 +91,7 @@ export async function loadTrait(
     version = typeof data.version === "string" ? data.version : undefined;
     deps = Array.isArray(data.deps) ? data.deps.map(String) : [];
     hooks = parseTraitHooks(data.hooks);
+    commandBinding = parseCommandBinding(data.command_binding);
     name = resolveTraitName(name, data);
   } else if (existsSync(legacyReadmePath)) {
     const raw = readFileSync(legacyReadmePath, "utf-8");
@@ -100,6 +103,7 @@ export async function loadTrait(
     version = typeof data.version === "string" ? data.version : undefined;
     deps = Array.isArray(data.deps) ? data.deps.map(String) : [];
     hooks = parseTraitHooks(data.hooks);
+    commandBinding = parseCommandBinding(data.command_binding);
     name = resolveTraitName(name, data);
   } else {
     // 无有效文件
@@ -123,6 +127,7 @@ export async function loadTrait(
     methods,
     deps,
     hooks,
+    commandBinding,
     dir: traitDir,
   };
 }
@@ -525,6 +530,18 @@ export async function loadTraitsFromDir(
   }
 
   return results;
+}
+
+/**
+ * 解析 command_binding frontmatter 字段
+ */
+function parseCommandBinding(raw: unknown): TraitDefinition["commandBinding"] {
+  if (!raw || typeof raw !== "object") return undefined;
+  const cb = raw as Record<string, unknown>;
+  if (Array.isArray(cb.commands)) {
+    return { commands: cb.commands.map(String) };
+  }
+  return undefined;
 }
 
 /** 合法的 hook 事件名 */

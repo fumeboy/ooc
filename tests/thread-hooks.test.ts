@@ -7,6 +7,7 @@ import { describe, test, expect } from "bun:test";
 import {
   collectBeforeHooks,
   collectAfterHooks,
+  collectCommandTraits,
 } from "../src/thread/hooks.js";
 import type { ThreadFrameHook } from "../src/thread/types.js";
 import type { TraitDefinition } from "../src/types/index.js";
@@ -108,5 +109,37 @@ describe("collectAfterHooks", () => {
     expect(result).not.toBeNull();
     expect(result).toContain("反思经验");
     expect(result).toContain("检查输出质量");
+  });
+});
+
+describe("collectCommandTraits", () => {
+  test("匹配 commandBinding 中的指令", () => {
+    const traits = [
+      { name: "kernel/talkable", commandBinding: { commands: ["talk", "talk_sync", "return"] } },
+      { name: "kernel/computable", commandBinding: { commands: ["program"] } },
+      { name: "kernel/base" }, // 无 commandBinding
+    ] as any[];
+
+    const result = collectCommandTraits(traits, new Set(["talk"]));
+    expect(result).toContain("kernel/talkable");
+    expect(result).not.toContain("kernel/computable");
+  });
+
+  test("空 activeCommands 返回空数组", () => {
+    const traits = [
+      { name: "kernel/talkable", commandBinding: { commands: ["talk"] } },
+    ] as any[];
+    expect(collectCommandTraits(traits, new Set())).toEqual([]);
+  });
+
+  test("多指令匹配", () => {
+    const traits = [
+      { name: "kernel/talkable", commandBinding: { commands: ["talk", "return"] } },
+      { name: "kernel/reflective", commandBinding: { commands: ["return"] } },
+    ] as any[];
+
+    const result = collectCommandTraits(traits, new Set(["return"]));
+    expect(result).toContain("kernel/talkable");
+    expect(result).toContain("kernel/reflective");
   });
 });

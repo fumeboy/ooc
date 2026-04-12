@@ -110,3 +110,33 @@ function collectHooksByEvent(
   if (injections.length === 0) return null;
   return `>>> [系统提示 — ${event}]\n${injections.join("\n\n")}`;
 }
+
+/**
+ * 收集指令绑定的 trait，返回需要加载的 trait ID 列表
+ *
+ * 遍历所有 trait，检查 commandBinding.commands 是否与 activeCommands 有交集。
+ *
+ * @param traits - 所有已加载的 trait 定义
+ * @param activeCommands - 当前活跃的指令类型集合
+ * @returns 需要激活的 trait ID 列表
+ */
+export function collectCommandTraits(
+  traits: TraitDefinition[],
+  activeCommands: Set<string>,
+): string[] {
+  if (activeCommands.size === 0) return [];
+
+  const result: string[] = [];
+  for (const trait of traits) {
+    const binding = trait.commandBinding;
+    if (!binding?.commands?.length) continue;
+
+    for (const cmd of binding.commands) {
+      if (activeCommands.has(cmd)) {
+        result.push(localTraitId(trait));
+        break;
+      }
+    }
+  }
+  return result;
+}
