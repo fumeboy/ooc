@@ -164,6 +164,7 @@ export function extractDirectiveTypes(iterResult: Record<string, unknown>): stri
   const directiveFields = [
     "program", "talks", "useSkill", "newChildNode", "threadReturn",
     "awaitingChildren", "continueSubThread", "planUpdate",
+    "formBegin", "formSubmit", "formCancel",
   ];
   /* thought 在 newActions 中 */
   const result: string[] = [];
