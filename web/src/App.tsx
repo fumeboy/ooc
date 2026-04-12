@@ -468,16 +468,6 @@ export function App() {
           >
             Oriented Object Context
           </h1>
-          <span
-            className={cn(
-              "text-[8px]",
-              sseConnected ? "text-green-500" : "text-[var(--muted-foreground)]",
-            )}
-            role="status"
-            title={sseConnected ? "Connected" : "Disconnected"}
-          >
-            ●
-          </span>
         </div>
       </div>
 

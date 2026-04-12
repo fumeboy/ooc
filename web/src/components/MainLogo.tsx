@@ -12,7 +12,7 @@
 import { useAtom } from "jotai";
 import { useEffect } from "react";
 import { OocLogo } from "./OocLogo";
-import { debugEnabledAtom, globalPausedAtom } from "../store/session";
+import { debugEnabledAtom, globalPausedAtom, sseConnectedAtom } from "../store/session";
 import { cn } from "../lib/utils";
 import {
   enableDebug,
@@ -50,7 +50,7 @@ function TogglePill({
           ? "text-white"
           : "bg-[var(--accent)] text-[var(--muted-foreground)] hover:bg-[var(--accent)]/80 opacity-70",
       )}
-      style={active ? { backgroundColor: activeColor } : undefined}
+      style={active ? { backgroundColor: activeColor+"90" } : undefined}
     >
       <span className="relative w-5 h-3 rounded-full bg-black/20 shrink-0">
         <span
@@ -75,6 +75,7 @@ function PlaceholderPill() {
 export function MainLogo({ isMobile }: { isMobile?: boolean }) {
   const [debugEnabled, setDebugEnabled] = useAtom(debugEnabledAtom);
   const [globalPaused, setGlobalPaused] = useAtom(globalPausedAtom);
+  const [sseConnected] = useAtom(sseConnectedAtom);
 
   useEffect(() => {
     getDebugStatus().then((r) => setDebugEnabled(r.debugEnabled)).catch(() => {});
@@ -134,16 +135,16 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
       </div>
 
       {/* btn1（左上）：空置 */}
-      <div className="absolute" style={{
+      {/* <div className="absolute" style={{
         top: "50%", left: "50%",
         transform: `translate(calc(-50% + ${positions[0]!.x}px), calc(-50% + ${positions[0]!.y}px)) rotate(${tilt}deg)`,
       }}>
         <PlaceholderPill />
-      </div>
+      </div> */}
 
       {/* btn2（右上）：debug */}
       <div className="absolute" style={{
-        top: "50%", left: "50%",
+        top: "50%", left: "60%",
         transform: `translate(calc(-50% + ${positions[1]!.x}px), calc(-50% + ${positions[1]!.y}px)) rotate(${tilt}deg)`,
       }}>
         <TogglePill
@@ -157,8 +158,8 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
 
       {/* btn3（左下）：全局 pause */}
       <div className="absolute" style={{
-        top: "50%", left: "50%",
-        transform: `translate(calc(-50% + ${positions[2]!.x}px), calc(-50% + ${positions[2]!.y}px)) rotate(${tilt}deg)`,
+        top: "50%", left: "40%",
+        transform: `translate(calc(-50% + ${positions[2]!.x}px), calc(-50% + ${positions[2]!.y}px)) rotate(${tilt+5}deg)`,
       }}>
         <TogglePill
           active={globalPaused}
@@ -169,12 +170,25 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
         />
       </div>
 
-      {/* btn4（右下）：空置 */}
+      {/* btn4（右下）：网络状态 */}
       <div className="absolute" style={{
         top: "50%", left: "50%",
         transform: `translate(calc(-50% + ${positions[3]!.x}px), calc(-50% + ${positions[3]!.y}px)) rotate(${tilt}deg)`,
       }}>
-        <PlaceholderPill />
+        <div
+          className={cn(
+            PILL_STYLE,
+            sseConnected
+              ? "bg-green-500/20 text-green-600"
+              : "bg-red-500/20 text-red-500 opacity-70",
+          )}
+        >
+          <span className={cn(
+            "w-1.5 h-1.5 rounded-full shrink-0",
+            sseConnected ? "bg-green-500" : "bg-red-500",
+          )} />
+          <span>{sseConnected ? "online" : "offline"}</span>
+        </div>
       </div>
     </div>
   );
