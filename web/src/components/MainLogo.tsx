@@ -155,18 +155,10 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
         />
       </div>
 
-      {/* btn3（左下）：空置 */}
+      {/* btn3（左下）：全局 pause */}
       <div className="absolute" style={{
         top: "50%", left: "50%",
         transform: `translate(calc(-50% + ${positions[2]!.x}px), calc(-50% + ${positions[2]!.y}px)) rotate(${tilt}deg)`,
-      }}>
-        <PlaceholderPill />
-      </div>
-
-      {/* btn4（右下）：全局 pause */}
-      <div className="absolute" style={{
-        top: "50%", left: "50%",
-        transform: `translate(calc(-50% + ${positions[3]!.x}px), calc(-50% + ${positions[3]!.y}px)) rotate(${tilt}deg)`,
       }}>
         <TogglePill
           active={globalPaused}
@@ -175,6 +167,14 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
           activeLabel="paused"
           onClick={toggleGlobalPause}
         />
+      </div>
+
+      {/* btn4（右下）：空置 */}
+      <div className="absolute" style={{
+        top: "50%", left: "50%",
+        transform: `translate(calc(-50% + ${positions[3]!.x}px), calc(-50% + ${positions[3]!.y}px)) rotate(${tilt}deg)`,
+      }}>
+        <PlaceholderPill />
       </div>
     </div>
   );
