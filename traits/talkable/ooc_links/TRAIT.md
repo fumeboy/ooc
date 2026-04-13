@@ -31,18 +31,6 @@ OOC 系统使用 `ooc://` 协议来引用系统内的对象和文件。
 - `description`（可选）— 卡片描述文字
 - URL 必须是 `ooc://` 链接
 
-### 示例
-
-```toml
-[talk]
-target = "user"
-message = """
-我已经为你生成了项目看板，请查看：
-
-[navigate title="项目看板" description="当前任务进度总览"]ooc://file/objects/supervisor/files/kanban.md[/navigate]
-"""
-```
-
 ### 使用场景
 
 - 你生成了文档或报告，需要引导用户查看
