@@ -726,6 +726,13 @@ export async function runWithThreadTree(
         /* 转换为 LLM Messages */
         messages = contextToMessages(context);
 
+        /* 自动 mark 已纳入 context 的 unread inbox 消息 */
+        for (const msg of context.inbox) {
+          if (msg.status === "unread") {
+            tree.markInbox(threadId, msg.id, "ack", "已纳入上下文");
+          }
+        }
+
         /* 追加活跃 form 信息到 context（让 LLM 知道当前有哪些未完成的 form） */
         const activeForms = formManager.activeForms();
         if (activeForms.length > 0) {
@@ -1775,6 +1782,13 @@ export async function resumeWithThreadTree(
           skills: config.skills,
         });
         messages = contextToMessages(context);
+
+        /* 自动 mark 已纳入 context 的 unread inbox 消息（resume 路径） */
+        for (const msg of context.inbox) {
+          if (msg.status === "unread") {
+            tree.markInbox(threadId, msg.id, "ack", "已纳入上下文");
+          }
+        }
 
         /* 追加活跃 form 信息（resume 路径） */
         const activeForms = formManager.activeForms();
