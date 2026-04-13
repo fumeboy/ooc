@@ -27,7 +27,7 @@ import { MethodRegistry, type MethodContext } from "../trait/registry.js";
 import { getActiveTraits, traitId } from "../trait/activator.js";
 import { FormManager } from "./form.js";
 import { collectCommandTraits } from "./hooks.js";
-import { buildAvailableTools, BEGIN_TOOL_TO_COMMAND, SUBMIT_TOOL_TO_COMMAND, FORM_CANCEL_TOOL } from "./tools.js";
+import { buildAvailableTools } from "./tools.js";
 
 import type { LLMClient, Message, ToolCall } from "../thinkable/client.js";
 import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "../types/index.js";
@@ -807,49 +807,67 @@ export async function runWithThreadTree(
 
         consola.info(`[Engine] tool_call: ${toolName}(${JSON.stringify(args).slice(0, 200)})`);
 
-        /* --- Begin --- */
-        if (toolName in BEGIN_TOOL_TO_COMMAND) {
-          const command = BEGIN_TOOL_TO_COMMAND[toolName]!;
-          const formId = formManager.begin(command, args.description as string ?? "", {
-            trait: args.trait as string,
-            functionName: args.function_name as string,
-          });
+        /* --- Open --- */
+        if (toolName === "open") {
+          const openType = args.type as string;
+          const command = args.command as string;
+          const description = args.description as string ?? "";
 
-          const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommands());
-          for (const traitName of traitsToLoad) {
+          if (openType === "command" && command) {
+            // 指令类 open：和旧的 begin 逻辑一样
+            const formId = formManager.begin(command, description, {
+              trait: args.trait as string,
+              functionName: args.function_name as string,
+            });
+            const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommands());
+            for (const traitName of traitsToLoad) await tree.activateTrait(threadId, traitName);
+            if (command === "call_function" && args.trait) await tree.activateTrait(threadId, args.trait as string);
+
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.activeForms = formManager.toData();
+              td.actions.push({ type: "inject", content: `Form ${formId} 已创建（${command}）。相关知识已加载。`, timestamp: Date.now() });
+              tree.writeThreadData(threadId, td);
+            }
+            consola.info(`[Engine] open command: ${command} → ${formId}`);
+
+          } else if (openType === "trait" && args.name) {
+            // trait 加载
+            const traitName = args.name as string;
             await tree.activateTrait(threadId, traitName);
-          }
+            const formId = formManager.begin("_trait", description, { trait: traitName });
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.activeForms = formManager.toData();
+              td.actions.push({ type: "inject", content: `Trait ${traitName} 已加载。`, timestamp: Date.now() });
+              tree.writeThreadData(threadId, td);
+            }
+            consola.info(`[Engine] open trait: ${traitName} → ${formId}`);
 
-          if (command === "call_function" && args.trait) {
-            await tree.activateTrait(threadId, args.trait as string);
-          }
-
-          if (command === "use_skill" && args.name) {
-            const skillDef = config.skills?.find(s => s.name === args.name);
+          } else if (openType === "skill" && args.name) {
+            // skill 加载
+            const skillName = args.name as string;
+            const skillDef = config.skills?.find(s => s.name === skillName);
+            let injectContent: string;
             if (skillDef) {
               const body = loadSkillBody(skillDef.dir);
-              if (body) {
-                const td = tree.readThreadData(threadId);
-                if (td) {
-                  td.actions.push({ type: "inject", content: body, timestamp: Date.now() });
-                  tree.writeThreadData(threadId, td);
-                }
-              }
+              injectContent = body ?? `[错误] Skill "${skillName}" 内容为空`;
+            } else {
+              injectContent = `[错误] 未找到 Skill "${skillName}"`;
             }
+            const formId = formManager.begin("_skill", description, { trait: skillName });
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.activeForms = formManager.toData();
+              td.actions.push({ type: "inject", content: injectContent, timestamp: Date.now() });
+              tree.writeThreadData(threadId, td);
+            }
+            consola.info(`[Engine] open skill: ${skillName} → ${formId}`);
           }
-
-          const td = tree.readThreadData(threadId);
-          if (td) {
-            td.activeForms = formManager.toData();
-            td.actions.push({ type: "inject", content: `Form ${formId} 已创建（${command}）。相关知识已加载。`, timestamp: Date.now() });
-            tree.writeThreadData(threadId, td);
-          }
-          consola.info(`[Engine] form.begin: ${command} → ${formId}`);
         }
 
         /* --- Submit --- */
-        else if (toolName in SUBMIT_TOOL_TO_COMMAND) {
-          const command = SUBMIT_TOOL_TO_COMMAND[toolName]!;
+        else if (toolName === "submit") {
           const form = formManager.submit(args.form_id as string ?? "");
 
           if (!form) {
@@ -859,6 +877,8 @@ export async function runWithThreadTree(
               tree.writeThreadData(threadId, td);
             }
           } else {
+            const command = form.command;
+
             /* program */
             if (command === "program" && args.code) {
               const { context: execCtx, getOutputs } = buildExecContext(threadId);
@@ -991,9 +1011,11 @@ export async function runWithThreadTree(
             }
 
             /* trait 卸载 */
-            if (!formManager.activeCommands().has(form.command)) {
-              const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
-              for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName);
+            if (command !== "_trait" && command !== "_skill") {
+              if (!formManager.activeCommands().has(form.command)) {
+                const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
+                for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName);
+              }
             }
 
             const tdAfter = tree.readThreadData(threadId);
@@ -1002,21 +1024,29 @@ export async function runWithThreadTree(
           }
         }
 
-        /* --- Cancel --- */
-        else if (toolName === "form_cancel") {
+        /* --- Close --- */
+        else if (toolName === "close") {
           const form = formManager.cancel(args.form_id as string ?? "");
           if (form) {
-            if (!formManager.activeCommands().has(form.command)) {
-              const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
-              for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName);
+            if (form.command !== "_trait" && form.command !== "_skill") {
+              // command 类型：卸载 command 关联 trait
+              if (!formManager.activeCommands().has(form.command)) {
+                const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
+                for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName);
+              }
+            } else if (form.command === "_trait" && form.trait) {
+              // trait 类型：卸载 trait
+              await tree.deactivateTrait(threadId, form.trait);
             }
+            // skill 类型：无需卸载
+
             const td = tree.readThreadData(threadId);
             if (td) {
               td.activeForms = formManager.toData();
-              td.actions.push({ type: "inject", content: `Form ${form.formId} 已取消。`, timestamp: Date.now() });
+              td.actions.push({ type: "inject", content: `Form ${form.formId} 已关闭。`, timestamp: Date.now() });
               tree.writeThreadData(threadId, td);
             }
-            consola.info(`[Engine] form.cancel: ${form.command} (${form.formId})`);
+            consola.info(`[Engine] close: ${form.command} (${form.formId})`);
           }
         }
 
@@ -1798,35 +1828,68 @@ export async function resumeWithThreadTree(
         const toolName = tc.function.name;
         consola.info(`[Engine] tool_call: ${toolName}(${JSON.stringify(args).slice(0, 200)})`);
 
-        if (toolName in BEGIN_TOOL_TO_COMMAND) {
-          const command = BEGIN_TOOL_TO_COMMAND[toolName]!;
-          const formId = formManager.begin(command, args.description as string ?? "", {
-            trait: args.trait as string, functionName: args.function_name as string,
-          });
-          const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommands());
-          for (const traitName of traitsToLoad) await tree.activateTrait(threadId, traitName);
-          if (command === "call_function" && args.trait) await tree.activateTrait(threadId, args.trait as string);
-          if (command === "use_skill" && args.name) {
-            const skillDef = config.skills?.find(s => s.name === args.name);
+        /* --- Open (resume) --- */
+        if (toolName === "open") {
+          const openType = args.type as string;
+          const command = args.command as string;
+          const description = args.description as string ?? "";
+
+          if (openType === "command" && command) {
+            const formId = formManager.begin(command, description, {
+              trait: args.trait as string, functionName: args.function_name as string,
+            });
+            const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommands());
+            for (const traitName of traitsToLoad) await tree.activateTrait(threadId, traitName);
+            if (command === "call_function" && args.trait) await tree.activateTrait(threadId, args.trait as string);
+
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.activeForms = formManager.toData();
+              td.actions.push({ type: "inject", content: `Form ${formId} 已创建（${command}）。相关知识已加载。`, timestamp: Date.now() });
+              tree.writeThreadData(threadId, td);
+            }
+            consola.info(`[Engine] open command: ${command} → ${formId}`);
+
+          } else if (openType === "trait" && args.name) {
+            const traitName = args.name as string;
+            await tree.activateTrait(threadId, traitName);
+            const formId = formManager.begin("_trait", description, { trait: traitName });
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.activeForms = formManager.toData();
+              td.actions.push({ type: "inject", content: `Trait ${traitName} 已加载。`, timestamp: Date.now() });
+              tree.writeThreadData(threadId, td);
+            }
+            consola.info(`[Engine] open trait: ${traitName} → ${formId}`);
+
+          } else if (openType === "skill" && args.name) {
+            const skillName = args.name as string;
+            const skillDef = config.skills?.find(s => s.name === skillName);
+            let injectContent: string;
             if (skillDef) {
               const body = loadSkillBody(skillDef.dir);
-              if (body) { const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "inject", content: body, timestamp: Date.now() }); tree.writeThreadData(threadId, td); } }
+              injectContent = body ?? `[错误] Skill "${skillName}" 内容为空`;
+            } else {
+              injectContent = `[错误] 未找到 Skill "${skillName}"`;
             }
+            const formId = formManager.begin("_skill", description, { trait: skillName });
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.activeForms = formManager.toData();
+              td.actions.push({ type: "inject", content: injectContent, timestamp: Date.now() });
+              tree.writeThreadData(threadId, td);
+            }
+            consola.info(`[Engine] open skill: ${skillName} → ${formId}`);
           }
-          const td = tree.readThreadData(threadId);
-          if (td) {
-            td.activeForms = formManager.toData();
-            td.actions.push({ type: "inject", content: `Form ${formId} 已创建（${command}）。相关知识已加载。`, timestamp: Date.now() });
-            tree.writeThreadData(threadId, td);
-          }
-          consola.info(`[Engine] form.begin: ${command} → ${formId}`);
-        } else if (toolName in SUBMIT_TOOL_TO_COMMAND) {
-          const command = SUBMIT_TOOL_TO_COMMAND[toolName]!;
+
+        /* --- Submit (resume) --- */
+        } else if (toolName === "submit") {
           const form = formManager.submit(args.form_id as string ?? "");
           if (!form) {
             const td = tree.readThreadData(threadId);
             if (td) { td.actions.push({ type: "inject", content: `[错误] Form ${args.form_id} 不存在。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
           } else {
+            const command = form.command;
             if (command === "program" && args.code) {
               const { context: execCtx, getOutputs } = buildExecContext(threadId);
               const lang = (args.lang as string) ?? "javascript";
@@ -1868,15 +1931,24 @@ export async function resumeWithThreadTree(
               const ids = threadIds.join(", ");
               const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "inject", content: `[${command}] ${ids}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
             }
-            if (!formManager.activeCommands().has(form.command)) { const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command])); for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName); }
+            if (command !== "_trait" && command !== "_skill") {
+              if (!formManager.activeCommands().has(form.command)) { const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command])); for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName); }
+            }
             const tdAfter = tree.readThreadData(threadId); if (tdAfter) { tdAfter.activeForms = formManager.toData(); tree.writeThreadData(threadId, tdAfter); }
             consola.info(`[Engine] form.submit: ${command} (${form.formId})`);
           }
-        } else if (toolName === "form_cancel") {
+
+        /* --- Close (resume) --- */
+        } else if (toolName === "close") {
           const form = formManager.cancel(args.form_id as string ?? "");
           if (form) {
-            if (!formManager.activeCommands().has(form.command)) { const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command])); for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName); }
-            const td = tree.readThreadData(threadId); if (td) { td.activeForms = formManager.toData(); td.actions.push({ type: "inject", content: `Form ${form.formId} 已取消。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+            if (form.command !== "_trait" && form.command !== "_skill") {
+              if (!formManager.activeCommands().has(form.command)) { const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command])); for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName); }
+            } else if (form.command === "_trait" && form.trait) {
+              await tree.deactivateTrait(threadId, form.trait);
+            }
+            const td = tree.readThreadData(threadId); if (td) { td.activeForms = formManager.toData(); td.actions.push({ type: "inject", content: `Form ${form.formId} 已关闭。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+            consola.info(`[Engine] close: ${form.command} (${form.formId})`);
           }
         }
 
