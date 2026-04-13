@@ -191,7 +191,7 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>): Message[
     const inboxLines = ctx.inbox
       .map(m => `- #${m.id} [${m.from}] ${m.content}`)
       .join("\n");
-    userParts.push(`## 未读消息\n${inboxLines}`);
+    userParts.push(`## 未读消息\n${inboxLines}\n\n（请在下次工具调用时通过 mark 参数标记以上消息）`);
   }
 
   /* todos */
@@ -726,13 +726,6 @@ export async function runWithThreadTree(
         /* 转换为 LLM Messages */
         messages = contextToMessages(context);
 
-        /* 自动 mark 已纳入 context 的 unread inbox 消息 */
-        for (const msg of context.inbox) {
-          if (msg.status === "unread") {
-            tree.markInbox(threadId, msg.id, "ack", "已纳入上下文");
-          }
-        }
-
         /* 追加活跃 form 信息到 context（让 LLM 知道当前有哪些未完成的 form） */
         const activeForms = formManager.activeForms();
         if (activeForms.length > 0) {
@@ -825,6 +818,13 @@ export async function runWithThreadTree(
         const toolName = tc.function.name;
 
         consola.info(`[Engine] tool_call: ${toolName}(${JSON.stringify(args).slice(0, 200)})`);
+
+        /* 处理 mark 参数（三个 tool 通用） */
+        if (Array.isArray(args.mark)) {
+          for (const m of args.mark as { messageId: string; type: "ack" | "ignore" | "todo"; tip: string }[]) {
+            tree.markInbox(threadId, m.messageId, m.type, m.tip);
+          }
+        }
 
         /* --- Open --- */
         if (toolName === "open") {
@@ -1783,13 +1783,6 @@ export async function resumeWithThreadTree(
         });
         messages = contextToMessages(context);
 
-        /* 自动 mark 已纳入 context 的 unread inbox 消息（resume 路径） */
-        for (const msg of context.inbox) {
-          if (msg.status === "unread") {
-            tree.markInbox(threadId, msg.id, "ack", "已纳入上下文");
-          }
-        }
-
         /* 追加活跃 form 信息（resume 路径） */
         const activeForms = formManager.activeForms();
         if (activeForms.length > 0) {
@@ -1865,6 +1858,13 @@ export async function resumeWithThreadTree(
         try { args = JSON.parse(tc.function.arguments); } catch {}
         const toolName = tc.function.name;
         consola.info(`[Engine] tool_call: ${toolName}(${JSON.stringify(args).slice(0, 200)})`);
+
+        /* 处理 mark 参数（resume 路径） */
+        if (Array.isArray(args.mark)) {
+          for (const m of args.mark as { messageId: string; type: "ack" | "ignore" | "todo"; tip: string }[]) {
+            tree.markInbox(threadId, m.messageId, m.type, m.tip);
+          }
+        }
 
         /* --- Open (resume) --- */
         if (toolName === "open") {

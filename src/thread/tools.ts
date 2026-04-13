@@ -6,10 +6,25 @@
  * - submit: 提交执行（仅 command 类型）
  * - close: 关闭上下文（卸载知识 / 取消指令）
  *
- * @ref docs/superpowers/specs/2026-04-13-tool-calling-architecture-design.md
+ * 所有 tool 都支持可选的 mark 参数，用于主动标记 inbox 消息。
  */
 
 import type { ToolDefinition } from "../thinkable/client.js";
+
+/** mark 参数的 JSON Schema（三个 tool 共用） */
+const MARK_PARAM = {
+  type: "array",
+  description: "标记 inbox 消息。可在任何 tool 调用时附带。",
+  items: {
+    type: "object",
+    properties: {
+      messageId: { type: "string", description: "inbox 消息 ID" },
+      type: { type: "string", enum: ["ack", "ignore", "todo"], description: "标记类型" },
+      tip: { type: "string", description: "标记说明" },
+    },
+    required: ["messageId", "type", "tip"],
+  },
+} as const;
 
 /** open tool — 打开上下文 */
 export const OPEN_TOOL: ToolDefinition = {
@@ -47,6 +62,7 @@ export const OPEN_TOOL: ToolDefinition = {
           type: "string",
           description: "call_function 时：方法名",
         },
+        mark: MARK_PARAM,
       },
       required: ["type", "description"],
     },
@@ -85,6 +101,7 @@ export const SUBMIT_TOOL: ToolDefinition = {
         args: { type: "object", description: "call_function: 方法参数" },
         /* create_sub_thread 额外 */
         traits: { type: "array", items: { type: "string" }, description: "create_sub_thread: trait 列表" },
+        mark: MARK_PARAM,
       },
       required: ["form_id"],
     },
@@ -104,6 +121,7 @@ export const CLOSE_TOOL: ToolDefinition = {
           type: "string",
           description: "open 返回的 form_id",
         },
+        mark: MARK_PARAM,
       },
       required: ["form_id"],
     },
@@ -122,12 +140,3 @@ export const OOC_TOOLS: ToolDefinition[] = [OPEN_TOOL, SUBMIT_TOOL, CLOSE_TOOL];
 export function buildAvailableTools(_activeCommands?: Set<string>): ToolDefinition[] {
   return OOC_TOOLS;
 }
-
-/* ========== 旧 API 兼容（保留导出名，engine 中可能引用） ========== */
-
-/** @deprecated 使用 OOC_TOOLS */
-export const BEGIN_TOOL_TO_COMMAND: Record<string, string> = {};
-/** @deprecated 使用 OOC_TOOLS */
-export const SUBMIT_TOOL_TO_COMMAND: Record<string, string> = {};
-/** @deprecated */
-export const FORM_CANCEL_TOOL = CLOSE_TOOL;

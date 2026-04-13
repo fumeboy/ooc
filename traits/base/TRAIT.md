@@ -30,6 +30,24 @@ deps: []
 
 关闭一个已打开的 form。command 类型等同于取消指令，trait/skill 类型等同于卸载知识。
 
+## mark — 标记 inbox 消息
+
+所有工具（open/submit/close）都支持可选的 `mark` 参数，用于主动标记 inbox 中的消息：
+
+```json
+"mark": [
+  {"messageId": "msg_xxx", "type": "ack", "tip": "已阅读并理解"},
+  {"messageId": "msg_yyy", "type": "todo", "tip": "需要后续处理"}
+]
+```
+
+标记类型：
+- `ack` — 已确认（消息已阅读并理解）
+- `ignore` — 忽略（消息与当前任务无关）
+- `todo` — 待办（需要后续处理）
+
+收到消息后应尽早 mark，让系统知道你对消息的处理态度。
+
 ## 规则
 
 1. 每轮只能调用一个工具
@@ -37,3 +55,4 @@ deps: []
 3. submit 时必须传入 form_id
 4. 任务完成后必须 open(type="command", command="return") → submit(summary="...")
 5. 你的文本输出会自动记录为思考过程
+6. 收到 inbox 消息后，在下一次工具调用时通过 mark 参数标记
