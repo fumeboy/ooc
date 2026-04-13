@@ -10,10 +10,15 @@
  * - 支持 SSE 流式追加（loading 状态）
  */
 import { useState } from "react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "../../lib/utils";
 import { MarkdownContent } from "./MarkdownContent";
-import { Copy, Check, ChevronRight, ChevronDown, Loader2 } from "lucide-react";
+import { Copy, Check, ChevronRight, ChevronDown, Loader2, Maximize2, X } from "lucide-react";
 import type { Action, FlowMessage } from "../../api/types";
+
+/** program/action 内容截断阈值 */
+const TRUNCATE_MAX_LINES = 8;
+const TRUNCATE_MAX_CHARS = 300;
 
 /* ── 复制按钮 ── */
 function CopyBtn({ text }: { text: string }) {
@@ -56,6 +61,60 @@ function formatTs(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
+/* ── 文本截断工具（行数 + 字符数双重限制） ── */
+function truncateText(text: string): { truncated: string; isTruncated: boolean } {
+  const lines = text.split("\n");
+  if (lines.length <= TRUNCATE_MAX_LINES && text.length <= TRUNCATE_MAX_CHARS) {
+    return { truncated: text, isTruncated: false };
+  }
+  /* 先按行截断 */
+  let result = lines.length > TRUNCATE_MAX_LINES
+    ? lines.slice(0, TRUNCATE_MAX_LINES).join("\n")
+    : text;
+  /* 再按字符截断 */
+  if (result.length > TRUNCATE_MAX_CHARS) {
+    result = result.slice(0, TRUNCATE_MAX_CHARS);
+  }
+  return { truncated: result + " …", isTruncated: true };
+}
+
+/* ── 全文模态窗 ── */
+function FullTextModal({ open, onClose, title, content, result }: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  content: string;
+  result?: string;
+}) {
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Content
+          aria-describedby={undefined}
+          className="fixed z-50 inset-4 md:inset-[10%] flex flex-col bg-[var(--card)] rounded-xl shadow-2xl overflow-hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+        >
+          <DialogPrimitive.Title className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] shrink-0">
+            <span className="font-mono text-sm font-semibold">{title}</span>
+            <DialogPrimitive.Close className="p-1 rounded hover:bg-[var(--accent)] transition-colors">
+              <X className="w-4 h-4" />
+            </DialogPrimitive.Close>
+          </DialogPrimitive.Title>
+          <div className="flex-1 overflow-auto p-4 font-mono text-[12px]">
+            <pre className="whitespace-pre-wrap break-all text-[var(--foreground)]">{content}</pre>
+            {result && (
+              <div className="mt-3 border-t border-[var(--border)] pt-3">
+                <span className="text-[10px] text-[var(--muted-foreground)] font-semibold uppercase tracking-wider">output</span>
+                <pre className="mt-1 whitespace-pre-wrap break-all text-[var(--foreground)] opacity-70">{result}</pre>
+              </div>
+            )}
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+}
+
 /* ── inject 内容解析 ── */
 function parseInjectTitle(content: string): { title: string; body: string } {
   const m = content.match(/^>>>\s*\[系统提示 — ([^\|\]]+)(?:\s*\|\s*([^\]]+))?\]\s*(\n|$)/);
@@ -82,9 +141,15 @@ export function TuiAction({ action, objectName, loading }: TuiActionProps) {
   const isInject = action.type === "inject";
   const isProgramOrAction = action.type === "program" || action.type === "action";
   const [expanded, setExpanded] = useState(!isInject);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const injectParsed = isInject ? parseInjectTitle(action.content) : null;
   const displayContent = isInject ? (injectParsed?.body ?? action.content) : action.content;
+
+  /* program/action 截断 */
+  const contentTrunc = isProgramOrAction ? truncateText(action.content) : null;
+  const resultTrunc = isProgramOrAction && action.result ? truncateText(action.result) : null;
+  const needsModal = contentTrunc?.isTruncated || resultTrunc?.isTruncated;
 
   return (
     <div className="group font-mono text-[12px] leading-relaxed">
@@ -124,12 +189,34 @@ export function TuiAction({ action, objectName, loading }: TuiActionProps) {
         <div className="pl-5 mt-0.5">
           {isProgramOrAction ? (
             <div>
-              <pre className="text-[11px] whitespace-pre-wrap break-all text-[var(--foreground)] opacity-90">{action.content}</pre>
+              <pre className="text-[11px] whitespace-pre-wrap break-all text-[var(--foreground)] opacity-90">
+                {contentTrunc!.truncated}
+              </pre>
               {action.result && (
                 <div className="mt-1 border-l-2 border-[var(--border)] pl-2">
                   <span className="text-[10px] text-[var(--muted-foreground)]">output</span>
-                  <pre className="text-[11px] whitespace-pre-wrap break-all text-[var(--foreground)] opacity-70">{action.result}</pre>
+                  <pre className="text-[11px] whitespace-pre-wrap break-all text-[var(--foreground)] opacity-70">
+                    {resultTrunc!.truncated}
+                  </pre>
                 </div>
+              )}
+              {needsModal && (
+                <button
+                  onClick={() => setModalOpen(true)}
+                  className="mt-1 inline-flex items-center gap-1 text-[10px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                >
+                  <Maximize2 className="w-3 h-3" />
+                  <span>查看全文</span>
+                </button>
+              )}
+              {needsModal && (
+                <FullTextModal
+                  open={modalOpen}
+                  onClose={() => setModalOpen(false)}
+                  title={`${cfg.label} — ${objectName ?? ""}`}
+                  content={action.content}
+                  result={action.result}
+                />
               )}
             </div>
           ) : action.type === "thought" ? (
