@@ -851,17 +851,28 @@ export async function runWithThreadTree(
             consola.info(`[Engine] open command: ${command} → ${formId}`);
 
           } else if (openType === "trait" && args.name) {
-            // trait 加载
+            /* trait 加载：验证 trait 存在后再激活 */
             const traitName = args.name as string;
-            await tree.activateTrait(threadId, traitName);
-            const formId = formManager.begin("_trait", description, { trait: traitName });
-            const td = tree.readThreadData(threadId);
-            if (td) {
-              td.activeForms = formManager.toData();
-              td.actions.push({ type: "inject", content: `Trait ${traitName} 已加载。`, timestamp: Date.now() });
-              tree.writeThreadData(threadId, td);
+            const traitExists = config.traits.some(t => traitId(t) === traitName);
+            if (traitExists) {
+              await tree.activateTrait(threadId, traitName);
+              const formId = formManager.begin("_trait", description, { trait: traitName });
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.activeForms = formManager.toData();
+                td.actions.push({ type: "inject", content: `Trait ${traitName} 已加载。`, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+              consola.info(`[Engine] open trait: ${traitName} → ${formId}`);
+            } else {
+              const available = config.traits.map(t => traitId(t)).filter(id => !id.startsWith("kernel/")).slice(0, 20).join(", ");
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.actions.push({ type: "inject", content: `[错误] Trait "${traitName}" 不存在。可用 trait: ${available || "(无)"}`, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+              consola.warn(`[Engine] open trait: ${traitName} not found`);
             }
-            consola.info(`[Engine] open trait: ${traitName} → ${formId}`);
 
           } else if (openType === "skill" && args.name) {
             // skill 加载
@@ -1066,6 +1077,13 @@ export async function runWithThreadTree(
               tree.writeThreadData(threadId, td);
             }
             consola.info(`[Engine] close: ${form.command} (${form.formId})`);
+          } else {
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.actions.push({ type: "inject", content: `[提示] Form ${args.form_id} 不存在（可能已被 submit 消费）。请直接执行下一步操作。`, timestamp: Date.now() });
+              tree.writeThreadData(threadId, td);
+            }
+            consola.warn(`[Engine] close: form ${args.form_id} not found`);
           }
         }
 
@@ -1890,15 +1908,23 @@ export async function resumeWithThreadTree(
 
           } else if (openType === "trait" && args.name) {
             const traitName = args.name as string;
-            await tree.activateTrait(threadId, traitName);
-            const formId = formManager.begin("_trait", description, { trait: traitName });
-            const td = tree.readThreadData(threadId);
-            if (td) {
-              td.activeForms = formManager.toData();
-              td.actions.push({ type: "inject", content: `Trait ${traitName} 已加载。`, timestamp: Date.now() });
-              tree.writeThreadData(threadId, td);
+            const traitExists = config.traits.some(t => traitId(t) === traitName);
+            if (traitExists) {
+              await tree.activateTrait(threadId, traitName);
+              const formId = formManager.begin("_trait", description, { trait: traitName });
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.activeForms = formManager.toData();
+                td.actions.push({ type: "inject", content: `Trait ${traitName} 已加载。`, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+              consola.info(`[Engine] open trait: ${traitName} → ${formId}`);
+            } else {
+              const available = config.traits.map(t => traitId(t)).filter(id => !id.startsWith("kernel/")).slice(0, 20).join(", ");
+              const td = tree.readThreadData(threadId);
+              if (td) { td.actions.push({ type: "inject", content: `[错误] Trait "${traitName}" 不存在。可用 trait: ${available || "(无)"}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+              consola.warn(`[Engine] open trait: ${traitName} not found`);
             }
-            consola.info(`[Engine] open trait: ${traitName} → ${formId}`);
 
           } else if (openType === "skill" && args.name) {
             const skillName = args.name as string;
@@ -1987,6 +2013,9 @@ export async function resumeWithThreadTree(
             }
             const td = tree.readThreadData(threadId); if (td) { td.activeForms = formManager.toData(); td.actions.push({ type: "inject", content: `Form ${form.formId} 已关闭。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
             consola.info(`[Engine] close: ${form.command} (${form.formId})`);
+          } else {
+            const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "inject", content: `[提示] Form ${args.form_id} 不存在（可能已被 submit 消费）。请直接执行下一步操作。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+            consola.warn(`[Engine] close: form ${args.form_id} not found`);
           }
         }
 
