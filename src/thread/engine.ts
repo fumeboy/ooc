@@ -943,7 +943,7 @@ export async function runWithThreadTree(
               await tree.returnThread(threadId, args.summary as string ?? "");
               const td = tree.readThreadData(threadId);
               if (td) {
-                td.actions.push({ type: "thread_return", content: `[return] ${args.summary}`, timestamp: Date.now() });
+                td.actions.push({ type: "thread_return", content: args.summary as string ?? "", timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
               }
               consola.info(`[Engine] return: ${(args.summary as string)?.slice(0, 100)}`);
@@ -1073,7 +1073,7 @@ export async function runWithThreadTree(
             llmMeta: { model: llmModel, latencyMs: llmLatencyMs, promptTokens: llmUsage.promptTokens ?? 0, completionTokens: llmUsage.completionTokens ?? 0, totalTokens: llmUsage.totalTokens ?? 0 },
             contextStats: { ...ctxStats, totalMessageChars },
             activeTraits: context.scopeChain, activeSkills: (config.skills ?? []).map(s => s.name),
-            parsedDirectives: [toolName], threadId, objectName,
+            parsedDirectives: [toolName], threadId, objectName, toolCalls,
           });
         }
 
@@ -1932,7 +1932,7 @@ export async function resumeWithThreadTree(
               }
             } else if (command === "return") {
               tree.setNodeStatus(threadId, "done"); tree.setNodeSummary(threadId, args.summary as string ?? "");
-              const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "thread_return", content: `[return] ${args.summary}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+              const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "thread_return", content: args.summary as string ?? "", timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
               scheduler.markDone(threadId);
             } else if (command === "create_sub_thread") {
               const childId = `thread_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -1981,7 +1981,7 @@ export async function resumeWithThreadTree(
           const debugDir = join(objectFlowDir, "threads", threadId, "debug");
           const ctxStats = computeContextStats(context);
           const totalMessageChars = messages.reduce((sum, m) => sum + m.content.length, 0);
-          writeDebugLoop({ debugDir, loopIndex: debugLoopCounter, messages, llmOutput, thinkingContent, source: "llm", llmMeta: { model: llmModel, latencyMs: llmLatencyMs, promptTokens: llmUsage.promptTokens ?? 0, completionTokens: llmUsage.completionTokens ?? 0, totalTokens: llmUsage.totalTokens ?? 0 }, contextStats: { ...ctxStats, totalMessageChars }, activeTraits: context.scopeChain, activeSkills: (config.skills ?? []).map(s => s.name), parsedDirectives: [toolName], threadId, objectName });
+          writeDebugLoop({ debugDir, loopIndex: debugLoopCounter, messages, llmOutput, thinkingContent, source: "llm", llmMeta: { model: llmModel, latencyMs: llmLatencyMs, promptTokens: llmUsage.promptTokens ?? 0, completionTokens: llmUsage.completionTokens ?? 0, totalTokens: llmUsage.totalTokens ?? 0 }, contextStats: { ...ctxStats, totalMessageChars }, activeTraits: context.scopeChain, activeSkills: (config.skills ?? []).map(s => s.name), parsedDirectives: [toolName], threadId, objectName, toolCalls });
         }
 
       } else {

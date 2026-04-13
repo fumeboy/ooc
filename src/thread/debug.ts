@@ -56,6 +56,7 @@ export interface WriteDebugLoopParams {
   parsedDirectives: string[];
   threadId: string;
   objectName: string;
+  toolCalls?: { id: string; type: string; function: { name: string; arguments: string } }[];
 }
 
 /**
@@ -84,8 +85,17 @@ export function writeDebugLoop(params: WriteDebugLoopParams): void {
     .join("\n\n");
   writeFileSync(join(debugDir, `${prefix}.input.txt`), inputContent, "utf-8");
 
-  /* output.txt */
-  writeFileSync(join(debugDir, `${prefix}.output.txt`), llmOutput, "utf-8");
+  /* output.txt — 包含文本输出 + tool calls */
+  let outputContent = llmOutput;
+  if (params.toolCalls && params.toolCalls.length > 0) {
+    const tcLines = params.toolCalls.map(tc => {
+      let argsFormatted: string;
+      try { argsFormatted = JSON.stringify(JSON.parse(tc.function.arguments), null, 2); } catch { argsFormatted = tc.function.arguments; }
+      return `[tool_call] ${tc.function.name}\n${argsFormatted}`;
+    });
+    outputContent += (outputContent ? "\n\n" : "") + tcLines.join("\n\n");
+  }
+  writeFileSync(join(debugDir, `${prefix}.output.txt`), outputContent, "utf-8");
 
   /* thinking.txt（仅当有内容时） */
   if (thinkingContent) {
