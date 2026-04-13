@@ -726,6 +726,18 @@ export async function runWithThreadTree(
         /* 转换为 LLM Messages */
         messages = contextToMessages(context);
 
+        /* 追加活跃 form 信息到 context（让 LLM 知道当前有哪些未完成的 form） */
+        const activeForms = formManager.activeForms();
+        if (activeForms.length > 0) {
+          const formLines = activeForms.map(f =>
+            `- ${f.formId}（${f.command}）: ${f.description}${f.trait ? ` [trait: ${f.trait}]` : ""}`,
+          );
+          const lastMsg = messages[messages.length - 1];
+          if (lastMsg && lastMsg.role === "user") {
+            lastMsg.content += `\n\n## 活跃 Form\n以下 form 已 open，等待 submit 或 close：\n${formLines.join("\n")}`;
+          }
+        }
+
         /* 构建动态 tools 列表 */
         const availableTools = buildAvailableTools(formManager.activeCommands());
 
@@ -1763,6 +1775,18 @@ export async function resumeWithThreadTree(
           skills: config.skills,
         });
         messages = contextToMessages(context);
+
+        /* 追加活跃 form 信息（resume 路径） */
+        const activeForms = formManager.activeForms();
+        if (activeForms.length > 0) {
+          const formLines = activeForms.map(f =>
+            `- ${f.formId}（${f.command}）: ${f.description}${f.trait ? ` [trait: ${f.trait}]` : ""}`,
+          );
+          const lastMsg = messages[messages.length - 1];
+          if (lastMsg && lastMsg.role === "user") {
+            lastMsg.content += `\n\n## 活跃 Form\n以下 form 已 open，等待 submit 或 close：\n${formLines.join("\n")}`;
+          }
+        }
 
         /* 构建动态 tools 列表 */
         const availableTools = buildAvailableTools(formManager.activeCommands());
