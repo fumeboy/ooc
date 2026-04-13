@@ -2,17 +2,17 @@
 name: kernel/computable/program_api
 type: how_to_use_tool
 when: never
-description: 完整 API 参考文档 — 所有工具方法、沙箱环境变量、Trait 元编程、Context Window
+description: 完整 API 参考文档 — 沙箱环境变量、工具方法、Trait 自省
 deps: ["kernel/computable"]
 ---
 
 # 完整 API 参考文档
 
-以下 API 在 `[program]` 段落中可用。
+以下 API 在 `submit(code=...)` 执行代码时可用。
 
 ## 沙箱环境变量
 
-以下路径变量在 `[program]` 中直接可用（无需 import）：
+以下路径变量直接可用（无需 import）：
 
 - `self_dir` — 对象的 stone 目录（如 `stones/supervisor/`）
 - `self_files_dir` — 对象的 files 目录（`self_dir + "/files"`）
@@ -20,93 +20,72 @@ deps: ["kernel/computable"]
 - `world_dir` — OOC World 根目录（user repo 根）
 - `task_dir` — 当前 flow 的根目录（如 `flows/{sessionId}/objects/{objectName}/`）
 - `task_files_dir` — 当前 flow 的 files 目录（`task_dir + "/files"`）
-- `sessionId` — 当前任务 ID
+- `sessionId` — 当前 session ID
 - `filesDir` — 等同于 `task_files_dir`
 
 ## 基础 API
 
-- `print(...args)` — 调试输出，只有你自己在下一轮思考中可见。不要用 print 回复任何人。
+- `print(...args)` — 输出结果（必须用 print，不要用 console.log）
 - `getData(key)` — 获取数据（先查 flow 工作记忆，再查 stone 长期记忆）
-- `setData(key, value)` — 设置任务工作记忆（仅当前任务可见，任务结束后归档到 effects/）
-- `persistData(key, value)` — 持久化数据到 stone（跨任务长期存在，同时当前任务立即可见）
+- `setData(key, value)` — 设置任务工作记忆（仅当前任务可见）
+- `persistData(key, value)` — 持久化数据到 stone（跨任务长期存在）
 - `getStoneData(key)` — 只读 stone 长期记忆
 - `getAllData()` — 获取所有数据（stone 为底，flow 覆盖）
 
-## 记忆索引（Memory）
+## 文件操作
 
-- `getMemory(scope?)` — 读取记忆索引。`scope` 可选："session"（会话记忆）或省略（长期记忆）
-- `updateMemory(content, scope?)` — 更新记忆索引。`scope` 可选："session"（会话记忆）或省略（长期记忆）
+- `readFile(path, opts?)` — 读取文件，返回字符串（不存在返回 null）。opts: { offset, limit }
+- `editFile(path, oldStr, newStr)` — 编辑文件（搜索替换），返回字符串
+- `writeFile(path, content)` — 写入文件（自动创建目录）
+- `listDir(path)` — 列出目录，返回文件名数组
+- `fileExists(path)` — 检查文件是否存在，返回 boolean
+- `deleteFile(path)` — 删除文件
 
-记忆索引是 markdown 格式的文档，作为你每次思考时的上下文。长期记忆跨任务持久存在，会话记忆仅当前任务可见。详见 reflective trait 中的记忆维护指南。
+## 搜索
 
-## 跨对象协作
+- `glob(pattern, opts?)` — 文件名搜索，返回路径数组。opts: { basePath, limit }
+- `grep(pattern, opts?)` — 内容搜索，返回匹配结果字符串。opts: { path, glob, context }
 
-- `talk(message, target, replyTo?)` — 向另一个对象或人类发消息（同步投递，fire-and-forget）。这是唯一的通信方式。向人类回复用 `talk("回复内容", "user")`。`replyTo` 可选，指定回复哪条消息的 ID（如 `"msg_abc"`）。
+## Shell
 
-## 局部变量（local）
+- `exec(cmd, opts?)` — 执行 Shell 命令，返回 stdout 字符串
+- `sh(cmd, opts?)` — 执行 Shell，返回 { ok, stdout, stderr }
 
-`local` 是与行为树节点绑定的局部变量空间，跨轮次持久化。
+## 记忆
 
-- `local.x = 1` — 写入当前 focus 节点的局部变量
-- `local.x` — 读取当前节点的局部变量，如果当前节点没有则自动查找祖先节点
-- 当 focus 进入子节点时，子节点有自己的 local 空间，但可以读取父节点的 local
-- 当子栈帧完成后，该节点的 local 数据保留在节点上（持久化）
-
-### local vs setData vs persistData 选择指南
-
-| | `local` | `setData` | `persistData` |
-|---|---------|-----------|---------------|
-| 作用域 | 当前行为树节点（子节点可读父节点） | 当前任务（Flow）全局 | 对象级别，跨任务 |
-| 生命周期 | 当前任务，节点内 | 当前任务结束后归档到 effects/ | 永久持久化到 stone |
-| 用途 | 步骤中间状态 | 任务工作记忆 | 长期记忆 |
-
-简单判断：
-- **这个值只在当前步骤需要？** → `local`
-- **这个值本次任务需要，但下次任务不需要？** → `setData`
-- **这个值下次任务还需要？** → `persistData`
-
-## 认知栈控制 API
-
-- `moveFocus(nodeId)` — 手动移动注意力到指定节点
-- `activateTrait(name)` — 为当前栈帧动态添加 trait（trait 绑定在栈帧上，focus 离开时自动失效）
-- `stack_throw(error)` — 抛出异常：沿栈向上冒泡，触发 `when_error` hook
-- `summary(text)` — 设置当前节点的摘要文本
-- `create_hook(when, type, handler)` — 注册栈帧级 hook。`when`: `when_stack_pop` / `when_yield` / `when_error`；`type`: hook 类型；`handler`: 回调函数
-
-## 待办队列（TodoList）
-
-待办队列控制认知栈节点的执行顺序。子栈帧创建时自动追加，完成时自动弹出。
-
-- `addTodo(nodeId, title)` — 在队列尾部追加
-- `insertTodo(index, nodeId, title)` — 在指定位置插入（0 = 最前面）
-- `removeTodo(index)` — 移除指定位置的待办
-- `getTodo()` — 获取当前待办队列
+- `getMemory(scope?)` — 读取记忆。scope: "session"（会话记忆）或省略（长期记忆）
+- `updateMemory(content, scope?)` — 更新记忆。scope: "session" 或省略
 
 ## Trait 自省与动态激活
 
-以下 API 用于减少“猜 API / 猜 trait 名称”的试错成本（在 `[program]` 中可用）：
+- `listTraits()` / `listLibraryTraits()` — 列出所有已加载的 trait ID
+- `listActiveTraits()` — 列出当前线程作用域链下生效的 trait ID
+- `readTrait(name)` — 读取 trait 文档，返回 { path, content }
+- `activateTrait(name)` / `deactivateTrait(name)` — 动态修改当前线程的激活 trait
+- `methods(trait?)` — 列出当前可调用的工具方法签名
+- `help()` — 打印 API 简短说明
 
-- `listTraits()` / `listLibraryTraits()` — 列出当前 world 已加载的所有 trait ID（如 `library/http/client`）
-- `listActiveTraits()` — 列出当前 focus/线程作用域链下生效的 trait ID
-- `readTrait(name)` — 读取 trait 文档，返回 `{ path, content }`（读取 `TRAIT.md`）
-- `activateTrait(name)` / `deactivateTrait(name)` — 动态修改当前栈帧的 `activatedTraits`，并刷新可调用工具方法
-- `methods(trait?)` — 列出当前可调用的工具方法签名（按 trait 分组检索）
-- `help()` — 打印上述 API 的简短说明
+## 局部变量（local）
 
-## Context Window 管理
+`local` 是与线程节点绑定的局部变量空间，跨轮次持久化。
 
-- `addWindow(name, content)` — 添加静态文本窗口
-- `addWindow(name, { file: "path" })` — 添加文件型窗口（相对于对象目录）
-- `addWindow(name, { trait: "traitName", method: "methodName" })` — 添加函数型窗口
-- `getWindow(name)` — 获取窗口当前内容
-- `editWindow(name, content)` — 更新窗口为静态文本
-- `removeWindow(name)` — 移除窗口
-- `listWindows()` — 列出所有窗口名称
+- `local.x = 1` — 写入当前线程的局部变量
+- `local.x` — 读取当前线程的局部变量
+
+子线程完成后，artifacts 会合并到父线程的 locals 中。
+
+### local vs setData vs persistData
+
+| | `local` | `setData` | `persistData` |
+|---|---------|-----------|---------------|
+| 作用域 | 当前线程 | 当前任务全局 | 对象级别，跨任务 |
+| 生命周期 | 当前任务 | 当前任务 | 永久 |
+| 用途 | 步骤中间状态 | 任务工作记忆 | 长期记忆 |
 
 ## 工具方法 vs 底层 API
 
 ```
-正确（优先使用工具方法）：
+优先使用工具方法：
   const file = await readFile("kernel/src/config.ts");
   const result = await editFile("kernel/src/config.ts", "port: 3000", "port: 8080");
   const files = await glob("**/*.ts");
@@ -116,18 +95,12 @@ deps: ["kernel/computable"]
 避免（除非工具方法不够用）：
   const content = await Bun.file(world_dir + "/kernel/src/config.ts").text();
   await Bun.write(path, newContent);
-  const entries = readdirSync(dir);
 ```
 
-工具方法的优势：自动路径解析、结构化返回值、错误信息包含修正上下文、信息密度控制。
+工具方法的优势：自动路径解析、结构化返回值、错误信息包含修正上下文。
 
 ## 重要规则
 
-1. `[wait]` 表示等待外部输入，不是"暂停思考"
-2. `[finish]` 表示任务彻底完成
-3. 不输出指令 = 继续下一轮思考
-4. 同一 [program] 中的代码作为一个整体执行
-5. 跨轮次用 local 传递变量
-6. talk() 是同步函数，不需要 await
-7. 用 print() 调试
-8. 检查执行结果：代码失败时根据错误修正重试
+1. 用 print() 输出结果
+2. 检查执行结果：代码失败时根据错误修正重试
+3. talk() 是同步函数，不需要 await
