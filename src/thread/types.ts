@@ -11,7 +11,7 @@
  */
 
 /** 线程状态 */
-export type ThreadStatus = "pending" | "running" | "waiting" | "done" | "failed";
+export type ThreadStatus = "pending" | "running" | "waiting" | "done" | "failed" | "paused";
 
 /** 线程句柄（create_sub_thread 的返回值） */
 export type ThreadHandle = string;
@@ -97,22 +97,43 @@ export interface ThreadDataFile {
  * 与旧 Action 的区别：
  * - 新增 create_thread / thread_return 类型
  * - 删除 pause / stack_push / stack_pop 类型（不再需要）
+ *
+ * LLM 每轮输出的三种形态都会被记录：
+ * - thinking: LLM 的思考过程（extended thinking 输出）
+ * - text: LLM 的普通文本输出（非 tool 场景下的回复）
+ * - tool_use: LLM 的工具调用（open/submit 等）
+ *
+ * 系统侧的 action 类型：
+ * - inject: 系统注入的信息（form 创建、执行结果、错误提示等）
+ * - program: 代码执行及其结果
+ * - message_in / message_out: 跨对象消息
+ * - create_thread / thread_return: 子线程管理
+ * - set_plan: 计划变更
+ * - mark_inbox: 标记 inbox 消息
  */
 export interface ThreadAction {
   id?: string;
   type:
-    | "thought"
+    | "thinking"
+    | "text"
+    | "tool_use"
+    | "inject"
     | "program"
-    | "action"
     | "message_in"
     | "message_out"
-    | "inject"
-    | "set_plan"
     | "create_thread"
-    | "thread_return";
+    | "thread_return"
+    | "set_plan"
+    | "mark_inbox";
   timestamp: number;
   content: string;
+  /** tool_use: 工具名称；program: 代码内容；其他: 附加信息 */
+  name?: string;
+  /** tool_use: 工具参数（JSON 对象） */
+  args?: Record<string, unknown>;
+  /** program: 执行结果 */
   result?: string;
+  /** program: 执行是否成功 */
   success?: boolean;
 }
 

@@ -192,7 +192,7 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
   const childrenSummary = renderChildrenSummary(tree, threadId);
   const ancestorSummary = renderAncestorSummary(tree, threadId);
   const siblingSummary = renderSiblingSummary(tree, threadId);
-  const inbox = (threadData.inbox ?? []).filter(m => m.status === "unread");
+  const inbox = threadData.inbox ?? [];
   const todos = (threadData.todos ?? []).filter(t => t.status === "pending");
 
   /* 6. locals：从 threadData 读取 */
@@ -387,9 +387,23 @@ export function renderThreadProcess(actions: ThreadAction[]): string {
     const ts = formatTimestamp(action.timestamp);
 
     switch (action.type) {
-      case "thought":
-        lines.push(`[${ts}] [thought]`);
+      case "thinking":
+        lines.push(`[${ts}] [thinking]`);
         lines.push(action.content);
+        lines.push("");
+        break;
+
+      case "text":
+        lines.push(`[${ts}] [text]`);
+        lines.push(action.content);
+        lines.push("");
+        break;
+
+      case "tool_use":
+        lines.push(`[${ts}] [tool_use] ${action.name ?? "unknown"}`);
+        if (action.args && Object.keys(action.args).length > 0) {
+          lines.push(JSON.stringify(action.args, null, 2));
+        }
         lines.push("");
         break;
 
@@ -435,13 +449,8 @@ export function renderThreadProcess(actions: ThreadAction[]): string {
         lines.push("");
         break;
 
-      case "action":
-        lines.push(`[${ts}] [action]`);
-        lines.push(action.content);
-        if (action.result) {
-          const statusTag = action.success === false ? "x" : "v";
-          lines.push(`>>> ${statusTag} ${action.result}`);
-        }
+      case "mark_inbox":
+        lines.push(`[${ts}] [mark_inbox] ${action.content}`);
         lines.push("");
         break;
 

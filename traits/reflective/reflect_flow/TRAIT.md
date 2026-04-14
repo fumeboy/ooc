@@ -50,4 +50,3 @@ ReflectFlow 是每个对象的常驻自我反思 Flow，是 Self 数据的唯一
 3. 如果值得，执行相应的写入操作
 4. 用 `replyToFlow` 告知发起方处理结果
 5. 如果不确定，用 `replyToFlow` 追问
-6. 处理完毕后输出 `[wait]` 等待下一条消息

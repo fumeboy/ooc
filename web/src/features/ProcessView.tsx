@@ -2,7 +2,7 @@
  * ProcessView —— 行为树可视化组件
  *
  * 左栏：单栏时间线 —— 显示从 root 到 focus 节点的路径，每个节点用 NodeCard 展示。
- * 其中 thought action 现在表示模型原生 thinking 的持久化结果，而不是 assistant 协议段。
+ * 其中 thinking action 表示模型原生 thinking 的持久化结果，text 表示 LLM 文本输出，tool_use 表示工具调用。
  * 右栏：MiniTree 节点树缩略视图
  */
 import { useState } from "react";

@@ -41,16 +41,15 @@ function CopyBtn({ text }: { text: string }) {
 
 /* ── 类型前缀配置 ── */
 const TYPE_CONFIG: Record<string, { prefix: string; color: string; label: string }> = {
-  thought:     { prefix: "◆", color: "text-amber-500",  label: "thought" },
-  program:     { prefix: "▸", color: "text-blue-400",   label: "program" },
-  action:      { prefix: "▸", color: "text-sky-400",    label: "action" },
-  inject:      { prefix: "›", color: "text-orange-400", label: "inject" },
-  message_in:  { prefix: "←", color: "text-green-400",  label: "in" },
-  message_out: { prefix: "→", color: "text-teal-400",   label: "out" },
-  set_plan:    { prefix: "◇", color: "text-violet-400", label: "plan" },
-  stack_push:  { prefix: "↓", color: "text-emerald-400", label: "push" },
-  stack_pop:   { prefix: "↑", color: "text-cyan-400",   label: "pop" },
-  pause:       { prefix: "⏸", color: "text-gray-400",   label: "pause" },
+  thinking:       { prefix: "◆", color: "text-amber-500",  label: "thinking" },
+  text:           { prefix: "◇", color: "text-slate-400",  label: "text" },
+  tool_use:       { prefix: "⚙", color: "text-blue-400",   label: "tool" },
+  program:        { prefix: "▸", color: "text-blue-400",   label: "program" },
+  inject:         { prefix: "›", color: "text-orange-400", label: "inject" },
+  message_in:     { prefix: "←", color: "text-green-400",  label: "in" },
+  message_out:    { prefix: "→", color: "text-teal-400",   label: "out" },
+  set_plan:       { prefix: "◇", color: "text-violet-400", label: "plan" },
+  mark_inbox:     { prefix: "✓", color: "text-emerald-400", label: "mark" },
   create_thread:  { prefix: "⑂", color: "text-blue-400", label: "fork" },
   thread_return:  { prefix: "⏎", color: "text-green-400", label: "return" },
 };
@@ -139,16 +138,23 @@ interface TuiActionProps {
 export function TuiAction({ action, objectName, loading }: TuiActionProps) {
   const cfg = TYPE_CONFIG[action.type] ?? DEFAULT_CONFIG;
   const isInject = action.type === "inject";
-  const isProgramOrAction = action.type === "program" || action.type === "action";
+  const isThinking = action.type === "thinking";
+  const isProgram = action.type === "program";
+  const isToolUse = action.type === "tool_use";
   const [expanded, setExpanded] = useState(!isInject);
   const [modalOpen, setModalOpen] = useState(false);
+
+  /* tool_use: 显示工具名+参数摘要 */
+  const toolLabel = isToolUse && action.name
+    ? `${action.name}(${Object.keys(action.args ?? {}).slice(0, 3).join(", ")}${Object.keys(action.args ?? {}).length > 3 ? "..." : ""})`
+    : null;
 
   const injectParsed = isInject ? parseInjectTitle(action.content) : null;
   const displayContent = isInject ? (injectParsed?.body ?? action.content) : action.content;
 
-  /* program/action 截断 */
-  const contentTrunc = isProgramOrAction ? truncateText(action.content) : null;
-  const resultTrunc = isProgramOrAction && action.result ? truncateText(action.result) : null;
+  /* program 截断 */
+  const contentTrunc = isProgram ? truncateText(action.content) : null;
+  const resultTrunc = isProgram && action.result ? truncateText(action.result) : null;
   const needsModal = contentTrunc?.isTruncated || resultTrunc?.isTruncated;
 
   return (
@@ -163,10 +169,13 @@ export function TuiAction({ action, objectName, loading }: TuiActionProps) {
       >
         <span className={cn("shrink-0 select-none", cfg.color)}>{cfg.prefix}</span>
         <span className={cn("shrink-0 font-semibold", cfg.color)}>{cfg.label}</span>
+        {toolLabel && (
+          <span className="text-[var(--foreground)] opacity-80 truncate">{toolLabel}</span>
+        )}
         {objectName && (
           <span className="text-[var(--muted-foreground)] opacity-60">{objectName}</span>
         )}
-        {isProgramOrAction && action.success !== undefined && (
+        {isProgram && action.success !== undefined && (
           <span className={action.success === false ? "text-red-400 font-semibold" : "text-green-400 font-semibold"}>
             {action.success === false ? "✗" : "✓"}
           </span>
@@ -187,7 +196,7 @@ export function TuiAction({ action, objectName, loading }: TuiActionProps) {
       {/* 内容区 */}
       {expanded && (
         <div className="pl-5 mt-0.5">
-          {isProgramOrAction ? (
+          {isProgram ? (
             <div>
               <pre className="text-[11px] whitespace-pre-wrap break-all text-[var(--foreground)] opacity-90">
                 {contentTrunc!.truncated}
@@ -219,7 +228,7 @@ export function TuiAction({ action, objectName, loading }: TuiActionProps) {
                 />
               )}
             </div>
-          ) : action.type === "thought" ? (
+          ) : isThinking ? (
             <div className="text-[var(--foreground)] opacity-70 italic">
               <MarkdownContent content={displayContent} className="text-[12px] leading-relaxed" />
             </div>
@@ -308,11 +317,11 @@ export function TuiStreamingBlock({ type, content, objectName }: TuiStreamingBlo
         <Loader2 className="w-3 h-3 animate-spin text-[var(--muted-foreground)]" />
       </div>
       <div className="pl-5 mt-0.5">
-        {type === "thought" ? (
+        {type === "thinking" ? (
           <div className="text-[var(--foreground)] opacity-70 italic">
             <MarkdownContent content={content} className="text-[12px] leading-relaxed" />
           </div>
-        ) : type === "program" || type === "action" ? (
+        ) : type === "program" ? (
           <pre className="text-[11px] whitespace-pre-wrap break-all text-[var(--foreground)] opacity-90">{content}</pre>
         ) : (
           <MarkdownContent content={content} className="text-[12px] leading-relaxed" />

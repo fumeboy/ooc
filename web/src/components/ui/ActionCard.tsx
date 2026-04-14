@@ -16,17 +16,15 @@ import { Maximize2, Copy, Link, Check, X, Loader2, ChevronRight, ChevronDown } f
 import type { Action, FlowMessage } from "../../api/types";
 
 const ACTION_BADGE: Record<string, string> = {
-  thought: "text-amber-700 dark:text-amber-300",
+  thinking: "text-amber-700 dark:text-amber-300",
+  text: "text-slate-700 dark:text-slate-300",
+  tool_use: "text-blue-700 dark:text-blue-300",
   program: "text-blue-700 dark:text-blue-300",
-  action: "text-sky-700 dark:text-sky-300",
   inject: "text-orange-700 dark:text-orange-300",
   message_in: "text-green-700 dark:text-green-300",
   message_out: "text-teal-700 dark:text-teal-300",
-  pause: "text-gray-600 dark:text-gray-300",
-  // 认知栈操作
-  stack_push: "text-emerald-700 dark:text-emerald-300",
-  stack_pop: "text-cyan-700 dark:text-cyan-300",
   set_plan: "text-violet-700 dark:text-violet-300",
+  mark_inbox: "text-emerald-700 dark:text-emerald-300",
 };
 const DEFAULT_BADGE = "text-gray-600 dark:text-gray-300";
 
@@ -173,8 +171,8 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading
   });
 
   const isProgram = action.type === "program";
-  const isAction = action.type === "action";
-  const isProgramOrAction = isProgram || isAction;
+  const isToolUse = action.type === "tool_use";
+  const isProgramOrTool = isProgram || isToolUse;
   const badgeColor = ACTION_BADGE[action.type] ?? DEFAULT_BADGE;
   const R = 8;
   const ts = new Date(action.timestamp).toLocaleTimeString([], {
@@ -236,7 +234,7 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading
             )}
             <span className={cn("text-[11px] font-mono", badgeColor)}>[{action.type}]</span>
             {loading && <Loader2 className="w-3 h-3 animate-spin text-[var(--muted-foreground)]" />}
-            {isProgramOrAction && action.success !== undefined && (
+            {isProgramOrTool && action.success !== undefined && (
               <span
                 className={cn(
                   "text-[10px] font-semibold",
@@ -268,7 +266,7 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading
             <ToolbarBtn title="展开详情" onClick={() => setModalOpen(true)}>
               <Maximize2 className="w-3 h-3" />
             </ToolbarBtn>
-            {!isProgramOrAction && <CopyBtn text={action.content} title="复制内容" />}
+            {!isProgramOrTool && <CopyBtn text={action.content} title="复制内容" />}
             {action.id && objectName && (
               <ToolbarBtn title="引用" onClick={() => onRef?.(action.id!, objectName)}>
                 <Link className="w-3 h-3" />
@@ -310,7 +308,7 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading
                 background: `radial-gradient(circle at 0% 100%, transparent ${R}px, var(--card) ${R}px)`,
               }}
             />
-            {isProgramOrAction ? (
+            {isProgramOrTool ? (
               <div ref={contentRef} className="min-w-0" style={{ maxHeight: maxHeightStyle, overflow: maxHeightStyle ? bodyOverflow : undefined }}>
                 <div className="px-3 py-2">
                   <p className="text-[10px] text-[var(--muted-foreground)] mb-1 font-medium flex items-center">
@@ -360,7 +358,7 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading
       <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
         <div className="flex items-center gap-2 mb-4">
           <span className={cn("text-xs font-mono", badgeColor)}>[{action.type}]</span>
-          {isProgramOrAction && action.success !== undefined && (
+          {isProgramOrTool && action.success !== undefined && (
             <span
               className={cn(
                 "text-xs font-semibold",
@@ -375,7 +373,7 @@ export function ActionCard({ action, objectName, maxHeight = 220, onRef, loading
             <span className="text-[10px] font-mono text-[var(--muted-foreground)] opacity-60">{action.id}</span>
           )}
         </div>
-        {isProgramOrAction ? (
+        {isProgramOrTool ? (
           <div className="space-y-4">
             <div>
               <p className="text-xs text-[var(--muted-foreground)] mb-1 font-medium">{isProgram ? "Program" : "Action"}</p>

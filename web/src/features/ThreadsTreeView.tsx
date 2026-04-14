@@ -81,7 +81,7 @@ function getSummary(node: ProcessNode): string {
   if (node.summary) return node.summary.split("\n")[0]!.replace(/^#+\s*/, "");
   if (node.description) return node.description;
   const meaningful = node.actions.filter(
-    (a) => a.type === "thought" || a.type === "message_out" || (a.type as string) === "thread_return"
+    (a) => a.type === "thinking" || a.type === "text" || a.type === "message_out" || (a.type as string) === "thread_return"
   );
   const last = meaningful[meaningful.length - 1];
   if (last) return last.content.split("\n")[0]!.slice(0, 80);

@@ -32,16 +32,17 @@ export type FlowStatus = "running" | "waiting" | "pausing" | "finished" | "faile
 
 /** Action 类型 */
 export type ActionType =
-  | "thought"
+  | "thinking"
+  | "text"
+  | "tool_use"
   | "program"
-  | "action"
   | "message_in"
   | "message_out"
-  | "pause"
   | "inject"
-  | "stack_push"
-  | "stack_pop"
-  | "set_plan";
+  | "set_plan"
+  | "mark_inbox"
+  | "create_thread"
+  | "thread_return";
 
 /** Action */
 export interface Action {
@@ -49,6 +50,8 @@ export interface Action {
   type: ActionType;
   timestamp: number;
   content: string;
+  name?: string;
+  args?: Record<string, unknown>;
   result?: string;
   success?: boolean;
 }

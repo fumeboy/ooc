@@ -532,7 +532,7 @@ export function MessageSidebar() {
         })}
         {/* 流式 thought */}
         {streamingThought && activeFlow?.status === "running" && (
-          <TuiStreamingBlock type="thought" content={streamingThought.content} objectName="supervisor" />
+          <TuiStreamingBlock type="thinking" content={streamingThought.content} objectName="supervisor" />
         )}
         {/* 流式 program */}
         {streamingProgram && activeFlow?.status === "running" && (

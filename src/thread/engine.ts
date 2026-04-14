@@ -188,10 +188,26 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>): Message[
 
   /* inbox */
   if (ctx.inbox.length > 0) {
-    const inboxLines = ctx.inbox
-      .map(m => `- #${m.id} [${m.from}] ${m.content}`)
-      .join("\n");
-    userParts.push(`## 未读消息\n${inboxLines}\n\n（请在下次工具调用时通过 mark 参数标记以上消息）`);
+    const unread = ctx.inbox.filter(m => m.status === "unread");
+    const marked = ctx.inbox.filter(m => m.status === "marked");
+    const inboxLines: string[] = [];
+    if (unread.length > 0) {
+      inboxLines.push("### 未读消息");
+      for (const m of unread) {
+        inboxLines.push(`- #${m.id} [${m.from}] ${m.content}`);
+      }
+    }
+    if (marked.length > 0) {
+      inboxLines.push("### 已标记消息");
+      for (const m of marked) {
+        const markInfo = m.mark ? ` (${m.mark.type}: ${m.mark.tip})` : "";
+        inboxLines.push(`- #${m.id} [${m.from}] ${m.content}${markInfo}`);
+      }
+    }
+    if (unread.length > 0) {
+      inboxLines.push("\n（请在下次工具调用时通过 mark 参数标记未读消息）");
+    }
+    userParts.push(`## 收件箱\n${inboxLines.join("\n")}`);
   }
 
   /* todos */
@@ -316,7 +332,7 @@ async function applyIterationResult(
           const childData = tree.readThreadData(childId);
           if (childData) {
             const summary = targetData.actions
-              .filter(a => a.type === "thought" || a.type === "thread_return" || a.type === "program")
+              .filter(a => a.type === "thinking" || a.type === "text" || a.type === "thread_return" || a.type === "program")
               .map(a => `[${a.type}] ${a.content?.slice(0, 200)}`)
               .join("\n");
             if (summary) {
@@ -779,7 +795,7 @@ export async function runWithThreadTree(
         }
       }
 
-      /* 发射 SSE 思考事件 + 记录 thought action（从 thinking mode 获取） */
+      /* 发射 SSE 思考事件 + 记录 thinking action（从 thinking mode 获取） */
       if (thinkingContent) {
         emitSSE({
           type: "stream:thought",
@@ -788,11 +804,11 @@ export async function runWithThreadTree(
           chunk: thinkingContent,
         });
 
-        /* 将 thinking 输出记录为 thought action */
+        /* 将 thinking 输出记录为 thinking action */
         const td = tree.readThreadData(threadId);
         if (td) {
           td.actions.push({
-            type: "thought",
+            type: "thinking",
             content: thinkingContent,
             timestamp: Date.now(),
           });
@@ -802,11 +818,11 @@ export async function runWithThreadTree(
 
       /* ========== Tool Calling 路径 ========== */
       if (toolCalls && toolCalls.length > 0) {
-        /* 非 tool 文本输出记录为 thought（跳过已被 thinking mode 记录的内容） */
+        /* 非 tool 文本输出记录为 text（跳过已被 thinking mode 记录的内容） */
         if (llmOutput?.trim() && llmOutput !== thinkingContent) {
           const td = tree.readThreadData(threadId);
           if (td) {
-            td.actions.push({ type: "thought", content: llmOutput, timestamp: Date.now() });
+            td.actions.push({ type: "text", content: llmOutput, timestamp: Date.now() });
             tree.writeThreadData(threadId, td);
           }
         }
@@ -819,10 +835,25 @@ export async function runWithThreadTree(
 
         consola.info(`[Engine] tool_call: ${toolName}(${JSON.stringify(args).slice(0, 200)})`);
 
+        /* 记录 tool_use action */
+        {
+          const td = tree.readThreadData(threadId);
+          if (td) {
+            td.actions.push({ type: "tool_use", content: `${toolName}(${JSON.stringify(args).slice(0, 200)})`, name: toolName, args, timestamp: Date.now() });
+            tree.writeThreadData(threadId, td);
+          }
+        }
+
         /* 处理 mark 参数（三个 tool 通用） */
         if (Array.isArray(args.mark)) {
           for (const m of args.mark as { messageId: string; type: "ack" | "ignore" | "todo"; tip: string }[]) {
             tree.markInbox(threadId, m.messageId, m.type, m.tip);
+            /* 记录 mark_inbox action */
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.actions.push({ type: "mark_inbox", content: `标记消息 #${m.messageId}: ${m.type} — ${m.tip}`, timestamp: Date.now() });
+              tree.writeThreadData(threadId, td);
+            }
           }
         }
 
@@ -1567,6 +1598,16 @@ export async function resumeWithThreadTree(
 
   consola.info(`[Engine] 恢复执行 ${objectName}, session=${sessionId}`);
 
+  /* 将所有 paused 状态的线程恢复为 running */
+  for (const nodeId of tree.nodeIds) {
+    const node = tree.getNode(nodeId);
+    if (node && node.status === "paused") {
+      node.status = "running";
+      tree.updateNode(node);
+      consola.info(`[Engine] 恢复线程 ${nodeId}: paused -> running`);
+    }
+  }
+
   /* 如果提供了修改后的输出，替换缓存 */
   if (modifiedOutput !== undefined) {
     /* 找到有 _pendingOutput 的线程 */
@@ -1753,6 +1794,11 @@ export async function resumeWithThreadTree(
       const threadData = tree.readThreadData(threadId);
       if (!threadData) throw new Error(`线程数据不存在: ${threadId}`);
 
+      /* 初始化 FormManager（resume 时从 threadData 恢复） */
+      if (!formManager) {
+        formManager = FormManager.fromData(threadData.activeForms ?? []);
+      }
+
       /* 初始化 debug 计数器（仅首次） */
       if (config.debugEnabled && !debugLoopCounterInitialized) {
         const debugDir = join(objectFlowDir, "threads", threadId, "debug");
@@ -1840,7 +1886,14 @@ export async function resumeWithThreadTree(
           const inputContent = messages.map(m => `--- ${m.role} ---\n${m.content}`).join("\n\n");
           writeFileSync(join(debugDir, "llm.input.txt"), inputContent, "utf-8");
 
-          consola.info(`[Engine] 暂停 thread=${threadId}, 输出已缓存`);
+          /* 将线程状态改为 paused */
+          const node = tree.getNode(threadId);
+          if (node) {
+            node.status = "paused";
+            tree.updateNode(node);
+          }
+
+          consola.info(`[Engine] 暂停 thread=${threadId}, 输出已缓存, 状态改为 paused`);
           scheduler.pauseObject(objectName);
           return;
         }
@@ -1849,11 +1902,11 @@ export async function resumeWithThreadTree(
       if (thinkingContent) {
         emitSSE({ type: "stream:thought", objectName, sessionId, chunk: thinkingContent });
 
-        /* 将 thinking 输出记录为 thought action */
+        /* 将 thinking 输出记录为 thinking action */
         const td = tree.readThreadData(threadId);
         if (td) {
           td.actions.push({
-            type: "thought",
+            type: "thinking",
             content: thinkingContent,
             timestamp: Date.now(),
           });
@@ -1866,7 +1919,7 @@ export async function resumeWithThreadTree(
         if (llmOutput?.trim() && llmOutput !== thinkingContent) {
           const td = tree.readThreadData(threadId);
           if (td) {
-            td.actions.push({ type: "thought", content: llmOutput, timestamp: Date.now() });
+            td.actions.push({ type: "text", content: llmOutput, timestamp: Date.now() });
             tree.writeThreadData(threadId, td);
           }
         }
@@ -1877,10 +1930,25 @@ export async function resumeWithThreadTree(
         const toolName = tc.function.name;
         consola.info(`[Engine] tool_call: ${toolName}(${JSON.stringify(args).slice(0, 200)})`);
 
+        /* 记录 tool_use action */
+        {
+          const td = tree.readThreadData(threadId);
+          if (td) {
+            td.actions.push({ type: "tool_use", content: `${toolName}(${JSON.stringify(args).slice(0, 200)})`, name: toolName, args, timestamp: Date.now() });
+            tree.writeThreadData(threadId, td);
+          }
+        }
+
         /* 处理 mark 参数（resume 路径） */
         if (Array.isArray(args.mark)) {
           for (const m of args.mark as { messageId: string; type: "ack" | "ignore" | "todo"; tip: string }[]) {
             tree.markInbox(threadId, m.messageId, m.type, m.tip);
+            /* 记录 mark_inbox action */
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.actions.push({ type: "mark_inbox", content: `标记消息 #${m.messageId}: ${m.type} — ${m.tip}`, timestamp: Date.now() });
+              tree.writeThreadData(threadId, td);
+            }
           }
         }
 
@@ -1971,7 +2039,8 @@ export async function resumeWithThreadTree(
                 if (command === "talk_sync") tree.setNodeStatus(threadId, "waiting");
               }
             } else if (command === "return") {
-              tree.setNodeStatus(threadId, "done"); tree.setNodeSummary(threadId, args.summary as string ?? "");
+              await tree.setNodeStatus(threadId, "done");
+              await tree.updateNodeMeta(threadId, { summary: args.summary as string ?? "" });
               const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "thread_return", content: args.summary as string ?? "", timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
               scheduler.markDone(threadId);
             } else if (command === "create_sub_thread") {
