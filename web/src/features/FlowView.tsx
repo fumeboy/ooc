@@ -172,14 +172,21 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
           <ObjectReadmeView objectName={objectName} />
         </div>
 
-        {/* 抽屉：从底部升起覆盖 Readme */}
+        {/* 底部抽屉：从底部升起 */}
         {tab && (
           <div
-            className="absolute inset-0 flex flex-col bg-[var(--card)] animate-in slide-in-from-bottom fade-in-0"
-            style={{ animationDuration: "200ms" }}
+            className="absolute mx-2 bottom-0 left-0 right-0 bg-[var(--card)] border border-border rounded-t-xl shadow-xl h-[90%] animate-in slide-in-from-bottom duration-300"
           >
-            {/* 抽屉头部 */}
-            <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--border)] shrink-0">
+            {/* iOS 风格装饰条 */}
+            <div
+              className="flex items-center justify-center py-2 cursor-pointer"
+              onClick={() => setTab(null)}
+            >
+              <div className="w-16 h-1 bg-gray-300 rounded-full" />
+            </div>
+
+            {/* 抽屉头部：标题 + 关闭按钮 */}
+            <div className="flex items-center justify-between px-4 pb-2 shrink-0">
               <span className="text-xs font-medium text-[var(--muted-foreground)]">{tab}</span>
               <button
                 onClick={() => setTab(null)}
@@ -191,7 +198,7 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
             </div>
 
             {/* 抽屉内容 */}
-            <div className="flex-1 overflow-auto px-4 sm:px-8 py-4 sm:py-6">
+            <div className="h-[calc(100%-56px)] overflow-auto px-4 pb-4">
               {tab === "Timeline" && (
                 <div className="space-y-2">
                   {timeline.length === 0 && (

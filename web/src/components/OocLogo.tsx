@@ -52,7 +52,13 @@ const STAR_PATH = `M 98 36
 
 /** 星型 SVG 层（用于颜色叠加动画） */
 function StarLayer({ fill, opacity }: { fill: string; opacity: number }) {
+    const spiralW = "8";
   return (
+    <div>
+          {/* 底纹：阿基米德螺旋 */}
+      <svg viewBox="0 0 120 120" className="absolute inset-0 w-full h-full opacity-[0.15] animate-[spin_30s_linear_infinite]">
+        <path d={SPIRAL_D} fill="none" stroke={fill === "gradient" ? "url(#ooc-logo-gradient)" : fill} strokeWidth={spiralW} strokeLinecap="round" transform="rotate(60 60 60)" style={{ transition: "stroke 0.4s ease" }} />
+      </svg>
     <svg
       xmlns="http://www.w3.org/2000/svg"
       transform="rotate(95 0 0)"
@@ -64,8 +70,8 @@ function StarLayer({ fill, opacity }: { fill: string; opacity: number }) {
     >
       <defs>
         <linearGradient id="ooc-logo-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#8B5CF6" />
-          <stop offset="100%" stopColor="#F97316" />
+          <stop offset="0%" stopColor="#283baa" />
+          <stop offset="100%" stopColor="#b56933" />
         </linearGradient>
       </defs>
       <path
@@ -73,13 +79,13 @@ function StarLayer({ fill, opacity }: { fill: string; opacity: number }) {
         fill={fill === "gradient" ? "url(#ooc-logo-gradient)" : fill}
       />
     </svg>
-  );
+  </div>);
 }
 
 export function OocLogo({ size = "sm", px, color }: { size?: keyof typeof SIZES; px?: number; color?: string }) {
   const preset = SIZES[size];
   const dim = px ?? preset.px;
-  const spiralW = "8";
+
   const radius = dim < 40 ? "rounded-lg" : dim < 80 ? "rounded-xl" : "rounded-2xl";
   const fillColor = color ?? "#000";
 
@@ -105,11 +111,6 @@ export function OocLogo({ size = "sm", px, color }: { size?: keyof typeof SIZES;
       className={`relative ${radius} flex items-center justify-center overflow-hidden`}
       style={{ width: dim, height: dim }}
     >
-      {/* 底纹：阿基米德螺旋 */}
-      <svg viewBox="0 0 120 120" className="absolute inset-0 w-full h-full opacity-[0.15] animate-[spin_30s_linear_infinite]">
-        <path d={SPIRAL_D} fill="none" stroke={fillColor === "gradient" ? "#F97316" : fillColor} strokeWidth={spiralW} strokeLinecap="round" transform="rotate(60 60 60)" style={{ transition: "stroke 0.4s ease" }} />
-      </svg>
-
       {/* 星型：双层叠加实现颜色淡入淡出 */}
       <StarLayer fill={prevColor} opacity={transitioning ? 0 : 1} />
       <StarLayer fill={fillColor} opacity={1} />

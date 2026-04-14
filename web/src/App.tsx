@@ -458,58 +458,62 @@ export function App() {
 
   /* 侧边栏内容（桌面端和移动端共用） */
   const sidebarContent = (
-    <div className="flex flex-col items-center h-full" style={{ width: "inherit" }}>
-      <div className="flex flex-col items-center gap-1 px-4 py-4 shrink-0">
+    <div className="flex flex-col h-full gap-1.5" style={{ width: "inherit" }}>
+      {/* 上部区块：Logo */}
+      <div className="flex flex-col items-center bg-[var(--panel-bg)] rounded-[var(--panel-radius)] px-1 pt-4 pb-1 shrink-0">
         <MainLogo isMobile={isMobile} />
       </div>
 
-      {/* Tab 切换 */}
-      <div className="px-3 pb-2 shrink-0 w-full">
-        <nav className="flex items-center bg-[var(--accent)] rounded-full p-0.5">
-          {TABS.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setActivePath(null);
-                  setTabs([]);
-                }}
-                className={cn(
-                  "flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-full text-xs transition-all",
-                  activeTab === tab.id
-                    ? "bg-[var(--card)] text-[var(--foreground)] font-medium shadow-sm"
-                    : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]",
-                )}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* Session Bar（仅 Flows 模式有活跃会话时显示） */}
-      {activeTab === "flows" && activeFlow && (
-        <div className="px-3 pb-2 shrink-0 w-full">
-          <SessionBar
-            title={sessionTitle}
-            showSessions={showSessions}
-            onToggleSessions={() => setShowSessions(!showSessions)}
-            onSave={handleTitleSave}
-          />
+      {/* 下部区块：Tab + 内容 */}
+      <div className="flex flex-col flex-1 overflow-hidden bg-[var(--panel-bg)] rounded-[var(--panel-radius)]">
+        {/* Tab 切换 */}
+        <div className="px-3 pt-3 pb-2 shrink-0 w-full">
+          <nav className="flex items-center bg-[var(--accent)] rounded-full p-0.5">
+            {TABS.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setActivePath(null);
+                    setTabs([]);
+                  }}
+                  className={cn(
+                    "flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-full text-xs transition-all",
+                    activeTab === tab.id
+                      ? "bg-[var(--card)] text-[var(--foreground)] font-medium shadow-sm"
+                      : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]",
+                  )}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </nav>
         </div>
-      )}
 
-      {/* 列表/文件树区域 */}
-      <div className="flex-1 overflow-auto w-full">
-        {renderSidebarTree()}
+        {/* Session Bar（仅 Flows 模式有活跃会话时显示） */}
+        {activeTab === "flows" && activeFlow && (
+          <div className="px-3 pb-2 shrink-0 w-full">
+            <SessionBar
+              title={sessionTitle}
+              showSessions={showSessions}
+              onToggleSessions={() => setShowSessions(!showSessions)}
+              onSave={handleTitleSave}
+            />
+          </div>
+        )}
+
+        {/* 列表/文件树区域 */}
+        <div className="flex-1 overflow-auto w-full">
+          {renderSidebarTree()}
+        </div>
+
+        {/* 当月使用热力图 */}
+        <ActivityHeatmap />
       </div>
-
-      {/* 当月使用热力图 */}
-      <ActivityHeatmap />
     </div>
   );
 
@@ -548,7 +552,7 @@ export function App() {
 
       {/* ====== 桌面端网站左边栏 ====== */}
       {!isMobile && (
-        <aside className="relative z-10 flex flex-col items-center w-72 shrink-0 bg-[var(--panel-bg)] rounded-[var(--panel-radius)] overflow-hidden">
+        <aside className="relative z-10 flex flex-col w-72 shrink-0 overflow-visible">
           {sidebarContent}
         </aside>
       )}

@@ -19,7 +19,7 @@ import {
 } from "../api/client";
 
 /** 药丸按钮的统一尺寸 */
-const PILL_STYLE = "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] transition-colors whitespace-nowrap h-[18px] justify-center";
+const PILL_STYLE = "flex items-center gap-2 rounded-lg text-[10px] transition-colors whitespace-nowrap p-0.5 justify-center flex-1";
 
 /** 带 toggle 开关的药丸按钮 */
 function TogglePill({
@@ -74,9 +74,9 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
     debugEnabled && globalPaused
       ? "gradient"
       : debugEnabled
-        ? "#8B5CF6"
+        ? "#283baa"
         : globalPaused
-          ? "#F97316"
+          ? "#b56933"
           : "#000";
 
   const logoPx = isMobile ? 80 : 120;
@@ -98,7 +98,7 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
   };
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center w-full">
       <OocLogo px={logoPx} color={logoColor} />
 
       {/* Title */}
@@ -109,35 +109,37 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
         Oriented Object Context
       </h1>
 
-      {/* 三个药丸按钮水平排列 */}
-      <div className="flex items-center gap-1 mt-1">
-        <TogglePill
-          active={globalPaused}
-          activeColor="#F97316"
-          label="pause"
-          activeLabel="paused"
-          onClick={toggleGlobalPause}
-        />
-        <TogglePill
-          active={debugEnabled}
-          activeColor="#8B5CF6"
-          label="debug"
-          activeLabel="debug"
-          onClick={toggleDebug}
-        />
-        <div
-          className={cn(
-            PILL_STYLE,
-            sseConnected
-              ? "bg-green-500/20 text-green-600"
-              : "bg-red-500/20 text-red-500 opacity-70",
-          )}
-        >
-          <span className={cn(
-            "w-1.5 h-1.5 rounded-full shrink-0",
-            sseConnected ? "bg-green-500" : "bg-red-500",
-          )} />
-          <span>{sseConnected ? "online" : "offline"}</span>
+      {/* 三个按钮等宽排列在灰色圆角容器中 */}
+      <div className="w-full mt-2">
+        <div className="flex items-center gap-1 bg-[var(--accent)] rounded-md p-0.5">
+          <TogglePill
+            active={globalPaused}
+            activeColor="#b56933"
+            label="pause"
+            activeLabel="paused"
+            onClick={toggleGlobalPause}
+          />
+          <TogglePill
+            active={debugEnabled}
+            activeColor="#283baa"
+            label="debug"
+            activeLabel="debug"
+            onClick={toggleDebug}
+          />
+          <div
+            className={cn(
+              PILL_STYLE,
+              sseConnected
+                ? "bg-green-500/20 text-green-600"
+                : "opacity-70",
+            )}
+          >
+            <span className={cn(
+              "w-2 h-2 rounded-full shrink-0",
+              sseConnected ? "bg-green-500" : "bg-gray-400",
+            )} />
+            <span>{sseConnected ? "online" : "offline"}</span>
+          </div>
         </div>
       </div>
     </div>

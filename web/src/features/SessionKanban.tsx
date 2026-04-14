@@ -8,6 +8,7 @@ import { StatusGroup } from "./kanban/StatusGroup";
 import { IssueCard } from "./kanban/IssueCard";
 import { TaskCard } from "./kanban/TaskCard";
 import type { KanbanIssue, KanbanTask, IssueStatus, TaskStatus } from "../api/types";
+import { cn } from "../lib/utils";
 
 const ISSUE_GROUPS: { status: IssueStatus; label: string; color: string }[] = [
   { status: "discussing", label: "讨论中", color: "#3b82f6" },
@@ -30,6 +31,7 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
   const [issues, setIssues] = useState<KanbanIssue[]>([]);
   const [tasks, setTasks] = useState<KanbanTask[]>([]);
   const [dialog, setDialog] = useState<{ type: "issue" | "task" } | null>(null);
+  const [drawerExpanded, setDrawerExpanded] = useState(false);
   const lastEvent = useAtomValue(lastFlowEventAtom);
   const setTabs = useSetAtom(editorTabsAtom);
   const setActivePath = useSetAtom(activeFilePathAtom);
@@ -72,8 +74,9 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
   });
 
   return (
-    <div className="flex h-full overflow-hidden">
-      <div className="w-1/2 border-r border-border overflow-auto p-6">
+    <div className="relative flex flex-col h-full overflow-hidden">
+      {/* 主体：Session Readme */}
+      <div className="flex-1 overflow-auto p-6">
         {readme ? (
           <MarkdownContent content={readme} />
         ) : (
@@ -81,65 +84,88 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
         )}
       </div>
 
-      <div className="w-1/2 overflow-auto p-4 space-y-6">
-        {/* Issues */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Issues</h3>
-            <button
-              onClick={() => setDialog({ type: "issue" })}
-              className="text-muted-foreground hover:text-foreground text-sm leading-none px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
-              title="创建 Issue"
-            >
-              +
-            </button>
-          </div>
-          {ISSUE_GROUPS.map(({ status, label, color }) => {
-            const items = sortedIssues.filter((i) => i.status === status);
-            if (items.length === 0) return null;
-            return (
-              <StatusGroup key={status} label={label} color={color} count={items.length}>
-                {items.map((issue) => (
-                  <IssueCard
-                    key={issue.id}
-                    issue={issue}
-                    onClick={() => openTab(`flows/${sessionId}/issues/${issue.id}`, issue.id)}
-                  />
-                ))}
-              </StatusGroup>
-            );
-          })}
-          {issues.length === 0 && <p className="text-muted-foreground text-sm">暂无 Issue</p>}
+      {/* 底部抽屉：Issues & Tasks */}
+      <div
+        className={cn(
+          "absolute mx-2 bottom-0 left-0 right-0 bg-background border border-border rounded-t-xl shadow-xl transition-all duration-300 ease-out",
+          drawerExpanded ? "h-[90%]" : "h-[160px]"
+        )}
+      >
+        {/* iOS 风格装饰条 */}
+        <div
+          className="flex items-center justify-center py-2 cursor-pointer"
+          onClick={() => setDrawerExpanded(!drawerExpanded)}
+        >
+          <div className="w-16 h-1 bg-gray-300 rounded-full" />
         </div>
 
-        {/* Tasks */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tasks</h3>
-            <button
-              onClick={() => setDialog({ type: "task" })}
-              className="text-muted-foreground hover:text-foreground text-sm leading-none px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
-              title="创建 Task"
-            >
-              +
-            </button>
+        {/* 抽屉内容 */}
+        <div className="h-[calc(100%-32px)] overflow-auto px-4 pb-4">
+          <div className="flex gap-4 h-full">
+            {/* Issues 左栏 */}
+            <div className="flex-1 overflow-auto">
+              <div className="flex items-center justify-between mb-3 sticky top-0 bg-background py-2">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Issues</h3>
+                <button
+                  onClick={() => setDialog({ type: "issue" })}
+                  className="text-muted-foreground hover:text-foreground text-sm leading-none px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
+                  title="创建 Issue"
+                >
+                  +
+                </button>
+              </div>
+              <div className="space-y-2">
+                {ISSUE_GROUPS.map(({ status, label, color }) => {
+                  const items = sortedIssues.filter((i) => i.status === status);
+                  if (items.length === 0) return null;
+                  return (
+                    <StatusGroup key={status} label={label} color={color} count={items.length}>
+                      {items.map((issue) => (
+                        <IssueCard
+                          key={issue.id}
+                          issue={issue}
+                          onClick={() => openTab(`flows/${sessionId}/issues/${issue.id}`, issue.id)}
+                        />
+                      ))}
+                    </StatusGroup>
+                  );
+                })}
+                {issues.length === 0 && <p className="text-muted-foreground text-sm">暂无 Issue</p>}
+              </div>
+            </div>
+
+            {/* Tasks 右栏 */}
+            <div className="flex-1 overflow-auto border-l border-border pl-4">
+              <div className="flex items-center justify-between mb-3 sticky top-0 bg-background py-2">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tasks</h3>
+                <button
+                  onClick={() => setDialog({ type: "task" })}
+                  className="text-muted-foreground hover:text-foreground text-sm leading-none px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
+                  title="创建 Task"
+                >
+                  +
+                </button>
+              </div>
+              <div className="space-y-2">
+                {TASK_GROUPS.map(({ status, label, color }) => {
+                  const items = tasks.filter((t) => t.status === status);
+                  if (items.length === 0) return null;
+                  return (
+                    <StatusGroup key={status} label={label} color={color} count={items.length}>
+                      {items.map((task) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          onClick={() => openTab(`flows/${sessionId}/tasks/${task.id}`, task.id)}
+                        />
+                      ))}
+                    </StatusGroup>
+                  );
+                })}
+                {tasks.length === 0 && <p className="text-muted-foreground text-sm">暂无 Task</p>}
+              </div>
+            </div>
           </div>
-          {TASK_GROUPS.map(({ status, label, color }) => {
-            const items = tasks.filter((t) => t.status === status);
-            if (items.length === 0) return null;
-            return (
-              <StatusGroup key={status} label={label} color={color} count={items.length}>
-                {items.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    onClick={() => openTab(`flows/${sessionId}/tasks/${task.id}`, task.id)}
-                  />
-                ))}
-              </StatusGroup>
-            );
-          })}
-          {tasks.length === 0 && <p className="text-muted-foreground text-sm">暂无 Task</p>}
         </div>
       </div>
 
