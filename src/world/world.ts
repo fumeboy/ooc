@@ -504,9 +504,9 @@ export class World implements Routable {
         }
 
         /* World 作为路由中间层：启动目标 Object 的线程树，等待完成，返回结果 */
-        consola.info(`[World] 跨 Object talk: ${fromObject} → ${targetObject}`);
+        consola.info(`[World] 跨 Object talk: ${fromObject} → ${targetObject}, session=${sessionId}`);
         try {
-          const flow = await this._talkWithThreadTree(targetObject, message, fromObject);
+          const flow = await this._talkWithThreadTree(targetObject, message, fromObject, sessionId);
           const flowData = flow.toJSON();
           return flowData.summary ?? flowData.messages?.find((m: any) => m.direction === "out")?.content ?? null;
         } catch (e) {
