@@ -172,19 +172,19 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>): Message[
   /* 父线程期望 */
   if (ctx.parentExpectation) {
     userParts.push(`<!-- 任务：用户消息或父线程对当前线程的期望 -->`);
-    userParts.push(`<task>${ctx.parentExpectation}</task>`);
+    userParts.push(`<task>\n  ${ctx.parentExpectation}\n</task>`);
   }
 
   /* 创建者信息 */
   if (ctx.creationMode === "root") {
-    userParts.push(`<creator mode="root">你是根线程，由用户(user)发起。完成任务后必须用 [return] 返回最终结果。[talk] 只用于向其他对象发消息，不会结束线程。</creator>`);
+    userParts.push(`<creator mode="root">\n  你是根线程，由用户(user)发起。完成任务后必须用 [return] 返回最终结果。[talk] 只用于向其他对象发消息，不会结束线程。\n</creator>`);
   } else {
-    userParts.push(`<creator mode="${ctx.creationMode}" from="${ctx.creator}">你由 ${ctx.creator} 创建（${ctx.creationMode}）。完成任务后必须用 [return] 返回结果给创建者。[talk] 只用于向其他对象发消息，不会结束线程。</creator>`);
+    userParts.push(`<creator mode="${ctx.creationMode}" from="${ctx.creator}">\n  你由 ${ctx.creator} 创建（${ctx.creationMode}）。完成任务后必须用 [return] 返回结果给创建者。[talk] 只用于向其他对象发消息，不会结束线程。\n</creator>`);
   }
 
   /* 当前计划 */
   if (ctx.plan) {
-    userParts.push(`<plan>${ctx.plan}</plan>`);
+    userParts.push(`<plan>\n  ${ctx.plan}\n</plan>`);
   }
 
   /* 执行历史 */
@@ -197,7 +197,7 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>): Message[
 
   /* 局部变量 */
   if (Object.keys(ctx.locals).length > 0) {
-    userParts.push(`<locals>${JSON.stringify(ctx.locals, null, 2)}</locals>`);
+    userParts.push(`<locals>\n  ${JSON.stringify(ctx.locals, null, 2)}\n</locals>`);
   }
 
   /* inbox */
@@ -207,16 +207,16 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>): Message[
     userParts.push(`<!-- 收件箱：来自其他对象或系统的消息 -->`);
     userParts.push(`<inbox>`);
     if (unread.length > 0) {
-      userParts.push(`<!-- 未读消息：请在下次工具调用时通过 mark 参数标记 -->`);
+      userParts.push(`  <!-- 未读消息：请在下次工具调用时通过 mark 参数标记 -->`);
       for (const m of unread) {
-        userParts.push(`<message id="${m.id}" from="${m.from}" status="unread">${m.content}</message>`);
+        userParts.push(`  <message id="${m.id}" from="${m.from}" status="unread">\n    ${m.content}\n  </message>`);
       }
     }
     if (marked.length > 0) {
-      userParts.push(`<!-- 已标记消息 -->`);
+      userParts.push(`  <!-- 已标记消息 -->`);
       for (const m of marked) {
         const markAttr = m.mark ? ` mark="${m.mark.type}" tip="${m.mark.tip}"` : "";
-        userParts.push(`<message id="${m.id}" from="${m.from}" status="marked"${markAttr}>${m.content}</message>`);
+        userParts.push(`  <message id="${m.id}" from="${m.from}" status="marked"${markAttr}>\n    ${m.content}\n  </message>`);
       }
     }
     userParts.push(`</inbox>`);
@@ -226,7 +226,7 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>): Message[
   if (ctx.todos.length > 0) {
     userParts.push(`<todos>`);
     for (const t of ctx.todos) {
-      userParts.push(`<todo>${t.content}</todo>`);
+      userParts.push(`  <todo>${t.content}</todo>`);
     }
     userParts.push(`</todos>`);
   }
@@ -234,19 +234,19 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>): Message[
   /* 子节点摘要 */
   if (ctx.childrenSummary) {
     const allDone = ctx.childrenSummary.includes("[done]") && !ctx.childrenSummary.includes("[running]") && !ctx.childrenSummary.includes("[pending]") && !ctx.childrenSummary.includes("[waiting]");
-    const hint = allDone ? `\n<!-- 所有子线程已完成。请汇总子线程的结果，然后用 [return] 返回最终结果。 -->` : "";
+    const hint = allDone ? `\n  <!-- 所有子线程已完成。请汇总子线程的结果，然后用 [return] 返回最终结果。 -->` : "";
     userParts.push(`<!-- 子线程：当前线程创建的子线程状态摘要 -->`);
-    userParts.push(`<children>${hint}\n${ctx.childrenSummary}\n</children>`);
+    userParts.push(`<children>${hint}\n  ${ctx.childrenSummary}\n</children>`);
   }
 
   /* 祖先摘要 */
   if (ctx.ancestorSummary) {
-    userParts.push(`<ancestors>${ctx.ancestorSummary}</ancestors>`);
+    userParts.push(`<ancestors>\n  ${ctx.ancestorSummary}\n</ancestors>`);
   }
 
   /* 兄弟摘要 */
   if (ctx.siblingSummary) {
-    userParts.push(`<siblings>${ctx.siblingSummary}</siblings>`);
+    userParts.push(`<siblings>\n  ${ctx.siblingSummary}\n</siblings>`);
   }
 
   /* 通讯录 */
@@ -254,7 +254,7 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>): Message[
     userParts.push(`<!-- 通讯录：可通过 talk 联系的对象 -->`);
     userParts.push(`<directory>`);
     for (const d of ctx.directory) {
-      userParts.push(`<object name="${d.name}">${d.whoAmI}</object>`);
+      userParts.push(`  <object name="${d.name}">${d.whoAmI}</object>`);
     }
     userParts.push(`</directory>`);
   }
@@ -824,7 +824,7 @@ export async function runWithThreadTree(
             writeFileSync(join(debugDir, "llm.thinking.txt"), thinkingContent, "utf-8");
           }
           /* 写入 Context 供人工查看 */
-          const inputContent = messages.map(m => `--- ${m.role} ---\n${m.content}`).join("\n\n");
+          const inputContent = messages.map(m => `<${m.role}>\n${m.content}\n</${m.role}>`).join("\n\n");
           writeFileSync(join(debugDir, "llm.input.txt"), inputContent, "utf-8");
 
           consola.info(`[Engine] 暂停 thread=${threadId}, 输出已缓存`);
@@ -1954,7 +1954,7 @@ export async function resumeWithThreadTree(
           if (thinkingContent) {
             writeFileSync(join(debugDir, "llm.thinking.txt"), thinkingContent, "utf-8");
           }
-          const inputContent = messages.map(m => `--- ${m.role} ---\n${m.content}`).join("\n\n");
+          const inputContent = messages.map(m => `<${m.role}>\n${m.content}\n</${m.role}>`).join("\n\n");
           writeFileSync(join(debugDir, "llm.input.txt"), inputContent, "utf-8");
 
           /* 将线程状态改为 paused */

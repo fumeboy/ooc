@@ -382,83 +382,84 @@ export function renderThreadProcess(actions: ThreadAction[]): string {
   /* 按时间戳排序 */
   const sorted = [...actions].sort((a, b) => a.timestamp - b.timestamp);
 
+  const I = "  "; // 缩进单位
   const lines: string[] = [];
   for (const action of sorted) {
     const ts = formatTimestamp(action.timestamp);
 
     switch (action.type) {
       case "thinking":
-        lines.push(`<action type="thinking" ts="${ts}">`);
-        lines.push(action.content);
-        lines.push(`</action>`);
+        lines.push(`${I}<action type="thinking" ts="${ts}">`);
+        lines.push(`${I}${I}${action.content}`);
+        lines.push(`${I}</action>`);
         break;
 
       case "text":
-        lines.push(`<action type="text" ts="${ts}">`);
-        lines.push(action.content);
-        lines.push(`</action>`);
+        lines.push(`${I}<action type="text" ts="${ts}">`);
+        lines.push(`${I}${I}${action.content}`);
+        lines.push(`${I}</action>`);
         break;
 
       case "tool_use": {
         const nameAttr = action.name ? ` name="${action.name}"` : "";
-        lines.push(`<action type="tool_use" ts="${ts}"${nameAttr}>`);
+        lines.push(`${I}<action type="tool_use" ts="${ts}"${nameAttr}>`);
         if (action.args && Object.keys(action.args).length > 0) {
-          lines.push(`<args>`);
+          lines.push(`${I}${I}<args>`);
           for (const [k, v] of Object.entries(action.args)) {
             if (v === undefined || v === null) continue;
             if (typeof v === "object") {
-              lines.push(`<${k}>${JSON.stringify(v)}</${k}>`);
+              lines.push(`${I}${I}${I}<${k}>${JSON.stringify(v)}</${k}>`);
             } else {
-              lines.push(`<${k}>${v}</${k}>`);
+              lines.push(`${I}${I}${I}<${k}>${v}</${k}>`);
             }
           }
-          lines.push(`</args>`);
+          lines.push(`${I}${I}</args>`);
         }
-        lines.push(`</action>`);
+        lines.push(`${I}</action>`);
         break;
       }
 
       case "program":
-        lines.push(`<action type="program" ts="${ts}"${action.success !== undefined ? ` success="${action.success}"` : ""}>`);
-        lines.push(`<code>${action.content}</code>`);
+        lines.push(`${I}<action type="program" ts="${ts}"${action.success !== undefined ? ` success="${action.success}"` : ""}>`);
+        lines.push(`${I}${I}<code>${action.content}</code>`);
         if (action.result) {
-          lines.push(`<result>${action.result}</result>`);
+          lines.push(`${I}${I}<result>${action.result}</result>`);
         }
-        lines.push(`</action>`);
+        lines.push(`${I}</action>`);
         break;
 
       case "inject":
-        lines.push(`<action type="inject" ts="${ts}">`);
-        lines.push(action.content);
-        lines.push(`</action>`);
+        lines.push(`${I}<action type="inject" ts="${ts}">`);
+        lines.push(`${I}${I}${action.content}`);
+        lines.push(`${I}</action>`);
         break;
 
       case "message_in":
-        lines.push(`<action type="message_in" ts="${ts}">${action.content}</action>`);
+        lines.push(`${I}<action type="message_in" ts="${ts}">${action.content}</action>`);
         break;
 
       case "message_out":
-        lines.push(`<action type="message_out" ts="${ts}">${action.content}</action>`);
+        lines.push(`${I}<action type="message_out" ts="${ts}">${action.content}</action>`);
         break;
 
       case "create_thread":
-        lines.push(`<action type="create_thread" ts="${ts}">${action.content}</action>`);
+        lines.push(`${I}<action type="create_thread" ts="${ts}">${action.content}</action>`);
         break;
 
       case "thread_return":
-        lines.push(`<action type="thread_return" ts="${ts}">${action.content}</action>`);
+        lines.push(`${I}<action type="thread_return" ts="${ts}">${action.content}</action>`);
         break;
 
       case "set_plan":
-        lines.push(`<action type="set_plan" ts="${ts}">${action.content}</action>`);
+        lines.push(`${I}<action type="set_plan" ts="${ts}">${action.content}</action>`);
         break;
 
       case "mark_inbox":
-        lines.push(`<action type="mark_inbox" ts="${ts}">${action.content}</action>`);
+        lines.push(`${I}<action type="mark_inbox" ts="${ts}">${action.content}</action>`);
         break;
 
       default:
-        lines.push(`<action type="${action.type}" ts="${ts}">${action.content}</action>`);
+        lines.push(`${I}<action type="${action.type}" ts="${ts}">${action.content}</action>`);
     }
   }
 
