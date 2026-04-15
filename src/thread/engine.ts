@@ -1013,7 +1013,7 @@ export async function runWithThreadTree(
               });
               const td = tree.readThreadData(threadId);
               if (td) {
-                const childId = child?.id ?? "?";
+                const childId = child ?? "?";
                 td.actions.push({
                   type: "create_thread",
                   content: `[create_sub_thread] ${args.title} → ${childId}`,
