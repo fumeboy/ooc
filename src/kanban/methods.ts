@@ -88,6 +88,23 @@ export async function createTask(
   };
   tasks.push(task);
   await writeTasks(sessionDir, tasks);
+
+  /* 反向更新关联 Issue 的 taskRefs */
+  if (issueRefs && issueRefs.length > 0) {
+    const issues = await readIssues(sessionDir);
+    for (const issueId of issueRefs) {
+      const issue = issues.find((i) => i.id === issueId);
+      if (issue) {
+        if (!issue.taskRefs) issue.taskRefs = [];
+        if (!issue.taskRefs.includes(task.id)) {
+          issue.taskRefs.push(task.id);
+          issue.updatedAt = now();
+        }
+      }
+    }
+    await writeIssues(sessionDir, issues);
+  }
+
   return task;
 }
 

@@ -179,7 +179,7 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>): Message[
   if (ctx.creationMode === "root") {
     userParts.push(`<creator mode="root">\n  你是根线程，由用户(user)发起。完成任务后必须用 [return] 返回最终结果。[talk] 只用于向其他对象发消息，不会结束线程。\n</creator>`);
   } else {
-    userParts.push(`<creator mode="${ctx.creationMode}" from="${ctx.creator}">\n  你由 ${ctx.creator} 创建（${ctx.creationMode}）。完成任务后必须用 [return] 返回结果给创建者。[talk] 只用于向其他对象发消息，不会结束线程。\n</creator>`);
+    userParts.push(`<creator mode="${ctx.creationMode}" from="${ctx.creator}">\n  你是子线程，由 ${ctx.creator} 创建（${ctx.creationMode}）。你的职责是完成 <task> 中描述的具体工作，然后用 [return] 返回结果给创建者。不要重复创建者的工作，专注于你被分配的任务。\n</creator>`);
   }
 
   /* 当前计划 */

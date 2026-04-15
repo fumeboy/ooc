@@ -85,7 +85,7 @@ export function now(): string {
 /** 读取单条 Issue 详情 */
 export async function readIssueDetail(sessionDir: string, issueId: string): Promise<Issue | null> {
   try {
-    const path = join(sessionDir, "issues", `issue-${issueId}.json`);
+    const path = join(sessionDir, "issues", `${issueId}.json`);
     const file = Bun.file(path);
     if (!(await file.exists())) return null;
     return JSON.parse(await file.text()) as Issue;
@@ -99,7 +99,7 @@ export async function writeIssueDetail(sessionDir: string, issue: Issue): Promis
   const issuesDir = join(sessionDir, "issues");
   ensureDir(issuesDir);
   await Bun.write(
-    join(issuesDir, `issue-${issue.id}.json`),
+    join(issuesDir, `${issue.id}.json`),
     JSON.stringify(issue, null, 2),
   );
 }
@@ -107,7 +107,7 @@ export async function writeIssueDetail(sessionDir: string, issue: Issue): Promis
 /** 读取单条 Task 详情 */
 export async function readTaskDetail(sessionDir: string, taskId: string): Promise<Task | null> {
   try {
-    const path = join(sessionDir, "tasks", `task-${taskId}.json`);
+    const path = join(sessionDir, "tasks", `${taskId}.json`);
     const file = Bun.file(path);
     if (!(await file.exists())) return null;
     return JSON.parse(await file.text()) as Task;
@@ -121,7 +121,7 @@ export async function writeTaskDetail(sessionDir: string, task: Task): Promise<v
   const tasksDir = join(sessionDir, "tasks");
   ensureDir(tasksDir);
   await Bun.write(
-    join(tasksDir, `task-${task.id}.json`),
+    join(tasksDir, `${task.id}.json`),
     JSON.stringify(task, null, 2),
   );
 }
