@@ -964,6 +964,47 @@ export async function runWithThreadTree(
               tree.writeThreadData(threadId, td);
             }
             consola.info(`[Engine] open skill: ${skillName} → ${formId}`);
+
+          } else if (openType === "file" && args.path) {
+            // 文件读取：读取文件内容到 context window
+            const filePath = args.path as string;
+            const linesLimit = args.lines as number | undefined;
+            const rootDir = config.paths?.rootDir ?? config.rootDir;
+            const resolved = resolve(rootDir, filePath);
+
+            if (!existsSync(resolved)) {
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.actions.push({ type: "inject", content: `[错误] 文件 "${filePath}" 不存在`, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+              consola.warn(`[Engine] open file: ${filePath} not found`);
+            } else {
+              let content = readFileSync(resolved, "utf-8");
+              if (linesLimit && linesLimit > 0) {
+                const lines = content.split("\n");
+                content = lines.slice(0, linesLimit).join("\n");
+                if (lines.length > linesLimit) {
+                  content += `\n... (共 ${lines.length} 行，已截取前 ${linesLimit} 行)`;
+                }
+              }
+
+              const formId = formManager.begin("_file", description, { trait: filePath });
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                if (!td.windows) td.windows = {};
+                td.windows[filePath] = {
+                  name: filePath,
+                  content,
+                  formId,
+                  updatedAt: Date.now(),
+                };
+                td.activeForms = formManager.toData();
+                td.actions.push({ type: "inject", content: `文件 "${filePath}" 已加载到上下文窗口。${linesLimit ? `（前 ${linesLimit} 行）` : ""}`, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+              consola.info(`[Engine] open file: ${filePath}${linesLimit ? ` (${linesLimit} lines)` : ""} → ${formId}`);
+            }
           }
         }
 
@@ -1148,7 +1189,7 @@ export async function runWithThreadTree(
         else if (toolName === "close") {
           const form = formManager.cancel(args.form_id as string ?? "");
           if (form) {
-            if (form.command !== "_trait" && form.command !== "_skill") {
+            if (form.command !== "_trait" && form.command !== "_skill" && form.command !== "_file") {
               // command 类型：卸载 command 关联 trait
               if (!formManager.activeCommands().has(form.command)) {
                 const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
@@ -1157,6 +1198,13 @@ export async function runWithThreadTree(
             } else if (form.command === "_trait" && form.trait) {
               // trait 类型：卸载 trait
               await tree.deactivateTrait(threadId, form.trait);
+            } else if (form.command === "_file" && form.trait) {
+              // file 类型：从 windows 中移除（form.trait 存储的是文件路径）
+              const td = tree.readThreadData(threadId);
+              if (td?.windows?.[form.trait]) {
+                delete td.windows[form.trait];
+                tree.writeThreadData(threadId, td);
+              }
             }
             // skill 类型：无需卸载
 
@@ -2083,6 +2131,35 @@ export async function resumeWithThreadTree(
               tree.writeThreadData(threadId, td);
             }
             consola.info(`[Engine] open skill: ${skillName} → ${formId}`);
+
+          } else if (openType === "file" && args.path) {
+            const filePath = args.path as string;
+            const linesLimit = args.lines as number | undefined;
+            const rootDir = config.paths?.rootDir ?? config.rootDir;
+            const resolved = resolve(rootDir, filePath);
+
+            if (!existsSync(resolved)) {
+              const td = tree.readThreadData(threadId);
+              if (td) { td.actions.push({ type: "inject", content: `[错误] 文件 "${filePath}" 不存在`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+              consola.warn(`[Engine] open file: ${filePath} not found`);
+            } else {
+              let content = readFileSync(resolved, "utf-8");
+              if (linesLimit && linesLimit > 0) {
+                const lines = content.split("\n");
+                content = lines.slice(0, linesLimit).join("\n");
+                if (lines.length > linesLimit) content += `\n... (共 ${lines.length} 行，已截取前 ${linesLimit} 行)`;
+              }
+              const formId = formManager.begin("_file", description, { trait: filePath });
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                if (!td.windows) td.windows = {};
+                td.windows[filePath] = { name: filePath, content, formId, updatedAt: Date.now() };
+                td.activeForms = formManager.toData();
+                td.actions.push({ type: "inject", content: `文件 "${filePath}" 已加载到上下文窗口。${linesLimit ? `（前 ${linesLimit} 行）` : ""}`, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+              consola.info(`[Engine] open file: ${filePath}${linesLimit ? ` (${linesLimit} lines)` : ""} → ${formId}`);
+            }
           }
 
         /* --- Submit (resume) --- */
@@ -2162,10 +2239,13 @@ export async function resumeWithThreadTree(
         } else if (toolName === "close") {
           const form = formManager.cancel(args.form_id as string ?? "");
           if (form) {
-            if (form.command !== "_trait" && form.command !== "_skill") {
+            if (form.command !== "_trait" && form.command !== "_skill" && form.command !== "_file") {
               if (!formManager.activeCommands().has(form.command)) { const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command])); for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName); }
             } else if (form.command === "_trait" && form.trait) {
               await tree.deactivateTrait(threadId, form.trait);
+            } else if (form.command === "_file" && form.trait) {
+              const td = tree.readThreadData(threadId);
+              if (td?.windows?.[form.trait]) { delete td.windows[form.trait]; tree.writeThreadData(threadId, td); }
             }
             const td = tree.readThreadData(threadId); if (td) { td.activeForms = formManager.toData(); td.actions.push({ type: "inject", content: `Form ${form.formId} 已关闭。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
             consola.info(`[Engine] close: ${form.command} (${form.formId})`);

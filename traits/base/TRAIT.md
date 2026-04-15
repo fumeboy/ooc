@@ -2,13 +2,13 @@
 name: kernel/base
 type: how_to_think
 when: always
-description: 指令系统基座 — open/submit/close 三原语
+description: 指令系统基座 — open/submit/close/wait 四原语
 deps: []
 ---
 
 # 指令系统
 
-你通过调用工具来行动。系统提供三个工具：
+你通过调用工具来行动。系统提供四个工具：
 
 ## open — 打开上下文
 
@@ -19,8 +19,18 @@ deps: []
 | `command` | 执行指令（program/talk/return 等） | `command`, `description` |
 | `trait` | 加载 trait 知识到上下文 | `name`（trait 路径）, `description` |
 | `skill` | 加载 skill 内容到上下文 | `name`（skill 名称）, `description` |
+| `file` | 读取文件到上下文窗口 | `path`（文件路径）, `description` |
 
 可用 command：`program`, `talk`, `talk_sync`, `return`, `create_sub_thread`, `continue_sub_thread`, `call_function`, `set_plan`, `await`, `await_all`
+
+### file 类型说明
+
+`open(type="file")` 将文件内容加载为上下文窗口（`<knowledge>` 区域），而不是输出到执行历史中。
+
+- `path`：文件路径（相对于项目根目录）
+- `lines`：可选，限制读取行数（如 `lines=200` 只读前 200 行）
+- 再次 open 同一路径会更新窗口内容（支持刷新/重新读取）
+- `close(form_id)` 关闭窗口，从上下文中移除文件内容
 
 ## submit — 提交执行
 
@@ -28,11 +38,17 @@ deps: []
 
 ## close — 关闭上下文
 
-关闭一个已打开的 form。command 类型等同于取消指令，trait/skill 类型等同于卸载知识。
+关闭一个已打开的 form。command 类型等同于取消指令，trait/skill 类型等同于卸载知识，file 类型等同于从上下文移除文件。
+
+## wait — 等待
+
+将当前线程切换到等待状态，暂停执行。适用于：等待用户输入、等待外部事件、主动让出执行权。
+
+- `reason`：等待原因
 
 ## mark — 标记 inbox 消息
 
-所有工具（open/submit/close）都支持可选的 `mark` 参数，用于主动标记 inbox 中的消息：
+所有工具（open/submit/close/wait）都支持可选的 `mark` 参数，用于主动标记 inbox 中的消息：
 
 ```json
 "mark": [
@@ -56,3 +72,4 @@ deps: []
 4. 任务完成后必须 open(type="command", command="return") → submit(summary="...")
 5. 你的文本输出会自动记录为思考过程
 6. 收到 inbox 消息后，在下一次工具调用时通过 mark 参数标记
+7. 读取文件优先使用 open(type="file")，文件内容会出现在上下文窗口中，避免重复读取造成执行历史膨胀

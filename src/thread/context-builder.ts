@@ -156,6 +156,13 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
 
   if (extraWindows) knowledge.push(...extraWindows);
 
+  /* 动态 context windows（open(type=file) 产生的文件内容窗口） */
+  if (threadData.windows) {
+    for (const [path, win] of Object.entries(threadData.windows)) {
+      knowledge.push({ name: `file:${path}`, content: win.content });
+    }
+  }
+
   /* Skill 索引注入 */
   if (input.skills && input.skills.length > 0) {
     knowledge.push({
@@ -382,10 +389,49 @@ export function renderThreadProcess(actions: ThreadAction[]): string {
   /* 按时间戳排序 */
   const sorted = [...actions].sort((a, b) => a.timestamp - b.timestamp);
 
+  /* 收集已关闭的 form_id（submit 或 close 消费的） */
+  const closedFormIds = new Set<string>();
+  for (const a of sorted) {
+    if (a.type === "tool_use" && a.args?.form_id) {
+      if (a.name === "submit" || a.name === "close") {
+        closedFormIds.add(a.args.form_id as string);
+      }
+    }
+  }
+
+  /**
+   * 判断 action 是否应该被跳过（已关闭 form 的相关记录）
+   * - inject 中包含已关闭 form_id 的内容（"Form f_xxx 已创建"、"Form f_xxx 已关闭"）
+   * - tool_use open 中 form_id 已关闭的（open 返回的 form_id 在后续被 submit/close）
+   */
+  function shouldSkipAction(action: ThreadAction): boolean {
+    // inject：检查内容是否包含已关闭的 form_id
+    if (action.type === "inject") {
+      for (const fid of closedFormIds) {
+        if (action.content.includes(fid)) return true;
+      }
+    }
+    return false;
+  }
+
+  /** 从 tool_use args 中清除 form_id（已关闭的 form） */
+  function cleanArgs(action: ThreadAction): Record<string, unknown> | undefined {
+    if (!action.args) return action.args;
+    const args = { ...action.args };
+    if (args.form_id && closedFormIds.has(args.form_id as string)) {
+      delete args.form_id;
+    }
+    return Object.keys(args).length > 0 ? args : undefined;
+  }
+
   const I = "  "; // 缩进单位
   const lines: string[] = [];
   for (const action of sorted) {
+    if (shouldSkipAction(action)) continue;
+
     const ts = formatTimestamp(action.timestamp);
+    /* tool_use 的 args 需要清理 form_id */
+    const cleanedArgs = action.type === "tool_use" ? cleanArgs(action) : action.args;
 
     switch (action.type) {
       case "thinking":
@@ -403,9 +449,9 @@ export function renderThreadProcess(actions: ThreadAction[]): string {
       case "tool_use": {
         const nameAttr = action.name ? ` name="${action.name}"` : "";
         lines.push(`${I}<action type="tool_use" ts="${ts}"${nameAttr}>`);
-        if (action.args && Object.keys(action.args).length > 0) {
+        if (cleanedArgs && Object.keys(cleanedArgs).length > 0) {
           lines.push(`${I}${I}<args>`);
-          for (const [k, v] of Object.entries(action.args)) {
+          for (const [k, v] of Object.entries(cleanedArgs)) {
             if (v === undefined || v === null) continue;
             if (typeof v === "object") {
               lines.push(`${I}${I}${I}<${k}>${JSON.stringify(v)}</${k}>`);

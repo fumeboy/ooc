@@ -89,6 +89,18 @@ export interface ThreadDataFile {
     description: string;
     createdAt: number;
   }>;
+
+  /** 动态 context windows（open(type=file) 产生的可更新内容窗口） */
+  windows?: Record<string, {
+    /** 窗口名称（通常是文件路径） */
+    name: string;
+    /** 窗口内容 */
+    content: string;
+    /** 关联的 form_id（close 时用于清理） */
+    formId: string;
+    /** 更新时间 */
+    updatedAt: number;
+  }>;
 }
 
 /**

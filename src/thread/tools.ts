@@ -31,13 +31,13 @@ export const OPEN_TOOL: ToolDefinition = {
   type: "function",
   function: {
     name: "open",
-    description: "打开一个上下文。type=command 时加载指令相关知识；type=trait 时加载 trait 知识；type=skill 时加载 skill 内容。",
+    description: "打开一个上下文。type=command 时加载指令相关知识；type=trait 时加载 trait 知识；type=skill 时加载 skill 内容；type=file 时读取文件到上下文窗口。",
     parameters: {
       type: "object",
       properties: {
         type: {
           type: "string",
-          enum: ["command", "trait", "skill"],
+          enum: ["command", "trait", "skill", "file"],
           description: "上下文类型",
         },
         command: {
@@ -48,6 +48,14 @@ export const OPEN_TOOL: ToolDefinition = {
         name: {
           type: "string",
           description: "trait 完整路径（type=trait 时必填）或 skill 名称（type=skill 时必填）",
+        },
+        path: {
+          type: "string",
+          description: "文件路径（type=file 时必填，相对于项目根目录）",
+        },
+        lines: {
+          type: "number",
+          description: "读取行数限制（type=file 时可选，不填则读取全文）",
         },
         description: {
           type: "string",
