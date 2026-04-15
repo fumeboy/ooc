@@ -168,9 +168,9 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>): Message[
 
   /* 创建者信息 — 告诉 LLM 该向谁返回结果 */
   if (ctx.creationMode === "root") {
-    userParts.push(`## 创建者\n你是根线程，由用户(human)发起。完成任务后必须用 [return] 返回最终结果。[talk] 只用于向其他对象发消息，不会结束线程。`);
+    userParts.push(`## 创建者\n你是根线程，由用户(user)发起。完成任务后必须用 [return] 返回最终结果。`);
   } else {
-    userParts.push(`## 创建者\n你由 ${ctx.creator} 创建（${ctx.creationMode}）。完成任务后必须用 [return] 返回结果给创建者。[talk] 只用于向其他对象发消息，不会结束线程。`);
+    userParts.push(`## 创建者\n你由 ${ctx.creator} 创建（${ctx.creationMode}）。完成任务后必须用 [return] 返回结果给创建者。`);
   }
 
   /* 当前计划 */
@@ -472,10 +472,27 @@ export async function runWithThreadTree(
   const objectFlowDir = join(sessionDir, "objects", objectName);
   mkdirSync(objectFlowDir, { recursive: true });
 
+  /* 创建 .session.json 标志文件（如果不存在） */
+  const sessionFile = join(sessionDir, ".session.json");
+  if (!existsSync(sessionFile)) {
+    const title = message.slice(0, 20).replace(/\n/g, " ");
+    writeFileSync(sessionFile, JSON.stringify({
+      sessionId,
+      title,
+      createdAt: Date.now(),
+    }, null, 2), "utf-8");
+  }
+
   consola.info(`[Engine] 开始执行 ${objectName}, session=${sessionId}`);
 
-  /* 1. 创建 ThreadsTree + Root 线程 */
-  const tree = await ThreadsTree.create(objectFlowDir, `${objectName} 主线程`, message);
+  /* 1. 加载或创建 ThreadsTree + Root 线程 */
+  let tree = ThreadsTree.load(objectFlowDir);
+  if (!tree) {
+    consola.info(`[Engine] 创建新的线程树: ${objectName}`);
+    tree = await ThreadsTree.create(objectFlowDir, `${objectName} 主线程`, message);
+  } else {
+    consola.info(`[Engine] 加载已存在的线程树: ${objectName}, rootId=${tree.rootId}`);
+  }
 
   /* 2. 将初始消息写入 Root 线程的 inbox */
   tree.writeInbox(tree.rootId, {
@@ -1142,6 +1159,18 @@ export async function runWithThreadTree(
             }
             consola.warn(`[Engine] close: form ${args.form_id} not found`);
           }
+        }
+
+        /* --- Wait --- */
+        else if (toolName === "wait") {
+          const reason = args.reason as string ?? "";
+          await tree.setNodeStatus(threadId, "waiting");
+          const td = tree.readThreadData(threadId);
+          if (td) {
+            td.actions.push({ type: "inject", content: `[wait] 线程进入等待状态: ${reason}`, timestamp: Date.now() });
+            tree.writeThreadData(threadId, td);
+          }
+          consola.info(`[Engine] wait: ${reason}`);
         }
 
         /* debug 记录 */
@@ -2128,6 +2157,17 @@ export async function resumeWithThreadTree(
             const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "inject", content: `[提示] Form ${args.form_id} 不存在（可能已被 submit 消费）。请直接执行下一步操作。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
             consola.warn(`[Engine] close: form ${args.form_id} not found`);
           }
+
+        /* --- Wait (resume) --- */
+        } else if (toolName === "wait") {
+          const reason = args.reason as string ?? "";
+          await tree.setNodeStatus(threadId, "waiting");
+          const td = tree.readThreadData(threadId);
+          if (td) {
+            td.actions.push({ type: "inject", content: `[wait] 线程进入等待状态: ${reason}`, timestamp: Date.now() });
+            tree.writeThreadData(threadId, td);
+          }
+          consola.info(`[Engine] wait: ${reason}`);
         }
 
         if (config.debugEnabled && context && messages) {

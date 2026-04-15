@@ -128,14 +128,33 @@ export const CLOSE_TOOL: ToolDefinition = {
   },
 };
 
+/** wait tool — 切换线程到 waiting 状态 */
+export const WAIT_TOOL: ToolDefinition = {
+  type: "function",
+  function: {
+    name: "wait",
+    description: "将当前线程切换到 waiting 状态，暂停执行。适用于：等待用户输入、等待外部事件、主动让出执行权。线程会在收到新的 inbox 消息时被唤醒。",
+    parameters: {
+      type: "object",
+      properties: {
+        reason: {
+          type: "string",
+          description: "等待原因",
+        },
+        mark: MARK_PARAM,
+      },
+      required: ["reason"],
+    },
+  },
+};
+
 /** 所有 OOC tools */
-export const OOC_TOOLS: ToolDefinition[] = [OPEN_TOOL, SUBMIT_TOOL, CLOSE_TOOL];
+export const OOC_TOOLS: ToolDefinition[] = [OPEN_TOOL, SUBMIT_TOOL, CLOSE_TOOL, WAIT_TOOL];
 
 /**
  * 构建可用 tools 列表
  *
- * 始终返回三个 tool（open/submit/close）。
- * submit 和 close 只在有活跃 form 时才有意义，但始终提供（LLM 自行判断）。
+ * 始终返回四个 tool（open/submit/close/wait）。
  */
 export function buildAvailableTools(_activeCommands?: Set<string>): ToolDefinition[] {
   return OOC_TOOLS;
