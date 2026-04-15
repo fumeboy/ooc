@@ -363,6 +363,13 @@ async function applyIterationResult(
       /* 通知 Scheduler 启动新线程 */
       scheduler.onThreadCreated(childId, objectName);
 
+      /* 向父线程注入子线程 ID（让 LLM 知道真实的 thread_id） */
+      threadData.actions.push({
+        type: "inject",
+        content: `[create_sub_thread] 子线程已创建: ${childId}`,
+        timestamp: Date.now(),
+      });
+
       /* 发射 SSE 事件 */
       emitSSE({ type: "flow:action", objectName, sessionId, action: {
         type: "action",
