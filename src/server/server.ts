@@ -16,6 +16,7 @@ import { eventBus, type SSEEvent } from "./events.js";
 import { readFlow, listFlowSessions } from "../persistence/index.js";
 import { collectAllActions } from "../process/tree.js";
 import { loadTrait } from "../trait/loader.js";
+import { threadsToProcess } from "../persistence/thread-adapter.js";
 import type { World } from "../world/index.js";
 import type { FlowStatus, FlowMessage } from "../types/index.js";
 
@@ -395,6 +396,26 @@ async function handleRoute(
     });
 
     return json({ success: true, data: sorted });
+  }
+
+  /* GET /api/sessions/:sessionId/objects/:objectName/process — 获取对象的 process 数据 */
+  if (method === "GET" && path.match(/^\/api\/sessions\/[^/]+\/objects\/[^/]+\/process$/)) {
+    const parts = path.split("/");
+    const sessionId = parts[3];
+    const objectName = parts[5];
+    const objectFlowDir = join(world.flowsDir, sessionId, "objects", objectName);
+
+    if (!existsSync(objectFlowDir)) {
+      return json({ success: false, error: "Object not found" }, { status: 404 });
+    }
+
+    const process = threadsToProcess(objectFlowDir);
+
+    if (!process) {
+      return json({ success: false, error: "Process data not available" }, { status: 404 });
+    }
+
+    return json({ success: true, data: process });
   }
 
   /* GET /api/flows/:sessionId — 获取单个 Flow 详情 */
