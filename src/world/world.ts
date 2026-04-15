@@ -354,7 +354,7 @@ export class World implements Routable {
           'await talk("发送者名", "你的回复内容");',
           "",
           '// 向人类回复',
-          'await talk("human", "你的回复内容");',
+          'await talk("user", "你的回复内容");',
           "```",
           "",
           "`talk()` 是唯一的通信方式。无论是发起对话、回复消息、还是向人类回复，都必须用 `talk()`。",
@@ -431,10 +431,10 @@ export class World implements Routable {
    *
    * @param objectName - 目标对象名称
    * @param message - 消息内容
-   * @param from - 发送者（默认 "human"）
+   * @param from - 发送者（默认 "user"）
    * @returns Flow 实例
    */
-  async talk(objectName: string, message: string, from: string = "human", flowId?: string): Promise<Flow> {
+  async talk(objectName: string, message: string, from: string = "user", flowId?: string): Promise<Flow> {
     /* 线程树架构路径 */
     if (this._useThreadTree) {
       if (!flowId) {
@@ -485,8 +485,8 @@ export class World implements Routable {
       onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId) => {
         const target = targetObject.toLowerCase();
 
-        /* user/human 是系统用户（人类），不参与 ThinkLoop：只投递消息，不调度线程树 */
-        if (target === "user" || target === "human") {
+        /* user 是系统用户（人类），不参与 ThinkLoop：只投递消息，不调度线程树 */
+        if (target === "user") {
           emitSSE({
             type: "flow:message",
             objectName: fromObject,
@@ -575,7 +575,7 @@ export class World implements Routable {
         const flowJson = flow.toJSON();
         const hasOutbound = flowJson.messages.some((m: any) => m.direction === "out");
         if (!hasOutbound) {
-          flow.addMessage({ direction: "out", from: objectName, to: "human", content: result.summary, timestamp: now });
+          flow.addMessage({ direction: "out", from: objectName, to: "user", content: result.summary, timestamp: now });
         }
       }
       flow.save();
@@ -583,7 +583,7 @@ export class World implements Routable {
       /* 创建兼容 Flow 数据 */
       const messages: Array<Record<string, unknown>> = [];
       if (result.summary) {
-        messages.push({ direction: "out", from: objectName, to: "human", content: result.summary, timestamp: now });
+        messages.push({ direction: "out", from: objectName, to: "user", content: result.summary, timestamp: now });
       }
       const flowData = {
         sessionId,
@@ -654,7 +654,7 @@ export class World implements Routable {
           isPaused: (name) => this._globalPaused || this._pauseRequests.has(name),
           onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId) => {
             const target = targetObject.toLowerCase();
-            if (target === "user" || target === "human") {
+            if (target === "user") {
               emitSSE({
                 type: "flow:message",
                 objectName: fromObject,
@@ -717,7 +717,7 @@ export class World implements Routable {
           isPaused: (name) => this._globalPaused || this._pauseRequests.has(name),
           onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId) => {
             const target = targetObject.toLowerCase();
-            if (target === "user" || target === "human") {
+            if (target === "user") {
               emitSSE({
                 type: "flow:message",
                 objectName: fromObject,
@@ -807,15 +807,15 @@ export class World implements Routable {
    * 投递消息到目标对象（Routable 接口，异步，不运行 ThinkLoop）
    *
    * 消息投递到目标的 pending 队列，由 Scheduler 在下一轮调度时处理。
-   * "human" 和 "user" 都指向 user 对象（向后兼容）。
+   * "user" 指向 user 对象。
    */
   deliverMessage(targetName: string, message: string, from: string, replyTo?: string, sessionId?: string): void {
     /* 通过 sessionId 定位 session（支持并发） */
     const ctx = sessionId ? this._activeSessions.get(sessionId) : null;
     const session = ctx?.session ?? null;
 
-    /* talk("human", ...) 或 talk("user", ...) — 对象向人类回复 */
-    if (targetName === "human" || targetName === "user") {
+    /* talk("user", ...) — 对象向人类回复 */
+    if (targetName === "user") {
       if (!session) return;
       const senderFlow = session.getFlow(from);
       if (senderFlow) {
@@ -926,13 +926,13 @@ export class World implements Routable {
     let mainFlow: Flow;
     let targetFlow: Flow;
 
-    if (from === "human") {
+    if (from === "user") {
       /* 人类发起：main flow 在 objects/ 下，目标对象作为 sub-flow */
       const userStone = this._registry.get("user");
       if (!userStone) throw new Error("user 对象不存在");
 
-      mainFlow = Flow.create(this.flowsDir, "user", message, "human");
-      targetFlow = Flow.createSubFlow(mainFlow.sessionDir, stone.name, message, "human", "human");
+      mainFlow = Flow.create(this.flowsDir, "user", message, "user");
+      targetFlow = Flow.createSubFlow(mainFlow.sessionDir, stone.name, message, "user", "user");
 
       /* 确保 kanban 目录结构存在 */
       const issuesDir = join(mainFlow.sessionDir, "issues");
@@ -966,7 +966,7 @@ export class World implements Routable {
     const session = new Session(mainFlow.sessionId, mainFlow.sessionDir);
     const roundCounter = createSharedRoundCounter();
     const traitsCache = new Map<string, import("../types/index.js").TraitDefinition[]>();
-    if (from === "human") {
+    if (from === "user") {
       session.register("user", mainFlow);
     }
     session.register(objectName, targetFlow);
@@ -1040,7 +1040,7 @@ export class World implements Routable {
       this._activeSessions.delete(sessionId);
     }
 
-    return from === "human" ? mainFlow : targetFlow;
+    return from === "user" ? mainFlow : targetFlow;
   }
 
   /**
@@ -1065,7 +1065,7 @@ export class World implements Routable {
     let mainFlow: Flow | null = null;
     let targetFlow: Flow | null = null;
 
-    if (from === "human") {
+    if (from === "user") {
       const userStone = this._registry.get("user");
       if (!userStone) throw new Error("user 对象不存在");
       /* main flow (user) 在 session/objects/user/ */
@@ -1109,7 +1109,7 @@ export class World implements Routable {
     const session = new Session(mainFlow.sessionId, sessionDir);
     const roundCounter = createSharedRoundCounter();
     const traitsCache = new Map<string, import("../types/index.js").TraitDefinition[]>();
-    if (from === "human" && mainFlow !== targetFlow) {
+    if (from === "user" && mainFlow !== targetFlow) {
       session.register("user", mainFlow);
     }
     session.register(objectName, targetFlow);

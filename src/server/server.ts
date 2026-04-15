@@ -32,7 +32,7 @@ function hasSupervisorStone(world: World): boolean {
  * 通知 supervisor：用户向某个对象发送了消息; 废弃
  *
  * 非阻塞、非关键路径。失败时仅打印日志，不影响主流程。
- * 仅在用户直接发消息（from === "human"）且目标不是 supervisor 时触发。
+ * 仅在用户直接发消息（from === "user"）且目标不是 supervisor 时触发。
  */
 function _notifySupervisor(
   world: World,
@@ -43,7 +43,7 @@ function _notifySupervisor(
   if (!hasSupervisorStone(world)) return;
 
   const notification = `[系统通知] 用户向 ${objectName} 发送了消息（flowId: ${flowId}）:\n${message}`;
-  world.talk("supervisor", notification, "human").catch((e) => {
+  world.talk("supervisor", notification, "user").catch((e) => {
     consola.error("[Server] 通知 supervisor 失败:", (e as Error).message);
   });
 }
@@ -191,7 +191,7 @@ async function handleRoute(
     if (!message) return errorResponse("缺少 message 字段");
 
     /* 异步执行，不阻塞 HTTP 响应 */
-    world.talk(objectName, message, "human", flowId).catch((e) => {
+    world.talk(objectName, message, "user", flowId).catch((e) => {
       consola.error(`[Server] talk 异步执行失败: ${(e as Error).message}`);
     });
 
@@ -696,7 +696,7 @@ async function handleRoute(
     const target = (body.objectName ?? body.target) as string;
     const message = body.message as string;
     const triggerAt = body.triggerAt as number;
-    const createdBy = (body.createdBy as string) ?? "human";
+    const createdBy = (body.createdBy as string) ?? "user";
 
     if (!target || !message || !triggerAt) {
       return errorResponse("缺少必要字段。用法: { objectName: string, message: string, triggerAt: number (Unix ms) }");

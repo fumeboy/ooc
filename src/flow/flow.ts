@@ -75,7 +75,7 @@ export class Flow {
     flowsDir: string,
     stoneName: string,
     initialMessage: string,
-    from: string = "human",
+    from: string = "user",
     initiatedBy?: string,
   ): Flow {
     const sessionId = generateSessionId();

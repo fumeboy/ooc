@@ -189,7 +189,7 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
   return (
     <div className="relative flex flex-col h-full overflow-hidden">
       {/* 主体：Threads Tree 列表 */}
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-6 pb-[200px]">
         {objectNames.length === 0 && loadingObjects.size === 0 ? (
           <p className="text-muted-foreground text-sm">暂无对象参与此 session</p>
         ) : (
@@ -223,7 +223,7 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
       {/* 底部抽屉：Issues & Tasks */}
       <div
         className={cn(
-          "absolute mx-2 bottom-0 left-0 right-0 bg-background border border-border rounded-t-xl shadow-xl transition-all duration-300 ease-out",
+          "absolute mx-2 bottom-0 left-0 right-0 bg-[var(--panel-bg)]  border border-border rounded-t-xl shadow-xl transition-all duration-300 ease-out",
           drawerExpanded ? "h-[90%]" : "h-[160px]"
         )}
       >
