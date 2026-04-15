@@ -13,6 +13,7 @@ import type {
   FileInfo,
   FileTreeNode,
   SSEEvent,
+  Process,
 } from "./types";
 
 const BASE = "/api";
@@ -117,6 +118,19 @@ export async function updateFlowTitle(sessionId: string, title: string): Promise
 /** 更新 session title（写入 .session.json） */
 export async function updateSessionTitle(sessionId: string, title: string): Promise<void> {
   await patch<Record<string, unknown>>(`/sessions/${sessionId}`, { title });
+}
+
+/** 获取 session 中的所有对象列表 */
+export async function fetchSessionObjects(sessionId: string): Promise<string[]> {
+  return get<string[]>(`/sessions/${sessionId}/objects`);
+}
+
+/** 获取对象的 process 数据 */
+export async function fetchObjectProcess(
+  sessionId: string,
+  objectName: string
+): Promise<Process> {
+  return get<Process>(`/sessions/${sessionId}/objects/${objectName}/process`);
 }
 
 /** 创建对象 */
