@@ -1,13 +1,15 @@
 // kernel/web/src/features/SessionKanban.tsx
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { lastFlowEventAtom, editorTabsAtom, activeFilePathAtom } from "../store/session";
-import { fetchIssues, fetchTasks, fetchSessionReadme, createIssue, createTask } from "../api/kanban";
-import { MarkdownContent } from "../components/ui/MarkdownContent";
+import { fetchIssues, fetchTasks, createIssue, createTask } from "../api/kanban";
+import { fetchSessionObjects, fetchObjectProcess } from "../api/client";
 import { StatusGroup } from "./kanban/StatusGroup";
 import { IssueCard } from "./kanban/IssueCard";
 import { TaskCard } from "./kanban/TaskCard";
-import type { KanbanIssue, KanbanTask, IssueStatus, TaskStatus } from "../api/types";
+import { ThreadsTreeView } from "./ThreadsTreeView";
+import { ObjectAvatar } from "../components/ui/ObjectAvatar";
+import type { KanbanIssue, KanbanTask, IssueStatus, TaskStatus, Process } from "../api/types";
 import { cn } from "../lib/utils";
 
 const ISSUE_GROUPS: { status: IssueStatus; label: string; color: string }[] = [
@@ -27,7 +29,9 @@ const TASK_GROUPS: { status: TaskStatus; label: string; color: string }[] = [
 ];
 
 export function SessionKanban({ sessionId }: { sessionId: string }) {
-  const [readme, setReadme] = useState("");
+  const [objectNames, setObjectNames] = useState<string[]>([]);
+  const [processData, setProcessData] = useState<Map<string, Process>>(new Map());
+  const [loadingObjects, setLoadingObjects] = useState<Set<string>>(new Set());
   const [issues, setIssues] = useState<KanbanIssue[]>([]);
   const [tasks, setTasks] = useState<KanbanTask[]>([]);
   const [dialog, setDialog] = useState<{ type: "issue" | "task" } | null>(null);
@@ -36,9 +40,74 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
   const setTabs = useSetAtom(editorTabsAtom);
   const setActivePath = useSetAtom(activeFilePathAtom);
 
-  /* readme 只在挂载时加载一次，避免反复 404 */
+  /* 加载对象列表和 process 数据 */
   useEffect(() => {
-    fetchSessionReadme(sessionId).then(setReadme).catch(() => setReadme(""));
+    let mounted = true;
+
+    const loadObjects = async () => {
+      try {
+        const objects = await fetchSessionObjects(sessionId);
+        if (!mounted) return;
+
+        setObjectNames(objects);
+        setLoadingObjects(new Set(objects));
+
+        // 先加载 supervisor
+        if (objects.includes("supervisor")) {
+          try {
+            const process = await fetchObjectProcess(sessionId, "supervisor");
+            if (!mounted) return;
+            setProcessData(prev => new Map(prev).set("supervisor", process));
+            setLoadingObjects(prev => {
+              const next = new Set(prev);
+              next.delete("supervisor");
+              return next;
+            });
+          } catch (err) {
+            console.error("Failed to load supervisor process:", err);
+            setLoadingObjects(prev => {
+              const next = new Set(prev);
+              next.delete("supervisor");
+              return next;
+            });
+          }
+        }
+
+        // 并发加载其他对象
+        const others = objects.filter(name => name !== "supervisor");
+        await Promise.all(
+          others.map(async (name) => {
+            try {
+              const process = await fetchObjectProcess(sessionId, name);
+              if (!mounted) return;
+              setProcessData(prev => new Map(prev).set(name, process));
+            } catch (err) {
+              console.error(`Failed to load ${name} process:`, err);
+            } finally {
+              if (mounted) {
+                setLoadingObjects(prev => {
+                  const next = new Set(prev);
+                  next.delete(name);
+                  return next;
+                });
+              }
+            }
+          })
+        );
+      } catch (err) {
+        console.error("Failed to load session objects:", err);
+        if (mounted) {
+          setObjectNames([]);
+          setLoadingObjects(new Set());
+        }
+      }
+    };
+
+    loadObjects();
+
+    return () => {
+      mounted = false;
+    };
   }, [sessionId]);
 
   /* issues/tasks 在挂载和 SSE 事件时刷新 */
@@ -59,6 +128,50 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
     }
   }, [lastEvent, sessionId, loadKanban]);
 
+  /* SSE 实时刷新（防抖批量处理） */
+  const pendingRefreshes = useRef<Set<string>>(new Set());
+
+  const debouncedRefresh = useMemo(
+    () => {
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      return () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(async () => {
+          const objectsToRefresh = Array.from(pendingRefreshes.current);
+          pendingRefreshes.current.clear();
+
+          const processes = await Promise.all(
+            objectsToRefresh.map(name =>
+              fetchObjectProcess(sessionId, name).catch(err => {
+                console.error(`Failed to refresh ${name}:`, err);
+                return null;
+              })
+            )
+          );
+
+          setProcessData(prev => {
+            const next = new Map(prev);
+            objectsToRefresh.forEach((name, i) => {
+              if (processes[i]) next.set(name, processes[i]);
+            });
+            return next;
+          });
+        }, 500);
+      };
+    },
+    [sessionId]
+  );
+
+  useEffect(() => {
+    if (!lastEvent || !("objectName" in lastEvent)) return;
+    const objectName = (lastEvent as any).objectName;
+
+    if (objectNames.includes(objectName)) {
+      pendingRefreshes.current.add(objectName);
+      debouncedRefresh();
+    }
+  }, [lastEvent, objectNames, debouncedRefresh]);
+
   const openTab = (path: string, label: string) => {
     setActivePath(path);
     setTabs((prev) => {
@@ -75,12 +188,35 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="relative flex flex-col h-full overflow-hidden">
-      {/* 主体：Session Readme */}
+      {/* 主体：Threads Tree 列表 */}
       <div className="flex-1 overflow-auto p-6">
-        {readme ? (
-          <MarkdownContent content={readme} />
+        {objectNames.length === 0 && loadingObjects.size === 0 ? (
+          <p className="text-muted-foreground text-sm">暂无对象参与此 session</p>
         ) : (
-          <p className="text-muted-foreground text-sm">等待 Supervisor 更新工作状态...</p>
+          <div className="space-y-8">
+            {objectNames.map(name => (
+              <div key={name} className="space-y-2">
+                {/* 对象名分隔标题 */}
+                <div className="flex items-center gap-2 sticky top-0 bg-background py-2 z-10">
+                  <ObjectAvatar name={name} size="sm" />
+                  <h3 className="text-sm font-medium">{name}</h3>
+                </div>
+
+                {/* ThreadsTreeView 或加载状态 */}
+                {processData.has(name) ? (
+                  <ThreadsTreeView
+                    process={processData.get(name)!}
+                    sessionId={sessionId}
+                    objectName={name}
+                  />
+                ) : loadingObjects.has(name) ? (
+                  <div className="text-sm text-muted-foreground">加载中...</div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">对象数据不可用</div>
+                )}
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
