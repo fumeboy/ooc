@@ -146,114 +146,130 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>): Message[
   const systemParts: string[] = [];
 
   /* 身份 */
-  systemParts.push(`# 你是 ${ctx.name}`);
+  systemParts.push(`<!-- 对象身份：readme.md 的完整内容 -->`);
+  systemParts.push(`<identity name="${ctx.name}">`);
   systemParts.push(ctx.whoAmI);
+  systemParts.push(`</identity>`);
 
   /* 系统指令窗口 */
-  for (const w of ctx.instructions) {
-    systemParts.push(`\n## [指令] ${w.name}\n${w.content}`);
+  if (ctx.instructions.length > 0) {
+    systemParts.push(`<!-- 系统指令：激活的 kernel trait 注入的行为规则 -->`);
+    for (const w of ctx.instructions) {
+      systemParts.push(`<instruction name="${w.name}">\n${w.content}\n</instruction>`);
+    }
   }
 
   /* 知识窗口 */
-  for (const w of ctx.knowledge) {
-    systemParts.push(`\n## [知识] ${w.name}\n${w.content}`);
+  if (ctx.knowledge.length > 0) {
+    systemParts.push(`<!-- 知识窗口：激活的 library/user trait 和 skill 注入的知识 -->`);
+    for (const w of ctx.knowledge) {
+      systemParts.push(`<knowledge name="${w.name}">\n${w.content}\n</knowledge>`);
+    }
   }
 
   const userParts: string[] = [];
 
   /* 父线程期望 */
   if (ctx.parentExpectation) {
-    userParts.push(`## 任务\n${ctx.parentExpectation}`);
+    userParts.push(`<!-- 任务：用户消息或父线程对当前线程的期望 -->`);
+    userParts.push(`<task>${ctx.parentExpectation}</task>`);
   }
 
-  /* 创建者信息 — 告诉 LLM 该向谁返回结果 */
+  /* 创建者信息 */
   if (ctx.creationMode === "root") {
-    userParts.push(`## 创建者\n你是根线程，由用户(user)发起。完成任务后必须用 [return] 返回最终结果。`);
+    userParts.push(`<creator mode="root">你是根线程，由用户(user)发起。完成任务后必须用 [return] 返回最终结果。[talk] 只用于向其他对象发消息，不会结束线程。</creator>`);
   } else {
-    userParts.push(`## 创建者\n你由 ${ctx.creator} 创建（${ctx.creationMode}）。完成任务后必须用 [return] 返回结果给创建者。`);
+    userParts.push(`<creator mode="${ctx.creationMode}" from="${ctx.creator}">你由 ${ctx.creator} 创建（${ctx.creationMode}）。完成任务后必须用 [return] 返回结果给创建者。[talk] 只用于向其他对象发消息，不会结束线程。</creator>`);
   }
 
   /* 当前计划 */
   if (ctx.plan) {
-    userParts.push(`## 当前计划\n${ctx.plan}`);
+    userParts.push(`<plan>${ctx.plan}</plan>`);
   }
 
   /* 执行历史 */
-  userParts.push(`## 执行历史\n${ctx.process}`);
+  userParts.push(`<!-- 执行历史：当前线程的所有 actions 时间线 -->`);
+  if (ctx.process) {
+    userParts.push(`<process>\n${ctx.process}\n</process>`);
+  } else {
+    userParts.push(`<process />`);
+  }
 
   /* 局部变量 */
   if (Object.keys(ctx.locals).length > 0) {
-    userParts.push(`## 局部变量\n${JSON.stringify(ctx.locals, null, 2)}`);
+    userParts.push(`<locals>${JSON.stringify(ctx.locals, null, 2)}</locals>`);
   }
 
   /* inbox */
   if (ctx.inbox.length > 0) {
     const unread = ctx.inbox.filter(m => m.status === "unread");
     const marked = ctx.inbox.filter(m => m.status === "marked");
-    const inboxLines: string[] = [];
+    userParts.push(`<!-- 收件箱：来自其他对象或系统的消息 -->`);
+    userParts.push(`<inbox>`);
     if (unread.length > 0) {
-      inboxLines.push("### 未读消息");
+      userParts.push(`<!-- 未读消息：请在下次工具调用时通过 mark 参数标记 -->`);
       for (const m of unread) {
-        inboxLines.push(`- #${m.id} [${m.from}] ${m.content}`);
+        userParts.push(`<message id="${m.id}" from="${m.from}" status="unread">${m.content}</message>`);
       }
     }
     if (marked.length > 0) {
-      inboxLines.push("### 已标记消息");
+      userParts.push(`<!-- 已标记消息 -->`);
       for (const m of marked) {
-        const markInfo = m.mark ? ` (${m.mark.type}: ${m.mark.tip})` : "";
-        inboxLines.push(`- #${m.id} [${m.from}] ${m.content}${markInfo}`);
+        const markAttr = m.mark ? ` mark="${m.mark.type}" tip="${m.mark.tip}"` : "";
+        userParts.push(`<message id="${m.id}" from="${m.from}" status="marked"${markAttr}>${m.content}</message>`);
       }
     }
-    if (unread.length > 0) {
-      inboxLines.push("\n（请在下次工具调用时通过 mark 参数标记未读消息）");
-    }
-    userParts.push(`## 收件箱\n${inboxLines.join("\n")}`);
+    userParts.push(`</inbox>`);
   }
 
   /* todos */
   if (ctx.todos.length > 0) {
-    const todoLines = ctx.todos.map(t => `- [ ] ${t.content}`).join("\n");
-    userParts.push(`## 待办\n${todoLines}`);
+    userParts.push(`<todos>`);
+    for (const t of ctx.todos) {
+      userParts.push(`<todo>${t.content}</todo>`);
+    }
+    userParts.push(`</todos>`);
   }
 
   /* 子节点摘要 */
   if (ctx.childrenSummary) {
-    /* 检查是否所有子线程都已完成 */
     const allDone = ctx.childrenSummary.includes("[done]") && !ctx.childrenSummary.includes("[running]") && !ctx.childrenSummary.includes("[pending]") && !ctx.childrenSummary.includes("[waiting]");
-    let hint = "";
-    if (allDone) {
-      hint = "\n\n所有子线程已完成。请汇总子线程的结果，然后用 [return] 返回最终结果。";
-    }
-    userParts.push(`## 子线程\n${ctx.childrenSummary}${hint}`);
+    const hint = allDone ? `\n<!-- 所有子线程已完成。请汇总子线程的结果，然后用 [return] 返回最终结果。 -->` : "";
+    userParts.push(`<!-- 子线程：当前线程创建的子线程状态摘要 -->`);
+    userParts.push(`<children>${hint}\n${ctx.childrenSummary}\n</children>`);
   }
 
   /* 祖先摘要 */
   if (ctx.ancestorSummary) {
-    userParts.push(`## 上级线程\n${ctx.ancestorSummary}`);
+    userParts.push(`<ancestors>${ctx.ancestorSummary}</ancestors>`);
   }
 
   /* 兄弟摘要 */
   if (ctx.siblingSummary) {
-    userParts.push(`## 兄弟线程\n${ctx.siblingSummary}`);
+    userParts.push(`<siblings>${ctx.siblingSummary}</siblings>`);
   }
 
   /* 通讯录 */
   if (ctx.directory.length > 0) {
-    const dirLines = ctx.directory.map(d => `- ${d.name}: ${d.whoAmI}`).join("\n");
-    userParts.push(`## 通讯录\n${dirLines}`);
+    userParts.push(`<!-- 通讯录：可通过 talk 联系的对象 -->`);
+    userParts.push(`<directory>`);
+    for (const d of ctx.directory) {
+      userParts.push(`<object name="${d.name}">${d.whoAmI}</object>`);
+    }
+    userParts.push(`</directory>`);
   }
 
   /* 沙箱路径 */
   if (ctx.paths && Object.keys(ctx.paths).length > 0) {
-    userParts.push(`## 路径\n${JSON.stringify(ctx.paths)}`);
+    userParts.push(`<paths>${JSON.stringify(ctx.paths)}</paths>`);
   }
 
   /* 状态 */
-  userParts.push(`## 状态: ${ctx.status}`);
+  userParts.push(`<status>${ctx.status}</status>`);
 
   return [
-    { role: "system", content: systemParts.join("\n\n") },
-    { role: "user", content: userParts.join("\n\n") },
+    { role: "system", content: systemParts.join("\n") },
+    { role: "user", content: userParts.join("\n") },
   ];
 }
 
@@ -769,12 +785,12 @@ export async function runWithThreadTree(
         /* 追加活跃 form 信息到 context（让 LLM 知道当前有哪些未完成的 form） */
         const activeForms = formManager.activeForms();
         if (activeForms.length > 0) {
-          const formLines = activeForms.map(f =>
-            `- ${f.formId}（${f.command}）: ${f.description}${f.trait ? ` [trait: ${f.trait}]` : ""}`,
+          const formXml = activeForms.map(f =>
+            `<form id="${f.formId}" command="${f.command}"${f.trait ? ` trait="${f.trait}"` : ""}>${f.description}</form>`,
           );
           const lastMsg = messages[messages.length - 1];
           if (lastMsg && lastMsg.role === "user") {
-            lastMsg.content += `\n\n## 活跃 Form\n以下 form 已 open，等待 submit 或 close：\n${formLines.join("\n")}`;
+            lastMsg.content += `\n<!-- 活跃 Form：已 open 等待 submit 或 close -->\n<active-forms>\n${formXml.join("\n")}\n</active-forms>`;
           }
         }
 
@@ -1905,12 +1921,12 @@ export async function resumeWithThreadTree(
         /* 追加活跃 form 信息（resume 路径） */
         const activeForms = formManager.activeForms();
         if (activeForms.length > 0) {
-          const formLines = activeForms.map(f =>
-            `- ${f.formId}（${f.command}）: ${f.description}${f.trait ? ` [trait: ${f.trait}]` : ""}`,
+          const formXml = activeForms.map(f =>
+            `<form id="${f.formId}" command="${f.command}"${f.trait ? ` trait="${f.trait}"` : ""}>${f.description}</form>`,
           );
           const lastMsg = messages[messages.length - 1];
           if (lastMsg && lastMsg.role === "user") {
-            lastMsg.content += `\n\n## 活跃 Form\n以下 form 已 open，等待 submit 或 close：\n${formLines.join("\n")}`;
+            lastMsg.content += `\n<!-- 活跃 Form：已 open 等待 submit 或 close -->\n<active-forms>\n${formXml.join("\n")}\n</active-forms>`;
           }
         }
 
