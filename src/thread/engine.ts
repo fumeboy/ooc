@@ -1013,7 +1013,18 @@ export async function runWithThreadTree(
               });
               const td = tree.readThreadData(threadId);
               if (td) {
-                td.actions.push({ type: "create_thread", content: `[create_sub_thread] ${args.title} → ${child?.id ?? "?"}`, timestamp: Date.now() });
+                const childId = child?.id ?? "?";
+                td.actions.push({
+                  type: "create_thread",
+                  content: `[create_sub_thread] ${args.title} → ${childId}`,
+                  timestamp: Date.now()
+                });
+                // 立即注入 thread_id，让 LLM 在当前轮就能看到
+                td.actions.push({
+                  type: "inject",
+                  content: `[form.submit] create_sub_thread 成功，thread_id = ${childId}`,
+                  timestamp: Date.now(),
+                });
                 tree.writeThreadData(threadId, td);
               }
               consola.info(`[Engine] create_sub_thread: ${args.title}`);
@@ -2053,7 +2064,13 @@ export async function resumeWithThreadTree(
             } else if (command === "create_sub_thread") {
               const childId = `thread_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
               tree.createChild(threadId, childId, { title: args.title as string, description: args.description as string, traits: args.traits as string[] });
-              const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "create_thread", content: `[create_sub_thread] ${args.title} → ${childId}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.actions.push({ type: "create_thread", content: `[create_sub_thread] ${args.title} → ${childId}`, timestamp: Date.now() });
+                // 立即注入 thread_id
+                td.actions.push({ type: "inject", content: `[form.submit] create_sub_thread 成功，thread_id = ${childId}`, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
             } else if (command === "continue_sub_thread") {
               tree.writeInbox(args.thread_id as string, { from: objectName, content: args.message as string, source: "continue" }); tree.setNodeStatus(threadId, "waiting");
               const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "message_out", content: `[continue_sub_thread] → ${args.thread_id}: ${args.message}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
