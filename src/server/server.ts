@@ -374,6 +374,29 @@ async function handleRoute(
     } catch { return json({ success: true, data: { groups: [] } }); }
   }
 
+  /* GET /api/sessions/:sessionId/objects — 获取 session 中的所有对象 */
+  if (method === "GET" && path.startsWith("/api/sessions/") && path.endsWith("/objects")) {
+    const sessionId = path.split("/")[3];
+    const objectsDir = join(world.flowsDir, sessionId, "objects");
+
+    if (!existsSync(objectsDir)) {
+      return json({ success: true, data: [] });
+    }
+
+    const objects = readdirSync(objectsDir, { withFileTypes: true })
+      .filter(d => d.isDirectory())
+      .map(d => d.name);
+
+    // supervisor 排在第一位
+    const sorted = objects.sort((a, b) => {
+      if (a === "supervisor") return -1;
+      if (b === "supervisor") return 1;
+      return a.localeCompare(b);
+    });
+
+    return json({ success: true, data: sorted });
+  }
+
   /* GET /api/flows/:sessionId — 获取单个 Flow 详情 */
   const flowDetailMatch = path.match(/^\/api\/flows\/([^/]+)$/);
   if (method === "GET" && flowDetailMatch) {
