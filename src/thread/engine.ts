@@ -549,11 +549,18 @@ export async function runWithThreadTree(
     const rootDir = config.paths?.rootDir ?? config.rootDir;
 
     const context: Record<string, unknown> = {
-      /* 基础路径 */
+      /* 基础路径（沙箱变量名） */
       self_dir: stoneDir,
       self_files_dir: join(stoneDir, "files"),
       world_dir: rootDir,
       filesDir: join(objectFlowDir, "files"),
+
+      /* MethodContext 兼容字段（trait 方法通过这些字段访问） */
+      rootDir: rootDir,
+      sessionId: sessionId,
+      selfDir: stoneDir,
+      stoneName: objectName,
+      data: config.stone.data,
 
       /* 基础 API */
       print: printFn,
@@ -1781,6 +1788,14 @@ export async function resumeWithThreadTree(
       self_files_dir: join(stoneDir, "files"),
       world_dir: rootDir,
       filesDir: join(objectFlowDir, "files"),
+
+      /* MethodContext 兼容字段 */
+      rootDir: rootDir,
+      sessionId: sessionId,
+      selfDir: stoneDir,
+      stoneName: objectName,
+      data: config.stone.data,
+
       print: printFn,
       getData: (key: string) => config.stone.data[key],
       getAllData: () => ({ ...config.stone.data }),
