@@ -922,27 +922,37 @@ export async function runWithThreadTree(
             consola.info(`[Engine] open command: ${command} → ${formId}`);
 
           } else if (openType === "trait" && args.name) {
-            /* trait 加载：验证 trait 存在后再激活 */
-            const traitName = args.name as string;
-            const traitExists = config.traits.some(t => traitId(t) === traitName);
-            if (traitExists) {
-              await tree.activateTrait(threadId, traitName);
-              const formId = formManager.begin("_trait", description, { trait: traitName });
+            /* trait 加载：支持模糊匹配（精确 → 前缀补全 → 尾部匹配） */
+            const traitInput = args.name as string;
+            const allTraitIds = config.traits.map(t => traitId(t));
+            let resolvedTraitName = allTraitIds.find(id => id === traitInput) ?? null;
+            if (!resolvedTraitName && !traitInput.includes("/")) {
+              // 前缀补全
+              resolvedTraitName = allTraitIds.find(id => id === `library/${traitInput}` || id === `kernel/${traitInput}`) ?? null;
+              // 尾部匹配
+              if (!resolvedTraitName) {
+                resolvedTraitName = allTraitIds.find(id => id.endsWith(`/${traitInput}`)) ?? null;
+              }
+            }
+
+            if (resolvedTraitName) {
+              await tree.activateTrait(threadId, resolvedTraitName);
+              const formId = formManager.begin("_trait", description, { trait: resolvedTraitName });
               const td = tree.readThreadData(threadId);
               if (td) {
                 td.activeForms = formManager.toData();
-                td.actions.push({ type: "inject", content: `Trait ${traitName} 已加载。`, timestamp: Date.now() });
+                td.actions.push({ type: "inject", content: `Trait ${resolvedTraitName} 已加载。`, timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
               }
-              consola.info(`[Engine] open trait: ${traitName} → ${formId}`);
+              consola.info(`[Engine] open trait: ${traitInput} → ${resolvedTraitName} → ${formId}`);
             } else {
-              const available = config.traits.map(t => traitId(t)).filter(id => !id.startsWith("kernel/")).slice(0, 20).join(", ");
+              const available = allTraitIds.filter(id => !id.startsWith("kernel/") || id.includes("/plannable/") || id.includes("/computable/")).slice(0, 30).join(", ");
               const td = tree.readThreadData(threadId);
               if (td) {
-                td.actions.push({ type: "inject", content: `[错误] Trait "${traitName}" 不存在。可用 trait: ${available || "(无)"}`, timestamp: Date.now() });
+                td.actions.push({ type: "inject", content: `[错误] Trait "${traitInput}" 不存在。可用 trait: ${available || "(无)"}`, timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
               }
-              consola.warn(`[Engine] open trait: ${traitName} not found`);
+              consola.warn(`[Engine] open trait: ${traitInput} not found`);
             }
 
           } else if (openType === "skill" && args.name) {
@@ -2094,23 +2104,31 @@ export async function resumeWithThreadTree(
             consola.info(`[Engine] open command: ${command} → ${formId}`);
 
           } else if (openType === "trait" && args.name) {
-            const traitName = args.name as string;
-            const traitExists = config.traits.some(t => traitId(t) === traitName);
-            if (traitExists) {
-              await tree.activateTrait(threadId, traitName);
-              const formId = formManager.begin("_trait", description, { trait: traitName });
+            const traitInput = args.name as string;
+            const allTraitIds = config.traits.map(t => traitId(t));
+            let resolvedTraitName = allTraitIds.find(id => id === traitInput) ?? null;
+            if (!resolvedTraitName && !traitInput.includes("/")) {
+              resolvedTraitName = allTraitIds.find(id => id === `library/${traitInput}` || id === `kernel/${traitInput}`) ?? null;
+              if (!resolvedTraitName) {
+                resolvedTraitName = allTraitIds.find(id => id.endsWith(`/${traitInput}`)) ?? null;
+              }
+            }
+
+            if (resolvedTraitName) {
+              await tree.activateTrait(threadId, resolvedTraitName);
+              const formId = formManager.begin("_trait", description, { trait: resolvedTraitName });
               const td = tree.readThreadData(threadId);
               if (td) {
                 td.activeForms = formManager.toData();
-                td.actions.push({ type: "inject", content: `Trait ${traitName} 已加载。`, timestamp: Date.now() });
+                td.actions.push({ type: "inject", content: `Trait ${resolvedTraitName} 已加载。`, timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
               }
-              consola.info(`[Engine] open trait: ${traitName} → ${formId}`);
+              consola.info(`[Engine] open trait: ${traitInput} → ${resolvedTraitName} → ${formId}`);
             } else {
-              const available = config.traits.map(t => traitId(t)).filter(id => !id.startsWith("kernel/")).slice(0, 20).join(", ");
+              const available = allTraitIds.filter(id => !id.startsWith("kernel/") || id.includes("/plannable/") || id.includes("/computable/")).slice(0, 30).join(", ");
               const td = tree.readThreadData(threadId);
-              if (td) { td.actions.push({ type: "inject", content: `[错误] Trait "${traitName}" 不存在。可用 trait: ${available || "(无)"}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
-              consola.warn(`[Engine] open trait: ${traitName} not found`);
+              if (td) { td.actions.push({ type: "inject", content: `[错误] Trait "${traitInput}" 不存在。可用 trait: ${available || "(无)"}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+              consola.warn(`[Engine] open trait: ${traitInput} not found`);
             }
 
           } else if (openType === "skill" && args.name) {
