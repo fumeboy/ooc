@@ -30,10 +30,10 @@ export async function writeIssues(sessionDir: string, issues: Issue[]): Promise<
   /* 写入 index.json（完整数据，方便前端直接读取） */
   await Bun.write(join(issuesDir, "index.json"), JSON.stringify(issues, null, 2));
 
-  /* 写入单条文件 */
+  /* 写入单条文件（id 已含前缀，如 issue-001） */
   for (const issue of issues) {
     await Bun.write(
-      join(issuesDir, `issue-${issue.id}.json`),
+      join(issuesDir, `${issue.id}.json`),
       JSON.stringify(issue, null, 2),
     );
   }
@@ -61,7 +61,7 @@ export async function writeTasks(sessionDir: string, tasks: Task[]): Promise<voi
 
   for (const task of tasks) {
     await Bun.write(
-      join(tasksDir, `task-${task.id}.json`),
+      join(tasksDir, `${task.id}.json`),
       JSON.stringify(task, null, 2),
     );
   }

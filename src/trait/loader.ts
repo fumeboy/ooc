@@ -332,18 +332,21 @@ export function parseTSDoc(source: string): Map<string, TSDocInfo> {
 
     for (let i = startIdx; i < rawParams.length; i++) {
       const raw = rawParams[i]!;
-      /* 解析 "name: type = default" 或 "name" */
+      /* 解析 "name: type = default" 或 "name" 或 "name?: type" */
       const hasDefault = raw.includes("=");
       const withoutDefault = raw.split("=")[0]!.trim();
       const parts = withoutDefault.split(":").map((s) => s.trim());
-      const paramName = parts[0]!;
+      let paramName = parts[0]!;
+      /* 去掉可选参数的 ? 后缀（如 description? → description） */
+      const isOptional = paramName.endsWith("?");
+      if (isOptional) paramName = paramName.slice(0, -1);
       const paramType = parts[1] ?? "unknown";
 
       params.push({
         name: paramName,
         type: paramType,
         description: paramDocs.get(paramName) ?? "",
-        required: !hasDefault,
+        required: !hasDefault && !isOptional,
       });
     }
 
