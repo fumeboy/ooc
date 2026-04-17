@@ -46,7 +46,7 @@ export function OocLinkPreview() {
           </div>
           {parsed && (
             <div className="text-sm font-medium mt-1">
-              {parsed.type === "object" ? `对象: ${parsed.name}` : `文件: ${parsed.filename}`}
+              {parsed.type === "object" ? `对象: ${parsed.name}` : parsed.type === "file" ? `文件: ${parsed.filename}` : parsed.type === "ui" ? `UI: ${parsed.path}` : null}
             </div>
           )}
         </div>

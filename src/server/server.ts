@@ -1246,5 +1246,17 @@ function handleOocResolve(oocUrl: string, world: World): Response {
     return json({ success: true, data: { type: "file", objectName, filename, content } });
   }
 
+  /* ooc://ui/{相对路径} — Flow 自定义 UI 页面 */
+  const uiMatch = oocUrl.match(/^ooc:\/\/ui\/(.+)$/);
+  if (uiMatch) {
+    const relPath = decodeURIComponent(uiMatch[1]!);
+    const filePath = join(world.rootDir, relPath);
+    /* 安全检查 */
+    if (!filePath.startsWith(world.rootDir)) return errorResponse("非法路径", 403);
+    if (!existsSync(filePath)) return errorResponse(`UI 文件 "${relPath}" 不存在`, 404);
+    const content = readFileSync(filePath, "utf-8");
+    return json({ success: true, data: { type: "ui", path: relPath, content } });
+  }
+
   return errorResponse(`无法解析 ooc:// URL: ${oocUrl}`);
 }

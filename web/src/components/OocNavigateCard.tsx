@@ -43,6 +43,20 @@ export function OocNavigateCard({ title, description, url }: OocNavigateCardProp
         return [...prev, { path, label: parsed.filename }];
       });
       setActiveFilePath(path);
+    } else if (parsed.type === "ui") {
+      /* 从路径提取 sessionId 和 objectName：flows/{sid}/objects/{name}/ui/pages/{page} */
+      const m = parsed.path.match(/^flows\/([^/]+)\/objects\/([^/]+)\/ui\/pages\/(.+)$/);
+      if (m) {
+        const path = `flows/${m[1]}/objects/${m[2]}`;
+        const label = m[2]!;
+        setEditorTabs((prev) => {
+          if (prev.some((t) => t.path === path)) return prev;
+          return [...prev, { path, label }];
+        });
+        setActiveFilePath(path + "?tab=UI");
+      } else {
+        setOocLink(url);
+      }
     } else {
       /* 未知类型，降级到 OocLinkPreview */
       setOocLink(url);

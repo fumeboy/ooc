@@ -1,7 +1,7 @@
 /**
  * FlowView — 单个 Flow 对象的详情视图
  *
- * Tabs: Timeline / Process / Readme / Data / UI
+ * Tabs: Process / Data / Memory / UI
  * Data tab 使用分栏设计：左栏 Flow data，右栏 Stone data。
  *
  * @ref docs/哲学文档/gene.md#G2 — renders — Flow 状态机
@@ -16,12 +16,11 @@ import { ObjectReadmeView } from "./ObjectReadmeView";
 import { ProcessView } from "./ProcessView";
 import { ThreadsTreeView } from "./ThreadsTreeView";
 import { DynamicUI } from "./DynamicUI";
-import { ActionCard, TalkCard } from "../components/ui/ActionCard";
 import { CodeMirrorViewer } from "../components/ui/CodeMirrorViewer";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { cn } from "../lib/utils";
 import { X } from "lucide-react";
-import type { FlowData, FlowMessage, Action, TimelineEntry, StoneData } from "../api/types";
+import type { FlowData, StoneData } from "../api/types";
 
 interface FlowViewProps {
   /** session ID（顶层 sessionId） */
@@ -32,8 +31,8 @@ interface FlowViewProps {
   initialTab?: string;
 }
 
-const BASE_TABS = ["Timeline", "Process", "Data", "Memory"] as const;
-type Tab = "Timeline" | "Process" | "Data" | "Memory" | "UI" | null;
+const BASE_TABS = ["Process", "Data", "Memory"] as const;
+type Tab = "Process" | "Data" | "Memory" | "UI" | null;
 
 export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
   const [flow, setFlow] = useState<FlowData | null>(null);
@@ -96,43 +95,6 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
   const subFlow = (flow as any).subFlows?.find((sf: any) => sf.stoneName === objectName);
   const process = subFlow?.process ?? flow.process;
   const status = subFlow?.status ?? flow.status;
-
-  /* 构建该对象的时间线 */
-  const objectMessages = flow.messages.filter(
-    (m) => m.from === objectName || m.to === objectName
-  );
-
-  const collectActions = (node: any): (Action & { _origIndex: number })[] => {
-    const actions: (Action & { _origIndex: number })[] = [];
-    let index = 0;
-    const walk = (n: any) => {
-      for (const a of n.actions ?? []) {
-        actions.push({ ...a, _origIndex: index++ });
-      }
-      for (const child of n.children ?? []) {
-        walk(child);
-      }
-    };
-    walk(node);
-    return actions;
-  };
-  const actions = collectActions(process.root);
-
-  const timeline: TimelineEntry[] = [
-    ...objectMessages.map((m): TimelineEntry => ({ kind: "message", data: m, objectName })),
-    ...actions.map((a): TimelineEntry => ({ kind: "action", data: a, objectName })),
-  ].sort((a, b) => {
-    const ta = a.kind === "message" ? a.data.timestamp : a.kind === "action" ? a.data.timestamp : 0;
-    const tb = b.kind === "message" ? b.data.timestamp : b.kind === "action" ? b.data.timestamp : 0;
-    if (ta !== tb) return ta - tb;
-    // 时间戳相同时：
-    // - 如果都是 action，按先序遍历的原始顺序排列
-    // - 如果是 message 和 action，保持它们在原始数组中的相对顺序
-    if (a.kind === "action" && b.kind === "action") {
-      return (a.data as any)._origIndex - (b.data as any)._origIndex;
-    }
-    return 0;
-  });
 
   return (
     <div className="h-full flex flex-col">
@@ -199,24 +161,6 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
 
             {/* 抽屉内容 */}
             <div className="h-[calc(100%-56px)] overflow-auto px-4 pb-4">
-              {tab === "Timeline" && (
-                <div className="space-y-2">
-                  {timeline.length === 0 && (
-                    <p className="text-sm text-[var(--muted-foreground)]">暂无记录</p>
-                  )}
-                  {timeline.map((entry, i) => {
-                    if (entry.kind === "message") {
-                      const m = entry.data as FlowMessage;
-                      return <TalkCard key={`msg-${i}`} msg={m} />;
-                    }
-                    if (entry.kind === "action") {
-                      const a = entry.data as Action;
-                      return <ActionCard key={`act-${i}`} action={a} objectName={objectName} />;
-                    }
-                    return null;
-                  })}
-                </div>
-              )}
               {tab === "Process" && (
                 (process as any)?.isThreadTree
                   ? <ThreadsTreeView process={process} sessionId={sessionId} objectName={objectName} />

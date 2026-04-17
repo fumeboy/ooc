@@ -6,6 +6,7 @@ import { fetchIssues, ackIssue, postIssueComment } from "../api/kanban";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { CommentTimeline } from "./kanban/CommentTimeline";
 import { DynamicUI } from "./DynamicUI";
+import { ArrowLeft } from "lucide-react";
 import type { KanbanIssue, IssueStatus } from "../api/types";
 
 const STATUS_LABELS: Record<IssueStatus, string> = {
@@ -60,6 +61,13 @@ export function IssueDetailView({ sessionId, issueId }: { sessionId: string; iss
     <div className="flex flex-col h-full">
       <div className="border-b border-border px-6 py-4">
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => openTab(`flows/${sessionId}`, "Session")}
+            className="w-7 h-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            title="返回看板"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
           <h2 className="text-lg font-semibold">{issue.title}</h2>
           <span className={`px-2 py-0.5 rounded-full text-xs text-white ${STATUS_COLORS[issue.status]}`}>
             {STATUS_LABELS[issue.status]}
