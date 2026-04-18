@@ -458,7 +458,7 @@ export class World implements Routable {
    * 使用新的 thread/ 模块执行对话，返回兼容的 Flow 对象。
    * 内部通过 runWithThreadTree 执行，结果包装为 Flow 以保持接口兼容。
    */
-  private async _talkWithThreadTree(objectName: string, message: string, from: string, preSessionId?: string): Promise<Flow> {
+  private async _talkWithThreadTree(objectName: string, message: string, from: string, preSessionId?: string, continueThreadId?: string): Promise<Flow> {
     const stone = this._registry.get(objectName);
     if (!stone) throw new Error(`对象 "${objectName}" 不存在`);
 
@@ -482,7 +482,7 @@ export class World implements Routable {
         flowsDir: this.flowsDir,
       },
       isPaused: (name) => this._globalPaused || this._pauseRequests.has(name),
-      onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId) => {
+      onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId, continueThreadId) => {
         const target = targetObject.toLowerCase();
 
         /* user 是系统用户（人类），不参与 ThinkLoop：只投递消息，不调度线程树 */
@@ -500,18 +500,19 @@ export class World implements Routable {
             },
           });
           consola.info(`[World] ${fromObject} → user: 已投递（不触发 user thinkloop）`);
-          return null;
+          return { reply: null, remoteThreadId: "user" };
         }
 
         /* World 作为路由中间层：启动目标 Object 的线程树，等待完成，返回结果 */
-        consola.info(`[World] 跨 Object talk: ${fromObject} → ${targetObject}, session=${sessionId}`);
+        consola.info(`[World] 跨 Object talk: ${fromObject} → ${targetObject}, session=${sessionId}${continueThreadId ? `, continue=${continueThreadId}` : ""}`);
         try {
-          const flow = await this._talkWithThreadTree(targetObject, message, fromObject, sessionId);
+          const flow = await this._talkWithThreadTree(targetObject, message, fromObject, sessionId, continueThreadId);
           const flowData = flow.toJSON();
-          return flowData.summary ?? flowData.messages?.find((m: any) => m.direction === "out")?.content ?? null;
+          const reply = flowData.summary ?? flowData.messages?.find((m: any) => m.direction === "out")?.content ?? null;
+          return { reply, remoteThreadId: flowData._remoteThreadId ?? "unknown" };
         } catch (e) {
           consola.error(`[World] 跨 Object talk 失败: ${(e as Error).message}`);
-          return `[错误] ${(e as Error).message}`;
+          return { reply: `[错误] ${(e as Error).message}`, remoteThreadId: "error" };
         }
       },
     };
@@ -519,7 +520,7 @@ export class World implements Routable {
     /* 运行线程树引擎 */
     consola.info(`[World] 使用线程树架构处理 talk: ${from} → ${objectName}`);
     const messageTimestamp = Date.now();
-    const result: TalkResult = await runWithThreadTree(objectName, message, from, engineConfig, preSessionId);
+    const result: TalkResult = await runWithThreadTree(objectName, message, from, engineConfig, preSessionId, continueThreadId);
 
     /* 在线程树 session 目录下写入 Flow 兼容数据 */
     const sessionDir = join(this.flowsDir, result.sessionId);
@@ -541,6 +542,7 @@ export class World implements Routable {
       process: { root: { id: "root", title: "task", status: "done", children: [] }, focusId: "root" },
       data: {},
       summary: result.summary ?? null,
+      _remoteThreadId: result.threadId ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -652,7 +654,7 @@ export class World implements Routable {
           stone: stone.toJSON(),
           paths: { stoneDir: stone.dir, rootDir: this._rootDir, flowsDir: this.flowsDir },
           isPaused: (name) => this._globalPaused || this._pauseRequests.has(name),
-          onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId) => {
+          onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId, continueThreadId) => {
             const target = targetObject.toLowerCase();
             if (target === "user") {
               emitSSE({
@@ -668,13 +670,14 @@ export class World implements Routable {
                 },
               });
               consola.info(`[World] ${fromObject} → user: 已投递（不触发 user thinkloop）`);
-              return null;
+              return { reply: null, remoteThreadId: "user" };
             }
             try {
-              const flow = await this._talkWithThreadTree(targetObject, message, fromObject);
+              const flow = await this._talkWithThreadTree(targetObject, message, fromObject, undefined, continueThreadId);
               const flowData = flow.toJSON();
-              return flowData.summary ?? flowData.messages?.find((m: any) => m.direction === "out")?.content ?? null;
-            } catch (e) { return `[错误] ${(e as Error).message}`; }
+              const reply = flowData.summary ?? flowData.messages?.find((m: any) => m.direction === "out")?.content ?? null;
+              return { reply, remoteThreadId: flowData._remoteThreadId ?? "unknown" };
+            } catch (e) { return { reply: `[错误] ${(e as Error).message}`, remoteThreadId: "error" }; }
           },
         };
         const result = await resumeWithThreadTree(objectName, flowId, engineConfig);
@@ -715,7 +718,7 @@ export class World implements Routable {
           stone: stone.toJSON(),
           paths: { stoneDir: stone.dir, rootDir: this._rootDir, flowsDir: this.flowsDir },
           isPaused: (name) => this._globalPaused || this._pauseRequests.has(name),
-          onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId) => {
+          onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId, continueThreadId) => {
             const target = targetObject.toLowerCase();
             if (target === "user") {
               emitSSE({
@@ -731,13 +734,14 @@ export class World implements Routable {
                 },
               });
               consola.info(`[World] ${fromObject} → user: 已投递（不触发 user thinkloop）`);
-              return null;
+              return { reply: null, remoteThreadId: "user" };
             }
             try {
-              const flow = await this._talkWithThreadTree(targetObject, message, fromObject);
+              const flow = await this._talkWithThreadTree(targetObject, message, fromObject, undefined, continueThreadId);
               const flowData = flow.toJSON();
-              return flowData.summary ?? flowData.messages?.find((m: any) => m.direction === "out")?.content ?? null;
-            } catch (e) { return `[错误] ${(e as Error).message}`; }
+              const reply = flowData.summary ?? flowData.messages?.find((m: any) => m.direction === "out")?.content ?? null;
+              return { reply, remoteThreadId: flowData._remoteThreadId ?? "unknown" };
+            } catch (e) { return { reply: `[错误] ${(e as Error).message}`, remoteThreadId: "error" }; }
           },
         };
         const result = await stepOnceWithThreadTree(objectName, flowId, engineConfig, modifiedOutput);

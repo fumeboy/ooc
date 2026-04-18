@@ -76,9 +76,10 @@ export interface EngineConfig {
    * @param fromObject - 发起方对象名
    * @param fromThreadId - 发起方线程 ID
    * @param sessionId - 当前 session ID
-   * @returns 目标对象的回复（summary）
+   * @param continueThreadId - 可选，继续对方已有线程（而非新建）
+   * @returns { reply, remoteThreadId } — 对方回复 + 对方线程 ID
    */
-  onTalk?: (targetObject: string, message: string, fromObject: string, fromThreadId: string, sessionId: string) => Promise<string | null>;
+  onTalk?: (targetObject: string, message: string, fromObject: string, fromThreadId: string, sessionId: string, continueThreadId?: string) => Promise<{ reply: string | null; remoteThreadId: string }>;
   /** 是否开启 debug 模式（持久化每轮 ThinkLoop 的 LLM 输入/输出） */
   debugEnabled?: boolean;
   /** Scheduler 配置覆盖 */
@@ -99,6 +100,8 @@ export interface TalkResult {
   summary?: string;
   /** 总迭代次数 */
   totalIterations: number;
+  /** 实际执行的线程 ID（用于 continue_thread） */
+  threadId?: string;
 }
 
 /* ========== 辅助函数 ========== */
@@ -474,6 +477,8 @@ async function applyIterationResult(
  * @param message - 用户消息
  * @param from - 消息来源
  * @param config - 引擎配置
+ * @param preSessionId - 可选，预创建的 session ID
+ * @param continueThreadId - 可选，继续已有线程（而非新建/重置根线程）
  * @returns 执行结果
  */
 export async function runWithThreadTree(
@@ -482,6 +487,7 @@ export async function runWithThreadTree(
   from: string,
   config: EngineConfig,
   preSessionId?: string,
+  continueThreadId?: string,
 ): Promise<TalkResult> {
   const sessionId = preSessionId ?? generateSessionId();
   const sessionDir = join(config.flowsDir, sessionId);
@@ -513,9 +519,31 @@ export async function runWithThreadTree(
 
   /* 1. 加载或创建 ThreadsTree + Root 线程 */
   let tree = ThreadsTree.load(objectFlowDir);
+  /* 实际接收消息的线程 ID（默认根线程，continue 模式下为指定线程） */
+  let targetThreadId: string;
+
   if (!tree) {
     consola.info(`[Engine] 创建新的线程树: ${objectName}`);
     tree = await ThreadsTree.create(objectFlowDir, `${objectName} 主线程`, message);
+    targetThreadId = tree.rootId;
+  } else if (continueThreadId) {
+    /* continue 模式：向指定线程写入消息并唤醒 */
+    const targetNode = tree.getNode(continueThreadId);
+    if (targetNode) {
+      if (targetNode.status === "done" || targetNode.status === "failed") {
+        await tree.setNodeStatus(continueThreadId, "running");
+        consola.info(`[Engine] continue 线程 ${continueThreadId}: ${targetNode.status} → running`);
+      }
+      targetThreadId = continueThreadId;
+    } else {
+      /* 指定的线程不存在，回退到根线程 */
+      consola.warn(`[Engine] continue 线程 ${continueThreadId} 不存在，回退到根线程`);
+      const rootNode = tree.getNode(tree.rootId);
+      if (rootNode && rootNode.status === "done") {
+        await tree.setNodeStatus(tree.rootId, "running");
+      }
+      targetThreadId = tree.rootId;
+    }
   } else {
     consola.info(`[Engine] 加载已存在的线程树: ${objectName}, rootId=${tree.rootId}`);
     /* 多轮对话：如果根线程已完成，重置为 running 以处理新消息 */
@@ -524,10 +552,11 @@ export async function runWithThreadTree(
       await tree.setNodeStatus(tree.rootId, "running");
       consola.info(`[Engine] 重置根线程状态: done → running（多轮对话续写）`);
     }
+    targetThreadId = tree.rootId;
   }
 
-  /* 2. 将初始消息写入 Root 线程的 inbox */
-  tree.writeInbox(tree.rootId, {
+  /* 2. 将初始消息写入目标线程的 inbox */
+  tree.writeInbox(targetThreadId, {
     from,
     content: message,
     source: "talk",
@@ -1091,14 +1120,24 @@ export async function runWithThreadTree(
             else if ((command === "talk" || command === "talk_sync") && config.onTalk) {
               const target = (args.target as string)?.toLowerCase();
               if (target && target !== objectName.toLowerCase()) {
+                const continueThreadId = args.continue_thread as string | undefined;
                 const td = tree.readThreadData(threadId);
                 if (td) {
-                  td.actions.push({ type: "message_out", content: `[talk] → ${args.target}: ${args.message}`, timestamp: Date.now() });
+                  const continueLabel = continueThreadId ? ` (continue: ${continueThreadId})` : "";
+                  td.actions.push({ type: "message_out", content: `[talk] → ${args.target}: ${args.message}${continueLabel}`, timestamp: Date.now() });
                   tree.writeThreadData(threadId, td);
                 }
                 try {
-                  const reply = await config.onTalk(args.target as string, args.message as string, objectName, threadId, sessionId);
-                  if (reply) tree.writeInbox(threadId, { from: args.target as string, content: reply, source: "talk" });
+                  const { reply, remoteThreadId } = await config.onTalk(args.target as string, args.message as string, objectName, threadId, sessionId, continueThreadId);
+                  if (reply) {
+                    tree.writeInbox(threadId, { from: args.target as string, content: `${reply}\n[remote_thread_id: ${remoteThreadId}]`, source: "talk" });
+                  }
+                  /* 将 remote_thread_id 记录到 actions（无论是否有 reply，LLM 都能看到） */
+                  const td2 = tree.readThreadData(threadId);
+                  if (td2) {
+                    td2.actions.push({ type: "inject", content: `[talk → ${args.target}] remote_thread_id = ${remoteThreadId}`, timestamp: Date.now() });
+                    tree.writeThreadData(threadId, td2);
+                  }
                 } catch (e) {
                   tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" });
                 }
@@ -1658,9 +1697,9 @@ export async function runWithThreadTree(
   /* 8. 运行 Scheduler */
   await scheduler.run(objectName, tree, callbacks);
 
-  /* 9. 读取 Root 节点最终状态 */
-  const rootNode = tree.getNode(tree.rootId);
-  const finalStatus = rootNode?.status ?? "failed";
+  /* 9. 读取最终状态（continue 模式读目标线程，否则读根线程） */
+  const resultNode = tree.getNode(targetThreadId) ?? tree.getNode(tree.rootId);
+  const finalStatus = resultNode?.status ?? "failed";
 
   /* 10. 发射 SSE 结束事件 */
   emitSSE({
@@ -1675,8 +1714,9 @@ export async function runWithThreadTree(
   return {
     sessionId,
     status: finalStatus,
-    summary: rootNode?.summary,
+    summary: resultNode?.summary,
     totalIterations,
+    threadId: targetThreadId,
   };
 }
 
@@ -2231,8 +2271,25 @@ export async function resumeWithThreadTree(
             } else if ((command === "talk" || command === "talk_sync") && config.onTalk) {
               const target = (args.target as string)?.toLowerCase();
               if (target && target !== objectName.toLowerCase()) {
-                const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "message_out", content: `[talk] → ${args.target}: ${args.message}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
-                try { const reply = await config.onTalk(args.target as string, args.message as string, objectName, threadId, sessionId); if (reply) tree.writeInbox(threadId, { from: args.target as string, content: reply, source: "talk" }); } catch (e) { tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" }); }
+                const continueThreadId = args.continue_thread as string | undefined;
+                const td = tree.readThreadData(threadId);
+                if (td) {
+                  const continueLabel = continueThreadId ? ` (continue: ${continueThreadId})` : "";
+                  td.actions.push({ type: "message_out", content: `[talk] → ${args.target}: ${args.message}${continueLabel}`, timestamp: Date.now() });
+                  tree.writeThreadData(threadId, td);
+                }
+                try {
+                  const { reply, remoteThreadId } = await config.onTalk(args.target as string, args.message as string, objectName, threadId, sessionId, continueThreadId);
+                  if (reply) {
+                    tree.writeInbox(threadId, { from: args.target as string, content: `${reply}\n[remote_thread_id: ${remoteThreadId}]`, source: "talk" });
+                  }
+                  /* 将 remote_thread_id 记录到 actions（无论是否有 reply，LLM 都能看到） */
+                  const td2 = tree.readThreadData(threadId);
+                  if (td2) {
+                    td2.actions.push({ type: "inject", content: `[talk → ${args.target}] remote_thread_id = ${remoteThreadId}`, timestamp: Date.now() });
+                    tree.writeThreadData(threadId, td2);
+                  }
+                } catch (e) { tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" }); }
                 if (command === "talk_sync") tree.setNodeStatus(threadId, "waiting");
               }
             } else if (command === "return") {
@@ -2595,7 +2652,7 @@ export async function resumeWithThreadTree(
   });
 
   consola.info(`[Engine] 恢复执行结束 ${objectName}, status=${finalStatus}, iterations=${totalIterations}`);
-  return { sessionId, status: finalStatus, summary: rootNode?.summary, totalIterations };
+  return { sessionId, status: finalStatus, summary: rootNode?.summary, totalIterations, threadId: tree.rootId };
 }
 
 /**

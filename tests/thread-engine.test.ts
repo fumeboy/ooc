@@ -186,7 +186,7 @@ describe("talk 自动 ack 兜底", () => {
     let secondCallHasInbox = false;
 
     const config = makeConfig({
-      onTalk: async () => null,
+      onTalk: async () => ({ reply: null, remoteThreadId: "th_mock" }),
       responseFn: (messages: any[]) => {
         callCount++;
         const userMsg = messages.find((m: any) => m.role === "user")?.content ?? "";

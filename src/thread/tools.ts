@@ -96,6 +96,7 @@ export const SUBMIT_TOOL: ToolDefinition = {
         /* talk / talk_sync */
         target: { type: "string", description: "talk: 目标对象名" },
         message: { type: "string", description: "talk/continue_sub_thread: 消息内容" },
+        continue_thread: { type: "string", description: "talk: 继续对方已有线程（传入上次 talk 返回的 remote_thread_id），不传则新建线程" },
         /* return */
         summary: { type: "string", description: "return: 完成摘要" },
         /* create_sub_thread */
