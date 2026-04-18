@@ -488,7 +488,7 @@ export async function runWithThreadTree(
   const objectFlowDir = join(sessionDir, "objects", objectName);
   mkdirSync(objectFlowDir, { recursive: true });
 
-  /* 创建 .session.json 标志文件（如果不存在） */
+  /* 创建 .session.json 标志文件（如果不存在），或补充空 title */
   const sessionFile = join(sessionDir, ".session.json");
   if (!existsSync(sessionFile)) {
     const title = message.slice(0, 20).replace(/\n/g, " ");
@@ -497,6 +497,16 @@ export async function runWithThreadTree(
       title,
       createdAt: Date.now(),
     }, null, 2), "utf-8");
+  } else {
+    /* 预创建的 session 可能 title 为空，用第一条消息补充 */
+    try {
+      const meta = JSON.parse(readFileSync(sessionFile, "utf-8"));
+      if (!meta.title) {
+        meta.title = message.slice(0, 20).replace(/\n/g, " ");
+        if (!meta.sessionId) meta.sessionId = sessionId;
+        writeFileSync(sessionFile, JSON.stringify(meta, null, 2), "utf-8");
+      }
+    } catch { /* 解析失败忽略 */ }
   }
 
   consola.info(`[Engine] 开始执行 ${objectName}, session=${sessionId}`);
@@ -508,6 +518,12 @@ export async function runWithThreadTree(
     tree = await ThreadsTree.create(objectFlowDir, `${objectName} 主线程`, message);
   } else {
     consola.info(`[Engine] 加载已存在的线程树: ${objectName}, rootId=${tree.rootId}`);
+    /* 多轮对话：如果根线程已完成，重置为 running 以处理新消息 */
+    const rootNode = tree.getNode(tree.rootId);
+    if (rootNode && rootNode.status === "done") {
+      await tree.setNodeStatus(tree.rootId, "running");
+      consola.info(`[Engine] 重置根线程状态: done → running（多轮对话续写）`);
+    }
   }
 
   /* 2. 将初始消息写入 Root 线程的 inbox */
@@ -719,8 +735,7 @@ export async function runWithThreadTree(
   /* 7. debug 计数器 */
   let debugLoopCounter = 0;
 
-  /* 7b. FormManager */
-  const formManager = new FormManager();
+  /* 7b. 每线程独立的 FormManager（从 threadData.activeForms 恢复） */
 
   /* 8. 创建 SchedulerCallbacks */
   const callbacks: SchedulerCallbacks = {
@@ -732,6 +747,9 @@ export async function runWithThreadTree(
       if (!threadData) {
         throw new Error(`线程数据不存在: ${threadId}`);
       }
+
+      /* 每次迭代从 threadData 恢复 FormManager（线程隔离） */
+      const formManager = FormManager.fromData(threadData.activeForms ?? []);
 
       /* 读取树的内部结构用于 Context 构建 */
       const treeFile = buildTreeFileSnapshot(tree);
@@ -835,6 +853,9 @@ export async function runWithThreadTree(
           writeFileSync(join(debugDir, "llm.input.txt"), inputContent, "utf-8");
 
           consola.info(`[Engine] 暂停 thread=${threadId}, 输出已缓存`);
+
+          /* 将线程状态改为 paused */
+          await tree.setNodeStatus(threadId, "paused");
 
           /* 通知 scheduler 暂停此对象 */
           scheduler.pauseObject(objectName);
@@ -1738,8 +1759,7 @@ export async function resumeWithThreadTree(
   for (const nodeId of tree.nodeIds) {
     const node = tree.getNode(nodeId);
     if (node && node.status === "paused") {
-      node.status = "running";
-      tree.updateNode(node);
+      await tree.setNodeStatus(nodeId, "running");
       consola.info(`[Engine] 恢复线程 ${nodeId}: paused -> running`);
     }
   }
@@ -2031,11 +2051,7 @@ export async function resumeWithThreadTree(
           writeFileSync(join(debugDir, "llm.input.txt"), inputContent, "utf-8");
 
           /* 将线程状态改为 paused */
-          const node = tree.getNode(threadId);
-          if (node) {
-            node.status = "paused";
-            tree.updateNode(node);
-          }
+          await tree.setNodeStatus(threadId, "paused");
 
           consola.info(`[Engine] 暂停 thread=${threadId}, 输出已缓存, 状态改为 paused`);
           scheduler.pauseObject(objectName);

@@ -190,15 +190,23 @@ async function handleRoute(
     const flowId = (body.sessionId ?? body.flowId) as string | undefined;
     if (!message) return errorResponse("缺少 message 字段");
 
+    /* 检查对象是否存在 */
+    if (!world.registry.get(objectName)) {
+      return errorResponse(`对象 "${objectName}" 不存在`, 404);
+    }
+
+    /* 未提供 sessionId 时自动生成，确保 HTTP 响应能返回 */
+    const sessionId = flowId ?? `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
     /* 异步执行，不阻塞 HTTP 响应 */
-    world.talk(objectName, message, "user", flowId).catch((e) => {
+    world.talk(objectName, message, "user", sessionId).catch((e) => {
       consola.error(`[Server] talk 异步执行失败: ${(e as Error).message}`);
     });
 
     return json({
       success: true,
       data: {
-        sessionId: flowId ?? null,
+        sessionId,
         status: "running",
       },
     });
@@ -442,7 +450,13 @@ async function handleRoute(
       /* 兼容旧数据：session 根目录 */
       flow = readFlow(sessionDir);
     }
-    if (!flow) return errorResponse(`Flow "${sessionId}" 不存在`, 404);
+    if (!flow) {
+      /* session 目录存在但 flow 数据尚未写入（竞态：异步执行中） */
+      if (existsSync(sessionDir)) {
+        return json({ success: true, data: { flow: { sessionId, status: "pending", messages: [], actions: [] } } });
+      }
+      return errorResponse(`Flow "${sessionId}" 不存在`, 404);
+    }
 
     /* 合并 sub-flow 的消息和 process（让前端能看到完整对话和所有对象的行为树） */
     const objectsDir = join(sessionDir, "objects");
@@ -503,6 +517,8 @@ async function handleRoute(
     /* 遍历 session 下所有 sub-flow，将 running 状态改为 failed */
     const objectsSubDir = join(sessionDir, "objects");
     let cancelled = 0;
+
+    /* 旧架构：通过 data.json 取消 */
     const cancelFlow = (dir: string) => {
       const flow = readFlow(dir);
       if (flow && (flow.status === "running" || flow.status === "waiting")) {
@@ -520,16 +536,40 @@ async function handleRoute(
       }
     };
 
+    /* 线程树架构：通过 threads.json 取消 */
+    const cancelThreadTree = (dir: string) => {
+      const treePath = join(dir, "threads.json");
+      if (!existsSync(treePath)) return;
+      try {
+        const tree = JSON.parse(readFileSync(treePath, "utf-8"));
+        let modified = false;
+        for (const nodeId of Object.keys(tree.nodes ?? {})) {
+          const node = tree.nodes[nodeId];
+          if (node && (node.status === "running" || node.status === "waiting" || node.status === "doing")) {
+            node.status = "failed";
+            node.updatedAt = Date.now();
+            modified = true;
+            cancelled++;
+          }
+        }
+        if (modified) {
+          writeFileSync(treePath, JSON.stringify(tree, null, 2));
+        }
+      } catch { /* 解析失败忽略 */ }
+    };
+
     /* 取消 main flow */
     const mainFlowDir = join(objectsSubDir, "user");
     cancelFlow(mainFlowDir);
     if (!existsSync(mainFlowDir)) cancelFlow(sessionDir);
 
-    /* 取消所有 sub-flows */
+    /* 取消所有 sub-flows（旧架构 + 线程树架构） */
     if (existsSync(objectsSubDir)) {
       for (const entry of readdirSync(objectsSubDir, { withFileTypes: true })) {
-        if (entry.isDirectory() && entry.name !== "user") {
-          cancelFlow(join(objectsSubDir, entry.name));
+        if (entry.isDirectory()) {
+          const subDir = join(objectsSubDir, entry.name);
+          cancelFlow(subDir);
+          cancelThreadTree(subDir);
         }
       }
     }
@@ -608,7 +648,13 @@ async function handleRoute(
     if (relPath.includes("..")) return errorResponse("非法路径", 403);
     const absPath = join(world.rootDir, relPath);
     if (!absPath.startsWith(world.rootDir)) return errorResponse("非法路径", 403);
-    if (!existsSync(absPath)) return errorResponse("文件不存在", 404);
+    if (!existsSync(absPath)) {
+      /* kanban index 文件不存在时返回空数组（避免前端 404） */
+      if (relPath.endsWith("/issues/index.json") || relPath.endsWith("/tasks/index.json")) {
+        return json({ success: true, data: { path: relPath, content: "[]", size: 2 } });
+      }
+      return errorResponse("文件不存在", 404);
+    }
     const stat = statSync(absPath);
     if (stat.isDirectory()) return errorResponse("路径是目录，不是文件", 400);
     const content = readFileSync(absPath, "utf-8");
