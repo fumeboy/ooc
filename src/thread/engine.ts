@@ -145,7 +145,7 @@ function generateSessionId(): string {
  * - system: whoAmI + instructions + knowledge
  * - user: parentExpectation + process + inbox + todos + childrenSummary + directory
  */
-function contextToMessages(ctx: ReturnType<typeof buildThreadContext>): Message[] {
+function contextToMessages(ctx: ReturnType<typeof buildThreadContext>, deferHooks?: import("./types.js").ThreadFrameHook[]): Message[] {
   const systemParts: string[] = [];
 
   /* 身份 */
@@ -232,6 +232,20 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>): Message[
       userParts.push(`  <todo>${t.content}</todo>`);
     }
     userParts.push(`</todos>`);
+  }
+
+  /* defer hooks：展示已注册的 command hooks，让 LLM 在决策前看到 */
+  if (deferHooks && deferHooks.length > 0) {
+    const onHooks = deferHooks.filter(h => h.event.startsWith("on:"));
+    if (onHooks.length > 0) {
+      userParts.push(`<!-- defer 提醒：你之前注册的 command hook，对应 command 执行时请注意 -->`);
+      userParts.push(`<defers>`);
+      for (const h of onHooks) {
+        const cmd = h.event.slice(3); /* 去掉 "on:" 前缀 */
+        userParts.push(`  <defer command="${cmd}"${h.once === false ? ' once="false"' : ""}>${h.content}</defer>`);
+      }
+      userParts.push(`</defers>`);
+    }
   }
 
   /* 子节点摘要 */
@@ -832,7 +846,7 @@ export async function runWithThreadTree(
         });
 
         /* 转换为 LLM Messages */
-        messages = contextToMessages(context);
+        messages = contextToMessages(context, threadData.hooks);
 
         /* 追加活跃 form 信息到 context（让 LLM 知道当前有哪些未完成的 form） */
         const activeForms = formManager.activeForms();
@@ -2099,8 +2113,7 @@ export async function resumeWithThreadTree(
           traits: config.traits, extraWindows: config.extraWindows, paths: config.paths,
           skills: config.skills,
         });
-        messages = contextToMessages(context);
-
+        messages = contextToMessages(context, threadData.hooks);
         /* 追加活跃 form 信息（resume 路径） */
         const activeForms = formManager.activeForms();
         if (activeForms.length > 0) {
