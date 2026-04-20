@@ -60,8 +60,16 @@ export function useHashRouter() {
    */
   const sourceRef = useRef<"hash" | "atoms" | null>(null);
 
+  /** 跳过首次 atoms → hash 同步，让 hash → atoms 先初始化 */
+  const initializedRef = useRef(false);
+
   /* atoms → hash：状态变化时更新 URL */
   useEffect(() => {
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      return;
+    }
+
     if (sourceRef.current === "hash") {
       sourceRef.current = null;
       return;
