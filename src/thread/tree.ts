@@ -49,6 +49,8 @@ export class ThreadsTree {
   private _tree: ThreadsTreeFile;
   /** 串行化写入队列 */
   private readonly _writeQueue = new WriteQueue();
+  /** 线程复活回调（writeInbox 触发 done → running 时调用） */
+  private _onRevival?: (nodeId: string) => void;
 
   private constructor(dir: string, tree: ThreadsTreeFile) {
     this._dir = dir;
@@ -442,6 +444,19 @@ export class ThreadsTree {
     return result;
   }
 
+  /* ========== 线程复活回调 ========== */
+
+  /**
+   * 注入线程复活回调
+   *
+   * Engine 初始化时调用，当 writeInbox 触发 done → running 时通知 Scheduler。
+   *
+   * @param cb - 回调函数，参数为被复活的线程 ID
+   */
+  setRevivalCallback(cb: (nodeId: string) => void): void {
+    this._onRevival = cb;
+  }
+
   /* ========== inbox 操作 ========== */
 
   /** unread 消息上限 */
@@ -513,6 +528,16 @@ export class ThreadsTree {
     }
 
     this.writeThreadData(nodeId, data);
+
+    /* 线程复活：done 线程收到消息时自动唤醒为 running */
+    const node = this._tree.nodes[nodeId];
+    if (node && node.status === "done") {
+      node.status = "running";
+      node.revivalCount = (node.revivalCount ?? 0) + 1;
+      node.updatedAt = Date.now();
+      writeThreadsTree(this._dir, this._tree);
+      this._onRevival?.(nodeId);
+    }
   }
 
   /**

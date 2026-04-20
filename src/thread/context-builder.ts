@@ -192,6 +192,11 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
     }
   }
 
+  /* 3b. 线程复活提示 */
+  if (nodeMeta.revivalCount && nodeMeta.revivalCount > 0) {
+    parentExpectation += `\n<revival_notice>你之前已经完成过此线程（第 ${nodeMeta.revivalCount} 次复活）。你的上一次完成摘要：「${nodeMeta.summary ?? '无'}」。现在你的 inbox 中有新消息需要处理。请阅读新消息并继续工作。</revival_notice>`;
+  }
+
   /* 4. process：渲染 actions 时间线 */
   const process = renderThreadProcess(threadData.actions);
 

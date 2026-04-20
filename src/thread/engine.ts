@@ -26,7 +26,7 @@ import { CodeExecutor, executeShell } from "../executable/executor.js";
 import { MethodRegistry, type MethodContext } from "../trait/registry.js";
 import { getActiveTraits, traitId } from "../trait/activator.js";
 import { FormManager } from "./form.js";
-import { collectCommandTraits } from "./hooks.js";
+import { collectCommandTraits, collectCommandHooks } from "./hooks.js";
 import { buildAvailableTools } from "./tools.js";
 
 import type { LLMClient, Message, ToolCall } from "../thinkable/client.js";
@@ -404,19 +404,12 @@ async function applyIterationResult(
     const targetNode = tree.getNode(targetId);
 
     if (targetNode) {
-      /* 写入目标线程的 inbox */
+      /* 写入目标线程的 inbox（done 线程会被 writeInbox 自动复活） */
       tree.writeInbox(targetId, {
         from: objectName,
         content: message,
         source: "talk",
       });
-
-      /* 如果目标线程已完成（done/failed），唤醒为 running */
-      if (targetNode.status === "done" || targetNode.status === "failed") {
-        await tree.setNodeStatus(targetId, "running");
-        scheduler.onThreadCreated(targetId, objectName);
-      }
-      /* 如果目标线程正在 running，消息已写入 inbox，下一轮自然看到 */
 
       emitSSE({ type: "flow:action", objectName, sessionId, action: {
         type: "action",
@@ -754,6 +747,11 @@ export async function runWithThreadTree(
     maxIterationsPerThread: config.schedulerConfig?.maxIterationsPerThread ?? 100,
     maxTotalIterations: config.schedulerConfig?.maxTotalIterations ?? 500,
     deadlockGracePeriodMs: config.schedulerConfig?.deadlockGracePeriodMs ?? 30_000,
+  });
+
+  /* 5b. 注入线程复活回调（done 线程收到 inbox 消息时自动唤醒） */
+  tree.setRevivalCallback((nodeId) => {
+    scheduler.onThreadCreated(nodeId, objectName);
   });
 
   /* 6. 检查暂停 */
@@ -1249,10 +1247,47 @@ export async function runWithThreadTree(
             }
 
             /* trait 卸载 */
-            if (command !== "_trait" && command !== "_skill") {
+            if (command !== "_trait" && command !== "_skill" && command !== "defer") {
               if (!formManager.activeCommands().has(form.command)) {
                 const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
                 for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName);
+              }
+
+              /* defer hook 注入：command 被 submit 时，收集匹配的 on:{command} hooks */
+              const tdForHook = tree.readThreadData(threadId);
+              if (tdForHook?.hooks) {
+                const hookText = collectCommandHooks(command, tdForHook.hooks);
+                if (hookText) {
+                  tdForHook.actions.push({ type: "inject", content: hookText, timestamp: Date.now() });
+                  tree.writeThreadData(threadId, tdForHook);
+                }
+              }
+            }
+
+            /* defer command：注册 on:{command} hook */
+            if (command === "defer") {
+              const onCommand = args.on_command as string;
+              const content = args.content as string;
+              if (onCommand && content) {
+                const td = tree.readThreadData(threadId);
+                if (td) {
+                  if (!td.hooks) td.hooks = [];
+                  td.hooks.push({
+                    event: `on:${onCommand}`,
+                    traitName: "",
+                    content,
+                    once: (args.once as boolean) ?? true,
+                  });
+                  td.actions.push({ type: "inject", content: `[defer] 已注册 on:${onCommand} 提醒`, timestamp: Date.now() });
+                  tree.writeThreadData(threadId, td);
+                }
+                consola.info(`[Engine] defer: on:${onCommand}`);
+              } else {
+                const td = tree.readThreadData(threadId);
+                if (td) {
+                  td.actions.push({ type: "inject", content: `[错误] defer 需要 on_command 和 content 参数`, timestamp: Date.now() });
+                  tree.writeThreadData(threadId, td);
+                }
               }
             }
 
@@ -1983,6 +2018,11 @@ export async function resumeWithThreadTree(
     maxIterationsPerThread: config.schedulerConfig?.maxIterationsPerThread ?? 100,
     maxTotalIterations: config.schedulerConfig?.maxTotalIterations ?? 500,
     deadlockGracePeriodMs: config.schedulerConfig?.deadlockGracePeriodMs ?? 30_000,
+  });
+
+  /* 注入线程复活回调（done 线程收到 inbox 消息时自动唤醒） */
+  tree.setRevivalCallback((nodeId) => {
+    scheduler.onThreadCreated(nodeId, objectName);
   });
 
   /* debug 计数器（resume 场景需要从已有文件数初始化） */

@@ -46,6 +46,9 @@ export interface ThreadsTreeNodeMeta {
   /** 正在等待的子线程 ID 列表 */
   awaitingChildren?: string[];
 
+  /** 复活次数（每次从 done → running 时 +1） */
+  revivalCount?: number;
+
   /** 创建者线程 ID（用于失败通知路由） */
   creatorThreadId?: string;
   /** 创建者所属 Object（跨 Object 时） */
@@ -189,9 +192,14 @@ export interface ThreadTodoItem {
  * 与旧 FrameHook 的区别：
  * - 旧：{ id, when: HookTime, type: HookType, handler } — 复杂的 hook 系统
  * - 新：{ event, traitName, content, once } — 简化为纯文本 Context 注入
+ *
+ * event 类型：
+ * - "before" / "after"：线程生命周期钩子（create_sub_thread / return 时触发）
+ * - "on:{command}"：command 钩子（对应 command 被 submit 时触发，如 "on:return"）
+ *   由 defer command 在运行时注册，灵感来自 Go 的 defer 语法。
  */
 export interface ThreadFrameHook {
-  event: "before" | "after";
+  event: "before" | "after" | `on:${string}`;
   traitName: string;
   content: string;
   once?: boolean;
