@@ -373,7 +373,7 @@ export function App() {
     let breadcrumbSegments: string[] = [];
     let content: React.ReactNode = null;
 
-    if (activePath && tabs.length > 0) {
+    if (activePath) {
       /* ViewRegistry 渲染（优先级最高） */
       breadcrumbSegments = activePath.split("/").filter(Boolean);
       const resolved = viewRegistry.resolve(activePath);
