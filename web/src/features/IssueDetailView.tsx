@@ -107,10 +107,10 @@ export function IssueDetailView({ sessionId, issueId }: { sessionId: string; iss
         )}
         {tab === "reports" && (
           <div className="p-6 overflow-auto h-full space-y-4">
-            {issue.reportPages.map((page) => (
-              <div key={page} className="rounded-lg border border-border overflow-hidden">
-                <div className="px-3 py-2 bg-muted text-xs font-medium">{page}</div>
-                <DynamicUI importPath={`@flows/${sessionId}/objects/supervisor/ui/pages/${page}`} componentProps={{ sessionId }} />
+            {issue.reportPages.map((page, i) => (
+              <div key={`${i}-${typeof page === "string" ? page : JSON.stringify(page)}`} className="rounded-lg border border-border overflow-hidden">
+                <div className="px-3 py-2 bg-muted text-xs font-medium">{typeof page === "string" ? page : JSON.stringify(page)}</div>
+                <DynamicUI importPath={`@flows/${sessionId}/objects/supervisor/ui/pages/${typeof page === "string" ? page : ""}`} componentProps={{ sessionId }} />
               </div>
             ))}
           </div>

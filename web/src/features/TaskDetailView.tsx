@@ -118,10 +118,10 @@ export function TaskDetailView({ sessionId, taskId }: { sessionId: string; taskI
         )}
         {tab === "reports" && (
           <div className="p-6 space-y-4">
-            {task.reportPages.map((page) => (
-              <div key={page} className="rounded-lg border border-border overflow-hidden">
-                <div className="px-3 py-2 bg-muted text-xs font-medium">{page}</div>
-                <DynamicUI importPath={`@flows/${sessionId}/objects/supervisor/ui/pages/${page}`} componentProps={{ sessionId }} />
+            {task.reportPages.map((page, i) => (
+              <div key={`${i}-${typeof page === "string" ? page : JSON.stringify(page)}`} className="rounded-lg border border-border overflow-hidden">
+                <div className="px-3 py-2 bg-muted text-xs font-medium">{typeof page === "string" ? page : JSON.stringify(page)}</div>
+                <DynamicUI importPath={`@flows/${sessionId}/objects/supervisor/ui/pages/${typeof page === "string" ? page : ""}`} componentProps={{ sessionId }} />
               </div>
             ))}
           </div>
