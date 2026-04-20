@@ -6,7 +6,7 @@
  *
  * @ref ooc://file/stones/sophia/files/哲学文档/gene.md#G11 — implements — 前端整体布局
  */
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useAtom, useSetAtom, useAtomValue } from "jotai";
 import { objectsAtom } from "./store/objects";
 import {
@@ -172,7 +172,15 @@ export function App() {
   const [stoneGroups, setStoneGroups] = useState<GroupConfig["groups"]>([]);
 
   /* 当选中会话时自动切到文件树，取消选中时切回 sessions 并清除编辑器状态 */
+  const prevActiveIdRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
+    /* 跳过初始 mount（让 hash router 先恢复状态） */
+    if (prevActiveIdRef.current === undefined) {
+      prevActiveIdRef.current = activeId;
+      setShowSessions(!activeId);
+      return;
+    }
+    prevActiveIdRef.current = activeId;
     setShowSessions(!activeId);
     if (!activeId && activeTab === "flows") {
       setActivePath(null);
