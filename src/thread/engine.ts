@@ -1659,6 +1659,16 @@ export async function runWithThreadTree(
             }
           }
 
+          /* defer hook 注入（TOML 路径） */
+          const tdForHook = tree.readThreadData(threadId);
+          if (tdForHook?.hooks) {
+            const hookText = collectCommandHooks(form.command, tdForHook.hooks);
+            if (hookText) {
+              tdForHook.actions.push({ type: "inject", content: hookText, timestamp: Date.now() });
+              tree.writeThreadData(threadId, tdForHook);
+            }
+          }
+
           /* 持久化 */
           const td = tree.readThreadData(threadId);
           if (td) {

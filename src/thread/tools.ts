@@ -42,7 +42,7 @@ export const OPEN_TOOL: ToolDefinition = {
         },
         command: {
           type: "string",
-          enum: ["program", "talk", "talk_sync", "return", "create_sub_thread", "continue_sub_thread", "call_function", "set_plan", "await", "await_all"],
+          enum: ["program", "talk", "talk_sync", "return", "create_sub_thread", "continue_sub_thread", "call_function", "set_plan", "await", "await_all", "defer"],
           description: "指令名称（type=command 时必填）",
         },
         name: {
@@ -110,6 +110,10 @@ export const SUBMIT_TOOL: ToolDefinition = {
         args: { type: "object", description: "call_function: 方法参数" },
         /* create_sub_thread 额外 */
         traits: { type: "array", items: { type: "string" }, description: "create_sub_thread: trait 列表" },
+        /* defer */
+        on_command: { type: "string", description: "defer: 目标 command 名（如 return, talk, program）" },
+        content: { type: "string", description: "defer: 提醒文本" },
+        once: { type: "boolean", description: "defer: 是否只触发一次（默认 true）" },
         mark: MARK_PARAM,
       },
       required: ["form_id"],

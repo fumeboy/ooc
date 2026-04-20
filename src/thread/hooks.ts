@@ -140,3 +140,43 @@ export function collectCommandTraits(
   }
   return result;
 }
+
+/**
+ * 收集 command hooks（defer 注册的 on:{command} 钩子）
+ *
+ * 在 command 被 submit 时调用，收集当前线程中匹配的 hooks。
+ * 触发后，once !== false 的 hook 自动从 hooks 数组中移除。
+ *
+ * @param command - 被 submit 的 command 名称（如 "return", "talk"）
+ * @param threadHooks - 当前线程的 hooks 数组（会被修改：移除 once hook）
+ * @returns 合并后的注入文本，无匹配 hook 时返回 null
+ */
+export function collectCommandHooks(
+  command: string,
+  threadHooks: ThreadFrameHook[] | undefined,
+): string | null {
+  if (!threadHooks || threadHooks.length === 0) return null;
+
+  const event = `on:${command}`;
+  const injections: string[] = [];
+  const toRemove: number[] = [];
+
+  for (let i = 0; i < threadHooks.length; i++) {
+    const hook = threadHooks[i];
+    if (hook.event !== event) continue;
+
+    injections.push(hook.content);
+    /* once 默认 true */
+    if (hook.once !== false) {
+      toRemove.push(i);
+    }
+  }
+
+  /* 从后往前移除，避免索引偏移 */
+  for (let i = toRemove.length - 1; i >= 0; i--) {
+    threadHooks.splice(toRemove[i], 1);
+  }
+
+  if (injections.length === 0) return null;
+  return `>>> [defer 提醒 — ${command}]\n${injections.join("\n")}`;
+}
