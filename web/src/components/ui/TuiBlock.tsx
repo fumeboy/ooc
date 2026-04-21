@@ -173,8 +173,9 @@ export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionP
   const injectParsed = isInject ? parseInjectTitle(action.content) : null;
   const displayContent = isInject ? (injectParsed?.body ?? action.content) : action.content;
 
-  /* program 截断 */
-  const contentTrunc = isProgram ? truncateText(action.content) : null;
+  /* program / tool_use 的内容都是代码/JSON 文本——统一 truncate 且用 pre 展示 */
+  const isCodeLike = isProgram || isToolUse;
+  const contentTrunc = isCodeLike ? truncateText(action.content) : null;
   const resultTrunc = isProgram && action.result ? truncateText(action.result) : null;
   const needsModal = contentTrunc?.isTruncated || resultTrunc?.isTruncated;
 
@@ -250,12 +251,12 @@ export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionP
             ? { maxHeight: typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight, overflow: "auto" }
             : undefined}
         >
-          {isProgram ? (
+          {isCodeLike ? (
             <div>
               <pre className="text-[11px] whitespace-pre-wrap break-all text-[var(--foreground)] opacity-90">
                 {contentTrunc!.truncated}
               </pre>
-              {action.result && (
+              {isProgram && action.result && (
                 <div className="mt-1 border-l-2 border-[var(--border)] pl-2">
                   <span className="text-[10px] text-[var(--muted-foreground)]">output</span>
                   <pre className="text-[11px] whitespace-pre-wrap break-all text-[var(--foreground)] opacity-70">
@@ -278,7 +279,7 @@ export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionP
                   onClose={() => setModalOpen(false)}
                   title={`${cfg.label} — ${objectName ?? ""}`}
                   content={action.content}
-                  result={action.result}
+                  result={isProgram ? action.result : undefined}
                 />
               )}
             </div>
@@ -306,7 +307,23 @@ interface TuiTalkProps {
   loading?: boolean;
 }
 
+/** 剥离 talk 消息的内部元标记（[fork] / [form: form_xxx] 等），只保留可读正文
+ *
+ * LLM 视角的 message_out.content 会带 " [fork]" / " [form: form_xxx]" 尾缀，
+ * 前端渲染时不应直接暴露给用户（Bruce 首轮 #14）。
+ */
+function stripTalkMeta(content: string): string {
+  let body = content.trim();
+  while (true) {
+    const stripped = body.replace(/\s*\[(fork|continue|form)(?::?\s*[^\]]+)?\]\s*$/g, "").trim();
+    if (stripped === body) break;
+    body = stripped;
+  }
+  return body || content;
+}
+
 export function TuiTalk({ msg, loading }: TuiTalkProps) {
+  const cleanContent = stripTalkMeta(msg.content);
   return (
     <div className="group font-mono text-[12px] leading-relaxed">
       {/* 头部行 */}
@@ -316,12 +333,12 @@ export function TuiTalk({ msg, loading }: TuiTalkProps) {
         <span className="text-[var(--muted-foreground)] opacity-60">{msg.from} → {msg.to}</span>
         {loading && <Loader2 className="w-3 h-3 animate-spin text-[var(--muted-foreground)]" />}
         <span className="text-[var(--muted-foreground)] opacity-40 shrink-0 ml-auto">{formatTs(msg.timestamp)}</span>
-        <CopyBtn text={msg.content} />
+        <CopyBtn text={cleanContent} />
       </div>
 
-      {/* 内容 */}
+      {/* 内容（已剥离 [fork] / [form: xxx] 等内部元标记） */}
       <div className="pl-5 mt-0.5">
-        <MarkdownContent content={msg.content} className="text-[13px] leading-relaxed" />
+        <MarkdownContent content={cleanContent} className="text-[13px] leading-relaxed" />
       </div>
     </div>
   );

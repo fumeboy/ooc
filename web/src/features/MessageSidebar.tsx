@@ -501,6 +501,17 @@ export function MessageSidebar() {
       if (e.key === "Escape") {
         e.preventDefault();
         setShowMention(false);
+        /* 同步把输入框里的触发字符 @query 清掉——避免残留 @ 让用户重新手动删 */
+        setInput((prev) => {
+          const atIdx = prev.lastIndexOf("@");
+          if (atIdx < 0) return prev;
+          /* 只剥离最后一次 @ 之后、非空格的片段（保留 @ 之前和之后被空格分隔的内容） */
+          const after = prev.slice(atIdx + 1);
+          const spaceIdx = after.search(/\s/);
+          const tail = spaceIdx >= 0 ? after.slice(spaceIdx) : "";
+          return prev.slice(0, atIdx) + tail;
+        });
+        setMentionQuery("");
         return;
       }
     }

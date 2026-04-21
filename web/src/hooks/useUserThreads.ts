@@ -124,10 +124,20 @@ export function findThreadInAllSubFlows(
   return null;
 }
 
-/** 从 "[talk] → user: xxx" 剥离前缀 */
+/** 从 "[talk] → user: <body> [fork:...] [form: form_xxx]" 剥离前缀和尾缀元标记
+ *
+ * 清理目标（Bruce 首轮 #14）：让 threads 列表的消息缩略显示的是"人话"，
+ * 而不是 LLM 视角的 action content 序列化文本。 */
 function stripTalkPrefix(content: string): string {
-  const m = content.match(/^\[talk\][^:]*:\s*(.*)$/s);
-  return m ? m[1]!.trim() : content;
+  const m = content.match(/^\[talk\][^:]*:\s*([\s\S]*)$/);
+  let body = (m?.[1] ?? content).trim();
+  /* 尾部元标记：[fork] / [fork:xxx] / [continue:xxx] / [form: form_xxx]，可能有多个连续 */
+  while (true) {
+    const stripped = body.replace(/\s*\[(fork|continue|form)(?::?\s*[^\]]+)?\]\s*$/g, "").trim();
+    if (stripped === body) break;
+    body = stripped;
+  }
+  return body || content;
 }
 
 /** localStorage 已读消息 id 集合（offline fallback——服务端 readState 不可用时使用） */

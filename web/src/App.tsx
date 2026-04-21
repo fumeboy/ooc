@@ -393,17 +393,36 @@ export function App() {
               /* 先创建 session 拿到 sessionId，再异步 talk */
               const { sessionId } = await createSession(t);
               const path = `flows/${sessionId}`;
+              const now = Date.now();
               /* 乐观设置 flow 数据，让 MessageSidebar 立即显示用户消息 */
               setActiveFlow({
                 sessionId,
                 stoneName: t,
                 status: "running",
-                messages: [{ direction: "in", from: "human", to: t, content: msg, timestamp: Date.now() }],
+                messages: [{ direction: "in", from: "human", to: t, content: msg, timestamp: now }],
                 process: { root: { id: "root", title: "task", status: "doing", children: [], actions: [] }, focusId: "root" },
                 data: {},
-                createdAt: Date.now(),
-                updatedAt: Date.now(),
+                createdAt: now,
+                updatedAt: now,
               } as any);
+              /* 同时在 sessions 列表里 pre-insert 一条乐观记录，避免侧边栏显示 "Untitled session"
+               * 直到 SSE 第一次刷新（Bruce 首轮 #10）*/
+              setSessions((prev) => {
+                if (prev.some((s) => s.sessionId === sessionId)) return prev;
+                return [
+                  {
+                    sessionId,
+                    status: "running",
+                    firstMessage: msg,
+                    messageCount: 1,
+                    actionCount: 0,
+                    hasProcess: false,
+                    createdAt: now,
+                    updatedAt: now,
+                  },
+                  ...prev,
+                ];
+              });
               setActiveId(sessionId);
               setActivePath(path);
               setTabs([{ path, label: "Kanban" }]);
