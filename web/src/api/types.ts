@@ -147,6 +147,17 @@ export interface FlowSummary {
   updatedAt: number;
 }
 
+/** Context 可见性分类（镜像后端 `kernel/src/thread/visibility.ts#ContextVisibility`） */
+export type ContextVisibility = "detailed" | "summary" | "title_only" | "hidden";
+
+/** context-visibility API 返回结构 */
+export interface ContextVisibilityResult {
+  /** 实际使用的 focus 节点 ID（可能是 query 传入的，也可能是默认选中的） */
+  focusId: string;
+  /** 每个节点 threadId → 可见性分类 */
+  visibility: Record<string, ContextVisibility>;
+}
+
 /** Trait 信息 */
 export interface TraitInfo {
   name: string;

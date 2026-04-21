@@ -14,6 +14,7 @@ import type {
   FileTreeNode,
   SSEEvent,
   Process,
+  ContextVisibilityResult,
 } from "./types";
 
 const BASE = "/api";
@@ -131,6 +132,24 @@ export async function fetchObjectProcess(
   objectName: string
 ): Promise<Process> {
   return get<Process>(`/sessions/${sessionId}/objects/${objectName}/process`);
+}
+
+/**
+ * 获取线程树每个节点相对于 focus 的 Context 可见性分类
+ *
+ * @param sessionId - Flow session ID
+ * @param objectName - Object 名称
+ * @param focus - 观察主体线程 ID（可选，后端会默认选 running 叶节点或 root）
+ */
+export async function getContextVisibility(
+  sessionId: string,
+  objectName: string,
+  focus?: string,
+): Promise<ContextVisibilityResult> {
+  const query = focus ? `?focus=${encodeURIComponent(focus)}` : "";
+  return get<ContextVisibilityResult>(
+    `/flows/${sessionId}/objects/${objectName}/context-visibility${query}`,
+  );
 }
 
 /** 创建对象 */

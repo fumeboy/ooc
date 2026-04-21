@@ -11,11 +11,11 @@
  */
 import { useState, useCallback, useRef, useEffect } from "react";
 import { cn } from "../lib/utils";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { TuiAction } from "../components/ui/TuiBlock";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
-import { updateThreadPins, resumeFlow, fetchFileContent } from "../api/client";
-import type { Process, ProcessNode } from "../api/types";
+import { updateThreadPins, resumeFlow, fetchFileContent, getContextVisibility } from "../api/client";
+import type { Process, ProcessNode, ContextVisibility } from "../api/types";
 
 interface ThreadsTreeViewProps {
   process: Process;
@@ -115,6 +115,101 @@ function getPinColor(pin: string): string {
   return found?.color ?? "#9ca3af";
 }
 
+/**
+ * Context 可见性视觉配置
+ *
+ * 为每种可见性分类定义一组 CSS class：
+ * - rowClass：整行的背景 / 边框 / 透明度
+ * - badge：图例里显示的色块 class
+ * - label：图例与 tooltip 里显示的中文名
+ *
+ * 设计原则：
+ * - detailed：最高亮（紫色实心高亮） —— "我自己，完整可见"
+ * - summary：中等（蓝色边框） —— "title + summary 出现在 Context"
+ * - title_only：低调（灰虚线边框） —— "只有 title，没有 summary"
+ * - hidden：弱化（半透明灰阶） —— "完全不在 Context 里"
+ * - 不覆盖 status 圆点色，可与 status 独立组合显示
+ */
+const VIS_STYLE: Record<ContextVisibility, { rowClass: string; badge: string; label: string }> = {
+  detailed: {
+    rowClass: "bg-purple-100 dark:bg-purple-900/30 border-l-4 border-purple-400",
+    badge: "bg-purple-200 border-2 border-purple-400",
+    label: "detailed（完整可见）",
+  },
+  summary: {
+    rowClass: "border-l-2 border-blue-400 bg-blue-50/40 dark:bg-blue-900/10",
+    badge: "bg-blue-100 border-2 border-blue-400",
+    label: "summary（title + 摘要）",
+  },
+  title_only: {
+    rowClass: "border-l border-dashed border-slate-400",
+    badge: "border border-dashed border-slate-400",
+    label: "title_only（仅 title）",
+  },
+  hidden: {
+    rowClass: "opacity-40",
+    badge: "opacity-50 bg-slate-200 border border-slate-300",
+    label: "hidden（不可见）",
+  },
+};
+
+/**
+ * 生成 Context 可见性分类的 tooltip 原因描述
+ *
+ * 规则（对齐 `kernel/src/thread/context-builder.ts`）：
+ * - detailed：focus 自身
+ * - summary / title_only：祖先、直接子、兄弟
+ * - hidden：其他
+ */
+function buildVisibilityReason(
+  nodeId: string,
+  focusId: string,
+  visibility: ContextVisibility,
+  rootNode: ProcessNode,
+): string {
+  if (nodeId === focusId) return "focus 自身：Context 中以完整 actions 的形式可见";
+  if (visibility === "hidden") return "不在 focus 线程的 Context 中（非祖先/直接子/兄弟）";
+
+  /* 判定是祖先 / 子 / 兄弟 */
+  const focusNode = findNode(rootNode, focusId);
+  if (!focusNode) return VIS_STYLE[visibility].label;
+  /* 祖先链 */
+  const ancestorIds = new Set<string>();
+  (function collectAncestors(n: ProcessNode, target: string): boolean {
+    if (n.id === target) return true;
+    for (const c of n.children) {
+      if (collectAncestors(c, target)) {
+        ancestorIds.add(n.id);
+        return true;
+      }
+    }
+    return false;
+  })(rootNode, focusId);
+  if (ancestorIds.has(nodeId)) {
+    return `祖先链：${VIS_STYLE[visibility].label}`;
+  }
+  /* 直接子 */
+  if (focusNode.children.some((c) => c.id === nodeId)) {
+    return `focus 的直接子：${VIS_STYLE[visibility].label}`;
+  }
+  /* 兄弟：focus 的父节点的其他子 */
+  const parent = findParent(rootNode, focusId);
+  if (parent && parent.children.some((c) => c.id === nodeId)) {
+    return `同级兄弟：${VIS_STYLE[visibility].label}`;
+  }
+  return VIS_STYLE[visibility].label;
+}
+
+/** 递归查找节点的父节点 */
+function findParent(root: ProcessNode, childId: string): ProcessNode | null {
+  for (const c of root.children) {
+    if (c.id === childId) return root;
+    const deeper = findParent(c, childId);
+    if (deeper) return deeper;
+  }
+  return null;
+}
+
 export function ThreadsTreeView({ process, sessionId, objectName }: ThreadsTreeViewProps) {
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null);
   const [recentViewed, setRecentViewed] = useState<string[]>([]);
@@ -123,6 +218,40 @@ export function ThreadsTreeView({ process, sessionId, objectName }: ThreadsTreeV
   /* 右键菜单 */
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  /* Ctx View 模式：以某个 focus 线程为观察主体，给每个节点着色可见性 */
+  const [ctxViewEnabled, setCtxViewEnabled] = useState(false);
+  const [ctxFocusId, setCtxFocusId] = useState<string | null>(null);
+  const [ctxVisibility, setCtxVisibility] = useState<Record<string, ContextVisibility>>({});
+  const [ctxLoading, setCtxLoading] = useState(false);
+
+  /**
+   * 拉取可见性数据
+   *
+   * ctxViewEnabled 切为 true 或 focus 切换时调用。
+   * 失败静默（已有降级显示：无可见性数据时等同普通树视图）。
+   */
+  const fetchVisibility = useCallback(async (focus?: string) => {
+    if (!sessionId || !objectName) return;
+    setCtxLoading(true);
+    try {
+      const result = await getContextVisibility(sessionId, objectName, focus);
+      setCtxFocusId(result.focusId);
+      setCtxVisibility(result.visibility);
+    } catch (e) {
+      console.error("[ThreadsTreeView] getContextVisibility failed:", e);
+    } finally {
+      setCtxLoading(false);
+    }
+  }, [sessionId, objectName]);
+
+  /* 开启 Ctx View 时首次拉取 */
+  useEffect(() => {
+    if (ctxViewEnabled && sessionId && objectName) {
+      fetchVisibility(ctxFocusId ?? undefined);
+    }
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [ctxViewEnabled]);
 
   /* 点击外部关闭右键菜单 */
   useEffect(() => {
@@ -209,16 +338,71 @@ export function ThreadsTreeView({ process, sessionId, objectName }: ThreadsTreeV
     );
   }
 
+  /** 切换 Ctx View 模式 */
+  const toggleCtxView = () => {
+    setCtxViewEnabled((prev) => !prev);
+  };
+
+  /** 节点单击：Ctx View 时 = 切换 focus；否则 = 看详情 */
+  const handleNodeClickOrFocus = (nodeId: string) => {
+    if (ctxViewEnabled) {
+      setCtxFocusId(nodeId);
+      fetchVisibility(nodeId);
+    } else {
+      handleNodeClick(nodeId);
+    }
+  };
+
   /* 树视图 */
+  const focusNode = ctxViewEnabled && ctxFocusId ? findNode(process.root, ctxFocusId) : null;
   return (
     <div className="py-3 font-mono text-[13px] leading-relaxed relative">
+      {/* Ctx View 头部（切换按钮 + 图例） */}
+      <div className="flex items-center justify-between px-2 pb-2 mb-2 border-b border-[var(--border)]">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleCtxView}
+            className={cn(
+              "flex items-center gap-1 px-2 py-1 text-xs rounded border transition-colors",
+              ctxViewEnabled
+                ? "bg-purple-100 dark:bg-purple-900/40 border-purple-400 text-purple-800 dark:text-purple-200"
+                : "border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--accent)]",
+            )}
+            title="切换 Context 可见性视图"
+          >
+            {ctxViewEnabled ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+            <span>Ctx View</span>
+          </button>
+          {ctxViewEnabled && focusNode && (
+            <span className="text-xs text-[var(--muted-foreground)]">
+              focus: <span className="text-[var(--foreground)] font-medium">{focusNode.title}</span>
+              {ctxLoading && <span className="ml-2 animate-pulse">加载中…</span>}
+            </span>
+          )}
+        </div>
+        {ctxViewEnabled && (
+          <div className="flex items-center gap-3 text-[11px]">
+            {(["detailed", "summary", "title_only", "hidden"] as ContextVisibility[]).map((v) => (
+              <span key={v} className="flex items-center gap-1">
+                <span className={cn("inline-block w-3 h-3 rounded-sm", VIS_STYLE[v].badge)} />
+                <span className="text-[var(--muted-foreground)]">{VIS_STYLE[v].label}</span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
       <ThreadNode
         node={process.root}
         focusId={process.focusId}
         depth={0}
-        onNodeClick={handleNodeClick}
+        onNodeClick={handleNodeClickOrFocus}
         onContextMenu={handleContextMenu}
         getDisplayPins={getDisplayPins}
+        ctxViewEnabled={ctxViewEnabled}
+        ctxFocusId={ctxFocusId}
+        ctxVisibility={ctxVisibility}
+        rootNode={process.root}
       />
 
       {/* 右键图钉菜单 */}
@@ -264,6 +448,10 @@ function ThreadNode({
   onNodeClick,
   onContextMenu,
   getDisplayPins,
+  ctxViewEnabled,
+  ctxFocusId,
+  ctxVisibility,
+  rootNode,
 }: {
   node: ProcessNode;
   focusId: string;
@@ -271,6 +459,14 @@ function ThreadNode({
   onNodeClick: (id: string) => void;
   onContextMenu: (e: React.MouseEvent, id: string) => void;
   getDisplayPins: (node: ProcessNode) => string[];
+  /** Ctx View 开关状态 —— 开启时用可见性着色 */
+  ctxViewEnabled?: boolean;
+  /** 当前观察主体线程 ID */
+  ctxFocusId?: string | null;
+  /** 每节点的可见性分类 map */
+  ctxVisibility?: Record<string, ContextVisibility>;
+  /** 树根节点（用于计算 tooltip 需要的祖先/兄弟关系） */
+  rootNode?: ProcessNode;
 }) {
   const meta = getThreadMeta(node);
   const status = meta.hasPendingOutput ? "paused" : (meta.threadStatus ?? (node.status === "doing" ? "running" : node.status === "done" ? "done" : "pending"));
@@ -283,12 +479,24 @@ function ThreadNode({
   const actionCount = node.actions.length;
   const pins = getDisplayPins(node);
 
+  /* Ctx View 着色与 tooltip */
+  const visibility = ctxViewEnabled && ctxVisibility ? ctxVisibility[node.id] : undefined;
+  const visStyle = visibility ? VIS_STYLE[visibility] : undefined;
+  const visTooltip =
+    ctxViewEnabled && visibility && ctxFocusId && rootNode
+      ? buildVisibilityReason(node.id, ctxFocusId, visibility, rootNode)
+      : undefined;
+
   return (
     <div className="relative">
       {/* 主行 */}
       <div
-        className="flex items-baseline gap-0 rounded-sm -mx-1 px-1 group"
+        className={cn(
+          "flex items-baseline gap-0 rounded-sm -mx-1 px-1 group",
+          visStyle?.rowClass,
+        )}
         onContextMenu={(e) => onContextMenu(e, node.id)}
+        title={visTooltip}
       >
         {/* 缩进 */}
         <span className="shrink-0 select-none" style={{ width: depth * 24 }} />
@@ -374,6 +582,10 @@ function ThreadNode({
                 onNodeClick={onNodeClick}
                 onContextMenu={onContextMenu}
                 getDisplayPins={getDisplayPins}
+                ctxViewEnabled={ctxViewEnabled}
+                ctxFocusId={ctxFocusId}
+                ctxVisibility={ctxVisibility}
+                rootNode={rootNode}
               />
             </div>
           ))}
