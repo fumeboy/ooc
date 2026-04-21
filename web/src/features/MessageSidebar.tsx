@@ -30,6 +30,8 @@ import { cn } from "../lib/utils";
 import { Send, Maximize2, Minimize2, X, ChevronUp, ChevronDown, MessageSquare } from "lucide-react";
 import type { FlowMessage, Action } from "../api/types";
 import { ProgressIndicator } from "../components/ProgressIndicator";
+import { MessageSidebarThreadsList } from "./MessageSidebarThreadsList";
+import { useUserThreads } from "../hooks/useUserThreads";
 
 const DEFAULT_TARGET = "supervisor";
 
@@ -414,11 +416,22 @@ export function MessageSidebar() {
   /* sidebar 模式：固定宽度侧边栏 */
   const isMain = sidebarMode === "main";
 
-  /* 未读角标（Task 4.4 接入真实数据；当前占位以让 Header 按钮先接好） */
-  const hasUnread = false;
-  const unreadTotal = 0;
-  void currentThreadId;  // 占位引用，避免 TS6133；Task 4.6 会真正使用
-  void setCurrentThreadId;
+  /* user 相关线程聚合（用于 threads list + Header 红点） */
+  const userThreads = useUserThreads();
+
+  /* 未读角标：排除"当前正在查看的 thread"的消息，避免红点跟着自己跑 */
+  const unreadTotal = useMemo(() => {
+    if (!userThreads.rawInbox.length) return 0;
+    let count = 0;
+    for (const entry of userThreads.rawInbox) {
+      if (entry.threadId === currentThreadId) continue;
+      if (userThreads.allUnreadMessageIds.includes(entry.messageId)) count += 1;
+    }
+    return count;
+  }, [userThreads.rawInbox, userThreads.allUnreadMessageIds, currentThreadId]);
+  const hasUnread = unreadTotal > 0;
+
+  void setCurrentThreadId;  // Task 4.5/4.6 会使用
 
   return (
     <div className={cn(
@@ -523,7 +536,11 @@ export function MessageSidebar() {
       {/* 迭代进度 */}
       <ProgressIndicator />
 
-      {/* 消息列表区域 */}
+      {/* threads 视图：双栏 list */}
+      {sidebarView === "threads" && <MessageSidebarThreadsList />}
+
+      {/* process 视图：原有消息列表区域 */}
+      {sidebarView === "process" && (
       <div className="flex-1 flex flex-col relative min-h-0">
         {/* 消息列表 */}
         <div ref={scrollRef} className="flex-1 overflow-auto px-3 py-3 space-y-1.5">
@@ -616,6 +633,7 @@ export function MessageSidebar() {
           </button>
         )}
       </div>
+      )}
 
       {/* 输入框 */}
       <div className="px-3 pb-3 pt-2 shrink-0 relative">
