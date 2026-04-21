@@ -241,100 +241,19 @@ async function handleRoute(
     });
   }
 
-  /* GET /api/stones/:name/flows/:flowId/pending-output — 读取暂存的 LLM 输出 */
-  const pendingOutputMatch = path.match(/^\/api\/stones\/([^/]+)\/flows\/([^/]+)\/pending-output$/);
-  if (method === "GET" && pendingOutputMatch) {
-    const name = pendingOutputMatch[1]!;
-    const flowId = pendingOutputMatch[2]!;
-    const stone = world.getObject(name);
-    if (!stone) return errorResponse(`对象 "${name}" 不存在`, 404);
-
-    /* 加载 Flow 读取 pending output */
-    const { Flow: FlowClass } = await import("../flow/index.js");
-    const userStone = world.getObject("user");
-    let flow: any = null;
-    if (userStone) {
-      const userFlowDir = join(world.flowsDir, flowId);
-      const mainFlow = FlowClass.load(userFlowDir);
-      if (mainFlow) {
-        const subFlowDir = join(mainFlow.dir, "objects", name);
-        flow = FlowClass.load(subFlowDir);
-        if (!flow && mainFlow.stoneName === name) flow = mainFlow;
-      }
-    }
-    if (!flow) {
-      flow = FlowClass.load(join(world.flowsDir, flowId));
-    }
-
-    if (!flow) return errorResponse(`Flow "${flowId}" 不存在`, 404);
-
-    const data = flow.toJSON();
-    return json({
-      success: true,
-      data: {
-        pendingOutput: data.data._pendingOutput ?? null,
-        debugMode: data.data.debugMode ?? false,
-        status: data.status,
-      },
-    });
-  }
-
-  /* POST /api/stones/:name/flows/:flowId/step — 单步执行 */
-  const stepMatch = path.match(/^\/api\/stones\/([^/]+)\/flows\/([^/]+)\/step$/);
-  if (method === "POST" && stepMatch) {
-    const name = stepMatch[1]!;
-    const flowId = stepMatch[2]!;
-    const body = (await req.json()) as Record<string, unknown>;
-    const modifiedOutput = body.modifiedOutput as string | undefined;
-
-    const flow = await world.stepOnce(name, flowId, modifiedOutput);
-    return json({
-      success: true,
-      data: {
-        sessionId: flow.sessionId,
-        status: flow.status,
-        debugMode: flow.toJSON().data.debugMode ?? false,
-      },
-    });
-  }
-
-  /* POST /api/stones/:name/flows/:flowId/debug-mode — 开启/关闭调试模式 */
-  const debugModeMatch = path.match(/^\/api\/stones\/([^/]+)\/flows\/([^/]+)\/debug-mode$/);
-  if (method === "POST" && debugModeMatch) {
-    const name = debugModeMatch[1]!;
-    const flowId = debugModeMatch[2]!;
-    const body = (await req.json()) as Record<string, unknown>;
-    const enabled = body.enabled === true;
-
-    const stone = world.getObject(name);
-    if (!stone) return errorResponse(`对象 "${name}" 不存在`, 404);
-
-    /* 加载并更新 Flow */
-    const { Flow: FlowCls } = await import("../flow/index.js");
-    const sessionDir = join(world.flowsDir, flowId);
-    const userStone = world.getObject("user");
-    let flow: any = null;
-    if (userStone) {
-      /* 新结构：session/flows/user/ */
-      const mainFlow = FlowCls.load(join(sessionDir, "objects", "user"));
-      if (mainFlow) {
-        const subFlowDir = join(sessionDir, "objects", name);
-        flow = FlowCls.load(subFlowDir);
-        if (!flow && mainFlow.stoneName === name) flow = mainFlow;
-      }
-    }
-    if (!flow) {
-      /* 兼容旧数据 */
-      flow = FlowCls.load(sessionDir);
-    }
-
-    if (!flow) return errorResponse(`Flow "${flowId}" 不存在`, 404);
-
-    flow.setFlowData("debugMode", enabled);
-    flow.save();
-
-    return json({ success: true, data: { debugMode: enabled } });
-  }
+  /*
+   * 说明（2026-04-21 旧 Flow 架构退役）：
+   *
+   * 原本这里有三个 debug 调试接口：
+   *   - GET  /api/stones/:name/flows/:flowId/pending-output
+   *   - POST /api/stones/:name/flows/:flowId/step
+   *   - POST /api/stones/:name/flows/:flowId/debug-mode
+   *
+   * 这三个接口只在旧 Flow 架构下工作（依赖 `flow.data._pendingOutput` / `debugMode` 字段）。
+   * 线程树架构的 pause/step 调试走文件级：stones/{name}/threads/{id}/llm.input.txt + llm.output.txt，
+   * 不存在对应的 JSON 字段，因此上述接口在新架构下永远返回空值，已全部移除。
+   * 前端 `FlowDetail.tsx` 的 `PausedPanel` 组件同步删除。
+   */
 
   /* ========== 对象详情 ========== */
 
