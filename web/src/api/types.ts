@@ -44,6 +44,46 @@ export type ActionType =
   | "create_thread"
   | "thread_return";
 
+/**
+ * talk form 选项（结构化表单里的单个选项）
+ *
+ * @ref kernel/src/thread/types.ts — TalkFormOption 后端类型镜像
+ */
+export interface TalkFormOption {
+  id: string;
+  label: string;
+  detail?: string;
+}
+
+/**
+ * talk form 结构化表单（talk/talk_sync 可选携带）
+ *
+ * 当发起方 LLM 在心里有几个候选回复时，用它代替纯文本列表——接收方（通常是 user）
+ * 的前端会把消息渲染为 option picker（编号选项 + 自由文本兜底）。
+ *
+ * @ref kernel/src/thread/types.ts — TalkFormPayload 后端类型镜像
+ */
+export interface TalkFormPayload {
+  formId: string;
+  type: "single_choice" | "multi_choice";
+  options: TalkFormOption[];
+  allow_free_text: boolean;
+}
+
+/**
+ * 对某个 form 的结构化回复
+ *
+ * 前端 user 点选/输入后通过 POST /api/talk/:target body.formResponse 传给后端。
+ * 后端把它以 [formResponse] 前缀注入 message 让目标 LLM 识别。
+ *
+ * @ref kernel/src/thread/types.ts — FormResponse 后端类型镜像
+ */
+export interface FormResponse {
+  formId: string;
+  selectedOptionIds: string[];
+  freeText: string | null;
+}
+
 /** Action */
 export interface Action {
   id?: string;
@@ -59,6 +99,15 @@ export interface Action {
   title?: string;
   result?: string;
   success?: boolean;
+  /**
+   * message_out (talk): 可选结构化表单
+   *
+   * 当发起方 LLM 调用 talk 时 args.form 非空，engine 会把 form（带 formId）
+   * 一并落盘到此字段。前端反查 inbox 时看到 form 就把消息渲染成 option picker。
+   */
+  form?: TalkFormPayload;
+  /** message_in (talk): 对某 form 的结构化回复（仅在 LLM 视角回显时出现） */
+  formResponse?: FormResponse;
 }
 
 /** Flow 消息 */

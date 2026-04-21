@@ -16,6 +16,7 @@ import type {
   Process,
   ContextVisibilityResult,
   UserInbox,
+  FormResponse,
 } from "./types";
 
 const BASE = "/api";
@@ -177,13 +178,31 @@ export async function createSession(objectName = "supervisor"): Promise<{ sessio
   return post<{ sessionId: string }>("/sessions/create", { objectName });
 }
 
-export async function talkTo(objectName: string, message: string, flowId?: string): Promise<{
+/**
+ * 向对象发消息
+ *
+ * @param objectName 目标对象名
+ * @param message 消息正文（若同时带 formResponse，服务端会把结构化信息作为
+ *   [formResponse] 前缀注入 message 正文）
+ * @param flowId 可选，续写已有 session；不传则后端生成新 sessionId
+ * @param formResponse 可选，对某个 form 的结构化回复（用户点选 + 自由文本）
+ */
+export async function talkTo(
+  objectName: string,
+  message: string,
+  flowId?: string,
+  formResponse?: FormResponse,
+): Promise<{
   sessionId: string;
   status: string;
   actions: unknown[];
   messages: unknown[];
 }> {
-  return post(`/talk/${objectName}`, { message, ...(flowId && { flowId }) });
+  return post(`/talk/${objectName}`, {
+    message,
+    ...(flowId && { flowId }),
+    ...(formResponse && { formResponse }),
+  });
 }
 
 /** 暂停对象执行 */
