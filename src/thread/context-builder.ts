@@ -28,6 +28,11 @@ import type {
 } from "./types.js";
 import { getAncestorPath } from "./persistence.js";
 import { getActiveTraits, traitId as activatorTraitId } from "../trait/activator.js";
+import { existsSync, readFileSync } from "node:fs";
+import { join as pathJoin } from "node:path";
+
+/** memory.md 注入 Context 的上限（防止长期记忆膨胀撑爆 Context） */
+const MEMORY_MD_MAX_CHARS = 4000;
 
 /**
  * 获取 trait 的完整标识（本地版本，避免循环依赖）
@@ -170,6 +175,31 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
       name: "available-skills",
       content: formatSkillIndex(input.skills),
     });
+  }
+
+  /* ReflectFlow 方案 B Phase 3：注入对象长期记忆 memory.md
+   *
+   * 反思线程通过 reflect_flow.persist_to_memory 写入的经验条目存放在
+   * `{stoneDir}/memory.md`。本次 Context 构建时把它作为独立 knowledge 窗口注入，
+   * 让主线程 LLM 在思考时"看见"自己沉淀下来的经验。
+   *
+   * - 只读（主线程不应修改 memory.md，固化路径是反思线程的沉淀工具）
+   * - 上限 4000 字符（超长截取尾部 + 前部提示——偏好近期经验）
+   * - 文件不存在 / 读取失败 → 静默跳过（不污染 Context） */
+  const stoneDirForMem = paths?.stoneDir;
+  if (stoneDirForMem) {
+    const memoryPath = pathJoin(stoneDirForMem, "memory.md");
+    if (existsSync(memoryPath)) {
+      try {
+        const raw = readFileSync(memoryPath, "utf-8");
+        const content = raw.length > MEMORY_MD_MAX_CHARS
+          ? `（…memory.md 超过 ${MEMORY_MD_MAX_CHARS} 字符，已截取最近 ${MEMORY_MD_MAX_CHARS} 字符）\n\n${raw.slice(-MEMORY_MD_MAX_CHARS)}`
+          : raw;
+        knowledge.push({ name: "memory", content });
+      } catch {
+        /* 读取失败：静默跳过 */
+      }
+    }
   }
 
   /* 3. parentExpectation
