@@ -111,12 +111,14 @@ export function MessageSidebar() {
       .catch(console.error);
   }, [activeId]);
 
-  /* 过滤 mention 候选 */
+  /* 过滤 mention 候选（按字母顺序稳定排序，避免打开顺序随机——Bruce 首轮 #9） */
   const mentionCandidates = useMemo(() => {
     if (!showMention) return [];
     const q = mentionQuery.toLowerCase();
     return objectNames
       .filter((name) => name.toLowerCase().includes(q))
+      .slice()
+      .sort((a, b) => a.localeCompare(b))
       .slice(0, 6);
   }, [showMention, mentionQuery, objectNames]);
 
