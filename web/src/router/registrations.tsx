@@ -90,35 +90,90 @@ function TaskDetailAdapter({ path }: ViewProps) {
   return <TaskDetailView sessionId={m?.[1] ?? ""} taskId={m?.[2] ?? ""} />;
 }
 
-/** ReflectFlow 适配器 — stones/{name}/reflect/ 下的 Process + Data + Memory 视图 */
+/** 反思线程的 inbox 消息（读自 threads/{rootId}/thread.json） */
+interface ReflectInboxMessage {
+  id: string;
+  from: string;
+  content: string;
+  timestamp: number;
+  status: string;
+  source?: string;
+}
+
+/** 反思线程树节点元数据（threads.json） */
+interface ReflectThreadsTreeFile {
+  rootId: string;
+  nodes: Record<string, {
+    id: string;
+    title: string;
+    description?: string;
+    status: string;
+    childrenIds: string[];
+    createdAt: number;
+    updatedAt: number;
+  }>;
+}
+
+/**
+ * ReflectFlow 适配器 — stones/{name}/reflect/ 下的 Inbox + Memory 视图
+ *
+ * 方案 B Phase 4：适配线程树结构（threads.json + threads/{rootId}/thread.json），
+ * 废弃旧 Process/Data tab（它们假设 data.json + process.json 结构，线程树化后不存在）。
+ *
+ * - **Inbox tab**：列出反思线程 root 节点 inbox 的所有消息（未读 / 已读 / 已处理）
+ * - **Memory tab**：渲染对象 memory.md（反思沉淀产出）
+ *
+ * 底层数据：`stones/{name}/reflect/threads.json` + `threads/{rootId}/thread.json`
+ */
 function ReflectFlowAdapter({ path }: ViewProps) {
   const objectName = path.match(/stones\/([^/]+)/)?.[1] ?? "";
   const basePath = `stones/${objectName}/reflect`;
 
-  type ReflectTab = "Process" | "Data" | "Memory";
-  let initialTab: ReflectTab = "Process";
-  if (path.endsWith("/data.json")) initialTab = "Data";
-  else if (path.endsWith("/memory.md")) initialTab = "Memory";
+  type ReflectTab = "Inbox" | "Memory";
+  let initialTab: ReflectTab = "Inbox";
+  if (path.endsWith("/memory.md")) initialTab = "Memory";
 
   const [tab, setTab] = useState<ReflectTab>(initialTab);
-  const [process, setProcess] = useState<Process | null>(null);
-  const [dataContent, setDataContent] = useState<string | null>(null);
+  const [treeFile, setTreeFile] = useState<ReflectThreadsTreeFile | null>(null);
+  const [inbox, setInbox] = useState<ReflectInboxMessage[]>([]);
   const [memoryContent, setMemoryContent] = useState<string | null>(null);
   const refreshKey = useAtomValue(refreshKeyAtom);
 
   useEffect(() => { setTab(initialTab); }, [path]);
 
   useEffect(() => {
-    fetchFileContent(`${basePath}/process.json`)
-      .then((c) => setProcess(JSON.parse(c) as Process))
-      .catch(() => setProcess(null));
-    fetchFileContent(`${basePath}/data.json`)
-      .then((raw) => { try { setDataContent(JSON.stringify(JSON.parse(raw), null, 2)); } catch { setDataContent(raw); } })
-      .catch(() => setDataContent(null));
+    /* 读 threads.json */
+    fetchFileContent(`${basePath}/threads.json`)
+      .then((raw) => {
+        try {
+          const parsed = JSON.parse(raw) as ReflectThreadsTreeFile;
+          setTreeFile(parsed);
+          /* 同步读 root thread.json（inbox 在这里） */
+          return fetchFileContent(`${basePath}/threads/${parsed.rootId}/thread.json`)
+            .then((threadRaw) => {
+              try {
+                const threadData = JSON.parse(threadRaw) as { inbox?: ReflectInboxMessage[] };
+                setInbox(threadData.inbox ?? []);
+              } catch {
+                setInbox([]);
+              }
+            })
+            .catch(() => setInbox([]));
+        } catch {
+          setTreeFile(null);
+          setInbox([]);
+        }
+      })
+      .catch(() => {
+        /* 反思线程尚未初始化（对象从未被 talkToSelf 过） */
+        setTreeFile(null);
+        setInbox([]);
+      });
+    /* Memory 独立读 */
     fetchFileContent(`stones/${objectName}/memory.md`)
       .then(setMemoryContent)
       .catch(() => setMemoryContent(""));
-  }, [basePath, refreshKey]);
+  }, [basePath, objectName, refreshKey]);
 
   return (
     <div className="h-full flex flex-col">
@@ -128,9 +183,14 @@ function ReflectFlowAdapter({ path }: ViewProps) {
             {objectName}
           </h2>
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">reflect</span>
+          {treeFile && (
+            <span className="text-[10px] text-[var(--muted-foreground)] font-mono">
+              rootId: {treeFile.rootId.slice(0, 16)}…
+            </span>
+          )}
         </div>
         <div className="flex items-center bg-[var(--accent)] rounded-lg p-0.5">
-          {(["Process", "Data", "Memory"] as const).map((t) => (
+          {(["Inbox", "Memory"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -142,21 +202,47 @@ function ReflectFlowAdapter({ path }: ViewProps) {
               )}
             >
               {t}
+              {t === "Inbox" && inbox.filter((m) => m.status === "unread").length > 0 && (
+                <span className="ml-1 inline-block px-1 text-[10px] rounded-full bg-red-100 text-red-600">
+                  {inbox.filter((m) => m.status === "unread").length}
+                </span>
+              )}
             </button>
           ))}
         </div>
       </div>
       <div className="flex-1 overflow-auto px-4 sm:px-8 py-4">
-        {tab === "Process" && (
-          process ? <ProcessView process={process} /> : <p className="text-sm text-[var(--muted-foreground)]">加载中...</p>
-        )}
-        {tab === "Data" && (
-          dataContent ? <CodeMirrorViewer content={dataContent} ext="json" /> : <p className="text-sm text-[var(--muted-foreground)]">加载中...</p>
+        {tab === "Inbox" && (
+          !treeFile ? (
+            <p className="text-sm text-[var(--muted-foreground)]">反思线程尚未初始化（该对象从未被 talkToSelf）</p>
+          ) : inbox.length === 0 ? (
+            <p className="text-sm text-[var(--muted-foreground)]">inbox 为空</p>
+          ) : (
+            <ul className="space-y-3">
+              {inbox.map((msg) => (
+                <li key={msg.id} className={cn(
+                  "rounded-lg border p-3",
+                  msg.status === "unread"
+                    ? "border-[var(--primary)] bg-[var(--primary)]/5"
+                    : "border-[var(--border)] opacity-60",
+                )}>
+                  <div className="flex items-center gap-2 text-[11px] text-[var(--muted-foreground)] mb-2">
+                    <span className="font-mono">{msg.id.slice(0, 20)}…</span>
+                    <span>from: {msg.from}</span>
+                    <span>status: {msg.status}</span>
+                    {msg.source && <span>source: {msg.source}</span>}
+                    <span className="ml-auto">{new Date(msg.timestamp).toLocaleString()}</span>
+                  </div>
+                  <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+                </li>
+              ))}
+            </ul>
+          )
         )}
         {tab === "Memory" && (
-          memoryContent
+          memoryContent && memoryContent.length > 0
             ? <div className="prose prose-sm max-w-none"><MarkdownContent content={memoryContent} /></div>
-            : <p className="text-sm text-[var(--muted-foreground)]">暂无记忆</p>
+            : <p className="text-sm text-[var(--muted-foreground)]">暂无长期记忆（memory.md 未写入）</p>
         )}
       </div>
     </div>
