@@ -15,6 +15,7 @@ import type {
   SSEEvent,
   Process,
   ContextVisibilityResult,
+  UserInbox,
 } from "./types";
 
 const BASE = "/api";
@@ -150,6 +151,19 @@ export async function getContextVisibility(
   return get<ContextVisibilityResult>(
     `/flows/${sessionId}/objects/${objectName}/context-visibility${query}`,
   );
+}
+
+/**
+ * 获取 session 的 user inbox（引用式收件箱）
+ *
+ * 返回条目只包含 (threadId, messageId) 引用——消息正文请在发起对象的
+ * threads/{threadId}/thread.json 的 actions[] 里按 id === messageId 反查。
+ *
+ * @param sessionId - Flow session ID
+ * @ref docs/工程管理/迭代/all/20260421_feature_user_inbox.md
+ */
+export async function getUserInbox(sessionId: string): Promise<UserInbox> {
+  return get<UserInbox>(`/sessions/${sessionId}/user-inbox`);
 }
 
 /** 创建对象 */

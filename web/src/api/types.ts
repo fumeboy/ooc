@@ -276,3 +276,25 @@ export interface KanbanTask {
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * User Inbox（session 级引用式收件箱）
+ *
+ * user 是身份挂牌、不参与 ThinkLoop，但系统会记录每次"某对象→user"的 talk，
+ * 方便前端聚合渲染 MessageSidebar 的"按对象分组 + 未读角标"。
+ *
+ * 条目只存 (threadId, messageId) 引用，不存消息正文；正文在发起对象的
+ * thread.json.actions 里，前端凭 (threadId, messageId) 反查。
+ *
+ * @ref kernel/src/persistence/user-inbox.ts — UserInboxEntry / UserInboxData 后端类型镜像
+ */
+export interface UserInboxEntry {
+  /** 发起对象当前线程 id */
+  threadId: string;
+  /** message_out action 的 id（在发起对象的 thread.json.actions 里反查正文） */
+  messageId: string;
+}
+
+export interface UserInbox {
+  inbox: UserInboxEntry[];
+}
