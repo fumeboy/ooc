@@ -25,15 +25,30 @@ function mapStatus(status: ThreadsTreeNodeMeta["status"]): NodeStatus {
   }
 }
 
-/** ThreadAction → Action（字段兼容，直接透传） */
+/** ThreadAction → Action（字段兼容，直接透传）
+ *
+ * 重要：必须透传所有字段，前端会用到：
+ * - name/args/title：TuiAction 渲染 tool_use 卡片
+ * - form：message_out 带结构化表单时，前端渲染 option picker
+ * - formResponse：message_in 回显用户结构化回复
+ * - context：think/talk 的 fork/continue 模式徽章
+ * 历史上曾因遗漏 form 字段导致前端 Talk Form picker 完全失效
+ * （Bruce 首轮体验 2026-04-22 #7）。
+ */
 function mapAction(a: ThreadAction): Action {
   return {
     id: a.id,
     type: a.type as Action["type"],
     timestamp: a.timestamp,
     content: a.content,
+    name: a.name,
+    args: a.args,
+    title: a.title,
     result: a.result,
     success: a.success,
+    form: a.form,
+    formResponse: a.formResponse,
+    context: a.context,
   };
 }
 

@@ -156,6 +156,27 @@ export function MessageSidebar() {
      */
     const formById = new Map<string, { form: TalkFormPayload; messageId: string | undefined }>();
     const formMap = new Map<string, { form: TalkFormPayload; messageId: string | undefined }>();
+    /* 解析 message_out action.content 里的真正 talk 正文：
+     *   "[talk] → user: <body> [fork:...] [form: ...]"
+     * → 取 "<body>" 部分，供合成 FlowMessage 的 content 使用 */
+    const parseTalkBody = (content: string): string => {
+      const m = content.match(
+        new RegExp(`^\\[talk\\][^:]*:\\s*([\\s\\S]*?)(?:\\s*\\[form:[^\\]]+\\])?$`),
+      );
+      let body = (m?.[1] ?? content).trim();
+      /* 去掉末尾的 "[fork]" / "[fork:threadId]" / "[continue:...]" 方括号元标记 */
+      body = body.replace(/\s*\[(fork|continue)(?::[^\]]+)?\]\s*$/g, "").trim();
+      return body || content;
+    };
+    /* 合成出来的"target=user 的 message_out"等价 FlowMessage 条目（防止 flow.messages
+     * 落盘缺漏时 Talk Form 完全不展示）。去重规则（任一命中即跳过）：
+     *   - action.id 已出现在 msgs（FlowMessage.id 匹配）
+     *   - (from + to + content + timestamp) 的启发式键匹配一条 msg（兼容 msg 无 id 的旧数据） */
+    const existingMsgIds = new Set(msgs.map((m) => m.id).filter(Boolean) as string[]);
+    const existingMsgKeys = new Set(
+      msgs.map((m) => `${m.from}|${m.to}|${m.content.slice(0, 200)}|${m.timestamp ?? 0}`),
+    );
+    const syntheticTalkMsgs: FlowMessage[] = [];
     for (const a of node.actions ?? []) {
       if (a.type === "message_out" && a.form) {
         /* 按 id 精确匹配（最稳） */
@@ -167,6 +188,25 @@ export function MessageSidebar() {
         const body = (bodyMatch?.[1] ?? a.content).trim();
         formMap.set(`${body.slice(0, 200)}|${a.timestamp ?? 0}`, { form: a.form, messageId: a.id });
       }
+      /* 若 action 是 target=user 的 message_out（含 form 或普通 talk），且 flow.messages
+       * 里找不到对应条目（按 id 或 content+ts），合成一条 FlowMessage 塞进 timeline */
+      if (a.type === "message_out" && a.id) {
+        const isToUser = /^\[talk\][^:]*:/.test(a.content); /* message_out 的正文统一带 "[talk]" 前缀 */
+        if (isToUser && !existingMsgIds.has(a.id)) {
+          const body = parseTalkBody(a.content);
+          const key = `${objName}|user|${body.slice(0, 200)}|${a.timestamp ?? 0}`;
+          if (!existingMsgKeys.has(key)) {
+            syntheticTalkMsgs.push({
+              id: a.id,
+              direction: "out",
+              from: objName,
+              to: "user",
+              content: body,
+              timestamp: a.timestamp ?? 0,
+            });
+          }
+        }
+      }
     }
 
     /* actions：只取当前节点自身的 actions（不递归子节点——子线程有自己的 Body） */
@@ -174,9 +214,10 @@ export function MessageSidebar() {
       .map((a, i) => ({ ...a, _origIndex: i }))
       .filter((a) => a.type !== "message_in" && a.type !== "message_out" && a.type !== "thread_return");
 
-    /* 合并并按时间排序 */
+    /* 合并并按时间排序（msgs + 合成 talk msgs + actions） */
+    const allMsgs = [...msgs, ...syntheticTalkMsgs];
     const entries: Entry[] = [
-      ...msgs.map((m): Entry => ({ kind: "message", data: m })),
+      ...allMsgs.map((m): Entry => ({ kind: "message", data: m })),
       ...actions.map((a): Entry => ({ kind: "action", data: a })),
     ].sort((a, b) => {
       const ta = a.data.timestamp ?? 0;
