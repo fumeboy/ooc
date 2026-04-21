@@ -24,6 +24,8 @@ import { existsSync, mkdirSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import { SerialQueue } from "../utils/serial-queue.js";
+
 /** inbox 条目：纯引用，不含正文 */
 export interface UserInboxEntry {
   /** 发起对象当前线程 id（前端凭此找到 objects/{sender}/threads/{threadId}/thread.json） */
@@ -38,36 +40,12 @@ export interface UserInboxData {
 }
 
 /**
- * per-session Promise 链，用于串行化同一 session 的写入
+ * per-session 串行化队列（key = sessionId）
  *
- * 原理：每次 enqueue 将新操作追加到对应 sessionId 的链尾，前一个 await 完毕后本次才执行。
- * 与 kernel/src/thread/queue.ts 的 WriteQueue 原理一致，但以 sessionId 为键。
- * 旧 session.serializedWrite 已随旧 Flow 架构退役，此处为替代方案。
+ * 与旧 `_writeChains` Map 等价，但基于统一的 `SerialQueue` 工具。
+ * 同一 session 的多次 append 按 FIFO 串行，不同 session 互不阻塞。
  */
-const _writeChains = new Map<string, Promise<void>>();
-
-/**
- * 在指定 session 的串行化队列里执行一次写入
- */
-async function _enqueueWrite(sessionId: string, fn: () => Promise<void>): Promise<void> {
-  const prev = _writeChains.get(sessionId) ?? Promise.resolve();
-  let resolve!: () => void;
-  let reject!: (err: unknown) => void;
-  const next = new Promise<void>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  /* 链尾替换为 next 的 catch-wrapped 版本，确保后续 await 不会因为本次异常就挂掉整个链 */
-  _writeChains.set(sessionId, next.catch(() => {}));
-  await prev.catch(() => {});
-  try {
-    await fn();
-    resolve();
-  } catch (err) {
-    reject(err);
-    throw err;
-  }
-}
+const _userInboxQueue = new SerialQueue<string>();
 
 /**
  * 获取 user/data.json 的路径
@@ -132,7 +110,7 @@ export async function appendUserInbox(
   threadId: string,
   messageId: string,
 ): Promise<void> {
-  await _enqueueWrite(sessionId, async () => {
+  await _userInboxQueue.enqueue(sessionId, async () => {
     const userDir = join(flowsDir, sessionId, "user");
     if (!existsSync(userDir)) mkdirSync(userDir, { recursive: true });
 

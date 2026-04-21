@@ -20,39 +20,23 @@ import { mkdirSync } from "node:fs";
 import { consola } from "consola";
 
 import { ThreadsTree } from "./tree.js";
+import { SerialQueue } from "../utils/serial-queue.js";
 
 /**
- * 对一个 stone 目录内的「反思目录」并发访问做串行化
+ * 反思目录级串行化队列（key = stoneDir 绝对路径）
  *
  * 由于 reflect 线程是跨 session 共享的——同一时刻多个 session 里多个对象可能
  * 同时 talkToSelf，两者最终都落到同一个 `stones/{name}/reflect/threads.json`。
- * `ThreadsTree.load / create` 本身会读写同一个文件，如果两个并发请求里一个在
- * `load()` 发现文件不存在决定 create，另一个也走到 create，就会互相覆盖。
+ * `ThreadsTree.load / create` 会读写同一文件，两个并发请求里都走 create 会互相覆盖。
  *
- * 这里用一个进程内 promise 串行化每个 stoneDir 的 ensureReflectThread/talkToReflect，
- * 保证"同一个 reflect 目录的首次初始化 + 后续 writeInbox"顺序进行。
+ * 这里使用统一的 `SerialQueue`，保证"同一个 reflect 目录的首次初始化 + 后续
+ * writeInbox"按顺序进行；不同 stoneDir 互不阻塞。
  */
-const REFLECT_LOCKS = new Map<string, Promise<void>>();
+const _reflectQueue = new SerialQueue<string>();
 
-/** 按 stoneDir 串行化一段异步操作 */
+/** 按 stoneDir 串行化一段异步操作（保留原函数名，内部委托 SerialQueue） */
 async function withReflectLock<T>(stoneDir: string, fn: () => Promise<T>): Promise<T> {
-  const prev = REFLECT_LOCKS.get(stoneDir) ?? Promise.resolve();
-  let release!: () => void;
-  const next = new Promise<void>(resolve => { release = resolve; });
-  /* 把新的 chain promise 存回 map，作为下一个等待者的 prev */
-  const chained = prev.then(() => next);
-  REFLECT_LOCKS.set(stoneDir, chained);
-
-  try {
-    await prev;
-    return await fn();
-  } finally {
-    release();
-    /* 若没有新任务排进来（map 中仍是我们刚写入的 chain），清理 lock（轻量 GC） */
-    if (REFLECT_LOCKS.get(stoneDir) === chained) {
-      REFLECT_LOCKS.delete(stoneDir);
-    }
-  }
+  return _reflectQueue.enqueue(stoneDir, fn);
 }
 
 /**
