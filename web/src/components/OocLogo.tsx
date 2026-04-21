@@ -92,7 +92,7 @@ export function OocLogo({ size = "sm", px, color }: { size?: keyof typeof SIZES;
   /* 颜色过渡：用前一个颜色淡出 + 新颜色淡入 */
   const [prevColor, setPrevColor] = useState(fillColor);
   const [transitioning, setTransitioning] = useState(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (fillColor !== prevColor) {

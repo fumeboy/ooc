@@ -36,7 +36,6 @@ import { useHashRouter } from "./hooks/useHashRouter";
 import { ActivityHeatmap } from "./components/ui/ActivityHeatmap";
 import { OocLinkPreview } from "./components/OocLinkPreview";
 import { CommandPalette } from "./components/CommandPalette";
-import { OocLogo } from "./components/OocLogo";
 import { MainLogo } from "./components/MainLogo";
 import { Sheet, SheetContent, SheetTrigger } from "./components/ui/sheet";
 import { cn } from "./lib/utils";
@@ -144,7 +143,7 @@ export function App() {
   const [sseConnected] = useAtom(sseConnectedAtom);
   const [activeFlow, setActiveFlow] = useAtom(activeSessionFlowAtom);
   const [activeId, setActiveId] = useAtom(activeSessionIdAtom);
-  const [tabs, setTabs] = useAtom(editorTabsAtom);
+  const [, setTabs] = useAtom(editorTabsAtom);
   const [activePath, setActivePath] = useAtom(activeFilePathAtom);
   const [sidebarTree, setSidebarTree] = useAtom(sidebarTreeAtom);
   const setRefreshKey = useSetAtom(refreshKeyAtom);
