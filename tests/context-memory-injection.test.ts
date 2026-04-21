@@ -1,10 +1,11 @@
 /**
- * Context memory.md 注入测试（方案 B Phase 3）
+ * Context memory.md 注入测试（SuperFlow 沿用原方案 B Phase 3 行为）
  *
  * 验证 buildThreadContext 在 paths.stoneDir 指向的目录下读到 memory.md 时，
  * 把其内容作为独立 knowledge 窗口注入，供 LLM 在下一次 Context 中读到。
+ * memory.md 由 super 线程通过 reflective/super.persist_to_memory 写入。
  *
- * @ref docs/工程管理/迭代/all/20260421_feature_ReflectFlow方案B.md
+ * @ref docs/工程管理/迭代/all/20260422_refactor_SuperFlow转型.md
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";

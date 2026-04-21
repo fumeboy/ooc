@@ -177,13 +177,13 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
     });
   }
 
-  /* ReflectFlow 方案 B Phase 3：注入对象长期记忆 memory.md
+  /* SuperFlow（原方案 B Phase 3）：注入对象长期记忆 memory.md
    *
-   * 反思线程通过 reflect_flow.persist_to_memory 写入的经验条目存放在
+   * super 线程通过 reflective/super.persist_to_memory 写入的经验条目存放在
    * `{stoneDir}/memory.md`。本次 Context 构建时把它作为独立 knowledge 窗口注入，
    * 让主线程 LLM 在思考时"看见"自己沉淀下来的经验。
    *
-   * - 只读（主线程不应修改 memory.md，固化路径是反思线程的沉淀工具）
+   * - 只读（主线程不应修改 memory.md，唯一写入路径是 super 分身的沉淀工具）
    * - 上限 4000 字符（超长截取尾部 + 前部提示——偏好近期经验）
    * - 文件不存在 / 读取失败 → 静默跳过（不污染 Context） */
   const stoneDirForMem = paths?.stoneDir;
