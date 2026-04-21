@@ -100,3 +100,41 @@ export function classifyContextVisibility(
 
   return result;
 }
+
+/**
+ * 选择默认 focus 节点 ID。
+ *
+ * 规则（与迭代文档一致）：
+ * 1. 优先：状态为 running 且没有仍在活跃（非 done/failed）的子节点的"running 叶"
+ * 2. 其次：任意 running 节点
+ * 3. 兜底：`tree.rootId`
+ *
+ * 用途：前端打开可视化页面时没有 `?focus=...` 的默认视角选择。
+ *
+ * @param tree - 线程树
+ * @returns 默认 focus 节点 ID
+ */
+export function pickDefaultFocus(tree: ThreadsTreeFile): string {
+  const terminal = new Set(["done", "failed"]);
+
+  const running: string[] = [];
+  for (const n of Object.values(tree.nodes)) {
+    if (n.status === "running") running.push(n.id);
+  }
+
+  /* 规则 1：running 叶（子节点全部 terminal 或没有子节点） */
+  for (const id of running) {
+    const n = tree.nodes[id]!;
+    const hasActiveChild = n.childrenIds.some(cid => {
+      const c = tree.nodes[cid];
+      return c && !terminal.has(c.status);
+    });
+    if (!hasActiveChild) return id;
+  }
+
+  /* 规则 2：任意 running */
+  if (running.length > 0) return running[0]!;
+
+  /* 规则 3：root */
+  return tree.rootId;
+}

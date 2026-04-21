@@ -830,6 +830,38 @@ async function handleRoute(
     return json({ success: true, data: { globalPaused: world.isGlobalPaused() } });
   }
 
+  /* GET /api/flows/:sessionId/objects/:objectName/context-visibility?focus=:threadId
+   *
+   * 返回整棵线程树中每个节点相对于 focus 线程 Context 的可见性分类。
+   * 分类值见 `kernel/src/thread/visibility.ts#ContextVisibility`。
+   *
+   * 参数：
+   * - sessionId / objectName：定位 Object 的 Flow 目录
+   * - focus（query）：观察主体线程 ID；未提供时默认选 running 叶节点，若无则使用 rootId
+   *
+   * 返回 { success: true, data: { focusId, visibility: { [threadId]: "..." } } }
+   */
+  const ctxVisMatch = path.match(/^\/api\/flows\/([^/]+)\/objects\/([^/]+)\/context-visibility$/);
+  if (method === "GET" && ctxVisMatch) {
+    const sessionId = ctxVisMatch[1]!;
+    const objectName = ctxVisMatch[2]!;
+    const url = new URL(req.url);
+    const focusQuery = url.searchParams.get("focus") ?? undefined;
+
+    const { readThreadsTree } = await import("../thread/persistence.js");
+    const { classifyContextVisibility, pickDefaultFocus } = await import("../thread/visibility.js");
+
+    const objectFlowDir = join(world.flowsDir, sessionId, "objects", objectName);
+    const tree = readThreadsTree(objectFlowDir);
+    if (!tree) return errorResponse(`Thread tree 不存在: ${sessionId}/${objectName}`, 404);
+
+    let focusId = focusQuery ?? pickDefaultFocus(tree);
+    if (!tree.nodes[focusId]) focusId = tree.rootId;
+
+    const visibility = classifyContextVisibility(tree, focusId);
+    return json({ success: true, data: { focusId, visibility } });
+  }
+
   /* 404 */
   return errorResponse(`未知路由: ${method} ${path}`, 404);
 }

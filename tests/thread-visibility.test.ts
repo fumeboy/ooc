@@ -18,7 +18,7 @@
  */
 import { describe, test, expect } from "bun:test";
 import type { ThreadsTreeFile, ThreadsTreeNodeMeta } from "../src/thread/types.js";
-import { classifyContextVisibility, type ContextVisibility } from "../src/thread/visibility.js";
+import { classifyContextVisibility, pickDefaultFocus, type ContextVisibility } from "../src/thread/visibility.js";
 
 /** 辅助：创建节点元数据 */
 function makeNode(id: string, overrides?: Partial<ThreadsTreeNodeMeta>): ThreadsTreeNodeMeta {
@@ -238,6 +238,59 @@ describe("classifyContextVisibility — 边界 case", () => {
     const map = classifyContextVisibility(tree, "r");
     expect(map.r).toBe("detailed");
     expect(map.orphan).toBe("hidden");
+  });
+});
+
+describe("pickDefaultFocus — 默认视角选择", () => {
+  test("存在 running 叶节点：优先选中", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: {
+        r: makeNode("r", { status: "running", childrenIds: ["a", "b"] }),
+        a: makeNode("a", { parentId: "r", status: "done" }),
+        b: makeNode("b", { parentId: "r", status: "running" }), /* 叶 */
+      },
+    };
+    expect(pickDefaultFocus(tree)).toBe("b");
+  });
+
+  test("没有 running 叶但有 running 非叶：返回任意 running（规则 2）", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: {
+        r: makeNode("r", { status: "running", childrenIds: ["a"] }),
+        a: makeNode("a", { parentId: "r", status: "waiting" }),
+      },
+    };
+    /* r 是 running 但有 waiting 子（非 terminal），不算叶；
+     * 规则 1 没有匹配 —— 没有 running 叶节点。
+     * 规则 2 —— r 是唯一的 running，返回 r。
+     */
+    expect(pickDefaultFocus(tree)).toBe("r");
+  });
+
+  test("全部 done：兜底返回 rootId", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: {
+        r: makeNode("r", { status: "done", childrenIds: ["a"] }),
+        a: makeNode("a", { parentId: "r", status: "done" }),
+      },
+    };
+    expect(pickDefaultFocus(tree)).toBe("r");
+  });
+
+  test("多个 running 叶：返回其中之一", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: {
+        r: makeNode("r", { status: "waiting", childrenIds: ["a", "b"] }),
+        a: makeNode("a", { parentId: "r", status: "running" }),
+        b: makeNode("b", { parentId: "r", status: "running" }),
+      },
+    };
+    const chosen = pickDefaultFocus(tree);
+    expect(["a", "b"]).toContain(chosen);
   });
 });
 
