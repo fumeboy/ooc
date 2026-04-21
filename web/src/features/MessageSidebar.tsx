@@ -571,15 +571,27 @@ export function MessageSidebar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
-  /* 自动选默认线程：若 currentThreadId 为空且 supervisor 有 root thread，自动选为默认
-   * 逻辑：subFlows 里找 stoneName === "supervisor"，取其 process.root.id
-   * 若 supervisor 还没起 thread，currentThreadId 保持 null，Body 显示空状态 */
+  /* 自动选默认线程：若 currentThreadId 为空，自动聚焦到"当前对话主对象"的 root thread
+   *
+   * 选取优先级（覆盖新 session 刚起步时 supervisor 还没 subFlow 的场景）：
+   *   1. activeFlow.stoneName 对应的 subFlow（用户点欢迎页 bruce 卡片时 stoneName=bruce）
+   *   2. target（header 展示的目标）对应的 subFlow
+   *   3. stoneName === "supervisor" 的 subFlow（回退到默认 target）
+   *   4. subFlows 里任一 root（保底不让 sidebar 停在空态）
+   * 若尚无 subFlow，currentThreadId 保持 null，Body 显示空状态（等 SSE 到达） */
   useEffect(() => {
     if (currentThreadId) return;
-    const supervisorSub = activeFlow?.subFlows?.find((sf) => sf.stoneName === DEFAULT_TARGET);
-    const rootId = supervisorSub?.process?.root?.id;
-    if (rootId) setCurrentThreadId(rootId);
-  }, [activeFlow, currentThreadId, setCurrentThreadId]);
+    const subFlows = activeFlow?.subFlows ?? [];
+    if (subFlows.length === 0) return;
+    const preferredNames = [activeFlow?.stoneName, target, DEFAULT_TARGET].filter(Boolean) as string[];
+    let picked = null as string | null;
+    for (const name of preferredNames) {
+      const sf = subFlows.find((s) => s.stoneName === name);
+      if (sf?.process?.root?.id) { picked = sf.process.root.id; break; }
+    }
+    if (!picked) picked = subFlows[0]?.process?.root?.id ?? null;
+    if (picked) setCurrentThreadId(picked);
+  }, [activeFlow, target, currentThreadId, setCurrentThreadId]);
 
   /* 切到某 thread 时，把该线程所属对象 lastReadTimestamp 上报给服务端：
    *   - 时间戳取该 thread 中最大的 inbox 消息 timestamp（从 subFlows 反查 action.timestamp）
