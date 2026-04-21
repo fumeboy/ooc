@@ -1,5 +1,6 @@
 ---
-name: kernel/computable/file_search
+namespace: kernel
+name: computable/file_search
 type: how_to_use_tool
 version: 1.0.0
 when: never

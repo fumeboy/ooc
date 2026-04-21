@@ -1,9 +1,10 @@
 ---
-name: kernel/talkable/cross_object
+namespace: kernel
+name: talkable/cross_object
 type: how_to_interact
 when: never
 description: 跨对象函数调用协议 — 通过 talk 实现多轮对话调用
-deps: ["kernel/talkable"]
+deps: ["kernel:talkable"]
 ---
 
 # 跨对象函数调用（通过对话实现）

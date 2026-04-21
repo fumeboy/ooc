@@ -1,5 +1,6 @@
 ---
-name: kernel/talkable/issue-discussion
+namespace: kernel
+name: talkable/issue-discussion
 type: how_to_think
 version: 1.0.0
 when: never

@@ -1,5 +1,6 @@
 ---
-name: kernel/computable/file_ops
+namespace: kernel
+name: computable/file_ops
 type: how_to_use_tool
 version: 1.0.0
 when: never

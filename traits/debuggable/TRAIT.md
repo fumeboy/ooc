@@ -1,5 +1,6 @@
 ---
-name: kernel/debuggable
+namespace: kernel
+name: debuggable
 type: how_to_think
 version: 1.0.0
 when: never

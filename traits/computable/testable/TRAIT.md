@@ -1,5 +1,6 @@
 ---
-name: kernel/computable/testable
+namespace: kernel
+name: computable/testable
 type: how_to_think
 version: 1.0.0
 when: never

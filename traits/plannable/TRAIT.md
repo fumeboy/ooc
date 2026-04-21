@@ -1,5 +1,6 @@
 ---
-name: kernel/plannable
+namespace: kernel
+name: plannable
 type: how_to_think
 version: 2.0.0
 when: never

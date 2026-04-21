@@ -1,5 +1,6 @@
 ---
-name: kernel/computable/shell_exec
+namespace: kernel
+name: computable/shell_exec
 type: how_to_use_tool
 version: 1.0.0
 when: never

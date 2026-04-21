@@ -1,5 +1,6 @@
 ---
-name: kernel/computable/web_search
+namespace: kernel
+name: computable/web_search
 type: how_to_use_tool
 version: 1.0.0
 when: never

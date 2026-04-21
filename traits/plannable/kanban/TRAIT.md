@@ -1,5 +1,6 @@
 ---
-name: kernel/plannable/kanban
+namespace: kernel
+name: plannable/kanban
 type: how_to_use_tool
 when: never
 description: Session 级 Issue/Task 管理 API

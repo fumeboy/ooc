@@ -1,9 +1,10 @@
 ---
-name: kernel/computable/program_api
+namespace: kernel
+name: computable/program_api
 type: how_to_use_tool
 when: never
 description: 完整 API 参考文档 — 沙箱环境变量、工具方法、Trait 自省
-deps: ["kernel/computable"]
+deps: ["kernel:computable"]
 ---
 
 # 完整 API 参考文档

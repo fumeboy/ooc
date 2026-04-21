@@ -1,5 +1,6 @@
 ---
-name: kernel/reflective
+namespace: kernel
+name: reflective
 type: how_to_think
 version: 1.0.0
 when: never

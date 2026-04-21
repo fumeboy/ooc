@@ -1,5 +1,6 @@
 ---
-name: kernel/verifiable
+namespace: kernel
+name: verifiable
 type: how_to_think
 version: 1.0.0
 when: never

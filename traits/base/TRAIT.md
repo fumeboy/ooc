@@ -1,5 +1,6 @@
 ---
-name: kernel/base
+namespace: kernel
+name: base
 type: how_to_think
 when: always
 description: 指令系统基座 — open/submit/close/wait 四原语
