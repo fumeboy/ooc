@@ -27,6 +27,7 @@ import { emitSSE } from "../server/events.js";
 import { runWithThreadTree, resumeWithThreadTree, stepOnceWithThreadTree, writeThreadTreeFlowData, type EngineConfig, type TalkResult, type TalkReturn } from "../thread/engine.js";
 import { loadSkills } from "../skill/index.js";
 import { appendUserInbox } from "../persistence/user-inbox.js";
+import { handleOnTalkToSuper } from "./super.js";
 
 /** World 配置 */
 export interface WorldConfig {
@@ -514,6 +515,13 @@ export class World {
           return handleOnTalkToUser({ fromObject, message, sessionId, fromThreadId, messageId, flowsDir: this.flowsDir });
         }
 
+        /* super 是对象的反思镜像分身（SuperFlow）：
+         * 落盘到 stones/{fromObject}/super/ 的独立 ThreadsTree。
+         * 当前阶段 super 线程不触发 ThinkLoop（reply=null，异步通道） */
+        if (target === "super") {
+          return handleOnTalkToSuper({ fromObject, message, rootDir: this._rootDir, messageId });
+        }
+
         /* World 作为路由中间层：启动目标 Object 的线程树，等待完成，返回结果 */
         consola.info(`[World] 跨 Object talk: ${fromObject} → ${targetObject}, session=${sessionId}${continueThreadId ? `, continue=${continueThreadId}` : ""}`);
         try {
@@ -632,6 +640,9 @@ export class World {
         const target = targetObject.toLowerCase();
         if (target === "user") {
           return handleOnTalkToUser({ fromObject, message, sessionId, fromThreadId, messageId, flowsDir: this.flowsDir });
+        }
+        if (target === "super") {
+          return handleOnTalkToSuper({ fromObject, message, rootDir: this._rootDir, messageId });
         }
         try {
           const talkRet = await this._talkWithThreadTree(targetObject, message, fromObject, undefined, continueThreadId);
