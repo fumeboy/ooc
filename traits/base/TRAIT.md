@@ -47,10 +47,9 @@ deps: []
 
 仅 command 类型的 form 可以 submit。必填参数：`title`、`form_id` + 指令参数。
 
-> **注意（create_sub_thread）**：submit 的顶层 `title` 是本次提交动作的自叙（如"派生分析子线程"）。
-> 子线程的"名称"请通过 `child_title` 字段传入（如 `child_title="分析任务"`）。
-> 为向后兼容，未提供 `child_title` 时 engine 会把 `title` 当作子线程名——但这会让前端卡片的行动标题
-> 和子线程名混在一起，建议新代码明确使用 `child_title`。
+> **注意（create_sub_thread）**：submit 的 `title` 对 create_sub_thread 来说同时是新子线程的名字。
+> 语义上，这次 tool call 的"行动标题" = "要创建的子线程的名字"——不需要两个字段。
+> 例如：`submit(title="分析任务", ...)` 会创建一个名为"分析任务"的子线程。
 
 ## close — 关闭上下文
 

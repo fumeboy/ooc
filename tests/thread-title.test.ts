@@ -294,20 +294,19 @@ describe("SSE — flow:action 事件包含 title", () => {
   });
 });
 
-/* ========== 4. create_sub_thread 向后兼容 ========== */
+/* ========== 4. create_sub_thread：title 同时作为子线程名 ========== */
 
-describe("create_sub_thread 的 title 兼容", () => {
+describe("create_sub_thread — title 即子线程名", () => {
   /**
    * scheduler 调度多线程时，同一 mock LLM 会被父子两个线程共用。
-   * 我们用简单的“遇到 create_sub_thread 相关指令就走完子线程"策略：
+   * 走完整流程：
    * - 父线程 call 1：open create_sub_thread
-   * - 父线程 call 2：submit（带 child_title 或 title）
-   * - 从此切到子线程：call 3/4 是子线程的 open return / submit return
-   * - 再切回父线程：call 5/6 是父线程的 open return / submit return
-   * 测试直接验证子线程 title 字段，不关心中间 thread_id 捕获。
+   * - 父线程 call 2：submit（title = 子线程名）
+   * - 切到子线程：call 3/4 子线程 open+submit return
+   * - 切回父线程：call 5/6 父线程 open+submit return
    */
-  function buildSteps(submitArgs: { title?: string; child_title?: string; description?: string }) {
-    const state: { parentFormId?: string; childFormId?: string; parentReturnFormId?: string } = {};
+  function buildSteps(submitArgs: { title: string; description?: string }) {
+    const state: { parentFormId?: string } = {};
     let phase = 0;
     return (messages: unknown[]): { content: string; toolCalls: ToolCall[] } => {
       const userContent = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
@@ -329,7 +328,7 @@ describe("create_sub_thread 的 title 兼容", () => {
         const m = userContent.match(/<form id="(f_[^"]+)" command="create_sub_thread"/);
         state.parentFormId = m?.[1] ?? "f_unknown";
         phase = 2;
-        return { content: "", toolCalls: [toolCall("submit", { title: "父提交创建", form_id: state.parentFormId, ...submitArgs })] };
+        return { content: "", toolCalls: [toolCall("submit", { form_id: state.parentFormId, ...submitArgs })] };
       }
       /* phase 2+: 等子线程完成后父线程继续；open+submit return */
       const rm = userContent.match(/<form id="(f_[^"]+)" command="return"/);
@@ -340,9 +339,9 @@ describe("create_sub_thread 的 title 兼容", () => {
     };
   }
 
-  test("child_title 指定子线程名，title 作为 tool action 标题", async () => {
+  test("submit 的 title 直接作为子线程标题（同时也是 tool action.title）", async () => {
     const llm = new MockLLMClient({
-      responseFn: buildSteps({ child_title: "分析任务", title: "父提交创建", description: "d" }),
+      responseFn: buildSteps({ title: "分析任务", description: "d" }),
     });
 
     const config: EngineConfig = {
@@ -365,42 +364,19 @@ describe("create_sub_thread 的 title 兼容", () => {
     const sessionDir = join(FLOWS_DIR, result.sessionId);
     const threadsJsonPath = join(sessionDir, "objects", "test_obj", "threads.json");
     const threadsJson = JSON.parse(await Bun.file(threadsJsonPath).text());
-    /* 找到非 root 节点 */
+    /* 找到非 root 节点，其 title 应等于 submit 的 title */
     const rootId = threadsJson.rootId;
     const childEntry = Object.entries(threadsJson.nodes as Record<string, { title: string }>).find(([id]) => id !== rootId);
     expect(childEntry).toBeTruthy();
     expect(childEntry![1].title).toBe("分析任务");
-  });
 
-  test("无 child_title 时 fallback 用 title 作子线程名（向后兼容旧 LLM 用法）", async () => {
-    const llm = new MockLLMClient({
-      responseFn: buildSteps({ title: "研究子任务", description: "d" }),
-    });
-
-    const config: EngineConfig = {
-      rootDir: TEST_DIR,
-      flowsDir: FLOWS_DIR,
-      llm,
-      directory: [],
-      traits: [],
-      stone: makeStone("test_obj"),
-      schedulerConfig: {
-        maxIterationsPerThread: 20,
-        maxTotalIterations: 40,
-        deadlockGracePeriodMs: 0,
-      },
-    };
-
-    const result = await runWithThreadTree("test_obj", "你好", "user", config);
-    expect(result.status).toBe("done");
-
-    const sessionDir = join(FLOWS_DIR, result.sessionId);
-    const threadsJsonPath = join(sessionDir, "objects", "test_obj", "threads.json");
-    const threadsJson = JSON.parse(await Bun.file(threadsJsonPath).text());
-    const rootId = threadsJson.rootId;
-    const childEntry = Object.entries(threadsJson.nodes as Record<string, { title: string }>).find(([id]) => id !== rootId);
-    expect(childEntry).toBeTruthy();
-    /* 向后兼容：用 title 作为子线程名 */
-    expect(childEntry![1].title).toBe("研究子任务");
+    /* 同时验证：父线程的 submit tool_use action.title 也等于同一个值 */
+    const parentThreadPath = join(sessionDir, "objects", "test_obj", "threads", rootId, "thread.json");
+    const parentThread = JSON.parse(await Bun.file(parentThreadPath).text());
+    const parentSubmits = (parentThread.actions as Array<{ type: string; name?: string; title?: string; args?: Record<string, unknown> }>)
+      .filter((a) => a.type === "tool_use" && a.name === "submit" && (a.args?.["form_id"] ?? "").toString().startsWith("f_"));
+    /* 找到 create_sub_thread 那次 submit：它的 title 即子线程名 */
+    const createSubmit = parentSubmits.find((a) => a.title === "分析任务");
+    expect(createSubmit).toBeTruthy();
   });
 });

@@ -1009,8 +1009,8 @@ export async function runWithThreadTree(
 
             /* create_sub_thread */
             else if (command === "create_sub_thread") {
-              /* 子线程标题：优先 child_title，fallback 到 title（向后兼容） */
-              const subThreadName = (args.child_title as string | undefined) ?? (args.title as string | undefined) ?? "";
+              /* 子线程标题 = tool call 的 title（天然同一语义） */
+              const subThreadName = (args.title as string | undefined) ?? "";
               const child = await tree.createSubThread(threadId, subThreadName, {
                 description: args.description as string,
                 traits: args.traits as string[],
@@ -1896,7 +1896,8 @@ export async function resumeWithThreadTree(
               const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "thread_return", content: args.summary as string ?? "", timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
               scheduler.markDone(threadId);
             } else if (command === "create_sub_thread") {
-              const subThreadName = (args.child_title as string | undefined) ?? (args.title as string | undefined) ?? "";
+              /* 子线程标题 = tool call 的 title（天然同一语义） */
+              const subThreadName = (args.title as string | undefined) ?? "";
               const child = await tree.createSubThread(threadId, subThreadName, {
                 description: args.description as string,
                 traits: args.traits as string[],
