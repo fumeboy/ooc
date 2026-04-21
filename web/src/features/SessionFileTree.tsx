@@ -57,15 +57,21 @@ async function enhanceTree(tree: FileTreeNode, sessionId: string): Promise<FileT
 
   /* 给 views/<viewName>/ 目录打 marker="view"（Bruce 首轮 #13）：
    * 用户点击目录即激活 view 渲染（FlowView 的 View tab），而非只展开子文件。
-   * 需要深入到 objects/<obj>/views/<viewName>。 */
+   * 需要深入到 objects/<obj>/views/<viewName>。
+   *
+   * 逻辑：nextInsideViews 表示"当前节点的直接 children 应被视为 view 子目录"。
+   * - 顶层调用 insideViews=false
+   * - 进入 node.name === "views" 后，其 children 就是 view 名 → 打 marker
+   * - 再深一层（进入 main/frontend.tsx 等）无需额外处理，保留原样 */
   const markViewDirs = (node: FileTreeNode, insideViews = false): FileTreeNode => {
-    const nextInsideViews = insideViews || node.name === "views";
     if (!node.children) return node;
+    const childInsideViews = insideViews || node.name === "views";
     const children = node.children.map((c) => {
-      if (insideViews && c.type === "directory" && !c.marker) {
-        return { ...markViewDirs(c, true), marker: "view" as const };
+      /* 当前 c 直接位于 views/ 下且是目录：打 marker */
+      if (childInsideViews && c.type === "directory" && !c.marker) {
+        return { ...markViewDirs(c, false), marker: "view" as const };
       }
-      return markViewDirs(c, nextInsideViews);
+      return markViewDirs(c, childInsideViews);
     });
     return { ...node, children };
   };

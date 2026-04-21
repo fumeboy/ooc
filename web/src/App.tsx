@@ -223,11 +223,21 @@ export function App() {
   const openFileTab = useCallback((path: string, node: FileTreeNode) => {
     let resolvedPath = path;
 
-    /* .stone 虚拟节点在 Flows 上下文中 → 重定向到 FlowView 路径 */
-    if (activeTab === "flows" && activeId && node.marker === "stone") {
-      const stoneMatch = path.match(/^stones\/([^/]+)$/);
-      if (stoneMatch) {
-        resolvedPath = `flows/${activeId}/objects/${stoneMatch[1]!}`;
+    /* .stone 虚拟节点在 Flows 上下文中 → 重定向到 FlowView 路径
+     * 既包括 .stone 根（`stones/<obj>` → `flows/<sid>/objects/<obj>`），
+     * 也包括 view 激活路径（`stones/<obj>/views/<name>` → `flows/<sid>/objects/<obj>/views/<name>`），
+     * 这样 session 文件树里点 main 能直接触发 FlowView 的 View tab（Bruce 首轮 #13）。 */
+    if (activeTab === "flows" && activeId) {
+      if (node.marker === "stone") {
+        const stoneMatch = path.match(/^stones\/([^/]+)$/);
+        if (stoneMatch) {
+          resolvedPath = `flows/${activeId}/objects/${stoneMatch[1]!}`;
+        }
+      } else if (node.marker === "view") {
+        const viewMatch = path.match(/^stones\/([^/]+)\/views\/([^/]+)$/);
+        if (viewMatch) {
+          resolvedPath = `flows/${activeId}/objects/${viewMatch[1]!}/views/${viewMatch[2]!}`;
+        }
       }
     }
 

@@ -9,7 +9,7 @@
 import { useState, useEffect } from "react";
 import { useAtomValue } from "jotai";
 import { lastFlowEventAtom, refreshKeyAtom } from "../store/session";
-import { fetchFlow, fetchSessionTree, fetchFileContent, fetchObject } from "../api/client";
+import { fetchFlow, fetchSessionTree, fetchStoneTree, fetchFileContent, fetchObject } from "../api/client";
 import { StatusBadge } from "../components/ui/Badge";
 import { ObjectAvatar } from "../components/ui/ObjectAvatar";
 import { ObjectReadmeView } from "./ObjectReadmeView";
@@ -76,15 +76,34 @@ export function FlowView({ sessionId, objectName, initialTab, initialViewName }:
 
   /* 检查该对象是否有 views/ 目录（任一 view）
    *
+   * views 实际存在于 stones/<obj>/views/（flow 级没有）。
+   * 所以用 fetchStoneTree 查询，再 fallback 到 session tree（兼容 flow 本地自定义 view）。
+   *
    * initialViewName 优先级：若路由指定具体 view（如 views/my_view），用它；
    * 否则 main 优先，再回退到第一个 view 名。 */
   useEffect(() => {
-    fetchSessionTree(sessionId).then((tree) => {
-      const objectsDir = tree.children?.find((c) => c.name === "objects");
-      const objectDir = objectsDir?.children?.find((c) => c.name === objectName);
-      const viewsDir = objectDir?.children?.find((c) => c.name === "views");
-      const viewDirs = viewsDir?.children?.filter((c) => c.type === "directory") ?? [];
-      const viewNames = viewDirs.map((d) => d.name);
+    const resolveViewNames = async (): Promise<string[]> => {
+      /* 1. 优先从 stone 树找 */
+      try {
+        const stoneTree = await fetchStoneTree(objectName);
+        const viewsDir = stoneTree.children?.find((c) => c.name === "views");
+        const viewDirs = viewsDir?.children?.filter((c) => c.type === "directory") ?? [];
+        if (viewDirs.length > 0) return viewDirs.map((d) => d.name);
+      } catch { /* ignore */ }
+      /* 2. fallback 到 session tree（flow 本地自定义 view 场景） */
+      try {
+        const tree = await fetchSessionTree(sessionId);
+        const objectsDir = tree.children?.find((c) => c.name === "objects");
+        const objectDir = objectsDir?.children?.find((c) => c.name === objectName);
+        const viewsDir = objectDir?.children?.find((c) => c.name === "views");
+        const viewDirs = viewsDir?.children?.filter((c) => c.type === "directory") ?? [];
+        return viewDirs.map((d) => d.name);
+      } catch {
+        return [];
+      }
+    };
+
+    resolveViewNames().then((viewNames) => {
       const found = viewNames.length > 0;
       setHasView(found);
       const picked = initialViewName && viewNames.includes(initialViewName)
