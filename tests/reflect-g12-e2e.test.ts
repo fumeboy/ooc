@@ -71,7 +71,7 @@ describe("G12 闭环 — 路径 A：主线程直接沉淀", () => {
     mkdirSync(stoneDir, { recursive: true });
 
     /* 1. 主线程沙箱里直调 persist_to_memory */
-    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const mod: any = await import("../traits/reflective/super/index.js");
     const ctx = { selfDir: stoneDir, stoneName: "bruce" };
     const result: any = await mod.llm_methods.persist_to_memory.fn(ctx, {
       key: "调试新 API 的姿势",
@@ -115,7 +115,7 @@ describe("G12 闭环 — 路径 B：反思线程经调度触发沉淀", () => {
      *
      * 真实场景是 runner 跑 LLM → LLM 决定是否调 persist_to_memory；这里用直接调
      * 短路，验证调度 → 沉淀的管道连通。 */
-    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const mod: any = await import("../traits/reflective/super/index.js");
 
     const scheduler = new ReflectScheduler(async ({ stoneDir: sd, stoneName, tree }) => {
       const data = tree.readThreadData(tree.rootId);
@@ -171,7 +171,7 @@ describe("G12 闭环 — 路径 B：反思线程经调度触发沉淀", () => {
   test("多次 talkToSelf 经一次 scanAll 都被沉淀", async () => {
     const stoneDir = join(TEST_DIR, "stones", "bruce");
     mkdirSync(stoneDir, { recursive: true });
-    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const mod: any = await import("../traits/reflective/super/index.js");
 
     const scheduler = new ReflectScheduler(async ({ stoneDir: sd, stoneName, tree }) => {
       const data = tree.readThreadData(tree.rootId);

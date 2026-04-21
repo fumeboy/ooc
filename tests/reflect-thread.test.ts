@@ -157,7 +157,7 @@ describe("reflect_flow trait llm_methods（kernel trait）", () => {
 
   test("llm_methods.talkToSelf 投递消息到反思线程", async () => {
     /* 动态导入 trait index.ts（相对路径绕过 trait loader） */
-    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const mod: any = await import("../traits/reflective/super/index.js");
     const talkToSelf = mod.llm_methods.talkToSelf;
     expect(talkToSelf).toBeDefined();
     expect(typeof talkToSelf.fn).toBe("function");
@@ -175,7 +175,7 @@ describe("reflect_flow trait llm_methods（kernel trait）", () => {
   });
 
   test("llm_methods.talkToSelf 拒绝空 message", async () => {
-    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const mod: any = await import("../traits/reflective/super/index.js");
     const result: any = await mod.llm_methods.talkToSelf.fn(
       { selfDir: stoneDir, stoneName: "bruce" },
       { message: "" },
@@ -185,7 +185,7 @@ describe("reflect_flow trait llm_methods（kernel trait）", () => {
   });
 
   test("llm_methods.getReflectState 未初始化时返回 initialized=false", async () => {
-    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const mod: any = await import("../traits/reflective/super/index.js");
     const result: any = await mod.llm_methods.getReflectState.fn(
       { selfDir: stoneDir, stoneName: "bruce" },
       {},
@@ -196,7 +196,7 @@ describe("reflect_flow trait llm_methods（kernel trait）", () => {
   });
 
   test("llm_methods.getReflectState 在多次投递后返回正确的 unread 计数", async () => {
-    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const mod: any = await import("../traits/reflective/super/index.js");
     const ctx = { selfDir: stoneDir, stoneName: "bruce" };
     await mod.llm_methods.talkToSelf.fn(ctx, { message: "第 1 条" });
     await mod.llm_methods.talkToSelf.fn(ctx, { message: "第 2 条" });
@@ -224,7 +224,7 @@ describe("reflect_flow trait 沉淀工具（方案 B Phase 2）", () => {
   });
 
   test("llm_methods.persist_to_memory 首次写入创建 memory.md", async () => {
-    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const mod: any = await import("../traits/reflective/super/index.js");
     const ctx = { selfDir: stoneDir, stoneName: "bruce" };
 
     const result: any = await mod.llm_methods.persist_to_memory.fn(ctx, {
@@ -241,7 +241,7 @@ describe("reflect_flow trait 沉淀工具（方案 B Phase 2）", () => {
   });
 
   test("llm_methods.persist_to_memory 多次 append 保留历史", async () => {
-    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const mod: any = await import("../traits/reflective/super/index.js");
     const ctx = { selfDir: stoneDir, stoneName: "bruce" };
 
     await mod.llm_methods.persist_to_memory.fn(ctx, { key: "key-a", content: "内容 A" });
@@ -257,7 +257,7 @@ describe("reflect_flow trait 沉淀工具（方案 B Phase 2）", () => {
   });
 
   test("llm_methods.persist_to_memory 拒绝空 key / content", async () => {
-    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const mod: any = await import("../traits/reflective/super/index.js");
     const ctx = { selfDir: stoneDir, stoneName: "bruce" };
 
     let r: any = await mod.llm_methods.persist_to_memory.fn(ctx, { key: "", content: "x" });
@@ -268,7 +268,7 @@ describe("reflect_flow trait 沉淀工具（方案 B Phase 2）", () => {
   });
 
   test("llm_methods.create_trait 在 stones/{self}/traits/** 下创建 TRAIT.md", async () => {
-    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const mod: any = await import("../traits/reflective/super/index.js");
     const ctx = { selfDir: stoneDir, stoneName: "bruce" };
 
     const result: any = await mod.llm_methods.create_trait.fn(ctx, {
@@ -297,7 +297,7 @@ deps: []
   });
 
   test("llm_methods.create_trait 拒绝越权路径（..、绝对路径、超出 stones/{self}）", async () => {
-    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const mod: any = await import("../traits/reflective/super/index.js");
     const ctx = { selfDir: stoneDir, stoneName: "bruce" };
 
     /* 路径 .. 越权 */
@@ -321,7 +321,7 @@ deps: []
   });
 
   test("llm_methods.create_trait 拒绝覆盖已有 trait", async () => {
-    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const mod: any = await import("../traits/reflective/super/index.js");
     const ctx = { selfDir: stoneDir, stoneName: "bruce" };
 
     const body = `---
