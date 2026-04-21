@@ -6,10 +6,25 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { World } from "../src/world/index.js";
-import { MockLLMClient } from "../src/thinkable/client.js";
+import { MockLLMClient, type ToolCall } from "../src/thinkable/client.js";
+import type { LLMConfig } from "../src/thinkable/config.js";
 import { eventBus } from "../src/server/events.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_world_test");
+
+/**
+ * 测试用 LLMConfig：不依赖 OOC_API_KEY 环境变量。
+ * World 构造时会传给 OpenAICompatibleClient，但测试里从未真正调用 chat API
+ * （要么只构造 World / createObject，要么 mock 掉 _llm）。
+ */
+const TEST_LLM_CONFIG: LLMConfig = {
+  provider: "openai-compatible",
+  apiKey: "test-key",
+  baseUrl: "https://example.invalid/v1",
+  model: "test-model",
+  maxTokens: 1024,
+  timeout: 5,
+};
 
 beforeEach(() => {
   rmSync(TEST_DIR, { recursive: true, force: true });
@@ -21,7 +36,7 @@ afterEach(() => {
 
 describe("World", () => {
   test("初始化创建目录结构", () => {
-    const world = new World({ rootDir: TEST_DIR });
+    const world = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG });
     world.init();
 
     const { existsSync } = require("node:fs");
@@ -36,7 +51,7 @@ describe("World", () => {
   });
 
   test("创建对象", () => {
-    const world = new World({ rootDir: TEST_DIR });
+    const world = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG });
     world.init();
 
     const stone = world.createObject("greeter", "你是一个友好的问候者");
@@ -45,7 +60,7 @@ describe("World", () => {
   });
 
   test("列出对象", () => {
-    const world = new World({ rootDir: TEST_DIR });
+    const world = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG });
     world.init();
 
     world.createObject("alpha", "Alpha");
@@ -58,7 +73,7 @@ describe("World", () => {
   });
 
   test("获取对象", () => {
-    const world = new World({ rootDir: TEST_DIR });
+    const world = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG });
     world.init();
 
     world.createObject("test", "Test");
@@ -71,7 +86,7 @@ describe("World", () => {
   });
 
   test("重复创建对象抛出错误", () => {
-    const world = new World({ rootDir: TEST_DIR });
+    const world = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG });
     world.init();
 
     world.createObject("unique", "Unique");
@@ -80,12 +95,12 @@ describe("World", () => {
 
   test("重启后加载已有对象", () => {
     /* 第一次启动，创建对象 */
-    const world1 = new World({ rootDir: TEST_DIR });
+    const world1 = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG });
     world1.init();
     world1.createObject("persistent", "我会被记住");
 
     /* 第二次启动 */
-    const world2 = new World({ rootDir: TEST_DIR });
+    const world2 = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG });
     world2.init();
 
     const objects = world2.listObjects();
@@ -100,16 +115,33 @@ describe("World", () => {
     eventBus.on("sse", onSse);
 
     try {
-      const world = new World({ rootDir: TEST_DIR, useThreadTree: true });
+      const world = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG, useThreadTree: true });
       world.init();
       world.createObject("supervisor", "你是一个测试 supervisor");
 
-      // 注入 mock LLM：第一轮发 [talk] 给 user，第二轮 [return] 结束
+      /**
+       * 注入 mock LLM：用 tool-calling 协议驱动一次 talk→user + 一次 return。
+       * phase 0: open(talk)  → phase 1: submit(talk to user)
+       * phase 2: open(return) → phase 3: submit(return)
+       */
+      const toolCall = (name: string, args: Record<string, unknown>): ToolCall => ({
+        id: `tc_${Math.random().toString(36).slice(2, 8)}`,
+        type: "function",
+        function: { name, arguments: JSON.stringify(args) },
+      });
+
+      let phase = 0;
       (world as any)._llm = new MockLLMClient({
-        responses: [
-          `[talk]\ntarget = "user"\nmessage = "你好"`,
-          `[return]\nsummary = "done"`,
-        ],
+        responseFn: (messages: unknown[]) => {
+          const userContent = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
+          const talkForm = userContent.match(/<form id="(f_[^"]+)" command="talk"/);
+          const retForm = userContent.match(/<form id="(f_[^"]+)" command="return"/);
+          if (phase === 0) { phase = 1; return { content: "", toolCalls: [toolCall("open", { title: "准备 talk user", type: "command", command: "talk", description: "向 user 发招呼" })] }; }
+          if (phase === 1 && talkForm?.[1]) { phase = 2; return { content: "", toolCalls: [toolCall("submit", { title: "向 user 问好", form_id: talkForm[1], target: "user", message: "你好" })] }; }
+          if (phase === 2) { phase = 3; return { content: "", toolCalls: [toolCall("open", { title: "准备 return", type: "command", command: "return", description: "结束" })] }; }
+          if (phase === 3 && retForm?.[1]) { return { content: "", toolCalls: [toolCall("submit", { title: "返回 done", form_id: retForm[1], summary: "done" })] }; }
+          return { content: "", toolCalls: [toolCall("open", { title: "兜底 return", type: "command", command: "return", description: "结束" })] };
+        },
       });
 
       // 防回归：如果仍然会调度 user，会触发这里的 throw

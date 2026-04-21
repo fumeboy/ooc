@@ -210,9 +210,11 @@ describe("renderThreadProcess", () => {
     expect(rendered).toContain("inject");
   });
 
-  test("空 actions 返回提示文本", () => {
+  test("空 actions 返回空字符串", () => {
+    /* 空 actions 下 renderThreadProcess 返回 ""，由上层 buildThreadContext 决定是否拼接。
+     * 这样在首次进入时 process 段可以直接省略，避免输出 "(无历史)" 这种冗余占位符。 */
     const rendered = renderThreadProcess([]);
-    expect(rendered).toContain("(无历史)");
+    expect(rendered).toBe("");
   });
 });
 

@@ -91,6 +91,7 @@ describe("thinkable client", () => {
   });
 
   test("buildChatPayload 包含 thinking capability 映射", () => {
+    process.env.OOC_API_KEY = "test-key";
     const config = {
       ...DefaultConfig(),
       apiKey: "test-key",
@@ -114,6 +115,7 @@ describe("thinkable client", () => {
   });
 
   test("仅开启 thinking 语义但未配置 provider 参数时，不注入 thinking payload", () => {
+    process.env.OOC_API_KEY = "test-key";
     const config = {
       ...DefaultConfig(),
       apiKey: "test-key",

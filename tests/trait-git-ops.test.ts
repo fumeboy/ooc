@@ -6,15 +6,22 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { join } from "path";
+import { resolve } from "path";
 import {
   gitStatus,
   gitLog,
   gitDiff,
 } from "../../library/traits/git/ops/index";
 
-/** 模拟上下文，rootDir 指向 kernel/ 目录（它是一个 git 仓库） */
-const mockCtx = { rootDir: join(process.cwd(), "kernel") } as any;
+/**
+ * 模拟上下文，rootDir 指向 kernel/ 目录（它是一个独立的 git 仓库 / submodule）。
+ *
+ * 用相对于测试文件的路径解析，避免对 process.cwd() 的依赖——
+ * `bun test` 在 kernel/ 下运行时 cwd 是 kernel/，拼 "kernel" 会得到错误路径 kernel/kernel。
+ * 使用 resolve(import.meta.dir, "..") 得到 kernel/ 目录本身，稳定可复现。
+ */
+const KERNEL_DIR = resolve(import.meta.dir, "..");
+const mockCtx = { rootDir: KERNEL_DIR } as any;
 
 // ─── gitStatus ────────────────────────────────────────────
 
