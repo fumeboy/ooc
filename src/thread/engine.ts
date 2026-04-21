@@ -1250,7 +1250,14 @@ export async function runWithThreadTree(
               }
             }
 
-            /* call_function */
+            /* call_function
+             *
+             * 统一协议：llm_methods 签名为 `(ctx, argsObj)` 对象解构，与沙箱 callMethod
+             * 完全一致。engine 把 LLM 传来的 args.args 作为整体对象传给 fn，**不再按
+             * params 列表展开为位置参数**（旧做法与新 trait 不匹配）。
+             *
+             * 兼容：若 LLM 传入数组 args（极少见）→ 走位置参数展开，保留向后兼容空间。
+             */
             else if (command === "call_function" && form.trait && form.functionName) {
               const method = methodRegistry.all().find(m => m.name === form.functionName && m.traitName === form.trait);
               let resultText: string;
@@ -1259,10 +1266,25 @@ export async function runWithThreadTree(
               } else {
                 try {
                   const { context: execCtx } = buildExecContext(threadId);
-                  const argsObj = (args.args && typeof args.args === "object" ? args.args : {}) as Record<string, unknown>;
-                  const argValues = method.params.map(p => argsObj[p.name]);
-                  const result = method.needsCtx !== false
-                    ? await method.fn(execCtx, ...argValues) : await method.fn(...argValues);
+                  const rawArgs = args.args;
+                  const isPositionalArray = Array.isArray(rawArgs);
+                  const isObjectArgs = rawArgs !== null && typeof rawArgs === "object" && !isPositionalArray;
+                  const argsObj: Record<string, unknown> = isObjectArgs
+                    ? (rawArgs as Record<string, unknown>)
+                    : {};
+                  let result: unknown;
+                  if (isPositionalArray) {
+                    /* 旧位置参数兜底：args 是数组时按顺序展开 */
+                    const argValues = rawArgs as unknown[];
+                    result = method.needsCtx !== false
+                      ? await method.fn(execCtx, ...argValues)
+                      : await method.fn(...argValues);
+                  } else {
+                    /* 新协议：整个对象作为单一参数 */
+                    result = method.needsCtx !== false
+                      ? await method.fn(execCtx, argsObj)
+                      : await method.fn(argsObj);
+                  }
                   resultText = typeof result === "string" ? result : JSON.stringify(result, null, 2);
                 } catch (e) {
                   resultText = `[错误] ${form.trait}.${form.functionName} 执行失败: ${(e as Error).message}`;
@@ -2138,11 +2160,41 @@ export async function resumeWithThreadTree(
               tree.writeInbox(args.thread_id as string, { from: objectName, content: args.message as string, source: "continue" }); tree.setNodeStatus(threadId, "waiting");
               const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "message_out", content: `[continue_sub_thread] → ${args.thread_id}: ${args.message}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
             } else if (command === "call_function" && form.trait && form.functionName) {
+              /* resume 路径：与第一次执行保持同一协议——argsObj 整体作为第二参数传入 */
               const method = methodRegistry.all().find(m => m.name === form.functionName && m.traitName === form.trait);
               let resultText: string;
-              if (!method) { resultText = `[错误] 方法 ${form.trait}.${form.functionName} 不存在`; }
-              else { try { const { context: execCtx } = buildExecContext(threadId); const argsObj = (args.args && typeof args.args === "object" ? args.args : {}) as Record<string, unknown>; const argValues = method.params.map(p => argsObj[p.name]); const result = method.needsCtx !== false ? await method.fn(execCtx, ...argValues) : await method.fn(...argValues); resultText = typeof result === "string" ? result : JSON.stringify(result, null, 2); } catch (e) { resultText = `[错误] ${(e as Error).message}`; } }
-              const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "inject", content: `>>> ${form.trait}.${form.functionName} 结果:\n${resultText}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+              if (!method) {
+                resultText = `[错误] 方法 ${form.trait}.${form.functionName} 不存在`;
+              } else {
+                try {
+                  const { context: execCtx } = buildExecContext(threadId);
+                  const rawArgs = args.args;
+                  const isPositionalArray = Array.isArray(rawArgs);
+                  const isObjectArgs = rawArgs !== null && typeof rawArgs === "object" && !isPositionalArray;
+                  const argsObj: Record<string, unknown> = isObjectArgs
+                    ? (rawArgs as Record<string, unknown>)
+                    : {};
+                  let result: unknown;
+                  if (isPositionalArray) {
+                    const argValues = rawArgs as unknown[];
+                    result = method.needsCtx !== false
+                      ? await method.fn(execCtx, ...argValues)
+                      : await method.fn(...argValues);
+                  } else {
+                    result = method.needsCtx !== false
+                      ? await method.fn(execCtx, argsObj)
+                      : await method.fn(argsObj);
+                  }
+                  resultText = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+                } catch (e) {
+                  resultText = `[错误] ${(e as Error).message}`;
+                }
+              }
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.actions.push({ type: "inject", content: `>>> ${form.trait}.${form.functionName} 结果:\n${resultText}`, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
             } else if (command === "set_plan") {
               const td = tree.readThreadData(threadId); if (td) { td.plan = args.text as string; td.actions.push({ type: "set_plan", content: args.text as string, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
             } else if (command === "await" || command === "await_all") {
