@@ -15,6 +15,7 @@ import { ObjectAvatar } from "../components/ui/ObjectAvatar";
 import { ObjectReadmeView } from "./ObjectReadmeView";
 import { ProcessView } from "./ProcessView";
 import { ThreadsTreeView } from "./ThreadsTreeView";
+import { EffectsTab } from "./EffectsTab";
 import { DynamicUI } from "./DynamicUI";
 import { CodeMirrorViewer } from "../components/ui/CodeMirrorViewer";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
@@ -31,8 +32,10 @@ interface FlowViewProps {
   initialTab?: string;
 }
 
-const BASE_TABS = ["Process", "Data", "Memory"] as const;
-type Tab = "Process" | "Data" | "Memory" | "View" | null;
+/* tabs 与 ObjectDetail 对齐：Process / Data / Effects / Memory (+View)
+ * 注：FlowView 没有 Readme tab（Readme 作为背景底层已经始终可见） */
+const BASE_TABS = ["Process", "Data", "Effects", "Memory"] as const;
+type Tab = "Process" | "Data" | "Effects" | "Memory" | "View" | null;
 
 export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
   const [flow, setFlow] = useState<FlowData | null>(null);
@@ -172,6 +175,9 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
               )}
               {tab === "Data" && (
                 <SplitDataTab sessionId={sessionId} objectName={objectName} stoneData={stone?.data} />
+              )}
+              {tab === "Effects" && (
+                <EffectsTab objectName={objectName} />
               )}
               {tab === "Memory" && (
                 <FlowMemoryTab sessionId={sessionId} objectName={objectName} />
