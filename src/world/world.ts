@@ -26,6 +26,7 @@ import { DefaultConfig, type LLMConfig } from "../thinkable/config.js";
 import { emitSSE } from "../server/events.js";
 import { runWithThreadTree, resumeWithThreadTree, stepOnceWithThreadTree, writeThreadTreeFlowData, type EngineConfig, type TalkResult, type TalkReturn } from "../thread/engine.js";
 import { loadSkills } from "../skill/index.js";
+import { appendUserInbox } from "../persistence/user-inbox.js";
 
 /** World 配置 */
 export interface WorldConfig {
@@ -40,17 +41,20 @@ export interface WorldConfig {
  *
  * user 不参与 ThinkLoop：
  * 1. 通过 SSE 广播 flow:message 事件，前端实时渲染
- * 2. 返回 { reply: null, remoteThreadId: "user" } — user 没有 thread 也不会回复
+ * 2. 向 flows/{sessionId}/user/data.json 的 inbox 追加一条 (threadId, messageId)
+ *    引用索引——前端凭此反查 thread.json.actions 里的消息正文
+ * 3. 返回 { reply: null, remoteThreadId: "user" } — user 没有 thread 也不会回复
  *
  * 抽成独立 helper 消除 `_talkWithThreadTree` 与 `_buildEngineConfig` 中的代码重复。
  *
- * 注意：本 helper 目前仅做 SSE 广播；后续 Task 3.3 将在此添加 user inbox 的索引写入。
+ * inbox 写失败不回滚 SSE、不抛——inbox 只是索引，丢一条不应阻塞对话主流程。
  *
  * @param fromObject - 发起方对象名
  * @param message - 消息内容
  * @param sessionId - 当前 session ID
- * @param fromThreadId - 发起方线程 ID（用于将来写入 inbox）
- * @param messageId - engine 生成的 message_out action id（用于将来写入 inbox）
+ * @param fromThreadId - 发起方线程 ID（用于写 inbox；缺失时 inbox 跳过写入）
+ * @param messageId - engine 生成的 message_out action id（缺失时 inbox 跳过写入）
+ * @param flowsDir - flows/ 根目录（用于定位 user/data.json 路径）
  */
 function handleOnTalkToUser(params: {
   fromObject: string;
@@ -58,8 +62,9 @@ function handleOnTalkToUser(params: {
   sessionId: string;
   fromThreadId: string;
   messageId?: string;
+  flowsDir: string;
 }): { reply: null; remoteThreadId: string } {
-  const { fromObject, message, sessionId } = params;
+  const { fromObject, message, sessionId, fromThreadId, messageId, flowsDir } = params;
   emitSSE({
     type: "flow:message",
     objectName: fromObject,
@@ -73,6 +78,18 @@ function handleOnTalkToUser(params: {
     },
   });
   consola.info(`[World] ${fromObject} → user: 已投递（不触发 user thinkloop）`);
+
+  /* 追加 user inbox 索引——只有在 threadId + messageId 都齐备时写入 */
+  if (fromThreadId && messageId) {
+    /* 不等待：写失败只记 console.error，不影响调用方 */
+    void appendUserInbox(flowsDir, sessionId, fromThreadId, messageId).catch((err) => {
+      console.error(
+        `[World] user inbox 写入失败 (session=${sessionId}, threadId=${fromThreadId}, messageId=${messageId}):`,
+        err,
+      );
+    });
+  }
+
   return { reply: null, remoteThreadId: "user" };
 }
 
@@ -487,7 +504,7 @@ export class World {
 
         /* user 是系统用户（人类），不参与 ThinkLoop：交由专用 handler 处理 */
         if (target === "user") {
-          return handleOnTalkToUser({ fromObject, message, sessionId, fromThreadId, messageId });
+          return handleOnTalkToUser({ fromObject, message, sessionId, fromThreadId, messageId, flowsDir: this.flowsDir });
         }
 
         /* World 作为路由中间层：启动目标 Object 的线程树，等待完成，返回结果 */
@@ -607,7 +624,7 @@ export class World {
       onTalk: async (targetObject, message, fromObject, fromThreadId, sessionId, continueThreadId, messageId) => {
         const target = targetObject.toLowerCase();
         if (target === "user") {
-          return handleOnTalkToUser({ fromObject, message, sessionId, fromThreadId, messageId });
+          return handleOnTalkToUser({ fromObject, message, sessionId, fromThreadId, messageId, flowsDir: this.flowsDir });
         }
         try {
           const talkRet = await this._talkWithThreadTree(targetObject, message, fromObject, undefined, continueThreadId);
