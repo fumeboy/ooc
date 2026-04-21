@@ -21,8 +21,8 @@ import {
   activeSessionFlowAtom,
   lastFlowEventAtom,
 } from "../store/session";
-import { getUserInbox } from "../api/client";
-import type { UserInboxEntry, Action, ProcessNode, SubFlowSummary, FlowStatus } from "../api/types";
+import { getUserInbox, setUserReadObject } from "../api/client";
+import type { UserInbox, UserInboxEntry, Action, ProcessNode, SubFlowSummary, FlowStatus } from "../api/types";
 
 /** 单条"user 主动创建"线程 */
 export interface CreatedByUserThread {
@@ -70,10 +70,12 @@ export interface TalkToUserGroup {
 export interface UserThreadsData {
   created_by_user: CreatedByUserThread[];
   talk_to_user: TalkToUserGroup[];
-  /** 全部未读 messageId 列表（便于 Header 红点判断 + mark-as-read 写 localStorage） */
+  /** 全部未读 messageId 列表（便于 Header 红点判断 + mark-as-read） */
   allUnreadMessageIds: string[];
   /** inbox 原始条目（调试用） */
   rawInbox: UserInboxEntry[];
+  /** 服务端下发的 read-state（objectName → lastReadTimestamp） */
+  readState: Record<string, number>;
 }
 
 /** 从 inbox 引用 + subFlows 反查单条消息的 content（message_out action.id === messageId） */
@@ -128,7 +130,7 @@ function stripTalkPrefix(content: string): string {
   return m ? m[1]!.trim() : content;
 }
 
-/** localStorage 已读消息 id 集合 */
+/** localStorage 已读消息 id 集合（offline fallback——服务端 readState 不可用时使用） */
 function readLastReadSet(sessionId: string): Set<string> {
   if (typeof window === "undefined") return new Set();
   try {
@@ -141,7 +143,7 @@ function readLastReadSet(sessionId: string): Set<string> {
   }
 }
 
-/** 把一批 messageId 加入 localStorage 的已读集合 */
+/** 把一批 messageId 加入 localStorage 的已读集合（offline fallback） */
 export function markMessagesRead(sessionId: string, messageIds: string[]): void {
   if (typeof window === "undefined" || messageIds.length === 0) return;
   try {
@@ -157,6 +159,32 @@ export function markMessagesRead(sessionId: string, messageIds: string[]): void 
 }
 
 /**
+ * 标记某对象线程的最新消息为已读：
+ * - 调用 `POST /user-read-state`（后端权威记录）
+ * - 失败时写 localStorage 兜底（下次渲染会读到）
+ *
+ * @param sessionId - session
+ * @param objectName - 目标对象名
+ * @param timestamp - 已读到的消息 timestamp
+ * @param fallbackMessageIds - 可选，失败兜底时要 localStorage.set 的 message id 列表
+ */
+export async function markObjectRead(
+  sessionId: string,
+  objectName: string,
+  timestamp: number,
+  fallbackMessageIds?: string[],
+): Promise<void> {
+  try {
+    await setUserReadObject(sessionId, objectName, timestamp);
+  } catch {
+    /* 服务端失败，写 localStorage 兜底 */
+    if (fallbackMessageIds && fallbackMessageIds.length > 0) {
+      markMessagesRead(sessionId, fallbackMessageIds);
+    }
+  }
+}
+
+/**
  * 聚合 hook：返回 user 相关线程数据
  *
  * SSE 刷新策略：lastFlowEventAtom 变化 → debounce 300ms → 重拉 inbox
@@ -167,17 +195,29 @@ export function useUserThreads(): UserThreadsData & { refresh: () => void } {
   const lastEvent = useAtomValue(lastFlowEventAtom);
 
   const [inbox, setInbox] = useState<UserInboxEntry[]>([]);
+  /** 服务端 read-state（unread 判定权威）——失败时保持上次值，渲染回退到 localStorage */
+  const [readState, setReadState] = useState<Record<string, number>>({});
+  const [readStateLoaded, setReadStateLoaded] = useState(false);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /** 拉取 inbox */
+  /** 拉取 inbox + readState */
   const refresh = useCallback(() => {
     if (!sessionId) {
       setInbox([]);
+      setReadState({});
+      setReadStateLoaded(false);
       return;
     }
     getUserInbox(sessionId)
-      .then((data) => setInbox(data.inbox ?? []))
-      .catch(() => setInbox([]));
+      .then((data: UserInbox) => {
+        setInbox(data.inbox ?? []);
+        setReadState(data.readState?.lastReadTimestampByObject ?? {});
+        setReadStateLoaded(true);
+      })
+      .catch(() => {
+        setInbox([]);
+        setReadStateLoaded(false);
+      });
   }, [sessionId]);
 
   /** 初次 + sessionId 变化 */
@@ -198,7 +238,8 @@ export function useUserThreads(): UserThreadsData & { refresh: () => void } {
   /** 聚合计算 */
   const data = useMemo<UserThreadsData>(() => {
     const subFlows = activeFlow?.subFlows ?? [];
-    const lastReadSet = sessionId ? readLastReadSet(sessionId) : new Set<string>();
+    /* 未读判定：优先服务端 readState（timestamp 比较），失败回退 localStorage（messageId 集合） */
+    const lastReadSet = readStateLoaded ? null : (sessionId ? readLastReadSet(sessionId) : new Set<string>());
 
     /* created_by_user：每个 subFlow 的 root 节点 */
     const created_by_user: CreatedByUserThread[] = subFlows.map((sf) => ({
@@ -218,7 +259,7 @@ export function useUserThreads(): UserThreadsData & { refresh: () => void } {
         node: ProcessNode;
         messageIds: string[];
         messageContents: { id: string; content: string; ts: number }[];
-        unreadCount: number;
+        unreadIds: string[];
       }
     >();
 
@@ -232,20 +273,25 @@ export function useUserThreads(): UserThreadsData & { refresh: () => void } {
           node: found.node,
           messageIds: [],
           messageContents: [],
-          unreadCount: 0,
+          unreadIds: [],
         };
         byThread.set(entry.threadId, slot);
       }
       slot.messageIds.push(entry.messageId);
-      if (!lastReadSet.has(entry.messageId)) slot.unreadCount += 1;
       const action = findActionInProcess(found.subFlow.process.root, entry.messageId);
+      const actionTs = action?.timestamp ?? 0;
       if (action) {
         slot.messageContents.push({
           id: entry.messageId,
           content: stripTalkPrefix(action.content ?? ""),
-          ts: action.timestamp ?? 0,
+          ts: actionTs,
         });
       }
+      /* 未读判定 */
+      const isUnread = readStateLoaded
+        ? actionTs > (readState[slot.objectName] ?? 0)
+        : !(lastReadSet!.has(entry.messageId));
+      if (isUnread) slot.unreadIds.push(entry.messageId);
     }
 
     const byObject = new Map<string, TalkToUserThread[]>();
@@ -259,7 +305,7 @@ export function useUserThreads(): UserThreadsData & { refresh: () => void } {
         messageIds: slot.messageIds,
         lastMessage: last?.content ?? "",
         lastMessageAt: last?.ts ?? 0,
-        unreadCount: slot.unreadCount,
+        unreadCount: slot.unreadIds.length,
       };
       const list = byObject.get(slot.objectName) ?? [];
       list.push(thread);
@@ -279,18 +325,18 @@ export function useUserThreads(): UserThreadsData & { refresh: () => void } {
       };
     }).sort((a, b) => b.lastMessageAt - a.lastMessageAt);
 
+    /* allUnreadMessageIds：所有 byThread slot 的 unread 合并 */
     const allUnreadMessageIds: string[] = [];
-    for (const entry of inbox) {
-      if (!lastReadSet.has(entry.messageId)) allUnreadMessageIds.push(entry.messageId);
-    }
+    for (const slot of byThread.values()) allUnreadMessageIds.push(...slot.unreadIds);
 
     return {
       created_by_user,
       talk_to_user,
       allUnreadMessageIds,
       rawInbox: inbox,
+      readState,
     };
-  }, [activeFlow, inbox, sessionId]);
+  }, [activeFlow, inbox, sessionId, readState, readStateLoaded]);
 
   return { ...data, refresh };
 }

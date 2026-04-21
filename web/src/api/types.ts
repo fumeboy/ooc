@@ -344,6 +344,19 @@ export interface UserInboxEntry {
   messageId: string;
 }
 
+/**
+ * 已读状态：每个对象最后已读消息的 timestamp
+ *
+ * 前端切换到某对象的线程时调 `POST /user-read-state` 上报时间戳；
+ * 服务端按 objectName 单调递增地记录。判定 unread 用：thread 中消息
+ * timestamp > lastReadTimestampByObject[objectName]。
+ */
+export interface UserReadState {
+  lastReadTimestampByObject: Record<string, number>;
+}
+
 export interface UserInbox {
   inbox: UserInboxEntry[];
+  /** 已读进度：对象 → 最后已读时间戳（map 顺序不稳定，仅按 key 访问） */
+  readState: UserReadState;
 }

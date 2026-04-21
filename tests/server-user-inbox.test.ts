@@ -36,7 +36,7 @@ afterEach(() => {
 });
 
 describe("GET /api/sessions/:sid/user-inbox", () => {
-  test("session 不存在时返回 { inbox: [] }", async () => {
+  test("session 不存在时返回空 inbox + 空 readState", async () => {
     const world = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG });
     world.init();
 
@@ -45,7 +45,9 @@ describe("GET /api/sessions/:sid/user-inbox", () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ success: true, data: { inbox: [] } });
+    expect(body.success).toBe(true);
+    expect(body.data.inbox).toEqual([]);
+    expect(body.data.readState).toEqual({ lastReadTimestampByObject: {} });
   });
 
   test("预先写入 inbox 后能被 endpoint 读取", async () => {
@@ -91,5 +93,85 @@ describe("GET /api/sessions/:sid/user-inbox", () => {
     const entry = body.data.inbox[0];
     expect(entry).toHaveProperty("threadId", "t1");
     expect(entry).toHaveProperty("messageId", "m1");
+  });
+});
+
+describe("POST /api/sessions/:sid/user-read-state", () => {
+  test("合法 payload 更新 readState 并反映在后续 GET 中", async () => {
+    const world = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG });
+    world.init();
+
+    const sid = "s_read_state_set";
+    const req = new Request(`http://test/api/sessions/${sid}/user-read-state`, {
+      method: "POST",
+      body: JSON.stringify({ objectName: "bruce", timestamp: 1234 }),
+      headers: { "content-type": "application/json" },
+    });
+    const res = await handleRoute("POST", `/api/sessions/${sid}/user-read-state`, req, world);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.readState).toEqual({ lastReadTimestampByObject: { bruce: 1234 } });
+
+    /* GET 也能读到 */
+    const getReq = new Request(`http://test/api/sessions/${sid}/user-inbox`);
+    const getRes = await handleRoute("GET", `/api/sessions/${sid}/user-inbox`, getReq, world);
+    const getBody = await getRes.json();
+    expect(getBody.data.readState).toEqual({ lastReadTimestampByObject: { bruce: 1234 } });
+  });
+
+  test("旧 timestamp 被忽略（单调递增）", async () => {
+    const world = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG });
+    world.init();
+
+    const sid = "s_read_state_mono";
+    for (const ts of [3000, 2000, 1500, 2500]) {
+      const req = new Request(`http://test/api/sessions/${sid}/user-read-state`, {
+        method: "POST",
+        body: JSON.stringify({ objectName: "iris", timestamp: ts }),
+        headers: { "content-type": "application/json" },
+      });
+      await handleRoute("POST", `/api/sessions/${sid}/user-read-state`, req, world);
+    }
+
+    const getReq = new Request(`http://test/api/sessions/${sid}/user-inbox`);
+    const getRes = await handleRoute("GET", `/api/sessions/${sid}/user-inbox`, getReq, world);
+    const getBody = await getRes.json();
+    /* 最大值 3000 胜出 */
+    expect(getBody.data.readState).toEqual({ lastReadTimestampByObject: { iris: 3000 } });
+  });
+
+  test("缺字段返回 400", async () => {
+    const world = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG });
+    world.init();
+
+    const sid = "s_bad_payload";
+
+    /* 缺 objectName */
+    let req = new Request(`http://test/api/sessions/${sid}/user-read-state`, {
+      method: "POST",
+      body: JSON.stringify({ timestamp: 123 }),
+      headers: { "content-type": "application/json" },
+    });
+    let res = await handleRoute("POST", `/api/sessions/${sid}/user-read-state`, req, world);
+    expect(res.status).toBe(400);
+
+    /* 缺 timestamp */
+    req = new Request(`http://test/api/sessions/${sid}/user-read-state`, {
+      method: "POST",
+      body: JSON.stringify({ objectName: "bruce" }),
+      headers: { "content-type": "application/json" },
+    });
+    res = await handleRoute("POST", `/api/sessions/${sid}/user-read-state`, req, world);
+    expect(res.status).toBe(400);
+
+    /* 非 JSON */
+    req = new Request(`http://test/api/sessions/${sid}/user-read-state`, {
+      method: "POST",
+      body: "not json",
+      headers: { "content-type": "application/json" },
+    });
+    res = await handleRoute("POST", `/api/sessions/${sid}/user-read-state`, req, world);
+    expect(res.status).toBe(400);
   });
 });

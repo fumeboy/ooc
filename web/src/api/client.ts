@@ -167,6 +167,27 @@ export async function getUserInbox(sessionId: string): Promise<UserInbox> {
   return get<UserInbox>(`/sessions/${sessionId}/user-inbox`);
 }
 
+/**
+ * 更新 user 对某对象的已读进度（timestamp 为该对象线程中已读到的最大消息时间戳）
+ *
+ * 服务端以 objectName 为 key 单调递增地记录；旧 timestamp 会被忽略。
+ *
+ * @param sessionId - Flow session ID
+ * @param objectName - 对象名（如 "bruce"）
+ * @param timestamp - 已读的最大消息 timestamp（epoch ms）
+ * @ref docs/工程管理/迭代/all/20260421_feature_user_inbox_read_state.md
+ */
+export async function setUserReadObject(
+  sessionId: string,
+  objectName: string,
+  timestamp: number,
+): Promise<{ readState: { lastReadTimestampByObject: Record<string, number> } }> {
+  return post<{ readState: { lastReadTimestampByObject: Record<string, number> } }>(
+    `/sessions/${sessionId}/user-read-state`,
+    { objectName, timestamp },
+  );
+}
+
 /** 创建对象 */
 export async function createObject(name: string, whoAmI: string): Promise<StoneData> {
   return post<StoneData>("/stones", { name, whoAmI });

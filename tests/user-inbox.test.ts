@@ -39,7 +39,8 @@ describe("appendUserInbox", () => {
     expect(existsSync(dataJson)).toBe(true);
 
     const parsed = JSON.parse(readFileSync(dataJson, "utf-8"));
-    expect(parsed).toEqual({ inbox: [{ threadId: "th_1", messageId: "msg_1" }] });
+    /* 断言 inbox 字段；readState 是 read-state 迭代引入的可选扩展字段 */
+    expect(parsed.inbox).toEqual([{ threadId: "th_1", messageId: "msg_1" }]);
   });
 
   test("多次 append 按顺序追加，不去重", async () => {
@@ -90,19 +91,21 @@ describe("appendUserInbox", () => {
 });
 
 describe("readUserInbox", () => {
-  test("不存在的 session 返回 { inbox: [] }", async () => {
+  test("不存在的 session 返回空 inbox + 空 readState", async () => {
     const data = await readUserInbox(FLOWS_DIR, "s_nonexistent");
-    expect(data).toEqual({ inbox: [] });
+    expect(data.inbox).toEqual([]);
+    expect(data.readState).toEqual({ lastReadTimestampByObject: {} });
   });
 
-  test("session 存在但 user/data.json 不存在也返回 { inbox: [] }", async () => {
+  test("session 存在但 user/data.json 不存在返回空 inbox + 空 readState", async () => {
     const sid = "s_exists_but_no_user";
     mkdirSync(join(FLOWS_DIR, sid), { recursive: true });
     const data = await readUserInbox(FLOWS_DIR, sid);
-    expect(data).toEqual({ inbox: [] });
+    expect(data.inbox).toEqual([]);
+    expect(data.readState).toEqual({ lastReadTimestampByObject: {} });
   });
 
-  test("损坏的 data.json 返回 { inbox: [] }（容错）", async () => {
+  test("损坏的 data.json 返回空 inbox + 空 readState（容错）", async () => {
     const sid = "s_corrupted";
     const userDir = join(FLOWS_DIR, sid, "user");
     mkdirSync(userDir, { recursive: true });
@@ -112,11 +115,12 @@ describe("readUserInbox", () => {
     await fs.writeFile(dataJson, "not a json {{{", "utf-8");
 
     const data = await readUserInbox(FLOWS_DIR, sid);
-    expect(data).toEqual({ inbox: [] });
+    expect(data.inbox).toEqual([]);
+    expect(data.readState).toEqual({ lastReadTimestampByObject: {} });
   });
 
-  test("data.json 存在但无 inbox 字段时返回 { inbox: [] }", async () => {
-    /* 兼容未来扩展：user/data.json 可能有其他字段但没 inbox */
+  test("data.json 存在但无 inbox 字段时返回空 inbox", async () => {
+    /* 兼容：user/data.json 可能有其他字段但没 inbox */
     const sid = "s_no_inbox_field";
     const userDir = join(FLOWS_DIR, sid, "user");
     mkdirSync(userDir, { recursive: true });
@@ -124,6 +128,7 @@ describe("readUserInbox", () => {
     await fs.writeFile(join(userDir, "data.json"), JSON.stringify({ other: "field" }), "utf-8");
 
     const data = await readUserInbox(FLOWS_DIR, sid);
-    expect(data).toEqual({ inbox: [] });
+    expect(data.inbox).toEqual([]);
+    expect(data.readState).toEqual({ lastReadTimestampByObject: {} });
   });
 });

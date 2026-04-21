@@ -32,7 +32,7 @@ import { Send, Maximize2, Minimize2, X, ChevronUp, ChevronDown, MessageSquare } 
 import type { FlowMessage, Action, FormResponse, TalkFormPayload } from "../api/types";
 import { ProgressIndicator } from "../components/ProgressIndicator";
 import { MessageSidebarThreadsList } from "./MessageSidebarThreadsList";
-import { useUserThreads, findThreadInAllSubFlows, markMessagesRead } from "../hooks/useUserThreads";
+import { useUserThreads, findThreadInAllSubFlows, markMessagesRead, markObjectRead } from "../hooks/useUserThreads";
 
 const DEFAULT_TARGET = "supervisor";
 
@@ -540,14 +540,35 @@ export function MessageSidebar() {
     if (rootId) setCurrentThreadId(rootId);
   }, [activeFlow, currentThreadId, setCurrentThreadId]);
 
-  /* 切到某 thread 时，把该 thread 对应的 inbox 条目标记为已读（localStorage） */
+  /* 切到某 thread 时，把该线程所属对象 lastReadTimestamp 上报给服务端：
+   *   - 时间戳取该 thread 中最大的 inbox 消息 timestamp（从 subFlows 反查 action.timestamp）
+   *   - 服务端失败时写 localStorage 兜底（保证离线也有已读记录）
+   * 同时兼容读 localStorage 的旧逻辑：对该 thread 的 messageIds 也写进 localStorage */
   useEffect(() => {
     if (!activeId || !currentThreadId) return;
-    const msgIds = userThreads.rawInbox
-      .filter((e) => e.threadId === currentThreadId)
-      .map((e) => e.messageId);
-    if (msgIds.length > 0) markMessagesRead(activeId, msgIds);
-  }, [activeId, currentThreadId, userThreads.rawInbox]);
+    const inboxForThread = userThreads.rawInbox.filter((e) => e.threadId === currentThreadId);
+    if (inboxForThread.length === 0) return;
+
+    /* 反查当前 thread 所属对象 + 该线程最大 message_out timestamp */
+    const sfs = activeFlow?.subFlows ?? [];
+    const found = findThreadInAllSubFlows(sfs, currentThreadId);
+    const objectName = found?.subFlow.stoneName;
+    if (!objectName) return;
+
+    let maxTs = 0;
+    for (const entry of inboxForThread) {
+      const actions = found.node.actions ?? [];
+      const act = actions.find((a) => a.id === entry.messageId);
+      if (act?.timestamp && act.timestamp > maxTs) maxTs = act.timestamp;
+    }
+    if (maxTs === 0) return;
+
+    const msgIds = inboxForThread.map((e) => e.messageId);
+    /* 异步上报服务端；失败时回退 localStorage */
+    void markObjectRead(activeId, objectName, maxTs, msgIds);
+    /* 同时写 localStorage——服务端成功时也更新，便于 offline 重载时仍然已读 */
+    markMessagesRead(activeId, msgIds);
+  }, [activeId, currentThreadId, userThreads.rawInbox, activeFlow]);
 
   /* 未读角标：排除"当前正在查看的 thread"的消息，避免红点跟着自己跑 */
   const unreadTotal = useMemo(() => {

@@ -9,6 +9,9 @@ export { threadsToProcess } from "./thread-adapter.js";
 export {
   appendUserInbox,
   readUserInbox,
+  readUserReadState,
+  setUserReadObject,
   type UserInboxEntry,
   type UserInboxData,
+  type UserReadState,
 } from "./user-inbox.js";

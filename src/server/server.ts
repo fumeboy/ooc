@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { existsSync, readFileSync, readdirSync, writeFileSync, statSync, mkdirSync } from "node:fs";
 import { consola } from "consola";
 import { eventBus, type SSEEvent } from "./events.js";
-import { readFlow, listFlowSessions, readUserInbox } from "../persistence/index.js";
+import { readFlow, listFlowSessions, readUserInbox, setUserReadObject } from "../persistence/index.js";
 import { collectAllActions } from "../process/tree.js";
 import { loadTrait } from "../trait/loader.js";
 import { threadsToProcess } from "../persistence/thread-adapter.js";
@@ -1025,6 +1025,36 @@ export async function handleRoute(
     const sessionId = userInboxMatch[1]!;
     const data = await readUserInbox(world.flowsDir, sessionId);
     return json({ success: true, data });
+  }
+
+  /* POST /api/sessions/:sessionId/user-read-state
+   *
+   * 前端切换到某对象的线程后上报：objectName 读到 timestamp 为止。
+   * 后端在 `flows/{sid}/user/data.json` 的 readState.lastReadTimestampByObject 里
+   * 单调递增地更新该对象的 lastReadAt（旧 ts 比新 ts 大时忽略，防止乱序回退）。
+   *
+   * Body: { objectName: string; timestamp: number }
+   *
+   * @ref docs/工程管理/迭代/all/20260421_feature_user_inbox_read_state.md
+   */
+  const userReadStateMatch = path.match(/^\/api\/sessions\/([^/]+)\/user-read-state$/);
+  if (method === "POST" && userReadStateMatch) {
+    const sessionId = userReadStateMatch[1]!;
+    let payload: { objectName?: unknown; timestamp?: unknown };
+    try {
+      payload = (await req.json()) as typeof payload;
+    } catch {
+      return errorResponse("请求体必须是合法 JSON", 400);
+    }
+    const objectName = typeof payload.objectName === "string" ? payload.objectName : "";
+    const timestamp = typeof payload.timestamp === "number" && Number.isFinite(payload.timestamp)
+      ? payload.timestamp : Number.NaN;
+    if (!objectName) return errorResponse("objectName 必填且为字符串", 400);
+    if (!Number.isFinite(timestamp)) return errorResponse("timestamp 必填且为数字", 400);
+
+    await setUserReadObject(world.flowsDir, sessionId, objectName, timestamp);
+    const data = await readUserInbox(world.flowsDir, sessionId);
+    return json({ success: true, data: { readState: data.readState } });
   }
 
   /* 404 */
