@@ -66,7 +66,8 @@ describe("loadAllTraits 三层加载", () => {
 
     createTrait(kernelDir, "kernel", "computable", "kernel computable");
     createTrait(libraryDir, "library", "web/search", "library web search");
-    createTrait(objectDir, "self", "reporter", "object reporter");
+    /* 新签名：objectDir 下查 traits/ 子目录 */
+    createTrait(join(objectDir, "traits"), "self", "reporter", "object reporter");
 
     const { traits } = await loadAllTraits(objectDir, kernelDir, libraryDir);
     expect(traits).toHaveLength(3);
@@ -103,7 +104,7 @@ describe("loadAllTraits 三层加载", () => {
     mkdirSync(kernelDir, { recursive: true });
 
     createTrait(libraryDir, "library", "search", "library版本");
-    createTrait(objectDir, "self", "search", "self 版本");
+    createTrait(join(objectDir, "traits"), "self", "search", "self 版本");
 
     const { traits } = await loadAllTraits(objectDir, kernelDir, libraryDir);
     // 两个 traitId 不同：library:search + self:search

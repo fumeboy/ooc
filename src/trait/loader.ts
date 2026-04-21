@@ -120,13 +120,15 @@ export async function loadTrait(
 ): Promise<TraitDefinition | null> {
   if (!existsSync(traitDir)) return null;
 
-  /* 识别描述文件：TRAIT.md / SKILL.md / readme.md（优先级递减） */
+  /* 识别描述文件：TRAIT.md / VIEW.md / SKILL.md / readme.md（优先级递减） */
   const traitPath = join(traitDir, "TRAIT.md");
+  const viewPath = join(traitDir, "VIEW.md");
   const skillPath = join(traitDir, "SKILL.md");
   const legacyReadmePath = join(traitDir, "readme.md");
 
   let descPath: string | null = null;
   if (existsSync(traitPath)) descPath = traitPath;
+  else if (existsSync(viewPath)) descPath = viewPath;
   else if (existsSync(skillPath)) descPath = skillPath;
   else if (existsSync(legacyReadmePath)) descPath = legacyReadmePath;
 
@@ -141,7 +143,13 @@ export async function loadTrait(
   expectNamespace(namespace, expectedNamespace, fileLabel);
   const name = validateName(data.name, fileLabel);
 
-  const kind: TraitKind = data.kind === "view" ? "view" : "trait";
+  /* kind 默认规则：
+   * - frontmatter 显式 kind: view → view
+   * - 描述文件名是 VIEW.md → view（即使 frontmatter 未声明）
+   * - 其他情况 → trait */
+  const descIsViewFile = descPath.endsWith("VIEW.md");
+  const kind: TraitKind =
+    data.kind === "view" || descIsViewFile ? "view" : "trait";
   const content = body.trim();
   const when: TraitDefinition["when"] =
     typeof data.when === "string" ? (data.when as TraitDefinition["when"]) : "never";
@@ -471,22 +479,32 @@ export async function loadTraitsByRef(
 }
 
 /**
- * 加载一个对象的所有 Traits（kernel → library → 对象自身）
+ * 加载一个对象的所有 Traits（kernel → library → 对象自身 + 对象 views）
  *
  * 加载优先级（同名后者覆盖前者）：
  * 1. kernel traits — 系统级基础能力
  * 2. library traits — 用户级公共能力
  * 3. object traits — 对象自定义能力（self namespace）
+ * 4. object views — 对象自渲染视图（self namespace，kind=view）
+ * 5. flow views — Flow 级 views（可选；sessionId 下的 views/，self namespace，kind=view）
  *
- * @param objectTraitsDir - 对象的 traits/ 目录
+ * Views 与 traits 共享 traitId 空间（namespace:name）：
+ * - 普通 trait 名 = `foo` → traitId `self:foo`
+ * - view 名     = `foo` → traitId `self:foo`
+ *
+ * 为避免同名冲突，建议 view 与 trait 不重名；若重名则按加载顺序（view 覆盖 trait）。
+ *
+ * @param objectDir - 对象根目录（stone.dir），其下 traits/ + views/ 会被分别扫
  * @param kernelTraitsDir - kernel traits 目录
  * @param libraryTraitsDir - library traits 目录（可选）
- * @returns 合并后的 Trait 列表
+ * @param flowObjectDir - Flow 级对象目录（可选），其下 views/ 会被叠加
+ * @returns 合并后的 Trait 列表（含 views）
  */
 export async function loadAllTraits(
-  objectTraitsDir: string,
+  objectDir: string,
   kernelTraitsDir: string,
   libraryTraitsDir?: string,
+  flowObjectDir?: string,
 ): Promise<{ traits: TraitDefinition[]; tree: TraitTree[] }> {
   const traitMap = new Map<string, TraitDefinition>();
 
@@ -507,6 +525,7 @@ export async function loadAllTraits(
   }
 
   /* 3. 加载对象 traits（self namespace，同名覆盖 library 和 kernel） */
+  const objectTraitsDir = join(objectDir, "traits");
   if (existsSync(objectTraitsDir)) {
     const objectTraits = await loadTraitsFromDir(objectTraitsDir, "self");
     for (const trait of objectTraits) {
@@ -514,10 +533,93 @@ export async function loadAllTraits(
     }
   }
 
+  /* 4. 加载对象 stone 级 views（self namespace，kind=view） */
+  if (existsSync(objectDir)) {
+    const stoneViews = await loadObjectViews(objectDir);
+    for (const view of stoneViews) {
+      traitMap.set(traitId(view), view);
+    }
+  }
+
+  /* 5. 加载 flow 级 views（可选；覆盖 stone 级 views） */
+  if (flowObjectDir && existsSync(flowObjectDir)) {
+    const flowViews = await loadObjectViews(flowObjectDir);
+    for (const view of flowViews) {
+      traitMap.set(traitId(view), view);
+    }
+  }
+
   const traits = Array.from(traitMap.values());
   const tree = buildTraitTree(traits);
 
   return { traits, tree };
+}
+
+/**
+ * 加载对象的所有 views（kind=view 的 trait）
+ *
+ * 目录结构：
+ * ```
+ * {objectDir}/views/
+ * └── {viewName}/
+ *     ├── VIEW.md       ← frontmatter: namespace=self, kind=view
+ *     ├── frontend.tsx  ← 必须存在（React 组件默认导出）
+ *     └── backend.ts    ← 可选（llm_methods / ui_methods 双导出）
+ * ```
+ *
+ * 校验规则：
+ * - 目录下必须有 VIEW.md（loader 内部也接受 TRAIT.md 兼容，但约定用 VIEW.md）
+ * - 必须有 frontend.tsx，否则抛错
+ * - frontmatter 的 namespace 强制 self（由 expectNamespace 校验）
+ * - frontmatter 的 kind 强制覆盖为 "view"（即使用户忘写）
+ *
+ * @param objectDir - 对象目录（stones/{name} 或 flows/{sid}/objects/{name}）
+ * @returns views 列表，每个都是 kind="view" 的 TraitDefinition
+ */
+export async function loadObjectViews(objectDir: string): Promise<TraitDefinition[]> {
+  const viewsDir = join(objectDir, "views");
+  if (!existsSync(viewsDir)) return [];
+
+  const results: TraitDefinition[] = [];
+
+  const entries = readdirSync(viewsDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+    if (entry.name.startsWith(".")) continue;
+
+    const viewDir = join(viewsDir, entry.name);
+    if (entry.isSymbolicLink()) {
+      try {
+        if (!statSync(viewDir).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+    }
+
+    /* 识别描述文件：优先 VIEW.md，兼容 TRAIT.md */
+    const viewMdPath = join(viewDir, "VIEW.md");
+    const traitMdPath = join(viewDir, "TRAIT.md");
+    const hasDescFile = existsSync(viewMdPath) || existsSync(traitMdPath);
+    if (!hasDescFile) continue; /* 既无 VIEW.md 也无 TRAIT.md，跳过 */
+
+    /* 强制校验 frontend.tsx */
+    const frontendPath = join(viewDir, "frontend.tsx");
+    if (!existsSync(frontendPath)) {
+      throw new Error(
+        `[trait-loader] view "${viewDir}" 缺少 frontend.tsx（views/ 下每个 view 必须有 frontend.tsx）`,
+      );
+    }
+
+    /* 复用 loadTrait 解析 VIEW.md + backend.ts/index.ts 的方法导出 */
+    const trait = await loadTrait(viewDir, "self");
+    if (!trait) continue;
+
+    /* 强制 kind=view（views/ 目录下的一律视为 view，忽略用户 frontmatter 写错的情况） */
+    const view: TraitDefinition = { ...trait, kind: "view" };
+    results.push(view);
+  }
+
+  return results;
 }
 
 /**

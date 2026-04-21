@@ -314,10 +314,10 @@ when: always
       "utf-8",
     );
 
-    /* self trait */
-    mkdirSync(join(objectDir, "reporter"), { recursive: true });
+    /* self trait（新签名：objectDir 下查 traits/） */
+    mkdirSync(join(objectDir, "traits", "reporter"), { recursive: true });
     writeFileSync(
-      join(objectDir, "reporter", "TRAIT.md"),
+      join(objectDir, "traits", "reporter", "TRAIT.md"),
       `---
 namespace: self
 name: reporter
@@ -356,10 +356,11 @@ kernel版本`,
     );
 
     /* self 下创建同 traitId "kernel:foo" 是不允许的（namespace 被强制为 self）；
-       这里用同名 self:foo 来测试 trait map 的合并覆盖不会丢失两者 */
-    mkdirSync(join(objectDir, "foo"), { recursive: true });
+       这里用同名 self:foo 来测试 trait map 的合并覆盖不会丢失两者。
+       新签名：objectDir 下查 traits/ 子目录。 */
+    mkdirSync(join(objectDir, "traits", "foo"), { recursive: true });
     writeFileSync(
-      join(objectDir, "foo", "TRAIT.md"),
+      join(objectDir, "traits", "foo", "TRAIT.md"),
       `---
 namespace: self
 name: foo

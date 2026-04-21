@@ -668,13 +668,12 @@ export class World {
   private async _loadTraits(stone: Stone) {
     const kernelTraitsDir = join(this._rootDir, "kernel", "traits");
     const libraryTraitsDir = join(this._rootDir, "library", "traits");
-    const objectTraitsDir = join(stone.dir, "traits");
 
-    /* 三层加载：kernel（基座）→ library（公共库）→ object（自定义） */
-    const { traits, tree } = await loadAllTraits(objectTraitsDir, kernelTraitsDir, libraryTraitsDir);
+    /* 新协议：传入 objectDir（其下 traits/ + views/ 会被分别扫描） */
+    const { traits, tree } = await loadAllTraits(stone.dir, kernelTraitsDir, libraryTraitsDir);
     this._traitTree = tree;
 
-    consola.info(`[World] 加载 ${traits.length} 个 traits: ${traits.map(t => t.name).join(", ")}`);
+    consola.info(`[World] 加载 ${traits.length} 个 traits/views: ${traits.map(t => t.name).join(", ")}`);
     consola.info(`[World] library traits 方法已全量注册，readme 通过 activateTrait() 按需激活`);
     return traits;
   }
