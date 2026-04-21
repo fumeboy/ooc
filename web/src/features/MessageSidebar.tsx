@@ -31,7 +31,7 @@ import { Send, Maximize2, Minimize2, X, ChevronUp, ChevronDown, MessageSquare } 
 import type { FlowMessage, Action } from "../api/types";
 import { ProgressIndicator } from "../components/ProgressIndicator";
 import { MessageSidebarThreadsList } from "./MessageSidebarThreadsList";
-import { useUserThreads } from "../hooks/useUserThreads";
+import { useUserThreads, findThreadInAllSubFlows, markMessagesRead } from "../hooks/useUserThreads";
 
 const DEFAULT_TARGET = "supervisor";
 
@@ -114,37 +114,34 @@ export function MessageSidebar() {
       .slice(0, 6);
   }, [showMention, mentionQuery, objectNames]);
 
-  /* 构建 timeline：messages + supervisor actions，按时间排序 */
-  const timeline = useMemo(() => {
-    if (!activeFlow) return [];
+  /* 定位 currentThreadId 对应的 thread 节点（跨所有 subFlows 查找） */
+  const currentThreadLocation = useMemo(() => {
+    if (!currentThreadId || !activeFlow?.subFlows) return null;
+    return findThreadInAllSubFlows(activeFlow.subFlows, currentThreadId);
+  }, [currentThreadId, activeFlow]);
 
-    /* 收集 messages（排除 user→user） */
+  /** 当前 Body 展示的线程所属对象名（TuiAction 渲染头像等用） */
+  const currentObjectName = currentThreadLocation?.subFlow.stoneName ?? DEFAULT_TARGET;
+
+  /* 构建 timeline：只取 currentThreadId 所在节点的 actions + 对应 messages（过滤到相关对象） */
+  const timeline = useMemo(() => {
+    if (!activeFlow || !currentThreadLocation) return [];
+
+    const { node, subFlow } = currentThreadLocation;
+
+    /* messages：只保留与当前 thread 所属对象相关（from/to 含该对象或 user） */
+    const objName = subFlow.stoneName;
     const msgs = activeFlow.messages.filter((msg) => {
       if ((msg.from === "user" || msg.from === "human") && msg.to === "user") return false;
-      return true;
+      const involvesObj = msg.from === objName || msg.to === objName;
+      const involvesUser = msg.from === "user" || msg.from === "human" || msg.to === "user";
+      return involvesObj && involvesUser;
     });
 
-    /* 收集 supervisor 的 actions（从 subFlows 中提取） */
-    const collectActions = (node: any): (Action & { _origIndex: number })[] => {
-      const actions: (Action & { _origIndex: number })[] = [];
-      let index = 0;
-      const walk = (n: any) => {
-        for (const a of n.actions ?? []) {
-          actions.push({ ...a, _origIndex: index++ });
-        }
-        for (const child of n.children ?? []) {
-          walk(child);
-        }
-      };
-      walk(node);
-      return actions;
-    };
-
-    const supervisorFlow = (activeFlow as any).subFlows?.find((sf: any) => sf.stoneName === "supervisor");
-    const process = supervisorFlow?.process ?? activeFlow.process;
-    const allActions = process?.root ? collectActions(process.root) : [];
-    /* 过滤掉 message_in/message_out（messages 已包含这些信息）和 thread_return */
-    const actions = allActions.filter((a) => a.type !== "message_in" && a.type !== "message_out" && a.type !== "thread_return");
+    /* actions：只取当前节点自身的 actions（不递归子节点——子线程有自己的 Body） */
+    const actions = (node.actions ?? [])
+      .map((a, i) => ({ ...a, _origIndex: i }))
+      .filter((a) => a.type !== "message_in" && a.type !== "message_out" && a.type !== "thread_return");
 
     /* 合并并按时间排序 */
     type Entry = { kind: "message"; data: FlowMessage } | { kind: "action"; data: Action & { _origIndex?: number } };
@@ -155,8 +152,6 @@ export function MessageSidebar() {
       const ta = a.data.timestamp ?? 0;
       const tb = b.data.timestamp ?? 0;
       if (ta !== tb) return ta - tb;
-      // 时间戳相同时：
-      // - 如果都是 action，按先序遍历的原始顺序排列
       if (a.kind === "action" && b.kind === "action") {
         return (a.data._origIndex ?? 0) - (b.data._origIndex ?? 0);
       }
@@ -164,7 +159,7 @@ export function MessageSidebar() {
     });
 
     return entries;
-  }, [activeFlow]);
+  }, [activeFlow, currentThreadLocation]);
 
   /* 监听滚动事件，检测用户是否手动向上滚动 */
   useEffect(() => {
@@ -435,6 +430,15 @@ export function MessageSidebar() {
     if (rootId) setCurrentThreadId(rootId);
   }, [activeFlow, currentThreadId, setCurrentThreadId]);
 
+  /* 切到某 thread 时，把该 thread 对应的 inbox 条目标记为已读（localStorage） */
+  useEffect(() => {
+    if (!activeId || !currentThreadId) return;
+    const msgIds = userThreads.rawInbox
+      .filter((e) => e.threadId === currentThreadId)
+      .map((e) => e.messageId);
+    if (msgIds.length > 0) markMessagesRead(activeId, msgIds);
+  }, [activeId, currentThreadId, userThreads.rawInbox]);
+
   /* 未读角标：排除"当前正在查看的 thread"的消息，避免红点跟着自己跑 */
   const unreadTotal = useMemo(() => {
     if (!userThreads.rawInbox.length) return 0;
@@ -560,7 +564,9 @@ export function MessageSidebar() {
         <div ref={scrollRef} className="flex-1 overflow-auto px-3 py-3 space-y-1.5">
         {timeline.length === 0 && !activeStreamingTalk && (
           <p className="text-xs text-[var(--muted-foreground)] text-center py-8 font-mono">
-            输入消息开始对话，输入 @ 选择对象
+            {currentThreadId
+              ? "此线程暂无内容"
+              : `向 ${target} 发起对话，输入 @ 切换对象`}
           </p>
         )}
         {timeline.map((entry, i) => {
@@ -582,7 +588,7 @@ export function MessageSidebar() {
               <div key={`act-${i}`} ref={(el) => { msgRefs.current[i] = el; }}>
                 <TuiAction
                   action={a}
-                  objectName="supervisor"
+                  objectName={currentObjectName}
                   loading={activeFlow?.status === "running" && i === timeline.length - 1}
                 />
               </div>
@@ -592,22 +598,22 @@ export function MessageSidebar() {
         })}
         {/* 流式 thought */}
         {streamingThought && activeFlow?.status === "running" && (
-          <TuiStreamingBlock type="thinking" content={streamingThought.content} objectName="supervisor" />
+          <TuiStreamingBlock type="thinking" content={streamingThought.content} objectName={currentObjectName} />
         )}
         {/* 流式 program */}
         {streamingProgram && activeFlow?.status === "running" && (
-          <TuiStreamingBlock type="program" content={streamingProgram.content} objectName="supervisor" />
+          <TuiStreamingBlock type="program" content={streamingProgram.content} objectName={currentObjectName} />
         )}
         {/* 流式 action */}
         {streamingAction && activeFlow?.status === "running" && (
-          <TuiStreamingBlock type="action" content={streamingAction.content} objectName="supervisor" />
+          <TuiStreamingBlock type="action" content={streamingAction.content} objectName={currentObjectName} />
         )}
         {/* 流式 stack_push */}
         {streamingStackPush && activeFlow?.status === "running" && (
           <TuiStreamingBlock
             type="stack_push"
             content={`[${streamingStackPush.opType}.${streamingStackPush.attr}] ${streamingStackPush.content}`}
-            objectName="supervisor"
+            objectName={currentObjectName}
           />
         )}
         {/* 流式 stack_pop */}
@@ -615,12 +621,12 @@ export function MessageSidebar() {
           <TuiStreamingBlock
             type="stack_pop"
             content={`[${streamingStackPop.opType}.${streamingStackPop.attr}] ${streamingStackPop.content}`}
-            objectName="supervisor"
+            objectName={currentObjectName}
           />
         )}
         {/* 流式 set_plan */}
         {streamingSetPlan && activeFlow?.status === "running" && (
-          <TuiStreamingBlock type="set_plan" content={streamingSetPlan.content} objectName="supervisor" />
+          <TuiStreamingBlock type="set_plan" content={streamingSetPlan.content} objectName={currentObjectName} />
         )}
         {/* 流式 talk */}
         {activeStreamingTalk && (
