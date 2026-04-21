@@ -14,7 +14,7 @@
  * @ref docs/superpowers/specs/2026-04-21-trait-namespace-views-and-http-methods-design.md#4.8
  */
 import React, { Component, Suspense, useMemo } from "react";
-import { talkTo } from "../api/client";
+import { talkTo, callMethod as apiCallMethod } from "../api/client";
 
 declare const __OOC_ROOT__: string;
 
@@ -93,7 +93,8 @@ class UIErrorBoundary extends Component<
  *
  * @param importPath - @stones/.../views/{viewName}/frontend.tsx
  *                     或 @flows/.../views/{viewName}/frontend.tsx
- * @param componentProps - 传给加载到的组件的 props（通常含 sessionId, objectName, callMethod）
+ * @param componentProps - 传给加载到的组件的 props（通常含 sessionId, objectName）
+ *                         DynamicUI 会自动合并注入 callMethod 闭包（若 componentProps 含 sessionId+objectName）
  * @param fallback - 加载失败时的降级视图（可选）
  */
 export function DynamicUI({
@@ -104,6 +105,18 @@ export function DynamicUI({
   componentProps: any;
   fallback?: React.ReactNode;
 }) {
+  /* 自动注入 callMethod 闭包（当 componentProps 含 sessionId + objectName 时） */
+  const sessionId = componentProps?.sessionId;
+  const objectName = componentProps?.objectName;
+  const boundProps = useMemo(() => {
+    if (!sessionId || !objectName) return componentProps;
+    if (componentProps.callMethod) return componentProps; /* 已显式传入则保留 */
+    return {
+      ...componentProps,
+      callMethod: (traitId: string, method: string, args: object = {}) =>
+        apiCallMethod(sessionId, objectName, traitId, method, args),
+    };
+  }, [componentProps, sessionId, objectName]);
   const LazyComponent = useMemo(() => {
     const resolved = resolveImportPath(importPath);
     return React.lazy(async () => {
@@ -146,7 +159,7 @@ export function DynamicUI({
           <div className="p-4 text-sm text-muted-foreground">加载 View 组件...</div>
         }
       >
-        <LazyComponent {...componentProps} />
+        <LazyComponent {...boundProps} />
       </Suspense>
     </UIErrorBoundary>
   );

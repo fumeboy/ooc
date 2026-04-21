@@ -218,6 +218,35 @@ export async function resolveOocUrl(url: string): Promise<{ type: string; [key: 
   return get<{ type: string; [key: string]: unknown }>(`/resolve?url=${encodeURIComponent(url)}`);
 }
 
+/**
+ * 调用对象 View 的 ui_method（Phase 4）
+ *
+ * 后端白名单严格：traitId 必须 self: + trait kind=view + method 在 ui_methods。
+ * 若方法调用 ctx.notifyThread，会写入根线程 inbox 并（必要时）复活 done 线程。
+ *
+ * @param sessionId - flow 所属 session id
+ * @param objectName - 对象名（必须是 view 的所有者）
+ * @param traitId - self:{viewName} 格式
+ * @param method - ui_methods 中声明的方法名
+ * @param args - 方法参数（对象）
+ * @returns 方法返回值
+ *
+ * @ref docs/superpowers/specs/2026-04-21-trait-namespace-views-and-http-methods-design.md#4.7
+ */
+export async function callMethod<TResult = unknown>(
+  sessionId: string,
+  objectName: string,
+  traitId: string,
+  method: string,
+  args: object = {},
+): Promise<TResult> {
+  const body = await post<{ result: TResult }>(
+    `/flows/${encodeURIComponent(sessionId)}/objects/${encodeURIComponent(objectName)}/call_method`,
+    { traitId, method, args },
+  );
+  return body.result;
+}
+
 /** 获取 .ooc/ 根目录文件树 */
 export async function fetchProjectTree(): Promise<FileTreeNode> {
   return get<FileTreeNode>("/tree");

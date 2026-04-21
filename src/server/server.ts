@@ -214,6 +214,133 @@ export async function handleRoute(
     });
   }
 
+  /* POST /api/flows/:sid/objects/:name/call_method — 用户从 View 调用 ui_method（Phase 4）
+   *
+   * 白名单严格：
+   *   - traitId 必须是 self: namespace
+   *   - 目标 trait 的 kind 必须是 "view"
+   *   - method 必须在 ui_methods（不看 llm_methods）
+   *   - view 必须属于路径参数 :name 指向的对象（由 loader 隐式保证 + 此处显式再查）
+   * 副作用：
+   *   - 方法可通过 ctx.notifyThread(msg) 向该对象的根线程 inbox 写 system 消息
+   *     若根线程状态为 done，自动复活；若 flow 处于 sleep 状态，world.resumeFlow 非阻塞触发
+   *
+   * @ref docs/superpowers/specs/2026-04-21-trait-namespace-views-and-http-methods-design.md#4.6
+   */
+  const callMethodMatch = path.match(/^\/api\/flows\/([^/]+)\/objects\/([^/]+)\/call_method$/);
+  if (method === "POST" && callMethodMatch) {
+    const sid = callMethodMatch[1]!;
+    const objectName = callMethodMatch[2]!;
+    const body = (await req.json()) as Record<string, unknown>;
+    const traitId = body.traitId;
+    const methodName = body.method;
+    const args = (body.args ?? {}) as Record<string, unknown>;
+
+    /* 参数校验 */
+    if (typeof traitId !== "string" || !traitId) {
+      return errorResponse("缺少 traitId 字段", 400);
+    }
+    if (typeof methodName !== "string" || !methodName) {
+      return errorResponse("缺少 method 字段", 400);
+    }
+    if (!traitId.startsWith("self:")) {
+      return errorResponse("只允许调用 self: namespace 的 traitId", 403);
+    }
+
+    /* 对象存在性校验 */
+    const stone = world.registry.get(objectName);
+    if (!stone) return errorResponse(`对象 "${objectName}" 不存在`, 404);
+
+    /* 加载该对象的全部 self traits + views（kernel/library 不参与 HTTP call_method） */
+    const { loadObjectViews, loadTraitsFromDir } = await import("../trait/loader.js");
+    const stoneViews = await loadObjectViews(stone.dir);
+    const flowObjectDir = join(world.rootDir, "flows", sid, "objects", objectName);
+    const flowViews = existsSync(flowObjectDir) ? await loadObjectViews(flowObjectDir) : [];
+    const selfTraits = existsSync(join(stone.dir, "traits"))
+      ? await loadTraitsFromDir(join(stone.dir, "traits"), "self")
+      : [];
+    /* 合并 self 命名空间下可见条目（flow view 覆盖 stone view 覆盖 trait） */
+    const selfMap = new Map<string, typeof stoneViews[number]>();
+    for (const t of selfTraits) selfMap.set(`${t.namespace}:${t.name}`, t);
+    for (const v of stoneViews) selfMap.set(`${v.namespace}:${v.name}`, v);
+    for (const v of flowViews) selfMap.set(`${v.namespace}:${v.name}`, v);
+    const view = selfMap.get(traitId);
+    if (!view) {
+      return errorResponse(`trait "${traitId}" 不属于对象 "${objectName}"（或不存在）`, 404);
+    }
+    /* kind=view 校验：self: namespace 的普通 trait 不可通过 HTTP 调用 */
+    if (view.kind !== "view") {
+      return errorResponse(`traitId "${traitId}" 不是 kind=view（实际 ${view.kind}），HTTP 只允许调用 view`, 403);
+    }
+
+    /* ui_methods 白名单 */
+    const uiMethod = view.uiMethods?.[methodName];
+    if (!uiMethod) {
+      const available = Object.keys(view.uiMethods ?? {});
+      return errorResponse(
+        `方法 "${methodName}" 未在 ${traitId} 的 ui_methods 中声明（可用：${available.join(", ") || "无"}）`,
+        403,
+      );
+    }
+
+    /* 构造 MethodContext，含 notifyThread（写入根线程 inbox + 唤醒 done 线程 + 非阻塞 resume） */
+    const { ThreadsTree } = await import("../thread/tree.js");
+    const objFlowDir = join(world.rootDir, "flows", sid, "objects", objectName);
+    const tree = existsSync(objFlowDir) ? ThreadsTree.load(objFlowDir) : null;
+
+    const notifyThread = (content: string, opts?: { from?: string }) => {
+      if (!tree) {
+        consola.warn(`[call_method] notifyThread: 无线程树（flow ${sid}/${objectName}），跳过`);
+        return;
+      }
+      const rootId = tree.rootId;
+      const rootNodeBefore = tree.getNode(rootId);
+      const needsRevival = rootNodeBefore?.status === "done";
+      tree.writeInbox(rootId, {
+        from: opts?.from ?? "ui",
+        content,
+        source: "system",
+      });
+      /* 若 root 线程由 done 被复活，触发 resumeFlow（非阻塞，不等待 LLM 完成） */
+      if (needsRevival) {
+        world.resumeFlow(objectName, sid).catch((e) => {
+          consola.error(`[call_method] resumeFlow 失败: ${(e as Error).message}`);
+        });
+      }
+    };
+
+    const methodCtx = {
+      data: { ...stone.data },
+      getData: (k: string) => stone.data[k],
+      setData: (k: string, v: unknown) => { stone.data[k] = v; },
+      print: (...parts: unknown[]) => {
+        consola.info(`[call_method/${objectName}]`, ...parts);
+      },
+      sessionId: sid,
+      filesDir: join(objFlowDir, "files"),
+      rootDir: world.rootDir,
+      selfDir: stone.dir,
+      stoneName: objectName,
+      notifyThread,
+    };
+
+    /* 执行方法 */
+    try {
+      const result = uiMethod.needsCtx
+        ? await uiMethod.fn(methodCtx, args)
+        : await uiMethod.fn(args);
+      /* data 变更持久化 */
+      try {
+        stone.save();
+      } catch (e) {
+        consola.warn(`[call_method] stone.save() 失败: ${(e as Error).message}`);
+      }
+      return json({ success: true, data: { result } });
+    } catch (e) {
+      return json({ success: false, error: (e as Error).message }, 500);
+    }
+  }
+
   /* ========== 暂停/恢复 ========== */
 
   /* POST /api/stones/:name/pause — 暂停对象 */

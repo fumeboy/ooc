@@ -40,6 +40,19 @@ export interface MethodContext {
   readonly selfDir: string;
   /** 对象名称 */
   readonly stoneName: string;
+  /**
+   * 向当前对象的根线程 inbox 写入一条 system 消息
+   *
+   * 行为：
+   * - 写入 root 线程的 inbox（status=unread）
+   * - 若 root 线程状态为 done，则自动复活（revival）
+   * - 仅在 HTTP call_method 或 UI 方法上下文中可用；LLM 沙箱中通常为 no-op
+   *
+   * 由调用点（如 HTTP call_method endpoint）显式注入实现。
+   *
+   * @ref docs/superpowers/specs/2026-04-21-trait-namespace-views-and-http-methods-design.md#4.6
+   */
+  notifyThread?(content: string, opts?: { from?: string }): void;
 }
 
 /** 注册表中的方法条目 */
