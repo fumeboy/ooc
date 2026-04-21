@@ -2,37 +2,90 @@
 namespace: kernel
 name: talkable
 type: how_to_interact
-version: 2.0.0
+version: 2.1.0
 when: never
 command_binding:
   commands: ["talk", "talk_sync", "return"]
-description: 对象间通信协议 — talk/talk_sync 消息传递
+description: 对象间通信协议 — talk 统一 fork/continue 四模式
 deps: []
 ---
 
 # 通信能力
 
-## 发送消息
+## talk —— 对其他对象的线程操作
 
-通过 `open(type=command, command=talk)` → `submit(target, message)` 发送异步消息。
-通过 `open(type=command, command=talk_sync)` → `submit(target, message)` 发送同步消息（等待回复）。
+`talk` 把 "给别人发消息" 的所有情形统一在一个指令下：
+
+```
+talk {
+  target: string,                    # 目标对象名
+  msg: string,                       # 消息内容
+  threadId?: string,                 # 对方的线程 ID
+  context: "fork" | "continue",      # 操作模式
+  form?: <talk form>,                # 可选结构化表单
+}
+```
+
+### 四种模式
+
+| 模式 | 表达 | 语义 |
+|------|------|------|
+| fork 对方新根线程（默认） | `talk(target=X, msg, context="fork")` | 对方开一条新会话处理你的请求 |
+| fork 对方已有线程下的子线程 | `talk(target=X, msg, threadId=Y, context="fork")` | 在 X 的线程 Y 下派生子线程（新能力） |
+| continue 对方已有线程 | `talk(target=X, msg, threadId=Y, context="continue")` | 向 X 的线程 Y 投递消息、唤醒它（新能力） |
+| continue 无 threadId | **非法**（engine 会报错） | — |
+
+### 语义提示
+
+- **fork**：派生新线程，对原线程 readonly。适合：发起新话题、询问意见、让对方另开一个任务帮你。
+- **continue**：向对方已有线程投递消息、唤醒它。适合：追加信息、更正、在"同一个对话"里继续推进。
+
+### 使用方式
+
+```
+# 新话题（fork 对方新根线程）
+open(type=command, command=talk, description="请 sophia 分析 G3")
+submit(title="请 sophia 分析 G3", form_id="<...>", target="sophia", msg="请分析 G3 的设计", context="fork")
+
+# 在 sophia 的已有线程下派生子任务（fork under）
+open(type=command, command=talk, description="在 sophia 的 G3 分析线程下派生子任务")
+submit(title="派生子任务", form_id="<...>", target="sophia", msg="顺便看下 G3 的反例", threadId="th_sophia_g3", context="fork")
+
+# 向对方已有线程补充信息（continue）
+open(type=command, command=talk, description="向 sophia 补充数据")
+submit(title="补充数据", form_id="<...>", target="sophia", msg="忘了告诉你：实验 009 的结论在附件", threadId="th_sophia_g3", context="continue")
+```
 
 talk 完成后，对方的回复会出现在你的 inbox 中，并附带 `[remote_thread_id: th_xxx]`。
-这个 ID 是对方处理你请求的线程 ID，可用于后续继续对话。
+你可以把这个 ID 作为下次 talk 的 `threadId` 参数，实现"在同一个对话里继续"（continue）或"在这个线程下派生"（fork）。
 
-## 继续对话（continue_thread）
+## target="super" —— 反思镜像分身（保留字）
 
-如果你想在之前的对话基础上追问，使用 `continue_thread` 参数：
+> **反例警告**：不要把 `target="super"` 误解为 `target="supervisor"`——
+> 前者是**你自己的反思通道**（把经验写给"未来的自己"），
+> 后者是**独立的监督对象**（Alan Kay，系统的总指挥），它俩是完全不同的对象。
 
-```
-open(type=command, command=talk, description="继续向 sophia 追问")
-submit(target="sophia", message="请补充 G3 的分析", continue_thread="th_xxx")
-```
+### 语义
 
-`continue_thread` 传入上次 talk 回复中的 `remote_thread_id`。
-对方会在同一个线程中继续处理，保留之前的完整上下文。
+`target="super"` 是一个保留字，指向**当前对象的 super**——即你自己的反思镜像分身（super-ego 的字面意义）。
+消息落盘到 `stones/{你}/super/` 的独立线程树里，由你的 super 在后续时刻消费（沉淀 memory.md、创建新 trait 等）。
 
-不传 `continue_thread` 时，每次 talk 都会在对方创建新线程。
+"A 对 super 说话" = "A 对自己说话"。
+
+### 适用场景
+
+- 记录一个值得沉淀的经验：`talk(target="super", msg="发现：X 场景下应该 Y", context="fork")`
+- 让 super 派生一条反思线程去整理某段历史：`talk(target="super", msg="请把本次会话的教训整理成 memory 条目", context="fork")`
+- 向已有的 super 反思线程追加新证据：`talk(target="super", msg="又一个反例：Z", threadId="th_super_yyy", context="continue")`
+
+### 反例对比（必须分清）
+
+| 写法 | 对象 | 后果 |
+|------|------|------|
+| `talk(target="super", msg="记下这个经验", context="fork")` | 自己的反思分身 | 落盘到 `stones/{你}/super/`，等你自己的 super 消费 |
+| `talk(target="supervisor", msg="记下这个经验", context="fork")` | supervisor（Alan Kay） | 打断 Alan 的工作、让他帮你记——**绝大多数情况不是你想要的** |
+
+当 prompt 里说"记下经验"、"向自己的 super 说"、"做反思"时——**永远用 `target="super"`**，不是 `target="supervisor"`。
 
 ## 回复与 mark
 
@@ -74,7 +127,8 @@ submit(
   form_id="<open 返回的 form_id>",
   title="询问 user 的方案选择",
   target="user",
-  message="这个需求你希望按哪种方式实现？",
+  msg="这个需求你希望按哪种方式实现？",
+  context="fork",
   form={
     "type": "single_choice",
     "options": [

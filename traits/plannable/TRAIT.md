@@ -2,10 +2,10 @@
 namespace: kernel
 name: plannable
 type: how_to_think
-version: 2.0.0
+version: 2.1.0
 when: never
 command_binding:
-  commands: ["create_sub_thread", "continue_sub_thread", "set_plan"]
+  commands: ["think", "set_plan"]
 description: 任务拆解与规划 — 先想清楚再动手
 deps: []
 ---
@@ -16,11 +16,47 @@ deps: []
 
 1. **先拆解再执行** — 复杂任务先用 set_plan 写出计划，再逐步执行
 2. **一次只做一步** — 每步完成后验证，再进入下一步
-3. **子线程处理子任务** — 用 create_sub_thread 将独立子任务委托给子线程
+3. **用 think 派生子线程** — 把独立子任务委托给子线程，保持当前线程的视野单纯
 
-## 子线程
+## think —— 对自己的线程操作
 
-通过 `open(type=command, command=create_sub_thread)` → `submit(title, description, traits)` 创建子线程。
+`think` 统一了 fork（派生新子线程）和 continue（向已有线程补充信息）两种意图。
+参数约定：
+
+```
+think {
+  msg: string,                       # 要投递的消息
+  threadId?: string,                 # 目标线程 ID
+  context: "fork" | "continue",      # 操作模式
+  traits?: string[],                 # fork 时，新子线程的 trait 列表
+}
+```
+
+### 模式对照表
+
+| 模式 | 含义 | threadId 处理 |
+|------|------|--------------|
+| `think(msg, context="fork")` | 在当前线程下派生新子线程 | 省略即以当前线程为父 |
+| `think(msg, threadId=Y, context="fork")` | 在指定线程 Y 下派生子线程 | 必填 Y（必须存在） |
+| `think(msg, threadId=Y, context="continue")` | 向线程 Y 投递消息、唤醒它 | 必填 Y |
+| `think(msg, context="continue")` | **非法**（engine 会报错） | — |
+
+### 语义要点
+
+- **fork**：派生新线程，对原线程而言是 **readonly**——你在原线程什么都没改，只是"另开一枝"干点事情。适合：查资料、拆解子任务、探索方案、写临时笔记。新子线程完成后 return，父线程可通过 `await` 获取摘要。
+- **continue**：向原线程 inbox 投递消息、唤醒它。这会**影响**原线程的后续思考。适合：补充信息、修正方向、追加指令、汇报结果。
+
+### 使用方式
+
+```
+# 派生子线程去分析（fork）
+open(type=command, command=think, description="分析模块 X")
+submit(title="分析模块 X", form_id="<...>", context="fork", msg="请分析 kernel/src/thread/engine.ts 的 onTalk 路径", traits=["kernel/computable"])
+
+# 向之前派生的线程补充信息（continue）
+open(type=command, command=think, description="给分析任务补充文件清单")
+submit(title="补充文件清单", form_id="<...>", context="continue", threadId="th_xxx", msg="顺便看一下 tree.ts 的 createSubThread API")
+```
 
 子线程特点：
 - 继承父线程的 trait 作用域
@@ -42,17 +78,9 @@ deps: []
 - 发现新信息时：调整计划
 - 完成一个阶段时：标记进度
 
-## continue_sub_thread
-
-通过 `open(type=command, command=continue_sub_thread)` → `submit(thread_id, message)` 向已创建的子线程追加消息。
-
-用于：
-- 补充信息给正在执行的子线程
-- 修正子线程的方向
-
 ## 契约式编程
 
-创建子线程时，在 description 中明确声明：
+创建子线程时，在 msg 中明确声明：
 - 这个子线程要做什么
 - 预期产出什么结果
 - 完成标准是什么
