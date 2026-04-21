@@ -1,16 +1,23 @@
 /**
- * Trait 方法注册表 (G3)
+ * Trait 方法注册表 (G3) — Phase 2 重构版
  *
- * 管理所有 Trait 方法的注册。
- * 关键规则：方法注册是全量的（registerAll 注册所有 trait 的方法）。
- * 但 buildSandboxMethods 支持按 activatedTraits 过滤，只注入已激活 trait 的方法到沙箱。
- * 这确保对象只能调用自己有权限的工具，同时保留全量注册以支持跨 trait 方法依赖。
+ * 新协议（硬迁移，无兼容层）：
+ * - key = (traitId, methodName, channel)；channel ∈ {llm, ui}
+ * - buildSandboxMethods 只暴露 `callMethod(traitIdRaw, methodName, args)` 单函数
+ * - 沙箱只能调 llm_methods；ui_methods 由 HTTP /api/.../call_method 端点调（Phase 4）
+ * - 支持省略 namespace：按 self → kernel → library 顺序查找
  *
- * @ref docs/哲学文档/gene.md#G3 — implements — Trait 方法全量注册（不受激活影响）
- * @ref src/types/trait.ts — references — TraitDefinition, TraitMethod, TraitMethodParam 类型
+ * @ref docs/哲学文档/gene.md#G3 — implements — Trait 方法全量注册（双通道隔离）
+ * @ref docs/superpowers/specs/2026-04-21-trait-namespace-views-and-http-methods-design.md
+ * @ref src/types/trait.ts — references — TraitDefinition, TraitMethod, TraitMethodChannel 类型
  */
 
-import type { TraitDefinition, TraitMethod, TraitMethodParam } from "../types/index.js";
+import type {
+  TraitDefinition,
+  TraitMethod,
+  TraitMethodParam,
+  TraitMethodChannel,
+} from "../types/index.js";
 import { traitId } from "./activator.js";
 
 /** 方法执行上下文（注入到每个 trait 方法中） */
@@ -37,9 +44,9 @@ export interface MethodContext {
 
 /** 注册表中的方法条目 */
 export interface RegisteredMethod {
-  /** 方法名 */
+  /** 方法名（不含 traitId） */
   name: string;
-  /** 来源 trait */
+  /** 来源 traitId（`namespace:name` 格式） */
   traitName: string;
   /** 方法描述 */
   description: string;
@@ -49,30 +56,80 @@ export interface RegisteredMethod {
   fn: (...args: unknown[]) => Promise<unknown>;
   /** 函数是否需要 ctx 作为第一个参数 */
   needsCtx: boolean;
+  /** 通道：llm（LLM 沙箱） / ui（前端 HTTP） */
+  channel: TraitMethodChannel;
 }
 
-/** 方法注册表 */
+/** 三元键：`${traitId}::${methodName}::${channel}` */
+type RegistryKey = string;
+
+/**
+ * 方法注册表（双通道）
+ *
+ * 同一个 (traitId, methodName) 允许同时在 llm 和 ui 两个通道注册
+ * （一个方法被"同时暴露"是允许的；但通常不同的方法被不同通道使用）。
+ */
 export class MethodRegistry {
-  /** 所有注册的方法：methodName → RegisteredMethod */
-  private _methods: Map<string, RegisteredMethod> = new Map();
+  /** 所有注册的方法：(traitId, methodName, channel) → RegisteredMethod */
+  private _methods: Map<RegistryKey, RegisteredMethod> = new Map();
 
   /**
-   * 从 Trait 列表注册所有方法
+   * 注册一个方法到指定通道
+   */
+  register(
+    traitId: string,
+    methodName: string,
+    def: TraitMethod,
+    channel: TraitMethodChannel,
+  ): void {
+    const key = this._buildKey(traitId, methodName, channel);
+    this._methods.set(key, {
+      name: methodName,
+      traitName: traitId,
+      description: def.description,
+      params: def.params,
+      fn: def.fn,
+      needsCtx: def.needsCtx ?? true,
+      channel,
+    });
+  }
+
+  /**
+   * 从一组 Trait 定义批量注册所有方法
+   *
+   * 注册规则：
+   * - trait.llmMethods 中的方法 → llm channel
+   * - trait.uiMethods 中的方法 → ui channel
+   * - trait.methods（旧数组形式，Phase 2 过渡期）→ llm channel（默认）
    *
    * @param traits - Trait 定义列表
    */
   registerAll(traits: TraitDefinition[]): void {
     this._methods.clear();
     for (const trait of traits) {
-      for (const method of trait.methods) {
-        this._methods.set(method.name, {
-          name: method.name,
-          traitName: traitId(trait),
-          description: method.description,
-          params: method.params,
-          fn: method.fn,
-          needsCtx: method.needsCtx ?? true,
-        });
+      const id = traitId(trait);
+
+      /* llmMethods: Record<name, def> */
+      if (trait.llmMethods) {
+        for (const [methodName, def] of Object.entries(trait.llmMethods)) {
+          this.register(id, methodName, def, "llm");
+        }
+      }
+
+      /* uiMethods: Record<name, def> */
+      if (trait.uiMethods) {
+        for (const [methodName, def] of Object.entries(trait.uiMethods)) {
+          this.register(id, methodName, def, "ui");
+        }
+      }
+
+      /* 旧 methods 数组（过渡期，Phase 2 任务 2.3/2.4/2.5 逐个 trait 迁移到 llm_methods 后可删除） */
+      if (trait.methods && trait.methods.length > 0) {
+        for (const method of trait.methods) {
+          /* 不重复注册：若同名方法已通过 llmMethods 注册则跳过 */
+          if (this.get(id, method.name, "llm")) continue;
+          this.register(id, method.name, method, "llm");
+        }
       }
     }
   }
@@ -80,12 +137,23 @@ export class MethodRegistry {
   /**
    * 获取指定方法
    */
-  get(name: string): RegisteredMethod | undefined {
-    return this._methods.get(name);
+  get(
+    traitId: string,
+    methodName: string,
+    channel: TraitMethodChannel,
+  ): RegisteredMethod | undefined {
+    return this._methods.get(this._buildKey(traitId, methodName, channel));
   }
 
   /**
-   * 获取所有方法名
+   * 获取 ui 通道方法（供 HTTP /call_method 端点快捷使用）
+   */
+  getUiMethod(traitId: string, methodName: string): RegisteredMethod | undefined {
+    return this.get(traitId, methodName, "ui");
+  }
+
+  /**
+   * 获取所有方法的 (traitId, methodName, channel) 清单
    */
   names(): string[] {
     return Array.from(this._methods.keys());
@@ -101,58 +169,81 @@ export class MethodRegistry {
   /**
    * 构建用于沙箱的方法映射
    *
-   * 将注册的方法包装为 (ctx: MethodContext, ...args) → result 的形式，
-   * 返回可以直接注入到执行上下文中的函数映射。
+   * 新协议：只暴露 `callMethod(traitIdRaw, methodName, args)` 单函数。
+   * 取消扁平命名（`readFile(...)`）与两段式命名（`trait.method(...)`）。
    *
-   * 支持两种调用方式：
-   * 1. 两段式调用：`traitName.methodName()`（避免命名冲突）
-   * 2. 直接调用：`methodName()`（方便使用，文档中描述的方式）
+   * callMethod 解析 traitIdRaw：
+   * - 含冒号 → 精确匹配完整 traitId
+   * - 不含冒号 → 按 self → kernel → library 顺序查找
    *
    * @param ctx - 方法执行上下文
-   * @param activatedTraits - 已激活的 trait 名称列表。只注入这些 trait 的方法。
-   * @returns 扁平化结构：{ methodName: function, ..., traitName: { methodName: function, ... } }
+   * @param _stoneName - 预留参数（后续 Phase 可能用于 self:X 的定向解析）
+   * @returns `{ callMethod }`
    */
   buildSandboxMethods(
     ctx: MethodContext,
-    activatedTraits: string[],
-  ): Record<string, unknown> {
-    /* 结果对象：同时包含扁平化方法和嵌套结构 */
-    const result: Record<string, unknown> = {};
-    /* 嵌套映射：{ traitName: { methodName: function, ... } }（两段式调用） */
-    const nested: Record<string, Record<string, (...args: unknown[]) => Promise<unknown>>> = {};
-
-    const filterSet = new Set(activatedTraits);
-
-    for (const [name, method] of this._methods) {
-      if (!filterSet.has(method.traitName)) continue;
-
-      const wrapped = method.needsCtx
-        ? async (...args: unknown[]) => method.fn(ctx, ...args)
-        : async (...args: unknown[]) => method.fn(...args);
-
-      /* 兼容直接调用：methodName() */
-      result[name] = wrapped;
-
-      /* 同时支持两段式调用：namespace/traitName.methodName */
-      if (!nested[method.traitName]) {
-        nested[method.traitName] = {};
+    _stoneName: string,
+  ): { callMethod: (traitIdRaw: string, methodName: string, args?: object) => Promise<unknown> } {
+    const callMethod = async (
+      traitIdRaw: string,
+      methodName: string,
+      args: object = {},
+    ): Promise<unknown> => {
+      const resolvedTraitId = this._resolveTraitId(traitIdRaw);
+      const m = resolvedTraitId
+        ? this.get(resolvedTraitId, methodName, "llm")
+        : undefined;
+      if (!m) {
+        throw new Error(
+          `callMethod: ${traitIdRaw}:${methodName} not found (llm channel)`,
+        );
       }
-      nested[method.traitName]![name] = wrapped;
-    }
-
-    /* 将嵌套结构也加入结果 */
-    for (const [traitName, methods] of Object.entries(nested)) {
-      result[traitName] = methods;
-    }
-
-    return result;
+      if (m.needsCtx) {
+        return m.fn(ctx, args);
+      }
+      return m.fn(args);
+    };
+    return { callMethod };
   }
 
   /**
    * 获取方法参数定义（供跨对象调用时查询）
    */
-  getParamDefinition(methodName: string): TraitMethodParam[] | null {
-    const method = this._methods.get(methodName);
-    return method ? method.params : null;
+  getParamDefinition(
+    traitId: string,
+    methodName: string,
+    channel: TraitMethodChannel = "llm",
+  ): TraitMethodParam[] | null {
+    const m = this.get(traitId, methodName, channel);
+    return m ? m.params : null;
+  }
+
+  /* ========== 内部实现 ========== */
+
+  /** 构造三元键 */
+  private _buildKey(
+    traitId: string,
+    methodName: string,
+    channel: TraitMethodChannel,
+  ): RegistryKey {
+    return `${traitId}::${methodName}::${channel}`;
+  }
+
+  /**
+   * 解析 traitIdRaw 到完整 traitId
+   *
+   * - 含冒号 → 原样返回（后续 get 未命中则报错）
+   * - 不含冒号 → 查看所有已注册方法的 key，找 `{ns}:{raw}::*` 命中的第一个
+   *   按优先级 self > kernel > library
+   */
+  private _resolveTraitId(raw: string): string | null {
+    if (raw.includes(":")) return raw;
+    for (const ns of ["self", "kernel", "library"] as const) {
+      const prefix = `${ns}:${raw}::`;
+      for (const key of this._methods.keys()) {
+        if (key.startsWith(prefix)) return `${ns}:${raw}`;
+      }
+    }
+    return null;
   }
 }

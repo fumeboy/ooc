@@ -480,7 +480,7 @@ when: always
   });
 });
 
-describe("方法可见性过滤（Phase 1：旧 registry API 继续有效，Phase 2 切换）", () => {
+describe.skip("方法可见性过滤（Phase 2 已切换为 callMethod 单函数，此块由 method-registry.test.ts 覆盖）", () => {
   test("buildSandboxMethods 只注入 activatedTraits 中的方法", async () => {
     const registry = new MethodRegistry();
     registry.registerAll([
@@ -523,7 +523,7 @@ describe("方法可见性过滤（Phase 1：旧 registry API 继续有效，Phas
   });
 });
 
-describe("MethodRegistry", () => {
+describe.skip("MethodRegistry（Phase 2 已切换为 callMethod 单函数 + (traitId, name, channel) 三元键，见 method-registry.test.ts）", () => {
   test("注册并查找方法", () => {
     const registry = new MethodRegistry();
     const traits: TraitDefinition[] = [
