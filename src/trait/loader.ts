@@ -152,11 +152,23 @@ export async function loadTrait(
   const hooks = parseTraitHooks(data.hooks);
   const commandBinding = parseCommandBinding(data.command_binding);
 
-  /* 加载 index.ts 中的方法（Phase 1 阶段：保留旧 methods 列表；Phase 2 切换到 llm/ui_methods） */
-  let methods: TraitMethod[] = [];
+  /* 加载 index.ts（或 backend.ts——view 用 backend.ts）的方法 */
   const indexPath = join(traitDir, "index.ts");
-  if (existsSync(indexPath)) {
-    methods = await loadTraitMethods(indexPath);
+  const backendPath = join(traitDir, "backend.ts");
+  const methodsFile = existsSync(indexPath)
+    ? indexPath
+    : existsSync(backendPath)
+    ? backendPath
+    : null;
+
+  let llmMethods: Record<string, TraitMethod> | undefined;
+  let uiMethods: Record<string, TraitMethod> | undefined;
+  let legacyMethods: TraitMethod[] = [];
+  if (methodsFile) {
+    const loaded = await loadTraitMethods(methodsFile);
+    llmMethods = loaded.llmMethods;
+    uiMethods = loaded.uiMethods;
+    legacyMethods = loaded.legacyMethods;
   }
 
   return {
@@ -168,7 +180,9 @@ export async function loadTrait(
     when,
     description,
     readme: content,
-    methods,
+    methods: legacyMethods, // 过渡期保留，Phase 2 收尾后可删
+    llmMethods,
+    uiMethods,
     deps,
     hooks,
     commandBinding,
@@ -186,60 +200,113 @@ function parseTraitType(type: unknown): TraitType {
   return "how_to_think"; // 默认
 }
 
+/** loadTraitMethods 的返回值：三路方法表 */
+interface LoadedMethods {
+  /** `export const llm_methods = { ... }` → 装入 llm channel */
+  llmMethods?: Record<string, TraitMethod>;
+  /** `export const ui_methods = { ... }` → 装入 ui channel */
+  uiMethods?: Record<string, TraitMethod>;
+  /**
+   * 过渡期兼容：`export const methods = { ... }` 或直接 export function。
+   *
+   * Phase 2 每个 trait 迁移到 llm_methods 后逐步消失；最终收尾删除。
+   */
+  legacyMethods: TraitMethod[];
+}
+
 /**
- * 从 index.ts 动态加载方法
+ * 从 index.ts / backend.ts 动态加载方法
  *
- * 支持两种格式：
+ * 新协议（Phase 2）：优先读 `export const llm_methods` / `export const ui_methods`
+ * 双命名映射（Record<name, TraitMethodDef>）。
  *
- * 1. 旧格式（结构化导出）：
- * export const methods = {
- *   search: { description: "搜索", params: [...], fn: async (ctx, query) => { ... } }
- * };
+ * 过渡期兼容：
+ * - `export const methods = {...}` → legacyMethods（装入 llm channel）
+ * - `export async function name(...)` 直接函数导出 → 同上
  *
- * 2. 新格式（TSDoc 注释 + 直接导出函数）：
- * /** 搜索信息 @param query - 搜索关键词 *\/
- * export async function search(ctx, query) { ... }
- * 系统从 TSDoc 注释自动解析 description 和 params。
+ * @param indexPath - index.ts 或 backend.ts 的绝对路径
  */
-async function loadTraitMethods(indexPath: string): Promise<TraitMethod[]> {
+async function loadTraitMethods(indexPath: string): Promise<LoadedMethods> {
   try {
     const mod = await import(`${indexPath}?t=${Date.now()}`);
 
-    /* 尝试旧格式：export const methods = {...} */
-    const exported = mod.methods as Record<string, unknown> | undefined;
-    if (exported && typeof exported === "object") {
-      return loadMethodsFromStructured(exported);
+    const llmMethods = parseNamedMethodsRecord(mod.llm_methods);
+    const uiMethods = parseNamedMethodsRecord(mod.ui_methods);
+
+    /* 过渡期：兼容旧 export const methods = {...} 对象 */
+    let legacyMethods: TraitMethod[] = [];
+    const legacyExport = mod.methods as Record<string, unknown> | undefined;
+    if (legacyExport && typeof legacyExport === "object") {
+      legacyMethods = loadMethodsFromStructured(legacyExport);
+    } else if (!llmMethods && !uiMethods) {
+      /* 无新旧任何已命名导出时，走 TSDoc 自动解析路径（library/sessions/index 等遗留） */
+      const source = readFileSync(indexPath, "utf-8");
+      const tsDocMap = parseTSDoc(source);
+      const ctxMap = parseFirstParam(source);
+
+      for (const [name, value] of Object.entries(mod)) {
+        if (name === "default" || name === "methods" || name === "llm_methods" || name === "ui_methods") continue;
+        if (typeof value !== "function") continue;
+
+        const doc = tsDocMap.get(name);
+        const needsCtx = doc?.needsCtx ?? ctxMap.get(name) ?? false;
+        legacyMethods.push({
+          name,
+          description: doc?.description ?? "",
+          params: doc?.params ?? [],
+          fn: value as (...args: unknown[]) => Promise<unknown>,
+          needsCtx,
+        });
+      }
     }
 
-    /* 新格式：从导出的函数 + 源码 TSDoc 解析 */
-    const source = readFileSync(indexPath, "utf-8");
-    const tsDocMap = parseTSDoc(source);
-    const ctxMap = parseFirstParam(source);
-
-    const results: TraitMethod[] = [];
-    for (const [name, value] of Object.entries(mod)) {
-      if (name === "default" || name === "methods") continue;
-      if (typeof value !== "function") continue;
-
-      const doc = tsDocMap.get(name);
-      /* 检测函数是否需要 ctx：优先用 TSDoc 解析结果，否则用签名检测 */
-      const needsCtx = doc?.needsCtx ?? ctxMap.get(name) ?? false;
-      results.push({
-        name,
-        description: doc?.description ?? "",
-        params: doc?.params ?? [],
-        fn: value as (...args: unknown[]) => Promise<unknown>,
-        needsCtx,
-      });
-    }
-    return results;
+    return { llmMethods, uiMethods, legacyMethods };
   } catch {
-    return [];
+    return { legacyMethods: [] };
   }
 }
 
 /**
- * 从旧格式的 methods 对象加载方法
+ * 解析 `Record<name, TraitMethodDef>` 导出 → `Record<name, TraitMethod>`
+ *
+ * Phase 2 推荐的导出形态：
+ * ```ts
+ * export const llm_methods = {
+ *   readFile: {
+ *     description: "...",
+ *     params: [{ name: "path", type: "string", description: "...", required: true }],
+ *     fn: async (ctx, { path }) => { ... },
+ *   },
+ * };
+ * ```
+ */
+function parseNamedMethodsRecord(raw: unknown): Record<string, TraitMethod> | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const result: Record<string, TraitMethod> = {};
+  for (const [name, def] of Object.entries(raw as Record<string, unknown>)) {
+    const d = def as Record<string, unknown> | null;
+    if (!d || typeof d !== "object") continue;
+    if (typeof d.fn !== "function") continue;
+    result[name] = {
+      name,
+      description: typeof d.description === "string" ? d.description : "",
+      params: Array.isArray(d.params)
+        ? d.params.map((p: Record<string, unknown>) => ({
+            name: String(p.name ?? ""),
+            type: String(p.type ?? "unknown"),
+            description: String(p.description ?? ""),
+            required: Boolean(p.required ?? false),
+          }))
+        : [],
+      fn: d.fn as (...args: unknown[]) => Promise<unknown>,
+      needsCtx: d.needsCtx !== false, /* 默认 true */
+    };
+  }
+  return result;
+}
+
+/**
+ * 从旧格式的 methods 对象加载方法（过渡期）
  */
 function loadMethodsFromStructured(exported: Record<string, unknown>): TraitMethod[] {
   const results: TraitMethod[] = [];
