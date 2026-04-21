@@ -76,9 +76,18 @@ export interface EngineConfig {
    * @param fromThreadId - 发起方线程 ID
    * @param sessionId - 当前 session ID
    * @param continueThreadId - 可选，继续对方已有线程（而非新建）
+   * @param messageId - 可选，本次 message_out action 的 id（用于 target="user" 时写入 user inbox 索引）
    * @returns { reply, remoteThreadId } — 对方回复 + 对方线程 ID
    */
-  onTalk?: (targetObject: string, message: string, fromObject: string, fromThreadId: string, sessionId: string, continueThreadId?: string) => Promise<{ reply: string | null; remoteThreadId: string }>;
+  onTalk?: (
+    targetObject: string,
+    message: string,
+    fromObject: string,
+    fromThreadId: string,
+    sessionId: string,
+    continueThreadId?: string,
+    messageId?: string,
+  ) => Promise<{ reply: string | null; remoteThreadId: string }>;
   /** 是否开启 debug 模式（持久化每轮 ThinkLoop 的 LLM 输入/输出） */
   debugEnabled?: boolean;
   /** Scheduler 配置覆盖 */
@@ -134,6 +143,17 @@ export interface TalkReturn {
 /** 生成 session ID */
 function generateSessionId(): string {
   return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * 生成 message_out action 的消息 id
+ *
+ * 格式与 tree.ts 中的 inbox message id 保持一致：`msg_<timestamp36>_<rand>`。
+ * engine 在推 message_out action 前调用，把 id 同时写入 action.id 和传给 onTalk 回调。
+ * 当 target="user" 时，这个 id 就是 user inbox 的 messageId 索引（前端凭此反查正文）。
+ */
+function genMessageOutId(): string {
+  return `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
 /**
@@ -1071,16 +1091,23 @@ export async function runWithThreadTree(
               const target = (args.target as string)?.toLowerCase();
               if (target && target !== objectName.toLowerCase()) {
                 const continueThreadId = args.continue_thread as string | undefined;
+                /* 先生成 messageId（供 action.id 和 onTalk 参数共用，前端凭此反查正文） */
+                const messageId = genMessageOutId();
                 const td = tree.readThreadData(threadId);
                 if (td) {
                   const continueLabel = continueThreadId ? ` (continue: ${continueThreadId})` : "";
-                  td.actions.push({ type: "message_out", content: `[talk] → ${args.target}: ${args.message}${continueLabel}`, timestamp: Date.now() });
+                  td.actions.push({ id: messageId, type: "message_out", content: `[talk] → ${args.target}: ${args.message}${continueLabel}`, timestamp: Date.now() });
                   tree.writeThreadData(threadId, td);
+                }
+                /* talk_sync 到 user 是死锁：user 永远不会唤醒。记日志、不 setNodeStatus("waiting")、直接继续。 */
+                const isTalkSyncToUser = command === "talk_sync" && target === "user";
+                if (isTalkSyncToUser) {
+                  consola.warn(`[Engine] ${objectName} 尝试 talk_sync(target="user")——user 不参与 ThinkLoop，不会回复。已降级为 talk（不阻塞）。`);
                 }
                 /* 若未通过 mark 参数显式标记，且 target 只有一条未读最新消息，自动 ack */
                 const explicitlyMarked = Array.isArray(args.mark) && args.mark.length > 0;
                 try {
-                  const { reply, remoteThreadId } = await config.onTalk(args.target as string, args.message as string, objectName, threadId, sessionId, continueThreadId);
+                  const { reply, remoteThreadId } = await config.onTalk(args.target as string, args.message as string, objectName, threadId, sessionId, continueThreadId, messageId);
                   if (!explicitlyMarked) {
                     const tdAck = tree.readThreadData(threadId);
                     const autoAckId = getAutoAckMessageId(tdAck, args.target as string);
@@ -1100,7 +1127,8 @@ export async function runWithThreadTree(
                 } catch (e) {
                   tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" });
                 }
-                if (command === "talk_sync") tree.setNodeStatus(threadId, "waiting");
+                /* target=user 时不 setNodeStatus("waiting")，避免死锁；其他 target 维持原逻辑 */
+                if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting");
               }
             }
 
@@ -1972,15 +2000,22 @@ export async function resumeWithThreadTree(
               const target = (args.target as string)?.toLowerCase();
               if (target && target !== objectName.toLowerCase()) {
                 const continueThreadId = args.continue_thread as string | undefined;
+                /* 先生成 messageId（供 action.id 和 onTalk 参数共用，前端凭此反查正文） */
+                const messageId = genMessageOutId();
                 const td = tree.readThreadData(threadId);
                 if (td) {
                   const continueLabel = continueThreadId ? ` (continue: ${continueThreadId})` : "";
-                  td.actions.push({ type: "message_out", content: `[talk] → ${args.target}: ${args.message}${continueLabel}`, timestamp: Date.now() });
+                  td.actions.push({ id: messageId, type: "message_out", content: `[talk] → ${args.target}: ${args.message}${continueLabel}`, timestamp: Date.now() });
                   tree.writeThreadData(threadId, td);
+                }
+                /* talk_sync 到 user 是死锁：user 永远不会唤醒。记日志、不 setNodeStatus("waiting")、直接继续。 */
+                const isTalkSyncToUser = command === "talk_sync" && target === "user";
+                if (isTalkSyncToUser) {
+                  consola.warn(`[Engine] ${objectName} 尝试 talk_sync(target="user")——user 不参与 ThinkLoop，不会回复。已降级为 talk（不阻塞）。`);
                 }
                 const explicitlyMarked = Array.isArray(args.mark) && args.mark.length > 0;
                 try {
-                  const { reply, remoteThreadId } = await config.onTalk(args.target as string, args.message as string, objectName, threadId, sessionId, continueThreadId);
+                  const { reply, remoteThreadId } = await config.onTalk(args.target as string, args.message as string, objectName, threadId, sessionId, continueThreadId, messageId);
                   if (!explicitlyMarked) {
                     const tdAck = tree.readThreadData(threadId);
                     const autoAckId = getAutoAckMessageId(tdAck, args.target as string);
@@ -1996,7 +2031,8 @@ export async function resumeWithThreadTree(
                     tree.writeThreadData(threadId, td2);
                   }
                 } catch (e) { tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" }); }
-                if (command === "talk_sync") tree.setNodeStatus(threadId, "waiting");
+                /* target=user 时不 setNodeStatus("waiting")，避免死锁 */
+                if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting");
               }
             } else if (command === "return") {
               await tree.setNodeStatus(threadId, "done");

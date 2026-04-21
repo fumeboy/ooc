@@ -35,6 +35,47 @@ export interface WorldConfig {
   llmConfig?: LLMConfig;
 }
 
+/**
+ * 处理 talk(target="user") 的 onTalk 分支
+ *
+ * user 不参与 ThinkLoop：
+ * 1. 通过 SSE 广播 flow:message 事件，前端实时渲染
+ * 2. 返回 { reply: null, remoteThreadId: "user" } — user 没有 thread 也不会回复
+ *
+ * 抽成独立 helper 消除 `_talkWithThreadTree` 与 `_buildEngineConfig` 中的代码重复。
+ *
+ * 注意：本 helper 目前仅做 SSE 广播；后续 Task 3.3 将在此添加 user inbox 的索引写入。
+ *
+ * @param fromObject - 发起方对象名
+ * @param message - 消息内容
+ * @param sessionId - 当前 session ID
+ * @param fromThreadId - 发起方线程 ID（用于将来写入 inbox）
+ * @param messageId - engine 生成的 message_out action id（用于将来写入 inbox）
+ */
+function handleOnTalkToUser(params: {
+  fromObject: string;
+  message: string;
+  sessionId: string;
+  fromThreadId: string;
+  messageId?: string;
+}): { reply: null; remoteThreadId: string } {
+  const { fromObject, message, sessionId } = params;
+  emitSSE({
+    type: "flow:message",
+    objectName: fromObject,
+    sessionId,
+    message: {
+      direction: "out",
+      from: fromObject,
+      to: "user",
+      content: message,
+      timestamp: Date.now(),
+    },
+  });
+  consola.info(`[World] ${fromObject} → user: 已投递（不触发 user thinkloop）`);
+  return { reply: null, remoteThreadId: "user" };
+}
+
 /** World 实例 */
 export class World {
   /** user repo 根目录 */
@@ -441,25 +482,12 @@ export class World {
         flowsDir: this.flowsDir,
       },
       isPaused: (name) => this._globalPaused || this._pauseRequests.has(name),
-      onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId, continueThreadId) => {
+      onTalk: async (targetObject, message, fromObject, fromThreadId, sessionId, continueThreadId, messageId) => {
         const target = targetObject.toLowerCase();
 
-        /* user 是系统用户（人类），不参与 ThinkLoop：只投递消息，不调度线程树 */
+        /* user 是系统用户（人类），不参与 ThinkLoop：交由专用 handler 处理 */
         if (target === "user") {
-          emitSSE({
-            type: "flow:message",
-            objectName: fromObject,
-            sessionId,
-            message: {
-              direction: "out",
-              from: fromObject,
-              to: "user",
-              content: message,
-              timestamp: Date.now(),
-            },
-          });
-          consola.info(`[World] ${fromObject} → user: 已投递（不触发 user thinkloop）`);
-          return { reply: null, remoteThreadId: "user" };
+          return handleOnTalkToUser({ fromObject, message, sessionId, fromThreadId, messageId });
         }
 
         /* World 作为路由中间层：启动目标 Object 的线程树，等待完成，返回结果 */
@@ -576,23 +604,10 @@ export class World {
       stone: stone.toJSON(),
       paths: { stoneDir: stone.dir, rootDir: this._rootDir, flowsDir: this.flowsDir },
       isPaused: (name) => this._globalPaused || this._pauseRequests.has(name),
-      onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId, continueThreadId) => {
+      onTalk: async (targetObject, message, fromObject, fromThreadId, sessionId, continueThreadId, messageId) => {
         const target = targetObject.toLowerCase();
         if (target === "user") {
-          emitSSE({
-            type: "flow:message",
-            objectName: fromObject,
-            sessionId,
-            message: {
-              direction: "out",
-              from: fromObject,
-              to: "user",
-              content: message,
-              timestamp: Date.now(),
-            },
-          });
-          consola.info(`[World] ${fromObject} → user: 已投递（不触发 user thinkloop）`);
-          return { reply: null, remoteThreadId: "user" };
+          return handleOnTalkToUser({ fromObject, message, sessionId, fromThreadId, messageId });
         }
         try {
           const talkRet = await this._talkWithThreadTree(targetObject, message, fromObject, undefined, continueThreadId);
