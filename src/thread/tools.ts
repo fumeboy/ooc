@@ -11,6 +11,49 @@
 
 import type { ToolDefinition } from "../thinkable/client.js";
 
+/**
+ * talk form 参数的 JSON Schema（submit(command=talk/talk_sync) 用）
+ *
+ * 可选字段。当发起方已经心里有几个候选回复选项时，用它包一份「结构化表单」投递
+ * 给接收方——前端（user 收到消息时）会把它渲染为 option picker（编号选项 + 自由文本
+ * 兜底），用户选择/输入后把 formResponse 回传给发起方。
+ *
+ * 业务约束：
+ * - `type` 暂支持 `single_choice` / `multi_choice`；未来可能扩展 text_input 等。
+ * - `allow_free_text` 在业务上恒为 true（自然语言兜底永不关闭），这里保留字段
+ *   是为了未来可能需要区分「纯选项 vs 允许文字」的场景。
+ * - `options[i].detail` 是可选的副标题/说明。
+ */
+const FORM_PARAM = {
+  type: "object",
+  description: "可选的结构化表单。当你心里已经有 N 个候选回复时，用它代替纯文本选项列表——接收方的前端会渲染为 option picker（用户可以点选，也可以写自由文本）。",
+  properties: {
+    type: {
+      type: "string",
+      enum: ["single_choice", "multi_choice"],
+      description: "表单类型：single_choice 单选，multi_choice 多选",
+    },
+    options: {
+      type: "array",
+      description: "候选选项列表",
+      items: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "选项 ID（简短标识，如 A/B/C 或 opt1）" },
+          label: { type: "string", description: "选项标题（一行文字）" },
+          detail: { type: "string", description: "选项详细说明（可选）" },
+        },
+        required: ["id", "label"],
+      },
+    },
+    allow_free_text: {
+      type: "boolean",
+      description: "是否允许用户不选选项、直接写自由文本回复（默认 true，业务上总是 true）",
+    },
+  },
+  required: ["type", "options"],
+} as const;
+
 /** mark 参数的 JSON Schema（三个 tool 共用） */
 const MARK_PARAM = {
   type: "array",
@@ -99,7 +142,7 @@ export const SUBMIT_TOOL: ToolDefinition = {
   type: "function",
   function: {
     name: "submit",
-    description: "提交指令执行。必须先 open 获取 form_id。记得带 title 参数，用一句话说明本次提交的意图。",
+    description: "提交指令执行。必须先 open 获取 form_id。记得带 title 参数，用一句话说明本次提交的意图。talk/talk_sync 可选带 form 参数——当你已经有几个候选回复时，用结构化表单代替纯文本列表，接收方前端会把它渲染为 option picker。",
     parameters: {
       type: "object",
       properties: {
@@ -119,6 +162,8 @@ export const SUBMIT_TOOL: ToolDefinition = {
         target: { type: "string", description: "talk: 目标对象名" },
         message: { type: "string", description: "talk/continue_sub_thread: 消息内容" },
         continue_thread: { type: "string", description: "talk: 继续对方已有线程（传入上次 talk 返回的 remote_thread_id），不传则新建线程" },
+        /* talk / talk_sync: 可选结构化表单（选项 + 自由文本兜底） */
+        form: FORM_PARAM,
         /* return */
         summary: { type: "string", description: "return: 完成摘要" },
         /* set_plan */

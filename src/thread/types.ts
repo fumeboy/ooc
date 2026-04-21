@@ -107,6 +107,53 @@ export interface ThreadDataFile {
 }
 
 /**
+ * talk form 结构化表单（talk/talk_sync 可选携带）
+ *
+ * 当发起方已经心里有几个候选回复时，用它取代纯文本选项列表——
+ * 接收方前端可以渲染为 option picker（按钮选项 + 自由文本兜底）。
+ *
+ * 设计要点：
+ * - `allow_free_text` 业务上恒为 true，保留字段只为未来扩展。
+ * - `options` 里每个选项有 `id`（用于回传标识）、`label`（显示标题）、`detail`（可选副标题）。
+ * - 表单上 `formId` 由 engine 生成（`form_<ts>_<rand>`），作为 formResponse 的关联锚点。
+ */
+export interface TalkFormOption {
+  id: string;
+  label: string;
+  detail?: string;
+}
+
+export interface TalkFormPayload {
+  /** engine 生成的表单 id，用于关联 formResponse */
+  formId: string;
+  /** 表单类型：single_choice 单选 / multi_choice 多选 */
+  type: "single_choice" | "multi_choice";
+  /** 候选选项 */
+  options: TalkFormOption[];
+  /** 是否允许自由文本兜底（业务上恒为 true） */
+  allow_free_text: boolean;
+}
+
+/**
+ * 对某个 form 的结构化回复
+ *
+ * 场景：user 在 MessageSidebar 上点选/输入后，由 POST /api/talk/:target 的 body
+ * 附带 formResponse，后端写入发起方 inbox 时作为结构化字段存下（同时也序列化到
+ * inbox.content 让 LLM 可见）。
+ *
+ * - `selectedOptionIds`：用户点选的 option id；单选时长度 ≤ 1，多选时多个，纯自由文本回复时可能为空。
+ * - `freeText`：用户自由文本输入（没填时为 null）。
+ *
+ * 合法组合：至少 `selectedOptionIds.length > 0` 或 `freeText` 非 null；
+ * 两者都空视为"跳过"——前端应避免提交这种情况。
+ */
+export interface FormResponse {
+  formId: string;
+  selectedOptionIds: string[];
+  freeText: string | null;
+}
+
+/**
  * 线程 Action（替代旧 Action 类型）
  *
  * 与旧 Action 的区别：
@@ -157,10 +204,31 @@ export interface ThreadAction {
   result?: string;
   /** program: 执行是否成功 */
   success?: boolean;
+  /**
+   * message_out (talk/talk_sync): 可选结构化表单
+   *
+   * 当发起方的 LLM 调用 talk 时在 submit args 里带了 form 参数，engine 会把它
+   * 带上生成的 formId 一并写到这个 action 的 form 字段，作为正文的"真数据"。
+   * 前端按 (threadId, messageId=action.id) 反查后，若有 form，就把消息渲染成
+   * option picker 而不是普通 bubble。
+   */
+  form?: TalkFormPayload;
+  /**
+   * message_in: 对方消息里对某个 form 的结构化回复
+   *
+   * 仅当 user（或其他对象）通过 talk API 附带 formResponse 回复时，后端把该
+   * formResponse 同时写入 inbox 消息的 content（供 LLM 阅读）和此字段
+   * （供前端结构化展示）。
+   */
+  formResponse?: FormResponse;
 }
 
 /**
  * 线程 inbox 消息（新类型，旧系统无对应）
+ *
+ * form / formResponse 字段仅在 talk 场景下出现：
+ * - `form`：对方通过带 form 的 talk 发来的消息（引用式；真数据在发起方 action 里）
+ * - `formResponse`：对方（通常是 user）对本对象先前发出的 form 的结构化回复
  */
 export interface ThreadInboxMessage {
   id: string;
@@ -175,6 +243,10 @@ export interface ThreadInboxMessage {
     tip: string;
     markedAt: number;
   };
+  /** 对方发来的 form（带选项的结构化消息；前端渲染为 option picker） */
+  form?: TalkFormPayload;
+  /** 对方对本对象先前 form 的结构化回复（形如 {formId, selectedOptionIds, freeText}） */
+  formResponse?: FormResponse;
 }
 
 /**
