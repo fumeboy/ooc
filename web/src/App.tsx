@@ -80,7 +80,7 @@ function filterStoneTree(node: FileTreeNode): FileTreeNode {
     .filter((c) => {
       if (c.type === "file" && node.marker === "stone" && STONE_HIDDEN_FILES.has(c.name)) return false;
       if (c.type === "directory" && node.marker === "stone" && STONE_HIDDEN_DIRS.has(c.name)) return false;
-      if (c.type === "file" && node.name === "reflect" && FLOW_HIDDEN_FILES.has(c.name)) return false;
+      if (c.type === "file" && node.name === "super" && FLOW_HIDDEN_FILES.has(c.name)) return false;
       return true;
     })
     .map((c) => c.type === "directory" ? filterStoneTree(c) : c);

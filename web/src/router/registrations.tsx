@@ -90,8 +90,8 @@ function TaskDetailAdapter({ path }: ViewProps) {
   return <TaskDetailView sessionId={m?.[1] ?? ""} taskId={m?.[2] ?? ""} />;
 }
 
-/** 反思线程的 inbox 消息（读自 threads/{rootId}/thread.json） */
-interface ReflectInboxMessage {
+/** super 线程的 inbox 消息（读自 threads/{rootId}/thread.json） */
+interface SuperInboxMessage {
   id: string;
   from: string;
   content: string;
@@ -100,8 +100,8 @@ interface ReflectInboxMessage {
   source?: string;
 }
 
-/** 反思线程树节点元数据（threads.json） */
-interface ReflectThreadsTreeFile {
+/** super 线程树节点元数据（threads.json） */
+interface SuperThreadsTreeFile {
   rootId: string;
   nodes: Record<string, {
     id: string;
@@ -115,27 +115,28 @@ interface ReflectThreadsTreeFile {
 }
 
 /**
- * ReflectFlow 适配器 — stones/{name}/reflect/ 下的 Inbox + Memory 视图
+ * SuperFlow 适配器 — stones/{name}/super/ 下的 Inbox + Memory 视图
  *
- * 方案 B Phase 4：适配线程树结构（threads.json + threads/{rootId}/thread.json），
- * 废弃旧 Process/Data tab（它们假设 data.json + process.json 结构，线程树化后不存在）。
+ * SuperFlow 转型（2026-04-22）：替代原 ReflectFlowAdapter，路径 /reflect/ → /super/，
+ * 底层数据结构不变（仍是 ThreadsTree），仅命名语义从"常驻反思线程"升级为
+ * "对象的反思镜像分身"——A 向 super 说的话 = A 对自己的话。
  *
- * - **Inbox tab**：列出反思线程 root 节点 inbox 的所有消息（未读 / 已读 / 已处理）
- * - **Memory tab**：渲染对象 memory.md（反思沉淀产出）
+ * - **Inbox tab**：列出 super 线程 root 节点 inbox 的所有消息（未读 / 已读 / 已处理）
+ * - **Memory tab**：渲染对象 memory.md（沉淀产出）
  *
- * 底层数据：`stones/{name}/reflect/threads.json` + `threads/{rootId}/thread.json`
+ * 底层数据：`stones/{name}/super/threads.json` + `threads/{rootId}/thread.json`
  */
-function ReflectFlowAdapter({ path }: ViewProps) {
+function SuperFlowAdapter({ path }: ViewProps) {
   const objectName = path.match(/stones\/([^/]+)/)?.[1] ?? "";
-  const basePath = `stones/${objectName}/reflect`;
+  const basePath = `stones/${objectName}/super`;
 
-  type ReflectTab = "Inbox" | "Memory";
-  let initialTab: ReflectTab = "Inbox";
+  type SuperTab = "Inbox" | "Memory";
+  let initialTab: SuperTab = "Inbox";
   if (path.endsWith("/memory.md")) initialTab = "Memory";
 
-  const [tab, setTab] = useState<ReflectTab>(initialTab);
-  const [treeFile, setTreeFile] = useState<ReflectThreadsTreeFile | null>(null);
-  const [inbox, setInbox] = useState<ReflectInboxMessage[]>([]);
+  const [tab, setTab] = useState<SuperTab>(initialTab);
+  const [treeFile, setTreeFile] = useState<SuperThreadsTreeFile | null>(null);
+  const [inbox, setInbox] = useState<SuperInboxMessage[]>([]);
   const [memoryContent, setMemoryContent] = useState<string | null>(null);
   const refreshKey = useAtomValue(refreshKeyAtom);
 
@@ -146,13 +147,13 @@ function ReflectFlowAdapter({ path }: ViewProps) {
     fetchFileContent(`${basePath}/threads.json`)
       .then((raw) => {
         try {
-          const parsed = JSON.parse(raw) as ReflectThreadsTreeFile;
+          const parsed = JSON.parse(raw) as SuperThreadsTreeFile;
           setTreeFile(parsed);
           /* 同步读 root thread.json（inbox 在这里） */
           return fetchFileContent(`${basePath}/threads/${parsed.rootId}/thread.json`)
             .then((threadRaw) => {
               try {
-                const threadData = JSON.parse(threadRaw) as { inbox?: ReflectInboxMessage[] };
+                const threadData = JSON.parse(threadRaw) as { inbox?: SuperInboxMessage[] };
                 setInbox(threadData.inbox ?? []);
               } catch {
                 setInbox([]);
@@ -165,7 +166,7 @@ function ReflectFlowAdapter({ path }: ViewProps) {
         }
       })
       .catch(() => {
-        /* 反思线程尚未初始化（对象从未被 talkToSelf 过） */
+        /* super 线程尚未初始化（对象从未被 talk("super", ...) 过） */
         setTreeFile(null);
         setInbox([]);
       });
@@ -182,7 +183,7 @@ function ReflectFlowAdapter({ path }: ViewProps) {
           <h2 className="text-lg sm:text-xl font-bold leading-none" style={{ fontFamily: "var(--heading-font)" }}>
             {objectName}
           </h2>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">reflect</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">super</span>
           {treeFile && (
             <span className="text-[10px] text-[var(--muted-foreground)] font-mono">
               rootId: {treeFile.rootId.slice(0, 16)}…
@@ -214,7 +215,7 @@ function ReflectFlowAdapter({ path }: ViewProps) {
       <div className="flex-1 overflow-auto px-4 sm:px-8 py-4">
         {tab === "Inbox" && (
           !treeFile ? (
-            <p className="text-sm text-[var(--muted-foreground)]">反思线程尚未初始化（该对象从未被 talkToSelf）</p>
+            <p className="text-sm text-[var(--muted-foreground)]">super 线程尚未初始化（该对象从未被 talk(target=&quot;super&quot;) 过）</p>
           ) : inbox.length === 0 ? (
             <p className="text-sm text-[var(--muted-foreground)]">inbox 为空</p>
           ) : (
@@ -406,12 +407,12 @@ export function registerAllViews(): void {
     tabLabel: (p) => p.match(/tasks\/([^/]+)$/)?.[1] ?? "Task",
   });
 
-  /* ReflectFlow — stones/{name}/reflect/ 及其特定的 tabs 子路径 */
+  /* SuperFlow — stones/{name}/super/ 及其特定的 tabs 子路径 */
   viewRegistry.register({
-    name: "ReflectFlow",
-    component: ReflectFlowAdapter,
+    name: "SuperFlow",
+    component: SuperFlowAdapter,
     match: (p) => {
-      const match = p.match(/^stones\/[^/]+\/reflect(.*)$/);
+      const match = p.match(/^stones\/[^/]+\/super(.*)$/);
       if (!match) return false;
       const subPath = match[1] || "";
       if (subPath === "" || subPath === "/") return true;
@@ -421,10 +422,10 @@ export function registerAllViews(): void {
       return false;
     },
     priority: 80,
-    tabKey: (p) => p.match(/^(stones\/[^/]+\/reflect)/)?.[1] ?? p,
+    tabKey: (p) => p.match(/^(stones\/[^/]+\/super)/)?.[1] ?? p,
     tabLabel: (p) => {
-      const name = p.match(/stones\/([^/]+)/)?.[1] ?? "Reflect";
-      return `${name} (reflect)`;
+      const name = p.match(/stones\/([^/]+)/)?.[1] ?? "Super";
+      return `${name} (super)`;
     },
   });
 
@@ -438,11 +439,11 @@ export function registerAllViews(): void {
     tabLabel: (p) => p.match(/stones\/([^/]+)/)?.[1] ?? "Stone",
   });
 
-  /* ProcessJson — 任何路径下的 process.json（不在 flows/x/objects/x/ 和 stones/x/reflect/ 下的） */
+  /* ProcessJson — 任何路径下的 process.json（不在 flows/x/objects/x/ 和 stones/x/super/ 下的） */
   viewRegistry.register({
     name: "ProcessJson",
     component: ProcessJsonAdapter,
-    match: (p) => p.endsWith("/process.json") && !/^flows\/[^/]+\/objects\/[^/]+/.test(p) && !/^stones\/[^/]+\/reflect/.test(p),
+    match: (p) => p.endsWith("/process.json") && !/^flows\/[^/]+\/objects\/[^/]+/.test(p) && !/^stones\/[^/]+\/super/.test(p),
     priority: 40,
     tabKey: (p) => p,
     tabLabel: () => "Process",

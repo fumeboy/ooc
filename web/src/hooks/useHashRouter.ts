@@ -11,7 +11,7 @@
  *   /#/flows/{sessionId}/issues/{id}       → IssueDetailView
  *   /#/flows/{sessionId}/tasks/{id}        → TaskDetailView
  *   /#/stones/{name}                       → ObjectDetail
- *   /#/stones/{name}/reflect               → ReflectFlowView
+ *   /#/stones/{name}/super                 → SuperFlowView
  *   /#/stones                              → Stones tab
  *   /#/world                               → World tab
  */
