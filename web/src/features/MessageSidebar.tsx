@@ -26,14 +26,20 @@ import { talkTo, fetchFlow, fetchSessions, fetchObjects, pauseObject, resumeFlow
 import { userSessionsAtom } from "../store/session";
 import { ObjectAvatar } from "../components/ui/ObjectAvatar";
 import { TuiAction, TuiTalk, TuiUserMessage, TuiStreamingBlock } from "../components/ui/TuiBlock";
+import { TuiTalkForm } from "../components/ui/TuiTalkForm";
 import { cn } from "../lib/utils";
 import { Send, Maximize2, Minimize2, X, ChevronUp, ChevronDown, MessageSquare } from "lucide-react";
-import type { FlowMessage, Action } from "../api/types";
+import type { FlowMessage, Action, FormResponse, TalkFormPayload } from "../api/types";
 import { ProgressIndicator } from "../components/ProgressIndicator";
 import { MessageSidebarThreadsList } from "./MessageSidebarThreadsList";
 import { useUserThreads, findThreadInAllSubFlows, markMessagesRead } from "../hooks/useUserThreads";
 
 const DEFAULT_TARGET = "supervisor";
+
+/** Timeline 条目类型（message / action 合并排序） */
+type Entry =
+  | { kind: "message"; data: FlowMessage }
+  | { kind: "action"; data: Action & { _origIndex?: number } };
 
 export function MessageSidebar() {
   const [sidebarMode, setSidebarMode] = useAtom(messageSidebarModeAtom);
@@ -124,8 +130,8 @@ export function MessageSidebar() {
   const currentObjectName = currentThreadLocation?.subFlow.stoneName ?? DEFAULT_TARGET;
 
   /* 构建 timeline：只取 currentThreadId 所在节点的 actions + 对应 messages（过滤到相关对象） */
-  const timeline = useMemo(() => {
-    if (!activeFlow || !currentThreadLocation) return [];
+  const { timeline, formByContent } = useMemo(() => {
+    if (!activeFlow || !currentThreadLocation) return { timeline: [] as Entry[], formByContent: new Map<string, { form: TalkFormPayload; messageId: string | undefined }>() };
 
     const { node, subFlow } = currentThreadLocation;
 
@@ -138,13 +144,25 @@ export function MessageSidebar() {
       return involvesObj && involvesUser;
     });
 
+    /* 提前从当前节点 actions 里收集 form 信息（message_out action 携带 form 字段）
+     * key = 内容前 80 字符 + timestamp（粗略匹配 FlowMessage，避免 id 不可用）
+     * 为了容忍 [form: formId] 尾缀，key 用 stripTalkPrefix 后前缀 */
+    const formMap = new Map<string, { form: TalkFormPayload; messageId: string | undefined }>();
+    for (const a of node.actions ?? []) {
+      if (a.type === "message_out" && a.form) {
+        /* 把 [talk] → user: xxx [form: yyy] 转为纯文本前缀作 key */
+        const bodyMatch = a.content.match(/^\[talk\][^:]*:\s*([\s\S]*?)(?:\s*\[form:[^\]]+\])?$/);
+        const body = (bodyMatch?.[1] ?? a.content).trim();
+        formMap.set(`${body.slice(0, 200)}|${a.timestamp ?? 0}`, { form: a.form, messageId: a.id });
+      }
+    }
+
     /* actions：只取当前节点自身的 actions（不递归子节点——子线程有自己的 Body） */
     const actions = (node.actions ?? [])
       .map((a, i) => ({ ...a, _origIndex: i }))
       .filter((a) => a.type !== "message_in" && a.type !== "message_out" && a.type !== "thread_return");
 
     /* 合并并按时间排序 */
-    type Entry = { kind: "message"; data: FlowMessage } | { kind: "action"; data: Action & { _origIndex?: number } };
     const entries: Entry[] = [
       ...msgs.map((m): Entry => ({ kind: "message", data: m })),
       ...actions.map((a): Entry => ({ kind: "action", data: a })),
@@ -158,8 +176,76 @@ export function MessageSidebar() {
       return 0;
     });
 
-    return entries;
+    return { timeline: entries, formByContent: formMap };
   }, [activeFlow, currentThreadLocation]);
+
+  /* 已提交的 formId 集合（localStorage 持久化，刷新后不重复显示 picker） */
+  const [submittedFormIds, setSubmittedFormIds] = useState<Set<string>>(() => {
+    if (typeof window === "undefined" || !activeId) return new Set();
+    try {
+      const raw = window.localStorage.getItem(`ooc:talk-form:submitted:${activeId}`);
+      return new Set(raw ? JSON.parse(raw) as string[] : []);
+    } catch {
+      return new Set();
+    }
+  });
+  useEffect(() => {
+    if (!activeId) { setSubmittedFormIds(new Set()); return; }
+    try {
+      const raw = window.localStorage.getItem(`ooc:talk-form:submitted:${activeId}`);
+      setSubmittedFormIds(new Set(raw ? JSON.parse(raw) as string[] : []));
+    } catch {
+      setSubmittedFormIds(new Set());
+    }
+  }, [activeId]);
+
+  /* 匹配 FlowMessage 到 form */
+  const lookupFormForMessage = useCallback((msg: FlowMessage): { form: TalkFormPayload; messageId: string | undefined } | null => {
+    if (msg.from === "user" || msg.from === "human") return null;
+    if (msg.to !== "user" && msg.to !== "human") return null;
+    const key = `${msg.content.slice(0, 200).trim()}|${msg.timestamp ?? 0}`;
+    const exact = formByContent.get(key);
+    if (exact) return exact;
+    /* 二次尝试：不带 timestamp（某些 SSE message 的 timestamp 与 action 微差） */
+    for (const [k, v] of formByContent) {
+      const [kContent] = k.split("|");
+      if (kContent === msg.content.slice(0, 200).trim()) return v;
+    }
+    return null;
+  }, [formByContent]);
+
+  /* formResponse 发送处理 */
+  const handleFormSubmit = useCallback(async (targetObject: string, response: FormResponse, displayText: string) => {
+    const sid = activeFlow?.sessionId;
+    /* 乐观消息：在 Body 本地立即展示用户的 displayText（用户点选项时取 label；写自由文本时就是文字） */
+    const optimistic: FlowMessage = {
+      direction: "out",
+      from: "user",
+      to: targetObject,
+      content: displayText,
+      timestamp: Date.now(),
+    };
+    if (activeFlow && sid) {
+      setActiveFlow({
+        ...activeFlow,
+        messages: [...activeFlow.messages, optimistic],
+      });
+    }
+    /* 标记 formId 为已提交（避免刷新后 picker 重现） */
+    if (activeId) {
+      const next = new Set(submittedFormIds);
+      next.add(response.formId);
+      setSubmittedFormIds(next);
+      try {
+        window.localStorage.setItem(`ooc:talk-form:submitted:${activeId}`, JSON.stringify([...next]));
+      } catch { /* ignore */ }
+    }
+    /* 调后端（异步；后端会通过 [formResponse] 前缀传给 LLM） */
+    await talkTo(targetObject, displayText, sid, response).catch((e) => {
+      console.error("form submit error:", e);
+      throw e;
+    });
+  }, [activeFlow, activeId, setActiveFlow, submittedFormIds]);
 
   /* 监听滚动事件，检测用户是否手动向上滚动 */
   useEffect(() => {
@@ -573,11 +659,33 @@ export function MessageSidebar() {
           if (entry.kind === "message") {
             const msg = entry.data as FlowMessage;
             const isUser = msg.from === "user" || msg.from === "human";
+            /* 对象发给 user 的消息：如果对应 message_out action 有 form，渲染 option picker */
+            const formInfo = !isUser ? lookupFormForMessage(msg) : null;
             return (
               <div key={`msg-${i}`} ref={(el) => { msgRefs.current[i] = el; }}>
                 {isUser
                   ? <TuiUserMessage msg={msg} />
-                  : <TuiTalk msg={msg} />
+                  : formInfo
+                    ? <TuiTalkForm
+                        msg={msg}
+                        form={formInfo.form}
+                        alreadySubmitted={submittedFormIds.has(formInfo.form.formId)}
+                        onSubmit={async (response) => {
+                          /* displayText：点选项 → 取 label；自由文本 → 用 freeText */
+                          let displayText = response.freeText ?? "";
+                          if (response.selectedOptionIds.length > 0) {
+                            const labels = response.selectedOptionIds.map((id) => {
+                              const opt = formInfo.form.options.find((o) => o.id === id);
+                              return opt?.label ?? id;
+                            });
+                            displayText = labels.join("、");
+                            if (response.freeText) displayText += `（备注：${response.freeText}）`;
+                          }
+                          if (!displayText) displayText = "(已跳过)";
+                          await handleFormSubmit(msg.from, response, displayText);
+                        }}
+                      />
+                    : <TuiTalk msg={msg} />
                 }
               </div>
             );
