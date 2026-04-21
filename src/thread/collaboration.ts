@@ -33,6 +33,13 @@ export interface ObjectResolver {
   getTree(objectName: string): import("./tree.js").ThreadsTree;
   /** 检查 Object 是否存在 */
   objectExists(objectName: string): boolean;
+  /**
+   * 解析对象自身目录（stones/{name}/）
+   *
+   * 方案 A 新增：用于 talkToSelf → reflect.ts 路由的目录定位。
+   * 未实现该方法的调用方会降级到 deliverToSelfMeta 回调或返回错误。
+   */
+  getStoneDir?: (objectName: string) => string | null;
 }
 
 /** 协作 API 的上下文（创建时注入） */
@@ -50,8 +57,20 @@ export interface CollaborationContext {
   };
   /** Session 目录（用于 Issue 操作） */
   sessionDir: string;
-  /** 向 ReflectFlow 投递消息的回调（可选，由 World 层注入） */
+  /**
+   * 向 ReflectFlow 投递消息的回调（可选，优先级最高）
+   *
+   * 若提供，则 talkToSelf 直接调用该回调（完全 override 默认行为）。
+   * 历史语义：World 层的 `deliverToSelfMeta` 可做额外审计/前端广播。
+   */
   deliverToSelfMeta?: (objectName: string, message: string) => string;
+  /**
+   * 当前 Object 的自身目录（可选，方案 A 推荐提供）
+   *
+   * 若未提供 deliverToSelfMeta 但提供了 stoneDir，talkToSelf 会直接
+   * 通过 `reflect.ts` 把消息投递到 `stoneDir/reflect/` 的常驻反思线程。
+   */
+  stoneDir?: string;
   /**
    * S2: talk 深度/轮次限制（防止无限对话循环）
    *
@@ -76,9 +95,14 @@ export interface ThreadCollaborationAPI {
   talk(targetObject: string, message: string): Promise<string>;
   /** 在指定节点下创建子线程（同 Object 内，async） */
   createSubThreadOnNode(nodeId: string, message: string): Promise<string>;
-  /** 向自己的 ReflectFlow 发消息 */
-  talkToSelf(message: string): string;
-  /** ReflectFlow 专用：回复发起方线程（将消息写入发起方线程的 inbox） */
+  /**
+   * 向自己的反思线程发消息
+   *
+   * 方案 A：异步投递（不等待反思完成）。返回 Promise 以便将来可以 await
+   * 落盘完成（而 reflect.ts 的 talkToReflect 本身就是 async）。
+   */
+  talkToSelf(message: string): Promise<string>;
+  /** 反思线程专用：回复发起方线程（将消息写入发起方线程的 inbox） */
   replyToFlow(targetThreadId: string, message: string): string;
 }
 
@@ -102,7 +126,7 @@ export function createCollaborationAPI(ctx: CollaborationContext): ThreadCollabo
       return executeCreateSubThreadOnNode(ctx, nodeId, message);
     },
 
-    talkToSelf(message: string): string {
+    talkToSelf(message: string): Promise<string> {
       return executeTalkToSelf(ctx, message);
     },
 
@@ -274,24 +298,48 @@ async function executeCreateSubThreadOnNode(ctx: CollaborationContext, nodeId: s
 }
 
 /**
- * talkToSelf() 实现 — 向 ReflectFlow 发消息
+ * talkToSelf() 实现 — 向常驻反思线程投递消息
  *
- * 适配到新的线程树模型：通过 deliverToSelfMeta 回调与 ReflectFlow 交互。
+ * 路由优先级（方案 A 最小可用）：
+ * 1. 若提供 `deliverToSelfMeta` 回调 → 调之（向后兼容 / World 层可 override）
+ * 2. 若提供 `stoneDir`（或 resolver.getStoneDir 能解析当前对象的 stone 目录）
+ *    → 调 `reflect.ts::talkToReflect` 把消息落盘到反思线程 inbox
+ * 3. 二者都未提供 → 返回错误
+ *
+ * 当前方案 A 限制：消息投递到反思线程 inbox 后不会立即触发 ThinkLoop 执行。
+ * 等待后续迭代接入跨 session 常驻调度器后，反思线程才会真正消费消息。
  */
-function executeTalkToSelf(ctx: CollaborationContext, message: string): string {
+async function executeTalkToSelf(ctx: CollaborationContext, message: string): Promise<string> {
   const { currentObjectName, deliverToSelfMeta } = ctx;
 
-  if (!deliverToSelfMeta) {
-    return "[错误] talkToSelf 不可用（未配置 ReflectFlow）";
+  /* 优先级 1：显式 override 回调 */
+  if (deliverToSelfMeta) {
+    try {
+      return deliverToSelfMeta(currentObjectName, message);
+    } catch (e) {
+      const errMsg = `[Collaboration] talkToSelf 失败: ${(e as Error).message}`;
+      consola.error(errMsg);
+      return `[错误] ${(e as Error).message}`;
+    }
   }
 
-  try {
-    return deliverToSelfMeta(currentObjectName, message);
-  } catch (e) {
-    const errMsg = `[Collaboration] talkToSelf 失败: ${(e as Error).message}`;
-    consola.error(errMsg);
-    return `[错误] ${(e as Error).message}`;
+  /* 优先级 2：通过 stoneDir 路由到 reflect.ts */
+  const stoneDir = ctx.stoneDir ?? ctx.resolver.getStoneDir?.(currentObjectName) ?? null;
+  if (stoneDir) {
+    try {
+      const { talkToReflect } = await import("./reflect.js");
+      await talkToReflect(stoneDir, currentObjectName, message);
+      consola.info(`[Collaboration] ${currentObjectName} → 反思线程: 已投递 (len=${message.length})`);
+      return "[已投递到反思线程]";
+    } catch (e) {
+      const errMsg = `[Collaboration] talkToSelf → reflect 失败: ${(e as Error).message}`;
+      consola.error(errMsg);
+      return `[错误] ${(e as Error).message}`;
+    }
   }
+
+  /* 优先级 3：二者都没有 */
+  return "[错误] talkToSelf 不可用（未配置 ReflectFlow 且未提供 stoneDir）";
 }
 
 /**
