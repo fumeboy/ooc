@@ -70,6 +70,9 @@ function handleOnTalkToUser(params: {
     objectName: fromObject,
     sessionId,
     message: {
+      /* id 来自 engine 的 genMessageOutId()——前端按 id 匹配 thread action 里的 message_out，
+       * 避免旧 "content prefix + timestamp" 启发式匹配的不稳定 */
+      ...(messageId ? { id: messageId } : {}),
       direction: "out",
       from: fromObject,
       to: "user",

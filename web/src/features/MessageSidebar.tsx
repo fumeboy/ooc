@@ -130,8 +130,12 @@ export function MessageSidebar() {
   const currentObjectName = currentThreadLocation?.subFlow.stoneName ?? DEFAULT_TARGET;
 
   /* 构建 timeline：只取 currentThreadId 所在节点的 actions + 对应 messages（过滤到相关对象） */
-  const { timeline, formByContent } = useMemo(() => {
-    if (!activeFlow || !currentThreadLocation) return { timeline: [] as Entry[], formByContent: new Map<string, { form: TalkFormPayload; messageId: string | undefined }>() };
+  const { timeline, formByContent, formById } = useMemo(() => {
+    if (!activeFlow || !currentThreadLocation) return {
+      timeline: [] as Entry[],
+      formByContent: new Map<string, { form: TalkFormPayload; messageId: string | undefined }>(),
+      formById: new Map<string, { form: TalkFormPayload; messageId: string | undefined }>(),
+    };
 
     const { node, subFlow } = currentThreadLocation;
 
@@ -144,13 +148,21 @@ export function MessageSidebar() {
       return involvesObj && involvesUser;
     });
 
-    /* 提前从当前节点 actions 里收集 form 信息（message_out action 携带 form 字段）
-     * key = 内容前 80 字符 + timestamp（粗略匹配 FlowMessage，避免 id 不可用）
-     * 为了容忍 [form: formId] 尾缀，key 用 stripTalkPrefix 后前缀 */
+    /* 从当前节点 actions 里收集 form 信息（message_out action 携带 form 字段）
+     *
+     * 现在后端已为每条 message_out 生成 action.id（`msg_xxx`），并且 SSE flow:message
+     * 事件和 flow.messages 落盘都带同一个 id。前端优先按 id 匹配（稳），
+     * fallback 到内容+timestamp 启发式（兼容老数据）。
+     */
+    const formById = new Map<string, { form: TalkFormPayload; messageId: string | undefined }>();
     const formMap = new Map<string, { form: TalkFormPayload; messageId: string | undefined }>();
     for (const a of node.actions ?? []) {
       if (a.type === "message_out" && a.form) {
-        /* 把 [talk] → user: xxx [form: yyy] 转为纯文本前缀作 key */
+        /* 按 id 精确匹配（最稳） */
+        if (a.id) {
+          formById.set(a.id, { form: a.form, messageId: a.id });
+        }
+        /* 同步填 content+timestamp map，老 FlowMessage 没 id 时兜底 */
         const bodyMatch = a.content.match(/^\[talk\][^:]*:\s*([\s\S]*?)(?:\s*\[form:[^\]]+\])?$/);
         const body = (bodyMatch?.[1] ?? a.content).trim();
         formMap.set(`${body.slice(0, 200)}|${a.timestamp ?? 0}`, { form: a.form, messageId: a.id });
@@ -176,7 +188,7 @@ export function MessageSidebar() {
       return 0;
     });
 
-    return { timeline: entries, formByContent: formMap };
+    return { timeline: entries, formByContent: formMap, formById };
   }, [activeFlow, currentThreadLocation]);
 
   /* 已提交的 formId 集合（localStorage 持久化，刷新后不重复显示 picker） */
@@ -199,20 +211,32 @@ export function MessageSidebar() {
     }
   }, [activeId]);
 
-  /* 匹配 FlowMessage 到 form */
+  /* 匹配 FlowMessage 到 form
+   *
+   * 三级匹配：
+   * 1. msg.id 精确匹配（后端为 message_out 生成的 `msg_xxx`，最稳）
+   * 2. content + timestamp 精确匹配（兼容没有 id 的老消息 / 某些 SSE 路径）
+   * 3. 仅 content 匹配（timestamp 微差兜底）
+   */
   const lookupFormForMessage = useCallback((msg: FlowMessage): { form: TalkFormPayload; messageId: string | undefined } | null => {
     if (msg.from === "user" || msg.from === "human") return null;
     if (msg.to !== "user" && msg.to !== "human") return null;
+    /* 1. id 精确匹配 */
+    if (msg.id) {
+      const byId = formById.get(msg.id);
+      if (byId) return byId;
+    }
+    /* 2. content+timestamp 匹配 */
     const key = `${msg.content.slice(0, 200).trim()}|${msg.timestamp ?? 0}`;
     const exact = formByContent.get(key);
     if (exact) return exact;
-    /* 二次尝试：不带 timestamp（某些 SSE message 的 timestamp 与 action 微差） */
+    /* 3. 仅 content 匹配（兼容 SSE 时间戳微差） */
     for (const [k, v] of formByContent) {
       const [kContent] = k.split("|");
       if (kContent === msg.content.slice(0, 200).trim()) return v;
     }
     return null;
-  }, [formByContent]);
+  }, [formByContent, formById]);
 
   /* formResponse 发送处理 */
   const handleFormSubmit = useCallback(async (targetObject: string, response: FormResponse, displayText: string) => {
