@@ -4,7 +4,7 @@
  * 展示 inline_before、inline_after、inline_reflect 类型的节点。
  * 使用浅色背景区分类型，嵌入在父节点的展开内容中。
  */
-import { ActionCard } from "./ActionCard";
+import { TuiAction } from "./TuiBlock";
 import type { ProcessNode, NodeType } from "../../api/types";
 
 interface InlineNodeProps {
@@ -84,7 +84,7 @@ export function InlineNode({ node }: InlineNodeProps) {
       {node.actions.length > 0 && (
         <div className="px-4 py-3">
           {node.actions.map((action, i) => (
-            <ActionCard key={i} action={action} maxHeight={200} />
+            <TuiAction key={i} action={action} maxHeight={200} />
           ))}
         </div>
       )}

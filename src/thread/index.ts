@@ -12,11 +12,9 @@ export * from "./persistence.js";
 export * from "./queue.js";
 export * from "./tree.js";
 
-/* 阶段 3: ThinkLoop + Context 构建 */
-export * from "./parser.js";
+/* 阶段 3: Context 构建 + Hook 收集（tool-calling 主路径下 parser/thinkloop 已删除） */
 export * from "./hooks.js";
 export * from "./context-builder.js";
-export * from "./thinkloop.js";
 
 /* 阶段 4: Scheduler + World 适配 */
 export { ThreadScheduler, type ThreadSchedulerConfig, type SchedulerCallbacks } from "./scheduler.js";

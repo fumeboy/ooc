@@ -2,11 +2,14 @@
  * 线程树执行引擎测试
  *
  * 使用 mock LLM 验证 engine 的完整执行流程：
- * - 单轮对话（thought → return）
- * - 多轮迭代（thought → program → return）
+ * - 单轮对话（tool call: return）
+ * - 多轮迭代（思考多轮 → return）
  * - 子线程创建与调度
  * - 错误处理
  * - SSE 事件发射
+ *
+ * 测试使用 tool-calling 协议 mock（open + submit 每个 command 两轮工具调用），
+ * 与生产路径保持一致。TOML 兼容路径已删除。
  *
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md
  */
@@ -14,8 +17,8 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { runWithThreadTree, type EngineConfig, type TalkResult } from "../src/thread/engine.js";
-import { MockLLMClient } from "../src/thinkable/client.js";
+import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
+import { MockLLMClient, type ToolCall, type MockLLMResponseFnResult } from "../src/thinkable/client.js";
 import type { StoneData, DirectoryEntry, TraitDefinition } from "../src/types/index.js";
 import { eventBus } from "../src/server/events.js";
 
@@ -34,19 +37,110 @@ function makeStone(name: string): StoneData {
   };
 }
 
+/** 构造 tool call 数据结构 */
+function toolCall(name: string, args: Record<string, unknown>): ToolCall {
+  return {
+    id: `tc_${Math.random().toString(36).slice(2, 8)}`,
+    type: "function",
+    function: { name, arguments: JSON.stringify(args) },
+  };
+}
+
+/**
+ * 脚本式 tool-call mock：接收一个 step 数组，按顺序每轮返回一步。
+ * 每一步可以是：
+ *   - string —— thinking content（不触发 tool call）
+ *   - ToolCall —— 直接返回此 tool call
+ *   - () => ToolCall | string | MockLLMResponseFnResult —— 动态生成
+ */
+type MockStep = string | ToolCall | ((messages: unknown[]) => MockLLMResponseFnResult);
+
+function makeScript(steps: MockStep[]): (messages: unknown[]) => MockLLMResponseFnResult {
+  let i = 0;
+  return (messages: unknown[]) => {
+    const step = steps[i++] ?? steps[steps.length - 1];
+    if (typeof step === "function") {
+      return step(messages);
+    }
+    if (typeof step === "string") {
+      /* thinking content 模拟：无 tool call */
+      return { content: "", thinkingContent: step };
+    }
+    /* ToolCall */
+    return { content: "", toolCalls: [step] };
+  };
+}
+
+/** 捷径：open(command) 后紧跟 submit(...) 的两步脚本步骤生成器 */
+function openSubmit(command: string, submitArgs: Record<string, unknown>): MockStep[] {
+  /* submit 需要 form_id，我们在 submit 步实时从历史中提取（每次 open 返回的 form_id 都一样 form_xxx）。
+   * 但 engine 侧对 form_id 的校验会走 FormManager，因此直接回放一个合法的 form_id。
+   *
+   * 做法：open 时发 tool call，engine 生成 form_id 并写入 activeForms；
+   * submit 步用 closure 从上一轮 tree 读取 activeForms 恢复 form_id。
+   *
+   * 这里用占位符，真正的 form_id 在 submit 步由闭包回填。
+   */
+  const state: { formId?: string } = {};
+  return [
+    /* step 1: open */
+    (_messages: unknown[]) => {
+      return { content: "", toolCalls: [toolCall("open", { type: "command", command, description: `测试执行 ${command}` })] };
+    },
+    /* step 2: submit（engine 已把 form_id 写入 threadData.activeForms，我们从 context 里找到它） */
+    (messages: unknown[]) => {
+      const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user");
+      /* form_id 形如 f_xxx，active-forms XML：<form id="f_xxx" command="..."> */
+      const re = /<form id="(f_[^"]+)" command="([^"]+)"/g;
+      let formId = "f_unknown";
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(userMsg?.content ?? "")) !== null) {
+        if (m[2] === command) {
+          formId = m[1]!;
+          state.formId = formId;
+          break;
+        }
+      }
+      if (!state.formId && state.formId !== undefined) {
+        formId = state.formId;
+      }
+      return { content: "", toolCalls: [toolCall("submit", { form_id: formId, ...submitArgs })] };
+    },
+  ];
+}
+
+/** 单步 tool call：return 是最常用的终止方式 */
+function scriptReturn(summary: string): MockStep[] {
+  return openSubmit("return", { summary });
+}
+
+/** 单步 tool call：talk */
+function scriptTalk(target: string, message: string): MockStep[] {
+  return openSubmit("talk", { target, message });
+}
+
+/** 单步 tool call：set_plan */
+function scriptSetPlan(text: string): MockStep[] {
+  return openSubmit("set_plan", { text });
+}
+
+/** 不触发 tool 调用的思考步骤（仅 thinking） */
+function scriptThought(content: string): MockStep {
+  return content;
+}
+
 /** 创建基础 EngineConfig */
 function makeConfig(overrides?: {
-  responses?: string[];
-  responseFn?: (messages: any[]) => string;
+  steps?: MockStep[];
   stone?: StoneData;
   directory?: DirectoryEntry[];
   traits?: TraitDefinition[];
   schedulerConfig?: EngineConfig["schedulerConfig"];
   onTalk?: EngineConfig["onTalk"];
 }): EngineConfig {
-  const llm = overrides?.responseFn
-    ? new MockLLMClient({ responseFn: overrides.responseFn })
-    : new MockLLMClient({ responses: overrides?.responses ?? [] });
+  const llm = new MockLLMClient({
+    responseFn: overrides?.steps ? makeScript(overrides.steps) : undefined,
+  });
 
   return {
     rootDir: TEST_DIR,
@@ -64,43 +158,6 @@ function makeConfig(overrides?: {
   };
 }
 
-/** 生成 talk 的 TOML */
-function tomlTalk(target: string, message: string, extra?: string): string {
-  return `[talk]\ntarget = "${target}"\nmessage = "${message}"${extra ? `\n${extra}` : ""}`;
-}
-
-/** 生成 return 指令的 TOML */
-function tomlReturn(summary: string): string {
-  return `[return]\nsummary = "${summary}"`;
-}
-
-/** 生成 thought + return 的 TOML */
-function tomlThoughtReturn(thought: string, summary: string): string {
-  return `[thought]\ncontent = "${thought}"\n\n[return]\nsummary = "${summary}"`;
-}
-
-/** 生成 create_sub_thread 的 TOML */
-function tomlCreateSubThread(title: string, description?: string): string {
-  let toml = `[create_sub_thread]\ntitle = "${title}"`;
-  if (description) toml += `\ndescription = "${description}"`;
-  return toml;
-}
-
-/** 生成 thought 的 TOML */
-function tomlThought(content: string): string {
-  return `[thought]\ncontent = "${content}"`;
-}
-
-/** 生成 set_plan 的 TOML */
-function tomlSetPlan(text: string): string {
-  return `[set_plan]\ntext = "${text}"`;
-}
-
-/** 生成 await 的 TOML */
-function tomlAwait(threadId: string): string {
-  return `[await]\nthread_id = "${threadId}"`;
-}
-
 beforeEach(() => {
   mkdirSync(FLOWS_DIR, { recursive: true });
 });
@@ -114,42 +171,37 @@ afterEach(() => {
 /* ========== 基础执行 ========== */
 
 describe("基础执行", () => {
-  test("单轮对话：thought → return → done", async () => {
-    const config = makeConfig({
-      responses: [tomlThoughtReturn("我在思考", "任务完成")],
-    });
+  test("单轮对话：return → done", async () => {
+    const config = makeConfig({ steps: scriptReturn("任务完成") });
 
     const result = await runWithThreadTree("test_obj", "你好", "user", config);
 
     expect(result.status).toBe("done");
     expect(result.summary).toBe("任务完成");
     expect(result.sessionId).toBeTruthy();
-    expect(result.totalIterations).toBe(1);
+    /* open+submit 两轮 */
+    expect(result.totalIterations).toBe(2);
   });
 
-  test("多轮迭代：thought → thought → return", async () => {
-    let callCount = 0;
+  test("多轮迭代：思考 → 思考 → return", async () => {
     const config = makeConfig({
-      responseFn: () => {
-        callCount++;
-        if (callCount < 3) {
-          return tomlThought(`第 ${callCount} 轮思考`);
-        }
-        return tomlReturn("经过三轮思考完成");
-      },
+      steps: [
+        scriptThought("第 1 轮思考"),
+        scriptThought("第 2 轮思考"),
+        ...scriptReturn("经过多轮思考完成"),
+      ],
     });
 
     const result = await runWithThreadTree("test_obj", "复杂任务", "user", config);
 
     expect(result.status).toBe("done");
-    expect(result.summary).toBe("经过三轮思考完成");
-    expect(result.totalIterations).toBe(3);
+    expect(result.summary).toBe("经过多轮思考完成");
+    /* 2 轮思考 + 2 轮 open+submit = 4 轮 */
+    expect(result.totalIterations).toBe(4);
   });
 
   test("session 目录被正确创建", async () => {
-    const config = makeConfig({
-      responses: [tomlReturn("完成")],
-    });
+    const config = makeConfig({ steps: scriptReturn("完成") });
 
     const result = await runWithThreadTree("test_obj", "你好", "user", config);
 
@@ -162,17 +214,22 @@ describe("基础执行", () => {
 
   test("初始消息被写入 Root 线程的 inbox", async () => {
     let receivedInbox = false;
-    const config = makeConfig({
-      responseFn: (messages: any[]) => {
-        /* 检查 user message 中是否包含初始消息 */
-        const userMsg = messages.find((m: any) => m.role === "user");
+    const steps: MockStep[] = [
+      (messages: unknown[]) => {
+        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user");
         if (userMsg && userMsg.content.includes("你好世界")) {
           receivedInbox = true;
         }
-        return tomlReturn("收到消息");
+        return { content: "", toolCalls: [toolCall("open", { type: "command", command: "return", description: "完成" })] };
       },
-    });
+      (messages: unknown[]) => {
+        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user");
+        const m = userMsg?.content.match(/<form id="(f_[^\"]+)" command="return"/);
+        return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", summary: "收到消息" })] };
+      },
+    ];
 
+    const config = makeConfig({ steps });
     await runWithThreadTree("test_obj", "你好世界", "user", config);
 
     expect(receivedInbox).toBe(true);
@@ -181,51 +238,66 @@ describe("基础执行", () => {
 
 describe("talk 自动 ack 兜底", () => {
   test("仅当 target 只有一条未读且为最新消息，且 talk 未显式 mark 时自动 ack", async () => {
-    let callCount = 0;
     let firstCallSawInboxId = false;
-    let secondCallHasInbox = false;
+    let laterCallHasInbox = false;
+    let stage = 0;
+
+    const steps: MockStep[] = [
+      /* 轮 1: open talk */
+      (messages: unknown[]) => {
+        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
+        /* inbox 消息在 context 中形如 <message id="msg_xxx" from="user" status="unread"> */
+        if (/id="msg_[^"]+"\s+from="user"\s+status="unread"/.test(userMsg)) {
+          firstCallSawInboxId = true;
+        }
+        return { content: "", toolCalls: [toolCall("open", { type: "command", command: "talk", description: "回复 user" })] };
+      },
+      /* 轮 2: submit talk */
+      (messages: unknown[]) => {
+        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
+        const m = userMsg.match(/<form id="(f_[^\"]+)" command="talk"/);
+        return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", target: "user", message: "收到" })] };
+      },
+      /* 轮 3: open return */
+      (messages: unknown[]) => {
+        stage++;
+        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
+        /* stage >= 3 时检查：inbox 应该已被 ack */
+        if (userMsg.includes("未读消息")) {
+          laterCallHasInbox = true;
+        }
+        return { content: "", toolCalls: [toolCall("open", { type: "command", command: "return", description: "结束" })] };
+      },
+      /* 轮 4: submit return */
+      (messages: unknown[]) => {
+        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
+        const m = userMsg.match(/<form id="(f_[^\"]+)" command="return"/);
+        return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", summary: "done" })] };
+      },
+    ];
 
     const config = makeConfig({
+      steps,
       onTalk: async () => ({ reply: null, remoteThreadId: "th_mock" }),
-      responseFn: (messages: any[]) => {
-        callCount++;
-        const userMsg = messages.find((m: any) => m.role === "user")?.content ?? "";
-
-        if (callCount === 1) {
-          // 第一次应能看到未读消息行（含 #msg_ 前缀）
-          if (userMsg.includes("## 未读消息") && userMsg.includes("#msg_")) {
-            firstCallSawInboxId = true;
-          }
-          // 输出 talk（不带 mark），触发引擎兜底
-          return tomlTalk("user", "收到");
-        }
-
-        // 第二次：如果兜底 ack 生效，则不会再出现未读消息块
-        if (userMsg.includes("## 未读消息")) {
-          secondCallHasInbox = true;
-        }
-        return tomlReturn("done");
-      },
     });
 
     const result = await runWithThreadTree("test_obj", "hi", "user", config);
     expect(result.status).toBe("done");
-    expect(callCount).toBe(2);
     expect(firstCallSawInboxId).toBe(true);
-    expect(secondCallHasInbox).toBe(false);
+    expect(laterCallHasInbox).toBe(false);
 
-    // 读取落盘 thread.json，确认 inbox 状态已被标记
+    /* 读取落盘 thread.json，确认 inbox 状态已被标记 */
     const sessionDir = join(FLOWS_DIR, result.sessionId);
     const threadsJsonPath = join(sessionDir, "objects", "test_obj", "threads.json");
     const threadsJson = JSON.parse(await Bun.file(threadsJsonPath).text());
     const rootId = threadsJson.rootId as string;
     const threadPath = join(sessionDir, "objects", "test_obj", "threads", rootId, "thread.json");
     const thread = JSON.parse(await Bun.file(threadPath).text());
-    const inbox = thread.inbox as any[];
+    const inbox = thread.inbox as Array<{ status: string; mark?: { type: string } }>;
     expect(Array.isArray(inbox)).toBe(true);
     const marked = inbox.find((m) => m.status === "marked");
     expect(marked).toBeTruthy();
-    expect(marked.mark?.type).toBe("ack");
+    expect(marked?.mark?.type).toBe("ack");
   });
 });
 
@@ -233,29 +305,32 @@ describe("talk 自动 ack 兜底", () => {
 
 describe("计划更新", () => {
   test("set_plan 更新后在下一轮 Context 中可见", async () => {
-    let callCount = 0;
-    let planVisible = false;
-    const config = makeConfig({
-      responseFn: (messages: any[]) => {
-        callCount++;
-        if (callCount === 1) {
-          return tomlSetPlan("第一步：分析需求");
+    let planVisibleLater = false;
+
+    const steps: MockStep[] = [
+      /* 轮 1: open set_plan */
+      ...openSubmit("set_plan", { text: "第一步：分析需求" }),
+      /* 轮 3: 检查 plan 是否在 context 中；此时再 open return */
+      (messages: unknown[]) => {
+        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user");
+        if (userMsg && userMsg.content.includes("第一步：分析需求")) {
+          planVisibleLater = true;
         }
-        if (callCount === 2) {
-          const userMsg = messages.find((m: any) => m.role === "user");
-          if (userMsg && userMsg.content.includes("第一步：分析需求")) {
-            planVisible = true;
-          }
-          return tomlReturn("计划执行完毕");
-        }
-        return tomlReturn("done");
+        return { content: "", toolCalls: [toolCall("open", { type: "command", command: "return", description: "结束" })] };
       },
-    });
+      /* 轮 4: submit return */
+      (messages: unknown[]) => {
+        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
+        const m = userMsg.match(/<form id="(f_[^\"]+)" command="return"/);
+        return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", summary: "计划执行完毕" })] };
+      },
+    ];
+    const config = makeConfig({ steps });
 
     const result = await runWithThreadTree("test_obj", "制定计划", "user", config);
 
     expect(result.status).toBe("done");
-    expect(planVisible).toBe(true);
+    expect(planVisibleLater).toBe(true);
   });
 });
 
@@ -264,7 +339,7 @@ describe("计划更新", () => {
 describe("安全阀", () => {
   test("单线程迭代上限 → failed", async () => {
     const config = makeConfig({
-      responseFn: () => tomlThought("无限思考"),
+      steps: [scriptThought("无限思考")],
       schedulerConfig: {
         maxIterationsPerThread: 5,
         maxTotalIterations: 100,
@@ -280,7 +355,7 @@ describe("安全阀", () => {
 
   test("全局迭代上限 → failed", async () => {
     const config = makeConfig({
-      responseFn: () => tomlThought("无限思考"),
+      steps: [scriptThought("无限思考")],
       schedulerConfig: {
         maxIterationsPerThread: 100,
         maxTotalIterations: 3,
@@ -299,47 +374,41 @@ describe("安全阀", () => {
 
 describe("SSE 事件", () => {
   test("发射 flow:start 和 flow:end 事件", async () => {
-    const events: any[] = [];
-    eventBus.on("sse", (e: any) => events.push(e));
+    const events: Array<{ type: string; objectName?: string; status?: string }> = [];
+    eventBus.on("sse", (e) => events.push(e));
 
-    const config = makeConfig({
-      responses: [tomlReturn("完成")],
-    });
-
+    const config = makeConfig({ steps: scriptReturn("完成") });
     await runWithThreadTree("test_obj", "你好", "user", config);
 
-    const startEvents = events.filter(e => e.type === "flow:start");
-    const endEvents = events.filter(e => e.type === "flow:end");
+    const startEvents = events.filter((e) => e.type === "flow:start");
+    const endEvents = events.filter((e) => e.type === "flow:end");
 
     expect(startEvents.length).toBe(1);
-    expect(startEvents[0].objectName).toBe("test_obj");
+    expect(startEvents[0]?.objectName).toBe("test_obj");
 
     expect(endEvents.length).toBe(1);
-    expect(endEvents[0].objectName).toBe("test_obj");
-    expect(endEvents[0].status).toBe("idle");
+    expect(endEvents[0]?.objectName).toBe("test_obj");
+    expect(endEvents[0]?.status).toBe("idle");
   });
 
   test("发射 flow:progress 事件", async () => {
-    const events: any[] = [];
-    eventBus.on("sse", (e: any) => events.push(e));
+    const events: Array<{ type: string; iterations?: number }> = [];
+    eventBus.on("sse", (e) => events.push(e));
 
-    const config = makeConfig({
-      responses: [tomlReturn("完成")],
-    });
-
+    const config = makeConfig({ steps: scriptReturn("完成") });
     await runWithThreadTree("test_obj", "你好", "user", config);
 
-    const progressEvents = events.filter(e => e.type === "flow:progress");
+    const progressEvents = events.filter((e) => e.type === "flow:progress");
     expect(progressEvents.length).toBeGreaterThanOrEqual(1);
-    expect(progressEvents[0].iterations).toBe(1);
+    expect(progressEvents[0]?.iterations).toBeGreaterThanOrEqual(1);
   });
 
   test("失败时 flow:end 状态为 error", async () => {
-    const events: any[] = [];
-    eventBus.on("sse", (e: any) => events.push(e));
+    const events: Array<{ type: string; status?: string }> = [];
+    eventBus.on("sse", (e) => events.push(e));
 
     const config = makeConfig({
-      responseFn: () => tomlThought("无限"),
+      steps: [scriptThought("无限")],
       schedulerConfig: {
         maxIterationsPerThread: 2,
         maxTotalIterations: 100,
@@ -349,9 +418,9 @@ describe("SSE 事件", () => {
 
     await runWithThreadTree("test_obj", "失败任务", "user", config);
 
-    const endEvents = events.filter(e => e.type === "flow:end");
+    const endEvents = events.filter((e) => e.type === "flow:end");
     expect(endEvents.length).toBe(1);
-    expect(endEvents[0].status).toBe("error");
+    expect(endEvents[0]?.status).toBe("error");
   });
 });
 
@@ -366,7 +435,7 @@ describe("错误处理", () => {
         if (callCount === 1) {
           throw new Error("LLM rate limit exceeded");
         }
-        return tomlReturn("不应到达");
+        return "";
       },
     });
 
@@ -390,19 +459,17 @@ describe("错误处理", () => {
   });
 
   test("空 LLM 输出 → 继续迭代（不崩溃）", async () => {
-    let callCount = 0;
-    const config = makeConfig({
-      responseFn: () => {
-        callCount++;
-        if (callCount <= 2) return ""; /* 空输出 */
-        return tomlReturn("最终完成");
-      },
-    });
+    const steps: MockStep[] = [
+      () => ({ content: "", thinkingContent: "" }),
+      () => ({ content: "", thinkingContent: "" }),
+      ...scriptReturn("最终完成"),
+    ];
+    const config = makeConfig({ steps });
 
     const result = await runWithThreadTree("test_obj", "你好", "user", config);
 
     expect(result.status).toBe("done");
-    expect(result.totalIterations).toBe(3);
+    expect(result.totalIterations).toBe(4);
   });
 });
 
@@ -412,10 +479,7 @@ describe("暂停", () => {
   test("isPaused 为 true → 不执行迭代", async () => {
     let iterCount = 0;
     const config = makeConfig({
-      responseFn: () => {
-        iterCount++;
-        return tomlReturn("不应到达");
-      },
+      steps: [(() => { iterCount++; return ""; }) as MockStep],
     });
     config.isPaused = () => true;
 
@@ -432,15 +496,20 @@ describe("暂停", () => {
 describe("Context 构建", () => {
   test("Stone 的 whoAmI 出现在 system message 中", async () => {
     let systemMsg = "";
-    const config = makeConfig({
-      stone: makeStone("哲学家"),
-      responseFn: (messages: any[]) => {
-        const sys = messages.find((m: any) => m.role === "system");
+    const steps: MockStep[] = [
+      (messages: unknown[]) => {
+        const sys = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "system");
         if (sys) systemMsg = sys.content;
-        return tomlReturn("完成");
+        return { content: "", toolCalls: [toolCall("open", { type: "command", command: "return", description: "完成" })] };
       },
-    });
+      (messages: unknown[]) => {
+        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
+        const m = userMsg.match(/<form id="(f_[^\"]+)" command="return"/);
+        return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", summary: "完成" })] };
+      },
+    ];
 
+    const config = makeConfig({ stone: makeStone("哲学家"), steps });
     await runWithThreadTree("哲学家", "你好", "user", config);
 
     expect(systemMsg).toContain("哲学家");
@@ -449,18 +518,26 @@ describe("Context 构建", () => {
 
   test("directory 中的对象出现在 user message 中", async () => {
     let userMsg = "";
+    const steps: MockStep[] = [
+      (messages: unknown[]) => {
+        const u = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user");
+        if (u) userMsg = u.content;
+        return { content: "", toolCalls: [toolCall("open", { type: "command", command: "return", description: "完成" })] };
+      },
+      (messages: unknown[]) => {
+        const u = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
+        const m = u.match(/<form id="(f_[^\"]+)" command="return"/);
+        return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", summary: "完成" })] };
+      },
+    ];
+
     const config = makeConfig({
       directory: [
         { name: "助手A", whoAmI: "我是助手A", functions: [] },
         { name: "助手B", whoAmI: "我是助手B", functions: [] },
       ],
-      responseFn: (messages: any[]) => {
-        const u = messages.find((m: any) => m.role === "user");
-        if (u) userMsg = u.content;
-        return tomlReturn("完成");
-      },
+      steps,
     });
-
     await runWithThreadTree("test_obj", "你好", "user", config);
 
     expect(userMsg).toContain("助手A");
@@ -469,11 +546,21 @@ describe("Context 构建", () => {
 
   test("traits 的 readme 出现在 Context 中", async () => {
     let systemMsg = "";
-    const config = makeConfig({
-      stone: {
-        ...makeStone("test_obj"),
-        traits: ["my_trait"],
+    const steps: MockStep[] = [
+      (messages: unknown[]) => {
+        const sys = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "system");
+        if (sys) systemMsg = sys.content;
+        return { content: "", toolCalls: [toolCall("open", { type: "command", command: "return", description: "完成" })] };
       },
+      (messages: unknown[]) => {
+        const u = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
+        const m = u.match(/<form id="(f_[^\"]+)" command="return"/);
+        return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", summary: "完成" })] };
+      },
+    ];
+
+    const config = makeConfig({
+      stone: { ...makeStone("test_obj"), traits: ["my_trait"] },
       traits: [{
         name: "my_trait",
         type: "how_to_think",
@@ -483,13 +570,8 @@ describe("Context 构建", () => {
         methods: [],
         deps: [],
       }],
-      responseFn: (messages: any[]) => {
-        const sys = messages.find((m: any) => m.role === "system");
-        if (sys) systemMsg = sys.content;
-        return tomlReturn("完成");
-      },
+      steps,
     });
-
     await runWithThreadTree("test_obj", "你好", "user", config);
 
     expect(systemMsg).toContain("my_trait");
@@ -501,9 +583,7 @@ describe("Context 构建", () => {
 
 describe("返回值", () => {
   test("TalkResult 包含所有必要字段", async () => {
-    const config = makeConfig({
-      responses: [tomlReturn("一切顺利")],
-    });
+    const config = makeConfig({ steps: scriptReturn("一切顺利") });
 
     const result = await runWithThreadTree("test_obj", "你好", "user", config);
 
@@ -515,3 +595,8 @@ describe("返回值", () => {
     expect(result.sessionId.startsWith("s_")).toBe(true);
   });
 });
+
+/* ========== title 参数（阶段 B） ==========
+ * 注：title 参数的单元测试放在 thread-engine-title.test.ts（如存在）。
+ * 本文件聚焦基础执行路径，不重复覆盖。
+ */

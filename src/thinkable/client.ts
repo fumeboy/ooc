@@ -547,18 +547,27 @@ export class OpenAICompatibleClient implements LLMClient {
   }
 }
 
+/**
+ * responseFn 的返回值：
+ * - string —— 纯文本内容（不带 tool call）
+ * - { content, toolCalls? } —— 支持工具调用 mock 的完整响应
+ */
+export type MockLLMResponseFnResult =
+  | string
+  | { content?: string; toolCalls?: ToolCall[]; thinkingContent?: string };
+
 /** 测试用 Mock 客户端 */
 export class MockLLMClient implements LLMClient {
   private _responses: string[];
   private _responseObjects: Array<Partial<LLMResult>>;
   private _streamEvents: LLMStreamEvent[] | null;
-  private _responseFn: ((messages: Message[]) => string) | null;
+  private _responseFn: ((messages: Message[]) => MockLLMResponseFnResult) | null;
   private _callCount = 0;
   private _callHistory: Message[][] = [];
 
   constructor(params?: {
     responses?: string[];
-    responseFn?: (messages: Message[]) => string;
+    responseFn?: (messages: Message[]) => MockLLMResponseFnResult;
     responseObject?: Partial<LLMResult>;
     responseObjects?: Array<Partial<LLMResult>>;
     streamEvents?: LLMStreamEvent[];
@@ -592,9 +601,18 @@ export class MockLLMClient implements LLMClient {
       };
     }
 
-    let content: string;
+    let content: string = "";
+    let toolCalls: ToolCall[] | undefined;
+    let thinkingContent = "";
     if (this._responseFn) {
-      content = this._responseFn(messages);
+      const fnResult = this._responseFn(messages);
+      if (typeof fnResult === "string") {
+        content = fnResult;
+      } else {
+        content = fnResult.content ?? "";
+        toolCalls = fnResult.toolCalls;
+        thinkingContent = fnResult.thinkingContent ?? "";
+      }
     } else if (this._responses.length > 0) {
       content = this._responses.shift()!;
     } else {
@@ -603,11 +621,12 @@ export class MockLLMClient implements LLMClient {
 
     return {
       assistantContent: content,
-      thinkingContent: "",
+      thinkingContent,
       content,
       model: "mock",
       usage: {},
       raw: {},
+      toolCalls,
     };
   }
 

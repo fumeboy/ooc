@@ -133,9 +133,11 @@ interface TuiActionProps {
   action: Action;
   objectName?: string;
   loading?: boolean;
+  /** 内容区域最大高度（超出时可滚动，默认不限制） */
+  maxHeight?: number | string;
 }
 
-export function TuiAction({ action, objectName, loading }: TuiActionProps) {
+export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionProps) {
   const cfg = TYPE_CONFIG[action.type] ?? DEFAULT_CONFIG;
   const isInject = action.type === "inject";
   const isThinking = action.type === "thinking";
@@ -195,7 +197,12 @@ export function TuiAction({ action, objectName, loading }: TuiActionProps) {
 
       {/* 内容区 */}
       {expanded && (
-        <div className="pl-5 mt-0.5">
+        <div
+          className="pl-5 mt-0.5"
+          style={maxHeight != null
+            ? { maxHeight: typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight, overflow: "auto" }
+            : undefined}
+        >
           {isProgram ? (
             <div>
               <pre className="text-[11px] whitespace-pre-wrap break-all text-[var(--foreground)] opacity-90">

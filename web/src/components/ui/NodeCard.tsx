@@ -10,7 +10,7 @@ import { cn } from "../../lib/utils";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import type { ProcessNode } from "../../api/types";
 import { InlineNode } from "./InlineNode";
-import { ActionCard } from "./ActionCard";
+import { TuiAction } from "./TuiBlock";
 
 interface NodeCardProps {
   node: ProcessNode;
@@ -253,7 +253,7 @@ function ExpandedContent({ node }: { node: ProcessNode }) {
           <div className="text-xs text-gray-500 uppercase font-semibold mb-2">Actions 时间线</div>
           <div className="border-l-2 border-gray-200 ml-3 pl-4 space-y-3">
             {node.actions.map((action, i) => (
-              <ActionCard key={i} action={action} maxHeight={200} />
+              <TuiAction key={i} action={action} maxHeight={200} />
             ))}
           </div>
         </div>
