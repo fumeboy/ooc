@@ -604,7 +604,7 @@ export async function runWithThreadTree(
       return getActiveTraits(config.traits, scopeChain).map(t => traitId(t));
     };
 
-    /* 注入 Trait 方法 */
+    /* 注入 Trait 方法（Phase 2 协议：只暴露 callMethod 单函数） */
     let activeTraitNames = computeActiveTraitIds();
     const methodCtx: MethodContext = {
       setData: (key: string, value: unknown) => { config.stone.data[key] = value; },
@@ -617,20 +617,15 @@ export async function runWithThreadTree(
       stoneName: objectName,
       data: { ...config.stone.data },
     };
-    const baseKeys = new Set(Object.keys(context));
-    let injectedKeys = new Set<string>();
-    const injectTraitMethods = (traitIds: string[]) => {
-      // 清理旧注入（避免 trait 切换后残留错误方法）
-      for (const k of injectedKeys) {
-        if (!baseKeys.has(k)) delete (context as any)[k];
-      }
-      injectedKeys = new Set();
-      const sandboxMethods = methodRegistry.buildSandboxMethods(methodCtx, traitIds);
-      Object.assign(context, sandboxMethods);
-      for (const k of Object.keys(sandboxMethods)) injectedKeys.add(k);
+    /* 沙箱只暴露 { callMethod }，无需动态注入/清理每个方法名 */
+    const sandboxApi = methodRegistry.buildSandboxMethods(methodCtx, objectName);
+    Object.assign(context, sandboxApi);
+    /* 保留接口兼容：某些内部 API 仍调 injectTraitMethods 以感知 trait 切换 */
+    const injectTraitMethods = (_traitIds: string[]) => {
+      /* no-op：callMethod 内部每次调用时实时查 registry，trait 切换自动生效 */
     };
 
-    // 首次注入
+    // 首次注入（no-op，保留调用以便以后扩展）
     injectTraitMethods(activeTraitNames);
 
     // 管理/自省 API（避免 agent “猜 API”）
@@ -1630,16 +1625,11 @@ export async function resumeWithThreadTree(
       stoneName: objectName,
       data: { ...config.stone.data },
     };
-    const baseKeys = new Set(Object.keys(context));
-    let injectedKeys = new Set<string>();
-    const injectTraitMethods = (traitIds: string[]) => {
-      for (const k of injectedKeys) {
-        if (!baseKeys.has(k)) delete (context as any)[k];
-      }
-      injectedKeys = new Set();
-      const sandboxMethods = methodRegistry.buildSandboxMethods(methodCtx, traitIds);
-      Object.assign(context, sandboxMethods);
-      for (const k of Object.keys(sandboxMethods)) injectedKeys.add(k);
+    /* 沙箱只暴露 { callMethod } 单函数（Phase 2 协议） */
+    const sandboxApi = methodRegistry.buildSandboxMethods(methodCtx, objectName);
+    Object.assign(context, sandboxApi);
+    const injectTraitMethods = (_traitIds: string[]) => {
+      /* no-op：callMethod 实时查 registry，无需每次切换时重新注入 */
     };
 
     injectTraitMethods(activeTraitNames);

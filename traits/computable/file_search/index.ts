@@ -1,51 +1,45 @@
 /**
- * file_search —— 文件搜索 kernel trait
+ * file_search —— 文件搜索 kernel trait（Phase 2 协议：llm_methods 对象导出）
  *
- * 提供文件名模式匹配（glob）和文件内容搜索（grep）能力，任何对象激活即可用。
+ * 提供文件名模式匹配（glob）和文件内容搜索（grep）能力。
  * 所有返回路径均为相对于 rootDir 的相对路径，保持输出紧凑。
  */
 
 import { resolve, relative } from "path";
 import { toolOk, toolErr } from "../../../src/types/tool-result";
 import type { ToolResult } from "../../../src/types/tool-result";
+import type { TraitMethod } from "../../../src/types/index";
 
 /** 默认忽略的目录列表 */
 const DEFAULT_IGNORE = ["node_modules", ".git", ".存档"];
 
 /**
  * 按文件名模式匹配搜索文件
- * @param ctx - 上下文（需要 ctx.rootDir）
- * @param pattern - glob 模式（如 "**\/*.ts"）
- * @param options - 可选参数
- * @param options.basePath - 搜索根目录（默认 ctx.rootDir）
- * @param options.limit - 最大返回数量（默认 50）
- * @param options.ignore - 忽略的目录列表（默认 ["node_modules", ".git", ".存档"]）
- * @returns 匹配的相对路径列表
  */
-export async function glob(
-  ctx: any,
-  pattern: string,
-  options?: { basePath?: string; limit?: number; ignore?: string[] },
+async function globImpl(
+  ctx: { rootDir?: string },
+  {
+    pattern,
+    basePath,
+    limit = 50,
+    ignore = DEFAULT_IGNORE,
+  }: { pattern: string; basePath?: string; limit?: number; ignore?: string[] },
 ): Promise<ToolResult<string[]>> {
-  const basePath = options?.basePath
-    ? options.basePath.startsWith("/")
-      ? options.basePath
-      : resolve(ctx.rootDir ?? "", options.basePath)
+  const base = basePath
+    ? basePath.startsWith("/")
+      ? basePath
+      : resolve(ctx.rootDir ?? "", basePath)
     : (ctx.rootDir ?? "");
-  const limit = options?.limit ?? 50;
-  const ignore = options?.ignore ?? DEFAULT_IGNORE;
 
   try {
     const g = new Bun.Glob(pattern);
     const results: string[] = [];
 
-    for await (const entry of g.scan({ cwd: basePath })) {
-      // 检查是否在忽略目录中
+    for await (const entry of g.scan({ cwd: base })) {
       const shouldIgnore = ignore.some(
         (dir) => entry.startsWith(dir + "/") || entry.includes("/" + dir + "/"),
       );
       if (shouldIgnore) continue;
-
       results.push(entry);
       if (results.length >= limit) break;
     }
@@ -58,30 +52,25 @@ export async function glob(
 
 /** grep 输出的单条匹配结果 */
 interface GrepMatch {
-  /** 文件路径（相对于 rootDir） */
   file: string;
-  /** 行号 */
   line: number;
-  /** 匹配行的内容 */
   content: string;
 }
 
 /**
  * 在文件内容中搜索匹配的文本行
- * @param ctx - 上下文（需要 ctx.rootDir）
- * @param pattern - 搜索文本或正则表达式模式
- * @param options - 可选参数
- * @param options.path - 搜索目录（默认 ctx.rootDir）
- * @param options.glob - 文件名过滤（如 "*.ts"）
- * @param options.context - 显示匹配行前后的上下文行数
- * @param options.maxResults - 最大返回结果数（默认 30）
- * @param options.ignoreCase - 是否忽略大小写（默认 false）
- * @returns 匹配结果列表
  */
-export async function grep(
-  ctx: any,
-  pattern: string,
-  options?: {
+async function grepImpl(
+  ctx: { rootDir?: string },
+  {
+    pattern,
+    path,
+    glob,
+    context,
+    maxResults = 30,
+    ignoreCase = false,
+  }: {
+    pattern: string;
     path?: string;
     glob?: string;
     context?: number;
@@ -89,89 +78,45 @@ export async function grep(
     ignoreCase?: boolean;
   },
 ): Promise<ToolResult<GrepMatch[]>> {
-  const searchPath = options?.path
-    ? options.path.startsWith("/")
-      ? options.path
-      : resolve(ctx.rootDir ?? "", options.path)
+  const searchPath = path
+    ? path.startsWith("/")
+      ? path
+      : resolve(ctx.rootDir ?? "", path)
     : (ctx.rootDir ?? "");
-  const maxResults = options?.maxResults ?? 30;
 
   try {
-    // 构建 grep 命令参数
-    const args: string[] = [
-      "-r",  // 递归搜索
-      "-n",  // 显示行号
-    ];
+    const args: string[] = ["-r", "-n"];
 
-    // 忽略大小写
-    if (options?.ignoreCase) {
-      args.push("-i");
-    }
-
-    // 上下文行数（使用 -C 参数时输出格式会变，这里只取匹配行）
-    // 注意：带 context 时 grep 输出格式包含 "--" 分隔符，我们仍只解析 file:line:content
-    if (options?.context && options.context > 0) {
-      args.push(`-C`, String(options.context));
-    }
-
-    // 文件名过滤
-    if (options?.glob) {
-      args.push(`--include=${options.glob}`);
-    }
-
-    // 排除目录
-    for (const dir of DEFAULT_IGNORE) {
-      args.push(`--exclude-dir=${dir}`);
-    }
-
-    // 限制最大匹配数
+    if (ignoreCase) args.push("-i");
+    if (context && context > 0) args.push(`-C`, String(context));
+    if (glob) args.push(`--include=${glob}`);
+    for (const dir of DEFAULT_IGNORE) args.push(`--exclude-dir=${dir}`);
     args.push(`-m`, String(maxResults));
-
-    // 搜索模式和路径
     args.push("--", pattern, searchPath);
 
-    const proc = Bun.spawn(["grep", ...args], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-
+    const proc = Bun.spawn(["grep", ...args], { stdout: "pipe", stderr: "pipe" });
     const stdout = await new Response(proc.stdout).text();
     const stderr = await new Response(proc.stderr).text();
     await proc.exited;
 
-    // grep 退出码 1 表示无匹配，不是错误
     if (proc.exitCode !== 0 && proc.exitCode !== 1) {
       return toolErr(`grep 执行失败: ${stderr.trim()}`);
     }
 
-    // 解析输出
     const rootDir = ctx.rootDir ?? "";
     const matches: GrepMatch[] = [];
     const lines = stdout.split("\n").filter((l) => l.length > 0);
 
     for (const line of lines) {
-      // 格式: file:line:content 或 file-line-content（context 模式下的非匹配行）
-      // 跳过 context 分隔符 "--"
       if (line === "--") continue;
-
-      // 匹配 file:line:content 格式（匹配行用 ":"）
       const match = line.match(/^(.+?):(\d+)[:：](.*)$/);
       if (match) {
         const filePath = match[1]!;
         const lineNum = parseInt(match[2]!, 10);
         const content = match[3]!;
+        const relPath = rootDir ? relative(rootDir, filePath) : filePath;
 
-        // 转为相对路径
-        const relPath = rootDir
-          ? relative(rootDir, filePath)
-          : filePath;
-
-        matches.push({
-          file: relPath,
-          line: lineNum,
-          content: content.trim(),
-        });
-
+        matches.push({ file: relPath, line: lineNum, content: content.trim() });
         if (matches.length >= maxResults) break;
       }
     }
@@ -181,3 +126,68 @@ export async function grep(
     return toolErr(`grep 搜索失败: ${err?.message ?? String(err)}`);
   }
 }
+
+/* ========== 兼容导出（位置参数）：单元测试和内部调用用 ========== */
+
+export const glob = (
+  ctx: any,
+  pattern: string,
+  options?: { basePath?: string; limit?: number; ignore?: string[] },
+) =>
+  globImpl(ctx, {
+    pattern,
+    basePath: options?.basePath,
+    limit: options?.limit,
+    ignore: options?.ignore,
+  });
+
+export const grep = (
+  ctx: any,
+  pattern: string,
+  options?: {
+    path?: string;
+    glob?: string;
+    context?: number;
+    maxResults?: number;
+    ignoreCase?: boolean;
+  },
+) =>
+  grepImpl(ctx, {
+    pattern,
+    path: options?.path,
+    glob: options?.glob,
+    context: options?.context,
+    maxResults: options?.maxResults,
+    ignoreCase: options?.ignoreCase,
+  });
+
+/* ========== Phase 2 新协议 ========== */
+
+export const llm_methods: Record<string, TraitMethod> = {
+  glob: {
+    name: "glob",
+    description: "按文件名模式匹配搜索文件",
+    params: [
+      { name: "pattern", type: "string", description: 'glob 模式（如 "**/*.ts"）', required: true },
+      { name: "basePath", type: "string", description: "搜索根目录（默认 rootDir）", required: false },
+      { name: "limit", type: "number", description: "最大返回数量（默认 50）", required: false },
+      { name: "ignore", type: "string[]", description: "忽略的目录列表", required: false },
+    ],
+    fn: globImpl as TraitMethod["fn"],
+  },
+  grep: {
+    name: "grep",
+    description: "在文件内容中搜索匹配的文本行",
+    params: [
+      { name: "pattern", type: "string", description: "搜索文本或正则", required: true },
+      { name: "path", type: "string", description: "搜索目录（默认 rootDir）", required: false },
+      { name: "glob", type: "string", description: '文件名过滤（如 "*.ts"）', required: false },
+      { name: "context", type: "number", description: "上下文行数", required: false },
+      { name: "maxResults", type: "number", description: "最大结果数（默认 30）", required: false },
+      { name: "ignoreCase", type: "boolean", description: "忽略大小写", required: false },
+    ],
+    fn: grepImpl as TraitMethod["fn"],
+  },
+};
+
+export const ui_methods: Record<string, TraitMethod> = {};

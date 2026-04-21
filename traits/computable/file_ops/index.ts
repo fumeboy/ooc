@@ -1,13 +1,16 @@
 /**
  * file_ops —— 文件操作 kernel trait
  *
- * 提供文件读写、编辑、目录操作能力，任何对象激活即可用。
+ * 提供文件读写、编辑、目录操作能力。Phase 2 协议：
+ * 通过沙箱 `callMethod("computable/file_ops", method, args)` 调用，args 永远是对象。
+ *
  * 所有路径支持相对路径（相对于 ctx.rootDir）和绝对路径。
  */
 
 import { resolve } from "path";
 import { toolOk, toolErr } from "../../../src/types/tool-result";
 import type { ToolResult } from "../../../src/types/tool-result";
+import type { TraitMethod } from "../../../src/types/index";
 
 /** 路径解析：绝对路径直接用，相对路径基于 rootDir */
 const resolvePath = (rootDir: string, p: string) =>
@@ -15,18 +18,12 @@ const resolvePath = (rootDir: string, p: string) =>
 
 /**
  * 读取文件内容，返回带行号的文本
- * @param ctx - 上下文（需要 ctx.rootDir）
- * @param path - 文件路径
- * @param options - 可选参数：offset（起始行，默认 0）、limit（最大行数，默认 200）
  */
-export async function readFile(
-  ctx: any,
-  path: string,
-  options?: { offset?: number; limit?: number },
+async function readFileImpl(
+  ctx: { rootDir?: string },
+  { path, offset = 0, limit = 200 }: { path: string; offset?: number; limit?: number },
 ): Promise<ToolResult<{ content: string; totalLines: number; truncated: boolean }>> {
   const fullPath = resolvePath(ctx.rootDir ?? "", path);
-  const offset = options?.offset ?? 0;
-  const limit = options?.limit ?? 200;
 
   try {
     const file = Bun.file(fullPath);
@@ -57,23 +54,19 @@ export async function readFile(
 }
 
 /**
- * 在文件中搜索并替换文本
- * 两级容错：先精确匹配，再尝试 trim 空白匹配
- * @param ctx - 上下文
- * @param path - 文件路径
- * @param oldStr - 要查找的原始文本
- * @param newStr - 替换后的文本
- * @param options - 可选参数：replaceAll（是否替换所有匹配，默认 false）
+ * 在文件中搜索并替换文本。
+ * 两级容错：先精确匹配，再尝试 trim 空白匹配。
  */
-export async function editFile(
-  ctx: any,
-  path: string,
-  oldStr: string,
-  newStr: string,
-  options?: { replaceAll?: boolean },
+async function editFileImpl(
+  ctx: { rootDir?: string },
+  {
+    path,
+    oldStr,
+    newStr,
+    replaceAll = false,
+  }: { path: string; oldStr: string; newStr: string; replaceAll?: boolean },
 ): Promise<ToolResult<{ matchCount: number }>> {
   const fullPath = resolvePath(ctx.rootDir ?? "", path);
-  const replaceAll = options?.replaceAll ?? false;
 
   try {
     const file = Bun.file(fullPath);
@@ -98,9 +91,8 @@ export async function editFile(
       const trimmedOld = oldStr.split("\n").map((l) => l.trim()).join("\n");
       const lines = text.split("\n");
 
-      // 逐行滑动窗口匹配
       const oldLines = trimmedOld.split("\n");
-      const matches: number[] = []; // 记录匹配起始行号
+      const matches: number[] = [];
 
       for (let i = 0; i <= lines.length - oldLines.length; i++) {
         let found = true;
@@ -118,24 +110,16 @@ export async function editFile(
       matchCount = matches.length;
 
       if (matchCount === 0) {
-        // 返回上下文片段帮助 LLM 修正
         const snippet = text.slice(0, 500);
-        return toolErr(
-          `未找到匹配文本`,
-          `文件前 500 字符:\n${snippet}`,
-        );
+        return toolErr(`未找到匹配文本`, `文件前 500 字符:\n${snippet}`);
       }
 
       if (matchCount > 1 && !replaceAll) {
-        return toolErr(
-          `找到 ${matchCount} 处匹配，请设置 replaceAll: true 或提供更精确的文本`,
-        );
+        return toolErr(`找到 ${matchCount} 处匹配，请设置 replaceAll: true 或提供更精确的文本`);
       }
 
-      // 执行 fuzzy 替换
       const newLines = newStr.split("\n");
       const resultLines = [...lines];
-      // 从后往前替换，避免索引偏移
       const toReplace = replaceAll ? matches : [matches[0]!];
       for (let m = toReplace.length - 1; m >= 0; m--) {
         resultLines.splice(toReplace[m]!, oldLines.length, ...newLines);
@@ -145,23 +129,16 @@ export async function editFile(
       return toolOk({ matchCount: toReplace.length });
     }
 
-    // 精确匹配的情况
     if (matchCount > 1 && !replaceAll) {
-      return toolErr(
-        `找到 ${matchCount} 处匹配，请设置 replaceAll: true 或提供更精确的文本`,
-      );
+      return toolErr(`找到 ${matchCount} 处匹配，请设置 replaceAll: true 或提供更精确的文本`);
     }
 
     let result: string;
     if (replaceAll) {
       result = text.split(oldStr).join(newStr);
     } else {
-      // 只替换第一处
       const firstIdx = text.indexOf(oldStr);
-      result =
-        text.slice(0, firstIdx) +
-        newStr +
-        text.slice(firstIdx + oldStr.length);
+      result = text.slice(0, firstIdx) + newStr + text.slice(firstIdx + oldStr.length);
     }
 
     await Bun.write(fullPath, result);
@@ -173,19 +150,14 @@ export async function editFile(
 
 /**
  * 创建或覆盖文件，自动创建父目录
- * @param ctx - 上下文
- * @param path - 文件路径
- * @param content - 文件内容
  */
-export async function writeFile(
-  ctx: any,
-  path: string,
-  content: string,
+async function writeFileImpl(
+  ctx: { rootDir?: string },
+  { path, content }: { path: string; content: string },
 ): Promise<ToolResult<{ bytesWritten: number }>> {
   const fullPath = resolvePath(ctx.rootDir ?? "", path);
 
   try {
-    // 自动创建父目录
     const dir = fullPath.slice(0, fullPath.lastIndexOf("/"));
     if (dir) {
       const { mkdir } = await import("fs/promises");
@@ -201,19 +173,17 @@ export async function writeFile(
 
 /**
  * 列出目录内容
- * @param ctx - 上下文
- * @param path - 目录路径
- * @param options - 可选参数：recursive、includeHidden、limit（默认 100）
  */
-export async function listDir(
-  ctx: any,
-  path: string,
-  options?: { recursive?: boolean; includeHidden?: boolean; limit?: number },
+async function listDirImpl(
+  ctx: { rootDir?: string },
+  {
+    path,
+    recursive = false,
+    includeHidden = false,
+    limit = 100,
+  }: { path: string; recursive?: boolean; includeHidden?: boolean; limit?: number },
 ): Promise<ToolResult<{ entries: Array<{ name: string; type: string; size: number }> }>> {
   const fullPath = resolvePath(ctx.rootDir ?? "", path);
-  const recursive = options?.recursive ?? false;
-  const includeHidden = options?.includeHidden ?? false;
-  const limit = options?.limit ?? 100;
 
   try {
     const { readdir, stat } = await import("fs/promises");
@@ -224,7 +194,6 @@ export async function listDir(
       if (entries.length >= limit) break;
 
       const name = String(entry);
-      // 过滤隐藏文件
       const baseName = name.split("/").pop() ?? name;
       if (!includeHidden && baseName.startsWith(".")) continue;
 
@@ -237,7 +206,7 @@ export async function listDir(
           size: st.size,
         });
       } catch {
-        // 跳过无法 stat 的条目（如断开的符号链接）
+        // 跳过无法 stat 的条目
       }
     }
 
@@ -249,11 +218,11 @@ export async function listDir(
 
 /**
  * 检查文件或目录是否存在
- * @param ctx - 上下文
- * @param path - 文件/目录路径
- * @returns 布尔值（不是 ToolResult）
  */
-export async function fileExists(ctx: any, path: string): Promise<boolean> {
+async function fileExistsImpl(
+  ctx: { rootDir?: string },
+  { path }: { path: string },
+): Promise<boolean> {
   const fullPath = resolvePath(ctx.rootDir ?? "", path);
   try {
     const file = Bun.file(fullPath);
@@ -265,17 +234,12 @@ export async function fileExists(ctx: any, path: string): Promise<boolean> {
 
 /**
  * 删除文件或目录
- * @param ctx - 上下文
- * @param path - 文件/目录路径
- * @param options - 可选参数：recursive（是否递归删除目录，默认 false）
  */
-export async function deleteFile(
-  ctx: any,
-  path: string,
-  options?: { recursive?: boolean },
+async function deleteFileImpl(
+  ctx: { rootDir?: string },
+  { path, recursive = false }: { path: string; recursive?: boolean },
 ): Promise<ToolResult<{ success: boolean }>> {
   const fullPath = resolvePath(ctx.rootDir ?? "", path);
-  const recursive = options?.recursive ?? false;
 
   try {
     const { rm } = await import("fs/promises");
@@ -285,3 +249,100 @@ export async function deleteFile(
     return toolErr(`删除失败: ${err?.message ?? String(err)}`);
   }
 }
+
+/* ========== 兼容导出（位置参数）：单元测试和内部直接调用用 ========== */
+
+export const readFile = (ctx: any, path: string, options?: { offset?: number; limit?: number }) =>
+  readFileImpl(ctx, { path, offset: options?.offset, limit: options?.limit });
+
+export const editFile = (
+  ctx: any,
+  path: string,
+  oldStr: string,
+  newStr: string,
+  options?: { replaceAll?: boolean },
+) => editFileImpl(ctx, { path, oldStr, newStr, replaceAll: options?.replaceAll });
+
+export const writeFile = (ctx: any, path: string, content: string) =>
+  writeFileImpl(ctx, { path, content });
+
+export const listDir = (
+  ctx: any,
+  path: string,
+  options?: { recursive?: boolean; includeHidden?: boolean; limit?: number },
+) =>
+  listDirImpl(ctx, {
+    path,
+    recursive: options?.recursive,
+    includeHidden: options?.includeHidden,
+    limit: options?.limit,
+  });
+
+export const fileExists = (ctx: any, path: string) => fileExistsImpl(ctx, { path });
+
+export const deleteFile = (ctx: any, path: string, options?: { recursive?: boolean }) =>
+  deleteFileImpl(ctx, { path, recursive: options?.recursive });
+
+/* ========== Phase 2 新协议：llm_methods 对象导出（供沙箱 callMethod 使用） ========== */
+
+export const llm_methods: Record<string, TraitMethod> = {
+  readFile: {
+    name: "readFile",
+    description: "读取文件内容，返回带行号的文本",
+    params: [
+      { name: "path", type: "string", description: "文件路径（相对或绝对）", required: true },
+      { name: "offset", type: "number", description: "起始行号（从 0 开始）", required: false },
+      { name: "limit", type: "number", description: "最多读取行数（默认 200）", required: false },
+    ],
+    fn: readFileImpl as TraitMethod["fn"],
+  },
+  editFile: {
+    name: "editFile",
+    description: "在文件中搜索并替换文本（两级容错：精确/trim 空白）",
+    params: [
+      { name: "path", type: "string", description: "文件路径", required: true },
+      { name: "oldStr", type: "string", description: "要查找的原文本", required: true },
+      { name: "newStr", type: "string", description: "替换后的文本", required: true },
+      { name: "replaceAll", type: "boolean", description: "是否替换所有匹配（默认 false）", required: false },
+    ],
+    fn: editFileImpl as TraitMethod["fn"],
+  },
+  writeFile: {
+    name: "writeFile",
+    description: "创建或覆盖文件，自动创建父目录",
+    params: [
+      { name: "path", type: "string", description: "文件路径", required: true },
+      { name: "content", type: "string", description: "文件内容", required: true },
+    ],
+    fn: writeFileImpl as TraitMethod["fn"],
+  },
+  listDir: {
+    name: "listDir",
+    description: "列出目录内容",
+    params: [
+      { name: "path", type: "string", description: "目录路径", required: true },
+      { name: "recursive", type: "boolean", description: "是否递归（默认 false）", required: false },
+      { name: "includeHidden", type: "boolean", description: "是否包含隐藏文件（默认 false）", required: false },
+      { name: "limit", type: "number", description: "最大返回数（默认 100）", required: false },
+    ],
+    fn: listDirImpl as TraitMethod["fn"],
+  },
+  fileExists: {
+    name: "fileExists",
+    description: "检查文件或目录是否存在",
+    params: [{ name: "path", type: "string", description: "路径", required: true }],
+    fn: fileExistsImpl as TraitMethod["fn"],
+  },
+  deleteFile: {
+    name: "deleteFile",
+    description: "删除文件或目录",
+    params: [
+      { name: "path", type: "string", description: "路径", required: true },
+      { name: "recursive", type: "boolean", description: "递归删除目录（默认 false）", required: false },
+    ],
+    fn: deleteFileImpl as TraitMethod["fn"],
+  },
+};
+
+/** 此 trait 不对 UI 暴露方法 */
+export const ui_methods: Record<string, TraitMethod> = {};
