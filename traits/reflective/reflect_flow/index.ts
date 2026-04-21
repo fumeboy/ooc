@@ -96,6 +96,129 @@ async function getReflectStateImpl(
 }
 
 /**
+ * 把一条经验条目 append 到对象的 `stones/{name}/memory.md`（方案 B Phase 2 沉淀工具）
+ *
+ * 格式规范：
+ *   ## {key}（{YYYY-MM-DD HH:MM}）
+ *
+ *   {content}
+ *
+ * 幂等说明：**不去重**——同一 key 多次写入会产生多条记录（经验可能随时间演进，
+ * LLM 自己决定是否要把旧条目也留着）。
+ *
+ * 约束：
+ * - key 非空字符串
+ * - content 非空字符串
+ * - memory.md 最终内容是 append-only（不支持删除/修改历史条目）
+ */
+async function persistToMemoryImpl(
+  ctx: { selfDir: string; stoneName: string },
+  { key, content }: { key: string; content: string },
+): Promise<ToolResult<{ stoneName: string; memoryPath: string; keyPreview: string }>> {
+  if (typeof key !== "string" || key.trim().length === 0) {
+    return toolErr("persist_to_memory: key 必须是非空字符串");
+  }
+  if (typeof content !== "string" || content.trim().length === 0) {
+    return toolErr("persist_to_memory: content 必须是非空字符串");
+  }
+
+  try {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const memoryPath = path.join(ctx.selfDir, "memory.md");
+
+    /* 读现有（不存在视为空），按规范 append */
+    let prev = "";
+    try {
+      prev = await fs.readFile(memoryPath, "utf-8");
+    } catch {
+      /* 不存在 → 空 */
+    }
+
+    const now = new Date();
+    const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const entry = `\n## ${key.trim()}（${stamp}）\n\n${content.trim()}\n`;
+    const next = prev.endsWith("\n") || prev.length === 0 ? `${prev}${entry}` : `${prev}\n${entry}`;
+
+    /* 确保目录存在 */
+    await fs.mkdir(ctx.selfDir, { recursive: true });
+    await fs.writeFile(memoryPath, next, "utf-8");
+
+    return toolOk({
+      stoneName: ctx.stoneName,
+      memoryPath,
+      keyPreview: key.length > 40 ? `${key.slice(0, 40)}…` : key,
+    });
+  } catch (err: any) {
+    return toolErr(`persist_to_memory 失败: ${err?.message ?? String(err)}`);
+  }
+}
+
+/**
+ * 在对象 self 目录下 `traits/` 创建新的 trait（方案 B Phase 2 沉淀工具）
+ *
+ * 安全校验（必须全部通过）：
+ * - relativePath 非空字符串
+ * - 规范化后不得含 `..`、不得是绝对路径
+ * - 只允许落在 `{selfDir}/traits/` 子树内
+ * - 目标 TRAIT.md 不得已存在（防止意外覆盖已沉淀 trait）
+ *
+ * 成功后写入 `{selfDir}/traits/{relativePath}/TRAIT.md`。
+ */
+async function createTraitImpl(
+  ctx: { selfDir: string; stoneName: string },
+  { relativePath, content }: { relativePath: string; content: string },
+): Promise<ToolResult<{ stoneName: string; traitPath: string }>> {
+  if (typeof relativePath !== "string" || relativePath.trim().length === 0) {
+    return toolErr("create_trait: relativePath 必须是非空字符串");
+  }
+  if (typeof content !== "string" || content.trim().length === 0) {
+    return toolErr("create_trait: content 必须是非空字符串");
+  }
+
+  /* 安全检查 */
+  const trimmed = relativePath.trim();
+  if (trimmed.startsWith("/") || trimmed.match(/^[A-Za-z]:[\\/]/)) {
+    return toolErr(`create_trait: relativePath 不允许是绝对路径: ${trimmed}`);
+  }
+  if (trimmed.split(/[\\/]/).some(seg => seg === "..")) {
+    return toolErr(`create_trait: relativePath 不允许含 '..'（越权）: ${trimmed}`);
+  }
+
+  try {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const traitsRoot = path.resolve(ctx.selfDir, "traits");
+    const targetDir = path.resolve(traitsRoot, trimmed);
+
+    /* 二次兜底：规范化后必须仍在 traitsRoot 内 */
+    if (!targetDir.startsWith(traitsRoot + path.sep) && targetDir !== traitsRoot) {
+      return toolErr(`create_trait: 路径越权，不在 stones/{self}/traits/ 子树内`);
+    }
+
+    const traitMdPath = path.join(targetDir, "TRAIT.md");
+
+    /* 已存在 → 拒绝（反思工具是 append-only，不覆盖） */
+    try {
+      await fs.access(traitMdPath);
+      return toolErr(`create_trait: ${trimmed}/TRAIT.md 已存在（本工具不覆盖已有 trait）`);
+    } catch {
+      /* 不存在——正常路径 */
+    }
+
+    await fs.mkdir(targetDir, { recursive: true });
+    await fs.writeFile(traitMdPath, content, "utf-8");
+
+    return toolOk({
+      stoneName: ctx.stoneName,
+      traitPath: traitMdPath,
+    });
+  } catch (err: any) {
+    return toolErr(`create_trait 失败: ${err?.message ?? String(err)}`);
+  }
+}
+
+/**
  * llm 通道方法：LLM 沙箱里通过 `callMethod("reflective/reflect_flow", "talkToSelf", { message })` 调用
  */
 export const llm_methods: Record<string, TraitMethod> = {
@@ -113,6 +236,26 @@ export const llm_methods: Record<string, TraitMethod> = {
     description: "查看当前对象反思线程的 inbox 状态（是否初始化、消息数、最近 5 条预览）。",
     params: [],
     fn: getReflectStateImpl as TraitMethod["fn"],
+  },
+  persist_to_memory: {
+    name: "persist_to_memory",
+    description:
+      "把一条沉淀下来的经验/规律追加到当前对象的 memory.md（长期记忆，每次 Context 会被注入）。key 是短标题，content 是完整描述。",
+    params: [
+      { name: "key", type: "string", description: "经验的短标题（如 \"调试 API 的正确姿势\"）", required: true },
+      { name: "content", type: "string", description: "经验的完整描述（含具体场景、做法、反例等）", required: true },
+    ],
+    fn: persistToMemoryImpl as TraitMethod["fn"],
+  },
+  create_trait: {
+    name: "create_trait",
+    description:
+      "在当前对象的 stones/{self}/traits/** 下创建一个新的 trait（TRAIT.md）。适合把沉淀出的「做法」固化为对象能力。路径必须相对 stones/{self}/traits/，不允许 ..、绝对路径、已存在的 trait。",
+    params: [
+      { name: "relativePath", type: "string", description: "相对 stones/{self}/traits/ 的路径（如 \"learned/debug_api\"）", required: true },
+      { name: "content", type: "string", description: "TRAIT.md 完整内容（含 frontmatter + markdown 正文）", required: true },
+    ],
+    fn: createTraitImpl as TraitMethod["fn"],
   },
 };
 

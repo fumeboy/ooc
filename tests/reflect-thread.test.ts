@@ -211,3 +211,140 @@ describe("reflect_flow trait llm_methods（kernel trait）", () => {
     expect(result.data.recentContents[2]).toBe("第 3 条");
   });
 });
+
+describe("reflect_flow trait 沉淀工具（方案 B Phase 2）", () => {
+  let stoneDir: string;
+
+  beforeEach(() => {
+    stoneDir = makeTmpStone("reflect-persist");
+  });
+
+  afterEach(() => {
+    if (existsSync(stoneDir)) rmSync(stoneDir, { recursive: true, force: true });
+  });
+
+  test("llm_methods.persist_to_memory 首次写入创建 memory.md", async () => {
+    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const ctx = { selfDir: stoneDir, stoneName: "bruce" };
+
+    const result: any = await mod.llm_methods.persist_to_memory.fn(ctx, {
+      key: "测试经验",
+      content: "这是一条测试经验的详细描述",
+    });
+    expect(result.ok).toBe(true);
+
+    const memoryPath = join(stoneDir, "memory.md");
+    expect(existsSync(memoryPath)).toBe(true);
+    const content = readFileSync(memoryPath, "utf-8");
+    expect(content).toContain("测试经验");
+    expect(content).toContain("这是一条测试经验的详细描述");
+  });
+
+  test("llm_methods.persist_to_memory 多次 append 保留历史", async () => {
+    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const ctx = { selfDir: stoneDir, stoneName: "bruce" };
+
+    await mod.llm_methods.persist_to_memory.fn(ctx, { key: "key-a", content: "内容 A" });
+    await mod.llm_methods.persist_to_memory.fn(ctx, { key: "key-b", content: "内容 B" });
+
+    const content = readFileSync(join(stoneDir, "memory.md"), "utf-8");
+    expect(content).toContain("key-a");
+    expect(content).toContain("内容 A");
+    expect(content).toContain("key-b");
+    expect(content).toContain("内容 B");
+    /* 顺序：先 A 后 B */
+    expect(content.indexOf("key-a")).toBeLessThan(content.indexOf("key-b"));
+  });
+
+  test("llm_methods.persist_to_memory 拒绝空 key / content", async () => {
+    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const ctx = { selfDir: stoneDir, stoneName: "bruce" };
+
+    let r: any = await mod.llm_methods.persist_to_memory.fn(ctx, { key: "", content: "x" });
+    expect(r.ok).toBe(false);
+
+    r = await mod.llm_methods.persist_to_memory.fn(ctx, { key: "k", content: "" });
+    expect(r.ok).toBe(false);
+  });
+
+  test("llm_methods.create_trait 在 stones/{self}/traits/** 下创建 TRAIT.md", async () => {
+    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const ctx = { selfDir: stoneDir, stoneName: "bruce" };
+
+    const result: any = await mod.llm_methods.create_trait.fn(ctx, {
+      relativePath: "learned/new_skill",
+      content: `---
+namespace: self
+name: learned/new_skill
+type: how_to_think
+when: always
+description: 学到的新技能
+deps: []
+---
+
+# 新技能 trait
+
+这是反思沉淀出来的 trait。
+`,
+    });
+    expect(result.ok).toBe(true);
+
+    const traitPath = join(stoneDir, "traits", "learned", "new_skill", "TRAIT.md");
+    expect(existsSync(traitPath)).toBe(true);
+    const content = readFileSync(traitPath, "utf-8");
+    expect(content).toContain("namespace: self");
+    expect(content).toContain("这是反思沉淀出来的 trait");
+  });
+
+  test("llm_methods.create_trait 拒绝越权路径（..、绝对路径、超出 stones/{self}）", async () => {
+    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const ctx = { selfDir: stoneDir, stoneName: "bruce" };
+
+    /* 路径 .. 越权 */
+    let r: any = await mod.llm_methods.create_trait.fn(ctx, {
+      relativePath: "../other/bad",
+      content: "whatever",
+    });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/路径|越权|不允许/);
+
+    /* 绝对路径越权 */
+    r = await mod.llm_methods.create_trait.fn(ctx, {
+      relativePath: "/tmp/outside",
+      content: "whatever",
+    });
+    expect(r.ok).toBe(false);
+
+    /* 空路径 */
+    r = await mod.llm_methods.create_trait.fn(ctx, { relativePath: "", content: "x" });
+    expect(r.ok).toBe(false);
+  });
+
+  test("llm_methods.create_trait 拒绝覆盖已有 trait", async () => {
+    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const ctx = { selfDir: stoneDir, stoneName: "bruce" };
+
+    const body = `---
+namespace: self
+name: learned/overwrite
+type: how_to_think
+when: always
+description: 测试
+deps: []
+---
+
+首次`;
+    const r1: any = await mod.llm_methods.create_trait.fn(ctx, {
+      relativePath: "learned/overwrite",
+      content: body,
+    });
+    expect(r1.ok).toBe(true);
+
+    const r2: any = await mod.llm_methods.create_trait.fn(ctx, {
+      relativePath: "learned/overwrite",
+      content: body + "\n\n二次",
+    });
+    expect(r2.ok).toBe(false);
+    expect(r2.error).toMatch(/已存在|已有/);
+  });
+});
