@@ -19,13 +19,15 @@ import {
   streamingStackPopAtom,
   streamingSetPlanAtom,
   messageSidebarModeAtom,
+  messageSidebarViewAtom,
+  currentThreadIdAtom,
 } from "../store/session";
 import { talkTo, fetchFlow, fetchSessions, fetchObjects, pauseObject, resumeFlow } from "../api/client";
 import { userSessionsAtom } from "../store/session";
 import { ObjectAvatar } from "../components/ui/ObjectAvatar";
 import { TuiAction, TuiTalk, TuiUserMessage, TuiStreamingBlock } from "../components/ui/TuiBlock";
 import { cn } from "../lib/utils";
-import { Send, Maximize2, Minimize2, X, ChevronUp, ChevronDown } from "lucide-react";
+import { Send, Maximize2, Minimize2, X, ChevronUp, ChevronDown, MessageSquare } from "lucide-react";
 import type { FlowMessage, Action } from "../api/types";
 import { ProgressIndicator } from "../components/ProgressIndicator";
 
@@ -33,6 +35,8 @@ const DEFAULT_TARGET = "supervisor";
 
 export function MessageSidebar() {
   const [sidebarMode, setSidebarMode] = useAtom(messageSidebarModeAtom);
+  const [sidebarView, setSidebarView] = useAtom(messageSidebarViewAtom);
+  const [currentThreadId, setCurrentThreadId] = useAtom(currentThreadIdAtom);
   const activeId = useAtomValue(activeSessionIdAtom);
   const [activeFlow, setActiveFlow] = useAtom(activeSessionFlowAtom);
   const lastEvent = useAtomValue(lastFlowEventAtom);
@@ -410,6 +414,12 @@ export function MessageSidebar() {
   /* sidebar 模式：固定宽度侧边栏 */
   const isMain = sidebarMode === "main";
 
+  /* 未读角标（Task 4.4 接入真实数据；当前占位以让 Header 按钮先接好） */
+  const hasUnread = false;
+  const unreadTotal = 0;
+  void currentThreadId;  // 占位引用，避免 TS6133；Task 4.6 会真正使用
+  void setCurrentThreadId;
+
   return (
     <div className={cn(
       "flex flex-col bg-[var(--panel-bg)] rounded-[var(--panel-radius)] overflow-hidden",
@@ -481,6 +491,25 @@ export function MessageSidebar() {
               <span>{paused ? "paused" : "pause"}</span>
             </button>
           )}
+          {/* threads 列表切换按钮（带未读 dot 角标） */}
+          <button
+            onClick={() => setSidebarView(sidebarView === "threads" ? "process" : "threads")}
+            className={cn(
+              "relative p-1 rounded-lg transition-colors",
+              sidebarView === "threads"
+                ? "bg-[var(--accent)] text-[var(--foreground)]"
+                : "text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]",
+            )}
+            title={sidebarView === "threads" ? "返回对话" : "查看所有线程"}
+          >
+            <MessageSquare className="w-4 h-4" />
+            {hasUnread && (
+              <span
+                className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-red-500"
+                title={`${unreadTotal} 条未读`}
+              />
+            )}
+          </button>
           <button
             onClick={() => setSidebarMode(isMain ? "sidebar" : "main")}
             className="p-1 rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"

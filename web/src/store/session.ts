@@ -78,6 +78,21 @@ export const refreshKeyAtom = atom(0);
 export type MessageSidebarMode = "main" | "sidebar";
 export const messageSidebarModeAtom = atom<MessageSidebarMode>("sidebar");
 
+/**
+ * MessageSidebar Body 视图模式
+ * - "process": 展示 currentThreadId 对应线程的 process 时间线
+ * - "threads": 展示 user 相关线程的双栏列表（我发起的 + 收到的）
+ */
+export type MessageSidebarView = "process" | "threads";
+export const messageSidebarViewAtom = atom<MessageSidebarView>("process");
+
+/**
+ * MessageSidebar Body 当前查看的线程 id
+ * - null 表示尚未选择线程（显示空状态提示）
+ * - 首次发送给 supervisor 的消息后，前端 SSE 刷新后会把新根线程 id 设进来
+ */
+export const currentThreadIdAtom = atom<string | null>(null);
+
 /** debug 模式开关 */
 export const debugEnabledAtom = atom(false);
 
