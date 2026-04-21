@@ -16,15 +16,15 @@ import {
 } from "../src/process/index.js";
 import { computeScopeChain, collectFrameHooks } from "../src/process/cognitive-stack.js";
 import { getActiveTraits, traitId } from "../src/trait/activator.js";
-import type { TraitDefinition, TraitType } from "../src/types/index.js";
+import type { TraitDefinition } from "../src/types/index.js";
 
 beforeEach(() => {
   resetNodeCounter();
 });
 
-/** 创建测试用的 TraitDefinition (使用 namespace/name 格式) */
+/** 创建测试用的 TraitDefinition (namespace:name 格式，namespace 限定为 kernel|library|self) */
 const makeTrait = (
-  namespace: string,
+  namespace: TraitDefinition["namespace"],
   name: string,
   opts?: {
     when?: string;
@@ -33,6 +33,7 @@ const makeTrait = (
 ): TraitDefinition => ({
   namespace,
   name,
+  kind: "trait",
   type: "how_to_think",
   when: opts?.when ?? "always",
   description: "",
@@ -116,8 +117,9 @@ describe("collectFrameHooks", () => {
   test("收集 before hooks", () => {
     const traits: TraitDefinition[] = [
       {
-        namespace: "reflect",
+        namespace: "library",
         name: "reflective",
+        kind: "trait",
         type: "how_to_think",
         when: "always",
         description: "",
@@ -131,14 +133,15 @@ describe("collectFrameHooks", () => {
     const result = collectFrameHooks("before", traits, [], fired);
     expect(result).not.toBeNull();
     expect(result!).toContain("准备工作");
-    expect(fired.has("reflect/reflective:before")).toBe(true);
+    expect(fired.has("library:reflective:before")).toBe(true);
   });
 
   test("收集 after hooks", () => {
     const traits: TraitDefinition[] = [
       {
-        namespace: "reflect",
+        namespace: "library",
         name: "reflective",
+        kind: "trait",
         type: "how_to_think",
         when: "always",
         description: "",
@@ -157,8 +160,9 @@ describe("collectFrameHooks", () => {
   test("once hook 只触发一次", () => {
     const traits: TraitDefinition[] = [
       {
-        namespace: "reflect",
+        namespace: "library",
         name: "reflective",
+        kind: "trait",
         type: "how_to_think",
         when: "always",
         description: "",
@@ -181,8 +185,9 @@ describe("collectFrameHooks", () => {
   test("once: false 的 hook 可重复触发", () => {
     const traits: TraitDefinition[] = [
       {
-        namespace: "reflect",
+        namespace: "library",
         name: "reflective",
+        kind: "trait",
         type: "how_to_think",
         when: "always",
         description: "",
@@ -206,8 +211,9 @@ describe("collectFrameHooks", () => {
   test("只收集作用域链中或 always 的 traits", () => {
     const traits: TraitDefinition[] = [
       {
-        namespace: "always",
+        namespace: "kernel",
         name: "always_trait",
+        kind: "trait",
         type: "how_to_think",
         when: "always",
         description: "",
@@ -217,8 +223,9 @@ describe("collectFrameHooks", () => {
         hooks: { before: { inject: "always", once: false } },
       },
       {
-        namespace: "cond",
+        namespace: "library",
         name: "conditional",
+        kind: "trait",
         type: "how_to_think",
         when: "当需要时",
         description: "",
@@ -237,14 +244,14 @@ describe("collectFrameHooks", () => {
 
     /* conditional 在 scopeChain 中，应触发 */
     const fired2 = new Set<string>();
-    const r2 = collectFrameHooks("before", traits, ["cond/conditional"], fired2);
+    const r2 = collectFrameHooks("before", traits, ["library:conditional"], fired2);
     expect(r2).toContain("always");
     expect(r2).toContain("conditional");
   });
 
   test("无 hook 时返回 null", () => {
     const traits: TraitDefinition[] = [
-      { namespace: "test", name: "empty", type: "how_to_think", when: "always", description: "", readme: "", methods: [], deps: [] },
+      { namespace: "library", name: "empty", kind: "trait", type: "how_to_think", when: "always", description: "", readme: "", methods: [], deps: [] },
     ];
     const fired = new Set<string>();
     expect(collectFrameHooks("before", traits, [], fired)).toBeNull();
@@ -253,8 +260,9 @@ describe("collectFrameHooks", () => {
   test("once hook 在不同 focusNodeId 下各触发一次", () => {
     const traits: TraitDefinition[] = [
       {
-        namespace: "plan",
+        namespace: "kernel",
         name: "plannable",
+        kind: "trait",
         type: "how_to_think",
         when: "always",
         description: "",
@@ -360,6 +368,7 @@ describe("computable trait 激活", () => {
       {
         namespace: "kernel",
         name: "computable",
+        kind: "trait",
         type: "how_to_think",
         when: "always",
         description: "认知栈思维模式",
@@ -370,6 +379,7 @@ describe("computable trait 激活", () => {
       {
         namespace: "kernel",
         name: "plannable",
+        kind: "trait",
         type: "how_to_think",
         when: "当任务包含多个步骤时",
         description: "规划能力",
@@ -383,8 +393,8 @@ describe("computable trait 激活", () => {
     // 空 scopeChain — computable 仍然激活
     const active = getActiveTraits(traits, []);
     const ids = active.map(t => traitId(t));
-    expect(ids).toContain("kernel/computable");
-    expect(ids).not.toContain("kernel/plannable");
+    expect(ids).toContain("kernel:computable");
+    expect(ids).not.toContain("kernel:plannable");
   });
 
   test("plannable 在 scopeChain 中时被激活，before hook 可触发", () => {
@@ -392,6 +402,7 @@ describe("computable trait 激活", () => {
       {
         namespace: "kernel",
         name: "computable",
+        kind: "trait",
         type: "how_to_think",
         when: "always",
         description: "认知栈思维模式",
@@ -402,6 +413,7 @@ describe("computable trait 激活", () => {
       {
         namespace: "kernel",
         name: "plannable",
+        kind: "trait",
         type: "how_to_think",
         when: "当任务包含多个步骤时",
         description: "规划能力",
@@ -412,13 +424,13 @@ describe("computable trait 激活", () => {
       },
     ];
 
-    const active = getActiveTraits(traits, ["kernel/plannable"]);
+    const active = getActiveTraits(traits, ["kernel:plannable"]);
     const ids = active.map(t => traitId(t));
-    expect(ids).toContain("kernel/computable");
-    expect(ids).toContain("kernel/plannable");
+    expect(ids).toContain("kernel:computable");
+    expect(ids).toContain("kernel:plannable");
 
     // before hook 可触发
-    const plannable = active.find(t => traitId(t) === "kernel/plannable")!;
+    const plannable = active.find(t => traitId(t) === "kernel:plannable")!;
     expect(plannable.hooks?.before?.inject).toContain("评估任务");
   });
 });
@@ -436,7 +448,7 @@ describe("before hook 注入集成", () => {
 
     const fired = new Set<string>();
     // 模拟 plannable 在 scopeChain 中
-    const result = collectFrameHooks("before", traits, ["kernel/plannable"], fired, "node-1");
+    const result = collectFrameHooks("before", traits, ["kernel:plannable"], fired, "node-1");
 
     // 验证注入文本包含评估提示
     expect(result).not.toBeNull();

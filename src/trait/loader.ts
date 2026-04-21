@@ -28,89 +28,131 @@ import type {
   TraitType,
   TraitHook,
   TraitHookEvent,
+  TraitNamespace,
+  TraitKind,
 } from "../types/index.js";
 import { traitId } from "./activator.js";
+
+/** 合法 namespace 集合 */
+const VALID_NAMESPACES: readonly TraitNamespace[] = ["kernel", "library", "self"];
+
+/**
+ * 校验 namespace 字段合法性
+ *
+ * @param raw - frontmatter 读出的原始值
+ * @param fileLabel - 用于报错的文件路径标签
+ */
+function validateNamespace(raw: unknown, fileLabel: string): TraitNamespace {
+  if (typeof raw !== "string" || !raw.trim()) {
+    throw new Error(
+      `[trait-loader] ${fileLabel} 缺少 frontmatter \`namespace\` 字段（必须是 kernel | library | self 之一）`,
+    );
+  }
+  const ns = raw.trim();
+  if (!VALID_NAMESPACES.includes(ns as TraitNamespace)) {
+    throw new Error(
+      `[trait-loader] ${fileLabel} frontmatter namespace 必须是 kernel | library | self 之一，实际：${ns}`,
+    );
+  }
+  return ns as TraitNamespace;
+}
+
+/**
+ * 校验 frontmatter 的 namespace 与预期来源一致
+ *
+ * loader 的每个加载入口（kernel / library / stones / flows）会传入预期 namespace；
+ * 若 TRAIT.md / VIEW.md 声明的 namespace 不一致，直接报错（防止放错地方）。
+ */
+function expectNamespace(
+  actual: TraitNamespace,
+  expected: TraitNamespace | null,
+  fileLabel: string,
+): void {
+  if (expected && actual !== expected) {
+    throw new Error(
+      `[trait-loader] ${fileLabel} 声明的 namespace="${actual}" 与预期来源 "${expected}" 不一致`,
+    );
+  }
+}
+
+/**
+ * 校验 name 字段合法性
+ *
+ * - 必填
+ * - 不允许以 "namespace:" 前缀开头（冒号属于 traitId 分隔符）
+ * - 不允许出现非法字符（目前只允许字母数字、下划线、短横线、斜杠）
+ */
+function validateName(raw: unknown, fileLabel: string): string {
+  if (typeof raw !== "string" || !raw.trim()) {
+    throw new Error(
+      `[trait-loader] ${fileLabel} 缺少 frontmatter \`name\` 字段`,
+    );
+  }
+  const name = raw.trim();
+  if (name.includes(":")) {
+    throw new Error(
+      `[trait-loader] ${fileLabel} frontmatter name 不允许包含冒号（实际："${name}"）`,
+    );
+  }
+  if (!/^[a-zA-Z0-9_\-/]+$/.test(name)) {
+    throw new Error(
+      `[trait-loader] ${fileLabel} frontmatter name 含非法字符（只允许字母数字/下划线/短横线/斜杠，实际："${name}"）`,
+    );
+  }
+  return name;
+}
 
 /**
  * 从单个 trait 目录加载 Trait 定义
  *
+ * 新协议（硬迁移，无兼容层）：
+ * - TRAIT.md / VIEW.md frontmatter 必须显式写 `namespace: kernel | library | self`
+ *   和 `name: <相对名>`。
+ * - 加载器不再从物理路径推断 name/namespace。
+ *
  * @param traitDir - trait 目录路径
- * @param traitName - trait 完整路径名（如 "kernel/computable"）
- * @param _namespace - @deprecated 已废弃，保留参数签名兼容
- * @returns TraitDefinition，若目录无效返回 null
+ * @param expectedNamespace - 预期来源 namespace（loadTraitsFromDir 传入；null 表示不校验来源）
+ * @returns TraitDefinition，若目录无对应描述文件返回 null
  */
 export async function loadTrait(
   traitDir: string,
-  traitName?: string,
-  _namespace?: string,
+  expectedNamespace: TraitNamespace | null = null,
 ): Promise<TraitDefinition | null> {
   if (!existsSync(traitDir)) return null;
 
-  // 确定 trait 名称
-  let name = traitName;
-  if (!name) {
-    const parts = traitDir.split(/[/\\]/);
-    name = parts[parts.length - 1] || "";
-  }
-
-  // 尝试读取两种格式的文件
-  let content = "";
-  let when: TraitDefinition["when"] = "never";
-  let description = "";
-  let type: TraitType = "how_to_think"; // 默认类型
-  let version: string | undefined;
-  let deps: string[] = [];
-  let hooks: TraitDefinition["hooks"];
-  let commandBinding: TraitDefinition["commandBinding"];
-
+  /* 识别描述文件：TRAIT.md / SKILL.md / readme.md（优先级递减） */
   const traitPath = join(traitDir, "TRAIT.md");
   const skillPath = join(traitDir, "SKILL.md");
   const legacyReadmePath = join(traitDir, "readme.md");
 
-  // 优先级：TRAIT.md > SKILL.md > readme.md（兼容旧 library skills）
-  if (existsSync(traitPath)) {
-    const raw = readFileSync(traitPath, "utf-8");
-    const { data, content: body } = matter(raw);
-    content = body.trim();
-    when = typeof data.when === "string" ? (data.when as TraitDefinition["when"]) : "never";
-    description = typeof data.description === "string" ? data.description : "";
-    type = parseTraitType(data.type);
-    version = typeof data.version === "string" ? data.version : undefined;
-    deps = Array.isArray(data.deps) ? data.deps.map(String) : [];
-    hooks = parseTraitHooks(data.hooks);
-    commandBinding = parseCommandBinding(data.command_binding);
-    name = resolveTraitName(name, data);
-  } else if (existsSync(skillPath)) {
-    // SKILL.md 格式兼容
-    const raw = readFileSync(skillPath, "utf-8");
-    const { data, content: body } = matter(raw);
-    content = body.trim();
-    when = typeof data.when === "string" ? (data.when as TraitDefinition["when"]) : "never";
-    description = typeof data.description === "string" ? data.description : "";
-    type = parseTraitType(data.type);
-    version = typeof data.version === "string" ? data.version : undefined;
-    deps = Array.isArray(data.deps) ? data.deps.map(String) : [];
-    hooks = parseTraitHooks(data.hooks);
-    commandBinding = parseCommandBinding(data.command_binding);
-    name = resolveTraitName(name, data);
-  } else if (existsSync(legacyReadmePath)) {
-    const raw = readFileSync(legacyReadmePath, "utf-8");
-    const { data, content: body } = matter(raw);
-    content = body.trim();
-    when = typeof data.when === "string" ? (data.when as TraitDefinition["when"]) : "never";
-    description = typeof data.description === "string" ? data.description : "";
-    type = parseTraitType(data.type);
-    version = typeof data.version === "string" ? data.version : undefined;
-    deps = Array.isArray(data.deps) ? data.deps.map(String) : [];
-    hooks = parseTraitHooks(data.hooks);
-    commandBinding = parseCommandBinding(data.command_binding);
-    name = resolveTraitName(name, data);
-  } else {
-    // 无有效文件
-    return null;
-  }
+  let descPath: string | null = null;
+  if (existsSync(traitPath)) descPath = traitPath;
+  else if (existsSync(skillPath)) descPath = skillPath;
+  else if (existsSync(legacyReadmePath)) descPath = legacyReadmePath;
 
-  /* 加载 index.ts 中的方法 */
+  if (!descPath) return null;
+
+  const raw = readFileSync(descPath, "utf-8");
+  const { data, content: body } = matter(raw);
+  const fileLabel = descPath;
+
+  /* 新协议：强制 frontmatter 显式 namespace + name */
+  const namespace = validateNamespace(data.namespace, fileLabel);
+  expectNamespace(namespace, expectedNamespace, fileLabel);
+  const name = validateName(data.name, fileLabel);
+
+  const kind: TraitKind = data.kind === "view" ? "view" : "trait";
+  const content = body.trim();
+  const when: TraitDefinition["when"] =
+    typeof data.when === "string" ? (data.when as TraitDefinition["when"]) : "never";
+  const description = typeof data.description === "string" ? data.description : "";
+  const type: TraitType = parseTraitType(data.type);
+  const version = typeof data.version === "string" ? data.version : undefined;
+  const deps: string[] = Array.isArray(data.deps) ? data.deps.map(String) : [];
+  const hooks = parseTraitHooks(data.hooks);
+  const commandBinding = parseCommandBinding(data.command_binding);
+
+  /* 加载 index.ts 中的方法（Phase 1 阶段：保留旧 methods 列表；Phase 2 切换到 llm/ui_methods） */
   let methods: TraitMethod[] = [];
   const indexPath = join(traitDir, "index.ts");
   if (existsSync(indexPath)) {
@@ -118,7 +160,9 @@ export async function loadTrait(
   }
 
   return {
+    namespace,
     name,
+    kind,
     type,
     version,
     when,
@@ -130,49 +174,6 @@ export async function loadTrait(
     commandBinding,
     dir: traitDir,
   };
-}
-
-/**
- * 解析 trait 的完整路径名
- *
- * 优先级：
- * 1. frontmatter 中的 name 字段（如果包含 /，视为完整路径）
- * 2. frontmatter 中的 namespace + name 拼接（兼容旧格式）
- * 3. 调用方传入的 traitName（由 loadTraitsFromDir 根据目录结构构建）
- *
- * 旧格式兼容：
- * - namespace: lark, name: doc → lark/doc
- * - name: lark-wiki（连字符格式） → lark/wiki
- */
-function resolveTraitName(callerName: string, data: Record<string, unknown>): string {
-  const fmName = typeof data.name === "string" ? data.name.trim() : "";
-  const fmNamespace = typeof data.namespace === "string" ? data.namespace.trim() : "";
-
-  // 新格式：frontmatter name 已经是完整路径（包含 /）
-  if (fmName && fmName.includes("/")) {
-    return fmName;
-  }
-
-  // 旧格式兼容：namespace + name
-  if (fmNamespace && fmName) {
-    return `${fmNamespace}/${fmName}`;
-  }
-
-  // 调用方传入的名称已包含 prefix（由 loadTraitsFromDir 构建）
-  if (callerName && callerName.includes("/")) {
-    return callerName;
-  }
-
-  // 旧格式兼容：连字符分隔（如 lark-wiki → lark/wiki）
-  if (fmName && fmName.includes("-")) {
-    const [first, ...rest] = fmName.split("-");
-    if (first && rest.length > 0) {
-      return `${first}/${rest.join("-")}`;
-    }
-  }
-
-  // fallback：使用 frontmatter name 或调用方名称
-  return fmName || callerName;
 }
 
 /**
@@ -381,20 +382,22 @@ function parseFirstParam(source: string): Map<string, boolean> {
  * 只加载 refs 中列出的 trait，跳过不存在的目录。
  *
  * @param traitsDir - trait 所在的父目录（如 library/traits/）
- * @param refs - 要加载的 trait 完整路径名列表（如 "lark/doc"）
+ * @param refs - 要加载的 trait 相对名列表（如 "lark/doc"）
+ * @param expectedNamespace - 预期 namespace（用于 frontmatter 校验）
  * @returns 加载成功的 TraitDefinition 列表
  */
 export async function loadTraitsByRef(
   traitsDir: string,
   refs: string[],
+  expectedNamespace: TraitNamespace | null = null,
 ): Promise<TraitDefinition[]> {
   const results: TraitDefinition[] = [];
   for (const ref of refs) {
-    // ref 就是完整路径，直接用 / 分割拼接目录
+    // ref 是 namespace 下的相对名，用 / 分割拼接目录
     const traitDir = join(traitsDir, ...ref.split("/"));
 
     if (!existsSync(traitDir)) continue;
-    const trait = await loadTrait(traitDir, ref);
+    const trait = await loadTrait(traitDir, expectedNamespace);
     if (trait) results.push(trait);
   }
   return results;
@@ -406,7 +409,7 @@ export async function loadTraitsByRef(
  * 加载优先级（同名后者覆盖前者）：
  * 1. kernel traits — 系统级基础能力
  * 2. library traits — 用户级公共能力
- * 3. object traits — 对象自定义能力
+ * 3. object traits — 对象自定义能力（self namespace）
  *
  * @param objectTraitsDir - 对象的 traits/ 目录
  * @param kernelTraitsDir - kernel traits 目录
@@ -430,15 +433,15 @@ export async function loadAllTraits(
 
   /* 2. 加载 library traits（同名覆盖 kernel） */
   if (libraryTraitsDir && existsSync(libraryTraitsDir)) {
-    const libraryTraits = await loadTraitsFromDir(libraryTraitsDir, "");
+    const libraryTraits = await loadTraitsFromDir(libraryTraitsDir, "library");
     for (const trait of libraryTraits) {
       traitMap.set(traitId(trait), trait);
     }
   }
 
-  /* 3. 加载对象 traits（同名覆盖 library 和 kernel） */
+  /* 3. 加载对象 traits（self namespace，同名覆盖 library 和 kernel） */
   if (existsSync(objectTraitsDir)) {
-    const objectTraits = await loadTraitsFromDir(objectTraitsDir, "");
+    const objectTraits = await loadTraitsFromDir(objectTraitsDir, "self");
     for (const trait of objectTraits) {
       traitMap.set(traitId(trait), trait);
     }
@@ -465,73 +468,52 @@ export async function loadAllTraits(
  *     └── TRAIT.md
  *
  * @param traitsDir - traits 根目录
- * @param prefix - 路径前缀（如 "kernel"），会拼接到目录名前面构成完整 name
- * @param parentPath - 父路径（用于构建多级 name），内部递归使用
+ * @param expectedNamespace - 预期 namespace（kernel / library / self）
+ *   loader 会校验 TRAIT.md frontmatter 的 namespace 与之一致。
  */
 export async function loadTraitsFromDir(
   traitsDir: string,
-  prefix: string,
-  parentPath: string = "",
+  expectedNamespace: TraitNamespace,
 ): Promise<TraitDefinition[]> {
   if (!existsSync(traitsDir)) return [];
 
   const results: TraitDefinition[] = [];
-  const entries = readdirSync(traitsDir, { withFileTypes: true });
 
-  for (const entry of entries) {
-    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
-    if (entry.name.startsWith(".")) continue;
+  /** 递归扫描 */
+  const visit = async (dir: string): Promise<void> => {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+      if (entry.name.startsWith(".")) continue;
 
-    const entryPath = join(traitsDir, entry.name);
+      const entryPath = join(dir, entry.name);
 
-    // 支持 symlink：只有指向目录的 symlink 才视为可递归的 trait 目录
-    if (entry.isSymbolicLink()) {
-      try {
-        if (!statSync(entryPath).isDirectory()) continue;
-      } catch {
-        continue;
+      // 支持 symlink：只有指向目录的 symlink 才视为可递归的 trait 目录
+      if (entry.isSymbolicLink()) {
+        try {
+          if (!statSync(entryPath).isDirectory()) continue;
+        } catch {
+          continue;
+        }
       }
+
+      // 检查此目录本身是否是 trait（含 TRAIT.md/SKILL.md/readme.md）
+      const hasTraitFile =
+        existsSync(join(entryPath, "TRAIT.md")) ||
+        existsSync(join(entryPath, "SKILL.md")) ||
+        existsSync(join(entryPath, "readme.md"));
+
+      if (hasTraitFile) {
+        const trait = await loadTrait(entryPath, expectedNamespace);
+        if (trait) results.push(trait);
+      }
+
+      // 递归扫描子目录（无论本层是否是 trait，子目录都可能有 trait）
+      await visit(entryPath);
     }
-    const relativeName = parentPath ? `${parentPath}/${entry.name}` : entry.name;
-    // 完整 trait name = prefix/relativeName（如 kernel/computable）
-    const fullName = prefix ? `${prefix}/${relativeName}` : relativeName;
+  };
 
-    // 检查此目录本身是否是 trait（含 TRAIT.md/SKILL.md/readme.md）
-    const hasTraitFile =
-      existsSync(join(entryPath, "TRAIT.md")) ||
-      existsSync(join(entryPath, "SKILL.md")) ||
-      existsSync(join(entryPath, "readme.md"));
-
-    if (hasTraitFile) {
-      // 此目录是 trait，加载它
-      const trait = await loadTrait(entryPath, fullName);
-      if (trait) results.push(trait);
-    }
-
-    // 无论是否自身是 trait，都检查子目录是否含 trait（递归）
-    const subEntries = readdirSync(entryPath, { withFileTypes: true });
-    const hasSubTraits = subEntries.some(
-      (sub) =>
-        (sub.isDirectory() || (sub.isSymbolicLink() && (() => {
-          try { return statSync(join(entryPath, sub.name)).isDirectory(); } catch { return false; }
-        })())) &&
-        !sub.name.startsWith(".") &&
-        (existsSync(join(entryPath, sub.name, "TRAIT.md")) ||
-          existsSync(join(entryPath, sub.name, "SKILL.md")) ||
-          existsSync(join(entryPath, sub.name, "readme.md")))
-    );
-
-    if (hasSubTraits) {
-      // 递归加载子 trait
-      const childTraits = await loadTraitsFromDir(
-        entryPath,
-        prefix,
-        relativeName,
-      );
-      results.push(...childTraits);
-    }
-  }
-
+  await visit(traitsDir);
   return results;
 }
 
@@ -610,8 +592,14 @@ function parseTraitHooks(raw: unknown): TraitDefinition["hooks"] {
 /**
  * 从扁平的 TraitDefinition 列表构建树形索引
  *
+ * 新协议下 traitId = `namespace:name`，父子关系按**同 namespace 内 name 的 `/` 分级**推断。
+ *
+ * 例：
+ *   kernel:computable         ← 根（name 无 `/`）
+ *   kernel:computable/file_ops ← 子（parent = kernel:computable）
+ *
  * @param traits - 所有已加载的 trait
- * @returns 根节点列表（namespace 级别）
+ * @returns 根节点列表（每个 namespace 下独立成树）
  */
 export function buildTraitTree(traits: TraitDefinition[]): TraitTree[] {
   const nodes = new Map<string, TraitTree>();
@@ -633,11 +621,10 @@ export function buildTraitTree(traits: TraitDefinition[]): TraitTree[] {
   // 建立父子关系
   const roots: TraitTree[] = [];
   for (const [id, node] of nodes) {
-    const fullName = traitId(node.trait);
-    const lastSlash = fullName.lastIndexOf("/");
-    // 至少需要两段才有 parent（如 kernel/computable/output_format → parent = kernel/computable）
-    const secondLastSlash = lastSlash > 0 ? fullName.lastIndexOf("/", lastSlash - 1) : -1;
-    const parentId = secondLastSlash >= 0 ? fullName.substring(0, lastSlash) : null;
+    const name = node.trait.name;
+    const lastSlash = name.lastIndexOf("/");
+    const parentName = lastSlash > 0 ? name.substring(0, lastSlash) : null;
+    const parentId = parentName ? `${node.trait.namespace}:${parentName}` : null;
 
     if (parentId) {
       const parent = nodes.get(parentId);

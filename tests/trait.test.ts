@@ -1,5 +1,9 @@
 /**
  * Trait 系统测试
+ *
+ * Phase 1 改造后：loadTrait 签名从 (dir, name, namespace) 变为 (dir, expectedNamespace)；
+ * traitId 从 "namespace/name" 变为 "namespace:name"；
+ * 只允许三个 namespace：kernel | library | self。
  */
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
@@ -11,6 +15,20 @@ import { getActiveTraits, traitId } from "../src/trait/activator.js";
 import type { TraitDefinition } from "../src/types/index.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_trait_test");
+
+/** 新建一个最小化 TraitDefinition，便于测试用例构造 */
+function mkTrait(partial: Partial<TraitDefinition> & { namespace: TraitDefinition["namespace"]; name: string }): TraitDefinition {
+  return {
+    kind: "trait",
+    type: "how_to_think",
+    when: "always",
+    description: "",
+    readme: "",
+    methods: [],
+    deps: [],
+    ...partial,
+  };
+}
 
 beforeEach(() => {
   mkdirSync(TEST_DIR, { recursive: true });
@@ -27,18 +45,21 @@ describe("loadTrait", () => {
     writeFileSync(
       join(traitDir, "TRAIT.md"),
       `---
-namespace: "kernel"
-name: "my_trait"
-type: "how_to_think"
+namespace: kernel
+name: my_trait
+type: how_to_think
 when: always
 ---
 你应该认真思考。`,
       "utf-8",
     );
 
-    const trait = await loadTrait(traitDir, "my_trait", "kernel");
+    const trait = await loadTrait(traitDir, "kernel");
     expect(trait).not.toBeNull();
-    expect(trait!.name).toBe("kernel/my_trait");
+    expect(trait!.namespace).toBe("kernel");
+    expect(trait!.name).toBe("my_trait");
+    expect(traitId(trait!)).toBe("kernel:my_trait");
+    expect(trait!.kind).toBe("trait");
     expect(trait!.type).toBe("how_to_think");
     expect(trait!.when).toBe("always");
     expect(trait!.readme).toBe("你应该认真思考。");
@@ -46,14 +67,14 @@ when: always
   });
 
   test("加载有 index.ts 的 trait", async () => {
-    const traitDir = join(TEST_DIR, "math", "calc");
+    const traitDir = join(TEST_DIR, "library", "calc");
     mkdirSync(traitDir, { recursive: true });
     writeFileSync(
       join(traitDir, "TRAIT.md"),
       `---
-namespace: "math"
-name: "calc"
-type: "how_to_think"
+namespace: library
+name: calc
+type: how_to_think
 when: always
 ---
 计算能力`,
@@ -74,7 +95,7 @@ when: always
       "utf-8",
     );
 
-    const trait = await loadTrait(traitDir, "calc", "math");
+    const trait = await loadTrait(traitDir, "library");
     expect(trait).not.toBeNull();
     expect(trait!.methods).toHaveLength(1);
     expect(trait!.methods[0]!.name).toBe("add");
@@ -82,77 +103,77 @@ when: always
   });
 
   test("加载不存在的目录返回 null", async () => {
-    const result = await loadTrait(join(TEST_DIR, "nonexistent"), "nope", "test");
+    const result = await loadTrait(join(TEST_DIR, "nonexistent"), null);
     expect(result).toBeNull();
   });
 
   test("解析 frontmatter description", async () => {
-    const traitDir = join(TEST_DIR, "test", "desc_trait");
+    const traitDir = join(TEST_DIR, "self_desc");
     mkdirSync(traitDir, { recursive: true });
     writeFileSync(
       join(traitDir, "TRAIT.md"),
       `---
-namespace: "test"
-name: "desc_trait"
-type: "how_to_think"
+namespace: self
+name: desc_trait
+type: how_to_think
 when: always
 description: "一行摘要"
 ---
 完整内容`,
       "utf-8",
     );
-    const trait = await loadTrait(traitDir, "desc_trait", "test");
+    const trait = await loadTrait(traitDir, "self");
     expect(trait!.description).toBe("一行摘要");
   });
 
   test("无 description 时默认空字符串", async () => {
-    const traitDir = join(TEST_DIR, "test", "no_desc");
+    const traitDir = join(TEST_DIR, "self_nodesc");
     mkdirSync(traitDir, { recursive: true });
     writeFileSync(
       join(traitDir, "TRAIT.md"),
       `---
-namespace: "test"
-name: "no_desc"
-type: "how_to_think"
+namespace: self
+name: no_desc
+type: how_to_think
 when: always
 ---
 内容`,
       "utf-8",
     );
-    const trait = await loadTrait(traitDir, "no_desc", "test");
+    const trait = await loadTrait(traitDir, "self");
     expect(trait!.description).toBe("");
   });
 
   test("SKILL.md 格式兼容", async () => {
-    const traitDir = join(TEST_DIR, "skills", "my_skill");
+    const traitDir = join(TEST_DIR, "lib_skill");
     mkdirSync(traitDir, { recursive: true });
     writeFileSync(
       join(traitDir, "SKILL.md"),
       `---
-namespace: "skills"
-name: "my_skill"
-type: "how_to_use_tool"
+namespace: library
+name: my_skill
+type: how_to_use_tool
 when: always
 ---
 技能内容`,
       "utf-8",
     );
 
-    const trait = await loadTrait(traitDir, "my_skill", "skills");
+    const trait = await loadTrait(traitDir, "library");
     expect(trait).not.toBeNull();
-    expect(trait!.name).toBe("skills/my_skill");
+    expect(traitId(trait!)).toBe("library:my_skill");
     expect(trait!.type).toBe("how_to_use_tool");
   });
 
   test("hooks 解析", async () => {
-    const traitDir = join(TEST_DIR, "kernel", "hooked");
+    const traitDir = join(TEST_DIR, "kernel_hooked");
     mkdirSync(traitDir, { recursive: true });
     writeFileSync(
       join(traitDir, "TRAIT.md"),
       `---
-namespace: "kernel"
-name: "hooked"
-type: "how_to_think"
+namespace: kernel
+name: hooked
+type: how_to_think
 when: always
 hooks:
   before:
@@ -165,7 +186,7 @@ hooks:
       "utf-8",
     );
 
-    const trait = await loadTrait(traitDir, "hooked", "kernel");
+    const trait = await loadTrait(traitDir, "kernel");
     expect(trait!.hooks).toBeDefined();
     expect(trait!.hooks!.before).toBeDefined();
     expect(trait!.hooks!.before!.inject_title).toBe("开始前提醒");
@@ -173,163 +194,246 @@ hooks:
     expect(trait!.hooks!.when_finish).toBeDefined();
     expect(trait!.hooks!.when_finish!.inject).toBe("完成了");
   });
+
+  test("缺失 namespace 抛错", async () => {
+    const traitDir = join(TEST_DIR, "missing_ns");
+    mkdirSync(traitDir, { recursive: true });
+    writeFileSync(
+      join(traitDir, "TRAIT.md"),
+      `---
+name: foo
+type: how_to_think
+when: always
+---
+x`,
+      "utf-8",
+    );
+    await expect(loadTrait(traitDir, null)).rejects.toThrow(/namespace/);
+  });
+
+  test("非法 namespace 抛错", async () => {
+    const traitDir = join(TEST_DIR, "bad_ns");
+    mkdirSync(traitDir, { recursive: true });
+    writeFileSync(
+      join(traitDir, "TRAIT.md"),
+      `---
+namespace: user
+name: foo
+type: how_to_think
+when: always
+---
+x`,
+      "utf-8",
+    );
+    await expect(loadTrait(traitDir, null)).rejects.toThrow(/namespace/);
+  });
+
+  test("expectedNamespace 与声明不符抛错", async () => {
+    const traitDir = join(TEST_DIR, "ns_mismatch");
+    mkdirSync(traitDir, { recursive: true });
+    writeFileSync(
+      join(traitDir, "TRAIT.md"),
+      `---
+namespace: library
+name: foo
+type: how_to_think
+when: always
+---
+x`,
+      "utf-8",
+    );
+    await expect(loadTrait(traitDir, "kernel")).rejects.toThrow(/namespace/);
+  });
+
+  test("name 含冒号抛错", async () => {
+    const traitDir = join(TEST_DIR, "bad_name");
+    mkdirSync(traitDir, { recursive: true });
+    writeFileSync(
+      join(traitDir, "TRAIT.md"),
+      `---
+namespace: self
+name: "evil:name"
+type: how_to_think
+when: always
+---
+x`,
+      "utf-8",
+    );
+    await expect(loadTrait(traitDir, "self")).rejects.toThrow(/name/);
+  });
 });
 
 describe("traitId 函数", () => {
-  test("生成 namespace/name 格式", () => {
-    const trait: TraitDefinition = {
-      namespace: "kernel",
-      name: "computable",
-      type: "how_to_think",
-      when: "always",
-      description: "",
-      readme: "",
-      methods: [],
-      deps: [],
-    };
-    expect(traitId(trait)).toBe("kernel/computable");
+  test("生成 namespace:name 格式", () => {
+    const trait = mkTrait({ namespace: "kernel", name: "computable" });
+    expect(traitId(trait)).toBe("kernel:computable");
   });
 
-  test("无 namespace 时直接返回 name", () => {
-    const trait: TraitDefinition = {
-      name: "old_style",
-      type: "how_to_think",
-      when: "always",
-      description: "",
-      readme: "",
-      methods: [],
-      deps: [],
-    };
-    expect(traitId(trait)).toBe("old_style");
+  test("name 含 / 分级保留", () => {
+    const trait = mkTrait({ namespace: "library", name: "lark/doc" });
+    expect(traitId(trait)).toBe("library:lark/doc");
+  });
+
+  test("self namespace", () => {
+    const trait = mkTrait({ namespace: "self", name: "reporter" });
+    expect(traitId(trait)).toBe("self:reporter");
   });
 });
 
 describe("loadAllTraits", () => {
-  test("合并 kernel 和对象 traits", async () => {
-    const kernelDir = join(TEST_DIR, "kernel");
-    const objectDir = join(TEST_DIR, "object");
+  test("合并 kernel、library、self 三源 traits", async () => {
+    const kernelDir = join(TEST_DIR, "kr");
+    const libraryDir = join(TEST_DIR, "lib");
+    const objectDir = join(TEST_DIR, "self_obj");
 
-    /* kernel trait (新格式：kernel/computable) */
-    mkdirSync(join(kernelDir, "kernel", "computable"), { recursive: true });
+    /* kernel trait */
+    mkdirSync(join(kernelDir, "computable"), { recursive: true });
     writeFileSync(
-      join(kernelDir, "kernel", "computable", "TRAIT.md"),
+      join(kernelDir, "computable", "TRAIT.md"),
       `---
-namespace: "kernel"
-name: "computable"
-type: "how_to_think"
+namespace: kernel
+name: computable
+type: how_to_think
 when: always
 ---
 程序执行`,
       "utf-8",
     );
 
-    /* object trait (新格式：search/search) */
-    mkdirSync(join(objectDir, "search", "search"), { recursive: true });
+    /* library trait */
+    mkdirSync(join(libraryDir, "lark"), { recursive: true });
     writeFileSync(
-      join(objectDir, "search", "search", "TRAIT.md"),
+      join(libraryDir, "lark", "TRAIT.md"),
       `---
-namespace: "search"
-name: "search"
-type: "how_to_use_tool"
+namespace: library
+name: lark
+type: how_to_use_tool
 when: always
 ---
-搜索能力`,
+飞书能力`,
       "utf-8",
     );
 
-    const { traits } = await loadAllTraits(objectDir, kernelDir);
-    expect(traits).toHaveLength(2);
-    expect(traits.map((t) => traitId(t)).sort()).toEqual(["kernel/computable", "search/search"]);
+    /* self trait */
+    mkdirSync(join(objectDir, "reporter"), { recursive: true });
+    writeFileSync(
+      join(objectDir, "reporter", "TRAIT.md"),
+      `---
+namespace: self
+name: reporter
+type: how_to_use_tool
+when: always
+---
+报告能力`,
+      "utf-8",
+    );
+
+    const { traits } = await loadAllTraits(objectDir, kernelDir, libraryDir);
+    expect(traits).toHaveLength(3);
+    expect(traits.map((t) => traitId(t)).sort()).toEqual([
+      "kernel:computable",
+      "library:lark",
+      "self:reporter",
+    ]);
   });
 
-  test("对象 trait 覆盖 kernel 同名 trait", async () => {
-    const kernelDir = join(TEST_DIR, "kernel2");
-    const objectDir = join(TEST_DIR, "object2");
+  test("self trait 覆盖 kernel 同 traitId 的 trait", async () => {
+    const kernelDir = join(TEST_DIR, "kr2");
+    const objectDir = join(TEST_DIR, "self2");
 
-    mkdirSync(join(kernelDir, "kernel", "computable"), { recursive: true });
+    /* kernel 下一个普通 trait */
+    mkdirSync(join(kernelDir, "foo"), { recursive: true });
     writeFileSync(
-      join(kernelDir, "kernel", "computable", "TRAIT.md"),
+      join(kernelDir, "foo", "TRAIT.md"),
       `---
-namespace: "kernel"
-name: "computable"
-type: "how_to_think"
+namespace: kernel
+name: foo
+type: how_to_think
 when: always
 ---
 kernel版本`,
       "utf-8",
     );
 
-    mkdirSync(join(objectDir, "kernel", "computable"), { recursive: true });
+    /* self 下创建同 traitId "kernel:foo" 是不允许的（namespace 被强制为 self）；
+       这里用同名 self:foo 来测试 trait map 的合并覆盖不会丢失两者 */
+    mkdirSync(join(objectDir, "foo"), { recursive: true });
     writeFileSync(
-      join(objectDir, "kernel", "computable", "TRAIT.md"),
+      join(objectDir, "foo", "TRAIT.md"),
       `---
-namespace: "kernel"
-name: "computable"
-type: "how_to_think"
+namespace: self
+name: foo
+type: how_to_think
 when: always
 ---
-对象覆盖版本`,
+对象版本`,
       "utf-8",
     );
 
     const { traits } = await loadAllTraits(objectDir, kernelDir);
-    expect(traits).toHaveLength(1);
-    expect(traits[0]!.readme).toBe("对象覆盖版本");
+    expect(traits).toHaveLength(2);
+    expect(traits.map((t) => traitId(t)).sort()).toEqual([
+      "kernel:foo",
+      "self:foo",
+    ]);
   });
 });
 
 describe("getActiveTraits", () => {
   test("激活 always 的 traits，不激活条件 trait", () => {
     const traits: TraitDefinition[] = [
-      { namespace: "kernel", name: "a", type: "how_to_think", when: "always", description: "", readme: "A", methods: [], deps: [] },
-      { namespace: "kernel", name: "b", type: "how_to_think", when: "never", description: "", readme: "B", methods: [], deps: [] },
-      { namespace: "kernel", name: "c", type: "how_to_think", when: "当需要时", description: "", readme: "C", methods: [], deps: [] },
+      mkTrait({ namespace: "kernel", name: "a", when: "always", readme: "A" }),
+      mkTrait({ namespace: "kernel", name: "b", when: "never", readme: "B" }),
+      mkTrait({ namespace: "kernel", name: "c", when: "当需要时", readme: "C" }),
     ];
 
     const active = getActiveTraits(traits);
-    expect(active.map((t) => traitId(t))).toContain("kernel/a");
-    expect(active.map((t) => traitId(t))).not.toContain("kernel/b");
-    expect(active.map((t) => traitId(t))).not.toContain("kernel/c");
+    const ids = active.map((t) => traitId(t));
+    expect(ids).toContain("kernel:a");
+    expect(ids).not.toContain("kernel:b");
+    expect(ids).not.toContain("kernel:c");
   });
 
-  test("手动激活条件 trait (使用 namespace/name 格式)", () => {
+  test("手动激活条件 trait (scope 使用 namespace:name 格式)", () => {
     const traits: TraitDefinition[] = [
-      { namespace: "kernel", name: "a", type: "how_to_think", when: "always", description: "", readme: "A", methods: [], deps: [] },
-      { namespace: "tools", name: "obj_create", type: "how_to_use_tool", when: "当需要创建新对象时", description: "", readme: "OC", methods: [], deps: [] },
-      { namespace: "tools", name: "file_ops", type: "how_to_use_tool", when: "当需要操作文件系统时", description: "", readme: "FO", methods: [], deps: [] },
+      mkTrait({ namespace: "kernel", name: "a", when: "always", readme: "A" }),
+      mkTrait({ namespace: "library", name: "obj_create", type: "how_to_use_tool", when: "当需要创建新对象时", readme: "OC" }),
+      mkTrait({ namespace: "library", name: "file_ops", type: "how_to_use_tool", when: "当需要操作文件系统时", readme: "FO" }),
     ];
 
-    const active = getActiveTraits(traits, ["tools/obj_create"]);
-    expect(active.map((t) => traitId(t))).toContain("kernel/a");
-    expect(active.map((t) => traitId(t))).toContain("tools/obj_create");
-    expect(active.map((t) => traitId(t))).not.toContain("tools/file_ops");
+    const active = getActiveTraits(traits, ["library:obj_create"]);
+    const ids = active.map((t) => traitId(t));
+    expect(ids).toContain("kernel:a");
+    expect(ids).toContain("library:obj_create");
+    expect(ids).not.toContain("library:file_ops");
   });
 
-  test("依赖自动激活 (deps 使用 namespace/name 格式)", () => {
+  test("依赖自动激活 (deps 使用 namespace:name 格式)", () => {
     const traits: TraitDefinition[] = [
-      { namespace: "base", name: "base", type: "how_to_think", when: "never", description: "", readme: "Base", methods: [], deps: [] },
-      { namespace: "ext", name: "child", type: "how_to_think", when: "always", description: "", readme: "Child", methods: [], deps: ["base/base"] },
+      mkTrait({ namespace: "kernel", name: "base", when: "never", readme: "Base" }),
+      mkTrait({ namespace: "library", name: "child", when: "always", readme: "Child", deps: ["kernel:base"] }),
     ];
 
     const active = getActiveTraits(traits);
-    expect(active.map((t) => traitId(t))).toContain("base/base");
-    expect(active.map((t) => traitId(t))).toContain("ext/child");
+    const ids = active.map((t) => traitId(t));
+    expect(ids).toContain("kernel:base");
+    expect(ids).toContain("library:child");
   });
 });
 
 describe("loadTraitsByRef（_traits_ref 加载机制）", () => {
-  test("只加载指定名称的 trait (namespace/name 格式)", async () => {
-    const libDir = join(TEST_DIR, "library");
-    /* 创建 3 个 trait，只引用其中 2 个 */
-    for (const [ns, name] of [["search", "search"], ["translate", "translate"], ["summary", "summarize"]]) {
-      const traitDir = join(libDir, ns, name);
+  test("只加载指定名称的 trait", async () => {
+    const libDir = join(TEST_DIR, "lib_ref");
+    /* 创建 3 个 library trait，只引用其中 2 个 */
+    for (const name of ["search", "translate", "summarize"]) {
+      const traitDir = join(libDir, name);
       mkdirSync(traitDir, { recursive: true });
       writeFileSync(
         join(traitDir, "TRAIT.md"),
         `---
-namespace: "${ns}"
-name: "${name}"
-type: "how_to_use_tool"
+namespace: library
+name: ${name}
+type: how_to_use_tool
 when: always
 ---
 ${name}能力`,
@@ -337,80 +441,59 @@ ${name}能力`,
       );
     }
 
-    const traits = await loadTraitsByRef(libDir, ["search/search", "summary/summarize"]);
+    const traits = await loadTraitsByRef(libDir, ["search", "summarize"], "library");
     expect(traits).toHaveLength(2);
-    expect(traits.map(t => traitId(t)).sort()).toEqual(["search/search", "summary/summarize"]);
+    expect(traits.map((t) => traitId(t)).sort()).toEqual([
+      "library:search",
+      "library:summarize",
+    ]);
   });
 
   test("跳过不存在的 trait 名称", async () => {
     const libDir = join(TEST_DIR, "lib_skip");
-    mkdirSync(join(libDir, "real", "real"), { recursive: true });
+    mkdirSync(join(libDir, "real"), { recursive: true });
     writeFileSync(
-      join(libDir, "real", "real", "TRAIT.md"),
+      join(libDir, "real", "TRAIT.md"),
       `---
-namespace: "real"
-name: "real"
-type: "how_to_think"
+namespace: library
+name: real
+type: how_to_think
 when: always
 ---
 存在`,
       "utf-8",
     );
 
-    const traits = await loadTraitsByRef(libDir, ["real/real", "ghost/ghost", "phantom/phantom"]);
+    const traits = await loadTraitsByRef(libDir, ["real", "ghost", "phantom"], "library");
     expect(traits).toHaveLength(1);
-    expect(traitId(traits[0]!)).toBe("real/real");
+    expect(traitId(traits[0]!)).toBe("library:real");
   });
 
   test("空 refs 数组返回空列表", async () => {
-    const libDir = join(TEST_DIR, "lib_empty");
-    mkdirSync(join(libDir, "something", "something"), { recursive: true });
-    writeFileSync(
-      join(libDir, "something", "something", "TRAIT.md"),
-      `---
-namespace: "something"
-name: "something"
-type: "how_to_think"
-when: always
----
-内容`,
-      "utf-8",
-    );
-
-    const traits = await loadTraitsByRef(libDir, []);
+    const traits = await loadTraitsByRef(TEST_DIR, [], null);
     expect(traits).toHaveLength(0);
   });
 
   test("目录不存在时不报错", async () => {
-    const traits = await loadTraitsByRef(join(TEST_DIR, "nonexistent_lib"), ["a/a", "b/b"]);
+    const traits = await loadTraitsByRef(join(TEST_DIR, "nonexistent_lib"), ["a", "b"], null);
     expect(traits).toHaveLength(0);
   });
 });
 
-describe("方法可见性过滤", () => {
+describe("方法可见性过滤（Phase 1：旧 registry API 继续有效，Phase 2 切换）", () => {
   test("buildSandboxMethods 只注入 activatedTraits 中的方法", async () => {
     const registry = new MethodRegistry();
     registry.registerAll([
-      {
-        namespace: "t1",
+      mkTrait({
+        namespace: "kernel",
         name: "trait_a",
-        when: "always",
-        type: "how_to_think",
-        description: "",
-        readme: "",
         methods: [{ name: "methodA", description: "", params: [], fn: async () => "a", needsCtx: false }],
-        deps: [],
-      },
-      {
-        namespace: "t2",
+      }),
+      mkTrait({
+        namespace: "library",
         name: "trait_b",
-        when: "always",
-        type: "how_to_think",
-        description: "",
-        readme: "",
         methods: [{ name: "methodB", description: "", params: [], fn: async () => "b", needsCtx: false }],
-        deps: [],
-      },
+      }),
     ]);
 
     const ctx = {
@@ -419,14 +502,14 @@ describe("方法可见性过滤", () => {
       rootDir: "/tmp", selfDir: "/tmp", stoneName: "test",
     } as any;
 
-    // 只激活 trait_a → 只注入 trait_a.methodA
-    const sandbox = registry.buildSandboxMethods(ctx, ["t1/trait_a"]);
-    expect(sandbox["t1/trait_a"]).toBeDefined();
-    expect((sandbox["t1/trait_a"] as any).methodA).toBeDefined();
-    expect(sandbox["t2/trait_b"]).toBeUndefined();
+    // 只激活 kernel:trait_a → 只注入 kernel:trait_a 相关方法
+    const sandbox = registry.buildSandboxMethods(ctx, ["kernel:trait_a"]);
+    expect(sandbox["kernel:trait_a"]).toBeDefined();
+    expect((sandbox["kernel:trait_a"] as any).methodA).toBeDefined();
+    expect(sandbox["library:trait_b"]).toBeUndefined();
 
     // 验证两段式调用
-    const result = await (sandbox["t1/trait_a"] as any).methodA();
+    const result = await (sandbox["kernel:trait_a"] as any).methodA();
     expect(result).toBe("a");
 
     // 扁平调用可用，但仅限已激活 trait 的方法
@@ -434,9 +517,9 @@ describe("方法可见性过滤", () => {
     expect(sandbox.methodB).toBeUndefined();
 
     // 激活全部
-    const sandboxAll = registry.buildSandboxMethods(ctx, ["t1/trait_a", "t2/trait_b"]);
-    expect(sandboxAll["t1/trait_a"]).toBeDefined();
-    expect(sandboxAll["t2/trait_b"]).toBeDefined();
+    const sandboxAll = registry.buildSandboxMethods(ctx, ["kernel:trait_a", "library:trait_b"]);
+    expect(sandboxAll["kernel:trait_a"]).toBeDefined();
+    expect(sandboxAll["library:trait_b"]).toBeDefined();
   });
 });
 
@@ -444,13 +527,9 @@ describe("MethodRegistry", () => {
   test("注册并查找方法", () => {
     const registry = new MethodRegistry();
     const traits: TraitDefinition[] = [
-      {
-        namespace: "math",
+      mkTrait({
+        namespace: "library",
         name: "math",
-        type: "how_to_think",
-        when: "always",
-        description: "",
-        readme: "",
         methods: [
           {
             name: "add",
@@ -459,25 +538,20 @@ describe("MethodRegistry", () => {
             fn: async (_ctx: unknown, a: unknown, b: unknown) => (a as number) + (b as number),
           },
         ],
-        deps: [],
-      },
+      }),
     ];
 
     registry.registerAll(traits);
     expect(registry.names()).toContain("add");
-    expect(registry.get("add")!.traitName).toBe("math/math");
+    expect(registry.get("add")!.traitName).toBe("library:math");
   });
 
   test("构建沙箱方法", async () => {
     const registry = new MethodRegistry();
     const traits: TraitDefinition[] = [
-      {
-        namespace: "math",
+      mkTrait({
+        namespace: "library",
         name: "math",
-        type: "how_to_think",
-        when: "always",
-        description: "",
-        readme: "",
         methods: [
           {
             name: "multiply",
@@ -486,8 +560,7 @@ describe("MethodRegistry", () => {
             fn: async (_ctx: unknown, a: unknown, b: unknown) => (a as number) * (b as number),
           },
         ],
-        deps: [],
-      },
+      }),
     ];
 
     registry.registerAll(traits);
@@ -503,10 +576,10 @@ describe("MethodRegistry", () => {
       stoneName: "test",
     } as any;
 
-    // 两段式调用：namespace/traitName.methodName()
-    const methods = registry.buildSandboxMethods(ctx, ["math/math"]);
-    expect(methods["math/math"]).toBeDefined();
-    const result = await (methods["math/math"] as any).multiply(3, 4);
+    // 两段式调用：traitId.methodName()
+    const methods = registry.buildSandboxMethods(ctx, ["library:math"]);
+    expect(methods["library:math"]).toBeDefined();
+    const result = await (methods["library:math"] as any).multiply(3, 4);
     expect(result).toBe(12);
 
     // 扁平调用同样可用
@@ -516,19 +589,14 @@ describe("MethodRegistry", () => {
   test("buildSandboxMethods 传递 rootDir/selfDir/stoneName", async () => {
     const registry = new MethodRegistry();
     const traits: TraitDefinition[] = [
-      {
-        namespace: "inspect",
+      mkTrait({
+        namespace: "library",
         name: "inspector",
-        type: "how_to_think",
-        when: "always",
-        description: "",
-        readme: "",
         methods: [
           {
             name: "inspectCtx",
             description: "返回 ctx 中的新字段",
             params: [],
-            /** 方法接收 ctx，返回三个新字段 */
             fn: async (ctx: Record<string, unknown>) => ({
               rootDir: ctx.rootDir,
               selfDir: ctx.selfDir,
@@ -536,8 +604,7 @@ describe("MethodRegistry", () => {
             }),
           },
         ],
-        deps: [],
-      },
+      }),
     ];
 
     registry.registerAll(traits);
@@ -554,28 +621,24 @@ describe("MethodRegistry", () => {
       stoneName: "alice",
     } as any;
 
-    // 两段式调用：inspect/inspector.inspectCtx()
-    const methods = registry.buildSandboxMethods(ctx, ["inspect/inspector"]);
-    expect(methods["inspect/inspector"]).toBeDefined();
-    const result = (await (methods["inspect/inspector"] as any).inspectCtx()) as Record<string, unknown>;
+    const methods = registry.buildSandboxMethods(ctx, ["library:inspector"]);
+    expect(methods["library:inspector"]).toBeDefined();
+    const result = (await (methods["library:inspector"] as any).inspectCtx()) as Record<string, unknown>;
     expect(result.rootDir).toBe("/home/user/project");
     expect(result.selfDir).toBe("/home/user/project/stones/alice");
     expect(result.stoneName).toBe("alice");
 
-    // 扁平调用同样可用
     expect(typeof methods.inspectCtx).toBe("function");
   });
 
-  test("两段式方法调用 namespace/traitName.methodName()", async () => {
+  test("两段式方法调用 traitId.methodName()", async () => {
     const registry = new MethodRegistry();
     const traits: TraitDefinition[] = [
-      {
-        namespace: "math",
+      mkTrait({
+        namespace: "library",
         name: "math_basic",
-        type: "how_to_think",
         when: "never",
         description: "基础数学",
-        readme: "",
         methods: [
           {
             name: "add",
@@ -590,15 +653,12 @@ describe("MethodRegistry", () => {
             fn: async (_ctx: unknown, a: unknown, b: unknown) => (a as number) - (b as number),
           },
         ],
-        deps: [],
-      },
-      {
-        namespace: "str",
+      }),
+      mkTrait({
+        namespace: "library",
         name: "string_utils",
-        type: "how_to_think",
         when: "never",
         description: "字符串工具",
-        readme: "",
         methods: [
           {
             name: "concat",
@@ -607,8 +667,7 @@ describe("MethodRegistry", () => {
             fn: async (_ctx: unknown, a: unknown, b: unknown) => (a as string) + (b as string),
           },
         ],
-        deps: [],
-      },
+      }),
     ];
 
     registry.registerAll(traits);
@@ -624,27 +683,23 @@ describe("MethodRegistry", () => {
       stoneName: "test",
     } as any;
 
-    // 激活 math_basic 和 string_utils
-    const methods = registry.buildSandboxMethods(ctx, ["math/math_basic", "str/string_utils"]);
+    const methods = registry.buildSandboxMethods(ctx, ["library:math_basic", "library:string_utils"]);
 
-    // 验证两段式调用：namespace/traitName.methodName()
-    expect(methods["math/math_basic"]).toBeDefined();
-    expect((methods["math/math_basic"] as any).add).toBeDefined();
-    expect((methods["math/math_basic"] as any).subtract).toBeDefined();
-    expect(methods["str/string_utils"]).toBeDefined();
-    expect((methods["str/string_utils"] as any).concat).toBeDefined();
+    expect(methods["library:math_basic"]).toBeDefined();
+    expect((methods["library:math_basic"] as any).add).toBeDefined();
+    expect((methods["library:math_basic"] as any).subtract).toBeDefined();
+    expect(methods["library:string_utils"]).toBeDefined();
+    expect((methods["library:string_utils"] as any).concat).toBeDefined();
 
-    // 验证两段式调用能正常工作
-    const addResult = await (methods["math/math_basic"] as any).add(2, 3);
+    const addResult = await (methods["library:math_basic"] as any).add(2, 3);
     expect(addResult).toBe(5);
 
-    const subtractResult = await (methods["math/math_basic"] as any).subtract(10, 3);
+    const subtractResult = await (methods["library:math_basic"] as any).subtract(10, 3);
     expect(subtractResult).toBe(7);
 
-    const concatResult = await (methods["str/string_utils"] as any).concat("Hello, ", "World!");
+    const concatResult = await (methods["library:string_utils"] as any).concat("Hello, ", "World!");
     expect(concatResult).toBe("Hello, World!");
 
-    // 扁平调用同样可用
     expect(typeof methods.add).toBe("function");
     expect(typeof methods.subtract).toBe("function");
     expect(typeof methods.concat).toBe("function");
@@ -653,30 +708,22 @@ describe("MethodRegistry", () => {
   test("buildSandboxMethods 按 activatedTraits 过滤方法", async () => {
     const registry = new MethodRegistry();
     const traits: TraitDefinition[] = [
-      {
-        namespace: "ns1",
+      mkTrait({
+        namespace: "kernel",
         name: "trait_a",
-        type: "how_to_think",
         when: "never",
-        description: "",
-        readme: "",
         methods: [
           { name: "methodA", description: "", params: [], fn: async () => "A" },
         ],
-        deps: [],
-      },
-      {
-        namespace: "ns2",
+      }),
+      mkTrait({
+        namespace: "library",
         name: "trait_b",
-        type: "how_to_think",
         when: "never",
-        description: "",
-        readme: "",
         methods: [
           { name: "methodB", description: "", params: [], fn: async () => "B" },
         ],
-        deps: [],
-      },
+      }),
     ];
 
     registry.registerAll(traits);
@@ -692,23 +739,19 @@ describe("MethodRegistry", () => {
       stoneName: "test",
     } as any;
 
-    // 只激活 trait_a
-    const methods = registry.buildSandboxMethods(ctx, ["ns1/trait_a"]);
+    // 只激活 kernel:trait_a
+    const methods = registry.buildSandboxMethods(ctx, ["kernel:trait_a"]);
 
-    // trait_a 的方法应该可用（两段式调用）
-    expect(methods["ns1/trait_a"]).toBeDefined();
-    expect((methods["ns1/trait_a"] as any).methodA).toBeDefined();
+    expect(methods["kernel:trait_a"]).toBeDefined();
+    expect((methods["kernel:trait_a"] as any).methodA).toBeDefined();
 
-    // trait_b 的方法应该不可用
-    expect(methods["ns2/trait_b"]).toBeUndefined();
+    expect(methods["library:trait_b"]).toBeUndefined();
 
-    // 扁平调用仅暴露已激活 trait 的方法
     expect(typeof methods.methodA).toBe("function");
     expect(methods.methodB).toBeUndefined();
 
-    // 激活全部时所有 trait 都可用
-    const allMethods = registry.buildSandboxMethods(ctx, ["ns1/trait_a", "ns2/trait_b"]);
-    expect(allMethods["ns1/trait_a"]).toBeDefined();
-    expect(allMethods["ns2/trait_b"]).toBeDefined();
+    const allMethods = registry.buildSandboxMethods(ctx, ["kernel:trait_a", "library:trait_b"]);
+    expect(allMethods["kernel:trait_a"]).toBeDefined();
+    expect(allMethods["library:trait_b"]).toBeDefined();
   });
 });

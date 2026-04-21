@@ -30,6 +30,9 @@ export type {
 export type {
   TraitMethodParam,
   TraitMethod,
+  TraitMethodChannel,
+  TraitNamespace,
+  TraitKind,
   TraitWhen,
   TraitHookEvent,
   TraitHook,

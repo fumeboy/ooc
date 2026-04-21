@@ -256,6 +256,8 @@ export class World {
         computableReadme,
         [
           "---",
+          "namespace: kernel",
+          "name: computable",
           "when: always",
           "---",
           "",
@@ -363,6 +365,8 @@ export class World {
         talkableReadme,
         [
           "---",
+          "namespace: kernel",
+          "name: talkable",
           "when: always",
           "---",
           "",

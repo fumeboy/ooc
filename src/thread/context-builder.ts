@@ -31,12 +31,11 @@ import { getActiveTraits, traitId as activatorTraitId } from "../trait/activator
 
 /**
  * 获取 trait 的完整标识（本地版本，避免循环依赖）
+ *
+ * 与 activator.traitId 保持一致：`namespace:name`（冒号分隔）。
  */
 function localTraitId(trait: TraitDefinition): string {
-  if (trait.namespace && !trait.name.startsWith(trait.namespace + "/")) {
-    return `${trait.namespace}/${trait.name}`;
-  }
-  return trait.name;
+  return `${trait.namespace}:${trait.name}`;
 }
 
 /** 线程 Context（双视角） */
@@ -118,13 +117,15 @@ export interface ThreadContextInput {
 }
 
 /**
- * 判断是否为 kernel trait（前缀匹配）
+ * 判断是否为 kernel trait（traitId 前缀匹配）
  *
  * kernel trait 的 readme 注入到 instructions 区域（系统指令），
  * 非 kernel trait 注入到 knowledge 区域（知识窗口）。
+ *
+ * 新协议：traitId = `namespace:name`，所以用 "kernel:" 前缀判断。
  */
 function isKernelTrait(id: string): boolean {
-  return id.startsWith("kernel/");
+  return id.startsWith("kernel:");
 }
 
 /**

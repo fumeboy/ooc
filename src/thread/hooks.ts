@@ -19,12 +19,11 @@ import type { ThreadFrameHook } from "./types.js";
 
 /**
  * 获取 trait 的完整标识（本地版本，避免循环依赖）
+ *
+ * 与 activator.traitId 保持一致：`namespace:name`（冒号分隔）。
  */
 function localTraitId(trait: TraitDefinition): string {
-  if (trait.namespace && !trait.name.startsWith(trait.namespace + "/")) {
-    return `${trait.namespace}/${trait.name}`;
-  }
-  return trait.name;
+  return `${trait.namespace}:${trait.name}`;
 }
 
 /**

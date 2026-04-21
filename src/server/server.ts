@@ -947,6 +947,8 @@ interface TraitInfo {
 
 /**
  * 获取对象的 traits 详情（对象自身 + kernel）
+ *
+ * 本函数仅扫 traits/ 一级子目录（不递归），用于前端对象详情页的 trait 列表展示。
  */
 async function getTraitsInfo(
   objectDir: string,
@@ -955,7 +957,10 @@ async function getTraitsInfo(
   const objectTraitsDir = join(objectDir, "traits");
   const kernelTraitsDir = join(worldRootDir, "kernel", "traits");
 
-  const loadTraitInfos = async (dir: string): Promise<TraitInfo[]> => {
+  const loadTraitInfos = async (
+    dir: string,
+    expectedNamespace: "self" | "kernel",
+  ): Promise<TraitInfo[]> => {
     if (!existsSync(dir)) return [];
     const names = readdirSync(dir, { withFileTypes: true })
       .filter((d) => d.isDirectory())
@@ -963,10 +968,10 @@ async function getTraitsInfo(
 
     const infos: TraitInfo[] = [];
     for (const name of names) {
-      const trait = await loadTrait(join(dir, name), name);
+      const trait = await loadTrait(join(dir, name), expectedNamespace);
       if (trait) {
         infos.push({
-          name: trait.name,
+          name: `${trait.namespace}:${trait.name}`,
           when: trait.when,
           readme: trait.readme,
           hasMethods: trait.methods.length > 0,
@@ -978,8 +983,8 @@ async function getTraitsInfo(
   };
 
   return {
-    traits: await loadTraitInfos(objectTraitsDir),
-    kernelTraits: await loadTraitInfos(kernelTraitsDir),
+    traits: await loadTraitInfos(objectTraitsDir, "self"),
+    kernelTraits: await loadTraitInfos(kernelTraitsDir, "kernel"),
   };
 }
 

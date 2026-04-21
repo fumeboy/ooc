@@ -66,29 +66,17 @@ export function buildContext(
   /* whoAmI 只使用 Stone 自身的 thinkable 描述 */
   const whoAmI = stone.thinkable.whoAmI;
 
-  /* 区分 kernel traits（系统指令）和 user traits（领域知识） */
-  const KERNEL_TRAIT_IDS = new Set([
-    "kernel/computable",
-    "kernel/talkable",
-    "kernel/object_creation",
-    "kernel/verifiable",
-    "kernel/debuggable",
-    "kernel/plannable",
-    "kernel/reflective",
-    "kernel/computable/web_search",
-    "kernel/computable/testable",
-    "kernel/reviewable",
-    "kernel/computable",
-  ]);
+  /* 区分 kernel traits（系统指令）和 user traits（领域知识）——用 "kernel:" 前缀判断 */
+  const isKernelTraitId = (id: string) => id.startsWith("kernel:");
 
   /* Progressive Disclosure: 有 description 的 trait 只在 focus 路径或 always-on 时注入完整 readme */
   const instructions: ContextWindow[] = activeTraits
-    .filter((t) => t.readme && KERNEL_TRAIT_IDS.has(traitId(t)))
+    .filter((t) => t.readme && isKernelTraitId(traitId(t)))
     .filter((t) => !t.description || scopeSet.has(traitId(t)) || t.when === "always")
     .map((t) => ({ name: traitId(t), content: t.readme }));
 
   const userTraitWindows: ContextWindow[] = activeTraits
-    .filter((t) => t.readme && !KERNEL_TRAIT_IDS.has(traitId(t)))
+    .filter((t) => t.readme && !isKernelTraitId(traitId(t)))
     .filter((t) => !t.description || scopeSet.has(traitId(t)))
     .map((t) => ({ name: traitId(t), content: t.readme }));
 

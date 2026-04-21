@@ -17,15 +17,42 @@ import type { TraitDefinition } from "../types/index.js";
 /**
  * 获取 trait 的完整标识
  *
+ * 新格式（硬迁移）：`<namespace>:<name>`（冒号分隔）。
+ *
  * @param trait - Trait 定义
- * @returns trait 的完整路径名（如 "kernel/computable"）
+ * @returns trait 的 traitId（如 "kernel:computable", "library:lark/doc", "self:reporter"）
  */
 export function traitId(trait: TraitDefinition): string {
-  // 兼容旧格式：如果 name 不含 namespace 前缀但 namespace 存在，则拼接
-  if (trait.namespace && !trait.name.startsWith(trait.namespace + "/")) {
-    return `${trait.namespace}/${trait.name}`;
+  return `${trait.namespace}:${trait.name}`;
+}
+
+/**
+ * 解析 trait 引用（可能省略 namespace）到完整 traitId
+ *
+ * 规则：
+ * - 若 raw 含 `:` → 直接作为完整 traitId 返回（原样）
+ * - 否则按 `self:{raw}` → `kernel:{raw}` → `library:{raw}` 顺序在候选集合中查找，
+ *   取第一个命中
+ * - 全部未命中 → 返回 null
+ *
+ * @param raw - 可能省略 namespace 的 trait 引用（如 "computable" 或 "kernel:computable"）
+ * @param available - 已加载的 trait 集合（用于判断 namespace 省略时按优先级查找）
+ */
+export function resolveTraitRef(
+  raw: string,
+  available: Iterable<TraitDefinition>,
+): string | null {
+  if (raw.includes(":")) {
+    const exists = Array.from(available).some((t) => traitId(t) === raw);
+    return exists ? raw : null;
   }
-  return trait.name;
+  const byId = new Set<string>();
+  for (const t of available) byId.add(traitId(t));
+  for (const ns of ["self", "kernel", "library"] as const) {
+    const candidate = `${ns}:${raw}`;
+    if (byId.has(candidate)) return candidate;
+  }
+  return null;
 }
 
 /**

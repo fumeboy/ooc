@@ -126,17 +126,17 @@ describe("progressive disclosure", () => {
       updatedAt: 1,
     };
     const traits: TraitDefinition[] = [
-      { namespace: "kernel", name: "computable", type: "how_to_think", when: "always", description: "核心 API", readme: "长内容", methods: [], deps: [] },
-      { namespace: "ext", name: "hidden", type: "how_to_think", when: "never", description: "隐藏", readme: "x", methods: [], deps: [] },
-      { namespace: "kernel", name: "plannable", type: "how_to_think", when: "条件", description: "规划", readme: "y", methods: [], deps: [] },
+      { namespace: "kernel", name: "computable", kind: "trait", type: "how_to_think", when: "always", description: "核心 API", readme: "长内容", methods: [], deps: [] },
+      { namespace: "library", name: "hidden", kind: "trait", type: "how_to_think", when: "never", description: "隐藏", readme: "x", methods: [], deps: [] },
+      { namespace: "kernel", name: "plannable", kind: "trait", type: "how_to_think", when: "条件", description: "规划", readme: "y", methods: [], deps: [] },
     ];
     const ctx = buildContext(stone, flow, [], traits);
     const catalog = ctx.knowledge.find(w => w.name === "_trait_catalog");
     expect(catalog).toBeDefined();
-    expect(catalog!.content).toContain("kernel/computable: 核心 API");
-    // inactive traits 会在 catalog 中显示为 "ext/hidden: 隐藏 (activateTrait to use)"
-    expect(catalog!.content).toContain("ext/hidden: 隐藏 (activateTrait to use)");
-    expect(catalog!.content).toContain("kernel/plannable: 规划");
+    expect(catalog!.content).toContain("kernel:computable: 核心 API");
+    // inactive traits 会在 catalog 中显示为 "library:hidden: 隐藏 (activateTrait to use)"
+    expect(catalog!.content).toContain("library:hidden: 隐藏 (activateTrait to use)");
+    expect(catalog!.content).toContain("kernel:plannable: 规划");
   });
 
   test("无 description 的 trait fallback 到完整注入", () => {
@@ -159,10 +159,10 @@ describe("progressive disclosure", () => {
       updatedAt: 1,
     };
     const traits: TraitDefinition[] = [
-      { namespace: "custom", name: "my_trait", type: "how_to_think", when: "always", description: "", readme: "无 description 应注入", methods: [], deps: [] },
+      { namespace: "self", name: "my_trait", kind: "trait", type: "how_to_think", when: "always", description: "", readme: "无 description 应注入", methods: [], deps: [] },
     ];
     const ctx = buildContext(stone, flow, [], traits);
-    const noDesc = ctx.knowledge.find(w => w.name === "custom/my_trait");
+    const noDesc = ctx.knowledge.find(w => w.name === "self:my_trait");
     expect(noDesc).toBeDefined();
   });
 });

@@ -572,19 +572,27 @@ export async function runWithThreadTree(
       const trimmed = input.trim();
       if (!trimmed) return null;
       const all = new Set(config.traits.map(t => traitId(t)));
+      /* 完整 traitId 直接命中 */
       if (all.has(trimmed)) return trimmed;
-      if (!trimmed.includes("/")) return null;
-      const cands = [`library/${trimmed}`, `kernel/${trimmed}`];
-      for (const c of cands) if (all.has(c)) return c;
+      /* 省略 namespace：按 self → kernel → library 顺序查找 */
+      if (!trimmed.includes(":")) {
+        for (const ns of ["self", "kernel", "library"] as const) {
+          const candidate = `${ns}:${trimmed}`;
+          if (all.has(candidate)) return candidate;
+        }
+      }
       return null;
     };
 
     const readTraitFile = (id: string): { path: string; content: string } | null => {
-      const base = id.startsWith("library/")
-        ? join(rootDir, "library", "traits", id.slice("library/".length))
-        : id.startsWith("kernel/")
-          ? join(rootDir, "kernel", "traits", id.slice("kernel/".length))
-          : null;
+      let base: string | null = null;
+      if (id.startsWith("library:")) {
+        base = join(rootDir, "library", "traits", id.slice("library:".length));
+      } else if (id.startsWith("kernel:")) {
+        base = join(rootDir, "kernel", "traits", id.slice("kernel:".length));
+      } else if (id.startsWith("self:")) {
+        base = join(rootDir, "stones", objectName, "traits", id.slice("self:".length));
+      }
       if (!base) return null;
       const p = join(base, "TRAIT.md");
       if (!existsSync(p)) return null;
@@ -973,7 +981,7 @@ export async function runWithThreadTree(
               }
               consola.info(`[Engine] open trait: ${traitInput} → ${resolvedTraitName} → ${formId}`);
             } else {
-              const available = allTraitIds.filter(id => !id.startsWith("kernel/") || id.includes("/plannable/") || id.includes("/computable/")).slice(0, 30).join(", ");
+              const available = allTraitIds.filter(id => !id.startsWith("kernel:") || id.includes("kernel:plannable/") || id.includes("kernel:computable/")).slice(0, 30).join(", ");
               const td = tree.readThreadData(threadId);
               if (td) {
                 td.actions.push({ type: "inject", content: `[错误] Trait "${traitInput}" 不存在。可用 trait: ${available || "(无)"}`, timestamp: Date.now() });
@@ -1578,19 +1586,27 @@ export async function resumeWithThreadTree(
       const trimmed = input.trim();
       if (!trimmed) return null;
       const all = new Set(config.traits.map(t => traitId(t)));
+      /* 完整 traitId 直接命中 */
       if (all.has(trimmed)) return trimmed;
-      if (!trimmed.includes("/")) return null;
-      const cands = [`library/${trimmed}`, `kernel/${trimmed}`];
-      for (const c of cands) if (all.has(c)) return c;
+      /* 省略 namespace：按 self → kernel → library 顺序查找 */
+      if (!trimmed.includes(":")) {
+        for (const ns of ["self", "kernel", "library"] as const) {
+          const candidate = `${ns}:${trimmed}`;
+          if (all.has(candidate)) return candidate;
+        }
+      }
       return null;
     };
 
     const readTraitFile = (id: string): { path: string; content: string } | null => {
-      const base = id.startsWith("library/")
-        ? join(rootDir, "library", "traits", id.slice("library/".length))
-        : id.startsWith("kernel/")
-          ? join(rootDir, "kernel", "traits", id.slice("kernel/".length))
-          : null;
+      let base: string | null = null;
+      if (id.startsWith("library:")) {
+        base = join(rootDir, "library", "traits", id.slice("library:".length));
+      } else if (id.startsWith("kernel:")) {
+        base = join(rootDir, "kernel", "traits", id.slice("kernel:".length));
+      } else if (id.startsWith("self:")) {
+        base = join(rootDir, "stones", objectName, "traits", id.slice("self:".length));
+      }
       if (!base) return null;
       const p = join(base, "TRAIT.md");
       if (!existsSync(p)) return null;
@@ -1924,7 +1940,7 @@ export async function resumeWithThreadTree(
               }
               consola.info(`[Engine] open trait: ${traitInput} → ${resolvedTraitName} → ${formId}`);
             } else {
-              const available = allTraitIds.filter(id => !id.startsWith("kernel/") || id.includes("/plannable/") || id.includes("/computable/")).slice(0, 30).join(", ");
+              const available = allTraitIds.filter(id => !id.startsWith("kernel:") || id.includes("kernel:plannable/") || id.includes("kernel:computable/")).slice(0, 30).join(", ");
               const td = tree.readThreadData(threadId);
               if (td) { td.actions.push({ type: "inject", content: `[错误] Trait "${traitInput}" 不存在。可用 trait: ${available || "(无)"}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
               consola.warn(`[Engine] open trait: ${traitInput} not found`);
