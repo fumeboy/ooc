@@ -143,3 +143,71 @@ describe("reflect.ts 基础 API", () => {
     expect(data?.inbox).toHaveLength(1);
   });
 });
+
+describe("reflect_flow trait llm_methods（kernel trait）", () => {
+  let stoneDir: string;
+
+  beforeEach(() => {
+    stoneDir = makeTmpStone("reflect-trait");
+  });
+
+  afterEach(() => {
+    if (existsSync(stoneDir)) rmSync(stoneDir, { recursive: true, force: true });
+  });
+
+  test("llm_methods.talkToSelf 投递消息到反思线程", async () => {
+    /* 动态导入 trait index.ts（相对路径绕过 trait loader） */
+    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const talkToSelf = mod.llm_methods.talkToSelf;
+    expect(talkToSelf).toBeDefined();
+    expect(typeof talkToSelf.fn).toBe("function");
+
+    const ctx = { selfDir: stoneDir, stoneName: "bruce" };
+    const result: any = await talkToSelf.fn(ctx, { message: "Trait 方法路径的反思" });
+    expect(result.ok).toBe(true);
+    expect(result.data.stoneName).toBe("bruce");
+
+    const tree = ThreadsTree.load(join(stoneDir, "reflect"))!;
+    const data = tree.readThreadData(tree.rootId);
+    expect(data?.inbox).toHaveLength(1);
+    expect(data!.inbox![0]!.content).toBe("Trait 方法路径的反思");
+    expect(data!.inbox![0]!.from).toBe("bruce");
+  });
+
+  test("llm_methods.talkToSelf 拒绝空 message", async () => {
+    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const result: any = await mod.llm_methods.talkToSelf.fn(
+      { selfDir: stoneDir, stoneName: "bruce" },
+      { message: "" },
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("非空字符串");
+  });
+
+  test("llm_methods.getReflectState 未初始化时返回 initialized=false", async () => {
+    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const result: any = await mod.llm_methods.getReflectState.fn(
+      { selfDir: stoneDir, stoneName: "bruce" },
+      {},
+    );
+    expect(result.ok).toBe(true);
+    expect(result.data.initialized).toBe(false);
+    expect(result.data.inboxTotal).toBe(0);
+  });
+
+  test("llm_methods.getReflectState 在多次投递后返回正确的 unread 计数", async () => {
+    const mod: any = await import("../traits/reflective/reflect_flow/index.js");
+    const ctx = { selfDir: stoneDir, stoneName: "bruce" };
+    await mod.llm_methods.talkToSelf.fn(ctx, { message: "第 1 条" });
+    await mod.llm_methods.talkToSelf.fn(ctx, { message: "第 2 条" });
+    await mod.llm_methods.talkToSelf.fn(ctx, { message: "第 3 条" });
+
+    const result: any = await mod.llm_methods.getReflectState.fn(ctx, {});
+    expect(result.ok).toBe(true);
+    expect(result.data.initialized).toBe(true);
+    expect(result.data.inboxTotal).toBe(3);
+    expect(result.data.inboxUnread).toBe(3);
+    expect(result.data.recentContents).toHaveLength(3);
+    expect(result.data.recentContents[2]).toBe("第 3 条");
+  });
+});

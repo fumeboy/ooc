@@ -3,51 +3,76 @@ namespace: kernel
 name: reflective/reflect_flow
 type: how_to_think
 when: never
-description: ReflectFlow 角色定义 — Self 数据的唯一守门人
-deps: ["kernel:reflective"]
+description: 常驻反思线程（ReflectFlow 线程树版）— 经验沉淀循环的工程通道
+deps: []
 ---
 
-# ReflectFlow 角色定义
+# ReflectFlow 线程树版
 
-ReflectFlow 是每个对象的常驻自我反思 Flow，是 Self 数据的唯一守门人。普通 Flow 通过 `reflect()` 向 ReflectFlow 发送消息。
+每个对象都有一条独立于任何 session 的**常驻反思线程**：
+- 落盘在 `stones/{name}/reflect/threads.json + threads/{id}/thread.json`
+- 结构与普通线程树一致（root 线程 + inbox + actions + todos + …）
+- 生命周期横跨所有 session——对象每次新对话共享同一条反思线程
 
-## 职责
+反思线程是 **G12（经验沉淀）** 的工程通道：
+- **经历** → 任务执行时发生的有意义事件
+- **记录** → 调用 `talkToSelf(message)` 把候选经验投递到反思线程 inbox
+- **反思**（未来迭代实装）→ 跨 session 常驻调度器唤醒反思线程跑一轮 ThinkLoop
+- **沉淀**（未来迭代实装）→ 反思线程决定是否把经验写入 memory.md / 创建 trait
 
-1. **判断**：这条信息值得长期保存吗？
-2. **分类**：保存到哪里？
-   - 事实、经验、教训 → `updateMemory`（长期记忆 memory.md）
-   - 结构化数据 → `persistData`（data.json）
-   - 可复用的行为模式 → 写文件到 `self_traits_dir` + `reloadTrait`
-3. **整理**：与现有数据合并，避免重复和膨胀
-4. **回复**：告诉发起方处理结果，必要时追问澄清
+## 当前状态（方案 A 最小可用）
 
-## 决策原则
+**已实装**：
+- 投递通道：`callMethod("reflective/reflect_flow", "talkToSelf", { message })` 从任何对象线程都能调用
+- 落盘：`stones/{name}/reflect/` 目录自动初始化，消息写入 root 线程 inbox
+- 状态查询：`callMethod("reflective/reflect_flow", "getReflectState", {})` 查看反思线程当前 inbox
+- 幂等 + 并发安全：多次调用 `talkToSelf` 不会破坏线程树结构
+- 线程复活：若反思线程当前 status=done，`talkToSelf` 投递会自动把它置回 running（等待未来调度器消费）
 
-- 重复的信息：合并到已有条目，不追加
-- 过时的信息：替换旧版本
-- 临时的、一次性的信息：拒绝，留在 Session 即可
-- 重要的可复用模式：沉淀为 trait
-- 不确定的信息：用 `replyToFlow` 反向追问发起方
+**暂不实装**（后续迭代 backlog）：
+- 反思线程 ThinkLoop 实际执行——当前消息只是"静静躺在 inbox 里"
+- 跨 session 常驻调度器（需要新的线程调度模型，参考 `ThreadScheduler` 但脱离 session 生命周期）
+- 反思产出自动写入 memory.md 或创建 trait
+- 下次主线程 Context 构建时自动注入 memory.md 让经验生效
+- 反思专属权限（如访问 `self_traits_dir` 写 trait）
 
-## 可用 API
+## 可用 llm_methods
 
-- `updateMemory(content)` — 更新 Self 长期记忆（memory.md）
-- `getMemory()` — 读取当前长期记忆
-- `persistData(key, value)` — 写入 Self 结构化数据（data.json）
-- `getData(key)` — 读取 Self 数据
-- `replyToFlow(sessionId, message)` — 回复发起对话的 Flow
-- 文件系统 API — 可读写 Self 目录下的所有文件（`self_dir`、`self_traits_dir`）
-- `reloadTrait(name)` — 热加载 trait
+### `talkToSelf({ message })`
 
-## 消息格式
+把一段值得反思的经验投递到反思线程 inbox。
 
-收到的消息格式为 `[from:sessionId] 消息内容`，其中 sessionId 是发起方的 Flow ID。
-回复时使用 `replyToFlow(sessionId, "回复内容")`。
+```javascript
+await callMethod("reflective/reflect_flow", "talkToSelf", {
+  message: "刚才把任务拆成 3 个子线程并行跑，效果比串行快 2.5 倍。下次复杂任务可先考虑并行。",
+});
+// → { ok: true, data: { stoneName: "bruce", messagePreview: "..." } }
+```
 
-## 工作方式
+**调用时机建议**：
+- 当意识到"这个做法/教训对将来重要"时，立即投递
+- 不要为了触发反思而编造内容——反思线程处理的是真实经验
+- 不需要高频调用；每次任务 1-3 条高信息密度的记录即可
 
-1. 收到消息后，先读取当前 Self 数据（`getMemory()`、`getData()`）
-2. 判断消息内容是否值得沉淀
-3. 如果值得，执行相应的写入操作
-4. 用 `replyToFlow` 告知发起方处理结果
-5. 如果不确定，用 `replyToFlow` 追问
+### `getReflectState({})`
+
+查看反思线程当前 inbox 状态。
+
+```javascript
+const r = await callMethod("reflective/reflect_flow", "getReflectState", {});
+// → { ok: true, data: { stoneName, initialized, inboxTotal, inboxUnread, recentContents: [...5 条预览] } }
+```
+
+用于 LLM 自检："我累计投递过多少条反思？最近的几条是什么？"
+
+## 设计要点
+
+- 本 trait 的 `when: never`——不会被自动激活到栈帧认知链。要使用其方法，对象通过 `callMethod` 主动调用即可。
+- 投递的 inbox 消息 `source: "system"`——区别于 `talk` 来源消息，将来调度器可据此决定不同处理策略。
+- 一个对象只有一个反思线程（常驻 root），不支持多根。若要把不同维度的反思分流，调度器实装后可在反思线程内部创建 sub_thread。
+
+## 参考
+
+- @ref docs/哲学文档/gene.md#G12 经验沉淀：经历 → 记录 → 反思 → 沉淀
+- @ref kernel/src/thread/reflect.ts 落盘 API（`ensureReflectThread` / `talkToReflect` / `getReflectThreadDir`）
+- @ref docs/工程管理/迭代/all/20260421_feature_ReflectFlow线程树化.md 本次迭代文档
