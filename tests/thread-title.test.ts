@@ -165,7 +165,7 @@ describe("engine — title 持久化到 ThreadAction", () => {
     expect(toolUses[1]?.name).toBe("submit");
     expect(toolUses[1]?.title).toBe("提交返回结果");
     /* 注意：title 作为顶层行动标题存储在 ThreadAction.title；
-     * 为兼容 create_sub_thread 的 title→子线程名老用法，args.title 可能仍保留。
+     * 为兼容 think(fork) 的 title→子线程名用法，args.title 可能仍保留。
      * 前端以 ThreadAction.title 为准展示。 */
   });
 });
@@ -288,24 +288,24 @@ describe("SSE — flow:action 事件包含 title", () => {
 
     await runWithThreadTree("test_obj", "你好", "user", config);
 
-    /* 无 title 的 tool call 不会因 title 触发 flow:action（只有 create_sub_thread 等原有事件） */
+    /* 无 title 的 tool call 不会因 title 触发 flow:action（只有 think(fork) 等原有事件） */
     const titledActions = captured.filter((e) => e.type === "flow:action" && e.action?.title);
     expect(titledActions.length).toBe(0);
   });
 });
 
-/* ========== 4. create_sub_thread：title 同时作为子线程名 ========== */
+/* ========== 4. think(fork)：title 同时作为子线程名 ========== */
 
-describe("create_sub_thread — title 即子线程名", () => {
+describe("think(fork) — title 即子线程名", () => {
   /**
    * scheduler 调度多线程时，同一 mock LLM 会被父子两个线程共用。
    * 走完整流程：
-   * - 父线程 call 1：open create_sub_thread
-   * - 父线程 call 2：submit（title = 子线程名）
+   * - 父线程 call 1：open think
+   * - 父线程 call 2：submit（title = 子线程名，context="fork"）
    * - 切到子线程：call 3/4 子线程 open+submit return
    * - 切回父线程：call 5/6 父线程 open+submit return
    */
-  function buildSteps(submitArgs: { title: string; description?: string }) {
+  function buildSteps(submitArgs: { title: string; msg?: string; context?: string }) {
     const state: { parentFormId?: string } = {};
     let phase = 0;
     return (messages: unknown[]): { content: string; toolCalls: ToolCall[] } => {
@@ -322,13 +322,13 @@ describe("create_sub_thread — title 即子线程名", () => {
       /* 父线程 */
       if (phase === 0) {
         phase = 1;
-        return { content: "", toolCalls: [toolCall("open", { title: "父开始 create_sub_thread", type: "command", command: "create_sub_thread", description: "派生" })] };
+        return { content: "", toolCalls: [toolCall("open", { title: "父开始 think(fork)", type: "command", command: "think", description: "派生" })] };
       }
       if (phase === 1) {
-        const m = userContent.match(/<form id="(f_[^"]+)" command="create_sub_thread"/);
+        const m = userContent.match(/<form id="(f_[^"]+)" command="think"/);
         state.parentFormId = m?.[1] ?? "f_unknown";
         phase = 2;
-        return { content: "", toolCalls: [toolCall("submit", { form_id: state.parentFormId, ...submitArgs })] };
+        return { content: "", toolCalls: [toolCall("submit", { form_id: state.parentFormId, context: "fork", ...submitArgs })] };
       }
       /* phase 2+: 等子线程完成后父线程继续；open+submit return */
       const rm = userContent.match(/<form id="(f_[^"]+)" command="return"/);
@@ -341,7 +341,7 @@ describe("create_sub_thread — title 即子线程名", () => {
 
   test("submit 的 title 直接作为子线程标题（同时也是 tool action.title）", async () => {
     const llm = new MockLLMClient({
-      responseFn: buildSteps({ title: "分析任务", description: "d" }),
+      responseFn: buildSteps({ title: "分析任务", msg: "派生分析子任务" }),
     });
 
     const config: EngineConfig = {
@@ -375,7 +375,7 @@ describe("create_sub_thread — title 即子线程名", () => {
     const parentThread = JSON.parse(await Bun.file(parentThreadPath).text());
     const parentSubmits = (parentThread.actions as Array<{ type: string; name?: string; title?: string; args?: Record<string, unknown> }>)
       .filter((a) => a.type === "tool_use" && a.name === "submit" && (a.args?.["form_id"] ?? "").toString().startsWith("f_"));
-    /* 找到 create_sub_thread 那次 submit：它的 title 即子线程名 */
+    /* 找到 think(fork) 那次 submit：它的 title 即子线程名 */
     const createSubmit = parentSubmits.find((a) => a.title === "分析任务");
     expect(createSubmit).toBeTruthy();
   });

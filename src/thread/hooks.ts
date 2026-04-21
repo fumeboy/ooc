@@ -2,7 +2,7 @@
  * 线程生命周期 Hook 收集与注入
  *
  * 简化版 hook 系统：只有 before 和 after 两种事件。
- * - before：create_sub_thread 时注入子线程首轮 Context
+ * - before：think(fork) / 子线程创建时注入子线程首轮 Context
  * - after：return 时注入创建者线程下一轮 Context
  *
  * Hook 内容是纯文本，不是可执行代码，天然非递归。
@@ -27,7 +27,7 @@ function localTraitId(trait: TraitDefinition): string {
 }
 
 /**
- * 收集 before hooks（create_sub_thread 时调用）
+ * 收集 before hooks（think(fork) / 子线程创建时调用）
  *
  * @param traits - 所有已加载的 trait 定义
  * @param scopeChain - 当前线程的 scope chain（trait 名称列表）

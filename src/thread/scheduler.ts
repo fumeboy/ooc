@@ -169,7 +169,7 @@ export class ThreadScheduler {
   /**
    * 新线程注册（运行时动态创建的线程）
    *
-   * 由 ThinkLoop 中的 create_sub_thread 调用。
+   * 由 ThinkLoop 中的 think(fork) 调用。
    * 如果 Scheduler 正在运行，立即启动新线程的 loop。
    */
   onThreadCreated(threadId: string, objectName: string): void {

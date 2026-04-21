@@ -57,7 +57,7 @@ describe("ThreadsTree 构造", () => {
   });
 });
 
-/* ========== create_sub_thread ========== */
+/* ========== createSubThread（think(fork) 底层 API） ========== */
 
 describe("createSubThread", () => {
   test("创建子线程，父子关系正确", async () => {

@@ -219,7 +219,7 @@ describe("renderThreadProcess", () => {
 });
 
 describe("buildThreadContext", () => {
-  test("create_sub_thread 方式：初始 process 包含父线程快照", () => {
+  test("think(fork) / sub_thread 方式：初始 process 包含父线程快照", () => {
     const tree: ThreadsTreeFile = {
       rootId: "r",
       nodes: {
@@ -343,7 +343,7 @@ describe("buildThreadContext", () => {
     expect(ctx.parentExpectation).toBe("");
   });
 
-  test("create_sub_thread_on_node 方式：Context 包含目标节点完整历史（Phase 5 完善）", () => {
+  test("sub_thread_on_node 方式：Context 包含目标节点完整历史（Phase 5 完善）", () => {
     const tree: ThreadsTreeFile = {
       rootId: "r",
       nodes: {

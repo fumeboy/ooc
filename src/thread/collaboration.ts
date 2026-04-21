@@ -1,7 +1,7 @@
 /**
  * 协作 API — 跨 Object 对话与线程内协作
  *
- * 实现 talk() 和 create_sub_thread_on_node() 两个核心协作原语。
+ * 实现 talk() 和 createSubThreadOnNode() 两个核心协作原语。
  * 替代旧的 kernel/src/world/router.ts。
  *
  * 设计原则：

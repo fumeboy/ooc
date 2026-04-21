@@ -13,7 +13,7 @@
 /** 线程状态 */
 export type ThreadStatus = "pending" | "running" | "waiting" | "done" | "failed" | "paused";
 
-/** 线程句柄（create_sub_thread 的返回值） */
+/** 线程句柄（think(fork) / createSubThread 的返回值） */
 export type ThreadHandle = string;
 
 /** 线程树结构索引（threads.json） */
@@ -31,7 +31,7 @@ export interface ThreadsTreeNodeMeta {
   parentId?: string;
   childrenIds: string[];
 
-  /** 认知栈：静态 traits（create_sub_thread 时指定） */
+  /** 认知栈：静态 traits（think(fork) 时指定） */
   traits?: string[];
   /** 认知栈：动态激活的 traits */
   activatedTraits?: string[];
@@ -221,6 +221,15 @@ export interface ThreadAction {
    * （供前端结构化展示）。
    */
   formResponse?: FormResponse;
+  /**
+   * think / talk 的操作模式（2026-04-22 引入）
+   *
+   * 仅当 action 来源是 think / talk 指令（tool_use / message_out / create_thread）时写入，
+   * 用于前端 TuiAction 渲染和问题追溯。
+   * - "fork": 派生新线程（原线程只读，不被影响）
+   * - "continue": 向原线程投递消息（产生影响，唤醒原线程）
+   */
+  context?: "fork" | "continue";
 }
 
 /**
@@ -273,7 +282,7 @@ export interface ThreadTodoItem {
  * - 新：{ event, traitName, content, once } — 简化为纯文本 Context 注入
  *
  * event 类型：
- * - "before" / "after"：线程生命周期钩子（create_sub_thread / return 时触发）
+ * - "before" / "after"：线程生命周期钩子（think(fork) / return 时触发）
  * - "on:{command}"：command 钩子（对应 command 被 submit 时触发，如 "on:return"）
  *   由 defer command 在运行时注册，灵感来自 Go 的 defer 语法。
  */

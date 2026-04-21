@@ -70,13 +70,19 @@ export interface EngineConfig {
    * 当 LLM 输出 [talk] 且 target 不是当前 Object 时调用。
    * World 负责路由：启动目标 Object 的线程树，等待完成，返回结果。
    *
+   * 2026-04-22 新增 `forkUnderThreadId`（对应 think/talk 的 `context="fork"` + 指定 threadId 模式）——
+   * 在对方的 threadId 下 fork 新子线程，而非新建根线程。
+   * 同时 `continueThreadId` 对应 `context="continue"` 的模式——向对方已有线程投递消息。
+   * 两者互斥：同时传入时以 forkUnderThreadId 优先，world 端会校验。
+   *
    * @param targetObject - 目标对象名
    * @param message - 消息内容
    * @param fromObject - 发起方对象名
    * @param fromThreadId - 发起方线程 ID
    * @param sessionId - 当前 session ID
-   * @param continueThreadId - 可选，继续对方已有线程（而非新建）
+   * @param continueThreadId - 可选，继续对方已有线程（对应 context="continue"）
    * @param messageId - 可选，本次 message_out action 的 id（用于 target="user" 时写入 user inbox 索引）
+   * @param forkUnderThreadId - 可选，在对方此线程下 fork 新子线程（对应 context="fork" + 指定 threadId）
    * @returns { reply, remoteThreadId } — 对方回复 + 对方线程 ID
    */
   onTalk?: (
@@ -87,6 +93,7 @@ export interface EngineConfig {
     sessionId: string,
     continueThreadId?: string,
     messageId?: string,
+    forkUnderThreadId?: string,
   ) => Promise<{ reply: string | null; remoteThreadId: string }>;
   /** 是否开启 debug 模式（持久化每轮 ThinkLoop 的 LLM 输入/输出） */
   debugEnabled?: boolean;
@@ -108,7 +115,7 @@ export interface TalkResult {
   summary?: string;
   /** 总迭代次数 */
   totalIterations: number;
-  /** 实际执行的线程 ID（用于 continue_thread） */
+  /** 实际执行的线程 ID（用于 talk(context="continue")） */
   threadId?: string;
 }
 
@@ -132,7 +139,7 @@ export interface TalkReturn {
   actions: Array<{ type: string; content: string; timestamp: number; id?: string; result?: string; success?: boolean }>;
   /** 对话摘要 */
   summary?: string;
-  /** 关联的底层线程 ID（用于 continue_thread） */
+  /** 关联的底层线程 ID（用于 talk(context="continue")） */
   threadId?: string;
   /** toJSON 快照（供 HTTP 调试/前端消费，形态与 Flow.toJSON 兼容） */
   toJSON?: () => Record<string, unknown>;
@@ -458,7 +465,8 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>, deferHook
  * @param from - 消息来源
  * @param config - 引擎配置
  * @param preSessionId - 可选，预创建的 session ID
- * @param continueThreadId - 可选，继续已有线程（而非新建/重置根线程）
+ * @param continueThreadId - 可选，继续已有线程（而非新建/重置根线程）。对应 talk(context="continue")。
+ * @param forkUnderThreadId - 可选，在已有线程下 fork 新子线程（而非新建/重置根线程）。对应 talk(context="fork", threadId=...)。
  * @returns 执行结果
  */
 export async function runWithThreadTree(
@@ -468,6 +476,7 @@ export async function runWithThreadTree(
   config: EngineConfig,
   preSessionId?: string,
   continueThreadId?: string,
+  forkUnderThreadId?: string,
 ): Promise<TalkResult> {
   const sessionId = preSessionId ?? generateSessionId();
   const sessionDir = join(config.flowsDir, sessionId);
@@ -506,6 +515,31 @@ export async function runWithThreadTree(
     consola.info(`[Engine] 创建新的线程树: ${objectName}`);
     tree = await ThreadsTree.create(objectFlowDir, `${objectName} 主线程`, message);
     targetThreadId = tree.rootId;
+  } else if (forkUnderThreadId) {
+    /* fork 模式：在指定线程下 fork 新子线程，将消息写入新子线程的 inbox（对应 talk(context="fork", threadId=X)） */
+    const parentNode = tree.getNode(forkUnderThreadId);
+    if (parentNode) {
+      const subId = await tree.createSubThread(forkUnderThreadId, `${from} → ${objectName}`, {
+        description: message,
+        creatorObjectName: from,
+        creationMode: "talk",
+      });
+      if (subId) {
+        await tree.setNodeStatus(subId, "running");
+        targetThreadId = subId;
+        consola.info(`[Engine] fork under ${forkUnderThreadId} → ${subId}`);
+      } else {
+        consola.warn(`[Engine] fork under ${forkUnderThreadId} 失败（深度超限或父节点不存在），回退根线程`);
+        const rootNode = tree.getNode(tree.rootId);
+        if (rootNode && rootNode.status === "done") await tree.setNodeStatus(tree.rootId, "running");
+        targetThreadId = tree.rootId;
+      }
+    } else {
+      consola.warn(`[Engine] forkUnderThreadId ${forkUnderThreadId} 不存在，回退到根线程`);
+      const rootNode = tree.getNode(tree.rootId);
+      if (rootNode && rootNode.status === "done") await tree.setNodeStatus(tree.rootId, "running");
+      targetThreadId = tree.rootId;
+    }
   } else if (continueThreadId) {
     /* continue 模式：向指定线程写入消息并唤醒 */
     const targetNode = tree.getNode(continueThreadId);
@@ -921,7 +955,7 @@ export async function runWithThreadTree(
         /**
          * 剥离顶层 title（自叙式行动标题）
          *
-         * submit 场景特殊：create_sub_thread 的老用法把 title 当作子线程标题。
+         * submit 场景特殊：think(fork) 把 title 当作子线程标题。
          * engine 在 submit 分支处理时需要能读到 title（作为子线程名 fallback），
          * 所以这里**不删除** args.title，让 submit 分支按 command 类型自行决定。
          * 其他 tool（open/close/wait）下，title 仅作为 action 标题，args 中是否保留不影响业务逻辑。
@@ -1138,58 +1172,82 @@ export async function runWithThreadTree(
               consola.info(`[Engine] program ${execResult.success ? "成功" : "失败"}`);
             }
 
-            /* talk / talk_sync */
+            /* talk / talk_sync
+             *
+             * 统一协议：talk 指令通过 context=fork|continue + 可选 threadId 表达四种模式。
+             * - fork + 无 threadId：对方新根线程（默认）
+             * - fork + threadId：对方 threadId 下 fork 新子线程（新能力）
+             * - continue + threadId：向对方 threadId 投递消息，唤醒对方（新能力）
+             * - continue + 无 threadId：schema/engine 校验报错
+             */
             else if ((command === "talk" || command === "talk_sync") && config.onTalk) {
               const target = (args.target as string)?.toLowerCase();
               if (target && target !== objectName.toLowerCase()) {
-                const continueThreadId = args.continue_thread as string | undefined;
-                /* 先生成 messageId（供 action.id 和 onTalk 参数共用，前端凭此反查正文） */
-                const messageId = genMessageOutId();
-                /* 解析可选的结构化表单（talk form）——供前端渲染 option picker */
-                const formPayload = extractTalkForm(args.form);
-                const td = tree.readThreadData(threadId);
-                if (td) {
-                  const continueLabel = continueThreadId ? ` (continue: ${continueThreadId})` : "";
-                  const formLabel = formPayload ? ` [form: ${formPayload.formId}]` : "";
-                  td.actions.push({
-                    id: messageId,
-                    type: "message_out",
-                    content: `[talk] → ${args.target}: ${args.message}${continueLabel}${formLabel}`,
-                    timestamp: Date.now(),
-                    ...(formPayload ? { form: formPayload } : {}),
-                  });
-                  tree.writeThreadData(threadId, td);
-                }
-                /* talk_sync 到 user 是死锁：user 永远不会唤醒。记日志、不 setNodeStatus("waiting")、直接继续。 */
-                const isTalkSyncToUser = command === "talk_sync" && target === "user";
-                if (isTalkSyncToUser) {
-                  consola.warn(`[Engine] ${objectName} 尝试 talk_sync(target="user")——user 不参与 ThinkLoop，不会回复。已降级为 talk（不阻塞）。`);
-                }
-                /* 若未通过 mark 参数显式标记，且 target 只有一条未读最新消息，自动 ack */
-                const explicitlyMarked = Array.isArray(args.mark) && args.mark.length > 0;
-                try {
-                  const { reply, remoteThreadId } = await config.onTalk(args.target as string, args.message as string, objectName, threadId, sessionId, continueThreadId, messageId);
-                  if (!explicitlyMarked) {
-                    const tdAck = tree.readThreadData(threadId);
-                    const autoAckId = getAutoAckMessageId(tdAck, args.target as string);
-                    if (autoAckId) {
-                      tree.markInbox(threadId, autoAckId, "ack", "已回复");
+                /* 解析 context + threadId + msg（兼容 msg 与旧 message 参数） */
+                const ctxMode = (args.context as string | undefined) === "continue" ? "continue" : "fork";
+                const remoteThreadIdArg = args.threadId as string | undefined;
+                const msgContent = (args.msg as string | undefined) ?? (args.message as string | undefined) ?? "";
+                /* continue 必须指定 threadId */
+                if (ctxMode === "continue" && !remoteThreadIdArg) {
+                  const td = tree.readThreadData(threadId);
+                  if (td) {
+                    td.actions.push({ type: "inject", content: `[错误] talk(context="continue") 必须同时指定 threadId 参数`, timestamp: Date.now() });
+                    tree.writeThreadData(threadId, td);
+                  }
+                } else {
+                  /* fork 模式下 threadId 作为 forkUnderThreadId（对方线程下 fork）；
+                   * continue 模式下 threadId 作为 continueThreadId（向对方线程投递） */
+                  const forkUnderThreadId = ctxMode === "fork" ? remoteThreadIdArg : undefined;
+                  const continueThreadId = ctxMode === "continue" ? remoteThreadIdArg : undefined;
+                  /* 先生成 messageId（供 action.id 和 onTalk 参数共用，前端凭此反查正文） */
+                  const messageId = genMessageOutId();
+                  /* 解析可选的结构化表单（talk form）——供前端渲染 option picker */
+                  const formPayload = extractTalkForm(args.form);
+                  const td = tree.readThreadData(threadId);
+                  if (td) {
+                    const modeLabel = ` [${ctxMode}${remoteThreadIdArg ? `:${remoteThreadIdArg}` : ""}]`;
+                    const formLabel = formPayload ? ` [form: ${formPayload.formId}]` : "";
+                    td.actions.push({
+                      id: messageId,
+                      type: "message_out",
+                      content: `[talk] → ${args.target}: ${msgContent}${modeLabel}${formLabel}`,
+                      timestamp: Date.now(),
+                      context: ctxMode,
+                      ...(formPayload ? { form: formPayload } : {}),
+                    });
+                    tree.writeThreadData(threadId, td);
+                  }
+                  /* talk_sync 到 user 是死锁：user 永远不会唤醒。记日志、不 setNodeStatus("waiting")、直接继续。 */
+                  const isTalkSyncToUser = command === "talk_sync" && target === "user";
+                  if (isTalkSyncToUser) {
+                    consola.warn(`[Engine] ${objectName} 尝试 talk_sync(target="user")——user 不参与 ThinkLoop，不会回复。已降级为 talk（不阻塞）。`);
+                  }
+                  /* 若未通过 mark 参数显式标记，且 target 只有一条未读最新消息，自动 ack */
+                  const explicitlyMarked = Array.isArray(args.mark) && args.mark.length > 0;
+                  try {
+                    const { reply, remoteThreadId } = await config.onTalk(args.target as string, msgContent, objectName, threadId, sessionId, continueThreadId, messageId, forkUnderThreadId);
+                    if (!explicitlyMarked) {
+                      const tdAck = tree.readThreadData(threadId);
+                      const autoAckId = getAutoAckMessageId(tdAck, args.target as string);
+                      if (autoAckId) {
+                        tree.markInbox(threadId, autoAckId, "ack", "已回复");
+                      }
                     }
+                    if (reply) {
+                      tree.writeInbox(threadId, { from: args.target as string, content: `${reply}\n[remote_thread_id: ${remoteThreadId}]`, source: "talk" });
+                    }
+                    /* 将 remote_thread_id 记录到 actions（无论是否有 reply，LLM 都能看到） */
+                    const td2 = tree.readThreadData(threadId);
+                    if (td2) {
+                      td2.actions.push({ type: "inject", content: `[talk → ${args.target}] remote_thread_id = ${remoteThreadId}`, timestamp: Date.now() });
+                      tree.writeThreadData(threadId, td2);
+                    }
+                  } catch (e) {
+                    tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" });
                   }
-                  if (reply) {
-                    tree.writeInbox(threadId, { from: args.target as string, content: `${reply}\n[remote_thread_id: ${remoteThreadId}]`, source: "talk" });
-                  }
-                  /* 将 remote_thread_id 记录到 actions（无论是否有 reply，LLM 都能看到） */
-                  const td2 = tree.readThreadData(threadId);
-                  if (td2) {
-                    td2.actions.push({ type: "inject", content: `[talk → ${args.target}] remote_thread_id = ${remoteThreadId}`, timestamp: Date.now() });
-                    tree.writeThreadData(threadId, td2);
-                  }
-                } catch (e) {
-                  tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" });
+                  /* target=user 时不 setNodeStatus("waiting")，避免死锁；其他 target 维持原逻辑 */
+                  if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting");
                 }
-                /* target=user 时不 setNodeStatus("waiting")，避免死锁；其他 target 维持原逻辑 */
-                if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting");
               }
             }
 
@@ -1204,49 +1262,76 @@ export async function runWithThreadTree(
               consola.info(`[Engine] return: ${(args.summary as string)?.slice(0, 100)}`);
             }
 
-            /* create_sub_thread */
-            else if (command === "create_sub_thread") {
-              /* 子线程标题 = tool call 的 title（天然同一语义） */
-              const subThreadName = (args.title as string | undefined) ?? "";
-              const child = await tree.createSubThread(threadId, subThreadName, {
-                description: args.description as string,
-                traits: args.traits as string[],
-              });
-              if (child) {
-                // 设置子线程为 running
-                await tree.setNodeStatus(child, "running");
+            /* think — 对自己的线程操作（fork / continue 四模式的自身半边） */
+            else if (command === "think") {
+              const ctxMode = (args.context as string | undefined) === "continue" ? "continue" : "fork";
+              const targetThreadId = args.threadId as string | undefined;
+              const msgContent = (args.msg as string | undefined) ?? "";
 
-                const td = tree.readThreadData(threadId);
-                if (td) {
-                  const childId = child ?? "?";
-                  td.actions.push({
-                    type: "create_thread",
-                    content: `[create_sub_thread] ${subThreadName} → ${childId}`,
-                    timestamp: Date.now()
+              if (ctxMode === "fork") {
+                /* fork 模式：以 targetThreadId（或当前线程）为父，创建子线程
+                 * 子线程标题 = tool call 的 title（天然同一语义；msg 作为描述/首条消息） */
+                const subThreadName = (args.title as string | undefined) ?? (msgContent.slice(0, 40) || "thread");
+                const parentId = targetThreadId ?? threadId;
+                const parentNode = tree.getNode(parentId);
+                if (!parentNode) {
+                  const td = tree.readThreadData(threadId);
+                  if (td) {
+                    td.actions.push({ type: "inject", content: `[错误] think(fork): 指定的 threadId=${parentId} 不存在`, timestamp: Date.now() });
+                    tree.writeThreadData(threadId, td);
+                  }
+                } else {
+                  const child = await tree.createSubThread(parentId, subThreadName, {
+                    description: msgContent || (args.description as string | undefined),
+                    traits: args.traits as string[],
                   });
-                  // 立即注入 thread_id，让 LLM 在当前轮就能看到
-                  td.actions.push({
-                    type: "inject",
-                    content: `[form.submit] create_sub_thread 成功，thread_id = ${childId}`,
-                    timestamp: Date.now(),
-                  });
-                  tree.writeThreadData(threadId, td);
+                  if (child) {
+                    await tree.setNodeStatus(child, "running");
+                    /* 把 msg 作为首条 inbox 注入，子线程首轮 Context 可见 */
+                    if (msgContent) {
+                      tree.writeInbox(child, { from: objectName, content: msgContent, source: "system" });
+                    }
+                    const td = tree.readThreadData(threadId);
+                    if (td) {
+                      td.actions.push({
+                        type: "create_thread",
+                        content: `[think.fork] ${subThreadName} → ${child}${targetThreadId ? ` (under ${targetThreadId})` : ""}`,
+                        timestamp: Date.now(),
+                        context: "fork",
+                      });
+                      td.actions.push({
+                        type: "inject",
+                        content: `[form.submit] think(fork) 成功，thread_id = ${child}`,
+                        timestamp: Date.now(),
+                      });
+                      tree.writeThreadData(threadId, td);
+                    }
+                    scheduler.onThreadCreated(child, objectName);
+                  }
+                  consola.info(`[Engine] think.fork: ${subThreadName} → ${child}`);
                 }
-
-                // 通知 Scheduler 启动新线程
-                scheduler.onThreadCreated(child, objectName);
-              }
-              consola.info(`[Engine] create_sub_thread: ${subThreadName}`);
-            }
-
-            /* continue_sub_thread */
-            else if (command === "continue_sub_thread") {
-              tree.writeInbox(args.thread_id as string, { from: objectName, content: args.message as string, source: "continue" });
-              await tree.setNodeStatus(threadId, "waiting");
-              const td = tree.readThreadData(threadId);
-              if (td) {
-                td.actions.push({ type: "message_out", content: `[continue_sub_thread] → ${args.thread_id}: ${args.message}`, timestamp: Date.now() });
-                tree.writeThreadData(threadId, td);
+              } else {
+                /* continue 模式：必须指定 threadId，向它的 inbox 投递消息 */
+                if (!targetThreadId) {
+                  const td = tree.readThreadData(threadId);
+                  if (td) {
+                    td.actions.push({ type: "inject", content: `[错误] think(context="continue") 必须同时指定 threadId 参数`, timestamp: Date.now() });
+                    tree.writeThreadData(threadId, td);
+                  }
+                } else {
+                  tree.writeInbox(targetThreadId, { from: objectName, content: msgContent, source: "continue" });
+                  const td = tree.readThreadData(threadId);
+                  if (td) {
+                    td.actions.push({
+                      type: "message_out",
+                      content: `[think.continue] → ${targetThreadId}: ${msgContent}`,
+                      timestamp: Date.now(),
+                      context: "continue",
+                    });
+                    tree.writeThreadData(threadId, td);
+                  }
+                  consola.info(`[Engine] think.continue: → ${targetThreadId}`);
+                }
               }
             }
 
@@ -1915,7 +2000,7 @@ export async function resumeWithThreadTree(
         const toolName = tc.function.name;
 
         /* 剥离顶层 title（参见 runWithThreadTree 同段落的说明）
-         * submit 场景下 args.title 保留（create_sub_thread 的子线程名兼容 fallback） */
+         * submit 场景下 args.title 保留（think(fork) 的子线程名 fallback） */
         const rawTitle = typeof args.title === "string" ? args.title : undefined;
         const actionTitle = rawTitle;
 
@@ -2083,82 +2168,100 @@ export async function resumeWithThreadTree(
               const td = tree.readThreadData(threadId);
               if (td) { td.actions.push({ type: "program", content: args.code as string, success: execResult.success, result: execResult.success ? (outputText ? `>>> output:\n${outputText}` : ">>> output: (无输出)") : `>>> error: ${execResult.error}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
             } else if ((command === "talk" || command === "talk_sync") && config.onTalk) {
+              /* resume 路径的 talk：与 run 路径保持同一 schema 协议（think/talk 统一 context）。 */
               const target = (args.target as string)?.toLowerCase();
               if (target && target !== objectName.toLowerCase()) {
-                const continueThreadId = args.continue_thread as string | undefined;
-                /* 先生成 messageId（供 action.id 和 onTalk 参数共用，前端凭此反查正文） */
-                const messageId = genMessageOutId();
-                /* 解析可选的结构化表单（talk form）——供前端渲染 option picker */
-                const formPayload = extractTalkForm(args.form);
-                const td = tree.readThreadData(threadId);
-                if (td) {
-                  const continueLabel = continueThreadId ? ` (continue: ${continueThreadId})` : "";
-                  const formLabel = formPayload ? ` [form: ${formPayload.formId}]` : "";
-                  td.actions.push({
-                    id: messageId,
-                    type: "message_out",
-                    content: `[talk] → ${args.target}: ${args.message}${continueLabel}${formLabel}`,
-                    timestamp: Date.now(),
-                    ...(formPayload ? { form: formPayload } : {}),
-                  });
-                  tree.writeThreadData(threadId, td);
+                const ctxMode = (args.context as string | undefined) === "continue" ? "continue" : "fork";
+                const remoteThreadIdArg = args.threadId as string | undefined;
+                const msgContent = (args.msg as string | undefined) ?? (args.message as string | undefined) ?? "";
+                if (ctxMode === "continue" && !remoteThreadIdArg) {
+                  const td = tree.readThreadData(threadId);
+                  if (td) { td.actions.push({ type: "inject", content: `[错误] talk(context="continue") 必须同时指定 threadId 参数`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+                } else {
+                  const forkUnderThreadId = ctxMode === "fork" ? remoteThreadIdArg : undefined;
+                  const continueThreadId = ctxMode === "continue" ? remoteThreadIdArg : undefined;
+                  const messageId = genMessageOutId();
+                  const formPayload = extractTalkForm(args.form);
+                  const td = tree.readThreadData(threadId);
+                  if (td) {
+                    const modeLabel = ` [${ctxMode}${remoteThreadIdArg ? `:${remoteThreadIdArg}` : ""}]`;
+                    const formLabel = formPayload ? ` [form: ${formPayload.formId}]` : "";
+                    td.actions.push({
+                      id: messageId,
+                      type: "message_out",
+                      content: `[talk] → ${args.target}: ${msgContent}${modeLabel}${formLabel}`,
+                      timestamp: Date.now(),
+                      context: ctxMode,
+                      ...(formPayload ? { form: formPayload } : {}),
+                    });
+                    tree.writeThreadData(threadId, td);
+                  }
+                  const isTalkSyncToUser = command === "talk_sync" && target === "user";
+                  if (isTalkSyncToUser) {
+                    consola.warn(`[Engine] ${objectName} 尝试 talk_sync(target="user")——user 不参与 ThinkLoop，不会回复。已降级为 talk（不阻塞）。`);
+                  }
+                  const explicitlyMarked = Array.isArray(args.mark) && args.mark.length > 0;
+                  try {
+                    const { reply, remoteThreadId } = await config.onTalk(args.target as string, msgContent, objectName, threadId, sessionId, continueThreadId, messageId, forkUnderThreadId);
+                    if (!explicitlyMarked) {
+                      const tdAck = tree.readThreadData(threadId);
+                      const autoAckId = getAutoAckMessageId(tdAck, args.target as string);
+                      if (autoAckId) tree.markInbox(threadId, autoAckId, "ack", "已回复");
+                    }
+                    if (reply) {
+                      tree.writeInbox(threadId, { from: args.target as string, content: `${reply}\n[remote_thread_id: ${remoteThreadId}]`, source: "talk" });
+                    }
+                    const td2 = tree.readThreadData(threadId);
+                    if (td2) {
+                      td2.actions.push({ type: "inject", content: `[talk → ${args.target}] remote_thread_id = ${remoteThreadId}`, timestamp: Date.now() });
+                      tree.writeThreadData(threadId, td2);
+                    }
+                  } catch (e) { tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" }); }
+                  if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting");
                 }
-                /* talk_sync 到 user 是死锁：user 永远不会唤醒。记日志、不 setNodeStatus("waiting")、直接继续。 */
-                const isTalkSyncToUser = command === "talk_sync" && target === "user";
-                if (isTalkSyncToUser) {
-                  consola.warn(`[Engine] ${objectName} 尝试 talk_sync(target="user")——user 不参与 ThinkLoop，不会回复。已降级为 talk（不阻塞）。`);
-                }
-                const explicitlyMarked = Array.isArray(args.mark) && args.mark.length > 0;
-                try {
-                  const { reply, remoteThreadId } = await config.onTalk(args.target as string, args.message as string, objectName, threadId, sessionId, continueThreadId, messageId);
-                  if (!explicitlyMarked) {
-                    const tdAck = tree.readThreadData(threadId);
-                    const autoAckId = getAutoAckMessageId(tdAck, args.target as string);
-                    if (autoAckId) tree.markInbox(threadId, autoAckId, "ack", "已回复");
-                  }
-                  if (reply) {
-                    tree.writeInbox(threadId, { from: args.target as string, content: `${reply}\n[remote_thread_id: ${remoteThreadId}]`, source: "talk" });
-                  }
-                  /* 将 remote_thread_id 记录到 actions（无论是否有 reply，LLM 都能看到） */
-                  const td2 = tree.readThreadData(threadId);
-                  if (td2) {
-                    td2.actions.push({ type: "inject", content: `[talk → ${args.target}] remote_thread_id = ${remoteThreadId}`, timestamp: Date.now() });
-                    tree.writeThreadData(threadId, td2);
-                  }
-                } catch (e) { tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" }); }
-                /* target=user 时不 setNodeStatus("waiting")，避免死锁 */
-                if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting");
               }
             } else if (command === "return") {
               await tree.setNodeStatus(threadId, "done");
               await tree.updateNodeMeta(threadId, { summary: args.summary as string ?? "" });
               const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "thread_return", content: args.summary as string ?? "", timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
               scheduler.markDone(threadId);
-            } else if (command === "create_sub_thread") {
-              /* 子线程标题 = tool call 的 title（天然同一语义） */
-              const subThreadName = (args.title as string | undefined) ?? "";
-              const child = await tree.createSubThread(threadId, subThreadName, {
-                description: args.description as string,
-                traits: args.traits as string[],
-              });
-              if (child) {
-                // 设置子线程为 running
-                await tree.setNodeStatus(child, "running");
-
-                const td = tree.readThreadData(threadId);
-                if (td) {
-                  td.actions.push({ type: "create_thread", content: `[create_sub_thread] ${subThreadName} → ${child}`, timestamp: Date.now() });
-                  // 立即注入 thread_id
-                  td.actions.push({ type: "inject", content: `[form.submit] create_sub_thread 成功，thread_id = ${child}`, timestamp: Date.now() });
-                  tree.writeThreadData(threadId, td);
+            } else if (command === "think") {
+              /* resume 路径的 think：与 run 路径语义完全对齐 */
+              const ctxMode = (args.context as string | undefined) === "continue" ? "continue" : "fork";
+              const targetThreadId = args.threadId as string | undefined;
+              const msgContent = (args.msg as string | undefined) ?? "";
+              if (ctxMode === "fork") {
+                const subThreadName = (args.title as string | undefined) ?? (msgContent.slice(0, 40) || "thread");
+                const parentId = targetThreadId ?? threadId;
+                const parentNode = tree.getNode(parentId);
+                if (!parentNode) {
+                  const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "inject", content: `[错误] think(fork): 指定的 threadId=${parentId} 不存在`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+                } else {
+                  const child = await tree.createSubThread(parentId, subThreadName, {
+                    description: msgContent || (args.description as string | undefined),
+                    traits: args.traits as string[],
+                  });
+                  if (child) {
+                    await tree.setNodeStatus(child, "running");
+                    if (msgContent) tree.writeInbox(child, { from: objectName, content: msgContent, source: "system" });
+                    const td = tree.readThreadData(threadId);
+                    if (td) {
+                      td.actions.push({ type: "create_thread", content: `[think.fork] ${subThreadName} → ${child}${targetThreadId ? ` (under ${targetThreadId})` : ""}`, timestamp: Date.now(), context: "fork" });
+                      td.actions.push({ type: "inject", content: `[form.submit] think(fork) 成功，thread_id = ${child}`, timestamp: Date.now() });
+                      tree.writeThreadData(threadId, td);
+                    }
+                    scheduler.onThreadCreated(child, objectName);
+                  }
                 }
-
-                // 通知 Scheduler 启动新线程
-                scheduler.onThreadCreated(child, objectName);
+              } else {
+                if (!targetThreadId) {
+                  const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "inject", content: `[错误] think(context="continue") 必须同时指定 threadId 参数`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+                } else {
+                  tree.writeInbox(targetThreadId, { from: objectName, content: msgContent, source: "continue" });
+                  const td = tree.readThreadData(threadId);
+                  if (td) { td.actions.push({ type: "message_out", content: `[think.continue] → ${targetThreadId}: ${msgContent}`, timestamp: Date.now(), context: "continue" }); tree.writeThreadData(threadId, td); }
+                }
               }
-            } else if (command === "continue_sub_thread") {
-              tree.writeInbox(args.thread_id as string, { from: objectName, content: args.message as string, source: "continue" }); tree.setNodeStatus(threadId, "waiting");
-              const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "message_out", content: `[continue_sub_thread] → ${args.thread_id}: ${args.message}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
             } else if (command === "call_function" && form.trait && form.functionName) {
               /* resume 路径：与第一次执行保持同一协议——argsObj 整体作为第二参数传入 */
               const method = methodRegistry.all().find(m => m.name === form.functionName && m.traitName === form.trait);

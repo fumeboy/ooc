@@ -7,9 +7,9 @@
  * 执行视角：whoAmI + parentExpectation + plan + process + locals + windows
  * 规划视角：children 摘要 + inbox + todos + directory
  *
- * 三种创建方式的 Context 差异：
- * - create_sub_thread：初始 process = 父线程渲染快照（inject action）
- * - create_sub_thread_on_node：初始 process = 空白 + 目标节点完整历史
+ * 三种创建方式的 Context 差异（2026-04-22 think/talk 统一后，"sub_thread" 由 think(fork) 产生，"talk" 由 talk(fork/continue) 产生）：
+ * - think(fork) / 原 create_sub_thread：初始 process = 父线程渲染快照（inject action）
+ * - sub_thread_on_node（协作 API 保留）：初始 process = 空白 + 目标节点完整历史
  * - talk：初始 process = 空白
  *
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md#5
@@ -113,9 +113,9 @@ export interface ThreadContextInput {
   /** 已加载的 Skill 定义列表 */
   skills?: SkillDefinition[];
   /**
-   * 目标节点数据（仅 create_sub_thread_on_node 场景使用）
+   * 目标节点数据（仅 sub_thread_on_node 协作场景使用）
    *
-   * 当通过 create_sub_thread_on_node 创建子线程时，需要将目标节点的
+   * 当通过 sub_thread_on_node 协作 API 创建子线程时，需要将目标节点的
    * 完整 actions 历史展示在 Context 中。Phase 5 完善具体渲染逻辑。
    */
   targetNodeData?: ThreadDataFile;
@@ -206,7 +206,7 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
    *
    * 语义：用当前节点的 title + description 构成"父线程对我的期望"。
    * 为什么用当前节点的 description 而不是父节点的？
-   * 因为 description 是父线程在 create_sub_thread 时指定的，
+   * 因为 description 是父线程在 think(fork) 时指定的，
    * 描述的是"你被要求做什么"，属于当前节点的元数据，
    * 而父节点的 title/description 描述的是父线程自身的任务。
    * parentExpectation = 父节点的 title（提供上级任务名称）
@@ -250,11 +250,11 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
     creator = nodeMeta.creatorObjectName;
     creationMode = nodeMeta.creationMode ?? "talk";
   } else if (nodeMeta.creatorThreadId && nodeMeta.creatorThreadId !== nodeMeta.parentId) {
-    /* create_sub_thread_on_node：creator 是调用方线程，不是父节点 */
+    /* sub_thread_on_node（协作 API）：creator 是调用方线程，不是父节点 */
     creator = nodeMeta.creatorThreadId;
     creationMode = nodeMeta.creationMode ?? "sub_thread_on_node";
   } else if (nodeMeta.parentId) {
-    /* 普通 create_sub_thread：creator 是父线程 */
+    /* 普通 think(fork) 子线程：creator 是父线程 */
     creator = nodeMeta.parentId;
     creationMode = nodeMeta.creationMode ?? "sub_thread";
   }

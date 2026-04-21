@@ -76,13 +76,13 @@ const MARK_PARAM = {
  * 也作为 LLM 自我对齐的锚点：每次 tool call 显式复述意图可降低失焦。
  * 前端 TuiAction 会把 title 作为卡片行首主标题展示。
  *
- * 特别说明：对 submit + create_sub_thread 而言，这个 title 同时作为
+ * 特别说明：对 submit + think(context="fork") 而言，这个 title 同时作为
  * 新创建的子线程的名字（语义上两者天然同一：「这次 tool call 在做什么」
  * 就是「要创建的子线程是什么」）。
  */
 const TITLE_PARAM = {
   type: "string",
-  description: "一句话说明本次工具调用在做什么（面向观察者的自然语言，建议不超过 20 个汉字）。例如：\"读取 gene.md\"、\"回复用户问题\"、\"分解任务为 3 个子线程\"。对于 submit + create_sub_thread，此 title 同时作为新创建子线程的名字。",
+  description: "一句话说明本次工具调用在做什么（面向观察者的自然语言，建议不超过 20 个汉字）。例如：\"读取 gene.md\"、\"回复用户问题\"、\"分解任务为 3 个子线程\"。对于 submit + think(context=\"fork\")，此 title 同时作为新创建子线程的名字。",
 } as const;
 
 /** open tool — 打开上下文 */
@@ -102,7 +102,7 @@ export const OPEN_TOOL: ToolDefinition = {
         },
         command: {
           type: "string",
-          enum: ["program", "talk", "talk_sync", "return", "create_sub_thread", "continue_sub_thread", "call_function", "set_plan", "await", "await_all", "defer"],
+          enum: ["program", "think", "talk", "talk_sync", "return", "call_function", "set_plan", "await", "await_all", "defer"],
           description: "指令名称（type=command 时必填）",
         },
         name: {
@@ -142,12 +142,12 @@ export const SUBMIT_TOOL: ToolDefinition = {
   type: "function",
   function: {
     name: "submit",
-    description: "提交指令执行。必须先 open 获取 form_id。记得带 title 参数，用一句话说明本次提交的意图。talk/talk_sync 可选带 form 参数——当你已经有几个候选回复时，用结构化表单代替纯文本列表，接收方前端会把它渲染为 option picker。",
+    description: "提交指令执行。必须先 open 获取 form_id。记得带 title 参数，用一句话说明本次提交的意图。think/talk 指令通过 context=fork|continue 表达四种语义：think(fork) 派生自己的子线程；think(continue,threadId) 向自己某线程补充；talk(fork,target) 向别人新根线程；talk(continue,target,threadId) 向别人已有线程补充。talk 可选带 form 参数——当你已经有几个候选回复时，用结构化表单代替纯文本列表，接收方前端会把它渲染为 option picker。",
     parameters: {
       type: "object",
       properties: {
         /**
-         * 注意：对 create_sub_thread 来说，这个 title 同时是新子线程的名字——
+         * 注意：对 think(context="fork") 来说，这个 title 同时是新子线程的名字——
          * 这次 tool call 的「行动标题」天然等于「要创建的子线程的标题」。
          */
         title: TITLE_PARAM,
@@ -158,23 +158,25 @@ export const SUBMIT_TOOL: ToolDefinition = {
         /* program */
         code: { type: "string", description: "program: JavaScript 代码" },
         lang: { type: "string", enum: ["javascript", "shell"], description: "program: 语言" },
-        /* talk / talk_sync */
-        target: { type: "string", description: "talk: 目标对象名" },
-        message: { type: "string", description: "talk/continue_sub_thread: 消息内容" },
-        continue_thread: { type: "string", description: "talk: 继续对方已有线程（传入上次 talk 返回的 remote_thread_id），不传则新建线程" },
-        /* talk / talk_sync: 可选结构化表单（选项 + 自由文本兜底） */
+        /* think / talk 统一参数（fork vs continue 四模式） */
+        msg: { type: "string", description: "think/talk: 要发送的消息内容。think 时向自己的线程投递，talk 时向对方投递。" },
+        threadId: { type: "string", description: "think/talk: 目标线程 ID。context=continue 时必填；context=fork 时可选——省略时，think 默认 fork 当前线程，talk 默认 fork 对方新根线程。" },
+        context: { type: "string", enum: ["fork", "continue"], description: "think/talk: 操作模式。fork=派生新线程（对原线程 readonly，适合查资料/拆分子任务）；continue=直接向原线程投递消息（会产生影响，适合补充信息/触发决策）。" },
+        /* talk 额外参数 */
+        target: { type: "string", description: "talk: 目标对象名。特殊保留字 \"super\" 指向当前对象的反思镜像分身（不是 supervisor）。" },
+        /* talk: 可选结构化表单（选项 + 自由文本兜底） */
         form: FORM_PARAM,
         /* return */
         summary: { type: "string", description: "return: 完成摘要" },
         /* set_plan */
         text: { type: "string", description: "set_plan: 计划内容" },
         /* await */
-        thread_id: { type: "string", description: "await/continue_sub_thread: 线程 ID" },
+        thread_id: { type: "string", description: "await: 线程 ID" },
         thread_ids: { type: "array", items: { type: "string" }, description: "await_all: 线程 ID 列表" },
         /* call_function */
         args: { type: "object", description: "call_function: 方法参数" },
-        /* create_sub_thread 额外 */
-        traits: { type: "array", items: { type: "string" }, description: "create_sub_thread: trait 列表" },
+        /* think 额外参数 */
+        traits: { type: "array", items: { type: "string" }, description: "think(fork): 新子线程的 trait 列表" },
         /* defer */
         on_command: { type: "string", description: "defer: 目标 command 名（如 return, talk, program）" },
         content: { type: "string", description: "defer: 提醒文本" },
