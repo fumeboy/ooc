@@ -115,7 +115,7 @@ describe("World", () => {
     eventBus.on("sse", onSse);
 
     try {
-      const world = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG, useThreadTree: true });
+      const world = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG });
       world.init();
       world.createObject("supervisor", "你是一个测试 supervisor");
 
