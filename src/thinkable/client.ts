@@ -556,9 +556,18 @@ export type MockLLMResponseFnResult =
   | string
   | { content?: string; toolCalls?: ToolCall[]; thinkingContent?: string };
 
-/** 测试用 Mock 客户端 */
+/**
+ * 测试用 Mock 客户端
+ *
+ * 2026-04-21 旧 Flow 架构退役：移除 `responses: string[]` 入参。
+ * 该字段原本是给旧 TOML parser 喂预置字符串用的，TOML 路径删除后语义已模糊
+ * （只能作 content 透传，不会被解析为指令）。新测试应使用以下三种模式之一：
+ * - `responseFn: (messages) => string | { content, toolCalls?, thinkingContent? }`
+ *   —— 最灵活，可基于 messages 动态生成 tool call。推荐使用。
+ * - `responseObject: Partial<LLMResult>` —— 固定一次响应（含 thinkingContent）。
+ * - `responseObjects: Array<Partial<LLMResult>>` —— 固定多次响应的序列。
+ */
 export class MockLLMClient implements LLMClient {
-  private _responses: string[];
   private _responseObjects: Array<Partial<LLMResult>>;
   private _streamEvents: LLMStreamEvent[] | null;
   private _responseFn: ((messages: Message[]) => MockLLMResponseFnResult) | null;
@@ -566,13 +575,11 @@ export class MockLLMClient implements LLMClient {
   private _callHistory: Message[][] = [];
 
   constructor(params?: {
-    responses?: string[];
     responseFn?: (messages: Message[]) => MockLLMResponseFnResult;
     responseObject?: Partial<LLMResult>;
     responseObjects?: Array<Partial<LLMResult>>;
     streamEvents?: LLMStreamEvent[];
   }) {
-    this._responses = params?.responses ? [...params.responses] : [];
     this._responseObjects = params?.responseObjects
       ? [...params.responseObjects]
       : params?.responseObject
@@ -613,8 +620,6 @@ export class MockLLMClient implements LLMClient {
         toolCalls = fnResult.toolCalls;
         thinkingContent = fnResult.thinkingContent ?? "";
       }
-    } else if (this._responses.length > 0) {
-      content = this._responses.shift()!;
     } else {
       content = `[MockLLM 默认响应 #${this._callCount}]`;
     }
