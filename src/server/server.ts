@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { existsSync, readFileSync, readdirSync, writeFileSync, statSync, mkdirSync } from "node:fs";
 import { consola } from "consola";
 import { eventBus, type SSEEvent } from "./events.js";
-import { readFlow, listFlowSessions } from "../persistence/index.js";
+import { readFlow, listFlowSessions, readUserInbox } from "../persistence/index.js";
 import { collectAllActions } from "../process/tree.js";
 import { loadTrait } from "../trait/loader.js";
 import { threadsToProcess } from "../persistence/thread-adapter.js";
@@ -108,8 +108,10 @@ export function startServer(config: ServerConfig): void {
 
 /**
  * 路由处理
+ *
+ * export 以便单元测试直接调用（无需真起 Bun.serve）。
  */
-async function handleRoute(
+export async function handleRoute(
   method: string,
   path: string,
   req: Request,
@@ -351,18 +353,15 @@ async function handleRoute(
     const sessionId = flowDetailMatch[1]!;
     const sessionDir = join(world.flowsDir, sessionId);
 
-    /* 新结构：main flow 在 session/objects/user/ */
-    let flow = readFlow(join(sessionDir, "objects", "user"));
-    if (!flow) {
-      /* 线程树兼容：扫描 objects/ 下第一个有 data.json 的子目录 */
-      const objDir = join(sessionDir, "objects");
-      if (existsSync(objDir)) {
-        const entries = readdirSync(objDir, { withFileTypes: true });
-        for (const entry of entries) {
-          if (!entry.isDirectory()) continue;
-          const subFlow = readFlow(join(objDir, entry.name));
-          if (subFlow) { flow = subFlow; break; }
-        }
+    /* 线程树架构下 flow 数据只在 objects/{objectName}/ 下；扫第一个有 data.json 的子目录 */
+    let flow = null;
+    const objDir = join(sessionDir, "objects");
+    if (existsSync(objDir)) {
+      const entries = readdirSync(objDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const subFlow = readFlow(join(objDir, entry.name));
+        if (subFlow) { flow = subFlow; break; }
       }
     }
     if (!flow) {
@@ -384,8 +383,6 @@ async function handleRoute(
       const subEntries = readdirSync(objectsDir, { withFileTypes: true });
       for (const entry of subEntries) {
         if (!entry.isDirectory()) continue;
-        /* 跳过 user（main flow 自身） */
-        if (entry.name === "user") continue;
         const subFlow = readFlow(join(objectsDir, entry.name));
         if (subFlow) {
           flow.messages = mergeMessages(flow.messages, subFlow.messages);
@@ -395,10 +392,6 @@ async function handleRoute(
             process: subFlow.process,
           });
         }
-      }
-      /* 兼容：如果 main flow 是 user，用第一个 sub-flow 的状态 */
-      if (flow.stoneName === "user" && subFlows.length > 0) {
-        flow.status = subFlows[0]!.status as FlowStatus;
       }
     }
 
@@ -860,6 +853,25 @@ async function handleRoute(
 
     const visibility = classifyContextVisibility(tree, focusId);
     return json({ success: true, data: { focusId, visibility } });
+  }
+
+  /* GET /api/sessions/:sessionId/user-inbox
+   *
+   * 返回 session 的 user inbox（引用式收件箱）。
+   * user 不参与 ThinkLoop，但系统会记录每次"某对象→user"的 talk，
+   * 方便前端聚合渲染 MessageSidebar 的"按对象分组 + 未读角标"。
+   *
+   * 返回 { success: true, data: { inbox: [{ threadId, messageId }, ...] } }
+   * 若 session 不存在或尚未有任何 talk(user)，返回 { inbox: [] }。
+   * 消息正文请按 (threadId, messageId) 反查：flows/{sid}/objects/{sender}/threads/{threadId}/thread.json 的 actions[]
+   *
+   * @ref docs/工程管理/迭代/all/20260421_feature_user_inbox.md
+   */
+  const userInboxMatch = path.match(/^\/api\/sessions\/([^/]+)\/user-inbox$/);
+  if (method === "GET" && userInboxMatch) {
+    const sessionId = userInboxMatch[1]!;
+    const data = await readUserInbox(world.flowsDir, sessionId);
+    return json({ success: true, data });
   }
 
   /* 404 */
