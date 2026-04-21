@@ -159,6 +159,9 @@ export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionP
   const resultTrunc = isProgram && action.result ? truncateText(action.result) : null;
   const needsModal = contentTrunc?.isTruncated || resultTrunc?.isTruncated;
 
+  /* tool_use 的自叙标题 title 作为主文案显示，优先级高于 toolLabel */
+  const hasTitle = isToolUse && typeof action.title === "string" && action.title.trim().length > 0;
+
   return (
     <div className="group font-mono text-[12px] leading-relaxed">
       {/* 头部行 */}
@@ -171,8 +174,21 @@ export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionP
       >
         <span className={cn("shrink-0 select-none", cfg.color)}>{cfg.prefix}</span>
         <span className={cn("shrink-0 font-semibold", cfg.color)}>{cfg.label}</span>
-        {toolLabel && (
-          <span className="text-[var(--foreground)] opacity-80 truncate">{toolLabel}</span>
+        {hasTitle ? (
+          <>
+            {/* 主标题：tool call 的自叙行动标题 */}
+            <span className="text-[var(--foreground)] font-medium truncate">{action.title}</span>
+            {/* 副标题：原 toolName(args) 摘要，次级色、小字 */}
+            {toolLabel && (
+              <span className="text-[var(--muted-foreground)] text-[10px] opacity-70 truncate">
+                {toolLabel}
+              </span>
+            )}
+          </>
+        ) : (
+          toolLabel && (
+            <span className="text-[var(--foreground)] opacity-80 truncate">{toolLabel}</span>
+          )
         )}
         {objectName && (
           <span className="text-[var(--muted-foreground)] opacity-60">{objectName}</span>
