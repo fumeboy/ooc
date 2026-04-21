@@ -43,17 +43,29 @@ export function OocNavigateCard({ title, description, url }: OocNavigateCardProp
         return [...prev, { path, label: parsed.filename }];
       });
       setActiveFilePath(path);
-    } else if (parsed.type === "ui") {
-      /* 从路径提取 sessionId 和 objectName：flows/{sid}/objects/{name}/ui/pages/{page} */
-      const m = parsed.path.match(/^flows\/([^/]+)\/objects\/([^/]+)\/ui\/pages\/(.+)$/);
-      if (m) {
-        const path = `flows/${m[1]}/objects/${m[2]}`;
-        const label = m[2]!;
+    } else if (parsed.type === "view") {
+      /* 路径形态：
+       *   flows/{sid}/objects/{name}/views/{viewName}/           → 打开 flow 对象 View tab
+       *   stones/{name}/views/{viewName}/                        → 打开 stone 对象 View tab
+       */
+      const flowMatch = parsed.path.match(/^flows\/([^/]+)\/objects\/([^/]+)\/views\/([^/]+)\/?/);
+      const stoneMatch = parsed.path.match(/^stones\/([^/]+)\/views\/([^/]+)\/?/);
+      if (flowMatch) {
+        const path = `flows/${flowMatch[1]}/objects/${flowMatch[2]}/views/${flowMatch[3]}`;
+        const label = flowMatch[3]!;
         setEditorTabs((prev) => {
           if (prev.some((t) => t.path === path)) return prev;
           return [...prev, { path, label }];
         });
-        setActiveFilePath(path + "?tab=UI");
+        setActiveFilePath(path);
+      } else if (stoneMatch) {
+        const path = `stones/${stoneMatch[1]}/views/${stoneMatch[2]}`;
+        const label = stoneMatch[2]!;
+        setEditorTabs((prev) => {
+          if (prev.some((t) => t.path === path)) return prev;
+          return [...prev, { path, label }];
+        });
+        setActiveFilePath(path);
       } else {
         setOocLink(url);
       }

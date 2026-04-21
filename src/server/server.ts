@@ -1260,16 +1260,18 @@ function handleOocResolve(oocUrl: string, world: World): Response {
     return json({ success: true, data: { type: "file", objectName, filename, content } });
   }
 
-  /* ooc://ui/{相对路径} — Flow 自定义 UI 页面 */
-  const uiMatch = oocUrl.match(/^ooc:\/\/ui\/(.+)$/);
-  if (uiMatch) {
-    const relPath = decodeURIComponent(uiMatch[1]!);
-    const filePath = join(world.rootDir, relPath);
+  /* ooc://view/{相对路径} — 对象的 view 资源（stones/{name}/views/... 或 flows/{sid}/objects/{name}/views/...） */
+  const viewMatch = oocUrl.match(/^ooc:\/\/view\/(.+)$/);
+  if (viewMatch) {
+    const relPath = decodeURIComponent(viewMatch[1]!);
+    /* 尾部斜杠时默认指向 frontend.tsx；否则原样解析 */
+    const resolvedRel = relPath.endsWith("/") ? relPath + "frontend.tsx" : relPath;
+    const filePath = join(world.rootDir, resolvedRel);
     /* 安全检查 */
     if (!filePath.startsWith(world.rootDir)) return errorResponse("非法路径", 403);
-    if (!existsSync(filePath)) return errorResponse(`UI 文件 "${relPath}" 不存在`, 404);
+    if (!existsSync(filePath)) return errorResponse(`View 文件 "${resolvedRel}" 不存在`, 404);
     const content = readFileSync(filePath, "utf-8");
-    return json({ success: true, data: { type: "ui", path: relPath, content } });
+    return json({ success: true, data: { type: "view", path: resolvedRel, content } });
   }
 
   return errorResponse(`无法解析 ooc:// URL: ${oocUrl}`);
