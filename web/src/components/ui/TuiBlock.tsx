@@ -206,24 +206,16 @@ export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionP
             {threadIdArg ? `·${threadIdArg.slice(0, 12)}` : ""}
           </span>
         )}
+        {/* hasTitle 时：header 只显示类型 + 徽章 + title；toolLabel 抬到第二行 */}
         {hasTitle ? (
-          <>
-            {/* 主标题：tool call 的自叙行动标题 */}
-            <span className="text-[var(--foreground)] font-medium truncate">{action.title}</span>
-            {/* 副标题：原 toolName(args) 摘要，次级色、小字 */}
-            {toolLabel && (
-              <span className="text-[var(--muted-foreground)] text-[10px] opacity-70 truncate">
-                {toolLabel}
-              </span>
-            )}
-          </>
+          <span className="text-[var(--foreground)] font-medium truncate flex-1 min-w-0">{action.title}</span>
         ) : (
           toolLabel && (
             <span className="text-[var(--foreground)] opacity-80 truncate">{toolLabel}</span>
           )
         )}
         {objectName && (
-          <span className="text-[var(--muted-foreground)] opacity-60">{objectName}</span>
+          <span className="text-[var(--muted-foreground)] opacity-60 shrink-0">{objectName}</span>
         )}
         {isProgram && action.success !== undefined && (
           <span className={action.success === false ? "text-red-400 font-semibold" : "text-green-400 font-semibold"}>
@@ -242,6 +234,13 @@ export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionP
         <span className="text-[var(--muted-foreground)] opacity-40 shrink-0 ml-auto">{formatTs(action.timestamp)}</span>
         <CopyBtn text={action.content} />
       </div>
+
+      {/* hasTitle 时，第二行：toolLabel（原 toolName(args) 摘要）作为次级信息 */}
+      {hasTitle && toolLabel && (
+        <div className="pl-5 text-[var(--muted-foreground)] text-[10px] opacity-70 truncate leading-tight">
+          {toolLabel}
+        </div>
+      )}
 
       {/* 内容区 */}
       {expanded && (
