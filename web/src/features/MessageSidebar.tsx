@@ -419,6 +419,22 @@ export function MessageSidebar() {
   /* user 相关线程聚合（用于 threads list + Header 红点） */
   const userThreads = useUserThreads();
 
+  /* session 切换时重置 currentThreadId（避免保留跨 session 的旧 thread） */
+  useEffect(() => {
+    setCurrentThreadId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId]);
+
+  /* 自动选默认线程：若 currentThreadId 为空且 supervisor 有 root thread，自动选为默认
+   * 逻辑：subFlows 里找 stoneName === "supervisor"，取其 process.root.id
+   * 若 supervisor 还没起 thread，currentThreadId 保持 null，Body 显示空状态 */
+  useEffect(() => {
+    if (currentThreadId) return;
+    const supervisorSub = activeFlow?.subFlows?.find((sf) => sf.stoneName === DEFAULT_TARGET);
+    const rootId = supervisorSub?.process?.root?.id;
+    if (rootId) setCurrentThreadId(rootId);
+  }, [activeFlow, currentThreadId, setCurrentThreadId]);
+
   /* 未读角标：排除"当前正在查看的 thread"的消息，避免红点跟着自己跑 */
   const unreadTotal = useMemo(() => {
     if (!userThreads.rawInbox.length) return 0;
@@ -430,8 +446,6 @@ export function MessageSidebar() {
     return count;
   }, [userThreads.rawInbox, userThreads.allUnreadMessageIds, currentThreadId]);
   const hasUnread = unreadTotal > 0;
-
-  void setCurrentThreadId;  // Task 4.5/4.6 会使用
 
   return (
     <div className={cn(
