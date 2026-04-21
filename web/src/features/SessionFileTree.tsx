@@ -55,6 +55,21 @@ async function enhanceTree(tree: FileTreeNode, sessionId: string): Promise<FileT
     });
   };
 
+  /* 给 views/<viewName>/ 目录打 marker="view"（Bruce 首轮 #13）：
+   * 用户点击目录即激活 view 渲染（FlowView 的 View tab），而非只展开子文件。
+   * 需要深入到 objects/<obj>/views/<viewName>。 */
+  const markViewDirs = (node: FileTreeNode, insideViews = false): FileTreeNode => {
+    const nextInsideViews = insideViews || node.name === "views";
+    if (!node.children) return node;
+    const children = node.children.map((c) => {
+      if (insideViews && c.type === "directory" && !c.marker) {
+        return { ...markViewDirs(c, true), marker: "view" as const };
+      }
+      return markViewDirs(c, nextInsideViews);
+    });
+    return { ...node, children };
+  };
+
   if (objectsDir?.children) {
     const newFlowChildren: FileTreeNode[] = [];
     for (const child of objectsDir.children) {
@@ -72,7 +87,8 @@ async function enhanceTree(tree: FileTreeNode, sessionId: string): Promise<FileT
             if (c.type === "directory" && c.name === "super") {
               return { ...c, children: filterChildren(c.children, FLOW_HIDDEN) };
             }
-            return c;
+            /* views 目录下的 view 名子目录打 marker="view" */
+            return markViewDirs(c);
           });
           const stoneVirtual: FileTreeNode = {
             name: ".stone",
@@ -83,10 +99,10 @@ async function enhanceTree(tree: FileTreeNode, sessionId: string): Promise<FileT
           };
           newFlowChildren.push({
             ...child,
-            children: [stoneVirtual, ...filteredFlowChildren],
+            children: [stoneVirtual, ...filteredFlowChildren.map((c) => markViewDirs(c))],
           });
         } catch {
-          newFlowChildren.push({ ...child, children: filteredFlowChildren });
+          newFlowChildren.push({ ...child, children: filteredFlowChildren.map((c) => markViewDirs(c)) });
         }
       } else {
         newFlowChildren.push(child);

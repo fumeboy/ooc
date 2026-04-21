@@ -280,8 +280,8 @@ export interface FileTreeNode {
   path: string;
   size?: number;
   children?: FileTreeNode[];
-  /** 目录标记：stone 或 flow */
-  marker?: "stone" | "flow";
+  /** 目录标记：stone（对象）/ flow（session 里的对象实例）/ view（对象的 views 渲染入口） */
+  marker?: "stone" | "flow" | "view";
 }
 
 // --- Session Kanban ---

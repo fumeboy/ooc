@@ -180,6 +180,8 @@ function TreeNode({ node, onSelect, selectedPath, depth, defaultExpanded, onCont
               <Box className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
             ) : node.marker === "flow" ? (
               <GitBranch className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+            ) : node.marker === "view" ? (
+              <Palette className="w-3.5 h-3.5 text-pink-500 shrink-0" />
             ) : expanded ? (
               <FolderOpen className="w-3.5 h-3.5 text-blue-500 shrink-0" />
             ) : (

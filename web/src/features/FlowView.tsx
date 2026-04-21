@@ -30,6 +30,12 @@ interface FlowViewProps {
   objectName: string;
   /** 初始 tab（由路由指定） */
   initialTab?: string;
+  /**
+   * 路由指定的 view 名（如路径 `...objects/obj/views/<viewName>`），
+   * 存在时覆盖 defaultViewName（main 优先）的选择——实现文件树点击 `views/main` 直接激活该 view
+   * （Bruce 首轮 #13）。
+   */
+  initialViewName?: string;
 }
 
 /* tabs 与 ObjectDetail 对齐：Process / Data / Effects / Memory (+View)
@@ -37,13 +43,13 @@ interface FlowViewProps {
 const BASE_TABS = ["Process", "Data", "Effects", "Memory"] as const;
 type Tab = "Process" | "Data" | "Effects" | "Memory" | "View" | null;
 
-export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
+export function FlowView({ sessionId, objectName, initialTab, initialViewName }: FlowViewProps) {
   const [flow, setFlow] = useState<FlowData | null>(null);
   const [stone, setStone] = useState<StoneData | null>(null);
   const [tab, setTab] = useState<Tab>((initialTab as Tab) || null);
   const [hasView, setHasView] = useState(false);
-  /** 默认加载的 view 名称（main 优先，否则取第一个） */
-  const [defaultViewName, setDefaultViewName] = useState<string | null>(null);
+  /** 默认加载的 view 名称（main 优先，否则取第一个；initialViewName 优先覆盖） */
+  const [defaultViewName, setDefaultViewName] = useState<string | null>(initialViewName ?? null);
   const lastEvent = useAtomValue(lastFlowEventAtom);
   const refreshKey = useAtomValue(refreshKeyAtom);
 
@@ -68,7 +74,10 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
     }
   }, [lastEvent]);
 
-  /* 检查该对象是否有 views/ 目录（任一 view） */
+  /* 检查该对象是否有 views/ 目录（任一 view）
+   *
+   * initialViewName 优先级：若路由指定具体 view（如 views/my_view），用它；
+   * 否则 main 优先，再回退到第一个 view 名。 */
   useEffect(() => {
     fetchSessionTree(sessionId).then((tree) => {
       const objectsDir = tree.children?.find((c) => c.name === "objects");
@@ -78,7 +87,10 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
       const viewNames = viewDirs.map((d) => d.name);
       const found = viewNames.length > 0;
       setHasView(found);
-      setDefaultViewName(viewNames.includes("main") ? "main" : (viewNames[0] ?? null));
+      const picked = initialViewName && viewNames.includes(initialViewName)
+        ? initialViewName
+        : viewNames.includes("main") ? "main" : (viewNames[0] ?? null);
+      setDefaultViewName(picked);
       if (found && !initialTab) {
         setTab("View");
       } else if (!found && initialTab === "View") {
@@ -86,7 +98,7 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
         setTab(null);
       }
     }).catch(() => setHasView(false));
-  }, [sessionId, objectName, initialTab]);
+  }, [sessionId, objectName, initialTab, initialViewName]);
 
   const tabs: Tab[] = hasView ? [...BASE_TABS, "View"] : [...BASE_TABS];
 

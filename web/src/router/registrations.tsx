@@ -55,7 +55,7 @@ function StoneViewAdapter({ path }: ViewProps) {
   return <ObjectDetail objectName={name} initialTab={initialTab} />;
 }
 
-/** FlowView 适配器 — 从 path 提取 sessionId, objectName, initialTab */
+/** FlowView 适配器 — 从 path 提取 sessionId, objectName, initialTab, initialViewName */
 function FlowViewAdapter({ path }: ViewProps) {
   const match = path.match(/^flows\/([^/]+)\/objects\/([^/]+)/);
   if (!match) return null;
@@ -64,12 +64,18 @@ function FlowViewAdapter({ path }: ViewProps) {
 
   /* 子路径 → initialTab */
   let initialTab: string | undefined;
+  let initialViewName: string | undefined;
   if (path.endsWith("/data.json")) initialTab = "Data";
   else if (path.endsWith("/process.json")) initialTab = "Process";
   else if (path.endsWith("/memory.md")) initialTab = "Memory";
-  else if (/\/views(\/|$)/.test(path)) initialTab = "View";
+  else if (/\/views(\/|$)/.test(path)) {
+    initialTab = "View";
+    /* 如果路径带具体 viewName（如 .../views/main），优先传给 FlowView 作为 initial view */
+    const viewMatch = path.match(/\/views\/([^/]+)(?:\/|$)/);
+    if (viewMatch) initialViewName = viewMatch[1]!;
+  }
 
-  return <FlowView sessionId={sessionId} objectName={objectName} initialTab={initialTab} />;
+  return <FlowView sessionId={sessionId} objectName={objectName} initialTab={initialTab} initialViewName={initialViewName} />;
 }
 
 /** SessionKanban 适配器 */
