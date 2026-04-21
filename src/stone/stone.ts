@@ -75,8 +75,8 @@ export class Stone {
   get relations(): readonly Relation[] { return this._data.relations; }
   get traits(): readonly string[] { return this._data.traits; }
 
-  /** 获取 reflect/ 目录路径（原 effects/_selfmeta，ReflectFlow 数据） */
-  get reflectDir(): string { return join(this._dir, "reflect"); }
+  /** 获取 super/ 目录路径（SuperFlow：对象的反思镜像分身，跨 session 常驻） */
+  get superDir(): string { return join(this._dir, "super"); }
 
   /* ========== 数据操作（不可变更新） ========== */
 

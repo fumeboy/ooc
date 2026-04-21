@@ -1,22 +1,21 @@
 /**
  * 协作 API 测试
  *
- * 测试 talk、create_sub_thread_on_node、talkToSelf、replyToFlow 的完整生命周期。
+ * 测试 talk、create_sub_thread_on_node 的完整生命周期。
  * 使用 mock 的 ThreadsTree（匹配真实 API）和 MockScheduler。
+ *
+ * SuperFlow 转型（2026-04-22）：talkToSelf / replyToFlow 相关测试已删除，
+ * 对应能力由通用 talk(target="super") 实现，测试见 world-talk-super.test.ts。
  *
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md#4.2
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md#9
  */
-import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
-import { mkdirSync, rmSync, existsSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { describe, test, expect, beforeEach } from "bun:test";
 import {
   createCollaborationAPI,
   type CollaborationContext,
   type ObjectResolver,
 } from "../src/thread/collaboration.js";
-import { ThreadsTree } from "../src/thread/tree.js";
 import type {
   ThreadsTreeNodeMeta,
   ThreadDataFile,
@@ -384,213 +383,10 @@ describe("create_sub_thread_on_node()", () => {
   });
 });
 
-describe("talkToSelf()", () => {
-  let tree: MockTree;
-  let scheduler: MockScheduler;
-  let api: ReturnType<typeof createCollaborationAPI>;
-  let deliverToSelfMetaCalled = false;
-
-  beforeEach(() => {
-    tree = new MockTree();
-    scheduler = new MockScheduler();
-    deliverToSelfMetaCalled = false;
-
-    const resolver: ObjectResolver = {
-      getTree: () => tree as any,
-      objectExists: () => true,
-    };
-
-    const ctx: CollaborationContext = {
-      currentObjectName: "A",
-      currentThreadId: "root_001",
-      resolver,
-      scheduler: scheduler as any,
-      sessionDir: "/tmp/test-session",
-      deliverToSelfMeta: (_name: string, _msg: string) => {
-        deliverToSelfMetaCalled = true;
-        return "[已发送到 ReflectFlow]";
-      },
-    };
-
-    api = createCollaborationAPI(ctx);
-  });
-
-  test("talkToSelf 调用 deliverToSelfMeta", async () => {
-    const result = await api.talkToSelf("我需要反思一下");
-    expect(deliverToSelfMetaCalled).toBe(true);
-    expect(result).toContain("ReflectFlow");
-  });
-
-  test("talkToSelf 无 deliverToSelfMeta 且无 stoneDir 时返回错误", async () => {
-    const resolver: ObjectResolver = {
-      getTree: () => tree as any,
-      objectExists: () => true,
-    };
-    const ctx2: CollaborationContext = {
-      currentObjectName: "A",
-      currentThreadId: "root_001",
-      resolver,
-      scheduler: scheduler as any,
-      sessionDir: "/tmp/test-session",
-      // 不提供 deliverToSelfMeta 也不提供 stoneDir
-    };
-    const api2 = createCollaborationAPI(ctx2);
-    const result = await api2.talkToSelf("hello");
-    expect(result).toContain("错误");
-  });
-});
-
-describe("talkToSelf() — 方案 A 通过 stoneDir 路由到 reflect.ts", () => {
-  let stoneDir: string;
-  let tree: MockTree;
-  let scheduler: MockScheduler;
-
-  beforeEach(() => {
-    stoneDir = join(tmpdir(), `collab-reflect-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`);
-    mkdirSync(stoneDir, { recursive: true });
-    tree = new MockTree();
-    scheduler = new MockScheduler();
-  });
-
-  afterEach(() => {
-    if (existsSync(stoneDir)) rmSync(stoneDir, { recursive: true, force: true });
-  });
-
-  test("提供 stoneDir 时 talkToSelf 把消息写入 {stoneDir}/reflect/ 的根线程 inbox", async () => {
-    const resolver: ObjectResolver = {
-      getTree: () => tree as any,
-      objectExists: () => true,
-    };
-    const ctx: CollaborationContext = {
-      currentObjectName: "bruce",
-      currentThreadId: "root_001",
-      resolver,
-      scheduler: scheduler as any,
-      sessionDir: "/tmp/session",
-      stoneDir,
-    };
-    const api = createCollaborationAPI(ctx);
-
-    const result = await api.talkToSelf("G12 沉淀候选：X 做法效果显著");
-    expect(result).toContain("已投递到反思线程");
-
-    /* 从磁盘反查 reflect 线程树状态 */
-    const reflectTree = ThreadsTree.load(join(stoneDir, "reflect"));
-    expect(reflectTree).toBeTruthy();
-    const data = reflectTree!.readThreadData(reflectTree!.rootId);
-    expect(data?.inbox).toHaveLength(1);
-    expect(data!.inbox![0]!.from).toBe("bruce");
-    expect(data!.inbox![0]!.content).toBe("G12 沉淀候选：X 做法效果显著");
-    expect(data!.inbox![0]!.source).toBe("system");
-  });
-
-  test("deliverToSelfMeta 优先级高于 stoneDir（override 语义）", async () => {
-    let delivered = false;
-    const resolver: ObjectResolver = {
-      getTree: () => tree as any,
-      objectExists: () => true,
-    };
-    const ctx: CollaborationContext = {
-      currentObjectName: "bruce",
-      currentThreadId: "root_001",
-      resolver,
-      scheduler: scheduler as any,
-      sessionDir: "/tmp/session",
-      stoneDir,
-      deliverToSelfMeta: (_name, _msg) => { delivered = true; return "[override]"; },
-    };
-    const api = createCollaborationAPI(ctx);
-
-    const result = await api.talkToSelf("test");
-    expect(delivered).toBe(true);
-    expect(result).toBe("[override]");
-
-    /* stoneDir 路径不应被使用：reflect 目录里不应有 threads.json */
-    expect(existsSync(join(stoneDir, "reflect", "threads.json"))).toBe(false);
-  });
-
-  test("resolver.getStoneDir 可作为 fallback 提供 stoneDir", async () => {
-    const resolver: ObjectResolver = {
-      getTree: () => tree as any,
-      objectExists: () => true,
-      getStoneDir: (name) => name === "bruce" ? stoneDir : null,
-    };
-    const ctx: CollaborationContext = {
-      currentObjectName: "bruce",
-      currentThreadId: "root_001",
-      resolver,
-      scheduler: scheduler as any,
-      sessionDir: "/tmp/session",
-      /* 不传 stoneDir，由 resolver 解析 */
-    };
-    const api = createCollaborationAPI(ctx);
-
-    const result = await api.talkToSelf("从 resolver 取到 stoneDir 也应 work");
-    expect(result).toContain("已投递到反思线程");
-
-    const reflectTree = ThreadsTree.load(join(stoneDir, "reflect"));
-    expect(reflectTree).toBeTruthy();
-    const data = reflectTree!.readThreadData(reflectTree!.rootId);
-    expect(data?.inbox).toHaveLength(1);
-  });
-});
-
-describe("replyToFlow()", () => {
-  let tree: MockTree;
-  let scheduler: MockScheduler;
-  let api: ReturnType<typeof createCollaborationAPI>;
-
-  beforeEach(async () => {
-    tree = new MockTree();
-    scheduler = new MockScheduler();
-
-    // 创建一个正在运行的子线程（模拟发起 talkToSelf 的线程）
-    await tree.createSubThread("root_001", "正在执行的任务", {
-      creatorThreadId: "root_001",
-    });
-
-    const resolver: ObjectResolver = {
-      getTree: () => tree as any,
-      objectExists: () => true,
-    };
-
-    // ReflectFlow 的上下文（currentThreadId 是 ReflectFlow 自己的线程）
-    const ctx: CollaborationContext = {
-      currentObjectName: "A",
-      currentThreadId: "root_001",
-      resolver,
-      scheduler: scheduler as any,
-      sessionDir: "/tmp/test-session",
-    };
-
-    api = createCollaborationAPI(ctx);
-  });
-
-  test("replyToFlow 将消息写入目标线程的 inbox", () => {
-    // 获取子线程 ID（由 createSubThread 生成）
-    const children = tree.getChildren("root_001");
-    expect(children).toHaveLength(1);
-    const targetThreadId = children[0]!.id;
-
-    const result = api.replyToFlow(targetThreadId, "反思结果：应该优化缓存策略");
-
-    // 目标线程的 inbox 收到消息（通过 tree.writeInbox）
-    const targetData = tree.readThreadData(targetThreadId);
-    expect(targetData?.inbox).toBeDefined();
-    const inboxMsgs = targetData!.inbox!.filter(m => m.content === "反思结果：应该优化缓存策略");
-    expect(inboxMsgs).toHaveLength(1);
-    expect(inboxMsgs[0]!.source).toBe("system");
-    expect(inboxMsgs[0]!.from).toContain("ReflectFlow");
-    expect(inboxMsgs[0]!.status).toBe("unread");
-
-    expect(result).toContain("已回复");
-  });
-
-  test("replyToFlow 目标线程不存在时返回错误", () => {
-    const result = api.replyToFlow("nonexistent_thread", "hello");
-    expect(result).toContain("错误");
-  });
-});
+/* talkToSelf / replyToFlow 测试已删除（SuperFlow 转型 Phase 3）：
+ * - talkToSelf 被通用 talk(target="super") 取代（world.onTalk 特判）
+ * - replyToFlow 不再需要（super 线程不回调主线程，是单向异步通道）
+ * 对应实现的测试见 kernel/tests/world-talk-super.test.ts */
 
 describe("talk 回复路由（onTalkHandlerReturn）", () => {
   let treeA: MockTree;

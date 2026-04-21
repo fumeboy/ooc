@@ -24,82 +24,7 @@ import { toolOk, toolErr } from "../../../src/types/tool-result";
 import type { ToolResult } from "../../../src/types/tool-result";
 
 /**
- * 把消息投递到当前对象的常驻反思线程
- *
- * 典型用法：当对象在任务过程中意识到"刚才那个 X 做法值得记下来"时调用本方法，
- * 反思线程会在未来（接入调度器后）消费这条消息，判断是否沉淀到 memory.md 或 trait。
- *
- * 方案 A 当前返回后消息只是落入反思线程 inbox（不触发执行）。
- */
-async function talkToSelfImpl(
-  ctx: { selfDir: string; stoneName: string },
-  { message }: { message: string },
-): Promise<ToolResult<{ stoneName: string; messagePreview: string }>> {
-  if (typeof message !== "string" || message.trim().length === 0) {
-    return toolErr("talkToSelf: message 必须是非空字符串");
-  }
-
-  try {
-    const { talkToReflect } = await import("../../../src/thread/reflect");
-    await talkToReflect(ctx.selfDir, ctx.stoneName, message);
-    const preview = message.length > 80 ? `${message.slice(0, 80)}…` : message;
-    return toolOk({ stoneName: ctx.stoneName, messagePreview: preview });
-  } catch (err: any) {
-    return toolErr(`talkToSelf 失败: ${err?.message ?? String(err)}`);
-  }
-}
-
-/**
- * 查看反思线程当前 inbox 状态
- *
- * 用于 LLM 自检"我累计向反思线程投递了多少条经验？"。
- */
-async function getReflectStateImpl(
-  ctx: { selfDir: string; stoneName: string },
-  _args: Record<string, never>,
-): Promise<
-  ToolResult<{
-    stoneName: string;
-    initialized: boolean;
-    inboxTotal: number;
-    inboxUnread: number;
-    recentContents: string[];
-  }>
-> {
-  try {
-    const { getReflectThreadDir } = await import("../../../src/thread/reflect");
-    const { ThreadsTree } = await import("../../../src/thread/tree");
-
-    const dir = getReflectThreadDir(ctx.selfDir);
-    const tree = ThreadsTree.load(dir);
-    if (!tree) {
-      return toolOk({
-        stoneName: ctx.stoneName,
-        initialized: false,
-        inboxTotal: 0,
-        inboxUnread: 0,
-        recentContents: [],
-      });
-    }
-    const data = tree.readThreadData(tree.rootId);
-    const inbox = data?.inbox ?? [];
-    const recent = inbox
-      .slice(-5)
-      .map((m) => (m.content.length > 120 ? `${m.content.slice(0, 120)}…` : m.content));
-    return toolOk({
-      stoneName: ctx.stoneName,
-      initialized: true,
-      inboxTotal: inbox.length,
-      inboxUnread: inbox.filter((m) => m.status === "unread").length,
-      recentContents: recent,
-    });
-  } catch (err: any) {
-    return toolErr(`getReflectState 失败: ${err?.message ?? String(err)}`);
-  }
-}
-
-/**
- * 把一条经验条目 append 到对象的 `stones/{name}/memory.md`（方案 B Phase 2 沉淀工具）
+ * 把一条经验条目 append 到对象的 `stones/{name}/memory.md`（SuperFlow 沉淀工具）
  *
  * 格式规范：
  *   ## {key}（{YYYY-MM-DD HH:MM}）
@@ -222,24 +147,11 @@ async function createTraitImpl(
 }
 
 /**
- * llm 通道方法：LLM 沙箱里通过 `callMethod("reflective/reflect_flow", "talkToSelf", { message })` 调用
+ * llm 通道方法（SuperFlow 沉淀工具集）：
+ * 仅由 super 线程消费（普通对象因 when: never 不会激活本 trait）。
+ * 投递通道见通用 `talk(target="super", message)`——本 trait 不再暴露 talkToSelf。
  */
 export const llm_methods: Record<string, TraitMethod> = {
-  talkToSelf: {
-    name: "talkToSelf",
-    description:
-      "把一段值得反思的经验投递到对象的常驻反思线程 inbox。调用后消息落盘在 stones/{name}/reflect/，由反思线程后续消费用于沉淀。",
-    params: [
-      { name: "message", type: "string", description: "要反思的内容（完整的经验描述）", required: true },
-    ],
-    fn: talkToSelfImpl as TraitMethod["fn"],
-  },
-  getReflectState: {
-    name: "getReflectState",
-    description: "查看当前对象反思线程的 inbox 状态（是否初始化、消息数、最近 5 条预览）。",
-    params: [],
-    fn: getReflectStateImpl as TraitMethod["fn"],
-  },
   persist_to_memory: {
     name: "persist_to_memory",
     description:
