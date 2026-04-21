@@ -5,25 +5,21 @@
  * World 不是「生态中的一个对象」，而是「生态本身」。
  * 但它仍然遵循 G1——它有 readme.md、data.json，它是一个 OOC Object。
  *
+ * 线程树架构（kernel/src/thread/*）是唯一执行路径，旧 Flow 架构已于 2026-04-21 退役。
+ *
  * @ref docs/哲学文档/gene.md#G1 — implements — World 本身也是对象
  * @ref docs/哲学文档/gene.md#G7 — implements — .ooc/ 目录即 World 的物理存在
  * @ref docs/哲学文档/gene.md#G8 — implements — 消息投递（talk/talkInSpace）、对象创建
  * @ref src/world/registry.ts — references — Registry 对象注册表
- * @ref src/world/router.ts — references — CollaborationAPI 消息路由
- * @ref src/world/session.ts — references — Session 任务会话
- * @ref src/world/scheduler.ts — references — Scheduler 多 Flow 调度
+ * @ref src/thread/engine.ts — references — 线程树执行引擎
  */
 
 import { join } from "node:path";
-import { existsSync, mkdirSync, writeFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { consola } from "consola";
 import { Registry } from "./registry.js";
-import { createCollaborationAPI, createSharedRoundCounter, type Routable, type SharedRoundCounter } from "./router.js";
-import { Session } from "./session.js";
-import { Scheduler } from "./scheduler.js";
 import { CronManager } from "./cron.js";
 import { Stone } from "../stone/index.js";
-import { Flow } from "../flow/index.js";
 import { loadAllTraits, loadTraitsByRef } from "../trait/index.js";
 import { OpenAICompatibleClient, type LLMClient } from "../thinkable/client.js";
 import { DefaultConfig, type LLMConfig } from "../thinkable/config.js";
@@ -37,33 +33,22 @@ export interface WorldConfig {
   rootDir: string;
   /** LLM 配置（可选，默认使用 DefaultConfig） */
   llmConfig?: LLMConfig;
-  /** 是否使用线程树架构（默认 true，OOC_THREAD_TREE=0 可回退旧 Flow 架构） */
-  useThreadTree?: boolean;
 }
 
-/** World 实例 —— 实现 Routable 接口支持对象间协作 */
-export class World implements Routable {
+/** World 实例 */
+export class World {
   /** user repo 根目录 */
   private readonly _rootDir: string;
   /** 对象注册表 */
   private readonly _registry: Registry;
   /** LLM 客户端 */
   private readonly _llm: LLMClient;
-  /** 活跃的 session 上下文（支持并发，key = mainFlow.sessionId） */
-  private readonly _activeSessions = new Map<string, {
-    session: Session;
-    scheduler: Scheduler;
-    roundCounter: SharedRoundCounter;
-    traitsCache: Map<string, import("../types/index.js").TraitDefinition[]>;
-  }>();
   /** 暂停请求集合（运行时状态，不持久化） */
   private readonly _pauseRequests = new Set<string>();
   /** 定时任务管理器 */
   private _cron: CronManager;
   /** trait 树形索引（loadAllTraits 后填充） */
   private _traitTree: import("../types/index.js").TraitTree[] = [];
-  /** 是否使用线程树架构 */
-  private readonly _useThreadTree: boolean;
   /** debug 模式开关 */
   private _debugEnabled = false;
   /** 全局暂停开关 */
@@ -73,7 +58,6 @@ export class World implements Routable {
     this._rootDir = config.rootDir;
     this._registry = new Registry(join(config.rootDir, "stones"));
     this._llm = new OpenAICompatibleClient(config.llmConfig ?? DefaultConfig());
-    this._useThreadTree = config.useThreadTree ?? false;
     this._cron = new CronManager((task) => {
       this.talk(task.targetObject, task.message, `cron:${task.createdBy}`).catch(err => {
         consola.error(`[Cron] 定时任务 ${task.id} 执行失败:`, err);
@@ -127,11 +111,6 @@ export class World implements Routable {
 
     /* 启动定时任务管理器 */
     this._cron.start();
-
-    /* 异步恢复未完成的 session（不阻塞服务器启动） */
-    this._autoResumeSessions().catch(e => {
-      consola.error("[World] 自动恢复 session 失败:", (e as Error).message);
-    });
   }
 
   /**
@@ -251,13 +230,6 @@ export class World implements Routable {
           "- `updateSessionMemory(content)` — 更新 Session 会话记忆",
           "- `updateFlowSummary(summary)` — 更新对话摘要（跨对话可见）",
           "- `getFlowSummary()` — 读取当前对话摘要",
-          "",
-          "### 自我对话（沉淀到 Self）",
-          "",
-          "- `talkToSelf(message)` — 向 ReflectFlow 发消息，请求沉淀信息到 Self（长期记忆/数据/trait）",
-          "",
-          "普通 Flow 不能直接写 Self 目录。想把 Session 中的收获沉淀到 Self，唯一的方式是 talkToSelf。",
-          "ReflectFlow 会判断信息是否值得保存、保存到哪里，并回复处理结果。",
           "",
           "### 跨对象协作",
           "",
@@ -427,29 +399,16 @@ export class World implements Routable {
   /* ========== 消息与任务 ========== */
 
   /**
-   * 向对象发送消息，创建 Flow 并运行 ThinkLoop（人类入口）
+   * 向对象发送消息，通过线程树引擎执行 ThinkLoop
    *
    * @param objectName - 目标对象名称
    * @param message - 消息内容
    * @param from - 发送者（默认 "user"）
-   * @returns Flow 实例
+   * @param flowId - 可选，预创建的 session ID 或续写已有 session
+   * @returns TalkReturn（线程树执行结果的纯数据快照）
    */
-  async talk(objectName: string, message: string, from: string = "user", flowId?: string): Promise<Flow | TalkReturn> {
-    /* 线程树架构路径 */
-    if (this._useThreadTree) {
-      if (!flowId) {
-        return this._talkWithThreadTree(objectName, message, from);
-      }
-      /* 有 flowId：可能是预创建的 session 或续写 */
-      return this._talkWithThreadTree(objectName, message, from, flowId);
-    }
-
-    /* 旧架构路径 */
-    if (flowId) {
-      return this._resumeAndRunFlow(objectName, message, from, flowId);
-    }
-    const flow = await this._createAndRunFlow(objectName, message, from);
-    return flow;
+  async talk(objectName: string, message: string, from: string = "user", flowId?: string): Promise<TalkReturn> {
+    return this._talkWithThreadTree(objectName, message, from, flowId);
   }
 
   /**
@@ -558,177 +517,92 @@ export class World implements Routable {
   }
 
   /**
-   * 恢复暂停的 Flow
+   * 恢复暂停的 Flow（线程树 pause/resume）
    *
-   * 清除暂停信号，加载暂停的 Flow，重新创建 Scheduler 运行。
-   * ThinkLoop 会检测到 _pendingOutput 并跳过 LLM 调用直接执行 programs。
+   * 清除暂停请求，加载 session 目录下的线程树数据，通过线程树引擎恢复执行。
    */
-  async resumeFlow(objectName: string, flowId: string): Promise<Flow | TalkReturn> {
+  async resumeFlow(objectName: string, flowId: string): Promise<TalkReturn> {
     this._pauseRequests.delete(objectName);
 
-    /* 线程树路由：检查 session 目录是否包含线程树数据 */
-    if (this._useThreadTree) {
-      const sessionDir = join(this.flowsDir, flowId);
-      const objectFlowDir = join(sessionDir, "objects", objectName);
-      const { ThreadsTree } = await import("../thread/tree.js");
-      const tree = ThreadsTree.load(objectFlowDir);
-      if (tree) {
-        const stone = this._registry.get(objectName);
-        if (!stone) throw new Error(`对象 "${objectName}" 不存在`);
-        const traits = await this._loadTraits(stone);
-        const engineConfig: EngineConfig = {
-          rootDir: this._rootDir,
-          flowsDir: this.flowsDir,
-          llm: this._llm,
-          directory: this._registry.buildDirectory(),
-          traits,
-          skills: loadSkills(join(this._rootDir, "library", "skills")),
-          debugEnabled: this._debugEnabled,
-          stone: stone.toJSON(),
-          paths: { stoneDir: stone.dir, rootDir: this._rootDir, flowsDir: this.flowsDir },
-          isPaused: (name) => this._globalPaused || this._pauseRequests.has(name),
-          onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId, continueThreadId) => {
-            const target = targetObject.toLowerCase();
-            if (target === "user") {
-              emitSSE({
-                type: "flow:message",
-                objectName: fromObject,
-                sessionId,
-                message: {
-                  direction: "out",
-                  from: fromObject,
-                  to: "user",
-                  content: message,
-                  timestamp: Date.now(),
-                },
-              });
-              consola.info(`[World] ${fromObject} → user: 已投递（不触发 user thinkloop）`);
-              return { reply: null, remoteThreadId: "user" };
-            }
-            try {
-              const talkRet = await this._talkWithThreadTree(targetObject, message, fromObject, undefined, continueThreadId);
-              const reply = talkRet.summary ?? talkRet.messages.find((m) => m.direction === "out")?.content ?? null;
-              return { reply, remoteThreadId: talkRet.threadId ?? "unknown" };
-            } catch (e) { return { reply: `[错误] ${(e as Error).message}`, remoteThreadId: "error" }; }
-          },
-        };
-        const result = await resumeWithThreadTree(objectName, flowId, engineConfig);
-        return this._wrapThreadTreeResult(result, objectName, flowId);
-      }
-    }
-
-    return this._resumePausedFlow(objectName, flowId);
-  }
-
-  /**
-   * 单步执行：运行一轮 ThinkLoop 后自动暂停
-   *
-   * 如果提供了 modifiedOutput，会替换暂存的 LLM 输出。
-   * 执行完一轮后自动设置 debugMode，使 ThinkLoop 在执行完后暂停。
-   */
-  async stepOnce(objectName: string, flowId: string, modifiedOutput?: string): Promise<Flow | TalkReturn> {
-    this._pauseRequests.delete(objectName);
-
-    /* 线程树路由 */
-    if (this._useThreadTree) {
-      const sessionDir = join(this.flowsDir, flowId);
-      const objectFlowDir = join(sessionDir, "objects", objectName);
-      const { ThreadsTree } = await import("../thread/tree.js");
-      const tree = ThreadsTree.load(objectFlowDir);
-      if (tree) {
-        const stone = this._registry.get(objectName);
-        if (!stone) throw new Error(`对象 "${objectName}" 不存在`);
-        const traits = await this._loadTraits(stone);
-        const engineConfig: EngineConfig = {
-          rootDir: this._rootDir,
-          flowsDir: this.flowsDir,
-          llm: this._llm,
-          directory: this._registry.buildDirectory(),
-          traits,
-          skills: loadSkills(join(this._rootDir, "library", "skills")),
-          debugEnabled: this._debugEnabled,
-          stone: stone.toJSON(),
-          paths: { stoneDir: stone.dir, rootDir: this._rootDir, flowsDir: this.flowsDir },
-          isPaused: (name) => this._globalPaused || this._pauseRequests.has(name),
-          onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId, continueThreadId) => {
-            const target = targetObject.toLowerCase();
-            if (target === "user") {
-              emitSSE({
-                type: "flow:message",
-                objectName: fromObject,
-                sessionId,
-                message: {
-                  direction: "out",
-                  from: fromObject,
-                  to: "user",
-                  content: message,
-                  timestamp: Date.now(),
-                },
-              });
-              consola.info(`[World] ${fromObject} → user: 已投递（不触发 user thinkloop）`);
-              return { reply: null, remoteThreadId: "user" };
-            }
-            try {
-              const talkRet = await this._talkWithThreadTree(targetObject, message, fromObject, undefined, continueThreadId);
-              const reply = talkRet.summary ?? talkRet.messages.find((m) => m.direction === "out")?.content ?? null;
-              return { reply, remoteThreadId: talkRet.threadId ?? "unknown" };
-            } catch (e) { return { reply: `[错误] ${(e as Error).message}`, remoteThreadId: "error" }; }
-          },
-        };
-        const result = await stepOnceWithThreadTree(objectName, flowId, engineConfig, modifiedOutput);
-        return this._wrapThreadTreeResult(result, objectName, flowId);
-      }
-    }
+    const sessionDir = join(this.flowsDir, flowId);
+    const objectFlowDir = join(sessionDir, "objects", objectName);
+    const { ThreadsTree } = await import("../thread/tree.js");
+    const tree = ThreadsTree.load(objectFlowDir);
+    if (!tree) throw new Error(`Flow "${flowId}" 不存在或缺少线程树数据`);
 
     const stone = this._registry.get(objectName);
     if (!stone) throw new Error(`对象 "${objectName}" 不存在`);
 
-    /* 加载目标 Flow */
+    const engineConfig = await this._buildEngineConfig(stone);
+    const result = await resumeWithThreadTree(objectName, flowId, engineConfig);
+    return this._wrapThreadTreeResult(result, objectName, flowId);
+  }
+
+  /**
+   * 单步执行：运行一轮线程树迭代后自动暂停
+   *
+   * @param modifiedOutput - 可选，替换暂存的 LLM 输出（用于调试时修改模型回复）
+   */
+  async stepOnce(objectName: string, flowId: string, modifiedOutput?: string): Promise<TalkReturn> {
+    this._pauseRequests.delete(objectName);
+
     const sessionDir = join(this.flowsDir, flowId);
-    const userStone = this._registry.get("user");
-    let targetFlow: Flow | null = null;
+    const objectFlowDir = join(sessionDir, "objects", objectName);
+    const { ThreadsTree } = await import("../thread/tree.js");
+    const tree = ThreadsTree.load(objectFlowDir);
+    if (!tree) throw new Error(`Flow "${flowId}" 不存在或缺少线程树数据`);
 
-    if (userStone) {
-      /* 新结构：session/objects/user/ */
-      const mainFlow = Flow.load(join(sessionDir, "objects", "user"));
-      if (!mainFlow) {
-        /* 兼容旧数据 */
-        const oldMain = Flow.load(sessionDir);
-        if (oldMain) {
-          const subFlowDir = join(sessionDir, "objects", objectName);
-          targetFlow = Flow.load(subFlowDir);
-          if (!targetFlow && oldMain.stoneName === objectName) {
-            targetFlow = oldMain;
-          }
+    const stone = this._registry.get(objectName);
+    if (!stone) throw new Error(`对象 "${objectName}" 不存在`);
+
+    const engineConfig = await this._buildEngineConfig(stone);
+    const result = await stepOnceWithThreadTree(objectName, flowId, engineConfig, modifiedOutput);
+    return this._wrapThreadTreeResult(result, objectName, flowId);
+  }
+
+  /**
+   * 构建线程树引擎配置（resumeFlow/stepOnce 共享）
+   */
+  private async _buildEngineConfig(stone: Stone): Promise<EngineConfig> {
+    const traits = await this._loadTraits(stone);
+    return {
+      rootDir: this._rootDir,
+      flowsDir: this.flowsDir,
+      llm: this._llm,
+      directory: this._registry.buildDirectory(),
+      traits,
+      skills: loadSkills(join(this._rootDir, "library", "skills")),
+      debugEnabled: this._debugEnabled,
+      stone: stone.toJSON(),
+      paths: { stoneDir: stone.dir, rootDir: this._rootDir, flowsDir: this.flowsDir },
+      isPaused: (name) => this._globalPaused || this._pauseRequests.has(name),
+      onTalk: async (targetObject, message, fromObject, _fromThreadId, sessionId, continueThreadId) => {
+        const target = targetObject.toLowerCase();
+        if (target === "user") {
+          emitSSE({
+            type: "flow:message",
+            objectName: fromObject,
+            sessionId,
+            message: {
+              direction: "out",
+              from: fromObject,
+              to: "user",
+              content: message,
+              timestamp: Date.now(),
+            },
+          });
+          consola.info(`[World] ${fromObject} → user: 已投递（不触发 user thinkloop）`);
+          return { reply: null, remoteThreadId: "user" };
         }
-      } else {
-        const subFlowDir = join(sessionDir, "objects", objectName);
-        targetFlow = Flow.load(subFlowDir);
-        if (!targetFlow && mainFlow.stoneName === objectName) {
-          targetFlow = mainFlow;
+        try {
+          const talkRet = await this._talkWithThreadTree(targetObject, message, fromObject, undefined, continueThreadId);
+          const reply = talkRet.summary ?? talkRet.messages.find((m) => m.direction === "out")?.content ?? null;
+          return { reply, remoteThreadId: talkRet.threadId ?? "unknown" };
+        } catch (e) {
+          return { reply: `[错误] ${(e as Error).message}`, remoteThreadId: "error" };
         }
-      }
-    }
-
-    if (!targetFlow) {
-      /* 兼容旧数据 */
-      targetFlow = Flow.load(sessionDir);
-    }
-
-    if (!targetFlow) throw new Error(`Flow "${flowId}" 不存在`);
-
-    /* 设置 debugMode */
-    targetFlow.setFlowData("debugMode", true);
-
-    /* 可选：替换暂存的 LLM 输出 */
-    if (modifiedOutput !== undefined) {
-      targetFlow.setFlowData("_pendingOutput", modifiedOutput);
-    }
-
-    targetFlow.save();
-
-    /* 恢复执行 — ThinkLoop 会在一轮执行完毕后因 debugMode 自动暂停 */
-    return this._resumePausedFlow(objectName, flowId);
+      },
+    };
   }
 
   /**
@@ -739,525 +613,13 @@ export class World implements Routable {
   }
 
   /**
-   * 投递消息到目标对象（Routable 接口，异步，不运行 ThinkLoop）
-   *
-   * 消息投递到目标的 pending 队列，由 Scheduler 在下一轮调度时处理。
-   * "user" 指向 user 对象。
-   */
-  deliverMessage(targetName: string, message: string, from: string, replyTo?: string, sessionId?: string): void {
-    /* 通过 sessionId 定位 session（支持并发） */
-    const ctx = sessionId ? this._activeSessions.get(sessionId) : null;
-    const session = ctx?.session ?? null;
-
-    /* talk("user", ...) — 对象向人类回复 */
-    if (targetName === "user") {
-      if (!session) return;
-      const senderFlow = session.getFlow(from);
-      if (senderFlow) {
-        senderFlow.addMessage({ direction: "out", from, to: "user", content: message });
-        consola.info(`[World] ${from} → user: 记录为回复`);
-      }
-      return;
-    }
-
-    const stone = this._registry.get(targetName);
-    if (!stone) {
-      throw new Error(`对象 "${targetName}" 不存在`);
-    }
-
-    if (!session) {
-      throw new Error("[World] 没有活跃的 Session");
-    }
-
-    /* 复用或创建目标的 Flow */
-    let targetFlow = session.getFlow(targetName);
-    if (targetFlow) {
-      consola.info(`[World] 复用 ${targetName} 的 Flow，投递消息 (from: ${from})`);
-    } else {
-      /* 在 main flow 的 objects/ 子目录下创建 sub-flow */
-      targetFlow = Flow.createSubFlow(session.sessionDir, stone.name, message, from, from);
-      session.register(targetName, targetFlow);
-      /* 注册到 Scheduler */
-      const scheduler = ctx?.scheduler;
-      if (scheduler) {
-        const traitsCache = ctx?.traitsCache;
-        const traits = traitsCache?.get(targetName) ?? [];
-        const collaboration = createCollaborationAPI(this, targetName, stone.dir, ctx?.roundCounter ?? undefined, targetFlow.sessionId, sessionId);
-        scheduler.register(targetName, targetFlow, stone.toJSON(), stone.dir, traits, collaboration, this._traitTree);
-      }
-      consola.info(`[World] 为 ${targetName} 创建 sub-flow ${targetFlow.sessionId} (在 main flow 下)`);
-    }
-
-    /* 投递消息到 pending 队列（ThinkLoop 消费时会记录到消息历史和行为树） */
-    targetFlow.deliverMessage(from, message, replyTo);
-  }
-
-  /**
-   * 获取对象目录路径（Routable 接口）
+   * 获取对象目录路径（供线程树 engine 查询）
    */
   getObjectDir(name: string): string | null {
     const stone = this._registry.get(name);
     return stone ? stone.dir : null;
   }
 
-  /**
-   * 向对象的 ReflectFlow 投递消息（Routable 接口）
-   *
-   * 普通 Flow 通过 talkToSelf 调用此方法，消息投递到 ReflectFlow 的 pending 队列。
-   * ReflectFlow 在下一轮调度时处理。
-   */
-  deliverToSelfMeta(stoneName: string, message: string, fromTaskId: string): string {
-    const stone = this._registry.get(stoneName);
-    if (!stone) return `[错误] 对象 "${stoneName}" 不存在`;
-
-    const selfMetaFlow = Flow.ensureReflectFlow(stone.reflectDir, stoneName);
-    const taggedMessage = `[from:${fromTaskId}] ${message}`;
-    selfMetaFlow.deliverMessage(stoneName, taggedMessage);
-    selfMetaFlow.save();
-
-    consola.info(`[World] talkToSelf: ${stoneName}/${fromTaskId} → ReflectFlow`);
-    return `[消息已发送给 ReflectFlow]`;
-  }
-
-  /**
-   * ReflectFlow 回复发起对话的 Flow（Routable 接口）
-   *
-   * ReflectFlow 通过 replyToFlow 调用此方法，消息投递到目标 Flow 的 pending 队列。
-   */
-  deliverFromSelfMeta(stoneName: string, targetTaskId: string, message: string, sessionId?: string): string {
-    const stone = this._registry.get(stoneName);
-    if (!stone) return `[错误] 对象 "${stoneName}" 不存在`;
-
-    /* 通过 sessionId 定位 session（支持并发） */
-    const ctx = sessionId ? this._activeSessions.get(sessionId) : null;
-    const session = ctx?.session ?? null;
-    if (!session) return `[错误] 没有活跃的 Session`;
-
-    /* 遍历 session 中的所有 Flow，找到匹配 taskId 的 */
-    for (const { flow } of session.allFlows()) {
-      if (flow.sessionId === targetTaskId) {
-        flow.deliverMessage("_reflect", `[ReflectFlow 回复] ${message}`);
-        consola.info(`[World] ReflectFlow → ${stoneName}/${targetTaskId}`);
-        return `[回复已发送给 ${targetTaskId}]`;
-      }
-    }
-
-    return `[错误] 找不到 Flow "${targetTaskId}"`;
-  }
-
-  /**
-   * 内部：创建 Flow、Session 并通过 Scheduler 运行
-   */
-  private async _createAndRunFlow(
-    objectName: string,
-    message: string,
-    from: string,
-  ): Promise<Flow> {
-    const stone = this._registry.get(objectName);
-    if (!stone) {
-      throw new Error(`对象 "${objectName}" 不存在`);
-    }
-
-    let mainFlow: Flow;
-    let targetFlow: Flow;
-
-    if (from === "user") {
-      /* 人类发起：main flow 在 objects/ 下，目标对象作为 sub-flow */
-      const userStone = this._registry.get("user");
-      if (!userStone) throw new Error("user 对象不存在");
-
-      mainFlow = Flow.create(this.flowsDir, "user", message, "user");
-      targetFlow = Flow.createSubFlow(mainFlow.sessionDir, stone.name, message, "user", "user");
-
-      /* 确保 kanban 目录结构存在 */
-      const issuesDir = join(mainFlow.sessionDir, "issues");
-      const tasksDir = join(mainFlow.sessionDir, "tasks");
-      mkdirSync(issuesDir, { recursive: true });
-      mkdirSync(tasksDir, { recursive: true });
-      const issuesIndexPath = join(issuesDir, "index.json");
-      if (!existsSync(issuesIndexPath)) {
-        writeFileSync(issuesIndexPath, "[]", "utf-8");
-      }
-      const tasksIndexPath = join(tasksDir, "index.json");
-      if (!existsSync(tasksIndexPath)) {
-        writeFileSync(tasksIndexPath, "[]", "utf-8");
-      }
-
-      /* 写入初始消息到 sub-flow 的 messages[]（createSubFlow 不写入，避免与 deliverMessage 路径重复） */
-      targetFlow.addMessage({ direction: "in", from, to: stone.name, content: message });
-      targetFlow.save();
-      consola.info(`[World] 人类发起对话 → main flow ${mainFlow.sessionId}, sub-flow ${targetFlow.sessionId} (${objectName})`);
-    } else {
-      /* 非人类发起（系统内部）：直接在 objects/ 下创建 */
-      mainFlow = Flow.create(this.flowsDir, stone.name, message, from);
-      targetFlow = mainFlow;
-      consola.info(`[World] 向 ${objectName} 发送消息，创建 Flow ${mainFlow.sessionId}`);
-    }
-
-    emitSSE({ type: "flow:start", objectName, taskId: mainFlow.sessionId });
-
-    /* 创建 SessionContext（支持并发） */
-    const sessionId = mainFlow.sessionId;
-    const session = new Session(mainFlow.sessionId, mainFlow.sessionDir);
-    const roundCounter = createSharedRoundCounter();
-    const traitsCache = new Map<string, import("../types/index.js").TraitDefinition[]>();
-    if (from === "user") {
-      session.register("user", mainFlow);
-    }
-    session.register(objectName, targetFlow);
-
-    /* 加载 Traits 并缓存 */
-    const traits = await this._loadTraits(stone);
-    traitsCache.set(objectName, traits);
-
-    /* 预加载所有对象的 traits（Scheduler 创建 sub-flow 时需要） */
-    for (const otherStone of this._registry.all()) {
-      if (otherStone.name !== objectName && !traitsCache.has(otherStone.name)) {
-        const otherTraits = await this._loadTraits(otherStone);
-        traitsCache.set(otherStone.name, otherTraits);
-      }
-    }
-
-    /* 确保目标对象的 ReflectFlow 存在 */
-    this._ensureReflectFlow(stone, session);
-
-    /* 构建协作 API */
-    const collaboration = createCollaborationAPI(this, objectName, stone.dir, roundCounter, targetFlow.sessionId, sessionId);
-    const directory = this._registry.buildDirectory();
-
-    /* 创建 Scheduler 并注册入口 Flow */
-    const scheduler = new Scheduler(this._llm, directory, undefined, (name) => this._pauseRequests.has(name), this._cron, this.flowsDir);
-    scheduler.register(objectName, targetFlow, stone.toJSON(), stone.dir, traits, collaboration, this._traitTree);
-
-    /* 注册到 activeSessions（在 Scheduler.run 之前，deliverMessage 需要访问） */
-    this._activeSessions.set(sessionId, { session, scheduler, roundCounter, traitsCache });
-
-    try {
-      /* 运行 Scheduler */
-      const updatedData = await scheduler.run(objectName);
-
-      /* 同步所有参与对象的数据 */
-      for (const { stoneName, flow: f } of session.allFlows()) {
-        const s = this._registry.get(stoneName);
-        if (s) {
-          s.save();
-        }
-      }
-
-      /* 同步入口对象数据（保留接口兼容，ReflectFlow 机制下普通 Flow 不再直接写 Stone） */
-      for (const [key, value] of Object.entries(updatedData)) {
-        stone.setData(key, value);
-      }
-      stone.save();
-
-      /* 同步 main flow 状态（当 main flow 和 target flow 分离时） */
-      if (mainFlow !== targetFlow) {
-        mainFlow.setStatus(targetFlow.status);
-        mainFlow.save();
-      }
-
-      /* 发出 Flow 结束事件 */
-      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.sessionId, status: targetFlow.status });
-    } catch (e) {
-      /* 异常时将所有 running 的 flow 标记为 failed，防止僵尸 */
-      consola.error(`[World] _createAndRunFlow 异常:`, (e as Error).message);
-      for (const { flow: f } of session.allFlows()) {
-        if (f.status === "running") {
-          f.setStatus("failed");
-          f.recordAction({ type: "thought", content: `[系统异常] ${(e as Error).message}` });
-          f.save();
-        }
-      }
-      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.sessionId, status: "failed" });
-      throw e;
-    } finally {
-      /* 清理：从 Map 中移除（即使出错也要清理） */
-      this._activeSessions.delete(sessionId);
-    }
-
-    return from === "user" ? mainFlow : targetFlow;
-  }
-
-  /**
-   * 内部：在已有 Flow 上续写消息并重新运行 Scheduler
-   *
-   * 加载已有 Flow，追加新消息，重新创建 Scheduler 运行。
-   * 这样对象能看到之前的对话历史，实现真正的多轮对话。
-   */
-  private async _resumeAndRunFlow(
-    objectName: string,
-    message: string,
-    from: string,
-    flowId: string,
-  ): Promise<Flow> {
-    const stone = this._registry.get(objectName);
-    if (!stone) {
-      throw new Error(`对象 "${objectName}" 不存在`);
-    }
-
-    /* 加载 flow（统一在 objects/{flowId}/ 下） */
-    const sessionDir = join(this.flowsDir, flowId);
-    let mainFlow: Flow | null = null;
-    let targetFlow: Flow | null = null;
-
-    if (from === "user") {
-      const userStone = this._registry.get("user");
-      if (!userStone) throw new Error("user 对象不存在");
-      /* main flow (user) 在 session/objects/user/ */
-      mainFlow = Flow.load(join(sessionDir, "objects", "user"));
-      if (!mainFlow) {
-        /* 兼容旧数据：session 根目录下直接有 data.json */
-        mainFlow = Flow.load(sessionDir);
-      }
-      if (!mainFlow) throw new Error(`Flow "${flowId}" 不存在`);
-
-      /* 加载 sub-flow */
-      const subFlowDir = join(sessionDir, "objects", objectName);
-      targetFlow = Flow.load(subFlowDir);
-      if (!targetFlow) {
-        if (mainFlow.stoneName === objectName) {
-          targetFlow = mainFlow;
-        } else {
-          /* 创建新的 sub-flow */
-          targetFlow = Flow.createSubFlow(sessionDir, stone.name, message, from, from);
-        }
-      }
-    } else {
-      /* 非人类发起：flow 在 session/objects/{stoneName}/ */
-      mainFlow = Flow.load(join(sessionDir, "objects", objectName));
-      if (!mainFlow) {
-        /* 兼容旧数据 */
-        mainFlow = Flow.load(sessionDir);
-      }
-      if (!mainFlow) throw new Error(`Flow "${flowId}" 不存在`);
-      targetFlow = mainFlow;
-    }
-
-    /* 追加新消息 */
-    targetFlow.addMessage({ direction: "in", from, to: objectName, content: message });
-    targetFlow.setStatus("running");
-    consola.info(`[World] 在 ${objectName} 的 Flow ${targetFlow.sessionId} 上续写消息`);
-    emitSSE({ type: "flow:start", objectName, taskId: mainFlow.sessionId });
-
-    /* 创建 SessionContext（支持并发） */
-    const sessionId = mainFlow.sessionId;
-    const session = new Session(mainFlow.sessionId, sessionDir);
-    const roundCounter = createSharedRoundCounter();
-    const traitsCache = new Map<string, import("../types/index.js").TraitDefinition[]>();
-    if (from === "user" && mainFlow !== targetFlow) {
-      session.register("user", mainFlow);
-    }
-    session.register(objectName, targetFlow);
-
-    /* 恢复已有的 sub-flows */
-    this._loadExistingSubFlows(session, sessionDir, objectName);
-
-    /* 加载 Traits 并缓存 */
-    const traits = await this._loadTraits(stone);
-    traitsCache.set(objectName, traits);
-
-    for (const otherStone of this._registry.all()) {
-      if (otherStone.name !== objectName && !traitsCache.has(otherStone.name)) {
-        const otherTraits = await this._loadTraits(otherStone);
-        traitsCache.set(otherStone.name, otherTraits);
-      }
-    }
-
-    /* 确保目标对象的 ReflectFlow 存在 */
-    this._ensureReflectFlow(stone, session);
-
-    /* 构建协作 API */
-    const collaboration = createCollaborationAPI(this, objectName, stone.dir, roundCounter, targetFlow.sessionId, sessionId);
-    const directory = this._registry.buildDirectory();
-
-    /* 创建 Scheduler 并注册 Flow */
-    const scheduler = new Scheduler(this._llm, directory, undefined, (name) => this._pauseRequests.has(name), this._cron, this.flowsDir);
-    scheduler.register(objectName, targetFlow, stone.toJSON(), stone.dir, traits, collaboration, this._traitTree);
-
-    /* 注册到 activeSessions */
-    this._activeSessions.set(sessionId, { session, scheduler, roundCounter, traitsCache });
-
-    try {
-      /* 运行 Scheduler */
-      const updatedData = await scheduler.run(objectName);
-
-      /* 同步所有参与对象的数据 */
-      for (const { stoneName, flow: f } of session.allFlows()) {
-        const s = this._registry.get(stoneName);
-        if (s) {
-          s.save();
-        }
-      }
-
-      /* 同步入口对象数据（保留接口兼容，ReflectFlow 机制下普通 Flow 不再直接写 Stone） */
-      for (const [key, value] of Object.entries(updatedData)) {
-        stone.setData(key, value);
-      }
-      stone.save();
-
-      /* 同步 main flow 状态 */
-      if (mainFlow !== targetFlow) {
-        mainFlow.setStatus(targetFlow.status);
-        mainFlow.save();
-      }
-
-      /* 发出 Flow 结束事件 */
-      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.sessionId, status: targetFlow.status });
-    } catch (e) {
-      /* 异常时将所有 running 的 flow 标记为 failed，防止僵尸 */
-      consola.error(`[World] _resumeAndRunFlow 异常:`, (e as Error).message);
-      for (const { flow: f } of session.allFlows()) {
-        if (f.status === "running") {
-          f.setStatus("failed");
-          f.recordAction({ type: "thought", content: `[系统异常] ${(e as Error).message}` });
-          f.save();
-        }
-      }
-      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.sessionId, status: "failed" });
-      throw e;
-    } finally {
-      /* 清理 */
-      this._activeSessions.delete(sessionId);
-    }
-
-    return mainFlow;
-  }
-
-  /**
-   * 内部：恢复暂停的 Flow
-   *
-   * 加载 pausing 状态的 Flow，设为 running，重新创建 Scheduler 运行。
-   * ThinkLoop 会检测到 _pendingOutput 并跳过 LLM 调用直接执行 programs。
-   */
-  private async _resumePausedFlow(
-    objectName: string,
-    flowId: string,
-  ): Promise<Flow> {
-    const stone = this._registry.get(objectName);
-    if (!stone) {
-      throw new Error(`对象 "${objectName}" 不存在`);
-    }
-
-    /* 尝试从 objects/ 加载 flow */
-    const sessionDir = join(this.flowsDir, flowId);
-    const userStone = this._registry.get("user");
-    let mainFlow: Flow | null = null;
-    let targetFlow: Flow | null = null;
-
-    if (userStone) {
-      /* 新结构：session/objects/user/ */
-      mainFlow = Flow.load(join(sessionDir, "objects", "user"));
-      if (!mainFlow) {
-        /* 兼容旧数据：session 根目录 */
-        mainFlow = Flow.load(sessionDir);
-      }
-      if (mainFlow) {
-        const subFlowDir = join(sessionDir, "objects", objectName);
-        targetFlow = Flow.load(subFlowDir);
-        if (!targetFlow && mainFlow.stoneName === objectName) {
-          targetFlow = mainFlow;
-        }
-      }
-    }
-
-    /* 兼容旧数据：从 session 根目录加载 */
-    if (!mainFlow) {
-      mainFlow = Flow.load(sessionDir);
-      targetFlow = mainFlow;
-    }
-
-    if (!mainFlow || !targetFlow) {
-      throw new Error(`Flow "${flowId}" 不存在。提示：flowId 应为主任务 ID（如 task_xxx），不是子 flow ID（如 sub_xxx）`);
-    }
-    if (targetFlow.status !== "pausing") {
-      throw new Error(`Flow "${flowId}" 状态为 "${targetFlow.status}"，不是 pausing`);
-    }
-
-    targetFlow.setStatus("running");
-    consola.info(`[World] 恢复 ${objectName} 的 Flow ${targetFlow.sessionId}`);
-    emitSSE({ type: "flow:start", objectName, taskId: mainFlow.sessionId });
-
-    /* 创建 SessionContext（支持并发） */
-    const sessionId = mainFlow.sessionId;
-    const session = new Session(mainFlow.sessionId, sessionDir);
-    const roundCounter = createSharedRoundCounter();
-    const traitsCache = new Map<string, import("../types/index.js").TraitDefinition[]>();
-    if (mainFlow !== targetFlow) {
-      session.register("user", mainFlow);
-    }
-    session.register(objectName, targetFlow);
-
-    /* 恢复已有的 sub-flows */
-    this._loadExistingSubFlows(session, sessionDir, objectName);
-
-    /* 加载 Traits 并缓存 */
-    const traits = await this._loadTraits(stone);
-    traitsCache.set(objectName, traits);
-
-    for (const otherStone of this._registry.all()) {
-      if (otherStone.name !== objectName && !traitsCache.has(otherStone.name)) {
-        const otherTraits = await this._loadTraits(otherStone);
-        traitsCache.set(otherStone.name, otherTraits);
-      }
-    }
-
-    /* 确保目标对象的 ReflectFlow 存在 */
-    this._ensureReflectFlow(stone, session);
-
-    /* 构建协作 API */
-    const collaboration = createCollaborationAPI(this, objectName, stone.dir, roundCounter, targetFlow.sessionId, sessionId);
-    const directory = this._registry.buildDirectory();
-
-    /* 创建 Scheduler 并注册 Flow */
-    const scheduler = new Scheduler(this._llm, directory, undefined, (name) => this._pauseRequests.has(name), this._cron, this.flowsDir);
-    scheduler.register(objectName, targetFlow, stone.toJSON(), stone.dir, traits, collaboration, this._traitTree);
-
-    /* 注册到 activeSessions */
-    this._activeSessions.set(sessionId, { session, scheduler, roundCounter, traitsCache });
-
-    try {
-      /* 运行 Scheduler */
-      const updatedData = await scheduler.run(objectName);
-
-      /* 同步所有参与对象的数据 */
-      for (const { stoneName, flow: f } of session.allFlows()) {
-        const s = this._registry.get(stoneName);
-        if (s) {
-          s.save();
-        }
-      }
-
-      for (const [key, value] of Object.entries(updatedData)) {
-        stone.setData(key, value);
-      }
-      stone.save();
-
-      /* 同步 main flow 状态 */
-      if (mainFlow !== targetFlow) {
-        mainFlow.setStatus(targetFlow.status);
-        mainFlow.save();
-      }
-
-      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.sessionId, status: targetFlow.status });
-    } catch (e) {
-      /* 异常时将所有 running 的 flow 标记为 failed，防止僵尸 */
-      consola.error(`[World] _resumePausedFlow 异常:`, (e as Error).message);
-      for (const { flow: f } of session.allFlows()) {
-        if (f.status === "running") {
-          f.setStatus("failed");
-          f.recordAction({ type: "thought", content: `[系统异常] ${(e as Error).message}` });
-          f.save();
-        }
-      }
-      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.sessionId, status: "failed" });
-      throw e;
-    } finally {
-      /* 清理 */
-      this._activeSessions.delete(sessionId);
-    }
-
-    return mainFlow;
-  }
 
   /**
    * 加载对象的 Traits（kernel → library → 对象自身）
@@ -1279,215 +641,6 @@ export class World implements Routable {
     consola.info(`[World] 加载 ${traits.length} 个 traits: ${traits.map(t => t.name).join(", ")}`);
     consola.info(`[World] library traits 方法已全量注册，readme 通过 activateTrait() 按需激活`);
     return traits;
-  }
-
-  /**
-   * 服务启动时自动恢复未完成的 session
-   *
-   * 扫描 objects/ 目录，找到 running 或 waiting+有消息 的 flow，
-   * 创建 Scheduler 恢复调度。不追加新消息。
-   */
-  private async _autoResumeSessions(): Promise<void> {
-    if (!existsSync(this.flowsDir)) return;
-
-    const sessionDirs = readdirSync(this.flowsDir, { withFileTypes: true });
-    const toResume: Array<{ sessionDir: string; sessionId: string; objectName: string; mainFlow: Flow; targetFlow: Flow }> = [];
-
-    for (const entry of sessionDirs) {
-      if (!entry.isDirectory()) continue;
-      const sessionId = entry.name;
-      const sessionDir = join(this.flowsDir, sessionId);
-      const flowsSubDir = join(sessionDir, "objects");
-      if (!existsSync(flowsSubDir)) continue;
-
-      /* 扫描 session 下所有 flow */
-      const flowEntries = readdirSync(flowsSubDir, { withFileTypes: true });
-      let needsResume = false;
-      let entryObjectName: string | null = null;
-
-      for (const fe of flowEntries) {
-        if (!fe.isDirectory() || fe.name === "user") continue;
-        const flow = Flow.load(join(flowsSubDir, fe.name));
-        if (!flow) continue;
-
-        if (flow.status === "running") {
-          needsResume = true;
-          entryObjectName = fe.name;
-          break;
-        }
-        if (flow.status === "waiting" && flow.hasPendingMessages) {
-          needsResume = true;
-          entryObjectName = fe.name;
-        }
-      }
-
-      if (!needsResume || !entryObjectName) continue;
-
-      /* 加载 main flow (user) 和 target flow */
-      const mainFlow = Flow.load(join(flowsSubDir, "user"));
-      if (!mainFlow) continue;
-
-      const targetFlow = Flow.load(join(flowsSubDir, entryObjectName));
-      if (!targetFlow) continue;
-
-      /* 跳过已完成的 session */
-      if (targetFlow.status === "finished" || targetFlow.status === "failed") continue;
-
-      toResume.push({ sessionDir, sessionId, objectName: entryObjectName, mainFlow, targetFlow });
-    }
-
-    if (toResume.length === 0) return;
-
-    consola.info(`[World] 发现 ${toResume.length} 个未完成的 session，开始恢复`);
-
-    /* 串行恢复，避免同时消耗大量 LLM 配额 */
-    for (const { sessionDir, sessionId, objectName, mainFlow, targetFlow } of toResume) {
-      try {
-        await this._autoResumeSession(sessionDir, sessionId, objectName, mainFlow, targetFlow);
-      } catch (e) {
-        consola.error(`[World] 恢复 session ${sessionId} 失败:`, (e as Error).message);
-      }
-    }
-  }
-
-  /**
-   * 自动恢复单个 session（不追加新消息）
-   *
-   * 逻辑与 _resumeAndRunFlow 类似，但跳过消息追加步骤。
-   */
-  private async _autoResumeSession(
-    sessionDir: string,
-    sessionId: string,
-    objectName: string,
-    mainFlow: Flow,
-    targetFlow: Flow,
-  ): Promise<void> {
-    const stone = this._registry.get(objectName);
-    if (!stone) {
-      consola.warn(`[World] 自动恢复跳过: 对象 "${objectName}" 不存在`);
-      return;
-    }
-
-    /* 设置为 running */
-    targetFlow.setStatus("running");
-    consola.info(`[World] 自动恢复 session ${sessionId}, 入口对象: ${objectName}`);
-    emitSSE({ type: "flow:start", objectName, taskId: mainFlow.sessionId });
-
-    /* 创建 SessionContext */
-    const session = new Session(mainFlow.sessionId, sessionDir);
-    const roundCounter = createSharedRoundCounter();
-    const traitsCache = new Map<string, import("../types/index.js").TraitDefinition[]>();
-    if (mainFlow !== targetFlow) {
-      session.register("user", mainFlow);
-    }
-    session.register(objectName, targetFlow);
-
-    /* 恢复已有的 sub-flows */
-    this._loadExistingSubFlows(session, sessionDir, objectName);
-
-    /* 加载 Traits 并缓存 */
-    const traits = await this._loadTraits(stone);
-    traitsCache.set(objectName, traits);
-
-    for (const otherStone of this._registry.all()) {
-      if (otherStone.name !== objectName && !traitsCache.has(otherStone.name)) {
-        const otherTraits = await this._loadTraits(otherStone);
-        traitsCache.set(otherStone.name, otherTraits);
-      }
-    }
-
-    /* 确保 ReflectFlow 存在 */
-    this._ensureReflectFlow(stone, session);
-
-    /* 构建协作 API */
-    const collaboration = createCollaborationAPI(this, objectName, stone.dir, roundCounter, targetFlow.sessionId, sessionId);
-    const directory = this._registry.buildDirectory();
-
-    /* 创建 Scheduler 并注册 */
-    const scheduler = new Scheduler(this._llm, directory, undefined, (name) => this._pauseRequests.has(name), this._cron, this.flowsDir);
-    scheduler.register(objectName, targetFlow, stone.toJSON(), stone.dir, traits, collaboration, this._traitTree);
-
-    /* 注册到 activeSessions */
-    this._activeSessions.set(sessionId, { session, scheduler, roundCounter, traitsCache });
-
-    try {
-      const updatedData = await scheduler.run(objectName);
-
-      /* 同步所有参与对象的数据 */
-      for (const { stoneName } of session.allFlows()) {
-        const s = this._registry.get(stoneName);
-        if (s) s.save();
-      }
-
-      for (const [key, value] of Object.entries(updatedData)) {
-        stone.setData(key, value);
-      }
-      stone.save();
-
-      /* 同步 main flow 状态 */
-      if (mainFlow !== targetFlow) {
-        mainFlow.setStatus(targetFlow.status);
-        mainFlow.save();
-      }
-
-      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.sessionId, status: targetFlow.status });
-      consola.info(`[World] session ${sessionId} 恢复完成, 状态: ${targetFlow.status}`);
-    } catch (e) {
-      consola.error(`[World] _autoResumeSession 异常:`, (e as Error).message);
-      for (const { flow: f } of session.allFlows()) {
-        if (f.status === "running") {
-          f.setStatus("failed");
-          f.recordAction({ type: "thought", content: `[系统异常] ${(e as Error).message}` });
-          f.save();
-        }
-      }
-      emitSSE({ type: "flow:end", objectName, taskId: mainFlow.sessionId, status: "failed" });
-    } finally {
-      this._activeSessions.delete(sessionId);
-    }
-  }
-
-  /**
-   * 加载 session 下已有的 sub-flows 到 session
-   *
-   * 恢复对话时，需要把之前创建的 sub-flows 重新注册到 session，
-   * 这样 deliverMessage 能正确复用已有的 sub-flow。
-   */
-  private _loadExistingSubFlows(session: Session, sessionDir: string, excludeName?: string): void {
-    const flowsDir = join(sessionDir, "objects");
-    if (!existsSync(flowsDir)) return;
-
-    const entries = readdirSync(flowsDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const stoneName = entry.name;
-      if (stoneName === excludeName) continue;
-      if (session.hasFlow(stoneName)) continue;
-
-      const subFlow = Flow.load(join(flowsDir, stoneName));
-      if (subFlow) {
-        session.register(stoneName, subFlow);
-        consola.info(`[World] 恢复 sub-flow: ${stoneName} (${subFlow.sessionId})`);
-      }
-    }
-  }
-
-  /**
-   * 确保目标对象的 ReflectFlow 存在并注册到 session/scheduler
-   *
-   * ReflectFlow 是对象的常驻 Flow，负责维护 Self（Stone）的长期数据。
-   * 普通 Flow 通过 talkToSelf 向 ReflectFlow 发消息，ReflectFlow 是唯一可写 Self 目录的 Flow。
-   */
-  private _ensureReflectFlow(stone: Stone, session: Session): Flow {
-    const selfMetaFlow = Flow.ensureReflectFlow(stone.reflectDir, stone.name);
-
-    /* 注册到 session（如果尚未注册） */
-    const selfMetaKey = `_reflect:${stone.name}`;
-    if (!session.hasFlow(selfMetaKey)) {
-      session.register(selfMetaKey, selfMetaFlow);
-    }
-
-    return selfMetaFlow;
   }
 
   /* ========== 访问器 ========== */

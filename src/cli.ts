@@ -36,10 +36,8 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  /* 初始化 World — 线程树架构默认启用，OOC_THREAD_TREE=0 可回退 */
-  const useThreadTree = process.env.OOC_THREAD_TREE !== "0";
-  const world = new World({ rootDir: OOC_ROOT, useThreadTree });
-  if (!useThreadTree) consola.info("[CLI] 使用旧 Flow 架构 (OOC_THREAD_TREE=0)");
+  /* 初始化 World — 线程树架构是唯一路径（旧 Flow 架构已于 2026-04-21 退役） */
+  const world = new World({ rootDir: OOC_ROOT });
   world.init();
 
   switch (command) {
