@@ -28,7 +28,7 @@ import { loadAllTraits, loadTraitsByRef } from "../trait/index.js";
 import { OpenAICompatibleClient, type LLMClient } from "../thinkable/client.js";
 import { DefaultConfig, type LLMConfig } from "../thinkable/config.js";
 import { emitSSE } from "../server/events.js";
-import { runWithThreadTree, resumeWithThreadTree, stepOnceWithThreadTree, type EngineConfig, type TalkResult } from "../thread/engine.js";
+import { runWithThreadTree, resumeWithThreadTree, stepOnceWithThreadTree, writeThreadTreeFlowData, type EngineConfig, type TalkResult, type TalkReturn } from "../thread/engine.js";
 import { loadSkills } from "../skill/index.js";
 
 /** World 配置 */
@@ -434,7 +434,7 @@ export class World implements Routable {
    * @param from - 发送者（默认 "user"）
    * @returns Flow 实例
    */
-  async talk(objectName: string, message: string, from: string = "user", flowId?: string): Promise<Flow> {
+  async talk(objectName: string, message: string, from: string = "user", flowId?: string): Promise<Flow | TalkReturn> {
     /* 线程树架构路径 */
     if (this._useThreadTree) {
       if (!flowId) {
@@ -455,10 +455,10 @@ export class World implements Routable {
   /**
    * 线程树架构的 talk 实现
    *
-   * 使用新的 thread/ 模块执行对话，返回兼容的 Flow 对象。
-   * 内部通过 runWithThreadTree 执行，结果包装为 Flow 以保持接口兼容。
+   * 使用新的 thread/ 模块执行对话，返回 TalkReturn（与 Flow.toJSON 结构兼容的纯数据对象）。
+   * 不再依赖 Flow 类——data.json 直接由 writeThreadTreeFlowData 写入。
    */
-  private async _talkWithThreadTree(objectName: string, message: string, from: string, preSessionId?: string, continueThreadId?: string): Promise<Flow> {
+  private async _talkWithThreadTree(objectName: string, message: string, from: string, preSessionId?: string, continueThreadId?: string): Promise<TalkReturn> {
     const stone = this._registry.get(objectName);
     if (!stone) throw new Error(`对象 "${objectName}" 不存在`);
 
@@ -506,10 +506,9 @@ export class World implements Routable {
         /* World 作为路由中间层：启动目标 Object 的线程树，等待完成，返回结果 */
         consola.info(`[World] 跨 Object talk: ${fromObject} → ${targetObject}, session=${sessionId}${continueThreadId ? `, continue=${continueThreadId}` : ""}`);
         try {
-          const flow = await this._talkWithThreadTree(targetObject, message, fromObject, sessionId, continueThreadId);
-          const flowData = flow.toJSON();
-          const reply = flowData.summary ?? flowData.messages?.find((m: any) => m.direction === "out")?.content ?? null;
-          return { reply, remoteThreadId: flowData._remoteThreadId ?? "unknown" };
+          const talkRet = await this._talkWithThreadTree(targetObject, message, fromObject, sessionId, continueThreadId);
+          const reply = talkRet.summary ?? talkRet.messages.find((m) => m.direction === "out")?.content ?? null;
+          return { reply, remoteThreadId: talkRet.threadId ?? "unknown" };
         } catch (e) {
           consola.error(`[World] 跨 Object talk 失败: ${(e as Error).message}`);
           return { reply: `[错误] ${(e as Error).message}`, remoteThreadId: "error" };
@@ -522,91 +521,25 @@ export class World implements Routable {
     const messageTimestamp = Date.now();
     const result: TalkResult = await runWithThreadTree(objectName, message, from, engineConfig, preSessionId, continueThreadId);
 
-    /* 在线程树 session 目录下写入 Flow 兼容数据 */
-    const sessionDir = join(this.flowsDir, result.sessionId);
-    const flowDir = join(sessionDir, "objects", objectName);
-    const now = Date.now();
-
-    const messages: Array<Record<string, unknown>> = [
-      { direction: "in", from, to: objectName, content: message, timestamp: messageTimestamp },
-    ];
-    if (result.summary) {
-      messages.push({ direction: "out", from: objectName, to: from, content: result.summary, timestamp: now });
-    }
-
-    const flowData = {
-      sessionId: result.sessionId,
-      stoneName: objectName,
-      status: result.status === "done" ? "finished" : result.status === "failed" ? "failed" : "waiting",
-      messages,
-      process: { root: { id: "root", title: "task", status: "done", children: [] }, focusId: "root" },
-      data: {},
-      summary: result.summary ?? null,
-      _remoteThreadId: result.threadId ?? null,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    mkdirSync(flowDir, { recursive: true });
-    writeFileSync(join(flowDir, "data.json"), JSON.stringify(flowData, null, 2), "utf-8");
-    writeFileSync(join(flowDir, ".flow"), "", "utf-8");
-
-    /* 加载为 Flow 对象返回 */
-    const flow = Flow.load(flowDir);
-    if (!flow) throw new Error(`无法加载 Flow: ${flowDir}`);
+    /* 线程树执行结果落盘 + 构造 TalkReturn（兼容 Flow.toJSON 形状） */
+    const talkRet = writeThreadTreeFlowData(result, objectName, this.flowsDir, message, from, messageTimestamp);
 
     consola.info(`[World] 线程树执行完成: session=${result.sessionId}, status=${result.status}, iterations=${result.totalIterations}`);
-    return flow;
+    return talkRet;
   }
 
   /**
-   * 将线程树执行结果包装为兼容的 Flow 对象
+   * 将线程树执行结果包装为 TalkReturn
+   *
+   * resumeFlow/stepOnce 的线程树分支使用：result.sessionId 可能已存在数据，
+   * 由 writeThreadTreeFlowData 覆盖写入。不追加 inbound 消息（resume 不新增入站消息）。
    */
-  private _wrapThreadTreeResult(result: TalkResult, objectName: string, sessionId: string): Flow {
-    const sessionDir = join(this.flowsDir, sessionId);
-    const flowDir = join(sessionDir, "objects", objectName);
-    const now = Date.now();
-
-    /* 尝试加载已有 Flow 并更新 */
-    let flow = Flow.load(flowDir);
-    if (flow) {
-      flow.setStatus(result.status === "done" ? "finished" : result.status === "failed" ? "failed" : "waiting");
-      if (result.summary) {
-        flow.setSummary(result.summary);
-        /* 追加 outbound 消息（如果还没有） */
-        const flowJson = flow.toJSON();
-        const hasOutbound = flowJson.messages.some((m: any) => m.direction === "out");
-        if (!hasOutbound) {
-          flow.addMessage({ direction: "out", from: objectName, to: "user", content: result.summary, timestamp: now });
-        }
-      }
-      flow.save();
-    } else {
-      /* 创建兼容 Flow 数据 */
-      const messages: Array<Record<string, unknown>> = [];
-      if (result.summary) {
-        messages.push({ direction: "out", from: objectName, to: "user", content: result.summary, timestamp: now });
-      }
-      const flowData = {
-        sessionId,
-        stoneName: objectName,
-        status: result.status === "done" ? "finished" : result.status === "failed" ? "failed" : "waiting",
-        messages,
-        process: { root: { id: "root", title: "task", status: "done", children: [] }, focusId: "root" },
-        data: {},
-        summary: result.summary ?? null,
-        createdAt: now,
-        updatedAt: now,
-      };
-      mkdirSync(flowDir, { recursive: true });
-      writeFileSync(join(flowDir, "data.json"), JSON.stringify(flowData, null, 2), "utf-8");
-      writeFileSync(join(flowDir, ".flow"), "", "utf-8");
-      flow = Flow.load(flowDir);
-      if (!flow) throw new Error(`无法加载 Flow: ${flowDir}`);
-    }
-
+  private _wrapThreadTreeResult(result: TalkResult, objectName: string, sessionId: string): TalkReturn {
+    /* resume/step 场景下 result.sessionId 应等于传入的 sessionId；用 sessionId 兜底 */
+    const normalizedResult: TalkResult = { ...result, sessionId: result.sessionId ?? sessionId };
+    const talkRet = writeThreadTreeFlowData(normalizedResult, objectName, this.flowsDir);
     consola.info(`[World] 线程树执行完成: session=${sessionId}, status=${result.status}, iterations=${result.totalIterations}`);
-    return flow;
+    return talkRet;
   }
 
   /* ========== 暂停/恢复 ========== */
@@ -630,7 +563,7 @@ export class World implements Routable {
    * 清除暂停信号，加载暂停的 Flow，重新创建 Scheduler 运行。
    * ThinkLoop 会检测到 _pendingOutput 并跳过 LLM 调用直接执行 programs。
    */
-  async resumeFlow(objectName: string, flowId: string): Promise<Flow> {
+  async resumeFlow(objectName: string, flowId: string): Promise<Flow | TalkReturn> {
     this._pauseRequests.delete(objectName);
 
     /* 线程树路由：检查 session 目录是否包含线程树数据 */
@@ -673,10 +606,9 @@ export class World implements Routable {
               return { reply: null, remoteThreadId: "user" };
             }
             try {
-              const flow = await this._talkWithThreadTree(targetObject, message, fromObject, undefined, continueThreadId);
-              const flowData = flow.toJSON();
-              const reply = flowData.summary ?? flowData.messages?.find((m: any) => m.direction === "out")?.content ?? null;
-              return { reply, remoteThreadId: flowData._remoteThreadId ?? "unknown" };
+              const talkRet = await this._talkWithThreadTree(targetObject, message, fromObject, undefined, continueThreadId);
+              const reply = talkRet.summary ?? talkRet.messages.find((m) => m.direction === "out")?.content ?? null;
+              return { reply, remoteThreadId: talkRet.threadId ?? "unknown" };
             } catch (e) { return { reply: `[错误] ${(e as Error).message}`, remoteThreadId: "error" }; }
           },
         };
@@ -694,7 +626,7 @@ export class World implements Routable {
    * 如果提供了 modifiedOutput，会替换暂存的 LLM 输出。
    * 执行完一轮后自动设置 debugMode，使 ThinkLoop 在执行完后暂停。
    */
-  async stepOnce(objectName: string, flowId: string, modifiedOutput?: string): Promise<Flow> {
+  async stepOnce(objectName: string, flowId: string, modifiedOutput?: string): Promise<Flow | TalkReturn> {
     this._pauseRequests.delete(objectName);
 
     /* 线程树路由 */
@@ -737,10 +669,9 @@ export class World implements Routable {
               return { reply: null, remoteThreadId: "user" };
             }
             try {
-              const flow = await this._talkWithThreadTree(targetObject, message, fromObject, undefined, continueThreadId);
-              const flowData = flow.toJSON();
-              const reply = flowData.summary ?? flowData.messages?.find((m: any) => m.direction === "out")?.content ?? null;
-              return { reply, remoteThreadId: flowData._remoteThreadId ?? "unknown" };
+              const talkRet = await this._talkWithThreadTree(targetObject, message, fromObject, undefined, continueThreadId);
+              const reply = talkRet.summary ?? talkRet.messages.find((m) => m.direction === "out")?.content ?? null;
+              return { reply, remoteThreadId: talkRet.threadId ?? "unknown" };
             } catch (e) { return { reply: `[错误] ${(e as Error).message}`, remoteThreadId: "error" }; }
           },
         };

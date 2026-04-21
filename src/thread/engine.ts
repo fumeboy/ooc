@@ -103,11 +103,119 @@ export interface TalkResult {
   threadId?: string;
 }
 
+/**
+ * world.talk() / resumeFlow() / stepOnce() 的统一返回类型
+ *
+ * 替代直接返回 Flow 实例：线程树架构下 Flow 类不再作为返回契约，
+ * 而是以一个纯数据对象暴露外部消费者需要的字段。
+ *
+ * 调用方只需读取 sessionId/status/messages/actions/summary，
+ * 与 Flow.toJSON() 的结构保持一致，由 writeSessionArtifact 落盘到 data.json。
+ */
+export interface TalkReturn {
+  /** 会话 ID（即 mainFlow/rootThread 的 sessionId） */
+  sessionId: string;
+  /** 最终状态（按 FlowStatus 枚举：running/waiting/pausing/finished/failed） */
+  status: "running" | "waiting" | "pausing" | "finished" | "failed";
+  /** 消息列表（与 FlowMessage 同形） */
+  messages: Array<{ direction: "in" | "out"; from: string; to: string; content: string; timestamp: number; id?: string }>;
+  /** 行为树动作（扁平列表，来自线程树 actions 的投影） */
+  actions: Array<{ type: string; content: string; timestamp: number; id?: string; result?: string; success?: boolean }>;
+  /** 对话摘要 */
+  summary?: string;
+  /** 关联的底层线程 ID（用于 continue_thread） */
+  threadId?: string;
+  /** toJSON 快照（供 HTTP 调试/前端消费，形态与 Flow.toJSON 兼容） */
+  toJSON?: () => Record<string, unknown>;
+}
+
 /* ========== 辅助函数 ========== */
 
 /** 生成 session ID */
 function generateSessionId(): string {
   return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * 把 TalkResult（线程树执行产物）落盘为 data.json + 封装为 TalkReturn
+ *
+ * 线程树路径下 world.talk()/resumeFlow()/stepOnce() 统一通过此函数构造返回值。
+ * 不再依赖 Flow 类——直接用 writeFileSync 写入 data.json（HTTP 层通过 readFlow 消费）。
+ *
+ * @param result - 线程树执行结果
+ * @param objectName - 目标对象名
+ * @param flowsDir - flows/ 根目录
+ * @param incomingMessage - 本次入站消息（可选，追加到 messages[]）
+ * @param fromName - 入站消息发送者（默认 "user"）
+ * @param incomingTimestamp - 入站消息时间戳（可选）
+ */
+export function writeThreadTreeFlowData(
+  result: TalkResult,
+  objectName: string,
+  flowsDir: string,
+  incomingMessage?: string,
+  fromName: string = "user",
+  incomingTimestamp?: number,
+): TalkReturn {
+  const sessionDir = join(flowsDir, result.sessionId);
+  const flowDir = join(sessionDir, "objects", objectName);
+  const now = Date.now();
+
+  /* 状态映射：ThreadStatus → FlowStatus */
+  const status: TalkReturn["status"] =
+    result.status === "done" ? "finished"
+    : result.status === "failed" ? "failed"
+    : result.status === "paused" ? "pausing"
+    : "waiting";
+
+  /* 构造 messages[] */
+  const messages: TalkReturn["messages"] = [];
+  if (incomingMessage) {
+    messages.push({
+      direction: "in",
+      from: fromName,
+      to: objectName,
+      content: incomingMessage,
+      timestamp: incomingTimestamp ?? now,
+    });
+  }
+  if (result.summary) {
+    messages.push({
+      direction: "out",
+      from: objectName,
+      to: fromName,
+      content: result.summary,
+      timestamp: now,
+    });
+  }
+
+  /* 落盘 data.json（供 /api/flows/:sessionId 的 readFlow 消费） */
+  const flowJson = {
+    sessionId: result.sessionId,
+    stoneName: objectName,
+    status,
+    messages,
+    process: { root: { id: "root", title: "task", status: "done", children: [] }, focusId: "root" },
+    data: {},
+    summary: result.summary ?? null,
+    _remoteThreadId: result.threadId ?? null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  mkdirSync(flowDir, { recursive: true });
+  writeFileSync(join(flowDir, "data.json"), JSON.stringify(flowJson, null, 2), "utf-8");
+  writeFileSync(join(flowDir, ".flow"), "", "utf-8");
+
+  return {
+    sessionId: result.sessionId,
+    status,
+    messages,
+    actions: [],
+    summary: result.summary,
+    threadId: result.threadId,
+    toJSON: () => ({ ...flowJson }),
+  };
 }
 
 /* ========== Context → LLM Messages 转换 ========== */
