@@ -1,11 +1,13 @@
 /**
  * Talk Form 迭代单元测试
  *
- * 覆盖三个关键契约：
+ * 覆盖四个关键契约：
  * 1. tool schema：submit tool 的 args 声明 optional form 字段
  * 2. engine 持久化：talk(form=...) 把 form 落盘到 message_out action
  * 3. user inbox 索引：带 form 的 talk(target="user") 经 engine 仍能正常生成
  *    messageId 并写入 user inbox；前端凭此反查正文就能拿到 form
+ * 4. server API：POST /api/talk/:target 带 formResponse 字段时，
+ *    在消息前注入 [formResponse] 结构化前缀（让目标 LLM 可识别）
  *
  * @ref docs/工程管理/迭代/all/20260421_feature_talk_form.md
  */
@@ -19,6 +21,9 @@ import type { StoneData } from "../src/types/index.js";
 import { eventBus } from "../src/server/events.js";
 import { SUBMIT_TOOL } from "../src/thread/tools.js";
 import type { TalkFormPayload, ThreadAction } from "../src/thread/types.js";
+import { handleRoute } from "../src/server/server.js";
+import { World } from "../src/world/world.js";
+import type { LLMConfig } from "../src/thinkable/config.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_talk_form_test");
 const FLOWS_DIR = join(TEST_DIR, "flows");
@@ -427,5 +432,189 @@ describe("engine — talk(form=...) 持久化", () => {
     expect(form.type).toBe("multi_choice");
     expect(form.options).toHaveLength(3);
     expect(form.allow_free_text).toBe(true);
+  });
+});
+
+/* ========== 4. server API — POST /api/talk 接受 formResponse ========== */
+
+const TEST_LLM_CONFIG: LLMConfig = {
+  provider: "openai-compatible",
+  apiKey: "test-key",
+  baseUrl: "https://example.invalid/v1",
+  model: "test-model",
+  maxTokens: 1024,
+  timeout: 5,
+};
+
+describe("server — POST /api/talk/:target 支持 formResponse", () => {
+  test("formResponse 正确解析后以 [formResponse] 前缀注入 message", async () => {
+    const world = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG });
+    world.init();
+
+    /* mock world.talk 记录实参 */
+    const calls: Array<{ object: string; message: string; from: string; flowId?: string }> = [];
+    world.talk = async (object: string, message: string, from: string, flowId?: string) => {
+      calls.push({ object, message, from, flowId });
+      return {
+        sessionId: flowId ?? "s_mock",
+        stoneName: object,
+        status: "running" as const,
+        messages: [],
+        actions: [],
+        process: { root: { id: "r", title: "t", status: "done" as const, children: [] }, focusId: "r" },
+        data: {},
+        createdAt: 0,
+        updatedAt: 0,
+      };
+    };
+
+    const body = {
+      message: "我选方案 A",
+      sessionId: "s_test",
+      formResponse: {
+        formId: "form_abc",
+        selectedOptionIds: ["A"],
+        freeText: null,
+      },
+    };
+
+    const req = new Request("http://test/api/talk/user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const res = await handleRoute("POST", "/api/talk/user", req, world);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+
+    /* 等 async world.talk 被调用 */
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(calls.length).toBe(1);
+    const c = calls[0]!;
+    expect(c.object).toBe("user");
+    expect(c.from).toBe("user");
+    expect(c.flowId).toBe("s_test");
+    /* message 开头有 [formResponse] 前缀，后面是用户原文 */
+    expect(c.message).toContain("[formResponse]");
+    expect(c.message).toContain('"formId":"form_abc"');
+    expect(c.message).toContain('"selectedOptionIds":["A"]');
+    expect(c.message).toContain("我选方案 A");
+    /* 前缀在前 */
+    expect(c.message.indexOf("[formResponse]")).toBeLessThan(c.message.indexOf("我选方案 A"));
+  });
+
+  test("freeText 兜底的 formResponse（没选项，只写自由文本）", async () => {
+    const world = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG });
+    world.init();
+    const calls: Array<{ message: string }> = [];
+    world.talk = async (_object: string, message: string) => {
+      calls.push({ message });
+      return {
+        sessionId: "s_mock",
+        stoneName: "supervisor",
+        status: "running" as const,
+        messages: [],
+        actions: [],
+        process: { root: { id: "r", title: "t", status: "done" as const, children: [] }, focusId: "r" },
+        data: {},
+        createdAt: 0,
+        updatedAt: 0,
+      };
+    };
+
+    const body = {
+      message: "我都不喜欢这些选项",
+      formResponse: {
+        formId: "form_xyz",
+        selectedOptionIds: [],
+        freeText: "我都不喜欢这些选项",
+      },
+    };
+    const req = new Request("http://test/api/talk/user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const res = await handleRoute("POST", "/api/talk/user", req, world);
+    expect(res.status).toBe(200);
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(calls.length).toBe(1);
+    expect(calls[0]!.message).toContain('"formId":"form_xyz"');
+    expect(calls[0]!.message).toContain('"selectedOptionIds":[]');
+    expect(calls[0]!.message).toContain('"freeText":"我都不喜欢这些选项"');
+  });
+
+  test("无 formResponse 的普通 talk 不注入前缀（向后兼容）", async () => {
+    const world = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG });
+    world.init();
+    const calls: Array<{ message: string }> = [];
+    world.talk = async (_object: string, message: string) => {
+      calls.push({ message });
+      return {
+        sessionId: "s_mock",
+        stoneName: "supervisor",
+        status: "running" as const,
+        messages: [],
+        actions: [],
+        process: { root: { id: "r", title: "t", status: "done" as const, children: [] }, focusId: "r" },
+        data: {},
+        createdAt: 0,
+        updatedAt: 0,
+      };
+    };
+
+    const body = { message: "你好" };
+    const req = new Request("http://test/api/talk/user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const res = await handleRoute("POST", "/api/talk/user", req, world);
+    expect(res.status).toBe(200);
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(calls.length).toBe(1);
+    expect(calls[0]!.message).toBe("你好");
+    expect(calls[0]!.message).not.toContain("[formResponse]");
+  });
+
+  test("formResponse 缺 formId → 视为无效，退回普通 talk", async () => {
+    const world = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG });
+    world.init();
+    const calls: Array<{ message: string }> = [];
+    world.talk = async (_object: string, message: string) => {
+      calls.push({ message });
+      return {
+        sessionId: "s_mock",
+        stoneName: "supervisor",
+        status: "running" as const,
+        messages: [],
+        actions: [],
+        process: { root: { id: "r", title: "t", status: "done" as const, children: [] }, focusId: "r" },
+        data: {},
+        createdAt: 0,
+        updatedAt: 0,
+      };
+    };
+
+    const body = {
+      message: "hi",
+      formResponse: { selectedOptionIds: ["A"] } /* 缺 formId */,
+    };
+    const req = new Request("http://test/api/talk/user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const res = await handleRoute("POST", "/api/talk/user", req, world);
+    expect(res.status).toBe(200);
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(calls.length).toBe(1);
+    expect(calls[0]!.message).toBe("hi");
+    expect(calls[0]!.message).not.toContain("[formResponse]");
   });
 });

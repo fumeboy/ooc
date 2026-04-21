@@ -183,25 +183,51 @@ export async function handleRoute(
     return json({ success: true, data: { sessionId } }, 201);
   }
 
-  /* POST /api/talk/:objectName — 向对象发消息（异步，不等待执行完成） */
+  /* POST /api/talk/:objectName — 向对象发消息（异步，不等待执行完成）
+   *
+   * 可选 body 字段 formResponse：对某个 form 的结构化回复
+   *   { formId: string, selectedOptionIds: string[], freeText: string | null }
+   * 若提供，服务端会把结构化信息以 [formResponse] 前缀注入消息体，
+   * 让目标对象的 LLM 能明确区分「用户点选了 X/Y」vs「用户写了自由文本」。
+   */
   const talkMatch = path.match(/^\/api\/talk\/([^/]+)$/);
   if (method === "POST" && talkMatch) {
     const objectName = talkMatch[1]!;
     const body = (await req.json()) as Record<string, unknown>;
     const message = body.message as string;
     const flowId = (body.sessionId ?? body.flowId) as string | undefined;
-    if (!message) return errorResponse("缺少 message 字段");
+    const formResponseRaw = body.formResponse;
+    if (!message && formResponseRaw == null) return errorResponse("缺少 message 字段");
 
     /* 检查对象是否存在 */
     if (!world.registry.get(objectName)) {
       return errorResponse(`对象 "${objectName}" 不存在`, 404);
     }
 
+    /* 标准化 formResponse（宽容校验：字段缺失视为未提供） */
+    let formResponsePrefix = "";
+    if (formResponseRaw && typeof formResponseRaw === "object") {
+      const fr = formResponseRaw as Record<string, unknown>;
+      const formId = typeof fr.formId === "string" ? fr.formId : null;
+      const selectedOptionIds = Array.isArray(fr.selectedOptionIds)
+        ? fr.selectedOptionIds.filter((x): x is string => typeof x === "string")
+        : [];
+      const freeText = typeof fr.freeText === "string" ? fr.freeText : null;
+      if (formId) {
+        /* 结构化前缀：LLM 凭此知道用户点了哪个选项 / 写了什么文字
+         * 单行 JSON 方便 LLM 机读；同时前端用户输入的 message 会作为人类可读部分展示在前缀之后 */
+        const payload = JSON.stringify({ formId, selectedOptionIds, freeText });
+        formResponsePrefix = `[formResponse] ${payload}\n\n`;
+      }
+    }
+
+    const finalMessage = formResponsePrefix + (message ?? "");
+
     /* 未提供 sessionId 时自动生成，确保 HTTP 响应能返回 */
     const sessionId = flowId ?? `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
     /* 异步执行，不阻塞 HTTP 响应 */
-    world.talk(objectName, message, "user", sessionId).catch((e) => {
+    world.talk(objectName, finalMessage, "user", sessionId).catch((e) => {
       consola.error(`[Server] talk 异步执行失败: ${(e as Error).message}`);
     });
 
