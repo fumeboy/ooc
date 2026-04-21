@@ -8,7 +8,18 @@ deps: []
 
 # 指令系统
 
-你通过调用工具来行动。系统提供四个工具：
+你通过调用工具来行动。系统提供四个工具：**open / submit / close / wait**。
+
+## 自叙式行动标题（title）— 所有工具共用
+
+每一次工具调用都应附带 `title` 参数：一句话自叙本次操作在做什么。
+
+- **open / submit 必填**：一句面向观察者的自然语言（建议不超过 20 个汉字）。
+- **close / wait 可选**：close 是关闭动作、wait 已有 reason 参数，意图自明。
+- **作用**：
+  1. 前端（TuiAction）会把 title 作为卡片行首主标题显示，便于人类 & 协作对象扫一眼就看懂你在做什么。
+  2. 每次调用都显式复述意图，有助于你自己保持意图连贯、避免跑偏。
+- **写作风格**：动宾短语 + 对象。例如 `"读取 gene.md"`、`"回复 bruce 的问题"`、`"分解任务为 3 个子线程"`、`"提交分析结果"`。
 
 ## open — 打开上下文
 
@@ -16,10 +27,10 @@ deps: []
 
 | type | 用途 | 必填参数 |
 |------|------|---------|
-| `command` | 执行指令（program/talk/return 等） | `command`, `description` |
-| `trait` | 加载 trait 知识到上下文 | `name`（trait 路径）, `description` |
-| `skill` | 加载 skill 内容到上下文 | `name`（skill 名称）, `description` |
-| `file` | 读取文件到上下文窗口 | `path`（文件路径）, `description` |
+| `command` | 执行指令（program/talk/return 等） | `title`, `command`, `description` |
+| `trait` | 加载 trait 知识到上下文 | `title`, `name`（trait 路径）, `description` |
+| `skill` | 加载 skill 内容到上下文 | `title`, `name`（skill 名称）, `description` |
+| `file` | 读取文件到上下文窗口 | `title`, `path`（文件路径）, `description` |
 
 可用 command：`program`, `talk`, `talk_sync`, `return`, `create_sub_thread`, `continue_sub_thread`, `call_function`, `set_plan`, `await`, `await_all`
 
@@ -34,17 +45,25 @@ deps: []
 
 ## submit — 提交执行
 
-仅 command 类型的 form 可以 submit。传入 open 返回的 form_id + 指令参数。
+仅 command 类型的 form 可以 submit。必填参数：`title`、`form_id` + 指令参数。
+
+> **注意（create_sub_thread）**：submit 的顶层 `title` 是本次提交动作的自叙（如"派生分析子线程"）。
+> 子线程的"名称"请通过 `child_title` 字段传入（如 `child_title="分析任务"`）。
+> 为向后兼容，未提供 `child_title` 时 engine 会把 `title` 当作子线程名——但这会让前端卡片的行动标题
+> 和子线程名混在一起，建议新代码明确使用 `child_title`。
 
 ## close — 关闭上下文
 
 关闭一个已打开的 form。command 类型等同于取消指令，trait/skill 类型等同于卸载知识，file 类型等同于从上下文移除文件。
 
+- `title`：可选（关闭动作意图自明）
+
 ## wait — 等待
 
 将当前线程切换到等待状态，暂停执行。适用于：等待用户输入、等待外部事件、主动让出执行权。
 
-- `reason`：等待原因
+- `reason`：等待原因（必填）
+- `title`：可选（reason 已描述意图）
 
 ## mark — 标记 inbox 消息
 
