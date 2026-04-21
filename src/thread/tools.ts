@@ -26,15 +26,28 @@ const MARK_PARAM = {
   },
 } as const;
 
+/**
+ * title 参数的 JSON Schema（所有 tool 共用）
+ *
+ * 面向外部观察者（人类、协作对象、supervisor）的一句话意图描述。
+ * 也作为 LLM 自我对齐的锚点：每次 tool call 显式复述意图可降低失焦。
+ * 前端 TuiAction 会把 title 作为卡片行首主标题展示。
+ */
+const TITLE_PARAM = {
+  type: "string",
+  description: "一句话说明本次工具调用在做什么（面向观察者的自然语言，建议不超过 20 个汉字）。例如：\"读取 gene.md\"、\"回复用户问题\"、\"分解任务为 3 个子线程\"。",
+} as const;
+
 /** open tool — 打开上下文 */
 export const OPEN_TOOL: ToolDefinition = {
   type: "function",
   function: {
     name: "open",
-    description: "打开一个上下文。type=command 时加载指令相关知识；type=trait 时加载 trait 知识；type=skill 时加载 skill 内容；type=file 时读取文件到上下文窗口。",
+    description: "打开一个上下文。type=command 时加载指令相关知识；type=trait 时加载 trait 知识；type=skill 时加载 skill 内容；type=file 时读取文件到上下文窗口。记得带 title 参数，用一句话说明本次在做什么。",
     parameters: {
       type: "object",
       properties: {
+        title: TITLE_PARAM,
         type: {
           type: "string",
           enum: ["command", "trait", "skill", "file"],
@@ -72,7 +85,7 @@ export const OPEN_TOOL: ToolDefinition = {
         },
         mark: MARK_PARAM,
       },
-      required: ["type", "description"],
+      required: ["title", "type", "description"],
     },
   },
 };
@@ -82,10 +95,17 @@ export const SUBMIT_TOOL: ToolDefinition = {
   type: "function",
   function: {
     name: "submit",
-    description: "提交指令执行。必须先 open 获取 form_id。",
+    description: "提交指令执行。必须先 open 获取 form_id。记得带 title 参数，用一句话说明本次提交的意图。",
     parameters: {
       type: "object",
       properties: {
+        /**
+         * 注意：create_sub_thread 语义下有两个 title：
+         * - tool call 的 `title`（必填）—— 本次 submit 的"一句话行动说明"，展示到前端
+         * - create_sub_thread 的子线程标题（通过 child_title 参数传入）
+         * 参见 ThreadAction.title 与 ThreadsTreeNodeMeta.title 的区分。
+         */
+        title: TITLE_PARAM,
         form_id: {
           type: "string",
           description: "open 返回的 form_id",
@@ -99,8 +119,11 @@ export const SUBMIT_TOOL: ToolDefinition = {
         continue_thread: { type: "string", description: "talk: 继续对方已有线程（传入上次 talk 返回的 remote_thread_id），不传则新建线程" },
         /* return */
         summary: { type: "string", description: "return: 完成摘要" },
-        /* create_sub_thread */
-        title: { type: "string", description: "create_sub_thread: 子线程标题" },
+        /* create_sub_thread
+         *   注意：此字段是子线程名，不要与 tool call 顶层 title 混淆。为避免冲突，
+         *   此处仍使用 `title` 键（JSON Schema 同名不会覆盖，子线程标题由 engine 从 args 读取）。
+         *   若未来需要严格解歧义，可改名为 child_title。 */
+        child_title: { type: "string", description: "create_sub_thread: 子线程标题（别名 title 也被接受）" },
         /* set_plan */
         text: { type: "string", description: "set_plan: 计划内容" },
         /* await */
@@ -116,7 +139,7 @@ export const SUBMIT_TOOL: ToolDefinition = {
         once: { type: "boolean", description: "defer: 是否只触发一次（默认 true）" },
         mark: MARK_PARAM,
       },
-      required: ["form_id"],
+      required: ["title", "form_id"],
     },
   },
 };

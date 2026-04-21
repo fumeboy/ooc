@@ -144,8 +144,15 @@ export interface ThreadAction {
   content: string;
   /** tool_use: 工具名称；program: 代码内容；其他: 附加信息 */
   name?: string;
-  /** tool_use: 工具参数（JSON 对象） */
+  /** tool_use: 工具参数（JSON 对象），已剥离顶层 title 字段 */
   args?: Record<string, unknown>;
+  /**
+   * tool_use: 自叙式行动标题（面向观察者的一句话意图）
+   * LLM 在调用 tool 时通过 title 参数提供，engine 记录时剥离出来。
+   * 前端 TuiAction 会把 title 作为卡片行首主标题展示。
+   * 保持 optional 以兼容历史落盘数据。
+   */
+  title?: string;
   /** program: 执行结果 */
   result?: string;
   /** program: 执行是否成功 */

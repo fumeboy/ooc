@@ -738,15 +738,49 @@ export async function runWithThreadTree(
         try { args = JSON.parse(tc.function.arguments); } catch {}
         const toolName = tc.function.name;
 
-        consola.info(`[Engine] tool_call: ${toolName}(${JSON.stringify(args).slice(0, 200)})`);
+        /**
+         * 剥离顶层 title（自叙式行动标题）
+         *
+         * submit 场景特殊：create_sub_thread 的老用法把 title 当作子线程标题。
+         * engine 在 submit 分支处理时需要能读到 title（作为子线程名 fallback），
+         * 所以这里**不删除** args.title，让 submit 分支按 command 类型自行决定。
+         * 其他 tool（open/close/wait）下，title 仅作为 action 标题，args 中是否保留不影响业务逻辑。
+         */
+        const rawTitle = typeof args.title === "string" ? args.title : undefined;
+        const actionTitle = rawTitle;
 
-        /* 记录 tool_use action */
+        consola.info(`[Engine] tool_call: ${toolName}${actionTitle ? ` "${actionTitle}"` : ""}(${JSON.stringify(args).slice(0, 200)})`);
+
+        /* 记录 tool_use action（含 title） */
         {
           const td = tree.readThreadData(threadId);
           if (td) {
-            td.actions.push({ type: "tool_use", content: `${toolName}(${JSON.stringify(args).slice(0, 200)})`, name: toolName, args, timestamp: Date.now() });
+            td.actions.push({
+              type: "tool_use",
+              content: `${toolName}(${JSON.stringify(args).slice(0, 200)})`,
+              name: toolName,
+              args,
+              title: actionTitle,
+              timestamp: Date.now(),
+            });
             tree.writeThreadData(threadId, td);
           }
+        }
+
+        /* SSE 事件：把本次 tool call 的 title 立即广播给前端 */
+        if (actionTitle) {
+          emitSSE({
+            type: "flow:action",
+            objectName,
+            sessionId,
+            action: {
+              type: "tool_use",
+              name: toolName,
+              title: actionTitle,
+              content: `${toolName}`,
+              timestamp: Date.now(),
+            },
+          });
         }
 
         /* 处理 mark 参数（三个 tool 通用） */
@@ -975,7 +1009,9 @@ export async function runWithThreadTree(
 
             /* create_sub_thread */
             else if (command === "create_sub_thread") {
-              const child = await tree.createSubThread(threadId, args.title as string, {
+              /* 子线程标题：优先 child_title，fallback 到 title（向后兼容） */
+              const subThreadName = (args.child_title as string | undefined) ?? (args.title as string | undefined) ?? "";
+              const child = await tree.createSubThread(threadId, subThreadName, {
                 description: args.description as string,
                 traits: args.traits as string[],
               });
@@ -988,7 +1024,7 @@ export async function runWithThreadTree(
                   const childId = child ?? "?";
                   td.actions.push({
                     type: "create_thread",
-                    content: `[create_sub_thread] ${args.title} → ${childId}`,
+                    content: `[create_sub_thread] ${subThreadName} → ${childId}`,
                     timestamp: Date.now()
                   });
                   // 立即注入 thread_id，让 LLM 在当前轮就能看到
@@ -1003,7 +1039,7 @@ export async function runWithThreadTree(
                 // 通知 Scheduler 启动新线程
                 scheduler.onThreadCreated(child, objectName);
               }
-              consola.info(`[Engine] create_sub_thread: ${args.title}`);
+              consola.info(`[Engine] create_sub_thread: ${subThreadName}`);
             }
 
             /* continue_sub_thread */
@@ -1655,15 +1691,44 @@ export async function resumeWithThreadTree(
         let args: Record<string, unknown> = {};
         try { args = JSON.parse(tc.function.arguments); } catch {}
         const toolName = tc.function.name;
-        consola.info(`[Engine] tool_call: ${toolName}(${JSON.stringify(args).slice(0, 200)})`);
 
-        /* 记录 tool_use action */
+        /* 剥离顶层 title（参见 runWithThreadTree 同段落的说明）
+         * submit 场景下 args.title 保留（create_sub_thread 的子线程名兼容 fallback） */
+        const rawTitle = typeof args.title === "string" ? args.title : undefined;
+        const actionTitle = rawTitle;
+
+        consola.info(`[Engine] tool_call: ${toolName}${actionTitle ? ` "${actionTitle}"` : ""}(${JSON.stringify(args).slice(0, 200)})`);
+
+        /* 记录 tool_use action（含 title） */
         {
           const td = tree.readThreadData(threadId);
           if (td) {
-            td.actions.push({ type: "tool_use", content: `${toolName}(${JSON.stringify(args).slice(0, 200)})`, name: toolName, args, timestamp: Date.now() });
+            td.actions.push({
+              type: "tool_use",
+              content: `${toolName}(${JSON.stringify(args).slice(0, 200)})`,
+              name: toolName,
+              args,
+              title: actionTitle,
+              timestamp: Date.now(),
+            });
             tree.writeThreadData(threadId, td);
           }
+        }
+
+        /* SSE 事件：广播 title */
+        if (actionTitle) {
+          emitSSE({
+            type: "flow:action",
+            objectName,
+            sessionId,
+            action: {
+              type: "tool_use",
+              name: toolName,
+              title: actionTitle,
+              content: `${toolName}`,
+              timestamp: Date.now(),
+            },
+          });
         }
 
         /* 处理 mark 参数（resume 路径） */
@@ -1831,7 +1896,8 @@ export async function resumeWithThreadTree(
               const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "thread_return", content: args.summary as string ?? "", timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
               scheduler.markDone(threadId);
             } else if (command === "create_sub_thread") {
-              const child = await tree.createSubThread(threadId, args.title as string, {
+              const subThreadName = (args.child_title as string | undefined) ?? (args.title as string | undefined) ?? "";
+              const child = await tree.createSubThread(threadId, subThreadName, {
                 description: args.description as string,
                 traits: args.traits as string[],
               });
@@ -1841,7 +1907,7 @@ export async function resumeWithThreadTree(
 
                 const td = tree.readThreadData(threadId);
                 if (td) {
-                  td.actions.push({ type: "create_thread", content: `[create_sub_thread] ${args.title} → ${child}`, timestamp: Date.now() });
+                  td.actions.push({ type: "create_thread", content: `[create_sub_thread] ${subThreadName} → ${child}`, timestamp: Date.now() });
                   // 立即注入 thread_id
                   td.actions.push({ type: "inject", content: `[form.submit] create_sub_thread 成功，thread_id = ${child}`, timestamp: Date.now() });
                   tree.writeThreadData(threadId, td);

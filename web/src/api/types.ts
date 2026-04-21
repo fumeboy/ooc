@@ -52,6 +52,11 @@ export interface Action {
   content: string;
   name?: string;
   args?: Record<string, unknown>;
+  /**
+   * tool_use: 自叙式行动标题（一句话说明本次 tool call 的意图）
+   * 前端 TuiAction 优先用 title 作为卡片行首显示；无 title 时 fallback 到 name/content。
+   */
+  title?: string;
   result?: string;
   success?: boolean;
 }
