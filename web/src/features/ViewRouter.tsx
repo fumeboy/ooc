@@ -53,9 +53,9 @@ function parseRoute(path: string): {
   const stoneTraitsMatch = path.match(/^stones\/([^/]+)\/traits/);
   if (stoneTraitsMatch) return { type: "stone", objectName: stoneTraitsMatch[1], initialTab: "Effects" };
 
-  /* flows/{sessionId}/objects/{objectName}/ui/pages — Flow UI tab */
-  const flowUIMatch = path.match(/^flows\/([^/]+)\/objects\/([^/]+)\/ui\/pages$/);
-  if (flowUIMatch) return { type: "flow-detail", sessionId: flowUIMatch[1], objectName: flowUIMatch[2], initialTab: "UI" };
+  /* flows/{sessionId}/objects/{objectName}/views(/{viewName})? — Flow View tab */
+  const flowViewMatch = path.match(/^flows\/([^/]+)\/objects\/([^/]+)\/views(?:\/[^/]+)?$/);
+  if (flowViewMatch) return { type: "flow-detail", sessionId: flowViewMatch[1], objectName: flowViewMatch[2], initialTab: "View" };
 
   /* flows/{sessionId}/objects/{objectName}/process.json — Flow Process tab */
   const flowProcessMatch = path.match(/^flows\/([^/]+)\/objects\/([^/]+)\/process\.json$/);
@@ -110,8 +110,8 @@ export function ViewRouter({ filePath }: ViewRouterProps) {
       };
       return (
         <DynamicUI
-          importPath={`@stones/${name}/ui/index.tsx`}
-          componentProps={stoneUIProps}
+          importPath={`@stones/${name}/views/main/frontend.tsx`}
+          componentProps={{ ...stoneUIProps, objectName: name, sessionId: "" }}
           fallback={<ObjectDetail objectName={name} initialTab={route.initialTab} />}
         />
       );

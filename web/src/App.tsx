@@ -420,8 +420,8 @@ export function App() {
         />
       );
     } else if (activeTab === "flows" && activeId) {
-      /* Session index → supervisor UI tab */
-      const indexPath = `flows/${activeId}/objects/supervisor/ui/pages`;
+      /* Session index → supervisor View tab（默认 views/main） */
+      const indexPath = `flows/${activeId}/objects/supervisor/views`;
       breadcrumbSegments = indexPath.split("/").filter(Boolean);
       const resolved = viewRegistry.resolve(indexPath);
       const ViewComponent = resolved?.registration.component;

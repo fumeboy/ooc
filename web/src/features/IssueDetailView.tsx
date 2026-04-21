@@ -107,12 +107,17 @@ export function IssueDetailView({ sessionId, issueId }: { sessionId: string; iss
         )}
         {tab === "reports" && (
           <div className="p-6 overflow-auto h-full space-y-4">
-            {issue.reportPages.map((page, i) => (
-              <div key={`${i}-${typeof page === "string" ? page : JSON.stringify(page)}`} className="rounded-lg border border-border overflow-hidden">
-                <div className="px-3 py-2 bg-muted text-xs font-medium">{typeof page === "string" ? page : JSON.stringify(page)}</div>
-                <DynamicUI importPath={`@flows/${sessionId}/objects/supervisor/ui/pages/${typeof page === "string" ? page : ""}`} componentProps={{ sessionId }} />
-              </div>
-            ))}
+            {issue.reportPages.map((page, i) => {
+              const raw = typeof page === "string" ? page : "";
+              /* 兼容：旧 reportPages 存的是 "report.tsx" 或 "report"，统一剥离 .tsx 作为 viewName */
+              const viewName = raw.replace(/\.tsx$/, "");
+              return (
+                <div key={`${i}-${raw || JSON.stringify(page)}`} className="rounded-lg border border-border overflow-hidden">
+                  <div className="px-3 py-2 bg-muted text-xs font-medium">{raw || JSON.stringify(page)}</div>
+                  <DynamicUI importPath={`@flows/${sessionId}/objects/supervisor/views/${viewName}/frontend.tsx`} componentProps={{ sessionId, objectName: "supervisor" }} />
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

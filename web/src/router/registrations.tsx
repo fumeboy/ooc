@@ -43,10 +43,11 @@ function StoneViewAdapter({ path }: ViewProps) {
       stone: { name, whoAmI: "", data: {} },
       sendMessage: (msg: string) => { talkTo(name, msg).catch(console.error); },
     };
+    /* 默认加载 views/main；Phase 4 后将注入 callMethod */
     return (
       <DynamicUI
-        importPath={`@stones/${name}/ui/index.tsx`}
-        componentProps={stoneUIProps}
+        importPath={`@stones/${name}/views/main/frontend.tsx`}
+        componentProps={{ ...stoneUIProps, objectName: name, sessionId: "" }}
         fallback={<ObjectDetail objectName={name} initialTab={initialTab} />}
       />
     );
@@ -66,7 +67,7 @@ function FlowViewAdapter({ path }: ViewProps) {
   if (path.endsWith("/data.json")) initialTab = "Data";
   else if (path.endsWith("/process.json")) initialTab = "Process";
   else if (path.endsWith("/memory.md")) initialTab = "Memory";
-  else if (path.endsWith("/ui/pages")) initialTab = "UI";
+  else if (/\/views(\/|$)/.test(path)) initialTab = "View";
 
   return <FlowView sessionId={sessionId} objectName={objectName} initialTab={initialTab} />;
 }
@@ -268,7 +269,7 @@ function FileViewerAdapter({ path }: ViewProps) {
 /* ── 注册所有视图 ── */
 
 export function registerAllViews(): void {
-  /* FlowView — flows/{sid}/objects/{obj} 及其特定的 UI tabs 子路径 */
+  /* FlowView — flows/{sid}/objects/{obj} 及其特定的 tab 子路径 */
   viewRegistry.register({
     name: "FlowView",
     component: FlowViewAdapter,
@@ -280,7 +281,8 @@ export function registerAllViews(): void {
       if (subPath === "/data.json") return true;
       if (subPath === "/process.json") return true;
       if (subPath === "/memory.md") return true;
-      if (subPath === "/ui/pages") return true;
+      /* 新协议：views/{viewName}（含具体 view 名称） */
+      if (/^\/views(\/[^/]+)?$/.test(subPath)) return true;
       return false;
     },
     priority: 100,

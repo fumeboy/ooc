@@ -32,13 +32,15 @@ interface FlowViewProps {
 }
 
 const BASE_TABS = ["Process", "Data", "Memory"] as const;
-type Tab = "Process" | "Data" | "Memory" | "UI" | null;
+type Tab = "Process" | "Data" | "Memory" | "View" | null;
 
 export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
   const [flow, setFlow] = useState<FlowData | null>(null);
   const [stone, setStone] = useState<StoneData | null>(null);
   const [tab, setTab] = useState<Tab>((initialTab as Tab) || null);
-  const [hasUI, setHasUI] = useState(false);
+  const [hasView, setHasView] = useState(false);
+  /** 默认加载的 view 名称（main 优先，否则取第一个） */
+  const [defaultViewName, setDefaultViewName] = useState<string | null>(null);
   const lastEvent = useAtomValue(lastFlowEventAtom);
   const refreshKey = useAtomValue(refreshKeyAtom);
 
@@ -63,25 +65,27 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
     }
   }, [lastEvent]);
 
-  /* 检查该对象是否有 ui/pages/ 目录 */
+  /* 检查该对象是否有 views/ 目录（任一 view） */
   useEffect(() => {
     fetchSessionTree(sessionId).then((tree) => {
       const objectsDir = tree.children?.find((c) => c.name === "objects");
       const objectDir = objectsDir?.children?.find((c) => c.name === objectName);
-      const uiDir = objectDir?.children?.find((c) => c.name === "ui");
-      const pagesDir = uiDir?.children?.find((c) => c.name === "pages");
-      const found = !!pagesDir;
-      setHasUI(found);
+      const viewsDir = objectDir?.children?.find((c) => c.name === "views");
+      const viewDirs = viewsDir?.children?.filter((c) => c.type === "directory") ?? [];
+      const viewNames = viewDirs.map((d) => d.name);
+      const found = viewNames.length > 0;
+      setHasView(found);
+      setDefaultViewName(viewNames.includes("main") ? "main" : (viewNames[0] ?? null));
       if (found && !initialTab) {
-        setTab("UI");
-      } else if (!found && initialTab === "UI") {
-        /* initialTab 指定了 UI 但实际没有 UI 目录，回退到 Readme */
+        setTab("View");
+      } else if (!found && initialTab === "View") {
+        /* initialTab 指定了 View 但实际没有 views/ 目录，回退到 Readme */
         setTab(null);
       }
-    }).catch(() => setHasUI(false));
+    }).catch(() => setHasView(false));
   }, [sessionId, objectName, initialTab]);
 
-  const tabs: Tab[] = hasUI ? [...BASE_TABS, "UI"] : [...BASE_TABS];
+  const tabs: Tab[] = hasView ? [...BASE_TABS, "View"] : [...BASE_TABS];
 
   if (!flow) {
     return (
@@ -172,9 +176,9 @@ export function FlowView({ sessionId, objectName, initialTab }: FlowViewProps) {
               {tab === "Memory" && (
                 <FlowMemoryTab sessionId={sessionId} objectName={objectName} />
               )}
-              {tab === "UI" && (
+              {tab === "View" && defaultViewName && (
                 <DynamicUI
-                  importPath={`@flows/${sessionId}/objects/${objectName}/ui/pages/index.tsx`}
+                  importPath={`@flows/${sessionId}/objects/${objectName}/views/${defaultViewName}/frontend.tsx`}
                   componentProps={{ sessionId, objectName }}
                 />
               )}

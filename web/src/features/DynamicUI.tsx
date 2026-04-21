@@ -1,16 +1,17 @@
 /**
- * DynamicUI — 统一动态加载自渲染 UI 组件
+ * DynamicUI — 统一动态加载对象的 View 组件
  *
- * 支持 Stone 级别和 Flow 级别的动态 import：
- * - Stone: @stones/{name}/ui/index.tsx
- * - Flow:  @flows/{sid}/objects/{name}/ui/pages/*.tsx
+ * 新协议（Phase 3）：Views 取代旧 ui/ 机制：
+ * - Stone 级：@stones/{name}/views/{viewName}/frontend.tsx
+ * - Flow  级：@flows/{sid}/objects/{name}/views/{viewName}/frontend.tsx
  *
  * 使用 Vite define 注入的 __OOC_ROOT__ 构建 /@fs/ 绝对 URL，
  * 绕过 @vite-ignore 导致的路径解析问题。
  *
  * UI 加载失败时自动通知对应对象，让对象可以修复代码。
  *
- * @ref docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达
+ * @ref docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达（View 形式）
+ * @ref docs/superpowers/specs/2026-04-21-trait-namespace-views-and-http-methods-design.md#4.8
  */
 import React, { Component, Suspense, useMemo } from "react";
 import { talkTo } from "../api/client";
@@ -30,26 +31,26 @@ function resolveImportPath(aliasPath: string): string {
 
 /** 从 importPath 中提取通知目标信息 */
 function extractUITarget(importPath: string): { objectName: string; flowId?: string } | null {
-  /* Flow UI: @flows/{sid}/objects/{obj}/ui/pages/*.tsx */
+  /* Flow View: @flows/{sid}/objects/{obj}/views/{viewName}/... */
   const flowMatch = importPath.match(/@flows\/([^/]+)\/objects\/([^/]+)/);
   if (flowMatch) return { objectName: flowMatch[2]!, flowId: flowMatch[1]! };
 
-  /* Stone UI: @stones/{name}/ui/index.tsx → talk 给 ReflectFlow */
+  /* Stone View: @stones/{name}/views/... → talk 给对象 */
   const stoneMatch = importPath.match(/@stones\/([^/]+)/);
   if (stoneMatch) return { objectName: stoneMatch[1]! };
 
   return null;
 }
 
-/** 通知对象 UI 加载失败 */
+/** 通知对象 View 加载失败 */
 function notifyUIError(importPath: string, error: string) {
   const target = extractUITarget(importPath);
   if (!target) return;
-  const msg = `[系统通知] 你的 UI 组件加载失败，请修复 ui/index.tsx。\n\n错误信息：\n${error}`;
+  const msg = `[系统通知] 你的 View 组件加载失败，请检查 views/{viewName}/frontend.tsx。\n\n路径：${importPath}\n\n错误信息：\n${error}`;
   talkTo(target.objectName, msg, target.flowId).catch(() => {});
 }
 
-/** Error Boundary for dynamic UI */
+/** Error Boundary for dynamic View */
 interface ErrorBoundaryState {
   hasError: boolean;
   error?: Error;
@@ -73,7 +74,7 @@ class UIErrorBoundary extends Component<
     if (this.state.hasError) {
       return (
         <div className="p-4 text-sm">
-          <p className="text-red-500 font-medium">自渲染 UI 加载失败</p>
+          <p className="text-red-500 font-medium">View 组件加载失败</p>
           {this.state.error && (
             <pre className="mt-2 text-xs text-[var(--muted-foreground)] whitespace-pre-wrap bg-[var(--muted)] p-3 rounded-lg overflow-auto max-h-40">
               {this.state.error.message}
@@ -88,10 +89,11 @@ class UIErrorBoundary extends Component<
 }
 
 /**
- * 通用动态 UI 加载器
+ * 通用动态 View 加载器
  *
- * @param importPath - 相对于 .ooc/web/src/features/ 的 import 路径
- * @param componentProps - 传给加载到的组件的 props
+ * @param importPath - @stones/.../views/{viewName}/frontend.tsx
+ *                     或 @flows/.../views/{viewName}/frontend.tsx
+ * @param componentProps - 传给加载到的组件的 props（通常含 sessionId, objectName, callMethod）
  * @param fallback - 加载失败时的降级视图（可选）
  */
 export function DynamicUI({
@@ -125,7 +127,7 @@ export function DynamicUI({
         return {
           default: () => (
             <div className="p-4 text-sm">
-              <p className="text-red-500 font-medium">自渲染 UI 加载失败</p>
+              <p className="text-red-500 font-medium">View 组件加载失败</p>
               <pre className="mt-2 text-xs text-[var(--muted-foreground)] whitespace-pre-wrap bg-[var(--muted)] p-3 rounded-lg overflow-auto max-h-40">
                 {errorMsg}
               </pre>
@@ -141,7 +143,7 @@ export function DynamicUI({
     <UIErrorBoundary fallback={<div />} importPath={importPath}>
       <Suspense
         fallback={
-          <div className="p-4 text-sm text-muted-foreground">加载自渲染 UI...</div>
+          <div className="p-4 text-sm text-muted-foreground">加载 View 组件...</div>
         }
       >
         <LazyComponent {...componentProps} />

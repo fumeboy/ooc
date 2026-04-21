@@ -13,7 +13,7 @@ import { EffectsTab } from "./EffectsTab";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { ObjectAvatar } from "../components/ui/ObjectAvatar";
 import { cn } from "../lib/utils";
-import { objectUIs, hasCustomUI } from "../objects";
+import { getDefaultView, hasCustomUI } from "../objects";
 import type { StoneData } from "../api/types";
 
 const BASE_TABS = ["Readme", "Data", "Effects"] as const;
@@ -93,9 +93,13 @@ export function ObjectDetail({ objectName, initialTab }: ObjectDetailProps) {
             <MarkdownContent content={stone.memory} />
           </div>
         )}
-        {tab === "UI" && objectUIs[objectName] &&
-          (() => { const CustomUI = objectUIs[objectName]; return <CustomUI objectName={objectName} stone={stone} />; })()
-        }
+        {tab === "UI" && hasCustomUI(objectName) && (() => {
+          /* 新协议：从 objectViews 取默认 view（main 优先） */
+          const CustomUI = getDefaultView(objectName);
+          return CustomUI
+            ? <CustomUI objectName={objectName} stone={stone} sessionId="" callMethod={() => { throw new Error("callMethod not wired in stone-level view yet"); }} />
+            : null;
+        })()}
       </div>
     </div>
   );
