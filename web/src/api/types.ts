@@ -108,6 +108,14 @@ export interface Action {
   form?: TalkFormPayload;
   /** message_in (talk): 对某 form 的结构化回复（仅在 LLM 视角回显时出现） */
   formResponse?: FormResponse;
+  /**
+   * think / talk 的操作模式（2026-04-22 引入）
+   *
+   * 仅当 action 来源是 think / talk 指令（tool_use / message_out / create_thread）时写入。
+   * - "fork": 派生新线程（原线程只读，不被影响）
+   * - "continue": 向原线程投递消息（产生影响，唤醒原线程）
+   */
+  context?: "fork" | "continue";
 }
 
 /** Flow 消息 */

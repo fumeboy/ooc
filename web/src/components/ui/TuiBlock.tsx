@@ -114,6 +114,16 @@ function FullTextModal({ open, onClose, title, content, result }: {
   );
 }
 
+/**
+ * 从 submit args 的旁枝字段推断 command（历史落盘 + 运行时 open/submit 时 command 字段
+ * 可能未落在 action.args 里，这里做兜底，使前端可以识别 think/talk 渲染）
+ */
+function inferCommandFromArgs(args: Record<string, unknown>): string | undefined {
+  if ("context" in args && ("msg" in args || "threadId" in args) && "target" in args) return "talk";
+  if ("context" in args && ("msg" in args || "threadId" in args)) return "think";
+  return undefined;
+}
+
 /* ── inject 内容解析 ── */
 function parseInjectTitle(content: string): { title: string; body: string } {
   const m = content.match(/^>>>\s*\[系统提示 — ([^\|\]]+)(?:\s*\|\s*([^\]]+))?\]\s*(\n|$)/);
@@ -146,6 +156,15 @@ export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionP
   const [expanded, setExpanded] = useState(!isInject);
   const [modalOpen, setModalOpen] = useState(false);
 
+  /* think/talk 的 context/threadId 徽章（submit 时 args 中含有） */
+  const args = (action.args ?? {}) as Record<string, unknown>;
+  const submitCommand = isToolUse && action.name === "submit"
+    ? (args["command"] as string | undefined) ?? inferCommandFromArgs(args)
+    : undefined;
+  const isThinkOrTalk = submitCommand === "think" || submitCommand === "talk" || submitCommand === "talk_sync";
+  const ctx = args["context"] as ("fork" | "continue" | undefined);
+  const threadIdArg = args["threadId"] as (string | undefined);
+
   /* tool_use: 显示工具名+参数摘要 */
   const toolLabel = isToolUse && action.name
     ? `${action.name}(${Object.keys(action.args ?? {}).slice(0, 3).join(", ")}${Object.keys(action.args ?? {}).length > 3 ? "..." : ""})`
@@ -174,6 +193,19 @@ export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionP
       >
         <span className={cn("shrink-0 select-none", cfg.color)}>{cfg.prefix}</span>
         <span className={cn("shrink-0 font-semibold", cfg.color)}>{cfg.label}</span>
+        {/* think/talk 徽章：显示 command + fork|continue + threadId 摘要 */}
+        {isThinkOrTalk && (
+          <span
+            className={cn(
+              "shrink-0 px-1 py-px rounded text-[10px] font-mono",
+              ctx === "continue" ? "bg-teal-500/20 text-teal-400" : "bg-blue-500/20 text-blue-400",
+            )}
+          >
+            {submitCommand}
+            {ctx ? `·${ctx}` : ""}
+            {threadIdArg ? `·${threadIdArg.slice(0, 12)}` : ""}
+          </span>
+        )}
         {hasTitle ? (
           <>
             {/* 主标题：tool call 的自叙行动标题 */}
