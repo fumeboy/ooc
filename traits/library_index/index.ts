@@ -152,3 +152,25 @@ export function listLibrarySkills(_ctx: { rootDir: string }): string[] {
 export function readLibrarySkill(_ctx: { rootDir: string }, name: string): string {
   return `[错误] 已废弃的 API，请使用 readTrait("${name}") 替代`;
 }
+
+// ========== Phase 2 新协议：llm_methods 对象导出 ==========
+
+import type { TraitMethod } from "../../src/types/index";
+
+export const llm_methods: Record<string, TraitMethod> = {
+  listLibraryTraits: {
+    name: "listLibraryTraits",
+    description: "列出 library 中的所有 trait（name 格式 namespace/name）",
+    params: [],
+    fn: ((ctx: { rootDir: string }) => listLibraryTraits(ctx)) as TraitMethod["fn"],
+  },
+  searchLibrary: {
+    name: "searchLibrary",
+    description: "按关键词在 library 中搜索 trait",
+    params: [{ name: "keyword", type: "string", description: "关键词", required: true }],
+    fn: ((ctx: { rootDir: string }, { keyword }: { keyword: string }) =>
+      searchLibrary(ctx, keyword)) as TraitMethod["fn"],
+  },
+};
+
+export const ui_methods: Record<string, TraitMethod> = {};
