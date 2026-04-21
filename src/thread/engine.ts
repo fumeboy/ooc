@@ -157,6 +157,55 @@ function genMessageOutId(): string {
 }
 
 /**
+ * 生成 talk form 的 formId
+ *
+ * 格式 `form_<timestamp36>_<rand>`。与 activeForms 的 formId（`f_` 前缀）区分——
+ * 后者是 engine 内部的 command form 生命周期，这个是 talk 消息级结构化表单，
+ * 独立生命周期。
+ */
+function genTalkFormId(): string {
+  return `form_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/**
+ * 从 submit args 中提取并标准化 talk form payload
+ *
+ * LLM 可能给出部分字段缺失的 form（如漏 allow_free_text），此处兜底默认值。
+ * 返回 null 表示 form 字段缺失/无效，engine 应当退回为普通 talk。
+ *
+ * @param raw - submit args 中 form 字段的原值
+ * @returns 带生成 formId 的标准化 TalkFormPayload，或 null
+ */
+function extractTalkForm(raw: unknown): import("./types.js").TalkFormPayload | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const type = r.type;
+  if (type !== "single_choice" && type !== "multi_choice") return null;
+  const rawOptions = r.options;
+  if (!Array.isArray(rawOptions) || rawOptions.length === 0) return null;
+  const options: import("./types.js").TalkFormOption[] = [];
+  for (const opt of rawOptions) {
+    if (!opt || typeof opt !== "object") continue;
+    const o = opt as Record<string, unknown>;
+    if (typeof o.id !== "string" || typeof o.label !== "string") continue;
+    options.push({
+      id: o.id,
+      label: o.label,
+      detail: typeof o.detail === "string" ? o.detail : undefined,
+    });
+  }
+  if (options.length === 0) return null;
+  /* allow_free_text 业务上恒 true，LLM 传什么都不影响 */
+  const allowFreeText = typeof r.allow_free_text === "boolean" ? r.allow_free_text : true;
+  return {
+    formId: genTalkFormId(),
+    type,
+    options,
+    allow_free_text: allowFreeText,
+  };
+}
+
+/**
  * 把 TalkResult（线程树执行产物）落盘为 data.json + 封装为 TalkReturn
  *
  * 线程树路径下 world.talk()/resumeFlow()/stepOnce() 统一通过此函数构造返回值。
@@ -1096,10 +1145,19 @@ export async function runWithThreadTree(
                 const continueThreadId = args.continue_thread as string | undefined;
                 /* 先生成 messageId（供 action.id 和 onTalk 参数共用，前端凭此反查正文） */
                 const messageId = genMessageOutId();
+                /* 解析可选的结构化表单（talk form）——供前端渲染 option picker */
+                const formPayload = extractTalkForm(args.form);
                 const td = tree.readThreadData(threadId);
                 if (td) {
                   const continueLabel = continueThreadId ? ` (continue: ${continueThreadId})` : "";
-                  td.actions.push({ id: messageId, type: "message_out", content: `[talk] → ${args.target}: ${args.message}${continueLabel}`, timestamp: Date.now() });
+                  const formLabel = formPayload ? ` [form: ${formPayload.formId}]` : "";
+                  td.actions.push({
+                    id: messageId,
+                    type: "message_out",
+                    content: `[talk] → ${args.target}: ${args.message}${continueLabel}${formLabel}`,
+                    timestamp: Date.now(),
+                    ...(formPayload ? { form: formPayload } : {}),
+                  });
                   tree.writeThreadData(threadId, td);
                 }
                 /* talk_sync 到 user 是死锁：user 永远不会唤醒。记日志、不 setNodeStatus("waiting")、直接继续。 */
@@ -2008,10 +2066,19 @@ export async function resumeWithThreadTree(
                 const continueThreadId = args.continue_thread as string | undefined;
                 /* 先生成 messageId（供 action.id 和 onTalk 参数共用，前端凭此反查正文） */
                 const messageId = genMessageOutId();
+                /* 解析可选的结构化表单（talk form）——供前端渲染 option picker */
+                const formPayload = extractTalkForm(args.form);
                 const td = tree.readThreadData(threadId);
                 if (td) {
                   const continueLabel = continueThreadId ? ` (continue: ${continueThreadId})` : "";
-                  td.actions.push({ id: messageId, type: "message_out", content: `[talk] → ${args.target}: ${args.message}${continueLabel}`, timestamp: Date.now() });
+                  const formLabel = formPayload ? ` [form: ${formPayload.formId}]` : "";
+                  td.actions.push({
+                    id: messageId,
+                    type: "message_out",
+                    content: `[talk] → ${args.target}: ${args.message}${continueLabel}${formLabel}`,
+                    timestamp: Date.now(),
+                    ...(formPayload ? { form: formPayload } : {}),
+                  });
                   tree.writeThreadData(threadId, td);
                 }
                 /* talk_sync 到 user 是死锁：user 永远不会唤醒。记日志、不 setNodeStatus("waiting")、直接继续。 */
