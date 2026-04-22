@@ -459,7 +459,7 @@ export async function handleRoute(
 
   /* GET /api/sessions/:sessionId/objects — 获取 session 中的所有对象 */
   if (method === "GET" && path.startsWith("/api/sessions/") && path.endsWith("/objects")) {
-    const sessionId = path.split("/")[3];
+    const sessionId = path.split("/")[3]!;
     const objectsDir = join(world.flowsDir, sessionId, "objects");
 
     if (!existsSync(objectsDir)) {
@@ -483,18 +483,18 @@ export async function handleRoute(
   /* GET /api/sessions/:sessionId/objects/:objectName/process — 获取对象的 process 数据 */
   if (method === "GET" && path.match(/^\/api\/sessions\/[^/]+\/objects\/[^/]+\/process$/)) {
     const parts = path.split("/");
-    const sessionId = parts[3];
-    const objectName = parts[5];
+    const sessionId = parts[3]!;
+    const objectName = parts[5]!;
     const objectFlowDir = join(world.flowsDir, sessionId, "objects", objectName);
 
     if (!existsSync(objectFlowDir)) {
-      return json({ success: false, error: "Object not found" }, { status: 404 });
+      return json({ success: false, error: "Object not found" }, 404);
     }
 
     const process = threadsToProcess(objectFlowDir);
 
     if (!process) {
-      return json({ success: false, error: "Process data not available" }, { status: 404 });
+      return json({ success: false, error: "Process data not available" }, 404);
     }
 
     return json({ success: true, data: process });
