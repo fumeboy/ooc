@@ -111,7 +111,7 @@ export const OPEN_TOOL: ToolDefinition = {
         },
         path: {
           type: "string",
-          description: "文件路径（type=file 时必填，相对于项目根目录）",
+          description: "文件路径（type=file 时必填）。支持三种形式：\n- 普通相对路径（相对项目根目录）：如 `docs/哲学文档/gene.md`\n- 虚拟路径 `@trait:<ns>/<name>`：读某个 trait 的 TRAIT.md（ns = kernel / library / self）。例：`@trait:kernel/talkable`\n- 虚拟路径 `@relation:<peer>`：读当前对象与对方的关系文件。例：`@relation:supervisor`",
         },
         lines: {
           type: "number",

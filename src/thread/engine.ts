@@ -27,6 +27,7 @@ import { getActiveTraits, traitId } from "../trait/activator.js";
 import { FormManager } from "./form.js";
 import { collectCommandTraits, collectCommandHooks } from "./hooks.js";
 import { buildAvailableTools } from "./tools.js";
+import { resolveVirtualPath, isVirtualPath } from "./virtual-path.js";
 import { runBuildHooks } from "../world/hooks.js";
 
 import type { LLMClient, Message, ToolCall } from "../thinkable/client.js";
@@ -242,6 +243,35 @@ function genMessageOutId(): string {
  */
 function genTalkFormId(): string {
   return `form_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/**
+ * 解析 open(path=...) 的路径（支持虚拟路径 @trait:... / @relation:...）
+ *
+ * 在 engine 的 run / resume 两条路径共用。
+ *
+ * @param rawPath  LLM 传入的原始 path 字符串
+ * @param rootDir  项目根目录
+ * @param selfName 当前对象名（用于 @trait:self/... 与 @relation:...）
+ * @param stoneDir 当前对象的 stone 目录；用于从路径嗅探 selfKind（目前仅支持 stone，
+ *                 flow_obj 由 Phase 7 的对称扩展接入）
+ * @returns { resolved, isVirtual, kind }：resolved=绝对路径（null=无法解析），
+ *          isVirtual=是否虚拟路径，kind="trait"|"relation"|"file"
+ */
+function resolveOpenFilePath(
+  rawPath: string,
+  rootDir: string,
+  selfName: string,
+  _stoneDir?: string,
+): { resolved: string | null; isVirtual: boolean; kind: "trait" | "relation" | "file" } {
+  const virtual = isVirtualPath(rawPath);
+  const resolved = resolveVirtualPath(rawPath, { rootDir, selfName, selfKind: "stone" });
+  let kind: "trait" | "relation" | "file" = "file";
+  if (virtual) {
+    if (rawPath.startsWith("@trait:")) kind = "trait";
+    else if (rawPath.startsWith("@relation:")) kind = "relation";
+  }
+  return { resolved, isVirtual: virtual, kind };
 }
 
 /**
@@ -1416,19 +1446,33 @@ export async function runWithThreadTree(
             consola.info(`[Engine] open skill: ${skillName} → ${formId}`);
 
           } else if (openType === "file" && args.path) {
-            // 文件读取：读取文件内容到 context window
+            /* 文件读取：支持虚拟路径 @trait:... / @relation:... / 普通相对路径 */
             const filePath = args.path as string;
             const linesLimit = args.lines as number | undefined;
             const rootDir = config.paths?.rootDir ?? config.rootDir;
-            const resolved = resolve(rootDir, filePath);
 
-            if (!existsSync(resolved)) {
+            const { resolved, isVirtual, kind } = resolveOpenFilePath(filePath, rootDir, objectName);
+            if (!resolved) {
               const td = tree.readThreadData(threadId);
               if (td) {
-                td.actions.push({ type: "inject", content: `[错误] 文件 "${filePath}" 不存在`, timestamp: Date.now() });
+                td.actions.push({
+                  type: "inject",
+                  content: `[错误] 路径 "${filePath}" 无法解析（未知虚拟前缀或格式错误）`,
+                  timestamp: Date.now(),
+                });
                 tree.writeThreadData(threadId, td);
               }
-              consola.warn(`[Engine] open file: ${filePath} not found`);
+              consola.warn(`[Engine] open file: ${filePath} unresolved`);
+            } else if (!existsSync(resolved)) {
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                const hint = isVirtual
+                  ? `[错误] 虚拟路径 "${filePath}" 指向的文件不存在（${resolved}）`
+                  : `[错误] 文件 "${filePath}" 不存在`;
+                td.actions.push({ type: "inject", content: hint, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+              consola.warn(`[Engine] open file: ${filePath} not found (resolved=${resolved})`);
             } else {
               let content = readFileSync(resolved, "utf-8");
               if (linesLimit && linesLimit > 0) {
@@ -1439,6 +1483,7 @@ export async function runWithThreadTree(
                 }
               }
 
+              /* window 的 key 用 LLM 原始输入（包括虚拟路径本身），便于 LLM 识别 / close 时反查 */
               const formId = formManager.begin("_file", description, { trait: filePath });
               const td = tree.readThreadData(threadId);
               if (td) {
@@ -1450,10 +1495,15 @@ export async function runWithThreadTree(
                   updatedAt: Date.now(),
                 };
                 td.activeForms = formManager.toData();
-                td.actions.push({ type: "inject", content: `文件 "${filePath}" 已加载到上下文窗口。${linesLimit ? `（前 ${linesLimit} 行）` : ""}`, timestamp: Date.now() });
+                const kindLabel = kind === "trait" ? "Trait" : kind === "relation" ? "关系文件" : "文件";
+                td.actions.push({
+                  type: "inject",
+                  content: `${kindLabel} "${filePath}" 已加载到上下文窗口。${linesLimit ? `（前 ${linesLimit} 行）` : ""}`,
+                  timestamp: Date.now(),
+                });
                 tree.writeThreadData(threadId, td);
               }
-              consola.info(`[Engine] open file: ${filePath}${linesLimit ? ` (${linesLimit} lines)` : ""} → ${formId}`);
+              consola.info(`[Engine] open ${kind}: ${filePath}${linesLimit ? ` (${linesLimit} lines)` : ""} → ${formId}`);
             }
           }
         }
@@ -2687,15 +2737,21 @@ export async function resumeWithThreadTree(
             consola.info(`[Engine] open skill: ${skillName} → ${formId}`);
 
           } else if (openType === "file" && args.path) {
+            /* resume 路径同 run 路径：支持虚拟路径 @trait:... / @relation:... */
             const filePath = args.path as string;
             const linesLimit = args.lines as number | undefined;
             const rootDir = config.paths?.rootDir ?? config.rootDir;
-            const resolved = resolve(rootDir, filePath);
 
-            if (!existsSync(resolved)) {
+            const { resolved, isVirtual, kind } = resolveOpenFilePath(filePath, rootDir, objectName);
+            if (!resolved) {
               const td = tree.readThreadData(threadId);
-              if (td) { td.actions.push({ type: "inject", content: `[错误] 文件 "${filePath}" 不存在`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
-              consola.warn(`[Engine] open file: ${filePath} not found`);
+              if (td) { td.actions.push({ type: "inject", content: `[错误] 路径 "${filePath}" 无法解析（未知虚拟前缀或格式错误）`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+              consola.warn(`[Engine] open file: ${filePath} unresolved (resume)`);
+            } else if (!existsSync(resolved)) {
+              const td = tree.readThreadData(threadId);
+              const hint = isVirtual ? `[错误] 虚拟路径 "${filePath}" 指向的文件不存在（${resolved}）` : `[错误] 文件 "${filePath}" 不存在`;
+              if (td) { td.actions.push({ type: "inject", content: hint, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+              consola.warn(`[Engine] open file: ${filePath} not found (resume, resolved=${resolved})`);
             } else {
               let content = readFileSync(resolved, "utf-8");
               if (linesLimit && linesLimit > 0) {
@@ -2709,10 +2765,11 @@ export async function resumeWithThreadTree(
                 if (!td.windows) td.windows = {};
                 td.windows[filePath] = { name: filePath, content, formId, updatedAt: Date.now() };
                 td.activeForms = formManager.toData();
-                td.actions.push({ type: "inject", content: `文件 "${filePath}" 已加载到上下文窗口。${linesLimit ? `（前 ${linesLimit} 行）` : ""}`, timestamp: Date.now() });
+                const kindLabel = kind === "trait" ? "Trait" : kind === "relation" ? "关系文件" : "文件";
+                td.actions.push({ type: "inject", content: `${kindLabel} "${filePath}" 已加载到上下文窗口。${linesLimit ? `（前 ${linesLimit} 行）` : ""}`, timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
               }
-              consola.info(`[Engine] open file: ${filePath}${linesLimit ? ` (${linesLimit} lines)` : ""} → ${formId}`);
+              consola.info(`[Engine] open ${kind}: ${filePath}${linesLimit ? ` (${linesLimit} lines)` : ""} → ${formId} (resume)`);
             }
           }
 
