@@ -7,10 +7,20 @@
  * 所有路径支持相对路径（相对于 ctx.rootDir）和绝对路径。
  */
 
-import { resolve } from "path";
+import { resolve, join } from "path";
 import { toolOk, toolErr } from "../../../src/types/tool-result";
 import type { ToolResult } from "../../../src/types/tool-result";
 import type { TraitMethod } from "../../../src/types/index";
+import {
+  createEditPlan,
+  readEditPlan,
+  previewEditPlan,
+  applyEditPlan,
+  cancelEditPlan,
+  type EditChange,
+  type EditPlan,
+  type ApplyResult,
+} from "../../../src/persistence/edit-plans";
 
 /** 路径解析：绝对路径直接用，相对路径基于 rootDir */
 const resolvePath = (rootDir: string, p: string) =>
@@ -250,6 +260,105 @@ async function deleteFileImpl(
   }
 }
 
+/* ========== 多文件 Transaction（Edit Plan） ========== */
+
+/** 从 ctx 推断 flowsRoot：默认 `${rootDir}/flows`；若已有 ctx.flowsRoot 则优先 */
+function inferFlowsRoot(ctx: any): string | undefined {
+  if (ctx?.flowsRoot && typeof ctx.flowsRoot === "string") return ctx.flowsRoot;
+  if (ctx?.rootDir) return join(ctx.rootDir, "flows");
+  return undefined;
+}
+
+/**
+ * 创建 edit plan（不真写，返回 plan_id + preview）
+ */
+async function planEditsImpl(
+  ctx: { rootDir?: string; sessionId?: string } & any,
+  { changes }: { changes: EditChange[] },
+): Promise<ToolResult<{ planId: string; changesCount: number; preview: string }>> {
+  const rootDir = ctx.rootDir ?? "";
+  if (!rootDir) return toolErr("rootDir 未设置");
+  try {
+    const plan = await createEditPlan({
+      rootDir,
+      changes,
+      sessionId: ctx.sessionId,
+      flowsRoot: inferFlowsRoot(ctx),
+    });
+    const preview = await previewEditPlan(plan);
+    return toolOk({ planId: plan.planId, changesCount: plan.changes.length, preview });
+  } catch (err: any) {
+    return toolErr(`plan_edits 失败: ${err?.message ?? String(err)}`);
+  }
+}
+
+/**
+ * 预览 edit plan 的 unified diff
+ */
+async function previewEditPlanImpl(
+  ctx: { rootDir?: string; sessionId?: string } & any,
+  { planId }: { planId: string },
+): Promise<ToolResult<{ plan: EditPlan; preview: string }>> {
+  try {
+    const plan = await readEditPlan(planId, {
+      sessionId: ctx.sessionId,
+      flowsRoot: inferFlowsRoot(ctx),
+    });
+    if (!plan) return toolErr(`plan 不存在: ${planId}`);
+    const preview = await previewEditPlan(plan);
+    return toolOk({ plan, preview });
+  } catch (err: any) {
+    return toolErr(`preview_edit_plan 失败: ${err?.message ?? String(err)}`);
+  }
+}
+
+/**
+ * 原子应用 edit plan；任一失败全部回滚
+ */
+async function applyEditsImpl(
+  ctx: { rootDir?: string; sessionId?: string } & any,
+  { planId }: { planId: string },
+): Promise<ToolResult<ApplyResult>> {
+  try {
+    const plan = await readEditPlan(planId, {
+      sessionId: ctx.sessionId,
+      flowsRoot: inferFlowsRoot(ctx),
+    });
+    if (!plan) return toolErr(`plan 不存在: ${planId}`);
+    const result = await applyEditPlan(plan, {
+      sessionId: ctx.sessionId,
+      flowsRoot: inferFlowsRoot(ctx),
+    });
+    if (!result.ok) return toolErr(result.error ?? "apply 失败", JSON.stringify(result.perChange, null, 2));
+    return toolOk(result);
+  } catch (err: any) {
+    return toolErr(`apply_edits 失败: ${err?.message ?? String(err)}`);
+  }
+}
+
+/**
+ * 取消 edit plan
+ */
+async function cancelEditsImpl(
+  ctx: { rootDir?: string; sessionId?: string } & any,
+  { planId }: { planId: string },
+): Promise<ToolResult<{ status: string }>> {
+  try {
+    const plan = await readEditPlan(planId, {
+      sessionId: ctx.sessionId,
+      flowsRoot: inferFlowsRoot(ctx),
+    });
+    if (!plan) return toolErr(`plan 不存在: ${planId}`);
+    const cancelled = await cancelEditPlan(plan, {
+      sessionId: ctx.sessionId,
+      flowsRoot: inferFlowsRoot(ctx),
+    });
+    return toolOk({ status: cancelled.status });
+  } catch (err: any) {
+    return toolErr(`cancel_edits 失败: ${err?.message ?? String(err)}`);
+  }
+}
+
 /* ========== 兼容导出（位置参数）：单元测试和内部直接调用用 ========== */
 
 export const readFile = (ctx: any, path: string, options?: { offset?: number; limit?: number }) =>
@@ -282,6 +391,19 @@ export const fileExists = (ctx: any, path: string) => fileExistsImpl(ctx, { path
 
 export const deleteFile = (ctx: any, path: string, options?: { recursive?: boolean }) =>
   deleteFileImpl(ctx, { path, recursive: options?.recursive });
+
+/** 位置参数形式：创建 edit plan */
+export const planEdits = (ctx: any, changes: EditChange[]) => planEditsImpl(ctx, { changes });
+
+/** 位置参数形式：预览 */
+export const previewEditPlanMethod = (ctx: any, planId: string) =>
+  previewEditPlanImpl(ctx, { planId });
+
+/** 位置参数形式：应用 */
+export const applyEdits = (ctx: any, planId: string) => applyEditsImpl(ctx, { planId });
+
+/** 位置参数形式：取消 */
+export const cancelEdits = (ctx: any, planId: string) => cancelEditsImpl(ctx, { planId });
 
 /* ========== Phase 2 新协议：llm_methods 对象导出（供沙箱 callMethod 使用） ========== */
 
@@ -341,6 +463,38 @@ export const llm_methods: Record<string, TraitMethod> = {
       { name: "recursive", type: "boolean", description: "递归删除目录（默认 false）", required: false },
     ],
     fn: deleteFileImpl as TraitMethod["fn"],
+  },
+  plan_edits: {
+    name: "plan_edits",
+    description: "创建多文件编辑计划（不真写），返回 planId + unified diff 预览",
+    params: [
+      {
+        name: "changes",
+        type: "array",
+        description:
+          '变更列表。每项：{ kind: "edit"|"write", path, oldText?, newText?, replaceAll?, newContent? }',
+        required: true,
+      },
+    ],
+    fn: planEditsImpl as TraitMethod["fn"],
+  },
+  preview_edit_plan: {
+    name: "preview_edit_plan",
+    description: "预览 edit plan 的 unified diff",
+    params: [{ name: "planId", type: "string", description: "plan id", required: true }],
+    fn: previewEditPlanImpl as TraitMethod["fn"],
+  },
+  apply_edits: {
+    name: "apply_edits",
+    description: "原子应用 edit plan；任一失败全部回滚",
+    params: [{ name: "planId", type: "string", description: "plan id", required: true }],
+    fn: applyEditsImpl as TraitMethod["fn"],
+  },
+  cancel_edits: {
+    name: "cancel_edits",
+    description: "取消 edit plan（仅 pending 状态）",
+    params: [{ name: "planId", type: "string", description: "plan id", required: true }],
+    fn: cancelEditsImpl as TraitMethod["fn"],
   },
 };
 

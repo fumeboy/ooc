@@ -246,3 +246,41 @@ describe("deleteFile", () => {
     expect(exists).toBe(false);
   });
 });
+
+// ─── Edit Plan Transaction ───────────────────────────────
+
+describe("plan_edits / apply_edits", () => {
+  test("通过 trait ctx 创建 plan 并应用", async () => {
+    const { planEdits, applyEdits, previewEditPlanMethod } = await import(
+      "../traits/computable/file_ops/index"
+    );
+    const planDir = join(tempDir, "plan-work");
+    await mkdir(planDir, { recursive: true });
+    await fsWriteFile(join(planDir, "a.ts"), "export const A = 1;\n");
+    await fsWriteFile(join(planDir, "b.ts"), "export const B = 2;\n");
+
+    const planCtx = { rootDir: planDir, sessionId: "trait-test" };
+    const planRes = await planEdits(planCtx, [
+      { kind: "edit", path: "a.ts", oldText: "A = 1", newText: "A = 100" },
+      { kind: "edit", path: "b.ts", oldText: "B = 2", newText: "B = 200" },
+    ]);
+    expect(planRes.ok).toBe(true);
+    if (!planRes.ok) return;
+    expect(planRes.data.changesCount).toBe(2);
+    expect(planRes.data.preview).toContain("--- a/a.ts");
+
+    const prev = await previewEditPlanMethod(planCtx, planRes.data.planId);
+    expect(prev.ok).toBe(true);
+
+    const apply = await applyEdits(planCtx, planRes.data.planId);
+    expect(apply.ok).toBe(true);
+    if (!apply.ok) return;
+    expect(apply.data.applied).toBe(2);
+
+    const { readFile: fsReadFile } = await import("fs/promises");
+    const a = await fsReadFile(join(planDir, "a.ts"), "utf-8");
+    expect(a).toContain("A = 100");
+    const b = await fsReadFile(join(planDir, "b.ts"), "utf-8");
+    expect(b).toContain("B = 200");
+  });
+});

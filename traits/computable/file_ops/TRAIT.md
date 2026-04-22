@@ -94,9 +94,44 @@ await deleteFile("temp/output.txt");
 await deleteFile("temp/", { recursive: true });
 ```
 
+## 多文件事务（Edit Plan）
+
+跨多个文件做原子性重构时，使用 plan → preview → apply 三段式 API，避免半改动态。
+
+### plan_edits({ changes })
+
+创建编辑计划（不真写），返回 `{ planId, changesCount, preview }`。
+
+`changes` 是数组，每项两种形态：
+
+```javascript
+// 局部替换
+{ kind: "edit", path: "src/a.ts", oldText: "old", newText: "new", replaceAll: false }
+
+// 整文件覆盖（新建或替换）
+{ kind: "write", path: "src/new.ts", newContent: "export const N = 9;\n" }
+```
+
+### preview_edit_plan({ planId })
+
+返回 `{ plan, preview }`，`preview` 是 unified-diff 风格的字符串。
+
+### apply_edits({ planId })
+
+原子应用：
+
+- 先读所有文件的 snapshot
+- 预计算所有 change 的新内容；任一预计算失败（如匹配不到 oldText）→ 整个 apply 失败，不写任何文件
+- 预计算通过后逐文件写盘；任一写盘失败 → 按 snapshot 回滚已写部分
+
+### cancel_edits({ planId })
+
+取消 pending 状态的 plan。
+
 ## 注意事项
 
 1. 所有路径可以是相对路径（相对于对象的 rootDir）或绝对路径
 2. readFile 返回带行号的格式化文本，方便定位代码
 3. editFile 找不到匹配时会返回上下文片段，帮助你修正搜索文本
 4. writeFile 会自动创建不存在的父目录
+5. plan 持久化在 `flows/{sessionId}/edit-plans/{planId}.json`；无 sessionId 时降级到 `/tmp/ooc-edit-plans/`
