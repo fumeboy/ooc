@@ -29,6 +29,8 @@ import type {
 import { getAncestorPath } from "./persistence.js";
 import { resolveTraitRef } from "../trait/activator.js";
 import { getOpenFiles } from "./open-files.js";
+import { scanPeers } from "./peers.js";
+import { readPeerRelations, type PeerRelationEntry } from "./relation.js";
 import { getBuildFeedback, formatFeedbackForContext } from "../world/hooks.js";
 import { existsSync, readFileSync } from "node:fs";
 import { join as pathJoin } from "node:path";
@@ -83,6 +85,16 @@ export interface ThreadContext {
   paths?: Record<string, string>;
   /** 线程状态 */
   status: ThreadStatus;
+
+  /**
+   * <relations> 索引条目（Phase 5 新增）
+   *
+   * 由 target 阶段扫描当前线程 peers + 读取 relations/ 文件降级链生成。
+   * 空数组表示无 peer，调用方可省略整个块；每项含 peer name + 索引行摘要 +
+   * hasFile 标记（可用于区分缺失与存在但空）。XML 渲染在 engine 的
+   * contextToMessages 里完成，便于与其他 user 子节点统一缩进。
+   */
+  relations: PeerRelationEntry[];
 }
 
 /** buildThreadContext 的输入参数 */
@@ -283,6 +295,23 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
   }
   /* else: root 线程，creator = "user", creationMode = "root" */
 
+  /* 8. <relations> 索引条目（Phase 5 target 阶段）
+   *
+   * 扫描当前线程涉及的 peer 对象，读 relations/{peer}.md 的 summary 降级链
+   * 生成结构化条目。XML 渲染由 engine.contextToMessages 负责，保持与 user 其他
+   * 子节点统一缩进。LLM 若需全文再 open(path="@relation:<peer>") 主动读。
+   * rootDir 取自 paths.rootDir（与 virtual-path 同源）；缺失时降级为空列表。 */
+  let relations: PeerRelationEntry[] = [];
+  const rootDir = paths?.rootDir;
+  if (rootDir) {
+    const peers = scanPeers(threadData, stone.name);
+    relations = readPeerRelations(peers, {
+      rootDir,
+      selfName: stone.name,
+      selfKind: "stone",
+    });
+  }
+
   return {
     name: stone.name,
     whoAmI: stone.thinkable.whoAmI,
@@ -303,6 +332,7 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
     scopeChain,
     paths,
     status: nodeMeta.status,
+    relations,
   };
 }
 

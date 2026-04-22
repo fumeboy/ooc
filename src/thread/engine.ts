@@ -701,6 +701,23 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>, deferHook
     });
   }
 
+  /* <relations> 索引（Phase 5 target 阶段）
+   *
+   * 仅列出本线程涉及的 peer 对象的一行式关系摘要。LLM 若需全文再
+   * open(path="@relation:<peer>") 主动读。缺失 relation 文件的 peer 也会
+   * 显示 "(无关系记录)"，让 LLM 感知"存在但未登记"的缺口。 */
+  if (ctx.relations && ctx.relations.length > 0) {
+    userChildren.push({
+      tag: "relations",
+      comment: "关系索引：本线程已涉及的对象的关系摘要（一行）；需全文用 open(path=\"@relation:<peer>\")",
+      children: ctx.relations.map(r => ({
+        tag: "peer",
+        attrs: { name: r.name },
+        content: r.summary,
+      })),
+    });
+  }
+
   /* 沙箱路径 */
   if (ctx.paths && Object.keys(ctx.paths).length > 0) {
     userChildren.push({ tag: "paths", content: JSON.stringify(ctx.paths) });
