@@ -35,7 +35,24 @@ export function useSSE() {
   const activeSessionIdRef = useRef(activeSessionId);
   activeSessionIdRef.current = activeSessionId;
 
+  /* StrictMode 防御：缓存当前活跃的 disconnect 句柄
+   *
+   * React StrictMode dev 双 mount 会跑两次 effect。原实现每次都新建 EventSource，
+   * 即使 cleanup 关旧的，也存在微秒级竞态窗口（短时间双连接、双倍事件）。
+   *
+   * 用 ref 跟踪：进入 effect 前先关掉上一次还活着的连接，再建新的。
+   * cleanup 时仅当 ref 仍指向自己时才执行关闭——避免 StrictMode 第二次 mount
+   * 关掉自己刚建好的连接。 */
+  const sseDisconnectRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
+    /* 严格防御：进入前若有活跃连接，先关闭 */
+    if (sseDisconnectRef.current) {
+      sseDisconnectRef.current();
+      sseDisconnectRef.current = null;
+    }
+
+
     /* 防止并发 fetchObjects 竞争：只应用最新请求的结果 */
     let objectsFetchId = 0;
     const refreshObjects = () => {
@@ -53,6 +70,8 @@ export function useSSE() {
         if (id === sessionsFetchId) setSessions(data);
       }).catch(console.error);
     };
+
+    let myDisconnect: (() => void) | null = null;
 
     const disconnect = connectSSE((event) => {
       switch (event.type) {
@@ -233,9 +252,19 @@ export function useSSE() {
       }
     });
 
+    myDisconnect = disconnect;
+    sseDisconnectRef.current = disconnect;
+
     return () => {
+      /* 仅当 ref 还指向本次 effect 建立的连接时才关——避免 StrictMode 第二次 mount
+       * 时关掉新连接（第一次 cleanup 跑在第二次 setup 之后） */
+      if (sseDisconnectRef.current === myDisconnect) {
+        sseDisconnectRef.current = null;
+      }
       disconnect();
       setConnected(false);
     };
+    /* 依赖故意只填 setAtom 函数（jotai 保证稳定 ref）；activeSessionId 通过 ref 读，
+     * 避免 sid 变化时重连（重连会丢失中途事件） */
   }, [setConnected, setObjects, setSessions, setLastFlowEvent, setStreamingThought, setStreamingTalk, setStreamingProgram, setStreamingAction, setStreamingStackPush, setStreamingStackPop, setStreamingSetPlan, setFlowProgress]);
 }
