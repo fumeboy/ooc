@@ -18,7 +18,7 @@ import { collectAllActions } from "../process/tree.js";
 import { loadTrait } from "../trait/loader.js";
 import { threadsToProcess } from "../persistence/thread-adapter.js";
 import type { World } from "../world/index.js";
-import type { FlowStatus, FlowMessage, Process, ProcessNode, Action } from "../types/index.js";
+import type { FlowStatus, FlowMessage, Process, ProcessNode, Action, FlowData } from "../types/index.js";
 
 /**
  * 动态摘要最大字符长度（超过截断追加省略号）
@@ -86,6 +86,41 @@ function computeCurrentAction(process: Process | undefined | null): string | und
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   return s.slice(0, Math.max(0, max - 1)) + "…";
+}
+
+/**
+ * 根据对象的 threads.json 推断实时 Flow 状态
+ *
+ * 背景：线程树架构下，engine 仅在执行完成后才写 objects/{name}/data.json；
+ * 执行过程中 data.json 的 status 可能还是上一次 finish 值。
+ * 但 threads.json 是**每次 action 都增量更新**的（tree.writeThreadData），
+ * 因此优先读 threads.json 判断当前是否还有 running/waiting 节点——
+ * 有则 override subFlow.status 为 "running"，让前端 SessionKanban 的
+ * "正在 XX" 提示能在 running 期间可靠显示。
+ *
+ * @param objectFlowDir - flows/{sessionId}/objects/{objectName} 目录
+ * @param dataStatus - data.json 中原始 status（作为 fallback）
+ * @returns 合成后的 FlowStatus
+ */
+function inferLiveFlowStatus(objectFlowDir: string, dataStatus: FlowStatus): FlowStatus {
+  const treePath = join(objectFlowDir, "threads.json");
+  if (!existsSync(treePath)) return dataStatus;
+  try {
+    const tree = JSON.parse(readFileSync(treePath, "utf-8")) as {
+      rootId?: string;
+      nodes?: Record<string, { status?: string }>;
+    };
+    if (!tree.nodes) return dataStatus;
+    /* 有任何 running/waiting 节点 → 认为 flow 还在活跃 */
+    for (const node of Object.values(tree.nodes)) {
+      if (node.status === "running" || node.status === "waiting") {
+        return "running";
+      }
+    }
+    return dataStatus;
+  } catch {
+    return dataStatus;
+  }
 }
 
 /**
@@ -590,40 +625,82 @@ export async function handleRoute(
       flow = readFlow(sessionDir);
     }
     if (!flow) {
-      /* session 目录存在但 flow 数据尚未写入（竞态：异步执行中） */
+      /* session 目录存在但 flow 数据尚未写入（竞态：异步执行中）。
+         构造一个"占位 flow"让下游 subFlows 聚合逻辑继续执行——
+         这样 running session 即便 data.json 还没落盘，前端也能从
+         threads.json 合成的 subFlows 拿到 currentAction。 */
       if (existsSync(sessionDir)) {
-        return json({ success: true, data: { flow: { sessionId, status: "pending", messages: [], actions: [] } } });
+        const now = Date.now();
+        flow = {
+          sessionId,
+          stoneName: "",
+          status: "pending" as FlowStatus,
+          messages: [] as FlowMessage[],
+          process: { root: { id: "root", title: "task", status: "todo" as const, children: [], actions: [] }, focusId: "root" },
+          data: {},
+          createdAt: now,
+          updatedAt: now,
+        } satisfies FlowData;
+      } else {
+        return errorResponse(`Flow "${sessionId}" 不存在`, 404);
       }
-      return errorResponse(`Flow "${sessionId}" 不存在`, 404);
     }
 
     /* 合并 sub-flow 的消息和 process（让前端能看到完整对话和所有对象的行为树） */
     const objectsDir = join(sessionDir, "objects");
     /* currentAction 为 2026-04-22 新增的追加字段——仅对 running 状态计算，
        给前端 SessionKanban 做"running session 动态摘要"提示。
-       此处仅追加，不改动原有三个字段。 */
+       此处仅追加，不改动原有三个字段。
+       修复 (2026-04-22 bugfix-v3 P1-d)：data.json 执行中不会更新 status；
+       通过 inferLiveFlowStatus 从 threads.json 推断活跃状态，让 running 期
+       currentAction 能可靠点亮前端 pulse + "正在 X" 文本。 */
     const subFlows: Array<{ stoneName: string; status: FlowStatus; process: unknown; currentAction?: string }> = [];
     if (existsSync(objectsDir)) {
       const subEntries = readdirSync(objectsDir, { withFileTypes: true });
       for (const entry of subEntries) {
         if (!entry.isDirectory()) continue;
-        const subFlow = readFlow(join(objectsDir, entry.name));
+        const subFlowDir = join(objectsDir, entry.name);
+        const subFlow = readFlow(subFlowDir);
         if (subFlow) {
           flow.messages = mergeMessages(flow.messages, subFlow.messages);
+          /* 合成实时 status：优先 threads.json（增量更新），fallback data.json */
+          const liveStatus = inferLiveFlowStatus(subFlowDir, subFlow.status);
           /* 仅 running/waiting 计算——finished/failed 已有 node.summary（"一句话任务摘要"），
              不需要再叠一层 currentAction 以免信号混淆。 */
           const currentAction =
-            subFlow.status === "running" || subFlow.status === "waiting"
+            liveStatus === "running" || liveStatus === "waiting"
               ? computeCurrentAction(subFlow.process)
               : undefined;
           subFlows.push({
             stoneName: subFlow.stoneName,
-            status: subFlow.status,
+            status: liveStatus,
             process: subFlow.process,
+            ...(currentAction ? { currentAction } : {}),
+          });
+        } else if (existsSync(join(subFlowDir, "threads.json"))) {
+          /* 线程树已建但 data.json 尚未写入（engine 仅在 finish 时写 data.json）——
+             用 threads.json + threads/ 目录合成一个"临时 subFlow"，
+             让 running session 的前端 UI 立即能见到对象行 + 实时 currentAction。 */
+          const liveStatus = inferLiveFlowStatus(subFlowDir, "running");
+          const process = threadsToProcess(subFlowDir) ?? undefined;
+          const currentAction =
+            liveStatus === "running" || liveStatus === "waiting"
+              ? computeCurrentAction(process)
+              : undefined;
+          subFlows.push({
+            stoneName: entry.name,
+            status: liveStatus,
+            process,
             ...(currentAction ? { currentAction } : {}),
           });
         }
       }
+    }
+
+    /* 若任一 subFlow 活跃（running/waiting），顶层 flow.status 也应反映——
+       sessions 列表卡片与 Kanban 的活跃指示都依赖此字段。 */
+    if (subFlows.some((s) => s.status === "running" || s.status === "waiting")) {
+      flow.status = "running";
     }
 
     return json({ success: true, data: { flow, subFlows } });
