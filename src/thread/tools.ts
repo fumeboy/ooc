@@ -168,6 +168,8 @@ export const SUBMIT_TOOL: ToolDefinition = {
         context: { type: "string", enum: ["fork", "continue"], description: "think/talk: 操作模式。fork=派生新线程（对原线程 readonly，适合查资料/拆分子任务）；continue=直接向原线程投递消息（会产生影响，适合补充信息/触发决策）。" },
         /* talk 额外参数 */
         target: { type: "string", description: "talk: 目标对象名。特殊保留字 \"super\" 指向当前对象的反思镜像分身（不是 supervisor）。" },
+        /* Phase 6：talk(continue) 的消息类型标签 */
+        type: { type: "string", description: "talk(continue) 子类型。当前识别：'relation_update' —— 请对方在 relations/{我}.md 里登记某内容；接收方的 inbox 会显示 <relation_update_request> 徽章，由其自主决定接受 / 拒绝（engine 不自动写入）。其他值不影响行为。" },
         /* talk: 可选结构化表单（选项 + 自由文本兜底） */
         form: FORM_PARAM,
         /* return / compact */

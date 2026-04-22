@@ -541,7 +541,7 @@ export class World {
    * 使用新的 thread/ 模块执行对话，返回 TalkReturn（与 Flow.toJSON 结构兼容的纯数据对象）。
    * 不再依赖 Flow 类——data.json 直接由 writeThreadTreeFlowData 写入。
    */
-  private async _talkWithThreadTree(objectName: string, message: string, from: string, preSessionId?: string, continueThreadId?: string, forkUnderThreadId?: string): Promise<TalkReturn> {
+  private async _talkWithThreadTree(objectName: string, message: string, from: string, preSessionId?: string, continueThreadId?: string, forkUnderThreadId?: string, messageKind?: string): Promise<TalkReturn> {
     const stone = this._registry.get(objectName);
     if (!stone) throw new Error(`对象 "${objectName}" 不存在`);
 
@@ -565,7 +565,7 @@ export class World {
         flowsDir: this.flowsDir,
       },
       isPaused: (name) => this._globalPaused || this._pauseRequests.has(name),
-      onTalk: async (targetObject, message, fromObject, fromThreadId, sessionId, continueThreadId, messageId, forkUnderThreadId) => {
+      onTalk: async (targetObject, message, fromObject, fromThreadId, sessionId, continueThreadId, messageId, forkUnderThreadId, messageKind) => {
         const target = targetObject.toLowerCase();
 
         /* user 是系统用户（人类），不参与 ThinkLoop：交由专用 handler 处理 */
@@ -584,9 +584,9 @@ export class World {
         const modeDesc = forkUnderThreadId
           ? `, fork under=${forkUnderThreadId}`
           : continueThreadId ? `, continue=${continueThreadId}` : "";
-        consola.info(`[World] 跨 Object talk: ${fromObject} → ${targetObject}, session=${sessionId}${modeDesc}`);
+        consola.info(`[World] 跨 Object talk: ${fromObject} → ${targetObject}, session=${sessionId}${modeDesc}${messageKind ? ` (kind=${messageKind})` : ""}`);
         try {
-          const talkRet = await this._talkWithThreadTree(targetObject, message, fromObject, sessionId, continueThreadId, forkUnderThreadId);
+          const talkRet = await this._talkWithThreadTree(targetObject, message, fromObject, sessionId, continueThreadId, forkUnderThreadId, messageKind);
           const reply = talkRet.summary ?? talkRet.messages.find((m) => m.direction === "out")?.content ?? null;
           return { reply, remoteThreadId: talkRet.threadId ?? "unknown" };
         } catch (e) {
@@ -597,9 +597,9 @@ export class World {
     };
 
     /* 运行线程树引擎 */
-    consola.info(`[World] 使用线程树架构处理 talk: ${from} → ${objectName}${forkUnderThreadId ? ` (fork under ${forkUnderThreadId})` : ""}`);
+    consola.info(`[World] 使用线程树架构处理 talk: ${from} → ${objectName}${forkUnderThreadId ? ` (fork under ${forkUnderThreadId})` : ""}${messageKind ? ` (kind=${messageKind})` : ""}`);
     const messageTimestamp = Date.now();
-    const result: TalkResult = await runWithThreadTree(objectName, message, from, engineConfig, preSessionId, continueThreadId, forkUnderThreadId);
+    const result: TalkResult = await runWithThreadTree(objectName, message, from, engineConfig, preSessionId, continueThreadId, forkUnderThreadId, messageKind);
 
     /* 线程树执行结果落盘 + 构造 TalkReturn（兼容 Flow.toJSON 形状） */
     const talkRet = writeThreadTreeFlowData(result, objectName, this.flowsDir, message, from, messageTimestamp);
@@ -697,7 +697,7 @@ export class World {
       stone: stone.toJSON(),
       paths: { stoneDir: stone.dir, rootDir: this._rootDir, flowsDir: this.flowsDir },
       isPaused: (name) => this._globalPaused || this._pauseRequests.has(name),
-      onTalk: async (targetObject, message, fromObject, fromThreadId, sessionId, continueThreadId, messageId, forkUnderThreadId) => {
+      onTalk: async (targetObject, message, fromObject, fromThreadId, sessionId, continueThreadId, messageId, forkUnderThreadId, messageKind) => {
         const target = targetObject.toLowerCase();
         if (target === "user") {
           return handleOnTalkToUser({ fromObject, message, sessionId, fromThreadId, messageId, flowsDir: this.flowsDir });
@@ -706,7 +706,7 @@ export class World {
           return handleOnTalkToSuper({ fromObject, message, rootDir: this._rootDir, messageId });
         }
         try {
-          const talkRet = await this._talkWithThreadTree(targetObject, message, fromObject, undefined, continueThreadId, forkUnderThreadId);
+          const talkRet = await this._talkWithThreadTree(targetObject, message, fromObject, undefined, continueThreadId, forkUnderThreadId, messageKind);
           const reply = talkRet.summary ?? talkRet.messages.find((m) => m.direction === "out")?.content ?? null;
           return { reply, remoteThreadId: talkRet.threadId ?? "unknown" };
         } catch (e) {

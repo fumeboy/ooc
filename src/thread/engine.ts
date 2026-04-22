@@ -92,6 +92,8 @@ export interface EngineConfig {
    * @param continueThreadId - 可选，继续对方已有线程（对应 context="continue"）
    * @param messageId - 可选，本次 message_out action 的 id（用于 target="user" 时写入 user inbox 索引）
    * @param forkUnderThreadId - 可选，在对方此线程下 fork 新子线程（对应 context="fork" + 指定 threadId）
+   * @param messageKind - 可选，消息类型标签（Phase 6，如 "relation_update_request"），
+   *   传递给接收侧写 inbox 时一并保留，让接收方 context 能渲染特殊徽章
    * @returns { reply, remoteThreadId } — 对方回复 + 对方线程 ID
    */
   onTalk?: (
@@ -103,6 +105,7 @@ export interface EngineConfig {
     continueThreadId?: string,
     messageId?: string,
     forkUnderThreadId?: string,
+    messageKind?: string,
   ) => Promise<{ reply: string | null; remoteThreadId: string }>;
   /** 是否开启 debug 模式（持久化每轮 ThinkLoop 的 LLM 输入/输出） */
   debugEnabled?: boolean;
@@ -600,6 +603,19 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>, deferHook
       /* 首条 unread 附带分组注释，以减少噪音 */
       for (let i = 0; i < unread.length; i++) {
         const m = unread[i]!;
+        /* Phase 6：relation_update_request 徽章渲染——用 <relation_update_request> 标签替代 <message>，
+         * 让 LLM 一眼识别出"这是请求我修改关系文件的提议"。正文内容不变，接收方自主决定。 */
+        if (m.kind === "relation_update_request") {
+          inboxChildren.push({
+            tag: "relation_update_request",
+            attrs: { id: m.id, from: m.from, ts: m.timestamp },
+            content: m.content,
+            comment: i === 0
+              ? "关系更新请求（Phase 6）：对方希望你在自己的 relations/{他}.md 里记录某内容。请自主决定接受/部分接受/拒绝；engine 不会自动写入，写入需你自己 call file_ops.writeFile 或 editFile"
+              : undefined,
+          });
+          continue;
+        }
         inboxChildren.push({
           tag: "message",
           attrs: { id: m.id, from: m.from, status: "unread" },
@@ -618,8 +634,10 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>, deferHook
           attrs.mark = m.mark.type;
           attrs.tip = m.mark.tip;
         }
+        /* Phase 6：即使已 marked，relation_update_request 仍保留其专用标签形态（便于 LLM 回查） */
+        const tag = m.kind === "relation_update_request" ? "relation_update_request" : "message";
         inboxChildren.push({
-          tag: "message",
+          tag,
           attrs,
           content: m.content,
           comment: i === 0 ? "已标记消息" : undefined,
@@ -763,6 +781,7 @@ export async function runWithThreadTree(
   preSessionId?: string,
   continueThreadId?: string,
   forkUnderThreadId?: string,
+  messageKind?: string,
 ): Promise<TalkResult> {
   const sessionId = preSessionId ?? generateSessionId();
   const sessionDir = join(config.flowsDir, sessionId);
@@ -859,11 +878,12 @@ export async function runWithThreadTree(
     targetThreadId = tree.rootId;
   }
 
-  /* 2. 将初始消息写入目标线程的 inbox */
+  /* 2. 将初始消息写入目标线程的 inbox（Phase 6：透传 kind，如 relation_update_request） */
   tree.writeInbox(targetThreadId, {
     from,
     content: message,
     source: "talk",
+    kind: messageKind,
   });
 
   /* 3. 发射 SSE 开始事件 */
@@ -1708,8 +1728,13 @@ export async function runWithThreadTree(
                   }
                   /* 若未通过 mark 参数显式标记，且 target 只有一条未读最新消息，自动 ack */
                   const explicitlyMarked = Array.isArray(args.mark) && args.mark.length > 0;
+                  /* Phase 6：识别 talk.continue.relation_update —— 给接收方注入 kind 标签 */
+                  const talkType = typeof args.type === "string" ? args.type : undefined;
+                  const messageKind = ctxMode === "continue" && talkType === "relation_update"
+                    ? "relation_update_request"
+                    : undefined;
                   try {
-                    const { reply, remoteThreadId } = await config.onTalk(args.target as string, msgContent, objectName, threadId, sessionId, continueThreadId, messageId, forkUnderThreadId);
+                    const { reply, remoteThreadId } = await config.onTalk(args.target as string, msgContent, objectName, threadId, sessionId, continueThreadId, messageId, forkUnderThreadId, messageKind);
                     if (!explicitlyMarked) {
                       const tdAck = tree.readThreadData(threadId);
                       const autoAckId = getAutoAckMessageId(tdAck, args.target as string);
@@ -2999,8 +3024,13 @@ export async function resumeWithThreadTree(
                     consola.warn(`[Engine] ${objectName} 尝试 talk_sync(target="user")——user 不参与 ThinkLoop，不会回复。已降级为 talk（不阻塞）。`);
                   }
                   const explicitlyMarked = Array.isArray(args.mark) && args.mark.length > 0;
+                  /* Phase 6：识别 talk.continue.relation_update */
+                  const talkType = typeof args.type === "string" ? args.type : undefined;
+                  const messageKind = ctxMode === "continue" && talkType === "relation_update"
+                    ? "relation_update_request"
+                    : undefined;
                   try {
-                    const { reply, remoteThreadId } = await config.onTalk(args.target as string, msgContent, objectName, threadId, sessionId, continueThreadId, messageId, forkUnderThreadId);
+                    const { reply, remoteThreadId } = await config.onTalk(args.target as string, msgContent, objectName, threadId, sessionId, continueThreadId, messageId, forkUnderThreadId, messageKind);
                     if (!explicitlyMarked) {
                       const tdAck = tree.readThreadData(threadId);
                       const autoAckId = getAutoAckMessageId(tdAck, args.target as string);

@@ -294,6 +294,16 @@ export interface ThreadInboxMessage {
   form?: TalkFormPayload;
   /** 对方对本对象先前 form 的结构化回复（形如 {formId, selectedOptionIds, freeText}） */
   formResponse?: FormResponse;
+  /**
+   * 消息类型标签（Phase 6）
+   *
+   * 目前识别值：
+   * - `"relation_update_request"`：发起方通过 talk.continue.relation_update 发来的
+   *   "请在你那边登记我们的关系" 请求；接收方的 context 用 <relation_update_request>
+   *   徽章渲染，不自动写入任何关系文件（是否接受 / 拒绝由接收方自己决定）。
+   * - 未来可扩展其他半结构化通知类型。
+   */
+  kind?: string;
 }
 
 /**

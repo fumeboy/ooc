@@ -494,6 +494,8 @@ export class ThreadsTree {
       content: string;
       source: ThreadInboxMessage["source"];
       issueId?: string;
+      /** 可选消息类型标签（Phase 6，如 "relation_update_request"） */
+      kind?: string;
     },
   ): void {
     const data = this.readThreadData(nodeId);
@@ -510,6 +512,7 @@ export class ThreadsTree {
       source: msg.source,
       issueId: msg.issueId,
       status: "unread",
+      ...(msg.kind ? { kind: msg.kind } : {}),
     };
     data.inbox.push(newMsg);
 
