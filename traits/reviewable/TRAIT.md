@@ -59,3 +59,9 @@ deps:
 | "我自己审查过了" | 自己审查自己 = 确认偏误 |
 | "这次改动太小不需要审查" | 小改动的审查成本也小，没理由跳过 |
 | "审查太慢了" | 不审查导致的返工更慢 |
+
+## 相关子 trait
+
+| 子 trait | 内容 |
+|----------|------|
+| `kernel/reviewable/review_api` | 审查操作工具集 — read_diff / post_review / multi_perspective_review / suggest_fixes |
