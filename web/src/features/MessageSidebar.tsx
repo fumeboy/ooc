@@ -68,6 +68,9 @@ export function MessageSidebar() {
   const pendingSendRef = useRef<boolean>(false);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /** fetchFlow 是否已成功返回过（用于判定空 sidebar 显示"思考中"还是"发起对话"） */
+  const [flowFetched, setFlowFetched] = useState(false);
+
   /** 用户是否主动滚动到非底部位置 */
   const [userScrolledUp, setUserScrolledUp] = useState(false);
 
@@ -378,6 +381,7 @@ export function MessageSidebar() {
     if (!activeFlow || activeFlow.sessionId !== activeId) {
       setActiveFlow(null);
     }
+    setFlowFetched(false);
     if (!activeId) return;
     fetchFlow(activeId).then((serverFlow) => {
       setActiveFlow((prev) => {
@@ -390,7 +394,11 @@ export function MessageSidebar() {
         }
         return serverFlow;
       });
-    }).catch(console.error);
+      setFlowFetched(true);
+    }).catch((e) => {
+      console.error(e);
+      setFlowFetched(true); /* 失败也算"已尝试"——避免一直显示"思考中" */
+    });
   }, [activeId]);
 
   /* SSE 实时更新 */
@@ -763,13 +771,32 @@ export function MessageSidebar() {
       <div className="flex-1 flex flex-col relative min-h-0">
         {/* 消息列表 */}
         <div ref={scrollRef} className="flex-1 overflow-auto px-3 py-3 space-y-1.5">
-        {timeline.length === 0 && !activeStreamingTalk && (
+        {timeline.length === 0
+          && !activeStreamingTalk
+          /* 不显示空提示：当有任何 streaming 状态时（thinking/program/action/stack 等），
+           * 这些块自身已表达了"对象正在工作"——再叠空提示会有 UI 冗余 */
+          && !(streamingThought && streamingThought.sessionId === activeId)
+          && !(streamingProgram && streamingProgram.sessionId === activeId)
+          && !(streamingAction && streamingAction.sessionId === activeId)
+          && !(streamingStackPush && streamingStackPush.sessionId === activeId)
+          && !(streamingStackPop && streamingStackPop.sessionId === activeId)
+          && !(streamingSetPlan && streamingSetPlan.sessionId === activeId) && (
           <p className="text-xs text-[var(--muted-foreground)] text-center py-8 font-mono">
             {currentThreadId
               ? "此线程暂无内容"
-              : activeId
-                /* 新 session 创建后 subFlows 还没写盘的间歇态：显示思考中而非"发起对话"
-                 * （避免误导用户重复输入；LLM 一旦回 chunk 立即出现 streaming bubble） */
+              : activeId && (
+                  /* 新 session 创建后 subFlows 还没写盘的间歇态：显示思考中而非"发起对话"
+                   * （避免误导用户重复输入；LLM 一旦回 chunk 立即出现 streaming bubble）。
+                   *
+                   * 显示条件（任一）：
+                   *   1. fetchFlow 还没返回（!flowFetched）—— 新 session 早期窗口
+                   *   2. activeFlow 已加载但 status 是 running/waiting/pausing —— 仍在跑
+                   * 排除 finished/failed/空 session —— 保留空态。 */
+                  !flowFetched
+                    || activeFlow?.status === "running"
+                    || activeFlow?.status === "waiting"
+                    || activeFlow?.status === "pausing"
+                )
                 ? <>正在思考中<span className="inline-block ml-1 animate-pulse">...</span></>
                 : `向 ${target} 发起对话，输入 @ 切换对象`}
           </p>
