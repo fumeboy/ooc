@@ -70,7 +70,23 @@ export function ActivityHeatmap() {
   const today = new Date().getDate();
 
   return (
-    <div className="px-3 py-3 shrink-0 w-full">
+    <div
+      className={cn(
+        "shrink-0",
+        /* 外边距：卡片与 sidebar 容器边缘留出呼吸空间 */
+        "mx-2 my-2",
+        /* 内边距：卡片自身 padding */
+        "px-3 py-3",
+        /* 卡片化：灰色浅边框 + 圆角 */
+        "rounded-xl border border-[var(--border)]",
+      )}
+      /* 渐变背景：162° 的绿色渐晕（用户抓取样式）+ 底层 card token 保证明暗自适应。
+       * 47,118,19 = OOC 活动绿；33%→89% 的 stop 让色彩集中在右下角，与截图 UX 一致。 */
+      // style={{
+      //   background:
+      //     "linear-gradient(162deg, rgba(47, 118, 19, 0) 33.38%, rgba(47, 118, 19, 0.20) 89.58%), var(--card)",
+      // }}
+    >
       {/* 标题 */}
       <div className="flex items-center justify-between mb-2">
         <span className="text-[10px] text-[var(--muted-foreground)]">
@@ -114,7 +130,7 @@ export function ActivityHeatmap() {
                 <div
                   key={col}
                   className={cn(
-                    "flex-1 h-3 rounded-[2px] transition-colors",
+                    "flex-1 h-3 rounded-[2px] transition-colors opacity-90",
                     HEAT_COLORS[level],
                     isToday && "ring-1 ring-[var(--foreground)] ring-offset-1 ring-offset-[var(--panel-bg)]",
                   )}
