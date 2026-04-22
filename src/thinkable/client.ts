@@ -103,6 +103,19 @@ export interface LLMClient {
   chatStream?(messages: Message[]): AsyncIterable<string>;
   /** 流式聊天（双通道事件） */
   chatEventStream?(messages: Message[]): AsyncIterable<LLMStreamEvent>;
+  /**
+   * 流式 thinking + 完整 LLMResponse 聚合。
+   *
+   * 提供此方法的客户端内部使用 streaming 协议，把 thinking chunk 实时回调给 onThinkingChunk，
+   * 同时聚合 content / tool_calls / usage 为完整 LLMResponse 返回（语义等价 chat）。
+   *
+   * 调用方使用场景：想在 LLM 返回前把 thinking 逐段推送给 UI（SSE stream:thought）。
+   * 不实现此方法则调用方回退到 chat() 一次性等待最终结果。
+   */
+  chatWithThinkingStream?(
+    messages: Message[],
+    options: { tools?: ToolDefinition[]; onThinkingChunk: (chunk: string) => void },
+  ): Promise<LLMResponse>;
   /** 当前客户端是否启用了 provider-native thinking 语义 */
   isThinkingEnabled?(): boolean;
   /** 当前客户端是否应在开启 thinking 时退回非流式模式 */
@@ -410,6 +423,146 @@ export class OpenAICompatibleClient implements LLMClient {
 
   preferNonStreamingThinking(): boolean {
     return this._config.thinking.enabled;
+  }
+
+  /**
+   * 流式 thinking + 完整 LLMResponse 聚合。
+   *
+   * 走 OpenAI 兼容 stream: true 协议，逐 SSE chunk 解析：
+   * - thinking delta → 立即回调 onThinkingChunk（UI 实时展示）
+   * - assistant content delta → 累积
+   * - tool_calls delta（含 index/id/function.name/function.arguments）→ 按 index 聚合
+   * - usage / 最后 raw → 汇总构造 LLMResponse 返回
+   *
+   * 某些 provider 在 thinking 启用时不走真流式（preferNonStreamingThinking=true）——
+   * 此时 stream 返回的 thinking 仍可能是整段聚合后的单 chunk，但对 UI 无回归：
+   * 最坏情况等价于 chat() 一次性返回。有真流式支持的 provider 则立刻受益。
+   */
+  async chatWithThinkingStream(
+    messages: Message[],
+    options: { tools?: ToolDefinition[]; onThinkingChunk: (chunk: string) => void },
+  ): Promise<LLMResponse> {
+    const payload = buildChatPayload(this._config, messages, {
+      stream: true,
+      tools: options.tools,
+    });
+    consola.info("LLM 请求（流式 thinking）", this._config.model, `${messages.length} messages`);
+    const start = performance.now();
+    const maxRetries = 3;
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const url = `${this._config.baseUrl.replace(/\/$/, "")}/chat/completions`;
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this._config.apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(this._config.timeout * 1000),
+        });
+
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+        }
+
+        const reader = resp.body?.getReader();
+        if (!reader) throw new Error("响应体为空");
+
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let lastJson: Record<string, unknown> | null = null;
+
+        let assistantBuffer = "";
+        let thinkingBuffer = "";
+        let modelFromStream: string | undefined;
+        /* tool_calls 按 index 聚合：provider 会拆成多块 delta，逐段拼 arguments */
+        const toolCallsByIndex = new Map<number, { id?: string; type?: string; function: { name?: string; arguments: string } }>();
+
+        const chunkTimeoutMs = Math.max(30_000, this._config.timeout * 500);
+
+        while (true) {
+          const { done, value } = await readWithTimeout(reader, chunkTimeoutMs);
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            const parsed = parseSSELine(line);
+            if (!parsed) continue;
+            lastJson = parsed;
+            if (typeof parsed.model === "string") modelFromStream = parsed.model;
+
+            const { assistantChunk, thinkingChunk } = extractDeltaEvent(parsed);
+            if (thinkingChunk) {
+              thinkingBuffer += thinkingChunk;
+              /* 实时推送给回调（UI 立即展示） */
+              try { options.onThinkingChunk(thinkingChunk); } catch (e) { consola.warn("onThinkingChunk error", e); }
+            }
+            if (assistantChunk) assistantBuffer += assistantChunk;
+
+            /* 解析 tool_calls delta —— OpenAI 约定通过 index 累加 */
+            const choices = Array.isArray(parsed.choices) ? (parsed.choices as Array<Record<string, unknown>>) : [];
+            const delta = choices[0]?.delta as Record<string, unknown> | undefined;
+            const tcDeltas = Array.isArray(delta?.tool_calls) ? (delta!.tool_calls as Array<Record<string, unknown>>) : [];
+            for (const tc of tcDeltas) {
+              const idx = typeof tc.index === "number" ? tc.index : 0;
+              let agg = toolCallsByIndex.get(idx);
+              if (!agg) { agg = { function: { arguments: "" } }; toolCallsByIndex.set(idx, agg); }
+              if (typeof tc.id === "string" && tc.id) agg.id = tc.id;
+              if (typeof tc.type === "string") agg.type = tc.type;
+              const fn = tc.function as Record<string, unknown> | undefined;
+              if (fn) {
+                if (typeof fn.name === "string" && fn.name) agg.function.name = fn.name;
+                if (typeof fn.arguments === "string") agg.function.arguments += fn.arguments;
+              }
+            }
+          }
+        }
+
+        if (buffer.trim()) {
+          const parsed = parseSSELine(buffer);
+          if (parsed) lastJson = parsed;
+        }
+
+        const elapsed = (performance.now() - start) / 1000;
+        consola.info("LLM 流式（thinking+tools）响应完成", modelFromStream ?? this._config.model, `${elapsed.toFixed(3)}s`);
+
+        /* 构造聚合 tool_calls 数组（按 index 排序） */
+        const toolCalls: ToolCall[] = [...toolCallsByIndex.entries()]
+          .sort((a, b) => a[0] - b[0])
+          .map(([, v]) => ({
+            id: v.id ?? `call_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+            type: (v.type ?? "function") as "function",
+            function: {
+              name: v.function.name ?? "",
+              arguments: v.function.arguments,
+            },
+          }))
+          .filter(tc => tc.function.name);
+
+        return {
+          assistantContent: assistantBuffer,
+          thinkingContent: thinkingBuffer,
+          content: assistantBuffer.trim().length > 0 ? assistantBuffer : thinkingBuffer,
+          model: modelFromStream ?? this._config.model,
+          usage: normalizeUsage(lastJson ? ((lastJson.usage ?? null) as Record<string, unknown> | null) : null),
+          toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+          raw: lastJson ?? undefined,
+        };
+      } catch (e) {
+        lastError = e as Error;
+        if (attempt < maxRetries - 1) continue;
+      }
+    }
+
+    throw new Error(
+      `LLM 流式（thinking+tools）调用失败（重试 ${maxRetries} 次）: ${lastError?.message}`,
+    );
   }
 
   /**
