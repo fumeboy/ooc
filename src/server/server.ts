@@ -18,7 +18,75 @@ import { collectAllActions } from "../process/tree.js";
 import { loadTrait } from "../trait/loader.js";
 import { threadsToProcess } from "../persistence/thread-adapter.js";
 import type { World } from "../world/index.js";
-import type { FlowStatus, FlowMessage } from "../types/index.js";
+import type { FlowStatus, FlowMessage, Process, ProcessNode, Action } from "../types/index.js";
+
+/**
+ * 动态摘要最大字符长度（超过截断追加省略号）
+ *
+ * 与迭代文档 `docs/工程管理/迭代/all/20260422_feature_running_session_摘要.md`
+ * 约定的"限长 50 字符"对齐。
+ */
+const CURRENT_ACTION_MAX_LEN = 50;
+
+/**
+ * 从 Process 计算一句话"当前动作"摘要
+ *
+ * 仅用于 running session 在前端（SessionKanban）做"正在做什么"的动态提示。
+ *
+ * 优先级（与迭代文档 Phase 1 一致）：
+ * 1. 最新 thinking action 的首句
+ * 2. 最新 tool_use action 的 title
+ * 3. 最新 action 的类型名
+ *
+ * 遍历策略：递归收集所有节点 actions → 按 timestamp 降序 → 按优先级挑选。
+ *
+ * @returns 50 字符以内的摘要；数据不足时返回 undefined（前端显示 fallback）
+ */
+function computeCurrentAction(process: Process | undefined | null): string | undefined {
+  if (!process?.root) return undefined;
+
+  /* 递归把所有 action 收进一个数组（不可变）——每个节点的 actions 本身保序，
+     跨节点则按 timestamp 全局排序。 */
+  const all: Action[] = [];
+  const walk = (node: ProcessNode): void => {
+    for (const a of node.actions ?? []) all.push(a);
+    for (const child of node.children ?? []) walk(child);
+  };
+  walk(process.root);
+
+  if (all.length === 0) return undefined;
+
+  /* 降序按 timestamp，保证"最新"语义；copy 不改原数据。 */
+  const sorted = [...all].sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
+
+  /* 优先级 1：最新 thinking 首句（首个换行之前） */
+  const latestThinking = sorted.find((a) => a.type === "thinking" && typeof a.content === "string" && a.content.trim().length > 0);
+  if (latestThinking) {
+    const firstLine = latestThinking.content.split(/\r?\n/)[0]!.trim();
+    if (firstLine) return truncate(firstLine, CURRENT_ACTION_MAX_LEN);
+  }
+
+  /* 优先级 2：最新 tool_use 的 title */
+  const latestToolUse = sorted.find((a) => a.type === "tool_use" && typeof a.title === "string" && a.title.trim().length > 0);
+  if (latestToolUse && latestToolUse.title) {
+    return truncate(latestToolUse.title.trim(), CURRENT_ACTION_MAX_LEN);
+  }
+
+  /* 优先级 3：最新 action 的类型名（兜底——有 name 的用 name，否则用 type） */
+  const latest = sorted[0];
+  if (latest) {
+    const label = latest.name && latest.name.trim() ? latest.name.trim() : latest.type;
+    return truncate(label, CURRENT_ACTION_MAX_LEN);
+  }
+
+  return undefined;
+}
+
+/** 截断到 max 字符，超出补 `…`（不折中英文，简化实现） */
+function truncate(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return s.slice(0, Math.max(0, max - 1)) + "…";
+}
 
 /**
  * 检查 supervisor stone 是否存在
@@ -531,7 +599,10 @@ export async function handleRoute(
 
     /* 合并 sub-flow 的消息和 process（让前端能看到完整对话和所有对象的行为树） */
     const objectsDir = join(sessionDir, "objects");
-    const subFlows: Array<{ stoneName: string; status: FlowStatus; process: unknown }> = [];
+    /* currentAction 为 2026-04-22 新增的追加字段——仅对 running 状态计算，
+       给前端 SessionKanban 做"running session 动态摘要"提示。
+       此处仅追加，不改动原有三个字段。 */
+    const subFlows: Array<{ stoneName: string; status: FlowStatus; process: unknown; currentAction?: string }> = [];
     if (existsSync(objectsDir)) {
       const subEntries = readdirSync(objectsDir, { withFileTypes: true });
       for (const entry of subEntries) {
@@ -539,10 +610,17 @@ export async function handleRoute(
         const subFlow = readFlow(join(objectsDir, entry.name));
         if (subFlow) {
           flow.messages = mergeMessages(flow.messages, subFlow.messages);
+          /* 仅 running/waiting 计算——finished/failed 已有 node.summary（"一句话任务摘要"），
+             不需要再叠一层 currentAction 以免信号混淆。 */
+          const currentAction =
+            subFlow.status === "running" || subFlow.status === "waiting"
+              ? computeCurrentAction(subFlow.process)
+              : undefined;
           subFlows.push({
             stoneName: subFlow.stoneName,
             status: subFlow.status,
             process: subFlow.process,
+            ...(currentAction ? { currentAction } : {}),
           });
         }
       }
