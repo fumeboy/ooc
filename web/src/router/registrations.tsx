@@ -20,6 +20,7 @@ import { DynamicUI } from "../features/DynamicUI";
 import { IssueDetailView } from "../features/IssueDetailView";
 import { TaskDetailView } from "../features/TaskDetailView";
 import { ProcessView } from "../features/ProcessView";
+import { LLMInputViewerAdapter } from "../features/LLMInputViewer";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { CodeMirrorViewer } from "../components/ui/CodeMirrorViewer";
 import { hasCustomUI } from "../objects";
@@ -453,6 +454,19 @@ export function registerAllViews(): void {
     priority: 40,
     tabKey: (p) => p,
     tabLabel: () => "Process",
+  });
+
+  /* LLMInputViewer — 路径以 llm.input.txt 结尾（debug 输出），结构化浏览 */
+  viewRegistry.register({
+    name: "LLMInputViewer",
+    component: LLMInputViewerAdapter,
+    match: (p) => /\/llm\.input\.txt$/.test(p) || /\/loop_\d+\.input\.txt$/.test(p),
+    priority: 90,
+    tabKey: (p) => p,
+    tabLabel: (p) => {
+      const name = p.split("/").pop() ?? "Context";
+      return name;
+    },
   });
 
   /* FileViewer — fallback，匹配所有文件 */
