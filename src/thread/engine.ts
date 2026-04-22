@@ -198,6 +198,7 @@ async function triggerBuildHooksAfterCall(params: {
   try {
     const paths = extractWrittenPaths(params.trait, params.functionName, params.args);
     if (paths.length === 0) return "";
+    consola.info(`[build_hooks] call_function 触发 trait=${params.trait} fn=${params.functionName} paths=${paths.join(",")}`);
     const feedback = await runBuildHooks(paths, {
       rootDir: params.rootDir,
       threadId: params.threadId,
@@ -209,7 +210,8 @@ async function triggerBuildHooksAfterCall(params: {
       lines.push(`- [${f.hookName}] ${f.path}: ${(f.errors?.[0] ?? f.output).slice(0, 200)}`);
     }
     return lines.join("\n");
-  } catch {
+  } catch (e) {
+    consola.warn(`[build_hooks] triggerBuildHooksAfterCall 异常: ${(e as Error).message}`);
     return "";
   }
 }
@@ -823,9 +825,14 @@ export async function runWithThreadTree(
   const methodRegistry = new MethodRegistry();
   methodRegistry.registerAll(config.traits);
 
-  /* 4.3 构建执行上下文工厂（每次 program 执行时调用） */
-  const buildExecContext = (threadId: string): { context: Record<string, unknown>; getOutputs: () => string[] } => {
+  /* 4.3 构建执行上下文工厂（每次 program 执行时调用）
+   *
+   * 返回值新增 getWrittenPaths()：program 执行期间，沙箱内 callMethod(file_ops.writeFile/editFile)
+   * 与直接调 context.writeFile 都会累计写入 path 列表，供 program 结束后触发 build_hooks。
+   */
+  const buildExecContext = (threadId: string): { context: Record<string, unknown>; getOutputs: () => string[]; getWrittenPaths: () => string[] } => {
     const outputs: string[] = [];
+    const writtenPaths: string[] = [];
     const isThenable = (v: unknown): v is PromiseLike<unknown> =>
       v != null && (typeof v === "object" || typeof v === "function") && "then" in (v as any);
     const printFn = (...args: unknown[]) => {
@@ -871,6 +878,7 @@ export async function runWithThreadTree(
         const resolved = resolve(rootDir, path);
         mkdirSync(resolve(resolved, ".."), { recursive: true });
         writeFileSync(resolved, content, "utf-8");
+        writtenPaths.push(path);
       },
       listFiles: (path: string) => {
         const resolved = resolve(rootDir, path);
@@ -936,7 +944,16 @@ export async function runWithThreadTree(
       data: { ...config.stone.data },
     };
     /* 沙箱只暴露 { callMethod }，无需动态注入/清理每个方法名 */
-    const sandboxApi = methodRegistry.buildSandboxMethods(methodCtx, objectName);
+    const sandboxApiRaw = methodRegistry.buildSandboxMethods(methodCtx, objectName);
+    /* 包装 callMethod：file_ops.writeFile / editFile 成功后记录 path，供 program 结束后触发 build_hooks */
+    const sandboxApi = {
+      callMethod: async (traitIdRaw: string, methodName: string, args?: object) => {
+        const result = await sandboxApiRaw.callMethod(traitIdRaw, methodName, args);
+        const paths = extractWrittenPaths(traitIdRaw, methodName, args);
+        for (const p of paths) writtenPaths.push(p);
+        return result;
+      },
+    };
     Object.assign(context, sandboxApi);
     /* 保留接口兼容：某些内部 API 仍调 injectTraitMethods 以感知 trait 切换 */
     const injectTraitMethods = (_traitIds: string[]) => {
@@ -998,7 +1015,7 @@ export async function runWithThreadTree(
       ].join("\n"),
     });
 
-    return { context, getOutputs: () => outputs };
+    return { context, getOutputs: () => outputs, getWrittenPaths: () => [...writtenPaths] };
   };
 
   /* 5. 创建 Scheduler */
@@ -1430,7 +1447,7 @@ export async function runWithThreadTree(
 
             /* program */
             if (command === "program" && args.code) {
-              const { context: execCtx, getOutputs } = buildExecContext(threadId);
+              const { context: execCtx, getOutputs, getWrittenPaths } = buildExecContext(threadId);
               const lang = (args.lang as string) ?? "javascript";
               const execResult = lang === "shell"
                 ? await executeShell(args.code as string, config.rootDir)
@@ -1452,6 +1469,31 @@ export async function runWithThreadTree(
                   timestamp: Date.now(),
                 });
                 tree.writeThreadData(threadId, td);
+              }
+              /* build hook：program 内若 callMethod(file_ops.writeFile/editFile) 或 context.writeFile 触发过写入，
+               * 在此扫描累计的 paths 跑 hooks，把失败结果注入下一轮 context。 */
+              if (execResult.success) {
+                const paths = getWrittenPaths();
+                if (paths.length > 0) {
+                  consola.info(`[build_hooks] program 结束，扫描写入路径 count=${paths.length} paths=${paths.join(",")}`);
+                  try {
+                    const feedback = await runBuildHooks(paths, { rootDir: config.rootDir, threadId });
+                    const failing = feedback.filter((f) => !f.success);
+                    if (failing.length > 0) {
+                      const lines = [`[build_hooks] ${failing.length} 个检查未通过（下一轮 Context 的 <knowledge name="build_feedback"> 会展开）:`];
+                      for (const f of failing) {
+                        lines.push(`- [${f.hookName}] ${f.path}: ${(f.errors?.[0] ?? f.output).slice(0, 200)}`);
+                      }
+                      const td2 = tree.readThreadData(threadId);
+                      if (td2) {
+                        td2.actions.push({ type: "inject", content: lines.join("\n"), timestamp: Date.now() });
+                        tree.writeThreadData(threadId, td2);
+                      }
+                    }
+                  } catch (e) {
+                    consola.warn(`[build_hooks] 执行异常: ${(e as Error).message}`);
+                  }
+                }
               }
               consola.info(`[Engine] program ${execResult.success ? "成功" : "失败"}`);
             }
@@ -2064,9 +2106,12 @@ export async function resumeWithThreadTree(
   const methodRegistry = new MethodRegistry();
   methodRegistry.registerAll(config.traits);
 
-  /* 复用 buildExecContext（与 runWithThreadTree 相同逻辑） */
-  const buildExecContext = (threadId: string): { context: Record<string, unknown>; getOutputs: () => string[] } => {
+  /* 复用 buildExecContext（与 runWithThreadTree 相同逻辑）
+   * 返回 getWrittenPaths()：沙箱内 file_ops.writeFile/editFile 累计 path 供 program 后触发 hooks。
+   */
+  const buildExecContext = (threadId: string): { context: Record<string, unknown>; getOutputs: () => string[]; getWrittenPaths: () => string[] } => {
     const outputs: string[] = [];
+    const writtenPaths: string[] = [];
     const isThenable = (v: unknown): v is PromiseLike<unknown> =>
       v != null && (typeof v === "object" || typeof v === "function") && "then" in (v as any);
     const printFn = (...args: unknown[]) => {
@@ -2107,6 +2152,7 @@ export async function resumeWithThreadTree(
         const resolved = resolve(rootDir, path);
         mkdirSync(resolve(resolved, ".."), { recursive: true });
         writeFileSync(resolved, content, "utf-8");
+        writtenPaths.push(path);
       },
       listFiles: (path: string) => {
         const resolved = resolve(rootDir, path);
@@ -2167,7 +2213,16 @@ export async function resumeWithThreadTree(
       data: { ...config.stone.data },
     };
     /* 沙箱只暴露 { callMethod } 单函数（Phase 2 协议） */
-    const sandboxApi = methodRegistry.buildSandboxMethods(methodCtx, objectName);
+    const sandboxApiRaw = methodRegistry.buildSandboxMethods(methodCtx, objectName);
+    /* 包装 callMethod：file_ops.writeFile / editFile 成功后记录 path（resume 路径同 run 路径） */
+    const sandboxApi = {
+      callMethod: async (traitIdRaw: string, methodName: string, args?: object) => {
+        const result = await sandboxApiRaw.callMethod(traitIdRaw, methodName, args);
+        const paths = extractWrittenPaths(traitIdRaw, methodName, args);
+        for (const p of paths) writtenPaths.push(p);
+        return result;
+      },
+    };
     Object.assign(context, sandboxApi);
     const injectTraitMethods = (_traitIds: string[]) => {
       /* no-op：callMethod 实时查 registry，无需每次切换时重新注入 */
@@ -2218,7 +2273,7 @@ export async function resumeWithThreadTree(
         "提示：如 print 出现 [Promise]，请用 await 获取结果",
       ].join("\n"),
     });
-    return { context, getOutputs: () => outputs };
+    return { context, getOutputs: () => outputs, getWrittenPaths: () => [...writtenPaths] };
   };
 
   const scheduler = new ThreadScheduler({
@@ -2582,7 +2637,7 @@ export async function resumeWithThreadTree(
           } else {
             const command = form.command;
             if (command === "program" && args.code) {
-              const { context: execCtx, getOutputs } = buildExecContext(threadId);
+              const { context: execCtx, getOutputs, getWrittenPaths } = buildExecContext(threadId);
               const lang = (args.lang as string) ?? "javascript";
               const execResult = lang === "shell" ? await executeShell(args.code as string, config.rootDir) : await executor.execute(args.code as string, execCtx);
               const allOutputs = [...getOutputs()]; if (execResult.stdout) allOutputs.push(execResult.stdout);
@@ -2590,6 +2645,30 @@ export async function resumeWithThreadTree(
               const outputText = allOutputs.join("\n").trim();
               const td = tree.readThreadData(threadId);
               if (td) { td.actions.push({ type: "program", content: args.code as string, success: execResult.success, result: execResult.success ? (outputText ? `>>> output:\n${outputText}` : ">>> output: (无输出)") : `>>> error: ${execResult.error}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+              /* build hook：resume 路径同 run 路径，program 写入路径累计后触发 hooks */
+              if (execResult.success) {
+                const paths = getWrittenPaths();
+                if (paths.length > 0) {
+                  consola.info(`[build_hooks] program(resume) 结束，扫描写入路径 count=${paths.length} paths=${paths.join(",")}`);
+                  try {
+                    const feedback = await runBuildHooks(paths, { rootDir: config.rootDir, threadId });
+                    const failing = feedback.filter((f) => !f.success);
+                    if (failing.length > 0) {
+                      const lines = [`[build_hooks] ${failing.length} 个检查未通过（下一轮 Context 的 <knowledge name="build_feedback"> 会展开）:`];
+                      for (const f of failing) {
+                        lines.push(`- [${f.hookName}] ${f.path}: ${(f.errors?.[0] ?? f.output).slice(0, 200)}`);
+                      }
+                      const td2 = tree.readThreadData(threadId);
+                      if (td2) {
+                        td2.actions.push({ type: "inject", content: lines.join("\n"), timestamp: Date.now() });
+                        tree.writeThreadData(threadId, td2);
+                      }
+                    }
+                  } catch (e) {
+                    consola.warn(`[build_hooks] 执行异常: ${(e as Error).message}`);
+                  }
+                }
+              }
             } else if ((command === "talk" || command === "talk_sync") && config.onTalk) {
               /* resume 路径的 talk：与 run 路径保持同一 schema 协议（think/talk 统一 context）。 */
               const target = (args.target as string)?.toLowerCase();
