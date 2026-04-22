@@ -3,8 +3,10 @@ namespace: kernel
 name: talkable/cross_object
 type: how_to_interact
 when: never
-description: 跨对象函数调用协议 — 通过 talk 实现多轮对话调用
+description: 跨对象 talk fork 模式 — 跨对象函数调用 + 新会话派生
 deps: ["kernel:talkable"]
+command_binding:
+  commands: ["talk.fork"]
 ---
 
 # 跨对象函数调用（通过对话实现）

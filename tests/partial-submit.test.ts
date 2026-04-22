@@ -1,0 +1,152 @@
+/**
+ * 渐进式填表（partial submit）单测（Phase 4）
+ *
+ * 语义：submit 新增 `partial: boolean` 参数（默认 false）。
+ * - partial=true：不执行指令，把 args 累加到 form.accumulatedArgs，
+ *   重算命令路径（deriveCommandPath），按新路径 ↔ command_binding 加载新 trait
+ * - partial=false：按最终累积 args 执行指令，结束时释放本 form 引入的 trait
+ *
+ * 测试覆盖：
+ * - FormManager 的 partial 语义（累积 / path 变化）
+ * - collectCommandTraits 支持 path 前缀匹配（冒泡）
+ */
+
+import { describe, test, expect } from "bun:test";
+import { FormManager } from "../src/thread/form.js";
+import { collectCommandTraits } from "../src/thread/hooks.js";
+import type { TraitDefinition } from "../src/types/index.js";
+
+function trait(
+  namespace: "kernel" | "library" | "self",
+  name: string,
+  commands?: string[],
+): TraitDefinition {
+  return {
+    namespace,
+    name,
+    kind: "trait",
+    type: "how_to_think",
+    version: "1.0.0",
+    when: "never",
+    description: "",
+    readme: `# ${namespace}:${name}`,
+    methods: [],
+    deps: [],
+    commandBinding: commands ? { commands } : undefined,
+    dir: `/fake/${namespace}/${name}`,
+  };
+}
+
+describe("FormManager.partialSubmit — 累积语义", () => {
+  test("第一次 partial submit 后 form 仍存在，args 被累积", () => {
+    const mgr = new FormManager();
+    const fid = mgr.begin("talk", "desc");
+    mgr.partialSubmit(fid, { target: "sophia", context: "fork" });
+
+    const form = mgr.getForm(fid);
+    expect(form).not.toBeNull();
+    expect(form!.accumulatedArgs).toEqual({ target: "sophia", context: "fork" });
+    expect(form!.commandPath).toBe("talk.fork");
+  });
+
+  test("多次 partial submit 累积 args（后者覆盖前者同名字段）", () => {
+    const mgr = new FormManager();
+    const fid = mgr.begin("talk", "desc");
+    mgr.partialSubmit(fid, { target: "sophia" });
+    mgr.partialSubmit(fid, { context: "continue", type: "relation_update" });
+
+    const form = mgr.getForm(fid);
+    expect(form!.accumulatedArgs).toEqual({
+      target: "sophia",
+      context: "continue",
+      type: "relation_update",
+    });
+    expect(form!.commandPath).toBe("talk.continue.relation_update");
+  });
+
+  test("partialSubmit 对不存在的 formId 返回 null", () => {
+    const mgr = new FormManager();
+    expect(mgr.partialSubmit("nope", {})).toBeNull();
+  });
+
+  test("partial submit 不影响 activeCommandPaths 的基础路径", () => {
+    const mgr = new FormManager();
+    const fid = mgr.begin("talk", "desc");
+    /* 尚未 partial submit，basePath = "talk" */
+    expect(mgr.activeCommandPaths()).toContain("talk");
+
+    mgr.partialSubmit(fid, { context: "fork" });
+    /* 现在 activeCommandPaths 应包含 "talk.fork"（当前 form 的 deepened path） */
+    expect(mgr.activeCommandPaths()).toContain("talk.fork");
+  });
+});
+
+describe("FormManager.submit（非 partial）— 消费 form", () => {
+  test("非 partial submit 后 form 被移除，引用计数 -1", () => {
+    const mgr = new FormManager();
+    const fid = mgr.begin("talk", "desc");
+    expect(mgr.activeCommands().has("talk")).toBe(true);
+    const form = mgr.submit(fid);
+    expect(form).not.toBeNull();
+    expect(mgr.activeCommands().has("talk")).toBe(false);
+    expect(mgr.getForm(fid)).toBeNull();
+  });
+
+  test("submit 后返回的 form 含累积的 accumulatedArgs", () => {
+    const mgr = new FormManager();
+    const fid = mgr.begin("talk", "desc");
+    mgr.partialSubmit(fid, { target: "sophia", context: "fork" });
+    const form = mgr.submit(fid);
+    expect(form!.accumulatedArgs).toEqual({ target: "sophia", context: "fork" });
+  });
+});
+
+describe("collectCommandTraits — 冒泡匹配（前缀）", () => {
+  test("binding=talk 命中 activePath=talk.fork（父命中子）", () => {
+    const traits = [trait("kernel", "talkable", ["talk"])];
+    const result = collectCommandTraits(traits, new Set(["talk.fork"]));
+    expect(result).toContain("kernel:talkable");
+  });
+
+  test("binding=talk.fork 只命中 talk.fork，不命中 talk.continue", () => {
+    const traits = [trait("kernel", "talkable/cross_object", ["talk.fork"])];
+    expect(collectCommandTraits(traits, new Set(["talk.fork"]))).toContain(
+      "kernel:talkable/cross_object",
+    );
+    expect(collectCommandTraits(traits, new Set(["talk.continue"]))).not.toContain(
+      "kernel:talkable/cross_object",
+    );
+  });
+
+  test("binding=talk.continue.relation_update 精确命中", () => {
+    const traits = [
+      trait("kernel", "talkable/relation_update", ["talk.continue.relation_update"]),
+    ];
+    expect(
+      collectCommandTraits(
+        traits,
+        new Set(["talk.continue.relation_update"]),
+      ),
+    ).toContain("kernel:talkable/relation_update");
+  });
+
+  test("多个 binding 冒泡：talk 命中 talk.fork + talk.continue.relation_update", () => {
+    const traits = [
+      trait("kernel", "talkable", ["talk"]),
+      trait("kernel", "talkable/cross_object", ["talk.fork"]),
+      trait("kernel", "talkable/relation_update", ["talk.continue.relation_update"]),
+    ];
+    /* activePath = "talk.fork"：talkable 父绑定命中；cross_object 精确命中；relation_update 不命中 */
+    const result = collectCommandTraits(traits, new Set(["talk.fork"]));
+    expect(result).toContain("kernel:talkable");
+    expect(result).toContain("kernel:talkable/cross_object");
+    expect(result).not.toContain("kernel:talkable/relation_update");
+  });
+
+  test("back-compat: 旧 flat binding（如 'talk'）在 path='talk' 时命中自己", () => {
+    const traits = [trait("kernel", "talkable", ["talk"])];
+    expect(collectCommandTraits(traits, new Set(["talk"]))).toContain(
+      "kernel:talkable",
+    );
+  });
+});

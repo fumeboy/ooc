@@ -2,11 +2,19 @@
  * Form 管理器
  *
  * 管理指令生命周期的 form 模型。
- * 每个指令通过 begin/submit/cancel 三阶段执行。
+ * 每个指令通过 begin/partialSubmit/submit/cancel 四阶段执行：
+ * - begin：创建 form，loading 相关 trait（open tool 触发）
+ * - partialSubmit：累积 args 但不执行；重算命令路径，供渐进式填表（spec Phase 4）
+ * - submit：按最终 args 执行指令，form 结束（引用计数 -1）
+ * - cancel：放弃执行，form 结束（等价 submit，但不触发指令）
+ *
  * 同类型 form 共享 trait 加载（引用计数）。
  *
  * @ref docs/superpowers/specs/2026-04-12-command-lifecycle-progressive-trait-design.md#6
+ * @ref docs/superpowers/specs/2026-04-23-three-phase-trait-activation-design.md#第二部分-process过程
  */
+
+import { deriveCommandPath } from "./command-tree.js";
 
 /** 活跃的 Form */
 export interface ActiveForm {
@@ -22,6 +30,33 @@ export interface ActiveForm {
   trait?: string;
   /** call_function 专用：函数名 */
   functionName?: string;
+
+  /**
+   * 累积的 args（Phase 4 渐进式填表）
+   *
+   * partialSubmit 把本次 args 与现有累积合并（后者覆盖前者同名字段）；
+   * 最终 submit 时把累积 args 交付给指令执行器。
+   * 未经 partial 的 form 保持 `{}`。
+   */
+  accumulatedArgs: Record<string, unknown>;
+
+  /**
+   * 当前命令路径（由 deriveCommandPath(command, accumulatedArgs) 算出）
+   *
+   * begin 时 = command（未深入）。
+   * 每次 partialSubmit 后按新累积 args 重算（可能从 "talk" 深化到 "talk.continue.relation_update"）。
+   * 这个路径用于与 trait.command_binding.commands 做前缀匹配。
+   */
+  commandPath: string;
+
+  /**
+   * 本 form 已加载的 trait ID 列表（Phase 4）
+   *
+   * 用于 submit(partial=false) / cancel 时批量释放——避免因渐进填表
+   * 触发的临时 trait 在 form 结束后仍残留 context。
+   * begin 时由 engine 写入初始加载集；partialSubmit 新增追加；关闭时参考此字段。
+   */
+  loadedTraits: string[];
 }
 
 /** 生成 form_id */
@@ -38,11 +73,44 @@ export class FormManager {
   begin(command: string, description: string, extra?: { trait?: string; functionName?: string }): string {
     const formId = generateFormId();
     this.forms.set(formId, {
-      formId, command, description, createdAt: Date.now(),
+      formId,
+      command,
+      description,
+      createdAt: Date.now(),
+      accumulatedArgs: {},
+      commandPath: deriveCommandPath(command, {}) || command,
+      loadedTraits: [],
       ...extra,
     });
     this.commandRefCount.set(command, (this.commandRefCount.get(command) ?? 0) + 1);
     return formId;
+  }
+
+  /**
+   * 部分提交（Phase 4 渐进式填表）
+   *
+   * 累积 args、重算 commandPath，但**不**消费 form（form 仍保留、引用计数不变）。
+   *
+   * @returns 更新后的 form 快照；formId 不存在时返回 null
+   */
+  partialSubmit(
+    formId: string,
+    args: Record<string, unknown>,
+  ): ActiveForm | null {
+    const form = this.forms.get(formId);
+    if (!form) return null;
+
+    /* 累积 args：后者覆盖前者同名字段。生成全新对象（immutability）。 */
+    const nextArgs: Record<string, unknown> = { ...form.accumulatedArgs, ...args };
+    const nextPath = deriveCommandPath(form.command, nextArgs) || form.command;
+
+    const next: ActiveForm = {
+      ...form,
+      accumulatedArgs: nextArgs,
+      commandPath: nextPath,
+    };
+    this.forms.set(formId, next);
+    return next;
   }
 
   /** 提交 form，返回被提交的 form 信息（不存在返回 null） */
@@ -64,9 +132,32 @@ export class FormManager {
     return this.submit(formId); // 逻辑相同：移除 form + 引用计数 -1
   }
 
+  /**
+   * 追加本 form 已加载的 trait（engine 在 begin / partialSubmit 后调用）
+   *
+   * 幂等：重复 id 不再追加。
+   */
+  addLoadedTraits(formId: string, traitIds: string[]): void {
+    const form = this.forms.get(formId);
+    if (!form) return;
+    const set = new Set(form.loadedTraits);
+    for (const id of traitIds) set.add(id);
+    this.forms.set(formId, { ...form, loadedTraits: Array.from(set) });
+  }
+
   /** 获取当前活跃的指令类型集合（引用计数 > 0 的） */
   activeCommands(): Set<string> {
     return new Set(this.commandRefCount.keys());
+  }
+
+  /**
+   * 获取当前所有活跃 form 的 commandPath 集合（Phase 4）
+   *
+   * 用于按 path 前缀匹配 trait.command_binding。同一 command 多 form 时取各自的
+   * commandPath；path 可以重复也可以不同（partial 深度不同）。
+   */
+  activeCommandPaths(): Set<string> {
+    return new Set(Array.from(this.forms.values()).map((f) => f.commandPath));
   }
 
   /** 获取所有活跃 form 列表 */
@@ -83,8 +174,20 @@ export class FormManager {
   static fromData(forms: ActiveForm[]): FormManager {
     const mgr = new FormManager();
     for (const form of forms) {
-      mgr.forms.set(form.formId, form);
-      mgr.commandRefCount.set(form.command, (mgr.commandRefCount.get(form.command) ?? 0) + 1);
+      /* 向后兼容：老 form 可能没有 accumulatedArgs / commandPath / loadedTraits */
+      const normalized: ActiveForm = {
+        formId: form.formId,
+        command: form.command,
+        description: form.description,
+        createdAt: form.createdAt,
+        trait: form.trait,
+        functionName: form.functionName,
+        accumulatedArgs: form.accumulatedArgs ?? {},
+        commandPath: form.commandPath ?? (deriveCommandPath(form.command, form.accumulatedArgs ?? {}) || form.command),
+        loadedTraits: Array.isArray(form.loadedTraits) ? form.loadedTraits : [],
+      };
+      mgr.forms.set(normalized.formId, normalized);
+      mgr.commandRefCount.set(normalized.command, (mgr.commandRefCount.get(normalized.command) ?? 0) + 1);
     }
     return mgr;
   }

@@ -142,7 +142,7 @@ export const SUBMIT_TOOL: ToolDefinition = {
   type: "function",
   function: {
     name: "submit",
-    description: "提交指令执行。必须先 open 获取 form_id。记得带 title 参数，用一句话说明本次提交的意图。think/talk 指令通过 context=fork|continue 表达四种语义：think(fork) 派生自己的子线程；think(continue,threadId) 向自己某线程补充；talk(fork,target) 向别人新根线程；talk(continue,target,threadId) 向别人已有线程补充。talk 可选带 form 参数——当你已经有几个候选回复时，用结构化表单代替纯文本列表，接收方前端会把它渲染为 option picker。",
+    description: "提交指令执行。必须先 open 获取 form_id。记得带 title 参数，用一句话说明本次提交的意图。think/talk 指令通过 context=fork|continue 表达四种语义：think(fork) 派生自己的子线程；think(continue,threadId) 向自己某线程补充；talk(fork,target) 向别人新根线程；talk(continue,target,threadId) 向别人已有线程补充。talk 可选带 form 参数——当你已经有几个候选回复时，用结构化表单代替纯文本列表，接收方前端会把它渲染为 option picker。\n\n【渐进填表（partial=true）】当一个指令的参数不是一次能填齐、或希望按路径深化先看相关 trait 说明时，多次 submit 同一个 form_id 并带 partial=true。每次 partial 会把 args 累积进表，按深化路径新增匹配的 TRAIT.md 到上下文——直到最后一次 partial=false（或不带 partial）才真正执行。partial 仅对有子路径的指令（如 talk）有用；无深化分支的指令建议直接 partial=false。",
     parameters: {
       type: "object",
       properties: {
@@ -154,6 +154,10 @@ export const SUBMIT_TOOL: ToolDefinition = {
         form_id: {
           type: "string",
           description: "open 返回的 form_id",
+        },
+        partial: {
+          type: "boolean",
+          description: "是否为部分提交（Phase 4 渐进填表）。true=累积参数但不执行；false（默认）=按累积参数执行指令。",
         },
         /* program */
         code: { type: "string", description: "program: JavaScript 代码" },

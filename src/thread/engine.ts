@@ -1355,7 +1355,8 @@ export async function runWithThreadTree(
               trait: args.trait as string,
               functionName: args.function_name as string,
             });
-            const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommands());
+            /* Phase 4：按 commandPath 集合做冒泡前缀匹配（父 binding 命中子路径） */
+            const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommandPaths());
             /* 累加真正"新加载"的 trait（changed=true 表示此次激活；false 表示本就在作用域内） */
             const newlyLoadedTraits: string[] = [];
             for (const traitName of traitsToLoad) {
@@ -1366,6 +1367,8 @@ export async function runWithThreadTree(
               const changed = await tree.activateTrait(threadId, args.trait as string);
               if (changed) newlyLoadedTraits.push(args.trait as string);
             }
+            /* Phase 4：记录本 form 引入的 trait，供 submit(partial=false) / cancel 时回收 */
+            formManager.addLoadedTraits(formId, newlyLoadedTraits);
 
             const td = tree.readThreadData(threadId);
             if (td) {
@@ -1519,6 +1522,53 @@ export async function runWithThreadTree(
 
         /* --- Submit --- */
         else if (toolName === "submit") {
+          /* Phase 4：partial=true 走渐进式填表分支，不消费 form */
+          const isPartial = args.partial === true;
+          if (isPartial) {
+            const formId = args.form_id as string ?? "";
+            /* 提取除元参数外的 args 作为累积字段（剥离 form_id / partial / title / mark） */
+            const META_KEYS = new Set(["form_id", "partial", "title", "mark"]);
+            const incoming: Record<string, unknown> = {};
+            for (const [k, v] of Object.entries(args)) {
+              if (!META_KEYS.has(k)) incoming[k] = v;
+            }
+            const updatedForm = formManager.partialSubmit(formId, incoming);
+            if (!updatedForm) {
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.actions.push({ type: "inject", content: `[错误] Form ${formId} 不存在（partial submit 失败）。`, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+            } else {
+              /* 根据新路径重新 collectCommandTraits，追加本 form 新 open 的 trait */
+              const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommandPaths());
+              const newlyLoadedTraits: string[] = [];
+              for (const traitName of traitsToLoad) {
+                if (updatedForm.loadedTraits.includes(traitName)) continue; /* 已加载过 */
+                const changed = await tree.activateTrait(threadId, traitName);
+                if (changed) newlyLoadedTraits.push(traitName);
+              }
+              if (newlyLoadedTraits.length > 0) {
+                formManager.addLoadedTraits(formId, newlyLoadedTraits);
+              }
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.activeForms = formManager.toData();
+                const pathHint = `当前路径：${updatedForm.commandPath}`;
+                const loadHint = newlyLoadedTraits.length > 0
+                  ? `按新路径追加 trait：${newlyLoadedTraits.join(", ")}`
+                  : `按新路径无新增 trait`;
+                td.actions.push({
+                  type: "inject",
+                  content: `[partial submit] Form ${formId} 已累积参数（未执行）。${pathHint}。${loadHint}。可继续 partial，或 partial=false 执行指令。`,
+                  timestamp: Date.now(),
+                });
+                tree.writeThreadData(threadId, td);
+              }
+              consola.info(`[Engine] partial submit: form=${formId} path=${updatedForm.commandPath}`);
+            }
+            /* partial 分支到此结束，不进入指令执行 */
+          } else {
           const form = formManager.submit(args.form_id as string ?? "");
 
           if (!form) {
@@ -1528,6 +1578,12 @@ export async function runWithThreadTree(
               tree.writeThreadData(threadId, td);
             }
           } else {
+            /* Phase 4：把累积 args 合并进本次调用 args，让"渐进填表"对下游指令透明 */
+            if (form.accumulatedArgs && Object.keys(form.accumulatedArgs).length > 0) {
+              for (const [k, v] of Object.entries(form.accumulatedArgs)) {
+                if (!(k in args)) args[k] = v;
+              }
+            }
             const command = form.command;
 
             /* program */
@@ -1897,11 +1953,20 @@ export async function runWithThreadTree(
               }
             }
 
-            /* trait 卸载 */
+            /* trait 卸载（submit 结束时）
+             * Phase 4：优先用 form.loadedTraits；向后兼容的兜底走 collectCommandTraits。
+             * 仍被其他 active form 需要的 trait 不卸。固定 trait 亦豁免。 */
             if (command !== "_trait" && command !== "_skill" && command !== "defer") {
               if (!formManager.activeCommands().has(form.command)) {
-                const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
-                for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName);
+                const traitsToUnload = form.loadedTraits && form.loadedTraits.length > 0
+                  ? form.loadedTraits
+                  : collectCommandTraits(config.traits, new Set([form.command]));
+                const stillNeededSet = new Set(collectCommandTraits(config.traits, formManager.activeCommandPaths()));
+                for (const traitName of traitsToUnload) {
+                  if (tree.isPinnedTrait(threadId, traitName)) continue;
+                  if (stillNeededSet.has(traitName)) continue;
+                  await tree.deactivateTrait(threadId, traitName);
+                }
               }
 
               /* defer hook 注入：command 被 submit 时，收集匹配的 on:{command} hooks */
@@ -1946,6 +2011,7 @@ export async function runWithThreadTree(
             if (tdAfter) { tdAfter.activeForms = formManager.toData(); tree.writeThreadData(threadId, tdAfter); }
             consola.info(`[Engine] form.submit: ${command} (${form.formId})`);
           }
+          } /* end of non-partial branch */
         }
 
         /* --- Close --- */
@@ -1956,11 +2022,22 @@ export async function runWithThreadTree(
             const unloadedTraits: string[] = [];
             const keptPinnedTraits: string[] = [];
             if (form.command !== "_trait" && form.command !== "_skill" && form.command !== "_file") {
-              // command 类型：卸载 command 关联 trait（仅当该 command 已无其他 active form），固定 trait 豁免
+              // command 类型：卸载本 form 引入的 trait
+              // Phase 4：优先用 form.loadedTraits（含渐进填表带入的子 trait）。
+              //          回退路径：老 form 没有 loadedTraits 字段时用 collectCommandTraits 兜底。
+              // 仅当该 command 已无其他 active form 时才卸载；固定 trait 豁免。
               if (!formManager.activeCommands().has(form.command)) {
-                const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
+                const traitsToUnload = form.loadedTraits && form.loadedTraits.length > 0
+                  ? form.loadedTraits
+                  : collectCommandTraits(config.traits, new Set([form.command]));
+                /* 当前仍需被其他 active form 的 commandPath 集合所需 → 不卸 */
+                const stillNeededSet = new Set(collectCommandTraits(config.traits, formManager.activeCommandPaths()));
                 for (const traitName of traitsToUnload) {
                   if (tree.isPinnedTrait(threadId, traitName)) {
+                    keptPinnedTraits.push(traitName);
+                    continue;
+                  }
+                  if (stillNeededSet.has(traitName)) {
                     keptPinnedTraits.push(traitName);
                     continue;
                   }
@@ -1972,7 +2049,7 @@ export async function runWithThreadTree(
               // trait 类型：close 等价 unpin + 可能 deactivate。
               // 逻辑：先 unpin；若该 trait 不再被任何 active command 需要，则 deactivate
               await tree.unpinTrait(threadId, form.trait);
-              const stillNeededByCommand = collectCommandTraits(config.traits, formManager.activeCommands()).has(form.trait);
+              const stillNeededByCommand = collectCommandTraits(config.traits, formManager.activeCommandPaths()).has(form.trait);
               if (!stillNeededByCommand) {
                 const changed = await tree.deactivateTrait(threadId, form.trait);
                 if (changed) unloadedTraits.push(form.trait);
@@ -2663,7 +2740,8 @@ export async function resumeWithThreadTree(
             const formId = formManager.begin(command, description, {
               trait: args.trait as string, functionName: args.function_name as string,
             });
-            const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommands());
+            /* Phase 4：按 commandPath 冒泡前缀匹配 */
+            const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommandPaths());
             const newlyLoadedTraits: string[] = [];
             for (const traitName of traitsToLoad) {
               const changed = await tree.activateTrait(threadId, traitName);
@@ -2673,6 +2751,7 @@ export async function resumeWithThreadTree(
               const changed = await tree.activateTrait(threadId, args.trait as string);
               if (changed) newlyLoadedTraits.push(args.trait as string);
             }
+            formManager.addLoadedTraits(formId, newlyLoadedTraits);
 
             const td = tree.readThreadData(threadId);
             if (td) {
@@ -2791,11 +2870,50 @@ export async function resumeWithThreadTree(
 
         /* --- Submit (resume) --- */
         } else if (toolName === "submit") {
+          /* Phase 4：resume 路径同 run 路径，支持 partial=true 渐进填表 */
+          const isPartial = args.partial === true;
+          if (isPartial) {
+            const formId = args.form_id as string ?? "";
+            const META_KEYS = new Set(["form_id", "partial", "title", "mark"]);
+            const incoming: Record<string, unknown> = {};
+            for (const [k, v] of Object.entries(args)) {
+              if (!META_KEYS.has(k)) incoming[k] = v;
+            }
+            const updatedForm = formManager.partialSubmit(formId, incoming);
+            if (!updatedForm) {
+              const td = tree.readThreadData(threadId);
+              if (td) { td.actions.push({ type: "inject", content: `[错误] Form ${formId} 不存在（partial submit 失败）。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+            } else {
+              const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommandPaths());
+              const newlyLoadedTraits: string[] = [];
+              for (const traitName of traitsToLoad) {
+                if (updatedForm.loadedTraits.includes(traitName)) continue;
+                const changed = await tree.activateTrait(threadId, traitName);
+                if (changed) newlyLoadedTraits.push(traitName);
+              }
+              if (newlyLoadedTraits.length > 0) formManager.addLoadedTraits(formId, newlyLoadedTraits);
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.activeForms = formManager.toData();
+                const pathHint = `当前路径：${updatedForm.commandPath}`;
+                const loadHint = newlyLoadedTraits.length > 0 ? `按新路径追加 trait：${newlyLoadedTraits.join(", ")}` : `按新路径无新增 trait`;
+                td.actions.push({ type: "inject", content: `[partial submit] Form ${formId} 已累积参数（未执行）。${pathHint}。${loadHint}。可继续 partial，或 partial=false 执行指令。`, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+              consola.info(`[Engine] partial submit(resume): form=${formId} path=${updatedForm.commandPath}`);
+            }
+          } else {
           const form = formManager.submit(args.form_id as string ?? "");
           if (!form) {
             const td = tree.readThreadData(threadId);
             if (td) { td.actions.push({ type: "inject", content: `[错误] Form ${args.form_id} 不存在。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
           } else {
+            /* Phase 4：合并累积 args */
+            if (form.accumulatedArgs && Object.keys(form.accumulatedArgs).length > 0) {
+              for (const [k, v] of Object.entries(form.accumulatedArgs)) {
+                if (!(k in args)) args[k] = v;
+              }
+            }
             const command = form.command;
             if (command === "program" && args.code) {
               const { context: execCtx, getOutputs, getWrittenPaths } = buildExecContext(threadId);
@@ -3037,11 +3155,23 @@ export async function resumeWithThreadTree(
               }
             }
             if (command !== "_trait" && command !== "_skill") {
-              if (!formManager.activeCommands().has(form.command)) { const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command])); for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName); }
+              /* Phase 4 同 run 路径：优先用 form.loadedTraits 卸载本 form 引入的 trait */
+              if (!formManager.activeCommands().has(form.command)) {
+                const traitsToUnload = form.loadedTraits && form.loadedTraits.length > 0
+                  ? form.loadedTraits
+                  : collectCommandTraits(config.traits, new Set([form.command]));
+                const stillNeededSet = new Set(collectCommandTraits(config.traits, formManager.activeCommandPaths()));
+                for (const traitName of traitsToUnload) {
+                  if (tree.isPinnedTrait(threadId, traitName)) continue;
+                  if (stillNeededSet.has(traitName)) continue;
+                  await tree.deactivateTrait(threadId, traitName);
+                }
+              }
             }
             const tdAfter = tree.readThreadData(threadId); if (tdAfter) { tdAfter.activeForms = formManager.toData(); tree.writeThreadData(threadId, tdAfter); }
             consola.info(`[Engine] form.submit: ${command} (${form.formId})`);
           }
+          } /* end of non-partial branch (resume) */
 
         /* --- Close (resume) --- */
         } else if (toolName === "close") {
@@ -3052,9 +3182,17 @@ export async function resumeWithThreadTree(
             const keptPinnedTraits: string[] = [];
             if (form.command !== "_trait" && form.command !== "_skill" && form.command !== "_file") {
               if (!formManager.activeCommands().has(form.command)) {
-                const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
+                /* Phase 4 同 run 路径：优先 form.loadedTraits */
+                const traitsToUnload = form.loadedTraits && form.loadedTraits.length > 0
+                  ? form.loadedTraits
+                  : collectCommandTraits(config.traits, new Set([form.command]));
+                const stillNeededSet = new Set(collectCommandTraits(config.traits, formManager.activeCommandPaths()));
                 for (const traitName of traitsToUnload) {
                   if (tree.isPinnedTrait(threadId, traitName)) {
+                    keptPinnedTraits.push(traitName);
+                    continue;
+                  }
+                  if (stillNeededSet.has(traitName)) {
                     keptPinnedTraits.push(traitName);
                     continue;
                   }
@@ -3065,7 +3203,7 @@ export async function resumeWithThreadTree(
             } else if (form.command === "_trait" && form.trait) {
               /* close _trait 型 form：unpin + 若无命令再需要则 deactivate */
               await tree.unpinTrait(threadId, form.trait);
-              const stillNeededByCommand = collectCommandTraits(config.traits, formManager.activeCommands()).has(form.trait);
+              const stillNeededByCommand = collectCommandTraits(config.traits, formManager.activeCommandPaths()).has(form.trait);
               if (!stillNeededByCommand) {
                 const changed = await tree.deactivateTrait(threadId, form.trait);
                 if (changed) unloadedTraits.push(form.trait);

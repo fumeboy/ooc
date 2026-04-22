@@ -10,6 +10,7 @@
 
 import type { TraitDefinition } from "../types/index.js";
 import type { ThreadFrameHook } from "./types.js";
+import { matchesCommandPath } from "./command-tree.js";
 
 /**
  * 获取 trait 的完整标识（本地版本，避免循环依赖）
@@ -23,29 +24,42 @@ function localTraitId(trait: TraitDefinition): string {
 /**
  * 收集指令绑定的 trait，返回需要加载的 trait ID 列表
  *
- * 遍历所有 trait，检查 commandBinding.commands 是否与 activeCommands 有交集。
+ * Phase 4 升级：参数从 `activeCommands: Set<command>` 扩展为
+ * `activePaths: Set<commandPath>`，用 `matchesCommandPath`（冒泡前缀匹配）
+ * 替代精确名字匹配。
+ *
+ * 冒泡语义：
+ * - binding `"talk"` 命中路径 `"talk"` / `"talk.fork"` / `"talk.continue.relation_update"`
+ * - binding `"talk.fork"` 只命中 `"talk.fork"`
+ * - binding `"talk.continue.relation_update"` 只命中精确路径
+ *
+ * 向后兼容：老的 flat binding（如 "talk"）在 activePaths 含 "talk" 时继续命中。
  *
  * @param traits - 所有已加载的 trait 定义
- * @param activeCommands - 当前活跃的指令类型集合
+ * @param activePaths - 当前活跃 form 的 commandPath 集合（可能含旧式 flat command）
  * @returns 需要激活的 trait ID 列表
  */
 export function collectCommandTraits(
   traits: TraitDefinition[],
-  activeCommands: Set<string>,
+  activePaths: Set<string>,
 ): string[] {
-  if (activeCommands.size === 0) return [];
+  if (activePaths.size === 0) return [];
 
   const result: string[] = [];
   for (const trait of traits) {
     const binding = trait.commandBinding;
     if (!binding?.commands?.length) continue;
 
-    for (const cmd of binding.commands) {
-      if (activeCommands.has(cmd)) {
-        result.push(localTraitId(trait));
-        break;
+    let matched = false;
+    outer: for (const b of binding.commands) {
+      for (const p of activePaths) {
+        if (matchesCommandPath(p, b)) {
+          matched = true;
+          break outer;
+        }
       }
     }
+    if (matched) result.push(localTraitId(trait));
   }
   return result;
 }
