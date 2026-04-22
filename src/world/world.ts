@@ -19,6 +19,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { consola } from "consola";
 import { Registry } from "./registry.js";
 import { CronManager } from "./cron.js";
+import { registerDefaultHooks } from "./hooks.js";
 import { Stone } from "../stone/index.js";
 import { loadAllTraits, loadTraitsByRef } from "../trait/index.js";
 import { OpenAICompatibleClient, type LLMClient } from "../thinkable/client.js";
@@ -199,6 +200,13 @@ export class World {
 
     /* 启动定时任务管理器 */
     this._cron.start();
+
+    /* 注册默认 build hooks（json-syntax；OOC_BUILD_HOOKS_TSC=1 时也注册 tsc-check） */
+    try {
+      registerDefaultHooks();
+    } catch (e) {
+      consola.warn("[World] 注册 build hooks 失败（继续启动）:", (e as Error).message);
+    }
 
     /* 注册所有对象到 SuperScheduler 并启动 polling
      * 每个对象都有自己的 super 镜像分身（即使从未被 talk(super)，目录也可能不存在——

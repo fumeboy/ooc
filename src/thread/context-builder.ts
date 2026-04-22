@@ -28,6 +28,7 @@ import type {
 } from "./types.js";
 import { getAncestorPath } from "./persistence.js";
 import { getActiveTraits, traitId as activatorTraitId } from "../trait/activator.js";
+import { getBuildFeedback, formatFeedbackForContext } from "../world/hooks.js";
 import { existsSync, readFileSync } from "node:fs";
 import { join as pathJoin } from "node:path";
 
@@ -209,6 +210,24 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
         /* 读取失败：静默跳过 */
       }
     }
+  }
+
+  /* build_feedback 窗口：注入最近未通过的 build hook 结果
+   *
+   * 由 `src/world/hooks.ts` 的 runBuildHooks 在 file_ops 类 action 后触发。
+   * 这里只负责读当前线程的失败列表，格式化后作为 knowledge 注入。
+   * 成功的 hook 不会出现在 getBuildFeedback 返回里；超过 5 分钟自动过期。
+   *
+   * @ref docs/工程管理/迭代/all/20260422_feature_build_feedback_loop.md
+   */
+  try {
+    const bf = getBuildFeedback(threadId);
+    if (bf.length > 0) {
+      const content = formatFeedbackForContext(bf);
+      if (content) knowledge.push({ name: "build_feedback", content });
+    }
+  } catch {
+    /* 读取 feedback 失败：静默跳过 */
   }
 
   /* 3. parentExpectation

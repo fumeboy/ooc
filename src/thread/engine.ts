@@ -27,6 +27,7 @@ import { getActiveTraits, traitId } from "../trait/activator.js";
 import { FormManager } from "./form.js";
 import { collectCommandTraits, collectCommandHooks } from "./hooks.js";
 import { buildAvailableTools } from "./tools.js";
+import { runBuildHooks } from "../world/hooks.js";
 
 import type { LLMClient, Message, ToolCall } from "../thinkable/client.js";
 import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "../types/index.js";
@@ -150,6 +151,67 @@ export interface TalkReturn {
 /** 生成 session ID */
 function generateSessionId(): string {
   return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * 提取一次 call_function 参数中涉及的"被写入文件路径"（用于触发 build hooks）
+ *
+ * 识别的方法：
+ * - writeFile / editFile / deleteFile → args.path
+ * - apply_edits → 读 plan 后对每个 change 的 path 触发（此处只能返回空，由 apply_edits 内部自己触发更合适——
+ *   MVP 先不深入，仅接 writeFile/editFile）
+ *
+ * 防递归：返回的 path 必然是 LLM 主动写的文件；hook 内部如果又调 writeFile 需要自己判断不再回灌。
+ */
+function extractWrittenPaths(
+  trait: string | undefined,
+  functionName: string | undefined,
+  args: unknown,
+): string[] {
+  if (!trait || !functionName) return [];
+  const isFileOps =
+    trait === "computable/file_ops" ||
+    trait === "kernel:computable/file_ops" ||
+    trait.endsWith(":computable/file_ops");
+  if (!isFileOps) return [];
+  const targetMethods = new Set(["writeFile", "editFile"]);
+  if (!targetMethods.has(functionName)) return [];
+  if (!args || typeof args !== "object") return [];
+  const path = (args as Record<string, unknown>).path;
+  if (typeof path !== "string" || path.length === 0) return [];
+  return [path];
+}
+
+/**
+ * 在 call_function 执行成功后触发 build hooks，并把结果写入 thread inject
+ *
+ * 调用方传入必要上下文；此函数不抛出（hook 内部失败被吞）。
+ * 返回 inject 用的文本（可能为空串）。
+ */
+async function triggerBuildHooksAfterCall(params: {
+  trait?: string;
+  functionName?: string;
+  args: unknown;
+  rootDir: string;
+  threadId: string;
+}): Promise<string> {
+  try {
+    const paths = extractWrittenPaths(params.trait, params.functionName, params.args);
+    if (paths.length === 0) return "";
+    const feedback = await runBuildHooks(paths, {
+      rootDir: params.rootDir,
+      threadId: params.threadId,
+    });
+    const failing = feedback.filter((f) => !f.success);
+    if (failing.length === 0) return "";
+    const lines = [`[build_hooks] ${failing.length} 个检查未通过（下一轮 Context 的 <knowledge name="build_feedback"> 会展开）:`];
+    for (const f of failing) {
+      lines.push(`- [${f.hookName}] ${f.path}: ${(f.errors?.[0] ?? f.output).slice(0, 200)}`);
+    }
+    return lines.join("\n");
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -1619,6 +1681,21 @@ export async function runWithThreadTree(
                   td.actions.push({ type: "inject", content: `>>> ${trait}.${functionName} 结果:\n${resultText}`, timestamp: Date.now() });
                   tree.writeThreadData(threadId, td);
                 }
+                /* build hook：file_ops 写文件动作完成后自动触发（tsc/lint/json-syntax 等） */
+                const hookInject = await triggerBuildHooksAfterCall({
+                  trait,
+                  functionName,
+                  args: args.args,
+                  rootDir: config.rootDir,
+                  threadId,
+                });
+                if (hookInject) {
+                  const td2 = tree.readThreadData(threadId);
+                  if (td2) {
+                    td2.actions.push({ type: "inject", content: hookInject, timestamp: Date.now() });
+                    tree.writeThreadData(threadId, td2);
+                  }
+                }
                 consola.info(`[Engine] call_function: ${trait}.${functionName}`);
               }
             }
@@ -2660,6 +2737,21 @@ export async function resumeWithThreadTree(
               if (td) {
                 td.actions.push({ type: "inject", content: `>>> ${trait}.${functionName} 结果:\n${resultText}`, timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
+              }
+              /* build hook（resume 路径）：file_ops 写文件动作完成后自动触发 */
+              const hookInjectResume = await triggerBuildHooksAfterCall({
+                trait,
+                functionName,
+                args: args.args,
+                rootDir: config.rootDir,
+                threadId,
+              });
+              if (hookInjectResume) {
+                const td2 = tree.readThreadData(threadId);
+                if (td2) {
+                  td2.actions.push({ type: "inject", content: hookInjectResume, timestamp: Date.now() });
+                  tree.writeThreadData(threadId, td2);
+                }
               }
               }  /* end of "if (trait && functionName)" else-branch */
             } else if (command === "set_plan") {
