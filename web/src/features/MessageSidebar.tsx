@@ -214,10 +214,19 @@ export function MessageSidebar() {
       }
     }
 
-    /* actions：只取当前节点自身的 actions（不递归子节点——子线程有自己的 Body） */
+    /* actions：只取当前节点自身的 actions（不递归子节点——子线程有自己的 Body）。
+     * MessageSidebar 是面向"对话感"的高层视图，额外过滤掉 `inject` / `mark_inbox` 这类
+     * 内部协议噪音（如 `[talk → user] remote_thread_id = ...` / `Form x 已创建 相关知识已加载`）；
+     * 用户在 ThreadsTreeView 的线程详情页仍能看到完整 actions（详情视图不经过此过滤）。 */
     const actions = (node.actions ?? [])
       .map((a, i) => ({ ...a, _origIndex: i }))
-      .filter((a) => a.type !== "message_in" && a.type !== "message_out" && a.type !== "thread_return");
+      .filter((a) =>
+        a.type !== "message_in"
+        && a.type !== "message_out"
+        && a.type !== "thread_return"
+        && a.type !== "inject"
+        && a.type !== "mark_inbox",
+      );
 
     /* 合并并按时间排序（msgs + 合成 talk msgs + actions） */
     const allMsgs = [...msgs, ...syntheticTalkMsgs];
@@ -590,33 +599,40 @@ export function MessageSidebar() {
   /* user 相关线程聚合（用于 threads list + Header 红点） */
   const userThreads = useUserThreads();
 
-  /* session 切换时重置 currentThreadId（避免保留跨 session 的旧 thread） */
-  useEffect(() => {
-    setCurrentThreadId(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId]);
-
-  /* 自动选默认线程：若 currentThreadId 为空，自动聚焦到"当前对话主对象"的 root thread
+  /* 统一 currentThreadId 聚焦逻辑：
+   * - 当前 threadId 仍在新 session 的 subFlows 里 → 保持（用户手动切换后仍有效）
+   * - 否则按 preferredNames 优先级挑一个 root thread 作为默认
+   * - subFlows 尚未就绪 → 清空（由"思考中..."空态显示，等 SSE 到后再 pick）
    *
-   * 选取优先级（覆盖新 session 刚起步时 supervisor 还没 subFlow 的场景）：
-   *   1. activeFlow.stoneName 对应的 subFlow（用户点欢迎页 bruce 卡片时 stoneName=bruce）
-   *   2. target（header 展示的目标）对应的 subFlow
-   *   3. stoneName === "supervisor" 的 subFlow（回退到默认 target）
-   *   4. subFlows 里任一 root（保底不让 sidebar 停在空态）
-   * 若尚无 subFlow，currentThreadId 保持 null，Body 显示空状态（等 SSE 到达） */
+   * 合并原因：之前分 session-switch reset + auto-focus pick 两个 effect，
+   * 在 activeId 变化瞬间存在微秒级 race 可能导致 currentThreadId 停留在 null（sidebar 空白）。
+   * 合并后以单次 dep 变化为触发点，逻辑完整且幂等。 */
   useEffect(() => {
-    if (currentThreadId) return;
     const subFlows = activeFlow?.subFlows ?? [];
-    if (subFlows.length === 0) return;
+
+    /* 当前 threadId 仍在 subFlows 里找得到 → 保持 */
+    if (currentThreadId && subFlows.length > 0) {
+      const stillExists = findThreadInAllSubFlows(subFlows, currentThreadId) !== null;
+      if (stillExists) return;
+    }
+
+    /* subFlows 尚未就绪 */
+    if (subFlows.length === 0) {
+      if (currentThreadId) setCurrentThreadId(null);
+      return;
+    }
+
+    /* 优先级 pick：activeFlow.stoneName → target → supervisor → 任一 */
     const preferredNames = [activeFlow?.stoneName, target, DEFAULT_TARGET].filter(Boolean) as string[];
-    let picked = null as string | null;
+    let picked: string | null = null;
     for (const name of preferredNames) {
       const sf = subFlows.find((s) => s.stoneName === name);
       if (sf?.process?.root?.id) { picked = sf.process.root.id; break; }
     }
     if (!picked) picked = subFlows[0]?.process?.root?.id ?? null;
-    if (picked) setCurrentThreadId(picked);
-  }, [activeFlow, target, currentThreadId, setCurrentThreadId]);
+    if (picked && picked !== currentThreadId) setCurrentThreadId(picked);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, activeFlow, target]);
 
   /* 切到某 thread 时，把该线程所属对象 lastReadTimestamp 上报给服务端：
    *   - 时间戳取该 thread 中最大的 inbox 消息 timestamp（从 subFlows 反查 action.timestamp）
