@@ -24,6 +24,42 @@ import { toolOk, toolErr } from "../../../src/types/tool-result";
 import type { ToolResult } from "../../../src/types/tool-result";
 
 /**
+ * 行号前缀 sanity check —— 剥离 `file_ops.readFile` 等工具输出中常见的
+ * `NN | xxx` 行号前缀格式，防止 memory.md / TRAIT.md 被污染（bugfix 2026-04-22）
+ *
+ * 触发条件（全部满足才剥离）：
+ * 1. 文本按行拆分后有 **至少 2 行**
+ * 2. 所有**非空行**都以 `^\s*\d+\s*\|` 开头（连续的行号伪装，纯文本不满足）
+ *
+ * 剥离方式：
+ * - 逐行去掉 `^\s*\d+\s*\|\s?` 前缀（保留原本的正文内容，包括末尾空格）
+ * - 空行保持为空行
+ *
+ * 不误伤：
+ * - markdown 表格行（如 `| 1 | xxx |`）——表格行以 `|` 开头，非数字开头，不匹配
+ * - 混合文本（部分行带前缀、部分不带）——必须所有非空行都满足才剥离
+ * - 单行纯文本（如 "hello"）——没有行号前缀，不满足条件
+ *
+ * 同时用于 key 校验：若 key 本身就像 `"  1 | 标题"`，同样剥离。
+ */
+export function stripLineNumberPrefix(text: string): string {
+  if (!text) return text;
+
+  const linePrefixRe = /^\s*\d+\s*\|/;
+  const lines = text.split("\n");
+
+  /* 非空行必须全部匹配前缀；至少要有一行非空匹配才算"整段被污染" */
+  const nonEmpty = lines.filter(l => l.trim().length > 0);
+  if (nonEmpty.length === 0) return text;
+  const allPolluted = nonEmpty.every(l => linePrefixRe.test(l));
+  if (!allPolluted) return text;
+
+  /* 逐行剥离前缀 `^\s*\d+\s*\|\s?`（最多吃掉一个 pipe 后的空格，保留正文空白） */
+  const stripRe = /^\s*\d+\s*\|\s?/;
+  return lines.map(l => l.replace(stripRe, "")).join("\n");
+}
+
+/**
  * 把一条经验条目 append 到对象的 `stones/{name}/memory.md`（SuperFlow 沉淀工具）
  *
  * 格式规范：
@@ -49,6 +85,24 @@ async function persistToMemoryImpl(
   if (typeof content !== "string" || content.trim().length === 0) {
     return toolErr("persist_to_memory: content 必须是非空字符串");
   }
+
+  /* Sanity check —— 防御 readFile 带行号格式污染 memory.md（bugfix 2026-04-22）
+     若 LLM 把 `callMethod("computable/file_ops", "readFile", ...)` 返回的 content
+     直接传进来（形如 "  1 | xxx\n  2 | yyy"），这里剥离前缀再落盘。 */
+  const cleanKey = stripLineNumberPrefix(key).trim();
+  const cleanContent = stripLineNumberPrefix(content).trim();
+  if (cleanKey.length === 0) {
+    return toolErr(
+      "persist_to_memory: key 剥离行号前缀后为空（请传 raw 文本，不要 wrap 为 `NN | xxx` 格式）",
+    );
+  }
+  if (cleanContent.length === 0) {
+    return toolErr(
+      "persist_to_memory: content 剥离行号前缀后为空（请传 raw 文本，不要 wrap 为 `NN | xxx` 格式）",
+    );
+  }
+  key = cleanKey;
+  content = cleanContent;
 
   try {
     const fs = await import("node:fs/promises");
@@ -103,6 +157,15 @@ async function createTraitImpl(
   if (typeof content !== "string" || content.trim().length === 0) {
     return toolErr("create_trait: content 必须是非空字符串");
   }
+
+  /* Sanity check —— 同 persist_to_memory，防御带行号前缀的污染（bugfix 2026-04-22） */
+  const cleanContent = stripLineNumberPrefix(content);
+  if (cleanContent.trim().length === 0) {
+    return toolErr(
+      "create_trait: content 剥离行号前缀后为空（请传 raw TRAIT.md 内容，不要 wrap 为 `NN | xxx` 格式）",
+    );
+  }
+  content = cleanContent;
 
   /* 安全检查 */
   const trimmed = relativePath.trim();

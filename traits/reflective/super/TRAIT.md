@@ -57,6 +57,26 @@ await callMethod("reflective/super", "persist_to_memory", {
 
 格式：`## {key}（YYYY-MM-DD HH:MM）\n\n{content}\n`（不去重、append-only）。
 
+**重要约束**（避免污染 memory.md）：
+- `content` 必须是 **raw 纯文本 / markdown**
+- 不要把 `callMethod("computable/file_ops", "readFile", ...)` 返回的 `content`（带 `NN | xxx` 行号前缀）直接传进来
+- 若需引用别处的内容，请**自己抽取要点后改写**，再作为 content 传入
+- 工具已内置 sanity check（整段带行号前缀会被自动剥离），但更好的习惯是从源头传 raw 文本
+
+反例（会被 sanity check 剥离）：
+```
+  1 | # 项目知识
+  2 |
+  3 | ## 组织结构
+```
+
+正例：
+```
+# 项目知识
+
+## 组织结构
+```
+
 ### `create_trait({ relativePath, content })`
 
 在 `stones/{name}/traits/**` 下新建一个 TRAIT.md。

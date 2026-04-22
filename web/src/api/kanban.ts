@@ -2,7 +2,16 @@
 // Kanban 相关 API 调用
 
 import { fetchFileContent } from "./client";
-import type { KanbanIssue, KanbanTask } from "./types";
+import type { IssueStatus, KanbanIssue, KanbanTask, TaskStatus } from "./types";
+
+/** Issue 合法状态枚举（与后端 types.ts 保持一致） */
+export const ISSUE_STATUSES: IssueStatus[] = [
+  "discussing", "designing", "reviewing",
+  "executing", "confirming", "done", "closed",
+];
+
+/** Task 合法状态枚举（与后端 types.ts 保持一致） */
+export const TASK_STATUSES: TaskStatus[] = ["running", "done", "closed"];
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 
@@ -86,5 +95,54 @@ export async function createTask(
     body: JSON.stringify({ title, description, issueRefs }),
   });
   const json = await res.json();
+  return json.data as KanbanTask;
+}
+
+/**
+ * 切换 Issue 状态
+ *
+ * 调用成功时返回更新后的完整 Issue；失败（400/404）返回 null 并在控制台打警告，
+ * 让调用方可以做乐观更新回滚。
+ */
+export async function setIssueStatus(
+  sessionId: string, issueId: string, status: IssueStatus,
+): Promise<KanbanIssue | null> {
+  const res = await fetch(
+    `${API_BASE}/api/sessions/${sessionId}/issues/${issueId}/status`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    },
+  );
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    console.warn("[setIssueStatus] failed", json.error ?? res.status);
+    return null;
+  }
+  return json.data as KanbanIssue;
+}
+
+/**
+ * 切换 Task 状态
+ *
+ * 调用成功时返回更新后的完整 Task；失败时返回 null。
+ */
+export async function setTaskStatus(
+  sessionId: string, taskId: string, status: TaskStatus,
+): Promise<KanbanTask | null> {
+  const res = await fetch(
+    `${API_BASE}/api/sessions/${sessionId}/tasks/${taskId}/status`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    },
+  );
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    console.warn("[setTaskStatus] failed", json.error ?? res.status);
+    return null;
+  }
   return json.data as KanbanTask;
 }

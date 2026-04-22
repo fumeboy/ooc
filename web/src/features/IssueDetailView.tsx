@@ -2,9 +2,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { lastFlowEventAtom, editorTabsAtom, activeFilePathAtom } from "../store/session";
-import { fetchIssues, ackIssue, postIssueComment } from "../api/kanban";
+import { fetchIssues, ackIssue, postIssueComment, setIssueStatus, ISSUE_STATUSES } from "../api/kanban";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { CommentTimeline } from "./kanban/CommentTimeline";
+import { StatusBadgeMenu, type StatusOption } from "./kanban/StatusBadgeMenu";
 import { DynamicUI } from "./DynamicUI";
 import { ArrowLeft } from "lucide-react";
 import type { KanbanIssue, IssueStatus } from "../api/types";
@@ -19,11 +20,19 @@ const STATUS_COLORS: Record<IssueStatus, string> = {
   executing: "bg-amber-500", confirming: "bg-cyan-500", done: "bg-emerald-500", closed: "bg-gray-500",
 };
 
+/** 下拉候选项（保持 ISSUE_STATUSES 定义的顺序） */
+const ISSUE_STATUS_OPTIONS: StatusOption<IssueStatus>[] = ISSUE_STATUSES.map((s) => ({
+  value: s,
+  label: STATUS_LABELS[s],
+  color: STATUS_COLORS[s],
+}));
+
 type Tab = "description" | "comments" | "tasks" | "reports";
 
 export function IssueDetailView({ sessionId, issueId }: { sessionId: string; issueId: string }) {
   const [issue, setIssue] = useState<KanbanIssue | null>(null);
   const [tab, setTab] = useState<Tab>("comments");
+  const [statusBusy, setStatusBusy] = useState(false);
   const lastEvent = useAtomValue(lastFlowEventAtom);
   const setTabs = useSetAtom(editorTabsAtom);
   const setActivePath = useSetAtom(activeFilePathAtom);
@@ -32,6 +41,22 @@ export function IssueDetailView({ sessionId, issueId }: { sessionId: string; iss
     const issues = await fetchIssues(sessionId);
     setIssue(issues.find((i) => i.id === issueId) ?? null);
   }, [sessionId, issueId]);
+
+  /* 状态切换：乐观更新 + 调 API + 失败回滚 + SSE 刷新兜底 */
+  const handleStatusChange = useCallback(async (next: IssueStatus) => {
+    if (!issue || next === issue.status) return;
+    const prev = issue.status;
+    setStatusBusy(true);
+    setIssue({ ...issue, status: next });
+    const updated = await setIssueStatus(sessionId, issueId, next);
+    if (!updated) {
+      /* 回滚 */
+      setIssue({ ...issue, status: prev });
+    } else {
+      setIssue(updated);
+    }
+    setStatusBusy(false);
+  }, [issue, sessionId, issueId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -69,9 +94,12 @@ export function IssueDetailView({ sessionId, issueId }: { sessionId: string; iss
             <ArrowLeft className="w-4 h-4" />
           </button>
           <h2 className="text-lg font-semibold">{issue.title}</h2>
-          <span className={`px-2 py-0.5 rounded-full text-xs text-white ${STATUS_COLORS[issue.status]}`}>
-            {STATUS_LABELS[issue.status]}
-          </span>
+          <StatusBadgeMenu<IssueStatus>
+            current={issue.status}
+            options={ISSUE_STATUS_OPTIONS}
+            onSelect={handleStatusChange}
+            disabled={statusBusy}
+          />
         </div>
         <div className="text-xs text-muted-foreground mt-1">
           参与者: {issue.participants.length > 0 ? issue.participants.join(", ") : "无"}

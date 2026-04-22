@@ -2,8 +2,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { lastFlowEventAtom, editorTabsAtom, activeFilePathAtom } from "../store/session";
-import { fetchTasks, ackTask } from "../api/kanban";
+import { fetchTasks, ackTask, setTaskStatus, TASK_STATUSES } from "../api/kanban";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
+import { StatusBadgeMenu, type StatusOption } from "./kanban/StatusBadgeMenu";
 import { DynamicUI } from "./DynamicUI";
 import { ArrowLeft } from "lucide-react";
 import type { KanbanTask, TaskStatus } from "../api/types";
@@ -12,11 +13,19 @@ const STATUS_LABELS: Record<TaskStatus, string> = { running: "执行中", done: 
 const STATUS_COLORS: Record<TaskStatus, string> = { running: "bg-amber-500", done: "bg-emerald-500", closed: "bg-gray-500" };
 const SUB_STATUS_COLORS: Record<string, string> = { pending: "bg-gray-400", running: "bg-amber-500", done: "bg-emerald-500" };
 
+/** 下拉候选项（保持 TASK_STATUSES 定义的顺序） */
+const TASK_STATUS_OPTIONS: StatusOption<TaskStatus>[] = TASK_STATUSES.map((s) => ({
+  value: s,
+  label: STATUS_LABELS[s],
+  color: STATUS_COLORS[s],
+}));
+
 type Tab = "description" | "subtasks" | "issues" | "reports";
 
 export function TaskDetailView({ sessionId, taskId }: { sessionId: string; taskId: string }) {
   const [task, setTask] = useState<KanbanTask | null>(null);
   const [tab, setTab] = useState<Tab>("subtasks");
+  const [statusBusy, setStatusBusy] = useState(false);
   const lastEvent = useAtomValue(lastFlowEventAtom);
   const setTabs = useSetAtom(editorTabsAtom);
   const setActivePath = useSetAtom(activeFilePathAtom);
@@ -25,6 +34,21 @@ export function TaskDetailView({ sessionId, taskId }: { sessionId: string; taskI
     const tasks = await fetchTasks(sessionId);
     setTask(tasks.find((t) => t.id === taskId) ?? null);
   }, [sessionId, taskId]);
+
+  /* 状态切换：乐观更新 + 调 API + 失败回滚 */
+  const handleStatusChange = useCallback(async (next: TaskStatus) => {
+    if (!task || next === task.status) return;
+    const prev = task.status;
+    setStatusBusy(true);
+    setTask({ ...task, status: next });
+    const updated = await setTaskStatus(sessionId, taskId, next);
+    if (!updated) {
+      setTask({ ...task, status: prev });
+    } else {
+      setTask(updated);
+    }
+    setStatusBusy(false);
+  }, [task, sessionId, taskId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -65,9 +89,12 @@ export function TaskDetailView({ sessionId, taskId }: { sessionId: string; taskI
             <ArrowLeft className="w-4 h-4" />
           </button>
           <h2 className="text-lg font-semibold">{task.title}</h2>
-          <span className={`px-2 py-0.5 rounded-full text-xs text-white ${STATUS_COLORS[task.status]}`}>
-            {STATUS_LABELS[task.status]}
-          </span>
+          <StatusBadgeMenu<TaskStatus>
+            current={task.status}
+            options={TASK_STATUS_OPTIONS}
+            onSelect={handleStatusChange}
+            disabled={statusBusy}
+          />
         </div>
         {total > 0 && (
           <div className="flex items-center gap-2 mt-2">
