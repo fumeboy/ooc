@@ -326,14 +326,29 @@ export async function updateThreadPins(
 /**
  * SSE 端点地址
  *
- * 开发模式下 Vite proxy 会 buffer SSE 流导致事件延迟，
- * 因此直连后端。后端已配置 CORS，不会有跨域问题。
+ * 开发模式下（vite dev server 5173）Vite 的 HTTP proxy 在某些路径下
+ * 会让 EventSource 长连接 stuck（已开发现：第二次新 session 后只能收到
+ * flow:start 一个事件，后续 stream:* / flow:action / flow:message 全部
+ * 收不到，必须刷新页面才能拿到最新数据）。
+ *
+ * 因此 dev 模式直连后端 8080（后端已配 CORS_HEADERS = *）。
+ * 生产 / 反向代理（nginx）模式下走相对路径，由网关负责正确转发 SSE
+ * （需 `proxy_buffering off`）。
+ *
+ * @ref docs/工程管理/迭代/all/20260422_bugfix_新session_sse实时性.md
  */
-const SSE_URL = `${BASE}/sse`;
+function resolveSseUrl(): string {
+  /* 仅当前页面在标准 vite dev port 时才认为是 dev，避免误命中生产部署 */
+  if (typeof window !== "undefined" && window.location?.port === "5173") {
+    /* dev：直连后端 8080。同 host 即可（CORS 允许 *）。 */
+    return `${window.location.protocol}//${window.location.hostname}:8080${BASE}/sse`;
+  }
+  return `${BASE}/sse`;
+}
 
 /** 创建 SSE 连接 */
 export function connectSSE(onEvent: (event: SSEEvent) => void): () => void {
-  const source = new EventSource(SSE_URL);
+  const source = new EventSource(resolveSseUrl());
 
   source.onmessage = (e) => {
     try {
