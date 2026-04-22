@@ -57,3 +57,30 @@ hooks:
 | "这个函数太简单不需要测试" | 简单函数组合出复杂 bug |
 | "测试会拖慢速度" | 没测试的代码拖慢的是调试速度 |
 | "测试立刻通过了" | 从未失败的测试证明不了任何事 |
+
+## 可用方法
+
+### run_tests({ filter?, coverage?, timeoutMs? })
+
+一次性运行 `bun test`，返回：
+
+```
+{ pass, fail, skip, failures: [{ name, file?, line?, message?, raw }], exitCode, raw, durationMs, coveragePct? }
+```
+
+### watch_tests({ filter? })
+
+启动 `bun test --watch` 进程。返回 `{ watchId, startedAt }`。
+失败时会通过内部 subscribeFailures 广播（LLM 看得到失败是通过后续的 context 注入而非 return 值）。
+
+### stop_watch({ watchId })
+
+停止 watch。
+
+### list_watches({})
+
+列出活跃 watch id。
+
+### test_coverage({ filter? })
+
+跑一次 `--coverage`，返回 `{ pass, fail, coveragePct, summary }`，其中 summary 是覆盖率表格的前 20 行文本。
