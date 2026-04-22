@@ -24,10 +24,11 @@ import { loadAllTraits, loadTraitsByRef } from "../trait/index.js";
 import { OpenAICompatibleClient, type LLMClient } from "../thinkable/client.js";
 import { DefaultConfig, type LLMConfig } from "../thinkable/config.js";
 import { emitSSE } from "../server/events.js";
-import { runWithThreadTree, resumeWithThreadTree, stepOnceWithThreadTree, writeThreadTreeFlowData, type EngineConfig, type TalkResult, type TalkReturn } from "../thread/engine.js";
+import { runWithThreadTree, resumeWithThreadTree, runSuperThread, stepOnceWithThreadTree, writeThreadTreeFlowData, type EngineConfig, type TalkResult, type TalkReturn } from "../thread/engine.js";
 import { loadSkills } from "../skill/index.js";
 import { appendUserInbox } from "../persistence/user-inbox.js";
 import { handleOnTalkToSuper } from "./super.js";
+import { SuperScheduler } from "../thread/super-scheduler.js";
 
 /** World 配置 */
 export interface WorldConfig {
@@ -115,6 +116,17 @@ export class World {
   private _debugEnabled = false;
   /** 全局暂停开关 */
   private _globalPaused = false;
+  /**
+   * SuperScheduler —— 跨 session 常驻调度器（G12 经验沉淀循环的工程通道）
+   *
+   * polling 扫所有对象的 `stones/{name}/super/`，发现 unread inbox 就触发
+   * super 线程跑一轮 ThinkLoop。runner 内部构建 EngineConfig 并调
+   * runSuperThread——目录指向 super 而非 flows/{sid}/，跨 session 常驻。
+   *
+   * 启动：init() 中注册所有对象 + start()
+   * 停止：stopSuperScheduler()（graceful shutdown）
+   */
+  private _superScheduler: SuperScheduler;
 
   constructor(config: WorldConfig) {
     this._rootDir = config.rootDir;
@@ -124,6 +136,20 @@ export class World {
       this.talk(task.targetObject, task.message, `cron:${task.createdBy}`).catch(err => {
         consola.error(`[Cron] 定时任务 ${task.id} 执行失败:`, err);
       });
+    });
+    /* SuperScheduler 在 constructor 阶段创建（runner 是箭头函数闭包，访问 this._registry / this._llm 等）。
+     * 注册和 start 在 init() 中执行——确保 stones 已 loadAll。 */
+    this._superScheduler = new SuperScheduler({
+      runner: async ({ stoneName, superDir }) => {
+        const stone = this._registry.get(stoneName);
+        if (!stone) {
+          consola.warn(`[World] super runner: 对象 "${stoneName}" 不存在，跳过`);
+          return;
+        }
+        /* 每次执行重新构建 config——traits / directory 可能动态变化（如 trait 热加载） */
+        const engineConfig = await this._buildEngineConfig(stone);
+        await runSuperThread(stoneName, superDir, engineConfig);
+      },
     });
   }
 
@@ -173,6 +199,30 @@ export class World {
 
     /* 启动定时任务管理器 */
     this._cron.start();
+
+    /* 注册所有对象到 SuperScheduler 并启动 polling
+     * 每个对象都有自己的 super 镜像分身（即使从未被 talk(super)，目录也可能不存在——
+     * SuperScheduler 内部 _needsRun 已 robust 处理"目录不存在"场景，注册都是安全的）。
+     * user 对象排除：user 不参与 ThinkLoop，无 super 概念。 */
+    for (const obj of this._registry.all()) {
+      if (obj.name === "user") continue;
+      this._superScheduler.register(obj.name, this._rootDir);
+    }
+    this._superScheduler.start();
+  }
+
+  /**
+   * 优雅停机 SuperScheduler（等所有 in-flight runner 完成后返回）
+   *
+   * 通常在进程退出（SIGINT / SIGTERM）时调用。本方法幂等。
+   */
+  async stopSuperScheduler(): Promise<void> {
+    await this._superScheduler.stop();
+  }
+
+  /** 获取 SuperScheduler 实例（用于测试 / 手动 tick / 健康检查） */
+  get superScheduler(): SuperScheduler {
+    return this._superScheduler;
   }
 
   /**

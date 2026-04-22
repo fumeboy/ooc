@@ -44,6 +44,20 @@ async function main(): Promise<void> {
     case "start": {
       const port = parseInt(args[1] ?? "8080", 10);
       startServer({ port, world });
+      /* SuperScheduler 已在 world.init() 中启动；此处注册 graceful shutdown
+       * 信号处理：进程收到 SIGINT/SIGTERM 时停止 polling 并等 in-flight runner 完成。
+       * 避免 super 线程跑到一半时被强制 kill，导致 thread.json 半写状态。 */
+      const shutdown = async (sig: string) => {
+        consola.info(`[CLI] 收到 ${sig}，开始优雅停机…`);
+        try {
+          await world.stopSuperScheduler();
+        } catch (e) {
+          consola.error("[CLI] SuperScheduler 停机出错:", e);
+        }
+        process.exit(0);
+      };
+      process.once("SIGINT", () => void shutdown("SIGINT"));
+      process.once("SIGTERM", () => void shutdown("SIGTERM"));
       break;
     }
 
