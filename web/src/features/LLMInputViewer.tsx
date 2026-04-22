@@ -74,30 +74,63 @@ interface MessageBlock {
 /**
  * 将 llm.input.txt 的内容切分为消息块
  *
- * 约定：每个块以 `--- <role> ---\n` 开头，后接该消息的 XML 文本。
- * 块之间以 `\n\n` 分隔。容错：若没有 role 分隔（历史文件），整体作为单个 "other" 块。
+ * 协议历史上有两种格式：
+ * 1. 早期：`--- system ---\n<content>\n\n--- user ---\n<content>\n...`
+ *    按 `--- <role> ---\n` 分隔。
+ * 2. 当前（engine.ts::writeFileSync 实际写法）：直接多根 XML
+ *    `<system>...</system>\n\n<user>...</user>`（见 engine.ts 行 1172）
+ *    无 role 分隔符，依赖顶层标签名。
+ *
+ * 容错策略：
+ * - 先按 `--- <role> ---` 切；命中 → 返回每块
+ * - 未命中：正则扫顶层 `<system>`、`<user>`、`<assistant>` 标签，按位置切块
+ * - 都未命中：整体作为单个 "other" 块（fallback 到 parse-error）
  */
 function splitMessageBlocks(raw: string): MessageBlock[] {
   const blocks: MessageBlock[] = [];
-  /* 正则：按 "--- xxx ---\n" 切分；保留 role 标记 */
+  /* 协议 1：按 "--- xxx ---\n" 切分 */
   const rx = /^--- (\w+) ---\n/gm;
   const matches: { role: string; start: number; contentStart: number }[] = [];
   let m: RegExpExecArray | null;
   while ((m = rx.exec(raw)) !== null) {
     matches.push({ role: m[1]!, start: m.index, contentStart: m.index + m[0].length });
   }
-  if (matches.length === 0) {
-    blocks.push({ role: "other", rawXml: raw });
+  if (matches.length > 0) {
+    for (let i = 0; i < matches.length; i++) {
+      const cur = matches[i]!;
+      const next = matches[i + 1];
+      const end = next ? next.start : raw.length;
+      const body = raw.slice(cur.contentStart, end).trim();
+      const role = (cur.role === "system" || cur.role === "user") ? cur.role : "other";
+      blocks.push({ role, rawXml: body });
+    }
     return blocks;
   }
-  for (let i = 0; i < matches.length; i++) {
-    const cur = matches[i]!;
-    const next = matches[i + 1];
-    const end = next ? next.start : raw.length;
-    const body = raw.slice(cur.contentStart, end).trim();
-    const role = (cur.role === "system" || cur.role === "user") ? cur.role : "other";
-    blocks.push({ role, rawXml: body });
+
+  /* 协议 2：直接多根 XML `<role>...</role>`。
+   * 用简单 tag 扫描（不嵌套同名 role tag 在实际输出里不会出现）：
+   * 匹配 `<(system|user|assistant)[\s>]` 作为起点，查找对应 `</role>`。 */
+  const roleRx = /<(system|user|assistant)(?:\s[^>]*)?>/g;
+  const starts: { role: string; start: number }[] = [];
+  let rm: RegExpExecArray | null;
+  while ((rm = roleRx.exec(raw)) !== null) {
+    starts.push({ role: rm[1]!, start: rm.index });
   }
+  if (starts.length > 0) {
+    for (let i = 0; i < starts.length; i++) {
+      const cur = starts[i]!;
+      const closeTag = `</${cur.role}>`;
+      const closeIdx = raw.indexOf(closeTag, cur.start);
+      const end = closeIdx >= 0 ? closeIdx + closeTag.length : (starts[i + 1]?.start ?? raw.length);
+      const body = raw.slice(cur.start, end).trim();
+      const role = (cur.role === "system" || cur.role === "user") ? cur.role : "other";
+      blocks.push({ role, rawXml: body });
+    }
+    return blocks;
+  }
+
+  /* 协议 3：无任何识别 → 整体 fallback */
+  blocks.push({ role: "other", rawXml: raw });
   return blocks;
 }
 
@@ -163,13 +196,23 @@ function parseLLMInput(raw: string): ParsedNode[] | null {
     const roots: ParsedNode[] = [];
     const idSeed = { next: 0 };
 
+    /** 尝试 parse 一段 XML；失败时包一层 <ooc-root> 再 parse（覆盖多根场景） */
+    const tryParse = (xml: string): Element | null => {
+      const doc1 = parser.parseFromString(xml, "application/xml");
+      const err1 = doc1.getElementsByTagName("parsererror")[0];
+      if (!err1 && doc1.documentElement) return doc1.documentElement;
+      /* 包根再试 */
+      const wrapped = `<ooc-root>${xml}</ooc-root>`;
+      const doc2 = parser.parseFromString(wrapped, "application/xml");
+      const err2 = doc2.getElementsByTagName("parsererror")[0];
+      if (!err2 && doc2.documentElement) return doc2.documentElement;
+      return null;
+    };
+
     for (const block of blocks) {
-      /* DOMParser 需要单根文档。block 可能是 `<system>...</system>` 或 `<user>...</user>`，
-         已是单根，直接交给 parser。 */
-      const xmlDoc = parser.parseFromString(block.rawXml, "application/xml");
-      const parseError = xmlDoc.getElementsByTagName("parsererror")[0];
-      if (parseError) {
-        /* 本块解析失败：作为伪叶子返回原文，避免全盘失败 */
+      const rootEl = tryParse(block.rawXml);
+      if (!rootEl) {
+        /* 本块仍失败 → 伪叶子保住整体 */
         roots.push({
           id: `n${idSeed.next++}`,
           tag: `${block.role}(parse-error)`,
@@ -182,8 +225,13 @@ function parseLLMInput(raw: string): ParsedNode[] | null {
         });
         continue;
       }
-      const rootEl = xmlDoc.documentElement;
-      if (!rootEl) continue;
+      /* 若根是我们包的 <ooc-root>：把其子节点各自当 root push（保留多根结构） */
+      if (rootEl.tagName === "ooc-root") {
+        for (const c of Array.from(rootEl.children)) {
+          roots.push(domToParsed(c, 0, block.role, idSeed));
+        }
+        continue;
+      }
       roots.push(domToParsed(rootEl, 0, block.role, idSeed));
     }
 
