@@ -1043,13 +1043,29 @@ export async function runWithThreadTree(
               functionName: args.function_name as string,
             });
             const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommands());
-            for (const traitName of traitsToLoad) await tree.activateTrait(threadId, traitName);
-            if (command === "call_function" && args.trait) await tree.activateTrait(threadId, args.trait as string);
+            /* 累加真正"新加载"的 trait（changed=true 表示此次激活；false 表示本就在作用域内） */
+            const newlyLoadedTraits: string[] = [];
+            for (const traitName of traitsToLoad) {
+              const changed = await tree.activateTrait(threadId, traitName);
+              if (changed) newlyLoadedTraits.push(traitName);
+            }
+            if (command === "call_function" && args.trait) {
+              const changed = await tree.activateTrait(threadId, args.trait as string);
+              if (changed) newlyLoadedTraits.push(args.trait as string);
+            }
 
             const td = tree.readThreadData(threadId);
             if (td) {
               td.activeForms = formManager.toData();
-              td.actions.push({ type: "inject", content: `Form ${formId} 已创建（${command}）。相关知识已加载。`, timestamp: Date.now() });
+              /* 告诉 LLM 这次 open 具体加载了哪些 trait，避免它盲目猜测或重复 open */
+              const loadHint = newlyLoadedTraits.length > 0
+                ? `本次新加载 trait：${newlyLoadedTraits.join(", ")}`
+                : `相关 trait 已在作用域内，无新增`;
+              td.actions.push({
+                type: "inject",
+                content: `Form ${formId} 已创建（${command}）。${loadHint}。`,
+                timestamp: Date.now(),
+              });
               tree.writeThreadData(threadId, td);
             }
             consola.info(`[Engine] open command: ${command} → ${formId}`);
@@ -1069,12 +1085,18 @@ export async function runWithThreadTree(
             }
 
             if (resolvedTraitName) {
-              await tree.activateTrait(threadId, resolvedTraitName);
+              const changed = await tree.activateTrait(threadId, resolvedTraitName);
               const formId = formManager.begin("_trait", description, { trait: resolvedTraitName });
               const td = tree.readThreadData(threadId);
               if (td) {
                 td.activeForms = formManager.toData();
-                td.actions.push({ type: "inject", content: `Trait ${resolvedTraitName} 已加载。`, timestamp: Date.now() });
+                td.actions.push({
+                  type: "inject",
+                  content: changed
+                    ? `Trait ${resolvedTraitName} 已加载到作用域。`
+                    : `Trait ${resolvedTraitName} 已在作用域内（open 成功，无新增）。`,
+                  timestamp: Date.now(),
+                });
                 tree.writeThreadData(threadId, td);
               }
               consola.info(`[Engine] open trait: ${traitInput} → ${resolvedTraitName} → ${formId}`);
@@ -1499,15 +1521,21 @@ export async function runWithThreadTree(
         else if (toolName === "close") {
           const form = formManager.cancel(args.form_id as string ?? "");
           if (form) {
+            /* 追踪本次关闭实际卸载的 trait，供 inject 文案使用 */
+            const unloadedTraits: string[] = [];
             if (form.command !== "_trait" && form.command !== "_skill" && form.command !== "_file") {
-              // command 类型：卸载 command 关联 trait
+              // command 类型：卸载 command 关联 trait（仅当该 command 已无其他 active form）
               if (!formManager.activeCommands().has(form.command)) {
                 const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
-                for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName);
+                for (const traitName of traitsToUnload) {
+                  const changed = await tree.deactivateTrait(threadId, traitName);
+                  if (changed) unloadedTraits.push(traitName);
+                }
               }
             } else if (form.command === "_trait" && form.trait) {
               // trait 类型：卸载 trait
-              await tree.deactivateTrait(threadId, form.trait);
+              const changed = await tree.deactivateTrait(threadId, form.trait);
+              if (changed) unloadedTraits.push(form.trait);
             } else if (form.command === "_file" && form.trait) {
               // file 类型：从 windows 中移除（form.trait 存储的是文件路径）
               const td = tree.readThreadData(threadId);
@@ -1521,7 +1549,39 @@ export async function runWithThreadTree(
             const td = tree.readThreadData(threadId);
             if (td) {
               td.activeForms = formManager.toData();
-              td.actions.push({ type: "inject", content: `Form ${form.formId} 已关闭。`, timestamp: Date.now() });
+              const unloadHint = unloadedTraits.length > 0
+                ? `本次卸载 trait：${unloadedTraits.join(", ")}`
+                : `无 trait 被卸载（可能仍被其他 active form 占用）`;
+              td.actions.push({
+                type: "inject",
+                content: `Form ${form.formId} 已关闭。${unloadHint}。`,
+                timestamp: Date.now(),
+              });
+              /* 防震荡安全阀：检测连续 open-close 无 submit 的模式。
+               * 历史 bug：LLM 陷入"打开 talk form → 读 inject → 关闭 → 再开"无限循环，
+               * 单线程 iteration 限制内可跑上百轮 actions 无任何外部输出。
+               * 策略：倒序扫最近 tool_use，若 close+open 各 ≥ OSCILLATION_THRESHOLD 且中间无 submit，
+               * 注入强烈警告，引导 LLM 用 wait/return 跳出循环。 */
+              const OSCILLATION_THRESHOLD = 5;
+              const recentTools = td.actions.filter(a => a.type === "tool_use");
+              let closesInTail = 0, opensInTail = 0, hadSubmit = false;
+              for (let i = recentTools.length - 1; i >= 0 && i >= recentTools.length - 20; i--) {
+                const nm = recentTools[i]!.name;
+                if (nm === "submit") { hadSubmit = true; break; }
+                if (nm === "close") closesInTail++;
+                else if (nm === "open") opensInTail++;
+                else break;
+              }
+              if (!hadSubmit && closesInTail >= OSCILLATION_THRESHOLD && opensInTail >= OSCILLATION_THRESHOLD) {
+                td.actions.push({
+                  type: "inject",
+                  content: `[⚠️ 震荡警告] 连续 open/close 超过 ${OSCILLATION_THRESHOLD} 次无 submit——你陷入了无效循环。` +
+                    `立即用 wait({reason:"..."}) 向用户报告当前状态并等待指示；或 return({summary:"..."}) 结束当前线程。` +
+                    `**不要**再 open 新 form，你已在循环里。`,
+                  timestamp: Date.now(),
+                });
+                consola.warn(`[Engine] 检测到 open/close 震荡（closes=${closesInTail} opens=${opensInTail}），注入警告`);
+              }
               tree.writeThreadData(threadId, td);
             }
             consola.info(`[Engine] close: ${form.command} (${form.formId})`);
@@ -2123,13 +2183,27 @@ export async function resumeWithThreadTree(
               trait: args.trait as string, functionName: args.function_name as string,
             });
             const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommands());
-            for (const traitName of traitsToLoad) await tree.activateTrait(threadId, traitName);
-            if (command === "call_function" && args.trait) await tree.activateTrait(threadId, args.trait as string);
+            const newlyLoadedTraits: string[] = [];
+            for (const traitName of traitsToLoad) {
+              const changed = await tree.activateTrait(threadId, traitName);
+              if (changed) newlyLoadedTraits.push(traitName);
+            }
+            if (command === "call_function" && args.trait) {
+              const changed = await tree.activateTrait(threadId, args.trait as string);
+              if (changed) newlyLoadedTraits.push(args.trait as string);
+            }
 
             const td = tree.readThreadData(threadId);
             if (td) {
               td.activeForms = formManager.toData();
-              td.actions.push({ type: "inject", content: `Form ${formId} 已创建（${command}）。相关知识已加载。`, timestamp: Date.now() });
+              const loadHint = newlyLoadedTraits.length > 0
+                ? `本次新加载 trait：${newlyLoadedTraits.join(", ")}`
+                : `相关 trait 已在作用域内，无新增`;
+              td.actions.push({
+                type: "inject",
+                content: `Form ${formId} 已创建（${command}）。${loadHint}。`,
+                timestamp: Date.now(),
+              });
               tree.writeThreadData(threadId, td);
             }
             consola.info(`[Engine] open command: ${command} → ${formId}`);
@@ -2146,12 +2220,18 @@ export async function resumeWithThreadTree(
             }
 
             if (resolvedTraitName) {
-              await tree.activateTrait(threadId, resolvedTraitName);
+              const changed = await tree.activateTrait(threadId, resolvedTraitName);
               const formId = formManager.begin("_trait", description, { trait: resolvedTraitName });
               const td = tree.readThreadData(threadId);
               if (td) {
                 td.activeForms = formManager.toData();
-                td.actions.push({ type: "inject", content: `Trait ${resolvedTraitName} 已加载。`, timestamp: Date.now() });
+                td.actions.push({
+                  type: "inject",
+                  content: changed
+                    ? `Trait ${resolvedTraitName} 已加载到作用域。`
+                    : `Trait ${resolvedTraitName} 已在作用域内（open 成功，无新增）。`,
+                  timestamp: Date.now(),
+                });
                 tree.writeThreadData(threadId, td);
               }
               consola.info(`[Engine] open trait: ${traitInput} → ${resolvedTraitName} → ${formId}`);
@@ -2398,15 +2478,57 @@ export async function resumeWithThreadTree(
         } else if (toolName === "close") {
           const form = formManager.cancel(args.form_id as string ?? "");
           if (form) {
+            /* 追踪实际卸载的 trait */
+            const unloadedTraits: string[] = [];
             if (form.command !== "_trait" && form.command !== "_skill" && form.command !== "_file") {
-              if (!formManager.activeCommands().has(form.command)) { const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command])); for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName); }
+              if (!formManager.activeCommands().has(form.command)) {
+                const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
+                for (const traitName of traitsToUnload) {
+                  const changed = await tree.deactivateTrait(threadId, traitName);
+                  if (changed) unloadedTraits.push(traitName);
+                }
+              }
             } else if (form.command === "_trait" && form.trait) {
-              await tree.deactivateTrait(threadId, form.trait);
+              const changed = await tree.deactivateTrait(threadId, form.trait);
+              if (changed) unloadedTraits.push(form.trait);
             } else if (form.command === "_file" && form.trait) {
               const td = tree.readThreadData(threadId);
               if (td?.windows?.[form.trait]) { delete td.windows[form.trait]; tree.writeThreadData(threadId, td); }
             }
-            const td = tree.readThreadData(threadId); if (td) { td.activeForms = formManager.toData(); td.actions.push({ type: "inject", content: `Form ${form.formId} 已关闭。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.activeForms = formManager.toData();
+              const unloadHint = unloadedTraits.length > 0
+                ? `本次卸载 trait：${unloadedTraits.join(", ")}`
+                : `无 trait 被卸载（可能仍被其他 active form 占用）`;
+              td.actions.push({
+                type: "inject",
+                content: `Form ${form.formId} 已关闭。${unloadHint}。`,
+                timestamp: Date.now(),
+              });
+              /* 防震荡安全阀（见 runWithThreadTree 同名逻辑）：连续 open/close 无 submit → 强警告 */
+              const OSCILLATION_THRESHOLD = 5;
+              const recentTools = td.actions.filter(a => a.type === "tool_use");
+              let closesInTail = 0, opensInTail = 0, hadSubmit = false;
+              for (let i = recentTools.length - 1; i >= 0 && i >= recentTools.length - 20; i--) {
+                const nm = recentTools[i]!.name;
+                if (nm === "submit") { hadSubmit = true; break; }
+                if (nm === "close") closesInTail++;
+                else if (nm === "open") opensInTail++;
+                else break;
+              }
+              if (!hadSubmit && closesInTail >= OSCILLATION_THRESHOLD && opensInTail >= OSCILLATION_THRESHOLD) {
+                td.actions.push({
+                  type: "inject",
+                  content: `[⚠️ 震荡警告] 连续 open/close 超过 ${OSCILLATION_THRESHOLD} 次无 submit——你陷入了无效循环。` +
+                    `立即用 wait({reason:"..."}) 向用户报告当前状态并等待指示；或 return({summary:"..."}) 结束当前线程。` +
+                    `**不要**再 open 新 form，你已在循环里。`,
+                  timestamp: Date.now(),
+                });
+                consola.warn(`[Engine] 检测到 open/close 震荡（closes=${closesInTail} opens=${opensInTail}），注入警告`);
+              }
+              tree.writeThreadData(threadId, td);
+            }
             consola.info(`[Engine] close: ${form.command} (${form.formId})`);
           } else {
             const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "inject", content: `[提示] Form ${args.form_id} 不存在（可能已被 submit 消费）。请直接执行下一步操作。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }

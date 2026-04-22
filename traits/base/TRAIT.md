@@ -44,6 +44,34 @@ deps: []
 - 再次 open 同一路径会更新窗口内容（支持刷新/重新读取）
 - `close(form_id)` 关闭窗口，从上下文中移除文件内容
 
+### trait 类型说明
+
+`open(type="trait", name="...")` 主动把某个 trait 加载到当前线程的作用域。
+
+**何时需要主动 open trait？**
+
+你的 `<knowledge>` 区域默认只展示"当前作用域"下 active 的 trait。如果你需要的能力 trait **不在作用域链里**（例如它 `when: never` 或依赖的 `command_binding` 未 open），**你必须主动 `open(type=trait, name=...)` 来激活它**，否则该 trait 的知识和方法无法被你使用。
+
+**如何知道哪些 trait 存在？**
+
+- 看你每次 tool 调用返回的 inject 消息——会告诉你"本次新加载 trait：..."或"相关 trait 已在作用域内"
+- 看 `<knowledge>` 段落里已经展示的 trait 列表
+- 非 kernel 命名空间（library / self）的 trait，在 `<directory>` 或用 `open(type=file, path="stones/{self}/traits/")` 查看
+
+**示例**：
+
+```json
+// 激活 library 中的 http/client trait（用前缀补全）
+open(type="trait", name="http/client", title="加载 HTTP 客户端能力", description="准备调用外部 API")
+
+// 激活自己持有的 reporter trait（self 命名空间；`namespace:name` 或简短名都行）
+open(type="trait", name="self:reporter", title="加载 reporter 汇报能力", description="准备生成报告文档")
+```
+
+**加载后**：trait 的 TRAIT.md 内容会进入 `<knowledge>` 段，你可以读它的说明；`llm_methods` 会自动注入 `callMethod` 沙箱（in program）。
+
+**卸载**：`close(form_id)` 关闭对应 form，trait 从作用域链移除。注意 inject 消息会明确告诉你"本次卸载 trait：..."或"无 trait 被卸载（可能仍被其他 active form 占用）"。
+
 ## submit — 提交执行
 
 仅 command 类型的 form 可以 submit。必填参数：`title`、`form_id` + 指令参数。
