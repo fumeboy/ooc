@@ -102,8 +102,8 @@ export const OPEN_TOOL: ToolDefinition = {
         },
         command: {
           type: "string",
-          enum: ["program", "think", "talk", "talk_sync", "return", "call_function", "set_plan", "await", "await_all", "defer"],
-          description: "指令名称（type=command 时必填）",
+          enum: ["program", "think", "talk", "talk_sync", "return", "call_function", "set_plan", "await", "await_all", "defer", "compact"],
+          description: "指令名称（type=command 时必填）。compact 进入上下文压缩模式——列出/截断/丢弃冗余 actions，最后 submit compact {summary} 一次性完成压缩。",
         },
         name: {
           type: "string",
@@ -166,8 +166,8 @@ export const SUBMIT_TOOL: ToolDefinition = {
         target: { type: "string", description: "talk: 目标对象名。特殊保留字 \"super\" 指向当前对象的反思镜像分身（不是 supervisor）。" },
         /* talk: 可选结构化表单（选项 + 自由文本兜底） */
         form: FORM_PARAM,
-        /* return */
-        summary: { type: "string", description: "return: 完成摘要" },
+        /* return / compact */
+        summary: { type: "string", description: "return: 完成摘要 / compact: 浓缩历史的摘要纯文本（会作为 compact_summary action 注入历史首条）" },
         /* set_plan */
         text: { type: "string", description: "set_plan: 计划内容" },
         /* await */

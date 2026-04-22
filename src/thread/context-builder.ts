@@ -514,7 +514,7 @@ export function renderSiblingSummary(tree: ThreadsTreeFile, nodeId: string): str
 export function renderThreadProcess(actions: ThreadAction[]): string {
   if (actions.length === 0) return "";
 
-  /* 按时间戳排序 */
+  /* 按时间戳排序——compact_summary 依赖被强制置为 min(ts)-1 排在最前 */
   const sorted = [...actions].sort((a, b) => a.timestamp - b.timestamp);
 
   /* 收集已关闭的 form_id（submit 或 close 消费的） */
@@ -631,6 +631,19 @@ export function renderThreadProcess(actions: ThreadAction[]): string {
       case "mark_inbox":
         lines.push(`${I}<action type="mark_inbox" ts="${ts}">${action.content}</action>`);
         break;
+
+      case "compact_summary": {
+        /* 压缩摘要作为首条历史背景渲染——LLM 看到后会理解"此前这一大片经历被 compact 掉了"，
+         * 并在 summary 里获取整体情境。attrs 里带 original/kept 让 LLM 感知压缩比例。 */
+        const attrs: string[] = [`ts="${ts}"`];
+        if (typeof action.original === "number") attrs.push(`original="${action.original}"`);
+        if (typeof action.kept === "number") attrs.push(`kept="${action.kept}"`);
+        lines.push(`${I}<action type="compact_summary" ${attrs.join(" ")}>`);
+        lines.push(`${I}${I}[已压缩 · 此前历史的浓缩摘要]`);
+        lines.push(`${I}${I}${action.content}`);
+        lines.push(`${I}</action>`);
+        break;
+      }
 
       default:
         lines.push(`${I}<action type="${action.type}" ts="${ts}">${action.content}</action>`);

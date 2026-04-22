@@ -109,6 +109,22 @@ export interface ThreadDataFile {
     /** 更新时间 */
     updatedAt: number;
   }>;
+
+  /**
+   * Compact 模式下的待应用标记（submit compact 时消费并清空）
+   *
+   * 场景：LLM 通过 open(command="compact") 进入压缩模式后，会多轮调用
+   * truncate_action / drop_action 累积标记；最后一次 submit compact 时才一次性生效。
+   * 因为每轮 ThinkLoop 是独立调度的，标记必须跨轮持久化——存在 thread.json 里最简单。
+   *
+   * submit compact 执行后会被清空（undefined）。
+   */
+  compactMarks?: {
+    /** 要丢弃的 action 索引（含 reason） */
+    drops?: Array<{ idx: number; reason: string }>;
+    /** 要截断的 action（保留前 maxLines 行） */
+    truncates?: Array<{ idx: number; maxLines: number }>;
+  };
 }
 
 /**
@@ -191,9 +207,26 @@ export interface ThreadAction {
     | "create_thread"
     | "thread_return"
     | "set_plan"
-    | "mark_inbox";
+    | "mark_inbox"
+    /**
+     * compact_summary：对象主动压缩上下文后留下的摘要 action
+     *
+     * 由 submit compact 一次性生成：
+     * - content 字段存 LLM 提供的 summary 纯文本
+     * - original 字段记录压缩前的 action 总数
+     * - kept 字段记录压缩后保留的 action 数（不含 compact_summary 本身）
+     * - timestamp 被强制设为 min(所有原 action.timestamp) - 1，保证永远排在最前
+     *
+     * context-builder 的 renderThreadProcess 为此类型特化渲染，作为首条历史背景注入，
+     * 让 LLM 在"清理过的工作台"前仍能看到整体情境。
+     */
+    | "compact_summary";
   timestamp: number;
   content: string;
+  /** compact_summary: 压缩前 actions 总数（仅 compact_summary 使用） */
+  original?: number;
+  /** compact_summary: 压缩后保留的 actions 数（不含 compact_summary 本身） */
+  kept?: number;
   /** tool_use: 工具名称；program: 代码内容；其他: 附加信息 */
   name?: string;
   /** tool_use: 工具参数（JSON 对象），已剥离顶层 title 字段 */

@@ -34,6 +34,12 @@ import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "
 import type { SkillDefinition } from "../skill/types.js";
 import { writeDebugLoop, computeContextStats, getExistingLoopCount } from "./debug.js";
 import { loadSkillBody } from "../skill/loader.js";
+import {
+  estimateActionsTokens,
+  applyCompact,
+  buildCompactHint,
+  COMPACT_THRESHOLD_TOKENS,
+} from "./compact.js";
 import type {
   ThreadsTreeFile,
   ThreadDataFile,
@@ -891,6 +897,12 @@ export async function runWithThreadTree(
 
       /* local 变量 */
       local: tree.readThreadData(threadId)?.locals ?? {},
+
+      /* compact trait 专用内部字段（下划线前缀表明非公开 API）
+       * compact 的 llm_methods 通过这两个字段读取当前线程的 actions 和累积压缩标记。
+       * 普通 trait 不应读写这两个字段——它们是 compact 与 engine 的私有契约。 */
+      __threadId: threadId,
+      __threadsTree: tree,
     };
 
     const normalizeTraitId = (input: string): string | null => {
@@ -1122,6 +1134,20 @@ export async function runWithThreadTree(
           const lastMsg = messages[messages.length - 1];
           if (lastMsg && lastMsg.role === "user") {
             lastMsg.content += `\n<!-- 活跃 Form：已 open 等待 submit 或 close -->\n<active-forms>\n${formXml.join("\n")}\n</active-forms>`;
+          }
+        }
+
+        /* Compact 阈值提示：actions token 超 COMPACT_THRESHOLD_TOKENS 时往 last user message 追加引导
+         *
+         * 只在非 compact 模式下提示——若 LLM 已经 open(compact) 正在压缩，就别再劝它压缩了。
+         * 对"已有 compact_summary"幂等：compact_summary 本身会被算入 tokens，若再次超阈值也该提示。 */
+        if (!formManager.activeCommands().has("compact")) {
+          const currentTokens = estimateActionsTokens(threadData.actions);
+          if (currentTokens > COMPACT_THRESHOLD_TOKENS) {
+            const lastMsg = messages[messages.length - 1];
+            if (lastMsg && lastMsg.role === "user") {
+              lastMsg.content += buildCompactHint(currentTokens);
+            }
           }
         }
 
@@ -1765,6 +1791,53 @@ export async function runWithThreadTree(
               }
             }
 
+            /* compact —— 一次性应用所有累积的 truncate/drop 标记 + 插入 compact_summary
+             *
+             * args.summary 必填——LLM 给出的"此前工作浓缩摘要"。
+             * engine 读 threadData.compactMarks 应用到 actions，插入 compact_summary 作为首条，
+             * 清空 compactMarks。trait 的激活状态由本分支底下的"trait 卸载"块统一处理。 */
+            else if (command === "compact") {
+              const summary = typeof args.summary === "string" ? args.summary.trim() : "";
+              const td = tree.readThreadData(threadId);
+              if (!td) {
+                consola.warn(`[Engine] compact: 读取 thread.json 失败 thread=${threadId}`);
+              } else if (summary.length === 0) {
+                td.actions.push({
+                  type: "inject",
+                  content: `[错误] submit compact 必须带 summary 参数（LLM 生成的浓缩摘要纯文本）。本次压缩未执行。`,
+                  timestamp: Date.now(),
+                });
+                tree.writeThreadData(threadId, td);
+              } else {
+                const marks = td.compactMarks ?? {};
+                const before = estimateActionsTokens(td.actions);
+                const newActions = applyCompact(td.actions, marks, summary);
+                const after = estimateActionsTokens(newActions);
+                const dropCount = marks.drops?.length ?? 0;
+                const truncateCount = marks.truncates?.length ?? 0;
+                const summaryAction = newActions[0]!;
+
+                /* 原子应用：替换 actions + 清空 compactMarks */
+                const nextTd: ThreadDataFile = {
+                  ...td,
+                  actions: newActions,
+                  compactMarks: undefined,
+                };
+                /* 在 compact_summary 之后 append 一条 inject 告诉 LLM 压缩结果
+                 * （这条 inject 是新一轮的起点，不会被当前压缩影响） */
+                nextTd.actions.push({
+                  type: "inject",
+                  content:
+                    `>>> [compact 完成] drop=${dropCount} truncate=${truncateCount}; ` +
+                    `tokens ${before} → ${after}（节省 ${before - after}）。\n` +
+                    `compact_summary 已作为首条历史背景注入，后续工作继续。`,
+                  timestamp: Date.now(),
+                });
+                tree.writeThreadData(threadId, nextTd);
+                consola.info(`[Engine] compact: tokens ${before} → ${after} drop=${dropCount} truncate=${truncateCount} kept=${summaryAction.kept}`);
+              }
+            }
+
             /* trait 卸载 */
             if (command !== "_trait" && command !== "_skill" && command !== "defer") {
               if (!formManager.activeCommands().has(form.command)) {
@@ -2161,6 +2234,10 @@ export async function resumeWithThreadTree(
       },
       fileExists: (path: string) => existsSync(resolve(rootDir, path)),
       local: tree.readThreadData(threadId)?.locals ?? {},
+
+      /* compact trait 专用内部字段：见 runWithThreadTree 同名注释 */
+      __threadId: threadId,
+      __threadsTree: tree,
     };
 
     const normalizeTraitId = (input: string): string | null => {
@@ -2363,6 +2440,17 @@ export async function resumeWithThreadTree(
           const lastMsg = messages[messages.length - 1];
           if (lastMsg && lastMsg.role === "user") {
             lastMsg.content += `\n<!-- 活跃 Form：已 open 等待 submit 或 close -->\n<active-forms>\n${formXml.join("\n")}\n</active-forms>`;
+          }
+        }
+
+        /* Compact 阈值提示（resume 路径，与 runWithThreadTree 同义） */
+        if (!formManager.activeCommands().has("compact")) {
+          const currentTokens = estimateActionsTokens(threadData.actions);
+          if (currentTokens > COMPACT_THRESHOLD_TOKENS) {
+            const lastMsg = messages[messages.length - 1];
+            if (lastMsg && lastMsg.role === "user") {
+              lastMsg.content += buildCompactHint(currentTokens);
+            }
           }
         }
 
@@ -2842,6 +2930,38 @@ export async function resumeWithThreadTree(
               await tree.awaitThreads(threadId, threadIds);
               const ids = threadIds.join(", ");
               const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "inject", content: `[${command}] ${ids}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+            }
+            /* compact (resume 路径，与 run 路径同义) */
+            else if (command === "compact") {
+              const summary = typeof args.summary === "string" ? args.summary.trim() : "";
+              const td = tree.readThreadData(threadId);
+              if (!td) {
+                consola.warn(`[Engine] compact (resume): 读取 thread.json 失败 thread=${threadId}`);
+              } else if (summary.length === 0) {
+                td.actions.push({
+                  type: "inject",
+                  content: `[错误] submit compact 必须带 summary 参数。本次压缩未执行。`,
+                  timestamp: Date.now(),
+                });
+                tree.writeThreadData(threadId, td);
+              } else {
+                const marks = td.compactMarks ?? {};
+                const before = estimateActionsTokens(td.actions);
+                const newActions = applyCompact(td.actions, marks, summary);
+                const after = estimateActionsTokens(newActions);
+                const dropCount = marks.drops?.length ?? 0;
+                const truncateCount = marks.truncates?.length ?? 0;
+                const nextTd: ThreadDataFile = { ...td, actions: newActions, compactMarks: undefined };
+                nextTd.actions.push({
+                  type: "inject",
+                  content:
+                    `>>> [compact 完成] drop=${dropCount} truncate=${truncateCount}; ` +
+                    `tokens ${before} → ${after}（节省 ${before - after}）。`,
+                  timestamp: Date.now(),
+                });
+                tree.writeThreadData(threadId, nextTd);
+                consola.info(`[Engine] compact (resume): tokens ${before} → ${after}`);
+              }
             }
             if (command !== "_trait" && command !== "_skill") {
               if (!formManager.activeCommands().has(form.command)) { const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command])); for (const traitName of traitsToUnload) await tree.deactivateTrait(threadId, traitName); }
