@@ -22,6 +22,14 @@
 import type { TraitMethod } from "../../../src/types/index";
 import { toolOk, toolErr } from "../../../src/types/tool-result";
 import type { ToolResult } from "../../../src/types/tool-result";
+import {
+  appendMemoryEntry,
+  mergeDuplicateEntries,
+  rebuildMemoryIndex,
+  readMemoryEntries,
+  writeMemoryEntry,
+  migrateMemoryMdToEntries,
+} from "../../../src/persistence/memory-entries";
 
 /**
  * 行号前缀 sanity check —— 剥离 `file_ops.readFile` 等工具输出中常见的
@@ -125,6 +133,21 @@ async function persistToMemoryImpl(
     /* 确保目录存在 */
     await fs.mkdir(ctx.selfDir, { recursive: true });
     await fs.writeFile(memoryPath, next, "utf-8");
+
+    /* 同时写入结构化 entry（Memory Curation Phase 1）——不破坏老 memory.md 的 append-only 兼容，
+     * 而是并行沉淀到 `memory/entries/{id}.json` 供 query_memory 检索。
+     * 失败不阻塞主路径（老 memory.md 已写成功就视为成功）。
+     */
+    try {
+      appendMemoryEntry(ctx.selfDir, ctx.stoneName, {
+        key,
+        content,
+        sourceType: "persist_to_memory",
+      });
+      rebuildMemoryIndex(ctx.selfDir, ctx.stoneName);
+    } catch {
+      /* 结构化写入失败不影响 markdown 路径；静默忽略，LLM 下次有机会重试 */
+    }
 
     return toolOk({
       stoneName: ctx.stoneName,
@@ -234,6 +257,95 @@ export const llm_methods: Record<string, TraitMethod> = {
       { name: "content", type: "string", description: "TRAIT.md 完整内容（含 frontmatter + markdown 正文）", required: true },
     ],
     fn: createTraitImpl as TraitMethod["fn"],
+  },
+
+  /* ─── Memory Curation（2026-04-22）──── */
+
+  migrate_memory_md: {
+    name: "migrate_memory_md",
+    description:
+      "把当前对象的老 memory.md（append-only markdown）迁移到结构化 memory/entries/*.json。幂等——多次运行结果一致。不删除 memory.md（作为 readonly snapshot 保留）。迁移后自动 rebuild memory/index.md。",
+    params: [],
+    fn: (async (ctx: { selfDir: string; stoneName: string }) => {
+      try {
+        const stats = migrateMemoryMdToEntries(ctx.selfDir, ctx.stoneName);
+        rebuildMemoryIndex(ctx.selfDir, ctx.stoneName);
+        return toolOk(stats);
+      } catch (err: any) {
+        return toolErr(`migrate_memory_md 失败: ${err?.message ?? String(err)}`);
+      }
+    }) as TraitMethod["fn"],
+  },
+
+  merge_memory_duplicates: {
+    name: "merge_memory_duplicates",
+    description:
+      "扫描 memory/entries/*.json，把同 key 的多条记录合并为一条（content 行去重并集，tags 并集，pinned 任一为 true 则 true）。返回 {merged, kept}。",
+    params: [],
+    fn: (async (ctx: { selfDir: string; stoneName: string }) => {
+      try {
+        const stats = mergeDuplicateEntries(ctx.selfDir);
+        rebuildMemoryIndex(ctx.selfDir, ctx.stoneName);
+        return toolOk(stats);
+      } catch (err: any) {
+        return toolErr(`merge_memory_duplicates 失败: ${err?.message ?? String(err)}`);
+      }
+    }) as TraitMethod["fn"],
+  },
+
+  pin_memory: {
+    name: "pin_memory",
+    description:
+      "把一条 memory entry 标记为 pinned（固化，不受 TTL 影响；合并时优先保留）。通过 id 定位。",
+    params: [
+      { name: "id", type: "string", description: "memory entry id（如 'me_20260422_abcd1234'）", required: true },
+      { name: "pinned", type: "boolean", description: "true=固化，false=取消固化", required: false },
+    ],
+    fn: (async (
+      ctx: { selfDir: string; stoneName: string },
+      { id, pinned }: { id: string; pinned?: boolean },
+    ) => {
+      if (!id?.trim()) return toolErr("pin_memory: id 必填");
+      try {
+        const entries = readMemoryEntries(ctx.selfDir);
+        const entry = entries.find(e => e.id === id);
+        if (!entry) return toolErr(`pin_memory: 找不到 id=${id}`);
+        const updated = { ...entry, pinned: pinned ?? true, updatedAt: new Date().toISOString() };
+        writeMemoryEntry(ctx.selfDir, updated);
+        rebuildMemoryIndex(ctx.selfDir, ctx.stoneName);
+        return toolOk({ id, pinned: updated.pinned });
+      } catch (err: any) {
+        return toolErr(`pin_memory 失败: ${err?.message ?? String(err)}`);
+      }
+    }) as TraitMethod["fn"],
+  },
+
+  set_memory_ttl: {
+    name: "set_memory_ttl",
+    description:
+      "设置 memory entry 的 TTL（过期天数；null=永久）。过期 entry 会被 query_memory 默认过滤，但不会自动物理删除。",
+    params: [
+      { name: "id", type: "string", description: "memory entry id", required: true },
+      { name: "ttlDays", type: "number", description: "过期天数（null 或缺省=永久）", required: false },
+    ],
+    fn: (async (
+      ctx: { selfDir: string; stoneName: string },
+      { id, ttlDays }: { id: string; ttlDays?: number | null },
+    ) => {
+      if (!id?.trim()) return toolErr("set_memory_ttl: id 必填");
+      try {
+        const entries = readMemoryEntries(ctx.selfDir);
+        const entry = entries.find(e => e.id === id);
+        if (!entry) return toolErr(`set_memory_ttl: 找不到 id=${id}`);
+        const newTtl = ttlDays === undefined ? null : ttlDays;
+        const updated = { ...entry, ttlDays: newTtl, updatedAt: new Date().toISOString() };
+        writeMemoryEntry(ctx.selfDir, updated);
+        rebuildMemoryIndex(ctx.selfDir, ctx.stoneName);
+        return toolOk({ id, ttlDays: newTtl });
+      } catch (err: any) {
+        return toolErr(`set_memory_ttl 失败: ${err?.message ?? String(err)}`);
+      }
+    }) as TraitMethod["fn"],
   },
 };
 

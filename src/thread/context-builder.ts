@@ -187,23 +187,33 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
     });
   }
 
-  /* SuperFlow（原方案 B Phase 3）：注入对象长期记忆 memory.md
+  /* SuperFlow（原方案 B Phase 3）：注入对象长期记忆
    *
-   * super 线程通过 reflective/super.persist_to_memory 写入的经验条目存放在
-   * `{stoneDir}/memory.md`。本次 Context 构建时把它作为独立 knowledge 窗口注入，
-   * 让主线程 LLM 在思考时"看见"自己沉淀下来的经验。
+   * 老版：`{stoneDir}/memory.md`（append-only markdown snapshot）
+   * 新版（Memory Curation 2026-04-22）：`{stoneDir}/memory/index.md` + `{stoneDir}/memory/entries/*.json`
    *
-   * - 只读（主线程不应修改 memory.md，唯一写入路径是 super 分身的沉淀工具）
-   * - 上限 4000 字符（超长截取尾部 + 前部提示——偏好近期经验）
-   * - 文件不存在 / 读取失败 → 静默跳过（不污染 Context） */
+   * 注入策略（最小侵入）：
+   * 1. 优先读 `memory/index.md`（结构化 curated 视图；Top Pinned + Recent）
+   * 2. 若无 → 回退 `memory.md`（老路径，Bruce 测试等用例依赖）
+   * 3. 两者都无 → 静默跳过
+   *
+   * - 只读（主线程不应修改 memory，唯一写入路径是 super 分身的沉淀工具）
+   * - 上限 MEMORY_MD_MAX_CHARS（超长截取尾部）
+   * - 读取失败 → 静默跳过（不污染 Context） */
   const stoneDirForMem = paths?.stoneDir;
   if (stoneDirForMem) {
-    const memoryPath = pathJoin(stoneDirForMem, "memory.md");
-    if (existsSync(memoryPath)) {
+    const indexPath = pathJoin(stoneDirForMem, "memory", "index.md");
+    const legacyPath = pathJoin(stoneDirForMem, "memory.md");
+    const sourcePath = existsSync(indexPath)
+      ? indexPath
+      : existsSync(legacyPath)
+        ? legacyPath
+        : null;
+    if (sourcePath) {
       try {
-        const raw = readFileSync(memoryPath, "utf-8");
+        const raw = readFileSync(sourcePath, "utf-8");
         const content = raw.length > MEMORY_MD_MAX_CHARS
-          ? `（…memory.md 超过 ${MEMORY_MD_MAX_CHARS} 字符，已截取最近 ${MEMORY_MD_MAX_CHARS} 字符）\n\n${raw.slice(-MEMORY_MD_MAX_CHARS)}`
+          ? `（…memory 超过 ${MEMORY_MD_MAX_CHARS} 字符，已截取最近 ${MEMORY_MD_MAX_CHARS} 字符）\n\n${raw.slice(-MEMORY_MD_MAX_CHARS)}`
           : raw;
         knowledge.push({ name: "memory", content });
       } catch {

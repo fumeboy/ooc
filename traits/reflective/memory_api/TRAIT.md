@@ -51,6 +51,38 @@ updateSessionMemory("## 当前进展\n- 已完成数据收集\n- 待分析");
 2. **重要性过滤** — 不是所有信息都值得记住，只记录会影响未来决策的内容
 3. **通过 SuperFlow 沉淀** — 你的 super 镜像分身会帮你合并、去重、整理长期记忆
 
+## 结构化记忆检索（Memory Curation 2026-04-22）
+
+长期记忆除了 `memory.md`（append-only snapshot），还有结构化版本 `memory/entries/{id}.json`。
+你可以通过 `query_memory` / `get_memory_entry` 检索：
+
+```javascript
+// 关键词检索（模糊匹配 key/content/tags/category）
+const r = await query_memory({ query: "调试 API", limit: 10 });
+// r.data.entries = [{ id, key, contentPreview, tags, category, createdAt, pinned }, ...]
+
+// 按 tag 过滤
+const r = await query_memory({ tags: ["debugging"] });
+
+// 只看最近一周
+const r = await query_memory({ since: "2026-04-15T00:00:00Z" });
+
+// 只看固化条目
+const r = await query_memory({ onlyPinned: true });
+
+// 拿到 id 后获取详情
+const full = await get_memory_entry({ id: "me_20260422_abcd1234" });
+// full.data = { id, key, content, tags, category, createdAt, updatedAt, pinned, ttlDays, source }
+```
+
+## 写入通道仍然是 super
+
+本 trait 只提供 **读** 能力。写入/维护/合并/pin/TTL 的操作都在 `kernel/reflective/super`：
+- `persist_to_memory` — 沉淀新条目（同时写 memory.md + entries/*.json）
+- `migrate_memory_md` — 把老 memory.md 迁移为结构化 entries（幂等）
+- `merge_memory_duplicates` — 合并同 key 的重复条目
+- `pin_memory` / `set_memory_ttl` — 固化与过期控制
+
 ## Memory vs Trait vs Data
 
 | | Memory | Trait | Data |
