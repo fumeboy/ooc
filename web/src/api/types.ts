@@ -175,6 +175,20 @@ export interface SubFlowSummary {
   stoneName: string;
   status: FlowStatus;
   process: Process;
+  /**
+   * 一句话动态摘要（running / waiting 状态下的"当前动作"）
+   *
+   * 仅在对象处于 running / waiting 时由后端按优先级提炼：
+   * 1. 最新 thinking 首句
+   * 2. 最新 tool_use.title
+   * 3. 最新 action 的 name/type
+   *
+   * 长度 ≤ 50，前端在 SessionKanban 对象行旁展示，带 pulse 效果。
+   *
+   * @ref kernel/src/server/server.ts — computeCurrentAction 后端实现
+   * @ref docs/工程管理/迭代/all/20260422_feature_running_session_摘要.md
+   */
+  currentAction?: string;
 }
 
 /** Flow 完整数据 */

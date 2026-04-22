@@ -3,13 +3,13 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { lastFlowEventAtom, editorTabsAtom, activeFilePathAtom } from "../store/session";
 import { fetchIssues, fetchTasks, createIssue, createTask } from "../api/kanban";
-import { fetchSessionObjects, fetchObjectProcess } from "../api/client";
+import { fetchSessionObjects, fetchObjectProcess, fetchFlow } from "../api/client";
 import { StatusGroup } from "./kanban/StatusGroup";
 import { IssueCard } from "./kanban/IssueCard";
 import { TaskCard } from "./kanban/TaskCard";
 import { ThreadsTreeView } from "./ThreadsTreeView";
 import { ObjectAvatar } from "../components/ui/ObjectAvatar";
-import type { KanbanIssue, KanbanTask, IssueStatus, TaskStatus, Process } from "../api/types";
+import type { KanbanIssue, KanbanTask, IssueStatus, TaskStatus, Process, FlowStatus } from "../api/types";
 import { cn } from "../lib/utils";
 
 const ISSUE_GROUPS: { status: IssueStatus; label: string; color: string }[] = [
@@ -28,10 +28,24 @@ const TASK_GROUPS: { status: TaskStatus; label: string; color: string }[] = [
   { status: "closed", label: "已关闭", color: "#6b7280" },
 ];
 
+/**
+ * subFlow 的动态摘要 meta（Phase 2 of Running-Summary-Agent 迭代）
+ *
+ * 对齐后端 `GET /api/flows/:sid` 响应中 `subFlows[i]` 的 `{ status, currentAction }` 两字段。
+ * 仅 running / waiting 下 currentAction 才非空；finished / failed 不显示动态摘要
+ * （因为 finished 已有 node.summary 的"一句话任务摘要"）。
+ */
+interface SubFlowMeta {
+  status: FlowStatus;
+  currentAction?: string;
+}
+
 export function SessionKanban({ sessionId }: { sessionId: string }) {
   const [objectNames, setObjectNames] = useState<string[]>([]);
   const [processData, setProcessData] = useState<Map<string, Process>>(new Map());
   const [loadingObjects, setLoadingObjects] = useState<Set<string>>(new Set());
+  /* 对象 → subFlow 动态摘要（通过 /api/flows/:sid 获取） */
+  const [subFlowMeta, setSubFlowMeta] = useState<Map<string, SubFlowMeta>>(new Map());
   const [issues, setIssues] = useState<KanbanIssue[]>([]);
   const [tasks, setTasks] = useState<KanbanTask[]>([]);
   const [dialog, setDialog] = useState<{ type: "issue" | "task" } | null>(null);
@@ -39,6 +53,24 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
   const lastEvent = useAtomValue(lastFlowEventAtom);
   const setTabs = useSetAtom(editorTabsAtom);
   const setActivePath = useSetAtom(activeFilePathAtom);
+
+  /* 加载 sub-flow 动态摘要（currentAction + status）
+   *
+   * 独立的小端点 fetch，不与 fetchObjectProcess 耦合——哪个 API 变化都不影响另一个。
+   * 失败静默：SessionKanban 仍然可用，只是没有"正在做什么"提示。
+   */
+  const loadSubFlowMeta = useCallback(async () => {
+    try {
+      const flow = await fetchFlow(sessionId);
+      const next = new Map<string, SubFlowMeta>();
+      for (const sf of flow.subFlows ?? []) {
+        next.set(sf.stoneName, { status: sf.status, currentAction: sf.currentAction });
+      }
+      setSubFlowMeta(next);
+    } catch (err) {
+      console.error("Failed to load subFlow meta:", err);
+    }
+  }, [sessionId]);
 
   /* 加载对象列表和 process 数据 */
   useEffect(() => {
@@ -104,11 +136,13 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
     };
 
     loadObjects();
+    /* 首次加载 subFlow 动态摘要（含 currentAction） */
+    loadSubFlowMeta();
 
     return () => {
       mounted = false;
     };
-  }, [sessionId]);
+  }, [sessionId, loadSubFlowMeta]);
 
   /* issues/tasks 在挂载和 SSE 事件时刷新 */
   const loadKanban = useCallback(async () => {
@@ -140,6 +174,10 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
           const objectsToRefresh = Array.from(pendingRefreshes.current);
           pendingRefreshes.current.clear();
 
+          /* 并行刷新两份数据：
+             1. 每个对象的 process（线程树用）
+             2. 整个 session 的 subFlow meta（currentAction 用）
+             使用 all-settled 避免任一失败连带拖垮另一份。 */
           const processes = await Promise.all(
             objectsToRefresh.map(name =>
               fetchObjectProcess(sessionId, name).catch(err => {
@@ -156,10 +194,13 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
             });
             return next;
           });
+
+          /* 同步刷新 subFlow meta —— 跟 action 事件频率一致，保证"正在做什么"动态更新 */
+          loadSubFlowMeta();
         }, 500);
       };
     },
-    [sessionId]
+    [sessionId, loadSubFlowMeta]
   );
 
   useEffect(() => {
@@ -194,12 +235,45 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
           <p className="text-muted-foreground text-sm">暂无对象参与此 session</p>
         ) : (
           <div className="space-y-8">
-            {objectNames.map(name => (
+            {objectNames.map(name => {
+              const meta = subFlowMeta.get(name);
+              const isLive = meta?.status === "running" || meta?.status === "waiting";
+              const currentAction = isLive ? meta?.currentAction : undefined;
+              return (
               <div key={name} className="space-y-2">
                 {/* 对象名分隔标题 */}
                 <div className="flex items-center gap-2 sticky top-0 bg-background py-2 z-10">
                   <ObjectAvatar name={name} size="sm" />
                   <h3 className="text-sm font-medium">{name}</h3>
+                  {/* 动态摘要：仅 running / waiting 状态 + 有 currentAction 时显示
+                      pulse 圆点 + "正在 ..." 单行省略 —— 与 finished session 的
+                      "一句话任务摘要"视觉体系对齐，但信号是"正在进行" */}
+                  {isLive && currentAction && (
+                    <div
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground overflow-hidden min-w-0"
+                      title={currentAction}
+                      data-testid={`current-action-${name}`}
+                    >
+                      <span
+                        className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shrink-0"
+                        aria-hidden
+                      />
+                      <span className="truncate">正在 {currentAction}</span>
+                    </div>
+                  )}
+                  {/* 仅 running 但还没 currentAction：显示 pulse + "思考中…" fallback */}
+                  {isLive && !currentAction && (
+                    <div
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                      data-testid={`current-action-${name}`}
+                    >
+                      <span
+                        className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shrink-0"
+                        aria-hidden
+                      />
+                      <span>思考中…</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* ThreadsTreeView 或加载状态 */}
@@ -215,7 +289,8 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
                   <div className="text-sm text-muted-foreground">对象数据不可用</div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
