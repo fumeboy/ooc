@@ -19,7 +19,7 @@ import { consola } from "consola";
 
 import { ThreadsTree } from "./tree.js";
 import { ThreadScheduler, type SchedulerCallbacks } from "./scheduler.js";
-import { buildThreadContext } from "./context-builder.js";
+import { buildThreadContext, computeThreadScopeChain, extractStoneTraitRefs } from "./context-builder.js";
 import { emitSSE } from "../server/events.js";
 import { CodeExecutor, executeShell } from "../executable/executor.js";
 import { MethodRegistry, type MethodContext } from "../trait/registry.js";
@@ -916,8 +916,9 @@ export async function runWithThreadTree(
       return { path: p, content: readFileSync(p, "utf-8") };
     };
 
+    const stoneTraitRefs = extractStoneTraitRefs(config.stone, config.traits);
     const computeActiveTraitIds = (): string[] => {
-      const scopeChain = tree.computeScopeChain(threadId);
+      const scopeChain = computeThreadScopeChain(tree.toFile(), threadId, stoneTraitRefs);
       return getActiveTraits(config.traits, scopeChain).map(t => traitId(t));
     };
 
@@ -2147,8 +2148,9 @@ export async function resumeWithThreadTree(
       return { path: p, content: readFileSync(p, "utf-8") };
     };
 
+    const stoneTraitRefs = extractStoneTraitRefs(config.stone, config.traits);
     const computeActiveTraitIds = (): string[] => {
-      const scopeChain = tree.computeScopeChain(threadId);
+      const scopeChain = computeThreadScopeChain(tree.toFile(), threadId, stoneTraitRefs);
       return getActiveTraits(config.traits, scopeChain).map(t => traitId(t));
     };
 

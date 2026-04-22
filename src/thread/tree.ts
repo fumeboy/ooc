@@ -123,6 +123,18 @@ export class ThreadsTree {
     return this._tree.rootId;
   }
 
+  /**
+   * 返回当前线程树的 ThreadsTreeFile 只读快照
+   *
+   * 用途：外部工具（如 context-builder 的 computeThreadScopeChain）需要直接
+   * 按快照语义遍历节点，而非通过 ThreadsTree 的高层方法。注意返回的是
+   * **浅引用**——调用方不应修改其内部结构，所有变更必须走 ThreadsTree 的
+   * _mutate 写队列，否则会绕过序列化并破坏磁盘一致性。
+   */
+  toFile(): ThreadsTreeFile {
+    return this._tree;
+  }
+
   /** 获取所有节点 ID */
   get nodeIds(): string[] {
     return Object.keys(this._tree.nodes);

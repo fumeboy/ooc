@@ -11,8 +11,10 @@ import {
   renderAncestorSummary,
   renderSiblingSummary,
   computeThreadScopeChain,
+  extractStoneTraitRefs,
   type ThreadContextInput,
 } from "../src/thread/context-builder.js";
+import type { TraitDefinition } from "../src/types/index.js";
 import type {
   ThreadsTreeFile,
   ThreadsTreeNodeMeta,
@@ -95,6 +97,39 @@ describe("computeThreadScopeChain", () => {
     const chain = computeThreadScopeChain(tree, "a");
     const computableCount = chain.filter(t => t === "kernel/computable").length;
     expect(computableCount).toBe(1);
+  });
+
+  test("stone._traits_ref 合入 scope chain 最前", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: {
+        r: makeNode("r", { traits: ["self:alpha"] }),
+      },
+    };
+    const chain = computeThreadScopeChain(tree, "r", [
+      "kernel:reviewable/review_api",
+      "library:git/advanced",
+    ]);
+    /* 默认激活清单位于线程 traits 前 */
+    expect(chain[0]).toBe("kernel:reviewable/review_api");
+    expect(chain[1]).toBe("library:git/advanced");
+    expect(chain[2]).toBe("self:alpha");
+  });
+
+  test("stone._traits_ref 去重：与线程 traits 重复时只保留一份", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: {
+        r: makeNode("r", { traits: ["kernel:reviewable/review_api"] }),
+      },
+    };
+    const chain = computeThreadScopeChain(tree, "r", [
+      "kernel:reviewable/review_api",
+      "library:git/advanced",
+    ]);
+    const count = chain.filter(t => t === "kernel:reviewable/review_api").length;
+    expect(count).toBe(1);
+    expect(chain).toContain("library:git/advanced");
   });
 });
 
@@ -446,5 +481,83 @@ describe("buildThreadContext — skill index", () => {
     });
     const skillWindow = ctx.knowledge.find(w => w.name === "available-skills");
     expect(skillWindow).toBeUndefined();
+  });
+});
+
+describe("extractStoneTraitRefs", () => {
+  /** 辅助：构造最小 TraitDefinition */
+  function trait(namespace: "kernel" | "library" | "self", name: string): TraitDefinition {
+    return {
+      namespace,
+      name,
+      type: "how_to_use_tool",
+      when: "never",
+      description: `${namespace}:${name}`,
+      readme: "",
+      deps: [],
+      methods: [],
+      parent: null,
+    } as unknown as TraitDefinition;
+  }
+
+  test("stone.data 无 _traits_ref 字段 → 返回空数组", () => {
+    const refs = extractStoneTraitRefs(
+      { name: "x", thinkable: { whoAmI: "" }, talkable: { whoAmI: "", functions: [] }, data: {}, relations: [], traits: [] },
+      [],
+    );
+    expect(refs).toEqual([]);
+  });
+
+  test("完整 traitId 形式正常解析", () => {
+    const traits = [
+      trait("kernel", "reviewable/review_api"),
+      trait("library", "git/advanced"),
+    ];
+    const refs = extractStoneTraitRefs(
+      {
+        name: "x",
+        thinkable: { whoAmI: "" },
+        talkable: { whoAmI: "", functions: [] },
+        data: { _traits_ref: ["kernel:reviewable/review_api", "library:git/advanced"] },
+        relations: [],
+        traits: [],
+      },
+      traits,
+    );
+    expect(refs).toEqual(["kernel:reviewable/review_api", "library:git/advanced"]);
+  });
+
+  test("简写名称按 self→kernel→library 优先级解析", () => {
+    const traits = [
+      trait("library", "git/ops"),
+    ];
+    /* "git_ops" 不存在——跳过；"git/ops" 存在 → library:git/ops */
+    const refs = extractStoneTraitRefs(
+      {
+        name: "x",
+        thinkable: { whoAmI: "" },
+        talkable: { whoAmI: "", functions: [] },
+        data: { _traits_ref: ["git_ops", "git/ops"] },
+        relations: [],
+        traits: [],
+      },
+      traits,
+    );
+    expect(refs).toEqual(["library:git/ops"]);
+  });
+
+  test("未命中的 ref 被静默忽略，不污染 scope chain", () => {
+    const refs = extractStoneTraitRefs(
+      {
+        name: "x",
+        thinkable: { whoAmI: "" },
+        talkable: { whoAmI: "", functions: [] },
+        data: { _traits_ref: ["does_not_exist", "kernel:nope"] },
+        relations: [],
+        traits: [],
+      },
+      [],
+    );
+    expect(refs).toEqual([]);
   });
 });

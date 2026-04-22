@@ -27,7 +27,7 @@ import type {
   ThreadStatus,
 } from "./types.js";
 import { getAncestorPath } from "./persistence.js";
-import { getActiveTraits, traitId as activatorTraitId } from "../trait/activator.js";
+import { getActiveTraits, traitId as activatorTraitId, resolveTraitRef } from "../trait/activator.js";
 import { getBuildFeedback, formatFeedbackForContext } from "../world/hooks.js";
 import { existsSync, readFileSync } from "node:fs";
 import { join as pathJoin } from "node:path";
@@ -147,8 +147,9 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
     throw new Error(`[buildThreadContext] 节点不存在: ${threadId}`);
   }
 
-  /* 1. scope chain：沿祖先链合并 traits */
-  const scopeChain = computeThreadScopeChain(tree, threadId);
+  /* 1. scope chain：沿祖先链合并 traits（附加 stone._traits_ref 默认激活） */
+  const stoneTraitRefs = extractStoneTraitRefs(stone, traits);
+  const scopeChain = computeThreadScopeChain(tree, threadId, stoneTraitRefs);
 
   /* 2. 激活 traits（使用完整版 activator，支持 deps 递归激活） */
   const activeTraits = getActiveTraits(traits, scopeChain);
@@ -328,14 +329,30 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
  * 保证 scope chain 的遍历顺序与 spec Section 5.3 一致：
  * Root 的 traits 在前，leaf 的 traits 在后。
  *
+ * 额外：stoneRefs（来自 stone.data._traits_ref 的已解析 traitId 列表）
+ * 作为对象级"默认激活"清单，优先合入 scope chain（位于所有线程自身
+ * traits 之前），便于在线程层级未显式声明时仍能激活这些 trait。
+ *
  * @param tree - 线程树
  * @param nodeId - 目标节点 ID
+ * @param stoneRefs - 对象级默认激活的 trait id 列表（可选，完整 namespace:name 格式）
  * @returns 去重后的 trait 名称列表（Root → leaf 顺序）
  */
-export function computeThreadScopeChain(tree: ThreadsTreeFile, nodeId: string): string[] {
+export function computeThreadScopeChain(
+  tree: ThreadsTreeFile,
+  nodeId: string,
+  stoneRefs?: string[],
+): string[] {
   const path = getAncestorPath(tree, nodeId); /* Root → leaf 顺序 */
   const seen = new Set<string>();
   const result: string[] = [];
+
+  /* 对象级默认激活：优先合入，保证"对象默认可用的 trait"始终在所有线程层之前 */
+  if (stoneRefs && stoneRefs.length > 0) {
+    for (const t of stoneRefs) {
+      if (!seen.has(t)) { seen.add(t); result.push(t); }
+    }
+  }
 
   for (const id of path) {
     const node = tree.nodes[id];
@@ -353,6 +370,43 @@ export function computeThreadScopeChain(tree: ThreadsTreeFile, nodeId: string): 
     }
   }
 
+  return result;
+}
+
+/**
+ * 从 stone.data._traits_ref 中提取对象级默认激活清单
+ *
+ * `_traits_ref` 是 stone 声明的"对象默认激活 trait 列表"——
+ * 即无需线程层显式激活就默认生效的 trait（例如 supervisor 总是可用
+ * git/review/memory 等高阶工具）。
+ *
+ * 支持两种书写：
+ * 1. 完整 namespace:name 形式（推荐）—— "kernel:reviewable/review_api"
+ * 2. 简写 name 形式 —— "git_ops"、"reviewable/review_api"（按 self/kernel/library 优先级 resolve）
+ *
+ * 未命中 available traits 的 ref 会被静默忽略（避免历史数据污染 scope chain）。
+ *
+ * @param stone - Stone 数据（其 data._traits_ref 可选）
+ * @param traits - 已加载的所有 trait（用于 resolveTraitRef 候选集合）
+ * @returns 去重后的完整 traitId 列表
+ */
+export function extractStoneTraitRefs(
+  stone: StoneData,
+  traits: TraitDefinition[],
+): string[] {
+  const raw = (stone.data as Record<string, unknown> | undefined)?._traits_ref;
+  if (!Array.isArray(raw)) return [];
+
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string" || item.length === 0) continue;
+    const resolved = resolveTraitRef(item, traits);
+    if (!resolved) continue;
+    if (seen.has(resolved)) continue;
+    seen.add(resolved);
+    result.push(resolved);
+  }
   return result;
 }
 
