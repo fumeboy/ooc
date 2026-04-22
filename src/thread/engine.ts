@@ -1343,44 +1343,63 @@ export async function runWithThreadTree(
              *
              * 兼容：若 LLM 传入数组 args（极少见）→ 走位置参数展开，保留向后兼容空间。
              */
-            else if (command === "call_function" && form.trait && form.functionName) {
-              const method = methodRegistry.all().find(m => m.name === form.functionName && m.traitName === form.trait);
-              let resultText: string;
-              if (!method) {
-                resultText = `[错误] 方法 ${form.trait}.${form.functionName} 不存在`;
-              } else {
-                try {
-                  const { context: execCtx } = buildExecContext(threadId);
-                  const rawArgs = args.args;
-                  const isPositionalArray = Array.isArray(rawArgs);
-                  const isObjectArgs = rawArgs !== null && typeof rawArgs === "object" && !isPositionalArray;
-                  const argsObj: Record<string, unknown> = isObjectArgs
-                    ? (rawArgs as Record<string, unknown>)
-                    : {};
-                  let result: unknown;
-                  if (isPositionalArray) {
-                    /* 旧位置参数兜底：args 是数组时按顺序展开 */
-                    const argValues = rawArgs as unknown[];
-                    result = method.needsCtx !== false
-                      ? await method.fn(execCtx, ...argValues)
-                      : await method.fn(...argValues);
-                  } else {
-                    /* 新协议：整个对象作为单一参数 */
-                    result = method.needsCtx !== false
-                      ? await method.fn(execCtx, argsObj)
-                      : await method.fn(argsObj);
-                  }
-                  resultText = typeof result === "string" ? result : JSON.stringify(result, null, 2);
-                } catch (e) {
-                  resultText = `[错误] ${form.trait}.${form.functionName} 执行失败: ${(e as Error).message}`;
+            else if (command === "call_function") {
+              /* call_function 协议：trait + function_name 应当在 open 时传入；
+               * 兜底 1：从 submit 的 args.trait / args.function_name 补填
+               * 兜底 2：缺失时 inject 明确错误（避免静默跳过让 LLM 误以为成功）。
+               * 与 resume 路径保持双路径行为一致。 */
+              const trait = form.trait ?? (args.trait as string | undefined);
+              const functionName = form.functionName ?? (args.function_name as string | undefined);
+              if (!trait || !functionName) {
+                const td = tree.readThreadData(threadId);
+                if (td) {
+                  td.actions.push({
+                    type: "inject",
+                    content: `[错误] call_function 缺少 trait 或 function_name 参数。\n请在 open 时传：open({ type: "command", command: "call_function", trait: "<完整 traitId 如 kernel:reflective/super>", function_name: "<方法名>" })`,
+                    timestamp: Date.now(),
+                  });
+                  tree.writeThreadData(threadId, td);
                 }
+                consola.warn(`[Engine] call_function 缺参数 (run): trait=${trait} fn=${functionName}`);
+              } else {
+                const method = methodRegistry.all().find(m => m.name === functionName && m.traitName === trait);
+                let resultText: string;
+                if (!method) {
+                  resultText = `[错误] 方法 ${trait}.${functionName} 不存在`;
+                } else {
+                  try {
+                    const { context: execCtx } = buildExecContext(threadId);
+                    const rawArgs = args.args;
+                    const isPositionalArray = Array.isArray(rawArgs);
+                    const isObjectArgs = rawArgs !== null && typeof rawArgs === "object" && !isPositionalArray;
+                    const argsObj: Record<string, unknown> = isObjectArgs
+                      ? (rawArgs as Record<string, unknown>)
+                      : {};
+                    let result: unknown;
+                    if (isPositionalArray) {
+                      /* 旧位置参数兜底：args 是数组时按顺序展开 */
+                      const argValues = rawArgs as unknown[];
+                      result = method.needsCtx !== false
+                        ? await method.fn(execCtx, ...argValues)
+                        : await method.fn(...argValues);
+                    } else {
+                      /* 新协议：整个对象作为单一参数 */
+                      result = method.needsCtx !== false
+                        ? await method.fn(execCtx, argsObj)
+                        : await method.fn(argsObj);
+                    }
+                    resultText = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+                  } catch (e) {
+                    resultText = `[错误] ${trait}.${functionName} 执行失败: ${(e as Error).message}`;
+                  }
+                }
+                const td = tree.readThreadData(threadId);
+                if (td) {
+                  td.actions.push({ type: "inject", content: `>>> ${trait}.${functionName} 结果:\n${resultText}`, timestamp: Date.now() });
+                  tree.writeThreadData(threadId, td);
+                }
+                consola.info(`[Engine] call_function: ${trait}.${functionName}`);
               }
-              const td = tree.readThreadData(threadId);
-              if (td) {
-                td.actions.push({ type: "inject", content: `>>> ${form.trait}.${form.functionName} 结果:\n${resultText}`, timestamp: Date.now() });
-                tree.writeThreadData(threadId, td);
-              }
-              consola.info(`[Engine] call_function: ${form.trait}.${form.functionName}`);
             }
 
             /* set_plan */
@@ -2268,12 +2287,30 @@ export async function resumeWithThreadTree(
                   if (td) { td.actions.push({ type: "message_out", content: `[think.continue] → ${targetThreadId}: ${msgContent}`, timestamp: Date.now(), context: "continue" }); tree.writeThreadData(threadId, td); }
                 }
               }
-            } else if (command === "call_function" && form.trait && form.functionName) {
+            } else if (command === "call_function") {
+              /* call_function 协议：trait + function_name 应当在 open 时传入；
+               * 兜底 1：从 submit 的 args.trait / args.function_name 补填
+               * 兜底 2：缺失时 inject 明确错误（之前是静默跳过，会让 LLM 误以为成功）
+               * 与 run 路径对齐——保持双路径行为一致。 */
+              const trait = form.trait ?? (args.trait as string | undefined);
+              const functionName = form.functionName ?? (args.function_name as string | undefined);
+              if (!trait || !functionName) {
+                const td = tree.readThreadData(threadId);
+                if (td) {
+                  td.actions.push({
+                    type: "inject",
+                    content: `[错误] call_function 缺少 trait 或 function_name 参数。\n请在 open 时传：open({ type: "command", command: "call_function", trait: "<完整 traitId 如 kernel:reflective/super>", function_name: "<方法名>" })`,
+                    timestamp: Date.now(),
+                  });
+                  tree.writeThreadData(threadId, td);
+                }
+                consola.warn(`[Engine] call_function 缺参数 (resume): trait=${trait} fn=${functionName}`);
+              } else {
               /* resume 路径：与第一次执行保持同一协议——argsObj 整体作为第二参数传入 */
-              const method = methodRegistry.all().find(m => m.name === form.functionName && m.traitName === form.trait);
+              const method = methodRegistry.all().find(m => m.name === functionName && m.traitName === trait);
               let resultText: string;
               if (!method) {
-                resultText = `[错误] 方法 ${form.trait}.${form.functionName} 不存在`;
+                resultText = `[错误] 方法 ${trait}.${functionName} 不存在`;
               } else {
                 try {
                   const { context: execCtx } = buildExecContext(threadId);
@@ -2301,9 +2338,10 @@ export async function resumeWithThreadTree(
               }
               const td = tree.readThreadData(threadId);
               if (td) {
-                td.actions.push({ type: "inject", content: `>>> ${form.trait}.${form.functionName} 结果:\n${resultText}`, timestamp: Date.now() });
+                td.actions.push({ type: "inject", content: `>>> ${trait}.${functionName} 结果:\n${resultText}`, timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
               }
+              }  /* end of "if (trait && functionName)" else-branch */
             } else if (command === "set_plan") {
               const td = tree.readThreadData(threadId); if (td) { td.plan = args.text as string; td.actions.push({ type: "set_plan", content: args.text as string, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
             } else if (command === "await" || command === "await_all") {
@@ -2424,11 +2462,93 @@ export async function runSuperThread(
 
   consola.info(`[Engine] 启动 super 线程 ${stoneName} (dir=${superDir})`);
 
+  /* 关键：super 线程必须激活 `kernel:reflective/super` trait，否则：
+   * 1. LLM 不知道自己处于"反思角色"——会按普通对象的 readme 思考（错位）
+   * 2. `persist_to_memory` / `create_trait` 方法 trait 的 `when: never`，
+   *    不激活就不会出现在沙箱 callMethod 列表里——LLM 无法调用沉淀工具
+   *
+   * 做法：load tree → 在 root 线程的 activatedTraits 注入 `kernel:reflective/super`
+   * （tree.activateTrait 内部幂等，已激活则 noop）。 */
+  const tree = ThreadsTree.load(superDir);
+  if (!tree) {
+    throw new Error(`无法加载 super 线程树: ${superDir}`);
+  }
+  await tree.activateTrait(tree.rootId, "kernel:reflective/super");
+
+  /* 注入 super 角色 prompt 到 extraWindows——LLM 在 Context 看到「我是 X 的 super 镜像分身」
+   *
+   * 含完整 open + submit 的工具调用示例——call_function 的 open 必须传 trait
+   * 和 function_name 两个参数，缺失会导致 submit 时 engine 报错（这是常见陷阱）。 */
+  const superPromptWindow: ContextWindow = {
+    name: "super_role",
+    content: [
+      `你现在处于 **${stoneName}:super 线程**——你是 ${stoneName} 的反思镜像分身（super-ego）。`,
+      "",
+      "你的职责：消化 inbox 中的经验候选条目，决定哪些值得**沉淀**到长期记忆。",
+      "",
+      "## 可用沉淀工具（已自动加载 `kernel:reflective/super` trait）",
+      "",
+      "- `persist_to_memory({ key, content })` — 追加经验到 `stones/{name}/memory.md`（长期记忆）",
+      "- `create_trait({ relativePath, content })` — 固化「做法」为新 trait（可选，更重的沉淀）",
+      "",
+      "## 典型工作流程（每条 unread inbox 消息）",
+      "",
+      "1. 读 inbox 消息（来自主线程的「经验候选」）",
+      "2. 判断是否值得沉淀（重复/琐碎的就 mark 为 ignore）",
+      "3. 值得沉淀 → open + submit call_function 调 `persist_to_memory`",
+      "4. 用 mark 把消息状态从 unread 改为 ack（type: ack, tip: 已沉淀/已忽略）",
+      "5. 没有更多消息要处理时 → open + submit `return` 结束本轮",
+      "   （线程进入 done，下次有新消息会自动复活）",
+      "",
+      "## 完整工具调用示例（最关键！）",
+      "",
+      "**第一步：open 必须传 `trait` + `function_name` 两个参数**：",
+      "```json",
+      "open({",
+      '  "type": "command",',
+      '  "command": "call_function",',
+      '  "trait": "kernel:reflective/super",   // <-- 必传，完整 traitId',
+      '  "function_name": "persist_to_memory", // <-- 必传',
+      '  "description": "沉淀经验到 memory.md"',
+      "})",
+      "```",
+      "",
+      "**第二步：submit 时在 `args` 字段下传方法参数**：",
+      "```json",
+      "submit({",
+      '  "form_id": "f_xxx",                   // 从 open 返回',
+      '  "args": {                              // <-- 方法参数整体放这里',
+      '    "key": "线程树的认知透明度价值",',
+      '    "content": "完整经验描述..."',
+      '  },',
+      '  "mark": [{ "messageId": "msg_xxx", "type": "ack", "tip": "已沉淀" }]',
+      "})",
+      "```",
+      "",
+      "**常见错误**：open 只传 `description` 但漏了 `trait` / `function_name`——",
+      "engine 会报错 \"call_function 缺少 trait 或 function_name 参数\"。",
+      "",
+      `## 边界提醒：你不是普通的 ${stoneName}`,
+      "",
+      "- 不要去执行任务、不要去查文档资料、不要去回答用户",
+      "- 你只做一件事：消化 inbox + 选择性沉淀",
+      "- 所有外部工作由主线程完成——super 是内省分身",
+    ].join("\n"),
+  };
+
+  const augmentedConfig: EngineConfig = {
+    ...config,
+    extraWindows: [
+      ...(config.extraWindows ?? []),
+      superPromptWindow,
+    ],
+  };
+
   /* 复用 resume 路径——关键是把 objectFlowDir 指向 super 目录而非 flows/ */
   return resumeWithThreadTree(
     stoneName,
     virtualSessionId,
-    config,
+    augmentedConfig,
     /* modifiedOutput */ undefined,
     /* objectFlowDirOverride */ superDir,
   );
