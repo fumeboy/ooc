@@ -55,6 +55,21 @@ const TYPE_CONFIG: Record<string, { prefix: string; color: string; label: string
 };
 const DEFAULT_CONFIG = { prefix: "·", color: "text-gray-400", label: "unknown" };
 
+/* ── tool_use 四原语角标配置：open/submit/close/wait ──
+ * 之前 tool_use 一律显示 "tool" + 蓝色齿轮，无区分度。根据实际工具名（action.name）
+ * 使用不同图标 + 颜色：
+ *   open   — ⬒（frame） violet，表示"打开上下文/申请指令"
+ *   submit — ▶（前进）   sky，表示"提交执行"
+ *   close  — ⊘（禁止圈） slate，表示"关闭/取消"
+ *   wait   — ⏸（暂停）   amber，表示"等待外部响应"
+ * 其他 tool 名保持 fallback（⚙ tool 蓝色）。 */
+const TOOL_CONFIG: Record<string, { prefix: string; color: string; label: string }> = {
+  open:   { prefix: "⬒", color: "text-violet-400", label: "open" },
+  submit: { prefix: "▶", color: "text-sky-400",    label: "submit" },
+  close:  { prefix: "⊘", color: "text-slate-400",  label: "close" },
+  wait:   { prefix: "⏸", color: "text-amber-400",  label: "wait" },
+};
+
 /* ── 时间格式化 ── */
 function formatTs(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -148,11 +163,14 @@ interface TuiActionProps {
 }
 
 export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionProps) {
-  const cfg = TYPE_CONFIG[action.type] ?? DEFAULT_CONFIG;
   const isInject = action.type === "inject";
   const isThinking = action.type === "thinking";
   const isProgram = action.type === "program";
   const isToolUse = action.type === "tool_use";
+  /* tool_use 时按工具名（open/submit/close/wait）选角标；非 tool_use 或其他工具名回退到 TYPE_CONFIG.tool_use */
+  const baseCfg = TYPE_CONFIG[action.type] ?? DEFAULT_CONFIG;
+  const toolCfg = isToolUse && action.name ? TOOL_CONFIG[action.name] : undefined;
+  const cfg = toolCfg ?? baseCfg;
   const [expanded, setExpanded] = useState(!isInject);
   const [modalOpen, setModalOpen] = useState(false);
 
