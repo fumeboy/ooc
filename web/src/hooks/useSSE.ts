@@ -104,6 +104,13 @@ export function useSSE() {
           setFlowProgress((prev) =>
             prev?.sessionId === event.sessionId ? null : prev,
           );
+          /* 防御性清空所有 streaming atoms（仅匹配当前 session）：
+           * 如果后端某个 stream:*:end 漏发，前端"思考中…"动画会一直闪烁。
+           * flow:end 是 session 终态信号，到达时所有流式块都该停。 */
+          setStreamingThought((prev) => (prev?.sessionId === event.sessionId ? null : prev));
+          setStreamingTalk((prev) => (prev?.sessionId === event.sessionId ? null : prev));
+          setStreamingProgram((prev) => (prev?.sessionId === event.sessionId ? null : prev));
+          setStreamingAction((prev) => (prev?.sessionId === event.sessionId ? null : prev));
           break;
 
         case "flow:progress":

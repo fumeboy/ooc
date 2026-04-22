@@ -448,8 +448,10 @@ export function App() {
         />
       );
     } else if (activeTab === "flows" && activeId) {
-      /* Session index → supervisor View tab（默认 views/main） */
-      const indexPath = `flows/${activeId}/objects/supervisor/views`;
+      /* Session 默认落地页 → SessionKanban（threads tree 总览 + Issues/Tasks 面板）。
+       * 之前硬跳 `objects/supervisor/views` 是误设——session 首页不属于任何单一对象，
+       * 应展示跨对象的 session 级看板。 */
+      const indexPath = `flows/${activeId}`;
       breadcrumbSegments = indexPath.split("/").filter(Boolean);
       const resolved = viewRegistry.resolve(indexPath);
       const ViewComponent = resolved?.registration.component;
