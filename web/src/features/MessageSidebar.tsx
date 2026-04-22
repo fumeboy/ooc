@@ -423,12 +423,16 @@ export function MessageSidebar() {
     return () => { if (refreshTimer.current) clearTimeout(refreshTimer.current); };
   }, []);
 
-  /* 流式 talk（当前 session running 时） */
+  /* 流式 talk：只要属于当前 session 就显示
+   *
+   * 不再要求 activeFlow.status === "running"——新 session 创建后 fetchFlow 早期返回的
+   * status 可能还是 pending / waiting，导致第一个 stream chunk 不渲染（看起来"无流式"）。
+   * 用 sessionId 比较即可，更宽松、更实时。 */
   const activeStreamingTalk = useMemo(() => {
-    if (!streamingTalk || !activeFlow) return null;
-    if (activeFlow.status !== "running") return null;
+    if (!streamingTalk || !activeId) return null;
+    if (streamingTalk.sessionId !== activeId) return null;
     return streamingTalk;
-  }, [streamingTalk, activeFlow]);
+  }, [streamingTalk, activeId]);
 
   /** 点击新消息按钮，滚动到底部 */
   const handleScrollToNewMessages = useCallback(() => {
@@ -763,7 +767,11 @@ export function MessageSidebar() {
           <p className="text-xs text-[var(--muted-foreground)] text-center py-8 font-mono">
             {currentThreadId
               ? "此线程暂无内容"
-              : `向 ${target} 发起对话，输入 @ 切换对象`}
+              : activeId
+                /* 新 session 创建后 subFlows 还没写盘的间歇态：显示思考中而非"发起对话"
+                 * （避免误导用户重复输入；LLM 一旦回 chunk 立即出现 streaming bubble） */
+                ? <>正在思考中<span className="inline-block ml-1 animate-pulse">...</span></>
+                : `向 ${target} 发起对话，输入 @ 切换对象`}
           </p>
         )}
         {timeline.map((entry, i) => {
@@ -815,20 +823,20 @@ export function MessageSidebar() {
           }
           return null;
         })}
-        {/* 流式 thought */}
-        {streamingThought && activeFlow?.status === "running" && (
+        {/* 流式 thought：只要属于当前 session 就显示（不卡 status=running——见 activeStreamingTalk 注释） */}
+        {streamingThought && streamingThought.sessionId === activeId && (
           <TuiStreamingBlock type="thinking" content={streamingThought.content} objectName={currentObjectName} />
         )}
         {/* 流式 program */}
-        {streamingProgram && activeFlow?.status === "running" && (
+        {streamingProgram && streamingProgram.sessionId === activeId && (
           <TuiStreamingBlock type="program" content={streamingProgram.content} objectName={currentObjectName} />
         )}
         {/* 流式 action */}
-        {streamingAction && activeFlow?.status === "running" && (
+        {streamingAction && streamingAction.sessionId === activeId && (
           <TuiStreamingBlock type="action" content={streamingAction.content} objectName={currentObjectName} />
         )}
         {/* 流式 stack_push */}
-        {streamingStackPush && activeFlow?.status === "running" && (
+        {streamingStackPush && streamingStackPush.sessionId === activeId && (
           <TuiStreamingBlock
             type="stack_push"
             content={`[${streamingStackPush.opType}.${streamingStackPush.attr}] ${streamingStackPush.content}`}
@@ -836,7 +844,7 @@ export function MessageSidebar() {
           />
         )}
         {/* 流式 stack_pop */}
-        {streamingStackPop && activeFlow?.status === "running" && (
+        {streamingStackPop && streamingStackPop.sessionId === activeId && (
           <TuiStreamingBlock
             type="stack_pop"
             content={`[${streamingStackPop.opType}.${streamingStackPop.attr}] ${streamingStackPop.content}`}
@@ -844,7 +852,7 @@ export function MessageSidebar() {
           />
         )}
         {/* 流式 set_plan */}
-        {streamingSetPlan && activeFlow?.status === "running" && (
+        {streamingSetPlan && streamingSetPlan.sessionId === activeId && (
           <TuiStreamingBlock type="set_plan" content={streamingSetPlan.content} objectName={currentObjectName} />
         )}
         {/* 流式 talk */}
