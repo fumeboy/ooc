@@ -560,11 +560,15 @@ export async function runWithThreadTree(
     }
   } else {
     consola.info(`[Engine] 加载已存在的线程树: ${objectName}, rootId=${tree.rootId}`);
-    /* 多轮对话：如果根线程已完成，重置为 running 以处理新消息 */
+    /* 多轮对话：根线程不在 running 时（done / waiting / failed）一律唤醒处理新消息。
+     * waiting 是常见情形——上一轮 LLM 调 wait() 后等待用户下一句；
+     * 没有此处的唤醒，writeInbox 之后 scheduler 会"全 waiting → 非死锁"立即退出，
+     * 新消息躺在 inbox 里不被消费，表现为"发了消息没反应，必须刷新也无效"。 */
     const rootNode = tree.getNode(tree.rootId);
-    if (rootNode && rootNode.status === "done") {
+    if (rootNode && rootNode.status !== "running") {
+      const prev = rootNode.status;
       await tree.setNodeStatus(tree.rootId, "running");
-      consola.info(`[Engine] 重置根线程状态: done → running（多轮对话续写）`);
+      consola.info(`[Engine] 重置根线程状态: ${prev} → running（多轮对话续写）`);
     }
     targetThreadId = tree.rootId;
   }
@@ -813,6 +817,9 @@ export async function runWithThreadTree(
       let llmUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } = {};
       let context: ReturnType<typeof buildThreadContext> | undefined;
       let messages: Message[] | undefined;
+      /* 流式 thinking 是否有 chunk 到达：决定后续 emit stream:thought 的路径。
+       * 声明在外层作用域，既供 else 分支 LLM 调用处设值，也供块外 thinkingContent 分支读取。 */
+      let sawThinkingChunk = false;
 
       /* 检查是否有缓存的 LLM 输出（resume 模式） */
       if (threadData._pendingOutput) {
@@ -873,15 +880,29 @@ export async function runWithThreadTree(
         /* 构建动态 tools 列表 */
         const availableTools = buildAvailableTools(formManager.activeCommands());
 
-        /* 调用 LLM（带 tools） */
+        /* 调用 LLM（带 tools + 流式 thinking）。
+         * 客户端若实现 chatWithThinkingStream，则 thinking chunk 实时通过 SSE stream:thought 推送给前端；
+         * 未实现则回退到 chat()，等 LLM 完整返回后一次性发出（语义不降级）。 */
         const llmStartTime = Date.now();
-        const llmResult = await config.llm.chat(messages, { tools: availableTools });
+        const llmResult = typeof config.llm.chatWithThinkingStream === "function"
+          ? await config.llm.chatWithThinkingStream(messages, {
+              tools: availableTools,
+              onThinkingChunk: (chunk) => {
+                sawThinkingChunk = true;
+                emitSSE({ type: "stream:thought", objectName, sessionId, chunk });
+              },
+            })
+          : await config.llm.chat(messages, { tools: availableTools });
         llmLatencyMs = Date.now() - llmStartTime;
         llmOutput = llmResult.content;
         thinkingContent = llmResult.thinkingContent;
         llmModel = (llmResult as any).model || "unknown";
         llmUsage = (llmResult as any).usage ?? {};
         toolCalls = llmResult.toolCalls;
+        /* 流式路径已逐 chunk 发过；非流式路径后面仍会整段发一次（保持前端可观测性） */
+        if (sawThinkingChunk) {
+          emitSSE({ type: "stream:thought:end", objectName, sessionId });
+        }
 
         /* LLM 返回后检查暂停信号 */
         if (config.isPaused?.(objectName)) {
@@ -916,12 +937,11 @@ export async function runWithThreadTree(
 
       /* 发射 SSE 思考事件 + 记录 thinking action（从 thinking mode 获取） */
       if (thinkingContent) {
-        emitSSE({
-          type: "stream:thought",
-          objectName,
-          sessionId,
-          chunk: thinkingContent,
-        });
+        /* 仅非流式路径需要在此补发整段——流式路径已在 onThinkingChunk 中逐段发过并 end */
+        if (!sawThinkingChunk) {
+          emitSSE({ type: "stream:thought", objectName, sessionId, chunk: thinkingContent });
+          emitSSE({ type: "stream:thought:end", objectName, sessionId });
+        }
 
         /* 将 thinking 输出记录为 thinking action */
         const td = tree.readThreadData(threadId);
@@ -1914,6 +1934,8 @@ export async function resumeWithThreadTree(
       let llmUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } = {};
       let context: ReturnType<typeof buildThreadContext> | undefined;
       let messages: Message[] | undefined;
+      /* 流式 thinking 是否有 chunk 到达：跨 else 与块外 if (thinkingContent) 共用。 */
+      let sawThinkingChunk = false;
 
       if (threadData._pendingOutput) {
         /* 优先从文件读取（用户可能已修改） */
@@ -1961,13 +1983,24 @@ export async function resumeWithThreadTree(
         const availableTools = buildAvailableTools(formManager.activeCommands());
 
         const llmStartTime = Date.now();
-        const llmResult = await config.llm.chat(messages, { tools: availableTools });
+        const llmResult = typeof config.llm.chatWithThinkingStream === "function"
+          ? await config.llm.chatWithThinkingStream(messages, {
+              tools: availableTools,
+              onThinkingChunk: (chunk) => {
+                sawThinkingChunk = true;
+                emitSSE({ type: "stream:thought", objectName, sessionId, chunk });
+              },
+            })
+          : await config.llm.chat(messages, { tools: availableTools });
         llmLatencyMs = Date.now() - llmStartTime;
         llmOutput = llmResult.content;
         thinkingContent = llmResult.thinkingContent;
         llmModel = (llmResult as any).model || "unknown";
         llmUsage = (llmResult as any).usage ?? {};
         toolCalls = llmResult.toolCalls;
+        if (sawThinkingChunk) {
+          emitSSE({ type: "stream:thought:end", objectName, sessionId });
+        }
 
         if (config.isPaused?.(objectName)) {
           threadData._pendingOutput = llmOutput;
@@ -1994,7 +2027,11 @@ export async function resumeWithThreadTree(
       }
 
       if (thinkingContent) {
-        emitSSE({ type: "stream:thought", objectName, sessionId, chunk: thinkingContent });
+        /* 仅非流式路径需要在此补发整段——流式路径已在 onThinkingChunk 中逐段发过并 end */
+        if (!sawThinkingChunk) {
+          emitSSE({ type: "stream:thought", objectName, sessionId, chunk: thinkingContent });
+          emitSSE({ type: "stream:thought:end", objectName, sessionId });
+        }
 
         /* 将 thinking 输出记录为 thinking action */
         const td = tree.readThreadData(threadId);
