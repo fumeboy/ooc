@@ -29,6 +29,7 @@ import { FormManager } from "./form.js";
 import { collectCommandTraits, collectCommandHooks } from "./hooks.js";
 import { buildAvailableTools } from "./tools.js";
 import { resolveVirtualPath, isVirtualPath } from "./virtual-path.js";
+import { detectSelfKind } from "./self-kind.js";
 import { runBuildHooks } from "../world/hooks.js";
 
 import type { LLMClient, Message, ToolCall } from "../thinkable/client.js";
@@ -254,11 +255,14 @@ function genTalkFormId(): string {
  *
  * 在 engine 的 run / resume 两条路径共用。
  *
+ * Phase 7：通过 detectSelfKind 自动识别 stone vs flow_obj，flow_obj 场景下
+ * @trait:self/X 和 @relation:<peer> 正确落在 flows/<sid>/objects/<name>/ 下。
+ *
  * @param rawPath  LLM 传入的原始 path 字符串
  * @param rootDir  项目根目录
  * @param selfName 当前对象名（用于 @trait:self/... 与 @relation:...）
- * @param stoneDir 当前对象的 stone 目录；用于从路径嗅探 selfKind（目前仅支持 stone，
- *                 flow_obj 由 Phase 7 的对称扩展接入）
+ * @param stoneDir 当前对象的 stone 目录；用于嗅探 selfKind（stone vs flow_obj）
+ * @param flowsDir flows/ 根目录（检测 flow_obj 需要）
  * @returns { resolved, isVirtual, kind }：resolved=绝对路径（null=无法解析），
  *          isVirtual=是否虚拟路径，kind="trait"|"relation"|"file"
  */
@@ -266,10 +270,17 @@ function resolveOpenFilePath(
   rawPath: string,
   rootDir: string,
   selfName: string,
-  _stoneDir?: string,
+  stoneDir?: string,
+  flowsDir?: string,
 ): { resolved: string | null; isVirtual: boolean; kind: "trait" | "relation" | "file" } {
   const virtual = isVirtualPath(rawPath);
-  const resolved = resolveVirtualPath(rawPath, { rootDir, selfName, selfKind: "stone" });
+  const selfInfo = detectSelfKind(stoneDir ?? "", flowsDir ?? "");
+  const resolved = resolveVirtualPath(rawPath, {
+    rootDir,
+    selfName,
+    selfKind: selfInfo.selfKind,
+    sessionId: selfInfo.sessionId,
+  });
   let kind: "trait" | "relation" | "file" = "file";
   if (virtual) {
     if (rawPath.startsWith("@trait:")) kind = "trait";
@@ -1499,8 +1510,10 @@ export async function runWithThreadTree(
             const filePath = args.path as string;
             const linesLimit = args.lines as number | undefined;
             const rootDir = config.paths?.rootDir ?? config.rootDir;
+            const stoneDir = config.paths?.stoneDir;
+            const flowsDir = config.paths?.flowsDir ?? config.flowsDir;
 
-            const { resolved, isVirtual, kind } = resolveOpenFilePath(filePath, rootDir, objectName);
+            const { resolved, isVirtual, kind } = resolveOpenFilePath(filePath, rootDir, objectName, stoneDir, flowsDir);
             if (!resolved) {
               const td = tree.readThreadData(threadId);
               if (td) {
@@ -2878,8 +2891,10 @@ export async function resumeWithThreadTree(
             const filePath = args.path as string;
             const linesLimit = args.lines as number | undefined;
             const rootDir = config.paths?.rootDir ?? config.rootDir;
+            const stoneDir = config.paths?.stoneDir;
+            const flowsDir = config.paths?.flowsDir ?? config.flowsDir;
 
-            const { resolved, isVirtual, kind } = resolveOpenFilePath(filePath, rootDir, objectName);
+            const { resolved, isVirtual, kind } = resolveOpenFilePath(filePath, rootDir, objectName, stoneDir, flowsDir);
             if (!resolved) {
               const td = tree.readThreadData(threadId);
               if (td) { td.actions.push({ type: "inject", content: `[错误] 路径 "${filePath}" 无法解析（未知虚拟前缀或格式错误）`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }

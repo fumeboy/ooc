@@ -31,6 +31,7 @@ import { resolveTraitRef } from "../trait/activator.js";
 import { getOpenFiles } from "./open-files.js";
 import { scanPeers } from "./peers.js";
 import { readPeerRelations, type PeerRelationEntry } from "./relation.js";
+import { detectSelfKind } from "./self-kind.js";
 import { getBuildFeedback, formatFeedbackForContext } from "../world/hooks.js";
 import { existsSync, readFileSync } from "node:fs";
 import { join as pathJoin } from "node:path";
@@ -295,20 +296,24 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
   }
   /* else: root 线程，creator = "user", creationMode = "root" */
 
-  /* 8. <relations> 索引条目（Phase 5 target 阶段）
+  /* 8. <relations> 索引条目（Phase 5/7 target 阶段）
    *
    * 扫描当前线程涉及的 peer 对象，读 relations/{peer}.md 的 summary 降级链
-   * 生成结构化条目。XML 渲染由 engine.contextToMessages 负责，保持与 user 其他
-   * 子节点统一缩进。LLM 若需全文再 open(path="@relation:<peer>") 主动读。
-   * rootDir 取自 paths.rootDir（与 virtual-path 同源）；缺失时降级为空列表。 */
+   * 生成结构化条目。XML 渲染由 engine.contextToMessages 负责。
+   * Phase 7：通过 detectSelfKind 识别 stone vs flow_obj，flow_obj 时 relation
+   *          文件位于 flows/<sid>/objects/<self>/relations/ 下。 */
   let relations: PeerRelationEntry[] = [];
   const rootDir = paths?.rootDir;
   if (rootDir) {
     const peers = scanPeers(threadData, stone.name);
+    const stoneDir = paths?.stoneDir ?? "";
+    const flowsDir = paths?.flowsDir ?? (rootDir ? `${rootDir}/flows` : "");
+    const selfInfo = detectSelfKind(stoneDir, flowsDir);
     relations = readPeerRelations(peers, {
       rootDir,
       selfName: stone.name,
-      selfKind: "stone",
+      selfKind: selfInfo.selfKind,
+      sessionId: selfInfo.sessionId,
     });
   }
 
