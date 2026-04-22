@@ -942,6 +942,65 @@ export async function handleRoute(
     return json({ success: true });
   }
 
+  /* POST /api/sessions/:sessionId/issues/:issueId/status — 切换 Issue 状态
+   * body: { status: IssueStatus }
+   * 合法 status: discussing / designing / reviewing / executing / confirming / done / closed
+   */
+  const issueStatusMatch = path.match(/^\/api\/sessions\/([^/]+)\/issues\/([^/]+)\/status$/);
+  if (method === "POST" && issueStatusMatch) {
+    const [, sessionId, issueId] = issueStatusMatch;
+    const body = (await req.json()) as { status?: string };
+    const status = body.status;
+    const validIssueStatus = new Set([
+      "discussing", "designing", "reviewing",
+      "executing", "confirming", "done", "closed",
+    ]);
+    if (!status || !validIssueStatus.has(status)) {
+      return errorResponse(
+        `非法 status："${status ?? ""}"；合法值为 ${[...validIssueStatus].join(",")}`,
+      );
+    }
+    const sessionDir = join(world.flowsDir, sessionId!);
+    if (!existsSync(sessionDir)) return errorResponse(`Session "${sessionId}" 不存在`, 404);
+    const { updateIssueStatus } = await import("../kanban/methods.js");
+    const { readIssueDetail } = await import("../kanban/store.js");
+    try {
+      await updateIssueStatus(sessionDir, issueId!, status as import("../kanban/types.js").IssueStatus);
+    } catch (e) {
+      return errorResponse((e as Error).message, 404);
+    }
+    const issue = await readIssueDetail(sessionDir, issueId!);
+    return json({ success: true, data: issue });
+  }
+
+  /* POST /api/sessions/:sessionId/tasks/:taskId/status — 切换 Task 状态
+   * body: { status: TaskStatus }
+   * 合法 status: running / done / closed
+   */
+  const taskStatusMatch = path.match(/^\/api\/sessions\/([^/]+)\/tasks\/([^/]+)\/status$/);
+  if (method === "POST" && taskStatusMatch) {
+    const [, sessionId, taskId] = taskStatusMatch;
+    const body = (await req.json()) as { status?: string };
+    const status = body.status;
+    const validTaskStatus = new Set(["running", "done", "closed"]);
+    if (!status || !validTaskStatus.has(status)) {
+      return errorResponse(
+        `非法 status："${status ?? ""}"；合法值为 ${[...validTaskStatus].join(",")}`,
+      );
+    }
+    const sessionDir = join(world.flowsDir, sessionId!);
+    if (!existsSync(sessionDir)) return errorResponse(`Session "${sessionId}" 不存在`, 404);
+    const { updateTaskStatus } = await import("../kanban/methods.js");
+    const { readTaskDetail } = await import("../kanban/store.js");
+    try {
+      await updateTaskStatus(sessionDir, taskId!, status as import("../kanban/types.js").TaskStatus);
+    } catch (e) {
+      return errorResponse((e as Error).message, 404);
+    }
+    const task = await readTaskDetail(sessionDir, taskId!);
+    return json({ success: true, data: task });
+  }
+
   /* POST /api/debug/enable — 开启 debug 模式 */
   if (method === "POST" && path === "/api/debug/enable") {
     world.enableDebug();
