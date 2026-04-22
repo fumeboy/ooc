@@ -296,156 +296,323 @@ export function writeThreadTreeFlowData(
 
 /* ========== Context → LLM Messages 转换 ========== */
 
+/* ========== XML 结构化输出辅助 ========== */
+
+/**
+ * XML 节点的中间表示
+ *
+ * 用于在 contextToMessages 中以数据结构方式组织 Context，
+ * 然后交给 serializeXml 按嵌套层级缩进输出。
+ *
+ * 设计原则：
+ * - 只缩进 open/close 标签行；content 原样不动（保留 TRAIT.md 的 Markdown 表格 / 代码块 / 长段文本）。
+ * - children 与 content 二选一：有 children 时是容器节点；有 content 时是叶子节点。
+ * - 可选 comment：渲染为 <!-- ... --> 在开标签前（同样随层级缩进）。
+ * - selfClosing：渲染为 <tag/>（当无内容也无子节点时）。
+ */
+interface XmlNode {
+  /** 标签名，例如 "system" / "knowledge" / "message" */
+  tag: string;
+  /** 属性表，顺序按插入顺序渲染（Record 本身在 JS 中保持插入顺序） */
+  attrs?: Record<string, string | number>;
+  /** 子节点（容器节点使用） */
+  children?: XmlNode[];
+  /** 原样内容字符串（叶子节点使用，不缩进） */
+  content?: string;
+  /** 附加注释（在 open 标签前渲染为 <!-- ... -->） */
+  comment?: string;
+  /** 是否自闭合（渲染为 <tag/>） */
+  selfClosing?: boolean;
+}
+
+/**
+ * 属性表序列化（保留插入顺序）
+ */
+function renderAttrs(attrs?: Record<string, string | number>): string {
+  if (!attrs) return "";
+  const entries = Object.entries(attrs);
+  if (entries.length === 0) return "";
+  const parts = entries.map(([k, v]) => ` ${k}="${v}"`);
+  return parts.join("");
+}
+
+/**
+ * 将 XmlNode 数组按嵌套层级缩进序列化
+ *
+ * @param nodes - 要序列化的节点数组（同一层级）
+ * @param depth - 当前深度（用于缩进；每一级 2 空格）
+ * @returns 序列化后的字符串（行之间以 \n 分隔，末尾无 \n）
+ *
+ * 关键约束：
+ * - 只缩进 open/close 标签行。
+ * - content 原样输出（不缩进、不改换行），保护 Markdown / 代码块内容。
+ * - children 为空且无 content 的容器节点使用 selfClosing。
+ */
+function serializeXml(nodes: XmlNode[], depth = 0): string {
+  const indent = "  ".repeat(depth);
+  const lines: string[] = [];
+
+  for (const node of nodes) {
+    if (node.comment) {
+      lines.push(`${indent}<!-- ${node.comment} -->`);
+    }
+
+    const attrStr = renderAttrs(node.attrs);
+
+    /* 自闭合节点（无子、无内容） */
+    if (node.selfClosing || (!node.children?.length && !node.content)) {
+      lines.push(`${indent}<${node.tag}${attrStr}/>`);
+      continue;
+    }
+
+    /* 容器节点：有 children */
+    if (node.children && node.children.length > 0) {
+      lines.push(`${indent}<${node.tag}${attrStr}>`);
+      lines.push(serializeXml(node.children, depth + 1));
+      lines.push(`${indent}</${node.tag}>`);
+      continue;
+    }
+
+    /* 叶子节点：有 content（内容原样不缩进） */
+    lines.push(`${indent}<${node.tag}${attrStr}>`);
+    lines.push(node.content ?? "");
+    lines.push(`${indent}</${node.tag}>`);
+  }
+
+  return lines.join("\n");
+}
+
 /**
  * 将 ThreadContext 转换为 LLM Messages
  *
- * 构建 system + user 两条消息：
- * - system: whoAmI + instructions + knowledge
- * - user: parentExpectation + process + inbox + todos + childrenSummary + directory
+ * 构建 system + user 两条消息，XML 结构按嵌套层级缩进：
+ * - system：<system> 容器包裹 <identity> / <instructions> / <knowledge>
+ * - user：<user> 容器包裹 <task> / <creator> / <plan> / <process> / <inbox> / <todos> /
+ *   <defers> / <children> / <ancestors> / <siblings> / <directory> / <paths> / <status>
+ *
+ * 只有标签行被缩进；叶子节点的 content 原样输出（不破坏 Markdown / 代码块 / 长文本）。
  */
 function contextToMessages(ctx: ReturnType<typeof buildThreadContext>, deferHooks?: import("./types.js").ThreadFrameHook[]): Message[] {
-  const systemParts: string[] = [];
+  /* ========== system 侧：<system> 容器 ========== */
+  const systemChildren: XmlNode[] = [];
 
   /* 身份 */
-  systemParts.push(`<!-- 对象身份：readme.md 的完整内容 -->`);
-  systemParts.push(`<identity name="${ctx.name}">`);
-  systemParts.push(ctx.whoAmI);
-  systemParts.push(`</identity>`);
+  systemChildren.push({
+    tag: "identity",
+    attrs: { name: ctx.name },
+    content: ctx.whoAmI,
+    comment: "对象身份：readme.md 的完整内容",
+  });
 
   /* 系统指令窗口 */
   if (ctx.instructions.length > 0) {
-    systemParts.push(`<!-- 系统指令：激活的 kernel trait 注入的行为规则 -->`);
-    for (const w of ctx.instructions) {
-      systemParts.push(`<instruction name="${w.name}">\n${w.content}\n</instruction>`);
-    }
+    systemChildren.push({
+      tag: "instructions",
+      comment: "系统指令：激活的 kernel trait 注入的行为规则",
+      children: ctx.instructions.map(w => ({
+        tag: "instruction",
+        attrs: { name: w.name },
+        content: w.content,
+      })),
+    });
   }
 
   /* 知识窗口 */
   if (ctx.knowledge.length > 0) {
-    systemParts.push(`<!-- 知识窗口：激活的 library/user trait 和 skill 注入的知识。lifespan="transient" 表示该 trait 由 open(type=command) 带入，form 关闭即回收；lifespan="pinned" 表示用户已显式固定。若需保留 transient trait，请 open(type="trait", name="X") 固定之。 -->`);
-    for (const w of ctx.knowledge) {
-      const lifespanAttr = w.lifespan ? ` lifespan="${w.lifespan}"` : "";
-      systemParts.push(`<knowledge name="${w.name}"${lifespanAttr}>\n${w.content}\n</knowledge>`);
-    }
+    systemChildren.push({
+      tag: "knowledge",
+      comment: `知识窗口：激活的 library/user trait 和 skill 注入的知识。lifespan="transient" 表示该 trait 由 open(type=command) 带入，form 关闭即回收；lifespan="pinned" 表示用户已显式固定。若需保留 transient trait，请 open(type="trait", name="X") 固定之。`,
+      children: ctx.knowledge.map(w => {
+        const attrs: Record<string, string | number> = { name: w.name };
+        if (w.lifespan) attrs.lifespan = w.lifespan;
+        return {
+          tag: "window",
+          attrs,
+          content: w.content,
+        };
+      }),
+    });
   }
 
-  const userParts: string[] = [];
+  const systemRoot: XmlNode = { tag: "system", children: systemChildren };
+
+  /* ========== user 侧：<user> 容器 ========== */
+  const userChildren: XmlNode[] = [];
 
   /* 父线程期望 */
   if (ctx.parentExpectation) {
-    userParts.push(`<!-- 任务：用户消息或父线程对当前线程的期望 -->`);
-    userParts.push(`<task>\n  ${ctx.parentExpectation}\n</task>`);
+    userChildren.push({
+      tag: "task",
+      content: ctx.parentExpectation,
+      comment: "任务：用户消息或父线程对当前线程的期望",
+    });
   }
 
   /* 创建者信息 */
   if (ctx.creationMode === "root") {
-    userParts.push(`<creator mode="root">\n  你是根线程，由用户(user)发起。完成任务后必须用 [return] 返回最终结果。[talk] 只用于向其他对象发消息，不会结束线程。\n</creator>`);
+    userChildren.push({
+      tag: "creator",
+      attrs: { mode: "root" },
+      content: "你是根线程，由用户(user)发起。完成任务后必须用 [return] 返回最终结果。[talk] 只用于向其他对象发消息，不会结束线程。",
+    });
   } else {
-    userParts.push(`<creator mode="${ctx.creationMode}" from="${ctx.creator}">\n  你是子线程，由 ${ctx.creator} 创建（${ctx.creationMode}）。你的职责是完成 <task> 中描述的具体工作，然后用 [return] 返回结果给创建者。不要重复创建者的工作，专注于你被分配的任务。\n</creator>`);
+    userChildren.push({
+      tag: "creator",
+      attrs: { mode: ctx.creationMode, from: ctx.creator },
+      content: `你是子线程，由 ${ctx.creator} 创建（${ctx.creationMode}）。你的职责是完成 <task> 中描述的具体工作，然后用 [return] 返回结果给创建者。不要重复创建者的工作，专注于你被分配的任务。`,
+    });
   }
 
   /* 当前计划 */
   if (ctx.plan) {
-    userParts.push(`<plan>\n  ${ctx.plan}\n</plan>`);
+    userChildren.push({ tag: "plan", content: ctx.plan });
   }
 
   /* 执行历史 */
-  userParts.push(`<!-- 执行历史：当前线程的所有 actions 时间线 -->`);
   if (ctx.process) {
-    userParts.push(`<process>\n${ctx.process}\n</process>`);
+    userChildren.push({
+      tag: "process",
+      content: ctx.process,
+      comment: "执行历史：当前线程的所有 actions 时间线",
+    });
   } else {
-    userParts.push(`<process />`);
+    userChildren.push({
+      tag: "process",
+      selfClosing: true,
+      comment: "执行历史：当前线程的所有 actions 时间线",
+    });
   }
 
   /* 局部变量 */
   if (Object.keys(ctx.locals).length > 0) {
-    userParts.push(`<locals>\n  ${JSON.stringify(ctx.locals, null, 2)}\n</locals>`);
+    userChildren.push({ tag: "locals", content: JSON.stringify(ctx.locals, null, 2) });
   }
 
   /* inbox */
   if (ctx.inbox.length > 0) {
     const unread = ctx.inbox.filter(m => m.status === "unread");
     const marked = ctx.inbox.filter(m => m.status === "marked");
-    userParts.push(`<!-- 收件箱：来自其他对象或系统的消息 -->`);
-    userParts.push(`<inbox>`);
+    const inboxChildren: XmlNode[] = [];
+
     if (unread.length > 0) {
-      userParts.push(`  <!-- 未读消息：请在下次工具调用时通过 mark 参数标记 -->`);
-      for (const m of unread) {
-        userParts.push(`  <message id="${m.id}" from="${m.from}" status="unread">\n    ${m.content}\n  </message>`);
+      /* 用一个“空 tag”承载分组注释不合适；改为给每条未读消息注入自己的 comment */
+      /* 首条 unread 附带分组注释，以减少噪音 */
+      for (let i = 0; i < unread.length; i++) {
+        const m = unread[i]!;
+        inboxChildren.push({
+          tag: "message",
+          attrs: { id: m.id, from: m.from, status: "unread" },
+          content: m.content,
+          comment: i === 0 ? "未读消息：请在下次工具调用时通过 mark 参数标记" : undefined,
+        });
       }
     }
     if (marked.length > 0) {
-      userParts.push(`  <!-- 已标记消息 -->`);
-      for (const m of marked) {
-        const markAttr = m.mark ? ` mark="${m.mark.type}" tip="${m.mark.tip}"` : "";
-        userParts.push(`  <message id="${m.id}" from="${m.from}" status="marked"${markAttr}>\n    ${m.content}\n  </message>`);
+      for (let i = 0; i < marked.length; i++) {
+        const m = marked[i]!;
+        const attrs: Record<string, string | number> = {
+          id: m.id, from: m.from, status: "marked",
+        };
+        if (m.mark) {
+          attrs.mark = m.mark.type;
+          attrs.tip = m.mark.tip;
+        }
+        inboxChildren.push({
+          tag: "message",
+          attrs,
+          content: m.content,
+          comment: i === 0 ? "已标记消息" : undefined,
+        });
       }
     }
-    userParts.push(`</inbox>`);
+
+    userChildren.push({
+      tag: "inbox",
+      attrs: {
+        unread: unread.length,
+        marked: marked.length,
+      },
+      comment: "收件箱：来自其他对象或系统的消息",
+      children: inboxChildren,
+    });
   }
 
   /* todos */
   if (ctx.todos.length > 0) {
-    userParts.push(`<todos>`);
-    for (const t of ctx.todos) {
-      userParts.push(`  <todo>${t.content}</todo>`);
-    }
-    userParts.push(`</todos>`);
+    userChildren.push({
+      tag: "todos",
+      children: ctx.todos.map(t => ({ tag: "todo", content: t.content })),
+    });
   }
 
   /* defer hooks：展示已注册的 command hooks，让 LLM 在决策前看到 */
   if (deferHooks && deferHooks.length > 0) {
     const onHooks = deferHooks.filter(h => h.event.startsWith("on:"));
     if (onHooks.length > 0) {
-      userParts.push(`<!-- defer 提醒：你之前注册的 command hook，对应 command 执行时请注意 -->`);
-      userParts.push(`<defers>`);
-      for (const h of onHooks) {
-        const cmd = h.event.slice(3); /* 去掉 "on:" 前缀 */
-        userParts.push(`  <defer command="${cmd}"${h.once === false ? ' once="false"' : ""}>${h.content}</defer>`);
-      }
-      userParts.push(`</defers>`);
+      userChildren.push({
+        tag: "defers",
+        comment: "defer 提醒：你之前注册的 command hook，对应 command 执行时请注意",
+        children: onHooks.map(h => {
+          const cmd = h.event.slice(3); /* 去掉 "on:" 前缀 */
+          const attrs: Record<string, string | number> = { command: cmd };
+          if (h.once === false) attrs.once = "false";
+          return { tag: "defer", attrs, content: h.content };
+        }),
+      });
     }
   }
 
   /* 子节点摘要 */
   if (ctx.childrenSummary) {
-    const allDone = ctx.childrenSummary.includes("[done]") && !ctx.childrenSummary.includes("[running]") && !ctx.childrenSummary.includes("[pending]") && !ctx.childrenSummary.includes("[waiting]");
-    const hint = allDone ? `\n  <!-- 所有子线程已完成。请汇总子线程的结果，然后用 [return] 返回最终结果。 -->` : "";
-    userParts.push(`<!-- 子线程：当前线程创建的子线程状态摘要 -->`);
-    userParts.push(`<children>${hint}\n  ${ctx.childrenSummary}\n</children>`);
+    const allDone = ctx.childrenSummary.includes("[done]")
+      && !ctx.childrenSummary.includes("[running]")
+      && !ctx.childrenSummary.includes("[pending]")
+      && !ctx.childrenSummary.includes("[waiting]");
+    const comments: string[] = ["子线程：当前线程创建的子线程状态摘要"];
+    if (allDone) comments.push("所有子线程已完成。请汇总子线程的结果，然后用 [return] 返回最终结果。");
+    userChildren.push({
+      tag: "children",
+      content: ctx.childrenSummary,
+      comment: comments.join(" / "),
+    });
   }
 
   /* 祖先摘要 */
   if (ctx.ancestorSummary) {
-    userParts.push(`<ancestors>\n  ${ctx.ancestorSummary}\n</ancestors>`);
+    userChildren.push({ tag: "ancestors", content: ctx.ancestorSummary });
   }
 
   /* 兄弟摘要 */
   if (ctx.siblingSummary) {
-    userParts.push(`<siblings>\n  ${ctx.siblingSummary}\n</siblings>`);
+    userChildren.push({ tag: "siblings", content: ctx.siblingSummary });
   }
 
   /* 通讯录 */
   if (ctx.directory.length > 0) {
-    userParts.push(`<!-- 通讯录：可通过 talk 联系的对象 -->`);
-    userParts.push(`<directory>`);
-    for (const d of ctx.directory) {
-      userParts.push(`  <object name="${d.name}">${d.whoAmI}</object>`);
-    }
-    userParts.push(`</directory>`);
+    userChildren.push({
+      tag: "directory",
+      comment: "通讯录：可通过 talk 联系的对象",
+      children: ctx.directory.map(d => ({
+        tag: "object",
+        attrs: { name: d.name },
+        content: d.whoAmI,
+      })),
+    });
   }
 
   /* 沙箱路径 */
   if (ctx.paths && Object.keys(ctx.paths).length > 0) {
-    userParts.push(`<paths>${JSON.stringify(ctx.paths)}</paths>`);
+    userChildren.push({ tag: "paths", content: JSON.stringify(ctx.paths) });
   }
 
   /* 状态 */
-  userParts.push(`<status>${ctx.status}</status>`);
+  userChildren.push({ tag: "status", content: ctx.status });
+
+  const userRoot: XmlNode = { tag: "user", children: userChildren };
 
   return [
-    { role: "system", content: systemParts.join("\n") },
-    { role: "user", content: userParts.join("\n") },
+    { role: "system", content: serializeXml([systemRoot], 0) },
+    { role: "user", content: serializeXml([userRoot], 0) },
   ];
 }
 
