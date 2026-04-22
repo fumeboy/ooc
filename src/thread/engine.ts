@@ -19,11 +19,12 @@ import { consola } from "consola";
 
 import { ThreadsTree } from "./tree.js";
 import { ThreadScheduler, type SchedulerCallbacks } from "./scheduler.js";
-import { buildThreadContext, computeThreadScopeChain, extractStoneTraitRefs } from "./context-builder.js";
+import { buildThreadContext } from "./context-builder.js";
+import { getOpenFiles } from "./open-files.js";
 import { emitSSE } from "../server/events.js";
 import { CodeExecutor, executeShell } from "../executable/executor.js";
 import { MethodRegistry, type MethodContext } from "../trait/registry.js";
-import { getActiveTraits, traitId } from "../trait/activator.js";
+import { traitId } from "../trait/activator.js";
 import { FormManager } from "./form.js";
 import { collectCommandTraits, collectCommandHooks } from "./hooks.js";
 import { buildAvailableTools } from "./tools.js";
@@ -966,10 +967,18 @@ export async function runWithThreadTree(
       return { path: p, content: readFileSync(p, "utf-8") };
     };
 
-    const stoneTraitRefs = extractStoneTraitRefs(config.stone, config.traits);
+    /* Phase 3：通过 open-files 中枢统一计算当前 open 的 trait 集合
+     * （替代旧 getActiveTraits 直接调用，语义等价） */
     const computeActiveTraitIds = (): string[] => {
-      const scopeChain = computeThreadScopeChain(tree.toFile(), threadId, stoneTraitRefs);
-      return getActiveTraits(config.traits, scopeChain).map(t => traitId(t));
+      const td = tree.readThreadData(threadId);
+      if (!td) return [];
+      return getOpenFiles({
+        tree: tree.toFile(),
+        threadId,
+        threadData: td,
+        stone: config.stone,
+        traits: config.traits,
+      }).activeTraitIds;
     };
 
     /* 注入 Trait 方法（Phase 2 协议：只暴露 callMethod 单函数） */
@@ -2321,10 +2330,17 @@ export async function resumeWithThreadTree(
       return { path: p, content: readFileSync(p, "utf-8") };
     };
 
-    const stoneTraitRefs = extractStoneTraitRefs(config.stone, config.traits);
+    /* Phase 3：resume 路径同 run 路径，统一用 open-files 中枢 */
     const computeActiveTraitIds = (): string[] => {
-      const scopeChain = computeThreadScopeChain(tree.toFile(), threadId, stoneTraitRefs);
-      return getActiveTraits(config.traits, scopeChain).map(t => traitId(t));
+      const td = tree.readThreadData(threadId);
+      if (!td) return [];
+      return getOpenFiles({
+        tree: tree.toFile(),
+        threadId,
+        threadData: td,
+        stone: config.stone,
+        traits: config.traits,
+      }).activeTraitIds;
     };
 
     let activeTraitNames = computeActiveTraitIds();

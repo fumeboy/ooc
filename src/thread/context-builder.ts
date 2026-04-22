@@ -27,22 +27,14 @@ import type {
   ThreadStatus,
 } from "./types.js";
 import { getAncestorPath } from "./persistence.js";
-import { getActiveTraits, traitId as activatorTraitId, resolveTraitRef } from "../trait/activator.js";
+import { resolveTraitRef } from "../trait/activator.js";
+import { getOpenFiles } from "./open-files.js";
 import { getBuildFeedback, formatFeedbackForContext } from "../world/hooks.js";
 import { existsSync, readFileSync } from "node:fs";
 import { join as pathJoin } from "node:path";
 
 /** memory.md 注入 Context 的上限（防止长期记忆膨胀撑爆 Context） */
 const MEMORY_MD_MAX_CHARS = 4000;
-
-/**
- * 获取 trait 的完整标识（本地版本，避免循环依赖）
- *
- * 与 activator.traitId 保持一致：`namespace:name`（冒号分隔）。
- */
-function localTraitId(trait: TraitDefinition): string {
-  return `${trait.namespace}:${trait.name}`;
-}
 
 /** 线程 Context（双视角） */
 export interface ThreadContext {
@@ -123,18 +115,6 @@ export interface ThreadContextInput {
 }
 
 /**
- * 判断是否为 kernel trait（traitId 前缀匹配）
- *
- * kernel trait 的 readme 注入到 instructions 区域（系统指令），
- * 非 kernel trait 注入到 knowledge 区域（知识窗口）。
- *
- * 新协议：traitId = `namespace:name`，所以用 "kernel:" 前缀判断。
- */
-function isKernelTrait(id: string): boolean {
-  return id.startsWith("kernel:");
-}
-
-/**
  * 构建线程 Context
  *
  * @param input - 构建参数
@@ -147,29 +127,33 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
     throw new Error(`[buildThreadContext] 节点不存在: ${threadId}`);
   }
 
-  /* 1. scope chain：沿祖先链合并 traits（附加 stone._traits_ref 默认激活） */
+  /* 1+2. Open-files 中枢：scope chain + deps 递归激活
+   *
+   * Phase 3 重构：把 scopeChain + getActiveTraits 折叠进 getOpenFiles，
+   * 它返回 { pinned, transient, inject, instructions, knowledge, activeTraitIds }。
+   * 为保持与旧版 buildThreadContext 行为完全等价——
+   * - instructions 不带 lifespan 标签（kernel trait 一律无 lifespan）
+   * - knowledge 的 lifespan 只由 nodeMeta.pinnedTraits 决定（不含 stoneRefs / when="always"）
+   * 本函数在 getOpenFiles 返回值之上做 lifespan 覆盖，保持旧 window 形态。 */
   const stoneTraitRefs = extractStoneTraitRefs(stone, traits);
   const scopeChain = computeThreadScopeChain(tree, threadId, stoneTraitRefs);
+  const openFiles = getOpenFiles({ tree, threadId, threadData, stone, traits });
 
-  /* 2. 激活 traits（使用完整版 activator，支持 deps 递归激活） */
-  const activeTraits = getActiveTraits(traits, scopeChain);
+  /* kernel trait → instructions（无 lifespan 标签） */
+  const instructions: ContextWindow[] = openFiles.instructions.map(w => ({
+    name: w.name,
+    content: w.content,
+  }));
 
-  const instructions: ContextWindow[] = activeTraits
-    .filter(t => t.readme && isKernelTrait(localTraitId(t)))
-    .map(t => ({ name: localTraitId(t), content: t.readme }));
-
-  /* 当前节点的固定集合——给每个知识窗口打 lifespan 标签（pinned / transient） */
-  const pinnedSet = new Set(nodeMeta.pinnedTraits ?? []);
-  const knowledge: ContextWindow[] = activeTraits
-    .filter(t => t.readme && !isKernelTrait(localTraitId(t)))
-    .map(t => {
-      const fullId = `${t.namespace}:${t.name}`;
-      return {
-        name: localTraitId(t),
-        content: t.readme,
-        lifespan: pinnedSet.has(fullId) ? ("pinned" as const) : ("transient" as const),
-      };
-    });
+  /* 非 kernel trait → knowledge
+   * 旧行为：lifespan 仅由 nodeMeta.pinnedTraits 决定（不含 stoneRefs / when="always"）。
+   * 此处对齐旧行为以避免回归。 */
+  const legacyPinnedSet = new Set(nodeMeta.pinnedTraits ?? []);
+  const knowledge: ContextWindow[] = openFiles.knowledge.map(w => ({
+    name: w.name,
+    content: w.content,
+    lifespan: legacyPinnedSet.has(w.name) ? ("pinned" as const) : ("transient" as const),
+  }));
 
   if (extraWindows) knowledge.push(...extraWindows);
 
