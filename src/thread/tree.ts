@@ -679,10 +679,57 @@ export class ThreadsTree {
       const before = node.activatedTraits.length;
       node.activatedTraits = node.activatedTraits.filter(t => t !== traitId);
       if (node.activatedTraits.length === before) return;
+      /* 同步清理 pinnedTraits 里的同 id（deactivate 隐含 unpin） */
+      if (node.pinnedTraits && node.pinnedTraits.includes(traitId)) {
+        node.pinnedTraits = node.pinnedTraits.filter(t => t !== traitId);
+      }
       node.updatedAt = Date.now();
       changed = true;
     });
     return changed;
+  }
+
+  /**
+   * 固定 trait：把 trait 钉在作用域（submit/close 回收时豁免）
+   * 调用方假设 traitId 已在 activatedTraits 里或同事务内先激活。幂等。
+   * @returns 是否发生变更（false 表示本就已固定）
+   */
+  async pinTrait(nodeId: string, traitId: string): Promise<boolean> {
+    if (!this._tree.nodes[nodeId]) return false;
+    let changed = false;
+    await this._mutate((tree) => {
+      const node = tree.nodes[nodeId];
+      if (!node) return;
+      if (!node.pinnedTraits) node.pinnedTraits = [];
+      if (node.pinnedTraits.includes(traitId)) return;
+      node.pinnedTraits.push(traitId);
+      node.updatedAt = Date.now();
+      changed = true;
+    });
+    return changed;
+  }
+
+  /**
+   * 解除固定：trait 仍在 activatedTraits 里，但不再享有回收豁免
+   * @returns 是否发生变更（false 表示本就未固定）
+   */
+  async unpinTrait(nodeId: string, traitId: string): Promise<boolean> {
+    if (!this._tree.nodes[nodeId]) return false;
+    let changed = false;
+    await this._mutate((tree) => {
+      const node = tree.nodes[nodeId];
+      if (!node?.pinnedTraits || !node.pinnedTraits.includes(traitId)) return;
+      node.pinnedTraits = node.pinnedTraits.filter(t => t !== traitId);
+      node.updatedAt = Date.now();
+      changed = true;
+    });
+    return changed;
+  }
+
+  /** 查询 trait 是否已固定 */
+  isPinnedTrait(nodeId: string, traitId: string): boolean {
+    const node = this._tree.nodes[nodeId];
+    return !!node?.pinnedTraits?.includes(traitId);
   }
 
   /* ========== 内部：串行化写入 ========== */

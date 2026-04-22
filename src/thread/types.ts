@@ -35,6 +35,11 @@ export interface ThreadsTreeNodeMeta {
   traits?: string[];
   /** 认知栈：动态激活的 traits */
   activatedTraits?: string[];
+  /** 固定 trait：activatedTraits 的子集，submit/close 回收逻辑不会自动卸载它们。
+   * - open(type="command") 自动带入的 trait → 进 activatedTraits 但**不**进 pinnedTraits（临时生效）
+   * - open(type="trait", name=X) 显式打开 → 同时加入 pinnedTraits（固定）
+   * - close 对应的"trait 型" form 可以 unpin */
+  pinnedTraits?: string[];
 
   /** 输出契约 */
   outputs?: string[];

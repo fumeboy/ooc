@@ -322,9 +322,10 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>, deferHook
 
   /* 知识窗口 */
   if (ctx.knowledge.length > 0) {
-    systemParts.push(`<!-- 知识窗口：激活的 library/user trait 和 skill 注入的知识 -->`);
+    systemParts.push(`<!-- 知识窗口：激活的 library/user trait 和 skill 注入的知识。lifespan="transient" 表示该 trait 由 open(type=command) 带入，form 关闭即回收；lifespan="pinned" 表示用户已显式固定。若需保留 transient trait，请 open(type="trait", name="X") 固定之。 -->`);
     for (const w of ctx.knowledge) {
-      systemParts.push(`<knowledge name="${w.name}">\n${w.content}\n</knowledge>`);
+      const lifespanAttr = w.lifespan ? ` lifespan="${w.lifespan}"` : "";
+      systemParts.push(`<knowledge name="${w.name}"${lifespanAttr}>\n${w.content}\n</knowledge>`);
     }
   }
 
@@ -1057,9 +1058,10 @@ export async function runWithThreadTree(
             const td = tree.readThreadData(threadId);
             if (td) {
               td.activeForms = formManager.toData();
-              /* 告诉 LLM 这次 open 具体加载了哪些 trait，避免它盲目猜测或重复 open */
+              /* 命令型 open 带入的 trait 是"临时生效"——submit/close 此 form 后会自动回收。
+               * 若想保留某 trait 跨越 form 关闭，可以再 open(type="trait", name=X) 固定它。 */
               const loadHint = newlyLoadedTraits.length > 0
-                ? `本次新加载 trait：${newlyLoadedTraits.join(", ")}`
+                ? `本次新加载 trait（临时生效，form 关闭即回收）：${newlyLoadedTraits.join(", ")}。如需保留某 trait，可 open(type="trait", name="...") 固定它`
                 : `相关 trait 已在作用域内，无新增`;
               td.actions.push({
                 type: "inject",
@@ -1085,21 +1087,31 @@ export async function runWithThreadTree(
             }
 
             if (resolvedTraitName) {
-              const changed = await tree.activateTrait(threadId, resolvedTraitName);
+              /* open(type="trait") 语义：激活 + 固定。
+               * - 若 trait 未激活：activateTrait 激活；pinTrait 固定
+               * - 若 trait 已激活但未固定（临时态）：pinTrait 将其"提升"为固定（submit/close 不再自动回收）
+               * - 若已激活已固定：幂等 */
+              const activateChanged = await tree.activateTrait(threadId, resolvedTraitName);
+              const pinChanged = await tree.pinTrait(threadId, resolvedTraitName);
               const formId = formManager.begin("_trait", description, { trait: resolvedTraitName });
               const td = tree.readThreadData(threadId);
               if (td) {
                 td.activeForms = formManager.toData();
-                td.actions.push({
-                  type: "inject",
-                  content: changed
-                    ? `Trait ${resolvedTraitName} 已加载到作用域。`
-                    : `Trait ${resolvedTraitName} 已在作用域内（open 成功，无新增）。`,
-                  timestamp: Date.now(),
-                });
+                let hint: string;
+                if (activateChanged && pinChanged) {
+                  hint = `Trait ${resolvedTraitName} 已加载到作用域并固定（submit/close 不会自动回收）`;
+                } else if (!activateChanged && pinChanged) {
+                  hint = `Trait ${resolvedTraitName} 原本为临时生效，现已固定（submit/close 不再自动回收）`;
+                } else if (activateChanged && !pinChanged) {
+                  /* 理论上不会发生：activate 新增但 pin 已存在 */
+                  hint = `Trait ${resolvedTraitName} 已加载且已固定`;
+                } else {
+                  hint = `Trait ${resolvedTraitName} 已在作用域内且已固定（open 成功，无状态变化）`;
+                }
+                td.actions.push({ type: "inject", content: `${hint}。`, timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
               }
-              consola.info(`[Engine] open trait: ${traitInput} → ${resolvedTraitName} → ${formId}`);
+              consola.info(`[Engine] open trait (pin): ${traitInput} → ${resolvedTraitName} → ${formId} (pin=${pinChanged})`);
             } else {
               const available = allTraitIds.filter(id => !id.startsWith("kernel:") || id.includes("kernel:plannable/") || id.includes("kernel:computable/")).slice(0, 30).join(", ");
               const td = tree.readThreadData(threadId);
@@ -1521,21 +1533,34 @@ export async function runWithThreadTree(
         else if (toolName === "close") {
           const form = formManager.cancel(args.form_id as string ?? "");
           if (form) {
-            /* 追踪本次关闭实际卸载的 trait，供 inject 文案使用 */
+            /* 追踪本次关闭实际卸载的 trait 与"因固定而保留"的 trait，供 inject 文案使用 */
             const unloadedTraits: string[] = [];
+            const keptPinnedTraits: string[] = [];
             if (form.command !== "_trait" && form.command !== "_skill" && form.command !== "_file") {
-              // command 类型：卸载 command 关联 trait（仅当该 command 已无其他 active form）
+              // command 类型：卸载 command 关联 trait（仅当该 command 已无其他 active form），固定 trait 豁免
               if (!formManager.activeCommands().has(form.command)) {
                 const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
                 for (const traitName of traitsToUnload) {
+                  if (tree.isPinnedTrait(threadId, traitName)) {
+                    keptPinnedTraits.push(traitName);
+                    continue;
+                  }
                   const changed = await tree.deactivateTrait(threadId, traitName);
                   if (changed) unloadedTraits.push(traitName);
                 }
               }
             } else if (form.command === "_trait" && form.trait) {
-              // trait 类型：卸载 trait
-              const changed = await tree.deactivateTrait(threadId, form.trait);
-              if (changed) unloadedTraits.push(form.trait);
+              // trait 类型：close 等价 unpin + 可能 deactivate。
+              // 逻辑：先 unpin；若该 trait 不再被任何 active command 需要，则 deactivate
+              await tree.unpinTrait(threadId, form.trait);
+              const stillNeededByCommand = collectCommandTraits(config.traits, formManager.activeCommands()).has(form.trait);
+              if (!stillNeededByCommand) {
+                const changed = await tree.deactivateTrait(threadId, form.trait);
+                if (changed) unloadedTraits.push(form.trait);
+              } else {
+                /* 仍被命令需要——降级为临时生效 */
+                keptPinnedTraits.push(form.trait);
+              }
             } else if (form.command === "_file" && form.trait) {
               // file 类型：从 windows 中移除（form.trait 存储的是文件路径）
               const td = tree.readThreadData(threadId);
@@ -1549,12 +1574,13 @@ export async function runWithThreadTree(
             const td = tree.readThreadData(threadId);
             if (td) {
               td.activeForms = formManager.toData();
-              const unloadHint = unloadedTraits.length > 0
-                ? `本次卸载 trait：${unloadedTraits.join(", ")}`
-                : `无 trait 被卸载（可能仍被其他 active form 占用）`;
+              const parts: string[] = [];
+              if (unloadedTraits.length > 0) parts.push(`本次卸载 trait：${unloadedTraits.join(", ")}`);
+              if (keptPinnedTraits.length > 0) parts.push(`已固定 trait 保留未卸载：${keptPinnedTraits.join(", ")}`);
+              if (parts.length === 0) parts.push(`无 trait 被卸载（可能仍被其他 active form 占用）`);
               td.actions.push({
                 type: "inject",
-                content: `Form ${form.formId} 已关闭。${unloadHint}。`,
+                content: `Form ${form.formId} 已关闭。${parts.join("；")}。`,
                 timestamp: Date.now(),
               });
               /* 防震荡安全阀：检测连续 open-close 无 submit 的模式。
@@ -2197,7 +2223,7 @@ export async function resumeWithThreadTree(
             if (td) {
               td.activeForms = formManager.toData();
               const loadHint = newlyLoadedTraits.length > 0
-                ? `本次新加载 trait：${newlyLoadedTraits.join(", ")}`
+                ? `本次新加载 trait（临时生效，form 关闭即回收）：${newlyLoadedTraits.join(", ")}。如需保留某 trait，可 open(type="trait", name="...") 固定它`
                 : `相关 trait 已在作用域内，无新增`;
               td.actions.push({
                 type: "inject",
@@ -2220,21 +2246,31 @@ export async function resumeWithThreadTree(
             }
 
             if (resolvedTraitName) {
-              const changed = await tree.activateTrait(threadId, resolvedTraitName);
+              /* open(type="trait") 语义：激活 + 固定。
+               * - 若 trait 未激活：activateTrait 激活；pinTrait 固定
+               * - 若 trait 已激活但未固定（临时态）：pinTrait 将其"提升"为固定（submit/close 不再自动回收）
+               * - 若已激活已固定：幂等 */
+              const activateChanged = await tree.activateTrait(threadId, resolvedTraitName);
+              const pinChanged = await tree.pinTrait(threadId, resolvedTraitName);
               const formId = formManager.begin("_trait", description, { trait: resolvedTraitName });
               const td = tree.readThreadData(threadId);
               if (td) {
                 td.activeForms = formManager.toData();
-                td.actions.push({
-                  type: "inject",
-                  content: changed
-                    ? `Trait ${resolvedTraitName} 已加载到作用域。`
-                    : `Trait ${resolvedTraitName} 已在作用域内（open 成功，无新增）。`,
-                  timestamp: Date.now(),
-                });
+                let hint: string;
+                if (activateChanged && pinChanged) {
+                  hint = `Trait ${resolvedTraitName} 已加载到作用域并固定（submit/close 不会自动回收）`;
+                } else if (!activateChanged && pinChanged) {
+                  hint = `Trait ${resolvedTraitName} 原本为临时生效，现已固定（submit/close 不再自动回收）`;
+                } else if (activateChanged && !pinChanged) {
+                  /* 理论上不会发生：activate 新增但 pin 已存在 */
+                  hint = `Trait ${resolvedTraitName} 已加载且已固定`;
+                } else {
+                  hint = `Trait ${resolvedTraitName} 已在作用域内且已固定（open 成功，无状态变化）`;
+                }
+                td.actions.push({ type: "inject", content: `${hint}。`, timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
               }
-              consola.info(`[Engine] open trait: ${traitInput} → ${resolvedTraitName} → ${formId}`);
+              consola.info(`[Engine] open trait (pin): ${traitInput} → ${resolvedTraitName} → ${formId} (pin=${pinChanged})`);
             } else {
               const available = allTraitIds.filter(id => !id.startsWith("kernel:") || id.includes("kernel:plannable/") || id.includes("kernel:computable/")).slice(0, 30).join(", ");
               const td = tree.readThreadData(threadId);
@@ -2478,19 +2514,31 @@ export async function resumeWithThreadTree(
         } else if (toolName === "close") {
           const form = formManager.cancel(args.form_id as string ?? "");
           if (form) {
-            /* 追踪实际卸载的 trait */
+            /* 追踪实际卸载的 trait 与因固定而保留的 trait（见 run 路径同名逻辑） */
             const unloadedTraits: string[] = [];
+            const keptPinnedTraits: string[] = [];
             if (form.command !== "_trait" && form.command !== "_skill" && form.command !== "_file") {
               if (!formManager.activeCommands().has(form.command)) {
                 const traitsToUnload = collectCommandTraits(config.traits, new Set([form.command]));
                 for (const traitName of traitsToUnload) {
+                  if (tree.isPinnedTrait(threadId, traitName)) {
+                    keptPinnedTraits.push(traitName);
+                    continue;
+                  }
                   const changed = await tree.deactivateTrait(threadId, traitName);
                   if (changed) unloadedTraits.push(traitName);
                 }
               }
             } else if (form.command === "_trait" && form.trait) {
-              const changed = await tree.deactivateTrait(threadId, form.trait);
-              if (changed) unloadedTraits.push(form.trait);
+              /* close _trait 型 form：unpin + 若无命令再需要则 deactivate */
+              await tree.unpinTrait(threadId, form.trait);
+              const stillNeededByCommand = collectCommandTraits(config.traits, formManager.activeCommands()).has(form.trait);
+              if (!stillNeededByCommand) {
+                const changed = await tree.deactivateTrait(threadId, form.trait);
+                if (changed) unloadedTraits.push(form.trait);
+              } else {
+                keptPinnedTraits.push(form.trait);
+              }
             } else if (form.command === "_file" && form.trait) {
               const td = tree.readThreadData(threadId);
               if (td?.windows?.[form.trait]) { delete td.windows[form.trait]; tree.writeThreadData(threadId, td); }
@@ -2498,12 +2546,13 @@ export async function resumeWithThreadTree(
             const td = tree.readThreadData(threadId);
             if (td) {
               td.activeForms = formManager.toData();
-              const unloadHint = unloadedTraits.length > 0
-                ? `本次卸载 trait：${unloadedTraits.join(", ")}`
-                : `无 trait 被卸载（可能仍被其他 active form 占用）`;
+              const parts: string[] = [];
+              if (unloadedTraits.length > 0) parts.push(`本次卸载 trait：${unloadedTraits.join(", ")}`);
+              if (keptPinnedTraits.length > 0) parts.push(`已固定 trait 保留未卸载：${keptPinnedTraits.join(", ")}`);
+              if (parts.length === 0) parts.push(`无 trait 被卸载（可能仍被其他 active form 占用）`);
               td.actions.push({
                 type: "inject",
-                content: `Form ${form.formId} 已关闭。${unloadHint}。`,
+                content: `Form ${form.formId} 已关闭。${parts.join("；")}。`,
                 timestamp: Date.now(),
               });
               /* 防震荡安全阀（见 runWithThreadTree 同名逻辑）：连续 open/close 无 submit → 强警告 */

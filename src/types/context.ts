@@ -29,6 +29,9 @@ export interface ContextWindow {
   name: string;
   /** 窗口内容 */
   content: string;
+  /** trait 生命周期：pinned=用户显式固定，transient=command_binding 带入（form 关闭即回收）。
+   * 非 trait 窗口（memory/skill/file 等）为 undefined。 */
+  lifespan?: "pinned" | "transient";
 }
 
 /**

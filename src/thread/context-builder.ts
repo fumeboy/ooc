@@ -156,9 +156,18 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
     .filter(t => t.readme && isKernelTrait(localTraitId(t)))
     .map(t => ({ name: localTraitId(t), content: t.readme }));
 
+  /* 当前节点的固定集合——给每个知识窗口打 lifespan 标签（pinned / transient） */
+  const pinnedSet = new Set(nodeMeta.pinnedTraits ?? []);
   const knowledge: ContextWindow[] = activeTraits
     .filter(t => t.readme && !isKernelTrait(localTraitId(t)))
-    .map(t => ({ name: localTraitId(t), content: t.readme }));
+    .map(t => {
+      const fullId = `${t.namespace}:${t.name}`;
+      return {
+        name: localTraitId(t),
+        content: t.readme,
+        lifespan: pinnedSet.has(fullId) ? ("pinned" as const) : ("transient" as const),
+      };
+    });
 
   if (extraWindows) knowledge.push(...extraWindows);
 

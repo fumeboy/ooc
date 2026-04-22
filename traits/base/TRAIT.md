@@ -44,33 +44,45 @@ deps: []
 - 再次 open 同一路径会更新窗口内容（支持刷新/重新读取）
 - `close(form_id)` 关闭窗口，从上下文中移除文件内容
 
-### trait 类型说明
+### trait 类型说明 — 临时 vs 固定
 
-`open(type="trait", name="...")` 主动把某个 trait 加载到当前线程的作用域。
+所有被激活的 trait 都有一个生命周期标签 `lifespan`，在 `<knowledge>` 窗口的属性里显式标注：
 
-**何时需要主动 open trait？**
+| lifespan | 含义 | 何时回收 |
+|---|---|---|
+| `transient` | 由 `open(type="command")` 通过 command_binding 自动带入 | 该 command 的 form 关闭（close/submit 完成）时**自动回收** |
+| `pinned` | 由 `open(type="trait", name="X")` 显式固定 | **不会**随 form 关闭回收，直到显式 close 该 trait 型 form 或线程结束 |
 
-你的 `<knowledge>` 区域默认只展示"当前作用域"下 active 的 trait。如果你需要的能力 trait **不在作用域链里**（例如它 `when: never` 或依赖的 `command_binding` 未 open），**你必须主动 `open(type=trait, name=...)` 来激活它**，否则该 trait 的知识和方法无法被你使用。
+在 `<knowledge>` 里你会看到类似：
+
+```xml
+<knowledge name="computable/file_ops" lifespan="transient">...</knowledge>
+<knowledge name="self:reporter" lifespan="pinned">...</knowledge>
+```
+
+**关键规则**：
+
+- `open(type="command", command="talk")` 会把 `talkable` 等 trait **临时**载入（lifespan=transient）
+- 若 submit 或 close 该 talk form，transient trait 会被自动回收
+- 如果你希望某个 trait 跨越多轮操作保留——**再次 `open(type="trait", name="X")` 把它固定（pinned）**。下次 submit/close 不会卸载它
+- close 固定型 form（即原先 `open(type=trait)` 创建的 form）会 unpin：若该 trait 还被某个 active command 需要，降级为 transient；否则从作用域移除
+
+**示例 — 固定 reporter 直到任务结束**：
+
+```json
+// 先主动固定，避免之后 talk form 关闭时 reporter 被回收
+open(type="trait", name="self:reporter", title="固定 reporter 能力", description="本轮对话需多次产出报告")
+// 之后正常 open(type="command", command="talk") → submit → close，reporter 仍在 knowledge 里
+```
 
 **如何知道哪些 trait 存在？**
 
-- 看你每次 tool 调用返回的 inject 消息——会告诉你"本次新加载 trait：..."或"相关 trait 已在作用域内"
-- 看 `<knowledge>` 段落里已经展示的 trait 列表
+- 每次 open 后的 inject 消息会告诉你"本次新加载 trait（临时生效）：..."或"Trait X 已加载并固定"
+- 每次 close 后的 inject 会告诉你"本次卸载 trait：..."或"已固定 trait 保留未卸载：..."
+- 看 `<knowledge>` 段落里已经展示的 trait 列表（含 lifespan 属性）
 - 非 kernel 命名空间（library / self）的 trait，在 `<directory>` 或用 `open(type=file, path="stones/{self}/traits/")` 查看
 
-**示例**：
-
-```json
-// 激活 library 中的 http/client trait（用前缀补全）
-open(type="trait", name="http/client", title="加载 HTTP 客户端能力", description="准备调用外部 API")
-
-// 激活自己持有的 reporter trait（self 命名空间；`namespace:name` 或简短名都行）
-open(type="trait", name="self:reporter", title="加载 reporter 汇报能力", description="准备生成报告文档")
-```
-
-**加载后**：trait 的 TRAIT.md 内容会进入 `<knowledge>` 段，你可以读它的说明；`llm_methods` 会自动注入 `callMethod` 沙箱（in program）。
-
-**卸载**：`close(form_id)` 关闭对应 form，trait 从作用域链移除。注意 inject 消息会明确告诉你"本次卸载 trait：..."或"无 trait 被卸载（可能仍被其他 active form 占用）"。
+**名称匹配**：name 支持 `namespace:name`（精确）或短名前缀补全（如 `http/client` 匹配 `library:http/client`）
 
 ## submit — 提交执行
 
