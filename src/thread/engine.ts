@@ -1636,9 +1636,13 @@ function getAutoAckMessageId(
  * 线程中缓存的 _pendingOutput 会被 runOneIteration 检测到并跳过 LLM 调用。
  *
  * @param objectName - 对象名称
- * @param sessionId - 要恢复的 session ID
+ * @param sessionId - 要恢复的 session ID（也用于 SSE/日志标签）
  * @param config - 引擎配置
  * @param modifiedOutput - 可选：替换缓存的 LLM 输出（用于人工干预）
+ * @param objectFlowDirOverride - 可选：覆盖默认的 `flows/{sid}/objects/{name}` 路径。
+ *   用于 super 线程场景——super 线程不在 flows/ 下，而是在 `stones/{name}/super/`。
+ *   runSuperThread 通过此参数让 resume 的整套 scheduler / debug / files 路径
+ *   自然落到 super 目录，无需复制 600 行 resume 代码。
  * @returns 执行结果
  */
 export async function resumeWithThreadTree(
@@ -1646,9 +1650,10 @@ export async function resumeWithThreadTree(
   sessionId: string,
   config: EngineConfig,
   modifiedOutput?: string,
+  objectFlowDirOverride?: string,
 ): Promise<TalkResult> {
   const sessionDir = join(config.flowsDir, sessionId);
-  const objectFlowDir = join(sessionDir, "objects", objectName);
+  const objectFlowDir = objectFlowDirOverride ?? join(sessionDir, "objects", objectName);
 
   /* 加载 ThreadsTree */
   const tree = ThreadsTree.load(objectFlowDir);
@@ -2221,10 +2226,11 @@ export async function resumeWithThreadTree(
                 }
               }
             } else if (command === "return") {
-              await tree.setNodeStatus(threadId, "done");
-              await tree.updateNodeMeta(threadId, { summary: args.summary as string ?? "" });
+              /* 与 run 路径对齐：用 tree.returnThread（自动设 done + 写 summary + 唤醒等待的父线程）。
+               * 历史 bug：旧 resume 这里调了不存在的 scheduler.markDone() 导致抛错——已修复。 */
+              await tree.returnThread(threadId, args.summary as string ?? "");
               const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "thread_return", content: args.summary as string ?? "", timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
-              scheduler.markDone(threadId);
+              consola.info(`[Engine] return (resume): ${(args.summary as string)?.slice(0, 100)}`);
             } else if (command === "think") {
               /* resume 路径的 think：与 run 路径语义完全对齐 */
               const ctxMode = (args.context as string | undefined) === "continue" ? "continue" : "fork";
@@ -2377,6 +2383,55 @@ export async function resumeWithThreadTree(
 
   consola.info(`[Engine] 恢复执行结束 ${objectName}, status=${finalStatus}, iterations=${totalIterations}`);
   return { sessionId, status: finalStatus, summary: rootNode?.summary, totalIterations, threadId: tree.rootId };
+}
+
+/**
+ * 运行一轮 super 线程 ThinkLoop（跨 session 常驻线程的执行入口）
+ *
+ * super 线程落盘在 `stones/{name}/super/`（非 `flows/{sid}/objects/{name}`），
+ * 跨 session 常驻。本函数复用 `resumeWithThreadTree` 的整套 scheduler 管线——
+ * 通过 `objectFlowDirOverride` 把 super 目录作为 engine 的工作目录。
+ *
+ * 为什么复用 resume 而非 run：
+ * - super 线程在首次 `handleOnTalkToSuper` 时已经创建 root 线程并写了 inbox
+ * - runWithThreadTree 假设"一次 talk 触发一次 run"——会额外写入 incoming message
+ * - resumeWithThreadTree 的模型是"拿已有 tree 跑 scheduler"，正符合 super 场景
+ *
+ * sessionId 传 `super:{stoneName}`——虚拟标签，不对应物理 flows 目录。
+ * 仅用于 SSE 事件 / 日志 / onTalk 回调透传。engine 内部不会因此创建新文件。
+ *
+ * 执行语义：
+ * 1. 加载 super 目录的 ThreadsTree
+ * 2. 所有 status=running 的线程由 scheduler 并发拉起（复活回调已在 resume 里注入）
+ * 3. LLM 消费 inbox、调用 `persist_to_memory` / `create_trait`、mark 掉 unread
+ * 4. root 线程完成后返回 done/waiting（scheduler 根据 inbox/子线程状态决定）
+ * 5. 下次 tick 时 super-scheduler 检测是否还有 unread，有就再跑一轮
+ *
+ * 错误处理：engine 内部的异常由 scheduler 捕获并写入 inbox（with from=system）。
+ * 本函数只传播"无法加载 tree"这一启动级错误。
+ *
+ * @param stoneName super 所属的 stone 名
+ * @param superDir super 目录绝对路径（由 `getSuperThreadDir` 计算）
+ * @param config engine 配置（由 World 层构建，traits 含 `reflective/super` 等）
+ */
+export async function runSuperThread(
+  stoneName: string,
+  superDir: string,
+  config: EngineConfig,
+): Promise<TalkResult> {
+  /* 虚拟 sessionId：仅用于日志 / SSE / onTalk 透传，不对应物理 flows/ 目录 */
+  const virtualSessionId = `super:${stoneName}`;
+
+  consola.info(`[Engine] 启动 super 线程 ${stoneName} (dir=${superDir})`);
+
+  /* 复用 resume 路径——关键是把 objectFlowDir 指向 super 目录而非 flows/ */
+  return resumeWithThreadTree(
+    stoneName,
+    virtualSessionId,
+    config,
+    /* modifiedOutput */ undefined,
+    /* objectFlowDirOverride */ superDir,
+  );
 }
 
 /**
