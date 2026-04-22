@@ -4,13 +4,8 @@ name: debuggable
 type: how_to_think
 version: 1.0.0
 when: never
-description: 系统化调试四阶段流程，根因先于修复（需要时 activateTrait 加载）
+description: 系统化调试四阶段流程，根因先于修复
 deps: []
-hooks:
-  when_error:
-    inject: 程序执行失败。不要猜测修复。按四阶段流程：1.读完整错误信息 2.定位出错环节 3.形成假设 4.最小变更验证。
-    inject_title: 系统化调试：遇到错误时按四阶段流程处理
-    once: false
 ---
 # 系统化调试能力
 

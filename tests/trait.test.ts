@@ -165,36 +165,6 @@ when: always
     expect(trait!.type).toBe("how_to_use_tool");
   });
 
-  test("hooks 解析", async () => {
-    const traitDir = join(TEST_DIR, "kernel_hooked");
-    mkdirSync(traitDir, { recursive: true });
-    writeFileSync(
-      join(traitDir, "TRAIT.md"),
-      `---
-namespace: kernel
-name: hooked
-type: how_to_think
-when: always
-hooks:
-  before:
-    inject_title: "开始前提醒"
-    inject: "请仔细阅读文档"
-    once: true
-  when_finish: "完成了"
----
-内容`,
-      "utf-8",
-    );
-
-    const trait = await loadTrait(traitDir, "kernel");
-    expect(trait!.hooks).toBeDefined();
-    expect(trait!.hooks!.before).toBeDefined();
-    expect(trait!.hooks!.before!.inject_title).toBe("开始前提醒");
-    expect(trait!.hooks!.before!.inject).toBe("请仔细阅读文档");
-    expect(trait!.hooks!.when_finish).toBeDefined();
-    expect(trait!.hooks!.when_finish!.inject).toBe("完成了");
-  });
-
   test("缺失 namespace 抛错", async () => {
     const traitDir = join(TEST_DIR, "missing_ns");
     mkdirSync(traitDir, { recursive: true });

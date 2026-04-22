@@ -8,28 +8,25 @@ command_binding:
   commands: ["return"]
 description: 经验结晶与自我反思（SuperFlow），向自己的反思镜像分身对话来沉淀经验
 deps: []
-hooks:
-  when_finish:
-    inject: |
-      在结束任务前，请花一轮思考回顾：
-      1. 这个任务中你学到了什么新东西？
-      2. 有什么值得长期记住的？向你自己的反思分身（super）投递一条经验：
-         - 重要的事实或经验 → await talk("super", "请记住：...")
-         - 可复用的行为模式 → await talk("super", "请沉淀为 trait：...")
-      3. 需要更新会话记忆（updateSessionMemory）吗？
-      4. 请用 updateFlowSummary 写一句话摘要，概括这次对话的主题和关键结论。
-      5. 有没有犯错？根因是什么？
-      确认后再输出 [finish]。
-    inject_title: 任务结束前反思：回顾学到的内容并沉淀经验
-    once: true
-  after:
-    inject: |
-      这个步骤完成了。快速回顾：学到了什么？有没有值得记住的模式？需要更新会话记忆吗？
-    inject_title: 步骤完成后快速回顾
-    once: false
 ---
 
 # 反思与经验沉淀能力（SuperFlow）
+
+## 🧭 结束任务前的反思门禁（必读）
+
+**在输出 [return] 之前，花一轮思考回顾：**
+
+1. 这个任务中你学到了什么新东西？
+2. 有什么值得长期记住的？向你自己的反思分身（super）投递一条经验：
+   - 重要的事实或经验 → `await talk("super", "请记住：...")`
+   - 可复用的行为模式 → `await talk("super", "请沉淀为 trait：...")`
+3. 需要更新会话记忆（`updateSessionMemory`）吗？
+4. 请用 `updateFlowSummary` 写一句话摘要，概括这次对话的主题和关键结论。
+5. 有没有犯错？根因是什么？
+
+确认后再输出 [return]。
+
+---
 
 ## 核心原则
 

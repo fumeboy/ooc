@@ -26,8 +26,6 @@ import type {
   TraitTree,
   TraitMethod,
   TraitType,
-  TraitHook,
-  TraitHookEvent,
   TraitNamespace,
   TraitKind,
 } from "../types/index.js";
@@ -157,7 +155,6 @@ export async function loadTrait(
   const type: TraitType = parseTraitType(data.type);
   const version = typeof data.version === "string" ? data.version : undefined;
   const deps: string[] = Array.isArray(data.deps) ? data.deps.map(String) : [];
-  const hooks = parseTraitHooks(data.hooks);
   const commandBinding = parseCommandBinding(data.command_binding);
 
   /* 加载 index.ts（或 backend.ts——view 用 backend.ts）的方法 */
@@ -192,7 +189,6 @@ export async function loadTrait(
     llmMethods,
     uiMethods,
     deps,
-    hooks,
     commandBinding,
     dir: traitDir,
   };
@@ -696,66 +692,6 @@ function parseCommandBinding(raw: unknown): TraitDefinition["commandBinding"] {
     return { commands: cb.commands.map(String) };
   }
   return undefined;
-}
-
-/** 合法的 hook 事件名 */
-const VALID_HOOK_EVENTS = new Set<TraitHookEvent>([
-  "before",
-  "after",
-  "when_finish",
-  "when_wait",
-  "when_error",
-]);
-
-/**
- * 从 inject 文本提取默认的 inject_title（前 50 个字符）
- */
-function extractDefaultTitle(inject: string): string {
-  const trimmed = inject.trim().replace(/^[\n\r]+/, "").replace(/[\n\r].*$/, "");
-  return trimmed.length > 50 ? trimmed.slice(0, 50) + "..." : trimmed;
-}
-
-/**
- * 从 frontmatter 的 hooks 字段解析 Trait Hooks
- *
- * 支持两种格式：
- * 1. 简写：hooks: { when_finish: "提示文本" }
- * 2. 完整：hooks: { when_finish: { inject: "提示文本", inject_title: "标题", once: true } }
- */
-function parseTraitHooks(raw: unknown): TraitDefinition["hooks"] {
-  if (!raw || typeof raw !== "object") return undefined;
-
-  const result: Partial<Record<TraitHookEvent, TraitHook>> = {};
-  let hasAny = false;
-
-  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (!VALID_HOOK_EVENTS.has(key as TraitHookEvent)) continue;
-
-    if (typeof value === "string") {
-      /* 简写格式 */
-      result[key as TraitHookEvent] = {
-        inject: value,
-        inject_title: extractDefaultTitle(value),
-        once: true,
-      };
-      hasAny = true;
-    } else if (value && typeof value === "object") {
-      const obj = value as Record<string, unknown>;
-      if (typeof obj.inject === "string") {
-        result[key as TraitHookEvent] = {
-          inject: obj.inject,
-          inject_title:
-            typeof obj.inject_title === "string"
-              ? obj.inject_title
-              : extractDefaultTitle(obj.inject),
-          once: obj.once !== false, /* 默认 true */
-        };
-        hasAny = true;
-      }
-    }
-  }
-
-  return hasAny ? result : undefined;
 }
 
 /**

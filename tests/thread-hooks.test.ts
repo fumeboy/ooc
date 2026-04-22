@@ -1,128 +1,17 @@
 /**
  * 线程 Hook 收集与注入测试
  *
+ * 仅覆盖 command/defer hook。Trait 级 before/after hook 已随 TRAIT.md 的 hooks 字段
+ * 一起下线，内容迁入 TRAIT.md 正文。
+ *
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md#7
  */
 import { describe, test, expect } from "bun:test";
 import {
-  collectBeforeHooks,
-  collectAfterHooks,
   collectCommandTraits,
   collectCommandHooks,
 } from "../src/thread/hooks.js";
 import type { ThreadFrameHook } from "../src/thread/types.js";
-import type { TraitDefinition } from "../src/types/index.js";
-
-/**
- * 构造测试用 trait
- *
- * 接受完整 traitId（如 `kernel:verifiable`）；若不含冒号，默认为 library namespace。
- */
-function makeTrait(traitIdLike: string, hooks?: { before?: string; after?: string }): TraitDefinition {
-  const [nsOrName, rest] = traitIdLike.includes(":")
-    ? traitIdLike.split(":", 2)
-    : ["library", traitIdLike];
-  const namespace = (rest ? nsOrName : "library") as TraitDefinition["namespace"];
-  const name = rest ?? nsOrName;
-  const t: TraitDefinition = {
-    namespace,
-    name,
-    kind: "trait",
-    type: "how_to_think",
-    description: "",
-    readme: "",
-    when: "always",
-    deps: [],
-    methods: [],
-  };
-  if (hooks) {
-    t.hooks = {};
-    if (hooks.before) t.hooks.before = { inject: hooks.before, once: true };
-    if (hooks.after) t.hooks.after = { inject: hooks.after, once: true };
-  }
-  return t;
-}
-
-describe("collectBeforeHooks", () => {
-  test("从 scope chain traits 收集 before hooks", () => {
-    const traits = [
-      makeTrait("kernel:verifiable", { before: "开始前，先明确验证标准。" }),
-      makeTrait("kernel:computable"),
-      makeTrait("library:academic_writing", { before: "请使用学术写作风格。" }),
-    ];
-    const scopeChain = ["kernel:verifiable", "kernel:computable", "library:academic_writing"];
-    const firedHooks = new Set<string>();
-
-    const result = collectBeforeHooks(traits, scopeChain, firedHooks);
-    expect(result).not.toBeNull();
-    expect(result).toContain("验证标准");
-    expect(result).toContain("学术写作");
-    expect(firedHooks.size).toBe(2);
-  });
-
-  test("once hook 不重复触发", () => {
-    const traits = [
-      makeTrait("kernel:verifiable", { before: "验证标准" }),
-    ];
-    const scopeChain = ["kernel:verifiable"];
-    const firedHooks = new Set<string>(["kernel:verifiable:before"]);
-
-    const result = collectBeforeHooks(traits, scopeChain, firedHooks);
-    expect(result).toBeNull();
-  });
-
-  test("从 ThreadFrameHook 收集 before hooks", () => {
-    const threadHooks: ThreadFrameHook[] = [
-      { event: "before", traitName: "custom", content: "自定义 before 提示", once: true },
-      { event: "after", traitName: "custom", content: "这是 after，不应出现" },
-    ];
-    const firedHooks = new Set<string>();
-
-    const result = collectBeforeHooks([], [], firedHooks, threadHooks);
-    expect(result).not.toBeNull();
-    expect(result).toContain("自定义 before 提示");
-    expect(result).not.toContain("after");
-  });
-
-  test("scope chain 为空时返回 null", () => {
-    const traits = [
-      makeTrait("kernel:verifiable", { before: "验证标准" }),
-    ];
-    const result = collectBeforeHooks(traits, [], new Set());
-    expect(result).toBeNull();
-  });
-});
-
-describe("collectAfterHooks", () => {
-  test("从 scope chain traits 收集 after hooks", () => {
-    const traits = [
-      makeTrait("kernel:reflective", { after: "子任务完成了，有什么值得沉淀的经验？" }),
-    ];
-    const scopeChain = ["kernel:reflective"];
-    const firedHooks = new Set<string>();
-
-    const result = collectAfterHooks(traits, scopeChain, firedHooks);
-    expect(result).not.toBeNull();
-    expect(result).toContain("经验");
-    expect(firedHooks.has("kernel:reflective:after")).toBe(true);
-  });
-
-  test("合并 trait hooks 和 thread hooks", () => {
-    const traits = [
-      makeTrait("kernel:reflective", { after: "反思经验" }),
-    ];
-    const threadHooks: ThreadFrameHook[] = [
-      { event: "after", traitName: "custom", content: "检查输出质量" },
-    ];
-    const scopeChain = ["kernel:reflective"];
-    const firedHooks = new Set<string>();
-
-    const result = collectAfterHooks(traits, scopeChain, firedHooks, threadHooks);
-    expect(result).not.toBeNull();
-    expect(result).toContain("反思经验");
-    expect(result).toContain("检查输出质量");
-  });
-});
 
 describe("collectCommandTraits", () => {
   test("匹配 commandBinding 中的指令", () => {

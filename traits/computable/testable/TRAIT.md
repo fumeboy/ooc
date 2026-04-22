@@ -7,10 +7,6 @@ when: never
 description: RED-GREEN-REFACTOR 循环，测试先于代码，失败先于通过
 deps:
   - verifiable
-hooks:
-  before:
-    inject: 提醒：如果你要写代码，先写测试。先看到测试失败。
-    inject_title: 测试驱动：写代码前先写测试
 ---
 # 测试驱动能力
 
