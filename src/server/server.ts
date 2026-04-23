@@ -987,6 +987,55 @@ export async function handleRoute(
     return json({ success: true });
   }
 
+  /* GET /api/stones/:name/memory/stats — memory 健康度统计（Memory Curation Phase 2 Phase 4） */
+  const memoryStatsMatch = path.match(/^\/api\/stones\/([^/]+)\/memory\/stats$/);
+  if (method === "GET" && memoryStatsMatch) {
+    const name = memoryStatsMatch[1]!;
+    const stone = world.getObject(name);
+    if (!stone) return errorResponse(`对象 "${name}" 不存在`, 404);
+
+    const { readMemoryEntries } = await import("../persistence/memory-entries.js");
+    const entries = readMemoryEntries(stone.dir);
+    const now = Date.now();
+    let pinned = 0;
+    let totalAgeMs = 0;
+    let latestCreatedAt: string | null = null;
+    for (const e of entries) {
+      if (e.pinned) pinned++;
+      const createdMs = new Date(e.createdAt).getTime();
+      totalAgeMs += Math.max(0, now - createdMs);
+      if (!latestCreatedAt || createdMs > new Date(latestCreatedAt).getTime()) {
+        latestCreatedAt = e.createdAt;
+      }
+    }
+    const avgAgeMs = entries.length > 0 ? Math.round(totalAgeMs / entries.length) : 0;
+    const lastCuration = world.memoryCurator.getLastStat(name);
+
+    return json({
+      success: true,
+      data: {
+        stoneName: name,
+        total: entries.length,
+        pinned,
+        nonPinned: entries.length - pinned,
+        avgAgeMs,
+        avgAgeDays: Math.round(avgAgeMs / (24 * 3600 * 1000) * 10) / 10,
+        latestCreatedAt,
+        lastCuration: lastCuration ?? null,
+      },
+    });
+  }
+
+  /* POST /api/stones/:name/memory/curate — 手动触发一次 curation + GC（Phase 4 UI 辅助） */
+  const memoryCurateMatch = path.match(/^\/api\/stones\/([^/]+)\/memory\/curate$/);
+  if (method === "POST" && memoryCurateMatch) {
+    const name = memoryCurateMatch[1]!;
+    const stone = world.getObject(name);
+    if (!stone) return errorResponse(`对象 "${name}" 不存在`, 404);
+    const stat = await world.memoryCurator.curateNow(name);
+    return json({ success: true, data: stat });
+  }
+
   /* GET /api/stones/:name — 获取对象详情（放在子路由之后匹配） */
   const objectDetailMatch = path.match(/^\/api\/stones\/([^/]+)$/);
   if (method === "GET" && objectDetailMatch) {

@@ -71,6 +71,41 @@ export async function fetchObject(name: string): Promise<StoneData> {
   return get<StoneData>(`/stones/${name}`);
 }
 
+/** Memory 健康度统计（Phase 4） */
+export interface MemoryStats {
+  stoneName: string;
+  total: number;
+  pinned: number;
+  nonPinned: number;
+  /** 平均年龄（毫秒） */
+  avgAgeMs: number;
+  /** 平均年龄（天，保留一位小数） */
+  avgAgeDays: number;
+  /** 最近一条 entry 的 createdAt ISO 8601（无 entry 时 null） */
+  latestCreatedAt: string | null;
+  /** 最近一次 curation 结果（服务端 MemoryCurator 的 getLastStat） */
+  lastCuration: {
+    stoneName: string;
+    merged: number;
+    kept: number;
+    at: string;
+    gc?: { scanned: number; expired: number; deleted: number; dryRun: boolean };
+  } | null;
+}
+
+/** 获取对象的 memory 健康度统计 */
+export async function fetchMemoryStats(name: string): Promise<MemoryStats> {
+  return get<MemoryStats>(`/stones/${name}/memory/stats`);
+}
+
+/** 手动触发一次 curation + GC（UI 辅助；返回 CurationTickStat 或 null） */
+export async function triggerMemoryCuration(name: string): Promise<MemoryStats["lastCuration"]> {
+  const res = await fetch(`/api/stones/${name}/memory/curate`, { method: "POST" });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? "触发 curation 失败");
+  return json.data;
+}
+
 /** 获取对象 readme */
 export async function fetchReadme(name: string): Promise<string> {
   const data = await get<{ content: string }>(`/stones/${name}/readme`);

@@ -11,6 +11,7 @@ import { ObjectReadmeView } from "./ObjectReadmeView";
 import { DataTab } from "./DataTab";
 import { EffectsTab } from "./EffectsTab";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
+import { MemoryStatsBar } from "./MemoryStatsBar";
 import { ObjectAvatar } from "../components/ui/ObjectAvatar";
 import { cn } from "../lib/utils";
 import { getDefaultView, hasCustomUI } from "../objects";
@@ -89,8 +90,11 @@ export function ObjectDetail({ objectName, initialTab }: ObjectDetailProps) {
         {tab === "Data" && <DataTab data={stone.data} />}
         {tab === "Effects" && <EffectsTab objectName={objectName} />}
         {tab === "Memory" && stone.memory && (
-          <div className="prose prose-sm max-w-none">
-            <MarkdownContent content={stone.memory} />
+          <div>
+            <MemoryStatsBar objectName={objectName} />
+            <div className="prose prose-sm max-w-none">
+              <MarkdownContent content={stone.memory} />
+            </div>
           </div>
         )}
         {tab === "UI" && hasCustomUI(objectName) && (() => {
