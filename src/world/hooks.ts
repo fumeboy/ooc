@@ -221,6 +221,92 @@ export const tscCheckHook: BuildHook = {
   },
 };
 
+/**
+ * Prettier 格式化 hook —— 调 `bun x prettier --write {path}` 自动格式化
+ *
+ * 设计：
+ * - 不把"格式化结果不同于原文件"视为失败——prettier 的正常产出就是 autofix，
+ *   成功时 output 返回"已 prettier format"给 LLM 一个看得见的提示即可
+ * - 仅在命令非零退出（prettier 崩 / 配置错误）时 success=false
+ * - 支持 .ts/.tsx/.js/.jsx/.json/.md/.css/.html
+ */
+export const prettierFormatHook: BuildHook = {
+  name: "prettier-format",
+  match: (p) => /\.(tsx?|jsx?|json|md|css|html|ya?ml)$/.test(p),
+  run: async (path, ctx) => {
+    const start = Date.now();
+    try {
+      const abs = path.startsWith("/") ? path : `${ctx.rootDir}/${path}`;
+      const proc = Bun.spawn(
+        ["bun", "x", "prettier", "--write", abs],
+        { cwd: ctx.rootDir, stdout: "pipe", stderr: "pipe" },
+      );
+      const [stdoutText, stderrText] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+      ]);
+      await proc.exited;
+      const combined = (stdoutText + stderrText).trim();
+      const success = proc.exitCode === 0;
+      return {
+        success,
+        output: success ? "prettier 已格式化" : combined.slice(0, 2000),
+        errors: success ? undefined : combined.split("\n").filter((l) => l.trim().length > 0),
+        durationMs: Date.now() - start,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        output: `prettier 执行失败: ${err?.message ?? err}`,
+        errors: [String(err?.message ?? err)],
+        durationMs: Date.now() - start,
+      };
+    }
+  },
+};
+
+/**
+ * ESLint 检查 hook —— 调 `bun x eslint {path}` 检查代码错误
+ *
+ * 设计：
+ * - 非零退出码视为失败，把 stdout/stderr 作为错误给 LLM
+ * - 仅匹配 js/ts 家族（eslint 默认不处理其他）
+ */
+export const eslintCheckHook: BuildHook = {
+  name: "eslint-check",
+  match: (p) => /\.(tsx?|jsx?|mjs|cjs)$/.test(p),
+  run: async (path, ctx) => {
+    const start = Date.now();
+    try {
+      const abs = path.startsWith("/") ? path : `${ctx.rootDir}/${path}`;
+      const proc = Bun.spawn(
+        ["bun", "x", "eslint", abs],
+        { cwd: ctx.rootDir, stdout: "pipe", stderr: "pipe" },
+      );
+      const [stdoutText, stderrText] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+      ]);
+      await proc.exited;
+      const combined = (stdoutText + stderrText).trim();
+      const success = proc.exitCode === 0;
+      return {
+        success,
+        output: combined.slice(0, 4000),
+        errors: success ? undefined : combined.split("\n").filter((l) => l.trim().length > 0),
+        durationMs: Date.now() - start,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        output: `eslint 执行失败: ${err?.message ?? err}`,
+        errors: [String(err?.message ?? err)],
+        durationMs: Date.now() - start,
+      };
+    }
+  },
+};
+
 /** JSON 语法 check（只解析不执行） */
 export const jsonSyntaxHook: BuildHook = {
   name: "json-syntax",
@@ -246,13 +332,24 @@ export const jsonSyntaxHook: BuildHook = {
 /**
  * 注册默认 hook 集合（world 启动时调用）
  *
- * 开关：`OOC_BUILD_HOOKS=0` 完全关闭；默认只注册 json-syntax（轻量、零风险）。
- * tsc-check 因为速度较慢（冷启动 >5s），默认不注册，需要 `OOC_BUILD_HOOKS_TSC=1` 开启。
+ * 开关：
+ * - `OOC_BUILD_HOOKS=0` 完全关闭所有 hook
+ * - `OOC_BUILD_HOOKS_TSC=1` 启用 tsc-check（冷启动 >5s，默认关）
+ * - `OOC_BUILD_HOOKS_PRETTIER=1` 启用 prettier-format（默认关，autofix 风险）
+ * - `OOC_BUILD_HOOKS_ESLINT=1` 启用 eslint-check（默认关）
+ *
+ * 默认只注册 json-syntax（轻量、零风险）。
  */
 export function registerDefaultHooks(): void {
   if (process.env.OOC_BUILD_HOOKS === "0") return;
   registerBuildHook(jsonSyntaxHook);
   if (process.env.OOC_BUILD_HOOKS_TSC === "1") {
     registerBuildHook(tscCheckHook);
+  }
+  if (process.env.OOC_BUILD_HOOKS_PRETTIER === "1") {
+    registerBuildHook(prettierFormatHook);
+  }
+  if (process.env.OOC_BUILD_HOOKS_ESLINT === "1") {
+    registerBuildHook(eslintCheckHook);
   }
 }
