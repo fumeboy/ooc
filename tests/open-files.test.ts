@@ -229,3 +229,70 @@ describe("getOpenFiles — activeTraitIds 便利属性", () => {
     expect(result.activeTraitIds.length).toBe(new Set(result.activeTraitIds).size);
   });
 });
+
+/**
+ * Phase 3 — llm_input_viewer：source 来源溯源
+ *
+ * 每个 ContextWindow 带一个 source 枚举，用于前端 hover 显示"为什么激活"。
+ * 优先级：always_on > thread_pinned > stone_default > command_binding > scope_chain
+ */
+describe("getOpenFiles — source 来源溯源（Phase 3）", () => {
+  function findByName(windows: Array<{ name: string; source?: string }>, name: string) {
+    return windows.find((w) => w.name === name);
+  }
+
+  test("when=always trait → source=always_on", () => {
+    const traits = [trait("kernel", "computable", { when: "always" })];
+    const s = stone();
+    const { tree, threadData, threadId } = singleNodeTree();
+    const result = getOpenFiles({ tree, threadId, threadData, stone: s, traits });
+    const w = findByName(result.pinned, "kernel:computable");
+    expect(w?.source).toBe("always_on");
+  });
+
+  test("线程 pinnedTraits → source=thread_pinned", () => {
+    const traits = [trait("library", "git_ops")];
+    const s = stone();
+    const { tree, threadData, threadId } = singleNodeTree({
+      activatedTraits: ["library:git_ops"],
+      pinnedTraits: ["library:git_ops"],
+    });
+    const result = getOpenFiles({ tree, threadId, threadData, stone: s, traits });
+    const w = findByName(result.pinned, "library:git_ops");
+    expect(w?.source).toBe("thread_pinned");
+  });
+
+  test("stone._traits_ref → source=stone_default", () => {
+    const traits = [trait("library", "git_ops")];
+    const s = stone({ _traits_ref: ["library:git_ops"] });
+    const { tree, threadData, threadId } = singleNodeTree();
+    const result = getOpenFiles({ tree, threadId, threadData, stone: s, traits });
+    const w = findByName(result.pinned, "library:git_ops");
+    expect(w?.source).toBe("stone_default");
+  });
+
+  test("仅 activatedTraits（非 pinned） → source=command_binding（transient）", () => {
+    const traits = [trait("kernel", "plannable")];
+    const s = stone();
+    const { tree, threadData, threadId } = singleNodeTree({
+      activatedTraits: ["kernel:plannable"],
+    });
+    const result = getOpenFiles({ tree, threadId, threadData, stone: s, traits });
+    const w = findByName(result.transient, "kernel:plannable");
+    expect(w?.source).toBe("command_binding");
+    expect(w?.lifespan).toBe("transient");
+  });
+
+  test("优先级：always_on > thread_pinned > stone_default > command_binding", () => {
+    /* 同时命中 when=always + pinnedTraits + stoneRefs + activatedTraits → 取 always_on */
+    const traits = [trait("kernel", "talkable", { when: "always" })];
+    const s = stone({ _traits_ref: ["kernel:talkable"] });
+    const { tree, threadData, threadId } = singleNodeTree({
+      activatedTraits: ["kernel:talkable"],
+      pinnedTraits: ["kernel:talkable"],
+    });
+    const result = getOpenFiles({ tree, threadId, threadData, stone: s, traits });
+    const w = findByName(result.pinned, "kernel:talkable");
+    expect(w?.source).toBe("always_on");
+  });
+});

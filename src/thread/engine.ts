@@ -469,11 +469,12 @@ export function contextToMessages(
     systemChildren.push({
       tag: "instructions",
       comment: "系统指令：激活的 kernel trait 注入的行为规则",
-      children: ctx.instructions.map(w => ({
-        tag: "instruction",
-        attrs: { name: w.name },
-        content: w.content,
-      })),
+      children: ctx.instructions.map(w => {
+        const attrs: Record<string, string | number> = { name: w.name };
+        /* Phase 3 — llm_input_viewer：source 属性用于前端 hover 溯源 */
+        if (w.source) attrs.source = w.source;
+        return { tag: "instruction", attrs, content: w.content };
+      }),
     });
   }
 
@@ -481,10 +482,12 @@ export function contextToMessages(
   if (ctx.knowledge.length > 0) {
     systemChildren.push({
       tag: "knowledge",
-      comment: `知识窗口：激活的 library/user trait 和 skill 注入的知识。lifespan="transient" 表示该 trait 由 open(type=command) 带入，form 关闭即回收；lifespan="pinned" 表示用户已显式固定，或该 trait 的 when="always"（语义等价 pinned）。若需保留 transient trait，请 open(type="trait", name="X") 固定之。`,
+      comment: `知识窗口：激活的 library/user trait 和 skill 注入的知识。lifespan="transient" 表示该 trait 由 open(type=command) 带入，form 关闭即回收；lifespan="pinned" 表示用户已显式固定，或该 trait 的 when="always"（语义等价 pinned）。source 属性标明窗口的注入来源（stone_default / thread_pinned / command_binding / always_on / skill_index / memory / coverage / build_feedback / file_window / extra / scope_chain）。若需保留 transient trait，请 open(type="trait", name="X") 固定之。`,
       children: ctx.knowledge.map(w => {
         const attrs: Record<string, string | number> = { name: w.name };
         if (w.lifespan) attrs.lifespan = w.lifespan;
+        /* Phase 3 — llm_input_viewer：source 属性用于前端 hover 溯源 */
+        if (w.source) attrs.source = w.source;
         return {
           tag: "window",
           attrs,

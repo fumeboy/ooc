@@ -29,12 +29,13 @@
  * @ref docs/superpowers/specs/2026-04-23-three-phase-trait-activation-design.md#第四部分-统一激活中枢
  */
 
-import type { TraitDefinition, StoneData, ContextWindow } from "../types/index.js";
+import type { TraitDefinition, StoneData, ContextWindow, ContextWindowSource } from "../types/index.js";
 import type {
   ThreadsTreeFile,
   ThreadDataFile,
 } from "./types.js";
 import { getActiveTraits, traitId as activatorTraitId } from "../trait/activator.js";
+import { getAncestorPath } from "./persistence.js";
 import {
   computeThreadScopeChain,
   extractStoneTraitRefs,
@@ -108,24 +109,52 @@ export function getOpenFiles(input: OpenFilesInput): OpenFiles {
   /* 2. 激活集合（含 deps 递归） */
   const activeTraits = getActiveTraits(traits, scopeChain);
 
-  /* 3. pinned 集合
-   *
-   * 行为等价原则（Phase 3）：
-   * - 过去 lifespan 标记只依据 nodeMeta.pinnedTraits（线程显式 pin）。
-   * - 为了让 "origin 阶段常驻" 有语义归宿（spec 要求），把 stone 层
-   *   默认激活清单（_traits_ref）也视作 pinned。
-   * - when="always" 的 kernel trait（系统级强制激活）也归为 pinned，
-   *   与旧 instructions 语义（常驻系统指令）对齐。
-   *
-   * 注意：旧 buildThreadContext 的 lifespan 标签覆盖范围更窄——只有
-   * nodeMeta.pinnedTraits。Phase 3 的扩展仅影响 lifespan 标签值，不影响
-   * 集合成员（即不增减哪些 trait 参与 context），所以对外可见行为等价。 */
+  /* 3. pinned 集合（同旧逻辑） */
   const pinnedKeys = new Set<string>([
     ...stoneRefs,
     ...(nodeMeta.pinnedTraits ?? []),
   ]);
   for (const t of activeTraits) {
     if (t.when === "always") pinnedKeys.add(activatorTraitId(t));
+  }
+
+  /* Phase 3 — llm_input_viewer：计算每个 window 的 source（来源溯源）。
+   *
+   * 收集以下集合以做优先级判定：
+   * - stoneRefSet: stone._traits_ref（对象级默认）
+   * - threadPinnedSet: 当前节点 pinnedTraits（线程显式 pin）
+   * - activatedSet: 祖先链任一节点的 activatedTraits（由 open/command_binding 动态激活）
+   * - scopeTraitsSet: 祖先链任一节点的 traits 字段（静态声明集合）
+   */
+  const stoneRefSet = new Set(stoneRefs);
+  const threadPinnedSet = new Set(nodeMeta.pinnedTraits ?? []);
+  const activatedSet = new Set<string>();
+  const scopeTraitsSet = new Set<string>();
+  const ancestorIds = getAncestorPath(tree, threadId);
+  for (const id of ancestorIds) {
+    const n = tree.nodes[id];
+    if (!n) continue;
+    if (n.traits) {
+      for (const t of n.traits) scopeTraitsSet.add(t);
+    }
+    if (n.activatedTraits) {
+      for (const t of n.activatedTraits) activatedSet.add(t);
+    }
+  }
+
+  function determineSource(t: TraitDefinition, id: string): ContextWindowSource {
+    /* 优先级：精确 → 泛化
+     * 1. always_on：when=always 的 kernel 常驻
+     * 2. thread_pinned：当前节点显式 pin
+     * 3. stone_default：stone._traits_ref 声明
+     * 4. command_binding：任何节点 activatedTraits 动态激活
+     * 5. scope_chain：兜底——祖先 traits 声明集合 */
+    if (t.when === "always") return "always_on";
+    if (threadPinnedSet.has(id)) return "thread_pinned";
+    if (stoneRefSet.has(id)) return "stone_default";
+    if (activatedSet.has(id)) return "command_binding";
+    if (scopeTraitsSet.has(id)) return "scope_chain";
+    return "scope_chain";
   }
 
   const pinned: ContextWindow[] = [];
@@ -144,10 +173,12 @@ export function getOpenFiles(input: OpenFilesInput): OpenFiles {
     if (!t.readme) continue; /* 无 readme（如部分 view）不参与 window 生成 */
 
     const isPinned = pinnedKeys.has(id);
+    const source = determineSource(t, id);
     const window: ContextWindow = {
       name: id,
       content: t.readme,
       lifespan: isPinned ? "pinned" : "transient",
+      source,
     };
 
     if (isPinned) pinned.push(window);

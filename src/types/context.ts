@@ -23,6 +23,37 @@ export interface DirectoryEntry {
   functions: TalkableFunction[];
 }
 
+/**
+ * 窗口来源（Phase 3 — llm_input_viewer）
+ *
+ * 描述"这个窗口为什么会出现在 context 里"，用于前端 hover tooltip 溯源。
+ *
+ * 枚举值：
+ * - stone_default: stone.data._traits_ref 里声明的对象级默认激活
+ * - thread_pinned: 线程显式 open(type="trait") pin 的 trait
+ * - always_on:    trait 自身 when="always" 声明的常驻激活
+ * - command_binding: 被 open(type="command") / partial submit 通过 command_binding 带入的 transient trait
+ * - scope_chain:  线程祖先链 traits/activatedTraits 中声明的激活（未归入上面几类）
+ * - skill_index:  `available-skills` 索引窗口
+ * - memory:       `{stoneDir}/memory/index.md` 或 legacy `memory.md` 的注入
+ * - coverage:     最近一次 --coverage 结果
+ * - build_feedback: world.hooks 失败反馈
+ * - file_window:  open(type="file") 产生的文件内容窗口
+ * - extra:        engine 调用方通过 extraWindows 注入
+ */
+export type ContextWindowSource =
+  | "stone_default"
+  | "thread_pinned"
+  | "always_on"
+  | "command_binding"
+  | "scope_chain"
+  | "skill_index"
+  | "memory"
+  | "coverage"
+  | "build_feedback"
+  | "file_window"
+  | "extra";
+
 /** Context 中的知识窗口 */
 export interface ContextWindow {
   /** 窗口名称（通常是 trait 名） */
@@ -32,6 +63,13 @@ export interface ContextWindow {
   /** trait 生命周期：pinned=用户显式固定，transient=command_binding 带入（form 关闭即回收）。
    * 非 trait 窗口（memory/skill/file 等）为 undefined。 */
   lifespan?: "pinned" | "transient";
+  /**
+   * 窗口来源（Phase 3 — llm_input_viewer）
+   *
+   * 用于前端 hover tooltip 解释"它为什么被激活"。可选字段，旧调用方不填不影响 LLM
+   * 行为；上层统一由 getOpenFiles / context-builder 注入。
+   */
+  source?: ContextWindowSource;
 }
 
 /**

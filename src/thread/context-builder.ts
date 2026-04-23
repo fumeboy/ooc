@@ -156,25 +156,32 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
   const scopeChain = computeThreadScopeChain(tree, threadId, stoneTraitRefs);
   const openFiles = getOpenFiles({ tree, threadId, threadData, stone, traits });
 
-  /* kernel trait → instructions（无 lifespan 标签） */
+  /* kernel trait → instructions（无 lifespan 标签；但保留 source 用于 hover 溯源） */
   const instructions: ContextWindow[] = openFiles.instructions.map(w => ({
     name: w.name,
     content: w.content,
+    source: w.source,
   }));
 
-  /* 非 kernel trait → knowledge：直接沿用 open-files 计算的 lifespan */
+  /* 非 kernel trait → knowledge：直接沿用 open-files 计算的 lifespan / source */
   const knowledge: ContextWindow[] = openFiles.knowledge.map(w => ({
     name: w.name,
     content: w.content,
     lifespan: w.lifespan,
+    source: w.source,
   }));
 
-  if (extraWindows) knowledge.push(...extraWindows);
+  if (extraWindows) {
+    /* extraWindows 的来源归到 "extra"（调用方注入），除非调用方已标注 source */
+    for (const w of extraWindows) {
+      knowledge.push({ ...w, source: w.source ?? "extra" });
+    }
+  }
 
   /* 动态 context windows（open(type=file) 产生的文件内容窗口） */
   if (threadData.windows) {
     for (const [path, win] of Object.entries(threadData.windows)) {
-      knowledge.push({ name: `file:${path}`, content: win.content });
+      knowledge.push({ name: `file:${path}`, content: win.content, source: "file_window" });
     }
   }
 
@@ -183,6 +190,7 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
     knowledge.push({
       name: "available-skills",
       content: formatSkillIndex(input.skills),
+      source: "skill_index",
     });
   }
 
@@ -214,7 +222,7 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
         const content = raw.length > MEMORY_MD_MAX_CHARS
           ? `（…memory 超过 ${MEMORY_MD_MAX_CHARS} 字符，已截取最近 ${MEMORY_MD_MAX_CHARS} 字符）\n\n${raw.slice(-MEMORY_MD_MAX_CHARS)}`
           : raw;
-        knowledge.push({ name: "memory", content });
+        knowledge.push({ name: "memory", content, source: "memory" });
       } catch {
         /* 读取失败：静默跳过 */
       }
@@ -236,7 +244,7 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
         ? `# Coverage — 总覆盖率 ${cov.pct}% (cwd=${cov.cwd})`
         : `# Coverage (cwd=${cov.cwd})`;
       const body = cov.summary || "(无文件级表，仅总览)";
-      knowledge.push({ name: "coverage", content: `${header}\n\n${body}` });
+      knowledge.push({ name: "coverage", content: `${header}\n\n${body}`, source: "coverage" });
     }
   } catch {
     /* 读取失败静默跳过 */
@@ -254,7 +262,7 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
     const bf = getBuildFeedback(threadId);
     if (bf.length > 0) {
       const content = formatFeedbackForContext(bf);
-      if (content) knowledge.push({ name: "build_feedback", content });
+      if (content) knowledge.push({ name: "build_feedback", content, source: "build_feedback" });
     }
   } catch {
     /* 读取 feedback 失败：静默跳过 */

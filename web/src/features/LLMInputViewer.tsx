@@ -263,17 +263,52 @@ function renderNodeLabel(node: ParsedNode): string {
   return keyAttrs.length > 0 ? `${tag} (${keyAttrs.join(", ")})` : tag;
 }
 
-/** 小徽标：pinned / unread / marked */
+/**
+ * source 枚举 → 中文解释（Phase 3 — llm_input_viewer Hover 溯源）
+ *
+ * 与 kernel/src/types/context.ts::ContextWindowSource 一一对应。
+ */
+const SOURCE_EXPLANATION: Record<string, string> = {
+  always_on: "Trait 自身 when=\"always\" 声明的常驻激活（系统级强制）",
+  thread_pinned: "当前线程显式 open(type=trait) pin 的窗口",
+  stone_default: "stone.data._traits_ref 里声明的对象级默认激活",
+  command_binding: "open(type=command) / partial submit 通过 command_binding 带入的临时 trait（form 关闭即回收）",
+  scope_chain: "祖先线程的 traits 字段静态声明",
+  skill_index: "available-skills 索引窗口（可通过 use_skill 按需加载完整内容）",
+  memory: "对象长期记忆（stone/memory/index.md 或 legacy memory.md）",
+  coverage: "最近一次 bun test --coverage 结果摘要",
+  build_feedback: "最近未通过的 build hook 反馈（file_ops 后触发）",
+  file_window: "open(type=file) 产生的文件内容窗口",
+  extra: "engine 调用方通过 extraWindows 注入",
+};
+
+/** 小徽标：pinned / unread / marked / source */
 function NodeBadges({ node }: { node: ParsedNode }) {
-  const badges: { label: string; cls: string }[] = [];
-  if (node.attrs.lifespan === "pinned") badges.push({ label: "📌", cls: "bg-yellow-100 text-yellow-700" });
+  const badges: { label: string; cls: string; title?: string }[] = [];
+  if (node.attrs.lifespan === "pinned") badges.push({ label: "📌", cls: "bg-yellow-100 text-yellow-700", title: "lifespan=pinned（不会随 form 关闭回收）" });
+  if (node.attrs.lifespan === "transient") badges.push({ label: "⏳", cls: "bg-gray-100 text-gray-600", title: "lifespan=transient（form 关闭即回收）" });
   if (node.attrs.status === "unread") badges.push({ label: "unread", cls: "bg-red-100 text-red-600" });
   if (node.attrs.status === "marked") badges.push({ label: "marked", cls: "bg-blue-100 text-blue-700" });
   if (node.attrs.unread && Number(node.attrs.unread) > 0) badges.push({ label: `${node.attrs.unread} unread`, cls: "bg-red-100 text-red-600" });
+  /* Phase 3 — llm_input_viewer：source 徽标 + hover tooltip */
+  if (node.attrs.source) {
+    const s = node.attrs.source;
+    badges.push({
+      label: s,
+      cls: "bg-purple-50 text-purple-700 border border-purple-200",
+      title: SOURCE_EXPLANATION[s] ?? `来源: ${s}`,
+    });
+  }
   return (
     <span className="inline-flex gap-1 ml-1">
       {badges.map((b, i) => (
-        <span key={i} className={cn("text-[9px] px-1 py-px rounded", b.cls)}>{b.label}</span>
+        <span
+          key={i}
+          className={cn("text-[9px] px-1 py-px rounded", b.cls)}
+          title={b.title}
+        >
+          {b.label}
+        </span>
       ))}
     </span>
   );
@@ -403,10 +438,15 @@ function DetailPanel({ node, searchQuery }: { node: ParsedNode | null; searchQue
           <div className="mt-2 text-[11px] grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
             {attrRows.map(([k, v]) => (
               <span key={k} className="contents">
-                <span className="font-mono text-[var(--muted-foreground)]">{k}:</span>
-                <span className="font-mono truncate">{v}</span>
+                <span className="font-mono text-[var(--muted-foreground)]" title={k === "source" ? "窗口来源（为什么被激活）" : undefined}>{k}:</span>
+                <span className="font-mono truncate" title={k === "source" ? (SOURCE_EXPLANATION[v] ?? undefined) : undefined}>{v}</span>
               </span>
             ))}
+          </div>
+        )}
+        {node.attrs.source && SOURCE_EXPLANATION[node.attrs.source] && (
+          <div className="mt-2 text-[11px] text-[var(--muted-foreground)] italic">
+            来源解释: {SOURCE_EXPLANATION[node.attrs.source]}
           </div>
         )}
       </div>
