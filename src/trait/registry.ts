@@ -41,6 +41,13 @@ export interface MethodContext {
   /** 对象名称 */
   readonly stoneName: string;
   /**
+   * 可选：当前线程 ID
+   *
+   * engine 在沙箱 callMethod 里构造时可以透传；trait 方法里用于 build_hooks
+   * 的 feedback 隔离（apply_edits 完成后按 threadId 把 feedback 归档到对应线程）。
+   */
+  readonly threadId?: string;
+  /**
    * 向当前对象的根线程 inbox 写入一条 system 消息
    *
    * 行为：

@@ -337,7 +337,7 @@ async function previewEditPlanImpl(
  * 原子应用 edit plan；任一失败全部回滚
  */
 async function applyEditsImpl(
-  ctx: { rootDir?: string; sessionId?: string } & any,
+  ctx: { rootDir?: string; sessionId?: string; threadId?: string } & any,
   { planId }: { planId: string },
 ): Promise<ToolResult<ApplyResult>> {
   try {
@@ -349,6 +349,9 @@ async function applyEditsImpl(
     const result = await applyEditPlan(plan, {
       sessionId: ctx.sessionId,
       flowsRoot: inferFlowsRoot(ctx),
+      /* 把 threadId 传进去 —— applyEditPlan 在多文件写入成功后会对每个 changedPath
+       * 依次跑 runBuildHooks，feedback 按此 threadId 落到 feedbackByThread。 */
+      threadId: ctx.threadId,
     });
     if (!result.ok) return toolErr(result.error ?? "apply 失败", JSON.stringify(result.perChange, null, 2));
     return toolOk(result);

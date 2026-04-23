@@ -968,6 +968,8 @@ export async function runWithThreadTree(
       selfDir: stoneDir,
       stoneName: objectName,
       data: { ...config.stone.data },
+      /* 透传 threadId —— apply_edits 等 trait 方法用它把 build_hooks feedback 归档到本线程 */
+      threadId,
     };
     /* 沙箱只暴露 { callMethod }，无需动态注入/清理每个方法名 */
     const sandboxApiRaw = methodRegistry.buildSandboxMethods(methodCtx, objectName);
@@ -2421,6 +2423,8 @@ export async function resumeWithThreadTree(
       selfDir: stoneDir,
       stoneName: objectName,
       data: { ...config.stone.data },
+      /* 透传 threadId —— apply_edits 等 trait 方法用它把 build_hooks feedback 归档到本线程 */
+      threadId,
     };
     /* 沙箱只暴露 { callMethod } 单函数（Phase 2 协议） */
     const sandboxApiRaw = methodRegistry.buildSandboxMethods(methodCtx, objectName);

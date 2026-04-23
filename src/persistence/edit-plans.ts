@@ -21,6 +21,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { readFile, writeFile, mkdir, unlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { runBuildHooks, type HookFeedback } from "../world/hooks.js";
 
 /** 单个 change —— 两种形态：局部编辑 or 整文件覆盖 */
 export type EditChange =
@@ -64,6 +65,18 @@ export interface ApplyResult {
     before?: string;
     after?: string;
   }>;
+  /**
+   * 多文件 apply 完成后依次跑 build hooks 得到的 feedback
+   *
+   * 仅在 Phase 3 引入：applyEditPlan 成功写完所有文件后，按 change 顺序
+   * 对每个 changedPath 跑一次 runBuildHooks；失败的 feedback 会同时落到
+   * world/hooks.ts 的 feedbackByThread，下一轮 context-builder 读出来注入。
+   *
+   * 若 ApplyResult.ok=false（写盘失败 / 回滚），不跑 hooks 且此字段留空。
+   * 若未提供 threadId（options.threadId undefined），hooks 仍会跑，但 feedback
+   * 落到 global bucket；这里也会返回一份副本便于上层直接查看。
+   */
+  buildFeedback?: HookFeedback[];
 }
 
 /** plan 状态机 */
@@ -200,7 +213,7 @@ export async function previewEditPlan(plan: EditPlan): Promise<string> {
  */
 export async function applyEditPlan(
   plan: EditPlan,
-  options?: { sessionId?: string; flowsRoot?: string },
+  options?: { sessionId?: string; flowsRoot?: string; threadId?: string },
 ): Promise<ApplyResult> {
   if (plan.status !== "pending") {
     return {
@@ -339,6 +352,23 @@ export async function applyEditPlan(
     applied: prepared.length,
     perChange,
   };
+
+  /* 多文件原子写入成功 → 依次跑 build hooks
+   *
+   * 把每个 change.path 送给 hook；threadId 由调用方传入以便 feedback 隔离。
+   * 任一 hook 失败不影响 apply 结论（ok 保持 true，LLM 下一轮看到 feedback）。
+   * hooks 本身抛出的异常已被 runBuildHooks 内部吞掉并转成 success=false feedback。 */
+  try {
+    const changedPaths = prepared.map((p) => p.path);
+    const feedback = await runBuildHooks(changedPaths, {
+      rootDir: plan.rootDir,
+      threadId: options?.threadId,
+    });
+    if (feedback.length > 0) result.buildFeedback = feedback;
+  } catch {
+    /* runBuildHooks 已自己吞异常；此处做二重保险 */
+  }
+
   await persistPlanStatus(plan, "applied", result, options);
   return result;
 }
