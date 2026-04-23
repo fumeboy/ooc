@@ -9,12 +9,13 @@
  * - 支持折叠/展开长内容
  * - 支持 SSE 流式追加（loading 状态）
  */
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "../../lib/utils";
 import { MarkdownContent } from "./MarkdownContent";
 import { Copy, Check, ChevronRight, ChevronDown, Loader2, Maximize2, X } from "lucide-react";
 import type { Action, FlowMessage } from "../../api/types";
+import { EditDiffCard, detectEditDiffEntries } from "../EditDiffCard";
 
 /** program/action 内容截断阈值 */
 const TRUNCATE_MAX_LINES = 8;
@@ -200,6 +201,18 @@ export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionP
   /* tool_use 的自叙标题 title 作为主文案显示，优先级高于 toolLabel */
   const hasTitle = isToolUse && typeof action.title === "string" && action.title.trim().length > 0;
 
+  /**
+   * 文件编辑 diff entries（file_ops.editFile/writeFile/applyEdits 的 before/after）
+   *
+   * 命中时：
+   *  - inject 类型：用 EditDiffCard[] 替换原文本渲染（更直观）
+   *  - program 类型：在 result 下方追加 EditDiffCard[]（不替换 result，保留 program 输出）
+   *  - 旧 action（result/content 不含 before/after）：detectEditDiffEntries 返回 []
+   *    自动 fallback 到原渲染——向后兼容
+   */
+  const diffEntries = useMemo(() => detectEditDiffEntries(action), [action]);
+  const hasDiff = diffEntries.length > 0;
+
   return (
     <div className="group font-mono text-[12px] leading-relaxed">
       {/* 头部行 */}
@@ -282,6 +295,14 @@ export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionP
                   </pre>
                 </div>
               )}
+              {/* program 路径：检测到 file_ops 编辑 → 在 output 下方追加 diff 卡片 */}
+              {isProgram && hasDiff && (
+                <div className="mt-1.5">
+                  {diffEntries.map((e, i) => (
+                    <EditDiffCard key={`${e.path}-${i}`} entry={e} />
+                  ))}
+                </div>
+              )}
               {needsModal && (
                 <button
                   onClick={() => setModalOpen(true)}
@@ -304,6 +325,13 @@ export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionP
           ) : isThinking ? (
             <div className="text-[var(--foreground)] opacity-70 italic">
               <MarkdownContent content={displayContent} className="text-[12px] leading-relaxed" />
+            </div>
+          ) : isInject && hasDiff ? (
+            /* inject 路径：file_ops.editFile/writeFile/applyEdits 结果 → 用 diff 卡片替换原 JSON 文本 */
+            <div>
+              {diffEntries.map((e, i) => (
+                <EditDiffCard key={`${e.path}-${i}`} entry={e} />
+              ))}
             </div>
           ) : (
             <div className="text-[var(--foreground)] opacity-90">

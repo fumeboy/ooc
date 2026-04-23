@@ -9,7 +9,6 @@
 
 import React, { useEffect, useRef, useMemo } from "react";
 import { EditorView } from "@codemirror/view";
-// @ts-expect-error — @codemirror/merge 未提供类型声明（运行时模块存在），跳过 TS 检查
 import { MergeView, unifiedMergeView } from "@codemirror/merge";
 import CodeMirror from "@uiw/react-codemirror";
 import { oocTheme, readonlyExtensions, getLanguageExtension } from "./codemirror/theme";
