@@ -31,6 +31,7 @@ import { loadSkills } from "../skill/index.js";
 import { appendUserInbox } from "../persistence/user-inbox.js";
 import { handleOnTalkToSuper } from "./super.js";
 import { SuperScheduler } from "../thread/super-scheduler.js";
+import { MemoryCurator } from "../persistence/memory-curator.js";
 
 /** World 配置 */
 export interface WorldConfig {
@@ -136,6 +137,17 @@ export class World {
    * 停止：stopSuperScheduler()（graceful shutdown）
    */
   private _superScheduler: SuperScheduler;
+  /**
+   * MemoryCurator —— 结构化 memory 周期维护（Phase 2）
+   *
+   * 默认每 30 秒 tick 一次，触发条件：
+   * - 距上次 curation 超过 5 分钟 OR
+   * - 累积 20 条新 entry
+   * 触发时跑 mergeDuplicateEntries + rebuildMemoryIndex。
+   *
+   * 与 SuperScheduler 并列，但关注"数据层维护"而非"inbox 消费"。
+   */
+  private _memoryCurator: MemoryCurator;
 
   constructor(config: WorldConfig) {
     this._rootDir = config.rootDir;
@@ -160,6 +172,7 @@ export class World {
         await runSuperThread(stoneName, superDir, engineConfig);
       },
     });
+    this._memoryCurator = new MemoryCurator();
   }
 
   /* ========== Debug 模式 ========== */
@@ -223,8 +236,11 @@ export class World {
     for (const obj of this._registry.all()) {
       if (obj.name === "user") continue;
       this._superScheduler.register(obj.name, this._rootDir);
+      /* MemoryCurator 按 selfDir 注册（{rootDir}/stones/{name}） */
+      this._memoryCurator.register(obj.name, obj.dir);
     }
     this._superScheduler.start();
+    this._memoryCurator.start();
 
     /* 启动 runner → world 失败桥：把 test runner 的失败事件投递给 supervisor（或指定对象）
      * 默认关闭，需 OOC_TEST_FAILURE_BRIDGE=1 开启。 */
@@ -254,11 +270,17 @@ export class World {
       /* 卸载失败不影响 supervisor 停止 */
     }
     await this._superScheduler.stop();
+    await this._memoryCurator.stop();
   }
 
   /** 获取 SuperScheduler 实例（用于测试 / 手动 tick / 健康检查） */
   get superScheduler(): SuperScheduler {
     return this._superScheduler;
+  }
+
+  /** 获取 MemoryCurator 实例（用于测试 / 手动 tick / UI 健康度查询） */
+  get memoryCurator(): MemoryCurator {
+    return this._memoryCurator;
   }
 
   /**
