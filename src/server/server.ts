@@ -14,6 +14,12 @@ import { existsSync, readFileSync, readdirSync, writeFileSync, statSync, mkdirSy
 import { consola } from "consola";
 import { eventBus, type SSEEvent } from "./events.js";
 import { readFlow, listFlowSessions, readUserInbox, setUserReadObject } from "../persistence/index.js";
+import {
+  readEditPlan,
+  previewEditPlan,
+  applyEditPlan,
+  cancelEditPlan,
+} from "../persistence/edit-plans.js";
 import { collectAllActions } from "../process/tree.js";
 import { loadTrait } from "../trait/loader.js";
 import { threadsToProcess } from "../persistence/thread-adapter.js";
@@ -1269,6 +1275,75 @@ export async function handleRoute(
     await setUserReadObject(world.flowsDir, sessionId, objectName, timestamp);
     const data = await readUserInbox(world.flowsDir, sessionId);
     return json({ success: true, data: { readState: data.readState } });
+  }
+
+  /* ========== Edit Plans（多文件原子编辑事务） ==========
+   *
+   * 前端在渲染 LLM 发出的 plan_edits tool_use 时，通过这三个端点完成
+   * "查看 diff → 应用 / 取消" 闭环；绕过 LLM 直接操作 persistence 层。
+   *
+   * - GET    /api/flows/:sid/edit-plans/:planId          返回 plan + preview
+   * - POST   /api/flows/:sid/edit-plans/:planId/apply    应用 plan；可选 body.threadId
+   *          透传给 applyEditPlan 以让 build hook feedback 落到对应线程 bucket
+   * - POST   /api/flows/:sid/edit-plans/:planId/cancel   取消 pending plan
+   *
+   * @ref docs/工程管理/迭代/all/20260422_feature_edit_plans_http_ui.md
+   */
+
+  /* GET /api/flows/:sid/edit-plans/:planId — 读取 plan 详情 + preview */
+  const editPlanGetMatch = path.match(/^\/api\/flows\/([^/]+)\/edit-plans\/([^/]+)$/);
+  if (method === "GET" && editPlanGetMatch) {
+    const sid = editPlanGetMatch[1]!;
+    const planId = editPlanGetMatch[2]!;
+    const plan = await readEditPlan(planId, { sessionId: sid, flowsRoot: world.flowsDir });
+    if (!plan) return errorResponse(`plan "${planId}" 不存在`, 404);
+    const preview = await previewEditPlan(plan);
+    return json({ success: true, data: { plan, preview } });
+  }
+
+  /* POST /api/flows/:sid/edit-plans/:planId/apply — 应用 plan
+   *
+   * 409 仅在 readEditPlan 读到的 plan.status !== pending 时返回（避免对 applied/failed/
+   * cancelled 重复 apply）；实际 applyEditPlan 内部也有同样的校验作为二重保险。
+   * 可选 body.threadId 透传给 runBuildHooks，feedback 隔离到该线程。 */
+  const editPlanApplyMatch = path.match(/^\/api\/flows\/([^/]+)\/edit-plans\/([^/]+)\/apply$/);
+  if (method === "POST" && editPlanApplyMatch) {
+    const sid = editPlanApplyMatch[1]!;
+    const planId = editPlanApplyMatch[2]!;
+    const plan = await readEditPlan(planId, { sessionId: sid, flowsRoot: world.flowsDir });
+    if (!plan) return errorResponse(`plan "${planId}" 不存在`, 404);
+    if (plan.status !== "pending") {
+      return errorResponse(`plan 已是 ${plan.status} 状态，不能重复应用`, 409);
+    }
+
+    /* 宽容解析 body：无 body 或非 JSON 都视作未传 threadId */
+    let threadId: string | undefined;
+    try {
+      const raw = (await req.json()) as Record<string, unknown>;
+      if (typeof raw?.threadId === "string") threadId = raw.threadId;
+    } catch {
+      /* 无 body 或 body 非合法 JSON → threadId 留空 */
+    }
+
+    const result = await applyEditPlan(plan, {
+      sessionId: sid,
+      flowsRoot: world.flowsDir,
+      threadId,
+    });
+    /* 读取最新 plan 状态（applyEditPlan 已重新落盘）供前端展示 */
+    const updatedPlan = await readEditPlan(planId, { sessionId: sid, flowsRoot: world.flowsDir });
+    return json({ success: true, data: { result, plan: updatedPlan ?? plan } });
+  }
+
+  /* POST /api/flows/:sid/edit-plans/:planId/cancel — 取消 pending plan */
+  const editPlanCancelMatch = path.match(/^\/api\/flows\/([^/]+)\/edit-plans\/([^/]+)\/cancel$/);
+  if (method === "POST" && editPlanCancelMatch) {
+    const sid = editPlanCancelMatch[1]!;
+    const planId = editPlanCancelMatch[2]!;
+    const plan = await readEditPlan(planId, { sessionId: sid, flowsRoot: world.flowsDir });
+    if (!plan) return errorResponse(`plan "${planId}" 不存在`, 404);
+    const updated = await cancelEditPlan(plan, { sessionId: sid, flowsRoot: world.flowsDir });
+    return json({ success: true, data: { plan: updated } });
   }
 
   /* 404 */
