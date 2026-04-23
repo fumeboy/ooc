@@ -54,10 +54,20 @@ export interface HookFeedback {
   errors?: string[];
   timestamp: number;
   durationMs?: number;
+  /**
+   * 防循环计数（Phase 5）
+   *
+   * 仅在 success=false 时有值；同一 (path, errorHash) 在同一 bucket 内连续出现的次数。
+   * formatFeedbackForContext 读取此字段决定是否追加"已重复失败 N 次"告警文本。
+   */
+  repeatCount?: number;
 }
 
 /** feedback 过期时间：5 分钟 */
 const FEEDBACK_TTL_MS = 5 * 60 * 1000;
+
+/** 防循环阈值：同一 (path, errorHash) 连续失败此数后 formatFeedbackForContext 注入告警 */
+const REPEAT_FAIL_THRESHOLD = 3;
 
 /** 全局 hook 注册表 */
 const hooks: BuildHook[] = [];
@@ -65,6 +75,39 @@ const hooks: BuildHook[] = [];
 const feedbackByThread = new Map<string, HookFeedback[]>();
 /** 全局 feedback（当 threadId 缺失时） */
 const globalFeedback: HookFeedback[] = [];
+
+/**
+ * 防循环计数表：bucket(threadId) → key(path + errHash) → count
+ *
+ * 每当同一路径同一错误再次出现时递增；同路径一旦成功则清零。
+ * key 由 `${path}||${errorHash}` 构成，errorHash 是 errors 文本的简单哈希。
+ */
+const repeatCountsByBucket = new Map<string, Map<string, number>>();
+
+/** 简易字符串哈希（非加密，够把错误文本区分开即可） */
+function hashText(text: string): string {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) {
+    h = (h * 31 + text.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(36);
+}
+
+/** 计算 feedback 的重复 key（path + 错误文本哈希） */
+function feedbackRepeatKey(fb: HookFeedback): string {
+  const src = fb.errors && fb.errors.length > 0 ? fb.errors.join("\n") : fb.output;
+  return `${fb.path}||${hashText(src)}`;
+}
+
+/** 获取 / 初始化某 bucket 的计数 map */
+function getRepeatMap(bucketId: string): Map<string, number> {
+  let m = repeatCountsByBucket.get(bucketId);
+  if (!m) {
+    m = new Map();
+    repeatCountsByBucket.set(bucketId, m);
+  }
+  return m;
+}
 
 /** 注册 hook */
 export function registerBuildHook(hook: BuildHook): void {
@@ -76,6 +119,7 @@ export function __clearHooks(): void {
   hooks.length = 0;
   feedbackByThread.clear();
   globalFeedback.length = 0;
+  repeatCountsByBucket.clear();
 }
 
 /** 取当前已注册的 hook 数 */
@@ -95,6 +139,10 @@ export async function runBuildHooks(
   if (paths.length === 0 || hooks.length === 0) return [];
 
   const produced: HookFeedback[] = [];
+  /* bucket 语义：threadId 存在则按线程隔离计数；否则落 __global__ 桶 */
+  const bucketId = ctx.threadId ?? "__global__";
+  const repeatMap = getRepeatMap(bucketId);
+
   for (const path of paths) {
     // 同路径旧 feedback 失效（不论成功失败都以最新一次为准）
     if (ctx.threadId) {
@@ -108,6 +156,10 @@ export async function runBuildHooks(
         if (globalFeedback[i]!.path === path) globalFeedback.splice(i, 1);
       }
     }
+
+    /* 先预设当前路径的成功状态——只要本轮所有 match 的 hook 都返回 success，
+     * 该路径下所有历史 repeat count 都会被清零。此处先默认 true，任一失败置 false。 */
+    let pathAllSuccess = true;
 
     for (const h of hooks) {
       if (!h.match(path)) continue;
@@ -131,6 +183,20 @@ export async function runBuildHooks(
         timestamp: Date.now(),
         durationMs: res.durationMs ?? Date.now() - start,
       };
+
+      /* 防循环计数：
+       * - 失败：按 (path, errorHash) 累加；阈值 REPEAT_FAIL_THRESHOLD 达到后
+       *   后续注入会附带"已重复失败 N 次"告警（由 formatFeedbackForContext 读取 fb.repeatCount）
+       * - 成功：仅将该 hook 的结果排除在 feedback 外；path 级清零延后到循环末统一处理 */
+      if (!fb.success) {
+        pathAllSuccess = false;
+        const key = feedbackRepeatKey(fb);
+        const prev = repeatMap.get(key) ?? 0;
+        const next = prev + 1;
+        repeatMap.set(key, next);
+        fb.repeatCount = next;
+      }
+
       produced.push(fb);
       if (ctx.threadId) {
         const arr = feedbackByThread.get(ctx.threadId) ?? [];
@@ -138,6 +204,14 @@ export async function runBuildHooks(
         feedbackByThread.set(ctx.threadId, arr);
       } else {
         globalFeedback.push(fb);
+      }
+    }
+
+    /* 同一 path 本轮所有 hook 都 pass → 清空该 path 下所有历史 repeatCount
+     * 避免"先失败 N 次、后修好一次、再失败"被误判为"已重复失败 N+1 次"。 */
+    if (pathAllSuccess) {
+      for (const k of [...repeatMap.keys()]) {
+        if (k.startsWith(`${path}||`)) repeatMap.delete(k);
       }
     }
   }
@@ -162,12 +236,32 @@ export function clearFeedback(threadId?: string): void {
   else globalFeedback.length = 0;
 }
 
-/** 格式化 feedback 为 markdown，供 knowledge window 注入 */
+/** 格式化 feedback 为 markdown，供 knowledge window 注入
+ *
+ * 防循环（Phase 5）：若 feedback 中任一条 `repeatCount >= REPEAT_FAIL_THRESHOLD`，
+ * 在头部追加全局告警段，提示 LLM 停手换思路（而非继续以同样方式改同一文件）。
+ * 单条 feedback 里 repeatCount >= 阈值时，在该条 section 开头也标注本条的计数。
+ */
 export function formatFeedbackForContext(feedback: HookFeedback[]): string {
   if (feedback.length === 0) return "";
   const lines: string[] = ["# Build Feedback（自动触发的检查失败）", ""];
+
+  /* 挑出已达阈值的条目用于全局告警 */
+  const repeated = feedback.filter((f) => (f.repeatCount ?? 0) >= REPEAT_FAIL_THRESHOLD);
+  if (repeated.length > 0) {
+    lines.push("> ⚠️ 以下错误已重复失败多次，请停下来换思路：");
+    for (const f of repeated) {
+      lines.push(`> - [${f.hookName}] ${f.path} 已重复失败 ${f.repeatCount} 次（阈值 ${REPEAT_FAIL_THRESHOLD}）。不要再以同样方式修这个文件。`);
+    }
+    lines.push("");
+  }
+
   for (const f of feedback) {
-    lines.push(`## [${f.hookName}] ${f.path}`);
+    let header = `## [${f.hookName}] ${f.path}`;
+    if ((f.repeatCount ?? 0) >= REPEAT_FAIL_THRESHOLD) {
+      header += ` ⚠️ 已重复失败 ${f.repeatCount} 次`;
+    }
+    lines.push(header);
     if (f.errors && f.errors.length > 0) {
       for (const e of f.errors.slice(0, 10)) lines.push(`- ${e}`);
     }
@@ -181,6 +275,11 @@ export function formatFeedbackForContext(feedback: HookFeedback[]): string {
     lines.push("");
   }
   return lines.join("\n");
+}
+
+/** 导出阈值用于测试 / 文档引用 */
+export function getRepeatFailThreshold(): number {
+  return REPEAT_FAIL_THRESHOLD;
 }
 
 /* ========== 默认 hooks ========== */
