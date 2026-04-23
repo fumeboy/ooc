@@ -33,6 +33,7 @@ import { scanPeers } from "./peers.js";
 import { readPeerRelations, type PeerRelationEntry } from "./relation.js";
 import { detectSelfKind } from "./self-kind.js";
 import { getBuildFeedback, formatFeedbackForContext } from "../world/hooks.js";
+import { serializeXml, type XmlNode } from "./xml.js";
 import { existsSync, readFileSync } from "node:fs";
 import { join as pathJoin } from "node:path";
 
@@ -144,10 +145,12 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
    *
    * Phase 3 重构：把 scopeChain + getActiveTraits 折叠进 getOpenFiles，
    * 它返回 { pinned, transient, inject, instructions, knowledge, activeTraitIds }。
-   * 为保持与旧版 buildThreadContext 行为完全等价——
-   * - instructions 不带 lifespan 标签（kernel trait 一律无 lifespan）
-   * - knowledge 的 lifespan 只由 nodeMeta.pinnedTraits 决定（不含 stoneRefs / when="always"）
-   * 本函数在 getOpenFiles 返回值之上做 lifespan 覆盖，保持旧 window 形态。 */
+   *
+   * lifespan 语义（与远端 bugfix 一致）：
+   * - when="always" 的 trait 语义上等价 pinned：不应因 command form 生命周期而显示
+   *   transient 或被回收
+   * - open-files 已把 stoneRefs + nodeMeta.pinnedTraits + when=always 三类统一归到
+   *   pinned 集合，直接沿用其 lifespan 即可；不再在这里做 legacy 覆盖 */
   const stoneTraitRefs = extractStoneTraitRefs(stone, traits);
   const scopeChain = computeThreadScopeChain(tree, threadId, stoneTraitRefs);
   const openFiles = getOpenFiles({ tree, threadId, threadData, stone, traits });
@@ -158,14 +161,11 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
     content: w.content,
   }));
 
-  /* 非 kernel trait → knowledge
-   * 旧行为：lifespan 仅由 nodeMeta.pinnedTraits 决定（不含 stoneRefs / when="always"）。
-   * 此处对齐旧行为以避免回归。 */
-  const legacyPinnedSet = new Set(nodeMeta.pinnedTraits ?? []);
+  /* 非 kernel trait → knowledge：直接沿用 open-files 计算的 lifespan */
   const knowledge: ContextWindow[] = openFiles.knowledge.map(w => ({
     name: w.name,
     content: w.content,
-    lifespan: legacyPinnedSet.has(w.name) ? ("pinned" as const) : ("transient" as const),
+    lifespan: w.lifespan,
   }));
 
   if (extraWindows) knowledge.push(...extraWindows);
@@ -561,115 +561,121 @@ export function renderThreadProcess(actions: ThreadAction[]): string {
     return false;
   }
 
-  /** 从 tool_use args 中清除 form_id（已关闭的 form） */
+  /** 从 tool_use args 中清除 form_id（已关闭的 form）
+   *
+   * 注意：历史里不展示真实 form_id 是刻意设计——已完结的 form_id 属于历史残留，
+   * 继续展示可能误导后续判断。
+   * 但为了避免模型被"历史缺失 form_id"误导（规则要 form_id，历史却没有），
+   * 这里输出一个展示层占位符字段 `form_id_finished_so_removed`，明确表示：
+   * 此 action 曾有关联 form_id，但已在完成后移除。
+   *
+   * 运行时永远不依赖该字段；它只存在于 Context 渲染/落盘（llm.input.txt）。
+   */
   function cleanArgs(action: ThreadAction): Record<string, unknown> | undefined {
     if (!action.args) return action.args;
     const args = { ...action.args };
     if (args.form_id && closedFormIds.has(args.form_id as string)) {
       delete args.form_id;
+      (args as Record<string, unknown>).form_id_finished_so_removed = true;
     }
     return Object.keys(args).length > 0 ? args : undefined;
   }
 
-  const I = "  "; // 缩进单位
-  const lines: string[] = [];
+  /** 把任意 JS value 转成 XmlNode，避免 JSON.stringify 塞进文本内容
+   *
+   * - 标量（string/number/boolean）→ 叶子 content
+   * - 数组 → `<tag><item index="0">...</item><item index="1">...</item></tag>`
+   * - 对象 → `<tag><key1>...</key1><key2>...</key2></tag>`（键按字典序）
+   * - null/undefined → 返回 null，调用方决定是否忽略
+   */
+  function valueToXmlNode(tag: string, value: unknown): XmlNode | null {
+    if (value === undefined || value === null) return null;
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      return { tag, content: String(value) };
+    }
+    if (Array.isArray(value)) {
+      const children: XmlNode[] = [];
+      for (let i = 0; i < value.length; i++) {
+        const child = valueToXmlNode("item", value[i]);
+        if (child) {
+          child.attrs = { ...(child.attrs ?? {}), index: i };
+          children.push(child);
+        }
+      }
+      return { tag, children };
+    }
+    if (typeof value === "object") {
+      const obj = value as Record<string, unknown>;
+      const keys = Object.keys(obj).sort((a, b) => a.localeCompare(b));
+      const children: XmlNode[] = [];
+      for (const k of keys) {
+        const child = valueToXmlNode(k, obj[k]);
+        if (child) children.push(child);
+      }
+      return { tag, children };
+    }
+    return { tag, content: String(value) };
+  }
+
+  const nodes: XmlNode[] = [];
   for (const action of sorted) {
     if (shouldSkipAction(action)) continue;
 
     const ts = formatTimestamp(action.timestamp);
-    /* tool_use 的 args 需要清理 form_id */
     const cleanedArgs = action.type === "tool_use" ? cleanArgs(action) : action.args;
 
+    const attrs: Record<string, string | number> = { type: action.type, ts };
+    if (action.type === "tool_use" && action.name) attrs.name = action.name;
+    if (action.type === "program" && action.success !== undefined) attrs.success = String(action.success);
+    if (action.type === "compact_summary") {
+      if (typeof action.original === "number") attrs.original = action.original;
+      if (typeof action.kept === "number") attrs.kept = action.kept;
+    }
+
+    const node: XmlNode = { tag: "action", attrs };
+
     switch (action.type) {
-      case "thinking":
-        lines.push(`${I}<action type="thinking" ts="${ts}">`);
-        lines.push(`${I}${I}${action.content}`);
-        lines.push(`${I}</action>`);
-        break;
-
-      case "text":
-        lines.push(`${I}<action type="text" ts="${ts}">`);
-        lines.push(`${I}${I}${action.content}`);
-        lines.push(`${I}</action>`);
-        break;
-
       case "tool_use": {
-        const nameAttr = action.name ? ` name="${action.name}"` : "";
-        lines.push(`${I}<action type="tool_use" ts="${ts}"${nameAttr}>`);
         if (cleanedArgs && Object.keys(cleanedArgs).length > 0) {
-          lines.push(`${I}${I}<args>`);
-          for (const [k, v] of Object.entries(cleanedArgs)) {
-            if (v === undefined || v === null) continue;
-            if (typeof v === "object") {
-              lines.push(`${I}${I}${I}<${k}>${JSON.stringify(v)}</${k}>`);
-            } else {
-              lines.push(`${I}${I}${I}<${k}>${v}</${k}>`);
-            }
+          const argKeys = Object.keys(cleanedArgs).sort((a, b) => a.localeCompare(b));
+          const argChildren: XmlNode[] = [];
+          for (const k of argKeys) {
+            const v = (cleanedArgs as Record<string, unknown>)[k];
+            const argNode = valueToXmlNode(k, v);
+            if (argNode) argChildren.push(argNode);
           }
-          lines.push(`${I}${I}</args>`);
+          node.children = [{ tag: "args", children: argChildren }];
+        } else {
+          node.selfClosing = true;
         }
-        lines.push(`${I}</action>`);
         break;
       }
-
-      case "program":
-        lines.push(`${I}<action type="program" ts="${ts}"${action.success !== undefined ? ` success="${action.success}"` : ""}>`);
-        lines.push(`${I}${I}<code>${action.content}</code>`);
-        if (action.result) {
-          lines.push(`${I}${I}<result>${action.result}</result>`);
-        }
-        lines.push(`${I}</action>`);
+      case "program": {
+        const children: XmlNode[] = [{ tag: "code", content: action.content }];
+        if (action.result) children.push({ tag: "result", content: action.result });
+        node.children = children;
         break;
-
-      case "inject":
-        lines.push(`${I}<action type="inject" ts="${ts}">`);
-        lines.push(`${I}${I}${action.content}`);
-        lines.push(`${I}</action>`);
-        break;
-
-      case "message_in":
-        lines.push(`${I}<action type="message_in" ts="${ts}">${action.content}</action>`);
-        break;
-
-      case "message_out":
-        lines.push(`${I}<action type="message_out" ts="${ts}">${action.content}</action>`);
-        break;
-
-      case "create_thread":
-        lines.push(`${I}<action type="create_thread" ts="${ts}">${action.content}</action>`);
-        break;
-
-      case "thread_return":
-        lines.push(`${I}<action type="thread_return" ts="${ts}">${action.content}</action>`);
-        break;
-
-      case "set_plan":
-        lines.push(`${I}<action type="set_plan" ts="${ts}">${action.content}</action>`);
-        break;
-
-      case "mark_inbox":
-        lines.push(`${I}<action type="mark_inbox" ts="${ts}">${action.content}</action>`);
-        break;
-
+      }
       case "compact_summary": {
         /* 压缩摘要作为首条历史背景渲染——LLM 看到后会理解"此前这一大片经历被 compact 掉了"，
-         * 并在 summary 里获取整体情境。attrs 里带 original/kept 让 LLM 感知压缩比例。 */
-        const attrs: string[] = [`ts="${ts}"`];
-        if (typeof action.original === "number") attrs.push(`original="${action.original}"`);
-        if (typeof action.kept === "number") attrs.push(`kept="${action.kept}"`);
-        lines.push(`${I}<action type="compact_summary" ${attrs.join(" ")}>`);
-        lines.push(`${I}${I}[已压缩 · 此前历史的浓缩摘要]`);
-        lines.push(`${I}${I}${action.content}`);
-        lines.push(`${I}</action>`);
+         * 并在 summary 里获取整体情境。original/kept 已进 attrs。 */
+        node.content = `[已压缩 · 此前历史的浓缩摘要]\n${action.content}`;
         break;
       }
-
-      default:
-        lines.push(`${I}<action type="${action.type}" ts="${ts}">${action.content}</action>`);
+      default: {
+        if (action.content) {
+          node.content = action.content;
+        } else {
+          node.selfClosing = true;
+        }
+      }
     }
+
+    nodes.push(node);
   }
 
-  return lines.join("\n");
+  /* depth=1：让 <action> 相对外层 <process> 缩进 2 空格 */
+  return serializeXml(nodes, 1);
 }
 
 /**

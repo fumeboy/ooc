@@ -119,6 +119,16 @@ export interface EngineConfig {
   };
 }
 
+/** always trait 判定
+ *
+ * when="always" 语义上等价 pinned：不应因 command form 生命周期而显示 transient
+ * 或被自动回收。trait 卸载 / deactivate / unpin 路径都应绕过 always trait。
+ */
+function isAlwaysTrait(traits: TraitDefinition[], fullId: string): boolean {
+  const t = traits.find((tr) => traitId(tr) === fullId);
+  return t?.when === "always";
+}
+
 /** 执行结果 */
 export interface TalkResult {
   /** Session ID */
@@ -453,7 +463,7 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>, deferHook
   if (ctx.knowledge.length > 0) {
     systemChildren.push({
       tag: "knowledge",
-      comment: `知识窗口：激活的 library/user trait 和 skill 注入的知识。lifespan="transient" 表示该 trait 由 open(type=command) 带入，form 关闭即回收；lifespan="pinned" 表示用户已显式固定。若需保留 transient trait，请 open(type="trait", name="X") 固定之。`,
+      comment: `知识窗口：激活的 library/user trait 和 skill 注入的知识。lifespan="transient" 表示该 trait 由 open(type=command) 带入，form 关闭即回收；lifespan="pinned" 表示用户已显式固定，或该 trait 的 when="always"（语义等价 pinned）。若需保留 transient trait，请 open(type="trait", name="X") 固定之。`,
       children: ctx.knowledge.map(w => {
         const attrs: Record<string, string | number> = { name: w.name };
         if (w.lifespan) attrs.lifespan = w.lifespan;
@@ -1345,7 +1355,7 @@ export async function runWithThreadTree(
                 : `相关 trait 已在作用域内，无新增`;
               td.actions.push({
                 type: "inject",
-                content: `Form ${formId} 已创建（${command}）。${loadHint}。`,
+                content: `Form ${formId} 已创建（${command}）。${loadHint}。下一步：请调用 submit({"form_id":"${formId}", ...}) 提交。`,
                 timestamp: Date.now(),
               });
               tree.writeThreadData(threadId, td);
@@ -1937,6 +1947,8 @@ export async function runWithThreadTree(
                 for (const traitName of traitsToUnload) {
                   if (tree.isPinnedTrait(threadId, traitName)) continue;
                   if (stillNeededSet.has(traitName)) continue;
+                  /* always trait 语义 pinned：不应随 command form submit 自动回收 */
+                  if (isAlwaysTrait(config.traits, traitName)) continue;
                   await tree.deactivateTrait(threadId, traitName);
                 }
               }
@@ -2013,20 +2025,26 @@ export async function runWithThreadTree(
                     keptPinnedTraits.push(traitName);
                     continue;
                   }
+                  /* always trait 语义 pinned：不应随 command form close 自动回收 */
+                  if (isAlwaysTrait(config.traits, traitName)) {
+                    keptPinnedTraits.push(traitName);
+                    continue;
+                  }
                   const changed = await tree.deactivateTrait(threadId, traitName);
                   if (changed) unloadedTraits.push(traitName);
                 }
               }
             } else if (form.command === "_trait" && form.trait) {
               // trait 类型：close 等价 unpin + 可能 deactivate。
-              // 逻辑：先 unpin；若该 trait 不再被任何 active command 需要，则 deactivate
+              // 逻辑：先 unpin；若该 trait 不再被任何 active command 需要，则 deactivate；
+              //       但 always trait 本身豁免，只做 unpin 语义（实际 when=always 不会被 unpin 影响）。
               await tree.unpinTrait(threadId, form.trait);
               const stillNeededByCommand = collectCommandTraits(config.traits, formManager.activeCommandPaths()).has(form.trait);
-              if (!stillNeededByCommand) {
+              if (!stillNeededByCommand && !isAlwaysTrait(config.traits, form.trait)) {
                 const changed = await tree.deactivateTrait(threadId, form.trait);
                 if (changed) unloadedTraits.push(form.trait);
               } else {
-                /* 仍被命令需要——降级为临时生效 */
+                /* 仍被命令需要 或 always trait → 降级为临时生效 / 保留 */
                 keptPinnedTraits.push(form.trait);
               }
             } else if (form.command === "_file" && form.trait) {
@@ -2733,7 +2751,7 @@ export async function resumeWithThreadTree(
                 : `相关 trait 已在作用域内，无新增`;
               td.actions.push({
                 type: "inject",
-                content: `Form ${formId} 已创建（${command}）。${loadHint}。`,
+                content: `Form ${formId} 已创建（${command}）。${loadHint}。下一步：请调用 submit({"form_id":"${formId}", ...}) 提交。`,
                 timestamp: Date.now(),
               });
               tree.writeThreadData(threadId, td);
@@ -3143,6 +3161,8 @@ export async function resumeWithThreadTree(
                 for (const traitName of traitsToUnload) {
                   if (tree.isPinnedTrait(threadId, traitName)) continue;
                   if (stillNeededSet.has(traitName)) continue;
+                  /* always trait 语义 pinned：不应随 command form submit 自动回收 */
+                  if (isAlwaysTrait(config.traits, traitName)) continue;
                   await tree.deactivateTrait(threadId, traitName);
                 }
               }
@@ -3175,15 +3195,21 @@ export async function resumeWithThreadTree(
                     keptPinnedTraits.push(traitName);
                     continue;
                   }
+                  /* always trait 语义 pinned：不应随 command form close 自动回收 */
+                  if (isAlwaysTrait(config.traits, traitName)) {
+                    keptPinnedTraits.push(traitName);
+                    continue;
+                  }
                   const changed = await tree.deactivateTrait(threadId, traitName);
                   if (changed) unloadedTraits.push(traitName);
                 }
               }
             } else if (form.command === "_trait" && form.trait) {
-              /* close _trait 型 form：unpin + 若无命令再需要则 deactivate */
+              /* close _trait 型 form：unpin + 若无命令再需要则 deactivate；
+               * always trait 豁免 deactivate（when=always 本就不应被回收）。 */
               await tree.unpinTrait(threadId, form.trait);
               const stillNeededByCommand = collectCommandTraits(config.traits, formManager.activeCommandPaths()).has(form.trait);
-              if (!stillNeededByCommand) {
+              if (!stillNeededByCommand && !isAlwaysTrait(config.traits, form.trait)) {
                 const changed = await tree.deactivateTrait(threadId, form.trait);
                 if (changed) unloadedTraits.push(form.trait);
               } else {
