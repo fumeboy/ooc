@@ -20,6 +20,7 @@ import { consola } from "consola";
 import { Registry } from "./registry.js";
 import { CronManager } from "./cron.js";
 import { registerDefaultHooks } from "./hooks.js";
+import { startTestFailureBridge } from "./test-failure-bridge.js";
 import { Stone } from "../stone/index.js";
 import { loadAllTraits, loadTraitsByRef } from "../trait/index.js";
 import { OpenAICompatibleClient, type LLMClient } from "../thinkable/client.js";
@@ -117,6 +118,13 @@ export class World {
   private _debugEnabled = false;
   /** 全局暂停开关 */
   private _globalPaused = false;
+  /**
+   * Test Failure Bridge 的卸载函数
+   *
+   * 由 init() 在 OOC_TEST_FAILURE_BRIDGE=1 时启动 runner → world 失败桥；
+   * stopSuperScheduler() 在优雅停机时也调用它解除订阅，避免泄漏。
+   */
+  private _stopTestFailureBridge: () => void = () => {};
   /**
    * SuperScheduler —— 跨 session 常驻调度器（G12 经验沉淀循环的工程通道）
    *
@@ -217,6 +225,20 @@ export class World {
       this._superScheduler.register(obj.name, this._rootDir);
     }
     this._superScheduler.start();
+
+    /* 启动 runner → world 失败桥：把 test runner 的失败事件投递给 supervisor（或指定对象）
+     * 默认关闭，需 OOC_TEST_FAILURE_BRIDGE=1 开启。 */
+    try {
+      this._stopTestFailureBridge = startTestFailureBridge({
+        lookup: {
+          names: () => this._registry.names(),
+          has: (n) => this._registry.get(n) !== undefined,
+        },
+        talk: (recipient, message) => this.talk(recipient, message, "test_runner"),
+      });
+    } catch (e) {
+      consola.warn("[World] 启动 test failure bridge 失败（继续启动）:", (e as Error).message);
+    }
   }
 
   /**
@@ -225,6 +247,12 @@ export class World {
    * 通常在进程退出（SIGINT / SIGTERM）时调用。本方法幂等。
    */
   async stopSuperScheduler(): Promise<void> {
+    /* 顺带解除 test failure bridge 订阅 */
+    try {
+      this._stopTestFailureBridge();
+    } catch {
+      /* 卸载失败不影响 supervisor 停止 */
+    }
     await this._superScheduler.stop();
   }
 

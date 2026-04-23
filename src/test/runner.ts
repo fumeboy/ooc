@@ -214,6 +214,8 @@ export async function runTests(opts: RunOptions): Promise<TestRunSummary> {
     const summary = parseSummary(raw);
     const failures = parseFailures(raw);
     const coveragePct = opts.coverage ? parseCoverage(raw) : undefined;
+    /* 记录最近 coverage 快照，供 context-builder 注入 knowledge */
+    if (opts.coverage) recordLatestCoverage(opts.cwd, raw, coveragePct);
     return {
       pass: summary.pass,
       fail: summary.fail,
@@ -252,6 +254,15 @@ function broadcastFailures(failures: readonly TestFailure[], cwd: string): void 
       // 吞掉 listener 抛出的错，不影响其他 listener
     }
   }
+}
+
+/**
+ * 测试 / 手动触发用：以指定 failures 列表触发所有已注册的 subscribeFailures 回调
+ *
+ * 仅供单元测试与集成测试调用（runner-world 桥无法等真 bun test 跑出假失败）。
+ */
+export function __emitFailuresForTest(failures: readonly TestFailure[], cwd: string): void {
+  broadcastFailures(failures, cwd);
 }
 
 function newWatchId(): string {
@@ -337,13 +348,14 @@ export function listWatchIds(): string[] {
   return Array.from(watchSessions.keys());
 }
 
-/** 测试工具：清理所有 watch + listener */
+/** 测试工具：清理所有 watch + listener + coverage 缓存 */
 export async function __resetAll(): Promise<void> {
   for (const s of [...watchSessions.values()]) {
     await s.stop().catch(() => {});
   }
   watchSessions.clear();
   failureListeners.clear();
+  latestCoverageByCwd.clear();
 }
 
 /* ========== Coverage 辅助 ========== */
@@ -369,4 +381,57 @@ export function summarizeCoverage(raw: string): string {
   }
   if (tableLines.length === 0) return "";
   return tableLines.slice(0, 20).join("\n");
+}
+
+/* ========== Coverage 缓存（供 context-builder 注入 knowledge） ========== */
+
+/**
+ * 最近一次 coverage 运行结果快照
+ *
+ * 每次 runTests(opts.coverage=true) 成功返回时更新。
+ * context-builder 读此缓存注入 `<knowledge name="coverage">`。
+ * 若从未跑过 coverage，返回 undefined。
+ */
+export interface LatestCoverage {
+  /** 总覆盖率百分比（未解析到则缺省） */
+  pct?: number;
+  /** 格式化后的未覆盖表摘要（给 LLM 看） */
+  summary: string;
+  /** 运行所在 cwd，便于多 repo 区分 */
+  cwd: string;
+  /** 更新时间戳 */
+  updatedAt: number;
+}
+
+/** 最近一次 coverage（按 cwd 隔离） */
+const latestCoverageByCwd = new Map<string, LatestCoverage>();
+
+/** 更新最近 coverage 快照（内部调用） */
+function recordLatestCoverage(cwd: string, raw: string, pct?: number): void {
+  const summary = summarizeCoverage(raw);
+  latestCoverageByCwd.set(cwd, {
+    pct,
+    summary,
+    cwd,
+    updatedAt: Date.now(),
+  });
+}
+
+/**
+ * 取最近一次 coverage 结果
+ *
+ * @param cwd - 可选按 cwd 过滤；不传则返回最近更新的那条
+ */
+export function getLatestCoverage(cwd?: string): LatestCoverage | undefined {
+  if (cwd) return latestCoverageByCwd.get(cwd);
+  let latest: LatestCoverage | undefined;
+  for (const c of latestCoverageByCwd.values()) {
+    if (!latest || c.updatedAt > latest.updatedAt) latest = c;
+  }
+  return latest;
+}
+
+/** 清除 coverage 缓存（测试 / reset 用） */
+export function clearLatestCoverage(): void {
+  latestCoverageByCwd.clear();
 }
