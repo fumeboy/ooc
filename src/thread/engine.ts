@@ -31,6 +31,7 @@ import { buildAvailableTools } from "./tools.js";
 import { resolveVirtualPath, isVirtualPath } from "./virtual-path.js";
 import { detectSelfKind } from "./self-kind.js";
 import { runBuildHooks } from "../world/hooks.js";
+import { serializeXml, type XmlNode } from "./xml.js";
 
 import type { LLMClient, Message, ToolCall } from "../thinkable/client.js";
 import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "../types/index.js";
@@ -411,91 +412,7 @@ export function writeThreadTreeFlowData(
 
 /* ========== Context → LLM Messages 转换 ========== */
 
-/* ========== XML 结构化输出辅助 ========== */
-
-/**
- * XML 节点的中间表示
- *
- * 用于在 contextToMessages 中以数据结构方式组织 Context，
- * 然后交给 serializeXml 按嵌套层级缩进输出。
- *
- * 设计原则：
- * - 只缩进 open/close 标签行；content 原样不动（保留 TRAIT.md 的 Markdown 表格 / 代码块 / 长段文本）。
- * - children 与 content 二选一：有 children 时是容器节点；有 content 时是叶子节点。
- * - 可选 comment：渲染为 <!-- ... --> 在开标签前（同样随层级缩进）。
- * - selfClosing：渲染为 <tag/>（当无内容也无子节点时）。
- */
-interface XmlNode {
-  /** 标签名，例如 "system" / "knowledge" / "message" */
-  tag: string;
-  /** 属性表，顺序按插入顺序渲染（Record 本身在 JS 中保持插入顺序） */
-  attrs?: Record<string, string | number>;
-  /** 子节点（容器节点使用） */
-  children?: XmlNode[];
-  /** 原样内容字符串（叶子节点使用，不缩进） */
-  content?: string;
-  /** 附加注释（在 open 标签前渲染为 <!-- ... -->） */
-  comment?: string;
-  /** 是否自闭合（渲染为 <tag/>） */
-  selfClosing?: boolean;
-}
-
-/**
- * 属性表序列化（保留插入顺序）
- */
-function renderAttrs(attrs?: Record<string, string | number>): string {
-  if (!attrs) return "";
-  const entries = Object.entries(attrs);
-  if (entries.length === 0) return "";
-  const parts = entries.map(([k, v]) => ` ${k}="${v}"`);
-  return parts.join("");
-}
-
-/**
- * 将 XmlNode 数组按嵌套层级缩进序列化
- *
- * @param nodes - 要序列化的节点数组（同一层级）
- * @param depth - 当前深度（用于缩进；每一级 2 空格）
- * @returns 序列化后的字符串（行之间以 \n 分隔，末尾无 \n）
- *
- * 关键约束：
- * - 只缩进 open/close 标签行。
- * - content 原样输出（不缩进、不改换行），保护 Markdown / 代码块内容。
- * - children 为空且无 content 的容器节点使用 selfClosing。
- */
-function serializeXml(nodes: XmlNode[], depth = 0): string {
-  const indent = "  ".repeat(depth);
-  const lines: string[] = [];
-
-  for (const node of nodes) {
-    if (node.comment) {
-      lines.push(`${indent}<!-- ${node.comment} -->`);
-    }
-
-    const attrStr = renderAttrs(node.attrs);
-
-    /* 自闭合节点（无子、无内容） */
-    if (node.selfClosing || (!node.children?.length && !node.content)) {
-      lines.push(`${indent}<${node.tag}${attrStr}/>`);
-      continue;
-    }
-
-    /* 容器节点：有 children */
-    if (node.children && node.children.length > 0) {
-      lines.push(`${indent}<${node.tag}${attrStr}>`);
-      lines.push(serializeXml(node.children, depth + 1));
-      lines.push(`${indent}</${node.tag}>`);
-      continue;
-    }
-
-    /* 叶子节点：有 content（内容原样不缩进） */
-    lines.push(`${indent}<${node.tag}${attrStr}>`);
-    lines.push(node.content ?? "");
-    lines.push(`${indent}</${node.tag}>`);
-  }
-
-  return lines.join("\n");
-}
+/* XML 结构化输出辅助已抽到独立模块 src/thread/xml.ts（便于单元测试） */
 
 /**
  * 将 ThreadContext 转换为 LLM Messages
