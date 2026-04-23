@@ -30,6 +30,7 @@ import {
   writeMemoryEntry,
   migrateMemoryMdToEntries,
 } from "../../../src/persistence/memory-entries";
+import { runMemoryGc } from "../../../src/persistence/memory-gc";
 
 /**
  * 行号前缀 sanity check —— 剥离 `file_ops.readFile` 等工具输出中常见的
@@ -316,6 +317,27 @@ export const llm_methods: Record<string, TraitMethod> = {
         return toolOk({ id, pinned: updated.pinned });
       } catch (err: any) {
         return toolErr(`pin_memory 失败: ${err?.message ?? String(err)}`);
+      }
+    }) as TraitMethod["fn"],
+  },
+
+  gc_memory: {
+    name: "gc_memory",
+    description:
+      "对当前对象的结构化 memory 跑一次 GC：扫 entries/*.json，pinned 永不删，ttlDays 定义则按该 TTL，未设则用默认 30 天。默认 dry-run（只写 audit log 不实删），设环境变量 OOC_MEMORY_GC=1 才物理删除。返回 {scanned, expired, deleted, dryRun}。",
+    params: [],
+    fn: (async (ctx: { selfDir: string; stoneName: string }) => {
+      try {
+        const summary = runMemoryGc(ctx.selfDir, ctx.stoneName);
+        rebuildMemoryIndex(ctx.selfDir, ctx.stoneName);
+        return toolOk({
+          scanned: summary.scanned,
+          expired: summary.expired,
+          deleted: summary.deleted,
+          dryRun: summary.dryRun,
+        });
+      } catch (err: any) {
+        return toolErr(`gc_memory 失败: ${err?.message ?? String(err)}`);
       }
     }) as TraitMethod["fn"],
   },

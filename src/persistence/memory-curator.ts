@@ -28,6 +28,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { consola } from "consola";
 
 import { mergeDuplicateEntries, rebuildMemoryIndex } from "./memory-entries.js";
+import { runMemoryGc, type GcRunSummary } from "./memory-gc.js";
 
 /**
  * 注册项：每个对象的数据目录
@@ -54,6 +55,13 @@ export interface CurationTickStat {
   kept: number;
   /** 完成时间 ISO 8601 */
   at: string;
+  /** 随 curation 一起跑的 GC 结果（若跑了 GC） */
+  gc?: {
+    scanned: number;
+    expired: number;
+    deleted: number;
+    dryRun: boolean;
+  };
 }
 
 /**
@@ -205,24 +213,49 @@ export class MemoryCurator {
     }
   }
 
-  /** 实际跑一个对象的 curation（merge + rebuild index） */
+  /** 实际跑一个对象的 curation（merge + rebuild index + GC） */
   private async _runCuration(reg: MemoryCuratorRegistration): Promise<void> {
     if (this._inFlight.has(reg.stoneName)) return;
     this._inFlight.add(reg.stoneName);
     try {
       const { merged, kept } = mergeDuplicateEntries(reg.selfDir);
       rebuildMemoryIndex(reg.selfDir, reg.stoneName);
+
+      /* 顺带跑一次 GC——默认 dry-run（OOC_MEMORY_GC=1 才真删）
+         即便 dry-run 也会写 audit log，便于观察过期分布 */
+      let gcSummary: GcRunSummary | null = null;
+      try {
+        gcSummary = runMemoryGc(reg.selfDir, reg.stoneName);
+        /* 真删后 index 需再次 rebuild，反映新的 entry 数量 */
+        if (gcSummary.deleted > 0) {
+          rebuildMemoryIndex(reg.selfDir, reg.stoneName);
+        }
+      } catch (gcErr) {
+        consola.warn(`[MemoryCurator] ${reg.stoneName} GC 失败（已吞）:`, gcErr);
+      }
+
       const stat: CurationTickStat = {
         stoneName: reg.stoneName,
         merged,
-        kept,
+        kept: gcSummary && gcSummary.deleted > 0 ? Math.max(0, kept - gcSummary.deleted) : kept,
         at: new Date().toISOString(),
+        ...(gcSummary ? {
+          gc: {
+            scanned: gcSummary.scanned,
+            expired: gcSummary.expired,
+            deleted: gcSummary.deleted,
+            dryRun: gcSummary.dryRun,
+          },
+        } : {}),
       };
       this._lastStats.set(reg.stoneName, stat);
-      reg.lastEntryCount = kept;
+      reg.lastEntryCount = stat.kept;
       reg.lastCurationAt = Date.now();
-      if (merged > 0) {
-        consola.info(`[MemoryCurator] ${reg.stoneName}: merged=${merged} kept=${kept}`);
+      if (merged > 0 || (gcSummary?.deleted ?? 0) > 0) {
+        consola.info(
+          `[MemoryCurator] ${reg.stoneName}: merged=${merged} kept=${stat.kept}` +
+          (gcSummary ? ` gc[scanned=${gcSummary.scanned} expired=${gcSummary.expired} deleted=${gcSummary.deleted} dryRun=${gcSummary.dryRun}]` : ""),
+        );
       }
     } catch (err) {
       consola.error(`[MemoryCurator] ${reg.stoneName} curation 失败（已吞，不影响其他对象）:`, err);
