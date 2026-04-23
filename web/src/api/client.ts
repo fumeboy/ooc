@@ -287,6 +287,98 @@ export async function callMethod<TResult = unknown>(
   return body.result;
 }
 
+/* ========== Edit Plans（多文件原子编辑事务） ==========
+ *
+ * LLM 通过 plan_edits 在后端创建 plan（不真写），前端可以：
+ *   1. GET 拉取 plan 详情 + unified diff preview
+ *   2. POST .../apply 应用事务
+ *   3. POST .../cancel 取消 pending plan
+ *
+ * @ref docs/工程管理/迭代/all/20260422_feature_edit_plans_http_ui.md
+ */
+
+/** plan 最小字段（与后端 EditPlan 结构对齐） */
+export interface EditPlanData {
+  planId: string;
+  sessionId?: string;
+  createdAt: number;
+  status: "pending" | "applied" | "failed" | "cancelled";
+  rootDir: string;
+  changes: Array<{
+    kind: "edit" | "write";
+    path: string;
+    oldText?: string;
+    newText?: string;
+    newContent?: string;
+    replaceAll?: boolean;
+  }>;
+  appliedAt?: number;
+  applyResult?: {
+    ok: boolean;
+    applied: number;
+    error?: string;
+    perChange: Array<{
+      path: string;
+      ok: boolean;
+      bytesWritten?: number;
+      error?: string;
+      before?: string;
+      after?: string;
+    }>;
+  };
+}
+
+/** apply 返回 */
+export interface ApplyEditPlanResponse {
+  result: {
+    ok: boolean;
+    applied: number;
+    error?: string;
+    perChange: Array<{
+      path: string;
+      ok: boolean;
+      bytesWritten?: number;
+      error?: string;
+      before?: string;
+      after?: string;
+    }>;
+  };
+  plan: EditPlanData;
+}
+
+/** 读取 plan + unified diff preview */
+export async function getEditPlan(
+  sessionId: string,
+  planId: string,
+): Promise<{ plan: EditPlanData; preview: string }> {
+  return get<{ plan: EditPlanData; preview: string }>(
+    `/flows/${encodeURIComponent(sessionId)}/edit-plans/${encodeURIComponent(planId)}`,
+  );
+}
+
+/** 应用 plan。threadId 可选，用于让 build hook feedback 落到对应线程 bucket */
+export async function applyEditPlan(
+  sessionId: string,
+  planId: string,
+  threadId?: string,
+): Promise<ApplyEditPlanResponse> {
+  return post<ApplyEditPlanResponse>(
+    `/flows/${encodeURIComponent(sessionId)}/edit-plans/${encodeURIComponent(planId)}/apply`,
+    threadId ? { threadId } : {},
+  );
+}
+
+/** 取消 pending plan */
+export async function cancelEditPlan(
+  sessionId: string,
+  planId: string,
+): Promise<{ plan: EditPlanData }> {
+  return post<{ plan: EditPlanData }>(
+    `/flows/${encodeURIComponent(sessionId)}/edit-plans/${encodeURIComponent(planId)}/cancel`,
+    {},
+  );
+}
+
 /** 获取 .ooc/ 根目录文件树 */
 export async function fetchProjectTree(): Promise<FileTreeNode> {
   return get<FileTreeNode>("/tree");

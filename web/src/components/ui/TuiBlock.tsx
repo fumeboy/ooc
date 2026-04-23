@@ -9,13 +9,19 @@
  * - 支持折叠/展开长内容
  * - 支持 SSE 流式追加（loading 状态）
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "../../lib/utils";
 import { MarkdownContent } from "./MarkdownContent";
 import { Copy, Check, ChevronRight, ChevronDown, Loader2, Maximize2, X } from "lucide-react";
 import type { Action, FlowMessage } from "../../api/types";
 import { EditDiffCard, detectEditDiffEntries } from "../EditDiffCard";
+import { EditPlanView, type EditPlanViewModel } from "../../features/EditPlanView";
+import {
+  getEditPlan,
+  applyEditPlan as apiApplyEditPlan,
+  cancelEditPlan as apiCancelEditPlan,
+} from "../../api/client";
 
 /** program/action 内容截断阈值 */
 const TRUNCATE_MAX_LINES = 8;
@@ -151,6 +157,197 @@ function parseInjectTitle(content: string): { title: string; body: string } {
   return { title: firstLine.slice(0, 60), body: content };
 }
 
+/**
+ * 从 inject / program action 中抽取 file_ops.plan_edits 的 planId
+ *
+ * 检测 pattern（与 `detectEditDiffEntries` 同风格）：
+ *   - inject.content: `>>> file_ops.plan_edits 结果:\n<JSON>`
+ *   - program.result: `>>> output:\n<JSON>`（JSON 里含 planId 字段时也捕获）
+ *   - 若 tool_use submit(command=plan_edits) 的 result 里能解出 planId，也算命中
+ *
+ * 返回 null 表示此 action 不是 plan_edits 结果。
+ */
+function detectPlanEditsRef(action: {
+  type: string;
+  content?: string;
+  result?: string;
+  name?: string;
+  args?: Record<string, unknown>;
+}): { planId: string } | null {
+  /* 统一的 JSON 抽取：找到 { ... } 首个平衡块 */
+  const tryExtractJson = (text: string): unknown => {
+    try {
+      return JSON.parse(text);
+    } catch {
+      /* 容错：从文本里找第一个合法 {…} */
+      const idx = text.indexOf("{");
+      if (idx < 0) return null;
+      for (let end = text.length; end > idx; end--) {
+        try {
+          return JSON.parse(text.slice(idx, end));
+        } catch {
+          /* try next */
+        }
+      }
+      return null;
+    }
+  };
+
+  /* 读 tool-result 包装 { ok, data } 里的 planId */
+  const pickPlanId = (parsed: unknown): string | null => {
+    if (parsed === null || typeof parsed !== "object") return null;
+    const obj = parsed as Record<string, unknown>;
+    const data = obj.ok === true && typeof obj.data === "object" && obj.data !== null
+      ? (obj.data as Record<string, unknown>)
+      : obj;
+    if (typeof data.planId === "string" && data.planId.length > 0) return data.planId;
+    return null;
+  };
+
+  if (action.type === "inject" && typeof action.content === "string") {
+    const m = action.content.match(/^>>>\s*([^\s]+?)\s*结果:\n([\s\S]+)$/);
+    if (m && m[1]?.includes("plan_edits")) {
+      const planId = pickPlanId(tryExtractJson(m[2] ?? ""));
+      if (planId) return { planId };
+    }
+    return null;
+  }
+
+  if (action.type === "program" && typeof action.result === "string") {
+    const text = action.result;
+    if (!text.includes("planId")) return null;
+    const stripped = text.replace(/^>>>\s*output:\s*/i, "");
+    const planId = pickPlanId(tryExtractJson(stripped));
+    if (planId) return { planId };
+    return null;
+  }
+
+  /* tool_use 兜底：submit(command=plan_edits) 的 result 字段可能是 JSON */
+  if (action.type === "tool_use" && action.name === "submit") {
+    const cmd = action.args?.command;
+    if (cmd === "plan_edits" && typeof action.result === "string") {
+      const planId = pickPlanId(tryExtractJson(action.result));
+      if (planId) return { planId };
+    }
+  }
+
+  return null;
+}
+
+/* ================================================================
+ *  EditPlanCard — 根据 planId 懒加载 plan 详情并嵌入 EditPlanView
+ * ================================================================ */
+
+interface EditPlanCardProps {
+  planId: string;
+  sessionId: string;
+  /** apply 时作为 feedback bucket 的线程 id（一般是当前 action 所在线程） */
+  threadId?: string;
+}
+
+/**
+ * EditPlanCard — 前端编辑事务闭环入口
+ *
+ * 渲染策略：
+ *  1. mount 时 GET plan + preview
+ *  2. 失败 → 显示错误文案（不影响父 action 其他部分）
+ *  3. 成功 → 渲染 EditPlanView，钩住 onApply / onCancel 发 HTTP
+ *  4. 按钮点完后本地更新 plan.status（无需等后端事件）
+ */
+function EditPlanCard({ planId, sessionId, threadId }: EditPlanCardProps) {
+  const [plan, setPlan] = useState<EditPlanViewModel | null>(null);
+  const [preview, setPreview] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    getEditPlan(sessionId, planId)
+      .then((res) => {
+        if (cancelled) return;
+        /* 后端 plan.changes 是 readonly 数组，组件模型要求可读数组即可 */
+        setPlan({
+          planId: res.plan.planId,
+          status: res.plan.status,
+          createdAt: res.plan.createdAt,
+          changes: [...res.plan.changes],
+        });
+        setPreview(res.preview);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, planId]);
+
+  const onApply = useCallback(async (id: string) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await apiApplyEditPlan(sessionId, id, threadId);
+      setPlan((prev) => (prev ? { ...prev, status: res.plan.status } : prev));
+      if (!res.result.ok) setError(res.result.error ?? "应用失败");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [sessionId, threadId, busy]);
+
+  const onCancel = useCallback(async (id: string) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await apiCancelEditPlan(sessionId, id);
+      setPlan((prev) => (prev ? { ...prev, status: res.plan.status } : prev));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [sessionId, busy]);
+
+  if (loading) {
+    return (
+      <div className="mt-1.5 text-[11px] text-[var(--muted-foreground)] italic flex items-center gap-1">
+        <Loader2 className="w-3 h-3 animate-spin" />
+        加载 plan {planId}…
+      </div>
+    );
+  }
+  if (error && !plan) {
+    return (
+      <div className="mt-1.5 text-[11px] text-rose-500">
+        plan {planId} 加载失败: {error}
+      </div>
+    );
+  }
+  if (!plan) return null;
+
+  return (
+    <div className="mt-1.5">
+      <EditPlanView plan={plan} preview={preview} onApply={onApply} onCancel={onCancel} />
+      {error && (
+        <div className="mt-1 text-[11px] text-rose-500">{error}</div>
+      )}
+      {busy && (
+        <div className="mt-1 text-[11px] text-[var(--muted-foreground)] italic flex items-center gap-1">
+          <Loader2 className="w-3 h-3 animate-spin" /> 处理中…
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ================================================================
  *  TuiAction — 替代 ActionCard
  * ================================================================ */
@@ -161,9 +358,13 @@ interface TuiActionProps {
   loading?: boolean;
   /** 内容区域最大高度（超出时可滚动，默认不限制） */
   maxHeight?: number | string;
+  /** 用于 plan_edits 闭环：发起 apply/cancel HTTP 时需要 sessionId */
+  sessionId?: string;
+  /** 用于 plan_edits.apply 的 feedback 隔离：当前 action 所在线程 id */
+  threadId?: string;
 }
 
-export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionProps) {
+export function TuiAction({ action, objectName, loading, maxHeight, sessionId, threadId }: TuiActionProps) {
   const isInject = action.type === "inject";
   const isThinking = action.type === "thinking";
   const isProgram = action.type === "program";
@@ -212,6 +413,14 @@ export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionP
    */
   const diffEntries = useMemo(() => detectEditDiffEntries(action), [action]);
   const hasDiff = diffEntries.length > 0;
+
+  /**
+   * plan_edits 结果检测：若 action 是 file_ops.plan_edits 返回（inject/program），
+   * 额外渲染 EditPlanCard（查看 diff / 应用 / 取消）。不替换原 action 主体渲染——
+   * plan 卡片挂在下方作为交互入口。仅在有 sessionId 时渲染，避免无法发 HTTP 时的空壳按钮。
+   */
+  const planRef = useMemo(() => detectPlanEditsRef(action), [action]);
+  const hasPlan = planRef !== null && !!sessionId;
 
   return (
     <div className="group font-mono text-[12px] leading-relaxed">
@@ -303,6 +512,14 @@ export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionP
                   ))}
                 </div>
               )}
+              {/* program 路径：plan_edits 结果 → 追加 EditPlanCard */}
+              {isProgram && hasPlan && sessionId && planRef && (
+                <EditPlanCard planId={planRef.planId} sessionId={sessionId} threadId={threadId} />
+              )}
+              {/* tool_use 路径：兜底覆盖 submit(command=plan_edits) result 直接含 planId 的场景 */}
+              {isToolUse && hasPlan && sessionId && planRef && (
+                <EditPlanCard planId={planRef.planId} sessionId={sessionId} threadId={threadId} />
+              )}
               {needsModal && (
                 <button
                   onClick={() => setModalOpen(true)}
@@ -332,7 +549,13 @@ export function TuiAction({ action, objectName, loading, maxHeight }: TuiActionP
               {diffEntries.map((e, i) => (
                 <EditDiffCard key={`${e.path}-${i}`} entry={e} />
               ))}
+              {hasPlan && sessionId && planRef && (
+                <EditPlanCard planId={planRef.planId} sessionId={sessionId} threadId={threadId} />
+              )}
             </div>
+          ) : isInject && hasPlan && sessionId && planRef ? (
+            /* inject 路径：plan_edits 结果 → 用 EditPlanCard 替换原 JSON 文本 */
+            <EditPlanCard planId={planRef.planId} sessionId={sessionId} threadId={threadId} />
           ) : (
             <div className="text-[var(--foreground)] opacity-90">
               <MarkdownContent content={displayContent} className="text-[12px] leading-relaxed" />

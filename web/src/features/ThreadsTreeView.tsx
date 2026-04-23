@@ -710,6 +710,8 @@ function ThreadDetailView({
               key={`${action.type}-${i}`}
               action={action}
               objectName={node.title}
+              sessionId={sessionId}
+              threadId={node.id}
             />
           ))
         )}

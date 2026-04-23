@@ -860,6 +860,7 @@ export function MessageSidebar() {
                   action={a}
                   objectName={currentObjectName}
                   loading={activeFlow?.status === "running" && i === timeline.length - 1}
+                  sessionId={activeId ?? undefined}
                 />
               </div>
             );
