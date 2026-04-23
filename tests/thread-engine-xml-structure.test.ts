@@ -16,10 +16,11 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
+import { runWithThreadTree, contextToMessages, type EngineConfig, type ActiveFormView } from "../src/thread/engine.js";
 import { MockLLMClient, type ToolCall, type MockLLMResponseFnResult } from "../src/thinkable/client.js";
 import { eventBus } from "../src/server/events.js";
 import type { StoneData, DirectoryEntry, TraitDefinition } from "../src/types/index.js";
+import type { ThreadContext } from "../src/thread/context-builder.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_thread_engine_xml_test");
 const FLOWS_DIR = join(TEST_DIR, "flows");
@@ -220,5 +221,90 @@ describe("contextToMessages XML 结构化输出", () => {
     expect(input).toMatch(/\n    <message [^>]*>/);
     /* 消息内容（原样） */
     expect(input).toContain("你好世界");
+  });
+
+  /**
+   * Phase 3 — llm_input_viewer：<active-forms> 应作为 <user> 子节点渲染，而不是
+   * engine 在 user message 字符串末尾追加的兄弟节点。
+   */
+  test("activeForms 作为 <user> 子节点序列化", () => {
+    const ctx: ThreadContext = {
+      name: "alice",
+      whoAmI: "我是 alice",
+      parentExpectation: "",
+      plan: "",
+      process: "",
+      locals: {},
+      instructions: [],
+      knowledge: [],
+      creator: "user",
+      creationMode: "root",
+      childrenSummary: "",
+      ancestorSummary: "",
+      siblingSummary: "",
+      inbox: [],
+      todos: [],
+      directory: [],
+      scopeChain: [],
+      paths: undefined,
+      status: "running",
+      relations: [],
+    };
+
+    const activeForms: ActiveFormView[] = [
+      { formId: "f_abc_01", command: "talk", description: "测试 talk form", trait: "contact" },
+      { formId: "f_xyz_02", command: "return", description: "测试 return form" },
+    ];
+
+    const messages = contextToMessages(ctx, undefined, activeForms);
+    const userMsg = messages.find(m => m.role === "user");
+    expect(userMsg).toBeDefined();
+    const body = userMsg!.content;
+
+    /* 必须是 <user> 内部，不再出现在 </user> 之后 */
+    const userCloseIdx = body.lastIndexOf("</user>");
+    const activeFormsIdx = body.indexOf("<active-forms>");
+    expect(activeFormsIdx).toBeGreaterThan(-1);
+    expect(userCloseIdx).toBeGreaterThan(activeFormsIdx);
+
+    /* 缩进 2 格（作为 <user> 子节点） */
+    expect(body).toMatch(/\n {2}<active-forms>\n/);
+    expect(body).toMatch(/\n {2}<\/active-forms>\n/);
+
+    /* 内部 <form> 缩进 4 格，保留 id/command 属性 */
+    expect(body).toMatch(/\n {4}<form id="f_abc_01" command="talk" trait="contact">/);
+    expect(body).toMatch(/\n {4}<form id="f_xyz_02" command="return">/);
+  });
+
+  /**
+   * Phase 3 — llm_input_viewer：没有 active form 时，<active-forms> 节点不应存在。
+   */
+  test("没有活跃 form 时不渲染 <active-forms>", () => {
+    const ctx: ThreadContext = {
+      name: "alice",
+      whoAmI: "我是 alice",
+      parentExpectation: "",
+      plan: "",
+      process: "",
+      locals: {},
+      instructions: [],
+      knowledge: [],
+      creator: "user",
+      creationMode: "root",
+      childrenSummary: "",
+      ancestorSummary: "",
+      siblingSummary: "",
+      inbox: [],
+      todos: [],
+      directory: [],
+      scopeChain: [],
+      paths: undefined,
+      status: "running",
+      relations: [],
+    };
+
+    const messages = contextToMessages(ctx);
+    const userMsg = messages.find(m => m.role === "user");
+    expect(userMsg!.content).not.toContain("<active-forms>");
   });
 });

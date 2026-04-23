@@ -434,7 +434,25 @@ export function writeThreadTreeFlowData(
  *
  * 只有标签行被缩进；叶子节点的 content 原样输出（不破坏 Markdown / 代码块 / 长文本）。
  */
-function contextToMessages(ctx: ReturnType<typeof buildThreadContext>, deferHooks?: import("./types.js").ThreadFrameHook[]): Message[] {
+/**
+ * 活跃 Form 的简化视图（contextToMessages 侧不关心 FormManager 内部细节）
+ *
+ * Phase 3 —— llm_input_viewer：把 <active-forms> 从 engine 外部追加改为
+ * contextToMessages 内部以 <user> 子节点形式生成，保证前端 DOMParser
+ * 把它当作 <user> 的子节点解析。
+ */
+export interface ActiveFormView {
+  formId: string;
+  command: string;
+  description: string;
+  trait?: string;
+}
+
+export function contextToMessages(
+  ctx: ReturnType<typeof buildThreadContext>,
+  deferHooks?: import("./types.js").ThreadFrameHook[],
+  activeForms?: ActiveFormView[],
+): Message[] {
   /* ========== system 侧：<system> 容器 ========== */
   const systemChildren: XmlNode[] = [];
 
@@ -677,6 +695,26 @@ function contextToMessages(ctx: ReturnType<typeof buildThreadContext>, deferHook
   /* 沙箱路径 */
   if (ctx.paths && Object.keys(ctx.paths).length > 0) {
     userChildren.push({ tag: "paths", content: JSON.stringify(ctx.paths) });
+  }
+
+  /* 活跃 Form（Phase 3 — llm_input_viewer）
+   *
+   * 以前这里由 engine 在 contextToMessages 之后追加到 user message 末尾，
+   * 从前端 DOMParser 的角度看它是 <user> 的兄弟节点；现在作为 <user> 的子节点
+   * 序列化，语义更清晰、对 LLM 的可见性不变。 */
+  if (activeForms && activeForms.length > 0) {
+    userChildren.push({
+      tag: "active-forms",
+      comment: "活跃 Form：已 open 等待 submit 或 close",
+      children: activeForms.map(f => {
+        const attrs: Record<string, string | number> = {
+          id: f.formId,
+          command: f.command,
+        };
+        if (f.trait) attrs.trait = f.trait;
+        return { tag: "form", attrs, content: f.description };
+      }),
+    });
   }
 
   /* 状态 */
@@ -1138,20 +1176,18 @@ export async function runWithThreadTree(
           skills: config.skills,
         });
 
-        /* 转换为 LLM Messages */
-        messages = contextToMessages(context, threadData.hooks);
-
-        /* 追加活跃 form 信息到 context（让 LLM 知道当前有哪些未完成的 form） */
-        const activeForms = formManager.activeForms();
-        if (activeForms.length > 0) {
-          const formXml = activeForms.map(f =>
-            `<form id="${f.formId}" command="${f.command}"${f.trait ? ` trait="${f.trait}"` : ""}>${f.description}</form>`,
-          );
-          const lastMsg = messages[messages.length - 1];
-          if (lastMsg && lastMsg.role === "user") {
-            lastMsg.content += `\n<!-- 活跃 Form：已 open 等待 submit 或 close -->\n<active-forms>\n${formXml.join("\n")}\n</active-forms>`;
-          }
-        }
+        /* 转换为 LLM Messages
+         *
+         * Phase 3 — llm_input_viewer：活跃 form 作为 <user> 子节点由
+         * contextToMessages 内部序列化，不再在外部字符串追加，保证前端 DOMParser
+         * 能把它当作 <user> 的子节点。 */
+        const activeFormsView: ActiveFormView[] = formManager.activeForms().map(f => ({
+          formId: f.formId,
+          command: f.command,
+          description: f.description,
+          trait: f.trait,
+        }));
+        messages = contextToMessages(context, threadData.hooks, activeFormsView);
 
         /* Compact 阈值提示：actions token 超 COMPACT_THRESHOLD_TOKENS 时往 last user message 追加引导
          *
@@ -2567,18 +2603,14 @@ export async function resumeWithThreadTree(
           traits: config.traits, extraWindows: config.extraWindows, paths: config.paths,
           skills: config.skills,
         });
-        messages = contextToMessages(context, threadData.hooks);
-        /* 追加活跃 form 信息（resume 路径） */
-        const activeForms = formManager.activeForms();
-        if (activeForms.length > 0) {
-          const formXml = activeForms.map(f =>
-            `<form id="${f.formId}" command="${f.command}"${f.trait ? ` trait="${f.trait}"` : ""}>${f.description}</form>`,
-          );
-          const lastMsg = messages[messages.length - 1];
-          if (lastMsg && lastMsg.role === "user") {
-            lastMsg.content += `\n<!-- 活跃 Form：已 open 等待 submit 或 close -->\n<active-forms>\n${formXml.join("\n")}\n</active-forms>`;
-          }
-        }
+        /* Phase 3 — llm_input_viewer：resume 路径同样把活跃 form 作为 <user> 子节点 */
+        const activeFormsViewResume: ActiveFormView[] = formManager.activeForms().map(f => ({
+          formId: f.formId,
+          command: f.command,
+          description: f.description,
+          trait: f.trait,
+        }));
+        messages = contextToMessages(context, threadData.hooks, activeFormsViewResume);
 
         /* Compact 阈值提示（resume 路径，与 runWithThreadTree 同义） */
         if (!formManager.activeCommands().has("compact")) {
