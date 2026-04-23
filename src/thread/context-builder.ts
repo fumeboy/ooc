@@ -33,6 +33,7 @@ import { scanPeers } from "./peers.js";
 import { readPeerRelations, type PeerRelationEntry } from "./relation.js";
 import { detectSelfKind } from "./self-kind.js";
 import { getBuildFeedback, formatFeedbackForContext } from "../world/hooks.js";
+import { getLatestCoverage } from "../test/runner.js";
 import { serializeXml, type XmlNode } from "./xml.js";
 import { existsSync, readFileSync } from "node:fs";
 import { join as pathJoin } from "node:path";
@@ -218,6 +219,27 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
         /* 读取失败：静默跳过 */
       }
     }
+  }
+
+  /* coverage 窗口：注入最近一次 --coverage 跑出的摘要
+   *
+   * 由 `src/test/runner.ts` 的 runTests(opts.coverage=true) 更新缓存。
+   * 只显示总覆盖率 + 文件表摘要（前 20 行），让 LLM 知道哪些新代码缺测试。
+   * 从未跑过 coverage 时 getLatestCoverage 返回 undefined，不注入窗口。
+   *
+   * @ref docs/工程管理/迭代/all/20260422_feature_feedback_loop_完整闭环.md
+   */
+  try {
+    const cov = getLatestCoverage();
+    if (cov && (cov.summary || typeof cov.pct === "number")) {
+      const header = typeof cov.pct === "number"
+        ? `# Coverage — 总覆盖率 ${cov.pct}% (cwd=${cov.cwd})`
+        : `# Coverage (cwd=${cov.cwd})`;
+      const body = cov.summary || "(无文件级表，仅总览)";
+      knowledge.push({ name: "coverage", content: `${header}\n\n${body}` });
+    }
+  } catch {
+    /* 读取失败静默跳过 */
   }
 
   /* build_feedback 窗口：注入最近未通过的 build hook 结果

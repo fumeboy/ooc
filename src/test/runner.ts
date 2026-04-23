@@ -435,3 +435,12 @@ export function getLatestCoverage(cwd?: string): LatestCoverage | undefined {
 export function clearLatestCoverage(): void {
   latestCoverageByCwd.clear();
 }
+
+/**
+ * 测试用：直接喂入 coverage 缓存，避免依赖真跑 bun test 子进程
+ *
+ * 仅供单元测试 / 集成测试使用。
+ */
+export function __injectLatestCoverageForTest(cov: LatestCoverage): void {
+  latestCoverageByCwd.set(cov.cwd, cov);
+}
