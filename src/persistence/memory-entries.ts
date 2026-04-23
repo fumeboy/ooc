@@ -13,6 +13,13 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync } from "node:fs";
 import { join as pathJoin } from "node:path";
+import {
+  rebuildEntryEmbedding,
+  readEmbedding,
+  deleteEmbedding,
+  generateEmbedding,
+  cosineSimilarity,
+} from "./memory-embedding.js";
 
 /** 单条 memory entry（落盘 JSON 结构） */
 export interface MemoryEntry {
@@ -59,6 +66,12 @@ export interface QueryMemoryOptions {
   includeExpired?: boolean;
   /** 只返回 pinned（默认 false） */
   onlyPinned?: boolean;
+  /**
+   * 检索模式（Phase 2 引入）：
+   * - "fuzzy"（默认）：按 query 串做 key/content/tags/category 的 substring 模糊匹配，按 createdAt 降序
+   * - "vector"：按 query 做 embedding top-K 余弦召回，按 score 降序（需要同时传 query）
+   */
+  mode?: "fuzzy" | "vector";
 }
 
 // ─── 内部工具 ────────────────────────────────────────────
@@ -89,6 +102,8 @@ export function readMemoryEntries(selfDir: string): MemoryEntry[] {
   if (!existsSync(entriesDir)) return [];
   const entries: MemoryEntry[] = [];
   for (const file of readdirSync(entriesDir)) {
+    /* 跳过 embedding 旁路文件（Phase 2；`.embedding.json` 不是 entry） */
+    if (file.endsWith(".embedding.json")) continue;
     if (!file.endsWith(".json")) continue;
     try {
       const raw = readFileSync(pathJoin(entriesDir, file), "utf-8");
@@ -178,11 +193,25 @@ export function appendMemoryEntry(
       };
 
   writeMemoryEntry(selfDir, merged);
+
+  /* Phase 2：side-effect 生成 embedding（零网络、确定性）。
+     失败不抛——embedding 丢了还可以通过 fuzzy 检索，后续 rebuild 机制会补。 */
+  try {
+    rebuildEntryEmbedding(selfDir, merged.id, merged.key, merged.content);
+  } catch {
+    /* ignore */
+  }
+
   return merged;
 }
 
 /**
- * 查询 entries，支持关键词/tags/since/pinned 过滤，按 createdAt 降序返回
+ * 查询 entries，支持关键词/tags/since/pinned 过滤
+ *
+ * 排序：
+ * - `mode="fuzzy"`（默认）：按 createdAt 降序
+ * - `mode="vector"`：按 query embedding 的余弦相似度降序（需 options.query 非空，
+ *   否则自动回退到 fuzzy 排序）
  */
 export function queryMemoryEntries(
   selfDir: string,
@@ -190,6 +219,7 @@ export function queryMemoryEntries(
 ): MemoryEntry[] {
   const all = readMemoryEntries(selfDir);
   const now = Date.now();
+  const mode = options.mode ?? "fuzzy";
 
   let filtered = all.filter(e => {
     /* TTL 过滤 */
@@ -207,8 +237,9 @@ export function queryMemoryEntries(
     if (options.since) {
       if (new Date(e.createdAt).getTime() < new Date(options.since).getTime()) return false;
     }
-    /* query fuzzy */
-    if (options.query) {
+    /* vector mode 不再做 substring 预过滤——让所有未过期 entry 都参与余弦排序；
+     * fuzzy mode 仍按 substring 预过滤 */
+    if (mode === "fuzzy" && options.query) {
       const q = options.query.toLowerCase();
       const hay = [e.key, e.content, e.category, ...e.tags].join(" ").toLowerCase();
       if (!hay.includes(q)) return false;
@@ -216,7 +247,21 @@ export function queryMemoryEntries(
     return true;
   });
 
-  filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  if (mode === "vector" && options.query && options.query.trim().length > 0) {
+    const qVec = generateEmbedding(options.query);
+    /* 为每个 entry 取（或现场计算）embedding，算余弦 */
+    const scored = filtered.map(e => {
+      let v = readEmbedding(selfDir, e.id);
+      if (!v) v = generateEmbedding(`${e.key} ${e.content}`);
+      return { entry: e, score: cosineSimilarity(qVec, v) };
+    });
+    scored.sort((a, b) => b.score - a.score);
+    /* 过滤掉 score <= 0 的（完全不相关）——避免无意义的降序尾巴 */
+    filtered = scored.filter(s => s.score > 0).map(s => s.entry);
+  } else {
+    filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
   if (options.limit !== undefined && options.limit > 0) {
     filtered = filtered.slice(0, options.limit);
   }
@@ -268,6 +313,7 @@ export function migrateMemoryMdToEntries(
       },
     };
     writeMemoryEntry(selfDir, entry);
+    try { rebuildEntryEmbedding(selfDir, entry.id, entry.key, entry.content); } catch { /* ignore */ }
     created++;
   }
   return { created, existing, total: parsed.length };
@@ -444,11 +490,14 @@ export function mergeDuplicateEntries(
       updatedAt: new Date().toISOString(),
     };
     writeMemoryEntry(selfDir, merged);
-    /* 删除被合并的 rest（物理删除 JSON 文件） */
+    /* 合并后的 entry 内容发生变化，embedding 需重建 */
+    try { rebuildEntryEmbedding(selfDir, merged.id, merged.key, merged.content); } catch { /* ignore */ }
+    /* 删除被合并的 rest（物理删除 JSON 文件 + 其 embedding） */
     const entriesDir = pathJoin(selfDir, "memory", "entries");
     for (const r of rest) {
       try {
         unlinkSync(pathJoin(entriesDir, `${r.id}.json`));
+        deleteEmbedding(selfDir, r.id);
         mergedCount++;
       } catch {
         /* 文件不存在等，忽略 */
