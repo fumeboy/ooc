@@ -84,6 +84,9 @@ describe("editFile", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.matchCount).toBe(1);
+    // diff 字段：before/after 完整文本
+    expect(result.data.before).toBe("hello world\nfoo bar\n");
+    expect(result.data.after).toBe("hello world\nbaz qux\n");
 
     const content = await Bun.file(filePath).text();
     expect(content).toBe("hello world\nbaz qux\n");
@@ -98,6 +101,10 @@ describe("editFile", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.matchCount).toBe(1);
+    // diff 字段：before/after 完整文本（容错分支也需要返回）
+    expect(result.data.before).toBe("  hello  \n  world  \nend\n");
+    expect(result.data.after).toContain("replaced");
+    expect(result.data.after).not.toContain("hello");
 
     const content = await Bun.file(filePath).text();
     expect(content).toContain("replaced");
@@ -136,6 +143,9 @@ describe("editFile", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.matchCount).toBe(2);
+    // diff 字段：before/after 完整文本
+    expect(result.data.before).toBe("aaa\nbbb\naaa\n");
+    expect(result.data.after).toBe("ccc\nbbb\nccc\n");
 
     const content = await Bun.file(filePath).text();
     expect(content).toBe("ccc\nbbb\nccc\n");
@@ -151,15 +161,37 @@ describe("writeFile", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.bytesWritten).toBe(11);
+    // 写新文件：before 应为空串，after 为新内容（前端据此渲染"全文绿色 (new file)"）
+    expect(result.data.before).toBe("");
+    expect(result.data.after).toBe("Hello World");
 
     const content = await Bun.file(filePath).text();
     expect(content).toBe("Hello World");
+  });
+
+  test("覆写已存在文件携带 before/after", async () => {
+    const filePath = join(tempDir, "write-overwrite.txt");
+    await fsWriteFile(filePath, "old content");
+
+    const result = await writeFile(ctx, filePath, "new content");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // 覆写已存在文件：before = 旧内容，after = 新内容
+    expect(result.data.before).toBe("old content");
+    expect(result.data.after).toBe("new content");
+
+    const content = await Bun.file(filePath).text();
+    expect(content).toBe("new content");
   });
 
   test("自动创建父目录", async () => {
     const filePath = join(tempDir, "deep", "nested", "dir", "file.txt");
     const result = await writeFile(ctx, filePath, "nested content");
     expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // 父目录新建场景：文件本身不存在，before 应为空串
+    expect(result.data.before).toBe("");
+    expect(result.data.after).toBe("nested content");
 
     const content = await Bun.file(filePath).text();
     expect(content).toBe("nested content");
@@ -276,11 +308,40 @@ describe("plan_edits / apply_edits", () => {
     expect(apply.ok).toBe(true);
     if (!apply.ok) return;
     expect(apply.data.applied).toBe(2);
+    // 多文件 transaction：每个 perChange 应携带 before/after 供前端 diff 渲染
+    expect(apply.data.perChange.length).toBe(2);
+    const aChange = apply.data.perChange.find((c) => c.path === "a.ts");
+    const bChange = apply.data.perChange.find((c) => c.path === "b.ts");
+    expect(aChange?.before).toBe("export const A = 1;\n");
+    expect(aChange?.after).toBe("export const A = 100;\n");
+    expect(bChange?.before).toBe("export const B = 2;\n");
+    expect(bChange?.after).toBe("export const B = 200;\n");
 
     const { readFile: fsReadFile } = await import("fs/promises");
     const a = await fsReadFile(join(planDir, "a.ts"), "utf-8");
     expect(a).toContain("A = 100");
     const b = await fsReadFile(join(planDir, "b.ts"), "utf-8");
     expect(b).toContain("B = 200");
+  });
+
+  test("applyEdits write 新文件携带 before='' / after=newContent", async () => {
+    const { planEdits, applyEdits } = await import(
+      "../traits/computable/file_ops/index"
+    );
+    const planDir = join(tempDir, "plan-write-new");
+    await mkdir(planDir, { recursive: true });
+
+    const planCtx = { rootDir: planDir, sessionId: "trait-test-write" };
+    const planRes = await planEdits(planCtx, [
+      { kind: "write", path: "newfile.ts", newContent: "export const X = 1;\n" },
+    ]);
+    expect(planRes.ok).toBe(true);
+    if (!planRes.ok) return;
+
+    const apply = await applyEdits(planCtx, planRes.data.planId);
+    expect(apply.ok).toBe(true);
+    if (!apply.ok) return;
+    expect(apply.data.perChange[0]?.before).toBe("");
+    expect(apply.data.perChange[0]?.after).toBe("export const X = 1;\n");
   });
 });

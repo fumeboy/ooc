@@ -66,6 +66,9 @@ async function readFileImpl(
 /**
  * 在文件中搜索并替换文本。
  * 两级容错：先精确匹配，再尝试 trim 空白匹配。
+ *
+ * 返回值除 matchCount 外，还附带 before/after 完整文本，供前端渲染绿+/红- 风格的
+ * diff 卡片。before = 写盘前内容，after = 写盘后内容。
  */
 async function editFileImpl(
   ctx: { rootDir?: string },
@@ -75,7 +78,7 @@ async function editFileImpl(
     newStr,
     replaceAll = false,
   }: { path: string; oldStr: string; newStr: string; replaceAll?: boolean },
-): Promise<ToolResult<{ matchCount: number }>> {
+): Promise<ToolResult<{ matchCount: number; before: string; after: string }>> {
   const fullPath = resolvePath(ctx.rootDir ?? "", path);
 
   try {
@@ -86,6 +89,8 @@ async function editFileImpl(
     }
 
     const text = await file.text();
+    /** 写盘前快照——用于 diff 渲染的 before 字段 */
+    const before = text;
 
     // 第一级：精确匹配
     let matchCount = 0;
@@ -135,24 +140,25 @@ async function editFileImpl(
         resultLines.splice(toReplace[m]!, oldLines.length, ...newLines);
       }
 
-      await Bun.write(fullPath, resultLines.join("\n"));
-      return toolOk({ matchCount: toReplace.length });
+      const after = resultLines.join("\n");
+      await Bun.write(fullPath, after);
+      return toolOk({ matchCount: toReplace.length, before, after });
     }
 
     if (matchCount > 1 && !replaceAll) {
       return toolErr(`找到 ${matchCount} 处匹配，请设置 replaceAll: true 或提供更精确的文本`);
     }
 
-    let result: string;
+    let after: string;
     if (replaceAll) {
-      result = text.split(oldStr).join(newStr);
+      after = text.split(oldStr).join(newStr);
     } else {
       const firstIdx = text.indexOf(oldStr);
-      result = text.slice(0, firstIdx) + newStr + text.slice(firstIdx + oldStr.length);
+      after = text.slice(0, firstIdx) + newStr + text.slice(firstIdx + oldStr.length);
     }
 
-    await Bun.write(fullPath, result);
-    return toolOk({ matchCount: replaceAll ? matchCount : 1 });
+    await Bun.write(fullPath, after);
+    return toolOk({ matchCount: replaceAll ? matchCount : 1, before, after });
   } catch (err: any) {
     return toolErr(`编辑文件失败: ${err?.message ?? String(err)}`);
   }
@@ -160,14 +166,29 @@ async function editFileImpl(
 
 /**
  * 创建或覆盖文件，自动创建父目录
+ *
+ * 返回值附带 before/after 完整文本以支持前端 diff 渲染：
+ * - 文件原本不存在：before 为空串、after 为新内容（前端渲染为"全文绿色 (new file)"）
+ * - 文件已存在：before 为旧内容、after 为新内容（前端渲染绿+/红- diff）
  */
 async function writeFileImpl(
   ctx: { rootDir?: string },
   { path, content }: { path: string; content: string },
-): Promise<ToolResult<{ bytesWritten: number }>> {
+): Promise<ToolResult<{ bytesWritten: number; before: string; after: string }>> {
   const fullPath = resolvePath(ctx.rootDir ?? "", path);
 
   try {
+    /** 写盘前快照：文件不存在视为空串（用于 diff 的 before） */
+    let before = "";
+    try {
+      const existing = Bun.file(fullPath);
+      if (await existing.exists()) {
+        before = await existing.text();
+      }
+    } catch {
+      // 读旧内容失败不影响写入；before 留空串
+    }
+
     const dir = fullPath.slice(0, fullPath.lastIndexOf("/"));
     if (dir) {
       const { mkdir } = await import("fs/promises");
@@ -175,7 +196,7 @@ async function writeFileImpl(
     }
 
     const bytesWritten = await Bun.write(fullPath, content);
-    return toolOk({ bytesWritten });
+    return toolOk({ bytesWritten, before, after: content });
   } catch (err: any) {
     return toolErr(`写入文件失败: ${err?.message ?? String(err)}`);
   }

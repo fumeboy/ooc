@@ -50,8 +50,20 @@ export interface ApplyResult {
   applied: number;
   /** 如有失败，错误信息 */
   error?: string;
-  /** 每个 change 的摘要 */
-  perChange: Array<{ path: string; ok: boolean; bytesWritten?: number; error?: string }>;
+  /**
+   * 每个 change 的摘要
+   * before/after：成功写入的文件，写盘前后的完整文本。
+   * 前端用它在 thread view 渲染 diff 卡片（绿+/红- 高亮）。
+   * 写新文件 before 为空串；失败 / 回滚的条目不带 before/after。
+   */
+  perChange: Array<{
+    path: string;
+    ok: boolean;
+    bytesWritten?: number;
+    error?: string;
+    before?: string;
+    after?: string;
+  }>;
 }
 
 /** plan 状态机 */
@@ -287,7 +299,14 @@ export async function applyEditPlan(
       if (!existsSync(parent)) await mkdir(parent, { recursive: true });
       await writeFile(p.abs, p.newContent, "utf-8");
       written.push(i);
-      perChange.push({ path: p.path, ok: true, bytesWritten: p.bytes });
+      perChange.push({
+        path: p.path,
+        ok: true,
+        bytesWritten: p.bytes,
+        // 暴露 before/after 给前端做 diff 渲染（写新文件 before 为空串）
+        before: snaps[i]!.original,
+        after: p.newContent,
+      });
     } catch (err: any) {
       perChange.push({ path: p.path, ok: false, error: String(err?.message ?? err) });
       // 回滚
