@@ -133,9 +133,9 @@ bun kernel/src/cli.ts start 8080
 
 | 文档 | 路径 | 内容 |
 |------|------|------|
-| 核心基因 | `docs/哲学文档/gene.md` | 13 条基因——OOC 的全部规则 |
-| 涌现能力 | `docs/哲学文档/emergence.md` | 基因组合涌现的高阶能力 |
+| 核心基因 | `docs/哲学/genes/` | 13 条基因——OOC 的全部规则（每条一个 .md） |
+| 涌现能力 | `docs/哲学/emergences/` | 基因组合涌现的高阶能力（每条一个 .md） |
 | 概念树 | `docs/meta.md` | 完整概念结构与工程子树 |
-| 组织结构 | `docs/组织/` | 1+3 组织模型（Sophia/Kernel/Iris/Nexus） |
+| 组织结构 | `docs/工程管理/组织/` | 1+3 组织模型（Sophia/Kernel/Iris/Nexus） |
 
 TypeScript · Bun · Claude API · React · Vite

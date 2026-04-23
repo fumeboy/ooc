@@ -101,6 +101,6 @@ await callMethod("reflective/super", "create_trait", {
 
 ## 参考
 
-- @ref docs/哲学文档/gene.md#G12 经验沉淀：经历 → 记录 → 反思 → 沉淀
+- @ref docs/哲学/genes/g12-经验沉淀.md 经验沉淀：经历 → 记录 → 反思 → 沉淀
 - @ref kernel/src/world/super.ts SuperFlow 落盘 API（`handleOnTalkToSuper` / `getSuperThreadDir`）
 - @ref docs/工程管理/迭代/all/20260422_refactor_SuperFlow转型.md SuperFlow 转型迭代文档
