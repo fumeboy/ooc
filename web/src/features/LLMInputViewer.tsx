@@ -30,33 +30,18 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAtomValue } from "jotai";
 import { refreshKeyAtom } from "../store/session";
-import { fetchFileContent } from "../api/client";
+import { fetchFileContent, fetchSessionTree } from "../api/client";
+import type { FileTreeNode } from "../api/types";
 import type { ViewProps } from "../router/registry";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { CodeMirrorViewer } from "../components/ui/CodeMirrorViewer";
 import { cn } from "../lib/utils";
+import { computeNodeDiff, type DiffMap, type DiffStatus } from "./llm-input-diff";
 
 /* ========== 数据模型 ========== */
 
-/** 解析后的 XML 节点（前端内部表示） */
-interface ParsedNode {
-  /** 唯一 id（用于选中 / 展开状态） */
-  id: string;
-  /** 标签名 */
-  tag: string;
-  /** 属性键值表 */
-  attrs: Record<string, string>;
-  /** 子节点（容器节点） */
-  children: ParsedNode[];
-  /** 叶子内容（仅叶子节点，容器节点为 null） */
-  content: string | null;
-  /** 深度（用于缩进渲染） */
-  depth: number;
-  /** 消息角色分段（"system" | "user" | "other"） */
-  section: "system" | "user" | "other";
-  /** 原始片段字符数（含子树） */
-  charCount: number;
-}
+/** 解析后的 XML 节点（前端内部表示，从 llm-input-diff.ts 继承） */
+import type { ParsedNode } from "./llm-input-diff";
 
 /**
  * 消息块：--- role --- 开头的大段
@@ -323,12 +308,25 @@ interface TreeNodeProps {
   expanded: Set<string>;
   toggleExpanded: (id: string) => void;
   searchQuery: string;
+  /** Phase 2 — 对比视图：若提供 → 按 diff status 高亮背景 */
+  diffStatus?: Map<string, DiffStatus>;
 }
 
-function TreeNode({ node, selectedId, onSelect, expanded, toggleExpanded, searchQuery }: TreeNodeProps) {
+/** diff status → Tailwind 样式类（按 Phase 2 配色） */
+function diffBgClass(status?: DiffStatus): string {
+  switch (status) {
+    case "added": return "bg-green-50 border-l-2 border-green-400";
+    case "removed": return "bg-red-50 border-l-2 border-red-400";
+    case "changed": return "bg-amber-50 border-l-2 border-amber-400";
+    default: return "";
+  }
+}
+
+function TreeNode({ node, selectedId, onSelect, expanded, toggleExpanded, searchQuery, diffStatus }: TreeNodeProps) {
   const isExpanded = expanded.has(node.id);
   const isSelected = selectedId === node.id;
   const hasChildren = node.children.length > 0;
+  const nodeDiffStatus = diffStatus?.get(node.id);
 
   /* 搜索：当前节点匹配（标签 / 属性值 / content） */
   const matchesSearch = useMemo(() => {
@@ -349,9 +347,11 @@ function TreeNode({ node, selectedId, onSelect, expanded, toggleExpanded, search
           "flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer text-xs group",
           isSelected ? "bg-[var(--primary)]/10 text-[var(--primary)] font-medium" : "hover:bg-[var(--accent)]",
           matchesSearch && !isSelected && "bg-yellow-50",
+          diffBgClass(nodeDiffStatus),
         )}
         style={{ paddingLeft: `${node.depth * 10 + 6}px` }}
         onClick={() => onSelect(node)}
+        title={nodeDiffStatus && nodeDiffStatus !== "unchanged" ? `diff: ${nodeDiffStatus}` : undefined}
       >
         {hasChildren ? (
           <button
@@ -365,6 +365,18 @@ function TreeNode({ node, selectedId, onSelect, expanded, toggleExpanded, search
         )}
         <span className="font-mono truncate flex-1">{renderNodeLabel(node)}</span>
         <NodeBadges node={node} />
+        {nodeDiffStatus && nodeDiffStatus !== "unchanged" && (
+          <span
+            className={cn(
+              "text-[9px] px-1 py-px rounded",
+              nodeDiffStatus === "added" && "bg-green-200 text-green-800",
+              nodeDiffStatus === "removed" && "bg-red-200 text-red-800",
+              nodeDiffStatus === "changed" && "bg-amber-200 text-amber-800",
+            )}
+          >
+            {nodeDiffStatus === "added" ? "+" : nodeDiffStatus === "removed" ? "−" : "~"}
+          </span>
+        )}
         <span className="text-[9px] text-[var(--muted-foreground)] opacity-60 group-hover:opacity-100 shrink-0">
           {node.charCount}
         </span>
@@ -380,6 +392,7 @@ function TreeNode({ node, selectedId, onSelect, expanded, toggleExpanded, search
               expanded={expanded}
               toggleExpanded={toggleExpanded}
               searchQuery={searchQuery}
+              diffStatus={diffStatus}
             />
           ))}
         </ul>
@@ -471,40 +484,31 @@ function DetailPanel({ node, searchQuery }: { node: ParsedNode | null; searchQue
   );
 }
 
-/* ========== 主组件 ========== */
+/* ========== 单侧面板：tree + detail（主视图 + 对比视图共用） ========== */
 
-/** LLMInputViewer 适配器：由 ViewRegistry 调用 */
-export function LLMInputViewerAdapter({ path }: ViewProps) {
-  const [raw, setRaw] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const refreshKey = useAtomValue(refreshKeyAtom);
+interface PaneProps {
+  path: string;
+  raw: string;
+  parsed: ParsedNode[];
+  searchQuery: string;
+  /** Phase 2 — 对比视图：该侧的 diff 状态 map（可选） */
+  diffMap?: Map<string, DiffStatus>;
+}
 
-  useEffect(() => {
-    setRaw(null);
-    setError(null);
-    fetchFileContent(path)
-      .then(setRaw)
-      .catch((e) => setError((e as Error).message));
-  }, [path, refreshKey]);
-
-  const parsed = useMemo(() => (raw ? parseLLMInput(raw) : null), [raw]);
-
+function ViewerPane({ path, parsed, searchQuery, diffMap }: PaneProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [searchQuery, setSearchQuery] = useState("");
 
-  /* 默认：展开所有顶层节点（<system>/<user>） */
+  /* 默认：展开所有顶层节点 */
   useEffect(() => {
-    if (parsed) {
-      const init = new Set<string>();
-      for (const root of parsed) init.add(root.id);
-      setExpanded(init);
-    }
+    const init = new Set<string>();
+    for (const root of parsed) init.add(root.id);
+    setExpanded(init);
   }, [parsed]);
 
   /* 查找选中节点 */
   const selectedNode = useMemo(() => {
-    if (!parsed || !selectedId) return null;
+    if (!selectedId) return null;
     const stack: ParsedNode[] = [...parsed];
     while (stack.length > 0) {
       const n = stack.pop()!;
@@ -513,13 +517,6 @@ export function LLMInputViewerAdapter({ path }: ViewProps) {
     }
     return null;
   }, [parsed, selectedId]);
-
-  /* 汇总统计 */
-  const stats = useMemo(() => {
-    if (!parsed) return { totalChars: 0, totalTokens: 0, topSections: 0 };
-    const totalChars = parsed.reduce((s, r) => s + r.charCount, 0);
-    return { totalChars, totalTokens: estimateTokens(totalChars), topSections: parsed.length };
-  }, [parsed]);
 
   const toggleExpanded = (id: string) => {
     setExpanded((prev) => {
@@ -532,7 +529,7 @@ export function LLMInputViewerAdapter({ path }: ViewProps) {
 
   /* 搜索：展开所有路径到匹配节点 */
   useEffect(() => {
-    if (!searchQuery || !parsed) return;
+    if (!searchQuery) return;
     const q = searchQuery.toLowerCase();
     const toExpand = new Set(expanded);
     const walk = (node: ParsedNode, ancestors: string[]): boolean => {
@@ -553,6 +550,156 @@ export function LLMInputViewerAdapter({ path }: ViewProps) {
     setExpanded(toExpand);
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [searchQuery, parsed]);
+
+  /* 对比模式下默认展开所有 diff!=unchanged 节点的祖先 */
+  useEffect(() => {
+    if (!diffMap) return;
+    const toExpand = new Set<string>();
+    const walk = (node: ParsedNode, ancestors: string[]): boolean => {
+      const selfChanged = diffMap.get(node.id) !== "unchanged" && diffMap.has(node.id);
+      let descChanged = false;
+      for (const c of node.children) if (walk(c, [...ancestors, node.id])) descChanged = true;
+      if (descChanged || selfChanged) {
+        for (const a of [...ancestors, node.id]) toExpand.add(a);
+      }
+      return descChanged || selfChanged;
+    };
+    for (const root of parsed) walk(root, []);
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      for (const id of toExpand) next.add(id);
+      return next;
+    });
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [diffMap, parsed]);
+
+  const fileName = path.split("/").pop() ?? path;
+  const totalChars = parsed.reduce((s, r) => s + r.charCount, 0);
+
+  return (
+    <div className="flex flex-col min-w-0 min-h-0 flex-1">
+      <div className="px-3 py-1.5 border-b border-[var(--border)] shrink-0 bg-[var(--accent)]/10 flex items-center gap-2">
+        <span className="font-mono text-[11px] truncate" title={path}>{fileName}</span>
+        <span className="text-[10px] text-[var(--muted-foreground)]">
+          {totalChars.toLocaleString()} chars · ~{estimateTokens(totalChars).toLocaleString()} tokens
+        </span>
+      </div>
+      <div className="flex-1 min-h-0 flex">
+        <div className="w-[38%] min-w-[220px] max-w-[420px] border-r border-[var(--border)] overflow-auto py-2">
+          <ul>
+            {parsed.map((root) => (
+              <TreeNode
+                key={root.id}
+                node={root}
+                selectedId={selectedId}
+                onSelect={(n) => setSelectedId(n.id)}
+                expanded={expanded}
+                toggleExpanded={toggleExpanded}
+                searchQuery={searchQuery}
+                diffStatus={diffMap}
+              />
+            ))}
+          </ul>
+        </div>
+        <div className="flex-1 min-w-0">
+          <DetailPanel node={selectedNode} searchQuery={searchQuery} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ========== Compare：候选文件列表 ========== */
+
+/**
+ * 从文件树递归收集 llm.input.txt / loop_*.input.txt 路径
+ */
+function collectInputTxtFiles(node: FileTreeNode, result: FileTreeNode[]): void {
+  if (node.type === "file" && /\.input\.txt$/.test(node.name)) {
+    result.push(node);
+  }
+  if (node.children) {
+    for (const c of node.children) collectInputTxtFiles(c, result);
+  }
+}
+
+/** 从路径中提取 sessionId（`flows/<sid>/...`） */
+function extractSessionId(path: string): string | null {
+  const m = path.match(/^flows\/([^/]+)\//);
+  return m ? m[1]! : null;
+}
+
+/* ========== 主组件 ========== */
+
+/** LLMInputViewer 适配器：由 ViewRegistry 调用 */
+export function LLMInputViewerAdapter({ path }: ViewProps) {
+  const refreshKey = useAtomValue(refreshKeyAtom);
+
+  /* 主（左）侧文件 */
+  const [raw, setRaw] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRaw(null);
+    setError(null);
+    fetchFileContent(path)
+      .then(setRaw)
+      .catch((e) => setError((e as Error).message));
+  }, [path, refreshKey]);
+
+  const parsed = useMemo(() => (raw ? parseLLMInput(raw) : null), [raw]);
+
+  /* Phase 2 — 对比视图：第二个（右）侧文件 */
+  const [compareEnabled, setCompareEnabled] = useState(false);
+  const [comparePath, setComparePath] = useState<string>("");
+  const [compareRaw, setCompareRaw] = useState<string | null>(null);
+  const [candidates, setCandidates] = useState<FileTreeNode[]>([]);
+  const [candError, setCandError] = useState<string | null>(null);
+
+  /* 进入 compare 模式：拉同 session 的文件树 → 筛 .input.txt */
+  useEffect(() => {
+    if (!compareEnabled) return;
+    const sessionId = extractSessionId(path);
+    if (!sessionId) { setCandError("路径未位于 flows/<sid>/... 下，无法列候选"); return; }
+    fetchSessionTree(sessionId)
+      .then((tree) => {
+        const collected: FileTreeNode[] = [];
+        collectInputTxtFiles(tree, collected);
+        /* 过滤掉当前文件本身；并按路径字典序排列 */
+        const filtered = collected.filter((c) => c.path !== path);
+        filtered.sort((a, b) => a.path.localeCompare(b.path));
+        setCandidates(filtered);
+        setCandError(null);
+      })
+      .catch((e) => setCandError((e as Error).message));
+  }, [compareEnabled, path, refreshKey]);
+
+  /* 选中 compare 文件后加载 raw */
+  useEffect(() => {
+    if (!comparePath) { setCompareRaw(null); return; }
+    setCompareRaw(null);
+    fetchFileContent(comparePath)
+      .then(setCompareRaw)
+      .catch(() => setCompareRaw(null));
+  }, [comparePath, refreshKey]);
+
+  const compareParsed = useMemo(() => (compareRaw ? parseLLMInput(compareRaw) : null), [compareRaw]);
+
+  /* 计算 diff map */
+  const diffResult = useMemo<DiffMap | null>(() => {
+    if (!parsed || !compareParsed) return null;
+    return computeNodeDiff(parsed, compareParsed);
+  }, [parsed, compareParsed]);
+
+  /* 搜索 */
+  const [searchQuery, setSearchQuery] = useState("");
+
+  /* 汇总统计（左） */
+  const stats = useMemo(() => {
+    if (!parsed) return { totalChars: 0, totalTokens: 0, topSections: 0 };
+    const totalChars = parsed.reduce((s, r) => s + r.charCount, 0);
+    return { totalChars, totalTokens: estimateTokens(totalChars), topSections: parsed.length };
+  }, [parsed]);
 
   if (error) {
     return <div className="flex items-center justify-center h-full"><p className="text-sm text-red-500">{error}</p></div>;
@@ -585,6 +732,40 @@ export function LLMInputViewerAdapter({ path }: ViewProps) {
           <span className="text-[10px] text-[var(--muted-foreground)]">
             {stats.totalChars.toLocaleString()} chars · ~{stats.totalTokens.toLocaleString()} tokens · {stats.topSections} blocks
           </span>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !compareEnabled;
+              setCompareEnabled(next);
+              if (!next) { setComparePath(""); setCompareRaw(null); }
+            }}
+            className={cn(
+              "px-2 py-1 text-xs border rounded-md transition-colors",
+              compareEnabled
+                ? "bg-[var(--primary)] text-white border-[var(--primary)]"
+                : "bg-[var(--card)] hover:bg-[var(--accent)] border-[var(--border)]",
+            )}
+            title="与另一个 llm.input.txt 做节点级对比"
+          >
+            {compareEnabled ? "退出对比" : "Compare"}
+          </button>
+          {compareEnabled && (
+            <select
+              className="px-2 py-1 text-xs border border-[var(--border)] rounded-md bg-[var(--card)] max-w-[360px] outline-none focus:border-[var(--primary)]"
+              value={comparePath}
+              onChange={(e) => setComparePath(e.target.value)}
+            >
+              <option value="">选择对比文件…（{candidates.length} 个候选）</option>
+              {candidates.map((c) => (
+                <option key={c.path} value={c.path} title={c.path}>
+                  {c.path.replace(/^flows\/[^/]+\//, "")}
+                </option>
+              ))}
+            </select>
+          )}
+          {compareEnabled && candError && (
+            <span className="text-[10px] text-red-500">{candError}</span>
+          )}
           <input
             type="search"
             placeholder="搜索（标签 / 属性 / 内容）"
@@ -593,27 +774,39 @@ export function LLMInputViewerAdapter({ path }: ViewProps) {
             className="ml-auto px-2 py-1 text-xs border border-[var(--border)] rounded-md bg-[var(--card)] w-48 sm:w-64 outline-none focus:border-[var(--primary)]"
           />
         </div>
+        {compareEnabled && diffResult && (
+          <div className="mt-1 text-[10px] text-[var(--muted-foreground)] flex items-center gap-3">
+            <span><span className="inline-block w-2 h-2 bg-green-400 rounded-sm align-middle mr-1" />added</span>
+            <span><span className="inline-block w-2 h-2 bg-red-400 rounded-sm align-middle mr-1" />removed</span>
+            <span><span className="inline-block w-2 h-2 bg-amber-400 rounded-sm align-middle mr-1" />changed</span>
+          </div>
+        )}
       </div>
-      {/* 主区：左树 + 右详情 */}
+      {/* 主区：单侧 or 双侧对比 */}
       <div className="flex-1 min-h-0 flex">
-        <div className="w-[34%] min-w-[240px] max-w-[420px] border-r border-[var(--border)] overflow-auto py-2">
-          <ul>
-            {parsed.map((root) => (
-              <TreeNode
-                key={root.id}
-                node={root}
-                selectedId={selectedId}
-                onSelect={(n) => setSelectedId(n.id)}
-                expanded={expanded}
-                toggleExpanded={toggleExpanded}
-                searchQuery={searchQuery}
-              />
-            ))}
-          </ul>
-        </div>
-        <div className="flex-1 min-w-0">
-          <DetailPanel node={selectedNode} searchQuery={searchQuery} />
-        </div>
+        <ViewerPane
+          path={path}
+          raw={raw}
+          parsed={parsed}
+          searchQuery={searchQuery}
+          diffMap={diffResult?.left}
+        />
+        {compareEnabled && compareParsed && compareRaw && (
+          <div className="border-l-2 border-[var(--border)] flex-1 min-w-0 min-h-0 flex">
+            <ViewerPane
+              path={comparePath}
+              raw={compareRaw}
+              parsed={compareParsed}
+              searchQuery={searchQuery}
+              diffMap={diffResult?.right}
+            />
+          </div>
+        )}
+        {compareEnabled && !compareParsed && (
+          <div className="border-l-2 border-[var(--border)] flex-1 min-w-0 flex items-center justify-center text-xs text-[var(--muted-foreground)] px-4">
+            {comparePath ? (compareRaw === null ? "加载中…" : "解析失败") : "请选择一个对比文件"}
+          </div>
+        )}
       </div>
     </div>
   );
