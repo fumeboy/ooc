@@ -84,9 +84,10 @@ describe("editFile", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.matchCount).toBe(1);
-    // diff 字段：before/after 完整文本
+    // diff 字段：before/after 完整文本 + path（前端卡片标题用）
     expect(result.data.before).toBe("hello world\nfoo bar\n");
     expect(result.data.after).toBe("hello world\nbaz qux\n");
+    expect(result.data.path).toBe(filePath);
 
     const content = await Bun.file(filePath).text();
     expect(content).toBe("hello world\nbaz qux\n");
@@ -164,6 +165,7 @@ describe("writeFile", () => {
     // 写新文件：before 应为空串，after 为新内容（前端据此渲染"全文绿色 (new file)"）
     expect(result.data.before).toBe("");
     expect(result.data.after).toBe("Hello World");
+    expect(result.data.path).toBe(filePath);
 
     const content = await Bun.file(filePath).text();
     expect(content).toBe("Hello World");

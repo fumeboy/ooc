@@ -78,7 +78,7 @@ async function editFileImpl(
     newStr,
     replaceAll = false,
   }: { path: string; oldStr: string; newStr: string; replaceAll?: boolean },
-): Promise<ToolResult<{ matchCount: number; before: string; after: string }>> {
+): Promise<ToolResult<{ matchCount: number; before: string; after: string; path: string }>> {
   const fullPath = resolvePath(ctx.rootDir ?? "", path);
 
   try {
@@ -142,7 +142,7 @@ async function editFileImpl(
 
       const after = resultLines.join("\n");
       await Bun.write(fullPath, after);
-      return toolOk({ matchCount: toReplace.length, before, after });
+      return toolOk({ matchCount: toReplace.length, before, after, path });
     }
 
     if (matchCount > 1 && !replaceAll) {
@@ -158,7 +158,7 @@ async function editFileImpl(
     }
 
     await Bun.write(fullPath, after);
-    return toolOk({ matchCount: replaceAll ? matchCount : 1, before, after });
+    return toolOk({ matchCount: replaceAll ? matchCount : 1, before, after, path });
   } catch (err: any) {
     return toolErr(`编辑文件失败: ${err?.message ?? String(err)}`);
   }
@@ -174,7 +174,7 @@ async function editFileImpl(
 async function writeFileImpl(
   ctx: { rootDir?: string },
   { path, content }: { path: string; content: string },
-): Promise<ToolResult<{ bytesWritten: number; before: string; after: string }>> {
+): Promise<ToolResult<{ bytesWritten: number; before: string; after: string; path: string }>> {
   const fullPath = resolvePath(ctx.rootDir ?? "", path);
 
   try {
@@ -196,7 +196,7 @@ async function writeFileImpl(
     }
 
     const bytesWritten = await Bun.write(fullPath, content);
-    return toolOk({ bytesWritten, before, after: content });
+    return toolOk({ bytesWritten, before, after: content, path });
   } catch (err: any) {
     return toolErr(`写入文件失败: ${err?.message ?? String(err)}`);
   }
