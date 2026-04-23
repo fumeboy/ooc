@@ -1,42 +1,60 @@
 /**
- * code_index —— 代码语义索引 kernel trait（MVP）
+ * code_index —— 代码语义索引 kernel trait
  *
- * 基于正则的轻量 TS/JS 符号索引，提供：
- * - symbol_lookup：按名精确查找定义
- * - find_references：查找符号引用
- * - list_symbols：枚举文件/目录内符号
- * - call_hierarchy：调用链分析（callers / callees）
- * - semantic_search：语义搜索（MVP 退化为 token 匹配 + 排序）
- * - index_refresh：触发/重建索引
+ * v2：tree-sitter AST + 增量索引 + 真向量 semantic_search + callees call graph
+ * （v1 正则 + 全量重建 + token 匹配 + 单向 callers 作为 fallback 保留）
  *
- * 设计原则：
- * - 索引按 rootDir 维度缓存在内存，首次调用触发构建
- * - 索引数据结构是 immutable snapshot，查询返回副本
- * - 只支持 TS/JS/TSX/JSX；其他语言留给后续扩展
+ * 提供的 llm_methods：
+ *   - symbol_lookup   按名精确查找定义
+ *   - find_references 查找符号引用
+ *   - list_symbols    枚举文件/目录内符号
+ *   - call_hierarchy  调用链（callers + callees）
+ *   - semantic_search 向量语义搜索（cosine sim）
+ *   - index_refresh   全量 / 增量重建索引
+ *
+ * 设计：
+ *   - 索引按 rootDir 维度缓存；首次调用触发构建
+ *   - tree-sitter 可用时走 AST，否则回退正则（MVP 行为保留）
+ *   - 向量落盘 `.ooc/code-index/vectors.json`（首次构建写入；增量更新对应条目）
+ *   - call graph 方向：byName 可反查 callers；callGraphOut 存每个定义的 callees
+ *
+ * @ref docs/工程管理/迭代/all/20260422_feature_code_index_v2.md
  */
 
-import { resolve, relative, extname, join } from "path";
+import { resolve, relative, extname, join, dirname } from "path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { toolOk, toolErr } from "../../../src/types/tool-result";
 import type { ToolResult } from "../../../src/types/tool-result";
 import type { TraitMethod } from "../../../src/types/index";
+import { parseAndExtract, tsLangOf } from "./parser/extractor";
+import type { ExtractedSymbolKind } from "./parser/extractor";
+import { generateEmbedding, cosineSimilarity } from "../../../src/persistence/memory-embedding";
 
-/** 支持的语言扩展名 */
-const SUPPORTED_EXTS = [".ts", ".tsx", ".js", ".jsx"] as const;
-type Lang = "ts" | "tsx" | "js" | "jsx";
-type SymbolKind = "function" | "class" | "interface" | "type" | "const";
+/** 支持的语言扩展名（含 v2 新增的 py/go/rs） */
+const SUPPORTED_EXTS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".go", ".rs"] as const;
+
+/** 与 v1 对齐的 Lang；保留向后兼容字面量 */
+type Lang = "ts" | "tsx" | "js" | "jsx" | "py" | "go" | "rs";
+type SymbolKind = ExtractedSymbolKind; /* function | class | interface | type | const */
 
 /** 单个符号记录 */
 export interface SymbolEntry {
   /** 相对 rootDir 的路径 */
   file: string;
-  /** 1-based 行号 */
+  /** 1-based 起始行号 */
   line: number;
+  /** 1-based 结束行号（v2 新增；v1 时 fallback 等于 line） */
+  endLine?: number;
   /** 符号类型 */
   kind: SymbolKind;
   /** 符号名 */
   name: string;
   /** 语言 */
   lang: Lang;
+  /** 签名首行（v2 新增；正则 fallback 时为空串） */
+  signature?: string;
+  /** docstring（v2 新增；正则 fallback 时为空串） */
+  docstring?: string;
 }
 
 /** 引用记录 */
@@ -45,6 +63,9 @@ export interface ReferenceEntry {
   line: number;
   content: string;
 }
+
+/** 内部结构：一个符号的定义 key（文件相对 + name + line） */
+type DefKey = string; /* `${file}::${name}@${line}` */
 
 /** 索引快照（immutable） */
 interface IndexSnapshot {
@@ -58,6 +79,13 @@ interface IndexSnapshot {
   byFile: Map<string, readonly SymbolEntry[]>;
   /** 扫描的文件数量 */
   fileCount: number;
+  /**
+   * call graph：DefKey → 它调用的符号名列表（去重）
+   * DefKey 统一采用 `${relFile}::${name}@${line}`
+   */
+  callGraphOut: Map<DefKey, readonly string[]>;
+  /** 每个符号的 embedding（按 DefKey 索引） */
+  vectors: Map<DefKey, readonly number[]>;
 }
 
 /** 默认忽略的目录 */
@@ -81,39 +109,35 @@ function langOf(path: string): Lang | null {
   const ext = extname(path).toLowerCase();
   if (ext === ".ts") return "ts";
   if (ext === ".tsx") return "tsx";
-  if (ext === ".js") return "js";
+  if (ext === ".js" || ext === ".mjs" || ext === ".cjs") return "js";
   if (ext === ".jsx") return "jsx";
+  if (ext === ".py") return "py";
+  if (ext === ".go") return "go";
+  if (ext === ".rs") return "rs";
   return null;
 }
 
 /**
- * 正则匹配规则集合
+ * v1 正则匹配规则（fallback 用；tree-sitter 不可用时生效）
  *
- * 说明：MVP 版本，覆盖常见声明形态。
- * 未来可替换为 tree-sitter 获得更高精度。
+ * 只覆盖 TS/JS 家族——其他语言没有正则 fallback 时直接返回空数组。
  */
 const SYMBOL_PATTERNS: Array<{ kind: SymbolKind; re: RegExp }> = [
-  // export function foo() / function foo() / async function foo()
   { kind: "function", re: /^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/ },
-  // export const foo = (...) => / const foo = async (...) => / export const foo = function
   {
     kind: "function",
     re: /^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::\s*[^=]+)?=\s*(?:async\s*)?(?:\([^)]*\)\s*(?::\s*[^=]+)?=>|function)/,
   },
-  // export class Foo / class Foo
   { kind: "class", re: /^\s*(?:export\s+)?(?:abstract\s+)?class\s+([A-Za-z_$][\w$]*)/ },
-  // export interface Foo / interface Foo
   { kind: "interface", re: /^\s*(?:export\s+)?interface\s+([A-Za-z_$][\w$]*)/ },
-  // export type Foo = / type Foo =
   { kind: "type", re: /^\s*(?:export\s+)?type\s+([A-Za-z_$][\w$]*)\s*[=<]/ },
-  // export const FOO = / const FOO: T = （排除已被 function 规则匹配的）
   {
     kind: "const",
     re: /^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::\s*[^=]+)?=\s*(?!(?:async\s*)?(?:\([^)]*\)\s*(?::\s*[^=]+)?=>|function))/,
   },
 ];
 
-/** 从单行提取符号（可能返回多个，例如一行同时匹配 const + function） */
+/** 从单行提取符号（正则 fallback） */
 function extractSymbolsFromLine(line: string): Array<{ kind: SymbolKind; name: string }> {
   const results: Array<{ kind: SymbolKind; name: string }> = [];
   const seen = new Set<string>();
@@ -130,66 +154,268 @@ function extractSymbolsFromLine(line: string): Array<{ kind: SymbolKind; name: s
   return results;
 }
 
-/** 扫描单个文件，返回符号数组 */
-async function scanFile(absPath: string, relPath: string): Promise<SymbolEntry[]> {
+/**
+ * 扫描单个文件
+ *
+ * 返回 `{ symbols, calleesMap }`：
+ *   - symbols：符号数组（file 字段已填；行号 1-based）
+ *   - calleesMap：DefKey → callees 名称列表（仅 AST 路径有；正则 fallback 为空）
+ */
+async function scanFile(
+  absPath: string,
+  relPath: string,
+): Promise<{ symbols: SymbolEntry[]; calleesMap: Map<DefKey, string[]> }> {
   const lang = langOf(absPath);
-  if (!lang) return [];
+  if (!lang) return { symbols: [], calleesMap: new Map() };
 
+  let text: string;
   try {
-    const text = await Bun.file(absPath).text();
-    const lines = text.split("\n");
-    const symbols: SymbolEntry[] = [];
-    for (let i = 0; i < lines.length; i++) {
-      const found = extractSymbolsFromLine(lines[i]!);
-      for (const { kind, name } of found) {
-        symbols.push({ file: relPath, line: i + 1, kind, name, lang });
-      }
-    }
-    return symbols;
+    text = await Bun.file(absPath).text();
   } catch {
-    return [];
+    return { symbols: [], calleesMap: new Map() };
   }
+
+  /* 优先走 tree-sitter AST；失败回退正则（仅 TS/JS 家族） */
+  const tsLang = tsLangOf(extname(absPath));
+  if (tsLang) {
+    try {
+      const { symbols: extracted, callees } = await parseAndExtract(text, tsLang);
+      const calleesMap = new Map<DefKey, string[]>();
+      const symbols: SymbolEntry[] = extracted.map((s) => ({
+        file: relPath,
+        line: s.line,
+        endLine: s.endLine,
+        kind: s.kind,
+        name: s.name,
+        lang,
+        signature: s.signature,
+        docstring: s.docstring,
+      }));
+      for (const c of callees) {
+        /* extractor 给的 symbolKey 是 `name@line`；这里补上 file 前缀 */
+        const defKey: DefKey = `${relPath}::${c.symbolKey}`;
+        calleesMap.set(defKey, [...c.callees]);
+      }
+      return { symbols, calleesMap };
+    } catch {
+      /* AST 失败 → 回退正则（仅当是 TS/JS 家族） */
+    }
+  }
+
+  /* 正则 fallback：仅对 TS/JS 家族有意义 */
+  if (!["ts", "tsx", "js", "jsx"].includes(lang)) {
+    return { symbols: [], calleesMap: new Map() };
+  }
+  const lines = text.split("\n");
+  const symbols: SymbolEntry[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const found = extractSymbolsFromLine(lines[i]!);
+    for (const { kind, name } of found) {
+      symbols.push({ file: relPath, line: i + 1, kind, name, lang, signature: "", docstring: "" });
+    }
+  }
+  return { symbols, calleesMap: new Map() };
 }
 
-/** 构建索引：遍历 rootDir 下所有支持文件 */
+/** 某相对路径是否在忽略名单 */
+function isIgnored(rel: string): boolean {
+  return DEFAULT_IGNORE.some((d) => rel.startsWith(d + "/") || rel.includes("/" + d + "/"));
+}
+
+/** 构建 DefKey（给内部 callees/vectors 索引用） */
+function defKeyOf(file: string, name: string, line: number): DefKey {
+  return `${file}::${name}@${line}`;
+}
+
+/** 向量落盘路径（相对 rootDir） */
+function vectorsPath(rootDir: string): string {
+  return join(rootDir, ".ooc", "code-index", "vectors.json");
+}
+
+/** 向量盘存的 JSON schema */
+interface VectorsFile {
+  dim: number;
+  /** 每个 DefKey → vec 数组 */
+  entries: Record<string, number[]>;
+  /** 用于兜底：builtAt */
+  builtAt: number;
+}
+
+/** 计算一个符号的 embedding input 文本：name + signature + docstring */
+function embeddingInputOf(s: SymbolEntry): string {
+  const parts = [s.name];
+  if (s.signature) parts.push(s.signature);
+  if (s.docstring) parts.push(s.docstring);
+  return parts.join(" ");
+}
+
+/**
+ * 全量构建索引（rootDir 下所有支持语言的文件）
+ */
 async function buildIndex(rootDir: string): Promise<IndexSnapshot> {
-  const g = new Bun.Glob("**/*.{ts,tsx,js,jsx}");
+  const pattern = `**/*{${SUPPORTED_EXTS.join(",")}}`;
+  const g = new Bun.Glob(pattern);
   const byName = new Map<string, SymbolEntry[]>();
   const byFile = new Map<string, SymbolEntry[]>();
+  const callGraphOut = new Map<DefKey, string[]>();
+  const vectors = new Map<DefKey, number[]>();
   let fileCount = 0;
 
-  for await (const rel of g.scan({ cwd: rootDir })) {
-    const shouldIgnore = DEFAULT_IGNORE.some(
-      (d) => rel.startsWith(d + "/") || rel.includes("/" + d + "/"),
-    );
-    if (shouldIgnore) continue;
+  /* glob scan 本身遇到奇怪文件名/权限问题也可能抛；整个循环外层兜底 */
+  const iter = (async function*() {
+    try {
+      for await (const rel of g.scan({ cwd: rootDir })) yield rel;
+    } catch {
+      /* 提前结束 */
+    }
+  })();
 
+  for await (const rel of iter) {
+    if (isIgnored(rel)) continue;
     const abs = join(rootDir, rel);
-    const syms = await scanFile(abs, rel);
-    if (syms.length === 0) continue;
+    /* 任一文件报错（权限/特殊路径）都不应阻塞全量构建 */
+    let scanResult: { symbols: SymbolEntry[]; calleesMap: Map<DefKey, string[]> };
+    try {
+      scanResult = await scanFile(abs, rel);
+    } catch {
+      continue;
+    }
+    const { symbols, calleesMap } = scanResult;
+    if (symbols.length === 0) continue;
 
     fileCount++;
-    byFile.set(rel, syms);
-    for (const s of syms) {
+    byFile.set(rel, symbols);
+    for (const s of symbols) {
       const arr = byName.get(s.name) ?? [];
       arr.push(s);
       byName.set(s.name, arr);
+      /* embedding：name + signature + docstring */
+      const vec = generateEmbedding(embeddingInputOf(s));
+      vectors.set(defKeyOf(s.file, s.name, s.line), vec);
     }
+    for (const [k, v] of calleesMap.entries()) callGraphOut.set(k, v);
   }
 
-  // 冻结为 readonly
+  return freezeSnapshot(rootDir, byName, byFile, callGraphOut, vectors, fileCount);
+}
+
+/**
+ * 把内部 Map 冻结为 readonly snapshot
+ */
+function freezeSnapshot(
+  rootDir: string,
+  byName: Map<string, SymbolEntry[]>,
+  byFile: Map<string, SymbolEntry[]>,
+  callGraphOut: Map<DefKey, string[]>,
+  vectors: Map<DefKey, number[]>,
+  fileCount: number,
+): IndexSnapshot {
   const frozenByName = new Map<string, readonly SymbolEntry[]>();
   for (const [k, v] of byName.entries()) frozenByName.set(k, Object.freeze([...v]));
   const frozenByFile = new Map<string, readonly SymbolEntry[]>();
   for (const [k, v] of byFile.entries()) frozenByFile.set(k, Object.freeze([...v]));
-
+  const frozenCg = new Map<DefKey, readonly string[]>();
+  for (const [k, v] of callGraphOut.entries()) frozenCg.set(k, Object.freeze([...v]));
+  const frozenVec = new Map<DefKey, readonly number[]>();
+  for (const [k, v] of vectors.entries()) frozenVec.set(k, Object.freeze([...v]));
   return {
     builtAt: Date.now(),
     rootDir,
     byName: frozenByName,
     byFile: frozenByFile,
     fileCount,
+    callGraphOut: frozenCg,
+    vectors: frozenVec,
   };
+}
+
+/**
+ * 落盘向量到 `.ooc/code-index/vectors.json`
+ *
+ * 失败不抛（只记 console.warn）——盘存是缓存，构建仍在内存中可用。
+ */
+function persistVectors(snap: IndexSnapshot): void {
+  try {
+    const p = vectorsPath(snap.rootDir);
+    const dir = dirname(p);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const entries: Record<string, number[]> = {};
+    for (const [k, v] of snap.vectors.entries()) entries[k] = [...v];
+    const file: VectorsFile = { dim: 256, entries, builtAt: snap.builtAt };
+    writeFileSync(p, JSON.stringify(file), "utf-8");
+  } catch (err: any) {
+    /* 持久化失败只做静默告警；不影响运行时 */
+    console.warn(`[code_index] 向量持久化失败: ${err?.message ?? err}`);
+  }
+}
+
+/**
+ * 增量更新：对一组相对路径重扫并合并进现有 snapshot
+ *
+ * - 对每个 path：先从 byFile/byName/callGraphOut/vectors 里清掉旧条目
+ * - 若文件仍然存在（能读到）：用新扫描结果替换
+ * - 若文件不存在（删除）：只做清理
+ */
+async function applyIncremental(
+  snap: IndexSnapshot,
+  relPaths: string[],
+): Promise<IndexSnapshot> {
+  /* 先做 mutable 副本——局部构建完成后再 freeze */
+  const byName = new Map<string, SymbolEntry[]>();
+  for (const [k, v] of snap.byName.entries()) byName.set(k, [...v]);
+  const byFile = new Map<string, SymbolEntry[]>();
+  for (const [k, v] of snap.byFile.entries()) byFile.set(k, [...v]);
+  const callGraphOut = new Map<DefKey, string[]>();
+  for (const [k, v] of snap.callGraphOut.entries()) callGraphOut.set(k, [...v]);
+  const vectors = new Map<DefKey, number[]>();
+  for (const [k, v] of snap.vectors.entries()) vectors.set(k, [...v]);
+
+  let fileCount = snap.fileCount;
+
+  for (const rel of relPaths) {
+    if (isIgnored(rel)) continue;
+    const oldSyms = byFile.get(rel);
+    if (oldSyms) {
+      /* 清除 byName 中属于本文件的条目 */
+      for (const s of oldSyms) {
+        const dk = defKeyOf(s.file, s.name, s.line);
+        vectors.delete(dk);
+        callGraphOut.delete(dk);
+        const arr = byName.get(s.name);
+        if (arr) {
+          const filtered = arr.filter((x) => !(x.file === rel && x.line === s.line));
+          if (filtered.length === 0) byName.delete(s.name);
+          else byName.set(s.name, filtered);
+        }
+      }
+      byFile.delete(rel);
+      fileCount = Math.max(0, fileCount - 1);
+    }
+
+    /* 文件是否还存在？不存在就只做清理 */
+    const abs = join(snap.rootDir, rel);
+    let exists = false;
+    try {
+      exists = await Bun.file(abs).exists();
+    } catch {
+      exists = false;
+    }
+    if (!exists) continue;
+
+    const { symbols, calleesMap } = await scanFile(abs, rel);
+    if (symbols.length === 0) continue;
+    fileCount++;
+    byFile.set(rel, symbols);
+    for (const s of symbols) {
+      const arr = byName.get(s.name) ?? [];
+      arr.push(s);
+      byName.set(s.name, arr);
+      vectors.set(defKeyOf(s.file, s.name, s.line), generateEmbedding(embeddingInputOf(s)));
+    }
+    for (const [k, v] of calleesMap.entries()) callGraphOut.set(k, v);
+  }
+
+  return freezeSnapshot(snap.rootDir, byName, byFile, callGraphOut, vectors, fileCount);
 }
 
 /** 获取当前 rootDir 的 snapshot；必要时构建 */
@@ -198,7 +424,16 @@ async function getSnapshot(rootDir: string): Promise<IndexSnapshot> {
   if (cached) return cached;
   const snap = await buildIndex(rootDir);
   cache.set(rootDir, snap);
+  /* 首次构建后落盘向量 */
+  persistVectors(snap);
   return snap;
+}
+
+/** 归一化输入 path：绝对路径 → 相对 rootDir；相对路径保持不变 */
+function toRelPath(rootDir: string, path: string): string {
+  if (!path) return path;
+  if (path.startsWith("/")) return relative(rootDir, path);
+  return path;
 }
 
 /* ========== llm_methods 实现 ========== */
@@ -236,10 +471,8 @@ async function findReferencesImpl(
   if (!symbol || typeof symbol !== "string") return toolErr("symbol 必填");
 
   try {
-    // 先确保索引存在（复用已扫描文件列表，避免重复 glob）
     const snap = await getSnapshot(rootDir);
     const refs: ReferenceEntry[] = [];
-    // 用单词边界正则查 symbol
     const re = new RegExp(`\\b${symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
 
     for (const [relPath] of snap.byFile.entries()) {
@@ -255,7 +488,7 @@ async function findReferencesImpl(
           }
         }
       } catch {
-        // 跳过读不到的文件
+        /* 跳过读不到的文件 */
       }
     }
     return toolOk(refs);
@@ -274,7 +507,7 @@ async function listSymbolsImpl(
 
   try {
     const snap = await getSnapshot(rootDir);
-    const target = path.startsWith("/") ? relative(rootDir, path) : path;
+    const target = toRelPath(rootDir, path);
     const collected: SymbolEntry[] = [];
     for (const [relPath, syms] of snap.byFile.entries()) {
       if (relPath === target || relPath.startsWith(target.endsWith("/") ? target : target + "/")) {
@@ -289,6 +522,16 @@ async function listSymbolsImpl(
   }
 }
 
+/**
+ * call_hierarchy：
+ *   - callers：谁调用了 symbol（find_references 基础上排除定义行）
+ *   - callees：symbol 的 function body 里调用了谁（AST 获得；需 tree-sitter 支持）
+ *
+ * callees 返回的 ReferenceEntry：
+ *   - file = 调用方所在文件
+ *   - line = 调用方定义起始行
+ *   - content = 被调用的符号名
+ */
 async function callHierarchyImpl(
   ctx: { rootDir?: string },
   {
@@ -296,54 +539,84 @@ async function callHierarchyImpl(
     direction = "callers",
   }: { symbol: string; direction?: "callers" | "callees" },
 ): Promise<ToolResult<ReferenceEntry[]>> {
-  // MVP：callers 等价于 find_references 过滤掉定义行；callees 暂不支持
-  if (direction === "callees") {
-    return toolErr("call_hierarchy callees 方向尚未实现（MVP 只支持 callers）");
-  }
   const rootDir = ctx.rootDir ?? "";
   if (!rootDir) return toolErr("rootDir 未设置");
 
+  const snap = await getSnapshot(rootDir);
+
+  if (direction === "callees") {
+    /* 找到所有与该 symbol 同名的定义，合并 callees 返回 */
+    const defs = snap.byName.get(symbol) ?? [];
+    if (defs.length === 0) return toolOk([]);
+    const out: ReferenceEntry[] = [];
+    for (const d of defs) {
+      const dk = defKeyOf(d.file, d.name, d.line);
+      const callees = snap.callGraphOut.get(dk);
+      if (!callees) continue;
+      for (const callee of callees) {
+        out.push({ file: d.file, line: d.line, content: callee });
+      }
+    }
+    return toolOk(out);
+  }
+
+  /* callers */
   const refsRes = await findReferencesImpl(ctx, { symbol });
   if (!refsRes.ok) return refsRes;
-
-  // 过滤掉"定义行"
-  const snap = await getSnapshot(rootDir);
   const defLines = new Set<string>();
-  for (const s of snap.byName.get(symbol) ?? []) {
-    defLines.add(`${s.file}:${s.line}`);
-  }
+  for (const s of snap.byName.get(symbol) ?? []) defLines.add(`${s.file}:${s.line}`);
   const callers = refsRes.data.filter((r) => !defLines.has(`${r.file}:${r.line}`));
   return toolOk(callers);
 }
 
+/**
+ * semantic_search：对查询文本计算 embedding，cosineSimilarity 排序 topK
+ *
+ * 为保持与 v1 兼容：若 snapshot 的 vectors 为空（理论上新实现下不会；兜底逻辑），
+ * 回退到 v1 的 token 相似度（保证上游不报错）。
+ */
 async function semanticSearchImpl(
   ctx: { rootDir?: string },
   { query, topK = 10 }: { query: string; topK?: number },
 ): Promise<ToolResult<Array<SymbolEntry & { score: number }>>> {
-  // MVP：简易相似度 = query 中 token 在 symbol name 出现次数 + 子串加权
   const rootDir = ctx.rootDir ?? "";
   if (!rootDir) return toolErr("rootDir 未设置");
   if (!query || typeof query !== "string") return toolErr("query 必填");
 
   try {
     const snap = await getSnapshot(rootDir);
-    const tokens = query
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter((t) => t.length > 0);
-    const scored: Array<SymbolEntry & { score: number }> = [];
 
-    for (const [name, entries] of snap.byName.entries()) {
-      const lname = name.toLowerCase();
-      let score = 0;
-      for (const t of tokens) {
-        if (lname === t) score += 5;
-        else if (lname.includes(t)) score += 2;
+    if (snap.vectors.size === 0) {
+      /* fallback：v1 token 相似度 */
+      const tokens = query.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length > 0);
+      const scored: Array<SymbolEntry & { score: number }> = [];
+      for (const [name, entries] of snap.byName.entries()) {
+        const lname = name.toLowerCase();
+        let score = 0;
+        for (const t of tokens) {
+          if (lname === t) score += 5;
+          else if (lname.includes(t)) score += 2;
+        }
+        if (score === 0) continue;
+        for (const e of entries) scored.push({ ...e, score });
       }
-      if (score === 0) continue;
-      for (const e of entries) scored.push({ ...e, score });
+      scored.sort((a, b) => b.score - a.score);
+      return toolOk(scored.slice(0, topK));
     }
 
+    /* 真向量路径 */
+    const qvec = generateEmbedding(query);
+    const scored: Array<SymbolEntry & { score: number }> = [];
+    for (const [, entries] of snap.byName.entries()) {
+      for (const e of entries) {
+        const dk = defKeyOf(e.file, e.name, e.line);
+        const vec = snap.vectors.get(dk);
+        if (!vec) continue;
+        const sim = cosineSimilarity(qvec, [...vec]);
+        if (sim <= 0) continue;
+        scored.push({ ...e, score: sim });
+      }
+    }
     scored.sort((a, b) => b.score - a.score);
     return toolOk(scored.slice(0, topK));
   } catch (err: any) {
@@ -351,21 +624,52 @@ async function semanticSearchImpl(
   }
 }
 
+/**
+ * index_refresh：
+ *   - 不传 paths → 整库重建（清空缓存 + 重扫）
+ *   - 传 paths → 增量：只重扫这些文件（删/改/新增都支持）
+ */
 async function indexRefreshImpl(
   ctx: { rootDir?: string },
-  _args: { paths?: string[] } = {},
-): Promise<ToolResult<{ fileCount: number; symbolCount: number; builtAt: number }>> {
+  { paths }: { paths?: string[] } = {},
+): Promise<ToolResult<{ fileCount: number; symbolCount: number; builtAt: number; incremental: boolean; touched: number }>> {
   const rootDir = ctx.rootDir ?? "";
   if (!rootDir) return toolErr("rootDir 未设置");
 
   try {
-    // MVP：整库重建（增量可留给后续）
+    if (paths && paths.length > 0) {
+      /* 增量路径 */
+      const rels = paths.map((p) => toRelPath(rootDir, p));
+      const cached = cache.get(rootDir);
+      const base = cached ?? (await buildIndex(rootDir));
+      const next = await applyIncremental(base, rels);
+      cache.set(rootDir, next);
+      persistVectors(next);
+      let symbolCount = 0;
+      for (const arr of next.byFile.values()) symbolCount += arr.length;
+      return toolOk({
+        fileCount: next.fileCount,
+        symbolCount,
+        builtAt: next.builtAt,
+        incremental: true,
+        touched: rels.length,
+      });
+    }
+
+    /* 全量重建 */
     cache.delete(rootDir);
     const snap = await buildIndex(rootDir);
     cache.set(rootDir, snap);
+    persistVectors(snap);
     let symbolCount = 0;
     for (const arr of snap.byFile.values()) symbolCount += arr.length;
-    return toolOk({ fileCount: snap.fileCount, symbolCount, builtAt: snap.builtAt });
+    return toolOk({
+      fileCount: snap.fileCount,
+      symbolCount,
+      builtAt: snap.builtAt,
+      incremental: false,
+      touched: snap.fileCount,
+    });
   } catch (err: any) {
     return toolErr(`index_refresh 失败: ${err?.message ?? String(err)}`);
   }
@@ -398,11 +702,11 @@ export const __resetCache = () => cache.clear();
 export const llm_methods: Record<string, TraitMethod> = {
   symbol_lookup: {
     name: "symbol_lookup",
-    description: "按名精确查找代码符号的定义位置",
+    description: "按名精确查找代码符号的定义位置（tree-sitter AST + 正则 fallback）",
     params: [
       { name: "query", type: "string", description: "符号名", required: true },
       { name: "kind", type: "string", description: "function|class|interface|type|const", required: false },
-      { name: "lang", type: "string", description: "ts|tsx|js|jsx", required: false },
+      { name: "lang", type: "string", description: "ts|tsx|js|jsx|py|go|rs", required: false },
     ],
     fn: symbolLookupImpl as TraitMethod["fn"],
   },
@@ -427,7 +731,7 @@ export const llm_methods: Record<string, TraitMethod> = {
   },
   call_hierarchy: {
     name: "call_hierarchy",
-    description: "调用链分析（MVP 只支持 callers 方向）",
+    description: "调用链分析（v2：支持 callers + callees 双向）",
     params: [
       { name: "symbol", type: "string", description: "符号名", required: true },
       { name: "direction", type: "string", description: "callers|callees", required: false },
@@ -436,7 +740,7 @@ export const llm_methods: Record<string, TraitMethod> = {
   },
   semantic_search: {
     name: "semantic_search",
-    description: "语义搜索（MVP 版 token 相似度）",
+    description: "语义搜索（v2：向量余弦相似度，基于 name+signature+docstring）",
     params: [
       { name: "query", type: "string", description: "查询文本", required: true },
       { name: "topK", type: "number", description: "返回数量（默认 10）", required: false },
@@ -445,9 +749,9 @@ export const llm_methods: Record<string, TraitMethod> = {
   },
   index_refresh: {
     name: "index_refresh",
-    description: "重建代码索引",
+    description: "重建代码索引（v2：传 paths 则增量，否则全量）",
     params: [
-      { name: "paths", type: "string[]", description: "可选增量路径（MVP 忽略，整库重建）", required: false },
+      { name: "paths", type: "string[]", description: "可选：增量刷新的文件相对路径（传入后只重扫这些文件）", required: false },
     ],
     fn: indexRefreshImpl as TraitMethod["fn"],
   },

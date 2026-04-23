@@ -231,9 +231,24 @@ describe("call_hierarchy", () => {
     expect(defRef).toBeUndefined();
   });
 
-  test("callees 未实现返回错误", async () => {
+  test("callees 方向（v2：AST 提取 fetchUser 无 body 内调用则返回空）", async () => {
+    /* v1 MVP 时未实现此方向会返回 ok=false；v2 使用 tree-sitter AST，
+       fetchUser 函数体里除对象字面量 { id, name } 外没有 call expression，
+       故 callees 应为空数组。 */
     const r = await call_hierarchy(ctx, "fetchUser", "callees");
-    expect(r.ok).toBe(false);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(Array.isArray(r.data)).toBe(true);
+  });
+
+  test("callees 方向返回 UserService.get 内部调用 fetchUser", async () => {
+    /* UserService.get 方法里有 return fetchUser(id)；
+       v2 callees 聚合 class 维度的 AST 调用应能发现 fetchUser。 */
+    const r = await call_hierarchy(ctx, "UserService", "callees");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const callees = r.data.map((x) => x.content);
+    expect(callees).toContain("fetchUser");
   });
 });
 

@@ -429,6 +429,45 @@ export const jsonSyntaxHook: BuildHook = {
 };
 
 /**
+ * Code Index 增量刷新 hook —— 写/改文件后触发 `code_index.index_refresh({ paths })`
+ *
+ * 设计：
+ * - 只匹配 tree-sitter 支持的语言扩展（ts/tsx/js/jsx/mjs/cjs/py/go/rs）
+ * - 调 index_refresh 增量版本，只重扫本路径（全量避免）
+ * - success 始终为 true（索引更新失败只告警，不阻塞 LLM 的下一轮；feedback
+ *   不向 LLM 展示，避免制造噪声——真正的"build 错误"由 tsc/eslint 专职 hook 负责）
+ * - 默认不注册；打开 `OOC_CODE_INDEX_HOOK=1` 才启用
+ *
+ * @ref docs/工程管理/迭代/all/20260422_feature_code_index_v2.md — Phase 3
+ */
+export const codeIndexRefreshHook: BuildHook = {
+  name: "code-index-refresh",
+  match: (p) => /\.(tsx?|jsx?|mjs|cjs|py|go|rs)$/.test(p),
+  run: async (path, ctx) => {
+    const start = Date.now();
+    try {
+      /* 动态 import 避免 hooks 模块对 trait 产生静态依赖 */
+      const mod: any = await import("../../traits/computable/code_index/index.js");
+      const res = await mod.index_refresh({ rootDir: ctx.rootDir }, [path]);
+      const ok = res?.ok === true;
+      return {
+        success: true, /* 始终视为"非阻塞" */
+        output: ok
+          ? `code_index 已增量刷新: ${path} (touched=${res.data?.touched ?? 1})`
+          : `code_index 刷新失败（已忽略）: ${res?.error ?? "unknown"}`,
+        durationMs: Date.now() - start,
+      };
+    } catch (err: any) {
+      return {
+        success: true,
+        output: `code_index 刷新异常（已忽略）: ${err?.message ?? err}`,
+        durationMs: Date.now() - start,
+      };
+    }
+  },
+};
+
+/**
  * 注册默认 hook 集合（world 启动时调用）
  *
  * 开关：
@@ -436,6 +475,7 @@ export const jsonSyntaxHook: BuildHook = {
  * - `OOC_BUILD_HOOKS_TSC=1` 启用 tsc-check（冷启动 >5s，默认关）
  * - `OOC_BUILD_HOOKS_PRETTIER=1` 启用 prettier-format（默认关，autofix 风险）
  * - `OOC_BUILD_HOOKS_ESLINT=1` 启用 eslint-check（默认关）
+ * - `OOC_CODE_INDEX_HOOK=1` 启用 code_index 增量刷新（默认关；开启后写文件自动 index_refresh）
  *
  * 默认只注册 json-syntax（轻量、零风险）。
  */
@@ -450,5 +490,8 @@ export function registerDefaultHooks(): void {
   }
   if (process.env.OOC_BUILD_HOOKS_ESLINT === "1") {
     registerBuildHook(eslintCheckHook);
+  }
+  if (process.env.OOC_CODE_INDEX_HOOK === "1") {
+    registerBuildHook(codeIndexRefreshHook);
   }
 }

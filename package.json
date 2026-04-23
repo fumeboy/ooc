@@ -14,7 +14,12 @@
   "dependencies": {
     "consola": "^3.4.0",
     "gray-matter": "^4.0.3",
-    "smol-toml": "^1.6.1"
+    "smol-toml": "^1.6.1",
+    "tree-sitter-go": "^0.25.0",
+    "tree-sitter-python": "^0.25.0",
+    "tree-sitter-rust": "^0.24.0",
+    "tree-sitter-typescript": "^0.23.2",
+    "web-tree-sitter": "^0.26.8"
   },
   "devDependencies": {
     "@types/bun": "^1.2.0",

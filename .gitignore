@@ -8,3 +8,6 @@ web/dist/
 
 # TypeScript incremental build cache
 *.tsbuildinfo
+
+# code_index 向量缓存（首次构建落盘，运行时自动重建）
+.ooc/
