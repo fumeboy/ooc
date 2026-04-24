@@ -7,7 +7,7 @@
  * @ref ooc://file/stones/sophia/files/哲学文档/gene.md#G11 — implements — 前端整体布局
  */
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { useAtom, useSetAtom, useAtomValue } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import { objectsAtom } from "./store/objects";
 import {
   activeTabAtom,
@@ -150,7 +150,7 @@ export function App() {
   const isMobile = useIsMobile();
   useHashRouter();
   const [sessions, setSessions] = useAtom(userSessionsAtom);
-  const sidebarMode = useAtomValue(messageSidebarModeAtom);
+  const [sidebarMode, setSidebarMode] = useAtom(messageSidebarModeAtom);
 
   /* sessionId → session title 的 lookup（面包屑用） */
   const sessionTitleMap = useMemo(() => {
@@ -203,6 +203,17 @@ export function App() {
       fetchProjectTree().then(setSidebarTree).catch(console.error);
     }
   }, [activeTab, setSidebarTree]);
+
+  /* Codex-like 对话优先：session 首页默认让 MessageSidebar 占满主区；
+   * 当用户打开对象 / thread 详情 / 文件 / view 等具体路径时，自动展开中央主内容区。 */
+  useEffect(() => {
+    if (isMobile || activeTab !== "flows" || !activeId || !activePath) return;
+    if (activePath === `flows/${activeId}`) {
+      setSidebarMode("main");
+      return;
+    }
+    setSidebarMode("sidebar");
+  }, [activePath, activeTab, activeId, isMobile, setSidebarMode]);
 
   /* Session title */
   const sessionTitle = activeFlow?.title
