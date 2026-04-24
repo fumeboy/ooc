@@ -15,10 +15,6 @@ describe("deriveCommandPath — 根层级", () => {
     expect(deriveCommandPath("nope", {})).toBe("");
   });
 
-  test("return 无 _match 停在根", () => {
-    expect(deriveCommandPath("return", { summary: "done" })).toBe("return");
-  });
-
   test("program 无 language 时停在 program", () => {
     expect(deriveCommandPath("program", {})).toBe("program");
   });
@@ -33,6 +29,12 @@ describe("deriveCommandPath — 根层级", () => {
 });
 
 describe("deriveCommandPath — talk 三层", () => {
+  test("talk + target=this_thread_creator → talk.this_thread_creator", () => {
+    expect(
+      deriveCommandPath("talk", { target: "this_thread_creator", context: "continue" }),
+    ).toBe("talk.this_thread_creator");
+  });
+
   test("talk 无 context → 停在 talk", () => {
     expect(deriveCommandPath("talk", {})).toBe("talk");
   });
@@ -111,9 +113,10 @@ describe("deriveCommandPath — submit 多子", () => {
 describe("COMMAND_TREE — 结构性检查", () => {
   test("顶层必须包含 spec 要求的 command", () => {
     const keys = Object.keys(COMMAND_TREE);
-    for (const c of ["talk", "open", "program", "submit", "return"]) {
+    for (const c of ["talk", "open", "program", "submit"]) {
       expect(keys).toContain(c);
     }
+    expect(keys).not.toContain("return");
   });
 
   test("talk.continue 下必须包含 relation_update / question_form", () => {

@@ -12,7 +12,8 @@
  *
  * 过滤：
  * - 自己（self）：关系归属本对象，不与自己建关系
- * - "user" / "system" / "super"：系统通道、反思分身，非对象级 peer
+ * - "system" / "super"：系统通道、反思分身，非对象级 peer
+ * - "user" 保留：user 也可通过 stones/user/relations/self.md 声明别人和自己沟通的偏好
  * - 非字符串值：静默忽略（防御 LLM 乱填）
  *
  * 归一：
@@ -24,7 +25,7 @@
 import type { ThreadDataFile } from "./types.js";
 
 /** 系统通道保留字——不参与 peer / relation 记账 */
-const RESERVED_NAMES = new Set(["user", "system", "super"]);
+const RESERVED_NAMES = new Set(["system", "super"]);
 
 /**
  * 扫描当前线程涉及的 peer 对象名

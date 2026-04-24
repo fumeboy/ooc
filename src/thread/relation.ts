@@ -37,6 +37,8 @@ import matter from "gray-matter";
 
 /** 一条 peer 索引行的结构化描述 */
 export interface PeerRelationEntry {
+  /** 条目来源：当前对象看 peer，或 peer 自己声明的沟通指南 */
+  kind: "peer" | "target_self";
   /** peer 对象名（显示在 <peer name="..."> 的属性中） */
   name: string;
   /** 索引行显示文案（降级链决定） */
@@ -94,7 +96,7 @@ export function readPeerRelation(
 ): PeerRelationEntry {
   const path = locateRelationFile(peer, ctx);
   if (!path || !existsSync(path)) {
-    return { name: peer, summary: "(无关系记录)", hasFile: false };
+    return { kind: "peer", name: peer, summary: "(无关系记录)", hasFile: false };
   }
   try {
     const raw = readFileSync(path, "utf-8");
@@ -104,7 +106,7 @@ export function readPeerRelation(
 
     /* 1) frontmatter.summary */
     if (typeof fm.summary === "string" && fm.summary.trim()) {
-      return { name: peer, summary: fm.summary.trim(), hasFile: true };
+      return { kind: "peer", name: peer, summary: fm.summary.trim(), hasFile: true };
     }
 
     /* 2) 正文首行非空文本（剥 markdown heading 的 #） */
@@ -112,14 +114,14 @@ export function readPeerRelation(
       const firstLine = body.split(/\r?\n/).find((l) => l.trim().length > 0);
       if (firstLine) {
         const cleaned = firstLine.replace(/^#+\s*/, "").trim();
-        if (cleaned) return { name: peer, summary: cleaned, hasFile: true };
+        if (cleaned) return { kind: "peer", name: peer, summary: cleaned, hasFile: true };
       }
     }
 
     /* 3) 文件名 fallback */
-    return { name: peer, summary: `${peer}.md`, hasFile: true };
+    return { kind: "peer", name: peer, summary: `${peer}.md`, hasFile: true };
   } catch {
-    return { name: peer, summary: "(读取失败)", hasFile: true };
+    return { kind: "peer", name: peer, summary: "(读取失败)", hasFile: true };
   }
 }
 
@@ -131,6 +133,39 @@ export function readPeerRelations(
   ctx: RelationLocateContext,
 ): PeerRelationEntry[] {
   return peers.map((p) => readPeerRelation(p, ctx));
+}
+
+/**
+ * 读取当前对象与 peers 的关系，并追加 peer 自己声明的沟通指南。
+ *
+ * 对于 A 的 context：
+ * - A/relations/B.md → kind="peer"，表示 A 视角下的 B
+ * - B/relations/self.md → kind="target_self"，表示 B 要求别人如何和自己 talk
+ *
+ * 缺失的 A/relations/B.md 仍显示 "(无关系记录)"，帮助对象意识到关系未登记；
+ * 缺失的 B/relations/self.md 不生成空记录，避免每个 peer 都多一行噪声。
+ */
+export function readRelationsForPeers(
+  peers: string[],
+  ctx: RelationLocateContext,
+): PeerRelationEntry[] {
+  const entries: PeerRelationEntry[] = [];
+  for (const peer of peers) {
+    entries.push(readPeerRelation(peer, ctx));
+
+    const targetSelf = readPeerRelation("self", {
+      rootDir: ctx.rootDir,
+      selfName: peer,
+    });
+    if (targetSelf.hasFile) {
+      entries.push({
+        ...targetSelf,
+        kind: "target_self",
+        name: peer,
+      });
+    }
+  }
+  return entries;
 }
 
 /**
@@ -169,7 +204,8 @@ export function renderRelationsIndexInner(
   const entries = readPeerRelations(peers, ctx);
   const lines: string[] = [];
   for (const e of entries) {
-    lines.push(`  <peer name="${escapeAttr(e.name)}">${escapeText(e.summary)}</peer>`);
+    const tag = e.kind === "target_self" ? "target_self" : "peer";
+    lines.push(`  <${tag} name="${escapeAttr(e.name)}">${escapeText(e.summary)}</${tag}>`);
   }
   return lines.join("\n");
 }

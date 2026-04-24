@@ -441,7 +441,7 @@ async function multiPerspectiveReviewImpl(
   const recipes = buildMultiPerspectiveRecipes(personas);
   const mergeHint =
     "对每个 persona，通过 [create_sub_thread] fork 子线程并注入对应 biasPrompt（via open(type='trait', path=...) 或直接 talk）。" +
-    "子线程 return 时带 findings[]，主线程收集后去重/合并为最终 review。" +
+    "子线程通过 talk(target=\"this_thread_creator\", context=\"continue\") 交付 findings[]，主线程收集后去重/合并为最终 review。" +
     "合并策略：同 path:line 且同 severity 的视为重复，保留视角标签集合。";
   return toolOk({ recipes, mergeHint });
 }

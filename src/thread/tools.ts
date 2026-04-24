@@ -102,7 +102,7 @@ export const OPEN_TOOL: ToolDefinition = {
         },
         command: {
           type: "string",
-          enum: ["program", "think", "talk", "talk_sync", "return", "call_function", "set_plan", "await", "await_all", "defer", "compact"],
+          enum: ["program", "think", "talk", "talk_sync", "call_function", "set_plan", "await", "await_all", "defer", "compact"],
           description: "指令名称（type=command 时必填）。compact 进入上下文压缩模式——列出/截断/丢弃冗余 actions，最后 submit compact {summary} 一次性完成压缩。",
         },
         name: {
@@ -171,13 +171,14 @@ export const SUBMIT_TOOL: ToolDefinition = {
         threadId: { type: "string", description: "think/talk: 目标线程 ID。context=continue 时必填；context=fork 时可选——省略时，think 默认 fork 当前线程，talk 默认 fork 对方新根线程。" },
         context: { type: "string", enum: ["fork", "continue"], description: "think/talk: 操作模式。fork=派生新线程（对原线程 readonly，适合查资料/拆分子任务）；continue=直接向原线程投递消息（会产生影响，适合补充信息/触发决策）。" },
         /* talk 额外参数 */
-        target: { type: "string", description: "talk: 目标对象名。特殊保留字 \"super\" 指向当前对象的反思镜像分身（不是 supervisor）。" },
+        target: { type: "string", description: "talk: 目标对象名。特殊保留字 \"super\" 指向当前对象的反思镜像分身（不是 supervisor）；\"this_thread_creator\" 指向当前线程创建者，只能 context=continue，不能 fork。" },
+        wait: { type: "boolean", description: "think/talk: true 表示本次 submit 执行后自动把当前线程切换到 waiting 状态，等待后续消息或外部唤醒。" },
         /* Phase 6：talk(continue) 的消息类型标签 */
         type: { type: "string", description: "talk(continue) 子类型。当前识别：'relation_update' —— 请对方在 relations/{我}.md 里登记某内容；接收方的 inbox 会显示 <relation_update_request> 徽章，由其自主决定接受 / 拒绝（engine 不自动写入）。其他值不影响行为。" },
         /* talk: 可选结构化表单（选项 + 自由文本兜底） */
         form: FORM_PARAM,
-        /* return / compact */
-        summary: { type: "string", description: "return: 完成摘要 / compact: 浓缩历史的摘要纯文本（会作为 compact_summary action 注入历史首条）" },
+        /* compact */
+        summary: { type: "string", description: "compact: 浓缩历史的摘要纯文本（会作为 compact_summary action 注入历史首条）" },
         /* set_plan */
         text: { type: "string", description: "set_plan: 计划内容" },
         /* await */
@@ -188,7 +189,7 @@ export const SUBMIT_TOOL: ToolDefinition = {
         /* think 额外参数 */
         traits: { type: "array", items: { type: "string" }, description: "think(fork): 新子线程的 trait 列表" },
         /* defer */
-        on_command: { type: "string", description: "defer: 目标 command 名（如 return, talk, program）" },
+        on_command: { type: "string", description: "defer: 目标 command 名（如 talk, program）" },
         content: { type: "string", description: "defer: 提醒文本" },
         once: { type: "boolean", description: "defer: 是否只触发一次（默认 true）" },
         mark: MARK_PARAM,

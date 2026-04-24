@@ -11,8 +11,10 @@ import {
   locateRelationFile,
   readPeerRelation,
   readPeerRelations,
+  readRelationsForPeers,
   renderRelationsIndex,
 } from "../src/thread/relation.js";
+import { scanPeers } from "../src/thread/peers.js";
 
 const TMP_ROOT = "/tmp/ooc-relation-test";
 
@@ -161,5 +163,51 @@ describe("readPeerRelations — 批量", () => {
     const r = readPeerRelations(["b", "a"], { rootDir: TMP_ROOT, selfName: "alice" });
     expect(r.map((e) => e.name)).toEqual(["b", "a"]);
     expect(r.map((e) => e.summary)).toEqual(["S_B", "S_A"]);
+  });
+});
+
+describe("readRelationsForPeers — target self 指南", () => {
+  test("同时读取 self/relations/peer.md 与 peer/relations/self.md", () => {
+    writeRelationFile("alice", "bob", `---\nsummary: Alice 视角里的 Bob\n---`);
+    writeRelationFile("bob", "self", `---\nsummary: 和 Bob 说话请先给结论\n---`);
+
+    const entries = readRelationsForPeers(["bob"], {
+      rootDir: TMP_ROOT,
+      selfName: "alice",
+    });
+
+    expect(entries.map(e => [e.kind, e.name, e.summary])).toEqual([
+      ["peer", "bob", "Alice 视角里的 Bob"],
+      ["target_self", "bob", "和 Bob 说话请先给结论"],
+    ]);
+  });
+
+  test("缺失 peer/relations/self.md 时不额外生成 target_self 空记录", () => {
+    writeRelationFile("alice", "bob", `---\nsummary: Alice 视角里的 Bob\n---`);
+
+    const entries = readRelationsForPeers(["bob"], {
+      rootDir: TMP_ROOT,
+      selfName: "alice",
+    });
+
+    expect(entries.map(e => e.kind)).toEqual(["peer"]);
+  });
+});
+
+describe("scanPeers — user 也参与 relation target", () => {
+  test("tool_use target=user 不再被过滤", () => {
+    const peers = scanPeers({
+      id: "t1",
+      actions: [
+        {
+          type: "tool_use",
+          name: "submit",
+          args: { target: "user" },
+          timestamp: 1,
+        },
+      ],
+    } as any, "alice");
+
+    expect(peers).toEqual(["user"]);
   });
 });

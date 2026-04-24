@@ -333,7 +333,12 @@ function formatOpenFileContent(
 }
 
 function formatLatestLlmInput(messages: Message[]): string {
-  return messages.map(m => `<${m.role}>\n${m.content}\n</${m.role}>`).join("\n\n");
+  return messages.map(m => {
+    const content = m.content.trim();
+    const roleRoot = new RegExp(`^<${m.role}(?:\\s[^>]*)?>[\\s\\S]*</${m.role}>$`);
+    if (roleRoot.test(content)) return content;
+    return `<${m.role}>\n${m.content}\n</${m.role}>`;
+  }).join("\n\n");
 }
 
 function writeLatestLlmInput(threadDir: string, messages: Message[]): void {
@@ -505,6 +510,8 @@ export interface ActiveFormView {
   trait?: string;
 }
 
+const THIS_THREAD_CREATOR = "this_thread_creator";
+
 export function contextToMessages(
   ctx: ReturnType<typeof buildThreadContext>,
   deferHooks?: import("./types.js").ThreadFrameHook[],
@@ -573,13 +580,13 @@ export function contextToMessages(
     userChildren.push({
       tag: "creator",
       attrs: { mode: "root" },
-      content: "你是根线程，由用户(user)发起。完成任务后必须用 [return] 返回最终结果。[talk] 只用于向其他对象发消息，不会结束线程。",
+      content: "你是根线程，由用户(user)发起。this_thread_creator 当前解析为 user。需要回复或交付给创建者时，用 talk(target=\"this_thread_creator\", context=\"continue\", msg=\"...\")；如果需要等待用户继续输入，在 submit talk/think 时传 wait=true。",
     });
   } else {
     userChildren.push({
       tag: "creator",
       attrs: { mode: ctx.creationMode, from: ctx.creator },
-      content: `你是子线程，由 ${ctx.creator} 创建（${ctx.creationMode}）。你的职责是完成 <task> 中描述的具体工作，然后用 [return] 返回结果给创建者。不要重复创建者的工作，专注于你被分配的任务。`,
+      content: `你是子线程，由 ${ctx.creator} 创建（${ctx.creationMode}）。this_thread_creator 当前解析为 ${ctx.creator} 的创建线程。完成阶段性或最终结果时，用 talk(target="this_thread_creator", context="continue", msg="...") 交还给创建者；this_thread_creator 禁止 context="fork"。不要重复创建者的工作，专注于你被分配的任务。`,
     });
   }
 
@@ -704,7 +711,7 @@ export function contextToMessages(
       && !ctx.childrenSummary.includes("[pending]")
       && !ctx.childrenSummary.includes("[waiting]");
     const comments: string[] = ["子线程：当前线程创建的子线程状态摘要"];
-    if (allDone) comments.push("所有子线程已完成。请汇总子线程的结果，然后用 [return] 返回最终结果。");
+    if (allDone) comments.push('所有子线程已完成。请汇总子线程的结果，然后用 talk(target="this_thread_creator", context="continue") 交付最终结果。');
     userChildren.push({
       tag: "children",
       content: ctx.childrenSummary,
@@ -743,9 +750,9 @@ export function contextToMessages(
   if (ctx.relations && ctx.relations.length > 0) {
     userChildren.push({
       tag: "relations",
-      comment: "关系索引：本线程已涉及的对象的关系摘要（一行）；需全文用 open(path=\"@relation:<peer>\")",
+      comment: "关系索引：本线程已涉及的对象关系摘要；<peer> 是我看对方，<target_self> 是对方声明的沟通指南；需全文用 open(path=\"@relation:<peer>\") 或查看对方 relations/self.md",
       children: ctx.relations.map(r => ({
-        tag: "peer",
+        tag: r.kind === "target_self" ? "target_self" : "peer",
         attrs: { name: r.name },
         content: r.summary,
       })),
@@ -1712,37 +1719,40 @@ export async function runWithThreadTree(
              * - continue + threadId：向对方 threadId 投递消息，唤醒对方（新能力）
              * - continue + 无 threadId：schema/engine 校验报错
              */
-            else if ((command === "talk" || command === "talk_sync") && config.onTalk) {
-              const target = (args.target as string)?.toLowerCase();
-              if (target && target !== objectName.toLowerCase()) {
+            else if (command === "talk" || command === "talk_sync") {
+              const rawTarget = args.target as string | undefined;
+              if (rawTarget) {
                 /* 解析 context + threadId + msg（兼容 msg 与旧 message 参数） */
                 const ctxMode = (args.context as string | undefined) === "continue" ? "continue" : "fork";
                 const remoteThreadIdArg = args.threadId as string | undefined;
                 const msgContent = (args.msg as string | undefined) ?? (args.message as string | undefined) ?? "";
-                /* continue 必须指定 threadId */
-                if (ctxMode === "continue" && !remoteThreadIdArg) {
+                const resolved = resolveTalkTarget(tree, threadId, objectName, rawTarget, ctxMode, remoteThreadIdArg);
+                /* continue 必须指定 threadId，this_thread_creator 除外（由 engine 解析） */
+                if (!resolved.ok) {
+                  const td = tree.readThreadData(threadId);
+                  if (td) {
+                    td.actions.push({ type: "inject", content: `[错误] ${resolved.error}`, timestamp: Date.now() });
+                    tree.writeThreadData(threadId, td);
+                  }
+                } else if (ctxMode === "continue" && !resolved.continueThreadId && rawTarget.toLowerCase() !== THIS_THREAD_CREATOR && resolved.target.toLowerCase() !== "user") {
                   const td = tree.readThreadData(threadId);
                   if (td) {
                     td.actions.push({ type: "inject", content: `[错误] talk(context="continue") 必须同时指定 threadId 参数`, timestamp: Date.now() });
                     tree.writeThreadData(threadId, td);
                   }
                 } else {
-                  /* fork 模式下 threadId 作为 forkUnderThreadId（对方线程下 fork）；
-                   * continue 模式下 threadId 作为 continueThreadId（向对方线程投递） */
-                  const forkUnderThreadId = ctxMode === "fork" ? remoteThreadIdArg : undefined;
-                  const continueThreadId = ctxMode === "continue" ? remoteThreadIdArg : undefined;
                   /* 先生成 messageId（供 action.id 和 onTalk 参数共用，前端凭此反查正文） */
                   const messageId = genMessageOutId();
                   /* 解析可选的结构化表单（talk form）——供前端渲染 option picker */
                   const formPayload = extractTalkForm(args.form);
                   const td = tree.readThreadData(threadId);
                   if (td) {
-                    const modeLabel = ` [${ctxMode}${remoteThreadIdArg ? `:${remoteThreadIdArg}` : ""}]`;
+                    const modeLabel = ` [${ctxMode}${resolved.continueThreadId ?? resolved.forkUnderThreadId ? `:${resolved.continueThreadId ?? resolved.forkUnderThreadId}` : ""}]`;
                     const formLabel = formPayload ? ` [form: ${formPayload.formId}]` : "";
                     td.actions.push({
                       id: messageId,
                       type: "message_out",
-                      content: `[talk] → ${args.target}: ${msgContent}${modeLabel}${formLabel}`,
+                      content: `[talk] → ${rawTarget}: ${msgContent}${modeLabel}${formLabel}`,
                       timestamp: Date.now(),
                       context: ctxMode,
                       ...(formPayload ? { form: formPayload } : {}),
@@ -1750,7 +1760,7 @@ export async function runWithThreadTree(
                     tree.writeThreadData(threadId, td);
                   }
                   /* talk_sync 到 user 是死锁：user 永远不会唤醒。记日志、不 setNodeStatus("waiting")、直接继续。 */
-                  const isTalkSyncToUser = command === "talk_sync" && target === "user";
+                  const isTalkSyncToUser = command === "talk_sync" && resolved.target.toLowerCase() === "user";
                   if (isTalkSyncToUser) {
                     consola.warn(`[Engine] ${objectName} 尝试 talk_sync(target="user")——user 不参与 ThinkLoop，不会回复。已降级为 talk（不阻塞）。`);
                   }
@@ -1762,21 +1772,31 @@ export async function runWithThreadTree(
                     ? "relation_update_request"
                     : undefined;
                   try {
-                    const { reply, remoteThreadId } = await config.onTalk(args.target as string, msgContent, objectName, threadId, sessionId, continueThreadId, messageId, forkUnderThreadId, messageKind);
+                    let reply: string | null = null;
+                    let remoteThreadId = resolved.continueThreadId ?? resolved.forkUnderThreadId ?? resolved.target;
+                    if (resolved.localThreadId) {
+                      tree.writeInbox(resolved.localThreadId, { from: objectName, content: msgContent, source: "talk", kind: messageKind });
+                    } else if (config.onTalk) {
+                      const talkResult = await config.onTalk(resolved.target, msgContent, objectName, threadId, sessionId, resolved.continueThreadId, messageId, resolved.forkUnderThreadId, messageKind);
+                      reply = talkResult.reply;
+                      remoteThreadId = talkResult.remoteThreadId;
+                    } else {
+                      throw new Error(`onTalk 未配置，无法发送到 ${resolved.target}`);
+                    }
                     if (!explicitlyMarked) {
                       const tdAck = tree.readThreadData(threadId);
-                      const autoAckId = getAutoAckMessageId(tdAck, args.target as string);
+                      const autoAckId = getAutoAckMessageId(tdAck, resolved.target);
                       if (autoAckId) {
                         tree.markInbox(threadId, autoAckId, "ack", "已回复");
                       }
                     }
                     if (reply) {
-                      tree.writeInbox(threadId, { from: args.target as string, content: `${reply}\n[remote_thread_id: ${remoteThreadId}]`, source: "talk" });
+                      tree.writeInbox(threadId, { from: resolved.target, content: `${reply}\n[remote_thread_id: ${remoteThreadId}]`, source: "talk" });
                     }
                     /* 将 remote_thread_id 记录到 actions（无论是否有 reply，LLM 都能看到） */
                     const td2 = tree.readThreadData(threadId);
                     if (td2) {
-                      td2.actions.push({ type: "inject", content: `[talk → ${args.target}] remote_thread_id = ${remoteThreadId}`, timestamp: Date.now() });
+                      td2.actions.push({ type: "inject", content: `[talk → ${rawTarget}] remote_thread_id = ${remoteThreadId}`, timestamp: Date.now() });
                       tree.writeThreadData(threadId, td2);
                     }
                   } catch (e) {
@@ -1784,19 +1804,9 @@ export async function runWithThreadTree(
                   }
                   /* target=user 时不 setNodeStatus("waiting")，避免死锁；其他 target 维持原逻辑 */
                   if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting");
+                  if (args.wait === true) await tree.setNodeStatus(threadId, "waiting");
                 }
               }
-            }
-
-            /* return */
-            else if (command === "return") {
-              await tree.returnThread(threadId, args.summary as string ?? "");
-              const td = tree.readThreadData(threadId);
-              if (td) {
-                td.actions.push({ type: "thread_return", content: args.summary as string ?? "", timestamp: Date.now() });
-                tree.writeThreadData(threadId, td);
-              }
-              consola.info(`[Engine] return: ${(args.summary as string)?.slice(0, 100)}`);
             }
 
             /* think — 对自己的线程操作（fork / continue 四模式的自身半边） */
@@ -1867,10 +1877,11 @@ export async function runWithThreadTree(
                     });
                     tree.writeThreadData(threadId, td);
                   }
-                  consola.info(`[Engine] think.continue: → ${targetThreadId}`);
-                }
-              }
-            }
+	                  consola.info(`[Engine] think.continue: → ${targetThreadId}`);
+	                }
+	              }
+	              if (args.wait === true) await tree.setNodeStatus(threadId, "waiting");
+	            }
 
             /* call_function
              *
@@ -2161,7 +2172,7 @@ export async function runWithThreadTree(
                * 历史 bug：LLM 陷入"打开 talk form → 读 inject → 关闭 → 再开"无限循环，
                * 单线程 iteration 限制内可跑上百轮 actions 无任何外部输出。
                * 策略：倒序扫最近 tool_use，若 close+open 各 ≥ OSCILLATION_THRESHOLD 且中间无 submit，
-               * 注入强烈警告，引导 LLM 用 wait/return 跳出循环。 */
+               * 注入强烈警告，引导 LLM 用 wait 或向创建者交付结果跳出循环。 */
               const OSCILLATION_THRESHOLD = 5;
               const recentTools = td.actions.filter(a => a.type === "tool_use");
               let closesInTail = 0, opensInTail = 0, hadSubmit = false;
@@ -2176,7 +2187,7 @@ export async function runWithThreadTree(
                 td.actions.push({
                   type: "inject",
                   content: `[⚠️ 震荡警告] 连续 open/close 超过 ${OSCILLATION_THRESHOLD} 次无 submit——你陷入了无效循环。` +
-                    `立即用 wait({reason:"..."}) 向用户报告当前状态并等待指示；或 return({summary:"..."}) 结束当前线程。` +
+                    `立即用 wait({reason:"..."}) 报告当前状态并等待指示；或 talk(target="this_thread_creator", context="continue", msg="...") 交付当前结果。` +
                     `**不要**再 open 新 form，你已在循环里。`,
                   timestamp: Date.now(),
                 });
@@ -2324,6 +2335,45 @@ function getAutoAckMessageId(
   if (latestFromTarget.id !== unreadFromTarget[0]!.id) return null;
 
   return unreadFromTarget[0]!.id;
+}
+
+type ResolvedTalkTarget =
+  | { ok: true; target: string; continueThreadId?: string; forkUnderThreadId?: string; localThreadId?: string }
+  | { ok: false; error: string };
+
+function resolveTalkTarget(
+  tree: ThreadsTree,
+  threadId: string,
+  objectName: string,
+  rawTarget: string,
+  ctxMode: "fork" | "continue",
+  remoteThreadIdArg?: string,
+): ResolvedTalkTarget {
+  const normalized = rawTarget.toLowerCase();
+  if (normalized !== THIS_THREAD_CREATOR) {
+    return {
+      ok: true,
+      target: rawTarget,
+      continueThreadId: ctxMode === "continue" ? remoteThreadIdArg : undefined,
+      forkUnderThreadId: ctxMode === "fork" ? remoteThreadIdArg : undefined,
+    };
+  }
+
+  if (ctxMode === "fork") {
+    return { ok: false, error: `talk(target="${THIS_THREAD_CREATOR}") 只能使用 context="continue"，不能 fork` };
+  }
+
+  const node = tree.getNode(threadId);
+  if (!node?.creatorThreadId) {
+    return { ok: true, target: "user" };
+  }
+
+  const creatorObject = node.creatorObjectName;
+  if (!creatorObject || creatorObject.toLowerCase() === objectName.toLowerCase()) {
+    return { ok: true, target: objectName, localThreadId: node.creatorThreadId, continueThreadId: node.creatorThreadId };
+  }
+
+  return { ok: true, target: creatorObject, continueThreadId: node.creatorThreadId };
 }
 
 /* ========== Resume / StepOnce ========== */
@@ -3019,36 +3069,38 @@ export async function resumeWithThreadTree(
                   }
                 }
               }
-            } else if ((command === "talk" || command === "talk_sync") && config.onTalk) {
+            } else if (command === "talk" || command === "talk_sync") {
               /* resume 路径的 talk：与 run 路径保持同一 schema 协议（think/talk 统一 context）。 */
-              const target = (args.target as string)?.toLowerCase();
-              if (target && target !== objectName.toLowerCase()) {
+              const rawTarget = args.target as string | undefined;
+              if (rawTarget) {
                 const ctxMode = (args.context as string | undefined) === "continue" ? "continue" : "fork";
                 const remoteThreadIdArg = args.threadId as string | undefined;
                 const msgContent = (args.msg as string | undefined) ?? (args.message as string | undefined) ?? "";
-                if (ctxMode === "continue" && !remoteThreadIdArg) {
+                const resolved = resolveTalkTarget(tree, threadId, objectName, rawTarget, ctxMode, remoteThreadIdArg);
+                if (!resolved.ok) {
+                  const td = tree.readThreadData(threadId);
+                  if (td) { td.actions.push({ type: "inject", content: `[错误] ${resolved.error}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+                } else if (ctxMode === "continue" && !resolved.continueThreadId && rawTarget.toLowerCase() !== THIS_THREAD_CREATOR && resolved.target.toLowerCase() !== "user") {
                   const td = tree.readThreadData(threadId);
                   if (td) { td.actions.push({ type: "inject", content: `[错误] talk(context="continue") 必须同时指定 threadId 参数`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
                 } else {
-                  const forkUnderThreadId = ctxMode === "fork" ? remoteThreadIdArg : undefined;
-                  const continueThreadId = ctxMode === "continue" ? remoteThreadIdArg : undefined;
                   const messageId = genMessageOutId();
                   const formPayload = extractTalkForm(args.form);
                   const td = tree.readThreadData(threadId);
                   if (td) {
-                    const modeLabel = ` [${ctxMode}${remoteThreadIdArg ? `:${remoteThreadIdArg}` : ""}]`;
+                    const modeLabel = ` [${ctxMode}${resolved.continueThreadId ?? resolved.forkUnderThreadId ? `:${resolved.continueThreadId ?? resolved.forkUnderThreadId}` : ""}]`;
                     const formLabel = formPayload ? ` [form: ${formPayload.formId}]` : "";
                     td.actions.push({
                       id: messageId,
                       type: "message_out",
-                      content: `[talk] → ${args.target}: ${msgContent}${modeLabel}${formLabel}`,
+                      content: `[talk] → ${rawTarget}: ${msgContent}${modeLabel}${formLabel}`,
                       timestamp: Date.now(),
                       context: ctxMode,
                       ...(formPayload ? { form: formPayload } : {}),
                     });
                     tree.writeThreadData(threadId, td);
                   }
-                  const isTalkSyncToUser = command === "talk_sync" && target === "user";
+                  const isTalkSyncToUser = command === "talk_sync" && resolved.target.toLowerCase() === "user";
                   if (isTalkSyncToUser) {
                     consola.warn(`[Engine] ${objectName} 尝试 talk_sync(target="user")——user 不参与 ThinkLoop，不会回复。已降级为 talk（不阻塞）。`);
                   }
@@ -3059,31 +3111,38 @@ export async function resumeWithThreadTree(
                     ? "relation_update_request"
                     : undefined;
                   try {
-                    const { reply, remoteThreadId } = await config.onTalk(args.target as string, msgContent, objectName, threadId, sessionId, continueThreadId, messageId, forkUnderThreadId, messageKind);
+                    let reply: string | null = null;
+                    let remoteThreadId = resolved.continueThreadId ?? resolved.forkUnderThreadId ?? resolved.target;
+                    if (resolved.localThreadId) {
+                      tree.writeInbox(resolved.localThreadId, { from: objectName, content: msgContent, source: "talk", kind: messageKind });
+                    } else if (config.onTalk) {
+                      const talkResult = await config.onTalk(resolved.target, msgContent, objectName, threadId, sessionId, resolved.continueThreadId, messageId, resolved.forkUnderThreadId, messageKind);
+                      reply = talkResult.reply;
+                      remoteThreadId = talkResult.remoteThreadId;
+                    } else {
+                      throw new Error(`onTalk 未配置，无法发送到 ${resolved.target}`);
+                    }
                     if (!explicitlyMarked) {
                       const tdAck = tree.readThreadData(threadId);
-                      const autoAckId = getAutoAckMessageId(tdAck, args.target as string);
+                      const autoAckId = getAutoAckMessageId(tdAck, resolved.target);
                       if (autoAckId) tree.markInbox(threadId, autoAckId, "ack", "已回复");
                     }
                     if (reply) {
-                      tree.writeInbox(threadId, { from: args.target as string, content: `${reply}\n[remote_thread_id: ${remoteThreadId}]`, source: "talk" });
+                      tree.writeInbox(threadId, { from: resolved.target, content: `${reply}\n[remote_thread_id: ${remoteThreadId}]`, source: "talk" });
                     }
                     const td2 = tree.readThreadData(threadId);
                     if (td2) {
-                      td2.actions.push({ type: "inject", content: `[talk → ${args.target}] remote_thread_id = ${remoteThreadId}`, timestamp: Date.now() });
+                      td2.actions.push({ type: "inject", content: `[talk → ${rawTarget}] remote_thread_id = ${remoteThreadId}`, timestamp: Date.now() });
                       tree.writeThreadData(threadId, td2);
                     }
-                  } catch (e) { tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" }); }
+                  } catch (e) {
+                    tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" });
+                  }
                   if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting");
+                  if (args.wait === true) await tree.setNodeStatus(threadId, "waiting");
                 }
               }
-            } else if (command === "return") {
-              /* 与 run 路径对齐：用 tree.returnThread（自动设 done + 写 summary + 唤醒等待的父线程）。
-               * 历史 bug：旧 resume 这里调了不存在的 scheduler.markDone() 导致抛错——已修复。 */
-              await tree.returnThread(threadId, args.summary as string ?? "");
-              const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "thread_return", content: args.summary as string ?? "", timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
-              consola.info(`[Engine] return (resume): ${(args.summary as string)?.slice(0, 100)}`);
-            } else if (command === "think") {
+	            } else if (command === "think") {
               /* resume 路径的 think：与 run 路径语义完全对齐 */
               const ctxMode = (args.context as string | undefined) === "continue" ? "continue" : "fork";
               const targetThreadId = args.threadId as string | undefined;
@@ -3118,9 +3177,10 @@ export async function resumeWithThreadTree(
                   tree.writeInbox(targetThreadId, { from: objectName, content: msgContent, source: "continue" });
                   const td = tree.readThreadData(threadId);
                   if (td) { td.actions.push({ type: "message_out", content: `[think.continue] → ${targetThreadId}: ${msgContent}`, timestamp: Date.now(), context: "continue" }); tree.writeThreadData(threadId, td); }
-                }
-              }
-            } else if (command === "call_function") {
+	                }
+	              }
+	              if (args.wait === true) await tree.setNodeStatus(threadId, "waiting");
+	            } else if (command === "call_function") {
               /* call_function 协议：trait + function_name 应当在 open 时传入；
                * 兜底 1：从 submit 的 args.trait / args.function_name 补填
                * 兜底 2：缺失时 inject 明确错误（之前是静默跳过，会让 LLM 误以为成功）
@@ -3325,7 +3385,7 @@ export async function resumeWithThreadTree(
                 td.actions.push({
                   type: "inject",
                   content: `[⚠️ 震荡警告] 连续 open/close 超过 ${OSCILLATION_THRESHOLD} 次无 submit——你陷入了无效循环。` +
-                    `立即用 wait({reason:"..."}) 向用户报告当前状态并等待指示；或 return({summary:"..."}) 结束当前线程。` +
+                    `立即用 wait({reason:"..."}) 报告当前状态并等待指示；或 talk(target="this_thread_creator", context="continue", msg="...") 交付当前结果。` +
                     `**不要**再 open 新 form，你已在循环里。`,
                   timestamp: Date.now(),
                 });
@@ -3460,8 +3520,8 @@ export async function runSuperThread(
       "2. 判断是否值得沉淀（重复/琐碎的就 mark 为 ignore）",
       "3. 值得沉淀 → open + submit call_function 调 `persist_to_memory`",
       "4. 用 mark 把消息状态从 unread 改为 ack（type: ack, tip: 已沉淀/已忽略）",
-      "5. 没有更多消息要处理时 → open + submit `return` 结束本轮",
-      "   （线程进入 done，下次有新消息会自动复活）",
+      "5. 没有更多消息要处理时 → wait({ reason: \"暂无更多经验候选\" }) 暂停本轮",
+      "   （下次有新消息会自动唤醒）",
       "",
       "## 完整工具调用示例（最关键！）",
       "",

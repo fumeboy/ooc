@@ -116,6 +116,45 @@ describe("Bruce 1 · Context 里的 <relations> 索引", () => {
     expect(ctx.relations[0]!.summary).toBe("OOC 总指挥，审批 G/E 编号变更");
   });
 
+  test("alice talk user 时 context 同时包含 alice/relations/user 与 user/relations/self", async () => {
+    writeRelation("alice", "user", `---\nsummary: Alice 记录的 user 偏好\n---`);
+    writeRelation("user", "self", `---\nsummary: 给 user 汇报时先说结论\n---`);
+
+    const stoneDir = join(TMP_ROOT, "stones", "alice");
+    mkdirSync(stoneDir, { recursive: true });
+    const stone = makeStone("alice", stoneDir);
+
+    const flowDir = join(TMP_ROOT, "flows", "s1", "objects", "alice");
+    const tree = await ThreadsTree.create(flowDir, "root", "task");
+    const td = tree.readThreadData(tree.rootId)!;
+    td.actions.push({
+      type: "tool_use",
+      name: "submit",
+      args: { target: "user", context: "fork", msg: "汇报结果" },
+      timestamp: Date.now(),
+    });
+    tree.writeThreadData(tree.rootId, td);
+
+    const treeFile = {
+      rootId: tree.rootId,
+      nodes: Object.fromEntries(tree.nodeIds.map(id => [id, tree.getNode(id)!])),
+    };
+    const ctx = buildThreadContext({
+      tree: treeFile,
+      threadId: tree.rootId,
+      threadData: tree.readThreadData(tree.rootId)!,
+      stone,
+      directory: [{ name: "user", whoAmI: "human user" }],
+      traits: [],
+      paths: { rootDir: TMP_ROOT, stoneDir, flowsDir: join(TMP_ROOT, "flows") },
+    });
+
+    expect(ctx.relations.map(r => [r.kind, r.name, r.summary])).toEqual([
+      ["peer", "user", "Alice 记录的 user 偏好"],
+      ["target_self", "user", "给 user 汇报时先说结论"],
+    ]);
+  });
+
   test("无 relation 文件的 peer 也显示索引行 (无关系记录)", async () => {
     const stoneDir = join(TMP_ROOT, "stones", "alice");
     mkdirSync(stoneDir, { recursive: true });

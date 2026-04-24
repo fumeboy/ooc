@@ -33,22 +33,23 @@ export interface CommandTreeNode {
  * 命令树定义（核心数据）
  *
  * 命令路径语义（参见 spec）：
- * - talk.fork / talk.continue / talk.continue.relation_update / talk.continue.question_form
+ * - talk.this_thread_creator / talk.fork / talk.continue / talk.continue.relation_update / talk.continue.question_form
  * - open.command / open.path
  * - program.shell / program.ts
  * - submit.compact / submit.talk / ...（每个可 submit 的 command 型 form 一个子节点）
- * - return（叶子）
  *
  * 注意：submit 下挂哪些具体 command 子节点由本模块硬编码，随新增 command 演进手动维护。
- * 目前只挂 compact / talk 两个——按 spec 的示例；未来按需扩展。
+ * 目前挂 compact / talk / think；未来按需扩展。
  */
 export const COMMAND_TREE: Record<string, CommandTreeNode> = {
   talk: {
     _match: (args) => {
+      if (args.target === "this_thread_creator") return "this_thread_creator";
       const ctx = args.context;
       if (typeof ctx !== "string" || !ctx) return undefined;
       return ctx;
     },
+    this_thread_creator: {},
     fork: {},
     continue: {
       _match: (args) => {
@@ -87,8 +88,8 @@ export const COMMAND_TREE: Record<string, CommandTreeNode> = {
     },
     compact: {},
     talk: {},
+    think: {},
   },
-  return: {},
 };
 
 /**
@@ -104,7 +105,7 @@ export const COMMAND_TREE: Record<string, CommandTreeNode> = {
  * - 任意 args 字段值非 string 时被视为"不下潜"
  * - `_match` 抛异常被吞，视为停止下潜
  *
- * @param toolName 顶层 tool 名称（open / submit / talk / program / return / ...）
+ * @param toolName 顶层 tool 名称（open / submit / talk / program / think / ...）
  * @param args    tool 的参数对象
  * @returns 点分路径（例：talk.continue.relation_update）；toolName 未定义时返回空串
  */

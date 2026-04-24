@@ -5,7 +5,7 @@ type: how_to_think
 version: 1.0.0
 when: never
 command_binding:
-  commands: ["return"]
+  commands: ["talk.this_thread_creator"]
 description: 证据先于结论，完成前必须运行验证，禁止凭记忆声称通过
 deps: []
 ---
@@ -18,7 +18,7 @@ deps: []
 2. 输出是什么？（引用具体输出，不是"测试通过了"）
 3. 输出是否支持你的结论？
 
-**如果任何一项答不上来，先运行验证再 return。**
+**如果任何一项答不上来，先运行验证，再向 `this_thread_creator` 交付结论。**
 
 ---
 

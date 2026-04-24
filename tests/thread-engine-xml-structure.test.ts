@@ -109,6 +109,25 @@ function readFirstLoopInput(sessionId: string, objectName: string): string {
   throw new Error(`未找到 loop input.txt: ${objectDir}`);
 }
 
+function readLatestLlmInput(sessionId: string, objectName: string): string {
+  const objectDir = join(FLOWS_DIR, sessionId, "objects", objectName);
+  const stack: string[] = [objectDir];
+  while (stack.length > 0) {
+    const cur = stack.pop()!;
+    if (!existsSync(cur)) continue;
+    const entries = readdirSync(cur, { withFileTypes: true });
+    for (const e of entries) {
+      const p = join(cur, e.name);
+      if (e.isDirectory()) {
+        stack.push(p);
+      } else if (e.isFile() && e.name === "llm.input.txt") {
+        return readFileSync(p, "utf-8");
+      }
+    }
+  }
+  throw new Error(`未找到 llm.input.txt: ${objectDir}`);
+}
+
 describe("contextToMessages XML 结构化输出", () => {
   beforeEach(() => {
     if (existsSync(TEST_DIR)) rmSync(TEST_DIR, { recursive: true });
@@ -187,6 +206,40 @@ describe("contextToMessages XML 结构化输出", () => {
     expect(input).toMatch(/^\|------\|------\|/m);
     expect(input).toContain("```ts");
     expect(input).toMatch(/^function foo\(\) \{ return 1; \}/m);
+  });
+
+  test("latest llm.input.txt 不重复包裹 role 根节点", async () => {
+    const stone = makeStone("alice");
+
+    const llm = new MockLLMClient({
+      responseFn: makeScript(openSubmit("return", { summary: "done" })),
+    });
+
+    const config: EngineConfig = {
+      rootDir: TEST_DIR,
+      flowsDir: FLOWS_DIR,
+      llm,
+      stone,
+      directory: [],
+      traits: [],
+      debugEnabled: true,
+      schedulerConfig: {
+        maxIterationsPerThread: 10,
+        maxTotalIterations: 20,
+        deadlockGracePeriodMs: 0,
+      },
+    };
+
+    const res = await runWithThreadTree("alice", "检查 latest input", "user", config);
+    expect(res.status).toBe("done");
+
+    const input = readLatestLlmInput(res.sessionId, "alice");
+    expect(input).toMatch(/^<system>\n/m);
+    expect(input).toMatch(/\n  <identity name="alice">/);
+    expect(input).not.toContain("<system>\n<system>");
+    expect(input).toMatch(/\n\n<user>\n/);
+    expect(input).toMatch(/\n  <creator mode="root">/);
+    expect(input).not.toContain("<user>\n<user>");
   });
 
   test("inbox 作为 <user> 子节点，message 进一步嵌套", async () => {

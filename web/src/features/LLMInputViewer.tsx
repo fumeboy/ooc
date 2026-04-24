@@ -37,87 +37,14 @@ import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { CodeMirrorViewer } from "../components/ui/CodeMirrorViewer";
 import { cn } from "../lib/utils";
 import { computeNodeDiff, type DiffMap, type DiffStatus } from "./llm-input-diff";
+import { splitMessageBlocks } from "./llm-input-parser";
 
 /* ========== 数据模型 ========== */
 
 /** 解析后的 XML 节点（前端内部表示，从 llm-input-diff.ts 继承） */
 import type { ParsedNode } from "./llm-input-diff";
 
-/**
- * 消息块：--- role --- 开头的大段
- *
- * engine 的 writeDebugLoop 将 Message[] 以下面格式拼接：
- *   --- system ---\n<system>...\n\n--- user ---\n<user>...
- */
-interface MessageBlock {
-  role: "system" | "user" | "other";
-  rawXml: string;
-}
-
 /* ========== 解析 ========== */
-
-/**
- * 将 llm.input.txt 的内容切分为消息块
- *
- * 协议历史上有两种格式：
- * 1. 早期：`--- system ---\n<content>\n\n--- user ---\n<content>\n...`
- *    按 `--- <role> ---\n` 分隔。
- * 2. 当前（engine.ts::writeFileSync 实际写法）：直接多根 XML
- *    `<system>...</system>\n\n<user>...</user>`（见 engine.ts 行 1172）
- *    无 role 分隔符，依赖顶层标签名。
- *
- * 容错策略：
- * - 先按 `--- <role> ---` 切；命中 → 返回每块
- * - 未命中：正则扫顶层 `<system>`、`<user>`、`<assistant>` 标签，按位置切块
- * - 都未命中：整体作为单个 "other" 块（fallback 到 parse-error）
- */
-function splitMessageBlocks(raw: string): MessageBlock[] {
-  const blocks: MessageBlock[] = [];
-  /* 协议 1：按 "--- xxx ---\n" 切分 */
-  const rx = /^--- (\w+) ---\n/gm;
-  const matches: { role: string; start: number; contentStart: number }[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = rx.exec(raw)) !== null) {
-    matches.push({ role: m[1]!, start: m.index, contentStart: m.index + m[0].length });
-  }
-  if (matches.length > 0) {
-    for (let i = 0; i < matches.length; i++) {
-      const cur = matches[i]!;
-      const next = matches[i + 1];
-      const end = next ? next.start : raw.length;
-      const body = raw.slice(cur.contentStart, end).trim();
-      const role = (cur.role === "system" || cur.role === "user") ? cur.role : "other";
-      blocks.push({ role, rawXml: body });
-    }
-    return blocks;
-  }
-
-  /* 协议 2：直接多根 XML `<role>...</role>`。
-   * 用简单 tag 扫描（不嵌套同名 role tag 在实际输出里不会出现）：
-   * 匹配 `<(system|user|assistant)[\s>]` 作为起点，查找对应 `</role>`。 */
-  const roleRx = /<(system|user|assistant)(?:\s[^>]*)?>/g;
-  const starts: { role: string; start: number }[] = [];
-  let rm: RegExpExecArray | null;
-  while ((rm = roleRx.exec(raw)) !== null) {
-    starts.push({ role: rm[1]!, start: rm.index });
-  }
-  if (starts.length > 0) {
-    for (let i = 0; i < starts.length; i++) {
-      const cur = starts[i]!;
-      const closeTag = `</${cur.role}>`;
-      const closeIdx = raw.indexOf(closeTag, cur.start);
-      const end = closeIdx >= 0 ? closeIdx + closeTag.length : (starts[i + 1]?.start ?? raw.length);
-      const body = raw.slice(cur.start, end).trim();
-      const role = (cur.role === "system" || cur.role === "user") ? cur.role : "other";
-      blocks.push({ role, rawXml: body });
-    }
-    return blocks;
-  }
-
-  /* 协议 3：无任何识别 → 整体 fallback */
-  blocks.push({ role: "other", rawXml: raw });
-  return blocks;
-}
 
 /** 递归将 DOM 节点转换为 ParsedNode */
 function domToParsed(
@@ -491,11 +418,12 @@ interface PaneProps {
   raw: string;
   parsed: ParsedNode[];
   searchQuery: string;
+  showHeader?: boolean;
   /** Phase 2 — 对比视图：该侧的 diff 状态 map（可选） */
   diffMap?: Map<string, DiffStatus>;
 }
 
-function ViewerPane({ path, parsed, searchQuery, diffMap }: PaneProps) {
+function ViewerPane({ path, parsed, searchQuery, showHeader = true, diffMap }: PaneProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -578,12 +506,14 @@ function ViewerPane({ path, parsed, searchQuery, diffMap }: PaneProps) {
 
   return (
     <div className="flex flex-col min-w-0 min-h-0 flex-1">
-      <div className="px-3 py-1.5 border-b border-[var(--border)] shrink-0 bg-[var(--accent)]/10 flex items-center gap-2">
-        <span className="font-mono text-[11px] truncate" title={path}>{fileName}</span>
-        <span className="text-[10px] text-[var(--muted-foreground)]">
-          {totalChars.toLocaleString()} chars · ~{estimateTokens(totalChars).toLocaleString()} tokens
-        </span>
-      </div>
+      {showHeader && (
+        <div className="px-3 py-1.5 border-b border-[var(--border)] shrink-0 bg-[var(--accent)]/10 flex items-center gap-2">
+          <span className="font-mono text-[11px] truncate" title={path}>{fileName}</span>
+          <span className="text-[10px] text-[var(--muted-foreground)]">
+            {totalChars.toLocaleString()} chars · ~{estimateTokens(totalChars).toLocaleString()} tokens
+          </span>
+        </div>
+      )}
       <div className="flex-1 min-h-0 flex">
         <div className="w-[38%] min-w-[220px] max-w-[420px] border-r border-[var(--border)] overflow-auto py-2">
           <ul>
@@ -789,6 +719,7 @@ export function LLMInputViewerAdapter({ path }: ViewProps) {
           raw={raw}
           parsed={parsed}
           searchQuery={searchQuery}
+          showHeader={compareEnabled}
           diffMap={diffResult?.left}
         />
         {compareEnabled && compareParsed && compareRaw && (

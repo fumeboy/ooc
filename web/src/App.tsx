@@ -69,6 +69,63 @@ function addRecentFile(path: string, label?: string) {
   localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(recent.slice(0, MAX_RECENT)));
 }
 
+function buildRecentTree(recentFiles: RecentFile[]): FileTreeNode | null {
+  if (recentFiles.length === 0) return null;
+
+  const recentRoot: FileTreeNode = {
+    name: "__root__",
+    type: "directory",
+    path: "__recent_root__",
+    children: [{
+      name: "最近访问的",
+      type: "directory",
+      path: "__recent__",
+      children: [],
+    }],
+  };
+
+  const visibleRoot = recentRoot.children![0]!;
+
+  for (const recent of recentFiles) {
+    const parts = recent.path.split("/").filter(Boolean);
+    if (parts.length === 0) continue;
+
+    let cursor = visibleRoot;
+    let prefix = "";
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]!;
+      prefix = prefix ? `${prefix}/${part}` : part;
+      const isLeaf = i === parts.length - 1;
+      cursor.children ??= [];
+
+      if (isLeaf) {
+        if (!cursor.children.some((child) => child.path === recent.path)) {
+          cursor.children.push({
+            name: recent.label || part,
+            type: "file",
+            path: recent.path,
+          });
+        }
+        continue;
+      }
+
+      let next = cursor.children.find((child) => child.type === "directory" && child.path === prefix);
+      if (!next) {
+        next = {
+          name: part,
+          type: "directory",
+          path: prefix,
+          children: [],
+        };
+        cursor.children.push(next);
+      }
+      cursor = next;
+    }
+  }
+
+  return visibleRoot.children && visibleRoot.children.length > 0 ? recentRoot : null;
+}
+
 /** 过滤 Stones 文件树 */
 const STONE_HIDDEN_FILES = new Set(["readme.md", "memory.md", "data.json"]);
 const STONE_HIDDEN_DIRS = new Set(["traits"]);
@@ -295,29 +352,19 @@ export function App() {
         />;
       }
 
-      const recentPaths = getRecentFiles();
-      const recentRoot: FileTreeNode | null = recentPaths.length > 0 ? {
-        name: "__root__",
-        type: "directory",
-        path: "__recent_root__",
-        children: [{
-          name: "最近访问的",
-          type: "directory",
-          path: "__recent__",
-          children: recentPaths.map((r) => ({
-            name: r.label,
-            type: "file" as const,
-            path: r.path,
-            size: 0,
-          })),
-        }],
-      } : null;
+      const recentRoot = buildRecentTree(getRecentFiles());
 
       return (
         <>
           {recentRoot && (
             <div className="px-1 mb-1">
-              <FileTree root={recentRoot} onSelect={openFileTab} selectedPath={activePath ?? undefined} />
+              <FileTree
+                root={recentRoot}
+                onSelect={openFileTab}
+                selectedPath={activePath ?? undefined}
+                defaultExpanded
+                defaultExpandedDepth={5}
+              />
             </div>
           )}
           <SessionFileTree

@@ -28,9 +28,10 @@ interface FileTreeProps {
   onSelect?: (path: string, node: FileTreeNode) => void;
   selectedPath?: string;
   defaultExpanded?: boolean;
+  defaultExpandedDepth?: number;
 }
 
-export function FileTree({ root, onSelect, selectedPath, defaultExpanded = false }: FileTreeProps) {
+export function FileTree({ root, onSelect, selectedPath, defaultExpanded = false, defaultExpandedDepth = 1 }: FileTreeProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; path: string } | null>(null);
 
   return (
@@ -43,6 +44,7 @@ export function FileTree({ root, onSelect, selectedPath, defaultExpanded = false
           selectedPath={selectedPath}
           depth={0}
           defaultExpanded={defaultExpanded}
+          defaultExpandedDepth={defaultExpandedDepth}
           onContextMenu={(e, path) => {
             e.preventDefault();
             setContextMenu({ x: e.clientX, y: e.clientY, path });
@@ -55,6 +57,7 @@ export function FileTree({ root, onSelect, selectedPath, defaultExpanded = false
           selectedPath={selectedPath}
           depth={0}
           defaultExpanded={defaultExpanded}
+          defaultExpandedDepth={defaultExpandedDepth}
           onContextMenu={(e, path) => {
             e.preventDefault();
             setContextMenu({ x: e.clientX, y: e.clientY, path });
@@ -137,11 +140,12 @@ interface TreeNodeProps {
   selectedPath?: string;
   depth: number;
   defaultExpanded: boolean;
+  defaultExpandedDepth: number;
   onContextMenu?: (e: React.MouseEvent, path: string) => void;
 }
 
-function TreeNode({ node, onSelect, selectedPath, depth, defaultExpanded, onContextMenu }: TreeNodeProps) {
-  const [expanded, setExpanded] = useState(defaultExpanded && depth < 1);
+function TreeNode({ node, onSelect, selectedPath, depth, defaultExpanded, defaultExpandedDepth, onContextMenu }: TreeNodeProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded && depth < defaultExpandedDepth);
   const isDir = node.type === "directory";
   const isSelected = selectedPath === node.path;
 
@@ -212,6 +216,7 @@ function TreeNode({ node, onSelect, selectedPath, depth, defaultExpanded, onCont
               selectedPath={selectedPath}
               depth={depth + 1}
               defaultExpanded={defaultExpanded}
+              defaultExpandedDepth={defaultExpandedDepth}
               onContextMenu={onContextMenu}
             />
           ))}

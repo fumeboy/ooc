@@ -5,7 +5,7 @@ type: how_to_interact
 version: 2.1.0
 when: never
 command_binding:
-  commands: ["talk", "talk_sync", "return"]
+  commands: ["talk", "talk_sync"]
 description: 对象间通信协议 — talk 统一 fork/continue 四模式
 deps: []
 ---
@@ -23,6 +23,7 @@ talk {
   threadId?: string,                 # 对方的线程 ID
   context: "fork" | "continue",      # 操作模式
   form?: <talk form>,                # 可选结构化表单
+  wait?: boolean,                    # 提交后是否让当前线程进入 waiting
 }
 ```
 
@@ -34,11 +35,13 @@ talk {
 | fork 对方已有线程下的子线程 | `talk(target=X, msg, threadId=Y, context="fork")` | 在 X 的线程 Y 下派生子线程（新能力） |
 | continue 对方已有线程 | `talk(target=X, msg, threadId=Y, context="continue")` | 向 X 的线程 Y 投递消息、唤醒它（新能力） |
 | continue 无 threadId | **非法**（engine 会报错） | — |
+| 回复当前线程创建者 | `talk(target="this_thread_creator", msg, context="continue")` | 向创建本线程的一方交付/回复；不会自动结束当前线程 |
 
 ### 语义提示
 
 - **fork**：派生新线程，对原线程 readonly。适合：发起新话题、询问意见、让对方另开一个任务帮你。
 - **continue**：向对方已有线程投递消息、唤醒它。适合：追加信息、更正、在"同一个对话"里继续推进。
+- **this_thread_creator**：虚拟目标，指向当前线程的创建者。它可能是 user、其他对象，或者当前对象自己的父线程。只能用 `context="continue"`，禁止 `fork`。提交后当前线程不会自动结束；如果交付后需要暂停等待后续输入，传 `wait=true`。
 
 ### 使用方式
 
@@ -54,6 +57,10 @@ submit(title="派生子任务", form_id="<...>", target="sophia", msg="顺便看
 # 向对方已有线程补充信息（continue）
 open(type=command, command=talk, description="向 sophia 补充数据")
 submit(title="补充数据", form_id="<...>", target="sophia", msg="忘了告诉你：实验 009 的结论在附件", threadId="th_sophia_g3", context="continue")
+
+# 向当前线程创建者交付结果（不结束当前线程）
+open(type=command, command=talk, description="回复当前线程创建者")
+submit(title="交付结果", form_id="<...>", target="this_thread_creator", msg="我已经完成分析，结论是 ...", context="continue", wait=true)
 ```
 
 talk 完成后，对方的回复会出现在你的 inbox 中，并附带 `[remote_thread_id: th_xxx]`。

@@ -43,7 +43,7 @@ think {
 
 ### 语义要点
 
-- **fork**：派生新线程，对原线程而言是 **readonly**——你在原线程什么都没改，只是"另开一枝"干点事情。适合：查资料、拆解子任务、探索方案、写临时笔记。新子线程完成后 return，父线程可通过 `await` 获取摘要。
+- **fork**：派生新线程，对原线程而言是 **readonly**——你在原线程什么都没改，只是"另开一枝"干点事情。适合：查资料、拆解子任务、探索方案、写临时笔记。新子线程完成后可通过 `talk(target="this_thread_creator", context="continue")` 向父线程交付，父线程可通过 `await` 获取摘要。
 - **continue**：向原线程 inbox 投递消息、唤醒它。这会**影响**原线程的后续思考。适合：补充信息、修正方向、追加指令、汇报结果。
 
 ### 使用方式
@@ -61,7 +61,7 @@ submit(title="补充文件清单", form_id="<...>", context="continue", threadId
 子线程特点：
 - 继承父线程的 trait 作用域
 - 独立执行，有自己的 actions 历史
-- 完成后 return summary 给父线程
+- 完成后向 `this_thread_creator` 交付 summary 给父线程
 - 父线程通过 `await` 等待子线程完成
 
 适合拆分为子线程的场景：
@@ -85,7 +85,7 @@ submit(title="补充文件清单", form_id="<...>", context="continue", threadId
 - 预期产出什么结果
 - 完成标准是什么
 
-子线程 return 时，summary 应该包含约定的产出。
+子线程向 `this_thread_creator` 交付时，summary 应该包含约定的产出。
 
 ## YAGNI 原则
 

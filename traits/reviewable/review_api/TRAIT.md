@@ -66,7 +66,7 @@ const r = await multi_perspective_review({});
 // r.data.mergeHint = "对每个 persona，通过 [create_sub_thread] fork 子线程..."
 ```
 
-调用者 LLM 拿到 recipes 后，自己发起多个 `[create_sub_thread]`，每个注入对应 biasPrompt，子线程 return findings，主线程合并。
+调用者 LLM 拿到 recipes 后，自己发起多个子线程，每个注入对应 biasPrompt，子线程通过 `talk(target="this_thread_creator", context="continue")` 交付 findings，主线程合并。
 
 ### suggest_fixes({ findings })
 

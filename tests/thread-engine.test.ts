@@ -196,6 +196,38 @@ afterEach(() => {
 /* ========== 基础执行 ========== */
 
 describe("基础执行", () => {
+  test("talk(this_thread_creator, wait=true) 解析为 user 并等待，不再需要 return", async () => {
+    const calls: Array<{
+      target: string;
+      message: string;
+      continueThreadId?: string;
+      forkUnderThreadId?: string;
+    }> = [];
+
+    const config = makeConfig({
+      steps: openSubmit("talk", {
+        target: "this_thread_creator",
+        context: "continue",
+        msg: "你好，我已经收到。",
+        wait: true,
+      }),
+      onTalk: async (target, message, _from, _fromThread, _sid, continueThreadId, _messageId, forkUnderThreadId) => {
+        calls.push({ target, message, continueThreadId, forkUnderThreadId });
+        return { reply: null, remoteThreadId: "user" };
+      },
+    });
+
+    const result = await runWithThreadTree("test_obj", "hi", "user", config);
+
+    expect(result.status).toBe("waiting");
+    expect(calls).toEqual([{
+      target: "user",
+      message: "你好，我已经收到。",
+      continueThreadId: undefined,
+      forkUnderThreadId: undefined,
+    }]);
+  });
+
   test("单轮对话：return → done", async () => {
     const config = makeConfig({ steps: scriptReturn("任务完成") });
 

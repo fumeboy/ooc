@@ -30,7 +30,7 @@ import { getAncestorPath } from "./persistence.js";
 import { resolveTraitRef } from "../trait/activator.js";
 import { getOpenFiles } from "./open-files.js";
 import { scanPeers } from "./peers.js";
-import { readPeerRelations, type PeerRelationEntry } from "./relation.js";
+import { readRelationsForPeers, type PeerRelationEntry } from "./relation.js";
 import { detectSelfKind } from "./self-kind.js";
 import { getBuildFeedback, formatFeedbackForContext } from "../world/hooks.js";
 import { getLatestCoverage } from "../test/runner.js";
@@ -339,7 +339,7 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
     const stoneDir = paths?.stoneDir ?? "";
     const flowsDir = paths?.flowsDir ?? (rootDir ? `${rootDir}/flows` : "");
     const selfInfo = detectSelfKind(stoneDir, flowsDir);
-    relations = readPeerRelations(peers, {
+    relations = readRelationsForPeers(peers, {
       rootDir,
       selfName: stone.name,
       selfKind: selfInfo.selfKind,
