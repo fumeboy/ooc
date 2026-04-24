@@ -89,6 +89,7 @@ function openSubmit(command: string, submitArgs: Record<string, unknown>) {
 function readFirstLoopInput(sessionId: string, objectName: string): string {
   const objectDir = join(FLOWS_DIR, sessionId, "objects", objectName);
   const stack: string[] = [objectDir];
+  const fallbackInputs: string[] = [];
   while (stack.length > 0) {
     const cur = stack.pop()!;
     if (!existsSync(cur)) continue;
@@ -97,11 +98,14 @@ function readFirstLoopInput(sessionId: string, objectName: string): string {
       const p = join(cur, e.name);
       if (e.isDirectory()) {
         stack.push(p);
-      } else if (e.isFile() && e.name.endsWith(".input.txt")) {
+      } else if (e.isFile() && /^loop_\d+\.input\.txt$/.test(e.name)) {
         return readFileSync(p, "utf-8");
+      } else if (e.isFile() && e.name.endsWith(".input.txt")) {
+        fallbackInputs.push(p);
       }
     }
   }
+  if (fallbackInputs[0]) return readFileSync(fallbackInputs[0], "utf-8");
   throw new Error(`未找到 loop input.txt: ${objectDir}`);
 }
 

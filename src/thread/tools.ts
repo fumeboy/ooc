@@ -115,7 +115,11 @@ export const OPEN_TOOL: ToolDefinition = {
         },
         lines: {
           type: "number",
-          description: "读取行数限制（type=file 时可选，不填则读取全文）",
+          description: "读取行数限制（type=file 时可选，默认 200 行；设为 -1 表示不限行数）",
+        },
+        columns: {
+          type: "number",
+          description: "每行字符数限制（type=file 时可选，默认每行最多 200 字符；设为 -1 表示不限列宽）",
         },
         description: {
           type: "string",

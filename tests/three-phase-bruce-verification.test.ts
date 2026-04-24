@@ -14,7 +14,8 @@
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { ThreadsTree } from "../src/thread/tree.js";
 import { buildThreadContext } from "../src/thread/context-builder.js";
@@ -31,6 +32,8 @@ import type { StoneData, TraitDefinition } from "../src/types/index.js";
 import type { ThreadDataFile } from "../src/thread/types.js";
 
 const TMP_ROOT = "/tmp/ooc-bruce-e14";
+const KERNEL_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+const USER_ROOT = dirname(KERNEL_ROOT);
 
 beforeEach(() => {
   try { rmSync(TMP_ROOT, { recursive: true, force: true }); } catch {}
@@ -166,12 +169,12 @@ describe("Bruce 2 · open(path=@relation:<peer>) 可读取关系全文", () => {
 
   test("@trait:kernel/<name> 同样可解析", () => {
     const resolved = resolveVirtualPath("@trait:kernel/talkable/relation_update", {
-      rootDir: "/Users/zhangzhefu/x/ooc/user",
+      rootDir: USER_ROOT,
       selfName: "alice",
       selfKind: "stone",
     });
     expect(resolved).toBe(
-      "/Users/zhangzhefu/x/ooc/user/kernel/traits/talkable/relation_update/TRAIT.md",
+      join(KERNEL_ROOT, "traits", "talkable", "relation_update", "TRAIT.md"),
     );
     expect(existsSync(resolved!)).toBe(true);
   });
@@ -336,16 +339,16 @@ describe("Bruce 5 · 向后兼容：老 thread.json 无新字段", () => {
 describe("Bruce · selfKind 自动识别（stone / flow_obj 对称）", () => {
   test("stones/alice → stone", () => {
     const r = detectSelfKind(
-      "/Users/zhangzhefu/x/ooc/user/stones/alice",
-      "/Users/zhangzhefu/x/ooc/user/flows",
+      join(USER_ROOT, "stones", "alice"),
+      join(USER_ROOT, "flows"),
     );
     expect(r.selfKind).toBe("stone");
   });
 
   test("flows/s1/objects/tmp → flow_obj + sessionId", () => {
     const r = detectSelfKind(
-      "/Users/zhangzhefu/x/ooc/user/flows/s1/objects/tmp",
-      "/Users/zhangzhefu/x/ooc/user/flows",
+      join(USER_ROOT, "flows", "s1", "objects", "tmp"),
+      join(USER_ROOT, "flows"),
     );
     expect(r.selfKind).toBe("flow_obj");
     expect(r.sessionId).toBe("s1");

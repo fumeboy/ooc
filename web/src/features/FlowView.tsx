@@ -110,9 +110,7 @@ export function FlowView({ sessionId, objectName, initialTab, initialViewName }:
         ? initialViewName
         : viewNames.includes("main") ? "main" : (viewNames[0] ?? null);
       setDefaultViewName(picked);
-      if (found && !initialTab) {
-        setTab("View");
-      } else if (!found && initialTab === "View") {
+      if (!found && initialTab === "View") {
         /* initialTab 指定了 View 但实际没有 views/ 目录，回退到 Readme */
         setTab(null);
       }

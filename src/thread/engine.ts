@@ -300,6 +300,63 @@ function resolveOpenFilePath(
   return { resolved, isVirtual: virtual, kind };
 }
 
+const DEFAULT_OPEN_FILE_LINES = 200;
+const DEFAULT_OPEN_FILE_COLUMNS = 200;
+
+function normalizeOpenFileLimit(value: unknown, defaultValue: number): number | null {
+  if (value === -1) return null;
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : defaultValue;
+}
+
+function formatOpenFileContent(
+  raw: string,
+  options: { lines?: unknown; columns?: unknown },
+): { content: string; linesLimit: number | null; columnsLimit: number | null } {
+  const linesLimit = normalizeOpenFileLimit(options.lines, DEFAULT_OPEN_FILE_LINES);
+  const columnsLimit = normalizeOpenFileLimit(options.columns, DEFAULT_OPEN_FILE_COLUMNS);
+
+  const allLines = raw.split("\n");
+  const visibleLines = linesLimit === null ? allLines : allLines.slice(0, linesLimit);
+  const formatted = visibleLines.map((line) => {
+    if (columnsLimit === null || line.length <= columnsLimit) return line;
+    const omitted = line.length - columnsLimit;
+    return `${line.slice(0, columnsLimit)}... （超长省略后续 ${omitted} 字符）`;
+  });
+
+  if (linesLimit !== null && allLines.length > linesLimit) {
+    formatted.push(`... （超长省略后续 ${allLines.length - linesLimit} 行）`);
+  }
+
+  return { content: formatted.join("\n"), linesLimit, columnsLimit };
+}
+
+function formatLatestLlmInput(messages: Message[]): string {
+  return messages.map(m => `<${m.role}>\n${m.content}\n</${m.role}>`).join("\n\n");
+}
+
+function writeLatestLlmInput(threadDir: string, messages: Message[]): void {
+  mkdirSync(threadDir, { recursive: true });
+  writeFileSync(join(threadDir, "llm.input.txt"), formatLatestLlmInput(messages), "utf-8");
+}
+
+function writeLatestLlmOutput(
+  threadDir: string,
+  llmOutput: string,
+  thinkingContent?: string,
+): void {
+  mkdirSync(threadDir, { recursive: true });
+  writeFileSync(join(threadDir, "llm.output.txt"), llmOutput, "utf-8");
+
+  const thinkingFile = join(threadDir, "llm.thinking.txt");
+  if (thinkingContent) {
+    writeFileSync(thinkingFile, thinkingContent, "utf-8");
+  } else if (existsSync(thinkingFile)) {
+    unlinkSync(thinkingFile);
+  }
+}
+
 /**
  * 从 submit args 中提取并标准化 talk form payload
  *
@@ -1145,14 +1202,10 @@ export async function runWithThreadTree(
         const outputFile = join(debugDir, "llm.output.txt");
         if (existsSync(outputFile)) {
           llmOutput = readFileSync(outputFile, "utf-8");
-          unlinkSync(outputFile);
           const thinkingFile = join(debugDir, "llm.thinking.txt");
           if (existsSync(thinkingFile)) {
             thinkingContent = readFileSync(thinkingFile, "utf-8");
-            unlinkSync(thinkingFile);
           }
-          const inputFile = join(debugDir, "llm.input.txt");
-          if (existsSync(inputFile)) unlinkSync(inputFile);
         } else {
           /* fallback 到内存缓存 */
           llmOutput = threadData._pendingOutput;
@@ -1208,6 +1261,8 @@ export async function runWithThreadTree(
 
         /* 构建动态 tools 列表 */
         const availableTools = buildAvailableTools(formManager.activeCommands());
+        const latestLlmDir = join(objectFlowDir, "threads", threadId);
+        writeLatestLlmInput(latestLlmDir, messages);
 
         /* 调用 LLM（带 tools + 流式 thinking）。
          * 客户端若实现 chatWithThinkingStream，则 thinking chunk 实时通过 SSE stream:thought 推送给前端；
@@ -1228,6 +1283,7 @@ export async function runWithThreadTree(
         llmModel = (llmResult as any).model || "unknown";
         llmUsage = (llmResult as any).usage ?? {};
         toolCalls = llmResult.toolCalls;
+        writeLatestLlmOutput(latestLlmDir, llmOutput, thinkingContent);
         /* 流式路径已逐 chunk 发过；非流式路径后面仍会整段发一次（保持前端可观测性） */
         if (sawThinkingChunk) {
           emitSSE({ type: "stream:thought:end", objectName, sessionId });
@@ -1241,17 +1297,6 @@ export async function runWithThreadTree(
             threadData._pendingThinkingOutput = thinkingContent;
           }
           tree.writeThreadData(threadId, threadData);
-
-          /* 写入调试文件（与旧系统兼容） */
-          const debugDir = join(objectFlowDir, "threads", threadId);
-          mkdirSync(debugDir, { recursive: true });
-          writeFileSync(join(debugDir, "llm.output.txt"), llmOutput, "utf-8");
-          if (thinkingContent) {
-            writeFileSync(join(debugDir, "llm.thinking.txt"), thinkingContent, "utf-8");
-          }
-          /* 写入 Context 供人工查看 */
-          const inputContent = messages.map(m => `<${m.role}>\n${m.content}\n</${m.role}>`).join("\n\n");
-          writeFileSync(join(debugDir, "llm.input.txt"), inputContent, "utf-8");
 
           consola.info(`[Engine] 暂停 thread=${threadId}, 输出已缓存`);
 
@@ -1476,7 +1521,8 @@ export async function runWithThreadTree(
           } else if (openType === "file" && args.path) {
             /* 文件读取：支持虚拟路径 @trait:... / @relation:... / 普通相对路径 */
             const filePath = args.path as string;
-            const linesLimit = args.lines as number | undefined;
+            const rawLinesLimit = args.lines;
+            const rawColumnsLimit = args.columns;
             const rootDir = config.paths?.rootDir ?? config.rootDir;
             const stoneDir = config.paths?.stoneDir;
             const flowsDir = config.paths?.flowsDir ?? config.flowsDir;
@@ -1504,14 +1550,11 @@ export async function runWithThreadTree(
               }
               consola.warn(`[Engine] open file: ${filePath} not found (resolved=${resolved})`);
             } else {
-              let content = readFileSync(resolved, "utf-8");
-              if (linesLimit && linesLimit > 0) {
-                const lines = content.split("\n");
-                content = lines.slice(0, linesLimit).join("\n");
-                if (lines.length > linesLimit) {
-                  content += `\n... (共 ${lines.length} 行，已截取前 ${linesLimit} 行)`;
-                }
-              }
+              const rawContent = readFileSync(resolved, "utf-8");
+              const { content, linesLimit, columnsLimit } = formatOpenFileContent(rawContent, {
+                lines: rawLinesLimit,
+                columns: rawColumnsLimit,
+              });
 
               /* window 的 key 用 LLM 原始输入（包括虚拟路径本身），便于 LLM 识别 / close 时反查 */
               const formId = formManager.begin("_file", description, { trait: filePath });
@@ -1526,14 +1569,18 @@ export async function runWithThreadTree(
                 };
                 td.activeForms = formManager.toData();
                 const kindLabel = kind === "trait" ? "Trait" : kind === "relation" ? "关系文件" : "文件";
+                const limitHint = [
+                  linesLimit === null ? "不限行数" : `前 ${linesLimit} 行`,
+                  columnsLimit === null ? "不限列宽" : `每行最多 ${columnsLimit} 字符`,
+                ].join("，");
                 td.actions.push({
                   type: "inject",
-                  content: `${kindLabel} "${filePath}" 已加载到上下文窗口。${linesLimit ? `（前 ${linesLimit} 行）` : ""}`,
+                  content: `${kindLabel} "${filePath}" 已加载到上下文窗口。（${limitHint}）`,
                   timestamp: Date.now(),
                 });
                 tree.writeThreadData(threadId, td);
               }
-              consola.info(`[Engine] open ${kind}: ${filePath}${linesLimit ? ` (${linesLimit} lines)` : ""} → ${formId}`);
+              consola.info(`[Engine] open ${kind}: ${filePath} (${linesLimit ?? "all"} lines, ${columnsLimit ?? "all"} columns) → ${formId}`);
             }
           }
         }
@@ -2583,14 +2630,10 @@ export async function resumeWithThreadTree(
         const outputFile = join(debugDir, "llm.output.txt");
         if (existsSync(outputFile)) {
           llmOutput = readFileSync(outputFile, "utf-8");
-          unlinkSync(outputFile);
           const thinkingFile = join(debugDir, "llm.thinking.txt");
           if (existsSync(thinkingFile)) {
             thinkingContent = readFileSync(thinkingFile, "utf-8");
-            unlinkSync(thinkingFile);
           }
-          const inputFile = join(debugDir, "llm.input.txt");
-          if (existsSync(inputFile)) unlinkSync(inputFile);
         } else {
           llmOutput = threadData._pendingOutput;
           thinkingContent = threadData._pendingThinkingOutput;
@@ -2628,6 +2671,8 @@ export async function resumeWithThreadTree(
 
         /* 构建动态 tools 列表 */
         const availableTools = buildAvailableTools(formManager.activeCommands());
+        const latestLlmDir = join(objectFlowDir, "threads", threadId);
+        writeLatestLlmInput(latestLlmDir, messages);
 
         const llmStartTime = Date.now();
         const llmResult = typeof config.llm.chatWithThinkingStream === "function"
@@ -2645,6 +2690,7 @@ export async function resumeWithThreadTree(
         llmModel = (llmResult as any).model || "unknown";
         llmUsage = (llmResult as any).usage ?? {};
         toolCalls = llmResult.toolCalls;
+        writeLatestLlmOutput(latestLlmDir, llmOutput, thinkingContent);
         if (sawThinkingChunk) {
           emitSSE({ type: "stream:thought:end", objectName, sessionId });
         }
@@ -2653,16 +2699,6 @@ export async function resumeWithThreadTree(
           threadData._pendingOutput = llmOutput;
           if (thinkingContent) threadData._pendingThinkingOutput = thinkingContent;
           tree.writeThreadData(threadId, threadData);
-
-          /* 写入调试文件供人工查看/修改 */
-          const debugDir = join(objectFlowDir, "threads", threadId);
-          mkdirSync(debugDir, { recursive: true });
-          writeFileSync(join(debugDir, "llm.output.txt"), llmOutput, "utf-8");
-          if (thinkingContent) {
-            writeFileSync(join(debugDir, "llm.thinking.txt"), thinkingContent, "utf-8");
-          }
-          const inputContent = messages.map(m => `<${m.role}>\n${m.content}\n</${m.role}>`).join("\n\n");
-          writeFileSync(join(debugDir, "llm.input.txt"), inputContent, "utf-8");
 
           /* 将线程状态改为 paused */
           await tree.setNodeStatus(threadId, "paused");
@@ -2863,7 +2899,8 @@ export async function resumeWithThreadTree(
           } else if (openType === "file" && args.path) {
             /* resume 路径同 run 路径：支持虚拟路径 @trait:... / @relation:... */
             const filePath = args.path as string;
-            const linesLimit = args.lines as number | undefined;
+            const rawLinesLimit = args.lines;
+            const rawColumnsLimit = args.columns;
             const rootDir = config.paths?.rootDir ?? config.rootDir;
             const stoneDir = config.paths?.stoneDir;
             const flowsDir = config.paths?.flowsDir ?? config.flowsDir;
@@ -2879,12 +2916,11 @@ export async function resumeWithThreadTree(
               if (td) { td.actions.push({ type: "inject", content: hint, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
               consola.warn(`[Engine] open file: ${filePath} not found (resume, resolved=${resolved})`);
             } else {
-              let content = readFileSync(resolved, "utf-8");
-              if (linesLimit && linesLimit > 0) {
-                const lines = content.split("\n");
-                content = lines.slice(0, linesLimit).join("\n");
-                if (lines.length > linesLimit) content += `\n... (共 ${lines.length} 行，已截取前 ${linesLimit} 行)`;
-              }
+              const rawContent = readFileSync(resolved, "utf-8");
+              const { content, linesLimit, columnsLimit } = formatOpenFileContent(rawContent, {
+                lines: rawLinesLimit,
+                columns: rawColumnsLimit,
+              });
               const formId = formManager.begin("_file", description, { trait: filePath });
               const td = tree.readThreadData(threadId);
               if (td) {
@@ -2892,10 +2928,14 @@ export async function resumeWithThreadTree(
                 td.windows[filePath] = { name: filePath, content, formId, updatedAt: Date.now() };
                 td.activeForms = formManager.toData();
                 const kindLabel = kind === "trait" ? "Trait" : kind === "relation" ? "关系文件" : "文件";
-                td.actions.push({ type: "inject", content: `${kindLabel} "${filePath}" 已加载到上下文窗口。${linesLimit ? `（前 ${linesLimit} 行）` : ""}`, timestamp: Date.now() });
+                const limitHint = [
+                  linesLimit === null ? "不限行数" : `前 ${linesLimit} 行`,
+                  columnsLimit === null ? "不限列宽" : `每行最多 ${columnsLimit} 字符`,
+                ].join("，");
+                td.actions.push({ type: "inject", content: `${kindLabel} "${filePath}" 已加载到上下文窗口。（${limitHint}）`, timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
               }
-              consola.info(`[Engine] open ${kind}: ${filePath}${linesLimit ? ` (${linesLimit} lines)` : ""} → ${formId} (resume)`);
+              consola.info(`[Engine] open ${kind}: ${filePath} (${linesLimit ?? "all"} lines, ${columnsLimit ?? "all"} columns) → ${formId} (resume)`);
             }
           }
 
