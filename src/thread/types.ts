@@ -95,7 +95,7 @@ export interface ThreadDataFile {
   _pendingOutput?: string;
   /** 暂停时缓存的 thinking 输出 */
   _pendingThinkingOutput?: string;
-  /** 单步调试模式：执行一轮后自动暂停 */
+  /** per-thread 单步调试模式：执行一轮后自动暂停（独立于全局 debug 模式） */
   _debugMode?: boolean;
 
   /** 活跃的 form 列表（持久化，支持 resume）

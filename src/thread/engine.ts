@@ -2204,9 +2204,11 @@ export async function runWithThreadTree(
 
       }
 
-      /* debugMode 检查：单步执行后自动暂停 */
+      /* per-thread _debugMode 检查：单步执行后自动暂停
+       * 这是线程级别的单步模式，与全局 debug 模式（写 debug 文件）无关。
+       * 执行完一轮 LLM 后自动暂停，用于细粒度调试单个线程。 */
       if (threadData._debugMode) {
-        consola.info(`[Engine] debugMode 单步完成, thread=${threadId}, 自动暂停`);
+        consola.info(`[Engine] 单步模式完成, thread=${threadId}, 自动暂停`);
         scheduler.pauseObject(objectName);
       }
 
@@ -3377,7 +3379,7 @@ export async function resumeWithThreadTree(
       }
 
       if (threadData._debugMode) {
-        consola.info(`[Engine] debugMode 单步完成, thread=${threadId}`);
+        consola.info(`[Engine] 单步模式完成, thread=${threadId}, 自动暂停`);
         scheduler.pauseObject(objectName);
       }
     },
@@ -3542,10 +3544,11 @@ export async function runSuperThread(
 }
 
 /**
- * 单步执行线程树
+ * 单步执行线程树（per-thread 单步模式）
  *
- * 设置 debugMode，执行一轮后自动暂停。
- * 可选替换缓存的 LLM 输出（人工干预）。
+ * 为所有 running 线程设置 _debugMode 标志，执行一轮后自动暂停。
+ * 这是线程级细粒度调试机制，独立于全局 debug 模式（写 debug 文件）。
+ * 可选替换缓存的 LLM 输出（人工干预调试）。
  */
 export async function stepOnceWithThreadTree(
   objectName: string,

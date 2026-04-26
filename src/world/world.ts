@@ -175,23 +175,34 @@ export class World {
     this._memoryCurator = new MemoryCurator();
   }
 
-  /* ========== Debug 模式 ========== */
+  /* ========== Debug 模式（写 debug 文件，不暂停） ========== */
 
-  /** 开启 debug 模式 */
+  /**
+   * 开启 debug 模式
+   *
+   * Debug 模式下，每轮 LLM 执行后 OOC 会写入 loop_N.input.txt / loop_N.output.txt / loop_N.thinking.txt / loop_N.meta.json
+   * 到 threads/{threadId}/debug/ 目录，用于事后排查。**不暂停执行**。
+   */
   enableDebug(): void { this._debugEnabled = true; }
 
-  /** 关闭 debug 模式 */
+  /** 关闭 debug 模式，停止写 debug 文件 */
   disableDebug(): void { this._debugEnabled = false; }
 
-  /** 查询 debug 模式状态 */
+  /** 查询 debug 模式状态（是否写 debug 文件） */
   isDebugEnabled(): boolean { return this._debugEnabled; }
 
-  /* ========== 全局暂停 ========== */
+  /* ========== 全局暂停（暂停执行，不写 debug 文件） ========== */
 
-  /** 开启全局暂停 */
+  /**
+   * 开启全局暂停
+   *
+   * 全局暂停下，所有 running 线程在当前 LLM 轮次结束后进入 paused 状态，
+   * 需要 `POST /api/objects/:name/resume` 手动唤醒。
+   * 与 debug 模式无关——debug 模式仅写文件，全局暂停才暂停执行。
+   */
   enableGlobalPause(): void { this._globalPaused = true; }
 
-  /** 关闭全局暂停 */
+  /** 关闭全局暂停，但不自动唤醒已暂停的线程 */
   disableGlobalPause(): void { this._globalPaused = false; }
 
   /** 查询全局暂停状态 */
@@ -710,7 +721,11 @@ export class World {
   }
 
   /**
-   * 单步执行：运行一轮线程树迭代后自动暂停
+   * 单步执行（per-thread _debugMode）：运行一轮线程树迭代后自动暂停
+   *
+   * 这是 per-thread 的单步模式（通过设置 threadData._debugMode），独立于全局 debug 模式。
+   * 执行一轮 LLM 迭代后自动暂停，用于细粒度调试单个线程。
+   * 重新调用 stepOnce 继续执行下一轮（可选修改 LLM 输出后再执行）。
    *
    * @param modifiedOutput - 可选，替换暂存的 LLM 输出（用于调试时修改模型回复）
    */

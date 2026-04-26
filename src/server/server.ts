@@ -20,7 +20,7 @@ import {
   applyEditPlan,
   cancelEditPlan,
 } from "../persistence/edit-plans.js";
-import { collectAllActions } from "../process/tree.js";
+import { collectAllActions, createProcess } from "../process/tree.js";
 import { loadTrait } from "../trait/loader.js";
 import { threadsToProcess } from "../persistence/thread-adapter.js";
 import type { World } from "../world/index.js";
@@ -337,7 +337,29 @@ export async function handleRoute(
 
     /* 异步执行，不阻塞 HTTP 响应 */
     world.talk(objectName, finalMessage, "user", sessionId).catch((e) => {
-      consola.error(`[Server] talk 异步执行失败: ${(e as Error).message}`);
+      const errMsg = (e as Error).message;
+      consola.error(`[Server] talk 异步执行失败: ${errMsg}`);
+      /* 将失败写入 data.json，让 /api/flows 能感知此 session 的失败状态 */
+      try {
+        const now = Date.now();
+        const objectFlowDir = join(world.flowsDir, sessionId, "objects", objectName);
+        mkdirSync(objectFlowDir, { recursive: true });
+        const failedFlow: FlowData = {
+          sessionId,
+          stoneName: objectName,
+          title: "(talk failed before engine start)",
+          status: "failed",
+          failureReason: errMsg,
+          messages: [],
+          process: createProcess("task"),
+          data: {},
+          createdAt: now,
+          updatedAt: now,
+        };
+        writeFileSync(join(objectFlowDir, "data.json"), JSON.stringify(failedFlow, null, 2));
+      } catch (writeErr) {
+        consola.error(`[Server] 写失败 flow 记录失败: ${(writeErr as Error).message}`);
+      }
     });
 
     return json({
@@ -1212,36 +1234,57 @@ export async function handleRoute(
     return json({ success: true, data: task });
   }
 
-  /* POST /api/debug/enable — 开启 debug 模式 */
+  /* POST /api/debug/enable — 开启 debug 模式
+   *
+   * Debug 模式：OOC 会把每轮 LLM 的输入/输出/思考/元数据写入 thread 的 debug 目录。
+   * 不影响执行节奏，不会暂停线程。用于事后排查执行过程。
+   */
   if (method === "POST" && path === "/api/debug/enable") {
     world.enableDebug();
     return json({ success: true, data: { debugEnabled: true } });
   }
 
-  /* POST /api/debug/disable — 关闭 debug 模式 */
+  /* POST /api/debug/disable — 关闭 debug 模式
+   *
+   * 关闭 debug 文件写入。
+   */
   if (method === "POST" && path === "/api/debug/disable") {
     world.disableDebug();
     return json({ success: true, data: { debugEnabled: false } });
   }
 
-  /* GET /api/debug/status — 查询 debug 模式状态 */
+  /* GET /api/debug/status — 查询 debug 模式状态
+   *
+   * 返回当前是否写入 debug 文件。
+   */
   if (method === "GET" && path === "/api/debug/status") {
     return json({ success: true, data: { debugEnabled: world.isDebugEnabled() } });
   }
 
-  /* POST /api/global-pause/enable — 开启全局暂停 */
+  /* POST /api/global-pause/enable — 开启全局暂停
+   *
+   * 全局暂停（global-pause）：暂停所有 running 线程在当前 LLM 轮次结束后进入 paused 状态。
+   * 需要 `POST /api/objects/:name/resume` 或 `/api/<...>/resume` 手动唤醒。
+   * 与 debug 模式无关——debug 模式不会暂停，全局暂停也不会写 debug 文件。
+   */
   if (method === "POST" && path === "/api/global-pause/enable") {
     world.enableGlobalPause();
     return json({ success: true, data: { globalPaused: true } });
   }
 
-  /* POST /api/global-pause/disable — 关闭全局暂停 */
+  /* POST /api/global-pause/disable — 关闭全局暂停
+   *
+   * 解除全局暂停状态，不自动唤醒已暂停的线程。
+   */
   if (method === "POST" && path === "/api/global-pause/disable") {
     world.disableGlobalPause();
     return json({ success: true, data: { globalPaused: false } });
   }
 
-  /* GET /api/global-pause/status — 查询全局暂停状态 */
+  /* GET /api/global-pause/status — 查询全局暂停状态
+   *
+   * 返回当前是否启用了全局暂停。
+   */
   if (method === "GET" && path === "/api/global-pause/status") {
     return json({ success: true, data: { globalPaused: world.isGlobalPaused() } });
   }
