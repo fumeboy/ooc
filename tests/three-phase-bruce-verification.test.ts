@@ -235,11 +235,11 @@ describe("Bruce 4 · 渐进填表：partial submit 深化路径", () => {
     expect(mgr.getForm(fid)!.commandPath).toBe("talk");
 
     /* Step 1：只填 context=continue */
-    mgr.partialSubmit(fid, { context: "continue" });
+    mgr.applyRefine(fid, { context: "continue" });
     expect(mgr.getForm(fid)!.commandPath).toBe("talk.continue");
 
     /* Step 2：再填 type=relation_update */
-    mgr.partialSubmit(fid, { type: "relation_update" });
+    mgr.applyRefine(fid, { type: "relation_update" });
     expect(mgr.getForm(fid)!.commandPath).toBe("talk.continue.relation_update");
 
     /* Step 3：最终 submit（非 partial） → form 被消费 */
@@ -257,7 +257,7 @@ describe("Bruce 4 · 渐进填表：partial submit 深化路径", () => {
     mgr.addLoadedTraits(fid, ["kernel:talkable"]);
     expect(mgr.getForm(fid)!.loadedTraits).toEqual(["kernel:talkable"]);
 
-    mgr.partialSubmit(fid, { context: "continue" });
+    mgr.applyRefine(fid, { context: "continue" });
     mgr.addLoadedTraits(fid, ["kernel:talkable/relation_update"]);
     /* 新加的在后面，原来的仍保留 */
     expect(mgr.getForm(fid)!.loadedTraits).toContain("kernel:talkable");
@@ -267,8 +267,8 @@ describe("Bruce 4 · 渐进填表：partial submit 深化路径", () => {
   test("partial submit 的 args 最终交付指令执行（合并、后覆盖前）", () => {
     const mgr = new FormManager();
     const fid = mgr.begin("talk", "");
-    mgr.partialSubmit(fid, { target: "sophia", context: "fork" });
-    mgr.partialSubmit(fid, { context: "continue" }); /* 改主意了 */
+    mgr.applyRefine(fid, { target: "sophia", context: "fork" });
+    mgr.applyRefine(fid, { context: "continue" }); /* 改主意了 */
     const final = mgr.submit(fid);
     expect(final!.accumulatedArgs).toEqual({
       target: "sophia",

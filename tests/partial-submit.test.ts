@@ -41,7 +41,7 @@ describe("FormManager.partialSubmit — 累积语义", () => {
   test("第一次 partial submit 后 form 仍存在，args 被累积", () => {
     const mgr = new FormManager();
     const fid = mgr.begin("talk", "desc");
-    mgr.partialSubmit(fid, { target: "sophia", context: "fork" });
+    mgr.applyRefine(fid, { target: "sophia", context: "fork" });
 
     const form = mgr.getForm(fid);
     expect(form).not.toBeNull();
@@ -52,8 +52,8 @@ describe("FormManager.partialSubmit — 累积语义", () => {
   test("多次 partial submit 累积 args（后者覆盖前者同名字段）", () => {
     const mgr = new FormManager();
     const fid = mgr.begin("talk", "desc");
-    mgr.partialSubmit(fid, { target: "sophia" });
-    mgr.partialSubmit(fid, { context: "continue", type: "relation_update" });
+    mgr.applyRefine(fid, { target: "sophia" });
+    mgr.applyRefine(fid, { context: "continue", type: "relation_update" });
 
     const form = mgr.getForm(fid);
     expect(form!.accumulatedArgs).toEqual({
@@ -66,7 +66,7 @@ describe("FormManager.partialSubmit — 累积语义", () => {
 
   test("partialSubmit 对不存在的 formId 返回 null", () => {
     const mgr = new FormManager();
-    expect(mgr.partialSubmit("nope", {})).toBeNull();
+    expect(mgr.applyRefine("nope", {})).toBeNull();
   });
 
   test("partial submit 不影响 activeCommandPaths 的基础路径", () => {
@@ -75,7 +75,7 @@ describe("FormManager.partialSubmit — 累积语义", () => {
     /* 尚未 partial submit，basePath = "talk" */
     expect(mgr.activeCommandPaths()).toContain("talk");
 
-    mgr.partialSubmit(fid, { context: "fork" });
+    mgr.applyRefine(fid, { context: "fork" });
     /* 现在 activeCommandPaths 应包含 "talk.fork"（当前 form 的 deepened path） */
     expect(mgr.activeCommandPaths()).toContain("talk.fork");
   });
@@ -95,7 +95,7 @@ describe("FormManager.submit（非 partial）— 消费 form", () => {
   test("submit 后返回的 form 含累积的 accumulatedArgs", () => {
     const mgr = new FormManager();
     const fid = mgr.begin("talk", "desc");
-    mgr.partialSubmit(fid, { target: "sophia", context: "fork" });
+    mgr.applyRefine(fid, { target: "sophia", context: "fork" });
     const form = mgr.submit(fid);
     expect(form!.accumulatedArgs).toEqual({ target: "sophia", context: "fork" });
   });

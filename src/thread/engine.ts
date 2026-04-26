@@ -1550,7 +1550,7 @@ export async function runWithThreadTree(
             for (const [k, v] of Object.entries(args)) {
               if (!META_KEYS.has(k)) incoming[k] = v;
             }
-            const updatedForm = formManager.partialSubmit(formId, incoming);
+            const updatedForm = formManager.applyRefine(formId, incoming);
             if (!updatedForm) {
               const td = tree.readThreadData(threadId);
               if (td) {
@@ -2910,7 +2910,7 @@ export async function resumeWithThreadTree(
             for (const [k, v] of Object.entries(args)) {
               if (!META_KEYS.has(k)) incoming[k] = v;
             }
-            const updatedForm = formManager.partialSubmit(formId, incoming);
+            const updatedForm = formManager.applyRefine(formId, incoming);
             if (!updatedForm) {
               const td = tree.readThreadData(threadId);
               if (td) { td.actions.push({ type: "inject", content: `[错误] Form ${formId} 不存在（partial submit 失败）。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }

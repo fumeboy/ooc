@@ -2,15 +2,15 @@
  * Form 管理器
  *
  * 管理指令生命周期的 form 模型。
- * 每个指令通过 begin/partialSubmit/submit/cancel 四阶段执行：
+ * 每个指令通过 begin/applyRefine/submit/cancel 四阶段执行：
  * - begin：创建 form，loading 相关 trait（open tool 触发）
- * - partialSubmit：累积 args 但不执行；重算命令路径，供渐进式填表（spec Phase 4）
+ * - applyRefine：累积 args 但不执行；重算命令路径（refine tool 触发）
  * - submit：按最终 args 执行指令，form 结束（引用计数 -1）
  * - cancel：放弃执行，form 结束（等价 submit，但不触发指令）
  *
  * 同类型 form 共享 trait 加载（引用计数）。
  *
- * @ref docs/superpowers/specs/2026-04-12-command-lifecycle-progressive-trait-design.md#6
+ * @ref docs/superpowers/specs/2026-04-26-refine-tool-and-knowledge-activator.md
  * @ref docs/superpowers/specs/2026-04-23-three-phase-trait-activation-design.md#第二部分-process过程
  */
 
@@ -34,7 +34,7 @@ export interface ActiveForm {
   /**
    * 累积的 args（Phase 4 渐进式填表）
    *
-   * partialSubmit 把本次 args 与现有累积合并（后者覆盖前者同名字段）；
+   * applyRefine 把本次 args 与现有累积合并（后者覆盖前者同名字段）；
    * 最终 submit 时把累积 args 交付给指令执行器。
    * 未经 partial 的 form 保持 `{}`。
    */
@@ -44,7 +44,7 @@ export interface ActiveForm {
    * 当前命令路径（由 deriveCommandPath(command, accumulatedArgs) 算出）
    *
    * begin 时 = command（未深入）。
-   * 每次 partialSubmit 后按新累积 args 重算（可能从 "talk" 深化到 "talk.continue.relation_update"）。
+   * 每次 applyRefine 后按新累积 args 重算（可能从 "talk" 深化到 "talk.continue.relation_update"）。
    * 这个路径用于与 trait.command_binding.commands 做前缀匹配。
    */
   commandPath: string;
@@ -54,7 +54,7 @@ export interface ActiveForm {
    *
    * 用于 submit(partial=false) / cancel 时批量释放——避免因渐进填表
    * 触发的临时 trait 在 form 结束后仍残留 context。
-   * begin 时由 engine 写入初始加载集；partialSubmit 新增追加；关闭时参考此字段。
+   * begin 时由 engine 写入初始加载集；applyRefine 新增追加；关闭时参考此字段。
    */
   loadedTraits: string[];
 }
@@ -87,13 +87,14 @@ export class FormManager {
   }
 
   /**
-   * 部分提交（Phase 4 渐进式填表）
+   * Refine: 累积 args 但不执行（替代旧的 partialSubmit）
    *
-   * 累积 args、重算 commandPath，但**不**消费 form（form 仍保留、引用计数不变）。
+   * 累积 args、重算 commandPath，form 仍保留、引用计数不变。
+   * 对应 refine tool。
    *
    * @returns 更新后的 form 快照；formId 不存在时返回 null
    */
-  partialSubmit(
+  applyRefine(
     formId: string,
     args: Record<string, unknown>,
   ): ActiveForm | null {
@@ -133,7 +134,7 @@ export class FormManager {
   }
 
   /**
-   * 追加本 form 已加载的 trait（engine 在 begin / partialSubmit 后调用）
+   * 追加本 form 已加载的 trait（engine 在 begin / applyRefine 后调用）
    *
    * 幂等：重复 id 不再追加。
    */
