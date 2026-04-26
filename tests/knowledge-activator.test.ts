@@ -126,3 +126,41 @@ describe("computeKnowledgeRefs emits view as type='view'", () => {
     expect(types).toEqual(["trait:@trait:talkable", "view:@view:status_page"]);
   });
 });
+
+describe("computeKnowledgeRefs emits relation refs from peers list", () => {
+  test("each peer becomes a summary-presentation relation ref", () => {
+    const refs = computeKnowledgeRefs({
+      traits: [],
+      activePaths: new Set(),
+      peers: ["bob", "carol"],
+    });
+    const rels = refs.filter((r) => r.type === "relation");
+    expect(rels.map((r) => r.ref).sort()).toEqual(["@relation:bob", "@relation:carol"]);
+    expect(rels.every((r) => r.presentation === "summary")).toBe(true);
+    expect(rels.every((r) => r.source.kind === "relation")).toBe(true);
+  });
+
+  test("peers + form_match emit refs of all three kinds in same call", () => {
+    const refs = computeKnowledgeRefs({
+      traits: [
+        {
+          namespace: "kernel", name: "talkable", kind: "trait", type: "how_to_think",
+          version: "1.0.0", when: "never", description: "", readme: "",
+          methods: [], deps: [], activatesOn: { paths: ["talk"] }, dir: "/fake/talkable",
+        },
+      ],
+      activePaths: new Set(["talk.continue"]),
+      peers: ["alice"],
+    });
+    const summary = refs.map((r) => `${r.type}/${r.ref}/${r.presentation}`).sort();
+    expect(summary).toEqual([
+      "relation/@relation:alice/summary",
+      "trait/@trait:talkable/full",
+    ]);
+  });
+
+  test("undefined peers input emits no relation refs", () => {
+    const refs = computeKnowledgeRefs({ traits: [], activePaths: new Set() });
+    expect(refs.filter((r) => r.type === "relation")).toEqual([]);
+  });
+});

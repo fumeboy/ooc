@@ -133,6 +133,8 @@ export interface ComputeRefsInput {
   activePaths: Set<string>;
   /** 可选：预先构建好的反向索引（性能优化：调用方可缓存） */
   reverseIndex?: PathReverseIndex;
+  /** 协作 peers — 每个 peer 自动产出 summary-presentation 的 relation ref */
+  peers?: string[];
 }
 
 /**
@@ -172,5 +174,18 @@ export function computeKnowledgeRefs(input: ComputeRefsInput): KnowledgeRef[] {
       reason: `命令路径命中 ${knowledgeType} ${t.namespace}:${t.name}`,
     });
   }
+  /* relation 维度：peers → summary refs */
+  if (input.peers) {
+    for (const peer of input.peers) {
+      refs.push({
+        type: "relation",
+        ref: `@relation:${peer}`,
+        source: { kind: "relation", path: `@relation:${peer}` },
+        presentation: "summary",
+        reason: `当前线程协作伙伴 ${peer}`,
+      });
+    }
+  }
+
   return refs;
 }
