@@ -5,8 +5,9 @@
  * 沿用 G3/G13 设计：激活由作用域链 + 反向索引驱动。
  *
  * @ref docs/superpowers/specs/2026-04-26-refine-tool-and-knowledge-activator.md
- * @ref docs/哲学文档/gene.md#G3
- * @ref docs/哲学文档/gene.md#G13
+ * @ref docs/哲学文档/gene.md#G3 — implements — 激活逻辑（always/never/条件）
+ * @ref docs/哲学文档/gene.md#G13 — implements — 认知栈作用域链驱动激活
+ * @ref docs/哲学文档/gene.md#G5 — references — 激活决定 context 中注入哪些知识内容
  */
 
 import type { TraitDefinition } from "../types/index.js";

@@ -9,7 +9,7 @@ export type KnowledgeType = "trait" | "view" | "relation";
 export type KnowledgeSource =
   | { kind: "origin" }
   | { kind: "form_match"; path: string }
-  | { kind: "relation"; peer: string }
+  | { kind: "relation"; path: string }
   | { kind: "open_action" };
 
 export type KnowledgePresentation = "summary" | "full";
