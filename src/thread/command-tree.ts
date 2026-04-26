@@ -15,6 +15,9 @@
 
 /** 命令树节点（递归结构）。一个节点可同时是分支（有子节点）和叶子（无子节点）。 */
 export interface CommandTreeNode {
+  /** 该注册项可能命中的所有路径（含根本身和子路径，扁平列出）。
+   *  Activator 用此字段建反向索引；deriveCommandPath 不依赖它。 */
+  paths?: string[];
   /**
    * 从当前节点向下潜的匹配函数。
    *
@@ -44,6 +47,7 @@ export interface CommandTreeNode {
  */
 export const COMMAND_TREE: Record<string, CommandTreeNode> = {
   talk: {
+    paths: ["talk", "talk.fork", "talk.continue", "talk.continue.relation_update", "talk.continue.question_form"],
     _match: (args) => {
       const ctx = args.context;
       if (typeof ctx !== "string" || !ctx) return undefined;
@@ -51,7 +55,7 @@ export const COMMAND_TREE: Record<string, CommandTreeNode> = {
     },
     fork: {},
     continue: {
-      _match: (args) => {
+      _match: (args: Record<string, unknown>) => {
         const type = args.type;
         if (typeof type !== "string" || !type) return undefined;
         return type;
@@ -61,6 +65,7 @@ export const COMMAND_TREE: Record<string, CommandTreeNode> = {
     },
   },
   open: {
+    paths: ["open", "open.command", "open.path"],
     _match: (args) => {
       /* command 优先于 path（两者同时出现时），保持与 open tool 的主用法一致 */
       if (typeof args.command === "string" && args.command) return "command";
@@ -71,6 +76,7 @@ export const COMMAND_TREE: Record<string, CommandTreeNode> = {
     path: {},
   },
   program: {
+    paths: ["program", "program.shell", "program.ts"],
     _match: (args) => {
       const lang = args.language ?? args.lang;
       if (typeof lang !== "string" || !lang) return undefined;
@@ -80,6 +86,7 @@ export const COMMAND_TREE: Record<string, CommandTreeNode> = {
     ts: {},
   },
   submit: {
+    paths: ["submit", "submit.compact", "submit.talk"],
     _match: (args) => {
       const c = args.command;
       if (typeof c !== "string" || !c) return undefined;
@@ -88,7 +95,10 @@ export const COMMAND_TREE: Record<string, CommandTreeNode> = {
     compact: {},
     talk: {},
   },
-  return: {},
+  return: { paths: ["return"] },
+  refine: { paths: ["refine"] },
+  close: { paths: ["close"] },
+  wait: { paths: ["wait"] },
 };
 
 /**

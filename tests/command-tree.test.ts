@@ -123,3 +123,25 @@ describe("COMMAND_TREE — 结构性检查", () => {
     expect(cont.question_form).toBeDefined();
   });
 });
+
+describe("COMMAND_TREE.<root>.paths declares known path universe", () => {
+  test("talk paths include talk, talk.continue, talk.fork", () => {
+    const node = COMMAND_TREE.talk as { paths?: string[] };
+    expect(node.paths).toBeDefined();
+    expect(node.paths).toContain("talk");
+    expect(node.paths).toContain("talk.continue");
+    expect(node.paths).toContain("talk.fork");
+  });
+
+  test("submit paths include submit and known children", () => {
+    const node = COMMAND_TREE.submit as { paths?: string[] };
+    expect(node.paths).toBeDefined();
+    expect(node.paths).toContain("submit");
+  });
+
+  test("refine, close, wait registered as top-level entries", () => {
+    expect(COMMAND_TREE.refine).toBeDefined();
+    expect(COMMAND_TREE.close).toBeDefined();
+    expect(COMMAND_TREE.wait).toBeDefined();
+  });
+});
