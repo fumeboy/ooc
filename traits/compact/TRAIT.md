@@ -4,8 +4,8 @@ name: compact
 type: how_to_think
 version: 1.0.0
 when: never
-command_binding:
-  commands: ["compact"]
+activates_on:
+  paths: ["compact"]
 description: 上下文审查与压缩——识别冗余 action、截断或丢弃、生成摘要，最后 submit compact 一次性应用
 deps: []
 ---

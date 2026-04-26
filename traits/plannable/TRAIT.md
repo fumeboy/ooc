@@ -4,8 +4,8 @@ name: plannable
 type: how_to_think
 version: 2.1.0
 when: never
-command_binding:
-  commands: ["think", "set_plan"]
+activates_on:
+  paths: ["think", "set_plan"]
 description: 任务拆解与规划 — 先想清楚再动手
 deps: []
 ---

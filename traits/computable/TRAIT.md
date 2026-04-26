@@ -4,8 +4,8 @@ name: computable
 type: how_to_think
 version: 2.2.0
 when: never
-command_binding:
-  commands: ["program"]
+activates_on:
+  paths: ["program"]
 description: 代码执行能力 — 文件操作、搜索、Shell 命令、数据管理（通过 callMethod 调用）
 deps: []
 ---

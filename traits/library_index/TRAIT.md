@@ -4,8 +4,8 @@ name: library_index
 type: how_to_use_tool
 version: 2.0.0
 when: never
-command_binding:
-  commands: ["program"]
+activates_on:
+  paths: ["program"]
 description: Library 公共资源索引 — 查找和使用 library 中的 traits
 deps: []
 ---

@@ -5,8 +5,8 @@ type: how_to_interact
 when: never
 description: 关系更新请求 — talk.continue.relation_update（Phase 6）
 deps: ["kernel:talkable"]
-command_binding:
-  commands: ["talk.continue.relation_update"]
+activates_on:
+  paths: ["talk.continue.relation_update"]
 ---
 
 # 关系更新请求（relation_update）

@@ -4,8 +4,8 @@ name: talkable
 type: how_to_interact
 version: 2.1.0
 when: never
-command_binding:
-  commands: ["talk", "talk_sync", "return"]
+activates_on:
+  paths: ["talk", "talk_sync", "return"]
 description: 对象间通信协议 — talk 统一 fork/continue 四模式
 deps: []
 ---

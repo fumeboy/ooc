@@ -63,7 +63,7 @@ describe("talkable/relation_update TRAIT.md", () => {
     expect(trait).not.toBeNull();
     expect(trait!.namespace).toBe("kernel");
     expect(trait!.name).toBe("talkable/relation_update");
-    expect(trait!.commandBinding?.commands).toEqual(["talk.continue.relation_update"]);
+    expect(trait!.activatesOn?.paths).toEqual(["talk.continue.relation_update"]);
   });
 
   test("TRAIT.md 正文包含关键段落（发起方 / 接收方指导）", () => {
