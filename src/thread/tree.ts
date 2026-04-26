@@ -572,6 +572,23 @@ export class ThreadsTree {
       writeThreadsTree(this._dir, this._tree);
       this._onRevival?.(nodeId);
     }
+
+    /* B2 fix（Option B）：waiting + waitingType=talk_sync → 唤醒
+     *
+     * talk_sync 调用者进入 waiting+waitingType=talk_sync 等待对方回复。
+     * 当对方把消息写入本线程 inbox 时，视为回复到达，自动将线程转回 running。
+     * 注意：
+     * - 不调用 _onRevival —— talk_sync 唤醒不算 revival（线程本来就活着，没结束过）。
+     * - 不递增 revivalCount —— revivalCount 语义专属于 done → running 的复活路径。
+     * - 其他 waitingType（await_children、explicit_wait）不在此处处理，保持不变。
+     *   await_children 由 checkAndWake 处理；explicit_wait 由显式 resume 处理。
+     */
+    if (node && node.status === "waiting" && node.waitingType === "talk_sync") {
+      node.status = "running";
+      node.waitingType = undefined;
+      node.updatedAt = Date.now();
+      writeThreadsTree(this._dir, this._tree);
+    }
   }
 
   /**
