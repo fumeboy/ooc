@@ -194,6 +194,29 @@ export const SUBMIT_TOOL: ToolDefinition = {
   },
 };
 
+/** refine tool — 向 open 的 form 追加/修改 args（不执行） */
+export const REFINE_TOOL: ToolDefinition = {
+  type: "function",
+  function: {
+    name: "refine",
+    description:
+      "向已 open 的 form 追加或修改参数（不执行）。多次调用 refine 累积 args（后到覆盖先到），可能深化命令路径，从而触发新一轮知识激活。等到参数齐全且语义合理，再调 submit() 执行。refine 取代旧的 submit(partial=true)。",
+    parameters: {
+      type: "object",
+      properties: {
+        title: TITLE_PARAM,
+        form_id: { type: "string", description: "open 返回的 form_id" },
+        args: {
+          type: "object",
+          description: "要追加或覆盖的参数键值对。后到覆盖先到。",
+        },
+        mark: MARK_PARAM,
+      },
+      required: ["title", "form_id"],
+    },
+  },
+};
+
 /** close tool — 关闭上下文 */
 export const CLOSE_TOOL: ToolDefinition = {
   type: "function",
@@ -235,7 +258,7 @@ export const WAIT_TOOL: ToolDefinition = {
 };
 
 /** 所有 OOC tools */
-export const OOC_TOOLS: ToolDefinition[] = [OPEN_TOOL, SUBMIT_TOOL, CLOSE_TOOL, WAIT_TOOL];
+export const OOC_TOOLS: ToolDefinition[] = [OPEN_TOOL, REFINE_TOOL, SUBMIT_TOOL, CLOSE_TOOL, WAIT_TOOL];
 
 /**
  * 构建可用 tools 列表
