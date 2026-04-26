@@ -19,7 +19,7 @@ import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
 import { MockLLMClient, type ToolCall } from "../src/thinkable/client.js";
 import type { StoneData } from "../src/types/index.js";
 import { eventBus } from "../src/server/events.js";
-import { SUBMIT_TOOL } from "../src/thread/tools.js";
+import { SUBMIT_TOOL, REFINE_TOOL } from "../src/thread/tools.js";
 import type { TalkFormPayload, ThreadAction } from "../src/thread/types.js";
 import { handleRoute } from "../src/server/server.js";
 import { World } from "../src/world/world.js";
@@ -60,33 +60,21 @@ afterEach(() => {
 /* ========== 1. Schema 契约 ========== */
 
 describe("tool schema — form 参数", () => {
-  test("submit tool 的 args 声明 form（optional）", () => {
+  test("submit tool 不再直接声明 form 字段（已改用 refine()）", () => {
     const params = SUBMIT_TOOL.function.parameters as {
-      properties: Record<string, { type?: string; description?: string; properties?: Record<string, unknown>; required?: string[] }>;
+      properties: Record<string, unknown>;
       required?: string[];
     };
-    expect(params.properties).toHaveProperty("form");
-    const form = params.properties.form;
-    expect(form.type).toBe("object");
-    /* form 不在 required 里——不提供时退回普通 talk */
-    expect(params.required ?? []).not.toContain("form");
+    /* form 参数现在通过 refine() 传递，不再出现在 submit schema */
+    expect(params.properties.form).toBeUndefined();
   });
 
-  test("form schema 要求 type 和 options 字段", () => {
-    const params = SUBMIT_TOOL.function.parameters as {
-      properties: Record<string, { properties?: Record<string, { type?: string; enum?: string[] }>; required?: string[] }>;
+  test("REFINE_TOOL 的 args 字段可接收含 form 的任意对象", () => {
+    const params = REFINE_TOOL.function.parameters as {
+      properties: Record<string, { type?: string }>;
     };
-    const form = params.properties.form;
-    expect(form.properties).toHaveProperty("type");
-    expect(form.properties).toHaveProperty("options");
-    expect(form.properties).toHaveProperty("allow_free_text");
-    /* type 枚举仅 single_choice / multi_choice */
-    const typeField = form.properties?.type;
-    expect(typeField?.enum).toContain("single_choice");
-    expect(typeField?.enum).toContain("multi_choice");
-    /* form 内部 required 包含 type + options */
-    expect(form.required ?? []).toContain("type");
-    expect(form.required ?? []).toContain("options");
+    /* refine 通过 args: object 接收任意字段，包括 form */
+    expect(params.properties.args?.type).toBe("object");
   });
 });
 

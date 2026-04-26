@@ -64,13 +64,13 @@ describe("tool schema — think / talk 统一参数", () => {
     expect(commandEnum).not.toContain("continue_sub_thread");
   });
 
-  test("submit tool 的 parameters 含 msg / threadId / context 字段", () => {
-    const props = (SUBMIT_TOOL.function.parameters as { properties: Record<string, { type?: string; enum?: string[] }> })
+  test("submit tool 不再含 msg / threadId / context 字段（已改用 refine()）", () => {
+    const props = (SUBMIT_TOOL.function.parameters as { properties: Record<string, unknown> })
       .properties;
-    expect(props.msg).toBeDefined();
-    expect(props.threadId).toBeDefined();
-    expect(props.context).toBeDefined();
-    expect(props.context?.enum).toEqual(["fork", "continue"]);
+    /* 这些参数现在通过 refine() 传递，不出现在 submit schema */
+    expect(props.msg).toBeUndefined();
+    expect(props.threadId).toBeUndefined();
+    expect(props.context).toBeUndefined();
   });
 
   test("submit tool 不再含 continue_thread 字段", () => {

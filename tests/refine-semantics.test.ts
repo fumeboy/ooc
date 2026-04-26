@@ -1,13 +1,12 @@
 /**
- * 渐进式填表（partial submit）单测（Phase 4）
+ * Refine 语义单测（取代旧的 partial-submit.test.ts）
  *
- * 语义：submit 新增 `partial: boolean` 参数（默认 false）。
- * - partial=true：不执行指令，把 args 累加到 form.accumulatedArgs，
- *   重算命令路径（deriveCommandPath），按新路径 ↔ command_binding 加载新 trait
- * - partial=false：按最终累积 args 执行指令，结束时释放本 form 引入的 trait
+ * 语义：refine(form_id, args) 累积 args、重算 commandPath；不执行。
+ * - submit(form_id) 才执行最终指令。
+ * - submit 不接受 args（参数全部走 refine）。
  *
  * 测试覆盖：
- * - FormManager 的 partial 语义（累积 / path 变化）
+ * - FormManager.applyRefine 的累积语义 / path 变化
  * - collectCommandTraits 支持 path 前缀匹配（冒泡）
  */
 
@@ -37,7 +36,7 @@ function trait(
   };
 }
 
-describe("FormManager.partialSubmit — 累积语义", () => {
+describe("FormManager.applyRefine — 累积语义", () => {
   test("第一次 partial submit 后 form 仍存在，args 被累积", () => {
     const mgr = new FormManager();
     const fid = mgr.begin("talk", "desc");

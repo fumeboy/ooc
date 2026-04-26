@@ -5,7 +5,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { OOC_TOOLS, REFINE_TOOL, OPEN_TOOL } from "../src/thread/tools.js";
+import { OOC_TOOLS, REFINE_TOOL, OPEN_TOOL, SUBMIT_TOOL } from "../src/thread/tools.js";
 
 describe("REFINE_TOOL definition", () => {
   test("exported and present in OOC_TOOLS", () => {
@@ -34,5 +34,23 @@ describe("OPEN_TOOL extended args description", () => {
     const params = OPEN_TOOL.function.parameters as Record<string, unknown>;
     const props = params.properties as Record<string, { type?: string }>;
     expect(props.args?.type).toBe("object");
+  });
+});
+
+describe("SUBMIT_TOOL after refine refactor", () => {
+  test("submit no longer accepts partial field", () => {
+    const params = SUBMIT_TOOL.function.parameters as Record<string, unknown>;
+    const props = params.properties as Record<string, unknown>;
+    expect(props.partial).toBeUndefined();
+  });
+
+  test("submit no longer accepts top-level args field", () => {
+    const params = SUBMIT_TOOL.function.parameters as Record<string, unknown>;
+    const props = params.properties as Record<string, unknown>;
+    expect(props.args).toBeUndefined();
+  });
+
+  test("submit description does not mention partial", () => {
+    expect(SUBMIT_TOOL.function.description).not.toContain("partial");
   });
 });

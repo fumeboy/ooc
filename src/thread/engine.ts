@@ -1610,52 +1610,17 @@ export async function runWithThreadTree(
 
         /* --- Submit --- */
         else if (toolName === "submit") {
-          /* Phase 4：partial=true 走渐进式填表分支，不消费 form */
-          const isPartial = args.partial === true;
-          if (isPartial) {
-            const formId = args.form_id as string ?? "";
-            /* 提取除元参数外的 args 作为累积字段（剥离 form_id / partial / title / mark） */
-            const META_KEYS = new Set(["form_id", "partial", "title", "mark"]);
-            const incoming: Record<string, unknown> = {};
-            for (const [k, v] of Object.entries(args)) {
-              if (!META_KEYS.has(k)) incoming[k] = v;
+          /* partial 已退役 → 引导改用 refine */
+          if (args.partial === true) {
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.actions.push({
+                type: "inject",
+                content: "[错误] submit(partial=true) 已退役。请改用 refine(form_id, args) 累积参数，最后 submit(form_id) 执行。",
+                timestamp: Date.now(),
+              });
+              tree.writeThreadData(threadId, td);
             }
-            const updatedForm = formManager.applyRefine(formId, incoming);
-            if (!updatedForm) {
-              const td = tree.readThreadData(threadId);
-              if (td) {
-                td.actions.push({ type: "inject", content: `[错误] Form ${formId} 不存在（partial submit 失败）。`, timestamp: Date.now() });
-                tree.writeThreadData(threadId, td);
-              }
-            } else {
-              /* 根据新路径重新 collectCommandTraits，追加本 form 新 open 的 trait */
-              const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommandPaths());
-              const newlyLoadedTraits: string[] = [];
-              for (const traitName of traitsToLoad) {
-                if (updatedForm.loadedTraits.includes(traitName)) continue; /* 已加载过 */
-                const changed = await tree.activateTrait(threadId, traitName);
-                if (changed) newlyLoadedTraits.push(traitName);
-              }
-              if (newlyLoadedTraits.length > 0) {
-                formManager.addLoadedTraits(formId, newlyLoadedTraits);
-              }
-              const td = tree.readThreadData(threadId);
-              if (td) {
-                td.activeForms = formManager.toData();
-                const pathHint = `当前路径：${updatedForm.commandPath}`;
-                const loadHint = newlyLoadedTraits.length > 0
-                  ? `按新路径追加 trait：${newlyLoadedTraits.join(", ")}`
-                  : `按新路径无新增 trait`;
-                td.actions.push({
-                  type: "inject",
-                  content: `[partial submit] Form ${formId} 已累积参数（未执行）。${pathHint}。${loadHint}。可继续 partial，或 partial=false 执行指令。`,
-                  timestamp: Date.now(),
-                });
-                tree.writeThreadData(threadId, td);
-              }
-              consola.info(`[Engine] partial submit: form=${formId} path=${updatedForm.commandPath}`);
-            }
-            /* partial 分支到此结束，不进入指令执行 */
           } else {
           const form = formManager.submit(args.form_id as string ?? "");
 
@@ -3024,37 +2989,16 @@ export async function resumeWithThreadTree(
 
         /* --- Submit (resume) --- */
         } else if (toolName === "submit") {
-          /* Phase 4：resume 路径同 run 路径，支持 partial=true 渐进填表 */
-          const isPartial = args.partial === true;
-          if (isPartial) {
-            const formId = args.form_id as string ?? "";
-            const META_KEYS = new Set(["form_id", "partial", "title", "mark"]);
-            const incoming: Record<string, unknown> = {};
-            for (const [k, v] of Object.entries(args)) {
-              if (!META_KEYS.has(k)) incoming[k] = v;
-            }
-            const updatedForm = formManager.applyRefine(formId, incoming);
-            if (!updatedForm) {
-              const td = tree.readThreadData(threadId);
-              if (td) { td.actions.push({ type: "inject", content: `[错误] Form ${formId} 不存在（partial submit 失败）。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
-            } else {
-              const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommandPaths());
-              const newlyLoadedTraits: string[] = [];
-              for (const traitName of traitsToLoad) {
-                if (updatedForm.loadedTraits.includes(traitName)) continue;
-                const changed = await tree.activateTrait(threadId, traitName);
-                if (changed) newlyLoadedTraits.push(traitName);
-              }
-              if (newlyLoadedTraits.length > 0) formManager.addLoadedTraits(formId, newlyLoadedTraits);
-              const td = tree.readThreadData(threadId);
-              if (td) {
-                td.activeForms = formManager.toData();
-                const pathHint = `当前路径：${updatedForm.commandPath}`;
-                const loadHint = newlyLoadedTraits.length > 0 ? `按新路径追加 trait：${newlyLoadedTraits.join(", ")}` : `按新路径无新增 trait`;
-                td.actions.push({ type: "inject", content: `[partial submit] Form ${formId} 已累积参数（未执行）。${pathHint}。${loadHint}。可继续 partial，或 partial=false 执行指令。`, timestamp: Date.now() });
-                tree.writeThreadData(threadId, td);
-              }
-              consola.info(`[Engine] partial submit(resume): form=${formId} path=${updatedForm.commandPath}`);
+          /* partial 已退役 → 引导改用 refine */
+          if (args.partial === true) {
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.actions.push({
+                type: "inject",
+                content: "[错误] submit(partial=true) 已退役。请改用 refine(form_id, args) 累积参数，最后 submit(form_id) 执行。",
+                timestamp: Date.now(),
+              });
+              tree.writeThreadData(threadId, td);
             }
           } else {
           const form = formManager.submit(args.form_id as string ?? "");
