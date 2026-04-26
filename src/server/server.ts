@@ -749,6 +749,7 @@ export async function handleRoute(
       const flow = readFlow(dir);
       if (flow && (flow.status === "running" || flow.status === "waiting")) {
         flow.status = "failed";
+        flow.failureReason = "用户取消";
         flow.updatedAt = Date.now();
         flow.messages.push({
           direction: "in" as const,
@@ -1522,6 +1523,7 @@ function getSessionsSummary(flowsDir: string): Array<{
   hasProcess: boolean;
   createdAt: number;
   updatedAt: number;
+  failureReason?: string;
 }> {
   const sessionIds = listFlowSessions(flowsDir);
   const summaries: Array<{
@@ -1534,6 +1536,7 @@ function getSessionsSummary(flowsDir: string): Array<{
     hasProcess: boolean;
     createdAt: number;
     updatedAt: number;
+    failureReason?: string;
   }> = [];
 
   for (const sessionId of sessionIds) {
@@ -1616,6 +1619,7 @@ function getSessionsSummary(flowsDir: string): Array<{
       hasProcess: true,
       createdAt: flow.createdAt,
       updatedAt: flow.updatedAt,
+      failureReason: flow.failureReason,
     });
   }
 

@@ -158,4 +158,6 @@ export interface FlowData {
   summary?: string;
   /** 是否为 SelfMeta Flow（拥有写 Self 目录的特权） */
   isSelfMeta?: boolean;
+  /** 失败原因（仅 status === "failed" 时填充，面向用户展示） */
+  failureReason?: string;
 }
