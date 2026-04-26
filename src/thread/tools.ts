@@ -263,7 +263,7 @@ export const OOC_TOOLS: ToolDefinition[] = [OPEN_TOOL, REFINE_TOOL, SUBMIT_TOOL,
 /**
  * 构建可用 tools 列表
  *
- * 始终返回四个 tool（open/submit/close/wait）。
+ * 始终返回五个 tool（open/refine/submit/close/wait）。
  */
 export function buildAvailableTools(_activeCommands?: Set<string>): ToolDefinition[] {
   return OOC_TOOLS;

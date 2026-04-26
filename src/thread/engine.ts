@@ -1538,6 +1538,51 @@ export async function runWithThreadTree(
           }
         }
 
+        /* --- Refine --- */
+        else if (toolName === "refine") {
+          const formId = (args.form_id as string) ?? "";
+          const incoming = (args.args as Record<string, unknown> | undefined) ?? {};
+
+          const updatedForm = formManager.applyRefine(formId, incoming);
+          if (!updatedForm) {
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.actions.push({
+                type: "inject",
+                content: `[错误] refine 失败：Form ${formId} 不存在。`,
+                timestamp: Date.now(),
+              });
+              tree.writeThreadData(threadId, td);
+            }
+          } else {
+            const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommandPaths());
+            const newlyLoadedTraits: string[] = [];
+            for (const traitName of traitsToLoad) {
+              if (updatedForm.loadedTraits.includes(traitName)) continue;
+              const changed = await tree.activateTrait(threadId, traitName);
+              if (changed) newlyLoadedTraits.push(traitName);
+            }
+            if (newlyLoadedTraits.length > 0) {
+              formManager.addLoadedTraits(formId, newlyLoadedTraits);
+            }
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.activeForms = formManager.toData();
+              const pathHint = `当前路径：${updatedForm.commandPath}`;
+              const loadHint = newlyLoadedTraits.length > 0
+                ? `按新路径追加 trait：${newlyLoadedTraits.join(", ")}`
+                : `按新路径无新增 trait`;
+              td.actions.push({
+                type: "inject",
+                content: `[refine] Form ${formId} 已累积参数（未执行）。${pathHint}。${loadHint}。可继续 refine，或 submit() 执行指令。`,
+                timestamp: Date.now(),
+              });
+              tree.writeThreadData(threadId, td);
+            }
+            consola.info(`[Engine] refine: form=${formId} path=${updatedForm.commandPath}`);
+          }
+        }
+
         /* --- Submit --- */
         else if (toolName === "submit") {
           /* Phase 4：partial=true 走渐进式填表分支，不消费 form */
