@@ -9,7 +9,7 @@
  * @ref docs/哲学文档/gene.md#G3 — implements — Trait 激活内容注入 context（instructions + knowledge）
  * @ref docs/哲学文档/gene.md#G9 — references — 行为树渲染为 process 文本
  * @ref docs/哲学文档/gene.md#G13 — implements — 认知栈作用域链驱动 trait 激活
- * @ref src/trait/activator.ts — references — getActiveTraits
+ * @ref src/knowledge/activator.ts — references — getActiveTraits
  * @ref src/process/cognitive-stack.ts — references — computeScopeChain
  * @ref src/process/render.ts — references — renderProcess 行为树文本渲染
  * @ref src/types/context.ts — references — Context, ContextWindow, WindowConfig 类型
@@ -19,7 +19,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Context, DirectoryEntry, ContextWindow, WindowConfig, TraitDefinition, TraitTree } from "../types/index.js";
 import type { StoneData, FlowData } from "../types/index.js";
-import { getActiveTraits, traitId } from "../trait/activator.js";
+import { getActiveTraits, traitId } from "../knowledge/activator.js";
 import { computeScopeChain } from "../process/cognitive-stack.js";
 import { renderProcess } from "../process/render.js";
 import { findNode } from "../process/tree.js";

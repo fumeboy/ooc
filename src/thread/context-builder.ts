@@ -27,7 +27,7 @@ import type {
   ThreadStatus,
 } from "./types.js";
 import { getAncestorPath } from "./persistence.js";
-import { resolveTraitRef } from "../trait/activator.js";
+import { resolveTraitRef } from "../knowledge/activator.js";
 import { getOpenFiles } from "./open-files.js";
 import { scanPeers } from "./peers.js";
 import { readPeerRelations, type PeerRelationEntry } from "./relation.js";

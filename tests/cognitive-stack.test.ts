@@ -15,7 +15,7 @@ import {
   advanceFocus,
 } from "../src/process/index.js";
 import { computeScopeChain, collectFrameHooks } from "../src/process/cognitive-stack.js";
-import { getActiveTraits, traitId } from "../src/trait/activator.js";
+import { getActiveTraits, traitId } from "../src/knowledge/activator.js";
 import type { TraitDefinition } from "../src/types/index.js";
 
 beforeEach(() => {

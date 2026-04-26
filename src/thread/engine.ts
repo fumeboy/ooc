@@ -24,7 +24,7 @@ import { getOpenFiles } from "./open-files.js";
 import { emitSSE } from "../server/events.js";
 import { CodeExecutor, executeShell } from "../executable/executor.js";
 import { MethodRegistry, type MethodContext } from "../trait/registry.js";
-import { traitId } from "../trait/activator.js";
+import { traitId } from "../knowledge/activator.js";
 import { FormManager } from "./form.js";
 import { collectCommandTraits, collectCommandHooks } from "./hooks.js";
 import { buildAvailableTools } from "./tools.js";

@@ -7,7 +7,7 @@ import { buildContext } from "../src/context/builder.js";
 import { formatContextAsSystem, formatContextAsMessages } from "../src/context/formatter.js";
 import { createProcess } from "../src/process/tree.js";
 import type { StoneData, FlowData, TraitDefinition } from "../src/types/index.js";
-import { traitId } from "../src/trait/activator.js";
+import { traitId } from "../src/knowledge/activator.js";
 
 describe("buildContext", () => {
   test("构建基础 Context", () => {

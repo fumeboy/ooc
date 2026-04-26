@@ -12,7 +12,7 @@
 
 import type { Process, ProcessNode, FrameHook, HookTime, TraitDefinition } from "../types/index.js";
 import { getPathToNode } from "./tree.js";
-import { traitId } from "../trait/activator.js";
+import { traitId } from "../knowledge/activator.js";
 
 /**
  * 从 focus 路径计算作用域链（当前活跃的 traits 名称列表）

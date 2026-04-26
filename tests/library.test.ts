@@ -9,7 +9,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadAllTraits } from "../src/trait/loader.js";
-import { traitId } from "../src/trait/activator.js";
+import { traitId } from "../src/knowledge/activator.js";
 import {
   listLibrarySkills,
   readLibrarySkill,

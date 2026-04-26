@@ -29,7 +29,7 @@ import type {
   TraitNamespace,
   TraitKind,
 } from "../types/index.js";
-import { traitId } from "./activator.js";
+import { traitId } from "../knowledge/activator.js";
 
 /** 合法 namespace 集合 */
 const VALID_NAMESPACES: readonly TraitNamespace[] = ["kernel", "library", "self"];

@@ -11,7 +11,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadTrait, loadAllTraits, loadTraitsByRef } from "../src/trait/loader.js";
 import { MethodRegistry } from "../src/trait/registry.js";
-import { getActiveTraits, traitId } from "../src/trait/activator.js";
+import { getActiveTraits, traitId } from "../src/knowledge/activator.js";
 import type { TraitDefinition } from "../src/types/index.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_trait_test");
