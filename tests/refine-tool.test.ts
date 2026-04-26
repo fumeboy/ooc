@@ -50,7 +50,4 @@ describe("SUBMIT_TOOL after refine refactor", () => {
     expect(props.args).toBeUndefined();
   });
 
-  test("submit description does not mention partial", () => {
-    expect(SUBMIT_TOOL.function.description).not.toContain("partial");
-  });
 });

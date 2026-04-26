@@ -32,7 +32,7 @@ export interface DirectoryEntry {
  * - stone_default: stone.data._traits_ref 里声明的对象级默认激活
  * - thread_pinned: 线程显式 open(type="trait") pin 的 trait
  * - always_on:    trait 自身 when="always" 声明的常驻激活
- * - command_binding: 被 open(type="command") / partial submit 通过 command_binding 带入的 transient trait
+ * - command_binding: 被 open(type="command") / refine 通过 command_binding 带入的 transient trait
  * - scope_chain:  线程祖先链 traits/activatedTraits 中声明的激活（未归入上面几类）
  * - skill_index:  `available-skills` 索引窗口
  * - memory:       `{stoneDir}/memory/index.md` 或 legacy `memory.md` 的注入

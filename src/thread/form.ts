@@ -36,7 +36,7 @@ export interface ActiveForm {
    *
    * applyRefine 把本次 args 与现有累积合并（后者覆盖前者同名字段）；
    * 最终 submit 时把累积 args 交付给指令执行器。
-   * 未经 partial 的 form 保持 `{}`。
+   * 未经 refine 的 form 保持 `{}`。
    */
   accumulatedArgs: Record<string, unknown>;
 
@@ -52,7 +52,7 @@ export interface ActiveForm {
   /**
    * 本 form 已加载的 trait ID 列表（Phase 4）
    *
-   * 用于 submit(partial=false) / cancel 时批量释放——避免因渐进填表
+   * 用于 submit / cancel 时批量释放——避免因渐进填表
    * 触发的临时 trait 在 form 结束后仍残留 context。
    * begin 时由 engine 写入初始加载集；applyRefine 新增追加；关闭时参考此字段。
    */
@@ -155,7 +155,7 @@ export class FormManager {
    * 获取当前所有活跃 form 的 commandPath 集合（Phase 4）
    *
    * 用于按 path 前缀匹配 trait.command_binding。同一 command 多 form 时取各自的
-   * commandPath；path 可以重复也可以不同（partial 深度不同）。
+   * commandPath；path 可以重复也可以不同（refine 深度不同）。
    */
   activeCommandPaths(): Set<string> {
     return new Set(Array.from(this.forms.values()).map((f) => f.commandPath));

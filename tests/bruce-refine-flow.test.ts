@@ -5,7 +5,6 @@
  * 1. 端到端能 import + run engine 不崩
  * 2. refine 工具可被引擎识别（OOC_TOOLS 含 REFINE_TOOL）
  * 3. submit 已无 partial 字段（schema 层确认）
- * 4. 旧用法 `submit(partial=true)` 在引擎中应被注入错误而非沉默丢弃
  *
  * 完整 LLM 驱动的 Bruce 验证由人类通过运行 `bun kernel/src/cli.ts start 8080`
  * 在真实环境中执行（参见任务 18 step 2 的 manual smoke test）。

@@ -7,7 +7,7 @@
  * 2. LLM 可通过 open(path="@relation:<peer>") 直接读到关系全文
  * 3. talk.continue.relation_update 请求在接收方以 <relation_update_request>
  *    徽章出现；engine 不自动写入任何 relation 文件
- * 4. open(command=talk) + 多次 partial submit 累积 args + 最终 submit（深化命令
+ * 4. open(command=talk) + 多次 refine 累积 args + 最终 submit（深化命令
  *    路径；TRAIT.md 单调追加 open，不回缩）
  * 5. 无 openFiles / formState 新字段的旧 thread.json 仍可正常运行（向后兼容）
  */
@@ -228,8 +228,8 @@ describe("Bruce 3 · relation_update 请求徽章渲染（不自动写）", () =
   });
 });
 
-describe("Bruce 4 · 渐进填表：partial submit 深化路径", () => {
-  test("FormManager 的 commandPath 随 partial submit 深化", () => {
+describe("Bruce 4 · 渐进填表：refine 深化路径", () => {
+  test("FormManager 的 commandPath 随 refine 深化", () => {
     const mgr = new FormManager();
     const fid = mgr.begin("talk", "问 sophia");
     expect(mgr.getForm(fid)!.commandPath).toBe("talk");
@@ -242,7 +242,7 @@ describe("Bruce 4 · 渐进填表：partial submit 深化路径", () => {
     mgr.applyRefine(fid, { type: "relation_update" });
     expect(mgr.getForm(fid)!.commandPath).toBe("talk.continue.relation_update");
 
-    /* Step 3：最终 submit（非 partial） → form 被消费 */
+    /* Step 3：最终 submit → form 被消费 */
     const finalForm = mgr.submit(fid);
     expect(finalForm!.accumulatedArgs).toEqual({
       context: "continue",
@@ -251,7 +251,7 @@ describe("Bruce 4 · 渐进填表：partial submit 深化路径", () => {
     expect(mgr.getForm(fid)).toBeNull();
   });
 
-  test("partial submit 过程中，loadedTraits 单调追加（不回缩）", () => {
+  test("refine 过程中，loadedTraits 单调追加（不回缩）", () => {
     const mgr = new FormManager();
     const fid = mgr.begin("talk", "问 sophia");
     mgr.addLoadedTraits(fid, ["kernel:talkable"]);
@@ -264,7 +264,7 @@ describe("Bruce 4 · 渐进填表：partial submit 深化路径", () => {
     expect(mgr.getForm(fid)!.loadedTraits).toContain("kernel:talkable/relation_update");
   });
 
-  test("partial submit 的 args 最终交付指令执行（合并、后覆盖前）", () => {
+  test("refine 的 args 最终交付指令执行（合并、后覆盖前）", () => {
     const mgr = new FormManager();
     const fid = mgr.begin("talk", "");
     mgr.applyRefine(fid, { target: "sophia", context: "fork" });

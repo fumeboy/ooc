@@ -37,7 +37,7 @@ function trait(
 }
 
 describe("FormManager.applyRefine — 累积语义", () => {
-  test("第一次 partial submit 后 form 仍存在，args 被累积", () => {
+  test("第一次 refine 后 form 仍存在，args 被累积", () => {
     const mgr = new FormManager();
     const fid = mgr.begin("talk", "desc");
     mgr.applyRefine(fid, { target: "sophia", context: "fork" });
@@ -48,7 +48,7 @@ describe("FormManager.applyRefine — 累积语义", () => {
     expect(form!.commandPath).toBe("talk.fork");
   });
 
-  test("多次 partial submit 累积 args（后者覆盖前者同名字段）", () => {
+  test("多次 refine 累积 args（后者覆盖前者同名字段）", () => {
     const mgr = new FormManager();
     const fid = mgr.begin("talk", "desc");
     mgr.applyRefine(fid, { target: "sophia" });
@@ -63,15 +63,15 @@ describe("FormManager.applyRefine — 累积语义", () => {
     expect(form!.commandPath).toBe("talk.continue.relation_update");
   });
 
-  test("partialSubmit 对不存在的 formId 返回 null", () => {
+  test("applyRefine 对不存在的 formId 返回 null", () => {
     const mgr = new FormManager();
     expect(mgr.applyRefine("nope", {})).toBeNull();
   });
 
-  test("partial submit 不影响 activeCommandPaths 的基础路径", () => {
+  test("refine 不影响 activeCommandPaths 的基础路径", () => {
     const mgr = new FormManager();
     const fid = mgr.begin("talk", "desc");
-    /* 尚未 partial submit，basePath = "talk" */
+    /* 尚未 refine，basePath = "talk" */
     expect(mgr.activeCommandPaths()).toContain("talk");
 
     mgr.applyRefine(fid, { context: "fork" });
@@ -80,8 +80,8 @@ describe("FormManager.applyRefine — 累积语义", () => {
   });
 });
 
-describe("FormManager.submit（非 partial）— 消费 form", () => {
-  test("非 partial submit 后 form 被移除，引用计数 -1", () => {
+describe("FormManager.submit — 消费 form", () => {
+  test("submit 后 form 被移除，引用计数 -1", () => {
     const mgr = new FormManager();
     const fid = mgr.begin("talk", "desc");
     expect(mgr.activeCommands().has("talk")).toBe(true);

@@ -1383,7 +1383,7 @@ export async function runWithThreadTree(
               const changed = await tree.activateTrait(threadId, args.trait as string);
               if (changed) newlyLoadedTraits.push(args.trait as string);
             }
-            /* Phase 4：记录本 form 引入的 trait，供 submit(partial=false) / cancel 时回收 */
+            /* Phase 4：记录本 form 引入的 trait，供 submit / cancel 时回收 */
             formManager.addLoadedTraits(formId, newlyLoadedTraits);
 
             const td = tree.readThreadData(threadId);
@@ -1610,468 +1610,455 @@ export async function runWithThreadTree(
 
         /* --- Submit --- */
         else if (toolName === "submit") {
-          /* partial 已退役 → 引导改用 refine */
-          if (args.partial === true) {
+          const form = formManager.submit(args.form_id as string ?? "");
+
+          if (!form) {
             const td = tree.readThreadData(threadId);
             if (td) {
-              td.actions.push({
-                type: "inject",
-                content: "[错误] submit(partial=true) 已退役。请改用 refine(form_id, args) 累积参数，最后 submit(form_id) 执行。",
-                timestamp: Date.now(),
-              });
+              td.actions.push({ type: "inject", content: `[错误] Form ${args.form_id} 不存在。`, timestamp: Date.now() });
               tree.writeThreadData(threadId, td);
             }
           } else {
-            const form = formManager.submit(args.form_id as string ?? "");
+            /* Phase 4：把累积 args 合并进本次调用 args，让"渐进填表"对下游指令透明 */
+            if (form.accumulatedArgs && Object.keys(form.accumulatedArgs).length > 0) {
+              for (const [k, v] of Object.entries(form.accumulatedArgs)) {
+                if (!(k in args)) args[k] = v;
+              }
+            }
+            const command = form.command;
 
-            if (!form) {
+            /* program */
+            if (command === "program" && args.code) {
+              const { context: execCtx, getOutputs, getWrittenPaths } = buildExecContext(threadId);
+              const lang = (args.lang as string) ?? "javascript";
+              const execResult = lang === "shell"
+                ? await executeShell(args.code as string, config.rootDir)
+                : await executor.execute(args.code as string, execCtx);
+              const allOutputs = [...getOutputs()];
+              if (execResult.stdout) allOutputs.push(execResult.stdout);
+              if (execResult.returnValue != null) {
+                allOutputs.push(typeof execResult.returnValue === "string"
+                  ? execResult.returnValue : JSON.stringify(execResult.returnValue, null, 2));
+              }
+              const outputText = allOutputs.join("\n").trim();
               const td = tree.readThreadData(threadId);
               if (td) {
-                td.actions.push({ type: "inject", content: `[错误] Form ${args.form_id} 不存在。`, timestamp: Date.now() });
+                td.actions.push({
+                  type: "program", content: args.code as string, success: execResult.success,
+                  result: execResult.success
+                    ? (outputText ? `>>> output:\n${outputText}` : ">>> output: (无输出)")
+                    : `>>> error: ${execResult.error}`,
+                  timestamp: Date.now(),
+                });
                 tree.writeThreadData(threadId, td);
               }
-            } else {
-              /* Phase 4：把累积 args 合并进本次调用 args，让"渐进填表"对下游指令透明 */
-              if (form.accumulatedArgs && Object.keys(form.accumulatedArgs).length > 0) {
-                for (const [k, v] of Object.entries(form.accumulatedArgs)) {
-                  if (!(k in args)) args[k] = v;
-                }
-              }
-              const command = form.command;
-
-              /* program */
-              if (command === "program" && args.code) {
-                const { context: execCtx, getOutputs, getWrittenPaths } = buildExecContext(threadId);
-                const lang = (args.lang as string) ?? "javascript";
-                const execResult = lang === "shell"
-                  ? await executeShell(args.code as string, config.rootDir)
-                  : await executor.execute(args.code as string, execCtx);
-                const allOutputs = [...getOutputs()];
-                if (execResult.stdout) allOutputs.push(execResult.stdout);
-                if (execResult.returnValue != null) {
-                  allOutputs.push(typeof execResult.returnValue === "string"
-                    ? execResult.returnValue : JSON.stringify(execResult.returnValue, null, 2));
-                }
-                const outputText = allOutputs.join("\n").trim();
-                const td = tree.readThreadData(threadId);
-                if (td) {
-                  td.actions.push({
-                    type: "program", content: args.code as string, success: execResult.success,
-                    result: execResult.success
-                      ? (outputText ? `>>> output:\n${outputText}` : ">>> output: (无输出)")
-                      : `>>> error: ${execResult.error}`,
-                    timestamp: Date.now(),
-                  });
-                  tree.writeThreadData(threadId, td);
-                }
-                /* build hook：program 内若 callMethod(file_ops.writeFile/editFile) 或 context.writeFile 触发过写入，
-                 * 在此扫描累计的 paths 跑 hooks，把失败结果注入下一轮 context。 */
-                if (execResult.success) {
-                  const paths = getWrittenPaths();
-                  if (paths.length > 0) {
-                    consola.info(`[build_hooks] program 结束，扫描写入路径 count=${paths.length} paths=${paths.join(",")}`);
-                    try {
-                      const feedback = await runBuildHooks(paths, { rootDir: config.rootDir, threadId });
-                      const failing = feedback.filter((f) => !f.success);
-                      if (failing.length > 0) {
-                        const lines = [`[build_hooks] ${failing.length} 个检查未通过（下一轮 Context 的 <knowledge name="build_feedback"> 会展开）:`];
-                        for (const f of failing) {
-                          lines.push(`- [${f.hookName}] ${f.path}: ${(f.errors?.[0] ?? f.output).slice(0, 200)}`);
-                        }
-                        const td2 = tree.readThreadData(threadId);
-                        if (td2) {
-                          td2.actions.push({ type: "inject", content: lines.join("\n"), timestamp: Date.now() });
-                          tree.writeThreadData(threadId, td2);
-                        }
+              /* build hook：program 内若 callMethod(file_ops.writeFile/editFile) 或 context.writeFile 触发过写入，
+               * 在此扫描累计的 paths 跑 hooks，把失败结果注入下一轮 context。 */
+              if (execResult.success) {
+                const paths = getWrittenPaths();
+                if (paths.length > 0) {
+                  consola.info(`[build_hooks] program 结束，扫描写入路径 count=${paths.length} paths=${paths.join(",")}`);
+                  try {
+                    const feedback = await runBuildHooks(paths, { rootDir: config.rootDir, threadId });
+                    const failing = feedback.filter((f) => !f.success);
+                    if (failing.length > 0) {
+                      const lines = [`[build_hooks] ${failing.length} 个检查未通过（下一轮 Context 的 <knowledge name="build_feedback"> 会展开）:`];
+                      for (const f of failing) {
+                        lines.push(`- [${f.hookName}] ${f.path}: ${(f.errors?.[0] ?? f.output).slice(0, 200)}`);
                       }
-                    } catch (e) {
-                      consola.warn(`[build_hooks] 执行异常: ${(e as Error).message}`);
-                    }
-                  }
-                }
-                consola.info(`[Engine] program ${execResult.success ? "成功" : "失败"}`);
-              }
-
-              /* talk / talk_sync
-               *
-               * 统一协议：talk 指令通过 context=fork|continue + 可选 threadId 表达四种模式。
-               * - fork + 无 threadId：对方新根线程（默认）
-               * - fork + threadId：对方 threadId 下 fork 新子线程（新能力）
-               * - continue + threadId：向对方 threadId 投递消息，唤醒对方（新能力）
-               * - continue + 无 threadId：schema/engine 校验报错
-               */
-              else if ((command === "talk" || command === "talk_sync") && config.onTalk) {
-                const target = (args.target as string)?.toLowerCase();
-                if (target && target !== objectName.toLowerCase()) {
-                  /* 解析 context + threadId + msg（兼容 msg 与旧 message 参数） */
-                  const ctxMode = (args.context as string | undefined) === "continue" ? "continue" : "fork";
-                  const remoteThreadIdArg = args.threadId as string | undefined;
-                  const msgContent = (args.msg as string | undefined) ?? (args.message as string | undefined) ?? "";
-                  /* continue 必须指定 threadId */
-                  if (ctxMode === "continue" && !remoteThreadIdArg) {
-                    const td = tree.readThreadData(threadId);
-                    if (td) {
-                      td.actions.push({ type: "inject", content: `[错误] talk(context="continue") 必须同时指定 threadId 参数`, timestamp: Date.now() });
-                      tree.writeThreadData(threadId, td);
-                    }
-                  } else {
-                    /* fork 模式下 threadId 作为 forkUnderThreadId（对方线程下 fork）；
-                     * continue 模式下 threadId 作为 continueThreadId（向对方线程投递） */
-                    const forkUnderThreadId = ctxMode === "fork" ? remoteThreadIdArg : undefined;
-                    const continueThreadId = ctxMode === "continue" ? remoteThreadIdArg : undefined;
-                    /* 先生成 messageId（供 action.id 和 onTalk 参数共用，前端凭此反查正文） */
-                    const messageId = genMessageOutId();
-                    /* 解析可选的结构化表单（talk form）——供前端渲染 option picker */
-                    const formPayload = extractTalkForm(args.form);
-                    const td = tree.readThreadData(threadId);
-                    if (td) {
-                      const modeLabel = ` [${ctxMode}${remoteThreadIdArg ? `:${remoteThreadIdArg}` : ""}]`;
-                      const formLabel = formPayload ? ` [form: ${formPayload.formId}]` : "";
-                      td.actions.push({
-                        id: messageId,
-                        type: "message_out",
-                        content: `[talk] → ${args.target}: ${msgContent}${modeLabel}${formLabel}`,
-                        timestamp: Date.now(),
-                        context: ctxMode,
-                        ...(formPayload ? { form: formPayload } : {}),
-                      });
-                      tree.writeThreadData(threadId, td);
-                    }
-                    /* talk_sync 到 user 是死锁：user 永远不会唤醒。记日志、不 setNodeStatus("waiting")、直接继续。 */
-                    const isTalkSyncToUser = command === "talk_sync" && target === "user";
-                    if (isTalkSyncToUser) {
-                      consola.warn(`[Engine] ${objectName} 尝试 talk_sync(target="user")——user 不参与 ThinkLoop，不会回复。已降级为 talk（不阻塞）。`);
-                    }
-                    /* 若未通过 mark 参数显式标记，且 target 只有一条未读最新消息，自动 ack */
-                    const explicitlyMarked = Array.isArray(args.mark) && args.mark.length > 0;
-                    /* Phase 6：识别 talk.continue.relation_update —— 给接收方注入 kind 标签 */
-                    const talkType = typeof args.type === "string" ? args.type : undefined;
-                    const messageKind = ctxMode === "continue" && talkType === "relation_update"
-                      ? "relation_update_request"
-                      : undefined;
-                    try {
-                      const { reply, remoteThreadId } = await config.onTalk(args.target as string, msgContent, objectName, threadId, sessionId, continueThreadId, messageId, forkUnderThreadId, messageKind);
-                      if (!explicitlyMarked) {
-                        const tdAck = tree.readThreadData(threadId);
-                        const autoAckId = getAutoAckMessageId(tdAck, args.target as string);
-                        if (autoAckId) {
-                          tree.markInbox(threadId, autoAckId, "ack", "已回复");
-                        }
-                      }
-                      if (reply) {
-                        tree.writeInbox(threadId, { from: args.target as string, content: `${reply}\n[remote_thread_id: ${remoteThreadId}]`, source: "talk" });
-                      }
-                      /* 将 remote_thread_id 记录到 actions（无论是否有 reply，LLM 都能看到） */
                       const td2 = tree.readThreadData(threadId);
                       if (td2) {
-                        td2.actions.push({ type: "inject", content: `[talk → ${args.target}] remote_thread_id = ${remoteThreadId}`, timestamp: Date.now() });
+                        td2.actions.push({ type: "inject", content: lines.join("\n"), timestamp: Date.now() });
                         tree.writeThreadData(threadId, td2);
                       }
-                    } catch (e) {
-                      tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" });
                     }
-                    /* target=user 时不 setNodeStatus("waiting")，避免死锁；其他 target 维持原逻辑 */
-                    if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting");
+                  } catch (e) {
+                    consola.warn(`[build_hooks] 执行异常: ${(e as Error).message}`);
                   }
                 }
               }
+              consola.info(`[Engine] program ${execResult.success ? "成功" : "失败"}`);
+            }
 
-              /* return */
-              else if (command === "return") {
-                await tree.returnThread(threadId, args.summary as string ?? "");
-                const td = tree.readThreadData(threadId);
-                if (td) {
-                  td.actions.push({ type: "thread_return", content: args.summary as string ?? "", timestamp: Date.now() });
-                  tree.writeThreadData(threadId, td);
-                }
-                consola.info(`[Engine] return: ${(args.summary as string)?.slice(0, 100)}`);
-              }
-
-              /* think — 对自己的线程操作（fork / continue 四模式的自身半边） */
-              else if (command === "think") {
+            /* talk / talk_sync
+             *
+             * 统一协议：talk 指令通过 context=fork|continue + 可选 threadId 表达四种模式。
+             * - fork + 无 threadId：对方新根线程（默认）
+             * - fork + threadId：对方 threadId 下 fork 新子线程（新能力）
+             * - continue + threadId：向对方 threadId 投递消息，唤醒对方（新能力）
+             * - continue + 无 threadId：schema/engine 校验报错
+             */
+            else if ((command === "talk" || command === "talk_sync") && config.onTalk) {
+              const target = (args.target as string)?.toLowerCase();
+              if (target && target !== objectName.toLowerCase()) {
+                /* 解析 context + threadId + msg（兼容 msg 与旧 message 参数） */
                 const ctxMode = (args.context as string | undefined) === "continue" ? "continue" : "fork";
-                const targetThreadId = args.threadId as string | undefined;
-                const msgContent = (args.msg as string | undefined) ?? "";
-
-                if (ctxMode === "fork") {
-                  /* fork 模式：以 targetThreadId（或当前线程）为父，创建子线程
-                   * 子线程标题 = tool call 的 title（天然同一语义；msg 作为描述/首条消息） */
-                  const subThreadName = (args.title as string | undefined) ?? (msgContent.slice(0, 40) || "thread");
-                  const parentId = targetThreadId ?? threadId;
-                  const parentNode = tree.getNode(parentId);
-                  if (!parentNode) {
-                    const td = tree.readThreadData(threadId);
-                    if (td) {
-                      td.actions.push({ type: "inject", content: `[错误] think(fork): 指定的 threadId=${parentId} 不存在`, timestamp: Date.now() });
-                      tree.writeThreadData(threadId, td);
-                    }
-                  } else {
-                    const child = await tree.createSubThread(parentId, subThreadName, {
-                      description: msgContent || (args.description as string | undefined),
-                      traits: args.traits as string[],
-                    });
-                    if (child) {
-                      await tree.setNodeStatus(child, "running");
-                      /* 把 msg 作为首条 inbox 注入，子线程首轮 Context 可见 */
-                      if (msgContent) {
-                        tree.writeInbox(child, { from: objectName, content: msgContent, source: "system" });
-                      }
-                      const td = tree.readThreadData(threadId);
-                      if (td) {
-                        td.actions.push({
-                          type: "create_thread",
-                          content: `[think.fork] ${subThreadName} → ${child}${targetThreadId ? ` (under ${targetThreadId})` : ""}`,
-                          timestamp: Date.now(),
-                          context: "fork",
-                        });
-                        td.actions.push({
-                          type: "inject",
-                          content: `[form.submit] think(fork) 成功，thread_id = ${child}`,
-                          timestamp: Date.now(),
-                        });
-                        tree.writeThreadData(threadId, td);
-                      }
-                      scheduler.onThreadCreated(child, objectName);
-                    }
-                    consola.info(`[Engine] think.fork: ${subThreadName} → ${child}`);
+                const remoteThreadIdArg = args.threadId as string | undefined;
+                const msgContent = (args.msg as string | undefined) ?? (args.message as string | undefined) ?? "";
+                /* continue 必须指定 threadId */
+                if (ctxMode === "continue" && !remoteThreadIdArg) {
+                  const td = tree.readThreadData(threadId);
+                  if (td) {
+                    td.actions.push({ type: "inject", content: `[错误] talk(context="continue") 必须同时指定 threadId 参数`, timestamp: Date.now() });
+                    tree.writeThreadData(threadId, td);
                   }
                 } else {
-                  /* continue 模式：必须指定 threadId，向它的 inbox 投递消息 */
-                  if (!targetThreadId) {
-                    const td = tree.readThreadData(threadId);
-                    if (td) {
-                      td.actions.push({ type: "inject", content: `[错误] think(context="continue") 必须同时指定 threadId 参数`, timestamp: Date.now() });
-                      tree.writeThreadData(threadId, td);
+                  /* fork 模式下 threadId 作为 forkUnderThreadId（对方线程下 fork）；
+                   * continue 模式下 threadId 作为 continueThreadId（向对方线程投递） */
+                  const forkUnderThreadId = ctxMode === "fork" ? remoteThreadIdArg : undefined;
+                  const continueThreadId = ctxMode === "continue" ? remoteThreadIdArg : undefined;
+                  /* 先生成 messageId（供 action.id 和 onTalk 参数共用，前端凭此反查正文） */
+                  const messageId = genMessageOutId();
+                  /* 解析可选的结构化表单（talk form）——供前端渲染 option picker */
+                  const formPayload = extractTalkForm(args.form);
+                  const td = tree.readThreadData(threadId);
+                  if (td) {
+                    const modeLabel = ` [${ctxMode}${remoteThreadIdArg ? `:${remoteThreadIdArg}` : ""}]`;
+                    const formLabel = formPayload ? ` [form: ${formPayload.formId}]` : "";
+                    td.actions.push({
+                      id: messageId,
+                      type: "message_out",
+                      content: `[talk] → ${args.target}: ${msgContent}${modeLabel}${formLabel}`,
+                      timestamp: Date.now(),
+                      context: ctxMode,
+                      ...(formPayload ? { form: formPayload } : {}),
+                    });
+                    tree.writeThreadData(threadId, td);
+                  }
+                  /* talk_sync 到 user 是死锁：user 永远不会唤醒。记日志、不 setNodeStatus("waiting")、直接继续。 */
+                  const isTalkSyncToUser = command === "talk_sync" && target === "user";
+                  if (isTalkSyncToUser) {
+                    consola.warn(`[Engine] ${objectName} 尝试 talk_sync(target="user")——user 不参与 ThinkLoop，不会回复。已降级为 talk（不阻塞）。`);
+                  }
+                  /* 若未通过 mark 参数显式标记，且 target 只有一条未读最新消息，自动 ack */
+                  const explicitlyMarked = Array.isArray(args.mark) && args.mark.length > 0;
+                  /* Phase 6：识别 talk.continue.relation_update —— 给接收方注入 kind 标签 */
+                  const talkType = typeof args.type === "string" ? args.type : undefined;
+                  const messageKind = ctxMode === "continue" && talkType === "relation_update"
+                    ? "relation_update_request"
+                    : undefined;
+                  try {
+                    const { reply, remoteThreadId } = await config.onTalk(args.target as string, msgContent, objectName, threadId, sessionId, continueThreadId, messageId, forkUnderThreadId, messageKind);
+                    if (!explicitlyMarked) {
+                      const tdAck = tree.readThreadData(threadId);
+                      const autoAckId = getAutoAckMessageId(tdAck, args.target as string);
+                      if (autoAckId) {
+                        tree.markInbox(threadId, autoAckId, "ack", "已回复");
+                      }
                     }
-                  } else {
-                    tree.writeInbox(targetThreadId, { from: objectName, content: msgContent, source: "continue" });
+                    if (reply) {
+                      tree.writeInbox(threadId, { from: args.target as string, content: `${reply}\n[remote_thread_id: ${remoteThreadId}]`, source: "talk" });
+                    }
+                    /* 将 remote_thread_id 记录到 actions（无论是否有 reply，LLM 都能看到） */
+                    const td2 = tree.readThreadData(threadId);
+                    if (td2) {
+                      td2.actions.push({ type: "inject", content: `[talk → ${args.target}] remote_thread_id = ${remoteThreadId}`, timestamp: Date.now() });
+                      tree.writeThreadData(threadId, td2);
+                    }
+                  } catch (e) {
+                    tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" });
+                  }
+                  /* target=user 时不 setNodeStatus("waiting")，避免死锁；其他 target 维持原逻辑 */
+                  if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting");
+                }
+              }
+            }
+
+            /* return */
+            else if (command === "return") {
+              await tree.returnThread(threadId, args.summary as string ?? "");
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.actions.push({ type: "thread_return", content: args.summary as string ?? "", timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+              consola.info(`[Engine] return: ${(args.summary as string)?.slice(0, 100)}`);
+            }
+
+            /* think — 对自己的线程操作（fork / continue 四模式的自身半边） */
+            else if (command === "think") {
+              const ctxMode = (args.context as string | undefined) === "continue" ? "continue" : "fork";
+              const targetThreadId = args.threadId as string | undefined;
+              const msgContent = (args.msg as string | undefined) ?? "";
+
+              if (ctxMode === "fork") {
+                /* fork 模式：以 targetThreadId（或当前线程）为父，创建子线程
+                 * 子线程标题 = tool call 的 title（天然同一语义；msg 作为描述/首条消息） */
+                const subThreadName = (args.title as string | undefined) ?? (msgContent.slice(0, 40) || "thread");
+                const parentId = targetThreadId ?? threadId;
+                const parentNode = tree.getNode(parentId);
+                if (!parentNode) {
+                  const td = tree.readThreadData(threadId);
+                  if (td) {
+                    td.actions.push({ type: "inject", content: `[错误] think(fork): 指定的 threadId=${parentId} 不存在`, timestamp: Date.now() });
+                    tree.writeThreadData(threadId, td);
+                  }
+                } else {
+                  const child = await tree.createSubThread(parentId, subThreadName, {
+                    description: msgContent || (args.description as string | undefined),
+                    traits: args.traits as string[],
+                  });
+                  if (child) {
+                    await tree.setNodeStatus(child, "running");
+                    /* 把 msg 作为首条 inbox 注入，子线程首轮 Context 可见 */
+                    if (msgContent) {
+                      tree.writeInbox(child, { from: objectName, content: msgContent, source: "system" });
+                    }
                     const td = tree.readThreadData(threadId);
                     if (td) {
                       td.actions.push({
-                        type: "message_out",
-                        content: `[think.continue] → ${targetThreadId}: ${msgContent}`,
+                        type: "create_thread",
+                        content: `[think.fork] ${subThreadName} → ${child}${targetThreadId ? ` (under ${targetThreadId})` : ""}`,
                         timestamp: Date.now(),
-                        context: "continue",
+                        context: "fork",
+                      });
+                      td.actions.push({
+                        type: "inject",
+                        content: `[form.submit] think(fork) 成功，thread_id = ${child}`,
+                        timestamp: Date.now(),
                       });
                       tree.writeThreadData(threadId, td);
                     }
-                    consola.info(`[Engine] think.continue: → ${targetThreadId}`);
+                    scheduler.onThreadCreated(child, objectName);
                   }
+                  consola.info(`[Engine] think.fork: ${subThreadName} → ${child}`);
                 }
-              }
-
-              /* call_function
-               *
-               * 统一协议：llm_methods 签名为 `(ctx, argsObj)` 对象解构，与沙箱 callMethod
-               * 完全一致。engine 把 LLM 传来的 args.args 作为整体对象传给 fn，**不再按
-               * params 列表展开为位置参数**（旧做法与新 trait 不匹配）。
-               *
-               * 兼容：若 LLM 传入数组 args（极少见）→ 走位置参数展开，保留向后兼容空间。
-               */
-              else if (command === "call_function") {
-                /* call_function 协议：trait + function_name 应当在 open 时传入；
-                 * 兜底 1：从 submit 的 args.trait / args.function_name 补填
-                 * 兜底 2：缺失时 inject 明确错误（避免静默跳过让 LLM 误以为成功）。
-                 * 与 resume 路径保持双路径行为一致。 */
-                const trait = form.trait ?? (args.trait as string | undefined);
-                const functionName = form.functionName ?? (args.function_name as string | undefined);
-                if (!trait || !functionName) {
+              } else {
+                /* continue 模式：必须指定 threadId，向它的 inbox 投递消息 */
+                if (!targetThreadId) {
+                  const td = tree.readThreadData(threadId);
+                  if (td) {
+                    td.actions.push({ type: "inject", content: `[错误] think(context="continue") 必须同时指定 threadId 参数`, timestamp: Date.now() });
+                    tree.writeThreadData(threadId, td);
+                  }
+                } else {
+                  tree.writeInbox(targetThreadId, { from: objectName, content: msgContent, source: "continue" });
                   const td = tree.readThreadData(threadId);
                   if (td) {
                     td.actions.push({
-                      type: "inject",
-                      content: `[错误] call_function 缺少 trait 或 function_name 参数。\n请在 open 时传：open({ type: "command", command: "call_function", trait: "<完整 traitId 如 kernel:reflective/super>", function_name: "<方法名>" })`,
+                      type: "message_out",
+                      content: `[think.continue] → ${targetThreadId}: ${msgContent}`,
                       timestamp: Date.now(),
+                      context: "continue",
                     });
                     tree.writeThreadData(threadId, td);
                   }
-                  consola.warn(`[Engine] call_function 缺参数 (run): trait=${trait} fn=${functionName}`);
-                } else {
-                  const method = methodRegistry.all().find(m => m.name === functionName && m.traitName === trait);
-                  let resultText: string;
-                  if (!method) {
-                    resultText = `[错误] 方法 ${trait}.${functionName} 不存在`;
-                  } else {
-                    try {
-                      const { context: execCtx } = buildExecContext(threadId);
-                      const rawArgs = args.args;
-                      const isPositionalArray = Array.isArray(rawArgs);
-                      const isObjectArgs = rawArgs !== null && typeof rawArgs === "object" && !isPositionalArray;
-                      const argsObj: Record<string, unknown> = isObjectArgs
-                        ? (rawArgs as Record<string, unknown>)
-                        : {};
-                      let result: unknown;
-                      if (isPositionalArray) {
-                        /* 旧位置参数兜底：args 是数组时按顺序展开 */
-                        const argValues = rawArgs as unknown[];
-                        result = method.needsCtx !== false
-                          ? await method.fn(execCtx, ...argValues)
-                          : await method.fn(...argValues);
-                      } else {
-                        /* 新协议：整个对象作为单一参数 */
-                        result = method.needsCtx !== false
-                          ? await method.fn(execCtx, argsObj)
-                          : await method.fn(argsObj);
-                      }
-                      resultText = typeof result === "string" ? result : JSON.stringify(result, null, 2);
-                    } catch (e) {
-                      resultText = `[错误] ${trait}.${functionName} 执行失败: ${(e as Error).message}`;
-                    }
-                  }
-                  const td = tree.readThreadData(threadId);
-                  if (td) {
-                    td.actions.push({ type: "inject", content: `>>> ${trait}.${functionName} 结果:\n${resultText}`, timestamp: Date.now() });
-                    tree.writeThreadData(threadId, td);
-                  }
-                  /* build hook：file_ops 写文件动作完成后自动触发（tsc/lint/json-syntax 等） */
-                  const hookInject = await triggerBuildHooksAfterCall({
-                    trait,
-                    functionName,
-                    args: args.args,
-                    rootDir: config.rootDir,
-                    threadId,
-                  });
-                  if (hookInject) {
-                    const td2 = tree.readThreadData(threadId);
-                    if (td2) {
-                      td2.actions.push({ type: "inject", content: hookInject, timestamp: Date.now() });
-                      tree.writeThreadData(threadId, td2);
-                    }
-                  }
-                  consola.info(`[Engine] call_function: ${trait}.${functionName}`);
+                  consola.info(`[Engine] think.continue: → ${targetThreadId}`);
                 }
               }
+            }
 
-              /* set_plan */
-              else if (command === "set_plan") {
+            /* call_function
+             *
+             * 统一协议：llm_methods 签名为 `(ctx, argsObj)` 对象解构，与沙箱 callMethod
+             * 完全一致。engine 把 LLM 传来的 args.args 作为整体对象传给 fn，**不再按
+             * params 列表展开为位置参数**（旧做法与新 trait 不匹配）。
+             *
+             * 兼容：若 LLM 传入数组 args（极少见）→ 走位置参数展开，保留向后兼容空间。
+             */
+            else if (command === "call_function") {
+              /* call_function 协议：trait + function_name 应当在 open 时传入；
+               * 兜底 1：从 submit 的 args.trait / args.function_name 补填
+               * 兜底 2：缺失时 inject 明确错误（避免静默跳过让 LLM 误以为成功）。
+               * 与 resume 路径保持双路径行为一致。 */
+              const trait = form.trait ?? (args.trait as string | undefined);
+              const functionName = form.functionName ?? (args.function_name as string | undefined);
+              if (!trait || !functionName) {
                 const td = tree.readThreadData(threadId);
                 if (td) {
-                  td.plan = args.text as string;
-                  td.actions.push({ type: "set_plan", content: args.text as string, timestamp: Date.now() });
-                  tree.writeThreadData(threadId, td);
-                }
-              }
-
-              /* await / await_all */
-              else if (command === "await" || command === "await_all") {
-                const threadIds = command === "await" ? [args.thread_id as string] : (args.thread_ids as string[]) ?? [];
-                await tree.awaitThreads(threadId, threadIds);
-                const ids = threadIds.join(", ");
-                const td = tree.readThreadData(threadId);
-                if (td) {
-                  td.actions.push({ type: "inject", content: `[${command}] ${ids}`, timestamp: Date.now() });
-                  tree.writeThreadData(threadId, td);
-                }
-              }
-
-              /* compact —— 一次性应用所有累积的 truncate/drop 标记 + 插入 compact_summary
-               *
-               * args.summary 必填——LLM 给出的"此前工作浓缩摘要"。
-               * engine 读 threadData.compactMarks 应用到 actions，插入 compact_summary 作为首条，
-               * 清空 compactMarks。trait 的激活状态由本分支底下的"trait 卸载"块统一处理。 */
-              else if (command === "compact") {
-                const summary = typeof args.summary === "string" ? args.summary.trim() : "";
-                const td = tree.readThreadData(threadId);
-                if (!td) {
-                  consola.warn(`[Engine] compact: 读取 thread.json 失败 thread=${threadId}`);
-                } else if (summary.length === 0) {
                   td.actions.push({
                     type: "inject",
-                    content: `[错误] submit compact 必须带 summary 参数（LLM 生成的浓缩摘要纯文本）。本次压缩未执行。`,
+                    content: `[错误] call_function 缺少 trait 或 function_name 参数。\n请在 open 时传：open({ type: "command", command: "call_function", trait: "<完整 traitId 如 kernel:reflective/super>", function_name: "<方法名>" })`,
                     timestamp: Date.now(),
                   });
                   tree.writeThreadData(threadId, td);
+                }
+                consola.warn(`[Engine] call_function 缺参数 (run): trait=${trait} fn=${functionName}`);
+              } else {
+                const method = methodRegistry.all().find(m => m.name === functionName && m.traitName === trait);
+                let resultText: string;
+                if (!method) {
+                  resultText = `[错误] 方法 ${trait}.${functionName} 不存在`;
                 } else {
-                  const marks = td.compactMarks ?? {};
-                  const before = estimateActionsTokens(td.actions);
-                  const newActions = applyCompact(td.actions, marks, summary);
-                  const after = estimateActionsTokens(newActions);
-                  const dropCount = marks.drops?.length ?? 0;
-                  const truncateCount = marks.truncates?.length ?? 0;
-                  const summaryAction = newActions[0]!;
-
-                  /* 原子应用：替换 actions + 清空 compactMarks */
-                  const nextTd: ThreadDataFile = {
-                    ...td,
-                    actions: newActions,
-                    compactMarks: undefined,
-                  };
-                  /* 在 compact_summary 之后 append 一条 inject 告诉 LLM 压缩结果
-                   * （这条 inject 是新一轮的起点，不会被当前压缩影响） */
-                  nextTd.actions.push({
-                    type: "inject",
-                    content:
-                      `>>> [compact 完成] drop=${dropCount} truncate=${truncateCount}; ` +
-                      `tokens ${before} → ${after}（节省 ${before - after}）。\n` +
-                      `compact_summary 已作为首条历史背景注入，后续工作继续。`,
-                    timestamp: Date.now(),
-                  });
-                  tree.writeThreadData(threadId, nextTd);
-                  consola.info(`[Engine] compact: tokens ${before} → ${after} drop=${dropCount} truncate=${truncateCount} kept=${summaryAction.kept}`);
+                  try {
+                    const { context: execCtx } = buildExecContext(threadId);
+                    const rawArgs = args.args;
+                    const isPositionalArray = Array.isArray(rawArgs);
+                    const isObjectArgs = rawArgs !== null && typeof rawArgs === "object" && !isPositionalArray;
+                    const argsObj: Record<string, unknown> = isObjectArgs
+                      ? (rawArgs as Record<string, unknown>)
+                      : {};
+                    let result: unknown;
+                    if (isPositionalArray) {
+                      /* 旧位置参数兜底：args 是数组时按顺序展开 */
+                      const argValues = rawArgs as unknown[];
+                      result = method.needsCtx !== false
+                        ? await method.fn(execCtx, ...argValues)
+                        : await method.fn(...argValues);
+                    } else {
+                      /* 新协议：整个对象作为单一参数 */
+                      result = method.needsCtx !== false
+                        ? await method.fn(execCtx, argsObj)
+                        : await method.fn(argsObj);
+                    }
+                    resultText = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+                  } catch (e) {
+                    resultText = `[错误] ${trait}.${functionName} 执行失败: ${(e as Error).message}`;
+                  }
                 }
+                const td = tree.readThreadData(threadId);
+                if (td) {
+                  td.actions.push({ type: "inject", content: `>>> ${trait}.${functionName} 结果:\n${resultText}`, timestamp: Date.now() });
+                  tree.writeThreadData(threadId, td);
+                }
+                /* build hook：file_ops 写文件动作完成后自动触发（tsc/lint/json-syntax 等） */
+                const hookInject = await triggerBuildHooksAfterCall({
+                  trait,
+                  functionName,
+                  args: args.args,
+                  rootDir: config.rootDir,
+                  threadId,
+                });
+                if (hookInject) {
+                  const td2 = tree.readThreadData(threadId);
+                  if (td2) {
+                    td2.actions.push({ type: "inject", content: hookInject, timestamp: Date.now() });
+                    tree.writeThreadData(threadId, td2);
+                  }
+                }
+                consola.info(`[Engine] call_function: ${trait}.${functionName}`);
               }
-
-              /* trait 卸载（submit 结束时）
-               * Phase 4：优先用 form.loadedTraits；向后兼容的兜底走 collectCommandTraits。
-               * 仍被其他 active form 需要的 trait 不卸。固定 trait 亦豁免。 */
-              if (command !== "_trait" && command !== "_skill" && command !== "defer") {
-                if (!formManager.activeCommands().has(form.command)) {
-                  const traitsToUnload = form.loadedTraits && form.loadedTraits.length > 0
-                    ? form.loadedTraits
-                    : collectCommandTraits(config.traits, new Set([form.command]));
-                  const stillNeededSet = new Set(collectCommandTraits(config.traits, formManager.activeCommandPaths()));
-                  for (const traitName of traitsToUnload) {
-                    if (tree.isPinnedTrait(threadId, traitName)) continue;
-                    if (stillNeededSet.has(traitName)) continue;
-                    /* always trait 语义 pinned：不应随 command form submit 自动回收 */
-                    if (isAlwaysTrait(config.traits, traitName)) continue;
-                    await tree.deactivateTrait(threadId, traitName);
-                  }
-                }
-
-                /* defer hook 注入：command 被 submit 时，收集匹配的 on:{command} hooks */
-                const tdForHook = tree.readThreadData(threadId);
-                if (tdForHook?.hooks) {
-                  const hookText = collectCommandHooks(command, tdForHook.hooks);
-                  if (hookText) {
-                    tdForHook.actions.push({ type: "inject", content: hookText, timestamp: Date.now() });
-                    tree.writeThreadData(threadId, tdForHook);
-                  }
-                }
-              }
-
-              /* defer command：注册 on:{command} hook */
-              if (command === "defer") {
-                const onCommand = args.on_command as string;
-                const content = args.content as string;
-                if (onCommand && content) {
-                  const td = tree.readThreadData(threadId);
-                  if (td) {
-                    if (!td.hooks) td.hooks = [];
-                    td.hooks.push({
-                      event: `on:${onCommand}`,
-                      traitName: "",
-                      content,
-                      once: (args.once as boolean) ?? true,
-                    });
-                    td.actions.push({ type: "inject", content: `[defer] 已注册 on:${onCommand} 提醒`, timestamp: Date.now() });
-                    tree.writeThreadData(threadId, td);
-                  }
-                  consola.info(`[Engine] defer: on:${onCommand}`);
-                } else {
-                  const td = tree.readThreadData(threadId);
-                  if (td) {
-                    td.actions.push({ type: "inject", content: `[错误] defer 需要 on_command 和 content 参数`, timestamp: Date.now() });
-                    tree.writeThreadData(threadId, td);
-                  }
-                }
-              }
-
-              const tdAfter = tree.readThreadData(threadId);
-              if (tdAfter) { tdAfter.activeForms = formManager.toData(); tree.writeThreadData(threadId, tdAfter); }
-              consola.info(`[Engine] form.submit: ${command} (${form.formId})`);
             }
-          } /* end of non-partial branch */
+
+            /* set_plan */
+            else if (command === "set_plan") {
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.plan = args.text as string;
+                td.actions.push({ type: "set_plan", content: args.text as string, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+            }
+
+            /* await / await_all */
+            else if (command === "await" || command === "await_all") {
+              const threadIds = command === "await" ? [args.thread_id as string] : (args.thread_ids as string[]) ?? [];
+              await tree.awaitThreads(threadId, threadIds);
+              const ids = threadIds.join(", ");
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.actions.push({ type: "inject", content: `[${command}] ${ids}`, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+            }
+
+            /* compact —— 一次性应用所有累积的 truncate/drop 标记 + 插入 compact_summary
+             *
+             * args.summary 必填——LLM 给出的"此前工作浓缩摘要"。
+             * engine 读 threadData.compactMarks 应用到 actions，插入 compact_summary 作为首条，
+             * 清空 compactMarks。trait 的激活状态由本分支底下的"trait 卸载"块统一处理。 */
+            else if (command === "compact") {
+              const summary = typeof args.summary === "string" ? args.summary.trim() : "";
+              const td = tree.readThreadData(threadId);
+              if (!td) {
+                consola.warn(`[Engine] compact: 读取 thread.json 失败 thread=${threadId}`);
+              } else if (summary.length === 0) {
+                td.actions.push({
+                  type: "inject",
+                  content: `[错误] submit compact 必须带 summary 参数（LLM 生成的浓缩摘要纯文本）。本次压缩未执行。`,
+                  timestamp: Date.now(),
+                });
+                tree.writeThreadData(threadId, td);
+              } else {
+                const marks = td.compactMarks ?? {};
+                const before = estimateActionsTokens(td.actions);
+                const newActions = applyCompact(td.actions, marks, summary);
+                const after = estimateActionsTokens(newActions);
+                const dropCount = marks.drops?.length ?? 0;
+                const truncateCount = marks.truncates?.length ?? 0;
+                const summaryAction = newActions[0]!;
+
+                /* 原子应用：替换 actions + 清空 compactMarks */
+                const nextTd: ThreadDataFile = {
+                  ...td,
+                  actions: newActions,
+                  compactMarks: undefined,
+                };
+                /* 在 compact_summary 之后 append 一条 inject 告诉 LLM 压缩结果
+                 * （这条 inject 是新一轮的起点，不会被当前压缩影响） */
+                nextTd.actions.push({
+                  type: "inject",
+                  content:
+                    `>>> [compact 完成] drop=${dropCount} truncate=${truncateCount}; ` +
+                    `tokens ${before} → ${after}（节省 ${before - after}）。\n` +
+                    `compact_summary 已作为首条历史背景注入，后续工作继续。`,
+                  timestamp: Date.now(),
+                });
+                tree.writeThreadData(threadId, nextTd);
+                consola.info(`[Engine] compact: tokens ${before} → ${after} drop=${dropCount} truncate=${truncateCount} kept=${summaryAction.kept}`);
+              }
+            }
+
+            /* trait 卸载（submit 结束时）
+             * Phase 4：优先用 form.loadedTraits；向后兼容的兜底走 collectCommandTraits。
+             * 仍被其他 active form 需要的 trait 不卸。固定 trait 亦豁免。 */
+            if (command !== "_trait" && command !== "_skill" && command !== "defer") {
+              if (!formManager.activeCommands().has(form.command)) {
+                const traitsToUnload = form.loadedTraits && form.loadedTraits.length > 0
+                  ? form.loadedTraits
+                  : collectCommandTraits(config.traits, new Set([form.command]));
+                const stillNeededSet = new Set(collectCommandTraits(config.traits, formManager.activeCommandPaths()));
+                for (const traitName of traitsToUnload) {
+                  if (tree.isPinnedTrait(threadId, traitName)) continue;
+                  if (stillNeededSet.has(traitName)) continue;
+                  /* always trait 语义 pinned：不应随 command form submit 自动回收 */
+                  if (isAlwaysTrait(config.traits, traitName)) continue;
+                  await tree.deactivateTrait(threadId, traitName);
+                }
+              }
+
+              /* defer hook 注入：command 被 submit 时，收集匹配的 on:{command} hooks */
+              const tdForHook = tree.readThreadData(threadId);
+              if (tdForHook?.hooks) {
+                const hookText = collectCommandHooks(command, tdForHook.hooks);
+                if (hookText) {
+                  tdForHook.actions.push({ type: "inject", content: hookText, timestamp: Date.now() });
+                  tree.writeThreadData(threadId, tdForHook);
+                }
+              }
+            }
+
+            /* defer command：注册 on:{command} hook */
+            if (command === "defer") {
+              const onCommand = args.on_command as string;
+              const content = args.content as string;
+              if (onCommand && content) {
+                const td = tree.readThreadData(threadId);
+                if (td) {
+                  if (!td.hooks) td.hooks = [];
+                  td.hooks.push({
+                    event: `on:${onCommand}`,
+                    traitName: "",
+                    content,
+                    once: (args.once as boolean) ?? true,
+                  });
+                  td.actions.push({ type: "inject", content: `[defer] 已注册 on:${onCommand} 提醒`, timestamp: Date.now() });
+                  tree.writeThreadData(threadId, td);
+                }
+                consola.info(`[Engine] defer: on:${onCommand}`);
+              } else {
+                const td = tree.readThreadData(threadId);
+                if (td) {
+                  td.actions.push({ type: "inject", content: `[错误] defer 需要 on_command 和 content 参数`, timestamp: Date.now() });
+                  tree.writeThreadData(threadId, td);
+                }
+              }
+            }
+
+            const tdAfter = tree.readThreadData(threadId);
+            if (tdAfter) { tdAfter.activeForms = formManager.toData(); tree.writeThreadData(threadId, tdAfter); }
+            consola.info(`[Engine] form.submit: ${command} (${form.formId})`);
+          }
         }
 
         /* --- Close --- */
@@ -2989,294 +2976,281 @@ export async function resumeWithThreadTree(
 
         /* --- Submit (resume) --- */
         } else if (toolName === "submit") {
-          /* partial 已退役 → 引导改用 refine */
-          if (args.partial === true) {
+          const form = formManager.submit(args.form_id as string ?? "");
+          if (!form) {
             const td = tree.readThreadData(threadId);
-            if (td) {
-              td.actions.push({
-                type: "inject",
-                content: "[错误] submit(partial=true) 已退役。请改用 refine(form_id, args) 累积参数，最后 submit(form_id) 执行。",
-                timestamp: Date.now(),
-              });
-              tree.writeThreadData(threadId, td);
-            }
+            if (td) { td.actions.push({ type: "inject", content: `[错误] Form ${args.form_id} 不存在。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
           } else {
-            const form = formManager.submit(args.form_id as string ?? "");
-            if (!form) {
-              const td = tree.readThreadData(threadId);
-              if (td) { td.actions.push({ type: "inject", content: `[错误] Form ${args.form_id} 不存在。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
-            } else {
-              /* Phase 4：合并累积 args */
-              if (form.accumulatedArgs && Object.keys(form.accumulatedArgs).length > 0) {
-                for (const [k, v] of Object.entries(form.accumulatedArgs)) {
-                  if (!(k in args)) args[k] = v;
-                }
+            /* Phase 4：合并累积 args */
+            if (form.accumulatedArgs && Object.keys(form.accumulatedArgs).length > 0) {
+              for (const [k, v] of Object.entries(form.accumulatedArgs)) {
+                if (!(k in args)) args[k] = v;
               }
-              const command = form.command;
-              if (command === "program" && args.code) {
-                const { context: execCtx, getOutputs, getWrittenPaths } = buildExecContext(threadId);
-                const lang = (args.lang as string) ?? "javascript";
-                const execResult = lang === "shell" ? await executeShell(args.code as string, config.rootDir) : await executor.execute(args.code as string, execCtx);
-                const allOutputs = [...getOutputs()]; if (execResult.stdout) allOutputs.push(execResult.stdout);
-                if (execResult.returnValue != null) allOutputs.push(typeof execResult.returnValue === "string" ? execResult.returnValue : JSON.stringify(execResult.returnValue, null, 2));
-                const outputText = allOutputs.join("\n").trim();
-                const td = tree.readThreadData(threadId);
-                if (td) { td.actions.push({ type: "program", content: args.code as string, success: execResult.success, result: execResult.success ? (outputText ? `>>> output:\n${outputText}` : ">>> output: (无输出)") : `>>> error: ${execResult.error}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
-                /* build hook：resume 路径同 run 路径，program 写入路径累计后触发 hooks */
-                if (execResult.success) {
-                  const paths = getWrittenPaths();
-                  if (paths.length > 0) {
-                    consola.info(`[build_hooks] program(resume) 结束，扫描写入路径 count=${paths.length} paths=${paths.join(",")}`);
-                    try {
-                      const feedback = await runBuildHooks(paths, { rootDir: config.rootDir, threadId });
-                      const failing = feedback.filter((f) => !f.success);
-                      if (failing.length > 0) {
-                        const lines = [`[build_hooks] ${failing.length} 个检查未通过（下一轮 Context 的 <knowledge name="build_feedback"> 会展开）:`];
-                        for (const f of failing) {
-                          lines.push(`- [${f.hookName}] ${f.path}: ${(f.errors?.[0] ?? f.output).slice(0, 200)}`);
-                        }
-                        const td2 = tree.readThreadData(threadId);
-                        if (td2) {
-                          td2.actions.push({ type: "inject", content: lines.join("\n"), timestamp: Date.now() });
-                          tree.writeThreadData(threadId, td2);
-                        }
-                      }
-                    } catch (e) {
-                      consola.warn(`[build_hooks] 执行异常: ${(e as Error).message}`);
-                    }
-                  }
-                }
-              } else if ((command === "talk" || command === "talk_sync") && config.onTalk) {
-                /* resume 路径的 talk：与 run 路径保持同一 schema 协议（think/talk 统一 context）。 */
-                const target = (args.target as string)?.toLowerCase();
-                if (target && target !== objectName.toLowerCase()) {
-                  const ctxMode = (args.context as string | undefined) === "continue" ? "continue" : "fork";
-                  const remoteThreadIdArg = args.threadId as string | undefined;
-                  const msgContent = (args.msg as string | undefined) ?? (args.message as string | undefined) ?? "";
-                  if (ctxMode === "continue" && !remoteThreadIdArg) {
-                    const td = tree.readThreadData(threadId);
-                    if (td) { td.actions.push({ type: "inject", content: `[错误] talk(context="continue") 必须同时指定 threadId 参数`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
-                  } else {
-                    const forkUnderThreadId = ctxMode === "fork" ? remoteThreadIdArg : undefined;
-                    const continueThreadId = ctxMode === "continue" ? remoteThreadIdArg : undefined;
-                    const messageId = genMessageOutId();
-                    const formPayload = extractTalkForm(args.form);
-                    const td = tree.readThreadData(threadId);
-                    if (td) {
-                      const modeLabel = ` [${ctxMode}${remoteThreadIdArg ? `:${remoteThreadIdArg}` : ""}]`;
-                      const formLabel = formPayload ? ` [form: ${formPayload.formId}]` : "";
-                      td.actions.push({
-                        id: messageId,
-                        type: "message_out",
-                        content: `[talk] → ${args.target}: ${msgContent}${modeLabel}${formLabel}`,
-                        timestamp: Date.now(),
-                        context: ctxMode,
-                        ...(formPayload ? { form: formPayload } : {}),
-                      });
-                      tree.writeThreadData(threadId, td);
-                    }
-                    const isTalkSyncToUser = command === "talk_sync" && target === "user";
-                    if (isTalkSyncToUser) {
-                      consola.warn(`[Engine] ${objectName} 尝试 talk_sync(target="user")——user 不参与 ThinkLoop，不会回复。已降级为 talk（不阻塞）。`);
-                    }
-                    const explicitlyMarked = Array.isArray(args.mark) && args.mark.length > 0;
-                    /* Phase 6：识别 talk.continue.relation_update */
-                    const talkType = typeof args.type === "string" ? args.type : undefined;
-                    const messageKind = ctxMode === "continue" && talkType === "relation_update"
-                      ? "relation_update_request"
-                      : undefined;
-                    try {
-                      const { reply, remoteThreadId } = await config.onTalk(args.target as string, msgContent, objectName, threadId, sessionId, continueThreadId, messageId, forkUnderThreadId, messageKind);
-                      if (!explicitlyMarked) {
-                        const tdAck = tree.readThreadData(threadId);
-                        const autoAckId = getAutoAckMessageId(tdAck, args.target as string);
-                        if (autoAckId) tree.markInbox(threadId, autoAckId, "ack", "已回复");
-                      }
-                      if (reply) {
-                        tree.writeInbox(threadId, { from: args.target as string, content: `${reply}\n[remote_thread_id: ${remoteThreadId}]`, source: "talk" });
+            }
+            const command = form.command;
+            if (command === "program" && args.code) {
+              const { context: execCtx, getOutputs, getWrittenPaths } = buildExecContext(threadId);
+              const lang = (args.lang as string) ?? "javascript";
+              const execResult = lang === "shell" ? await executeShell(args.code as string, config.rootDir) : await executor.execute(args.code as string, execCtx);
+              const allOutputs = [...getOutputs()]; if (execResult.stdout) allOutputs.push(execResult.stdout);
+              if (execResult.returnValue != null) allOutputs.push(typeof execResult.returnValue === "string" ? execResult.returnValue : JSON.stringify(execResult.returnValue, null, 2));
+              const outputText = allOutputs.join("\n").trim();
+              const td = tree.readThreadData(threadId);
+              if (td) { td.actions.push({ type: "program", content: args.code as string, success: execResult.success, result: execResult.success ? (outputText ? `>>> output:\n${outputText}` : ">>> output: (无输出)") : `>>> error: ${execResult.error}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+              /* build hook：resume 路径同 run 路径，program 写入路径累计后触发 hooks */
+              if (execResult.success) {
+                const paths = getWrittenPaths();
+                if (paths.length > 0) {
+                  consola.info(`[build_hooks] program(resume) 结束，扫描写入路径 count=${paths.length} paths=${paths.join(",")}`);
+                  try {
+                    const feedback = await runBuildHooks(paths, { rootDir: config.rootDir, threadId });
+                    const failing = feedback.filter((f) => !f.success);
+                    if (failing.length > 0) {
+                      const lines = [`[build_hooks] ${failing.length} 个检查未通过（下一轮 Context 的 <knowledge name="build_feedback"> 会展开）:`];
+                      for (const f of failing) {
+                        lines.push(`- [${f.hookName}] ${f.path}: ${(f.errors?.[0] ?? f.output).slice(0, 200)}`);
                       }
                       const td2 = tree.readThreadData(threadId);
                       if (td2) {
-                        td2.actions.push({ type: "inject", content: `[talk → ${args.target}] remote_thread_id = ${remoteThreadId}`, timestamp: Date.now() });
+                        td2.actions.push({ type: "inject", content: lines.join("\n"), timestamp: Date.now() });
                         tree.writeThreadData(threadId, td2);
                       }
-                    } catch (e) { tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" }); }
-                    if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting");
-                  }
-                }
-              } else if (command === "return") {
-                /* 与 run 路径对齐：用 tree.returnThread（自动设 done + 写 summary + 唤醒等待的父线程）。
-                 * 历史 bug：旧 resume 这里调了不存在的 scheduler.markDone() 导致抛错——已修复。 */
-                await tree.returnThread(threadId, args.summary as string ?? "");
-                const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "thread_return", content: args.summary as string ?? "", timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
-                consola.info(`[Engine] return (resume): ${(args.summary as string)?.slice(0, 100)}`);
-              } else if (command === "think") {
-                /* resume 路径的 think：与 run 路径语义完全对齐 */
-                const ctxMode = (args.context as string | undefined) === "continue" ? "continue" : "fork";
-                const targetThreadId = args.threadId as string | undefined;
-                const msgContent = (args.msg as string | undefined) ?? "";
-                if (ctxMode === "fork") {
-                  const subThreadName = (args.title as string | undefined) ?? (msgContent.slice(0, 40) || "thread");
-                  const parentId = targetThreadId ?? threadId;
-                  const parentNode = tree.getNode(parentId);
-                  if (!parentNode) {
-                    const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "inject", content: `[错误] think(fork): 指定的 threadId=${parentId} 不存在`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
-                  } else {
-                    const child = await tree.createSubThread(parentId, subThreadName, {
-                      description: msgContent || (args.description as string | undefined),
-                      traits: args.traits as string[],
-                    });
-                    if (child) {
-                      await tree.setNodeStatus(child, "running");
-                      if (msgContent) tree.writeInbox(child, { from: objectName, content: msgContent, source: "system" });
-                      const td = tree.readThreadData(threadId);
-                      if (td) {
-                        td.actions.push({ type: "create_thread", content: `[think.fork] ${subThreadName} → ${child}${targetThreadId ? ` (under ${targetThreadId})` : ""}`, timestamp: Date.now(), context: "fork" });
-                        td.actions.push({ type: "inject", content: `[form.submit] think(fork) 成功，thread_id = ${child}`, timestamp: Date.now() });
-                        tree.writeThreadData(threadId, td);
-                      }
-                      scheduler.onThreadCreated(child, objectName);
                     }
-                  }
-                } else {
-                  if (!targetThreadId) {
-                    const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "inject", content: `[错误] think(context="continue") 必须同时指定 threadId 参数`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
-                  } else {
-                    tree.writeInbox(targetThreadId, { from: objectName, content: msgContent, source: "continue" });
-                    const td = tree.readThreadData(threadId);
-                    if (td) { td.actions.push({ type: "message_out", content: `[think.continue] → ${targetThreadId}: ${msgContent}`, timestamp: Date.now(), context: "continue" }); tree.writeThreadData(threadId, td); }
+                  } catch (e) {
+                    consola.warn(`[build_hooks] 执行异常: ${(e as Error).message}`);
                   }
                 }
-              } else if (command === "call_function") {
-                /* call_function 协议：trait + function_name 应当在 open 时传入；
-                 * 兜底 1：从 submit 的 args.trait / args.function_name 补填
-                 * 兜底 2：缺失时 inject 明确错误（之前是静默跳过，会让 LLM 误以为成功）
-                 * 与 run 路径对齐——保持双路径行为一致。 */
-                const trait = form.trait ?? (args.trait as string | undefined);
-                const functionName = form.functionName ?? (args.function_name as string | undefined);
-                if (!trait || !functionName) {
+              }
+            } else if ((command === "talk" || command === "talk_sync") && config.onTalk) {
+              /* resume 路径的 talk：与 run 路径保持同一 schema 协议（think/talk 统一 context）。 */
+              const target = (args.target as string)?.toLowerCase();
+              if (target && target !== objectName.toLowerCase()) {
+                const ctxMode = (args.context as string | undefined) === "continue" ? "continue" : "fork";
+                const remoteThreadIdArg = args.threadId as string | undefined;
+                const msgContent = (args.msg as string | undefined) ?? (args.message as string | undefined) ?? "";
+                if (ctxMode === "continue" && !remoteThreadIdArg) {
+                  const td = tree.readThreadData(threadId);
+                  if (td) { td.actions.push({ type: "inject", content: `[错误] talk(context="continue") 必须同时指定 threadId 参数`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+                } else {
+                  const forkUnderThreadId = ctxMode === "fork" ? remoteThreadIdArg : undefined;
+                  const continueThreadId = ctxMode === "continue" ? remoteThreadIdArg : undefined;
+                  const messageId = genMessageOutId();
+                  const formPayload = extractTalkForm(args.form);
                   const td = tree.readThreadData(threadId);
                   if (td) {
+                    const modeLabel = ` [${ctxMode}${remoteThreadIdArg ? `:${remoteThreadIdArg}` : ""}]`;
+                    const formLabel = formPayload ? ` [form: ${formPayload.formId}]` : "";
                     td.actions.push({
-                      type: "inject",
-                      content: `[错误] call_function 缺少 trait 或 function_name 参数。\n请在 open 时传：open({ type: "command", command: "call_function", trait: "<完整 traitId 如 kernel:reflective/super>", function_name: "<方法名>" })`,
+                      id: messageId,
+                      type: "message_out",
+                      content: `[talk] → ${args.target}: ${msgContent}${modeLabel}${formLabel}`,
                       timestamp: Date.now(),
+                      context: ctxMode,
+                      ...(formPayload ? { form: formPayload } : {}),
                     });
                     tree.writeThreadData(threadId, td);
                   }
-                  consola.warn(`[Engine] call_function 缺参数 (resume): trait=${trait} fn=${functionName}`);
-                } else {
-                /* resume 路径：与第一次执行保持同一协议——argsObj 整体作为第二参数传入 */
-                const method = methodRegistry.all().find(m => m.name === functionName && m.traitName === trait);
-                let resultText: string;
-                if (!method) {
-                  resultText = `[错误] 方法 ${trait}.${functionName} 不存在`;
-                } else {
+                  const isTalkSyncToUser = command === "talk_sync" && target === "user";
+                  if (isTalkSyncToUser) {
+                    consola.warn(`[Engine] ${objectName} 尝试 talk_sync(target="user")——user 不参与 ThinkLoop，不会回复。已降级为 talk（不阻塞）。`);
+                  }
+                  const explicitlyMarked = Array.isArray(args.mark) && args.mark.length > 0;
+                  /* Phase 6：识别 talk.continue.relation_update */
+                  const talkType = typeof args.type === "string" ? args.type : undefined;
+                  const messageKind = ctxMode === "continue" && talkType === "relation_update"
+                    ? "relation_update_request"
+                    : undefined;
                   try {
-                    const { context: execCtx } = buildExecContext(threadId);
-                    const rawArgs = args.args;
-                    const isPositionalArray = Array.isArray(rawArgs);
-                    const isObjectArgs = rawArgs !== null && typeof rawArgs === "object" && !isPositionalArray;
-                    const argsObj: Record<string, unknown> = isObjectArgs
-                      ? (rawArgs as Record<string, unknown>)
-                      : {};
-                    let result: unknown;
-                    if (isPositionalArray) {
-                      const argValues = rawArgs as unknown[];
-                      result = method.needsCtx !== false
-                        ? await method.fn(execCtx, ...argValues)
-                        : await method.fn(...argValues);
-                    } else {
-                      result = method.needsCtx !== false
-                        ? await method.fn(execCtx, argsObj)
-                        : await method.fn(argsObj);
+                    const { reply, remoteThreadId } = await config.onTalk(args.target as string, msgContent, objectName, threadId, sessionId, continueThreadId, messageId, forkUnderThreadId, messageKind);
+                    if (!explicitlyMarked) {
+                      const tdAck = tree.readThreadData(threadId);
+                      const autoAckId = getAutoAckMessageId(tdAck, args.target as string);
+                      if (autoAckId) tree.markInbox(threadId, autoAckId, "ack", "已回复");
                     }
-                    resultText = typeof result === "string" ? result : JSON.stringify(result, null, 2);
-                  } catch (e) {
-                    resultText = `[错误] ${(e as Error).message}`;
+                    if (reply) {
+                      tree.writeInbox(threadId, { from: args.target as string, content: `${reply}\n[remote_thread_id: ${remoteThreadId}]`, source: "talk" });
+                    }
+                    const td2 = tree.readThreadData(threadId);
+                    if (td2) {
+                      td2.actions.push({ type: "inject", content: `[talk → ${args.target}] remote_thread_id = ${remoteThreadId}`, timestamp: Date.now() });
+                      tree.writeThreadData(threadId, td2);
+                    }
+                  } catch (e) { tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" }); }
+                  if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting");
+                }
+              }
+            } else if (command === "return") {
+              /* 与 run 路径对齐：用 tree.returnThread（自动设 done + 写 summary + 唤醒等待的父线程）。
+               * 历史 bug：旧 resume 这里调了不存在的 scheduler.markDone() 导致抛错——已修复。 */
+              await tree.returnThread(threadId, args.summary as string ?? "");
+              const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "thread_return", content: args.summary as string ?? "", timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+              consola.info(`[Engine] return (resume): ${(args.summary as string)?.slice(0, 100)}`);
+            } else if (command === "think") {
+              /* resume 路径的 think：与 run 路径语义完全对齐 */
+              const ctxMode = (args.context as string | undefined) === "continue" ? "continue" : "fork";
+              const targetThreadId = args.threadId as string | undefined;
+              const msgContent = (args.msg as string | undefined) ?? "";
+              if (ctxMode === "fork") {
+                const subThreadName = (args.title as string | undefined) ?? (msgContent.slice(0, 40) || "thread");
+                const parentId = targetThreadId ?? threadId;
+                const parentNode = tree.getNode(parentId);
+                if (!parentNode) {
+                  const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "inject", content: `[错误] think(fork): 指定的 threadId=${parentId} 不存在`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+                } else {
+                  const child = await tree.createSubThread(parentId, subThreadName, {
+                    description: msgContent || (args.description as string | undefined),
+                    traits: args.traits as string[],
+                  });
+                  if (child) {
+                    await tree.setNodeStatus(child, "running");
+                    if (msgContent) tree.writeInbox(child, { from: objectName, content: msgContent, source: "system" });
+                    const td = tree.readThreadData(threadId);
+                    if (td) {
+                      td.actions.push({ type: "create_thread", content: `[think.fork] ${subThreadName} → ${child}${targetThreadId ? ` (under ${targetThreadId})` : ""}`, timestamp: Date.now(), context: "fork" });
+                      td.actions.push({ type: "inject", content: `[form.submit] think(fork) 成功，thread_id = ${child}`, timestamp: Date.now() });
+                      tree.writeThreadData(threadId, td);
+                    }
+                    scheduler.onThreadCreated(child, objectName);
                   }
                 }
+              } else {
+                if (!targetThreadId) {
+                  const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "inject", content: `[错误] think(context="continue") 必须同时指定 threadId 参数`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+                } else {
+                  tree.writeInbox(targetThreadId, { from: objectName, content: msgContent, source: "continue" });
+                  const td = tree.readThreadData(threadId);
+                  if (td) { td.actions.push({ type: "message_out", content: `[think.continue] → ${targetThreadId}: ${msgContent}`, timestamp: Date.now(), context: "continue" }); tree.writeThreadData(threadId, td); }
+                }
+              }
+            } else if (command === "call_function") {
+              /* call_function 协议：trait + function_name 应当在 open 时传入；
+               * 兜底 1：从 submit 的 args.trait / args.function_name 补填
+               * 兜底 2：缺失时 inject 明确错误（之前是静默跳过，会让 LLM 误以为成功）
+               * 与 run 路径对齐——保持双路径行为一致。 */
+              const trait = form.trait ?? (args.trait as string | undefined);
+              const functionName = form.functionName ?? (args.function_name as string | undefined);
+              if (!trait || !functionName) {
                 const td = tree.readThreadData(threadId);
                 if (td) {
-                  td.actions.push({ type: "inject", content: `>>> ${trait}.${functionName} 结果:\n${resultText}`, timestamp: Date.now() });
-                  tree.writeThreadData(threadId, td);
-                }
-                /* build hook（resume 路径）：file_ops 写文件动作完成后自动触发 */
-                const hookInjectResume = await triggerBuildHooksAfterCall({
-                  trait,
-                  functionName,
-                  args: args.args,
-                  rootDir: config.rootDir,
-                  threadId,
-                });
-                if (hookInjectResume) {
-                  const td2 = tree.readThreadData(threadId);
-                  if (td2) {
-                    td2.actions.push({ type: "inject", content: hookInjectResume, timestamp: Date.now() });
-                    tree.writeThreadData(threadId, td2);
-                  }
-                }
-                }  /* end of "if (trait && functionName)" else-branch */
-              } else if (command === "set_plan") {
-                const td = tree.readThreadData(threadId); if (td) { td.plan = args.text as string; td.actions.push({ type: "set_plan", content: args.text as string, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
-              } else if (command === "await" || command === "await_all") {
-                const threadIds = command === "await" ? [args.thread_id as string] : (args.thread_ids as string[]) ?? [];
-                await tree.awaitThreads(threadId, threadIds);
-                const ids = threadIds.join(", ");
-                const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "inject", content: `[${command}] ${ids}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
-              }
-              /* compact (resume 路径，与 run 路径同义) */
-              else if (command === "compact") {
-                const summary = typeof args.summary === "string" ? args.summary.trim() : "";
-                const td = tree.readThreadData(threadId);
-                if (!td) {
-                  consola.warn(`[Engine] compact (resume): 读取 thread.json 失败 thread=${threadId}`);
-                } else if (summary.length === 0) {
                   td.actions.push({
                     type: "inject",
-                    content: `[错误] submit compact 必须带 summary 参数。本次压缩未执行。`,
+                    content: `[错误] call_function 缺少 trait 或 function_name 参数。\n请在 open 时传：open({ type: "command", command: "call_function", trait: "<完整 traitId 如 kernel:reflective/super>", function_name: "<方法名>" })`,
                     timestamp: Date.now(),
                   });
                   tree.writeThreadData(threadId, td);
-                } else {
-                  const marks = td.compactMarks ?? {};
-                  const before = estimateActionsTokens(td.actions);
-                  const newActions = applyCompact(td.actions, marks, summary);
-                  const after = estimateActionsTokens(newActions);
-                  const dropCount = marks.drops?.length ?? 0;
-                  const truncateCount = marks.truncates?.length ?? 0;
-                  const nextTd: ThreadDataFile = { ...td, actions: newActions, compactMarks: undefined };
-                  nextTd.actions.push({
-                    type: "inject",
-                    content:
-                      `>>> [compact 完成] drop=${dropCount} truncate=${truncateCount}; ` +
-                      `tokens ${before} → ${after}（节省 ${before - after}）。`,
-                    timestamp: Date.now(),
-                  });
-                  tree.writeThreadData(threadId, nextTd);
-                  consola.info(`[Engine] compact (resume): tokens ${before} → ${after}`);
                 }
-              }
-              if (command !== "_trait" && command !== "_skill") {
-                /* Phase 4 同 run 路径：优先用 form.loadedTraits 卸载本 form 引入的 trait */
-                if (!formManager.activeCommands().has(form.command)) {
-                  const traitsToUnload = form.loadedTraits && form.loadedTraits.length > 0
-                    ? form.loadedTraits
-                    : collectCommandTraits(config.traits, new Set([form.command]));
-                  const stillNeededSet = new Set(collectCommandTraits(config.traits, formManager.activeCommandPaths()));
-                  for (const traitName of traitsToUnload) {
-                    if (tree.isPinnedTrait(threadId, traitName)) continue;
-                    if (stillNeededSet.has(traitName)) continue;
-                    /* always trait 语义 pinned：不应随 command form submit 自动回收 */
-                    if (isAlwaysTrait(config.traits, traitName)) continue;
-                    await tree.deactivateTrait(threadId, traitName);
+                consola.warn(`[Engine] call_function 缺参数 (resume): trait=${trait} fn=${functionName}`);
+              } else {
+              /* resume 路径：与第一次执行保持同一协议——argsObj 整体作为第二参数传入 */
+              const method = methodRegistry.all().find(m => m.name === functionName && m.traitName === trait);
+              let resultText: string;
+              if (!method) {
+                resultText = `[错误] 方法 ${trait}.${functionName} 不存在`;
+              } else {
+                try {
+                  const { context: execCtx } = buildExecContext(threadId);
+                  const rawArgs = args.args;
+                  const isPositionalArray = Array.isArray(rawArgs);
+                  const isObjectArgs = rawArgs !== null && typeof rawArgs === "object" && !isPositionalArray;
+                  const argsObj: Record<string, unknown> = isObjectArgs
+                    ? (rawArgs as Record<string, unknown>)
+                    : {};
+                  let result: unknown;
+                  if (isPositionalArray) {
+                    const argValues = rawArgs as unknown[];
+                    result = method.needsCtx !== false
+                      ? await method.fn(execCtx, ...argValues)
+                      : await method.fn(...argValues);
+                  } else {
+                    result = method.needsCtx !== false
+                      ? await method.fn(execCtx, argsObj)
+                      : await method.fn(argsObj);
                   }
+                  resultText = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+                } catch (e) {
+                  resultText = `[错误] ${(e as Error).message}`;
                 }
               }
-              const tdAfter = tree.readThreadData(threadId); if (tdAfter) { tdAfter.activeForms = formManager.toData(); tree.writeThreadData(threadId, tdAfter); }
-              consola.info(`[Engine] form.submit: ${command} (${form.formId})`);
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.actions.push({ type: "inject", content: `>>> ${trait}.${functionName} 结果:\n${resultText}`, timestamp: Date.now() });
+                tree.writeThreadData(threadId, td);
+              }
+              /* build hook（resume 路径）：file_ops 写文件动作完成后自动触发 */
+              const hookInjectResume = await triggerBuildHooksAfterCall({
+                trait,
+                functionName,
+                args: args.args,
+                rootDir: config.rootDir,
+                threadId,
+              });
+              if (hookInjectResume) {
+                const td2 = tree.readThreadData(threadId);
+                if (td2) {
+                  td2.actions.push({ type: "inject", content: hookInjectResume, timestamp: Date.now() });
+                  tree.writeThreadData(threadId, td2);
+                }
+              }
+              }  /* end of "if (trait && functionName)" else-branch */
+            } else if (command === "set_plan") {
+              const td = tree.readThreadData(threadId); if (td) { td.plan = args.text as string; td.actions.push({ type: "set_plan", content: args.text as string, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+            } else if (command === "await" || command === "await_all") {
+              const threadIds = command === "await" ? [args.thread_id as string] : (args.thread_ids as string[]) ?? [];
+              await tree.awaitThreads(threadId, threadIds);
+              const ids = threadIds.join(", ");
+              const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "inject", content: `[${command}] ${ids}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
             }
-          } /* end of non-partial branch (resume) */
+            /* compact (resume 路径，与 run 路径同义) */
+            else if (command === "compact") {
+              const summary = typeof args.summary === "string" ? args.summary.trim() : "";
+              const td = tree.readThreadData(threadId);
+              if (!td) {
+                consola.warn(`[Engine] compact (resume): 读取 thread.json 失败 thread=${threadId}`);
+              } else if (summary.length === 0) {
+                td.actions.push({
+                  type: "inject",
+                  content: `[错误] submit compact 必须带 summary 参数。本次压缩未执行。`,
+                  timestamp: Date.now(),
+                });
+                tree.writeThreadData(threadId, td);
+              } else {
+                const marks = td.compactMarks ?? {};
+                const before = estimateActionsTokens(td.actions);
+                const newActions = applyCompact(td.actions, marks, summary);
+                const after = estimateActionsTokens(newActions);
+                const dropCount = marks.drops?.length ?? 0;
+                const truncateCount = marks.truncates?.length ?? 0;
+                const nextTd: ThreadDataFile = { ...td, actions: newActions, compactMarks: undefined };
+                nextTd.actions.push({
+                  type: "inject",
+                  content:
+                    `>>> [compact 完成] drop=${dropCount} truncate=${truncateCount}; ` +
+                    `tokens ${before} → ${after}（节省 ${before - after}）。`,
+                  timestamp: Date.now(),
+                });
+                tree.writeThreadData(threadId, nextTd);
+                consola.info(`[Engine] compact (resume): tokens ${before} → ${after}`);
+              }
+            }
+            if (command !== "_trait" && command !== "_skill") {
+              /* Phase 4 同 run 路径：优先用 form.loadedTraits 卸载本 form 引入的 trait */
+              if (!formManager.activeCommands().has(form.command)) {
+                const traitsToUnload = form.loadedTraits && form.loadedTraits.length > 0
+                  ? form.loadedTraits
+                  : collectCommandTraits(config.traits, new Set([form.command]));
+                const stillNeededSet = new Set(collectCommandTraits(config.traits, formManager.activeCommandPaths()));
+                for (const traitName of traitsToUnload) {
+                  if (tree.isPinnedTrait(threadId, traitName)) continue;
+                  if (stillNeededSet.has(traitName)) continue;
+                  /* always trait 语义 pinned：不应随 command form submit 自动回收 */
+                  if (isAlwaysTrait(config.traits, traitName)) continue;
+                  await tree.deactivateTrait(threadId, traitName);
+                }
+              }
+            }
+            const tdAfter = tree.readThreadData(threadId); if (tdAfter) { tdAfter.activeForms = formManager.toData(); tree.writeThreadData(threadId, tdAfter); }
+            consola.info(`[Engine] form.submit: ${command} (${form.formId})`);
+          }
 
         /* --- Close (resume) --- */
         } else if (toolName === "close") {

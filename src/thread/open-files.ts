@@ -13,7 +13,7 @@
  *               data._traits_ref 解析出的 trait，加上线程显式 pin 的 trait。
  *
  * - `transient` Process 阶段由 command_binding / open(type="command") /
- *               partial submit 触发的 trait 激活。**form 关闭后自动回收**。
+ *               refine 触发的 trait 激活。**form 关闭后自动回收**。
  *
  * - `inject`    Target 阶段需要渲染到 context 的片段（如 <relations> 索引）。
  *               Phase 3 默认空数组；Phase 5/6 填充。
@@ -64,7 +64,7 @@ export interface OpenFilesInput {
 export interface OpenFiles {
   /** Origin 阶段 open 的文件（stone 默认 + 线程 pin 的） */
   pinned: ContextWindow[];
-  /** Process 阶段 open 的文件（command_binding / partial submit 触发的，form 关闭即回收） */
+  /** Process 阶段 open 的文件（command_binding / refine 触发的，form 关闭即回收） */
   transient: ContextWindow[];
   /** Target 阶段要 inject 到 context 的渲染片段（<relations> 等；Phase 5/6 填充） */
   inject: ContextWindow[];

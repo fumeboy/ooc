@@ -4,7 +4,7 @@
  * 把 trait "激活" 折叠为 "文件 open"：
  * getOpenFiles(thread, stone) 返回三类文件路径集合：
  * - pinned: 对象 origin 阶段 open 的（readme.activated_traits + data._traits_ref 解析 + 线程显式 pin 的）
- * - transient: process 阶段 open 的（command_binding / open(command) / partial submit 触发的）
+ * - transient: process 阶段 open 的（command_binding / open(command) / refine 触发的）
  * - inject: target 阶段的 <relations> 索引等渲染片段（Phase 5/6 填充；此处测试空数组）
  *
  * 行为等价：Phase 3 的 getOpenFiles 必须与原有 getActiveTraits + pinnedTraits
