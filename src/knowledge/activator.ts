@@ -122,3 +122,53 @@ export function getChildTraits(
     (t) => t.parent === parentId,
   );
 }
+
+import type { KnowledgeRef } from "./types.js";
+import { buildPathReverseIndex, lookupTraitsByPaths, type PathReverseIndex } from "./reverse-index.js";
+
+export interface ComputeRefsInput {
+  /** 已加载 traits/views/relations（统一通过 TraitDefinition 形态承载） */
+  traits: TraitDefinition[];
+  /** 当前活跃 form 的 commandPath 集合 */
+  activePaths: Set<string>;
+  /** 可选：预先构建好的反向索引（性能优化：调用方可缓存） */
+  reverseIndex?: PathReverseIndex;
+}
+
+/**
+ * 基于反向索引计算当前应激活的 KnowledgeRef[]（form_match 维度）
+ *
+ * origin / relation / open_action 维度后续 Task 加入。当前只产出 trait 类型；
+ * Task 15 将根据 t.kind 区分出 view 类型；Task 16 将根据 peers 输入产出 relation。
+ */
+export function computeKnowledgeRefs(input: ComputeRefsInput): KnowledgeRef[] {
+  const idx = input.reverseIndex ?? buildPathReverseIndex(input.traits);
+  const traitMap = new Map(input.traits.map((t) => [traitId(t), t]));
+  const hitIds = lookupTraitsByPaths(idx, input.activePaths);
+
+  const refs: KnowledgeRef[] = [];
+  for (const id of hitIds) {
+    const t = traitMap.get(id);
+    if (!t) continue;
+    /* 找到这条 trait 是被哪个 activePath 命中的（取第一个匹配的，仅用于 reason） */
+    let matchedPath = "";
+    if (t.activatesOn?.paths) {
+      outer: for (const ap of input.activePaths) {
+        for (const decl of t.activatesOn.paths) {
+          if (ap === decl || ap.startsWith(decl + ".")) {
+            matchedPath = ap;
+            break outer;
+          }
+        }
+      }
+    }
+    refs.push({
+      type: "trait",
+      ref: `@trait:${t.name}`,
+      source: { kind: "form_match", path: matchedPath },
+      presentation: "full",
+      reason: `命令路径命中 trait ${t.namespace}:${t.name}`,
+    });
+  }
+  return refs;
+}
