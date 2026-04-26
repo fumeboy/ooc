@@ -2115,7 +2115,7 @@ export async function runWithThreadTree(
               // 逻辑：先 unpin；若该 trait 不再被任何 active command 需要，则 deactivate；
               //       但 always trait 本身豁免，只做 unpin 语义（实际 when=always 不会被 unpin 影响）。
               await tree.unpinTrait(threadId, form.trait);
-              const stillNeededByCommand = collectCommandTraits(config.traits, formManager.activeCommandPaths()).has(form.trait);
+              const stillNeededByCommand = new Set(collectCommandTraits(config.traits, formManager.activeCommandPaths())).has(form.trait);
               if (!stillNeededByCommand && !isAlwaysTrait(config.traits, form.trait)) {
                 const changed = await tree.deactivateTrait(threadId, form.trait);
                 if (changed) unloadedTraits.push(form.trait);
@@ -3314,7 +3314,7 @@ export async function resumeWithThreadTree(
               /* close _trait 型 form：unpin + 若无命令再需要则 deactivate；
                * always trait 豁免 deactivate（when=always 本就不应被回收）。 */
               await tree.unpinTrait(threadId, form.trait);
-              const stillNeededByCommand = collectCommandTraits(config.traits, formManager.activeCommandPaths()).has(form.trait);
+              const stillNeededByCommand = new Set(collectCommandTraits(config.traits, formManager.activeCommandPaths())).has(form.trait);
               if (!stillNeededByCommand && !isAlwaysTrait(config.traits, form.trait)) {
                 const changed = await tree.deactivateTrait(threadId, form.trait);
                 if (changed) unloadedTraits.push(form.trait);

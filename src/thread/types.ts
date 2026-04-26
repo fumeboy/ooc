@@ -10,6 +10,8 @@
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md#3
  */
 
+import type { ActiveForm } from "./form.js";
+
 /** 线程状态 */
 export type ThreadStatus = "pending" | "running" | "waiting" | "done" | "failed" | "paused";
 
@@ -90,13 +92,11 @@ export interface ThreadDataFile {
   /** 单步调试模式：执行一轮后自动暂停 */
   _debugMode?: boolean;
 
-  /** 活跃的 form 列表（持久化，支持 resume） */
-  activeForms?: Array<{
-    formId: string;
-    command: string;
-    description: string;
-    createdAt: number;
-  }>;
+  /** 活跃的 form 列表（持久化，支持 resume）
+   *
+   *  ActiveForm 完整字段含 accumulatedArgs / commandPath / loadedTraits / trait / functionName。
+   *  FormManager.fromData 对老数据缺失字段做了向后兼容默认值填充。 */
+  activeForms?: ActiveForm[];
 
   /** 动态 context windows（open(type=file) 产生的可更新内容窗口） */
   windows?: Record<string, {
