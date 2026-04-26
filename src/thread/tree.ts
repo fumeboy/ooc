@@ -283,15 +283,32 @@ export class ThreadsTree {
   /**
    * 更新节点状态
    *
+   * 当 status === "waiting" 时，可通过 waitingType 标识具体等待原因：
+   * - "await_children": 等子线程完成
+   * - "talk_sync": 等其他对象同步回复
+   * - "explicit_wait": LLM 主动 wait 暂停
+   *
+   * 当 status 不是 "waiting" 时，会自动清除 waitingType 字段。
+   *
    * @param nodeId - 节点 ID
    * @param status - 新状态
+   * @param waitingType - 等待类型（仅 status === "waiting" 时有意义）
    */
-  async setNodeStatus(nodeId: string, status: ThreadStatus): Promise<void> {
+  async setNodeStatus(
+    nodeId: string,
+    status: ThreadStatus,
+    waitingType?: ThreadsTreeNodeMeta["waitingType"]
+  ): Promise<void> {
     if (!this._tree.nodes[nodeId]) return;
     await this._mutate((tree) => {
       const node = tree.nodes[nodeId];
       if (node) {
         node.status = status;
+        if (status === "waiting" && waitingType) {
+          node.waitingType = waitingType;
+        } else {
+          node.waitingType = undefined;
+        }
         node.updatedAt = Date.now();
       }
     });
@@ -397,6 +414,7 @@ export class ThreadsTree {
       if (node) {
         node.awaitingChildren = childIds;
         node.status = "waiting";
+        node.waitingType = "await_children";
         node.updatedAt = Date.now();
       }
     });
@@ -427,6 +445,7 @@ export class ThreadsTree {
       if (n) {
         n.awaitingChildren = undefined;
         n.status = "running";
+        n.waitingType = undefined;
         n.updatedAt = Date.now();
       }
     });

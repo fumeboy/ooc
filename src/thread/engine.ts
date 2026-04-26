@@ -141,6 +141,8 @@ export interface TalkResult {
   totalIterations: number;
   /** 实际执行的线程 ID（用于 talk(context="continue")） */
   threadId?: string;
+  /** 失败原因（仅 status === "failed" 时填充） */
+  failureReason?: string;
 }
 
 /**
@@ -392,7 +394,7 @@ export function writeThreadTreeFlowData(
   }
 
   /* 落盘 data.json（供 /api/flows/:sessionId 的 readFlow 消费） */
-  const flowJson = {
+  const flowJson: Record<string, unknown> = {
     sessionId: result.sessionId,
     stoneName: objectName,
     status,
@@ -404,6 +406,9 @@ export function writeThreadTreeFlowData(
     createdAt: now,
     updatedAt: now,
   };
+  if (result.failureReason) {
+    flowJson.failureReason = result.failureReason;
+  }
 
   mkdirSync(flowDir, { recursive: true });
   writeFileSync(join(flowDir, "data.json"), JSON.stringify(flowJson, null, 2), "utf-8");
@@ -1759,7 +1764,7 @@ export async function runWithThreadTree(
                     tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" });
                   }
                   /* target=user 时不 setNodeStatus("waiting")，避免死锁；其他 target 维持原逻辑 */
-                  if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting");
+                  if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting", "talk_sync");
                 }
               }
             }
@@ -2173,7 +2178,7 @@ export async function runWithThreadTree(
         /* --- Wait --- */
         else if (toolName === "wait") {
           const reason = args.reason as string ?? "";
-          await tree.setNodeStatus(threadId, "waiting");
+          await tree.setNodeStatus(threadId, "waiting", "explicit_wait");
           const td = tree.readThreadData(threadId);
           if (td) {
             td.actions.push({ type: "inject", content: `[wait] 线程进入等待状态: ${reason}`, timestamp: Date.now() });
@@ -2248,12 +2253,21 @@ export async function runWithThreadTree(
 
   consola.info(`[Engine] 执行结束 ${objectName}, status=${finalStatus}, iterations=${totalIterations}`);
 
+  /* 提取失败原因：扫描结果线程的 inbox 找最新的 thread_error 消息 */
+  let failureReason: string | undefined;
+  if (finalStatus === "failed") {
+    const td = tree.readThreadData(targetThreadId) ?? tree.readThreadData(tree.rootId);
+    const errorMsg = td?.inbox?.find((m) => m.source === "thread_error")?.content;
+    failureReason = errorMsg ?? "线程执行失败";
+  }
+
   return {
     sessionId,
     status: finalStatus,
     summary: resultNode?.summary,
     totalIterations,
     threadId: targetThreadId,
+    failureReason,
   };
 }
 
@@ -3076,7 +3090,7 @@ export async function resumeWithThreadTree(
                       tree.writeThreadData(threadId, td2);
                     }
                   } catch (e) { tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" }); }
-                  if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting");
+                  if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting", "talk_sync");
                 }
               }
             } else if (command === "return") {
@@ -3343,7 +3357,7 @@ export async function resumeWithThreadTree(
         /* --- Wait (resume) --- */
         } else if (toolName === "wait") {
           const reason = args.reason as string ?? "";
-          await tree.setNodeStatus(threadId, "waiting");
+          await tree.setNodeStatus(threadId, "waiting", "explicit_wait");
           const td = tree.readThreadData(threadId);
           if (td) {
             td.actions.push({ type: "inject", content: `[wait] 线程进入等待状态: ${reason}`, timestamp: Date.now() });
@@ -3384,7 +3398,16 @@ export async function resumeWithThreadTree(
   });
 
   consola.info(`[Engine] 恢复执行结束 ${objectName}, status=${finalStatus}, iterations=${totalIterations}`);
-  return { sessionId, status: finalStatus, summary: rootNode?.summary, totalIterations, threadId: tree.rootId };
+
+  /* 提取失败原因：扫描根线程 inbox 找最新的 thread_error 消息 */
+  let failureReason: string | undefined;
+  if (finalStatus === "failed") {
+    const td = tree.readThreadData(tree.rootId);
+    const errorMsg = td?.inbox?.find((m) => m.source === "thread_error")?.content;
+    failureReason = errorMsg ?? "线程执行失败";
+  }
+
+  return { sessionId, status: finalStatus, summary: rootNode?.summary, totalIterations, threadId: tree.rootId, failureReason };
 }
 
 /**
