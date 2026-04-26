@@ -3,13 +3,13 @@ namespace: kernel
 name: base
 type: how_to_think
 when: always
-description: 指令系统基座 — open/submit/close/wait 四原语
+description: 指令系统基座 — open/refine/submit/close/wait 五原语
 deps: []
 ---
 
 # 指令系统
 
-你通过调用工具来行动。系统提供四个工具：**open / submit / close / wait**。
+你通过调用工具来行动。系统提供五个工具：**open / refine / submit / close / wait**。
 
 ## 自叙式行动标题（title）— 所有工具共用
 
@@ -91,6 +91,34 @@ open(type="trait", name="self:reporter", title="固定 reporter 能力", descrip
 > **注意（think(context="fork")）**：submit 的 `title` 对 `think(context="fork")` 来说同时是新子线程的名字。
 > 语义上，这次 tool call 的"行动标题" = "要创建的子线程的名字"——不需要两个字段。
 > 例如：`submit(title="分析任务", command=think, context="fork", msg="请分析...")` 会创建一个名为"分析任务"的子线程。
+
+## refine — 累积参数
+
+在 submit 之前，多次调用 refine 来逐步累积/修改 form 的参数。必填参数：`title`、`form_id`、`args`（对象）。
+
+- **作用**：积累参数但**不执行**。多次调用时，后续参数覆盖先前设定的同名参数。
+- **路径深化**：每次 refine 可能改变指令的命令路径，从而触发新一轮 trait 激活。例如 `talk` → `talk.fork`，系统会自动加载新增的 trait。
+- **何时使用**：当参数需要分步骤采集、或参数之间有依赖关系时，用 refine 代替 open 时直接传递全量参数。等所有参数齐备后，调用 `submit(form_id)` 真正执行。
+- **替代 submit(partial=true)**：refine 是旧版 `submit(partial=true)` 机制的升级替代，功能更清晰。
+
+**典型模式**：
+
+```json
+// 1. 打开一个 talk 命令
+open(type="command", command="talk", title="发起对话", description="准备与 alice 讨论任务")
+// 返回 form_id = "f_123"
+
+// 2. 第一次 refine：指定对象
+refine(title="指定对话对象", form_id="f_123", args={target: "alice"})
+// 系统检测到 target 变更，激活 talkable trait
+
+// 3. 第二次 refine：深化为异步对话
+refine(title="异步对话模式", form_id="f_123", args={context: "fork", msg: "请帮我分析这个问题"})
+// 系统检测到 context="fork"，激活 talkable/cross_object trait
+
+// 4. 最终 submit 执行
+submit(title="开始对话", form_id="f_123")
+```
 
 ## close — 关闭上下文
 
