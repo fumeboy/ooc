@@ -162,12 +162,14 @@ export function computeKnowledgeRefs(input: ComputeRefsInput): KnowledgeRef[] {
         }
       }
     }
+    const knowledgeType: "trait" | "view" = t.kind === "view" ? "view" : "trait";
+    const refPrefix = knowledgeType === "view" ? "@view" : "@trait";
     refs.push({
-      type: "trait",
-      ref: `@trait:${t.name}`,
+      type: knowledgeType,
+      ref: `${refPrefix}:${t.name}`,
       source: { kind: "form_match", path: matchedPath },
       presentation: "full",
-      reason: `命令路径命中 trait ${t.namespace}:${t.name}`,
+      reason: `命令路径命中 ${knowledgeType} ${t.namespace}:${t.name}`,
     });
   }
   return refs;

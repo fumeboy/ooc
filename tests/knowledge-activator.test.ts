@@ -91,3 +91,38 @@ describe("computeKnowledgeRefs from form_match source", () => {
     expect(refs).toEqual([]);
   });
 });
+
+function view(name: string, paths: string[]): TraitDefinition {
+  return {
+    namespace: "self", name, kind: "view", type: "how_to_think",
+    version: "1.0.0", when: "never", description: "",
+    readme: `# ${name}`, methods: [], deps: [],
+    activatesOn: { paths },
+    dir: `/fake/view/${name}`,
+  };
+}
+
+describe("computeKnowledgeRefs emits view as type='view'", () => {
+  test("view activated via path produces KnowledgeRef of type view", () => {
+    const items = [view("status_page", ["talk"])];
+    const refs = computeKnowledgeRefs({ traits: items, activePaths: new Set(["talk"]) });
+    expect(refs).toHaveLength(1);
+    expect(refs[0].type).toBe("view");
+    expect(refs[0].ref).toBe("@view:status_page");
+  });
+
+  test("trait and view emitted with their respective types in same call", () => {
+    const items: TraitDefinition[] = [
+      // trait — kind defaults to "trait"
+      {
+        namespace: "kernel", name: "talkable", kind: "trait", type: "how_to_think",
+        version: "1.0.0", when: "never", description: "", readme: "", methods: [], deps: [],
+        activatesOn: { paths: ["talk"] }, dir: "/fake/talkable",
+      },
+      view("status_page", ["talk"]),
+    ];
+    const refs = computeKnowledgeRefs({ traits: items, activePaths: new Set(["talk"]) });
+    const types = refs.map((r) => `${r.type}:${r.ref}`).sort();
+    expect(types).toEqual(["trait:@trait:talkable", "view:@view:status_page"]);
+  });
+});
