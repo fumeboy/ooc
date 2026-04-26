@@ -159,6 +159,14 @@ export interface TraitDefinition {
   commandBinding?: {
     commands: string[];
   };
+  /**
+   * 反向激活声明：当 form 路径命中以下任一时，激活此 knowledge。
+   * 与 commandBinding 语义相同（前缀匹配），但属于新 spec 的 push 模型，
+   * 由命令注册表 paths + knowledge 自身声明共同决定激活。
+   *
+   * @ref docs/superpowers/specs/2026-04-26-refine-tool-and-knowledge-activator.md
+   */
+  activatesOn?: { paths: string[] };
   /** 使用示例（用于 Context 注入） */
   examples?: TraitExample[];
   /** 常见错误对比（正确 vs 错误） */

@@ -156,6 +156,7 @@ export async function loadTrait(
   const version = typeof data.version === "string" ? data.version : undefined;
   const deps: string[] = Array.isArray(data.deps) ? data.deps.map(String) : [];
   const commandBinding = parseCommandBinding(data.command_binding);
+  const activatesOn = parseActivatesOn(data);
 
   /* 加载 index.ts（或 backend.ts——view 用 backend.ts）的方法 */
   const indexPath = join(traitDir, "index.ts");
@@ -190,6 +191,7 @@ export async function loadTrait(
     uiMethods,
     deps,
     commandBinding,
+    activatesOn,
     dir: traitDir,
   };
 }
@@ -692,6 +694,22 @@ function parseCommandBinding(raw: unknown): TraitDefinition["commandBinding"] {
     return { commands: cb.commands.map(String) };
   }
   return undefined;
+}
+
+/**
+ * 解析 frontmatter 的 activates_on.paths 字段
+ *
+ * 容错：activates_on 不是对象、paths 不是数组、数组为空、元素不是非空字符串
+ *      → 返回 undefined
+ */
+function parseActivatesOn(fm: Record<string, unknown>): { paths: string[] } | undefined {
+  const raw = fm.activates_on;
+  if (!raw || typeof raw !== "object") return undefined;
+  const paths = (raw as Record<string, unknown>).paths;
+  if (!Array.isArray(paths)) return undefined;
+  const cleaned = paths.filter((p): p is string => typeof p === "string" && p.length > 0);
+  if (cleaned.length === 0) return undefined;
+  return { paths: cleaned };
 }
 
 /**
