@@ -1685,15 +1685,18 @@ export async function runWithThreadTree(
               consola.info(`[Engine] program ${execResult.success ? "成功" : "失败"}`);
             }
 
-            /* talk / talk_sync
+            /* talk
              *
              * 统一协议：talk 指令通过 context=fork|continue + 可选 threadId 表达四种模式。
              * - fork + 无 threadId：对方新根线程（默认）
              * - fork + threadId：对方 threadId 下 fork 新子线程（新能力）
              * - continue + threadId：向对方 threadId 投递消息，唤醒对方（新能力）
              * - continue + 无 threadId：schema/engine 校验报错
+             *
+             * wait=true：talk 完成后让当前线程进入 waiting+waitingType="talk_sync"，
+             * 等待对方通过 writeInbox 唤醒（等同于原 talk_sync 语义）。
              */
-            else if ((command === "talk" || command === "talk_sync") && config.onTalk) {
+            else if (command === "talk" && config.onTalk) {
               const target = (args.target as string)?.toLowerCase();
               if (target && target !== objectName.toLowerCase()) {
                 /* 解析 context + threadId + msg（兼容 msg 与旧 message 参数） */
@@ -1730,10 +1733,11 @@ export async function runWithThreadTree(
                     });
                     tree.writeThreadData(threadId, td);
                   }
-                  /* talk_sync 到 user 是死锁：user 永远不会唤醒。记日志、不 setNodeStatus("waiting")、直接继续。 */
-                  const isTalkSyncToUser = command === "talk_sync" && target === "user";
+                  /* wait=true 且 target=user 是死锁：user 永远不会唤醒。记日志、不 setNodeStatus("waiting")、直接继续。 */
+                  const isWaitMode = args.wait === true;
+                  const isTalkSyncToUser = isWaitMode && target === "user";
                   if (isTalkSyncToUser) {
-                    consola.warn(`[Engine] ${objectName} 尝试 talk_sync(target="user")——user 不参与 ThinkLoop，不会回复。已降级为 talk（不阻塞）。`);
+                    consola.warn(`[Engine] ${objectName} 尝试 talk(wait=true, target="user")——user 不参与 ThinkLoop，不会回复。已降级为普通 talk（不阻塞）。`);
                   }
                   /* 若未通过 mark 参数显式标记，且 target 只有一条未读最新消息，自动 ack */
                   const explicitlyMarked = Array.isArray(args.mark) && args.mark.length > 0;
@@ -1763,8 +1767,8 @@ export async function runWithThreadTree(
                   } catch (e) {
                     tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" });
                   }
-                  /* target=user 时不 setNodeStatus("waiting")，避免死锁；其他 target 维持原逻辑 */
-                  if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting", "talk_sync");
+                  /* wait=true 且 target 非 user：进入 waiting 等待对方回复（talk_sync 语义）*/
+                  if (isWaitMode && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting", "talk_sync");
                 }
               }
             }
@@ -1825,8 +1829,19 @@ export async function runWithThreadTree(
                       tree.writeThreadData(threadId, td);
                     }
                     scheduler.onThreadCreated(child, objectName);
+                    /* wait=true：父线程进入 waiting，等子线程完成后由 scheduler 唤醒 */
+                    if (args.wait === true) {
+                      await tree.awaitThreads(threadId, [child]);
+                      const tdWait = tree.readThreadData(threadId);
+                      if (tdWait) {
+                        tdWait.actions.push({ type: "inject", content: `[think.fork wait=true] 等待子线程 ${child} 完成`, timestamp: Date.now() });
+                        tree.writeThreadData(threadId, tdWait);
+                      }
+                      consola.info(`[Engine] think.fork wait=true: ${subThreadName} → ${child}，父线程等待`);
+                    } else {
+                      consola.info(`[Engine] think.fork: ${subThreadName} → ${child}`);
+                    }
                   }
-                  consola.info(`[Engine] think.fork: ${subThreadName} → ${child}`);
                 }
               } else {
                 /* continue 模式：必须指定 threadId，向它的 inbox 投递消息 */
@@ -3037,8 +3052,9 @@ export async function resumeWithThreadTree(
                   }
                 }
               }
-            } else if ((command === "talk" || command === "talk_sync") && config.onTalk) {
-              /* resume 路径的 talk：与 run 路径保持同一 schema 协议（think/talk 统一 context）。 */
+            } else if (command === "talk" && config.onTalk) {
+              /* resume 路径的 talk：与 run 路径保持同一 schema 协议（think/talk 统一 context）。
+               * wait=true 时 talk 完成后让当前线程进入 waiting+waitingType="talk_sync"，等待对方唤醒。 */
               const target = (args.target as string)?.toLowerCase();
               if (target && target !== objectName.toLowerCase()) {
                 const ctxMode = (args.context as string | undefined) === "continue" ? "continue" : "fork";
@@ -3066,9 +3082,10 @@ export async function resumeWithThreadTree(
                     });
                     tree.writeThreadData(threadId, td);
                   }
-                  const isTalkSyncToUser = command === "talk_sync" && target === "user";
+                  const isWaitModeResume = args.wait === true;
+                  const isTalkSyncToUser = isWaitModeResume && target === "user";
                   if (isTalkSyncToUser) {
-                    consola.warn(`[Engine] ${objectName} 尝试 talk_sync(target="user")——user 不参与 ThinkLoop，不会回复。已降级为 talk（不阻塞）。`);
+                    consola.warn(`[Engine] ${objectName} 尝试 talk(wait=true, target="user")——user 不参与 ThinkLoop，不会回复。已降级为普通 talk（不阻塞）。`);
                   }
                   const explicitlyMarked = Array.isArray(args.mark) && args.mark.length > 0;
                   /* Phase 6：识别 talk.continue.relation_update */
@@ -3092,7 +3109,8 @@ export async function resumeWithThreadTree(
                       tree.writeThreadData(threadId, td2);
                     }
                   } catch (e) { tree.writeInbox(threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" }); }
-                  if (command === "talk_sync" && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting", "talk_sync");
+                  /* wait=true 且 target 非 user：进入 waiting 等待对方回复（talk_sync 语义）*/
+                  if (isWaitModeResume && !isTalkSyncToUser) tree.setNodeStatus(threadId, "waiting", "talk_sync");
                 }
               }
             } else if (command === "return") {
@@ -3127,6 +3145,18 @@ export async function resumeWithThreadTree(
                       tree.writeThreadData(threadId, td);
                     }
                     scheduler.onThreadCreated(child, objectName);
+                    /* wait=true：父线程进入 waiting，等子线程完成后由 scheduler 唤醒 */
+                    if (args.wait === true) {
+                      await tree.awaitThreads(threadId, [child]);
+                      const tdWait = tree.readThreadData(threadId);
+                      if (tdWait) {
+                        tdWait.actions.push({ type: "inject", content: `[think.fork wait=true] 等待子线程 ${child} 完成`, timestamp: Date.now() });
+                        tree.writeThreadData(threadId, tdWait);
+                      }
+                      consola.info(`[Engine] think.fork wait=true (resume): ${subThreadName} → ${child}，父线程等待`);
+                    } else {
+                      consola.info(`[Engine] think.fork (resume): ${subThreadName} → ${child}`);
+                    }
                   }
                 }
               } else {

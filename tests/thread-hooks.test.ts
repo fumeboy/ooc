@@ -16,7 +16,7 @@ import type { ThreadFrameHook } from "../src/thread/types.js";
 describe("collectCommandTraits", () => {
   test("匹配 activatesOn.paths 中的指令", () => {
     const traits = [
-      { namespace: "kernel", name: "talkable", activatesOn: { paths: ["talk", "talk_sync", "return"] } },
+      { namespace: "kernel", name: "talkable", activatesOn: { paths: ["talk", "return"] } },
       { namespace: "kernel", name: "computable", activatesOn: { paths: ["program"] } },
       { namespace: "kernel", name: "base" }, // 无 activatesOn
     ] as any[];

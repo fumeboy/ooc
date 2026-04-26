@@ -5,7 +5,7 @@ type: how_to_think
 version: 1.0.0
 when: never
 activates_on:
-  paths: ["talk", "talk_sync"]
+  paths: ["talk"]
 description: Issue 讨论能力，所有对象可通过此 trait 参与 issue 评论
 deps: []
 ---

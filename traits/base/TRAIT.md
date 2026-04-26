@@ -33,7 +33,7 @@ deps: []
 | `skill` | 加载 skill 内容到上下文 | `title`, `name`（skill 名称）, `description` |
 | `file` | 读取文件到上下文窗口 | `title`, `path`（文件路径）, `description` |
 
-可用 command：`program`, `think`, `talk`, `talk_sync`, `return`, `call_function`, `set_plan`, `await`, `await_all`, `defer`
+可用 command：`program`, `think`, `talk`, `return`, `call_function`, `set_plan`, `await`, `await_all`, `defer`, `compact`
 
 ### file 类型说明
 

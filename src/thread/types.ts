@@ -51,8 +51,8 @@ export interface ThreadsTreeNodeMeta {
   summary?: string;
 
   /** 当 status === "waiting" 时，标识具体在等什么。
-   *  - "await_children": 在等子线程完成（await / await_all 触发）
-   *  - "talk_sync":      在等其他对象的同步回复（talk_sync 触发）
+   *  - "await_children": 在等子线程完成（await / await_all / think(wait=true) 触发）
+   *  - "talk_sync":      在等其他对象的同步回复（talk(wait=true) 触发；内部状态标签，非命令名）
    *  - "explicit_wait":  LLM 主动 wait 暂停（wait 工具触发） */
   waitingType?: "await_children" | "talk_sync" | "explicit_wait";
 
@@ -134,7 +134,7 @@ export interface ThreadDataFile {
 }
 
 /**
- * talk form 结构化表单（talk/talk_sync 可选携带）
+ * talk form 结构化表单（talk 可选携带）
  *
  * 当发起方已经心里有几个候选回复时，用它取代纯文本选项列表——
  * 接收方前端可以渲染为 option picker（按钮选项 + 自由文本兜底）。
@@ -249,7 +249,7 @@ export interface ThreadAction {
   /** program: 执行是否成功 */
   success?: boolean;
   /**
-   * message_out (talk/talk_sync): 可选结构化表单
+   * message_out (talk): 可选结构化表单
    *
    * 当发起方的 LLM 调用 talk 时在 submit args 里带了 form 参数，engine 会把它
    * 带上生成的 formId 一并写到这个 action 的 form 字段，作为正文的"真数据"。

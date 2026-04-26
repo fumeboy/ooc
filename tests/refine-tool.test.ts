@@ -6,6 +6,7 @@
 
 import { describe, test, expect } from "bun:test";
 import { OOC_TOOLS, REFINE_TOOL, OPEN_TOOL, SUBMIT_TOOL } from "../src/thread/tools.js";
+import { getOpenableCommands } from "../src/thread/command-tree.js";
 
 describe("REFINE_TOOL definition", () => {
   test("exported and present in OOC_TOOLS", () => {
@@ -49,5 +50,42 @@ describe("SUBMIT_TOOL after refine refactor", () => {
     const props = params.properties as Record<string, unknown>;
     expect(props.args).toBeUndefined();
   });
+});
 
+describe("OPEN_TOOL.command.enum — 动态生成（来自 COMMAND_TREE）", () => {
+  test("enum 长度为 10（与 getOpenableCommands() 一致）", () => {
+    const params = OPEN_TOOL.function.parameters as Record<string, unknown>;
+    const props = params.properties as Record<string, { enum?: string[] }>;
+    expect(props.command?.enum).toHaveLength(10);
+    expect(props.command?.enum).toHaveLength(getOpenableCommands().length);
+  });
+
+  test("enum 不含 talk_sync", () => {
+    const params = OPEN_TOOL.function.parameters as Record<string, unknown>;
+    const props = params.properties as Record<string, { enum?: string[] }>;
+    expect(props.command?.enum).not.toContain("talk_sync");
+  });
+
+  test("enum 包含 think（新增为 openable）", () => {
+    const params = OPEN_TOOL.function.parameters as Record<string, unknown>;
+    const props = params.properties as Record<string, { enum?: string[] }>;
+    expect(props.command?.enum).toContain("think");
+  });
+
+  test("enum 包含 compact（新增为 openable）", () => {
+    const params = OPEN_TOOL.function.parameters as Record<string, unknown>;
+    const props = params.properties as Record<string, { enum?: string[] }>;
+    expect(props.command?.enum).toContain("compact");
+  });
+
+  test("OPEN_TOOL.description 是简短的通用描述（不含 per-command 说明）", () => {
+    const desc = OPEN_TOOL.function.description;
+    /* 描述应简短，不再包含大段命令说明 */
+    expect(desc.length).toBeLessThan(200);
+  });
+
+  test("SUBMIT_TOOL.description 是简短的通用描述（不含 per-command 说明）", () => {
+    const desc = SUBMIT_TOOL.function.description;
+    expect(desc.length).toBeLessThan(200);
+  });
 });

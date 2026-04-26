@@ -8,7 +8,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { deriveCommandPath, COMMAND_TREE } from "../src/thread/command-tree.js";
+import { deriveCommandPath, COMMAND_TREE, getOpenableCommands } from "../src/thread/command-tree.js";
 
 describe("deriveCommandPath — 根层级", () => {
   test("未知 tool 名返回空串", () => {
@@ -125,12 +125,25 @@ describe("COMMAND_TREE — 结构性检查", () => {
 });
 
 describe("COMMAND_TREE.<root>.paths declares known path universe", () => {
-  test("talk paths include talk, talk.continue, talk.fork", () => {
+  test("talk paths include talk, talk.continue, talk.fork, talk.wait.fork", () => {
     const node = COMMAND_TREE.talk as { paths?: string[] };
     expect(node.paths).toBeDefined();
     expect(node.paths).toContain("talk");
     expect(node.paths).toContain("talk.continue");
     expect(node.paths).toContain("talk.fork");
+    expect(node.paths).toContain("talk.wait");
+    expect(node.paths).toContain("talk.wait.fork");
+    expect(node.paths).toContain("talk.wait.continue");
+    expect(node.paths).toContain("talk.wait.continue.relation_update");
+  });
+
+  test("think paths include think, think.fork, think.wait, think.wait.fork", () => {
+    const node = COMMAND_TREE.think as { paths?: string[] };
+    expect(node.paths).toBeDefined();
+    expect(node.paths).toContain("think");
+    expect(node.paths).toContain("think.fork");
+    expect(node.paths).toContain("think.wait");
+    expect(node.paths).toContain("think.wait.fork");
   });
 
   test("submit paths include submit and known children", () => {
@@ -143,5 +156,19 @@ describe("COMMAND_TREE.<root>.paths declares known path universe", () => {
     expect(COMMAND_TREE.refine).toBeDefined();
     expect(COMMAND_TREE.close).toBeDefined();
     expect(COMMAND_TREE.wait).toBeDefined();
+  });
+
+  test("新增 openable 命令已注册：call_function, set_plan, await, await_all, defer, compact", () => {
+    for (const cmd of ["call_function", "set_plan", "await", "await_all", "defer", "compact"]) {
+      expect(COMMAND_TREE[cmd]).toBeDefined();
+      expect((COMMAND_TREE[cmd] as { openable?: boolean }).openable).toBe(true);
+    }
+  });
+
+  test("getOpenableCommands 已包含所有 openable 命令", () => {
+    const cmds = getOpenableCommands();
+    for (const cmd of ["program", "think", "talk", "return", "call_function", "set_plan", "await", "await_all", "defer", "compact"]) {
+      expect(cmds).toContain(cmd);
+    }
   });
 });

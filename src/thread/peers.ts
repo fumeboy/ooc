@@ -5,7 +5,7 @@
  * Target 阶段 open-files 中枢据此决定要渲染哪些 <relations> 索引行。
  *
  * 数据源：
- * - actions[tool_use].args.target：本线程对外发起的 talk/talk_sync 的对方对象
+ * - actions[tool_use].args.target：本线程对外发起的 talk 的对方对象
  * - actions[message_out].content：历史 talk action（已记录的对外消息）
  *   注：结构化数据已在 tool_use 中体现；message_out 只是扁平化，这里不重复扫
  * - inbox[].from：收到过消息的对方

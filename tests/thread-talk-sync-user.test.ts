@@ -1,13 +1,15 @@
 /**
- * talk_sync(target="user") 死锁修复单元测试
+ * talk(wait=true, target="user") 死锁修复单元测试
  *
  * 问题背景：
  *   engine.ts 原本在处理 `talk_sync` 时无条件 `setNodeStatus("waiting")`，
  *   等待对方回复后唤醒。但 user 不参与 ThinkLoop，永远不会回复——
  *   线程会永久 waiting，直到触发全局迭代上限或死锁检测。
  *
- * 修复：当 target="user" 时，engine 不再 setNodeStatus("waiting")，
- *   改为记录 consola.warn，直接继续下一轮（按 talk 语义而非 talk_sync）。
+ * 修复：当 wait=true 且 target="user" 时，engine 不再 setNodeStatus("waiting")，
+ *   改为记录 consola.warn，直接继续下一轮（降级为普通 talk 语义）。
+ *
+ * talk_sync 已被折叠入 talk(wait=true)：不再有独立的 talk_sync command。
  *
  * @ref docs/工程管理/迭代/all/20260421_feature_user_inbox.md
  */
@@ -52,10 +54,10 @@ afterEach(() => {
   eventBus.removeAllListeners("sse");
 });
 
-describe("engine — talk_sync(target=\"user\") 死锁修复", () => {
-  test("talk_sync 到 user 不会把线程置为 waiting，线程继续到完成", async () => {
-    /* 脚本：open talk_sync(user) → submit → open return → submit
-     * 如果死锁修复失效，talk_sync 会把 root 线程永久置为 waiting，
+describe("engine — talk(wait=true, target=\"user\") 死锁修复", () => {
+  test("talk(wait=true) 到 user 不会把线程置为 waiting，线程继续到完成", async () => {
+    /* 脚本：open talk(wait=true, user) → submit → open return → submit
+     * 如果死锁修复失效，talk(wait=true) 会把 root 线程永久置为 waiting，
      * 第 3 轮不会执行，最终 status != "done"。 */
     let formId = "f_unknown";
     let step = 0;
@@ -68,14 +70,14 @@ describe("engine — talk_sync(target=\"user\") 死锁修复", () => {
             toolCalls: [toolCall("open", {
               title: "先给 user 同步打声招呼",
               type: "command",
-              command: "talk_sync",
+              command: "talk",
               description: "同步问候",
             })],
           };
         }
         if (step === 2) {
           const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user");
-          const m = userMsg?.content.match(/<form id="(f_[^"]+)" command="talk_sync"/);
+          const m = userMsg?.content.match(/<form id="(f_[^"]+)" command="talk"/);
           if (m?.[1]) formId = m[1];
           return {
             content: "",
@@ -83,7 +85,8 @@ describe("engine — talk_sync(target=\"user\") 死锁修复", () => {
               title: "投递同步消息",
               form_id: formId,
               target: "user",
-              message: "你好 user（talk_sync）",
+              wait: true,
+              message: "你好 user（talk wait=true）",
             })],
           };
         }
@@ -142,8 +145,8 @@ describe("engine — talk_sync(target=\"user\") 死锁修复", () => {
     expect(userMessagesReceived).toBe(1);
   });
 
-  test("talk_sync 到非 user 对象仍会把线程置为 waiting（原语义不变）", async () => {
-    /* 验证修复只作用于 target=user，不影响常规 talk_sync 语义 */
+  test("talk(wait=true) 到非 user 对象仍会把线程置为 waiting（原语义不变）", async () => {
+    /* 验证修复只作用于 target=user，不影响 wait=true 的常规语义 */
     let step = 0;
     let formId = "f_unknown";
     const llm = new MockLLMClient({
@@ -155,14 +158,14 @@ describe("engine — talk_sync(target=\"user\") 死锁修复", () => {
             toolCalls: [toolCall("open", {
               title: "调用 bob",
               type: "command",
-              command: "talk_sync",
+              command: "talk",
               description: "同步询问",
             })],
           };
         }
         /* step 2 */
         const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user");
-        const m = userMsg?.content.match(/<form id="(f_[^"]+)" command="talk_sync"/);
+        const m = userMsg?.content.match(/<form id="(f_[^"]+)" command="talk"/);
         if (m?.[1]) formId = m[1];
         return {
           content: "",
@@ -170,6 +173,7 @@ describe("engine — talk_sync(target=\"user\") 死锁修复", () => {
             title: "投递",
             form_id: formId,
             target: "bob",
+            wait: true,
             message: "在吗",
           })],
         };
@@ -196,7 +200,7 @@ describe("engine — talk_sync(target=\"user\") 死锁修复", () => {
     };
 
     const result = await runWithThreadTree("alice", "test", "user", config);
-    /* 常规 talk_sync 会让 root 线程 waiting 等待 bob 回复；
+    /* talk(wait=true) 会让 root 线程 waiting 等待 bob 回复；
      * bob 回复后被 writeInbox 唤醒，线程继续；但这里 LLM 脚本没有 return 步骤，
      * 所以会跑到迭代上限——关键验证是 status ≠ "done" 且也不 hang，至少跑到了 waiting 分支。 */
     expect(result.status === "waiting" || result.status === "failed").toBe(true);

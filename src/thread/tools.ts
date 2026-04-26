@@ -10,9 +10,10 @@
  */
 
 import type { ToolDefinition } from "../thinkable/client.js";
+import { getOpenableCommands } from "./command-tree.js";
 
 /**
- * talk form 参数的 JSON Schema（submit(command=talk/talk_sync) 用）
+ * talk form 参数的 JSON Schema（submit(command=talk) 用）
  *
  * 可选字段。当发起方已经心里有几个候选回复选项时，用它包一份「结构化表单」投递
  * 给接收方——前端（user 收到消息时）会把它渲染为 option picker（编号选项 + 自由文本
@@ -90,7 +91,7 @@ export const OPEN_TOOL: ToolDefinition = {
   type: "function",
   function: {
     name: "open",
-    description: "打开一个上下文。type=command 时加载指令相关知识；type=trait 时加载 trait 知识；type=skill 时加载 skill 内容；type=file 时读取文件到上下文窗口。可选 args 字段——若已知部分参数可一并传入，等价于 open(...) 紧接 refine(args)。记得带 title 参数，用一句话说明本次在做什么。",
+    description: "打开一个上下文。type=command 加载指令知识；type=trait 加载 trait 知识；type=skill 加载 skill 内容；type=file 读取文件到上下文。可选 args 字段等价于 open 后立即 refine(args)。记得带 title 参数。",
     parameters: {
       type: "object",
       properties: {
@@ -102,8 +103,8 @@ export const OPEN_TOOL: ToolDefinition = {
         },
         command: {
           type: "string",
-          enum: ["program", "think", "talk", "talk_sync", "return", "call_function", "set_plan", "await", "await_all", "defer", "compact"],
-          description: "指令名称（type=command 时必填）。compact 进入上下文压缩模式——列出/截断/丢弃冗余 actions，最后 submit compact {summary} 一次性完成压缩。",
+          enum: getOpenableCommands(),
+          description: "指令名称（type=command 时必填）。可用指令由 COMMAND_TREE 注册表动态生成。",
         },
         name: {
           type: "string",
@@ -146,7 +147,7 @@ export const SUBMIT_TOOL: ToolDefinition = {
   type: "function",
   function: {
     name: "submit",
-    description: "提交指令执行。必须先 open 获取 form_id，所有参数通过 refine() 累积；submit() 本身不接受参数。think/talk 指令通过 context=fork|continue 表达四种语义：think(fork) 派生自己的子线程；think(continue,threadId) 向自己某线程补充；talk(fork,target) 向别人新根线程；talk(continue,target,threadId) 向别人已有线程补充。talk 可选带 form 参数（结构化表单）——记得用 refine() 提供。记得带 title 参数，用一句话说明本次提交的意图。",
+    description: "提交指令执行。必须先 open 获取 form_id，所有参数通过 refine() 累积后再 submit。记得带 title 参数，用一句话说明本次提交的意图。各指令的参数语义参见 COMMAND_TREE / trait 文档。",
     parameters: {
       type: "object",
       properties: {

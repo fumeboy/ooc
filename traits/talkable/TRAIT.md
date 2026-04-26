@@ -5,7 +5,7 @@ type: how_to_interact
 version: 2.1.0
 when: never
 activates_on:
-  paths: ["talk", "talk_sync", "return"]
+  paths: ["talk", "return"]
 description: 对象间通信协议 — talk 统一 fork/continue 四模式
 deps: []
 ---
@@ -22,11 +22,12 @@ talk {
   msg: string,                       # 消息内容
   threadId?: string,                 # 对方的线程 ID
   context: "fork" | "continue",      # 操作模式
+  wait?: boolean,                    # true 时等待对方回复（阻塞当前线程）
   form?: <talk form>,                # 可选结构化表单
 }
 ```
 
-### 四种模式
+### 四种模式（+ wait 维度）
 
 | 模式 | 表达 | 语义 |
 |------|------|------|
@@ -34,6 +35,9 @@ talk {
 | fork 对方已有线程下的子线程 | `talk(target=X, msg, threadId=Y, context="fork")` | 在 X 的线程 Y 下派生子线程（新能力） |
 | continue 对方已有线程 | `talk(target=X, msg, threadId=Y, context="continue")` | 向 X 的线程 Y 投递消息、唤醒它（新能力） |
 | continue 无 threadId | **非法**（engine 会报错） | — |
+| 任意模式 + wait=true | `talk(..., wait=true)` | talk 发出后当前线程进入 waiting，等对方通过 inbox 回复后被唤醒 |
+
+> `wait=true` 对 `target="user"` 无效（user 不参与 ThinkLoop，永远不会唤醒），engine 会自动降级为普通 talk。
 
 ### 语义提示
 
