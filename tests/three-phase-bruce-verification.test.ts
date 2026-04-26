@@ -51,7 +51,7 @@ function trait(
     when: (opts?.when as TraitDefinition["when"]) ?? "never",
     description: "", readme: opts?.readme ?? `# ${namespace}:${name}`,
     methods: [], deps: opts?.deps ?? [],
-    commandBinding: opts?.commands ? { commands: opts.commands } : undefined,
+    activatesOn: opts?.commands ? { paths: opts.commands } : undefined,
     dir: `/fake/${namespace}/${name}`,
   };
 }

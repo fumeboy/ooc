@@ -10,8 +10,6 @@
 
 import type { TraitDefinition } from "../types/index.js";
 import type { ThreadFrameHook } from "./types.js";
-import { matchesCommandPath } from "./command-tree.js";
-
 /**
  * 获取 trait 的完整标识（本地版本，避免循环依赖）
  *
@@ -24,19 +22,17 @@ function localTraitId(trait: TraitDefinition): string {
 /**
  * 收集应激活的 trait id 列表
  *
- * 双轨匹配（Task 12）：
- * 1. **优先** trait.activatesOn.paths（新 spec push 模型，前缀匹配）
- * 2. **后备** trait.commandBinding.commands（旧机制，前缀匹配；Task 14 删除）
+ * 单一规则：trait.activatesOn.paths 反向声明（前缀匹配）。
  *
- * 同 trait 不会被重复计入（去重）。
- *
- * 命中规则（两条轨道相同）：
+ * 命中规则：
  * - active path === declared path → 命中
  * - active path 以 (declared path + ".") 开头 → 命中（父声明覆盖子路径）
  *
+ * 没有 activatesOn 的 trait 永不命中（Task 14：旧 command_binding fallback 已移除）。
+ *
  * @param traits     - 所有已加载的 trait 定义
  * @param activePaths - 当前活跃 form 的 commandPath 集合
- * @returns 需要激活的 trait ID 列表（去重，按 traits 入参顺序）
+ * @returns 需要激活的 trait ID 列表（按 traits 入参顺序，不会重复）
  *
  * @ref docs/superpowers/specs/2026-04-26-refine-tool-and-knowledge-activator.md
  */
@@ -45,50 +41,20 @@ export function collectCommandTraits(
   activePaths: Set<string>,
 ): string[] {
   if (activePaths.size === 0) return [];
-
   const result: string[] = [];
-  const seen = new Set<string>();
-
   for (const trait of traits) {
-    const id = localTraitId(trait);
-    if (seen.has(id)) continue;
-
-    /* 1) 优先：activates_on.paths 反向声明（前缀匹配） */
     const aoPaths = trait.activatesOn?.paths;
-    if (aoPaths && aoPaths.length > 0) {
-      let hit = false;
-      outerAo: for (const decl of aoPaths) {
-        for (const ap of activePaths) {
-          if (ap === decl || ap.startsWith(decl + ".")) {
-            hit = true;
-            break outerAo;
-          }
+    if (!aoPaths || aoPaths.length === 0) continue;
+    let hit = false;
+    outer: for (const decl of aoPaths) {
+      for (const ap of activePaths) {
+        if (ap === decl || ap.startsWith(decl + ".")) {
+          hit = true;
+          break outer;
         }
       }
-      if (hit) {
-        result.push(id);
-        seen.add(id);
-        continue;
-      }
     }
-
-    /* 2) 后备：旧的 command_binding（同前缀匹配语义，Task 14 移除） */
-    const binding = trait.commandBinding;
-    if (binding?.commands?.length) {
-      let hit = false;
-      outerCb: for (const b of binding.commands) {
-        for (const p of activePaths) {
-          if (matchesCommandPath(p, b)) {
-            hit = true;
-            break outerCb;
-          }
-        }
-      }
-      if (hit) {
-        result.push(id);
-        seen.add(id);
-      }
-    }
+    if (hit) result.push(localTraitId(trait));
   }
   return result;
 }

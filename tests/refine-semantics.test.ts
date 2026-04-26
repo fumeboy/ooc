@@ -31,7 +31,7 @@ function trait(
     readme: `# ${namespace}:${name}`,
     methods: [],
     deps: [],
-    commandBinding: commands ? { commands } : undefined,
+    activatesOn: commands ? { paths: commands } : undefined,
     dir: `/fake/${namespace}/${name}`,
   };
 }
@@ -101,13 +101,13 @@ describe("FormManager.submit（非 partial）— 消费 form", () => {
 });
 
 describe("collectCommandTraits — 冒泡匹配（前缀）", () => {
-  test("binding=talk 命中 activePath=talk.fork（父命中子）", () => {
+  test("activates=talk 命中 activePath=talk.fork（父命中子）", () => {
     const traits = [trait("kernel", "talkable", ["talk"])];
     const result = collectCommandTraits(traits, new Set(["talk.fork"]));
     expect(result).toContain("kernel:talkable");
   });
 
-  test("binding=talk.fork 只命中 talk.fork，不命中 talk.continue", () => {
+  test("activates=talk.fork 只命中 talk.fork，不命中 talk.continue", () => {
     const traits = [trait("kernel", "talkable/cross_object", ["talk.fork"])];
     expect(collectCommandTraits(traits, new Set(["talk.fork"]))).toContain(
       "kernel:talkable/cross_object",
@@ -117,7 +117,7 @@ describe("collectCommandTraits — 冒泡匹配（前缀）", () => {
     );
   });
 
-  test("binding=talk.continue.relation_update 精确命中", () => {
+  test("activates=talk.continue.relation_update 精确命中", () => {
     const traits = [
       trait("kernel", "talkable/relation_update", ["talk.continue.relation_update"]),
     ];
@@ -129,20 +129,20 @@ describe("collectCommandTraits — 冒泡匹配（前缀）", () => {
     ).toContain("kernel:talkable/relation_update");
   });
 
-  test("多个 binding 冒泡：talk 命中 talk.fork + talk.continue.relation_update", () => {
+  test("多个 activates 冒泡：talk 命中 talk.fork + talk.continue.relation_update", () => {
     const traits = [
       trait("kernel", "talkable", ["talk"]),
       trait("kernel", "talkable/cross_object", ["talk.fork"]),
       trait("kernel", "talkable/relation_update", ["talk.continue.relation_update"]),
     ];
-    /* activePath = "talk.fork"：talkable 父绑定命中；cross_object 精确命中；relation_update 不命中 */
+    /* activePath = "talk.fork"：talkable 父声明命中；cross_object 精确命中；relation_update 不命中 */
     const result = collectCommandTraits(traits, new Set(["talk.fork"]));
     expect(result).toContain("kernel:talkable");
     expect(result).toContain("kernel:talkable/cross_object");
     expect(result).not.toContain("kernel:talkable/relation_update");
   });
 
-  test("back-compat: 旧 flat binding（如 'talk'）在 path='talk' 时命中自己", () => {
+  test("activates=talk 在 path='talk' 时精确命中自己", () => {
     const traits = [trait("kernel", "talkable", ["talk"])];
     expect(collectCommandTraits(traits, new Set(["talk"]))).toContain(
       "kernel:talkable",

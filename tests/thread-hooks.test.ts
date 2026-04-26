@@ -14,11 +14,11 @@ import {
 import type { ThreadFrameHook } from "../src/thread/types.js";
 
 describe("collectCommandTraits", () => {
-  test("匹配 commandBinding 中的指令", () => {
+  test("匹配 activatesOn.paths 中的指令", () => {
     const traits = [
-      { namespace: "kernel", name: "talkable", commandBinding: { commands: ["talk", "talk_sync", "return"] } },
-      { namespace: "kernel", name: "computable", commandBinding: { commands: ["program"] } },
-      { namespace: "kernel", name: "base" }, // 无 commandBinding
+      { namespace: "kernel", name: "talkable", activatesOn: { paths: ["talk", "talk_sync", "return"] } },
+      { namespace: "kernel", name: "computable", activatesOn: { paths: ["program"] } },
+      { namespace: "kernel", name: "base" }, // 无 activatesOn
     ] as any[];
 
     const result = collectCommandTraits(traits, new Set(["talk"]));
@@ -28,15 +28,15 @@ describe("collectCommandTraits", () => {
 
   test("空 activeCommands 返回空数组", () => {
     const traits = [
-      { namespace: "kernel", name: "talkable", commandBinding: { commands: ["talk"] } },
+      { namespace: "kernel", name: "talkable", activatesOn: { paths: ["talk"] } },
     ] as any[];
     expect(collectCommandTraits(traits, new Set())).toEqual([]);
   });
 
   test("多指令匹配", () => {
     const traits = [
-      { namespace: "kernel", name: "talkable", commandBinding: { commands: ["talk", "return"] } },
-      { namespace: "kernel", name: "reflective", commandBinding: { commands: ["return"] } },
+      { namespace: "kernel", name: "talkable", activatesOn: { paths: ["talk", "return"] } },
+      { namespace: "kernel", name: "reflective", activatesOn: { paths: ["return"] } },
     ] as any[];
 
     const result = collectCommandTraits(traits, new Set(["return"]));

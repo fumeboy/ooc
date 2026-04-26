@@ -1,5 +1,5 @@
 /**
- * collectCommandTraits with reverse index + command_binding fallback
+ * collectCommandTraits via activatesOn (prefix matching)
  *
  * @ref docs/superpowers/specs/2026-04-26-refine-tool-and-knowledge-activator.md
  */
@@ -23,21 +23,15 @@ function traitOnly(opts: {
   };
 }
 
-describe("collectCommandTraits prefers activatesOn, falls back to commandBinding", () => {
+describe("collectCommandTraits matches via activatesOn (prefix)", () => {
   test("trait with activatesOn matches via reverse index (prefix-aware)", () => {
     const traits = [traitOnly({ name: "a", activates: ["talk"] })];
     const ids = collectCommandTraits(traits, new Set(["talk.continue"]));
     expect(ids).toEqual(["kernel:a"]);
   });
 
-  test("trait with only commandBinding still matches (back-compat)", () => {
-    const traits = [traitOnly({ name: "b", bindings: ["talk"] })];
-    const ids = collectCommandTraits(traits, new Set(["talk.continue"]));
-    expect(ids).toEqual(["kernel:b"]);
-  });
-
-  test("trait with both activates and binding only counted once", () => {
-    const traits = [traitOnly({ name: "c", activates: ["talk"], bindings: ["talk"] })];
+  test("trait with activates is counted once", () => {
+    const traits = [traitOnly({ name: "c", activates: ["talk"] })];
     const ids = collectCommandTraits(traits, new Set(["talk"]));
     expect(ids).toEqual(["kernel:c"]);
   });
@@ -48,10 +42,10 @@ describe("collectCommandTraits prefers activatesOn, falls back to commandBinding
     expect(ids).toEqual([]);
   });
 
-  test("multiple traits: activates and binding mixes counted correctly", () => {
+  test("multiple traits: all activatesOn entries counted", () => {
     const traits = [
       traitOnly({ name: "x", activates: ["talk"] }),
-      traitOnly({ name: "y", bindings: ["submit"] }),
+      traitOnly({ name: "y", activates: ["submit"] }),
     ];
     const ids = collectCommandTraits(traits, new Set(["talk.continue", "submit.compact"])).sort();
     expect(ids).toEqual(["kernel:x", "kernel:y"]);
