@@ -90,7 +90,7 @@ export const OPEN_TOOL: ToolDefinition = {
   type: "function",
   function: {
     name: "open",
-    description: "打开一个上下文。type=command 时加载指令相关知识；type=trait 时加载 trait 知识；type=skill 时加载 skill 内容；type=file 时读取文件到上下文窗口。记得带 title 参数，用一句话说明本次在做什么。",
+    description: "打开一个上下文。type=command 时加载指令相关知识；type=trait 时加载 trait 知识；type=skill 时加载 skill 内容；type=file 时读取文件到上下文窗口。可选 args 字段——若已知部分参数可一并传入，等价于 open(...) 紧接 refine(args)。记得带 title 参数，用一句话说明本次在做什么。",
     parameters: {
       type: "object",
       properties: {
@@ -116,6 +116,10 @@ export const OPEN_TOOL: ToolDefinition = {
         lines: {
           type: "number",
           description: "读取行数限制（type=file 时可选，不填则读取全文）",
+        },
+        args: {
+          type: "object",
+          description: "可选预填参数。等价于 open 后立即 refine(args)。",
         },
         description: {
           type: "string",

@@ -1402,6 +1402,31 @@ export async function runWithThreadTree(
               tree.writeThreadData(threadId, td);
             }
             consola.info(`[Engine] open command: ${command} → ${formId}`);
+            /* open(args) 等价于 open + refine(args)：若用户带了 args，立即应用 refine */
+            if (args.args && typeof args.args === "object") {
+              const incomingPre = args.args as Record<string, unknown>;
+              if (Object.keys(incomingPre).length > 0) {
+                const refined = formManager.applyRefine(formId, incomingPre);
+                if (refined) {
+                  const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommandPaths());
+                  for (const traitName of traitsToLoad) {
+                    if (refined.loadedTraits.includes(traitName)) continue;
+                    const changed = await tree.activateTrait(threadId, traitName);
+                    if (changed) formManager.addLoadedTraits(formId, [traitName]);
+                  }
+                  const td2 = tree.readThreadData(threadId);
+                  if (td2) {
+                    td2.activeForms = formManager.toData();
+                    td2.actions.push({
+                      type: "inject",
+                      content: `[refine via open] 预填参数已累积；当前路径：${refined.commandPath}。`,
+                      timestamp: Date.now(),
+                    });
+                    tree.writeThreadData(threadId, td2);
+                  }
+                }
+              }
+            }
 
           } else if (openType === "trait" && args.name) {
             /* trait 加载：支持模糊匹配（精确 → 前缀补全 → 尾部匹配） */
@@ -2841,6 +2866,31 @@ export async function resumeWithThreadTree(
               tree.writeThreadData(threadId, td);
             }
             consola.info(`[Engine] open command: ${command} → ${formId}`);
+            /* open(args) 等价于 open + refine(args)：若用户带了 args，立即应用 refine */
+            if (args.args && typeof args.args === "object") {
+              const incomingPre = args.args as Record<string, unknown>;
+              if (Object.keys(incomingPre).length > 0) {
+                const refined = formManager.applyRefine(formId, incomingPre);
+                if (refined) {
+                  const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommandPaths());
+                  for (const traitName of traitsToLoad) {
+                    if (refined.loadedTraits.includes(traitName)) continue;
+                    const changed = await tree.activateTrait(threadId, traitName);
+                    if (changed) formManager.addLoadedTraits(formId, [traitName]);
+                  }
+                  const td2 = tree.readThreadData(threadId);
+                  if (td2) {
+                    td2.activeForms = formManager.toData();
+                    td2.actions.push({
+                      type: "inject",
+                      content: `[refine via open] 预填参数已累积；当前路径：${refined.commandPath}。`,
+                      timestamp: Date.now(),
+                    });
+                    tree.writeThreadData(threadId, td2);
+                  }
+                }
+              }
+            }
 
           } else if (openType === "trait" && args.name) {
             const traitInput = args.name as string;

@@ -5,7 +5,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { OOC_TOOLS, REFINE_TOOL } from "../src/thread/tools.js";
+import { OOC_TOOLS, REFINE_TOOL, OPEN_TOOL } from "../src/thread/tools.js";
 
 describe("REFINE_TOOL definition", () => {
   test("exported and present in OOC_TOOLS", () => {
@@ -19,6 +19,19 @@ describe("REFINE_TOOL definition", () => {
     const required = params.required as string[];
     expect(required).toContain("title");
     expect(required).toContain("form_id");
+    const props = params.properties as Record<string, { type?: string }>;
+    expect(props.args?.type).toBe("object");
+  });
+});
+
+describe("OPEN_TOOL extended args description", () => {
+  test("description mentions args equivalent to refine", () => {
+    expect(OPEN_TOOL.function.description).toContain("args");
+    expect(OPEN_TOOL.function.description).toContain("refine");
+  });
+
+  test("args field present in OPEN_TOOL parameters", () => {
+    const params = OPEN_TOOL.function.parameters as Record<string, unknown>;
     const props = params.properties as Record<string, { type?: string }>;
     expect(props.args?.type).toBe("object");
   });
