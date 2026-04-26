@@ -44,36 +44,49 @@ describe("buildPathReverseIndex", () => {
   });
 });
 
-describe("lookupTraitsByPaths (prefix match)", () => {
-  test("declaration 'talk' matches active path 'talk.continue.relation_update'", () => {
+describe("lookupTraitsByPaths (exact match)", () => {
+  test("declaration 'talk' matches when 'talk' is in activePaths (explicit parent emission)", () => {
+    /* In flat table, deriveCommandPaths always includes 'talk' as bare name,
+     * so activePaths will contain 'talk' directly — exact match works. */
+    const idx = buildPathReverseIndex([trait("talkable", ["talk"])]);
+    const ids = lookupTraitsByPaths(idx, new Set(["talk", "talk.continue", "talk.relation_update", "talk.continue.relation_update"]));
+    expect(ids).toEqual(["kernel:talkable"]);
+  });
+
+  test("declaration 'talk' does NOT match when only 'talk.continue.relation_update' in activePaths（exact, no prefix）", () => {
     const idx = buildPathReverseIndex([trait("talkable", ["talk"])]);
     const ids = lookupTraitsByPaths(idx, new Set(["talk.continue.relation_update"]));
-    expect(ids).toEqual(["kernel:talkable"]);
+    expect(ids).toEqual([]);
   });
 
   test("declaration 'talk.fork' does NOT match 'talk.continue'", () => {
     const idx = buildPathReverseIndex([trait("forky", ["talk.fork"])]);
-    const ids = lookupTraitsByPaths(idx, new Set(["talk.continue"]));
+    const ids = lookupTraitsByPaths(idx, new Set(["talk", "talk.continue"]));
     expect(ids).toEqual([]);
   });
 
-  test("dedup: same trait id from multiple paths counted once", () => {
+  test("dedup: same trait id from multiple exact-match paths counted once", () => {
     const t = trait("multi", ["talk", "submit.talk"]);
     const idx = buildPathReverseIndex([t]);
-    const ids = lookupTraitsByPaths(idx, new Set(["talk.fork", "submit.talk.compact"]));
+    /* Both "talk" and "submit.talk" are in activePaths → multi hits twice, deduplicated */
+    const ids = lookupTraitsByPaths(idx, new Set(["talk", "talk.fork", "submit", "submit.talk"]));
     expect(ids).toEqual(["kernel:multi"]);
   });
 });
 
 describe("computeKnowledgeRefs from form_match source", () => {
-  test("active path emits a KnowledgeRef per matched trait (prefix-aware)", () => {
+  test("active path emits a KnowledgeRef per matched trait (exact match, parent paths explicit)", () => {
+    /* deriveCommandPaths("talk", {context:"continue",type:"relation_update"}) returns
+     * ["talk","talk.continue","talk.relation_update","talk.continue.relation_update"]
+     * so activePaths contains "talk" (exact match for talkable) and
+     * "talk.continue.relation_update" (exact match for relation_update). */
     const traits = [
       trait("talkable", ["talk"]),
       trait("relation_update", ["talk.continue.relation_update"]),
     ];
     const refs = computeKnowledgeRefs({
       traits,
-      activePaths: new Set(["talk.continue.relation_update"]),
+      activePaths: new Set(["talk", "talk.continue", "talk.relation_update", "talk.continue.relation_update"]),
     });
     const refIds = refs.map((r) => r.ref).sort();
     expect(refIds).toEqual(["@trait:relation_update", "@trait:talkable"]);
@@ -141,6 +154,7 @@ describe("computeKnowledgeRefs emits relation refs from peers list", () => {
   });
 
   test("peers + form_match emit refs of all three kinds in same call", () => {
+    /* activePaths must include "talk" directly for talkable to match (exact) */
     const refs = computeKnowledgeRefs({
       traits: [
         {
@@ -149,7 +163,7 @@ describe("computeKnowledgeRefs emits relation refs from peers list", () => {
           methods: [], deps: [], activatesOn: { paths: ["talk"] }, dir: "/fake/talkable",
         },
       ],
-      activePaths: new Set(["talk.continue"]),
+      activePaths: new Set(["talk", "talk.continue"]),
       peers: ["alice"],
     });
     const summary = refs.map((r) => `${r.type}/${r.ref}/${r.presentation}`).sort();

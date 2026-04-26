@@ -1,9 +1,9 @@
 /**
- * think(wait=true) 对称性验证
+ * think(wait=true) 对称性验证（flat command-table 版本）
  *
  * 验证：
- * 1. COMMAND_TREE.think 注册了正确的路径集合（含 wait 维度）
- * 2. deriveCommandPath 正确推导 think(wait=true) 的路径
+ * 1. COMMAND_TABLE.think 注册了正确的路径集合（含 wait 维度，无复合嵌套）
+ * 2. deriveCommandPaths 正确推导 think(wait=true) 的多路径
  * 3. getOpenableCommands() 包含 "think"
  * 4. think(wait=true, context=fork) 时父线程进入 waiting+waitingType=await_children
  */
@@ -11,7 +11,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-import { deriveCommandPath, getOpenableCommands, COMMAND_TREE } from "../src/thread/command-tree.js";
+import { deriveCommandPaths, getOpenableCommands, COMMAND_TABLE } from "../src/thread/command-table.js";
 import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
 import { MockLLMClient, type ToolCall } from "../src/thinkable/client.js";
 import type { StoneData } from "../src/types/index.js";
@@ -49,53 +49,64 @@ afterEach(() => {
   eventBus.removeAllListeners("sse");
 });
 
-describe("COMMAND_TREE.think — 路径注册", () => {
-  test("think 节点存在", () => {
-    expect(COMMAND_TREE.think).toBeDefined();
+describe("COMMAND_TABLE.think — 路径注册", () => {
+  test("think entry 存在", () => {
+    expect(COMMAND_TABLE.think).toBeDefined();
   });
 
-  test("paths 包含 think, think.fork, think.continue, think.wait, think.wait.fork, think.wait.continue", () => {
-    const node = COMMAND_TREE.think as { paths?: string[] };
-    expect(node.paths).toBeDefined();
-    const paths = node.paths!;
-    for (const p of ["think", "think.fork", "think.continue", "think.wait", "think.wait.fork", "think.wait.continue"]) {
+  test("paths 包含 think, think.fork, think.continue, think.wait（不含复合嵌套）", () => {
+    const entry = COMMAND_TABLE.think;
+    const paths = entry.paths;
+    for (const p of ["think", "think.fork", "think.continue", "think.wait"]) {
       expect(paths).toContain(p);
     }
+    /* 旧复合路径已消除 */
+    expect(paths).not.toContain("think.wait.fork");
+    expect(paths).not.toContain("think.wait.continue");
   });
 
   test("think.openable 为 true", () => {
-    const node = COMMAND_TREE.think as { openable?: boolean };
-    expect(node.openable).toBe(true);
+    expect(COMMAND_TABLE.think.openable).toBe(true);
   });
 });
 
-describe("deriveCommandPath — think 路径推导", () => {
-  test("think 无参 → think", () => {
-    expect(deriveCommandPath("think", {})).toBe("think");
+describe("deriveCommandPaths — think 路径推导（多路径并行）", () => {
+  test("think 无参 → ['think']", () => {
+    expect(deriveCommandPaths("think", {})).toEqual(["think"]);
   });
 
-  test("think(context=fork) → think.fork", () => {
-    expect(deriveCommandPath("think", { context: "fork" })).toBe("think.fork");
+  test("think(context=fork) → ['think', 'think.fork']", () => {
+    expect(deriveCommandPaths("think", { context: "fork" })).toEqual(["think", "think.fork"]);
   });
 
-  test("think(context=continue) → think.continue", () => {
-    expect(deriveCommandPath("think", { context: "continue" })).toBe("think.continue");
+  test("think(context=continue) → ['think', 'think.continue']", () => {
+    expect(deriveCommandPaths("think", { context: "continue" })).toEqual(["think", "think.continue"]);
   });
 
-  test("think(wait=true) → think.wait", () => {
-    expect(deriveCommandPath("think", { wait: true })).toBe("think.wait");
+  test("think(wait=true) → 含 think 和 think.wait", () => {
+    const paths = deriveCommandPaths("think", { wait: true });
+    expect(paths).toContain("think");
+    expect(paths).toContain("think.wait");
   });
 
-  test("think(wait=true, context=fork) → think.wait.fork", () => {
-    expect(deriveCommandPath("think", { wait: true, context: "fork" })).toBe("think.wait.fork");
+  test("think(wait=true, context=fork) → think, think.wait, think.fork（不含 think.wait.fork）", () => {
+    const paths = deriveCommandPaths("think", { wait: true, context: "fork" });
+    expect(paths).toContain("think");
+    expect(paths).toContain("think.wait");
+    expect(paths).toContain("think.fork");
+    expect(paths).not.toContain("think.wait.fork");
   });
 
-  test("think(wait=true, context=continue) → think.wait.continue", () => {
-    expect(deriveCommandPath("think", { wait: true, context: "continue" })).toBe("think.wait.continue");
+  test("think(wait=true, context=continue) → think, think.wait, think.continue（不含 think.wait.continue）", () => {
+    const paths = deriveCommandPaths("think", { wait: true, context: "continue" });
+    expect(paths).toContain("think");
+    expect(paths).toContain("think.wait");
+    expect(paths).toContain("think.continue");
+    expect(paths).not.toContain("think.wait.continue");
   });
 
-  test("think(wait=false, context=fork) → think.fork（wait 维度不激活）", () => {
-    expect(deriveCommandPath("think", { wait: false, context: "fork" })).toBe("think.fork");
+  test("think(wait=false, context=fork) → 不含 think.wait", () => {
+    expect(deriveCommandPaths("think", { wait: false, context: "fork" })).not.toContain("think.wait");
   });
 });
 

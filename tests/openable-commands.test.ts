@@ -8,7 +8,7 @@
  * 4. OPEN_TOOL.command.enum 与 getOpenableCommands() 完全一致（动态生成）
  */
 import { describe, test, expect } from "bun:test";
-import { getOpenableCommands } from "../src/thread/command-tree.js";
+import { getOpenableCommands } from "../src/thread/command-table.js";
 import { OPEN_TOOL } from "../src/thread/tools.js";
 
 const EXPECTED_OPENABLE = [

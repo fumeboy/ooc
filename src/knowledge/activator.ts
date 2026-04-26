@@ -129,7 +129,7 @@ import { buildPathReverseIndex, lookupTraitsByPaths, type PathReverseIndex } fro
 export interface ComputeRefsInput {
   /** 已加载 traits/views/relations（统一通过 TraitDefinition 形态承载） */
   traits: TraitDefinition[];
-  /** 当前活跃 form 的 commandPath 集合 */
+  /** 当前活跃 form 的 commandPaths 合并集合（来自 FormManager.activeCommandPaths()） */
   activePaths: Set<string>;
   /** 可选：预先构建好的反向索引（性能优化：调用方可缓存） */
   reverseIndex?: PathReverseIndex;

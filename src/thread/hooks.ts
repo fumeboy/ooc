@@ -22,16 +22,17 @@ function localTraitId(trait: TraitDefinition): string {
 /**
  * 收集应激活的 trait id 列表
  *
- * 单一规则：trait.activatesOn.paths 反向声明（前缀匹配）。
+ * 单一规则：trait.activatesOn.paths 精确匹配 activePaths。
  *
  * 命中规则：
- * - active path === declared path → 命中
- * - active path 以 (declared path + ".") 开头 → 命中（父声明覆盖子路径）
+ * - declared path ∈ activePaths → 命中
  *
+ * deriveCommandPaths() 已显式包含所有父路径（如 ["talk", "talk.continue"]），
+ * 无需前缀匹配——父声明直接出现在 activePaths 中。
  * 没有 activatesOn 的 trait 永不命中（Task 14：旧 command_binding fallback 已移除）。
  *
  * @param traits     - 所有已加载的 trait 定义
- * @param activePaths - 当前活跃 form 的 commandPath 集合
+ * @param activePaths - 当前活跃 form 的 commandPaths 合并集合
  * @returns 需要激活的 trait ID 列表（按 traits 入参顺序，不会重复）
  *
  * @ref docs/superpowers/specs/2026-04-26-refine-tool-and-knowledge-activator.md
@@ -46,12 +47,10 @@ export function collectCommandTraits(
     const aoPaths = trait.activatesOn?.paths;
     if (!aoPaths || aoPaths.length === 0) continue;
     let hit = false;
-    outer: for (const decl of aoPaths) {
-      for (const ap of activePaths) {
-        if (ap === decl || ap.startsWith(decl + ".")) {
-          hit = true;
-          break outer;
-        }
+    for (const decl of aoPaths) {
+      if (activePaths.has(decl)) {
+        hit = true;
+        break;
       }
     }
     if (hit) result.push(localTraitId(trait));

@@ -24,7 +24,7 @@ import { collectCommandTraits } from "../src/thread/hooks.js";
 import { resolveVirtualPath } from "../src/thread/virtual-path.js";
 import { scanPeers } from "../src/thread/peers.js";
 import { readPeerRelations, renderRelationsIndex } from "../src/thread/relation.js";
-import { deriveCommandPath } from "../src/thread/command-tree.js";
+import { deriveCommandPaths } from "../src/thread/command-table.js";
 import { detectSelfKind } from "../src/thread/self-kind.js";
 
 import type { StoneData, TraitDefinition } from "../src/types/index.js";
@@ -195,32 +195,36 @@ describe("Bruce 3 · relation_update 请求徽章渲染（不自动写）", () =
     expect(existsSync(join(TMP_ROOT, "stones", "supervisor", "relations", "kernel.md"))).toBe(false);
   });
 
-  test("deriveCommandPath 正确识别 talk.continue.relation_update", () => {
-    expect(
-      deriveCommandPath("talk", {
-        target: "supervisor",
-        context: "continue",
-        type: "relation_update",
-        threadId: "th_xxx",
-        msg: "请登记...",
-      }),
-    ).toBe("talk.continue.relation_update");
+  test("deriveCommandPaths 包含 talk.continue.relation_update 等所有激活路径", () => {
+    const paths = deriveCommandPaths("talk", {
+      target: "supervisor",
+      context: "continue",
+      type: "relation_update",
+      threadId: "th_xxx",
+      msg: "请登记...",
+    });
+    expect(paths).toContain("talk");
+    expect(paths).toContain("talk.continue");
+    expect(paths).toContain("talk.relation_update");
+    expect(paths).toContain("talk.continue.relation_update");
   });
 
-  test("talkable/relation_update trait 绑定正确的命令路径（冒泡匹配）", () => {
+  test("talkable/relation_update trait 绑定正确的命令路径（精确匹配）", () => {
     const traits = [
       trait("kernel", "talkable", { commands: ["talk"] }),
       trait("kernel", "talkable/cross_object", { commands: ["talk.fork"] }),
       trait("kernel", "talkable/relation_update", { commands: ["talk.continue.relation_update"] }),
     ];
 
-    /* talk.continue.relation_update 路径应命中：
-     * - talkable（父 "talk" 冒泡到所有 talk.*）
-     * - relation_update（精确）
-     * 但不命中 cross_object（"talk.fork" 独立分支） */
+    /* activePaths = deriveCommandPaths("talk", {context:"continue",type:"relation_update"})
+     * = ["talk","talk.continue","talk.relation_update","talk.continue.relation_update"]
+     * 精确命中：
+     * - talkable（"talk" 在 activePaths 中）
+     * - relation_update（"talk.continue.relation_update" 在 activePaths 中）
+     * 不命中 cross_object（"talk.fork" 不在 activePaths 中） */
     const activated = collectCommandTraits(
       traits,
-      new Set(["talk.continue.relation_update"]),
+      new Set(["talk", "talk.continue", "talk.relation_update", "talk.continue.relation_update"]),
     );
     expect(activated).toContain("kernel:talkable");
     expect(activated).toContain("kernel:talkable/relation_update");
@@ -229,18 +233,22 @@ describe("Bruce 3 · relation_update 请求徽章渲染（不自动写）", () =
 });
 
 describe("Bruce 4 · 渐进填表：refine 深化路径", () => {
-  test("FormManager 的 commandPath 随 refine 深化", () => {
+  test("FormManager 的 commandPaths 随 refine 深化（多路径并行）", () => {
     const mgr = new FormManager();
     const fid = mgr.begin("talk", "问 sophia");
-    expect(mgr.getForm(fid)!.commandPath).toBe("talk");
+    expect(mgr.getForm(fid)!.commandPaths).toEqual(["talk"]);
 
     /* Step 1：只填 context=continue */
     mgr.applyRefine(fid, { context: "continue" });
-    expect(mgr.getForm(fid)!.commandPath).toBe("talk.continue");
+    expect(mgr.getForm(fid)!.commandPaths).toContain("talk");
+    expect(mgr.getForm(fid)!.commandPaths).toContain("talk.continue");
 
     /* Step 2：再填 type=relation_update */
     mgr.applyRefine(fid, { type: "relation_update" });
-    expect(mgr.getForm(fid)!.commandPath).toBe("talk.continue.relation_update");
+    expect(mgr.getForm(fid)!.commandPaths).toContain("talk");
+    expect(mgr.getForm(fid)!.commandPaths).toContain("talk.continue");
+    expect(mgr.getForm(fid)!.commandPaths).toContain("talk.relation_update");
+    expect(mgr.getForm(fid)!.commandPaths).toContain("talk.continue.relation_update");
 
     /* Step 3：最终 submit → form 被消费 */
     const finalForm = mgr.submit(fid);
@@ -278,7 +286,7 @@ describe("Bruce 4 · 渐进填表：refine 深化路径", () => {
 });
 
 describe("Bruce 5 · 向后兼容：老 thread.json 无新字段", () => {
-  test("FormManager.fromData 容忍缺失的 accumulatedArgs/commandPath/loadedTraits", () => {
+  test("FormManager.fromData 容忍缺失的 accumulatedArgs/commandPaths/loadedTraits", () => {
     /* 模拟老格式持久化数据 */
     const oldForms = [
       {
@@ -294,7 +302,26 @@ describe("Bruce 5 · 向后兼容：老 thread.json 无新字段", () => {
     /* 新字段被赋默认值 */
     expect(form!.accumulatedArgs).toEqual({});
     expect(form!.loadedTraits).toEqual([]);
-    expect(form!.commandPath).toBe("talk"); /* 由 deriveCommandPath({}) 兜底回到 command 本身 */
+    expect(form!.commandPaths).toContain("talk"); /* 由 deriveCommandPaths({}) 兜底回到 command 本身 */
+  });
+
+  test("FormManager.fromData 迁移旧格式 commandPath:string → commandPaths:string[]", () => {
+    /* 模拟老格式：commandPath 是单字符串 */
+    const oldForms = [
+      {
+        formId: "f_yyy",
+        command: "talk",
+        description: "migrated",
+        createdAt: 1234,
+        commandPath: "talk.continue",
+        accumulatedArgs: { context: "continue" },
+        loadedTraits: [],
+      } as any,
+    ];
+    const mgr = FormManager.fromData(oldForms);
+    const form = mgr.getForm("f_yyy");
+    expect(form).not.toBeNull();
+    expect(form!.commandPaths).toEqual(["talk.continue"]); /* 迁移为单元素数组 */
   });
 
   test("ThreadInboxMessage 无 kind 字段的老消息正常渲染", async () => {

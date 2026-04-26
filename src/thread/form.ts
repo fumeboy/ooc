@@ -14,7 +14,7 @@
  * @ref docs/superpowers/specs/2026-04-23-three-phase-trait-activation-design.md#第二部分-process过程
  */
 
-import { deriveCommandPath } from "./command-tree.js";
+import { deriveCommandPaths } from "./command-table.js";
 
 /** 活跃的 Form */
 export interface ActiveForm {
@@ -41,13 +41,13 @@ export interface ActiveForm {
   accumulatedArgs: Record<string, unknown>;
 
   /**
-   * 当前命令路径（由 deriveCommandPath(command, accumulatedArgs) 算出）
+   * 当前激活的 path 集合（由 deriveCommandPaths(command, accumulatedArgs) 算出）
    *
-   * begin 时 = command（未深入）。
-   * 每次 applyRefine 后按新累积 args 重算（可能从 "talk" 深化到 "talk.continue.relation_update"）。
-   * 这个路径用于与 trait.command_binding.commands 做前缀匹配。
+   * begin 时 = match(command, {})；refine 后用最新累积 args 重算。
+   * Activator 反向索引基于这些 path 决定激活哪些 trait。
+   * 多路径并行：如 ["talk", "talk.continue", "talk.continue.relation_update"]。
    */
-  commandPath: string;
+  commandPaths: string[];
 
   /**
    * 本 form 已加载的 trait ID 列表（Phase 4）
@@ -78,7 +78,7 @@ export class FormManager {
       description,
       createdAt: Date.now(),
       accumulatedArgs: {},
-      commandPath: deriveCommandPath(command, {}) || command,
+      commandPaths: deriveCommandPaths(command, {}).length > 0 ? deriveCommandPaths(command, {}) : [command],
       loadedTraits: [],
       ...extra,
     });
@@ -89,7 +89,7 @@ export class FormManager {
   /**
    * Refine: 累积 args 但不执行（替代旧的 partialSubmit）
    *
-   * 累积 args、重算 commandPath，form 仍保留、引用计数不变。
+   * 累积 args、重算 commandPaths，form 仍保留、引用计数不变。
    * 对应 refine tool。
    *
    * @returns 更新后的 form 快照；formId 不存在时返回 null
@@ -103,12 +103,13 @@ export class FormManager {
 
     /* 累积 args：后者覆盖前者同名字段。生成全新对象（immutability）。 */
     const nextArgs: Record<string, unknown> = { ...form.accumulatedArgs, ...args };
-    const nextPath = deriveCommandPath(form.command, nextArgs) || form.command;
+    const nextPaths = deriveCommandPaths(form.command, nextArgs);
+    const resolvedPaths = nextPaths.length > 0 ? nextPaths : [form.command];
 
     const next: ActiveForm = {
       ...form,
       accumulatedArgs: nextArgs,
-      commandPath: nextPath,
+      commandPaths: resolvedPaths,
     };
     this.forms.set(formId, next);
     return next;
@@ -152,13 +153,19 @@ export class FormManager {
   }
 
   /**
-   * 获取当前所有活跃 form 的 commandPath 集合（Phase 4）
+   * 获取当前所有活跃 form 的 commandPaths 合并集合（Phase 4）
    *
-   * 用于按 path 前缀匹配 trait.command_binding。同一 command 多 form 时取各自的
-   * commandPath；path 可以重复也可以不同（refine 深度不同）。
+   * 用于精确匹配 trait.activates_on.paths。同一 command 多 form 时扁平化各自的
+   * commandPaths 数组；结果去重（Set 保证）。
    */
   activeCommandPaths(): Set<string> {
-    return new Set(Array.from(this.forms.values()).map((f) => f.commandPath));
+    const result = new Set<string>();
+    for (const form of this.forms.values()) {
+      for (const p of form.commandPaths) {
+        result.add(p);
+      }
+    }
+    return result;
   }
 
   /** 获取所有活跃 form 列表 */
@@ -174,18 +181,32 @@ export class FormManager {
   /** 从持久化数据恢复 */
   static fromData(forms: ActiveForm[]): FormManager {
     const mgr = new FormManager();
-    for (const form of forms) {
-      /* 向后兼容：老 form 可能没有 accumulatedArgs / commandPath / loadedTraits */
+    for (const raw of forms) {
+      /* 向后兼容：老 form 可能没有 accumulatedArgs / commandPaths / loadedTraits */
+      /* 数据格式迁移：老版本存的是 commandPath: string，新版本是 commandPaths: string[] */
+      const accumulated = raw.accumulatedArgs ?? {};
+      let commandPaths: string[];
+      if (Array.isArray((raw as unknown as { commandPaths?: unknown }).commandPaths)) {
+        /* 新格式 */
+        commandPaths = (raw as unknown as { commandPaths: string[] }).commandPaths;
+      } else if (typeof (raw as unknown as { commandPath?: unknown }).commandPath === "string") {
+        /* 老格式迁移：单路径 → 数组 */
+        commandPaths = [(raw as unknown as { commandPath: string }).commandPath];
+      } else {
+        /* 无路径信息：重新计算 */
+        const derived = deriveCommandPaths(raw.command, accumulated);
+        commandPaths = derived.length > 0 ? derived : [raw.command];
+      }
       const normalized: ActiveForm = {
-        formId: form.formId,
-        command: form.command,
-        description: form.description,
-        createdAt: form.createdAt,
-        trait: form.trait,
-        functionName: form.functionName,
-        accumulatedArgs: form.accumulatedArgs ?? {},
-        commandPath: form.commandPath ?? (deriveCommandPath(form.command, form.accumulatedArgs ?? {}) || form.command),
-        loadedTraits: Array.isArray(form.loadedTraits) ? form.loadedTraits : [],
+        formId: raw.formId,
+        command: raw.command,
+        description: raw.description,
+        createdAt: raw.createdAt,
+        trait: raw.trait,
+        functionName: raw.functionName,
+        accumulatedArgs: accumulated,
+        commandPaths,
+        loadedTraits: Array.isArray(raw.loadedTraits) ? raw.loadedTraits : [],
       };
       mgr.forms.set(normalized.formId, normalized);
       mgr.commandRefCount.set(normalized.command, (mgr.commandRefCount.get(normalized.command) ?? 0) + 1);

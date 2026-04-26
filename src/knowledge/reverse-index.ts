@@ -39,11 +39,11 @@ export function buildPathReverseIndex(traits: TraitDefinition[]): PathReverseInd
 /**
  * 根据 active path 集合查反向索引，返回命中的 traitId 列表（去重）。
  *
- * 命中规则：path 前缀匹配——
+ * 命中规则：精确匹配——
  * - active path === declared path → 命中
- * - active path 以 (declared path + ".") 开头 → 命中（父声明覆盖子路径）
  *
- * 等价于 thread/command-tree.matchesCommandPath。
+ * match() 已显式包含所有父路径（如 ["talk", "talk.continue", "talk.fork"]），
+ * 无需再做前缀匹配——父声明通过 match 直接出现在 activePaths 中。
  */
 export function lookupTraitsByPaths(
   idx: PathReverseIndex,
@@ -51,11 +51,8 @@ export function lookupTraitsByPaths(
 ): string[] {
   const hit = new Set<string>();
   for (const ap of activePaths) {
-    for (const [decl, ids] of idx.entries()) {
-      if (ap === decl || ap.startsWith(decl + ".")) {
-        for (const id of ids) hit.add(id);
-      }
-    }
+    const ids = idx.get(ap);
+    if (ids) for (const id of ids) hit.add(id);
   }
   return Array.from(hit);
 }

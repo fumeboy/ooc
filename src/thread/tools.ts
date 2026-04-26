@@ -10,7 +10,7 @@
  */
 
 import type { ToolDefinition } from "../thinkable/client.js";
-import { getOpenableCommands } from "./command-tree.js";
+import { getOpenableCommands } from "./command-table.js";
 
 /**
  * talk form 参数的 JSON Schema（submit(command=talk) 用）
@@ -104,7 +104,7 @@ export const OPEN_TOOL: ToolDefinition = {
         command: {
           type: "string",
           enum: getOpenableCommands(),
-          description: "指令名称（type=command 时必填）。可用指令由 COMMAND_TREE 注册表动态生成。",
+          description: "指令名称（type=command 时必填）。可用指令由 COMMAND_TABLE 注册表动态生成。",
         },
         name: {
           type: "string",
@@ -147,7 +147,7 @@ export const SUBMIT_TOOL: ToolDefinition = {
   type: "function",
   function: {
     name: "submit",
-    description: "提交指令执行。必须先 open 获取 form_id，所有参数通过 refine() 累积后再 submit。记得带 title 参数，用一句话说明本次提交的意图。各指令的参数语义参见 COMMAND_TREE / trait 文档。",
+    description: "提交指令执行。必须先 open 获取 form_id，所有参数通过 refine() 累积后再 submit。记得带 title 参数，用一句话说明本次提交的意图。各指令的参数语义参见 COMMAND_TABLE / trait 文档。",
     parameters: {
       type: "object",
       properties: {

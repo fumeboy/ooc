@@ -1,5 +1,8 @@
 /**
- * collectCommandTraits via activatesOn (prefix matching)
+ * collectCommandTraits via activatesOn (exact match)
+ *
+ * flat command-table 版本：match() 显式包含父路径，activePaths 直接含 "talk"，
+ * 无需前缀匹配——精确匹配即可命中。
  *
  * @ref docs/superpowers/specs/2026-04-26-refine-tool-and-knowledge-activator.md
  */
@@ -23,11 +26,21 @@ function traitOnly(opts: {
   };
 }
 
-describe("collectCommandTraits matches via activatesOn (prefix)", () => {
-  test("trait with activatesOn matches via reverse index (prefix-aware)", () => {
+describe("collectCommandTraits matches via activatesOn (exact match)", () => {
+  test("trait with activatesOn=['talk'] matches when 'talk' is in activePaths", () => {
+    /* deriveCommandPaths("talk", {context:"continue"}) → ["talk","talk.continue"]
+     * "talk" is in activePaths, so exact match hits */
+    const traits = [traitOnly({ name: "a", activates: ["talk"] })];
+    const ids = collectCommandTraits(traits, new Set(["talk", "talk.continue"]));
+    expect(ids).toEqual(["kernel:a"]);
+  });
+
+  test("trait with activates=['talk'] does NOT match when only 'talk.continue' in activePaths（exact, no prefix fallback）", () => {
+    /* If activePaths only has 'talk.continue' without 'talk', no match — this is intentional.
+     * In practice, deriveCommandPaths always includes the bare name, so this is a guard test. */
     const traits = [traitOnly({ name: "a", activates: ["talk"] })];
     const ids = collectCommandTraits(traits, new Set(["talk.continue"]));
-    expect(ids).toEqual(["kernel:a"]);
+    expect(ids).toEqual([]);
   });
 
   test("trait with activates is counted once", () => {
@@ -47,7 +60,8 @@ describe("collectCommandTraits matches via activatesOn (prefix)", () => {
       traitOnly({ name: "x", activates: ["talk"] }),
       traitOnly({ name: "y", activates: ["submit"] }),
     ];
-    const ids = collectCommandTraits(traits, new Set(["talk.continue", "submit.compact"])).sort();
+    /* deriveCommandPaths produces ["talk","talk.continue"] and ["submit","submit.compact"] */
+    const ids = collectCommandTraits(traits, new Set(["talk", "talk.continue", "submit", "submit.compact"])).sort();
     expect(ids).toEqual(["kernel:x", "kernel:y"]);
   });
 });

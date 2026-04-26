@@ -6,7 +6,7 @@ when: never
 description: 跨对象 talk fork 模式 — 跨对象函数调用 + 新会话派生
 deps: ["kernel:talkable"]
 activates_on:
-  paths: ["talk.fork", "talk.wait.fork"]
+  paths: ["talk.fork"]
 ---
 
 # 跨对象函数调用（通过对话实现）

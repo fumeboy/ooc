@@ -1376,7 +1376,7 @@ export async function runWithThreadTree(
               trait: args.trait as string,
               functionName: args.function_name as string,
             });
-            /* Phase 4：按 commandPath 集合做冒泡前缀匹配（父 binding 命中子路径） */
+            /* Phase 4：按 commandPaths 集合做精确匹配（match 已显式包含所有父路径） */
             const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommandPaths());
             /* 累加真正"新加载"的 trait（changed=true 表示此次激活；false 表示本就在作用域内） */
             const newlyLoadedTraits: string[] = [];
@@ -1424,7 +1424,7 @@ export async function runWithThreadTree(
                     td2.activeForms = formManager.toData();
                     td2.actions.push({
                       type: "inject",
-                      content: `[refine via open] 预填参数已累积；当前路径：${refined.commandPath}。`,
+                      content: `[refine via open] 预填参数已累积；当前路径：${refined.commandPaths.join(", ")}。`,
                       timestamp: Date.now(),
                     });
                     tree.writeThreadData(threadId, td2);
@@ -1598,7 +1598,7 @@ export async function runWithThreadTree(
             const td = tree.readThreadData(threadId);
             if (td) {
               td.activeForms = formManager.toData();
-              const pathHint = `当前路径：${updatedForm.commandPath}`;
+              const pathHint = `当前路径：${updatedForm.commandPaths.join(", ")}`;
               const loadHint = newlyLoadedTraits.length > 0
                 ? `按新路径追加 trait：${newlyLoadedTraits.join(", ")}`
                 : `按新路径无新增 trait`;
@@ -1609,7 +1609,7 @@ export async function runWithThreadTree(
               });
               tree.writeThreadData(threadId, td);
             }
-            consola.info(`[Engine] refine: form=${formId} path=${updatedForm.commandPath}`);
+            consola.info(`[Engine] refine: form=${formId} paths=${updatedForm.commandPaths.join(", ")}`);
           }
         }
 
@@ -2097,7 +2097,7 @@ export async function runWithThreadTree(
                 const traitsToUnload = form.loadedTraits && form.loadedTraits.length > 0
                   ? form.loadedTraits
                   : collectCommandTraits(config.traits, new Set([form.command]));
-                /* 当前仍需被其他 active form 的 commandPath 集合所需 → 不卸 */
+                /* 当前仍需被其他 active form 的 commandPaths 集合所需 → 不卸 */
                 const stillNeededSet = new Set(collectCommandTraits(config.traits, formManager.activeCommandPaths()));
                 for (const traitName of traitsToUnload) {
                   if (tree.isPinnedTrait(threadId, traitName)) {
@@ -2822,7 +2822,7 @@ export async function resumeWithThreadTree(
             const formId = formManager.begin(command, description, {
               trait: args.trait as string, functionName: args.function_name as string,
             });
-            /* Phase 4：按 commandPath 冒泡前缀匹配 */
+            /* Phase 4：按 commandPaths 集合做精确匹配（match 已显式包含所有父路径） */
             const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommandPaths());
             const newlyLoadedTraits: string[] = [];
             for (const traitName of traitsToLoad) {
@@ -2866,7 +2866,7 @@ export async function resumeWithThreadTree(
                     td2.activeForms = formManager.toData();
                     td2.actions.push({
                       type: "inject",
-                      content: `[refine via open] 预填参数已累积；当前路径：${refined.commandPath}。`,
+                      content: `[refine via open] 预填参数已累积；当前路径：${refined.commandPaths.join(", ")}。`,
                       timestamp: Date.now(),
                     });
                     tree.writeThreadData(threadId, td2);
@@ -2997,12 +2997,12 @@ export async function resumeWithThreadTree(
             const td = tree.readThreadData(threadId);
             if (td) {
               td.activeForms = formManager.toData();
-              const pathHint = `当前路径：${updatedForm.commandPath}`;
+              const pathHint = `当前路径：${updatedForm.commandPaths.join(", ")}`;
               const loadHint = newlyLoadedTraits.length > 0 ? `按新路径追加 trait：${newlyLoadedTraits.join(", ")}` : `按新路径无新增 trait`;
               td.actions.push({ type: "inject", content: `[refine] Form ${formId} 已累积参数（未执行）。${pathHint}。${loadHint}。可继续 refine，或 submit() 执行指令。`, timestamp: Date.now() });
               tree.writeThreadData(threadId, td);
             }
-            consola.info(`[Engine] refine(resume): form=${formId} path=${updatedForm.commandPath}`);
+            consola.info(`[Engine] refine(resume): form=${formId} paths=${updatedForm.commandPaths.join(", ")}`);
           }
 
         /* --- Submit (resume) --- */
