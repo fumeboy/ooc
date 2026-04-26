@@ -17,16 +17,17 @@ activates_on:
 
 ## 发起方（你发送时）
 
-使用方式（推荐走 talk 的渐进填表，借助 partial submit 观察各层 bias）：
+使用方式（推荐走 talk 的渐进填表，借助 refine 逐步触发各层 bias）：
 
 ```
 open(type=command, command=talk, description="向 sophia 提议登记协作规矩")
-submit(form_id="<...>", partial=true, target="sophia", context="continue")
+refine(form_id="<...>", target="sophia", context="continue")
 # → engine 派生路径到 talk.continue；talk/continue 相关 bias 已 open
-submit(form_id="<...>", partial=true, type="relation_update")
+refine(form_id="<...>", type="relation_update")
 # → engine 派生到 talk.continue.relation_update；本 TRAIT.md 被 open
-submit(form_id="<...>", partial=false, threadId="th_sophia_g3",
+refine(form_id="<...>", threadId="th_sophia_g3",
        msg="请在 relations/kernel.md 里登记：所有 G/E 编号变更必须先 talk 我确认")
+submit(form_id="<...>")
 ```
 
 或一次性填齐：
