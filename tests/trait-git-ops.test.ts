@@ -52,7 +52,7 @@ describe("gitLog", () => {
     expect(result.data.length).toBeGreaterThan(0);
     expect(result.data.length).toBeLessThanOrEqual(3);
 
-    const entry = result.data[0];
+    const entry = result.data[0]!;
     expect(entry).toHaveProperty("hash");
     expect(entry).toHaveProperty("message");
     expect(entry).toHaveProperty("author");

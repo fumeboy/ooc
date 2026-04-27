@@ -24,7 +24,7 @@
  * - `activeTraitIds`：所有 open 中 trait 的完整 ID 去重列表（供 debug / 方法筛选）
  *
  * 行为等价：`getOpenFiles` 内部调用 getActiveTraits + pinnedTraits 划分，
- * 保证与原调用链产生相同的 trait 集合（deps 递归、when 规则完全一致）。
+ * 保证与原调用链产生相同的 trait 集合（deps 递归、显式激活）。
  *
  * @ref docs/superpowers/specs/2026-04-23-three-phase-trait-activation-design.md#第四部分-统一激活中枢
  */
@@ -90,7 +90,7 @@ function isKernelTrait(id: string): boolean {
  *
  * 执行步骤：
  * 1. scope chain：stone._traits_ref + 祖先链 traits + activatedTraits（computeThreadScopeChain）
- * 2. 激活集合：getActiveTraits（处理 when / deps 递归）
+ * 2. 激活集合：getActiveTraits（处理 scope chain / deps 递归）
  * 3. 按 pinnedTraits 拆分：在 pinnedTraits 里的 → pinned；否则 → transient
  * 4. 按 namespace 拆分 instructions（kernel）/ knowledge（非 kernel）
  */
@@ -114,9 +114,7 @@ export function getOpenFiles(input: OpenFilesInput): OpenFiles {
     ...stoneRefs,
     ...(nodeMeta.pinnedTraits ?? []),
   ]);
-  for (const t of activeTraits) {
-    if (t.when === "always") pinnedKeys.add(activatorTraitId(t));
-  }
+  if (activeTraits.some((t) => activatorTraitId(t) === "kernel:base")) pinnedKeys.add("kernel:base");
 
   /* Phase 3 — llm_input_viewer：计算每个 window 的 source（来源溯源）。
    *
@@ -144,12 +142,12 @@ export function getOpenFiles(input: OpenFilesInput): OpenFiles {
 
   function determineSource(t: TraitDefinition, id: string): ContextWindowSource {
     /* 优先级：精确 → 泛化
-     * 1. always_on：when=always 的 kernel 常驻
+     * 1. always_on：kernel:base 协议基座常驻
      * 2. thread_pinned：当前节点显式 pin
      * 3. stone_default：stone._traits_ref 声明
      * 4. command_binding：任何节点 activatedTraits 动态激活
      * 5. scope_chain：兜底——祖先 traits 声明集合 */
-    if (t.when === "always") return "always_on";
+    if (id === "kernel:base") return "always_on";
     if (threadPinnedSet.has(id)) return "thread_pinned";
     if (stoneRefSet.has(id)) return "stone_default";
     if (activatedSet.has(id)) return "command_binding";

@@ -3,9 +3,8 @@ namespace: kernel
 name: reflective
 type: how_to_think
 version: 1.0.0
-when: never
 activates_on:
-  paths: ["return"]
+  show_content_when: ["return"]
 description: 经验结晶与自我反思（SuperFlow），向自己的反思镜像分身对话来沉淀经验
 deps: []
 ---

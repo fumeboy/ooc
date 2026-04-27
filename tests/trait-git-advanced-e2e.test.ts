@@ -76,11 +76,11 @@ describe("git/advanced E2E — interactive rebase 完整编排", () => {
       const r = await interactiveRebase({ rootDir: dir } as any, {
         onto: "HEAD~5",
         plan: [
-          { action: "reword", commit: c1, message: "C1-reworded" },
-          { action: "pick", commit: c2 },
-          { action: "squash", commit: c3, message: "C2+C3-merged" },
-          { action: "pick", commit: c4 },
-          { action: "drop", commit: c5 },
+          { action: "reword", commit: c1!, message: "C1-reworded" },
+          { action: "pick", commit: c2! },
+          { action: "squash", commit: c3!, message: "C2+C3-merged" },
+          { action: "pick", commit: c4! },
+          { action: "drop", commit: c5! },
         ],
       });
       expect(r.ok).toBe(true);

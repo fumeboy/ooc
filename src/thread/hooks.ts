@@ -22,14 +22,15 @@ function localTraitId(trait: TraitDefinition): string {
 /**
  * 收集应激活的 trait id 列表
  *
- * 单一规则：trait.activatesOn.paths 精确匹配 activePaths。
+ * 单一规则：trait.activatesOn.showContentWhen 精确匹配 activePaths。
  *
  * 命中规则：
  * - declared path ∈ activePaths → 命中
  *
  * deriveCommandPaths() 已显式包含所有父路径（如 ["talk", "talk.continue"]），
  * 无需前缀匹配——父声明直接出现在 activePaths 中。
- * 没有 activatesOn 的 trait 永不命中（Task 14：旧 command_binding fallback 已移除）。
+ * showDescriptionWhen 只展示摘要，不会进入 activatedTraits。
+ * 没有 showContentWhen 的 trait 不会被作为完整正文激活。
  *
  * @param traits     - 所有已加载的 trait 定义
  * @param activePaths - 当前活跃 form 的 commandPaths 合并集合
@@ -44,7 +45,7 @@ export function collectCommandTraits(
   if (activePaths.size === 0) return [];
   const result: string[] = [];
   for (const trait of traits) {
-    const aoPaths = trait.activatesOn?.paths;
+    const aoPaths = trait.activatesOn?.showContentWhen;
     if (!aoPaths || aoPaths.length === 0) continue;
     let hit = false;
     for (const decl of aoPaths) {
@@ -80,6 +81,7 @@ export function collectCommandHooks(
 
   for (let i = 0; i < threadHooks.length; i++) {
     const hook = threadHooks[i];
+    if (!hook) continue;
     if (hook.event !== event) continue;
 
     injections.push(hook.content);
@@ -91,7 +93,10 @@ export function collectCommandHooks(
 
   /* 从后往前移除，避免索引偏移 */
   for (let i = toRemove.length - 1; i >= 0; i--) {
-    threadHooks.splice(toRemove[i], 1);
+    const index = toRemove[i];
+    if (index !== undefined) {
+      threadHooks.splice(index, 1);
+    }
   }
 
   if (injections.length === 0) return null;

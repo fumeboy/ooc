@@ -20,7 +20,7 @@ import {
   applyEditPlan,
   cancelEditPlan,
 } from "../persistence/edit-plans.js";
-import { collectAllActions, createProcess } from "../process/tree.js";
+import { collectAllActions, createProcess } from "../persistence/process-compat.js";
 import { loadTrait } from "../trait/loader.js";
 import { threadsToProcess } from "../persistence/thread-adapter.js";
 import type { World } from "../world/index.js";
@@ -127,34 +127,6 @@ function inferLiveFlowStatus(objectFlowDir: string, dataStatus: FlowStatus): Flo
   } catch {
     return dataStatus;
   }
-}
-
-/**
- * 检查 supervisor stone 是否存在
- */
-function hasSupervisorStone(world: World): boolean {
-  const supervisorDir = join(world.rootDir, "stones", "supervisor");
-  return existsSync(supervisorDir);
-}
-
-/**
- * 通知 supervisor：用户向某个对象发送了消息; 废弃
- *
- * 非阻塞、非关键路径。失败时仅打印日志，不影响主流程。
- * 仅在用户直接发消息（from === "user"）且目标不是 supervisor 时触发。
- */
-function _notifySupervisor(
-  world: World,
-  objectName: string,
-  message: string,
-  flowId: string,
-): void {
-  if (!hasSupervisorStone(world)) return;
-
-  const notification = `[系统通知] 用户向 ${objectName} 发送了消息（flowId: ${flowId}）:\n${message}`;
-  world.talk("supervisor", notification, "user").catch((e) => {
-    consola.error("[Server] 通知 supervisor 失败:", (e as Error).message);
-  });
 }
 
 /** 服务器配置 */
@@ -1504,7 +1476,6 @@ function handleSSE(): Response {
 /** Trait 信息（前端展示用） */
 interface TraitInfo {
   name: string;
-  when: string;
   readme: string;
   hasMethods: boolean;
   methods: { name: string; description: string }[];
@@ -1535,12 +1506,21 @@ async function getTraitsInfo(
     for (const name of names) {
       const trait = await loadTrait(join(dir, name), expectedNamespace);
       if (trait) {
+        const methods = [
+          ...Object.entries(trait.llmMethods ?? {}).map(([methodName, method]) => ({
+            name: methodName,
+            description: method.description,
+          })),
+          ...Object.entries(trait.uiMethods ?? {}).map(([methodName, method]) => ({
+            name: methodName,
+            description: method.description,
+          })),
+        ];
         infos.push({
           name: `${trait.namespace}:${trait.name}`,
-          when: trait.when,
           readme: trait.readme,
-          hasMethods: trait.methods.length > 0,
-          methods: trait.methods.map((m) => ({ name: m.name, description: m.description })),
+          hasMethods: methods.length > 0,
+          methods,
         });
       }
     }

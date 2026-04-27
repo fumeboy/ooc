@@ -19,7 +19,7 @@ import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
 import { MockLLMClient, type ToolCall } from "../src/thinkable/client.js";
 import type { StoneData } from "../src/types/index.js";
 import { eventBus } from "../src/server/events.js";
-import { SUBMIT_TOOL, REFINE_TOOL } from "../src/thread/tools.js";
+import { SUBMIT_TOOL, REFINE_TOOL } from "../src/thread/tools/index.js";
 import type { TalkFormPayload, ThreadAction } from "../src/thread/types.js";
 import { handleRoute } from "../src/server/server.js";
 import { World } from "../src/world/world.js";
@@ -146,7 +146,7 @@ describe("engine — talk(form=...) 持久化", () => {
     let i = 0;
     const llm = new MockLLMClient({
       responseFn: (messages) => {
-        const step = steps[i++] ?? steps[steps.length - 1];
+        const step = steps[i++] ?? steps[steps.length - 1]!;
         return step(messages);
       },
     });
@@ -251,7 +251,7 @@ describe("engine — talk(form=...) 持久化", () => {
     let i = 0;
     const llm = new MockLLMClient({
       responseFn: (messages) => {
-        const step = steps[i++] ?? steps[steps.length - 1];
+        const step = steps[i++] ?? steps[steps.length - 1]!;
         return step(messages);
       },
     });
@@ -332,7 +332,7 @@ describe("engine — talk(form=...) 持久化", () => {
     let i = 0;
     const llm = new MockLLMClient({
       responseFn: (messages) => {
-        const step = steps[i++] ?? steps[steps.length - 1];
+        const step = steps[i++] ?? steps[steps.length - 1]!;
         return step(messages);
       },
     });
@@ -394,7 +394,7 @@ describe("engine — talk(form=...) 持久化", () => {
     let i = 0;
     const llm = new MockLLMClient({
       responseFn: (messages) => {
-        const step = steps[i++] ?? steps[steps.length - 1];
+        const step = steps[i++] ?? steps[steps.length - 1]!;
         return step(messages);
       },
     });
@@ -473,7 +473,7 @@ describe("server — POST /api/talk/:target 支持 formResponse", () => {
     });
     const res = await handleRoute("POST", "/api/talk/user", req, world);
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await res.json() as { success: boolean };
     expect(json.success).toBe(true);
 
     /* 等 async world.talk 被调用 */

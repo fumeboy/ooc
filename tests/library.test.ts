@@ -11,8 +11,6 @@ import { join } from "node:path";
 import { loadAllTraits } from "../src/trait/loader.js";
 import { traitId } from "../src/knowledge/activator.js";
 import {
-  listLibrarySkills,
-  readLibrarySkill,
   listLibraryTraits,
   searchLibrary,
 } from "../traits/library_index/index.js";
@@ -131,46 +129,6 @@ describe("loadAllTraits 三层加载", () => {
 /* ========== Library Index Trait 方法 ========== */
 
 describe("library_index trait 方法", () => {
-  test("listLibrarySkills 已废弃返回空数组", () => {
-    const rootDir = join(TEST_DIR, "root");
-    mkdirSync(join(rootDir, "library", "skills"), { recursive: true });
-    writeFileSync(join(rootDir, "library", "skills", "news.md"), "# News Skill", "utf-8");
-
-    const skills = listLibrarySkills({ rootDir });
-    expect(skills).toEqual([]);
-  });
-
-  test("listLibrarySkills 空目录返回空数组", () => {
-    const rootDir = join(TEST_DIR, "root_empty");
-    mkdirSync(join(rootDir, "library", "skills"), { recursive: true });
-
-    const skills = listLibrarySkills({ rootDir });
-    expect(skills).toEqual([]);
-  });
-
-  test("listLibrarySkills 目录不存在返回空数组", () => {
-    const rootDir = join(TEST_DIR, "nonexistent_root");
-    const skills = listLibrarySkills({ rootDir });
-    expect(skills).toEqual([]);
-  });
-
-  test("readLibrarySkill 已废弃返回错误提示", () => {
-    const rootDir = join(TEST_DIR, "root2");
-    mkdirSync(join(rootDir, "library", "skills"), { recursive: true });
-    writeFileSync(join(rootDir, "library", "skills", "deep-reading.md"), "# 深度阅读\n\n详细内容", "utf-8");
-
-    const content = readLibrarySkill({ rootDir }, "deep-reading");
-    expect(content).toContain("已废弃");
-  });
-
-  test("readLibrarySkill 不存在的 skill 返回错误提示", () => {
-    const rootDir = join(TEST_DIR, "root3");
-    mkdirSync(join(rootDir, "library", "skills"), { recursive: true });
-
-    const content = readLibrarySkill({ rootDir }, "nonexistent");
-    expect(content).toContain("已废弃");
-  });
-
   test("listLibraryTraits 列出 traits（library 下的 ns/name 形式目录）", () => {
     const rootDir = join(TEST_DIR, "root4");
 

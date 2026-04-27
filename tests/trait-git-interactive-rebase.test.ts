@@ -118,11 +118,11 @@ describe("git/advanced — llm_methods 契约（interactive）", () => {
     expect(llm_methods.interactive_rebase).toBeDefined();
     expect(llm_methods.rebase_continue).toBeDefined();
     expect(llm_methods.rebase_abort).toBeDefined();
-    expect(typeof llm_methods.interactive_rebase.fn).toBe("function");
+    expect(typeof llm_methods.interactive_rebase!.fn).toBe("function");
   });
 
   test("interactive_rebase 的 plan 参数标记为 required", () => {
-    const planParam = llm_methods.interactive_rebase.params.find(p => p.name === "plan");
+    const planParam = llm_methods.interactive_rebase!.params.find(p => p.name === "plan");
     expect(planParam).toBeDefined();
     expect(planParam!.required).toBe(true);
   });

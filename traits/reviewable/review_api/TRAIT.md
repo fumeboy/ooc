@@ -3,7 +3,6 @@ namespace: kernel
 name: reviewable/review_api
 type: how_to_use_tool
 version: 1.0.0
-when: never
 description: 代码审查操作工具集 — read_diff / post_review / multi_perspective_review / suggest_fixes
 deps:
   - kernel:reviewable
@@ -15,12 +14,14 @@ deps:
 
 ## 可用 API
 
+在 `program` 沙箱内使用 `callMethod("reviewable/review_api", method, args)` 调用。单个方法也可以通过 `open({ type: "command", command: "program", title, trait: "reviewable/review_api", method })` 发起。
+
 ### read_diff({ ref1?, ref2?, pr? })
 
 拉取 diff 并解析为结构化数据：
 
 ```javascript
-const r = await read_diff({ ref1: "main", ref2: "HEAD" });
+const r = await callMethod("reviewable/review_api", "read_diff", { ref1: "main", ref2: "HEAD" });
 // r.data = {
 //   files: [{
 //     path: "src/app.ts",
@@ -58,7 +59,7 @@ ReviewFinding 结构：
 **返回编排配方**，不真正 fork 线程。默认 personas：`["security", "performance", "readability", "architecture"]`。
 
 ```javascript
-const r = await multi_perspective_review({});
+const r = await callMethod("reviewable/review_api", "multi_perspective_review", {});
 // r.data.recipes = [
 //   { persona: "security", biasPrompt: "...", forkTitle: "security review", forkDescription: "..." },
 //   ...
@@ -73,7 +74,7 @@ const r = await multi_perspective_review({});
 把 review findings 翻译为 edit_plan 骨架（path / line / change / priority），供"多文件 transaction"迭代消费。
 
 ```javascript
-const r = await suggest_fixes({ findings: [...] });
+const r = await callMethod("reviewable/review_api", "suggest_fixes", { findings: [...] });
 // r.data.steps = [{ path, line, change, priority: 1..5 }, ...]
 // 按 priority 升序（critical=1 在最前）
 ```

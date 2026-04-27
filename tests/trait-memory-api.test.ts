@@ -13,6 +13,13 @@ import {
   readMemoryEntries,
 } from "../src/persistence/memory-entries";
 
+type TestMethod = {
+  fn: (ctx: unknown, args: Record<string, unknown>) => Promise<any>;
+};
+
+const memoryMethods = memoryApiMethods as Record<string, TestMethod>;
+const supervisorMethods = superMethods as Record<string, TestMethod>;
+
 let tmp = "";
 
 beforeEach(() => {
@@ -25,7 +32,7 @@ afterEach(() => {
 
 describe("memory_api.query_memory", () => {
   test("空目录 → 返回 total=0 entries=[]", async () => {
-    const r = await memoryApiMethods.query_memory.fn(
+    const r = await memoryMethods.query_memory!.fn(
       { selfDir: tmp, stoneName: "alice" } as any,
       {},
     );
@@ -39,7 +46,7 @@ describe("memory_api.query_memory", () => {
   test("有条目 → 返回 summary（含 contentPreview）", async () => {
     const longContent = "x".repeat(500);
     appendMemoryEntry(tmp, "alice", { key: "K", content: longContent, tags: ["t"] });
-    const r = await memoryApiMethods.query_memory.fn(
+    const r = await memoryMethods.query_memory!.fn(
       { selfDir: tmp, stoneName: "alice" } as any,
       {},
     );
@@ -47,16 +54,16 @@ describe("memory_api.query_memory", () => {
     if (!r.ok) return;
     const d = r.data as { total: number; entries: any[] };
     expect(d.total).toBe(1);
-    expect(d.entries[0].contentPreview.length).toBeLessThan(longContent.length);
-    expect(d.entries[0].contentPreview.endsWith("…")).toBe(true);
-    expect(d.entries[0].key).toBe("K");
-    expect(d.entries[0].tags).toEqual(["t"]);
+    expect(d.entries[0]!.contentPreview.length).toBeLessThan(longContent.length);
+    expect(d.entries[0]!.contentPreview.endsWith("…")).toBe(true);
+    expect(d.entries[0]!.key).toBe("K");
+    expect(d.entries[0]!.tags).toEqual(["t"]);
   });
 
   test("query 过滤生效", async () => {
     appendMemoryEntry(tmp, "alice", { key: "debug", content: "API 调试方法" });
     appendMemoryEntry(tmp, "alice", { key: "style", content: "命名规范" });
-    const r = await memoryApiMethods.query_memory.fn(
+    const r = await memoryMethods.query_memory!.fn(
       { selfDir: tmp, stoneName: "alice" } as any,
       { query: "API" },
     );
@@ -64,13 +71,13 @@ describe("memory_api.query_memory", () => {
     if (!r.ok) return;
     const d = r.data as { total: number; entries: any[] };
     expect(d.total).toBe(1);
-    expect(d.entries[0].key).toBe("debug");
+    expect(d.entries[0]!.key).toBe("debug");
   });
 });
 
 describe("memory_api.get_memory_entry", () => {
   test("不存在 id → error", async () => {
-    const r = await memoryApiMethods.get_memory_entry.fn(
+    const r = await memoryMethods.get_memory_entry!.fn(
       { selfDir: tmp, stoneName: "alice" } as any,
       { id: "me_nonexistent" },
     );
@@ -79,7 +86,7 @@ describe("memory_api.get_memory_entry", () => {
 
   test("存在 id → 返回完整 entry", async () => {
     const e = appendMemoryEntry(tmp, "alice", { key: "k", content: "c" });
-    const r = await memoryApiMethods.get_memory_entry.fn(
+    const r = await memoryMethods.get_memory_entry!.fn(
       { selfDir: tmp, stoneName: "alice" } as any,
       { id: e.id },
     );
@@ -97,7 +104,7 @@ describe("super.migrate_memory_md", () => {
       join(tmp, "memory.md"),
       "## A（2026-04-22 10:00）\n\naaa\n\n## B（2026-04-22 11:00）\n\nbbb",
     );
-    const r = await superMethods.migrate_memory_md.fn(
+    const r = await supervisorMethods.migrate_memory_md!.fn(
       { selfDir: tmp, stoneName: "alice" } as any,
       {},
     );
@@ -113,7 +120,7 @@ describe("super.migrate_memory_md", () => {
   });
 
   test("无 memory.md → total=0 不报错", async () => {
-    const r = await superMethods.migrate_memory_md.fn(
+    const r = await supervisorMethods.migrate_memory_md!.fn(
       { selfDir: tmp, stoneName: "alice" } as any,
       {},
     );
@@ -123,7 +130,7 @@ describe("super.migrate_memory_md", () => {
 
 describe("super.pin_memory / set_memory_ttl", () => {
   test("pin_memory 非法 id → error", async () => {
-    const r = await superMethods.pin_memory.fn(
+    const r = await supervisorMethods.pin_memory!.fn(
       { selfDir: tmp, stoneName: "alice" } as any,
       { id: "nonexistent" },
     );
@@ -132,40 +139,40 @@ describe("super.pin_memory / set_memory_ttl", () => {
 
   test("pin_memory 合法 id → pinned=true，index 反映", async () => {
     const e = appendMemoryEntry(tmp, "alice", { key: "k", content: "c" });
-    const r = await superMethods.pin_memory.fn(
+    const r = await supervisorMethods.pin_memory!.fn(
       { selfDir: tmp, stoneName: "alice" } as any,
       { id: e.id },
     );
     expect(r.ok).toBe(true);
     const entries = readMemoryEntries(tmp);
-    expect(entries[0].pinned).toBe(true);
+    expect(entries[0]!.pinned).toBe(true);
     const indexBody = readFileSync(join(tmp, "memory", "index.md"), "utf-8");
     expect(indexBody).toContain("## Pinned");
   });
 
   test("pin_memory 取消固化", async () => {
     const e = appendMemoryEntry(tmp, "alice", { key: "k", content: "c" });
-    await superMethods.pin_memory.fn(
+    await supervisorMethods.pin_memory!.fn(
       { selfDir: tmp, stoneName: "alice" } as any,
       { id: e.id },
     );
-    await superMethods.pin_memory.fn(
+    await supervisorMethods.pin_memory!.fn(
       { selfDir: tmp, stoneName: "alice" } as any,
       { id: e.id, pinned: false },
     );
     const entries = readMemoryEntries(tmp);
-    expect(entries[0].pinned).toBe(false);
+    expect(entries[0]!.pinned).toBe(false);
   });
 
   test("set_memory_ttl", async () => {
     const e = appendMemoryEntry(tmp, "alice", { key: "k", content: "c" });
-    const r = await superMethods.set_memory_ttl.fn(
+    const r = await supervisorMethods.set_memory_ttl!.fn(
       { selfDir: tmp, stoneName: "alice" } as any,
       { id: e.id, ttlDays: 7 },
     );
     expect(r.ok).toBe(true);
     const entries = readMemoryEntries(tmp);
-    expect(entries[0].ttlDays).toBe(7);
+    expect(entries[0]!.ttlDays).toBe(7);
   });
 });
 
@@ -173,7 +180,7 @@ describe("super.merge_memory_duplicates", () => {
   test("同 key 多条 → 合并", async () => {
     appendMemoryEntry(tmp, "alice", { key: "k", content: "c1" });
     appendMemoryEntry(tmp, "alice", { key: "k", content: "c2" });
-    const r = await superMethods.merge_memory_duplicates.fn(
+    const r = await supervisorMethods.merge_memory_duplicates!.fn(
       { selfDir: tmp, stoneName: "alice" } as any,
       {},
     );
@@ -187,7 +194,7 @@ describe("super.merge_memory_duplicates", () => {
 
 describe("super.persist_to_memory 写入结构化 entries", () => {
   test("调用 persist_to_memory 后，memory.md 和 entries/ 都被写入", async () => {
-    const r = await superMethods.persist_to_memory.fn(
+    const r = await supervisorMethods.persist_to_memory!.fn(
       { selfDir: tmp, stoneName: "alice" } as any,
       { key: "新经验", content: "新内容" },
     );
@@ -200,7 +207,7 @@ describe("super.persist_to_memory 写入结构化 entries", () => {
     /* 新路径：entries */
     const entries = readMemoryEntries(tmp);
     expect(entries.length).toBe(1);
-    expect(entries[0].key).toBe("新经验");
+    expect(entries[0]!.key).toBe("新经验");
     /* index.md 已生成 */
     expect(existsSync(join(tmp, "memory", "index.md"))).toBe(true);
   });

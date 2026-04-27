@@ -27,7 +27,6 @@ describe("loader 加载 llm_methods / ui_methods", () => {
 namespace: self
 name: llm_only
 type: how_to_think
-when: always
 ---
 x`,
       "utf-8",
@@ -59,7 +58,6 @@ namespace: self
 name: ui_only
 kind: view
 type: how_to_interact
-when: never
 ---
 y`,
       "utf-8",
@@ -91,7 +89,6 @@ namespace: self
 name: both
 kind: view
 type: how_to_interact
-when: never
 ---
 z`,
       "utf-8",
@@ -111,7 +108,7 @@ export const ui_methods = {
     expect(Object.keys(trait!.uiMethods ?? {})).toContain("submit");
   });
 
-  test("过渡期兼容：旧 export const methods 装入 methods 数组（未来会被 llm channel 吸收）", async () => {
+  test("旧 export const methods 不再被当作可调用方法加载", async () => {
     const dir = join(TEST_DIR, "legacy");
     mkdirSync(dir, { recursive: true });
     writeFileSync(
@@ -120,7 +117,6 @@ export const ui_methods = {
 namespace: kernel
 name: legacy
 type: how_to_think
-when: never
 ---
 l`,
       "utf-8",
@@ -137,9 +133,7 @@ l`,
       "utf-8",
     );
     const trait = await loadTrait(dir, "kernel");
-    expect(trait!.methods).toHaveLength(1);
-    expect(trait!.methods[0]!.name).toBe("add");
-    /* 过渡期：llmMethods 可能为空或 undefined，registerAll 通过 trait.methods
-       兜底把这些装入 llm channel */
+    expect(trait!.llmMethods ?? {}).toEqual({});
+    expect(trait!.uiMethods ?? {}).toEqual({});
   });
 });

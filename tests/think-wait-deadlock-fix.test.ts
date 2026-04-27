@@ -168,9 +168,9 @@ describe("Symptom 1 — tree.awaitThreads: awaitingChildren 正确填充", () =>
     const parent = tree.getNode(tree.rootId)!;
     /* 必须是 [childId]，不能是 [] 或 undefined */
     expect(parent.status).toBe("waiting");
-    expect(parent.awaitingChildren).toEqual([childId]);
+    expect(parent.awaitingChildren).toEqual([childId!]);
     expect(parent.awaitingChildren!.length).toBe(1);
-    expect(parent.awaitingChildren![0]).toBe(childId);
+    expect(parent.awaitingChildren![0]).toBe(childId!);
   });
 
   test("子线程完成后，父线程可被唤醒（awaitingChildren 非空是唤醒的前提）", async () => {

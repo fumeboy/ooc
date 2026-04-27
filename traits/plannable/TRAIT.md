@@ -3,9 +3,8 @@ namespace: kernel
 name: plannable
 type: how_to_think
 version: 2.1.0
-when: never
 activates_on:
-  paths: ["think", "set_plan"]
+  show_content_when: ["think", "set_plan"]
 description: 任务拆解与规划 — 先想清楚再动手
 deps: []
 ---
@@ -50,12 +49,14 @@ think {
 
 ```
 # 派生子线程去分析（fork）
-open(type=command, command=think, description="分析模块 X")
-submit(title="分析模块 X", form_id="<...>", context="fork", msg="请分析 kernel/src/thread/engine.ts 的 onTalk 路径", traits=["kernel/computable"])
+open(title="分析模块 X", type=command, command=think, description="分析模块 X")
+refine(title="填写分析任务", form_id="<...>", args={context="fork", msg="请分析 kernel/src/thread/engine.ts 的 onTalk 路径", traits=["kernel/computable"]})
+submit(title="分析模块 X", form_id="<...>")
 
 # 向之前派生的线程补充信息（continue）
-open(type=command, command=think, description="给分析任务补充文件清单")
-submit(title="补充文件清单", form_id="<...>", context="continue", threadId="th_xxx", msg="顺便看一下 tree.ts 的 createSubThread API")
+open(title="补充文件清单", type=command, command=think, description="给分析任务补充文件清单")
+refine(title="填写补充信息", form_id="<...>", args={context="continue", threadId="th_xxx", msg="顺便看一下 tree.ts 的 createSubThread API"})
+submit(title="补充文件清单", form_id="<...>")
 ```
 
 子线程特点：
@@ -71,7 +72,7 @@ submit(title="补充文件清单", form_id="<...>", context="continue", threadId
 
 ## set_plan
 
-通过 `open(type=command, command=set_plan)` → `submit(text="...")` 更新当前线程的计划。
+通过 `open(title="更新计划", type=command, command=set_plan)` → `refine(args={text:"..."})` → `submit(form_id)` 更新当前线程的计划。
 
 计划会展示在 Context 中，帮助你保持方向感。建议在以下时机更新计划：
 - 任务开始时：写出初始计划

@@ -9,9 +9,9 @@
  *
  * 路径绕过：用 MockLLMClient 脚本化 tool_call，不依赖真实 LLM。
  * super trait 的 `persist_to_memory` 方法被 registerAll 注入后，LLM 通过
- * `call_function` 调用写入 memory.md——验证完整的 G12 沉淀链路。
+ * `program` trait/method 调用写入 memory.md——验证完整的 G12 沉淀链路。
  *
- * @ref kernel/src/thread/engine.ts — runSuperThread
+ * @ref kernel/src/thread/super-thread.ts — runSuperThread
  * @ref kernel/traits/reflective/super/index.ts — persist_to_memory
  * @ref docs/工程管理/迭代/all/20260422_feature_super_scheduler.md
  */
@@ -21,7 +21,8 @@ import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from "node
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { runSuperThread, type EngineConfig } from "../src/thread/engine.js";
+import { type EngineConfig } from "../src/thread/engine.js";
+import { runSuperThread } from "../src/thread/super-thread.js";
 import { MockLLMClient, type ToolCall, type MockLLMResponseFnResult } from "../src/thinkable/client.js";
 import type { StoneData, TraitDefinition } from "../src/types/index.js";
 import { handleOnTalkToSuper } from "../src/world/super.js";
@@ -53,7 +54,7 @@ function makeStone(name: string): StoneData {
   };
 }
 
-/** 构造含 `reflective/super` trait 的 traits 列表，让 call_function 能调 persist_to_memory
+/** 构造含 `reflective/super` trait 的 traits 列表，让 program trait/method 能调 persist_to_memory
  *
  * 注意：Trait 定义内部用驼峰 `llmMethods`（loader 把 `llm_methods` 转换过来）；
  * 手动构造时也必须用 `llmMethods`，否则 registerAll 找不到方法。
@@ -63,7 +64,6 @@ function makeSuperTrait(): TraitDefinition {
     namespace: "kernel",
     name: "reflective/super",
     type: "how_to_think",
-    when: "always",  /* 测试场景：super 目录总激活此 trait；生产中由 when: never + 显式激活保证权限 */
     description: "super 沉淀工具集",
     deps: [],
     readme: "",
@@ -107,7 +107,7 @@ describe("engine.runSuperThread", () => {
     expect(beforeData.inbox[0].status).toBe("unread");
 
     /* 2. 构造 mock LLM 脚本：
-       - 第一轮：open call_function（trait=reflective/super, function_name=persist_to_memory）
+       - 第一轮：open program（trait=reflective/super, method=persist_to_memory）
        - 第二轮：submit 该 form，args 含 key/content + 同时把 inbox 消息 mark=ack
        - 第三轮：open return
        - 第四轮：submit return */
@@ -117,16 +117,16 @@ describe("engine.runSuperThread", () => {
       responseFn: (messages: unknown[]): MockLLMResponseFnResult => {
         step++;
         if (step === 1) {
-          /* open call_function */
+          /* open program trait/method */
           return {
             content: "",
             toolCalls: [toolCall("open", {
               type: "command",
-              command: "call_function",
+              command: "program",
               /* engine 内部按 traitName 完整匹配（"kernel:reflective/super"），
                * LLM 在生产中也可以省略 namespace；测试里直接传完整 id 简化路径。 */
               trait: "kernel:reflective/super",
-              function_name: "persist_to_memory",
+              method: "persist_to_memory",
               description: "沉淀一条经验到 memory.md",
             })],
           };
@@ -134,7 +134,7 @@ describe("engine.runSuperThread", () => {
         if (step === 2) {
           /* 从 user message 里找 form id + inbox message id */
           const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user");
-          const fmMatch = /<form id="(f_[^"]+)" command="call_function"/.exec(userMsg?.content ?? "");
+          const fmMatch = /<form id="(f_[^"]+)" command="program"/.exec(userMsg?.content ?? "");
           formId = fmMatch ? fmMatch[1]! : "f_unknown";
           const msgIdMatch = /<message id="([^"]+)" from="bruce" status="unread"/.exec(userMsg?.content ?? "");
           const messageId = msgIdMatch ? msgIdMatch[1]! : "msg_unknown";

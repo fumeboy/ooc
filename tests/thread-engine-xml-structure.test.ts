@@ -16,7 +16,8 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { runWithThreadTree, contextToMessages, type EngineConfig, type ActiveFormView } from "../src/thread/engine.js";
+import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
+import { contextToMessages, type ActiveFormView } from "../src/thread/context-messages.js";
 import { MockLLMClient, type ToolCall, type MockLLMResponseFnResult } from "../src/thinkable/client.js";
 import { eventBus } from "../src/server/events.js";
 import type { StoneData, DirectoryEntry, TraitDefinition } from "../src/types/index.js";

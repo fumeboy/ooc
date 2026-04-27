@@ -2,14 +2,31 @@
 namespace: kernel
 name: plannable/kanban
 type: how_to_use_tool
-when: never
 description: Session 级 Issue/Task 管理 API
 deps: []
 ---
 
 # Kanban API
 
-Session 级别的 Issue/Task 管理。通过 `call_function` 调用。
+Session 级别的 Issue/Task 管理。通过 `program` 的 trait/method 形态调用：
+
+```json
+open({
+  "title": "创建 Issue",
+  "type": "command",
+  "command": "program",
+  "trait": "kernel:plannable/kanban",
+  "method": "createIssue",
+  "description": "创建 Issue"
+})
+refine({
+  "form_id": "f_xxx",
+  "args": { "title": "标题", "description": "描述" }
+})
+submit({
+  "form_id": "f_xxx"
+})
+```
 
 ## Issue 管理
 

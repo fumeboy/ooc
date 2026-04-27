@@ -100,7 +100,7 @@ export interface ThreadDataFile {
 
   /** 活跃的 form 列表（持久化，支持 resume）
    *
-   *  ActiveForm 完整字段含 accumulatedArgs / commandPaths / loadedTraits / trait / functionName。
+   *  ActiveForm 完整字段含 accumulatedArgs / commandPaths / loadedTraits / trait / method。
    *  FormManager.fromData 对老数据缺失字段做了向后兼容默认值填充。 */
   activeForms?: ActiveForm[];
 

@@ -6,7 +6,7 @@
  * 写入通道仍然只有一个：`talk("super", ...)` → super 分身调 `persist_to_memory`。
  * 本 trait 只读，不暴露 write。
  *
- * when: never —— 只有 memory_api 激活的对象能调用，防止越权。
+ * 只有显式激活 memory_api 的对象能调用，防止越权。
  *
  * @ref docs/工程管理/迭代/all/20260422_feature_memory_curation.md — implements — Phase 3
  */

@@ -2,7 +2,6 @@
 namespace: kernel
 name: reflective/super
 type: how_to_think
-when: never
 description: 对象的反思镜像分身（SuperFlow）——沉淀工具集（persist_to_memory / create_trait）
 deps: []
 ---
@@ -95,7 +94,7 @@ await callMethod("reflective/super", "create_trait", {
 
 ## 设计要点
 
-- 本 trait 的 `when: never`——不会被普通对象自动激活。只有 super 对象（或显式激活者）才能使用。
+- 本 trait 不会被普通对象自动激活。只有 super 对象（或显式激活者）才能使用。
 - 本 trait 的 `type: how_to_think`——属于"思考风格"类认知装备。
 - 一个对象只有一个 super 目录（常驻 root 线程），不支持多根。
 

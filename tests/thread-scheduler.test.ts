@@ -616,11 +616,11 @@ describe("动态线程创建", () => {
       iterationFn: async (threadId) => {
         if (threadId === "r") {
           rootIter++;
-          if (rootIter === 1 && !childCreated) {
-            /* 第一轮：创建子线程 */
-            nodes["child"] = makeNode("child", "running", { parentId: "r", creatorThreadId: "r" });
-            nodes.r.childrenIds.push("child");
-            nodes.r.awaitingChildren = ["child"];
+            if (rootIter === 1 && !childCreated) {
+              /* 第一轮：创建子线程 */
+              nodes["child"] = makeNode("child", "running", { parentId: "r", creatorThreadId: "r" });
+              nodes.r!.childrenIds.push("child");
+              nodes.r!.awaitingChildren = ["child"];
             await tree.setNodeStatus("r", "waiting");
             childCreated = true;
             /* 通知 Scheduler 有新线程 */
@@ -646,7 +646,7 @@ describe("动态线程创建", () => {
     await scheduler.run("obj_a", tree as any, callbacks);
 
     expect(iterationLog).toContain("child");
-    expect(nodes.r.status).toBe("done");
+    expect(nodes.r!.status).toBe("done");
     expect(nodes.child!.status).toBe("done");
   });
 });

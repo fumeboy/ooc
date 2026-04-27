@@ -46,7 +46,7 @@ describe("git/advanced — blame on real repo", () => {
     if (!r.ok) return; /* 容忍 blame 在某些特殊仓库状态下失败 */
     expect(r.data.path).toBe(readmeRel);
     if (r.data.lines.length > 0) {
-      const first = r.data.lines[0];
+      const first = r.data.lines[0]!;
       expect(first.commit.length).toBeGreaterThan(0);
       expect(first.lineNumber).toBeGreaterThan(0);
     }

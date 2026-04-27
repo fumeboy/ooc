@@ -80,7 +80,7 @@ describe("thread.json 读写", () => {
     const data: ThreadDataFile = {
       id: "root_001",
       actions: [
-        { type: "thought", content: "开始思考", timestamp: Date.now() },
+        { type: "thinking", content: "开始思考", timestamp: Date.now() },
       ],
       plan: "写论文",
     };

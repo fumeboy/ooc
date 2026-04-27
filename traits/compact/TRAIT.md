@@ -3,9 +3,8 @@ namespace: kernel
 name: compact
 type: how_to_think
 version: 1.0.0
-when: never
 activates_on:
-  paths: ["compact"]
+  show_content_when: ["compact"]
 description: 上下文审查与压缩——识别冗余 action、截断或丢弃、生成摘要，最后 submit compact 一次性应用
 deps: []
 ---
@@ -20,7 +19,7 @@ deps: []
 
 **compact 就是你主动清理工作台的动作**。它不是"删记忆"，而是"把桌上一堆草稿纸合并成一张纸条"——重要结论写进 summary 里，细节被允许遗忘。
 
-本 trait 只在你 `open(command="compact")` 时激活——engine 自动把我加到作用域。
+本 trait 只在你 `open(title="压缩上下文", command="compact", description="...")` 时激活——engine 自动把我加到作用域。
 Submit compact 后我自动卸载，你回到正常工作流。
 
 ## 什么时候应该 compact？
@@ -34,7 +33,7 @@ Submit compact 后我自动卸载，你回到正常工作流。
 ## 标准流程（三步走）
 
 ```
-1. open(command="compact")          ← 进入压缩模式，本 trait 激活
+1. open(title="压缩上下文", command="compact", description="...") ← 进入压缩模式，本 trait 激活
 2. list_actions()                   ← 先看清有哪些 action 可压
 3. （可选）truncate_action / drop_action / close_trait   ← 多次调用累积标记
 4. （可选）preview_compact()        ← 预估效果
@@ -46,7 +45,19 @@ submit 时 engine 会读出所有标记一次性应用——你不需要在 subm
 
 ## 可用 llm_methods
 
-所有方法通过 `open + submit call_function { trait: "kernel:compact", function_name: "..." }` 调用。
+所有方法通过 `program` 的 trait/method 形态调用：
+
+```json
+open({
+  "title": "列出可压缩 action",
+  "type": "command",
+  "command": "program",
+  "trait": "kernel:compact",
+  "method": "list_actions",
+  "description": "列出可压缩 action"
+})
+submit({ "form_id": "f_xxx" })
+```
 
 ### `list_actions()`
 

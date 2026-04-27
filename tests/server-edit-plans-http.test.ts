@@ -31,6 +31,11 @@ const TEST_LLM_CONFIG: LLMConfig = {
   timeout: 5,
 };
 
+type ApiBody<T = any> = {
+  success: boolean;
+  data: T;
+};
+
 /** 构造一个带两个源文件的 session，返回 world + sessionId */
 async function setupWorldWithFixture(): Promise<{ world: World; sid: string }> {
   const world = new World({ rootDir: TEST_DIR, llmConfig: TEST_LLM_CONFIG });
@@ -70,7 +75,7 @@ describe("GET /api/flows/:sid/edit-plans/:planId", () => {
     const res = await handleRoute("GET", path, req, world);
 
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = await res.json() as ApiBody;
     expect(body.success).toBe(true);
     expect(body.data.plan.planId).toBe(plan.planId);
     expect(body.data.plan.status).toBe("pending");
@@ -87,7 +92,7 @@ describe("GET /api/flows/:sid/edit-plans/:planId", () => {
     const req = new Request(`http://test${path}`);
     const res = await handleRoute("GET", path, req, world);
     expect(res.status).toBe(404);
-    const body = await res.json();
+    const body = await res.json() as ApiBody;
     expect(body.success).toBe(false);
   });
 });
@@ -113,7 +118,7 @@ describe("POST /api/flows/:sid/edit-plans/:planId/apply", () => {
     const res = await handleRoute("POST", path, req, world);
 
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = await res.json() as ApiBody;
     expect(body.success).toBe(true);
     expect(body.data.result.ok).toBe(true);
     expect(body.data.result.applied).toBe(1);
@@ -142,7 +147,7 @@ describe("POST /api/flows/:sid/edit-plans/:planId/apply", () => {
     const res = await handleRoute("POST", path, req, world);
 
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = await res.json() as ApiBody;
     expect(body.success).toBe(true);
     expect(body.data.result.ok).toBe(true);
   });
@@ -208,7 +213,7 @@ describe("POST /api/flows/:sid/edit-plans/:planId/cancel", () => {
     const res = await handleRoute("POST", path, req, world);
 
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = await res.json() as ApiBody;
     expect(body.success).toBe(true);
     expect(body.data.plan.status).toBe("cancelled");
   });

@@ -143,7 +143,7 @@ describe("queryMemoryEntries vector 模式", () => {
       limit: 3,
     });
     expect(result.length).toBeGreaterThan(0);
-    expect(result[0].key).toBe("线程树的可观测性价值");
+    expect(result[0]!.key).toBe("线程树的可观测性价值");
   });
 
   test("vector 模式：无关查询不命中（score <= 0 的被过滤）", () => {
@@ -171,7 +171,7 @@ describe("queryMemoryEntries vector 模式", () => {
       mode: "fuzzy",
     });
     expect(result.length).toBe(1);
-    expect(result[0].key).toBe("每日心情记录");
+    expect(result[0]!.key).toBe("每日心情记录");
   });
 
   test("vector 模式 + query 为空 → 回退到时间倒序", () => {

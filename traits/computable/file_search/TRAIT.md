@@ -3,13 +3,12 @@ namespace: kernel
 name: computable/file_search
 type: how_to_use_tool
 version: 1.0.0
-when: never
 description: 文件名模式匹配和内容搜索能力
 deps: []
 ---
 # 文件搜索能力
 
-你可以通过以下 API 在文件系统中搜索文件名和文件内容。
+你可以通过 `program` 沙箱里的 `callMethod("computable/file_search", method, args)` 在文件系统中搜索文件名和文件内容。单个方法也可以通过 `open({ type: "command", command: "program", title, trait: "computable/file_search", method })` 发起。
 
 ## 可用 API
 
@@ -24,11 +23,11 @@ deps: []
 
 ```javascript
 // 查找所有 TypeScript 文件
-const files = await glob("**/*.ts");
+const files = await callMethod("computable/file_search", "glob", { pattern: "**/*.ts" });
 // files.data = ["src/index.ts", "src/utils.ts", ...]
 
 // 限定目录和数量
-const configs = await glob("*.json", { basePath: "config/", limit: 10 });
+const configs = await callMethod("computable/file_search", "glob", { pattern: "*.json", basePath: "config/", limit: 10 });
 ```
 
 ### grep(pattern, options?)
@@ -44,14 +43,14 @@ const configs = await glob("*.json", { basePath: "config/", limit: 10 });
 
 ```javascript
 // 搜索包含 "TODO" 的行
-const todos = await grep("TODO");
+const todos = await callMethod("computable/file_search", "grep", { pattern: "TODO" });
 // todos.data = [{ file: "src/index.ts", line: 42, content: "// TODO: fix this" }, ...]
 
 // 在 TypeScript 文件中搜索，忽略大小写
-const results = await grep("export function", { glob: "*.ts", ignoreCase: true });
+const results = await callMethod("computable/file_search", "grep", { pattern: "export function", glob: "*.ts", ignoreCase: true });
 
 // 带上下文搜索
-const matches = await grep("error", { context: 2, maxResults: 10 });
+const matches = await callMethod("computable/file_search", "grep", { pattern: "error", context: 2, maxResults: 10 });
 ```
 
 ## 注意事项

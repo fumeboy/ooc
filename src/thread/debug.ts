@@ -166,32 +166,6 @@ export function computeContextStats(ctx: {
 }
 
 /**
- * 从 ThreadIterationResult 提取解析出的指令类型
- *
- * 遍历 iterResult 的关键字段，收集非 null/undefined 的字段名。
- */
-export function extractDirectiveTypes(iterResult: Record<string, unknown>): string[] {
-  const directiveFields = [
-    "program", "talks", "useSkill", "newChildNode", "threadReturn",
-    "awaitingChildren", "continueSubThread", "planUpdate",
-    "formBegin", "formSubmit", "formCancel",
-  ];
-  /* thought 在 newActions 中 */
-  const result: string[] = [];
-  const actions = iterResult.newActions as Array<{ type: string }> | undefined;
-  if (actions?.some(a => a.type === "thought")) result.push("thought");
-  if (actions?.some(a => a.type === "set_plan")) result.push("set_plan");
-
-  for (const field of directiveFields) {
-    const val = iterResult[field];
-    if (val !== null && val !== undefined) {
-      result.push(field);
-    }
-  }
-  return result;
-}
-
-/**
  * 获取 debug 目录下已有的 loop 数量（用于 resume 场景初始化计数器）
  */
 export function getExistingLoopCount(debugDir: string): number {

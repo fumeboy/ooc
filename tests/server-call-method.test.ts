@@ -60,7 +60,6 @@ async function setupWorld(): Promise<{ world: World; sid: string; objDir: string
 namespace: self
 name: demo
 kind: view
-when: never
 ---
 demo view`,
     "utf-8",
@@ -171,7 +170,6 @@ describe("POST /api/flows/:sid/objects/:name/call_method", () => {
       `---
 namespace: self
 name: helper
-when: never
 ---
 helper`,
       "utf-8",

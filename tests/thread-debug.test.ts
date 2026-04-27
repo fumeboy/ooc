@@ -9,7 +9,6 @@ import { join } from "node:path";
 import {
   writeDebugLoop,
   computeContextStats,
-  extractDirectiveTypes,
   getExistingLoopCount,
   type WriteDebugLoopParams,
 } from "../src/thread/debug.js";
@@ -154,42 +153,6 @@ describe("computeContextStats", () => {
     expect(stats.sections.siblingSummary).toBe(0);
     expect(stats.totalChars).toBeGreaterThan(0);
     expect(stats.totalChars).toBe(Object.values(stats.sections).reduce((a, b) => a + b, 0));
-  });
-});
-
-describe("extractDirectiveTypes", () => {
-  test("提取非 null 的指令类型", () => {
-    const iterResult = {
-      newActions: [{ type: "thought", content: "...", timestamp: 0 }],
-      program: { code: "print(1)" },
-      talks: null,
-      useSkill: null,
-      newChildNode: null,
-      threadReturn: null,
-      awaitingChildren: null,
-      continueSubThread: null,
-      planUpdate: null,
-    };
-    const types = extractDirectiveTypes(iterResult);
-    expect(types).toContain("thought");
-    expect(types).toContain("program");
-    expect(types).not.toContain("talks");
-  });
-
-  test("空结果返回空数组", () => {
-    const iterResult = {
-      newActions: [],
-      program: null,
-      talks: null,
-      useSkill: null,
-      newChildNode: null,
-      threadReturn: null,
-      awaitingChildren: null,
-      continueSubThread: null,
-      planUpdate: null,
-    };
-    const types = extractDirectiveTypes(iterResult);
-    expect(types).toEqual([]);
   });
 });
 

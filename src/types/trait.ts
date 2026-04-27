@@ -4,7 +4,7 @@
  * Trait 是对象的能力单元。
  * 每个 Trait 是一个目录：TRAIT.md/SKILL.md/readme.md（文档/bias）+ 可选 index.ts（方法）。
  *
- * @ref docs/哲学文档/gene.md#G3 — implements — Trait 自我定义单元（TraitDefinition, TraitWhen, TraitMethod）
+ * @ref docs/哲学文档/gene.md#G3 — implements — Trait 自我定义单元（TraitDefinition, TraitMethod）
  * @ref docs/哲学文档/gene.md#G12 — references — Trait 是经验沉淀的载体
  */
 
@@ -62,9 +62,6 @@ export interface TraitMethod {
 /** Trait 方法通道：llm（LLM 沙箱调用） vs ui（前端 HTTP 调用） */
 export type TraitMethodChannel = "llm" | "ui";
 
-/** Trait 激活条件 */
-export type TraitWhen = "always" | "never" | string;
-
 /** Trait Hook 事件名 — 栈帧级 + Flow 级 */
 export type TraitHookEvent = "before" | "after" | "when_finish" | "when_wait" | "when_error";
 
@@ -115,8 +112,6 @@ export interface TraitDefinition {
   type: TraitType;
   /** 版本号 */
   version?: string;
-  /** 激活条件 */
-  when: TraitWhen;
   /** 一行摘要（~50字），用于 trait catalog 展示 */
   description: string;
   /** readme.md/TRAIT.md 的文本内容（用作 bias/context window） */
@@ -135,11 +130,6 @@ export interface TraitDefinition {
    * 调用入口：`POST /api/flows/:sid/objects/:name/call_method`（白名单：self + kind=view + 此表）。
    */
   uiMethods?: Record<string, TraitMethod>;
-  /**
-   * @deprecated 旧字段，Phase 2 删除。目前保留以便过渡期 loader 输出。
-   * 新代码应读 `llmMethods` / `uiMethods`。
-   */
-  methods: TraitMethod[];
   /**
    * 依赖的其他 trait
    *
@@ -160,13 +150,16 @@ export interface TraitDefinition {
     commands: string[];
   };
   /**
-   * 反向激活声明：当 form 路径命中以下任一时，激活此 knowledge。
-   * 与 commandBinding 语义相同（前缀匹配），但属于新 spec 的 push 模型，
-   * 由命令注册表 paths + knowledge 自身声明共同决定激活。
+   * 反向激活声明：当 form 路径命中以下任一时，激活此 knowledge 的展示形态。
+   * - showDescriptionWhen：只展示 description / summary
+   * - showContentWhen：展示正文内容，并可进入方法可用的 activatedTraits
    *
    * @ref docs/superpowers/specs/2026-04-26-refine-tool-and-knowledge-activator.md
    */
-  activatesOn?: { paths: string[] };
+  activatesOn?: {
+    showDescriptionWhen?: string[];
+    showContentWhen?: string[];
+  };
   /** 使用示例（用于 Context 注入） */
   examples?: TraitExample[];
   /** 常见错误对比（正确 vs 错误） */

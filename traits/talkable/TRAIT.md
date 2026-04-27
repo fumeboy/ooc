@@ -3,9 +3,8 @@ namespace: kernel
 name: talkable
 type: how_to_interact
 version: 2.1.0
-when: never
 activates_on:
-  paths: ["talk", "return"]
+  show_content_when: ["talk", "return"]
 description: 对象间通信协议 — talk 统一 fork/continue 四模式
 deps: []
 ---
@@ -48,16 +47,19 @@ talk {
 
 ```
 # 新话题（fork 对方新根线程）
-open(type=command, command=talk, description="请 sophia 分析 G3")
-submit(title="请 sophia 分析 G3", form_id="<...>", target="sophia", msg="请分析 G3 的设计", context="fork")
+open(title="请 sophia 分析 G3", type=command, command=talk, description="请 sophia 分析 G3")
+refine(title="填写对话参数", form_id="<...>", args={target="sophia", msg="请分析 G3 的设计", context="fork"})
+submit(title="请 sophia 分析 G3", form_id="<...>")
 
 # 在 sophia 的已有线程下派生子任务（fork under）
-open(type=command, command=talk, description="在 sophia 的 G3 分析线程下派生子任务")
-submit(title="派生子任务", form_id="<...>", target="sophia", msg="顺便看下 G3 的反例", threadId="th_sophia_g3", context="fork")
+open(title="派生子任务", type=command, command=talk, description="在 sophia 的 G3 分析线程下派生子任务")
+refine(title="填写派生参数", form_id="<...>", args={target="sophia", msg="顺便看下 G3 的反例", threadId="th_sophia_g3", context="fork"})
+submit(title="派生子任务", form_id="<...>")
 
 # 向对方已有线程补充信息（continue）
-open(type=command, command=talk, description="向 sophia 补充数据")
-submit(title="补充数据", form_id="<...>", target="sophia", msg="忘了告诉你：实验 009 的结论在附件", threadId="th_sophia_g3", context="continue")
+open(title="补充数据", type=command, command=talk, description="向 sophia 补充数据")
+refine(title="填写补充参数", form_id="<...>", args={target="sophia", msg="忘了告诉你：实验 009 的结论在附件", threadId="th_sophia_g3", context="continue"})
+submit(title="补充数据", form_id="<...>")
 ```
 
 talk 完成后，对方的回复会出现在你的 inbox 中，并附带 `[remote_thread_id: th_xxx]`。
@@ -126,22 +128,25 @@ talk 完成后，对方的回复会出现在你的 inbox 中，并附带 `[remot
 ### 使用方式
 
 ```
-open(type=command, command=talk, description="问 user 选方案")
-submit(
+open(title="询问方案选择", type=command, command=talk, description="问 user 选方案")
+refine(
+  title="填写表单消息",
   form_id="<open 返回的 form_id>",
-  title="询问 user 的方案选择",
-  target="user",
-  msg="这个需求你希望按哪种方式实现？",
-  context="fork",
-  form={
-    "type": "single_choice",
-    "options": [
-      { "id": "A", "label": "方案 A：重构现有模块", "detail": "改动小，风险低" },
-      { "id": "B", "label": "方案 B：新建独立服务", "detail": "架构清晰，但需要迁移" },
-      { "id": "C", "label": "方案 C：先试点再决定" }
-    ]
+  args={
+    target="user",
+    msg="这个需求你希望按哪种方式实现？",
+    context="fork",
+    form={
+      "type": "single_choice",
+      "options": [
+        { "id": "A", "label": "方案 A：重构现有模块", "detail": "改动小，风险低" },
+        { "id": "B", "label": "方案 B：新建独立服务", "detail": "架构清晰，但需要迁移" },
+        { "id": "C", "label": "方案 C：先试点再决定" }
+      ]
+    }
   }
 )
+submit(title="询问 user 的方案选择", form_id="<open 返回的 form_id>")
 ```
 
 **字段说明**：

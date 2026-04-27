@@ -11,7 +11,7 @@
  * 落盘路径：`stones/{name}/super/threads.json + threads/{id}/thread.json`
  * 线程生命周期独立于任何 session——每个对象只有一个 super 分身。
  *
- * 权限隔离：本 trait `when: never`，只有 super 对象（显式激活者）才能调用
+ * 权限隔离：本 trait 只有 super 对象（显式激活者）才能调用
  * `persist_to_memory` / `create_trait`——普通对象无法越权。
  *
  * @ref docs/哲学文档/gene.md#G12 — implements — 经验沉淀循环的工程通道
@@ -235,7 +235,7 @@ async function createTraitImpl(
 
 /**
  * llm 通道方法（SuperFlow 沉淀工具集）：
- * 仅由 super 线程消费（普通对象因 when: never 不会激活本 trait）。
+ * 仅由 super 线程消费（普通对象不会自动激活本 trait）。
  * 投递通道见通用 `talk(target="super", message)`——本 trait 不再暴露 talkToSelf。
  */
 export const llm_methods: Record<string, TraitMethod> = {

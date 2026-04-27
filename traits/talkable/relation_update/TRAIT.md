@@ -2,11 +2,10 @@
 namespace: kernel
 name: talkable/relation_update
 type: how_to_interact
-when: never
 description: 关系更新请求 — talk.continue.relation_update（Phase 6）
 deps: ["kernel:talkable"]
 activates_on:
-  paths: ["talk.continue.relation_update"]
+  show_content_when: ["talk.continue.relation_update"]
 ---
 
 # 关系更新请求（relation_update）
@@ -20,23 +19,26 @@ activates_on:
 使用方式（推荐走 talk 的渐进填表，借助 refine 逐步触发各层 bias）：
 
 ```
-open(type=command, command=talk, description="向 sophia 提议登记协作规矩")
-refine(form_id="<...>", target="sophia", context="continue")
+open(title="提议登记协作规矩", type=command, command=talk, description="向 sophia 提议登记协作规矩")
+refine(title="指定对象与模式", form_id="<...>", args={target="sophia", context="continue"})
 # → engine 派生路径到 talk.continue；talk/continue 相关 bias 已 open
-refine(form_id="<...>", type="relation_update")
+refine(title="指定关系更新类型", form_id="<...>", args={type="relation_update"})
 # → engine 派生到 talk.continue.relation_update；本 TRAIT.md 被 open
-refine(form_id="<...>", threadId="th_sophia_g3",
-       msg="请在 relations/kernel.md 里登记：所有 G/E 编号变更必须先 talk 我确认")
-submit(form_id="<...>")
+refine(title="填写登记请求", form_id="<...>",
+       args={threadId="th_sophia_g3",
+             msg="请在 relations/kernel.md 里登记：所有 G/E 编号变更必须先 talk 我确认"})
+submit(title="发送关系更新请求", form_id="<...>")
 ```
 
 或一次性填齐：
 
 ```
-open(type=command, command=talk, description="请求登记协作规矩")
-submit(form_id="<...>", target="sophia", context="continue",
-       threadId="th_sophia_g3", type="relation_update",
-       msg="请在你的 relations/kernel.md 里登记：\n- 所有 G/E 编号变更必须先 talk 我\n- PR 标题必须含 G 编号")
+open(title="请求登记协作规矩", type=command, command=talk, description="请求登记协作规矩")
+refine(title="填写关系更新请求", form_id="<...>",
+       args={target="sophia", context="continue",
+             threadId="th_sophia_g3", type="relation_update",
+             msg="请在你的 relations/kernel.md 里登记：\n- 所有 G/E 编号变更必须先 talk 我\n- PR 标题必须含 G 编号"})
+submit(title="发送关系更新请求", form_id="<...>")
 ```
 
 ### 消息正文规范
@@ -65,8 +67,8 @@ submit(form_id="<...>", target="sophia", context="continue",
 ### 必须做一件事（不可忽略）
 
 - **接受**：读 `relations/{对方}.md`（若不存在则创建），把请求内容以合适的结构
-  （frontmatter summary + bullets）写入。用 `open(type=command, command=call_function,
-  trait="kernel:computable/file_ops", function_name="writeFile")` 或 `editFile`。
+  （frontmatter summary + bullets）写入。用 `open(title="写入关系文件", type=command, command=program,
+  trait="kernel:computable/file_ops", method="writeFile", description="写入关系文件")` 或 `editFile`。
 - **部分接受**：只采纳其中一部分；在回信里说明哪几条被采纳、哪几条被拒绝
 - **拒绝**：在回信里说明原因（例如"与现有约定冲突"、"暂不需要"）
 - **推迟**：短暂不决定可以，但必须在本轮或下一轮给出明确态度，不要沉默

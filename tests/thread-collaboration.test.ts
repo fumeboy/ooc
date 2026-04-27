@@ -319,8 +319,8 @@ describe("create_sub_thread_on_node()", () => {
     // 给 C 写入一些 actions 历史
     const cData = tree.readThreadData(childCId!);
     cData!.actions = [
-      { type: "thought", content: "开始收集数据", timestamp: 1000 },
-      { type: "action", content: "调用 API", timestamp: 2000, result: "成功", success: true },
+      { type: "thinking", content: "开始收集数据", timestamp: 1000 },
+      { type: "program", content: "调用 API", timestamp: 2000, result: "成功", success: true },
     ];
     tree.writeThreadData(childCId!, cData!);
 
@@ -419,9 +419,9 @@ describe("talk 回复路由（onTalkHandlerReturn）", () => {
     expect(hId).not.toBeNull();
     await treeB.setNodeStatus(hId!, "done");
     // 手动设置 linked 信息和 summary（实际由 collaboration.ts 在创建时设置）
-    treeB.nodes[hId!].linkedWaitingNodeId = wId!;
-    treeB.nodes[hId!].linkedWaitingObjectName = "A";
-    treeB.nodes[hId!].summary = "搜索完成，找到 3 篇论文";
+    treeB.nodes[hId!]!.linkedWaitingNodeId = wId!;
+    treeB.nodes[hId!]!.linkedWaitingObjectName = "A";
+    treeB.nodes[hId!]!.summary = "搜索完成，找到 3 篇论文";
 
     const resolver: ObjectResolver = {
       getTree: (name) => (name === "A" ? treeA : treeB) as any,

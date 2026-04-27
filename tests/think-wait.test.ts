@@ -11,7 +11,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-import { deriveCommandPaths, getOpenableCommands, COMMAND_TABLE } from "../src/thread/command-table.js";
+import { deriveCommandPaths, getOpenableCommands, COMMAND_TABLE } from "../src/thread/commands/index.js";
 import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
 import { MockLLMClient, type ToolCall } from "../src/thinkable/client.js";
 import type { StoneData } from "../src/types/index.js";
@@ -55,7 +55,7 @@ describe("COMMAND_TABLE.think — 路径注册", () => {
   });
 
   test("paths 包含 think, think.fork, think.continue, think.wait（不含复合嵌套）", () => {
-    const entry = COMMAND_TABLE.think;
+    const entry = COMMAND_TABLE.think!;
     const paths = entry.paths;
     for (const p of ["think", "think.fork", "think.continue", "think.wait"]) {
       expect(paths).toContain(p);
@@ -66,7 +66,7 @@ describe("COMMAND_TABLE.think — 路径注册", () => {
   });
 
   test("think.openable 为 true", () => {
-    expect(COMMAND_TABLE.think.openable).toBe(true);
+    expect(COMMAND_TABLE.think!.openable).toBe(true);
   });
 });
 

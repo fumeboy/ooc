@@ -38,7 +38,7 @@ describe("waitingType 字段消歧", () => {
 
     // 验证字段通过 JSON 持久化后能正确还原
     const persisted = readThreadsTree(TEST_DIR);
-    expect(persisted!.nodes[tree.rootId].waitingType).toBe("await_children");
+    expect(persisted!.nodes[tree.rootId]!.waitingType).toBe("await_children");
   });
 
   test("setNodeStatus('waiting', 'explicit_wait') 写入 explicit_wait", async () => {
@@ -53,7 +53,7 @@ describe("waitingType 字段消歧", () => {
 
     // 验证字段通过 JSON 持久化后能正确还原
     const persisted = readThreadsTree(TEST_DIR);
-    expect(persisted!.nodes[tree.rootId].waitingType).toBe("explicit_wait");
+    expect(persisted!.nodes[tree.rootId]!.waitingType).toBe("explicit_wait");
   });
 
   test("setNodeStatus('waiting', 'talk_sync') 写入 talk_sync", async () => {
@@ -68,7 +68,7 @@ describe("waitingType 字段消歧", () => {
 
     // 验证字段通过 JSON 持久化后能正确还原
     const persisted = readThreadsTree(TEST_DIR);
-    expect(persisted!.nodes[tree.rootId].waitingType).toBe("talk_sync");
+    expect(persisted!.nodes[tree.rootId]!.waitingType).toBe("talk_sync");
   });
 
   test("setNodeStatus 非 waiting 状态时清除 waitingType", async () => {

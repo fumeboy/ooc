@@ -13,7 +13,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { OOC_TOOLS, REFINE_TOOL, SUBMIT_TOOL, OPEN_TOOL } from "../src/thread/tools.js";
+import { OOC_TOOLS, REFINE_TOOL, SUBMIT_TOOL, OPEN_TOOL } from "../src/thread/tools/index.js";
 
 describe("Bruce E2E scaffold: refine flow integrity", () => {
   test("OOC_TOOLS exports refine in canonical position (after open, before submit)", () => {

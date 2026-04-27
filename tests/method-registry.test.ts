@@ -128,34 +128,6 @@ describe("MethodRegistry Phase 2 双通道", () => {
     expect(result).toEqual({});
   });
 
-  test("registerAll 兼容旧 trait.methods 数组（过渡期）", () => {
-    /* Phase 2 加载器在切换到 llm_methods/ui_methods 之前，loader 仍然把
-       旧 `export const methods = [...]` 装入 trait.methods。registerAll
-       必须把这些 legacy methods 注册到 llm channel，保证现有代码不断。 */
-    const r = new MethodRegistry();
-    r.registerAll([
-      {
-        namespace: "kernel",
-        name: "computable",
-        kind: "trait",
-        type: "how_to_think",
-        when: "always",
-        description: "",
-        readme: "",
-        deps: [],
-        methods: [
-          {
-            name: "readFile",
-            description: "读文件",
-            params: [],
-            fn: async () => "hi",
-          },
-        ],
-      } as any,
-    ]);
-    expect(r.get("kernel:computable", "readFile", "llm")).toBeDefined();
-  });
-
   test("registerAll 支持新的 llmMethods / uiMethods 双通道", () => {
     const r = new MethodRegistry();
     r.registerAll([
@@ -164,11 +136,9 @@ describe("MethodRegistry Phase 2 双通道", () => {
         name: "report",
         kind: "view",
         type: "how_to_interact",
-        when: "never",
         description: "",
         readme: "",
         deps: [],
-        methods: [],
         llmMethods: {
           parse: { name: "parse", description: "", params: [], fn: async () => "llm-parsed" },
         },

@@ -3,7 +3,6 @@ namespace: kernel
 name: reviewable
 type: how_to_think
 version: 1.0.0
-when: never
 description: 两阶段审查：先验证合规性（做对了吗），再验证质量（做好了吗）（需要时 activateTrait 加载）
 deps:
   - verifiable

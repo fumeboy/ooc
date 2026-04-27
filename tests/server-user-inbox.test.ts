@@ -26,6 +26,14 @@ const TEST_LLM_CONFIG: LLMConfig = {
   timeout: 5,
 };
 
+type UserInboxBody = {
+  success: boolean;
+  data: {
+    inbox: Array<{ threadId: string; messageId: string }>;
+    readState: { lastReadTimestampByObject: Record<string, number> };
+  };
+};
+
 beforeEach(() => {
   rmSync(TEST_DIR, { recursive: true, force: true });
   mkdirSync(TEST_DIR, { recursive: true });
@@ -44,7 +52,7 @@ describe("GET /api/sessions/:sid/user-inbox", () => {
     const res = await handleRoute("GET", "/api/sessions/s_nonexistent/user-inbox", req, world);
 
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = await res.json() as UserInboxBody;
     expect(body.success).toBe(true);
     expect(body.data.inbox).toEqual([]);
     expect(body.data.readState).toEqual({ lastReadTimestampByObject: {} });
@@ -63,7 +71,7 @@ describe("GET /api/sessions/:sid/user-inbox", () => {
     const res = await handleRoute("GET", `/api/sessions/${sid}/user-inbox`, req, world);
 
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = await res.json() as UserInboxBody;
     expect(body.success).toBe(true);
     expect(body.data.inbox).toEqual([
       { threadId: "th_a", messageId: "msg_1" },
@@ -109,14 +117,14 @@ describe("POST /api/sessions/:sid/user-read-state", () => {
     });
     const res = await handleRoute("POST", `/api/sessions/${sid}/user-read-state`, req, world);
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = await res.json() as UserInboxBody;
     expect(body.success).toBe(true);
     expect(body.data.readState).toEqual({ lastReadTimestampByObject: { bruce: 1234 } });
 
     /* GET 也能读到 */
     const getReq = new Request(`http://test/api/sessions/${sid}/user-inbox`);
     const getRes = await handleRoute("GET", `/api/sessions/${sid}/user-inbox`, getReq, world);
-    const getBody = await getRes.json();
+    const getBody = await getRes.json() as UserInboxBody;
     expect(getBody.data.readState).toEqual({ lastReadTimestampByObject: { bruce: 1234 } });
   });
 
@@ -136,7 +144,7 @@ describe("POST /api/sessions/:sid/user-read-state", () => {
 
     const getReq = new Request(`http://test/api/sessions/${sid}/user-inbox`);
     const getRes = await handleRoute("GET", `/api/sessions/${sid}/user-inbox`, getReq, world);
-    const getBody = await getRes.json();
+    const getBody = await getRes.json() as UserInboxBody;
     /* 最大值 3000 胜出 */
     expect(getBody.data.readState).toEqual({ lastReadTimestampByObject: { iris: 3000 } });
   });

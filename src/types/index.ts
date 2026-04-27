@@ -24,17 +24,15 @@ export type {
   DirectoryEntry,
   ContextWindow,
   ContextWindowSource,
-  WindowConfig,
-  Context,
 } from "./context.js";
 
 export type {
+  TraitType,
   TraitMethodParam,
   TraitMethod,
   TraitMethodChannel,
   TraitNamespace,
   TraitKind,
-  TraitWhen,
   TraitHookEvent,
   TraitHook,
   TraitDefinition,
@@ -43,15 +41,8 @@ export type {
 
 export type {
   NodeStatus,
-  NodeType,
   ProcessNode,
-  TodoItem,
-  Signal,
-  ThreadState,
   Process,
-  HookTime,
-  HookType,
-  FrameHook,
 } from "./process.js";
 
 export type { ToolResult } from "./tool-result.js";

@@ -173,7 +173,7 @@ export function parseUnifiedDiff(raw: string): DiffFile[] {
   let i = 0;
 
   while (i < lines.length) {
-    const line = lines[i];
+    const line = lines[i] ?? "";
     if (!line.startsWith("diff --git ")) {
       i++;
       continue;
@@ -189,8 +189,8 @@ export function parseUnifiedDiff(raw: string): DiffFile[] {
 
     /* 扫描文件头几行（直到第一个 @@ 或下一个 diff --git） */
     i++;
-    while (i < lines.length && !lines[i].startsWith("@@") && !lines[i].startsWith("diff --git ")) {
-      const h = lines[i];
+    while (i < lines.length && !(lines[i] ?? "").startsWith("@@") && !(lines[i] ?? "").startsWith("diff --git ")) {
+      const h = lines[i] ?? "";
       if (h.startsWith("new file mode")) mode = "added";
       else if (h.startsWith("deleted file mode")) mode = "deleted";
       else if (h.startsWith("rename from ")) {
@@ -203,22 +203,22 @@ export function parseUnifiedDiff(raw: string): DiffFile[] {
     const hunks: DiffHunk[] = [];
 
     /* 解析 hunks */
-    while (i < lines.length && lines[i].startsWith("@@")) {
-      const header = lines[i];
+    while (i < lines.length && (lines[i] ?? "").startsWith("@@")) {
+      const header = lines[i] ?? "";
       const hm = header.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
       const hunk: DiffHunk = {
         header,
-        oldStart: hm ? parseInt(hm[1], 10) : 0,
+        oldStart: hm?.[1] ? parseInt(hm[1], 10) : 0,
         oldLines: hm && hm[2] ? parseInt(hm[2], 10) : 1,
-        newStart: hm ? parseInt(hm[3], 10) : 0,
+        newStart: hm?.[3] ? parseInt(hm[3], 10) : 0,
         newLines: hm && hm[4] ? parseInt(hm[4], 10) : 1,
         contextLines: [],
         removedLines: [],
         addedLines: [],
       };
       i++;
-      while (i < lines.length && !lines[i].startsWith("@@") && !lines[i].startsWith("diff --git ")) {
-        const bodyLine = lines[i];
+      while (i < lines.length && !(lines[i] ?? "").startsWith("@@") && !(lines[i] ?? "").startsWith("diff --git ")) {
+        const bodyLine = lines[i] ?? "";
         if (bodyLine.startsWith("+") && !bodyLine.startsWith("+++")) {
           hunk.addedLines.push(bodyLine.slice(1));
         } else if (bodyLine.startsWith("-") && !bodyLine.startsWith("---")) {

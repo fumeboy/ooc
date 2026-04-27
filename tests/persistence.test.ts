@@ -7,7 +7,7 @@ import { mkdirSync, rmSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { readStone, writeStone, readFlow, writeFlow, listObjects } from "../src/persistence/index.js";
-import { createProcess } from "../src/process/tree.js";
+import { createProcess } from "../src/persistence/process-compat.js";
 import type { StoneData, FlowData } from "../src/types/index.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_persistence_test");

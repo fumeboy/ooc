@@ -3,13 +3,12 @@ namespace: kernel
 name: computable/shell_exec
 type: how_to_use_tool
 version: 1.0.0
-when: never
 description: 执行 Shell 命令，支持自定义超时和工作目录
 deps: []
 ---
 # Shell 执行能力
 
-你可以通过以下 API 执行 Shell 命令。
+你可以通过 `program` 沙箱里的 `callMethod("computable/shell_exec", method, args)` 执行 Shell 命令。单个方法也可以通过 `open({ type: "command", command: "program", title, trait: "computable/shell_exec", method })` 发起。
 
 ## 可用 API
 
@@ -31,14 +30,14 @@ deps: []
 
 ```javascript
 // 成功时直接返回 stdout
-const output = await exec("echo hello");
+const output = await callMethod("computable/shell_exec", "exec", { command: "echo hello" });
 print(output); // 输出: "hello\n"
 
 // 自定义工作目录
-const result = await exec("ls -la", { cwd: "/tmp" });
+const result = await callMethod("computable/shell_exec", "exec", { command: "ls -la", cwd: "/tmp" });
 
 // 带超时
-const result = await exec("long-running-task", { timeout: 5000 });
+const result = await callMethod("computable/shell_exec", "exec", { command: "long-running-task", timeout: 5000 });
 ```
 
 #### 错误处理
@@ -47,7 +46,7 @@ const result = await exec("long-running-task", { timeout: 5000 });
 
 ```javascript
 try {
-  const output = await exec("invalid-command");
+  const output = await callMethod("computable/shell_exec", "exec", { command: "invalid-command" });
   print(output);
 } catch (e) {
   print("执行失败:", e.message);

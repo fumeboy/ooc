@@ -53,7 +53,7 @@ type MockStep = string | ToolCall | ((messages: unknown[]) => MockLLMResponseFnR
 function makeScript(steps: MockStep[]): (messages: unknown[]) => MockLLMResponseFnResult {
   let i = 0;
   return (_messages: unknown[]) => {
-    const step = steps[i++] ?? steps[steps.length - 1];
+    const step = steps[i++] ?? steps[steps.length - 1] ?? "";
     if (typeof step === "function") return step(_messages);
     if (typeof step === "string") return { content: "", thinkingContent: step };
     return { content: "", toolCalls: [step] };
@@ -211,9 +211,7 @@ describe("build_hooks 触发链路（program 分支）", () => {
       type: "how_to_think",
       description: "文件操作",
       readme: "文件操作",
-      when: "always",
       deps: [],
-      methods: [],
       llmMethods: fileOps.llm_methods,
     };
 

@@ -9,11 +9,14 @@
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { ThreadsTree } from "../src/thread/tree.js";
 import { loadTrait } from "../src/trait/loader.js";
 
 const TMP_ROOT = "/tmp/ooc-relation-update-test";
+const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+const RELATION_UPDATE_TRAIT_DIR = join(REPO_ROOT, "traits", "talkable", "relation_update");
 
 beforeEach(() => {
   try { rmSync(TMP_ROOT, { recursive: true, force: true }); } catch {}
@@ -57,17 +60,17 @@ describe("ThreadsTree.writeInbox — kind 透传", () => {
 
 describe("talkable/relation_update TRAIT.md", () => {
   test("TRAIT.md 存在且可被 loader 解析", async () => {
-    const traitDir = "/Users/zhangzhefu/x/ooc/user/kernel/traits/talkable/relation_update";
+    const traitDir = RELATION_UPDATE_TRAIT_DIR;
     expect(existsSync(join(traitDir, "TRAIT.md"))).toBe(true);
     const trait = await loadTrait(traitDir, "kernel");
     expect(trait).not.toBeNull();
     expect(trait!.namespace).toBe("kernel");
     expect(trait!.name).toBe("talkable/relation_update");
-    expect(trait!.activatesOn?.paths).toEqual(["talk.continue.relation_update"]);
+    expect(trait!.activatesOn?.showContentWhen).toEqual(["talk.continue.relation_update"]);
   });
 
   test("TRAIT.md 正文包含关键段落（发起方 / 接收方指导）", () => {
-    const traitDir = "/Users/zhangzhefu/x/ooc/user/kernel/traits/talkable/relation_update";
+    const traitDir = RELATION_UPDATE_TRAIT_DIR;
     const content = readFileSync(join(traitDir, "TRAIT.md"), "utf-8");
     expect(content).toContain("发起方");
     expect(content).toContain("接收方");

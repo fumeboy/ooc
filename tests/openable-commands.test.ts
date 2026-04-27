@@ -2,19 +2,18 @@
  * getOpenableCommands() 动态生成枚举验证
  *
  * 验证：
- * 1. 返回值与预期集合完全一致（10 个，已排序）
+ * 1. 返回值与预期集合完全一致（9 个，已排序）
  * 2. 不含 open/refine/submit/close/wait（不可 open 的工具原语）
  * 3. 不含 talk_sync（已折叠）
  * 4. OPEN_TOOL.command.enum 与 getOpenableCommands() 完全一致（动态生成）
  */
 import { describe, test, expect } from "bun:test";
-import { getOpenableCommands } from "../src/thread/command-table.js";
-import { OPEN_TOOL } from "../src/thread/tools.js";
+import { getOpenableCommands } from "../src/thread/commands/index.js";
+import { OPEN_TOOL } from "../src/thread/tools/index.js";
 
 const EXPECTED_OPENABLE = [
   "await",
   "await_all",
-  "call_function",
   "compact",
   "defer",
   "program",
@@ -25,8 +24,8 @@ const EXPECTED_OPENABLE = [
 ];
 
 describe("getOpenableCommands()", () => {
-  test("返回 10 个命令", () => {
-    expect(getOpenableCommands()).toHaveLength(10);
+  test("返回 9 个命令", () => {
+    expect(getOpenableCommands()).toHaveLength(9);
   });
 
   test("与预期集合完全一致（已排序）", () => {
@@ -35,6 +34,10 @@ describe("getOpenableCommands()", () => {
 
   test("不包含 talk_sync", () => {
     expect(getOpenableCommands()).not.toContain("talk_sync");
+  });
+
+  test("不包含 call_function（已合并到 program trait/method）", () => {
+    expect(getOpenableCommands()).not.toContain("call_function");
   });
 
   test("不包含 open/refine/submit/close/wait（工具原语，不是 command）", () => {

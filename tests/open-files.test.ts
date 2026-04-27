@@ -21,7 +21,6 @@ function trait(
   namespace: "kernel" | "library" | "self",
   name: string,
   opts?: {
-    when?: "always" | "never" | string;
     deps?: string[];
     readme?: string;
     command_binding?: string[];
@@ -33,10 +32,8 @@ function trait(
     kind: "trait",
     type: "how_to_think",
     version: "1.0.0",
-    when: (opts?.when as TraitDefinition["when"]) ?? "never",
     description: "",
     readme: opts?.readme ?? `# ${namespace}:${name}`,
-    methods: [],
     deps: opts?.deps ?? [],
     commandBinding: opts?.command_binding
       ? { commands: opts.command_binding }
@@ -52,7 +49,7 @@ function stone(data?: Record<string, unknown>): StoneData {
     dir: "/fake/stones/alice",
     thinkable: { whoAmI: "I am alice" },
     data: data ?? {},
-  } as StoneData;
+  } as unknown as StoneData;
 }
 
 /** 构造最小线程树（root + 单节点） */
@@ -88,14 +85,14 @@ function singleNodeTree(
 }
 
 describe("getOpenFiles — origin 阶段（stone readme + _traits_ref）", () => {
-  test("always trait 被 open 进 pinned（origin 层）", () => {
-    const traits = [trait("kernel", "computable", { when: "always" })];
+  test("kernel:base 被 open 进 pinned（origin 层）", () => {
+    const traits = [trait("kernel", "base")];
     const s = stone();
     const { tree, threadData, threadId } = singleNodeTree();
 
     const result = getOpenFiles({ tree, threadId, threadData, stone: s, traits });
     const ids = result.pinned.map((w) => w.name);
-    expect(ids).toContain("kernel:computable");
+    expect(ids).toContain("kernel:base");
   });
 
   test("_traits_ref 列出的 trait 被 open 进 pinned（origin 层）", () => {
@@ -112,7 +109,7 @@ describe("getOpenFiles — origin 阶段（stone readme + _traits_ref）", () =>
     expect(ids).toContain("kernel:talkable");
   });
 
-  test("when=never 且不在 _traits_ref 中 → 不在 pinned", () => {
+    test("不在 _traits_ref 中的普通 trait → 不在 pinned", () => {
     const traits = [
       trait("library", "secret_trait"),
       trait("library", "git_ops"),
@@ -163,11 +160,13 @@ describe("getOpenFiles — process 阶段（线程级 activatedTraits）", () =>
 
   test("deps 递归激活（A deps B，A 在 scope 则 B 也应 open）", () => {
     const traits = [
-      trait("library", "doc_api", { when: "always", deps: ["library:base_io"] }),
+      trait("library", "doc_api", { deps: ["library:base_io"] }),
       trait("library", "base_io"),
     ];
     const s = stone();
-    const { tree, threadData, threadId } = singleNodeTree();
+    const { tree, threadData, threadId } = singleNodeTree({
+      activatedTraits: ["library:doc_api"],
+    });
 
     const result = getOpenFiles({ tree, threadId, threadData, stone: s, traits });
     const ids = [
@@ -182,7 +181,7 @@ describe("getOpenFiles — process 阶段（线程级 activatedTraits）", () =>
 describe("getOpenFiles — instructions 区分（kernel → instructions，其他 → knowledge）", () => {
   test("kernel trait → instructions；library/self → knowledge", () => {
     const traits = [
-      trait("kernel", "computable", { when: "always" }),
+      trait("kernel", "base"),
       trait("library", "git_ops"),
       trait("self", "reporter"),
     ];
@@ -190,18 +189,18 @@ describe("getOpenFiles — instructions 区分（kernel → instructions，其�
     const { tree, threadData, threadId } = singleNodeTree();
 
     const result = getOpenFiles({ tree, threadId, threadData, stone: s, traits });
-    expect(result.instructions.map((w) => w.name)).toContain("kernel:computable");
+    expect(result.instructions.map((w) => w.name)).toContain("kernel:base");
     expect(result.knowledge.map((w) => w.name)).toContain("library:git_ops");
     expect(result.knowledge.map((w) => w.name)).toContain("self:reporter");
     /* kernel 不应出现在 knowledge，library/self 不应出现在 instructions */
-    expect(result.knowledge.map((w) => w.name)).not.toContain("kernel:computable");
+    expect(result.knowledge.map((w) => w.name)).not.toContain("kernel:base");
     expect(result.instructions.map((w) => w.name)).not.toContain("library:git_ops");
   });
 });
 
 describe("getOpenFiles — inject 阶段（Phase 5/6 扩展点）", () => {
   test("Phase 3 默认 inject 为空数组（target 阶段未填充）", () => {
-    const traits = [trait("kernel", "computable", { when: "always" })];
+    const traits = [trait("kernel", "base")];
     const s = stone();
     const { tree, threadData, threadId } = singleNodeTree();
 
@@ -213,7 +212,7 @@ describe("getOpenFiles — inject 阶段（Phase 5/6 扩展点）", () => {
 describe("getOpenFiles — activeTraitIds 便利属性", () => {
   test("返回所有 open 中 trait 的完整 ID 列表（origin + process 去重）", () => {
     const traits = [
-      trait("kernel", "computable", { when: "always" }),
+      trait("kernel", "base"),
       trait("library", "git_ops"),
     ];
     const s = stone({ _traits_ref: ["library:git_ops"] });
@@ -223,7 +222,7 @@ describe("getOpenFiles — activeTraitIds 便利属性", () => {
 
     const result = getOpenFiles({ tree, threadId, threadData, stone: s, traits });
     const ids = new Set(result.activeTraitIds);
-    expect(ids.has("kernel:computable")).toBe(true);
+    expect(ids.has("kernel:base")).toBe(true);
     expect(ids.has("library:git_ops")).toBe(true);
     /* 去重 */
     expect(result.activeTraitIds.length).toBe(new Set(result.activeTraitIds).size);
@@ -237,16 +236,19 @@ describe("getOpenFiles — activeTraitIds 便利属性", () => {
  * 优先级：always_on > thread_pinned > stone_default > command_binding > scope_chain
  */
 describe("getOpenFiles — source 来源溯源（Phase 3）", () => {
-  function findByName(windows: Array<{ name: string; source?: string }>, name: string) {
+  function findByName(
+    windows: Array<{ name: string; source?: string; lifespan?: string }>,
+    name: string,
+  ) {
     return windows.find((w) => w.name === name);
   }
 
-  test("when=always trait → source=always_on", () => {
-    const traits = [trait("kernel", "computable", { when: "always" })];
+  test("kernel:base trait → source=always_on", () => {
+    const traits = [trait("kernel", "base")];
     const s = stone();
     const { tree, threadData, threadId } = singleNodeTree();
     const result = getOpenFiles({ tree, threadId, threadData, stone: s, traits });
-    const w = findByName(result.pinned, "kernel:computable");
+    const w = findByName(result.pinned, "kernel:base");
     expect(w?.source).toBe("always_on");
   });
 
@@ -284,15 +286,15 @@ describe("getOpenFiles — source 来源溯源（Phase 3）", () => {
   });
 
   test("优先级：always_on > thread_pinned > stone_default > command_binding", () => {
-    /* 同时命中 when=always + pinnedTraits + stoneRefs + activatedTraits → 取 always_on */
-    const traits = [trait("kernel", "talkable", { when: "always" })];
-    const s = stone({ _traits_ref: ["kernel:talkable"] });
+    /* kernel:base 同时命中 pinnedTraits + stoneRefs + activatedTraits → 取 always_on */
+    const traits = [trait("kernel", "base")];
+    const s = stone({ _traits_ref: ["kernel:base"] });
     const { tree, threadData, threadId } = singleNodeTree({
-      activatedTraits: ["kernel:talkable"],
-      pinnedTraits: ["kernel:talkable"],
+      activatedTraits: ["kernel:base"],
+      pinnedTraits: ["kernel:base"],
     });
     const result = getOpenFiles({ tree, threadId, threadData, stone: s, traits });
-    const w = findByName(result.pinned, "kernel:talkable");
+    const w = findByName(result.pinned, "kernel:base");
     expect(w?.source).toBe("always_on");
   });
 });

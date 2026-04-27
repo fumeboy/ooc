@@ -161,7 +161,7 @@ export function renderRelationsIndex(
  *
  * 便于 engine 的 XML 序列化器在 <relations> 容器内直接 content 注入。
  */
-export function renderRelationsIndexInner(
+function renderRelationsIndexInner(
   peers: string[],
   ctx: RelationLocateContext,
 ): string {

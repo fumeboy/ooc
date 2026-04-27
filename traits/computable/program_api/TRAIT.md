@@ -2,14 +2,13 @@
 namespace: kernel
 name: computable/program_api
 type: how_to_use_tool
-when: never
-description: 完整 API 参考文档 — 沙箱环境、callMethod 协议、Trait 自省
+description: 完整 API 参考文档 — 沙箱环境、trait 方法调用、Trait 自省
 deps: ["kernel:computable"]
 ---
 
 # 完整 API 参考文档
 
-以下 API 在 `submit(code=...)` 执行代码时可用。
+以下 API 在 `program` 代码沙箱里执行代码时可用。
 
 ## 沙箱环境变量
 
@@ -34,9 +33,55 @@ deps: ["kernel:computable"]
 - `getAllData()` — 获取所有数据（stone 为底，flow 覆盖）
 - `local.x = value` / `local.x` — 当前线程局部变量（跨轮次持久化）
 
-## 唯一方法调用协议：`callMethod(traitId, methodName, args)`
+## Trait 方法调用入口
 
-**所有 trait 方法通过这个单一入口调用。** args 永远是对象。
+OOC 有两个 trait 方法调用入口：
+
+1. **直接方法调用**：不需要写代码时，优先打开 program 方法表单，直接指定 `trait` 和 `method`。
+2. **代码沙箱内调用**：已经在 program 代码里时，使用 `callMethod(traitId, methodName, args)`。
+
+两种入口的 args 永远是对象。
+
+### 直接方法调用
+
+```json
+open({
+  "type": "command",
+  "command": "program",
+  "title": "读取文件",
+  "trait": "kernel:computable/file_ops",
+  "method": "readFile",
+  "description": "读取 docs/meta.md"
+})
+refine({
+  "form_id": "f_xxx",
+  "args": { "path": "docs/meta.md", "limit": 50 }
+})
+submit({ "form_id": "f_xxx" })
+```
+
+也可以先打开 program 方法表单但暂不确定参数，等读取上下文或确认路径后再 `refine`：
+
+```json
+open({
+  "type": "command",
+  "command": "program",
+  "title": "准备写入文件",
+  "trait": "kernel:computable/file_ops",
+  "method": "writeFile",
+  "description": "写入整理后的结果"
+})
+refine({
+  "form_id": "f_xxx",
+  "args": {
+    "path": "docs/result.md",
+    "content": "# 整理结果\n\n..."
+  }
+})
+submit({ "form_id": "f_xxx" })
+```
+
+### 代码沙箱内调用
 
 ```javascript
 // 完整 traitId（推荐）

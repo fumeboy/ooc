@@ -1,5 +1,5 @@
 /**
- * collectCommandTraits via activatesOn (exact match)
+ * collectCommandTraits via activatesOn.showContentWhen (exact match)
  *
  * flat command-table 版本：match() 显式包含父路径，activePaths 直接含 "talk"，
  * 无需前缀匹配——精确匹配即可命中。
@@ -18,15 +18,15 @@ function traitOnly(opts: {
 }): TraitDefinition {
   return {
     namespace: "kernel", name: opts.name, kind: "trait", type: "how_to_think",
-    version: "1.0.0", when: "never", description: "",
-    readme: `# ${opts.name}`, methods: [], deps: [],
+    version: "1.0.0", description: "",
+    readme: `# ${opts.name}`, deps: [],
     commandBinding: opts.bindings ? { commands: opts.bindings } : undefined,
-    activatesOn: opts.activates ? { paths: opts.activates } : undefined,
+    activatesOn: opts.activates ? { showContentWhen: opts.activates } : undefined,
     dir: `/fake/${opts.name}`,
   };
 }
 
-describe("collectCommandTraits matches via activatesOn (exact match)", () => {
+describe("collectCommandTraits matches via activatesOn.showContentWhen (exact match)", () => {
   test("trait with activatesOn=['talk'] matches when 'talk' is in activePaths", () => {
     /* deriveCommandPaths("talk", {context:"continue"}) → ["talk","talk.continue"]
      * "talk" is in activePaths, so exact match hits */
@@ -51,6 +51,18 @@ describe("collectCommandTraits matches via activatesOn (exact match)", () => {
 
   test("trait with neither activates nor bindings does not match", () => {
     const traits = [traitOnly({ name: "d" })];
+    const ids = collectCommandTraits(traits, new Set(["talk"]));
+    expect(ids).toEqual([]);
+  });
+
+  test("showDescriptionWhen does not activate full trait content", () => {
+    const traits: TraitDefinition[] = [{
+      namespace: "kernel", name: "summary_only", kind: "trait", type: "how_to_think",
+      version: "1.0.0", description: "只展示摘要",
+      readme: "# summary_only", deps: [],
+      activatesOn: { showDescriptionWhen: ["talk"] },
+      dir: "/fake/summary_only",
+    }];
     const ids = collectCommandTraits(traits, new Set(["talk"]));
     expect(ids).toEqual([]);
   });

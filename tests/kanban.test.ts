@@ -36,7 +36,7 @@ describe("kanban store", () => {
     await writeIssues(TEST_DIR, [issue]);
     const result = await readIssues(TEST_DIR);
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe("issue-001");
+    expect(result[0]!.id).toBe("issue-001");
   });
 
   test("readTasks returns empty array when file missing", async () => {
@@ -54,7 +54,7 @@ describe("kanban store", () => {
     await writeTasks(TEST_DIR, [task]);
     const result = await readTasks(TEST_DIR);
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe("task-001");
+    expect(result[0]!.id).toBe("task-001");
   });
 
   test("nextId generates sequential IDs", () => {
@@ -76,7 +76,7 @@ describe("kanban methods", () => {
     await createIssue(TEST_DIR, "Test");
     await updateIssueStatus(TEST_DIR, "issue-001", "executing");
     const issues = await readIssues(TEST_DIR);
-    expect(issues[0].status).toBe("executing");
+    expect(issues[0]!.status).toBe("executing");
   });
 
   test("createTask with issueRefs", async () => {
@@ -93,17 +93,17 @@ describe("kanban methods", () => {
     expect(sub.assignee).toBe("bob");
     await updateSubTask(TEST_DIR, "task-001", sub.id, { status: "done" });
     const tasks = await readTasks(TEST_DIR);
-    expect(tasks[0].subtasks[0].status).toBe("done");
+    expect(tasks[0]!.subtasks[0]!.status).toBe("done");
   });
 
   test("setIssueNewInfo toggles flag", async () => {
     await createIssue(TEST_DIR, "Test");
     await setIssueNewInfo(TEST_DIR, "issue-001", true);
     let issues = await readIssues(TEST_DIR);
-    expect(issues[0].hasNewInfo).toBe(true);
+    expect(issues[0]!.hasNewInfo).toBe(true);
     await setIssueNewInfo(TEST_DIR, "issue-001", false);
     issues = await readIssues(TEST_DIR);
-    expect(issues[0].hasNewInfo).toBe(false);
+    expect(issues[0]!.hasNewInfo).toBe(false);
   });
 });
 

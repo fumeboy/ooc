@@ -241,9 +241,9 @@ describe("runMemoryGc", () => {
     const summary = runMemoryGc(selfDir, "bruce");
     expect(summary.decisions.length).toBe(3);
     const byId = Object.fromEntries(summary.decisions.map(d => [d.id, d]));
-    expect(byId["me_a"].reason).toBe("expired");
-    expect(byId["me_b"].reason).toBe("pinned");
-    expect(byId["me_c"].reason).toBe("fresh");
+    expect(byId["me_a"]!.reason).toBe("expired");
+    expect(byId["me_b"]!.reason).toBe("pinned");
+    expect(byId["me_c"]!.reason).toBe("fresh");
   });
 
   test("DEFAULT_TTL_DAYS = 30", () => {

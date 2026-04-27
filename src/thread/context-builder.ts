@@ -2,7 +2,7 @@
  * 线程 Context 构建器
  *
  * 为每个线程构建独立的 Context，包含执行视角和规划视角。
- * 与旧 builder（kernel/src/context/builder.ts）完全独立。
+ * 这是 ThreadTree 引擎的唯一 Context 构建入口。
  *
  * 执行视角：whoAmI + parentExpectation + plan + process + locals + windows
  * 规划视角：children 摘要 + inbox + todos + directory
@@ -147,11 +147,10 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
    * Phase 3 重构：把 scopeChain + getActiveTraits 折叠进 getOpenFiles，
    * 它返回 { pinned, transient, inject, instructions, knowledge, activeTraitIds }。
    *
-   * lifespan 语义（与远端 bugfix 一致）：
-   * - when="always" 的 trait 语义上等价 pinned：不应因 command form 生命周期而显示
-   *   transient 或被回收
-   * - open-files 已把 stoneRefs + nodeMeta.pinnedTraits + when=always 三类统一归到
-   *   pinned 集合，直接沿用其 lifespan 即可；不再在这里做 legacy 覆盖 */
+   * lifespan 语义：
+   * - kernel:base 是协议基座，等价 pinned，不随 command form 生命周期回收
+   * - open-files 已把 stoneRefs + nodeMeta.pinnedTraits + kernel:base 统一归到
+   *   pinned 集合，直接沿用其 lifespan 即可 */
   const stoneTraitRefs = extractStoneTraitRefs(stone, traits);
   const scopeChain = computeThreadScopeChain(tree, threadId, stoneTraitRefs);
   const openFiles = getOpenFiles({ tree, threadId, threadData, stone, traits });

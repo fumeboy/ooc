@@ -120,7 +120,6 @@ export class MethodRegistry {
    * 注册规则：
    * - trait.llmMethods 中的方法 → llm channel
    * - trait.uiMethods 中的方法 → ui channel
-   * - trait.methods（旧数组形式，Phase 2 过渡期）→ llm channel（默认）
    *
    * @param traits - Trait 定义列表
    */
@@ -140,15 +139,6 @@ export class MethodRegistry {
       if (trait.uiMethods) {
         for (const [methodName, def] of Object.entries(trait.uiMethods)) {
           this.register(id, methodName, def, "ui");
-        }
-      }
-
-      /* 旧 methods 数组（过渡期，Phase 2 任务 2.3/2.4/2.5 逐个 trait 迁移到 llm_methods 后可删除） */
-      if (trait.methods && trait.methods.length > 0) {
-        for (const method of trait.methods) {
-          /* 不重复注册：若同名方法已通过 llmMethods 注册则跳过 */
-          if (this.get(id, method.name, "llm")) continue;
-          this.register(id, method.name, method, "llm");
         }
       }
     }
@@ -224,18 +214,6 @@ export class MethodRegistry {
       return m.fn(args);
     };
     return { callMethod };
-  }
-
-  /**
-   * 获取方法参数定义（供跨对象调用时查询）
-   */
-  getParamDefinition(
-    traitId: string,
-    methodName: string,
-    channel: TraitMethodChannel = "llm",
-  ): TraitMethodParam[] | null {
-    const m = this.get(traitId, methodName, channel);
-    return m ? m.params : null;
   }
 
   /* ========== 内部实现 ========== */

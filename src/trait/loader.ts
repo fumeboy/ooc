@@ -149,8 +149,6 @@ export async function loadTrait(
   const kind: TraitKind =
     data.kind === "view" || descIsViewFile ? "view" : "trait";
   const content = body.trim();
-  const when: TraitDefinition["when"] =
-    typeof data.when === "string" ? (data.when as TraitDefinition["when"]) : "never";
   const description = typeof data.description === "string" ? data.description : "";
   const type: TraitType = parseTraitType(data.type);
   const version = typeof data.version === "string" ? data.version : undefined;
@@ -169,12 +167,10 @@ export async function loadTrait(
 
   let llmMethods: Record<string, TraitMethod> | undefined;
   let uiMethods: Record<string, TraitMethod> | undefined;
-  let legacyMethods: TraitMethod[] = [];
   if (methodsFile) {
     const loaded = await loadTraitMethods(methodsFile);
     llmMethods = loaded.llmMethods;
     uiMethods = loaded.uiMethods;
-    legacyMethods = loaded.legacyMethods;
   }
 
   return {
@@ -183,10 +179,8 @@ export async function loadTrait(
     kind,
     type,
     version,
-    when,
     description,
     readme: content,
-    methods: legacyMethods, // 过渡期保留，Phase 2 收尾后可删
     llmMethods,
     uiMethods,
     deps,
@@ -212,12 +206,6 @@ interface LoadedMethods {
   llmMethods?: Record<string, TraitMethod>;
   /** `export const ui_methods = { ... }` → 装入 ui channel */
   uiMethods?: Record<string, TraitMethod>;
-  /**
-   * 过渡期兼容：`export const methods = { ... }` 或直接 export function。
-   *
-   * Phase 2 每个 trait 迁移到 llm_methods 后逐步消失；最终收尾删除。
-   */
-  legacyMethods: TraitMethod[];
 }
 
 /**
@@ -225,10 +213,6 @@ interface LoadedMethods {
  *
  * 新协议（Phase 2）：优先读 `export const llm_methods` / `export const ui_methods`
  * 双命名映射（Record<name, TraitMethodDef>）。
- *
- * 过渡期兼容：
- * - `export const methods = {...}` → legacyMethods（装入 llm channel）
- * - `export async function name(...)` 直接函数导出 → 同上
  *
  * @param indexPath - index.ts 或 backend.ts 的绝对路径
  */
@@ -239,36 +223,9 @@ async function loadTraitMethods(indexPath: string): Promise<LoadedMethods> {
     const llmMethods = parseNamedMethodsRecord(mod.llm_methods);
     const uiMethods = parseNamedMethodsRecord(mod.ui_methods);
 
-    /* 过渡期：兼容旧 export const methods = {...} 对象 */
-    let legacyMethods: TraitMethod[] = [];
-    const legacyExport = mod.methods as Record<string, unknown> | undefined;
-    if (legacyExport && typeof legacyExport === "object") {
-      legacyMethods = loadMethodsFromStructured(legacyExport);
-    } else if (!llmMethods && !uiMethods) {
-      /* 无新旧任何已命名导出时，走 TSDoc 自动解析路径（library/sessions/index 等遗留） */
-      const source = readFileSync(indexPath, "utf-8");
-      const tsDocMap = parseTSDoc(source);
-      const ctxMap = parseFirstParam(source);
-
-      for (const [name, value] of Object.entries(mod)) {
-        if (name === "default" || name === "methods" || name === "llm_methods" || name === "ui_methods") continue;
-        if (typeof value !== "function") continue;
-
-        const doc = tsDocMap.get(name);
-        const needsCtx = doc?.needsCtx ?? ctxMap.get(name) ?? false;
-        legacyMethods.push({
-          name,
-          description: doc?.description ?? "",
-          params: doc?.params ?? [],
-          fn: value as (...args: unknown[]) => Promise<unknown>,
-          needsCtx,
-        });
-      }
-    }
-
-    return { llmMethods, uiMethods, legacyMethods };
+    return { llmMethods, uiMethods };
   } catch {
-    return { legacyMethods: [] };
+    return {};
   }
 }
 
@@ -309,33 +266,6 @@ function parseNamedMethodsRecord(raw: unknown): Record<string, TraitMethod> | un
     };
   }
   return result;
-}
-
-/**
- * 从旧格式的 methods 对象加载方法（过渡期）
- */
-function loadMethodsFromStructured(exported: Record<string, unknown>): TraitMethod[] {
-  const results: TraitMethod[] = [];
-  for (const [name, def] of Object.entries(exported)) {
-    const d = def as Record<string, unknown>;
-    if (typeof d.fn !== "function") continue;
-
-    results.push({
-      name,
-      description: typeof d.description === "string" ? d.description : "",
-      params: Array.isArray(d.params)
-        ? d.params.map((p: Record<string, unknown>) => ({
-            name: String(p.name ?? ""),
-            type: String(p.type ?? "unknown"),
-            description: String(p.description ?? ""),
-            required: Boolean(p.required ?? false),
-          }))
-        : [],
-      fn: d.fn as (...args: unknown[]) => Promise<unknown>,
-      needsCtx: true,
-    });
-  }
-  return results;
 }
 
 /** TSDoc 解析结果 */
@@ -427,25 +357,6 @@ export function parseTSDoc(source: string): Map<string, TSDocInfo> {
     result.set(funcName, { description, params, needsCtx });
   }
 
-  return result;
-}
-
-/**
- * 从源码中检测每个 export function 的第一个参数是否是 ctx
- *
- * 用于没有 TSDoc 注释的函数（如 LLM 创建的 trait）。
- */
-function parseFirstParam(source: string): Map<string, boolean> {
-  const result = new Map<string, boolean>();
-  const pattern = /export\s+(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)/g;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(source)) !== null) {
-    const funcName = match[1]!;
-    const paramList = match[2]!;
-    const firstParam =
-      paramList.split(",")[0]?.split(":")[0]?.split("=")[0]?.trim() ?? "";
-    result.set(funcName, firstParam === "ctx");
-  }
   return result;
 }
 
@@ -697,19 +608,30 @@ function parseCommandBinding(raw: unknown): TraitDefinition["commandBinding"] {
 }
 
 /**
- * 解析 frontmatter 的 activates_on.paths 字段
+ * 解析 frontmatter 的 activates_on.show_description_when / show_content_when 字段
  *
- * 容错：activates_on 不是对象、paths 不是数组、数组为空、元素不是非空字符串
- *      → 返回 undefined
+ * 旧协议 activates_on.paths 不再解析，避免失效字段继续悄悄生效。
  */
-function parseActivatesOn(fm: Record<string, unknown>): { paths: string[] } | undefined {
+function parseActivatesOn(fm: Record<string, unknown>): TraitDefinition["activatesOn"] {
   const raw = fm.activates_on;
   if (!raw || typeof raw !== "object") return undefined;
-  const paths = (raw as Record<string, unknown>).paths;
-  if (!Array.isArray(paths)) return undefined;
-  const cleaned = paths.filter((p): p is string => typeof p === "string" && p.length > 0);
-  if (cleaned.length === 0) return undefined;
-  return { paths: cleaned };
+  const obj = raw as Record<string, unknown>;
+
+  const showDescriptionWhen = parsePathList(obj.show_description_when);
+  const showContentWhen = parsePathList(obj.show_content_when);
+
+  if (!showDescriptionWhen && !showContentWhen) return undefined;
+  return {
+    ...(showDescriptionWhen ? { showDescriptionWhen } : {}),
+    ...(showContentWhen ? { showContentWhen } : {}),
+  };
+}
+
+/** 解析 activates_on 下的路径数组字段。 */
+function parsePathList(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const cleaned = raw.filter((p): p is string => typeof p === "string" && p.length > 0);
+  return cleaned.length > 0 ? cleaned : undefined;
 }
 
 /**

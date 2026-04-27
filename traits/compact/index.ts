@@ -1,8 +1,8 @@
 /**
  * kernel:compact —— 上下文压缩 trait 的工具集实现
  *
- * 本 trait 的方法只在线程通过 `open(command="compact")` 激活后可用。
- * 方法体通过 engine 的 call_function 路径触发——execCtx 会被 engine 注入
+ * 本 trait 的方法只在线程通过 `open(title="压缩上下文", command="compact", description="...")` 激活后可用。
+ * 方法体通过 engine 的 program trait/method 路径触发——execCtx 会被 engine 注入
  * `__threadId`（当前线程 ID）和 `__threadsTree`（ThreadsTree 实例引用），
  * 让这些方法能够读写当前线程的 `thread.json`（actions / compactMarks / pinnedTraits）。
  *
@@ -32,13 +32,13 @@ interface CompactCtx {
 /**
  * 从 ctx 中读取 compact 必要字段（threadId + tree）
  *
- * 若缺失，说明 trait 不是通过 engine 的 call_function 路径激活（例如被外部复用），
+ * 若缺失，说明 trait 不是通过 engine 的 program trait/method 路径激活（例如被外部复用），
  * 返回明确错误而不是 crash——方便未来扩展。
  */
 function readCompactCtx(ctx: unknown): { threadId: string; tree: ThreadsTree } | string {
   const c = ctx as Partial<CompactCtx> | undefined;
   if (!c || typeof c.__threadId !== "string" || !c.__threadsTree) {
-    return "compact trait 方法只能在 open(command=\"compact\") 后通过 call_function 调用";
+    return "compact trait 方法只能在 open(title=\"压缩上下文\", command=\"compact\", description=\"...\") 后通过 program trait/method 调用";
   }
   return { threadId: c.__threadId, tree: c.__threadsTree as ThreadsTree };
 }
@@ -48,12 +48,12 @@ function readCompactCtx(ctx: unknown): { threadId: string; tree: ThreadsTree } |
  *
  * 规则：
  * - compact_summary 类型：永远跳过（已经是压缩产物）
- * - 最近一条 `open(command="compact")` 之后（含）的 tool_use：跳过（正在进行的 compact 流程自身）
+ * - 最近一条 `open(title="压缩上下文", command="compact", description="...")` 之后（含）的 tool_use：跳过（正在进行的 compact 流程自身）
  *
  * 返回数组里的 idx 是**原始 actions 数组下标**——LLM 后续用 idx 做 truncate/drop 标记。
  */
 function filterCompactableActions(actions: ThreadAction[]): Array<{ idx: number; action: ThreadAction }> {
-  /* 找最近一次 open(command="compact") 的下标：从此之后（含）所有 tool_use 都跳过 */
+  /* 找最近一次 open compact 的下标：从此之后（含）所有 tool_use 都跳过 */
   let lastCompactOpenIdx = -1;
   for (let i = actions.length - 1; i >= 0; i--) {
     const a = actions[i]!;
@@ -262,7 +262,7 @@ async function previewCompactImpl(ctx: unknown): Promise<ToolResult<{
 /**
  * llm_methods —— compact trait 对沙箱暴露的方法集合
  *
- * 权限隔离：when:never + command_binding.compact 保证只有 open(command="compact") 后才激活。
+ * 权限隔离：activates_on.show_content_when=[compact] 保证只有 open(title="压缩上下文", command="compact", description="...") 后才激活。
  */
 export const llm_methods: Record<string, TraitMethod> = {
   list_actions: {

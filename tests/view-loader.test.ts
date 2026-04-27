@@ -38,7 +38,6 @@ namespace: self
 name: demo
 kind: view
 type: how_to_interact
-when: never
 description: 示例视图
 ---
 
@@ -68,7 +67,6 @@ demo view`,
 namespace: self
 name: broken
 kind: view
-when: never
 ---
 no frontend`,
       "utf-8",
@@ -86,7 +84,6 @@ no frontend`,
 namespace: self
 name: form
 kind: view
-when: never
 ---
 form view`,
       "utf-8",
@@ -131,7 +128,6 @@ export const llm_methods = {
       `---
 namespace: self
 name: x
-when: never
 ---
 x view`,
       "utf-8",

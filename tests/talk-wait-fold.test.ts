@@ -2,7 +2,7 @@
  * talk_sync → talk(wait=true) 折叠验证（flat command-table 版本）
  *
  * 验证：
- * 1. talkable trait 的 activates_on.paths=["talk"] 通过精确匹配涵盖 talk(wait=true)
+ * 1. talkable trait 的 activates_on.show_content_when=["talk"] 通过精确匹配涵盖 talk(wait=true)
  *    ——因为 match 总是包含 "talk" 本身
  * 2. talk(wait=true, target≠user) 通过 deriveCommandPaths 产生包含 talk.wait 的路径集合
  * 3. getOpenableCommands() 不包含 "talk_sync"
@@ -13,7 +13,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-import { deriveCommandPaths, getOpenableCommands } from "../src/thread/command-table.js";
+import { deriveCommandPaths, getOpenableCommands } from "../src/thread/commands/index.js";
 import { ThreadsTree } from "../src/thread/tree.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_talk_wait_fold_test");

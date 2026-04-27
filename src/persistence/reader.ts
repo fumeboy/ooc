@@ -13,7 +13,7 @@
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { parseReadme } from "./frontmatter.js";
-import { createProcess } from "../process/tree.js";
+import { createProcess } from "./process-compat.js";
 import { threadsToProcess } from "./thread-adapter.js";
 import type { StoneData, FlowData, Relation } from "../types/index.js";
 

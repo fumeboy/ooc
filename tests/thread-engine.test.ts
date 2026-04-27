@@ -58,7 +58,7 @@ type MockStep = string | ToolCall | ((messages: unknown[]) => MockLLMResponseFnR
 function makeScript(steps: MockStep[]): (messages: unknown[]) => MockLLMResponseFnResult {
   let i = 0;
   return (messages: unknown[]) => {
-    const step = steps[i++] ?? steps[steps.length - 1];
+    const step = steps[i++] ?? steps[steps.length - 1] ?? "";
     if (typeof step === "function") {
       return step(messages);
     }
@@ -388,7 +388,7 @@ describe("SSE 事件", () => {
 
     expect(endEvents.length).toBe(1);
     expect(endEvents[0]?.objectName).toBe("test_obj");
-    expect(endEvents[0]?.status).toBe("idle");
+    expect(endEvents[0]?.status).toBe("finished");
   });
 
   test("发射 flow:progress 事件", async () => {
@@ -403,7 +403,7 @@ describe("SSE 事件", () => {
     expect(progressEvents[0]?.iterations).toBeGreaterThanOrEqual(1);
   });
 
-  test("失败时 flow:end 状态为 error", async () => {
+  test("失败时 flow:end 状态为 failed", async () => {
     const events: Array<{ type: string; status?: string }> = [];
     eventBus.on("sse", (e) => events.push(e));
 
@@ -420,7 +420,7 @@ describe("SSE 事件", () => {
 
     const endEvents = events.filter((e) => e.type === "flow:end");
     expect(endEvents.length).toBe(1);
-    expect(endEvents[0]?.status).toBe("error");
+    expect(endEvents[0]?.status).toBe("failed");
   });
 });
 
@@ -560,14 +560,17 @@ describe("Context 构建", () => {
     ];
 
     const config = makeConfig({
-      stone: { ...makeStone("test_obj"), traits: ["my_trait"] },
+      stone: {
+        ...makeStone("test_obj"),
+        data: { _traits_ref: ["kernel:my_trait"] },
+      },
       traits: [{
+        namespace: "kernel",
+        kind: "trait",
         name: "my_trait",
         type: "how_to_think",
-        when: "always",
         description: "测试 trait",
         readme: "这是 my_trait 的知识内容",
-        methods: [],
         deps: [],
       }],
       steps,

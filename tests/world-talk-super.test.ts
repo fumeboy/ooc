@@ -69,9 +69,9 @@ describe("handleOnTalkToSuper — SuperFlow 落盘", () => {
     expect(tree).toBeTruthy();
     const threadData = tree!.readThreadData(tree!.rootId);
     expect(threadData).toBeTruthy();
-    expect(threadData!.inbox.length).toBe(1);
-    expect(threadData!.inbox[0]!.content).toContain("读 meta.md");
-    expect(threadData!.inbox[0]!.from).toBe("bruce");
+    expect(threadData!.inbox!.length).toBe(1);
+    expect(threadData!.inbox![0]!.content).toContain("读 meta.md");
+    expect(threadData!.inbox![0]!.from).toBe("bruce");
   });
 
   test("多次投递累积到同一 super 线程树（复用 rootId）", async () => {
@@ -86,8 +86,8 @@ describe("handleOnTalkToSuper — SuperFlow 落盘", () => {
     const tree = ThreadsTree.load(join(stoneDir, "super"));
     expect(tree).toBeTruthy();
     const td = tree!.readThreadData(tree!.rootId);
-    expect(td!.inbox.length).toBe(3);
-    expect(td!.inbox.map((m: any) => m.content)).toEqual(["第一条", "第二条", "第三条"]);
+    expect(td!.inbox!.length).toBe(3);
+    expect(td!.inbox!.map((m: any) => m.content)).toEqual(["第一条", "第二条", "第三条"]);
   });
 
   test("不同对象的 super 互不干扰（落盘在各自的 stones/{name}/super/）", async () => {
@@ -103,8 +103,8 @@ describe("handleOnTalkToSuper — SuperFlow 落盘", () => {
     expect(irisTree).toBeTruthy();
     expect(bruceTree!.rootId).not.toBe(irisTree!.rootId);
 
-    expect(bruceTree!.readThreadData(bruceTree!.rootId)!.inbox[0]!.content).toBe("bruce-msg");
-    expect(irisTree!.readThreadData(irisTree!.rootId)!.inbox[0]!.content).toBe("iris-msg");
+    expect(bruceTree!.readThreadData(bruceTree!.rootId)!.inbox![0]!.content).toBe("bruce-msg");
+    expect(irisTree!.readThreadData(irisTree!.rootId)!.inbox![0]!.content).toBe("iris-msg");
   });
 
   test("rootDir 不存在 stones/{fromObject} 时自动兜底 mkdir（不报错）", async () => {

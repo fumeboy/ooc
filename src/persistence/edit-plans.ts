@@ -139,6 +139,17 @@ export async function createEditPlan(args: {
     if (c.kind !== "edit" && c.kind !== "write") {
       throw new Error(`未知 change.kind: ${(c as any).kind}`);
     }
+    if (c.kind === "edit") {
+      if (typeof c.oldText !== "string" || c.oldText.length === 0) {
+        throw new Error("edit change 的 oldText 不能为空");
+      }
+      if (typeof c.newText !== "string") {
+        throw new Error("edit change 的 newText 必须是字符串");
+      }
+    }
+    if (c.kind === "write" && typeof c.newContent !== "string") {
+      throw new Error("write change 的 newContent 必须是字符串");
+    }
   }
 
   const plan: EditPlan = {

@@ -1,12 +1,12 @@
 /**
- * Engine call_function 对象参数兼容性测试
+ * Engine program trait/method 对象参数测试
  *
  * 背景：Trait Namespace 重构后，llm_methods 注册的方法签名统一为
- * `(ctx, argsObj)` 对象解构风格。engine.ts 的 call_function 分支需要与
- * 沙箱 callMethod 保持一致的调用协议——**永远把 argsObj 整体作为第二个参数传入**。
+ * `(ctx, argsObj)` 对象解构风格。engine.ts 的 program trait/method 分支需要与
+ * 沙箱 callMethod 保持一致的调用协议：永远把 argsObj 整体作为第二个参数传入。
  *
  * 本文件覆盖 3 个场景：
- * 1. 对象风格 llm_method（新协议 `(ctx, { message })`）能被 call_function 正确调用
+ * 1. 对象风格 llm_method（新协议 `(ctx, { message })`）能被 program trait/method 正确调用
  * 2. 空参数 `{}` 场景（如 `getReflectState`）
  * 3. needsCtx=false 时，args 对象直接作为第一个参数传入
  *
@@ -21,7 +21,7 @@ import { MockLLMClient, type ToolCall, type MockLLMResponseFnResult } from "../s
 import type { StoneData, DirectoryEntry, TraitDefinition, TraitMethod } from "../src/types/index.js";
 import { eventBus } from "../src/server/events.js";
 
-const TEST_DIR = join(import.meta.dir, ".tmp_call_function_obj_args_test");
+const TEST_DIR = join(import.meta.dir, ".tmp_program_trait_method_args_test");
 const FLOWS_DIR = join(TEST_DIR, "flows");
 
 /** 最小 Stone */
@@ -50,7 +50,7 @@ type MockStep = string | ToolCall | ((messages: unknown[]) => MockLLMResponseFnR
 function makeScript(steps: MockStep[]): (messages: unknown[]) => MockLLMResponseFnResult {
   let i = 0;
   return (messages: unknown[]) => {
-    const step = steps[i++] ?? steps[steps.length - 1];
+    const step = steps[i++] ?? steps[steps.length - 1]!;
     if (typeof step === "function") return step(messages);
     if (typeof step === "string") return { content: "", thinkingContent: step };
     return { content: "", toolCalls: [step] };
@@ -77,11 +77,9 @@ function makeTraitWithObjectMethod(
     name: traitRelName,
     kind: "trait",
     type: "how_to_use_tool",
-    when: "always",
     description: `测试 trait ${traitRelName}`,
     readme: "",
     deps: [],
-    methods: [],
     llmMethods: { [methodName]: method },
   };
 }
@@ -95,7 +93,7 @@ afterEach(() => {
   eventBus.removeAllListeners("sse");
 });
 
-describe("engine call_function 对象参数兼容", () => {
+describe("engine program trait/method 对象参数", () => {
   test("调用新协议 (ctx, {message}) llm_method：argsObj 整体作为第二参数", async () => {
     /* 捕获 fn 实际收到的参数 */
     let capturedCtx: unknown = null;
@@ -115,20 +113,20 @@ describe("engine call_function 对象参数兼容", () => {
 
     const traitId = "kernel:demo_obj";
 
-    /* 脚本：open call_function → submit call_function → return */
+    /* 脚本：open program(trait/method) → submit → return */
     const steps: MockStep[] = [
-      /* step 1: open call_function，指定 trait + functionName */
+      /* step 1: open program，指定 trait + method */
       () => ({ content: "", toolCalls: [toolCall("open", {
         type: "command",
-        command: "call_function",
+        command: "program",
         description: "调 talkToSelf",
         trait: traitId,
-        function_name: "talkToSelf",
+        method: "talkToSelf",
       })] }),
       /* step 2: submit 带 args 对象 */
       (messages: unknown[]) => {
         const userMsg = (messages as Array<{ role: string; content: string }>).find(m => m.role === "user")?.content ?? "";
-        const match = userMsg.match(/<form id="(f_[^"]+)" command="call_function"/);
+        const match = userMsg.match(/<form id="(f_[^"]+)" command="program"/);
         return {
           content: "",
           toolCalls: [toolCall("submit", {
@@ -184,14 +182,14 @@ describe("engine call_function 对象参数兼容", () => {
     const steps: MockStep[] = [
       () => ({ content: "", toolCalls: [toolCall("open", {
         type: "command",
-        command: "call_function",
+        command: "program",
         description: "调 getState",
         trait: traitId,
-        function_name: "getState",
+        method: "getState",
       })] }),
       (messages: unknown[]) => {
         const userMsg = (messages as Array<{ role: string; content: string }>).find(m => m.role === "user")?.content ?? "";
-        const match = userMsg.match(/<form id="(f_[^"]+)" command="call_function"/);
+        const match = userMsg.match(/<form id="(f_[^"]+)" command="program"/);
         return {
           content: "",
           toolCalls: [toolCall("submit", { form_id: match?.[1] ?? "f_unknown", args: {} })],
@@ -239,14 +237,14 @@ describe("engine call_function 对象参数兼容", () => {
     const steps: MockStep[] = [
       () => ({ content: "", toolCalls: [toolCall("open", {
         type: "command",
-        command: "call_function",
+        command: "program",
         description: "调 doIt",
         trait: traitId,
-        function_name: "doIt",
+        method: "doIt",
       })] }),
       (messages: unknown[]) => {
         const userMsg = (messages as Array<{ role: string; content: string }>).find(m => m.role === "user")?.content ?? "";
-        const match = userMsg.match(/<form id="(f_[^"]+)" command="call_function"/);
+        const match = userMsg.match(/<form id="(f_[^"]+)" command="program"/);
         return {
           content: "",
           toolCalls: [toolCall("submit", {

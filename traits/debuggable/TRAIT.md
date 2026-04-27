@@ -3,7 +3,6 @@ namespace: kernel
 name: debuggable
 type: how_to_think
 version: 1.0.0
-when: never
 description: 系统化调试四阶段流程，根因先于修复
 deps: []
 ---

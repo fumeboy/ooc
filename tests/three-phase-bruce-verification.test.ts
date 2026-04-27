@@ -14,7 +14,7 @@
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import { ThreadsTree } from "../src/thread/tree.js";
 import { buildThreadContext } from "../src/thread/context-builder.js";
@@ -24,13 +24,14 @@ import { collectCommandTraits } from "../src/thread/hooks.js";
 import { resolveVirtualPath } from "../src/thread/virtual-path.js";
 import { scanPeers } from "../src/thread/peers.js";
 import { readPeerRelations, renderRelationsIndex } from "../src/thread/relation.js";
-import { deriveCommandPaths } from "../src/thread/command-table.js";
+import { deriveCommandPaths } from "../src/thread/commands/index.js";
 import { detectSelfKind } from "../src/thread/self-kind.js";
 
 import type { StoneData, TraitDefinition } from "../src/types/index.js";
 import type { ThreadDataFile } from "../src/thread/types.js";
 
 const TMP_ROOT = "/tmp/ooc-bruce-e14";
+const PROJECT_ROOT = resolve(import.meta.dir, "../..");
 
 beforeEach(() => {
   try { rmSync(TMP_ROOT, { recursive: true, force: true }); } catch {}
@@ -44,14 +45,12 @@ afterEach(() => {
 function trait(
   namespace: "kernel" | "library" | "self",
   name: string,
-  opts?: { when?: "always" | "never" | string; deps?: string[]; commands?: string[]; readme?: string },
+  opts?: { deps?: string[]; commands?: string[]; readme?: string },
 ): TraitDefinition {
   return {
     namespace, name, kind: "trait", type: "how_to_think", version: "1.0.0",
-    when: (opts?.when as TraitDefinition["when"]) ?? "never",
-    description: "", readme: opts?.readme ?? `# ${namespace}:${name}`,
-    methods: [], deps: opts?.deps ?? [],
-    activatesOn: opts?.commands ? { paths: opts.commands } : undefined,
+    description: "", readme: opts?.readme ?? `# ${namespace}:${name}`, deps: opts?.deps ?? [],
+    activatesOn: opts?.commands ? { showContentWhen: opts.commands } : undefined,
     dir: `/fake/${namespace}/${name}`,
   };
 }
@@ -59,10 +58,13 @@ function trait(
 /** 造一个最小 stone */
 function makeStone(name: string, stoneDir: string, data?: Record<string, unknown>): StoneData {
   return {
-    name, dir: stoneDir,
+    name,
     thinkable: { whoAmI: `I am ${name}` },
+    talkable: { whoAmI: `I am ${name}`, functions: [] },
     data: data ?? {},
-  } as StoneData;
+    relations: [],
+    traits: [],
+  };
 }
 
 /** 写一个 relation 文件 */
@@ -103,7 +105,7 @@ describe("Bruce 1 · Context 里的 <relations> 索引", () => {
       threadId: tree.rootId,
       threadData: tree.readThreadData(tree.rootId)!,
       stone,
-      directory: [{ name: "supervisor", whoAmI: "OOC 总指挥" }],
+      directory: [{ name: "supervisor", whoAmI: "OOC 总指挥", functions: [] }],
       traits: [],
       paths: { rootDir: TMP_ROOT, stoneDir, flowsDir: join(TMP_ROOT, "flows") },
     });
@@ -166,12 +168,12 @@ describe("Bruce 2 · open(path=@relation:<peer>) 可读取关系全文", () => {
 
   test("@trait:kernel/<name> 同样可解析", () => {
     const resolved = resolveVirtualPath("@trait:kernel/talkable/relation_update", {
-      rootDir: "/Users/zhangzhefu/x/ooc/user",
+      rootDir: PROJECT_ROOT,
       selfName: "alice",
       selfKind: "stone",
     });
     expect(resolved).toBe(
-      "/Users/zhangzhefu/x/ooc/user/kernel/traits/talkable/relation_update/TRAIT.md",
+      join(PROJECT_ROOT, "kernel", "traits", "talkable", "relation_update", "TRAIT.md"),
     );
     expect(existsSync(resolved!)).toBe(true);
   });
@@ -340,8 +342,10 @@ describe("Bruce 5 · 向后兼容：老 thread.json 无新字段", () => {
   });
 
   test("getOpenFiles 容忍无 relations 的线程", () => {
-    const traits = [trait("kernel", "computable", { when: "always" })];
-    const stone = makeStone("alice", join(TMP_ROOT, "stones", "alice"));
+    const traits = [trait("kernel", "computable")];
+    const stone = makeStone("alice", join(TMP_ROOT, "stones", "alice"), {
+      _traits_ref: ["kernel:computable"],
+    });
     const threadId = "r";
     const treeFile = {
       rootId: threadId,

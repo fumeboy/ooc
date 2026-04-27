@@ -14,7 +14,7 @@
  * @ref docs/superpowers/specs/2026-04-23-three-phase-trait-activation-design.md#第二部分-process过程
  */
 
-import { deriveCommandPaths } from "./command-table.js";
+import { deriveCommandPaths } from "./commands/index.js";
 
 /** 活跃的 Form */
 export interface ActiveForm {
@@ -26,10 +26,10 @@ export interface ActiveForm {
   description: string;
   /** 创建时间戳 */
   createdAt: number;
-  /** call_function 专用：目标 trait */
+  /** program trait/method 专用：目标 trait */
   trait?: string;
-  /** call_function 专用：函数名 */
-  functionName?: string;
+  /** program trait/method 专用：方法名 */
+  method?: string;
 
   /**
    * 累积的 args（Phase 4 渐进式填表）
@@ -70,7 +70,7 @@ export class FormManager {
   private commandRefCount = new Map<string, number>();
 
   /** 开启 form，返回 form_id */
-  begin(command: string, description: string, extra?: { trait?: string; functionName?: string }): string {
+  begin(command: string, description: string, extra?: { trait?: string; method?: string }): string {
     const formId = generateFormId();
     this.forms.set(formId, {
       formId,
@@ -155,7 +155,7 @@ export class FormManager {
   /**
    * 获取当前所有活跃 form 的 commandPaths 合并集合（Phase 4）
    *
-   * 用于精确匹配 trait.activates_on.paths。同一 command 多 form 时扁平化各自的
+   * 用于精确匹配 trait.activates_on.show_content_when。同一 command 多 form 时扁平化各自的
    * commandPaths 数组；结果去重（Set 保证）。
    */
   activeCommandPaths(): Set<string> {
@@ -203,7 +203,7 @@ export class FormManager {
         description: raw.description,
         createdAt: raw.createdAt,
         trait: raw.trait,
-        functionName: raw.functionName,
+        method: raw.method,
         accumulatedArgs: accumulated,
         commandPaths,
         loadedTraits: Array.isArray(raw.loadedTraits) ? raw.loadedTraits : [],

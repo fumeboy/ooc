@@ -11,7 +11,7 @@ export interface LLMConfig {
   model: string;
   maxTokens: number;
   timeout: number;
-  thinking: ThinkingConfig;
+  thinking?: ThinkingConfig;
 }
 
 export interface ThinkingConfig {

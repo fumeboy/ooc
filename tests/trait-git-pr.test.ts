@@ -65,12 +65,12 @@ describe("git/pr — llm_methods 契约", () => {
     ];
     for (const name of expected) {
       expect(llm_methods[name]).toBeDefined();
-      expect(typeof llm_methods[name].fn).toBe("function");
+      expect(typeof llm_methods[name]!.fn).toBe("function");
     }
   });
 
   test("merge_pr 的 method 参数必须标记为 required", () => {
-    const methodParam = llm_methods.merge_pr.params.find(p => p.name === "method");
+    const methodParam = llm_methods.merge_pr!.params.find(p => p.name === "method");
     expect(methodParam).toBeDefined();
     expect(methodParam!.required).toBe(true);
   });

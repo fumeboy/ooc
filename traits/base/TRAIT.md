@@ -2,7 +2,6 @@
 namespace: kernel
 name: base
 type: how_to_think
-when: always
 description: 指令系统基座 — open/refine/submit/close/wait 五原语
 deps: []
 ---
@@ -33,11 +32,16 @@ deps: []
 | `skill` | 加载 skill 内容到上下文 | `title`, `name`（skill 名称）, `description` |
 | `file` | 读取文件到上下文窗口 | `title`, `path`（文件路径）, `description` |
 
-可用 command：`program`, `think`, `talk`, `return`, `call_function`, `set_plan`, `await`, `await_all`, `defer`, `compact`
+可用 command：`program`, `think`, `talk`, `return`, `set_plan`, `await`, `await_all`, `defer`, `compact`
+
+`program` 有两种执行形态：
+
+- 执行代码：`open(title="执行脚本", type="command", command="program", description="...")` 后通过 `refine(args={code: ...})` 提供代码，再 `submit(form_id)` 执行
+- 调用 trait 方法：`open(title="调用方法", type="command", command="program", trait="kernel:xxx", method="yyy", description="...")` 后通过 `refine(args=...)` 提供方法参数，再 `submit(form_id)` 执行
 
 ### file 类型说明
 
-`open(type="file")` 将文件内容加载为上下文窗口（`<knowledge>` 区域），而不是输出到执行历史中。
+`open(title="读取文件", type="file", path="...", description="...")` 将文件内容加载为上下文窗口（`<knowledge>` 区域），而不是输出到执行历史中。
 
 - `path`：文件路径（相对于项目根目录）
 - `lines`：可选，限制读取行数（如 `lines=200` 只读前 200 行）
@@ -50,8 +54,8 @@ deps: []
 
 | lifespan | 含义 | 何时回收 |
 |---|---|---|
-| `transient` | 由 `open(type="command")` 通过 command_binding 自动带入 | 该 command 的 form 关闭（close/submit 完成）时**自动回收** |
-| `pinned` | 由 `open(type="trait", name="X")` 显式固定 | **不会**随 form 关闭回收，直到显式 close 该 trait 型 form 或线程结束 |
+| `transient` | 由 `open(title="...", type="command", command="...", description="...")` 通过 command_binding 自动带入 | 该 command 的 form 关闭（close/submit 完成）时**自动回收** |
+| `pinned` | 由 `open(title="固定能力", type="trait", name="X", description="...")` 显式固定 | **不会**随 form 关闭回收，直到显式 close 该 trait 型 form 或线程结束 |
 
 在 `<knowledge>` 里你会看到类似：
 
@@ -62,17 +66,17 @@ deps: []
 
 **关键规则**：
 
-- `open(type="command", command="talk")` 会把 `talkable` 等 trait **临时**载入（lifespan=transient）
+- `open(title="发起对话", type="command", command="talk", description="...")` 会把 `talkable` 等 trait **临时**载入（lifespan=transient）
 - 若 submit 或 close 该 talk form，transient trait 会被自动回收
-- 如果你希望某个 trait 跨越多轮操作保留——**再次 `open(type="trait", name="X")` 把它固定（pinned）**。下次 submit/close 不会卸载它
-- close 固定型 form（即原先 `open(type=trait)` 创建的 form）会 unpin：若该 trait 还被某个 active command 需要，降级为 transient；否则从作用域移除
+- 如果你希望某个 trait 跨越多轮操作保留——**再次 `open(title="固定能力", type="trait", name="X", description="...")` 把它固定（pinned）**。下次 submit/close 不会卸载它
+- close 固定型 form（即原先 `open(title="固定能力", type=trait, name="...", description="...")` 创建的 form）会 unpin：若该 trait 还被某个 active command 需要，降级为 transient；否则从作用域移除
 
 **示例 — 固定 reporter 直到任务结束**：
 
 ```json
 // 先主动固定，避免之后 talk form 关闭时 reporter 被回收
-open(type="trait", name="self:reporter", title="固定 reporter 能力", description="本轮对话需多次产出报告")
-// 之后正常 open(type="command", command="talk") → submit → close，reporter 仍在 knowledge 里
+open(title="固定 reporter 能力", type="trait", name="self:reporter", description="本轮对话需多次产出报告")
+// 之后正常 open(title="发起对话", type="command", command="talk", description="...") → submit → close，reporter 仍在 knowledge 里
 ```
 
 **如何知道哪些 trait 存在？**
@@ -80,7 +84,7 @@ open(type="trait", name="self:reporter", title="固定 reporter 能力", descrip
 - 每次 open 后的 inject 消息会告诉你"本次新加载 trait（临时生效）：..."或"Trait X 已加载并固定"
 - 每次 close 后的 inject 会告诉你"本次卸载 trait：..."或"已固定 trait 保留未卸载：..."
 - 看 `<knowledge>` 段落里已经展示的 trait 列表（含 lifespan 属性）
-- 非 kernel 命名空间（library / self）的 trait，在 `<directory>` 或用 `open(type=file, path="stones/{self}/traits/")` 查看
+- 非 kernel 命名空间（library / self）的 trait，在 `<directory>` 或用 `open(title="查看 traits", type=file, path="stones/{self}/traits/", description="查看当前对象 traits")` 查看
 
 **名称匹配**：name 支持 `namespace:name`（精确）或短名前缀补全（如 `http/client` 匹配 `library:http/client`）
 
@@ -105,7 +109,7 @@ open(type="trait", name="self:reporter", title="固定 reporter 能力", descrip
 
 ```json
 // 1. 打开一个 talk 命令
-open(type="command", command="talk", title="发起对话", description="准备与 alice 讨论任务")
+open(title="发起对话", type="command", command="talk", description="准备与 alice 讨论任务")
 // 返回 form_id = "f_123"
 
 // 2. 第一次 refine：指定对象
@@ -156,7 +160,7 @@ submit(title="开始对话", form_id="f_123")
 1. 每轮只能调用一个工具
 2. open 后系统加载相关知识，你可以多轮思考准备
 3. submit 时必须传入 form_id
-4. 任务完成后必须 open(type="command", command="return") → submit(summary="...")
+4. 任务完成后必须 `open(title="返回结果", type="command", command="return", description="完成任务")` → `refine(args={summary:"..."})` → `submit(form_id)`
 5. 你的文本输出会自动记录为思考过程
 6. 收到 inbox 消息后，在下一次工具调用时通过 mark 参数标记
-7. 读取文件优先使用 open(type="file")，文件内容会出现在上下文窗口中，避免重复读取造成执行历史膨胀
+7. 读取文件优先使用 `open(title="读取文件", type="file", path="...", description="...")`，文件内容会出现在上下文窗口中，避免重复读取造成执行历史膨胀

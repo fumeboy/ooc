@@ -184,7 +184,7 @@ describe("engine — talk(wait=true, target=\"user\") 死锁修复", () => {
       rootDir: TEST_DIR,
       flowsDir: FLOWS_DIR,
       llm,
-      directory: [{ name: "bob", whoAmI: "bob" }],
+      directory: [{ name: "bob", whoAmI: "bob", functions: [] }],
       traits: [],
       stone: makeStone("alice"),
       onTalk: async (targetObject) => {

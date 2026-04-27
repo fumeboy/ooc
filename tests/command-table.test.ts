@@ -1,17 +1,19 @@
 /**
  * 命令表基础单测
  *
- * 测试 deriveCommandPaths 从 (toolName, args) 派生多路径集合：
+ * 测试 deriveCommandPaths 从 (command, args) 派生多路径集合：
  * - 依照 COMMAND_TABLE 定义，match(args) 返回 string[]
  * - 各维度独立：wait / context / type 各自追加对应 path
  * - 父路径总是包含在结果中（bare command 名）
  */
 
 import { describe, test, expect } from "bun:test";
-import { deriveCommandPaths, COMMAND_TABLE, getOpenableCommands } from "../src/thread/command-table.js";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { deriveCommandPaths, COMMAND_TABLE, getOpenableCommands } from "../src/thread/commands/index.js";
 
 describe("deriveCommandPaths — 根层级", () => {
-  test("未知 tool 名返回空数组", () => {
+  test("未知 command 名返回空数组", () => {
     expect(deriveCommandPaths("nope", {})).toEqual([]);
   });
 
@@ -160,54 +162,32 @@ describe("deriveCommandPaths — think 多路径并行", () => {
   });
 });
 
-describe("deriveCommandPaths — open 双分支（两路径并行）", () => {
-  test("open + command=talk → ['open', 'open.command']", () => {
-    expect(deriveCommandPaths("open", { command: "talk" })).toEqual(["open", "open.command"]);
-  });
-
-  test("open + path='/x' → ['open', 'open.path']", () => {
-    expect(deriveCommandPaths("open", { path: "/x" })).toEqual(["open", "open.path"]);
-  });
-
-  test("open + command + path → ['open', 'open.command', 'open.path']（两维度并行）", () => {
-    expect(deriveCommandPaths("open", { command: "talk", path: "/x" })).toEqual(["open", "open.command", "open.path"]);
-  });
-
-  test("open 无参 → ['open']", () => {
-    expect(deriveCommandPaths("open", {})).toEqual(["open"]);
-  });
-});
-
-describe("deriveCommandPaths — submit 多子", () => {
-  test("submit 无 command → ['submit']", () => {
-    expect(deriveCommandPaths("submit", {})).toEqual(["submit"]);
-  });
-
-  test("submit + command=compact → ['submit', 'submit.compact']", () => {
-    expect(deriveCommandPaths("submit", { command: "compact" })).toEqual(["submit", "submit.compact"]);
-  });
-
-  test("submit + command=talk → ['submit', 'submit.talk']", () => {
-    expect(deriveCommandPaths("submit", { command: "talk" })).toEqual(["submit", "submit.talk"]);
-  });
-
-  test("submit + command 无对应子节点 → ['submit']（保守）", () => {
-    expect(deriveCommandPaths("submit", { command: "unknown_xyz" })).toEqual(["submit"]);
+describe("deriveCommandPaths — 顶层 tool 不是 command", () => {
+  test("open/refine/submit/close/wait 不在 command 路径表中派生路径", () => {
+    for (const toolName of ["open", "refine", "submit", "close", "wait"]) {
+      expect(deriveCommandPaths(toolName, { command: "talk" })).toEqual([]);
+    }
   });
 });
 
 describe("COMMAND_TABLE — 结构性检查", () => {
   test("顶层必须包含 spec 要求的 command", () => {
     const keys = Object.keys(COMMAND_TABLE);
-    for (const c of ["talk", "open", "program", "submit", "return"]) {
+    for (const c of ["talk", "think", "program", "return", "set_plan", "await", "await_all", "defer", "compact"]) {
       expect(keys).toContain(c);
     }
   });
 
-  test("refine, close, wait 注册为顶层 entry", () => {
-    expect(COMMAND_TABLE.refine).toBeDefined();
-    expect(COMMAND_TABLE.close).toBeDefined();
-    expect(COMMAND_TABLE.wait).toBeDefined();
+  test("顶层 tool 原语不注册为 command entry", () => {
+    for (const toolName of ["open", "refine", "submit", "close", "wait"]) {
+      expect(COMMAND_TABLE[toolName]).toBeUndefined();
+    }
+  });
+
+  test("commands 目录不包含 tool-only 模块", () => {
+    for (const toolName of ["open", "refine", "submit", "close", "wait"]) {
+      expect(existsSync(join(import.meta.dir, "../src/thread/commands", `${toolName}.ts`))).toBe(false);
+    }
   });
 
   test("每个 entry 都有 paths 和 match 字段", () => {
@@ -217,11 +197,12 @@ describe("COMMAND_TABLE — 结构性检查", () => {
     }
   });
 
-  test("新增 openable 命令已注册：call_function, set_plan, await, await_all, defer, compact", () => {
-    for (const cmd of ["call_function", "set_plan", "await", "await_all", "defer", "compact"]) {
+  test("新增 openable 命令已注册：set_plan, await, await_all, defer, compact", () => {
+    for (const cmd of ["set_plan", "await", "await_all", "defer", "compact"]) {
       expect(COMMAND_TABLE[cmd]).toBeDefined();
       expect(COMMAND_TABLE[cmd]?.openable).toBe(true);
     }
+    expect(COMMAND_TABLE.call_function).toBeUndefined();
   });
 });
 
@@ -248,24 +229,19 @@ describe("COMMAND_TABLE.<entry>.paths declares known path universe", () => {
     expect(entry.paths).not.toContain("think.wait.continue");
   });
 
-  test("submit paths 包含 submit 及已知子路径", () => {
-    const entry = COMMAND_TABLE.submit!;
-    expect(entry.paths).toContain("submit");
-    expect(entry.paths).toContain("submit.compact");
-    expect(entry.paths).toContain("submit.talk");
-  });
 });
 
 describe("getOpenableCommands()", () => {
-  test("返回 10 个命令", () => {
-    expect(getOpenableCommands()).toHaveLength(10);
+  test("返回 9 个命令", () => {
+    expect(getOpenableCommands()).toHaveLength(9);
   });
 
   test("getOpenableCommands 已包含所有 openable 命令", () => {
     const cmds = getOpenableCommands();
-    for (const cmd of ["program", "think", "talk", "return", "call_function", "set_plan", "await", "await_all", "defer", "compact"]) {
+    for (const cmd of ["program", "think", "talk", "return", "set_plan", "await", "await_all", "defer", "compact"]) {
       expect(cmds).toContain(cmd);
     }
+    expect(cmds).not.toContain("call_function");
   });
 
   test("不包含 open, refine, submit, close, wait（工具原语）", () => {

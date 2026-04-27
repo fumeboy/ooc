@@ -3,7 +3,6 @@ namespace: kernel
 name: computable/code_index
 type: how_to_use_tool
 version: 0.2.0
-when: never
 description: 代码语义索引能力（符号查找 / 引用查找 / 调用链 / 向量语义搜索 / 增量索引）
 deps: []
 ---
@@ -19,6 +18,8 @@ deps: []
 - **增量索引**：`index_refresh({ paths })` 只重扫传入的文件，不全量重建
 
 ## 可用 API
+
+在 `program` 沙箱内使用 `callMethod("computable/code_index", method, args)` 调用。单个方法也可以通过 `open({ type: "command", command: "program", title, trait: "computable/code_index", method })` 发起。
 
 ### symbol_lookup({ query, kind?, lang? })
 

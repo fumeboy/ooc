@@ -150,7 +150,7 @@ describe("git/pr — comment_on_pr GraphQL reply", () => {
   });
 
   test("llm_methods.comment_on_pr 的 inReplyTo 参数保留", () => {
-    const p = llm_methods.comment_on_pr.params.find(x => x.name === "inReplyTo");
+    const p = llm_methods.comment_on_pr!.params.find(x => x.name === "inReplyTo");
     expect(p).toBeDefined();
     expect(p!.required).toBe(false);
   });

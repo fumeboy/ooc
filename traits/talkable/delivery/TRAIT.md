@@ -2,7 +2,6 @@
 namespace: kernel
 name: talkable/delivery
 type: how_to_interact
-when: never
 description: 交付规范、协作交付、角色边界
 deps: ["kernel:talkable"]
 ---

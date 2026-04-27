@@ -82,6 +82,13 @@ async function editFileImpl(
   const fullPath = resolvePath(ctx.rootDir ?? "", path);
 
   try {
+    if (typeof oldStr !== "string" || oldStr.length === 0) {
+      return toolErr("oldStr 不能为空");
+    }
+    if (typeof newStr !== "string") {
+      return toolErr("newStr 必须是字符串");
+    }
+
     const file = Bun.file(fullPath);
     const exists = await file.exists();
     if (!exists) {

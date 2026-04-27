@@ -16,7 +16,7 @@ import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
 import { MockLLMClient, type ToolCall } from "../src/thinkable/client.js";
 import type { StoneData } from "../src/types/index.js";
 import { eventBus } from "../src/server/events.js";
-import { OPEN_TOOL, SUBMIT_TOOL, CLOSE_TOOL, WAIT_TOOL } from "../src/thread/tools.js";
+import { OPEN_TOOL, SUBMIT_TOOL, CLOSE_TOOL, WAIT_TOOL } from "../src/thread/tools/index.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_thread_title_test");
 const FLOWS_DIR = join(TEST_DIR, "flows");
@@ -58,7 +58,7 @@ describe("tool schema — title 参数", () => {
       required?: string[];
     };
     expect(params.properties).toHaveProperty("title");
-    expect(params.properties.title.type).toBe("string");
+    expect(params.properties.title!.type).toBe("string");
     expect(params.required).toContain("title");
   });
 
@@ -68,7 +68,7 @@ describe("tool schema — title 参数", () => {
       required?: string[];
     };
     expect(params.properties).toHaveProperty("title");
-    expect(params.properties.title.type).toBe("string");
+    expect(params.properties.title!.type).toBe("string");
     expect(params.required).toContain("title");
   });
 
@@ -126,7 +126,7 @@ describe("engine — title 持久化到 ThreadAction", () => {
     let i = 0;
     const llm = new MockLLMClient({
       responseFn: (messages) => {
-        const step = steps[i++] ?? steps[steps.length - 1];
+        const step = steps[i++] ?? steps[steps.length - 1]!;
         return step(messages);
       },
     });
@@ -205,7 +205,7 @@ describe("SSE — flow:action 事件包含 title", () => {
     let i = 0;
     const llm = new MockLLMClient({
       responseFn: (messages) => {
-        const step = steps[i++] ?? steps[steps.length - 1];
+        const step = steps[i++] ?? steps[steps.length - 1]!;
         return step(messages);
       },
     });
@@ -267,7 +267,7 @@ describe("SSE — flow:action 事件包含 title", () => {
     let i = 0;
     const llm = new MockLLMClient({
       responseFn: (messages) => {
-        const step = steps[i++] ?? steps[steps.length - 1];
+        const step = steps[i++] ?? steps[steps.length - 1]!;
         return step(messages);
       },
     });

@@ -341,7 +341,7 @@ export function parseMemoryMd(raw: string): ParsedMdSection[] {
   let cur: ParsedMdSection | null = null;
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const line = lines[i] ?? "";
     /* 顶级 # 忽略；## 是段落分隔 */
     if (line.startsWith("## ")) {
       if (cur) {
@@ -381,11 +381,13 @@ export function parseDateStampOrNow(stamp: string): string {
   /* YYYY-MM-DD HH:MM 或 YYYY-MM-DD */
   const m = stamp.match(/^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}):(\d{2}))?$/);
   if (!m) return new Date().toISOString();
-  const y = parseInt(m[1], 10);
-  const mo = parseInt(m[2], 10) - 1;
-  const d = parseInt(m[3], 10);
-  const hh = m[4] ? parseInt(m[4], 10) : 0;
-  const mm = m[5] ? parseInt(m[5], 10) : 0;
+  const [, year, month, day, hour, minute] = m;
+  if (!year || !month || !day) return new Date().toISOString();
+  const y = parseInt(year, 10);
+  const mo = parseInt(month, 10) - 1;
+  const d = parseInt(day, 10);
+  const hh = hour ? parseInt(hour, 10) : 0;
+  const mm = minute ? parseInt(minute, 10) : 0;
   const date = new Date(Date.UTC(y, mo, d, hh, mm));
   return date.toISOString();
 }
@@ -476,6 +478,7 @@ export function mergeDuplicateEntries(
     /* 按 createdAt 升序：第一个最早 */
     group.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     const first = group[0];
+    if (!first) continue;
     const rest = group.slice(1);
 
     const contentLines = new Set(first.content.split("\n"));

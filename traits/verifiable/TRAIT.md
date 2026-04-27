@@ -3,9 +3,8 @@ namespace: kernel
 name: verifiable
 type: how_to_think
 version: 1.0.0
-when: never
 activates_on:
-  paths: ["return"]
+  show_content_when: ["return"]
 description: 证据先于结论，完成前必须运行验证，禁止凭记忆声称通过
 deps: []
 ---

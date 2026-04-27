@@ -26,7 +26,8 @@ import { loadAllTraits, loadTraitsByRef } from "../trait/index.js";
 import { OpenAICompatibleClient, type LLMClient } from "../thinkable/client.js";
 import { DefaultConfig, type LLMConfig } from "../thinkable/config.js";
 import { emitSSE } from "../server/events.js";
-import { runWithThreadTree, resumeWithThreadTree, runSuperThread, stepOnceWithThreadTree, writeThreadTreeFlowData, type EngineConfig, type TalkResult, type TalkReturn } from "../thread/engine.js";
+import { runWithThreadTree, resumeWithThreadTree, stepOnceWithThreadTree, writeThreadTreeFlowData, type EngineConfig, type TalkResult, type TalkReturn } from "../thread/engine.js";
+import { runSuperThread } from "../thread/super-thread.js";
 import { loadSkills } from "../skill/index.js";
 import { appendUserInbox } from "../persistence/user-inbox.js";
 import { handleOnTalkToSuper } from "./super.js";
@@ -381,7 +382,6 @@ export class World {
           "---",
           "namespace: kernel",
           "name: computable",
-          "when: always",
           "---",
           "",
           "# 程序执行能力",
@@ -490,7 +490,6 @@ export class World {
           "---",
           "namespace: kernel",
           "name: talkable",
-          "when: always",
           "---",
           "",
           "# 通信能力",

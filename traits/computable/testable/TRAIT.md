@@ -3,7 +3,6 @@ namespace: kernel
 name: computable/testable
 type: how_to_think
 version: 1.0.0
-when: never
 description: RED-GREEN-REFACTOR 循环，测试先于代码，失败先于通过
 deps:
   - verifiable

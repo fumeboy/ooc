@@ -76,9 +76,20 @@ describe("createEditPlan / readEditPlan", () => {
         rootDir: workDir,
         sessionId,
         flowsRoot,
-        changes: [{ kind: "unknown" as any, path: "x" }],
+        changes: [{ kind: "unknown", path: "x" } as any],
       }),
     ).rejects.toThrow();
+  });
+
+  test("edit change 的 oldText 不能为空", async () => {
+    await expect(
+      createEditPlan({
+        rootDir: workDir,
+        sessionId,
+        flowsRoot,
+        changes: [{ kind: "edit", path: "src/a.ts", oldText: "", newText: "x" }],
+      }),
+    ).rejects.toThrow("oldText 不能为空");
   });
 });
 

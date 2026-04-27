@@ -10,7 +10,7 @@
  * @ref src/thinkable/config.ts — references — LLMConfig 配置
  */
 
-import type { LLMConfig } from "./config.js";
+import type { LLMConfig, ThinkingConfig } from "./config.js";
 import { consola } from "consola";
 
 /** 给 reader.read() 加 per-chunk 超时，防止流式读取无限挂起 */
@@ -215,8 +215,13 @@ function extractAssistantContent(message: Record<string, unknown> | null | undef
   return normalizeTextContent(message?.content);
 }
 
+function getThinkingConfig(config: LLMConfig): ThinkingConfig {
+  return config.thinking ?? { enabled: false };
+}
+
 function buildThinkingCapabilityPayload(config: LLMConfig): Record<string, unknown> | null {
-  if (!config.thinking.enabled) return null;
+  const thinking = getThinkingConfig(config);
+  if (!thinking.enabled) return null;
 
   /*
    * thinking 能力分两层：
@@ -227,16 +232,16 @@ function buildThinkingCapabilityPayload(config: LLMConfig): Record<string, unkno
    * 但不一定接受额外的 thinking payload。只有明确配置 mode/budget 时，
    * 才向上游发送显式 thinking 参数，避免对兼容网关造成 500。
    */
-  if (!config.thinking.mode && typeof config.thinking.budget !== "number") {
+  if (!thinking.mode && typeof thinking.budget !== "number") {
     return null;
   }
 
   const thinkingPayload: Record<string, unknown> = {
-    type: config.thinking.mode ?? "enabled",
+    type: thinking.mode ?? "enabled",
   };
 
-  if (typeof config.thinking.budget === "number" && Number.isFinite(config.thinking.budget)) {
-    thinkingPayload.budget = config.thinking.budget;
+  if (typeof thinking.budget === "number" && Number.isFinite(thinking.budget)) {
+    thinkingPayload.budget = thinking.budget;
   }
 
   return thinkingPayload;
@@ -418,11 +423,11 @@ export class OpenAICompatibleClient implements LLMClient {
   }
 
   isThinkingEnabled(): boolean {
-    return this._config.thinking.enabled;
+    return getThinkingConfig(this._config).enabled;
   }
 
   preferNonStreamingThinking(): boolean {
-    return this._config.thinking.enabled;
+    return getThinkingConfig(this._config).enabled;
   }
 
   /**
@@ -552,7 +557,7 @@ export class OpenAICompatibleClient implements LLMClient {
           model: modelFromStream ?? this._config.model,
           usage: normalizeUsage(lastJson ? ((lastJson.usage ?? null) as Record<string, unknown> | null) : null),
           toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-          raw: lastJson ?? undefined,
+          raw: lastJson ?? {},
         };
       } catch (e) {
         lastError = e as Error;
@@ -661,7 +666,7 @@ export class OpenAICompatibleClient implements LLMClient {
         yield {
           type: "done",
           usage: doneUsage,
-          raw: lastJson ?? undefined,
+          raw: lastJson ?? {},
         };
         return;
       } catch (e) {

@@ -16,7 +16,7 @@ import { join } from "node:path";
 
 import { handleRoute } from "../src/server/server.js";
 import { World } from "../src/world/world.js";
-import { createProcess } from "../src/process/tree.js";
+import { createProcess } from "../src/persistence/process-compat.js";
 import type { FlowData } from "../src/types/flow.js";
 import type { LLMConfig } from "../src/thinkable/config.js";
 

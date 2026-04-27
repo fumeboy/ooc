@@ -26,12 +26,10 @@ function trait(
     kind: "trait",
     type: "how_to_think",
     version: "1.0.0",
-    when: "never",
     description: "",
     readme: `# ${namespace}:${name}`,
-    methods: [],
     deps: [],
-    activatesOn: commands ? { paths: commands } : undefined,
+    activatesOn: commands ? { showContentWhen: commands } : undefined,
     dir: `/fake/${namespace}/${name}`,
   };
 }
@@ -138,7 +136,7 @@ describe("collectCommandTraits — 精确匹配（match 显式包含父路径）
     ).toContain("kernel:talkable/relation_update");
   });
 
-  test("多个 traits：talk=match, cross_object=match, relation_update=not match（when paths=[talk,talk.fork]）", () => {
+  test("多个 traits：talk=match, cross_object=match, relation_update=not match（active paths=[talk,talk.fork]）", () => {
     const traits = [
       trait("kernel", "talkable", ["talk"]),
       trait("kernel", "talkable/cross_object", ["talk.fork"]),

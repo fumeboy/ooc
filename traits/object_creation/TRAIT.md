@@ -3,9 +3,8 @@ namespace: kernel
 name: object_creation
 type: how_to_interact
 version: 1.1.0
-when: never
 activates_on:
-  paths: ["think"]
+  show_content_when: ["think"]
 description: 创建新对象或完善对象身份的指南
 deps: []
 ---
@@ -67,4 +66,4 @@ const whoAmI = `你是 researcher，一个专业的信息研究员。
 1. **具体胜于抽象**：不要写"你很聪明"，写"你擅长对比分析和结构化输出"
 2. **局限比能力更重要**：明确告诉对象它不能做什么，防止幻觉和越界
 3. **方法论是元认知**：告诉对象"如何工作"比告诉它"做什么"更有持久价值
-4. **自我约束可以用 trait 实现**：如果某个规则足够重要，建议对象用 createTrait 将其固化为 always-on 的 trait
+4. **自我约束可以用 trait 实现**：如果某个规则足够重要，建议对象用 createTrait 将其固化为默认激活的 trait

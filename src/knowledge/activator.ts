@@ -5,7 +5,7 @@
  * 沿用 G3/G13 设计：激活由作用域链 + 反向索引驱动。
  *
  * @ref docs/superpowers/specs/2026-04-26-refine-tool-and-knowledge-activator.md
- * @ref docs/哲学文档/gene.md#G3 — implements — 激活逻辑（always/never/条件）
+ * @ref docs/哲学文档/gene.md#G3 — implements — 激活逻辑（scope chain / explicit activation）
  * @ref docs/哲学文档/gene.md#G13 — implements — 认知栈作用域链驱动激活
  * @ref docs/哲学文档/gene.md#G5 — references — 激活决定 context 中注入哪些知识内容
  */
@@ -57,9 +57,9 @@ export function resolveTraitRef(
  * 获取应该激活的 Traits（完整内容注入 context）
  *
  * 激活规则：
- * - when = "always" → 自动激活
- * - when = "never" → 不激活（除非被依赖）
- * - 其他（自然语言条件） → 仅当 "namespace/name" 出现在 scopeChain 中时激活
+ * - `kernel:base` 是协议基座，默认激活
+ * - 其他 trait 仅当完整 traitId 出现在 scopeChain 中时激活
+ * - deps 递归激活
  *
  * @param traits - 所有已加载的 Trait
  * @param scopeChain - 从 computeScopeChain 计算的栈帧 traits（格式："namespace/name"）
@@ -92,14 +92,7 @@ export function getActiveTraits(
   for (const trait of traits) {
     const id = traitId(trait);
 
-    if (trait.when === "never" && !scopeSet.has(id)) continue;
-    if (trait.when === "always") {
-      activate(trait);
-      continue;
-    }
-
-    /* 条件 trait：仅当 "namespace/name" 出现在作用域链中时激活 */
-    if (scopeSet.has(id)) {
+    if (id === "kernel:base" || scopeSet.has(id)) {
       activate(trait);
     }
   }
@@ -107,24 +100,8 @@ export function getActiveTraits(
   return result;
 }
 
-/**
- * 获取指定父 trait 的子 trait 列表
- *
- * @param allTraits - 所有已加载的 trait
- * @param parentId - 父 trait ID
- * @returns 子 trait 列表
- */
-export function getChildTraits(
-  allTraits: TraitDefinition[],
-  parentId: string,
-): TraitDefinition[] {
-  return allTraits.filter(
-    (t) => t.parent === parentId,
-  );
-}
-
 import type { KnowledgeRef } from "./types.js";
-import { buildPathReverseIndex, lookupTraitsByPaths, type PathReverseIndex } from "./reverse-index.js";
+import { buildPathReverseIndex, lookupKnowledgeByPaths, type PathReverseIndex } from "./reverse-index.js";
 
 export interface ComputeRefsInput {
   /** 已加载 traits/views/relations（统一通过 TraitDefinition 形态承载） */
@@ -146,31 +123,20 @@ export interface ComputeRefsInput {
 export function computeKnowledgeRefs(input: ComputeRefsInput): KnowledgeRef[] {
   const idx = input.reverseIndex ?? buildPathReverseIndex(input.traits);
   const traitMap = new Map(input.traits.map((t) => [traitId(t), t]));
-  const hitIds = lookupTraitsByPaths(idx, input.activePaths);
+  const hits = lookupKnowledgeByPaths(idx, input.activePaths);
 
   const refs: KnowledgeRef[] = [];
-  for (const id of hitIds) {
+  for (const hit of hits) {
+    const id = hit.id;
     const t = traitMap.get(id);
     if (!t) continue;
-    /* 找到这条 trait 是被哪个 activePath 命中的（取第一个匹配的，仅用于 reason） */
-    let matchedPath = "";
-    if (t.activatesOn?.paths) {
-      outer: for (const ap of input.activePaths) {
-        for (const decl of t.activatesOn.paths) {
-          if (ap === decl || ap.startsWith(decl + ".")) {
-            matchedPath = ap;
-            break outer;
-          }
-        }
-      }
-    }
     const knowledgeType: "trait" | "view" = t.kind === "view" ? "view" : "trait";
     const refPrefix = knowledgeType === "view" ? "@view" : "@trait";
     refs.push({
       type: knowledgeType,
       ref: `${refPrefix}:${t.name}`,
-      source: { kind: "form_match", path: matchedPath },
-      presentation: "full",
+      source: { kind: "form_match", path: hit.matchedPath },
+      presentation: hit.presentation,
       reason: `命令路径命中 ${knowledgeType} ${t.namespace}:${t.name}`,
     });
   }

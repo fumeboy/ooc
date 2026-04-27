@@ -3,50 +3,62 @@ namespace: kernel
 name: computable/file_ops
 type: how_to_use_tool
 version: 1.0.0
-when: never
 description: 文件读写、编辑、目录操作能力
 deps: []
 ---
 # 文件操作能力
 
-你可以通过以下 API 对文件系统进行读写操作。
+你可以通过 `program` 沙箱里的 `callMethod("computable/file_ops", method, args)` 对文件系统进行读写操作。单个方法也可以通过 `open({ type: "command", command: "program", title, trait: "computable/file_ops", method })` 发起。args 永远是对象。
 
 ## 可用 API
 
-### readFile(path, options?)
+### readFile({ path, offset?, limit? })
 
 读取文件内容，返回带行号的文本。默认最多读取 200 行。
 
 - `path` — 文件路径（相对于 rootDir 或绝对路径）
-- `options.offset` — 起始行号（从 0 开始，默认 0）
-- `options.limit` — 最大读取行数（默认 200）
+- `offset` — 起始行号（从 0 开始，默认 0）
+- `limit` — 最大读取行数（默认 200）
 
 ```javascript
-const result = await readFile("src/index.ts");
+const result = await callMethod("computable/file_ops", "readFile", { path: "src/index.ts" });
 // result.data = { content: "  1 | ...\n  2 | ...", totalLines: 50, truncated: false }
 
-const partial = await readFile("src/index.ts", { offset: 10, limit: 5 });
+const partial = await callMethod("computable/file_ops", "readFile", {
+  path: "src/index.ts",
+  offset: 10,
+  limit: 5
+});
 // 从第 11 行开始读取 5 行
 ```
 
-### editFile(path, oldStr, newStr, options?)
+### editFile({ path, oldStr, newStr, replaceAll? })
 
 在文件中搜索并替换文本。支持精确匹配和空白容错匹配。
 
 - `path` — 文件路径
-- `oldStr` — 要查找的原始文本
+- `oldStr` — 要查找的原始文本，不能为空
 - `newStr` — 替换后的文本
-- `options.replaceAll` — 是否替换所有匹配（默认 false）
+- `replaceAll` — 是否替换所有匹配（默认 false）
 
 ```javascript
-const result = await editFile("src/index.ts", "old code", "new code");
+const result = await callMethod("computable/file_ops", "editFile", {
+  path: "src/index.ts",
+  oldStr: "old code",
+  newStr: "new code"
+});
 // result.data = { matchCount: 1 }
 
 // 替换所有匹配
-await editFile("src/index.ts", "foo", "bar", { replaceAll: true });
+await callMethod("computable/file_ops", "editFile", {
+  path: "src/index.ts",
+  oldStr: "foo",
+  newStr: "bar",
+  replaceAll: true
+});
 ```
 
-### writeFile(path, content)
+### writeFile({ path, content })
 
 创建或覆盖文件，自动创建父目录。
 
@@ -54,44 +66,47 @@ await editFile("src/index.ts", "foo", "bar", { replaceAll: true });
 - `content` — 文件内容
 
 ```javascript
-const result = await writeFile("output/result.txt", "Hello World");
+const result = await callMethod("computable/file_ops", "writeFile", {
+  path: "output/result.txt",
+  content: "Hello World"
+});
 // result.data = { bytesWritten: 11 }
 ```
 
-### listDir(path, options?)
+### listDir({ path, recursive?, includeHidden?, limit? })
 
 列出目录内容。
 
 - `path` — 目录路径
-- `options.recursive` — 是否递归列出子目录（默认 false）
-- `options.includeHidden` — 是否包含隐藏文件（默认 false）
-- `options.limit` — 最大返回条目数（默认 100）
+- `recursive` — 是否递归列出子目录（默认 false）
+- `includeHidden` — 是否包含隐藏文件（默认 false）
+- `limit` — 最大返回条目数（默认 100）
 
 ```javascript
-const result = await listDir("src/");
+const result = await callMethod("computable/file_ops", "listDir", { path: "src/" });
 // result.data = { entries: [{ name: "index.ts", type: "file", size: 1024 }, ...] }
 ```
 
-### fileExists(path)
+### fileExists({ path })
 
 检查文件或目录是否存在。直接返回布尔值（不是 ToolResult）。
 
 ```javascript
-if (await fileExists("config.json")) {
-  const cfg = await readFile("config.json");
+if (await callMethod("computable/file_ops", "fileExists", { path: "config.json" })) {
+  const cfg = await callMethod("computable/file_ops", "readFile", { path: "config.json" });
 }
 ```
 
-### deleteFile(path, options?)
+### deleteFile({ path, recursive? })
 
 删除文件或目录。
 
 - `path` — 文件/目录路径
-- `options.recursive` — 是否递归删除目录（默认 false）
+- `recursive` — 是否递归删除目录（默认 false）
 
 ```javascript
-await deleteFile("temp/output.txt");
-await deleteFile("temp/", { recursive: true });
+await callMethod("computable/file_ops", "deleteFile", { path: "temp/output.txt" });
+await callMethod("computable/file_ops", "deleteFile", { path: "temp/", recursive: true });
 ```
 
 ## 多文件事务（Edit Plan）
@@ -111,6 +126,8 @@ await deleteFile("temp/", { recursive: true });
 // 整文件覆盖（新建或替换）
 { kind: "write", path: "src/new.ts", newContent: "export const N = 9;\n" }
 ```
+
+`oldText` 不能为空。
 
 ### preview_edit_plan({ planId })
 

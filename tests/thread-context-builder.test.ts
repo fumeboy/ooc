@@ -233,12 +233,12 @@ describe("renderSiblingSummary", () => {
 describe("renderThreadProcess", () => {
   test("渲染 actions 时间线", () => {
     const actions: ThreadAction[] = [
-      { type: "thought", content: "开始思考", timestamp: 1000 },
+      { type: "thinking", content: "开始思考", timestamp: 1000 },
       { type: "program", content: "search('AI')", result: "found 3", success: true, timestamp: 2000 },
       { type: "inject", content: "=== 父线程上下文 ===", timestamp: 500 },
     ];
     const rendered = renderThreadProcess(actions);
-    expect(rendered).toContain("thought");
+    expect(rendered).toContain("thinking");
     expect(rendered).toContain("开始思考");
     expect(rendered).toContain("program");
     expect(rendered).toContain("search");
@@ -270,7 +270,7 @@ describe("buildThreadContext", () => {
       id: "a",
       actions: [
         { type: "inject", content: "=== 父线程上下文 ===\n之前讨论了...", timestamp: 1000 },
-        { type: "thought", content: "开始搜索", timestamp: 2000 },
+        { type: "thinking", content: "开始搜索", timestamp: 2000 },
       ],
       plan: "1. 搜索 2. 整理",
     };
@@ -338,7 +338,7 @@ describe("buildThreadContext", () => {
     };
     const threadData: ThreadDataFile = {
       id: "r",
-      actions: [{ type: "thought", content: "规划中", timestamp: 1000 }],
+      actions: [{ type: "thinking", content: "规划中", timestamp: 1000 }],
       inbox: [
         { id: "msg1", from: "X", content: "通知", timestamp: 2000, source: "system", status: "unread" },
       ],
@@ -403,7 +403,7 @@ describe("buildThreadContext", () => {
     const targetNodeData: ThreadDataFile = {
       id: "c",
       actions: [
-        { type: "thought", content: "我在写文档", timestamp: 1000 },
+        { type: "thinking", content: "我在写文档", timestamp: 1000 },
         { type: "program", content: "writeFile('doc.md')", result: "ok", success: true, timestamp: 2000 },
       ],
     };
@@ -496,11 +496,9 @@ describe("extractStoneTraitRefs", () => {
       namespace,
       name,
       type: "how_to_use_tool",
-      when: "never",
       description: `${namespace}:${name}`,
       readme: "",
       deps: [],
-      methods: [],
       parent: null,
     } as unknown as TraitDefinition;
   }

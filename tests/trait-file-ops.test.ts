@@ -134,6 +134,16 @@ describe("editFile", () => {
     expect(result.error).toContain("replaceAll");
   });
 
+  test("oldStr 为空时返回错误，避免空字符串匹配卡死", async () => {
+    const filePath = join(tempDir, "edit-empty-oldstr.txt");
+    await fsWriteFile(filePath, "abc\n");
+
+    const result = await editFile(ctx, filePath, "", "x");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain("oldStr 不能为空");
+  });
+
   test("replaceAll 替换所有匹配", async () => {
     const filePath = join(tempDir, "edit-replaceall.txt");
     await fsWriteFile(filePath, "aaa\nbbb\naaa\n");

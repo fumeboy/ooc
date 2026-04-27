@@ -3,9 +3,8 @@ namespace: kernel
 name: library_index
 type: how_to_use_tool
 version: 2.0.0
-when: never
 activates_on:
-  paths: ["program"]
+  show_content_when: ["program"]
 description: Library 公共资源索引 — 查找和使用 library 中的 traits
 deps: []
 ---

@@ -92,19 +92,19 @@ describe("parseMemoryMd", () => {
     ].join("\n");
     const sections = parseMemoryMd(md);
     expect(sections.length).toBe(2);
-    expect(sections[0].key).toBe("经验 A");
-    expect(sections[0].stamp).toBe("2026-04-22 10:00");
-    expect(sections[0].content).toContain("aaa 内容");
-    expect(sections[0].content).toContain("bbb 行");
-    expect(sections[1].key).toBe("经验 B");
+    expect(sections[0]!.key).toBe("经验 A");
+    expect(sections[0]!.stamp).toBe("2026-04-22 10:00");
+    expect(sections[0]!.content).toContain("aaa 内容");
+    expect(sections[0]!.content).toContain("bbb 行");
+    expect(sections[1]!.key).toBe("经验 B");
   });
 
   test("没时间戳的段落 stamp 为空", () => {
     const md = "## 经验 A\n\n内容";
     const sections = parseMemoryMd(md);
     expect(sections.length).toBe(1);
-    expect(sections[0].key).toBe("经验 A");
-    expect(sections[0].stamp).toBe("");
+    expect(sections[0]!.key).toBe("经验 A");
+    expect(sections[0]!.stamp).toBe("");
   });
 
   test("顶级 # 不被当作段落", () => {
@@ -117,7 +117,7 @@ describe("parseMemoryMd", () => {
     const md = "## 只有标题\n\n## 有内容\n\n文本";
     const sections = parseMemoryMd(md);
     expect(sections.length).toBe(1);
-    expect(sections[0].key).toBe("有内容");
+    expect(sections[0]!.key).toBe("有内容");
   });
 });
 
@@ -227,7 +227,7 @@ describe("queryMemoryEntries", () => {
   test("query 模糊匹配 content", () => {
     const r = queryMemoryEntries(tmp, { query: "curl" });
     expect(r.length).toBe(1);
-    expect(r[0].key).toBe("调试 API");
+    expect(r[0]!.key).toBe("调试 API");
   });
 
   test("query 模糊匹配 tag", () => {
@@ -238,7 +238,7 @@ describe("queryMemoryEntries", () => {
   test("按 tag 过滤（任一命中）", () => {
     const r = queryMemoryEntries(tmp, { tags: ["style"] });
     expect(r.length).toBe(1);
-    expect(r[0].key).toBe("命名规范");
+    expect(r[0]!.key).toBe("命名规范");
   });
 
   test("按 since 过滤", () => {
@@ -255,10 +255,10 @@ describe("queryMemoryEntries", () => {
   test("onlyPinned=true 过滤非 pinned", () => {
     /* 手动 pin 一条 */
     const entries = readMemoryEntries(tmp);
-    writeMemoryEntry(tmp, { ...entries[0], pinned: true });
+    writeMemoryEntry(tmp, { ...entries[0]!, pinned: true });
     const r = queryMemoryEntries(tmp, { onlyPinned: true });
     expect(r.length).toBe(1);
-    expect(r[0].pinned).toBe(true);
+    expect(r[0]!.pinned).toBe(true);
   });
 });
 
@@ -275,12 +275,12 @@ describe("mergeDuplicateEntries", () => {
 
     const left = readMemoryEntries(tmp);
     expect(left.length).toBe(1);
-    expect(left[0].tags.sort()).toEqual(["a", "b", "c"]);
-    expect(left[0].pinned).toBe(true); /* 任一 pinned → pinned */
+    expect(left[0]!.tags.sort()).toEqual(["a", "b", "c"]);
+    expect(left[0]!.pinned).toBe(true); /* 任一 pinned → pinned */
     /* content 含所有原始行 */
-    expect(left[0].content).toContain("c1");
-    expect(left[0].content).toContain("c2");
-    expect(left[0].content).toContain("c3");
+    expect(left[0]!.content).toContain("c1");
+    expect(left[0]!.content).toContain("c2");
+    expect(left[0]!.content).toContain("c3");
   });
 
   test("单条 entry 不被合并", () => {

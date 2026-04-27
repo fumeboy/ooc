@@ -52,15 +52,18 @@ export function generateEmbedding(text: string): number[] {
   /* 构造 uni + bi-gram */
   const grams: string[] = [];
   for (let i = 0; i < tokens.length; i++) {
-    grams.push(tokens[i]);
-    if (i + 1 < tokens.length) grams.push(`${tokens[i]}|${tokens[i + 1]}`);
+    const token = tokens[i];
+    if (!token) continue;
+    grams.push(token);
+    const next = tokens[i + 1];
+    if (next) grams.push(`${token}|${next}`);
   }
 
   /* TF 累加 */
   const weight = 1 / Math.log(1 + grams.length);
   for (const g of grams) {
     const slot = djb2Hash(g) % EMBEDDING_DIM;
-    vec[slot] += weight;
+    vec[slot] = (vec[slot] ?? 0) + weight;
   }
 
   /* L2 归一化 */
@@ -68,7 +71,7 @@ export function generateEmbedding(text: string): number[] {
   for (const v of vec) sumSq += v * v;
   const norm = Math.sqrt(sumSq);
   if (norm === 0) return vec;
-  for (let i = 0; i < vec.length; i++) vec[i] = vec[i] / norm;
+  for (let i = 0; i < vec.length; i++) vec[i] = (vec[i] ?? 0) / norm;
   return vec;
 }
 
@@ -78,7 +81,7 @@ export function generateEmbedding(text: string): number[] {
 export function cosineSimilarity(a: number[], b: number[]): number {
   const n = Math.min(a.length, b.length);
   let dot = 0;
-  for (let i = 0; i < n; i++) dot += a[i] * b[i];
+  for (let i = 0; i < n; i++) dot += (a[i] ?? 0) * (b[i] ?? 0);
   return dot;
 }
 

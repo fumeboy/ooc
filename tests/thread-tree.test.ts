@@ -75,12 +75,12 @@ describe("createSubThread", () => {
 
     // 父节点 childrenIds 更新
     const root = tree.getNode(tree.rootId)!;
-    expect(root.childrenIds).toContain(childId);
+    expect(root.childrenIds).toContain(childId!);
 
     // 子线程的 thread.json 已创建
     const threadData = tree.readThreadData(childId!);
     expect(threadData).not.toBeNull();
-    expect(threadData!.id).toBe(childId);
+    expect(threadData!.id).toBe(childId!);
   });
 
   test("创建子线程时可指定 traits 和 description", async () => {
@@ -106,9 +106,9 @@ describe("createSubThread", () => {
 
     const root = tree.getNode(tree.rootId)!;
     expect(root.childrenIds).toHaveLength(3);
-    expect(root.childrenIds).toContain(id1);
-    expect(root.childrenIds).toContain(id2);
-    expect(root.childrenIds).toContain(id3);
+    expect(root.childrenIds).toContain(id1!);
+    expect(root.childrenIds).toContain(id2!);
+    expect(root.childrenIds).toContain(id3!);
   });
 
   test("超过最大深度时返回 null", async () => {
@@ -209,7 +209,7 @@ describe("awaitThreads", () => {
 
     const root = tree.getNode(tree.rootId)!;
     expect(root.status).toBe("waiting");
-    expect(root.awaitingChildren).toEqual([childId]);
+    expect(root.awaitingChildren).toEqual([childId!]);
   });
 
   test("await_all 多个子线程", async () => {
@@ -222,7 +222,7 @@ describe("awaitThreads", () => {
 
     const root = tree.getNode(tree.rootId)!;
     expect(root.status).toBe("waiting");
-    expect(root.awaitingChildren).toEqual([id1, id2, id3]);
+    expect(root.awaitingChildren).toEqual([id1!, id2!, id3!]);
   });
 
   test("子线程全部 done 后，checkAndWake 唤醒父线程", async () => {

@@ -14,10 +14,10 @@ import {
 import type { ThreadFrameHook } from "../src/thread/types.js";
 
 describe("collectCommandTraits", () => {
-  test("匹配 activatesOn.paths 中的指令", () => {
+  test("匹配 activatesOn.showContentWhen 中的指令", () => {
     const traits = [
-      { namespace: "kernel", name: "talkable", activatesOn: { paths: ["talk", "return"] } },
-      { namespace: "kernel", name: "computable", activatesOn: { paths: ["program"] } },
+      { namespace: "kernel", name: "talkable", activatesOn: { showContentWhen: ["talk", "return"] } },
+      { namespace: "kernel", name: "computable", activatesOn: { showContentWhen: ["program"] } },
       { namespace: "kernel", name: "base" }, // 无 activatesOn
     ] as any[];
 
@@ -28,15 +28,15 @@ describe("collectCommandTraits", () => {
 
   test("空 activeCommands 返回空数组", () => {
     const traits = [
-      { namespace: "kernel", name: "talkable", activatesOn: { paths: ["talk"] } },
+      { namespace: "kernel", name: "talkable", activatesOn: { showContentWhen: ["talk"] } },
     ] as any[];
     expect(collectCommandTraits(traits, new Set())).toEqual([]);
   });
 
   test("多指令匹配", () => {
     const traits = [
-      { namespace: "kernel", name: "talkable", activatesOn: { paths: ["talk", "return"] } },
-      { namespace: "kernel", name: "reflective", activatesOn: { paths: ["return"] } },
+      { namespace: "kernel", name: "talkable", activatesOn: { showContentWhen: ["talk", "return"] } },
+      { namespace: "kernel", name: "reflective", activatesOn: { showContentWhen: ["return"] } },
     ] as any[];
 
     const result = collectCommandTraits(traits, new Set(["return"]));
@@ -71,7 +71,7 @@ describe("collectCommandHooks", () => {
     expect(result1).toContain("一次性提醒");
     expect(result1).toContain("持久提醒");
     expect(hooks.length).toBe(1);
-    expect(hooks[0].content).toBe("持久提醒");
+    expect(hooks[0]!.content).toBe("持久提醒");
 
     /* 第二次触发：只有持久提醒 */
     const result2 = collectCommandHooks("return", hooks);
@@ -120,7 +120,7 @@ describe("collectCommandHooks", () => {
     expect(result).not.toContain("after hook");
     /* before/after hooks 不被移除 */
     expect(hooks.length).toBe(2);
-    expect(hooks[0].event).toBe("before");
-    expect(hooks[1].event).toBe("after");
+    expect(hooks[0]!.event).toBe("before");
+    expect(hooks[1]!.event).toBe("after");
   });
 });

@@ -7,9 +7,16 @@ import {
   parseUnifiedDiff,
   renderReviewMarkdown,
   buildMultiPerspectiveRecipes,
-  llm_methods,
+  llm_methods as rawLlmMethods,
   type ReviewFinding,
 } from "../traits/reviewable/review_api/index";
+
+type TestMethod = {
+  params: Array<{ name: string; required: boolean }>;
+  fn: (ctx: unknown, args: Record<string, unknown>) => Promise<any>;
+};
+
+const llm_methods = rawLlmMethods as Record<string, TestMethod>;
 
 describe("parseUnifiedDiff", () => {
   test("空字符串 → 空数组", () => {
@@ -33,11 +40,11 @@ describe("parseUnifiedDiff", () => {
 
     const files = parseUnifiedDiff(raw);
     expect(files.length).toBe(1);
-    const f = files[0];
+    const f = files[0]!;
     expect(f.path).toBe("src/app.ts");
     expect(f.mode).toBe("modified");
     expect(f.hunks.length).toBe(1);
-    const h = f.hunks[0];
+    const h = f.hunks[0]!;
     expect(h.oldStart).toBe(10);
     expect(h.newStart).toBe(10);
     expect(h.contextLines).toEqual(["const x = 1;"]);
@@ -56,8 +63,8 @@ describe("parseUnifiedDiff", () => {
       "+line2",
     ].join("\n");
     const files = parseUnifiedDiff(raw);
-    expect(files[0].mode).toBe("added");
-    expect(files[0].path).toBe("new.ts");
+    expect(files[0]!.mode).toBe("added");
+    expect(files[0]!.path).toBe("new.ts");
   });
 
   test("deleted file 标记识别", () => {
@@ -71,8 +78,8 @@ describe("parseUnifiedDiff", () => {
       "-line2",
     ].join("\n");
     const files = parseUnifiedDiff(raw);
-    expect(files[0].mode).toBe("deleted");
-    expect(files[0].path).toBe("old.ts");
+    expect(files[0]!.mode).toBe("deleted");
+    expect(files[0]!.path).toBe("old.ts");
   });
 
   test("renamed file 保留 oldPath", () => {
@@ -83,9 +90,9 @@ describe("parseUnifiedDiff", () => {
       "rename to b.ts",
     ].join("\n");
     const files = parseUnifiedDiff(raw);
-    expect(files[0].mode).toBe("renamed");
-    expect(files[0].oldPath).toBe("a.ts");
-    expect(files[0].path).toBe("b.ts");
+    expect(files[0]!.mode).toBe("renamed");
+    expect(files[0]!.oldPath).toBe("a.ts");
+    expect(files[0]!.path).toBe("b.ts");
   });
 
   test("多文件多 hunk", () => {
@@ -106,10 +113,10 @@ describe("parseUnifiedDiff", () => {
     ].join("\n");
     const files = parseUnifiedDiff(raw);
     expect(files.length).toBe(2);
-    expect(files[0].path).toBe("a.ts");
-    expect(files[1].path).toBe("b.ts");
-    expect(files[1].hunks[0].removedLines).toEqual(["x"]);
-    expect(files[1].hunks[0].addedLines).toEqual(["y"]);
+    expect(files[0]!.path).toBe("a.ts");
+    expect(files[1]!.path).toBe("b.ts");
+    expect(files[1]!.hunks[0]!.removedLines).toEqual(["x"]);
+    expect(files[1]!.hunks[0]!.addedLines).toEqual(["y"]);
   });
 });
 
@@ -160,8 +167,8 @@ describe("buildMultiPerspectiveRecipes", () => {
 
   test("未知 persona 回退到通用模板", () => {
     const r = buildMultiPerspectiveRecipes(["accessibility"]);
-    expect(r[0].persona).toBe("accessibility");
-    expect(r[0].biasPrompt).toContain("accessibility");
+    expect(r[0]!.persona).toBe("accessibility");
+    expect(r[0]!.biasPrompt).toContain("accessibility");
   });
 });
 
@@ -170,12 +177,12 @@ describe("llm_methods 契约", () => {
     const names = ["read_diff", "post_review", "multi_perspective_review", "suggest_fixes"];
     for (const n of names) {
       expect(llm_methods[n]).toBeDefined();
-      expect(typeof llm_methods[n].fn).toBe("function");
+      expect(typeof llm_methods[n]!.fn).toBe("function");
     }
   });
 
   test("post_review 的 findings 参数是 required", () => {
-    const p = llm_methods.post_review.params.find(p => p.name === "findings");
+    const p = llm_methods.post_review!.params.find(p => p.name === "findings");
     expect(p?.required).toBe(true);
   });
 
@@ -185,18 +192,18 @@ describe("llm_methods 契约", () => {
       { path: "b.ts", severity: "critical", message: "cr", suggestion: "fix cr" },
       { path: "c.ts", severity: "high", message: "hi" },
     ];
-    const r = await llm_methods.suggest_fixes.fn({} as any, { findings });
+    const r = await llm_methods.suggest_fixes!.fn({} as any, { findings });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const data = r.data as { steps: Array<{ path: string; priority: number; change: string }> };
-    expect(data.steps[0].path).toBe("b.ts"); /* critical first */
-    expect(data.steps[0].change).toBe("fix cr");
-    expect(data.steps[1].path).toBe("c.ts");
-    expect(data.steps[2].path).toBe("a.ts");
+    expect(data.steps[0]!.path).toBe("b.ts"); /* critical first */
+    expect(data.steps[0]!.change).toBe("fix cr");
+    expect(data.steps[1]!.path).toBe("c.ts");
+    expect(data.steps[2]!.path).toBe("a.ts");
   });
 
   test("multi_perspective_review 默认 4 视角", async () => {
-    const r = await llm_methods.multi_perspective_review.fn({} as any, {});
+    const r = await llm_methods.multi_perspective_review!.fn({} as any, {});
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const data = r.data as { recipes: Array<{ persona: string }>; mergeHint: string };
@@ -205,7 +212,7 @@ describe("llm_methods 契约", () => {
   });
 
   test("post_review 无 prNumber 无 filePath → text 模式返回 markdown", async () => {
-    const r = await llm_methods.post_review.fn({} as any, {
+    const r = await llm_methods.post_review!.fn({} as any, {
       findings: [{ path: "x.ts", severity: "info" as const, message: "m" }],
       summary: "sum",
     });
@@ -218,14 +225,14 @@ describe("llm_methods 契约", () => {
   });
 
   test("post_review 错误输入（findings 非数组）应返回 error", async () => {
-    const r = await llm_methods.post_review.fn({} as any, { findings: "not array" as any });
+    const r = await llm_methods.post_review!.fn({} as any, { findings: "not array" as any });
     expect(r.ok).toBe(false);
   });
 });
 
 describe("read_diff 异常路径", () => {
   test("不存在的 rootDir → error（不抛异常）", async () => {
-    const r = await llm_methods.read_diff.fn({ rootDir: "/definitely/not/here/xyz" } as any, {
+    const r = await llm_methods.read_diff!.fn({ rootDir: "/definitely/not/here/xyz" } as any, {
       ref1: "HEAD",
       ref2: "HEAD",
     });
