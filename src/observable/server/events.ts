@@ -6,11 +6,11 @@
  * SSE handler 监听并推送给所有连接的客户端。
  *
  * @ref docs/哲学文档/gene.md#G11 — references — SSE 是前端实时感知对象状态变化的通道
- * @ref src/types/flow.ts — references — Action, FlowMessage, FlowStatus 事件数据类型
+ * @ref src/shared/types/flow.ts — references — Action, FlowMessage, FlowStatus 事件数据类型
  */
 
 import { EventEmitter } from "node:events";
-import type { Action, FlowMessage, FlowStatus } from "../../types/index.js";
+import type { Action, FlowMessage, FlowStatus } from "../../shared/types/index.js";
 
 /** SSE 事件类型 */
 export type SSEEvent =

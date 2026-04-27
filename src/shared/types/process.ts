@@ -4,7 +4,7 @@
  * ThreadTree 是真实执行模型；这些类型仅用于旧 FlowData.process 字段、
  * 前端 ProcessView 以及 /api/flows 兼容响应。
  *
- * @ref src/types/flow.ts — references — Action 类型定义
+ * @ref src/shared/types/flow.ts — references — Action 类型定义
  */
 
 import type { Action } from "./flow.js";

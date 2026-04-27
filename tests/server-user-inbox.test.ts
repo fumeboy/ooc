@@ -10,10 +10,10 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-import { handleRoute } from "../src/server/server.js";
+import { handleRoute } from "../src/observable/server/server.js";
 import { appendUserInbox } from "../src/storable/inbox/user-inbox.js";
 import { World } from "../src/world/world.js";
-import type { LLMConfig } from "../src/thinkable/config.js";
+import type { LLMConfig } from "../src/thinkable/llm/config.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_server_user_inbox_test");
 

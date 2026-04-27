@@ -16,9 +16,9 @@
  * @ref docs/工程管理/迭代/all/20260422_feature_code_review_trait.md — implements
  */
 
-import type { TraitMethod } from "../../../src/types/index";
-import { toolOk, toolErr } from "../../../src/types/tool-result";
-import type { ToolResult } from "../../../src/types/tool-result";
+import type { TraitMethod } from "../../../src/shared/types/index";
+import { toolOk, toolErr } from "../../../src/shared/types/tool-result";
+import type { ToolResult } from "../../../src/shared/types/tool-result";
 
 // ─── 内部辅助 ─────────────────────────────────────────────
 

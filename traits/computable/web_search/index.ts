@@ -6,7 +6,7 @@
  * @ref docs/哲学文档/gene.md#G3 — implements — Trait 方法扩展对象能力
  */
 
-import type { TraitMethod } from "../../../src/types/index";
+import type { TraitMethod } from "../../../src/shared/types/index";
 
 /** 将 HTML 转换为可读的纯文本 */
 function htmlToText(html: string): string {

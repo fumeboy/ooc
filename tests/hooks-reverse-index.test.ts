@@ -9,7 +9,7 @@
 
 import { describe, test, expect } from "bun:test";
 import { collectCommandTraits } from "../src/extendable/activation/hooks.js";
-import type { TraitDefinition } from "../src/types/index.js";
+import type { TraitDefinition } from "../src/shared/types/index.js";
 
 function traitOnly(opts: {
   name: string;

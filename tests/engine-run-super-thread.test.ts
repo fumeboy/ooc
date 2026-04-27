@@ -23,8 +23,8 @@ import { tmpdir } from "node:os";
 
 import { type EngineConfig } from "../src/thinkable/engine/engine.js";
 import { runSuperThread } from "../src/collaborable/super/super-thread.js";
-import { MockLLMClient, type ToolCall, type MockLLMResponseFnResult } from "../src/thinkable/client.js";
-import type { StoneData, TraitDefinition } from "../src/types/index.js";
+import { MockLLMClient, type ToolCall, type MockLLMResponseFnResult } from "../src/thinkable/llm/client.js";
+import type { StoneData, TraitDefinition } from "../src/shared/types/index.js";
 import { handleOnTalkToSuper } from "../src/collaborable/super/super.js";
 import { llm_methods as superLLMMethods } from "../../kernel/traits/reflective/super/index.js";
 import { eventBus } from "../src/observable/server/events.js";

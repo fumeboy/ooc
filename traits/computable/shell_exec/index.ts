@@ -4,7 +4,7 @@
  * 提供 Shell 命令执行能力，支持自定义工作目录、超时和环境变量。
  */
 
-import type { TraitMethod } from "../../../src/types/index";
+import type { TraitMethod } from "../../../src/shared/types/index";
 
 /** exec 方法的可选参数 */
 export interface ExecOptions {

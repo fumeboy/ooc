@@ -16,8 +16,8 @@ import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { runWithThreadTree, type EngineConfig } from "../src/thinkable/engine/engine.js";
-import { MockLLMClient, type ToolCall } from "../src/thinkable/client.js";
-import type { StoneData } from "../src/types/index.js";
+import { MockLLMClient, type ToolCall } from "../src/thinkable/llm/client.js";
+import type { StoneData } from "../src/shared/types/index.js";
 import { eventBus } from "../src/observable/server/events.js";
 import { OPEN_TOOL, SUBMIT_TOOL } from "../src/executable/tools/index.js";
 

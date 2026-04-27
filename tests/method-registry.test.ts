@@ -9,7 +9,7 @@
 
 import { describe, test, expect } from "bun:test";
 import { MethodRegistry } from "../src/extendable/trait/registry.js";
-import type { TraitMethod } from "../src/types/index.js";
+import type { TraitMethod } from "../src/shared/types/index.js";
 
 /** 构造一个最小化的 TraitMethod */
 function mkMethod(fn: (ctx: any, args: any) => Promise<unknown>): TraitMethod {

@@ -17,8 +17,8 @@ import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { runWithThreadTree, type EngineConfig } from "../src/thinkable/engine/engine.js";
-import { MockLLMClient, type ToolCall, type MockLLMResponseFnResult } from "../src/thinkable/client.js";
-import type { StoneData, DirectoryEntry, TraitDefinition, TraitMethod } from "../src/types/index.js";
+import { MockLLMClient, type ToolCall, type MockLLMResponseFnResult } from "../src/thinkable/llm/client.js";
+import type { StoneData, DirectoryEntry, TraitDefinition, TraitMethod } from "../src/shared/types/index.js";
 import { eventBus } from "../src/observable/server/events.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_program_trait_method_args_test");

@@ -1,7 +1,7 @@
 /**
  * API 客户端 —— 与后端 HTTP API 通信
  *
- * @ref src/server/server.ts — references — 后端 HTTP API 端点
+ * @ref src/observable/server/server.ts — references — 后端 HTTP API 端点
  * @ref .ooc/web/src/api/types.ts — references — 请求/响应类型定义
  */
 import type {

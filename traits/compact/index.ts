@@ -16,9 +16,9 @@
  * @ref docs/工程管理/迭代/all/20260422_feature_context_compact.md — references — 本迭代设计
  */
 
-import type { TraitMethod } from "../../src/types/index";
-import { toolOk, toolErr } from "../../src/types/tool-result";
-import type { ToolResult } from "../../src/types/tool-result";
+import type { TraitMethod } from "../../src/shared/types/index";
+import { toolOk, toolErr } from "../../src/shared/types/tool-result";
+import type { ToolResult } from "../../src/shared/types/tool-result";
 import type { ThreadsTree } from "../../src/thinkable/thread-tree/tree";
 import type { ThreadAction, ThreadDataFile } from "../../src/thinkable/thread-tree/types";
 import { estimateActionsTokens, previewCompactedTokens } from "../../src/thinkable/context/compact";

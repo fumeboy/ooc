@@ -7,7 +7,7 @@
 import { describe, test, expect } from "bun:test";
 import { buildPathReverseIndex, lookupKnowledgeByPaths } from "../src/extendable/knowledge/reverse-index.js";
 import { computeKnowledgeRefs } from "../src/extendable/knowledge/activator.js";
-import type { TraitDefinition } from "../src/types/index.js";
+import type { TraitDefinition } from "../src/shared/types/index.js";
 
 function trait(name: string, contentPaths: string[], descriptionPaths: string[] = []): TraitDefinition {
   return {

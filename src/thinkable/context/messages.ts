@@ -1,6 +1,6 @@
 import { serializeXml, type XmlNode } from "../../executable/protocol/xml.js";
 
-import type { Message } from "../client.js";
+import type { Message } from "../llm/client.js";
 import type { buildThreadContext } from "./builder.js";
 import type { ThreadFrameHook } from "../../thinkable/thread-tree/types.js";
 

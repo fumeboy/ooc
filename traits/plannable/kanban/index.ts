@@ -6,7 +6,7 @@
  */
 
 import type { MethodContext } from "../../../src/trait/registry";
-import type { TraitMethod } from "../../../src/types/index";
+import type { TraitMethod } from "../../../src/shared/types/index";
 import * as m from "../../../src/collaborable/kanban/methods";
 
 function sessionDir(ctx: MethodContext): string {

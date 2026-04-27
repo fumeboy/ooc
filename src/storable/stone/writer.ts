@@ -6,14 +6,14 @@
  *
  * @ref docs/哲学文档/gene.md#G7 — implements — 将对象写入文件系统（writeStone, writeFlow）
  * @ref src/storable/frontmatter.ts — references — serializeReadme frontmatter 序列化
- * @ref src/types/object.ts — references — StoneData 类型
- * @ref src/types/flow.ts — references — FlowData 类型
+ * @ref src/shared/types/object.ts — references — StoneData 类型
+ * @ref src/shared/types/flow.ts — references — FlowData 类型
  */
 
 import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { serializeReadme } from "../frontmatter.js";
-import type { StoneData, FlowData } from "../../types/index.js";
+import type { StoneData, FlowData } from "../../shared/types/index.js";
 
 /**
  * 确保目录存在

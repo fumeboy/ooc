@@ -15,7 +15,7 @@
  *
  * @ref docs/哲学文档/gene.md#G3 — implements — Trait 从文件系统加载（TRAIT.md/SKILL.md + index.ts）
  * @ref docs/哲学文档/gene.md#G7 — references — Trait 目录即 Trait 存在
- * @ref src/types/trait.ts — references — TraitDefinition 类型
+ * @ref src/shared/types/trait.ts — references — TraitDefinition 类型
  */
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
@@ -28,7 +28,7 @@ import type {
   TraitType,
   TraitNamespace,
   TraitKind,
-} from "../../types/index.js";
+} from "../../shared/types/index.js";
 import { traitId } from "../knowledge/activator.js";
 
 /** 合法 namespace 集合 */

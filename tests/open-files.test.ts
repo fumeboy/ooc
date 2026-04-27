@@ -13,7 +13,7 @@
 
 import { describe, test, expect } from "bun:test";
 import { getOpenFiles } from "../src/extendable/activation/open-files.js";
-import type { TraitDefinition, StoneData } from "../src/types/index.js";
+import type { TraitDefinition, StoneData } from "../src/shared/types/index.js";
 import type { ThreadsTreeFile, ThreadDataFile } from "../src/thinkable/thread-tree/types.js";
 
 /** 构造一个最小化 TraitDefinition（避免每个测试重复 boilerplate） */

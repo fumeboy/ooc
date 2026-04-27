@@ -8,7 +8,7 @@
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md#7
  */
 
-import type { TraitDefinition } from "../../types/index.js";
+import type { TraitDefinition } from "../../shared/types/index.js";
 import type { ThreadFrameHook } from "../../thinkable/thread-tree/types.js";
 /**
  * 获取 trait 的完整标识（本地版本，避免循环依赖）

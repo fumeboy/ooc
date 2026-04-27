@@ -12,19 +12,19 @@
 import { join } from "node:path";
 import { existsSync, readFileSync, readdirSync, writeFileSync, statSync, mkdirSync } from "node:fs";
 import { consola } from "consola";
-import { eventBus, type SSEEvent } from "../observable/server/events.js";
-import { readFlow, listFlowSessions, readUserInbox, setUserReadObject } from "../storable/index.js";
+import { eventBus, type SSEEvent } from "./events.js";
+import { readFlow, listFlowSessions, readUserInbox, setUserReadObject } from "../../storable/index.js";
 import {
   readEditPlan,
   previewEditPlan,
   applyEditPlan,
   cancelEditPlan,
-} from "../storable/edit-plans/edit-plans.js";
-import { collectAllActions, createProcess } from "../storable/thread/process-compat.js";
-import { loadTrait } from "../extendable/trait/loader.js";
-import { threadsToProcess } from "../storable/thread/thread-adapter.js";
-import type { World } from "../world/index.js";
-import type { FlowStatus, FlowMessage, Process, ProcessNode, Action, FlowData } from "../types/index.js";
+} from "../../storable/edit-plans/edit-plans.js";
+import { collectAllActions, createProcess } from "../../storable/thread/process-compat.js";
+import { loadTrait } from "../../extendable/trait/loader.js";
+import { threadsToProcess } from "../../storable/thread/thread-adapter.js";
+import type { World } from "../../world/index.js";
+import type { FlowStatus, FlowMessage, Process, ProcessNode, Action, FlowData } from "../../shared/types/index.js";
 
 /**
  * 动态摘要最大字符长度（超过截断追加省略号）
@@ -381,7 +381,7 @@ export async function handleRoute(
     if (!stone) return errorResponse(`对象 "${objectName}" 不存在`, 404);
 
     /* 加载该对象的全部 self traits + views（kernel/library 不参与 HTTP call_method） */
-    const { loadObjectViews, loadTraitsFromDir } = await import("../extendable/trait/loader.js");
+    const { loadObjectViews, loadTraitsFromDir } = await import("../../extendable/trait/loader.js");
     const stoneViews = await loadObjectViews(stone.dir);
     const flowObjectDir = join(world.rootDir, "flows", sid, "objects", objectName);
     const flowViews = existsSync(flowObjectDir) ? await loadObjectViews(flowObjectDir) : [];
@@ -413,7 +413,7 @@ export async function handleRoute(
     }
 
     /* 构造 MethodContext，含 notifyThread（写入根线程 inbox + 唤醒 done 线程 + 非阻塞 resume） */
-    const { ThreadsTree } = await import("../thinkable/thread-tree/tree.js");
+    const { ThreadsTree } = await import("../../thinkable/thread-tree/tree.js");
     const objFlowDir = join(world.rootDir, "flows", sid, "objects", objectName);
     const tree = existsSync(objFlowDir) ? ThreadsTree.load(objFlowDir) : null;
 
@@ -905,7 +905,7 @@ export async function handleRoute(
     const objectName = body.objectName ?? "supervisor";
 
     /* 找到 thread.json 并更新 pins */
-    const { readThreadsTree, getAncestorPath, readThreadData, writeThreadData, getThreadDir } = await import("../storable/thread/persistence.js");
+    const { readThreadsTree, getAncestorPath, readThreadData, writeThreadData, getThreadDir } = await import("../../storable/thread/persistence.js");
     const objectFlowDir = join(world.flowsDir, sessionId, "objects", objectName);
     const tree = readThreadsTree(objectFlowDir);
     if (!tree || !tree.nodes[threadId]) return errorResponse(`Thread "${threadId}" 不存在`, 404);
@@ -989,7 +989,7 @@ export async function handleRoute(
     const stone = world.getObject(name);
     if (!stone) return errorResponse(`对象 "${name}" 不存在`, 404);
 
-    const { readMemoryEntries } = await import("../storable/memory/entries.js");
+    const { readMemoryEntries } = await import("../../storable/memory/entries.js");
     const entries = readMemoryEntries(stone.dir);
     const now = Date.now();
     let pinned = 0;
@@ -1096,7 +1096,7 @@ export async function handleRoute(
     if (!body.title) return errorResponse("title is required");
 
     const sessionDir = join(world.flowsDir, sessionId!);
-    const { createIssue } = await import("../collaborable/kanban/methods.js");
+    const { createIssue } = await import("../../collaborable/kanban/methods.js");
     const issue = await createIssue(sessionDir, body.title, body.description, body.participants);
     return json({ success: true, data: issue });
   }
@@ -1109,7 +1109,7 @@ export async function handleRoute(
     if (!body.title) return errorResponse("title is required");
 
     const sessionDir = join(world.flowsDir, sessionId!);
-    const { createTask } = await import("../collaborable/kanban/methods.js");
+    const { createTask } = await import("../../collaborable/kanban/methods.js");
     const task = await createTask(sessionDir, body.title, body.description, body.issueRefs);
     return json({ success: true, data: task });
   }
@@ -1122,7 +1122,7 @@ export async function handleRoute(
     if (!body.content) return errorResponse("content is required");
 
     const sessionDir = join(world.flowsDir, sessionId!);
-    const { commentOnIssue } = await import("../collaborable/kanban/discussion.js");
+    const { commentOnIssue } = await import("../../collaborable/kanban/discussion.js");
     const result = await commentOnIssue(sessionDir, issueId!, "user", body.content, body.mentions);
     return json({ success: true, data: result.comment });
   }
@@ -1132,7 +1132,7 @@ export async function handleRoute(
   if (method === "POST" && issueAckMatch) {
     const [, sessionId, issueId] = issueAckMatch;
     const sessionDir = join(world.flowsDir, sessionId!);
-    const { setIssueNewInfo } = await import("../collaborable/kanban/methods.js");
+    const { setIssueNewInfo } = await import("../../collaborable/kanban/methods.js");
     await setIssueNewInfo(sessionDir, issueId!, false);
     return json({ success: true });
   }
@@ -1142,7 +1142,7 @@ export async function handleRoute(
   if (method === "POST" && taskAckMatch) {
     const [, sessionId, taskItemId] = taskAckMatch;
     const sessionDir = join(world.flowsDir, sessionId!);
-    const { setTaskNewInfo } = await import("../collaborable/kanban/methods.js");
+    const { setTaskNewInfo } = await import("../../collaborable/kanban/methods.js");
     await setTaskNewInfo(sessionDir, taskItemId!, false);
     return json({ success: true });
   }
@@ -1167,10 +1167,10 @@ export async function handleRoute(
     }
     const sessionDir = join(world.flowsDir, sessionId!);
     if (!existsSync(sessionDir)) return errorResponse(`Session "${sessionId}" 不存在`, 404);
-    const { updateIssueStatus } = await import("../collaborable/kanban/methods.js");
-    const { readIssueDetail } = await import("../collaborable/kanban/store.js");
+    const { updateIssueStatus } = await import("../../collaborable/kanban/methods.js");
+    const { readIssueDetail } = await import("../../collaborable/kanban/store.js");
     try {
-      await updateIssueStatus(sessionDir, issueId!, status as import("../collaborable/kanban/types.js").IssueStatus);
+      await updateIssueStatus(sessionDir, issueId!, status as import("../../collaborable/kanban/types.js").IssueStatus);
     } catch (e) {
       return errorResponse((e as Error).message, 404);
     }
@@ -1195,10 +1195,10 @@ export async function handleRoute(
     }
     const sessionDir = join(world.flowsDir, sessionId!);
     if (!existsSync(sessionDir)) return errorResponse(`Session "${sessionId}" 不存在`, 404);
-    const { updateTaskStatus } = await import("../collaborable/kanban/methods.js");
-    const { readTaskDetail } = await import("../collaborable/kanban/store.js");
+    const { updateTaskStatus } = await import("../../collaborable/kanban/methods.js");
+    const { readTaskDetail } = await import("../../collaborable/kanban/store.js");
     try {
-      await updateTaskStatus(sessionDir, taskId!, status as import("../collaborable/kanban/types.js").TaskStatus);
+      await updateTaskStatus(sessionDir, taskId!, status as import("../../collaborable/kanban/types.js").TaskStatus);
     } catch (e) {
       return errorResponse((e as Error).message, 404);
     }
@@ -1279,8 +1279,8 @@ export async function handleRoute(
     const url = new URL(req.url);
     const focusQuery = url.searchParams.get("focus") ?? undefined;
 
-    const { readThreadsTree } = await import("../storable/thread/persistence.js");
-    const { classifyContextVisibility, pickDefaultFocus } = await import("../observable/visibility/visibility.js");
+    const { readThreadsTree } = await import("../../storable/thread/persistence.js");
+    const { classifyContextVisibility, pickDefaultFocus } = await import("../visibility/visibility.js");
 
     const objectFlowDir = join(world.flowsDir, sessionId, "objects", objectName);
     const tree = readThreadsTree(objectFlowDir);

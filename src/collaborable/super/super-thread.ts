@@ -3,7 +3,7 @@ import { consola } from "consola";
 import { ThreadsTree } from "../../thinkable/thread-tree/tree.js";
 import { resumeWithThreadTree, type EngineConfig } from "../../thinkable/engine/engine.js";
 
-import type { ContextWindow } from "../../types/index.js";
+import type { ContextWindow } from "../../shared/types/index.js";
 import type { TalkResult } from "../../thinkable/engine/types.js";
 
 /**

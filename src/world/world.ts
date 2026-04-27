@@ -5,13 +5,13 @@
  * World 不是「生态中的一个对象」，而是「生态本身」。
  * 但它仍然遵循 G1——它有 readme.md、data.json，它是一个 OOC Object。
  *
- * 线程树架构（kernel/src/thread/*）是唯一执行路径，旧 Flow 架构已于 2026-04-21 退役。
+ * 线程树架构（kernel/src/thinkable/engine + kernel/src/thinkable/thread-tree）是唯一执行路径，旧 Flow 架构已于 2026-04-21 退役。
  *
  * @ref docs/哲学文档/gene.md#G1 — implements — World 本身也是对象
  * @ref docs/哲学文档/gene.md#G7 — implements — .ooc/ 目录即 World 的物理存在
  * @ref docs/哲学文档/gene.md#G8 — implements — 消息投递（talk/talkInSpace）、对象创建
  * @ref src/world/registry.ts — references — Registry 对象注册表
- * @ref src/thread/engine.ts — references — 线程树执行引擎
+ * @ref src/thinkable/engine/engine.ts — references — 线程树执行引擎
  */
 
 import { join } from "node:path";
@@ -21,10 +21,10 @@ import { Registry } from "./registry.js";
 import { CronManager } from "./cron.js";
 import { registerDefaultHooks } from "./hooks.js";
 import { startTestFailureBridge } from "./test-failure-bridge.js";
-import { Stone } from "../stone/index.js";
+import { Stone } from "../object/index.js";
 import { loadAllTraits, loadTraitsByRef } from "../extendable/trait/index.js";
-import { OpenAICompatibleClient, type LLMClient } from "../thinkable/client.js";
-import { DefaultConfig, type LLMConfig } from "../thinkable/config.js";
+import { OpenAICompatibleClient, type LLMClient } from "../thinkable/llm/client.js";
+import { DefaultConfig, type LLMConfig } from "../thinkable/llm/config.js";
 import { emitSSE } from "../observable/server/events.js";
 import { runWithThreadTree, resumeWithThreadTree, stepOnceWithThreadTree, writeThreadTreeFlowData, type EngineConfig, type TalkResult, type TalkReturn } from "../thinkable/engine/engine.js";
 import { runSuperThread } from "../collaborable/super/super-thread.js";
@@ -115,7 +115,7 @@ export class World {
   /** 定时任务管理器 */
   private _cron: CronManager;
   /** trait 树形索引（loadAllTraits 后填充） */
-  private _traitTree: import("../types/index.js").TraitTree[] = [];
+  private _traitTree: import("../shared/types/index.js").TraitTree[] = [];
   /** debug 模式开关 */
   private _debugEnabled = false;
   /** 全局暂停开关 */

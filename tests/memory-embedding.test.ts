@@ -8,7 +8,7 @@
  * - 落盘 / 读取 / 删除
  * - queryMemoryEntries vector 模式：相关内容排在前
  *
- * @ref kernel/src/persistence/memory-embedding.ts
+ * @ref kernel/src/storable/memory/embedding.ts
  * @ref docs/工程管理/迭代/all/20260422_feature_memory_curation_phase2.md — Phase 2
  */
 

@@ -15,9 +15,9 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { World } from "../src/world/world.js";
-import { handleRoute } from "../src/server/server.js";
+import { handleRoute } from "../src/observable/server/server.js";
 import { ThreadsTree } from "../src/thinkable/thread-tree/tree.js";
-import type { LLMConfig } from "../src/thinkable/config.js";
+import type { LLMConfig } from "../src/thinkable/llm/config.js";
 import type { ThreadAction } from "../src/thinkable/thread-tree/types.js";
 
 /** 测试用 LLMConfig：不依赖 OOC_API_KEY（本组测试不发起 LLM 调用）。 */

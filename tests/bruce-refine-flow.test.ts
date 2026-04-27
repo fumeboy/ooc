@@ -6,7 +6,7 @@
  * 2. refine 工具可被引擎识别（OOC_TOOLS 含 REFINE_TOOL）
  * 3. submit 已无 partial 字段（schema 层确认）
  *
- * 完整 LLM 驱动的 Bruce 验证由人类通过运行 `bun kernel/src/cli.ts start 8080`
+ * 完整 LLM 驱动的 Bruce 验证由人类通过运行 `bun kernel/src/app/cli.ts start 8080`
  * 在真实环境中执行（参见任务 18 step 2 的 manual smoke test）。
  *
  * @ref docs/superpowers/specs/2026-04-26-refine-tool-and-knowledge-activator.md

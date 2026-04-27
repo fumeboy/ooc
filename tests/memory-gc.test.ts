@@ -10,7 +10,7 @@
  * 6. OOC_MEMORY_GC=1 env 等价于 forceRealDelete
  * 7. 空目录 → scanned=0，不写 log
  *
- * @ref kernel/src/persistence/memory-gc.ts
+ * @ref kernel/src/storable/memory/gc.ts
  * @ref docs/工程管理/迭代/all/20260422_feature_memory_curation_phase2.md — Phase 3
  */
 

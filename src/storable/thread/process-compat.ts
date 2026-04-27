@@ -5,7 +5,7 @@
  * FlowData.process shape usable for HTTP responses and persisted historical data.
  */
 
-import type { Action, Process, ProcessNode } from "../../types/index.js";
+import type { Action, Process, ProcessNode } from "../../shared/types/index.js";
 
 export function createProcess(title: string, description?: string): Process {
   return {

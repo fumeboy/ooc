@@ -10,9 +10,9 @@
  * 底层依赖 `src/observable/test-runner/runner.ts`。
  */
 
-import { toolOk, toolErr } from "../../../src/types/tool-result";
-import type { ToolResult } from "../../../src/types/tool-result";
-import type { TraitMethod } from "../../../src/types/index";
+import { toolOk, toolErr } from "../../../src/shared/types/tool-result";
+import type { ToolResult } from "../../../src/shared/types/tool-result";
+import type { TraitMethod } from "../../../src/shared/types/index";
 import {
   runTests,
   startWatch,

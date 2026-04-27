@@ -16,7 +16,7 @@
  * 为什么不直接用锁库：Kernel 要求最小依赖，Promise 链在 30 行内可自给自足。
  *
  * @ref docs/工程管理/迭代/all/20260421_refactor_write_queue统一.md
- * @ref kernel/src/thread/queue.ts — references — WriteQueue 使用 SerialQueue 作为内部实现
+ * @ref kernel/src/storable/thread/queue.ts — references — WriteQueue 使用 SerialQueue 作为内部实现
  * @ref kernel/src/storable/inbox/user-inbox.ts — references — user inbox 写入也走 SerialQueue
  * @ref kernel/src/collaborable/super/super.ts — references — SuperFlow 目录锁基于 SerialQueue
  */

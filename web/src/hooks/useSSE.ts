@@ -2,7 +2,7 @@
  * SSE 连接 hook —— 监听后端实时事件
  *
  * @ref docs/哲学文档/gene.md#G11 — references — SSE 驱动前端实时更新
- * @ref src/server/events.ts — references — 后端 SSE 事件类型
+ * @ref src/observable/server/events.ts — references — 后端 SSE 事件类型
  */
 import { useEffect, useRef } from "react";
 import { useSetAtom, useAtomValue } from "jotai";

@@ -11,8 +11,8 @@
  * @ref docs/工程管理/迭代/all/20260422_feature_memory_curation.md — implements — Phase 3
  */
 
-import type { TraitMethod } from "../../../src/types/index";
-import { toolOk, toolErr } from "../../../src/types/tool-result";
+import type { TraitMethod } from "../../../src/shared/types/index";
+import { toolOk, toolErr } from "../../../src/shared/types/tool-result";
 import {
   queryMemoryEntries,
   readMemoryEntries,

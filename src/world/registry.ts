@@ -5,14 +5,14 @@
  *
  * @ref docs/哲学文档/gene.md#G1 — implements — 对象注册与通讯录（DirectoryEntry）
  * @ref docs/哲学文档/gene.md#G7 — references — 从 stones/ 目录扫描加载
- * @ref src/stone/stone.ts — references — Stone 对象实例
+ * @ref src/object/stone.ts — references — Stone 对象实例
  * @ref src/storable/stone/reader.ts — references — listObjects 目录扫描
  */
 
 import { join } from "node:path";
-import { Stone } from "../stone/index.js";
+import { Stone } from "../object/index.js";
 import { listObjects } from "../storable/index.js";
-import type { DirectoryEntry } from "../types/index.js";
+import type { DirectoryEntry } from "../shared/types/index.js";
 
 /** 对象注册表 */
 export class Registry {

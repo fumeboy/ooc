@@ -18,9 +18,9 @@ import { join } from "node:path";
 
 import { runWithThreadTree, type EngineConfig } from "../src/thinkable/engine/engine.js";
 import { contextToMessages, type ActiveFormView } from "../src/thinkable/context/messages.js";
-import { MockLLMClient, type ToolCall, type MockLLMResponseFnResult } from "../src/thinkable/client.js";
+import { MockLLMClient, type ToolCall, type MockLLMResponseFnResult } from "../src/thinkable/llm/client.js";
 import { eventBus } from "../src/observable/server/events.js";
-import type { StoneData, DirectoryEntry, TraitDefinition } from "../src/types/index.js";
+import type { StoneData, DirectoryEntry, TraitDefinition } from "../src/shared/types/index.js";
 import type { ThreadContext } from "../src/thinkable/context/builder.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_thread_engine_xml_test");

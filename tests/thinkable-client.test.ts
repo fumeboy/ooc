@@ -5,14 +5,14 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { DefaultConfig } from "../src/thinkable/config.js";
+import { DefaultConfig } from "../src/thinkable/llm/config.js";
 import {
   detectProtocolMarkers,
   MockLLMClient,
   OpenAICompatibleClient,
   buildChatPayload,
   type LLMStreamEvent,
-} from "../src/thinkable/client.js";
+} from "../src/thinkable/llm/client.js";
 
 const ORIGINAL_ENV = { ...process.env };
 const ORIGINAL_FETCH = globalThis.fetch;

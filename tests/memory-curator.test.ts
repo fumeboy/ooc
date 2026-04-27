@@ -13,7 +13,7 @@
  * 9. 幂等 start / stop
  * 10. tickIntervalMs / timeThresholdMs / countThresholdEntries 可配置
  *
- * @ref kernel/src/persistence/memory-curator.ts
+ * @ref kernel/src/storable/memory/curator.ts
  * @ref docs/工程管理/迭代/all/20260422_feature_memory_curation_phase2.md
  */
 

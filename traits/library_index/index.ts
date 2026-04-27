@@ -139,7 +139,7 @@ export function searchLibrary(ctx: { rootDir: string }, keyword: string): string
 
 // ========== Phase 2 新协议：llm_methods 对象导出 ==========
 
-import type { TraitMethod } from "../../src/types/index";
+import type { TraitMethod } from "../../src/shared/types/index";
 
 export const llm_methods: Record<string, TraitMethod> = {
   listLibraryTraits: {

@@ -13,18 +13,18 @@
  * 避免引入完整 HTTP 层的测试复杂度。
  *
  * @ref Bruce 深度验证 - B1 修复
- * @ref src/server/server.ts — POST /api/talk 的 .catch 处理器
+ * @ref src/observable/server/server.ts — POST /api/talk 的 .catch 处理器
  */
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { handleRoute } from "../src/server/server.js";
+import { handleRoute } from "../src/observable/server/server.js";
 import { World } from "../src/world/world.js";
 import { createProcess } from "../src/storable/thread/process-compat.js";
-import type { FlowData } from "../src/types/flow.js";
-import type { LLMConfig } from "../src/thinkable/config.js";
+import type { FlowData } from "../src/shared/types/flow.js";
+import type { LLMConfig } from "../src/thinkable/llm/config.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_talk_failure_surfaces_test");
 

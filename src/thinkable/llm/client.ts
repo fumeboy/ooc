@@ -7,7 +7,7 @@
  * - MockLLMClient：用于测试
  *
  * @ref docs/哲学文档/gene.md#G4 — references — LLM 是 ThinkLoop 的思考引擎
- * @ref src/thinkable/config.ts — references — LLMConfig 配置
+ * @ref src/thinkable/llm/config.ts — references — LLMConfig 配置
  */
 
 import type { LLMConfig, ThinkingConfig } from "./config.js";

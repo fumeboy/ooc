@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { readStone, writeStone, readFlow, writeFlow, listObjects } from "../src/storable/index.js";
 import { createProcess } from "../src/storable/thread/process-compat.js";
-import type { StoneData, FlowData } from "../src/types/index.js";
+import type { StoneData, FlowData } from "../src/shared/types/index.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_persistence_test");
 

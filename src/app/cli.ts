@@ -2,20 +2,20 @@
  * CLI 入口
  *
  * 用法：
- *   bun src/cli.ts start [port]       — 启动服务器
- *   bun src/cli.ts talk <object> <msg> — 向对象发消息
- *   bun src/cli.ts create <name>       — 创建对象
- *   bun src/cli.ts list                — 列出所有对象
+ *   bun src/app/cli.ts start [port]       — 启动服务器
+ *   bun src/app/cli.ts talk <object> <msg> — 向对象发消息
+ *   bun src/app/cli.ts create <name>       — 创建对象
+ *   bun src/app/cli.ts list                — 列出所有对象
  *
  * @ref src/world/world.ts — references — World 根对象初始化
- * @ref src/server/server.ts — references — startServer HTTP 服务
+ * @ref src/observable/server/server.ts — references — startServer HTTP 服务
  */
 
 import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { consola } from "consola";
-import { World } from "./world/index.js";
-import { startServer } from "./server/server.js";
+import { World } from "../world/index.js";
+import { startServer } from "../observable/server/server.js";
 
 /** user repo 根目录（即 cwd） */
 const OOC_ROOT = process.cwd();
@@ -66,7 +66,7 @@ async function main(): Promise<void> {
       const message = args.slice(2).join(" ");
 
       if (!objectName || !message) {
-        consola.error("用法: bun src/cli.ts talk <object> <message>");
+        consola.error("用法: bun src/app/cli.ts talk <object> <message>");
         process.exit(1);
       }
 
@@ -99,7 +99,7 @@ async function main(): Promise<void> {
       const whoAmI = args.slice(2).join(" ") || "";
 
       if (!name) {
-        consola.error("用法: bun src/cli.ts create <name> [whoAmI]");
+        consola.error("用法: bun src/app/cli.ts create <name> [whoAmI]");
         process.exit(1);
       }
 
@@ -136,10 +136,10 @@ function printUsage(): void {
 OOC — Object-Oriented Context
 
 用法:
-  bun src/cli.ts start [port]        启动服务器（默认 8080）
-  bun src/cli.ts talk <object> <msg> 向对象发消息
-  bun src/cli.ts create <name>       创建对象
-  bun src/cli.ts list                列出所有对象
+  bun src/app/cli.ts start [port]        启动服务器（默认 8080）
+  bun src/app/cli.ts talk <object> <msg> 向对象发消息
+  bun src/app/cli.ts create <name>       创建对象
+  bun src/app/cli.ts list                列出所有对象
 `);
 }
 

@@ -126,7 +126,7 @@ cp kernel/.env .env
 #   OOC_MODEL=claude-opus-4-6
 
 # 启动服务
-bun kernel/src/cli.ts start 8080
+bun kernel/src/app/cli.ts start 8080
 ```
 
 ## 文档

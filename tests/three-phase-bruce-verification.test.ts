@@ -27,7 +27,7 @@ import { readPeerRelations, renderRelationsIndex } from "../src/collaborable/rel
 import { deriveCommandPaths } from "../src/executable/commands/index.js";
 import { detectSelfKind } from "../src/object/self-kind.js";
 
-import type { StoneData, TraitDefinition } from "../src/types/index.js";
+import type { StoneData, TraitDefinition } from "../src/shared/types/index.js";
 import type { ThreadDataFile } from "../src/thinkable/thread-tree/types.js";
 
 const TMP_ROOT = "/tmp/ooc-bruce-e14";

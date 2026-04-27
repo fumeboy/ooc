@@ -5,7 +5,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { Stone } from "../src/stone/index.js";
+import { Stone } from "../src/object/index.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_stone_test");
 

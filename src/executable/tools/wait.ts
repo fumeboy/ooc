@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "../../thinkable/client.js";
+import type { ToolDefinition } from "../../thinkable/llm/client.js";
 import { MARK_PARAM } from "./schema.js";
 
 /** wait tool — 切换线程到 waiting 状态 */

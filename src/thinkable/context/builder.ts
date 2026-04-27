@@ -15,7 +15,7 @@
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md#5
  */
 
-import type { StoneData, DirectoryEntry, ContextWindow, TraitDefinition } from "../../types/index.js";
+import type { StoneData, DirectoryEntry, ContextWindow, TraitDefinition } from "../../shared/types/index.js";
 import type { SkillDefinition } from "../../extendable/skill/types.js";
 import type {
   ThreadsTreeFile,

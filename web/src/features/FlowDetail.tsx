@@ -6,7 +6,7 @@
  *
  * @ref docs/哲学文档/gene.md#G2 — renders — Flow 状态机（running/waiting/finished/failed）
  * @ref docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达
- * @ref src/types/flow.ts — references — FlowData, FlowMessage 类型
+ * @ref src/shared/types/flow.ts — references — FlowData, FlowMessage 类型
  */
 import { useState, useEffect } from "react";
 import { useAtomValue } from "jotai";

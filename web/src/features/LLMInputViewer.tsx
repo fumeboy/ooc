@@ -251,7 +251,7 @@ function renderNodeLabel(node: ParsedNode): string {
 /**
  * source 枚举 → 中文解释（Phase 3 — llm_input_viewer Hover 溯源）
  *
- * 与 kernel/src/types/context.ts::ContextWindowSource 一一对应。
+ * 与 kernel/src/shared/types/context.ts::ContextWindowSource 一一对应。
  */
 const SOURCE_EXPLANATION: Record<string, string> = {
   always_on: "Trait 自身 when=\"always\" 声明的常驻激活（系统级强制）",

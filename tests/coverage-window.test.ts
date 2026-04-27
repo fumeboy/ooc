@@ -15,7 +15,7 @@ import {
   __emitFailuresForTest,
 } from "../src/observable/test-runner/runner";
 import type { ThreadsTreeFile, ThreadDataFile } from "../src/thinkable/thread-tree/types";
-import type { StoneData } from "../src/types/index";
+import type { StoneData } from "../src/shared/types/index";
 
 function makeMinimalTree(): ThreadsTreeFile {
   return {

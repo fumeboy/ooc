@@ -5,12 +5,12 @@
  * 转换为前端 ProcessView 已支持的 Process 结构。
  *
  * @ref kernel/src/thinkable/thread-tree/types.ts — references — ThreadsTreeFile, ThreadsTreeNodeMeta
- * @ref kernel/src/types/process.ts — references — Process, ProcessNode
+ * @ref kernel/src/shared/types/process.ts — references — Process, ProcessNode
  */
 
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import type { Process, ProcessNode, NodeStatus, Action } from "../../types/index.js";
+import type { Process, ProcessNode, NodeStatus, Action } from "../../shared/types/index.js";
 import type { ThreadsTreeFile, ThreadsTreeNodeMeta, ThreadAction } from "../../thinkable/thread-tree/types.js";
 
 /** 线程状态 → 行为树节点状态 */

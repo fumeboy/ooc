@@ -2,7 +2,7 @@
  * Context 相关共享类型
  *
  * @ref docs/哲学文档/gene.md#G3 — references — ContextWindow 来自 Trait 的 readme 内容
- * @ref src/types/object.ts — references — TalkableFunction, DirectoryEntry 中的对象接口
+ * @ref src/shared/types/object.ts — references — TalkableFunction, DirectoryEntry 中的对象接口
  */
 
 import type { TalkableFunction } from "./object.js";

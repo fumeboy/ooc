@@ -16,16 +16,16 @@ describe("dead code cleanup", () => {
   });
 
   test("context and process compatibility types expose only live fields", () => {
-    const contextTypes = read("src/types/context.ts");
-    const processTypes = read("src/types/process.ts");
-    const typeIndex = read("src/types/index.ts");
+    const contextTypes = read("src/shared/types/context.ts");
+    const processTypes = read("src/shared/types/process.ts");
+    const typeIndex = read("src/shared/types/index.ts");
 
     expect(contextTypes).not.toContain("export interface WindowConfig");
     expect(contextTypes).not.toContain("export interface Context {");
     expect(typeIndex).not.toContain("WindowConfig");
     expect(typeIndex).not.toContain("Context,");
-    expect(read("src/types/trait.ts")).not.toContain("when?:");
-    expect(read("src/types/trait.ts")).not.toContain("methods: TraitMethod[]");
+    expect(read("src/shared/types/trait.ts")).not.toContain("when?:");
+    expect(read("src/shared/types/trait.ts")).not.toContain("methods: TraitMethod[]");
 
     for (const symbol of ["TodoItem", "Signal", "ThreadState", "HookTime", "HookType", "FrameHook", "NodeType"]) {
       expect(processTypes).not.toContain(symbol);
@@ -46,8 +46,8 @@ describe("dead code cleanup", () => {
     expect(read("src/executable/tools/index.ts")).not.toContain("FORM_PARAM");
     expect(read("src/observable/debug/debug.ts")).not.toContain("extractDirectiveTypes");
     expect(read("src/collaborable/relation/relation.ts")).not.toContain("export function renderRelationsIndexInner");
-    expect(read("src/server/server.ts")).not.toContain("hasSupervisorStone");
-    expect(read("src/server/server.ts")).not.toContain("_notifySupervisor");
+    expect(read("src/observable/server/server.ts")).not.toContain("hasSupervisorStone");
+    expect(read("src/observable/server/server.ts")).not.toContain("_notifySupervisor");
   });
 
   test("knowledge and library deprecated helpers are removed", () => {

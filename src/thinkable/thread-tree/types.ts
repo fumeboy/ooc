@@ -5,7 +5,7 @@
  * 每个 ProcessNode 同时是行为树节点、独立线程、认知栈帧。
  *
  * 命名约定：所有新类型以 Thread 前缀命名，避免与旧类型（Action, TodoItem, FrameHook）冲突。
- * 旧类型在 kernel/src/types/ 中，重构完成后将被删除。过渡期间两套类型共存。
+ * 旧类型在 kernel/src/shared/types/ 中，重构完成后将被删除。过渡期间两套类型共存。
  *
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md#3
  */

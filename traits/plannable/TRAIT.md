@@ -50,7 +50,7 @@ think {
 ```
 # 派生子线程去分析（fork）
 open(title="分析模块 X", type=command, command=think, description="分析模块 X")
-refine(title="填写分析任务", form_id="<...>", args={context="fork", msg="请分析 kernel/src/thread/engine.ts 的 onTalk 路径", traits=["kernel/computable"]})
+refine(title="填写分析任务", form_id="<...>", args={context="fork", msg="请分析 kernel/src/thinkable/engine/engine.ts 的 onTalk 路径", traits=["kernel/computable"]})
 submit(title="分析模块 X", form_id="<...>")
 
 # 向之前派生的线程补充信息（continue）

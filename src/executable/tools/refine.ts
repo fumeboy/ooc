@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "../../thinkable/client.js";
+import type { ToolDefinition } from "../../thinkable/llm/client.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 /** refine tool — 向 open 的 form 追加/修改 args（不执行） */

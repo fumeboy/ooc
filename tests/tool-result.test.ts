@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { toolOk, toolErr } from "../src/types/tool-result";
+import { toolOk, toolErr } from "../src/shared/types/tool-result";
 
 describe("ToolResult", () => {
   test("toolOk 创建成功结果", () => {

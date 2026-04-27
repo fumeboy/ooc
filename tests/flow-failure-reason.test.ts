@@ -6,19 +6,19 @@
  * 2. 手动取消 Flow（DELETE /api/flows/:sid）后，data.json 中包含 failureReason
  * 3. GET /api/flows 列表接口在 session 摘要中透传 failureReason
  *
- * @ref src/types/flow.ts — FlowData.failureReason
- * @ref src/server/server.ts — DELETE /api/flows/:sid, GET /api/flows
+ * @ref src/shared/types/flow.ts — FlowData.failureReason
+ * @ref src/observable/server/server.ts — DELETE /api/flows/:sid, GET /api/flows
  */
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { handleRoute } from "../src/server/server.js";
+import { handleRoute } from "../src/observable/server/server.js";
 import { World } from "../src/world/world.js";
 import { createProcess } from "../src/storable/thread/process-compat.js";
-import type { FlowData } from "../src/types/flow.js";
-import type { LLMConfig } from "../src/thinkable/config.js";
+import type { FlowData } from "../src/shared/types/flow.js";
+import type { LLMConfig } from "../src/thinkable/llm/config.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_flow_failure_reason_test");
 

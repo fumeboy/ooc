@@ -10,11 +10,11 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { handleRoute } from "../src/server/server.js";
+import { handleRoute } from "../src/observable/server/server.js";
 import { createIssue, createTask } from "../src/collaborable/kanban/methods.js";
 import { readIssues, readTasks } from "../src/collaborable/kanban/store.js";
 import { World } from "../src/world/world.js";
-import type { LLMConfig } from "../src/thinkable/config.js";
+import type { LLMConfig } from "../src/thinkable/llm/config.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_server_kanban_status_test");
 

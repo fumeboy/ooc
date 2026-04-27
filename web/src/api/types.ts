@@ -1,10 +1,10 @@
 /**
  * 前端 API 类型定义
  *
- * @ref src/types/object.ts — references — StoneData 后端类型镜像
- * @ref src/types/flow.ts — references — FlowData, Action 后端类型镜像
- * @ref src/types/process.ts — references — Process, ProcessNode 后端类型镜像
- * @ref src/types/trait.ts — references — TraitDefinition 后端类型镜像
+ * @ref src/shared/types/object.ts — references — StoneData 后端类型镜像
+ * @ref src/shared/types/flow.ts — references — FlowData, Action 后端类型镜像
+ * @ref src/shared/types/process.ts — references — Process, ProcessNode 后端类型镜像
+ * @ref src/shared/types/trait.ts — references — TraitDefinition 后端类型镜像
  */
 /** 对象摘要（列表用） */
 export interface ObjectSummary {
@@ -47,7 +47,7 @@ export type ActionType =
 /**
  * talk form 选项（结构化表单里的单个选项）
  *
- * @ref kernel/src/thread/types.ts — TalkFormOption 后端类型镜像
+ * @ref kernel/src/thinkable/thread-tree/types.ts — TalkFormOption 后端类型镜像
  */
 export interface TalkFormOption {
   id: string;
@@ -61,7 +61,7 @@ export interface TalkFormOption {
  * 当发起方 LLM 在心里有几个候选回复时，用它代替纯文本列表——接收方（通常是 user）
  * 的前端会把消息渲染为 option picker（编号选项 + 自由文本兜底）。
  *
- * @ref kernel/src/thread/types.ts — TalkFormPayload 后端类型镜像
+ * @ref kernel/src/thinkable/thread-tree/types.ts — TalkFormPayload 后端类型镜像
  */
 export interface TalkFormPayload {
   formId: string;
@@ -76,7 +76,7 @@ export interface TalkFormPayload {
  * 前端 user 点选/输入后通过 POST /api/talk/:target body.formResponse 传给后端。
  * 后端把它以 [formResponse] 前缀注入 message 让目标 LLM 识别。
  *
- * @ref kernel/src/thread/types.ts — FormResponse 后端类型镜像
+ * @ref kernel/src/thinkable/thread-tree/types.ts — FormResponse 后端类型镜像
  */
 export interface FormResponse {
   formId: string;
@@ -185,7 +185,7 @@ export interface SubFlowSummary {
    *
    * 长度 ≤ 50，前端在 SessionKanban 对象行旁展示，带 pulse 效果。
    *
-   * @ref kernel/src/server/server.ts — computeCurrentAction 后端实现
+   * @ref kernel/src/observable/server/server.ts — computeCurrentAction 后端实现
    * @ref docs/工程管理/迭代/all/20260422_feature_running_session_摘要.md
    */
   currentAction?: string;
@@ -218,7 +218,7 @@ export interface FlowSummary {
   updatedAt: number;
 }
 
-/** Context 可见性分类（镜像后端 `kernel/src/thread/visibility.ts#ContextVisibility`） */
+/** Context 可见性分类（镜像后端 `kernel/src/observable/visibility/visibility.ts#ContextVisibility`） */
 export type ContextVisibility = "detailed" | "summary" | "title_only" | "hidden";
 
 /** context-visibility API 返回结构 */
@@ -357,7 +357,7 @@ export interface KanbanTask {
  * 条目只存 (threadId, messageId) 引用，不存消息正文；正文在发起对象的
  * thread.json.actions 里，前端凭 (threadId, messageId) 反查。
  *
- * @ref kernel/src/persistence/user-inbox.ts — UserInboxEntry / UserInboxData 后端类型镜像
+ * @ref kernel/src/storable/inbox/user-inbox.ts — UserInboxEntry / UserInboxData 后端类型镜像
  */
 export interface UserInboxEntry {
   /** 发起对象当前线程 id */

@@ -156,7 +156,7 @@ const VIS_STYLE: Record<ContextVisibility, { rowClass: string; badge: string; la
 /**
  * 生成 Context 可见性分类的 tooltip 原因描述
  *
- * 规则（对齐 `kernel/src/thread/context-builder.ts`）：
+ * 规则（对齐 `kernel/src/thinkable/context/builder.ts`）：
  * - detailed：focus 自身
  * - summary / title_only：祖先、直接子、兄弟
  * - hidden：其他

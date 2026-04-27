@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "../../thinkable/client.js";
+import type { ToolDefinition } from "../../thinkable/llm/client.js";
 import { getOpenableCommands } from "../commands/index.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 

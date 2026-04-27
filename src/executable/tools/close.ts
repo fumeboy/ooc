@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "../../thinkable/client.js";
+import type { ToolDefinition } from "../../thinkable/llm/client.js";
 import { MARK_PARAM } from "./schema.js";
 
 /** close tool — 关闭上下文 */

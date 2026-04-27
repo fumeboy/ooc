@@ -18,7 +18,7 @@
  */
 
 import matter from "gray-matter";
-import type { Talkable, Thinkable } from "../types/index.js";
+import type { Talkable, Thinkable } from "../shared/types/index.js";
 
 /** readme.md 解析结果 */
 export interface ReadmeParseResult {

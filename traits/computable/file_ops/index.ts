@@ -8,9 +8,9 @@
  */
 
 import { resolve, join } from "path";
-import { toolOk, toolErr } from "../../../src/types/tool-result";
-import type { ToolResult } from "../../../src/types/tool-result";
-import type { TraitMethod } from "../../../src/types/index";
+import { toolOk, toolErr } from "../../../src/shared/types/tool-result";
+import type { ToolResult } from "../../../src/shared/types/tool-result";
+import type { TraitMethod } from "../../../src/shared/types/index";
 import {
   createEditPlan,
   readEditPlan,

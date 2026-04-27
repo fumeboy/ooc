@@ -13,7 +13,7 @@ deps: []
 底层：
 - **tree-sitter AST**（TS / TSX / JS / JSX / Python / Go / Rust）解析符号
 - **正则 fallback**（AST 失败时自动降级，仅 TS/JS 家族）
-- **hash n-gram TF 向量**（dim=256，复用 `src/persistence/memory-embedding.ts`）做 semantic_search
+- **hash n-gram TF 向量**（dim=256，复用 `src/storable/memory/embedding.ts`）做 semantic_search
 - **AST 作用域分析**提取 callees（v1 仅支持 callers，v2 双向）
 - **增量索引**：`index_refresh({ paths })` 只重扫传入的文件，不全量重建
 

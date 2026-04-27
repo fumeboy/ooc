@@ -35,8 +35,8 @@ import { runBuildHooks } from "../../world/hooks.js";
 import { contextToMessages, type ActiveFormView } from "../context/messages.js";
 import { threadStatusToFlowStatus, type TalkResult } from "./types.js";
 
-import type { LLMClient, Message, ToolCall } from "../client.js";
-import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "../../types/index.js";
+import type { LLMClient, Message, ToolCall } from "../llm/client.js";
+import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "../../shared/types/index.js";
 import type { SkillDefinition } from "../../extendable/skill/types.js";
 import { writeDebugLoop, computeContextStats, getExistingLoopCount } from "../../observable/debug/debug.js";
 import { loadSkillBody } from "../../extendable/skill/loader.js";

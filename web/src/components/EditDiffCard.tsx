@@ -5,7 +5,7 @@
  * 每文件 before/after 变更（绿+/红- 高亮 + +N -N delta + 文件名标题）。
  *
  * 后端 trait method 调用方式不变，仅 result 多了 before/after 字段（详见
- * `kernel/traits/computable/file_ops/index.ts` 与 `kernel/src/persistence/edit-plans.ts`）。
+ * `kernel/traits/computable/file_ops/index.ts` 与 `kernel/src/storable/edit-plans/edit-plans.ts`）。
  *
  * 设计选择：
  *  - 复用项目已有的 `FileDiffViewer`（基于 @codemirror/merge），不再额外引入

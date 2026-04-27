@@ -9,7 +9,7 @@
  *
  * @ref docs/哲学文档/gene.md#G3 — implements — Trait 方法全量注册（双通道隔离）
  * @ref docs/superpowers/specs/2026-04-21-trait-namespace-views-and-http-methods-design.md
- * @ref src/types/trait.ts — references — TraitDefinition, TraitMethod, TraitMethodChannel 类型
+ * @ref src/shared/types/trait.ts — references — TraitDefinition, TraitMethod, TraitMethodChannel 类型
  */
 
 import type {
@@ -17,7 +17,7 @@ import type {
   TraitMethod,
   TraitMethodParam,
   TraitMethodChannel,
-} from "../../types/index.js";
+} from "../../shared/types/index.js";
 import { traitId } from "../knowledge/activator.js";
 
 /** 方法执行上下文（注入到每个 trait 方法中） */

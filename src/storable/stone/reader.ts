@@ -6,8 +6,8 @@
  *
  * @ref docs/哲学文档/gene.md#G7 — implements — 从文件系统读取对象（readStone, readFlow, listObjects）
  * @ref src/storable/frontmatter.ts — references — parseReadme frontmatter 解析
- * @ref src/types/object.ts — references — StoneData 类型
- * @ref src/types/flow.ts — references — FlowData 类型
+ * @ref src/shared/types/object.ts — references — StoneData 类型
+ * @ref src/shared/types/flow.ts — references — FlowData 类型
  */
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";
@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { parseReadme } from "../frontmatter.js";
 import { createProcess } from "../thread/process-compat.js";
 import { threadsToProcess } from "../thread/thread-adapter.js";
-import type { StoneData, FlowData, Relation } from "../../types/index.js";
+import type { StoneData, FlowData, Relation } from "../../shared/types/index.js";
 
 /**
  * 从目录读取 Stone 对象

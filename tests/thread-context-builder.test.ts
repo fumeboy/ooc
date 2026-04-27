@@ -14,7 +14,7 @@ import {
   extractStoneTraitRefs,
   type ThreadContextInput,
 } from "../src/thinkable/context/builder.js";
-import type { TraitDefinition } from "../src/types/index.js";
+import type { TraitDefinition } from "../src/shared/types/index.js";
 import type {
   ThreadsTreeFile,
   ThreadsTreeNodeMeta,

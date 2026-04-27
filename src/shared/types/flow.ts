@@ -7,7 +7,7 @@
  * @ref docs/哲学文档/gene.md#G2 — implements — Flow 动态形态（FlowData, FlowStatus）
  * @ref docs/哲学文档/gene.md#G8 — implements — PendingMessage 异步消息投递
  * @ref docs/哲学文档/gene.md#G10 — implements — Action 不可变事件记录
- * @ref src/types/process.ts — references — Process 行为树类型
+ * @ref src/shared/types/process.ts — references — Process 行为树类型
  */
 
 /** Flow 状态机 (G2) */

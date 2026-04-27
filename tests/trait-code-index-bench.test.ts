@@ -51,9 +51,9 @@ describeBench("code_index benchmark (OOC_BENCH=1)", () => {
 
   test("单文件增量刷新", async () => {
     /* 取已索引的第一个 kernel 文件做 refresh */
-    const r1 = await list_symbols(ctx, "src/cli.ts");
+    const r1 = await list_symbols(ctx, "src/app/cli.ts");
     /* cli.ts 不一定有符号；退而求其次找任一常见文件 */
-    const target = r1.ok && r1.data.length > 0 ? "src/cli.ts" : "src/thread/engine.ts";
+    const target = r1.ok && r1.data.length > 0 ? "src/app/cli.ts" : "src/thinkable/engine/engine.ts";
     const t0 = performance.now();
     const r = await index_refresh(ctx, [target]);
     const elapsed = performance.now() - t0;

@@ -9,7 +9,7 @@
  * index 只负责聚合与统一导出，避免单个大文件吞掉目录可读性。
  */
 
-import type { ToolDefinition } from "../../thinkable/client.js";
+import type { ToolDefinition } from "../../thinkable/llm/client.js";
 
 import { CLOSE_TOOL } from "./close.js";
 import { OPEN_TOOL } from "./open.js";

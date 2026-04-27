@@ -29,7 +29,7 @@
  * @ref docs/superpowers/specs/2026-04-23-three-phase-trait-activation-design.md#第四部分-统一激活中枢
  */
 
-import type { TraitDefinition, StoneData, ContextWindow, ContextWindowSource } from "../../types/index.js";
+import type { TraitDefinition, StoneData, ContextWindow, ContextWindowSource } from "../../shared/types/index.js";
 import type {
   ThreadsTreeFile,
   ThreadDataFile,

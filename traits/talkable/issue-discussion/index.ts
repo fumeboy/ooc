@@ -4,7 +4,7 @@
  */
 
 import type { MethodContext } from "../../../src/trait/registry";
-import type { TraitMethod } from "../../../src/types/index";
+import type { TraitMethod } from "../../../src/shared/types/index";
 import * as d from "../../../src/collaborable/kanban/discussion";
 
 function sessionDir(ctx: MethodContext): string {

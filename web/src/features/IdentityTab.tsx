@@ -3,7 +3,7 @@
  *
  * @ref docs/哲学文档/gene.md#G1 — renders — 对象的 thinkable.whoAmI 和 talkable 信息
  * @ref docs/哲学文档/gene.md#G11 — implements — 对象 UI 自我表达
- * @ref src/types/object.ts — references — StoneData 类型
+ * @ref src/shared/types/object.ts — references — StoneData 类型
  */
 import type { StoneData } from "../api/types";
 

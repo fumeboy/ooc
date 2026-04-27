@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "../../thinkable/client.js";
+import type { ToolDefinition } from "../../thinkable/llm/client.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 /** submit tool — 提交执行（仅 command 类型） */
