@@ -11,7 +11,7 @@ import {
   computeContextStats,
   getExistingLoopCount,
   type WriteDebugLoopParams,
-} from "../src/thread/debug.js";
+} from "../src/observable/debug/debug.js";
 
 const TMP = join(import.meta.dir, "__tmp_debug__");
 

@@ -13,7 +13,7 @@ import { ThreadsTree } from "../src/thread/tree.js";
 import {
   buildThreadContext,
   type ThreadContextInput,
-} from "../src/thread/context-builder.js";
+} from "../src/thinkable/context/builder.js";
 import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
 import { MockLLMClient, type ToolCall } from "../src/thinkable/client.js";
 import type { StoneData } from "../src/types/index.js";

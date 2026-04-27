@@ -1264,7 +1264,7 @@ export async function handleRoute(
   /* GET /api/flows/:sessionId/objects/:objectName/context-visibility?focus=:threadId
    *
    * 返回整棵线程树中每个节点相对于 focus 线程 Context 的可见性分类。
-   * 分类值见 `kernel/src/thread/visibility.ts#ContextVisibility`。
+   * 分类值见 `kernel/src/observable/visibility/visibility.ts#ContextVisibility`。
    *
    * 参数：
    * - sessionId / objectName：定位 Object 的 Flow 目录
@@ -1280,7 +1280,7 @@ export async function handleRoute(
     const focusQuery = url.searchParams.get("focus") ?? undefined;
 
     const { readThreadsTree } = await import("../thread/persistence.js");
-    const { classifyContextVisibility, pickDefaultFocus } = await import("../thread/visibility.js");
+    const { classifyContextVisibility, pickDefaultFocus } = await import("../observable/visibility/visibility.js");
 
     const objectFlowDir = join(world.flowsDir, sessionId, "objects", objectName);
     const tree = readThreadsTree(objectFlowDir);

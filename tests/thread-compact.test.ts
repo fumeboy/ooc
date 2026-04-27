@@ -23,7 +23,7 @@ import {
 } from "../src/thread/compact";
 import { ThreadsTree } from "../src/thread/tree";
 import type { ThreadAction, ThreadDataFile } from "../src/thread/types";
-import { renderThreadProcess } from "../src/thread/context-builder";
+import { renderThreadProcess } from "../src/thinkable/context/builder";
 import {
   llm_methods as compactMethods,
 } from "../traits/compact/index";

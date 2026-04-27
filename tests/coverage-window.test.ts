@@ -8,12 +8,12 @@
  */
 
 import { describe, test, expect, beforeEach } from "bun:test";
-import { buildThreadContext } from "../src/thread/context-builder";
+import { buildThreadContext } from "../src/thinkable/context/builder";
 import {
   clearLatestCoverage,
   getLatestCoverage,
   __emitFailuresForTest,
-} from "../src/test/runner";
+} from "../src/observable/test-runner/runner";
 import type { ThreadsTreeFile, ThreadDataFile } from "../src/thread/types";
 import type { StoneData } from "../src/types/index";
 
@@ -75,7 +75,7 @@ describe("Coverage window", () => {
 
   test("注入 coverage 窗口 —— 手动喂缓存", async () => {
     /* 绕过 runTests 直接喂数据，避免依赖 bun test 子进程 */
-    const { __injectLatestCoverageForTest } = await import("../src/test/runner");
+    const { __injectLatestCoverageForTest } = await import("../src/observable/test-runner/runner");
     __injectLatestCoverageForTest({
       cwd: "/tmp/r",
       pct: 72.5,

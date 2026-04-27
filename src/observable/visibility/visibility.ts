@@ -17,11 +17,11 @@
  * - 这三个函数都只深入一层或只走祖先链，所以 uncle / cousin / 孙 等都被排除。
  *
  * @ref docs/超工程管理/迭代/all/20260421_feature_thread上下文可视化.md
- * @ref kernel/src/thread/context-builder.ts
+ * @ref kernel/src/thinkable/context/builder.ts
  */
 
-import type { ThreadsTreeFile } from "./types.js";
-import { getAncestorPath } from "./persistence.js";
+import type { ThreadsTreeFile } from "../../thread/types.js";
+import { getAncestorPath } from "../../thread/persistence.js";
 
 /** 上下文可见性分类 */
 export type ContextVisibility =

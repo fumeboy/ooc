@@ -7,7 +7,7 @@
  * - stop_watch：停止 watch 会话
  * - test_coverage：运行 --coverage，返回未覆盖文件摘要
  *
- * 底层依赖 `src/test/runner.ts`。
+ * 底层依赖 `src/observable/test-runner/runner.ts`。
  */
 
 import { toolOk, toolErr } from "../../../src/types/tool-result";
@@ -20,7 +20,7 @@ import {
   listWatchIds,
   summarizeCoverage,
   type TestRunSummary,
-} from "../../../src/test/runner";
+} from "../../../src/observable/test-runner/runner";
 
 /** ctx 的最小形态 */
 type Ctx = { rootDir?: string };

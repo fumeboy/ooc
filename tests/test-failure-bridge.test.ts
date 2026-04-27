@@ -14,8 +14,8 @@ import {
   pickRecipient,
   startTestFailureBridge,
 } from "../src/world/test-failure-bridge";
-import { __emitFailuresForTest, __resetAll } from "../src/test/runner";
-import type { TestFailure } from "../src/test/runner";
+import { __emitFailuresForTest, __resetAll } from "../src/observable/test-runner/runner";
+import type { TestFailure } from "../src/observable/test-runner/runner";
 
 const SAMPLE: TestFailure[] = [
   {

@@ -1,7 +1,7 @@
 import type { CodeExecutor } from "../sandbox/executor.js";
 import type { MethodContext, MethodRegistry } from "../../extendable/trait/registry.js";
 import type { TraitDefinition } from "../../types/index.js";
-import type { ActiveForm } from "../../thread/form.js";
+import type { ActiveForm } from "../forms/form.js";
 import type { ThreadScheduler } from "../../thread/scheduler.js";
 import type { ThreadsTree } from "../../thread/tree.js";
 import type { TalkFormPayload } from "../../thread/types.js";

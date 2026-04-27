@@ -12,7 +12,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { buildThreadContext } from "../src/thread/context-builder.js";
+import { buildThreadContext } from "../src/thinkable/context/builder.js";
 import { ThreadsTree } from "../src/thread/tree.js";
 import type { StoneData } from "../src/types/index.js";
 import type { ThreadsTreeFile } from "../src/thread/types.js";

@@ -11,7 +11,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { FormManager } from "../src/thread/form.js";
+import { FormManager } from "../src/executable/forms/form.js";
 import { collectCommandTraits } from "../src/thread/hooks.js";
 import type { TraitDefinition } from "../src/types/index.js";
 

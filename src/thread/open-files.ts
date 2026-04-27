@@ -39,7 +39,7 @@ import { getAncestorPath } from "./persistence.js";
 import {
   computeThreadScopeChain,
   extractStoneTraitRefs,
-} from "./context-builder.js";
+} from "../thinkable/context/builder.js";
 
 /**
  * open-files 的输入参数

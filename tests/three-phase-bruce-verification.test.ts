@@ -17,9 +17,9 @@ import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from "node
 import { join, resolve } from "node:path";
 
 import { ThreadsTree } from "../src/thread/tree.js";
-import { buildThreadContext } from "../src/thread/context-builder.js";
+import { buildThreadContext } from "../src/thinkable/context/builder.js";
 import { getOpenFiles } from "../src/thread/open-files.js";
-import { FormManager } from "../src/thread/form.js";
+import { FormManager } from "../src/executable/forms/form.js";
 import { collectCommandTraits } from "../src/thread/hooks.js";
 import { resolveVirtualPath } from "../src/executable/protocol/virtual-path.js";
 import { scanPeers } from "../src/thread/peers.js";

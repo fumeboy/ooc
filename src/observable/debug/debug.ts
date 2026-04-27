@@ -9,7 +9,7 @@
 
 import { mkdirSync, writeFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import type { Message } from "../thinkable/client.js";
+import type { Message } from "../../thinkable/client.js";
 
 /** Debug 元数据 */
 export interface DebugMeta {

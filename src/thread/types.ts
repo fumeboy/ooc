@@ -10,7 +10,7 @@
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md#3
  */
 
-import type { ActiveForm } from "./form.js";
+import type { ActiveForm } from "../executable/forms/form.js";
 
 /** 线程状态 */
 export type ThreadStatus = "pending" | "running" | "waiting" | "done" | "failed" | "paused";

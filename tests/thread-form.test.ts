@@ -4,7 +4,7 @@
  * @ref docs/superpowers/specs/2026-04-12-command-lifecycle-progressive-trait-design.md#6
  */
 import { describe, test, expect } from "bun:test";
-import { FormManager, type ActiveForm } from "../src/thread/form.js";
+import { FormManager, type ActiveForm } from "../src/executable/forms/form.js";
 
 describe("FormManager", () => {
   test("begin 创建 form 并返回 form_id", () => {

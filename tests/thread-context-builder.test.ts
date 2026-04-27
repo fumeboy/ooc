@@ -13,7 +13,7 @@ import {
   computeThreadScopeChain,
   extractStoneTraitRefs,
   type ThreadContextInput,
-} from "../src/thread/context-builder.js";
+} from "../src/thinkable/context/builder.js";
 import type { TraitDefinition } from "../src/types/index.js";
 import type {
   ThreadsTreeFile,

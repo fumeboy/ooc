@@ -15,8 +15,8 @@
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md#5
  */
 
-import type { StoneData, DirectoryEntry, ContextWindow, TraitDefinition } from "../types/index.js";
-import type { SkillDefinition } from "../extendable/skill/types.js";
+import type { StoneData, DirectoryEntry, ContextWindow, TraitDefinition } from "../../types/index.js";
+import type { SkillDefinition } from "../../extendable/skill/types.js";
 import type {
   ThreadsTreeFile,
   ThreadsTreeNodeMeta,
@@ -25,16 +25,16 @@ import type {
   ThreadInboxMessage,
   ThreadTodoItem,
   ThreadStatus,
-} from "./types.js";
-import { getAncestorPath } from "./persistence.js";
-import { resolveTraitRef } from "../extendable/knowledge/activator.js";
-import { getOpenFiles } from "./open-files.js";
-import { scanPeers } from "./peers.js";
-import { readPeerRelations, type PeerRelationEntry } from "./relation.js";
-import { detectSelfKind } from "./self-kind.js";
-import { getBuildFeedback, formatFeedbackForContext } from "../world/hooks.js";
-import { getLatestCoverage } from "../test/runner.js";
-import { serializeXml, type XmlNode } from "../executable/protocol/xml.js";
+} from "../../thread/types.js";
+import { getAncestorPath } from "../../thread/persistence.js";
+import { resolveTraitRef } from "../../extendable/knowledge/activator.js";
+import { getOpenFiles } from "../../thread/open-files.js";
+import { scanPeers } from "../../thread/peers.js";
+import { readPeerRelations, type PeerRelationEntry } from "../../thread/relation.js";
+import { detectSelfKind } from "../../thread/self-kind.js";
+import { getBuildFeedback, formatFeedbackForContext } from "../../world/hooks.js";
+import { getLatestCoverage } from "../../observable/test-runner/runner.js";
+import { serializeXml, type XmlNode } from "../../executable/protocol/xml.js";
 import { existsSync, readFileSync } from "node:fs";
 import { join as pathJoin } from "node:path";
 
@@ -230,7 +230,7 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
 
   /* coverage 窗口：注入最近一次 --coverage 跑出的摘要
    *
-   * 由 `src/test/runner.ts` 的 runTests(opts.coverage=true) 更新缓存。
+   * 由 `src/observable/test-runner/runner.ts` 的 runTests(opts.coverage=true) 更新缓存。
    * 只显示总覆盖率 + 文件表摘要（前 20 行），让 LLM 知道哪些新代码缺测试。
    * 从未跑过 coverage 时 getLatestCoverage 返回 undefined，不注入窗口。
    *

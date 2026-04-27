@@ -14,8 +14,8 @@
  */
 
 import { consola } from "consola";
-import type { TestFailure } from "../test/runner.js";
-import { subscribeFailures } from "../test/runner.js";
+import type { TestFailure } from "../observable/test-runner/runner.js";
+import { subscribeFailures } from "../observable/test-runner/runner.js";
 
 /** Stone 查询接口（world 传入） */
 export interface StoneLookup {

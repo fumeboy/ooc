@@ -19,26 +19,26 @@ import { consola } from "consola";
 
 import { ThreadsTree } from "./tree.js";
 import { ThreadScheduler, type SchedulerCallbacks } from "./scheduler.js";
-import { buildThreadContext } from "./context-builder.js";
+import { buildThreadContext } from "../thinkable/context/builder.js";
 import { getOpenFiles } from "./open-files.js";
 import { emitSSE } from "../observable/server/events.js";
 import { CodeExecutor } from "../executable/sandbox/executor.js";
 import { MethodRegistry, type MethodContext } from "../extendable/trait/registry.js";
 import { traitId } from "../extendable/knowledge/activator.js";
-import { FormManager } from "./form.js";
+import { FormManager } from "../executable/forms/form.js";
 import { collectCommandTraits, collectCommandHooks } from "./hooks.js";
 import { executeCommand } from "../executable/commands/index.js";
 import { buildAvailableTools } from "../executable/tools/index.js";
 import { resolveVirtualPath, isVirtualPath } from "../executable/protocol/virtual-path.js";
 import { detectSelfKind } from "./self-kind.js";
 import { runBuildHooks } from "../world/hooks.js";
-import { contextToMessages, type ActiveFormView } from "./context-messages.js";
+import { contextToMessages, type ActiveFormView } from "../thinkable/context/messages.js";
 import { threadStatusToFlowStatus, type TalkResult } from "./engine-types.js";
 
 import type { LLMClient, Message, ToolCall } from "../thinkable/client.js";
 import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "../types/index.js";
 import type { SkillDefinition } from "../extendable/skill/types.js";
-import { writeDebugLoop, computeContextStats, getExistingLoopCount } from "./debug.js";
+import { writeDebugLoop, computeContextStats, getExistingLoopCount } from "../observable/debug/debug.js";
 import { loadSkillBody } from "../extendable/skill/loader.js";
 import {
   estimateActionsTokens,

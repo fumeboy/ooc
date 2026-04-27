@@ -16,7 +16,7 @@ import {
   subscribeFailures,
   listWatchIds,
   __resetAll,
-} from "../src/test/runner";
+} from "../src/observable/test-runner/runner";
 
 beforeEach(async () => {
   await __resetAll();

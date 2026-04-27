@@ -1,7 +1,7 @@
 /**
  * 线程 Context 可见性分类器测试
  *
- * 对应 `kernel/src/thread/visibility.ts`：给定一棵线程树和 focus 节点 ID，
+ * 对应 `kernel/src/observable/visibility/visibility.ts`：给定一棵线程树和 focus 节点 ID，
  * 计算每个节点在 focus 线程 Context 中的呈现形态。
  *
  * 规则来源（严格对齐 `context-builder.ts` 的实现）：
@@ -14,11 +14,11 @@
  * 注意 context-builder 当前的 siblingSummary 只收集"父节点的其他直接子"，
  * 所以 uncle（父节点的兄弟）并不会出现在 Context，更不会出现其子孙。
  *
- * @ref kernel/src/thread/context-builder.ts
+ * @ref kernel/src/thinkable/context/builder.ts
  */
 import { describe, test, expect } from "bun:test";
 import type { ThreadsTreeFile, ThreadsTreeNodeMeta } from "../src/thread/types.js";
-import { classifyContextVisibility, pickDefaultFocus, type ContextVisibility } from "../src/thread/visibility.js";
+import { classifyContextVisibility, pickDefaultFocus, type ContextVisibility } from "../src/observable/visibility/visibility.js";
 
 /** 辅助：创建节点元数据 */
 function makeNode(id: string, overrides?: Partial<ThreadsTreeNodeMeta>): ThreadsTreeNodeMeta {
