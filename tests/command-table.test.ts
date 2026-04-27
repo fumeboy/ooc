@@ -173,7 +173,7 @@ describe("deriveCommandPaths — 顶层 tool 不是 command", () => {
 describe("COMMAND_TABLE — 结构性检查", () => {
   test("顶层必须包含 spec 要求的 command", () => {
     const keys = Object.keys(COMMAND_TABLE);
-    for (const c of ["talk", "think", "program", "return", "set_plan", "await", "await_all", "defer", "compact"]) {
+    for (const c of ["talk", "think", "program", "return", "set_plan", "defer", "compact"]) {
       expect(keys).toContain(c);
     }
   });
@@ -197,11 +197,13 @@ describe("COMMAND_TABLE — 结构性检查", () => {
     }
   });
 
-  test("新增 openable 命令已注册：set_plan, await, await_all, defer, compact", () => {
-    for (const cmd of ["set_plan", "await", "await_all", "defer", "compact"]) {
+  test("新增 openable 命令已注册：set_plan, defer, compact", () => {
+    for (const cmd of ["set_plan", "defer", "compact"]) {
       expect(COMMAND_TABLE[cmd]).toBeDefined();
       expect(COMMAND_TABLE[cmd]?.openable).toBe(true);
     }
+    expect(COMMAND_TABLE.await).toBeUndefined();
+    expect(COMMAND_TABLE.await_all).toBeUndefined();
     expect(COMMAND_TABLE.call_function).toBeUndefined();
   });
 });
@@ -232,15 +234,17 @@ describe("COMMAND_TABLE.<entry>.paths declares known path universe", () => {
 });
 
 describe("getOpenableCommands()", () => {
-  test("返回 9 个命令", () => {
-    expect(getOpenableCommands()).toHaveLength(9);
+  test("返回 7 个命令", () => {
+    expect(getOpenableCommands()).toHaveLength(7);
   });
 
   test("getOpenableCommands 已包含所有 openable 命令", () => {
     const cmds = getOpenableCommands();
-    for (const cmd of ["program", "think", "talk", "return", "set_plan", "await", "await_all", "defer", "compact"]) {
+    for (const cmd of ["program", "think", "talk", "return", "set_plan", "defer", "compact"]) {
       expect(cmds).toContain(cmd);
     }
+    expect(cmds).not.toContain("await");
+    expect(cmds).not.toContain("await_all");
     expect(cmds).not.toContain("call_function");
   });
 

@@ -398,7 +398,7 @@ export class ThreadsTree {
   /* ========== 等待与唤醒 ========== */
 
   /**
-   * 等待子线程（await / await_all）
+   * 等待子线程（由 think(wait=true) 等上层指令触发）
    *
    * 设置当前节点的 awaitingChildren，状态变为 waiting。
    * 不是 JS 层面的 await，而是线程状态转换。

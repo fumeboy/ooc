@@ -197,10 +197,10 @@ describe("returnThread", () => {
   });
 });
 
-/* ========== await / await_all ========== */
+/* ========== awaitThreads 子线程等待 ========== */
 
 describe("awaitThreads", () => {
-  test("await 单个子线程：设置 awaitingChildren + 状态变 waiting", async () => {
+  test("等待单个子线程：设置 awaitingChildren + 状态变 waiting", async () => {
     const tree = await ThreadsTree.create(TEST_DIR, "Root");
     const childId = await tree.createSubThread(tree.rootId, "子任务");
     await tree.setNodeStatus(childId!, "running");
@@ -212,7 +212,7 @@ describe("awaitThreads", () => {
     expect(root.awaitingChildren).toEqual([childId!]);
   });
 
-  test("await_all 多个子线程", async () => {
+  test("等待多个子线程", async () => {
     const tree = await ThreadsTree.create(TEST_DIR, "Root");
     const id1 = await tree.createSubThread(tree.rootId, "A");
     const id2 = await tree.createSubThread(tree.rootId, "B");

@@ -51,7 +51,7 @@ export interface ThreadsTreeNodeMeta {
   summary?: string;
 
   /** 当 status === "waiting" 时，标识具体在等什么。
-   *  - "await_children": 在等子线程完成（await / await_all / think(wait=true) 触发）
+   *  - "await_children": 在等子线程完成（think(wait=true) 等路径触发）
    *  - "talk_sync":      在等其他对象的同步回复（talk(wait=true) 触发；内部状态标签，非命令名）
    *  - "explicit_wait":  LLM 主动 wait 暂停（wait 工具触发） */
   waitingType?: "await_children" | "talk_sync" | "explicit_wait";

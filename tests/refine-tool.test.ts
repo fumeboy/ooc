@@ -53,10 +53,10 @@ describe("SUBMIT_TOOL after refine refactor", () => {
 });
 
 describe("OPEN_TOOL.command.enum — 动态生成（来自 COMMAND_TABLE）", () => {
-  test("enum 长度为 9（与 getOpenableCommands() 一致）", () => {
+  test("enum 长度为 7（与 getOpenableCommands() 一致）", () => {
     const params = OPEN_TOOL.function.parameters as Record<string, unknown>;
     const props = params.properties as Record<string, { enum?: string[] }>;
-    expect(props.command?.enum).toHaveLength(9);
+    expect(props.command?.enum).toHaveLength(7);
     expect(props.command?.enum).toHaveLength(getOpenableCommands().length);
   });
 

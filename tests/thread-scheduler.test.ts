@@ -219,7 +219,7 @@ describe("唤醒机制", () => {
     expect(nodes.r.status).toBe("done");
   });
 
-  test("await_all：所有子线程 done 后才唤醒", async () => {
+  test("等待多个子线程：所有子线程 done 后才唤醒", async () => {
     const iterCounts: Record<string, number> = {};
     let parentWoken = false;
     const nodes = {
@@ -380,7 +380,7 @@ describe("错误处理", () => {
   test("死锁检测：running=0 且 waiting>0 → 唤醒所有 waiting", async () => {
     /**
      * 构造真实死锁场景：
-     * r 创建子线程 a 和 b，然后 await_all([a, b])
+     * r 创建子线程 a 和 b，然后等待 a 和 b
      * a 完成后，b 进入 waiting 等待一个不存在于本 Object 内的子线程 x
      * 但 x 实际上也在本 Object 内（只是 awaitingChildren 指向了 r，形成环）
      *

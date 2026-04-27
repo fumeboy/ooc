@@ -2,7 +2,7 @@
  * getOpenableCommands() 动态生成枚举验证
  *
  * 验证：
- * 1. 返回值与预期集合完全一致（9 个，已排序）
+ * 1. 返回值与预期集合完全一致（7 个，已排序）
  * 2. 不含 open/refine/submit/close/wait（不可 open 的工具原语）
  * 3. 不含 talk_sync（已折叠）
  * 4. OPEN_TOOL.command.enum 与 getOpenableCommands() 完全一致（动态生成）
@@ -12,8 +12,6 @@ import { getOpenableCommands } from "../src/executable/commands/index.js";
 import { OPEN_TOOL } from "../src/executable/tools/index.js";
 
 const EXPECTED_OPENABLE = [
-  "await",
-  "await_all",
   "compact",
   "defer",
   "program",
@@ -24,8 +22,8 @@ const EXPECTED_OPENABLE = [
 ];
 
 describe("getOpenableCommands()", () => {
-  test("返回 9 个命令", () => {
-    expect(getOpenableCommands()).toHaveLength(9);
+  test("返回 7 个命令", () => {
+    expect(getOpenableCommands()).toHaveLength(7);
   });
 
   test("与预期集合完全一致（已排序）", () => {
@@ -42,7 +40,7 @@ describe("getOpenableCommands()", () => {
 
   test("不包含 open/refine/submit/close/wait（工具原语，不是 command）", () => {
     const cmds = getOpenableCommands();
-    for (const notOpenable of ["open", "refine", "submit", "close", "wait"]) {
+    for (const notOpenable of ["open", "refine", "submit", "close", "wait", "await", "await_all"]) {
       expect(cmds).not.toContain(notOpenable);
     }
   });

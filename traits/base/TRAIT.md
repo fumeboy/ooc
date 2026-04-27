@@ -32,7 +32,7 @@ deps: []
 | `skill` | 加载 skill 内容到上下文 | `title`, `name`（skill 名称）, `description` |
 | `file` | 读取文件到上下文窗口 | `title`, `path`（文件路径）, `description` |
 
-可用 command：`program`, `think`, `talk`, `return`, `set_plan`, `await`, `await_all`, `defer`, `compact`
+可用 command：`program`, `think`, `talk`, `return`, `set_plan`, `defer`, `compact`
 
 `program` 有两种执行形态：
 

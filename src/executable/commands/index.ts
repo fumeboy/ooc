@@ -11,8 +11,6 @@
  * @ref docs/superpowers/specs/2026-04-23-three-phase-trait-activation-design.md#第二部分-process过程
  */
 
-import { awaitCommand, executeAwaitCommand } from "./await.js";
-import { awaitAllCommand, executeAwaitAllCommand } from "./await_all.js";
 import { compactCommand, executeCompactCommand } from "./compact.js";
 import { deferCommand, executeDeferCommand } from "./defer.js";
 import { executeProgramCommand, programCommand } from "./program.js";
@@ -35,8 +33,6 @@ export const COMMAND_TABLE: Record<string, CommandTableEntry> = {
   program: programCommand,
   return: returnCommand,
   set_plan: setPlanCommand,
-  await: awaitCommand,
-  await_all: awaitAllCommand,
   defer: deferCommand,
   compact: compactCommand,
 };
@@ -86,10 +82,6 @@ export async function executeCommand(command: string, ctx: CommandExecutionConte
       return executeThinkCommand(ctx);
     case "set_plan":
       return executeSetPlanCommand(ctx);
-    case "await":
-      return executeAwaitCommand(ctx);
-    case "await_all":
-      return executeAwaitAllCommand(ctx);
     case "compact":
       return executeCompactCommand(ctx);
     case "defer":
