@@ -1733,6 +1733,18 @@ export async function runWithThreadTree(
                     });
                     tree.writeThreadData(threadId, td);
                   }
+                  /* F1：wait 参数类型校验——非 boolean 时注入警告，让 LLM 及时纠正 */
+                  if (args.wait !== undefined && typeof args.wait !== "boolean") {
+                    const tdWarn = tree.readThreadData(threadId);
+                    if (tdWarn) {
+                      tdWarn.actions.push({
+                        type: "inject",
+                        content: `[警告] 参数 wait 不是 boolean（收到 ${typeof args.wait} 值 "${String(args.wait)}"），将忽略此参数。请使用布尔值 true/false。`,
+                        timestamp: Date.now(),
+                      });
+                      tree.writeThreadData(threadId, tdWarn);
+                    }
+                  }
                   /* wait=true 且 target=user 是死锁：user 永远不会唤醒。记日志、不 setNodeStatus("waiting")、直接继续。 */
                   const isWaitMode = args.wait === true;
                   const isTalkSyncToUser = isWaitMode && target === "user";
@@ -1829,6 +1841,18 @@ export async function runWithThreadTree(
                       tree.writeThreadData(threadId, td);
                     }
                     scheduler.onThreadCreated(child, objectName);
+                    /* F1：wait 参数类型校验（think run 路径） */
+                    if (args.wait !== undefined && typeof args.wait !== "boolean") {
+                      const tdWarn = tree.readThreadData(threadId);
+                      if (tdWarn) {
+                        tdWarn.actions.push({
+                          type: "inject",
+                          content: `[警告] 参数 wait 不是 boolean（收到 ${typeof args.wait} 值 "${String(args.wait)}"），将忽略此参数。请使用布尔值 true/false。`,
+                          timestamp: Date.now(),
+                        });
+                        tree.writeThreadData(threadId, tdWarn);
+                      }
+                    }
                     /* wait=true：父线程进入 waiting，等子线程完成后由 scheduler 唤醒 */
                     if (args.wait === true) {
                       await tree.awaitThreads(threadId, [child]);
@@ -2149,13 +2173,20 @@ export async function runWithThreadTree(
             const td = tree.readThreadData(threadId);
             if (td) {
               td.activeForms = formManager.toData();
-              const parts: string[] = [];
-              if (unloadedTraits.length > 0) parts.push(`本次卸载 trait：${unloadedTraits.join(", ")}`);
-              if (keptPinnedTraits.length > 0) parts.push(`已固定 trait 保留未卸载：${keptPinnedTraits.join(", ")}`);
-              if (parts.length === 0) parts.push(`无 trait 被卸载（可能仍被其他 active form 占用）`);
+              let closeHint: string;
+              if (form.command === "_file" && form.trait) {
+                /* 文件类型：描述文件已从上下文窗口移除 */
+                closeHint = `文件 "${form.trait}" 已从上下文窗口移除。`;
+              } else {
+                const parts: string[] = [];
+                if (unloadedTraits.length > 0) parts.push(`本次卸载 trait：${unloadedTraits.join(", ")}`);
+                if (keptPinnedTraits.length > 0) parts.push(`已固定 trait 保留未卸载：${keptPinnedTraits.join(", ")}`);
+                if (parts.length === 0) parts.push(`无 trait 被卸载（可能仍被其他 active form 占用）`);
+                closeHint = `${parts.join("；")}。`;
+              }
               td.actions.push({
                 type: "inject",
-                content: `Form ${form.formId} 已关闭。${parts.join("；")}。`,
+                content: `[close] Form ${form.formId} 已关闭。${closeHint}`,
                 timestamp: Date.now(),
               });
               /* 防震荡安全阀：检测连续 open-close 无 submit 的模式。
@@ -3088,6 +3119,18 @@ export async function resumeWithThreadTree(
                     });
                     tree.writeThreadData(threadId, td);
                   }
+                  /* F1：wait 参数类型校验（resume 路径） */
+                  if (args.wait !== undefined && typeof args.wait !== "boolean") {
+                    const tdWarn = tree.readThreadData(threadId);
+                    if (tdWarn) {
+                      tdWarn.actions.push({
+                        type: "inject",
+                        content: `[警告] 参数 wait 不是 boolean（收到 ${typeof args.wait} 值 "${String(args.wait)}"），将忽略此参数。请使用布尔值 true/false。`,
+                        timestamp: Date.now(),
+                      });
+                      tree.writeThreadData(threadId, tdWarn);
+                    }
+                  }
                   const isWaitModeResume = args.wait === true;
                   const isTalkSyncToUser = isWaitModeResume && target === "user";
                   if (isTalkSyncToUser) {
@@ -3151,6 +3194,18 @@ export async function resumeWithThreadTree(
                       tree.writeThreadData(threadId, td);
                     }
                     scheduler.onThreadCreated(child, objectName);
+                    /* F1：wait 参数类型校验（think resume 路径） */
+                    if (args.wait !== undefined && typeof args.wait !== "boolean") {
+                      const tdWarn = tree.readThreadData(threadId);
+                      if (tdWarn) {
+                        tdWarn.actions.push({
+                          type: "inject",
+                          content: `[警告] 参数 wait 不是 boolean（收到 ${typeof args.wait} 值 "${String(args.wait)}"），将忽略此参数。请使用布尔值 true/false。`,
+                          timestamp: Date.now(),
+                        });
+                        tree.writeThreadData(threadId, tdWarn);
+                      }
+                    }
                     /* wait=true：父线程进入 waiting，等子线程完成后由 scheduler 唤醒 */
                     if (args.wait === true) {
                       await tree.awaitThreads(threadId, [child]);
@@ -3357,13 +3412,20 @@ export async function resumeWithThreadTree(
             const td = tree.readThreadData(threadId);
             if (td) {
               td.activeForms = formManager.toData();
-              const parts: string[] = [];
-              if (unloadedTraits.length > 0) parts.push(`本次卸载 trait：${unloadedTraits.join(", ")}`);
-              if (keptPinnedTraits.length > 0) parts.push(`已固定 trait 保留未卸载：${keptPinnedTraits.join(", ")}`);
-              if (parts.length === 0) parts.push(`无 trait 被卸载（可能仍被其他 active form 占用）`);
+              let closeHint: string;
+              if (form.command === "_file" && form.trait) {
+                /* 文件类型：描述文件已从上下文窗口移除 */
+                closeHint = `文件 "${form.trait}" 已从上下文窗口移除。`;
+              } else {
+                const parts: string[] = [];
+                if (unloadedTraits.length > 0) parts.push(`本次卸载 trait：${unloadedTraits.join(", ")}`);
+                if (keptPinnedTraits.length > 0) parts.push(`已固定 trait 保留未卸载：${keptPinnedTraits.join(", ")}`);
+                if (parts.length === 0) parts.push(`无 trait 被卸载（可能仍被其他 active form 占用）`);
+                closeHint = `${parts.join("；")}。`;
+              }
               td.actions.push({
                 type: "inject",
-                content: `Form ${form.formId} 已关闭。${parts.join("；")}。`,
+                content: `[close] Form ${form.formId} 已关闭。${closeHint}`,
                 timestamp: Date.now(),
               });
               /* 防震荡安全阀（见 runWithThreadTree 同名逻辑）：连续 open/close 无 submit → 强警告 */
