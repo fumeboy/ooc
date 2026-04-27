@@ -11,7 +11,7 @@ import { llm_methods as superMethods } from "../traits/reflective/super/index";
 import {
   appendMemoryEntry,
   readMemoryEntries,
-} from "../src/persistence/memory-entries";
+} from "../src/storable/memory/entries";
 
 type TestMethod = {
   fn: (ctx: unknown, args: Record<string, unknown>) => Promise<any>;

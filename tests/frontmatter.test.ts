@@ -3,7 +3,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { parseReadme, serializeReadme } from "../src/persistence/frontmatter.js";
+import { parseReadme, serializeReadme } from "../src/storable/frontmatter.js";
 
 describe("parseReadme", () => {
   test("解析完整的 readme.md", () => {

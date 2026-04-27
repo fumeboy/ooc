@@ -16,8 +16,8 @@ import { toolOk, toolErr } from "../../../src/types/tool-result";
 import {
   queryMemoryEntries,
   readMemoryEntries,
-} from "../../../src/persistence/memory-entries";
-import type { MemoryEntry, QueryMemoryOptions } from "../../../src/persistence/memory-entries";
+} from "../../../src/storable/memory/entries";
+import type { MemoryEntry, QueryMemoryOptions } from "../../../src/storable/memory/entries";
 
 /** query_memory 输入 */
 export interface QueryMemoryInput extends QueryMemoryOptions {}

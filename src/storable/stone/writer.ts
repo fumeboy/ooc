@@ -5,15 +5,15 @@
  * 持久化目录就是对象的物理存在。
  *
  * @ref docs/哲学文档/gene.md#G7 — implements — 将对象写入文件系统（writeStone, writeFlow）
- * @ref src/persistence/frontmatter.ts — references — serializeReadme frontmatter 序列化
+ * @ref src/storable/frontmatter.ts — references — serializeReadme frontmatter 序列化
  * @ref src/types/object.ts — references — StoneData 类型
  * @ref src/types/flow.ts — references — FlowData 类型
  */
 
 import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { serializeReadme } from "./frontmatter.js";
-import type { StoneData, FlowData } from "../types/index.js";
+import { serializeReadme } from "../frontmatter.js";
+import type { StoneData, FlowData } from "../../types/index.js";
 
 /**
  * 确保目录存在

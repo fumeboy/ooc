@@ -28,7 +28,7 @@ import {
   writeMemoryEntry,
   isMemoryEntry,
   type MemoryEntry,
-} from "../src/persistence/memory-entries";
+} from "../src/storable/memory/entries";
 
 let tmp = "";
 

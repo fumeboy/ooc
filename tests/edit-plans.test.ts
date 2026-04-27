@@ -19,7 +19,7 @@ import {
   previewEditPlan,
   applyEditPlan,
   cancelEditPlan,
-} from "../src/persistence/edit-plans";
+} from "../src/storable/edit-plans/edit-plans";
 
 let workDir: string;
 let flowsRoot: string;

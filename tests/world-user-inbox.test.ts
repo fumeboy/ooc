@@ -15,7 +15,7 @@ import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
 import { MockLLMClient, type ToolCall } from "../src/thinkable/client.js";
 import type { StoneData } from "../src/types/index.js";
 import { eventBus } from "../src/observable/server/events.js";
-import { readUserInbox } from "../src/persistence/user-inbox.js";
+import { readUserInbox } from "../src/storable/inbox/user-inbox.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_world_user_inbox_test");
 const FLOWS_DIR = join(TEST_DIR, "flows");
@@ -56,7 +56,7 @@ function makeUserOnlyOnTalk(flowsDir: string, capturedInbox: Array<{ threadId: s
     messageId: string | undefined,
   ) => {
     if (targetObject.toLowerCase() === "user" && fromThreadId && messageId) {
-      const { appendUserInbox } = await import("../src/persistence/user-inbox.js");
+      const { appendUserInbox } = await import("../src/storable/inbox/user-inbox.js");
       await appendUserInbox(flowsDir, sessionId, fromThreadId, messageId);
       capturedInbox.push({ threadId: fromThreadId, messageId });
     }
@@ -133,7 +133,7 @@ describe("World → user inbox 集成", () => {
 
   test("user/data.json 的 inbox 字段是追加语义（同 session 内两次 talk 有两条）", async () => {
     /* 手动调两次 talk（不通过 engine）以隔离测试 */
-    const { appendUserInbox } = await import("../src/persistence/user-inbox.js");
+    const { appendUserInbox } = await import("../src/storable/inbox/user-inbox.js");
     const sid = "s_append_test";
     await appendUserInbox(FLOWS_DIR, sid, "th_1", "msg_1");
     await appendUserInbox(FLOWS_DIR, sid, "th_1", "msg_2");

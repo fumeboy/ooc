@@ -36,7 +36,7 @@ describe("dead code cleanup", () => {
   test("legacy context and process implementation directories are removed", () => {
     expect(existsSync(join(root, "src/context"))).toBe(false);
     expect(existsSync(join(root, "src/process"))).toBe(false);
-    expect(read("src/persistence/process-compat.ts")).toContain("FlowData process compatibility helpers");
+    expect(read("src/storable/thread/process-compat.ts")).toContain("FlowData process compatibility helpers");
   });
 
   test("low-risk thread/server dead symbols are gone", () => {

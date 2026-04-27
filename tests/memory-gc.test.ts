@@ -24,13 +24,13 @@ import {
   readMemoryEntries,
   writeMemoryEntry,
   type MemoryEntry,
-} from "../src/persistence/memory-entries.js";
+} from "../src/storable/memory/entries.js";
 import {
   evaluateGcDecision,
   runMemoryGc,
   DEFAULT_TTL_DAYS,
-} from "../src/persistence/memory-gc.js";
-import { embeddingPath } from "../src/persistence/memory-embedding.js";
+} from "../src/storable/memory/gc.js";
+import { embeddingPath } from "../src/storable/memory/embedding.js";
 
 let tmp = "";
 let selfDir = "";

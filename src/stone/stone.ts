@@ -10,12 +10,12 @@
  * @ref docs/哲学文档/gene.md#G6 — implements — addRelation 有向关系管理
  * @ref docs/哲学文档/gene.md#G7 — implements — 持久化目录即物理存在（load/save/create）
  * @ref src/types/object.ts — references — StoneData, Talkable, Thinkable, Relation 类型
- * @ref src/persistence/reader.ts — references — readStone 加载
- * @ref src/persistence/writer.ts — references — writeStone 保存
+ * @ref src/storable/stone/reader.ts — references — readStone 加载
+ * @ref src/storable/stone/writer.ts — references — writeStone 保存
  */
 
 import { join } from "node:path";
-import { readStone, writeStone } from "../persistence/index.js";
+import { readStone, writeStone } from "../storable/index.js";
 import type { StoneData, Talkable, Thinkable, Relation } from "../types/index.js";
 
 /** Stone 实例：持有数据并提供操作接口 */

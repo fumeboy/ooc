@@ -15,7 +15,7 @@ import { join } from "path";
 import {
   createEditPlan,
   applyEditPlan,
-} from "../src/persistence/edit-plans";
+} from "../src/storable/edit-plans/edit-plans";
 import {
   __clearHooks,
   registerBuildHook,

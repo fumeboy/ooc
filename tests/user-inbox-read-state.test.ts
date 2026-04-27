@@ -18,7 +18,7 @@ import {
   readUserInbox,
   readUserReadState,
   setUserReadObject,
-} from "../src/persistence/user-inbox.js";
+} from "../src/storable/inbox/user-inbox.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_user_inbox_read_state_test");
 const FLOWS_DIR = join(TEST_DIR, "flows");

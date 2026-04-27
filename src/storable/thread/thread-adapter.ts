@@ -10,8 +10,8 @@
 
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import type { Process, ProcessNode, NodeStatus, Action } from "../types/index.js";
-import type { ThreadsTreeFile, ThreadsTreeNodeMeta, ThreadAction } from "../thread/types.js";
+import type { Process, ProcessNode, NodeStatus, Action } from "../../types/index.js";
+import type { ThreadsTreeFile, ThreadsTreeNodeMeta, ThreadAction } from "../../thread/types.js";
 
 /** 线程状态 → 行为树节点状态 */
 function mapStatus(status: ThreadsTreeNodeMeta["status"]): NodeStatus {

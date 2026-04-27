@@ -13,7 +13,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-import { appendUserInbox, readUserInbox } from "../src/persistence/user-inbox.js";
+import { appendUserInbox, readUserInbox } from "../src/storable/inbox/user-inbox.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_user_inbox_test");
 const FLOWS_DIR = join(TEST_DIR, "flows");

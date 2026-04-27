@@ -25,11 +25,11 @@ import {
   deleteEmbedding,
   embeddingPath,
   EMBEDDING_DIM,
-} from "../src/persistence/memory-embedding.js";
+} from "../src/storable/memory/embedding.js";
 import {
   appendMemoryEntry,
   queryMemoryEntries,
-} from "../src/persistence/memory-entries.js";
+} from "../src/storable/memory/entries.js";
 
 let tmp = "";
 let selfDir = "";

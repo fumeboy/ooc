@@ -20,15 +20,15 @@
  * - **graceful stop**：stop() 等所有 in-flight 完成
  *
  * @ref docs/工程管理/迭代/all/20260422_feature_memory_curation_phase2.md
- * @ref kernel/src/persistence/memory-entries.ts — depends — mergeDuplicateEntries, rebuildMemoryIndex
+ * @ref kernel/src/storable/memory/entries.ts — depends — mergeDuplicateEntries, rebuildMemoryIndex
  */
 
 import { join } from "node:path";
 import { existsSync, readdirSync } from "node:fs";
 import { consola } from "consola";
 
-import { mergeDuplicateEntries, rebuildMemoryIndex } from "./memory-entries.js";
-import { runMemoryGc, type GcRunSummary } from "./memory-gc.js";
+import { mergeDuplicateEntries, rebuildMemoryIndex } from "./entries.js";
+import { runMemoryGc, type GcRunSummary } from "./gc.js";
 
 /**
  * 注册项：每个对象的数据目录

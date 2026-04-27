@@ -29,8 +29,8 @@ import {
   readMemoryEntries,
   writeMemoryEntry,
   migrateMemoryMdToEntries,
-} from "../../../src/persistence/memory-entries";
-import { runMemoryGc } from "../../../src/persistence/memory-gc";
+} from "../../../src/storable/memory/entries";
+import { runMemoryGc } from "../../../src/storable/memory/gc";
 
 /**
  * 行号前缀 sanity check —— 剥离 `file_ops.readFile` 等工具输出中常见的

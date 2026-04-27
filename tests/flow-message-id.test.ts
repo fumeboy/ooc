@@ -18,7 +18,7 @@ import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
 import { MockLLMClient, type ToolCall } from "../src/thinkable/client.js";
 import type { StoneData } from "../src/types/index.js";
 import { eventBus } from "../src/observable/server/events.js";
-import { readUserInbox } from "../src/persistence/user-inbox.js";
+import { readUserInbox } from "../src/storable/inbox/user-inbox.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_flow_message_id_test");
 const FLOWS_DIR = join(TEST_DIR, "flows");
@@ -94,7 +94,7 @@ describe("FlowMessage id 字段三源对齐", () => {
       stone: makeStone("alice"),
       onTalk: async (targetObject, message, fromObject, fromThreadId, sessionId, _continueThreadId, messageId) => {
         if (targetObject.toLowerCase() === "user" && fromThreadId && messageId) {
-          const { appendUserInbox } = await import("../src/persistence/user-inbox.js");
+          const { appendUserInbox } = await import("../src/storable/inbox/user-inbox.js");
           const { emitSSE } = await import("../src/observable/server/events.js");
           await appendUserInbox(FLOWS_DIR, sessionId, fromThreadId, messageId);
           emitSSE({

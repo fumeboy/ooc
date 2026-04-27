@@ -25,8 +25,8 @@
 import { existsSync, unlinkSync, mkdirSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { readMemoryEntries, type MemoryEntry } from "./memory-entries.js";
-import { deleteEmbedding } from "./memory-embedding.js";
+import { readMemoryEntries, type MemoryEntry } from "./entries.js";
+import { deleteEmbedding } from "./embedding.js";
 
 /** 默认 TTL：未显式设 ttlDays 的 entry 视为 30 天过期 */
 export const DEFAULT_TTL_DAYS = 30;

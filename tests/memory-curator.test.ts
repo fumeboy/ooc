@@ -22,8 +22,8 @@ import { mkdtempSync, rmSync, mkdirSync, existsSync, readFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { MemoryCurator } from "../src/persistence/memory-curator.js";
-import { appendMemoryEntry, readMemoryEntries } from "../src/persistence/memory-entries.js";
+import { MemoryCurator } from "../src/storable/memory/curator.js";
+import { appendMemoryEntry, readMemoryEntries } from "../src/storable/memory/entries.js";
 
 let tmp = "";
 let selfDir = "";

@@ -20,7 +20,7 @@ import {
   type EditChange,
   type EditPlan,
   type ApplyResult,
-} from "../../../src/persistence/edit-plans";
+} from "../../../src/storable/edit-plans/edit-plans";
 
 /** 路径解析：绝对路径直接用，相对路径基于 rootDir */
 const resolvePath = (rootDir: string, p: string) =>

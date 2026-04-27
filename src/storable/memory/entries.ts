@@ -19,7 +19,7 @@ import {
   deleteEmbedding,
   generateEmbedding,
   cosineSimilarity,
-} from "./memory-embedding.js";
+} from "./embedding.js";
 
 /** 单条 memory entry（落盘 JSON 结构） */
 export interface MemoryEntry {

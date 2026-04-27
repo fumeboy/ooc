@@ -11,7 +11,7 @@ import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { handleRoute } from "../src/server/server.js";
-import { appendUserInbox } from "../src/persistence/user-inbox.js";
+import { appendUserInbox } from "../src/storable/inbox/user-inbox.js";
 import { World } from "../src/world/world.js";
 import type { LLMConfig } from "../src/thinkable/config.js";
 

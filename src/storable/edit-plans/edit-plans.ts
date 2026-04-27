@@ -21,7 +21,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { readFile, writeFile, mkdir, unlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { runBuildHooks, type HookFeedback } from "../world/hooks.js";
+import { runBuildHooks, type HookFeedback } from "../../world/hooks.js";
 
 /** 单个 change —— 两种形态：局部编辑 or 整文件覆盖 */
 export type EditChange =

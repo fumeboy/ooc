@@ -13,16 +13,16 @@ import { join } from "node:path";
 import { existsSync, readFileSync, readdirSync, writeFileSync, statSync, mkdirSync } from "node:fs";
 import { consola } from "consola";
 import { eventBus, type SSEEvent } from "../observable/server/events.js";
-import { readFlow, listFlowSessions, readUserInbox, setUserReadObject } from "../persistence/index.js";
+import { readFlow, listFlowSessions, readUserInbox, setUserReadObject } from "../storable/index.js";
 import {
   readEditPlan,
   previewEditPlan,
   applyEditPlan,
   cancelEditPlan,
-} from "../persistence/edit-plans.js";
-import { collectAllActions, createProcess } from "../persistence/process-compat.js";
+} from "../storable/edit-plans/edit-plans.js";
+import { collectAllActions, createProcess } from "../storable/thread/process-compat.js";
 import { loadTrait } from "../extendable/trait/loader.js";
-import { threadsToProcess } from "../persistence/thread-adapter.js";
+import { threadsToProcess } from "../storable/thread/thread-adapter.js";
 import type { World } from "../world/index.js";
 import type { FlowStatus, FlowMessage, Process, ProcessNode, Action, FlowData } from "../types/index.js";
 
@@ -989,7 +989,7 @@ export async function handleRoute(
     const stone = world.getObject(name);
     if (!stone) return errorResponse(`对象 "${name}" 不存在`, 404);
 
-    const { readMemoryEntries } = await import("../persistence/memory-entries.js");
+    const { readMemoryEntries } = await import("../storable/memory/entries.js");
     const entries = readMemoryEntries(stone.dir);
     const now = Date.now();
     let pinned = 0;

@@ -39,7 +39,7 @@ export type ActionType =
  * 旧 Flow 下只用 id/type/timestamp/content[/result/success]；
  * 线程树引入后扩展了 name/args/title/form/formResponse/context。
  * 前端（`kernel/web/src/api/types.ts`）与本类型保持镜像，序列化 pipeline
- * （`persistence/thread-adapter.ts` mapAction）必须透传所有字段，否则会
+ * （`storable/thread/thread-adapter.ts` mapAction）必须透传所有字段，否则会
  * 丢失业务关键信息（如 Talk Form picker）。
  */
 export interface Action {

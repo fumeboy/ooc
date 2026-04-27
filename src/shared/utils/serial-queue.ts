@@ -17,7 +17,7 @@
  *
  * @ref docs/工程管理/迭代/all/20260421_refactor_write_queue统一.md
  * @ref kernel/src/thread/queue.ts — references — WriteQueue 使用 SerialQueue 作为内部实现
- * @ref kernel/src/persistence/user-inbox.ts — references — user inbox 写入也走 SerialQueue
+ * @ref kernel/src/storable/inbox/user-inbox.ts — references — user inbox 写入也走 SerialQueue
  * @ref kernel/src/world/super.ts — references — SuperFlow 目录锁基于 SerialQueue
  */
 

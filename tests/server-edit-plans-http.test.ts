@@ -17,7 +17,7 @@ import { join } from "node:path";
 
 import { handleRoute } from "../src/server/server.js";
 import { World } from "../src/world/world.js";
-import { createEditPlan } from "../src/persistence/edit-plans.js";
+import { createEditPlan } from "../src/storable/edit-plans/edit-plans.js";
 import type { LLMConfig } from "../src/thinkable/config.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_server_edit_plans_http_test");

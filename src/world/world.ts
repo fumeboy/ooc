@@ -29,10 +29,10 @@ import { emitSSE } from "../observable/server/events.js";
 import { runWithThreadTree, resumeWithThreadTree, stepOnceWithThreadTree, writeThreadTreeFlowData, type EngineConfig, type TalkResult, type TalkReturn } from "../thread/engine.js";
 import { runSuperThread } from "../thread/super-thread.js";
 import { loadSkills } from "../extendable/skill/index.js";
-import { appendUserInbox } from "../persistence/user-inbox.js";
+import { appendUserInbox } from "../storable/inbox/user-inbox.js";
 import { handleOnTalkToSuper } from "./super.js";
 import { SuperScheduler } from "../thread/super-scheduler.js";
-import { MemoryCurator } from "../persistence/memory-curator.js";
+import { MemoryCurator } from "../storable/memory/curator.js";
 
 /** World 配置 */
 export interface WorldConfig {

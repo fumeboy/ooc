@@ -28,7 +28,7 @@ import type { ToolResult } from "../../../src/types/tool-result";
 import type { TraitMethod } from "../../../src/types/index";
 import { parseAndExtract, tsLangOf } from "./parser/extractor";
 import type { ExtractedSymbolKind } from "./parser/extractor";
-import { generateEmbedding, cosineSimilarity } from "../../../src/persistence/memory-embedding";
+import { generateEmbedding, cosineSimilarity } from "../../../src/storable/memory/embedding";
 
 /** 支持的语言扩展名（含 v2 新增的 py/go/rs） */
 const SUPPORTED_EXTS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".go", ".rs"] as const;
