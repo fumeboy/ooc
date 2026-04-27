@@ -26,8 +26,8 @@ import { join } from "node:path";
 import { mkdirSync } from "node:fs";
 import { consola } from "consola";
 
-import { ThreadsTree } from "../thread/tree.js";
-import { SerialQueue } from "../shared/utils/serial-queue.js";
+import { ThreadsTree } from "../../thread/tree.js";
+import { SerialQueue } from "../../shared/utils/serial-queue.js";
 
 /**
  * super 目录级串行化队列（key = stone 的 super 目录绝对路径）

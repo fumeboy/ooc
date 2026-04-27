@@ -1,4 +1,4 @@
-// kernel/src/kanban/discussion.ts
+// kernel/src/collaborable/kanban/discussion.ts
 // Issue 讨论方法 — 评论、读取评论、读取 Issue
 
 import type { Comment, Issue } from "./types";

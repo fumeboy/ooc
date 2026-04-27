@@ -3,7 +3,7 @@
  *
  * 在同一个 key 下，保证 enqueue 的异步任务按 FIFO 顺序逐个执行；
  * 不同 key 之间互不阻塞。用 Promise 链实现，语义与旧
- * `WriteQueue` / `user-inbox.ts` 的 `_writeChains` / `world/super.ts` 的
+ * `WriteQueue` / `user-inbox.ts` 的 `_writeChains` / `collaborable/super/super.ts` 的
  * super 目录锁完全一致，但抽成了统一工具。
  *
  * 设计特性：
@@ -18,7 +18,7 @@
  * @ref docs/工程管理/迭代/all/20260421_refactor_write_queue统一.md
  * @ref kernel/src/thread/queue.ts — references — WriteQueue 使用 SerialQueue 作为内部实现
  * @ref kernel/src/storable/inbox/user-inbox.ts — references — user inbox 写入也走 SerialQueue
- * @ref kernel/src/world/super.ts — references — SuperFlow 目录锁基于 SerialQueue
+ * @ref kernel/src/collaborable/super/super.ts — references — SuperFlow 目录锁基于 SerialQueue
  */
 
 /**

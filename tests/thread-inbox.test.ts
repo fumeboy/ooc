@@ -4,7 +4,7 @@
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md#3.3
  */
 import { describe, test, expect } from "bun:test";
-import { enforceInboxLimits } from "../src/thread/inbox.js";
+import { enforceInboxLimits } from "../src/collaborable/inbox/inbox.js";
 import type { ThreadInboxMessage } from "../src/thread/types.js";
 
 /** 辅助：生成 inbox 消息 */

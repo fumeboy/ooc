@@ -29,8 +29,8 @@ import type {
 import { getAncestorPath } from "../../thread/persistence.js";
 import { resolveTraitRef } from "../../extendable/knowledge/activator.js";
 import { getOpenFiles } from "../../thread/open-files.js";
-import { scanPeers } from "../../thread/peers.js";
-import { readPeerRelations, type PeerRelationEntry } from "../../thread/relation.js";
+import { scanPeers } from "../../collaborable/relation/peers.js";
+import { readPeerRelations, type PeerRelationEntry } from "../../collaborable/relation/relation.js";
 import { detectSelfKind } from "../../thread/self-kind.js";
 import { getBuildFeedback, formatFeedbackForContext } from "../../world/hooks.js";
 import { getLatestCoverage } from "../../observable/test-runner/runner.js";

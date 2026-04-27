@@ -27,11 +27,11 @@ import { OpenAICompatibleClient, type LLMClient } from "../thinkable/client.js";
 import { DefaultConfig, type LLMConfig } from "../thinkable/config.js";
 import { emitSSE } from "../observable/server/events.js";
 import { runWithThreadTree, resumeWithThreadTree, stepOnceWithThreadTree, writeThreadTreeFlowData, type EngineConfig, type TalkResult, type TalkReturn } from "../thread/engine.js";
-import { runSuperThread } from "../thread/super-thread.js";
+import { runSuperThread } from "../collaborable/super/super-thread.js";
 import { loadSkills } from "../extendable/skill/index.js";
 import { appendUserInbox } from "../storable/inbox/user-inbox.js";
-import { handleOnTalkToSuper } from "./super.js";
-import { SuperScheduler } from "../thread/super-scheduler.js";
+import { handleOnTalkToSuper } from "../collaborable/super/super.js";
+import { SuperScheduler } from "../collaborable/super/super-scheduler.js";
 import { MemoryCurator } from "../storable/memory/curator.js";
 
 /** World 配置 */

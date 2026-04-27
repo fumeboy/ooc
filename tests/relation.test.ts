@@ -12,7 +12,7 @@ import {
   readPeerRelation,
   readPeerRelations,
   renderRelationsIndex,
-} from "../src/thread/relation.js";
+} from "../src/collaborable/relation/relation.js";
 
 const TMP_ROOT = "/tmp/ooc-relation-test";
 

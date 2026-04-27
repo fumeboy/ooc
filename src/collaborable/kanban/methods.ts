@@ -1,4 +1,4 @@
-// kernel/src/kanban/methods.ts
+// kernel/src/collaborable/kanban/methods.ts
 // Session Kanban 方法实现 — Issue/Task 的增删改
 
 import type { Issue, IssueStatus, Task, TaskStatus, SubTask, SubTaskStatus } from "./types";

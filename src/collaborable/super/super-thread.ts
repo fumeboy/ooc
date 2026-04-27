@@ -1,10 +1,10 @@
 import { consola } from "consola";
 
-import { ThreadsTree } from "./tree.js";
-import { resumeWithThreadTree, type EngineConfig } from "./engine.js";
+import { ThreadsTree } from "../../thread/tree.js";
+import { resumeWithThreadTree, type EngineConfig } from "../../thread/engine.js";
 
-import type { ContextWindow } from "../types/index.js";
-import type { TalkResult } from "./engine-types.js";
+import type { ContextWindow } from "../../types/index.js";
+import type { TalkResult } from "../../thread/engine-types.js";
 
 /**
  * 运行一轮 super 线程 ThinkLoop（跨 session 常驻线程的执行入口）

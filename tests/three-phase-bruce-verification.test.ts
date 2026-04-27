@@ -22,8 +22,8 @@ import { getOpenFiles } from "../src/thread/open-files.js";
 import { FormManager } from "../src/executable/forms/form.js";
 import { collectCommandTraits } from "../src/thread/hooks.js";
 import { resolveVirtualPath } from "../src/executable/protocol/virtual-path.js";
-import { scanPeers } from "../src/thread/peers.js";
-import { readPeerRelations, renderRelationsIndex } from "../src/thread/relation.js";
+import { scanPeers } from "../src/collaborable/relation/peers.js";
+import { readPeerRelations, renderRelationsIndex } from "../src/collaborable/relation/relation.js";
 import { deriveCommandPaths } from "../src/executable/commands/index.js";
 import { detectSelfKind } from "../src/thread/self-kind.js";
 

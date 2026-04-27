@@ -11,7 +11,7 @@
  * super trait 的 `persist_to_memory` 方法被 registerAll 注入后，LLM 通过
  * `program` trait/method 调用写入 memory.md——验证完整的 G12 沉淀链路。
  *
- * @ref kernel/src/thread/super-thread.ts — runSuperThread
+ * @ref kernel/src/collaborable/super/super-thread.ts — runSuperThread
  * @ref kernel/traits/reflective/super/index.ts — persist_to_memory
  * @ref docs/工程管理/迭代/all/20260422_feature_super_scheduler.md
  */
@@ -22,10 +22,10 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { type EngineConfig } from "../src/thread/engine.js";
-import { runSuperThread } from "../src/thread/super-thread.js";
+import { runSuperThread } from "../src/collaborable/super/super-thread.js";
 import { MockLLMClient, type ToolCall, type MockLLMResponseFnResult } from "../src/thinkable/client.js";
 import type { StoneData, TraitDefinition } from "../src/types/index.js";
-import { handleOnTalkToSuper } from "../src/world/super.js";
+import { handleOnTalkToSuper } from "../src/collaborable/super/super.js";
 import { llm_methods as superLLMMethods } from "../../kernel/traits/reflective/super/index.js";
 import { eventBus } from "../src/observable/server/events.js";
 

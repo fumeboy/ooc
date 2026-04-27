@@ -2,7 +2,7 @@
  * SuperScheduler —— 跨 session 常驻的 super 线程调度器
  *
  * 背景与哲学（G12 完整工程闭环）：
- * - `handleOnTalkToSuper`（world/super.ts）只做"落盘 + 复活"：把 talk(target="super")
+ * - `handleOnTalkToSuper`（collaborable/super/super.ts）只做"落盘 + 复活"：把 talk(target="super")
  *   的消息写到 `stones/{name}/super/` 的 root 线程 inbox。
  * - 但没有调度器去**消费**那些 inbox 消息——它们会静静躺着，直到某个外力驱动
  *   super 线程跑一轮 ThinkLoop。
@@ -30,16 +30,16 @@
  *
  * @ref docs/工程管理/迭代/all/20260422_feature_super_scheduler.md
  * @ref docs/哲学文档/gene.md#G12 — implements — 经验沉淀循环的调度器
- * @ref kernel/src/world/super.ts — references — handleOnTalkToSuper 的落盘伙伴
+ * @ref kernel/src/collaborable/super/super.ts — references — handleOnTalkToSuper 的落盘伙伴
  */
 
 import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { consola } from "consola";
 
-import { ThreadsTree } from "./tree.js";
-import { SerialQueue } from "../shared/utils/serial-queue.js";
-import { getSuperThreadDir } from "../world/super.js";
+import { ThreadsTree } from "../../thread/tree.js";
+import { SerialQueue } from "../../shared/utils/serial-queue.js";
+import { getSuperThreadDir } from "./super.js";
 
 /**
  * 单个 super 目录运行一轮 ThinkLoop 的 runner 接口

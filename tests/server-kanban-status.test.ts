@@ -11,8 +11,8 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { handleRoute } from "../src/server/server.js";
-import { createIssue, createTask } from "../src/kanban/methods.js";
-import { readIssues, readTasks } from "../src/kanban/store.js";
+import { createIssue, createTask } from "../src/collaborable/kanban/methods.js";
+import { readIssues, readTasks } from "../src/collaborable/kanban/store.js";
 import { World } from "../src/world/world.js";
 import type { LLMConfig } from "../src/thinkable/config.js";
 

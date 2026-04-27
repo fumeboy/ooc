@@ -20,7 +20,7 @@ import { mkdirSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { handleOnTalkToSuper } from "../src/world/super.js";
+import { handleOnTalkToSuper } from "../src/collaborable/super/super.js";
 import { ThreadsTree } from "../src/thread/tree.js";
 
 /** 为每个测试生成独立 tmp 根目录（模拟 user repo 根） */

@@ -12,9 +12,9 @@ import { join } from "node:path";
 import {
   commentOnIssueWithNotify,
   type ObjectResolver,
-} from "../src/thread/collaboration.js";
+} from "../src/collaborable/talk/collaboration.js";
 import type { ThreadsTreeNodeMeta, ThreadInboxMessage, ThreadStatus } from "../src/thread/types.js";
-import { createIssue } from "../src/kanban/methods.js";
+import { createIssue } from "../src/collaborable/kanban/methods.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_issue_collab_test");
 

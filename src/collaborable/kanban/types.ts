@@ -1,4 +1,4 @@
-// kernel/src/kanban/types.ts
+// kernel/src/collaborable/kanban/types.ts
 // Session Kanban 数据类型定义
 
 export type IssueStatus =

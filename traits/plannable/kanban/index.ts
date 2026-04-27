@@ -2,12 +2,12 @@
  * kanban trait — Session 级 Issue/Task 管理 API（Phase 2 协议：llm_methods 对象导出）
  *
  * 提供 Issue 和 Task 的增删改能力，所有对象均可使用。
- * 底层调用 kernel/src/kanban/methods.ts 的实现。
+ * 底层调用 kernel/src/collaborable/kanban/methods.ts 的实现。
  */
 
 import type { MethodContext } from "../../../src/trait/registry";
 import type { TraitMethod } from "../../../src/types/index";
-import * as m from "../../../src/kanban/methods";
+import * as m from "../../../src/collaborable/kanban/methods";
 
 function sessionDir(ctx: MethodContext): string {
   return `${ctx.rootDir}/flows/${ctx.sessionId}`;

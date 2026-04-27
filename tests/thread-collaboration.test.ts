@@ -15,7 +15,7 @@ import {
   createCollaborationAPI,
   type CollaborationContext,
   type ObjectResolver,
-} from "../src/thread/collaboration.js";
+} from "../src/collaborable/talk/collaboration.js";
 import type {
   ThreadsTreeNodeMeta,
   ThreadDataFile,
@@ -400,7 +400,7 @@ describe("talk 回复路由（onTalkHandlerReturn）", () => {
   });
 
   test("H return 后，结果路由回 A 的 inbox + locals", async () => {
-    const { onTalkHandlerReturn } = await import("../src/thread/collaboration.js");
+    const { onTalkHandlerReturn } = await import("../src/collaborable/talk/collaboration.js");
 
     // 模拟 talk 已经创建了 W 和 H
     // W 在 A 侧（等待占位节点）

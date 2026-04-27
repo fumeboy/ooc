@@ -2,13 +2,13 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync } from "fs";
 import {
   readIssues, writeIssues, readTasks, writeTasks, nextId, now,
-} from "../src/kanban/store";
-import type { Issue, Task } from "../src/kanban/types";
+} from "../src/collaborable/kanban/store";
+import type { Issue, Task } from "../src/collaborable/kanban/types";
 import {
   createIssue, updateIssueStatus, createTask,
   createSubTask, updateSubTask, setIssueNewInfo,
-} from "../src/kanban/methods";
-import { commentOnIssue, listIssueComments, getIssue } from "../src/kanban/discussion";
+} from "../src/collaborable/kanban/methods";
+import { commentOnIssue, listIssueComments, getIssue } from "../src/collaborable/kanban/discussion";
 
 const TEST_DIR = "/tmp/ooc-kanban-test";
 

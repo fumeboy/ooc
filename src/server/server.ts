@@ -1096,7 +1096,7 @@ export async function handleRoute(
     if (!body.title) return errorResponse("title is required");
 
     const sessionDir = join(world.flowsDir, sessionId!);
-    const { createIssue } = await import("../kanban/methods.js");
+    const { createIssue } = await import("../collaborable/kanban/methods.js");
     const issue = await createIssue(sessionDir, body.title, body.description, body.participants);
     return json({ success: true, data: issue });
   }
@@ -1109,7 +1109,7 @@ export async function handleRoute(
     if (!body.title) return errorResponse("title is required");
 
     const sessionDir = join(world.flowsDir, sessionId!);
-    const { createTask } = await import("../kanban/methods.js");
+    const { createTask } = await import("../collaborable/kanban/methods.js");
     const task = await createTask(sessionDir, body.title, body.description, body.issueRefs);
     return json({ success: true, data: task });
   }
@@ -1122,7 +1122,7 @@ export async function handleRoute(
     if (!body.content) return errorResponse("content is required");
 
     const sessionDir = join(world.flowsDir, sessionId!);
-    const { commentOnIssue } = await import("../kanban/discussion.js");
+    const { commentOnIssue } = await import("../collaborable/kanban/discussion.js");
     const result = await commentOnIssue(sessionDir, issueId!, "user", body.content, body.mentions);
     return json({ success: true, data: result.comment });
   }
@@ -1132,7 +1132,7 @@ export async function handleRoute(
   if (method === "POST" && issueAckMatch) {
     const [, sessionId, issueId] = issueAckMatch;
     const sessionDir = join(world.flowsDir, sessionId!);
-    const { setIssueNewInfo } = await import("../kanban/methods.js");
+    const { setIssueNewInfo } = await import("../collaborable/kanban/methods.js");
     await setIssueNewInfo(sessionDir, issueId!, false);
     return json({ success: true });
   }
@@ -1142,7 +1142,7 @@ export async function handleRoute(
   if (method === "POST" && taskAckMatch) {
     const [, sessionId, taskItemId] = taskAckMatch;
     const sessionDir = join(world.flowsDir, sessionId!);
-    const { setTaskNewInfo } = await import("../kanban/methods.js");
+    const { setTaskNewInfo } = await import("../collaborable/kanban/methods.js");
     await setTaskNewInfo(sessionDir, taskItemId!, false);
     return json({ success: true });
   }
@@ -1167,10 +1167,10 @@ export async function handleRoute(
     }
     const sessionDir = join(world.flowsDir, sessionId!);
     if (!existsSync(sessionDir)) return errorResponse(`Session "${sessionId}" 不存在`, 404);
-    const { updateIssueStatus } = await import("../kanban/methods.js");
-    const { readIssueDetail } = await import("../kanban/store.js");
+    const { updateIssueStatus } = await import("../collaborable/kanban/methods.js");
+    const { readIssueDetail } = await import("../collaborable/kanban/store.js");
     try {
-      await updateIssueStatus(sessionDir, issueId!, status as import("../kanban/types.js").IssueStatus);
+      await updateIssueStatus(sessionDir, issueId!, status as import("../collaborable/kanban/types.js").IssueStatus);
     } catch (e) {
       return errorResponse((e as Error).message, 404);
     }
@@ -1195,10 +1195,10 @@ export async function handleRoute(
     }
     const sessionDir = join(world.flowsDir, sessionId!);
     if (!existsSync(sessionDir)) return errorResponse(`Session "${sessionId}" 不存在`, 404);
-    const { updateTaskStatus } = await import("../kanban/methods.js");
-    const { readTaskDetail } = await import("../kanban/store.js");
+    const { updateTaskStatus } = await import("../collaborable/kanban/methods.js");
+    const { readTaskDetail } = await import("../collaborable/kanban/store.js");
     try {
-      await updateTaskStatus(sessionDir, taskId!, status as import("../kanban/types.js").TaskStatus);
+      await updateTaskStatus(sessionDir, taskId!, status as import("../collaborable/kanban/types.js").TaskStatus);
     } catch (e) {
       return errorResponse((e as Error).message, 404);
     }

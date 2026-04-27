@@ -15,7 +15,7 @@
  * `persist_to_memory` / `create_trait`——普通对象无法越权。
  *
  * @ref docs/哲学文档/gene.md#G12 — implements — 经验沉淀循环的工程通道
- * @ref kernel/src/world/super.ts — references — talk(super) 落盘 API
+ * @ref kernel/src/collaborable/super/super.ts — references — talk(super) 落盘 API
  * @ref docs/工程管理/迭代/all/20260422_refactor_SuperFlow转型.md — references — SuperFlow 转型迭代
  */
 

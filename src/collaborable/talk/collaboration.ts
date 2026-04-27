@@ -12,7 +12,7 @@
  * SuperFlow 转型（2026-04-22）：删除 talkToSelf / replyToFlow 原语。
  * 对象的反思通过通用 `talk(target="super")` 实现——world.onTalk 识别
  * super 特殊 target 后落盘到 `stones/{fromObject}/super/` 的独立 ThreadsTree。
- * 见 kernel/src/world/super.ts::handleOnTalkToSuper。
+ * 见 kernel/src/collaborable/super/super.ts::handleOnTalkToSuper。
  *
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md#4.2
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md#9
@@ -22,7 +22,7 @@
 import { consola } from "consola";
 import type {
   ThreadsTreeNodeMeta,
-} from "./types.js";
+} from "../../thread/types.js";
 
 /*
  * 注意：不再需要 import { enforceInboxLimits } from "./inbox.js"
@@ -36,7 +36,7 @@ import type {
 /** Object 解析器 — 获取其他 Object 的线程树 */
 export interface ObjectResolver {
   /** 获取指定 Object 的线程树（ThreadsTree 实例） */
-  getTree(objectName: string): import("./tree.js").ThreadsTree;
+  getTree(objectName: string): import("../../thread/tree.js").ThreadsTree;
   /** 检查 Object 是否存在 */
   objectExists(objectName: string): boolean;
 }

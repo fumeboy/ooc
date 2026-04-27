@@ -1,4 +1,4 @@
-// kernel/src/kanban/store.ts
+// kernel/src/collaborable/kanban/store.ts
 // issues/ 和 tasks/ 目录结构的读写操作
 
 import { join } from "node:path";

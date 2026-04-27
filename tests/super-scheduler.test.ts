@@ -14,7 +14,7 @@
  * 7. stop() 等待 in-flight runner 完成后返回（graceful shutdown）
  * 8. 未注册 stone 的 tick 不派发
  *
- * @ref kernel/src/thread/super-scheduler.ts
+ * @ref kernel/src/collaborable/super/super-scheduler.ts
  * @ref docs/工程管理/迭代/all/20260422_feature_super_scheduler.md
  */
 
@@ -23,8 +23,8 @@ import { mkdirSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { SuperScheduler, type SuperRunner } from "../src/thread/super-scheduler.js";
-import { handleOnTalkToSuper, getSuperThreadDir } from "../src/world/super.js";
+import { SuperScheduler, type SuperRunner } from "../src/collaborable/super/super-scheduler.js";
+import { handleOnTalkToSuper, getSuperThreadDir } from "../src/collaborable/super/super.js";
 
 function makeTmpRoot(prefix = "super-scheduler-test"): string {
   const base = join(tmpdir(), `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`);
