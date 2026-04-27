@@ -270,22 +270,22 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
 
   /* 3. parentExpectation
    *
-   * 语义：用当前节点的 title + description 构成"父线程对我的期望"。
-   * 为什么用当前节点的 description 而不是父节点的？
-   * 因为 description 是父线程在 think(fork) 时指定的，
-   * 描述的是"你被要求做什么"，属于当前节点的元数据，
-   * 而父节点的 title/description 描述的是父线程自身的任务。
-   * parentExpectation = 父节点的 title（提供上级任务名称）
-   *                   + 当前节点的 description（提供具体要求）
+   * 语义：当前节点自身的 title + description，描述"我被要求做什么"。
+   * title 是 think(fork) 时由父线程指定的子线程任务名称（即 <task> 的核心内容）。
+   * description 是对任务的补充说明，同样来自父线程创建子线程时传入的参数。
+   *
+   * BUG-C 修复（Symptom 2）：之前错误地使用了 parent.title（父线程自身的任务名），
+   * 导致子线程的 <task> 渲染的是父线程的任务标题，而非自己被分配的任务标题。
+   * 例如：submit(title="分析 G3 基因") 创建的子线程，其 <task> 应显示"分析 G3 基因"，
+   * 而不是"supervisor 主线程"（父线程的 title）。
+   * 父线程的上下文已通过 <creator> 和 <ancestor_summary> 提供，无需重复写入 <task>。
    */
   let parentExpectation = "";
   if (nodeMeta.parentId) {
-    const parent = tree.nodes[nodeMeta.parentId];
-    if (parent) {
-      parentExpectation = parent.title;
-      if (nodeMeta.description) {
-        parentExpectation += `\n${nodeMeta.description}`;
-      }
+    /* 有父节点：说明这是子线程，用自身 title 作为 <task> 核心内容 */
+    parentExpectation = nodeMeta.title;
+    if (nodeMeta.description) {
+      parentExpectation += `\n${nodeMeta.description}`;
     }
   }
 

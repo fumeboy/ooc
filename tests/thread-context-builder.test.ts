@@ -285,7 +285,10 @@ describe("buildThreadContext", () => {
     const ctx = buildThreadContext(input);
     expect(ctx.name).toBe("researcher");
     expect(ctx.whoAmI).toContain("研究员");
-    expect(ctx.parentExpectation).toContain("搜索论文");
+    /* BUG-C 修复：parentExpectation 应包含当前节点自身 title（"搜索子任务"），
+     * 而不是父节点 title（"搜索论文"）。父节点上下文已通过 ancestorSummary 提供。 */
+    expect(ctx.parentExpectation).toContain("搜索子任务");
+    expect(ctx.parentExpectation).not.toContain("搜索论文");
     expect(ctx.parentExpectation).toContain("AI Safety");
     expect(ctx.plan).toBe("1. 搜索 2. 整理");
     expect(ctx.process).toContain("父线程上下文");
@@ -415,8 +418,10 @@ describe("buildThreadContext", () => {
       targetNodeData,
     };
     const ctx = buildThreadContext(input);
-    /* Phase 5 完善：验证 targetNodeData 的 actions 被渲染到 Context 中 */
-    expect(ctx.parentExpectation).toContain("已完成的任务");
+    /* BUG-C 修复：parentExpectation 应包含当前节点自身 title（"回忆子线程"）
+     * 和 description（"你产出的文档路径在哪？"），而不是父节点 title（"已完成的任务"）。 */
+    expect(ctx.parentExpectation).toContain("回忆子线程");
+    expect(ctx.parentExpectation).not.toContain("已完成的任务");
     expect(ctx.parentExpectation).toContain("你产出的文档路径在哪？");
   });
 });

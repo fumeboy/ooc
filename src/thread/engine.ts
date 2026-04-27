@@ -1832,6 +1832,12 @@ export async function runWithThreadTree(
                     /* wait=true：父线程进入 waiting，等子线程完成后由 scheduler 唤醒 */
                     if (args.wait === true) {
                       await tree.awaitThreads(threadId, [child]);
+                      /* BUG-C 修复（Symptom 1）：子线程可能在 awaitThreads 调用之前已经完成。
+                       * 由于 onThreadCreated 是非 await 启动子线程循环，子线程可能在当前
+                       * 协程挂起后（_mutate 内的 await）就已经跑完并触发了 _checkAndWakeWaiters，
+                       * 而那时父线程还未处于 waiting 状态，scheduler 跳过了父线程。
+                       * 因此在 awaitThreads 完成后立即检查一次唤醒条件，防止永久死锁。 */
+                      await tree.checkAndWake(threadId);
                       const tdWait = tree.readThreadData(threadId);
                       if (tdWait) {
                         tdWait.actions.push({ type: "inject", content: `[think.fork wait=true] 等待子线程 ${child} 完成`, timestamp: Date.now() });
@@ -3148,6 +3154,9 @@ export async function resumeWithThreadTree(
                     /* wait=true：父线程进入 waiting，等子线程完成后由 scheduler 唤醒 */
                     if (args.wait === true) {
                       await tree.awaitThreads(threadId, [child]);
+                      /* BUG-C 修复（Symptom 1，resume 路径）：与 run 路径对称，
+                       * 在 awaitThreads 之后立即检查子线程是否已完成，防止死锁。 */
+                      await tree.checkAndWake(threadId);
                       const tdWait = tree.readThreadData(threadId);
                       if (tdWait) {
                         tdWait.actions.push({ type: "inject", content: `[think.fork wait=true] 等待子线程 ${child} 完成`, timestamp: Date.now() });
