@@ -8,14 +8,14 @@
  *   bun src/app/cli.ts list                — 列出所有对象
  *
  * @ref src/world/world.ts — references — World 根对象初始化
- * @ref src/observable/server/server.ts — references — startServer HTTP 服务
+ * @ref src/app/server.ts — references — startServer HTTP 服务
  */
 
 import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { consola } from "consola";
 import { World } from "../world/index.js";
-import { startServer } from "../observable/server/server.js";
+import { startServer } from "./server.js";
 
 /** user repo 根目录（即 cwd） */
 const OOC_ROOT = process.cwd();
