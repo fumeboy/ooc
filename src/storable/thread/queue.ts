@@ -11,7 +11,7 @@
  * @ref kernel/src/shared/utils/serial-queue.ts — references — 通用 SerialQueue 实现
  */
 
-import { SerialQueue } from "../shared/utils/serial-queue.js";
+import { SerialQueue } from "../../shared/utils/serial-queue.js";
 
 /**
  * 单实例级串行化队列——每个 ThreadsTree 用一个，所有 enqueue 共用一条链。

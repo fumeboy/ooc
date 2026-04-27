@@ -14,9 +14,9 @@ import {
   ThreadScheduler,
   type ThreadSchedulerConfig,
   type SchedulerCallbacks,
-} from "../src/thread/scheduler.js";
-import type { ThreadsTree } from "../src/thread/tree.js";
-import type { ThreadsTreeNodeMeta, ThreadStatus } from "../src/thread/types.js";
+} from "../src/thinkable/engine/scheduler.js";
+import type { ThreadsTree } from "../src/thinkable/thread-tree/tree.js";
+import type { ThreadsTreeNodeMeta, ThreadStatus } from "../src/thinkable/thread-tree/types.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_thread_scheduler_test");
 

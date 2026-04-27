@@ -31,8 +31,8 @@ import {
   getThreadDir,
   ensureThreadDir,
   getAncestorPath,
-} from "./persistence.js";
-import { WriteQueue } from "./queue.js";
+} from "../../storable/thread/persistence.js";
+import { WriteQueue } from "../../storable/thread/queue.js";
 
 /** 生成唯一节点 ID */
 function generateNodeId(): string {

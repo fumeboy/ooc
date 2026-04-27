@@ -16,19 +16,19 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { ThreadsTree } from "../src/thread/tree.js";
+import { ThreadsTree } from "../src/thinkable/thread-tree/tree.js";
 import { buildThreadContext } from "../src/thinkable/context/builder.js";
-import { getOpenFiles } from "../src/thread/open-files.js";
+import { getOpenFiles } from "../src/extendable/activation/open-files.js";
 import { FormManager } from "../src/executable/forms/form.js";
-import { collectCommandTraits } from "../src/thread/hooks.js";
+import { collectCommandTraits } from "../src/extendable/activation/hooks.js";
 import { resolveVirtualPath } from "../src/executable/protocol/virtual-path.js";
 import { scanPeers } from "../src/collaborable/relation/peers.js";
 import { readPeerRelations, renderRelationsIndex } from "../src/collaborable/relation/relation.js";
 import { deriveCommandPaths } from "../src/executable/commands/index.js";
-import { detectSelfKind } from "../src/thread/self-kind.js";
+import { detectSelfKind } from "../src/object/self-kind.js";
 
 import type { StoneData, TraitDefinition } from "../src/types/index.js";
-import type { ThreadDataFile } from "../src/thread/types.js";
+import type { ThreadDataFile } from "../src/thinkable/thread-tree/types.js";
 
 const TMP_ROOT = "/tmp/ooc-bruce-e14";
 const PROJECT_ROOT = resolve(import.meta.dir, "../..");

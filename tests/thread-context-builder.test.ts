@@ -22,7 +22,7 @@ import type {
   ThreadAction,
   ThreadInboxMessage,
   ThreadTodoItem,
-} from "../src/thread/types.js";
+} from "../src/thinkable/thread-tree/types.js";
 import type { SkillDefinition } from "../src/extendable/skill/types.js";
 
 /** 辅助：创建节点元数据 */

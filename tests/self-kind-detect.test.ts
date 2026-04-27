@@ -6,7 +6,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { detectSelfKind } from "../src/thread/self-kind.js";
+import { detectSelfKind } from "../src/object/self-kind.js";
 
 describe("detectSelfKind", () => {
   test("stones/<name>/ → stone", () => {

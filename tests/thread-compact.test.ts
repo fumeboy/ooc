@@ -2,7 +2,7 @@
  * Context Compact 测试
  *
  * 覆盖：
- * - src/thread/compact.ts 的纯函数：estimateActionsTokens / applyMarks / applyCompact / buildCompactHint
+ * - src/thinkable/context/compact.ts 的纯函数：estimateActionsTokens / applyMarks / applyCompact / buildCompactHint
  * - kernel/traits/compact/index.ts 的 llm_methods：list_actions / truncate_action / drop_action / close_trait / preview_compact
  * - context-builder 对 compact_summary 的渲染
  * - engine submit compact 分支（通过直接构造 threadData 验证）
@@ -20,9 +20,9 @@ import {
   buildCompactHint,
   previewCompactedTokens,
   COMPACT_THRESHOLD_TOKENS,
-} from "../src/thread/compact";
-import { ThreadsTree } from "../src/thread/tree";
-import type { ThreadAction, ThreadDataFile } from "../src/thread/types";
+} from "../src/thinkable/context/compact";
+import { ThreadsTree } from "../src/thinkable/thread-tree/tree";
+import type { ThreadAction, ThreadDataFile } from "../src/thinkable/thread-tree/types";
 import { renderThreadProcess } from "../src/thinkable/context/builder";
 import {
   llm_methods as compactMethods,

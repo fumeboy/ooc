@@ -12,7 +12,7 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import type { ThreadsTreeFile, ThreadDataFile } from "./types.js";
+import type { ThreadsTreeFile, ThreadDataFile } from "../../thinkable/thread-tree/types.js";
 
 const THREADS_TREE_FILENAME = "threads.json";
 const THREAD_DATA_FILENAME = "thread.json";

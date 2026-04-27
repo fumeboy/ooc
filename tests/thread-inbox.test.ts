@@ -5,7 +5,7 @@
  */
 import { describe, test, expect } from "bun:test";
 import { enforceInboxLimits } from "../src/collaborable/inbox/inbox.js";
-import type { ThreadInboxMessage } from "../src/thread/types.js";
+import type { ThreadInboxMessage } from "../src/thinkable/thread-tree/types.js";
 
 /** 辅助：生成 inbox 消息 */
 function makeMsg(id: string, status: "unread" | "marked", timestamp: number): ThreadInboxMessage {

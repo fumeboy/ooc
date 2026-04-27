@@ -413,7 +413,7 @@ export async function handleRoute(
     }
 
     /* 构造 MethodContext，含 notifyThread（写入根线程 inbox + 唤醒 done 线程 + 非阻塞 resume） */
-    const { ThreadsTree } = await import("../thread/tree.js");
+    const { ThreadsTree } = await import("../thinkable/thread-tree/tree.js");
     const objFlowDir = join(world.rootDir, "flows", sid, "objects", objectName);
     const tree = existsSync(objFlowDir) ? ThreadsTree.load(objFlowDir) : null;
 
@@ -905,7 +905,7 @@ export async function handleRoute(
     const objectName = body.objectName ?? "supervisor";
 
     /* 找到 thread.json 并更新 pins */
-    const { readThreadsTree, getAncestorPath, readThreadData, writeThreadData, getThreadDir } = await import("../thread/persistence.js");
+    const { readThreadsTree, getAncestorPath, readThreadData, writeThreadData, getThreadDir } = await import("../storable/thread/persistence.js");
     const objectFlowDir = join(world.flowsDir, sessionId, "objects", objectName);
     const tree = readThreadsTree(objectFlowDir);
     if (!tree || !tree.nodes[threadId]) return errorResponse(`Thread "${threadId}" 不存在`, 404);
@@ -1279,7 +1279,7 @@ export async function handleRoute(
     const url = new URL(req.url);
     const focusQuery = url.searchParams.get("focus") ?? undefined;
 
-    const { readThreadsTree } = await import("../thread/persistence.js");
+    const { readThreadsTree } = await import("../storable/thread/persistence.js");
     const { classifyContextVisibility, pickDefaultFocus } = await import("../observable/visibility/visibility.js");
 
     const objectFlowDir = join(world.flowsDir, sessionId, "objects", objectName);

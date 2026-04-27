@@ -9,19 +9,19 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-import { ThreadsTree } from "../src/thread/tree.js";
+import { ThreadsTree } from "../src/thinkable/thread-tree/tree.js";
 import {
   buildThreadContext,
   type ThreadContextInput,
 } from "../src/thinkable/context/builder.js";
-import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
+import { runWithThreadTree, type EngineConfig } from "../src/thinkable/engine/engine.js";
 import { MockLLMClient, type ToolCall } from "../src/thinkable/client.js";
 import type { StoneData } from "../src/types/index.js";
 import type {
   ThreadsTreeFile,
   ThreadsTreeNodeMeta,
   ThreadDataFile,
-} from "../src/thread/types.js";
+} from "../src/thinkable/thread-tree/types.js";
 import { eventBus } from "../src/observable/server/events.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_think_wait_deadlock_test");
@@ -262,7 +262,7 @@ describe("Symptom 1 — engine 集成: 子线程 title 与 submit.title 一致",
     expect(result.status === "waiting" || result.status === "failed").toBe(true);
 
     /* 通过磁盘上的 threads.json 验证子线程 title */
-    const { readThreadsTree } = await import("../src/thread/persistence.js");
+    const { readThreadsTree } = await import("../src/storable/thread/persistence.js");
     const objectFlowDir = `${FLOWS_DIR}/${result.sessionId}/objects/supervisor`;
     const treeFile = readThreadsTree(objectFlowDir);
     if (treeFile) {
@@ -340,7 +340,7 @@ describe("Symptom 1 — engine 集成: think(wait=true) 填充 awaitingChildren"
     expect(result.status === "waiting" || result.status === "failed").toBe(true);
 
     /* 通过磁盘读取 tree 状态，验证父节点 awaitingChildren 非空 */
-    const { readThreadsTree } = await import("../src/thread/persistence.js");
+    const { readThreadsTree } = await import("../src/storable/thread/persistence.js");
     const objectFlowDir = `${FLOWS_DIR}/${result.sessionId}/objects/parent`;
     const treeFile = readThreadsTree(objectFlowDir);
     if (treeFile && result.status === "waiting") {

@@ -26,7 +26,7 @@ import { join } from "node:path";
 import { mkdirSync } from "node:fs";
 import { consola } from "consola";
 
-import { ThreadsTree } from "../../thread/tree.js";
+import { ThreadsTree } from "../../thinkable/thread-tree/tree.js";
 import { SerialQueue } from "../../shared/utils/serial-queue.js";
 
 /**

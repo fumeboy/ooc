@@ -18,7 +18,7 @@
  */
 
 import { consola } from "consola";
-import type { ThreadsTreeNodeMeta, ThreadStatus } from "./types.js";
+import type { ThreadsTreeNodeMeta, ThreadStatus } from "../thread-tree/types.js";
 
 /* ========== 类型定义 ========== */
 

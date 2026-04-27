@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { threadStatusToFlowStatus, type TalkResult, type TalkReturn } from "./engine-types.js";
+import { threadStatusToFlowStatus, type TalkResult, type TalkReturn } from "../../thinkable/engine/types.js";
 
 /**
  * 把 TalkResult（线程树执行产物）落盘为 data.json + 封装为 TalkReturn

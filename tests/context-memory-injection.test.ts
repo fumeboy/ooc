@@ -13,9 +13,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { buildThreadContext } from "../src/thinkable/context/builder.js";
-import { ThreadsTree } from "../src/thread/tree.js";
+import { ThreadsTree } from "../src/thinkable/thread-tree/tree.js";
 import type { StoneData } from "../src/types/index.js";
-import type { ThreadsTreeFile } from "../src/thread/types.js";
+import type { ThreadsTreeFile } from "../src/thinkable/thread-tree/types.js";
 
 /** 把 ThreadsTree 转为 snapshot（与 engine 里的 buildTreeFileSnapshot 等价） */
 function snapshot(tree: ThreadsTree): ThreadsTreeFile {

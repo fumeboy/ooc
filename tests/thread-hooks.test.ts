@@ -10,8 +10,8 @@ import { describe, test, expect } from "bun:test";
 import {
   collectCommandTraits,
   collectCommandHooks,
-} from "../src/thread/hooks.js";
-import type { ThreadFrameHook } from "../src/thread/types.js";
+} from "../src/extendable/activation/hooks.js";
+import type { ThreadFrameHook } from "../src/thinkable/thread-tree/types.js";
 
 describe("collectCommandTraits", () => {
   test("匹配 activatesOn.showContentWhen 中的指令", () => {

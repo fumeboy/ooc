@@ -13,7 +13,7 @@ import {
   commentOnIssueWithNotify,
   type ObjectResolver,
 } from "../src/collaborable/talk/collaboration.js";
-import type { ThreadsTreeNodeMeta, ThreadInboxMessage, ThreadStatus } from "../src/thread/types.js";
+import type { ThreadsTreeNodeMeta, ThreadInboxMessage, ThreadStatus } from "../src/thinkable/thread-tree/types.js";
 import { createIssue } from "../src/collaborable/kanban/methods.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_issue_collab_test");

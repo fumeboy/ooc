@@ -22,7 +22,7 @@
 import { consola } from "consola";
 import type {
   ThreadsTreeNodeMeta,
-} from "../../thread/types.js";
+} from "../../thinkable/thread-tree/types.js";
 
 /*
  * 注意：不再需要 import { enforceInboxLimits } from "./inbox.js"
@@ -36,7 +36,7 @@ import type {
 /** Object 解析器 — 获取其他 Object 的线程树 */
 export interface ObjectResolver {
   /** 获取指定 Object 的线程树（ThreadsTree 实例） */
-  getTree(objectName: string): import("../../thread/tree.js").ThreadsTree;
+  getTree(objectName: string): import("../../thinkable/thread-tree/tree.js").ThreadsTree;
   /** 检查 Object 是否存在 */
   objectExists(objectName: string): boolean;
 }

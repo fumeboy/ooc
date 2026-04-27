@@ -28,7 +28,7 @@ describe("command execution split", () => {
   });
 
   test("engine delegates command execution instead of branching per command", () => {
-    const engine = readFileSync(join(import.meta.dir, "../src/thread/engine.ts"), "utf-8");
+    const engine = readFileSync(join(import.meta.dir, "../src/thinkable/engine/engine.ts"), "utf-8");
     for (const command of ["program", "talk", "return", "think", "set_plan", "await", "await_all", "compact", "defer"]) {
       expect(engine).not.toContain(`command === "${command}"`);
     }
@@ -36,7 +36,7 @@ describe("command execution split", () => {
   });
 
   test("engine keeps context rendering and flow data projection in focused modules", () => {
-    const engine = readFileSync(join(import.meta.dir, "../src/thread/engine.ts"), "utf-8");
+    const engine = readFileSync(join(import.meta.dir, "../src/thinkable/engine/engine.ts"), "utf-8");
 
     expect(engine).not.toContain("export function contextToMessages");
     expect(engine).not.toContain("export function writeThreadTreeFlowData");

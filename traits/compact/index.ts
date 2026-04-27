@@ -19,9 +19,9 @@
 import type { TraitMethod } from "../../src/types/index";
 import { toolOk, toolErr } from "../../src/types/tool-result";
 import type { ToolResult } from "../../src/types/tool-result";
-import type { ThreadsTree } from "../../src/thread/tree";
-import type { ThreadAction, ThreadDataFile } from "../../src/thread/types";
-import { estimateActionsTokens, previewCompactedTokens } from "../../src/thread/compact";
+import type { ThreadsTree } from "../../src/thinkable/thread-tree/tree";
+import type { ThreadAction, ThreadDataFile } from "../../src/thinkable/thread-tree/types";
+import { estimateActionsTokens, previewCompactedTokens } from "../../src/thinkable/context/compact";
 
 /** engine 在 buildExecContext 里注入的内部字段名 */
 interface CompactCtx {

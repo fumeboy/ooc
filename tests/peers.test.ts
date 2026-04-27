@@ -13,7 +13,7 @@
 
 import { describe, test, expect } from "bun:test";
 import { scanPeers } from "../src/collaborable/relation/peers.js";
-import type { ThreadDataFile } from "../src/thread/types.js";
+import type { ThreadDataFile } from "../src/thinkable/thread-tree/types.js";
 
 function threadData(actions: ThreadDataFile["actions"]): ThreadDataFile {
   return { id: "r", actions };

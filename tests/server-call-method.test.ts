@@ -19,7 +19,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { World } from "../src/world/world.js";
 import { handleRoute } from "../src/server/server.js";
-import { ThreadsTree } from "../src/thread/tree.js";
+import { ThreadsTree } from "../src/thinkable/thread-tree/tree.js";
 import type { LLMConfig } from "../src/thinkable/config.js";
 
 /** 测试用 LLMConfig：不依赖 OOC_API_KEY。端点测试不会真正调 chat。 */

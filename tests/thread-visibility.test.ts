@@ -17,7 +17,7 @@
  * @ref kernel/src/thinkable/context/builder.ts
  */
 import { describe, test, expect } from "bun:test";
-import type { ThreadsTreeFile, ThreadsTreeNodeMeta } from "../src/thread/types.js";
+import type { ThreadsTreeFile, ThreadsTreeNodeMeta } from "../src/thinkable/thread-tree/types.js";
 import { classifyContextVisibility, pickDefaultFocus, type ContextVisibility } from "../src/observable/visibility/visibility.js";
 
 /** 辅助：创建节点元数据 */

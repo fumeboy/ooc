@@ -21,7 +21,7 @@
  * @ref docs/superpowers/specs/2026-04-23-three-phase-trait-activation-design.md#第三部分-target终点
  */
 
-import type { ThreadDataFile } from "../../thread/types.js";
+import type { ThreadDataFile } from "../../thinkable/thread-tree/types.js";
 
 /** 系统通道保留字——不参与 peer / relation 记账 */
 const RESERVED_NAMES = new Set(["user", "system", "super"]);

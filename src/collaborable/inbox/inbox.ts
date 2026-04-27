@@ -8,7 +8,7 @@
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md#3.3
  */
 
-import type { ThreadInboxMessage } from "../../thread/types.js";
+import type { ThreadInboxMessage } from "../../thinkable/thread-tree/types.js";
 
 /** unread 消息上限 */
 const UNREAD_LIMIT = 50;

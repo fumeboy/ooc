@@ -1,4 +1,4 @@
-import type { ThreadStatus } from "./types.js";
+import type { ThreadStatus } from "../thread-tree/types.js";
 
 /** 执行结果 */
 export interface TalkResult {

@@ -29,17 +29,17 @@
  * @ref docs/superpowers/specs/2026-04-23-three-phase-trait-activation-design.md#第四部分-统一激活中枢
  */
 
-import type { TraitDefinition, StoneData, ContextWindow, ContextWindowSource } from "../types/index.js";
+import type { TraitDefinition, StoneData, ContextWindow, ContextWindowSource } from "../../types/index.js";
 import type {
   ThreadsTreeFile,
   ThreadDataFile,
-} from "./types.js";
-import { getActiveTraits, traitId as activatorTraitId } from "../extendable/knowledge/activator.js";
-import { getAncestorPath } from "./persistence.js";
+} from "../../thinkable/thread-tree/types.js";
+import { getActiveTraits, traitId as activatorTraitId } from "../knowledge/activator.js";
+import { getAncestorPath } from "../../storable/thread/persistence.js";
 import {
   computeThreadScopeChain,
   extractStoneTraitRefs,
-} from "../thinkable/context/builder.js";
+} from "../../thinkable/context/builder.js";
 
 /**
  * open-files 的输入参数

@@ -12,7 +12,7 @@
 
 import { describe, test, expect } from "bun:test";
 import { FormManager } from "../src/executable/forms/form.js";
-import { collectCommandTraits } from "../src/thread/hooks.js";
+import { collectCommandTraits } from "../src/extendable/activation/hooks.js";
 import type { TraitDefinition } from "../src/types/index.js";
 
 function trait(

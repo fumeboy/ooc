@@ -20,8 +20,8 @@
  * @ref kernel/src/thinkable/context/builder.ts
  */
 
-import type { ThreadsTreeFile } from "../../thread/types.js";
-import { getAncestorPath } from "../../thread/persistence.js";
+import type { ThreadsTreeFile } from "../../thinkable/thread-tree/types.js";
+import { getAncestorPath } from "../../storable/thread/persistence.js";
 
 /** 上下文可见性分类 */
 export type ContextVisibility =

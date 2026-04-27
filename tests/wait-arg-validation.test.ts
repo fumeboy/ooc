@@ -11,11 +11,11 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
+import { runWithThreadTree, type EngineConfig } from "../src/thinkable/engine/engine.js";
 import { MockLLMClient, type ToolCall } from "../src/thinkable/client.js";
 import type { StoneData } from "../src/types/index.js";
 import { eventBus } from "../src/observable/server/events.js";
-import type { ThreadAction } from "../src/thread/types.js";
+import type { ThreadAction } from "../src/thinkable/thread-tree/types.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_wait_arg_validation_test");
 const FLOWS_DIR = join(TEST_DIR, "flows");

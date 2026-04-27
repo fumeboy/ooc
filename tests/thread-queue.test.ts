@@ -6,7 +6,7 @@
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md#10.2
  */
 import { describe, test, expect } from "bun:test";
-import { WriteQueue } from "../src/thread/queue.js";
+import { WriteQueue } from "../src/storable/thread/queue.js";
 
 describe("WriteQueue", () => {
   test("顺序执行写入操作", async () => {

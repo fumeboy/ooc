@@ -76,7 +76,7 @@ export interface TalkFormOption {
   detail?: string;
 }
 
-/** Talk 结构化表单负载（与 `kernel/src/thread/types.ts` 镜像） */
+/** Talk 结构化表单负载（与 `kernel/src/thinkable/thread-tree/types.ts` 镜像） */
 export interface TalkFormPayload {
   formId: string;
   type: "single_choice" | "multi_choice";

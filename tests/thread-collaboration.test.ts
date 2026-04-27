@@ -21,14 +21,14 @@ import type {
   ThreadDataFile,
   ThreadInboxMessage,
   ThreadStatus,
-} from "../src/thread/types.js";
+} from "../src/thinkable/thread-tree/types.js";
 
 /* ========== Mock 基础设施 ========== */
 
 /**
  * 简易内存树 mock — 模拟 ThreadsTree 的真实 API
  *
- * 【重要】必须与 kernel/src/thread/tree.ts 的 ThreadsTree 公开 API 一致：
+ * 【重要】必须与 kernel/src/thinkable/thread-tree/tree.ts 的 ThreadsTree 公开 API 一致：
  * - rootId (getter)，不是 getRootId()
  * - createSubThread(parentId, title, options?) → Promise<string | null>
  * - setNodeStatus(nodeId, status) → Promise<void>

@@ -15,7 +15,7 @@
  * @ref docs/工程管理/迭代/all/20260422_feature_context_compact.md
  */
 
-import type { ThreadAction, ThreadDataFile } from "./types.js";
+import type { ThreadAction, ThreadDataFile } from "../thread-tree/types.js";
 
 /**
  * 默认 token 阈值：超过此值时 engine 在 context 末尾注入"建议 compact"提示

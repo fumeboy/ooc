@@ -25,13 +25,13 @@ import type {
   ThreadInboxMessage,
   ThreadTodoItem,
   ThreadStatus,
-} from "../../thread/types.js";
-import { getAncestorPath } from "../../thread/persistence.js";
+} from "../../thinkable/thread-tree/types.js";
+import { getAncestorPath } from "../../storable/thread/persistence.js";
 import { resolveTraitRef } from "../../extendable/knowledge/activator.js";
-import { getOpenFiles } from "../../thread/open-files.js";
+import { getOpenFiles } from "../../extendable/activation/open-files.js";
 import { scanPeers } from "../../collaborable/relation/peers.js";
 import { readPeerRelations, type PeerRelationEntry } from "../../collaborable/relation/relation.js";
-import { detectSelfKind } from "../../thread/self-kind.js";
+import { detectSelfKind } from "../../object/self-kind.js";
 import { getBuildFeedback, formatFeedbackForContext } from "../../world/hooks.js";
 import { getLatestCoverage } from "../../observable/test-runner/runner.js";
 import { serializeXml, type XmlNode } from "../../executable/protocol/xml.js";

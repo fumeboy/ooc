@@ -21,7 +21,7 @@ import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from "node
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { type EngineConfig } from "../src/thread/engine.js";
+import { type EngineConfig } from "../src/thinkable/engine/engine.js";
 import { runSuperThread } from "../src/collaborable/super/super-thread.js";
 import { MockLLMClient, type ToolCall, type MockLLMResponseFnResult } from "../src/thinkable/client.js";
 import type { StoneData, TraitDefinition } from "../src/types/index.js";
@@ -222,7 +222,7 @@ describe("engine.runSuperThread", () => {
 
   test("super 线程无 unread inbox → scheduler 跑完无副作用", async () => {
     /* 构造一个空 super（线程存在，inbox 无 unread） */
-    const { ThreadsTree } = await import("../src/thread/tree.js");
+    const { ThreadsTree } = await import("../src/thinkable/thread-tree/tree.js");
     mkdirSync(superDir, { recursive: true });
     await ThreadsTree.create(superDir, "bruce:super", "test");
 

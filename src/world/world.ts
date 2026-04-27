@@ -26,7 +26,7 @@ import { loadAllTraits, loadTraitsByRef } from "../extendable/trait/index.js";
 import { OpenAICompatibleClient, type LLMClient } from "../thinkable/client.js";
 import { DefaultConfig, type LLMConfig } from "../thinkable/config.js";
 import { emitSSE } from "../observable/server/events.js";
-import { runWithThreadTree, resumeWithThreadTree, stepOnceWithThreadTree, writeThreadTreeFlowData, type EngineConfig, type TalkResult, type TalkReturn } from "../thread/engine.js";
+import { runWithThreadTree, resumeWithThreadTree, stepOnceWithThreadTree, writeThreadTreeFlowData, type EngineConfig, type TalkResult, type TalkReturn } from "../thinkable/engine/engine.js";
 import { runSuperThread } from "../collaborable/super/super-thread.js";
 import { loadSkills } from "../extendable/skill/index.js";
 import { appendUserInbox } from "../storable/inbox/user-inbox.js";
@@ -707,7 +707,7 @@ export class World {
 
     const sessionDir = join(this.flowsDir, flowId);
     const objectFlowDir = join(sessionDir, "objects", objectName);
-    const { ThreadsTree } = await import("../thread/tree.js");
+    const { ThreadsTree } = await import("../thinkable/thread-tree/tree.js");
     const tree = ThreadsTree.load(objectFlowDir);
     if (!tree) throw new Error(`Flow "${flowId}" 不存在或缺少线程树数据`);
 
@@ -733,7 +733,7 @@ export class World {
 
     const sessionDir = join(this.flowsDir, flowId);
     const objectFlowDir = join(sessionDir, "objects", objectName);
-    const { ThreadsTree } = await import("../thread/tree.js");
+    const { ThreadsTree } = await import("../thinkable/thread-tree/tree.js");
     const tree = ThreadsTree.load(objectFlowDir);
     if (!tree) throw new Error(`Flow "${flowId}" 不存在或缺少线程树数据`);
 

@@ -14,8 +14,8 @@ import {
   getThreadDir,
   ensureThreadDir,
   getAncestorPath,
-} from "../src/thread/persistence.js";
-import type { ThreadsTreeFile, ThreadDataFile } from "../src/thread/types.js";
+} from "../src/storable/thread/persistence.js";
+import type { ThreadsTreeFile, ThreadDataFile } from "../src/thinkable/thread-tree/types.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_thread_persist_test");
 

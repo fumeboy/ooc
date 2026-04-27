@@ -12,7 +12,7 @@ import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { deriveCommandPaths, getOpenableCommands, COMMAND_TABLE } from "../src/executable/commands/index.js";
-import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
+import { runWithThreadTree, type EngineConfig } from "../src/thinkable/engine/engine.js";
 import { MockLLMClient, type ToolCall } from "../src/thinkable/client.js";
 import type { StoneData } from "../src/types/index.js";
 import { eventBus } from "../src/observable/server/events.js";

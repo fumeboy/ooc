@@ -8,8 +8,8 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { ThreadsTree } from "../src/thread/tree.js";
-import { readThreadsTree } from "../src/thread/persistence.js";
+import { ThreadsTree } from "../src/thinkable/thread-tree/tree.js";
+import { readThreadsTree } from "../src/storable/thread/persistence.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_waiting_type_test");
 

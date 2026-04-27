@@ -11,7 +11,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { ThreadsTree } from "../src/thread/tree.js";
+import { ThreadsTree } from "../src/thinkable/thread-tree/tree.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_talk_sync_wake_test");
 

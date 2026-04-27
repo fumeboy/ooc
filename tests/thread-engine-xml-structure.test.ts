@@ -16,7 +16,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
+import { runWithThreadTree, type EngineConfig } from "../src/thinkable/engine/engine.js";
 import { contextToMessages, type ActiveFormView } from "../src/thinkable/context/messages.js";
 import { MockLLMClient, type ToolCall, type MockLLMResponseFnResult } from "../src/thinkable/client.js";
 import { eventBus } from "../src/observable/server/events.js";

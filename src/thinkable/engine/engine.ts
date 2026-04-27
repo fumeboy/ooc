@@ -17,39 +17,39 @@ import { mkdirSync, existsSync, readFileSync, writeFileSync, readdirSync, unlink
 import { join, resolve } from "node:path";
 import { consola } from "consola";
 
-import { ThreadsTree } from "./tree.js";
+import { ThreadsTree } from "../thread-tree/tree.js";
 import { ThreadScheduler, type SchedulerCallbacks } from "./scheduler.js";
-import { buildThreadContext } from "../thinkable/context/builder.js";
-import { getOpenFiles } from "./open-files.js";
-import { emitSSE } from "../observable/server/events.js";
-import { CodeExecutor } from "../executable/sandbox/executor.js";
-import { MethodRegistry, type MethodContext } from "../extendable/trait/registry.js";
-import { traitId } from "../extendable/knowledge/activator.js";
-import { FormManager } from "../executable/forms/form.js";
-import { collectCommandTraits, collectCommandHooks } from "./hooks.js";
-import { executeCommand } from "../executable/commands/index.js";
-import { buildAvailableTools } from "../executable/tools/index.js";
-import { resolveVirtualPath, isVirtualPath } from "../executable/protocol/virtual-path.js";
-import { detectSelfKind } from "./self-kind.js";
-import { runBuildHooks } from "../world/hooks.js";
-import { contextToMessages, type ActiveFormView } from "../thinkable/context/messages.js";
-import { threadStatusToFlowStatus, type TalkResult } from "./engine-types.js";
+import { buildThreadContext } from "../context/builder.js";
+import { getOpenFiles } from "../../extendable/activation/open-files.js";
+import { emitSSE } from "../../observable/server/events.js";
+import { CodeExecutor } from "../../executable/sandbox/executor.js";
+import { MethodRegistry, type MethodContext } from "../../extendable/trait/registry.js";
+import { traitId } from "../../extendable/knowledge/activator.js";
+import { FormManager } from "../../executable/forms/form.js";
+import { collectCommandTraits, collectCommandHooks } from "../../extendable/activation/hooks.js";
+import { executeCommand } from "../../executable/commands/index.js";
+import { buildAvailableTools } from "../../executable/tools/index.js";
+import { resolveVirtualPath, isVirtualPath } from "../../executable/protocol/virtual-path.js";
+import { detectSelfKind } from "../../object/self-kind.js";
+import { runBuildHooks } from "../../world/hooks.js";
+import { contextToMessages, type ActiveFormView } from "../context/messages.js";
+import { threadStatusToFlowStatus, type TalkResult } from "./types.js";
 
-import type { LLMClient, Message, ToolCall } from "../thinkable/client.js";
-import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "../types/index.js";
-import type { SkillDefinition } from "../extendable/skill/types.js";
-import { writeDebugLoop, computeContextStats, getExistingLoopCount } from "../observable/debug/debug.js";
-import { loadSkillBody } from "../extendable/skill/loader.js";
+import type { LLMClient, Message, ToolCall } from "../client.js";
+import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "../../types/index.js";
+import type { SkillDefinition } from "../../extendable/skill/types.js";
+import { writeDebugLoop, computeContextStats, getExistingLoopCount } from "../../observable/debug/debug.js";
+import { loadSkillBody } from "../../extendable/skill/loader.js";
 import {
   estimateActionsTokens,
   buildCompactHint,
   COMPACT_THRESHOLD_TOKENS,
-} from "./compact.js";
+} from "../context/compact.js";
 import type {
   ThreadsTreeFile,
   ThreadAction,
   ThreadStatus,
-} from "./types.js";
+} from "../thread-tree/types.js";
 
 /* ========== 类型定义 ========== */
 
@@ -127,7 +127,7 @@ function isAlwaysTrait(traits: TraitDefinition[], fullId: string): boolean {
   return fullId === "kernel:base";
 }
 
-export type { TalkResult, TalkReturn } from "./engine-types.js";
+export type { TalkResult, TalkReturn } from "./types.js";
 /* ========== 辅助函数 ========== */
 
 /** 生成 session ID */
@@ -299,14 +299,14 @@ function resolveOpenFilePath(
  * @param raw - submit args 中 form 字段的原值
  * @returns 带生成 formId 的标准化 TalkFormPayload，或 null
  */
-function extractTalkForm(raw: unknown): import("./types.js").TalkFormPayload | null {
+function extractTalkForm(raw: unknown): import("../thread-tree/types.js").TalkFormPayload | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   const type = r.type;
   if (type !== "single_choice" && type !== "multi_choice") return null;
   const rawOptions = r.options;
   if (!Array.isArray(rawOptions) || rawOptions.length === 0) return null;
-  const options: import("./types.js").TalkFormOption[] = [];
+  const options: import("../thread-tree/types.js").TalkFormOption[] = [];
   for (const opt of rawOptions) {
     if (!opt || typeof opt !== "object") continue;
     const o = opt as Record<string, unknown>;
@@ -328,7 +328,7 @@ function extractTalkForm(raw: unknown): import("./types.js").TalkFormPayload | n
   };
 }
 
-export { writeThreadTreeFlowData } from "./flow-data.js";
+export { writeThreadTreeFlowData } from "../../storable/session/flow-data.js";
 
 /* ========== 核心引擎 ========== */
 
@@ -1506,7 +1506,7 @@ export async function runWithThreadTree(
  * 此函数遍历所有节点，构建一个只读快照。
  */
 function buildTreeFileSnapshot(tree: ThreadsTree): ThreadsTreeFile {
-  const nodes: Record<string, import("./types.js").ThreadsTreeNodeMeta> = {};
+  const nodes: Record<string, import("../thread-tree/types.js").ThreadsTreeNodeMeta> = {};
   for (const nodeId of tree.nodeIds) {
     const node = tree.getNode(nodeId);
     if (node) nodes[nodeId] = node;

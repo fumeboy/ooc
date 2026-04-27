@@ -72,7 +72,7 @@ describe("SuperScheduler", () => {
     /* 先投一条消息再 ack（让 inbox 无 unread）——此处简化：直接 talkToSuper
        一条，inbox 里是 unread，所以我们测的是"如果没 unread 就不跑"的场景。
        构造"没 unread"的 super：创建空线程树不写消息。 */
-    const { ThreadsTree } = await import("../src/thread/tree.js");
+    const { ThreadsTree } = await import("../src/thinkable/thread-tree/tree.js");
     const superDir = getSuperThreadDir(rootDir, "bruce");
     mkdirSync(superDir, { recursive: true });
     await ThreadsTree.create(superDir, "bruce:super", "test");
