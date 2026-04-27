@@ -17,7 +17,7 @@ import { describe, test, expect } from "bun:test";
 import {
   resolveVirtualPath,
   isVirtualPath,
-} from "../src/thread/virtual-path.js";
+} from "../src/executable/protocol/virtual-path.js";
 
 describe("isVirtualPath", () => {
   test("@trait: / @relation: 开头视为虚拟路径", () => {

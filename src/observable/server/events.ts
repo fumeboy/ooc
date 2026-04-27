@@ -10,7 +10,7 @@
  */
 
 import { EventEmitter } from "node:events";
-import type { Action, FlowMessage, FlowStatus } from "../types/index.js";
+import type { Action, FlowMessage, FlowStatus } from "../../types/index.js";
 
 /** SSE 事件类型 */
 export type SSEEvent =

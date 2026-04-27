@@ -24,7 +24,7 @@ import {
   getBuildFeedback,
   jsonSyntaxHook,
 } from "../src/world/hooks.js";
-import { eventBus } from "../src/server/events.js";
+import { eventBus } from "../src/observable/server/events.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_build_hooks_trigger_test");
 const FLOWS_DIR = join(TEST_DIR, "flows");

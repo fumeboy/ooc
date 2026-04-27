@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { World } from "../src/world/index.js";
 import { MockLLMClient, type ToolCall } from "../src/thinkable/client.js";
 import type { LLMConfig } from "../src/thinkable/config.js";
-import { eventBus } from "../src/server/events.js";
+import { eventBus } from "../src/observable/server/events.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_world_test");
 

@@ -25,7 +25,7 @@ import { Stone } from "../stone/index.js";
 import { loadAllTraits, loadTraitsByRef } from "../trait/index.js";
 import { OpenAICompatibleClient, type LLMClient } from "../thinkable/client.js";
 import { DefaultConfig, type LLMConfig } from "../thinkable/config.js";
-import { emitSSE } from "../server/events.js";
+import { emitSSE } from "../observable/server/events.js";
 import { runWithThreadTree, resumeWithThreadTree, stepOnceWithThreadTree, writeThreadTreeFlowData, type EngineConfig, type TalkResult, type TalkReturn } from "../thread/engine.js";
 import { runSuperThread } from "../thread/super-thread.js";
 import { loadSkills } from "../skill/index.js";

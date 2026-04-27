@@ -38,7 +38,7 @@ import { existsSync } from "node:fs";
 import { consola } from "consola";
 
 import { ThreadsTree } from "./tree.js";
-import { SerialQueue } from "../utils/serial-queue.js";
+import { SerialQueue } from "../shared/utils/serial-queue.js";
 import { getSuperThreadDir } from "../world/super.js";
 
 /**

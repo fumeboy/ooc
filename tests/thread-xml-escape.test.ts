@@ -1,5 +1,5 @@
 /**
- * src/thread/xml.ts 序列化辅助的单元测试
+ * src/executable/protocol/xml.ts 序列化辅助的单元测试
  *
  * 覆盖：
  * - 属性值 XML 实体转义（`&` `<` `>` `"`）
@@ -17,7 +17,7 @@ import {
   contentNeedsCdata,
   wrapCdata,
   serializeXml,
-} from "../src/thread/xml.js";
+} from "../src/executable/protocol/xml.js";
 
 describe("escapeAttr", () => {
   test("转义 & < > \"", () => {

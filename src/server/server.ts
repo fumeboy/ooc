@@ -6,13 +6,13 @@
  *
  * @ref docs/哲学文档/gene.md#G11 — references — 前端通过 API 获取对象数据进行 UI 渲染
  * @ref src/world/world.ts — references — World 根对象（API 操作入口）
- * @ref src/server/events.ts — references — SSE 事件总线
+ * @ref src/observable/server/events.ts — references — SSE 事件总线
  */
 
 import { join } from "node:path";
 import { existsSync, readFileSync, readdirSync, writeFileSync, statSync, mkdirSync } from "node:fs";
 import { consola } from "consola";
-import { eventBus, type SSEEvent } from "./events.js";
+import { eventBus, type SSEEvent } from "../observable/server/events.js";
 import { readFlow, listFlowSessions, readUserInbox, setUserReadObject } from "../persistence/index.js";
 import {
   readEditPlan,

@@ -24,7 +24,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { SerialQueue } from "../utils/serial-queue.js";
+import { SerialQueue } from "../shared/utils/serial-queue.js";
 
 /** inbox 条目：纯引用，不含正文 */
 export interface UserInboxEntry {

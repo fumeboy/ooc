@@ -4,14 +4,14 @@
  * 保证对 threads.json 的并发写入操作按 FIFO 顺序串行执行。
  * 每个 Object 的 ThreadsTree 持有一个 WriteQueue 实例。
  *
- * 内部委托给通用的 `SerialQueue`（`src/utils/serial-queue.ts`），对调用方保持
+ * 内部委托给通用的 `SerialQueue`（`src/shared/utils/serial-queue.ts`），对调用方保持
  * 原 API（`enqueue(fn)`，不需要 key），避免改动所有调用点。
  *
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md#10.2
- * @ref kernel/src/utils/serial-queue.ts — references — 通用 SerialQueue 实现
+ * @ref kernel/src/shared/utils/serial-queue.ts — references — 通用 SerialQueue 实现
  */
 
-import { SerialQueue } from "../utils/serial-queue.js";
+import { SerialQueue } from "../shared/utils/serial-queue.js";
 
 /**
  * 单实例级串行化队列——每个 ThreadsTree 用一个，所有 enqueue 共用一条链。

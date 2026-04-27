@@ -19,7 +19,7 @@ import { join } from "node:path";
 import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
 import { contextToMessages, type ActiveFormView } from "../src/thread/context-messages.js";
 import { MockLLMClient, type ToolCall, type MockLLMResponseFnResult } from "../src/thinkable/client.js";
-import { eventBus } from "../src/server/events.js";
+import { eventBus } from "../src/observable/server/events.js";
 import type { StoneData, DirectoryEntry, TraitDefinition } from "../src/types/index.js";
 import type { ThreadContext } from "../src/thread/context-builder.js";
 

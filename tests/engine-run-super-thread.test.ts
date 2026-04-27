@@ -27,7 +27,7 @@ import { MockLLMClient, type ToolCall, type MockLLMResponseFnResult } from "../s
 import type { StoneData, TraitDefinition } from "../src/types/index.js";
 import { handleOnTalkToSuper } from "../src/world/super.js";
 import { llm_methods as superLLMMethods } from "../../kernel/traits/reflective/super/index.js";
-import { eventBus } from "../src/server/events.js";
+import { eventBus } from "../src/observable/server/events.js";
 
 function makeTmpRoot(prefix = "engine-run-super-test"): string {
   const base = join(tmpdir(), `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`);

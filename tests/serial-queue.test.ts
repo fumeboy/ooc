@@ -11,7 +11,7 @@
  * @ref docs/工程管理/迭代/all/20260421_refactor_write_queue统一.md
  */
 import { describe, test, expect } from "bun:test";
-import { SerialQueue } from "../src/utils/serial-queue.js";
+import { SerialQueue } from "../src/shared/utils/serial-queue.js";
 
 /** 小工具：延时 */
 function sleep(ms: number): Promise<void> {

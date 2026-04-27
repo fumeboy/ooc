@@ -22,7 +22,7 @@ import type {
   ThreadsTreeNodeMeta,
   ThreadDataFile,
 } from "../src/thread/types.js";
-import { eventBus } from "../src/server/events.js";
+import { eventBus } from "../src/observable/server/events.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_think_wait_deadlock_test");
 const FLOWS_DIR = join(TEST_DIR, "flows");

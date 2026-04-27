@@ -34,7 +34,7 @@ import { readPeerRelations, type PeerRelationEntry } from "./relation.js";
 import { detectSelfKind } from "./self-kind.js";
 import { getBuildFeedback, formatFeedbackForContext } from "../world/hooks.js";
 import { getLatestCoverage } from "../test/runner.js";
-import { serializeXml, type XmlNode } from "./xml.js";
+import { serializeXml, type XmlNode } from "../executable/protocol/xml.js";
 import { existsSync, readFileSync } from "node:fs";
 import { join as pathJoin } from "node:path";
 

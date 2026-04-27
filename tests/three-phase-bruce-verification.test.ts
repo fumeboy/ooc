@@ -21,7 +21,7 @@ import { buildThreadContext } from "../src/thread/context-builder.js";
 import { getOpenFiles } from "../src/thread/open-files.js";
 import { FormManager } from "../src/thread/form.js";
 import { collectCommandTraits } from "../src/thread/hooks.js";
-import { resolveVirtualPath } from "../src/thread/virtual-path.js";
+import { resolveVirtualPath } from "../src/executable/protocol/virtual-path.js";
 import { scanPeers } from "../src/thread/peers.js";
 import { readPeerRelations, renderRelationsIndex } from "../src/thread/relation.js";
 import { deriveCommandPaths } from "../src/thread/commands/index.js";

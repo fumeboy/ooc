@@ -15,7 +15,7 @@ import { deriveCommandPaths, getOpenableCommands, COMMAND_TABLE } from "../src/t
 import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
 import { MockLLMClient, type ToolCall } from "../src/thinkable/client.js";
 import type { StoneData } from "../src/types/index.js";
-import { eventBus } from "../src/server/events.js";
+import { eventBus } from "../src/observable/server/events.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_think_wait_test");
 const FLOWS_DIR = join(TEST_DIR, "flows");

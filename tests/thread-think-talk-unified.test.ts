@@ -18,7 +18,7 @@ import { join } from "node:path";
 import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
 import { MockLLMClient, type ToolCall } from "../src/thinkable/client.js";
 import type { StoneData } from "../src/types/index.js";
-import { eventBus } from "../src/server/events.js";
+import { eventBus } from "../src/observable/server/events.js";
 import { OPEN_TOOL, SUBMIT_TOOL } from "../src/thread/tools/index.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_think_talk_test");

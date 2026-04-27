@@ -1,4 +1,4 @@
-import { serializeXml, type XmlNode } from "./xml.js";
+import { serializeXml, type XmlNode } from "../executable/protocol/xml.js";
 
 import type { Message } from "../thinkable/client.js";
 import type { buildThreadContext } from "./context-builder.js";
@@ -6,7 +6,7 @@ import type { ThreadFrameHook } from "./types.js";
 
 /* ========== Context → LLM Messages 转换 ========== */
 
-/* XML 结构化输出辅助已抽到独立模块 src/thread/xml.ts（便于单元测试） */
+/* XML 结构化输出辅助已抽到独立模块 src/executable/protocol/xml.ts（便于单元测试） */
 
 /**
  * 将 ThreadContext 转换为 LLM Messages
