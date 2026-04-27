@@ -1,4 +1,4 @@
-import type { CodeExecutor } from "../executor.js";
+import type { CodeExecutor } from "../sandbox/executor.js";
 import type { MethodContext, MethodRegistry } from "../../extendable/trait/registry.js";
 import type { TraitDefinition } from "../../types/index.js";
 import type { ActiveForm } from "../../thread/form.js";

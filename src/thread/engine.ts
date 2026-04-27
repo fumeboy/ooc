@@ -22,7 +22,7 @@ import { ThreadScheduler, type SchedulerCallbacks } from "./scheduler.js";
 import { buildThreadContext } from "./context-builder.js";
 import { getOpenFiles } from "./open-files.js";
 import { emitSSE } from "../observable/server/events.js";
-import { CodeExecutor } from "../executable/executor.js";
+import { CodeExecutor } from "../executable/sandbox/executor.js";
 import { MethodRegistry, type MethodContext } from "../extendable/trait/registry.js";
 import { traitId } from "../extendable/knowledge/activator.js";
 import { FormManager } from "./form.js";
