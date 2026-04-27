@@ -5,7 +5,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { parseTSDoc } from "../src/trait/index.js";
+import { parseTSDoc } from "../src/extendable/trait/index.js";
 
 describe("parseTSDoc", () => {
   test("解析单个函数的描述和参数", () => {

@@ -28,7 +28,7 @@ import type {
   TraitType,
   TraitNamespace,
   TraitKind,
-} from "../types/index.js";
+} from "../../types/index.js";
 import { traitId } from "../knowledge/activator.js";
 
 /** 合法 namespace 集合 */

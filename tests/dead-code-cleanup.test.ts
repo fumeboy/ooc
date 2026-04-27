@@ -51,14 +51,14 @@ describe("dead code cleanup", () => {
   });
 
   test("knowledge and library deprecated helpers are removed", () => {
-    expect(read("src/knowledge/reverse-index.ts")).not.toContain("lookupTraitsByPaths");
-    expect(read("src/knowledge/activator.ts")).not.toContain("getChildTraits");
-    expect(read("src/knowledge/index.ts")).not.toContain("getChildTraits");
-    expect(read("src/knowledge/index.ts")).not.toContain("lookupTraitsByPaths");
-    expect(read("src/trait/registry.ts")).not.toContain("getParamDefinition");
-    expect(read("src/trait/registry.ts")).not.toContain("trait.methods");
-    expect(read("src/trait/loader.ts")).not.toContain("legacyMethods");
-    expect(read("src/trait/loader.ts")).not.toContain("loadMethodsFromStructured");
+    expect(read("src/extendable/knowledge/reverse-index.ts")).not.toContain("lookupTraitsByPaths");
+    expect(read("src/extendable/knowledge/activator.ts")).not.toContain("getChildTraits");
+    expect(read("src/extendable/knowledge/index.ts")).not.toContain("getChildTraits");
+    expect(read("src/extendable/knowledge/index.ts")).not.toContain("lookupTraitsByPaths");
+    expect(read("src/extendable/trait/registry.ts")).not.toContain("getParamDefinition");
+    expect(read("src/extendable/trait/registry.ts")).not.toContain("trait.methods");
+    expect(read("src/extendable/trait/loader.ts")).not.toContain("legacyMethods");
+    expect(read("src/extendable/trait/loader.ts")).not.toContain("loadMethodsFromStructured");
     expect(read("traits/library_index/index.ts")).not.toContain("listLibrarySkills");
     expect(read("traits/library_index/index.ts")).not.toContain("readLibrarySkill");
   });

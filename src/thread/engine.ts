@@ -23,8 +23,8 @@ import { buildThreadContext } from "./context-builder.js";
 import { getOpenFiles } from "./open-files.js";
 import { emitSSE } from "../observable/server/events.js";
 import { CodeExecutor } from "../executable/executor.js";
-import { MethodRegistry, type MethodContext } from "../trait/registry.js";
-import { traitId } from "../knowledge/activator.js";
+import { MethodRegistry, type MethodContext } from "../extendable/trait/registry.js";
+import { traitId } from "../extendable/knowledge/activator.js";
 import { FormManager } from "./form.js";
 import { collectCommandTraits, collectCommandHooks } from "./hooks.js";
 import { executeCommand } from "./commands/index.js";
@@ -37,9 +37,9 @@ import { threadStatusToFlowStatus, type TalkResult } from "./engine-types.js";
 
 import type { LLMClient, Message, ToolCall } from "../thinkable/client.js";
 import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "../types/index.js";
-import type { SkillDefinition } from "../skill/types.js";
+import type { SkillDefinition } from "../extendable/skill/types.js";
 import { writeDebugLoop, computeContextStats, getExistingLoopCount } from "./debug.js";
-import { loadSkillBody } from "../skill/loader.js";
+import { loadSkillBody } from "../extendable/skill/loader.js";
 import {
   estimateActionsTokens,
   buildCompactHint,

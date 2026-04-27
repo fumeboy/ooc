@@ -1,5 +1,5 @@
 import type { CodeExecutor } from "../../executable/executor.js";
-import type { MethodContext, MethodRegistry } from "../../trait/registry.js";
+import type { MethodContext, MethodRegistry } from "../../extendable/trait/registry.js";
 import type { TraitDefinition } from "../../types/index.js";
 import type { ActiveForm } from "../form.js";
 import type { ThreadScheduler } from "../scheduler.js";

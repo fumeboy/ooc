@@ -8,7 +8,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { MethodRegistry } from "../src/trait/registry.js";
+import { MethodRegistry } from "../src/extendable/trait/registry.js";
 import type { TraitMethod } from "../src/types/index.js";
 
 /** 构造一个最小化的 TraitMethod */

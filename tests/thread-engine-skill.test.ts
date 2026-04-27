@@ -6,8 +6,8 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { loadSkillBody } from "../src/skill/loader.js";
-import type { SkillDefinition } from "../src/skill/types.js";
+import { loadSkillBody } from "../src/extendable/skill/loader.js";
+import type { SkillDefinition } from "../src/extendable/skill/types.js";
 
 const TMP = join(import.meta.dir, "__tmp_engine_skill__");
 

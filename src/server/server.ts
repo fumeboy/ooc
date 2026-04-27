@@ -21,7 +21,7 @@ import {
   cancelEditPlan,
 } from "../persistence/edit-plans.js";
 import { collectAllActions, createProcess } from "../persistence/process-compat.js";
-import { loadTrait } from "../trait/loader.js";
+import { loadTrait } from "../extendable/trait/loader.js";
 import { threadsToProcess } from "../persistence/thread-adapter.js";
 import type { World } from "../world/index.js";
 import type { FlowStatus, FlowMessage, Process, ProcessNode, Action, FlowData } from "../types/index.js";
@@ -381,7 +381,7 @@ export async function handleRoute(
     if (!stone) return errorResponse(`对象 "${objectName}" 不存在`, 404);
 
     /* 加载该对象的全部 self traits + views（kernel/library 不参与 HTTP call_method） */
-    const { loadObjectViews, loadTraitsFromDir } = await import("../trait/loader.js");
+    const { loadObjectViews, loadTraitsFromDir } = await import("../extendable/trait/loader.js");
     const stoneViews = await loadObjectViews(stone.dir);
     const flowObjectDir = join(world.rootDir, "flows", sid, "objects", objectName);
     const flowViews = existsSync(flowObjectDir) ? await loadObjectViews(flowObjectDir) : [];

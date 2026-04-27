@@ -23,7 +23,7 @@ import type {
   ThreadInboxMessage,
   ThreadTodoItem,
 } from "../src/thread/types.js";
-import type { SkillDefinition } from "../src/skill/types.js";
+import type { SkillDefinition } from "../src/extendable/skill/types.js";
 
 /** 辅助：创建节点元数据 */
 function makeNode(id: string, overrides?: Partial<ThreadsTreeNodeMeta>): ThreadsTreeNodeMeta {

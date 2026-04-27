@@ -8,7 +8,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadTrait } from "../src/trait/loader.js";
+import { loadTrait } from "../src/extendable/trait/loader.js";
 
 describe("loader parses activates_on.show_*_when", () => {
   let dir: string;

@@ -14,7 +14,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadObjectViews } from "../src/trait/loader.js";
+import { loadObjectViews } from "../src/extendable/trait/loader.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_view_loader_test");
 

@@ -16,7 +16,7 @@
  */
 
 import type { StoneData, DirectoryEntry, ContextWindow, TraitDefinition } from "../types/index.js";
-import type { SkillDefinition } from "../skill/types.js";
+import type { SkillDefinition } from "../extendable/skill/types.js";
 import type {
   ThreadsTreeFile,
   ThreadsTreeNodeMeta,
@@ -27,7 +27,7 @@ import type {
   ThreadStatus,
 } from "./types.js";
 import { getAncestorPath } from "./persistence.js";
-import { resolveTraitRef } from "../knowledge/activator.js";
+import { resolveTraitRef } from "../extendable/knowledge/activator.js";
 import { getOpenFiles } from "./open-files.js";
 import { scanPeers } from "./peers.js";
 import { readPeerRelations, type PeerRelationEntry } from "./relation.js";

@@ -5,7 +5,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadTrait } from "../src/trait/loader.js";
+import { loadTrait } from "../src/extendable/trait/loader.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_loader_methods_test");
 

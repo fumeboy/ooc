@@ -10,7 +10,7 @@
  * @ref docs/哲学文档/gene.md#G5 — references — 激活决定 context 中注入哪些知识内容
  */
 
-import type { TraitDefinition } from "../types/index.js";
+import type { TraitDefinition } from "../../types/index.js";
 
 /**
  * 获取 trait 的完整标识

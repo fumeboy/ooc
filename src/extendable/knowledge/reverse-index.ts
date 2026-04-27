@@ -9,7 +9,7 @@
  * @ref docs/superpowers/specs/2026-04-26-refine-tool-and-knowledge-activator.md
  */
 
-import type { TraitDefinition } from "../types/index.js";
+import type { TraitDefinition } from "../../types/index.js";
 import { traitId } from "./activator.js";
 
 export type PathReverseIndexEntry = {

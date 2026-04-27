@@ -8,8 +8,8 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadAllTraits } from "../src/trait/loader.js";
-import { traitId } from "../src/knowledge/activator.js";
+import { loadAllTraits } from "../src/extendable/trait/loader.js";
+import { traitId } from "../src/extendable/knowledge/activator.js";
 import {
   listLibraryTraits,
   searchLibrary,

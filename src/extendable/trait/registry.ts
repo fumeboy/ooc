@@ -17,7 +17,7 @@ import type {
   TraitMethod,
   TraitMethodParam,
   TraitMethodChannel,
-} from "../types/index.js";
+} from "../../types/index.js";
 import { traitId } from "../knowledge/activator.js";
 
 /** 方法执行上下文（注入到每个 trait 方法中） */

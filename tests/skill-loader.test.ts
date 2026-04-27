@@ -6,7 +6,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadSkills, loadSkillBody } from "../src/skill/loader.js";
+import { loadSkills, loadSkillBody } from "../src/extendable/skill/loader.js";
 
 const TMP = join(import.meta.dir, "__tmp_skills__");
 

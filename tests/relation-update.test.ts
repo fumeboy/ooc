@@ -12,7 +12,7 @@ import { mkdirSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ThreadsTree } from "../src/thread/tree.js";
-import { loadTrait } from "../src/trait/loader.js";
+import { loadTrait } from "../src/extendable/trait/loader.js";
 
 const TMP_ROOT = "/tmp/ooc-relation-update-test";
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));

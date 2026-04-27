@@ -9,8 +9,8 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadTrait, loadAllTraits, loadTraitsByRef } from "../src/trait/loader.js";
-import { getActiveTraits, traitId } from "../src/knowledge/activator.js";
+import { loadTrait, loadAllTraits, loadTraitsByRef } from "../src/extendable/trait/loader.js";
+import { getActiveTraits, traitId } from "../src/extendable/knowledge/activator.js";
 import type { TraitDefinition } from "../src/types/index.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_trait_test");

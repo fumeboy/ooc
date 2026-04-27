@@ -34,7 +34,7 @@ import type {
   ThreadsTreeFile,
   ThreadDataFile,
 } from "./types.js";
-import { getActiveTraits, traitId as activatorTraitId } from "../knowledge/activator.js";
+import { getActiveTraits, traitId as activatorTraitId } from "../extendable/knowledge/activator.js";
 import { getAncestorPath } from "./persistence.js";
 import {
   computeThreadScopeChain,
