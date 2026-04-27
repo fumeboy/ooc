@@ -14,7 +14,7 @@
  * @ref docs/superpowers/specs/2026-04-23-three-phase-trait-activation-design.md#第二部分-process过程
  */
 
-import { deriveCommandPaths } from "./commands/index.js";
+import { deriveCommandPaths } from "../executable/commands/index.js";
 
 /** 活跃的 Form */
 export interface ActiveForm {

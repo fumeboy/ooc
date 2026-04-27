@@ -42,8 +42,8 @@ describe("dead code cleanup", () => {
   test("low-risk thread/server dead symbols are gone", () => {
     expect(existsSync(join(root, "src/thread/world-adapter.ts"))).toBe(false);
     expect(existsSync(join(root, "src/thread/index.ts"))).toBe(false);
-    expect(read("src/thread/tools/schema.ts")).not.toContain("FORM_PARAM");
-    expect(read("src/thread/tools/index.ts")).not.toContain("FORM_PARAM");
+    expect(read("src/executable/tools/schema.ts")).not.toContain("FORM_PARAM");
+    expect(read("src/executable/tools/index.ts")).not.toContain("FORM_PARAM");
     expect(read("src/thread/debug.ts")).not.toContain("extractDirectiveTypes");
     expect(read("src/thread/relation.ts")).not.toContain("export function renderRelationsIndexInner");
     expect(read("src/server/server.ts")).not.toContain("hasSupervisorStone");

@@ -10,7 +10,7 @@
 import { describe, test, expect } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { deriveCommandPaths, COMMAND_TABLE, getOpenableCommands } from "../src/thread/commands/index.js";
+import { deriveCommandPaths, COMMAND_TABLE, getOpenableCommands } from "../src/executable/commands/index.js";
 
 describe("deriveCommandPaths — 根层级", () => {
   test("未知 command 名返回空数组", () => {
@@ -186,7 +186,7 @@ describe("COMMAND_TABLE — 结构性检查", () => {
 
   test("commands 目录不包含 tool-only 模块", () => {
     for (const toolName of ["open", "refine", "submit", "close", "wait"]) {
-      expect(existsSync(join(import.meta.dir, "../src/thread/commands", `${toolName}.ts`))).toBe(false);
+      expect(existsSync(join(import.meta.dir, "../src/executable/commands", `${toolName}.ts`))).toBe(false);
     }
   });
 

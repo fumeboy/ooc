@@ -13,7 +13,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-import { deriveCommandPaths, getOpenableCommands } from "../src/thread/commands/index.js";
+import { deriveCommandPaths, getOpenableCommands } from "../src/executable/commands/index.js";
 import { ThreadsTree } from "../src/thread/tree.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_talk_wait_fold_test");

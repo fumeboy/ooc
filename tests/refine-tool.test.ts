@@ -5,8 +5,8 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { OOC_TOOLS, REFINE_TOOL, OPEN_TOOL, SUBMIT_TOOL } from "../src/thread/tools/index.js";
-import { getOpenableCommands } from "../src/thread/commands/index.js";
+import { OOC_TOOLS, REFINE_TOOL, OPEN_TOOL, SUBMIT_TOOL } from "../src/executable/tools/index.js";
+import { getOpenableCommands } from "../src/executable/commands/index.js";
 
 describe("REFINE_TOOL definition", () => {
   test("exported and present in OOC_TOOLS", () => {

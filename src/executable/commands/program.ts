@@ -1,5 +1,5 @@
 import { consola } from "consola";
-import { executeShell } from "../../executable/executor.js";
+import { executeShell } from "../executor.js";
 import type { MethodContext } from "../../extendable/trait/registry.js";
 import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
 

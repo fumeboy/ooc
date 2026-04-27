@@ -24,7 +24,7 @@ import { collectCommandTraits } from "../src/thread/hooks.js";
 import { resolveVirtualPath } from "../src/executable/protocol/virtual-path.js";
 import { scanPeers } from "../src/thread/peers.js";
 import { readPeerRelations, renderRelationsIndex } from "../src/thread/relation.js";
-import { deriveCommandPaths } from "../src/thread/commands/index.js";
+import { deriveCommandPaths } from "../src/executable/commands/index.js";
 import { detectSelfKind } from "../src/thread/self-kind.js";
 
 import type { StoneData, TraitDefinition } from "../src/types/index.js";

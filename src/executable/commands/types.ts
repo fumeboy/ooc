@@ -1,10 +1,10 @@
-import type { CodeExecutor } from "../../executable/executor.js";
+import type { CodeExecutor } from "../executor.js";
 import type { MethodContext, MethodRegistry } from "../../extendable/trait/registry.js";
 import type { TraitDefinition } from "../../types/index.js";
-import type { ActiveForm } from "../form.js";
-import type { ThreadScheduler } from "../scheduler.js";
-import type { ThreadsTree } from "../tree.js";
-import type { TalkFormPayload } from "../types.js";
+import type { ActiveForm } from "../../thread/form.js";
+import type { ThreadScheduler } from "../../thread/scheduler.js";
+import type { ThreadsTree } from "../../thread/tree.js";
+import type { TalkFormPayload } from "../../thread/types.js";
 
 /** 命令表条目（扁平结构，无嵌套子节点）。 */
 export interface CommandTableEntry {

@@ -1,6 +1,6 @@
 import { consola } from "consola";
-import { applyCompact, estimateActionsTokens } from "../compact.js";
-import type { ThreadDataFile } from "../types.js";
+import { applyCompact, estimateActionsTokens } from "../../thread/compact.js";
+import type { ThreadDataFile } from "../../thread/types.js";
 import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
 
 export const compactCommand: CommandTableEntry = {

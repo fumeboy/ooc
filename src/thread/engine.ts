@@ -27,8 +27,8 @@ import { MethodRegistry, type MethodContext } from "../extendable/trait/registry
 import { traitId } from "../extendable/knowledge/activator.js";
 import { FormManager } from "./form.js";
 import { collectCommandTraits, collectCommandHooks } from "./hooks.js";
-import { executeCommand } from "./commands/index.js";
-import { buildAvailableTools } from "./tools/index.js";
+import { executeCommand } from "../executable/commands/index.js";
+import { buildAvailableTools } from "../executable/tools/index.js";
 import { resolveVirtualPath, isVirtualPath } from "../executable/protocol/virtual-path.js";
 import { detectSelfKind } from "./self-kind.js";
 import { runBuildHooks } from "../world/hooks.js";

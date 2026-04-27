@@ -19,7 +19,7 @@ import { runWithThreadTree, type EngineConfig } from "../src/thread/engine.js";
 import { MockLLMClient, type ToolCall } from "../src/thinkable/client.js";
 import type { StoneData } from "../src/types/index.js";
 import { eventBus } from "../src/observable/server/events.js";
-import { SUBMIT_TOOL, REFINE_TOOL } from "../src/thread/tools/index.js";
+import { SUBMIT_TOOL, REFINE_TOOL } from "../src/executable/tools/index.js";
 import type { TalkFormPayload, ThreadAction } from "../src/thread/types.js";
 import { handleRoute } from "../src/server/server.js";
 import { World } from "../src/world/world.js";

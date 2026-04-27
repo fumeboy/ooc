@@ -5,15 +5,15 @@ import { join } from "node:path";
 describe("command execution split", () => {
   test("each openable command module exports its execute function", async () => {
     const modules = {
-      await: await import("../src/thread/commands/await.js"),
-      await_all: await import("../src/thread/commands/await_all.js"),
-      compact: await import("../src/thread/commands/compact.js"),
-      defer: await import("../src/thread/commands/defer.js"),
-      program: await import("../src/thread/commands/program.js"),
-      return: await import("../src/thread/commands/return.js"),
-      set_plan: await import("../src/thread/commands/set_plan.js"),
-      talk: await import("../src/thread/commands/talk.js"),
-      think: await import("../src/thread/commands/think.js"),
+      await: await import("../src/executable/commands/await.js"),
+      await_all: await import("../src/executable/commands/await_all.js"),
+      compact: await import("../src/executable/commands/compact.js"),
+      defer: await import("../src/executable/commands/defer.js"),
+      program: await import("../src/executable/commands/program.js"),
+      return: await import("../src/executable/commands/return.js"),
+      set_plan: await import("../src/executable/commands/set_plan.js"),
+      talk: await import("../src/executable/commands/talk.js"),
+      think: await import("../src/executable/commands/think.js"),
     };
 
     expect(typeof modules.await.executeAwaitCommand).toBe("function");
