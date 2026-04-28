@@ -3,7 +3,7 @@
  *
  * 把 trait "激活" 折叠为 "文件 open"：
  * getOpenFiles(thread, stone) 返回三类文件路径集合：
- * - pinned: 对象 origin 阶段 open 的（readme.activated_traits + data._traits_ref 解析 + 线程显式 pin 的）
+ * - pinned: 常驻 open 的（kernel:base + 线程显式 pin 的）
  * - transient: process 阶段 open 的（command_binding / open(command) / refine 触发的）
  * - inject: target 阶段的 <relations> 索引等渲染片段（Phase 5/6 填充；此处测试空数组）
  *
@@ -84,7 +84,7 @@ function singleNodeTree(
   return { tree, threadData, threadId };
 }
 
-describe("getOpenFiles — origin 阶段（stone readme + _traits_ref）", () => {
+describe("getOpenFiles — origin 阶段", () => {
   test("kernel:base 被 open 进 pinned（origin 层）", () => {
     const traits = [trait("kernel", "base")];
     const s = stone();
@@ -95,7 +95,7 @@ describe("getOpenFiles — origin 阶段（stone readme + _traits_ref）", () =>
     expect(ids).toContain("kernel:base");
   });
 
-  test("_traits_ref 列出的 trait 被 open 进 pinned（origin 层）", () => {
+  test("data._traits_ref 不再默认激活 trait", () => {
     const traits = [
       trait("library", "git_ops"),
       trait("kernel", "talkable"),
@@ -105,11 +105,11 @@ describe("getOpenFiles — origin 阶段（stone readme + _traits_ref）", () =>
 
     const result = getOpenFiles({ tree, threadId, threadData, stone: s, traits });
     const ids = result.pinned.map((w) => w.name);
-    expect(ids).toContain("library:git_ops");
-    expect(ids).toContain("kernel:talkable");
+    expect(ids).not.toContain("library:git_ops");
+    expect(ids).not.toContain("kernel:talkable");
   });
 
-    test("不在 _traits_ref 中的普通 trait → 不在 pinned", () => {
+  test("不在显式 pin 中的普通 trait → 不在 pinned", () => {
     const traits = [
       trait("library", "secret_trait"),
       trait("library", "git_ops"),
@@ -119,7 +119,7 @@ describe("getOpenFiles — origin 阶段（stone readme + _traits_ref）", () =>
 
     const result = getOpenFiles({ tree, threadId, threadData, stone: s, traits });
     const ids = result.pinned.map((w) => w.name);
-    expect(ids).toContain("library:git_ops");
+    expect(ids).not.toContain("library:git_ops");
     expect(ids).not.toContain("library:secret_trait");
   });
 });
@@ -185,8 +185,10 @@ describe("getOpenFiles — instructions 区分（kernel → instructions，其�
       trait("library", "git_ops"),
       trait("self", "reporter"),
     ];
-    const s = stone({ _traits_ref: ["library:git_ops", "self:reporter"] });
-    const { tree, threadData, threadId } = singleNodeTree();
+    const s = stone();
+    const { tree, threadData, threadId } = singleNodeTree({
+      activatedTraits: ["library:git_ops", "self:reporter"],
+    });
 
     const result = getOpenFiles({ tree, threadId, threadData, stone: s, traits });
     expect(result.instructions.map((w) => w.name)).toContain("kernel:base");
@@ -215,7 +217,7 @@ describe("getOpenFiles — activeTraitIds 便利属性", () => {
       trait("kernel", "base"),
       trait("library", "git_ops"),
     ];
-    const s = stone({ _traits_ref: ["library:git_ops"] });
+    const s = stone();
     const { tree, threadData, threadId } = singleNodeTree({
       activatedTraits: ["library:git_ops"] /* 重复声明：应去重 */,
     });
@@ -233,7 +235,7 @@ describe("getOpenFiles — activeTraitIds 便利属性", () => {
  * Phase 3 — llm_input_viewer：source 来源溯源
  *
  * 每个 ContextWindow 带一个 source 枚举，用于前端 hover 显示"为什么激活"。
- * 优先级：always_on > thread_pinned > stone_default > command_binding > scope_chain
+ * 优先级：always_on > thread_pinned > command_binding > from_parent
  */
 describe("getOpenFiles — source 来源溯源（Phase 3）", () => {
   function findByName(
@@ -264,13 +266,13 @@ describe("getOpenFiles — source 来源溯源（Phase 3）", () => {
     expect(w?.source).toBe("thread_pinned");
   });
 
-  test("stone._traits_ref → source=stone_default", () => {
+  test("stone._traits_ref 不再产生 source=stone_default", () => {
     const traits = [trait("library", "git_ops")];
     const s = stone({ _traits_ref: ["library:git_ops"] });
     const { tree, threadData, threadId } = singleNodeTree();
     const result = getOpenFiles({ tree, threadId, threadData, stone: s, traits });
-    const w = findByName(result.pinned, "library:git_ops");
-    expect(w?.source).toBe("stone_default");
+    const w = findByName([...result.pinned, ...result.transient], "library:git_ops");
+    expect(w).toBeUndefined();
   });
 
   test("仅 activatedTraits（非 pinned） → source=command_binding（transient）", () => {
@@ -285,10 +287,10 @@ describe("getOpenFiles — source 来源溯源（Phase 3）", () => {
     expect(w?.lifespan).toBe("transient");
   });
 
-  test("优先级：always_on > thread_pinned > stone_default > command_binding", () => {
-    /* kernel:base 同时命中 pinnedTraits + stoneRefs + activatedTraits → 取 always_on */
+  test("优先级：always_on > thread_pinned > command_binding", () => {
+    /* kernel:base 同时命中 pinnedTraits + activatedTraits → 取 always_on */
     const traits = [trait("kernel", "base")];
-    const s = stone({ _traits_ref: ["kernel:base"] });
+    const s = stone();
     const { tree, threadData, threadId } = singleNodeTree({
       activatedTraits: ["kernel:base"],
       pinnedTraits: ["kernel:base"],
@@ -296,5 +298,38 @@ describe("getOpenFiles — source 来源溯源（Phase 3）", () => {
     const result = getOpenFiles({ tree, threadId, threadData, stone: s, traits });
     const w = findByName(result.pinned, "kernel:base");
     expect(w?.source).toBe("always_on");
+  });
+
+  test("祖先线程 traits 继承 → source=from_parent", () => {
+    const traits = [trait("library", "research")];
+    const s = stone();
+    const tree: ThreadsTreeFile = {
+      rootId: "root",
+      nodes: {
+        root: {
+          id: "root",
+          title: "root",
+          status: "running",
+          childrenIds: ["child"],
+          traits: ["library:research"],
+          createdAt: 0,
+          updatedAt: 0,
+        },
+        child: {
+          id: "child",
+          parentId: "root",
+          title: "child",
+          status: "running",
+          childrenIds: [],
+          createdAt: 0,
+          updatedAt: 0,
+        },
+      },
+    };
+    const threadData: ThreadDataFile = { id: "child", events: [] };
+
+    const result = getOpenFiles({ tree, threadId: "child", threadData, stone: s, traits });
+    const w = findByName(result.knowledge, "library:research");
+    expect(w?.source).toBe("from_parent");
   });
 });

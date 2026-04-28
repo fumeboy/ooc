@@ -30,17 +30,15 @@ export function readStone(dir: string): StoneData | null {
   const readmePath = join(dir, "readme.md");
   const dataPath = join(dir, "data.json");
 
-  /* 解析 readme.md → thinkable + talkable + activatedTraits */
+  /* 解析 readme.md → thinkable + talkable */
   let thinkable = { whoAmI: "" };
   let talkable = { whoAmI: "", functions: [] as StoneData["talkable"]["functions"] };
-  let readmeActivatedTraits: string[] = [];
 
   if (existsSync(readmePath)) {
     const content = readFileSync(readmePath, "utf-8");
     const parsed = parseReadme(content);
     thinkable = parsed.thinkable;
     talkable = parsed.talkable;
-    readmeActivatedTraits = parsed.activatedTraits;
   }
 
   /* 读取 data.json */
@@ -51,27 +49,6 @@ export function readStone(dir: string): StoneData | null {
     } catch {
       data = {};
     }
-  }
-
-  /* 合并 readme.activated_traits 与 data._traits_ref：
-   * - readme 条目优先（代表对象身份声明，入库、持久）
-   * - data 条目作为补充（运行时/本地策略）
-   * 两者去重合并后写回 data._traits_ref 作为统一输出。
-   */
-  if (readmeActivatedTraits.length > 0 || Array.isArray(data._traits_ref)) {
-    const existing = Array.isArray(data._traits_ref)
-      ? (data._traits_ref as unknown[]).filter(
-          (x): x is string => typeof x === "string" && x.length > 0,
-        )
-      : [];
-    const merged: string[] = [];
-    const seen = new Set<string>();
-    for (const x of [...readmeActivatedTraits, ...existing]) {
-      if (seen.has(x)) continue;
-      seen.add(x);
-      merged.push(x);
-    }
-    data._traits_ref = merged;
   }
 
   /* 从 data 中提取 relations（如果有） */
@@ -87,9 +64,6 @@ export function readStone(dir: string): StoneData | null {
       .filter((d) => d.isDirectory())
       .map((d) => d.name);
   }
-
-  /* 移除内部字段，只保留用户数据 */
-  const { _relations: _, ...userData } = data;
 
   /* 读取 memory.md（长期记忆索引） */
   const memoryPath = join(dir, "memory.md");

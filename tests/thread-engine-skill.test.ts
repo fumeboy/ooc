@@ -1,7 +1,7 @@
 /**
- * Engine 层 useSkill 集成测试
+ * Engine 层 open(type="skill") 集成测试
  *
- * 验证 useSkill 指令的完整流程：查找 skill → 读取 body → 写入 inject action
+ * 验证 skill 加载流程：查找 skill → 读取 body → 写入 inject event
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
@@ -27,7 +27,7 @@ function createSkill(name: string, body: string) {
   return dir;
 }
 
-describe("useSkill engine flow", () => {
+describe('open(type="skill") engine flow', () => {
   test("skill 找到时：loadSkillBody 返回 body 内容", () => {
     const dir = createSkill("commit", "# Commit 流程\n\n1. 检查 status");
     const body = loadSkillBody(dir);

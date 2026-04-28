@@ -46,6 +46,20 @@ whoAmI: 工具对象
     expect(result.talkable.whoAmI).toBe("工具对象");
     expect(result.thinkable.whoAmI).toBe("");
   });
+
+  test("忽略废弃的 activated_traits frontmatter", () => {
+    const content = `---
+whoAmI: 工具对象
+activated_traits:
+  - kernel:computable
+---
+我是一个工具对象。`;
+
+    const result = parseReadme(content);
+
+    expect(result.talkable.whoAmI).toBe("工具对象");
+    expect((result as unknown as { activatedTraits?: string[] }).activatedTraits).toBeUndefined();
+  });
 });
 
 describe("serializeReadme", () => {

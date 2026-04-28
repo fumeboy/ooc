@@ -256,10 +256,9 @@ function renderNodeLabel(node: ParsedNode): string {
 const SOURCE_EXPLANATION: Record<string, string> = {
   always_on: "Trait 自身 when=\"always\" 声明的常驻激活（系统级强制）",
   thread_pinned: "当前线程显式 open(type=trait) pin 的窗口",
-  stone_default: "stone.data._traits_ref 里声明的对象级默认激活",
   command_binding: "open(type=command) / partial submit 通过 command_binding 带入的临时 trait（form 关闭即回收）",
-  scope_chain: "祖先线程的 traits 字段静态声明",
-  skill_index: "available-skills 索引窗口（可通过 use_skill 按需加载完整内容）",
+  from_parent: "从父级/祖先线程继承的 traits 静态声明",
+  skill_index: 'available-skills 索引窗口（可通过 open(type="skill") 按需加载完整内容）',
   memory: "对象长期记忆（stone/memory/index.md 或 legacy memory.md）",
   coverage: "最近一次 bun test --coverage 结果摘要",
   build_feedback: "最近未通过的 build hook 反馈（file_ops 后触发）",

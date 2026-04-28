@@ -57,6 +57,43 @@ describe("readStone / writeStone", () => {
     const result = readStone(join(TEST_DIR, "nonexistent"));
     expect(result).toBeNull();
   });
+
+  test("readme activated_traits 不再合并为 data._traits_ref", () => {
+    const dir = join(TEST_DIR, "objects", "legacy");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "readme.md"),
+      `---
+whoAmI: legacy
+activated_traits:
+  - kernel:computable
+---
+legacy object`,
+    );
+    writeFileSync(join(dir, "data.json"), JSON.stringify({ topic: "legacy" }, null, 2));
+
+    const loaded = readStone(dir);
+
+    expect(loaded).not.toBeNull();
+    expect(loaded!.data.topic).toBe("legacy");
+    expect((loaded!.data as Record<string, unknown>)._traits_ref).toBeUndefined();
+  });
+
+  test("data._traits_ref 作为废弃配置读取时会被过滤", () => {
+    const dir = join(TEST_DIR, "objects", "legacy-data");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "readme.md"), "legacy object");
+    writeFileSync(
+      join(dir, "data.json"),
+      JSON.stringify({ _traits_ref: ["kernel:computable"], topic: "legacy" }, null, 2),
+    );
+
+    const loaded = readStone(dir);
+
+    expect(loaded).not.toBeNull();
+    expect(loaded!.data.topic).toBe("legacy");
+    expect((loaded!.data as Record<string, unknown>)._traits_ref).toBeUndefined();
+  });
 });
 
 describe("readFlow / writeFlow", () => {

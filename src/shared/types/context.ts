@@ -23,11 +23,10 @@ export interface DirectoryEntry {
  * 描述"这个窗口为什么会出现在 context 里"，用于前端 hover tooltip 溯源。
  *
  * 枚举值：
- * - stone_default: stone.data._traits_ref 里声明的对象级默认激活
  * - thread_pinned: 线程显式 open(type="trait") pin 的 trait
  * - always_on:    系统协议基座（kernel:base）常驻激活
  * - command_binding: 被 open(type="command") / refine 通过 command_binding 带入的 transient trait
- * - scope_chain:  线程祖先链 traits/activatedTraits 中声明的激活（未归入上面几类）
+ * - from_parent:  线程祖先链 traits/activatedTraits 中声明的激活（未归入上面几类）
  * - skill_index:  `available-skills` 索引窗口
  * - memory:       `{stoneDir}/memory/index.md` 或 legacy `memory.md` 的注入
  * - coverage:     最近一次 --coverage 结果
@@ -36,11 +35,10 @@ export interface DirectoryEntry {
  * - extra:        engine 调用方通过 extraWindows 注入
  */
 export type ContextWindowSource =
-  | "stone_default"
   | "thread_pinned"
   | "always_on"
   | "command_binding"
-  | "scope_chain"
+  | "from_parent"
   | "skill_index"
   | "memory"
   | "coverage"

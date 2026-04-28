@@ -9,8 +9,7 @@
  *
  * 本模块提供统一的 `getOpenFiles(input)`，输出三类：
  *
- * - `pinned`    Origin 阶段（常驻）open 的文件：stone readme.activated_traits +
- *               data._traits_ref 解析出的 trait，加上线程显式 pin 的 trait。
+ * - `pinned`    常驻 open 的文件：系统协议基座和线程显式 pin 的 trait。
  *
  * - `transient` Process 阶段由 command_binding / open(type="command") /
  *               refine 触发的 trait 激活。**form 关闭后自动回收**。
@@ -36,10 +35,7 @@ import type {
 } from "../../thinkable/thread-tree/types.js";
 import { getActiveTraits, traitId as activatorTraitId } from "../knowledge/activator.js";
 import { getAncestorPath } from "../../storable/thread/persistence.js";
-import {
-  computeThreadScopeChain,
-  extractStoneTraitRefs,
-} from "../../thinkable/context/builder.js";
+import { computeThreadScopeChain } from "../../thinkable/context/builder.js";
 
 /**
  * open-files 的输入参数
@@ -62,7 +58,7 @@ export interface OpenFilesInput {
  * 便利拆分——调用方可直接拿去填 <system> / <user> 的知识区域。
  */
 export interface OpenFiles {
-  /** Origin 阶段 open 的文件（stone 默认 + 线程 pin 的） */
+  /** 常驻 open 的文件（系统协议基座 + 线程 pin 的） */
   pinned: ContextWindow[];
   /** Process 阶段 open 的文件（command_binding / refine 触发的，form 关闭即回收） */
   transient: ContextWindow[];
@@ -89,7 +85,7 @@ function isKernelTrait(id: string): boolean {
  * 逻辑，只是出口换成 OpenFiles 结构。
  *
  * 执行步骤：
- * 1. scope chain：stone._traits_ref + 祖先链 traits + activatedTraits（computeThreadScopeChain）
+ * 1. scope chain：祖先链 traits + activatedTraits（computeThreadScopeChain）
  * 2. 激活集合：getActiveTraits（处理 scope chain / deps 递归）
  * 3. 按 pinnedTraits 拆分：在 pinnedTraits 里的 → pinned；否则 → transient
  * 4. 按 namespace 拆分 instructions（kernel）/ knowledge（非 kernel）
@@ -103,15 +99,13 @@ export function getOpenFiles(input: OpenFilesInput): OpenFiles {
   }
 
   /* 1. scope chain */
-  const stoneRefs = extractStoneTraitRefs(stone, traits);
-  const scopeChain = computeThreadScopeChain(tree, threadId, stoneRefs);
+  const scopeChain = computeThreadScopeChain(tree, threadId);
 
   /* 2. 激活集合（含 deps 递归） */
   const activeTraits = getActiveTraits(traits, scopeChain);
 
   /* 3. pinned 集合（同旧逻辑） */
   const pinnedKeys = new Set<string>([
-    ...stoneRefs,
     ...(nodeMeta.pinnedTraits ?? []),
   ]);
   if (activeTraits.some((t) => activatorTraitId(t) === "kernel:base")) pinnedKeys.add("kernel:base");
@@ -119,12 +113,10 @@ export function getOpenFiles(input: OpenFilesInput): OpenFiles {
   /* Phase 3 — llm_input_viewer：计算每个 window 的 source（来源溯源）。
    *
    * 收集以下集合以做优先级判定：
-   * - stoneRefSet: stone._traits_ref（对象级默认）
    * - threadPinnedSet: 当前节点 pinnedTraits（线程显式 pin）
    * - activatedSet: 祖先链任一节点的 activatedTraits（由 open/command_binding 动态激活）
    * - scopeTraitsSet: 祖先链任一节点的 traits 字段（静态声明集合）
    */
-  const stoneRefSet = new Set(stoneRefs);
   const threadPinnedSet = new Set(nodeMeta.pinnedTraits ?? []);
   const activatedSet = new Set<string>();
   const scopeTraitsSet = new Set<string>();
@@ -144,15 +136,13 @@ export function getOpenFiles(input: OpenFilesInput): OpenFiles {
     /* 优先级：精确 → 泛化
      * 1. always_on：kernel:base 协议基座常驻
      * 2. thread_pinned：当前节点显式 pin
-     * 3. stone_default：stone._traits_ref 声明
-     * 4. command_binding：任何节点 activatedTraits 动态激活
-     * 5. scope_chain：兜底——祖先 traits 声明集合 */
+     * 3. command_binding：任何节点 activatedTraits 动态激活
+     * 4. from_parent：兜底——祖先 traits 声明集合 */
     if (id === "kernel:base") return "always_on";
     if (threadPinnedSet.has(id)) return "thread_pinned";
-    if (stoneRefSet.has(id)) return "stone_default";
     if (activatedSet.has(id)) return "command_binding";
-    if (scopeTraitsSet.has(id)) return "scope_chain";
-    return "scope_chain";
+    if (scopeTraitsSet.has(id)) return "from_parent";
+    return "from_parent";
   }
 
   const pinned: ContextWindow[] = [];
@@ -187,6 +177,7 @@ export function getOpenFiles(input: OpenFilesInput): OpenFiles {
   }
 
   void threadData; /* 当前阶段不直接读 threadData；Phase 5/6 扩展 */
+  void stone; /* 对象级默认 trait 配置已废弃；保留入参用于调用方结构一致 */
 
   return {
     pinned,

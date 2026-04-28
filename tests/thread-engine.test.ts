@@ -666,6 +666,9 @@ describe("Context 构建", () => {
   test("Stone 的 whoAmI 出现在 system message 中", async () => {
     let systemMsg = "";
     const steps: MockStep[] = [
+      () => {
+        return { content: "", toolCalls: [toolCall("open", { type: "trait", name: "kernel:my_trait", title: "加载测试 trait", description: "验证 trait 内容进入 context" })] };
+      },
       (messages: unknown[]) => {
         const sys = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "system");
         if (sys) systemMsg = sys.content;
@@ -716,12 +719,12 @@ describe("Context 构建", () => {
   test("traits 的 readme 出现在 Context 中", async () => {
     let systemMsg = "";
     const steps: MockStep[] = [
-      (messages: unknown[]) => {
-        const sys = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "system");
-        if (sys) systemMsg = sys.content;
+      (_messages: unknown[]) => {
         return { content: "", toolCalls: [toolCall("open", { type: "command", command: "return", description: "完成" })] };
       },
       (messages: unknown[]) => {
+        const sys = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "system");
+        if (sys) systemMsg = sys.content;
         const u = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
         const m = u.match(/<form id="(f_[^\"]+)" command="return"/);
         return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", summary: "完成" })] };
@@ -729,10 +732,6 @@ describe("Context 构建", () => {
     ];
 
     const config = makeConfig({
-      stone: {
-        ...makeStone("test_obj"),
-        data: { _traits_ref: ["kernel:my_trait"] },
-      },
       traits: [{
         namespace: "kernel",
         kind: "trait",
@@ -740,6 +739,7 @@ describe("Context 构建", () => {
         type: "how_to_think",
         description: "测试 trait",
         readme: "这是 my_trait 的知识内容",
+        activatesOn: { showContentWhen: ["return"] },
         deps: [],
       }],
       steps,

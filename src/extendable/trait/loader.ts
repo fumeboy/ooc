@@ -361,7 +361,7 @@ export function parseTSDoc(source: string): Map<string, TSDocInfo> {
 }
 
 /**
- * 按名称列表加载指定的 trait（用于 _traits_ref 机制）
+ * 按名称列表加载指定的 trait
  *
  * 只加载 refs 中列出的 trait，跳过不存在的目录。
  *

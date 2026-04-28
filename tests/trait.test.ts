@@ -372,7 +372,7 @@ describe("getActiveTraits", () => {
   });
 });
 
-describe("loadTraitsByRef（_traits_ref 加载机制）", () => {
+describe("loadTraitsByRef", () => {
   test("只加载指定名称的 trait", async () => {
     const libDir = join(TEST_DIR, "lib_ref");
     /* 创建 3 个 library trait，只引用其中 2 个 */

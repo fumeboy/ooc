@@ -1,14 +1,14 @@
 /**
  * 线程 Context 构建器
  *
- * 为每个线程构建独立的 Context，包含执行视角和规划视角。
+ * 为每个线程构建独立的 Context，包含系统上下文窗口和可作为 messages 回放的 process events。
  * 这是 ThreadTree 引擎的唯一 Context 构建入口。
  *
- * 执行视角：whoAmI + parentExpectation + plan + processEvents + locals + windows
- * 规划视角：children 摘要 + inbox + todos + directory
+ * 系统上下文：whoAmI + parentExpectation + plan + locals + windows + children/inbox/todos/directory
+ * 事件历史：processEvents（LLM 交互过程 + 上下文变化提示）
  *
  * 三种创建方式的 Context 差异（2026-04-22 do/talk 统一后，"sub_thread" 由 do(fork) 产生，"talk" 由 talk(fork/continue) 产生）：
- * - do(fork) / 原 create_sub_thread：初始 processEvents 包含父线程渲染快照（inject event）
+ * - do(fork)：初始 processEvents 包含父线程渲染快照（inject event）
  * - sub_thread_on_node（协作 API 保留）：初始 processEvents = 空白 + 目标节点完整历史
  * - talk：初始 processEvents = 空白
  *
@@ -26,7 +26,6 @@ import type {
   ThreadStatus,
 } from "../../thinkable/thread-tree/types.js";
 import { getAncestorPath } from "../../storable/thread/persistence.js";
-import { resolveTraitRef } from "../../extendable/knowledge/activator.js";
 import { getOpenFiles } from "../../extendable/activation/open-files.js";
 import { scanPeers } from "../../collaborable/relation/peers.js";
 import { readPeerRelations, type PeerRelationEntry } from "../../collaborable/relation/relation.js";
@@ -42,7 +41,7 @@ const MEMORY_MD_MAX_CHARS = 4000;
 
 /** 线程 Context（双视角） */
 export interface ThreadContext {
-  /* === 执行视角 === */
+  /* === 系统上下文 === */
   /** Object 名称 */
   name: string;
   /** 身份描述 */
@@ -66,7 +65,7 @@ export interface ThreadContext {
   /** 创建方式 */
   creationMode: "root" | "sub_thread" | "sub_thread_on_node" | "talk";
 
-  /* === 规划视角 === */
+  /* === 线程树与协作状态 === */
   /** 子节点摘要 */
   childrenSummary: string;
   /** 祖先节点摘要（Root → 父节点，不含自身） */
@@ -148,10 +147,9 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
    *
    * lifespan 语义：
    * - kernel:base 是协议基座，等价 pinned，不随 command form 生命周期回收
-   * - open-files 已把 stoneRefs + nodeMeta.pinnedTraits + kernel:base 统一归到
-   *   pinned 集合，直接沿用其 lifespan 即可 */
-  const stoneTraitRefs = extractStoneTraitRefs(stone, traits);
-  const scopeChain = computeThreadScopeChain(tree, threadId, stoneTraitRefs);
+   * - open-files 已把 nodeMeta.pinnedTraits + kernel:base 统一归到 pinned 集合，
+   *   直接沿用其 lifespan 即可 */
+  const scopeChain = computeThreadScopeChain(tree, threadId);
   const openFiles = getOpenFiles({ tree, threadId, threadData, stone, traits });
 
   /* kernel trait → instructions（无 lifespan 标签；但保留 source 用于 hover 溯源） */
@@ -274,7 +272,7 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
    *
    * BUG-C 修复（Symptom 2）：之前错误地使用了 parent.title（父线程自身的任务名），
    * 导致子线程的 <task> 渲染的是父线程的任务标题，而非自己被分配的任务标题。
-   * 例如：submit(title="分析 G3 基因") 创建的子线程，其 <task> 应显示"分析 G3 基因"，
+   * 例如：submit(form_id="f_xxx", title="分析 G3 基因", context="fork", msg="...") 创建的子线程，其 <task> 应显示"分析 G3 基因"，
    * 而不是"supervisor 主线程"（父线程的 title）。
    * 父线程的上下文已通过 <creator> 和 <ancestor_summary> 提供，无需重复写入 <task>。
    */
@@ -295,7 +293,7 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
   /* 4. process events：当前线程上下文变化与 LLM 交互历史 */
   const processEvents = threadData.events;
 
-  /* 5. 规划视角 */
+  /* 5. 线程树与协作状态 */
   const childrenSummary = renderChildrenSummary(tree, threadId);
   const ancestorSummary = renderAncestorSummary(tree, threadId);
   const siblingSummary = renderSiblingSummary(tree, threadId);
@@ -376,30 +374,17 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
  * 保证 scope chain 的遍历顺序与 spec Section 5.3 一致：
  * Root 的 traits 在前，leaf 的 traits 在后。
  *
- * 额外：stoneRefs（来自 stone.data._traits_ref 的已解析 traitId 列表）
- * 作为对象级"默认激活"清单，优先合入 scope chain（位于所有线程自身
- * traits 之前），便于在线程层级未显式声明时仍能激活这些 trait。
- *
  * @param tree - 线程树
  * @param nodeId - 目标节点 ID
- * @param stoneRefs - 对象级默认激活的 trait id 列表（可选，完整 namespace:name 格式）
  * @returns 去重后的 trait 名称列表（Root → leaf 顺序）
  */
 export function computeThreadScopeChain(
   tree: ThreadsTreeFile,
   nodeId: string,
-  stoneRefs?: string[],
 ): string[] {
   const path = getAncestorPath(tree, nodeId); /* Root → leaf 顺序 */
   const seen = new Set<string>();
   const result: string[] = [];
-
-  /* 对象级默认激活：优先合入，保证"对象默认可用的 trait"始终在所有线程层之前 */
-  if (stoneRefs && stoneRefs.length > 0) {
-    for (const t of stoneRefs) {
-      if (!seen.has(t)) { seen.add(t); result.push(t); }
-    }
-  }
 
   for (const id of path) {
     const node = tree.nodes[id];
@@ -421,44 +406,7 @@ export function computeThreadScopeChain(
 }
 
 /**
- * 从 stone.data._traits_ref 中提取对象级默认激活清单
- *
- * `_traits_ref` 是 stone 声明的"对象默认激活 trait 列表"——
- * 即无需线程层显式激活就默认生效的 trait（例如 supervisor 总是可用
- * git/review/memory 等高阶工具）。
- *
- * 支持两种书写：
- * 1. 完整 namespace:name 形式（推荐）—— "kernel:reviewable/review_api"
- * 2. 简写 name 形式 —— "git_ops"、"reviewable/review_api"（按 self/kernel/library 优先级 resolve）
- *
- * 未命中 available traits 的 ref 会被静默忽略（避免历史数据污染 scope chain）。
- *
- * @param stone - Stone 数据（其 data._traits_ref 可选）
- * @param traits - 已加载的所有 trait（用于 resolveTraitRef 候选集合）
- * @returns 去重后的完整 traitId 列表
- */
-export function extractStoneTraitRefs(
-  stone: StoneData,
-  traits: TraitDefinition[],
-): string[] {
-  const raw = (stone.data as Record<string, unknown> | undefined)?._traits_ref;
-  if (!Array.isArray(raw)) return [];
-
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const item of raw) {
-    if (typeof item !== "string" || item.length === 0) continue;
-    const resolved = resolveTraitRef(item, traits);
-    if (!resolved) continue;
-    if (seen.has(resolved)) continue;
-    seen.add(resolved);
-    result.push(resolved);
-  }
-  return result;
-}
-
-/**
- * 渲染子节点摘要（规划视角）
+ * 渲染子节点摘要（线程树状态）
  *
  * 格式：每个子节点一行，包含 title + status + summary（如有）
  *
@@ -550,10 +498,10 @@ export function renderSiblingSummary(tree: ThreadsTreeFile, nodeId: string): str
 }
 
 /**
- * 渲染线程 process events 时间线（执行视角的 process）
+ * 渲染线程 process events 时间线
  *
  * 按时间戳排序，格式化为 LLM 可读的文本。
- * 与旧 renderProcess 的区别：不需要行为树结构，直接渲染事件列表。
+ * 与 contextToMessages 一致：历史是 process events，而不是旧 action 树。
  *
  * @param events - 线程的 process events 列表
  * @returns 渲染后的文本
@@ -593,18 +541,14 @@ export function renderThreadProcess(events: ProcessEvent[]): string {
    *
    * 注意：历史里不展示真实 form_id 是刻意设计——已完结的 form_id 属于历史残留，
    * 继续展示可能误导后续判断。
-   * 但为了避免模型被"历史缺失 form_id"误导（规则要 form_id，历史却没有），
-   * 这里输出一个展示层占位符字段 `form_id_finished_so_removed`，明确表示：
-   * 此 event 曾有关联 form_id，但已在完成后移除。
-   *
-   * 运行时永远不依赖该字段；它只存在于 Context 渲染/落盘（llm.input.txt）。
+   * 当前可提交的 form_id 只应从 <active-forms> 获取，历史里已关闭 form 的 form_id
+   * 不再回灌给模型，也不输出伪造参数字段。
    */
   function cleanArgs(event: ProcessEvent): Record<string, unknown> | undefined {
     if (!event.args) return event.args;
     const args = { ...event.args };
     if (args.form_id && closedFormIds.has(args.form_id as string)) {
       delete args.form_id;
-      (args as Record<string, unknown>).form_id_finished_so_removed = true;
     }
     return Object.keys(args).length > 0 ? args : undefined;
   }
@@ -660,7 +604,7 @@ export function renderThreadProcess(events: ProcessEvent[]): string {
       if (typeof event.kept === "number") attrs.kept = event.kept;
     }
 
-    const node: XmlNode = { tag: "action", attrs };
+    const node: XmlNode = { tag: "process_event", attrs };
 
     switch (event.type) {
       case "tool_use": {
@@ -702,7 +646,7 @@ export function renderThreadProcess(events: ProcessEvent[]): string {
     nodes.push(node);
   }
 
-  /* depth=1：让 <action> 相对外层 <process> 缩进 2 空格 */
+  /* depth=1：让 <process_event> 在嵌入外层容器时缩进 2 空格 */
   return serializeXml(nodes, 1);
 }
 
@@ -718,13 +662,13 @@ function formatTimestamp(timestamp: number): string {
  * 生成 Skill 索引文本
  *
  * 每个 skill 一行，格式：`- name: description (when: 场景)`
- * 用于注入 knowledge window，让对象知道有哪些 skill 可用。
+ * 用于注入 knowledge window，让对象知道有哪些 skill 可用，以及如何通过 open 加载。
  */
 function formatSkillIndex(skills: SkillDefinition[]): string {
   const lines = [
     "## 可用 Skills",
     "",
-    "以下 skill 可通过 [use_skill] 指令按需加载完整内容：",
+    '以下 skill 可通过 open(title="...", type="skill", name="...") 按需加载完整内容：',
   ];
   for (const s of skills) {
     let line = `- ${s.name}: ${s.description}`;

@@ -11,10 +11,8 @@ import {
   renderAncestorSummary,
   renderSiblingSummary,
   computeThreadScopeChain,
-  extractStoneTraitRefs,
   type ThreadContextInput,
 } from "../src/thinkable/context/builder.js";
-import type { TraitDefinition } from "../src/shared/types/index.js";
 import type {
   ThreadsTreeFile,
   ThreadsTreeNodeMeta,
@@ -99,37 +97,27 @@ describe("computeThreadScopeChain", () => {
     expect(computableCount).toBe(1);
   });
 
-  test("stone._traits_ref 合入 scope chain 最前", () => {
+  test("computeThreadScopeChain 不再接收对象级默认 trait 清单", () => {
     const tree: ThreadsTreeFile = {
       rootId: "r",
       nodes: {
         r: makeNode("r", { traits: ["self:alpha"] }),
       },
     };
-    const chain = computeThreadScopeChain(tree, "r", [
-      "kernel:reviewable/review_api",
-      "library:git/advanced",
-    ]);
-    /* 默认激活清单位于线程 traits 前 */
-    expect(chain[0]).toBe("kernel:reviewable/review_api");
-    expect(chain[1]).toBe("library:git/advanced");
-    expect(chain[2]).toBe("self:alpha");
+    const chain = computeThreadScopeChain(tree, "r");
+    expect(chain).toEqual(["self:alpha"]);
   });
 
-  test("stone._traits_ref 去重：与线程 traits 重复时只保留一份", () => {
+  test("computeThreadScopeChain 仅沿线程树收集 traits / activatedTraits", () => {
     const tree: ThreadsTreeFile = {
       rootId: "r",
       nodes: {
         r: makeNode("r", { traits: ["kernel:reviewable/review_api"] }),
       },
     };
-    const chain = computeThreadScopeChain(tree, "r", [
-      "kernel:reviewable/review_api",
-      "library:git/advanced",
-    ]);
+    const chain = computeThreadScopeChain(tree, "r");
     const count = chain.filter(t => t === "kernel:reviewable/review_api").length;
     expect(count).toBe(1);
-    expect(chain).toContain("library:git/advanced");
   });
 });
 
@@ -238,6 +226,8 @@ describe("renderThreadProcess", () => {
       { type: "inject", content: "=== 父线程上下文 ===", timestamp: 500 },
     ];
     const rendered = renderThreadProcess(events);
+    expect(rendered).toContain("<process_event");
+    expect(rendered).not.toContain("<action");
     expect(rendered).toContain("thinking");
     expect(rendered).toContain("开始思考");
     expect(rendered).toContain("program");
@@ -250,6 +240,20 @@ describe("renderThreadProcess", () => {
      * 这样在首次进入时 process 段可以直接省略，避免输出 "(无历史)" 这种冗余占位符。 */
     const rendered = renderThreadProcess([]);
     expect(rendered).toBe("");
+  });
+
+  test("已关闭 form 的历史 form_id 不再以伪参数提示模型", () => {
+    const events: ProcessEvent[] = [
+      { type: "tool_use", name: "open", args: { title: "打开 return", type: "command", command: "return" }, content: "open", timestamp: 1000 },
+      { type: "inject", content: "Form f_done 已创建（return）。下一步：请调用 submit({\"form_id\":\"f_done\", ...}) 提交。", timestamp: 1001 },
+      { type: "tool_use", name: "submit", args: { form_id: "f_done", summary: "done" }, content: "submit", timestamp: 1002 },
+    ];
+
+    const rendered = renderThreadProcess(events);
+
+    expect(rendered).not.toContain("form_id_finished_so_removed");
+    expect(rendered).not.toContain("f_done");
+    expect(rendered).toContain("<summary>");
   });
 });
 
@@ -450,7 +454,8 @@ describe("buildThreadContext — skill index", () => {
     expect(skillWindow!.content).toContain("commit: 生成 commit message");
     expect(skillWindow!.content).toContain("review: 代码审查");
     expect(skillWindow!.content).toContain("审查代码时");
-    expect(skillWindow!.content).toContain("[use_skill]");
+    expect(skillWindow!.content).toContain('open(title="...", type="skill", name="...")');
+    expect(skillWindow!.content).not.toContain("[use_skill]");
   });
 
   test("空 skills 列表不注入 window", () => {
@@ -486,81 +491,5 @@ describe("buildThreadContext — skill index", () => {
     });
     const skillWindow = ctx.knowledge.find(w => w.name === "available-skills");
     expect(skillWindow).toBeUndefined();
-  });
-});
-
-describe("extractStoneTraitRefs", () => {
-  /** 辅助：构造最小 TraitDefinition */
-  function trait(namespace: "kernel" | "library" | "self", name: string): TraitDefinition {
-    return {
-      namespace,
-      name,
-      type: "how_to_use_tool",
-      description: `${namespace}:${name}`,
-      readme: "",
-      deps: [],
-      parent: null,
-    } as unknown as TraitDefinition;
-  }
-
-  test("stone.data 无 _traits_ref 字段 → 返回空数组", () => {
-    const refs = extractStoneTraitRefs(
-      { name: "x", thinkable: { whoAmI: "" }, talkable: { whoAmI: "", functions: [] }, data: {}, relations: [], traits: [] },
-      [],
-    );
-    expect(refs).toEqual([]);
-  });
-
-  test("完整 traitId 形式正常解析", () => {
-    const traits = [
-      trait("kernel", "reviewable/review_api"),
-      trait("library", "git/advanced"),
-    ];
-    const refs = extractStoneTraitRefs(
-      {
-        name: "x",
-        thinkable: { whoAmI: "" },
-        talkable: { whoAmI: "", functions: [] },
-        data: { _traits_ref: ["kernel:reviewable/review_api", "library:git/advanced"] },
-        relations: [],
-        traits: [],
-      },
-      traits,
-    );
-    expect(refs).toEqual(["kernel:reviewable/review_api", "library:git/advanced"]);
-  });
-
-  test("简写名称按 self→kernel→library 优先级解析", () => {
-    const traits = [
-      trait("library", "git/ops"),
-    ];
-    /* "git_ops" 不存在——跳过；"git/ops" 存在 → library:git/ops */
-    const refs = extractStoneTraitRefs(
-      {
-        name: "x",
-        thinkable: { whoAmI: "" },
-        talkable: { whoAmI: "", functions: [] },
-        data: { _traits_ref: ["git_ops", "git/ops"] },
-        relations: [],
-        traits: [],
-      },
-      traits,
-    );
-    expect(refs).toEqual(["library:git/ops"]);
-  });
-
-  test("未命中的 ref 被静默忽略，不污染 scope chain", () => {
-    const refs = extractStoneTraitRefs(
-      {
-        name: "x",
-        thinkable: { whoAmI: "" },
-        talkable: { whoAmI: "", functions: [] },
-        data: { _traits_ref: ["does_not_exist", "kernel:nope"] },
-        relations: [],
-        traits: [],
-      },
-      [],
-    );
-    expect(refs).toEqual([]);
   });
 });

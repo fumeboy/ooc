@@ -39,7 +39,7 @@ function toolCall(name: string, args: Record<string, unknown>): ToolCall {
   };
 }
 
-/** 读 thread.json 中的 inject actions */
+/** 读 thread.json 中的 inject process events */
 async function readInjectActions(
   flowsDir: string,
   sessionId: string,

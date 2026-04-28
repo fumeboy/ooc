@@ -26,15 +26,6 @@ export interface ReadmeParseResult {
   thinkable: Thinkable;
   /** 对外可见的介绍（frontmatter） */
   talkable: Talkable;
-  /**
-   * 对象级默认激活的 trait 列表（frontmatter: activated_traits）
-   *
-   * 为什么放在 readme.md 而不是 data.json：
-   * - data.json 在很多项目里被 gitignore 作为运行时状态
-   * - readme.md 是对象身份文件，必须入库
-   * - 把"默认激活 trait"视为对象身份的一部分
-   */
-  activatedTraits: string[];
 }
 
 /**
@@ -60,13 +51,7 @@ export function parseReadme(content: string): ReadmeParseResult {
     whoAmI: body.trim(),
   };
 
-  /* activated_traits：对象级默认激活 trait 清单（frontmatter 数组） */
-  const activatedTraits: string[] = Array.isArray(data.activated_traits)
-    ? (data.activated_traits as unknown[])
-        .filter((x): x is string => typeof x === "string" && x.length > 0)
-    : [];
-
-  return { thinkable, talkable, activatedTraits };
+  return { thinkable, talkable };
 }
 
 /**
@@ -79,7 +64,6 @@ export function parseReadme(content: string): ReadmeParseResult {
 export function serializeReadme(
   thinkable: Thinkable,
   talkable: Talkable,
-  activatedTraits?: string[],
 ): string {
   const frontmatter: Record<string, unknown> = {};
 
@@ -92,10 +76,6 @@ export function serializeReadme(
       name: f.name,
       description: f.description,
     }));
-  }
-
-  if (activatedTraits && activatedTraits.length > 0) {
-    frontmatter.activated_traits = activatedTraits;
   }
 
   return matter.stringify(thinkable.whoAmI + "\n", frontmatter);

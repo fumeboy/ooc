@@ -118,7 +118,7 @@ export function contextToMessages(
   if (ctx.knowledge.length > 0) {
     systemChildren.push({
       tag: "knowledge",
-      comment: `知识窗口：激活的 library/user trait 和 skill 注入的知识。lifespan="transient" 表示该 trait 由 open(title="...", type=command, ...) 带入，form 关闭即回收；lifespan="pinned" 表示用户已显式固定，或该 trait 是系统协议基座。source 属性标明窗口的注入来源（stone_default / thread_pinned / command_binding / always_on / skill_index / memory / coverage / build_feedback / file_window / extra / scope_chain）。若需保留 transient trait，请 open(title="固定能力", type="trait", name="X", description="...") 固定之。`,
+      comment: `知识窗口：激活的 library/user trait 和 skill 注入的知识。lifespan="transient" 表示该 trait 由 open(title="...", type=command, ...) 带入，form 关闭即回收；lifespan="pinned" 表示用户已显式固定，或该 trait 是系统协议基座。source 属性标明窗口的注入来源（thread_pinned / command_binding / always_on / skill_index / memory / coverage / build_feedback / file_window / extra / from_parent）。若需保留 transient trait，请 open(title="固定能力", type="trait", name="X", description="...") 固定之。`,
       children: ctx.knowledge.map(w => {
         const attrs: Record<string, string | number> = { name: w.name };
         if (w.lifespan) attrs.lifespan = w.lifespan;

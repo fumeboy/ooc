@@ -343,22 +343,20 @@ describe("Bruce 5 · 向后兼容：老 thread.json 无新字段", () => {
 
   test("getOpenFiles 容忍无 relations 的线程", () => {
     const traits = [trait("kernel", "computable")];
-    const stone = makeStone("alice", join(TMP_ROOT, "stones", "alice"), {
-      _traits_ref: ["kernel:computable"],
-    });
+    const stone = makeStone("alice", join(TMP_ROOT, "stones", "alice"));
     const threadId = "r";
     const treeFile = {
       rootId: threadId,
       nodes: {
         [threadId]: {
           id: threadId, title: "root", status: "running" as const,
-          childrenIds: [], createdAt: 0, updatedAt: 0,
+          childrenIds: [], activatedTraits: ["kernel:computable"], createdAt: 0, updatedAt: 0,
         },
       },
     };
     const threadData: ThreadDataFile = { id: threadId, events: [] };
 
-    /* 不抛错，返回 origin 阶段激活 */
+    /* 不抛错，返回线程显式激活 */
     const result = getOpenFiles({ tree: treeFile, threadId, threadData, stone, traits });
     expect(result.activeTraitIds).toContain("kernel:computable");
   });
