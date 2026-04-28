@@ -73,7 +73,7 @@ export function readStone(dir: string): StoneData | null {
     name,
     thinkable,
     talkable,
-    data: userData,
+    data: data,
     relations,
     traits,
     memory,

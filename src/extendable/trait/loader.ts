@@ -122,13 +122,11 @@ export async function loadTrait(
   const traitPath = join(traitDir, "TRAIT.md");
   const viewPath = join(traitDir, "VIEW.md");
   const skillPath = join(traitDir, "SKILL.md");
-  const legacyReadmePath = join(traitDir, "readme.md");
 
   let descPath: string | null = null;
   if (existsSync(traitPath)) descPath = traitPath;
   else if (existsSync(viewPath)) descPath = viewPath;
   else if (existsSync(skillPath)) descPath = skillPath;
-  else if (existsSync(legacyReadmePath)) descPath = legacyReadmePath;
 
   if (!descPath) return null;
 

@@ -62,6 +62,18 @@ describe("thinkable config", () => {
       budget: 2048,
     });
   });
+
+  test("DefaultConfig 使用合理的 maxTokens 默认值，并支持环境变量覆盖", () => {
+    process.env.OOC_API_KEY = "test-key";
+
+    expect(DefaultConfig().maxTokens).toBe(40 * 10000);
+
+    process.env.OOC_MAX_TOKENS = "16384";
+    expect(DefaultConfig().maxTokens).toBe(16384);
+
+    process.env.OOC_MAX_TOKENS = "not-a-number";
+    expect(DefaultConfig().maxTokens).toBe(40 * 10000);
+  });
 });
 
 describe("thinkable client", () => {

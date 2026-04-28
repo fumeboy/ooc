@@ -13,7 +13,7 @@
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md
  */
 
-import { mkdirSync, existsSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from "node:fs";
+import { mkdirSync, existsSync, readFileSync, writeFileSync, readdirSync, unlinkSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { consola } from "consola";
 
@@ -841,8 +841,13 @@ export async function runWithThreadTree(
         const threadDir = getRuntimeThreadDir(objectFlowDir, tree, threadId);
         writeLatestLlmInput(threadDir, messages);
         const llmStartTime = Date.now();
-        const llmResult = typeof config.llm.chatWithThinkingStream === "function"
-          ? await config.llm.chatWithThinkingStream(messages, {
+        const chatWithThinkingStream = config.llm.chatWithThinkingStream;
+        const shouldUseThinkingStream =
+          typeof chatWithThinkingStream === "function"
+          && config.llm.isThinkingEnabled?.() === true
+          && !config.llm.preferNonStreamingThinking?.();
+        const llmResult = shouldUseThinkingStream
+          ? await chatWithThinkingStream.call(config.llm, messages, {
               tools: availableTools,
               onThinkingChunk: (chunk) => {
                 sawThinkingChunk = true;
@@ -1147,6 +1152,17 @@ export async function runWithThreadTree(
                 tree.writeThreadData(threadId, td);
               }
               consola.warn(`[Engine] open file: ${filePath} not found (resolved=${resolved})`);
+            } else if (statSync(resolved).isDirectory()) {
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.events.push({
+                  type: "inject",
+                  content: `[错误] 路径 "${filePath}" 是目录，不是可读取的文件。请改为读取目录下的具体文件。`,
+                  timestamp: Date.now(),
+                });
+                tree.writeThreadData(threadId, td);
+              }
+              consola.warn(`[Engine] open file: ${filePath} is directory (resolved=${resolved})`);
             } else {
               const rawContent = readFileSync(resolved, "utf-8");
               const { content, linesLimit, columnsLimit } = formatOpenFileContent(rawContent, {
@@ -1941,8 +1957,13 @@ export async function resumeWithThreadTree(
         const threadDir = getRuntimeThreadDir(objectFlowDir, tree, threadId);
         writeLatestLlmInput(threadDir, messages);
         const llmStartTime = Date.now();
-        const llmResult = typeof config.llm.chatWithThinkingStream === "function"
-          ? await config.llm.chatWithThinkingStream(messages, {
+        const chatWithThinkingStream = config.llm.chatWithThinkingStream;
+        const shouldUseThinkingStream =
+          typeof chatWithThinkingStream === "function"
+          && config.llm.isThinkingEnabled?.() === true
+          && !config.llm.preferNonStreamingThinking?.();
+        const llmResult = shouldUseThinkingStream
+          ? await chatWithThinkingStream.call(config.llm, messages, {
               tools: availableTools,
               onThinkingChunk: (chunk) => {
                 sawThinkingChunk = true;
@@ -2206,6 +2227,17 @@ export async function resumeWithThreadTree(
               const hint = isVirtual ? `[错误] 虚拟路径 "${filePath}" 指向的文件不存在（${resolved}）` : `[错误] 文件 "${filePath}" 不存在`;
               if (td) { td.events.push({ type: "inject", content: hint, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
               consola.warn(`[Engine] open file: ${filePath} not found (resume, resolved=${resolved})`);
+            } else if (statSync(resolved).isDirectory()) {
+              const td = tree.readThreadData(threadId);
+              if (td) {
+                td.events.push({
+                  type: "inject",
+                  content: `[错误] 路径 "${filePath}" 是目录，不是可读取的文件。请改为读取目录下的具体文件。`,
+                  timestamp: Date.now(),
+                });
+                tree.writeThreadData(threadId, td);
+              }
+              consola.warn(`[Engine] open file: ${filePath} is directory (resume, resolved=${resolved})`);
             } else {
               const rawContent = readFileSync(resolved, "utf-8");
               const { content, linesLimit, columnsLimit } = formatOpenFileContent(rawContent, {

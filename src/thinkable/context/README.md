@@ -54,12 +54,15 @@ The current layout is:
 ```ts
 [
   { role: "system", content: "<context>...</context>" },
+  { role: "user", content: "<process_event type=\"message_in\" ...>...</process_event>" },
   { role: "...", content: "<process_event ...>...</process_event>" },
   ...
 ]
 ```
 
 The first message is a system message containing the `<context>` information window. It includes stable identity, instructions, knowledge, task state, inbox, active forms, directory, relations, paths, and status.
+
+Unread inbox messages are also emitted as synthetic `message_in` user messages for the current LLM turn. The same messages remain visible inside `<context><inbox>...</inbox></context>` for state inspection, but the independent user message gives the model an explicit current input instead of leaving the request hidden inside system context only.
 
 Historical `processEvents` are not embedded inside `<context>`. They are emitted as independent messages so the transcript can be trimmed, summarized, or replayed more precisely.
 

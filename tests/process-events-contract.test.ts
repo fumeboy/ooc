@@ -36,4 +36,21 @@ describe("Process API event field contract", () => {
     expect(process.root.events[0]!.id).toBe("e1");
     expect("actions" in process.root).toBe(false);
   });
+
+  test("threadsToProcess preserves failed node status", () => {
+    const now = Date.now();
+    const tree: ThreadsTreeFile = {
+      rootId: "root",
+      nodes: {
+        root: { id: "root", title: "Root", status: "failed", childrenIds: [], createdAt: now, updatedAt: now },
+      },
+    };
+
+    writeThreadsTree(TEST_DIR, tree);
+    writeThreadData(join(TEST_DIR, "threads", "root"), { id: "root", events: [] });
+
+    const process = threadsToProcess(TEST_DIR)!;
+    expect(process.root.status).toBe("failed");
+    expect(process.root.locals?._threadStatus).toBe("failed");
+  });
 });

@@ -149,6 +149,7 @@ function makeConfig(overrides?: {
   traits?: TraitDefinition[];
   schedulerConfig?: EngineConfig["schedulerConfig"];
   onTalk?: EngineConfig["onTalk"];
+  llm?: EngineConfig["llm"];
 }): EngineConfig {
   const llm = new MockLLMClient({
     responseFn: overrides?.steps ? makeScript(overrides.steps) : undefined,
@@ -157,7 +158,7 @@ function makeConfig(overrides?: {
   return {
     rootDir: TEST_DIR,
     flowsDir: FLOWS_DIR,
-    llm,
+    llm: overrides?.llm ?? llm,
     directory: overrides?.directory ?? [],
     traits: overrides?.traits ?? [],
     stone: overrides?.stone ?? makeStone("test_obj"),
@@ -210,6 +211,82 @@ describe("基础执行", () => {
     expect(result.summary).toBe("经过多轮思考完成");
     /* 2 轮思考 + 2 轮 open+submit = 4 轮 */
     expect(result.totalIterations).toBe(4);
+  });
+
+  test("LLM 标记 preferNonStreamingThinking 时使用非流式 chat", async () => {
+    let chatCalls = 0;
+    let streamCalls = 0;
+    const llm: EngineConfig["llm"] = {
+      async chat(messages) {
+        chatCalls++;
+        if (chatCalls === 1) {
+          return {
+            assistantContent: "",
+            thinkingContent: "",
+            content: "",
+            model: "mock",
+            usage: {},
+            raw: {},
+            toolCalls: [toolCall("open", { title: "准备返回", type: "command", command: "return", description: "结束任务" })],
+          };
+        }
+        const allContent = messages.map((m) => m.content).join("\n");
+        const formId = allContent.match(/<form id="(f_[^"]+)" command="return"/)?.[1] ?? "f_unknown";
+        return {
+          assistantContent: "",
+          thinkingContent: "",
+          content: "",
+          model: "mock",
+          usage: {},
+          raw: {},
+          toolCalls: [toolCall("submit", { title: "提交返回", form_id: formId, summary: "done" })],
+        };
+      },
+      async chatWithThinkingStream() {
+        streamCalls++;
+        throw new Error("should not stream");
+      },
+      preferNonStreamingThinking() {
+        return true;
+      },
+    };
+
+    const result = await runWithThreadTree("test_obj", "你好", "user", makeConfig({ llm }));
+
+    expect(result.status).toBe("done");
+    expect(chatCalls).toBe(2);
+    expect(streamCalls).toBe(0);
+  });
+
+  test("LLM 未启用 thinking 时不调用 thinking stream", async () => {
+    let streamCalls = 0;
+    const llm: EngineConfig["llm"] = {
+      async chat() {
+        return {
+          assistantContent: "",
+          thinkingContent: "",
+          content: "",
+          model: "mock",
+          usage: {},
+          raw: {},
+          toolCalls: [toolCall("open", { title: "等待确认", type: "command", command: "return", description: "结束任务" })],
+        };
+      },
+      async chatWithThinkingStream() {
+        streamCalls++;
+        throw new Error("should not stream");
+      },
+      isThinkingEnabled() {
+        return false;
+      },
+    };
+
+    await runWithThreadTree("test_obj", "你好", "user", makeConfig({
+      llm,
+      schedulerConfig: { maxIterationsPerThread: 1, maxTotalIterations: 1, deadlockGracePeriodMs: 0 },
+    }));
+
+    expect(streamCalls).toBe(0);
   });
 
   test("session 目录被正确创建", async () => {
@@ -402,6 +479,28 @@ describe("基础执行", () => {
     expect(inspectedContext).toContain(longFirstLine);
     expect(inspectedContext).toContain("line-201");
     expect(inspectedContext).not.toContain("超长省略后续");
+  });
+
+  test("open file 遇到目录时注入错误而不是让线程失败", async () => {
+    mkdirSync(join(TEST_DIR, "a-dir"), { recursive: true });
+
+    let inspectedContext = "";
+    const steps: MockStep[] = [
+      scriptOpenFile("a-dir"),
+      (messages: unknown[]) => {
+        inspectedContext = allMessageContent(messages);
+        return { content: "", toolCalls: [toolCall("open", { title: "结束", type: "command", command: "return", description: "结束" })] };
+      },
+      (messages: unknown[]) => {
+        const m = allMessageContent(messages).match(/<form id="(f_[^\"]+)" command="return"/);
+        return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", summary: "done" })] };
+      },
+    ];
+
+    const result = await runWithThreadTree("test_obj", "读取目录", "user", makeConfig({ steps }));
+
+    expect(result.status).toBe("done");
+    expect(inspectedContext).toContain('路径 "a-dir" 是目录，不是可读取的文件');
   });
 });
 

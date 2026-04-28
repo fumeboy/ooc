@@ -2,7 +2,7 @@ import { serializeXml, type XmlNode } from "../../executable/protocol/xml.js";
 
 import type { Message } from "../llm/client.js";
 import type { buildThreadContext } from "./builder.js";
-import type { ProcessEvent, ThreadFrameHook } from "../../thinkable/thread-tree/types.js";
+import type { ProcessEvent, ThreadFrameHook, ThreadInboxMessage } from "../../thinkable/thread-tree/types.js";
 
 /* ========== Context → LLM Messages 转换 ========== */
 
@@ -83,6 +83,26 @@ function processEventToMessage(event: ProcessEvent): Message {
   return {
     role: processEventRole(event),
     content: serializeXml([{ tag: "process_event", attrs, children }], 0),
+  };
+}
+
+function inboxMessageToMessage(message: ThreadInboxMessage): Message {
+  const attrs: Record<string, string | number> = {
+    type: "message_in",
+    category: "llm_interaction",
+    id: message.id,
+    from: message.from,
+    ts: message.timestamp,
+  };
+  if (message.kind) attrs.kind = message.kind;
+
+  return {
+    role: "user",
+    content: serializeXml([{
+      tag: "process_event",
+      attrs,
+      children: [{ tag: "content", content: message.content }],
+    }], 0),
   };
 }
 
@@ -389,9 +409,13 @@ export function contextToMessages(
   };
 
   const processEvents = "processEvents" in ctx ? ctx.processEvents : [];
+  const unreadInboxMessages = ctx.inbox
+    .filter(m => m.status === "unread")
+    .map(inboxMessageToMessage);
 
   return [
     { role: "system", content: serializeXml([contextRoot], 0) },
+    ...unreadInboxMessages,
     ...processEvents.filter(e => e.type !== "thinking").map(processEventToMessage),
   ];
 }

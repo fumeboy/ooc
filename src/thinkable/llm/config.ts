@@ -37,13 +37,14 @@ export function DefaultConfig(): LLMConfig {
   }
 
   const thinkingBudget = process.env.OOC_THINKING_BUDGET;
+  const maxTokens = Number(process.env.OOC_MAX_TOKENS ?? 40 * 10000);
 
   return {
     provider: "openai-compatible",
     apiKey,
     baseUrl: process.env.OOC_BASE_URL || "https://api.openai.com/v1/",
     model: process.env.OOC_MODEL || "gpt-4o",
-    maxTokens: 40*10000,
+    maxTokens: Number.isFinite(maxTokens) && maxTokens > 0 ? maxTokens : 40 * 10000,
     timeout: 300,
     thinking: {
       enabled: process.env.OOC_THINKING_ENABLED === "1",

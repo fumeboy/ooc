@@ -28,7 +28,7 @@ export interface DirectoryEntry {
  * - command_binding: 被 open(type="command") / refine 通过 command_binding 带入的 transient trait
  * - from_parent:  线程祖先链 traits/activatedTraits 中声明的激活（未归入上面几类）
  * - skill_index:  `available-skills` 索引窗口
- * - memory:       `{stoneDir}/memory/index.md` 或 legacy `memory.md` 的注入
+ * - memory:       `{stoneDir}/memory/index.md` 的注入
  * - coverage:     最近一次 --coverage 结果
  * - build_feedback: world.hooks 失败反馈
  * - file_window:  open(type="file") 产生的文件内容窗口

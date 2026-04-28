@@ -59,11 +59,8 @@ export function readThreadData(threadDir: string): ThreadDataFile | null {
   if (!existsSync(filePath)) return null;
   try {
     const raw = readFileSync(filePath, "utf-8");
-    const { actions: _legacyActions, ...data } = JSON.parse(raw) as ThreadDataFile & Record<string, unknown>;
-    return {
-      ...data,
-      events: Array.isArray(data.events) ? data.events : [],
-    } as ThreadDataFile;
+    const data = JSON.parse(raw) as ThreadDataFile & Record<string, unknown>;
+    return data as ThreadDataFile;
   } catch {
     return null;
   }
@@ -77,7 +74,7 @@ export function readThreadData(threadDir: string): ThreadDataFile | null {
 export function writeThreadData(threadDir: string, data: ThreadDataFile): void {
   mkdirSync(threadDir, { recursive: true });
   const filePath = join(threadDir, THREAD_DATA_FILENAME);
-  const { actions: _legacyActions, ...persisted } = data as ThreadDataFile & Record<string, unknown>;
+  const persisted = data as ThreadDataFile & Record<string, unknown>;
   writeFileSync(filePath, JSON.stringify(persisted, null, 2), "utf-8");
 }
 

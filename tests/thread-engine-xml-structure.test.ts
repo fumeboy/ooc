@@ -393,6 +393,43 @@ describe("contextToMessages XML 结构化输出", () => {
     expect(eventMessages[2]!.content).toContain('<process_event type="inject" category="context_change"');
   });
 
+  test("未读 inbox 同时作为当前 user message 输入", () => {
+    const ctx: ThreadContext = {
+      name: "alice",
+      whoAmI: "我是 alice",
+      parentExpectation: "",
+      plan: "",
+      processEvents: [],
+      locals: {},
+      instructions: [],
+      knowledge: [],
+      creator: "user",
+      creationMode: "root",
+      childrenSummary: "",
+      ancestorSummary: "",
+      siblingSummary: "",
+      inbox: [
+        { id: "msg_1", from: "user", content: "请完成体验测试", timestamp: 1000, source: "talk", status: "unread" },
+      ],
+      todos: [],
+      directory: [],
+      scopeChain: [],
+      paths: undefined,
+      status: "running",
+      relations: [],
+    };
+
+    const messages = contextToMessages(ctx);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0]!.role).toBe("system");
+    expect(messages[0]!.content).toContain("<inbox");
+    expect(messages[0]!.content).toContain("请完成体验测试");
+    expect(messages[1]!.role).toBe("user");
+    expect(messages[1]!.content).toContain('<process_event type="message_in" category="llm_interaction" id="msg_1" from="user"');
+    expect(messages[1]!.content).toContain("请完成体验测试");
+  });
+
   test("历史 thinking 不作为 process event message 回灌给模型", () => {
     const ctx: ThreadContext = {
       name: "alice",
