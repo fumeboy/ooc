@@ -7,7 +7,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { DefaultConfig } from "../src/thinkable/llm/config.js";
 import {
-  detectProtocolMarkers,
   MockLLMClient,
   OpenAICompatibleClient,
   buildChatPayload,
@@ -127,14 +126,6 @@ describe("thinkable client", () => {
     const payload = buildChatPayload(config, [{ role: "user", content: "hi" }]);
 
     expect(payload).not.toHaveProperty("thinking");
-  });
-
-  test("detectProtocolMarkers 能识别 thinking 中混入的协议痕迹", () => {
-    expect(detectProtocolMarkers("我来分析一下\n```toml\n[program]\ncode = \"\"\"\n")).toEqual([
-      "fenced_toml",
-      "protocol_section",
-    ]);
-    expect(detectProtocolMarkers("纯思考内容，不含协议")).toEqual([]);
   });
 
   test("OpenAICompatibleClient.chat 返回 assistant/thinking 双通道结构", async () => {

@@ -143,28 +143,6 @@ function normalizeTextContent(content: unknown): string {
   return "";
 }
 
-function previewText(content: string, max = 80): string {
-  const normalized = content.replace(/\s+/g, " ").trim();
-  if (normalized.length <= max) return normalized;
-  return `${normalized.slice(0, max)}…`;
-}
-
-export function detectProtocolMarkers(content: string): string[] {
-  const markers: string[] = [];
-  const trimmed = content.trim();
-  if (!trimmed) return markers;
-
-  if (trimmed.includes("```toml")) markers.push("fenced_toml");
-  if (/^```/.test(trimmed)) markers.push("leading_fence");
-  if (/^\[(program|talk|action|cognize_stack_frame_push|cognize_stack_frame_pop|reflect_stack_frame_push|reflect_stack_frame_pop|plan|finish|wait|break)\]/m.test(trimmed)) {
-    markers.push("protocol_section");
-  }
-  if (/\[talk\/user\]/.test(trimmed)) markers.push("legacy_talk_section");
-  if (/\[thought\]/.test(trimmed)) markers.push("deprecated_thought_section");
-
-  return markers;
-}
-
 export function normalizeUsage(usage: Record<string, unknown> | null | undefined): TokenUsage {
   return {
     promptTokens: typeof usage?.prompt_tokens === "number"
@@ -290,18 +268,6 @@ function normalizeResult(
   const msg = (choices[0]?.message ?? null) as Record<string, unknown> | null;
   const assistantContent = extractAssistantContent(msg);
   const thinkingContent = extractThinkingContent(msg);
-  const thinkingMarkers = detectProtocolMarkers(thinkingContent);
-
-  if (thinkingContent.trim()) {
-    consola.info(
-      `[LLM][thinking][normalizeResult] len=${thinkingContent.length} markers=${thinkingMarkers.join(",") || "none"} preview=${JSON.stringify(previewText(thinkingContent))}`,
-    );
-    if (thinkingMarkers.length > 0) {
-      consola.warn(
-        `[LLM][thinking][normalizeResult] provider thinking contains protocol markers: ${thinkingMarkers.join(", ")}`,
-      );
-    }
-  }
 
   /* 提取 tool_calls */
   const rawToolCalls = Array.isArray(msg?.tool_calls) ? (msg.tool_calls as ToolCall[]) : undefined;
@@ -340,18 +306,6 @@ function extractDeltaEvent(
   const delta = (choice?.delta ?? choice?.message) as Record<string, unknown> | undefined;
   const assistantChunk = extractAssistantContent(delta);
   const thinkingChunk = extractThinkingContent(delta);
-  const thinkingMarkers = detectProtocolMarkers(thinkingChunk);
-
-  if (thinkingChunk) {
-    consola.info(
-      `[LLM][thinking][stream] len=${thinkingChunk.length} markers=${thinkingMarkers.join(",") || "none"} preview=${JSON.stringify(previewText(thinkingChunk))}`,
-    );
-    if (thinkingMarkers.length > 0) {
-      consola.warn(
-        `[LLM][thinking][stream] provider thinking chunk contains protocol markers: ${thinkingMarkers.join(", ")}`,
-      );
-    }
-  }
 
   return {
     assistantChunk: assistantChunk || undefined,
