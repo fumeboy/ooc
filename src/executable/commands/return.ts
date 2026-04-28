@@ -1,9 +1,14 @@
 import { consola } from "consola";
 import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
 
+export enum ReturnCommandPath {
+  /** return 指令：结束当前线程并写入总结。 */
+  Return = "return",
+}
+
 export const returnCommand: CommandTableEntry = {
-  paths: ["return"],
-  match: () => ["return"],
+  paths: [ReturnCommandPath.Return],
+  match: () => [ReturnCommandPath.Return],
   openable: true,
 };
 

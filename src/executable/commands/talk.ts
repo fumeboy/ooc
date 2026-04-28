@@ -1,27 +1,54 @@
 import { consola } from "consola";
 import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
 
+export enum TalkCommandPath {
+  /** 基础 talk 指令：向目标对象发送消息。 */
+  Talk = "talk",
+  /** fork 模式：在指定线程下创建新的子线程进行对话。 */
+  Fork = "talk.fork",
+  /** continue 模式：继续已有远端线程进行对话。 */
+  Continue = "talk.continue",
+  /** new 模式：显式发起新的 talk 线程。 */
+  New = "talk.new",
+  /** wait 模式：等待目标对象同步回复。 */
+  Wait = "talk.wait",
+  /** 关系更新请求：通知对方处理关系信息变更。 */
+  RelationUpdate = "talk.relation_update",
+  /** 结构化问题表单：随 talk 消息携带可交互表单。 */
+  QuestionForm = "talk.question_form",
+  /** continue 模式下的关系更新请求。 */
+  ContinueRelationUpdate = "talk.continue.relation_update",
+  /** continue 模式下的结构化问题表单。 */
+  ContinueQuestionForm = "talk.continue.question_form",
+}
+
 export const talkCommand: CommandTableEntry = {
   paths: [
-    "talk", "talk.fork", "talk.continue", "talk.new", "talk.wait",
-    "talk.relation_update", "talk.question_form",
-    "talk.continue.relation_update", "talk.continue.question_form",
+    TalkCommandPath.Talk,
+    TalkCommandPath.Fork,
+    TalkCommandPath.Continue,
+    TalkCommandPath.New,
+    TalkCommandPath.Wait,
+    TalkCommandPath.RelationUpdate,
+    TalkCommandPath.QuestionForm,
+    TalkCommandPath.ContinueRelationUpdate,
+    TalkCommandPath.ContinueQuestionForm,
   ],
   match: (args) => {
-    const hit: string[] = ["talk"];
+    const hit: string[] = [TalkCommandPath.Talk];
     const ctx = typeof args.context === "string" ? args.context : "";
     const type = typeof args.type === "string" ? args.type : "";
-    if (args.wait === true) hit.push("talk.wait");
-    if (ctx === "fork") hit.push("talk.fork");
-    if (ctx === "continue") hit.push("talk.continue");
-    if (ctx === "new") hit.push("talk.new");
+    if (args.wait === true) hit.push(TalkCommandPath.Wait);
+    if (ctx === "fork") hit.push(TalkCommandPath.Fork);
+    if (ctx === "continue") hit.push(TalkCommandPath.Continue);
+    if (ctx === "new") hit.push(TalkCommandPath.New);
     if (type === "relation_update") {
-      hit.push("talk.relation_update");
-      if (ctx === "continue") hit.push("talk.continue.relation_update");
+      hit.push(TalkCommandPath.RelationUpdate);
+      if (ctx === "continue") hit.push(TalkCommandPath.ContinueRelationUpdate);
     }
     if (type === "question_form") {
-      hit.push("talk.question_form");
-      if (ctx === "continue") hit.push("talk.continue.question_form");
+      hit.push(TalkCommandPath.QuestionForm);
+      if (ctx === "continue") hit.push(TalkCommandPath.ContinueQuestionForm);
     }
     return hit;
   },

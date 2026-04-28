@@ -3,9 +3,14 @@ import { applyCompact, estimateEventsTokens } from "../../thinkable/context/comp
 import type { ThreadDataFile } from "../../thinkable/thread-tree/types.js";
 import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
 
+export enum CompactCommandPath {
+  /** compact 指令：压缩当前线程历史并注入摘要。 */
+  Compact = "compact",
+}
+
 export const compactCommand: CommandTableEntry = {
-  paths: ["compact"],
-  match: () => ["compact"],
+  paths: [CompactCommandPath.Compact],
+  match: () => [CompactCommandPath.Compact],
   openable: true,
 };
 

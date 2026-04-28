@@ -1,14 +1,30 @@
 import { consola } from "consola";
 import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
 
+export enum DoCommandPath {
+  /** 基础 do 指令：在当前对象内创建或继续线程工作。 */
+  Do = "do",
+  /** fork 模式：在当前或指定线程下创建新的子线程。 */
+  Fork = "do.fork",
+  /** continue 模式：向已有线程追加消息并继续执行。 */
+  Continue = "do.continue",
+  /** wait 模式：父线程等待新建子线程完成。 */
+  Wait = "do.wait",
+}
+
 export const doCommand: CommandTableEntry = {
-  paths: ["do", "do.fork", "do.continue", "do.wait"],
+  paths: [
+    DoCommandPath.Do,
+    DoCommandPath.Fork,
+    DoCommandPath.Continue,
+    DoCommandPath.Wait,
+  ],
   match: (args) => {
-    const hit: string[] = ["do"];
+    const hit: string[] = [DoCommandPath.Do];
     const ctx = typeof args.context === "string" ? args.context : "";
-    if (args.wait === true) hit.push("do.wait");
-    if (ctx === "fork") hit.push("do.fork");
-    if (ctx === "continue") hit.push("do.continue");
+    if (args.wait === true) hit.push(DoCommandPath.Wait);
+    if (ctx === "fork") hit.push(DoCommandPath.Fork);
+    if (ctx === "continue") hit.push(DoCommandPath.Continue);
     return hit;
   },
   openable: true,

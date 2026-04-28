@@ -1,8 +1,13 @@
 import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
 
+export enum PlanCommandPath {
+  /** plan 指令：记录当前线程的执行计划文本。 */
+  Plan = "plan",
+}
+
 export const planCommand: CommandTableEntry = {
-  paths: ["plan"],
-  match: () => ["plan"],
+  paths: [PlanCommandPath.Plan],
+  match: () => [PlanCommandPath.Plan],
   openable: true,
 };
 

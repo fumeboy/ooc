@@ -3,13 +3,26 @@ import { executeShell } from "../sandbox/executor.js";
 import type { MethodContext } from "../../extendable/trait/registry.js";
 import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
 
+export enum ProgramCommandPath {
+  /** 基础 program 指令：执行代码或 trait 方法。 */
+  Program = "program",
+  /** shell 程序路径：以 shell 方式执行代码。 */
+  Shell = "program.shell",
+  /** TypeScript/JavaScript 程序路径：以内置执行器运行代码。 */
+  TypeScript = "program.ts",
+}
+
 export const programCommand: CommandTableEntry = {
-  paths: ["program", "program.shell", "program.ts"],
+  paths: [
+    ProgramCommandPath.Program,
+    ProgramCommandPath.Shell,
+    ProgramCommandPath.TypeScript,
+  ],
   match: (args) => {
-    const hit: string[] = ["program"];
+    const hit: string[] = [ProgramCommandPath.Program];
     const lang = (args.language ?? args.lang) as string | undefined;
-    if (lang === "shell") hit.push("program.shell");
-    if (lang === "ts") hit.push("program.ts");
+    if (lang === "shell") hit.push(ProgramCommandPath.Shell);
+    if (lang === "ts") hit.push(ProgramCommandPath.TypeScript);
     return hit;
   },
   openable: true,

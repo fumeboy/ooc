@@ -1,8 +1,13 @@
 import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
 
+export enum DeferCommandPath {
+  /** defer 指令：注册后续 command 触发时的提醒内容。 */
+  Defer = "defer",
+}
+
 export const deferCommand: CommandTableEntry = {
-  paths: ["defer"],
-  match: () => ["defer"],
+  paths: [DeferCommandPath.Defer],
+  match: () => [DeferCommandPath.Defer],
   openable: true,
 };
 

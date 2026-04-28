@@ -10,9 +10,23 @@
 import { describe, test, expect } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { CompactCommandPath } from "../src/executable/commands/compact.js";
+import { DeferCommandPath } from "../src/executable/commands/defer.js";
+import { DoCommandPath } from "../src/executable/commands/do.js";
 import { deriveCommandPaths, COMMAND_TABLE, getOpenableCommands } from "../src/executable/commands/index.js";
+import { PlanCommandPath } from "../src/executable/commands/plan.js";
+import { ProgramCommandPath } from "../src/executable/commands/program.js";
+import { ReturnCommandPath } from "../src/executable/commands/return.js";
+import { TalkCommandPath } from "../src/executable/commands/talk.js";
 
 describe("deriveCommandPaths — 根层级", () => {
+  test("single-path commands are declared through command path enums", () => {
+    expect(COMMAND_TABLE.return!.paths).toEqual(Object.values(ReturnCommandPath));
+    expect(COMMAND_TABLE.plan!.paths).toEqual(Object.values(PlanCommandPath));
+    expect(COMMAND_TABLE.defer!.paths).toEqual(Object.values(DeferCommandPath));
+    expect(COMMAND_TABLE.compact!.paths).toEqual(Object.values(CompactCommandPath));
+  });
+
   test("未知 command 名返回空数组", () => {
     expect(deriveCommandPaths("nope", {})).toEqual([]);
   });
@@ -25,6 +39,10 @@ describe("deriveCommandPaths — 根层级", () => {
     expect(deriveCommandPaths("program", {})).toEqual(["program"]);
   });
 
+  test("program command paths are declared through ProgramCommandPath enum", () => {
+    expect(COMMAND_TABLE.program!.paths).toEqual(Object.values(ProgramCommandPath));
+  });
+
   test("program + language=shell → ['program', 'program.shell']", () => {
     expect(deriveCommandPaths("program", { language: "shell" })).toEqual(["program", "program.shell"]);
   });
@@ -35,6 +53,10 @@ describe("deriveCommandPaths — 根层级", () => {
 });
 
 describe("deriveCommandPaths — talk 多路径并行", () => {
+  test("talk command paths are declared through TalkCommandPath enum", () => {
+    expect(COMMAND_TABLE.talk!.paths).toEqual(Object.values(TalkCommandPath));
+  });
+
   test("talk 无参 → ['talk']", () => {
     expect(deriveCommandPaths("talk", {})).toEqual(["talk"]);
   });
@@ -123,6 +145,10 @@ describe("deriveCommandPaths — talk wait 维度独立", () => {
 });
 
 describe("deriveCommandPaths — do 多路径并行", () => {
+  test("do command paths are declared through DoCommandPath enum", () => {
+    expect(COMMAND_TABLE.do!.paths).toEqual(Object.values(DoCommandPath));
+  });
+
   test("do 无参 → ['do']", () => {
     expect(deriveCommandPaths("do", {})).toEqual(["do"] );
   });
