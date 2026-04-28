@@ -28,7 +28,7 @@ import { ObjectAvatar } from "../components/ui/ObjectAvatar";
 import { TuiAction, TuiTalk, TuiUserMessage, TuiStreamingBlock } from "../components/ui/TuiBlock";
 import { TuiTalkForm } from "../components/ui/TuiTalkForm";
 import { cn } from "../lib/utils";
-import { Send, Maximize2, Minimize2, X, ChevronUp, ChevronDown, MessageSquare } from "lucide-react";
+import { Send, Maximize2, Minimize2, X, ChevronUp, ChevronDown, MessageSquare, AtSign, CornerDownLeft, Loader2 } from "lucide-react";
 import type { FlowMessage, Action, FormResponse, TalkFormPayload } from "../api/types";
 import { ProgressIndicator } from "../components/ProgressIndicator";
 import { MessageSidebarThreadsList } from "./MessageSidebarThreadsList";
@@ -61,7 +61,7 @@ export function MessageSidebar() {
   const [sending, setSending] = useState(false);
   const [target, setTarget] = useState(DEFAULT_TARGET);
   const [paused, setPaused] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const msgRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [currentMsgIdx, setCurrentMsgIdx] = useState(-1);
@@ -113,6 +113,14 @@ export function MessageSidebar() {
       })
       .catch(console.error);
   }, [activeId]);
+
+  /* Codex-like composer：随输入内容增长，最多到 max-height 后滚动 */
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [input]);
 
   /* 过滤 mention 候选（按字母顺序稳定排序，避免打开顺序随机——Bruce 首轮 #9） */
   const mentionCandidates = useMemo(() => {
@@ -486,7 +494,7 @@ export function MessageSidebar() {
   };
 
   /* 输入变化：检测 @ 触发 */
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setInput(val);
 
@@ -590,6 +598,17 @@ export function MessageSidebar() {
       console.error(e);
       setSending(false);
     }
+  };
+
+  const insertMentionTrigger = () => {
+    setInput((prev) => {
+      const prefix = prev.length === 0 || /\s$/.test(prev) ? prev : `${prev} `;
+      return `${prefix}@`;
+    });
+    setShowMention(true);
+    setMentionQuery("");
+    setMentionIndex(0);
+    requestAnimationFrame(() => inputRef.current?.focus());
   };
 
   /* main 模式：全宽渲染（由 App.tsx 放在主内容区） */
@@ -932,7 +951,7 @@ export function MessageSidebar() {
         {showMention && mentionCandidates.length > 0 && (
           <div
             ref={mentionRef}
-            className="absolute bottom-full left-3 right-3 mb-1 rounded-lg bg-[var(--popover)] border border-[var(--border)] shadow-lg overflow-hidden z-10"
+            className="absolute bottom-full left-3 right-3 mb-2 rounded-xl bg-[var(--popover)] border border-[var(--border)] shadow-lg overflow-hidden z-10"
           >
             {mentionCandidates.map((name, i) => (
               <button
@@ -950,36 +969,58 @@ export function MessageSidebar() {
           </div>
         )}
 
-        <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 focus-within:ring-1 focus-within:ring-[var(--ring)] transition-colors bg-[var(--card)]">
-          {/* target tag */}
-          {target !== DEFAULT_TARGET && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--accent)] text-xs shrink-0">
-              @{target}
-              <button
-                onClick={() => { setTarget(DEFAULT_TARGET); inputRef.current?.focus(); }}
-                className="hover:text-[var(--foreground)] text-[var(--muted-foreground)]"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          )}
-          <input
+        <div className="rounded-2xl bg-[var(--card)] border border-[var(--border)] shadow-sm focus-within:ring-1 focus-within:ring-[var(--ring)] focus-within:border-[var(--ring)] transition-all overflow-hidden">
+          <textarea
             ref={inputRef}
-            type="text"
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder={`给 ${target} 发消息...`}
+            placeholder={`Ask ${target} anything...`}
             disabled={sending}
-            className="flex-1 bg-transparent text-sm outline-none disabled:opacity-50 placeholder:text-[var(--muted-foreground)] min-w-0"
+            rows={1}
+            className="block w-full max-h-40 min-h-[56px] resize-none bg-transparent px-4 pt-3 pb-2 text-sm leading-6 outline-none disabled:opacity-50 placeholder:text-[var(--muted-foreground)]"
           />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || sending}
-            className="p-1.5 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] disabled:opacity-20 hover:opacity-90 transition-opacity shrink-0"
-          >
-            <Send className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center justify-between gap-2 px-2.5 pb-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="inline-flex items-center gap-1.5 max-w-[180px] px-2 py-1 rounded-full bg-[var(--accent)] text-[11px] text-[var(--foreground)] shrink-0">
+                <ObjectAvatar name={target} size="sm" />
+                <span className="truncate">@{target}</span>
+                {target !== DEFAULT_TARGET && (
+                  <button
+                    onClick={() => { setTarget(DEFAULT_TARGET); inputRef.current?.focus(); }}
+                    className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                    title="恢复默认对象"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </span>
+              <button
+                onClick={insertMentionTrigger}
+                className="h-7 w-7 inline-flex items-center justify-center rounded-full text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+                title="切换对象"
+              >
+                <AtSign className="w-3.5 h-3.5" />
+              </button>
+              <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-[var(--muted-foreground)] truncate">
+                <CornerDownLeft className="w-3 h-3" />
+                Enter 发送 · Shift+Enter 换行
+              </span>
+            </div>
+
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || sending}
+              className={cn(
+                "h-8 w-8 inline-flex items-center justify-center rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] transition-all shrink-0",
+                "disabled:opacity-25 disabled:cursor-not-allowed",
+                input.trim() && !sending && "hover:opacity-90 hover:scale-[1.03]",
+              )}
+              title={sending ? "发送中" : "发送"}
+            >
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
       </div>
     </div>

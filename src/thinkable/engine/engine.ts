@@ -35,6 +35,7 @@ import { runBuildHooks } from "../../world/hooks.js";
 import { contextToMessages, type ActiveFormView } from "../context/messages.js";
 import { threadStatusToFlowStatus, type TalkResult } from "./types.js";
 import { buildInvalidOpenMessage, resolveToolFormId } from "./protocol-guards.js";
+import { formatOpenFileContent } from "./open-file-format.js";
 
 import type { LLMClient, Message, ToolCall } from "../llm/client.js";
 import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "../../shared/types/index.js";
@@ -1118,7 +1119,8 @@ export async function runWithThreadTree(
           } else if (openType === "file" && args.path) {
             /* 文件读取：支持虚拟路径 @trait:... / @relation:... / 普通相对路径 */
             const filePath = args.path as string;
-            const linesLimit = args.lines as number | undefined;
+            const rawLinesLimit = args.lines;
+            const rawColumnsLimit = args.columns;
             const rootDir = config.paths?.rootDir ?? config.rootDir;
             const stoneDir = config.paths?.stoneDir;
             const flowsDir = config.paths?.flowsDir ?? config.flowsDir;
@@ -1146,14 +1148,11 @@ export async function runWithThreadTree(
               }
               consola.warn(`[Engine] open file: ${filePath} not found (resolved=${resolved})`);
             } else {
-              let content = readFileSync(resolved, "utf-8");
-              if (linesLimit && linesLimit > 0) {
-                const lines = content.split("\n");
-                content = lines.slice(0, linesLimit).join("\n");
-                if (lines.length > linesLimit) {
-                  content += `\n... (共 ${lines.length} 行，已截取前 ${linesLimit} 行)`;
-                }
-              }
+              const rawContent = readFileSync(resolved, "utf-8");
+              const { content, linesLimit, columnsLimit } = formatOpenFileContent(rawContent, {
+                lines: rawLinesLimit,
+                columns: rawColumnsLimit,
+              });
 
               /* window 的 key 用 LLM 原始输入（包括虚拟路径本身），便于 LLM 识别 / close 时反查 */
               const formId = formManager.begin("_file", description, { trait: filePath });
@@ -1168,14 +1167,18 @@ export async function runWithThreadTree(
                 };
                 td.activeForms = formManager.toData();
                 const kindLabel = kind === "trait" ? "Trait" : kind === "relation" ? "关系文件" : "文件";
+                const limitHint = [
+                  linesLimit === null ? "不限行数" : `前 ${linesLimit} 行`,
+                  columnsLimit === null ? "不限列宽" : `每行最多 ${columnsLimit} 字符`,
+                ].join("，");
                 td.events.push({
                   type: "inject",
-                  content: `${kindLabel} "${filePath}" 已加载到上下文窗口。${linesLimit ? `（前 ${linesLimit} 行）` : ""}`,
+                  content: `${kindLabel} "${filePath}" 已加载到上下文窗口。（${limitHint}）`,
                   timestamp: Date.now(),
                 });
                 tree.writeThreadData(threadId, td);
               }
-              consola.info(`[Engine] open ${kind}: ${filePath}${linesLimit ? ` (${linesLimit} lines)` : ""} → ${formId}`);
+              consola.info(`[Engine] open ${kind}: ${filePath} (${linesLimit ?? "all"} lines, ${columnsLimit ?? "all"} columns) → ${formId}`);
             }
           } else {
             const td = tree.readThreadData(threadId);
@@ -2187,7 +2190,8 @@ export async function resumeWithThreadTree(
           } else if (openType === "file" && args.path) {
             /* resume 路径同 run 路径：支持虚拟路径 @trait:... / @relation:... */
             const filePath = args.path as string;
-            const linesLimit = args.lines as number | undefined;
+            const rawLinesLimit = args.lines;
+            const rawColumnsLimit = args.columns;
             const rootDir = config.paths?.rootDir ?? config.rootDir;
             const stoneDir = config.paths?.stoneDir;
             const flowsDir = config.paths?.flowsDir ?? config.flowsDir;
@@ -2203,12 +2207,11 @@ export async function resumeWithThreadTree(
               if (td) { td.events.push({ type: "inject", content: hint, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
               consola.warn(`[Engine] open file: ${filePath} not found (resume, resolved=${resolved})`);
             } else {
-              let content = readFileSync(resolved, "utf-8");
-              if (linesLimit && linesLimit > 0) {
-                const lines = content.split("\n");
-                content = lines.slice(0, linesLimit).join("\n");
-                if (lines.length > linesLimit) content += `\n... (共 ${lines.length} 行，已截取前 ${linesLimit} 行)`;
-              }
+              const rawContent = readFileSync(resolved, "utf-8");
+              const { content, linesLimit, columnsLimit } = formatOpenFileContent(rawContent, {
+                lines: rawLinesLimit,
+                columns: rawColumnsLimit,
+              });
               const formId = formManager.begin("_file", description, { trait: filePath });
               const td = tree.readThreadData(threadId);
               if (td) {
@@ -2216,10 +2219,14 @@ export async function resumeWithThreadTree(
                 td.windows[filePath] = { name: filePath, content, formId, updatedAt: Date.now() };
                 td.activeForms = formManager.toData();
                 const kindLabel = kind === "trait" ? "Trait" : kind === "relation" ? "关系文件" : "文件";
-                td.events.push({ type: "inject", content: `${kindLabel} "${filePath}" 已加载到上下文窗口。${linesLimit ? `（前 ${linesLimit} 行）` : ""}`, timestamp: Date.now() });
+                const limitHint = [
+                  linesLimit === null ? "不限行数" : `前 ${linesLimit} 行`,
+                  columnsLimit === null ? "不限列宽" : `每行最多 ${columnsLimit} 字符`,
+                ].join("，");
+                td.events.push({ type: "inject", content: `${kindLabel} "${filePath}" 已加载到上下文窗口。（${limitHint}）`, timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
               }
-              consola.info(`[Engine] open ${kind}: ${filePath}${linesLimit ? ` (${linesLimit} lines)` : ""} → ${formId} (resume)`);
+              consola.info(`[Engine] open ${kind}: ${filePath} (${linesLimit ?? "all"} lines, ${columnsLimit ?? "all"} columns) → ${formId} (resume)`);
             }
           } else {
             const td = tree.readThreadData(threadId);

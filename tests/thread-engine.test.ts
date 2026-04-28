@@ -14,7 +14,7 @@
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdirSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { runWithThreadTree, type EngineConfig } from "../src/thinkable/engine/engine.js";
@@ -127,6 +127,18 @@ function scriptSetPlan(text: string): MockStep[] {
 /** 不触发 tool 调用的思考步骤（仅 thinking） */
 function scriptThought(content: string): MockStep {
   return content;
+}
+
+/** 单步 tool call：open(file)，用于检查下一轮 Context 里的文件窗口 */
+function scriptOpenFile(path: string, args: Record<string, unknown> = {}): MockStep {
+  return () => ({
+    content: "",
+    toolCalls: [toolCall("open", { type: "file", title: "读取测试文件", path, description: "读取测试文件", ...args })],
+  });
+}
+
+function allMessageContent(messages: unknown[]): string {
+  return (messages as Array<{ content?: string }>).map((m) => m.content ?? "").join("\n");
 }
 
 /** 创建基础 EngineConfig */
@@ -313,6 +325,83 @@ describe("基础执行", () => {
     await runWithThreadTree("test_obj", "你好世界", "user", config);
 
     expect(receivedInbox).toBe(true);
+  });
+
+  test("open file 默认只展示前 200 行且每行最多 200 字符", async () => {
+    const longFirstLine = "x".repeat(205);
+    const fileContent = [longFirstLine, ...Array.from({ length: 200 }, (_, i) => `line-${i + 2}`)].join("\n");
+    writeFileSync(join(TEST_DIR, "long.txt"), fileContent);
+
+    let inspectedContext = "";
+    const steps: MockStep[] = [
+      scriptOpenFile("long.txt"),
+      (messages: unknown[]) => {
+        inspectedContext = allMessageContent(messages);
+        return { content: "", toolCalls: [toolCall("open", { title: "结束", type: "command", command: "return", description: "结束" })] };
+      },
+      (messages: unknown[]) => {
+        const m = allMessageContent(messages).match(/<form id="(f_[^\"]+)" command="return"/);
+        return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", summary: "done" })] };
+      },
+    ];
+
+    const result = await runWithThreadTree("test_obj", "读取文件", "user", makeConfig({ steps }));
+
+    expect(result.status).toBe("done");
+    expect(inspectedContext).toContain(`${"x".repeat(200)}... （超长省略后续 5 字符）`);
+    expect(inspectedContext).toContain("line-200");
+    expect(inspectedContext).not.toContain("line-201");
+    expect(inspectedContext).toContain("... （超长省略后续 1 行）");
+  });
+
+  test("open file 支持 columns 参数限制每行字符数", async () => {
+    writeFileSync(join(TEST_DIR, "columns.txt"), ["abcdefghijk", "second-line"].join("\n"));
+
+    let inspectedContext = "";
+    const steps: MockStep[] = [
+      scriptOpenFile("columns.txt", { lines: -1, columns: 10 }),
+      (messages: unknown[]) => {
+        inspectedContext = allMessageContent(messages);
+        return { content: "", toolCalls: [toolCall("open", { title: "结束", type: "command", command: "return", description: "结束" })] };
+      },
+      (messages: unknown[]) => {
+        const m = allMessageContent(messages).match(/<form id="(f_[^\"]+)" command="return"/);
+        return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", summary: "done" })] };
+      },
+    ];
+
+    const result = await runWithThreadTree("test_obj", "读取文件", "user", makeConfig({ steps }));
+
+    expect(result.status).toBe("done");
+    expect(inspectedContext).toContain("abcdefghij... （超长省略后续 1 字符）");
+    expect(inspectedContext).toContain("second-lin... （超长省略后续 1 字符）");
+    expect(inspectedContext).not.toContain("超长省略后续 1 行");
+  });
+
+  test("open file 的 lines=-1 且 columns=-1 表示不限制", async () => {
+    const longFirstLine = "y".repeat(205);
+    const fileContent = [longFirstLine, ...Array.from({ length: 200 }, (_, i) => `line-${i + 2}`)].join("\n");
+    writeFileSync(join(TEST_DIR, "unlimited.txt"), fileContent);
+
+    let inspectedContext = "";
+    const steps: MockStep[] = [
+      scriptOpenFile("unlimited.txt", { lines: -1, columns: -1 }),
+      (messages: unknown[]) => {
+        inspectedContext = allMessageContent(messages);
+        return { content: "", toolCalls: [toolCall("open", { title: "结束", type: "command", command: "return", description: "结束" })] };
+      },
+      (messages: unknown[]) => {
+        const m = allMessageContent(messages).match(/<form id="(f_[^\"]+)" command="return"/);
+        return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", summary: "done" })] };
+      },
+    ];
+
+    const result = await runWithThreadTree("test_obj", "读取文件", "user", makeConfig({ steps }));
+
+    expect(result.status).toBe("done");
+    expect(inspectedContext).toContain(longFirstLine);
+    expect(inspectedContext).toContain("line-201");
+    expect(inspectedContext).not.toContain("超长省略后续");
   });
 });
 

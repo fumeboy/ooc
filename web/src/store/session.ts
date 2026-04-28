@@ -76,7 +76,7 @@ export const refreshKeyAtom = atom(0);
 
 /** 右侧消息面板显示模式：main = 主页展示（占据主内容区），sidebar = 侧边展示 */
 export type MessageSidebarMode = "main" | "sidebar";
-export const messageSidebarModeAtom = atom<MessageSidebarMode>("sidebar");
+export const messageSidebarModeAtom = atom<MessageSidebarMode>("main");
 
 /**
  * MessageSidebar Body 视图模式

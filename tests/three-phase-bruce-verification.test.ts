@@ -367,16 +367,16 @@ describe("Bruce 5 · 向后兼容：老 thread.json 无新字段", () => {
 describe("Bruce · selfKind 自动识别（stone / flow_obj 对称）", () => {
   test("stones/alice → stone", () => {
     const r = detectSelfKind(
-      "/Users/zhangzhefu/x/ooc/user/stones/alice",
-      "/Users/zhangzhefu/x/ooc/user/flows",
+      join(PROJECT_ROOT, "stones", "alice"),
+      join(PROJECT_ROOT, "flows"),
     );
     expect(r.selfKind).toBe("stone");
   });
 
   test("flows/s1/objects/tmp → flow_obj + sessionId", () => {
     const r = detectSelfKind(
-      "/Users/zhangzhefu/x/ooc/user/flows/s1/objects/tmp",
-      "/Users/zhangzhefu/x/ooc/user/flows",
+      join(PROJECT_ROOT, "flows", "s1", "objects", "tmp"),
+      join(PROJECT_ROOT, "flows"),
     );
     expect(r.selfKind).toBe("flow_obj");
     expect(r.sessionId).toBe("s1");
