@@ -65,6 +65,13 @@ submit(title="补充数据", form_id="<...>")
 talk 完成后，对方的回复会出现在你的 inbox 中，并附带 `[remote_thread_id: th_xxx]`。
 你可以把这个 ID 作为下次 talk 的 `threadId` 参数，实现"在同一个对话里继续"（continue）或"在这个线程下派生"（fork）。
 
+## return、talk 与 wait 的边界
+
+- `return` 的含义是把当前线程的 summary 交给 thread creator；它不是"当前思考过程到此为止"的通用信号。
+- 如果你已经用 `talk` 把结果回复给了 thread creator，不要再调用 `return` 发送同一份结果，避免创建者收到重复回复。
+- 如果交付结果后还需要继续验证、沉淀、整理后续事项，可以继续工作；不必因为已经回复过创建者而立刻 `return`。
+- 如果你希望当前过程主动停下来，或等待创建者/用户/外部事件的后续输入，调用 `wait(reason="...")`。
+
 ## target="super" —— 反思镜像分身（保留字）
 
 > **反例警告**：不要把 `target="super"` 误解为 `target="supervisor"`——

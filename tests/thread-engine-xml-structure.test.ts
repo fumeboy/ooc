@@ -308,6 +308,43 @@ describe("contextToMessages XML 结构化输出", () => {
     expect(systemMsg!.content).not.toContain("<active-forms>");
   });
 
+  test("主要 context 元素带 XML 注释解释语义", () => {
+    const ctx: ThreadContext = {
+      name: "alice",
+      whoAmI: "我是 alice",
+      parentExpectation: "完成一次验证",
+      plan: "1. 读取输入",
+      processEvents: [],
+      locals: { artifact: "report.md" },
+      instructions: [],
+      knowledge: [],
+      creator: "root_1",
+      creationMode: "sub_thread",
+      childrenSummary: "- [done] 子任务 A",
+      ancestorSummary: "- [running] 根任务",
+      siblingSummary: "- [waiting] 兄弟任务",
+      inbox: [],
+      todos: [{ id: "todo_1", content: "复核输出", status: "pending", createdAt: 1000 }],
+      directory: [],
+      scopeChain: [],
+      paths: { rootDir: "/tmp/ooc" },
+      status: "running",
+      relations: [],
+    };
+
+    const body = contextToMessages(ctx)[0]!.content;
+
+    expect(body).toContain("<!-- 任务：用户消息或父线程对当前线程的期望 -->");
+    expect(body).toContain("<!-- thread creator 是当前线程通过 return 交付 summary 的接收方；它不是你的身份来源，也不一定是用户。 -->");
+    expect(body).toContain("<!-- 计划：当前线程自己的工作计划，可随着执行推进更新 -->");
+    expect(body).toContain("<!-- 局部变量：当前线程保存的结构化中间结果 -->");
+    expect(body).toContain("<!-- 待办：当前线程尚未完成的事项 -->");
+    expect(body).toContain("<!-- 祖先线程：从根线程到父线程的状态摘要，帮助理解上游背景 -->");
+    expect(body).toContain("<!-- 兄弟线程：同一父线程下其他子线程的状态摘要，避免重复工作 -->");
+    expect(body).toContain("<!-- 路径：当前对象和会话可用的文件系统位置 -->");
+    expect(body).toContain("<!-- 状态：当前线程在调度器中的状态 -->");
+  });
+
   test("process events 从 context XML 中拆出为独立 messages", () => {
     const ctx: ThreadContext = {
       name: "alice",

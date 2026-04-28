@@ -13,6 +13,7 @@ import {
   computeThreadScopeChain,
   type ThreadContextInput,
 } from "../src/thinkable/context/builder.js";
+import { contextToMessages } from "../src/thinkable/context/messages.js";
 import type {
   ThreadsTreeFile,
   ThreadsTreeNodeMeta,
@@ -329,6 +330,34 @@ describe("buildThreadContext", () => {
     const ctx = buildThreadContext(input);
     expect(ctx.inbox).toHaveLength(1);
     expect(ctx.inbox[0]!.content).toContain("搜索论文");
+  });
+
+  test("同对象子线程的 creator 在 Context 中显示为自己", () => {
+    const tree: ThreadsTreeFile = {
+      rootId: "r",
+      nodes: {
+        r: makeNode("r", { title: "父线程", childrenIds: ["c"] }),
+        c: makeNode("c", {
+          parentId: "r",
+          title: "子任务",
+          creatorThreadId: "r",
+          creationMode: "sub_thread",
+        }),
+      },
+    };
+    const ctx = buildThreadContext({
+      tree,
+      threadId: "c",
+      threadData: makeThreadData("c"),
+      stone: { name: "researcher", thinkable: { whoAmI: "我是 researcher" } } as any,
+      directory: [],
+      traits: [],
+    });
+
+    const rendered = contextToMessages(ctx).map(m => m.content).join("\n");
+
+    expect(rendered).toContain('<creator mode="sub_thread" from="self" thread_id="r"');
+    expect(rendered).toContain("由当前对象 researcher 的线程 r 创建");
   });
 
   test("规划视角：children + inbox + todos", () => {

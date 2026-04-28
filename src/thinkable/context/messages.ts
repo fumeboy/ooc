@@ -32,6 +32,8 @@ export interface ActiveFormView {
   trait?: string;
 }
 
+const CREATOR_COMMENT = "thread creator 是当前线程通过 return 交付 summary 的接收方；它不是你的身份来源，也不一定是用户。";
+
 function processEventCategory(event: ProcessEvent): "llm_interaction" | "context_change" {
   if (
     event.type === "thinking"
@@ -151,25 +153,42 @@ export function contextToMessages(
   if (ctx.creationMode === "root") {
     userChildren.push({
       tag: "creator",
-      attrs: { mode: "root" },
-      content: "你是根线程，由用户(user)发起。完成任务后必须用 [return] 返回最终结果。[talk] 只用于向其他对象发消息，不会结束线程。",
+      attrs: { mode: "root", from: "user" },
+      content: "你是根线程，由用户(user)发起。需要结束当前线程并交付最终 summary 时，用 [return] 返回结果。[talk] 只用于向其他对象发消息，不会结束线程。",
+      comment: CREATOR_COMMENT,
+    });
+  } else if (ctx.creationMode === "sub_thread" || ctx.creationMode === "sub_thread_on_node") {
+    userChildren.push({
+      tag: "creator",
+      attrs: { mode: ctx.creationMode, from: "self", thread_id: ctx.creator },
+      content: `你是子线程，由当前对象 ${ctx.name} 的线程 ${ctx.creator} 创建（${ctx.creationMode}）。创建者就是你自己在另一个线程中的工作过程。你的职责是完成 <task> 中描述的具体工作，然后用 [return] 返回结果给创建者。不要重复创建者的工作，专注于你被分配的任务。`,
+      comment: CREATOR_COMMENT,
     });
   } else {
     userChildren.push({
       tag: "creator",
       attrs: { mode: ctx.creationMode, from: ctx.creator },
       content: `你是子线程，由 ${ctx.creator} 创建（${ctx.creationMode}）。你的职责是完成 <task> 中描述的具体工作，然后用 [return] 返回结果给创建者。不要重复创建者的工作，专注于你被分配的任务。`,
+      comment: CREATOR_COMMENT,
     });
   }
 
   /* 当前计划 */
   if (ctx.plan) {
-    userChildren.push({ tag: "plan", content: ctx.plan });
+    userChildren.push({
+      tag: "plan",
+      content: ctx.plan,
+      comment: "计划：当前线程自己的工作计划，可随着执行推进更新",
+    });
   }
 
   /* 局部变量 */
   if (Object.keys(ctx.locals).length > 0) {
-    userChildren.push({ tag: "locals", content: JSON.stringify(ctx.locals, null, 2) });
+    userChildren.push({
+      tag: "locals",
+      content: JSON.stringify(ctx.locals, null, 2),
+      comment: "局部变量：当前线程保存的结构化中间结果",
+    });
   }
 
   /* inbox */
@@ -240,6 +259,7 @@ export function contextToMessages(
   if (ctx.todos.length > 0) {
     userChildren.push({
       tag: "todos",
+      comment: "待办：当前线程尚未完成的事项",
       children: ctx.todos.map(t => ({ tag: "todo", content: t.content })),
     });
   }
@@ -278,12 +298,20 @@ export function contextToMessages(
 
   /* 祖先摘要 */
   if (ctx.ancestorSummary) {
-    userChildren.push({ tag: "ancestors", content: ctx.ancestorSummary });
+    userChildren.push({
+      tag: "ancestors",
+      content: ctx.ancestorSummary,
+      comment: "祖先线程：从根线程到父线程的状态摘要，帮助理解上游背景",
+    });
   }
 
   /* 兄弟摘要 */
   if (ctx.siblingSummary) {
-    userChildren.push({ tag: "siblings", content: ctx.siblingSummary });
+    userChildren.push({
+      tag: "siblings",
+      content: ctx.siblingSummary,
+      comment: "兄弟线程：同一父线程下其他子线程的状态摘要，避免重复工作",
+    });
   }
 
   /* 通讯录 */
@@ -318,7 +346,11 @@ export function contextToMessages(
 
   /* 沙箱路径 */
   if (ctx.paths && Object.keys(ctx.paths).length > 0) {
-    userChildren.push({ tag: "paths", content: JSON.stringify(ctx.paths) });
+    userChildren.push({
+      tag: "paths",
+      content: JSON.stringify(ctx.paths),
+      comment: "路径：当前对象和会话可用的文件系统位置",
+    });
   }
 
   /* 活跃 Form（Phase 3 — llm_input_viewer）
@@ -342,7 +374,11 @@ export function contextToMessages(
   }
 
   /* 状态 */
-  userChildren.push({ tag: "status", content: ctx.status });
+  userChildren.push({
+    tag: "status",
+    content: ctx.status,
+    comment: "状态：当前线程在调度器中的状态",
+  });
 
   const contextRoot: XmlNode = {
     tag: "context",
