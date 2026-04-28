@@ -12,7 +12,7 @@ deps: ["kernel:reflective"]
 
 你有两层存储空间：
 
-- **Self**（自我）：跨任务持久存在的身份、记忆、能力。你不能直接写 Self，必须通过 `talk("super", ...)` 与你的反思镜像分身对话。
+- **Self**（自我）：跨任务持久存在的身份、记忆、能力。你不能直接写 Self，必须通过 `talk` command 与你的反思镜像分身 `super` 对话。
 - **Session**（此刻）：当前任务的工作空间，任务结束即消散。你可以自由读写 Session。
 
 ## 跨对话摘要（Flow Summary）
@@ -31,8 +31,14 @@ deps: ["kernel:reflective"]
 ```javascript
 // 检索长期记忆（只读）
 const mem = await callMethod("reflective/memory_api", "query_memory", { query: "用户偏好", limit: 5 });
-// 写入长期记忆仍通过 super 请求
-await talk("super", "请记住：用户偏好简洁的 markdown 格式回复");
+```
+
+写入长期记忆仍通过 `super` 请求：
+
+```json
+open({"title":"沉淀用户偏好","type":"command","command":"talk","description":"请求 super 记录长期偏好"})
+refine({"form_id":"<form id>","args":{"target":"super","msg":"请记住：用户偏好简洁的 markdown 格式回复","context":"fork"}})
+submit({"form_id":"<form id>"})
 ```
 
 ## 会话记忆（Session Memory）

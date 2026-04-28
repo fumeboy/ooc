@@ -17,10 +17,11 @@ import type { ThreadsTreeFile, ThreadsTreeNodeMeta, ProcessEvent, ThreadDataFile
 function mapStatus(status: ThreadsTreeNodeMeta["status"]): NodeStatus {
   switch (status) {
     case "running": return "doing";
-    case "waiting": return "doing";
+    case "waiting": return "waiting";
     case "done": return "done";
-    case "failed": return "done";
+    case "failed": return "failed";
     case "pending": return "todo";
+    case "paused": return "waiting";
     default: return "todo";
   }
 }

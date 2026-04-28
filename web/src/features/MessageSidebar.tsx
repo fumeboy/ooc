@@ -301,6 +301,35 @@ export function MessageSidebar() {
     return null;
   }, [formByContent, formById]);
 
+  
+  /* 待回复表单信息（P0: Pending Forms indicator）
+   *
+   * 扫描 timeline 中尚未提交的 TuiTalkForm，
+   * 返回待回复表单列表及总数，供头部 badge 使用。
+   */
+  const pendingForms = useMemo(() => {
+    const pending: Array<{ entryIndex: number; formId: string; from: string; summary: string }> = [];
+    for (let i = 0; i < timeline.length; i++) {
+      const entry = timeline[i];
+      if (!entry) continue;
+      if (entry.kind !== "message") continue;
+      const msg = entry.data as FlowMessage;
+      if (msg.from === "user" || msg.from === "human") continue;
+      if (msg.to !== "user" && msg.to !== "human") continue;
+      const formInfo = lookupFormForMessage(msg);
+      if (!formInfo) continue;
+      /* 已提交的表单不算 pending */
+      if (submittedFormIds.has(formInfo.form.formId)) continue;
+      pending.push({
+        entryIndex: i,
+        formId: formInfo.form.formId,
+        from: msg.from,
+        summary: msg.content.slice(0, 40).trim(),
+      });
+    }
+    return pending;
+  }, [timeline, lookupFormForMessage, submittedFormIds]);
+
   /* formResponse 发送处理 */
   const handleFormSubmit = useCallback(async (targetObject: string, response: FormResponse, displayText: string) => {
     const sid = activeFlow?.sessionId;
@@ -733,6 +762,22 @@ export function MessageSidebar() {
           </div>
         </div>
         <div className="flex items-center gap-1">
+                    {/* P0: 待回复表单指示器 */}
+          {pendingForms.length > 0 && (
+            <button
+              onClick={() => {
+                const first = pendingForms[0];
+                if (first) {
+                  msgRefs.current[first.entryIndex]?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/25 transition-colors"
+              title={pendingForms.length + " 个表单等待你的回复"}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              <span>{pendingForms.length} 个待回复表单</span>
+            </button>
+          )}
           {/* 暂停/继续 toggle */}
           {activeFlow && (
             <button
@@ -825,14 +870,16 @@ export function MessageSidebar() {
                    *
                    * 显示条件（任一）：
                    *   1. fetchFlow 还没返回（!flowFetched）—— 新 session 早期窗口
-                   *   2. activeFlow 已加载但 status 是 running/waiting/pausing —— 仍在跑
+                   *   2. activeFlow 已加载但 status 是 running/waiting/pausing —— 显示对应状态
                    * 排除 finished/failed/空 session —— 保留空态。 */
                   !flowFetched
                     || activeFlow?.status === "running"
                     || activeFlow?.status === "waiting"
                     || activeFlow?.status === "pausing"
                 )
-                ? <>正在思考中<span className="inline-block ml-1 animate-pulse">...</span></>
+                ? activeFlow?.status === "waiting"
+                  ? "等待下一步输入..."
+                  : <>正在思考中<span className="inline-block ml-1 animate-pulse">...</span></>
                 : `向 ${target} 发起对话，输入 @ 切换对象`}
           </p>
         )}

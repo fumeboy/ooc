@@ -25,13 +25,13 @@ export function findPath(node: ProcessNode, targetId: string): ProcessNode[] | n
   return null;
 }
 
-/** 找到默认选中节点：focusId 或第一个 doing 节点 */
+/** 找到默认选中节点：focusId 或第一个 doing/waiting 节点 */
 function findDefaultId(root: ProcessNode, focusId: string): string {
   if (focusId) return focusId;
   const queue = [root];
   while (queue.length) {
     const n = queue.shift()!;
-    if (n.status === "doing") return n.id;
+    if (n.status === "doing" || n.status === "waiting") return n.id;
     queue.push(...n.children);
   }
   return root.id;
@@ -125,7 +125,7 @@ export function MiniTree({
 
   const hasChildren = visibleChildren.length > 0;
   const [expanded, setExpanded] = useState(
-    node.status === "doing" || node.id === focusId || depth < 2,
+    node.status === "doing" || node.status === "waiting" || node.id === focusId || depth < 2,
   );
   const isSelected = node.id === selectedId;
   const isFocus = node.id === focusId;
@@ -156,11 +156,12 @@ export function MiniTree({
         )}
         <span className={cn(
           "w-2 h-2 rounded-full shrink-0",
-          node.status === "done" ? "bg-green-500" : node.status === "doing" ? "bg-[var(--warm)]" : "bg-[var(--muted-foreground)] opacity-40",
+          node.status === "done" ? "bg-green-500" : node.status === "failed" ? "bg-red-500" : node.status === "waiting" ? "bg-amber-400" : node.status === "doing" ? "bg-[var(--warm)]" : "bg-[var(--muted-foreground)] opacity-40",
         )} />
         <span className={cn(
           "truncate flex-1",
           node.status === "done" && "text-[var(--muted-foreground)]",
+          node.status === "failed" && "text-red-500",
         )}>
           {node.title}
           {hasInlineChildren && (

@@ -26,12 +26,16 @@ interface NodeCardProps {
 const STATUS_COLORS = {
   done: "#22c55e",
   doing: "#f59e0b",
+  waiting: "#f59e0b",
+  failed: "#ef4444",
   todo: "#d1d5db",
 };
 
 const STATUS_BADGE_COLORS = {
   done: { bg: "#dcfce7", text: "#166534" },
   doing: { bg: "#dbeafe", text: "#1d4ed8" },
+  waiting: { bg: "#fef3c7", text: "#92400e" },
+  failed: { bg: "#fee2e2", text: "#991b1b" },
   todo: { bg: "#f3f4f6", text: "#6b7280" },
 };
 

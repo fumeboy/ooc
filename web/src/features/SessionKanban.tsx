@@ -237,7 +237,9 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
           <div className="space-y-8">
             {objectNames.map(name => {
               const meta = subFlowMeta.get(name);
-              const isLive = meta?.status === "running" || meta?.status === "waiting";
+              const isRunning = meta?.status === "running";
+              const isWaiting = meta?.status === "waiting";
+              const isLive = isRunning || isWaiting;
               const currentAction = isLive ? meta?.currentAction : undefined;
               return (
               <div key={name} className="space-y-2">
@@ -245,9 +247,7 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
                 <div className="flex items-center gap-2 sticky top-0 bg-background py-2 z-10">
                   <ObjectAvatar name={name} size="sm" />
                   <h3 className="text-sm font-medium">{name}</h3>
-                  {/* 动态摘要：仅 running / waiting 状态 + 有 currentAction 时显示
-                      pulse 圆点 + "正在 ..." 单行省略 —— 与 finished session 的
-                      "一句话任务摘要"视觉体系对齐，但信号是"正在进行" */}
+                  {/* 动态摘要：running / waiting 都可有 currentAction，但文案区分"正在"与"等待"。 */}
                   {isLive && currentAction && (
                     <div
                       className="flex items-center gap-1.5 text-xs text-muted-foreground overflow-hidden min-w-0"
@@ -258,10 +258,10 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
                         className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shrink-0"
                         aria-hidden
                       />
-                      <span className="truncate">正在 {currentAction}</span>
+                      <span className="truncate">{isWaiting ? "等待" : "正在"} {currentAction}</span>
                     </div>
                   )}
-                  {/* 仅 running 但还没 currentAction：显示 pulse + "思考中…" fallback */}
+                  {/* 无 currentAction 时，running 才是思考中；waiting 表示暂停等待外部输入。 */}
                   {isLive && !currentAction && (
                     <div
                       className="flex items-center gap-1.5 text-xs text-muted-foreground"
@@ -271,7 +271,7 @@ export function SessionKanban({ sessionId }: { sessionId: string }) {
                         className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shrink-0"
                         aria-hidden
                       />
-                      <span>思考中…</span>
+                      <span>{isWaiting ? "等待中" : "思考中…"}</span>
                     </div>
                   )}
                 </div>

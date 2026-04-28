@@ -6,7 +6,7 @@
  * - preview：根据 compactMarks 预估压缩后 token 数
  * - apply：真正执行压缩，返回新的 process events 数组 + compact_summary
  *
- * 对外暴露给 engine 的 submit compact 分支与 compact trait 的 preview 方法。
+ * 对外暴露给 engine 的 compact 提交分支与 compact trait 的 preview 方法。
  *
  * 设计约束：
  * - 纯函数：输入 process events + marks，输出新 events；不 IO、不修改入参
@@ -140,7 +140,7 @@ export function applyCompact(
  *
  * @param currentTokens - 当前估算的 token 数
  * @param threshold - 阈值（默认 COMPACT_THRESHOLD_TOKENS）
- * @returns 提示文本（含 open(command="compact") 引导）
+ * @returns 提示文本（含完整 open/refine/submit JSON 引导）
  */
 export function buildCompactHint(
   currentTokens: number,
@@ -150,7 +150,8 @@ export function buildCompactHint(
   return (
     `\n<!-- compact-pressure-hint -->\n` +
     `>>> [系统提示] 当前线程 process events 已占用 ~${kTokens}k tokens（阈值 ${Math.floor(threshold / 1000)}k），接近压力区。\n` +
-    `建议执行 open(command="compact") 梳理上下文——列出 → 标记冗余 → submit 压缩。\n` +
-    `compact 是对象的元认知能力：主动清理工作台让后续思考更清晰。`
+    `建议先进入 compact 模式：open({"title":"压缩上下文","type":"command","command":"compact","description":"梳理当前线程历史并压缩冗余 events"})。\n` +
+    `进入后优先使用直接 trait method：open({"title":"列出可压缩 events","type":"command","command":"program","trait":"kernel:compact","method":"list_actions","description":"查看可压缩 events"})，随后 submit({"form_id":"..."}) 执行。\n` +
+    `完成标记后用 submit({"form_id":"<compact form id>","summary":"此前：... 当前：..."}) 应用压缩并退出。`
   );
 }

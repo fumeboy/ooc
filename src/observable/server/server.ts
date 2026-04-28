@@ -23,7 +23,7 @@ import { buildFileTree, listFilesInDir } from "./files.js";
 import { handleKanbanRoute } from "./kanban-routes.js";
 import { handleOocResolve } from "./ooc-url.js";
 import { errorResponse, json } from "./responses.js";
-import { inferLiveFlowStatus, getSessionsSummary, mergeMessages } from "./sessions.js";
+import { aggregateFlowStatuses, inferLiveFlowStatus, getSessionsSummary, mergeMessages } from "./sessions.js";
 import { handleSSE } from "./sse.js";
 import { getTraitsInfo } from "./traits.js";
 
@@ -537,11 +537,8 @@ export async function handleRoute(
       }
     }
 
-    /* 若任一 subFlow 活跃（running/waiting），顶层 flow.status 也应反映——
-       sessions 列表卡片与 Kanban 的活跃指示都依赖此字段。 */
-    if (subFlows.some((s) => s.status === "running" || s.status === "waiting")) {
-      flow.status = "running";
-    }
+    /* 顶层 flow.status 复用列表页同一套聚合语义，保留 waiting 与 running 的差异。 */
+    flow.status = aggregateFlowStatuses(subFlows.map((s) => s.status), flow.status);
 
     return json({ success: true, data: { flow, subFlows } });
   }

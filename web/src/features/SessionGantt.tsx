@@ -25,7 +25,7 @@ interface GanttBlock {
   nodeId: string;
   title: string;
   summary: string | null;
-  status: "todo" | "doing" | "done";
+  status: ProcessNode["status"];
   startTime: number;
   endTime: number | null;
   /** 布局算法计算出的列索引 */
@@ -44,6 +44,8 @@ interface GanttRow {
 const STATUS_COLORS: Record<string, { bg: string; border: string; text: string }> = {
   done: { bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-700" },
   doing: { bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-700" },
+  waiting: { bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-700" },
+  failed: { bg: "bg-red-50", border: "border-red-300", text: "text-red-700" },
   todo: { bg: "bg-gray-50", border: "border-gray-200", text: "text-gray-500" },
 };
 
@@ -56,7 +58,7 @@ function collectNodes(node: ProcessNode, objectName: string): GanttBlock[] {
     const events = child.events ?? [];
     const timestamps = events.map((a) => a.timestamp).filter(Boolean);
     const startTime = timestamps.length > 0 ? Math.min(...timestamps) : 0;
-    const endTime = child.status === "doing"
+    const endTime = child.status === "doing" || child.status === "waiting"
       ? null
       : timestamps.length > 0 ? Math.max(...timestamps) : startTime;
 

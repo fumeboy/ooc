@@ -10,7 +10,7 @@
 import type { Action } from "./flow.js";
 
 /** 行为树节点状态 */
-export type NodeStatus = "todo" | "doing" | "done";
+export type NodeStatus = "todo" | "doing" | "waiting" | "done" | "failed";
 
 /** 行为树节点 */
 export interface ProcessNode {

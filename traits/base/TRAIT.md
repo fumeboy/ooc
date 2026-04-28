@@ -36,8 +36,18 @@ deps: []
 
 `program` 有两种执行形态：
 
-- 执行代码：`open(title="执行脚本", type="command", command="program", description="...")` 后通过 `refine(args={code: ...})` 提供代码，再 `submit(form_id)` 执行
-- 调用 trait 方法：`open(title="调用方法", type="command", command="program", trait="kernel:xxx", method="yyy", description="...")` 后通过 `refine(args=...)` 提供方法参数，再 `submit(form_id)` 执行
+- 调用 trait 方法（首选）：`open({"title":"调用方法","type":"command","command":"program","trait":"kernel:xxx","method":"yyy","description":"..."})` 后通过 `refine({"form_id":"...","args":{...}})` 提供方法参数，再 `submit({"form_id":"..."})` 执行
+- 执行代码：`open({"title":"执行脚本","type":"command","command":"program","description":"..."})` 后通过 `refine({"form_id":"...","args":{"code":"..."}})` 提供代码，再 `submit({"form_id":"..."})` 执行
+
+优先使用直接 trait method 调用：
+
+```json
+open({"title":"读取文件","type":"command","command":"program","trait":"kernel:computable/file_ops","method":"readFile","description":"读取指定文件"})
+refine({"form_id":"<form id>","args":{"path":"docs/meta.md"}})
+submit({"form_id":"<form id>"})
+```
+
+只有当你需要组合多步脚本、循环或复杂计算时，才打开 `program` 并在 code 中使用 `callMethod(...)`。
 
 ### file 类型说明
 
@@ -162,7 +172,8 @@ submit(title="开始对话", form_id="f_123")
 1. 每轮只能调用一个工具
 2. open 后系统加载相关知识，你可以多轮思考准备
 3. submit 时必须传入 form_id
-4. 任务完成后必须 `open(title="返回结果", type="command", command="return", description="完成任务")` → `refine(args={summary:"..."})` → `submit(form_id)`
-5. 你的文本输出会自动记录为思考过程
-6. 收到 inbox 消息后，在下一次工具调用时通过 mark 参数标记
-7. 读取文件优先使用 `open(title="读取文件", type="file", path="...", description="...")`，文件内容会出现在上下文窗口中，避免重复读取造成执行历史膨胀
+4. 需要把当前线程标记完成并向 thread creator 交付 summary 时，调用 `open(title="返回结果", type="command", command="return", description="完成任务")` → `refine(args={summary:"..."})` → `submit(form_id)`；如果已经用 `talk` 把结果回复给 thread creator，不要再用 `return` 重复回复
+5. `return` 不等于"当前过程停止"。如果你需要主动停下来、等待后续输入或让出执行权，调用 `wait(reason="...")`
+6. 你的文本输出会自动记录为思考过程
+7. 收到 inbox 消息后，在下一次工具调用时通过 mark 参数标记
+8. 读取文件优先使用 `open(title="读取文件", type="file", path="...", description="...")`，文件内容会出现在上下文窗口中，避免重复读取造成执行历史膨胀

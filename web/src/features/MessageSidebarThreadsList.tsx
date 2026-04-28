@@ -45,9 +45,13 @@ function formatRelativeTime(ts: number): string {
 function StatusDot({ status }: { status: ProcessNode["status"] }) {
   const color =
     status === "doing"
+      ? "bg-blue-400"
+      : status === "waiting"
       ? "bg-amber-400"
       : status === "done"
       ? "bg-emerald-400"
+      : status === "failed"
+      ? "bg-red-400"
       : "bg-slate-400";
   return <span className={cn("inline-block w-1.5 h-1.5 rounded-full", color)} />;
 }

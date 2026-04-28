@@ -5,7 +5,7 @@ type: how_to_think
 version: 1.0.0
 activates_on:
   show_content_when: ["compact"]
-description: 上下文审查与压缩——识别冗余 action、截断或丢弃、生成摘要，最后 submit compact 一次性应用
+description: 上下文审查与压缩——识别冗余 action、截断或丢弃、生成摘要，最后 submit 一次性应用
 deps: []
 ---
 
@@ -19,8 +19,8 @@ deps: []
 
 **compact 就是你主动清理工作台的动作**。它不是"删记忆"，而是"把桌上一堆草稿纸合并成一张纸条"——重要结论写进 summary 里，细节被允许遗忘。
 
-本 trait 只在你 `open(title="压缩上下文", command="compact", description="...")` 时激活——engine 自动把我加到作用域。
-Submit compact 后我自动卸载，你回到正常工作流。
+本 trait 只在你 `open({"title":"压缩上下文","type":"command","command":"compact","description":"..."})` 时激活——engine 自动把我加到作用域。
+提交 compact form 后我自动卸载，你回到正常工作流。
 
 ## 什么时候应该 compact？
 
@@ -32,16 +32,18 @@ Submit compact 后我自动卸载，你回到正常工作流。
 
 ## 标准流程（三步走）
 
-```
-1. open(title="压缩上下文", command="compact", description="...") ← 进入压缩模式，本 trait 激活
-2. list_actions()                   ← 先看清有哪些 event 可压
-3. （可选）truncate_action / drop_action / close_trait   ← 多次调用累积标记
-4. （可选）preview_compact()        ← 预估效果
-5. submit compact {summary: "..."}  ← 一次性应用所有标记 + 生成摘要 + 退出
+```json
+open({"title":"压缩上下文","type":"command","command":"compact","description":"梳理当前线程历史并压缩冗余 events"})
+open({"title":"列出可压缩 events","type":"command","command":"program","trait":"kernel:compact","method":"list_actions","description":"查看可压缩 events"})
+submit({"form_id":"<program form id>"})
+open({"title":"标记冗余 event","type":"command","command":"program","trait":"kernel:compact","method":"drop_action","description":"标记一个可丢弃 event"})
+refine({"form_id":"<program form id>","args":{"idx":12,"reason":"重复的目录列表，关键结论已在后续摘要中保留"}})
+submit({"form_id":"<program form id>"})
+submit({"form_id":"<compact form id>","summary":"此前：... 当前任务：..."})
 ```
 
 **关键**：标记是累积的。你可以 truncate 5 个、drop 3 个、最后 submit 一次。
-submit 时 engine 会读出所有标记一次性应用——你不需要在 submit 里重述要做什么。
+提交 compact form 时 engine 会读出所有标记一次性应用——你不需要在 submit 里重述要做什么。
 
 ## 可用 llm_methods
 
@@ -102,8 +104,8 @@ submit({ "form_id": "f_xxx" })
 
 ## Submit 语法
 
-```
-submit { form_id: "<compact 的 formId>", summary: "此前：xxx。当前任务：yyy。" }
+```json
+submit({"form_id":"<compact 的 formId>","summary":"此前：xxx。当前任务：yyy。"})
 ```
 
 summary 是一段**你自己组织的纯文本**——engine 不做任何二次处理，它会作为 `compact_summary` event 的 content 落入历史，在下一轮 context 首条呈现。

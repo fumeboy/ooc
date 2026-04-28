@@ -16,15 +16,25 @@ export function inferLiveFlowStatus(objectFlowDir: string, dataStatus: FlowStatu
       nodes?: Record<string, { status?: string }>;
     };
     if (!tree.nodes) return dataStatus;
+    let sawWaiting = false;
     for (const node of Object.values(tree.nodes)) {
-      if (node.status === "running" || node.status === "waiting") {
-        return "running";
-      }
+      if (node.status === "running") return "running";
+      if (node.status === "waiting") sawWaiting = true;
     }
+    if (sawWaiting) return "waiting";
     return dataStatus;
   } catch {
     return dataStatus;
   }
+}
+
+export function aggregateFlowStatuses(statuses: FlowStatus[], fallbackStatus: FlowStatus): FlowStatus {
+  if (statuses.includes("running")) return "running";
+  if (statuses.includes("waiting")) return "waiting";
+  if (statuses.includes("pausing")) return "pausing";
+  if (statuses.includes("failed")) return "failed";
+  if (statuses.includes("finished")) return "finished";
+  return fallbackStatus;
 }
 
 /**
@@ -38,9 +48,7 @@ export function inferSessionLiveStatus(sessionDir: string, fallbackStatus: FlowS
   const objectsDir = join(sessionDir, "objects");
   if (!existsSync(objectsDir)) return fallbackStatus;
 
-  let sawFailed = false;
-  let sawPausing = false;
-  let sawWaiting = false;
+  const statuses: FlowStatus[] = [];
 
   try {
     const entries = readdirSync(objectsDir, { withFileTypes: true });
@@ -51,20 +59,13 @@ export function inferSessionLiveStatus(sessionDir: string, fallbackStatus: FlowS
       const subFlow = readFlow(objectFlowDir);
       const baseStatus = subFlow?.status ?? (existsSync(join(objectFlowDir, "threads.json")) ? "running" : fallbackStatus);
       const liveStatus = inferLiveFlowStatus(objectFlowDir, baseStatus);
-
-      if (liveStatus === "running") return "running";
-      if (liveStatus === "waiting") sawWaiting = true;
-      if (liveStatus === "pausing") sawPausing = true;
-      if (liveStatus === "failed") sawFailed = true;
+      statuses.push(liveStatus);
     }
   } catch {
     return fallbackStatus;
   }
 
-  if (sawWaiting) return "waiting";
-  if (sawPausing) return "pausing";
-  if (sawFailed) return "failed";
-  return fallbackStatus;
+  return aggregateFlowStatuses(statuses, fallbackStatus);
 }
 
 /** 获取 sessions 摘要列表（从顶层 flows/ 目录读取） */

@@ -140,7 +140,7 @@ export interface ProcessNode {
   id: string;
   title: string;
   description?: string;
-  status: "todo" | "doing" | "done";
+  status: "todo" | "doing" | "waiting" | "done" | "failed";
   children: ProcessNode[];
   deps?: string[];
   events: Action[];

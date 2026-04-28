@@ -8,7 +8,7 @@
  *
  * 设计原则（与 G12 一致）：
  * - LLM 负责判断"什么该留什么该丢"
- * - 代码只做记账：把标记写进 `threadData.compactMarks`，submit compact 时统一消费
+ * - 代码只做记账：把标记写进 `threadData.compactMarks`，提交 compact form 时统一消费
  * - 方法不直接改 `events[]`——避免 LLM 单步误操作导致数据丢失，永远通过 submit 时的原子应用
  *
  * @ref docs/哲学/genes/g05-context-即世界.md — implements — 结构化遗忘兜底
@@ -129,7 +129,7 @@ async function listActionsImpl(ctx: unknown): Promise<ToolResult<{
 /**
  * truncate_action —— 标记某条 event 为"截断到前 N 行"
  *
- * 把标记写进 threadData.compactMarks.truncates，submit compact 时统一应用。
+ * 把标记写进 threadData.compactMarks.truncates，提交 compact form 时统一应用。
  * 同一 idx 多次 truncate 会覆盖（取最后一次的 maxLines）。
  */
 async function truncateActionImpl(
@@ -273,7 +273,7 @@ export const llm_methods: Record<string, TraitMethod> = {
   },
   truncate_action: {
     name: "truncate_action",
-    description: "标记第 idx 条 event 为\"截断到前 maxLines 行\"。标记累积，submit compact 时统一应用。适合长工具返回值（只有前几行有用）。",
+    description: "标记第 idx 条 event 为\"截断到前 maxLines 行\"。标记累积，提交 compact form 时统一应用。适合长工具返回值（只有前几行有用）。",
     params: [
       { name: "idx", type: "number", description: "event 在 events[] 中的索引（list_actions 返回的 idx）", required: true },
       { name: "maxLines", type: "number", description: "保留的行数（建议 20~50）", required: true },
