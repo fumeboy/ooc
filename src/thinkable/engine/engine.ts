@@ -4,7 +4,7 @@
  * 封装完整的执行流程：
  * 1. 创建 ThreadsTree（Root 线程）
  * 2. 构建 Context → 调用 LLM → 解析输出
- * 3. 应用 ThinkLoop 结果（actions、状态变更、子线程创建）
+ * 3. 应用 ThinkLoop 结果（events、状态变更、子线程创建）
  * 4. 通过 Scheduler 管理线程调度和唤醒
  *
  * 这是 World 和 thread/ 模块之间的桥梁。
@@ -34,6 +34,7 @@ import { detectSelfKind } from "../../object/self-kind.js";
 import { runBuildHooks } from "../../world/hooks.js";
 import { contextToMessages, type ActiveFormView } from "../context/messages.js";
 import { threadStatusToFlowStatus, type TalkResult } from "./types.js";
+import { buildInvalidOpenMessage, resolveToolFormId } from "./protocol-guards.js";
 
 import type { LLMClient, Message, ToolCall } from "../llm/client.js";
 import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "../../shared/types/index.js";
@@ -41,13 +42,13 @@ import type { SkillDefinition } from "../../extendable/skill/types.js";
 import { writeDebugLoop, computeContextStats, getExistingLoopCount } from "../../observable/debug/debug.js";
 import { loadSkillBody } from "../../extendable/skill/loader.js";
 import {
-  estimateActionsTokens,
+  estimateEventsTokens,
   buildCompactHint,
   COMPACT_THRESHOLD_TOKENS,
 } from "../context/compact.js";
 import type {
   ThreadsTreeFile,
-  ThreadAction,
+  ProcessEvent,
   ThreadStatus,
 } from "../thread-tree/types.js";
 
@@ -83,7 +84,7 @@ export interface EngineConfig {
    * 当 LLM 输出 [talk] 且 target 不是当前 Object 时调用。
    * World 负责路由：启动目标 Object 的线程树，等待完成，返回结果。
    *
-   * 2026-04-22 新增 `forkUnderThreadId`（对应 think/talk 的 `context="fork"` + 指定 threadId 模式）——
+   * 2026-04-22 新增 `forkUnderThreadId`（对应 do/talk 的 `context="fork"` + 指定 threadId 模式）——
    * 在对方的 threadId 下 fork 新子线程，而非新建根线程。
    * 同时 `continueThreadId` 对应 `context="continue"` 的模式——向对方已有线程投递消息。
    * 两者互斥：同时传入时以 forkUnderThreadId 优先，world 端会校验。
@@ -94,7 +95,7 @@ export interface EngineConfig {
    * @param fromThreadId - 发起方线程 ID
    * @param sessionId - 当前 session ID
    * @param continueThreadId - 可选，继续对方已有线程（对应 context="continue"）
-   * @param messageId - 可选，本次 message_out action 的 id（用于 target="user" 时写入 user inbox 索引）
+   * @param messageId - 可选，本次 message_out event 的 id（用于 target="user" 时写入 user inbox 索引）
    * @param forkUnderThreadId - 可选，在对方此线程下 fork 新子线程（对应 context="fork" + 指定 threadId）
    * @param messageKind - 可选，消息类型标签（Phase 6，如 "relation_update_request"），
    *   传递给接收侧写 inbox 时一并保留，让接收方 context 能渲染特殊徽章
@@ -133,6 +134,31 @@ export type { TalkResult, TalkReturn } from "./types.js";
 /** 生成 session ID */
 function generateSessionId(): string {
   return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function formatLatestLlmInput(messages: Message[]): string {
+  return messages.map(m => `<${m.role}>\n${m.content}\n</${m.role}>`).join("\n\n");
+}
+
+function writeLatestLlmInput(threadDir: string, messages: Message[]): void {
+  mkdirSync(threadDir, { recursive: true });
+  writeFileSync(join(threadDir, "llm.input.txt"), formatLatestLlmInput(messages), "utf-8");
+}
+
+function writeLatestLlmOutput(threadDir: string, llmOutput: string, thinkingContent?: string): void {
+  mkdirSync(threadDir, { recursive: true });
+  writeFileSync(join(threadDir, "llm.output.txt"), llmOutput, "utf-8");
+
+  const thinkingFile = join(threadDir, "llm.thinking.txt");
+  if (thinkingContent) {
+    writeFileSync(thinkingFile, thinkingContent, "utf-8");
+  } else if (existsSync(thinkingFile)) {
+    unlinkSync(thinkingFile);
+  }
+}
+
+function getRuntimeThreadDir(objectFlowDir: string, tree: ThreadsTree, threadId: string): string {
+  return join(objectFlowDir, "threads", ...tree.getAncestorPath(threadId));
 }
 
 /**
@@ -230,10 +256,10 @@ async function executeProgramTraitMethod(params: {
 }
 
 /**
- * 生成 message_out action 的消息 id
+ * 生成 message_out event 的消息 id
  *
  * 格式与 tree.ts 中的 inbox message id 保持一致：`msg_<timestamp36>_<rand>`。
- * engine 在推 message_out action 前调用，把 id 同时写入 action.id 和传给 onTalk 回调。
+ * engine 在推 message_out event 前调用，把 id 同时写入 event.id 和传给 onTalk 回调。
  * 当 target="user" 时，这个 id 就是 user inbox 的 messageId 索引（前端凭此反查正文）。
  */
 function genMessageOutId(): string {
@@ -545,7 +571,7 @@ export async function runWithThreadTree(
       local: tree.readThreadData(threadId)?.locals ?? {},
 
       /* compact trait 专用内部字段（下划线前缀表明非公开 API）
-       * compact 的 llm_methods 通过这两个字段读取当前线程的 actions 和累积压缩标记。
+       * compact 的 llm_methods 通过这两个字段读取当前线程的 events 和累积压缩标记。
        * 普通 trait 不应读写这两个字段——它们是 compact 与 engine 的私有契约。 */
       __threadId: threadId,
       __threadsTree: tree,
@@ -740,7 +766,7 @@ export async function runWithThreadTree(
       /* 检查是否有缓存的 LLM 输出（resume 模式） */
       if (threadData._pendingOutput) {
         /* 优先从文件读取（用户可能已修改） */
-        const debugDir = join(objectFlowDir, "threads", threadId);
+        const debugDir = getRuntimeThreadDir(objectFlowDir, tree, threadId);
         const outputFile = join(debugDir, "llm.output.txt");
         if (existsSync(outputFile)) {
           llmOutput = readFileSync(outputFile, "utf-8");
@@ -791,12 +817,12 @@ export async function runWithThreadTree(
         }));
         messages = contextToMessages(context, threadData.hooks, activeFormsView);
 
-        /* Compact 阈值提示：actions token 超 COMPACT_THRESHOLD_TOKENS 时往 last user message 追加引导
+        /* Compact 阈值提示：events token 超 COMPACT_THRESHOLD_TOKENS 时往 last user message 追加引导
          *
          * 只在非 compact 模式下提示——若 LLM 已经 open(compact) 正在压缩，就别再劝它压缩了。
          * 对"已有 compact_summary"幂等：compact_summary 本身会被算入 tokens，若再次超阈值也该提示。 */
         if (!formManager.activeCommands().has("compact")) {
-          const currentTokens = estimateActionsTokens(threadData.actions);
+          const currentTokens = estimateEventsTokens(threadData.events);
           if (currentTokens > COMPACT_THRESHOLD_TOKENS) {
             const lastMsg = messages[messages.length - 1];
             if (lastMsg && lastMsg.role === "user") {
@@ -811,6 +837,8 @@ export async function runWithThreadTree(
         /* 调用 LLM（带 tools + 流式 thinking）。
          * 客户端若实现 chatWithThinkingStream，则 thinking chunk 实时通过 SSE stream:thought 推送给前端；
          * 未实现则回退到 chat()，等 LLM 完整返回后一次性发出（语义不降级）。 */
+        const threadDir = getRuntimeThreadDir(objectFlowDir, tree, threadId);
+        writeLatestLlmInput(threadDir, messages);
         const llmStartTime = Date.now();
         const llmResult = typeof config.llm.chatWithThinkingStream === "function"
           ? await config.llm.chatWithThinkingStream(messages, {
@@ -827,6 +855,7 @@ export async function runWithThreadTree(
         llmModel = (llmResult as any).model || "unknown";
         llmUsage = (llmResult as any).usage ?? {};
         toolCalls = llmResult.toolCalls;
+        writeLatestLlmOutput(threadDir, llmOutput, thinkingContent);
         /* 流式路径已逐 chunk 发过；非流式路径后面仍会整段发一次（保持前端可观测性） */
         if (sawThinkingChunk) {
           emitSSE({ type: "stream:thought:end", objectName, sessionId });
@@ -841,17 +870,6 @@ export async function runWithThreadTree(
           }
           tree.writeThreadData(threadId, threadData);
 
-          /* 写入调试文件（与旧系统兼容） */
-          const debugDir = join(objectFlowDir, "threads", threadId);
-          mkdirSync(debugDir, { recursive: true });
-          writeFileSync(join(debugDir, "llm.output.txt"), llmOutput, "utf-8");
-          if (thinkingContent) {
-            writeFileSync(join(debugDir, "llm.thinking.txt"), thinkingContent, "utf-8");
-          }
-          /* 写入 Context 供人工查看 */
-          const inputContent = messages.map(m => `<${m.role}>\n${m.content}\n</${m.role}>`).join("\n\n");
-          writeFileSync(join(debugDir, "llm.input.txt"), inputContent, "utf-8");
-
           consola.info(`[Engine] 暂停 thread=${threadId}, 输出已缓存`);
 
           /* 将线程状态改为 paused */
@@ -863,7 +881,7 @@ export async function runWithThreadTree(
         }
       }
 
-      /* 发射 SSE 思考事件 + 记录 thinking action（从 thinking mode 获取） */
+      /* 发射 SSE 思考事件 + 记录 thinking event（从 thinking mode 获取） */
       if (thinkingContent) {
         /* 仅非流式路径需要在此补发整段——流式路径已在 onThinkingChunk 中逐段发过并 end */
         if (!sawThinkingChunk) {
@@ -871,10 +889,10 @@ export async function runWithThreadTree(
           emitSSE({ type: "stream:thought:end", objectName, sessionId });
         }
 
-        /* 将 thinking 输出记录为 thinking action */
+        /* 将 thinking 输出记录为 thinking event */
         const td = tree.readThreadData(threadId);
         if (td) {
-          td.actions.push({
+          td.events.push({
             type: "thinking",
             content: thinkingContent,
             timestamp: Date.now(),
@@ -889,7 +907,7 @@ export async function runWithThreadTree(
         if (llmOutput?.trim() && llmOutput !== thinkingContent) {
           const td = tree.readThreadData(threadId);
           if (td) {
-            td.actions.push({ type: "text", content: llmOutput, timestamp: Date.now() });
+            td.events.push({ type: "text", content: llmOutput, timestamp: Date.now() });
             tree.writeThreadData(threadId, td);
           }
         }
@@ -903,21 +921,21 @@ export async function runWithThreadTree(
         /**
          * 剥离顶层 title（自叙式行动标题）
          *
-         * submit 场景特殊：think(fork) 把 title 当作子线程标题。
+         * submit 场景特殊：do(fork) 把 title 当作子线程标题。
          * engine 在 submit 分支处理时需要能读到 title（作为子线程名 fallback），
          * 所以这里**不删除** args.title，让 submit 分支按 command 类型自行决定。
-         * 其他 tool（open/close/wait）下，title 仅作为 action 标题，args 中是否保留不影响业务逻辑。
+         * 其他 tool（open/close/wait）下，title 仅作为 event 标题，args 中是否保留不影响业务逻辑。
          */
         const rawTitle = typeof args.title === "string" ? args.title : undefined;
         const actionTitle = rawTitle;
 
         consola.info(`[Engine] tool_call: ${toolName}${actionTitle ? ` "${actionTitle}"` : ""}(${JSON.stringify(args).slice(0, 200)})`);
 
-        /* 记录 tool_use action（含 title） */
+        /* 记录 tool_use event（含 title） */
         {
           const td = tree.readThreadData(threadId);
           if (td) {
-            td.actions.push({
+            td.events.push({
               type: "tool_use",
               content: `${toolName}(${JSON.stringify(args).slice(0, 200)})`,
               name: toolName,
@@ -949,10 +967,10 @@ export async function runWithThreadTree(
         if (Array.isArray(args.mark)) {
           for (const m of args.mark as { messageId: string; type: "ack" | "ignore" | "todo"; tip: string }[]) {
             tree.markInbox(threadId, m.messageId, m.type, m.tip);
-            /* 记录 mark_inbox action */
+            /* 记录 mark_inbox event */
             const td = tree.readThreadData(threadId);
             if (td) {
-              td.actions.push({ type: "mark_inbox", content: `标记消息 #${m.messageId}: ${m.type} — ${m.tip}`, timestamp: Date.now() });
+              td.events.push({ type: "mark_inbox", content: `标记消息 #${m.messageId}: ${m.type} — ${m.tip}`, timestamp: Date.now() });
               tree.writeThreadData(threadId, td);
             }
           }
@@ -993,7 +1011,7 @@ export async function runWithThreadTree(
               const loadHint = newlyLoadedTraits.length > 0
                 ? `本次新加载 trait（临时生效，form 关闭即回收）：${newlyLoadedTraits.join(", ")}。如需保留某 trait，可 open(title="固定能力", type="trait", name="...", description="...") 固定它`
                 : `相关 trait 已在作用域内，无新增`;
-              td.actions.push({
+              td.events.push({
                 type: "inject",
                 content: `Form ${formId} 已创建（${command}）。${loadHint}。下一步：请调用 submit({"form_id":"${formId}", ...}) 提交。`,
                 timestamp: Date.now(),
@@ -1016,7 +1034,7 @@ export async function runWithThreadTree(
                   const td2 = tree.readThreadData(threadId);
                   if (td2) {
                     td2.activeForms = formManager.toData();
-                    td2.actions.push({
+                    td2.events.push({
                       type: "inject",
                       content: `[refine via open] 预填参数已累积；当前路径：${refined.commandPaths.join(", ")}。`,
                       timestamp: Date.now(),
@@ -1063,7 +1081,7 @@ export async function runWithThreadTree(
                 } else {
                   hint = `Trait ${resolvedTraitName} 已在作用域内且已固定（open 成功，无状态变化）`;
                 }
-                td.actions.push({ type: "inject", content: `${hint}。`, timestamp: Date.now() });
+                td.events.push({ type: "inject", content: `${hint}。`, timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
               }
               consola.info(`[Engine] open trait (pin): ${traitInput} → ${resolvedTraitName} → ${formId} (pin=${pinChanged})`);
@@ -1071,7 +1089,7 @@ export async function runWithThreadTree(
               const available = allTraitIds.filter(id => !id.startsWith("kernel:") || id.includes("kernel:plannable/") || id.includes("kernel:computable/")).slice(0, 30).join(", ");
               const td = tree.readThreadData(threadId);
               if (td) {
-                td.actions.push({ type: "inject", content: `[错误] Trait "${traitInput}" 不存在。可用 trait: ${available || "(无)"}`, timestamp: Date.now() });
+                td.events.push({ type: "inject", content: `[错误] Trait "${traitInput}" 不存在。可用 trait: ${available || "(无)"}`, timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
               }
               consola.warn(`[Engine] open trait: ${traitInput} not found`);
@@ -1092,7 +1110,7 @@ export async function runWithThreadTree(
             const td = tree.readThreadData(threadId);
             if (td) {
               td.activeForms = formManager.toData();
-              td.actions.push({ type: "inject", content: injectContent, timestamp: Date.now() });
+              td.events.push({ type: "inject", content: injectContent, timestamp: Date.now() });
               tree.writeThreadData(threadId, td);
             }
             consola.info(`[Engine] open skill: ${skillName} → ${formId}`);
@@ -1109,7 +1127,7 @@ export async function runWithThreadTree(
             if (!resolved) {
               const td = tree.readThreadData(threadId);
               if (td) {
-                td.actions.push({
+                td.events.push({
                   type: "inject",
                   content: `[错误] 路径 "${filePath}" 无法解析（未知虚拟前缀或格式错误）`,
                   timestamp: Date.now(),
@@ -1123,7 +1141,7 @@ export async function runWithThreadTree(
                 const hint = isVirtual
                   ? `[错误] 虚拟路径 "${filePath}" 指向的文件不存在（${resolved}）`
                   : `[错误] 文件 "${filePath}" 不存在`;
-                td.actions.push({ type: "inject", content: hint, timestamp: Date.now() });
+                td.events.push({ type: "inject", content: hint, timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
               }
               consola.warn(`[Engine] open file: ${filePath} not found (resolved=${resolved})`);
@@ -1150,7 +1168,7 @@ export async function runWithThreadTree(
                 };
                 td.activeForms = formManager.toData();
                 const kindLabel = kind === "trait" ? "Trait" : kind === "relation" ? "关系文件" : "文件";
-                td.actions.push({
+                td.events.push({
                   type: "inject",
                   content: `${kindLabel} "${filePath}" 已加载到上下文窗口。${linesLimit ? `（前 ${linesLimit} 行）` : ""}`,
                   timestamp: Date.now(),
@@ -1159,19 +1177,40 @@ export async function runWithThreadTree(
               }
               consola.info(`[Engine] open ${kind}: ${filePath}${linesLimit ? ` (${linesLimit} lines)` : ""} → ${formId}`);
             }
+          } else {
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.events.push({
+                type: "inject",
+                content: buildInvalidOpenMessage(tree, threadId),
+                timestamp: Date.now(),
+              });
+              tree.writeThreadData(threadId, td);
+            }
           }
         }
 
         /* --- Refine --- */
         else if (toolName === "refine") {
-          const formId = (args.form_id as string) ?? "";
+          const formId = resolveToolFormId(formManager, args);
           const incoming = (args.args as Record<string, unknown> | undefined) ?? {};
 
-          const updatedForm = formManager.applyRefine(formId, incoming);
+          const updatedForm = Object.keys(incoming).length > 0 ? formManager.applyRefine(formId, incoming) : null;
+          if (Object.keys(incoming).length === 0) {
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.events.push({
+                type: "inject",
+                content: `[错误] refine 参数不完整：必须提供非空 args 对象；refine 只用于累积参数，空 refine 不会推进任务。`,
+                timestamp: Date.now(),
+              });
+              tree.writeThreadData(threadId, td);
+            }
+          } else
           if (!updatedForm) {
             const td = tree.readThreadData(threadId);
             if (td) {
-              td.actions.push({
+              td.events.push({
                 type: "inject",
                 content: `[错误] refine 失败：Form ${formId} 不存在。`,
                 timestamp: Date.now(),
@@ -1196,7 +1235,7 @@ export async function runWithThreadTree(
               const loadHint = newlyLoadedTraits.length > 0
                 ? `按新路径追加 trait：${newlyLoadedTraits.join(", ")}`
                 : `按新路径无新增 trait`;
-              td.actions.push({
+              td.events.push({
                 type: "inject",
                 content: `[refine] Form ${formId} 已累积参数（未执行）。${pathHint}。${loadHint}。可继续 refine，或 submit() 执行指令。`,
                 timestamp: Date.now(),
@@ -1209,12 +1248,13 @@ export async function runWithThreadTree(
 
         /* --- Submit --- */
         else if (toolName === "submit") {
-          const form = formManager.submit(args.form_id as string ?? "");
+          const submitFormId = resolveToolFormId(formManager, args);
+          const form = formManager.submit(submitFormId);
 
           if (!form) {
             const td = tree.readThreadData(threadId);
             if (td) {
-              td.actions.push({ type: "inject", content: `[错误] Form ${args.form_id} 不存在。`, timestamp: Date.now() });
+              td.events.push({ type: "inject", content: `[错误] Form ${args.form_id} 不存在。`, timestamp: Date.now() });
               tree.writeThreadData(threadId, td);
             }
           } else {
@@ -1271,7 +1311,7 @@ export async function runWithThreadTree(
               if (tdForHook?.hooks) {
                 const hookText = collectCommandHooks(command, tdForHook.hooks);
                 if (hookText) {
-                  tdForHook.actions.push({ type: "inject", content: hookText, timestamp: Date.now() });
+                  tdForHook.events.push({ type: "inject", content: hookText, timestamp: Date.now() });
                   tree.writeThreadData(threadId, tdForHook);
                 }
               }
@@ -1284,7 +1324,8 @@ export async function runWithThreadTree(
 
         /* --- Close --- */
         else if (toolName === "close") {
-          const form = formManager.cancel(args.form_id as string ?? "");
+          const closeFormId = resolveToolFormId(formManager, args);
+          const form = formManager.cancel(closeFormId);
           if (form) {
             /* 追踪本次关闭实际卸载的 trait 与"因固定而保留"的 trait，供 inject 文案使用 */
             const unloadedTraits: string[] = [];
@@ -1355,18 +1396,18 @@ export async function runWithThreadTree(
                 if (parts.length === 0) parts.push(`无 trait 被卸载（可能仍被其他 active form 占用）`);
                 closeHint = `${parts.join("；")}。`;
               }
-              td.actions.push({
+              td.events.push({
                 type: "inject",
                 content: `[close] Form ${form.formId} 已关闭。${closeHint}`,
                 timestamp: Date.now(),
               });
               /* 防震荡安全阀：检测连续 open-close 无 submit 的模式。
                * 历史 bug：LLM 陷入"打开 talk form → 读 inject → 关闭 → 再开"无限循环，
-               * 单线程 iteration 限制内可跑上百轮 actions 无任何外部输出。
+               * 单线程 iteration 限制内可跑上百轮 events 无任何外部输出。
                * 策略：倒序扫最近 tool_use，若 close+open 各 ≥ OSCILLATION_THRESHOLD 且中间无 submit，
                * 注入强烈警告，引导 LLM 用 wait/return 跳出循环。 */
               const OSCILLATION_THRESHOLD = 5;
-              const recentTools = td.actions.filter(a => a.type === "tool_use");
+              const recentTools = td.events.filter(a => a.type === "tool_use");
               let closesInTail = 0, opensInTail = 0, hadSubmit = false;
               for (let i = recentTools.length - 1; i >= 0 && i >= recentTools.length - 20; i--) {
                 const nm = recentTools[i]!.name;
@@ -1376,7 +1417,7 @@ export async function runWithThreadTree(
                 else break;
               }
               if (!hadSubmit && closesInTail >= OSCILLATION_THRESHOLD && opensInTail >= OSCILLATION_THRESHOLD) {
-                td.actions.push({
+                td.events.push({
                   type: "inject",
                   content: `[⚠️ 震荡警告] 连续 open/close 超过 ${OSCILLATION_THRESHOLD} 次无 submit——你陷入了无效循环。` +
                     `立即用 wait({reason:"..."}) 向用户报告当前状态并等待指示；或 return({summary:"..."}) 结束当前线程。` +
@@ -1391,7 +1432,11 @@ export async function runWithThreadTree(
           } else {
             const td = tree.readThreadData(threadId);
             if (td) {
-              td.actions.push({ type: "inject", content: `[提示] Form ${args.form_id} 不存在（可能已被 submit 消费）。请直接执行下一步操作。`, timestamp: Date.now() });
+              const hasFormId = typeof args.form_id === "string" && args.form_id.length > 0;
+              const content = hasFormId
+                ? `[提示] Form ${args.form_id} 不存在（可能已被 submit 消费）。请直接执行下一步操作。`
+                : `[错误] close 参数不完整：当前没有可自动关闭的唯一 active form。请先 open 一个 form，或在 close 中提供 form_id。`;
+              td.events.push({ type: "inject", content, timestamp: Date.now() });
               tree.writeThreadData(threadId, td);
             }
             consola.warn(`[Engine] close: form ${args.form_id} not found`);
@@ -1404,7 +1449,7 @@ export async function runWithThreadTree(
           await tree.setNodeStatus(threadId, "waiting", "explicit_wait");
           const td = tree.readThreadData(threadId);
           if (td) {
-            td.actions.push({ type: "inject", content: `[wait] 线程进入等待状态: ${reason}`, timestamp: Date.now() });
+            td.events.push({ type: "inject", content: `[wait] 线程进入等待状态: ${reason}`, timestamp: Date.now() });
             tree.writeThreadData(threadId, td);
           }
           consola.info(`[Engine] wait: ${reason}`);
@@ -1413,7 +1458,7 @@ export async function runWithThreadTree(
         /* debug 记录 */
         if (config.debugEnabled && context && messages) {
           debugLoopCounter++;
-          const debugDir = join(objectFlowDir, "threads", threadId, "debug");
+          const debugDir = join(getRuntimeThreadDir(objectFlowDir, tree, threadId), "debug");
           const ctxStats = computeContextStats(context);
           const totalMessageChars = messages.reduce((sum, m) => sum + m.content.length, 0);
           writeDebugLoop({
@@ -1821,7 +1866,7 @@ export async function resumeWithThreadTree(
 
       /* 初始化 debug 计数器（仅首次） */
       if (config.debugEnabled && !debugLoopCounterInitialized) {
-        const debugDir = join(objectFlowDir, "threads", threadId, "debug");
+        const debugDir = join(getRuntimeThreadDir(objectFlowDir, tree, threadId), "debug");
         debugLoopCounter = getExistingLoopCount(debugDir);
         debugLoopCounterInitialized = true;
       }
@@ -1840,7 +1885,7 @@ export async function resumeWithThreadTree(
 
       if (threadData._pendingOutput) {
         /* 优先从文件读取（用户可能已修改） */
-        const debugDir = join(objectFlowDir, "threads", threadId);
+        const debugDir = getRuntimeThreadDir(objectFlowDir, tree, threadId);
         const outputFile = join(debugDir, "llm.output.txt");
         if (existsSync(outputFile)) {
           llmOutput = readFileSync(outputFile, "utf-8");
@@ -1878,7 +1923,7 @@ export async function resumeWithThreadTree(
 
         /* Compact 阈值提示（resume 路径，与 runWithThreadTree 同义） */
         if (!formManager.activeCommands().has("compact")) {
-          const currentTokens = estimateActionsTokens(threadData.actions);
+          const currentTokens = estimateEventsTokens(threadData.events);
           if (currentTokens > COMPACT_THRESHOLD_TOKENS) {
             const lastMsg = messages[messages.length - 1];
             if (lastMsg && lastMsg.role === "user") {
@@ -1890,6 +1935,8 @@ export async function resumeWithThreadTree(
         /* 构建动态 tools 列表 */
         const availableTools = buildAvailableTools();
 
+        const threadDir = getRuntimeThreadDir(objectFlowDir, tree, threadId);
+        writeLatestLlmInput(threadDir, messages);
         const llmStartTime = Date.now();
         const llmResult = typeof config.llm.chatWithThinkingStream === "function"
           ? await config.llm.chatWithThinkingStream(messages, {
@@ -1906,6 +1953,7 @@ export async function resumeWithThreadTree(
         llmModel = (llmResult as any).model || "unknown";
         llmUsage = (llmResult as any).usage ?? {};
         toolCalls = llmResult.toolCalls;
+        writeLatestLlmOutput(threadDir, llmOutput, thinkingContent);
         if (sawThinkingChunk) {
           emitSSE({ type: "stream:thought:end", objectName, sessionId });
         }
@@ -1914,16 +1962,6 @@ export async function resumeWithThreadTree(
           threadData._pendingOutput = llmOutput;
           if (thinkingContent) threadData._pendingThinkingOutput = thinkingContent;
           tree.writeThreadData(threadId, threadData);
-
-          /* 写入调试文件供人工查看/修改 */
-          const debugDir = join(objectFlowDir, "threads", threadId);
-          mkdirSync(debugDir, { recursive: true });
-          writeFileSync(join(debugDir, "llm.output.txt"), llmOutput, "utf-8");
-          if (thinkingContent) {
-            writeFileSync(join(debugDir, "llm.thinking.txt"), thinkingContent, "utf-8");
-          }
-          const inputContent = messages.map(m => `<${m.role}>\n${m.content}\n</${m.role}>`).join("\n\n");
-          writeFileSync(join(debugDir, "llm.input.txt"), inputContent, "utf-8");
 
           /* 将线程状态改为 paused */
           await tree.setNodeStatus(threadId, "paused");
@@ -1941,10 +1979,10 @@ export async function resumeWithThreadTree(
           emitSSE({ type: "stream:thought:end", objectName, sessionId });
         }
 
-        /* 将 thinking 输出记录为 thinking action */
+        /* 将 thinking 输出记录为 thinking event */
         const td = tree.readThreadData(threadId);
         if (td) {
-          td.actions.push({
+          td.events.push({
             type: "thinking",
             content: thinkingContent,
             timestamp: Date.now(),
@@ -1958,7 +1996,7 @@ export async function resumeWithThreadTree(
         if (llmOutput?.trim() && llmOutput !== thinkingContent) {
           const td = tree.readThreadData(threadId);
           if (td) {
-            td.actions.push({ type: "text", content: llmOutput, timestamp: Date.now() });
+            td.events.push({ type: "text", content: llmOutput, timestamp: Date.now() });
             tree.writeThreadData(threadId, td);
           }
         }
@@ -1969,17 +2007,17 @@ export async function resumeWithThreadTree(
         const toolName = tc.function.name;
 
         /* 剥离顶层 title（参见 runWithThreadTree 同段落的说明）
-         * submit 场景下 args.title 保留（think(fork) 的子线程名 fallback） */
+         * submit 场景下 args.title 保留（do(fork) 的子线程名 fallback） */
         const rawTitle = typeof args.title === "string" ? args.title : undefined;
         const actionTitle = rawTitle;
 
         consola.info(`[Engine] tool_call: ${toolName}${actionTitle ? ` "${actionTitle}"` : ""}(${JSON.stringify(args).slice(0, 200)})`);
 
-        /* 记录 tool_use action（含 title） */
+        /* 记录 tool_use event（含 title） */
         {
           const td = tree.readThreadData(threadId);
           if (td) {
-            td.actions.push({
+            td.events.push({
               type: "tool_use",
               content: `${toolName}(${JSON.stringify(args).slice(0, 200)})`,
               name: toolName,
@@ -2011,10 +2049,10 @@ export async function resumeWithThreadTree(
         if (Array.isArray(args.mark)) {
           for (const m of args.mark as { messageId: string; type: "ack" | "ignore" | "todo"; tip: string }[]) {
             tree.markInbox(threadId, m.messageId, m.type, m.tip);
-            /* 记录 mark_inbox action */
+            /* 记录 mark_inbox event */
             const td = tree.readThreadData(threadId);
             if (td) {
-              td.actions.push({ type: "mark_inbox", content: `标记消息 #${m.messageId}: ${m.type} — ${m.tip}`, timestamp: Date.now() });
+              td.events.push({ type: "mark_inbox", content: `标记消息 #${m.messageId}: ${m.type} — ${m.tip}`, timestamp: Date.now() });
               tree.writeThreadData(threadId, td);
             }
           }
@@ -2049,7 +2087,7 @@ export async function resumeWithThreadTree(
               const loadHint = newlyLoadedTraits.length > 0
                 ? `本次新加载 trait（临时生效，form 关闭即回收）：${newlyLoadedTraits.join(", ")}。如需保留某 trait，可 open(title="固定能力", type="trait", name="...", description="...") 固定它`
                 : `相关 trait 已在作用域内，无新增`;
-              td.actions.push({
+              td.events.push({
                 type: "inject",
                 content: `Form ${formId} 已创建（${command}）。${loadHint}。下一步：请调用 submit({"form_id":"${formId}", ...}) 提交。`,
                 timestamp: Date.now(),
@@ -2072,7 +2110,7 @@ export async function resumeWithThreadTree(
                   const td2 = tree.readThreadData(threadId);
                   if (td2) {
                     td2.activeForms = formManager.toData();
-                    td2.actions.push({
+                    td2.events.push({
                       type: "inject",
                       content: `[refine via open] 预填参数已累积；当前路径：${refined.commandPaths.join(", ")}。`,
                       timestamp: Date.now(),
@@ -2116,14 +2154,14 @@ export async function resumeWithThreadTree(
                 } else {
                   hint = `Trait ${resolvedTraitName} 已在作用域内且已固定（open 成功，无状态变化）`;
                 }
-                td.actions.push({ type: "inject", content: `${hint}。`, timestamp: Date.now() });
+                td.events.push({ type: "inject", content: `${hint}。`, timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
               }
               consola.info(`[Engine] open trait (pin): ${traitInput} → ${resolvedTraitName} → ${formId} (pin=${pinChanged})`);
             } else {
               const available = allTraitIds.filter(id => !id.startsWith("kernel:") || id.includes("kernel:plannable/") || id.includes("kernel:computable/")).slice(0, 30).join(", ");
               const td = tree.readThreadData(threadId);
-              if (td) { td.actions.push({ type: "inject", content: `[错误] Trait "${traitInput}" 不存在。可用 trait: ${available || "(无)"}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+              if (td) { td.events.push({ type: "inject", content: `[错误] Trait "${traitInput}" 不存在。可用 trait: ${available || "(无)"}`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
               consola.warn(`[Engine] open trait: ${traitInput} not found`);
             }
 
@@ -2141,7 +2179,7 @@ export async function resumeWithThreadTree(
             const td = tree.readThreadData(threadId);
             if (td) {
               td.activeForms = formManager.toData();
-              td.actions.push({ type: "inject", content: injectContent, timestamp: Date.now() });
+              td.events.push({ type: "inject", content: injectContent, timestamp: Date.now() });
               tree.writeThreadData(threadId, td);
             }
             consola.info(`[Engine] open skill: ${skillName} → ${formId}`);
@@ -2157,12 +2195,12 @@ export async function resumeWithThreadTree(
             const { resolved, isVirtual, kind } = resolveOpenFilePath(filePath, rootDir, objectName, stoneDir, flowsDir);
             if (!resolved) {
               const td = tree.readThreadData(threadId);
-              if (td) { td.actions.push({ type: "inject", content: `[错误] 路径 "${filePath}" 无法解析（未知虚拟前缀或格式错误）`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+              if (td) { td.events.push({ type: "inject", content: `[错误] 路径 "${filePath}" 无法解析（未知虚拟前缀或格式错误）`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
               consola.warn(`[Engine] open file: ${filePath} unresolved (resume)`);
             } else if (!existsSync(resolved)) {
               const td = tree.readThreadData(threadId);
               const hint = isVirtual ? `[错误] 虚拟路径 "${filePath}" 指向的文件不存在（${resolved}）` : `[错误] 文件 "${filePath}" 不存在`;
-              if (td) { td.actions.push({ type: "inject", content: hint, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+              if (td) { td.events.push({ type: "inject", content: hint, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
               consola.warn(`[Engine] open file: ${filePath} not found (resume, resolved=${resolved})`);
             } else {
               let content = readFileSync(resolved, "utf-8");
@@ -2178,21 +2216,42 @@ export async function resumeWithThreadTree(
                 td.windows[filePath] = { name: filePath, content, formId, updatedAt: Date.now() };
                 td.activeForms = formManager.toData();
                 const kindLabel = kind === "trait" ? "Trait" : kind === "relation" ? "关系文件" : "文件";
-                td.actions.push({ type: "inject", content: `${kindLabel} "${filePath}" 已加载到上下文窗口。${linesLimit ? `（前 ${linesLimit} 行）` : ""}`, timestamp: Date.now() });
+                td.events.push({ type: "inject", content: `${kindLabel} "${filePath}" 已加载到上下文窗口。${linesLimit ? `（前 ${linesLimit} 行）` : ""}`, timestamp: Date.now() });
                 tree.writeThreadData(threadId, td);
               }
               consola.info(`[Engine] open ${kind}: ${filePath}${linesLimit ? ` (${linesLimit} lines)` : ""} → ${formId} (resume)`);
+            }
+          } else {
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.events.push({
+                type: "inject",
+                content: buildInvalidOpenMessage(tree, threadId),
+                timestamp: Date.now(),
+              });
+              tree.writeThreadData(threadId, td);
             }
           }
 
         /* --- Refine (resume) --- */
         } else if (toolName === "refine") {
-          const formId = (args.form_id as string) ?? "";
+          const formId = resolveToolFormId(formManager, args);
           const incoming = (args.args as Record<string, unknown> | undefined) ?? {};
-          const updatedForm = formManager.applyRefine(formId, incoming);
+          const updatedForm = Object.keys(incoming).length > 0 ? formManager.applyRefine(formId, incoming) : null;
+          if (Object.keys(incoming).length === 0) {
+            const td = tree.readThreadData(threadId);
+            if (td) {
+              td.events.push({
+                type: "inject",
+                content: `[错误] refine 参数不完整：必须提供非空 args 对象；refine 只用于累积参数，空 refine 不会推进任务。`,
+                timestamp: Date.now(),
+              });
+              tree.writeThreadData(threadId, td);
+            }
+          } else
           if (!updatedForm) {
             const td = tree.readThreadData(threadId);
-            if (td) { td.actions.push({ type: "inject", content: `[错误] refine 失败：Form ${formId} 不存在。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+            if (td) { td.events.push({ type: "inject", content: `[错误] refine 失败：Form ${formId} 不存在。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
           } else {
             const traitsToLoad = collectCommandTraits(config.traits, formManager.activeCommandPaths());
             const newlyLoadedTraits: string[] = [];
@@ -2207,7 +2266,7 @@ export async function resumeWithThreadTree(
               td.activeForms = formManager.toData();
               const pathHint = `当前路径：${updatedForm.commandPaths.join(", ")}`;
               const loadHint = newlyLoadedTraits.length > 0 ? `按新路径追加 trait：${newlyLoadedTraits.join(", ")}` : `按新路径无新增 trait`;
-              td.actions.push({ type: "inject", content: `[refine] Form ${formId} 已累积参数（未执行）。${pathHint}。${loadHint}。可继续 refine，或 submit() 执行指令。`, timestamp: Date.now() });
+              td.events.push({ type: "inject", content: `[refine] Form ${formId} 已累积参数（未执行）。${pathHint}。${loadHint}。可继续 refine，或 submit() 执行指令。`, timestamp: Date.now() });
               tree.writeThreadData(threadId, td);
             }
             consola.info(`[Engine] refine(resume): form=${formId} paths=${updatedForm.commandPaths.join(", ")}`);
@@ -2215,10 +2274,11 @@ export async function resumeWithThreadTree(
 
         /* --- Submit (resume) --- */
         } else if (toolName === "submit") {
-          const form = formManager.submit(args.form_id as string ?? "");
+          const submitFormId = resolveToolFormId(formManager, args);
+          const form = formManager.submit(submitFormId);
           if (!form) {
             const td = tree.readThreadData(threadId);
-            if (td) { td.actions.push({ type: "inject", content: `[错误] Form ${args.form_id} 不存在。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+            if (td) { td.events.push({ type: "inject", content: `[错误] Form ${args.form_id} 不存在。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
           } else {
             /* Phase 4：合并累积 args */
             if (form.accumulatedArgs && Object.keys(form.accumulatedArgs).length > 0) {
@@ -2269,7 +2329,7 @@ export async function resumeWithThreadTree(
               if (tdForHook?.hooks) {
                 const hookText = collectCommandHooks(command, tdForHook.hooks);
                 if (hookText) {
-                  tdForHook.actions.push({ type: "inject", content: hookText, timestamp: Date.now() });
+                  tdForHook.events.push({ type: "inject", content: hookText, timestamp: Date.now() });
                   tree.writeThreadData(threadId, tdForHook);
                 }
               }
@@ -2280,7 +2340,8 @@ export async function resumeWithThreadTree(
 
         /* --- Close (resume) --- */
         } else if (toolName === "close") {
-          const form = formManager.cancel(args.form_id as string ?? "");
+          const closeFormId = resolveToolFormId(formManager, args);
+          const form = formManager.cancel(closeFormId);
           if (form) {
             /* 追踪实际卸载的 trait 与因固定而保留的 trait（见 run 路径同名逻辑） */
             const unloadedTraits: string[] = [];
@@ -2339,14 +2400,14 @@ export async function resumeWithThreadTree(
                 if (parts.length === 0) parts.push(`无 trait 被卸载（可能仍被其他 active form 占用）`);
                 closeHint = `${parts.join("；")}。`;
               }
-              td.actions.push({
+              td.events.push({
                 type: "inject",
                 content: `[close] Form ${form.formId} 已关闭。${closeHint}`,
                 timestamp: Date.now(),
               });
               /* 防震荡安全阀（见 runWithThreadTree 同名逻辑）：连续 open/close 无 submit → 强警告 */
               const OSCILLATION_THRESHOLD = 5;
-              const recentTools = td.actions.filter(a => a.type === "tool_use");
+              const recentTools = td.events.filter(a => a.type === "tool_use");
               let closesInTail = 0, opensInTail = 0, hadSubmit = false;
               for (let i = recentTools.length - 1; i >= 0 && i >= recentTools.length - 20; i--) {
                 const nm = recentTools[i]!.name;
@@ -2356,7 +2417,7 @@ export async function resumeWithThreadTree(
                 else break;
               }
               if (!hadSubmit && closesInTail >= OSCILLATION_THRESHOLD && opensInTail >= OSCILLATION_THRESHOLD) {
-                td.actions.push({
+                td.events.push({
                   type: "inject",
                   content: `[⚠️ 震荡警告] 连续 open/close 超过 ${OSCILLATION_THRESHOLD} 次无 submit——你陷入了无效循环。` +
                     `立即用 wait({reason:"..."}) 向用户报告当前状态并等待指示；或 return({summary:"..."}) 结束当前线程。` +
@@ -2369,7 +2430,13 @@ export async function resumeWithThreadTree(
             }
             consola.info(`[Engine] close: ${form.command} (${form.formId})`);
           } else {
-            const td = tree.readThreadData(threadId); if (td) { td.actions.push({ type: "inject", content: `[提示] Form ${args.form_id} 不存在（可能已被 submit 消费）。请直接执行下一步操作。`, timestamp: Date.now() }); tree.writeThreadData(threadId, td); }
+            const td = tree.readThreadData(threadId); if (td) {
+              const hasFormId = typeof args.form_id === "string" && args.form_id.length > 0;
+              const content = hasFormId
+                ? `[提示] Form ${args.form_id} 不存在（可能已被 submit 消费）。请直接执行下一步操作。`
+                : `[错误] close 参数不完整：当前没有可自动关闭的唯一 active form。请先 open 一个 form，或在 close 中提供 form_id。`;
+              td.events.push({ type: "inject", content, timestamp: Date.now() }); tree.writeThreadData(threadId, td);
+            }
             consola.warn(`[Engine] close: form ${args.form_id} not found`);
           }
 
@@ -2379,7 +2446,7 @@ export async function resumeWithThreadTree(
           await tree.setNodeStatus(threadId, "waiting", "explicit_wait");
           const td = tree.readThreadData(threadId);
           if (td) {
-            td.actions.push({ type: "inject", content: `[wait] 线程进入等待状态: ${reason}`, timestamp: Date.now() });
+            td.events.push({ type: "inject", content: `[wait] 线程进入等待状态: ${reason}`, timestamp: Date.now() });
             tree.writeThreadData(threadId, td);
           }
           consola.info(`[Engine] wait: ${reason}`);
@@ -2387,7 +2454,7 @@ export async function resumeWithThreadTree(
 
         if (config.debugEnabled && context && messages) {
           debugLoopCounter++;
-          const debugDir = join(objectFlowDir, "threads", threadId, "debug");
+          const debugDir = join(getRuntimeThreadDir(objectFlowDir, tree, threadId), "debug");
           const ctxStats = computeContextStats(context);
           const totalMessageChars = messages.reduce((sum, m) => sum + m.content.length, 0);
           writeDebugLoop({ debugDir, loopIndex: debugLoopCounter, messages, llmOutput, thinkingContent, source: "llm", llmMeta: { model: llmModel, latencyMs: llmLatencyMs, promptTokens: llmUsage.promptTokens ?? 0, completionTokens: llmUsage.completionTokens ?? 0, totalTokens: llmUsage.totalTokens ?? 0 }, contextStats: { ...ctxStats, totalMessageChars }, activeTraits: context.scopeChain, activeSkills: (config.skills ?? []).map(s => s.name), parsedDirectives: [toolName], threadId, objectName, toolCalls });

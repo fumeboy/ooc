@@ -32,7 +32,7 @@ export async function executeProgramCommand(ctx: CommandExecutionContext): Promi
     });
     const td = ctx.tree.readThreadData(ctx.threadId);
     if (td) {
-      td.actions.push({
+      td.events.push({
         type: "program",
         content: `${trait ?? "(missing trait)"}.${method ?? "(missing method)"}`,
         success: executed.success,
@@ -52,7 +52,7 @@ export async function executeProgramCommand(ctx: CommandExecutionContext): Promi
       if (hookInject) {
         const td2 = ctx.tree.readThreadData(ctx.threadId);
         if (td2) {
-          td2.actions.push({ type: "inject", content: hookInject, timestamp: Date.now() });
+          td2.events.push({ type: "inject", content: hookInject, timestamp: Date.now() });
           ctx.tree.writeThreadData(ctx.threadId, td2);
         }
       }
@@ -77,7 +77,7 @@ export async function executeProgramCommand(ctx: CommandExecutionContext): Promi
   const outputText = allOutputs.join("\n").trim();
   const td = ctx.tree.readThreadData(ctx.threadId);
   if (td) {
-    td.actions.push({
+    td.events.push({
       type: "program",
       content: args.code as string,
       success: execResult.success,
@@ -103,7 +103,7 @@ export async function executeProgramCommand(ctx: CommandExecutionContext): Promi
           }
           const td2 = ctx.tree.readThreadData(ctx.threadId);
           if (td2) {
-            td2.actions.push({ type: "inject", content: lines.join("\n"), timestamp: Date.now() });
+            td2.events.push({ type: "inject", content: lines.join("\n"), timestamp: Date.now() });
             ctx.tree.writeThreadData(ctx.threadId, td2);
           }
         }

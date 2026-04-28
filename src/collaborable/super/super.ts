@@ -62,7 +62,7 @@ export function getSuperThreadDir(rootDir: string, fromObject: string): string {
  * @param params.fromObject 发起方对象名（用于定位 super 目录）
  * @param params.message 要投递的反思消息
  * @param params.rootDir user repo 根目录
- * @param params.messageId engine 生成的 message_out action id（可选）
+ * @param params.messageId engine 生成的 message_out event id（可选）
  */
 export async function handleOnTalkToSuper(params: {
   fromObject: string;

@@ -13,11 +13,11 @@
 
 import { compactCommand, executeCompactCommand } from "./compact.js";
 import { deferCommand, executeDeferCommand } from "./defer.js";
+import { doCommand, executeDoCommand } from "./do.js";
+import { executePlanCommand, planCommand } from "./plan.js";
 import { executeProgramCommand, programCommand } from "./program.js";
 import { executeReturnCommand, returnCommand } from "./return.js";
-import { executeSetPlanCommand, setPlanCommand } from "./set_plan.js";
 import { executeTalkCommand, talkCommand } from "./talk.js";
-import { executeThinkCommand, thinkCommand } from "./think.js";
 import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
 
 export type { CommandTableEntry } from "./types.js";
@@ -29,10 +29,10 @@ export type { CommandTableEntry } from "./types.js";
  */
 export const COMMAND_TABLE: Record<string, CommandTableEntry> = {
   talk: talkCommand,
-  think: thinkCommand,
+  do: doCommand,
   program: programCommand,
   return: returnCommand,
-  set_plan: setPlanCommand,
+  plan: planCommand,
   defer: deferCommand,
   compact: compactCommand,
 };
@@ -78,10 +78,10 @@ export async function executeCommand(command: string, ctx: CommandExecutionConte
       return executeTalkCommand(ctx);
     case "return":
       return executeReturnCommand(ctx);
-    case "think":
-      return executeThinkCommand(ctx);
-    case "set_plan":
-      return executeSetPlanCommand(ctx);
+    case "do":
+      return executeDoCommand(ctx);
+    case "plan":
+      return executePlanCommand(ctx);
     case "compact":
       return executeCompactCommand(ctx);
     case "defer":

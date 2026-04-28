@@ -2,7 +2,7 @@
  * FlowMessage id 字段集成测试
  *
  * 验证目标：当对象调 talk(target="user") 时，前端消费的三个源都带同一个 id：
- * 1. thread.json.actions 的 message_out action 带 id（已有行为，这里加断言兜底）
+ * 1. thread.json.events 的 message_out action 带 id（已有行为，这里加断言兜底）
  * 2. SSE flow:message 事件的 message.id === action.id
  * 3. flows/{sessionId}/user/data.json 的 inbox.messageId === action.id
  *
@@ -129,7 +129,7 @@ describe("FlowMessage id 字段三源对齐", () => {
     const threadJsonPath = join(FLOWS_DIR, result.sessionId, "objects", "alice", "threads", inboxEntry.threadId, "thread.json");
     expect(existsSync(threadJsonPath)).toBe(true);
     const thread = JSON.parse(await Bun.file(threadJsonPath).text());
-    const msgOut = (thread.actions as Array<{ id?: string; type: string; content?: string }>).find(
+    const msgOut = ((thread.events) as Array<{ id?: string; type: string; content?: string }>).find(
       (a) => a.type === "message_out" && a.id === inboxEntry.messageId,
     );
     expect(msgOut).toBeDefined();

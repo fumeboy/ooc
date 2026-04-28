@@ -4,12 +4,12 @@
  * 本 trait 的方法只在线程通过 `open(title="压缩上下文", command="compact", description="...")` 激活后可用。
  * 方法体通过 engine 的 program trait/method 路径触发——execCtx 会被 engine 注入
  * `__threadId`（当前线程 ID）和 `__threadsTree`（ThreadsTree 实例引用），
- * 让这些方法能够读写当前线程的 `thread.json`（actions / compactMarks / pinnedTraits）。
+ * 让这些方法能够读写当前线程的 `thread.json`（events / compactMarks / pinnedTraits）。
  *
  * 设计原则（与 G12 一致）：
  * - LLM 负责判断"什么该留什么该丢"
  * - 代码只做记账：把标记写进 `threadData.compactMarks`，submit compact 时统一消费
- * - 方法不直接改 `actions[]`——避免 LLM 单步误操作导致数据丢失，永远通过 submit 时的原子应用
+ * - 方法不直接改 `events[]`——避免 LLM 单步误操作导致数据丢失，永远通过 submit 时的原子应用
  *
  * @ref docs/哲学/genes/g05-context-即世界.md — implements — 结构化遗忘兜底
  * @ref docs/哲学/genes/g12-经验沉淀.md — implements — LLM 做判断代码做记账
@@ -20,8 +20,8 @@ import type { TraitMethod } from "../../src/shared/types/index";
 import { toolOk, toolErr } from "../../src/shared/types/tool-result";
 import type { ToolResult } from "../../src/shared/types/tool-result";
 import type { ThreadsTree } from "../../src/thinkable/thread-tree/tree";
-import type { ThreadAction, ThreadDataFile } from "../../src/thinkable/thread-tree/types";
-import { estimateActionsTokens, previewCompactedTokens } from "../../src/thinkable/context/compact";
+import type { ProcessEvent, ThreadDataFile } from "../../src/thinkable/thread-tree/types";
+import { estimateEventsTokens, previewCompactedTokens } from "../../src/thinkable/context/compact";
 
 /** engine 在 buildExecContext 里注入的内部字段名 */
 interface CompactCtx {
@@ -44,60 +44,60 @@ function readCompactCtx(ctx: unknown): { threadId: string; tree: ThreadsTree } |
 }
 
 /**
- * 过滤"可被压缩"的 actions——compact_summary 本身和最近的 compact tool_use 不参与
+ * 过滤"可被压缩"的 process events——compact_summary 本身和最近的 compact tool_use 不参与
  *
  * 规则：
  * - compact_summary 类型：永远跳过（已经是压缩产物）
  * - 最近一条 `open(title="压缩上下文", command="compact", description="...")` 之后（含）的 tool_use：跳过（正在进行的 compact 流程自身）
  *
- * 返回数组里的 idx 是**原始 actions 数组下标**——LLM 后续用 idx 做 truncate/drop 标记。
+ * 返回数组里的 idx 是**原始 process events 数组下标**——LLM 后续用 idx 做 truncate/drop 标记。
  */
-function filterCompactableActions(actions: ThreadAction[]): Array<{ idx: number; action: ThreadAction }> {
+function filterCompactableEvents(events: ProcessEvent[]): Array<{ idx: number; event: ProcessEvent }> {
   /* 找最近一次 open compact 的下标：从此之后（含）所有 tool_use 都跳过 */
   let lastCompactOpenIdx = -1;
-  for (let i = actions.length - 1; i >= 0; i--) {
-    const a = actions[i]!;
+  for (let i = events.length - 1; i >= 0; i--) {
+    const a = events[i]!;
     if (a.type === "tool_use" && a.name === "open" && a.args?.command === "compact") {
       lastCompactOpenIdx = i;
       break;
     }
   }
 
-  const result: Array<{ idx: number; action: ThreadAction }> = [];
-  for (let i = 0; i < actions.length; i++) {
-    const a = actions[i]!;
+  const result: Array<{ idx: number; event: ProcessEvent }> = [];
+  for (let i = 0; i < events.length; i++) {
+    const a = events[i]!;
     if (a.type === "compact_summary") continue;
     /* 跳过 compact 流程自身的 tool_use / 相关 inject */
     if (lastCompactOpenIdx >= 0 && i >= lastCompactOpenIdx) continue;
-    result.push({ idx: i, action: a });
+    result.push({ idx: i, event: a });
   }
   return result;
 }
 
 /**
- * 取 action 的"一行摘要"：content 的第一行或 result 的第一行
+ * 取 process event 的"一行摘要"：content 的第一行或 result 的第一行
  */
-function summarizeAction(a: ThreadAction): string {
-  const source = a.content || a.result || "";
+function summarizeEvent(event: ProcessEvent): string {
+  const source = event.content || event.result || "";
   const firstLine = source.split("\n")[0] ?? "";
   return firstLine.length > 80 ? `${firstLine.slice(0, 80)}…` : firstLine;
 }
 
 /**
- * 计算 action 的总"内容行数"（content + result + args JSON）
+ * 计算 process event 的总"内容行数"（content + result + args JSON）
  */
-function countActionLines(a: ThreadAction): number {
+function countEventLines(event: ProcessEvent): number {
   let n = 0;
-  if (a.content) n += a.content.split("\n").length;
-  if (a.result) n += a.result.split("\n").length;
-  if (a.args) n += JSON.stringify(a.args).split("\n").length;
+  if (event.content) n += event.content.split("\n").length;
+  if (event.result) n += event.result.split("\n").length;
+  if (event.args) n += JSON.stringify(event.args).split("\n").length;
   return n;
 }
 
 /**
- * list_actions —— 列出所有可压缩 action 的索引 + 摘要 + 行数
+ * list_actions —— 列出所有可压缩 process event 的索引 + 摘要 + 行数
  *
- * 过滤规则见 filterCompactableActions。
+ * 过滤规则见 filterCompactableEvents。
  * 返回 JSON 结构化文本（LLM 以 inject 形式看到）。
  */
 async function listActionsImpl(ctx: unknown): Promise<ToolResult<{
@@ -109,15 +109,15 @@ async function listActionsImpl(ctx: unknown): Promise<ToolResult<{
   const td = ok.tree.readThreadData(ok.threadId);
   if (!td) return toolErr("compact.list_actions: 读取 thread.json 失败");
 
-  const compactable = filterCompactableActions(td.actions);
-  const items = compactable.map(({ idx, action }) => ({
+  const compactable = filterCompactableEvents(td.events);
+  const items = compactable.map(({ idx, event }) => ({
     idx,
-    type: action.type,
-    ts: action.timestamp,
-    summary: summarizeAction(action),
-    lines: countActionLines(action),
+    type: event.type,
+    ts: event.timestamp,
+    summary: summarizeEvent(event),
+    lines: countEventLines(event),
   }));
-  const estimatedTokens = estimateActionsTokens(td.actions);
+  const estimatedTokens = estimateEventsTokens(td.events);
 
   return toolOk({
     total: compactable.length,
@@ -127,7 +127,7 @@ async function listActionsImpl(ctx: unknown): Promise<ToolResult<{
 }
 
 /**
- * truncate_action —— 标记某条 action 为"截断到前 N 行"
+ * truncate_action —— 标记某条 event 为"截断到前 N 行"
  *
  * 把标记写进 threadData.compactMarks.truncates，submit compact 时统一应用。
  * 同一 idx 多次 truncate 会覆盖（取最后一次的 maxLines）。
@@ -147,7 +147,7 @@ async function truncateActionImpl(
 
   const td = ok.tree.readThreadData(ok.threadId);
   if (!td) return toolErr("truncate_action: 读取 thread.json 失败");
-  if (idx >= td.actions.length) return toolErr(`truncate_action: idx=${idx} 越界（actions.length=${td.actions.length}）`);
+  if (idx >= td.events.length) return toolErr(`truncate_action: idx=${idx} 越界（events.length=${td.events.length}）`);
 
   const nextMarks: NonNullable<ThreadDataFile["compactMarks"]> = td.compactMarks
     ? { drops: td.compactMarks.drops ? [...td.compactMarks.drops] : undefined, truncates: td.compactMarks.truncates ? [...td.compactMarks.truncates] : undefined }
@@ -167,7 +167,7 @@ async function truncateActionImpl(
 }
 
 /**
- * drop_action —— 标记某条 action 整条丢弃
+ * drop_action —— 标记某条 event 整条丢弃
  *
  * reason 必须至少 20 个字符——强制 LLM 给出"为什么可以丢"的理由，
  * 防止无脑 drop 导致关键信息丢失。
@@ -187,8 +187,8 @@ async function dropActionImpl(
 
   const td = ok.tree.readThreadData(ok.threadId);
   if (!td) return toolErr("drop_action: 读取 thread.json 失败");
-  if (idx >= td.actions.length) return toolErr(`drop_action: idx=${idx} 越界`);
-  if (td.actions[idx]!.type === "compact_summary") {
+  if (idx >= td.events.length) return toolErr(`drop_action: idx=${idx} 越界`);
+  if (td.events[idx]!.type === "compact_summary") {
     return toolErr("drop_action: compact_summary 类型不可丢弃（它是历史背景锚点）");
   }
 
@@ -245,8 +245,8 @@ async function previewCompactImpl(ctx: unknown): Promise<ToolResult<{
   const td = ok.tree.readThreadData(ok.threadId);
   if (!td) return toolErr("preview_compact: 读取 thread.json 失败");
 
-  const before = estimateActionsTokens(td.actions);
-  const after = previewCompactedTokens(td.actions, td.compactMarks ?? {});
+  const before = estimateEventsTokens(td.events);
+  const after = previewCompactedTokens(td.events, td.compactMarks ?? {});
   const dropCount = td.compactMarks?.drops?.length ?? 0;
   const truncateCount = td.compactMarks?.truncates?.length ?? 0;
 
@@ -267,24 +267,24 @@ async function previewCompactImpl(ctx: unknown): Promise<ToolResult<{
 export const llm_methods: Record<string, TraitMethod> = {
   list_actions: {
     name: "list_actions",
-    description: "列出当前线程所有可压缩 action 的 {idx, type, ts, summary, lines}。compact_summary 和当前 compact 流程自身的 tool_use 会被自动过滤。",
+    description: "列出当前线程所有可压缩 event 的 {idx, type, ts, summary, lines}。compact_summary 和当前 compact 流程自身的 tool_use 会被自动过滤。",
     params: [],
     fn: listActionsImpl as TraitMethod["fn"],
   },
   truncate_action: {
     name: "truncate_action",
-    description: "标记第 idx 条 action 为\"截断到前 maxLines 行\"。标记累积，submit compact 时统一应用。适合长工具返回值（只有前几行有用）。",
+    description: "标记第 idx 条 event 为\"截断到前 maxLines 行\"。标记累积，submit compact 时统一应用。适合长工具返回值（只有前几行有用）。",
     params: [
-      { name: "idx", type: "number", description: "action 在 actions[] 中的索引（list_actions 返回的 idx）", required: true },
+      { name: "idx", type: "number", description: "event 在 events[] 中的索引（list_actions 返回的 idx）", required: true },
       { name: "maxLines", type: "number", description: "保留的行数（建议 20~50）", required: true },
     ],
     fn: truncateActionImpl as TraitMethod["fn"],
   },
   drop_action: {
     name: "drop_action",
-    description: "标记第 idx 条 action 为整条丢弃。reason 必须至少 20 字——强制说明为什么这条可以丢（故意的摩擦，防无脑丢弃）。",
+    description: "标记第 idx 条 event 为整条丢弃。reason 必须至少 20 字——强制说明为什么这条可以丢（故意的摩擦，防无脑丢弃）。",
     params: [
-      { name: "idx", type: "number", description: "action 索引", required: true },
+      { name: "idx", type: "number", description: "event 索引", required: true },
       { name: "reason", type: "string", description: "丢弃理由（≥20 字，如\"探索性文件读取，结论已沉淀到 memory\"）", required: true },
     ],
     fn: dropActionImpl as TraitMethod["fn"],

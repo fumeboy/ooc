@@ -133,7 +133,7 @@ export function computeContextStats(ctx: {
   whoAmI: string;
   instructions: Array<{ content: string }>;
   knowledge: Array<{ content: string }>;
-  process: string;
+  processEvents: Array<{ content: string }>;
   plan: string;
   parentExpectation: string;
   childrenSummary: string;
@@ -149,7 +149,7 @@ export function computeContextStats(ctx: {
   sections.whoAmI = ctx.whoAmI.length;
   sections.instructions = ctx.instructions.reduce((sum, w) => sum + w.content.length, 0);
   sections.knowledge = ctx.knowledge.reduce((sum, w) => sum + w.content.length, 0);
-  sections.process = ctx.process.length;
+  sections.processEvents = ctx.processEvents.reduce((sum, e) => sum + e.content.length, 0);
   sections.plan = ctx.plan.length;
   sections.parentExpectation = ctx.parentExpectation.length;
   sections.childrenSummary = ctx.childrenSummary.length;

@@ -4,7 +4,7 @@
  * Bruce 发现：传入字符串 "yes" 而不是布尔值 true，引擎没有报错，
  * 只是静默地不激活 talk.wait 路径，LLM 容易踩坑无法察觉。
  *
- * 修复：在 talk 和 think 的 submit handler 中，
+ * 修复：在 talk 和 do 的 submit handler 中，
  * 检测 args.wait 为非 boolean 时注入警告 inject。
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
@@ -15,7 +15,7 @@ import { runWithThreadTree, type EngineConfig } from "../src/thinkable/engine/en
 import { MockLLMClient, type ToolCall } from "../src/thinkable/llm/client.js";
 import type { StoneData } from "../src/shared/types/index.js";
 import { eventBus } from "../src/observable/server/events.js";
-import type { ThreadAction } from "../src/thinkable/thread-tree/types.js";
+import type { ProcessEvent } from "../src/thinkable/thread-tree/types.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_wait_arg_validation_test");
 const FLOWS_DIR = join(TEST_DIR, "flows");
@@ -44,14 +44,14 @@ async function readInjectActions(
   flowsDir: string,
   sessionId: string,
   objectName: string,
-): Promise<ThreadAction[]> {
+): Promise<ProcessEvent[]> {
   const sessionDir = join(flowsDir, sessionId);
   const threadsJsonPath = join(sessionDir, "objects", objectName, "threads.json");
   const threadsJson = JSON.parse(await Bun.file(threadsJsonPath).text());
   const rootId = threadsJson.rootId as string;
   const threadPath = join(sessionDir, "objects", objectName, "threads", rootId, "thread.json");
   const thread = JSON.parse(await Bun.file(threadPath).text());
-  return (thread.actions as ThreadAction[]).filter((a) => a.type === "inject");
+  return ((thread.events) as ProcessEvent[]).filter((a) => a.type === "inject");
 }
 
 beforeEach(() => {
@@ -323,11 +323,11 @@ describe("F1 — talk submit: wait 参数类型校验", () => {
 });
 
 /* ========================================================================
- * F1: think submit 中 wait 参数类型校验
+ * F1: do submit 中 wait 参数类型校验
  * ======================================================================== */
 
-describe("F1 — think submit: wait 参数类型校验", () => {
-  test("think submit 传 wait=1（数字）时，注入包含类型警告", async () => {
+describe("F1 — do submit: wait 参数类型校验", () => {
+  test("do submit 传 wait=1（数字）时，注入包含类型警告", async () => {
     let step = 0;
     let thinkFormId = "f_unknown";
 
@@ -343,14 +343,14 @@ describe("F1 — think submit: wait 参数类型校验", () => {
             toolCalls: [toolCall("open", {
               title: "创建子线程",
               type: "command",
-              command: "think",
+              command: "do",
               description: "分析任务",
             })],
           };
         }
 
         if (step === 2) {
-          const m = userMsg?.content.match(/<form id="(f_[^"]+)" command="think"/);
+          const m = userMsg?.content.match(/<form id="(f_[^"]+)" command="do"/);
           if (m?.[1]) thinkFormId = m[1];
           return {
             content: "",
@@ -404,7 +404,7 @@ describe("F1 — think submit: wait 参数类型校验", () => {
       },
     };
 
-    const result = await runWithThreadTree("dave", "测试 think wait 类型校验", "user", config);
+    const result = await runWithThreadTree("dave", "测试 do wait 类型校验", "user", config);
     /* 无论最终状态如何，主要验证 inject */
     expect(result.status === "done" || result.status === "failed").toBe(true);
 

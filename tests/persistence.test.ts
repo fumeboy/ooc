@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { readStone, writeStone, readFlow, writeFlow, listObjects } from "../src/storable/index.js";
 import { createProcess } from "../src/storable/thread/process-compat.js";
+import { readThreadData, writeThreadData } from "../src/storable/thread/persistence.js";
 import type { StoneData, FlowData } from "../src/shared/types/index.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_persistence_test");
@@ -93,6 +94,38 @@ describe("readFlow / writeFlow", () => {
   });
 });
 
+describe("thread process events persistence", () => {
+  test("thread.json 持久化 events 字段而不是 actions 字段", () => {
+    const dir = join(TEST_DIR, "flows", "s1", "objects", "alice", "threads", "th1");
+
+    writeThreadData(dir, {
+      id: "th1",
+      events: [{ type: "inject", content: "上下文变化", timestamp: 1 }],
+    });
+
+    const raw = JSON.parse(readFileSync(join(dir, "thread.json"), "utf-8"));
+    expect(raw.events).toHaveLength(1);
+    expect(raw.actions).toBeUndefined();
+
+    const loaded = readThreadData(dir);
+    expect(loaded!.events).toHaveLength(1);
+    expect("actions" in loaded!).toBe(false);
+  });
+
+  test("thread.json 不再从旧 actions 字段回填 events", () => {
+    const dir = join(TEST_DIR, "flows", "s1", "objects", "alice", "threads", "legacy_actions");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "thread.json"), JSON.stringify({
+      id: "legacy_actions",
+      actions: [{ type: "inject", content: "旧字段", timestamp: 1 }],
+    }, null, 2), "utf-8");
+
+    const loaded = readThreadData(dir) as unknown as { events?: unknown[]; actions?: unknown[] };
+    expect(loaded.events).toEqual([]);
+    expect(loaded.actions).toBeUndefined();
+  });
+});
+
 describe("process.json 分离", () => {
   test("process 写入独立 process.json", () => {
     const dir = join(TEST_DIR, "flows", "session_process");
@@ -107,7 +140,7 @@ describe("process.json 分离", () => {
           title: "研究计划",
           status: "doing",
           children: [],
-          actions: [],
+          events: [],
         },
         focusId: "root_1",
       },
@@ -145,7 +178,7 @@ describe("process.json 分离", () => {
           title: "分析任务",
           status: "done",
           children: [],
-          actions: [],
+          events: [],
           summary: "分析完成",
         },
         focusId: "root_2",
@@ -175,7 +208,7 @@ describe("process.json 分离", () => {
       stoneName: "researcher",
       status: "finished",
       messages: [],
-      actions: [],
+      events: [],
       data: {},
       createdAt: Date.now(),
       updatedAt: Date.now(),

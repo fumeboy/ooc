@@ -15,7 +15,7 @@ import type { ActiveForm } from "../../executable/forms/form.js";
 /** 线程状态 */
 export type ThreadStatus = "pending" | "running" | "waiting" | "done" | "failed" | "paused";
 
-/** 线程句柄（think(fork) / createSubThread 的返回值） */
+/** 线程句柄（do(fork) / createSubThread 的返回值） */
 export type ThreadHandle = string;
 
 /** 线程树结构索引（threads.json） */
@@ -24,7 +24,7 @@ export interface ThreadsTreeFile {
   nodes: Record<string, ThreadsTreeNodeMeta>;
 }
 
-/** 线程树节点元数据（不含 actions，存储在 threads.json 中） */
+/** 线程树节点元数据（不含 events，存储在 threads.json 中） */
 export interface ThreadsTreeNodeMeta {
   id: string;
   title: string;
@@ -33,11 +33,11 @@ export interface ThreadsTreeNodeMeta {
   parentId?: string;
   childrenIds: string[];
 
-  /** 认知栈：静态 traits（think(fork) 时指定） */
+  /** 认知栈：静态 traits（do(fork) 时指定） */
   traits?: string[];
   /** 认知栈：动态激活的 traits */
   activatedTraits?: string[];
-  /** 固定 trait：activatedTraits 的子集，submit/close 回收逻辑不会自动卸载它们。
+  /** 固定 trait：activatedTraits 的子集，form 的 submit/close 回收逻辑不会自动卸载它们。
    * - open(type="command") 自动带入的 trait → 进 activatedTraits 但**不**进 pinnedTraits（临时生效）
    * - open(type="trait", name=X) 显式打开 → 同时加入 pinnedTraits（固定）
    * - close 对应的"trait 型" form 可以 unpin */
@@ -51,7 +51,7 @@ export interface ThreadsTreeNodeMeta {
   summary?: string;
 
   /** 当 status === "waiting" 时，标识具体在等什么。
-   *  - "await_children": 在等子线程完成（think(wait=true) 等路径触发）
+   *  - "await_children": 在等子线程完成（do(wait=true) 等路径触发）
    *  - "talk_sync":      在等其他对象的同步回复（talk(wait=true) 触发；内部状态标签，非命令名）
    *  - "explicit_wait":  LLM 主动 wait 暂停（wait 工具触发） */
   waitingType?: "await_children" | "talk_sync" | "explicit_wait";
@@ -81,7 +81,8 @@ export interface ThreadsTreeNodeMeta {
 /** 单个线程的运行时数据（thread.json） */
 export interface ThreadDataFile {
   id: string;
-  actions: ThreadAction[];
+  /** process events：上下文变化与 LLM 交互历史。持久化字段名。 */
+  events: ProcessEvent[];
   locals?: Record<string, unknown>;
   plan?: string;
   inbox?: ThreadInboxMessage[];
@@ -126,9 +127,9 @@ export interface ThreadDataFile {
    * submit compact 执行后会被清空（undefined）。
    */
   compactMarks?: {
-    /** 要丢弃的 action 索引（含 reason） */
+    /** 要丢弃的 event 索引（含 reason） */
     drops?: Array<{ idx: number; reason: string }>;
-    /** 要截断的 action（保留前 maxLines 行） */
+    /** 要截断的 event（保留前 maxLines 行） */
     truncates?: Array<{ idx: number; maxLines: number }>;
   };
 }
@@ -181,26 +182,13 @@ export interface FormResponse {
 }
 
 /**
- * 线程 Action（替代旧 Action 类型）
+ * ProcessEvent：线程中的过程事件。
  *
- * 与旧 Action 的区别：
- * - 新增 create_thread / thread_return 类型
- * - 删除 pause / stack_push / stack_pop 类型（不再需要）
- *
- * LLM 每轮输出的三种形态都会被记录：
- * - thinking: LLM 的思考过程（extended thinking 输出）
- * - text: LLM 的普通文本输出（非 tool 场景下的回复）
- * - tool_use: LLM 的工具调用（open/submit 等）
- *
- * 系统侧的 action 类型：
- * - inject: 系统注入的信息（form 创建、执行结果、错误提示等）
- * - program: 代码执行及其结果
- * - message_in / message_out: 跨对象消息
- * - create_thread / thread_return: 子线程管理
- * - set_plan: 计划变更
- * - mark_inbox: 标记 inbox 消息
+ * 它同时记录两类上下文变化：
+ * - LLM 交互过程：thinking / text / tool_use
+ * - 系统侧上下文变化：inject / program / message_in / message_out / set_plan 等
  */
-export interface ThreadAction {
+export interface ProcessEvent {
   id?: string;
   type:
     | "thinking"
@@ -215,13 +203,13 @@ export interface ThreadAction {
     | "set_plan"
     | "mark_inbox"
     /**
-     * compact_summary：对象主动压缩上下文后留下的摘要 action
+     * compact_summary：对象主动压缩上下文后留下的摘要事件
      *
      * 由 submit compact 一次性生成：
      * - content 字段存 LLM 提供的 summary 纯文本
-     * - original 字段记录压缩前的 action 总数
-     * - kept 字段记录压缩后保留的 action 数（不含 compact_summary 本身）
-     * - timestamp 被强制设为 min(所有原 action.timestamp) - 1，保证永远排在最前
+     * - original 字段记录压缩前的 event 总数
+     * - kept 字段记录压缩后保留的 event 数（不含 compact_summary 本身）
+     * - timestamp 被强制设为 min(所有原 event.timestamp) - 1，保证永远排在最前
      *
      * context-builder 的 renderThreadProcess 为此类型特化渲染，作为首条历史背景注入，
      * 让 LLM 在"清理过的工作台"前仍能看到整体情境。
@@ -229,9 +217,9 @@ export interface ThreadAction {
     | "compact_summary";
   timestamp: number;
   content: string;
-  /** compact_summary: 压缩前 actions 总数（仅 compact_summary 使用） */
+  /** compact_summary: 压缩前 events 总数（仅 compact_summary 使用） */
   original?: number;
-  /** compact_summary: 压缩后保留的 actions 数（不含 compact_summary 本身） */
+  /** compact_summary: 压缩后保留的 events 数（不含 compact_summary 本身） */
   kept?: number;
   /** tool_use: 工具名称；program: 代码内容；其他: 附加信息 */
   name?: string;
@@ -252,8 +240,8 @@ export interface ThreadAction {
    * message_out (talk): 可选结构化表单
    *
    * 当发起方的 LLM 调用 talk 时在 submit args 里带了 form 参数，engine 会把它
-   * 带上生成的 formId 一并写到这个 action 的 form 字段，作为正文的"真数据"。
-   * 前端按 (threadId, messageId=action.id) 反查后，若有 form，就把消息渲染成
+   * 带上生成的 formId 一并写到这个 event 的 form 字段，作为正文的"真数据"。
+   * 前端按 (threadId, messageId=event.id) 反查后，若有 form，就把消息渲染成
    * option picker 而不是普通 bubble。
    */
   form?: TalkFormPayload;
@@ -266,9 +254,9 @@ export interface ThreadAction {
    */
   formResponse?: FormResponse;
   /**
-   * think / talk 的操作模式（2026-04-22 引入）
+   * do / talk 的操作模式（2026-04-22 引入）
    *
-   * 仅当 action 来源是 think / talk 指令（tool_use / message_out / create_thread）时写入，
+   * 仅当 event 来源是 do / talk 指令（tool_use / message_out / create_thread）时写入，
    * 用于前端 TuiAction 渲染和问题追溯。
    * - "fork": 派生新线程（原线程只读，不被影响）
    * - "continue": 向原线程投递消息（产生影响，唤醒原线程）
@@ -336,7 +324,7 @@ export interface ThreadTodoItem {
  * - 新：{ event, traitName, content, once } — 简化为纯文本 Context 注入
  *
  * event 类型：
- * - "before" / "after"：线程生命周期钩子（think(fork) / return 时触发）
+ * - "before" / "after"：线程生命周期钩子（do(fork) / return 时触发）
  * - "on:{command}"：command 钩子（对应 command 被 submit 时触发，如 "on:return"）
  *   由 defer command 在运行时注册，灵感来自 Go 的 defer 语法。
  */

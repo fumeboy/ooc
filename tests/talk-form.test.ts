@@ -20,7 +20,7 @@ import { MockLLMClient, type ToolCall } from "../src/thinkable/llm/client.js";
 import type { StoneData } from "../src/shared/types/index.js";
 import { eventBus } from "../src/observable/server/events.js";
 import { SUBMIT_TOOL, REFINE_TOOL } from "../src/executable/tools/index.js";
-import type { TalkFormPayload, ThreadAction } from "../src/thinkable/thread-tree/types.js";
+import type { TalkFormPayload, ProcessEvent } from "../src/thinkable/thread-tree/types.js";
 import { handleRoute } from "../src/observable/server/server.js";
 import { World } from "../src/world/world.js";
 import type { LLMConfig } from "../src/thinkable/llm/config.js";
@@ -177,7 +177,7 @@ describe("engine — talk(form=...) 持久化", () => {
     const threadPath = join(sessionDir, "objects", "asker", "threads", rootId, "thread.json");
     const thread = JSON.parse(await Bun.file(threadPath).text());
 
-    const messageOuts = (thread.actions as ThreadAction[]).filter((a) => a.type === "message_out");
+    const messageOuts = ((thread.events) as ProcessEvent[]).filter((a) => a.type === "message_out");
     expect(messageOuts.length).toBe(1);
     const msgOut = messageOuts[0]!;
     expect(msgOut.form).toBeDefined();
@@ -277,7 +277,7 @@ describe("engine — talk(form=...) 持久化", () => {
     const sessionDir = join(FLOWS_DIR, result.sessionId);
     const rootId = JSON.parse(await Bun.file(join(sessionDir, "objects", "asker", "threads.json")).text()).rootId as string;
     const thread = JSON.parse(await Bun.file(join(sessionDir, "objects", "asker", "threads", rootId, "thread.json")).text());
-    const messageOuts = (thread.actions as ThreadAction[]).filter((a) => a.type === "message_out");
+    const messageOuts = ((thread.events) as ProcessEvent[]).filter((a) => a.type === "message_out");
     expect(messageOuts.length).toBe(1);
     /* 无 form 字段：undefined（JSON.stringify 后直接不落盘此 key） */
     expect(messageOuts[0]?.form).toBeUndefined();
@@ -352,7 +352,7 @@ describe("engine — talk(form=...) 持久化", () => {
     const sessionDir = join(FLOWS_DIR, result.sessionId);
     const rootId = JSON.parse(await Bun.file(join(sessionDir, "objects", "asker", "threads.json")).text()).rootId as string;
     const thread = JSON.parse(await Bun.file(join(sessionDir, "objects", "asker", "threads", rootId, "thread.json")).text());
-    const messageOuts = (thread.actions as ThreadAction[]).filter((a) => a.type === "message_out");
+    const messageOuts = ((thread.events) as ProcessEvent[]).filter((a) => a.type === "message_out");
     expect(messageOuts[0]?.form).toBeUndefined();
   });
 
@@ -414,7 +414,7 @@ describe("engine — talk(form=...) 持久化", () => {
     const sessionDir = join(FLOWS_DIR, result.sessionId);
     const rootId = JSON.parse(await Bun.file(join(sessionDir, "objects", "asker", "threads.json")).text()).rootId as string;
     const thread = JSON.parse(await Bun.file(join(sessionDir, "objects", "asker", "threads", rootId, "thread.json")).text());
-    const messageOuts = (thread.actions as ThreadAction[]).filter((a) => a.type === "message_out");
+    const messageOuts = ((thread.events) as ProcessEvent[]).filter((a) => a.type === "message_out");
     const form = messageOuts[0]?.form as TalkFormPayload;
     expect(form).toBeDefined();
     expect(form.type).toBe("multi_choice");
@@ -448,7 +448,7 @@ describe("server — POST /api/talk/:target 支持 formResponse", () => {
         stoneName: object,
         status: "running" as const,
         messages: [],
-        actions: [],
+        events: [],
         process: { root: { id: "r", title: "t", status: "done" as const, children: [] }, focusId: "r" },
         data: {},
         createdAt: 0,
@@ -504,7 +504,7 @@ describe("server — POST /api/talk/:target 支持 formResponse", () => {
         stoneName: "supervisor",
         status: "running" as const,
         messages: [],
-        actions: [],
+        events: [],
         process: { root: { id: "r", title: "t", status: "done" as const, children: [] }, focusId: "r" },
         data: {},
         createdAt: 0,
@@ -546,7 +546,7 @@ describe("server — POST /api/talk/:target 支持 formResponse", () => {
         stoneName: "supervisor",
         status: "running" as const,
         messages: [],
-        actions: [],
+        events: [],
         process: { root: { id: "r", title: "t", status: "done" as const, children: [] }, focusId: "r" },
         data: {},
         createdAt: 0,
@@ -580,7 +580,7 @@ describe("server — POST /api/talk/:target 支持 formResponse", () => {
         stoneName: "supervisor",
         status: "running" as const,
         messages: [],
-        actions: [],
+        events: [],
         process: { root: { id: "r", title: "t", status: "done" as const, children: [] }, focusId: "r" },
         data: {},
         createdAt: 0,

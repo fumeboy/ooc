@@ -134,7 +134,7 @@ describe("computeContextStats", () => {
       whoAmI: "我是 bruce",
       instructions: [{ content: "指令1" }, { content: "指令2" }],
       knowledge: [{ content: "知识窗口" }],
-      process: "执行历史...",
+      processEvents: [{ type: "text", content: "执行历史...", timestamp: 1 }],
       plan: "计划",
       parentExpectation: "期望",
       childrenSummary: "子节点",
@@ -149,7 +149,7 @@ describe("computeContextStats", () => {
     expect(stats.sections.whoAmI).toBe("我是 bruce".length);
     expect(stats.sections.instructions).toBe("指令1".length + "指令2".length);
     expect(stats.sections.knowledge).toBe("知识窗口".length);
-    expect(stats.sections.process).toBe("执行历史...".length);
+    expect(stats.sections.processEvents).toBe("执行历史...".length);
     expect(stats.sections.siblingSummary).toBe(0);
     expect(stats.totalChars).toBeGreaterThan(0);
     expect(stats.totalChars).toBe(Object.values(stats.sections).reduce((a, b) => a + b, 0));

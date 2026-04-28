@@ -4,7 +4,7 @@
  * 设计：
  * - BuildHook = { name, match(path), run(path, ctx) }
  * - 注册一组默认 hook（TS check / Prettier / ESLint），world 启动时注入
- * - 当 file_ops 类 action 完成后，engine 调用 runBuildHooks(paths, ctx)
+ * - 当 file_ops 类 event 完成后，engine 调用 runBuildHooks(paths, ctx)
  * - runBuildHooks 执行匹配的 hook，把失败结果追加到 per-thread feedback window
  * - context-builder 下一轮构建时从 getBuildFeedback(threadId) 读出来注入 knowledge
  *

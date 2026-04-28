@@ -2,20 +2,20 @@
  * 线程上下文压缩 —— 核心算法
  *
  * 负责：
- * - token 估算（简单 `JSON.stringify(actions).length / 4`）
+ * - token 估算（简单 `JSON.stringify(events).length / 4`）
  * - preview：根据 compactMarks 预估压缩后 token 数
- * - apply：真正执行压缩，返回新的 actions 数组 + compact_summary
+ * - apply：真正执行压缩，返回新的 process events 数组 + compact_summary
  *
  * 对外暴露给 engine 的 submit compact 分支与 compact trait 的 preview 方法。
  *
  * 设计约束：
- * - 纯函数：输入 actions + marks，输出新 actions；不 IO、不修改入参
+ * - 纯函数：输入 process events + marks，输出新 events；不 IO、不修改入参
  * - 不依赖 ThreadsTree：engine 负责持久化回写
  *
  * @ref docs/工程管理/迭代/all/20260422_feature_context_compact.md
  */
 
-import type { ThreadAction, ThreadDataFile } from "../thread-tree/types.js";
+import type { ProcessEvent, ThreadDataFile } from "../thread-tree/types.js";
 
 /**
  * 默认 token 阈值：超过此值时 engine 在 context 末尾注入"建议 compact"提示
@@ -26,30 +26,30 @@ import type { ThreadAction, ThreadDataFile } from "../thread-tree/types.js";
 export const COMPACT_THRESHOLD_TOKENS = 60_000;
 
 /**
- * 估算 actions 数组的 token 数
+ * 估算 process events 数组的 token 数
  *
- * 简化策略：`JSON.stringify(actions).length / 4`
+ * 简化策略：`JSON.stringify(events).length / 4`
  * - 英文 ~4 字符/token，中文 ~1.5 字符/token，平均 ~3 字符/token
  * - 除以 4 是偏保守估算（会低估中文占比高的 context，但不至于漏掉真正超阈值的场景）
  * - 不引入 tiktoken（增加依赖 + 跨平台麻烦 + 对估算目标"是否需要 compact"精度足够）
  */
-export function estimateActionsTokens(actions: ThreadAction[]): number {
-  if (actions.length === 0) return 0;
-  return Math.floor(JSON.stringify(actions).length / 4);
+export function estimateEventsTokens(events: ProcessEvent[]): number {
+  if (events.length === 0) return 0;
+  return Math.floor(JSON.stringify(events).length / 4);
 }
 
 /** compactMarks 的别名（从 ThreadDataFile 提取，方便类型签名简洁） */
 export type CompactMarks = NonNullable<ThreadDataFile["compactMarks"]>;
 
 /**
- * 对单条 action 应用截断标记
+ * 对单条 process event 应用截断标记
  *
  * 只截断 content / result / args.*（如果存在长文本 string 字段）。timestamp / type / id / name 保持不变。
  * maxLines 单位是"内容行数"——按 `\n` split 后取前 N 行。
  */
-function truncateActionContent(action: ThreadAction, maxLines: number): ThreadAction {
-  if (maxLines <= 0) return action;
-  const next: ThreadAction = { ...action };
+function truncateEventContent(event: ProcessEvent, maxLines: number): ProcessEvent {
+  if (maxLines <= 0) return event;
+  const next: ProcessEvent = { ...event };
   if (typeof next.content === "string" && next.content.length > 0) {
     const lines = next.content.split("\n");
     if (lines.length > maxLines) {
@@ -66,34 +66,34 @@ function truncateActionContent(action: ThreadAction, maxLines: number): ThreadAc
 }
 
 /**
- * 预估应用 marks 后的 token 数（不真正改 actions）
+ * 预估应用 marks 后的 token 数（不真正改 events）
  *
  * 用于 compact.preview_compact——让 LLM 在 submit 前看一眼效果。
  */
-export function previewCompactedTokens(actions: ThreadAction[], marks: CompactMarks): number {
-  const result = applyMarks(actions, marks);
-  return estimateActionsTokens(result);
+export function previewCompactedTokens(events: ProcessEvent[], marks: CompactMarks): number {
+  const result = applyMarks(events, marks);
+  return estimateEventsTokens(result);
 }
 
 /**
- * 应用 compactMarks：返回新 actions 数组（不含 compact_summary，由调用方追加）
+ * 应用 compactMarks：返回新 process events 数组（不含 compact_summary，由调用方追加）
  *
  * 处理顺序：
  * 1. drops 优先级高于 truncates——同一 idx 上两者都标记时走 drop
- * 2. 保留原 actions 的相对顺序
- * 3. 非标记的 action 原样保留
+ * 2. 保留原 events 的相对顺序
+ * 3. 非标记的 event 原样保留
  */
-export function applyMarks(actions: ThreadAction[], marks: CompactMarks): ThreadAction[] {
+export function applyMarks(events: ProcessEvent[], marks: CompactMarks): ProcessEvent[] {
   const dropSet = new Set((marks.drops ?? []).map(d => d.idx));
   const truncateMap = new Map<number, number>();
   for (const t of marks.truncates ?? []) truncateMap.set(t.idx, t.maxLines);
 
-  const result: ThreadAction[] = [];
-  for (let i = 0; i < actions.length; i++) {
+  const result: ProcessEvent[] = [];
+  for (let i = 0; i < events.length; i++) {
     if (dropSet.has(i)) continue;
-    const action = actions[i]!;
+    const event = events[i]!;
     const maxLines = truncateMap.get(i);
-    result.push(maxLines !== undefined ? truncateActionContent(action, maxLines) : action);
+    result.push(maxLines !== undefined ? truncateEventContent(event, maxLines) : event);
   }
   return result;
 }
@@ -101,30 +101,30 @@ export function applyMarks(actions: ThreadAction[], marks: CompactMarks): Thread
 /**
  * 执行完整压缩：应用 marks + 插入 compact_summary 作为首条
  *
- * @param actions - 原 actions 数组
+ * @param events - 原 process events 数组（变量名保留 events 以兼容 compact marks 的 idx 语义）
  * @param marks - 待应用的压缩标记
  * @param summary - LLM 生成的压缩摘要纯文本
- * @returns 新的 actions 数组（含 compact_summary 作为首条）
+ * @returns 新的 process events 数组（含 compact_summary 作为首条）
  *
- * compact_summary 的 timestamp 被强制设为 min(原 actions.timestamp) - 1，保证永远排在最前。
- * 若原 actions 为空（理论不会发生），退化为当前时间。
+ * compact_summary 的 timestamp 被强制设为 min(原 event.timestamp) - 1，保证永远排在最前。
+ * 若原 events 为空（理论不会发生），退化为当前时间。
  */
 export function applyCompact(
-  actions: ThreadAction[],
+  events: ProcessEvent[],
   marks: CompactMarks,
   summary: string,
-): ThreadAction[] {
-  const original = actions.length;
-  const compacted = applyMarks(actions, marks);
+): ProcessEvent[] {
+  const original = events.length;
+  const compacted = applyMarks(events, marks);
   const kept = compacted.length;
 
-  /* compact_summary 的 timestamp：取原 actions 最小 ts - 1（或者兜底 Date.now()） */
-  const minTs = actions.length > 0
-    ? actions.reduce((m, a) => Math.min(m, a.timestamp), Infinity)
+  /* compact_summary 的 timestamp：取原 events 最小 ts - 1（或者兜底 Date.now()） */
+  const minTs = events.length > 0
+    ? events.reduce((m, a) => Math.min(m, a.timestamp), Infinity)
     : Date.now();
   const summaryTs = isFinite(minTs) ? minTs - 1 : Date.now();
 
-  const summaryAction: ThreadAction = {
+  const summaryEvent: ProcessEvent = {
     type: "compact_summary",
     content: summary,
     timestamp: summaryTs,
@@ -132,7 +132,7 @@ export function applyCompact(
     kept,
   };
 
-  return [summaryAction, ...compacted];
+  return [summaryEvent, ...compacted];
 }
 
 /**
@@ -149,7 +149,7 @@ export function buildCompactHint(
   const kTokens = Math.floor(currentTokens / 1000);
   return (
     `\n<!-- compact-pressure-hint -->\n` +
-    `>>> [系统提示] 当前线程 actions 已占用 ~${kTokens}k tokens（阈值 ${Math.floor(threshold / 1000)}k），接近压力区。\n` +
+    `>>> [系统提示] 当前线程 process events 已占用 ~${kTokens}k tokens（阈值 ${Math.floor(threshold / 1000)}k），接近压力区。\n` +
     `建议执行 open(command="compact") 梳理上下文——列出 → 标记冗余 → submit 压缩。\n` +
     `compact 是对象的元认知能力：主动清理工作台让后续思考更清晰。`
   );

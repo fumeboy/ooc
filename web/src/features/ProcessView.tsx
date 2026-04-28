@@ -170,9 +170,9 @@ export function MiniTree({
         {isFocus && (
           <span className="text-[10px] text-[var(--warm)] shrink-0">(focus-on)</span>
         )}
-        {node.actions.length > 0 && (
+        {node.events.length > 0 && (
           <span className="text-[10px] text-[var(--muted-foreground)] shrink-0">
-            {node.actions.length}
+            {node.events.length}
           </span>
         )}
       </div>

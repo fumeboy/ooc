@@ -58,7 +58,7 @@ class MockTree {
       createdAt: now,
       updatedAt: now,
     };
-    this.threadData["root_001"] = { id: "root_001", actions: [] };
+    this.threadData["root_001"] = { id: "root_001", events: [] };
   }
 
   get rootId() { return this._rootId; }
@@ -104,7 +104,7 @@ class MockTree {
       createdAt: now,
       updatedAt: now,
     };
-    this.threadData[id] = { id, actions: [] };
+    this.threadData[id] = { id, events: [] };
     return id;
   }
 
@@ -316,9 +316,9 @@ describe("create_sub_thread_on_node()", () => {
     expect(childCId).not.toBeNull();
     await tree.returnThread(childCId!, "C 完成了数据收集");
 
-    // 给 C 写入一些 actions 历史
+    // 给 C 写入一些 events 历史
     const cData = tree.readThreadData(childCId!);
-    cData!.actions = [
+    cData!.events = [
       { type: "thinking", content: "开始收集数据", timestamp: 1000 },
       { type: "program", content: "调用 API", timestamp: 2000, result: "成功", success: true },
     ];
@@ -349,10 +349,10 @@ describe("create_sub_thread_on_node()", () => {
     expect(sub.creatorThreadId).toBe("root_001");
     expect(sub.creatorObjectName).toBe("A");
 
-    // I2: 新子线程的 thread.json 包含目标节点的完整 actions（inject action）
+    // I2: 新子线程的 thread.json 包含目标节点的完整 events（inject event）
     const subData = tree.readThreadData(sub.id);
     expect(subData).not.toBeNull();
-    const injectAction = subData!.actions.find((a: any) => a.type === "inject");
+    const injectAction = subData!.events.find((a: any) => a.type === "inject");
     expect(injectAction).toBeDefined();
     expect(injectAction!.content).toContain("开始收集数据");
     expect(injectAction!.content).toContain("调用 API");

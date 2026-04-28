@@ -2,7 +2,7 @@ import { serializeXml, type XmlNode } from "../../executable/protocol/xml.js";
 
 import type { Message } from "../llm/client.js";
 import type { buildThreadContext } from "./builder.js";
-import type { ThreadFrameHook } from "../../thinkable/thread-tree/types.js";
+import type { ProcessEvent, ThreadFrameHook } from "../../thinkable/thread-tree/types.js";
 
 /* ========== Context → LLM Messages 转换 ========== */
 
@@ -11,10 +11,11 @@ import type { ThreadFrameHook } from "../../thinkable/thread-tree/types.js";
 /**
  * 将 ThreadContext 转换为 LLM Messages
  *
- * 构建 system + user 两条消息，XML 结构按嵌套层级缩进：
- * - system：<system> 容器包裹 <identity> / <instructions> / <knowledge>
- * - user：<user> 容器包裹 <task> / <creator> / <plan> / <process> / <inbox> / <todos> /
- *   <defers> / <children> / <ancestors> / <siblings> / <directory> / <paths> / <status>
+ * 构建 system + process event messages，XML 结构按嵌套层级缩进：
+ * - system：<context> 容器包裹 <identity> / <instructions> / <knowledge> / <task> /
+ *   <creator> / <plan> / <inbox> / <todos> / <defers> / <children> / <ancestors> /
+ *   <siblings> / <directory> / <paths> / <status>
+ * - process event messages：每个历史事件单独渲染为 <process_event>
  *
  * 只有标签行被缩进；叶子节点的 content 原样输出（不破坏 Markdown / 代码块 / 长文本）。
  */
@@ -22,8 +23,7 @@ import type { ThreadFrameHook } from "../../thinkable/thread-tree/types.js";
  * 活跃 Form 的简化视图（contextToMessages 侧不关心 FormManager 内部细节）
  *
  * Phase 3 —— llm_input_viewer：把 <active-forms> 从 engine 外部追加改为
- * contextToMessages 内部以 <user> 子节点形式生成，保证前端 DOMParser
- * 把它当作 <user> 的子节点解析。
+ * contextToMessages 内部以 <context> 子节点形式生成。
  */
 export interface ActiveFormView {
   formId: string;
@@ -32,12 +32,64 @@ export interface ActiveFormView {
   trait?: string;
 }
 
+function processEventCategory(event: ProcessEvent): "llm_interaction" | "context_change" {
+  if (
+    event.type === "thinking"
+    || event.type === "text"
+    || event.type === "tool_use"
+    || event.type === "message_in"
+    || event.type === "message_out"
+  ) {
+    return "llm_interaction";
+  }
+  return "context_change";
+}
+
+function processEventRole(event: ProcessEvent): Message["role"] {
+  if (event.type === "thinking" || event.type === "text" || event.type === "tool_use" || event.type === "message_out") {
+    return "assistant";
+  }
+  return "user";
+}
+
+function valueNode(tag: string, value: unknown): XmlNode | null {
+  if (value === undefined) return null;
+  if (value === null || typeof value !== "object") {
+    return { tag, content: String(value) };
+  }
+  return { tag, content: JSON.stringify(value, null, 2) };
+}
+
+function processEventToMessage(event: ProcessEvent): Message {
+  const attrs: Record<string, string | number> = {
+    type: event.type,
+    category: processEventCategory(event),
+    ts: event.timestamp,
+  };
+  if (event.id) attrs.id = event.id;
+  if (event.name) attrs.name = event.name;
+  if (event.title) attrs.title = event.title;
+
+  const children: XmlNode[] = [];
+  if (event.content) children.push({ tag: "content", content: event.content });
+  const args = valueNode("args", event.args);
+  if (args) children.push(args);
+  const result = valueNode("result", event.result);
+  if (result) children.push(result);
+  if (typeof event.success === "boolean") children.push({ tag: "success", content: String(event.success) });
+
+  return {
+    role: processEventRole(event),
+    content: serializeXml([{ tag: "process_event", attrs, children }], 0),
+  };
+}
+
 export function contextToMessages(
   ctx: ReturnType<typeof buildThreadContext>,
   deferHooks?: ThreadFrameHook[],
   activeForms?: ActiveFormView[],
 ): Message[] {
-  /* ========== system 侧：<system> 容器 ========== */
+  /* ========== context 侧：稳定身份、规则与知识窗口 ========== */
   const systemChildren: XmlNode[] = [];
 
   /* 身份 */
@@ -83,7 +135,7 @@ export function contextToMessages(
 
   const systemRoot: XmlNode = { tag: "system", children: systemChildren };
 
-  /* ========== user 侧：<user> 容器 ========== */
+  /* ========== context 侧：当前任务状态窗口 ========== */
   const userChildren: XmlNode[] = [];
 
   /* 父线程期望 */
@@ -113,21 +165,6 @@ export function contextToMessages(
   /* 当前计划 */
   if (ctx.plan) {
     userChildren.push({ tag: "plan", content: ctx.plan });
-  }
-
-  /* 执行历史 */
-  if (ctx.process) {
-    userChildren.push({
-      tag: "process",
-      content: ctx.process,
-      comment: "执行历史：当前线程的所有 actions 时间线",
-    });
-  } else {
-    userChildren.push({
-      tag: "process",
-      selfClosing: true,
-      comment: "执行历史：当前线程的所有 actions 时间线",
-    });
   }
 
   /* 局部变量 */
@@ -287,7 +324,7 @@ export function contextToMessages(
   /* 活跃 Form（Phase 3 — llm_input_viewer）
    *
    * 以前这里由 engine 在 contextToMessages 之后追加到 user message 末尾，
-   * 从前端 DOMParser 的角度看它是 <user> 的兄弟节点；现在作为 <user> 的子节点
+   * 从前端 DOMParser 的角度看它是 <user> 的兄弟节点；现在作为 <context> 的子节点
    * 序列化，语义更清晰、对 LLM 的可见性不变。 */
   if (activeForms && activeForms.length > 0) {
     userChildren.push({
@@ -307,10 +344,18 @@ export function contextToMessages(
   /* 状态 */
   userChildren.push({ tag: "status", content: ctx.status });
 
-  const userRoot: XmlNode = { tag: "user", children: userChildren };
+  const contextRoot: XmlNode = {
+    tag: "context",
+    children: [
+      ...systemChildren,
+      ...userChildren,
+    ],
+  };
+
+  const processEvents = "processEvents" in ctx ? ctx.processEvents : [];
 
   return [
-    { role: "system", content: serializeXml([systemRoot], 0) },
-    { role: "user", content: serializeXml([userRoot], 0) },
+    { role: "system", content: serializeXml([contextRoot], 0) },
+    ...processEvents.filter(e => e.type !== "thinking").map(processEventToMessage),
   ];
 }

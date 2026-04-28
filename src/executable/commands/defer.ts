@@ -19,6 +19,6 @@ export function executeDeferCommand(ctx: CommandExecutionContext): void {
     content,
     once: (ctx.args.once as boolean) ?? true,
   });
-  td.actions.push({ type: "inject", content: `[defer] 已注册 on:${onCommand} 提醒`, timestamp: Date.now() });
+  td.events.push({ type: "inject", content: `[defer] 已注册 on:${onCommand} 提醒`, timestamp: Date.now() });
   ctx.tree.writeThreadData(ctx.threadId, td);
 }

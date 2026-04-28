@@ -16,8 +16,8 @@ export type FlowStatus = "running" | "waiting" | "pausing" | "finished" | "faile
 /** 事件类型 (G10) */
 export type ActionType =
   | "thought"
-  | "thinking"        // 线程树：对应 ThreadAction "thinking"
-  | "text"            // 线程树：对应 ThreadAction "text"
+  | "thinking"        // 线程树：对应 ProcessEvent "thinking"
+  | "text"            // 线程树：对应 ProcessEvent "text"
   | "tool_use"        // 线程树：tool 调用
   | "program"
   | "action"
@@ -65,7 +65,7 @@ export interface Action {
   form?: TalkFormPayload;
   /** message_in 的结构化表单回复 */
   formResponse?: FormResponse;
-  /** think / talk 的操作模式（fork/continue） */
+  /** do / talk 的操作模式（fork/continue） */
   context?: "fork" | "continue";
 }
 

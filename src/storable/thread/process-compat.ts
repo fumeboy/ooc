@@ -15,16 +15,16 @@ export function createProcess(title: string, description?: string): Process {
       ...(description ? { description } : {}),
       status: "doing",
       children: [],
-      actions: [],
+      events: [],
     },
     focusId: "root",
   };
 }
 
-export function collectAllActions(root: ProcessNode): Action[] {
-  const actions: Action[] = [...(root.actions ?? [])];
+export function collectAllEvents(root: ProcessNode): Action[] {
+  const events: Action[] = [...(root.events ?? [])];
   for (const child of root.children ?? []) {
-    actions.push(...collectAllActions(child));
+    events.push(...collectAllEvents(child));
   }
-  return actions;
+  return events;
 }

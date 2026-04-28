@@ -122,43 +122,43 @@ describe("deriveCommandPaths — talk wait 维度独立", () => {
   });
 });
 
-describe("deriveCommandPaths — think 多路径并行", () => {
-  test("think 无参 → ['think']", () => {
-    expect(deriveCommandPaths("think", {})).toEqual(["think"]);
+describe("deriveCommandPaths — do 多路径并行", () => {
+  test("do 无参 → ['do']", () => {
+    expect(deriveCommandPaths("do", {})).toEqual(["do"] );
   });
 
-  test("think(context=fork) → ['think', 'think.fork']", () => {
-    expect(deriveCommandPaths("think", { context: "fork" })).toEqual(["think", "think.fork"]);
+  test("do(context=fork) → ['do', 'do.fork']", () => {
+    expect(deriveCommandPaths("do", { context: "fork" })).toEqual(["do", "do.fork"]);
   });
 
-  test("think(context=continue) → ['think', 'think.continue']", () => {
-    expect(deriveCommandPaths("think", { context: "continue" })).toEqual(["think", "think.continue"]);
+  test("do(context=continue) → ['do', 'do.continue']", () => {
+    expect(deriveCommandPaths("do", { context: "continue" })).toEqual(["do", "do.continue"]);
   });
 
-  test("think(wait=true) → 含 think.wait（不含 think.wait.fork）", () => {
-    const paths = deriveCommandPaths("think", { wait: true });
-    expect(paths).toContain("think");
-    expect(paths).toContain("think.wait");
+  test("do(wait=true) → 含 do.wait（不含 do.wait.fork）", () => {
+    const paths = deriveCommandPaths("do", { wait: true });
+    expect(paths).toContain("do");
+    expect(paths).toContain("do.wait");
   });
 
-  test("think(wait=true, context=fork) → think, think.wait, think.fork（不含 think.wait.fork）", () => {
-    const paths = deriveCommandPaths("think", { wait: true, context: "fork" });
-    expect(paths).toContain("think");
-    expect(paths).toContain("think.wait");
-    expect(paths).toContain("think.fork");
-    expect(paths).not.toContain("think.wait.fork");
+  test("do(wait=true, context=fork) → do, do.wait, do.fork（不含 do.wait.fork）", () => {
+    const paths = deriveCommandPaths("do", { wait: true, context: "fork" });
+    expect(paths).toContain("do");
+    expect(paths).toContain("do.wait");
+    expect(paths).toContain("do.fork");
+    expect(paths).not.toContain("do.wait.fork");
   });
 
-  test("think(wait=true, context=continue) → think, think.wait, think.continue（不含 think.wait.continue）", () => {
-    const paths = deriveCommandPaths("think", { wait: true, context: "continue" });
-    expect(paths).toContain("think");
-    expect(paths).toContain("think.wait");
-    expect(paths).toContain("think.continue");
-    expect(paths).not.toContain("think.wait.continue");
+  test("do(wait=true, context=continue) → do, do.wait, do.continue（不含 do.wait.continue）", () => {
+    const paths = deriveCommandPaths("do", { wait: true, context: "continue" });
+    expect(paths).toContain("do");
+    expect(paths).toContain("do.wait");
+    expect(paths).toContain("do.continue");
+    expect(paths).not.toContain("do.wait.continue");
   });
 
-  test("think(wait=false, context=fork) → 不含 think.wait", () => {
-    expect(deriveCommandPaths("think", { wait: false, context: "fork" })).not.toContain("think.wait");
+  test("do(wait=false, context=fork) → 不含 do.wait", () => {
+    expect(deriveCommandPaths("do", { wait: false, context: "fork" })).not.toContain("do.wait");
   });
 });
 
@@ -173,7 +173,7 @@ describe("deriveCommandPaths — 顶层 tool 不是 command", () => {
 describe("COMMAND_TABLE — 结构性检查", () => {
   test("顶层必须包含 spec 要求的 command", () => {
     const keys = Object.keys(COMMAND_TABLE);
-    for (const c of ["talk", "think", "program", "return", "set_plan", "defer", "compact"]) {
+    for (const c of ["talk", "do", "program", "return", "plan", "defer", "compact"]) {
       expect(keys).toContain(c);
     }
   });
@@ -197,8 +197,8 @@ describe("COMMAND_TABLE — 结构性检查", () => {
     }
   });
 
-  test("新增 openable 命令已注册：set_plan, defer, compact", () => {
-    for (const cmd of ["set_plan", "defer", "compact"]) {
+  test("新增 openable 命令已注册：plan, defer, compact", () => {
+    for (const cmd of ["plan", "defer", "compact"]) {
       expect(COMMAND_TABLE[cmd]).toBeDefined();
       expect(COMMAND_TABLE[cmd]?.openable).toBe(true);
     }
@@ -222,13 +222,13 @@ describe("COMMAND_TABLE.<entry>.paths declares known path universe", () => {
     expect(entry.paths).not.toContain("talk.wait.continue.relation_update");
   });
 
-  test("think paths 包含 think, think.fork, think.wait（不含 think.wait.fork）", () => {
-    const entry = COMMAND_TABLE.think!;
-    expect(entry.paths).toContain("think");
-    expect(entry.paths).toContain("think.fork");
-    expect(entry.paths).toContain("think.wait");
-    expect(entry.paths).not.toContain("think.wait.fork");
-    expect(entry.paths).not.toContain("think.wait.continue");
+  test("do paths 包含 do, do.fork, do.wait（不含 do.wait.fork）", () => {
+    const entry = COMMAND_TABLE.do!;
+    expect(entry.paths).toContain("do");
+    expect(entry.paths).toContain("do.fork");
+    expect(entry.paths).toContain("do.wait");
+    expect(entry.paths).not.toContain("do.wait.fork");
+    expect(entry.paths).not.toContain("do.wait.continue");
   });
 
 });
@@ -240,7 +240,7 @@ describe("getOpenableCommands()", () => {
 
   test("getOpenableCommands 已包含所有 openable 命令", () => {
     const cmds = getOpenableCommands();
-    for (const cmd of ["program", "think", "talk", "return", "set_plan", "defer", "compact"]) {
+    for (const cmd of ["program", "do", "talk", "return", "plan", "defer", "compact"]) {
       expect(cmds).toContain(cmd);
     }
     expect(cmds).not.toContain("await");

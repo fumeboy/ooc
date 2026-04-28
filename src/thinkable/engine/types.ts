@@ -22,7 +22,7 @@ export interface TalkResult {
  * 替代直接返回 Flow 实例：线程树架构下 Flow 类不再作为返回契约，
  * 而是以一个纯数据对象暴露外部消费者需要的字段。
  *
- * 调用方只需读取 sessionId/status/messages/actions/summary，
+ * 调用方只需读取 sessionId/status/messages/events/summary，
  * 与 Flow.toJSON() 的结构保持一致，由 writeSessionArtifact 落盘到 data.json。
  */
 export interface TalkReturn {
@@ -32,8 +32,8 @@ export interface TalkReturn {
   status: "running" | "waiting" | "pausing" | "finished" | "failed";
   /** 消息列表（与 FlowMessage 同形） */
   messages: Array<{ direction: "in" | "out"; from: string; to: string; content: string; timestamp: number; id?: string }>;
-  /** 行为树动作（扁平列表，来自线程树 actions 的投影） */
-  actions: Array<{ type: string; content: string; timestamp: number; id?: string; result?: string; success?: boolean }>;
+  /** 线程树 process events 投影 */
+  events: Array<{ type: string; content: string; timestamp: number; id?: string; result?: string; success?: boolean }>;
   /** 对话摘要 */
   summary?: string;
   /** 关联的底层线程 ID（用于 talk(context="continue")） */

@@ -333,7 +333,7 @@ export async function handleRoute(
       data: {
         sessionId: flow.sessionId,
         status: flow.status,
-        actions: [...flow.actions],
+        events: [...flow.events],
         messages: flow.messages,
       },
     });
@@ -476,7 +476,7 @@ export async function handleRoute(
           stoneName: "",
           status: "pending" as FlowStatus,
           messages: [] as FlowMessage[],
-          process: { root: { id: "root", title: "task", status: "todo" as const, children: [], actions: [] }, focusId: "root" },
+          process: { root: { id: "root", title: "task", status: "todo" as const, children: [], events: [] }, focusId: "root" },
           data: {},
           createdAt: now,
           updatedAt: now,
@@ -1027,7 +1027,7 @@ export async function handleRoute(
    *
    * 返回 { success: true, data: { inbox: [{ threadId, messageId }, ...] } }
    * 若 session 不存在或尚未有任何 talk(user)，返回 { inbox: [] }。
-   * 消息正文请按 (threadId, messageId) 反查：flows/{sid}/objects/{sender}/threads/{threadId}/thread.json 的 actions[]
+   * 消息正文请按 (threadId, messageId) 反查：flows/{sid}/objects/{sender}/threads/{threadId}/thread.json 的 events[]
    *
    * @ref docs/工程管理/迭代/all/20260421_feature_user_inbox.md
    */

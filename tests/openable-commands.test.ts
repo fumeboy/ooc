@@ -14,11 +14,11 @@ import { OPEN_TOOL } from "../src/executable/tools/index.js";
 const EXPECTED_OPENABLE = [
   "compact",
   "defer",
+  "do",
+  "plan",
   "program",
   "return",
-  "set_plan",
   "talk",
-  "think",
 ];
 
 describe("getOpenableCommands()", () => {
@@ -68,11 +68,11 @@ describe("OPEN_TOOL.command.enum 动态生成", () => {
     expect(actualEnum).not.toContain("talk_sync");
   });
 
-  test("enum 包含 think 和 talk", () => {
+  test("enum 包含 do 和 talk", () => {
     const params = OPEN_TOOL.function.parameters as Record<string, unknown>;
     const props = params.properties as Record<string, { enum?: string[] }>;
     const actualEnum = props.command?.enum ?? [];
-    expect(actualEnum).toContain("think");
+    expect(actualEnum).toContain("do");
     expect(actualEnum).toContain("talk");
   });
 });

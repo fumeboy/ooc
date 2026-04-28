@@ -18,7 +18,7 @@ export function computeCurrentAction(process: Process | undefined | null): strin
 
   const all: Action[] = [];
   const walk = (node: ProcessNode): void => {
-    for (const a of node.actions ?? []) all.push(a);
+    for (const a of node.events ?? []) all.push(a);
     for (const child of node.children ?? []) walk(child);
   };
   walk(process.root);

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { collectAllActions } from "../../storable/thread/process-compat.js";
+import { collectAllEvents } from "../../storable/thread/process-compat.js";
 import { listFlowSessions, readFlow } from "../../storable/index.js";
 import type { FlowMessage, FlowStatus } from "../../shared/types/index.js";
 
@@ -25,6 +25,46 @@ export function inferLiveFlowStatus(objectFlowDir: string, dataStatus: FlowStatu
   } catch {
     return dataStatus;
   }
+}
+
+/**
+ * 聚合同一 session 下所有对象的实时状态。
+ *
+ * 详情接口会展示每个 subFlow 的实时状态；列表摘要也必须使用同一套来源，
+ * 否则旧数据里第一个对象已 finished、另一个对象仍 running 时会出现
+ * "列表 finished / 详情思考中" 的矛盾。
+ */
+export function inferSessionLiveStatus(sessionDir: string, fallbackStatus: FlowStatus): FlowStatus {
+  const objectsDir = join(sessionDir, "objects");
+  if (!existsSync(objectsDir)) return fallbackStatus;
+
+  let sawFailed = false;
+  let sawPausing = false;
+  let sawWaiting = false;
+
+  try {
+    const entries = readdirSync(objectsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+
+      const objectFlowDir = join(objectsDir, entry.name);
+      const subFlow = readFlow(objectFlowDir);
+      const baseStatus = subFlow?.status ?? (existsSync(join(objectFlowDir, "threads.json")) ? "running" : fallbackStatus);
+      const liveStatus = inferLiveFlowStatus(objectFlowDir, baseStatus);
+
+      if (liveStatus === "running") return "running";
+      if (liveStatus === "waiting") sawWaiting = true;
+      if (liveStatus === "pausing") sawPausing = true;
+      if (liveStatus === "failed") sawFailed = true;
+    }
+  } catch {
+    return fallbackStatus;
+  }
+
+  if (sawWaiting) return "waiting";
+  if (sawPausing) return "pausing";
+  if (sawFailed) return "failed";
+  return fallbackStatus;
 }
 
 /** 获取 sessions 摘要列表（从顶层 flows/ 目录读取） */
@@ -121,10 +161,10 @@ export function getSessionsSummary(flowsDir: string): Array<{
     summaries.push({
       sessionId: flow.sessionId,
       title: sessionTitle,
-      status: flow.status,
+      status: inferSessionLiveStatus(join(flowsDir, sessionId), flow.status),
       firstMessage: firstIn?.content ?? "",
       messageCount: flow.messages.length,
-      actionCount: collectAllActions(flow.process.root).length,
+      actionCount: collectAllEvents(flow.process.root).length,
       hasProcess: true,
       createdAt: flow.createdAt,
       updatedAt: flow.updatedAt,

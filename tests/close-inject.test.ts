@@ -13,7 +13,7 @@ import { runWithThreadTree, type EngineConfig } from "../src/thinkable/engine/en
 import { MockLLMClient, type ToolCall } from "../src/thinkable/llm/client.js";
 import type { StoneData } from "../src/shared/types/index.js";
 import { eventBus } from "../src/observable/server/events.js";
-import type { ThreadAction } from "../src/thinkable/thread-tree/types.js";
+import type { ProcessEvent } from "../src/thinkable/thread-tree/types.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp_close_inject_test");
 const FLOWS_DIR = join(TEST_DIR, "flows");
@@ -141,7 +141,7 @@ describe("D1 — close inject 格式验证", () => {
     const threadPath = join(sessionDir, "objects", "tester", "threads", rootId, "thread.json");
     const thread = JSON.parse(await Bun.file(threadPath).text());
 
-    const injectActions = (thread.actions as ThreadAction[]).filter((a) => a.type === "inject");
+    const injectActions = ((thread.events) as ProcessEvent[]).filter((a) => a.type === "inject");
 
     /* 必须存在一个 inject 包含 [close] 前缀 */
     const closeInject = injectActions.find((a) => a.content.includes("[close]"));
@@ -239,7 +239,7 @@ describe("D1 — close inject 格式验证", () => {
     const threadPath = join(sessionDir, "objects", "tester2", "threads", rootId, "thread.json");
     const thread = JSON.parse(await Bun.file(threadPath).text());
 
-    const injectActions = (thread.actions as ThreadAction[]).filter((a) => a.type === "inject");
+    const injectActions = ((thread.events) as ProcessEvent[]).filter((a) => a.type === "inject");
 
     /* 文件 form close 应有 [close] 前缀 */
     const closeInject = injectActions.find((a) => a.content.includes("[close]"));

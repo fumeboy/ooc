@@ -3,12 +3,12 @@
  *
  * 为 user 这个「身份挂牌、不参与 ThinkLoop」的特殊对象提供 session 级 inbox：
  * 当任意对象 A 调 talk(target="user", ...) 时，world 会追加一条
- * { threadId: A的当前线程id, messageId: 本次 message_out action 的 id }
+ * { threadId: A的当前线程id, messageId: 本次 message_out event 的 id }
  * 到 flows/{sessionId}/user/data.json。
  *
  * 设计要点：
  * - **引用式而非复制式**：inbox 只存 (threadId, messageId) 对，不存消息正文。
- *   正文本身仍在发起对象的 thread.json.actions 和 objects/{sender}/data.json.messages 里，
+ *   正文本身仍在发起对象的 thread.json.events 和 objects/{sender}/data.json.messages 里，
  *   前端按 (threadId, messageId) 反查。保持「真数据一份，索引多份」的清晰分层。
  * - **不把 user 改造为可执行对象**：不创建 user 的线程树、不进 ThinkLoop。
  * - **session 级而非全局**：每个 session 各自一份 inbox，天然隔离。
@@ -30,7 +30,7 @@ import { SerialQueue } from "../../shared/utils/serial-queue.js";
 export interface UserInboxEntry {
   /** 发起对象当前线程 id（前端凭此找到 objects/{sender}/threads/{threadId}/thread.json） */
   threadId: string;
-  /** message_out action 的 id（前端凭此在 thread.json.actions 里反查正文） */
+  /** message_out event 的 id（前端凭此在 thread.json.events 里反查正文） */
   messageId: string;
 }
 
@@ -158,7 +158,7 @@ export async function readUserReadState(flowsDir: string, sessionId: string): Pr
  * @param flowsDir - flows/ 根目录
  * @param sessionId - session id
  * @param threadId - 发起对象的当前线程 id
- * @param messageId - 本次 message_out action 的 id
+ * @param messageId - 本次 message_out event 的 id
  */
 export async function appendUserInbox(
   flowsDir: string,

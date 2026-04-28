@@ -4,7 +4,7 @@
  * 给定一棵线程树和 focus 节点 ID，计算每个节点在 focus 线程 Context 中的呈现形态。
  *
  * 分类规则（与 `context-builder.ts` 严格一致）：
- * - **detailed**：focus 自身。process 区段渲染了完整 actions。
+ * - **detailed**：focus 自身。process 区段渲染了完整 events。
  * - **summary**：祖先链 + 直接子 + 同级兄弟中，拥有 `summary` 字段的节点。
  * - **title_only**：祖先链 + 直接子 + 同级兄弟中，**没有** `summary` 字段的节点
  *   （renderAncestor/Children/SiblingSummary 会降级为"只有 title + status"输出）。
@@ -25,7 +25,7 @@ import { getAncestorPath } from "../../storable/thread/persistence.js";
 
 /** 上下文可见性分类 */
 export type ContextVisibility =
-  | "detailed"    /* focus 自身：完整 actions 可见 */
+  | "detailed"    /* focus 自身：完整 events 可见 */
   | "summary"     /* title + summary 出现在 Context */
   | "title_only"  /* 只有 title 出现（summary 为空） */
   | "hidden";     /* 不在 Context 里 */

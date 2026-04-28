@@ -38,7 +38,7 @@ function makeMinimalTree(): ThreadsTreeFile {
 function makeMinimalData(): ThreadDataFile {
   return {
     threadId: "root",
-    actions: [],
+    events: [],
   } as unknown as ThreadDataFile;
 }
 

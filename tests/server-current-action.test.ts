@@ -18,7 +18,7 @@ import { World } from "../src/world/world.js";
 import { handleRoute } from "../src/observable/server/server.js";
 import { ThreadsTree } from "../src/thinkable/thread-tree/tree.js";
 import type { LLMConfig } from "../src/thinkable/llm/config.js";
-import type { ThreadAction } from "../src/thinkable/thread-tree/types.js";
+import type { ProcessEvent } from "../src/thinkable/thread-tree/types.js";
 
 /** 测试用 LLMConfig：不依赖 OOC_API_KEY（本组测试不发起 LLM 调用）。 */
 const TEST_LLM_CONFIG: LLMConfig = {
@@ -35,10 +35,10 @@ const TEST_ROOT = join(import.meta.dir, ".tmp_current_action_test");
 
 /**
  * 构造一个最小 Flow 目录：
- * - 一个 supervisor 对象线程树（running 状态 + 指定 actions）
+ * - 一个 supervisor 对象线程树（running 状态 + 指定 events）
  * - 一个 finished 对象线程树（done 状态 + 完整 summary）
  */
-async function setup(actions: ThreadAction[]): Promise<{ world: World; sid: string }> {
+async function setup(events: ProcessEvent[]): Promise<{ world: World; sid: string }> {
   rmSync(TEST_ROOT, { recursive: true, force: true });
   mkdirSync(join(TEST_ROOT, "kernel", "traits"), { recursive: true });
   mkdirSync(join(TEST_ROOT, "library", "traits"), { recursive: true });
@@ -49,14 +49,14 @@ async function setup(actions: ThreadAction[]): Promise<{ world: World; sid: stri
   writeFileSync(join(stoneDir, "readme.md"), "# supervisor\n", "utf-8");
   writeFileSync(join(stoneDir, "data.json"), JSON.stringify({ name: "supervisor" }), "utf-8");
 
-  /* flows/s_test/objects/supervisor/（running 线程 + 指定 actions） */
+  /* flows/s_test/objects/supervisor/（running 线程 + 指定 events） */
   const sid = "s_test";
   const supervisorFlowDir = join(TEST_ROOT, "flows", sid, "objects", "supervisor");
   const tree = await ThreadsTree.create(supervisorFlowDir, "supervisor root", "init");
-  /* 写 actions 到 root thread */
+  /* 写 events 到 root thread */
   const base = tree.readThreadData(tree.rootId);
   if (!base) throw new Error("root thread data not found");
-  tree.writeThreadData(tree.rootId, { ...base, actions });
+  tree.writeThreadData(tree.rootId, { ...base, events });
   /* 确保 status 是 running */
   await tree.setNodeStatus(tree.rootId, "running");
 
@@ -107,9 +107,18 @@ async function getFlow(world: World, sid: string): Promise<{ subFlows: Array<{ s
   return body.data;
 }
 
+async function getFlowList(world: World): Promise<Array<{ sessionId: string; status: string }>> {
+  const req = new Request("http://localhost/api/flows", { method: "GET" });
+  const res = await handleRoute("GET", "/api/flows", req, world);
+  expect(res.status).toBe(200);
+  const body = await res.json() as { success: boolean; data: { sessions: Array<{ sessionId: string; status: string }> } };
+  expect(body.success).toBe(true);
+  return body.data.sessions;
+}
+
 describe("GET /api/flows/:sid currentAction 动态摘要", () => {
   test("优先级 1：最新 thinking 首句", async () => {
-    const actions: ThreadAction[] = [
+    const actions: ProcessEvent[] = [
       { id: "a1", type: "tool_use", timestamp: 1, content: "", title: "读文件 gene.md" },
       { id: "a2", type: "thinking", timestamp: 2, content: "我正在分析用户的意图\n第二行应该被忽略" },
     ];
@@ -120,7 +129,7 @@ describe("GET /api/flows/:sid currentAction 动态摘要", () => {
   });
 
   test("优先级 2：无 thinking 时取最新 tool_use.title", async () => {
-    const actions: ThreadAction[] = [
+    const actions: ProcessEvent[] = [
       { id: "a1", type: "tool_use", timestamp: 1, content: "", title: "旧 tool" },
       { id: "a2", type: "tool_use", timestamp: 2, content: "", title: "新 tool：读取 readme" },
     ];
@@ -131,7 +140,7 @@ describe("GET /api/flows/:sid currentAction 动态摘要", () => {
   });
 
   test("优先级 3：兜底最新 action 的 name/type", async () => {
-    const actions: ThreadAction[] = [
+    const actions: ProcessEvent[] = [
       { id: "a1", type: "inject", timestamp: 1, content: "", name: "inject_trait" },
     ];
     const { world, sid } = await setup(actions);
@@ -142,7 +151,7 @@ describe("GET /api/flows/:sid currentAction 动态摘要", () => {
 
   test("超过 50 字符截断补 …", async () => {
     const long = "这是一段非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常长的 thinking 内容用来验证截断规则";
-    const actions: ThreadAction[] = [
+    const actions: ProcessEvent[] = [
       { id: "a1", type: "thinking", timestamp: 1, content: long },
     ];
     const { world, sid } = await setup(actions);
@@ -153,7 +162,7 @@ describe("GET /api/flows/:sid currentAction 动态摘要", () => {
     expect(sup!.currentAction!.endsWith("…")).toBe(true);
   });
 
-  test("actions 为空时 currentAction 为 undefined（不出现在响应里）", async () => {
+  test("events 为空时 currentAction 为 undefined（不出现在响应里）", async () => {
     const { world, sid } = await setup([]);
     const data = await getFlow(world, sid);
     const sup = data.subFlows.find((s) => s.stoneName === "supervisor");
@@ -162,7 +171,7 @@ describe("GET /api/flows/:sid currentAction 动态摘要", () => {
   });
 
   test("finished 状态不带 currentAction", async () => {
-    const actions: ThreadAction[] = [
+    const actions: ProcessEvent[] = [
       { id: "a1", type: "thinking", timestamp: 1, content: "supervisor 正在思考" },
     ];
     const { world, sid } = await setup(actions);
@@ -171,5 +180,13 @@ describe("GET /api/flows/:sid currentAction 动态摘要", () => {
     expect(alice).toBeDefined();
     expect(alice!.status).toBe("finished");
     expect(alice!.currentAction).toBeUndefined();
+  });
+
+  test("session 列表聚合所有对象的实时线程状态", async () => {
+    const { world, sid } = await setup([]);
+    const sessions = await getFlowList(world);
+    const session = sessions.find((s) => s.sessionId === sid);
+    expect(session).toBeDefined();
+    expect(session!.status).toBe("running");
   });
 });

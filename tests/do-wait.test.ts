@@ -1,11 +1,11 @@
 /**
- * think(wait=true) 对称性验证（flat command-table 版本）
+ * do(wait=true) 对称性验证（flat command-table 版本）
  *
  * 验证：
- * 1. COMMAND_TABLE.think 注册了正确的路径集合（含 wait 维度，无复合嵌套）
- * 2. deriveCommandPaths 正确推导 think(wait=true) 的多路径
- * 3. getOpenableCommands() 包含 "think"
- * 4. think(wait=true, context=fork) 时父线程进入 waiting+waitingType=await_children
+ * 1. COMMAND_TABLE.do 注册了正确的路径集合（含 wait 维度，无复合嵌套）
+ * 2. deriveCommandPaths 正确推导 do(wait=true) 的多路径
+ * 3. getOpenableCommands() 包含 "do"
+ * 4. do(wait=true, context=fork) 时父线程进入 waiting+waitingType=await_children
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
@@ -49,77 +49,77 @@ afterEach(() => {
   eventBus.removeAllListeners("sse");
 });
 
-describe("COMMAND_TABLE.think — 路径注册", () => {
-  test("think entry 存在", () => {
-    expect(COMMAND_TABLE.think).toBeDefined();
+describe("COMMAND_TABLE.do — 路径注册", () => {
+  test("do entry 存在", () => {
+    expect(COMMAND_TABLE.do).toBeDefined();
   });
 
-  test("paths 包含 think, think.fork, think.continue, think.wait（不含复合嵌套）", () => {
-    const entry = COMMAND_TABLE.think!;
+  test("paths 包含 do, do.fork, do.continue, do.wait（不含复合嵌套）", () => {
+    const entry = COMMAND_TABLE.do!;
     const paths = entry.paths;
-    for (const p of ["think", "think.fork", "think.continue", "think.wait"]) {
+    for (const p of ["do", "do.fork", "do.continue", "do.wait"]) {
       expect(paths).toContain(p);
     }
     /* 旧复合路径已消除 */
-    expect(paths).not.toContain("think.wait.fork");
-    expect(paths).not.toContain("think.wait.continue");
+    expect(paths).not.toContain("do.wait.fork");
+    expect(paths).not.toContain("do.wait.continue");
   });
 
-  test("think.openable 为 true", () => {
-    expect(COMMAND_TABLE.think!.openable).toBe(true);
-  });
-});
-
-describe("deriveCommandPaths — think 路径推导（多路径并行）", () => {
-  test("think 无参 → ['think']", () => {
-    expect(deriveCommandPaths("think", {})).toEqual(["think"]);
-  });
-
-  test("think(context=fork) → ['think', 'think.fork']", () => {
-    expect(deriveCommandPaths("think", { context: "fork" })).toEqual(["think", "think.fork"]);
-  });
-
-  test("think(context=continue) → ['think', 'think.continue']", () => {
-    expect(deriveCommandPaths("think", { context: "continue" })).toEqual(["think", "think.continue"]);
-  });
-
-  test("think(wait=true) → 含 think 和 think.wait", () => {
-    const paths = deriveCommandPaths("think", { wait: true });
-    expect(paths).toContain("think");
-    expect(paths).toContain("think.wait");
-  });
-
-  test("think(wait=true, context=fork) → think, think.wait, think.fork（不含 think.wait.fork）", () => {
-    const paths = deriveCommandPaths("think", { wait: true, context: "fork" });
-    expect(paths).toContain("think");
-    expect(paths).toContain("think.wait");
-    expect(paths).toContain("think.fork");
-    expect(paths).not.toContain("think.wait.fork");
-  });
-
-  test("think(wait=true, context=continue) → think, think.wait, think.continue（不含 think.wait.continue）", () => {
-    const paths = deriveCommandPaths("think", { wait: true, context: "continue" });
-    expect(paths).toContain("think");
-    expect(paths).toContain("think.wait");
-    expect(paths).toContain("think.continue");
-    expect(paths).not.toContain("think.wait.continue");
-  });
-
-  test("think(wait=false, context=fork) → 不含 think.wait", () => {
-    expect(deriveCommandPaths("think", { wait: false, context: "fork" })).not.toContain("think.wait");
+  test("do.openable 为 true", () => {
+    expect(COMMAND_TABLE.do!.openable).toBe(true);
   });
 });
 
-describe("getOpenableCommands() 包含 think", () => {
-  test("包含 think", () => {
-    expect(getOpenableCommands()).toContain("think");
+describe("deriveCommandPaths — do 路径推导（多路径并行）", () => {
+  test("do 无参 → ['do']", () => {
+    expect(deriveCommandPaths("do", {})).toEqual(["do"] );
+  });
+
+  test("do(context=fork) → ['do', 'do.fork']", () => {
+    expect(deriveCommandPaths("do", { context: "fork" })).toEqual(["do", "do.fork"]);
+  });
+
+  test("do(context=continue) → ['do', 'do.continue']", () => {
+    expect(deriveCommandPaths("do", { context: "continue" })).toEqual(["do", "do.continue"]);
+  });
+
+  test("do(wait=true) → 含 do 和 do.wait", () => {
+    const paths = deriveCommandPaths("do", { wait: true });
+    expect(paths).toContain("do");
+    expect(paths).toContain("do.wait");
+  });
+
+  test("do(wait=true, context=fork) → do, do.wait, do.fork（不含 do.wait.fork）", () => {
+    const paths = deriveCommandPaths("do", { wait: true, context: "fork" });
+    expect(paths).toContain("do");
+    expect(paths).toContain("do.wait");
+    expect(paths).toContain("do.fork");
+    expect(paths).not.toContain("do.wait.fork");
+  });
+
+  test("do(wait=true, context=continue) → do, do.wait, do.continue（不含 do.wait.continue）", () => {
+    const paths = deriveCommandPaths("do", { wait: true, context: "continue" });
+    expect(paths).toContain("do");
+    expect(paths).toContain("do.wait");
+    expect(paths).toContain("do.continue");
+    expect(paths).not.toContain("do.wait.continue");
+  });
+
+  test("do(wait=false, context=fork) → 不含 do.wait", () => {
+    expect(deriveCommandPaths("do", { wait: false, context: "fork" })).not.toContain("do.wait");
   });
 });
 
-describe("engine — think(wait=true, context=fork) 等待子线程", () => {
-  test("父线程在 think(wait=true) 后进入 waiting+await_children，子完成后继续", async () => {
+describe("getOpenableCommands() 包含 do", () => {
+  test("包含 do", () => {
+    expect(getOpenableCommands()).toContain("do");
+  });
+});
+
+describe("engine — do(wait=true, context=fork) 等待子线程", () => {
+  test("父线程在 do(wait=true) 后进入 waiting+await_children，子完成后继续", async () => {
     /* 脚本：
-     *   step 1: open(think) → submit(context=fork, wait=true)  [父线程进入 waiting]
+     *   step 1: open(do) → submit(context=fork, wait=true)  [父线程进入 waiting]
      *   子线程自动启动，但本测试用 LLM mock 无法真正驱动子线程，
      *   因此我们只验证父线程在 submit 后进入 waiting 状态，不执行到 done。
      *   （完整的多线程等待场景在 scheduler 集成测试中覆盖）
@@ -135,14 +135,14 @@ describe("engine — think(wait=true, context=fork) 等待子线程", () => {
             toolCalls: [toolCall("open", {
               title: "派生子线程等待",
               type: "command",
-              command: "think",
+              command: "do",
               description: "fork 并等待",
             })],
           };
         }
         /* step 2: 找 form_id 并 submit */
         const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user");
-        const m = userMsg?.content.match(/<form id="(f_[^"]+)" command="think"/);
+        const m = userMsg?.content.match(/<form id="(f_[^"]+)" command="do"/);
         if (m?.[1]) formId = m[1];
         return {
           content: "",
@@ -174,7 +174,7 @@ describe("engine — think(wait=true, context=fork) 等待子线程", () => {
     const result = await runWithThreadTree("alice", "test", "user", config);
 
     /* 父线程进入 waiting 状态（等待子线程）；子线程无 LLM 驱动，整体超出迭代上限 → failed */
-    /* 关键：不是 done（说明 wait=true 真正阻塞了父线程），也不是因为 think fork 本身报错 */
+    /* 关键：不是 done（说明 wait=true 真正阻塞了父线程），也不是因为 do fork 本身报错 */
     expect(result.status === "waiting" || result.status === "failed").toBe(true);
   });
 });

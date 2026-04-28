@@ -410,7 +410,7 @@ export function App() {
                 stoneName: t,
                 status: "running",
                 messages: [{ direction: "in", from: "human", to: t, content: msg, timestamp: now }],
-                process: { root: { id: "root", title: "task", status: "doing", children: [], actions: [] }, focusId: "root" },
+                process: { root: { id: "root", title: "task", status: "doing", children: [], events: [] }, focusId: "root" },
                 data: {},
                 createdAt: now,
                 updatedAt: now,

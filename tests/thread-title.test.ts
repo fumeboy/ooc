@@ -3,7 +3,7 @@
  *
  * 验证阶段 B 的三个契约：
  * 1. tool schema 的 parameters 声明 title 字段（open/submit/wait required，close optional）
- * 2. engine 处理 tool call 时把 title 记录到 ThreadAction.title 字段（持久化）
+ * 2. engine 处理 tool call 时把 title 记录到 ProcessEvent.title 字段（持久化）
  * 3. SSE flow:action 事件 payload 包含 title
  *
  * @ref docs/工程管理/迭代/all/20260421_feature_工具调用title参数.md
@@ -92,9 +92,9 @@ describe("tool schema — title 参数", () => {
   });
 });
 
-/* ========== 2. Engine 记录 title 到 ThreadAction ========== */
+/* ========== 2. Engine 记录 title 到 ProcessEvent ========== */
 
-describe("engine — title 持久化到 ThreadAction", () => {
+describe("engine — title 持久化到 ProcessEvent", () => {
   test("tool_use action.title 被写入 threadData", async () => {
     let formId = "f_unknown";
     const steps = [
@@ -156,7 +156,7 @@ describe("engine — title 持久化到 ThreadAction", () => {
     const rootId = threadsJson.rootId as string;
     const threadPath = join(sessionDir, "objects", "test_obj", "threads", rootId, "thread.json");
     const thread = JSON.parse(await Bun.file(threadPath).text());
-    const toolUses = (thread.actions as Array<{ type: string; name?: string; title?: string; args?: Record<string, unknown> }>)
+    const toolUses = ((thread.events) as Array<{ type: string; name?: string; title?: string; args?: Record<string, unknown> }>)
       .filter((a) => a.type === "tool_use");
 
     expect(toolUses.length).toBe(2);
@@ -164,9 +164,9 @@ describe("engine — title 持久化到 ThreadAction", () => {
     expect(toolUses[0]?.title).toBe("打开 return 表单");
     expect(toolUses[1]?.name).toBe("submit");
     expect(toolUses[1]?.title).toBe("提交返回结果");
-    /* 注意：title 作为顶层行动标题存储在 ThreadAction.title；
-     * 为兼容 think(fork) 的 title→子线程名用法，args.title 可能仍保留。
-     * 前端以 ThreadAction.title 为准展示。 */
+    /* 注意：title 作为顶层行动标题存储在 ProcessEvent.title；
+     * 为兼容 do(fork) 的 title→子线程名用法，args.title 可能仍保留。
+     * 前端以 ProcessEvent.title 为准展示。 */
   });
 });
 
@@ -288,19 +288,19 @@ describe("SSE — flow:action 事件包含 title", () => {
 
     await runWithThreadTree("test_obj", "你好", "user", config);
 
-    /* 无 title 的 tool call 不会因 title 触发 flow:action（只有 think(fork) 等原有事件） */
+    /* 无 title 的 tool call 不会因 title 触发 flow:action（只有 do(fork) 等原有事件） */
     const titledActions = captured.filter((e) => e.type === "flow:action" && e.action?.title);
     expect(titledActions.length).toBe(0);
   });
 });
 
-/* ========== 4. think(fork)：title 同时作为子线程名 ========== */
+/* ========== 4. do(fork)：title 同时作为子线程名 ========== */
 
-describe("think(fork) — title 即子线程名", () => {
+describe("do(fork) — title 即子线程名", () => {
   /**
    * scheduler 调度多线程时，同一 mock LLM 会被父子两个线程共用。
    * 走完整流程：
-   * - 父线程 call 1：open think
+   * - 父线程 call 1：open do
    * - 父线程 call 2：submit（title = 子线程名，context="fork"）
    * - 切到子线程：call 3/4 子线程 open+submit return
    * - 切回父线程：call 5/6 父线程 open+submit return
@@ -322,10 +322,10 @@ describe("think(fork) — title 即子线程名", () => {
       /* 父线程 */
       if (phase === 0) {
         phase = 1;
-        return { content: "", toolCalls: [toolCall("open", { title: "父开始 think(fork)", type: "command", command: "think", description: "派生" })] };
+        return { content: "", toolCalls: [toolCall("open", { title: "父开始 do(fork)", type: "command", command: "do", description: "派生" })] };
       }
       if (phase === 1) {
-        const m = userContent.match(/<form id="(f_[^"]+)" command="think"/);
+        const m = userContent.match(/<form id="(f_[^"]+)" command="do"/);
         state.parentFormId = m?.[1] ?? "f_unknown";
         phase = 2;
         return { content: "", toolCalls: [toolCall("submit", { form_id: state.parentFormId, context: "fork", ...submitArgs })] };
@@ -373,9 +373,9 @@ describe("think(fork) — title 即子线程名", () => {
     /* 同时验证：父线程的 submit tool_use action.title 也等于同一个值 */
     const parentThreadPath = join(sessionDir, "objects", "test_obj", "threads", rootId, "thread.json");
     const parentThread = JSON.parse(await Bun.file(parentThreadPath).text());
-    const parentSubmits = (parentThread.actions as Array<{ type: string; name?: string; title?: string; args?: Record<string, unknown> }>)
+    const parentSubmits = ((parentThread.events) as Array<{ type: string; name?: string; title?: string; args?: Record<string, unknown> }>)
       .filter((a) => a.type === "tool_use" && a.name === "submit" && (a.args?.["form_id"] ?? "").toString().startsWith("f_"));
-    /* 找到 think(fork) 那次 submit：它的 title 即子线程名 */
+    /* 找到 do(fork) 那次 submit：它的 title 即子线程名 */
     const createSubmit = parentSubmits.find((a) => a.title === "分析任务");
     expect(createSubmit).toBeTruthy();
   });

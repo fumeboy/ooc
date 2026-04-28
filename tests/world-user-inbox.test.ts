@@ -124,7 +124,7 @@ describe("World → user inbox 集成", () => {
     const threadJsonPath = join(FLOWS_DIR, result.sessionId, "objects", "alice", "threads", entry.threadId, "thread.json");
     expect(existsSync(threadJsonPath)).toBe(true);
     const thread = JSON.parse(await Bun.file(threadJsonPath).text());
-    const msgOut = (thread.actions as Array<{ id?: string; type: string; content?: string }>).find(
+    const msgOut = ((thread.events) as Array<{ id?: string; type: string; content?: string }>).find(
       (a) => a.type === "message_out" && a.id === entry.messageId,
     );
     expect(msgOut).toBeDefined();

@@ -205,4 +205,85 @@ describe("engine — talk(wait=true, target=\"user\") 死锁修复", () => {
      * 所以会跑到迭代上限——关键验证是 status ≠ "done" 且也不 hang，至少跑到了 waiting 分支。 */
     expect(result.status === "waiting" || result.status === "failed").toBe(true);
   });
+
+  test("talk(wait=true) 到非 user 对象收到同步回复后会被唤醒并继续完成", async () => {
+    let step = 0;
+    let formId = "f_unknown";
+    const llm = new MockLLMClient({
+      responseFn: (messages) => {
+        step++;
+        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user");
+        if (step === 1) {
+          return {
+            content: "",
+            toolCalls: [toolCall("open", {
+              title: "询问 bob",
+              type: "command",
+              command: "talk",
+              description: "同步询问 bob",
+            })],
+          };
+        }
+        if (step === 2) {
+          const m = userMsg?.content.match(/<form id="(f_[^"]+)" command="talk"/);
+          if (m?.[1]) formId = m[1];
+          return {
+            content: "",
+            toolCalls: [toolCall("submit", {
+              title: "等待 bob 回复",
+              form_id: formId,
+              target: "bob",
+              wait: true,
+              message: "在吗",
+            })],
+          };
+        }
+        if (step === 3) {
+          return {
+            content: "",
+            toolCalls: [toolCall("open", {
+              title: "准备返回",
+              type: "command",
+              command: "return",
+              description: "收到 bob 回复后收尾",
+            })],
+          };
+        }
+
+        const m = userMsg?.content.match(/<form id="(f_[^"]+)" command="return"/);
+        if (m?.[1]) formId = m[1];
+        return {
+          content: "",
+          toolCalls: [toolCall("submit", {
+            title: "返回结果",
+            form_id: formId,
+            summary: "done after bob reply",
+          })],
+        };
+      },
+    });
+
+    const config: EngineConfig = {
+      rootDir: TEST_DIR,
+      flowsDir: FLOWS_DIR,
+      llm,
+      directory: [{ name: "bob", whoAmI: "bob", functions: [] }],
+      traits: [],
+      stone: makeStone("alice"),
+      onTalk: async (targetObject) => {
+        if (targetObject.toLowerCase() === "bob") return { reply: "我在", remoteThreadId: "th_bob" };
+        return { reply: null, remoteThreadId: "x" };
+      },
+      schedulerConfig: {
+        maxIterationsPerThread: 10,
+        maxTotalIterations: 20,
+        deadlockGracePeriodMs: 0,
+      },
+    };
+
+    const result = await runWithThreadTree("alice", "test", "user", config);
+
+    expect(result.status).toBe("done");
+    expect(result.summary).toBe("done after bob reply");
+  });
 });

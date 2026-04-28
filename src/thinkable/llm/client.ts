@@ -156,7 +156,7 @@ export function detectProtocolMarkers(content: string): string[] {
 
   if (trimmed.includes("```toml")) markers.push("fenced_toml");
   if (/^```/.test(trimmed)) markers.push("leading_fence");
-  if (/^\[(program|talk|action|cognize_stack_frame_push|cognize_stack_frame_pop|reflect_stack_frame_push|reflect_stack_frame_pop|set_plan|finish|wait|break)\]/m.test(trimmed)) {
+  if (/^\[(program|talk|action|cognize_stack_frame_push|cognize_stack_frame_pop|reflect_stack_frame_push|reflect_stack_frame_pop|plan|finish|wait|break)\]/m.test(trimmed)) {
     markers.push("protocol_section");
   }
   if (/\[talk\/user\]/.test(trimmed)) markers.push("legacy_talk_section");
@@ -770,7 +770,14 @@ export class MockLLMClient implements LLMClient {
     let toolCalls: ToolCall[] | undefined;
     let thinkingContent = "";
     if (this._responseFn) {
-      const fnResult = this._responseFn(messages);
+      const fnMessages = [
+        {
+          role: "user" as const,
+          content: messages.map((m) => m.content).join("\n"),
+        },
+        ...messages,
+      ];
+      const fnResult = this._responseFn(fnMessages);
       if (typeof fnResult === "string") {
         content = fnResult;
       } else {

@@ -4,13 +4,13 @@
  * 为每个线程构建独立的 Context，包含执行视角和规划视角。
  * 这是 ThreadTree 引擎的唯一 Context 构建入口。
  *
- * 执行视角：whoAmI + parentExpectation + plan + process + locals + windows
+ * 执行视角：whoAmI + parentExpectation + plan + processEvents + locals + windows
  * 规划视角：children 摘要 + inbox + todos + directory
  *
- * 三种创建方式的 Context 差异（2026-04-22 think/talk 统一后，"sub_thread" 由 think(fork) 产生，"talk" 由 talk(fork/continue) 产生）：
- * - think(fork) / 原 create_sub_thread：初始 process = 父线程渲染快照（inject action）
- * - sub_thread_on_node（协作 API 保留）：初始 process = 空白 + 目标节点完整历史
- * - talk：初始 process = 空白
+ * 三种创建方式的 Context 差异（2026-04-22 do/talk 统一后，"sub_thread" 由 do(fork) 产生，"talk" 由 talk(fork/continue) 产生）：
+ * - do(fork) / 原 create_sub_thread：初始 processEvents 包含父线程渲染快照（inject event）
+ * - sub_thread_on_node（协作 API 保留）：初始 processEvents = 空白 + 目标节点完整历史
+ * - talk：初始 processEvents = 空白
  *
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md#5
  */
@@ -19,9 +19,8 @@ import type { StoneData, DirectoryEntry, ContextWindow, TraitDefinition } from "
 import type { SkillDefinition } from "../../extendable/skill/types.js";
 import type {
   ThreadsTreeFile,
-  ThreadsTreeNodeMeta,
   ThreadDataFile,
-  ThreadAction,
+  ProcessEvent,
   ThreadInboxMessage,
   ThreadTodoItem,
   ThreadStatus,
@@ -52,8 +51,8 @@ export interface ThreadContext {
   parentExpectation: string;
   /** 当前计划 */
   plan: string;
-  /** actions 时间线（渲染后的文本） */
-  process: string;
+  /** process events：当前线程上下文变化与 LLM 交互历史 */
+  processEvents: ProcessEvent[];
   /** 局部变量 */
   locals: Record<string, unknown>;
   /** 系统指令窗口（kernel trait readme） */
@@ -124,7 +123,7 @@ export interface ThreadContextInput {
    * 目标节点数据（仅 sub_thread_on_node 协作场景使用）
    *
    * 当通过 sub_thread_on_node 协作 API 创建子线程时，需要将目标节点的
-   * 完整 actions 历史展示在 Context 中。Phase 5 完善具体渲染逻辑。
+   * 完整 events 历史展示在 Context 中。Phase 5 完善具体渲染逻辑。
    */
   targetNodeData?: ThreadDataFile;
 }
@@ -251,7 +250,7 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
 
   /* build_feedback 窗口：注入最近未通过的 build hook 结果
    *
-   * 由 `src/world/hooks.ts` 的 runBuildHooks 在 file_ops 类 action 后触发。
+   * 由 `src/world/hooks.ts` 的 runBuildHooks 在 file_ops 类 event 后触发。
    * 这里只负责读当前线程的失败列表，格式化后作为 knowledge 注入。
    * 成功的 hook 不会出现在 getBuildFeedback 返回里；超过 5 分钟自动过期。
    *
@@ -270,7 +269,7 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
   /* 3. parentExpectation
    *
    * 语义：当前节点自身的 title + description，描述"我被要求做什么"。
-   * title 是 think(fork) 时由父线程指定的子线程任务名称（即 <task> 的核心内容）。
+   * title 是 do(fork) 时由父线程指定的子线程任务名称（即 <task> 的核心内容）。
    * description 是对任务的补充说明，同样来自父线程创建子线程时传入的参数。
    *
    * BUG-C 修复（Symptom 2）：之前错误地使用了 parent.title（父线程自身的任务名），
@@ -293,8 +292,8 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
     parentExpectation += `\n<revival_notice>你之前已经完成过此线程（第 ${nodeMeta.revivalCount} 次复活）。你的上一次完成摘要：「${nodeMeta.summary ?? '无'}」。现在你的 inbox 中有新消息需要处理。请阅读新消息并继续工作。</revival_notice>`;
   }
 
-  /* 4. process：渲染 actions 时间线 */
-  const process = renderThreadProcess(threadData.actions);
+  /* 4. process events：当前线程上下文变化与 LLM 交互历史 */
+  const processEvents = threadData.events;
 
   /* 5. 规划视角 */
   const childrenSummary = renderChildrenSummary(tree, threadId);
@@ -319,7 +318,7 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
     creator = nodeMeta.creatorThreadId;
     creationMode = nodeMeta.creationMode ?? "sub_thread_on_node";
   } else if (nodeMeta.parentId) {
-    /* 普通 think(fork) 子线程：creator 是父线程 */
+    /* 普通 do(fork) 子线程：creator 是父线程 */
     creator = nodeMeta.parentId;
     creationMode = nodeMeta.creationMode ?? "sub_thread";
   }
@@ -351,7 +350,7 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
     whoAmI: stone.thinkable.whoAmI,
     parentExpectation,
     plan: threadData.plan ?? "",
-    process,
+    processEvents,
     locals,
     instructions,
     knowledge,
@@ -551,19 +550,19 @@ export function renderSiblingSummary(tree: ThreadsTreeFile, nodeId: string): str
 }
 
 /**
- * 渲染线程 actions 时间线（执行视角的 process）
+ * 渲染线程 process events 时间线（执行视角的 process）
  *
  * 按时间戳排序，格式化为 LLM 可读的文本。
- * 与旧 renderProcess 的区别：不需要行为树结构，直接渲染 actions 列表。
+ * 与旧 renderProcess 的区别：不需要行为树结构，直接渲染事件列表。
  *
- * @param actions - 线程的 actions 列表
+ * @param events - 线程的 process events 列表
  * @returns 渲染后的文本
  */
-export function renderThreadProcess(actions: ThreadAction[]): string {
-  if (actions.length === 0) return "";
+export function renderThreadProcess(events: ProcessEvent[]): string {
+  if (events.length === 0) return "";
 
   /* 按时间戳排序——compact_summary 依赖被强制置为 min(ts)-1 排在最前 */
-  const sorted = [...actions].sort((a, b) => a.timestamp - b.timestamp);
+  const sorted = [...events].sort((a, b) => a.timestamp - b.timestamp);
 
   /* 收集已关闭的 form_id（submit 或 close 消费的） */
   const closedFormIds = new Set<string>();
@@ -576,15 +575,15 @@ export function renderThreadProcess(actions: ThreadAction[]): string {
   }
 
   /**
-   * 判断 action 是否应该被跳过（已关闭 form 的相关记录）
+   * 判断 process event 是否应该被跳过（已关闭 form 的相关记录）
    * - inject 中包含已关闭 form_id 的内容（"Form f_xxx 已创建"、"Form f_xxx 已关闭"）
    * - tool_use open 中 form_id 已关闭的（open 返回的 form_id 在后续被 submit/close）
    */
-  function shouldSkipAction(action: ThreadAction): boolean {
+  function shouldSkipEvent(event: ProcessEvent): boolean {
     // inject：检查内容是否包含已关闭的 form_id
-    if (action.type === "inject") {
+    if (event.type === "inject") {
       for (const fid of closedFormIds) {
-        if (action.content.includes(fid)) return true;
+        if (event.content.includes(fid)) return true;
       }
     }
     return false;
@@ -596,13 +595,13 @@ export function renderThreadProcess(actions: ThreadAction[]): string {
    * 继续展示可能误导后续判断。
    * 但为了避免模型被"历史缺失 form_id"误导（规则要 form_id，历史却没有），
    * 这里输出一个展示层占位符字段 `form_id_finished_so_removed`，明确表示：
-   * 此 action 曾有关联 form_id，但已在完成后移除。
+   * 此 event 曾有关联 form_id，但已在完成后移除。
    *
    * 运行时永远不依赖该字段；它只存在于 Context 渲染/落盘（llm.input.txt）。
    */
-  function cleanArgs(action: ThreadAction): Record<string, unknown> | undefined {
-    if (!action.args) return action.args;
-    const args = { ...action.args };
+  function cleanArgs(event: ProcessEvent): Record<string, unknown> | undefined {
+    if (!event.args) return event.args;
+    const args = { ...event.args };
     if (args.form_id && closedFormIds.has(args.form_id as string)) {
       delete args.form_id;
       (args as Record<string, unknown>).form_id_finished_so_removed = true;
@@ -647,23 +646,23 @@ export function renderThreadProcess(actions: ThreadAction[]): string {
   }
 
   const nodes: XmlNode[] = [];
-  for (const action of sorted) {
-    if (shouldSkipAction(action)) continue;
+  for (const event of sorted) {
+    if (shouldSkipEvent(event)) continue;
 
-    const ts = formatTimestamp(action.timestamp);
-    const cleanedArgs = action.type === "tool_use" ? cleanArgs(action) : action.args;
+    const ts = formatTimestamp(event.timestamp);
+    const cleanedArgs = event.type === "tool_use" ? cleanArgs(event) : event.args;
 
-    const attrs: Record<string, string | number> = { type: action.type, ts };
-    if (action.type === "tool_use" && action.name) attrs.name = action.name;
-    if (action.type === "program" && action.success !== undefined) attrs.success = String(action.success);
-    if (action.type === "compact_summary") {
-      if (typeof action.original === "number") attrs.original = action.original;
-      if (typeof action.kept === "number") attrs.kept = action.kept;
+    const attrs: Record<string, string | number> = { type: event.type, ts };
+    if (event.type === "tool_use" && event.name) attrs.name = event.name;
+    if (event.type === "program" && event.success !== undefined) attrs.success = String(event.success);
+    if (event.type === "compact_summary") {
+      if (typeof event.original === "number") attrs.original = event.original;
+      if (typeof event.kept === "number") attrs.kept = event.kept;
     }
 
     const node: XmlNode = { tag: "action", attrs };
 
-    switch (action.type) {
+    switch (event.type) {
       case "tool_use": {
         if (cleanedArgs && Object.keys(cleanedArgs).length > 0) {
           const argKeys = Object.keys(cleanedArgs).sort((a, b) => a.localeCompare(b));
@@ -680,20 +679,20 @@ export function renderThreadProcess(actions: ThreadAction[]): string {
         break;
       }
       case "program": {
-        const children: XmlNode[] = [{ tag: "code", content: action.content }];
-        if (action.result) children.push({ tag: "result", content: action.result });
+        const children: XmlNode[] = [{ tag: "code", content: event.content }];
+        if (event.result) children.push({ tag: "result", content: event.result });
         node.children = children;
         break;
       }
       case "compact_summary": {
         /* 压缩摘要作为首条历史背景渲染——LLM 看到后会理解"此前这一大片经历被 compact 掉了"，
          * 并在 summary 里获取整体情境。original/kept 已进 attrs。 */
-        node.content = `[已压缩 · 此前历史的浓缩摘要]\n${action.content}`;
+        node.content = `[已压缩 · 此前历史的浓缩摘要]\n${event.content}`;
         break;
       }
       default: {
-        if (action.content) {
-          node.content = action.content;
+        if (event.content) {
+          node.content = event.content;
         } else {
           node.selfClosing = true;
         }

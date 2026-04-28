@@ -356,7 +356,7 @@ describe("Bruce 5 · 向后兼容：老 thread.json 无新字段", () => {
         },
       },
     };
-    const threadData: ThreadDataFile = { id: threadId, actions: [] };
+    const threadData: ThreadDataFile = { id: threadId, events: [] };
 
     /* 不抛错，返回 origin 阶段激活 */
     const result = getOpenFiles({ tree: treeFile, threadId, threadData, stone, traits });
@@ -402,10 +402,10 @@ describe("Bruce · renderRelationsIndex 产出符合 spec 的 XML", () => {
 });
 
 describe("Bruce · peer 扫描同时整合 tool_use 和 inbox", () => {
-  test("actions 中的 target + inbox 中的 from 合并去重", () => {
+  test("events 中的 target + inbox 中的 from 合并去重", () => {
     const td: ThreadDataFile = {
       id: "r",
-      actions: [
+      events: [
         {
           type: "tool_use",
           name: "submit",

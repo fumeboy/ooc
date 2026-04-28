@@ -11,7 +11,7 @@ deps: []
 
 # Compact —— 对象对自身上下文的元认知清理
 
-当线程在长时间工作后，`process.actions[]` 累积了大量已经"过期"的观察与尝试（文件读过一次就记住了结论、探索性 program 已经得出答案、早期 trait 已经不再需要），上下文会变得沉重：
+当线程在长时间工作后，`thread.json.events[]` 累积了大量已经"过期"的观察与尝试（文件读过一次就记住了结论、探索性 program 已经得出答案、早期 trait 已经不再需要），上下文会变得沉重：
 
 - LLM 注意力被稀释，遗忘早期关键信息
 - 每轮输入 token 变大，成本和延迟上升
@@ -34,7 +34,7 @@ Submit compact 后我自动卸载，你回到正常工作流。
 
 ```
 1. open(title="压缩上下文", command="compact", description="...") ← 进入压缩模式，本 trait 激活
-2. list_actions()                   ← 先看清有哪些 action 可压
+2. list_actions()                   ← 先看清有哪些 event 可压
 3. （可选）truncate_action / drop_action / close_trait   ← 多次调用累积标记
 4. （可选）preview_compact()        ← 预估效果
 5. submit compact {summary: "..."}  ← 一次性应用所有标记 + 生成摘要 + 退出
@@ -61,18 +61,18 @@ submit({ "form_id": "f_xxx" })
 
 ### `list_actions()`
 
-列出当前线程 `process.actions[]` 的所有可压缩 action，返回 `{idx, type, ts, summary, lines}` 数组。
+列出当前线程 `thread.json.events[]` 的所有可压缩 event，返回 `{idx, type, ts, summary, lines}` 数组。
 
-- `idx` — action 在数组中的索引（用于 truncate/drop）
+- `idx` — event 在数组中的索引（用于 truncate/drop）
 - `summary` — 第 1 行文本（`content` 或 `result` 的首行）
 - `lines` — 该 action 的总行数
 
-**compact_summary 类型**的 action 会被自动过滤（它本身就是压缩结果，不再参与压缩）。
+**compact_summary 类型**的 event 会被自动过滤（它本身就是压缩结果，不再参与压缩）。
 **当前轮的 tool_use（compact 相关）也会被自动过滤**——你不需要关心如何把自己压掉。
 
 ### `truncate_action({ idx, maxLines })`
 
-把第 `idx` 条 action 的长内容截断为前 `maxLines` 行。适合"工具返回了 500 行，只有前 20 行有用"的情况。
+把第 `idx` 条 event 的长内容截断为前 `maxLines` 行。适合"工具返回了 500 行，只有前 20 行有用"的情况。
 
 仅对有长文本的 type 有效（program / inject / tool_use 的 content+result+args）。
 - `idx` — action 索引
@@ -80,7 +80,7 @@ submit({ "form_id": "f_xxx" })
 
 ### `drop_action({ idx, reason })`
 
-整条丢弃第 `idx` 条 action。`reason` 必须至少 20 字，强制说明"为什么这条可以丢"。
+整条丢弃第 `idx` 条 event。`reason` 必须至少 20 字，强制说明"为什么这条可以丢"。
 常见可丢的：
 - 只是探索性的文件读取（结论已在别处）
 - 尝试错误路径的 program（已有正确路径）
@@ -106,7 +106,7 @@ submit({ "form_id": "f_xxx" })
 submit { form_id: "<compact 的 formId>", summary: "此前：xxx。当前任务：yyy。" }
 ```
 
-summary 是一段**你自己组织的纯文本**——engine 不做任何二次处理，它会作为 `compact_summary` action 的 content 落入历史，在下一轮 context 首条呈现。
+summary 是一段**你自己组织的纯文本**——engine 不做任何二次处理，它会作为 `compact_summary` event 的 content 落入历史，在下一轮 context 首条呈现。
 
 **好 summary 的特征**：
 - 包含本阶段的**关键结论**（做了什么、得出什么）

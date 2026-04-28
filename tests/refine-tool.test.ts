@@ -66,10 +66,10 @@ describe("OPEN_TOOL.command.enum — 动态生成（来自 COMMAND_TABLE）", ()
     expect(props.command?.enum).not.toContain("talk_sync");
   });
 
-  test("enum 包含 think（新增为 openable）", () => {
+  test("enum 包含 do（新增为 openable）", () => {
     const params = OPEN_TOOL.function.parameters as Record<string, unknown>;
     const props = params.properties as Record<string, { enum?: string[] }>;
-    expect(props.command?.enum).toContain("think");
+    expect(props.command?.enum).toContain("do");
   });
 
   test("enum 包含 compact（新增为 openable）", () => {

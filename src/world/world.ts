@@ -48,7 +48,7 @@ export interface WorldConfig {
  * user 不参与 ThinkLoop：
  * 1. 通过 SSE 广播 flow:message 事件，前端实时渲染
  * 2. 向 flows/{sessionId}/user/data.json 的 inbox 追加一条 (threadId, messageId)
- *    引用索引——前端凭此反查 thread.json.actions 里的消息正文
+ *    引用索引——前端凭此反查 thread.json.events 里的消息正文
  * 3. 返回 { reply: null, remoteThreadId: "user" } — user 没有 thread 也不会回复
  *
  * 抽成独立 helper 消除 `_talkWithThreadTree` 与 `_buildEngineConfig` 中的代码重复。
@@ -59,7 +59,7 @@ export interface WorldConfig {
  * @param message - 消息内容
  * @param sessionId - 当前 session ID
  * @param fromThreadId - 发起方线程 ID（用于写 inbox；缺失时 inbox 跳过写入）
- * @param messageId - engine 生成的 message_out action id（缺失时 inbox 跳过写入）
+ * @param messageId - engine 生成的 message_out event id（缺失时 inbox 跳过写入）
  * @param flowsDir - flows/ 根目录（用于定位 user/data.json 路径）
  */
 function handleOnTalkToUser(params: {
@@ -76,7 +76,7 @@ function handleOnTalkToUser(params: {
     objectName: fromObject,
     sessionId,
     message: {
-      /* id 来自 engine 的 genMessageOutId()——前端按 id 匹配 thread action 里的 message_out，
+      /* id 来自 engine 的 genMessageOutId()——前端按 id 匹配 thread event 里的 message_out，
        * 避免旧 "content prefix + timestamp" 启发式匹配的不稳定 */
       ...(messageId ? { id: messageId } : {}),
       direction: "out",

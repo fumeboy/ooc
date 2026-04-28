@@ -53,8 +53,8 @@ function collectNodes(node: ProcessNode, objectName: string): GanttBlock[] {
   const blocks: GanttBlock[] = [];
 
   for (const child of node.children ?? []) {
-    const actions = child.actions ?? [];
-    const timestamps = actions.map((a) => a.timestamp).filter(Boolean);
+    const events = child.events ?? [];
+    const timestamps = events.map((a) => a.timestamp).filter(Boolean);
     const startTime = timestamps.length > 0 ? Math.min(...timestamps) : 0;
     const endTime = child.status === "doing"
       ? null

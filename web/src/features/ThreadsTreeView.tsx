@@ -2,7 +2,7 @@
  * ThreadsTreeView — 线程树可视化组件（TUI 风格）
  *
  * - 一行一个节点，CSS 连接线
- * - 点击节点查看 thread 详情（actions 列表），左上角返回按钮
+ * - 点击节点查看 thread 详情（events 列表），左上角返回按钮
  * - 右键添加颜色图钉（10 种可选），支持多图钉
  * - 蓝色图钉自动标记最近查看的 5 个 thread
  * - 图钉持久化到 thread.json
@@ -80,7 +80,7 @@ function formatTime(ts: number): string {
 function getSummary(node: ProcessNode): string {
   if (node.summary) return node.summary.split("\n")[0]!.replace(/^#+\s*/, "");
   if (node.description) return node.description;
-  const meaningful = node.actions.filter(
+  const meaningful = node.events.filter(
     (a) => a.type === "thinking" || a.type === "text" || a.type === "message_out" || (a.type as string) === "thread_return"
   );
   const last = meaningful[meaningful.length - 1];
@@ -167,7 +167,7 @@ function buildVisibilityReason(
   visibility: ContextVisibility,
   rootNode: ProcessNode,
 ): string {
-  if (nodeId === focusId) return "focus 自身：Context 中以完整 actions 的形式可见";
+  if (nodeId === focusId) return "focus 自身：Context 中以完整 events 的形式可见";
   if (visibility === "hidden") return "不在 focus 线程的 Context 中（非祖先/直接子/兄弟）";
 
   /* 判定是祖先 / 子 / 兄弟 */
@@ -476,7 +476,7 @@ function ThreadNode({
     status === "running" || status === "waiting" || node.id === focusId || depth < 2
   );
   const summary = getSummary(node);
-  const actionCount = node.actions.length;
+  const actionCount = node.events.length;
   const pins = getDisplayPins(node);
 
   /* Ctx View 着色与 tooltip */
@@ -547,7 +547,7 @@ function ThreadNode({
 
         {/* 右侧元数据 */}
         <span className="shrink-0 ml-auto flex items-baseline gap-2 text-[11px] text-[var(--muted-foreground)]/50">
-          {actionCount > 0 && <span>{actionCount} actions</span>}
+          {actionCount > 0 && <span>{actionCount} events</span>}
           {meta.creationMode && meta.creationMode !== "sub_thread_on_node" && (
             <span>{meta.creationMode}</span>
           )}
@@ -702,10 +702,10 @@ function ThreadDetailView({
             <MarkdownContent content={node.summary} />
           </div>
         )}
-        {node.actions.length === 0 ? (
-          <p className="text-sm text-[var(--muted-foreground)]">暂无 actions</p>
+        {node.events.length === 0 ? (
+          <p className="text-sm text-[var(--muted-foreground)]">暂无 events</p>
         ) : (
-          node.actions.map((action, i) => (
+          node.events.map((action, i) => (
             <TuiAction
               key={`${action.type}-${i}`}
               action={action}

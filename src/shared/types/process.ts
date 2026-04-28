@@ -1,8 +1,8 @@
 /**
  * ProcessView 兼容类型定义
  *
- * ThreadTree 是真实执行模型；这些类型仅用于旧 FlowData.process 字段、
- * 前端 ProcessView 以及 /api/flows 兼容响应。
+ * ThreadTree 是真实执行模型；这些类型用于 FlowData.process 字段、
+ * 前端 ProcessView 以及 /api/flows 响应。
  *
  * @ref src/shared/types/flow.ts — references — Action 类型定义
  */
@@ -26,8 +26,8 @@ export interface ProcessNode {
   children: ProcessNode[];
   /** 依赖的节点 ID（必须等待完成才能开始） */
   deps?: string[];
-  /** 该节点的行为记录 */
-  actions: Action[];
+  /** 该节点的 process events */
+  events: Action[];
   /** 静态声明的 traits（create_plan_node 时指定） */
   traits?: string[];
   /** 动态激活的 traits（:before 帧中通过 activateTrait 添加） */
@@ -43,7 +43,7 @@ export interface ProcessNode {
   outputs?: string[];
   /** 节点输出描述（前端展示用） */
   outputDescription?: string;
-  /** plan 文本（当前节点的计划/目标，set_plan 写入） */
+  /** plan 文本（当前节点的计划/目标，plan command 写入） */
   plan?: string;
 }
 

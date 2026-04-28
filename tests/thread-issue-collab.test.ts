@@ -26,7 +26,7 @@ const TEST_DIR = join(import.meta.dir, ".tmp_issue_collab_test");
  */
 class MockTree {
   nodes: Record<string, ThreadsTreeNodeMeta> = {};
-  threadData: Record<string, { id: string; actions: any[]; inbox?: ThreadInboxMessage[]; locals?: Record<string, unknown> }> = {};
+  threadData: Record<string, { id: string; events: any[]; inbox?: ThreadInboxMessage[]; locals?: Record<string, unknown> }> = {};
   private _rootId = "root_001";
   private _nextId = 0;
 
@@ -36,7 +36,7 @@ class MockTree {
       id: "root_001", title: "Root", status: "running",
       childrenIds: [], createdAt: now, updatedAt: now,
     };
-    this.threadData["root_001"] = { id: "root_001", actions: [] };
+    this.threadData["root_001"] = { id: "root_001", events: [] };
   }
 
   get rootId() { return this._rootId; }
@@ -63,7 +63,7 @@ class MockTree {
       creatorObjectName: options?.creatorObjectName,
       createdAt: now, updatedAt: now,
     };
-    this.threadData[id] = { id, actions: [] };
+    this.threadData[id] = { id, events: [] };
     return id;
   }
   async setNodeStatus(nodeId: string, status: ThreadStatus): Promise<void> {

@@ -40,7 +40,7 @@ export async function executeTalkCommand(ctx: CommandExecutionContext): Promise<
   if (ctxMode === "continue" && !remoteThreadIdArg) {
     const td = ctx.tree.readThreadData(ctx.threadId);
     if (td) {
-      td.actions.push({ type: "inject", content: `[错误] talk(context="continue") 必须同时指定 threadId 参数`, timestamp: Date.now() });
+      td.events.push({ type: "inject", content: `[错误] talk(context="continue") 必须同时指定 threadId 参数`, timestamp: Date.now() });
       ctx.tree.writeThreadData(ctx.threadId, td);
     }
     return;
@@ -54,7 +54,7 @@ export async function executeTalkCommand(ctx: CommandExecutionContext): Promise<
   if (td) {
     const modeLabel = ` [${ctxMode}${remoteThreadIdArg ? `:${remoteThreadIdArg}` : ""}]`;
     const formLabel = formPayload ? ` [form: ${formPayload.formId}]` : "";
-    td.actions.push({
+    td.events.push({
       id: messageId,
       type: "message_out",
       content: `[talk] → ${args.target}: ${msgContent}${modeLabel}${formLabel}`,
@@ -68,7 +68,7 @@ export async function executeTalkCommand(ctx: CommandExecutionContext): Promise<
   if (args.wait !== undefined && typeof args.wait !== "boolean") {
     const tdWarn = ctx.tree.readThreadData(ctx.threadId);
     if (tdWarn) {
-      tdWarn.actions.push({
+      tdWarn.events.push({
         type: "inject",
         content: `[警告] 参数 wait 不是 boolean（收到 ${typeof args.wait} 值 "${String(args.wait)}"），将忽略此参数。请使用布尔值 true/false。`,
         timestamp: Date.now(),
@@ -81,6 +81,9 @@ export async function executeTalkCommand(ctx: CommandExecutionContext): Promise<
   const isTalkSyncToUser = isWaitMode && target === "user";
   if (isTalkSyncToUser) {
     consola.warn(`[Engine] ${ctx.objectName} 尝试 talk(wait=true, target="user")——user 不参与 ThinkLoop，不会回复。已降级为普通 talk（不阻塞）。`);
+  }
+  if (isWaitMode && !isTalkSyncToUser) {
+    await ctx.tree.setNodeStatus(ctx.threadId, "waiting", "talk_sync");
   }
   const explicitlyMarked = Array.isArray(args.mark) && args.mark.length > 0;
   const talkType = typeof args.type === "string" ? args.type : undefined;
@@ -109,11 +112,10 @@ export async function executeTalkCommand(ctx: CommandExecutionContext): Promise<
     }
     const td2 = ctx.tree.readThreadData(ctx.threadId);
     if (td2) {
-      td2.actions.push({ type: "inject", content: `[talk → ${args.target}] remote_thread_id = ${remoteThreadId}`, timestamp: Date.now() });
+      td2.events.push({ type: "inject", content: `[talk → ${args.target}] remote_thread_id = ${remoteThreadId}`, timestamp: Date.now() });
       ctx.tree.writeThreadData(ctx.threadId, td2);
     }
   } catch (e) {
     ctx.tree.writeInbox(ctx.threadId, { from: "system", content: `[talk 失败] ${(e as Error).message}`, source: "system" });
   }
-  if (isWaitMode && !isTalkSyncToUser) ctx.tree.setNodeStatus(ctx.threadId, "waiting", "talk_sync");
 }

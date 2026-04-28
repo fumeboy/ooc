@@ -52,7 +52,7 @@ export function writeStone(dir: string, stone: StoneData): void {
 /**
  * 将 Flow 数据写入目录
  *
- * process 数据单独写入 process.json（包含所有 action），
+ * process 数据单独写入 process.json（包含所有前端 Action 记录），
  * data.json 存储元数据（状态、消息等）。
  *
  * @param dir - Flow 目录路径（如 stones/researcher/effects/task_001/）

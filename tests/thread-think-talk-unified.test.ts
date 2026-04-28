@@ -1,11 +1,11 @@
 /**
- * think / talk 指令统一（fork vs continue）四模式单元测试
+ * do / talk 指令统一（fork vs continue）四模式单元测试
  *
  * 验证目标：
- * 1. executable/tools/open.ts 的 command enum 含 "think"，不含 "create_sub_thread" / "continue_sub_thread"
- * 2. engine 处理 `think(context="fork")` — 在当前线程下 fork 新子线程
- * 3. engine 处理 `think(context="continue", threadId)` — 向指定线程 inbox 投递消息
- * 4. engine 拒绝 `think(context="continue")` 无 threadId 的非法调用
+ * 1. executable/tools/open.ts 的 command enum 含 "do"，不含 "create_sub_thread" / "continue_sub_thread"
+ * 2. engine 处理 `do(context="fork")` — 在当前线程下 fork 新子线程
+ * 3. engine 处理 `do(context="continue", threadId)` — 向指定线程 inbox 投递消息
+ * 4. engine 拒绝 `do(context="continue")` 无 threadId 的非法调用
  * 5. talk 统一 schema 的 continue 路径（向对方 threadId 投递）
  * 6. talk(context="fork", threadId) 在对方线程下 fork 新子线程
  *
@@ -54,11 +54,11 @@ afterEach(() => {
 
 /* ========== 1. schema 契约 ========== */
 
-describe("tool schema — think / talk 统一参数", () => {
-  test("open tool 的 command enum 含 think，不含 create_sub_thread / continue_sub_thread", () => {
+describe("tool schema — do / talk 统一参数", () => {
+  test("open tool 的 command enum 含 do，不含 create_sub_thread / continue_sub_thread", () => {
     const commandEnum = (OPEN_TOOL.function.parameters as { properties: { command: { enum: string[] } } })
       .properties.command.enum;
-    expect(commandEnum).toContain("think");
+    expect(commandEnum).toContain("do");
     expect(commandEnum).toContain("talk");
     expect(commandEnum).not.toContain("create_sub_thread");
     expect(commandEnum).not.toContain("continue_sub_thread");
@@ -79,9 +79,9 @@ describe("tool schema — think / talk 统一参数", () => {
   });
 });
 
-/* ========== 2. think(fork) —— fork 自己的 thread ========== */
+/* ========== 2. do(fork) —— fork 自己的 thread ========== */
 
-describe("think(context=fork) — 在当前线程下派生子线程", () => {
+describe("do(context=fork) — 在当前线程下派生子线程", () => {
   test("无 threadId 时默认 fork 当前线程", async () => {
     let phase = 0;
     let parentFormId = "";
@@ -94,9 +94,9 @@ describe("think(context=fork) — 在当前线程下派生子线程", () => {
           if (m?.[1]) return { content: "", toolCalls: [toolCall("submit", { title: "子返回", form_id: m[1], summary: "done" })] };
           return { content: "", toolCalls: [toolCall("open", { title: "子 open return", type: "command", command: "return", description: "done" })] };
         }
-        if (phase === 0) { phase = 1; return { content: "", toolCalls: [toolCall("open", { title: "父 open think", type: "command", command: "think", description: "fork" })] }; }
+        if (phase === 0) { phase = 1; return { content: "", toolCalls: [toolCall("open", { title: "父 open do", type: "command", command: "do", description: "fork" })] }; }
         if (phase === 1) {
-          const m = userContent.match(/<form id="(f_[^"]+)" command="think"/);
+          const m = userContent.match(/<form id="(f_[^"]+)" command="do"/);
           parentFormId = m?.[1] ?? "f_err";
           phase = 2;
           return { content: "", toolCalls: [toolCall("submit", { title: "分析任务", form_id: parentFormId, context: "fork", msg: "请分析 X" })] };
@@ -124,18 +124,18 @@ describe("think(context=fork) — 在当前线程下派生子线程", () => {
   });
 });
 
-/* ========== 3. think(continue) —— continue 自己的 thread ========== */
+/* ========== 3. do(continue) —— continue 自己的 thread ========== */
 
-describe("think(context=continue, threadId) — 向指定线程 inbox 投递", () => {
+describe("do(context=continue, threadId) — 向指定线程 inbox 投递", () => {
   test("必须指定 threadId，否则 engine 拒绝", async () => {
     let step = 0;
     let formId = "";
     const llm = new MockLLMClient({
       responseFn: (messages) => {
         const userContent = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
-        if (step === 0) { step = 1; return { content: "", toolCalls: [toolCall("open", { title: "open think", type: "command", command: "think", description: "continue 无 threadId" })] }; }
+        if (step === 0) { step = 1; return { content: "", toolCalls: [toolCall("open", { title: "open do", type: "command", command: "do", description: "continue 无 threadId" })] }; }
         if (step === 1) {
-          const m = userContent.match(/<form id="(f_[^"]+)" command="think"/);
+          const m = userContent.match(/<form id="(f_[^"]+)" command="do"/);
           formId = m?.[1] ?? "f_err";
           step = 2;
           return { content: "", toolCalls: [toolCall("submit", { title: "尝试 continue", form_id: formId, context: "continue", msg: "补充信息" })] };
@@ -153,13 +153,13 @@ describe("think(context=continue, threadId) — 向指定线程 inbox 投递", (
     const result = await runWithThreadTree("obj", "hi", "user", config);
     expect(result.status).toBe("done");
 
-    /* 验证：没有新子线程（只有 root），且 root thread.json.actions 含错误注入 */
+    /* 验证：没有新子线程（只有 root），且 root thread.json.events 含错误注入 */
     const threadsJson = JSON.parse(await Bun.file(join(FLOWS_DIR, result.sessionId, "objects", "obj", "threads.json")).text());
     const rootId = threadsJson.rootId as string;
     const nodeCount = Object.keys(threadsJson.nodes).length;
     expect(nodeCount).toBe(1);
     const rootThread = JSON.parse(await Bun.file(join(FLOWS_DIR, result.sessionId, "objects", "obj", "threads", rootId, "thread.json")).text());
-    const injects = (rootThread.actions as Array<{ type: string; content: string }>).filter((a) => a.type === "inject" && a.content.includes("threadId 参数"));
+    const injects = ((rootThread.events) as Array<{ type: string; content: string }>).filter((a) => a.type === "inject" && a.content.includes("threadId 参数"));
     expect(injects.length).toBeGreaterThan(0);
   });
 });

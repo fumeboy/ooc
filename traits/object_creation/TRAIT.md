@@ -4,7 +4,7 @@ name: object_creation
 type: how_to_interact
 version: 1.1.0
 activates_on:
-  show_content_when: ["think"]
+  show_content_when: ["do"] 
 description: 创建新对象或完善对象身份的指南
 deps: []
 ---

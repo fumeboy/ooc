@@ -82,7 +82,7 @@ export interface UserThreadsData {
 function findActionInProcess(root: ProcessNode | undefined, actionId: string): Action | null {
   if (!root) return null;
   const walk = (node: ProcessNode): Action | null => {
-    for (const a of node.actions ?? []) {
+    for (const a of node.events ?? []) {
       if (a.id === actionId) return a;
     }
     for (const child of node.children ?? []) {

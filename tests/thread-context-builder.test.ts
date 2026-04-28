@@ -19,7 +19,7 @@ import type {
   ThreadsTreeFile,
   ThreadsTreeNodeMeta,
   ThreadDataFile,
-  ThreadAction,
+  ProcessEvent,
   ThreadInboxMessage,
   ThreadTodoItem,
 } from "../src/thinkable/thread-tree/types.js";
@@ -39,10 +39,10 @@ function makeNode(id: string, overrides?: Partial<ThreadsTreeNodeMeta>): Threads
 }
 
 /** 辅助：创建线程数据 */
-function makeThreadData(id: string, actions?: ThreadAction[]): ThreadDataFile {
+function makeThreadData(id: string, events?: ProcessEvent[]): ThreadDataFile {
   return {
     id,
-    actions: actions ?? [],
+    events: events ?? [],
   };
 }
 
@@ -231,13 +231,13 @@ describe("renderSiblingSummary", () => {
 });
 
 describe("renderThreadProcess", () => {
-  test("渲染 actions 时间线", () => {
-    const actions: ThreadAction[] = [
+  test("渲染 events 时间线", () => {
+    const events: ProcessEvent[] = [
       { type: "thinking", content: "开始思考", timestamp: 1000 },
       { type: "program", content: "search('AI')", result: "found 3", success: true, timestamp: 2000 },
       { type: "inject", content: "=== 父线程上下文 ===", timestamp: 500 },
     ];
-    const rendered = renderThreadProcess(actions);
+    const rendered = renderThreadProcess(events);
     expect(rendered).toContain("thinking");
     expect(rendered).toContain("开始思考");
     expect(rendered).toContain("program");
@@ -245,8 +245,8 @@ describe("renderThreadProcess", () => {
     expect(rendered).toContain("inject");
   });
 
-  test("空 actions 返回空字符串", () => {
-    /* 空 actions 下 renderThreadProcess 返回 ""，由上层 buildThreadContext 决定是否拼接。
+  test("空 events 返回空字符串", () => {
+    /* 空 events 下 renderThreadProcess 返回 ""，由上层 buildThreadContext 决定是否拼接。
      * 这样在首次进入时 process 段可以直接省略，避免输出 "(无历史)" 这种冗余占位符。 */
     const rendered = renderThreadProcess([]);
     expect(rendered).toBe("");
@@ -254,7 +254,7 @@ describe("renderThreadProcess", () => {
 });
 
 describe("buildThreadContext", () => {
-  test("think(fork) / sub_thread 方式：初始 process 包含父线程快照", () => {
+  test("do(fork) / sub_thread 方式：初始 process 包含父线程快照", () => {
     const tree: ThreadsTreeFile = {
       rootId: "r",
       nodes: {
@@ -268,7 +268,7 @@ describe("buildThreadContext", () => {
     };
     const threadData: ThreadDataFile = {
       id: "a",
-      actions: [
+      events: [
         { type: "inject", content: "=== 父线程上下文 ===\n之前讨论了...", timestamp: 1000 },
         { type: "thinking", content: "开始搜索", timestamp: 2000 },
       ],
@@ -291,8 +291,8 @@ describe("buildThreadContext", () => {
     expect(ctx.parentExpectation).not.toContain("搜索论文");
     expect(ctx.parentExpectation).toContain("AI Safety");
     expect(ctx.plan).toBe("1. 搜索 2. 整理");
-    expect(ctx.process).toContain("父线程上下文");
-    expect(ctx.process).toContain("开始搜索");
+    expect(ctx.processEvents.some(e => e.content.includes("父线程上下文"))).toBe(true);
+    expect(ctx.processEvents.some(e => e.content.includes("开始搜索"))).toBe(true);
   });
 
   test("talk 方式：初始 process 为空", () => {
@@ -309,7 +309,7 @@ describe("buildThreadContext", () => {
     };
     const threadData: ThreadDataFile = {
       id: "h",
-      actions: [],
+      events: [],
       inbox: [
         { id: "msg1", from: "A", content: "请搜索论文", timestamp: 1000, source: "talk", status: "unread" },
       ],
@@ -338,7 +338,7 @@ describe("buildThreadContext", () => {
     };
     const threadData: ThreadDataFile = {
       id: "r",
-      actions: [{ type: "thinking", content: "规划中", timestamp: 1000 }],
+      events: [{ type: "thinking", content: "规划中", timestamp: 1000 }],
       inbox: [
         { id: "msg1", from: "X", content: "通知", timestamp: 2000, source: "system", status: "unread" },
       ],
@@ -368,7 +368,7 @@ describe("buildThreadContext", () => {
       rootId: "r",
       nodes: { r: makeNode("r", { title: "Root" }) },
     };
-    const threadData: ThreadDataFile = { id: "r", actions: [] };
+    const threadData: ThreadDataFile = { id: "r", events: [] };
     const input: ThreadContextInput = {
       tree,
       threadId: "r",
@@ -402,12 +402,12 @@ describe("buildThreadContext", () => {
     };
     const targetNodeData: ThreadDataFile = {
       id: "c",
-      actions: [
+      events: [
         { type: "thinking", content: "我在写文档", timestamp: 1000 },
         { type: "program", content: "writeFile('doc.md')", result: "ok", success: true, timestamp: 2000 },
       ],
     };
-    const threadData: ThreadDataFile = { id: "sub", actions: [] };
+    const threadData: ThreadDataFile = { id: "sub", events: [] };
     const input: ThreadContextInput = {
       tree,
       threadId: "sub",

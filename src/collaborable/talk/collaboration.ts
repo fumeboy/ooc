@@ -165,10 +165,10 @@ async function executeTalk(ctx: CollaborationContext, targetObject: string, mess
   /* Step 3: A 的当前线程进入 waiting（使用 tree.awaitThreads） */
   await myTree.awaitThreads(currentThreadId, [wId]);
 
-  /* 记录 action（读取当前线程数据，追加 action，写回） */
+  /* 记录 event（读取当前线程数据，追加 event，写回） */
   const myThreadData = myTree.readThreadData(currentThreadId);
   if (myThreadData) {
-    myThreadData.actions.push({
+    myThreadData.events.push({
       type: "message_out",
       content: `[talk → ${targetObject}] ${message}`,
       timestamp: Date.now(),
@@ -187,7 +187,7 @@ async function executeTalk(ctx: CollaborationContext, targetObject: string, mess
 /**
  * create_sub_thread_on_node() 实现 — 在指定节点下创建子线程
  *
- * 仅限同一 Object 内。目标节点的完整 actions 历史会作为新线程的 Context。
+ * 仅限同一 Object 内。目标节点的完整 events 历史会作为新线程的 Context。
  *
  * @ref Spec Section 4.1 — create_sub_thread_on_node
  */
@@ -202,9 +202,9 @@ async function executeCreateSubThreadOnNode(ctx: CollaborationContext, nodeId: s
     return `[错误] 节点 ${nodeId} 不存在`;
   }
 
-  /* 读取目标节点的 thread.json，获取完整 actions 历史 */
+  /* 读取目标节点的 thread.json，获取完整 events 历史 */
   const targetThreadData = tree.readThreadData(nodeId);
-  const targetActions = targetThreadData?.actions ?? [];
+  const targetActions = targetThreadData?.events ?? [];
 
   /* 在目标节点下创建子线程 */
   const subId = await tree.createSubThread(nodeId, `回忆 ${targetNode.title}`, {
@@ -216,7 +216,7 @@ async function executeCreateSubThreadOnNode(ctx: CollaborationContext, nodeId: s
   await tree.setNodeStatus(subId, "running");
 
   /*
-   * I2: 将目标节点的完整 actions 作为 inject action 写入新子线程的 thread.json。
+   * I2: 将目标节点的完整 events 作为 inject event 写入新子线程的 thread.json。
    * 这样子线程的 Context 中自然包含目标节点的历史（按需回忆）。
    */
   if (targetActions.length > 0) {
@@ -225,7 +225,7 @@ async function executeCreateSubThreadOnNode(ctx: CollaborationContext, nodeId: s
       const injectContent = targetActions
         .map((a: any) => `[${a.type}] ${a.content ?? ""}`)
         .join("\n");
-      subData.actions.push({
+      subData.events.push({
         type: "inject",
         content: `=== 目标节点 ${targetNode.title} 的完整历史 ===\n${injectContent}`,
         timestamp: Date.now(),
@@ -246,10 +246,10 @@ async function executeCreateSubThreadOnNode(ctx: CollaborationContext, nodeId: s
   const existingAwaiting = currentNode?.awaitingChildren ?? [];
   await tree.awaitThreads(currentThreadId, [...existingAwaiting, subId]);
 
-  /* 记录 action */
+  /* 记录 event */
   const myThreadData = tree.readThreadData(currentThreadId);
   if (myThreadData) {
-    myThreadData.actions.push({
+    myThreadData.events.push({
       type: "create_thread",
       content: `[create_sub_thread_on_node(${nodeId})] ${message}`,
       timestamp: Date.now(),

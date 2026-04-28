@@ -77,7 +77,7 @@ export function writeThreadTreeFlowData(
     sessionId: result.sessionId,
     status,
     messages,
-    actions: [],
+    events: [],
     summary: result.summary,
     threadId: result.threadId,
     toJSON: () => ({ ...flowJson }),

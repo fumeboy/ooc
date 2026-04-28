@@ -11,7 +11,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Process, ProcessNode, NodeStatus, Action } from "../../shared/types/index.js";
-import type { ThreadsTreeFile, ThreadsTreeNodeMeta, ThreadAction } from "../../thinkable/thread-tree/types.js";
+import type { ThreadsTreeFile, ThreadsTreeNodeMeta, ProcessEvent, ThreadDataFile } from "../../thinkable/thread-tree/types.js";
 
 /** 线程状态 → 行为树节点状态 */
 function mapStatus(status: ThreadsTreeNodeMeta["status"]): NodeStatus {
@@ -25,17 +25,17 @@ function mapStatus(status: ThreadsTreeNodeMeta["status"]): NodeStatus {
   }
 }
 
-/** ThreadAction → Action（字段兼容，直接透传）
+/** ProcessEvent → 前端 Action（字段兼容，直接透传）
  *
  * 重要：必须透传所有字段，前端会用到：
  * - name/args/title：TuiAction 渲染 tool_use 卡片
  * - form：message_out 带结构化表单时，前端渲染 option picker
  * - formResponse：message_in 回显用户结构化回复
- * - context：think/talk 的 fork/continue 模式徽章
+ * - context：do/talk 的 fork/continue 模式徽章
  * 历史上曾因遗漏 form 字段导致前端 Talk Form picker 完全失效
  * （Bruce 首轮体验 2026-04-22 #7）。
  */
-function mapAction(a: ThreadAction): Action {
+function mapAction(a: ProcessEvent): Action {
   return {
     id: a.id,
     type: a.type as Action["type"],
@@ -66,18 +66,18 @@ function buildNode(
 ): ProcessNode {
   const meta = tree.nodes[nodeId]!;
 
-  /* 读取该线程的 actions、pins 和 pause 状态 */
-  let actions: Action[] = [];
+  /* 读取该线程的 process events、pins 和 pause 状态 */
+  let events: Action[] = [];
   let pins: string[] = [];
   let hasPendingOutput = false;
   const threadJsonPath = join(threadsDir, nodeId, "thread.json");
   if (existsSync(threadJsonPath)) {
     try {
-      const threadData = JSON.parse(readFileSync(threadJsonPath, "utf-8"));
-      actions = (threadData.actions ?? []).map(mapAction);
+      const threadData = JSON.parse(readFileSync(threadJsonPath, "utf-8")) as ThreadDataFile;
+      events = (threadData.events ?? []).map(mapAction);
       pins = threadData.pins ?? [];
       hasPendingOutput = !!threadData._pendingOutput;
-    } catch { /* 解析失败则无 actions */ }
+    } catch { /* 解析失败则无 events */ }
   }
 
   /* 递归构建子节点 */
@@ -91,7 +91,7 @@ function buildNode(
     description: meta.description,
     status: mapStatus(meta.status),
     children,
-    actions,
+    events,
     traits: meta.traits,
     activatedTraits: meta.activatedTraits,
     outputs: meta.outputs,

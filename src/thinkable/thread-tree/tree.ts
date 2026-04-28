@@ -18,7 +18,7 @@ import type {
   ThreadStatus,
   ThreadHandle,
   ThreadResult,
-  ThreadAction,
+  ProcessEvent,
   ThreadInboxMessage,
   ThreadTodoItem,
   ThreadFrameHook,
@@ -97,7 +97,7 @@ export class ThreadsTree {
     const rootThreadDir = ensureThreadDir(objectFlowDir, [rootId]);
     const rootData: ThreadDataFile = {
       id: rootId,
-      actions: [],
+      events: [],
     };
     writeThreadData(rootThreadDir, rootData);
 
@@ -209,7 +209,7 @@ export class ThreadsTree {
    * 创建子线程
    *
    * 在指定父节点下创建子节点，初始状态为 pending。
-   * 同时创建子线程的 thread.json（空 actions）。
+   * 同时创建子线程的 thread.json（空 events）。
    *
    * @param parentId - 父节点 ID
    * @param title - 子线程标题
@@ -273,7 +273,7 @@ export class ThreadsTree {
     const threadDir = ensureThreadDir(this._dir, ancestorPath);
     const threadData: ThreadDataFile = {
       id: childId,
-      actions: [],
+      events: [],
     };
     writeThreadData(threadDir, threadData);
 
@@ -398,7 +398,7 @@ export class ThreadsTree {
   /* ========== 等待与唤醒 ========== */
 
   /**
-   * 等待子线程（由 think(wait=true) 等上层指令触发）
+   * 等待子线程（由 do(wait=true) 等上层指令触发）
    *
    * 设置当前节点的 awaitingChildren，状态变为 waiting。
    * 不是 JS 层面的 await，而是线程状态转换。

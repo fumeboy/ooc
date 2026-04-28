@@ -12,7 +12,7 @@ export async function executeReturnCommand(ctx: CommandExecutionContext): Promis
   await ctx.tree.returnThread(ctx.threadId, summary);
   const td = ctx.tree.readThreadData(ctx.threadId);
   if (td) {
-    td.actions.push({ type: "thread_return", content: summary, timestamp: Date.now() });
+    td.events.push({ type: "thread_return", content: summary, timestamp: Date.now() });
     ctx.tree.writeThreadData(ctx.threadId, td);
   }
   consola.info(`[Engine] return: ${summary.slice(0, 100)}`);

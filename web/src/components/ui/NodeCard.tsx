@@ -3,7 +3,7 @@
  *
  * 展示单个 ProcessNode 的完整信息，支持折叠/展开。
  * 折叠时：只展示 plan、input、outputs 标记、summary
- * 展开时：展示完整 actions 时间线、内联节点
+ * 展开时：展示完整 events 时间线、内联节点
  */
 import { useState } from "react";
 import { cn } from "../../lib/utils";
@@ -81,9 +81,9 @@ export function NodeCard({ node, defaultExpanded = false, isFocus = false, onTog
         </span>
 
         {/* Actions 数量 */}
-        {node.actions.length > 0 && (
+        {node.events.length > 0 && (
           <span className="ml-auto text-xs text-gray-400">
-            {node.actions.length} {node.actions.length === 1 ? "action" : "actions"}
+            {node.events.length} {node.events.length === 1 ? "event" : "events"}
           </span>
         )}
       </div>
@@ -176,10 +176,10 @@ function CollapsedContent({ node }: { node: ProcessNode }) {
       )}
 
       {/* Actions 折叠标记 */}
-      {(node.actions.length > 0 || hasRegularChildren) && (
+      {(node.events.length > 0 || hasRegularChildren) && (
         <div className="mb-3 px-3 py-1.5 rounded text-xs text-center text-gray-500" style={{ backgroundColor: "#fafafa" }}>
           <span className="font-medium">
-            [{node.actions.length} 个 actions
+            [{node.events.length} 个 events
             {hasRegularChildren && ` + ${node.children.filter(c => !c.type || c.type === "frame").length} 个子节点`}]
           </span>
           <span className="ml-2">(点击展开)</span>
@@ -248,11 +248,11 @@ function ExpandedContent({ node }: { node: ProcessNode }) {
       )}
 
       {/* Actions 时间线 */}
-      {node.actions.length > 0 && (
+      {node.events.length > 0 && (
         <div className="mb-3">
           <div className="text-xs text-gray-500 uppercase font-semibold mb-2">Actions 时间线</div>
           <div className="border-l-2 border-gray-200 ml-3 pl-4 space-y-3">
-            {node.actions.map((action, i) => (
+            {node.events.map((action, i) => (
               <TuiAction key={i} action={action} maxHeight={200} />
             ))}
           </div>

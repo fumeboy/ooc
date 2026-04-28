@@ -81,9 +81,9 @@ export function InlineNode({ node }: InlineNodeProps) {
       </div>
 
       {/* Actions 时间线 */}
-      {node.actions.length > 0 && (
+      {node.events.length > 0 && (
         <div className="px-4 py-3">
-          {node.actions.map((action, i) => (
+          {node.events.map((action, i) => (
             <TuiAction key={i} action={action} maxHeight={200} />
           ))}
         </div>

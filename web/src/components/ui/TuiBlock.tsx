@@ -138,12 +138,18 @@ function FullTextModal({ open, onClose, title, content, result }: {
 
 /**
  * 从 submit args 的旁枝字段推断 command（历史落盘 + 运行时 open/submit 时 command 字段
- * 可能未落在 action.args 里，这里做兜底，使前端可以识别 think/talk 渲染）
+ * 可能未落在 action.args 里，这里做兜底，使前端可以识别 do/talk 渲染）
  */
 function inferCommandFromArgs(args: Record<string, unknown>): string | undefined {
   if ("context" in args && ("msg" in args || "threadId" in args) && "target" in args) return "talk";
-  if ("context" in args && ("msg" in args || "threadId" in args)) return "think";
+  if ("context" in args && ("msg" in args || "threadId" in args)) return "do";
   return undefined;
+}
+
+function normalizeSubmitCommand(command: string | undefined): string | undefined {
+  if (command === "think") return "do";
+  if (command === "set_plan") return "plan";
+  return command;
 }
 
 /* ── inject 内容解析 ── */
@@ -376,12 +382,12 @@ export function TuiAction({ action, objectName, loading, maxHeight, sessionId, t
   const [expanded, setExpanded] = useState(!isInject);
   const [modalOpen, setModalOpen] = useState(false);
 
-  /* think/talk 的 context/threadId 徽章（submit 时 args 中含有） */
+  /* do/talk 的 context/threadId 徽章（submit 时 args 中含有） */
   const args = (action.args ?? {}) as Record<string, unknown>;
-  const submitCommand = isToolUse && action.name === "submit"
+  const submitCommand = normalizeSubmitCommand(isToolUse && action.name === "submit"
     ? (args["command"] as string | undefined) ?? inferCommandFromArgs(args)
-    : undefined;
-  const isThinkOrTalk = submitCommand === "think" || submitCommand === "talk" || submitCommand === "talk_sync";
+    : undefined);
+  const isDoOrTalk = submitCommand === "do" || submitCommand === "talk" || submitCommand === "talk_sync";
   const ctx = args["context"] as ("fork" | "continue" | undefined);
   const threadIdArg = args["threadId"] as (string | undefined);
 
@@ -434,8 +440,8 @@ export function TuiAction({ action, objectName, loading, maxHeight, sessionId, t
       >
         <span className={cn("shrink-0 select-none", cfg.color)}>{cfg.prefix}</span>
         <span className={cn("shrink-0 font-semibold", cfg.color)}>{cfg.label}</span>
-        {/* think/talk 徽章：显示 command + fork|continue + threadId 摘要 */}
-        {isThinkOrTalk && (
+        {/* do/talk 徽章：显示 command + fork|continue + threadId 摘要 */}
+        {isDoOrTalk && (
           <span
             className={cn(
               "shrink-0 px-1 py-px rounded text-[10px] font-mono",

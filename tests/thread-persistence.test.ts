@@ -79,7 +79,7 @@ describe("thread.json 读写", () => {
 
     const data: ThreadDataFile = {
       id: "root_001",
-      actions: [
+      events: [
         { type: "thinking", content: "开始思考", timestamp: Date.now() },
       ],
       plan: "写论文",
@@ -88,7 +88,7 @@ describe("thread.json 读写", () => {
     const loaded = readThreadData(threadDir);
     expect(loaded).not.toBeNull();
     expect(loaded!.id).toBe("root_001");
-    expect(loaded!.actions).toHaveLength(1);
+    expect(loaded!.events).toHaveLength(1);
     expect(loaded!.plan).toBe("写论文");
   });
 
@@ -103,7 +103,7 @@ describe("thread.json 读写", () => {
 
     const data: ThreadDataFile = {
       id: "t1",
-      actions: [],
+      events: [],
       inbox: [
         { id: "msg1", from: "A", content: "你好", timestamp: Date.now(), source: "talk", status: "unread" },
       ],

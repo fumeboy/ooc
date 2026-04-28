@@ -39,7 +39,7 @@ describe("ThreadsTree 构造", () => {
     const threadData = readThreadData(join(TEST_DIR, "threads", tree.rootId));
     expect(threadData).not.toBeNull();
     expect(threadData!.id).toBe(tree.rootId);
-    expect(threadData!.actions).toEqual([]);
+    expect(threadData!.events).toEqual([]);
   });
 
   test("load 从磁盘加载已有树", async () => {
@@ -57,7 +57,7 @@ describe("ThreadsTree 构造", () => {
   });
 });
 
-/* ========== createSubThread（think(fork) 底层 API） ========== */
+/* ========== createSubThread（do(fork) 底层 API） ========== */
 
 describe("createSubThread", () => {
   test("创建子线程，父子关系正确", async () => {

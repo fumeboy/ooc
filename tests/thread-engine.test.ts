@@ -14,7 +14,7 @@
  * @ref docs/superpowers/specs/2026-04-06-thread-tree-architecture-design.md
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdirSync, rmSync, existsSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { runWithThreadTree, type EngineConfig } from "../src/thinkable/engine/engine.js";
@@ -89,12 +89,12 @@ function openSubmit(command: string, submitArgs: Record<string, unknown>): MockS
     },
     /* step 2: submit（engine 已把 form_id 写入 threadData.activeForms，我们从 context 里找到它） */
     (messages: unknown[]) => {
-      const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user");
+      const allContent = (messages as Array<{ role: string; content: string }>).map((m) => m.content).join("\n");
       /* form_id 形如 f_xxx，active-forms XML：<form id="f_xxx" command="..."> */
       const re = /<form id="(f_[^"]+)" command="([^"]+)"/g;
       let formId = "f_unknown";
       let m: RegExpExecArray | null;
-      while ((m = re.exec(userMsg?.content ?? "")) !== null) {
+      while ((m = re.exec(allContent ?? "")) !== null) {
         if (m[2] === command) {
           formId = m[1]!;
           state.formId = formId;
@@ -119,9 +119,9 @@ function scriptTalk(target: string, message: string): MockStep[] {
   return openSubmit("talk", { target, message });
 }
 
-/** 单步 tool call：set_plan */
+/** 单步 tool call：plan */
 function scriptSetPlan(text: string): MockStep[] {
-  return openSubmit("set_plan", { text });
+  return openSubmit("plan", { text });
 }
 
 /** 不触发 tool 调用的思考步骤（仅 thinking） */
@@ -212,19 +212,99 @@ describe("基础执行", () => {
     expect(existsSync(objectDir)).toBe(true);
   });
 
+  test("每个发生 LLM 调用的 thread 都在 thread.json 平级写出最新 llm 文件", async () => {
+    let phase = 0;
+    const llm = new MockLLMClient({
+      responseFn: (messages) => {
+        const userContent = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
+        const isChild = /creator mode="sub_thread"/.test(userContent);
+
+        if (isChild) {
+          const m = userContent.match(/<form id="(f_[^"]+)" command="return"/);
+          if (m?.[1]) {
+            return {
+              content: "child-submit-output",
+              toolCalls: [toolCall("submit", { form_id: m[1], summary: "child done" })],
+            };
+          }
+          return {
+            content: "child-open-output",
+            toolCalls: [toolCall("open", { title: "子线程结束", type: "command", command: "return", description: "done" })],
+          };
+        }
+
+        if (phase === 0) {
+          phase = 1;
+          return {
+            content: "parent-open-do-output",
+            toolCalls: [toolCall("open", { title: "父线程派生", type: "command", command: "do", description: "fork child" })],
+          };
+        }
+        if (phase === 1) {
+          phase = 2;
+          const m = userContent.match(/<form id="(f_[^"]+)" command="do"/);
+          return {
+            content: "parent-submit-do-output",
+            toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "f_unknown", context: "fork", title: "子任务", msg: "处理子任务" })],
+          };
+        }
+
+        const rm = userContent.match(/<form id="(f_[^"]+)" command="return"/);
+        if (rm?.[1]) {
+          return {
+            content: "parent-submit-return-output",
+            toolCalls: [toolCall("submit", { form_id: rm[1], summary: "parent done" })],
+          };
+        }
+        return {
+          content: "parent-open-return-output",
+          toolCalls: [toolCall("open", { title: "父线程结束", type: "command", command: "return", description: "done" })],
+        };
+      },
+    });
+    const config = makeConfig({ steps: [] });
+    config.llm = llm;
+    config.schedulerConfig = { maxIterationsPerThread: 20, maxTotalIterations: 40, deadlockGracePeriodMs: 0 };
+
+    const result = await runWithThreadTree("test_obj", "派生子任务", "user", config);
+
+    expect(result.status).toBe("done");
+    const objectDir = join(FLOWS_DIR, result.sessionId, "objects", "test_obj");
+    const threadsJson = JSON.parse(readFileSync(join(objectDir, "threads.json"), "utf-8")) as {
+      nodes: Record<string, { parentId?: string }>;
+    };
+    const nodes = Object.entries(threadsJson.nodes);
+    expect(nodes.length).toBeGreaterThan(1);
+
+    for (const [threadId] of nodes) {
+      const ancestorPath: string[] = [];
+      let cur: string | undefined = threadId;
+      while (cur) {
+        ancestorPath.unshift(cur);
+        cur = threadsJson.nodes[cur]?.parentId;
+      }
+      const threadDir = join(objectDir, "threads", ...ancestorPath);
+      expect(existsSync(join(threadDir, "thread.json"))).toBe(true);
+      expect(existsSync(join(threadDir, "llm.input.txt"))).toBe(true);
+      expect(existsSync(join(threadDir, "llm.output.txt"))).toBe(true);
+      expect(readFileSync(join(threadDir, "llm.input.txt"), "utf-8")).toContain("<system>");
+      expect(readFileSync(join(threadDir, "llm.output.txt"), "utf-8").length).toBeGreaterThan(0);
+    }
+  });
+
   test("初始消息被写入 Root 线程的 inbox", async () => {
     let receivedInbox = false;
     const steps: MockStep[] = [
       (messages: unknown[]) => {
-        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user");
-        if (userMsg && userMsg.content.includes("你好世界")) {
+        const allContent = (messages as Array<{ role: string; content: string }>).map((m) => m.content).join("\n");
+        if (allContent.includes("你好世界")) {
           receivedInbox = true;
         }
         return { content: "", toolCalls: [toolCall("open", { type: "command", command: "return", description: "完成" })] };
       },
       (messages: unknown[]) => {
-        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user");
-        const m = userMsg?.content.match(/<form id="(f_[^\"]+)" command="return"/);
+        const allContent = (messages as Array<{ role: string; content: string }>).map((m) => m.content).join("\n");
+        const m = allContent.match(/<form id="(f_[^\"]+)" command="return"/);
         return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", summary: "收到消息" })] };
       },
     ];
@@ -245,33 +325,33 @@ describe("talk 自动 ack 兜底", () => {
     const steps: MockStep[] = [
       /* 轮 1: open talk */
       (messages: unknown[]) => {
-        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
+        const allContent = (messages as Array<{ role: string; content: string }>).map((m) => m.content).join("\n");
         /* inbox 消息在 context 中形如 <message id="msg_xxx" from="user" status="unread"> */
-        if (/id="msg_[^"]+"\s+from="user"\s+status="unread"/.test(userMsg)) {
+        if (/id="msg_[^"]+"\s+from="user"\s+status="unread"/.test(allContent)) {
           firstCallSawInboxId = true;
         }
         return { content: "", toolCalls: [toolCall("open", { type: "command", command: "talk", description: "回复 user" })] };
       },
       /* 轮 2: submit talk */
       (messages: unknown[]) => {
-        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
-        const m = userMsg.match(/<form id="(f_[^\"]+)" command="talk"/);
+        const allContent = (messages as Array<{ role: string; content: string }>).map((m) => m.content).join("\n");
+        const m = allContent.match(/<form id="(f_[^\"]+)" command="talk"/);
         return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", target: "user", message: "收到" })] };
       },
       /* 轮 3: open return */
       (messages: unknown[]) => {
         stage++;
-        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
+        const allContent = (messages as Array<{ role: string; content: string }>).map((m) => m.content).join("\n");
         /* stage >= 3 时检查：inbox 应该已被 ack */
-        if (userMsg.includes("未读消息")) {
+        if (allContent.includes("未读消息")) {
           laterCallHasInbox = true;
         }
         return { content: "", toolCalls: [toolCall("open", { type: "command", command: "return", description: "结束" })] };
       },
       /* 轮 4: submit return */
       (messages: unknown[]) => {
-        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
-        const m = userMsg.match(/<form id="(f_[^\"]+)" command="return"/);
+        const allContent = (messages as Array<{ role: string; content: string }>).map((m) => m.content).join("\n");
+        const m = allContent.match(/<form id="(f_[^\"]+)" command="return"/);
         return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", summary: "done" })] };
       },
     ];
@@ -304,24 +384,24 @@ describe("talk 自动 ack 兜底", () => {
 /* ========== 计划更新 ========== */
 
 describe("计划更新", () => {
-  test("set_plan 更新后在下一轮 Context 中可见", async () => {
+  test("plan 更新后在下一轮 Context 中可见", async () => {
     let planVisibleLater = false;
 
     const steps: MockStep[] = [
-      /* 轮 1: open set_plan */
-      ...openSubmit("set_plan", { text: "第一步：分析需求" }),
+      /* 轮 1: open plan */
+      ...openSubmit("plan", { text: "第一步：分析需求" }),
       /* 轮 3: 检查 plan 是否在 context 中；此时再 open return */
       (messages: unknown[]) => {
-        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user");
-        if (userMsg && userMsg.content.includes("第一步：分析需求")) {
+        const allContent = (messages as Array<{ role: string; content: string }>).map((m) => m.content).join("\n");
+        if (allContent.includes("第一步：分析需求")) {
           planVisibleLater = true;
         }
         return { content: "", toolCalls: [toolCall("open", { type: "command", command: "return", description: "结束" })] };
       },
       /* 轮 4: submit return */
       (messages: unknown[]) => {
-        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
-        const m = userMsg.match(/<form id="(f_[^\"]+)" command="return"/);
+        const allContent = (messages as Array<{ role: string; content: string }>).map((m) => m.content).join("\n");
+        const m = allContent.match(/<form id="(f_[^\"]+)" command="return"/);
         return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", summary: "计划执行完毕" })] };
       },
     ];
@@ -503,8 +583,8 @@ describe("Context 构建", () => {
         return { content: "", toolCalls: [toolCall("open", { type: "command", command: "return", description: "完成" })] };
       },
       (messages: unknown[]) => {
-        const userMsg = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
-        const m = userMsg.match(/<form id="(f_[^\"]+)" command="return"/);
+        const allContent = (messages as Array<{ role: string; content: string }>).map((m) => m.content).join("\n");
+        const m = allContent.match(/<form id="(f_[^\"]+)" command="return"/);
         return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", summary: "完成" })] };
       },
     ];
@@ -516,17 +596,17 @@ describe("Context 构建", () => {
     expect(systemMsg).toContain("我是 哲学家");
   });
 
-  test("directory 中的对象出现在 user message 中", async () => {
-    let userMsg = "";
+  test("directory 中的对象出现在 system context 中", async () => {
+    let contextMsg = "";
     const steps: MockStep[] = [
       (messages: unknown[]) => {
-        const u = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user");
-        if (u) userMsg = u.content;
+        const sys = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "system");
+        if (sys) contextMsg = sys.content;
         return { content: "", toolCalls: [toolCall("open", { type: "command", command: "return", description: "完成" })] };
       },
       (messages: unknown[]) => {
-        const u = (messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")?.content ?? "";
-        const m = u.match(/<form id="(f_[^\"]+)" command="return"/);
+        const allContent = (messages as Array<{ role: string; content: string }>).map((m) => m.content).join("\n");
+        const m = allContent.match(/<form id="(f_[^\"]+)" command="return"/);
         return { content: "", toolCalls: [toolCall("submit", { form_id: m?.[1] ?? "form_unknown", summary: "完成" })] };
       },
     ];
@@ -540,8 +620,8 @@ describe("Context 构建", () => {
     });
     await runWithThreadTree("test_obj", "你好", "user", config);
 
-    expect(userMsg).toContain("助手A");
-    expect(userMsg).toContain("助手B");
+    expect(contextMsg).toContain("助手A");
+    expect(contextMsg).toContain("助手B");
   });
 
   test("traits 的 readme 出现在 Context 中", async () => {

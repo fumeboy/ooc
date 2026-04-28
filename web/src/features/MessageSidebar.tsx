@@ -134,7 +134,7 @@ export function MessageSidebar() {
   /** 当前 Body 展示的线程所属对象名（TuiAction 渲染头像等用） */
   const currentObjectName = currentThreadLocation?.subFlow.stoneName ?? DEFAULT_TARGET;
 
-  /* 构建 timeline：只取 currentThreadId 所在节点的 actions + 对应 messages（过滤到相关对象） */
+  /* 构建 timeline：只取 currentThreadId 所在节点的 events + 对应 messages（过滤到相关对象） */
   const { timeline, formByContent, formById } = useMemo(() => {
     if (!activeFlow || !currentThreadLocation) return {
       timeline: [] as Entry[],
@@ -153,7 +153,7 @@ export function MessageSidebar() {
       return involvesObj && involvesUser;
     });
 
-    /* 从当前节点 actions 里收集 form 信息（message_out action 携带 form 字段）
+    /* 从当前节点 events 里收集 form 信息（message_out event 携带 form 字段）
      *
      * 现在后端已为每条 message_out 生成 action.id（`msg_xxx`），并且 SSE flow:message
      * 事件和 flow.messages 落盘都带同一个 id。前端优先按 id 匹配（稳），
@@ -175,14 +175,14 @@ export function MessageSidebar() {
     };
     /* 合成出来的"target=user 的 message_out"等价 FlowMessage 条目（防止 flow.messages
      * 落盘缺漏时 Talk Form 完全不展示）。去重规则（任一命中即跳过）：
-     *   - action.id 已出现在 msgs（FlowMessage.id 匹配）
+     *   - event.id 已出现在 msgs（FlowMessage.id 匹配）
      *   - (from + to + content + timestamp) 的启发式键匹配一条 msg（兼容 msg 无 id 的旧数据） */
     const existingMsgIds = new Set(msgs.map((m) => m.id).filter(Boolean) as string[]);
     const existingMsgKeys = new Set(
       msgs.map((m) => `${m.from}|${m.to}|${m.content.slice(0, 200)}|${m.timestamp ?? 0}`),
     );
     const syntheticTalkMsgs: FlowMessage[] = [];
-    for (const a of node.actions ?? []) {
+    for (const a of node.events ?? []) {
       if (a.type === "message_out" && a.form) {
         /* 按 id 精确匹配（最稳） */
         if (a.id) {
@@ -193,7 +193,7 @@ export function MessageSidebar() {
         const body = (bodyMatch?.[1] ?? a.content).trim();
         formMap.set(`${body.slice(0, 200)}|${a.timestamp ?? 0}`, { form: a.form, messageId: a.id });
       }
-      /* 若 action 是 target=user 的 message_out（含 form 或普通 talk），且 flow.messages
+      /* 若 event 是 target=user 的 message_out（含 form 或普通 talk），且 flow.messages
        * 里找不到对应条目（按 id 或 content+ts），合成一条 FlowMessage 塞进 timeline */
       if (a.type === "message_out" && a.id) {
         const isToUser = /^\[talk\][^:]*:/.test(a.content); /* message_out 的正文统一带 "[talk]" 前缀 */
@@ -214,11 +214,11 @@ export function MessageSidebar() {
       }
     }
 
-    /* actions：只取当前节点自身的 actions（不递归子节点——子线程有自己的 Body）。
+    /* events：只取当前节点自身的 events（不递归子节点——子线程有自己的 Body）。
      * MessageSidebar 是面向"对话感"的高层视图，额外过滤掉 `inject` / `mark_inbox` 这类
      * 内部协议噪音（如 `[talk → user] remote_thread_id = ...` / `Form x 已创建 相关知识已加载`）；
-     * 用户在 ThreadsTreeView 的线程详情页仍能看到完整 actions（详情视图不经过此过滤）。 */
-    const actions = (node.actions ?? [])
+     * 用户在 ThreadsTreeView 的线程详情页仍能看到完整 events（详情视图不经过此过滤）。 */
+    const events = (node.events ?? [])
       .map((a, i) => ({ ...a, _origIndex: i }))
       .filter((a) =>
         a.type !== "message_in"
@@ -228,11 +228,11 @@ export function MessageSidebar() {
         && a.type !== "mark_inbox",
       );
 
-    /* 合并并按时间排序（msgs + 合成 talk msgs + actions） */
+    /* 合并并按时间排序（msgs + 合成 talk msgs + events） */
     const allMsgs = [...msgs, ...syntheticTalkMsgs];
     const entries: Entry[] = [
       ...allMsgs.map((m): Entry => ({ kind: "message", data: m })),
-      ...actions.map((a): Entry => ({ kind: "action", data: a })),
+      ...events.map((a): Entry => ({ kind: "action", data: a })),
     ].sort((a, b) => {
       const ta = a.data.timestamp ?? 0;
       const tb = b.data.timestamp ?? 0;
@@ -651,8 +651,8 @@ export function MessageSidebar() {
 
     let maxTs = 0;
     for (const entry of inboxForThread) {
-      const actions = found.node.actions ?? [];
-      const act = actions.find((a) => a.id === entry.messageId);
+      const events = found.node.events ?? [];
+      const act = events.find((a) => a.id === entry.messageId);
       if (act?.timestamp && act.timestamp > maxTs) maxTs = act.timestamp;
     }
     if (maxTs === 0) return;

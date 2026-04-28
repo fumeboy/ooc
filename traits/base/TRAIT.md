@@ -32,7 +32,7 @@ deps: []
 | `skill` | 加载 skill 内容到上下文 | `title`, `name`（skill 名称）, `description` |
 | `file` | 读取文件到上下文窗口 | `title`, `path`（文件路径）, `description` |
 
-可用 command：`program`, `think`, `talk`, `return`, `set_plan`, `defer`, `compact`
+可用 command：`program`, `do`, `talk`, `return`, `plan`, `defer`, `compact`
 
 `program` 有两种执行形态：
 
@@ -92,9 +92,9 @@ open(title="固定 reporter 能力", type="trait", name="self:reporter", descrip
 
 仅 command 类型的 form 可以 submit。必填参数：`title`、`form_id` + 指令参数。
 
-> **注意（think(context="fork")）**：submit 的 `title` 对 `think(context="fork")` 来说同时是新子线程的名字。
+> **注意（do(context="fork")）**：submit 的 `title` 对 `do(context="fork")` 来说同时是新子线程的名字。
 > 语义上，这次 tool call 的"行动标题" = "要创建的子线程的名字"——不需要两个字段。
-> 例如：`submit(title="分析任务", command=think, context="fork", msg="请分析...")` 会创建一个名为"分析任务"的子线程。
+> 例如：`submit(title="分析任务", form_id="f_xxx", context="fork", msg="请分析...")` 会创建一个名为"分析任务"的子线程。
 
 ## refine — 累积参数
 

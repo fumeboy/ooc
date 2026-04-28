@@ -65,11 +65,11 @@ function openSubmit(command: string, submitArgs: Record<string, unknown>) {
       toolCalls: [toolCall("open", { type: "command", command, description: `测试 ${command}` })],
     }),
     (messages: unknown[]) => {
-      const userMsg = (messages as Array<{ role: string; content: string }>).find(m => m.role === "user");
+      const allContent = (messages as Array<{ role: string; content: string }>).map(m => m.content).join("\n");
       const re = /<form id="(f_[^"]+)" command="([^"]+)"/g;
       let formId = "f_unknown";
       let m: RegExpExecArray | null;
-      while ((m = re.exec(userMsg?.content ?? "")) !== null) {
+      while ((m = re.exec(allContent)) !== null) {
         if (m[2] === command) { formId = m[1]!; break; }
       }
       return {
@@ -81,10 +81,10 @@ function openSubmit(command: string, submitArgs: Record<string, unknown>) {
 }
 
 /**
- * 读取 session 下第一轮 loop 的 input.txt（Root 线程）
+ * 读取 session 下第一轮 debug loop 的 input.txt（Root 线程）
  *
  * engine 在 <flowsDir>/<sessionId>/objects/<objectName>/threads/<threadId>/ 下写出：
- *   - llm.input.txt（最后一轮覆盖）
+ *   - llm.input.txt（每轮 LLM 调用前覆盖）
  *   - debug/loop_NNN.input.txt（每轮归档）
  */
 function readFirstLoopInput(sessionId: string, objectName: string): string {
@@ -98,7 +98,7 @@ function readFirstLoopInput(sessionId: string, objectName: string): string {
       const p = join(cur, e.name);
       if (e.isDirectory()) {
         stack.push(p);
-      } else if (e.isFile() && e.name.endsWith(".input.txt")) {
+      } else if (e.isFile() && /^loop_\d{3}\.input\.txt$/.test(e.name)) {
         return readFileSync(p, "utf-8");
       }
     }
@@ -118,7 +118,7 @@ describe("contextToMessages XML 结构化输出", () => {
     eventBus.removeAllListeners("sse");
   });
 
-  test("顶层 <system>/<user> 容器存在且按层级缩进；叶子 content 原样不缩进", async () => {
+  test("顶层 <context> system 容器存在且按层级缩进；叶子 content 原样不缩进", async () => {
     const stone = makeStone("alice");
 
     const directory: DirectoryEntry[] = [
@@ -163,12 +163,11 @@ describe("contextToMessages XML 结构化输出", () => {
     const input = readFirstLoopInput(res.sessionId, "alice");
 
     /* ---- 顶层容器 ---- */
-    expect(input).toMatch(/^--- system ---\n<system>/m);
-    expect(input).toContain("</system>");
-    expect(input).toMatch(/\n--- user ---\n<user>/);
-    expect(input).toContain("</user>");
+    expect(input).toMatch(/^--- system ---\n<context>/m);
+    expect(input).toContain("</context>");
+    expect(input).not.toMatch(/\n--- user ---\n<user>/);
 
-    /* ---- identity 在 <system> 之下（2 空格缩进） ---- */
+    /* ---- identity 在 <context> 之下（2 空格缩进） ---- */
     expect(input).toMatch(/\n  <identity name="alice">\n/);
     expect(input).toMatch(/\n  <\/identity>\n/);
 
@@ -176,7 +175,7 @@ describe("contextToMessages XML 结构化输出", () => {
     expect(input).toMatch(/\n  <directory>\n/);
     expect(input).toMatch(/\n    <object name="bob">/);
 
-    /* ---- status 为 <user> 直接子节点（2 空格缩进） ---- */
+    /* ---- status 为 <context> 直接子节点（2 空格缩进） ---- */
     expect(input).toMatch(/\n  <status>/);
 
     /* ---- Markdown 内容原样（表格 / 代码块不被前导空格污染） ---- */
@@ -186,7 +185,7 @@ describe("contextToMessages XML 结构化输出", () => {
     expect(input).toMatch(/^function foo\(\) \{ return 1; \}/m);
   });
 
-  test("inbox 作为 <user> 子节点，message 进一步嵌套", async () => {
+  test("inbox 作为 <context> 子节点，message 进一步嵌套", async () => {
     const stone = makeStone("alice");
     const traits: TraitDefinition[] = [];
     const directory: DirectoryEntry[] = [];
@@ -225,16 +224,16 @@ describe("contextToMessages XML 结构化输出", () => {
   });
 
   /**
-   * Phase 3 — llm_input_viewer：<active-forms> 应作为 <user> 子节点渲染，而不是
+   * Phase 3 — llm_input_viewer：<active-forms> 应作为 <context> 子节点渲染，而不是
    * engine 在 user message 字符串末尾追加的兄弟节点。
    */
-  test("activeForms 作为 <user> 子节点序列化", () => {
+  test("activeForms 作为 <context> 子节点序列化", () => {
     const ctx: ThreadContext = {
       name: "alice",
       whoAmI: "我是 alice",
       parentExpectation: "",
       plan: "",
-      process: "",
+      processEvents: [],
       locals: {},
       instructions: [],
       knowledge: [],
@@ -258,17 +257,17 @@ describe("contextToMessages XML 结构化输出", () => {
     ];
 
     const messages = contextToMessages(ctx, undefined, activeForms);
-    const userMsg = messages.find(m => m.role === "user");
-    expect(userMsg).toBeDefined();
-    const body = userMsg!.content;
+    const systemMsg = messages.find(m => m.role === "system");
+    expect(systemMsg).toBeDefined();
+    const body = systemMsg!.content;
 
-    /* 必须是 <user> 内部，不再出现在 </user> 之后 */
-    const userCloseIdx = body.lastIndexOf("</user>");
+    /* 必须是 <context> 内部，不再出现在 </context> 之后 */
+    const contextCloseIdx = body.lastIndexOf("</context>");
     const activeFormsIdx = body.indexOf("<active-forms>");
     expect(activeFormsIdx).toBeGreaterThan(-1);
-    expect(userCloseIdx).toBeGreaterThan(activeFormsIdx);
+    expect(contextCloseIdx).toBeGreaterThan(activeFormsIdx);
 
-    /* 缩进 2 格（作为 <user> 子节点） */
+    /* 缩进 2 格（作为 <context> 子节点） */
     expect(body).toMatch(/\n {2}<active-forms>\n/);
     expect(body).toMatch(/\n {2}<\/active-forms>\n/);
 
@@ -286,7 +285,7 @@ describe("contextToMessages XML 结构化输出", () => {
       whoAmI: "我是 alice",
       parentExpectation: "",
       plan: "",
-      process: "",
+      processEvents: [],
       locals: {},
       instructions: [],
       knowledge: [],
@@ -305,7 +304,91 @@ describe("contextToMessages XML 结构化输出", () => {
     };
 
     const messages = contextToMessages(ctx);
-    const userMsg = messages.find(m => m.role === "user");
-    expect(userMsg!.content).not.toContain("<active-forms>");
+    const systemMsg = messages.find(m => m.role === "system");
+    expect(systemMsg!.content).not.toContain("<active-forms>");
+  });
+
+  test("process events 从 context XML 中拆出为独立 messages", () => {
+    const ctx: ThreadContext = {
+      name: "alice",
+      whoAmI: "我是 alice",
+      parentExpectation: "完成一次验证",
+      plan: "1. 读取输入\n2. 调用工具",
+      processEvents: [
+        { type: "message_in", content: "用户提出需求", timestamp: 1000 },
+        { type: "tool_use", name: "open", title: "打开 return 表单", args: { type: "command", command: "return" }, content: "open return", timestamp: 2000 },
+        { type: "inject", content: "Form f_123 已创建；新的 knowledge 已注入", timestamp: 3000 },
+      ],
+      locals: {},
+      instructions: [],
+      knowledge: [],
+      creator: "user",
+      creationMode: "root",
+      childrenSummary: "",
+      ancestorSummary: "",
+      siblingSummary: "",
+      inbox: [],
+      todos: [],
+      directory: [],
+      scopeChain: [],
+      paths: undefined,
+      status: "running",
+      relations: [],
+    };
+
+    const messages = contextToMessages(ctx);
+
+    expect(messages[0]!.role).toBe("system");
+    expect(messages[0]!.content).toContain("<context>");
+    expect(messages[0]!.content).toContain("<task>");
+    expect(messages[0]!.content).not.toContain("<process>");
+    expect(messages[0]!.content).not.toContain("用户提出需求");
+    expect(messages[0]!.content).not.toContain("Form f_123 已创建");
+
+    const eventMessages = messages.slice(1);
+    expect(eventMessages).toHaveLength(3);
+    expect(eventMessages[0]!.role).toBe("user");
+    expect(eventMessages[0]!.content).toContain('<process_event type="message_in" category="llm_interaction"');
+    expect(eventMessages[1]!.role).toBe("assistant");
+    expect(eventMessages[1]!.content).toContain('<process_event type="tool_use" category="llm_interaction"');
+    expect(eventMessages[1]!.content).toContain('<args>');
+    expect(eventMessages[2]!.role).toBe("user");
+    expect(eventMessages[2]!.content).toContain('<process_event type="inject" category="context_change"');
+  });
+
+  test("历史 thinking 不作为 process event message 回灌给模型", () => {
+    const ctx: ThreadContext = {
+      name: "alice",
+      whoAmI: "我是 alice",
+      parentExpectation: "继续任务",
+      plan: "",
+      processEvents: [
+        { type: "thinking", content: "这是一段隐藏推理链，不应该回灌给模型", timestamp: 1000 },
+        { type: "text", content: "可见回复", timestamp: 2000 },
+      ],
+      locals: {},
+      instructions: [],
+      knowledge: [],
+      creator: "user",
+      creationMode: "root",
+      childrenSummary: "",
+      ancestorSummary: "",
+      siblingSummary: "",
+      inbox: [],
+      todos: [],
+      directory: [],
+      scopeChain: [],
+      paths: undefined,
+      status: "running",
+      relations: [],
+    };
+
+    const messages = contextToMessages(ctx);
+    const allContent = messages.map((m) => m.content).join("\n");
+
+    expect(allContent).not.toContain('type="thinking"');
+    expect(allContent).not.toContain("隐藏推理链");
+    expect(allContent).toContain('type="text"');
+    expect(allContent).toContain("可见回复");
   });
 });

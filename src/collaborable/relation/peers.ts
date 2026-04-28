@@ -1,12 +1,12 @@
 /**
  * Peers 扫描（Phase 5）
  *
- * 从当前线程的 actions + inbox 中提取"本线程涉及过的对象"集合（peers）。
+ * 从当前线程的 events + inbox 中提取"本线程涉及过的对象"集合（peers）。
  * Target 阶段 open-files 中枢据此决定要渲染哪些 <relations> 索引行。
  *
  * 数据源：
- * - actions[tool_use].args.target：本线程对外发起的 talk 的对方对象
- * - actions[message_out].content：历史 talk action（已记录的对外消息）
+ * - events[tool_use].args.target：本线程对外发起的 talk 的对方对象
+ * - events[message_out].content：历史 talk event（已记录的对外消息）
  *   注：结构化数据已在 tool_use 中体现；message_out 只是扁平化，这里不重复扫
  * - inbox[].from：收到过消息的对方
  *
@@ -54,8 +54,8 @@ export function scanPeers(
     result.push(trimmed);
   };
 
-  /* actions[tool_use].args.target */
-  for (const a of threadData.actions ?? []) {
+  /* events[tool_use].args.target */
+  for (const a of threadData.events ?? []) {
     if (a.type === "tool_use" && a.args && typeof a.args === "object") {
       const target = (a.args as Record<string, unknown>).target;
       tryAdd(target);

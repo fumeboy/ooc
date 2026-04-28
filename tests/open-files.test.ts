@@ -79,7 +79,7 @@ function singleNodeTree(
   };
   const threadData: ThreadDataFile = {
     id: threadId,
-    actions: [],
+    events: [],
   };
   return { tree, threadData, threadId };
 }

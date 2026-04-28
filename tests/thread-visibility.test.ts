@@ -5,7 +5,7 @@
  * 计算每个节点在 focus 线程 Context 中的呈现形态。
  *
  * 规则来源（严格对齐 `context-builder.ts` 的实现）：
- * - focus 自身：process 区段，完整 actions —— detailed
+ * - focus 自身：process 区段，完整 events —— detailed
  * - 祖先链（Root → 父，不含自身）：renderAncestorSummary —— 有 summary 则 summary，否则 title_only
  * - 直接子节点：renderChildrenSummary —— 有 summary 则 summary，否则 title_only
  * - 同级兄弟（同一父节点下的其他子节点）：renderSiblingSummary —— 有 summary 则 summary，否则 title_only
@@ -124,7 +124,7 @@ describe("classifyContextVisibility — 基础分类", () => {
     expect(map).toBeDefined();
   });
 
-  test("focus 自身 = detailed（完整 actions 可见）", () => {
+  test("focus 自身 = detailed（完整 events 可见）", () => {
     map = classifyContextVisibility(tree, "focus");
     expect(map.focus).toBe("detailed");
   });

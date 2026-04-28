@@ -109,9 +109,9 @@ export interface Action {
   /** message_in (talk): 对某 form 的结构化回复（仅在 LLM 视角回显时出现） */
   formResponse?: FormResponse;
   /**
-   * think / talk 的操作模式（2026-04-22 引入）
+   * do / talk 的操作模式（2026-04-22 引入）
    *
-   * 仅当 action 来源是 think / talk 指令（tool_use / message_out / create_thread）时写入。
+   * 仅当 action 来源是 do / talk 指令（tool_use / message_out / create_thread）时写入。
    * - "fork": 派生新线程（原线程只读，不被影响）
    * - "continue": 向原线程投递消息（产生影响，唤醒原线程）
    */
@@ -143,7 +143,7 @@ export interface ProcessNode {
   status: "todo" | "doing" | "done";
   children: ProcessNode[];
   deps?: string[];
-  actions: Action[];
+  events: Action[];
   traits?: string[];
   activatedTraits?: string[];
   summary?: string;
@@ -355,14 +355,14 @@ export interface KanbanTask {
  * 方便前端聚合渲染 MessageSidebar 的"按对象分组 + 未读角标"。
  *
  * 条目只存 (threadId, messageId) 引用，不存消息正文；正文在发起对象的
- * thread.json.actions 里，前端凭 (threadId, messageId) 反查。
+ * thread.json.events 里，前端凭 (threadId, messageId) 反查。
  *
  * @ref kernel/src/storable/inbox/user-inbox.ts — UserInboxEntry / UserInboxData 后端类型镜像
  */
 export interface UserInboxEntry {
   /** 发起对象当前线程 id */
   threadId: string;
-  /** message_out action 的 id（在发起对象的 thread.json.actions 里反查正文） */
+  /** message_out event 的 id（在发起对象的 thread.json.events 里反查正文） */
   messageId: string;
 }
 

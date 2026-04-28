@@ -27,9 +27,8 @@ export default defineConfig({
       },
     },
     hmr: {
-      /* 远程访问时（如 frpc），允许 HMR 通过任意 host 连接 */
-      host: "0.0.0.0",
-      clientPort: 18080,
+      host: "127.0.0.1",
+      clientPort: 5173,
     },
     fs: {
       allow: [

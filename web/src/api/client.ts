@@ -193,7 +193,7 @@ export async function getContextVisibility(
  * 获取 session 的 user inbox（引用式收件箱）
  *
  * 返回条目只包含 (threadId, messageId) 引用——消息正文请在发起对象的
- * threads/{threadId}/thread.json 的 actions[] 里按 id === messageId 反查。
+ * threads/{threadId}/thread.json 的 events[] 里按 id === messageId 反查。
  *
  * @param sessionId - Flow session ID
  * @ref docs/工程管理/迭代/all/20260421_feature_user_inbox.md
@@ -251,7 +251,7 @@ export async function talkTo(
 ): Promise<{
   sessionId: string;
   status: string;
-  actions: unknown[];
+  events: unknown[];
   messages: unknown[];
 }> {
   return post(`/talk/${objectName}`, {
@@ -270,7 +270,7 @@ export async function pauseObject(name: string): Promise<{ name: string; paused:
 export async function resumeFlow(name: string, flowId: string): Promise<{
   sessionId: string;
   status: string;
-  actions: unknown[];
+  events: unknown[];
   messages: unknown[];
 }> {
   return post(`/stones/${name}/resume`, { flowId });

@@ -1,7 +1,7 @@
 /**
  * Peer 扫描单测（Phase 5）
  *
- * scanPeers(threadData) 扫描当前线程 actions，
+ * scanPeers(threadData) 扫描当前线程 events，
  * 聚合 tool_use.args.target + message_in.from + message_out target（不含 self）。
  *
  * 规则：
@@ -15,8 +15,8 @@ import { describe, test, expect } from "bun:test";
 import { scanPeers } from "../src/collaborable/relation/peers.js";
 import type { ThreadDataFile } from "../src/thinkable/thread-tree/types.js";
 
-function threadData(actions: ThreadDataFile["actions"]): ThreadDataFile {
-  return { id: "r", actions };
+function threadData(events: ThreadDataFile["events"]): ThreadDataFile {
+  return { id: "r", events };
 }
 
 describe("scanPeers — 基础", () => {
@@ -35,10 +35,10 @@ describe("scanPeers — 基础", () => {
   });
 
   test("message_in.from 进入 peers（从 inbox 消息推断）", () => {
-    /* message_in 实际上只在 action 流里出现 content 文字；发信方在 inbox 字段 */
+    /* message_in 实际上只在 event 流里出现 content 文字；发信方在 inbox 字段 */
     const td: ThreadDataFile = {
       id: "r",
-      actions: [],
+      events: [],
       inbox: [
         { id: "m1", from: "kernel", content: "update!", timestamp: 1, source: "talk", status: "unread" },
       ],
@@ -50,7 +50,7 @@ describe("scanPeers — 基础", () => {
   test("多源去重：同一 peer 只出现一次", () => {
     const td: ThreadDataFile = {
       id: "r",
-      actions: [
+      events: [
         {
           type: "tool_use",
           name: "submit",
@@ -92,7 +92,7 @@ describe("scanPeers — 系统通道过滤", () => {
   test("user / system / super 被过滤", () => {
     const td: ThreadDataFile = {
       id: "r",
-      actions: [
+      events: [
         { type: "tool_use", name: "submit", args: { target: "user" }, content: "", timestamp: 1 },
         { type: "tool_use", name: "submit", args: { target: "super" }, content: "", timestamp: 2 },
       ],
