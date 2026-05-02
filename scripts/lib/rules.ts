@@ -1,6 +1,6 @@
-// .doc.ts 规则校验器 —— 当前实现 R2（版本号格式）
-// 后续 Task 4/5 会在本文件追加 R1（评审戳）和 R3（依赖）。
-import type { ParsedDoc, Violation } from "./types"
+// .doc.ts 规则校验器 —— 当前实现 R1（评审戳）+ R2（版本号格式）
+// 后续 Task 5 会在本文件追加 R3（依赖）/ R4（入口白名单）。
+import type { ParsedDoc, ReviewStamp, Violation } from "./types"
 
 // 版本号格式正则：{concept}_v{YYYYMMDD}_{N}
 // concept = 至少一个字符（允许中文/字母/数字/下划线）；YYYYMMDD = 8 位数字；N ≥ 1（数字）
@@ -59,4 +59,99 @@ function isValidDate(s: string): boolean {
   if (m < 1 || m > 12) return false
   if (d < 1 || d > 31) return false
   return true
+}
+
+// 第一行格式：// @reviewed {symbol} by {actor} @ {YYYY-MM-DD}
+// 后续行格式：// 确认说明：{text}（允许跨多行延续）
+const REVIEWED_LINE_RE = /^\/\/\s*@reviewed\s+(\S+)\s+by\s+(\S+)\s+@\s+(\d{4}-\d{2}-\d{2})\s*$/
+const RATIONALE_HEAD_RE = /^\/\/\s*确认说明[:：]\s*(.*)$/
+const COMMENT_LINE_RE = /^\/\/\s?(.*)$/
+
+// 解析一段紧贴 import 上方的 // 注释块为 ReviewStamp；不合法返回 null
+export function parseReviewStamp(block: string): ReviewStamp | null {
+  const lines = block.split("\n").map((l) => l.trim())
+  if (lines.length < 2) return null
+
+  const head = REVIEWED_LINE_RE.exec(lines[0]!)
+  if (!head) return null
+  const [, symbolName, actor, date] = head
+
+  // 找"确认说明"起始行
+  let rationaleStart = -1
+  for (let i = 1; i < lines.length; i++) {
+    if (RATIONALE_HEAD_RE.test(lines[i]!)) {
+      rationaleStart = i
+      break
+    }
+  }
+  if (rationaleStart === -1) return null
+
+  // 拼接确认说明（首行 + 后续延续行）
+  const parts: string[] = []
+  const headMatch = RATIONALE_HEAD_RE.exec(lines[rationaleStart]!)!
+  if (headMatch[1]) parts.push(headMatch[1])
+  for (let i = rationaleStart + 1; i < lines.length; i++) {
+    const m = COMMENT_LINE_RE.exec(lines[i]!)
+    if (m) parts.push(m[1] ?? "")
+  }
+  const rationale = parts.join(" ").trim()
+  if (rationale.length === 0) return null
+
+  return { symbolName: symbolName!, actor: actor!, date: date!, rationale }
+}
+
+// R1: 每条带版本号符号的 import 上方必须有合法 @reviewed 注释块覆盖所有版本号符号
+// 行为：
+//   - type-only import 跳过（不需要戳，TS 已校验存在性，且文档 → 源码不参与版本游戏）
+//   - 普通 import：对每个 importedName 用 VERSION_RE 判断是否带版本号
+//     不带版本号的不要求戳；带版本号的要求戳里的 symbolName 与之一致
+//     一条 import 里有多个版本号符号时，每个都需要被一个戳覆盖（多戳支持：见 parseAllReviewStamps）
+//   - 当前实现假定一条 import 只能配一个戳块；多版本号符号要么共用一个戳、要么报错
+//     （这是约定：同一 import 多符号通常意味着它们一起升版）
+export function checkR1(docs: ParsedDoc[]): Violation[] {
+  const out: Violation[] = []
+  for (const doc of docs) {
+    for (const imp of doc.imports) {
+      if (imp.isTypeOnly) continue
+      const versioned = imp.importedNames.filter((n) => VERSION_RE.test(n))
+      if (versioned.length === 0) continue
+
+      if (imp.precedingCommentBlock === null) {
+        out.push({
+          rule: "R1",
+          severity: "error",
+          filePath: doc.filePath,
+          line: imp.line,
+          message: `import { ${imp.importedNames.join(", ")} } 上方缺少 @reviewed 注释块`,
+        })
+        continue
+      }
+
+      const stamp = parseReviewStamp(imp.precedingCommentBlock)
+      if (!stamp) {
+        out.push({
+          rule: "R1",
+          severity: "error",
+          filePath: doc.filePath,
+          line: imp.line,
+          message: `import { ${imp.importedNames.join(", ")} } 上方注释块格式不合法（需含 @reviewed/by/日期/确认说明）`,
+        })
+        continue
+      }
+
+      // 当前一戳一 import 模型：戳的 symbolName 必须出现在 versioned 中
+      // 其余未被覆盖的版本号符号报错
+      const uncovered = versioned.filter((n) => n !== stamp.symbolName)
+      if (uncovered.length > 0) {
+        out.push({
+          rule: "R1",
+          severity: "error",
+          filePath: doc.filePath,
+          line: imp.line,
+          message: `@reviewed 戳覆盖 "${stamp.symbolName}" 与 import 符号 [${uncovered.join(", ")}] 不一致`,
+        })
+      }
+    }
+  }
+  return out
 }
