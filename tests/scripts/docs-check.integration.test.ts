@@ -73,6 +73,7 @@ describe("docs:check integration", () => {
       ].join("\n"),
       "b.doc.ts": [
         "// @docs-entry",
+        "",
         "// @reviewed X_v20260503_1 by alan @ 2026-05-03",
         "// 确认说明：仍然适用",
         'import { X_v20260503_1 } from "./a.doc"',

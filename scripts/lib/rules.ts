@@ -68,32 +68,22 @@ const RATIONALE_HEAD_RE = /^\/\/\s*确认说明[:：]\s*(.*)$/
 const COMMENT_LINE_RE = /^\/\/\s?(.*)$/
 
 // 解析一段紧贴 import 上方的 // 注释块为 ReviewStamp；不合法返回 null
-// 行为：从注释块中定位 @reviewed 行所在位置，从该行起解析；其前的行（如 // @docs-entry 等）允许存在
 export function parseReviewStamp(block: string): ReviewStamp | null {
   const lines = block.split("\n").map((l) => l.trim())
   if (lines.length < 2) return null
 
-  // 定位 @reviewed 行（允许其前存在其他 // 注释行）
-  let headIdx = -1
-  for (let i = 0; i < lines.length; i++) {
-    if (REVIEWED_LINE_RE.test(lines[i]!)) {
-      headIdx = i
-      break
-    }
-  }
-  if (headIdx === -1) return null
-
-  const head = REVIEWED_LINE_RE.exec(lines[headIdx]!)!
+  const head = REVIEWED_LINE_RE.exec(lines[0]!)
+  if (!head) return null
   const [, symbolName, actor, date] = head
 
-  // 探测：@reviewed 行之后不应再出现 @reviewed —— 多戳目前不支持
-  for (let i = headIdx + 1; i < lines.length; i++) {
+  // 探测：除首行外不应再出现 @reviewed —— 多戳目前不支持，同一 import 多版本符号必须拆成多个 import
+  for (let i = 1; i < lines.length; i++) {
     if (REVIEWED_LINE_RE.test(lines[i]!)) return null
   }
 
-  // 找"确认说明"起始行（必须出现在 @reviewed 之后）
+  // 找"确认说明"起始行
   let rationaleStart = -1
-  for (let i = headIdx + 1; i < lines.length; i++) {
+  for (let i = 1; i < lines.length; i++) {
     if (RATIONALE_HEAD_RE.test(lines[i]!)) {
       rationaleStart = i
       break
