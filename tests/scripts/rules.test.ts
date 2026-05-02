@@ -100,6 +100,16 @@ describe("parseReviewStamp", () => {
     ].join("\n")
     expect(parseReviewStamp(block)).toBeNull()
   })
+
+  it("多个 @reviewed 行返回 null（多戳不支持）", () => {
+    const block = [
+      "// @reviewed A_v20260503_1 by sophia @ 2026-05-03",
+      "// 确认说明：A 说明",
+      "// @reviewed B_v20260503_1 by sophia @ 2026-05-03",
+      "// 确认说明：B 说明",
+    ].join("\n")
+    expect(parseReviewStamp(block)).toBeNull()
+  })
 })
 
 function makeDocWithImport(filePath: string, imp: ImportRecord): ParsedDoc {
@@ -158,7 +168,9 @@ describe("R1 - review stamp", () => {
     })
     const v = checkR1([doc])
     expect(v).toHaveLength(1)
-    expect(v[0]!.message).toContain("不一致")
+    expect(v[0]!.message).toContain("不在 import 中")
+    expect(v[0]!.message).toContain("线程树_v20260503_1")
+    expect(v[0]!.message).toContain("线程树_v20260503_2")
   })
 
   it("合法戳通过", () => {
@@ -186,6 +198,7 @@ describe("R1 - review stamp", () => {
     })
     const v = checkR1([doc])
     expect(v).toHaveLength(1) // 调度_v20260503_1 没被戳覆盖
+    expect(v[0]!.message).toContain("未覆盖")
     expect(v[0]!.message).toContain("调度_v20260503_1")
   })
 

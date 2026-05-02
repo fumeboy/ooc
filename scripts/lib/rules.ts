@@ -76,6 +76,11 @@ export function parseReviewStamp(block: string): ReviewStamp | null {
   if (!head) return null
   const [, symbolName, actor, date] = head
 
+  // 探测：除首行外不应再出现 @reviewed —— 多戳目前不支持，同一 import 多版本符号必须拆成多个 import
+  for (let i = 1; i < lines.length; i++) {
+    if (REVIEWED_LINE_RE.test(lines[i]!)) return null
+  }
+
   // 找"确认说明"起始行
   let rationaleStart = -1
   for (let i = 1; i < lines.length; i++) {
@@ -105,7 +110,7 @@ export function parseReviewStamp(block: string): ReviewStamp | null {
 //   - type-only import 跳过（不需要戳，TS 已校验存在性，且文档 → 源码不参与版本游戏）
 //   - 普通 import：对每个 importedName 用 VERSION_RE 判断是否带版本号
 //     不带版本号的不要求戳；带版本号的要求戳里的 symbolName 与之一致
-//     一条 import 里有多个版本号符号时，每个都需要被一个戳覆盖（多戳支持：见 parseAllReviewStamps）
+//     一条 import 里有多个版本号符号时，每个都需要被一个戳覆盖（多戳暂不支持：同一 import 多版本符号必须拆成多个 import 语句）
 //   - 当前实现假定一条 import 只能配一个戳块；多版本号符号要么共用一个戳、要么报错
 //     （这是约定：同一 import 多符号通常意味着它们一起升版）
 export function checkR1(docs: ParsedDoc[]): Violation[] {
@@ -141,15 +146,27 @@ export function checkR1(docs: ParsedDoc[]): Violation[] {
 
       // 当前一戳一 import 模型：戳的 symbolName 必须出现在 versioned 中
       // 其余未被覆盖的版本号符号报错
-      const uncovered = versioned.filter((n) => n !== stamp.symbolName)
-      if (uncovered.length > 0) {
+      const stampHits = versioned.includes(stamp.symbolName)
+      if (!stampHits) {
+        // 戳覆盖的符号不在 import 中 —— 真正的不一致
         out.push({
           rule: "R1",
           severity: "error",
           filePath: doc.filePath,
           line: imp.line,
-          message: `@reviewed 戳覆盖 "${stamp.symbolName}" 与 import 符号 [${uncovered.join(", ")}] 不一致`,
+          message: `@reviewed 戳覆盖 "${stamp.symbolName}"，但该符号不在 import 中（实际 import: [${versioned.join(", ")}]）`,
         })
+      } else {
+        const uncovered = versioned.filter((n) => n !== stamp.symbolName)
+        if (uncovered.length > 0) {
+          out.push({
+            rule: "R1",
+            severity: "error",
+            filePath: doc.filePath,
+            line: imp.line,
+            message: `@reviewed 戳覆盖 "${stamp.symbolName}"，未覆盖 [${uncovered.join(", ")}]（一条 import 多个版本符号需拆分成多条 import）`,
+          })
+        }
       }
     }
   }
