@@ -43,7 +43,10 @@ export function parseDoc(filePath: string, source: string): ParsedDoc {
     }
   }
 
-  return { filePath, exports, imports }
+  // 入口标记：仅检查前 5 行的 // @docs-entry 注释，避免误命中正文
+  const isEntry = /^\s*\/\/\s*@docs-entry\s*$/m.test(source.split("\n").slice(0, 5).join("\n"))
+
+  return { filePath, exports, imports, isEntry }
 }
 
 // 从单条 import 语句节点中抽出 ImportRecord

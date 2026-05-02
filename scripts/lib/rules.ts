@@ -1,5 +1,5 @@
-// .doc.ts 规则校验器 —— 当前实现 R1（评审戳）+ R2（版本号格式）
-// 后续 Task 5 会在本文件追加 R3（依赖）/ R4（入口白名单）。
+// .doc.ts 规则校验器 —— 当前实现 R1（评审戳）+ R2（版本号格式）+ R3（孤立文件）+ R4（入口白名单）
+import { dirname, resolve } from "node:path"
 import type { ParsedDoc, ReviewStamp, Violation } from "./types"
 
 // 版本号格式正则：{concept}_v{YYYYMMDD}_{N}
@@ -168,6 +168,42 @@ export function checkR1(docs: ParsedDoc[]): Violation[] {
           })
         }
       }
+    }
+  }
+  return out
+}
+
+// R3: 孤立文件检测（warning）—— 配合 R4 入口白名单
+// 算法：
+//   1. 把所有 doc.imports 的 fromPath 解析为绝对路径并归到一个 importedSet
+//      （fromPath 通常省略后缀，如 "./a.doc"，因此尝试原样、+.ts、+.doc.ts 三种候选都加入集合）
+//   2. 遍历 docs，未被 importedSet 命中且 isEntry === false 的发 warning
+// R4 落地：isEntry 文件直接 continue，不参与孤立判定（即文件顶部含 // @docs-entry 标记）
+export function checkR3(docs: ParsedDoc[]): Violation[] {
+  const importedSet = new Set<string>()
+  for (const doc of docs) {
+    const baseDir = dirname(doc.filePath)
+    for (const imp of doc.imports) {
+      const candidates = [
+        resolve(baseDir, imp.fromPath),
+        resolve(baseDir, imp.fromPath + ".ts"),
+        resolve(baseDir, imp.fromPath + ".doc.ts"),
+      ]
+      for (const c of candidates) importedSet.add(c)
+    }
+  }
+
+  const out: Violation[] = []
+  for (const doc of docs) {
+    if (doc.isEntry) continue
+    if (!importedSet.has(doc.filePath)) {
+      out.push({
+        rule: "R3",
+        severity: "warning",
+        filePath: doc.filePath,
+        line: null,
+        message: "孤立 .doc.ts —— 没有任何文件 import 它（如是入口文档，请在前 5 行加 // @docs-entry）",
+      })
     }
   }
   return out

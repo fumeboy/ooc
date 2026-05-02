@@ -70,3 +70,15 @@ describe("parseDoc - imports", () => {
     expect(result.imports[0]!.precedingCommentBlock).toBeNull()
   })
 })
+
+describe("parseDoc - entry marker", () => {
+  it("// @docs-entry 在前几行被识别", () => {
+    const source = "// @docs-entry\nexport const X_v20260503_1 = `body`"
+    expect(parseDoc("/a.doc.ts", source).isEntry).toBe(true)
+  })
+
+  it("没有 marker 默认 false", () => {
+    const source = "export const X_v20260503_1 = `body`"
+    expect(parseDoc("/a.doc.ts", source).isEntry).toBe(false)
+  })
+})

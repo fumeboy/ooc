@@ -3,6 +3,7 @@ export interface ParsedDoc {
   filePath: string                     // 绝对路径
   exports: ExportedSymbol[]
   imports: ImportRecord[]
+  isEntry: boolean                     // 含 // @docs-entry 标记的文件（参与 R4 入口白名单）
 }
 
 // 一个 export const X = `...`
@@ -14,7 +15,7 @@ export interface ExportedSymbol {
 // 一个 import 语句（含上方紧贴的注释块）
 export interface ImportRecord {
   fromPath: string                     // 解析后的相对路径字符串（原样）
-  isTypeOnly: boolean                  // import type ... 或 import { type X }
+  isTypeOnly: boolean                  // import type ... 形式（当前不识别 import { type X } 这种 per-element 形式）
   importedNames: string[]              // 大括号里的符号名
   line: number                         // import 语句 1-based 行号
   precedingCommentBlock: string | null // 紧贴上方的连续 // 注释块原文（保留 //），无空行隔开则非 null

@@ -1,6 +1,6 @@
-// 规则校验单元测试 —— 当前覆盖 R2（版本号格式）、parseReviewStamp、R1（评审戳）
+// 规则校验单元测试 —— 当前覆盖 R2（版本号格式）、parseReviewStamp、R1（评审戳）、R3+R4（孤立文件 + 入口白名单）
 import { describe, expect, it } from "bun:test"
-import { checkR1, checkR2, parseReviewStamp } from "../../scripts/lib/rules"
+import { checkR1, checkR2, checkR3, parseReviewStamp } from "../../scripts/lib/rules"
 import type { ImportRecord, ParsedDoc } from "../../scripts/lib/types"
 
 function makeDoc(filePath: string, exportNames: string[]): ParsedDoc {
@@ -8,6 +8,7 @@ function makeDoc(filePath: string, exportNames: string[]): ParsedDoc {
     filePath,
     exports: exportNames.map((name, i) => ({ name, line: i + 1 })),
     imports: [],
+    isEntry: false,
   }
 }
 
@@ -113,7 +114,7 @@ describe("parseReviewStamp", () => {
 })
 
 function makeDocWithImport(filePath: string, imp: ImportRecord): ParsedDoc {
-  return { filePath, exports: [], imports: [imp] }
+  return { filePath, exports: [], imports: [imp], isEntry: false }
 }
 
 describe("R1 - review stamp", () => {
@@ -213,5 +214,44 @@ describe("R1 - review stamp", () => {
     const v = checkR1([doc])
     expect(v).toHaveLength(1)
     expect(v[0]!.message).toMatch(/格式不合法|缺少|@reviewed/)
+  })
+})
+
+function makeFullDoc(filePath: string, opts: { exports?: string[]; imports?: ImportRecord[]; isEntry?: boolean } = {}): ParsedDoc {
+  return {
+    filePath,
+    exports: (opts.exports ?? []).map((name, i) => ({ name, line: i + 1 })),
+    imports: opts.imports ?? [],
+    isEntry: opts.isEntry ?? false,
+  }
+}
+
+describe("R3 - orphan files (with R4 entry whitelist)", () => {
+  it("被其他文件 import 的不是孤立", () => {
+    const a: ParsedDoc = makeFullDoc("/docs/a.doc.ts", { exports: ["X_v20260503_1"] })
+    const b: ParsedDoc = makeFullDoc("/docs/b.doc.ts", {
+      imports: [{
+        fromPath: "./a.doc",
+        isTypeOnly: false,
+        importedNames: ["X_v20260503_1"],
+        line: 1,
+        precedingCommentBlock: null,
+      }],
+    })
+    const v = checkR3([a, b])
+    expect(v.find((x) => x.filePath === "/docs/a.doc.ts")).toBeUndefined()
+  })
+
+  it("无人 import 的报 warning", () => {
+    const a: ParsedDoc = makeFullDoc("/docs/a.doc.ts", { exports: ["X_v20260503_1"] })
+    const v = checkR3([a])
+    expect(v).toHaveLength(1)
+    expect(v[0]!.rule).toBe("R3")
+    expect(v[0]!.severity).toBe("warning")
+  })
+
+  it("@docs-entry 文件即使无人 import 也不报", () => {
+    const a: ParsedDoc = makeFullDoc("/docs/meta.doc.ts", { exports: ["meta_v20260503_1"], isEntry: true })
+    expect(checkR3([a])).toEqual([])
   })
 })
