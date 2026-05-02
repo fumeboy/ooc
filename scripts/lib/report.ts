@@ -3,6 +3,7 @@
 // 退出码规则：有任何 error 退出 1，否则退出 0（warning 不阻塞）。
 
 import type { Violation } from "./types"
+import { ALL_RULES } from "./types"
 
 export interface Report {
   text: string
@@ -26,9 +27,24 @@ export function formatReport(violations: Violation[]): Report {
     byRule.set(v.rule, arr)
   }
 
-  for (const rule of ["R1", "R2", "R3", "R4"] as const) {
+  for (const rule of ALL_RULES) {
     const arr = byRule.get(rule)
     if (!arr || arr.length === 0) continue
+    const sevTag = arr[0]!.severity === "error" ? "✗" : "⚠"
+    lines.push("")
+    lines.push(`${sevTag} ${rule} ${arr[0]!.severity}s: ${arr.length}`)
+    for (const v of arr) {
+      const loc = v.line === null ? v.filePath : `${v.filePath}:${v.line}`
+      lines.push(`  ${loc}`)
+      lines.push(`    ${v.message}`)
+    }
+  }
+
+  // 兜底：未在 ALL_RULES 中登记的 rule 也要打印（防漏报）
+  const known = new Set<string>(ALL_RULES)
+  for (const [rule, arr] of byRule) {
+    if (known.has(rule)) continue
+    if (arr.length === 0) continue
     const sevTag = arr[0]!.severity === "error" ? "✗" : "⚠"
     lines.push("")
     lines.push(`${sevTag} ${rule} ${arr[0]!.severity}s: ${arr.length}`)

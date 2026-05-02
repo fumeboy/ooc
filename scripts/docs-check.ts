@@ -6,6 +6,7 @@
 import { Glob } from "bun"
 import { readFile } from "node:fs/promises"
 import { resolve } from "node:path"
+import { stat } from "node:fs/promises"
 import { parseDoc } from "./lib/parse-doc"
 import { checkR1, checkR2, checkR3 } from "./lib/rules"
 import { formatReport } from "./lib/report"
@@ -13,6 +14,16 @@ import type { ParsedDoc, Violation } from "./lib/types"
 
 async function main(): Promise<number> {
   const docsDir = resolve(process.argv[2] ?? "docs")
+  try {
+    const s = await stat(docsDir)
+    if (!s.isDirectory()) {
+      process.stderr.write(`docs:check: not a directory: ${docsDir}\n`)
+      return 2
+    }
+  } catch {
+    process.stderr.write(`docs:check: directory not found: ${docsDir}\n`)
+    return 2
+  }
   const glob = new Glob("**/*.doc.ts")
 
   const docs: ParsedDoc[] = []

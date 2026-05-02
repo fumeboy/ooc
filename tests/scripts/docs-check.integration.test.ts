@@ -19,9 +19,9 @@ async function setupTmpDocs(files: Record<string, string>): Promise<string> {
   return dir
 }
 
-function runCli(docsDir: string): { stdout: string; code: number } {
+function runCli(docsDir: string): { stdout: string; stderr: string; code: number } {
   const r = spawnSync("bun", [CLI_PATH, docsDir], { encoding: "utf8" })
-  return { stdout: r.stdout ?? "", code: r.status ?? -1 }
+  return { stdout: r.stdout ?? "", stderr: r.stderr ?? "", code: r.status ?? -1 }
 }
 
 describe("docs:check integration", () => {
@@ -36,6 +36,7 @@ describe("docs:check integration", () => {
     const r = runCli(dir)
     expect(r.code).toBe(0)
     expect(r.stdout).toContain("OK")
+    expect(r.stderr).toBe("")
   })
 
   it("单个合法 entry doc → OK", async () => {
@@ -47,6 +48,7 @@ describe("docs:check integration", () => {
     })
     const r = runCli(dir)
     expect(r.code).toBe(0)
+    expect(r.stderr).toBe("")
   })
 
   it("缺 review 戳 → R1 error 退出 1", async () => {
@@ -82,6 +84,7 @@ describe("docs:check integration", () => {
     })
     const r = runCli(dir)
     expect(r.code).toBe(0)
+    expect(r.stderr).toBe("")
   })
 
   it("孤立非 entry 文件 → R3 warning 不阻塞退出", async () => {
@@ -91,5 +94,12 @@ describe("docs:check integration", () => {
     const r = runCli(dir)
     expect(r.code).toBe(0)
     expect(r.stdout).toContain("R3")
+    expect(r.stderr).toBe("")
+  })
+
+  it("不存在的 docsDir → exit 2 + stderr 提示", async () => {
+    const r = runCli("/tmp/__nonexistent-docs-check-dir-xyz__")
+    expect(r.code).toBe(2)
+    expect(r.stderr).toContain("directory not found")
   })
 })

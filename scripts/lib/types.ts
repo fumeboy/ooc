@@ -29,9 +29,13 @@ export interface ReviewStamp {
   rationale: string                    // 确认说明：后的全部文本
 }
 
+// 全部规则码，按报告输出顺序排列。新增规则时在此追加，避免 report.ts 漏报。
+export const ALL_RULES = ["R1", "R2", "R3", "R4"] as const
+export type RuleCode = typeof ALL_RULES[number]
+
 // 一条违规
 export interface Violation {
-  rule: "R1" | "R2" | "R3" | "R4"
+  rule: RuleCode
   severity: "error" | "warning"
   filePath: string
   line: number | null                  // 文件级违规可为 null
