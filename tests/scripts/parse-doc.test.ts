@@ -81,4 +81,14 @@ describe("parseDoc - entry marker", () => {
     const source = "export const X_v20260503_1 = `body`"
     expect(parseDoc("/a.doc.ts", source).isEntry).toBe(false)
   })
+
+  it("// @docs-entry 后跟中文注释也被识别", () => {
+    const source = "// @docs-entry — 这个文件是 docs 入口\nexport const X_v20260503_1 = `body`"
+    expect(parseDoc("/a.doc.ts", source).isEntry).toBe(true)
+  })
+
+  it("// @docs-entry-extra 不被识别（避免误命中扩展名）", () => {
+    const source = "// @docs-entry-extra\nexport const X_v20260503_1 = `body`"
+    expect(parseDoc("/a.doc.ts", source).isEntry).toBe(false)
+  })
 })
