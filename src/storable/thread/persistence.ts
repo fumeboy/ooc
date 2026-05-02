@@ -60,6 +60,8 @@ export function readThreadData(threadDir: string): ThreadDataFile | null {
   try {
     const raw = readFileSync(filePath, "utf-8");
     const data = JSON.parse(raw) as ThreadDataFile & Record<string, unknown>;
+    delete data.actions;
+    if (!Array.isArray(data.events)) data.events = [];
     return data as ThreadDataFile;
   } catch {
     return null;

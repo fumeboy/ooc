@@ -36,6 +36,8 @@ import { contextToMessages, type ActiveFormView } from "../context/messages.js";
 import { threadStatusToFlowStatus, type TalkResult } from "./types.js";
 import { buildInvalidOpenMessage, resolveToolFormId } from "./protocol-guards.js";
 import { formatOpenFileContent } from "./open-file-format.js";
+import { parseTextualToolCall } from "./text-tool-call.js";
+import { writeLatestLlmInput, writeLatestLlmOutput } from "./latest-llm-files.js";
 
 import type { LLMClient, Message, ToolCall } from "../llm/client.js";
 import type { StoneData, DirectoryEntry, TraitDefinition, ContextWindow } from "../../shared/types/index.js";
@@ -130,34 +132,9 @@ function isAlwaysTrait(traits: TraitDefinition[], fullId: string): boolean {
 }
 
 export type { TalkResult, TalkReturn } from "./types.js";
-/* ========== 辅助函数 ========== */
-
-/** 生成 session ID */
 function generateSessionId(): string {
   return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
-
-function formatLatestLlmInput(messages: Message[]): string {
-  return messages.map(m => `<${m.role}>\n${m.content}\n</${m.role}>`).join("\n\n");
-}
-
-function writeLatestLlmInput(threadDir: string, messages: Message[]): void {
-  mkdirSync(threadDir, { recursive: true });
-  writeFileSync(join(threadDir, "llm.input.txt"), formatLatestLlmInput(messages), "utf-8");
-}
-
-function writeLatestLlmOutput(threadDir: string, llmOutput: string, thinkingContent?: string): void {
-  mkdirSync(threadDir, { recursive: true });
-  writeFileSync(join(threadDir, "llm.output.txt"), llmOutput, "utf-8");
-
-  const thinkingFile = join(threadDir, "llm.thinking.txt");
-  if (thinkingContent) {
-    writeFileSync(thinkingFile, thinkingContent, "utf-8");
-  } else if (existsSync(thinkingFile)) {
-    unlinkSync(thinkingFile);
-  }
-}
-
 function getRuntimeThreadDir(objectFlowDir: string, tree: ThreadsTree, threadId: string): string {
   return join(objectFlowDir, "threads", ...tree.getAncestorPath(threadId));
 }
@@ -860,7 +837,7 @@ export async function runWithThreadTree(
         thinkingContent = llmResult.thinkingContent;
         llmModel = (llmResult as any).model || "unknown";
         llmUsage = (llmResult as any).usage ?? {};
-        toolCalls = llmResult.toolCalls;
+        toolCalls = llmResult.toolCalls ?? parseTextualToolCall(llmOutput);
         writeLatestLlmOutput(threadDir, llmOutput, thinkingContent);
         /* 流式路径已逐 chunk 发过；非流式路径后面仍会整段发一次（保持前端可观测性） */
         if (sawThinkingChunk) {
@@ -1976,7 +1953,7 @@ export async function resumeWithThreadTree(
         thinkingContent = llmResult.thinkingContent;
         llmModel = (llmResult as any).model || "unknown";
         llmUsage = (llmResult as any).usage ?? {};
-        toolCalls = llmResult.toolCalls;
+        toolCalls = llmResult.toolCalls ?? parseTextualToolCall(llmOutput);
         writeLatestLlmOutput(threadDir, llmOutput, thinkingContent);
         if (sawThinkingChunk) {
           emitSSE({ type: "stream:thought:end", objectName, sessionId });

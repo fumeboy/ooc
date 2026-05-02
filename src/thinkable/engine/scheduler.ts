@@ -256,17 +256,20 @@ export class ThreadScheduler {
 
       /* 检查单线程迭代上限 */
       if (tracker.iterations >= this._config.maxIterationsPerThread) {
-        consola.warn(`[ThreadScheduler] ${threadId} 达到单线程迭代上限 ${this._config.maxIterationsPerThread}，标记 failed`);
+        const reason = `线程 ${threadId} 达到单线程迭代上限 ${this._config.maxIterationsPerThread}`;
+        consola.warn(`[ThreadScheduler] ${reason}，标记 failed`);
         await tree.setNodeStatus(threadId, "failed");
         /* I4: 错误传播统一由 _onThreadFinished 处理 */
-        await this._onThreadFinished(threadId, objectName);
+        await this._onThreadFinished(threadId, objectName, reason);
         break;
       }
 
       /* 检查全局迭代上限 */
       if (this._totalIterations >= this._config.maxTotalIterations) {
-        consola.warn(`[ThreadScheduler] 全局迭代上限，${threadId} 标记 failed`);
+        const reason = `达到全局迭代上限 ${this._config.maxTotalIterations}`;
+        consola.warn(`[ThreadScheduler] ${reason}，${threadId} 标记 failed`);
         await tree.setNodeStatus(threadId, "failed");
+        await this._onThreadFinished(threadId, objectName, reason);
         /* I5: 全局超时强制失败，只执行一次 */
         await this._forceFailAllRunning();
         break;
@@ -316,9 +319,14 @@ export class ThreadScheduler {
 
     consola.info(`[ThreadScheduler] 线程结束 ${threadId} (${node.status})`);
 
-    /* 失败时通知创建者（优先使用传入的原始错误信息） */
+    /* 失败时通知创建者；根线程无创建者时把错误写回自身，供 failureReason 落盘。 */
     if (node.status === "failed") {
-      this._propagateError(threadId, errorMessage ?? `线程 ${threadId} 执行失败`);
+      const message = errorMessage ?? `线程 ${threadId} 执行失败`;
+      if (node.creatorThreadId) {
+        this._propagateError(threadId, message);
+      } else {
+        callbacks.onThreadError(threadId, objectName, message);
+      }
     }
 
     /* 调用外部回调 */

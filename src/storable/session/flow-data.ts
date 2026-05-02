@@ -80,6 +80,7 @@ export function writeThreadTreeFlowData(
     events: [],
     summary: result.summary,
     threadId: result.threadId,
+    failureReason: result.failureReason,
     toJSON: () => ({ ...flowJson }),
   };
 }

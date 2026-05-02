@@ -196,6 +196,52 @@ describe("基础执行", () => {
     expect(result.totalIterations).toBe(2);
   });
 
+  test("文本形式的 process_event tool_use 会 fallback 为真实 tool call", async () => {
+    const steps: MockStep[] = [
+      () => ({
+        content: [
+          '<process_event type="tool_use" category="llm_interaction" name="open" title="准备返回">',
+          "  <content>",
+          'open({"title":"准备返回","type":"command","command":"return","description":"结束任务"})',
+          "  </content>",
+          "  <args>",
+          JSON.stringify({ title: "准备返回", type: "command", command: "return", description: "结束任务" }),
+          "  </args>",
+          "</process_event>",
+        ].join("\n"),
+      }),
+      (messages: unknown[]) => {
+        const allContent = allMessageContent(messages);
+        const formId = allContent.match(/<form id="(f_[^"]+)" command="return"/)?.[1] ?? "f_unknown";
+        const args = { title: "补充返回摘要", form_id: formId, args: { summary: "文本 tool 已执行" } };
+        return {
+          content: [
+            '<process_event type="tool_use" category="llm_interaction" name="refine" title="补充返回摘要">',
+            "  <content>",
+            `refine(${JSON.stringify(args)})`,
+            "  </content>",
+            "  <args>",
+            JSON.stringify(args),
+            "  </args>",
+            "</process_event>",
+          ].join("\n"),
+        };
+      },
+      (messages: unknown[]) => {
+        const allContent = allMessageContent(messages);
+        const formId = allContent.match(/<form id="(f_[^"]+)" command="return"/)?.[1] ?? "f_unknown";
+        return { content: "", toolCalls: [toolCall("submit", { title: "提交返回", form_id: formId })] };
+      },
+    ];
+    const config = makeConfig({ steps });
+
+    const result = await runWithThreadTree("test_obj", "你好", "user", config);
+
+    expect(result.status).toBe("done");
+    expect(result.summary).toBe("文本 tool 已执行");
+    expect(result.totalIterations).toBe(3);
+  });
+
   test("多轮迭代：思考 → 思考 → return", async () => {
     const config = makeConfig({
       steps: [
@@ -619,6 +665,7 @@ describe("安全阀", () => {
 
     expect(result.status).toBe("failed");
     expect(result.totalIterations).toBe(5);
+    expect(result.failureReason).toContain("单线程迭代上限");
   });
 
   test("全局迭代上限 → failed", async () => {
@@ -635,6 +682,7 @@ describe("安全阀", () => {
 
     expect(result.status).toBe("failed");
     expect(result.totalIterations).toBeLessThanOrEqual(3);
+    expect(result.failureReason).toContain("全局迭代上限");
   });
 });
 

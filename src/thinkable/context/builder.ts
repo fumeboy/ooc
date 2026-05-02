@@ -206,9 +206,10 @@ export function buildThreadContext(input: ThreadContextInput): ThreadContext {
   const stoneDirForMem = paths?.stoneDir;
   if (stoneDirForMem) {
     const indexPath = pathJoin(stoneDirForMem, "memory", "index.md");
+    const legacyPath = pathJoin(stoneDirForMem, "memory.md");
     const sourcePath = existsSync(indexPath)
       ? indexPath
-        : null;
+      : existsSync(legacyPath) ? legacyPath : null;
     if (sourcePath) {
       try {
         const raw = readFileSync(sourcePath, "utf-8");

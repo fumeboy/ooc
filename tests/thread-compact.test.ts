@@ -179,7 +179,8 @@ describe("buildCompactHint", () => {
     const hint = buildCompactHint(65_000);
     expect(hint).toContain("compact");
     expect(hint).toContain("65k");
-    expect(hint).toContain('open(command="compact")');
+    expect(hint).toContain('"title":"压缩上下文"');
+    expect(hint).toContain('"command":"compact"');
   });
 
   test("阈值常量存在", () => {

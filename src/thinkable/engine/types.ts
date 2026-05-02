@@ -38,6 +38,8 @@ export interface TalkReturn {
   summary?: string;
   /** 关联的底层线程 ID（用于 talk(context="continue")） */
   threadId?: string;
+  /** 失败原因（仅 status === "failed" 时填充） */
+  failureReason?: string;
   /** toJSON 快照（供 HTTP 调试/前端消费，形态与 Flow.toJSON 兼容） */
   toJSON?: () => Record<string, unknown>;
 }

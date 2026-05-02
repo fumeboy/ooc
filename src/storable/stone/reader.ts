@@ -55,6 +55,7 @@ export function readStone(dir: string): StoneData | null {
   const relations: Relation[] = Array.isArray(data._relations)
     ? (data._relations as Relation[])
     : [];
+  delete data._traits_ref;
 
   /* 扫描 traits/ 目录获取 trait 名称列表 */
   const traitsDir = join(dir, "traits");
