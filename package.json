@@ -9,7 +9,8 @@
     "start": "bun src/app/cli.ts",
     "server": "bun src/app/cli.ts start",
     "test": "bun test",
-    "typecheck": "bun x tsc --noEmit"
+    "typecheck": "bun x tsc --noEmit",
+    "docs:check": "bun scripts/docs-check.ts"
   },
   "dependencies": {
     "consola": "^3.4.0",
