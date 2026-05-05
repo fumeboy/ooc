@@ -15,5 +15,9 @@
     "resolveJsonModule": true,
     "types": ["bun-types"]
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "../docs/**/*.doc.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts", "../docs/**/*.doc.ts"],
+  "paths": {
+    "@meta": ["meta/index.doc.ts"],
+    "@meta/*": ["meta/*"]
+  }
 }

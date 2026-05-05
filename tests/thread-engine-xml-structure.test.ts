@@ -383,14 +383,27 @@ describe("contextToMessages XML 结构化输出", () => {
     expect(messages[0]!.content).not.toContain("Form f_123 已创建");
 
     const eventMessages = messages.slice(1);
+    /* events 现以"自然 LLM message"形式渲染：
+     * 1. message_in → user 消息（纯文本，可带 [消息 #...] 头）
+     * 2. tool_use → assistant 消息携带 OpenAI tool_calls 字段
+     * 3. inject 紧跟 tool_use → 配对成 tool 角色 result（带 tool_call_id）
+     */
     expect(eventMessages).toHaveLength(3);
     expect(eventMessages[0]!.role).toBe("user");
-    expect(eventMessages[0]!.content).toContain('<process_event type="message_in" category="llm_interaction"');
+    expect(eventMessages[0]!.content).toContain("用户提出需求");
+    expect(eventMessages[0]!.content).not.toContain("<process_event");
+
     expect(eventMessages[1]!.role).toBe("assistant");
-    expect(eventMessages[1]!.content).toContain('<process_event type="tool_use" category="llm_interaction"');
-    expect(eventMessages[1]!.content).toContain('<args>');
-    expect(eventMessages[2]!.role).toBe("user");
-    expect(eventMessages[2]!.content).toContain('<process_event type="inject" category="context_change"');
+    expect(eventMessages[1]!.tool_calls).toBeDefined();
+    expect(eventMessages[1]!.tool_calls!.length).toBe(1);
+    expect(eventMessages[1]!.tool_calls![0]!.function.name).toBe("open");
+    expect(eventMessages[1]!.tool_calls![0]!.function.arguments).toContain('"command":"return"');
+    expect(eventMessages[1]!.content).toBe("");
+
+    expect(eventMessages[2]!.role).toBe("tool");
+    expect(eventMessages[2]!.tool_call_id).toBe(eventMessages[1]!.tool_calls![0]!.id);
+    expect(eventMessages[2]!.content).toContain("Form f_123 已创建");
+    expect(eventMessages[2]!.content).not.toContain("<process_event");
   });
 
   test("未读 inbox 同时作为当前 user message 输入", () => {
@@ -425,9 +438,11 @@ describe("contextToMessages XML 结构化输出", () => {
     expect(messages[0]!.role).toBe("system");
     expect(messages[0]!.content).toContain("<inbox");
     expect(messages[0]!.content).toContain("请完成体验测试");
+    /* 自然形态：inbox 消息以 [消息 #id] 头 + 原文呈现，role=user，无 XML 包裹 */
     expect(messages[1]!.role).toBe("user");
-    expect(messages[1]!.content).toContain('<process_event type="message_in" category="llm_interaction" id="msg_1" from="user"');
+    expect(messages[1]!.content).toContain("[消息 #msg_1]");
     expect(messages[1]!.content).toContain("请完成体验测试");
+    expect(messages[1]!.content).not.toContain("<process_event");
   });
 
   test("历史 thinking 不作为 process event message 回灌给模型", () => {
@@ -460,9 +475,11 @@ describe("contextToMessages XML 结构化输出", () => {
     const messages = contextToMessages(ctx);
     const allContent = messages.map((m) => m.content).join("\n");
 
-    expect(allContent).not.toContain('type="thinking"');
+    /* thinking 不回灌；text 以 assistant 自然消息形式呈现 */
     expect(allContent).not.toContain("隐藏推理链");
-    expect(allContent).toContain('type="text"');
     expect(allContent).toContain("可见回复");
+    const assistantMsg = messages.find(m => m.role === "assistant");
+    expect(assistantMsg).toBeDefined();
+    expect(assistantMsg!.content).toBe("可见回复");
   });
 });

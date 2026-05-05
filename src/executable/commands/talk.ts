@@ -59,7 +59,42 @@ export async function executeTalkCommand(ctx: CommandExecutionContext): Promise<
   if (!ctx.onTalk) return;
   const args = ctx.args;
   const target = (args.target as string)?.toLowerCase();
-  if (!target || target === ctx.objectName.toLowerCase()) return;
+
+  /* 静默 return 会让 LLM 误以为消息已送达；这里改为 inject 错误事件，让模型能感知并重试。
+   * 触发情形：target 缺失，或 target === self（自言自语）。 */
+  if (!target || target === ctx.objectName.toLowerCase()) {
+    const td = ctx.tree.readThreadData(ctx.threadId);
+    if (td) {
+      const reason = !target
+        ? `talk 缺少必填参数 target（应为目标对象名，如 "user" / "sophia" / "super"）`
+        : `talk 的 target 不能等于自己（${ctx.objectName}）—— 自言自语请用 do 指令`;
+      td.events.push({
+        type: "inject",
+        content: `[错误] ${reason}。本次 talk 未发送，请重新 open(command="talk") 并填全 target / msg / context 后 submit。`,
+        timestamp: Date.now(),
+      });
+      ctx.tree.writeThreadData(ctx.threadId, td);
+    }
+    return;
+  }
+
+  /* msg 兜底兼容：旧路径 args.msg / args.message；refine 经常写成 args.content（来自 form schema 习惯），这里也接受。 */
+  if (typeof args.content === "string" && !args.msg && !args.message) {
+    args.msg = args.content;
+  }
+  const msgProbe = (args.msg as string | undefined) ?? (args.message as string | undefined);
+  if (!msgProbe || msgProbe.trim().length === 0) {
+    const td = ctx.tree.readThreadData(ctx.threadId);
+    if (td) {
+      td.events.push({
+        type: "inject",
+        content: `[错误] talk 缺少必填参数 msg（消息内容）。本次 talk 未发送，请重新 refine 补齐 msg 后 submit。`,
+        timestamp: Date.now(),
+      });
+      ctx.tree.writeThreadData(ctx.threadId, td);
+    }
+    return;
+  }
 
   const ctxMode = (args.context as string | undefined) === "continue" ? "continue" : "fork";
   const remoteThreadIdArg = args.threadId as string | undefined;

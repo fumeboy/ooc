@@ -234,8 +234,15 @@ export function buildChatPayload(
   const payload: Record<string, unknown> = {
     model: config.model,
     messages: messages.map((m) => {
-      const msg: Record<string, unknown> = { role: m.role, content: m.content };
-      if (m.tool_calls) msg.tool_calls = m.tool_calls;
+      const msg: Record<string, unknown> = { role: m.role };
+      /* 带 tool_calls 的 assistant 消息：如果 content 为空，置 null（Anthropic 风格代理对空字符串敏感）；
+       * 没有 tool_calls 时正常落 content（即便空字符串，OpenAI 端也是合法的）。 */
+      if (m.tool_calls && m.tool_calls.length > 0) {
+        msg.tool_calls = m.tool_calls;
+        msg.content = m.content && m.content.length > 0 ? m.content : null;
+      } else {
+        msg.content = m.content;
+      }
       if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
       return msg;
     }),
@@ -280,6 +287,96 @@ function normalizeResult(
     usage: normalizeUsage((data.usage ?? null) as Record<string, unknown> | null),
     toolCalls: rawToolCalls,
     raw: data,
+  };
+}
+
+/**
+ * 把强制 SSE 的非流式响应聚合回标准 OpenAI JSON 形态。
+ * 复用 parseSSELine + extractDeltaEvent，按 choices[0].delta 累积 content / tool_calls，
+ * 拼成 { choices:[{ message:{ content, tool_calls } }], model, usage } 喂给 normalizeResult。
+ */
+async function aggregateSSEResponse(
+  resp: Response,
+  timeoutSec: number,
+): Promise<Record<string, unknown>> {
+  const reader = resp.body?.getReader();
+  if (!reader) throw new Error("响应体为空");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let lastJson: Record<string, unknown> | null = null;
+  let assistantBuf = "";
+  let thinkingBuf = "";
+  let modelFromStream: string | undefined;
+  const toolCallsByIndex = new Map<
+    number,
+    { id?: string; type?: string; function: { name?: string; arguments: string } }
+  >();
+
+  const chunkTimeoutMs = Math.max(30_000, timeoutSec * 500);
+
+  const consumeLine = (line: string) => {
+    const parsed = parseSSELine(line);
+    if (!parsed) return;
+    lastJson = parsed;
+    if (typeof parsed.model === "string") modelFromStream = parsed.model;
+
+    const { assistantChunk, thinkingChunk } = extractDeltaEvent(parsed);
+    if (assistantChunk) assistantBuf += assistantChunk;
+    if (thinkingChunk) thinkingBuf += thinkingChunk;
+
+    const choices = Array.isArray(parsed.choices)
+      ? (parsed.choices as Array<Record<string, unknown>>)
+      : [];
+    const delta = choices[0]?.delta as Record<string, unknown> | undefined;
+    const tcDeltas = Array.isArray(delta?.tool_calls)
+      ? (delta!.tool_calls as Array<Record<string, unknown>>)
+      : [];
+    for (const tc of tcDeltas) {
+      const idx = typeof tc.index === "number" ? tc.index : 0;
+      let agg = toolCallsByIndex.get(idx);
+      if (!agg) {
+        agg = { function: { arguments: "" } };
+        toolCallsByIndex.set(idx, agg);
+      }
+      if (typeof tc.id === "string" && tc.id) agg.id = tc.id;
+      if (typeof tc.type === "string") agg.type = tc.type;
+      const fn = tc.function as Record<string, unknown> | undefined;
+      if (fn) {
+        if (typeof fn.name === "string" && fn.name) agg.function.name = fn.name;
+        if (typeof fn.arguments === "string") agg.function.arguments += fn.arguments;
+      }
+    }
+  };
+
+  while (true) {
+    const { done, value } = await readWithTimeout(reader, chunkTimeoutMs);
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) consumeLine(line);
+  }
+  if (buffer.trim()) consumeLine(buffer);
+
+  const toolCalls = [...toolCallsByIndex.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, v]) => ({
+      id: v.id ?? `call_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+      type: (v.type ?? "function") as "function",
+      function: { name: v.function.name ?? "", arguments: v.function.arguments },
+    }))
+    .filter((tc) => tc.function.name);
+
+  const message: Record<string, unknown> = { role: "assistant", content: assistantBuf };
+  if (thinkingBuf) message.reasoning_content = thinkingBuf;
+  if (toolCalls.length > 0) message.tool_calls = toolCalls;
+
+  const lj = lastJson as Record<string, unknown> | null;
+  return {
+    choices: [{ index: 0, message, finish_reason: "stop" }],
+    model: modelFromStream ?? (lj && typeof lj.model === "string" ? lj.model : undefined),
+    usage: lj?.usage,
   };
 }
 
@@ -354,7 +451,12 @@ export class OpenAICompatibleClient implements LLMClient {
           throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
         }
 
-        const data = (await resp.json()) as Record<string, unknown>;
+        /* 部分 OpenAI 兼容代理（如 claudeide.net）即便 payload 不带 stream:true，也强制返回 text/event-stream。
+         * 这里按 Content-Type 分流：SSE → 流式聚合后构造 LLMResponse；其他 → 走标准 JSON 解析。 */
+        const contentType = resp.headers.get("content-type") ?? "";
+        const data = contentType.includes("text/event-stream")
+          ? await aggregateSSEResponse(resp, this._config.timeout)
+          : ((await resp.json()) as Record<string, unknown>);
         const elapsed = (performance.now() - start) / 1000;
         const result = normalizeResult(data, this._config.model);
 

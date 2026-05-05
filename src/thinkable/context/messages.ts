@@ -34,75 +34,165 @@ export interface ActiveFormView {
 
 const CREATOR_COMMENT = "thread creator 是当前线程通过 return 交付 summary 的接收方；它不是你的身份来源，也不一定是用户。";
 
-function processEventCategory(event: ProcessEvent): "llm_interaction" | "context_change" {
-  if (
-    event.type === "thinking"
-    || event.type === "text"
-    || event.type === "tool_use"
-    || event.type === "message_in"
-    || event.type === "message_out"
-  ) {
-    return "llm_interaction";
-  }
-  return "context_change";
-}
+/**
+ * 把 process events 序列转成"自然" LLM Messages —— 不再每条事件包一层 <process_event> XML。
+ *
+ * 原则：让历史看起来就是一段正常的多轮对话，模型不会把"事件 metadata"误读成对话内容。
+ * - text / message_out → assistant 文本消息
+ * - tool_use            → assistant 消息携带 OpenAI 风格的 tool_calls
+ * - inject / mark_inbox → 紧跟在 tool_use 后的视为该 tool_call 的 tool 角色 result；
+ *                          否则降级为普通 user 消息（系统侧旁注）
+ * - program             → assistant 发起 name="program" 的 tool_call + 配对的 tool result
+ * - message_in          → user 消息
+ * - compact_summary     → user 消息（带 "[已压缩 · ...]" 前缀）
+ * - thinking            → 跳过（不回灌给模型）
+ * - 其他类型            → 文本旁注（保留 content）
+ *
+ * 序列感知：每条 tool_use 必有对应 tool 消息（OpenAI 严格校验）；若没有任何后续反馈，
+ * 在下一个非反馈事件之前自动补一条占位 tool 消息，避免请求被 reject。
+ */
+function eventsToMessages(events: ProcessEvent[]): Message[] {
+  const result: Message[] = [];
+  let pendingToolCallId: string | null = null;
+  let pendingToolBuffer: string[] = [];
 
-function processEventRole(event: ProcessEvent): Message["role"] {
-  if (event.type === "thinking" || event.type === "text" || event.type === "tool_use" || event.type === "message_out") {
-    return "assistant";
-  }
-  return "user";
-}
-
-function valueNode(tag: string, value: unknown): XmlNode | null {
-  if (value === undefined) return null;
-  if (value === null || typeof value !== "object") {
-    return { tag, content: String(value) };
-  }
-  return { tag, content: JSON.stringify(value, null, 2) };
-}
-
-function processEventToMessage(event: ProcessEvent): Message {
-  const attrs: Record<string, string | number> = {
-    type: event.type,
-    category: processEventCategory(event),
-    ts: event.timestamp,
+  const flushPendingTool = () => {
+    if (pendingToolCallId === null) return;
+    result.push({
+      role: "tool",
+      tool_call_id: pendingToolCallId,
+      content: pendingToolBuffer.length > 0 ? pendingToolBuffer.join("\n\n") : "(no system feedback)",
+    });
+    pendingToolCallId = null;
+    pendingToolBuffer = [];
   };
-  if (event.id) attrs.id = event.id;
-  if (event.name) attrs.name = event.name;
-  if (event.title) attrs.title = event.title;
 
-  const children: XmlNode[] = [];
-  if (event.content) children.push({ tag: "content", content: event.content });
-  const args = valueNode("args", event.args);
-  if (args) children.push(args);
-  const result = valueNode("result", event.result);
-  if (result) children.push(result);
-  if (typeof event.success === "boolean") children.push({ tag: "success", content: String(event.success) });
+  const synthId = (event: ProcessEvent, suffix: string) =>
+    event.id ?? `tc_${event.timestamp}_${suffix}`;
 
-  return {
-    role: processEventRole(event),
-    content: serializeXml([{ tag: "process_event", attrs, children }], 0),
-  };
+  for (const event of events) {
+    switch (event.type) {
+      case "thinking":
+        /* thinking 不回灌给模型 */
+        break;
+
+      case "text":
+      case "message_out": {
+        flushPendingTool();
+        const content = (event.content ?? "").trim();
+        if (content.length > 0) {
+          result.push({ role: "assistant", content });
+        }
+        break;
+      }
+
+      case "tool_use": {
+        flushPendingTool();
+        const id = synthId(event, event.name ?? "tool");
+        result.push({
+          role: "assistant",
+          content: "",
+          tool_calls: [{
+            id,
+            type: "function",
+            function: {
+              name: event.name ?? "unknown",
+              arguments: JSON.stringify(event.args ?? {}),
+            },
+          }],
+        });
+        pendingToolCallId = id;
+        pendingToolBuffer = [];
+        break;
+      }
+
+      case "inject":
+      case "mark_inbox": {
+        const text = (event.content ?? "").trim();
+        if (text.length === 0) break;
+        if (pendingToolCallId !== null) {
+          pendingToolBuffer.push(text);
+        } else {
+          result.push({ role: "user", content: text });
+        }
+        break;
+      }
+
+      case "program": {
+        flushPendingTool();
+        const id = synthId(event, "program");
+        result.push({
+          role: "assistant",
+          content: "",
+          tool_calls: [{
+            id,
+            type: "function",
+            function: {
+              name: "program",
+              arguments: JSON.stringify({ code: event.content ?? "" }),
+            },
+          }],
+        });
+        const parts: string[] = [];
+        const out = (event.result ?? "").trim();
+        if (out.length > 0) parts.push(out);
+        if (typeof event.success === "boolean") parts.push(`[success=${event.success}]`);
+        result.push({
+          role: "tool",
+          tool_call_id: id,
+          content: parts.length > 0 ? parts.join("\n") : "(no output)",
+        });
+        break;
+      }
+
+      case "message_in": {
+        flushPendingTool();
+        const content = (event.content ?? "").trim();
+        if (content.length > 0) result.push({ role: "user", content });
+        break;
+      }
+
+      case "compact_summary": {
+        flushPendingTool();
+        result.push({
+          role: "user",
+          content: `[已压缩 · 此前历史的浓缩摘要]\n${event.content ?? ""}`,
+        });
+        break;
+      }
+
+      case "create_thread":
+      case "thread_return":
+      case "set_plan":
+      default: {
+        const text = (event.content ?? "").trim();
+        if (text.length === 0) break;
+        if (pendingToolCallId !== null) {
+          pendingToolBuffer.push(text);
+        } else {
+          result.push({ role: "user", content: text });
+        }
+      }
+    }
+  }
+
+  flushPendingTool();
+  return result;
 }
 
+/**
+ * 把单条 inbox 消息转成自然 user 消息。
+ *
+ * 来源是 user → 内容直出；其他对象 → 顶上加一行轻量 "[来自 X]" 标注，
+ * 避免模型把它误当成自己的话或系统注入。
+ */
 function inboxMessageToMessage(message: ThreadInboxMessage): Message {
-  const attrs: Record<string, string | number> = {
-    type: "message_in",
-    category: "llm_interaction",
-    id: message.id,
-    from: message.from,
-    ts: message.timestamp,
-  };
-  if (message.kind) attrs.kind = message.kind;
-
+  const header = message.from === "user"
+    ? `[消息 #${message.id}]`
+    : `[消息 #${message.id} 来自 ${message.from}${message.kind ? `, kind=${message.kind}` : ""}]`;
   return {
     role: "user",
-    content: serializeXml([{
-      tag: "process_event",
-      attrs,
-      children: [{ tag: "content", content: message.content }],
-    }], 0),
+    content: `${header}\n${message.content}`,
   };
 }
 
@@ -416,6 +506,6 @@ export function contextToMessages(
   return [
     { role: "system", content: serializeXml([contextRoot], 0) },
     ...unreadInboxMessages,
-    ...processEvents.filter(e => e.type !== "thinking").map(processEventToMessage),
+    ...eventsToMessages(processEvents),
   ];
 }
