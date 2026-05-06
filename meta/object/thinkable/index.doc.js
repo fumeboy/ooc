@@ -1,39 +1,39 @@
 import { object_v20260504_1 } from "@meta";
 import { executable_v20260504_1 } from "@meta/object/executable/index.doc";
+import { identity_v20260505_1 } from "@meta/object/thinkable/identity.doc";
+import { knowledge_v20260505_1 } from "@meta/object/thinkable/knowledge/index.doc";
+import { thread_v20260505_1 } from "@meta/object/thinkable/thread/index.doc";
+import { thinkloop_v20260505_1 } from "@meta/object/thinkable/thinkloop/index.doc";
+import { context_v20260505_1 } from "@meta/object/thinkable/context/index.doc";
 
 export const thinkable_v20260504_1 = {
     parent: object_v20260504_1,
     index: `
-Object 具有思想能力
+Thinkable 描述 Object 的思考能力。
 
-思想能力的核心是与 LLM 交互，这里的关键是构造 LLM 输入 (Context)
+思考的核心是与 LLM 交互，关键是构造 LLM 输入（Context）。
 
-Context 是一个信息窗口，从所有信息 (Knowledge) 中筛选出与当前问题相关的信息，是 Context Enginering 的工作
+思考的过程通过 Thread 表示，Thread 可以派生子 Thread，形成一个 Thread Tree。
+通过 do command 派生子 Thread（具体见 executable 文档）。
+派生子 Thread 不限于在当前 Thread，也可以指定其他 Thread 派生（例如询问其他 Thread 的信息）。
 
-    Context 的组成为:
-    - i
-        - role (who am i)
-        - knowledge (what i know / what i can do)
-            - skill
-            - memory
-            - relation 
-    - process (what i am doing, and doing for what)
-        - requirement (doing for what)
-            - plan
-            - todo list
-        - parent (this thread derived from which thread)
-        - events (what happened indexed by time)
-        - effects (what happened indexed by type)
-            - inbox (threads in)
-            - outbox (threads out)
-            - opened knowledge
-            - opened form
+子领域：
 
-思想的过程通过 Thread 表示，Thread 可以派生子 Thread，形成一个 Thread Tree
-通过 do command 来派生子 Thread (具体见 executable 文档)
-派生子 Thread 可以不只是在当前 Thread 派生，也可以指定其他 Thread 派生 (例如询问其他 Thread 的信息，就可以基于这个 Thread 去派生一个子 Thread)
-
-
+- identity
+    - Object 对自己的双面认知（内在 thinkable.whoAmI / 外在 talkable.whoAmI）
+- knowledge
+    - Object 拥有什么知识，以及这些知识如何按 command 渐进式激活进入 Context
+- context
+    - 单轮 LLM 输入窗口的组成与构建（Context Engineering）
+- thread
+    - 思考的运行时结构：线程树、节点状态、子线程、复活、调度
+- thinkloop
+    - 单轮循环的引擎：感知 → 思考 → 行动 → 记录 → 循环
 `,
-        executable: executable_v20260504_1,
-    }
+    identity: identity_v20260505_1,
+    knowledge: knowledge_v20260505_1,
+    context: context_v20260505_1,
+    thread: thread_v20260505_1,
+    thinkloop: thinkloop_v20260505_1,
+    executable: executable_v20260504_1,
+}
