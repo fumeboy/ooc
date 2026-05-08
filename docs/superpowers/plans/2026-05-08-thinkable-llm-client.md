@@ -24,6 +24,7 @@
 - Create: `src/thinkable/llm/__tests__/openai.test.ts`
 - Create: `src/thinkable/llm/__tests__/claude.test.ts`
 - Create: `src/thinkable/llm/__tests__/client.test.ts`
+- Create: `src/thinkable/llm/__tests__/real-openai.test.ts`
 - Create: `meta/object/thinkable/llm/index.doc.js`
 - Modify: `meta/object/thinkable/index.doc.js`
 
@@ -981,10 +982,50 @@ it("stream 返回统一事件序列", async () => {
 Run: `bun test src/thinkable/llm/__tests__`
 Expected: PASS，`env`、`openai`、`claude`、`client` 全部通过
 
-- [ ] **Step 9: 提交统一 client 与文档引用**
+- [ ] **Step 9: 增加显式触发的真实 OpenAI 集成测试**
+
+```ts
+import { describe, expect, it } from "bun:test";
+import { createLlmClient } from "../client.ts";
+
+// 真实链路测试默认不参与普通单测，只在显式设置开关时执行。
+const shouldRunRealTest = process.env.RUN_REAL_OPENAI_TEST === "1";
+
+describe.skipIf(!shouldRunRealTest)("real openai integration", () => {
+  it("使用 .env 中的真实配置完成一次非流式请求", async () => {
+    // 这条测试只验证真实链路能通，不追求复杂断言。
+    process.env.OOC_PROVIDER = "openai";
+
+    const client = createLlmClient();
+    const result = await client.generate({
+      messages: [
+        {
+          role: "system",
+          content: "你是一个简洁的测试助手。"
+        },
+        {
+          role: "user",
+          content: "请只返回 OK 两个字母。"
+        }
+      ],
+      temperature: 0
+    });
+
+    expect(result.provider).toBe("openai");
+    expect(result.text.length).toBeGreaterThan(0);
+  });
+});
+```
+
+- [ ] **Step 10: 显式运行真实 OpenAI 集成测试**
+
+Run: `RUN_REAL_OPENAI_TEST=1 bun test src/thinkable/llm/__tests__/real-openai.test.ts`
+Expected: PASS，真实请求成功返回非空文本
+
+- [ ] **Step 11: 提交统一 client、文档引用与真实测试**
 
 ```bash
-git add src/thinkable/llm/client.ts src/thinkable/llm/index.ts src/thinkable/llm/__tests__/client.test.ts meta/object/thinkable/llm/index.doc.js meta/object/thinkable/index.doc.js
+git add src/thinkable/llm/client.ts src/thinkable/llm/index.ts src/thinkable/llm/__tests__/client.test.ts src/thinkable/llm/__tests__/real-openai.test.ts meta/object/thinkable/llm/index.doc.js meta/object/thinkable/index.doc.js
 git commit -m "feat: add unified thinkable llm client"
 ```
 
@@ -997,6 +1038,7 @@ git commit -m "feat: add unified thinkable llm client"
 - OpenAI 协议与流式：Task 3 覆盖
 - Claude 协议与流式：Task 4 覆盖
 - 统一 client：Task 5 覆盖
+- 真实 `.env` OpenAI 测试：Task 5 覆盖
 - 中文注释与避免过早抽象：所有代码步骤都按小文件、直接逻辑设计
 - 源码与 `doc.js` 引用关系：Task 5 覆盖
 

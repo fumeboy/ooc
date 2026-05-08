@@ -1,6 +1,7 @@
 import { object_v20260504_1 } from "@meta";
 import { executable_v20260504_1 } from "@meta/object/executable/index.doc";
 import { identity_v20260505_1 } from "@meta/object/thinkable/identity.doc";
+import { llm_v20260508_1 } from "@meta/object/thinkable/llm/index.doc";
 import { knowledge_v20260505_1 } from "@meta/object/thinkable/knowledge/index.doc";
 import { thread_v20260505_1 } from "@meta/object/thinkable/thread/index.doc";
 import { thinkloop_v20260505_1 } from "@meta/object/thinkable/thinkloop/index.doc";
@@ -21,6 +22,8 @@ LLM 可以通过 do command 派生子 Thread（具体见 executable 文档）。
 
 - identity
     - Object 对自己的双面认知 (自我 / 对我介绍)
+- llm
+    - Object 如何请求模型、处理 provider 协议差异与流式输出
 - knowledge
     - Object 拥有什么知识，以及这些知识如何按 command 渐进式激活进入 Context
 - context
@@ -32,6 +35,7 @@ LLM 可以通过 do command 派生子 Thread（具体见 executable 文档）。
     - 单轮循环的引擎：context-build → llm → tool_use → 循环
 `,
     identity: identity_v20260505_1,
+    llm: llm_v20260508_1,
     knowledge: knowledge_v20260505_1,
     context: context_v20260505_1,
     thread: thread_v20260505_1,
