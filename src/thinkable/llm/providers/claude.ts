@@ -3,7 +3,9 @@ import type {
   LlmGenerateParams,
   LlmGenerateResult,
   LlmMessage,
-  LlmStreamEvent
+  LlmStreamEvent,
+  LlmTool,
+  LlmToolCall
 } from "../types";
 
 // Claude 只接受 user / assistant messages，system 单独提取成顶层字段。
@@ -24,7 +26,35 @@ function toClaudeSystem(messages: LlmMessage[]) {
     .join("\n\n");
 }
 
-// Claude 非流式请求把 content 数组中的文本拼成最终结果。
+// Claude tools 可以直接按统一结构映射过去。
+function toClaudeTools(tools: LlmTool[] | undefined) {
+  if (!tools || tools.length === 0) {
+    return undefined;
+  }
+
+  return tools.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    input_schema: tool.inputSchema
+  }));
+}
+
+// Claude 的非流式 content 中会同时出现 text 与 tool_use block。
+function toClaudeToolCalls(content: unknown): LlmToolCall[] {
+  if (!Array.isArray(content)) {
+    return [];
+  }
+
+  return content
+    .filter((item) => (item as { type?: string }).type === "tool_use")
+    .map((item) => ({
+      id: (item as { id?: string }).id ?? "",
+      name: ((item as { name?: string }).name ?? "wait") as LlmToolCall["name"],
+      arguments: (item as { input?: Record<string, unknown> }).input ?? {}
+    }));
+}
+
+// Claude 非流式请求把 content 数组中的文本和 tool call 拼成统一结果。
 export async function generateWithClaude(
   config: LlmEnvConfig,
   params: LlmGenerateParams
@@ -40,6 +70,7 @@ export async function generateWithClaude(
       model: params.model ?? config.model,
       system: toClaudeSystem(params.messages),
       messages: toClaudeMessages(params.messages),
+      tools: toClaudeTools(params.tools),
       temperature: params.temperature,
       max_tokens: params.maxTokens ?? 1024,
       stream: false
@@ -51,22 +82,23 @@ export async function generateWithClaude(
     throw new Error(`Claude 请求失败: ${response.status}`);
   }
 
-  // 首批只提取文本块内容，不抽象更复杂的 content 结构。
   const raw = await response.json();
   const text = (raw.content ?? [])
     .filter((item: { type?: string }) => item.type === "text")
     .map((item: { text?: string }) => item.text ?? "")
     .join("");
+  const toolCalls = toClaudeToolCalls(raw.content);
 
   return {
     provider: "claude",
     model: params.model ?? config.model,
     text,
+    toolCalls,
     raw
   };
 }
 
-// Claude 流式事件以 SSE 形式返回，需要从 delta.text 中提取增量。
+// Claude 流式事件以 SSE 形式返回，需要同时提取文本和 tool_use。
 export async function* streamWithClaude(
   config: LlmEnvConfig,
   params: LlmGenerateParams
@@ -83,6 +115,7 @@ export async function* streamWithClaude(
       model,
       system: toClaudeSystem(params.messages),
       messages: toClaudeMessages(params.messages),
+      tools: toClaudeTools(params.tools),
       temperature: params.temperature,
       max_tokens: params.maxTokens ?? 1024,
       stream: true
@@ -98,6 +131,7 @@ export async function* streamWithClaude(
   const reader = response.body.getReader();
   let pending = "";
   let fullText = "";
+  const toolCalls: LlmToolCall[] = [];
 
   // 统一流模型总是先发出 start 事件。
   yield { type: "start", provider: "claude", model };
@@ -123,23 +157,34 @@ export async function* streamWithClaude(
       }
 
       const eventName = eventLine.slice(7);
-      if (eventName !== "content_block_delta") {
-        continue;
-      }
-
-      // Claude 文本增量位于 delta.text 字段，其他事件暂不进入首批抽象。
       const payload = JSON.parse(dataLine.slice(6));
-      const delta = payload.delta?.text ?? "";
 
-      if (!delta) {
-        continue;
+      // Claude 文本增量位于 delta.text 字段。
+      if (eventName === "content_block_delta") {
+        const delta = payload.delta?.text ?? "";
+
+        if (!delta) {
+          continue;
+        }
+
+        fullText += delta;
+        yield { type: "text-delta", text: delta };
       }
 
-      fullText += delta;
-      yield { type: "text-delta", text: delta };
+      // Claude 工具块在完整出现时直接产出 tool-call。
+      if (eventName === "content_block_start" && payload.content_block?.type === "tool_use") {
+        const toolCall = {
+          id: payload.content_block.id ?? "",
+          name: (payload.content_block.name ?? "wait") as LlmToolCall["name"],
+          arguments: payload.content_block.input ?? {}
+        };
+
+        toolCalls.push(toolCall);
+        yield { type: "tool-call", toolCall };
+      }
     }
   }
 
-  // done 事件把整段文本返回给统一门面，便于后续聚合复用。
-  yield { type: "done", text: fullText, raw: undefined };
+  // done 事件把整段文本和工具列表返回给统一门面，便于后续聚合复用。
+  yield { type: "done", text: fullText, toolCalls, raw: undefined };
 }
