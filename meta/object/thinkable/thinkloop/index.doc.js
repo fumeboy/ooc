@@ -1,7 +1,18 @@
 import { thinkable_v20260504_1 } from "@meta/object/thinkable/index.doc";
+import * as thinkableContextSource from "../../../../src/thinkable/context.ts";
+import * as thinkloopSource from "../../../../src/thinkable/thinkloop.ts";
+import * as executableToolsSource from "../../../../src/executable/tools.ts";
+import * as observableSource from "../../../../src/observable/index.ts";
 
 export const thinkloop_v20260505_1 = {
   parent: thinkable_v20260504_1,
+  // sources 显式引用对应源码模块，确保 meta 与实现保持真实连接。
+  sources: {
+    context: thinkableContextSource,
+    thinkloop: thinkloopSource,
+    tools: executableToolsSource,
+    observable: observableSource
+  },
   index: `
 ThinkLoop 是 Object 的思考引擎。
 每一轮：context-build -> llm -> tool-use -> 循环。

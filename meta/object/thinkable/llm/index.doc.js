@@ -1,7 +1,22 @@
 import { thinkable_v20260504_1 } from "@meta/object/thinkable/index.doc";
+import * as llmTypesSource from "../../../../src/thinkable/llm/types.ts";
+import * as llmEnvSource from "../../../../src/thinkable/llm/env.ts";
+import * as llmOpenAiSource from "../../../../src/thinkable/llm/providers/openai.ts";
+import * as llmClaudeSource from "../../../../src/thinkable/llm/providers/claude.ts";
+import * as llmClientSource from "../../../../src/thinkable/llm/client.ts";
+import * as llmIndexSource from "../../../../src/thinkable/llm/index.ts";
 
 export const llm_v20260508_1 = {
   parent: thinkable_v20260504_1,
+  // sources 显式引用对应源码模块，确保 meta 与实现保持真实连接。
+  sources: {
+    types: llmTypesSource,
+    env: llmEnvSource,
+    openai: llmOpenAiSource,
+    claude: llmClaudeSource,
+    client: llmClientSource,
+    index: llmIndexSource
+  },
   index: `
 llm 描述 Object 如何与大语言模型交互。
 

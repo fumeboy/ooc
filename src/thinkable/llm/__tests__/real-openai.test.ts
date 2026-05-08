@@ -61,5 +61,5 @@ describe.skipIf(!shouldRunRealTest)("real openai integration", () => {
     expect(result.provider).toBe("openai");
     expect(result.text.length).toBeGreaterThan(0);
     expect(result.toolCalls).toEqual([]);
-  }, 30000);
+  }, 90000);
 });
