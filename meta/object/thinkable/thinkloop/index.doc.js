@@ -34,7 +34,7 @@ Engine.runThreadIteration(threadId):
    context = await contextBuilder.build(threadId)
 
 2. 构造 LLM Messages
-   - system message：<context> 信息窗口（whoAmI / knowledge / task / inbox / activeForms / ...）
+   - system message：<context> 信息窗口
    - process event messages：当前线程的历史变化（LLM 交互 + 上下文变化）
 
 3. LLM 输入记录

@@ -18,7 +18,7 @@ Identity 描述 Object 对自己的双面认知。
     - 完整的自我说明：角色、目标、风格、约束、价值观
     - 可以很长（几千字），是 Object 思考时的起点
     - 物理位置：stones/{name}/self.md
-    - 每一轮 ThinkLoop 注入 Context 的 whoAmI 字段
+    - 每一轮 ThinkLoop 注入 Context 的 self 字段
 
 - 外在自我 — 他者可见
     - 物理位置：stones/{name}/readme.md
