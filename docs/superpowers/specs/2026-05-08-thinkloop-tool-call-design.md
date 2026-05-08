@@ -13,7 +13,7 @@
 - `meta/object/thinkable/thinkloop/index.doc.js` 已明确写出单轮流程：
   - `context-build -> llm -> tool-use -> 循环`
   - `result = await llmClient.chat(messages, { tools: getAvailableTools() })`
-- 新系统还没有 `src/thinkable/thinkloop/` 实现
+- 新系统还没有 `src/thinkable/thinkloop.ts` 实现
 
 因此，本批次不是单独实现 `thinkloop`，而是要把下面这条最小主链一起收敛：
 
@@ -21,7 +21,7 @@
 buildContext(thread)
   -> getAvailableTools(thread)
   -> llmClient.generate({ messages, tools })
-  -> runThreadIteration(thread)
+  -> think(thread, llmClient)
   -> dispatchToolCall(...)
 ```
 
@@ -33,7 +33,7 @@ buildContext(thread)
 本次设计只解决以下问题：
 
 1. 扩展 `src/thinkable/llm/`，让现有 `generate()` 与 `stream()` 支持原生 tool call
-2. 在 `src/thinkable/thinkloop/` 下实现 `runThreadIteration(thread)` 这一层
+2. 在 `src/thinkable/thinkloop.ts` 中实现 `think(thread, llmClient)` 这一层
 3. 让 `thinkloop` 直接消费 `llm` 的原生 `toolCalls`
 4. 用显式临时函数承接外围未迁移能力
 5. 同步补齐 `llm` 与 `thinkloop` 的 `meta doc` 引用关系
@@ -60,10 +60,13 @@ buildContext(thread)
 ### 功能约束
 
 - 不新增 `chat()`，直接在现有 `generate()`、`stream()` 基础上支持 tool call
-- `thinkloop` 只实现 `runThreadIteration(thread)` 这一层
+- `thinkloop` 只实现 `think(thread, llmClient)` 这一层
 - `buildContext` 直接返回 `LlmMessage[]`
 - `thinkloop` 是异步过程函数，不返回额外 result 对象
-- `contextBuilder / 持久化 / pause 检查 / tool dispatch` 先接临时函数
+- 新建 `src/executable/tools.ts` 提供占位的 `getAvailableTools` 与 `dispatchToolCall`
+- 新建 `src/observable/index.ts` 提供占位的 `isPausing`、`writeLatestLlmInput`、`writeLatestLlmOutput`
+- 新建 `src/thinkable/context.ts` 声明 `type ThreadContext` 并提供占位的 `buildContext`
+- 新建 `src/thinkable/thinkloop.ts` 实现 `think`
 
 ### 代码质量约束
 
@@ -99,7 +102,7 @@ buildContext(thread)
 
 ### 2. `thinkloop` 只做单轮编排
 
-`runThreadIteration(thread)` 只负责编排一轮：
+`think(thread, llmClient)` 只负责编排一轮：
 
 - 构建 messages
 - 获取 tools
@@ -117,24 +120,21 @@ buildContext(thread)
 - thread tree 管理
 - tool 的具体业务逻辑
 
-这些能力全部由显式依赖承接。
+这些能力全部由显式模块承接。
 
 ### 3. 临时缺口必须显式暴露
 
-未迁移完成的外围能力不做“伪正式实现”，而是明确作为依赖传入：
+未迁移完成的外围能力不做“伪正式实现”，而是明确落到占位模块中：
 
-- `buildContext`
-- `getAvailableTools`
-- `writeLatestLlmInput`
-- `writeLatestLlmOutput`
-- `isPausing`
-- `dispatchToolCall`
+- `src/thinkable/context.ts`
+- `src/executable/tools.ts`
+- `src/observable/index.ts`
 
 这样可以保证：
 
 - `thinkloop` 核心边界清晰
 - 缺口不会被隐藏
-- 未来接入正式实现时，只是替换依赖，不重写主流程
+- 未来接入正式实现时，只是替换占位函数，不重写主流程
 
 ### 4. 数据模型只覆盖当前文档已定义内容
 
@@ -152,7 +152,13 @@ buildContext(thread)
 
 ```txt
 src/
+  executable/
+    tools.ts
+  observable/
+    index.ts
   thinkable/
+    context.ts
+    thinkloop.ts
     llm/
       index.ts
       types.ts
@@ -167,12 +173,6 @@ src/
         claude.test.ts
         client.test.ts
         real-openai.test.ts
-    thinkloop/
-      index.ts
-      types.ts
-      run-thread-iteration.ts
-      __tests__/
-        run-thread-iteration.test.ts
 ```
 
 ## `llm` 接口设计
@@ -395,39 +395,53 @@ type ThreadContext = {
 
 说明：
 
-- 这里只表示 `runThreadIteration(thread)` 当前一轮真正需要的线程上下文
+- 这里只表示 `think(thread, llmClient)` 当前一轮真正需要的线程上下文
 - 不提前塞入 children、inbox、node meta 等更大运行时结构
 
-### ThinkloopDependencies
+### 占位模块接口
 
 ```ts
-type ThinkloopDependencies = {
-  buildContext(thread: ThreadContext): Promise<LlmMessage[]>;
-  getAvailableTools(thread: ThreadContext): LlmTool[];
-  writeLatestLlmInput(
-    thread: ThreadContext,
-    messages: LlmMessage[],
-    tools: LlmTool[]
-  ): Promise<void> | void;
-  writeLatestLlmOutput(
-    thread: ThreadContext,
-    result: LlmGenerateResult
-  ): Promise<void> | void;
-  isPausing(thread: ThreadContext): Promise<boolean> | boolean;
-  dispatchToolCall(
-    thread: ThreadContext,
-    toolCall: LlmToolCall
-  ): Promise<void> | void;
-  llmClient: LlmClient;
-};
+export async function buildContext(
+  thread: ThreadContext
+): Promise<LlmMessage[]>;
+
+export function getAvailableTools(
+  thread: ThreadContext
+): LlmTool[];
+
+export async function dispatchToolCall(
+  thread: ThreadContext,
+  toolCall: LlmToolCall
+): Promise<void>;
+
+export function isPausing(
+  thread: ThreadContext
+): Promise<boolean> | boolean;
+
+export function writeLatestLlmInput(
+  thread: ThreadContext,
+  messages: LlmMessage[],
+  tools: LlmTool[]
+): Promise<void> | void;
+
+export function writeLatestLlmOutput(
+  thread: ThreadContext,
+  result: LlmGenerateResult
+): Promise<void> | void;
 ```
+
+这些函数在本批次先提供占位实现：
+
+- 让 `think` 可以直接编译和测试
+- 不假装已经完成真实上下文构建、持久化或 pause 系统
+- 后续只替换函数体，不重写模块边界
 
 ### 核心函数
 
 ```ts
-async function runThreadIteration(
+async function think(
   thread: ThreadContext,
-  deps: ThinkloopDependencies
+  llmClient: LlmClient
 ): Promise<void>
 ```
 
@@ -435,9 +449,9 @@ async function runThreadIteration(
 
 - 它是异步过程函数
 - 不返回额外 result 对象
-- 所有效果通过 `thread` 变更与依赖副作用体现
+- 所有效果通过 `thread` 变更与模块副作用体现
 
-## `runThreadIteration` 执行顺序
+## `think` 执行顺序
 
 固定为以下 8 步：
 
@@ -476,7 +490,7 @@ pause 检查必须发生在：
 具体行为：
 
 ```ts
-if (await deps.isPausing(thread)) {
+if (await isPausing(thread)) {
   thread.status = "paused";
   return;
 }
@@ -527,10 +541,10 @@ if (await deps.isPausing(thread)) {
 ### `thinkloop` 需要新增的测试
 
 1. 正常路径
-   - buildContext 被调用
-   - getAvailableTools 被调用
-   - llmClient.generate 被调用
-   - text / tool_use 正确写入 `thread.events`
+   - `buildContext` 被调用
+   - `getAvailableTools` 被调用
+   - `llmClient.generate` 被调用
+   - `text / tool_use` 正确写入 `thread.events`
 
 2. pause 路径
    - LLM 输出已记录
@@ -579,12 +593,13 @@ if (await deps.isPausing(thread)) {
 
 需要补充：
 
-- 当前第一批只实现 `runThreadIteration(thread)` 这一层
-- 外围 `contextBuilder / 持久化 / pause / tool dispatch` 由临时函数承接
+- 当前第一批只实现 `think(thread, llmClient)` 这一层
+- 外围 `contextBuilder / 持久化 / pause / tool dispatch` 由占位函数承接
 - 对应源码位置：
-  - `src/thinkable/thinkloop/types.ts`
-  - `src/thinkable/thinkloop/run-thread-iteration.ts`
-  - `src/thinkable/thinkloop/index.ts`
+  - `src/thinkable/context.ts`
+  - `src/thinkable/thinkloop.ts`
+  - `src/executable/tools.ts`
+  - `src/observable/index.ts`
 
 ## 实施完成标准
 
@@ -592,9 +607,9 @@ if (await deps.isPausing(thread)) {
 
 1. 现有 `llm` 的 `generate()` / `stream()` 支持原生 tool call
 2. OpenAI / Claude provider 都能把原生 tool call 归一化成统一结构
-3. 存在 `src/thinkable/thinkloop/` 最小骨架
-4. `runThreadIteration(thread)` 可直接消费 `generate({ messages, tools })`
-5. 外围未迁移能力全部通过显式临时依赖承接
+3. 存在 `src/thinkable/context.ts`、`src/thinkable/thinkloop.ts`、`src/executable/tools.ts`、`src/observable/index.ts` 最小骨架
+4. `think(thread, llmClient)` 可直接消费 `generate({ messages, tools })`
+5. 外围未迁移能力全部通过显式占位函数承接
 6. `llm` 与 `thinkloop` 的 `meta doc` 已同步更新并建立源码引用关系
 7. 新增或修改的源码满足中文注释密度要求
 
