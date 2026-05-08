@@ -1,0 +1,80 @@
+import { describe, expect, it, mock } from "bun:test";
+import { generateWithClaude, streamWithClaude } from "../providers/claude.ts";
+
+describe("claude provider", () => {
+  it("解析非流式文本结果", async () => {
+    globalThis.fetch = mock(async () =>
+      new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: "hello from claude" }]
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    ) as unknown as typeof fetch;
+
+    const result = await generateWithClaude(
+      {
+        provider: "claude",
+        apiKey: "test-key",
+        baseUrl: "https://example.com",
+        model: "claude-test"
+      },
+      { messages: [{ role: "user", content: "hi" }] }
+    );
+
+    expect(result.text).toBe("hello from claude");
+  });
+
+  it("把 Claude 流事件归一化为统一事件", async () => {
+    const body = [
+      "event: content_block_delta\n",
+      'data: {"delta":{"type":"text_delta","text":"hel"}}\n\n',
+      "event: content_block_delta\n",
+      'data: {"delta":{"type":"text_delta","text":"lo"}}\n\n'
+    ].join("");
+
+    globalThis.fetch = mock(async () =>
+      new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/event-stream" }
+      })
+    ) as unknown as typeof fetch;
+
+    const events = [];
+
+    for await (const event of streamWithClaude(
+      {
+        provider: "claude",
+        apiKey: "test-key",
+        baseUrl: "https://example.com",
+        model: "claude-test"
+      },
+      { messages: [{ role: "user", content: "hi" }] }
+    )) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      { type: "start", provider: "claude", model: "claude-test" },
+      { type: "text-delta", text: "hel" },
+      { type: "text-delta", text: "lo" },
+      { type: "done", text: "hello", raw: undefined }
+    ]);
+  });
+
+  it("Claude 非 2xx 状态码时抛错", async () => {
+    globalThis.fetch = mock(async () => new Response("bad request", { status: 401 })) as unknown as typeof fetch;
+
+    expect(
+      generateWithClaude(
+        {
+          provider: "claude",
+          apiKey: "test-key",
+          baseUrl: "https://example.com",
+          model: "claude-test"
+        },
+        { messages: [{ role: "user", content: "hi" }] }
+      )
+    ).rejects.toThrow("Claude 请求失败");
+  });
+});
