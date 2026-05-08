@@ -7,5 +7,8 @@ export type {
   LlmGenerateResult,
   LlmMessage,
   LlmProvider,
-  LlmStreamEvent
+  LlmStreamEvent,
+  LlmTool,
+  LlmToolCall,
+  LlmToolName
 } from "./types";

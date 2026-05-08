@@ -6,9 +6,8 @@
       "name": "thinkable-llm-client",
       "devDependencies": {
         "@types/bun": "latest",
-      },
-      "peerDependencies": {
-        "typescript": "^5",
+        "@types/node": "^25.6.2",
+        "typescript": "^5.9.0",
       },
     },
   },

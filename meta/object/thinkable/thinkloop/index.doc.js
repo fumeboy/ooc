@@ -8,6 +8,24 @@ ThinkLoop 是 Object 的思考引擎。
 
 ThinkLoop 支持接收 pause 信号暂停
 
+当前第一批只实现单轮函数 think(thread, llmClient)。
+
+本批次的外围能力先由占位函数承接：
+
+- buildContext
+- getAvailableTools
+- dispatchToolCall
+- isPausing
+- writeLatestLlmInput
+- writeLatestLlmOutput
+
+对应源码位置：
+
+- src/thinkable/context.ts
+- src/thinkable/thinkloop.ts
+- src/executable/tools.ts
+- src/observable/index.ts
+
 ## 单轮流程
 
 \`\`\`
@@ -41,7 +59,7 @@ Engine.runThreadIteration(threadId):
      writeLatestLlmInputToFile(context) // 将 LLM 的输入存到本地，用于 debug
 
 4. 调用 LLM
-   result = await llmClient.chat(messages, { tools: getAvailableTools() })
+   result = await llmClient.generate({ messages, tools: getAvailableTools() })
 
 5. 处理输出 & SSE 流式推送给前端
   5.1 处理 mark 参数（任意 tool 都可携带 args.mark，用于标记 inbox 中收到的 message 的响应状态）
@@ -61,11 +79,12 @@ Engine.runThreadIteration(threadId):
      case "submit": handleSubmit(args)  // 内部 executeCommand 派发到 program/talk/do/plan/...
      case "close":  handleClose(args)
      case "wait":   handleWait(args)
+     case "compress": handleCompress(args)
 \`\`\`
 
 ## 执行能力
 
-LLM 始终面向 5 个 tool：open / refine / submit / close / wait。
+LLM 始终面向 6 个 tool：open / refine / submit / close / wait / compress。
 具体能"做什么"由 submit 时携带的 command 决定（program / talk / do / plan / defer / compress / end 等）。
 
 详见 executable 文档
@@ -105,7 +124,7 @@ catch (error):
 ### 严重错误（如 LLM 调用失败）
 
 \`\`\`
-try { result = await llmClient.chat(...) }
+try { result = await llmClient.generate(...) }
 catch (error):
   events.push({ type: "inject", content: error.message })
   setNodeStatus("failed")

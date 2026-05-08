@@ -83,6 +83,7 @@ describe("createLlmClient", () => {
 
     expect(result.provider).toBe("openai");
     expect(result.text).toBe("hello from client");
+    expect(result.toolCalls).toEqual([]);
   });
 
   it("调用参数可以覆盖默认 provider", async () => {
@@ -108,6 +109,7 @@ describe("createLlmClient", () => {
 
     expect(result.provider).toBe("claude");
     expect(result.text).toBe("hello from override");
+    expect(result.toolCalls).toEqual([]);
   });
 
   it("stream 返回统一事件序列", async () => {
@@ -142,7 +144,55 @@ describe("createLlmClient", () => {
       { type: "start", provider: "openai", model: "gpt-test" },
       { type: "text-delta", text: "hel" },
       { type: "text-delta", text: "lo" },
-      { type: "done", text: "hello", raw: undefined }
+      { type: "done", text: "hello", toolCalls: [], raw: undefined }
     ]);
+  });
+
+  it("stream 的 done 事件带回完整 toolCalls", async () => {
+    process.env.OOC_PROVIDER = "claude";
+    process.env.OOC_API_KEY = "test-key";
+    process.env.OOC_BASE_URL = "https://example.com";
+    process.env.OOC_MODEL = "claude-test";
+
+    const body = [
+      "event: content_block_start\n",
+      'data: {"content_block":{"type":"tool_use","id":"toolu_1","name":"wait","input":{"reason":"hold"}}}\n\n'
+    ].join("");
+
+    globalThis.fetch = mock(async () =>
+      new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/event-stream" }
+      })
+    ) as unknown as typeof fetch;
+
+    const client = createLlmClient();
+    const events = [];
+
+    for await (const event of client.stream({
+      messages: [{ role: "user", content: "hi" }],
+      tools: [
+        {
+          name: "wait",
+          description: "等待外部信号",
+          inputSchema: { type: "object" }
+        }
+      ]
+    })) {
+      events.push(event);
+    }
+
+    expect(events.at(-1)).toEqual({
+      type: "done",
+      text: "",
+      toolCalls: [
+        {
+          id: "toolu_1",
+          name: "wait",
+          arguments: { reason: "hold" }
+        }
+      ],
+      raw: undefined
+    });
   });
 });

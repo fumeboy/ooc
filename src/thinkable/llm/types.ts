@@ -1,8 +1,8 @@
 // LLM provider 只保留首批需要的两种协议，避免过早抽象。
 export type LlmProvider = "openai" | "claude";
 
-// thinkloop 当前文档只定义了 5 个 tool，这里不提前开放任意字符串。
-export type LlmToolName = "open" | "refine" | "submit" | "close" | "wait";
+// thinkloop 当前文档只定义了 6 个 tool，这里不提前开放任意字符串。
+export type LlmToolName = "open" | "refine" | "submit" | "close" | "wait" | "compress";
 
 // 统一消息结构先只支持纯文本，后续再扩展多模态。
 export type LlmMessage = {
