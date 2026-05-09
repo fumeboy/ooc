@@ -1,4 +1,5 @@
 import { commands_v20260506_1 } from "@meta/object/executable/actions/commands/index.doc";
+import * as doSource from "@src/executable/commands/do";
 
 export const do_v20260506_1 = {
   parent: commands_v20260506_1,
@@ -54,4 +55,7 @@ do.wait
 子线程的 Context 自动继承父线程的全部已激活的知识。
 若 do(fork) 显式传入 \`knowledge\` 参数，这些 knowledge 追加到子节点的 \`node.knowledge\` 静态声明
 `,
+  sources: {
+    do: doSource,
+  },
 };

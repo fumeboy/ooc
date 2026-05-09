@@ -1,4 +1,5 @@
 import { tools_v20260506_1 } from "@meta/object/executable/actions/tools/index.doc";
+import * as openSource from "@src/executable/tools/open";
 
 export const open_v20260506_1 = {
   parent: tools_v20260506_1,
@@ -6,7 +7,6 @@ export const open_v20260506_1 = {
 \`open\` 用于
 - 开始一次行动
 - 加载一个资源到 Context
-- 创建一个 todo item
 
 具有 type 参数，按 \`type\` 分支处理：
 
@@ -15,7 +15,6 @@ export const open_v20260506_1 = {
 | command   | 开始一次 command 调用，分配 form_id | 是 |
 | knowledge | 显式打开一篇 knowledge，让其进入 Context | 否 |
 | file      | 把一个文件的内容注入 Context | 否 |
-| todo      | 创建一项待办 | 是 |
 
 ## type=command
 
@@ -52,7 +51,7 @@ open(
 行为：
 - activateKnowledge + pinKnowledge：knowledge 进入 \`activatedKnowledge\` 与 \`pinnedKnowledge\` 两个列表
 - 该 knowledge 完整正文注入 Context
-- pinned 的 knowledge **不**会因为其他 form submit/close 自动卸载，只能通过 \`close(type=knowledge, name=...)\` 显式 unpin
+- pinned 的 knowledge **不**会因为其他 form submit/close 自动卸载；显式卸载能力后续单独补充
 
 适用场景：临时想查阅某篇 knowledge 全文，与当前 form 的 command 无关。
 
@@ -71,18 +70,23 @@ open(
 )
 \`\`\`
 
-## type=todo
+## todo 的入口
+
+todo 不再通过 \`open(type=todo)\` 创建，而是统一走 command 入口：
 
 \`\`\`
 open(
-  type="todo",
-  title: "todo title",
-  description="…"             // 待办内容
+  type="command",
+  command="todo",
+  description="登记一个待办",
+  args: {
+    content: "补充 program 的真实链路测试",
+    on_command_path: ["program.function"]
+  }
 )
 \`\`\`
 
-行为：创建一个 todo form，分配 form_id。该 form 持续出现在 activeForms 中，直到 LLM 显式 \`submit(form_id)\` 或者 \`close(form_id)\` 标记完成。
-详见 thinkable 文档。
+后续仍然通过 \`refine / submit / close\` 操作该 form。
 
 ## 通用参数
 
@@ -92,6 +96,10 @@ open(
 
 ## 返回
 
-\`open\` 总是返回 \`{ form_id: string }\`。后续 refine/submit/close 都需引用这个 form_id。
+\`open(type=command)\` 返回 \`{ form_id: string }\`。后续 refine/submit/close 都需引用这个 form_id。
+\`open(type=knowledge|file)\` 不产生 form，只把资源挂入当前 Context。
 `,
+  sources: {
+    open: openSource,
+  },
 };

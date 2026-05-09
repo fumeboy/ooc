@@ -6,6 +6,12 @@
     "allowImportingTsExtensions": true,
     "strict": true,
     "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@meta": ["meta/index.doc.js"],
+      "@meta/*": ["meta/*"],
+      "@src/*": ["src/*"]
+    },
     "types": ["bun", "node"],
     "skipLibCheck": true
   },

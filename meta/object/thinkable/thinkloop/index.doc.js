@@ -96,7 +96,7 @@ Engine.runThreadIteration(threadId):
 ## 执行能力
 
 LLM 始终面向 6 个 tool：open / refine / submit / close / wait / compress。
-具体能"做什么"由 submit 时携带的 command 决定（program / talk / do / plan / defer / compress / end 等）。
+具体能"做什么"由 submit 时携带的 command 决定（program / talk / do / plan / todo / compress / end 等）。
 
 详见 executable 文档
 

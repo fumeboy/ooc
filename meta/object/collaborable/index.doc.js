@@ -1,4 +1,4 @@
-import { object_v20260504_1 } from "@meta";
+import { object_v20260504_1 } from "@meta/object/index.doc";
 import { talk_v20260506_1 } from "@meta/object/collaborable/talk/index.doc";
 import { relation_v20260506_1 } from "@meta/object/collaborable/relation/index.doc";
 import { kanban_v20260506_1 } from "@meta/object/collaborable/kanban/index.doc";

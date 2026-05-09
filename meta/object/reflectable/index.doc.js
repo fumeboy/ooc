@@ -1,4 +1,4 @@
-import { object_v20260504_1 } from "@meta";
+import { object_v20260504_1 } from "@meta/object/index.doc";
 
 export const reflectable_v20260504_1 = {
   parent: object_v20260504_1,

@@ -1,4 +1,5 @@
 import { commands_v20260506_1 } from "@meta/object/executable/actions/commands/index.doc";
+import * as programSource from "@src/executable/commands/program";
 
 export const program_v20260506_1 = {
   parent: commands_v20260506_1,
@@ -51,4 +52,7 @@ program.function                （模式 B）
 - \`print(...)\` / \`console.log(...)\` 的输出被收集，记录到 process event 中
 - 失败时栈记录在 program event 的 error 字段，但**不**会自动 fail 整个线程——LLM 决定如何处理
 `,
+  sources: {
+    program: programSource,
+  },
 };

@@ -1,4 +1,5 @@
 import { tools_v20260506_1 } from "@meta/object/executable/actions/tools/index.doc";
+import * as refineSource from "@src/executable/tools/refine";
 
 export const refine_v20260506_1 = {
   parent: tools_v20260506_1,
@@ -43,4 +44,7 @@ refine(form_id, { context: "continue" })          → 路径=[talk, talk.continu
 每次激活变化，会在 Context 的 process events 中 inject 一条提示，
 让 LLM 知道"我刚才的 refine 让 X knowledge 加入了视野"。
 `,
+  sources: {
+    refine: refineSource,
+  },
 };

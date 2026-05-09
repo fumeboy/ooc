@@ -1,4 +1,5 @@
 import type { LlmMessage } from "./llm/types";
+import type { ActiveForm } from "../executable/forms/form";
 
 // ProcessEvent 先只保留 think 单轮会直接写入的四种事件。
 export type ProcessEvent =
@@ -29,6 +30,20 @@ export type ThreadContext = {
   id: string;
   status: "running" | "waiting" | "done" | "failed" | "paused";
   events: ProcessEvent[];
+  activeForms?: ActiveForm[];
+  activatedKnowledge?: string[];
+  pinnedKnowledge?: string[];
+  windows?: Record<
+    string,
+    {
+      type: "knowledge" | "file";
+      path: string;
+      description: string;
+      lines?: unknown;
+      columns?: unknown;
+    }
+  >;
+  waitingType?: "explicit_wait" | "talk_sync" | "await_children";
 };
 
 // buildContext 先给最小占位实现，后续由正式 context 系统替换。

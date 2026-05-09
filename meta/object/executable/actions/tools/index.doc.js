@@ -1,4 +1,5 @@
 import { executable_v20260504_1 } from "@meta/object/executable/index.doc";
+import * as toolsSource from "@src/executable/tools/index";
 
 export const tools_v20260506_1 = {
   parent: executable_v20260504_1,
@@ -12,7 +13,7 @@ OOC 把"行动"建模为这些原语：
 | open    | 打开一次行动的入口（开启 form / 加载 knowledge / 加载 file） |
 | refine  | 累积 / 修改 form 参数（不执行） |
 | submit  | 提交 form，触发对应 command 执行 |
-| close   | 取消 form / 卸载已加载资源 |
+| close   | 取消 form |
 | wait    | 放弃当前思考循环，等待新事件 |
 | compress | 压缩本线程的 process events |
 
@@ -21,7 +22,7 @@ OOC 把"行动"建模为这些原语：
 - deps - 任意 tool 调用都可以携带 deps 参数，用于声明执行这个 tool 时是基于哪些信息而作出的决定
 
 LLM 永远只面向这些 tool；具体能"做什么"由 open 时携带的 command 决定
-（program / talk / do / plan / defer / end 等，详见 actions/commands）。
+（program / talk / do / plan / todo / end 等，详见 actions/commands）。
 
 ## 原语 + form 的关系
 
@@ -38,7 +39,7 @@ submit(form_id, ...)                 →  FormManager.submit(formId)
                                           ↓
                                        executeCommand(form.command, finalArgs)
                                        form 关闭；非 pinned 的 knowledge 自动卸载
-close(form_id)                       →  FormManager.cancel(formId)
+close(form_id, reason)               →  FormManager.cancel(formId)
                                           ↓
                                        form 关闭，无执行
                                        非 pinned 的 knowledge 自动卸载
@@ -56,6 +57,9 @@ wait()                               →  setNodeStatus("waiting")
 每个未关闭的 form 都会出现在 Context 的 activeForms 字段（详见 thinkable/context），
 让 LLM 看到自己手头还挂着哪些行动。
 
-注：todo 也通过 form 表示——\`open(type=todo, ...) → refine(填写 todo 处理备注) → submit\` 完成一项待办。
+注：todo 也通过 form 表示——\`open(type=command, command=todo, ...) → refine(...) → submit\` 完成一项待办。
 `,
+  sources: {
+    tools: toolsSource,
+  },
 };

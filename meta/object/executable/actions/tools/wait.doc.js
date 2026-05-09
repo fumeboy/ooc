@@ -1,4 +1,5 @@
 import { tools_v20260506_1 } from "@meta/object/executable/actions/tools/index.doc";
+import * as waitSource from "@src/executable/tools/wait";
 
 export const wait_v20260506_1 = {
   parent: tools_v20260506_1,
@@ -38,4 +39,7 @@ wait(
 - \`wait\` 表达"我的事情没结束，等待更多消息来帮助推进工作"
 - \`end\` 表达"我认为本线程的任务已完结，但若有新情况可以再来找我"
 `,
+  sources: {
+    wait: waitSource,
+  },
 };

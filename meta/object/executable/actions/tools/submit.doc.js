@@ -1,4 +1,5 @@
 import { tools_v20260506_1 } from "@meta/object/executable/actions/tools/index.doc";
+import * as submitSource from "@src/executable/tools/submit";
 
 export const submit_v20260506_1 = {
   parent: tools_v20260506_1,
@@ -16,17 +17,11 @@ submit(
 
 ## 行为
 
-按 form 的 type 分支：
-
-### form 来自 open(type=command)
+所有可提交的 form 都来自 \`open(type=command)\`：
 
 1. submit 把 form 标记为完成、从 context 移出
 2. 该 form 引入的 knowledge：若不再被其他活跃 form 命中、且未 pinned（主动 open 的 knowledge 标记为 pinned），自动移出 context
-3. 提交执行 form 内容
-
-### form 来自 open(type=todo)
-
-- todo：submit 视为"该待办已完成"，删除 form
+3. 提交执行 form 内容；若该 command 是 \`todo\`，则视为"该待办已完成"
 
 ## 与 refine 的协作
 
@@ -47,4 +42,7 @@ submit(form_id="f_001")
   → 因为 open command 临时加载的 knowledge 卸载（若无其他 program form 在）
 \`\`\`
 `,
+  sources: {
+    submit: submitSource,
+  },
 };

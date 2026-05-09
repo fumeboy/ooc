@@ -1,4 +1,5 @@
 import { commands_v20260506_1 } from "@meta/object/executable/actions/commands/index.doc";
+import * as talkSource from "@src/executable/commands/talk";
 
 export const talk_v20260506_1 = {
   parent: commands_v20260506_1,
@@ -53,6 +54,7 @@ talk
 talk.fork
 talk.continue
 talk.wait
+talk.thread_creator
 talk.relation_update
 talk.question_form
 \`\`\`
@@ -66,4 +68,7 @@ talk.question_form
 
 user （系统人类用户）是特殊的 object, user 可以参与消息交互，但是 user 的 thread 不由系统调度执行
 `,
+  sources: {
+    talk: talkSource,
+  },
 };

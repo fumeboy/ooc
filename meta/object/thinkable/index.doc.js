@@ -1,4 +1,4 @@
-import { object_v20260504_1 } from "@meta";
+import { object_v20260504_1 } from "@meta/object/index.doc";
 import { executable_v20260504_1 } from "@meta/object/executable/index.doc";
 import { identity_v20260505_1 } from "@meta/object/thinkable/identity.doc";
 import { llm_v20260508_1 } from "@meta/object/thinkable/llm/index.doc";

@@ -22,7 +22,6 @@ ThreadContext = {
   creator,             // 线程创建者标识（user / 父线程 ID / 外部对象名）:  记录用于告诉 LLM 把结果发送给谁
   plan,                // 当前线程的计划 (通过 plan 这个 command 设置)
   activeForms,         // 当前 open 但未 submit/close 的 form 列表（含每个 form 的任务描述与子待办）, 新建 thread 时的 requirement 会作为一个 form 出现，todo 也通过 form 表示
-  defers,              // 当前线程注册的 command hook
 
   /* —— 知识 —— */
   knowledge,           // 所有"已激活"的 knowledge 文档
@@ -115,12 +114,12 @@ ThreadContext = {
 
 详见 executable 文档
 
-#### TODO 作为 form
+#### todo 作为 form
 
-TODO Item 作为一类特殊的 form：
+todo 作为一类特殊的 command form：
 
-- \`open(type=todo, ...)\`        创建一个 todo form，分配 form_id
-- \`refine(form_id, {tip?: "…", status?: "done" | "pending"}\)\`       更新该 todo 的 tip 文本、开关（done / pending / 暂缓 等）
+- `open(type=command, command=todo, ...)`        创建一个 todo form，分配 form_id
+- `refine(form_id, { content: "…", on_command_path?: [...] })`       更新待办内容和提醒条件
 - \`submit(form_id)\`             视为该 todo 已处理，删除该 todo item
 
 未 submit 的 todo form 会持续出现在 activeForms 中，自然成为 LLM 每轮可见的"待办"。
@@ -131,13 +130,6 @@ todo 的生命周期完全复用 form 生命周期，不需要单独的待办状
 系统会自动在该线程上注入一个 todo form，内容为"处理初始消息"——
 让 LLM 第一轮就能在 activeForms 中看到这条待办，作为本线程任务的入口锚点。
 处理完成后由 LLM 自行 submit 该 todo form 即可关闭。
-
-### defers
-
-来源：当前线程通过 command \`defer\` 注册的 on:<command> hook
-作用：让 LLM 在执行前看到"如果我做 X，会同时触发 Y 提醒"
-
-详见 executable 文档。
 
 ### contact
 

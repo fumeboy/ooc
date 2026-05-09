@@ -1,4 +1,4 @@
-import { object_v20260504_1 } from "@meta";
+import { object_v20260504_1 } from "@meta/object/index.doc";
 import { persistable_v20260504_1 } from "@meta/object/persistable/index.doc";
 import { pause_v20260506_1 } from "@meta/object/observable/pause.doc";
 import { debug_v20260506_1 } from "@meta/object/observable/debug.doc";

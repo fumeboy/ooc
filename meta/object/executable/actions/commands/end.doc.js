@@ -1,4 +1,5 @@
 import { commands_v20260506_1 } from "@meta/object/executable/actions/commands/index.doc";
+import * as endSource from "@src/executable/commands/end";
 
 export const end_v20260506_1 = {
   parent: commands_v20260506_1,
@@ -32,4 +33,7 @@ done 状态下若收到任何新 inbox 消息，线程自动翻回 running
 | \`wait\` | waiting | 我的工作还没完结，但是我需要等待更多信息输入 |
 | \`end\`  | done    | 我认为本线程的任务已完结；若有新情况可以再来找我 |
 `,
+  sources: {
+    end: endSource,
+  },
 };
