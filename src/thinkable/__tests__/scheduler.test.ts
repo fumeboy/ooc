@@ -25,7 +25,8 @@ describe("scheduler", () => {
             content: "处理子线程初始消息"
           },
           commandPaths: ["todo"],
-          loadedKnowledgePaths: []
+          loadedKnowledgePaths: [],
+          status: "open"
         }
       ]
     };

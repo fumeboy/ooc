@@ -264,12 +264,12 @@ describe("think", () => {
     });
 
     await think(thread, llmClient);
-    expect(thread.activeForms).toEqual([]);
-    expect(thread.events.at(-1)).toEqual({
-      category: "context_change",
-      kind: "inject",
-      text: expect.stringContaining("[submit] Form")
-    });
+    expect(thread.activeForms).toHaveLength(1);
+    expect(thread.activeForms?.[0]?.status).toBe("executed");
+    const lastEvent = thread.events.at(-1);
+    expect(lastEvent?.category).toBe("context_change");
+    expect(lastEvent?.kind).toBe("inject");
+    expect(lastEvent && "text" in lastEvent ? lastEvent.text : "").toContain("[form executed]");
   });
 
   it("buildContext 产出的 system xml 会进入 llm 输入", async () => {

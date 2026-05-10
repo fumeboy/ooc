@@ -39,6 +39,6 @@ export const todoCommand: CommandTableEntry = {
 };
 
 /** 执行 todo 命令：todo 的可见性完全由 activeForms 生命周期表达。 */
-export async function executeTodoCommand(_ctx: CommandExecutionContext): Promise<void> {
-  return;
+export async function executeTodoCommand(_ctx: CommandExecutionContext): Promise<string | undefined> {
+  return undefined;
 }

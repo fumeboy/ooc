@@ -30,10 +30,11 @@ export const endCommand: CommandTableEntry = {
 };
 
 /** 执行 end command：记录结束信息，并把线程状态切为 done。 */
-export async function executeEndCommand(ctx: CommandExecutionContext): Promise<void> {
-  if (!ctx.thread) return;
+export async function executeEndCommand(ctx: CommandExecutionContext): Promise<string | undefined> {
+  if (!ctx.thread) return undefined;
 
   ctx.thread.endReason = typeof ctx.args.reason === "string" ? ctx.args.reason : undefined;
   ctx.thread.endSummary = typeof ctx.args.summary === "string" ? ctx.args.summary : undefined;
   ctx.thread.status = "done";
+  return undefined;
 }

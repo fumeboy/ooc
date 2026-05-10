@@ -31,10 +31,10 @@ export const planCommand: CommandTableEntry = {
 };
 
 /** 执行 plan command：把提交的计划文本覆盖到当前线程上下文。 */
-export async function executePlanCommand(ctx: CommandExecutionContext): Promise<void> {
-  if (!ctx.thread) return;
+export async function executePlanCommand(ctx: CommandExecutionContext): Promise<string | undefined> {
+  if (!ctx.thread) return undefined;
 
   const plan = typeof ctx.args.plan === "string" ? ctx.args.plan : "";
-
-  ctx.thread.plan =  plan
+  ctx.thread.plan = plan;
+  return undefined;
 }

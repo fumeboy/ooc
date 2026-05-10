@@ -19,7 +19,8 @@ describe("buildContext", () => {
             content: "补充 buildContext 测试"
           },
           commandPaths: ["todo"],
-          loadedKnowledgePaths: []
+          loadedKnowledgePaths: [],
+          status: "open"
         }
       ],
       inbox: [

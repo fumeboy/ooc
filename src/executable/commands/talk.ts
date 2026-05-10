@@ -69,10 +69,11 @@ export const talkCommand: CommandTableEntry = {
 };
 
 /** 执行 talk command；当前阶段显式拒绝跨 Object 通信，避免 LLM 误以为消息已送达。 */
-export async function executeTalkCommand(ctx: CommandExecutionContext): Promise<void> {
+export async function executeTalkCommand(ctx: CommandExecutionContext): Promise<string | undefined> {
   ctx.thread?.events.push({
     category: "context_change",
     kind: "inject",
     text: "[talk] 多 object 交互不属于当前单 object 阶段。"
   });
+  return undefined;
 }

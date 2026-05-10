@@ -197,7 +197,7 @@ describe("FormManager", () => {
         accumulatedArgs: {},
         commandPaths: ["talk"],
         loadedKnowledgePaths: []
-      } as ActiveForm
+      } as unknown as ActiveForm
     ]).getForm("f_legacy");
     expect(restored?.status).toBe("open");
   });

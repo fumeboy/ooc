@@ -142,7 +142,7 @@ describe("executable tools", () => {
     expect(thread.activeForms?.[0]?.commandPaths).toContain("talk.continue");
   });
 
-  it("通过 submit 提交 form 并移出 activeForms", async () => {
+  it("通过 submit 把 form 切到 executed 并保留在 activeForms", async () => {
     const thread = { id: "test", status: "running", events: [] } as ThreadContext;
     await dispatchToolCall(thread, {
       id: "call_1",
@@ -157,11 +157,12 @@ describe("executable tools", () => {
       arguments: { form_id: formId }
     });
 
-    expect(thread.activeForms).toEqual([]);
+    expect(thread.activeForms).toHaveLength(1);
+    expect(thread.activeForms?.[0]?.status).toBe("executed");
     expect(thread.events.at(-1)).toEqual({
       category: "context_change",
       kind: "inject",
-      text: expect.stringContaining("[submit]")
+      text: `[form executed] formId=${formId}`
     });
   });
 

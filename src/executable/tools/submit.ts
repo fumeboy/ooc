@@ -19,31 +19,53 @@ export const SUBMIT_TOOL: LlmTool = {
   },
 };
 
-/** 执行 submit tool：消费 form，并把累积参数交给 command 层接口。 */
+/** 执行 submit tool：把 form 切到 executing，跑 command，再切到 executed 并写入 result。 */
 export async function handleSubmitTool(
   thread: ThreadContext,
   args: Record<string, unknown>
 ): Promise<void> {
   const formId = args.form_id as string;
   const formManager = FormManager.fromData(thread.activeForms ?? []);
-  const form = formManager.submit(formId);
+  const existing = formManager.getForm(formId);
 
-  if (!form) {
+  if (!existing) {
     thread.events.push({
       category: "context_change",
       kind: "inject",
-      text: `[错误] Form ${formId} 不存在。`
+      text: `[错误] submit 失败：Form ${formId} 不存在。`
+    });
+    return;
+  }
+  if (existing.status !== "open") {
+    thread.events.push({
+      category: "context_change",
+      kind: "inject",
+      text: `[错误] submit 失败：Form ${formId} 不在 open 状态（当前 ${existing.status}）。`
     });
     return;
   }
 
-  const finalArgs = { ...form.accumulatedArgs, ...args };
-  await executeCommand(form.command, { thread, form, args: finalArgs });
-
+  const submitted = formManager.submit(formId)!;
   thread.activeForms = formManager.toData();
   thread.events.push({
     category: "context_change",
     kind: "inject",
-    text: `[submit] Form ${form.formId} 已提交（${form.command}）。`
+    text: `[form executing] formId=${formId} command=${submitted.command}`
+  });
+
+  const finalArgs = { ...submitted.accumulatedArgs, ...args };
+  let result: string | undefined;
+  try {
+    result = await executeCommand(submitted.command, { thread, form: submitted, args: finalArgs });
+  } catch (error) {
+    result = `[command-error] ${(error as Error).message}`;
+  }
+
+  formManager.markExecuted(formId, result);
+  thread.activeForms = formManager.toData();
+  thread.events.push({
+    category: "context_change",
+    kind: "inject",
+    text: `[form executed] formId=${formId}`
   });
 }

@@ -30,9 +30,9 @@ export async function handleRefineTool(
   const formId = args.form_id as string;
   const incoming = (args.args as Record<string, unknown> | undefined) ?? {};
   const formManager = FormManager.fromData(thread.activeForms ?? []);
-  const updatedForm = formManager.refine(formId, incoming);
+  const existing = formManager.getForm(formId);
 
-  if (!updatedForm) {
+  if (!existing) {
     thread.events.push({
       category: "context_change",
       kind: "inject",
@@ -40,7 +40,16 @@ export async function handleRefineTool(
     });
     return;
   }
+  if (existing.status !== "open") {
+    thread.events.push({
+      category: "context_change",
+      kind: "inject",
+      text: `[错误] refine 失败：Form ${formId} 不在 open 状态（当前 ${existing.status}）。`
+    });
+    return;
+  }
 
+  const updatedForm = formManager.refine(formId, incoming)!;
   thread.activeForms = formManager.toData();
   thread.events.push({
     category: "context_change",

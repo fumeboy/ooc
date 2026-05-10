@@ -61,12 +61,12 @@ export function deriveCommandPaths(
 }
 
 /**
- * 执行命令（占位实现，暂不实现具体逻辑）
+ * 执行命令并返回 result 字符串（可选）。
  *
- * @param command 命令名称
- * @param ctx 命令执行上下文
+ * - program 返回 shell 输出
+ * - 其它命令返回 undefined（副作用通过 ctx.thread 完成）
  */
-export async function executeCommand(command: string, ctx: CommandExecutionContext): Promise<void> {
+export async function executeCommand(command: string, ctx: CommandExecutionContext): Promise<string | undefined> {
   switch (command) {
     case "program":
       return executeProgramCommand(ctx);
@@ -81,6 +81,6 @@ export async function executeCommand(command: string, ctx: CommandExecutionConte
     case "end":
       return executeEndCommand(ctx);
     default:
-      return;
+      return undefined;
   }
 }

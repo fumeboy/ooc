@@ -90,8 +90,8 @@ function findThread(root: ThreadContext, threadId: string): ThreadContext | null
 }
 
 /** 执行 do command：fork 创建子线程，continue 向既有线程追加消息。 */
-export async function executeDoCommand(ctx: CommandExecutionContext): Promise<void> {
-  if (!ctx.thread) return;
+export async function executeDoCommand(ctx: CommandExecutionContext): Promise<string | undefined> {
+  if (!ctx.thread) return undefined;
 
   const mode = ctx.args.context === "continue" ? "continue" : "fork";
   const content = typeof ctx.args.msg === "string" ? ctx.args.msg : "";

@@ -52,6 +52,7 @@ export const programCommand: CommandTableEntry = {
 };
 
 /** 执行 program command；真实代码执行能力尚未接入。 */
-export async function executeProgramCommand(_ctx: CommandExecutionContext): Promise<void> {
-  // 暂未实现具体逻辑
+export async function executeProgramCommand(_ctx: CommandExecutionContext): Promise<string | undefined> {
+  // 暂未实现具体逻辑（Task 3 落地 program.shell）
+  return undefined;
 }
