@@ -38,3 +38,25 @@ export function threadDir(ref: ThreadPersistenceRef): string {
 export function toJson(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
+
+/**
+ * 标识磁盘上的单个 stone 对象。
+ *
+ * 路径形态：`{baseDir}/stones/{objectId}`
+ */
+export interface StoneObjectRef {
+  /** 包含 `stones/` 的根目录。 */
+  baseDir: string;
+  /** `stones/` 下的 object 目录名。 */
+  objectId: string;
+}
+
+/** 计算 stone 目录绝对路径。 */
+export function stoneDir(ref: StoneObjectRef): string {
+  return join(ref.baseDir, "stones", ref.objectId);
+}
+
+/** 从 ThreadPersistenceRef 派生 StoneObjectRef，便于 program/server 模块复用。 */
+export function deriveStoneFromThread(threadRef: ThreadPersistenceRef): StoneObjectRef {
+  return { baseDir: threadRef.baseDir, objectId: threadRef.objectId };
+}
