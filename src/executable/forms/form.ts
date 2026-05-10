@@ -48,6 +48,17 @@ export interface ActiveForm {
    * open 时由 engine 写入初始加载集；refine 新增追加；关闭时参考此字段。
    */
   loadedKnowledgePaths: string[];
+
+  /**
+   * Form 生命周期状态。
+   * - open：刚 open，未 submit；可以被 refine
+   * - executing：submit 已触发但 command 未返回；不可 refine 不可二次 submit
+   * - executed：command 已返回，结果在 result 字段；LLM 看完后用 close 释放
+   */
+  status: "open" | "executing" | "executed";
+
+  /** command 执行返回的结果文本；目前只有 program.shell 真正写入。 */
+  result?: string;
 }
 
 /** 生成 form_id */
@@ -71,6 +82,7 @@ export class FormManager {
       accumulatedArgs: {},
       commandPaths: deriveCommandPaths(command, {}).length > 0 ? deriveCommandPaths(command, {}) : [command],
       loadedKnowledgePaths: [],
+      status: "open",
     });
     this.commandRefCount.set(command, (this.commandRefCount.get(command) ?? 0) + 1);
     return formId;
@@ -89,6 +101,7 @@ export class FormManager {
   ): ActiveForm | null {
     const form = this.forms.get(formId);
     if (!form) return null;
+    if (form.status !== "open") return null;
 
     /* 累积 args：后者覆盖前者同名字段。生成全新对象（immutability）。 */
     const nextArgs: Record<string, unknown> = { ...form.accumulatedArgs, ...args };
@@ -104,8 +117,28 @@ export class FormManager {
     return next;
   }
 
-  /** 提交 form，返回被提交的 form 信息（对应 submit tool；不存在返回 null）。 */
+  /** 提交 form，把 status 从 open 切到 executing，返回 form 快照（不删除）。 */
   submit(formId: string): ActiveForm | null {
+    const form = this.forms.get(formId);
+    if (!form) return null;
+    if (form.status !== "open") return null;
+    const next: ActiveForm = { ...form, status: "executing" };
+    this.forms.set(formId, next);
+    return next;
+  }
+
+  /** 把 form 从 executing 切到 executed 并写入 result（command 完成后由 handler 调用）。 */
+  markExecuted(formId: string, result?: string): ActiveForm | null {
+    const form = this.forms.get(formId);
+    if (!form) return null;
+    if (form.status !== "executing") return null;
+    const next: ActiveForm = { ...form, status: "executed", result };
+    this.forms.set(formId, next);
+    return next;
+  }
+
+  /** 关闭 form，无论状态都从表中移除，返回被关闭的 form 信息（不存在返回 null）。 */
+  close(formId: string): ActiveForm | null {
     const form = this.forms.get(formId);
     if (!form) return null;
     this.forms.delete(formId);
@@ -116,11 +149,6 @@ export class FormManager {
       this.commandRefCount.set(form.command, count);
     }
     return form;
-  }
-
-  /** 关闭 form，返回被关闭的 form 信息（对应 close tool；不存在返回 null）。 */
-  close(formId: string): ActiveForm | null {
-    return this.submit(formId); // 逻辑相同：移除 form + 引用计数 -1
   }
 
   /**
@@ -205,6 +233,8 @@ export class FormManager {
         accumulatedArgs: accumulated,
         commandPaths,
         loadedKnowledgePaths,
+        status: raw.status ?? "open",
+        result: raw.result,
       };
       mgr.forms.set(normalized.formId, normalized);
       mgr.commandRefCount.set(normalized.command, (mgr.commandRefCount.get(normalized.command) ?? 0) + 1);

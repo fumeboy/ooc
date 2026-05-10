@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "bun:test";
-import { FormManager } from "../forms/form";
+import { FormManager, type ActiveForm } from "../forms/form";
 
 describe("FormManager", () => {
   let formManager: FormManager;
@@ -43,18 +43,20 @@ describe("FormManager", () => {
     expect(form?.accumulatedArgs).toEqual({ target: "user", message: "updated" });
   });
 
-  it("should submit a form and remove it from active forms", () => {
+  it("should keep submitted form in active set as executing", () => {
     const formId = formManager.open("talk", "test description");
     const submitted = formManager.submit(formId);
-    
+
     expect(submitted).not.toBeNull();
     expect(submitted?.formId).toBe(formId);
-    
-    const afterSubmit = formManager.getForm(formId);
-    expect(afterSubmit).toBeNull();
+    expect(submitted?.status).toBe("executing");
+
+    const stillThere = formManager.getForm(formId);
+    expect(stillThere).not.toBeNull();
+    expect(stillThere?.status).toBe("executing");
   });
 
-  it("should close a form same as submit", () => {
+  it("should close a form regardless of status", () => {
     const formId = formManager.open("talk", "test description");
     const closed = formManager.close(formId);
 
@@ -147,5 +149,56 @@ describe("FormManager", () => {
     expect("method" in restored).toBe(false);
     expect("loadedTraits" in restored).toBe(false);
     expect(restored.loadedKnowledgePaths).toEqual(["knowledge:program/function"]);
+  });
+
+  it("should default new form status to open", () => {
+    const formId = formManager.open("talk", "test description");
+    const form = formManager.getForm(formId);
+    expect(form?.status).toBe("open");
+    expect(form?.result).toBeUndefined();
+  });
+
+  it("should transition status from open to executing to executed", () => {
+    const formId = formManager.open("program", "shell");
+    expect(formManager.getForm(formId)?.status).toBe("open");
+
+    const submitted = formManager.submit(formId);
+    expect(submitted?.status).toBe("executing");
+    expect(formManager.getForm(formId)?.status).toBe("executing");
+
+    const executed = formManager.markExecuted(formId, "[stdout]\nhi\n[exit 0]");
+    expect(executed?.status).toBe("executed");
+    expect(executed?.result).toBe("[stdout]\nhi\n[exit 0]");
+    expect(formManager.getForm(formId)?.status).toBe("executed");
+    expect(formManager.getForm(formId)?.result).toBe("[stdout]\nhi\n[exit 0]");
+  });
+
+  it("should reject refine on non-open form", () => {
+    const formId = formManager.open("program", "shell");
+    formManager.submit(formId);
+    const refined = formManager.refine(formId, { code: "ls" });
+    expect(refined).toBeNull();
+  });
+
+  it("should reject submit on non-open form", () => {
+    const formId = formManager.open("program", "shell");
+    formManager.submit(formId);
+    const second = formManager.submit(formId);
+    expect(second).toBeNull();
+  });
+
+  it("should default missing status to open when restoring legacy data", () => {
+    const restored = FormManager.fromData([
+      {
+        formId: "f_legacy",
+        command: "talk",
+        description: "no status field",
+        createdAt: 1,
+        accumulatedArgs: {},
+        commandPaths: ["talk"],
+        loadedKnowledgePaths: []
+      } as ActiveForm
+    ]).getForm("f_legacy");
+    expect(restored?.status).toBe("open");
   });
 });
