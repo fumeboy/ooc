@@ -1,4 +1,8 @@
 import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
+import type { ThreadContext } from "../../thinkable/context.js";
+import { deriveStoneFromThread } from "../../persistable/index.js";
+import { executeUserCode } from "../sandbox/executor.js";
+import { createProgramSelf } from "../server/self.js";
 
 /** program command 暴露给 LLM 的知识说明。 */
 export const KNOWLEDGE = `
@@ -91,17 +95,82 @@ async function runShell(code: string): Promise<string> {
   return formatShellResult(code, stdout, stderr, exitCode);
 }
 
-/** 执行 program command；当前阶段仅支持 language="shell"。 */
-export async function executeProgramCommand(ctx: CommandExecutionContext): Promise<string | undefined> {
+/** 把 ts/js executor 的结果与 function path 的返回值统一格式化为单一字符串。 */
+function formatProgramResult(
+  header: string,
+  stdout: string,
+  returnValue: unknown,
+  error?: string,
+): string {
+  const lines = [header];
+  if (stdout) lines.push("[stdout]", truncate(stdout));
+  if (returnValue !== undefined) {
+    const text = typeof returnValue === "string" ? returnValue : JSON.stringify(returnValue, null, 2);
+    lines.push("[returnValue]", truncate(text));
+  }
+  if (error) {
+    lines.push("[error]", truncate(error), "[exit 1]");
+  } else {
+    lines.push("[exit 0]");
+  }
+  return lines.join("\n");
+}
+
+async function runUserCode(thread: ThreadContext, code: string): Promise<string> {
+  const persistence = thread.persistence;
+  const self = persistence ? createProgramSelf(deriveStoneFromThread(persistence), thread) : null;
+  const exec = await executeUserCode(code, self);
+  const firstLine = code.split("\n")[0]?.trim() ?? "";
+  return formatProgramResult(`# ts/js: ${firstLine}`, exec.stdout, exec.returnValue, exec.error);
+}
+
+async function runFunction(
+  thread: ThreadContext,
+  fn: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  if (!thread.persistence) {
+    return `[program.function] 当前线程无 persistence ref，无法调用 server 方法`;
+  }
+  const stoneRef = deriveStoneFromThread(thread.persistence);
+  try {
+    const self = createProgramSelf(stoneRef, thread);
+    const returnValue = await self.callMethod(fn, args);
+    return formatProgramResult(`# function: ${fn}`, "", returnValue);
+  } catch (error) {
+    return formatProgramResult(`# function: ${fn}`, "", undefined, (error as Error).message);
+  }
+}
+
+/** 执行 program command；按 args 路由到 function / shell / ts/js。 */
+export async function executeProgramCommand(
+  ctx: CommandExecutionContext,
+): Promise<string | undefined> {
+  const thread = ctx.thread;
+  if (!thread) return undefined;
+
+  // function 模式优先
+  const fn = ctx.args.function as string | undefined;
+  if (typeof fn === "string" && fn.length > 0) {
+    return runFunction(thread, fn, (ctx.args.args as Record<string, unknown>) ?? {});
+  }
+
   const language = (ctx.args.language ?? ctx.args.lang) as string | undefined;
   const code = ctx.args.code as string | undefined;
 
-  if (language !== "shell") {
-    return `[program] 本阶段仅支持 language="shell"，收到 language="${language ?? "<undefined>"}"`;
-  }
-  if (typeof code !== "string" || code.trim() === "") {
-    return `[program.shell] 缺少 code 参数`;
+  if (language === "shell") {
+    if (typeof code !== "string" || code.trim() === "") {
+      return `[program.shell] 缺少 code 参数`;
+    }
+    return runShell(code);
   }
 
-  return runShell(code);
+  if (language === "ts" || language === "typescript" || language === "js" || language === "javascript") {
+    if (typeof code !== "string" || code.trim() === "") {
+      return `[program.${language}] 缺少 code 参数`;
+    }
+    return runUserCode(thread, code);
+  }
+
+  return `[program] 未知 language="${language ?? "<undefined>"}"，支持 shell / ts / js / function`;
 }

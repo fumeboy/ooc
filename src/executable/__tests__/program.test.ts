@@ -1,9 +1,28 @@
-import { describe, expect, it } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { afterEach, describe, expect, it, test } from "bun:test";
 import { executeProgramCommand } from "../commands/program";
+import { createStoneObject, writeServerSource } from "../../persistable";
+import { clearServerLoaderCache } from "../server/loader";
 import type { ThreadContext } from "../../thinkable/context";
 
 function makeCtx(args: Record<string, unknown>) {
   const thread: ThreadContext = { id: "t", status: "running", events: [] };
+  return { thread, args };
+}
+
+function makeCtxWithPersistence(
+  args: Record<string, unknown>,
+  objectId: string,
+  baseDir: string
+) {
+  const thread: ThreadContext = {
+    id: "t",
+    status: "running",
+    events: [],
+    persistence: { baseDir, sessionId: "s1", objectId, threadId: "t" }
+  };
   return { thread, args };
 }
 
@@ -37,13 +56,83 @@ describe("program.shell", () => {
     expect(result).toContain("...[truncated, original");
   });
 
-  it("rejects non-shell language with explicit message", async () => {
-    const result = await executeProgramCommand(makeCtx({ language: "ts", code: "console.log(1)" }));
-    expect(result).toContain("本阶段仅支持 language=\"shell\"");
+  it("rejects unknown language with explicit message", async () => {
+    const result = await executeProgramCommand(makeCtx({ language: "rust", code: "fn main(){}" }));
+    expect(result).toContain("未知 language");
   });
 
   it("rejects missing code", async () => {
     const result = await executeProgramCommand(makeCtx({ language: "shell" }));
     expect(result).toContain("缺少 code 参数");
+  });
+});
+
+describe("program.ts/js + program.function", () => {
+  let tempRoot: string | undefined;
+
+  afterEach(async () => {
+    if (tempRoot) {
+      await rm(tempRoot, { recursive: true, force: true });
+      tempRoot = undefined;
+    }
+    clearServerLoaderCache();
+  });
+
+  test("ts mode runs user code and returns _result_", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-prog-"));
+    await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+    const ctx = makeCtxWithPersistence(
+      { language: "ts", code: "_result_ = 2 + 3;" },
+      "agent",
+      tempRoot
+    );
+    const result = await executeProgramCommand(ctx);
+    expect(result).toContain("[returnValue]");
+    expect(result).toContain("5");
+    expect(result).toContain("[exit 0]");
+  });
+
+  test("ts mode injects self with stone dir", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-prog-"));
+    await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+    const ctx = makeCtxWithPersistence(
+      { language: "ts", code: "_result_ = self.dir;" },
+      "agent",
+      tempRoot
+    );
+    const result = await executeProgramCommand(ctx);
+    expect(result).toContain("agent");
+  });
+
+  test("function path calls registered method", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-prog-"));
+    const ref = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+    await writeServerSource(
+      ref,
+      `export const llm_methods = { add: { fn: async (_c, { a, b }) => a + b } };`
+    );
+
+    const ctx = makeCtxWithPersistence(
+      { function: "add", args: { a: 7, b: 8 } },
+      "agent",
+      tempRoot
+    );
+    const result = await executeProgramCommand(ctx);
+    expect(result).toContain("[returnValue]");
+    expect(result).toContain("15");
+  });
+
+  test("function path errors clearly when no persistence", async () => {
+    const thread: ThreadContext = { id: "t", status: "running", events: [] };
+    const result = await executeProgramCommand({ thread, args: { function: "any" } });
+    expect(result).toContain("无 persistence");
+  });
+
+  test("function path errors clearly when method missing", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-prog-"));
+    await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+    const ctx = makeCtxWithPersistence({ function: "nope" }, "agent", tempRoot);
+    const result = await executeProgramCommand(ctx);
+    expect(result).toContain("不存在");
   });
 });
