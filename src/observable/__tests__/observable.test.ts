@@ -1,7 +1,11 @@
-import { describe, expect, it } from "bun:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { afterEach, describe, expect, it } from "bun:test";
 import * as observableModule from "../index";
 import type { ThreadContext } from "../../thinkable/context";
 import type { LlmGenerateResult, LlmMessage, LlmTool } from "../../thinkable/llm/types";
+import { createFlowObject, threadPaths } from "../../persistable";
 
 type ObservableStore = typeof observableModule & {
   clearLatestLlmObservation: () => void;
@@ -60,6 +64,67 @@ describe("observable llm snapshots", () => {
         threadId: "thread-observable",
         result
       }
+    });
+  });
+});
+
+describe("observable persistable debug files", () => {
+  let tempRoot: string | undefined;
+
+  afterEach(async () => {
+    if (tempRoot) {
+      await rm(tempRoot, { recursive: true, force: true });
+      tempRoot = undefined;
+    }
+  });
+
+  it("writes llm input and output debug files when thread is persistable", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-observable-"));
+    const flowRef = await createFlowObject({
+      baseDir: tempRoot,
+      sessionId: "s1",
+      objectId: "obj"
+    });
+    const thread: ThreadContext = {
+      id: "root",
+      status: "running",
+      events: [],
+      persistence: { ...flowRef, threadId: "root" }
+    };
+
+    await observableModule.writeLatestLlmInput(
+      thread,
+      [{ role: "system", content: "<context />" }],
+      []
+    );
+    await observableModule.writeLatestLlmOutput(thread, {
+      provider: "openai",
+      model: "test",
+      text: "done",
+      toolCalls: []
+    });
+
+    const paths = threadPaths(thread.persistence!);
+    const input = JSON.parse(await readFile(paths.llmInputFile, "utf8"));
+    const output = JSON.parse(await readFile(paths.llmOutputFile, "utf8"));
+
+    expect(input.threadId).toBe("root");
+    expect(output.result.text).toBe("done");
+  });
+
+  it("does not touch the disk when thread has no persistence ref", async () => {
+    const thread: ThreadContext = {
+      id: "ephemeral",
+      status: "running",
+      events: []
+    };
+
+    await observableModule.writeLatestLlmInput(thread, [], []);
+    await observableModule.writeLatestLlmOutput(thread, {
+      provider: "openai",
+      model: "test",
+      text: "",
+      toolCalls: []
     });
   });
 });
