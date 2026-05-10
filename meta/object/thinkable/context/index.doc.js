@@ -1,7 +1,13 @@
 import { thinkable_v20260504_1 } from "@meta/object/thinkable/index.doc";
+import * as contextSource from "@src/thinkable/context";
+import * as contextTestSource from "@src/thinkable/__tests__/context.test";
 
 export const context_v20260505_1 = {
   parent: thinkable_v20260504_1,
+  sources: {
+    context: contextSource,
+    tests: contextTestSource,
+  },
   index: `
 Context 是 Object 每次思考时看到的全部信息。
 
@@ -118,8 +124,8 @@ ThreadContext = {
 
 todo 作为一类特殊的 command form：
 
-- `open(type=command, command=todo, ...)`        创建一个 todo form，分配 form_id
-- `refine(form_id, { content: "…", on_command_path?: [...] })`       更新待办内容和提醒条件
+- \`open(type=command, command=todo, ...)\`        创建一个 todo form，分配 form_id
+- \`refine(form_id, { content: "…", on_command_path?: [...] })\`       更新待办内容和提醒条件
 - \`submit(form_id)\`             视为该 todo 已处理，删除该 todo item
 
 未 submit 的 todo form 会持续出现在 activeForms 中，自然成为 LLM 每轮可见的"待办"。

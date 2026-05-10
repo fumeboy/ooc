@@ -1,7 +1,15 @@
 import { thinkable_v20260504_1 } from "@meta/object/thinkable/index.doc";
+import * as contextSource from "@src/thinkable/context";
+import * as doCommandSource from "@src/executable/commands/do";
+import * as doThreadTreeTestSource from "@src/executable/__tests__/do-thread-tree.test";
 
 export const thread_v20260505_1 = {
   parent: thinkable_v20260504_1,
+  sources: {
+    context: contextSource,
+    doCommand: doCommandSource,
+    tests: doThreadTreeTestSource,
+  },
   index: `
 Thread 描述 Object 思考的运行时结构。
 
