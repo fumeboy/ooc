@@ -40,29 +40,48 @@ program.javascript
 program.function                （模式 B）
 \`\`\`
 
-## 沙箱环境 (面向模式A)
-
-执行环境提供：
-- 路径常量：\`self_dir\` / \`world_dir\` 等只读路径
-- 基础 API：\`readFile\` / \`writeFile\` / \`print\` / \`getData\` / \`setData\` 等（始终注入）
-- \`callMethod(id, name, args)\` 调用任意已注册对象函数方法
-
-## 输出与副作用
-
-- \`print(...)\` / \`console.log(...)\` 的输出被收集，记录到 process event 中
-- 失败时栈记录在 program event 的 error 字段，但**不**会自动 fail 整个线程——LLM 决定如何处理
-
 ## 当前实现阶段
 
-当前实现仅支持 \`language="shell"\`：
-- 通过 \`sh -c\` 执行 code 字符串
-- cwd 固定为 \`process.cwd()\`（项目根）；env 继承 parent process
-- 30 秒超时（exit code 124），stdout/stderr 各 4KB 截断
-- 输出归一化为单一字符串赋给 \`form.result\`，供 LLM 在下一轮 active_forms 中读取
+当前实现支持 3 种 language + 1 种 function 路径：
 
-当前不支持：
-- \`language="ts"\` / \`"js"\`（脚本沙箱）
-- \`function\` 模式（调用 server export 方法）
+- \`language="shell"\`：通过 \`sh -c\` 执行 code 字符串
+  - cwd 固定为 \`process.cwd()\`，env 继承 parent process
+  - 30 秒超时（exit code 124），stdout/stderr 各 4KB 截断
+
+- \`language="ts" / "typescript" / "js" / "javascript"\`：in-process 动态 import 执行
+  - 用户代码被包成 \`async function(console, self) { let _result_; ... return _result_; }\`
+  - 注入的 \`self\` 是 ProgramSelf 对象：\`self.dir\` / \`self.callMethod\` / \`self.getData\` / \`self.setData\`
+  - console.log/warn/error 进 result 的 [stdout] 段
+  - \`_result_\` 变量进 result 的 [returnValue] 段（JSON.stringify）
+  - 用户代码可以直接 \`import { ... } from "node:fs/promises"\` 等标准 Bun/Node API
+
+- \`function="<name>"\`（不需要 language）：直接调用 server/index.ts 中 llm_methods 注册的方法
+  - 等价于 \`language="ts", code="_result_ = await self.callMethod(name, args)"\`
+  - 推荐用于"我已经知道方法名只想调它"的场景
+
+## 元编程：编辑自己的 server/index.ts
+
+你可以用 program.shell 写 \`<self.dir>/server/index.ts\`，新方法在下次调用立即生效（按 mtime 自动 reload）。
+
+\`\`\`
+open(program, language=shell, code='cat > <self.dir>/server/index.ts <<EOF
+export const llm_methods = {
+  greet: {
+    description: "向某人问好",
+    params: [{ name: "name", type: "string", required: true }],
+    fn: async (ctx, { name }) => "Hello, " + name + "!",
+  },
+};
+EOF') → submit
+
+open(program, function="greet", args={ name: "world" }) → submit
+# returnValue 段会包含 "Hello, world!"
+\`\`\`
+
+## 当前不支持
+
+- 代码沙箱隔离（in-process 与内核共享进程）
+- ui_methods 的 HTTP 暴露
 - 命令白名单 / 沙箱隔离
 `,
   sources: {

@@ -85,7 +85,17 @@ flow 持久化的文件:
 
 ## 当前实现阶段
 
-当前实现只覆盖单 object flow：
+当前实现覆盖：
+
+**Stone（对象身份/数据）持久化**
+- \`stones/{objectId}/.stone.json\` — metadata
+- \`stones/{objectId}/self.md\` — 身份说明（读写）
+- \`stones/{objectId}/readme.md\` — 对外说明（读写）
+- \`stones/{objectId}/data.json\` — 属性数据（读写 + 顶层 merge）
+- \`stones/{objectId}/server/index.ts\` — server 方法源码（读写）
+- 其余目录（knowledge / memory / relations / client / files）仅建骨架，不读不写
+
+**Flow（对象运行态）持久化**
 - 初始化 \`flows/{sessionId}/objects/{objectId}/\`
 - 读写 \`threads/{threadId}/thread.json\`
 - 写入 \`threads/{threadId}/debug/llm.input.json\`
