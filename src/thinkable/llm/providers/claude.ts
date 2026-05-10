@@ -201,37 +201,80 @@ async function* parseClaudeSSE(
 
 // Claude 非流式请求把 content 数组中的文本和 tool call 拼成统一结果。
 // 兼容性补丁：当代理服务忽略 stream:false 直接返回 SSE 时，fallback 到 SSE 聚合。
+// 部分代理偶发对正常请求回 null/空 body，做最多 2 次重试。
 export async function generateWithClaude(
   config: LlmEnvConfig,
   params: LlmGenerateParams
 ): Promise<LlmGenerateResult> {
   const model = params.model ?? config.model;
-  const response = await fetchClaude(config, params, false);
+  let lastError: Error | undefined;
+  const maxAttempts = 3;
 
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await generateOnce(config, params, model);
+    } catch (error) {
+      lastError = error as Error;
+      // 仅对"返回非合法 JSON"或"空响应"做重试，其它错误立即抛出。
+      const message = (error as Error).message ?? "";
+      const retriable =
+        message.includes("不是合法 JSON 对象") || message.includes("空响应");
+      if (!retriable || attempt === maxAttempts) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+    }
+  }
+  throw lastError ?? new Error("Claude 请求未返回结果");
+}
+
+async function generateOnce(
+  config: LlmEnvConfig,
+  params: LlmGenerateParams,
+  model: string
+): Promise<LlmGenerateResult> {
+  const response = await fetchClaude(config, params, false);
   if (!response.ok) {
     throw new Error(`Claude 请求失败: ${response.status}`);
   }
 
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.includes("text/event-stream") && response.body) {
-    // 代理只返回 SSE：复用共享解析器把流聚合成单一结果。
     let text = "";
     let toolCalls: LlmToolCall[] = [];
+    let sawAnyEvent = false;
     for await (const event of parseClaudeSSE(response.body, model)) {
+      sawAnyEvent = true;
       if (event.type === "done") {
         text = event.text;
         toolCalls = event.toolCalls;
       }
     }
+    if (!sawAnyEvent) {
+      throw new Error("Claude SSE 空响应");
+    }
     return { provider: "claude", model, text, toolCalls };
   }
 
-  const raw = await response.json();
-  const text = (raw.content ?? [])
+  const bodyText = await response.text();
+  let raw: unknown;
+  try {
+    raw = JSON.parse(bodyText);
+  } catch {
+    raw = null;
+  }
+  if (!raw || typeof raw !== "object") {
+    if (process.env.OOC_DEBUG_LLM === "1") {
+      console.error("[claude debug] non-JSON body (status=", response.status, "ct=", contentType, ") len=", bodyText.length, "first200=", bodyText.slice(0, 200));
+    }
+    throw new Error(`Claude 响应不是合法 JSON 对象: ${JSON.stringify(raw)}`);
+  }
+  const content = (raw as { content?: unknown }).content;
+  const text = (Array.isArray(content) ? content : [])
     .filter((item: { type?: string }) => item.type === "text")
     .map((item: { text?: string }) => item.text ?? "")
     .join("");
-  const toolCalls = toClaudeToolCalls(raw.content);
+  const toolCalls = toClaudeToolCalls(content);
 
   return {
     provider: "claude",
