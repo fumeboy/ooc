@@ -126,4 +126,36 @@ describe("do thread tree core", () => {
       }
     ]);
   });
+
+  it("do.continue with wait=true puts parent into await_children", async () => {
+    const child: ThreadContext = {
+      id: "t_child",
+      status: "done",
+      events: [],
+      parentThreadId: "t_parent"
+    };
+    const parent: ThreadContext = {
+      id: "t_parent",
+      status: "running",
+      events: [],
+      childThreadIds: ["t_child"],
+      childThreads: { t_child: child }
+    };
+
+    await executeCommand("do", {
+      thread: parent,
+      args: {
+        context: "continue",
+        threadId: "t_child",
+        msg: "再做 task B",
+        wait: true
+      }
+    });
+
+    expect(parent.status).toBe("waiting");
+    expect(parent.waitingType).toBe("await_children");
+    expect(parent.awaitingChildren).toEqual(["t_child"]);
+    expect(child.status).toBe("running");
+    expect(child.inbox?.length).toBe(1);
+  });
 });

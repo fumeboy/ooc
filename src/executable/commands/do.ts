@@ -142,4 +142,11 @@ export async function executeDoCommand(ctx: CommandExecutionContext): Promise<st
   if (targetThread.status === "done" || targetThread.status === "failed") {
     targetThread.status = "running";
   }
+
+  // 与 fork 分支对称：wait=true 时父线程进入 await_children
+  if (ctx.args.wait === true) {
+    ctx.thread.status = "waiting";
+    ctx.thread.waitingType = "await_children";
+    ctx.thread.awaitingChildren = [targetThreadId];
+  }
 }
