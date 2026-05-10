@@ -3,9 +3,13 @@ import { persistable_v20260504_1 } from "@meta/object/persistable/index.doc";
 import { pause_v20260506_1 } from "@meta/object/observable/pause.doc";
 import { debug_v20260506_1 } from "@meta/object/observable/debug.doc";
 import { context_visibility_v20260506_1 } from "@meta/object/observable/context-visibility.doc";
+import * as observable from "@src/observable/index";
 
 export const observable_v20260504_1 = {
   parent: object_v20260504_1,
+  sources: {
+    observable,
+  },
   index: `
 Observable 描述 Object 如何被观察、被理解与被验证。
 

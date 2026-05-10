@@ -70,11 +70,13 @@ while (有 running 线程) {
 - 每个 tick 只执行一个 running thread
 - running thread 按 lastExecutedAt 从小到大选择
 - waitingType=await_children 的父线程在子线程 done/failed 后恢复 running
+- 若线程携带 persistable 引用，scheduler 在每轮 think 后保存线程状态
 
 当前源码暂未实现：
 - talk_sync / explicit_wait 的 inbox 唤醒
 - 全局 deadlock 检测与强制唤醒
 - super flow 调度
+- 跨 object 调度与 talk 同步
 
 ## 死锁检测
 

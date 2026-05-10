@@ -1,7 +1,11 @@
 import { object_v20260504_1 } from "@meta/object/index.doc";
+import * as persistable from "@src/persistable/index";
 
 export const persistable_v20260504_1 = {
   parent: object_v20260504_1,
+  sources: {
+    persistable,
+  },
   index: `
 Persistable 描述 Object 如何在文件系统中存在。
 
@@ -78,6 +82,16 @@ flow 持久化的文件:
     debug 数据， 默认要产出，LLM 输出内容
 - threads/{threadId}/debug/loop.1.input.json
     debug 数据， 第一轮的 context ，开启 debug 模式后记录每一轮的上述三个 debug 文件
+
+## 当前实现阶段
+
+当前实现只覆盖单 object flow：
+- 初始化 \`flows/{sessionId}/objects/{objectId}/\`
+- 读写 \`threads/{threadId}/thread.json\`
+- 写入 \`threads/{threadId}/debug/llm.input.json\`
+- 写入 \`threads/{threadId}/debug/llm.output.json\`
+
+本阶段不实现 stone/flow 数据合并、多 object session 协作、跨 object talk 投递。
 
 ## Session — 多 Flow 协作的工作空间
 
