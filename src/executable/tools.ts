@@ -7,8 +7,10 @@ import { handleRefineTool } from "./tools/refine";
 import { handleSubmitTool } from "./tools/submit";
 import { handleWaitTool } from "./tools/wait";
 
+/** 单个 LLM tool 的运行时 handler 签名。 */
 type ToolHandler = (thread: ThreadContext, args: Record<string, unknown>) => Promise<void>;
 
+/** tool 名到 handler 的路由表；未实现的 tool 会转成 context_change 提示。 */
 const TOOL_HANDLERS: Partial<Record<LlmToolCall["name"], ToolHandler>> = {
   open: handleOpenTool,
   refine: handleRefineTool,
@@ -17,12 +19,12 @@ const TOOL_HANDLERS: Partial<Record<LlmToolCall["name"], ToolHandler>> = {
   wait: handleWaitTool
 };
 
-// getAvailableTools 连接到真实的工具实现
+/** 返回当前线程可暴露给 LLM 的工具定义。 */
 export function getAvailableTools(thread: ThreadContext): LlmTool[] {
   return buildAvailableTools(thread);
 }
 
-// dispatchToolCall 只做路由，具体逻辑留在各 tool 文件中。
+/** 将 LLM tool call 分派给对应 handler，并把未知 tool 写成上下文提示。 */
 export async function dispatchToolCall(
   thread: ThreadContext,
   toolCall: LlmToolCall

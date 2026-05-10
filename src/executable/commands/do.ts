@@ -1,5 +1,8 @@
 import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
+import type { ThreadContext, ThreadMessage } from "../../thinkable/context.js";
+import { FormManager, type ActiveForm } from "../forms/form.js";
 
+/** do command 暴露给 LLM 的知识说明。 */
 export const KNOWLEDGE = `
 do 用于在当前对象内部派生子线程，或向已有子线程继续追加消息。
 
@@ -16,6 +19,7 @@ refine(form_id, { context: "fork", msg: "请检查日志", wait: true, knowledge
 submit(form_id)
 `;
 
+/** do command 的可匹配路径集合。 */
 export enum DoCommandPath {
   /** 基础 do 指令：执行动作。 */
   Do = "do",
@@ -27,6 +31,7 @@ export enum DoCommandPath {
   Wait = "do.wait",
 }
 
+/** do command 表项：根据 context/wait/target 派生路径。 */
 export const doCommand: CommandTableEntry = {
   paths: [
     DoCommandPath.Do,
@@ -45,7 +50,96 @@ export const doCommand: CommandTableEntry = {
   // 暂不实现具体执行逻辑
 };
 
-/** 执行 do 命令（占位实现，暂未实现具体逻辑） */
-export async function executeDoCommand(_ctx: CommandExecutionContext): Promise<void> {
-  // 暂未实现具体逻辑
+/** 生成内存线程 ID；当前只要求本地测试期间足够唯一。 */
+function generateThreadId(): string {
+  return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/** 构造 do 派生的线程间消息。 */
+function generateMessage(
+  fromThreadId: string,
+  toThreadId: string,
+  content: string,
+): ThreadMessage {
+  return {
+    id: `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+    fromThreadId,
+    toThreadId,
+    content,
+    createdAt: Date.now(),
+    source: "do",
+  };
+}
+
+/** 为 fork 出来的子线程创建“处理初始消息”的 todo form。 */
+function createInitialTodoForms(content: string): ActiveForm[] {
+  const formManager = new FormManager();
+  const formId = formManager.begin("todo", "处理初始消息");
+  formManager.applyRefine(formId, { content });
+  return formManager.toData();
+}
+
+/** 在当前内存线程树中按 ID 深度优先查找线程。 */
+function findThread(root: ThreadContext, threadId: string): ThreadContext | null {
+  if (root.id === threadId) return root;
+  for (const child of Object.values(root.childThreads ?? {})) {
+    const found = findThread(child, threadId);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** 执行 do command：fork 创建子线程，continue 向既有线程追加消息。 */
+export async function executeDoCommand(ctx: CommandExecutionContext): Promise<void> {
+  if (!ctx.thread) return;
+
+  const mode = ctx.args.context === "continue" ? "continue" : "fork";
+  const content = typeof ctx.args.msg === "string" ? ctx.args.msg : "";
+  const targetThreadId = typeof ctx.args.threadId === "string" ? ctx.args.threadId : undefined;
+
+  // fork 直接在目标父线程下挂一个新的运行中子线程，并把初始消息写入 inbox。
+  if (mode === "fork") {
+    const parentThread = targetThreadId ? findThread(ctx.thread, targetThreadId) : ctx.thread;
+    if (!parentThread) return;
+
+    const childId = generateThreadId();
+    const message = generateMessage(ctx.thread.id, childId, content);
+    const childThread: ThreadContext = {
+      id: childId,
+      status: "running",
+      events: [],
+      parentThreadId: parentThread.id,
+      creatorThreadId: ctx.thread.id,
+      inbox: [message],
+      activeForms: createInitialTodoForms(content),
+    };
+
+    parentThread.childThreadIds = [...(parentThread.childThreadIds ?? []), childId];
+    parentThread.childThreads = {
+      ...(parentThread.childThreads ?? {}),
+      [childId]: childThread,
+    };
+    ctx.thread.outbox = [...(ctx.thread.outbox ?? []), message];
+
+    // wait=true 时由当前线程等待新建的子线程完成。
+    if (ctx.args.wait === true) {
+      ctx.thread.status = "waiting";
+      ctx.thread.waitingType = "await_children";
+      ctx.thread.awaitingChildren = [childId];
+    }
+    return;
+  }
+
+  // continue 向现有线程追加消息；done/failed 线程收到新 inbox 后翻回 running。
+  if (!targetThreadId) return;
+  const targetThread = findThread(ctx.thread, targetThreadId);
+  if (!targetThread) return;
+
+  const message = generateMessage(ctx.thread.id, targetThreadId, content);
+  targetThread.inbox = [...(targetThread.inbox ?? []), message];
+  ctx.thread.outbox = [...(ctx.thread.outbox ?? []), message];
+
+  if (targetThread.status === "done" || targetThread.status === "failed") {
+    targetThread.status = "running";
+  }
 }

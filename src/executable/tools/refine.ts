@@ -22,7 +22,7 @@ export const REFINE_TOOL: LlmTool = {
   },
 };
 
-// refine 只累积参数，不触发 command 执行。
+/** 执行 refine tool：只累积参数并重算 command paths，不触发 command 执行。 */
 export async function handleRefineTool(
   thread: ThreadContext,
   args: Record<string, unknown>

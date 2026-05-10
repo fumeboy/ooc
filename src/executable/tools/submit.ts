@@ -19,7 +19,7 @@ export const SUBMIT_TOOL: LlmTool = {
   },
 };
 
-// submit 消费 form，并把累积参数交给 command 层接口。
+/** 执行 submit tool：消费 form，并把累积参数交给 command 层接口。 */
 export async function handleSubmitTool(
   thread: ThreadContext,
   args: Record<string, unknown>

@@ -24,7 +24,7 @@ export const CLOSE_TOOL: LlmTool = {
   },
 };
 
-// close 只关闭 form
+/** 执行 close tool：关闭 form 但不触发 command，并记录放弃原因。 */
 export async function handleCloseTool(
   thread: ThreadContext,
   args: Record<string, unknown>

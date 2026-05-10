@@ -1,5 +1,6 @@
 import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
 
+/** talk command 暴露给 LLM 的知识说明。 */
 export const KNOWLEDGE = `
 talk 用于向另一个 Object 发送消息。
 
@@ -18,6 +19,7 @@ refine(form_id, { target: "creator", msg: "任务完成", context: "continue", t
 submit(form_id)
 `;
 
+/** talk command 的可匹配路径集合。 */
 export enum TalkCommandPath {
   /** 基础 talk 指令：向目标对象发送消息。 */
   Talk = "talk",
@@ -35,6 +37,7 @@ export enum TalkCommandPath {
   QuestionForm = "talk.question_form",
 }
 
+/** talk command 表项：根据 context/wait/target/type 参数派生路径。 */
 export const talkCommand: CommandTableEntry = {
   paths: [
     TalkCommandPath.Talk,
@@ -65,7 +68,7 @@ export const talkCommand: CommandTableEntry = {
   // 暂不实现具体执行逻辑
 };
 
-/** 执行 talk 命令（占位实现，暂未实现具体逻辑） */
+/** 执行 talk command；跨 Object 通信能力尚未接入。 */
 export async function executeTalkCommand(_ctx: CommandExecutionContext): Promise<void> {
   // 暂未实现具体逻辑
 }

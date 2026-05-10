@@ -13,6 +13,7 @@ import { executeTalkCommand, talkCommand } from "./talk.js";
 import { executeTodoCommand, todoCommand } from "./todo.js";
 import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
 
+/** 对外统一导出 command 层类型。 */
 export type { CommandExecutionContext, CommandTableEntry } from "./types.js";
 
 /**

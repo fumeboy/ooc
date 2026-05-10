@@ -18,9 +18,12 @@ export interface CommandTableEntry {
   exec?: (args: Record<string, unknown>) => Promise<void> | void;
 }
 
-/** 命令执行上下文（占位类型，暂不包含具体字段） */
+/** 命令执行上下文，由 submit tool 消费 form 后传入具体 command。 */
 export interface CommandExecutionContext {
+  /** 当前执行 command 的线程；部分纯元数据 command 可以不依赖线程。 */
   thread?: ThreadContext;
+  /** 被 submit 消费的 form 快照，用于读取 command 和加载路径信息。 */
   form?: ActiveForm;
+  /** 最终参数，通常由 form.accumulatedArgs 与 submit 参数合并而来。 */
   args: Record<string, unknown>;
 }

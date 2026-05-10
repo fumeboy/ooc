@@ -64,6 +64,18 @@ while (有 running 线程) {
 任何写入 inbox 的路径，都会顺带检查目标线程状态：
 若状态为 done，直接翻回 running 并通知调度器。
 
+## 当前实现范围
+
+当前源码实现并测试：
+- 每个 tick 只执行一个 running thread
+- running thread 按 lastExecutedAt 从小到大选择
+- waitingType=await_children 的父线程在子线程 done/failed 后恢复 running
+
+当前源码暂未实现：
+- talk_sync / explicit_wait 的 inbox 唤醒
+- 全局 deadlock 检测与强制唤醒
+- super flow 调度
+
 ## 死锁检测
 
 定义：所有线程都进入 waiting 且没有可触发的唤醒条件 → 死锁。

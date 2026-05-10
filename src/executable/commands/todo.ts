@@ -1,5 +1,6 @@
 import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
 
+/** todo command 暴露给 LLM 的知识说明。 */
 export const KNOWLEDGE = `
 todo 用于登记一个可见待办，并可选配置在命中特定 command 或 command path 时提醒。
 
@@ -13,6 +14,7 @@ refine(form_id, { content: "补充 program 的真实链路测试", on_command_pa
 submit(form_id)
 `;
 
+/** todo command 的可匹配路径集合。 */
 export enum TodoCommandPath {
   /** 基础 todo 指令：登记一个待办。 */
   Todo = "todo",
@@ -20,6 +22,7 @@ export enum TodoCommandPath {
   OnCommandPath = "todo.on_command_path",
 }
 
+/** todo command 表项：根据 on_command_path 参数派生提醒路径。 */
 export const todoCommand: CommandTableEntry = {
   paths: [
     TodoCommandPath.Todo,
@@ -35,7 +38,7 @@ export const todoCommand: CommandTableEntry = {
   // 暂不实现具体执行逻辑
 };
 
-/** 执行 todo 命令（占位实现，暂未实现具体逻辑） */
+/** 执行 todo 命令：todo 的可见性完全由 activeForms 生命周期表达。 */
 export async function executeTodoCommand(_ctx: CommandExecutionContext): Promise<void> {
-  // 暂未实现具体逻辑
+  return;
 }

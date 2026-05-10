@@ -36,6 +36,7 @@ export const OPEN_TOOL: LlmTool = {
   }
 };
 
+/** 从 tool 参数中取出嵌套 args；非对象输入按空参数处理。 */
 function getArgs(args: Record<string, unknown>): Record<string, unknown> {
   const nested = args.args;
   if (nested && typeof nested === "object" && !Array.isArray(nested)) {
@@ -44,13 +45,14 @@ function getArgs(args: Record<string, unknown>): Record<string, unknown> {
   return {};
 }
 
+/** 向字符串数组追加唯一值，用于 knowledge pin/activate 的幂等记录。 */
 function pushUnique(target: string[] | undefined, value: string): string[] {
   const next = target ?? [];
   if (!next.includes(value)) next.push(value);
   return next;
 }
 
-// open 的行为以新文档为准：只有 command 产生 form。
+/** 执行 open tool：command 创建 form，knowledge/file 只打开 context 窗口。 */
 export async function handleOpenTool(
   thread: ThreadContext,
   args: Record<string, unknown>

@@ -1,5 +1,6 @@
 import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
 
+/** program command 暴露给 LLM 的知识说明。 */
 export const KNOWLEDGE = `
 program 用于执行一段代码，或调用对象 server 暴露的方法。
 
@@ -15,6 +16,7 @@ refine(form_id, { language: "ts", code: "const data = await readFile('foo.txt');
 submit(form_id)
 `;
 
+/** program command 的可匹配路径集合。 */
 export enum ProgramCommandPath {
   /** 基础 program 指令：执行代码或调用 server 导出函数。 */
   Program = "program",
@@ -28,6 +30,7 @@ export enum ProgramCommandPath {
   Function = "program.function",
 }
 
+/** program command 表项：根据 language/function 参数派生路径。 */
 export const programCommand: CommandTableEntry = {
   paths: [
     ProgramCommandPath.Program,
@@ -48,7 +51,7 @@ export const programCommand: CommandTableEntry = {
   // 暂不实现具体执行逻辑
 };
 
-/** 执行 program 命令（占位实现，暂未实现具体逻辑） */
+/** 执行 program command；真实代码执行能力尚未接入。 */
 export async function executeProgramCommand(_ctx: CommandExecutionContext): Promise<void> {
   // 暂未实现具体逻辑
 }

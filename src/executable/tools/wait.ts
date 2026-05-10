@@ -19,7 +19,7 @@ export const WAIT_TOOL: LlmTool = {
   },
 };
 
-// wait 只改线程状态
+/** 执行 wait tool：把当前线程切到 explicit_wait，并写入可见的上下文变化提示。 */
 export async function handleWaitTool(
   thread: ThreadContext,
   args: Record<string, unknown>
