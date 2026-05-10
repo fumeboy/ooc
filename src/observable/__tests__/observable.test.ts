@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as observableModule from "../index";
 import type { ThreadContext } from "../../thinkable/context";
 import type { LlmGenerateResult, LlmMessage, LlmTool } from "../../thinkable/llm/types";
-import { createFlowObject, threadPaths } from "../../persistable";
+import { createFlowObject, llmInputFile, llmOutputFile } from "../../persistable";
 
 type ObservableStore = typeof observableModule & {
   clearLatestLlmObservation: () => void;
@@ -104,9 +104,8 @@ describe("observable persistable debug files", () => {
       toolCalls: []
     });
 
-    const paths = threadPaths(thread.persistence!);
-    const input = JSON.parse(await readFile(paths.llmInputFile, "utf8"));
-    const output = JSON.parse(await readFile(paths.llmOutputFile, "utf8"));
+    const input = JSON.parse(await readFile(llmInputFile(thread.persistence!), "utf8"));
+    const output = JSON.parse(await readFile(llmOutputFile(thread.persistence!), "utf8"));
 
     expect(input.threadId).toBe("root");
     expect(output.result.text).toBe("done");

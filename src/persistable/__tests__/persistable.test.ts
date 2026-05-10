@@ -4,9 +4,10 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   createFlowObject,
-  flowObjectPaths,
+  flowMetadataFile,
+  llmInputFile,
+  llmOutputFile,
   readThread,
-  threadPaths,
   writeDebugInput,
   writeDebugOutput,
   writeThread
@@ -31,8 +32,7 @@ describe("persistable single object flow", () => {
       objectId: "obj"
     });
 
-    const paths = flowObjectPaths(ref);
-    const metadata = JSON.parse(await readFile(paths.flowMetadataFile, "utf8"));
+    const metadata = JSON.parse(await readFile(flowMetadataFile(ref), "utf8"));
 
     expect(metadata).toEqual({
       type: "flow-object",
@@ -100,9 +100,8 @@ describe("persistable single object flow", () => {
       }
     });
 
-    const paths = threadPaths(threadRef);
-    const input = JSON.parse(await readFile(paths.llmInputFile, "utf8"));
-    const output = JSON.parse(await readFile(paths.llmOutputFile, "utf8"));
+    const input = JSON.parse(await readFile(llmInputFile(threadRef), "utf8"));
+    const output = JSON.parse(await readFile(llmOutputFile(threadRef), "utf8"));
 
     expect(input.threadId).toBe("root");
     expect(output.result.text).toBe("ok");

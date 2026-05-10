@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import type { LlmClient } from "../llm/types";
 import type { ThreadContext } from "../context";
 import { runScheduler } from "../scheduler";
-import { createFlowObject, threadPaths } from "../../persistable";
+import { createFlowObject, threadFile } from "../../persistable";
 
 describe("scheduler", () => {
   it("wakes a waiting parent after its awaited child finishes", async () => {
@@ -204,8 +204,7 @@ describe("scheduler persistence", () => {
 
     await runScheduler(root, llmClient, { maxTicks: 1 });
 
-    const paths = threadPaths(root.persistence!);
-    const saved = JSON.parse(await readFile(paths.threadFile, "utf8"));
+    const saved = JSON.parse(await readFile(threadFile(root.persistence!), "utf8"));
     expect(saved.events.at(-1)).toEqual({
       category: "llm_interaction",
       kind: "text",

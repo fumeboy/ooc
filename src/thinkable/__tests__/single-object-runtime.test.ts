@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
-import { createFlowObject, threadPaths } from "../../persistable";
+import { createFlowObject, llmInputFile, llmOutputFile, threadFile } from "../../persistable";
 import type { ThreadContext } from "../context";
 import type { LlmClient } from "../llm/types";
 import { runScheduler } from "../scheduler";
@@ -81,10 +81,10 @@ describe("single object runtime", () => {
 
     await runScheduler(root, llmClient, { maxTicks: 2 });
 
-    const paths = threadPaths(root.persistence!);
-    const input = JSON.parse(await readFile(paths.llmInputFile, "utf8"));
-    const output = JSON.parse(await readFile(paths.llmOutputFile, "utf8"));
-    const savedThread = JSON.parse(await readFile(paths.threadFile, "utf8"));
+    const ref = root.persistence!;
+    const input = JSON.parse(await readFile(llmInputFile(ref), "utf8"));
+    const output = JSON.parse(await readFile(llmOutputFile(ref), "utf8"));
+    const savedThread = JSON.parse(await readFile(threadFile(ref), "utf8"));
 
     expect(input.threadId).toBe("root");
     expect(output.result.toolCalls[0]?.name).toBe("submit");

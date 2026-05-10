@@ -1,6 +1,6 @@
 import type { LlmMessage } from "./llm/types";
 import type { ActiveForm } from "../executable/forms/form";
-import type { ThreadPersistenceRef } from "../persistable/types";
+import type { ThreadPersistenceRef } from "../persistable/common";
 
 /**
  * 线程过程事件。
