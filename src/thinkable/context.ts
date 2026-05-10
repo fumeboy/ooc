@@ -166,6 +166,7 @@ function renderActiveForms(activeForms: ActiveForm[] | undefined): string {
 
   const items = activeForms
     .map((form) => {
+      const status = form.status ?? "open";
       const commandPaths = form.commandPaths.length
         ? `<command_paths>${form.commandPaths
             .map((path) => `<path>${escapeXml(path)}</path>`)
@@ -176,14 +177,18 @@ function renderActiveForms(activeForms: ActiveForm[] | undefined): string {
             .map((path) => `<path>${escapeXml(path)}</path>`)
             .join("")}</loaded_knowledge>`
         : "";
+      const resultXml = status === "executed" && form.result
+        ? `<result>${escapeXml(form.result)}</result>`
+        : "";
 
       return [
-        `<form id="${escapeXml(form.formId)}">`,
+        `<form id="${escapeXml(form.formId)}" status="${escapeXml(status)}">`,
         `<command>${escapeXml(form.command)}</command>`,
         `<description>${escapeXml(form.description)}</description>`,
         `<accumulated_args>${escapeXml(JSON.stringify(form.accumulatedArgs))}</accumulated_args>`,
         commandPaths,
         loadedKnowledge,
+        resultXml,
         "</form>"
       ].join("");
     })

@@ -92,7 +92,7 @@ describe("buildContext", () => {
     const messages = await buildContext(thread);
 
     expect(messages[0]?.content).toContain("<active_forms>");
-    expect(messages[0]?.content).toContain('<form id="f_todo">');
+    expect(messages[0]?.content).toContain('<form id="f_todo" status="open">');
     expect(messages[0]?.content).toContain("<command>todo</command>");
     expect(messages[0]?.content).toContain("处理用户的初始请求");
     expect(messages[0]?.content).not.toContain("<todos>");
@@ -156,5 +156,63 @@ describe("buildContext", () => {
         content: "[context_change:inject]\n用户补充了新的要求"
       }
     ]);
+  });
+
+  it("renders form status attribute and shows result only when executed", async () => {
+    const thread: ThreadContext = {
+      id: "t_status",
+      status: "running",
+      events: [],
+      activeForms: [
+        {
+          formId: "f_open",
+          command: "program",
+          description: "shell",
+          createdAt: 1,
+          accumulatedArgs: { language: "shell", code: "ls" },
+          commandPaths: ["program", "program.shell"],
+          loadedKnowledgePaths: [],
+          status: "open"
+        },
+        {
+          formId: "f_executing",
+          command: "program",
+          description: "shell",
+          createdAt: 2,
+          accumulatedArgs: {},
+          commandPaths: ["program"],
+          loadedKnowledgePaths: [],
+          status: "executing"
+        },
+        {
+          formId: "f_executed",
+          command: "program",
+          description: "shell",
+          createdAt: 3,
+          accumulatedArgs: {},
+          commandPaths: ["program"],
+          loadedKnowledgePaths: [],
+          status: "executed",
+          result: "$ ls\n[stdout]\nfoo\n[exit 0]"
+        }
+      ]
+    };
+
+    const messages = await buildContext(thread);
+    const xml = messages[0]?.content ?? "";
+
+    expect(xml).toContain('<form id="f_open" status="open">');
+    expect(xml).toContain('<form id="f_executing" status="executing">');
+    expect(xml).toContain('<form id="f_executed" status="executed">');
+
+    // 切片 + 字符串包含断言：避免跨 form 边界的贪婪匹配
+    function sliceForm(id: string): string {
+      const start = xml.indexOf(`<form id="${id}"`);
+      const end = xml.indexOf("</form>", start) + "</form>".length;
+      return xml.slice(start, end);
+    }
+    expect(sliceForm("f_executed")).toContain("<result>$ ls\n[stdout]\nfoo\n[exit 0]</result>");
+    expect(sliceForm("f_open")).not.toContain("<result>");
+    expect(sliceForm("f_executing")).not.toContain("<result>");
   });
 });
