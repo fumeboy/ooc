@@ -51,8 +51,57 @@ export const programCommand: CommandTableEntry = {
   // 暂不实现具体执行逻辑
 };
 
-/** 执行 program command；真实代码执行能力尚未接入。 */
-export async function executeProgramCommand(_ctx: CommandExecutionContext): Promise<string | undefined> {
-  // 暂未实现具体逻辑（Task 3 落地 program.shell）
-  return undefined;
+const MAX_OUTPUT_BYTES = 4096;
+
+function truncate(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  if (bytes.length <= MAX_OUTPUT_BYTES) return text;
+  const head = new TextDecoder().decode(bytes.slice(0, MAX_OUTPUT_BYTES));
+  return `${head}...[truncated, original ${bytes.length} bytes]`;
+}
+
+function formatShellResult(code: string, stdout: string, stderr: string, exitCode: number): string {
+  const firstLine = code.split("\n")[0]?.trim() ?? "";
+  const lines = [`$ ${firstLine}`];
+  if (stdout) lines.push("[stdout]", truncate(stdout));
+  if (stderr) lines.push("[stderr]", truncate(stderr));
+  // exit 124 是 GNU coreutils timeout 的约定退出码
+  lines.push(exitCode === 124 ? "[timeout 30s]" : `[exit ${exitCode}]`);
+  return lines.join("\n");
+}
+
+async function runShell(code: string): Promise<string> {
+  let proc: ReturnType<typeof Bun.spawn>;
+  try {
+    proc = Bun.spawn(["sh", "-c", code], {
+      cwd: process.cwd(),
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 30_000,
+    });
+  } catch (error) {
+    return `[program.shell] 启动失败: ${(error as Error).message}`;
+  }
+
+  const [stdout, stderr] = await Promise.all([
+    new Response(proc.stdout as ReadableStream<Uint8Array>).text(),
+    new Response(proc.stderr as ReadableStream<Uint8Array>).text(),
+  ]);
+  const exitCode = await proc.exited;
+  return formatShellResult(code, stdout, stderr, exitCode);
+}
+
+/** 执行 program command；当前阶段仅支持 language="shell"。 */
+export async function executeProgramCommand(ctx: CommandExecutionContext): Promise<string | undefined> {
+  const language = (ctx.args.language ?? ctx.args.lang) as string | undefined;
+  const code = ctx.args.code as string | undefined;
+
+  if (language !== "shell") {
+    return `[program] 本阶段仅支持 language="shell"，收到 language="${language ?? "<undefined>"}"`;
+  }
+  if (typeof code !== "string" || code.trim() === "") {
+    return `[program.shell] 缺少 code 参数`;
+  }
+
+  return runShell(code);
 }
