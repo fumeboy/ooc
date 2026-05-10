@@ -132,7 +132,9 @@ describe("buildContext", () => {
 
     const messages = await buildContext(thread);
 
-    expect(messages).toHaveLength(5);
+    // tool_use 事件刻意不进 transcript，避免 LLM 看到自己上一轮被
+    // 渲染成纯文本 [tool_use:NAME] 后模仿这种格式输出文本而非真正的 tool call。
+    expect(messages).toHaveLength(4);
     expect(messages[0]).toEqual({
       role: "system",
       content: '<context><thread id="t_process" status="running"></thread></context>'
@@ -146,10 +148,6 @@ describe("buildContext", () => {
       {
         role: "assistant",
         content: "[thinking]\n需要先检查上下文"
-      },
-      {
-        role: "assistant",
-        content: '[tool_use:open]\n{"type":"command","command":"todo"}'
       },
       {
         role: "user",

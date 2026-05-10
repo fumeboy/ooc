@@ -197,8 +197,8 @@ function renderActiveForms(activeForms: ActiveForm[] | undefined): string {
   return `<active_forms>${items}</active_forms>`;
 }
 
-/** 把过程事件转换为 provider 无关的 LLM message。 */
-function processEventToMessage(event: ProcessEvent): LlmMessage {
+/** 把过程事件转换为 provider 无关的 LLM message；返回 null 表示该事件不进 transcript。 */
+function processEventToMessage(event: ProcessEvent): LlmMessage | null {
   if (event.category === "context_change") {
     return {
       role: "user",
@@ -206,11 +206,17 @@ function processEventToMessage(event: ProcessEvent): LlmMessage {
     };
   }
 
+  /**
+   * tool_use 事件不进 transcript：
+   * 1) 多 provider 中只有把它渲染成 native tool_use block 才能让模型识别为"我之前调用了工具"；
+   *    渲染成纯文本 `[tool_use:NAME]\n{...}` 会让 Claude 在下一轮模仿这种文本形态，
+   *    输出的 tool 调用变成 text 内容而不是真正的 tool call（实测过的幻觉）。
+   * 2) 当前形态信息（active_forms / status / result）已通过 system XML context 完整暴露，
+   *    LLM 知道"我现在有哪些 form"，不需要靠 transcript 回忆自己刚才点了什么。
+   * 真正的 native tool_use 复述属于后续 provider 抽象升级，本阶段不做。
+   */
   if (event.kind === "tool_use") {
-    return {
-      role: "assistant",
-      content: `[tool_use:${event.toolName}]\n${JSON.stringify(event.arguments)}`
-    };
+    return null;
   }
 
   if (event.kind === "thinking") {
@@ -246,11 +252,15 @@ export async function buildContext(thread: ThreadContext): Promise<LlmMessage[]>
     "</context>"
   ].join("");
 
+  const transcript = thread.events
+    .map(processEventToMessage)
+    .filter((message): message is LlmMessage => message !== null);
+
   return [
     {
       role: "system",
       content
     },
-    ...thread.events.map(processEventToMessage)
+    ...transcript
   ];
 }

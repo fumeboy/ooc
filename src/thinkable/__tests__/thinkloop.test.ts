@@ -346,14 +346,11 @@ describe("think", () => {
     expect(messages?.[0]?.content).toContain("<outbox>");
     expect(messages?.[0]?.content).toContain("先去检查日志");
     expect(messages?.[0]?.content).not.toContain("上一轮已经检查过日志");
+    // tool_use 事件刻意不进 transcript（见 context.ts processEventToMessage 注释）。
     expect(messages?.slice(1)).toEqual([
       {
         role: "assistant",
         content: "上一轮已经检查过日志"
-      },
-      {
-        role: "assistant",
-        content: '[tool_use:wait]\n{"reason":"等待用户补充"}'
       },
       {
         role: "user",
