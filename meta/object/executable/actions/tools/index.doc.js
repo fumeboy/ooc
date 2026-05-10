@@ -27,21 +27,24 @@ LLM 永远只面向这些 tool；具体能"做什么"由 open 时携带的 comma
 ## 原语 + form 的关系
 
 \`\`\`
-open(type=command, command=X, ...)   →  FormManager.begin(formId, command=X)
+open(type=command, command=X, ...)   →  FormManager.open(command=X)
                                           ↓
-                                       form 进入活跃状态
+                                       form 进入活跃状态（status=open）
                                        根据 command 路径激活相关 knowledge
-refine(form_id, args)                →  FormManager.applyRefine(formId, args)
+refine(form_id, args)                →  FormManager.refine(formId, args)
                                           ↓
                                        累积参数；若 args 触发新的 command 路径，
                                        增量激活对应 knowledge
 submit(form_id, ...)                 →  FormManager.submit(formId)
                                           ↓
+                                       form 状态切到 executing（仍在 active_forms）
                                        executeCommand(form.command, finalArgs)
-                                       form 关闭；非 pinned 的 knowledge 自动卸载
-close(form_id, reason)               →  FormManager.cancel(formId)
+                                       FormManager.markExecuted(formId, result)
+                                       form 状态切到 executed，result 进入 context
+                                       （form 不自动关闭，由 LLM 显式 close）
+close(form_id, reason)               →  FormManager.close(formId)
                                           ↓
-                                       form 关闭，无执行
+                                       form 真正离开 active_forms（任何状态都可关）
                                        非 pinned 的 knowledge 自动卸载
 wait()                               →  setNodeStatus("waiting")
                                           ↓
