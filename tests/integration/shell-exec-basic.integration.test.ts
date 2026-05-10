@@ -23,7 +23,12 @@ describe.skipIf(!hasLlmEnv)("integration: shell-exec-basic", () => {
   test("agent counts ts files via shell and ends", async () => {
     const root = await makeRootThread(
       tempRoot,
-      "请用 shell 命令查一下 src/persistable/ 下有几个 .ts 文件（不含 __tests__/ 子目录），告诉我数字然后 end。"
+      [
+        "请用 program command（language=shell）执行 shell 命令，",
+        "查 src/persistable/ 下有几个 .ts 文件（不含 __tests__/ 子目录）。",
+        "看到 form 的 result 字段后，把数字写进 end command 的 summary 然后 end。",
+        "重要：执行 shell 必须用 program command；result 会出现在 active_forms 对应 form 的 result 字段，不需要 wait。",
+      ].join("\n")
     );
 
     await runScheduler(root, llm(), { maxTicks: 12 });

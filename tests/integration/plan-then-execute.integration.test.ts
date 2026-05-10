@@ -24,8 +24,10 @@ describe.skipIf(!hasLlmEnv)("integration: plan-then-execute", () => {
     const root = await makeRootThread(
       tempRoot,
       [
-        "请先做一份执行计划（用 plan command）：'数 src/ 下所有 .ts 文件总数'。",
-        "然后按计划用 shell 执行，把数字告诉我，最后 end。",
+        "请先做一份执行计划（open type=command command=plan）：'数 src/ 下所有 .ts 文件总数'。",
+        "然后用 program command（language=shell）执行 shell 命令，",
+        "看到 form 的 result 字段后，把数字写进 end command 的 summary 然后 end。",
+        "重要：执行 shell 用 program command 不是 do command；程序结果会出现在 active_forms 中对应 form 的 result 字段，不需要 wait。",
       ].join("\n")
     );
 

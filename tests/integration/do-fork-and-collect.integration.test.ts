@@ -26,9 +26,9 @@ describe.skipIf(!hasLlmEnv)("integration: do-fork-and-collect", () => {
     const root = await makeRootThread(
       tempRoot,
       [
-        "请派一个子线程（do command, context=fork, wait=true）执行任务：",
-        "用 shell 数 src/ 下所有 .ts 文件总数。",
-        "等子线程完成后，告诉我数字然后 end。",
+        "请用 do command（context=fork, wait=true, msg='请用 program command(language=shell) 跑 find src -type f -name *.ts | wc -l 然后 end'）派生子线程。",
+        "等子线程完成后（你会从 waiting 醒来），用 end command 结束父线程。",
+        "重要：你只需 open(do)+refine+submit 一次，然后醒来后 open(end)+submit；不要在父线程里直接跑 shell。",
       ].join("\n")
     );
 

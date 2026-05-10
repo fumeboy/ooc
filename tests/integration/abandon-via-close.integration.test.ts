@@ -24,9 +24,9 @@ describe.skipIf(!hasLlmEnv)("integration: abandon-via-close", () => {
     const root = await makeRootThread(
       tempRoot,
       [
-        "请演示 close tool 的用法：先 open 一个 program form（language=shell, code=ls），",
-        "然后立即 close 它（不要 submit！只 close），reason='演示放弃这次行动'。",
-        "完成后 end。",
+        "请演示 close tool 的用法：先 open 一个 program command form（type=command, command=program, args={language:'shell', code:'ls'}）。",
+        "然后立即用 close tool 关闭它（不要 submit！只 close），reason='演示放弃这次行动'。",
+        "之后 open type=command command=end 再 submit 来结束线程。",
       ].join("\n")
     );
 

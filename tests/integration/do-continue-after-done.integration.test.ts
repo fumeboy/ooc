@@ -24,11 +24,11 @@ describe.skipIf(!hasLlmEnv)("integration: do-continue-after-done", () => {
     const root = await makeRootThread(
       tempRoot,
       [
-        "请派一个子线程执行 task A：用 shell 数 src/persistable/ 下的 .ts 文件数。",
-        "（用 do command, context=fork, wait=true）",
-        "等子线程完成 task A 后，再用 do command, context=continue, threadId=<刚才那个子线程的 id>, wait=true",
-        "追加 task B：用 shell 数 src/thinkable/ 下的 .ts 文件数。",
-        "等 task B 也完成后，告诉我两个数字然后 end。",
+        "请用 do command（context=fork, wait=true）派生子线程，msg='请用 program(language=shell) 跑 find src/persistable -type f -name *.ts | wc -l 然后 end'。",
+        "等子线程完成 task A（你会从 waiting 醒来），active_forms 与 system context 会显示子线程 id。",
+        "然后再次 open do command（context=continue, threadId=<那个子线程 id>, wait=true, msg='请再用 program(language=shell) 跑 find src/thinkable -type f -name *.ts | wc -l 然后 end'）追加 task B。",
+        "等 task B 也完成后（再次从 waiting 醒来），open(end)+submit 结束。",
+        "重要：你不在父线程跑 shell，只用 do command 派生/追加。",
       ].join("\n")
     );
 

@@ -27,9 +27,10 @@ describe.skipIf(!hasLlmEnv)("integration: todo-driven-multistep", () => {
         "你接下来要完成两件事：",
         "(1) 数 src/persistable/ 下 .ts 文件数量；",
         "(2) 数 src/thinkable/ 下 .ts 文件数量。",
-        "请先用 todo command 把这两件事登记成 todo（open + refine + submit 各一次），",
-        "然后逐个用 shell 执行，每完成一件后用 close 把对应 todo form 关闭。",
-        "全部完成后 end。",
+        "请先用 todo command 把这两件事各登记成一个 todo（每件 open + refine(content=...) + submit），",
+        "然后逐个用 program command（language=shell）执行 shell 命令，每件完成后用 close 关闭对应 todo form。",
+        "全部完成后 open(type=command, command=end) 提交结束。",
+        "重要：每段 shell 用 program command；result 在 active_forms 中，不需要 wait。",
       ].join("\n")
     );
 

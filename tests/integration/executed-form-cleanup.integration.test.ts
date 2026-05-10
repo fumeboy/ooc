@@ -24,8 +24,10 @@ describe.skipIf(!hasLlmEnv)("integration: executed-form-cleanup", () => {
     const root = await makeRootThread(
       tempRoot,
       [
-        "请用 shell 跑 'ls src/'，看到结果后立刻 close 那个已 executed 的 form 释放 context。",
-        "然后 end。",
+        "请用 program command（language=shell, code='ls src/'）执行 shell。",
+        "submit 后看到 form status=executed 和 result，立刻用 close tool 关闭那个 form（reason='已读取结果'）。",
+        "然后 open(type=command, command=end) 提交结束。",
+        "重要：result 已在 active_forms 中可见，不需要 wait。",
       ].join("\n")
     );
 
