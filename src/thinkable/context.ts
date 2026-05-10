@@ -1,5 +1,6 @@
 import type { LlmMessage } from "./llm/types";
 import type { ActiveForm } from "../executable/forms/form";
+import type { ThreadPersistenceRef } from "../persistable/types";
 
 /**
  * 线程过程事件。
@@ -118,6 +119,8 @@ export type ThreadContext = {
   endSummary?: string;
   /** 最近一次被 scheduler 执行的时间，用于公平选择下一个 running thread。 */
   lastExecutedAt?: number;
+  /** 当前线程的持久化位置；缺失时系统只以内存模式运行。 */
+  persistence?: ThreadPersistenceRef;
 };
 
 /** 转义 XML 特殊字符，保证 context 内容不会破坏标签结构。 */
