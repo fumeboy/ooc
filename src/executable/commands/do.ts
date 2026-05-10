@@ -107,7 +107,15 @@ export async function executeDoCommand(ctx: CommandExecutionContext): Promise<st
     const childThread: ThreadContext = {
       id: childId,
       status: "running",
-      events: [],
+      // 同步把初始消息以 inject 形式入 events，确保 LLM transcript 至少有一条 user 消息：
+      // Claude/OpenAI API 都要求 messages 不能只有 system，否则代理可能直接返回空 body。
+      events: [
+        {
+          category: "context_change",
+          kind: "inject",
+          text: `[初始消息] ${content}`,
+        },
+      ],
       parentThreadId: parentThread.id,
       creatorThreadId: ctx.thread.id,
       inbox: [message],
