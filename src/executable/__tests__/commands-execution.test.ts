@@ -60,4 +60,26 @@ describe("command execution side effects", () => {
     expect(thread.endReason).toBe("done");
     expect(thread.endSummary).toBe("真实测试可以继续往上叠");
   });
+
+  it("talk should be an explicit non-goal in the single object phase", async () => {
+    const thread: ThreadContext = {
+      id: "thread-talk",
+      status: "running",
+      events: []
+    };
+
+    await executeCommand("talk", {
+      thread,
+      args: {
+        target: "another-object",
+        msg: "hello"
+      }
+    });
+
+    expect(thread.events.at(-1)).toEqual({
+      category: "context_change",
+      kind: "inject",
+      text: "[talk] 多 object 交互不属于当前单 object 阶段。"
+    });
+  });
 });
