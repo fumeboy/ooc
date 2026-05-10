@@ -74,8 +74,8 @@ function generateMessage(
 /** 为 fork 出来的子线程创建“处理初始消息”的 todo form。 */
 function createInitialTodoForms(content: string): ActiveForm[] {
   const formManager = new FormManager();
-  const formId = formManager.begin("todo", "处理初始消息");
-  formManager.applyRefine(formId, { content });
+  const formId = formManager.open("todo", "处理初始消息");
+  formManager.refine(formId, { content });
   return formManager.toData();
 }
 

@@ -64,8 +64,8 @@ export async function handleOpenTool(
 
   if (openType === "command") {
     const command = args.command as string;
-    const formId = formManager.begin(command, description);
-    formManager.applyRefine(formId, nestedArgs);
+    const formId = formManager.open(command, description);
+    formManager.refine(formId, nestedArgs);
     thread.activeForms = formManager.toData();
     thread.events.push({
       category: "context_change",

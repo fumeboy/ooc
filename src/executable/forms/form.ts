@@ -1,12 +1,11 @@
 /**
  * Form 管理器
  *
- * 管理指令生命周期的 form 模型。
- * 每个指令通过 begin/applyRefine/submit/cancel 四阶段执行：
- * - begin：创建 form，加载相关 knowledge（open tool 触发）
- * - applyRefine：累积 args 但不执行；重算命令路径（refine tool 触发）
- * - submit：按最终 args 执行指令，form 结束（引用计数 -1）
- * - cancel：放弃执行，form 结束（等价 submit，但不触发指令）
+ * 管理指令生命周期的 form 模型，方法名与对应的 LLM tool 一一对应：
+ * - open：创建 form，加载相关 knowledge（open tool 触发）
+ * - refine：累积 args 但不执行；重算命令路径（refine tool 触发）
+ * - submit：按最终 args 执行指令，form 结束（submit tool 触发）
+ * - close：放弃执行，form 结束（close tool 触发；逻辑等价 submit，但不触发指令）
  *
  * 同类型 form 共享 command 级别的激活状态（引用计数）。
  */
@@ -19,14 +18,14 @@ export interface ActiveForm {
   formId: string;
   /** 指令类型（如 "talk", "program"） */
   command: string;
-  /** 描述（begin 时提供） */
+  /** 描述（open 时提供） */
   description: string;
   /** 创建时间戳 */
   createdAt: number;
   /**
    * 累积的 args（渐进式填表）
    *
-   * applyRefine 把本次 args 与现有累积合并（后者覆盖前者同名字段）；
+   * refine 把本次 args 与现有累积合并（后者覆盖前者同名字段）；
    * 最终 submit 时把累积 args 交付给指令执行器。
    * 未经 refine 的 form 保持 `{}`。
    */
@@ -35,7 +34,7 @@ export interface ActiveForm {
   /**
    * 当前激活的 path 集合（由 deriveCommandPaths(command, accumulatedArgs) 算出）
    *
-   * begin 时 = match(command, {})；refine 后用最新累积 args 重算。
+   * open 时 = match(command, {})；refine 后用最新累积 args 重算。
    * Context 构建阶段会基于这些 path 决定激活哪些 knowledge。
    * 多路径并行：如 ["talk", "talk.continue", "talk.relation_update"]。
    */
@@ -44,9 +43,9 @@ export interface ActiveForm {
   /**
    * 本 form 已加载的 knowledge path 列表
    *
-   * 用于 submit / cancel 时批量释放——避免因渐进填表
+   * 用于 submit / close 时批量释放——避免因渐进填表
    * 触发的临时 knowledge 在 form 结束后仍残留 context。
-   * begin 时由 engine 写入初始加载集；applyRefine 新增追加；关闭时参考此字段。
+   * open 时由 engine 写入初始加载集；refine 新增追加；关闭时参考此字段。
    */
   loadedKnowledgePaths: string[];
 }
@@ -61,8 +60,8 @@ export class FormManager {
   private forms = new Map<string, ActiveForm>();
   private commandRefCount = new Map<string, number>();
 
-  /** 开启 form，返回 form_id */
-  begin(command: string, description: string): string {
+  /** 开启 form，返回 form_id（对应 open tool）。 */
+  open(command: string, description: string): string {
     const formId = generateFormId();
     this.forms.set(formId, {
       formId,
@@ -78,14 +77,13 @@ export class FormManager {
   }
 
   /**
-   * Refine：累积 args 但不执行（替代旧的 partialSubmit）
+   * 累积 args 但不执行（对应 refine tool）。
    *
    * 累积 args、重算 commandPaths，form 仍保留、引用计数不变。
-   * 对应 refine tool。
    *
    * @returns 更新后的 form 快照；formId 不存在时返回 null
    */
-  applyRefine(
+  refine(
     formId: string,
     args: Record<string, unknown>,
   ): ActiveForm | null {
@@ -106,7 +104,7 @@ export class FormManager {
     return next;
   }
 
-  /** 提交 form，返回被提交的 form 信息（不存在返回 null） */
+  /** 提交 form，返回被提交的 form 信息（对应 submit tool；不存在返回 null）。 */
   submit(formId: string): ActiveForm | null {
     const form = this.forms.get(formId);
     if (!form) return null;
@@ -120,13 +118,13 @@ export class FormManager {
     return form;
   }
 
-  /** 取消 form，返回被取消的 form 信息（不存在返回 null） */
-  cancel(formId: string): ActiveForm | null {
+  /** 关闭 form，返回被关闭的 form 信息（对应 close tool；不存在返回 null）。 */
+  close(formId: string): ActiveForm | null {
     return this.submit(formId); // 逻辑相同：移除 form + 引用计数 -1
   }
 
   /**
-   * 追加本 form 已加载的 knowledge path（engine 在 begin / applyRefine 后调用）
+   * 追加本 form 已加载的 knowledge path（engine 在 open / refine 后调用）
    *
    * 幂等：重复 id 不再追加。
    */

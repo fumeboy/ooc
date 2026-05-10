@@ -30,7 +30,7 @@ export async function handleRefineTool(
   const formId = args.form_id as string;
   const incoming = (args.args as Record<string, unknown> | undefined) ?? {};
   const formManager = FormManager.fromData(thread.activeForms ?? []);
-  const updatedForm = formManager.applyRefine(formId, incoming);
+  const updatedForm = formManager.refine(formId, incoming);
 
   if (!updatedForm) {
     thread.events.push({

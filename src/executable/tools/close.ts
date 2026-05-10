@@ -42,7 +42,7 @@ export async function handleCloseTool(
   }
 
   const formManager = FormManager.fromData(thread.activeForms ?? []);
-  const form = formManager.cancel(formId);
+  const form = formManager.close(formId);
 
   if (!form) {
     thread.events.push({

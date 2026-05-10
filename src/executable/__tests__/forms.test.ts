@@ -9,13 +9,13 @@ describe("FormManager", () => {
   });
 
   it("should create a form and return form_id", () => {
-    const formId = formManager.begin("talk", "test description");
+    const formId = formManager.open("talk", "test description");
     expect(typeof formId).toBe("string");
     expect(formId.length).toBeGreaterThan(0);
   });
 
   it("should retrieve an active form", () => {
-    const formId = formManager.begin("talk", "test description");
+    const formId = formManager.open("talk", "test description");
     const form = formManager.getForm(formId);
     expect(form).not.toBeNull();
     expect(form?.command).toBe("talk");
@@ -24,8 +24,8 @@ describe("FormManager", () => {
   });
 
   it("should apply refine to accumulate args", () => {
-    const formId = formManager.begin("talk", "test description");
-    const updatedForm = formManager.applyRefine(formId, { target: "user", message: "hello" });
+    const formId = formManager.open("talk", "test description");
+    const updatedForm = formManager.refine(formId, { target: "user", message: "hello" });
     
     expect(updatedForm).not.toBeNull();
     expect(updatedForm?.accumulatedArgs).toEqual({ target: "user", message: "hello" });
@@ -35,16 +35,16 @@ describe("FormManager", () => {
   });
 
   it("should override existing args on refine", () => {
-    const formId = formManager.begin("talk", "test description");
-    formManager.applyRefine(formId, { target: "user", message: "hello" });
-    formManager.applyRefine(formId, { message: "updated" });
+    const formId = formManager.open("talk", "test description");
+    formManager.refine(formId, { target: "user", message: "hello" });
+    formManager.refine(formId, { message: "updated" });
     
     const form = formManager.getForm(formId);
     expect(form?.accumulatedArgs).toEqual({ target: "user", message: "updated" });
   });
 
   it("should submit a form and remove it from active forms", () => {
-    const formId = formManager.begin("talk", "test description");
+    const formId = formManager.open("talk", "test description");
     const submitted = formManager.submit(formId);
     
     expect(submitted).not.toBeNull();
@@ -54,21 +54,21 @@ describe("FormManager", () => {
     expect(afterSubmit).toBeNull();
   });
 
-  it("should cancel a form same as submit", () => {
-    const formId = formManager.begin("talk", "test description");
-    const canceled = formManager.cancel(formId);
-    
-    expect(canceled).not.toBeNull();
-    expect(canceled?.formId).toBe(formId);
-    
-    const afterCancel = formManager.getForm(formId);
-    expect(afterCancel).toBeNull();
+  it("should close a form same as submit", () => {
+    const formId = formManager.open("talk", "test description");
+    const closed = formManager.close(formId);
+
+    expect(closed).not.toBeNull();
+    expect(closed?.formId).toBe(formId);
+
+    const afterClose = formManager.getForm(formId);
+    expect(afterClose).toBeNull();
   });
 
   it("should track active commands", () => {
-    formManager.begin("talk", "talk 1");
-    formManager.begin("program", "program 1");
-    formManager.begin("talk", "talk 2");
+    formManager.open("talk", "talk 1");
+    formManager.open("program", "program 1");
+    formManager.open("talk", "talk 2");
     
     const active = formManager.activeCommands();
     expect(active.size).toBe(2);
@@ -77,7 +77,7 @@ describe("FormManager", () => {
   });
 
   it("should merge active command paths", () => {
-    formManager.begin("talk", "talk 1");
+    formManager.open("talk", "talk 1");
     
     const paths = formManager.activeCommandPaths();
     expect(paths.size).toBeGreaterThan(0);
@@ -85,8 +85,8 @@ describe("FormManager", () => {
   });
 
   it("should list all active forms", () => {
-    formManager.begin("talk", "talk 1");
-    formManager.begin("program", "program 1");
+    formManager.open("talk", "talk 1");
+    formManager.open("program", "program 1");
     
     const forms = formManager.activeForms();
     expect(forms).toHaveLength(2);
@@ -95,7 +95,7 @@ describe("FormManager", () => {
   });
 
   it("should add loaded knowledge paths to a form", () => {
-    const formId = formManager.begin("talk", "test description");
+    const formId = formManager.open("talk", "test description");
     formManager.addLoadedKnowledgePaths(formId, ["knowledge:talk/base", "knowledge:talk/wait"]);
     formManager.addLoadedKnowledgePaths(formId, ["knowledge:talk/wait", "knowledge:talk/continue"]);
     
@@ -108,8 +108,8 @@ describe("FormManager", () => {
   });
 
   it("should support fromData and toData for persistence", () => {
-    const formId = formManager.begin("talk", "test description");
-    formManager.applyRefine(formId, { target: "user" });
+    const formId = formManager.open("talk", "test description");
+    formManager.refine(formId, { target: "user" });
     
     const data = formManager.toData();
     expect(data).toHaveLength(1);
