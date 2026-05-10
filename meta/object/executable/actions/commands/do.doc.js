@@ -40,6 +40,21 @@ submit(form_id)
 向已有线程追加消息：
 - threadId 必填
 - 把 msg 写入该线程 inbox
+- 若目标线程处于 done/failed，自动翻回 running
+- 若 wait=true，父线程进入 waiting (waitingType=await_children)，等待目标线程再次完成
+
+continue + wait 示例（supervisor 给已完成的子线程追加任务并等结果）：
+
+\`\`\`
+open(type=command, command=do, description="给 task A 已完成的子线程追加 task B")
+refine(form_id, {
+  context: "continue",
+  threadId: "t_child",
+  msg: "再数 src/thinkable 下的 ts 文件",
+  wait: true
+})
+submit(form_id)
+\`\`\`
 
 ## Path 列表
 

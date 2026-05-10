@@ -48,7 +48,11 @@ refine 触发新的 command path → 增量激活更多 knowledge
    ↓
 LLM 想清楚后 submit 执行
    ↓
-form 关闭，本次引入的 knowledge 自动卸载
+form 切到 executing 状态（仍在 active_forms 中）
+   ↓
+command 完成后 form 切到 executed，result 进入 context
+   ↓
+LLM 看完 result 后用 close 释放 form 与 knowledge
 \`\`\`
 
 意义：Context 每一刻只装载"当前必需"的知识，而不是预先塞满所有可能用到的能力描述。

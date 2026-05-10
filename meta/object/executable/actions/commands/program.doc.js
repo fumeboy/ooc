@@ -51,6 +51,19 @@ program.function                （模式 B）
 
 - \`print(...)\` / \`console.log(...)\` 的输出被收集，记录到 process event 中
 - 失败时栈记录在 program event 的 error 字段，但**不**会自动 fail 整个线程——LLM 决定如何处理
+
+## 当前实现阶段
+
+当前实现仅支持 \`language="shell"\`：
+- 通过 \`sh -c\` 执行 code 字符串
+- cwd 固定为 \`process.cwd()\`（项目根）；env 继承 parent process
+- 30 秒超时（exit code 124），stdout/stderr 各 4KB 截断
+- 输出归一化为单一字符串赋给 \`form.result\`，供 LLM 在下一轮 active_forms 中读取
+
+当前不支持：
+- \`language="ts"\` / \`"js"\`（脚本沙箱）
+- \`function\` 模式（调用 server export 方法）
+- 命令白名单 / 沙箱隔离
 `,
   sources: {
     program: programSource,
