@@ -49,6 +49,21 @@ function wakeParentsWaitingForChildren(root: ThreadContext): void {
 
   if (!allFinished) return;
 
+  // 给父线程注入一段总结，告诉它每个等待中的子线程的最终状态与 summary，
+  // 否则 LLM 醒来后没有任何关于子线程结果的可见信息，会再次 wait 卡死。
+  const lines = awaiting.map((childId) => {
+    const child = root.childThreads?.[childId];
+    if (!child) return `- ${childId}: <missing>`;
+    const summary = child.endSummary ?? "(无 summary)";
+    const reason = child.endReason ?? child.status;
+    return `- ${childId}: ${reason} - ${summary}`;
+  });
+  root.events.push({
+    category: "context_change",
+    kind: "inject",
+    text: `[await_children] 等待中的子线程已完成：\n${lines.join("\n")}`
+  });
+
   root.status = "running";
   root.waitingType = undefined;
   root.awaitingChildren = [];
