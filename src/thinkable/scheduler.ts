@@ -1,6 +1,7 @@
 import type { LlmClient } from "./llm/types";
 import type { ThreadContext } from "./context";
 import { think } from "./thinkloop";
+import { writeThread } from "../persistable";
 
 /** Scheduler 的运行参数。 */
 export interface SchedulerOptions {
@@ -66,8 +67,9 @@ function selectNextThread(threads: ThreadContext[]): ThreadContext {
 /**
  * 运行线程树调度循环。
  *
- * 每个 tick 先检查可唤醒父线程，再只执行一个 running thread 的一轮 think。
- * 本函数不负责持久化、跨 Object talk、deadlock 兜底或 paused 恢复。
+ * 每个 tick 先检查可唤醒父线程，再只执行一个 running thread 的一轮 think；
+ * 若该线程携带 persistence ref，think 完成后立即落盘。
+ * 本函数不负责跨 Object talk、deadlock 兜底或 paused 恢复。
  */
 export async function runScheduler(
   rootThread: ThreadContext,
@@ -85,5 +87,6 @@ export async function runScheduler(
     const nextThread = selectNextThread(runningThreads);
     nextThread.lastExecutedAt = Date.now();
     await think(nextThread, llmClient);
+    await writeThread(nextThread);
   }
 }

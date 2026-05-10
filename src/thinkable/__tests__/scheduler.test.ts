@@ -1,7 +1,11 @@
-import { describe, expect, it } from "bun:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { afterEach, describe, expect, it } from "bun:test";
 import type { LlmClient } from "../llm/types";
 import type { ThreadContext } from "../context";
 import { runScheduler } from "../scheduler";
+import { createFlowObject, threadPaths } from "../../persistable";
 
 describe("scheduler", () => {
   it("wakes a waiting parent after its awaited child finishes", async () => {
@@ -157,5 +161,55 @@ describe("scheduler", () => {
     await runScheduler(root, llmClient, { maxTicks: 1 });
 
     expect(executed).toEqual(["t_old"]);
+  });
+});
+
+describe("scheduler persistence", () => {
+  let tempRoot: string | undefined;
+
+  afterEach(async () => {
+    if (tempRoot) {
+      await rm(tempRoot, { recursive: true, force: true });
+      tempRoot = undefined;
+    }
+  });
+
+  it("persists a thread after it is executed", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-scheduler-"));
+    const flowRef = await createFlowObject({
+      baseDir: tempRoot,
+      sessionId: "s1",
+      objectId: "obj"
+    });
+    const root: ThreadContext = {
+      id: "root",
+      status: "running",
+      events: [],
+      persistence: { ...flowRef, threadId: "root" }
+    };
+    const llmClient: LlmClient = {
+      async generate() {
+        return {
+          provider: "openai",
+          model: "gpt-test",
+          text: "persisted",
+          toolCalls: []
+        };
+      },
+      async *stream() {
+        yield { type: "start", provider: "openai", model: "gpt-test" };
+        yield { type: "done", text: "persisted", toolCalls: [] };
+      }
+    };
+
+    await runScheduler(root, llmClient, { maxTicks: 1 });
+
+    const paths = threadPaths(root.persistence!);
+    const saved = JSON.parse(await readFile(paths.threadFile, "utf8"));
+    expect(saved.events.at(-1)).toEqual({
+      category: "llm_interaction",
+      kind: "text",
+      text: "persisted"
+    });
   });
 });
