@@ -54,12 +54,13 @@ function toClaudeToolCalls(content: unknown): LlmToolCall[] {
     }));
 }
 
-// Claude 非流式请求把 content 数组中的文本和 tool call 拼成统一结果。
-export async function generateWithClaude(
+// 单一 fetch helper，stream 路径与 generate 路径共用，避免重复构造。
+async function fetchClaude(
   config: LlmEnvConfig,
-  params: LlmGenerateParams
-): Promise<LlmGenerateResult> {
-  const response = await fetch(`${config.baseUrl}/v1/messages`, {
+  params: LlmGenerateParams,
+  stream: boolean
+): Promise<Response> {
+  return fetch(`${config.baseUrl}/v1/messages`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -73,13 +74,156 @@ export async function generateWithClaude(
       tools: toClaudeTools(params.tools),
       temperature: params.temperature,
       max_tokens: params.maxTokens ?? 1024,
-      stream: false
+      stream
     })
   });
+}
 
-  // Claude HTTP 失败时直接抛错，让上层决定如何处理。
+/**
+ * 共享 SSE 解析器。
+ *
+ * 同时被 streamWithClaude 与 generateWithClaude 在"代理只返回 SSE"路径下复用。
+ * 关键点：tool 参数通过 `input_json_delta` 增量到达，必须在 content_block_stop
+ * 时才能 JSON.parse 出完整对象，所以 tool-call 事件在 stop 时才 yield。
+ */
+async function* parseClaudeSSE(
+  body: ReadableStream<Uint8Array>,
+  model: string
+): AsyncGenerator<LlmStreamEvent> {
+  const decoder = new TextDecoder();
+  const reader = body.getReader();
+  let pending = "";
+  let fullText = "";
+  const toolCalls: LlmToolCall[] = [];
+  // 按 index 跟踪每个 tool_use block 的部分 JSON
+  const toolBuffers = new Map<number, { id: string; name: string; partialJson: string }>();
+
+  yield { type: "start", provider: "claude", model };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    pending += decoder.decode(value, { stream: true });
+    const frames = pending.split("\n\n");
+    pending = frames.pop() ?? "";
+
+    for (const frame of frames) {
+      const lines = frame.split("\n");
+      const eventLine = lines.find((line) => line.startsWith("event: "));
+      const dataLine = lines.find((line) => line.startsWith("data: "));
+      if (!eventLine || !dataLine) continue;
+
+      const eventName = eventLine.slice(7);
+      let payload: { [key: string]: unknown };
+      try {
+        payload = JSON.parse(dataLine.slice(6));
+      } catch {
+        // 个别代理偶尔会发出非 JSON 心跳行，跳过即可
+        continue;
+      }
+
+      if (
+        eventName === "content_block_start" &&
+        (payload.content_block as { type?: string } | undefined)?.type === "tool_use"
+      ) {
+        const block = payload.content_block as {
+          id?: string;
+          name?: string;
+          input?: Record<string, unknown>;
+        };
+        const input = block.input;
+        // 兼容旧格式 / 简化代理：input 已在 start 时完整给出，直接 yield。
+        if (input && typeof input === "object" && Object.keys(input).length > 0) {
+          const toolCall: LlmToolCall = {
+            id: block.id ?? "",
+            name: (block.name ?? "wait") as LlmToolCall["name"],
+            arguments: input
+          };
+          toolCalls.push(toolCall);
+          yield { type: "tool-call", toolCall };
+        } else {
+          // 标准 Anthropic SSE：input 通过后续 input_json_delta 累积，stop 时收尾。
+          const idx = (payload.index as number) ?? toolBuffers.size;
+          toolBuffers.set(idx, {
+            id: block.id ?? "",
+            name: block.name ?? "wait",
+            partialJson: ""
+          });
+        }
+      }
+
+      if (eventName === "content_block_delta") {
+        const delta = payload.delta as
+          | { type?: string; text?: string; partial_json?: string }
+          | undefined;
+        if (delta?.type === "text_delta") {
+          const text = delta.text ?? "";
+          if (text) {
+            fullText += text;
+            yield { type: "text-delta", text };
+          }
+        } else if (delta?.type === "input_json_delta") {
+          const idx = (payload.index as number) ?? -1;
+          const buf = toolBuffers.get(idx);
+          if (buf) buf.partialJson += delta.partial_json ?? "";
+        }
+      }
+
+      if (eventName === "content_block_stop") {
+        const idx = (payload.index as number) ?? -1;
+        const buf = toolBuffers.get(idx);
+        if (buf) {
+          let args: Record<string, unknown> = {};
+          if (buf.partialJson) {
+            try {
+              args = JSON.parse(buf.partialJson);
+            } catch {
+              // tool 参数 JSON 损坏时退回空对象，让上层 handler 报错而非整轮 fail
+              args = {};
+            }
+          }
+          const toolCall: LlmToolCall = {
+            id: buf.id,
+            name: buf.name as LlmToolCall["name"],
+            arguments: args
+          };
+          toolCalls.push(toolCall);
+          yield { type: "tool-call", toolCall };
+          toolBuffers.delete(idx);
+        }
+      }
+    }
+  }
+
+  yield { type: "done", text: fullText, toolCalls, raw: undefined };
+}
+
+// Claude 非流式请求把 content 数组中的文本和 tool call 拼成统一结果。
+// 兼容性补丁：当代理服务忽略 stream:false 直接返回 SSE 时，fallback 到 SSE 聚合。
+export async function generateWithClaude(
+  config: LlmEnvConfig,
+  params: LlmGenerateParams
+): Promise<LlmGenerateResult> {
+  const model = params.model ?? config.model;
+  const response = await fetchClaude(config, params, false);
+
   if (!response.ok) {
     throw new Error(`Claude 请求失败: ${response.status}`);
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("text/event-stream") && response.body) {
+    // 代理只返回 SSE：复用共享解析器把流聚合成单一结果。
+    let text = "";
+    let toolCalls: LlmToolCall[] = [];
+    for await (const event of parseClaudeSSE(response.body, model)) {
+      if (event.type === "done") {
+        text = event.text;
+        toolCalls = event.toolCalls;
+      }
+    }
+    return { provider: "claude", model, text, toolCalls };
   }
 
   const raw = await response.json();
@@ -91,7 +235,7 @@ export async function generateWithClaude(
 
   return {
     provider: "claude",
-    model: params.model ?? config.model,
+    model,
     text,
     toolCalls,
     raw
@@ -104,87 +248,11 @@ export async function* streamWithClaude(
   params: LlmGenerateParams
 ): AsyncIterable<LlmStreamEvent> {
   const model = params.model ?? config.model;
-  const response = await fetch(`${config.baseUrl}/v1/messages`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": config.apiKey,
-      "anthropic-version": "2023-06-01"
-    },
-    body: JSON.stringify({
-      model,
-      system: toClaudeSystem(params.messages),
-      messages: toClaudeMessages(params.messages),
-      tools: toClaudeTools(params.tools),
-      temperature: params.temperature,
-      max_tokens: params.maxTokens ?? 1024,
-      stream: true
-    })
-  });
+  const response = await fetchClaude(config, params, true);
 
-  // 流式路径必须同时检查状态码和响应体是否可读。
   if (!response.ok || !response.body) {
     throw new Error(`Claude 流式请求失败: ${response.status}`);
   }
 
-  const decoder = new TextDecoder();
-  const reader = response.body.getReader();
-  let pending = "";
-  let fullText = "";
-  const toolCalls: LlmToolCall[] = [];
-
-  // 统一流模型总是先发出 start 事件。
-  yield { type: "start", provider: "claude", model };
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-
-    // Claude 也是 SSE，需要按空行切成一帧一帧解析。
-    pending += decoder.decode(value, { stream: true });
-    const frames = pending.split("\n\n");
-    pending = frames.pop() ?? "";
-
-    for (const frame of frames) {
-      const lines = frame.split("\n");
-      const eventLine = lines.find((line) => line.startsWith("event: "));
-      const dataLine = lines.find((line) => line.startsWith("data: "));
-
-      if (!eventLine || !dataLine) {
-        continue;
-      }
-
-      const eventName = eventLine.slice(7);
-      const payload = JSON.parse(dataLine.slice(6));
-
-      // Claude 文本增量位于 delta.text 字段。
-      if (eventName === "content_block_delta") {
-        const delta = payload.delta?.text ?? "";
-
-        if (!delta) {
-          continue;
-        }
-
-        fullText += delta;
-        yield { type: "text-delta", text: delta };
-      }
-
-      // Claude 工具块在完整出现时直接产出 tool-call。
-      if (eventName === "content_block_start" && payload.content_block?.type === "tool_use") {
-        const toolCall = {
-          id: payload.content_block.id ?? "",
-          name: (payload.content_block.name ?? "wait") as LlmToolCall["name"],
-          arguments: payload.content_block.input ?? {}
-        };
-
-        toolCalls.push(toolCall);
-        yield { type: "tool-call", toolCall };
-      }
-    }
-  }
-
-  // done 事件把整段文本和工具列表返回给统一门面，便于后续聚合复用。
-  yield { type: "done", text: fullText, toolCalls, raw: undefined };
+  yield* parseClaudeSSE(response.body, model);
 }

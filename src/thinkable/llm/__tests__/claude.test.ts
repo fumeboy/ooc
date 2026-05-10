@@ -170,6 +170,50 @@ describe("claude provider", () => {
     ]);
   });
 
+  it("代理只返回 SSE 时 generateWithClaude 自动聚合", async () => {
+    // 模拟 claudeide 类型代理：忽略 stream:false，永远返回 text/event-stream
+    const body = [
+      "event: content_block_delta\n",
+      'data: {"index":0,"delta":{"type":"text_delta","text":"hi "}}\n\n',
+      "event: content_block_delta\n",
+      'data: {"index":0,"delta":{"type":"text_delta","text":"there"}}\n\n',
+      "event: content_block_start\n",
+      'data: {"index":1,"content_block":{"type":"tool_use","id":"toolu_x","name":"wait","input":{}}}\n\n',
+      "event: content_block_delta\n",
+      'data: {"index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"reason\\":"}}\n\n',
+      "event: content_block_delta\n",
+      'data: {"index":1,"delta":{"type":"input_json_delta","partial_json":"\\"等用户\\"}"}}\n\n',
+      "event: content_block_stop\n",
+      'data: {"index":1}\n\n'
+    ].join("");
+
+    globalThis.fetch = mock(async () =>
+      new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/event-stream" }
+      })
+    ) as unknown as typeof fetch;
+
+    const result = await generateWithClaude(
+      {
+        provider: "claude",
+        apiKey: "test-key",
+        baseUrl: "https://example.com",
+        model: "claude-test"
+      },
+      { messages: [{ role: "user", content: "hi" }] }
+    );
+
+    expect(result.text).toBe("hi there");
+    expect(result.toolCalls).toEqual([
+      {
+        id: "toolu_x",
+        name: "wait",
+        arguments: { reason: "等用户" }
+      }
+    ]);
+  });
+
   it("Claude 非 2xx 状态码时抛错", async () => {
     globalThis.fetch = mock(async () => new Response("bad request", { status: 401 })) as unknown as typeof fetch;
 
