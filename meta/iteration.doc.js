@@ -49,10 +49,15 @@ ooc-2  (2026-05-08 ~ 2026-05-11)
 │   └── [2026-05-10] single-object-core-implementation persistable 落 thread.json + observable 落 llm.input/output.json + scheduler 集成
 │       └── plan: docs/superpowers/plans/2026-05-10-single-object-core-implementation.md
 │
-└── 阶段 4：可用执行 + 真 LLM 验证 — 让 Agent 真能对外做事
-    └── [2026-05-10] executable-completion          Form 三段生命周期(open→executing→executed→close) + program.shell + do.continue+wait + 9 个真 LLM 集成测试
-        ├── spec: docs/superpowers/specs/2026-05-10-executable-completion-design.md
-        └── plan: docs/superpowers/plans/2026-05-10-executable-completion.md
+├── 阶段 4：可用执行 + 真 LLM 验证 — 让 Agent 真能对外做事
+│   └── [2026-05-10] executable-completion          Form 三段生命周期(open→executing→executed→close) + program.shell + do.continue+wait + 9 个真 LLM 集成测试
+│       ├── spec: docs/superpowers/specs/2026-05-10-executable-completion-design.md
+│       └── plan: docs/superpowers/plans/2026-05-10-executable-completion.md
+│
+└── 阶段 5：元编程 + stone 持久化 — 让 Object 能给自己写方法、保留身份
+    └── [2026-05-11] stone-server-meta-programming  stone 全套持久化(.stone.json/self.md/readme.md/data.json/server/index.ts) + program.ts/js(in-process dynamic import) + program.function(callMethod) + ProgramSelf(callMethod/getData/setData) + 元编程 knowledge + 真 LLM 集成测试
+        ├── spec: docs/superpowers/specs/2026-05-11-stone-server-meta-programming-design.md
+        └── plan: docs/superpowers/plans/2026-05-11-stone-server-meta-programming.md
 \`\`\`
 
 ## 阶段划分判据
@@ -61,12 +66,13 @@ ooc-2  (2026-05-08 ~ 2026-05-11)
 - **阶段 2 完成标志**：父子线程之间通过 inbox/outbox 协作，scheduler 公平选下一个 running thread
 - **阶段 3 完成标志**：杀进程重启后能从磁盘恢复线程态；任意时刻能从 llm.input/output.json 复盘上一轮 LLM 视角
 - **阶段 4 完成标志**：跑 \`bun --env-file=.env test tests/integration\` 9 个端到端场景全部 PASS（真 LLM 真 shell 真持久化）
+- **阶段 5 完成标志**：Agent 能用 program.shell 写 \`<self.dir>/server/index.ts\` 注册新方法 → 立即用 program.function 调用 → 看到结果；stone 全套目录骨架可创建，5 个核心文件可读写
 
 ## 后续阶段（未启动）
 
-- **阶段 5**：跨 object talk + server export 注册（让 stone 长大、能调彼此方法）
-- **阶段 6**：knowledge 加载引擎 + reflectable + super flow（让 form open 时真按 commandPath 加载 .md 知识进 context）
-- **阶段 7**：UI / client / 与人协作（与 observable/pause 联动，做可视化 + 介入）
+- **阶段 6**：跨 object talk + 全 stone 数据合并（让多 object session 协作）
+- **阶段 7**：knowledge 加载引擎 + reflectable + super flow（让 form open 时真按 commandPath 加载 .md 知识进 context）
+- **阶段 8**：UI / client / 与人协作（与 observable/pause 联动，做可视化 + 介入）
 
 后续阶段都不在当前主分支范围。每启动一个新阶段，都先在本文件追加一个新节点，然后再写 spec → plan → 实施。
 `,
