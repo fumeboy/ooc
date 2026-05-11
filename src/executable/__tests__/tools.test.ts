@@ -168,11 +168,11 @@ describe("executable tools", () => {
 
     expect(thread.activeForms).toHaveLength(1);
     expect(thread.activeForms?.[0]?.status).toBe("executed");
-    expect(thread.events.at(-1)).toEqual({
-      category: "context_change",
-      kind: "inject",
-      text: `[form executed] formId=${formId}`
-    });
+    const lastEvent = thread.events.at(-1);
+    expect(lastEvent?.category).toBe("context_change");
+    expect(lastEvent?.kind).toBe("inject");
+    expect(lastEvent && "text" in lastEvent ? lastEvent.text : "").toContain(`[form executed] formId=${formId}`);
+    expect(lastEvent && "text" in lastEvent ? lastEvent.text : "").toContain("不要在同一轮里立即 close");
   });
 
   it("通过 close 取消 form 并移出 activeForms", async () => {

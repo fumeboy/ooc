@@ -66,6 +66,10 @@ export async function handleSubmitTool(
   thread.events.push({
     category: "context_change",
     kind: "inject",
-    text: `[form executed] formId=${formId}`
+    text:
+      `[form executed] formId=${formId}\n` +
+      `result 已写入 active_forms 中该 form 的 <result> 段；` +
+      `请等到下一轮 think 时再读取该 result。` +
+      `不要在同一轮里立即 close 该 form——否则 result 会随 form 一并消失。`
   });
 }
