@@ -75,7 +75,7 @@ describe.skipIf(!shouldRunRealTest)("real app server e2e", () => {
       new Request("http://localhost/api/flows/real-app-session/objects/", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ objectId: "real-app-object" }),
+        body: JSON.stringify({ objectId: "real-app-object", initialMessage: "hello" }),
       })
     );
     expect(createObject.status).toBe(200);

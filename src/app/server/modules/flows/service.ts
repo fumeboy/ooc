@@ -33,31 +33,55 @@ export function createFlowsService(deps: {
         created: true,
       };
     },
-    async createFlowObject({ sessionId, objectId }: { sessionId: string; objectId: string }) {
+    async createFlowObject({
+      sessionId,
+      objectId,
+      initialMessage,
+    }: {
+      sessionId: string;
+      objectId: string;
+      initialMessage?: string;
+    }) {
       const ref = await createFlowObject({
         baseDir: deps.baseDir,
         sessionId,
         objectId,
       });
       const persistence = { ...ref, threadId: "root" } as const;
+      const initialEvents = initialMessage
+        ? [
+            {
+              category: "context_change" as const,
+              kind: "inject" as const,
+              text: initialMessage,
+            },
+          ]
+        : [];
       await writeThread({
         id: "root",
         status: "running",
-        events: [],
+        events: initialEvents,
         persistence,
       });
-      const job = deps.jobManager.createRunThreadJob({
-        sessionId,
-        objectId,
-        threadId: "root",
-      });
+      // 关键：只有 initialMessage 不为空才 enqueue job——
+      // 空 events 的 thread 跑 LLM 会被 Claude 代理拒绝（messages 必须含 user role），
+      // 立即 status=failed，后续 inject 也救不回来。
+      let jobId: string | undefined;
+      if (initialMessage) {
+        const job = deps.jobManager.createRunThreadJob({
+          sessionId,
+          objectId,
+          threadId: "root",
+        });
+        jobId = job.jobId;
+      }
       return {
         sessionId,
         objectId,
         dir: `${deps.baseDir}/flows/${sessionId}/objects/${objectId}`,
         created: true,
         initialThreadId: "root",
-        jobId: job.jobId,
+        jobId,
       };
     },
     async getFlowObject({ sessionId, objectId }: { sessionId: string; objectId: string }) {
@@ -102,12 +126,11 @@ export function createFlowsService(deps: {
         kind: "inject",
         text,
       });
-      // failed 线程不再自动唤醒——失败原因可能是不可恢复的；其它（done/waiting/paused/running）都翻回 running
-      if (thread.status !== "failed") {
-        thread.status = "running";
-        thread.waitingType = undefined;
-        thread.awaitingChildren = undefined;
-      }
+      // 任何状态（done/waiting/paused/failed/running）的 thread 在收到新 user inject 后都翻回 running——
+      // user 显式追加输入即意味着"继续从这里推下去"，包括从 failed 状态恢复尝试。
+      thread.status = "running";
+      thread.waitingType = undefined;
+      thread.awaitingChildren = undefined;
       await writeThread(thread);
       const job = deps.jobManager.createRunThreadJob({
         sessionId,

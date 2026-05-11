@@ -65,7 +65,7 @@ describe("app server local e2e", () => {
       new Request("http://localhost/api/flows/flow-e2e-session/objects/", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ objectId: "flow-e2e-object" }),
+        body: JSON.stringify({ objectId: "flow-e2e-object", initialMessage: "test" }),
       })
     );
     expect(createFlowObject.status).toBe(200);
