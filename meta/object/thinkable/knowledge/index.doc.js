@@ -1,7 +1,17 @@
 import { thinkable_v20260504_1 } from "@meta/object/thinkable/index.doc";
+import * as knowledgeTypes from "@src/thinkable/knowledge/types";
+import * as knowledgeParser from "@src/thinkable/knowledge/parser";
+import * as knowledgeLoader from "@src/thinkable/knowledge/loader";
+import * as knowledgeActivator from "@src/thinkable/knowledge/activator";
 
 export const knowledge_v20260505_1 = {
   parent: thinkable_v20260504_1,
+  sources: {
+    types: knowledgeTypes,
+    parser: knowledgeParser,
+    loader: knowledgeLoader,
+    activator: knowledgeActivator,
+  },
   index: `
 Knowledge 描述 Object 拥有什么知识，以及这些知识如何进入思考。
 
@@ -113,5 +123,25 @@ submit / close 后，本次 form 引入的 knowledge 自动卸载
 3. flows/{sessionId}/objects/{name}/knowledge/ — Object 在 flow 中创建或沉淀
 
 Object 通过专门的反思通道持续累积自己的持久 knowledge （详见 reflectable）。
+
+# 当前实现阶段
+
+当前实现覆盖：
+
+- **加载源**：仅 stones/{objectId}/knowledge/（kernel/knowledge/ 与 flow 第二来源未接入）
+- **路径 ID**：相对 knowledge/ 的路径，不带 .md 后缀（例：build-tools/file-ops、memory/index）。frontmatter 的 filename 字段作文档化字段，以文件路径为准
+- **激活时机**：每轮 buildContext 懒求值（无 thread 上的派生状态字段）
+- **激活规则**：activates_on.show_content_when 与 union(所有 activeForms.commandPaths) ∩ ≠ ∅ → full；show_description_when 命中 → summary；同时命中 full 优先
+- **手动 pin**：open(type=knowledge, path=X) 写到 thread.pinnedKnowledge，永远 full 渲染；close(type=knowledge, path=X, reason=...) 卸载
+- **热重载**：loader 按 "文件路径+mtime" 签名缓存，Agent 编辑 .md 后下一轮 think 立即生效
+- **上限**：单篇 full 内容 8KB 截断；激活集合超 20 项截尾
+
+当前不实现：
+
+- 跨线程继承（子线程 context 不含父链激活的 knowledge）
+- kernel/ 与 flow/knowledge/ 第二来源
+- .knowledge.json 配置（声明引用、外部源等）
+- knowledge 版本化 / git 历史
+- 基于 thread.status、events 等非 commandPath 的激活条件
 `,
 };
