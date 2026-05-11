@@ -14,6 +14,12 @@ program 用于执行一段代码，或调用对象 server 暴露的方法。
 - function: 模式 B，目标函数名
 - args: 模式 B，函数调用参数对象
 
+shell 环境变量：
+- shell 命令的 cwd 是 OOC 进程的工作目录（一般是 OOC 项目根），不是你自己的 stone 目录。
+- 想读写自己的 stone 目录（self.dir），请用 env $OOC_SELF_DIR：
+  例如 \`cat > "$OOC_SELF_DIR/server/index.ts" <<EOF ... EOF\`。
+- ts/js 中可用 self.dir / self.callMethod / self.getData / self.setData。
+
 调用示例：
 open(type="command", command="program", description="读取文件")
 refine(form_id, { language: "ts", code: "const data = await readFile('foo.txt'); print(data);" })

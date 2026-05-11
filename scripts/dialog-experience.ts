@@ -168,7 +168,8 @@ async function main() {
       "## 重要协议",
       "- form result 同步可见；submit 后下一轮直接读 active_forms 中 result 字段。",
       "- 看完 executed form 的 result，用 close(form_id, reason=...) 释放，避免 context 越积越多。",
-      "- shell 命令默认 cwd = OOC 项目根；想操作自己的目录用 self.dir。",
+      "- shell 命令默认 cwd = OOC 项目根；想操作自己的目录用 env $OOC_SELF_DIR（自动注入，指向 stones/{objectId}）。",
+      "- ts/js 代码可用 self.dir 取同一目录字符串。",
     ].join("\n")
   );
 
@@ -196,7 +197,7 @@ async function main() {
 
   // 主题 2：元编程 — 让 Agent 给自己写 server method
   await turn(4, "meta-program",
-    "现在给你自己写一个 server method 叫 'wordcount'，接收 { text: string } 返回该文本的单词数。请用 program(shell) 写到 self.dir 下的 server/index.ts。" +
+    "现在给你自己写一个 server method 叫 'wordcount'，接收 { text: string } 返回该文本的单词数。请用 program(shell) 写到 \"$OOC_SELF_DIR/server/index.ts\"（注意双引号包裹路径）。" +
     "示例：export const llm_methods = { wordcount: { description: '统计单词数', params: [{name:'text',required:true}], fn: async (_ctx, {text}) => String(text).split(/\\s+/).filter(Boolean).length } };");
 
   await turn(5, "meta-program",
@@ -218,12 +219,12 @@ async function main() {
 
   // 主题 4：自我修改 — 更新 self.md
   await turn(10, "self-modify",
-    "用 program(shell) 在 self.dir/self.md 末尾追加一行：'## 最近偏好\\n- 简洁回复\\n- 中文优先'。" +
+    "用 program(shell) 在 \"$OOC_SELF_DIR/self.md\" 末尾追加一行：'## 最近偏好\\n- 简洁回复\\n- 中文优先'。" +
     "用 echo >> 或 cat <<EOF 追加。完成后用 cat 验证。");
 
   // 主题 5：综合题
   await turn(11, "synthesis",
-    "做个综合：调 wordcount(text=self.md 第一行) 数一下。先用 program(shell) head -n 1 self.dir/self.md 拿到第一行，再 function='wordcount' 调用。两步分开做。");
+    "做个综合：调 wordcount(text=self.md 第一行) 数一下。先用 program(shell) head -n 1 \"$OOC_SELF_DIR/self.md\" 拿到第一行，再 function='wordcount' 调用。两步分开做。");
 
   await turn(12, "synthesis",
     "把 counter 字段最终值写进 data.json 中的 'final_counter' 字段（用 self.setData）。然后 program(shell) cat data.json 给我看。");
