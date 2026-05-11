@@ -65,6 +65,30 @@ describe("program.shell", () => {
     const result = await executeProgramCommand(makeCtx({ language: "shell" }));
     expect(result).toContain("缺少 code 参数");
   });
+
+  it("injects OOC_SELF_DIR pointing at stone dir when persistence is present", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "ooc-shell-self-"));
+    try {
+      await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+      const ctx = makeCtxWithPersistence(
+        { language: "shell", code: "echo \"$OOC_SELF_DIR\"" },
+        "agent",
+        tempRoot
+      );
+      const result = await executeProgramCommand(ctx);
+      expect(result).toContain(`${tempRoot}/stones/agent`);
+      expect(result).toContain("[exit 0]");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("does not set OOC_SELF_DIR when thread has no persistence", async () => {
+    const result = await executeProgramCommand(
+      makeCtx({ language: "shell", code: "echo \"[${OOC_SELF_DIR:-UNSET}]\"" })
+    );
+    expect(result).toContain("[UNSET]");
+  });
 });
 
 describe("program.ts/js + program.function", () => {
