@@ -1,5 +1,10 @@
-import { describe, expect, it } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { afterEach, describe, expect, it } from "bun:test";
 import { buildContext, type ThreadContext } from "../context";
+import { clearKnowledgeLoaderCache } from "../knowledge";
+import { createStoneObject, knowledgeDir } from "../../persistable";
 
 describe("buildContext", () => {
   it("renders inbox and outbox into the system xml context", async () => {
@@ -258,5 +263,99 @@ describe("buildContext", () => {
     }
     expect(sliceForm("f_fn")).toContain("<method_knowledge>");
     expect(sliceForm("f_no_knowledge")).not.toContain("<method_knowledge>");
+  });
+});
+
+describe("buildContext active_knowledge rendering", () => {
+  let tempRoot: string | undefined;
+
+  afterEach(async () => {
+    if (tempRoot) {
+      await rm(tempRoot, { recursive: true, force: true });
+      tempRoot = undefined;
+    }
+    clearKnowledgeLoaderCache();
+  });
+
+  it("renders summary entry when only show_description_when hits", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-kn-"));
+    const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+    const root = knowledgeDir(stoneRef);
+    await writeFile(
+      join(root, "summary-only.md"),
+      `---\ndescription: 仅描述\nactivates_on:\n  show_description_when: [program]\n---\nbody summary-only`
+    );
+
+    const thread: ThreadContext = {
+      id: "t",
+      status: "running",
+      events: [],
+      activeForms: [
+        {
+          formId: "f1",
+          command: "program",
+          description: "",
+          createdAt: 1,
+          accumulatedArgs: {},
+          commandPaths: ["program"],
+          loadedKnowledgePaths: [],
+          status: "open"
+        }
+      ],
+      persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" }
+    };
+
+    const messages = await buildContext(thread);
+    const xml = messages[0]?.content ?? "";
+    expect(xml).toContain('<knowledge path="summary-only" presentation="summary">');
+    expect(xml).toContain("<description>仅描述</description>");
+    expect(xml).not.toContain("body summary-only");
+  });
+
+  it("renders full entry with body when show_content_when hits", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-kn-"));
+    const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+    const root = knowledgeDir(stoneRef);
+    await writeFile(
+      join(root, "full-doc.md"),
+      `---\ndescription: 全文\nactivates_on:\n  show_content_when: [program.shell]\n---\n这是 full-doc 正文`
+    );
+
+    const thread: ThreadContext = {
+      id: "t",
+      status: "running",
+      events: [],
+      activeForms: [
+        {
+          formId: "f1",
+          command: "program",
+          description: "",
+          createdAt: 1,
+          accumulatedArgs: {},
+          commandPaths: ["program", "program.shell"],
+          loadedKnowledgePaths: [],
+          status: "open"
+        }
+      ],
+      persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" }
+    };
+
+    const messages = await buildContext(thread);
+    const xml = messages[0]?.content ?? "";
+    expect(xml).toContain('<knowledge path="full-doc" presentation="full">');
+    expect(xml).toContain("这是 full-doc 正文");
+  });
+
+  it("omits <active_knowledge> when no activation hits", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-kn-"));
+    await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+    const thread: ThreadContext = {
+      id: "t",
+      status: "running",
+      events: [],
+      persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" }
+    };
+    const messages = await buildContext(thread);
+    expect(messages[0]?.content).not.toContain("<active_knowledge>");
   });
 });

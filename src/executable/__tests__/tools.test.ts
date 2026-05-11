@@ -61,7 +61,6 @@ describe("executable tools", () => {
     });
 
     expect(thread.activeForms).toEqual([]);
-    expect(thread.activatedKnowledge).toEqual(["path/computable/file_ops"]);
     expect(thread.pinnedKnowledge).toEqual(["path/computable/file_ops"]);
     expect(thread.events.at(-1)).toEqual({
       category: "context_change",

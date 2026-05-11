@@ -88,7 +88,7 @@ export async function handleOpenTool(
   if (openType === "knowledge") {
     const path = nestedArgs.path as string;
     thread.activeForms = thread.activeForms ?? [];
-    thread.activatedKnowledge = pushUnique(thread.activatedKnowledge, path);
+    // 写入 pinnedKnowledge 即可——activator 每轮 lazy 派生当前激活集合，不再需要 activatedKnowledge 字段。
     thread.pinnedKnowledge = pushUnique(thread.pinnedKnowledge, path);
     thread.windows = {
       ...(thread.windows ?? {}),

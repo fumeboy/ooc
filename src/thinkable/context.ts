@@ -1,6 +1,11 @@
 import type { LlmMessage } from "./llm/types";
 import type { ActiveForm } from "../executable/forms/form";
-import type { ThreadPersistenceRef } from "../persistable/common";
+import { deriveStoneFromThread, type ThreadPersistenceRef } from "../persistable/common";
+import {
+  computeActivations,
+  loadKnowledgeIndex,
+  type ActivationResult
+} from "./knowledge";
 
 /**
  * 线程过程事件。
@@ -89,9 +94,10 @@ export type ThreadContext = {
   plan?: string;
   /** 当前 open 但尚未 submit/close 的 form；todo 也通过这里表达。 */
   activeForms?: ActiveForm[];
-  /** 已激活的 knowledge path；当前仅记录引用，不在本文件渲染正文。 */
-  activatedKnowledge?: string[];
-  /** 被显式固定的 knowledge path，避免普通 form 生命周期释放。 */
+  /**
+   * 被显式固定的 knowledge path（通过 open(type=knowledge) pin / close(type=knowledge) 卸载）。
+   * 自动激活由 activator 每轮基于 commandPaths 派生，不持久化在 thread 上。
+   */
   pinnedKnowledge?: string[];
   /** 显式打开的知识或文件窗口；当前只保存窗口元信息。 */
   windows?: Record<
@@ -164,6 +170,54 @@ function renderMessages(tag: "inbox" | "outbox", messages: ThreadMessage[] | und
 function renderMethodKnowledge(text: string | undefined): string {
   if (!text) return "";
   return `<method_knowledge>${escapeXml(text)}</method_knowledge>`;
+}
+
+/** 单篇 knowledge 全文截断上限，避免 context 爆炸。 */
+const MAX_KNOWLEDGE_BYTES = 8192;
+
+function truncateKnowledgeBody(body: string): string {
+  const bytes = new TextEncoder().encode(body);
+  if (bytes.length <= MAX_KNOWLEDGE_BYTES) return body;
+  const head = new TextDecoder().decode(bytes.slice(0, MAX_KNOWLEDGE_BYTES));
+  return `${head}...[truncated, original ${bytes.length} bytes]`;
+}
+
+/** 根据 activator 输出渲染 <active_knowledge>，按 summary / full 两档形态。 */
+function renderActiveKnowledge(activations: ActivationResult[]): string {
+  if (activations.length === 0) return "";
+  const items = activations
+    .map((a) => {
+      const desc = a.doc.frontmatter.description ?? "";
+      const descXml = desc ? `<description>${escapeXml(desc)}</description>` : "";
+      const contentXml =
+        a.presentation === "full"
+          ? `<content>${escapeXml(truncateKnowledgeBody(a.doc.body))}</content>`
+          : "";
+      return [
+        `<knowledge path="${escapeXml(a.path)}" presentation="${a.presentation}">`,
+        descXml,
+        contentXml,
+        "</knowledge>"
+      ].join("");
+    })
+    .join("");
+  return `<active_knowledge>${items}</active_knowledge>`;
+}
+
+/**
+ * 调 loader + activator 计算本轮激活集合，渲染为 XML 段。
+ * 线程没有 persistence 或加载失败时返回 ""，不污染 context。
+ */
+async function computeKnowledgeXml(thread: ThreadContext): Promise<string> {
+  if (!thread.persistence) return "";
+  try {
+    const stoneRef = deriveStoneFromThread(thread.persistence);
+    const index = await loadKnowledgeIndex(stoneRef);
+    const activations = computeActivations(thread, index);
+    return renderActiveKnowledge(activations);
+  } catch {
+    return "";
+  }
 }
 
 /** 渲染当前未完成的 form，让 LLM 能继续 refine/submit/close。 */
@@ -247,6 +301,8 @@ function processEventToMessage(event: ProcessEvent): LlmMessage | null {
  * 普通 messages 追加，避免把 transcript 混入 system prompt。
  */
 export async function buildContext(thread: ThreadContext): Promise<LlmMessage[]> {
+  const knowledgeXml = await computeKnowledgeXml(thread);
+
   const content = [
     "<context>",
     `<thread id="${escapeXml(thread.id)}" status="${escapeXml(thread.status)}">`,
@@ -254,6 +310,7 @@ export async function buildContext(thread: ThreadContext): Promise<LlmMessage[]>
     renderOptionalTag("parent_thread_id", thread.parentThreadId),
     renderOptionalTag("plan", thread.plan),
     renderActiveForms(thread.activeForms),
+    knowledgeXml,
     renderMessages("inbox", thread.inbox),
     renderMessages("outbox", thread.outbox),
     "</thread>",
