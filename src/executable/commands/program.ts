@@ -74,11 +74,12 @@ function formatShellResult(code: string, stdout: string, stderr: string, exitCod
   return lines.join("\n");
 }
 
-async function runShell(code: string): Promise<string> {
+async function runShell(code: string, env: Record<string, string>): Promise<string> {
   let proc: ReturnType<typeof Bun.spawn>;
   try {
     proc = Bun.spawn(["sh", "-c", code], {
       cwd: process.cwd(),
+      env: { ...process.env, ...env } as Record<string, string>,
       stdout: "pipe",
       stderr: "pipe",
       timeout: 30_000,
@@ -171,7 +172,14 @@ export async function executeProgramCommand(
     if (typeof code !== "string" || code.trim() === "") {
       return `[program.shell] 缺少 code 参数`;
     }
-    return runShell(code);
+    // 把 self.dir 注入为 OOC_SELF_DIR env var，让 shell 命令可以稳定定位 stone 目录，
+    // 例如：cat > "$OOC_SELF_DIR/server/index.ts" <<EOF ... EOF
+    const env: Record<string, string> = {};
+    if (thread.persistence) {
+      const stoneRef = deriveStoneFromThread(thread.persistence);
+      env.OOC_SELF_DIR = `${stoneRef.baseDir}/stones/${stoneRef.objectId}`;
+    }
+    return runShell(code, env);
   }
 
   if (language === "ts" || language === "typescript" || language === "js" || language === "javascript") {
