@@ -57,7 +57,8 @@ ooc-2  (2026-05-08 ~ 2026-05-11)
 └── 阶段 5：元编程 + stone 持久化 — 让 Object 能给自己写方法、保留身份
     └── [2026-05-11] stone-server-meta-programming  stone 全套持久化(.stone.json/self.md/readme.md/data.json/server/index.ts) + program.ts/js(in-process dynamic import) + program.function(callMethod) + ProgramSelf(callMethod/getData/setData) + 元编程 knowledge + 真 LLM 集成测试
         ├── spec: docs/superpowers/specs/2026-05-11-stone-server-meta-programming-design.md
-        └── plan: docs/superpowers/plans/2026-05-11-stone-server-meta-programming.md
+        ├── plan: docs/superpowers/plans/2026-05-11-stone-server-meta-programming.md
+        └── 后续微调：program.function 路径在 open/refine 后自动加载方法 description+params 到 form.methodSchema，让 LLM 在 active_forms 直接看到方法签名，不用翻 server/index.ts
 \`\`\`
 
 ## 阶段划分判据
