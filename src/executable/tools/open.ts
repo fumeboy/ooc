@@ -8,7 +8,7 @@ import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 /** open tool - 开始行动，或把 knowledge/file 显式放入 Context。 */
 export const OPEN_TOOL: LlmTool = {
   name: "open",
-  description: "开始一次行动，或把 knowledge/file 放入 Context。type=command 会产生 form；type=knowledge/file 不产生 form。",
+  description: "开始一次行动，或把 knowledge/file 放入 Context。type=command 只负责创建 form；业务参数必须放在 args，或后续通过 refine(args={...}) 补充。type=knowledge/file 不产生 form。",
   inputSchema: {
     type: "object",
     properties: {

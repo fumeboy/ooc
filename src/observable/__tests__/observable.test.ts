@@ -5,7 +5,14 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as observableModule from "../index";
 import type { ThreadContext } from "../../thinkable/context";
 import type { LlmGenerateResult, LlmMessage, LlmTool } from "../../thinkable/llm/types";
-import { createFlowObject, llmInputFile, llmOutputFile } from "../../persistable";
+import {
+  createFlowObject,
+  llmInputFile,
+  llmOutputFile,
+  loopMetaFile,
+  loopInputFile,
+  loopOutputFile
+} from "../../persistable";
 
 type ObservableStore = typeof observableModule & {
   clearLatestLlmObservation: () => void;
@@ -125,5 +132,47 @@ describe("observable persistable debug files", () => {
       text: "",
       toolCalls: []
     });
+  });
+
+  it("writes loop-level debug files when debug mode is enabled", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-observable-"));
+    const flowRef = await createFlowObject({
+      baseDir: tempRoot,
+      sessionId: "s1",
+      objectId: "obj"
+    });
+    const thread: ThreadContext = {
+      id: "root",
+      status: "running",
+      events: [],
+      persistence: { ...flowRef, threadId: "root" }
+    };
+    const messages: LlmMessage[] = [{ role: "system", content: "<context />" }];
+    const tools: LlmTool[] = [{ name: "wait", description: "等待", inputSchema: { type: "object" } }];
+    const result: LlmGenerateResult = {
+      provider: "openai",
+      model: "test",
+      text: "done",
+      toolCalls: []
+    };
+
+    observableModule.clearObservableDebugState();
+    observableModule.enableDebug();
+    const handle = await observableModule.beginLlmLoop(thread, messages, tools);
+    await observableModule.finishLlmLoop(thread, handle, {
+      result,
+      status: "ok"
+    });
+    observableModule.disableDebug();
+
+    const loopInput = JSON.parse(await readFile(loopInputFile(thread.persistence!, 1), "utf8"));
+    const loopOutput = JSON.parse(await readFile(loopOutputFile(thread.persistence!, 1), "utf8"));
+    const loopMeta = JSON.parse(await readFile(loopMetaFile(thread.persistence!, 1), "utf8"));
+
+    expect(loopInput.threadId).toBe("root");
+    expect(loopOutput.result.text).toBe("done");
+    expect(loopMeta.loopIndex).toBe(1);
+    expect(loopMeta.status).toBe("ok");
+    expect(loopMeta.messageCount).toBe(1);
   });
 });

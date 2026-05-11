@@ -52,10 +52,14 @@ export interface ServerMethod {
 /** server/index.ts 暴露的 llm_methods 字典。 */
 export type LlmMethods = Record<string, ServerMethod>;
 
+/** server/index.ts 暴露的 ui_methods 字典。 */
+export type UiMethods = Record<string, ServerMethod>;
+
 /** 内部用：缓存 stoneRef 与对应已加载的 methods（按 mtime 失效）。 */
 export interface ServerLoaderEntry {
   mtime: number;
-  methods: LlmMethods;
+  llmMethods: LlmMethods;
+  uiMethods: UiMethods;
 }
 
 export type { StoneObjectRef, ThreadContext };

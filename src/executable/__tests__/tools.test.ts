@@ -23,6 +23,16 @@ describe("executable tools", () => {
     expect(tools).toHaveLength(5);
   });
 
+  it("should describe the form protocol explicitly in open/refine/submit tools", () => {
+    const open = OOC_TOOLS.find((tool) => tool.name === "open");
+    const refine = OOC_TOOLS.find((tool) => tool.name === "refine");
+    const submit = OOC_TOOLS.find((tool) => tool.name === "submit");
+
+    expect(open?.description).toContain("业务参数必须放在 args");
+    expect(refine?.description).toContain("args 对象");
+    expect(submit?.description).toContain("不接受新的业务参数");
+  });
+
   it("通过 open 创建 command form 并预填 args", async () => {
     const thread = { id: "test", status: "running", events: [] } as ThreadContext;
 

@@ -135,4 +135,14 @@ describe("program.ts/js + program.function", () => {
     const result = await executeProgramCommand(ctx);
     expect(result).toContain("不存在");
   });
+
+  test("program path suggests refine protocol when execution args are missing", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-prog-"));
+    await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+    const ctx = makeCtxWithPersistence({}, "agent", tempRoot);
+    const result = await executeProgramCommand(ctx);
+    expect(result).toContain("program form 参数不完整");
+    expect(result).toContain("refine(args=");
+    expect(result).toContain("language");
+  });
 });

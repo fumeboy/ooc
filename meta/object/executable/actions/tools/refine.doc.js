@@ -13,6 +13,11 @@ refine(
 )
 \`\`\`
 
+协议约束：
+- 业务参数必须放在 \`args\` 对象里
+- 不要把业务参数展开到 tool 顶层
+- refine 只补参数，不执行 command
+
 ## 行为
 
 1. 找到 form_id 对应的 ActiveForm

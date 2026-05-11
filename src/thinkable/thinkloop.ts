@@ -1,5 +1,5 @@
 import { dispatchToolCall, getAvailableTools } from "../executable/tools";
-import { isPausing, writeLatestLlmInput, writeLatestLlmOutput } from "../observable";
+import { beginLlmLoop, finishLlmLoop, isPausing } from "../observable";
 import { buildContext, type ThreadContext } from "./context";
 import type { LlmClient } from "./llm/types";
 
@@ -10,13 +10,16 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
     throw new Error(`think 只能处理 running 线程: ${thread.id}`);
   }
 
+  let loopHandle:
+    | Awaited<ReturnType<typeof beginLlmLoop>>
+    | undefined;
   try {
     // Context 模块先直接返回 LLM messages，避免中间层抽象。
     const messages = await buildContext(thread);
     const tools = getAvailableTools(thread);
 
     // 输入输出记录点先挂到 observable 占位模块上。
-    await writeLatestLlmInput(thread, messages, tools);
+    loopHandle = await beginLlmLoop(thread, messages, tools);
     const result = await llmClient.generate({ messages, tools });
 
     // thinking 只记录，不负责回注到下一轮 context。
@@ -47,10 +50,9 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
       });
     }
 
-    await writeLatestLlmOutput(thread, result);
-
     // pause 必须发生在输出记录之后、tool 执行之前。
     if (await isPausing(thread)) {
+      await finishLlmLoop(thread, loopHandle, { result, status: "paused" });
       thread.status = "paused";
       return;
     }
@@ -59,6 +61,11 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
       try {
         await dispatchToolCall(thread, toolCall);
       } catch (error) {
+        await finishLlmLoop(thread, loopHandle, {
+          result,
+          status: "error",
+          error: (error as Error).message
+        });
         thread.events.push({
           category: "context_change",
           kind: "inject",
@@ -67,7 +74,14 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
         return;
       }
     }
+    await finishLlmLoop(thread, loopHandle, { result, status: "ok" });
   } catch (error) {
+    if (loopHandle) {
+      await finishLlmLoop(thread, loopHandle, {
+        status: "error",
+        error: (error as Error).message
+      });
+    }
     thread.events.push({
       category: "context_change",
       kind: "inject",
