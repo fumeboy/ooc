@@ -14,6 +14,7 @@ describe("worker", () => {
       baseDir: mkdtempSync(join(tmpdir(), "ooc-worker-")),
       workerPollMs: 5,
       workerEnabled: false,
+      workerMaxTicks: 15,
       pauseStore: createPauseStore(),
       jobManager,
     };

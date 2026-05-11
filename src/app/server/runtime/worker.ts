@@ -7,7 +7,10 @@ import { resumePausedThread } from "./resume";
 
 export type RuntimeJobRunner = (job: RuntimeJob, config: ServerConfig) => Promise<void>;
 
-export async function runJob(job: RuntimeJob, config: Pick<ServerConfig, "baseDir">): Promise<void> {
+export async function runJob(
+  job: RuntimeJob,
+  config: Pick<ServerConfig, "baseDir" | "workerMaxTicks">
+): Promise<void> {
   if (job.kind === "resume-thread") {
     await resumePausedThread({
       baseDir: config.baseDir,
@@ -29,7 +32,7 @@ export async function runJob(job: RuntimeJob, config: Pick<ServerConfig, "baseDi
   if (!rootThread) {
     throw new Error(`thread not found: ${job.threadId}`);
   }
-  await runScheduler(rootThread, createLlmClient(), { maxTicks: 10 });
+  await runScheduler(rootThread, createLlmClient(), { maxTicks: config.workerMaxTicks ?? 15 });
 }
 
 export async function processQueuedJobs(
