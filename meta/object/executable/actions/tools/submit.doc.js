@@ -45,7 +45,8 @@ submit(form_id="f_001")
   → form 切到 executing，inject "[form executing] formId=f_001 ..."
   → 执行 program command（如 shell mode 跑 sh -c code）
   → form 切到 executed，result 字段写入命令输出
-  → inject "[form executed] formId=f_001"
+  → inject "[form executed] formId=f_001 + 提醒：等到下一轮 think 再读 <result>，
+     同一轮立即 close 会让 result 随 form 一并消失"
 
 close(form_id="f_001", reason="结果已读取")
   → form 真正离开 active_forms
