@@ -50,9 +50,13 @@ export interface ObservableDebugStatus {
   enabled: boolean;
 }
 
+/** 运行时可注入的 pause 判定器。 */
+export type PauseChecker = (thread: ThreadContext) => boolean | Promise<boolean>;
+
 let latestLlmObservation: LlmObservation | undefined;
 let debugEnabled = false;
 const loopCounters = new Map<string, number>();
+let pauseChecker: PauseChecker = () => false;
 
 /** 把线程定位为稳定 key；持久化线程按磁盘 ref 区分，内存线程退化到 id。 */
 function loopKey(thread: ThreadContext): string {
@@ -91,10 +95,14 @@ export function getDebugStatus(): ObservableDebugStatus {
   return { enabled: debugEnabled };
 }
 
-/** pause 能力先默认为 false，占位表达“暂停检查点存在”。 */
+/** 注入 pause 判定逻辑，供 app/server runtime 控制暂停。 */
+export function setPauseChecker(checker: PauseChecker): void {
+  pauseChecker = checker;
+}
+
+/** pause 能力由 runtime 注入；默认关闭。 */
 export function isPausing(thread: ThreadContext): Promise<boolean> | boolean {
-  void thread;
-  return false;
+  return pauseChecker(thread);
 }
 
 /** 清空最近一次 LLM 观测，避免测试之间互相污染。 */
@@ -107,6 +115,7 @@ export function clearObservableDebugState(): void {
   latestLlmObservation = undefined;
   debugEnabled = false;
   loopCounters.clear();
+  pauseChecker = () => false;
 }
 
 /** 读取最近一次 LLM 输入/输出观测快照。 */

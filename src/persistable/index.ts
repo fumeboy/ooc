@@ -2,8 +2,12 @@ export type { FlowObjectRef, ThreadPersistenceRef, StoneObjectRef } from "./comm
 export { stoneDir, deriveStoneFromThread } from "./common";
 
 export {
+  createFlowSession,
   createFlowObject,
   flowMetadataFile,
+  sessionDir,
+  sessionMetadataFile,
+  type FlowSessionMetadata,
   type FlowObjectMetadata
 } from "./flow-object";
 
