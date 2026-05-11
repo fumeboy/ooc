@@ -207,7 +207,50 @@ describe("executable tools", () => {
     expect(thread.events.at(-1)).toEqual({
       category: "context_change",
       kind: "inject",
-      text: "[错误] close 参数不完整：必须提供 form_id 和 reason。"
+      text: "[错误] close 缺少 reason 参数。"
+    });
+  });
+
+  it("close(type=knowledge) 从 pinnedKnowledge 卸载指定路径", async () => {
+    const thread = {
+      id: "test",
+      status: "running",
+      events: [],
+      pinnedKnowledge: ["build/file-ops", "api/openai"]
+    } as ThreadContext;
+
+    await dispatchToolCall(thread, {
+      id: "call_1",
+      name: "close",
+      arguments: { type: "knowledge", path: "build/file-ops", reason: "已读完" }
+    });
+
+    expect(thread.pinnedKnowledge).toEqual(["api/openai"]);
+    expect(thread.events.at(-1)).toEqual({
+      category: "context_change",
+      kind: "inject",
+      text: "[close] knowledge build/file-ops 已卸载。原因：已读完"
+    });
+  });
+
+  it("close(type=knowledge) 对未 pin 的 path 给出提示，不报错", async () => {
+    const thread = {
+      id: "test",
+      status: "running",
+      events: [],
+      pinnedKnowledge: ["api/openai"]
+    } as ThreadContext;
+
+    await dispatchToolCall(thread, {
+      id: "call_1",
+      name: "close",
+      arguments: { type: "knowledge", path: "ghost", reason: "试试" }
+    });
+
+    expect(thread.pinnedKnowledge).toEqual(["api/openai"]);
+    expect(thread.events.at(-1)?.kind).toBe("inject");
+    expect(thread.events.at(-1) as { text: string }).toMatchObject({
+      text: expect.stringContaining("未被 pin")
     });
   });
 
