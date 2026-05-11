@@ -1,3 +1,5 @@
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 import {
   createFlowObject,
   createFlowSession,
@@ -8,6 +10,41 @@ import { loadUiServerMethods } from "@src/executable/server/loader";
 import type { createJobManager } from "../../runtime/job-manager";
 import type { PauseStore } from "../../runtime/pause-store";
 import { AppServerError } from "../../bootstrap/errors";
+
+/**
+ * 扫 flows/{sessionId}/objects/ 下所有 object 的 threads/，
+ * 返回 status=paused 的 {objectId, threadId} 列表。
+ * 任一层目录不存在直接当作空集，不抛异常。
+ */
+async function scanPausedThreads(baseDir: string, sessionId: string): Promise<Array<{ objectId: string; threadId: string }>> {
+  const objectsRoot = join(baseDir, "flows", sessionId, "objects");
+  let objectDirs;
+  try {
+    objectDirs = await readdir(objectsRoot, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+  const found: Array<{ objectId: string; threadId: string }> = [];
+  for (const obj of objectDirs) {
+    if (!obj.isDirectory()) continue;
+    const threadsDir = join(objectsRoot, obj.name, "threads");
+    let threadDirs;
+    try {
+      threadDirs = await readdir(threadsDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const td of threadDirs) {
+      if (!td.isDirectory()) continue;
+      const thread = await readThread({ baseDir, sessionId, objectId: obj.name }, td.name);
+      if (thread?.status === "paused") {
+        found.push({ objectId: obj.name, threadId: td.name });
+      }
+    }
+  }
+  return found;
+}
 
 function httpContext() {
   return {
@@ -149,9 +186,22 @@ export function createFlowsService(deps: {
       deps.pauseStore.pauseSession(sessionId);
       return { sessionId, paused: true };
     },
-    resumeSession({ sessionId }: { sessionId: string }) {
+    async resumeSession({ sessionId }: { sessionId: string }) {
       deps.pauseStore.resumeSession(sessionId);
-      return { sessionId, resumedThreadIds: [], jobIds: [] };
+      // 扫 paused threads 并各入队一个 resume-thread job
+      const paused = await scanPausedThreads(deps.baseDir, sessionId);
+      const jobIds: string[] = [];
+      const resumedThreadIds: string[] = [];
+      for (const { objectId, threadId } of paused) {
+        const job = deps.jobManager.createResumeThreadJob({
+          sessionId,
+          objectId,
+          threadId,
+        });
+        jobIds.push(job.jobId);
+        resumedThreadIds.push(`${objectId}/${threadId}`);
+      }
+      return { sessionId, resumedThreadIds, jobIds };
     },
     async callMethod({
       sessionId,

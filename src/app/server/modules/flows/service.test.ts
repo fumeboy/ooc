@@ -52,6 +52,55 @@ describe("flows service", () => {
     }
   });
 
+  test("resumeSession scans paused threads and enqueues resume-thread jobs", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-"));
+
+    try {
+      const jobManager = createJobManager();
+      const service = createFlowsService({
+        baseDir,
+        pauseStore: createPauseStore(),
+        jobManager,
+      });
+      await service.createSession({ sessionId: "s-resume" });
+      await service.createFlowObject({ sessionId: "s-resume", objectId: "agent1" });
+      await service.createFlowObject({ sessionId: "s-resume", objectId: "agent2" });
+
+      // 把 agent1.root 标记为 paused（模拟 pause 状态）；agent2.root 留作 running
+      const { readThread, writeThread } = await import("@src/persistable");
+      const t1 = await readThread({ baseDir, sessionId: "s-resume", objectId: "agent1" }, "root");
+      t1!.status = "paused";
+      await writeThread(t1!);
+
+      const out = await service.resumeSession({ sessionId: "s-resume" });
+      expect(out.resumedThreadIds).toEqual(["agent1/root"]);
+      expect(out.jobIds.length).toBe(1);
+      const job = jobManager.getJob(out.jobIds[0]!);
+      expect(job?.kind).toBe("resume-thread");
+      expect(job?.objectId).toBe("agent1");
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  test("resumeSession returns empty when no paused threads", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-"));
+
+    try {
+      const service = createFlowsService({
+        baseDir,
+        pauseStore: createPauseStore(),
+        jobManager: createJobManager(),
+      });
+      await service.createSession({ sessionId: "s-empty" });
+      const out = await service.resumeSession({ sessionId: "s-empty" });
+      expect(out.resumedThreadIds).toEqual([]);
+      expect(out.jobIds).toEqual([]);
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
   test("injectThread flips failed thread back to running", async () => {
     const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-"));
 
