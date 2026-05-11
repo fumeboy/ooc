@@ -1,13 +1,12 @@
 import { thread_v20260505_1 } from "@meta/object/thinkable/thread/index.doc";
 import { object_v20260504_1 } from "@meta/object/index.doc";
 import * as schedulerSource from "@src/thinkable/scheduler";
-import * as schedulerTestSource from "@src/thinkable/__tests__/scheduler.test";
 
+// doc 仅绑定实现源代码，不再绑定 .test.ts（避免顶层 import meta 时触发 bun:test 运行时）。
 export const scheduler_v20260505_1 = {
-  parent: thread_v20260505_1,
+  get parent() { return thread_v20260505_1; },
   sources: {
     scheduler: schedulerSource,
-    tests: schedulerTestSource,
   },
   index: `
 Scheduler 描述线程树的调度策略：每轮选哪个线程执行、何时唤醒等待中的线程、如何检测死锁。

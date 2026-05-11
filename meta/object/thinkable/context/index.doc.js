@@ -1,12 +1,13 @@
 import { thinkable_v20260504_1 } from "@meta/object/thinkable/index.doc";
 import * as contextSource from "@src/thinkable/context";
-import * as contextTestSource from "@src/thinkable/__tests__/context.test";
 
+// doc 仅绑定实现源代码，不再绑定 .test.ts —— 测试文件包含 bun:test 运行时依赖，
+// 顶层 import "meta/index.doc.js" 时会触发 "describe outside test runner" 错误。
+// 测试文件本身可通过 src/**/__tests__/ 路径直接发现，不需要在 doc 里再 alias。
 export const context_v20260505_1 = {
-  parent: thinkable_v20260504_1,
+  get parent() { return thinkable_v20260504_1; },
   sources: {
     context: contextSource,
-    tests: contextTestSource,
   },
   index: `
 Context 是 Object 每次思考时看到的全部信息。

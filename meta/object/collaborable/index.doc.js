@@ -5,7 +5,7 @@ import { kanban_v20260506_1 } from "@meta/object/collaborable/kanban/index.doc";
 import { role_v20260506_1 } from "@meta/object/collaborable/role/index.doc";
 
 export const collaborable_v20260504_1 = {
-  parent: object_v20260504_1,
+  get parent() { return object_v20260504_1; },
   index: `
 Collaborable 描述 Object 的协作与社交能力。
 

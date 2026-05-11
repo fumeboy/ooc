@@ -10,7 +10,7 @@ import { meta_v20260506_1 } from "@meta/index.doc";
  * 不重复每次迭代的具体实施细节——细节去 spec/plan 看。
  */
 export const iteration_v20260511_1 = {
-  parent: meta_v20260506_1,
+  get parent() { return meta_v20260506_1; },
   index: `
 ooc-2 迭代历史
 

@@ -2,7 +2,7 @@ import { object_v20260504_1 } from "@meta/object/index.doc";
 import * as persistable from "@src/persistable/index";
 
 export const persistable_v20260504_1 = {
-  parent: object_v20260504_1,
+  get parent() { return object_v20260504_1; },
   sources: {
     persistable,
   },

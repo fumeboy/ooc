@@ -2,7 +2,7 @@ import { commands_v20260506_1 } from "@meta/object/executable/actions/commands/i
 import * as planSource from "@src/executable/commands/plan";
 
 export const plan_v20260506_1 = {
-  parent: commands_v20260506_1,
+  get parent() { return commands_v20260506_1; },
   index: `
 \`plan\` 用于设置或更新当前线程的计划文本。
 

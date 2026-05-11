@@ -2,7 +2,7 @@ import { tools_v20260506_1 } from "@meta/object/executable/actions/tools/index.d
 import * as openSource from "@src/executable/tools/open";
 
 export const open_v20260506_1 = {
-  parent: tools_v20260506_1,
+  get parent() { return tools_v20260506_1; },
   index: `
 \`open\` 用于
 - 开始一次行动

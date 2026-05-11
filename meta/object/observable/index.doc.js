@@ -6,7 +6,7 @@ import { context_visibility_v20260506_1 } from "@meta/object/observable/context-
 import * as observable from "@src/observable/index";
 
 export const observable_v20260504_1 = {
-  parent: object_v20260504_1,
+  get parent() { return object_v20260504_1; },
   sources: {
     observable,
   },

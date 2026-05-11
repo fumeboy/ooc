@@ -2,7 +2,7 @@ import { tools_v20260506_1 } from "@meta/object/executable/actions/tools/index.d
 import * as closeSource from "@src/executable/tools/close";
 
 export const close_v20260506_1 = {
-  parent: tools_v20260506_1,
+  get parent() { return tools_v20260506_1; },
   index: `
 \`close\` 用于关闭一个已 open 的 form
 

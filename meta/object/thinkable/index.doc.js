@@ -8,7 +8,7 @@ import { thinkloop_v20260505_1 } from "@meta/object/thinkable/thinkloop/index.do
 import { context_v20260505_1 } from "@meta/object/thinkable/context/index.doc";
 
 export const thinkable_v20260504_1 = {
-    parent: object_v20260504_1,
+    get parent() { return object_v20260504_1; },
     index: `
 Thinkable 描述 Object 的思考能力。
 

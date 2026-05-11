@@ -7,7 +7,7 @@ import * as llmClientSource from "../../../../src/thinkable/llm/client.ts";
 import * as llmIndexSource from "../../../../src/thinkable/llm/index.ts";
 
 export const llm_v20260508_1 = {
-  parent: thinkable_v20260504_1,
+  get parent() { return thinkable_v20260504_1; },
   // sources 显式引用对应源码模块，确保 meta 与实现保持真实连接。
   sources: {
     types: llmTypesSource,

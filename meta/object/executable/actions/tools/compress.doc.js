@@ -1,7 +1,7 @@
 import { tools_v20260506_1 } from "@meta/object/executable/actions/tools/index.doc";
 
 export const compress_v20260506_1 = {
-  parent: tools_v20260506_1,
+  get parent() { return tools_v20260506_1; },
   index: `
 \`compress\` 用于清理上下文 & 压缩本线程的 process events，缓解 Context 容量压力。
 

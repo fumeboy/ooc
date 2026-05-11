@@ -1,7 +1,7 @@
 import { collaborable_v20260504_1 } from "@meta/object/collaborable/index.doc";
 
 export const kanban_v20260506_1 = {
-    parent: collaborable_v20260504_1,
+    get parent() { return collaborable_v20260504_1; },
     index: `
 Kanban 是 Session 级的结构化协作机制。
 

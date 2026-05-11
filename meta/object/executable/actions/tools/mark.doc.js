@@ -1,7 +1,7 @@
 import { tools_v20260506_1 } from "@meta/object/executable/actions/tools/index.doc";
 
 export const mark_v20260506_1 = {
-  parent: tools_v20260506_1,
+  get parent() { return tools_v20260506_1; },
   index: `
 \`mark\` 不是独立的 tool，而是任意 tool 调用都可以携带的**附加参数**。
 用于标记 inbox 中的消息已读。

@@ -1,7 +1,7 @@
 import { kanban_v20260506_1 } from "@meta/object/collaborable/kanban/index.doc";
 
 export const task_v20260506_1 = {
-    parent: kanban_v20260506_1,
+    get parent() { return kanban_v20260506_1; },
     index: `
 Task 是 Session 级的执行单元。多对多关联 Issue。
 

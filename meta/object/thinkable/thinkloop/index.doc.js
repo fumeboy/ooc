@@ -5,7 +5,7 @@ import * as executableToolsSource from "../../../../src/executable/tools.ts";
 import * as observableSource from "../../../../src/observable/index.ts";
 
 export const thinkloop_v20260505_1 = {
-  parent: thinkable_v20260504_1,
+  get parent() { return thinkable_v20260504_1; },
   // sources 显式引用对应源码模块，确保 meta 与实现保持真实连接。
   sources: {
     context: thinkableContextSource,

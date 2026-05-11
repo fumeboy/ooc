@@ -1,7 +1,7 @@
 import { object_v20260504_1 } from "@meta/object/index.doc";
 
 export const reflectable_v20260504_1 = {
-  parent: object_v20260504_1,
+  get parent() { return object_v20260504_1; },
   index: `
 Reflectable 描述 Object 的自我迭代、元编程能力。
 

@@ -1,7 +1,7 @@
 import { kanban_v20260506_1 } from "@meta/object/collaborable/kanban/index.doc";
 
 export const concurrent_write_v20260506_1 = {
-    parent: kanban_v20260506_1,
+    get parent() { return kanban_v20260506_1; },
     index: `
 Kanban 数据可能被多方并发写入。
 通过 per-key 串行化队列（SerialQueue）保护读-改-写竞态。

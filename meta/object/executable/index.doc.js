@@ -11,7 +11,7 @@ import * as executable_commands from "@src/executable/commands/index";
 import * as executable_forms from "@src/executable/forms/form";
 
 export const executable_v20260504_1 = {
-  parent: object_v20260504_1,
+  get parent() { return object_v20260504_1; },
   index: `
 Executable 描述 Object 的行动 / 编程能力。
 

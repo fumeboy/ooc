@@ -3,8 +3,9 @@ import * as serverLoader from "@src/executable/server/loader";
 import * as serverSelf from "@src/executable/server/self";
 import * as serverTypes from "@src/executable/server/types";
 
+// parent 改为 getter 以打破 executable/index ↔ server/index 的循环初始化死锁。
 export const server_v20260506_1 = {
-  parent: executable_v20260504_1,
+  get parent() { return executable_v20260504_1; },
   sources: {
     loader: serverLoader,
     self: serverSelf,

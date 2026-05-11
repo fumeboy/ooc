@@ -2,7 +2,7 @@ import { commands_v20260506_1 } from "@meta/object/executable/actions/commands/i
 import * as talkSource from "@src/executable/commands/talk";
 
 export const talk_v20260506_1 = {
-  parent: commands_v20260506_1,
+  get parent() { return commands_v20260506_1; },
   index: `
 \`talk\` 用于向另一个 Object 发送消息。
 

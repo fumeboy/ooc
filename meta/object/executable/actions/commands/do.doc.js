@@ -2,7 +2,7 @@ import { commands_v20260506_1 } from "@meta/object/executable/actions/commands/i
 import * as doSource from "@src/executable/commands/do";
 
 export const do_v20260506_1 = {
-  parent: commands_v20260506_1,
+  get parent() { return commands_v20260506_1; },
   index: `
 \`do\` 用于在当前对象内派生子线程，或向当前对象内已有子线程追加消息。
 

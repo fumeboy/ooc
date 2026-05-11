@@ -2,7 +2,7 @@ import { commands_v20260506_1 } from "@meta/object/executable/actions/commands/i
 import * as endSource from "@src/executable/commands/end";
 
 export const end_v20260506_1 = {
-  parent: commands_v20260506_1,
+  get parent() { return commands_v20260506_1; },
   index: `
 \`end\` 用于主动标记本线程已完成。
 

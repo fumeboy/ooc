@@ -1,7 +1,7 @@
 import { kanban_v20260506_1 } from "@meta/object/collaborable/kanban/index.doc";
 
 export const comment_v20260506_1 = {
-    parent: kanban_v20260506_1,
+    get parent() { return kanban_v20260506_1; },
     index: `
 Comment 是 Issue 下的评论。一旦创建，**不可修改**——
 行动记录不可变是 OOC 的基本约束。

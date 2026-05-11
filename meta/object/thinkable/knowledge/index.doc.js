@@ -5,7 +5,7 @@ import * as knowledgeLoader from "@src/thinkable/knowledge/loader";
 import * as knowledgeActivator from "@src/thinkable/knowledge/activator";
 
 export const knowledge_v20260505_1 = {
-  parent: thinkable_v20260504_1,
+  get parent() { return thinkable_v20260504_1; },
   sources: {
     types: knowledgeTypes,
     parser: knowledgeParser,

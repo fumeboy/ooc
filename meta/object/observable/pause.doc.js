@@ -1,7 +1,7 @@
 import { observable_v20260504_1 } from "@meta/object/observable/index.doc";
 
 export const pause_v20260506_1 = {
-  parent: observable_v20260504_1,
+  get parent() { return observable_v20260504_1; },
   index: `
 Pause 是 OOC 的“人工检查点”：让对象停止继续执行，把 LLM 的最新输出保留下来，允许人类介入，然后再 resume。
 

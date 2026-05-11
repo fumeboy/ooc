@@ -13,7 +13,7 @@ import { app_tree_v20260511_1 } from "@meta/app/index.doc";
 export { object_v20260504_1 } from "@meta/object/index.doc";
 
 export const object_tree_v20260504_1 = {
-  parent: object_v20260504_1,
+  get parent() { return object_v20260504_1; },
   index: `
 Object 能力维度包括 thinkable / collaborable / executable / persistable / extendable / observable / reflectable。
 `,

@@ -1,8 +1,9 @@
 import { executable_v20260504_1 } from "@meta/object/executable/index.doc";
 import * as commandsSource from "@src/executable/commands/index";
 
+// parent 改为 getter 以打破 executable/index ↔ commands/index 的循环初始化死锁。
 export const commands_v20260506_1 = {
-  parent: executable_v20260504_1,
+  get parent() { return executable_v20260504_1; },
   index: `
 Commands 是 LLM 通过 \`open(type=command, command=X)\` 调用的"具体行动单元"。
 

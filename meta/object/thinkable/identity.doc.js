@@ -4,7 +4,7 @@ import { persistable_v20260504_1 } from "@meta/object/persistable/index.doc";
 
 
 export const identity_v20260505_1 = {
-    parent: thinkable_v20260504_1,
+    get parent() { return thinkable_v20260504_1; },
     index: `
 Identity 描述 Object 对自己的双面认知。
 

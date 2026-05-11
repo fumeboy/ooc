@@ -2,7 +2,7 @@ import { commands_v20260506_1 } from "@meta/object/executable/actions/commands/i
 import * as programSource from "@src/executable/commands/program";
 
 export const program_v20260506_1 = {
-  parent: commands_v20260506_1,
+  get parent() { return commands_v20260506_1; },
   index: `
 \`program\` 用于在执行一段代码 / 调用 Object 的某个函数方法。
 

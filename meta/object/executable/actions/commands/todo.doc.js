@@ -2,7 +2,7 @@ import { commands_v20260506_1 } from "@meta/object/executable/actions/commands/i
 import * as todoSource from "@src/executable/commands/todo";
 
 export const todo_v20260509_1 = {
-  parent: commands_v20260506_1,
+  get parent() { return commands_v20260506_1; },
   index: `
 \`todo\` 用于登记一个可见待办，并可选配置在命中特定 command 或 command path 时提醒。
 

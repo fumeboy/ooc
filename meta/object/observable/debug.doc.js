@@ -1,7 +1,7 @@
 import { observable_v20260504_1 } from "@meta/object/observable/index.doc";
 
 export const debug_v20260506_1 = {
-  parent: observable_v20260504_1,
+  get parent() { return observable_v20260504_1; },
   index: `
 Debug 模式用于“事后排查”：持续把每轮 ThinkLoop 的输入/输出/元数据写到文件。
 

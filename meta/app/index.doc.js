@@ -12,6 +12,6 @@ app 描述 OOC 内核之上的应用层入口。
 };
 
 export const app_tree_v20260511_1 = {
-  parent: app_v20260511_1,
+  get parent() { return app_v20260511_1; },
   server: app_server_v20260511_1,
 };

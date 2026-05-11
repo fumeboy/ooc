@@ -1,8 +1,11 @@
 import { executable_v20260504_1 } from "@meta/object/executable/index.doc";
 import * as toolsSource from "@src/executable/tools/index";
 
+// parent 改为 getter 以打破 executable/index ↔ tools/index 的循环初始化死锁。
+// executable/index.doc.js 在顶层 import 本模块，此时 executable_v20260504_1 尚未赋值；
+// 用 getter 让消费方按需访问，避开 ReferenceError。
 export const tools_v20260506_1 = {
-  parent: executable_v20260504_1,
+  get parent() { return executable_v20260504_1; },
   index: `
 Tools 是 LLM 在每一轮 ThinkLoop 中可以直接调用的原语集合。
 

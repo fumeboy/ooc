@@ -1,7 +1,7 @@
 import { observable_v20260504_1 } from "@meta/object/observable/index.doc";
 
 export const context_visibility_v20260506_1 = {
-  parent: observable_v20260504_1,
+  get parent() { return observable_v20260504_1; },
   index: `
 Context Visibility 描述如何观察每轮 LLM 输入窗口中的信息来源。
 

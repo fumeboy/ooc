@@ -1,7 +1,7 @@
 import { role_v20260506_1 } from "@meta/object/collaborable/role/index.doc";
 
 export const supervisor_v20260506_1 = {
-  parent: role_v20260506_1,
+  get parent() { return role_v20260506_1; },
   index: `
 Supervisor 是一个对象，但拥有系统级特权。它是 Session 的总协调者。
 

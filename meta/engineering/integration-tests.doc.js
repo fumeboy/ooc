@@ -7,7 +7,7 @@ import { engineering_v20260506_1 } from "@meta/engineering/index.doc";
  * 二者目的互补：单测保算法正确性，集成测保系统作为整体在真实 LLM 行为下不崩。
  */
 export const integration_tests_v20260511_1 = {
-  parent: engineering_v20260506_1,
+  get parent() { return engineering_v20260506_1; },
   index: `
 集成测试沉淀
 

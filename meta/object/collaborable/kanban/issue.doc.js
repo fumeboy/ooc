@@ -1,7 +1,7 @@
 import { kanban_v20260506_1 } from "@meta/object/collaborable/kanban/index.doc";
 
 export const issue_v20260506_1 = {
-    parent: kanban_v20260506_1,
+    get parent() { return kanban_v20260506_1; },
     index: `
 Issue 是 Session 级的需求 / 问题讨论单元。跨对象讨论，多对多关联 Task。
 

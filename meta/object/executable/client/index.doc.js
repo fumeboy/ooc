@@ -1,7 +1,8 @@
 import { executable_v20260504_1 } from "@meta/object/executable/index.doc";
 
+// parent 改为 getter 以打破 executable/index ↔ client/index 的循环初始化死锁。
 export const client_v20260506_1 = {
-  parent: executable_v20260504_1,
+  get parent() { return executable_v20260504_1; },
   index: `
 Client 描述 Object 如何为自己编写前端 React UI 组件。
 
