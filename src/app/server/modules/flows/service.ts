@@ -71,6 +71,57 @@ export function createFlowsService(deps: {
     async getThread({ sessionId, objectId, threadId }: { sessionId: string; objectId: string; threadId: string }) {
       return await readThread({ baseDir: deps.baseDir, sessionId, objectId }, threadId);
     },
+    /**
+     * 向已存在的 thread 注入一条用户文本（作为 context_change/inject 事件），
+     * 把 thread.status 翻回 running，并入队一个新的 run-thread job 让 worker 续跑。
+     *
+     * 用于多轮对话：用户在 thread 上一轮跑完后追加新需求。
+     */
+    async injectThread({
+      sessionId,
+      objectId,
+      threadId,
+      text,
+    }: {
+      sessionId: string;
+      objectId: string;
+      threadId: string;
+      text: string;
+    }) {
+      const ref = { baseDir: deps.baseDir, sessionId, objectId };
+      const thread = await readThread(ref, threadId);
+      if (!thread) {
+        throw new AppServerError(
+          "NOT_FOUND",
+          `thread '${threadId}' not found`,
+          { sessionId, objectId, threadId }
+        );
+      }
+      thread.events.push({
+        category: "context_change",
+        kind: "inject",
+        text,
+      });
+      // failed 线程不再自动唤醒——失败原因可能是不可恢复的；其它（done/waiting/paused/running）都翻回 running
+      if (thread.status !== "failed") {
+        thread.status = "running";
+        thread.waitingType = undefined;
+        thread.awaitingChildren = undefined;
+      }
+      await writeThread(thread);
+      const job = deps.jobManager.createRunThreadJob({
+        sessionId,
+        objectId,
+        threadId,
+      });
+      return {
+        sessionId,
+        objectId,
+        threadId,
+        status: thread.status,
+        jobId: job.jobId,
+      };
+    },
     pauseSession({ sessionId }: { sessionId: string }) {
       deps.pauseStore.pauseSession(sessionId);
       return { sessionId, paused: true };
