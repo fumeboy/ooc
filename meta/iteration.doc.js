@@ -54,12 +54,18 @@ ooc-2  (2026-05-08 ~ 2026-05-11)
 │       ├── spec: docs/superpowers/specs/2026-05-10-executable-completion-design.md
 │       └── plan: docs/superpowers/plans/2026-05-10-executable-completion.md
 │
-└── 阶段 5：元编程 + stone 持久化 — 让 Object 能给自己写方法、保留身份
-    └── [2026-05-11] stone-server-meta-programming  stone 全套持久化(.stone.json/self.md/readme.md/data.json/server/index.ts) + program.ts/js(in-process dynamic import) + program.function(callMethod) + ProgramSelf(callMethod/getData/setData) + 元编程 knowledge + 真 LLM 集成测试
-        ├── spec: docs/superpowers/specs/2026-05-11-stone-server-meta-programming-design.md
-        ├── plan: docs/superpowers/plans/2026-05-11-stone-server-meta-programming.md
-        ├── 后续微调：method 注册支持可选 \`knowledge(args) → text\`（同 command.match 设计，基于当前 args 动态派生知识文本）；缺省回退到由 description+params 自动生成的基线文本；form 渲染段为 \`<method_knowledge>\`
-        └── 工程沉淀：meta/engineering/integration-tests.doc.js 记录 11 个真 LLM 集成测试（含 multi-round-multitask long-horizon 压力测试）+ 5 个由真 LLM 触发并修复的 bug 历史
+├── 阶段 5：元编程 + stone 持久化 — 让 Object 能给自己写方法、保留身份
+│   └── [2026-05-11] stone-server-meta-programming  stone 全套持久化(.stone.json/self.md/readme.md/data.json/server/index.ts) + program.ts/js(in-process dynamic import) + program.function(callMethod) + ProgramSelf(callMethod/getData/setData) + 元编程 knowledge + 真 LLM 集成测试
+│       ├── spec: docs/superpowers/specs/2026-05-11-stone-server-meta-programming-design.md
+│       ├── plan: docs/superpowers/plans/2026-05-11-stone-server-meta-programming.md
+│       ├── 后续微调：method 注册支持可选 \`knowledge(args) → text\`（同 command.match 设计，基于当前 args 动态派生知识文本）；缺省回退到由 description+params 自动生成的基线文本；form 渲染段为 \`<method_knowledge>\`
+│       └── 工程沉淀：meta/engineering/integration-tests.doc.js 记录 11 个真 LLM 集成测试（含 multi-round-multitask long-horizon 压力测试）+ 5 个由真 LLM 触发并修复的 bug 历史
+│
+└── 阶段 6：knowledge 模块 — 让 Object 能在 context 中按需看到自己的知识库
+    └── [2026-05-12] knowledge-module  parser + loader(mtime cache 热重载) + activator(命令路径相交) + context 渲染(\`<active_knowledge>\`) + 手动 pin/unpin(open/close type=knowledge)
+        ├── spec: docs/superpowers/specs/2026-05-12-knowledge-module-design.md
+        ├── plan: docs/superpowers/plans/2026-05-12-knowledge-module.md
+        └── 关键决策：懒求值（无 thread 派生状态字段）+ 单篇 8KB / 总数 20 项渲染上限 + 删 thread.activatedKnowledge 字段（违反 SSoT）+ js-yaml 依赖
 \`\`\`
 
 ## 阶段划分判据
@@ -69,12 +75,14 @@ ooc-2  (2026-05-08 ~ 2026-05-11)
 - **阶段 3 完成标志**：杀进程重启后能从磁盘恢复线程态；任意时刻能从 llm.input/output.json 复盘上一轮 LLM 视角
 - **阶段 4 完成标志**：跑 \`bun --env-file=.env test tests/integration\` 9 个端到端场景全部 PASS（真 LLM 真 shell 真持久化）
 - **阶段 5 完成标志**：Agent 能用 program.shell 写 \`<self.dir>/server/index.ts\` 注册新方法 → 立即用 program.function 调用 → 看到结果；stone 全套目录骨架可创建，5 个核心文件可读写
+- **阶段 6 完成标志**：在 stone/{objectId}/knowledge/ 放一篇 .md 含 \`activates_on.show_content_when=[program.shell]\` → Agent 一旦 open program 含 program.shell 路径 → 下一轮 system context 中 \`<active_knowledge>\` 段含该篇全文；Agent 编辑 .md 后下一轮 think 立即生效
 
 ## 后续阶段（未启动）
 
-- **阶段 6**：跨 object talk + 全 stone 数据合并（让多 object session 协作）
-- **阶段 7**：knowledge 加载引擎 + reflectable + super flow（让 form open 时真按 commandPath 加载 .md 知识进 context）
-- **阶段 8**：UI / client / 与人协作（与 observable/pause 联动，做可视化 + 介入）
+- **阶段 7**：跨 object talk + 全 stone 数据合并（让多 object session 协作）
+- **阶段 8**：reflectable + super flow（让 Object 通过 super flow 持续反思、沉淀 memory）
+- **阶段 9**：跨线程 knowledge 继承 + kernel built-in knowledge + flow 第二来源
+- **阶段 10**：UI / client / 与人协作（与 observable/pause 联动，做可视化 + 介入）
 
 后续阶段都不在当前主分支范围。每启动一个新阶段，都先在本文件追加一个新节点，然后再写 spec → plan → 实施。
 `,
