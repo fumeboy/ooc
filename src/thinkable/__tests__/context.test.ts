@@ -213,4 +213,57 @@ describe("buildContext", () => {
     expect(sliceForm("f_open")).not.toContain("<result>");
     expect(sliceForm("f_executing")).not.toContain("<result>");
   });
+
+  it("renders method_schema when form.methodSchema is populated", async () => {
+    const thread: ThreadContext = {
+      id: "t_schema",
+      status: "running",
+      events: [],
+      activeForms: [
+        {
+          formId: "f_fn",
+          command: "program",
+          description: "调 add",
+          createdAt: 1,
+          accumulatedArgs: { function: "add" },
+          commandPaths: ["program", "program.function"],
+          loadedKnowledgePaths: [],
+          status: "open",
+          methodSchema: {
+            description: "两数相加",
+            params: [
+              { name: "a", type: "number", description: "第一个加数", required: true },
+              { name: "b", type: "number", description: "第二个加数", required: true }
+            ]
+          }
+        },
+        {
+          formId: "f_no_schema",
+          command: "program",
+          description: "shell",
+          createdAt: 2,
+          accumulatedArgs: { language: "shell", code: "ls" },
+          commandPaths: ["program", "program.shell"],
+          loadedKnowledgePaths: [],
+          status: "open"
+        }
+      ]
+    };
+
+    const messages = await buildContext(thread);
+    const xml = messages[0]?.content ?? "";
+
+    expect(xml).toContain("<method_schema>");
+    expect(xml).toContain("<description>两数相加</description>");
+    expect(xml).toContain('<param name="a" type="number" required="true">第一个加数</param>');
+    expect(xml).toContain('<param name="b" type="number" required="true">第二个加数</param>');
+
+    function sliceForm(id: string): string {
+      const start = xml.indexOf(`<form id="${id}"`);
+      const end = xml.indexOf("</form>", start) + "</form>".length;
+      return xml.slice(start, end);
+    }
+    expect(sliceForm("f_fn")).toContain("<method_schema>");
+    expect(sliceForm("f_no_schema")).not.toContain("<method_schema>");
+  });
 });

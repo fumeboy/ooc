@@ -2,6 +2,7 @@ import type { ThreadContext } from "../../thinkable/context.js";
 import type { LlmTool } from "../../thinkable/llm/types.js";
 import { getOpenableCommands } from "../commands/index.js";
 import { FormManager } from "../forms/form.js";
+import { enrichProgramForm } from "../server/enrich.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 /** open tool - 开始行动，或把 knowledge/file 显式放入 Context。 */
@@ -66,7 +67,16 @@ export async function handleOpenTool(
     const command = args.command as string;
     const formId = formManager.open(command, description);
     formManager.refine(formId, nestedArgs);
-    thread.activeForms = formManager.toData();
+    let snapshot = formManager.toData();
+    // 若 form 是 program command + function 模式，自动加载方法签名供下一轮 LLM 看见
+    const target = snapshot.find((f) => f.formId === formId);
+    if (target) {
+      const enriched = await enrichProgramForm(target, thread);
+      if (enriched !== target) {
+        snapshot = snapshot.map((f) => (f.formId === formId ? enriched : f));
+      }
+    }
+    thread.activeForms = snapshot;
     thread.events.push({
       category: "context_change",
       kind: "inject",

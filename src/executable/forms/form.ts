@@ -59,6 +59,21 @@ export interface ActiveForm {
 
   /** command 执行返回的结果文本；目前只有 program.shell 真正写入。 */
   result?: string;
+
+  /**
+   * 当 form.command === "program" 且 accumulatedArgs.function 命中已注册 server 方法时，
+   * 由 enrichProgramForm 自动从 stone 的 server/index.ts 抓取该方法的 description + params 快照。
+   * 渲染到 active_forms 的 <method_schema> 段，让 LLM 在 refine 之前看到方法签名。
+   */
+  methodSchema?: {
+    description?: string;
+    params?: Array<{
+      name: string;
+      type?: string;
+      description?: string;
+      required?: boolean;
+    }>;
+  };
 }
 
 /** 生成 form_id */

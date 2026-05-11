@@ -1,6 +1,7 @@
 import type { LlmTool } from "../../thinkable/llm/types.js";
 import type { ThreadContext } from "../../thinkable/context.js";
 import { FormManager } from "../forms/form.js";
+import { enrichProgramForm } from "../server/enrich.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 /** refine tool — 向 open 的 form 追加/修改 args */
@@ -50,7 +51,16 @@ export async function handleRefineTool(
   }
 
   const updatedForm = formManager.refine(formId, incoming)!;
-  thread.activeForms = formManager.toData();
+  let snapshot = formManager.toData();
+  // 若 form 是 program command + function 模式，refine 后重抓方法签名
+  const target = snapshot.find((f) => f.formId === formId);
+  if (target) {
+    const enriched = await enrichProgramForm(target, thread);
+    if (enriched !== target) {
+      snapshot = snapshot.map((f) => (f.formId === formId ? enriched : f));
+    }
+  }
+  thread.activeForms = snapshot;
   thread.events.push({
     category: "context_change",
     kind: "inject",
