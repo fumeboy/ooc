@@ -23,7 +23,7 @@ ooc-2 迭代历史
 阶段不是预先规划的，是事后回看的标签——为了让"还差什么"在一眼能看清。
 
 \`\`\`
-ooc-2  (2026-05-08 ~ 2026-05-11)
+ooc-2  (2026-05-08 ~ 2026-05-12)
 │
 ├── 阶段 1：thinkable 骨架 — 让 LLM 接得通、tool 调得到
 │   ├── [2026-05-08] thinkable-llm-client          统一 LLM client（OpenAI + Claude 双 provider，按 OOC_PROVIDER 切换）
@@ -61,7 +61,22 @@ ooc-2  (2026-05-08 ~ 2026-05-11)
 │       ├── 后续微调：method 注册支持可选 \`knowledge(args) → text\`（同 command.match 设计，基于当前 args 动态派生知识文本）；缺省回退到由 description+params 自动生成的基线文本；form 渲染段为 \`<method_knowledge>\`
 │       └── 工程沉淀：meta/engineering/integration-tests.doc.js 记录 11 个真 LLM 集成测试（含 multi-round-multitask long-horizon 压力测试）+ 5 个由真 LLM 触发并修复的 bug 历史
 │
-└── 阶段 6：knowledge 模块 — 让 Object 能在 context 中按需看到自己的知识库
+├── 阶段 6：observable debug + form 协议增强 — 让"为什么 Agent 走偏"可定位 + 让 Agent 不再走偏
+│   └── [2026-05-11] observable-debug-and-form-protocol  observable 增加 debug mode + \`loop_NNN.{input,output,meta}.json\` 落盘；form 渲染加 \`<next_action>\` / \`<protocol_hint>\`；program 缺参时返回可操作纠偏提示；submit/refine/open 文档与 schema 明确"只在 refine/open 填业务参数，submit 不接受新参数"
+│       ├── spec: docs/superpowers/specs/2026-05-11-observable-debug-and-form-protocol-design.md
+│       ├── plan: docs/superpowers/plans/2026-05-11-observable-debug-and-form-protocol.md
+│       └── 回归记录: meta/engineering/test/2026-05-11-meta-programming-regression-test.md
+│
+├── 阶段 7：app-server 控制面 — 把 OOC 内核暴露为 HTTP API + 可恢复 worker
+│   └── [2026-05-11] app-server-elysia-control-plane  src/app/server 基于 Elysia 的控制面：health/runtime/stones/flows 4 模块 23 个 API；jobManager + pauseStore + worker + resumePausedThread；meta/app 文档树
+│       ├── spec(主体): docs/superpowers/specs/2026-05-11-app-server-elysia-control-plane-design.md
+│       ├── plan(主体): docs/superpowers/plans/2026-05-11-app-server-elysia-control-plane.md
+│       ├── spec(测试+文档): docs/superpowers/specs/2026-05-11-app-server-testing-and-docs-design.md
+│       ├── plan(测试+文档): docs/superpowers/plans/2026-05-11-app-server-testing-and-docs.md
+│       ├── 工程沉淀: meta/engineering/test/2026-05-11-app-server-control-plane-result-and-todo.md
+│       └── 已记录的 6 项 TODO（见上述报告）：执行 meta 循环引用修复 / 集成测试稳定性 / call_method 错误映射 / runtime debug 控制器测试 / worker 可恢复 / flows.resume 入队
+│
+└── 阶段 8：knowledge 模块 — 让 Object 能在 context 中按需看到自己的知识库
     └── [2026-05-12] knowledge-module  parser + loader(mtime cache 热重载) + activator(命令路径相交) + context 渲染(\`<active_knowledge>\`) + 手动 pin/unpin(open/close type=knowledge)
         ├── spec: docs/superpowers/specs/2026-05-12-knowledge-module-design.md
         ├── plan: docs/superpowers/plans/2026-05-12-knowledge-module.md
@@ -75,14 +90,16 @@ ooc-2  (2026-05-08 ~ 2026-05-11)
 - **阶段 3 完成标志**：杀进程重启后能从磁盘恢复线程态；任意时刻能从 llm.input/output.json 复盘上一轮 LLM 视角
 - **阶段 4 完成标志**：跑 \`bun --env-file=.env test tests/integration\` 9 个端到端场景全部 PASS（真 LLM 真 shell 真持久化）
 - **阶段 5 完成标志**：Agent 能用 program.shell 写 \`<self.dir>/server/index.ts\` 注册新方法 → 立即用 program.function 调用 → 看到结果；stone 全套目录骨架可创建，5 个核心文件可读写
-- **阶段 6 完成标志**：在 stone/{objectId}/knowledge/ 放一篇 .md 含 \`activates_on.show_content_when=[program.shell]\` → Agent 一旦 open program 含 program.shell 路径 → 下一轮 system context 中 \`<active_knowledge>\` 段含该篇全文；Agent 编辑 .md 后下一轮 think 立即生效
+- **阶段 6 完成标志**：开 debug mode 后每轮 LLM 调用都有 \`loop_NNN.{input,output,meta}.json\` 落盘；Agent 的 program form 不再"把 language/code 写进 description"或"空 submit"
+- **阶段 7 完成标志**：HTTP \`POST /api/stones\` 创建对象、\`PATCH /api/stones/:id/data\` 写数据、\`POST /api/flows/:sid/objects\` 起 session、\`POST /api/stones/:id/call_method\` 调方法全部端到端可用；\`RUN_REAL_APP_SERVER_TEST=1 bun test src/app/server/__tests__/real-app-server.test.ts\` 通过
+- **阶段 8 完成标志**：在 stone/{objectId}/knowledge/ 放一篇 .md 含 \`activates_on.show_content_when=[program.shell]\` → Agent 一旦 open program 含 program.shell 路径 → 下一轮 system context 中 \`<active_knowledge>\` 段含该篇全文；Agent 编辑 .md 后下一轮 think 立即生效
 
 ## 后续阶段（未启动）
 
-- **阶段 7**：跨 object talk + 全 stone 数据合并（让多 object session 协作）
-- **阶段 8**：reflectable + super flow（让 Object 通过 super flow 持续反思、沉淀 memory）
-- **阶段 9**：跨线程 knowledge 继承 + kernel built-in knowledge + flow 第二来源
-- **阶段 10**：UI / client / 与人协作（与 observable/pause 联动，做可视化 + 介入）
+- **阶段 9**：跨 object talk + 全 stone 数据合并（让多 object session 协作）
+- **阶段 10**：reflectable + super flow（让 Object 通过 super flow 持续反思、沉淀 memory）
+- **阶段 11**：跨线程 knowledge 继承 + kernel built-in knowledge + flow 第二来源
+- **阶段 12**：UI / client / 与人协作（与 observable/pause 联动，做可视化 + 介入）
 
 后续阶段都不在当前主分支范围。每启动一个新阶段，都先在本文件追加一个新节点，然后再写 spec → plan → 实施。
 `,
