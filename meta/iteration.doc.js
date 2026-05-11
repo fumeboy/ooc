@@ -58,7 +58,8 @@ ooc-2  (2026-05-08 ~ 2026-05-11)
     └── [2026-05-11] stone-server-meta-programming  stone 全套持久化(.stone.json/self.md/readme.md/data.json/server/index.ts) + program.ts/js(in-process dynamic import) + program.function(callMethod) + ProgramSelf(callMethod/getData/setData) + 元编程 knowledge + 真 LLM 集成测试
         ├── spec: docs/superpowers/specs/2026-05-11-stone-server-meta-programming-design.md
         ├── plan: docs/superpowers/plans/2026-05-11-stone-server-meta-programming.md
-        └── 后续微调：method 注册支持可选 \`knowledge(args) → text\`（同 command.match 设计，基于当前 args 动态派生知识文本）；缺省回退到由 description+params 自动生成的基线文本；form 渲染段为 \`<method_knowledge>\`
+        ├── 后续微调：method 注册支持可选 \`knowledge(args) → text\`（同 command.match 设计，基于当前 args 动态派生知识文本）；缺省回退到由 description+params 自动生成的基线文本；form 渲染段为 \`<method_knowledge>\`
+        └── 工程沉淀：meta/engineering/integration-tests.doc.js 记录 11 个真 LLM 集成测试（含 multi-round-multitask long-horizon 压力测试）+ 5 个由真 LLM 触发并修复的 bug 历史
 \`\`\`
 
 ## 阶段划分判据
