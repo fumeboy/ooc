@@ -16,10 +16,17 @@ export {
 export {
   llmInputFile,
   llmOutputFile,
+  loopInputFile,
+  loopOutputFile,
+  loopMetaFile,
   writeDebugInput,
   writeDebugOutput,
+  writeLoopDebugInput,
+  writeLoopDebugOutput,
+  writeLoopDebugMeta,
   type LlmInputDebugRecord,
-  type LlmOutputDebugRecord
+  type LlmOutputDebugRecord,
+  type LlmLoopDebugMetaRecord
 } from "./debug-file";
 
 export {

@@ -259,4 +259,43 @@ describe("buildContext", () => {
     expect(sliceForm("f_fn")).toContain("<method_knowledge>");
     expect(sliceForm("f_no_knowledge")).not.toContain("<method_knowledge>");
   });
+
+  it("renders next_action and protocol_hint for active forms", async () => {
+    const thread: ThreadContext = {
+      id: "t_protocol",
+      status: "running",
+      events: [],
+      activeForms: [
+        {
+          formId: "f_program_open",
+          command: "program",
+          description: "写 server 文件",
+          createdAt: 1,
+          accumulatedArgs: {},
+          commandPaths: ["program"],
+          loadedKnowledgePaths: [],
+          status: "open"
+        },
+        {
+          formId: "f_program_done",
+          command: "program",
+          description: "调 add",
+          createdAt: 2,
+          accumulatedArgs: { function: "add", args: { a: 1, b: 2 } },
+          commandPaths: ["program", "program.function"],
+          loadedKnowledgePaths: [],
+          status: "executed",
+          result: "# function: add\n[returnValue]\n3\n[exit 0]"
+        }
+      ]
+    };
+
+    const messages = await buildContext(thread);
+    const xml = messages[0]?.content ?? "";
+
+    expect(xml).toContain("<next_action>refine_or_submit_or_close</next_action>");
+    expect(xml).toContain("<next_action>inspect_result_then_close_or_open_next_form</next_action>");
+    expect(xml).toContain("program form 缺少可执行参数");
+    expect(xml).toContain("请先用 refine(args={");
+  });
 });

@@ -7,7 +7,7 @@ import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 /** submit tool — 提交执行（仅 command 类型） */
 export const SUBMIT_TOOL: LlmTool = {
   name: "submit",
-  description: "提交指令执行。必须先 open 获取 form_id，再将所有参数填充完毕后再 submit。",
+  description: "提交指令执行。必须先 open 获取 form_id，再通过 open(..., args={...}) 或 refine(args={...}) 填完参数后再 submit(form_id)。submit 不接受新的业务参数。",
   inputSchema: {
     type: "object",
     properties: {

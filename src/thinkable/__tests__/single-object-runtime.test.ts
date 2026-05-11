@@ -2,10 +2,17 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
-import { createFlowObject, llmInputFile, llmOutputFile, threadFile } from "../../persistable";
+import {
+  createFlowObject,
+  llmInputFile,
+  llmOutputFile,
+  loopMetaFile,
+  threadFile
+} from "../../persistable";
 import type { ThreadContext } from "../context";
 import type { LlmClient } from "../llm/types";
 import { runScheduler } from "../scheduler";
+import { clearObservableDebugState, disableDebug, enableDebug } from "../../observable";
 
 describe("single object runtime", () => {
   let tempRoot: string | undefined;
@@ -79,15 +86,21 @@ describe("single object runtime", () => {
       }
     };
 
+    clearObservableDebugState();
+    enableDebug();
     await runScheduler(root, llmClient, { maxTicks: 2 });
+    disableDebug();
 
     const ref = root.persistence!;
     const input = JSON.parse(await readFile(llmInputFile(ref), "utf8"));
     const output = JSON.parse(await readFile(llmOutputFile(ref), "utf8"));
+    const loopMeta = JSON.parse(await readFile(loopMetaFile(ref, 2), "utf8"));
     const savedThread = JSON.parse(await readFile(threadFile(ref), "utf8"));
 
     expect(input.threadId).toBe("root");
     expect(output.result.toolCalls[0]?.name).toBe("submit");
+    expect(loopMeta.loopIndex).toBe(2);
+    expect(loopMeta.status).toBe("ok");
     expect(root.plan).toBe("完成单 object 最小闭环");
     expect(savedThread.plan).toBe("完成单 object 最小闭环");
     expect(

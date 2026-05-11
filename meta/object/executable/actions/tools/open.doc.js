@@ -34,6 +34,12 @@ open(
 3. 激活路径对应的 knowledge（activates_on.show_content_when 或者 activates_on.show_description_when 命中）进入 Context
 4. 返回 form_id，供后续 refine / submit / close 引用。
 
+协议约束：
+- \`open(type="command")\` 的职责是“创建 form”
+- 若已经知道业务参数，可以放到 \`args\`
+- 若还没填全，后续必须用 \`refine(form_id, args={...})\` 继续补参数
+- 不要把 \`language / code / function\` 等业务参数写进 \`description\`
+
 ## type=knowledge
 
 \`\`\`

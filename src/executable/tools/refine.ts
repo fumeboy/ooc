@@ -7,7 +7,7 @@ import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 /** refine tool — 向 open 的 form 追加/修改 args */
 export const REFINE_TOOL: LlmTool = {
   name: "refine",
-  description: "向已 open 的 form 追加或修改参数。多次调用 refine 累积 args（后到覆盖先到），系统可能会根据参数匹配出新的知识补充到上下文中。等到参数齐全且语义合理，再调 submit() 执行。",
+  description: "向已 open 的 form 追加或修改参数。业务参数必须放在 args 对象里；多次调用 refine 会累积 args（后到覆盖先到）。等到参数齐全且语义合理，再调 submit(form_id) 执行。",
   inputSchema: {
     type: "object",
     properties: {

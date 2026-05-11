@@ -142,6 +142,15 @@ async function runFunction(
   }
 }
 
+/** 缺少 program 执行参数时，给 LLM 一个明确可操作的 refine 提示。 */
+function missingProgramArgsMessage(): string {
+  return [
+    "[program] program form 参数不完整：缺少 language/code，或缺少 function/args。",
+    "请先用 refine(args={ language: \"shell\", code: \"...\" })，",
+    "或 refine(args={ function: \"name\", args: {...} })，再 submit(form_id)。"
+  ].join("");
+}
+
 /** 执行 program command；按 args 路由到 function / shell / ts/js。 */
 export async function executeProgramCommand(
   ctx: CommandExecutionContext,
@@ -170,6 +179,10 @@ export async function executeProgramCommand(
       return `[program.${language}] 缺少 code 参数`;
     }
     return runUserCode(thread, code);
+  }
+
+  if (typeof code !== "string" && typeof fn !== "string") {
+    return missingProgramArgsMessage();
   }
 
   return `[program] 未知 language="${language ?? "<undefined>"}"，支持 shell / ts / js / function`;

@@ -30,6 +30,27 @@ OOC 有两个与“观测/调试”直接相关的开关：pause 与 debug：
 
 两者独立：pause 会暂停但不要求写 debug；debug 会写文件但不暂停。
 
+## 当前实现阶段
+
+当前实现支持：
+
+- 内存中的 latest LLM input/output 快照
+- 当线程携带 persistence ref 时，覆盖写入：
+  - \`threads/{threadId}/debug/llm.input.json\`
+  - \`threads/{threadId}/debug/llm.output.json\`
+- 当 debug mode 开启时，额外按轮次写入：
+  - \`threads/{threadId}/debug/loop_NNN.input.json\`
+  - \`threads/{threadId}/debug/loop_NNN.output.json\`
+  - \`threads/{threadId}/debug/loop_NNN.meta.json\`
+
+当前 loop meta 覆盖字段：
+- model / provider
+- latency
+- messageCount / toolCount / toolCallCount
+- contextBytes / resultTextBytes
+- status（ok / paused / error）
+- error（若本轮失败）
+
 可观察对象（概念层）:
 
 - thread tree：线程结构、节点状态、父子线程关系

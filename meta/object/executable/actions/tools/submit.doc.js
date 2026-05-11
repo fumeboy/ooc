@@ -15,6 +15,10 @@ submit(
 **submit 不接受新参数**——所有参数必须通过此前的 refine（或 open 时填充的 args）累积完成。
 这强制 LLM 在执行前完整审视参数。
 
+协议约束：
+- 如果 form 还缺业务参数，先 \`refine(form_id, args={...})\`
+- 不要把 \`language / code / function\` 等业务参数塞进 submit
+
 ## 行为
 
 所有可提交的 form 都来自 \`open(type=command)\`：
