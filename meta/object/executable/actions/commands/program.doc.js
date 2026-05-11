@@ -58,9 +58,11 @@ program.function                （模式 B）
 - \`function="<name>"\`（不需要 language）：直接调用 server/index.ts 中 llm_methods 注册的方法
   - 等价于 \`language="ts", code="_result_ = await self.callMethod(name, args)"\`
   - 推荐用于"我已经知道方法名只想调它"的场景
-  - **自动激活方法签名**：open/refine 时若 \`function="<name>"\` 命中已注册方法，系统会把该方法的
-    \`description\` + \`params\` 写到 form 的 \`<method_schema>\` 段，下一轮 LLM 直接看到方法描述与参数定义，
-    不需要先翻 server/index.ts 源码再 refine \`args\`。method 改名 / 删除时，schema 在下一次 refine 自动失效
+  - **自动激活方法知识**：open/refine 时若 \`function="<name>"\` 命中已注册方法，系统调用该方法的 \`knowledge(args)\` 函数
+    （缺省按 \`description\` + \`params\` 自动生成），把返回文本写到 form 的 \`<method_knowledge>\` 段。
+    下一轮 LLM 直接看到方法说明（且可以随 args 动态变化），不需要先翻 server/index.ts 源码再 refine \`args\`。
+    method 改名 / 删除时，knowledge 在下一次 refine 自动失效。
+    设计同构：\`server method.knowledge(args) → text\` ↔ \`command.match(args) → paths\`，都是基于当前 args 动态派生上下文。
 
 ## 元编程：编辑自己的 server/index.ts
 

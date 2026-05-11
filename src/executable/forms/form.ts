@@ -62,18 +62,12 @@ export interface ActiveForm {
 
   /**
    * 当 form.command === "program" 且 accumulatedArgs.function 命中已注册 server 方法时，
-   * 由 enrichProgramForm 自动从 stone 的 server/index.ts 抓取该方法的 description + params 快照。
-   * 渲染到 active_forms 的 <method_schema> 段，让 LLM 在 refine 之前看到方法签名。
+   * 由 enrichProgramForm 调用方法的 knowledge(args) 函数（缺省时按 description+params 自动生成），
+   * 把返回文本写到此字段，渲染到 active_forms 的 <method_knowledge> 段。
+   *
+   * 与 command.match(args)→paths 同构：args 改变 → knowledge 文本可以随之调整。
    */
-  methodSchema?: {
-    description?: string;
-    params?: Array<{
-      name: string;
-      type?: string;
-      description?: string;
-      required?: boolean;
-    }>;
-  };
+  methodKnowledge?: string;
 }
 
 /** 生成 form_id */

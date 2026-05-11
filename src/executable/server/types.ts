@@ -26,15 +26,25 @@ export interface ServerMethodContext {
 
 /** 单个注册到 server 的 LLM 可调用方法。 */
 export interface ServerMethod {
-  /** 给 LLM 看的方法说明（可选）。 */
+  /** 给 LLM 看的方法说明（可选；不写时由默认 knowledge 生成器使用）。 */
   description?: string;
-  /** 参数定义（可选；当前不强制校验）。 */
+  /** 参数定义（可选；不写时由默认 knowledge 生成器使用；当前不强制校验）。 */
   params?: Array<{
     name: string;
     type?: string;
     description?: string;
     required?: boolean;
   }>;
+  /**
+   * 动态知识函数（可选）。
+   *
+   * 与 command.match(args) → paths 同理：当 form 处于 program.function 模式时，
+   * 系统在 open/refine 后调用 knowledge(currentArgs)，把返回的文本写到 form.methodKnowledge，
+   * 渲染到下一轮 LLM 的 active_forms 中。
+   *
+   * 缺省时由默认实现从 description + params 拼出基线文本，保证 LLM 至少有静态提示。
+   */
+  knowledge?: (args: Record<string, unknown>) => string;
   /** 真正的执行函数。返回值会被 program 路径作为 returnValue 暴露给 LLM。 */
   fn: (ctx: ServerMethodContext, args: Record<string, unknown>) => unknown | Promise<unknown>;
 }

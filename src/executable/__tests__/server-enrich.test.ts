@@ -32,6 +32,15 @@ function makeForm(overrides: Partial<ActiveForm> = {}): ActiveForm {
   };
 }
 
+function makeThreadWithStone(tempRoot: string): ThreadContext {
+  return {
+    id: "t",
+    status: "running",
+    events: [],
+    persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
+  };
+}
+
 describe("enrichProgramForm", () => {
   test("returns form unchanged when command is not program", async () => {
     const form = makeForm({ command: "plan" });
@@ -45,7 +54,7 @@ describe("enrichProgramForm", () => {
     const thread: ThreadContext = { id: "t", status: "running", events: [] };
     const result = await enrichProgramForm(form, thread);
     expect(result).toBe(form);
-    expect(result.methodSchema).toBeUndefined();
+    expect(result.methodKnowledge).toBeUndefined();
   });
 
   test("returns form unchanged when thread has no persistence", async () => {
@@ -55,7 +64,7 @@ describe("enrichProgramForm", () => {
     expect(result).toBe(form);
   });
 
-  test("populates methodSchema when function matches a registered method", async () => {
+  test("falls back to default knowledge from description+params when method has no knowledge fn", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-enrich-"));
     const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
     await writeServerSource(
@@ -73,20 +82,62 @@ describe("enrichProgramForm", () => {
     );
 
     const form = makeForm({ accumulatedArgs: { function: "add" } });
-    const thread: ThreadContext = {
-      id: "t",
-      status: "running",
-      events: [],
-      persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
-    };
+    const result = await enrichProgramForm(form, makeThreadWithStone(tempRoot));
 
-    const result = await enrichProgramForm(form, thread);
     expect(result).not.toBe(form);
-    expect(result.methodSchema).toBeDefined();
-    expect(result.methodSchema?.description).toBe("两数相加");
-    expect(result.methodSchema?.params).toHaveLength(2);
-    expect(result.methodSchema?.params?.[0]?.name).toBe("a");
-    expect(result.methodSchema?.params?.[0]?.required).toBe(true);
+    expect(result.methodKnowledge).toContain("两数相加");
+    expect(result.methodKnowledge).toContain("- a [number]（必填）：第一个加数");
+    expect(result.methodKnowledge).toContain("- b [number]（必填）：第二个加数");
+  });
+
+  test("uses custom knowledge fn when method provides one", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-enrich-"));
+    const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+    // knowledge 函数据 args.mode 动态返回不同文本
+    await writeServerSource(
+      stoneRef,
+      `export const llm_methods = {
+        deploy: {
+          description: "部署服务",
+          knowledge: (args) => {
+            if (args.mode === "prod") {
+              return "生产环境部署：必须先经过 review，且需带 release_notes 字段。";
+            }
+            return "开发环境部署：直接传 service_name 即可，不需要 review。";
+          },
+          fn: async () => "deployed",
+        },
+      };`
+    );
+
+    const formDev = makeForm({ accumulatedArgs: { function: "deploy", args: { mode: "dev" } } });
+    const dev = await enrichProgramForm(formDev, makeThreadWithStone(tempRoot));
+    expect(dev.methodKnowledge).toContain("开发环境");
+    expect(dev.methodKnowledge).not.toContain("生产环境");
+
+    const formProd = makeForm({ accumulatedArgs: { function: "deploy", args: { mode: "prod" } } });
+    const prod = await enrichProgramForm(formProd, makeThreadWithStone(tempRoot));
+    expect(prod.methodKnowledge).toContain("生产环境");
+    expect(prod.methodKnowledge).toContain("release_notes");
+  });
+
+  test("falls back to default when custom knowledge fn throws", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-enrich-"));
+    const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+    await writeServerSource(
+      stoneRef,
+      `export const llm_methods = {
+        boom: {
+          description: "总是炸",
+          knowledge: () => { throw new Error("intentional"); },
+          fn: async () => null,
+        },
+      };`
+    );
+
+    const form = makeForm({ accumulatedArgs: { function: "boom" } });
+    const result = await enrichProgramForm(form, makeThreadWithStone(tempRoot));
+    expect(result.methodKnowledge).toContain("总是炸");
   });
 
   test("returns form unchanged when function name does not match any registered method", async () => {
@@ -98,19 +149,12 @@ describe("enrichProgramForm", () => {
     );
 
     const form = makeForm({ accumulatedArgs: { function: "bar" } });
-    const thread: ThreadContext = {
-      id: "t",
-      status: "running",
-      events: [],
-      persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
-    };
-
-    const result = await enrichProgramForm(form, thread);
+    const result = await enrichProgramForm(form, makeThreadWithStone(tempRoot));
     expect(result).toBe(form);
-    expect(result.methodSchema).toBeUndefined();
+    expect(result.methodKnowledge).toBeUndefined();
   });
 
-  test("clears methodSchema when function arg is removed in subsequent refine", async () => {
+  test("clears methodKnowledge when function arg is removed in subsequent refine", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-enrich-"));
     const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
     await writeServerSource(
@@ -118,24 +162,16 @@ describe("enrichProgramForm", () => {
       `export const llm_methods = { add: { description: "test", fn: async () => 0 } };`
     );
 
-    const thread: ThreadContext = {
-      id: "t",
-      status: "running",
-      events: [],
-      persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
-    };
-
     const enriched = await enrichProgramForm(
       makeForm({ accumulatedArgs: { function: "add" } }),
-      thread
+      makeThreadWithStone(tempRoot)
     );
-    expect(enriched.methodSchema).toBeDefined();
+    expect(enriched.methodKnowledge).toBeDefined();
 
-    // 用户后续 refine 把 function 改成空，应清掉 schema
     const cleared = await enrichProgramForm(
       { ...enriched, accumulatedArgs: { language: "shell", code: "ls" } },
-      thread
+      makeThreadWithStone(tempRoot)
     );
-    expect(cleared.methodSchema).toBeUndefined();
+    expect(cleared.methodKnowledge).toBeUndefined();
   });
 });

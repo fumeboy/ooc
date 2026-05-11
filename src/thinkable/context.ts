@@ -160,26 +160,10 @@ function renderMessages(tag: "inbox" | "outbox", messages: ThreadMessage[] | und
   return `<${tag}>${items}</${tag}>`;
 }
 
-/** 渲染 program command 自动激活的方法签名（description + params）。 */
-function renderMethodSchema(schema: ActiveForm["methodSchema"]): string {
-  if (!schema) return "";
-  const parts: string[] = [];
-  if (schema.description) {
-    parts.push(`<description>${escapeXml(schema.description)}</description>`);
-  }
-  if (schema.params && schema.params.length > 0) {
-    const paramItems = schema.params
-      .map((p) => {
-        const attrs: string[] = [`name="${escapeXml(p.name)}"`];
-        if (p.type) attrs.push(`type="${escapeXml(p.type)}"`);
-        attrs.push(`required="${p.required ?? false}"`);
-        return `<param ${attrs.join(" ")}>${escapeXml(p.description ?? "")}</param>`;
-      })
-      .join("");
-    parts.push(`<params>${paramItems}</params>`);
-  }
-  if (parts.length === 0) return "";
-  return `<method_schema>${parts.join("")}</method_schema>`;
+/** 渲染 program command 自动激活的方法知识文本。 */
+function renderMethodKnowledge(text: string | undefined): string {
+  if (!text) return "";
+  return `<method_knowledge>${escapeXml(text)}</method_knowledge>`;
 }
 
 /** 渲染当前未完成的 form，让 LLM 能继续 refine/submit/close。 */
@@ -202,7 +186,7 @@ function renderActiveForms(activeForms: ActiveForm[] | undefined): string {
       const resultXml = status === "executed" && form.result
         ? `<result>${escapeXml(form.result)}</result>`
         : "";
-      const methodSchemaXml = renderMethodSchema(form.methodSchema);
+      const methodKnowledgeXml = renderMethodKnowledge(form.methodKnowledge);
 
       return [
         `<form id="${escapeXml(form.formId)}" status="${escapeXml(status)}">`,
@@ -211,7 +195,7 @@ function renderActiveForms(activeForms: ActiveForm[] | undefined): string {
         `<accumulated_args>${escapeXml(JSON.stringify(form.accumulatedArgs))}</accumulated_args>`,
         commandPaths,
         loadedKnowledge,
-        methodSchemaXml,
+        methodKnowledgeXml,
         resultXml,
         "</form>"
       ].join("");
