@@ -55,4 +55,70 @@ describe("app server routes", () => {
     expect(body.sessionId).toBe("session-routes");
     expect(body.created).toBe(true);
   });
+
+  test("POST /api/stones/:id/call_method returns 404 for missing method", async () => {
+    const app = makeApp();
+    // 先创建一个 stone（不写任何 ui_methods）
+    await app.handle(
+      new Request("http://localhost/api/stones", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ objectId: "stone-no-methods" }),
+      })
+    );
+    const response = await app.handle(
+      new Request("http://localhost/api/stones/stone-no-methods/call_method", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ method: "ghost", args: {} }),
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(body.error.code).toBe("METHOD_NOT_FOUND");
+    expect(body.error.message).toContain("ghost");
+    expect(body.error.details.objectId).toBe("stone-no-methods");
+  });
+
+  test("POST /api/flows/:sid/objects/:id/call_method returns 404 for missing method", async () => {
+    const app = makeApp();
+    // 先创建 stone + flow session
+    await app.handle(
+      new Request("http://localhost/api/stones", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ objectId: "flow-no-methods" }),
+      })
+    );
+    await app.handle(
+      new Request("http://localhost/api/flows/", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: "s-call", title: "S" }),
+      })
+    );
+    await app.handle(
+      new Request("http://localhost/api/flows/s-call/objects/", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ objectId: "flow-no-methods" }),
+      })
+    );
+    const response = await app.handle(
+      new Request(
+        "http://localhost/api/flows/s-call/objects/flow-no-methods/call_method",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ method: "ghost", args: {} }),
+        }
+      )
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(body.error.code).toBe("METHOD_NOT_FOUND");
+    expect(body.error.details.objectId).toBe("flow-no-methods");
+  });
 });

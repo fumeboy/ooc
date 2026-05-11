@@ -10,6 +10,7 @@ import {
   writeServerSource,
 } from "@src/persistable";
 import { loadUiServerMethods } from "@src/executable/server/loader";
+import { AppServerError } from "../../bootstrap/errors";
 
 function createHttpMethodContext(dir: string) {
   return {
@@ -64,14 +65,35 @@ export function createStonesService({ baseDir }: { baseDir: string }) {
       return { ok: true };
     },
     async callMethod({ objectId, method, args = {} }: { objectId: string; method: string; args?: Record<string, unknown> }) {
-      const methods = await loadUiServerMethods(ref(objectId));
+      let methods;
+      try {
+        methods = await loadUiServerMethods(ref(objectId));
+      } catch (error) {
+        throw new AppServerError(
+          "METHOD_LOAD_FAILED",
+          `failed to load ui_methods for stone ${objectId}: ${(error as Error).message}`,
+          { objectId, method }
+        );
+      }
       const entry = methods[method];
       if (!entry) {
-        throw new Error(`ui method not found: ${method}`);
+        throw new AppServerError(
+          "METHOD_NOT_FOUND",
+          `ui method '${method}' not found on stone '${objectId}'`,
+          { objectId, method, available: Object.keys(methods) }
+        );
       }
-      return {
-        returnValue: await entry.fn(createHttpMethodContext(dir(objectId)), args),
-      };
+      try {
+        return {
+          returnValue: await entry.fn(createHttpMethodContext(dir(objectId)), args),
+        };
+      } catch (error) {
+        throw new AppServerError(
+          "INTERNAL_ERROR",
+          `ui method '${method}' threw: ${(error as Error).message}`,
+          { objectId, method }
+        );
+      }
     },
   };
 }

@@ -7,6 +7,7 @@ import {
 import { loadUiServerMethods } from "@src/executable/server/loader";
 import type { createJobManager } from "../../runtime/job-manager";
 import type { PauseStore } from "../../runtime/pause-store";
+import { AppServerError } from "../../bootstrap/errors";
 
 function httpContext() {
   return {
@@ -90,12 +91,33 @@ export function createFlowsService(deps: {
       args?: Record<string, unknown>;
     }) {
       void sessionId;
-      const methods = await loadUiServerMethods({ baseDir: deps.baseDir, objectId });
+      let methods;
+      try {
+        methods = await loadUiServerMethods({ baseDir: deps.baseDir, objectId });
+      } catch (error) {
+        throw new AppServerError(
+          "METHOD_LOAD_FAILED",
+          `failed to load ui_methods for flow object ${objectId}: ${(error as Error).message}`,
+          { sessionId, objectId, method }
+        );
+      }
       const entry = methods[method];
       if (!entry) {
-        throw new Error(`ui method not found: ${method}`);
+        throw new AppServerError(
+          "METHOD_NOT_FOUND",
+          `ui method '${method}' not found on flow object '${objectId}'`,
+          { sessionId, objectId, method, available: Object.keys(methods) }
+        );
       }
-      return { returnValue: await entry.fn(httpContext(), args) };
+      try {
+        return { returnValue: await entry.fn(httpContext(), args) };
+      } catch (error) {
+        throw new AppServerError(
+          "INTERNAL_ERROR",
+          `ui method '${method}' threw: ${(error as Error).message}`,
+          { sessionId, objectId, method }
+        );
+      }
     },
   };
 }

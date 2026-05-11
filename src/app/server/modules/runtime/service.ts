@@ -11,6 +11,37 @@ import { readLlmEnv } from "@src/thinkable/llm/env";
 import type { PauseStore } from "../../runtime/pause-store";
 import type { createJobManager } from "../../runtime/job-manager";
 import type { RuntimeJob } from "../../runtime/types";
+import { AppServerError } from "../../bootstrap/errors";
+
+/** 读 debug JSON：缺失 → 404 NOT_FOUND；损坏 → 500 INTERNAL_ERROR。 */
+async function readDebugJson(file: string, label: string, details: Record<string, unknown>): Promise<unknown> {
+  let raw;
+  try {
+    raw = await readFile(file, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new AppServerError(
+        "NOT_FOUND",
+        `debug file '${label}' not found`,
+        { ...details, file }
+      );
+    }
+    throw new AppServerError(
+      "INTERNAL_ERROR",
+      `failed to read debug file '${label}': ${(error as Error).message}`,
+      { ...details, file }
+    );
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    throw new AppServerError(
+      "INTERNAL_ERROR",
+      `debug file '${label}' contains invalid JSON: ${(error as Error).message}`,
+      { ...details, file }
+    );
+  }
+}
 
 export interface RuntimeService {
   getLlmConfig(): {
@@ -71,16 +102,27 @@ export function createRuntimeService(deps: {
       return { enabled: deps.pauseStore.isGlobalPauseEnabled() };
     },
     async getLatestDebug(ref: ThreadPersistenceRef) {
+      const details = {
+        sessionId: ref.sessionId,
+        objectId: ref.objectId,
+        threadId: ref.threadId,
+      };
       return {
-        input: JSON.parse(await readFile(llmInputFile(ref), 'utf8')),
-        output: JSON.parse(await readFile(llmOutputFile(ref), 'utf8')),
+        input: await readDebugJson(llmInputFile(ref), "llm.input.json", details),
+        output: await readDebugJson(llmOutputFile(ref), "llm.output.json", details),
       };
     },
     async getLoopDebug(ref: ThreadPersistenceRef, loopIndex: number) {
+      const details = {
+        sessionId: ref.sessionId,
+        objectId: ref.objectId,
+        threadId: ref.threadId,
+        loopIndex,
+      };
       return {
-        input: JSON.parse(await readFile(loopInputFile(ref, loopIndex), 'utf8')),
-        output: JSON.parse(await readFile(loopOutputFile(ref, loopIndex), 'utf8')),
-        meta: JSON.parse(await readFile(loopMetaFile(ref, loopIndex), 'utf8')),
+        input: await readDebugJson(loopInputFile(ref, loopIndex), `loop_${loopIndex}.input.json`, details),
+        output: await readDebugJson(loopOutputFile(ref, loopIndex), `loop_${loopIndex}.output.json`, details),
+        meta: await readDebugJson(loopMetaFile(ref, loopIndex), `loop_${loopIndex}.meta.json`, details),
       };
     },
   };
