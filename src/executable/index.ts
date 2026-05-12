@@ -16,6 +16,12 @@ export const KNOWLEDGE = `
 - close：关闭已经消费完的 form，释放上下文占用
 - wait：当需要等待外部输入、外部事件或下一轮时主动让出执行权
 
+工具调用规则：
+- 每一次工具调用都应附带 title：用一句话说明本次操作在做什么
+- open / submit 必须提供清晰 title；refine / close / wait 也应提供 title
+- 收到 inbox 消息后，在下一次工具调用时通过 mark 参数标记，说明已读到哪些 msg_id
+- mark 只用于标记消息处理进度，不替代真正的业务动作
+
 form 生命周期：
 - open：刚创建，可继续 refine 或 submit
 - executing：正在执行，不要再次 refine / submit
@@ -24,7 +30,9 @@ form 生命周期：
 一般规则：
 - 先 open，再按需多次 refine，参数齐全后再 submit
 - form 已执行完成但结果已消费时，应及时 close，避免无效上下文积累
-- 当前轮没有可继续执行的动作且需要等待时，使用 wait(reason="...")
+- 没有可继续执行的动作时，必须显式调用 wait(reason="...")
+- 不要只输出文本后假设系统会自动暂停；需要停下时必须调用 wait
+- 不要机械搬运旧系统概念；只使用当前上下文中存在的 form、inbox、knowledge 与工具协议
 `.trim();
 
 const EXECUTABLE_BASIC_PATH = "internal/executable/basic";

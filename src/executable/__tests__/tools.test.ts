@@ -102,6 +102,55 @@ describe("executable tools", () => {
     });
   });
 
+  it("open file 缺少 args.path 时返回错误且不写入 undefined window", async () => {
+    const thread = { id: "test", status: "running", events: [] } as ThreadContext;
+
+    const output = await dispatchToolCall(thread, {
+      id: "call_1",
+      name: "open",
+      arguments: {
+        type: "file",
+        title: "读取缺少路径的文件",
+        description: "路径只写在 description 中是不合法的"
+      }
+    });
+
+    expect(JSON.parse(output)).toEqual({
+      ok: false,
+      tool: "open",
+      error: 'open(type="file") 缺少 args.path 参数。'
+    });
+    expect(thread.windows).toBeUndefined();
+    expect(thread.events.at(-1)).toEqual({
+      category: "context_change",
+      kind: "inject",
+      text: '[错误] open(type="file") 缺少 args.path 参数。'
+    });
+  });
+
+  it("open schema 使用 OpenAI 兼容的简单 object schema，并描述 file/knowledge 的 args.path 约束", () => {
+    const open = OOC_TOOLS.find((tool) => tool.name === "open");
+    const schema = open?.inputSchema as {
+      allOf?: unknown;
+      properties?: {
+        args?: {
+          properties?: {
+            lines?: { items?: unknown };
+            columns?: { items?: unknown };
+          };
+        };
+      };
+    };
+    const serialized = JSON.stringify(schema);
+
+    expect(schema.allOf).toBeUndefined();
+    expect(serialized).not.toContain('"if"');
+    expect(serialized).not.toContain('"then"');
+    expect(schema.properties?.args?.properties?.lines?.items).toEqual({ type: "number" });
+    expect(schema.properties?.args?.properties?.columns?.items).toEqual({ type: "number" });
+    expect(serialized).toContain("文件或 knowledge 路径");
+  });
+
   it("通过 open command(todo) 创建 todo form 并预填提醒参数", async () => {
     const thread = { id: "test", status: "running", events: [] } as ThreadContext;
 
@@ -171,8 +220,9 @@ describe("executable tools", () => {
     const lastEvent = thread.events.at(-1);
     expect(lastEvent?.category).toBe("context_change");
     expect(lastEvent?.kind).toBe("inject");
-    expect(lastEvent && "text" in lastEvent ? lastEvent.text : "").toContain(`[form executed] formId=${formId}`);
-    expect(lastEvent && "text" in lastEvent ? lastEvent.text : "").toContain("不要在同一轮里立即 close");
+    expect(lastEvent && "text" in lastEvent ? lastEvent.text : "").toBe(
+      '[form executed] form "制定计划" 已执行完成。'
+    );
   });
 
   it("通过 close 取消 form 并移出 activeForms", async () => {
@@ -221,29 +271,7 @@ describe("executable tools", () => {
     });
   });
 
-  it("close(type=knowledge) 从 pinnedKnowledge 卸载指定路径", async () => {
-    const thread = {
-      id: "test",
-      status: "running",
-      events: [],
-      pinnedKnowledge: ["build/file-ops", "api/openai"]
-    } as ThreadContext;
-
-    await dispatchToolCall(thread, {
-      id: "call_1",
-      name: "close",
-      arguments: { type: "knowledge", path: "build/file-ops", reason: "已读完" }
-    });
-
-    expect(thread.pinnedKnowledge).toEqual(["api/openai"]);
-    expect(thread.events.at(-1)).toEqual({
-      category: "context_change",
-      kind: "inject",
-      text: "[close] knowledge build/file-ops 已卸载。原因：已读完"
-    });
-  });
-
-  it("close(type=knowledge) 对未 pin 的 path 给出提示，不报错", async () => {
+  it("close 缺少 form_id 时给出错误，不再支持 knowledge close 分支", async () => {
     const thread = {
       id: "test",
       status: "running",
@@ -258,9 +286,10 @@ describe("executable tools", () => {
     });
 
     expect(thread.pinnedKnowledge).toEqual(["api/openai"]);
-    expect(thread.events.at(-1)?.kind).toBe("inject");
-    expect(thread.events.at(-1) as { text: string }).toMatchObject({
-      text: expect.stringContaining("未被 pin")
+    expect(thread.events.at(-1)).toEqual({
+      category: "context_change",
+      kind: "inject",
+      text: "[错误] close 缺少 form_id 参数。"
     });
   });
 

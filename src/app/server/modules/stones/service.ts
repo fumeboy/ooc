@@ -10,6 +10,7 @@ import {
   writeServerSource,
 } from "@src/persistable";
 import { loadUiServerMethods } from "@src/executable/server/loader";
+import { readdir } from "node:fs/promises";
 import { AppServerError } from "../../bootstrap/errors";
 
 function createHttpMethodContext(dir: string) {
@@ -29,6 +30,19 @@ export function createStonesService({ baseDir }: { baseDir: string }) {
   const dir = (objectId: string) => `${baseDir}/stones/${objectId}`;
 
   return {
+    async listStones() {
+      try {
+        const entries = await readdir(`${baseDir}/stones`, { withFileTypes: true });
+        return {
+          items: entries
+            .filter((entry) => entry.isDirectory())
+            .map((entry) => ({ objectId: entry.name, dir: dir(entry.name) }))
+            .sort((a, b) => a.objectId.localeCompare(b.objectId)),
+        };
+      } catch {
+        return { items: [] };
+      }
+    },
     async createStone({ objectId }: { objectId: string }) {
       await createStoneObject(ref(objectId));
       return { objectId, dir: dir(objectId), created: true };

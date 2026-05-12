@@ -200,6 +200,45 @@ describe("think", () => {
     expect(dispatch).toHaveBeenCalledTimes(1);
   });
 
+  it("text-only response does not implicitly wait without a wait tool call", async () => {
+    const thread: contextModule.ThreadContext = {
+      id: "thread-text-only",
+      status: "running",
+      events: [
+        {
+          category: "llm_interaction",
+          kind: "text",
+          text: "你好！我是一个 AI 助手。"
+        }
+      ]
+    };
+
+    spyOn(contextModule, "buildInputItems").mockResolvedValue({ input: [] });
+    spyOn(toolsModule, "getAvailableTools").mockReturnValue([]);
+
+    const llmClient: LlmClient = {
+      async generate() {
+        return makeResult("openai", "gpt-test", "你好！我是一个 AI 助手。");
+      },
+      async *stream() {
+        yield { type: "start", provider: "openai", model: "gpt-test" };
+        yield { type: "done", text: "", toolCalls: [] };
+      }
+    };
+
+    await think(thread, llmClient);
+
+    expect(thread.status).toBe("running");
+    expect(thread.waitingType).toBeUndefined();
+    expect(
+      thread.events.filter((event) =>
+        event.category === "llm_interaction" &&
+        event.kind === "text" &&
+        event.text === "你好！我是一个 AI 助手。"
+      )
+    ).toHaveLength(1);
+  });
+
   it("连续多轮 think 可以跑通 open refine submit 与 todo command execute", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-5",
@@ -351,17 +390,12 @@ describe("think", () => {
     expect(firstContent).toContain("<outbox>");
     expect(firstContent).toContain("先去检查日志");
     expect(firstContent).not.toContain("上一轮已经检查过日志");
-    // tool_use 事件刻意不进 transcript（见 context.ts processEventToMessage 注释）。
+    // tool_use 和普通 inject 事件都不进 transcript，只保留结构化/必要事件。
     expect(inputItems?.slice(1)).toEqual([
       {
         type: "message",
         role: "assistant",
         content: "上一轮已经检查过日志"
-      },
-      {
-        type: "message",
-        role: "user",
-        content: "[context_change:inject]\n系统注入了新的上下文"
       }
     ]);
   });

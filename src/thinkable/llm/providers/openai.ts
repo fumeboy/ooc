@@ -1,3 +1,5 @@
+import OpenAI from "openai";
+import type { ResponseInputItem, FunctionTool } from "openai/resources/responses/responses";
 import type {
   LlmEnvConfig,
   LlmGenerateParams,
@@ -9,18 +11,17 @@ import type {
 } from "../types";
 
 // OpenAI tools 统一映射为 function calling 结构。
-function toOpenAiTools(tools: LlmTool[] | undefined) {
+function toOpenAiTools(tools: LlmTool[] | undefined): FunctionTool[] | undefined {
   if (!tools || tools.length === 0) {
     return undefined;
   }
 
   return tools.map((tool) => ({
     type: "function",
-    function: {
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.inputSchema
-    }
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.inputSchema,
+    strict: true
   }));
 }
 
@@ -42,12 +43,15 @@ function toOpenAiToolCalls(rawToolCalls: unknown): LlmToolCall[] {
   });
 }
 
-function toOpenAiInputItem(item: LlmInputItem): Record<string, unknown> {
+function toOpenAiInputItem(item: LlmInputItem): ResponseInputItem {
   if (item.type === "message") {
     return {
       type: "message",
       role: item.role,
-      content: item.content
+      content: [{
+        type: "input_text",
+        text: item.content
+      }]
     };
   }
   if (item.type === "function_call") {
@@ -66,8 +70,12 @@ function toOpenAiInputItem(item: LlmInputItem): Record<string, unknown> {
     };
   }
   return {
-    type: "reasoning",
-    text: item.text
+    type: "message",
+    role: "assistant",
+    content: [{
+      type: "input_text",
+      text: `[reasoning]\n${item.text}`
+    }]
   };
 }
 
@@ -127,18 +135,37 @@ function toOpenAiOutputItems(rawOutput: unknown): LlmInputItem[] {
   return outputItems;
 }
 
-// OpenAI 非流式请求直接走 chat completions，并返回统一结果。
+export function createOpenAiClient(config: LlmEnvConfig): OpenAI {
+  return new OpenAI({
+    apiKey: config.apiKey,
+    baseURL: config.baseUrl
+  });
+}
+
+function formatOpenAiError(error: unknown): string {
+  const status = (error as { status?: number }).status;
+  const detail = (error as { error?: { message?: string; code?: string; param?: string } }).error;
+  const message = detail?.message || (error as { message?: string }).message;
+  const meta = [
+    detail?.code ? `code=${detail.code}` : undefined,
+    detail?.param ? `param=${detail.param}` : undefined
+  ].filter(Boolean).join(", ");
+  const suffix = message ? ` - ${message}${meta ? ` (${meta})` : ""}` : "";
+
+  return typeof status === "number"
+    ? `OpenAI 请求失败: ${status}${suffix}`
+    : `OpenAI 请求失败${suffix}`;
+}
+
+// OpenAI 非流式请求直接走 Responses API，并返回统一结果。
 export async function generateWithOpenAi(
   config: LlmEnvConfig,
   params: LlmGenerateParams
 ): Promise<LlmGenerateResult> {
-  const response = await fetch(`${config.baseUrl}/responses`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${config.apiKey}`
-    },
-    body: JSON.stringify({
+  const client = createOpenAiClient(config);
+  let raw: { output: unknown };
+  try {
+    raw = await client.responses.create({
       model: params.model ?? config.model,
       input: params.input.map(toOpenAiInputItem),
       instructions: params.instructions,
@@ -146,16 +173,14 @@ export async function generateWithOpenAi(
       temperature: params.temperature,
       max_output_tokens: params.maxTokens,
       store: false
-    })
-  });
-
-  // HTTP 层失败时直接抛错，不做额外兜底分支。
-  if (!response.ok) {
-    throw new Error(`OpenAI 请求失败: ${response.status}`);
+    }) as { output: unknown };
+  } catch (error) {
+    const status = (error as { status?: number }).status;
+    if (typeof status === "number") {
+      throw new Error(formatOpenAiError(error));
+    }
+    throw error;
   }
-
-  // 非流式路径同时提取文本与 tool call，供 thinkloop 直接消费。
-  const raw = await response.json();
   const outputItems = toOpenAiOutputItems(raw.output);
   const text = outputItems
     .filter((item): item is Extract<LlmInputItem, { type: "message" }> => item.type === "message")

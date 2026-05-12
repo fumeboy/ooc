@@ -27,6 +27,55 @@ describe("app server routes", () => {
     expect(body.service).toBe("ooc-app-server");
   });
 
+  test("GET /debug/chat.html returns the debug chat page", async () => {
+    const app = makeApp();
+    const response = await app.handle(new Request("http://localhost/debug/chat.html"));
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(html).toContain("OOC Debug Chat");
+    expect(html).toContain("Create Object");
+    expect(html).toContain("Create Session");
+    expect(html).toContain("Process Events");
+    expect(html).toContain("Thread Context");
+    expect(html).toContain("Auto refresh");
+    expect(html).toContain("autoRefresh");
+    expect(html).toContain("setInterval");
+    expect(html).toContain("threadStatus");
+    expect(html).toContain("/api/stones");
+    expect(html).toContain("/api/flows/");
+    expect(html).toContain("/threads/root/continue");
+    expect(html).toContain("/api/runtime/jobs/");
+  });
+
+  test("GET /api/stones lists created objects for debug UI selection", async () => {
+    const app = makeApp();
+    await app.handle(
+      new Request("http://localhost/api/stones", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ objectId: "debug-object-a" }),
+      })
+    );
+    await app.handle(
+      new Request("http://localhost/api/stones", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ objectId: "debug-object-b" }),
+      })
+    );
+
+    const response = await app.handle(new Request("http://localhost/api/stones"));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.items.map((item: { objectId: string }) => item.objectId)).toEqual([
+      "debug-object-a",
+      "debug-object-b",
+    ]);
+  });
+
   test("POST /api/stones rejects invalid body", async () => {
     const app = makeApp();
     const response = await app.handle(

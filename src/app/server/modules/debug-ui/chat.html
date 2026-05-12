@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OOC Debug Chat</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #0f172a;
+        color: #e5e7eb;
+      }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top left, rgba(37, 99, 235, 0.18), transparent 32rem),
+          #0f172a;
+      }
+      main {
+        display: grid;
+        grid-template-columns: 340px minmax(360px, 1fr) minmax(420px, 1fr);
+        min-height: 100vh;
+      }
+      aside, section { padding: 20px; }
+      aside { border-right: 1px solid #334155; background: #020617; }
+      section { border-right: 1px solid #1f2937; background: rgba(15, 23, 42, 0.72); }
+      h1, h2, h3 { margin: 0 0 12px; }
+      h1 { font-size: 22px; }
+      h2 { font-size: 16px; color: #f8fafc; }
+      h3 { font-size: 14px; color: #cbd5e1; }
+      label { display: block; margin: 10px 0 6px; color: #cbd5e1; font-size: 12px; }
+      input, textarea, select, button {
+        box-sizing: border-box;
+        width: 100%;
+        border-radius: 8px;
+        border: 1px solid #475569;
+        padding: 9px 10px;
+        background: #020617;
+        color: #e5e7eb;
+        font: inherit;
+      }
+      input:focus, textarea:focus, select:focus {
+        border-color: #60a5fa;
+        outline: 2px solid rgba(96, 165, 250, 0.18);
+      }
+      textarea { min-height: 90px; resize: vertical; }
+      button { margin-top: 10px; cursor: pointer; background: #2563eb; border-color: #2563eb; font-weight: 700; }
+      button:hover { filter: brightness(1.1); }
+      button.secondary { background: #334155; border-color: #475569; }
+      button.inline { width: auto; padding: 7px 10px; margin: 0; }
+      input[type="checkbox"] { width: auto; }
+      pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+      .panel {
+        border: 1px solid rgba(51, 65, 85, 0.95);
+        border-radius: 14px;
+        padding: 14px;
+        margin-bottom: 14px;
+        background: rgba(17, 24, 39, 0.88);
+        box-shadow: 0 12px 36px rgba(2, 6, 23, 0.22);
+      }
+      .hint { color: #94a3b8; font-size: 12px; line-height: 1.5; }
+      .row { display: flex; gap: 8px; align-items: center; }
+      .row > * { flex: 1; }
+      .toolbar { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-top: 12px; }
+      .toolbar label { display: flex; gap: 8px; align-items: center; margin: 0; }
+      .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+      .tab { width: auto; background: #1e293b; border-color: #334155; }
+      .tab.active { background: #2563eb; border-color: #2563eb; }
+      .scroll { overflow: auto; max-height: calc(100vh - 140px); }
+      .chat { display: flex; flex-direction: column; gap: 10px; height: calc(100vh - 250px); overflow: auto; }
+      .bubble { border: 1px solid #334155; border-radius: 12px; padding: 10px; background: #020617; }
+      .bubble.user { border-color: #2563eb; }
+      .bubble.assistant { border-color: #16a34a; }
+      .bubble.meta { color: #94a3b8; font-size: 12px; }
+      .event { border-left: 3px solid #475569; padding: 8px 10px; margin: 8px 0; background: #020617; border-radius: 8px; }
+      .event .kind { color: #93c5fd; font-weight: 700; }
+      .status { color: #a7f3d0; font-size: 12px; min-height: 18px; }
+      .error { color: #fecaca; }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid #334155;
+        border-radius: 999px;
+        padding: 6px 10px;
+        background: #020617;
+        color: #cbd5e1;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .pill.running { border-color: #2563eb; color: #bfdbfe; }
+      .pill.waiting { border-color: #16a34a; color: #bbf7d0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <aside>
+        <h1>OOC Debug Chat</h1>
+        <p class="hint">Create objects, start sessions from an existing object, chat with the root thread, and inspect process events plus full thread context.</p>
+
+        <div class="panel">
+          <h2>Server</h2>
+          <label for="baseUrl">Server base URL</label>
+          <input id="baseUrl" value="" placeholder="same origin" />
+          <button id="reloadObjects" class="secondary">Reload Objects</button>
+          <div id="status" class="status"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Create Object</h2>
+          <label for="newObjectId">Object ID</label>
+          <input id="newObjectId" value="assistant" />
+          <button id="createObject">Create Object</button>
+        </div>
+
+        <div class="panel">
+          <h2>Create Session</h2>
+          <label for="sessionId">Session ID</label>
+          <input id="sessionId" />
+          <label for="objectSelect">Existing Object</label>
+          <select id="objectSelect"></select>
+          <label for="initialMessage">Initial Message</label>
+          <textarea id="initialMessage">Hello, please introduce yourself briefly.</textarea>
+          <button id="createSession">Create Session</button>
+        </div>
+      </aside>
+
+      <section>
+        <h2>Chat</h2>
+        <div class="panel">
+          <div class="row">
+            <div>
+              <label for="activeSessionId">Active Session</label>
+              <input id="activeSessionId" />
+            </div>
+            <div>
+              <label for="activeObjectId">Active Object</label>
+              <input id="activeObjectId" />
+            </div>
+          </div>
+          <div class="toolbar">
+            <button id="refreshThread" class="secondary inline">Refresh Thread</button>
+            <label for="autoRefresh">
+              <input id="autoRefresh" type="checkbox" checked />
+              Auto refresh
+            </label>
+            <span id="threadStatus" class="pill">thread: none</span>
+          </div>
+        </div>
+        <div id="chatLog" class="chat panel"></div>
+        <div class="panel">
+          <label for="chatInput">Message</label>
+          <textarea id="chatInput">Continue with one concise sentence.</textarea>
+          <button id="sendMessage">Send Chat</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Inspect</h2>
+        <div class="tabs">
+          <button class="tab active" data-tab="events">Process Events</button>
+          <button class="tab" data-tab="context">Thread Context</button>
+          <button class="tab" data-tab="trace">API Trace</button>
+        </div>
+        <div id="eventsPanel" class="panel scroll"></div>
+        <pre id="contextPanel" class="panel scroll" hidden></pre>
+        <pre id="tracePanel" class="panel scroll" hidden></pre>
+      </section>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let currentThread = null;
+      let autoRefreshBusy = false;
+      $("sessionId").value = `debug-${Date.now()}`;
+
+      function baseUrl() { return $("baseUrl").value.trim() || window.location.origin; }
+      function setStatus(text, error = false) {
+        $("status").textContent = text;
+        $("status").className = error ? "status error" : "status";
+      }
+      function trace(title, data) {
+        const body = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+        $("tracePanel").textContent += `\n\n# ${title}\n${body}`;
+      }
+      async function request(path, options = {}) {
+        const response = await fetch(`${baseUrl()}${path}`, {
+          headers: { "content-type": "application/json", ...(options.headers || {}) },
+          ...options,
+        });
+        const text = await response.text();
+        let body = text;
+        try { body = text ? JSON.parse(text) : null; } catch { body = text; }
+        trace(`${options.method || "GET"} ${path} -> ${response.status}`, body);
+        if (!response.ok) throw new Error(`${path} failed with ${response.status}`);
+        return body;
+      }
+      async function pollJob(jobId) {
+        if (!jobId) return null;
+        for (let i = 0; i < 40; i += 1) {
+          const job = await request(`/api/runtime/jobs/${encodeURIComponent(jobId)}`);
+          if (job.status === "done" || job.status === "failed") return job;
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        return null;
+      }
+      async function loadObjects() {
+        const body = await request("/api/stones");
+        const select = $("objectSelect");
+        select.innerHTML = "";
+        for (const item of body.items || []) {
+          const option = document.createElement("option");
+          option.value = item.objectId;
+          option.textContent = item.objectId;
+          select.appendChild(option);
+        }
+        if (!select.value && body.items?.[0]) select.value = body.items[0].objectId;
+        setStatus(`Loaded ${body.items?.length || 0} object(s)`);
+      }
+      function renderChat(thread) {
+        const box = $("chatLog");
+        box.innerHTML = "";
+        for (const msg of thread.inbox || []) {
+          const div = document.createElement("div");
+          div.className = "bubble user";
+          div.textContent = `User: ${msg.content}`;
+          box.appendChild(div);
+        }
+        for (const event of thread.events || []) {
+          if (event.category === "llm_interaction" && event.kind === "text") {
+            const div = document.createElement("div");
+            div.className = "bubble assistant";
+            div.textContent = `Assistant: ${event.text}`;
+            box.appendChild(div);
+          }
+        }
+        const meta = document.createElement("div");
+        meta.className = "bubble meta";
+        meta.textContent = `thread=${thread.id} status=${thread.status}`;
+        box.appendChild(meta);
+        box.scrollTop = box.scrollHeight;
+      }
+      function renderEvents(thread) {
+        const panel = $("eventsPanel");
+        panel.innerHTML = "";
+        for (const [index, event] of (thread.events || []).entries()) {
+          const div = document.createElement("div");
+          div.className = "event";
+          const title = document.createElement("div");
+          title.className = "kind";
+          title.textContent = `${index + 1}. ${event.category}:${event.kind}`;
+          const body = document.createElement("pre");
+          body.textContent = JSON.stringify(event, null, 2);
+          div.append(title, body);
+          panel.appendChild(div);
+        }
+      }
+      function renderThread(thread) {
+        currentThread = thread;
+        renderChat(thread);
+        renderEvents(thread);
+        $("contextPanel").textContent = JSON.stringify(thread, null, 2);
+        $("threadStatus").textContent = `thread: ${thread.status} / events: ${(thread.events || []).length}`;
+        $("threadStatus").className = `pill ${thread.status || ""}`;
+      }
+      async function refreshThread(options = {}) {
+        const sessionId = $("activeSessionId").value.trim();
+        const objectId = $("activeObjectId").value.trim();
+        if (!sessionId || !objectId) {
+          if (options.silent) return null;
+          throw new Error("Active session/object required");
+        }
+        const thread = await request(`/api/flows/${encodeURIComponent(sessionId)}/objects/${encodeURIComponent(objectId)}/threads/root`);
+        renderThread(thread);
+        setStatus(`Thread refreshed: ${new Date().toLocaleTimeString()}`);
+        return thread;
+      }
+      async function createObject() {
+        const objectId = $("newObjectId").value.trim();
+        await request("/api/stones", { method: "POST", body: JSON.stringify({ objectId }) });
+        await loadObjects();
+        $("objectSelect").value = objectId;
+        setStatus(`Object created: ${objectId}`);
+      }
+      async function createSession() {
+        const sessionId = $("sessionId").value.trim();
+        const objectId = $("objectSelect").value.trim();
+        const initialMessage = $("initialMessage").value;
+        await request("/api/flows/", { method: "POST", body: JSON.stringify({ sessionId, title: "Debug Chat" }) });
+        const object = await request(`/api/flows/${encodeURIComponent(sessionId)}/objects/`, {
+          method: "POST",
+          body: JSON.stringify({ objectId, initialMessage }),
+        });
+        $("activeSessionId").value = sessionId;
+        $("activeObjectId").value = objectId;
+        await pollJob(object.jobId);
+        await refreshThread();
+        setStatus(`Session ready: ${sessionId}/${objectId}`);
+      }
+      async function sendMessage() {
+        const sessionId = $("activeSessionId").value.trim();
+        const objectId = $("activeObjectId").value.trim();
+        const text = $("chatInput").value;
+        const body = await request(`/api/flows/${encodeURIComponent(sessionId)}/objects/${encodeURIComponent(objectId)}/threads/root/continue`, {
+          method: "POST",
+          body: JSON.stringify({ text }),
+        });
+        await pollJob(body.jobId);
+        await refreshThread();
+      }
+      document.querySelectorAll(".tab").forEach((button) => {
+        button.addEventListener("click", () => {
+          document.querySelectorAll(".tab").forEach((tab) => tab.classList.remove("active"));
+          button.classList.add("active");
+          const tab = button.dataset.tab;
+          $("eventsPanel").hidden = tab !== "events";
+          $("contextPanel").hidden = tab !== "context";
+          $("tracePanel").hidden = tab !== "trace";
+        });
+      });
+      $("reloadObjects").addEventListener("click", () => loadObjects().catch((error) => setStatus(error.message, true)));
+      $("createObject").addEventListener("click", () => createObject().catch((error) => setStatus(error.message, true)));
+      $("createSession").addEventListener("click", () => createSession().catch((error) => setStatus(error.message, true)));
+      $("sendMessage").addEventListener("click", () => sendMessage().catch((error) => setStatus(error.message, true)));
+      $("refreshThread").addEventListener("click", () => refreshThread().catch((error) => setStatus(error.message, true)));
+      setInterval(() => {
+        if (!$("autoRefresh").checked || autoRefreshBusy) return;
+        autoRefreshBusy = true;
+        refreshThread({ silent: true })
+          .catch((error) => setStatus(`Auto refresh failed: ${error.message}`, true))
+          .finally(() => { autoRefreshBusy = false; });
+      }, 2000);
+      loadObjects().catch((error) => setStatus(error.message, true));
+    </script>
+  </body>
+</html>

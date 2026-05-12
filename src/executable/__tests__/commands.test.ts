@@ -1,11 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { COMMAND_TABLE, getOpenableCommands, deriveCommandPaths } from "../commands/index";
-import { KNOWLEDGE as DO_KNOWLEDGE } from "../commands/do";
-import { KNOWLEDGE as END_KNOWLEDGE } from "../commands/end";
-import { KNOWLEDGE as PLAN_KNOWLEDGE } from "../commands/plan";
-import { KNOWLEDGE as PROGRAM_KNOWLEDGE, programCommand } from "../commands/program";
-import { KNOWLEDGE as TALK_KNOWLEDGE } from "../commands/talk";
-import { KNOWLEDGE as TODO_KNOWLEDGE } from "../commands/todo";
+import { programCommand } from "../commands/program";
 
 describe("executable commands", () => {
   it("should have command table with all commands", () => {
@@ -37,20 +32,13 @@ describe("executable commands", () => {
     expect(getOpenableCommands()).toEqual(["do", "end", "plan", "program", "talk", "todo"]);
   });
 
-  it("should export non-empty KNOWLEDGE for every command", () => {
-    const knowledges = [
-      TALK_KNOWLEDGE,
-      DO_KNOWLEDGE,
-      PROGRAM_KNOWLEDGE,
-      PLAN_KNOWLEDGE,
-      TODO_KNOWLEDGE,
-      END_KNOWLEDGE
-    ];
-
-    for (const knowledge of knowledges) {
-      expect(typeof knowledge).toBe("string");
-      expect(knowledge.trim().length).toBeGreaterThan(20);
-      expect(knowledge).toContain("调用示例");
+  it("should expose non-empty knowledge entries for every command", () => {
+    for (const [command, entry] of Object.entries(COMMAND_TABLE)) {
+      const knowledge = entry.knowledge?.({}, "open");
+      const basic = knowledge?.[`internal/executable/${command}/basic`];
+      expect(typeof basic).toBe("string");
+      expect(basic?.trim().length).toBeGreaterThan(20);
+      expect(basic).toContain("调用示例");
     }
   });
 

@@ -111,7 +111,7 @@ describe("observable persistable debug files", () => {
     await observableModule.writeLatestLlmInput(
       thread,
       [{ type: "message", role: "system", content: "<context />" }],
-      []
+      [{ name: "wait", description: "等待", inputSchema: { type: "object" } }]
     );
     await observableModule.writeLatestLlmOutput(thread, {
       provider: "openai",
@@ -126,6 +126,7 @@ describe("observable persistable debug files", () => {
 
     expect(input.threadId).toBe("root");
     expect(input.inputItems[0].type).toBe("message");
+    expect(input.tools).toBeUndefined();
     expect(output.outputItems[0].content).toBe("done");
   });
 
@@ -184,6 +185,7 @@ describe("observable persistable debug files", () => {
 
     expect(loopInput.threadId).toBe("root");
     expect(loopInput.inputItems[0].type).toBe("message");
+    expect(loopInput.tools).toBeUndefined();
     expect(loopOutput.outputItems[0].content).toBe("done");
     expect(loopMeta.loopIndex).toBe(1);
     expect(loopMeta.status).toBe("ok");

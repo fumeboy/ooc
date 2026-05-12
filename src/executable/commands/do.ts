@@ -1,9 +1,9 @@
-import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
+import type { CommandExecutionContext, CommandKnowledgeEntries, CommandTableEntry } from "./types.js";
 import type { ThreadContext, ThreadMessage } from "../../thinkable/context.js";
 import { FormManager, type ActiveForm } from "../forms/form.js";
 
 /** do command 暴露给 LLM 的知识说明。 */
-export const KNOWLEDGE = `
+const KNOWLEDGE = `
 do 用于在当前对象内部派生子线程，或向已有子线程继续追加消息。
 
 参数说明：
@@ -18,6 +18,9 @@ open(type="command", command="do", description="派生子线程处理子任务")
 refine(form_id, { context: "fork", msg: "请检查日志", wait: true, knowledge: ["kernel:debug"] })
 submit(form_id)
 `;
+
+const DO_BASIC_PATH = "internal/executable/do/basic";
+const DO_INPUT_PATH = "internal/executable/do/input";
 
 /** do command 的可匹配路径集合。 */
 export enum DoCommandPath {
@@ -46,6 +49,22 @@ export const doCommand: CommandTableEntry = {
     if (ctx === "continue") hit.push(DoCommandPath.Continue);
     if (args.wait === true) hit.push(DoCommandPath.Wait);
     return hit;
+  },
+  knowledge: (args) => {
+    const entries: CommandKnowledgeEntries = {
+      [DO_BASIC_PATH]: KNOWLEDGE.trim(),
+    };
+    const context = typeof args.context === "string" ? args.context : "";
+    const hasMsg = typeof args.msg === "string" && args.msg.trim().length > 0;
+    const hasThreadId = typeof args.threadId === "string" && args.threadId.trim().length > 0;
+    if (context === "continue" && (!hasThreadId || !hasMsg)) {
+      entries[DO_INPUT_PATH] = "do.continue 需要 threadId 与 msg；请先 refine(args={ context: \"continue\", threadId: \"...\", msg: \"...\" })。";
+    } else if (context === "fork" && !hasMsg) {
+      entries[DO_INPUT_PATH] = "do.fork 需要 msg；请先 refine(args={ context: \"fork\", msg: \"...\", wait: true|false })。";
+    } else if (context !== "fork" && context !== "continue") {
+      entries[DO_INPUT_PATH] = "do 需要 context=fork 或 context=continue；请先 refine 补充 context 与 msg。";
+    }
+    return entries;
   },
   // 暂不实现具体执行逻辑
 };

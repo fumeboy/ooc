@@ -1,7 +1,7 @@
-import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
+import type { CommandExecutionContext, CommandKnowledgeEntries, CommandTableEntry } from "./types.js";
 
 /** plan command 暴露给 LLM 的知识说明。 */
-export const KNOWLEDGE = `
+const KNOWLEDGE = `
 plan 用于把一个目标拆成可执行步骤，并输出后续行动计划。
 
 参数说明：
@@ -12,6 +12,9 @@ open(type="command", command="plan", description="先把迁移工作拆解")
 refine(form_id, { plan: "完成 executable command 迁移" })
 submit(form_id)
 `;
+
+const PLAN_BASIC_PATH = "internal/executable/plan/basic";
+const PLAN_INPUT_PATH = "internal/executable/plan/input";
 
 /** plan command 的可匹配路径集合。 */
 export enum PlanCommandPath {
@@ -26,6 +29,15 @@ export const planCommand: CommandTableEntry = {
   ],
   match: (_args) => {
     return [PlanCommandPath.Plan];
+  },
+  knowledge: (args) => {
+    const entries: CommandKnowledgeEntries = {
+      [PLAN_BASIC_PATH]: KNOWLEDGE.trim(),
+    };
+    if (typeof args.plan !== "string" || args.plan.trim().length === 0) {
+      entries[PLAN_INPUT_PATH] = "plan 需要 plan 文本；请先 refine(args={ plan: \"...\" }) 后再 submit(form_id)。";
+    }
+    return entries;
   },
   // 暂不实现具体执行逻辑
 };

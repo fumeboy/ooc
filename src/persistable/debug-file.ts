@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { threadDir, toJson, type ThreadPersistenceRef } from "./common";
-import type { LlmGenerateResult, LlmInputItem, LlmMessage, LlmTool } from "../thinkable/llm/types";
+import type { LlmGenerateResult, LlmInputItem, LlmMessage } from "../thinkable/llm/types";
 
 /** 调用 LLM 前写入的输入快照。 */
 export interface LlmInputDebugRecord {
@@ -9,8 +9,6 @@ export interface LlmInputDebugRecord {
   threadId: string;
   /** 传给 provider 的完整 input items。 */
   inputItems: LlmInputItem[];
-  /** 本轮暴露给 provider 的 tool 定义。 */
-  tools: LlmTool[];
 }
 
 /** LLM 返回后写入的输出快照。 */

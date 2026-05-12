@@ -87,8 +87,7 @@ describe("persistable single object flow", () => {
 
     await writeDebugInput(threadRef, {
       threadId: "root",
-      inputItems: [{ type: "message", role: "system", content: "<context />" }],
-      tools: []
+      inputItems: [{ type: "message", role: "system", content: "<context />" }]
     });
     await writeDebugOutput(threadRef, {
       threadId: "root",
@@ -102,6 +101,7 @@ describe("persistable single object flow", () => {
 
     expect(input.threadId).toBe("root");
     expect(input.inputItems[0].type).toBe("message");
+    expect(input.tools).toBeUndefined();
     expect(output.outputItems[0].content).toBe("ok");
   });
 });

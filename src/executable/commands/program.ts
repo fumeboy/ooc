@@ -8,7 +8,7 @@ import { buildProgramShellEnv } from "../program/self-env.js";
 import { runShellProgram } from "../program/shell.js";
 
 /** program command 暴露给 LLM 的知识说明。 */
-export const KNOWLEDGE = `
+const KNOWLEDGE = `
 program 用于执行一段代码，或调用对象 server 暴露的方法。
 
 参数说明：

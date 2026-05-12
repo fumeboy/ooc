@@ -167,38 +167,63 @@ function findInboxMessage(thread: ThreadContext, msgId: string): ThreadMessage |
   return thread.inbox?.find((message) => message.id === msgId);
 }
 
+function isErrorInject(text: string): boolean {
+  return text.startsWith("[错误]") || text.includes("失败") || text.includes("Error") || text.includes("error");
+}
+
 /** 把过程事件转换为 Responses-first input items；返回空数组表示该事件不进 transcript。 */
 function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInputItem[] {
   if (event.category === "context_change" && event.kind === "inbox_message_arrived") {
     const inboxMessage = findInboxMessage(thread, event.msgId);
-    const items: LlmInputItem[] = [];
-    if (inboxMessage) {
-      items.push({
-        type: "message",
-        role: "user",
-        content: inboxMessage.content
-      });
-    }
-    items.push({
-      type: "message",
-      role: "system",
-      content: `[context_change:${event.kind}] msg_id=${event.msgId}${event.text ? `\n${event.text}` : ""}`
-    });
-    return items;
-  }
-
-  if (event.category === "context_change") {
     return [
       {
-        type: "message",
-        role: "user",
-        content: `[context_change:${event.kind}]\n${event.text}`
+      type: "message",
+      role: "system",
+        content:
+          `[context_change:${event.kind}] msg_id=${event.msgId}` +
+          `${inboxMessage ? ` from=${inboxMessage.fromThreadId}` : ""}` +
+          `${event.text ? `\n${event.text}` : ""}`
       }
     ];
   }
 
-  if (event.kind === "tool_use" || event.kind === "function_call" || event.category === "tool_runtime") {
+  if (event.category === "context_change") {
+    if (!isErrorInject(event.text)) {
+      return [];
+    }
+    return [
+      {
+        type: "message",
+        role: "system",
+        content: `[context_change:error]\n${event.text}`
+      }
+    ];
+  }
+
+  if (event.kind === "tool_use") {
     return [];
+  }
+
+  if (event.kind === "function_call") {
+    return [
+      {
+        type: "function_call",
+        call_id: event.callId,
+        name: event.toolName,
+        arguments: event.arguments
+      }
+    ];
+  }
+
+  if (event.category === "tool_runtime") {
+    return [
+      {
+        type: "function_call_output",
+        call_id: event.callId,
+        name: event.toolName,
+        output: event.output
+      }
+    ];
   }
 
   if (event.kind === "thinking") {

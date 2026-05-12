@@ -7,6 +7,7 @@ import { getReadmeApi } from "./api.get-readme";
 import { getSelfApi } from "./api.get-self";
 import { getServerSourceApi } from "./api.get-server-source";
 import { getStoneApi } from "./api.get-stone";
+import { listStonesApi } from "./api.list-stones";
 import { patchDataApi } from "./api.patch-data";
 import { putReadmeApi } from "./api.put-readme";
 import { putSelfApi } from "./api.put-self";
@@ -16,6 +17,7 @@ import { createStonesService } from "./service";
 export function stonesModule(config: Pick<ServerConfig, "baseDir">) {
   const service = createStonesService({ baseDir: config.baseDir });
   return new Elysia({ prefix: "/api", name: "ooc.stones" })
+    .use(listStonesApi(service))
     .use(createStoneApi(service))
     .use(getStoneApi(service))
     .use(getSelfApi(service))

@@ -1,7 +1,7 @@
-import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
+import type { CommandExecutionContext, CommandKnowledgeEntries, CommandTableEntry } from "./types.js";
 
 /** todo command 暴露给 LLM 的知识说明。 */
-export const KNOWLEDGE = `
+const KNOWLEDGE = `
 todo 用于登记一个可见待办，并可选配置在命中特定 command 或 command path 时提醒。
 
 参数说明：
@@ -13,6 +13,9 @@ open(type="command", command="todo", description="登记后续待办")
 refine(form_id, { content: "补充 program 的真实链路测试", on_command_path: ["program", "program.function"] })
 submit(form_id)
 `;
+
+const TODO_BASIC_PATH = "internal/executable/todo/basic";
+const TODO_INPUT_PATH = "internal/executable/todo/input";
 
 /** todo command 的可匹配路径集合。 */
 export enum TodoCommandPath {
@@ -34,6 +37,15 @@ export const todoCommand: CommandTableEntry = {
       hit.push(TodoCommandPath.OnCommandPath);
     }
     return hit;
+  },
+  knowledge: (args) => {
+    const entries: CommandKnowledgeEntries = {
+      [TODO_BASIC_PATH]: KNOWLEDGE.trim(),
+    };
+    if (typeof args.content !== "string" || args.content.trim().length === 0) {
+      entries[TODO_INPUT_PATH] = "todo 需要 content；请先 refine(args={ content: \"...\", on_command_path: [...] }) 后再 submit(form_id)。";
+    }
+    return entries;
   },
   // 暂不实现具体执行逻辑
 };

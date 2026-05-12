@@ -1,7 +1,7 @@
-import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
+import type { CommandExecutionContext, CommandKnowledgeEntries, CommandTableEntry } from "./types.js";
 
 /** talk command 暴露给 LLM 的知识说明。 */
-export const KNOWLEDGE = `
+const KNOWLEDGE = `
 talk 用于向另一个 Object 发送消息。
 
 参数说明：
@@ -18,6 +18,10 @@ open(type="command", command="talk", description="向 creator 反馈")
 refine(form_id, { target: "creator", msg: "任务完成", context: "continue", threadId: "t_1", wait: true })
 submit(form_id)
 `;
+
+const TALK_BASIC_PATH = "internal/executable/talk/basic";
+const TALK_INPUT_PATH = "internal/executable/talk/input";
+const TALK_FORM_STATUS_PATH = "internal/executable/talk/form-status";
 
 /** talk command 的可匹配路径集合。 */
 export enum TalkCommandPath {
@@ -64,6 +68,25 @@ export const talkCommand: CommandTableEntry = {
       hit.push(TalkCommandPath.QuestionForm);
     }
     return hit;
+  },
+  knowledge: (args, formStatus) => {
+    const entries: CommandKnowledgeEntries = {
+      [TALK_BASIC_PATH]: KNOWLEDGE.trim(),
+    };
+    if (formStatus === "executing") {
+      entries[TALK_FORM_STATUS_PATH] = "talk form 正在执行；等待执行完成，不要再次 refine 或 submit。";
+      return entries;
+    }
+    if (formStatus === "executed") {
+      entries[TALK_FORM_STATUS_PATH] = "talk form 已执行完成；结果消费后使用 close(form_id, reason=...) 释放 form。";
+      return entries;
+    }
+    const hasTarget = typeof args.target === "string" && args.target.trim().length > 0;
+    const hasMsg = typeof args.msg === "string" && args.msg.trim().length > 0;
+    if (!hasTarget || !hasMsg) {
+      entries[TALK_INPUT_PATH] = "talk 需要 target 与 msg；请先 refine(args={ target: \"creator\" | \"super\" | \"object\", msg: \"...\" })。";
+    }
+    return entries;
   },
   // 暂不实现具体执行逻辑
 };

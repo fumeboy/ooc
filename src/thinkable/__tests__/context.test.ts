@@ -7,7 +7,7 @@ import { clearKnowledgeLoaderCache } from "../knowledge";
 import { createStoneObject, knowledgeDir } from "../../persistable";
 
 describe("buildContext", () => {
-  it("buildInputItems returns system item plus inbox-linked user items", async () => {
+  it("buildInputItems returns system item plus inbox-linked msg_id notice", async () => {
     const thread: ThreadContext = {
       id: "t_items",
       status: "running",
@@ -37,12 +37,21 @@ describe("buildContext", () => {
     );
     expect(
       out.input.some(
-        (item) => item.type === "message" && item.role === "user" && item.content.includes("新的用户输入")
+        (item) =>
+          item.type === "message" &&
+          item.role === "system" &&
+          item.content.includes("[context_change:inbox_message_arrived]") &&
+          item.content.includes("msg_id=msg_in_1")
       )
     ).toBe(true);
+    expect(
+      out.input.some(
+        (item) => item.type === "message" && item.role === "user" && item.content.includes("新的用户输入")
+      )
+    ).toBe(false);
   });
 
-  it("maps inbox message arrival into user item plus msg_id notice item", async () => {
+  it("maps inbox message arrival into msg_id notice item without duplicating user content", async () => {
     const thread: ThreadContext = {
       id: "t_inbox_notice",
       status: "running",
@@ -70,11 +79,72 @@ describe("buildContext", () => {
 
     expect(out.input).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ type: "message", role: "user", content: "请继续" }),
         expect.objectContaining({
           type: "message",
           role: "system",
           content: expect.stringContaining("msg_id=msg_in_1")
+        })
+      ])
+    );
+    expect(
+      out.input.some(
+        (item) => item.type === "message" && item.role === "user" && item.content.includes("请继续")
+      )
+    ).toBe(false);
+    expect(out.input[0]).toEqual(
+      expect.objectContaining({
+        type: "message",
+        role: "system",
+        content: expect.stringContaining("<inbox>")
+      })
+    );
+  });
+
+  it("replays function_call and function_call_output into next input items", async () => {
+    const thread: ThreadContext = {
+      id: "t_function_call_replay",
+      status: "running",
+      events: [
+        {
+          category: "llm_interaction",
+          kind: "function_call",
+          callId: "call_1",
+          toolName: "open",
+          arguments: {
+            type: "command",
+            command: "talk",
+            description: "向用户回复"
+          }
+        },
+        {
+          category: "tool_runtime",
+          kind: "function_call_output",
+          callId: "call_1",
+          toolName: "open",
+          output: "{\"ok\":true,\"tool\":\"open\"}",
+          ok: true
+        }
+      ]
+    };
+
+    const out = await buildInputItems(thread);
+
+    expect(out.input).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "function_call",
+          call_id: "call_1",
+          name: "open",
+          arguments: {
+            type: "command",
+            command: "talk",
+            description: "向用户回复"
+          }
+        }),
+        expect.objectContaining({
+          type: "function_call_output",
+          call_id: "call_1",
+          output: "{\"ok\":true,\"tool\":\"open\"}"
         })
       ])
     );
@@ -176,7 +246,7 @@ describe("buildContext", () => {
     expect(messages[0]?.content).not.toContain("<todos>");
   });
 
-  it("appends process events as ordinary llm messages after the system xml", async () => {
+  it("appends only meaningful process events after the system xml", async () => {
     const thread: ThreadContext = {
       id: "t_process",
       status: "running",
@@ -203,7 +273,12 @@ describe("buildContext", () => {
         {
           category: "context_change",
           kind: "inject",
-          text: "用户补充了新的要求"
+          text: "[refine] Form f_1 已累积参数。当前路径：talk。"
+        },
+        {
+          category: "context_change",
+          kind: "inject",
+          text: "[错误] submit 失败：Form f_missing 不存在。"
         }
       ]
     };
@@ -227,8 +302,8 @@ describe("buildContext", () => {
         content: "[thinking]\n需要先检查上下文"
       },
       {
-        role: "user",
-        content: "[context_change:inject]\n用户补充了新的要求"
+        role: "system",
+        content: "[context_change:error]\n[错误] submit 失败：Form f_missing 不存在。"
       }
     ]);
   });
@@ -385,6 +460,10 @@ describe("buildContext", () => {
     const messages = await buildContext({ id: "t1", status: "running", events: [] });
     const xml = messages[0]?.content ?? "";
     expect(xml).toContain("open / refine / submit / close / wait");
+    expect(xml).toContain("每一次工具调用都应附带 title");
+    expect(xml).toContain("没有可继续执行的动作时，必须显式调用 wait");
+    expect(xml).toContain("不要只输出文本后假设系统会自动暂停");
+    expect(xml).toContain("收到 inbox 消息后，在下一次工具调用时通过 mark 参数标记");
   });
 
   it("deduplicates identical knowledge entries across multiple forms", async () => {
@@ -447,6 +526,32 @@ describe("buildContext", () => {
     expect(xml).toContain("<!-- executable knowledge entries:");
     expect(xml).toContain("\n  <thread ");
     expect(xml).toContain("\n    <active_forms>");
+  });
+
+  it("renders file windows with readable file content in system context", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "ooc-file-window-"));
+    const filePath = join(tempRoot, "meta.md");
+    await writeFile(filePath, "# Meta\n\nFile window body");
+
+    const messages = await buildContext({
+      id: "t_file_window",
+      status: "running",
+      events: [],
+      windows: {
+        [filePath]: {
+          type: "file",
+          path: filePath,
+          description: "读取 meta.md"
+        }
+      }
+    });
+
+    const xml = messages[0]?.content ?? "";
+    expect(xml).toContain("<windows>");
+    expect(xml).toContain(`<window path="${filePath}" type="file">`);
+    expect(xml).toContain("<description>读取 meta.md</description>");
+    expect(xml).toContain("<content># Meta\n\nFile window body</content>");
+    await rm(tempRoot, { recursive: true, force: true });
   });
 });
 

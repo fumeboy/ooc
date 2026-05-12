@@ -1,8 +1,27 @@
 import { describe, expect, it } from "bun:test";
-import { executeCommand } from "../commands/index";
+import { COMMAND_TABLE, executeCommand } from "../commands/index";
 import type { ThreadContext } from "../../thinkable/context";
 
 describe("command execution side effects", () => {
+  it("all commands expose knowledge via CommandTableEntry instead of exported KNOWLEDGE", async () => {
+    for (const [command, entry] of Object.entries(COMMAND_TABLE)) {
+      const knowledge = entry.knowledge?.({}, "open");
+      expect(knowledge?.[`internal/executable/${command}/basic`]).toBeString();
+      expect(knowledge?.[`internal/executable/${command}/basic`].length).toBeGreaterThan(0);
+    }
+
+    const modules = await Promise.all([
+      import("../commands/do"),
+      import("../commands/end"),
+      import("../commands/plan"),
+      import("../commands/talk"),
+      import("../commands/todo")
+    ]);
+    for (const module of modules) {
+      expect("KNOWLEDGE" in module).toBe(false);
+    }
+  });
+
   it("plan should write thread.plan", async () => {
     const thread: ThreadContext = {
       id: "thread-plan",

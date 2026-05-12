@@ -146,8 +146,7 @@ export async function writeLatestLlmInput(
   if (thread.persistence) {
     await writeDebugInput(thread.persistence, {
       threadId: thread.id,
-      inputItems,
-      tools
+      inputItems
     });
   }
 }
@@ -190,8 +189,7 @@ export async function beginLlmLoop(
   if (debugEnabled && thread.persistence) {
     await writeLoopDebugInput(thread.persistence, loopIndex, {
       threadId: thread.id,
-      inputItems,
-      tools
+      inputItems
     });
   }
   return {

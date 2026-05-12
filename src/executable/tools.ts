@@ -8,7 +8,7 @@ import { handleSubmitTool } from "./tools/submit";
 import { handleWaitTool } from "./tools/wait";
 
 /** 单个 LLM tool 的运行时 handler 签名。 */
-type ToolHandler = (thread: ThreadContext, args: Record<string, unknown>) => Promise<void>;
+type ToolHandler = (thread: ThreadContext, args: Record<string, unknown>) => Promise<string | void>;
 
 /** tool 名到 handler 的路由表；未实现的 tool 会转成 context_change 提示。 */
 const TOOL_HANDLERS: Partial<Record<LlmToolCall["name"], ToolHandler>> = {
@@ -39,6 +39,9 @@ export async function dispatchToolCall(
     });
     return JSON.stringify({ ok: false, error: message });
   }
-  await handler(thread, toolCall.arguments);
+  const output = await handler(thread, toolCall.arguments);
+  if (typeof output === "string") {
+    return output;
+  }
   return JSON.stringify({ ok: true, tool: toolCall.name });
 }

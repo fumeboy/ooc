@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { readThread } from "@src/persistable";
 import { createJobManager } from "../../runtime/job-manager";
 import { createPauseStore } from "../../runtime/pause-store";
 import { createFlowsService } from "./service";
@@ -47,6 +48,18 @@ describe("flows service", () => {
 
       expect(result.initialThreadId).toBe("root");
       expect(typeof result.jobId).toBe("string");
+      const thread = await readThread({ baseDir, sessionId: "s1", objectId: "agent" }, "root");
+      const initialMsgId = thread?.inbox?.[0]?.id;
+      expect(initialMsgId).toBeDefined();
+      expect(thread?.inbox).toHaveLength(1);
+      expect(thread?.inbox?.[0]?.content).toBe("你好");
+      expect(thread?.events).toEqual([
+        {
+          category: "context_change",
+          kind: "inbox_message_arrived",
+          msgId: initialMsgId as string
+        }
+      ]);
     } finally {
       await rm(baseDir, { recursive: true, force: true });
     }
@@ -127,7 +140,15 @@ describe("flows service", () => {
       });
       expect(out.status).toBe("running");
       const after = await readThread({ baseDir, sessionId: "s1", objectId: "agent" }, "root");
+      const continuedMsgId = after?.inbox?.at(-1)?.id;
+      expect(continuedMsgId).toBeDefined();
       expect(after?.status).toBe("running");
+      expect(after?.inbox?.at(-1)?.content).toBe("继续推下去");
+      expect(after?.events.at(-1)).toEqual({
+        category: "context_change",
+        kind: "inbox_message_arrived",
+        msgId: continuedMsgId as string
+      });
     } finally {
       await rm(baseDir, { recursive: true, force: true });
     }

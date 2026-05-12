@@ -42,11 +42,15 @@ function makeThreadWithStone(tempRoot: string): ThreadContext {
 }
 
 describe("enrichProgramForm", () => {
-  test("returns form unchanged when command is not program", async () => {
+  test("enriches command knowledge paths even when command is not program", async () => {
     const form = makeForm({ command: "plan" });
     const thread: ThreadContext = { id: "t", status: "running", events: [] };
     const result = await enrichProgramForm(form, thread);
-    expect(result).toBe(form);
+    expect(result).not.toBe(form);
+    expect(result.commandKnowledgePaths).toEqual([
+      "internal/executable/plan/basic",
+      "internal/executable/plan/input",
+    ]);
   });
 
   test("returns form unchanged when no function arg present", async () => {

@@ -3,6 +3,15 @@ import { beginLlmLoop, finishLlmLoop, isPausing } from "../observable";
 import { buildInputItems, type ThreadContext } from "./context";
 import type { LlmClient } from "./llm/types";
 
+function latestAssistantText(thread: ThreadContext): string | undefined {
+  for (const event of [...thread.events].reverse()) {
+    if (event.category === "llm_interaction" && event.kind === "text") {
+      return event.text;
+    }
+  }
+  return undefined;
+}
+
 // think 是单轮执行器，只负责编排本轮顺序，不承担 scheduler 和持久化。
 export async function think(thread: ThreadContext, llmClient: LlmClient): Promise<void> {
   // 当前单轮执行只接受 running 状态，其他状态直接视为调用方错误。
@@ -35,8 +44,8 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
       });
     }
 
-    // 文本输出进入 process events，供后续 context-builder 消费。
-    if (result.text) {
+    // 文本输出进入 process events，供后续 context-builder 消费；完全重复的文本不再追加。
+    if (result.text && latestAssistantText(thread) !== result.text) {
       thread.events.push({
         category: "llm_interaction",
         kind: "text",

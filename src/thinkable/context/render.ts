@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { deriveStoneFromThread } from "../../persistable/common";
 import {
   computeActivations,
@@ -25,6 +26,7 @@ type XmlNode =
 
 const INDENT = "  ";
 const MAX_KNOWLEDGE_BYTES = 8192;
+const MAX_FILE_WINDOW_BYTES = 32768;
 
 /** 转义 XML 特殊字符，保证 context 内容不会破坏标签结构。 */
 export function escapeXml(text: string): string {
@@ -108,6 +110,13 @@ function truncateKnowledgeBody(body: string): string {
   return `${head}...[truncated, original ${bytes.length} bytes]`;
 }
 
+function truncateFileBody(body: string): string {
+  const bytes = new TextEncoder().encode(body);
+  if (bytes.length <= MAX_FILE_WINDOW_BYTES) return body;
+  const head = new TextDecoder().decode(bytes.slice(0, MAX_FILE_WINDOW_BYTES));
+  return `${head}...[truncated, original ${bytes.length} bytes]`;
+}
+
 function renderMessagesNode(tag: "inbox" | "outbox", messages: ThreadMessage[] | undefined): XmlNode | null {
   if (!messages || messages.length === 0) return null;
 
@@ -187,6 +196,36 @@ function renderActiveKnowledgeNode(activations: ActivationResult[]): XmlNode | n
   );
 }
 
+async function renderWindowsNode(thread: ThreadContext): Promise<XmlNode | null> {
+  const windows = Object.entries(thread.windows ?? {});
+  if (windows.length === 0) return null;
+
+  const children = await Promise.all(
+    windows.map(async ([key, window]) => {
+      const nodes: XmlNode[] = [
+        xmlElement("description", {}, [xmlText(window.description)])
+      ];
+
+      if (window.type === "file") {
+        try {
+          const content = await readFile(window.path, "utf8");
+          nodes.push(xmlElement("content", {}, [xmlText(truncateFileBody(content))]));
+        } catch (error) {
+          nodes.push(xmlElement("error", {}, [xmlText((error as Error).message)]));
+        }
+      }
+
+      if (window.type === "knowledge") {
+        nodes.push(xmlElement("path", {}, [xmlText(window.path)]));
+      }
+
+      return xmlElement("window", { path: window.path || key, type: window.type }, nodes);
+    })
+  );
+
+  return xmlElement("windows", {}, children);
+}
+
 async function computeActiveKnowledgeNode(thread: ThreadContext): Promise<XmlNode | null> {
   if (!thread.persistence) return null;
   try {
@@ -225,6 +264,12 @@ export async function renderContextXml(input: {
   if (activeKnowledgeNode) {
     threadChildren.push(xmlComment("active knowledge: persistent or activated project knowledge available to this turn"));
     threadChildren.push(activeKnowledgeNode);
+  }
+
+  const windowsNode = await renderWindowsNode(input.thread);
+  if (windowsNode) {
+    threadChildren.push(xmlComment("windows: explicitly opened files or knowledge windows available to this turn"));
+    threadChildren.push(windowsNode);
   }
 
   appendNode(threadChildren, renderMessagesNode("inbox", input.thread.inbox));

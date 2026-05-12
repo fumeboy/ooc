@@ -5,10 +5,11 @@ import {
   writeThread,
 } from "@src/persistable";
 import { loadUiServerMethods } from "@src/executable/server/loader";
+import type { ThreadContext } from "@src/thinkable/context";
 import type { createJobManager } from "../../runtime/job-manager";
 import type { PauseStore } from "../../runtime/pause-store";
 import { scanPausedThreads } from "../../runtime/thread-query";
-import { applyInjectTransition, applyResumeTransition, canResumeThread } from "../../runtime/thread-transition";
+import { applyResumeTransition, canResumeThread } from "../../runtime/thread-transition";
 import { AppServerError } from "../../bootstrap/errors";
 
 function httpContext() {
@@ -19,6 +20,42 @@ function httpContext() {
       inject() {},
     },
   } as never;
+}
+
+function createInboxMessage(text: string, toThreadId: string) {
+  return {
+    id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    fromThreadId: "user",
+    toThreadId,
+    content: text,
+    createdAt: Date.now(),
+    source: "system" as const,
+  };
+}
+
+function appendInboxMessage(thread: ThreadContext, text: string): ThreadContext {
+  const message = createInboxMessage(text, thread.id);
+  return {
+    ...thread,
+    inbox: [...(thread.inbox ?? []), message],
+    events: [
+      ...thread.events,
+      {
+        category: "context_change",
+        kind: "inbox_message_arrived",
+        msgId: message.id,
+      },
+    ],
+  };
+}
+
+function reviveThreadForInboxMessage(thread: ThreadContext): ThreadContext {
+  return {
+    ...thread,
+    status: "running",
+    waitingType: undefined,
+    awaitingChildren: undefined,
+  };
 }
 
 export function createFlowsService(deps: {
@@ -50,21 +87,13 @@ export function createFlowsService(deps: {
         objectId,
       });
       const persistence = { ...ref, threadId: "root" } as const;
-      const initialEvents = initialMessage
-        ? [
-            {
-              category: "context_change" as const,
-              kind: "inject" as const,
-              text: initialMessage,
-            },
-          ]
-        : [];
-      await writeThread({
+      const thread = {
         id: "root",
         status: "running",
-        events: initialEvents,
+        events: [],
         persistence,
-      });
+      } satisfies ThreadContext;
+      await writeThread(initialMessage ? appendInboxMessage(thread, initialMessage) : thread);
       // 关键：只有 initialMessage 不为空才 enqueue job——
       // 空 events 的 thread 跑 LLM 会被 Claude 代理拒绝（messages 必须含 user role），
       // 立即 status=failed，后续 continue 也救不回来。
@@ -123,7 +152,7 @@ export function createFlowsService(deps: {
           { sessionId, objectId, threadId }
         );
       }
-      const nextThread = applyInjectTransition(thread, text);
+      const nextThread = appendInboxMessage(reviveThreadForInboxMessage(thread), text);
       await writeThread(nextThread);
       const job = deps.jobManager.createRunThreadJob({
         sessionId,

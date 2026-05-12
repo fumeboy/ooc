@@ -5,10 +5,34 @@ import { FormManager } from "../forms/form.js";
 import { enrichProgramForm } from "../server/enrich.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
+const PATH_PARAM = {
+  type: "string",
+  minLength: 1,
+  description: "文件或 knowledge 路径。type=file/knowledge 时必须通过 args.path 提供，不能只写在 description 中。"
+};
+
+const WINDOW_ARGS_SCHEMA = {
+  type: "object",
+  properties: {
+    path: PATH_PARAM,
+    lines: {
+      type: "array",
+      items: { type: "number" },
+      description: "可选行范围，例如 [0, 200]。"
+    },
+    columns: {
+      type: "array",
+      items: { type: "number" },
+      description: "可选列范围，例如 [0, 120]。"
+    }
+  },
+  required: ["path"]
+};
+
 /** open tool - 开始行动，或把 knowledge/file 显式放入 Context。 */
 export const OPEN_TOOL: LlmTool = {
   name: "open",
-  description: "开始一次行动，或把 knowledge/file 放入 Context。type=command 只负责创建 form；业务参数必须放在 args，或后续通过 refine(args={...}) 补充。type=knowledge/file 不产生 form。",
+  description: "开始一次行动，或把 knowledge/file 放入 Context。type=command 只负责创建 form；业务参数必须放在 args，或后续通过 refine(args={...}) 补充。type=knowledge/file 不产生 form，且必须传 args.path。",
   inputSchema: {
     type: "object",
     properties: {
@@ -29,7 +53,12 @@ export const OPEN_TOOL: LlmTool = {
       },
       args: {
         type: "object",
-        description: "可选，允许为空，如果不确定参数可以稍后再通过 refine 补充参数"
+        description: "command 的业务参数；type=file/knowledge 时必须包含 args.path。",
+        properties: {
+          path: PATH_PARAM,
+          lines: WINDOW_ARGS_SCHEMA.properties.lines,
+          columns: WINDOW_ARGS_SCHEMA.properties.columns
+        }
       },
       mark: MARK_PARAM
     },
@@ -53,11 +82,26 @@ function pushUnique(target: string[] | undefined, value: string): string[] {
   return next;
 }
 
+function getRequiredPath(thread: ThreadContext, openType: string, nestedArgs: Record<string, unknown>): string | undefined {
+  const path = nestedArgs.path;
+  if (typeof path === "string" && path.trim()) {
+    return path.trim();
+  }
+
+  const message = `open(type="${openType}") 缺少 args.path 参数。`;
+  thread.events.push({
+    category: "context_change",
+    kind: "inject",
+    text: `[错误] ${message}`
+  });
+  return undefined;
+}
+
 /** 执行 open tool：command 创建 form，knowledge/file 只打开 context 窗口。 */
 export async function handleOpenTool(
   thread: ThreadContext,
   args: Record<string, unknown>
-): Promise<void> {
+): Promise<string | void> {
   const openType = args.type as string;
   const description = (args.description as string | undefined) ?? "";
   const nestedArgs = getArgs(args);
@@ -86,7 +130,10 @@ export async function handleOpenTool(
   }
 
   if (openType === "knowledge") {
-    const path = nestedArgs.path as string;
+    const path = getRequiredPath(thread, openType, nestedArgs);
+    if (!path) {
+      return JSON.stringify({ ok: false, tool: "open", error: `open(type="${openType}") 缺少 args.path 参数。` });
+    }
     thread.activeForms = thread.activeForms ?? [];
     // 写入 pinnedKnowledge 即可——activator 每轮 lazy 派生当前激活集合，不再需要 activatedKnowledge 字段。
     thread.pinnedKnowledge = pushUnique(thread.pinnedKnowledge, path);
@@ -109,7 +156,10 @@ export async function handleOpenTool(
   }
 
   if (openType === "file") {
-    const path = nestedArgs.path as string;
+    const path = getRequiredPath(thread, openType, nestedArgs);
+    if (!path) {
+      return JSON.stringify({ ok: false, tool: "open", error: `open(type="${openType}") 缺少 args.path 参数。` });
+    }
     thread.activeForms = thread.activeForms ?? [];
     thread.windows = {
       ...(thread.windows ?? {}),
