@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { executeUserCode } from "../sandbox/executor";
+import { executeUserCode } from "../program/sandbox/executor";
 
 describe("executeUserCode", () => {
   test("captures console.log into stdout", async () => {

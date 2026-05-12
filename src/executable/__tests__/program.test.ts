@@ -146,6 +146,27 @@ describe("program.ts/js + program.function", () => {
     expect(result).toContain("15");
   });
 
+  test("function path sees newly written server source immediately", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-prog-"));
+    const ref = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+
+    const before = await executeProgramCommand(
+      makeCtxWithPersistence({ function: "wordcount", args: { text: "a b c" } }, "agent", tempRoot)
+    );
+    expect(before).toContain("不存在");
+
+    await writeServerSource(
+      ref,
+      `export const llm_methods = { wordcount: { fn: async (_c, { text }) => text.split(/\\s+/).length } };`
+    );
+
+    const after = await executeProgramCommand(
+      makeCtxWithPersistence({ function: "wordcount", args: { text: "a b c" } }, "agent", tempRoot)
+    );
+    expect(after).toContain("[returnValue]");
+    expect(after).toContain("3");
+  });
+
   test("function path errors clearly when no persistence", async () => {
     const thread: ThreadContext = { id: "t", status: "running", events: [] };
     const result = await executeProgramCommand({ thread, args: { function: "any" } });

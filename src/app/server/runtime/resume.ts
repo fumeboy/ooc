@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { dispatchToolCall } from "@src/executable/tools";
 import { llmOutputFile, readThread, writeThread, type ThreadPersistenceRef } from "@src/persistable";
+import { applyResumeTransition, canResumeThread } from "./thread-transition";
 
 type SavedToolCall = {
   name: "open" | "refine" | "submit" | "close" | "wait" | "compress";
@@ -19,16 +20,16 @@ export async function resumePausedThread(ref: ThreadPersistenceRef) {
   if (!thread) {
     throw new Error(`thread not found: ${ref.threadId}`);
   }
-  if (thread.status !== "paused") {
+  if (!canResumeThread(thread)) {
     throw new Error(`thread ${ref.threadId} is not paused`);
   }
 
   const raw = await readFile(llmOutputFile(ref), "utf8");
   const payload = JSON.parse(raw) as SavedLlmOutput;
 
-  thread.status = "running";
+  const resumedThread = applyResumeTransition(thread);
   if (payload.result.text) {
-    thread.events.push({
+    resumedThread.events.push({
       category: "llm_interaction",
       kind: "text",
       text: payload.result.text,
@@ -36,19 +37,19 @@ export async function resumePausedThread(ref: ThreadPersistenceRef) {
   }
 
   for (const [index, toolCall] of payload.result.toolCalls.entries()) {
-    thread.events.push({
+    resumedThread.events.push({
       category: "llm_interaction",
       kind: "tool_use",
       toolName: toolCall.name,
       arguments: toolCall.arguments,
     });
-    await dispatchToolCall(thread, {
+    await dispatchToolCall(resumedThread, {
       id: `resume_${ref.threadId}_${index}`,
       name: toolCall.name,
       arguments: toolCall.arguments,
     });
   }
 
-  await writeThread(thread);
-  return thread;
+  await writeThread(resumedThread);
+  return resumedThread;
 }

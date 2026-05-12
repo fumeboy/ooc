@@ -1,5 +1,3 @@
-import { readdir } from "node:fs/promises";
-import { join } from "node:path";
 import {
   createFlowObject,
   createFlowSession,
@@ -9,42 +7,9 @@ import {
 import { loadUiServerMethods } from "@src/executable/server/loader";
 import type { createJobManager } from "../../runtime/job-manager";
 import type { PauseStore } from "../../runtime/pause-store";
+import { scanPausedThreads } from "../../runtime/thread-query";
+import { applyInjectTransition, applyResumeTransition, canResumeThread } from "../../runtime/thread-transition";
 import { AppServerError } from "../../bootstrap/errors";
-
-/**
- * 扫 flows/{sessionId}/objects/ 下所有 object 的 threads/，
- * 返回 status=paused 的 {objectId, threadId} 列表。
- * 任一层目录不存在直接当作空集，不抛异常。
- */
-async function scanPausedThreads(baseDir: string, sessionId: string): Promise<Array<{ objectId: string; threadId: string }>> {
-  const objectsRoot = join(baseDir, "flows", sessionId, "objects");
-  let objectDirs;
-  try {
-    objectDirs = await readdir(objectsRoot, { withFileTypes: true });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw error;
-  }
-  const found: Array<{ objectId: string; threadId: string }> = [];
-  for (const obj of objectDirs) {
-    if (!obj.isDirectory()) continue;
-    const threadsDir = join(objectsRoot, obj.name, "threads");
-    let threadDirs;
-    try {
-      threadDirs = await readdir(threadsDir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const td of threadDirs) {
-      if (!td.isDirectory()) continue;
-      const thread = await readThread({ baseDir, sessionId, objectId: obj.name }, td.name);
-      if (thread?.status === "paused") {
-        found.push({ objectId: obj.name, threadId: td.name });
-      }
-    }
-  }
-  return found;
-}
 
 function httpContext() {
   return {
@@ -158,17 +123,8 @@ export function createFlowsService(deps: {
           { sessionId, objectId, threadId }
         );
       }
-      thread.events.push({
-        category: "context_change",
-        kind: "inject",
-        text,
-      });
-      // 任何状态（done/waiting/paused/failed/running）的 thread 在收到新 user inject 后都翻回 running——
-      // user 显式追加输入即意味着"继续从这里推下去"，包括从 failed 状态恢复尝试。
-      thread.status = "running";
-      thread.waitingType = undefined;
-      thread.awaitingChildren = undefined;
-      await writeThread(thread);
+      const nextThread = applyInjectTransition(thread, text);
+      await writeThread(nextThread);
       const job = deps.jobManager.createRunThreadJob({
         sessionId,
         objectId,
@@ -178,7 +134,7 @@ export function createFlowsService(deps: {
         sessionId,
         objectId,
         threadId,
-        status: thread.status,
+        status: nextThread.status,
         jobId: job.jobId,
       };
     },
@@ -193,6 +149,12 @@ export function createFlowsService(deps: {
       const jobIds: string[] = [];
       const resumedThreadIds: string[] = [];
       for (const { objectId, threadId } of paused) {
+        const ref = { baseDir: deps.baseDir, sessionId, objectId };
+        const thread = await readThread(ref, threadId);
+        if (!thread || !canResumeThread(thread)) {
+          continue;
+        }
+        await writeThread(applyResumeTransition(thread));
         const job = deps.jobManager.createResumeThreadJob({
           sessionId,
           objectId,
