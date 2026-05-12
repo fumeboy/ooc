@@ -214,6 +214,38 @@ describe("claude provider", () => {
     ]);
   });
 
+  it("非合法 JSON 响应会按重试策略重试后成功", async () => {
+    let attempts = 0;
+    globalThis.fetch = mock(async () => {
+      attempts += 1;
+      if (attempts < 3) {
+        return new Response("not-json", {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: "retry ok" }]
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }) as unknown as typeof fetch;
+
+    const result = await generateWithClaude(
+      {
+        provider: "claude",
+        apiKey: "test-key",
+        baseUrl: "https://example.com",
+        model: "claude-test"
+      },
+      { messages: [{ role: "user", content: "hi" }] }
+    );
+
+    expect(attempts).toBe(3);
+    expect(result.text).toBe("retry ok");
+  });
+
   it("Claude 非 2xx 状态码时抛错", async () => {
     globalThis.fetch = mock(async () => new Response("bad request", { status: 401 })) as unknown as typeof fetch;
 
