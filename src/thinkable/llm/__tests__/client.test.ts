@@ -11,21 +11,17 @@ describe("createLlmClient", () => {
     globalThis.fetch = mock(async () =>
       new Response(
         JSON.stringify({
-          choices: [
+          output: [
             {
-              message: {
-                content: "准备调用工具",
-                tool_calls: [
-                  {
-                    id: "call_1",
-                    type: "function",
-                    function: {
-                      name: "wait",
-                      arguments: "{\"reason\":\"need input\"}"
-                    }
-                  }
-                ]
-              }
+              type: "message",
+              role: "assistant",
+              content: [{ type: "output_text", text: "准备调用工具" }]
+            },
+            {
+              type: "function_call",
+              call_id: "call_1",
+              name: "wait",
+              arguments: "{\"reason\":\"need input\"}"
             }
           ]
         }),
@@ -35,7 +31,7 @@ describe("createLlmClient", () => {
 
     const client = createLlmClient();
     const result = await client.generate({
-      messages: [{ role: "user", content: "hi" }],
+      input: [{ type: "message", role: "user", content: "hi" }],
       tools: [
         {
           name: "wait",
@@ -70,7 +66,13 @@ describe("createLlmClient", () => {
     globalThis.fetch = mock(async () =>
       new Response(
         JSON.stringify({
-          choices: [{ message: { content: "hello from client" } }]
+          output: [
+            {
+              type: "message",
+              role: "assistant",
+              content: [{ type: "output_text", text: "hello from client" }]
+            }
+          ]
         }),
         { status: 200, headers: { "content-type": "application/json" } }
       )
@@ -78,7 +80,7 @@ describe("createLlmClient", () => {
 
     const client = createLlmClient();
     const result = await client.generate({
-      messages: [{ role: "user", content: "hi" }]
+      input: [{ type: "message", role: "user", content: "hi" }]
     });
 
     expect(result.provider).toBe("openai");
@@ -104,7 +106,7 @@ describe("createLlmClient", () => {
     const client = createLlmClient();
     const result = await client.generate({
       provider: "claude",
-      messages: [{ role: "user", content: "hi" }]
+      input: [{ type: "message", role: "user", content: "hi" }]
     });
 
     expect(result.provider).toBe("claude");
@@ -135,7 +137,7 @@ describe("createLlmClient", () => {
     const events = [];
 
     for await (const event of client.stream({
-      messages: [{ role: "user", content: "hi" }]
+      input: [{ type: "message", role: "user", content: "hi" }]
     })) {
       events.push(event);
     }
@@ -170,7 +172,7 @@ describe("createLlmClient", () => {
     const events = [];
 
     for await (const event of client.stream({
-      messages: [{ role: "user", content: "hi" }],
+      input: [{ type: "message", role: "user", content: "hi" }],
       tools: [
         {
           name: "wait",

@@ -2,25 +2,21 @@ import { describe, expect, it, mock } from "bun:test";
 import { generateWithOpenAi, streamWithOpenAi } from "../providers/openai.ts";
 
 describe("openai provider", () => {
-  it("解析非流式 tool call 结果", async () => {
+  it("通过 Responses API 解析 message 与 function_call items", async () => {
     globalThis.fetch = mock(async () =>
       new Response(
         JSON.stringify({
-          choices: [
+          output: [
             {
-              message: {
-                content: "开始执行",
-                tool_calls: [
-                  {
-                    id: "call_1",
-                    type: "function",
-                    function: {
-                      name: "submit",
-                      arguments: "{\"command\":\"plan\"}"
-                    }
-                  }
-                ]
-              }
+              type: "message",
+              role: "assistant",
+              content: [{ type: "output_text", text: "开始执行" }]
+            },
+            {
+              type: "function_call",
+              call_id: "call_1",
+              name: "submit",
+              arguments: "{\"command\":\"plan\"}"
             }
           ]
         }),
@@ -36,7 +32,7 @@ describe("openai provider", () => {
         model: "gpt-test"
       },
       {
-        messages: [{ role: "user", content: "hi" }],
+        input: [{ type: "message", role: "user", content: "hi" }],
         tools: [
           {
             name: "submit",
@@ -53,10 +49,27 @@ describe("openai provider", () => {
       }
     );
 
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/v1/responses"),
+      expect.any(Object)
+    );
     expect(result.text).toBe("开始执行");
     expect(result.toolCalls).toEqual([
       {
         id: "call_1",
+        name: "submit",
+        arguments: { command: "plan" }
+      }
+    ]);
+    expect(result.outputItems).toEqual([
+      {
+        type: "message",
+        role: "assistant",
+        content: "开始执行"
+      },
+      {
+        type: "function_call",
+        call_id: "call_1",
         name: "submit",
         arguments: { command: "plan" }
       }
@@ -67,7 +80,13 @@ describe("openai provider", () => {
     globalThis.fetch = mock(async () =>
       new Response(
         JSON.stringify({
-          choices: [{ message: { content: "hello from openai" } }]
+          output: [
+            {
+              type: "message",
+              role: "assistant",
+              content: [{ type: "output_text", text: "hello from openai" }]
+            }
+          ]
         }),
         { status: 200, headers: { "content-type": "application/json" } }
       )
@@ -80,10 +99,17 @@ describe("openai provider", () => {
         baseUrl: "https://example.com/v1",
         model: "gpt-test"
       },
-      { messages: [{ role: "user", content: "hi" }] }
+      { input: [{ type: "message", role: "user", content: "hi" }] }
     );
 
     expect(result.text).toBe("hello from openai");
+    expect(result.outputItems).toEqual([
+      {
+        type: "message",
+        role: "assistant",
+        content: "hello from openai"
+      }
+    ]);
   });
 
   it("把流式响应归一化为统一事件", async () => {
@@ -109,7 +135,7 @@ describe("openai provider", () => {
         baseUrl: "https://example.com/v1",
         model: "gpt-test"
       },
-      { messages: [{ role: "user", content: "hi" }] }
+      { input: [{ type: "message", role: "user", content: "hi" }] }
     )) {
       events.push(event);
     }
@@ -146,7 +172,7 @@ describe("openai provider", () => {
         model: "gpt-test"
       },
       {
-        messages: [{ role: "user", content: "hi" }],
+        input: [{ type: "message", role: "user", content: "hi" }],
         tools: [
           {
             name: "wait",
@@ -195,7 +221,7 @@ describe("openai provider", () => {
           baseUrl: "https://example.com/v1",
           model: "gpt-test"
         },
-        { messages: [{ role: "user", content: "hi" }] }
+        { input: [{ type: "message", role: "user", content: "hi" }] }
       )
     ).rejects.toThrow("OpenAI 请求失败");
   });

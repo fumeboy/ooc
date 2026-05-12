@@ -1,14 +1,14 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { threadDir, toJson, type ThreadPersistenceRef } from "./common";
-import type { LlmGenerateResult, LlmMessage, LlmTool } from "../thinkable/llm/types";
+import type { LlmGenerateResult, LlmInputItem, LlmMessage, LlmTool } from "../thinkable/llm/types";
 
 /** 调用 LLM 前写入的输入快照。 */
 export interface LlmInputDebugRecord {
   /** 触发本次请求的线程 ID。 */
   threadId: string;
-  /** 传给 provider 的完整 messages。 */
-  messages: LlmMessage[];
+  /** 传给 provider 的完整 input items。 */
+  inputItems: LlmInputItem[];
   /** 本轮暴露给 provider 的 tool 定义。 */
   tools: LlmTool[];
 }
@@ -17,8 +17,44 @@ export interface LlmInputDebugRecord {
 export interface LlmOutputDebugRecord {
   /** 触发本次请求的线程 ID。 */
   threadId: string;
-  /** 归一化后的 provider 结果。 */
-  result: LlmGenerateResult;
+  /** 本轮归一化后的 output items。 */
+  outputItems: LlmInputItem[];
+  /** 便于人工检查的 provider 元信息。 */
+  provider?: string;
+  model?: string;
+}
+
+function toMessageItem(message: LlmMessage): LlmInputItem {
+  return {
+    type: "message",
+    role: message.role,
+    content: message.content
+  };
+}
+
+/** 兼容过渡期：旧消息数组在落盘前一律转成 item。 */
+export function normalizeInputItems(items: LlmInputItem[] | LlmMessage[]): LlmInputItem[] {
+  return items.map((item) => ("type" in item ? item : toMessageItem(item)));
+}
+
+/** 把当前归一化结果投影成 output items；provider 完成迁移后可直接使用原生 output。 */
+export function deriveOutputItems(result: LlmGenerateResult): LlmInputItem[] {
+  const items: LlmInputItem[] = [];
+  if (result.thinking) {
+    items.push({ type: "reasoning", text: result.thinking });
+  }
+  if (result.text) {
+    items.push({ type: "message", role: "assistant", content: result.text });
+  }
+  for (const toolCall of result.toolCalls) {
+    items.push({
+      type: "function_call",
+      call_id: toolCall.id,
+      name: toolCall.name,
+      arguments: toolCall.arguments
+    });
+  }
+  return items;
 }
 
 /** loop 级 debug 元数据，帮助排查每轮上下文与耗时。 */

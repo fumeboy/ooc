@@ -1,4 +1,4 @@
-import type { LlmMessage } from "../llm/types";
+import type { LlmInputItem, LlmMessage } from "../llm/types";
 import { collectExecutableKnowledgeEntries } from "../../executable/index";
 import type { ActiveForm } from "../../executable/forms/form";
 import type { ThreadPersistenceRef } from "../../persistable/common";
@@ -32,6 +32,18 @@ export type ProcessEvent =
   | {
       /** 事件来源：LLM 本轮交互输出。 */
       category: "llm_interaction";
+      /** Responses-first 一等 function_call 记录。 */
+      kind: "function_call";
+      /** 当前调用的稳定 ID。 */
+      callId: string;
+      /** 被调用的 OOC tool 名称。 */
+      toolName: "open" | "refine" | "submit" | "close" | "wait" | "compress";
+      /** 传给 tool handler 的原始参数对象。 */
+      arguments: Record<string, unknown>;
+    }
+  | {
+      /** 事件来源：LLM 本轮交互输出。 */
+      category: "llm_interaction";
       /** thinking 只用于记录回看，不作为推理上下文复喂。 */
       kind: "thinking";
       /** provider 返回的 thinking 文本。 */
@@ -44,6 +56,30 @@ export type ProcessEvent =
       kind: "inject";
       /** 注入内容，会以 user message 形式进入下一轮 transcript。 */
       text: string;
+    }
+  | {
+      /** 事件来源：外部输入到达，供 context builder 关联 inbox 中的新消息。 */
+      category: "context_change";
+      /** inbox 中有新消息到达。 */
+      kind: "inbox_message_arrived";
+      /** 到达消息的稳定标识。 */
+      msgId: string;
+      /** 可选的附加提示文本。 */
+      text?: string;
+    }
+  | {
+      /** 事件来源：tool 运行时结果。 */
+      category: "tool_runtime";
+      /** function_call 的输出结果。 */
+      kind: "function_call_output";
+      /** 与 function_call 对应的调用 ID。 */
+      callId: string;
+      /** 对应的 tool 名称。 */
+      toolName: "open" | "refine" | "submit" | "close" | "wait" | "compress";
+      /** 序列化后的输出字符串。 */
+      output: string;
+      /** 是否成功。 */
+      ok: boolean;
     };
 
 /** 线程之间通过 inbox/outbox 传递的最小消息模型。 */
@@ -126,30 +162,62 @@ export type ThreadContext = {
   persistence?: ThreadPersistenceRef;
 };
 
-/** 把过程事件转换为 provider 无关的 LLM message；返回 null 表示该事件不进 transcript。 */
-function processEventToMessage(event: ProcessEvent): LlmMessage | null {
-  if (event.category === "context_change") {
-    return {
-      role: "user",
-      content: `[context_change:${event.kind}]\n${event.text}`
-    };
+/** 基于 msgId 在 inbox 中查找实际消息正文。 */
+function findInboxMessage(thread: ThreadContext, msgId: string): ThreadMessage | undefined {
+  return thread.inbox?.find((message) => message.id === msgId);
+}
+
+/** 把过程事件转换为 Responses-first input items；返回空数组表示该事件不进 transcript。 */
+function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInputItem[] {
+  if (event.category === "context_change" && event.kind === "inbox_message_arrived") {
+    const inboxMessage = findInboxMessage(thread, event.msgId);
+    const items: LlmInputItem[] = [];
+    if (inboxMessage) {
+      items.push({
+        type: "message",
+        role: "user",
+        content: inboxMessage.content
+      });
+    }
+    items.push({
+      type: "message",
+      role: "system",
+      content: `[context_change:${event.kind}] msg_id=${event.msgId}${event.text ? `\n${event.text}` : ""}`
+    });
+    return items;
   }
 
-  if (event.kind === "tool_use") {
-    return null;
+  if (event.category === "context_change") {
+    return [
+      {
+        type: "message",
+        role: "user",
+        content: `[context_change:${event.kind}]\n${event.text}`
+      }
+    ];
+  }
+
+  if (event.kind === "tool_use" || event.kind === "function_call" || event.category === "tool_runtime") {
+    return [];
   }
 
   if (event.kind === "thinking") {
-    return {
-      role: "assistant",
-      content: `[thinking]\n${event.text}`
-    };
+    return [
+      {
+        type: "message",
+        role: "assistant",
+        content: `[thinking]\n${event.text}`
+      }
+    ];
   }
 
-  return {
-    role: "assistant",
-    content: event.text
-  };
+  return [
+    {
+      type: "message",
+      role: "assistant",
+      content: event.text
+    }
+  ];
 }
 
 /**
@@ -159,6 +227,16 @@ function processEventToMessage(event: ProcessEvent): LlmMessage | null {
  * 普通 messages 追加，避免把 transcript 混入 system prompt。
  */
 export async function buildContext(thread: ThreadContext): Promise<LlmMessage[]> {
+  const input = await buildInputItems(thread);
+  return input.input
+    .filter((item): item is Extract<LlmInputItem, { type: "message" }> => item.type === "message")
+    .map((item) => ({ role: item.role, content: item.content }));
+}
+
+/** 构造 Responses-first LLM 输入 items。 */
+export async function buildInputItems(
+  thread: ThreadContext
+): Promise<{ instructions?: string; input: LlmInputItem[] }> {
   const executableState = await collectExecutableKnowledgeEntries(thread.activeForms, thread);
   const content = await renderContextXml({
     thread,
@@ -166,15 +244,16 @@ export async function buildContext(thread: ThreadContext): Promise<LlmMessage[]>
     knowledgeEntries: executableState.knowledgeEntries,
   });
 
-  const transcript = thread.events
-    .map(processEventToMessage)
-    .filter((message): message is LlmMessage => message !== null);
+  const transcript = thread.events.flatMap((event) => processEventToItems(thread, event));
 
-  return [
-    {
-      role: "system",
-      content
-    },
-    ...transcript
-  ];
+  return {
+    input: [
+      {
+        type: "message",
+        role: "system",
+        content
+      },
+      ...transcript
+    ]
+  };
 }

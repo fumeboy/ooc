@@ -1,8 +1,13 @@
-import type { LlmEnvConfig, LlmGenerateParams, LlmMessage, LlmTool } from "../types";
+import type { LlmEnvConfig, LlmGenerateParams, LlmInputItem, LlmTool } from "../types";
+
+function isMessageItem(item: LlmInputItem): item is Extract<LlmInputItem, { type: "message" }> {
+  return item.type === "message";
+}
 
 // Claude 只接受 user / assistant messages，system 单独提取成顶层字段。
-function toClaudeMessages(messages: LlmMessage[]) {
-  return messages
+function toClaudeMessages(items: LlmInputItem[]) {
+  return items
+    .filter(isMessageItem)
     .filter((message) => message.role !== "system")
     .map((message) => ({
       role: message.role,
@@ -10,11 +15,13 @@ function toClaudeMessages(messages: LlmMessage[]) {
     }));
 }
 
-// Claude 的 system 需要从统一 messages 中单独提取。
-function toClaudeSystem(messages: LlmMessage[]) {
-  return messages
+// Claude 的 system 需要从统一 items 中单独提取。
+function toClaudeSystem(items: LlmInputItem[], instructions?: string) {
+  return [instructions, ...items
+    .filter(isMessageItem)
     .filter((message) => message.role === "system")
-    .map((message) => message.content)
+    .map((message) => message.content)]
+    .filter((item): item is string => typeof item === "string" && item.length > 0)
     .join("\n\n");
 }
 
@@ -46,8 +53,8 @@ export async function fetchClaude(
     },
     body: JSON.stringify({
       model: params.model ?? config.model,
-      system: toClaudeSystem(params.messages),
-      messages: toClaudeMessages(params.messages),
+      system: toClaudeSystem(params.input, params.instructions),
+      messages: toClaudeMessages(params.input),
       tools: toClaudeTools(params.tools),
       temperature: params.temperature,
       max_tokens: params.maxTokens ?? 1024,

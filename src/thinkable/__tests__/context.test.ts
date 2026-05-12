@@ -2,11 +2,84 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "bun:test";
-import { buildContext, type ThreadContext } from "../context";
+import { buildContext, buildInputItems, type ThreadContext } from "../context";
 import { clearKnowledgeLoaderCache } from "../knowledge";
 import { createStoneObject, knowledgeDir } from "../../persistable";
 
 describe("buildContext", () => {
+  it("buildInputItems returns system item plus inbox-linked user items", async () => {
+    const thread: ThreadContext = {
+      id: "t_items",
+      status: "running",
+      events: [
+        {
+          category: "context_change",
+          kind: "inbox_message_arrived",
+          msgId: "msg_in_1"
+        }
+      ],
+      inbox: [
+        {
+          id: "msg_in_1",
+          fromThreadId: "t_user",
+          toThreadId: "t_items",
+          content: "新的用户输入",
+          createdAt: 1,
+          source: "system"
+        }
+      ]
+    };
+
+    const out = await buildInputItems(thread);
+
+    expect(out.input[0]).toEqual(
+      expect.objectContaining({ type: "message", role: "system" })
+    );
+    expect(
+      out.input.some(
+        (item) => item.type === "message" && item.role === "user" && item.content.includes("新的用户输入")
+      )
+    ).toBe(true);
+  });
+
+  it("maps inbox message arrival into user item plus msg_id notice item", async () => {
+    const thread: ThreadContext = {
+      id: "t_inbox_notice",
+      status: "running",
+      events: [
+        {
+          category: "context_change",
+          kind: "inbox_message_arrived",
+          msgId: "msg_in_1",
+          text: "用户输入已到达"
+        }
+      ],
+      inbox: [
+        {
+          id: "msg_in_1",
+          fromThreadId: "t_user",
+          toThreadId: "t_inbox_notice",
+          content: "请继续",
+          createdAt: 1,
+          source: "system"
+        }
+      ]
+    };
+
+    const out = await buildInputItems(thread);
+
+    expect(out.input).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "message", role: "user", content: "请继续" }),
+        expect.objectContaining({
+          type: "message",
+          role: "system",
+          content: expect.stringContaining("msg_id=msg_in_1")
+        })
+      ])
+    );
+  });
+
   it("renders inbox and outbox into the system xml context", async () => {
     const thread: ThreadContext = {
       id: "t_parent",

@@ -12,6 +12,30 @@ export type LlmMessage = {
   content: string;
 };
 
+/** Responses-first 的统一输入 item；message 只是 item 的一种。 */
+export type LlmInputItem =
+  | {
+      type: "message";
+      role: "system" | "user" | "assistant";
+      content: string;
+    }
+  | {
+      type: "function_call";
+      call_id: string;
+      name: LlmToolName;
+      arguments: Record<string, unknown>;
+    }
+  | {
+      type: "function_call_output";
+      call_id: string;
+      name?: LlmToolName;
+      output: string;
+    }
+  | {
+      type: "reasoning";
+      text: string;
+    };
+
 /** 可暴露给 provider 的 tool 定义。 */
 export type LlmTool = {
   /** tool 原语名称，必须来自 OOC 文档定义的有限集合。 */
@@ -38,8 +62,10 @@ export type LlmGenerateParams = {
   provider?: LlmProvider;
   /** 可选模型覆盖；缺省时使用环境变量配置。 */
   model?: string;
-  /** 本轮完整输入消息。 */
-  messages: LlmMessage[];
+  /** 本轮完整输入 items。 */
+  input: LlmInputItem[];
+  /** 可选的顶层 instructions。 */
+  instructions?: string;
   /** 本轮可用工具；为空时 provider 不暴露 tool calling。 */
   tools?: LlmTool[];
   /** 采样温度，原样透传给 provider。 */
@@ -54,6 +80,8 @@ export type LlmGenerateResult = {
   provider: LlmProvider;
   /** 实际响应的模型名。 */
   model: string;
+  /** provider 返回并归一化后的输出 items。 */
+  outputItems: LlmInputItem[];
   /** provider 返回的文本正文。 */
   text: string;
   /** provider 返回并归一化后的 tool calls。 */

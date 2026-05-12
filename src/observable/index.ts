@@ -1,6 +1,8 @@
 import type { ThreadContext } from "../thinkable/context";
-import type { LlmGenerateResult, LlmMessage, LlmTool } from "../thinkable/llm/types";
+import type { LlmGenerateResult, LlmInputItem, LlmMessage, LlmTool } from "../thinkable/llm/types";
 import {
+  deriveOutputItems,
+  normalizeInputItems,
   writeDebugInput,
   writeDebugOutput,
   writeLoopDebugInput,
@@ -14,8 +16,8 @@ export type LlmObservation = {
   input?: {
     /** 触发本次请求的线程 ID。 */
     threadId: string;
-    /** 传给 LLM 的完整 messages。 */
-    messages: LlmMessage[];
+    /** 传给 LLM 的完整 input items。 */
+    inputItems: LlmInputItem[];
     /** 本轮暴露的 tool 定义。 */
     tools: LlmTool[];
   };
@@ -23,8 +25,11 @@ export type LlmObservation = {
   output?: {
     /** 触发本次请求的线程 ID。 */
     threadId: string;
-    /** 统一 LLM 结果。 */
-    result: LlmGenerateResult;
+    /** 归一化后的输出 items。 */
+    outputItems: LlmInputItem[];
+    /** 便于排查的 provider 元信息。 */
+    provider?: string;
+    model?: string;
   };
 };
 
@@ -126,21 +131,22 @@ export function getLatestLlmObservation(): LlmObservation | undefined {
 /** 记录最近一次 LLM 输入快照；线程带 persistence 时同步落盘。 */
 export async function writeLatestLlmInput(
   thread: ThreadContext,
-  messages: LlmMessage[],
+  items: LlmInputItem[] | LlmMessage[],
   tools: LlmTool[]
 ): Promise<void> {
+  const inputItems = normalizeInputItems(items);
   latestLlmObservation = {
     ...latestLlmObservation,
     input: {
       threadId: thread.id,
-      messages,
+      inputItems,
       tools
     }
   };
   if (thread.persistence) {
     await writeDebugInput(thread.persistence, {
       threadId: thread.id,
-      messages,
+      inputItems,
       tools
     });
   }
@@ -151,17 +157,22 @@ export async function writeLatestLlmOutput(
   thread: ThreadContext,
   result: LlmGenerateResult
 ): Promise<void> {
+  const outputItems = deriveOutputItems(result);
   latestLlmObservation = {
     ...latestLlmObservation,
     output: {
       threadId: thread.id,
-      result
+      outputItems,
+      provider: result.provider,
+      model: result.model
     }
   };
   if (thread.persistence) {
     await writeDebugOutput(thread.persistence, {
       threadId: thread.id,
-      result
+      outputItems,
+      provider: result.provider,
+      model: result.model
     });
   }
 }
@@ -169,16 +180,17 @@ export async function writeLatestLlmOutput(
 /** 开始一轮 LLM 调用：记录 latest 输入，必要时写入 loop_NNN.input.json。 */
 export async function beginLlmLoop(
   thread: ThreadContext,
-  messages: LlmMessage[],
+  items: LlmInputItem[] | LlmMessage[],
   tools: LlmTool[]
 ): Promise<LlmLoopHandle> {
   const loopIndex = nextLoopIndex(thread);
   const startedAt = Date.now();
-  await writeLatestLlmInput(thread, messages, tools);
+  const inputItems = normalizeInputItems(items);
+  await writeLatestLlmInput(thread, inputItems, tools);
   if (debugEnabled && thread.persistence) {
     await writeLoopDebugInput(thread.persistence, loopIndex, {
       threadId: thread.id,
-      messages,
+      inputItems,
       tools
     });
   }
@@ -186,9 +198,13 @@ export async function beginLlmLoop(
     threadId: thread.id,
     loopIndex,
     startedAt,
-    messageCount: messages.length,
+    messageCount: inputItems.length,
     toolCount: tools.length,
-    contextBytes: byteLength(messages.map((message) => message.content).join("\n"))
+    contextBytes: byteLength(
+      inputItems
+        .map((item) => ("content" in item ? item.content : "text" in item ? item.text : JSON.stringify(item)))
+        .join("\n")
+    )
   };
 }
 
@@ -206,9 +222,12 @@ export async function finishLlmLoop(
   if (payload.result) {
     await writeLatestLlmOutput(thread, payload.result);
     if (debugEnabled && thread.persistence) {
+      const outputItems = deriveOutputItems(payload.result);
       await writeLoopDebugOutput(thread.persistence, handle.loopIndex, {
         threadId: thread.id,
-        result: payload.result
+        outputItems,
+        provider: payload.result.provider,
+        model: payload.result.model
       });
     }
   }

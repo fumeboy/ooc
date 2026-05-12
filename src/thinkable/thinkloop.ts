@@ -1,6 +1,6 @@
 import { dispatchToolCall, getAvailableTools } from "../executable/tools";
 import { beginLlmLoop, finishLlmLoop, isPausing } from "../observable";
-import { buildContext, type ThreadContext } from "./context";
+import { buildInputItems, type ThreadContext } from "./context";
 import type { LlmClient } from "./llm/types";
 
 // think 是单轮执行器，只负责编排本轮顺序，不承担 scheduler 和持久化。
@@ -15,12 +15,16 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
     | undefined;
   try {
     // Context 模块先直接返回 LLM messages，避免中间层抽象。
-    const messages = await buildContext(thread);
+    const llmInput = await buildInputItems(thread);
     const tools = getAvailableTools(thread);
 
     // 输入输出记录点先挂到 observable 占位模块上。
-    loopHandle = await beginLlmLoop(thread, messages, tools);
-    const result = await llmClient.generate({ messages, tools });
+    loopHandle = await beginLlmLoop(thread, llmInput.input, tools);
+    const result = await llmClient.generate({
+      input: llmInput.input,
+      instructions: llmInput.instructions,
+      tools
+    });
 
     // thinking 只记录，不负责回注到下一轮 context。
     if (result.thinking) {
@@ -44,7 +48,8 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
     for (const toolCall of result.toolCalls) {
       thread.events.push({
         category: "llm_interaction",
-        kind: "tool_use",
+        kind: "function_call",
+        callId: toolCall.id,
         toolName: toolCall.name,
         arguments: toolCall.arguments
       });
@@ -59,8 +64,25 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
 
     for (const toolCall of result.toolCalls) {
       try {
-        await dispatchToolCall(thread, toolCall);
+        const output = (await dispatchToolCall(thread, toolCall))
+          ?? JSON.stringify({ ok: true, tool: toolCall.name });
+        thread.events.push({
+          category: "tool_runtime",
+          kind: "function_call_output",
+          callId: toolCall.id,
+          toolName: toolCall.name,
+          output,
+          ok: true
+        });
       } catch (error) {
+        thread.events.push({
+          category: "tool_runtime",
+          kind: "function_call_output",
+          callId: toolCall.id,
+          toolName: toolCall.name,
+          output: JSON.stringify({ ok: false, error: (error as Error).message }),
+          ok: false
+        });
         await finishLlmLoop(thread, loopHandle, {
           result,
           status: "error",

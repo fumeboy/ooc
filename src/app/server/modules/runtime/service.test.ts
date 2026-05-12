@@ -116,15 +116,20 @@ describe("runtime service", () => {
     };
     const debugDir = join(tempRoot, "flows/s/objects/o/threads/t/debug");
     await mkdir(debugDir, { recursive: true });
-    await writeFile(join(debugDir, "llm.input.json"), JSON.stringify({ threadId: "t", messages: [] }));
-    await writeFile(join(debugDir, "llm.output.json"), JSON.stringify({ threadId: "t", result: { text: "hi" } }));
+    await writeFile(join(debugDir, "llm.input.json"), JSON.stringify({ threadId: "t", inputItems: [] }));
+    await writeFile(join(debugDir, "llm.output.json"), JSON.stringify({
+      threadId: "t",
+      outputItems: [{ type: "message", role: "assistant", content: "hi" }],
+      provider: "openai",
+      model: "test"
+    }));
 
     const service = makeService();
     const out = (await service.getLatestDebug(ref)) as {
       input: { threadId: string };
-      output: { result: { text: string } };
+      output: { outputItems: Array<{ content: string }> };
     };
     expect(out.input.threadId).toBe("t");
-    expect(out.output.result.text).toBe("hi");
+    expect(out.output.outputItems[0]?.content).toBe("hi");
   });
 });

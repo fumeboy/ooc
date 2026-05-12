@@ -28,7 +28,7 @@ describe("claude provider", () => {
         model: "claude-test"
       },
       {
-        messages: [{ role: "user", content: "hi" }],
+        input: [{ type: "message", role: "user", content: "hi" }],
         tools: [
           {
             name: "open",
@@ -43,6 +43,19 @@ describe("claude provider", () => {
     expect(result.toolCalls).toEqual([
       {
         id: "toolu_1",
+        name: "open",
+        arguments: { title: "README", type: "file" }
+      }
+    ]);
+    expect(result.outputItems).toEqual([
+      {
+        type: "message",
+        role: "assistant",
+        content: "准备处理"
+      },
+      {
+        type: "function_call",
+        call_id: "toolu_1",
         name: "open",
         arguments: { title: "README", type: "file" }
       }
@@ -66,10 +79,17 @@ describe("claude provider", () => {
         baseUrl: "https://example.com",
         model: "claude-test"
       },
-      { messages: [{ role: "user", content: "hi" }] }
+      { input: [{ type: "message", role: "user", content: "hi" }] }
     );
 
     expect(result.text).toBe("hello from claude");
+    expect(result.outputItems).toEqual([
+      {
+        type: "message",
+        role: "assistant",
+        content: "hello from claude"
+      }
+    ]);
   });
 
   it("把 Claude 流事件归一化为统一事件", async () => {
@@ -96,7 +116,7 @@ describe("claude provider", () => {
         baseUrl: "https://example.com",
         model: "claude-test"
       },
-      { messages: [{ role: "user", content: "hi" }] }
+      { input: [{ type: "message", role: "user", content: "hi" }] }
     )) {
       events.push(event);
     }
@@ -132,7 +152,7 @@ describe("claude provider", () => {
         model: "claude-test"
       },
       {
-        messages: [{ role: "user", content: "hi" }],
+        input: [{ type: "message", role: "user", content: "hi" }],
         tools: [
           {
             name: "close",
@@ -201,7 +221,7 @@ describe("claude provider", () => {
         baseUrl: "https://example.com",
         model: "claude-test"
       },
-      { messages: [{ role: "user", content: "hi" }] }
+      { input: [{ type: "message", role: "user", content: "hi" }] }
     );
 
     expect(result.text).toBe("hi there");
@@ -239,7 +259,7 @@ describe("claude provider", () => {
         baseUrl: "https://example.com",
         model: "claude-test"
       },
-      { messages: [{ role: "user", content: "hi" }] }
+      { input: [{ type: "message", role: "user", content: "hi" }] }
     );
 
     expect(attempts).toBe(3);
@@ -257,7 +277,7 @@ describe("claude provider", () => {
           baseUrl: "https://example.com",
           model: "claude-test"
         },
-        { messages: [{ role: "user", content: "hi" }] }
+        { input: [{ type: "message", role: "user", content: "hi" }] }
       )
     ).rejects.toThrow("Claude 请求失败");
   });

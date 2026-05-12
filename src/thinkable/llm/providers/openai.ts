@@ -2,6 +2,7 @@ import type {
   LlmEnvConfig,
   LlmGenerateParams,
   LlmGenerateResult,
+  LlmInputItem,
   LlmStreamEvent,
   LlmTool,
   LlmToolCall
@@ -41,12 +42,97 @@ function toOpenAiToolCalls(rawToolCalls: unknown): LlmToolCall[] {
   });
 }
 
+function toOpenAiInputItem(item: LlmInputItem): Record<string, unknown> {
+  if (item.type === "message") {
+    return {
+      type: "message",
+      role: item.role,
+      content: item.content
+    };
+  }
+  if (item.type === "function_call") {
+    return {
+      type: "function_call",
+      call_id: item.call_id,
+      name: item.name,
+      arguments: JSON.stringify(item.arguments)
+    };
+  }
+  if (item.type === "function_call_output") {
+    return {
+      type: "function_call_output",
+      call_id: item.call_id,
+      output: item.output
+    };
+  }
+  return {
+    type: "reasoning",
+    text: item.text
+  };
+}
+
+function extractOutputText(content: unknown): string {
+  if (!Array.isArray(content)) {
+    return "";
+  }
+  return content
+    .map((part) => {
+      if ((part as { type?: string }).type === "output_text") {
+        return (part as { text?: string }).text ?? "";
+      }
+      if ((part as { type?: string }).type === "text") {
+        return (part as { text?: string }).text ?? "";
+      }
+      return "";
+    })
+    .join("");
+}
+
+function toOpenAiOutputItems(rawOutput: unknown): LlmInputItem[] {
+  if (!Array.isArray(rawOutput)) {
+    return [];
+  }
+
+  const outputItems: LlmInputItem[] = [];
+  for (const item of rawOutput) {
+    const raw = item as Record<string, unknown>;
+    if (raw.type === "message") {
+      outputItems.push({
+        type: "message" as const,
+        role: (raw.role as "system" | "user" | "assistant" | undefined) ?? "assistant",
+        content: extractOutputText(raw.content)
+      });
+      continue;
+    }
+    if (raw.type === "function_call") {
+      outputItems.push({
+        type: "function_call" as const,
+        call_id: (raw.call_id as string | undefined) ?? "",
+        name: ((raw.name as string | undefined) ?? "wait") as LlmToolCall["name"],
+        arguments: JSON.parse((raw.arguments as string | undefined) ?? "{}")
+      });
+      continue;
+    }
+    if (raw.type === "reasoning") {
+      outputItems.push({
+        type: "reasoning" as const,
+        text: typeof raw.summary === "string"
+          ? raw.summary
+          : Array.isArray(raw.summary)
+            ? raw.summary.map((item) => (item as { text?: string }).text ?? "").join("")
+            : ""
+      });
+    }
+  }
+  return outputItems;
+}
+
 // OpenAI 非流式请求直接走 chat completions，并返回统一结果。
 export async function generateWithOpenAi(
   config: LlmEnvConfig,
   params: LlmGenerateParams
 ): Promise<LlmGenerateResult> {
-  const response = await fetch(`${config.baseUrl}/chat/completions`, {
+  const response = await fetch(`${config.baseUrl}/responses`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -54,11 +140,12 @@ export async function generateWithOpenAi(
     },
     body: JSON.stringify({
       model: params.model ?? config.model,
-      messages: params.messages,
+      input: params.input.map(toOpenAiInputItem),
+      instructions: params.instructions,
       tools: toOpenAiTools(params.tools),
       temperature: params.temperature,
-      max_tokens: params.maxTokens,
-      stream: false
+      max_output_tokens: params.maxTokens,
+      store: false
     })
   });
 
@@ -69,13 +156,23 @@ export async function generateWithOpenAi(
 
   // 非流式路径同时提取文本与 tool call，供 thinkloop 直接消费。
   const raw = await response.json();
-  const message = raw.choices?.[0]?.message ?? {};
-  const text = message.content ?? "";
-  const toolCalls = toOpenAiToolCalls(message.tool_calls);
+  const outputItems = toOpenAiOutputItems(raw.output);
+  const text = outputItems
+    .filter((item): item is Extract<LlmInputItem, { type: "message" }> => item.type === "message")
+    .map((item) => item.content)
+    .join("");
+  const toolCalls = outputItems
+    .filter((item): item is Extract<LlmInputItem, { type: "function_call" }> => item.type === "function_call")
+    .map((item) => ({
+      id: item.call_id,
+      name: item.name,
+      arguments: item.arguments
+    }));
 
   return {
     provider: "openai",
     model: params.model ?? config.model,
+    outputItems,
     text,
     toolCalls,
     raw
@@ -96,10 +193,11 @@ export async function* streamWithOpenAi(
     },
     body: JSON.stringify({
       model,
-      messages: params.messages,
+      input: params.input.map(toOpenAiInputItem),
+      instructions: params.instructions,
       tools: toOpenAiTools(params.tools),
       temperature: params.temperature,
-      max_tokens: params.maxTokens,
+      max_output_tokens: params.maxTokens,
       stream: true
     })
   });

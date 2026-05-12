@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "bun:test";
 import * as observableModule from "../index";
 import type { ThreadContext } from "../../thinkable/context";
-import type { LlmGenerateResult, LlmMessage, LlmTool } from "../../thinkable/llm/types";
+import type { LlmGenerateResult, LlmInputItem, LlmTool } from "../../thinkable/llm/types";
 import {
   createFlowObject,
   llmInputFile,
@@ -20,12 +20,14 @@ type ObservableStore = typeof observableModule & {
     | {
         input?: {
           threadId: string;
-          messages: LlmMessage[];
+          inputItems: LlmInputItem[];
           tools: LlmTool[];
         };
         output?: {
           threadId: string;
-          result: LlmGenerateResult;
+          outputItems: LlmInputItem[];
+          provider?: string;
+          model?: string;
         };
       }
     | undefined;
@@ -42,7 +44,7 @@ describe("observable llm snapshots", () => {
       status: "running",
       events: []
     };
-    const messages: LlmMessage[] = [{ role: "system", content: "<context></context>" }];
+    const inputItems: LlmInputItem[] = [{ type: "message", role: "system", content: "<context></context>" }];
     const tools: LlmTool[] = [
       {
         name: "wait",
@@ -53,23 +55,30 @@ describe("observable llm snapshots", () => {
     const result: LlmGenerateResult = {
       provider: "openai",
       model: "gpt-test",
+      outputItems: [
+        { type: "message", role: "assistant", content: "下一步需要等待" }
+      ],
       text: "下一步需要等待",
       toolCalls: []
     };
 
     observable.clearLatestLlmObservation();
-    await observable.writeLatestLlmInput(thread, messages, tools);
+    await observable.writeLatestLlmInput(thread, inputItems, tools);
     await observable.writeLatestLlmOutput(thread, result);
 
     expect(observable.getLatestLlmObservation()).toEqual({
       input: {
         threadId: "thread-observable",
-        messages,
+        inputItems,
         tools
       },
       output: {
         threadId: "thread-observable",
-        result
+        outputItems: [
+          { type: "message", role: "assistant", content: "下一步需要等待" }
+        ],
+        provider: "openai",
+        model: "gpt-test"
       }
     });
   });
@@ -101,12 +110,13 @@ describe("observable persistable debug files", () => {
 
     await observableModule.writeLatestLlmInput(
       thread,
-      [{ role: "system", content: "<context />" }],
+      [{ type: "message", role: "system", content: "<context />" }],
       []
     );
     await observableModule.writeLatestLlmOutput(thread, {
       provider: "openai",
       model: "test",
+      outputItems: [{ type: "message", role: "assistant", content: "done" }],
       text: "done",
       toolCalls: []
     });
@@ -115,7 +125,8 @@ describe("observable persistable debug files", () => {
     const output = JSON.parse(await readFile(llmOutputFile(thread.persistence!), "utf8"));
 
     expect(input.threadId).toBe("root");
-    expect(output.result.text).toBe("done");
+    expect(input.inputItems[0].type).toBe("message");
+    expect(output.outputItems[0].content).toBe("done");
   });
 
   it("does not touch the disk when thread has no persistence ref", async () => {
@@ -129,6 +140,7 @@ describe("observable persistable debug files", () => {
     await observableModule.writeLatestLlmOutput(thread, {
       provider: "openai",
       model: "test",
+      outputItems: [],
       text: "",
       toolCalls: []
     });
@@ -147,18 +159,19 @@ describe("observable persistable debug files", () => {
       events: [],
       persistence: { ...flowRef, threadId: "root" }
     };
-    const messages: LlmMessage[] = [{ role: "system", content: "<context />" }];
+    const inputItems: LlmInputItem[] = [{ type: "message", role: "system", content: "<context />" }];
     const tools: LlmTool[] = [{ name: "wait", description: "等待", inputSchema: { type: "object" } }];
     const result: LlmGenerateResult = {
       provider: "openai",
       model: "test",
+      outputItems: [{ type: "message", role: "assistant", content: "done" }],
       text: "done",
       toolCalls: []
     };
 
     observableModule.clearObservableDebugState();
     observableModule.enableDebug();
-    const handle = await observableModule.beginLlmLoop(thread, messages, tools);
+    const handle = await observableModule.beginLlmLoop(thread, inputItems, tools);
     await observableModule.finishLlmLoop(thread, handle, {
       result,
       status: "ok"
@@ -170,7 +183,8 @@ describe("observable persistable debug files", () => {
     const loopMeta = JSON.parse(await readFile(loopMetaFile(thread.persistence!, 1), "utf8"));
 
     expect(loopInput.threadId).toBe("root");
-    expect(loopOutput.result.text).toBe("done");
+    expect(loopInput.inputItems[0].type).toBe("message");
+    expect(loopOutput.outputItems[0].content).toBe("done");
     expect(loopMeta.loopIndex).toBe(1);
     expect(loopMeta.status).toBe("ok");
     expect(loopMeta.messageCount).toBe(1);

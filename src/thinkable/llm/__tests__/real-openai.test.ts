@@ -45,12 +45,14 @@ describe.skipIf(!shouldRunRealTest)("real openai integration", () => {
 
     const client = createLlmClient();
     const result = await client.generate({
-      messages: [
+      input: [
         {
+          type: "message",
           role: "system",
           content: "你是一个简洁的测试助手。"
         },
         {
+          type: "message",
           role: "user",
           content: "请只返回 OK 两个字母。"
         }

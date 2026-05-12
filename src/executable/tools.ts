@@ -24,19 +24,21 @@ export function getAvailableTools(thread: ThreadContext): LlmTool[] {
   return buildAvailableTools(thread);
 }
 
-/** 将 LLM tool call 分派给对应 handler，并把未知 tool 写成上下文提示。 */
+/** 将 LLM tool call 分派给对应 handler，并返回可进入 function_call_output 的结果串。 */
 export async function dispatchToolCall(
   thread: ThreadContext,
   toolCall: LlmToolCall
-): Promise<void> {
+): Promise<string> {
   const handler = TOOL_HANDLERS[toolCall.name];
   if (!handler) {
+    const message = `[${toolCall.name}] tool 暂未实现。`;
     thread.events.push({
       category: "context_change",
       kind: "inject",
-      text: `[${toolCall.name}] tool 暂未实现。`
+      text: message
     });
-    return;
+    return JSON.stringify({ ok: false, error: message });
   }
   await handler(thread, toolCall.arguments);
+  return JSON.stringify({ ok: true, tool: toolCall.name });
 }

@@ -2,10 +2,33 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "bun:test";
-import type { LlmClient } from "../llm/types";
+import type { LlmClient, LlmGenerateResult, LlmToolCall } from "../llm/types";
 import type { ThreadContext } from "../context";
 import { runScheduler } from "../scheduler";
 import { createFlowObject, threadFile } from "../../persistable";
+
+function makeResult(
+  provider: "openai" | "claude",
+  model: string,
+  text: string,
+  toolCalls: LlmToolCall[] = []
+): LlmGenerateResult {
+  return {
+    provider,
+    model,
+    outputItems: [
+      ...(text ? [{ type: "message", role: "assistant", content: text } as const] : []),
+      ...toolCalls.map((toolCall) => ({
+        type: "function_call" as const,
+        call_id: toolCall.id,
+        name: toolCall.name,
+        arguments: toolCall.arguments
+      }))
+    ],
+    text,
+    toolCalls
+  };
+}
 
 describe("scheduler", () => {
   it("wakes a waiting parent after its awaited child finishes", async () => {
@@ -47,60 +70,45 @@ describe("scheduler", () => {
       async generate() {
         rounds += 1;
         if (rounds === 1) {
-          return {
-            provider: "openai",
-            model: "gpt-test",
-            text: "先提交初始 todo",
-            toolCalls: [
-              {
-                id: "call_submit_todo",
-                name: "submit",
-                arguments: {
-                  form_id: "f_initial_todo"
-                }
+          return makeResult("openai", "gpt-test", "先提交初始 todo", [
+            {
+              id: "call_submit_todo",
+              name: "submit",
+              arguments: {
+                form_id: "f_initial_todo"
               }
-            ]
-          };
+            }
+          ]);
         }
 
         if (rounds === 2) {
-          return {
-            provider: "openai",
-            model: "gpt-test",
-            text: "先打开 end form",
-            toolCalls: [
-              {
-                id: "call_open",
-                name: "open",
-                arguments: {
-                  type: "command",
-                  command: "end",
-                  description: "结束当前子线程",
-                  args: {
-                    reason: "done",
-                    summary: "child finished"
-                  }
+          return makeResult("openai", "gpt-test", "先打开 end form", [
+            {
+              id: "call_open",
+              name: "open",
+              arguments: {
+                type: "command",
+                command: "end",
+                description: "结束当前子线程",
+                args: {
+                  reason: "done",
+                  summary: "child finished"
                 }
               }
-            ]
-          };
+            }
+          ]);
         }
 
         const formId = child.activeForms?.find((form) => form.command === "end")?.formId ?? "";
-        return {
-          provider: "openai",
-          model: "gpt-test",
-          text: "提交 end form",
-          toolCalls: [
-            {
-              id: "call_submit",
-              name: "submit",
-              arguments: {
-                form_id: formId
-              }
+        return makeResult("openai", "gpt-test", "提交 end form", [
+          {
+            id: "call_submit",
+            name: "submit",
+            arguments: {
+              form_id: formId
             }
-          ]
-        };
+          }
+        ]);
       },
       async *stream() {
         yield { type: "start", provider: "openai", model: "gpt-test" };
@@ -142,13 +150,14 @@ describe("scheduler", () => {
     };
     const executed: string[] = [];
     const llmClient: LlmClient = {
-      async generate({ messages }) {
-        const system = messages[0]?.content ?? "";
+      async generate({ input }) {
+        const system = input[0] && "content" in input[0] ? input[0].content : "";
         if (system.includes('id="t_old"')) executed.push("t_old");
         if (system.includes('id="t_new"')) executed.push("t_new");
         return {
           provider: "openai",
           model: "gpt-test",
+          outputItems: [],
           text: "",
           toolCalls: []
         };
@@ -190,12 +199,7 @@ describe("scheduler persistence", () => {
     };
     const llmClient: LlmClient = {
       async generate() {
-        return {
-          provider: "openai",
-          model: "gpt-test",
-          text: "persisted",
-          toolCalls: []
-        };
+        return makeResult("openai", "gpt-test", "persisted");
       },
       async *stream() {
         yield { type: "start", provider: "openai", model: "gpt-test" };

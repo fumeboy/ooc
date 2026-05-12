@@ -2,8 +2,31 @@ import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import * as toolsModule from "../../executable/tools.ts";
 import * as observableModule from "../../observable/index.ts";
 import * as contextModule from "../context.ts";
-import type { LlmClient } from "../llm/types";
+import type { LlmClient, LlmGenerateResult, LlmInputItem, LlmToolCall } from "../llm/types";
 import { think } from "../thinkloop.ts";
+
+function makeResult(
+  provider: "openai" | "claude",
+  model: string,
+  text: string,
+  toolCalls: LlmToolCall[] = []
+): LlmGenerateResult {
+  return {
+    provider,
+    model,
+    outputItems: [
+      ...(text ? [{ type: "message", role: "assistant", content: text } as const] : []),
+      ...toolCalls.map((toolCall) => ({
+        type: "function_call" as const,
+        call_id: toolCall.id,
+        name: toolCall.name,
+        arguments: toolCall.arguments
+      }))
+    ],
+    text,
+    toolCalls
+  };
+}
 
 // 每个用例后恢复 spy，避免跨用例污染占位模块行为。
 afterEach(() => {
@@ -12,16 +35,16 @@ afterEach(() => {
 });
 
 describe("think", () => {
-  it("执行单轮 think 并记录 text 与 tool_use 事件", async () => {
+  it("执行单轮 think 并记录 text、function_call 与 function_call_output 事件", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-1",
       status: "running",
       events: []
     };
 
-    spyOn(contextModule, "buildContext").mockResolvedValue([
-      { role: "system", content: "context" }
-    ]);
+    spyOn(contextModule, "buildInputItems").mockResolvedValue({
+      input: [{ type: "message", role: "system", content: "context" }]
+    });
     spyOn(toolsModule, "getAvailableTools").mockReturnValue([
       {
         name: "wait",
@@ -31,22 +54,19 @@ describe("think", () => {
     ]);
     const writeInput = spyOn(observableModule, "writeLatestLlmInput");
     const writeOutput = spyOn(observableModule, "writeLatestLlmOutput");
-    const dispatch = spyOn(toolsModule, "dispatchToolCall").mockResolvedValue();
+    const dispatch = spyOn(toolsModule, "dispatchToolCall").mockResolvedValue(
+      JSON.stringify({ ok: true, tool: "wait" })
+    );
 
     const llmClient: LlmClient = {
       async generate() {
-        return {
-          provider: "openai",
-          model: "gpt-test",
-          text: "需要等待",
-          toolCalls: [
-            {
-              id: "call_1",
-              name: "wait",
-              arguments: { reason: "need input" }
-            }
-          ]
-        };
+        return makeResult("openai", "gpt-test", "需要等待", [
+          {
+            id: "call_1",
+            name: "wait",
+            arguments: { reason: "need input" }
+          }
+        ]);
       },
       async *stream() {
         yield { type: "start", provider: "openai", model: "gpt-test" };
@@ -66,9 +86,18 @@ describe("think", () => {
       },
       {
         category: "llm_interaction",
-        kind: "tool_use",
+        kind: "function_call",
+        callId: "call_1",
         toolName: "wait",
         arguments: { reason: "need input" }
+      },
+      {
+        category: "tool_runtime",
+        kind: "function_call_output",
+        callId: "call_1",
+        toolName: "wait",
+        output: expect.any(String),
+        ok: true
       }
     ]);
     expect(dispatch).toHaveBeenCalledTimes(1);
@@ -81,19 +110,16 @@ describe("think", () => {
       events: []
     };
 
-    spyOn(contextModule, "buildContext").mockResolvedValue([]);
+    spyOn(contextModule, "buildInputItems").mockResolvedValue({ input: [] });
     spyOn(toolsModule, "getAvailableTools").mockReturnValue([]);
     spyOn(observableModule, "isPausing").mockReturnValue(true);
-    const dispatch = spyOn(toolsModule, "dispatchToolCall").mockResolvedValue();
+    const dispatch = spyOn(toolsModule, "dispatchToolCall").mockResolvedValue(
+      JSON.stringify({ ok: true, tool: "wait" })
+    );
 
     const llmClient: LlmClient = {
       async generate() {
-        return {
-          provider: "openai",
-          model: "gpt-test",
-          text: "暂停前输出",
-          toolCalls: []
-        };
+        return makeResult("openai", "gpt-test", "暂停前输出");
       },
       async *stream() {
         yield { type: "start", provider: "openai", model: "gpt-test" };
@@ -114,7 +140,7 @@ describe("think", () => {
       events: []
     };
 
-    spyOn(contextModule, "buildContext").mockResolvedValue([]);
+    spyOn(contextModule, "buildInputItems").mockResolvedValue({ input: [] });
     spyOn(toolsModule, "getAvailableTools").mockReturnValue([]);
 
     const llmClient: LlmClient = {
@@ -144,23 +170,18 @@ describe("think", () => {
       events: []
     };
 
-    spyOn(contextModule, "buildContext").mockResolvedValue([]);
+    spyOn(contextModule, "buildInputItems").mockResolvedValue({ input: [] });
     spyOn(toolsModule, "getAvailableTools").mockReturnValue([]);
     const dispatch = spyOn(toolsModule, "dispatchToolCall")
       .mockRejectedValueOnce(new Error("first tool failed"))
-      .mockResolvedValueOnce();
+      .mockResolvedValueOnce(JSON.stringify({ ok: true, tool: "close" }));
 
     const llmClient: LlmClient = {
       async generate() {
-        return {
-          provider: "claude",
-          model: "claude-test",
-          text: "",
-          toolCalls: [
-            { id: "call_1", name: "open", arguments: {} },
-            { id: "call_2", name: "close", arguments: {} }
-          ]
-        };
+        return makeResult("claude", "claude-test", "", [
+          { id: "call_1", name: "open", arguments: {} },
+          { id: "call_2", name: "close", arguments: {} }
+        ]);
       },
       async *stream() {
         yield { type: "start", provider: "claude", model: "claude-test" };
@@ -192,60 +213,45 @@ describe("think", () => {
         round += 1;
 
         if (round === 1) {
-          return {
-            provider: "openai",
-            model: "gpt-test",
-            text: "先登记一个待办",
-            toolCalls: [
-              {
-                id: "call_open",
-                name: "open",
-                arguments: {
-                  type: "command",
-                  command: "todo",
-                  description: "登记 thinkloop 集成待办"
-                }
+          return makeResult("openai", "gpt-test", "先登记一个待办", [
+            {
+              id: "call_open",
+              name: "open",
+              arguments: {
+                type: "command",
+                command: "todo",
+                description: "登记 thinkloop 集成待办"
               }
-            ]
-          };
+            }
+          ]);
         }
 
         const formId = thread.activeForms?.[0]?.formId ?? "";
         if (round === 2) {
-          return {
-            provider: "openai",
-            model: "gpt-test",
-            text: "补充待办内容",
-            toolCalls: [
-              {
-                id: "call_refine",
-                name: "refine",
-                arguments: {
-                  form_id: formId,
-                  args: {
-                    content: "补充 thinkloop 集成测试",
-                    on_command_path: ["program.function"]
-                  }
+          return makeResult("openai", "gpt-test", "补充待办内容", [
+            {
+              id: "call_refine",
+              name: "refine",
+              arguments: {
+                form_id: formId,
+                args: {
+                  content: "补充 thinkloop 集成测试",
+                  on_command_path: ["program.function"]
                 }
               }
-            ]
-          };
+            }
+          ]);
         }
 
-        return {
-          provider: "openai",
-          model: "gpt-test",
-          text: "提交待办",
-          toolCalls: [
-            {
-              id: "call_submit",
-              name: "submit",
-              arguments: {
-                form_id: formId
-              }
+        return makeResult("openai", "gpt-test", "提交待办", [
+          {
+            id: "call_submit",
+            name: "submit",
+            arguments: {
+              form_id: formId
             }
-          ]
-        };
+          }
+        ]);
       },
       async *stream() {
         yield { type: "start", provider: "openai", model: "gpt-test" };
@@ -266,13 +272,15 @@ describe("think", () => {
     await think(thread, llmClient);
     expect(thread.activeForms).toHaveLength(1);
     expect(thread.activeForms?.[0]?.status).toBe("executed");
-    const lastEvent = thread.events.at(-1);
-    expect(lastEvent?.category).toBe("context_change");
-    expect(lastEvent?.kind).toBe("inject");
-    expect(lastEvent && "text" in lastEvent ? lastEvent.text : "").toContain("[form executed]");
+    const executedEvent = [...thread.events].reverse().find(
+      (event) => event.category === "context_change" && event.kind === "inject"
+    );
+    expect(executedEvent?.category).toBe("context_change");
+    expect(executedEvent?.kind).toBe("inject");
+    expect(executedEvent && "text" in executedEvent ? executedEvent.text : "").toContain("[form executed]");
   });
 
-  it("buildContext 产出的 system xml 会进入 llm 输入", async () => {
+  it("buildInputItems 产出的 system xml 会进入 llm 输入", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-6",
       status: "running",
@@ -323,12 +331,7 @@ describe("think", () => {
 
     const llmClient: LlmClient = {
       async generate() {
-        return {
-          provider: "openai",
-          model: "gpt-test",
-          text: "",
-          toolCalls: []
-        };
+        return makeResult("openai", "gpt-test", "");
       },
       async *stream() {
         yield { type: "start", provider: "openai", model: "gpt-test" };
@@ -338,21 +341,25 @@ describe("think", () => {
 
     await think(thread, llmClient);
 
-    const messages = writeInput.mock.calls[0]?.[1];
-    expect(messages?.[0]?.role).toBe("system");
-    expect(messages?.[0]?.content).toContain("<context>");
-    expect(messages?.[0]?.content).toContain("<inbox>");
-    expect(messages?.[0]?.content).toContain("请处理我的结果");
-    expect(messages?.[0]?.content).toContain("<outbox>");
-    expect(messages?.[0]?.content).toContain("先去检查日志");
-    expect(messages?.[0]?.content).not.toContain("上一轮已经检查过日志");
+    const inputItems = writeInput.mock.calls[0]?.[1] as LlmInputItem[] | undefined;
+    const firstItem = inputItems?.[0];
+    expect(firstItem).toEqual(expect.objectContaining({ type: "message", role: "system" }));
+    const firstContent = firstItem && firstItem.type === "message" ? firstItem.content : "";
+    expect(firstContent).toContain("<context>");
+    expect(firstContent).toContain("<inbox>");
+    expect(firstContent).toContain("请处理我的结果");
+    expect(firstContent).toContain("<outbox>");
+    expect(firstContent).toContain("先去检查日志");
+    expect(firstContent).not.toContain("上一轮已经检查过日志");
     // tool_use 事件刻意不进 transcript（见 context.ts processEventToMessage 注释）。
-    expect(messages?.slice(1)).toEqual([
+    expect(inputItems?.slice(1)).toEqual([
       {
+        type: "message",
         role: "assistant",
         content: "上一轮已经检查过日志"
       },
       {
+        type: "message",
         role: "user",
         content: "[context_change:inject]\n系统注入了新的上下文"
       }
@@ -372,10 +379,7 @@ describe("think", () => {
       ]
     };
     const llmResult = {
-      provider: "openai" as const,
-      model: "gpt-test",
-      text: "本轮输出",
-      toolCalls: [
+      ...makeResult("openai", "gpt-test", "本轮输出", [
         {
           id: "call_wait",
           name: "wait" as const,
@@ -383,7 +387,7 @@ describe("think", () => {
             reason: "等待检查"
           }
         }
-      ]
+      ])
     };
 
     spyOn(toolsModule, "getAvailableTools").mockReturnValue([
@@ -393,16 +397,18 @@ describe("think", () => {
         inputSchema: { type: "object" }
       }
     ]);
-    const dispatch = spyOn(toolsModule, "dispatchToolCall").mockResolvedValue();
+    const dispatch = spyOn(toolsModule, "dispatchToolCall").mockResolvedValue(
+      JSON.stringify({ ok: true, tool: "wait" })
+    );
     observableModule.clearLatestLlmObservation();
 
     const llmClient: LlmClient = {
-      async generate({ messages, tools }) {
+      async generate({ input, tools }) {
         const actualTools = tools ?? [];
         const observation = observableModule.getLatestLlmObservation();
         expect(observation?.input).toEqual({
           threadId: "thread-7",
-          messages,
+          inputItems: input,
           tools: actualTools
         });
         expect(observation?.output).toBeUndefined();
@@ -418,33 +424,60 @@ describe("think", () => {
 
     const observation = observableModule.getLatestLlmObservation();
     expect(observation?.input?.threadId).toBe("thread-7");
-    expect(observation?.input?.messages).toEqual([
-      {
-        role: "system",
-        content: '<context><thread id="thread-7" status="running"></thread></context>'
-      },
-      {
-        role: "assistant",
-        content: "上一轮输出"
-      }
-    ]);
+    const observedFirstItem = observation?.input?.inputItems?.[0];
+    expect(observedFirstItem).toEqual(expect.objectContaining({ type: "message", role: "system" }));
+    const observedFirstContent = observedFirstItem && observedFirstItem.type === "message"
+      ? observedFirstItem.content
+      : "";
+    expect(observedFirstContent).toContain('<thread id="thread-7" status="running">');
+    expect(observedFirstContent).toContain('<knowledge path="internal/executable/basic">');
+    expect(observation?.input?.inputItems?.[1]).toEqual({
+      type: "message",
+      role: "assistant",
+      content: "上一轮输出"
+    });
     expect(observation?.input?.tools).toHaveLength(1);
     expect(observation?.output).toEqual({
       threadId: "thread-7",
-      result: llmResult
+      outputItems: [
+        {
+          type: "message",
+          role: "assistant",
+          content: "本轮输出"
+        },
+        {
+          type: "function_call",
+          call_id: "call_wait",
+          name: "wait",
+          arguments: {
+            reason: "等待检查"
+          }
+        }
+      ],
+      provider: "openai",
+      model: "gpt-test"
     });
-    expect(thread.events.at(-2)).toEqual({
+    expect(thread.events.at(-3)).toEqual({
       category: "llm_interaction",
       kind: "text",
       text: "本轮输出"
     });
-    expect(thread.events.at(-1)).toEqual({
+    expect(thread.events.at(-2)).toEqual({
       category: "llm_interaction",
-      kind: "tool_use",
+      kind: "function_call",
+      callId: "call_wait",
       toolName: "wait",
       arguments: {
         reason: "等待检查"
       }
+    });
+    expect(thread.events.at(-1)).toEqual({
+      category: "tool_runtime",
+      kind: "function_call_output",
+      callId: "call_wait",
+      toolName: "wait",
+      output: JSON.stringify({ ok: true, tool: "wait" }),
+      ok: true
     });
     expect(dispatch).toHaveBeenCalledTimes(1);
   });

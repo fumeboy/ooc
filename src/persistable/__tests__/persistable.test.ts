@@ -87,23 +87,21 @@ describe("persistable single object flow", () => {
 
     await writeDebugInput(threadRef, {
       threadId: "root",
-      messages: [{ role: "system", content: "<context />" }],
+      inputItems: [{ type: "message", role: "system", content: "<context />" }],
       tools: []
     });
     await writeDebugOutput(threadRef, {
       threadId: "root",
-      result: {
-        provider: "openai",
-        model: "test",
-        text: "ok",
-        toolCalls: []
-      }
+      outputItems: [{ type: "message", role: "assistant", content: "ok" }],
+      provider: "openai",
+      model: "test"
     });
 
     const input = JSON.parse(await readFile(llmInputFile(threadRef), "utf8"));
     const output = JSON.parse(await readFile(llmOutputFile(threadRef), "utf8"));
 
     expect(input.threadId).toBe("root");
-    expect(output.result.text).toBe("ok");
+    expect(input.inputItems[0].type).toBe("message");
+    expect(output.outputItems[0].content).toBe("ok");
   });
 });

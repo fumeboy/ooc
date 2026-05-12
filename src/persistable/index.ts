@@ -23,6 +23,8 @@ export {
   loopInputFile,
   loopOutputFile,
   loopMetaFile,
+  normalizeInputItems,
+  deriveOutputItems,
   writeDebugInput,
   writeDebugOutput,
   writeLoopDebugInput,

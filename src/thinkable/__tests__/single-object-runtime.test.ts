@@ -10,9 +10,27 @@ import {
   threadFile
 } from "../../persistable";
 import type { ThreadContext } from "../context";
-import type { LlmClient } from "../llm/types";
+import type { LlmClient, LlmGenerateResult, LlmToolCall } from "../llm/types";
 import { runScheduler } from "../scheduler";
 import { clearObservableDebugState, disableDebug, enableDebug } from "../../observable";
+
+function makeResult(text: string, toolCalls: LlmToolCall[] = []): LlmGenerateResult {
+  return {
+    provider: "openai",
+    model: "test",
+    outputItems: [
+      ...(text ? [{ type: "message", role: "assistant", content: text } as const] : []),
+      ...toolCalls.map((toolCall) => ({
+        type: "function_call" as const,
+        call_id: toolCall.id,
+        name: toolCall.name,
+        arguments: toolCall.arguments
+      }))
+    ],
+    text,
+    toolCalls
+  };
+}
 
 describe("single object runtime", () => {
   let tempRoot: string | undefined;
@@ -44,41 +62,31 @@ describe("single object runtime", () => {
       async generate() {
         callCount += 1;
         if (callCount === 1) {
-          return {
-            provider: "openai",
-            model: "test",
-            text: "I will open a plan form.",
-            toolCalls: [
-              {
-                id: "tc1",
-                name: "open",
-                arguments: {
-                  title: "open plan",
-                  type: "command",
-                  command: "plan",
-                  description: "制定本对象执行计划",
-                  args: { plan: "完成单 object 最小闭环" }
-                }
-              }
-            ]
-          };
-        }
-
-        return {
-          provider: "openai",
-          model: "test",
-          text: "I will submit the plan.",
-          toolCalls: [
+          return makeResult("I will open a plan form.", [
             {
-              id: "tc2",
-              name: "submit",
+              id: "tc1",
+              name: "open",
               arguments: {
-                title: "提交计划",
-                form_id: root.activeForms?.[0]?.formId ?? ""
+                title: "open plan",
+                type: "command",
+                command: "plan",
+                description: "制定本对象执行计划",
+                args: { plan: "完成单 object 最小闭环" }
               }
             }
-          ]
-        };
+          ]);
+        }
+
+        return makeResult("I will submit the plan.", [
+          {
+            id: "tc2",
+            name: "submit",
+            arguments: {
+              title: "提交计划",
+              form_id: root.activeForms?.[0]?.formId ?? ""
+            }
+          }
+        ]);
       },
       async *stream() {
         yield { type: "start", provider: "openai", model: "test" };
@@ -98,7 +106,7 @@ describe("single object runtime", () => {
     const savedThread = JSON.parse(await readFile(threadFile(ref), "utf8"));
 
     expect(input.threadId).toBe("root");
-    expect(output.result.toolCalls[0]?.name).toBe("submit");
+    expect(output.outputItems[1]?.name).toBe("submit");
     expect(loopMeta.loopIndex).toBe(2);
     expect(loopMeta.status).toBe("ok");
     expect(root.plan).toBe("完成单 object 最小闭环");
@@ -106,7 +114,7 @@ describe("single object runtime", () => {
     expect(
       savedThread.events.some(
         (event: { category: string; kind: string }) =>
-          event.category === "llm_interaction" && event.kind === "tool_use"
+          event.category === "llm_interaction" && event.kind === "function_call"
       )
     ).toBe(true);
   });
