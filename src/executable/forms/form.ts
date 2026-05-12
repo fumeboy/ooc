@@ -61,13 +61,12 @@ export interface ActiveForm {
   result?: string;
 
   /**
-   * 当 form.command === "program" 且 accumulatedArgs.function 命中已注册 server 方法时，
-   * 由 enrichProgramForm 调用方法的 knowledge(args) 函数（缺省时按 description+params 自动生成），
-   * 把返回文本写到此字段，渲染到 active_forms 的 <method_knowledge> 段。
+   * 当前 form 绑定的 command knowledge path 集合。
    *
-   * 与 command.match(args)→paths 同构：args 改变 → knowledge 文本可以随之调整。
+   * knowledge 正文不内联存进 form，而是在 buildContext 阶段汇总到 knowledgeEntries。
+   * 这里仅保存 form 到 knowledge 的引用关系，供 <form> 渲染 path 列表。
    */
-  methodKnowledge?: string;
+  commandKnowledgePaths?: string[];
 }
 
 /** 生成 form_id */
@@ -91,6 +90,7 @@ export class FormManager {
       accumulatedArgs: {},
       commandPaths: deriveCommandPaths(command, {}).length > 0 ? deriveCommandPaths(command, {}) : [command],
       loadedKnowledgePaths: [],
+      commandKnowledgePaths: [],
       status: "open",
     });
     this.commandRefCount.set(command, (this.commandRefCount.get(command) ?? 0) + 1);
@@ -234,6 +234,9 @@ export class FormManager {
         : Array.isArray(raw.loadedTraits)
           ? raw.loadedTraits
           : [];
+      const commandKnowledgePaths = Array.isArray((raw as unknown as { commandKnowledgePaths?: unknown }).commandKnowledgePaths)
+        ? (raw as unknown as { commandKnowledgePaths: string[] }).commandKnowledgePaths
+        : [];
       const normalized: ActiveForm = {
         formId: raw.formId,
         command: raw.command,
@@ -242,6 +245,7 @@ export class FormManager {
         accumulatedArgs: accumulated,
         commandPaths,
         loadedKnowledgePaths,
+        commandKnowledgePaths,
         status: raw.status ?? "open",
         result: raw.result,
       };

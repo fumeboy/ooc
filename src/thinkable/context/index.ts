@@ -1,8 +1,8 @@
 import type { LlmMessage } from "../llm/types";
+import { collectExecutableKnowledgeEntries } from "../../executable/index";
 import type { ActiveForm } from "../../executable/forms/form";
 import type { ThreadPersistenceRef } from "../../persistable/common";
-import { computeKnowledgeXml } from "./knowledge";
-import { escapeXml, renderActiveForms, renderMessages, renderOptionalTag } from "./render";
+import { renderContextXml } from "./render";
 
 /**
  * 线程过程事件。
@@ -159,21 +159,12 @@ function processEventToMessage(event: ProcessEvent): LlmMessage | null {
  * 普通 messages 追加，避免把 transcript 混入 system prompt。
  */
 export async function buildContext(thread: ThreadContext): Promise<LlmMessage[]> {
-  const knowledgeXml = await computeKnowledgeXml(thread);
-
-  const content = [
-    "<context>",
-    `<thread id="${escapeXml(thread.id)}" status="${escapeXml(thread.status)}">`,
-    renderOptionalTag("creator_thread_id", thread.creatorThreadId),
-    renderOptionalTag("parent_thread_id", thread.parentThreadId),
-    renderOptionalTag("plan", thread.plan),
-    renderActiveForms(thread.activeForms),
-    knowledgeXml,
-    renderMessages("inbox", thread.inbox),
-    renderMessages("outbox", thread.outbox),
-    "</thread>",
-    "</context>"
-  ].join("");
+  const executableState = await collectExecutableKnowledgeEntries(thread.activeForms, thread);
+  const content = await renderContextXml({
+    thread,
+    activeForms: executableState.activeForms,
+    knowledgeEntries: executableState.knowledgeEntries,
+  });
 
   const transcript = thread.events
     .map(processEventToMessage)

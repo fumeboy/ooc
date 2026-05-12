@@ -39,8 +39,8 @@ export interface ServerMethod {
    * 动态知识函数（可选）。
    *
    * 与 command.match(args) → paths 同理：当 form 处于 program.function 模式时，
-   * 系统在 open/refine 后调用 knowledge(currentArgs)，把返回的文本写到 form.methodKnowledge，
-   * 渲染到下一轮 LLM 的 active_forms 中。
+   * 系统在 open/refine 后调用 knowledge(currentArgs)，并把结果并入
+   * `internal/executable/program/function` 对应的 knowledge entry。
    *
    * 缺省时由默认实现从 description + params 拼出基线文本，保证 LLM 至少有静态提示。
    */

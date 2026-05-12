@@ -67,7 +67,7 @@ export function createFlowsService(deps: {
       });
       // 关键：只有 initialMessage 不为空才 enqueue job——
       // 空 events 的 thread 跑 LLM 会被 Claude 代理拒绝（messages 必须含 user role），
-      // 立即 status=failed，后续 inject 也救不回来。
+      // 立即 status=failed，后续 continue 也救不回来。
       let jobId: string | undefined;
       if (initialMessage) {
         const job = deps.jobManager.createRunThreadJob({
@@ -98,12 +98,12 @@ export function createFlowsService(deps: {
       return await readThread({ baseDir: deps.baseDir, sessionId, objectId }, threadId);
     },
     /**
-     * 向已存在的 thread 注入一条用户文本（作为 context_change/inject 事件），
+     * 向已存在的 thread 追加一条用户文本（底层仍记录为 context_change/inject 事件），
      * 把 thread.status 翻回 running，并入队一个新的 run-thread job 让 worker 续跑。
      *
      * 用于多轮对话：用户在 thread 上一轮跑完后追加新需求。
      */
-    async injectThread({
+    async continueThread({
       sessionId,
       objectId,
       threadId,

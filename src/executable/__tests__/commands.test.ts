@@ -3,7 +3,7 @@ import { COMMAND_TABLE, getOpenableCommands, deriveCommandPaths } from "../comma
 import { KNOWLEDGE as DO_KNOWLEDGE } from "../commands/do";
 import { KNOWLEDGE as END_KNOWLEDGE } from "../commands/end";
 import { KNOWLEDGE as PLAN_KNOWLEDGE } from "../commands/plan";
-import { KNOWLEDGE as PROGRAM_KNOWLEDGE } from "../commands/program";
+import { KNOWLEDGE as PROGRAM_KNOWLEDGE, programCommand } from "../commands/program";
 import { KNOWLEDGE as TALK_KNOWLEDGE } from "../commands/talk";
 import { KNOWLEDGE as TODO_KNOWLEDGE } from "../commands/todo";
 
@@ -113,5 +113,26 @@ describe("executable commands", () => {
       "todo",
       "todo.on_command_path"
     ]);
+  });
+
+  it("should expose dynamic program knowledge entries", () => {
+    expect(programCommand.knowledge?.({}, "open")).toEqual(
+      expect.objectContaining({
+        "internal/executable/program/basic": expect.any(String),
+        "internal/executable/program/input": expect.any(String),
+      })
+    );
+    expect(
+      programCommand.knowledge?.({ language: "shell", code: "ls" }, "executing")?.["internal/executable/program/form-status"]
+    ).toContain("executing 状态的 form");
+  });
+
+  it("should describe program executing and executed knowledge without relying on inline form wording", () => {
+    expect(
+      programCommand.knowledge?.({ language: "shell", code: "ls" }, "executing")?.["internal/executable/program/form-status"]
+    ).toContain("对于 command program 的 executing 状态的 form");
+    expect(
+      programCommand.knowledge?.({ function: "readFile", args: { path: "a" } }, "executed")?.["internal/executable/program/form-status"]
+    ).toContain("对于 command program 的 executed 状态的 form");
   });
 });

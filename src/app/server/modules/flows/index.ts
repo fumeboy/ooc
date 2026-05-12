@@ -7,7 +7,7 @@ import { createFlowObjectApi } from "./api.create-flow-object";
 import { createSessionApi } from "./api.create-session";
 import { getFlowObjectApi } from "./api.get-flow-object";
 import { getThreadApi } from "./api.get-thread";
-import { injectThreadApi } from "./api.inject-thread";
+import { continueThreadApi } from "./api.continue-thread";
 import { pauseSessionApi } from "./api.pause-session";
 import { resumeSessionApi } from "./api.resume-session";
 import { createFlowsService } from "./service";
@@ -32,7 +32,7 @@ export function flowsModule(
     .use(createFlowObjectApi(service))
     .use(getFlowObjectApi(service))
     .use(getThreadApi(service))
-    .use(injectThreadApi(service))
+    .use(continueThreadApi(service))
     .use(pauseSessionApi(service))
     .use(resumeSessionApi(service))
     .use(callMethodApi(service));

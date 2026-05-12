@@ -2,6 +2,8 @@ import type { ThreadContext } from "../../thinkable/context";
 import type { ActiveForm } from "../forms/form";
 
 /** 命令表条目（扁平结构，无嵌套子节点）。 */
+export type CommandKnowledgeEntries = Record<string, string>;
+
 export interface CommandTableEntry {
   /** 该 command 可能产出的所有 path 集合（用于反向索引建表 + 文档目录） */
   paths: string[];
@@ -14,6 +16,11 @@ export interface CommandTableEntry {
    * - match 抛异常时退化为只返回 bare path
    */
   match: (args: Record<string, unknown>) => string[];
+  /** 基于当前参数与 form 生命周期状态派生命令知识。 */
+  knowledge?: (
+    args: Record<string, unknown>,
+    formStatus: ActiveForm["status"]
+  ) => CommandKnowledgeEntries;
   /** 执行底层 command 的回调（可选；暂未实现）。 */
   exec?: (args: Record<string, unknown>) => Promise<void> | void;
 }

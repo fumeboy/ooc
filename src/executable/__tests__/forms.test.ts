@@ -21,6 +21,7 @@ describe("FormManager", () => {
     expect(form?.command).toBe("talk");
     expect(form?.description).toBe("test description");
     expect(form?.accumulatedArgs).toEqual({});
+    expect(form?.commandKnowledgePaths).toEqual([]);
   });
 
   it("should apply refine to accumulate args", () => {
@@ -142,6 +143,7 @@ describe("FormManager", () => {
       method?: unknown;
       loadedTraits?: unknown;
       loadedKnowledgePaths?: string[];
+      commandKnowledgePaths?: string[];
     };
 
     expect(restored).not.toBeNull();
@@ -149,6 +151,7 @@ describe("FormManager", () => {
     expect("method" in restored).toBe(false);
     expect("loadedTraits" in restored).toBe(false);
     expect(restored.loadedKnowledgePaths).toEqual(["knowledge:program/function"]);
+    expect(restored.commandKnowledgePaths).toEqual([]);
   });
 
   it("should default new form status to open", () => {

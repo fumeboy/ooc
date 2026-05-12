@@ -140,10 +140,9 @@ describe("buildContext", () => {
     // tool_use 事件刻意不进 transcript，避免 LLM 看到自己上一轮被
     // 渲染成纯文本 [tool_use:NAME] 后模仿这种格式输出文本而非真正的 tool call。
     expect(messages).toHaveLength(4);
-    expect(messages[0]).toEqual({
-      role: "system",
-      content: '<context><thread id="t_process" status="running"></thread></context>'
-    });
+    expect(messages[0]?.role).toBe("system");
+    expect(messages[0]?.content).toContain('<thread id="t_process" status="running">');
+    expect(messages[0]?.content).toContain('<knowledge path="internal/executable/basic">');
     expect(messages[0]?.content).not.toContain("已经完成第一步");
     expect(messages.slice(1)).toEqual([
       {
@@ -219,7 +218,7 @@ describe("buildContext", () => {
     expect(sliceForm("f_executing")).not.toContain("<result>");
   });
 
-  it("renders method_knowledge when form.methodKnowledge is populated", async () => {
+  it("renders command knowledge paths on forms and keeps knowledge content in knowledge entries", async () => {
     const thread: ThreadContext = {
       id: "t_knowledge",
       status: "running",
@@ -233,8 +232,8 @@ describe("buildContext", () => {
           accumulatedArgs: { function: "add" },
           commandPaths: ["program", "program.function"],
           loadedKnowledgePaths: [],
-          status: "open",
-          methodKnowledge: "两数相加\n参数：\n- a [number]（必填）：第一个加数"
+          commandKnowledgePaths: ["internal/executable/program/basic", "internal/executable/program/input"],
+          status: "open"
         },
         {
           formId: "f_no_knowledge",
@@ -252,21 +251,23 @@ describe("buildContext", () => {
     const messages = await buildContext(thread);
     const xml = messages[0]?.content ?? "";
 
-    expect(xml).toContain("<method_knowledge>");
-    expect(xml).toContain("两数相加");
-    expect(xml).toContain("- a [number]（必填）：第一个加数");
+    expect(xml).toContain("<knowledge_entries>");
+    expect(xml).toContain('<knowledge path="internal/executable/program/basic">');
+    expect(xml).toContain("program 用于执行一段代码");
 
     function sliceForm(id: string): string {
       const start = xml.indexOf(`<form id="${id}"`);
       const end = xml.indexOf("</form>", start) + "</form>".length;
       return xml.slice(start, end);
     }
-    expect(sliceForm("f_fn")).toContain("<method_knowledge>");
-    expect(sliceForm("f_no_knowledge")).not.toContain("<method_knowledge>");
+    expect(sliceForm("f_fn")).toContain("<command_knowledge_paths>");
+    expect(sliceForm("f_fn")).toContain("<path>internal/executable/program/basic</path>");
+    expect(sliceForm("f_fn")).not.toContain("program 用于执行一段代码");
+    expect(sliceForm("f_no_knowledge")).toContain("<command_knowledge_paths>");
   });
 
-  it("renders next_action and protocol_hint for active forms", async () => {
-    const thread: ThreadContext = {
+  it("renders command knowledge paths on forms and knowledge entries in knowledge area", async () => {
+    const thread = {
       id: "t_protocol",
       status: "running",
       events: [],
@@ -279,6 +280,7 @@ describe("buildContext", () => {
           accumulatedArgs: {},
           commandPaths: ["program"],
           loadedKnowledgePaths: [],
+          commandKnowledgePaths: ["internal/executable/program/base"],
           status: "open"
         },
         {
@@ -289,8 +291,54 @@ describe("buildContext", () => {
           accumulatedArgs: { function: "add", args: { a: 1, b: 2 } },
           commandPaths: ["program", "program.function"],
           loadedKnowledgePaths: [],
+          commandKnowledgePaths: ["internal/executable/program/base", "internal/executable/program/function"],
           status: "executed",
           result: "# function: add\n[returnValue]\n3\n[exit 0]"
+        }
+      ]
+    } as unknown as ThreadContext;
+
+    const messages = await buildContext(thread);
+    const xml = messages[0]?.content ?? "";
+
+    expect(xml).not.toContain("<next_action>");
+    expect(xml).not.toContain("<protocol_hint>");
+    expect(xml).toContain("<command_knowledge_paths>");
+    expect(xml).toContain("<path>internal/executable/program/basic</path>");
+    expect(xml).toContain('<knowledge path="internal/executable/basic">');
+  });
+
+  it("always injects executable basic knowledge into system context", async () => {
+    const messages = await buildContext({ id: "t1", status: "running", events: [] });
+    const xml = messages[0]?.content ?? "";
+    expect(xml).toContain("open / refine / submit / close / wait");
+  });
+
+  it("deduplicates identical knowledge entries across multiple forms", async () => {
+    const thread: ThreadContext = {
+      id: "t_dedupe",
+      status: "running",
+      events: [],
+      activeForms: [
+        {
+          formId: "f_1",
+          command: "program",
+          description: "shell one",
+          createdAt: 1,
+          accumulatedArgs: { language: "shell", code: "pwd" },
+          commandPaths: ["program", "program.shell"],
+          loadedKnowledgePaths: [],
+          status: "open"
+        },
+        {
+          formId: "f_2",
+          command: "program",
+          description: "shell two",
+          createdAt: 2,
+          accumulatedArgs: { language: "shell", code: "ls" },
+          commandPaths: ["program", "program.shell"],
+          loadedKnowledgePaths: [],
+          status: "open"
         }
       ]
     };
@@ -298,10 +346,34 @@ describe("buildContext", () => {
     const messages = await buildContext(thread);
     const xml = messages[0]?.content ?? "";
 
-    expect(xml).toContain("<next_action>refine_or_submit_or_close</next_action>");
-    expect(xml).toContain("<next_action>inspect_result_then_close_or_open_next_form</next_action>");
-    expect(xml).toContain("program form 缺少可执行参数");
-    expect(xml).toContain("请先用 refine(args={");
+    expect(xml.match(/<path>internal\/executable\/program\/basic<\/path>/g)?.length).toBe(2);
+    expect(xml.match(/<knowledge path="internal\/executable\/program\/basic">/g)?.length).toBe(1);
+  });
+
+  it("renders indented xml with comments for active forms and knowledge entries", async () => {
+    const messages = await buildContext({
+      id: "t_comment",
+      status: "running",
+      events: [],
+      activeForms: [
+        {
+          formId: "f_1",
+          command: "program",
+          description: "shell",
+          createdAt: 1,
+          accumulatedArgs: { language: "shell", code: "ls" },
+          commandPaths: ["program", "program.shell"],
+          loadedKnowledgePaths: [],
+          status: "open"
+        }
+      ]
+    });
+
+    const xml = messages[0]?.content ?? "";
+    expect(xml).toContain("<!-- active forms:");
+    expect(xml).toContain("<!-- executable knowledge entries:");
+    expect(xml).toContain("\n  <thread ");
+    expect(xml).toContain("\n    <active_forms>");
   });
 });
 

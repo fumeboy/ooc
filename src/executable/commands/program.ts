@@ -1,4 +1,4 @@
-import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
+import type { CommandExecutionContext, CommandKnowledgeEntries, CommandTableEntry } from "./types.js";
 import type { ThreadContext } from "../../thinkable/context.js";
 import { createProgramSelf } from "../server/self.js";
 import { executeUserCode } from "../program/sandbox/executor.js";
@@ -28,6 +28,10 @@ open(type="command", command="program", description="读取文件")
 refine(form_id, { language: "ts", code: "const data = await readFile('foo.txt'); print(data);" })
 submit(form_id)
 `;
+
+const PROGRAM_BASIC_PATH = "internal/executable/program/basic";
+const PROGRAM_INPUT_PATH = "internal/executable/program/input";
+const PROGRAM_FORM_STATUS_PATH = "internal/executable/program/form-status";
 
 /** program command 的可匹配路径集合。 */
 export enum ProgramCommandPath {
@@ -60,6 +64,41 @@ export const programCommand: CommandTableEntry = {
     if (lang === "js" || lang === "javascript") hit.push(ProgramCommandPath.JavaScript);
     if (typeof args.function === "string") hit.push(ProgramCommandPath.Function);
     return hit;
+  },
+  knowledge: (args, formStatus) => {
+    const entries: CommandKnowledgeEntries = {
+      [PROGRAM_BASIC_PATH]: KNOWLEDGE.trim(),
+    };
+    const lang = (args.language ?? args.lang) as string | undefined;
+    const code = typeof args.code === "string" ? args.code.trim() : "";
+    const fn = typeof args.function === "string" ? args.function : undefined;
+    const fnArgs = args.args;
+
+    if (formStatus === "executing") {
+      entries[PROGRAM_FORM_STATUS_PATH] = "对于 command program 的 executing 状态的 form，应等待 result 写入后再继续，不要再次 refine 或 submit。";
+      return entries;
+    }
+    if (formStatus === "executed") {
+      entries[PROGRAM_FORM_STATUS_PATH] = "对于 command program 的 executed 状态的 form，应先阅读 result；如果结果已经消费，使用 close(form_id, reason=...) 释放 form。";
+      return entries;
+    }
+
+    if (fn) {
+      if (fnArgs && typeof fnArgs === "object" && !Array.isArray(fnArgs)) {
+        entries[PROGRAM_INPUT_PATH] = "program.function 参数已具备；确认无误后可直接 submit(form_id)。";
+      } else {
+        entries[PROGRAM_INPUT_PATH] = "program.function 缺少 args 对象；先用 refine(args={ function: \"name\", args: {...} })，再 submit(form_id)。";
+      }
+      return entries;
+    }
+
+    if (lang && code) {
+      entries[PROGRAM_INPUT_PATH] = "program shell/ts/js 参数已具备；可直接 submit(form_id)。";
+      return entries;
+    }
+
+    entries[PROGRAM_INPUT_PATH] = "program form 缺少可执行参数；若要执行 shell/ts/js，请先用 refine(args={ language: \"shell\" | \"ts\" | \"js\", code: \"...\" })；若要调 server 方法，请先用 refine(args={ function: \"name\", args: {...} })。";
+    return entries;
   },
   // 暂不实现具体执行逻辑
 };

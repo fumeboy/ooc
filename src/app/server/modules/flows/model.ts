@@ -24,7 +24,7 @@ export const callMethodBody = t.Object({
   args: t.Optional(t.Record(t.String(), t.Any())),
 });
 
-/** thread.events 注入 user 消息的请求体。 */
-export const injectThreadBody = t.Object({
+/** 继续指定 thread 会话的请求体。 */
+export const continueThreadBody = t.Object({
   text: t.String(),
 });

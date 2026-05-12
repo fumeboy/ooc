@@ -21,7 +21,7 @@ describe("flows service", () => {
       const result = await service.createFlowObject({ sessionId: "s1", objectId: "agent" });
 
       expect(result.initialThreadId).toBe("root");
-      // 没传 initialMessage → 不入队 job，等 user 显式 inject 才启动
+      // 没传 initialMessage → 不入队 job，等 user 显式 continue 才启动
       expect(result.jobId).toBeUndefined();
     } finally {
       await rm(baseDir, { recursive: true, force: true });
@@ -101,7 +101,7 @@ describe("flows service", () => {
     }
   });
 
-  test("injectThread flips failed thread back to running", async () => {
+  test("continueThread flips failed thread back to running", async () => {
     const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-"));
 
     try {
@@ -119,7 +119,7 @@ describe("flows service", () => {
       thread!.status = "failed";
       await writeThread(thread!);
 
-      const out = await service.injectThread({
+      const out = await service.continueThread({
         sessionId: "s1",
         objectId: "agent",
         threadId: "root",

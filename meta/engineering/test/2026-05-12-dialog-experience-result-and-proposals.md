@@ -29,11 +29,11 @@ session: dialog-1778520615266
 1. **createFlowObject 自动跑空 events thread 导致 status=failed 锁死**
    - commit: `bb634cf`
    - 表现：dialog 启动 15 轮全 failed
-   - 修：`createFlowObject` 仅在 `initialMessage` 非空时 enqueue job + seed events；`injectThread` 把 failed 也翻回 running
+   - 修：`createFlowObject` 仅在 `initialMessage` 非空时 enqueue job + seed events；`continueThread` 把 failed 也翻回 running
 
-2. **多轮对话缺 inject API**
+2. **多轮对话缺 continue API**
    - commit: `da4de53`
-   - 修：POST `/api/flows/:sid/objects/:oid/threads/:tid/inject`，把 thread 翻回 running 并入队新 run-thread job
+   - 修：POST `/api/flows/:sid/objects/:oid/threads/:tid/continue`，把 thread 翻回 running 并入队新 run-thread job
 
 3. **app-server 错误透传成通用 500**
    - commits: `a3f397f`、TODO 3/4 中的 callMethod & debug 路由

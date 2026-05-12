@@ -104,14 +104,14 @@ async function turn(turnNo: number, topic: string, userText: string): Promise<vo
   const beforeLoops = before?.events.length ?? 0;
 
   const { status, body } = await api(
-    `/api/flows/${SESSION_ID}/objects/${OBJECT_ID}/threads/${THREAD_ID}/inject`,
+    `/api/flows/${SESSION_ID}/objects/${OBJECT_ID}/threads/${THREAD_ID}/continue`,
     { text: userText }
   );
   if (status !== 200) {
-    issues.push(`turn ${turnNo}: inject 失败 status=${status} body=${JSON.stringify(body)}`);
+    issues.push(`turn ${turnNo}: continue 失败 status=${status} body=${JSON.stringify(body)}`);
     observations.push({
       turn: turnNo, topic, user: userText,
-      jobOutcome: "inject-failed",
+      jobOutcome: "continue-failed",
       threadStatusAfter: "?", thinkLoops: 0, formExecutedCount: 0, notes: [],
     });
     return;
@@ -161,9 +161,9 @@ async function main() {
       "调用自己的 server 方法、读写 data.json。",
       "",
       "## 协作风格",
-      "- 用户用 inject 事件喂指令；你按指令推进任务、用 program 等 command 执行。",
-      "- 一次 inject 一项任务，做完后输出文本汇报，不要 wait。",
-      "- 任务结束**不要 open(end)**，直接停在 status=running（让下一轮 inject 接着用）。",
+      "- 用户通过 continue 接口向当前 thread 追加新指令；你按指令推进任务、用 program 等 command 执行。",
+      "- 一次 continue 只处理一项任务，做完后输出文本汇报，不要 wait。",
+      "- 任务结束**不要 open(end)**，直接停在 status=running（让下一轮 continue 接着用）。",
       "",
       "## 重要协议",
       "- form result 同步可见；submit 后下一轮直接读 active_forms 中 result 字段。",
