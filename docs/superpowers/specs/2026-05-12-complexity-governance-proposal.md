@@ -17,7 +17,7 @@
 
 同时，`fta-cli` 对若干核心源码文件给出了较高的复杂度分数，例如：
 
-- `src/thinkable/context.ts`
+- `src/thinkable/context/`
 - `src/thinkable/llm/providers/claude.ts`
 - `src/app/server/modules/flows/service.ts`
 - `src/observable/index.ts`
@@ -140,7 +140,7 @@
 
 ## 热点文件裁判
 
-### A. `src/thinkable/context.ts`
+### A. `src/thinkable/context/`
 
 **裁判：复杂度偏高，且存在偶然复杂度，优先治理。**
 

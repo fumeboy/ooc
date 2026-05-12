@@ -4,3 +4,9 @@ node_modules/
 .trae
 .ooc-world-test/
 .claude/
+goal.md
+.agents
+.coco
+.trae-cn
+log
+skills-lock.json

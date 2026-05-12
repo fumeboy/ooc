@@ -34,7 +34,7 @@
 
 - Modify: `src/app/server/modules/flows/service.ts`
 - Modify: `src/app/server/runtime/worker.ts`
-- Modify: `src/thinkable/context.ts` 或迁移为 `src/thinkable/context/index.ts`
+- Modify: `src/thinkable/context.ts`（兼容导出）与 `src/thinkable/context/index.ts`
 - Modify: `src/executable/commands/program.ts`
 - Modify: `src/executable/__tests__/program.test.ts`
 - Modify: `src/app/server/modules/flows/service.test.ts`
@@ -268,7 +268,7 @@ git commit -m "refactor(flows): extract paused thread query"
 - Create: `src/thinkable/context/render.ts`
 - Create: `src/thinkable/context/knowledge.ts`
 - Create: `src/thinkable/context/protocol.ts`
-- Modify: `src/thinkable/context.ts`（迁移或删除）
+- Modify: `src/thinkable/context.ts`（保留兼容 re-export）
 - Modify: imports of `@src/thinkable/context`
 
 - [ ] **Step 1: 写失败测试，锁定 `buildContext()` 现有行为**
@@ -491,7 +491,7 @@ Expected: PASS
 
 - [ ] **Step 4: 更新文档（若目录结构变化需要同步）**
 
-若 `context/` 或 `program/` 目录结构与 `meta`/spec 中的描述不一致，补最小必要文档更新。
+若 `context/` 或 `program/` 目录结构与 `meta`/spec 中的描述不一致，补最小必要文档更新；当前实际落地为 `src/thinkable/context/` 主目录 + `src/thinkable/context.ts` 兼容 re-export，以及 `src/executable/program/sandbox/`。
 
 - [ ] **Step 5: 最终提交**
 
