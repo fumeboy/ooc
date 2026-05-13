@@ -11,6 +11,8 @@ import type { PauseStore } from "../../runtime/pause-store";
 import { scanPausedThreads } from "../../runtime/thread-query";
 import { applyResumeTransition, canResumeThread } from "../../runtime/thread-transition";
 import { AppServerError } from "../../bootstrap/errors";
+import { readdir, readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
 
 function httpContext() {
   return {
@@ -58,12 +60,47 @@ function reviveThreadForInboxMessage(thread: ThreadContext): ThreadContext {
   };
 }
 
+async function readSessionTitle(sessionDir: string, fallback: string) {
+  try {
+    const raw = await readFile(join(sessionDir, ".session.json"), "utf8");
+    const parsed = JSON.parse(raw) as { title?: unknown };
+    return typeof parsed.title === "string" && parsed.title.trim() ? parsed.title : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function createFlowsService(deps: {
   baseDir: string;
   pauseStore: PauseStore;
   jobManager: ReturnType<typeof createJobManager>;
 }) {
   return {
+    async listFlows() {
+      const flowsDir = join(deps.baseDir, "flows");
+      try {
+        const entries = await readdir(flowsDir, { withFileTypes: true });
+        const items = await Promise.all(
+          entries
+            .filter((entry) => entry.isDirectory())
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(async (entry) => {
+              const dir = join(flowsDir, entry.name);
+              const info = await stat(dir);
+              return {
+                sessionId: entry.name,
+                title: await readSessionTitle(dir, entry.name),
+                dir,
+                createdAt: info.birthtimeMs,
+                updatedAt: info.mtimeMs,
+              };
+            })
+        );
+        return { items };
+      } catch {
+        return { items: [] };
+      }
+    },
     async createSession({ sessionId, title }: { sessionId: string; title?: string }) {
       await createFlowSession(deps.baseDir, sessionId, title);
       return {

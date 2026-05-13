@@ -1,19 +1,25 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readServerConfig } from "../bootstrap/config";
 import { buildServer } from "../index";
 
-function makeApp() {
+function makeAppWithBaseDir() {
   const baseDir = mkdtempSync(join(tmpdir(), "ooc-app-server-routes-"));
-  return buildServer({
+  const app = buildServer({
     ...readServerConfig(),
     port: 0,
     baseDir,
     workerPollMs: 5,
     workerEnabled: false,
   });
+  return { app, baseDir };
+}
+
+function makeApp() {
+  return makeAppWithBaseDir().app;
 }
 
 describe("app server routes", () => {
@@ -169,5 +175,66 @@ describe("app server routes", () => {
     expect(response.status).toBe(404);
     expect(body.error.code).toBe("METHOD_NOT_FOUND");
     expect(body.error.details.objectId).toBe("flow-no-methods");
+  });
+
+  test("GET /api/flows lists flow sessions from world directory", async () => {
+    const { app, baseDir } = makeAppWithBaseDir();
+    const sessionDir = join(baseDir, "flows", "web-session");
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(join(sessionDir, ".session.json"), JSON.stringify({ title: "Web Session" }));
+
+    const response = await app.handle(new Request("http://localhost/api/flows"));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].sessionId).toBe("web-session");
+    expect(body.items[0].title).toBe("Web Session");
+    expect(body.items[0].dir).toBe(sessionDir);
+    expect(typeof body.items[0].createdAt).toBe("number");
+    expect(typeof body.items[0].updatedAt).toBe("number");
+  });
+
+  test("GET /api/tree reads scoped world directory trees with markers", async () => {
+    const { app, baseDir } = makeAppWithBaseDir();
+    await mkdir(join(baseDir, "flows", "web-session"), { recursive: true });
+    await mkdir(join(baseDir, "stones", "assistant"), { recursive: true });
+    await writeFile(join(baseDir, "flows", "web-session", "notes.txt"), "hello web");
+
+    const flowsResponse = await app.handle(new Request("http://localhost/api/tree?scope=flows"));
+    const flowsTree = await flowsResponse.json();
+    const worldResponse = await app.handle(new Request("http://localhost/api/tree?scope=world"));
+    const worldTree = await worldResponse.json();
+
+    expect(flowsResponse.status).toBe(200);
+    expect(flowsTree.name).toBe("flows");
+    expect(flowsTree.type).toBe("directory");
+    expect(flowsTree.children[0].name).toBe("web-session");
+    expect(flowsTree.children[0].path).toBe("flows/web-session");
+    expect(flowsTree.children[0].marker).toBe("flow");
+    expect(worldResponse.status).toBe(200);
+    expect(worldTree.children.map((node: { name: string }) => node.name)).toEqual(["flows", "stones"]);
+  });
+
+  test("GET /api/tree/file reads text files and reports missing or unsafe paths", async () => {
+    const { app, baseDir } = makeAppWithBaseDir();
+    await mkdir(join(baseDir, "flows", "web-session"), { recursive: true });
+    await writeFile(join(baseDir, "flows", "web-session", "notes.txt"), "hello web");
+
+    const ok = await app.handle(new Request("http://localhost/api/tree/file?path=flows/web-session/notes.txt"));
+    const okBody = await ok.json();
+    const missing = await app.handle(new Request("http://localhost/api/tree/file?path=missing.txt"));
+    const missingBody = await missing.json();
+    const escape = await app.handle(new Request("http://localhost/api/tree/file?path=../escape.txt"));
+    const escapeBody = await escape.json();
+
+    expect(ok.status).toBe(200);
+    expect(okBody.path).toBe("flows/web-session/notes.txt");
+    expect(okBody.content).toBe("hello web");
+    expect(okBody.size).toBe(9);
+    expect(missing.status).toBe(404);
+    expect(missingBody.error.code).toBe("NOT_FOUND");
+    expect(escape.status).toBe(400);
+    expect(escapeBody.error.code).toBe("INVALID_INPUT");
   });
 });

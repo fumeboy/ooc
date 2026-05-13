@@ -6,6 +6,7 @@ import { healthModule } from "./modules/health";
 import { runtimeModule } from "./modules/runtime";
 import { stonesModule } from "./modules/stones";
 import { flowsModule } from "./modules/flows";
+import { uiModule } from "./modules/ui";
 import { debugUiModule } from "./modules/debug-ui";
 import { startJobWorker } from "./runtime/worker";
 
@@ -49,7 +50,8 @@ export function buildServer(config: ServerConfig = readServerConfig()) {
     .use(healthModule)
     .use(runtimeModule(config))
     .use(stonesModule(config))
-    .use(flowsModule(config));
+    .use(flowsModule(config))
+    .use(uiModule(config));
 
   if (config.workerEnabled) {
     const worker = startJobWorker(config);
