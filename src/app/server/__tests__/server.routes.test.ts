@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readServerConfig } from "../bootstrap/config";
@@ -82,7 +82,7 @@ describe("app server routes", () => {
     ]);
   });
 
-  test("POST /api/stones rejects invalid body", async () => {
+  test("POST /api/stones rejects missing object identity", async () => {
     const app = makeApp();
     const response = await app.handle(
       new Request("http://localhost/api/stones", {
@@ -92,7 +92,10 @@ describe("app server routes", () => {
       })
     );
 
-    expect(response.status).toBe(422);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error.code).toBe("INVALID_INPUT");
   });
 
   test("POST /api/flows creates session", async () => {
@@ -234,6 +237,81 @@ describe("app server routes", () => {
     expect(okBody.size).toBe(9);
     expect(missing.status).toBe(404);
     expect(missingBody.error.code).toBe("NOT_FOUND");
+    expect(escape.status).toBe(400);
+    expect(escapeBody.error.code).toBe("INVALID_INPUT");
+  });
+
+  test("POST /api/stones creates object with description self and readme content", async () => {
+    const { app, baseDir } = makeAppWithBaseDir();
+
+    const response = await app.handle(
+      new Request("http://localhost/api/stones", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "writer",
+          description: "Writes project notes",
+          self: "# Writer\nI write notes.",
+          readme: "# Writer README",
+        }),
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.objectId).toBe("writer");
+    expect(await readFile(join(baseDir, "stones", "writer", "self.md"), "utf8")).toBe("# Writer\nI write notes.");
+    expect(await readFile(join(baseDir, "stones", "writer", "readme.md"), "utf8")).toBe("# Writer README");
+    const data = JSON.parse(await readFile(join(baseDir, "stones", "writer", "data.json"), "utf8"));
+    expect(data.name).toBe("writer");
+    expect(data.description).toBe("Writes project notes");
+    expect((await stat(join(baseDir, "stones", "writer", "knowledge", "memory"))).isDirectory()).toBe(true);
+  });
+
+  test("POST /api/stones/:id/knowledge creates files and folders only under knowledge", async () => {
+    const { app, baseDir } = makeAppWithBaseDir();
+    await app.handle(
+      new Request("http://localhost/api/stones", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ objectId: "researcher" }),
+      })
+    );
+
+    const folder = await app.handle(
+      new Request("http://localhost/api/stones/researcher/knowledge/directories", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: "notes" }),
+      })
+    );
+    const file = await app.handle(
+      new Request("http://localhost/api/stones/researcher/knowledge/files", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: "notes/idea.md", content: "# Idea" }),
+      })
+    );
+    const update = await app.handle(
+      new Request("http://localhost/api/stones/researcher/knowledge/files", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: "notes/idea.md", content: "# Updated" }),
+      })
+    );
+    const escape = await app.handle(
+      new Request("http://localhost/api/stones/researcher/knowledge/files", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: "../escape.md", content: "bad" }),
+      })
+    );
+    const escapeBody = await escape.json();
+
+    expect(folder.status).toBe(200);
+    expect(file.status).toBe(200);
+    expect(update.status).toBe(200);
+    expect(await readFile(join(baseDir, "stones", "researcher", "knowledge", "notes", "idea.md"), "utf8")).toBe("# Updated");
     expect(escape.status).toBe(400);
     expect(escapeBody.error.code).toBe("INVALID_INPUT");
   });

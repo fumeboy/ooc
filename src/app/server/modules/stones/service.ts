@@ -1,5 +1,6 @@
 import {
   createStoneObject,
+  knowledgeDir,
   mergeData,
   readData,
   readReadme,
@@ -10,8 +11,36 @@ import {
   writeServerSource,
 } from "@src/persistable";
 import { loadUiServerMethods } from "@src/executable/server/loader";
-import { readdir } from "node:fs/promises";
+import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { AppServerError } from "../../bootstrap/errors";
+
+function safeObjectId(input: string | undefined, fallback?: string) {
+  const value = (input ?? fallback ?? "").trim();
+  if (!value || value.includes("/") || value.includes("\\") || value.includes("..")) {
+    throw new AppServerError("INVALID_INPUT", "stone object name is required and must be a safe directory name", { input });
+  }
+  return value;
+}
+
+function safeKnowledgePath(input: string) {
+  if (!input || input.includes("\0") || isAbsolute(input)) {
+    throw new AppServerError("INVALID_INPUT", `unsafe knowledge path '${input}'`, { path: input });
+  }
+  const parts = input.split(/[\\/]+/).filter(Boolean);
+  if (parts.some((part) => part === "..")) {
+    throw new AppServerError("INVALID_INPUT", `unsafe knowledge path '${input}'`, { path: input });
+  }
+  return parts.join(sep);
+}
+
+function ensureInside(root: string, target: string, details: Record<string, unknown>) {
+  const resolvedRoot = resolve(root);
+  const resolvedTarget = resolve(target);
+  const rel = relative(resolvedRoot, resolvedTarget);
+  if (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel))) return resolvedTarget;
+  throw new AppServerError("INVALID_INPUT", "knowledge path escapes knowledge directory", details);
+}
 
 function createHttpMethodContext(dir: string) {
   return {
@@ -43,8 +72,29 @@ export function createStonesService({ baseDir }: { baseDir: string }) {
         return { items: [] };
       }
     },
-    async createStone({ objectId }: { objectId: string }) {
+    async createStone({
+      objectId,
+      name,
+      description,
+      self,
+      readme,
+    }: {
+      objectId?: string;
+      name?: string;
+      description?: string;
+      self?: string;
+      readme?: string;
+    }) {
+      objectId = safeObjectId(objectId, name);
       await createStoneObject(ref(objectId));
+      if (self !== undefined) await writeSelf(ref(objectId), self);
+      if (readme !== undefined) await writeReadme(ref(objectId), readme);
+      if (name !== undefined || description !== undefined) {
+        await mergeData(ref(objectId), {
+          ...(name !== undefined ? { name } : {}),
+          ...(description !== undefined ? { description } : {}),
+        });
+      }
       return { objectId, dir: dir(objectId), created: true };
     },
     async getStone({ objectId }: { objectId: string }) {
@@ -77,6 +127,29 @@ export function createStonesService({ baseDir }: { baseDir: string }) {
     async putServerSource({ objectId, code }: { objectId: string; code: string }) {
       await writeServerSource(ref(objectId), code);
       return { ok: true };
+    },
+    async createKnowledgeDirectory({ objectId, path }: { objectId: string; path: string }) {
+      const root = knowledgeDir(ref(objectId));
+      const safePath = safeKnowledgePath(path);
+      const target = ensureInside(root, join(root, safePath), { objectId, path });
+      await mkdir(target, { recursive: true });
+      return { objectId, path: safePath.split(sep).join("/"), created: true };
+    },
+    async createKnowledgeFile({ objectId, path, content = "" }: { objectId: string; path: string; content?: string }) {
+      const root = knowledgeDir(ref(objectId));
+      const safePath = safeKnowledgePath(path);
+      const target = ensureInside(root, join(root, safePath), { objectId, path });
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, content, "utf8");
+      return { objectId, path: safePath.split(sep).join("/"), created: true };
+    },
+    async putKnowledgeFile({ objectId, path, content = "" }: { objectId: string; path: string; content?: string }) {
+      const root = knowledgeDir(ref(objectId));
+      const safePath = safeKnowledgePath(path);
+      const target = ensureInside(root, join(root, safePath), { objectId, path });
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, content, "utf8");
+      return { objectId, path: safePath.split(sep).join("/"), ok: true };
     },
     async callMethod({ objectId, method, args = {} }: { objectId: string; method: string; args?: Record<string, unknown> }) {
       let methods;
