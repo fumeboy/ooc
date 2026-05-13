@@ -13,6 +13,7 @@ import { initialState, type AppState } from "./state";
 
 export function AppShell() {
   const [state, setState] = useState<AppState>(initialState);
+  const [showSessions, setShowSessions] = useState(true);
   const [stoneModalOpen, setStoneModalOpen] = useState(false);
   const [stoneDraft, setStoneDraft] = useState({ name: "", description: "", self: "", readme: "" });
   const [knowledgeModal, setKnowledgeModal] = useState<{ objectId: string; parentPath: string } | undefined>();
@@ -31,6 +32,11 @@ export function AppShell() {
   }, [patch, state.scope]);
 
   useEffect(() => { void refreshBasics("world"); }, []);
+
+  useEffect(() => {
+    if (state.scope !== "flows") return;
+    setShowSessions(!state.activeSessionId);
+  }, [state.scope, state.activeSessionId]);
 
   async function loadThread(sessionId: string, objectId: string) {
     try {
@@ -63,8 +69,23 @@ export function AppShell() {
 
   async function handleSession(flow: FlowSession) {
     const objectId = state.stones[0]?.objectId;
-    patch({ activeSessionId: flow.sessionId, activeObjectId: objectId, activeFile: undefined });
+    patch({ activeSessionId: flow.sessionId, activeObjectId: objectId });
     if (objectId) await loadThread(flow.sessionId, objectId);
+  }
+
+  function handleShowWelcome() {
+    patch({
+      activeSessionId: undefined,
+      activeObjectId: undefined,
+      activePath: undefined,
+      activeFile: undefined,
+      activeStoneObjectId: undefined,
+      activeKnowledgePath: undefined,
+      thread: undefined,
+      fileDirty: false,
+      scope: "flows",
+    });
+    setShowSessions(true);
   }
 
   async function handleCreate(input: { sessionId: string; objectId: string; initialMessage?: string }) {
@@ -135,10 +156,12 @@ export function AppShell() {
     }
   }
 
+  const isWelcome = state.scope === "flows" && !state.activeSessionId;
+
   return (
     <AppLayout
-      sidebar={<Sidebar scope={state.scope} flows={state.flows} stones={state.stones} tree={state.tree} activePath={state.activePath} activeSessionId={state.activeSessionId} onScope={refreshBasics} onNode={handleNode} onSession={handleSession} onCreate={handleCreate} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
-      main={<MainPanel file={state.activeFile} path={state.activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} />}
+      sidebar={<Sidebar scope={state.scope} flows={state.flows} tree={state.tree} activePath={state.activePath} activeSessionId={state.activeSessionId} activeSessionTitle={state.flows.find((flow) => flow.sessionId === state.activeSessionId)?.title ?? state.activeSessionId} showSessions={showSessions} onToggleSessions={() => setShowSessions((prev) => !prev)} onShowWelcome={handleShowWelcome} onScope={refreshBasics} onNode={handleNode} onSession={handleSession} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
+      main={<MainPanel isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={state.activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} />}
       right={<RightPanel sessionId={state.activeSessionId} objectId={state.activeObjectId} thread={state.thread} onSend={handleSend} />}
     >
       <CreateStoneModal open={stoneModalOpen} draft={stoneDraft} onDraft={setStoneDraft} onClose={() => setStoneModalOpen(false)} onSubmit={handleCreateStone} />

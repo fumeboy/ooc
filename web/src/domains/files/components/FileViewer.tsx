@@ -1,7 +1,6 @@
 import type { FileContent } from "../model";
 import { formatFileContent } from "../formatter";
 import { EmptyState } from "../../../shared/ui/EmptyState";
-import { MarkdownContent } from "../../../shared/ui/MarkdownContent";
 import CodeMirror from "@uiw/react-codemirror";
 import { markdown } from "@codemirror/lang-markdown";
 import { json } from "@codemirror/lang-json";
@@ -19,14 +18,18 @@ export function FileViewer({ file, editable = false, saving = false, onChange, o
   const formatted = formatFileContent(file.path, file.content);
   return (
     <div className="file-viewer">
-      <div className="row space-between" style={{ marginBottom: 12 }}>
-        <strong>{file.path}</strong>
-        <div className="row">
-          <span className="pill">{file.size}B</span>
-          {editable && <button className="btn" disabled={saving} onClick={onSave}>{saving ? "Saving..." : "Save"}</button>}
-        </div>
+      <CodeMirror
+        className={`code-editor ${editable ? "is-editable" : "is-readonly"}`}
+        value={formatted.content}
+        editable={editable}
+        extensions={extensionsFor(file.path)}
+        basicSetup={{ lineNumbers: true, foldGutter: true }}
+        onChange={(value) => onChange?.(value)}
+      />
+      <div className="file-viewer-footer">
+        <span className="pill">{file.size}B</span>
+        {editable && <button className="btn" disabled={saving} onClick={onSave}>{saving ? "Saving..." : "Save"}</button>}
       </div>
-      {editable ? <CodeMirror className="code-editor" value={file.content} extensions={extensionsFor(file.path)} basicSetup={{ lineNumbers: true, foldGutter: true }} onChange={(value) => onChange?.(value)} /> : formatted.kind === "markdown" ? <MarkdownContent content={formatted.content} /> : <pre className={formatted.kind === "json" ? "json-block" : ""}>{formatted.content}</pre>}
     </div>
   );
 }

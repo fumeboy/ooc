@@ -50,8 +50,8 @@ export function buildServer(config: ServerConfig = readServerConfig()) {
     .use(healthModule)
     .use(runtimeModule(config))
     .use(stonesModule(config))
-    .use(flowsModule(config))
-    .use(uiModule(config));
+    .use(uiModule(config))
+    .use(flowsModule(config));
 
   if (config.workerEnabled) {
     const worker = startJobWorker(config);
