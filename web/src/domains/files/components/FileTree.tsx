@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Box, ChevronDown, ChevronRight, FileJson2, FileText, Folder, FolderOpen, GitBranch } from "lucide-react";
+import { Box, ChevronDown, ChevronRight, FileJson2, FileText, Folder, FolderOpen, GitBranch, Plus } from "lucide-react";
 import type { FileTreeNode as Node } from "../model";
 
-export function FileTree({ root, selectedPath, onSelect }: { root?: Node; selectedPath?: string; onSelect: (node: Node) => void }) {
+export function FileTree({ root, selectedPath, onSelect, onCreate }: { root?: Node; selectedPath?: string; onSelect: (node: Node) => void; onCreate?: (node: Node) => void }) {
   if (!root) return <div className="muted small">No tree loaded.</div>;
-  return <div className="tree"><TreeNode node={root} depth={0} selectedPath={selectedPath} onSelect={onSelect} /></div>;
+  return <div className="tree"><TreeNode node={root} depth={0} selectedPath={selectedPath} onSelect={onSelect} onCreate={onCreate} /></div>;
 }
 
 function icon(node: Node, expanded: boolean) {
@@ -15,11 +15,15 @@ function icon(node: Node, expanded: boolean) {
   return <FileText size={13} className="tree-icon file" />;
 }
 
-function TreeNode({ node, depth, selectedPath, onSelect }: { node: Node; depth: number; selectedPath?: string; onSelect: (node: Node) => void }) {
+function canCreateIn(node: Node) {
+  return node.type === "directory" && /^stones\/[^/]+\/knowledge(?:\/|$)/.test(node.path);
+}
+
+function TreeNode({ node, depth, selectedPath, onSelect, onCreate }: { node: Node; depth: number; selectedPath?: string; onSelect: (node: Node) => void; onCreate?: (node: Node) => void }) {
   const [expanded, setExpanded] = useState(depth < 1);
   const selected = selectedPath === node.path;
   return (
-    <div>
+    <div className="tree-node">
       <button
         className={`tree-button ${selected ? "active" : ""}`}
         style={{ paddingLeft: depth * 14 + 6 }}
@@ -33,8 +37,9 @@ function TreeNode({ node, depth, selectedPath, onSelect }: { node: Node; depth: 
         <span className="tree-label">{node.name}</span>
         {node.size !== undefined && <span className="muted small" style={{ marginLeft: "auto" }}>{node.size}B</span>}
       </button>
+      {onCreate && canCreateIn(node) && <button className="tree-inline-action" title="Create knowledge file or folder" onClick={() => onCreate(node)} style={{ left: depth * 14 + 2 }}><Plus size={11} /></button>}
       {node.type === "directory" && expanded && node.children?.map((child) => (
-        <TreeNode key={child.path} node={child} depth={depth + 1} selectedPath={selectedPath} onSelect={onSelect} />
+        <TreeNode key={child.path} node={child} depth={depth + 1} selectedPath={selectedPath} onSelect={onSelect} onCreate={onCreate} />
       ))}
     </div>
   );

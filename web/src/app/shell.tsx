@@ -3,7 +3,7 @@ import { continueThread, fetchJob, fetchThread, waitForJob } from "../domains/ch
 import { fetchFile, fetchTree, type FileTreeNode, type TreeScope } from "../domains/files";
 import { fetchFlows, type FlowSession } from "../domains/flows";
 import { createSessionWithObject } from "../domains/sessions";
-import { fetchStones } from "../domains/stones";
+import { createKnowledgeDirectory, createKnowledgeFile, createStone, fetchStones, updateKnowledgeFile } from "../domains/stones";
 import { messageFromError } from "../transport/errors";
 import { AppLayout } from "./layout/AppLayout";
 import { MainPanel } from "./layout/MainPanel";
@@ -13,6 +13,10 @@ import { initialState, type AppState } from "./state";
 
 export function AppShell() {
   const [state, setState] = useState<AppState>(initialState);
+  const [stoneModalOpen, setStoneModalOpen] = useState(false);
+  const [stoneDraft, setStoneDraft] = useState({ name: "", description: "", self: "", readme: "" });
+  const [knowledgeModal, setKnowledgeModal] = useState<{ objectId: string; parentPath: string } | undefined>();
+  const [knowledgeDraft, setKnowledgeDraft] = useState({ kind: "file" as "file" | "folder", path: "", content: "" });
 
   const patch = useCallback((next: Partial<AppState>) => setState((prev) => ({ ...prev, ...next })), []);
 
@@ -37,11 +41,24 @@ export function AppShell() {
   }
 
   async function handleNode(node: FileTreeNode) {
-    patch({ activePath: node.path, error: undefined });
+    patch({ activePath: node.path, error: undefined, activeFile: undefined, activeStoneObjectId: undefined, activeKnowledgePath: undefined, fileDirty: false });
     if (node.type === "file") {
-      try { patch({ activeFile: await fetchFile(node.path) }); }
-      catch (error) { patch({ error: messageFromError(error) }); }
+      try {
+        const editable = knowledgeTarget(node.path);
+        patch({ activeFile: await fetchFile(node.path), activeStoneObjectId: editable?.objectId, activeKnowledgePath: editable?.path, fileDirty: false });
+      }
+      catch (error) { patch({ error: messageFromError(error), activeFile: undefined, activeStoneObjectId: undefined, activeKnowledgePath: undefined, fileDirty: false }); }
     }
+  }
+
+  function knowledgeTarget(path: string) {
+    const match = path.match(/^stones\/([^/]+)\/knowledge\/(.+)$/);
+    return match ? { objectId: match[1], path: match[2] } : undefined;
+  }
+
+  function knowledgeDirectoryTarget(node: FileTreeNode) {
+    const match = node.path.match(/^stones\/([^/]+)\/knowledge(?:\/(.*))?$/);
+    return match ? { objectId: match[1], parentPath: match[2] ?? "" } : undefined;
   }
 
   async function handleSession(flow: FlowSession) {
@@ -75,12 +92,67 @@ export function AppShell() {
     }
   }
 
+  async function handleCreateStone() {
+    const name = stoneDraft.name.trim();
+    if (!name) return patch({ error: "Object name is required" });
+    patch({ loading: true, error: undefined });
+    try {
+      await createStone({ name, description: stoneDraft.description, self: stoneDraft.self, readme: stoneDraft.readme });
+      setStoneModalOpen(false);
+      setStoneDraft({ name: "", description: "", self: "", readme: "" });
+      await refreshBasics("stones");
+    } catch (error) {
+      patch({ error: messageFromError(error), loading: false });
+    }
+  }
+
+  async function handleCreateKnowledge() {
+    if (!knowledgeModal) return;
+    const rawPath = knowledgeDraft.path.trim();
+    if (!rawPath) return patch({ error: "Knowledge path is required" });
+    const path = [knowledgeModal.parentPath, rawPath].filter(Boolean).join("/");
+    patch({ loading: true, error: undefined });
+    try {
+      if (knowledgeDraft.kind === "folder") await createKnowledgeDirectory({ objectId: knowledgeModal.objectId, path });
+      else await createKnowledgeFile({ objectId: knowledgeModal.objectId, path, content: knowledgeDraft.content });
+      setKnowledgeModal(undefined);
+      setKnowledgeDraft({ kind: "file", path: "", content: "" });
+      await refreshBasics("stones");
+    } catch (error) {
+      patch({ error: messageFromError(error), loading: false });
+    }
+  }
+
+  async function handleSaveFile() {
+    if (!state.activeFile || !state.activeStoneObjectId || !state.activeKnowledgePath) return;
+    patch({ savingFile: true, error: undefined });
+    try {
+      await updateKnowledgeFile({ objectId: state.activeStoneObjectId, path: state.activeKnowledgePath, content: state.activeFile.content });
+      patch({ savingFile: false, fileDirty: false });
+      await refreshBasics(state.scope);
+    } catch (error) {
+      patch({ error: messageFromError(error), savingFile: false });
+    }
+  }
+
   return (
     <AppLayout
-      sidebar={<Sidebar scope={state.scope} flows={state.flows} stones={state.stones} tree={state.tree} activePath={state.activePath} activeSessionId={state.activeSessionId} onScope={refreshBasics} onNode={handleNode} onSession={handleSession} onCreate={handleCreate} />}
-      main={<MainPanel file={state.activeFile} path={state.activePath} error={state.error} loading={state.loading} />}
+      sidebar={<Sidebar scope={state.scope} flows={state.flows} stones={state.stones} tree={state.tree} activePath={state.activePath} activeSessionId={state.activeSessionId} onScope={refreshBasics} onNode={handleNode} onSession={handleSession} onCreate={handleCreate} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
+      main={<MainPanel file={state.activeFile} path={state.activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} />}
       right={<RightPanel sessionId={state.activeSessionId} objectId={state.activeObjectId} thread={state.thread} onSend={handleSend} />}
-    />
+    >
+      <CreateStoneModal open={stoneModalOpen} draft={stoneDraft} onDraft={setStoneDraft} onClose={() => setStoneModalOpen(false)} onSubmit={handleCreateStone} />
+      <CreateKnowledgeModal modal={knowledgeModal} draft={knowledgeDraft} onDraft={setKnowledgeDraft} onClose={() => setKnowledgeModal(undefined)} onSubmit={handleCreateKnowledge} />
+    </AppLayout>
   );
 }
 
+function CreateStoneModal({ open, draft, onDraft, onClose, onSubmit }: { open: boolean; draft: { name: string; description: string; self: string; readme: string }; onDraft: (draft: { name: string; description: string; self: string; readme: string }) => void; onClose: () => void; onSubmit: () => void }) {
+  if (!open) return null;
+  return <div className="modal-backdrop"><div className="modal-card"><div className="row space-between"><strong>Create object</strong><button className="btn" onClick={onClose}>Close</button></div><div className="stack"><label className="field-label">Name<input className="input" value={draft.name} onChange={(event) => onDraft({ ...draft, name: event.target.value })} placeholder="researcher" /></label><label className="field-label">Description<input className="input" value={draft.description} onChange={(event) => onDraft({ ...draft, description: event.target.value })} placeholder="What this object does" /></label><label className="field-label">self.md<textarea className="textarea code-textarea" value={draft.self} onChange={(event) => onDraft({ ...draft, self: event.target.value })} /></label><label className="field-label">readme.md<textarea className="textarea code-textarea" value={draft.readme} onChange={(event) => onDraft({ ...draft, readme: event.target.value })} /></label></div><div className="row space-between modal-actions"><span className="muted small">knowledge / memory / relations / server directories are initialized by the backend.</span><button className="btn primary" onClick={onSubmit}>Create</button></div></div></div>;
+}
+
+function CreateKnowledgeModal({ modal, draft, onDraft, onClose, onSubmit }: { modal?: { objectId: string; parentPath: string }; draft: { kind: "file" | "folder"; path: string; content: string }; onDraft: (draft: { kind: "file" | "folder"; path: string; content: string }) => void; onClose: () => void; onSubmit: () => void }) {
+  if (!modal) return null;
+  return <div className="modal-backdrop"><div className="modal-card compact-modal"><div className="row space-between"><strong>Create knowledge entry</strong><button className="btn" onClick={onClose}>Close</button></div><p className="muted small">stones/{modal.objectId}/knowledge/{modal.parentPath}</p><div className="row"><button className={`btn ${draft.kind === "file" ? "primary" : ""}`} onClick={() => onDraft({ ...draft, kind: "file" })}>File</button><button className={`btn ${draft.kind === "folder" ? "primary" : ""}`} onClick={() => onDraft({ ...draft, kind: "folder" })}>Folder</button></div><label className="field-label">Path<input className="input" value={draft.path} onChange={(event) => onDraft({ ...draft, path: event.target.value })} placeholder={draft.kind === "file" ? "notes/idea.md" : "notes"} /></label>{draft.kind === "file" && <label className="field-label">Initial content<textarea className="textarea code-textarea" value={draft.content} onChange={(event) => onDraft({ ...draft, content: event.target.value })} /></label>}<div className="row space-between modal-actions"><span className="muted small">Paths are relative to the selected knowledge folder.</span><button className="btn primary" onClick={onSubmit}>Create</button></div></div></div>;
+}

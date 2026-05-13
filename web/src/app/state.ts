@@ -10,6 +10,10 @@ export type AppState = {
   tree?: FileTreeNode;
   activePath?: string;
   activeFile?: FileContent;
+  activeStoneObjectId?: string;
+  activeKnowledgePath?: string;
+  fileDirty: boolean;
+  savingFile: boolean;
   activeSessionId?: string;
   activeObjectId?: string;
   thread?: ThreadContext;
@@ -21,6 +25,7 @@ export const initialState: AppState = {
   scope: "world",
   flows: [],
   stones: [],
+  fileDirty: false,
+  savingFile: false,
   loading: true,
 };
-
