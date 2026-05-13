@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Box, ChevronDown, ChevronRight, FileJson2, FileText, Folder, FolderOpen, GitBranch } from "lucide-react";
 import type { FileTreeNode as Node } from "../model";
 
 export function FileTree({ root, selectedPath, onSelect }: { root?: Node; selectedPath?: string; onSelect: (node: Node) => void }) {
@@ -7,12 +8,11 @@ export function FileTree({ root, selectedPath, onSelect }: { root?: Node; select
 }
 
 function icon(node: Node, expanded: boolean) {
-  if (node.marker === "flow") return "⑂";
-  if (node.marker === "stone") return "◆";
-  if (node.type === "directory") return expanded ? "▾" : "▸";
-  if (node.name.endsWith(".json")) return "{}";
-  if (node.name.endsWith(".md")) return "md";
-  return "•";
+  if (node.marker === "flow") return <GitBranch size={13} className="tree-icon flow" />;
+  if (node.marker === "stone") return <Box size={13} className="tree-icon stone" />;
+  if (node.type === "directory") return expanded ? <FolderOpen size={13} className="tree-icon folder" /> : <Folder size={13} className="tree-icon folder" />;
+  if (node.name.endsWith(".json")) return <FileJson2 size={13} className="tree-icon json" />;
+  return <FileText size={13} className="tree-icon file" />;
 }
 
 function TreeNode({ node, depth, selectedPath, onSelect }: { node: Node; depth: number; selectedPath?: string; onSelect: (node: Node) => void }) {
@@ -28,7 +28,8 @@ function TreeNode({ node, depth, selectedPath, onSelect }: { node: Node; depth: 
           onSelect(node);
         }}
       >
-        <span className="muted small" style={{ width: 20 }}>{icon(node, expanded)}</span>
+        <span className="twisty">{node.type === "directory" ? (expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />) : null}</span>
+        {icon(node, expanded)}
         <span className="tree-label">{node.name}</span>
         {node.size !== undefined && <span className="muted small" style={{ marginLeft: "auto" }}>{node.size}B</span>}
       </button>
@@ -38,4 +39,3 @@ function TreeNode({ node, depth, selectedPath, onSelect }: { node: Node; depth: 
     </div>
   );
 }
-
