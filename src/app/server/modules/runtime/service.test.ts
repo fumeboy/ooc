@@ -6,6 +6,7 @@ import { createJobManager } from "../../runtime/job-manager";
 import { createPauseStore } from "../../runtime/pause-store";
 import { createRuntimeService } from "./service";
 import { AppServerError } from "../../bootstrap/errors";
+import { clearObservableDebugState } from "@src/observable";
 
 let tempRoot: string | undefined;
 
@@ -14,6 +15,7 @@ afterEach(async () => {
     await rm(tempRoot, { recursive: true, force: true });
     tempRoot = undefined;
   }
+  clearObservableDebugState();
 });
 
 function makeService() {
@@ -34,6 +36,16 @@ describe("runtime service", () => {
     pauseStore.enableGlobalPause();
 
     expect(service.getGlobalPauseStatus()).toEqual({ enabled: true });
+  });
+
+  test("toggles observable debug status", () => {
+    const service = makeService();
+
+    expect(service.getDebugStatus()).toEqual({ enabled: false });
+    expect(service.enableDebug()).toEqual({ enabled: true });
+    expect(service.getDebugStatus()).toEqual({ enabled: true });
+    expect(service.disableDebug()).toEqual({ enabled: false });
+    expect(service.getDebugStatus()).toEqual({ enabled: false });
   });
 
   test("getLatestDebug throws NOT_FOUND when debug files missing", async () => {

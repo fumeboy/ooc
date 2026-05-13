@@ -23,13 +23,9 @@ export const WAIT_TOOL: LlmTool = {
 export async function handleWaitTool(
   thread: ThreadContext,
   args: Record<string, unknown>
-): Promise<void> {
+): Promise<string> {
   const reason = (args.reason as string | undefined) ?? "";
   thread.status = "waiting";
   thread.waitingType = "explicit_wait";
-  thread.events.push({
-    category: "context_change",
-    kind: "inject",
-    text: `[wait] 线程进入等待状态: ${reason}`
-  });
+  return JSON.stringify({ ok: true, tool: "wait", message: `[wait] 线程进入等待状态: ${reason}` });
 }

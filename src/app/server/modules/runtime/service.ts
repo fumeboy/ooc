@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { disableDebug, enableDebug, getDebugStatus } from "@src/observable";
 import {
   llmInputFile,
   llmOutputFile,
@@ -56,6 +57,9 @@ export interface RuntimeService {
   enableGlobalPause(): { enabled: true };
   disableGlobalPause(): { enabled: false };
   getGlobalPauseStatus(): { enabled: boolean };
+  enableDebug(): { enabled: true };
+  disableDebug(): { enabled: false };
+  getDebugStatus(): { enabled: boolean };
   getLatestDebug(ref: ThreadPersistenceRef): Promise<{ input: unknown; output: unknown }>;
   getLoopDebug(ref: ThreadPersistenceRef, loopIndex: number): Promise<{ input: unknown; output: unknown; meta: unknown }>;
 }
@@ -100,6 +104,17 @@ export function createRuntimeService(deps: {
     },
     getGlobalPauseStatus() {
       return { enabled: deps.pauseStore.isGlobalPauseEnabled() };
+    },
+    enableDebug() {
+      enableDebug();
+      return { enabled: true as const };
+    },
+    disableDebug() {
+      disableDebug();
+      return { enabled: false as const };
+    },
+    getDebugStatus() {
+      return getDebugStatus();
     },
     async getLatestDebug(ref: ThreadPersistenceRef) {
       const details = {

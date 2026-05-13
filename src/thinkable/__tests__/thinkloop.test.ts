@@ -312,11 +312,11 @@ describe("think", () => {
     expect(thread.activeForms).toHaveLength(1);
     expect(thread.activeForms?.[0]?.status).toBe("executed");
     const executedEvent = [...thread.events].reverse().find(
-      (event) => event.category === "context_change" && event.kind === "inject"
+      (event) => event.category === "tool_runtime" && event.kind === "function_call_output"
     );
-    expect(executedEvent?.category).toBe("context_change");
-    expect(executedEvent?.kind).toBe("inject");
-    expect(executedEvent && "text" in executedEvent ? executedEvent.text : "").toContain("[form executed]");
+    expect(executedEvent?.category).toBe("tool_runtime");
+    expect(executedEvent?.kind).toBe("function_call_output");
+    expect(executedEvent && "output" in executedEvent ? executedEvent.output : "").toContain("[form executed]");
   });
 
   it("buildInputItems 产出的 system xml 会进入 llm 输入", async () => {

@@ -10,6 +10,14 @@ import { handleWaitTool } from "./tools/wait";
 /** 单个 LLM tool 的运行时 handler 签名。 */
 type ToolHandler = (thread: ThreadContext, args: Record<string, unknown>) => Promise<string | void>;
 
+function successToolOutput(tool: string, message?: string) {
+  return JSON.stringify(message ? { ok: true, tool, message } : { ok: true, tool });
+}
+
+function errorToolOutput(tool: string, error: string) {
+  return JSON.stringify({ ok: false, tool, error });
+}
+
 /** tool 名到 handler 的路由表；未实现的 tool 会转成 context_change 提示。 */
 const TOOL_HANDLERS: Partial<Record<LlmToolCall["name"], ToolHandler>> = {
   open: handleOpenTool,
@@ -32,16 +40,11 @@ export async function dispatchToolCall(
   const handler = TOOL_HANDLERS[toolCall.name];
   if (!handler) {
     const message = `[${toolCall.name}] tool 暂未实现。`;
-    thread.events.push({
-      category: "context_change",
-      kind: "inject",
-      text: message
-    });
-    return JSON.stringify({ ok: false, error: message });
+    return errorToolOutput(toolCall.name, message);
   }
   const output = await handler(thread, toolCall.arguments);
   if (typeof output === "string") {
     return output;
   }
-  return JSON.stringify({ ok: true, tool: toolCall.name });
+  return successToolOutput(toolCall.name);
 }

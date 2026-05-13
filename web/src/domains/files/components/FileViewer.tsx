@@ -5,6 +5,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import { markdown } from "@codemirror/lang-markdown";
 import { json } from "@codemirror/lang-json";
 import { javascript } from "@codemirror/lang-javascript";
+import { LLMInputJsonViewer, isLlmInputJsonPath } from "./LLMInputJsonViewer";
 
 function extensionsFor(path: string) {
   if (path.endsWith(".md") || path.endsWith(".markdown")) return [markdown()];
@@ -15,6 +16,9 @@ function extensionsFor(path: string) {
 
 export function FileViewer({ file, editable = false, saving = false, onChange, onSave }: { file?: FileContent; editable?: boolean; saving?: boolean; onChange?: (content: string) => void; onSave?: () => void }) {
   if (!file) return <EmptyState title="Select a file" detail="Choose a file from the tree to preview its text content." />;
+  if (!editable && isLlmInputJsonPath(file.path)) {
+    return <LLMInputJsonViewer file={file} />;
+  }
   const formatted = formatFileContent(file.path, file.content);
   return (
     <div className="file-viewer">

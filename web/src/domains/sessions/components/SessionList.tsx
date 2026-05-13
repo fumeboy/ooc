@@ -25,9 +25,6 @@ export function SessionList({ flows, activeSessionId, onSelect }: { flows: FlowS
 
   return (
     <div className="session-list-shell">
-      <div className="session-list-header">
-        <span className="session-list-title">Sessions</span>
-      </div>
       <nav className="session-list-nav">
         {sortedFlows.length === 0 ? (
           <p className="session-list-empty">No sessions yet</p>

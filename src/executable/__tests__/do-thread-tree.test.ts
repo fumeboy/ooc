@@ -76,6 +76,59 @@ describe("do thread tree core", () => {
     });
   });
 
+  it("fork 与 continue 都通过 inbox_message_arrived 记录新消息，而不是 inject", async () => {
+    const parent: ThreadContext = {
+      id: "t_parent",
+      status: "running",
+      events: []
+    };
+
+    await executeCommand("do", {
+      thread: parent,
+      args: {
+        context: "fork",
+        msg: "处理第一批告警"
+      }
+    });
+
+    const childId = parent.childThreadIds?.[0] ?? "";
+    const child = parent.childThreads?.[childId];
+    const firstMsgId = child?.inbox?.[0]?.id;
+
+    expect(firstMsgId).toBeDefined();
+    expect(child?.events).toEqual([
+      {
+        category: "context_change",
+        kind: "inbox_message_arrived",
+        msgId: firstMsgId
+      }
+    ]);
+
+    await executeCommand("do", {
+      thread: parent,
+      args: {
+        context: "continue",
+        threadId: childId,
+        msg: "处理第二批告警"
+      }
+    });
+
+    const secondMsgId = child?.inbox?.[1]?.id;
+    expect(secondMsgId).toBeDefined();
+    expect(child?.events).toEqual([
+      {
+        category: "context_change",
+        kind: "inbox_message_arrived",
+        msgId: firstMsgId
+      },
+      {
+        category: "context_change",
+        kind: "inbox_message_arrived",
+        msgId: secondMsgId
+      }
+    ]);
+  });
+
   it("continue appends inbox to an existing child thread and revives done child to running", async () => {
     const child: ThreadContext = {
       id: "t_child",

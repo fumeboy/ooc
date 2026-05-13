@@ -36,7 +36,7 @@ describe("executable tools", () => {
   it("通过 open 创建 command form 并预填 args", async () => {
     const thread = { id: "test", status: "running", events: [] } as ThreadContext;
 
-    await dispatchToolCall(thread, {
+    const output = await dispatchToolCall(thread, {
       id: "call_1",
       name: "open",
       arguments: {
@@ -50,17 +50,18 @@ describe("executable tools", () => {
     expect(thread.activeForms).toHaveLength(1);
     expect(thread.activeForms?.[0]?.command).toBe("talk");
     expect(thread.activeForms?.[0]?.accumulatedArgs).toEqual({ target: "user", msg: "hello" });
-    expect(thread.events.at(-1)).toEqual({
-      category: "context_change",
-      kind: "inject",
-      text: expect.stringContaining("Form")
+    expect(JSON.parse(output)).toEqual({
+      ok: true,
+      tool: "open",
+      message: expect.stringContaining("Form")
     });
+    expect(thread.events).toEqual([]);
   });
 
   it("通过 open knowledge 激活并固定 knowledge，且不创建 form", async () => {
     const thread = { id: "test", status: "running", events: [] } as ThreadContext;
 
-    await dispatchToolCall(thread, {
+    const output = await dispatchToolCall(thread, {
       id: "call_1",
       name: "open",
       arguments: {
@@ -72,17 +73,18 @@ describe("executable tools", () => {
 
     expect(thread.activeForms).toEqual([]);
     expect(thread.pinnedKnowledge).toEqual(["path/computable/file_ops"]);
-    expect(thread.events.at(-1)).toEqual({
-      category: "context_change",
-      kind: "inject",
-      text: expect.stringContaining("Knowledge path/computable/file_ops 已进入 Context")
+    expect(JSON.parse(output)).toEqual({
+      ok: true,
+      tool: "open",
+      message: expect.stringContaining("Knowledge path/computable/file_ops 已进入 Context")
     });
+    expect(thread.events).toEqual([]);
   });
 
   it("通过 open file 注入文件窗口，且不创建 form", async () => {
     const thread = { id: "test", status: "running", events: [] } as ThreadContext;
 
-    await dispatchToolCall(thread, {
+    const output = await dispatchToolCall(thread, {
       id: "call_1",
       name: "open",
       arguments: {
@@ -100,6 +102,12 @@ describe("executable tools", () => {
       lines: [0, 200],
       columns: [0, 120]
     });
+    expect(JSON.parse(output)).toEqual({
+      ok: true,
+      tool: "open",
+      message: "File src/foo.ts 已进入 Context。"
+    });
+    expect(thread.events).toEqual([]);
   });
 
   it("open file 缺少 args.path 时返回错误且不写入 undefined window", async () => {
@@ -121,11 +129,7 @@ describe("executable tools", () => {
       error: 'open(type="file") 缺少 args.path 参数。'
     });
     expect(thread.windows).toBeUndefined();
-    expect(thread.events.at(-1)).toEqual({
-      category: "context_change",
-      kind: "inject",
-      text: '[错误] open(type="file") 缺少 args.path 参数。'
-    });
+    expect(thread.events).toEqual([]);
   });
 
   it("open schema 使用 OpenAI 兼容的简单 object schema，并描述 file/knowledge 的 args.path 约束", () => {
@@ -187,7 +191,7 @@ describe("executable tools", () => {
     });
 
     const formId = thread.activeForms?.[0]?.formId ?? "";
-    await dispatchToolCall(thread, {
+    const output = await dispatchToolCall(thread, {
       id: "call_2",
       name: "refine",
       arguments: { form_id: formId, args: { context: "continue", threadId: "remote-1" } }
@@ -198,6 +202,25 @@ describe("executable tools", () => {
       threadId: "remote-1"
     });
     expect(thread.activeForms?.[0]?.commandPaths).toContain("talk.continue");
+    expect(JSON.parse(output)).toEqual({
+      ok: true,
+      tool: "refine",
+      message: expect.stringContaining(`Form ${formId} 已累积参数`)
+    });
+    expect(thread.events).toEqual([]);
+  });
+
+  it("未知 tool 通过 function_call_output 返回错误而不是写入 inject 事件", async () => {
+    const thread = { id: "test", status: "running", events: [] } as ThreadContext;
+
+    const output = await dispatchToolCall(thread, {
+      id: "call_unknown",
+      name: "compress" as never,
+      arguments: {}
+    });
+
+    expect(JSON.parse(output)).toEqual({ ok: false, tool: "compress", error: "[compress] tool 暂未实现。" });
+    expect(thread.events).toEqual([]);
   });
 
   it("通过 submit 把 form 切到 executed 并保留在 activeForms", async () => {
@@ -209,7 +232,7 @@ describe("executable tools", () => {
     });
 
     const formId = thread.activeForms?.[0]?.formId ?? "";
-    await dispatchToolCall(thread, {
+    const output = await dispatchToolCall(thread, {
       id: "call_2",
       name: "submit",
       arguments: { form_id: formId }
@@ -217,12 +240,12 @@ describe("executable tools", () => {
 
     expect(thread.activeForms).toHaveLength(1);
     expect(thread.activeForms?.[0]?.status).toBe("executed");
-    const lastEvent = thread.events.at(-1);
-    expect(lastEvent?.category).toBe("context_change");
-    expect(lastEvent?.kind).toBe("inject");
-    expect(lastEvent && "text" in lastEvent ? lastEvent.text : "").toBe(
-      '[form executed] form "制定计划" 已执行完成。'
-    );
+    expect(JSON.parse(output)).toEqual({
+      ok: true,
+      tool: "submit",
+      message: '[form executed] form "制定计划" 已执行完成。'
+    });
+    expect(thread.events).toEqual([]);
   });
 
   it("通过 close 取消 form 并移出 activeForms", async () => {
@@ -234,18 +257,19 @@ describe("executable tools", () => {
     });
 
     const formId = thread.activeForms?.[0]?.formId ?? "";
-    await dispatchToolCall(thread, {
+    const output = await dispatchToolCall(thread, {
       id: "call_2",
       name: "close",
       arguments: { form_id: formId, reason: "不需要写代码了" }
     });
 
     expect(thread.activeForms).toEqual([]);
-    expect(thread.events.at(-1)).toEqual({
-      category: "context_change",
-      kind: "inject",
-      text: "[close] Form " + formId + " 已关闭。原因：不需要写代码了"
+    expect(JSON.parse(output)).toEqual({
+      ok: true,
+      tool: "close",
+      message: "[close] Form " + formId + " 已关闭。原因：不需要写代码了"
     });
+    expect(thread.events).toEqual([]);
   });
 
   it("close 缺少 reason 时不关闭 form", async () => {
@@ -257,18 +281,15 @@ describe("executable tools", () => {
     });
 
     const formId = thread.activeForms?.[0]?.formId ?? "";
-    await dispatchToolCall(thread, {
+    const output = await dispatchToolCall(thread, {
       id: "call_2",
       name: "close",
       arguments: { form_id: formId }
     });
 
     expect(thread.activeForms).toHaveLength(1);
-    expect(thread.events.at(-1)).toEqual({
-      category: "context_change",
-      kind: "inject",
-      text: "[错误] close 缺少 reason 参数。"
-    });
+    expect(JSON.parse(output)).toEqual({ ok: false, tool: "close", error: "close 缺少 reason 参数。" });
+    expect(thread.events).toEqual([]);
   });
 
   it("close 缺少 form_id 时给出错误，不再支持 knowledge close 分支", async () => {
@@ -279,24 +300,21 @@ describe("executable tools", () => {
       pinnedKnowledge: ["api/openai"]
     } as ThreadContext;
 
-    await dispatchToolCall(thread, {
+    const output = await dispatchToolCall(thread, {
       id: "call_1",
       name: "close",
       arguments: { type: "knowledge", path: "ghost", reason: "试试" }
     });
 
     expect(thread.pinnedKnowledge).toEqual(["api/openai"]);
-    expect(thread.events.at(-1)).toEqual({
-      category: "context_change",
-      kind: "inject",
-      text: "[错误] close 缺少 form_id 参数。"
-    });
+    expect(JSON.parse(output)).toEqual({ ok: false, tool: "close", error: "close 缺少 form_id 参数。" });
+    expect(thread.events).toEqual([]);
   });
 
   it("通过 wait 把线程切换为 waiting", async () => {
     const thread = { id: "test", status: "running", events: [] } as ThreadContext;
 
-    await dispatchToolCall(thread, {
+    const output = await dispatchToolCall(thread, {
       id: "call_1",
       name: "wait",
       arguments: { reason: "等待用户输入" }
@@ -304,10 +322,11 @@ describe("executable tools", () => {
 
     expect(thread.status).toBe("waiting");
     expect(thread.waitingType).toBe("explicit_wait");
-    expect(thread.events.at(-1)).toEqual({
-      category: "context_change",
-      kind: "inject",
-      text: "[wait] 线程进入等待状态: 等待用户输入"
+    expect(JSON.parse(output)).toEqual({
+      ok: true,
+      tool: "wait",
+      message: "[wait] 线程进入等待状态: 等待用户输入"
     });
+    expect(thread.events).toEqual([]);
   });
 });

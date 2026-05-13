@@ -8,6 +8,31 @@ import { createPauseStore } from "../../runtime/pause-store";
 import { createFlowsService } from "./service";
 
 describe("flows service", () => {
+  test("listFlows exposes session paused state", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-"));
+
+    try {
+      const pauseStore = createPauseStore();
+      const service = createFlowsService({
+        baseDir,
+        pauseStore,
+        jobManager: createJobManager(),
+      });
+
+      await service.createSession({ sessionId: "s1", title: "demo" });
+      await service.createSession({ sessionId: "s2", title: "demo 2" });
+      pauseStore.pauseSession("s2");
+
+      const out = await service.listFlows();
+      expect(out.items.map((item) => ({ sessionId: item.sessionId, paused: item.paused }))).toEqual([
+        { sessionId: "s1", paused: false },
+        { sessionId: "s2", paused: true },
+      ]);
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
   test("creates flow object without initialMessage → no job enqueued", async () => {
     const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-"));
 
@@ -148,6 +173,34 @@ describe("flows service", () => {
         category: "context_change",
         kind: "inbox_message_arrived",
         msgId: continuedMsgId as string
+      });
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  test("pauseSession and resumeSession return latest paused flag", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-"));
+
+    try {
+      const service = createFlowsService({
+        baseDir,
+        pauseStore: createPauseStore(),
+        jobManager: createJobManager(),
+      });
+
+      await service.createSession({ sessionId: "s-pause" });
+
+      expect(service.pauseSession({ sessionId: "s-pause" })).toEqual({
+        sessionId: "s-pause",
+        paused: true,
+      });
+
+      await expect(service.resumeSession({ sessionId: "s-pause" })).resolves.toEqual({
+        sessionId: "s-pause",
+        paused: false,
+        resumedThreadIds: [],
+        jobIds: [],
       });
     } finally {
       await rm(baseDir, { recursive: true, force: true });

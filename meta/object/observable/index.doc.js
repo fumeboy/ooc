@@ -42,6 +42,7 @@ OOC 有两个与“观测/调试”直接相关的开关：pause 与 debug：
   - \`threads/{threadId}/debug/loop_NNN.input.json\`
   - \`threads/{threadId}/debug/loop_NNN.output.json\`
   - \`threads/{threadId}/debug/loop_NNN.meta.json\`
+- app server 进一步把 observable 的 pause / debug 状态提升成控制面 API，允许 web 直接查询与切换，而不是只在进程内部调用函数。
 
 当前 loop meta 覆盖字段：
 - model / provider
@@ -62,6 +63,24 @@ Observable 的目标:
 - 让“对象为什么这么做”可解释
 - 让“对象做了什么”可追溯
 - 让“对象是否真的完成”可验证
+
+当前 web 控制面已经把 `llm.input.json` 作为可观察性的直接入口之一：不仅能看原始 JSON，还能把 system message 内的 XML context 结构化展开，帮助人工定位“这一轮到底把什么上下文暴露给了模型”。
+
+当前 web chat 视图也开始遵循“观测对象先归一化”的思路：原始 thread events 会先映射成 message / tool / notice 三种人类可读语义，再做卡片展示。这样 observable 不再只是“文件存在”，而是“人能快速判断发生了什么”。
+
+## 这一轮的编程思想
+
+1. **把可观测性从文件层提升到控制面层**
+   - 文件仍是最终证据；
+   - 但 pause/debug 的开关、session paused 状态、health online/offline 需要先成为查询/切换 API，才能稳定接到 UI。
+
+2. **把“可看见”细分成两层**
+   - 机器层：debug JSON、thread status、event log；
+   - 人类层：tool card、notice card、XML tree viewer、Logo 状态色。
+
+3. **解释优先于保真平铺**
+   - 原始 event log 当然保真，但人类排障时最缺的是解释；
+   - 因此本轮倾向于先保留原始证据，再增加解释视图，而不是让用户直接消费未经整理的 JSON。
 
 ## 子文档
 

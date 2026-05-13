@@ -82,18 +82,19 @@ function pushUnique(target: string[] | undefined, value: string): string[] {
   return next;
 }
 
-function getRequiredPath(thread: ThreadContext, openType: string, nestedArgs: Record<string, unknown>): string | undefined {
+function successOutput(message: string) {
+  return JSON.stringify({ ok: true, tool: "open", message });
+}
+
+function errorOutput(error: string) {
+  return JSON.stringify({ ok: false, tool: "open", error });
+}
+
+function getRequiredPath(openType: string, nestedArgs: Record<string, unknown>): string | undefined {
   const path = nestedArgs.path;
   if (typeof path === "string" && path.trim()) {
     return path.trim();
   }
-
-  const message = `open(type="${openType}") 缺少 args.path 参数。`;
-  thread.events.push({
-    category: "context_change",
-    kind: "inject",
-    text: `[错误] ${message}`
-  });
   return undefined;
 }
 
@@ -121,18 +122,13 @@ export async function handleOpenTool(
       }
     }
     thread.activeForms = snapshot;
-    thread.events.push({
-      category: "context_change",
-      kind: "inject",
-      text: `Form ${formId} 已创建（${command}）。后续请用 refine / submit / close 引用该 form_id。`
-    });
-    return;
+    return successOutput(`Form ${formId} 已创建（${command}）。后续请用 refine / submit / close 引用该 form_id。`);
   }
 
   if (openType === "knowledge") {
-    const path = getRequiredPath(thread, openType, nestedArgs);
+    const path = getRequiredPath(openType, nestedArgs);
     if (!path) {
-      return JSON.stringify({ ok: false, tool: "open", error: `open(type="${openType}") 缺少 args.path 参数。` });
+      return errorOutput(`open(type="${openType}") 缺少 args.path 参数。`);
     }
     thread.activeForms = thread.activeForms ?? [];
     // 写入 pinnedKnowledge 即可——activator 每轮 lazy 派生当前激活集合，不再需要 activatedKnowledge 字段。
@@ -147,18 +143,13 @@ export async function handleOpenTool(
         columns: nestedArgs.columns
       }
     };
-    thread.events.push({
-      category: "context_change",
-      kind: "inject",
-      text: `Knowledge ${path} 已进入 Context 并固定。`
-    });
-    return;
+    return successOutput(`Knowledge ${path} 已进入 Context 并固定。`);
   }
 
   if (openType === "file") {
-    const path = getRequiredPath(thread, openType, nestedArgs);
+    const path = getRequiredPath(openType, nestedArgs);
     if (!path) {
-      return JSON.stringify({ ok: false, tool: "open", error: `open(type="${openType}") 缺少 args.path 参数。` });
+      return errorOutput(`open(type="${openType}") 缺少 args.path 参数。`);
     }
     thread.activeForms = thread.activeForms ?? [];
     thread.windows = {
@@ -171,10 +162,8 @@ export async function handleOpenTool(
         columns: nestedArgs.columns
       }
     };
-    thread.events.push({
-      category: "context_change",
-      kind: "inject",
-      text: `File ${path} 已进入 Context。`
-    });
+    return successOutput(`File ${path} 已进入 Context。`);
   }
+
+  return errorOutput(`open 不支持 type="${openType}"。`);
 }

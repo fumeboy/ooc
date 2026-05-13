@@ -4,5 +4,5 @@ export type FlowSession = {
   dir: string;
   createdAt: number;
   updatedAt: number;
+  paused?: boolean;
 };
-

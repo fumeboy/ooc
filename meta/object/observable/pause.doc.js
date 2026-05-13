@@ -15,9 +15,9 @@ OOC 里有两种“暂停”概念：
 
 2) 全局 pause（暂停所有对象）
 - API：
-  - POST \/api\/global-pause\/enable
-  - POST \/api\/global-pause\/disable
-  - GET  \/api\/global-pause\/status
+  - POST \/api\/runtime\/global-pause\/enable
+  - POST \/api\/runtime\/global-pause\/disable
+  - GET  \/api\/runtime\/global-pause\/status
 - 语义：当 global-pause 开启，所有对象都会在当前轮次结束后暂停（进入 paused）。
 
 ## 暂停发生在 ThinkLoop 的哪个点
@@ -36,5 +36,19 @@ resume 不是“从头再跑一轮 LLM”，而是：
 
 - 把 paused 的线程恢复为 running
 - 从 \`threads/{id}/llm.input.json\` 读取上一轮未执行的 LLM 决策继续执行
+
+## Web 控制面当前如何使用 pause
+
+- session pause / resume 已经接入 chat composer 左下角按钮；
+- global pause / resume 已经接入 MainLogo 顶部状态条；
+- UI 不自己缓存另一套 pause 真相，而是直接读取 flows/runtime API 返回值。
+
+这背后的实现原则是：**pause 是运行时状态，不是纯 UI 状态。**
+
+因此：
+
+- 真正的 pause 语义必须由 engine / app server 决定；
+- web 只能查询、触发、展示；
+- 一旦 pause 被提升成控制面能力，就必须提供 status API，而不仅是 enable/disable 的写操作。
 `,
 };

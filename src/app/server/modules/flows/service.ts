@@ -93,6 +93,7 @@ export function createFlowsService(deps: {
                 dir,
                 createdAt: info.birthtimeMs,
                 updatedAt: info.mtimeMs,
+                paused: deps.pauseStore.isSessionPaused(entry.name),
               };
             })
         );
@@ -229,7 +230,7 @@ export function createFlowsService(deps: {
         jobIds.push(job.jobId);
         resumedThreadIds.push(`${objectId}/${threadId}`);
       }
-      return { sessionId, resumedThreadIds, jobIds };
+      return { sessionId, paused: false, resumedThreadIds, jobIds };
     },
     async callMethod({
       sessionId,

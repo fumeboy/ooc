@@ -90,6 +90,21 @@ function generateMessage(
   };
 }
 
+function appendInboxMessage(thread: ThreadContext, message: ThreadMessage): ThreadContext {
+  return {
+    ...thread,
+    inbox: [...(thread.inbox ?? []), message],
+    events: [
+      ...(thread.events ?? []),
+      {
+        category: "context_change",
+        kind: "inbox_message_arrived",
+        msgId: message.id,
+      },
+    ],
+  };
+}
+
 /** 为 fork 出来的子线程创建“处理初始消息”的 todo form。 */
 function createInitialTodoForms(content: string): ActiveForm[] {
   const formManager = new FormManager();
@@ -123,23 +138,14 @@ export async function executeDoCommand(ctx: CommandExecutionContext): Promise<st
 
     const childId = generateThreadId();
     const message = generateMessage(ctx.thread.id, childId, content);
-    const childThread: ThreadContext = {
+    const childThread = appendInboxMessage({
       id: childId,
       status: "running",
-      // 同步把初始消息以 inject 形式入 events，确保 LLM transcript 至少有一条 user 消息：
-      // Claude/OpenAI API 都要求 messages 不能只有 system，否则代理可能直接返回空 body。
-      events: [
-        {
-          category: "context_change",
-          kind: "inject",
-          text: `[初始消息] ${content}`,
-        },
-      ],
+      events: [],
       parentThreadId: parentThread.id,
       creatorThreadId: ctx.thread.id,
-      inbox: [message],
       activeForms: createInitialTodoForms(content),
-    };
+    }, message);
 
     parentThread.childThreadIds = [...(parentThread.childThreadIds ?? []), childId];
     parentThread.childThreads = {
@@ -163,12 +169,12 @@ export async function executeDoCommand(ctx: CommandExecutionContext): Promise<st
   if (!targetThread) return;
 
   const message = generateMessage(ctx.thread.id, targetThreadId, content);
-  targetThread.inbox = [...(targetThread.inbox ?? []), message];
-  ctx.thread.outbox = [...(ctx.thread.outbox ?? []), message];
-
+  const nextTargetThread = appendInboxMessage(targetThread, message);
   if (targetThread.status === "done" || targetThread.status === "failed") {
-    targetThread.status = "running";
+    nextTargetThread.status = "running";
   }
+  Object.assign(targetThread, nextTargetThread);
+  ctx.thread.outbox = [...(ctx.thread.outbox ?? []), message];
 
   // 与 fork 分支对称：wait=true 时父线程进入 await_children
   if (ctx.args.wait === true) {

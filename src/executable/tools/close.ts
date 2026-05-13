@@ -29,43 +29,26 @@ export const CLOSE_TOOL: LlmTool = {
 export async function handleCloseTool(
   thread: ThreadContext,
   args: Record<string, unknown>
-): Promise<void> {
+): Promise<string> {
+  const successOutput = (message: string) => JSON.stringify({ ok: true, tool: "close", message });
+  const errorOutput = (error: string) => JSON.stringify({ ok: false, tool: "close", error });
   const reason = args.reason as string | undefined;
   if (!reason) {
-    thread.events.push({
-      category: "context_change",
-      kind: "inject",
-      text: "[错误] close 缺少 reason 参数。"
-    });
-    return;
+    return errorOutput("close 缺少 reason 参数。");
   }
 
   const formId = args.form_id as string | undefined;
   if (!formId) {
-    thread.events.push({
-      category: "context_change",
-      kind: "inject",
-      text: "[错误] close 缺少 form_id 参数。"
-    });
-    return;
+    return errorOutput("close 缺少 form_id 参数。");
   }
 
   const formManager = FormManager.fromData(thread.activeForms ?? []);
   const form = formManager.close(formId);
 
   if (!form) {
-    thread.events.push({
-      category: "context_change",
-      kind: "inject",
-      text: `[提示] Form ${formId} 不存在（可能已被 submit 消费）。`
-    });
-    return;
+    return errorOutput(`Form ${formId} 不存在（可能已被 submit 消费）。`);
   }
 
   thread.activeForms = formManager.toData();
-  thread.events.push({
-    category: "context_change",
-    kind: "inject",
-    text: `[close] Form ${form.formId} 已关闭。原因：${reason}`
-  });
+  return successOutput(`[close] Form ${form.formId} 已关闭。原因：${reason}`);
 }

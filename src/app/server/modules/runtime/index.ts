@@ -3,7 +3,10 @@ import type { ServerConfig } from "../../bootstrap/config";
 import { createJobManager } from "../../runtime/job-manager";
 import { createPauseStore } from "../../runtime/pause-store";
 import { disableGlobalPauseApi } from "./api.disable-global-pause";
+import { disableDebugApi } from "./api.disable-debug";
 import { enableGlobalPauseApi } from "./api.enable-global-pause";
+import { enableDebugApi } from "./api.enable-debug";
+import { getDebugStatusApi } from "./api.get-debug-status";
 import { getGlobalPauseStatusApi } from "./api.get-global-pause-status";
 import { getJobApi } from "./api.get-job";
 import { getLatestDebugApi } from "./api.get-latest-debug";
@@ -33,6 +36,9 @@ export function runtimeModule(config: RuntimeModuleConfig) {
     .use(enableGlobalPauseApi(service))
     .use(disableGlobalPauseApi(service))
     .use(getGlobalPauseStatusApi(service))
+    .use(enableDebugApi(service))
+    .use(disableDebugApi(service))
+    .use(getDebugStatusApi(service))
     .use(getLatestDebugApi(service))
     .use(getLoopDebugApi(service));
 }

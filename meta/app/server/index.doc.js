@@ -21,7 +21,7 @@ App Server 是 OOC 的控制面 HTTP 服务，位于 \`src/app/server\`，使用
 ## 模块
 
 - health：\`GET /api/health\`
-- runtime：LLM 配置、job 查询、global pause、debug 查询
+- runtime：LLM 配置、job 查询、global pause、debug 查询与 debug 开关
 - stones：stone object 创建、读写 self/readme/data/server source、\`call_method\`
 - flows：session、flow object、thread 查询、session pause/resume、\`call_method\`
 
@@ -53,6 +53,26 @@ flow object 创建后会创建 root thread 并入队 run-thread job。
 - routes tests：controller / route 层接口测试，验证 schema 与路由装配
 - local e2e：基于临时 baseDir 的控制面闭环，不依赖真实 LLM
 - real e2e：真实 LLM 链路，默认跳过，显式开关才运行
+
+## 本轮控制面演进补充
+
+- runtime 模块现在不仅暴露全局 pause：
+  - `GET /api/runtime/global-pause/status`
+  - `POST /api/runtime/global-pause/enable`
+  - `POST /api/runtime/global-pause/disable`
+- 同时也把 observable debug 的进程内开关变成了 HTTP 能力：
+  - `GET /api/runtime/debug/status`
+  - `POST /api/runtime/debug/enable`
+  - `POST /api/runtime/debug/disable`
+- flows 列表会附带 session 的 `paused` 状态，供 web 控制面直接展示与切换。
+
+这体现的设计原则是：**控制面状态必须通过 server 明确出入口，而不是让 web 猜测进程内状态。**
+
+换句话说：
+
+- pause / debug 不再只是 engine 内部开关；
+- 它们被提升为“可查询、可切换、可验证”的控制面能力；
+- route 仍保持 one api per file，service 负责状态语义，web 只消费 HTTP 契约。
 
 ## 真实测试
 

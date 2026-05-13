@@ -48,7 +48,6 @@ export function Sidebar({ scope, flows, tree, activePath, activeSessionId, activ
           {scope === "flows" ? (
             showSessions || !activeSessionId ? (
               <div className="section">
-                <p className="section-title">Sessions</p>
                 <SessionList flows={flows} activeSessionId={activeSessionId} onSelect={onSession} />
               </div>
             ) : (

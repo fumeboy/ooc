@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { continueThread, fetchJob, fetchThread, waitForJob } from "../domains/chat";
 import { fetchFile, fetchTree, type FileTreeNode, type TreeScope } from "../domains/files";
-import { fetchFlows, type FlowSession } from "../domains/flows";
+import { fetchFlows, pauseFlowSession, resumeFlowSession, type FlowSession } from "../domains/flows";
 import { createSessionWithObject } from "../domains/sessions";
 import { createKnowledgeDirectory, createKnowledgeFile, createStone, fetchStones, updateKnowledgeFile } from "../domains/stones";
 import { messageFromError } from "../transport/errors";
@@ -18,6 +18,9 @@ export function AppShell() {
   const [stoneDraft, setStoneDraft] = useState({ name: "", description: "", self: "", readme: "" });
   const [knowledgeModal, setKnowledgeModal] = useState<{ objectId: string; parentPath: string } | undefined>();
   const [knowledgeDraft, setKnowledgeDraft] = useState({ kind: "file" as "file" | "folder", path: "", content: "" });
+  const [pauseBusy, setPauseBusy] = useState(false);
+  const activeFlow = state.flows.find((flow) => flow.sessionId === state.activeSessionId);
+  const isSessionPaused = Boolean(activeFlow?.paused);
 
   const patch = useCallback((next: Partial<AppState>) => setState((prev) => ({ ...prev, ...next })), []);
 
@@ -73,6 +76,13 @@ export function AppShell() {
     if (objectId) await loadThread(flow.sessionId, objectId);
   }
 
+  function updateFlowPausedState(sessionId: string, paused: boolean) {
+    setState((prev) => ({
+      ...prev,
+      flows: prev.flows.map((flow) => (flow.sessionId === sessionId ? { ...flow, paused } : flow)),
+    }));
+  }
+
   function handleShowWelcome() {
     patch({
       activeSessionId: undefined,
@@ -110,6 +120,30 @@ export function AppShell() {
       patch({ loading: false });
     } catch (error) {
       patch({ error: messageFromError(error), loading: false });
+    }
+  }
+
+  async function handleToggleSessionPause() {
+    if (!state.activeSessionId) return;
+    setPauseBusy(true);
+    patch({ error: undefined });
+    try {
+      if (activeFlow?.paused) {
+        const result = await resumeFlowSession(state.activeSessionId);
+        updateFlowPausedState(state.activeSessionId, result.paused);
+        await Promise.all(result.jobIds.map((jobId) => waitForJob(jobId, fetchJob)));
+      } else {
+        const result = await pauseFlowSession(state.activeSessionId);
+        updateFlowPausedState(state.activeSessionId, result.paused);
+      }
+      if (state.activeObjectId) {
+        await loadThread(state.activeSessionId, state.activeObjectId);
+      }
+      await refreshBasics(state.scope);
+    } catch (error) {
+      patch({ error: messageFromError(error) });
+    } finally {
+      setPauseBusy(false);
     }
   }
 
@@ -162,7 +196,7 @@ export function AppShell() {
     <AppLayout
       sidebar={<Sidebar scope={state.scope} flows={state.flows} tree={state.tree} activePath={state.activePath} activeSessionId={state.activeSessionId} activeSessionTitle={state.flows.find((flow) => flow.sessionId === state.activeSessionId)?.title ?? state.activeSessionId} showSessions={showSessions} onToggleSessions={() => setShowSessions((prev) => !prev)} onShowWelcome={handleShowWelcome} onScope={refreshBasics} onNode={handleNode} onSession={handleSession} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
       main={<MainPanel isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={state.activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} />}
-      right={<RightPanel sessionId={state.activeSessionId} objectId={state.activeObjectId} thread={state.thread} onSend={handleSend} />}
+      right={<RightPanel sessionId={state.activeSessionId} objectId={state.activeObjectId} thread={state.thread} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} />}
     >
       <CreateStoneModal open={stoneModalOpen} draft={stoneDraft} onDraft={setStoneDraft} onClose={() => setStoneModalOpen(false)} onSubmit={handleCreateStone} />
       <CreateKnowledgeModal modal={knowledgeModal} draft={knowledgeDraft} onDraft={setKnowledgeDraft} onClose={() => setKnowledgeModal(undefined)} onSubmit={handleCreateKnowledge} />

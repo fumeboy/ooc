@@ -27,27 +27,19 @@ export const REFINE_TOOL: LlmTool = {
 export async function handleRefineTool(
   thread: ThreadContext,
   args: Record<string, unknown>
-): Promise<void> {
+): Promise<string> {
+  const successOutput = (message: string) => JSON.stringify({ ok: true, tool: "refine", message });
+  const errorOutput = (error: string) => JSON.stringify({ ok: false, tool: "refine", error });
   const formId = args.form_id as string;
   const incoming = (args.args as Record<string, unknown> | undefined) ?? {};
   const formManager = FormManager.fromData(thread.activeForms ?? []);
   const existing = formManager.getForm(formId);
 
   if (!existing) {
-    thread.events.push({
-      category: "context_change",
-      kind: "inject",
-      text: `[错误] refine 失败：Form ${formId} 不存在。`
-    });
-    return;
+    return errorOutput(`refine 失败：Form ${formId} 不存在。`);
   }
   if (existing.status !== "open") {
-    thread.events.push({
-      category: "context_change",
-      kind: "inject",
-      text: `[错误] refine 失败：Form ${formId} 不在 open 状态（当前 ${existing.status}）。`
-    });
-    return;
+    return errorOutput(`refine 失败：Form ${formId} 不在 open 状态（当前 ${existing.status}）。`);
   }
 
   const updatedForm = formManager.refine(formId, incoming)!;
@@ -61,9 +53,5 @@ export async function handleRefineTool(
     }
   }
   thread.activeForms = snapshot;
-  thread.events.push({
-    category: "context_change",
-    kind: "inject",
-    text: `[refine] Form ${formId} 已累积参数。当前路径：${updatedForm.commandPaths.join(", ")}。`
-  });
+  return successOutput(`[refine] Form ${formId} 已累积参数。当前路径：${updatedForm.commandPaths.join(", ")}。`);
 }

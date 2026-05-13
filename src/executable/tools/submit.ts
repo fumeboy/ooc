@@ -23,35 +23,23 @@ export const SUBMIT_TOOL: LlmTool = {
 export async function handleSubmitTool(
   thread: ThreadContext,
   args: Record<string, unknown>
-): Promise<void> {
+): Promise<string> {
+  const successOutput = (message: string, result?: string) =>
+    JSON.stringify(result ? { ok: true, tool: "submit", message, result } : { ok: true, tool: "submit", message });
+  const errorOutput = (error: string) => JSON.stringify({ ok: false, tool: "submit", error });
   const formId = args.form_id as string;
   const formManager = FormManager.fromData(thread.activeForms ?? []);
   const existing = formManager.getForm(formId);
 
   if (!existing) {
-    thread.events.push({
-      category: "context_change",
-      kind: "inject",
-      text: `[错误] submit 失败：Form ${formId} 不存在。`
-    });
-    return;
+    return errorOutput(`submit 失败：Form ${formId} 不存在。`);
   }
   if (existing.status !== "open") {
-    thread.events.push({
-      category: "context_change",
-      kind: "inject",
-      text: `[错误] submit 失败：Form ${formId} 不在 open 状态（当前 ${existing.status}）。`
-    });
-    return;
+    return errorOutput(`submit 失败：Form ${formId} 不在 open 状态（当前 ${existing.status}）。`);
   }
 
   const submitted = formManager.submit(formId)!;
   thread.activeForms = formManager.toData();
-  thread.events.push({
-    category: "context_change",
-    kind: "inject",
-    text: `[form executing] formId=${formId} command=${submitted.command}`
-  });
 
   const finalArgs = { ...submitted.accumulatedArgs, ...args };
   let result: string | undefined;
@@ -66,9 +54,5 @@ export async function handleSubmitTool(
   const title = typeof args.title === "string" && args.title.trim()
     ? args.title.trim()
     : submitted.description || submitted.command;
-  thread.events.push({
-    category: "context_change",
-    kind: "inject",
-    text: `[form executed] form "${title}" 已执行完成。`
-  });
+  return successOutput(`[form executed] form "${title}" 已执行完成。`, result);
 }

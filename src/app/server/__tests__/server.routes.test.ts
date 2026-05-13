@@ -33,6 +33,28 @@ describe("app server routes", () => {
     expect(body.service).toBe("ooc-app-server");
   });
 
+  test("runtime debug routes expose and toggle debug status", async () => {
+    const app = makeApp();
+
+    const initial = await app.handle(new Request("http://localhost/api/runtime/debug/status"));
+    const initialBody = await initial.json();
+    const enabled = await app.handle(new Request("http://localhost/api/runtime/debug/enable", { method: "POST" }));
+    const enabledBody = await enabled.json();
+    const afterEnable = await app.handle(new Request("http://localhost/api/runtime/debug/status"));
+    const afterEnableBody = await afterEnable.json();
+    const disabled = await app.handle(new Request("http://localhost/api/runtime/debug/disable", { method: "POST" }));
+    const disabledBody = await disabled.json();
+
+    expect(initial.status).toBe(200);
+    expect(initialBody.enabled).toBe(false);
+    expect(enabled.status).toBe(200);
+    expect(enabledBody.enabled).toBe(true);
+    expect(afterEnable.status).toBe(200);
+    expect(afterEnableBody.enabled).toBe(true);
+    expect(disabled.status).toBe(200);
+    expect(disabledBody.enabled).toBe(false);
+  });
+
   test("GET /debug/chat.html returns the debug chat page", async () => {
     const app = makeApp();
     const response = await app.handle(new Request("http://localhost/debug/chat.html"));
