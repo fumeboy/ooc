@@ -11,6 +11,14 @@ export interface ProgramSelf {
   getData: (key: string) => Promise<unknown>;
   /** 顶层 merge 写 data.json 中的字段。 */
   setData: (key: string, value: unknown) => Promise<void>;
+  /**
+   * 读取当前 thread 的局部数据（program_window 跨 exec 共享通道）。
+   * spec § program_window：仅 ts/js exec 之间通过 thread.threadLocalData 传值；
+   * shell 模式没有访问入口，需要落到 stone data 才能跨 exec。
+   */
+  getThreadLocal: (key: string) => unknown;
+  /** 写当前 thread 的局部数据。 */
+  setThreadLocal: (key: string, value: unknown) => void;
 }
 
 /** server method 调用时的上下文。 */

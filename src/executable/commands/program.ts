@@ -1,53 +1,66 @@
-import type { CommandExecutionContext, CommandKnowledgeEntries, CommandTableEntry } from "./types.js";
-import type { ThreadContext } from "../../thinkable/context.js";
-import { createProgramSelf } from "../server/self.js";
-import { executeUserCode } from "../program/sandbox/executor.js";
-import { runFunctionProgram } from "../program/function.js";
-import { formatProgramResult } from "../program/format.js";
-import { buildProgramShellEnv } from "../program/self-env.js";
-import { runShellProgram } from "../program/shell.js";
+/**
+ * root.program command — 创建一个 program_window 并立即执行第一次 exec。
+ *
+ * spec § program_window：
+ * - submit 副作用：在 thread.contextWindows 下挂 type=program 的 window；
+ *   args 中的 language+code / function+args 作为首次 exec 立即跑，结果进 history[0]
+ * - 后续 exec：通过 program_window 上注册的 \`exec\` command（windows/program.ts）
+ * - 跨 exec 共享数据通道：仅 ts/js sandbox 可读写 thread.threadLocalData
+ *
+ * C 规则：args 含完整 language+code 或 function+args 时一步触发自动 submit。
+ */
 
-/** program command 暴露给 LLM 的知识说明。 */
-const KNOWLEDGE = `
-program 用于执行一段代码，或调用对象 server 暴露的方法。
-
-参数说明：
-- code: 模式 A，待执行的代码字符串
-- language: 可选，ts / js / shell
-- function: 模式 B，目标函数名
-- args: 模式 B，函数调用参数对象
-
-shell 环境变量：
-- shell 命令的 cwd 是 OOC 进程的工作目录（一般是 OOC 项目根），不是你自己的 stone 目录。
-- 想读写自己的 stone 目录（self.dir），请用 env $OOC_SELF_DIR：
-  例如 \`cat > "$OOC_SELF_DIR/server/index.ts" <<EOF ... EOF\`。
-- ts/js 中可用 self.dir / self.callMethod / self.getData / self.setData。
-
-调用示例：
-open(type="command", command="program", description="读取文件")
-refine(form_id, { language: "ts", code: "const data = await readFile('foo.txt'); print(data);" })
-submit(form_id)
-`;
+import type {
+  CommandExecutionContext,
+  CommandKnowledgeEntries,
+  CommandTableEntry,
+} from "./types.js";
+import {
+  ROOT_WINDOW_ID,
+  generateWindowId,
+  type ProgramWindow,
+} from "../windows/types.js";
+import { runOneExec, type ProgramExecArgs } from "../windows/program-runtime.js";
 
 const PROGRAM_BASIC_PATH = "internal/executable/program/basic";
 const PROGRAM_INPUT_PATH = "internal/executable/program/input";
 const PROGRAM_FORM_STATUS_PATH = "internal/executable/program/form-status";
 
-/** program command 的可匹配路径集合。 */
+const KNOWLEDGE = `
+program 用于执行一段代码或调用 server 方法；submit 后产出一个 program_window，
+首次 exec 立即跑完，结果进 program_window.history。后续 exec 通过该 window 的
+\`exec\` command 触发。
+
+参数（首次 exec）：
+- language: 可选，shell / ts / js（与 code 配合）
+- code: 模式 A 待执行代码字符串
+- function: 模式 B 目标函数名
+- args: 模式 B 函数调用参数对象
+
+shell 环境变量：
+- shell 命令的 cwd 是 OOC 进程的工作目录
+- 想读写自己的 stone 目录（self.dir），用 env $OOC_SELF_DIR
+
+ts/js 上下文：
+- self.dir / self.callMethod / self.getData / self.setData 不变
+- 跨 exec 共享：self.getThreadLocal(key) / self.setThreadLocal(key, value)
+- shell 之间不共享 threadLocal（OS 进程隔离），需要时自行写入 stone data
+
+后续多次执行：
+- open(parent_window_id="<program_window_id>", command="exec", args={ language, code })
+
+调用示例：
+open(command="program", title="统计 ts 文件数量", args={ language: "shell", code: "find src -name '*.ts' | wc -l" })
+`.trim();
+
 export enum ProgramCommandPath {
-  /** 基础 program 指令：执行代码或调用 server 导出函数。 */
   Program = "program",
-  /** shell 程序路径：以 shell 方式执行代码。 */
   Shell = "program.shell",
-  /** TypeScript 程序路径：以内置执行器运行代码。 */
   TypeScript = "program.typescript",
-  /** JavaScript 程序路径：以内置执行器运行代码。 */
   JavaScript = "program.javascript",
-  /** 对象函数调用路径：调用 server 模块暴露的方法。 */
   Function = "program.function",
 }
 
-/** program command 表项：根据 language/function 参数派生路径。 */
 export const programCommand: CommandTableEntry = {
   paths: [
     ProgramCommandPath.Program,
@@ -65,10 +78,8 @@ export const programCommand: CommandTableEntry = {
     if (typeof args.function === "string") hit.push(ProgramCommandPath.Function);
     return hit;
   },
-  knowledge: (args, formStatus) => {
-    const entries: CommandKnowledgeEntries = {
-      [PROGRAM_BASIC_PATH]: KNOWLEDGE.trim(),
-    };
+  knowledge: (args, formStatus): CommandKnowledgeEntries => {
+    const entries: CommandKnowledgeEntries = { [PROGRAM_BASIC_PATH]: KNOWLEDGE };
     const lang = (args.language ?? args.lang) as string | undefined;
     const code = typeof args.code === "string" ? args.code.trim() : "";
     const fn = typeof args.function === "string" ? args.function : undefined;
@@ -85,74 +96,73 @@ export const programCommand: CommandTableEntry = {
 
     if (fn) {
       if (fnArgs && typeof fnArgs === "object" && !Array.isArray(fnArgs)) {
-        entries[PROGRAM_INPUT_PATH] = "program.function 参数已具备；确认无误后可直接 submit(form_id)。";
+        entries[PROGRAM_INPUT_PATH] = "program.function 参数已具备；submit 即创建 program_window 并执行。";
       } else {
-        entries[PROGRAM_INPUT_PATH] = "program.function 缺少 args 对象；先用 refine(args={ function: \"name\", args: {...} })，再 submit(form_id)。";
+        entries[PROGRAM_INPUT_PATH] = "program.function 缺少 args 对象；先用 refine(args={ function: \"name\", args: {...} })，再 submit。";
       }
       return entries;
     }
 
     if (lang && code) {
-      entries[PROGRAM_INPUT_PATH] = "program shell/ts/js 参数已具备；可直接 submit(form_id)。";
+      entries[PROGRAM_INPUT_PATH] = "program shell/ts/js 参数已具备；submit 即创建 program_window 并执行。";
       return entries;
     }
 
-    entries[PROGRAM_INPUT_PATH] = "program form 缺少可执行参数；若要执行 shell/ts/js，请先用 refine(args={ language: \"shell\" | \"ts\" | \"js\", code: \"...\" })；若要调 server 方法，请先用 refine(args={ function: \"name\", args: {...} })。";
+    entries[PROGRAM_INPUT_PATH] = "program form 缺少可执行参数；refine(args={ language: \"shell\" | \"ts\" | \"js\", code: \"...\" }) 或 refine(args={ function: \"name\", args: {...} })，再 submit。";
     return entries;
   },
-  // 暂不实现具体执行逻辑
+  exec: (ctx) => executeProgramCommand(ctx),
 };
 
-async function runUserCode(thread: ThreadContext, code: string): Promise<string> {
-  const persistence = thread.persistence;
-  const self = persistence ? createProgramSelf(persistence, thread) : null;
-  const exec = await executeUserCode(code, self);
-  const firstLine = code.split("\n")[0]?.trim() ?? "";
-  return formatProgramResult(`# ts/js: ${firstLine}`, exec.stdout, exec.returnValue, exec.error);
+/** 截断 title。 */
+function deriveTitle(args: ProgramExecArgs, max = 60): string {
+  const summary =
+    args.function !== undefined
+      ? `fn:${args.function}`
+      : args.language && args.code
+        ? `${args.language}: ${args.code.split("\n")[0] ?? ""}`
+        : "program";
+  return summary.length <= max ? summary : `${summary.slice(0, max)}...`;
 }
 
-/** 缺少 program 执行参数时，给 LLM 一个明确可操作的 refine 提示。 */
-function missingProgramArgsMessage(): string {
-  return [
-    "[program] program form 参数不完整：缺少 language/code，或缺少 function/args。",
-    "请先用 refine(args={ language: \"shell\", code: \"...\" })，",
-    "或 refine(args={ function: \"name\", args: {...} })，再 submit(form_id)。"
-  ].join("");
-}
-
-/** 执行 program command；按 args 路由到 function / shell / ts/js。 */
+/**
+ * root.program 执行入口：创建 program_window + 跑首次 exec。
+ *
+ * 失败时返回字符串 → WindowManager 把 form 留在 executed 状态。成功时副作用挂载完毕，返回 undefined。
+ */
 export async function executeProgramCommand(
   ctx: CommandExecutionContext,
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return undefined;
 
-  // function 模式优先
-  const fn = ctx.args.function as string | undefined;
-  if (typeof fn === "string" && fn.length > 0) {
-    return runFunctionProgram(thread, fn, (ctx.args.args as Record<string, unknown>) ?? {});
+  // 首次 exec 的 args 即来自 form
+  const execArgs: ProgramExecArgs = {
+    language: ctx.args.language as ProgramExecArgs["language"],
+    code: ctx.args.code as string | undefined,
+    function: ctx.args.function as string | undefined,
+    args: ctx.args.args as Record<string, unknown> | undefined,
+  };
+  // 验证至少有一种执行模式
+  if (!execArgs.function && !(execArgs.language && execArgs.code)) {
+    return "[program] 缺少执行参数；需要 language+code 或 function+args。";
   }
 
-  const language = (ctx.args.language ?? ctx.args.lang) as string | undefined;
-  const code = ctx.args.code as string | undefined;
+  const record = await runOneExec(thread, execArgs);
+  const programWindow: ProgramWindow = {
+    id: generateWindowId("program"),
+    type: "program",
+    parentWindowId: ROOT_WINDOW_ID,
+    title: deriveTitle(execArgs),
+    status: "open",
+    createdAt: Date.now(),
+    history: [record],
+  };
 
-  if (language === "shell") {
-    if (typeof code !== "string" || code.trim() === "") {
-      return `[program.shell] 缺少 code 参数`;
-    }
-    return runShellProgram(code, buildProgramShellEnv(thread));
+  if (ctx.manager) {
+    ctx.manager.insertTypedWindow(programWindow);
+  } else {
+    thread.contextWindows = [...(thread.contextWindows ?? []), programWindow];
   }
-
-  if (language === "ts" || language === "typescript" || language === "js" || language === "javascript") {
-    if (typeof code !== "string" || code.trim() === "") {
-      return `[program.${language}] 缺少 code 参数`;
-    }
-    return runUserCode(thread, code);
-  }
-
-  if (typeof code !== "string" && typeof fn !== "string") {
-    return missingProgramArgsMessage();
-  }
-
-  return `[program] 未知 language="${language ?? "<undefined>"}"，支持 shell / ts / js / function`;
+  return undefined;
 }

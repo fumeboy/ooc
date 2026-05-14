@@ -44,7 +44,18 @@ export function createProgramSelf(
     },
     async setData(key, value) {
       await mergeData(stoneRef, { [key]: value });
-    }
+    },
+    /**
+     * thread-local 数据：program_window 跨 exec 时由 ts/js sandbox 通过这里传值。
+     * 直接 mutate thread.threadLocalData，不经持久化（重启即丢）。
+     */
+    getThreadLocal(key) {
+      return thread.threadLocalData?.[key];
+    },
+    setThreadLocal(key, value) {
+      if (!thread.threadLocalData) thread.threadLocalData = {};
+      thread.threadLocalData[key] = value;
+    },
   };
   return self;
 }
