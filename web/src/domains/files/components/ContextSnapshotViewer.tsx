@@ -14,6 +14,25 @@ import { useEffect, useMemo, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { json as jsonLanguage } from "@codemirror/lang-json";
 import {
+  Bell,
+  ChevronRight,
+  CircleDot,
+  FileCheck,
+  FileText,
+  Inbox,
+  Layers,
+  ListChecks,
+  Loader2,
+  Mail,
+  MessageSquare,
+  PanelTop,
+  Play,
+  ScrollText,
+  Send,
+  Terminal,
+  type LucideIcon,
+} from "lucide-react";
+import {
   buildContextTree,
   collectAllNodeIds,
   estimateTokens,
@@ -34,7 +53,67 @@ function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-/** 复用 LLMInputJsonViewer 的左树行样式；data 仅用于详情面板。 */
+const WINDOW_TYPE_ICON: Record<ContextWindow["type"], LucideIcon> = {
+  root: PanelTop,
+  command_exec: FileCheck,
+  do: Inbox,
+  todo: ListChecks,
+  talk: MessageSquare,
+  program: Play,
+  file: FileText,
+  knowledge: ScrollText,
+};
+
+/** 把节点状态映射成颜色基调；节点没有 status 时返回 "neutral"。 */
+type Tone = "info" | "warning" | "success" | "error" | "neutral";
+function statusToTone(status?: string): Tone {
+  switch (status) {
+    case "running":
+    case "open":
+    case "active":
+      return "info";
+    case "executing":
+      return "warning";
+    case "executed":
+    case "done":
+      return "success";
+    case "failed":
+    case "archived":
+      return "error";
+    default:
+      return "neutral";
+  }
+}
+
+/** 根据 ContextNode 的 data 派生 (icon, tone, status)。 */
+function nodeAffix(node: ContextNode): { icon: LucideIcon; tone: Tone; status?: string } {
+  switch (node.data.kind) {
+    case "thread":
+      return { icon: Layers, tone: statusToTone(node.data.snapshot.status), status: node.data.snapshot.status };
+    case "section": {
+      const sectionIcon: Record<string, LucideIcon> = {
+        plan: Bell,
+        contextWindows: Layers,
+        inbox: Inbox,
+        outbox: Send,
+        events: Terminal,
+      };
+      return { icon: sectionIcon[node.data.section] ?? CircleDot, tone: "neutral" };
+    }
+    case "window": {
+      const w = node.data.window;
+      return { icon: WINDOW_TYPE_ICON[w.type], tone: statusToTone(w.status), status: w.status };
+    }
+    case "message":
+      return { icon: Mail, tone: "neutral" };
+    case "exec":
+      return { icon: Terminal, tone: node.data.exec.ok ? "success" : "error", status: node.data.exec.ok ? "ok" : "fail" };
+    case "event":
+      return { icon: Bell, tone: "neutral" };
+  }
+}
+
+/** 复用 cw-* 样式做美化的左树行。 */
 function TreeNode({
   node,
   selectedId,
@@ -51,38 +130,45 @@ function TreeNode({
   const isSelected = selectedId === node.id;
   const isExpanded = expanded.has(node.id);
   const hasChildren = node.children.length > 0;
+  const { icon: Icon, tone, status } = nodeAffix(node);
+  const isExecuting = node.data.kind === "window" && node.data.window.type === "command_exec" && node.data.window.status === "executing";
+
   return (
     <li>
       <div
-        className={`llm-input-tree-row ${isSelected ? "is-selected" : ""}`}
-        style={{ paddingLeft: `${node.depth * 14 + 8}px` }}
+        className={`cw-row cw-tone-${tone}${isSelected ? " is-selected" : ""}`}
+        style={{ paddingLeft: `${node.depth * 14 + 6}px` }}
         onClick={() => onSelect(node.id)}
       >
-        {hasChildren ? (
-          <button
-            type="button"
-            className="llm-input-tree-toggle"
-            onClick={(event) => {
-              event.stopPropagation();
-              onToggle(node.id);
-            }}
-          >
-            {isExpanded ? "▼" : "▶"}
-          </button>
-        ) : (
-          <span className="llm-input-tree-spacer" />
-        )}
-        <div className="llm-input-tree-content">
-          <div className="llm-input-tree-head">
-            <span className="llm-input-tree-label">{node.label}</span>
-            {node.badge && <span className="llm-input-tree-badge">{node.badge}</span>}
+        <button
+          type="button"
+          className="cw-chevron-btn"
+          onClick={(event) => {
+            event.stopPropagation();
+            if (hasChildren) onToggle(node.id);
+          }}
+          disabled={!hasChildren}
+        >
+          {hasChildren ? (
+            <ChevronRight size={12} className={isExpanded ? "cw-chevron-open" : ""} aria-hidden="true" />
+          ) : (
+            <CircleDot size={9} aria-hidden="true" />
+          )}
+        </button>
+        <Icon size={13} aria-hidden="true" className="cw-row-icon" />
+        <div className="cw-row-content">
+          <div className="cw-row-head">
+            <span className="cw-row-label">{node.label}</span>
+            {node.badge && <span className="cw-row-badge">{node.badge}</span>}
+            {status && <span className={`cw-status cw-status-${tone}`}>{status}</span>}
+            {isExecuting && <Loader2 size={11} className="cw-spinner" aria-hidden="true" />}
           </div>
-          {node.summary && <div className="llm-input-tree-summary">{node.summary}</div>}
+          {node.summary && <div className="cw-row-summary">{node.summary}</div>}
         </div>
-        <span className="llm-input-tree-size">{node.charCount}</span>
+        <span className="cw-row-size">{node.charCount}</span>
       </div>
       {hasChildren && isExpanded && (
-        <ul>
+        <ul className="cw-children">
           {node.children.map((child) => (
             <TreeNode
               key={child.id}
@@ -451,7 +537,7 @@ export function ContextSnapshotViewer({ snapshot }: { snapshot: ContextSnapshot 
       <div className="llm-input-layout">
         <aside className="llm-input-items">
           <div className="llm-input-sidebar-title">context tree</div>
-          <ul className="llm-input-item-list">
+          <ul className="cw-children llm-input-item-list">
             <TreeNode
               node={tree}
               selectedId={selectedKey}

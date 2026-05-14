@@ -304,26 +304,42 @@ button { cursor: pointer; }
 @media (max-width: 900px) { .llm-input-layout { grid-template-columns: 1fr; } .llm-input-items { border-right: 0; border-bottom: 1px solid var(--border); } }
 @media (max-width: 760px) { .app-shell { padding: 8px; } .app-layout { grid-template-columns: 1fr; } }
 
-/* ContextWindowsPanel — spec docs/superpowers/specs/2026-05-14-web-context-window-alignment-design.md */
-.cw-panel { margin: 8px 8px 0; padding: 8px 10px; border: 1px solid rgba(224, 227, 220, .72); border-radius: 8px; background: rgba(252, 252, 250, .82); display: grid; gap: 6px; flex: 0 0 auto; }
-.cw-panel-head { display: flex; align-items: center; gap: 8px; color: #6f766d; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; font-weight: 650; }
-.cw-panel-count { padding: 1px 6px; border-radius: 999px; background: rgba(224, 227, 220, .65); color: #585c54; font-size: 10px; }
-.cw-panel-body { display: grid; gap: 4px; max-height: 200px; overflow-y: auto; }
-.cw-row { display: grid; gap: 2px; }
-.cw-row-head { all: unset; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; font-size: 12px; color: var(--foreground); transition: background-color .12s; }
-.cw-row-head:hover:not(:disabled) { background: rgba(224, 227, 220, .55); }
-.cw-row-head:disabled { cursor: default; opacity: .9; }
-.cw-row-head.is-open { background: rgba(224, 227, 220, .55); }
-.cw-chevron { display: inline-flex; width: 12px; }
+/* ContextWindows tree (used by ContextSnapshotViewer); legacy chat-side panel removed */
+/* Tree row: applied to every TreeNode in the ContextSnapshotViewer left pane */
+.cw-row { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; cursor: pointer; transition: background-color .12s; font-size: 12px; line-height: 1.45; color: var(--foreground); border-left: 3px solid transparent; }
+.cw-row:hover { background: rgba(224, 227, 220, .35); }
+.cw-row.is-selected { background: rgba(224, 227, 220, .65); }
+.cw-row.cw-tone-info.is-selected, .cw-row.cw-tone-info:hover { border-left-color: rgba(120, 175, 200, .7); }
+.cw-row.cw-tone-warning.is-selected, .cw-row.cw-tone-warning:hover { border-left-color: rgba(220, 175, 90, .7); }
+.cw-row.cw-tone-success.is-selected, .cw-row.cw-tone-success:hover { border-left-color: rgba(110, 188, 142, .7); }
+.cw-row.cw-tone-error.is-selected, .cw-row.cw-tone-error:hover { border-left-color: rgba(206, 130, 130, .7); }
+
+.cw-chevron-btn { all: unset; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; color: #8d9189; }
+.cw-chevron-btn:disabled { cursor: default; opacity: .5; }
 .cw-chevron-open { transform: rotate(90deg); transition: transform .12s; }
-.cw-type { color: #8d9189; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; min-width: 38px; }
-.cw-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cw-status { font-size: 10px; padding: 1px 6px; border-radius: 999px; }
+.cw-row-icon { color: #6f766d; flex: 0 0 auto; }
+.cw-row.cw-tone-info .cw-row-icon { color: #3a7592; }
+.cw-row.cw-tone-warning .cw-row-icon { color: #9a7028; }
+.cw-row.cw-tone-success .cw-row-icon { color: #3a8662; }
+.cw-row.cw-tone-error .cw-row-icon { color: #9a4848; }
+.cw-row-content { display: grid; gap: 1px; min-width: 0; flex: 1; }
+.cw-row-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cw-row-label { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; min-width: 0; }
+.cw-row-badge { font-size: 9px; padding: 1px 5px; border-radius: 4px; background: rgba(224, 227, 220, .8); color: #585c54; text-transform: uppercase; letter-spacing: .04em; flex: 0 0 auto; }
+.cw-row-summary { color: #8d9189; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-row-size { color: #b3b8af; font-size: 10px; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.cw-children { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px; }
+.cw-children li { list-style: none; }
+
+.cw-status { font-size: 9.5px; padding: 1px 7px; border-radius: 999px; flex: 0 0 auto; font-weight: 600; letter-spacing: .03em; }
 .cw-status-info { background: rgba(186, 219, 235, .42); color: #2f5d72; }
 .cw-status-warning { background: rgba(245, 220, 168, .55); color: #7d5c1c; }
 .cw-status-success { background: rgba(196, 232, 211, .55); color: #2f6f4d; }
 .cw-status-error { background: rgba(238, 200, 200, .55); color: #8b3a3a; }
-.cw-spinner { animation: spin 1s linear infinite; color: #7d5c1c; }
+.cw-status-neutral { background: rgba(224, 227, 220, .55); color: #585c54; }
+.cw-spinner { animation: spin 1s linear infinite; color: #7d5c1c; flex: 0 0 auto; }
+
+/* Detail panel rows (originally for the chat-side panel; reused inline in ContextSnapshotViewer) */
 .cw-details { margin: 2px 0 4px 26px; padding: 6px 8px; background: rgba(247, 248, 245, .85); border: 1px solid rgba(224, 227, 220, .55); border-radius: 6px; display: grid; gap: 4px; font-size: 11px; }
 .cw-detail-row { display: grid; grid-template-columns: 90px 1fr; gap: 8px; align-items: start; }
 .cw-detail-label { color: #8d9189; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; padding-top: 2px; }

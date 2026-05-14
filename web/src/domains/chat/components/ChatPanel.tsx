@@ -1,6 +1,5 @@
 import type { ThreadContext } from "..";
 import { ChatComposer } from "./ChatComposer";
-import { ContextWindowsPanel } from "./ContextWindowsPanel";
 import { ThreadTimeline } from "./ThreadTimeline";
 
 export function ChatPanel({
@@ -24,7 +23,6 @@ export function ChatPanel({
     <div className="right-body chat-body">
       {sessionId && objectId ? (
         <>
-          <ContextWindowsPanel thread={thread} />
           <div className="chat-timeline">
             <ThreadTimeline thread={thread} />
           </div>
