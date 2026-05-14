@@ -59,11 +59,11 @@ open(
 )
 \`\`\`
 
-行为：
-- 当前真实实现是：knowledge path 只写入 \`pinnedKnowledge\`，由 context-builder 每轮 lazy 计算 active knowledge
-- 同时会额外挂一个 type=knowledge 的 window，帮助 LLM 看到“我显式打开过这篇知识”
-- 该 knowledge 完整正文会通过 active knowledge 进入 Context
-- pinned 的 knowledge **不**会因为其他 form submit/close 自动卸载；当前 close tool 也还不支持按 knowledge path 卸载
+行为（Step 1 范围）：
+- knowledge / file 类型的 open 在 Step 1 暂未实现（spec 2026-05-14 § 迁移节奏 Step 2 才回归 knowledge_window / file_window）
+- 当前 open tool 仅支持 \`open(parent_window_id?, command, title, args?, description?)\` 形态，创建 command_exec window
+- C 规则：\`open(args)\` 时若 args 已使 commandPaths 与空 args 时一致 + knowledge keys 不引入新 entry → 自动 submit
+- knowledge 自动激活仍按 commandPaths 派生；显式 pin 待 knowledge_window 落地后回归
 
 适用场景：临时想查阅某篇 knowledge 全文，与当前 form 的 command 无关。
 

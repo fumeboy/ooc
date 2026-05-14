@@ -30,7 +30,7 @@ plan 也不会自动同步给父线程
 | 形态 | 一段自由 markdown 文本 | 多个独立的 form，每个 form 是一项待办 |
 | 粒度 | 整体战略 | 单步行动 |
 | 修改 | submit plan command 整体覆盖 | 每个 todo form 独立 open / refine / submit |
-| 持久 | 持久写入 context | 出现在 context 的 activeForms 直到 todo form 被 submit/close |
+| 持久 | 持久写入 context（thread.plan 字段） | 表现为 todo_window 持续挂在 contextWindows 中，直到 close |
 `,
   sources: {
     plan: planSource,

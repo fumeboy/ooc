@@ -48,14 +48,19 @@ while (有 running 线程) {
 
 ## 等待与唤醒（waiting → running）
 
-线程通过 wait / do(wait=true) / talk(wait=true) 进入 waiting 状态。
-节点上记录 waitingType 标识等待原因：
+线程通过 wait / do(wait=true) / do_window.continue(wait=true) 进入 waiting 状态。
 
-| waitingType | 含义 | 唤醒条件 |
-|---|---|---|
-| await_children | 等待某个/某些子线程完成 | 对应子线程进入 done |
-| talk_sync      | talk(wait=true) 等待对方回复 | 对方 talk 回到本线程 inbox |
-| explicit_wait  | LLM 主动 wait（等任何 inbox 消息） | 任意新 inbox 消息 |
+Step 1（spec 2026-05-14）后 \`waitingType\` 字段已取消——所有”等待”语义统一为
+“等 thread.inbox 出现新消息”，scheduler 仅看 \`status === “waiting”\`：
+
+| 触发场景 | 实际唤醒路径 |
+|---|---|
+| do(wait=true) 等子线程完成 | scheduler 检测子线程 done/failed 后给父 inbox 写一条 system 消息 |
+| 显式 wait | 任意新 inbox 消息 |
+| 与 user 对话等待回复 | user reply 进 inbox |
+
+线程入眠时由 wait tool 写入 \`thread.inboxSnapshotAtWait\`（当前 inbox 长度快照）；
+scheduler 每 tick 比较 \`inbox.length > snapshot\` 即翻回 running 并清空 snapshot。
 
 ## done/failed 自动翻回 running
 
@@ -68,14 +73,12 @@ while (有 running 线程) {
 当前源码实现并测试：
 - 每个 tick 只执行一个 running thread
 - running thread 按 lastExecutedAt 从小到大选择
-- waitingType=await_children 的父线程在子线程 done/failed 后恢复 running
+- emitChildEndNotifications：子线程 done/failed 时给父 inbox 写一条 system 消息（幂等）
+- wakeWaitingThreadsOnInbox：waiting 线程的 inbox 长度增长后翻回 running
 - 若线程携带 persistable 引用，scheduler 在每轮 think 后保存线程状态
 
-await_children 被唤醒时，当前实现还会向父线程注入一段总结：
-
-- 每个等待中的子线程都会生成一行摘要
-- 摘要优先使用 \`endReason / endSummary\`
-- 若缺少 summary，则回退到子线程 status 或“无 summary”
+注入消息内容形如 \`[child:<childId>:<status>] <reason> - <summary>\`，
+LLM 醒来后可直接读到子线程的最终状态与 summary。
 
 这样父线程恢复后，下一轮 LLM 能直接看到“等待的子线程最后发生了什么”。
 

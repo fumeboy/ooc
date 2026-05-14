@@ -65,10 +65,14 @@ wait()                               →  setNodeStatus("waiting")
 
 ## form 在上下文中的表示
 
-每个未关闭的 form 都会出现在 Context 的 activeForms 字段（详见 thinkable/context），
+Step 1（spec 2026-05-14）后 form 改名为 \`command_exec window\`，是 ContextWindow 的一种 type。
+每个 open 创建的 command_exec form 都会出现在 \`thread.contextWindows\` 中（详见 thinkable/context），
 让 LLM 看到自己手头还挂着哪些行动。
 
-注：todo 也通过 form 表示——\`open(type=command, command=todo, ...) → refine(...) → submit\` 标记完成；若要真正从 activeForms 移除，还需要显式 \`close\`。
+submit 成功后该 form **自动从 contextWindows 移除**，无需 close；失败时保留 \`status=executed\` + \`result\`，等 LLM 显式 close。
+
+注：todo 不再走 \`open → refine → submit\` 三步——\`open(command="todo", title=..., args={ content })\`
+在 C 规则下直接执行，产出独立的 \`todo_window\`；完成时 \`close(window_id="<todo_window_id>")\`。
 `,
   sources: {
     tools: toolsSource,

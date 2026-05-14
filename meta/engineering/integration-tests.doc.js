@@ -20,7 +20,7 @@ export const integration_tests_v20260511_1 = {
 | 门控 | \`describe.skipIf(!hasLlmEnv)\` | 无 OOC_API_KEY 等 env 时自动跳过；CI 默认不跑（不烧钱），开发者本地按需跑 |
 | maxTicks | 每测显式设置（单 thread 8-14；含子线程 16-20；多任务 ≥25） | 防止 LLM 走偏后无限循环；超过即标 fail，倒逼调优 prompt |
 | 超时 | 每测函数级 \`{ timeout: 60_000 ~ 240_000 }\` | bun:test 默认 5s 不够；按场景规模设上限 |
-| 断言 | 仅断言"最终持久化状态"（thread.status / events 计数 / activeForms 残留 / 文件落盘 / endSummary 包含模式）；**不**断言中间步骤序列 | LLM 输出有随机性，固定步骤必然 flaky；最终状态稳定 |
+| 断言 | 仅断言"最终持久化状态"（thread.status / events 计数 / contextWindows 残留 / 文件落盘 / endSummary 包含模式）；**不**断言中间步骤序列 | LLM 输出有随机性，固定步骤必然 flaky；最终状态稳定 |
 | 数字断言 | 用区间 / 包含 而非确定值 | LLM 偶尔把数字写错一位的容错 |
 
 ## 2. 通用 fixture（tests/integration/_fixture.ts）
@@ -46,14 +46,14 @@ countEventsWithPrefix(thread, prefix): number     // 数 inject 文案前缀
 | 1 | shell-exec-basic | program.shell 单次调用 / open→refine→submit→executed→end 全生命周期 / endSummary 含数字 |
 | 2 | plan-then-execute | plan command 执行 / 多 form 串行（plan 后接 program）/ thread.plan 持久化 |
 | 3 | multi-shell-chain | 多 tick 多 program executed 累积 / 上一次 form 的 result 回喂下一轮 context |
-| 6 | wait-state-transition | wait tool / status=waiting + waitingType=explicit_wait（不验证唤醒，inbox 唤醒未实现） |
+| 6 | wait-state-transition | wait tool / status=waiting + inboxSnapshotAtWait 已写入（spec 2026-05-14 后 waitingType 取消） |
 
 ### 3.2 form 生命周期
 
 | # | 文件 | 覆盖能力 |
 |---|---|---|
 | 4 | abandon-via-close | close tool 真实触发 / 已 open 未 executed 的 form 被移除而无 executed 事件 |
-| 7 | executed-form-cleanup | executed form 显式 close 释放 / 最终 activeForms 不残留该 form |
+| 7 | executed-form-cleanup | submit 成功后 form 自动从 contextWindows 移除（无需 close）；最终 contextWindows 不残留 program command_exec |
 
 ### 3.3 多任务编排
 

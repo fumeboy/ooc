@@ -12,23 +12,24 @@ wait(
 )
 \`\`\`
 
-## 行为
+## 行为（Step 1 spec 2026-05-14）
 
-1. 把当前线程 status 从 running 设为 waiting，waitingType = explicit_wait (主动等待)
-2. Scheduler 不再调度该线程
+1. 把当前线程 status 从 running 设为 waiting
+2. 写入 \`thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0\` 作为入眠快照
+3. Scheduler 每 tick 比较 \`inbox.length > snapshot\` 即翻回 running 并清空 snapshot
 
-需要注意：文档层的目标语义是“等任意 inbox 消息后自动唤醒”，但当前源码里 scheduler 还**没有**实现 explicit_wait 的 inbox 唤醒；目前 wait 已落地的是状态翻转本身，真正的显式唤醒还待后续补齐。
+\`waitingType\` 字段已取消——所有"等待"语义统一为"等 thread.inbox 出现新消息"。
 
 ## 与 do(wait=true) / talk(wait=true) 的区别
 
-| 形式 | 等什么
-|---|---|---|
-| \`wait\` | 任意新事件
-| \`do(fork, wait=true)\` | 预期是等指定子线程，但任意 inbox 消息都可以唤醒
-| \`talk(target, wait=true)\` | 等对方回复，但任意 inbox 消息都可以唤醒
+| 形式 | 等什么 |
+|---|---|
+| \`wait\` | 任意新 inbox 消息 |
+| \`do(fork, wait=true)\` | 子线程结束时 scheduler 给父 inbox 写一条 system 消息触发唤醒 |
+| \`talk(target, wait=true)\` | 对方回复直接进 inbox 触发唤醒 |
 
-\`do(wait=true)\` / \`talk(wait=true)\` 本质上是隐式 wait——执行 command 完毕后自动设置
-对应 waitingType（await_children / talk_sync），通过 submit 触发，不需要显式调用 wait tool。
+三者底层语义完全一致：唤醒条件就是 inbox 长度增长。
+\`do(wait=true)\` / \`talk(wait=true)\` 只是把"切到 waiting"的动作绑在 submit 那一步，省一次 wait tool 调用。
 
 ## 与 end 的区别
 

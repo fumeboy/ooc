@@ -40,7 +40,8 @@ submit(form_id)
 ## wait 行为
 
 - \`wait=false\`（默认）：talk 投递后立即返回，本线程继续 running
-- \`wait=true\`：talk 投递后本线程进入 waiting，waitingType=talk_sync；
+- \`wait=true\`：talk 投递后本线程进入 status="waiting"（Step 1 起，waitingType 字段已取消，
+  唤醒条件统一为 inbox 收到任意新消息——对方回复直接进 inbox 即可唤醒）
 
 但需要明确：以上是设计目标语义。**当前源码实现里，talk command 仍处于单 object 阶段的占位实现**：
 

@@ -29,7 +29,8 @@ ThreadContext = {
   /* —— 任务 —— */
   creator,             // 线程创建者标识（user / 父线程 ID / 外部对象名）:  记录用于告诉 LLM 把结果发送给谁
   plan,                // 当前线程的计划 (通过 plan 这个 command 设置)
-  activeForms,         // 当前 open 但未 submit/close 的 form 列表（含每个 form 的任务描述与子待办）, 新建 thread 时的 requirement 会作为一个 form 出现，todo 也通过 form 表示
+  contextWindows,      // 所有 ContextWindow（root 隐含 + command_exec form + do_window + todo_window）, 替代旧 activeForms / pinnedKnowledge / windows 三套字段
+                       // 详见 spec docs/superpowers/specs/2026-05-14-context-window-unification-design.md
 
   /* —— 知识 —— */
   knowledge,           // 所有"已激活"的 knowledge 文档
@@ -48,8 +49,8 @@ ThreadContext = {
 \`\`\`
 
 注：线程的"任务说明"和"子待办列表"不作为 ThreadContext 的独立字段，
-而是归并到 form 设计中——每个 form 自带任务描述与待办状态，由 activeForms 字段统一呈现。
-详见 executable 文档
+而是统一收敛为 ContextWindow——每个 do_window 自带任务上下文（targetThreadId + transcript），
+todo_window 自带 content + onCommandPath；详见 executable 文档与 spec 2026-05-14。
 
 ## 字段语义
 
@@ -111,47 +112,49 @@ process event 的事件种类、字段定义与 transcript 转换规则，详见
 字段：每条记录含目标线程 ID / 对方对象名 / messages
 作用：让 Object 看到"我现在挂着哪些对外发起的对话"
 
-### activeForms
+### contextWindows
 
-内容：每个 form 含
-- 选择的 command
-- form 里填写的 args
-- form 标题、描述（form 创建时填入）
-- 相关加载的 knowledge 标题列表
+Step 1（spec 2026-05-14）后取代旧 activeForms / pinnedKnowledge / thread.windows。
 
-作用：提醒 LLM "你还有未完成的 open，可以继续 refine(填充参数) 或 submit/close"，
+flat 数组，层级通过 \`parentWindowId\` 表达。当前 step 1 范围下的 4 种 window：
 
-详见 executable 文档
+- **root**：每个 thread 隐含；注册全局 command（do/talk/program/plan/end/todo）
+- **command_exec**：调用某 command 时的临时 sub-window，承载 args 累积与 knowledge 渐进激活；
+  成功 submit 后系统自动从 contextWindows 移除；失败保留待 close
+- **do**：fork 子线程后产生的对话窗口；transcript 是 inbox/outbox 在 targetThreadId 视角的视图；
+  特例 \`isCreatorWindow=true\` 是初始 creator do_window，不可被 LLM close
+- **todo**：由 root.todo command 通过 C 规则直建的可见待办
 
-当前 XML context 中每个 form 的真实渲染字段比概念描述更具体：
+XML 渲染示例（\`<context_windows>\` 顶级节点，每个 window 含 sub_windows）：
 
-- \`<command>\`
-- \`<description>\`
-- \`<accumulated_args>\`（JSON 字符串）
-- \`<command_paths>\`
-- \`<loaded_knowledge>\`
-- \`<command_knowledge_paths>\`
-- 若 form 已执行完成且有结果，再附加 \`<result>\`
+\`\`\`xml
+<context_windows>
+  <window id="w_creator_root" type="do" status="running">
+    <title>处理初始消息</title>
+    <target_thread>__session__</target_thread>
+    <is_creator_window>true</is_creator_window>
+    <transcript>...</transcript>
+  </window>
+  <window id="f_xx" type="command_exec" status="open">
+    <title>制定计划</title>
+    <command>plan</command>
+    <accumulated_args>{"plan":"先 reshape"}</accumulated_args>
+    <command_paths><path>plan</path></command_paths>
+  </window>
+</context_windows>
+\`\`\`
 
-这意味着 activeForms 既承担“还有哪些行动没释放”的职责，也承担“当前 form 已经走到了哪一步、看到了哪些协议知识、拿到了什么结果”的可观测职责。
+详见 executable 文档与 src/executable/windows/types.ts。
 
-#### todo 作为 form
+#### todo 不再依赖 form 生命周期
 
-todo 作为一类特殊的 command form：
+旧实现中 todo 是"永远不 submit 的 form"——用 form 的 open 状态表达"未完成"。
+Step 1 之后 todo_window 是独立 window 类型，由 \`open(command="todo", title=..., args={ content, on_command_path? })\`
+触发 C 规则直建。完成时 \`close(window_id="<todo_window_id>", reason=...)\`。
 
-- \`open(type=command, command=todo, ...)\`        创建一个 todo form，分配 form_id
-- \`refine(form_id, { content: "…", on_command_path?: [...] })\`       更新待办内容和提醒条件
-- \`submit(form_id)\`             把该 todo form 标记为 executed，表示待办已处理
-- \`close(form_id, reason)\`      才会真正把 todo form 从 activeForms 中移除
-
-未 submit 的 todo form 会持续出现在 activeForms 中，自然成为 LLM 每轮可见的"待办"。
-当前源码里，todo command 本身是 no-op；todo 的生命周期完全复用 form 生命周期，不需要单独的待办状态机。
-
-线程新建时的初始 todo：
-当一个线程被创建（root 由用户消息发起 / sub_thread 由 do(fork) 派生 / talk 进入），
-系统会自动在该线程上注入一个 todo form，内容为"处理初始消息"——
-让 LLM 第一轮就能在 activeForms 中看到这条待办，作为本线程任务的入口锚点。
-处理完成后由 LLM 自行 submit 该 todo form 标记完成；若不再需要保留结果与痕迹，再显式 close。
+线程新建时的 creator do_window 取代了"自动注入处理初始消息 todo form"——
+任何新 thread 创建时系统自动挂一个 \`isCreatorWindow=true\` 的 do_window 指向 creator，
+LLM 一上来就能在 contextWindows 中看到与 creator 的对话视角。
 
 ### contact
 

@@ -42,7 +42,7 @@ session 级 \`POST /api/flows/:sessionId/resume\` 的真实语义还包括：
 
 - server 先取消该 session 的 pause 标记
 - 扫描该 session 下所有 paused thread
-- 对可恢复的线程清掉 \`waitingType\` / \`awaitingChildren\`，把状态翻回 running
+- 对可恢复的线程清掉 \`inboxSnapshotAtWait\`（spec 2026-05-14 后 waitingType / awaitingChildren 已删），把状态翻回 running
 - 为每个线程补一个 \`resume-thread\` job，并返回 \`jobIds\` / \`resumedThreadIds\`
 
 因此 resume 恢复的是“已拿到 LLM 输出、但还没来得及执行的那半轮工作”，不是重新请求一次模型。

@@ -84,9 +84,10 @@ Scheduler 调度子线程独立运行 ThinkLoop
 父线程收到 inbox 消息（恢复 running）
 \`\`\`
 
-注：任何线程创建时都会自动注入一份"处理初始消息"的 todo form，
-作为本线程任务的入口锚点。LLM 处理完后 submit 该 todo 即可关闭。
-详见 context/index 的 activeForms 段落。
+注（Step 1 spec 2026-05-14）：任何线程创建时都会自动注入一个 \`isCreatorWindow=true\` 的 do_window，
+指向 creator（root thread → "__session__"，child thread → 父 thread.id）；
+取代旧的"自动建处理初始消息 todo form"。该 creator do_window 不可被 LLM close，与 thread 同生命周期。
+详见 context/index 的 contextWindows 段落与 spec § 初始 creator 对话 window。
 
 子线程不通过专门的 return 机制把结果送回父——
 它就是普通地 talk 给自己的 creator（父线程的 ID）。
