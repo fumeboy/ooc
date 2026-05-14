@@ -11,6 +11,8 @@ import { executePlanCommand, planCommand } from "./plan.js";
 import { executeProgramCommand, programCommand } from "./program.js";
 import { executeTalkCommand, talkCommand } from "./talk.js";
 import { executeTodoCommand, todoCommand } from "./todo.js";
+import { executeOpenFileCommand, openFileCommand } from "./open-file.js";
+import { executeOpenKnowledgeCommand, openKnowledgeCommand } from "./open-knowledge.js";
 import type { CommandExecutionContext, CommandTableEntry } from "./types.js";
 
 /** 对外统一导出 command 层类型。 */
@@ -28,6 +30,8 @@ export const COMMAND_TABLE: Record<string, CommandTableEntry> = {
   plan: planCommand,
   todo: todoCommand,
   end: endCommand,
+  open_file: openFileCommand,
+  open_knowledge: openKnowledgeCommand,
 };
 
 /**
@@ -80,6 +84,10 @@ export async function executeCommand(command: string, ctx: CommandExecutionConte
       return executeTodoCommand(ctx);
     case "end":
       return executeEndCommand(ctx);
+    case "open_file":
+      return executeOpenFileCommand(ctx);
+    case "open_knowledge":
+      return executeOpenKnowledgeCommand(ctx);
     default:
       return undefined;
   }
