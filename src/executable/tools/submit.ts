@@ -1,13 +1,22 @@
+/**
+ * submit tool — 真正执行 command_exec form 中的 command。
+ *
+ * spec § 5 原语 submit：
+ * - status 切换：open → executing → executed
+ * - 成功：自动从 contextWindows 移除
+ * - 失败：保留 executed 状态 + result 含错误，需要 LLM 显式 close
+ * - 不接受新业务参数；所有 args 都必须先通过 open(args) 或 refine 给齐
+ */
+
 import type { LlmTool } from "../../thinkable/llm/types.js";
 import type { ThreadContext } from "../../thinkable/context.js";
-import { executeCommand } from "../commands/index.js";
-import { FormManager } from "../forms/form.js";
+import { WindowManager } from "../windows/index.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
-/** submit tool — 提交执行（仅 command 类型） */
 export const SUBMIT_TOOL: LlmTool = {
   name: "submit",
-  description: "提交指令执行。必须先 open 获取 form_id，再通过 open(..., args={...}) 或 refine(args={...}) 填完参数后再 submit(form_id)。submit 不接受新的业务参数。",
+  description:
+    "提交一个 command_exec form 真正执行。submit 不接受新业务参数。成功执行后系统会自动从 context 移除该 form；失败则保留 result 字段，需要你 close。",
   inputSchema: {
     type: "object",
     properties: {
@@ -19,40 +28,46 @@ export const SUBMIT_TOOL: LlmTool = {
   },
 };
 
-/** 执行 submit tool：把 form 切到 executing，跑 command，再切到 executed 并写入 result。 */
+const successOutput = (message: string, result?: string, autoRemoved?: boolean) =>
+  JSON.stringify({
+    ok: true,
+    tool: "submit",
+    message,
+    ...(result !== undefined ? { result } : {}),
+    ...(autoRemoved ? { auto_removed: true } : {}),
+  });
+const errorOutput = (error: string) => JSON.stringify({ ok: false, tool: "submit", error });
+
 export async function handleSubmitTool(
   thread: ThreadContext,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
 ): Promise<string> {
-  const successOutput = (message: string, result?: string) =>
-    JSON.stringify(result ? { ok: true, tool: "submit", message, result } : { ok: true, tool: "submit", message });
-  const errorOutput = (error: string) => JSON.stringify({ ok: false, tool: "submit", error });
-  const formId = args.form_id as string;
-  const formManager = FormManager.fromData(thread.activeForms ?? []);
-  const existing = formManager.getForm(formId);
+  const formId = args.form_id as string | undefined;
+  if (!formId) return errorOutput("submit 缺少 form_id 参数。");
 
-  if (!existing) {
-    return errorOutput(`submit 失败：Form ${formId} 不存在。`);
+  const mgr = WindowManager.fromThread(thread);
+  const target = mgr.get(formId);
+  if (!target) return errorOutput(`submit 失败：Form ${formId} 不存在。`);
+  if (target.type !== "command_exec") {
+    return errorOutput(`submit 失败：window ${formId} 不是 command_exec 类型。`);
   }
-  if (existing.status !== "open") {
-    return errorOutput(`submit 失败：Form ${formId} 不在 open 状态（当前 ${existing.status}）。`);
+  if (target.status !== "open") {
+    return errorOutput(`submit 失败：Form ${formId} 不在 open 状态（当前 ${target.status}）。`);
   }
 
-  const submitted = formManager.submit(formId)!;
-  thread.activeForms = formManager.toData();
-
-  const finalArgs = { ...submitted.accumulatedArgs, ...args };
   let result: string | undefined;
   try {
-    result = await executeCommand(submitted.command, { thread, form: submitted, args: finalArgs });
-  } catch (error) {
-    result = `[command-error] ${(error as Error).message}`;
+    result = await mgr.submit(formId, thread);
+  } catch (err) {
+    return errorOutput(`submit 失败：${(err as Error).message}`);
   }
 
-  formManager.markExecuted(formId, result);
-  thread.activeForms = formManager.toData();
-  const title = typeof args.title === "string" && args.title.trim()
-    ? args.title.trim()
-    : submitted.description || submitted.command;
-  return successOutput(`[form executed] form "${title}" 已执行完成。`, result);
+  thread.contextWindows = mgr.toData();
+  const after = mgr.get(formId);
+  const autoRemoved = !after; // 成功时 mgr.submit 已经移除
+  const title = (args.title as string | undefined)?.trim() || target.command;
+  const messageBase = autoRemoved
+    ? `[form executed] form "${title}" 已成功执行并自动释放。`
+    : `[form executed] form "${title}" 执行完成（保留待 close）。`;
+  return successOutput(messageBase, result, autoRemoved);
 }
