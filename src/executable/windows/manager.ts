@@ -236,17 +236,33 @@ export class WindowManager {
       throw new Error(`submit: form "${formId}" status is ${form.status}, expected "open"`);
     }
 
+    const parent = this.requireParent(form.parentWindowId);
+    const entry = lookupCommandEntry(parent, form.command);
+    if (!entry) {
+      throw new Error(
+        `submit: command "${form.command}" not registered on parent window type "${parent.type}"`,
+      );
+    }
+
     const executing: CommandExecWindow = { ...form, status: "executing" };
     this.windows.set(formId, executing);
 
     let result: string | undefined;
     let isError = false;
     try {
-      result = await executeCommand(form.command, {
+      const ctx: import("../commands/types.js").CommandExecutionContext = {
         thread,
-        form: undefined, // 旧 form 类型已废弃；commands 不应再依赖它（do/todo 改造后通过 ctx 拿 args）
+        form: executing,
+        parentWindow: parent,
         args: form.accumulatedArgs,
-      });
+      };
+      // 优先使用 entry.exec；fallback 到 root level 的 executeCommand by-name 派发，
+      // 兼容 commands/ 目录下尚未声明 exec 字段的旧 command。
+      if (entry.exec) {
+        result = await entry.exec(ctx);
+      } else {
+        result = await executeCommand(form.command, ctx);
+      }
     } catch (err) {
       result = `[command-error] ${(err as Error).message}`;
       isError = true;

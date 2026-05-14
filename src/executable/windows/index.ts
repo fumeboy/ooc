@@ -37,3 +37,7 @@ export type {
 } from "./registry.js";
 
 export { WindowManager } from "./manager.js";
+
+// Side-effect imports: each window type module 通过 registerWindowType 注入 commands / hooks。
+// 这些 import 必须在 WindowManager 之后 load，确保使用时表已就绪。
+import "./do.js";
