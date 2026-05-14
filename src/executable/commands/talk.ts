@@ -1,102 +1,103 @@
-import type { CommandExecutionContext, CommandKnowledgeEntries, CommandTableEntry } from "./types.js";
+/**
+ * root.talk command — 创建一个 talk_window，与外部 target 持续会话。
+ *
+ * spec § talk_window：
+ * - submit 副作用：在 thread.contextWindows 下挂 type=talk window，
+ *   target=user, conversationId=windowId, title=args.title
+ * - args 完整时（target/title）C 规则触发自动 submit
+ * - 实际发消息走 talk_window.say，不在 root.talk 上发
+ *
+ * 当前阶段限制：target 只能是 "user"。
+ */
 
-/** talk command 暴露给 LLM 的知识说明。 */
-const KNOWLEDGE = `
-talk 用于向另一个 Object 发送消息。
-
-参数说明：
-- target: 必填，目标对象名，或 creator / super
-- msg: 必填，消息内容
-- context: 可选，fork 或 continue
-- threadId: 可选，目标线程 ID；continue 时通常需要
-- type: 可选，relation_update 或 question_form
-- wait: 可选，是否同步等待回复
-- question_form: 可选，type=question_form 时附带结构化表单
-
-调用示例：
-open(type="command", command="talk", description="向 creator 反馈")
-refine(form_id, { target: "creator", msg: "任务完成", context: "continue", threadId: "t_1", wait: true })
-submit(form_id)
-`;
+import type {
+  CommandExecutionContext,
+  CommandKnowledgeEntries,
+  CommandTableEntry,
+} from "./types.js";
+import {
+  ROOT_WINDOW_ID,
+  generateWindowId,
+  type TalkWindow,
+} from "../windows/types.js";
 
 const TALK_BASIC_PATH = "internal/executable/talk/basic";
 const TALK_INPUT_PATH = "internal/executable/talk/input";
-const TALK_FORM_STATUS_PATH = "internal/executable/talk/form-status";
 
-/** talk command 的可匹配路径集合。 */
+const KNOWLEDGE = `
+talk 用于开启一个对外的会话窗口（talk_window）。当前阶段 target 只能是 "user"。
+
+参数：
+- target: 必填，目前仅 "user"
+- title: 必填，本会话的简短主题（多窗口区分用）
+
+submit 后副作用：
+- 在 thread.contextWindows 下挂一个 type=talk 的 window
+- 后续发消息：open(parent_window_id="<talk_window_id>", command="say", args={ msg: "...", wait: true|false })
+- 等待回复：open(parent_window_id="<talk_window_id>", command="wait", args={})
+- 关闭窗口：close(window_id="<talk_window_id>", reason="...")
+
+允许同时打开多个 talk_window 来并行维护不同主题。
+`.trim();
+
 export enum TalkCommandPath {
-  /** 基础 talk 指令：向目标对象发送消息。 */
   Talk = "talk",
-  /** fork 模式：在指定线程下创建新的子线程进行对话。 */
-  Fork = "talk.fork",
-  /** continue 模式：继续已有远端线程进行对话。 */
-  Continue = "talk.continue",
-  /** wait 模式：等待目标对象同步回复。 */
-  Wait = "talk.wait",
-  /** 给当前 thread 的创建方发消息。 */
-  ThreadCreator = "talk.thread_creator",
-  /** 关系更新请求：通知对方处理关系信息变更。 */
-  RelationUpdate = "talk.relation_update",
-  /** 结构化问题表单：随 talk 消息携带可交互表单。 */
-  QuestionForm = "talk.question_form",
 }
 
-/** talk command 表项：根据 context/wait/target/type 参数派生路径。 */
+/** root.talk command：创建 talk_window；不直接发消息。 */
 export const talkCommand: CommandTableEntry = {
-  paths: [
-    TalkCommandPath.Talk,
-    TalkCommandPath.Fork,
-    TalkCommandPath.Continue,
-    TalkCommandPath.Wait,
-    TalkCommandPath.ThreadCreator,
-    TalkCommandPath.RelationUpdate,
-    TalkCommandPath.QuestionForm,
-  ],
-  match: (args) => {
-    const hit: string[] = [TalkCommandPath.Talk];
-    const ctx = typeof args.context === "string" ? args.context : "";
-    const type = typeof args.type === "string" ? args.type : "";
+  paths: [TalkCommandPath.Talk],
+  match: () => [TalkCommandPath.Talk],
+  knowledge: (args, formStatus): CommandKnowledgeEntries => {
+    const entries: CommandKnowledgeEntries = { [TALK_BASIC_PATH]: KNOWLEDGE };
+    if (formStatus !== "open") return entries;
     const target = typeof args.target === "string" ? args.target : "";
-    if (args.wait === true) hit.push(TalkCommandPath.Wait);
-    if (ctx === "fork") hit.push(TalkCommandPath.Fork);
-    if (ctx === "continue") hit.push(TalkCommandPath.Continue);
-    if (target === "creator") hit.push(TalkCommandPath.ThreadCreator);
-    if (type === "relation_update") {
-      hit.push(TalkCommandPath.RelationUpdate);
-    }
-    if (type === "question_form") {
-      hit.push(TalkCommandPath.QuestionForm);
-    }
-    return hit;
-  },
-  knowledge: (args, formStatus) => {
-    const entries: CommandKnowledgeEntries = {
-      [TALK_BASIC_PATH]: KNOWLEDGE.trim(),
-    };
-    if (formStatus === "executing") {
-      entries[TALK_FORM_STATUS_PATH] = "talk form 正在执行；等待执行完成，不要再次 refine 或 submit。";
-      return entries;
-    }
-    if (formStatus === "executed") {
-      entries[TALK_FORM_STATUS_PATH] = "talk form 已执行完成；结果消费后使用 close(form_id, reason=...) 释放 form。";
-      return entries;
-    }
-    const hasTarget = typeof args.target === "string" && args.target.trim().length > 0;
-    const hasMsg = typeof args.msg === "string" && args.msg.trim().length > 0;
-    if (!hasTarget || !hasMsg) {
-      entries[TALK_INPUT_PATH] = "talk 需要 target 与 msg；请先 refine(args={ target: \"creator\" | \"super\" | \"object\", msg: \"...\" })。";
+    const title = typeof args.title === "string" ? args.title : "";
+    if (!target || !title) {
+      entries[TALK_INPUT_PATH] =
+        "talk 需要 target 与 title；用 refine(args={ target: \"user\", title: \"...\" })，或在 open 时一次给齐。";
+    } else if (target !== "user") {
+      entries[TALK_INPUT_PATH] = `talk 当前阶段仅支持 target="user"，收到 "${target}"。`;
     }
     return entries;
   },
-  // 暂不实现具体执行逻辑
+  exec: (ctx) => executeTalkCommand(ctx),
 };
 
-/** 执行 talk command；当前阶段显式拒绝跨 Object 通信，避免 LLM 误以为消息已送达。 */
-export async function executeTalkCommand(ctx: CommandExecutionContext): Promise<string | undefined> {
-  ctx.thread?.events.push({
-    category: "context_change",
-    kind: "inject",
-    text: "[talk] 多 object 交互不属于当前单 object 阶段。"
-  });
+function deriveTitle(raw: string, max = 60): string {
+  const trimmed = raw.trim();
+  return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max)}...`;
+}
+
+/** root.talk 执行入口：构建并挂载 talk_window。 */
+export async function executeTalkCommand(
+  ctx: CommandExecutionContext,
+): Promise<string | undefined> {
+  const thread = ctx.thread;
+  if (!thread) return "[talk] 缺少 thread context。";
+  const target = typeof ctx.args.target === "string" ? ctx.args.target : "";
+  if (target !== "user") {
+    return `[talk] 当前阶段仅支持 target="user"（收到 "${target}"）。`;
+  }
+  const title = typeof ctx.args.title === "string" ? deriveTitle(ctx.args.title) : "";
+  if (!title) return "[talk] 缺少 title 参数。";
+
+  const id = generateWindowId("talk");
+  const talkWindow: TalkWindow = {
+    id,
+    type: "talk",
+    parentWindowId: ROOT_WINDOW_ID,
+    title,
+    status: "open",
+    createdAt: Date.now(),
+    target: "user",
+    conversationId: id,
+  };
+
+  if (ctx.manager) {
+    ctx.manager.insertTypedWindow(talkWindow);
+  } else {
+    thread.contextWindows = [...(thread.contextWindows ?? []), talkWindow];
+  }
   return undefined;
 }

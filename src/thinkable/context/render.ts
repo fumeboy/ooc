@@ -9,6 +9,10 @@ import type {
   CommandExecWindow,
   ContextWindow,
   DoWindow,
+  FileWindow,
+  KnowledgeWindow,
+  ProgramWindow,
+  TalkWindow,
   TodoWindow,
 } from "../../executable/windows/types";
 import { ROOT_WINDOW_ID } from "../../executable/windows/types";
@@ -33,7 +37,6 @@ type XmlNode =
 const INDENT = "  ";
 const MAX_KNOWLEDGE_BYTES = 8192;
 const MAX_FILE_WINDOW_BYTES = 32768;
-void MAX_FILE_WINDOW_BYTES; // 占位，待 Step 2 file_window 回归后启用
 
 /** 转义 XML 特殊字符，保证 context 内容不会破坏标签结构。 */
 export function escapeXml(text: string): string {
@@ -129,7 +132,12 @@ function truncateKnowledgeBody(body: string): string {
   return `${head}...[truncated, original ${bytes.length} bytes]`;
 }
 
-void readFile; // Step 2 file_window 回归时启用
+function truncateFileBody(body: string): string {
+  const bytes = new TextEncoder().encode(body);
+  if (bytes.length <= MAX_FILE_WINDOW_BYTES) return body;
+  const head = new TextDecoder().decode(bytes.slice(0, MAX_FILE_WINDOW_BYTES));
+  return `${head}...[truncated, original ${bytes.length} bytes]`;
+}
 
 /** 渲染 inbox/outbox 的扁平消息列表（仅顶层兜底，未被 window 视图收纳的消息）。 */
 function renderMessagesNode(tag: "inbox" | "outbox", messages: ThreadMessage[] | undefined): XmlNode | null {
@@ -226,6 +234,135 @@ function renderTodoWindowChildren(window: TodoWindow): XmlNode[] {
   return children;
 }
 
+/** talk_window 渲染：target + transcript（按 windowId / replyToWindowId 过滤）。 */
+function renderTalkWindowChildren(window: TalkWindow, thread: ThreadContext): XmlNode[] {
+  const children: XmlNode[] = [
+    xmlElement("target", {}, [xmlText(window.target)]),
+    xmlElement("conversation_id", {}, [xmlText(window.conversationId)]),
+  ];
+  const messages = filterMessagesForTalkWindow(window, thread);
+  if (messages.length > 0) {
+    children.push(
+      xmlElement(
+        "transcript",
+        {},
+        messages.map((m) =>
+          xmlElement("message", { id: m.id, source: m.source }, [
+            xmlElement("from_thread_id", {}, [xmlText(m.fromThreadId)]),
+            xmlElement("to_thread_id", {}, [xmlText(m.toThreadId)]),
+            xmlElement("content", {}, [xmlText(m.content)]),
+          ]),
+        ),
+      ),
+    );
+  }
+  return children;
+}
+
+/** program_window 渲染：history 列表（每条 exec 一行 + 最近一条全文）。 */
+function renderProgramWindowChildren(window: ProgramWindow): XmlNode[] {
+  const children: XmlNode[] = [];
+  if (window.history.length === 0) {
+    children.push(xmlComment("(no exec yet)"));
+    return children;
+  }
+  // 摘要：所有 exec 的 language + ok 状态
+  const summary = window.history.map((rec, idx) => {
+    const tag = rec.language === "function" ? `fn:${rec.function}` : rec.language;
+    const okFlag = rec.ok ? "ok" : "fail";
+    return xmlElement(
+      "exec",
+      { id: rec.execId, n: String(idx), kind: tag, ok: okFlag },
+      [],
+    );
+  });
+  children.push(xmlElement("history", {}, summary));
+
+  // 最近一条 full output（过长时截断）
+  const last = window.history[window.history.length - 1]!;
+  children.push(
+    xmlElement(
+      "last_output",
+      { exec_id: last.execId },
+      [xmlText(truncateFileBody(last.output))],
+    ),
+  );
+  return children;
+}
+
+/** file_window 渲染：path + lines/columns + 文件正文（按切片+截断）。 */
+async function renderFileWindowChildren(window: FileWindow): Promise<XmlNode[]> {
+  const children: XmlNode[] = [
+    xmlElement("path", {}, [xmlText(window.path)]),
+  ];
+  if (window.lines) {
+    children.push(xmlElement("lines", {}, [xmlText(`${window.lines[0]}-${window.lines[1]}`)]));
+  }
+  if (window.columns) {
+    children.push(xmlElement("columns", {}, [xmlText(`${window.columns[0]}-${window.columns[1]}`)]));
+  }
+  try {
+    const raw = await readFile(window.path, "utf8");
+    const sliced = sliceByLinesColumns(raw, window.lines, window.columns);
+    children.push(xmlElement("content", {}, [xmlText(truncateFileBody(sliced))]));
+  } catch (error) {
+    children.push(xmlElement("error", {}, [xmlText((error as Error).message)]));
+  }
+  return children;
+}
+
+/** knowledge_window 渲染：path + 全文（按 8KB 截断）；正文从 knowledge index 拿。 */
+async function renderKnowledgeWindowChildren(
+  window: KnowledgeWindow,
+  thread: ThreadContext,
+): Promise<XmlNode[]> {
+  const children: XmlNode[] = [
+    xmlElement("path", {}, [xmlText(window.path)]),
+  ];
+  if (!thread.persistence) {
+    children.push(xmlElement("error", {}, [xmlText("thread 无 persistence ref")]));
+    return children;
+  }
+  try {
+    const stoneRef = deriveStoneFromThread(thread.persistence);
+    const index = await loadKnowledgeIndex(stoneRef);
+    const doc = index.byPath.get(window.path);
+    if (!doc) {
+      children.push(xmlElement("error", {}, [xmlText(`knowledge "${window.path}" 不存在`)]));
+    } else {
+      if (doc.frontmatter.description) {
+        children.push(xmlElement("description", {}, [xmlText(doc.frontmatter.description)]));
+      }
+      children.push(xmlElement("content", {}, [xmlText(truncateKnowledgeBody(doc.body))]));
+    }
+  } catch (error) {
+    children.push(xmlElement("error", {}, [xmlText((error as Error).message)]));
+  }
+  return children;
+}
+
+/** 按行/列范围切片文件正文；range 缺失则原样返回。 */
+function sliceByLinesColumns(
+  raw: string,
+  lines?: [number, number],
+  columns?: [number, number],
+): string {
+  let body = raw;
+  if (lines) {
+    const arr = body.split("\n");
+    const [start, end] = lines;
+    body = arr.slice(start, end).join("\n");
+  }
+  if (columns) {
+    const [start, end] = columns;
+    body = body
+      .split("\n")
+      .map((line) => line.slice(start, end))
+      .join("\n");
+  }
+  return body;
+}
+
 /**
  * 把单个 window 投影成 XmlNode。
  *
@@ -234,8 +371,14 @@ function renderTodoWindowChildren(window: TodoWindow): XmlNode[] {
  *     ...type 特有内容
  *     <sub_windows>...</sub_windows>
  *   </window>
+ *
+ * 异步版本：file_window / knowledge_window 需要 IO 读 body。
  */
-function renderWindowNode(window: ContextWindow, thread: ThreadContext, allWindows: ContextWindow[]): XmlNode {
+async function renderWindowNode(
+  window: ContextWindow,
+  thread: ThreadContext,
+  allWindows: ContextWindow[],
+): Promise<XmlNode> {
   const children: XmlNode[] = [
     xmlElement("title", {}, [xmlText(window.title)]),
   ];
@@ -250,6 +393,18 @@ function renderWindowNode(window: ContextWindow, thread: ThreadContext, allWindo
     case "todo":
       children.push(...renderTodoWindowChildren(window));
       break;
+    case "talk":
+      children.push(...renderTalkWindowChildren(window, thread));
+      break;
+    case "program":
+      children.push(...renderProgramWindowChildren(window));
+      break;
+    case "file":
+      children.push(...(await renderFileWindowChildren(window)));
+      break;
+    case "knowledge":
+      children.push(...(await renderKnowledgeWindowChildren(window, thread)));
+      break;
     case "root":
       // root 一般不显式渲染（隐含 window）；如果出现就只渲染基本信息
       break;
@@ -258,30 +413,27 @@ function renderWindowNode(window: ContextWindow, thread: ThreadContext, allWindo
   // 子 window 折叠
   const subWindows = allWindows.filter((w) => w.parentWindowId === window.id);
   if (subWindows.length > 0) {
-    children.push(
-      xmlElement(
-        "sub_windows",
-        {},
-        subWindows.map((sub) => renderWindowNode(sub, thread, allWindows))
-      )
+    const subNodes = await Promise.all(
+      subWindows.map((sub) => renderWindowNode(sub, thread, allWindows)),
     );
+    children.push(xmlElement("sub_windows", {}, subNodes));
   }
 
-  return xmlElement("window", { id: window.id, type: window.type, status: window.status }, children);
+  return xmlElement(
+    "window",
+    { id: window.id, type: window.type, status: window.status },
+    children,
+  );
 }
 
 /** 渲染 thread.contextWindows 的整体节点，按 root 下的直接子 window 自顶向下展开。 */
-function renderContextWindowsNode(thread: ThreadContext): XmlNode | null {
+async function renderContextWindowsNode(thread: ThreadContext): Promise<XmlNode | null> {
   const all = thread.contextWindows ?? [];
   if (all.length === 0) return null;
 
-  // 直接子 = parentWindowId 缺省 或 等于 ROOT_WINDOW_ID
   const topLevel = all.filter((w) => !w.parentWindowId || w.parentWindowId === ROOT_WINDOW_ID);
-  return xmlElement(
-    "context_windows",
-    {},
-    topLevel.map((w) => renderWindowNode(w, thread, all))
-  );
+  const children = await Promise.all(topLevel.map((w) => renderWindowNode(w, thread, all)));
+  return xmlElement("context_windows", {}, children);
 }
 
 /**
@@ -309,13 +461,33 @@ function filterMessagesForDoWindow(window: DoWindow, thread: ThreadContext): Thr
   return filtered;
 }
 
+/**
+ * talk_window 的视图过滤：
+ * - outbox 上 windowId === self.id（say 写入时的标记）
+ * - inbox 上 replyToWindowId === self.id（control plane user-reply 路由）
+ *
+ * spec § ThreadMessage 字段扩展。
+ */
+function filterMessagesForTalkWindow(window: TalkWindow, thread: ThreadContext): ThreadMessage[] {
+  const messages: ThreadMessage[] = [];
+  for (const m of thread.outbox ?? []) {
+    if (m.windowId === window.id) messages.push(m);
+  }
+  for (const m of thread.inbox ?? []) {
+    if (m.replyToWindowId === window.id) messages.push(m);
+  }
+  messages.sort((a, b) => a.createdAt - b.createdAt);
+  return messages;
+}
+
 /** 收集所有已被 window 视图收纳的消息 id；其余消息走顶层 inbox/outbox 兜底渲染。 */
 function collectWindowConsumedMessageIds(thread: ThreadContext): Set<string> {
   const consumed = new Set<string>();
   for (const w of thread.contextWindows ?? []) {
-    if (w.type !== "do") continue;
-    for (const m of filterMessagesForDoWindow(w, thread)) {
-      consumed.add(m.id);
+    if (w.type === "do") {
+      for (const m of filterMessagesForDoWindow(w, thread)) consumed.add(m.id);
+    } else if (w.type === "talk") {
+      for (const m of filterMessagesForTalkWindow(w, thread)) consumed.add(m.id);
     }
   }
   return consumed;
@@ -368,7 +540,7 @@ export async function renderContextXml(input: {
   appendNode(threadChildren, optionalElement("parent_thread_id", threadForRender.parentThreadId));
   appendNode(threadChildren, optionalElement("plan", threadForRender.plan));
 
-  const contextWindowsNode = renderContextWindowsNode(threadForRender);
+  const contextWindowsNode = await renderContextWindowsNode(threadForRender);
   if (contextWindowsNode) {
     threadChildren.push(xmlComment("context windows: persistent or in-flight windows the LLM is currently interacting with"));
     threadChildren.push(contextWindowsNode);

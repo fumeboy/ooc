@@ -104,6 +104,26 @@ REGISTRY.set("todo", {
   commands: {},
 });
 
+REGISTRY.set("talk", {
+  type: "talk",
+  commands: {},
+});
+
+REGISTRY.set("program", {
+  type: "program",
+  commands: {},
+});
+
+REGISTRY.set("file", {
+  type: "file",
+  commands: {},
+});
+
+REGISTRY.set("knowledge", {
+  type: "knowledge",
+  commands: {},
+});
+
 /**
  * 替换或合并某 type 的契约，用于 windows/do.ts、windows/todo.ts 在模块加载时注入实现。
  *

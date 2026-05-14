@@ -94,8 +94,21 @@ export type ThreadMessage = {
   content: string;
   /** 创建时间戳，用于排序和调试，不承担强一致时钟语义。 */
   createdAt: number;
-  /** 消息来源；当前只区分 do 派生消息和系统消息。 */
-  source: "do" | "system";
+  /** 消息来源；step 2 加入 talk 与外部用户对话。 */
+  source: "do" | "system" | "talk";
+  /**
+   * 消息归属的 window id；
+   * - 由 talk_window.say 写 outbox 时设置为该 talk_window 的 id
+   * - 由 do_window.continue 可选设置（do_window 视图实际用 targetThreadId 过滤，本字段非必需）
+   */
+  windowId?: string;
+  /**
+   * 该消息是哪个 window 的回复目标；
+   * - 由控制面 user-reply 路径填入：当 user 选择回复某个 talk_window 时，
+   *   写入新 inbox 消息的 replyToWindowId = 那个 talk_window 的 id
+   * - render 层据此把消息归入对应 talk_window 的 transcript
+   */
+  replyToWindowId?: string;
 };
 
 /**

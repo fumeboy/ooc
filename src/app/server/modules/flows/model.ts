@@ -24,7 +24,13 @@ export const callMethodBody = t.Object({
   args: t.Optional(t.Record(t.String(), t.Any())),
 });
 
-/** 继续指定 thread 会话的请求体。 */
+/**
+ * 继续指定 thread 会话的请求体。
+ *
+ * Step 2（spec 2026-05-14）：可选 targetWindowId 用于把消息归到某个 talk_window 视图
+ * （render 层据此过滤 transcript）。
+ */
 export const continueThreadBody = t.Object({
   text: t.String(),
+  targetWindowId: t.Optional(t.String()),
 });

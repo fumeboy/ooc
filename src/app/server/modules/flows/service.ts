@@ -25,7 +25,7 @@ function httpContext() {
   } as never;
 }
 
-function createInboxMessage(text: string, toThreadId: string) {
+function createInboxMessage(text: string, toThreadId: string, replyToWindowId?: string) {
   return {
     id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     fromThreadId: "user",
@@ -33,11 +33,12 @@ function createInboxMessage(text: string, toThreadId: string) {
     content: text,
     createdAt: Date.now(),
     source: "system" as const,
+    ...(replyToWindowId ? { replyToWindowId } : {}),
   };
 }
 
-function appendInboxMessage(thread: ThreadContext, text: string): ThreadContext {
-  const message = createInboxMessage(text, thread.id);
+function appendInboxMessage(thread: ThreadContext, text: string, replyToWindowId?: string): ThreadContext {
+  const message = createInboxMessage(text, thread.id, replyToWindowId);
   return {
     ...thread,
     inbox: [...(thread.inbox ?? []), message],
@@ -176,21 +177,26 @@ export function createFlowsService(deps: {
       return await readThread({ baseDir: deps.baseDir, sessionId, objectId }, threadId);
     },
     /**
-     * 向已存在的 thread 追加一条用户文本（底层仍记录为 context_change/inject 事件），
+     * 向已存在的 thread 追加一条用户文本（底层仍记录为 context_change/inbox_message_arrived 事件），
      * 把 thread.status 翻回 running，并入队一个新的 run-thread job 让 worker 续跑。
      *
      * 用于多轮对话：用户在 thread 上一轮跑完后追加新需求。
+     *
+     * Step 2：可选 targetWindowId（spec § talk_window） — 当 user 选择回复某个 talk_window 时，
+     * 写入 inbox 消息携带 replyToWindowId，render 层据此把消息归入对应 talk_window 的 transcript。
      */
     async continueThread({
       sessionId,
       objectId,
       threadId,
       text,
+      targetWindowId,
     }: {
       sessionId: string;
       objectId: string;
       threadId: string;
       text: string;
+      targetWindowId?: string;
     }) {
       const ref = { baseDir: deps.baseDir, sessionId, objectId };
       const thread = await readThread(ref, threadId);
@@ -201,7 +207,7 @@ export function createFlowsService(deps: {
           { sessionId, objectId, threadId }
         );
       }
-      const nextThread = appendInboxMessage(reviveThreadForInboxMessage(thread), text);
+      const nextThread = appendInboxMessage(reviveThreadForInboxMessage(thread), text, targetWindowId);
       await writeThread(nextThread);
       const job = deps.jobManager.createRunThreadJob({
         sessionId,

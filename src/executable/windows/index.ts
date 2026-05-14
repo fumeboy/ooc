@@ -45,3 +45,7 @@ export type { InitContextWindowsOpts } from "./init.js";
 // 这些 import 必须在 WindowManager 之后 load，确保使用时表已就绪。
 import "./do.js";
 import "./todo.js";
+import "./talk.js";
+import "./program.js";
+import "./file.js";
+import "./knowledge.js";

@@ -20,7 +20,7 @@
  */
 
 /** Window 类型枚举；新增类型必须同步在 WINDOW_REGISTRY 中注册。 */
-export type WindowType = "root" | "command_exec" | "do" | "todo";
+export type WindowType = "root" | "command_exec" | "do" | "todo" | "talk" | "program" | "file" | "knowledge";
 
 /**
  * Window 状态值汇总。
@@ -30,9 +30,12 @@ export type WindowType = "root" | "command_exec" | "do" | "todo";
  *   - 失败则保留 executed + result（错误信息），等 LLM 显式 close
  * - do：running → archived（被 close 时切到 archived，对应 B=ii archive 语义）
  * - todo：open → done（被 close 时切到 done）
+ * - talk：open → closed（close 释放，与对端无关）
+ * - program：open → closed（close 释放）
+ * - file / knowledge：open → closed（close 释放，可触发 reload）
  * - root：仅 active；与 thread 同生命周期，不能被关闭
  */
-export type WindowStatus = "open" | "executing" | "executed" | "running" | "archived" | "done" | "active";
+export type WindowStatus = "open" | "executing" | "executed" | "running" | "archived" | "done" | "active" | "closed";
 
 /**
  * 所有 ContextWindow 共享的字段。
@@ -121,12 +124,83 @@ export interface TodoWindow extends BaseContextWindow {
   status: "open" | "done";
 }
 
+/**
+ * Talk window — 与外部 target（当前阶段仅 user）保持持续会话的窗口。
+ *
+ * - target：当前仅 "user"；后续阶段引入跨 object 时扩展
+ * - conversationId：同 target 多窗口区分；当前固定等于 windowId
+ * - 注册的 command（windows/talk.ts）：say / wait / close
+ * - 视图：transcript 按 outbox.windowId === self.id || inbox.replyToWindowId === self.id 过滤
+ */
+export interface TalkWindow extends BaseContextWindow {
+  type: "talk";
+  target: "user";
+  conversationId: string;
+  status: "open" | "closed";
+}
+
+/**
+ * Program window — REPL 风格的代码执行窗口。
+ *
+ * - history：每次 exec 一条记录；每次都是独立 sandbox（spec § program_window）
+ * - ts/js sandbox 通过 self.getThreadLocal/setThreadLocal 跨 exec 共享数据（落到 thread.threadLocalData）
+ * - 注册 command：exec / close
+ */
+export interface ProgramWindow extends BaseContextWindow {
+  type: "program";
+  status: "open" | "closed";
+  history: ProgramExecRecord[];
+}
+
+export interface ProgramExecRecord {
+  execId: string;
+  language: "shell" | "ts" | "js" | "function";
+  code?: string;
+  function?: string;
+  args?: unknown;
+  output: string;
+  ok: boolean;
+  startedAt: number;
+}
+
+/**
+ * File window — 显示某个文件的内容（按 lines/columns 切片）。
+ *
+ * - path：文件绝对路径或工作目录相对路径
+ * - lines / columns：可选切片范围
+ * - 注册 command：set_range / reload / close
+ */
+export interface FileWindow extends BaseContextWindow {
+  type: "file";
+  status: "open" | "closed";
+  path: string;
+  lines?: [number, number];
+  columns?: [number, number];
+}
+
+/**
+ * Knowledge window — 显式打开的 knowledge doc 窗口；替代旧 pinnedKnowledge。
+ *
+ * - path：knowledge 索引中的路径（不带 .md 后缀）
+ * - 注册 command：reload / close
+ * - activator 在算激活集合时把已打开的 knowledge_window.path 视为强制 full
+ */
+export interface KnowledgeWindow extends BaseContextWindow {
+  type: "knowledge";
+  status: "open" | "closed";
+  path: string;
+}
+
 /** 所有 ContextWindow 类型的 discriminated union。新增 type 后必须扩这里 + WINDOW_REGISTRY。 */
 export type ContextWindow =
   | RootWindow
   | CommandExecWindow
   | DoWindow
-  | TodoWindow;
+  | TodoWindow
+  | TalkWindow
+  | ProgramWindow
+  | FileWindow
+  | KnowledgeWindow;
 
 /** Root window 的固定 id。 */
 export const ROOT_WINDOW_ID = "root";
@@ -137,6 +211,10 @@ export function generateWindowId(type: Exclude<WindowType, "root">): string {
     command_exec: "f",
     do: "w_do",
     todo: "w_todo",
+    talk: "w_talk",
+    program: "w_prog",
+    file: "w_file",
+    knowledge: "w_kn",
   } as const)[type];
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }
