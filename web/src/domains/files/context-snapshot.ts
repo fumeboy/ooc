@@ -108,6 +108,14 @@ export type ContextWindow =
       title: string;
       status: "open" | "closed";
       path: string;
+      /** 来源：explicit=LLM 主动 pin；protocol=KNOWLEDGE/form 派生；activator=stone 知识命中 */
+      source?: "explicit" | "protocol" | "activator";
+      /** 合成 window 直接携带正文；explicit 来源时可能为空（render 端从 loader 取） */
+      body?: string;
+      /** activator 来源时区分 full / summary */
+      presentation?: "full" | "summary";
+      /** activator 来源时的描述（来自 frontmatter.description） */
+      description?: string;
       createdAt?: number;
     };
 
@@ -212,7 +220,7 @@ function windowSummary(window: ContextWindow): string {
     case "file":
       return window.path + (window.lines ? ` [${window.lines.join("-")}]` : "");
     case "knowledge":
-      return window.path;
+      return `${window.source ?? "explicit"} · ${window.path}` + (window.presentation ? ` · ${window.presentation}` : "");
     case "root":
       return "thread root";
   }
@@ -243,7 +251,7 @@ function windowCharCount(window: ContextWindow): number {
       n += window.path.length;
       break;
     case "knowledge":
-      n += window.path.length;
+      n += window.path.length + (window.body?.length ?? 0) + (window.description?.length ?? 0);
       break;
     case "root":
       break;

@@ -199,10 +199,30 @@ function WindowDetails({ window }: { window: ContextWindow }) {
           <span className="cw-detail-label">path</span>
           <span className="cw-detail-value">{window.path}</span>
         </div>
-        <div className="cw-detail-row">
-          <span className="cw-detail-label">role</span>
-          <span className="cw-detail-value">force-full（取代旧 pinnedKnowledge）</span>
-        </div>
+        {window.source && (
+          <div className="cw-detail-row">
+            <span className="cw-detail-label">source</span>
+            <span className="cw-detail-value">{window.source}</span>
+          </div>
+        )}
+        {window.presentation && (
+          <div className="cw-detail-row">
+            <span className="cw-detail-label">presentation</span>
+            <span className="cw-detail-value">{window.presentation}</span>
+          </div>
+        )}
+        {window.description && (
+          <div className="cw-detail-row">
+            <span className="cw-detail-label">description</span>
+            <span className="cw-detail-value">{window.description}</span>
+          </div>
+        )}
+        {window.body && (
+          <div className="cw-detail-row">
+            <span className="cw-detail-label">content</span>
+            <pre className="cw-detail-pre">{window.body}</pre>
+          </div>
+        )}
       </div>
     );
   }

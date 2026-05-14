@@ -104,6 +104,10 @@ export type ContextWindow =
       title: string;
       status: "open" | "closed";
       path: string;
+      source?: "explicit" | "protocol" | "activator";
+      body?: string;
+      presentation?: "full" | "summary";
+      description?: string;
       createdAt?: number;
     };
 

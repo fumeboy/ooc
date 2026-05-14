@@ -226,12 +226,33 @@ function WindowDetail({ window }: { window: ContextWindow }) {
         </div>
       )}
       {window.type === "knowledge" && (
-        <div className="llm-input-attrs">
-          <div className="llm-input-attr-row">
-            <span className="llm-input-attr-key">path</span>
-            <span className="llm-input-attr-value">{window.path}</span>
+        <>
+          <div className="llm-input-attrs">
+            <div className="llm-input-attr-row">
+              <span className="llm-input-attr-key">path</span>
+              <span className="llm-input-attr-value">{window.path}</span>
+            </div>
+            {window.source && (
+              <div className="llm-input-attr-row">
+                <span className="llm-input-attr-key">source</span>
+                <span className="llm-input-attr-value">{window.source}</span>
+              </div>
+            )}
+            {window.presentation && (
+              <div className="llm-input-attr-row">
+                <span className="llm-input-attr-key">presentation</span>
+                <span className="llm-input-attr-value">{window.presentation}</span>
+              </div>
+            )}
+            {window.description && (
+              <div className="llm-input-attr-row">
+                <span className="llm-input-attr-key">description</span>
+                <span className="llm-input-attr-value">{window.description}</span>
+              </div>
+            )}
           </div>
-        </div>
+          {window.body && <pre className="llm-input-pre">{window.body}</pre>}
+        </>
       )}
     </div>
   );
