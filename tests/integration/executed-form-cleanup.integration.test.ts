@@ -20,22 +20,22 @@ describe.skipIf(!hasLlmEnv)("integration: executed-form-cleanup", () => {
     await cleanup();
   });
 
-  test("agent runs ls, reads result, closes form, then ends", async () => {
+  test("agent runs program (C-rule auto-submit), confirms no command_exec residue, then ends", async () => {
     const root = await makeRootThread(
       tempRoot,
       [
-        "请用 program command（language=shell, code='ls src/'）执行 shell。",
-        "submit 后看到 form status=executed 和 result，立刻用 close tool 关闭那个 form（reason='已读取结果'）。",
-        "然后 open(type=command, command=end) 提交结束。",
-        "重要：result 已在 active_forms 中可见，不需要 wait。",
-      ].join("\n")
+        "请用 open(command=\"program\", title=\"...\", args={ language: \"shell\", code: \"ls src/\" }) 执行 shell（C 规则会自动 submit）。",
+        "结果会进 program_window.history，不会留下 command_exec form。",
+        "然后用 close(window_id=<program_window id>) 关闭 program_window。",
+        "最后 open(command=\"end\") 结束线程。",
+        "重要：result 已在 program_window.history 中可见，不需要 wait。",
+      ].join("\n"),
     );
 
     await runScheduler(root, llm(), { maxTicks: 10 });
 
     expect(root.status).toBe("done");
     expect(countEventsWithPrefix(root, "[form executed]")).toBeGreaterThanOrEqual(1);
-    expect(countEventsWithPrefix(root, "[close]")).toBeGreaterThanOrEqual(1);
 
     const programForms = root.contextWindows.filter(
       (w) => w.type === "command_exec" && w.command === "program",

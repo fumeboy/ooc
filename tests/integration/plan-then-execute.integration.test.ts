@@ -20,21 +20,21 @@ describe.skipIf(!hasLlmEnv)("integration: plan-then-execute", () => {
     await cleanup();
   });
 
-  test("agent makes a plan then executes via shell", async () => {
+  test("agent makes a plan then executes via program_window", async () => {
     const root = await makeRootThread(
       tempRoot,
       [
-        "请先做一份执行计划（open type=command command=plan）：'数 src/ 下所有 .ts 文件总数'。",
-        "然后用 program command（language=shell）执行 shell 命令，",
-        "看到 form 的 result 字段后，把数字写进 end command 的 summary 然后 end。",
-        "重要：执行 shell 用 program command 不是 do command；程序结果会出现在 active_forms 中对应 form 的 result 字段，不需要 wait。",
-      ].join("\n")
+        "请先用 open(command=\"plan\", title=\"...\", args={ plan: \"数 src/ 下所有 .ts 文件总数\" }) 做一份计划（C 规则会自动 submit）。",
+        "然后用 open(command=\"program\", title=\"...\", args={ language: \"shell\", code: \"...\" }) 执行 shell；",
+        "结果会写进 program_window.history。读取后 open(command=\"end\", args={ summary: \"...\" }) 结束并把数字写进 summary。",
+        "重要：args 给齐时 C 规则自动 submit；不需要单独 wait。",
+      ].join("\n"),
     );
 
     await runScheduler(root, llm(), { maxTicks: 14 });
 
     expect(root.status).toBe("done");
     expect(root.plan?.length ?? 0).toBeGreaterThan(0);
-    expect(countEventsWithPrefix(root, "[form executed]")).toBeGreaterThanOrEqual(2);
+    expect(countEventsWithPrefix(root, "[form executed]")).toBeGreaterThanOrEqual(1);
   }, 180_000);
 });

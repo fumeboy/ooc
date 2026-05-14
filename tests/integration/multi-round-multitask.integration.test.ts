@@ -72,7 +72,7 @@ describe.skipIf(!hasLlmEnv)("integration: multi-round-multitask", () => {
             "",
             "重要：",
             "- 必须分步做，每步独立 open + submit 一个 program form；不要把多个 shell / ts 操作合并到一段脚本",
-            "- form result 已在 active_forms 中可见，不要 wait",
+            "- form result 已在 contextWindows 中可见，不要 wait",
             "- 严格按 1→2→3→4→5 的顺序完成",
           ].join("\n"),
         },
