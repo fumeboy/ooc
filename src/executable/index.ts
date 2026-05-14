@@ -9,7 +9,7 @@
 
 import { deriveStoneFromThread } from "../persistable";
 import type { ThreadContext } from "../thinkable/context";
-import { ROOT_COMMANDS } from "./windows/root/index.js";
+import { ROOT_BASIC_PATH, ROOT_COMMANDS, ROOT_KNOWLEDGE } from "./windows/root/index.js";
 import type { CommandKnowledgeEntries } from "./windows/command-types.js";
 import { getWindowTypeDefinition } from "./windows/registry.js";
 import type { CommandExecWindow, ContextWindow, KnowledgeWindow } from "./windows/types.js";
@@ -191,9 +191,10 @@ export async function collectExecutableKnowledgeEntries(
   contextWindows: ContextWindow[] | undefined,
   thread: ThreadContext,
 ): Promise<{ contextWindows: ContextWindow[] | undefined; knowledgeEntries: CommandKnowledgeEntries }> {
-  // 1) 收集 protocol 来源 entries —— 全局 KNOWLEDGE + 每个 command_exec form 的 knowledge()
+  // 1) 收集 protocol 来源 entries —— 全局 KNOWLEDGE + root 命令清单 + 每个 command_exec form 的 knowledge()
   const protocolEntries: CommandKnowledgeEntries = {
     [EXECUTABLE_BASIC_PATH]: KNOWLEDGE,
+    [ROOT_BASIC_PATH]: ROOT_KNOWLEDGE,
   };
 
   const list = contextWindows ?? [];

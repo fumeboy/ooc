@@ -5,7 +5,10 @@
  * - 旧 src/executable/commands/index.ts 拆分到这里 + windows/registry.ts；
  *   commands/ 目录已迁到 windows/root/，体现 "root 是一种 window type" 的从属关系
  * - 通过 registerWindowType("root", { commands }) 注入；与其它 window type 形态一致
- * - 暴露的工具函数（getOpenableCommands / deriveCommandPaths）只服务于 root 上的命令
+ * - 暴露的工具函数（getOpenableCommands / deriveRootCommandPaths）只服务于 root 上的命令
+ * - 暴露 ROOT_BASIC_PATH / ROOT_KNOWLEDGE：列出 root 注册的命令清单 + 用法摘要，
+ *   由 src/executable/index.ts:collectExecutableKnowledgeEntries 合成为
+ *   protocol 来源的 knowledge_window，每轮注入 context（参照 plan.ts 的 KNOWLEDGE 形态）
  */
 
 import { registerWindowType } from "../registry.js";
@@ -22,7 +25,7 @@ import type { CommandTableEntry } from "../command-types.js";
 /**
  * Root window 上注册的命令清单（核心数据）。
  *
- * 当前所有 command 都允许通过 \`open(parent_window_id?, command="X", ...)\` 打开。
+ * 当前所有 command 都允许通过 `open(parent_window_id?, command="X", ...)` 打开。
  * window-level 命令（如 do_window 上的 continue）由各自 windows/X.ts 注册到对应 type 上。
  */
 export const ROOT_COMMANDS: Record<string, CommandTableEntry> = {
@@ -36,18 +39,42 @@ export const ROOT_COMMANDS: Record<string, CommandTableEntry> = {
   open_knowledge: openKnowledgeCommand,
 };
 
+/** Protocol knowledge path（与 plan.ts 等命令文件的 *_BASIC_PATH 形态一致）。 */
+export const ROOT_BASIC_PATH = "internal/windows/root/basic";
+
+/**
+ * Root window 上可用 command 的清单 + 一行用途说明。
+ *
+ * 每轮自动作为 protocol knowledge_window 注入，让 LLM 在没有任何 form 时也清楚
+ * "我能在 root 上 open 哪些 command、每个 command 大致是干什么的"。
+ *
+ * 形态对应 plan.ts 的 KNOWLEDGE：纯文本，由 collectExecutableKnowledgeEntries 包成
+ * KnowledgeWindow（path=ROOT_BASIC_PATH, source=protocol）。
+ */
+export const ROOT_KNOWLEDGE = `
+root window 是每个 thread 隐含的根窗口。在 root 上可用的 command 列表如下，
+通过 open(command="<name>", title="...", args={...}) 调用（args 给齐时 C 规则会自动 submit）：
+
+| command         | 作用                                          | 主要副作用                                 |
+|-----------------|-----------------------------------------------|--------------------------------------------|
+| do              | 派生子线程                                    | 创建 child thread + do_window              |
+| talk            | 与 user 持续会话（当前 target 仅 "user"）      | 创建 talk_window；发消息走 talk_window.say |
+| program         | 执行代码 / 调用 server 方法                   | 创建 program_window；首次 exec 立即运行    |
+| plan            | 写 thread.plan                                | 仅副作用，不产生 window                    |
+| todo            | 登记可见待办                                  | 创建 todo_window（C 规则常命中直建）       |
+| end             | 标记 thread 完成                              | 仅副作用                                   |
+| open_file       | 把指定文件引入 context                        | 创建 file_window；后续 set_range/reload    |
+| open_knowledge  | 显式打开 stone knowledge doc                  | 创建 knowledge_window（force-full 渲染）   |
+
+每个 command 在进入 \`open\` 后，对应的详细 \`internal/executable/<name>/basic\` 协议
+知识会作为 form 自身的 protocol knowledge_window 出现；上面的清单只是入口索引。
+`.trim();
+
 /** 返回所有 root 上可 open 的命令名称列表（已排序）。 */
 export function getOpenableCommands(): string[] {
   return Object.keys(ROOT_COMMANDS).sort();
 }
 
-/**
- * 测试 / 直接调用 root command 的便捷入口；不走 WindowManager。
- *
- * 仅供测试使用：单测希望验证 root command 的副作用而不必构造 form 生命周期。
- * 生产代码应通过 WindowManager.openCommandExec 触发；那条路径会注入 manager
- * 与 parentWindow 等完整 ctx。
- */
 /**
  * 测试 / 直接调用 root command 的便捷入口；不走 WindowManager。
  *
