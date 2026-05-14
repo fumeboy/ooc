@@ -164,14 +164,16 @@ export class WindowManager {
     this.windows.set(formId, form);
     this.recordKnowledgeRefs(form);
 
-    // C 规则判定（spec § C 规则的判定算法）：args 非空 + commandPaths 集合不变 +
-    // 不引入"新"的 knowledge key（next ⊆ baseline 即可；减少入口算更明确，仍允许自动 submit）
+    // C 规则判定（spec § C 规则的判定算法）：
+    // - args 非空（无 args 等价于 LLM 想观察 form 状态再决定，不应自动 submit）
+    // - next commandPaths ⊇ baseline（新 path 由 LLM 显式给出，不算"surprise"）
+    // - next knowledge keys ⊆ baseline（command 自己不引入新协议知识，LLM 已知所有规则）
     if (Object.keys(args).length > 0) {
       const nextKnowledgeKeys = entry.knowledge
         ? Object.keys(entry.knowledge(args, "open"))
         : [];
       if (
-        setEqual(baselinePaths, commandPaths) &&
+        setSubset(baselinePaths, commandPaths) &&
         setSubset(nextKnowledgeKeys, baselineKnowledgeKeys)
       ) {
         const submitResult = await this.submit(formId, opts.thread);

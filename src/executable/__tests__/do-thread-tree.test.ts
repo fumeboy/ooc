@@ -101,4 +101,24 @@ describe("do command (ContextWindow model)", () => {
     expect(parent.contextWindows.find((w) => w.id === doWindowId)).toBeUndefined();
     expect(parent.childThreads![childId]!.status).toBe("paused");
   });
+
+  it("C 规则：open(do, args={msg, wait:true}) 一次调用即完成 fork+wait（spec § C 规则）", async () => {
+    const parent = makeThread({ id: "t_parent" });
+    const mgr = WindowManager.fromThread(parent);
+    const opened = await mgr.openCommandExec({
+      thread: parent,
+      command: "do",
+      title: "fork 子线程并等待",
+      args: { msg: "处理告警", wait: true },
+    });
+    parent.contextWindows = mgr.toData();
+
+    expect(opened.autoSubmitted).toBe(true);
+    expect(parent.childThreadIds).toHaveLength(1);
+    expect(parent.status).toBe("waiting");
+    expect(parent.inboxSnapshotAtWait).toBe(0);
+    // form 成功后应已自动消失，仅留 do_window 与 creator window
+    expect(parent.contextWindows.find((w) => w.type === "command_exec")).toBeUndefined();
+    expect(parent.contextWindows.some((w) => w.type === "do" && !(w as DoWindow).isCreatorWindow)).toBe(true);
+  });
 });

@@ -281,16 +281,21 @@ type ThreadMessage = {
 ```
 op_open(parent, command, args, title?):
   form = create_command_exec_window(parent, command, title)
-  baselinePaths    = command.match({})
+  baselinePaths     = command.match({})
   baselineKnowledge = command.knowledge({}, "open")
   if args is non-empty:
     apply_refine(form, args)
-    nextPaths    = command.match(args)
+    nextPaths     = command.match(args)
     nextKnowledge = command.knowledge(args, "open")
-    if setEqual(baselinePaths, nextPaths) and setEqual(baselineKnowledge, nextKnowledge):
-      auto_submit(form)
-  return form.id
+    if isSuperset(nextPaths, baselinePaths) and isSubset(nextKnowledge.keys, baselineKnowledge.keys):
+      submit(form)  // 走与 LLM 显式 submit 相同的路径
 ```
+
+判定语义：
+
+- **paths 允许 superset（next ⊇ baseline）**：args 给出新维度（如 `wait=true` 触发 `do.wait`）是 LLM 自己有意为之，不是协议层带来的"惊喜"——可以放行
+- **knowledge keys 必须 subset（next ⊆ baseline）**：command 不能借机引入新协议知识，否则 LLM 没机会读到就被自动 submit
+- **args 必须非空**：空 args = LLM 想先看 form 状态再决定下一步，不该自动 submit
 
 实现位置：`src/executable/tools/open.ts`，集中处理；各 command 不需要感知"是否被自动 submit"。
 
