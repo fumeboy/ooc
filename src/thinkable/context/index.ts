@@ -1,6 +1,6 @@
 import type { LlmInputItem, LlmMessage } from "../llm/types";
 import { collectExecutableKnowledgeEntries } from "../../executable/index";
-import type { ActiveForm } from "../../executable/forms/form";
+import type { ContextWindow } from "../../executable/windows/types";
 import type { ThreadPersistenceRef } from "../../persistable/common";
 import { renderContextXml } from "./render";
 
@@ -102,12 +102,16 @@ export type ThreadMessage = {
  * 单个线程的运行时上下文。
  *
  * 这是 buildContext / think / scheduler 共享的最小结构，不等同于完整持久化模型。
- * 字段只在新版 meta 文档已经定义清楚时进入这里，避免把旧系统复杂度直接搬入。
+ *
+ * Step 1 重构（spec 2026-05-14）：
+ * - 删除 activeForms / windows / pinnedKnowledge / waitingType / awaitingChildren
+ * - 新增 contextWindows（统一抽象）+ threadLocalData（program_window step 2 使用，先占位）
+ * - status="waiting" 单独表达"等待 inbox 新消息"，不再细分 waitingType（spec § 等待语义的简化）
  */
 export type ThreadContext = {
   /** 线程唯一标识；同时用于 XML context 中的 thread id。 */
   id: string;
-  /** 调度状态；只有 running 会被 scheduler 选中执行 ThinkLoop。 */
+  /** 调度状态；status="waiting" 表示等待 inbox 新消息，不再有 waitingType 细分。 */
   status: "running" | "waiting" | "done" | "failed" | "paused";
   /** 当前线程的过程事件流，会被转换成 system message 之后的普通 LLM messages。 */
   events: ProcessEvent[];
@@ -125,39 +129,30 @@ export type ThreadContext = {
   outbox?: ThreadMessage[];
   /** 当前线程的计划文本，由 plan command 覆盖式更新。 */
   plan?: string;
-  /** 当前 open 但尚未 submit/close 的 form；todo 也通过这里表达。 */
-  activeForms?: ActiveForm[];
   /**
-   * 被显式固定的 knowledge path（通过 open(type=knowledge) pin / close(type=knowledge) 卸载）。
-   * 自动激活由 activator 每轮基于 commandPaths 派生，不持久化在 thread 上。
+   * 当前线程的所有 ContextWindow（flat 数组，层级通过 parentWindowId 表达）。
+   *
+   * 取代旧的 activeForms / windows / pinnedKnowledge 三套并列字段。
+   * 见 src/executable/windows/types.ts 与 spec § 模型骨架。
    */
-  pinnedKnowledge?: string[];
-  /** 显式打开的知识或文件窗口；当前只保存窗口元信息。 */
-  windows?: Record<
-    string,
-    {
-      /** 窗口类型，决定后续 context builder 如何加载内容。 */
-      type: "knowledge" | "file";
-      /** knowledge path 或文件路径。 */
-      path: string;
-      /** 让 LLM 理解窗口用途的简短描述。 */
-      description: string;
-      /** 可选行范围；格式暂不收紧，等待 file/knowledge 模块定义。 */
-      lines?: unknown;
-      /** 可选列范围；格式暂不收紧，等待 file/knowledge 模块定义。 */
-      columns?: unknown;
-    }
-  >;
-  /** waiting 状态的原因，用于 scheduler 判断是否可唤醒。 */
-  waitingType?: "explicit_wait" | "talk_sync" | "await_children";
-  /** waitingType=await_children 时等待完成的子线程集合。 */
-  awaitingChildren?: string[];
+  contextWindows: ContextWindow[];
+  /**
+   * thread-local 共享数据；Step 2 program_window 的 ts/js exec 之间通过这里传值
+   * （spec § program_window 的"跨 exec 数据传递"段）。Step 1 仅占位、不读不写。
+   */
+  threadLocalData?: Record<string, unknown>;
   /** end command 写入的结束原因。 */
   endReason?: string;
   /** end command 写入的最终摘要。 */
   endSummary?: string;
   /** 最近一次被 scheduler 执行的时间，用于公平选择下一个 running thread。 */
   lastExecutedAt?: number;
+  /**
+   * 入眠时刻 inbox 长度快照；scheduler 唤醒时对比当前 inbox.length 判断是否有新消息。
+   * status="waiting" 时由 wait tool 写入；唤醒后由 scheduler 重置为 undefined。
+   * 见 spec § 等待语义的简化。
+   */
+  inboxSnapshotAtWait?: number;
   /** 当前线程的持久化位置；缺失时系统只以内存模式运行。 */
   persistence?: ThreadPersistenceRef;
 };
@@ -256,10 +251,10 @@ export async function buildContext(thread: ThreadContext): Promise<LlmMessage[]>
 export async function buildInputItems(
   thread: ThreadContext
 ): Promise<{ instructions?: string; input: LlmInputItem[] }> {
-  const executableState = await collectExecutableKnowledgeEntries(thread.activeForms, thread);
+  const executableState = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
   const content = await renderContextXml({
     thread,
-    activeForms: executableState.activeForms,
+    contextWindows: executableState.contextWindows,
     knowledgeEntries: executableState.knowledgeEntries,
   });
 
