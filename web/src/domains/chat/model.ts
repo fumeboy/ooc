@@ -57,6 +57,54 @@ export type ContextWindow =
       content: string;
       onCommandPath?: string[];
       createdAt?: number;
+    }
+  | {
+      id: string;
+      type: "talk";
+      parentWindowId?: string;
+      title: string;
+      status: "open" | "closed";
+      target: string;
+      conversationId: string;
+      createdAt?: number;
+    }
+  | {
+      id: string;
+      type: "program";
+      parentWindowId?: string;
+      title: string;
+      status: "open" | "closed";
+      history: Array<{
+        execId: string;
+        language: "shell" | "ts" | "js" | "function";
+        code?: string;
+        function?: string;
+        args?: unknown;
+        output: string;
+        ok: boolean;
+        startedAt: number;
+      }>;
+      createdAt?: number;
+    }
+  | {
+      id: string;
+      type: "file";
+      parentWindowId?: string;
+      title: string;
+      status: "open" | "closed";
+      path: string;
+      lines?: [number, number];
+      columns?: [number, number];
+      createdAt?: number;
+    }
+  | {
+      id: string;
+      type: "knowledge";
+      parentWindowId?: string;
+      title: string;
+      status: "open" | "closed";
+      path: string;
+      createdAt?: number;
     };
 
 export type ThreadContext = {

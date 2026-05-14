@@ -18,10 +18,14 @@ import {
   ChevronRight,
   CircleDot,
   FileCheck,
+  FileText,
   Inbox,
   ListChecks,
   Loader2,
+  MessageSquare,
   PanelTop,
+  Play,
+  ScrollText,
   type LucideIcon,
 } from "lucide-react";
 import type { ContextWindow, ThreadContext } from "../model";
@@ -38,6 +42,10 @@ const TYPE_STYLE: Record<ContextWindow["type"], WindowTypeStyle> = {
   command_exec: { icon: FileCheck, label: "form" },
   do: { icon: Inbox, label: "do" },
   todo: { icon: ListChecks, label: "todo" },
+  talk: { icon: MessageSquare, label: "talk" },
+  program: { icon: Play, label: "program" },
+  file: { icon: FileText, label: "file" },
+  knowledge: { icon: ScrollText, label: "knowledge" },
 };
 
 function statusToTone(status?: string): "info" | "warning" | "success" | "error" {
@@ -125,6 +133,76 @@ function WindowDetails({ window }: { window: ContextWindow }) {
             <span className="cw-detail-value">{window.onCommandPath.join(", ")}</span>
           </div>
         )}
+      </div>
+    );
+  }
+
+  if (window.type === "talk") {
+    return (
+      <div className="cw-details">
+        <div className="cw-detail-row">
+          <span className="cw-detail-label">target</span>
+          <span className="cw-detail-value">{window.target}</span>
+        </div>
+        <div className="cw-detail-row">
+          <span className="cw-detail-label">conversation</span>
+          <span className="cw-detail-value">{window.conversationId}</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (window.type === "program") {
+    return (
+      <div className="cw-details">
+        <div className="cw-detail-row">
+          <span className="cw-detail-label">execs</span>
+          <span className="cw-detail-value">{window.history.length}</span>
+        </div>
+        {window.history.length > 0 && (
+          <div className="cw-detail-row">
+            <span className="cw-detail-label">last</span>
+            <pre className="cw-detail-pre">{window.history[window.history.length - 1]?.output}</pre>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (window.type === "file") {
+    return (
+      <div className="cw-details">
+        <div className="cw-detail-row">
+          <span className="cw-detail-label">path</span>
+          <span className="cw-detail-value">{window.path}</span>
+        </div>
+        {window.lines && (
+          <div className="cw-detail-row">
+            <span className="cw-detail-label">lines</span>
+            <span className="cw-detail-value">{window.lines.join("-")}</span>
+          </div>
+        )}
+        {window.columns && (
+          <div className="cw-detail-row">
+            <span className="cw-detail-label">columns</span>
+            <span className="cw-detail-value">{window.columns.join("-")}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (window.type === "knowledge") {
+    return (
+      <div className="cw-details">
+        <div className="cw-detail-row">
+          <span className="cw-detail-label">path</span>
+          <span className="cw-detail-value">{window.path}</span>
+        </div>
+        <div className="cw-detail-row">
+          <span className="cw-detail-label">role</span>
+          <span className="cw-detail-value">force-full（取代旧 pinnedKnowledge）</span>
+        </div>
       </div>
     );
   }
