@@ -1,5 +1,5 @@
 import { commands_v20260506_1 } from "@meta/object/executable/actions/commands/index.doc";
-import * as planSource from "@src/executable/commands/plan";
+import * as planSource from "@src/executable/windows/root/plan";
 
 export const plan_v20260506_1 = {
   get parent() { return commands_v20260506_1; },

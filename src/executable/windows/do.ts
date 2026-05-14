@@ -8,7 +8,7 @@
  * - 特殊子类：初始 creator do_window（由 windows/init.ts 创建），不可被 LLM close
  */
 
-import type { CommandExecutionContext, CommandKnowledgeEntries, CommandTableEntry } from "../commands/types.js";
+import type { CommandExecutionContext, CommandKnowledgeEntries, CommandTableEntry } from "./command-types.js";
 import type { ThreadContext, ThreadMessage } from "../../thinkable/context.js";
 import { registerWindowType, type OnCloseContext } from "./registry.js";
 import type { DoWindow } from "./types.js";

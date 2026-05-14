@@ -1,5 +1,5 @@
 import { commands_v20260506_1 } from "@meta/object/executable/actions/commands/index.doc";
-import * as openKnowledgeSource from "@src/executable/commands/open-knowledge";
+import * as openKnowledgeSource from "@src/executable/windows/root/open-knowledge";
 
 export const open_knowledge_v20260514_1 = {
   get parent() { return commands_v20260506_1; },

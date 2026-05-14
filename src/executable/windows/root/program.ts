@@ -14,13 +14,13 @@ import type {
   CommandExecutionContext,
   CommandKnowledgeEntries,
   CommandTableEntry,
-} from "./types.js";
+} from "../command-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
   type ProgramWindow,
-} from "../windows/types.js";
-import { runOneExec, type ProgramExecArgs } from "../windows/program-runtime.js";
+} from "../types.js";
+import { runOneExec, type ProgramExecArgs } from "../program-runtime.js";
 
 const PROGRAM_BASIC_PATH = "internal/executable/program/basic";
 const PROGRAM_INPUT_PATH = "internal/executable/program/input";

@@ -13,7 +13,7 @@
 import type {
   CommandKnowledgeEntries,
   CommandTableEntry,
-} from "../commands/types.js";
+} from "./command-types.js";
 import { registerWindowType } from "./registry.js";
 
 const KNOWLEDGE_WINDOW_RELOAD_BASIC = "internal/windows/knowledge/reload/basic";

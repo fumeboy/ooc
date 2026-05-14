@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { executeCommand } from "../commands/index";
+import { execRootCommand } from "../windows";
 import { WindowManager } from "../windows";
 import {
   ROOT_WINDOW_ID,
@@ -25,7 +25,7 @@ describe("Step 2 window lifecycles", () => {
     const thread = makeThread({ id: "t_root" });
 
     // 创建 talk_window
-    await executeCommand("talk", { thread, args: { target: "user", title: "release plan" } });
+    await execRootCommand("talk", { thread, args: { target: "user", title: "release plan" } });
     const talkWindow = thread.contextWindows.find((w): w is TalkWindow => w.type === "talk");
     expect(talkWindow).toBeDefined();
     expect(talkWindow!.target).toBe("user");
@@ -55,7 +55,7 @@ describe("Step 2 window lifecycles", () => {
   it("program_window: root.program runs first exec; window.exec appends to history", async () => {
     const thread = makeThread({ id: "t_root" });
 
-    await executeCommand("program", {
+    await execRootCommand("program", {
       thread,
       args: { language: "shell", code: "echo first" },
     });

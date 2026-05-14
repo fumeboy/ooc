@@ -1,4 +1,4 @@
-import type { CommandExecutionContext, CommandKnowledgeEntries, CommandTableEntry } from "./types.js";
+import type { CommandExecutionContext, CommandKnowledgeEntries, CommandTableEntry } from "../command-types.js";
 
 /** end command 暴露给 LLM 的知识说明。 */
 const KNOWLEDGE = `
@@ -34,7 +34,7 @@ export const endCommand: CommandTableEntry = {
     };
     return entries;
   },
-  // 暂不实现具体执行逻辑
+  exec: (ctx) => executeEndCommand(ctx),
 };
 
 /** 执行 end command：记录结束信息，并把线程状态切为 done。 */

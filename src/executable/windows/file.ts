@@ -14,7 +14,7 @@ import type {
   CommandExecutionContext,
   CommandKnowledgeEntries,
   CommandTableEntry,
-} from "../commands/types.js";
+} from "./command-types.js";
 import { registerWindowType } from "./registry.js";
 import type { FileWindow } from "./types.js";
 

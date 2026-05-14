@@ -1,4 +1,4 @@
-import type { CommandExecutionContext, CommandKnowledgeEntries, CommandTableEntry } from "./types.js";
+import type { CommandExecutionContext, CommandKnowledgeEntries, CommandTableEntry } from "../command-types.js";
 
 /** plan command 暴露给 LLM 的知识说明。 */
 const KNOWLEDGE = `
@@ -39,7 +39,7 @@ export const planCommand: CommandTableEntry = {
     }
     return entries;
   },
-  // 暂不实现具体执行逻辑
+  exec: (ctx) => executePlanCommand(ctx),
 };
 
 /** 执行 plan command：把提交的计划文本覆盖到当前线程上下文。 */

@@ -7,7 +7,7 @@ import { client_v20260506_1 } from "@meta/object/executable/client/index.doc";
 
 // 引用源代码模块
 import * as executable_tools from "@src/executable/tools/index";
-import * as executable_commands from "@src/executable/commands/index";
+import * as executable_commands from "@src/executable/windows/root/index";
 import * as executable_windows from "@src/executable/windows/index";
 
 export const executable_v20260504_1 = {

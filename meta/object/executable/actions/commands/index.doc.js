@@ -1,5 +1,5 @@
 import { executable_v20260504_1 } from "@meta/object/executable/index.doc";
-import * as commandsSource from "@src/executable/commands/index";
+import * as commandsSource from "@src/executable/windows/root/index";
 
 // parent 改为 getter 以打破 executable/index ↔ commands/index 的循环初始化死锁。
 export const commands_v20260506_1 = {

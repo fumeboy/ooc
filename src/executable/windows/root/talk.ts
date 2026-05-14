@@ -14,12 +14,12 @@ import type {
   CommandExecutionContext,
   CommandKnowledgeEntries,
   CommandTableEntry,
-} from "./types.js";
+} from "../command-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
   type TalkWindow,
-} from "../windows/types.js";
+} from "../types.js";
 
 const TALK_BASIC_PATH = "internal/executable/talk/basic";
 const TALK_INPUT_PATH = "internal/executable/talk/input";

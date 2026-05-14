@@ -16,8 +16,7 @@
 
 import type { LlmTool } from "../../thinkable/llm/types.js";
 import type { ThreadContext } from "../../thinkable/context.js";
-import { getOpenableCommands } from "../commands/index.js";
-import { ROOT_WINDOW_ID, WindowManager } from "../windows/index.js";
+import { getOpenableCommands, ROOT_WINDOW_ID, WindowManager } from "../windows/index.js";
 import { enrichProgramFormCommand } from "../server/enrich.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 

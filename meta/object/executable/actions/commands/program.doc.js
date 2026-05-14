@@ -1,5 +1,5 @@
 import { commands_v20260506_1 } from "@meta/object/executable/actions/commands/index.doc";
-import * as programSource from "@src/executable/commands/program";
+import * as programSource from "@src/executable/windows/root/program";
 
 export const program_v20260514_1 = {
   get parent() { return commands_v20260506_1; },

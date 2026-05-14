@@ -17,15 +17,15 @@ import type {
   CommandExecutionContext,
   CommandKnowledgeEntries,
   CommandTableEntry,
-} from "./types.js";
-import type { ThreadContext, ThreadMessage } from "../../thinkable/context.js";
-import type { ThreadPersistenceRef } from "../../persistable/common.js";
+} from "../command-types.js";
+import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
+import type { ThreadPersistenceRef } from "../../../persistable/common.js";
 import {
   ROOT_WINDOW_ID,
   creatorWindowIdOf,
   generateWindowId,
   type DoWindow,
-} from "../windows/types.js";
+} from "../types.js";
 
 const DO_BASIC_PATH = "internal/executable/do/basic";
 const DO_INPUT_PATH = "internal/executable/do/input";

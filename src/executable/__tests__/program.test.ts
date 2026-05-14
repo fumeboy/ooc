@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, test } from "bun:test";
 import { runOneExec } from "../windows/program-runtime";
-import { executeProgramCommand } from "../commands/program";
+import { executeProgramCommand } from "../windows/root/program";
 import { createStoneObject, writeServerSource } from "../../persistable";
 import { clearServerLoaderCache } from "../server/loader";
 import { makeThread } from "../../__tests__/make-thread";

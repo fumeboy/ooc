@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { COMMAND_TABLE, executeCommand } from "../commands/index";
+import { ROOT_COMMANDS, execRootCommand } from "../windows";
 import { makeThread } from "../../__tests__/make-thread";
 
 /**
@@ -9,18 +9,18 @@ import { makeThread } from "../../__tests__/make-thread";
  */
 describe("command execution side effects", () => {
   it("all commands expose knowledge via CommandTableEntry instead of exported KNOWLEDGE", async () => {
-    for (const [command, entry] of Object.entries(COMMAND_TABLE)) {
+    for (const [command, entry] of Object.entries(ROOT_COMMANDS)) {
       const knowledge = entry.knowledge?.({}, "open");
       expect(knowledge?.[`internal/executable/${command}/basic`]).toBeString();
       expect(knowledge?.[`internal/executable/${command}/basic`].length).toBeGreaterThan(0);
     }
 
     const modules = await Promise.all([
-      import("../commands/do"),
-      import("../commands/end"),
-      import("../commands/plan"),
-      import("../commands/talk"),
-      import("../commands/todo"),
+      import("../windows/root/do"),
+      import("../windows/root/end"),
+      import("../windows/root/plan"),
+      import("../windows/root/talk"),
+      import("../windows/root/todo"),
     ]);
     for (const module of modules) {
       expect("KNOWLEDGE" in module).toBe(false);
@@ -29,7 +29,7 @@ describe("command execution side effects", () => {
 
   it("plan should write thread.plan", async () => {
     const thread = makeThread({ id: "thread-plan" });
-    await executeCommand("plan", {
+    await execRootCommand("plan", {
       thread,
       args: { plan: "完成 thinkloop 真实测试\n\n先打通 tool call 与 command execute" },
     });
@@ -38,7 +38,7 @@ describe("command execution side effects", () => {
 
   it("todo should produce a todo_window in contextWindows", async () => {
     const thread = makeThread({ id: "thread-todo" });
-    await executeCommand("todo", {
+    await execRootCommand("todo", {
       thread,
       args: {
         content: "补充 thinkloop 集成测试",
@@ -55,7 +55,7 @@ describe("command execution side effects", () => {
 
   it("end should mark thread as done and persist remaining fields", async () => {
     const thread = makeThread({ id: "thread-end" });
-    await executeCommand("end", {
+    await execRootCommand("end", {
       thread,
       args: { reason: "done", summary: "真实测试可以继续往上叠" },
     });
@@ -66,7 +66,7 @@ describe("command execution side effects", () => {
 
   it("talk(target=user, title) creates a talk_window in contextWindows", async () => {
     const thread = makeThread({ id: "thread-talk" });
-    const result = await executeCommand("talk", {
+    const result = await execRootCommand("talk", {
       thread,
       args: { target: "user", title: "发布计划" },
     });
@@ -79,7 +79,7 @@ describe("command execution side effects", () => {
 
   it("talk rejects non-user target with a clear error in current phase", async () => {
     const thread = makeThread({ id: "thread-talk-other" });
-    const result = await executeCommand("talk", {
+    const result = await execRootCommand("talk", {
       thread,
       args: { target: "another-object", title: "x" },
     });

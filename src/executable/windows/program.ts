@@ -13,7 +13,7 @@ import type {
   CommandExecutionContext,
   CommandKnowledgeEntries,
   CommandTableEntry,
-} from "../commands/types.js";
+} from "./command-types.js";
 import { registerWindowType } from "./registry.js";
 import { runOneExec, type ProgramExecArgs } from "./program-runtime.js";
 import type { ProgramWindow } from "./types.js";

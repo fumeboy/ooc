@@ -14,9 +14,8 @@
  * - 渲染层（src/thinkable/context/render.ts）负责把 renderXml 返回的 XmlNode 串成树
  */
 
-import type { CommandTableEntry } from "../commands/types.js";
+import type { CommandTableEntry } from "./command-types.js";
 import type { ThreadContext } from "../../thinkable/context.js";
-import { COMMAND_TABLE } from "../commands/index.js";
 import type { ContextWindow, WindowType } from "./types.js";
 
 /**
@@ -67,26 +66,20 @@ export interface WindowTypeDefinition {
 /**
  * 全局 window registry。新增 window type 必须在此注册。
  *
- * 当前 step 1 范围下的初始注册：
- * - root         — commands 直接复用 COMMAND_TABLE
+ * 当前 step 1 / step 2 范围下的初始注册：
+ * - root         — commands 由 windows/root/index.ts 通过 registerWindowType 注入
  * - command_exec — 无 commands、无 onClose（form 的释放语义由 WindowManager 统一处理）
- * - do、todo     — 占位空表；具体 commands 与 onClose 由 windows/do.ts、windows/todo.ts
- *                  在初始化时通过 registerWindowType 注入（见 Task 6 / Task 8）
+ * - do、todo、talk、program、file、knowledge — 占位空表；具体 commands 与 onClose
+ *   由各自 windows/X.ts 在初始化时通过 registerWindowType 注入
  *
- * 这种"先建空表、后注入"的写法避免 windows/registry.ts 直接 import windows/do.ts，
+ * 这种"先建空表、后注入"的写法避免 windows/registry.ts 直接 import 各 type 实现，
  * 否则会产生 windows ↔ commands ↔ windows 的循环依赖。
  */
 const REGISTRY: Map<WindowType, WindowTypeDefinition> = new Map();
 
 REGISTRY.set("root", {
   type: "root",
-  /**
-   * root window 注册的 command = COMMAND_TABLE 全集。
-   *
-   * 这意味着 LLM 顶层 `open(command="do")` ≡ `open(parent="root", command="do")`，
-   * 等价于今天的 open(type=command, command=do)。
-   */
-  commands: COMMAND_TABLE,
+  commands: {},
 });
 
 REGISTRY.set("command_exec", {

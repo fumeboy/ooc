@@ -9,8 +9,9 @@
 
 import { deriveStoneFromThread } from "../persistable";
 import type { ThreadContext } from "../thinkable/context";
-import { COMMAND_TABLE } from "./commands/index.js";
-import type { CommandKnowledgeEntries } from "./commands/types.js";
+import { ROOT_COMMANDS } from "./windows/root/index.js";
+import type { CommandKnowledgeEntries } from "./windows/command-types.js";
+import { getWindowTypeDefinition } from "./windows/registry.js";
 import type { CommandExecWindow, ContextWindow } from "./windows/types.js";
 import { loadServerMethods } from "./server/loader.js";
 import type { ServerMethod } from "./server/types.js";
@@ -110,12 +111,17 @@ async function computeProgramFunctionKnowledge(
   }
 }
 
-/** 计算单个 command_exec form 关联的 knowledge entries。 */
+/**
+ * 计算单个 command_exec form 关联的 knowledge entries。
+ *
+ * Step 2 重构后 form 可能挂在任意 window 类型下（root / do_window / talk_window / ...），
+ * 因此查找 entry 不能只看 ROOT_COMMANDS——需要按 parentWindowId 找到父 window 的 commands map。
+ */
 export async function computeFormKnowledgeEntries(
   form: CommandExecWindow,
   thread: ThreadContext,
 ): Promise<CommandKnowledgeEntries> {
-  const entry = COMMAND_TABLE[form.command];
+  const entry = lookupFormEntry(form, thread);
   const knowledgeEntries = entry?.knowledge
     ? { ...entry.knowledge(form.accumulatedArgs, form.status) }
     : {};
@@ -130,6 +136,23 @@ export async function computeFormKnowledgeEntries(
   return Object.fromEntries(
     Object.entries(knowledgeEntries).filter(([, content]) => typeof content === "string" && content.trim() !== ""),
   );
+}
+
+/** 根据 form.parentWindowId 找到父 window 的 type，再查该 type 的 commands map。 */
+function lookupFormEntry(
+  form: CommandExecWindow,
+  thread: ThreadContext,
+): import("./windows/command-types.js").CommandTableEntry | undefined {
+  const parentId = form.parentWindowId;
+  // root 隐含；form.parentWindowId === "root" 时落到 ROOT_COMMANDS
+  if (!parentId || parentId === "root") {
+    return ROOT_COMMANDS[form.command];
+  }
+  const parent = (thread.contextWindows ?? []).find((w) => w.id === parentId);
+  if (!parent) return undefined;
+  // 通过 registry 查找该 type 的 commands；动态 import 避免循环依赖
+  const def = getWindowTypeDefinition(parent.type);
+  return def.commands[form.command];
 }
 
 /**

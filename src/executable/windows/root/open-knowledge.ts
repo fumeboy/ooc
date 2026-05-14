@@ -12,12 +12,12 @@ import type {
   CommandExecutionContext,
   CommandKnowledgeEntries,
   CommandTableEntry,
-} from "./types.js";
+} from "../command-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
   type KnowledgeWindow,
-} from "../windows/types.js";
+} from "../types.js";
 
 const OPEN_KNOWLEDGE_BASIC_PATH = "internal/executable/open_knowledge/basic";
 const OPEN_KNOWLEDGE_INPUT_PATH = "internal/executable/open_knowledge/input";

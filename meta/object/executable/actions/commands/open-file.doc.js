@@ -1,5 +1,5 @@
 import { commands_v20260506_1 } from "@meta/object/executable/actions/commands/index.doc";
-import * as openFileSource from "@src/executable/commands/open-file";
+import * as openFileSource from "@src/executable/windows/root/open-file";
 
 export const open_file_v20260514_1 = {
   get parent() { return commands_v20260506_1; },

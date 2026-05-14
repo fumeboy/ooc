@@ -11,12 +11,12 @@ import type {
   CommandExecutionContext,
   CommandKnowledgeEntries,
   CommandTableEntry,
-} from "./types.js";
+} from "../command-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
   type FileWindow,
-} from "../windows/types.js";
+} from "../types.js";
 
 const OPEN_FILE_BASIC_PATH = "internal/executable/open_file/basic";
 const OPEN_FILE_INPUT_PATH = "internal/executable/open_file/input";

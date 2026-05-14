@@ -12,8 +12,8 @@ import type {
   CommandExecutionContext,
   CommandKnowledgeEntries,
   CommandTableEntry,
-} from "./types.js";
-import { ROOT_WINDOW_ID, generateWindowId, type TodoWindow } from "../windows/types.js";
+} from "../command-types.js";
+import { ROOT_WINDOW_ID, generateWindowId, type TodoWindow } from "../types.js";
 
 const TODO_BASIC_PATH = "internal/executable/todo/basic";
 const TODO_INPUT_PATH = "internal/executable/todo/input";

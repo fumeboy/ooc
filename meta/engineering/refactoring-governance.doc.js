@@ -1,7 +1,7 @@
 import * as flowsService from "@src/app/server/modules/flows/service";
 import * as threadTransition from "@src/app/server/runtime/thread-transition";
 import * as thinkableContext from "@src/thinkable/context";
-import * as programCommand from "@src/executable/commands/program";
+import * as programCommand from "@src/executable/windows/root/program";
 import * as claudeProvider from "@src/thinkable/llm/providers/claude";
 import { engineering_v20260506_1 } from "@meta/engineering/index.doc";
 

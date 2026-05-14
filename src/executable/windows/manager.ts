@@ -14,7 +14,7 @@
  * - 维护 knowledge path 引用计数（knowledgeRefCount），保证多 window 共享 path 时不被提前释放
  *
  * 不负责：
- * - command 自身的 exec 实现（由 src/executable/commands/index.ts:executeCommand 处理）
+ * - command 自身的 exec 实现（由各 root/X.ts 与 windows/X.ts 中的 entry.exec 提供）
  * - knowledge entries 的具体内容（由 collectExecutableKnowledgeEntries 派生）
  * - 持久化（由 src/persistable/thread-json.ts 处理）
  *
@@ -25,7 +25,6 @@
  */
 
 import type { ThreadContext } from "../../thinkable/context.js";
-import { deriveCommandPaths, executeCommand } from "../commands/index.js";
 import { getWindowTypeDefinition } from "./registry.js";
 import {
   ROOT_WINDOW_ID,
@@ -34,10 +33,26 @@ import {
   type ContextWindow,
   type WindowType,
 } from "./types.js";
+import type { CommandTableEntry } from "./command-types.js";
 
-/** 为 command_exec form 计算 commandPaths；空 args 派生不出来时退化为 [command]。 */
-function computeCommandPaths(command: string, args: Record<string, unknown>): string[] {
-  const derived = deriveCommandPaths(command, args);
+/**
+ * 用 entry.match() 直接计算 commandPaths；空 args 派生不出来时退化为 [command]。
+ *
+ * Step 2 重构后这个 helper 接收 entry 而不是 command 名 —— 修复了 Step 1 的 bug：
+ * 之前 deriveCommandPaths 只查 ROOT_COMMANDS 表，导致 do_window/talk_window 等
+ * 非 root 窗口上的 command（如 say.wait / continue.wait）无法被识别。
+ */
+function computeCommandPaths(
+  entry: CommandTableEntry,
+  command: string,
+  args: Record<string, unknown>,
+): string[] {
+  let derived: string[];
+  try {
+    derived = entry.match(args);
+  } catch {
+    derived = [command];
+  }
   return derived.length > 0 ? derived : [command];
 }
 
@@ -60,13 +75,13 @@ function setSubset(a: string[], b: string[]): boolean {
  * 从 parent command（root 上挂的 command）查找它注册到的 CommandTableEntry。
  *
  * parent_window_id 决定查哪个 window 的 commands：
- * - "root" → COMMAND_TABLE
+ * - "root" → root 注册到 WINDOW_REGISTRY 的 commands（来自 windows/root/index.ts）
  * - 其他 → 该 window 的 type definition.commands
  */
 function lookupCommandEntry(
   parentWindow: ContextWindow,
   command: string,
-): import("../commands/types.js").CommandTableEntry | undefined {
+): CommandTableEntry | undefined {
   const def = getWindowTypeDefinition(parentWindow.type);
   return def.commands[command];
 }
@@ -137,13 +152,13 @@ export class WindowManager {
 
     const formId = generateWindowId("command_exec");
     const baselineArgs: Record<string, unknown> = {};
-    const baselinePaths = computeCommandPaths(opts.command, baselineArgs);
+    const baselinePaths = computeCommandPaths(entry, opts.command, baselineArgs);
     const baselineKnowledgeKeys = entry.knowledge
       ? Object.keys(entry.knowledge(baselineArgs, "open"))
       : [];
 
     const args = opts.args ?? {};
-    const commandPaths = computeCommandPaths(opts.command, args);
+    const commandPaths = computeCommandPaths(entry, opts.command, args);
 
     const form: CommandExecWindow = {
       id: formId,
@@ -214,8 +229,11 @@ export class WindowManager {
     if (!form || form.type !== "command_exec" || form.status !== "open") {
       return false;
     }
+    const parent = this.requireParent(form.parentWindowId);
+    const entry = lookupCommandEntry(parent, form.command);
+    if (!entry) return false;
     const nextArgs = { ...form.accumulatedArgs, ...args };
-    const nextPaths = computeCommandPaths(form.command, nextArgs);
+    const nextPaths = computeCommandPaths(entry, form.command, nextArgs);
     const next: CommandExecWindow = {
       ...form,
       accumulatedArgs: nextArgs,
@@ -260,20 +278,15 @@ export class WindowManager {
     let result: string | undefined;
     let isError = false;
     try {
-      const ctx: import("../commands/types.js").CommandExecutionContext = {
+      const ctx: import("./command-types.js").CommandExecutionContext = {
         thread,
         form: executing,
         parentWindow: parent,
         manager: this,
         args: form.accumulatedArgs,
       };
-      // 优先使用 entry.exec；fallback 到 root level 的 executeCommand by-name 派发，
-      // 兼容 commands/ 目录下尚未声明 exec 字段的旧 command。
-      if (entry.exec) {
-        result = await entry.exec(ctx);
-      } else {
-        result = await executeCommand(form.command, ctx);
-      }
+      // entry.exec 在 Step 2 重构后是 CommandTableEntry 的必填字段
+      result = await entry.exec(ctx);
     } catch (err) {
       result = `[command-error] ${(err as Error).message}`;
       isError = true;

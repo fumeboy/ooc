@@ -14,7 +14,7 @@ import type {
   CommandExecutionContext,
   CommandKnowledgeEntries,
   CommandTableEntry,
-} from "../commands/types.js";
+} from "./command-types.js";
 import type { ThreadContext, ThreadMessage } from "../../thinkable/context.js";
 import { registerWindowType, type OnCloseContext } from "./registry.js";
 
