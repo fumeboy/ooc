@@ -74,15 +74,29 @@ function buildToolSummaryFields(toolName: string, argumentsValue: unknown): Tool
   if (!isRecord(argumentsValue)) return undefined;
   const fields: ToolSummaryField[] = [];
   if (toolName === "open") {
+    // ContextWindow 协议（spec 2026-05-14）：parent_window_id + command + args
+    const parent = asDisplayText(argumentsValue.parent_window_id);
+    if (parent) fields.push({ label: "parent", value: parent });
     const command = asDisplayText(argumentsValue.command);
     if (command) fields.push({ label: "command", value: command });
+    if (isRecord(argumentsValue.args)) {
+      for (const [k, v] of Object.entries(argumentsValue.args)) {
+        const text = asDisplayText(v);
+        if (text) fields.push({ label: k, value: text });
+      }
+    }
   }
   if (toolName === "refine") {
     fields.push(...buildRefineSummaryFields(argumentsValue));
   }
-  if (toolName === "submit" || toolName === "close") {
+  if (toolName === "submit") {
     const formId = asDisplayText(argumentsValue.form_id);
     if (formId) fields.push({ label: "form", value: formId });
+  }
+  if (toolName === "close") {
+    // close 在新模型下用 window_id；保留 form_id 兼容旧调用习惯
+    const windowId = asDisplayText(argumentsValue.window_id) ?? asDisplayText(argumentsValue.form_id);
+    if (windowId) fields.push({ label: "window", value: windowId });
   }
   if (toolName === "wait") {
     return undefined;
