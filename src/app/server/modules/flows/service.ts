@@ -6,6 +6,7 @@ import {
 } from "@src/persistable";
 import { loadUiServerMethods } from "@src/executable/server/loader";
 import type { ThreadContext } from "@src/thinkable/context";
+import { initContextWindows } from "@src/executable/windows";
 import type { createJobManager } from "../../runtime/job-manager";
 import type { PauseStore } from "../../runtime/pause-store";
 import { scanPausedThreads } from "../../runtime/thread-query";
@@ -51,12 +52,17 @@ function appendInboxMessage(thread: ThreadContext, text: string): ThreadContext 
   };
 }
 
+/**
+ * 把已 paused / waiting 的 thread 翻回 running。
+ *
+ * Step 1（spec 2026-05-14）：取消 waitingType / awaitingChildren；wait 状态本身就是
+ * "等 inbox 新消息"，写入新消息后把 status 翻回 running 即可。
+ */
 function reviveThreadForInboxMessage(thread: ThreadContext): ThreadContext {
   return {
     ...thread,
     status: "running",
-    waitingType: undefined,
-    awaitingChildren: undefined,
+    inboxSnapshotAtWait: undefined,
   };
 }
 
@@ -129,8 +135,13 @@ export function createFlowsService(deps: {
         id: "root",
         status: "running",
         events: [],
+        contextWindows: [],
         persistence,
       } satisfies ThreadContext;
+      // 注入初始 creator do_window：root thread 的 creator 是外部 session
+      initContextWindows(thread, {
+        initialTaskTitle: initialMessage ? initialMessage.slice(0, 60) : `flow ${objectId}`,
+      });
       await writeThread(initialMessage ? appendInboxMessage(thread, initialMessage) : thread);
       // 关键：只有 initialMessage 不为空才 enqueue job——
       // 空 events 的 thread 跑 LLM 会被 Claude 代理拒绝（messages 必须含 user role），
