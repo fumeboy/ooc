@@ -252,8 +252,13 @@ describe("buildContext (ContextWindow model)", () => {
   it("always injects executable basic knowledge into system context", async () => {
     const messages = await buildContext(makeThread({ id: "t1" }));
     const xml = messages[0]?.content ?? "";
-    expect(xml).toContain("open / refine / submit / close / wait");
+    // KNOWLEDGE 现在的形态：一行一个原语，不再是 "open / refine / submit / close / wait"
     expect(xml).toContain("ContextWindow");
+    expect(xml).toContain("open(parent_window_id");
+    expect(xml).toContain("wait(reason");
+    // 关键提示：思考空间 + talk 是与 user 唯一通道
+    expect(xml).toContain("思考空间");
+    expect(xml).toContain('command="talk"');
   });
 
   it("deduplicates identical knowledge entries across multiple forms", async () => {
