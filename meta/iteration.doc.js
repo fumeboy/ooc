@@ -81,6 +81,12 @@ ooc-2  (2026-05-08 ~ 2026-05-12)
         ├── spec: docs/superpowers/specs/2026-05-12-knowledge-module-design.md
         ├── plan: docs/superpowers/plans/2026-05-12-knowledge-module.md
         └── 关键决策：懒求值（无 thread 派生状态字段）+ 单篇 8KB / 总数 20 项渲染上限 + 删 thread.activatedKnowledge 字段（违反 SSoT）+ js-yaml 依赖
+
+└── 阶段 9：ContextWindow 统一抽象 — 把 form / inbox-outbox / windows 收敛为一种实体
+    └── [2026-05-14] context-window-step1  ContextWindow flat 数组取代 activeForms / windows / pinnedKnowledge；root / command_exec / do_window / todo_window 真实落地；C 规则在 open tool 落地；waitingType 字段取消（统一 inbox 唤醒）；初始 creator do_window 自动注入；持久化反序列化兼容旧 thread.json
+        ├── spec: docs/superpowers/specs/2026-05-14-context-window-unification-design.md
+        ├── plan: docs/superpowers/plans/2026-05-14-context-window-step1.md
+        └── 后续阶段（Step 2 / Step 3）：talk_window / program_window / file_window / knowledge_window 各自迁移；旧字段持久化清理；meta 全量更新
 \`\`\`
 
 ## 阶段划分判据

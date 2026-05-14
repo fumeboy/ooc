@@ -52,14 +52,20 @@ refine({ type: "relation_update" })             → 路径=[talk, talk.continue,
 这种"command 列举所有可能 path → knowledge 选择关心的 path"模型让能力按需挂入：
 LLM 还没决定要做"带关系更新的 talk"时，relation_update 的完整说明不会污染 Context。
 
-## form 与 commands 的关系
+## form 与 commands 的关系（Step 1 重构 — spec 2026-05-14）
 
-每次 \`open(type=command, command=X)\` 都会创建一个 form：
+每次 \`open(parent_window_id?, command=X, ...)\` 都会创建一个 **command_exec window** 作为 sub-window：
 
-- form 持有当前 command + args + 已加载的 knowledge id 列表
+- 它就是旧 form 概念的新身份；行为字段（accumulatedArgs / commandPaths / loadedKnowledgePaths / status / result）一一对应
 - refine 累积参数 → 重新计算 paths → 增量激活 knowledge
-- submit form 后， command 才真正执行
-- close form 放弃执行
+- submit 后 command 真正执行；**成功时该 form 自动从 contextWindows 移除**，无需 close
+- 失败时保留 executed + result 字段，需要 LLM 显式 close
+- C 规则：open 时给齐 args + 不引入新 knowledge → 跳过 refine/submit，自动一次到位
+
+某些 command 的 submit 还会副作用产出**新 window**：
+- root.do  → do_window  （挂在父 thread 下）
+- root.todo → todo_window（C 规则常命中，open 即建）
+- root.program / root.talk → 待 Step 2 改造为 program_window / talk_window
 
 ## 各 command 详解
 
