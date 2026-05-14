@@ -5,6 +5,7 @@ import {
   writeThread,
 } from "@src/persistable";
 import { loadUiServerMethods } from "@src/executable/server/loader";
+import { collectExecutableKnowledgeEntries } from "@src/executable";
 import type { ThreadContext } from "@src/thinkable/context";
 import { initContextWindows } from "@src/executable/windows";
 import type { createJobManager } from "../../runtime/job-manager";
@@ -173,8 +174,20 @@ export function createFlowsService(deps: {
         exists: true,
       };
     },
+    /**
+     * 返回 thread 给前端 UI；contextWindows 中合成 protocol / activator 来源的 knowledge_window，
+     * 让前端不需要单独跑合成逻辑就能看到 LLM 当前轮所见的全部 window。
+     *
+     * 不会改写磁盘上的 thread.json —— 合成只发生在响应体里。
+     */
     async getThread({ sessionId, objectId, threadId }: { sessionId: string; objectId: string; threadId: string }) {
-      return await readThread({ baseDir: deps.baseDir, sessionId, objectId }, threadId);
+      const thread = await readThread({ baseDir: deps.baseDir, sessionId, objectId }, threadId);
+      if (!thread) return undefined;
+      const enriched = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
+      return {
+        ...thread,
+        contextWindows: enriched.contextWindows ?? thread.contextWindows,
+      };
     },
     /**
      * 向已存在的 thread 追加一条用户文本（底层仍记录为 context_change/inbox_message_arrived 事件），

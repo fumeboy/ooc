@@ -48,13 +48,28 @@ export function getOpenableCommands(): string[] {
  * 生产代码应通过 WindowManager.openCommandExec 触发；那条路径会注入 manager
  * 与 parentWindow 等完整 ctx。
  */
+/**
+ * 测试 / 直接调用 root command 的便捷入口；不走 WindowManager。
+ *
+ * 仅供测试使用：单测希望验证 root command 的副作用而不必构造 form 生命周期。
+ * 生产代码应通过 WindowManager.openCommandExec 触发；那条路径会注入 manager
+ * 与 parentWindow 等完整 ctx，并走 outcome 识别。
+ *
+ * 这里保持旧的"返回 string | undefined"签名以兼容大量测试断言；遇到 outcome 时压平：
+ * - { ok: true, result } → result
+ * - { ok: false, error } → error（与旧 string-failure 约定一致）
+ */
 export async function execRootCommand(
   name: string,
   ctx: import("../command-types.js").CommandExecutionContext,
 ): Promise<string | undefined> {
   const entry = ROOT_COMMANDS[name];
   if (!entry) throw new Error(`execRootCommand: unknown root command "${name}"`);
-  return await entry.exec(ctx);
+  const raw = await entry.exec(ctx);
+  if (raw && typeof raw === "object" && "ok" in raw) {
+    return raw.ok ? raw.result : raw.error;
+  }
+  return raw;
 }
 
 /**
