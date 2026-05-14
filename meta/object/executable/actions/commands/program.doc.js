@@ -1,33 +1,41 @@
 import { commands_v20260506_1 } from "@meta/object/executable/actions/commands/index.doc";
 import * as programSource from "@src/executable/commands/program";
 
-export const program_v20260506_1 = {
+export const program_v20260514_1 = {
   get parent() { return commands_v20260506_1; },
   index: `
-\`program\` 用于在执行一段代码 / 调用 Object 的某个函数方法。
+\`program\` 用于执行一段代码或调用 server 方法。Step 2（spec 2026-05-14）后产出 **program_window**，
+首次 exec 立即跑完，后续可通过 program_window 的 \`exec\` command 在同一窗口反复执行。
 
 ## 调用形式
 
-### 模式 A：执行一段临时代码
+### 模式 A：执行一段临时代码（首次 exec）
 
 \`\`\`
-open(type=command, command=program, title="…", description="…")
-refine(form_id, {
-  code: "const data = await readFile('foo.txt'); print(data);",
-  language?: "ts" | "js" | "shell"
+open(command="program", title="…", args={
+  language: "ts" | "js" | "shell",
+  code: "..."
 })
-submit(form_id)
 \`\`\`
 
-### 模式 B：调用对象函数方法
+> args 给齐时 C 规则触发自动 submit，无需再 refine/submit。
+
+### 模式 B：调用对象函数方法（首次 exec）
 
 \`\`\`
-open(type=command, command=program, description="…")
-refine(form_id, {
+open(command="program", title="…", args={
   function: "readFile",              // 对象的 server 模块导出的 llm_methods 函数索引中注册的函数名
   args:   { path: "foo.txt" }
 })
-submit(form_id)
+\`\`\`
+
+### 后续多次执行：通过 program_window 上的 exec command
+
+\`\`\`
+open(parent_window_id="<program_window_id>", command="exec", args={
+  language: "ts",
+  code: "_result_ = await self.getThreadLocal('counter');"
+})
 \`\`\`
 
 ## Path 列表
@@ -40,62 +48,47 @@ program.javascript
 program.function                （模式 B）
 \`\`\`
 
+## program_window 的注册命令
+
+- \`exec\` (args: language+code | function+args) — 起独立 sandbox 跑一次，结果追加到 history
+- \`close\` — 释放 window；不影响任何外部进程
+
 ## 当前实现阶段
 
-当前实现支持 3 种 language + 1 种 function 路径：
+支持 3 种 language + 1 种 function 路径：
 
 - \`language="shell"\`：通过 \`sh -c\` 执行 code 字符串
   - cwd 固定为 \`process.cwd()\`，env 继承 parent process
   - 30 秒超时（exit code 124），stdout/stderr 各 4KB 截断
+  - 注入 env \`OOC_SELF_DIR\` 用于在 shell 中定位当前对象目录
 
 - \`language="ts" / "typescript" / "js" / "javascript"\`：in-process 动态 import 执行
   - 用户代码被包成 \`async function(console, self) { let _result_; ... return _result_; }\`
-  - 注入的 \`self\` 是 ProgramSelf 对象：\`self.dir\` / \`self.callMethod\` / \`self.getData\` / \`self.setData\`
+  - 注入的 \`self\` 是 ProgramSelf 对象
+    - \`self.dir\` / \`self.callMethod\` / \`self.getData\` / \`self.setData\` 不变
+    - **\`self.getThreadLocal(key)\` / \`self.setThreadLocal(key, value)\`**：跨 exec 共享 thread-local 数据（仅 ts/js；shell 不接此通道）
   - console.log/warn/error 进 result 的 [stdout] 段
-  - \`_result_\` 变量进 result 的 [returnValue] 段（JSON.stringify）
-  - 用户代码可以直接 \`import { ... } from "node:fs/promises"\` 等标准 Bun/Node API
-  - 若当前 thread 没有 persistence，传给用户代码的 \`self\` 会是 \`null\`
+  - \`_result_\` 变量进 result 的 [returnValue] 段
 
-- \`function="<name>"\`（不需要 language）：直接调用 server/index.ts 中 llm_methods 注册的方法
-  - 等价于 \`language="ts", code="_result_ = await self.callMethod(name, args)"\`
-  - 推荐用于"我已经知道方法名只想调它"的场景
-  - **自动激活方法知识**：open/refine 时若 \`function="<name>"\` 命中已注册方法，系统调用该方法的 \`knowledge(args)\` 函数
-    （缺省按 \`description\` + \`params\` 自动生成），把返回文本写到 form 的 \`<method_knowledge>\` 段。
-    下一轮 LLM 直接看到方法说明（且可以随 args 动态变化），不需要先翻 server/index.ts 源码再 refine \`args\`。
-    method 改名 / 删除时，knowledge 在下一次 refine 自动失效。
-    设计同构：\`server method.knowledge(args) → text\` ↔ \`command.match(args) → paths\`，都是基于当前 args 动态派生上下文。
+- \`function="<name>"\`：直接调用 server/index.ts 中 llm_methods 注册的方法
+  - 自动激活方法知识：method 的 \`knowledge(args)\` 写入 form 的 command_knowledge
 
-补充当前实现语义：
+## program_window 的 history
 
-- \`function\` 模式优先级高于 \`language\`；只要给了 \`function\`，就优先走 program.function。
-- language 兼容 \`language\` / \`lang\` 两个字段，以及 \`ts/typescript\`、\`js/javascript\` 别名。
-- 参数不完整时，program 往往返回“请先 refine(...)”这类提示字符串作为 result，而不是直接抛错阻止 submit。
-- shell 模式会额外注入环境变量 \`OOC_SELF_DIR\`，用于在 shell 中定位当前对象目录。
+每次 exec（无论首次还是后续）都生成一条 ProgramExecRecord：
 
-## 元编程：编辑自己的 server/index.ts
-
-你可以用 program.shell 写 \`<self.dir>/server/index.ts\`，新方法在下次调用立即生效（按 mtime 自动 reload）。
-
-\`\`\`
-open(program, language=shell, code='cat > <self.dir>/server/index.ts <<EOF
-export const llm_methods = {
-  greet: {
-    description: "向某人问好",
-    params: [{ name: "name", type: "string", required: true }],
-    fn: async (ctx, { name }) => "Hello, " + name + "!",
-  },
-};
-EOF') → submit
-
-open(program, function="greet", args={ name: "world" }) → submit
-# returnValue 段会包含 "Hello, world!"
+\`\`\`ts
+{ execId, language, code?, function?, args?, output, ok, startedAt }
 \`\`\`
 
-## 当前不支持
+渲染时：history 列出所有 exec 一行摘要 + 最近一条 last_output 全文（按 32KB 截断）。
+
+## 不在范围内
 
 - 代码沙箱隔离（in-process 与内核共享进程）
 - ui_methods 的 HTTP 暴露
-- 命令白名单 / 沙箱隔离
+- 命令白名单 / 真正的沙箱隔离
+- shell 之间的 thread-local 共享（OS 进程隔离）
 `,
   sources: {
     program: programSource,
