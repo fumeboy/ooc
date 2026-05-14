@@ -9,19 +9,19 @@ export const refine_v20260506_1 = {
 \`\`\`
 refine(
   form_id="…",               // 必填，open 返回的 form id
-  args: {...}                    // 任意键值对，按 form 的 command schema 累积
+  form_args: {...}               // 任意键值对，按 form 的 command schema 累积
 )
 \`\`\`
 
 协议约束：
-- 业务参数必须放在 \`args\` 对象里
+- 业务参数必须放在 \`form_args\` 对象里
 - 不要把业务参数展开到 tool 顶层
 - refine 只补参数，不执行 command
 
 ## 行为
 
 1. 找到 form_id 对应的 ActiveForm
-2. 把 args 合并到 form（同名键覆盖）
+2. 把 form_args 以浅合并方式并到 form（同名键覆盖）
 3. 重新根据参数计算激活的 command path
 4. 若激活路径发生改变（如初始 \`open(command=talk)\` 仅激活 \`talk\` 路径，refine 加了 \`context="continue"\` 后多激活 \`talk.continue\` 路径），增量激活对应的 knowledge
 
@@ -38,9 +38,9 @@ refine(
 \`\`\`
 open(command=talk, description="…")               → 路径=[talk]
                                                      激活: kernel:talkable
-refine(form_id, { target: "user", msg: "..." })   → 路径=[talk]（不变）
+refine(form_id, form_args={ target: "user", msg: "..." })   → 路径=[talk]（不变）
                                                      无新增激活
-refine(form_id, { context: "continue" })          → 路径=[talk, talk.continue]
+refine(form_id, form_args={ context: "continue" })          → 路径=[talk, talk.continue]
                                                      若有 knowledge 声明
                                                      show_content_when: ["talk.continue"]
                                                      则被激活
@@ -48,6 +48,8 @@ refine(form_id, { context: "continue" })          → 路径=[talk, talk.continu
 
 每次激活变化，会在 Context 的 process events 中 inject 一条提示，
 让 LLM 知道"我刚才的 refine 让 X knowledge 加入了视野"。
+
+对于 \`program.function\`，refine 还会重新抓取当前 method knowledge；因此 function 名称或 args 改变后，下一轮看到的方法说明也会同步变化。
 `,
   sources: {
     refine: refineSource,

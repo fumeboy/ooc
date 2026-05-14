@@ -54,6 +54,7 @@ program.function                （模式 B）
   - console.log/warn/error 进 result 的 [stdout] 段
   - \`_result_\` 变量进 result 的 [returnValue] 段（JSON.stringify）
   - 用户代码可以直接 \`import { ... } from "node:fs/promises"\` 等标准 Bun/Node API
+  - 若当前 thread 没有 persistence，传给用户代码的 \`self\` 会是 \`null\`
 
 - \`function="<name>"\`（不需要 language）：直接调用 server/index.ts 中 llm_methods 注册的方法
   - 等价于 \`language="ts", code="_result_ = await self.callMethod(name, args)"\`
@@ -63,6 +64,13 @@ program.function                （模式 B）
     下一轮 LLM 直接看到方法说明（且可以随 args 动态变化），不需要先翻 server/index.ts 源码再 refine \`args\`。
     method 改名 / 删除时，knowledge 在下一次 refine 自动失效。
     设计同构：\`server method.knowledge(args) → text\` ↔ \`command.match(args) → paths\`，都是基于当前 args 动态派生上下文。
+
+补充当前实现语义：
+
+- \`function\` 模式优先级高于 \`language\`；只要给了 \`function\`，就优先走 program.function。
+- language 兼容 \`language\` / \`lang\` 两个字段，以及 \`ts/typescript\`、\`js/javascript\` 别名。
+- 参数不完整时，program 往往返回“请先 refine(...)”这类提示字符串作为 result，而不是直接抛错阻止 submit。
+- shell 模式会额外注入环境变量 \`OOC_SELF_DIR\`，用于在 shell 中定位当前对象目录。
 
 ## 元编程：编辑自己的 server/index.ts
 

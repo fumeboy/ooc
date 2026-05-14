@@ -37,8 +37,13 @@ open(
 协议约束：
 - \`open(type="command")\` 的职责是“创建 form”
 - 若已经知道业务参数，可以放到 \`args\`
-- 若还没填全，后续必须用 \`refine(form_id, args={...})\` 继续补参数
+- 若还没填全，后续必须用 \`refine(form_id, form_args={...})\` 继续补参数
 - 不要把 \`language / code / function\` 等业务参数写进 \`description\`
+
+当前实现补充：
+
+- 若 \`open(type=command, command=program, args={ function, args })\` 命中已注册 server method，open 阶段就会先按当前参数加载方法知识，并把相关 path 写到 form 的 \`commandKnowledgePaths\`。
+- 这意味着 \`program.function\` 的帮助信息不是等到 submit 后才出现，而是在 open/refine 阶段就开始影响下一轮 context。
 
 ## type=knowledge
 
@@ -55,9 +60,10 @@ open(
 \`\`\`
 
 行为：
-- activateKnowledge + pinKnowledge：knowledge 进入 \`activatedKnowledge\` 与 \`pinnedKnowledge\` 两个列表
-- 该 knowledge 完整正文注入 Context
-- pinned 的 knowledge **不**会因为其他 form submit/close 自动卸载；显式卸载能力后续单独补充
+- 当前真实实现是：knowledge path 只写入 \`pinnedKnowledge\`，由 context-builder 每轮 lazy 计算 active knowledge
+- 同时会额外挂一个 type=knowledge 的 window，帮助 LLM 看到“我显式打开过这篇知识”
+- 该 knowledge 完整正文会通过 active knowledge 进入 Context
+- pinned 的 knowledge **不**会因为其他 form submit/close 自动卸载；当前 close tool 也还不支持按 knowledge path 卸载
 
 适用场景：临时想查阅某篇 knowledge 全文，与当前 form 的 command 无关。
 
@@ -75,6 +81,12 @@ open(
   }
 )
 \`\`\`
+
+当前 file window 的真实语义：
+
+- open 只记录窗口元信息（path / lines / columns / description）
+- 真正构建 context 时，渲染器会按 path 读取文件正文并塞进 \`<content>\`
+- lines / columns 目前只作为元数据保留，渲染时还没有真的按窗口裁剪
 
 ## todo 的入口
 

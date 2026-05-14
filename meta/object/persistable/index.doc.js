@@ -77,11 +77,11 @@ flow 持久化的文件:
 - threads/{threadId}/thread.json
     线程数据
 - threads/{threadId}/debug/llm.input.json
-    debug 数据， 默认要产出，构造的 context, 每次请求 LLM 前写入该文件, 相关设计可以见 observable 文档
+    debug 数据，默认要产出，构造的 context, 每次请求 LLM 前写入该文件, 相关设计可以见 observable 文档
 - threads/{threadId}/debug/llm.output.json
-    debug 数据， 默认要产出，LLM 输出内容
-- threads/{threadId}/debug/loop.1.input.json
-    debug 数据， 第一轮的 context ，开启 debug 模式后记录每一轮的上述三个 debug 文件
+    debug 数据，默认要产出，LLM 输出内容
+- threads/{threadId}/debug/loop_0001.input.json
+    debug 数据，第一轮的 context；开启 debug 模式后按固定 4 位 zero-pad 文件名记录每一轮的 input / output / meta
 
 ## 当前实现阶段
 

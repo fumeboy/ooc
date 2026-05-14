@@ -15,7 +15,9 @@ wait(
 ## 行为
 
 1. 把当前线程 status 从 running 设为 waiting，waitingType = explicit_wait (主动等待)
-2. Scheduler 不再调度该线程，直到 inbox 收到任何新消息时自动翻回 running
+2. Scheduler 不再调度该线程
+
+需要注意：文档层的目标语义是“等任意 inbox 消息后自动唤醒”，但当前源码里 scheduler 还**没有**实现 explicit_wait 的 inbox 唤醒；目前 wait 已落地的是状态翻转本身，真正的显式唤醒还待后续补齐。
 
 ## 与 do(wait=true) / talk(wait=true) 的区别
 

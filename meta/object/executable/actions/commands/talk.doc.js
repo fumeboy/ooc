@@ -42,6 +42,12 @@ submit(form_id)
 - \`wait=false\`（默认）：talk 投递后立即返回，本线程继续 running
 - \`wait=true\`：talk 投递后本线程进入 waiting，waitingType=talk_sync；
 
+但需要明确：以上是设计目标语义。**当前源码实现里，talk command 仍处于单 object 阶段的占位实现**：
+
+- submit talk 后不会真正把消息投递给其他 object
+- 当前只会向本线程注入一条 \`[talk] 多 object 交互不属于当前单 object 阶段。\` 提示
+- 因此 \`wait=true\`、\`context=fork/continue\`、\`target=creator/super/user\` 等跨对象语义目前都还没有真正落地
+
 ## type=relation_update / question_form
 
 - \`relation_update\`：通知对方"我们之间的关系信息有变更，请处理"。详见 collaborable/relation。
@@ -63,6 +69,8 @@ talk.question_form
 
 - target 缺失或等于 self（自言自语）：注入 inject 错误事件，本次 talk 不发送
 - target 是不存在的对象：onTalk 路由层会处理（可能创建新对象 / 报错）
+
+对齐当前源码时，应把 talk 理解成：**knowledge/path 协议已在，真实消息路由尚未实现。**
 
 ## 特殊处理
 

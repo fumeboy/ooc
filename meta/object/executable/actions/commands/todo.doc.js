@@ -29,8 +29,10 @@ todo 的可见性来自 \`activeForms\`：
 
 - \`open(command=todo)\` 后，form 出现在 \`activeForms\`，表示待办未完成
 - \`refine(form_id, ...)\` 更新待办内容和触发条件
-- \`submit(form_id)\` 消费并关闭 form，表示待办已处理
-- \`close(form_id, reason)\` 放弃该待办
+- \`submit(form_id)\` 把 form 标记为 executed，表示待办已处理
+- \`close(form_id, reason)\` 才会真正把该 todo 从 \`activeForms\` 中移除
+
+当前实现里，todo command 本身没有额外执行逻辑；它的“存在感”和“完成感”完全由 form 生命周期表达。
 
 ## Path 列表
 

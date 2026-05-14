@@ -34,7 +34,7 @@ open(type=command, command=X, ...)   →  FormManager.open(command=X)
                                           ↓
                                        form 进入活跃状态（status=open）
                                        根据 command 路径激活相关 knowledge
-refine(form_id, args)                →  FormManager.refine(formId, args)
+refine(form_id, form_args)           →  FormManager.refine(formId, form_args)
                                           ↓
                                        累积参数；若 args 触发新的 command 路径，
                                        增量激活对应 knowledge
@@ -54,6 +54,11 @@ wait()                               →  setNodeStatus("waiting")
                                        本线程让出调度权，直到新事件到达
 \`\`\`
 
+当前协议还要补两点：
+
+- \`refine\` 的业务参数真实字段名是 \`form_args\`，不是文档中早期常写的顶层 \`args\`。
+- \`submit\` 的 schema 不接受新的业务参数；但运行时内部仍会把 tool 顶层参数（如 \`title\` / \`mark\`）并入最终执行参数，因此 command 实现需要自己区分“业务参数”和“tool 元参数”。
+
 详见各 tool 的独立文档：
 - [open](./open.doc.js) / [refine](./refine.doc.js) / [submit](./submit.doc.js) / [close](./close.doc.js) / [wait](./wait.doc.js) / [compress](./compress.doc.js)
 - [mark](./mark.doc.js) — 附加在任意 tool 上的 inbox 标记
@@ -63,7 +68,7 @@ wait()                               →  setNodeStatus("waiting")
 每个未关闭的 form 都会出现在 Context 的 activeForms 字段（详见 thinkable/context），
 让 LLM 看到自己手头还挂着哪些行动。
 
-注：todo 也通过 form 表示——\`open(type=command, command=todo, ...) → refine(...) → submit\` 完成一项待办。
+注：todo 也通过 form 表示——\`open(type=command, command=todo, ...) → refine(...) → submit\` 标记完成；若要真正从 activeForms 移除，还需要显式 \`close\`。
 `,
   sources: {
     tools: toolsSource,

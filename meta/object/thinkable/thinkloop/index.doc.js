@@ -62,18 +62,19 @@ Engine.runThreadIteration(threadId):
 1. 构建 Context
    context = await contextBuilder.build(threadId)
 
-2. 构造 LLM Messages
-   - system message：<context> 信息窗口
-   - process event messages：当前线程的历史变化（LLM 交互 + 上下文变化）
+2. 构造 LLM 输入
+   - 当前源码已经是 Responses-first input items，而不只是传统 message-only 结构
+   - 第一条仍然是 system message：<context> 信息窗口
+   - 后续 transcript 则可能混合 message / function_call / function_call_output
 
 3. LLM 输入记录
      writeLatestLlmInputToFile(context) // 将 LLM 的输入存到本地，用于 debug
 
 4. 调用 LLM
-   result = await llmClient.generate({ messages, tools: getAvailableTools() })
+   result = await llmClient.generate({ input, tools: getAvailableTools() })
 
-5. 处理输出 & SSE 流式推送给前端
-  5.1 处理 mark 参数（任意 tool 都可携带 args.mark，用于标记 inbox 中收到的 message 的响应状态）
+5. 记录输出事件
+  5.1 assistant text / thinking / function_call 先写入 thread.events
 
 6. 输出记录
    writeLatestLlmOutputToFile(result) // 将 LLM 的输出存到本地，用于 debug
@@ -111,15 +112,28 @@ Process Event 表达"上下文如何变化"，分为两类：
 
 前端时间线视图直接渲染 events 数组，内核与前端字段名一致。
 
-### LLM thinking 内容 不进入下一轮 Context
+### 当前 thinking 的真实行为
 
-为什么不让 LLM 看到自己上一轮的 thinking？
+设计意图上，thinking 原本不应该进入下一轮 Context：
 
 1. **套娃风险**：LLM 看到自己之前的 thinking，可能开始 meta-thinking（思考自己的思考），失控
 2. **Context 爆炸**：thinking 通常比 content 长 2-5 倍，注入会急速耗 token
 3. **价值低**：thinking 是"本轮的推理过程"——过了就过了；有价值的结论应通过 content / tool_use 显式表达
 
-所以 thinking 内容只是**记录**（写入 thread.json 供回看），**不**进入下一轮 Context。
+但**当前源码实现尚未完全对齐这个意图**：\`thinking\` 事件会被转换成 assistant message，继续进入下一轮 transcript。
+
+因此这里要把“设计目标”和“当前实现”分开看：
+
+- 设计目标：thinking 只记录、不复喂
+- 当前实现：thinking 会回灌；后续若要继续收敛，应以源码改动为准
+
+## 当前实现补充语义
+
+- 连续两轮若 assistant text 完全相同，thinkloop 会做去重，不再追加重复 text event。
+- 多个 tool call 当前按顺序串行执行，不做并发派发。
+- 单个 tool 失败时，线程不会直接进入 failed；系统会写入 function_call_output(ok=false) 与错误提示 inject，然后结束本轮，把修复权交给下一轮 LLM。
+- 只有更外层的严重错误（例如 buildContext / provider generate 失败）才会把线程状态设为 failed。
+- thinkloop 已与 observable 的 beginLlmLoop / finishLlmLoop 对接，因此 pause / ok / error 三类结局都会进入 loop meta。
 
 ## 错误处理
 

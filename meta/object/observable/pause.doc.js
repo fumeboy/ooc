@@ -9,15 +9,15 @@ OOC 里有两种“暂停”概念：
 
 1) session 级 pause（暂停单个session下的所有对象）
 - API：
-  - POST \/api\/flows\/:sessionId\/pause
-  - POST \/api\/flows\/:sessionId\/resume
+  - POST /api/flows/:sessionId/pause
+  - POST /api/flows/:sessionId/resume
 - 语义：只影响该对象在某个 session 下的 ThinkLoop；暂停请求会让对象的 running 线程在“LLM 返回后”进入 paused。
 
 2) 全局 pause（暂停所有对象）
 - API：
-  - POST \/api\/runtime\/global-pause\/enable
-  - POST \/api\/runtime\/global-pause\/disable
-  - GET  \/api\/runtime\/global-pause\/status
+  - POST /api/runtime/global-pause/enable
+  - POST /api/runtime/global-pause/disable
+  - GET  /api/runtime/global-pause/status
 - 语义：当 global-pause 开启，所有对象都会在当前轮次结束后暂停（进入 paused）。
 
 ## 暂停发生在 ThinkLoop 的哪个点
@@ -35,7 +35,25 @@ OOC 里有两种“暂停”概念：
 resume 不是“从头再跑一轮 LLM”，而是：
 
 - 把 paused 的线程恢复为 running
-- 从 \`threads/{id}/llm.input.json\` 读取上一轮未执行的 LLM 决策继续执行
+- 从 \`threads/{id}/llm.output.json\` 读取上一轮尚未执行的 LLM 决策继续执行
+- 先回放上一轮 assistant text，再按保存的 toolCalls 逐个执行 tool handler
+
+session 级 \`POST /api/flows/:sessionId/resume\` 的真实语义还包括：
+
+- server 先取消该 session 的 pause 标记
+- 扫描该 session 下所有 paused thread
+- 对可恢复的线程清掉 \`waitingType\` / \`awaitingChildren\`，把状态翻回 running
+- 为每个线程补一个 \`resume-thread\` job，并返回 \`jobIds\` / \`resumedThreadIds\`
+
+因此 resume 恢复的是“已拿到 LLM 输出、但还没来得及执行的那半轮工作”，不是重新请求一次模型。
+
+## 运行时边界
+
+- session pause 与 global pause 都是 app server 进程内状态；server 重启后不会自动保留。
+- pause 请求本身不会中断当前中的 LLM HTTP 请求；真正暂停要等本轮 think 走到 pause 检查点。
+- observable / thinkloop 并不知道 session pause 的来源，它只调用 \`isPausing(thread)\`；具体判定由 app server 启动时通过 \`setPauseChecker(...)\` 注入。
+- 当前注入逻辑是：\`globalPause || isSessionPaused(thread.persistence?.sessionId)\`；因此**没有 persistence/sessionId 的纯内存线程只受 global pause 影响，不受 session pause 影响。**
+- session resume 当前不是维护一份独立 paused-thread 注册表，而是扫描 session 下持久化的 \`thread.json\`，找出 \`status === "paused"\` 的线程后逐个恢复。
 
 ## Web 控制面当前如何使用 pause
 

@@ -12,7 +12,7 @@ submit(
 )
 \`\`\`
 
-**submit 不接受新参数**——所有参数必须通过此前的 refine（或 open 时填充的 args）累积完成。
+**submit 不接受新的业务参数**——所有业务参数必须通过此前的 refine（或 open 时填充的 args）累积完成。
 这强制 LLM 在执行前完整审视参数。
 
 协议约束：
@@ -29,6 +29,11 @@ submit(
 4. \`close\` 触发时再卸载该 form 引入的 knowledge（若不再被其他活跃 form 命中、且未 pinned）
 5. 若该 command 是 \`todo\`，则 executed 状态视为"该待办已完成"
 
+当前实现还有两个边界：
+
+- submit 内部会把 form 的 accumulatedArgs 与 tool 顶层参数合并后再交给 command，因此 command 侧可能看到 \`title\` / \`mark\` / \`form_id\` 这类 tool 元参数。
+- submit 不会替 command 预校验“业务参数是否完整”；很多 command 在参数不全时会返回提示字符串作为 result，而不是直接阻止 submit。
+
 ## 与 refine 的协作
 
 典型流程：
@@ -38,7 +43,7 @@ open(type=command, command=program, description="写一段代码读文件")
   → form_id = "f_001"
   → 临时激活 program 相关 knowledge
 
-refine(form_id="f_001", language="ts", code="const data = await readFile('foo.txt'); print(data);")
+refine(form_id="f_001", form_args={ language="ts", code="const data = await readFile('foo.txt'); print(data);" })
   → 累积 args
 
 submit(form_id="f_001")

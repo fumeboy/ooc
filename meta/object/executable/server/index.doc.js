@@ -71,7 +71,7 @@ export const ui_methods: Record<string, ObjectExportMethod> = {
     params: [{ name: "value", type: "number", description: "", required: true }],
     fn: async (ctx, { value }) => {
       ctx.setData("submitted", value);
-      ctx.notifyThread?.(\`[UI] 用户提交 value=\${value}\`);
+      ctx.notifyThread?.("[UI] 用户提交 value=" + value);
       return { ok: true };
     },
   },
@@ -91,7 +91,7 @@ method 不写 knowledge fn 时，系统按 \`description + params\` 自动生成
 
 ## 当前实现阶段
 
-OOC 系统在 \`program\` command 内部按需 \`import("\${stoneDir}/server/index.ts?t=\${mtime}")\` 加载 \`llm_methods\`，按文件 mtime 缓存。
+OOC 系统在 \`program\` command 内部按需 \`import("<stoneDir>/server/index.ts?t=<mtime>")\` 加载 \`llm_methods\`，按文件 mtime 缓存。
 
 Agent 通过 \`program.shell\` 编辑此文件后，下一次 \`program.function\` 或 \`program.ts\` 中的 \`self.callMethod\` 会自动重新加载。
 

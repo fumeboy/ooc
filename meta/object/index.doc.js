@@ -1,5 +1,17 @@
 export const object_v20260504_1 = {
   index: `
+OOC 是一种 AI 智能体（Agent）架构。
+
+传统 Agent 的工作方式是：人类写一段 prompt，发给大语言模型（LLM），LLM 返回文本，
+程序解析文本并执行动作，然后把结果拼回 prompt，再次发给 LLM。
+在这种模式下，Agent 的「上下文」是一段不断增长的文本——它是扁平的、无结构的、一次性的。
+
+OOC 提出一个不同的模型：**把 Agent 的上下文组织为「活的对象生态」**。
+
+在 OOC 中，不存在一段巨大的 prompt。取而代之的是一组对象——
+每个对象有自己的身份、数据、行为、思维方式和关系。
+对象之间可以协作、对话、创建新对象。
+
 OOC （Object Oriented Context）由 Object 组成，每个 Object 都有以下特征：
 - Object 是一个对象，包含属性和方法 （数据与程序）
 - Object 可以被其他 Object 引用，也可以引用其他 Object，可以和其他 Object 交互

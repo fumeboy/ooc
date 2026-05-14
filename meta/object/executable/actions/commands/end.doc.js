@@ -17,6 +17,12 @@ submit(form_id)
 
 当前线程 status: running → done
 
+填充 end 字段：
+- \`endReason\`：这次结束的原因
+- \`endSummary\`：留给父线程或后续恢复阅读的总结
+
+scheduler 在 await_children 唤醒父线程时，会优先读取这些字段拼接子线程完成摘要。
+
 ## end 不发送任何消息
 
 end 只是状态切换。不会向 creator 报告"我做完了"。

@@ -227,13 +227,7 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
   }
 
   if (event.kind === "thinking") {
-    return [
-      {
-        type: "message",
-        role: "assistant",
-        content: `[thinking]\n${event.text}`
-      }
-    ];
+    return [];
   }
 
   return [

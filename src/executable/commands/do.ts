@@ -145,7 +145,7 @@ export async function executeDoCommand(ctx: CommandExecutionContext): Promise<st
       parentThreadId: parentThread.id,
       creatorThreadId: ctx.thread.id,
       activeForms: createInitialTodoForms(content),
-    }, message);
+    } as ThreadContext, message);
 
     parentThread.childThreadIds = [...(parentThread.childThreadIds ?? []), childId];
     parentThread.childThreads = {

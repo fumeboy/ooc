@@ -31,6 +31,12 @@ Executable 描述 Object 的行动 / 编程能力。
     - React 组件，给人看不给 LLM 看
     - server 的 ui_methods 是 client 唯一可调入口
 
+Executable 还负责维护默认注入的协议知识（用于告诉 LLM 如何与系统进行交互）：
+
+- 每轮都会把基础 executable 协议知识整理进 context
+- command 级知识由 \`command.match(args) -> paths\` 与 \`command.knowledge(...)\` 动态派生
+- 对于 object 自定义的 server method 的知识也会在 执行 command program 时动态计算
+
 ## 渐进式披露
 
 整个行动机制围绕**渐进式披露**设计：

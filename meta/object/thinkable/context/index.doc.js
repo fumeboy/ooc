@@ -1,4 +1,5 @@
 import { thinkable_v20260504_1 } from "@meta/object/thinkable/index.doc";
+import { process_events_v20260514_1 } from "@meta/object/thinkable/context/process-events.doc";
 import * as contextSource from "@src/thinkable/context";
 
 // doc 仅绑定实现源代码，不再绑定 .test.ts —— 测试文件包含 bun:test 运行时依赖，
@@ -81,11 +82,12 @@ ThreadContext = {
 
 ### processEvents
 
-内容：本线程的 LLM 交互（message_in / message_out / tool_use / text / thinking）
-       与上下文变化事件/提示
+内容：本线程的 process event 历史，记录 LLM 交互、上下文变化与 tool 运行结果。
 
 渲染：作为独立 LLM messages 输入，**不**混入 system prompt。
 意义：稳定信息走 system prompt，历史交互作为 transcript 走 messages，符合主流 LLM 输入组织方式。
+
+process event 的事件种类、字段定义与 transcript 转换规则，详见子文档 [process-events](./process-events.doc.js)。
 
 ### locals
 
@@ -121,22 +123,35 @@ ThreadContext = {
 
 详见 executable 文档
 
+当前 XML context 中每个 form 的真实渲染字段比概念描述更具体：
+
+- \`<command>\`
+- \`<description>\`
+- \`<accumulated_args>\`（JSON 字符串）
+- \`<command_paths>\`
+- \`<loaded_knowledge>\`
+- \`<command_knowledge_paths>\`
+- 若 form 已执行完成且有结果，再附加 \`<result>\`
+
+这意味着 activeForms 既承担“还有哪些行动没释放”的职责，也承担“当前 form 已经走到了哪一步、看到了哪些协议知识、拿到了什么结果”的可观测职责。
+
 #### todo 作为 form
 
 todo 作为一类特殊的 command form：
 
 - \`open(type=command, command=todo, ...)\`        创建一个 todo form，分配 form_id
 - \`refine(form_id, { content: "…", on_command_path?: [...] })\`       更新待办内容和提醒条件
-- \`submit(form_id)\`             视为该 todo 已处理，删除该 todo item
+- \`submit(form_id)\`             把该 todo form 标记为 executed，表示待办已处理
+- \`close(form_id, reason)\`      才会真正把 todo form 从 activeForms 中移除
 
 未 submit 的 todo form 会持续出现在 activeForms 中，自然成为 LLM 每轮可见的"待办"。
-todo 的生命周期完全复用 form 生命周期，不需要单独的待办状态机。
+当前源码里，todo command 本身是 no-op；todo 的生命周期完全复用 form 生命周期，不需要单独的待办状态机。
 
 线程新建时的初始 todo：
 当一个线程被创建（root 由用户消息发起 / sub_thread 由 do(fork) 派生 / talk 进入），
 系统会自动在该线程上注入一个 todo form，内容为"处理初始消息"——
 让 LLM 第一轮就能在 activeForms 中看到这条待办，作为本线程任务的入口锚点。
-处理完成后由 LLM 自行 submit 该 todo form 即可关闭。
+处理完成后由 LLM 自行 submit 该 todo form 标记完成；若不再需要保留结果与痕迹，再显式 close。
 
 ### contact
 
@@ -155,8 +170,11 @@ todo 的生命周期完全复用 form 生命周期，不需要单独的待办状
 
 1. **system prompt：\`<context>\` 信息窗口**
     - 上述所有字段（除 processEvents 外）按 XML 子标签序列渲染
+    - 当前渲染器不是简单字符串拼接，而是带 XML 转义、CDATA 包装、comment 清洗与体积截断：knowledge 正文按 8KB 截断，file window 正文按 32KB 截断
+    - file window 会直接读取文件正文进入 \`<content>\`；knowledge window 当前只显示 path/description，正文仍通过 active knowledge 渲染进入 context
 
 2. **process event messages：上下文变化历史**
     - processEvents 数组转为独立 LLM messages（user/assistant/tool 角色）
 `,
+  processEvents: process_events_v20260514_1,
 };
