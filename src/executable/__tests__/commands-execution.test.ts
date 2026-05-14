@@ -64,16 +64,26 @@ describe("command execution side effects", () => {
     expect(thread.endSummary).toBe("真实测试可以继续往上叠");
   });
 
-  it("talk should be an explicit non-goal in the single object phase", async () => {
+  it("talk(target=user, title) creates a talk_window in contextWindows", async () => {
     const thread = makeThread({ id: "thread-talk" });
-    await executeCommand("talk", {
+    const result = await executeCommand("talk", {
       thread,
-      args: { target: "another-object", msg: "hello" },
+      args: { target: "user", title: "发布计划" },
     });
-    expect(thread.events.at(-1)).toEqual({
-      category: "context_change",
-      kind: "inject",
-      text: "[talk] 多 object 交互不属于当前单 object 阶段。",
+    expect(result).toBeUndefined();
+    const talkWindow = thread.contextWindows.find((w) => w.type === "talk");
+    expect(talkWindow?.type).toBe("talk");
+    expect(talkWindow && talkWindow.type === "talk" && talkWindow.target).toBe("user");
+    expect(talkWindow && talkWindow.type === "talk" && talkWindow.title).toBe("发布计划");
+  });
+
+  it("talk rejects non-user target with a clear error in current phase", async () => {
+    const thread = makeThread({ id: "thread-talk-other" });
+    const result = await executeCommand("talk", {
+      thread,
+      args: { target: "another-object", title: "x" },
     });
+    expect(result).toContain("仅支持");
+    expect(thread.contextWindows.find((w) => w.type === "talk")).toBeUndefined();
   });
 });

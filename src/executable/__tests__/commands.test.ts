@@ -29,7 +29,16 @@ describe("executable commands", () => {
     for (const entry of Object.values(COMMAND_TABLE)) {
       expect("openable" in entry).toBe(false);
     }
-    expect(getOpenableCommands()).toEqual(["do", "end", "plan", "program", "talk", "todo"]);
+    expect(getOpenableCommands()).toEqual([
+      "do",
+      "end",
+      "open_file",
+      "open_knowledge",
+      "plan",
+      "program",
+      "talk",
+      "todo",
+    ]);
   });
 
   it("should expose non-empty knowledge entries for every command", () => {
@@ -41,28 +50,20 @@ describe("executable commands", () => {
     }
   });
 
-  it("should derive command paths from args", () => {
-    const paths = deriveCommandPaths("talk", { wait: true });
-    expect(Array.isArray(paths)).toBe(true);
-    expect(paths).toContain("talk");
-    expect(paths).toContain("talk.wait");
+  it("root.talk paths in new model: only [talk] (say/wait/close moved to talk_window)", () => {
+    expect(deriveCommandPaths("talk", { wait: true })).toEqual(["talk"]);
+    expect(deriveCommandPaths("talk", { target: "user", title: "x" })).toEqual(["talk"]);
   });
 
-  it("should keep talk paths consistent with command docs", () => {
-    const relationPaths = deriveCommandPaths("talk", {
+  it("removed legacy talk paths (talk_window has its own command paths)", () => {
+    // 旧 talk.fork / talk.continue / talk.thread_creator / talk.relation_update / talk.question_form
+    // 在 Step 2 后已下线；talk_window 上的 say/say.wait/wait/close 走 windows registry
+    const paths = deriveCommandPaths("talk", {
       context: "continue",
       target: "creator",
-      type: "relation_update"
+      type: "relation_update",
     });
-    expect(relationPaths).toEqual([
-      "talk",
-      "talk.continue",
-      "talk.thread_creator",
-      "talk.relation_update"
-    ]);
-
-    const questionPaths = deriveCommandPaths("talk", { type: "question_form" });
-    expect(questionPaths).toEqual(["talk", "talk.question_form"]);
+    expect(paths).toEqual(["talk"]);
   });
 
   it("root.do paths in new model: only do and do.wait (continue moved to do_window)", () => {
