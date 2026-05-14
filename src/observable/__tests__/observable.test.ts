@@ -42,7 +42,8 @@ describe("observable llm snapshots", () => {
     const thread: ThreadContext = {
       id: "thread-observable",
       status: "running",
-      events: []
+      events: [],
+      contextWindows: []
     };
     const inputItems: LlmInputItem[] = [{ type: "message", role: "system", content: "<context></context>" }];
     const tools: LlmTool[] = [
@@ -105,6 +106,7 @@ describe("observable persistable debug files", () => {
       id: "root",
       status: "running",
       events: [],
+      contextWindows: [],
       persistence: { ...flowRef, threadId: "root" }
     };
 
@@ -134,7 +136,8 @@ describe("observable persistable debug files", () => {
     const thread: ThreadContext = {
       id: "ephemeral",
       status: "running",
-      events: []
+      events: [],
+      contextWindows: []
     };
 
     await observableModule.writeLatestLlmInput(thread, [], []);
@@ -158,6 +161,7 @@ describe("observable persistable debug files", () => {
       id: "root",
       status: "running",
       events: [],
+      contextWindows: [],
       persistence: { ...flowRef, threadId: "root" }
     };
     const inputItems: LlmInputItem[] = [{ type: "message", role: "system", content: "<context />" }];

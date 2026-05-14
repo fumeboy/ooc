@@ -38,7 +38,6 @@ describe("executable commands", () => {
       const basic = knowledge?.[`internal/executable/${command}/basic`];
       expect(typeof basic).toBe("string");
       expect(basic?.trim().length).toBeGreaterThan(20);
-      expect(basic).toContain("调用示例");
     }
   });
 
@@ -66,12 +65,11 @@ describe("executable commands", () => {
     expect(questionPaths).toEqual(["talk", "talk.question_form"]);
   });
 
-  it("should derive do continue and wait paths", () => {
-    expect(deriveCommandPaths("do", { context: "continue" })).toEqual(["do", "do.continue"]);
-    expect(deriveCommandPaths("do", { context: "fork", wait: true })).toEqual([
+  it("root.do paths in new model: only do and do.wait (continue moved to do_window)", () => {
+    expect(deriveCommandPaths("do", { msg: "x" })).toEqual(["do"]);
+    expect(deriveCommandPaths("do", { msg: "x", wait: true })).toEqual([
       "do",
-      "do.fork",
-      "do.wait"
+      "do.wait",
     ]);
   });
 

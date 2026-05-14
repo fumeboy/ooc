@@ -17,6 +17,7 @@ describe("resumePausedThread", () => {
         id: "root",
         status: "paused",
         events: [],
+      contextWindows: [],
         persistence,
       });
 

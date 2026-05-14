@@ -31,6 +31,7 @@ describe.skipIf(!hasLlmEnv)("integration: wait-state-transition", () => {
     await runScheduler(root, llm(), { maxTicks: 5 });
 
     expect(root.status).toBe("waiting");
-    expect(root.waitingType).toBe("explicit_wait");
+    // Step 1 之后 waitingType 字段已取消；wait 后只看 inboxSnapshotAtWait 是否被设置
+    expect(root.inboxSnapshotAtWait).toBeDefined();
   }, 60_000);
 });

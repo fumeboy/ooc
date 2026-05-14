@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
 import { createStoneObject, writeServerSource } from "../../persistable";
 import { clearServerLoaderCache } from "../server/loader";
-import { enrichProgramForm } from "../server/enrich";
-import type { ActiveForm } from "../forms/form";
-import type { ThreadContext } from "../../thinkable/context";
+import { enrichProgramFormCommand } from "../server/enrich";
+import type { CommandExecWindow } from "../windows/types";
+import { makeThread } from "../../__tests__/make-thread";
 
 let tempRoot: string | undefined;
 
@@ -18,34 +18,35 @@ afterEach(async () => {
   clearServerLoaderCache();
 });
 
-function makeForm(overrides: Partial<ActiveForm> = {}): ActiveForm {
+function makeForm(overrides: Partial<CommandExecWindow> = {}): CommandExecWindow {
   return {
-    formId: "f_1",
+    id: "f_1",
+    type: "command_exec",
+    parentWindowId: "root",
+    title: "test",
+    status: "open",
+    createdAt: 1,
     command: "program",
     description: "test",
-    createdAt: 1,
     accumulatedArgs: {},
     commandPaths: ["program"],
     loadedKnowledgePaths: [],
-    status: "open",
     ...overrides,
   };
 }
 
-function makeThreadWithStone(tempRoot: string): ThreadContext {
-  return {
+function makeThreadWithStone(tempRoot: string) {
+  return makeThread({
     id: "t",
-    status: "running",
-    events: [],
     persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
-  };
+  });
 }
 
-describe("enrichProgramForm", () => {
+describe("enrichProgramFormCommand", () => {
   test("enriches command knowledge paths even when command is not program", async () => {
     const form = makeForm({ command: "plan" });
-    const thread: ThreadContext = { id: "t", status: "running", events: [] };
-    const result = await enrichProgramForm(form, thread);
+    const thread = makeThread({ id: "t" });
+    const result = await enrichProgramFormCommand(form, thread);
     expect(result).not.toBe(form);
     expect(result.commandKnowledgePaths).toEqual([
       "internal/executable/plan/basic",
@@ -53,11 +54,10 @@ describe("enrichProgramForm", () => {
     ]);
   });
 
-  test("returns form unchanged when no function arg present", async () => {
+  test("returns form unchanged-shape when no function arg present", async () => {
     const form = makeForm({ accumulatedArgs: { language: "shell", code: "ls" } });
-    const thread: ThreadContext = { id: "t", status: "running", events: [] };
-    const result = await enrichProgramForm(form, thread);
-    expect(result).not.toBe(form);
+    const thread = makeThread({ id: "t" });
+    const result = await enrichProgramFormCommand(form, thread);
     expect(result.commandKnowledgePaths).toEqual([
       "internal/executable/program/basic",
       "internal/executable/program/input",
@@ -66,8 +66,8 @@ describe("enrichProgramForm", () => {
 
   test("returns command knowledge even when thread has no persistence", async () => {
     const form = makeForm({ accumulatedArgs: { function: "add" } });
-    const thread: ThreadContext = { id: "t", status: "running", events: [] };
-    const result = await enrichProgramForm(form, thread);
+    const thread = makeThread({ id: "t" });
+    const result = await enrichProgramFormCommand(form, thread);
     expect(result.commandKnowledgePaths).toEqual([
       "internal/executable/program/basic",
       "internal/executable/program/input",
@@ -92,7 +92,7 @@ describe("enrichProgramForm", () => {
     );
 
     const form = makeForm({ accumulatedArgs: { function: "add" } });
-    const result = await enrichProgramForm(form, makeThreadWithStone(tempRoot));
+    const result = await enrichProgramFormCommand(form, makeThreadWithStone(tempRoot));
 
     expect(result).not.toBe(form);
     expect(result.commandKnowledgePaths).toContain("internal/executable/program/function");
@@ -101,7 +101,6 @@ describe("enrichProgramForm", () => {
   test("uses custom knowledge fn when method provides one", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-enrich-"));
     const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
-    // knowledge 函数据 args.mode 动态返回不同文本
     await writeServerSource(
       stoneRef,
       `export const llm_methods = {
@@ -119,11 +118,11 @@ describe("enrichProgramForm", () => {
     );
 
     const formDev = makeForm({ accumulatedArgs: { function: "deploy", args: { mode: "dev" } } });
-    const dev = await enrichProgramForm(formDev, makeThreadWithStone(tempRoot));
+    const dev = await enrichProgramFormCommand(formDev, makeThreadWithStone(tempRoot));
     expect(dev.commandKnowledgePaths).toContain("internal/executable/program/function");
 
     const formProd = makeForm({ accumulatedArgs: { function: "deploy", args: { mode: "prod" } } });
-    const prod = await enrichProgramForm(formProd, makeThreadWithStone(tempRoot));
+    const prod = await enrichProgramFormCommand(formProd, makeThreadWithStone(tempRoot));
     expect(prod.commandKnowledgePaths).toContain("internal/executable/program/function");
   });
 
@@ -142,7 +141,7 @@ describe("enrichProgramForm", () => {
     );
 
     const form = makeForm({ accumulatedArgs: { function: "boom" } });
-    const result = await enrichProgramForm(form, makeThreadWithStone(tempRoot));
+    const result = await enrichProgramFormCommand(form, makeThreadWithStone(tempRoot));
     expect(result.commandKnowledgePaths).toContain("internal/executable/program/function");
   });
 
@@ -155,7 +154,7 @@ describe("enrichProgramForm", () => {
     );
 
     const form = makeForm({ accumulatedArgs: { function: "bar" } });
-    const result = await enrichProgramForm(form, makeThreadWithStone(tempRoot));
+    const result = await enrichProgramFormCommand(form, makeThreadWithStone(tempRoot));
     expect(result.commandKnowledgePaths).toEqual([
       "internal/executable/program/basic",
       "internal/executable/program/input",
@@ -170,13 +169,13 @@ describe("enrichProgramForm", () => {
       `export const llm_methods = { add: { description: "test", fn: async () => 0 } };`
     );
 
-    const enriched = await enrichProgramForm(
+    const enriched = await enrichProgramFormCommand(
       makeForm({ accumulatedArgs: { function: "add" } }),
       makeThreadWithStone(tempRoot)
     );
     expect(enriched.commandKnowledgePaths).toContain("internal/executable/program/function");
 
-    const cleared = await enrichProgramForm(
+    const cleared = await enrichProgramFormCommand(
       { ...enriched, accumulatedArgs: { language: "shell", code: "ls" } },
       makeThreadWithStone(tempRoot)
     );

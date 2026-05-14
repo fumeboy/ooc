@@ -39,7 +39,8 @@ describe("think", () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-1",
       status: "running",
-      events: []
+      events: [],
+      contextWindows: []
     };
 
     spyOn(contextModule, "buildInputItems").mockResolvedValue({
@@ -107,7 +108,8 @@ describe("think", () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-2",
       status: "running",
-      events: []
+      events: [],
+      contextWindows: []
     };
 
     spyOn(contextModule, "buildInputItems").mockResolvedValue({ input: [] });
@@ -137,7 +139,8 @@ describe("think", () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-3",
       status: "running",
-      events: []
+      events: [],
+      contextWindows: []
     };
 
     spyOn(contextModule, "buildInputItems").mockResolvedValue({ input: [] });
@@ -167,7 +170,8 @@ describe("think", () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-4",
       status: "running",
-      events: []
+      events: [],
+      contextWindows: []
     };
 
     spyOn(contextModule, "buildInputItems").mockResolvedValue({ input: [] });
@@ -210,7 +214,8 @@ describe("think", () => {
           kind: "text",
           text: "你好！我是一个 AI 助手。"
         }
-      ]
+      ],
+      contextWindows: []
     };
 
     spyOn(contextModule, "buildInputItems").mockResolvedValue({ input: [] });
@@ -229,7 +234,7 @@ describe("think", () => {
     await think(thread, llmClient);
 
     expect(thread.status).toBe("running");
-    expect(thread.waitingType).toBeUndefined();
+    expect(thread.inboxSnapshotAtWait).toBeUndefined();
     expect(
       thread.events.filter((event) =>
         event.category === "llm_interaction" &&
@@ -239,58 +244,35 @@ describe("think", () => {
     ).toHaveLength(1);
   });
 
-  it("连续多轮 think 可以跑通 open refine submit 与 todo command execute", async () => {
+  it("连续多轮 think 可以跑通 open（C 规则）触发 todo_window 直建", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-5",
       status: "running",
-      events: []
+      events: [],
+      contextWindows: []
     };
 
     let round = 0;
     const llmClient: LlmClient = {
       async generate() {
         round += 1;
-
         if (round === 1) {
-          return makeResult("openai", "gpt-test", "先登记一个待办", [
+          // C 规则：open 时给齐 args 且不引入新 path/knowledge，自动 submit 直建 todo_window
+          return makeResult("openai", "gpt-test", "登记一个待办", [
             {
               id: "call_open",
               name: "open",
               arguments: {
-                type: "command",
+                title: "登记 thinkloop 集成待办",
                 command: "todo",
-                description: "登记 thinkloop 集成待办"
-              }
-            }
-          ]);
-        }
-
-        const formId = thread.activeForms?.[0]?.formId ?? "";
-        if (round === 2) {
-          return makeResult("openai", "gpt-test", "补充待办内容", [
-            {
-              id: "call_refine",
-              name: "refine",
-              arguments: {
-                form_id: formId,
                 args: {
-                  content: "补充 thinkloop 集成测试",
-                  on_command_path: ["program.function"]
+                  content: "补充 thinkloop 集成测试"
                 }
               }
             }
           ]);
         }
-
-        return makeResult("openai", "gpt-test", "提交待办", [
-          {
-            id: "call_submit",
-            name: "submit",
-            arguments: {
-              form_id: formId
-            }
-          }
-        ]);
+        return makeResult("openai", "gpt-test", "已完成", []);
       },
       async *stream() {
         yield { type: "start", provider: "openai", model: "gpt-test" };
@@ -299,24 +281,12 @@ describe("think", () => {
     };
 
     await think(thread, llmClient);
-    expect(thread.activeForms).toHaveLength(1);
-    expect(thread.activeForms?.[0]?.command).toBe("todo");
-
-    await think(thread, llmClient);
-    expect(thread.activeForms?.[0]?.accumulatedArgs).toEqual({
-      content: "补充 thinkloop 集成测试",
-      on_command_path: ["program.function"]
-    });
-
-    await think(thread, llmClient);
-    expect(thread.activeForms).toHaveLength(1);
-    expect(thread.activeForms?.[0]?.status).toBe("executed");
-    const executedEvent = [...thread.events].reverse().find(
-      (event) => event.category === "tool_runtime" && event.kind === "function_call_output"
-    );
-    expect(executedEvent?.category).toBe("tool_runtime");
-    expect(executedEvent?.kind).toBe("function_call_output");
-    expect(executedEvent && "output" in executedEvent ? executedEvent.output : "").toContain("[form executed]");
+    // 自动 submit 后直接产出 todo_window，不应留下 command_exec form
+    const todoWindows = thread.contextWindows.filter((w) => w.type === "todo");
+    expect(todoWindows).toHaveLength(1);
+    expect(todoWindows[0]?.type === "todo" && todoWindows[0].content).toBe("补充 thinkloop 集成测试");
+    const lingeringForms = thread.contextWindows.filter((w) => w.type === "command_exec");
+    expect(lingeringForms).toHaveLength(0);
   });
 
   it("buildInputItems 产出的 system xml 会进入 llm 输入", async () => {
@@ -362,7 +332,8 @@ describe("think", () => {
           createdAt: 2,
           source: "do"
         }
-      ]
+      ],
+      contextWindows: []
     };
 
     const writeInput = spyOn(observableModule, "writeLatestLlmInput");
@@ -410,7 +381,8 @@ describe("think", () => {
           kind: "text",
           text: "上一轮输出"
         }
-      ]
+      ],
+      contextWindows: []
     };
     const llmResult = {
       ...makeResult("openai", "gpt-test", "本轮输出", [

@@ -6,6 +6,7 @@ import { createStoneObject, readData, writeServerSource } from "../../persistabl
 import { createProgramSelf } from "../server/self";
 import { clearServerLoaderCache } from "../server/loader";
 import type { ThreadContext } from "../../thinkable/context";
+import { makeThread } from "../../__tests__/make-thread";
 
 let tempRoot: string | undefined;
 
@@ -31,7 +32,7 @@ describe("createProgramSelf", () => {
       };`
     );
 
-    const thread: ThreadContext = { id: "t1", status: "running", events: [] };
+    const thread: ThreadContext = makeThread({ id: "t1" });
     const self = createProgramSelf(ref, thread);
     const result = await self.callMethod("whoAmI", {});
     expect(typeof result).toBe("string");
@@ -42,7 +43,7 @@ describe("createProgramSelf", () => {
   test("callMethod throws clear error for unknown method", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-self-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
-    const thread: ThreadContext = { id: "t1", status: "running", events: [] };
+    const thread: ThreadContext = makeThread({ id: "t1" });
     const self = createProgramSelf(ref, thread);
     await expect(self.callMethod("nope", {})).rejects.toThrow(/不存在/);
   });
@@ -50,7 +51,7 @@ describe("createProgramSelf", () => {
   test("setData/getData round trip via mergeData", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-self-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
-    const thread: ThreadContext = { id: "t1", status: "running", events: [] };
+    const thread: ThreadContext = makeThread({ id: "t1" });
     const self = createProgramSelf(ref, thread);
 
     expect(await self.getData("counter")).toBeUndefined();
@@ -74,7 +75,7 @@ describe("createProgramSelf", () => {
       };`
     );
 
-    const thread: ThreadContext = { id: "t1", status: "running", events: [] };
+    const thread: ThreadContext = makeThread({ id: "t1" });
     const self = createProgramSelf(ref, thread);
     await self.callMethod("say", { text: "from method" });
     expect(thread.events.length).toBe(1);

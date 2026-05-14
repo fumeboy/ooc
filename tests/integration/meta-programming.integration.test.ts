@@ -68,7 +68,7 @@ describe.skipIf(!hasLlmEnv)("integration: meta-programming", () => {
           ].join("\n"),
         },
       ],
-      activeForms: [],
+      contextWindows: [],
       persistence: { ...flow, threadId: "root" },
     };
 

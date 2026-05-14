@@ -98,6 +98,12 @@ export async function executeTodoCommand(
     content,
     onCommandPath,
   };
-  thread.contextWindows = [...(thread.contextWindows ?? []), todoWindow];
+  if (ctx.manager) {
+    // 优先通过 WindowManager 插入，避免被 toData() 覆盖
+    ctx.manager.insertTypedWindow(todoWindow);
+  } else {
+    // fallback：无 manager 时直接 mutate thread（仅 executeCommand 直接调用场景）
+    thread.contextWindows = [...(thread.contextWindows ?? []), todoWindow];
+  }
   return undefined;
 }

@@ -5,6 +5,7 @@ import { createFlowObject } from "../../src/persistable";
 import { createLlmClient } from "../../src/thinkable/llm/client";
 import type { LlmClient } from "../../src/thinkable/llm/types";
 import type { ThreadContext } from "../../src/thinkable/context";
+import { initContextWindows } from "../../src/executable/windows";
 
 /** 当所有 OOC_* env 都设置时返回 true，否则集成测试自动 skip。 */
 export const hasLlmEnv = Boolean(
@@ -30,13 +31,15 @@ export async function setupTempFlow(): Promise<{ tempRoot: string; cleanup: () =
 /** 在临时 flow object 下创建一个携带初始 prompt 的 root thread。 */
 export async function makeRootThread(tempRoot: string, prompt: string): Promise<ThreadContext> {
   const flow = await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
-  return {
+  const thread: ThreadContext = {
     id: "root",
     status: "running",
     events: [{ category: "context_change", kind: "inject", text: prompt }],
-    activeForms: [],
+    contextWindows: [],
     persistence: { ...flow, threadId: "root" },
   };
+  initContextWindows(thread, { initialTaskTitle: prompt.slice(0, 60) });
+  return thread;
 }
 
 /** 统计 thread.events 中 inject 文案以指定前缀开头的数量。 */

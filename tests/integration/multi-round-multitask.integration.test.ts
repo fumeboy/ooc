@@ -77,7 +77,7 @@ describe.skipIf(!hasLlmEnv)("integration: multi-round-multitask", () => {
           ].join("\n"),
         },
       ],
-      activeForms: [],
+      contextWindows: [],
       persistence: { ...flow, threadId: "root" },
     };
 

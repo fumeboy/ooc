@@ -49,6 +49,13 @@ function setEqual(a: string[], b: string[]): boolean {
   return true;
 }
 
+/** 判断 a 是否是 b 的子集（用于 C 规则的 knowledge keys 判定，详见 openCommandExec）。 */
+function setSubset(a: string[], b: string[]): boolean {
+  const setB = new Set(b);
+  for (const v of a) if (!setB.has(v)) return false;
+  return true;
+}
+
 /**
  * 从 parent command（root 上挂的 command）查找它注册到的 CommandTableEntry。
  *
@@ -157,14 +164,15 @@ export class WindowManager {
     this.windows.set(formId, form);
     this.recordKnowledgeRefs(form);
 
-    // C 规则判定（spec § C 规则的判定算法）：仅当 args 非空 + paths 集合不变 + knowledge keys 不变
+    // C 规则判定（spec § C 规则的判定算法）：args 非空 + commandPaths 集合不变 +
+    // 不引入"新"的 knowledge key（next ⊆ baseline 即可；减少入口算更明确，仍允许自动 submit）
     if (Object.keys(args).length > 0) {
       const nextKnowledgeKeys = entry.knowledge
         ? Object.keys(entry.knowledge(args, "open"))
         : [];
       if (
         setEqual(baselinePaths, commandPaths) &&
-        setEqual(baselineKnowledgeKeys, nextKnowledgeKeys)
+        setSubset(nextKnowledgeKeys, baselineKnowledgeKeys)
       ) {
         const submitResult = await this.submit(formId, opts.thread);
         return { formId, autoSubmitted: true, submitResult };
@@ -254,6 +262,7 @@ export class WindowManager {
         thread,
         form: executing,
         parentWindow: parent,
+        manager: this,
         args: form.accumulatedArgs,
       };
       // 优先使用 entry.exec；fallback 到 root level 的 executeCommand by-name 派发，

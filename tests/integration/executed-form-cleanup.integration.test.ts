@@ -37,7 +37,9 @@ describe.skipIf(!hasLlmEnv)("integration: executed-form-cleanup", () => {
     expect(countEventsWithPrefix(root, "[form executed]")).toBeGreaterThanOrEqual(1);
     expect(countEventsWithPrefix(root, "[close]")).toBeGreaterThanOrEqual(1);
 
-    const programForms = (root.activeForms ?? []).filter((f) => f.command === "program");
+    const programForms = root.contextWindows.filter(
+      (w) => w.type === "command_exec" && w.command === "program",
+    );
     expect(programForms.length).toBe(0);
   }, 120_000);
 });

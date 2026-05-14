@@ -6,12 +6,13 @@ import type { LlmClient, LlmGenerateResult, LlmToolCall } from "../llm/types";
 import type { ThreadContext } from "../context";
 import { runScheduler } from "../scheduler";
 import { createFlowObject, threadFile } from "../../persistable";
+import { makeThread } from "../../__tests__/make-thread";
 
 function makeResult(
   provider: "openai" | "claude",
   model: string,
   text: string,
-  toolCalls: LlmToolCall[] = []
+  toolCalls: LlmToolCall[] = [],
 ): LlmGenerateResult {
   return {
     provider,
@@ -22,132 +23,66 @@ function makeResult(
         type: "function_call" as const,
         call_id: toolCall.id,
         name: toolCall.name,
-        arguments: toolCall.arguments
-      }))
+        arguments: toolCall.arguments,
+      })),
     ],
     text,
-    toolCalls
+    toolCalls,
   };
 }
 
+/**
+ * scheduler 在 ContextWindow 模型下的行为：
+ * - 子线程 done/failed 时 scheduler 主动给父 inbox 写一条 system 消息
+ * - inbox 长度增长后，waiting 父线程自动翻回 running
+ */
 describe("scheduler", () => {
-  it("wakes a waiting parent after its awaited child finishes", async () => {
-    const child: ThreadContext = {
+  it("wakes a waiting parent after the awaited child finishes (inbox-based)", async () => {
+    const child: ThreadContext = makeThread({
       id: "t_child",
-      status: "running",
-      events: [],
+      status: "done",
       parentThreadId: "t_parent",
       creatorThreadId: "t_parent",
-      activeForms: [
-        {
-          formId: "f_initial_todo",
-          command: "todo",
-          description: "处理初始消息",
-          createdAt: 1,
-          accumulatedArgs: {
-            content: "处理子线程初始消息"
-          },
-          commandPaths: ["todo"],
-          loadedKnowledgePaths: [],
-          status: "open"
-        }
-      ]
-    };
-    const parent: ThreadContext = {
+    });
+    child.endReason = "done";
+    child.endSummary = "child finished";
+
+    const parent: ThreadContext = makeThread({
       id: "t_parent",
       status: "waiting",
-      events: [],
-      childThreadIds: ["t_child"],
-      childThreads: {
-        t_child: child
-      },
-      waitingType: "await_children",
-      awaitingChildren: ["t_child"]
-    };
+      inbox: [],
+    });
+    parent.inboxSnapshotAtWait = 0;
+    parent.childThreadIds = ["t_child"];
+    parent.childThreads = { t_child: child };
 
-    let rounds = 0;
     const llmClient: LlmClient = {
       async generate() {
-        rounds += 1;
-        if (rounds === 1) {
-          return makeResult("openai", "gpt-test", "先提交初始 todo", [
-            {
-              id: "call_submit_todo",
-              name: "submit",
-              arguments: {
-                form_id: "f_initial_todo"
-              }
-            }
-          ]);
-        }
-
-        if (rounds === 2) {
-          return makeResult("openai", "gpt-test", "先打开 end form", [
-            {
-              id: "call_open",
-              name: "open",
-              arguments: {
-                type: "command",
-                command: "end",
-                description: "结束当前子线程",
-                args: {
-                  reason: "done",
-                  summary: "child finished"
-                }
-              }
-            }
-          ]);
-        }
-
-        const formId = child.activeForms?.find((form) => form.command === "end")?.formId ?? "";
-        return makeResult("openai", "gpt-test", "提交 end form", [
-          {
-            id: "call_submit",
-            name: "submit",
-            arguments: {
-              form_id: formId
-            }
-          }
-        ]);
+        return makeResult("openai", "gpt-test", "");
       },
       async *stream() {
         yield { type: "start", provider: "openai", model: "gpt-test" };
         yield { type: "done", text: "", toolCalls: [] };
-      }
+      },
     };
 
-    expect(parent.childThreads?.t_child?.activeForms?.[0]?.command).toBe("todo");
+    await runScheduler(parent, llmClient, { maxTicks: 2 });
 
-    await runScheduler(parent, llmClient, { maxTicks: 5 });
-
-    expect(parent.childThreads?.t_child?.status).toBe("done");
+    // scheduler 应该已经给父 inbox 写了 child 结束通知，并把父翻回 running
     expect(parent.status).toBe("running");
-    expect(parent.waitingType).toBeUndefined();
-    expect(parent.awaitingChildren).toEqual([]);
+    expect(parent.inboxSnapshotAtWait).toBeUndefined();
+    expect((parent.inbox ?? []).some((m) => m.content.includes("child finished"))).toBe(true);
   });
 
   it("runs the oldest running thread first by lastExecutedAt", async () => {
-    const childOld: ThreadContext = {
-      id: "t_old",
-      status: "running",
-      events: [],
-      lastExecutedAt: 10
-    };
-    const childNew: ThreadContext = {
-      id: "t_new",
-      status: "running",
-      events: [],
-      lastExecutedAt: 20
-    };
-    const root: ThreadContext = {
-      id: "t_root",
-      status: "waiting",
-      events: [],
-      childThreads: {
-        t_new: childNew,
-        t_old: childOld
-      }
-    };
+    const childOld: ThreadContext = makeThread({ id: "t_old" });
+    childOld.lastExecutedAt = 10;
+    const childNew: ThreadContext = makeThread({ id: "t_new" });
+    childNew.lastExecutedAt = 20;
+    const root: ThreadContext = makeThread({ id: "t_root", status: "waiting" });
+    root.inboxSnapshotAtWait = 0;
+    root.childThreads = { t_new: childNew, t_old: childOld };
+
     const executed: string[] = [];
     const llmClient: LlmClient = {
       async generate({ input }) {
@@ -159,17 +94,16 @@ describe("scheduler", () => {
           model: "gpt-test",
           outputItems: [],
           text: "",
-          toolCalls: []
+          toolCalls: [],
         };
       },
       async *stream() {
         yield { type: "start", provider: "openai", model: "gpt-test" };
         yield { type: "done", text: "", toolCalls: [] };
-      }
+      },
     };
 
     await runScheduler(root, llmClient, { maxTicks: 1 });
-
     expect(executed).toEqual(["t_old"]);
   });
 });
@@ -189,14 +123,12 @@ describe("scheduler persistence", () => {
     const flowRef = await createFlowObject({
       baseDir: tempRoot,
       sessionId: "s1",
-      objectId: "obj"
+      objectId: "obj",
     });
-    const root: ThreadContext = {
+    const root: ThreadContext = makeThread({
       id: "root",
-      status: "running",
-      events: [],
-      persistence: { ...flowRef, threadId: "root" }
-    };
+      persistence: { ...flowRef, threadId: "root" },
+    });
     const llmClient: LlmClient = {
       async generate() {
         return makeResult("openai", "gpt-test", "persisted");
@@ -204,7 +136,7 @@ describe("scheduler persistence", () => {
       async *stream() {
         yield { type: "start", provider: "openai", model: "gpt-test" };
         yield { type: "done", text: "persisted", toolCalls: [] };
-      }
+      },
     };
 
     await runScheduler(root, llmClient, { maxTicks: 1 });
@@ -213,7 +145,7 @@ describe("scheduler persistence", () => {
     expect(saved.events.at(-1)).toEqual({
       category: "llm_interaction",
       kind: "text",
-      text: "persisted"
+      text: "persisted",
     });
   });
 });

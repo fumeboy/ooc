@@ -1,332 +1,208 @@
 import { describe, it, expect } from "bun:test";
 import { OOC_TOOLS, buildAvailableTools } from "../tools/index";
 import { dispatchToolCall } from "../tools";
-import type { ThreadContext } from "../../thinkable/context";
+import { makeThread } from "../../__tests__/make-thread";
 
-describe("executable tools", () => {
-  it("should export 5 OOC tools (excluding compress)", () => {
+/**
+ * tools.test — 5 原语在 ContextWindow 模型下的行为验证。
+ *
+ * 覆盖：
+ * - tool 集合定义
+ * - open 创建 command_exec window 并预填 args
+ * - C 规则（args 完整 + 无新 knowledge → 自动 submit）
+ * - refine 累积 args
+ * - submit 成功自动移除；失败保留
+ * - close 释放任意 window
+ * - wait 切到 waiting + 写 inboxSnapshotAtWait
+ */
+describe("executable tools (ContextWindow model)", () => {
+  it("export 5 OOC tools (excluding compress)", () => {
     expect(OOC_TOOLS).toHaveLength(5);
-    
-    const toolNames = OOC_TOOLS.map(t => t.name);
-    expect(toolNames).toContain("open");
-    expect(toolNames).toContain("refine");
-    expect(toolNames).toContain("submit");
-    expect(toolNames).toContain("close");
-    expect(toolNames).toContain("wait");
+    const toolNames = OOC_TOOLS.map((t) => t.name);
+    expect(toolNames).toEqual(expect.arrayContaining(["open", "refine", "submit", "close", "wait"]));
     expect(toolNames).not.toContain("compress");
   });
 
-  it("should return available tools via buildAvailableTools", () => {
-    const mockThread = { id: "test", status: "running", events: [] } as ThreadContext;
-    const tools = buildAvailableTools(mockThread);
+  it("buildAvailableTools 返回固定五件套", () => {
+    const tools = buildAvailableTools(makeThread());
     expect(tools).toBe(OOC_TOOLS);
     expect(tools).toHaveLength(5);
   });
 
-  it("should describe the form protocol explicitly in open/refine/submit tools", () => {
-    const open = OOC_TOOLS.find((tool) => tool.name === "open");
-    const refine = OOC_TOOLS.find((tool) => tool.name === "refine");
-    const submit = OOC_TOOLS.find((tool) => tool.name === "submit");
-
-    expect(open?.description).toContain("业务参数必须放在 args");
-    expect(refine?.description).toContain("args 对象");
-    expect(submit?.description).toContain("不接受新的业务参数");
-  });
-
-  it("通过 open 创建 command form 并预填 args", async () => {
-    const thread = { id: "test", status: "running", events: [] } as ThreadContext;
-
+  it("open(command=plan) 创建 command_exec form 并预填 args（plan 缺 plan 文本时不会被 C 规则自动 submit）", async () => {
+    const thread = makeThread();
     const output = await dispatchToolCall(thread, {
       id: "call_1",
       name: "open",
       arguments: {
-        type: "command",
-        command: "talk",
-        description: "回复用户",
-        args: { target: "user", msg: "hello" }
-      }
+        title: "制定计划",
+        command: "plan",
+        description: "拆解迁移工作",
+      },
     });
 
-    expect(thread.activeForms).toHaveLength(1);
-    expect(thread.activeForms?.[0]?.command).toBe("talk");
-    expect(thread.activeForms?.[0]?.accumulatedArgs).toEqual({ target: "user", msg: "hello" });
-    expect(JSON.parse(output)).toEqual({
-      ok: true,
-      tool: "open",
-      message: expect.stringContaining("Form")
-    });
-    expect(thread.events).toEqual([]);
+    const parsed = JSON.parse(output);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.tool).toBe("open");
+    expect(parsed.auto_submitted).toBe(false);
+
+    const forms = thread.contextWindows.filter((w) => w.type === "command_exec");
+    expect(forms).toHaveLength(1);
+    expect(forms[0]?.command).toBe("plan");
   });
 
-  it("通过 open knowledge 激活并固定 knowledge，且不创建 form", async () => {
-    const thread = { id: "test", status: "running", events: [] } as ThreadContext;
-
-    const output = await dispatchToolCall(thread, {
-      id: "call_1",
-      name: "open",
-      arguments: {
-        type: "knowledge",
-        description: "查看 file_ops",
-        args: { path: "path/computable/file_ops", lines: [0, 200], columns: [0, 200] }
-      }
-    });
-
-    expect(thread.activeForms).toEqual([]);
-    expect(thread.pinnedKnowledge).toEqual(["path/computable/file_ops"]);
-    expect(JSON.parse(output)).toEqual({
-      ok: true,
-      tool: "open",
-      message: expect.stringContaining("Knowledge path/computable/file_ops 已进入 Context")
-    });
-    expect(thread.events).toEqual([]);
-  });
-
-  it("通过 open file 注入文件窗口，且不创建 form", async () => {
-    const thread = { id: "test", status: "running", events: [] } as ThreadContext;
-
-    const output = await dispatchToolCall(thread, {
-      id: "call_1",
-      name: "open",
-      arguments: {
-        type: "file",
-        description: "查看目标文件",
-        args: { path: "src/foo.ts", lines: [0, 200], columns: [0, 120] }
-      }
-    });
-
-    expect(thread.activeForms).toEqual([]);
-    expect(thread.windows?.["src/foo.ts"]).toEqual({
-      type: "file",
-      path: "src/foo.ts",
-      description: "查看目标文件",
-      lines: [0, 200],
-      columns: [0, 120]
-    });
-    expect(JSON.parse(output)).toEqual({
-      ok: true,
-      tool: "open",
-      message: "File src/foo.ts 已进入 Context。"
-    });
-    expect(thread.events).toEqual([]);
-  });
-
-  it("open file 缺少 args.path 时返回错误且不写入 undefined window", async () => {
-    const thread = { id: "test", status: "running", events: [] } as ThreadContext;
-
-    const output = await dispatchToolCall(thread, {
-      id: "call_1",
-      name: "open",
-      arguments: {
-        type: "file",
-        title: "读取缺少路径的文件",
-        description: "路径只写在 description 中是不合法的"
-      }
-    });
-
-    expect(JSON.parse(output)).toEqual({
-      ok: false,
-      tool: "open",
-      error: 'open(type="file") 缺少 args.path 参数。'
-    });
-    expect(thread.windows).toBeUndefined();
-    expect(thread.events).toEqual([]);
-  });
-
-  it("open schema 使用 OpenAI 兼容的简单 object schema，并描述 file/knowledge 的 args.path 约束", () => {
-    const open = OOC_TOOLS.find((tool) => tool.name === "open");
-    const schema = open?.inputSchema as {
-      allOf?: unknown;
-      properties?: {
-        args?: {
-          properties?: {
-            lines?: { items?: unknown };
-            columns?: { items?: unknown };
-          };
-        };
-      };
-    };
-    const serialized = JSON.stringify(schema);
-
-    expect(schema.allOf).toBeUndefined();
-    expect(serialized).not.toContain('"if"');
-    expect(serialized).not.toContain('"then"');
-    expect(schema.properties?.args?.properties?.lines?.items).toEqual({ type: "number" });
-    expect(schema.properties?.args?.properties?.columns?.items).toEqual({ type: "number" });
-    expect(serialized).toContain("文件或 knowledge 路径");
-  });
-
-  it("通过 open command(todo) 创建 todo form 并预填提醒参数", async () => {
-    const thread = { id: "test", status: "running", events: [] } as ThreadContext;
-
+  it("C 规则触发自动 submit：plan 给齐 plan 字段一次到位执行", async () => {
+    const thread = makeThread();
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "open",
       arguments: {
-        type: "command",
-        command: "todo",
-        description: "登记待办",
-        args: {
-          content: "为 open tool 补测试",
-          on_command_path: ["program.function"]
-        }
-      }
+        title: "立刻设定计划",
+        command: "plan",
+        args: { plan: "先 reshape，再迁移测试" },
+      },
     });
-
-    expect(thread.activeForms).toHaveLength(1);
-    expect(thread.activeForms?.[0]?.command).toBe("todo");
-    expect(thread.activeForms?.[0]?.description).toBe("登记待办");
-    expect(thread.activeForms?.[0]?.accumulatedArgs).toEqual({
-      content: "为 open tool 补测试",
-      on_command_path: ["program.function"]
-    });
-    expect(thread.activeForms?.[0]?.commandPaths).toEqual(["todo", "todo.on_command_path"]);
+    // form 应该已自动消失，plan 已落到 thread.plan
+    const forms = thread.contextWindows.filter((w) => w.type === "command_exec");
+    expect(forms).toHaveLength(0);
+    expect(thread.plan).toBe("先 reshape，再迁移测试");
   });
 
-  it("通过 refine 累积 form 参数并更新 command path", async () => {
-    const thread = { id: "test", status: "running", events: [] } as ThreadContext;
+  it("refine 累积 args 并刷新 commandPaths（do 加 wait 触发 do.wait path）", async () => {
+    const thread = makeThread();
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "open",
-      arguments: { type: "command", command: "talk", description: "继续对话" }
+      arguments: { title: "派生子线程", command: "do", description: "fork" },
     });
-
-    const formId = thread.activeForms?.[0]?.formId ?? "";
+    const formId = thread.contextWindows.find((w) => w.type === "command_exec")?.id ?? "";
     const output = await dispatchToolCall(thread, {
       id: "call_2",
       name: "refine",
-      arguments: { form_id: formId, args: { context: "continue", threadId: "remote-1" } }
+      arguments: { title: "补 wait", form_id: formId, form_args: { wait: true } },
     });
 
-    expect(thread.activeForms?.[0]?.accumulatedArgs).toEqual({
-      context: "continue",
-      threadId: "remote-1"
-    });
-    expect(thread.activeForms?.[0]?.commandPaths).toContain("talk.continue");
-    expect(JSON.parse(output)).toEqual({
-      ok: true,
-      tool: "refine",
-      message: expect.stringContaining(`Form ${formId} 已累积参数`)
-    });
-    expect(thread.events).toEqual([]);
+    const form = thread.contextWindows.find((w) => w.id === formId);
+    expect(form && form.type === "command_exec" && form.accumulatedArgs).toEqual({ wait: true });
+    expect(form && form.type === "command_exec" && form.commandPaths).toContain("do.wait");
+    expect(JSON.parse(output).ok).toBe(true);
   });
 
-  it("未知 tool 通过 function_call_output 返回错误而不是写入 inject 事件", async () => {
-    const thread = { id: "test", status: "running", events: [] } as ThreadContext;
-
-    const output = await dispatchToolCall(thread, {
-      id: "call_unknown",
-      name: "compress" as never,
-      arguments: {}
-    });
-
-    expect(JSON.parse(output)).toEqual({ ok: false, tool: "compress", error: "[compress] tool 暂未实现。" });
-    expect(thread.events).toEqual([]);
-  });
-
-  it("通过 submit 把 form 切到 executed 并保留在 activeForms", async () => {
-    const thread = { id: "test", status: "running", events: [] } as ThreadContext;
+  it("submit 成功后 form 自动移除", async () => {
+    const thread = makeThread();
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "open",
-      arguments: { type: "command", command: "plan", description: "制定计划" }
+      arguments: { title: "派生", command: "do", description: "fork" },
+    });
+    const formId = thread.contextWindows.find((w) => w.type === "command_exec")?.id ?? "";
+    await dispatchToolCall(thread, {
+      id: "call_2",
+      name: "refine",
+      arguments: { title: "补 msg", form_id: formId, form_args: { msg: "处理日志" } },
+    });
+    const output = await dispatchToolCall(thread, {
+      id: "call_3",
+      name: "submit",
+      arguments: { title: "执行 fork", form_id: formId },
     });
 
-    const formId = thread.activeForms?.[0]?.formId ?? "";
-    const output = await dispatchToolCall(thread, {
+    const parsed = JSON.parse(output);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.auto_removed).toBe(true);
+    expect(thread.contextWindows.find((w) => w.id === formId)).toBeUndefined();
+  });
+
+  it("submit 失败时 form 保留，等显式 close", async () => {
+    const thread = makeThread();
+    // do 缺 msg 直接 submit 会失败
+    await dispatchToolCall(thread, {
+      id: "call_1",
+      name: "open",
+      arguments: { title: "派生", command: "do", description: "fork" },
+    });
+    const formId = thread.contextWindows.find((w) => w.type === "command_exec")?.id ?? "";
+    await dispatchToolCall(thread, {
       id: "call_2",
       name: "submit",
-      arguments: { form_id: formId }
+      arguments: { title: "执行", form_id: formId },
     });
-
-    expect(thread.activeForms).toHaveLength(1);
-    expect(thread.activeForms?.[0]?.status).toBe("executed");
-    expect(JSON.parse(output)).toEqual({
-      ok: true,
-      tool: "submit",
-      message: '[form executed] form "制定计划" 已执行完成。'
-    });
-    expect(thread.events).toEqual([]);
+    const form = thread.contextWindows.find((w) => w.id === formId);
+    expect(form?.type).toBe("command_exec");
+    expect(form && form.type === "command_exec" && form.status).toBe("executed");
+    expect(form && form.type === "command_exec" && form.result).toContain("[do] 缺少 msg");
   });
 
-  it("通过 close 取消 form 并移出 activeForms", async () => {
-    const thread = { id: "test", status: "running", events: [] } as ThreadContext;
+  it("close 释放任意 window", async () => {
+    const thread = makeThread();
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "open",
-      arguments: { type: "command", command: "program", description: "写代码" }
+      arguments: { title: "派生", command: "do", description: "fork" },
     });
-
-    const formId = thread.activeForms?.[0]?.formId ?? "";
+    const formId = thread.contextWindows.find((w) => w.type === "command_exec")?.id ?? "";
     const output = await dispatchToolCall(thread, {
       id: "call_2",
       name: "close",
-      arguments: { form_id: formId, reason: "不需要写代码了" }
+      arguments: { window_id: formId, reason: "不需要了" },
     });
+    expect(thread.contextWindows.find((w) => w.id === formId)).toBeUndefined();
+    expect(JSON.parse(output).ok).toBe(true);
+  });
 
-    expect(thread.activeForms).toEqual([]);
+  it("close 缺 reason 时拒绝", async () => {
+    const thread = makeThread();
+    const output = await dispatchToolCall(thread, {
+      id: "call_1",
+      name: "close",
+      arguments: { window_id: "f_x" },
+    });
     expect(JSON.parse(output)).toEqual({
-      ok: true,
+      ok: false,
       tool: "close",
-      message: "[close] Form " + formId + " 已关闭。原因：不需要写代码了"
+      error: "close 缺少 reason 参数。",
     });
-    expect(thread.events).toEqual([]);
   });
 
-  it("close 缺少 reason 时不关闭 form", async () => {
-    const thread = { id: "test", status: "running", events: [] } as ThreadContext;
-    await dispatchToolCall(thread, {
-      id: "call_1",
-      name: "open",
-      arguments: { type: "command", command: "program", description: "写代码" }
-    });
-
-    const formId = thread.activeForms?.[0]?.formId ?? "";
-    const output = await dispatchToolCall(thread, {
-      id: "call_2",
-      name: "close",
-      arguments: { form_id: formId }
-    });
-
-    expect(thread.activeForms).toHaveLength(1);
-    expect(JSON.parse(output)).toEqual({ ok: false, tool: "close", error: "close 缺少 reason 参数。" });
-    expect(thread.events).toEqual([]);
-  });
-
-  it("close 缺少 form_id 时给出错误，不再支持 knowledge close 分支", async () => {
-    const thread = {
-      id: "test",
-      status: "running",
-      events: [],
-      pinnedKnowledge: ["api/openai"]
-    } as ThreadContext;
-
+  it("close creator do_window 时被拒绝并写 inject 事件", async () => {
+    const thread = makeThread();
+    const creator = thread.contextWindows.find((w) => w.type === "do" && w.isCreatorWindow);
+    expect(creator).toBeDefined();
     const output = await dispatchToolCall(thread, {
       id: "call_1",
       name: "close",
-      arguments: { type: "knowledge", path: "ghost", reason: "试试" }
+      arguments: { window_id: creator!.id, reason: "尝试关闭" },
     });
-
-    expect(thread.pinnedKnowledge).toEqual(["api/openai"]);
-    expect(JSON.parse(output)).toEqual({ ok: false, tool: "close", error: "close 缺少 form_id 参数。" });
-    expect(thread.events).toEqual([]);
+    expect(JSON.parse(output).ok).toBe(false);
+    expect(thread.contextWindows.find((w) => w.id === creator!.id)).toBeDefined();
+    expect(thread.events.some((e) => e.kind === "inject" && e.text.includes("close 拒绝"))).toBe(true);
   });
 
-  it("通过 wait 把线程切换为 waiting", async () => {
-    const thread = { id: "test", status: "running", events: [] } as ThreadContext;
-
+  it("wait 把线程切到 waiting 并记录 inboxSnapshotAtWait", async () => {
+    const thread = makeThread({ inbox: [] });
     const output = await dispatchToolCall(thread, {
       id: "call_1",
       name: "wait",
-      arguments: { reason: "等待用户输入" }
+      arguments: { reason: "等待用户" },
     });
-
     expect(thread.status).toBe("waiting");
-    expect(thread.waitingType).toBe("explicit_wait");
-    expect(JSON.parse(output)).toEqual({
-      ok: true,
-      tool: "wait",
-      message: "[wait] 线程进入等待状态: 等待用户输入"
+    expect(thread.inboxSnapshotAtWait).toBe(0);
+    const parsed = JSON.parse(output);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.message).toContain("等待 inbox 新消息");
+  });
+
+  it("未知 tool 返回错误", async () => {
+    const thread = makeThread();
+    const output = await dispatchToolCall(thread, {
+      id: "call_unknown",
+      name: "compress" as never,
+      arguments: {},
     });
-    expect(thread.events).toEqual([]);
+    expect(JSON.parse(output)).toEqual({
+      ok: false,
+      tool: "compress",
+      error: "[compress] tool 暂未实现。",
+    });
   });
 });

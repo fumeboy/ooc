@@ -2,20 +2,20 @@ import { describe, expect, test } from "bun:test";
 import { computeActivations } from "../activator";
 import type { KnowledgeDoc, KnowledgeIndex } from "../types";
 import type { ThreadContext } from "../../context";
-import type { ActiveForm } from "../../../executable/forms/form";
+import type { CommandExecWindow } from "../../../executable/windows/types";
 
 function doc(
   path: string,
   description: string,
   activates_on: KnowledgeDoc["frontmatter"]["activates_on"] | undefined,
-  body = `body of ${path}`
+  body = `body of ${path}`,
 ): KnowledgeDoc {
   return {
     path,
     file: `/tmp/${path}.md`,
     frontmatter: { description, activates_on },
     body,
-    mtime: 0
+    mtime: 0,
   };
 }
 
@@ -23,48 +23,45 @@ function indexOf(...docs: KnowledgeDoc[]): KnowledgeIndex {
   return { byPath: new Map(docs.map((d) => [d.path, d])) };
 }
 
-function form(overrides: Partial<ActiveForm>): ActiveForm {
+/** 构造 command_exec window 的辅助；activator 仅读 commandPaths 字段。 */
+function form(overrides: Partial<CommandExecWindow>): CommandExecWindow {
   return {
-    formId: "f",
+    id: "f",
+    type: "command_exec",
+    parentWindowId: "root",
+    title: "x",
+    status: "open",
+    createdAt: 0,
     command: "x",
     description: "",
-    createdAt: 0,
     accumulatedArgs: {},
     commandPaths: [],
     loadedKnowledgePaths: [],
-    status: "open",
-    ...overrides
+    ...overrides,
   };
 }
 
 function thread(overrides: Partial<ThreadContext>): ThreadContext {
-  return { id: "t", status: "running", events: [], ...overrides };
+  return {
+    id: "t",
+    status: "running",
+    events: [],
+    contextWindows: [],
+    ...overrides,
+  };
 }
 
-describe("computeActivations", () => {
+describe("computeActivations (ContextWindow model)", () => {
   test("empty thread → empty result", () => {
     const out = computeActivations(thread({}), indexOf(doc("a", "A", { show_content_when: ["program"] })));
-    expect(out).toEqual([]);
-  });
-
-  test("pinned knowledge always renders full", () => {
-    const index = indexOf(doc("manual/file-ops", "desc", undefined));
-    const out = computeActivations(thread({ pinnedKnowledge: ["manual/file-ops"] }), index);
-    expect(out).toHaveLength(1);
-    expect(out[0]?.presentation).toBe("full");
-    expect(out[0]?.reason).toBe("pinned");
-  });
-
-  test("pinned non-existent path is silently ignored", () => {
-    const out = computeActivations(thread({ pinnedKnowledge: ["ghost"] }), indexOf());
     expect(out).toEqual([]);
   });
 
   test("show_content_when match → full", () => {
     const index = indexOf(doc("a", "A", { show_content_when: ["program.shell"] }));
     const out = computeActivations(
-      thread({ activeForms: [form({ commandPaths: ["program.shell"] })] }),
-      index
+      thread({ contextWindows: [form({ commandPaths: ["program.shell"] })] }),
+      index,
     );
     expect(out).toHaveLength(1);
     expect(out[0]?.presentation).toBe("full");
@@ -74,8 +71,8 @@ describe("computeActivations", () => {
   test("show_description_when match → summary", () => {
     const index = indexOf(doc("a", "A", { show_description_when: ["program"] }));
     const out = computeActivations(
-      thread({ activeForms: [form({ commandPaths: ["program"] })] }),
-      index
+      thread({ contextWindows: [form({ commandPaths: ["program"] })] }),
+      index,
     );
     expect(out).toHaveLength(1);
     expect(out[0]?.presentation).toBe("summary");
@@ -86,47 +83,32 @@ describe("computeActivations", () => {
     const index = indexOf(
       doc("a", "A", {
         show_description_when: ["program"],
-        show_content_when: ["program.shell"]
-      })
+        show_content_when: ["program.shell"],
+      }),
     );
     const out = computeActivations(
       thread({
-        activeForms: [form({ commandPaths: ["program", "program.shell"] })]
+        contextWindows: [form({ commandPaths: ["program", "program.shell"] })],
       }),
-      index
+      index,
     );
     expect(out).toHaveLength(1);
     expect(out[0]?.presentation).toBe("full");
-  });
-
-  test("pinned override even when command path would only hit summary", () => {
-    const index = indexOf(doc("a", "A", { show_description_when: ["program"] }));
-    const out = computeActivations(
-      thread({
-        activeForms: [form({ commandPaths: ["program"] })],
-        pinnedKnowledge: ["a"]
-      }),
-      index
-    );
-    // pinned 优先；不会同时出现两次
-    expect(out).toHaveLength(1);
-    expect(out[0]?.presentation).toBe("full");
-    expect(out[0]?.reason).toBe("pinned");
   });
 
   test("multiple forms union commandPaths", () => {
     const index = indexOf(
       doc("a", "A", { show_content_when: ["program"] }),
-      doc("b", "B", { show_content_when: ["talk"] })
+      doc("b", "B", { show_content_when: ["talk"] }),
     );
     const out = computeActivations(
       thread({
-        activeForms: [
-          form({ formId: "f1", commandPaths: ["program"] }),
-          form({ formId: "f2", commandPaths: ["talk"] })
-        ]
+        contextWindows: [
+          form({ id: "f1", commandPaths: ["program"] }),
+          form({ id: "f2", commandPaths: ["talk"] }),
+        ],
       }),
-      index
+      index,
     );
     expect(out.map((r) => r.path).sort()).toEqual(["a", "b"]);
   });
@@ -134,8 +116,8 @@ describe("computeActivations", () => {
   test("non-matching paths produce no results", () => {
     const index = indexOf(doc("a", "A", { show_content_when: ["talk"] }));
     const out = computeActivations(
-      thread({ activeForms: [form({ commandPaths: ["program"] })] }),
-      index
+      thread({ contextWindows: [form({ commandPaths: ["program"] })] }),
+      index,
     );
     expect(out).toEqual([]);
   });
@@ -146,8 +128,8 @@ describe("computeActivations", () => {
       docs.push(doc(`k${i}`, `desc ${i}`, { show_content_when: ["program"] }));
     }
     const out = computeActivations(
-      thread({ activeForms: [form({ commandPaths: ["program"] })] }),
-      indexOf(...docs)
+      thread({ contextWindows: [form({ commandPaths: ["program"] })] }),
+      indexOf(...docs),
     );
     expect(out.length).toBe(20);
   });
@@ -155,8 +137,8 @@ describe("computeActivations", () => {
   test("doc without activates_on never auto-activates", () => {
     const index = indexOf(doc("a", "A", undefined));
     const out = computeActivations(
-      thread({ activeForms: [form({ commandPaths: ["program"] })] }),
-      index
+      thread({ contextWindows: [form({ commandPaths: ["program"] })] }),
+      index,
     );
     expect(out).toEqual([]);
   });

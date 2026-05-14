@@ -1,5 +1,6 @@
 import type { ThreadContext } from "../../thinkable/context";
 import type { CommandExecWindow, ContextWindow } from "../windows/types";
+import type { WindowManager } from "../windows/manager";
 
 /** 命令表条目（扁平结构，无嵌套子节点）。 */
 export type CommandKnowledgeEntries = Record<string, string>;
@@ -54,6 +55,14 @@ export interface CommandExecutionContext {
    * 由 WindowManager.submit 在调用 command 前注入，便于 command 访问父 window 的特有字段。
    */
   parentWindow?: ContextWindow;
+  /**
+   * 当前调度本次 command 的 WindowManager。
+   *
+   * command 的 exec 实现**必须**通过此 manager 操作 contextWindows（如 insertTypedWindow），
+   * 不要直接 mutate thread.contextWindows——否则 manager 完成 entry.exec 后调用 toData()
+   * 会覆盖你的修改。
+   */
+  manager?: WindowManager;
   /** 最终参数，通常由 form.accumulatedArgs 与 submit 参数合并而来。 */
   args: Record<string, unknown>;
 }

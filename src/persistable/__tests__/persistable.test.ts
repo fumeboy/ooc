@@ -52,6 +52,7 @@ describe("persistable single object flow", () => {
       id: "root",
       status: "running",
       events: [],
+      contextWindows: [],
       persistence: { ...ref, threadId: "root" }
     };
 

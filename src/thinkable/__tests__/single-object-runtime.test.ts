@@ -53,7 +53,7 @@ describe("single object runtime", () => {
       id: "root",
       status: "running",
       events: [],
-      activeForms: [],
+      contextWindows: [],
       persistence: { ...flowRef, threadId: "root" }
     };
 
@@ -62,13 +62,13 @@ describe("single object runtime", () => {
       async generate() {
         callCount += 1;
         if (callCount === 1) {
-          return makeResult("I will open a plan form.", [
+          // C 规则触发：args 给齐 plan，自动 submit；下一轮无需再 submit
+          return makeResult("I will set the plan via C-rule.", [
             {
               id: "tc1",
               name: "open",
               arguments: {
                 title: "open plan",
-                type: "command",
                 command: "plan",
                 description: "制定本对象执行计划",
                 args: { plan: "完成单 object 最小闭环" }
@@ -77,16 +77,7 @@ describe("single object runtime", () => {
           ]);
         }
 
-        return makeResult("I will submit the plan.", [
-          {
-            id: "tc2",
-            name: "submit",
-            arguments: {
-              title: "提交计划",
-              form_id: root.activeForms?.[0]?.formId ?? ""
-            }
-          }
-        ]);
+        return makeResult("All done.", []);
       },
       async *stream() {
         yield { type: "start", provider: "openai", model: "test" };
@@ -106,7 +97,7 @@ describe("single object runtime", () => {
     const savedThread = JSON.parse(await readFile(threadFile(ref), "utf8"));
 
     expect(input.threadId).toBe("root");
-    expect(output.outputItems[1]?.name).toBe("submit");
+    // C 规则下 round 1 直接执行 plan；round 2 没有任何工具调用，所以 outputItems 只有 message
     expect(loopMeta.loopIndex).toBe(2);
     expect(loopMeta.status).toBe("ok");
     expect(root.plan).toBe("完成单 object 最小闭环");
@@ -117,5 +108,6 @@ describe("single object runtime", () => {
           event.category === "llm_interaction" && event.kind === "function_call"
       )
     ).toBe(true);
+    void output;
   });
 });

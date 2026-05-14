@@ -76,7 +76,7 @@ describe.skipIf(!hasLlmEnv)("integration: knowledge-activation", () => {
           ].join("\n"),
         },
       ],
-      activeForms: [],
+      contextWindows: [],
       persistence: { ...flow, threadId: "root" },
     };
 

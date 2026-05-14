@@ -198,7 +198,11 @@ export async function executeDoCommand(ctx: CommandExecutionContext): Promise<st
     createdAt: Date.now(),
     targetThreadId: childId,
   };
-  parent.contextWindows = [...(parent.contextWindows ?? []), doWindow];
+  if (ctx.manager) {
+    ctx.manager.insertTypedWindow(doWindow);
+  } else {
+    parent.contextWindows = [...(parent.contextWindows ?? []), doWindow];
+  }
 
   // 5) wait=true 时父线程进入 waiting；scheduler 见 inbox 新消息后唤醒
   if (wait) {

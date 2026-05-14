@@ -5,24 +5,22 @@ import { afterEach, describe, expect, it, test } from "bun:test";
 import { executeProgramCommand } from "../commands/program";
 import { createStoneObject, writeServerSource } from "../../persistable";
 import { clearServerLoaderCache } from "../server/loader";
-import type { ThreadContext } from "../../thinkable/context";
+import { makeThread } from "../../__tests__/make-thread";
 
 function makeCtx(args: Record<string, unknown>) {
-  const thread: ThreadContext = { id: "t", status: "running", events: [] };
+  const thread = makeThread({ id: "t" });
   return { thread, args };
 }
 
 function makeCtxWithPersistence(
   args: Record<string, unknown>,
   objectId: string,
-  baseDir: string
+  baseDir: string,
 ) {
-  const thread: ThreadContext = {
+  const thread = makeThread({
     id: "t",
-    status: "running",
-    events: [],
-    persistence: { baseDir, sessionId: "s1", objectId, threadId: "t" }
-  };
+    persistence: { baseDir, sessionId: "s1", objectId, threadId: "t" },
+  });
   return { thread, args };
 }
 
@@ -168,7 +166,7 @@ describe("program.ts/js + program.function", () => {
   });
 
   test("function path errors clearly when no persistence", async () => {
-    const thread: ThreadContext = { id: "t", status: "running", events: [] };
+    const thread = makeThread({ id: "t" });
     const result = await executeProgramCommand({ thread, args: { function: "any" } });
     expect(result).toContain("无 persistence");
   });

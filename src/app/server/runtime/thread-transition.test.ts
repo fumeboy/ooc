@@ -11,24 +11,23 @@ function makeThread(overrides: Partial<ThreadContext> = {}): ThreadContext {
     id: "root",
     status: "running",
     events: [],
+    contextWindows: [],
     ...overrides,
   };
 }
 
-describe("thread transition", () => {
-  test("inject resets failed thread to running and clears waiting metadata", () => {
+describe("thread transition (ContextWindow model)", () => {
+  test("inject resets failed thread to running and clears waiting snapshot", () => {
     const next = applyInjectTransition(
       makeThread({
         status: "failed",
-        waitingType: "await_children",
-        awaitingChildren: ["child-1"],
+        inboxSnapshotAtWait: 3,
       }),
-      "继续"
+      "继续",
     );
 
     expect(next.status).toBe("running");
-    expect(next.waitingType).toBeUndefined();
-    expect(next.awaitingChildren).toBeUndefined();
+    expect(next.inboxSnapshotAtWait).toBeUndefined();
     expect(next.events.at(-1)).toEqual({
       category: "context_change",
       kind: "inject",
@@ -41,15 +40,15 @@ describe("thread transition", () => {
     expect(canResumeThread(makeThread({ status: "running" }))).toBe(false);
   });
 
-  test("resume transition flips paused thread to running", () => {
+  test("resume transition flips paused thread to running and clears snapshot", () => {
     const next = applyResumeTransition(
       makeThread({
         status: "paused",
-        waitingType: "explicit_wait",
-      })
+        inboxSnapshotAtWait: 5,
+      }),
     );
 
     expect(next.status).toBe("running");
-    expect(next.waitingType).toBeUndefined();
+    expect(next.inboxSnapshotAtWait).toBeUndefined();
   });
 });

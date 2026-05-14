@@ -1,214 +1,104 @@
 import { describe, expect, it } from "bun:test";
 import { executeCommand } from "../commands/index";
-import type { ThreadContext } from "../../thinkable/context";
+import { WindowManager } from "../windows";
+import { creatorWindowIdOf, type DoWindow } from "../windows/types";
+import { makeThread } from "../../__tests__/make-thread";
 
-describe("do thread tree core", () => {
-  it("fork creates a running child thread, writes child inbox, updates parent outbox, and waits when requested", async () => {
-    const parent: ThreadContext = {
-      id: "t_parent",
-      status: "running",
-      events: []
-    };
-
+/**
+ * do command 的 ContextWindow 行为验证。
+ *
+ * 覆盖：
+ * - fork：建 child + 父侧 do_window + child 内 creator do_window + 父 outbox + child inbox + 事件
+ * - wait=true：父 status="waiting"
+ * - 通过 do_window.continue 追加消息
+ * - close 父侧 do_window 归档子线程
+ */
+describe("do command (ContextWindow model)", () => {
+  it("fork: 创建 child thread、父侧 do_window、child 的 creator do_window，并写消息", async () => {
+    const parent = makeThread({ id: "t_parent" });
     await executeCommand("do", {
       thread: parent,
-      args: {
-        context: "fork",
-        msg: "处理日志中的错误",
-        wait: true
-      }
+      args: { msg: "处理日志中的错误", wait: true },
     });
 
     expect(parent.childThreadIds).toHaveLength(1);
-    const childId = parent.childThreadIds?.[0] ?? "";
-    expect(childId).toBeDefined();
-    expect(parent.childThreads?.[childId]?.parentThreadId).toBe("t_parent");
-    expect(parent.childThreads?.[childId]?.creatorThreadId).toBe("t_parent");
-    expect(parent.childThreads?.[childId]?.status).toBe("running");
-    expect(parent.childThreads?.[childId]?.inbox).toEqual([
-      {
-        id: expect.any(String),
-        fromThreadId: "t_parent",
-        toThreadId: childId,
-        content: "处理日志中的错误",
-        createdAt: expect.any(Number),
-        source: "do"
-      }
+    const childId = parent.childThreadIds![0]!;
+    const child = parent.childThreads![childId]!;
+
+    // 父侧 do_window 指向 child
+    const doWindow = parent.contextWindows.find(
+      (w): w is DoWindow => w.type === "do" && !w.isCreatorWindow,
+    );
+    expect(doWindow).toBeDefined();
+    expect(doWindow!.targetThreadId).toBe(childId);
+
+    // child 自己有 creator do_window 指向父
+    const childCreatorWindow = child.contextWindows.find(
+      (w): w is DoWindow => w.type === "do" && w.isCreatorWindow === true,
+    );
+    expect(childCreatorWindow).toBeDefined();
+    expect(childCreatorWindow!.id).toBe(creatorWindowIdOf(childId));
+    expect(childCreatorWindow!.targetThreadId).toBe("t_parent");
+
+    // 消息进 child inbox + 父 outbox + 子事件
+    expect(child.inbox?.[0]?.content).toBe("处理日志中的错误");
+    expect(parent.outbox?.[0]?.content).toBe("处理日志中的错误");
+    expect(child.events).toEqual([
+      { category: "context_change", kind: "inbox_message_arrived", msgId: child.inbox![0]!.id },
     ]);
-    expect(parent.outbox).toEqual([
-      {
-        id: expect.any(String),
-        fromThreadId: "t_parent",
-        toThreadId: childId,
-        content: "处理日志中的错误",
-        createdAt: expect.any(Number),
-        source: "do"
-      }
-    ]);
+
+    // wait=true → 父 status=waiting
     expect(parent.status).toBe("waiting");
-    expect(parent.waitingType).toBe("await_children");
-    expect(parent.awaitingChildren).toEqual([childId]);
+    expect(parent.inboxSnapshotAtWait).toBe(0);
   });
 
-  it("fork creates an initial todo form in the child thread", async () => {
-    const parent: ThreadContext = {
-      id: "t_parent",
-      status: "running",
-      events: []
-    };
-
+  it("do_window.continue 通过 WindowManager.openCommandExec 调用，追加 child inbox + 父 outbox", async () => {
+    const parent = makeThread({ id: "t_parent" });
     await executeCommand("do", {
       thread: parent,
-      args: {
-        context: "fork",
-        msg: "请检查日志"
-      }
+      args: { msg: "首条消息" },
     });
+    const childId = parent.childThreadIds![0]!;
+    const doWindowId = parent.contextWindows.find(
+      (w) => w.type === "do" && !(w as DoWindow).isCreatorWindow,
+    )!.id;
 
-    const childId = parent.childThreadIds?.[0] ?? "";
-    const child = parent.childThreads?.[childId];
-
-    expect(child?.activeForms).toHaveLength(1);
-    expect(child?.activeForms?.[0]?.command).toBe("todo");
-    expect(child?.activeForms?.[0]?.description).toBe("处理初始消息");
-    expect(child?.activeForms?.[0]?.accumulatedArgs).toEqual({
-      content: "请检查日志"
+    const mgr = WindowManager.fromThread(parent);
+    const opened = await mgr.openCommandExec({
+      thread: parent,
+      parentWindowId: doWindowId,
+      command: "continue",
+      title: "追加任务",
+      args: { msg: "继续处理 WARN" },
     });
+    parent.contextWindows = mgr.toData();
+
+    // C 规则触发自动 submit（args 完整 + 不引入新 knowledge）
+    expect(opened.autoSubmitted).toBe(true);
+
+    const child = parent.childThreads![childId]!;
+    expect(child.inbox).toHaveLength(2);
+    expect(child.inbox![1]?.content).toBe("继续处理 WARN");
+    expect(parent.outbox).toHaveLength(2);
   });
 
-  it("fork 与 continue 都通过 inbox_message_arrived 记录新消息，而不是 inject", async () => {
-    const parent: ThreadContext = {
-      id: "t_parent",
-      status: "running",
-      events: []
-    };
-
+  it("close 父侧 do_window 归档子线程（B=ii archive）", async () => {
+    const parent = makeThread({ id: "t_parent" });
     await executeCommand("do", {
       thread: parent,
-      args: {
-        context: "fork",
-        msg: "处理第一批告警"
-      }
+      args: { msg: "test" },
     });
+    const childId = parent.childThreadIds![0]!;
+    const doWindowId = parent.contextWindows.find(
+      (w) => w.type === "do" && !(w as DoWindow).isCreatorWindow,
+    )!.id;
 
-    const childId = parent.childThreadIds?.[0] ?? "";
-    const child = parent.childThreads?.[childId];
-    const firstMsgId = child?.inbox?.[0]?.id;
+    const mgr = WindowManager.fromThread(parent);
+    const closed = mgr.close(doWindowId, parent);
+    parent.contextWindows = mgr.toData();
+    expect(closed).toBe(true);
 
-    expect(firstMsgId).toBeDefined();
-    expect(child?.events).toEqual([
-      {
-        category: "context_change",
-        kind: "inbox_message_arrived",
-        msgId: firstMsgId
-      }
-    ]);
-
-    await executeCommand("do", {
-      thread: parent,
-      args: {
-        context: "continue",
-        threadId: childId,
-        msg: "处理第二批告警"
-      }
-    });
-
-    const secondMsgId = child?.inbox?.[1]?.id;
-    expect(secondMsgId).toBeDefined();
-    expect(child?.events).toEqual([
-      {
-        category: "context_change",
-        kind: "inbox_message_arrived",
-        msgId: firstMsgId
-      },
-      {
-        category: "context_change",
-        kind: "inbox_message_arrived",
-        msgId: secondMsgId
-      }
-    ]);
-  });
-
-  it("continue appends inbox to an existing child thread and revives done child to running", async () => {
-    const child: ThreadContext = {
-      id: "t_child",
-      status: "done",
-      events: [],
-      parentThreadId: "t_parent",
-      creatorThreadId: "t_parent",
-      inbox: []
-    };
-    const parent: ThreadContext = {
-      id: "t_parent",
-      status: "running",
-      events: [],
-      childThreadIds: ["t_child"],
-      childThreads: {
-        t_child: child
-      }
-    };
-
-    await executeCommand("do", {
-      thread: parent,
-      args: {
-        context: "continue",
-        threadId: "t_child",
-        msg: "继续检查剩余告警"
-      }
-    });
-
-    expect(parent.childThreads?.t_child?.status).toBe("running");
-    expect(parent.childThreads?.t_child?.inbox).toEqual([
-      {
-        id: expect.any(String),
-        fromThreadId: "t_parent",
-        toThreadId: "t_child",
-        content: "继续检查剩余告警",
-        createdAt: expect.any(Number),
-        source: "do"
-      }
-    ]);
-    expect(parent.outbox).toEqual([
-      {
-        id: expect.any(String),
-        fromThreadId: "t_parent",
-        toThreadId: "t_child",
-        content: "继续检查剩余告警",
-        createdAt: expect.any(Number),
-        source: "do"
-      }
-    ]);
-  });
-
-  it("do.continue with wait=true puts parent into await_children", async () => {
-    const child: ThreadContext = {
-      id: "t_child",
-      status: "done",
-      events: [],
-      parentThreadId: "t_parent"
-    };
-    const parent: ThreadContext = {
-      id: "t_parent",
-      status: "running",
-      events: [],
-      childThreadIds: ["t_child"],
-      childThreads: { t_child: child }
-    };
-
-    await executeCommand("do", {
-      thread: parent,
-      args: {
-        context: "continue",
-        threadId: "t_child",
-        msg: "再做 task B",
-        wait: true
-      }
-    });
-
-    expect(parent.status).toBe("waiting");
-    expect(parent.waitingType).toBe("await_children");
-    expect(parent.awaitingChildren).toEqual(["t_child"]);
-    expect(child.status).toBe("running");
-    expect(child.inbox?.length).toBe(1);
+    expect(parent.contextWindows.find((w) => w.id === doWindowId)).toBeUndefined();
+    expect(parent.childThreads![childId]!.status).toBe("paused");
   });
 });
