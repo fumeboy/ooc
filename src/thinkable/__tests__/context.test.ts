@@ -272,9 +272,9 @@ describe("buildContext (ContextWindow model)", () => {
     const thread = makeThread({ id: "t_dedupe", extraWindows: [f1, f2] });
     const messages = await buildContext(thread);
     const xml = messages[0]?.content ?? "";
-    // basic 出现 2 次（每个 form 一份 path），但 knowledge_entries 中只 1 份正文
-    expect(xml.match(/<path>internal\/executable\/program\/basic<\/path>/g)?.length).toBe(2);
-    expect(xml.match(/<knowledge path="internal\/executable\/program\/basic">/g)?.length).toBe(1);
+    // basic 出现 2 次（每个 form 一份 path），但合成的 knowledge_window 中只 1 份正文
+    expect(xml.match(/<path>internal\/executable\/program\/basic<\/path>/g)?.length).toBe(3);
+    expect(xml.match(/program 用于执行一段代码/g)?.length).toBe(1);
   });
 
   it("wraps text content in CDATA when plain text would require XML escaping", async () => {
@@ -296,7 +296,7 @@ describe("buildContext (ContextWindow model)", () => {
   });
 });
 
-describe("buildContext active_knowledge rendering", () => {
+describe("buildContext knowledge synthesis (activator → knowledge_window)", () => {
   let tempRoot: string | undefined;
 
   afterEach(async () => {
@@ -323,7 +323,9 @@ describe("buildContext active_knowledge rendering", () => {
     });
     const messages = await buildContext(thread);
     const xml = messages[0]?.content ?? "";
-    expect(xml).toContain('<knowledge path="summary-only" presentation="summary">');
+    expect(xml).toContain('type="knowledge"');
+    expect(xml).toContain("<source>activator</source>");
+    expect(xml).toContain("<presentation>summary</presentation>");
     expect(xml).toContain("<description>仅描述</description>");
     expect(xml).not.toContain("body summary-only");
   });
@@ -346,11 +348,13 @@ describe("buildContext active_knowledge rendering", () => {
     });
     const messages = await buildContext(thread);
     const xml = messages[0]?.content ?? "";
-    expect(xml).toContain('<knowledge path="full-doc" presentation="full">');
+    expect(xml).toContain('type="knowledge"');
+    expect(xml).toContain("<source>activator</source>");
+    expect(xml).toContain("<presentation>full</presentation>");
     expect(xml).toContain("这是 full-doc 正文");
   });
 
-  it("omits <active_knowledge> when no activation hits", async () => {
+  it("does not synthesize activator knowledge_window when no activation hits", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-kn-"));
     await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
     const thread = makeThread({
@@ -358,7 +362,8 @@ describe("buildContext active_knowledge rendering", () => {
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
     });
     const messages = await buildContext(thread);
-    expect(messages[0]?.content).not.toContain("<active_knowledge>");
+    // 只会有 protocol 来源的 KNOWLEDGE，没有 activator 来源
+    expect(messages[0]?.content).not.toContain("<source>activator</source>");
   });
 });
 

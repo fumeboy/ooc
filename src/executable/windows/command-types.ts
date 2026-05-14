@@ -18,6 +18,24 @@ import type { WindowManager } from "./manager";
 /** 命令表条目（扁平结构，无嵌套子节点）。 */
 export type CommandKnowledgeEntries = Record<string, string>;
 
+/**
+ * Command exec 的显式返回结果。
+ *
+ * 旧 exec 直接返回 \`string | undefined\`：undefined = 成功无 result；string = 多义（成功结果 / 失败 message
+ * 都用 \`[<name>] ...\` 前缀），被 manager 用启发式识别。
+ *
+ * Step 2 + 后续重构：推荐返回结构化 outcome，让 ok 与正文解耦。两种形态都被 WindowManager.submit 接受：
+ * - undefined            → 成功
+ * - "..."（不带 [tag] 前缀）→ 成功 + result 文本
+ * - { ok: true, result }  → 成功 + result 文本
+ * - { ok: false, error }  → 失败；form 保留 status=executed 等待 LLM close
+ *
+ * 旧路径"返回 \`[<name>] ...\` string 即失败"仍兼容（manager 内部识别），但新代码应改用 outcome。
+ */
+export type CommandExecOutcome =
+  | { ok: true; result?: string }
+  | { ok: false; error: string };
+
 export interface CommandTableEntry {
   /** 该 command 可能产出的所有 path 集合（用于反向索引建表 + 文档目录） */
   paths: string[];
@@ -38,9 +56,15 @@ export interface CommandTableEntry {
   /**
    * 执行该 command 的入口；WindowManager.submit 在 form 状态切到 executing 后调用。
    *
-   * Step 2 重构后所有 command（root + window-level）都必须提供 exec；不再有按名 fallback。
+   * 返回 outcome 是首选；返回 string/undefined 兼容旧实现。详见 CommandExecOutcome 注释。
    */
-  exec: (ctx: CommandExecutionContext) => Promise<string | undefined> | string | undefined;
+  exec: (
+    ctx: CommandExecutionContext,
+  ) =>
+    | Promise<string | undefined | CommandExecOutcome>
+    | string
+    | undefined
+    | CommandExecOutcome;
 }
 
 /**

@@ -158,21 +158,6 @@ function renderMessagesNode(tag: "inbox" | "outbox", messages: ThreadMessage[] |
   );
 }
 
-function renderKnowledgeEntriesNode(knowledgeEntries: Record<string, string>): XmlNode | null {
-  const entries = Object.entries(knowledgeEntries);
-  if (entries.length === 0) return null;
-
-  return xmlElement(
-    "knowledge_entries",
-    {},
-    entries.map(([path, content]) =>
-      xmlElement("knowledge", { path }, [
-        xmlElement("content", {}, [xmlText(content)]),
-      ])
-    )
-  );
-}
-
 // ---- Window 渲染（spec § 渲染示例） ----
 
 /** command_exec form 的内容渲染：accumulated_args / command_paths / loaded_knowledge / result。 */
@@ -311,7 +296,14 @@ async function renderFileWindowChildren(window: FileWindow): Promise<XmlNode[]> 
   return children;
 }
 
-/** knowledge_window 渲染：path + 全文（按 8KB 截断）；正文从 knowledge index 拿。 */
+/**
+ * knowledge_window 渲染：path + 正文。
+ *
+ * Step 2 之后所有 knowledge 都通过 contextWindows 走，包括协议常量与 activator 命中：
+ * - source=explicit  ：window.body 通常为空 → 回退到 loader 取（兼容旧 thread.json）
+ * - source=protocol  ：window.body 必填，直接渲染
+ * - source=activator ：window.body 在 presentation=full 时含正文，summary 时仅 description
+ */
 async function renderKnowledgeWindowChildren(
   window: KnowledgeWindow,
   thread: ThreadContext,
@@ -319,6 +311,24 @@ async function renderKnowledgeWindowChildren(
   const children: XmlNode[] = [
     xmlElement("path", {}, [xmlText(window.path)]),
   ];
+  if (window.source) {
+    children.push(xmlElement("source", {}, [xmlText(window.source)]));
+  }
+  if (window.presentation) {
+    children.push(xmlElement("presentation", {}, [xmlText(window.presentation)]));
+  }
+  if (window.description) {
+    children.push(xmlElement("description", {}, [xmlText(window.description)]));
+  }
+  // body 已合成时直接用；否则（explicit 或老数据）回退 loader
+  if (typeof window.body === "string" && window.body.length > 0) {
+    children.push(xmlElement("content", {}, [xmlText(truncateKnowledgeBody(window.body))]));
+    return children;
+  }
+  if (window.presentation === "summary") {
+    // summary 来源不渲染正文
+    return children;
+  }
   if (!thread.persistence) {
     children.push(xmlElement("error", {}, [xmlText("thread 无 persistence ref")]));
     return children;
@@ -330,7 +340,7 @@ async function renderKnowledgeWindowChildren(
     if (!doc) {
       children.push(xmlElement("error", {}, [xmlText(`knowledge "${window.path}" 不存在`)]));
     } else {
-      if (doc.frontmatter.description) {
+      if (doc.frontmatter.description && !window.description) {
         children.push(xmlElement("description", {}, [xmlText(doc.frontmatter.description)]));
       }
       children.push(xmlElement("content", {}, [xmlText(truncateKnowledgeBody(doc.body))]));
@@ -493,42 +503,15 @@ function collectWindowConsumedMessageIds(thread: ThreadContext): Set<string> {
   return consumed;
 }
 
-function renderActiveKnowledgeNode(activations: ActivationResult[]): XmlNode | null {
-  if (activations.length === 0) return null;
-
-  return xmlElement(
-    "active_knowledge",
-    {},
-    activations.map((activation) => {
-      const children: XmlNode[] = [];
-      const desc = activation.doc.frontmatter.description ?? "";
-      if (desc) {
-        children.push(xmlElement("description", {}, [xmlText(desc)]));
-      }
-      if (activation.presentation === "full") {
-        children.push(xmlElement("content", {}, [xmlText(truncateKnowledgeBody(activation.doc.body))]));
-      }
-      return xmlElement("knowledge", { path: activation.path, presentation: activation.presentation }, children);
-    })
-  );
-}
-
-async function computeActiveKnowledgeNode(thread: ThreadContext): Promise<XmlNode | null> {
-  if (!thread.persistence) return null;
-  try {
-    const stoneRef = deriveStoneFromThread(thread.persistence);
-    const index = await loadKnowledgeIndex(stoneRef);
-    const activations = computeActivations(thread, index);
-    return renderActiveKnowledgeNode(activations);
-  } catch {
-    return null;
-  }
-}
+// （renderActiveKnowledgeNode / computeActiveKnowledgeNode 已统一到
+//  src/executable/index.ts: collectExecutableKnowledgeEntries 合成 KnowledgeWindow，
+//  通过 contextWindows 渲染；本文件不再维护 <active_knowledge> 顶级节点。）
 
 export async function renderContextXml(input: {
   thread: ThreadContext;
   contextWindows: ContextWindow[] | undefined;
-  knowledgeEntries: Record<string, string>;
+  /** 兼容签名保留；实际 knowledge 已通过 contextWindows 投影。 */
+  knowledgeEntries?: Record<string, string>;
 }): Promise<string> {
   // 写回 thread.contextWindows 的 enrich 后版本（不 mutate input.thread，但渲染时按 enriched 走）
   const threadForRender: ThreadContext = input.contextWindows
@@ -542,21 +525,13 @@ export async function renderContextXml(input: {
 
   const contextWindowsNode = await renderContextWindowsNode(threadForRender);
   if (contextWindowsNode) {
-    threadChildren.push(xmlComment("context windows: persistent or in-flight windows the LLM is currently interacting with"));
+    threadChildren.push(xmlComment("context windows: persistent or in-flight windows the LLM is currently interacting with (knowledge synthesized as knowledge_window with source=protocol|activator|explicit)"));
     threadChildren.push(contextWindowsNode);
   }
 
-  const knowledgeEntriesNode = renderKnowledgeEntriesNode(input.knowledgeEntries);
-  if (knowledgeEntriesNode) {
-    threadChildren.push(xmlComment("executable knowledge entries: deduplicated protocol knowledge for active windows in this turn"));
-    threadChildren.push(knowledgeEntriesNode);
-  }
-
-  const activeKnowledgeNode = await computeActiveKnowledgeNode(threadForRender);
-  if (activeKnowledgeNode) {
-    threadChildren.push(xmlComment("active knowledge: persistent or activated project knowledge available to this turn"));
-    threadChildren.push(activeKnowledgeNode);
-  }
+  // <knowledge_entries> / <active_knowledge> 旧顶级节点已统一吸收进 contextWindows
+  // （src/executable/index.ts: collectExecutableKnowledgeEntries 合成 KnowledgeWindow），
+  // 这里不再单独渲染。input.knowledgeEntries 仅作为渲染回退兼容字段保留在签名中。
 
   // 顶层 inbox/outbox 渲染：仅展示未被任何 window 视图收纳的兜底消息（避免重复）
   const consumedMsgIds = collectWindowConsumedMessageIds(threadForRender);

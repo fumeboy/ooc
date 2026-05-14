@@ -285,13 +285,26 @@ export class WindowManager {
         manager: this,
         args: form.accumulatedArgs,
       };
-      // entry.exec 在 Step 2 重构后是 CommandTableEntry 的必填字段
-      result = await entry.exec(ctx);
+      const raw = await entry.exec(ctx);
+      // 三种返回形态：CommandExecOutcome / string / undefined
+      // - outcome：显式 ok 标志，最权威
+      // - undefined：成功无 result
+      // - string：兼容旧约定——以 [<name>]/[command-error]/[error] 为前缀视为错误
+      if (raw && typeof raw === "object" && "ok" in raw) {
+        if (raw.ok) {
+          result = raw.result;
+        } else {
+          result = raw.error;
+          isError = true;
+        }
+      } else {
+        result = raw;
+        if (typeof result === "string" && isLegacyErrorResult(result)) {
+          isError = true;
+        }
+      }
     } catch (err) {
       result = `[command-error] ${(err as Error).message}`;
-      isError = true;
-    }
-    if (typeof result === "string" && isErrorResult(result)) {
       isError = true;
     }
 
@@ -396,21 +409,18 @@ export class WindowManager {
 }
 
 /**
- * 判定 command 返回的 result 字符串是否表达失败。
+ * 兼容判定：旧 command exec 用 string 返回失败信息，统一约定以 \`[<name>]\` 前缀开头。
  *
- * 与 ActiveForm 时代的 form-status knowledge 提示保持兼容：
- * 凡是 command 返回的、用作"please refine 提示"的字符串，都视为失败结果保留。
+ * 凡 trim 后以 \`[\w_.]+\]\` 开头的字符串都视为失败：
+ * - \`[command-error] ...\`            — manager catch 转抛异常时拼出的固定前缀
+ * - \`[error] ...\`                    — 旧实现有几个地方手写了
+ * - \`[<command 名>] ...\`             — root command / window-level command 失败约定
+ * - \`[<window>.<command>] ...\`        — 比如 [do_window.continue] / [talk_window.say]
+ *
+ * 新代码应改用 CommandExecOutcome（显式 ok 标志），避免依赖此启发式。
  */
-function isErrorResult(result: string): boolean {
-  const head = result.slice(0, 64);
-  return (
-    head.startsWith("[command-error]") ||
-    head.startsWith("[error]") ||
-    head.startsWith("[program") || // [program.shell] 缺少 / [program] 未知 language
-    head.includes("缺少") ||
-    head.includes("失败") ||
-    /^\[\w+]\s*未知/.test(head)
-  );
+function isLegacyErrorResult(result: string): boolean {
+  return /^\[[\w_.-]+\]/.test(result.trimStart());
 }
 
 /** 把 window 关联的所有 knowledge path 抽出来，用于引用计数。 */

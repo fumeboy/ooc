@@ -12,9 +12,10 @@ import type { ThreadContext } from "../thinkable/context";
 import { ROOT_COMMANDS } from "./windows/root/index.js";
 import type { CommandKnowledgeEntries } from "./windows/command-types.js";
 import { getWindowTypeDefinition } from "./windows/registry.js";
-import type { CommandExecWindow, ContextWindow } from "./windows/types.js";
+import type { CommandExecWindow, ContextWindow, KnowledgeWindow } from "./windows/types.js";
 import { loadServerMethods } from "./server/loader.js";
 import type { ServerMethod } from "./server/types.js";
+import { computeActivations, loadKnowledgeIndex } from "../thinkable/knowledge/index.js";
 
 /** executable 子系统的全局基础知识，每轮都进入 context。 */
 export const KNOWLEDGE = `
@@ -173,26 +174,31 @@ export async function enrichFormCommandKnowledge(
 }
 
 /**
- * 从 contextWindows 中筛出 command_exec 子集，逐个派生 knowledge 条目并合并。
+ * 把 thread.contextWindows 与一组合成的 KnowledgeWindow 一起返回。
  *
- * 返回：
- * - contextWindows：可能被 enrich 过的 windows 列表（命令 form 的 commandKnowledgePaths 会被刷新）
- * - knowledgeEntries：本轮要进 system context 的全部 knowledge 条目（含全局基础知识）
+ * 合成来源（spec 2026-05-14 + 后续统一）：
+ * - protocol：全局 KNOWLEDGE 常量；每个 command_exec form 的 knowledge() 派生条目
+ * - activator：stones/{id}/knowledge/*.md 经 commandPaths 命中（full / summary）
+ *
+ * 注意：
+ * - 不 mutate 原 thread；synthetic windows 仅出现在返回的 contextWindows 副本中，
+ *   不会落到 thread.json 持久化字段
+ * - command_exec form 的 commandKnowledgePaths 仍会回写（保留 LLM 看到 form 时的协议提示链路）
+ * - explicit knowledge_window（用户 open_knowledge）已经在 thread.contextWindows 中，原样保留；
+ *   activator 命中同一 path 时跳过（避免重复）
  */
 export async function collectExecutableKnowledgeEntries(
   contextWindows: ContextWindow[] | undefined,
   thread: ThreadContext,
 ): Promise<{ contextWindows: ContextWindow[] | undefined; knowledgeEntries: CommandKnowledgeEntries }> {
-  const knowledgeEntries: CommandKnowledgeEntries = {
+  // 1) 收集 protocol 来源 entries —— 全局 KNOWLEDGE + 每个 command_exec form 的 knowledge()
+  const protocolEntries: CommandKnowledgeEntries = {
     [EXECUTABLE_BASIC_PATH]: KNOWLEDGE,
   };
 
-  if (!contextWindows || contextWindows.length === 0) {
-    return { contextWindows, knowledgeEntries };
-  }
-
+  const list = contextWindows ?? [];
   const enriched: ContextWindow[] = [];
-  for (const window of contextWindows) {
+  for (const window of list) {
     if (window.type !== "command_exec") {
       enriched.push(window);
       continue;
@@ -202,11 +208,79 @@ export async function collectExecutableKnowledgeEntries(
 
     const entries = await computeFormKnowledgeEntries(enrichedForm, thread);
     for (const [path, content] of Object.entries(entries)) {
-      if (!(path in knowledgeEntries)) {
-        knowledgeEntries[path] = content;
+      if (!(path in protocolEntries)) {
+        protocolEntries[path] = content;
       }
     }
   }
 
-  return { contextWindows: enriched, knowledgeEntries };
+  // 2) 把 protocol entries 合成为 KnowledgeWindow（source=protocol）
+  const synthetic: KnowledgeWindow[] = [];
+  for (const [path, body] of Object.entries(protocolEntries)) {
+    synthetic.push(makeKnowledgeWindow(path, body, "protocol"));
+  }
+
+  // 3) activator 命中 → KnowledgeWindow（source=activator + presentation）
+  const explicitPaths = new Set(
+    enriched.filter((w): w is KnowledgeWindow => w.type === "knowledge" && w.source === "explicit").map((w) => w.path),
+  );
+  if (thread.persistence) {
+    try {
+      const stoneRef = deriveStoneFromThread(thread.persistence);
+      const index = await loadKnowledgeIndex(stoneRef);
+      const activations = computeActivations(thread, index);
+      for (const act of activations) {
+        // explicit 优先；activator 重复命中同一 path 时跳过
+        if (explicitPaths.has(act.path)) continue;
+        const body = act.presentation === "full" ? truncateKnowledgeBody(act.doc.body) : "";
+        synthetic.push({
+          ...makeKnowledgeWindow(act.path, body, "activator"),
+          presentation: act.presentation,
+          description: act.doc.frontmatter.description,
+        });
+      }
+    } catch {
+      // 加载失败时静默：与 render 层 computeActiveKnowledgeNode 旧行为保持一致
+    }
+  }
+
+  // 4) 返回时把 synthetic windows 附加到 enriched 的副本上
+  const finalWindows = synthetic.length > 0 ? [...enriched, ...synthetic] : enriched;
+
+  // 同时返回 protocolEntries 兼容 render 层 — 渲染层会逐步停用 knowledgeEntries 节点
+  return { contextWindows: finalWindows, knowledgeEntries: protocolEntries };
+}
+
+const KNOWLEDGE_BODY_BYTES = 8192;
+
+/** 与 render 层共用的 8KB 截断；本地实现避免反向 import render.ts。 */
+function truncateKnowledgeBody(body: string): string {
+  const bytes = new TextEncoder().encode(body);
+  if (bytes.length <= KNOWLEDGE_BODY_BYTES) return body;
+  const head = new TextDecoder().decode(bytes.slice(0, KNOWLEDGE_BODY_BYTES));
+  return `${head}...[truncated, original ${bytes.length} bytes]`;
+}
+
+let syntheticIdCounter = 0;
+function nextSyntheticId(): string {
+  syntheticIdCounter += 1;
+  return `kn_${Date.now().toString(36)}_${syntheticIdCounter.toString(36)}`;
+}
+
+function makeKnowledgeWindow(
+  path: string,
+  body: string,
+  source: NonNullable<KnowledgeWindow["source"]>,
+): KnowledgeWindow {
+  return {
+    id: nextSyntheticId(),
+    type: "knowledge",
+    parentWindowId: "root",
+    title: path,
+    status: "open",
+    createdAt: Date.now(),
+    path,
+    source,
+    body,
+  };
 }

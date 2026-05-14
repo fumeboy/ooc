@@ -75,6 +75,7 @@ export async function executeOpenKnowledgeCommand(
     status: "open",
     createdAt: Date.now(),
     path,
+    source: "explicit",
   };
 
   if (ctx.manager) {

@@ -179,16 +179,34 @@ export interface FileWindow extends BaseContextWindow {
 }
 
 /**
- * Knowledge window — 显式打开的 knowledge doc 窗口；替代旧 pinnedKnowledge。
+ * Knowledge window — 一段 knowledge 文本作为 window 出现在 context 中。
  *
- * - path：knowledge 索引中的路径（不带 .md 后缀）
- * - 注册 command：reload / close
- * - activator 在算激活集合时把已打开的 knowledge_window.path 视为强制 full
+ * 三种 source（spec 2026-05-14 + 后续统一）：
+ * - explicit  ：LLM 通过 \`open(command="open_knowledge", path)\` 显式 pin；
+ *               持久化到 thread.contextWindows；可被 LLM \`close\` 释放。
+ *               render 时从 stone knowledge loader 取正文。
+ * - protocol  ：每轮自动注入的协议常量（src/executable/index.ts KNOWLEDGE）
+ *               与每个 command_exec form 的 \`knowledge()\` 派生条目；
+ *               不持久化，每轮 buildInputItems / captureContextSnapshot 时合成；
+ *               LLM 不可 close（\`close\` hook 会拒绝并写 inject）。
+ * - activator ：stones/{id}/knowledge/*.md 经 commandPaths 命中激活的条目；
+ *               同样合成、不持久化、不可 close；额外携带 presentation=full|summary。
+ *
+ * 合成的 KnowledgeWindow 自带 \`body\`，render 层不再需要回调 loader。
+ * activator 来源走总数 20 项 + 单篇 8KB 截断。
  */
 export interface KnowledgeWindow extends BaseContextWindow {
   type: "knowledge";
   status: "open" | "closed";
   path: string;
+  /** 三类来源；缺省视为 explicit（向后兼容旧 thread.json）。 */
+  source?: "explicit" | "protocol" | "activator";
+  /** 合成 window 携带正文；explicit 来源时由 render 层从 loader 取。 */
+  body?: string;
+  /** activator 来源时区分 full（含正文）与 summary（仅 description）。 */
+  presentation?: "full" | "summary";
+  /** activator 来源时记录 doc.frontmatter.description，便于 summary 渲染。 */
+  description?: string;
 }
 
 /** 所有 ContextWindow 类型的 discriminated union。新增 type 后必须扩这里 + WINDOW_REGISTRY。 */
