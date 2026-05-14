@@ -35,3 +35,5 @@ export type {
   RenderHook,
   RenderContext,
 } from "./registry.js";
+
+export { WindowManager } from "./manager.js";
