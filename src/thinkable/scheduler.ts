@@ -1,5 +1,5 @@
 import type { LlmClient } from "./llm/types";
-import type { ThreadContext } from "./context";
+import type { ThreadContext, ThreadMessage } from "./context";
 import { think } from "./thinkloop";
 import { writeThread } from "../persistable";
 
@@ -24,49 +24,79 @@ function collectRunningThreads(root: ThreadContext): ThreadContext[] {
   return result;
 }
 
-/**
- * 唤醒等待子线程完成的父线程。
- *
- * 当前只实现 waitingType=await_children；talk_sync / explicit_wait 的 inbox 唤醒
- * 由后续协作消息写入路径定义，不在本调度器里隐式补全。
- */
-function wakeParentsWaitingForChildren(root: ThreadContext): void {
+/** 找出 thread 中已结束（done/failed）的子线程，以便给父线程写入 system 通知。 */
+function* iterateThreads(root: ThreadContext): Iterable<ThreadContext> {
+  yield root;
   for (const child of Object.values(root.childThreads ?? {})) {
-    wakeParentsWaitingForChildren(child);
+    yield* iterateThreads(child);
   }
+}
 
-  if (root.status !== "waiting" || root.waitingType !== "await_children") {
-    return;
+function generateMessageId(): string {
+  return `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function makeSystemMessage(fromId: string, toId: string, content: string): ThreadMessage {
+  return {
+    id: generateMessageId(),
+    fromThreadId: fromId,
+    toThreadId: toId,
+    content,
+    createdAt: Date.now(),
+    source: "system",
+  };
+}
+
+/**
+ * 给 waiting 父线程注入"子线程已结束"的 system 消息。
+ *
+ * spec § 等待语义的简化：
+ * 旧 await_children 隐式唤醒被替换为"子线程结束 → 父 inbox 写 system 消息 → 父唤醒"。
+ *
+ * 幂等：同一 (parentId, childId) 只写一次；用 inbox 已有消息内容前缀检测重复。
+ */
+function emitChildEndNotifications(root: ThreadContext): void {
+  for (const thread of iterateThreads(root)) {
+    const children = Object.values(thread.childThreads ?? {});
+    for (const child of children) {
+      if (child.status !== "done" && child.status !== "failed") continue;
+      const marker = `[child:${child.id}:${child.status}]`;
+      const already = (thread.inbox ?? []).some((m) => m.content.startsWith(marker));
+      if (already) continue;
+      const summary = child.endSummary ?? "(无 summary)";
+      const reason = child.endReason ?? child.status;
+      const text = `${marker} ${reason} - ${summary}`;
+      thread.inbox = [
+        ...(thread.inbox ?? []),
+        makeSystemMessage(child.id, thread.id, text),
+      ];
+      thread.events = [
+        ...thread.events,
+        {
+          category: "context_change",
+          kind: "inbox_message_arrived",
+          msgId: thread.inbox[thread.inbox.length - 1]!.id,
+        },
+      ];
+    }
   }
+}
 
-  const awaiting = root.awaitingChildren ?? [];
-  if (awaiting.length === 0) return;
-
-  const allFinished = awaiting.every((childId) => {
-    const child = root.childThreads?.[childId];
-    return child && (child.status === "done" || child.status === "failed");
-  });
-
-  if (!allFinished) return;
-
-  // 给父线程注入一段总结，告诉它每个等待中的子线程的最终状态与 summary，
-  // 否则 LLM 醒来后没有任何关于子线程结果的可见信息，会再次 wait 卡死。
-  const lines = awaiting.map((childId) => {
-    const child = root.childThreads?.[childId];
-    if (!child) return `- ${childId}: <missing>`;
-    const summary = child.endSummary ?? "(无 summary)";
-    const reason = child.endReason ?? child.status;
-    return `- ${childId}: ${reason} - ${summary}`;
-  });
-  root.events.push({
-    category: "context_change",
-    kind: "inject",
-    text: `[await_children] 等待中的子线程已完成：\n${lines.join("\n")}`
-  });
-
-  root.status = "running";
-  root.waitingType = undefined;
-  root.awaitingChildren = [];
+/**
+ * 把 waiting 状态的线程在 inbox 长度增长后翻回 running。
+ *
+ * spec § 等待语义的简化：唯一唤醒规则 = inbox 出现新消息（与入眠快照对比）。
+ */
+function wakeWaitingThreadsOnInbox(root: ThreadContext): void {
+  for (const thread of iterateThreads(root)) {
+    if (thread.status !== "waiting") continue;
+    const snapshot = thread.inboxSnapshotAtWait ?? 0;
+    const now = thread.inbox?.length ?? 0;
+    if (now > snapshot) {
+      thread.status = "running";
+      thread.inboxSnapshotAtWait = undefined;
+    }
+  }
 }
 
 /** 按 lastExecutedAt 选择最久未执行的线程，id 只用于稳定打平手。 */
@@ -82,9 +112,13 @@ function selectNextThread(threads: ThreadContext[]): ThreadContext {
 /**
  * 运行线程树调度循环。
  *
- * 每个 tick 先检查可唤醒父线程，再只执行一个 running thread 的一轮 think；
- * 若该线程携带 persistence ref，think 完成后立即落盘。
- * 本函数不负责跨 Object talk、deadlock 兜底或 paused 恢复。
+ * 每个 tick：
+ * 1. 把已结束的子线程通知写到父 inbox（system 消息）
+ * 2. 看哪些 waiting 线程因 inbox 增长可以唤醒
+ * 3. 选一个 running 线程执行一轮 think
+ * 4. 若该线程携带 persistence ref，think 完成后立即落盘
+ *
+ * 不负责跨 Object talk、deadlock 兜底或 paused 恢复。
  */
 export async function runScheduler(
   rootThread: ThreadContext,
@@ -94,7 +128,8 @@ export async function runScheduler(
   const maxTicks = options.maxTicks ?? 20;
 
   for (let tick = 0; tick < maxTicks; tick += 1) {
-    wakeParentsWaitingForChildren(rootThread);
+    emitChildEndNotifications(rootThread);
+    wakeWaitingThreadsOnInbox(rootThread);
 
     const runningThreads = collectRunningThreads(rootThread);
     if (runningThreads.length === 0) return;
