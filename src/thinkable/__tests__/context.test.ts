@@ -528,6 +528,34 @@ describe("buildContext", () => {
     expect(xml).toContain("\n    <active_forms>");
   });
 
+  it("wraps text content in CDATA when plain text would require XML escaping", async () => {
+    const messages = await buildContext({
+      id: "t_cdata",
+      status: "running",
+      events: [],
+      activeForms: [
+        {
+          formId: "f_cdata",
+          command: "talk",
+          description: "向用户回复包含特殊字符的内容",
+          createdAt: 1,
+          accumulatedArgs: {
+            msg: 'say "hello" & <tag>'
+          },
+          commandPaths: ["talk"],
+          loadedKnowledgePaths: [],
+          status: "open"
+        }
+      ]
+    });
+
+    const xml = messages[0]?.content ?? "";
+    expect(xml).toContain("<accumulated_args><![CDATA[{\"msg\":\"say \\\"hello\\\" & <tag>\"}]]></accumulated_args>");
+    expect(xml).not.toContain("&quot;hello&quot;");
+    expect(xml).not.toContain("&lt;tag&gt;");
+    expect(xml).not.toContain("&amp; <tag>");
+  });
+
   it("renders file windows with readable file content in system context", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "ooc-file-window-"));
     const filePath = join(tempRoot, "meta.md");

@@ -5,6 +5,17 @@ export type ThreadContext = {
   events?: unknown[];
 };
 
+export type ToolSummaryField = {
+  label: string;
+  value: string;
+};
+
+export type ToolMark = {
+  messageId?: string;
+  type?: string;
+  tip?: string;
+};
+
 export type ChatLine =
   | {
       id: string;
@@ -19,6 +30,12 @@ export type ChatLine =
       role: "tool";
       toolName: string;
       callId?: string;
+      title?: string;
+      headerDescription?: string;
+      summaryFields?: ToolSummaryField[];
+      marks?: ToolMark[];
+      rawArguments?: unknown;
+      rawOutput?: unknown;
       argumentsText?: string;
       outputText?: string;
       ok?: boolean;

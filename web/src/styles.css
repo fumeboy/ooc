@@ -195,17 +195,45 @@ button { cursor: pointer; }
 .tui-tool .tui-prefix, .tui-tool .tui-label { color: #d08a28; }
 .tui-notice .tui-prefix, .tui-notice .tui-label { color: #56746a; }
 .tui-tool-card, .tui-notice-card {border-radius: var(--radius); border: 1px solid rgba(224, 227, 220, .92); background: rgba(255,255,255,.72); overflow: hidden; }
-.tui-tool-shell-head, .tui-notice-card-head { border-bottom: 1px solid rgba(224, 227, 220, .92); background: rgba(250, 250, 248, .85); }
+.tui-tool-card { background: rgba(252, 252, 250, .78); }
+.tui-tool-shell-head, .tui-notice-card-head { background: rgba(250, 250, 248, .62); }
+.tui-tool-card-head { display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
+.tui-tool-head-row { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.tui-tool-head-row-main { width: 100%; }
+.tui-tool-head-row-sub { }
+.tui-tool-title-wrap { min-width: 0; display: grid; gap: 3px; }
 .tui-tool-title-row { min-width: 0; display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap; overflow: hidden; }
-.tui-tool-name { font-size: 11px; color: #4c4230; line-height: 1.2; }
+.tui-tool-title-main { min-width: 0; flex: 1; font-size: 12px; line-height: 1.35; color: #3c362f; font-weight: 650; overflow-wrap: anywhere; }
+.tui-tool-title-sub { min-width: 0; font-size: 12px; line-height: 1.45; color: #8c9189; overflow-wrap: anywhere; }
 .tui-tool-callid { min-width: 0; max-width: 100%; font-size: 9px; color: var(--muted-foreground); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.tui-tool-head-actions { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
 .tui-tool-status { flex: 0 0 auto; border-radius: 999px; padding: 1px 7px; font-size: 9px; border: 1px solid rgba(208, 138, 40, .22); color: #9c6921; background: rgba(255, 244, 223, .95); line-height: 1.35; }
 .tui-tool-status.is-success { border-color: rgba(59, 184, 132, .24); color: #237954; background: rgba(225, 247, 237, .95); }
 .tui-tool-status.is-fail { border-color: rgba(198, 106, 10, .24); color: #9a4d10; background: rgba(255, 240, 228, .95); }
 .tui-tool-status.is-pending { border-color: rgba(120, 128, 120, .2); color: #6f766d; background: rgba(243, 244, 241, .95); }
+.tui-tool-body { display: grid; gap: 8px; padding: 8px 10px 9px; }
+.tui-tool-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 7px 10px; border-top: 1px solid rgba(224, 227, 220, .64); background: rgba(250, 250, 248, .42); }
 .tui-tool-section { display: grid; gap: 6px; padding: 10px 12px; }
 .tui-tool-section-label { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted-foreground); }
 .tui-tool-pre { font-size: 11px; line-height: 1.55; }
+.tui-tool-field-list { display: grid; gap: 0; }
+.tui-tool-field { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; align-items: start; padding: 6px 0; border-top: 1px solid rgba(224, 227, 220, .56); }
+.tui-tool-field:first-child { border-top: 0; }
+.tui-tool-field-label { font-size: 9px; line-height: 1.45; color: #9aa096; text-transform: uppercase; letter-spacing: .06em; }
+.tui-tool-field-value { font-size: 11px; line-height: 1.45; color: #4a443c; }
+.tui-tool-collapse-toggle { width: fit-content; border: 1px solid rgba(214, 219, 208, .88); background: rgba(255,255,255,.54); color: #7f867b; border-radius: 999px; padding: 3px 8px; display: inline-flex; align-items: center; gap: 5px; font-size: 10px; line-height: 1.25; }
+.tui-tool-collapse-toggle:hover { color: var(--foreground); }
+.tui-tool-collapse-toggle.is-open .tui-tool-collapse-icon { transform: rotate(180deg); }
+.tui-tool-card-toggle { width: 20px; height: 20px; border: 1px solid rgba(214, 219, 208, .88); background: rgba(255,255,255,.54); color: #7f867b; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.tui-tool-card-toggle:hover { color: var(--foreground); }
+.tui-tool-card-toggle.is-open .tui-tool-collapse-icon { transform: rotate(180deg); }
+.tui-tool-collapse-icon { transition: transform .16s ease; }
+.tui-tool-expanded-panels { display: grid; gap: 8px; }
+.tui-tool-expanded-panels:empty { display: none; }
+.tui-tool-collapse-body { display: grid; gap: 6px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.64); border: 1px solid rgba(224, 227, 220, .74); }
+.tui-tool-marks { display: grid; gap: 8px; }
+.tui-tool-mark { display: grid; gap: 4px; font-size: 11px; line-height: 1.5; color: #4a4f47; }
+.tui-tool-mark-label { display: inline-block; min-width: 58px; margin-right: 6px; color: var(--muted-foreground); text-transform: uppercase; font-size: 9px; letter-spacing: .05em; }
 .tui-notice-card { display: grid; gap: 0; background: rgba(240, 246, 244, .78); }
 .tui-notice-card.is-warning { background: rgba(255, 248, 232, .88); border-color: rgba(236, 207, 132, .6); }
 .tui-notice-card.is-error { background: rgba(255, 244, 242, .92); border-color: rgba(243, 182, 174, .72); }

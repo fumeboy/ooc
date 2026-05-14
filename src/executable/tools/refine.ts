@@ -7,19 +7,19 @@ import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 /** refine tool — 向 open 的 form 追加/修改 args */
 export const REFINE_TOOL: LlmTool = {
   name: "refine",
-  description: "向已 open 的 form 追加或修改参数。业务参数必须放在 args 对象里；多次调用 refine 会累积 args（后到覆盖先到）。等到参数齐全且语义合理，再调 submit(form_id) 执行。",
+  description: "向已 open 的 form 追加或修改参数。业务参数必须放在 form_args 对象里；多次调用 refine 会累积 form_args。等到参数齐全且语义合理，再调 submit(form_id) 执行。",
   inputSchema: {
     type: "object",
     properties: {
       title: TITLE_PARAM,
       form_id: { type: "string", description: "open 返回的 form_id" },
-      args: {
+      form_args: {
         type: "object",
-        description: "要追加或覆盖的参数键值对。后到覆盖先到。",
+        description: "要追加或覆盖的参数键值对",
       },
       mark: MARK_PARAM,
     },
-    required: ["title", "form_id"],
+    required: ["title", "form_id", "form_args"],
   },
 };
 
@@ -31,7 +31,7 @@ export async function handleRefineTool(
   const successOutput = (message: string) => JSON.stringify({ ok: true, tool: "refine", message });
   const errorOutput = (error: string) => JSON.stringify({ ok: false, tool: "refine", error });
   const formId = args.form_id as string;
-  const incoming = (args.args as Record<string, unknown> | undefined) ?? {};
+  const incoming = (args.form_args as Record<string, unknown> | undefined) ?? {};
   const formManager = FormManager.fromData(thread.activeForms ?? []);
   const existing = formManager.getForm(formId);
 

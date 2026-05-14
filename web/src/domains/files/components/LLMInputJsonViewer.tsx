@@ -64,6 +64,13 @@ type ViewerTreeNode = {
     | { kind: "xml_node"; xmlNode: XmlNodeRecord; parentItem: ParsedInputItem; index: number };
 };
 
+const XML_NODE_TYPES = {
+  element: 1,
+  text: 3,
+  cdata: 4,
+  comment: 8,
+} as const;
+
 function estimateTokens(chars: number): number {
   return Math.ceil(chars / 3);
 }
@@ -79,8 +86,16 @@ function previewText(value: string, limit = 88): string {
   return `${singleLine.slice(0, limit)}…`;
 }
 
+function collectXmlTextContent(nodes: ArrayLike<{ nodeType: number; nodeValue: string | null }>): string {
+  return Array.from(nodes)
+    .filter((node) => node.nodeType === XML_NODE_TYPES.text || node.nodeType === XML_NODE_TYPES.cdata)
+    .map((node) => node.nodeValue ?? "")
+    .join("\n")
+    .trim();
+}
+
 function isLlmInputJsonPath(path: string): boolean {
-  return /(^|\/)llm\.input\.json$/.test(path);
+  return /(^|\/)(llm|loop_\d+)\.input\.json$/.test(path);
 }
 
 function tryParseXmlRoots(raw: string): XmlNodeRecord[] | null {
@@ -107,10 +122,10 @@ function tryParseXmlRoots(raw: string): XmlNodeRecord[] | null {
 }
 
 function domNodeToXmlChild(node: ChildNode, idSeed: { next: number }, depth: number): XmlNodeRecord | null {
-  if (node.nodeType === Node.ELEMENT_NODE) {
+  if (node.nodeType === XML_NODE_TYPES.element) {
     return domNodeToXmlNode(node as Element, idSeed, depth);
   }
-  if (node.nodeType === Node.COMMENT_NODE) {
+  if (node.nodeType === XML_NODE_TYPES.comment) {
     const text = (node.nodeValue ?? "").trim();
     if (!text) return null;
     return {
@@ -135,11 +150,7 @@ function domNodeToXmlNode(element: Element, idSeed: { next: number }, depth: num
     .map((node) => domNodeToXmlChild(node, idSeed, depth + 1))
     .filter((node): node is XmlNodeRecord => node !== null);
 
-  const textNodes = Array.from(element.childNodes)
-    .filter((node) => node.nodeType === Node.TEXT_NODE)
-    .map((node) => node.nodeValue ?? "")
-    .join("\n")
-    .trim();
+  const textNodes = collectXmlTextContent(element.childNodes);
 
   const charCount = textNodes.length + children.reduce((sum, child) => sum + child.charCount, 0);
 
@@ -591,4 +602,4 @@ export function LLMInputJsonViewer({ file }: { file: FileContent }) {
   );
 }
 
-export { isLlmInputJsonPath };
+export { collectXmlTextContent, isLlmInputJsonPath, tryParseXmlRoots };

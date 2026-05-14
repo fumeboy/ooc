@@ -38,6 +38,18 @@ export function escapeXml(text: string): string {
     .replaceAll("'", "&apos;");
 }
 
+function shouldUseCdata(text: string): boolean {
+  return escapeXml(text) !== text;
+}
+
+function wrapCdata(text: string): string {
+  return `<![CDATA[${text.replaceAll("]]>", "]]]]><![CDATA[>")}]]>`;
+}
+
+function renderXmlTextValue(text: string): string {
+  return shouldUseCdata(text) ? wrapCdata(text) : escapeXml(text);
+}
+
 function escapeXmlComment(text: string): string {
   return text.replaceAll("--", "- -");
 }
@@ -80,7 +92,7 @@ function serializeXml(node: XmlNode, depth = 0): string {
   }
 
   if (node.kind === "text") {
-    return `${indent}${escapeXml(node.value)}`;
+    return `${indent}${renderXmlTextValue(node.value)}`;
   }
 
   const attrs = Object.entries(node.attrs ?? {})
@@ -93,7 +105,7 @@ function serializeXml(node: XmlNode, depth = 0): string {
   }
 
   if (children.length === 1 && children[0]?.kind === "text") {
-    return `${indent}<${node.tag}${attrs}>${escapeXml(children[0].value)}</${node.tag}>`;
+    return `${indent}<${node.tag}${attrs}>${renderXmlTextValue(children[0].value)}</${node.tag}>`;
   }
 
   const renderedChildren = children

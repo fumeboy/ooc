@@ -1,4 +1,4 @@
-import { Copy, Info, Loader2, Wrench, type LucideIcon } from "lucide-react";
+import { ChevronDown, CircleX, Clock3, Copy, FolderPlus, Info, Loader2, SendHorizontal, SlidersHorizontal, Wrench, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import type { ChatLine } from "../model";
 import { MarkdownContent } from "../../../shared/ui/MarkdownContent";
@@ -9,6 +9,18 @@ const ROLE_CONFIG: Record<ChatLine["role"], { prefix?: string; icon?: LucideIcon
   tool: { icon: Wrench, label: "tool", className: "tui-tool" },
   notice: { icon: Info, label: "notice", className: "tui-notice" },
 };
+
+const TOOL_ICON_CONFIG: Record<string, LucideIcon> = {
+  open: FolderPlus,
+  refine: SlidersHorizontal,
+  submit: SendHorizontal,
+  close: CircleX,
+  wait: Clock3,
+};
+
+function getToolIcon(toolName: string): LucideIcon {
+  return TOOL_ICON_CONFIG[toolName] ?? Wrench;
+}
 
 function buildCopyText(line: ChatLine) {
   if (line.kind === "message") return line.content;
@@ -45,22 +57,191 @@ function CopyBtn({ text }: { text: string }) {
   );
 }
 
+function ToolFieldList({ line }: { line: Extract<ChatLine, { kind: "tool" }> }) {
+  if (!line.summaryFields?.length) return null;
+  return (
+    <div className="tui-tool-field-list">
+      {line.summaryFields.map((field, index) => (
+        <div className="tui-tool-field" key={`${field.label}-${index}`}>
+          <div className="tui-tool-field-label">{field.label}</div>
+          <pre className="tui-pre tui-tool-field-value">{field.value}</pre>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type ToolPanelKey = "marks" | "arguments" | "output";
+
+function ToolFooterButton({ label, open, onClick }: { label: ToolPanelKey; open: boolean; onClick: () => void }) {
+  return (
+    <button type="button" className={`tui-tool-collapse-toggle${open ? " is-open" : ""}`} onClick={onClick}>
+      <ChevronDown size={12} className="tui-tool-collapse-icon" />
+      <span>{open ? `${label}` : `${label}`}</span>
+    </button>
+  );
+}
+
+function ToolMarksPanel({ line }: { line: Extract<ChatLine, { kind: "tool" }> }) {
+  if (!line.marks?.length) return null;
+  return (
+    <div className="tui-tool-collapse-body">
+      <div className="tui-tool-marks">
+        {line.marks.map((mark, index) => (
+          <div className="tui-tool-mark" key={`${mark.messageId ?? "mark"}-${index}`}>
+            {mark.messageId && <div><span className="tui-tool-mark-label">message</span>{mark.messageId}</div>}
+            {mark.type && <div><span className="tui-tool-mark-label">type</span>{mark.type}</div>}
+            {mark.tip && <div><span className="tui-tool-mark-label">tip</span>{mark.tip}</div>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ToolExpandedPanels({ line, openPanels }: { line: Extract<ChatLine, { kind: "tool" }>; openPanels: Record<ToolPanelKey, boolean> }) {
+  return (
+    <div className="tui-tool-expanded-panels">
+      {openPanels.marks && <ToolMarksPanel line={line} />}
+      {openPanels.arguments && line.argumentsText && (
+        <div className="tui-tool-collapse-body">
+          <pre className="tui-pre tui-tool-pre">{line.argumentsText}</pre>
+        </div>
+      )}
+      {openPanels.output && line.outputText && (
+        <div className="tui-tool-collapse-body">
+          <pre className="tui-pre tui-tool-pre">{line.outputText}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ToolCardShell({ line, children }: {
+  line: Extract<ChatLine, { kind: "tool" }>;
+  children?: React.ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [openPanels, setOpenPanels] = useState<Record<ToolPanelKey, boolean>>({ marks: false, arguments: false, output: false });
+  const togglePanel = (panel: ToolPanelKey) => setOpenPanels((current) => ({ ...current, [panel]: !current[panel] }));
+  const hasFooter = Boolean(line.marks?.length || line.argumentsText || line.outputText);
+  const hasBody = Boolean(children || openPanels.marks || openPanels.arguments || openPanels.output);
+  const ToolIcon = getToolIcon(line.toolName);
+
+  return (
+    <div className={`tui-tool-card tui-tool-card-${line.toolName}`}>
+      <div className="tui-tool-shell-head">
+        <div className="tui-card-head tui-card-head-embedded tui-tool-card-head">
+          <div className="tui-tool-head-row tui-tool-head-row-main">
+            <span className="tui-prefix tui-prefix-icon">
+              <ToolIcon size={12} strokeWidth={2} aria-hidden="true" />
+            </span>
+            <span className="tui-label">{line.toolName}</span>
+            {line.title && <div className="tui-tool-title-main">{line.title}</div>}
+            <div className="tui-tool-head-actions">
+              <span className={`tui-tool-status${line.pending ? " is-pending" : line.ok ? " is-success" : " is-fail"}`}>
+                {line.pending ? "pending" : line.ok ? "ok" : "failed"}
+              </span>
+              <button
+                type="button"
+                className={`tui-tool-card-toggle${expanded ? " is-open" : ""}`}
+                onClick={() => setExpanded((value) => !value)}
+                title={expanded ? "收起 tool card" : "展开 tool card"}
+                aria-label={expanded ? "收起 tool card" : "展开 tool card"}
+              >
+                <ChevronDown size={12} className="tui-tool-collapse-icon" />
+              </button>
+            </div>
+          </div>
+          {line.headerDescription && (
+            <div className="tui-tool-head-row tui-tool-head-row-sub">
+              <div className="tui-tool-title-sub">{line.headerDescription}</div>
+            </div>
+          )}
+        </div>
+      </div>
+      {expanded && hasBody && (
+        <div className="tui-tool-body">
+          {children}
+          <ToolExpandedPanels line={line} openPanels={openPanels} />
+        </div>
+      )}
+      {expanded && hasFooter && (
+        <div className="tui-tool-footer">
+          {line.marks?.length && <ToolFooterButton label="marks" open={openPanels.marks} onClick={() => togglePanel("marks")} />}
+          {line.argumentsText && <ToolFooterButton label="arguments" open={openPanels.arguments} onClick={() => togglePanel("arguments")} />}
+          {line.outputText && <ToolFooterButton label="output" open={openPanels.output} onClick={() => togglePanel("output")} />}
+          <CopyBtn text={buildCopyText(line)} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OpenToolCard({ line }: ToolCardShellProps) {
+  return <ToolCardShell line={line}><ToolFieldList line={line} /></ToolCardShell>;
+}
+
+function RefineToolCard({ line }: ToolCardShellProps) {
+  return <ToolCardShell line={line}><ToolFieldList line={line} /></ToolCardShell>;
+}
+
+function SubmitToolCard({ line }: ToolCardShellProps) {
+  return <ToolCardShell line={line}><ToolFieldList line={line} /></ToolCardShell>;
+}
+
+function CloseToolCard({ line }: ToolCardShellProps) {
+  return <ToolCardShell line={line}><ToolFieldList line={line} /></ToolCardShell>;
+}
+
+function WaitToolCard({ line }: ToolCardShellProps) {
+  return <ToolCardShell line={line}><ToolFieldList line={line} /></ToolCardShell>;
+}
+
+function GenericToolCard({ line }: ToolCardShellProps) {
+  return <ToolCardShell line={line}><ToolFieldList line={line} /></ToolCardShell>;
+}
+
+type ToolCardShellProps = {
+  line: Extract<ChatLine, { kind: "tool" }>;
+};
+
+function ToolCardRouter({ line }: ToolCardShellProps) {
+  switch (line.toolName) {
+    case "open":
+      return <OpenToolCard line={line} />;
+    case "refine":
+      return <RefineToolCard line={line} />;
+    case "submit":
+      return <SubmitToolCard line={line} />;
+    case "close":
+      return <CloseToolCard line={line} />;
+    case "wait":
+      return <WaitToolCard line={line} />;
+    default:
+      return <GenericToolCard line={line} />;
+  }
+}
+
 export function TuiBlock({ line, loading = false }: { line: ChatLine; loading?: boolean }) {
   const config = ROLE_CONFIG[line.role];
   const PrefixIcon = config.icon;
 
-  const renderHeader = (className = "tui-block-head", detail?: React.ReactNode, aside?: React.ReactNode) => (
+  const renderHeader = (className = "tui-block-head", detail?: React.ReactNode, aside?: React.ReactNode, labelOverride?: string, showCopy = true, iconOverride?: LucideIcon) => {
+    const HeaderIcon = iconOverride ?? PrefixIcon;
+    return (
     <div className={className}>
-      <span className={`tui-prefix${PrefixIcon ? " tui-prefix-icon" : ""}`}>
-        {PrefixIcon ? <PrefixIcon size={12} strokeWidth={2} aria-hidden="true" /> : config.prefix}
+      <span className={`tui-prefix${HeaderIcon ? " tui-prefix-icon" : ""}`}>
+        {HeaderIcon ? <HeaderIcon size={12} strokeWidth={2} aria-hidden="true" /> : config.prefix}
       </span>
-      <span className="tui-label">{config.label}</span>
+      <span className="tui-label">{labelOverride ?? config.label}</span>
       {detail && <div className="tui-header-detail">{detail}</div>}
       {loading && <Loader2 size={12} className="tui-spinner" />}
       {aside}
-      <CopyBtn text={buildCopyText(line)} />
+      {showCopy && <CopyBtn text={buildCopyText(line)} />}
     </div>
-  );
+    );
+  };
 
   const renderBody = () => {
     if (line.kind === "message") {
@@ -87,34 +268,7 @@ export function TuiBlock({ line, loading = false }: { line: ChatLine; loading?: 
       );
     }
 
-    return (
-      <div className="tui-tool-card">
-        <div className="tui-tool-shell-head">
-          {renderHeader(
-            "tui-card-head tui-card-head-embedded",
-            <div className="tui-tool-title-row">
-              <strong className="tui-tool-name">{line.toolName}</strong>
-              {line.callId && <span className="tui-tool-callid">{line.callId}</span>}
-            </div>,
-            <span className={`tui-tool-status${line.pending ? " is-pending" : line.ok ? " is-success" : " is-fail"}`}>
-              {line.pending ? "pending" : line.ok ? "ok" : "failed"}
-            </span>,
-          )}
-        </div>
-        {line.argumentsText && (
-          <div className="tui-tool-section">
-            <div className="tui-tool-section-label">arguments</div>
-            <pre className="tui-pre tui-tool-pre">{line.argumentsText}</pre>
-          </div>
-        )}
-        {line.outputText && (
-          <div className="tui-tool-section">
-            <div className="tui-tool-section-label">output</div>
-            <pre className="tui-pre tui-tool-pre">{line.outputText}</pre>
-          </div>
-        )}
-      </div>
-    );
+    return <ToolCardRouter line={line} />;
   };
 
   return (
