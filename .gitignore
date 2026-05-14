@@ -10,3 +10,7 @@ goal.md
 .trae-cn
 log
 skills-lock.json
+*.jpg
+*.jpeg
+web/dist/
+web/tsconfig.tsbuildinfo
