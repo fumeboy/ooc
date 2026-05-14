@@ -25,11 +25,13 @@ export {
   loopMetaFile,
   normalizeInputItems,
   deriveOutputItems,
+  captureContextSnapshot,
   writeDebugInput,
   writeDebugOutput,
   writeLoopDebugInput,
   writeLoopDebugOutput,
   writeLoopDebugMeta,
+  type ContextSnapshot,
   type LlmInputDebugRecord,
   type LlmOutputDebugRecord,
   type LlmLoopDebugMetaRecord

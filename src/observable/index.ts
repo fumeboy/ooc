@@ -1,6 +1,7 @@
 import type { ThreadContext } from "../thinkable/context";
 import type { LlmGenerateResult, LlmInputItem, LlmMessage, LlmTool } from "../thinkable/llm/types";
 import {
+  captureContextSnapshot,
   deriveOutputItems,
   normalizeInputItems,
   writeDebugInput,
@@ -146,7 +147,8 @@ export async function writeLatestLlmInput(
   if (thread.persistence) {
     await writeDebugInput(thread.persistence, {
       threadId: thread.id,
-      inputItems
+      inputItems,
+      contextSnapshot: captureContextSnapshot(thread),
     });
   }
 }
@@ -189,7 +191,8 @@ export async function beginLlmLoop(
   if (debugEnabled && thread.persistence) {
     await writeLoopDebugInput(thread.persistence, loopIndex, {
       threadId: thread.id,
-      inputItems
+      inputItems,
+      contextSnapshot: captureContextSnapshot(thread),
     });
   }
   return {

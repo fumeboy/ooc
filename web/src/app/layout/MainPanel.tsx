@@ -1,9 +1,10 @@
 import type { FileContent } from "../../domains/files";
 import { FileViewer } from "../../domains/files/components/FileViewer";
 import type { Stone } from "../../domains/stones";
+import type { ThreadContext } from "../../domains/chat";
 import { Welcome } from "./Welcome";
 
-export function MainPanel({ isWelcome = false, stones = [], onCreateSession, file, path, error, loading, editableFile, savingFile, onFileChange, onFileSave }: { isWelcome?: boolean; stones?: Stone[]; onCreateSession?: (input: { sessionId: string; objectId: string; initialMessage?: string }) => Promise<void>; file?: FileContent; path?: string; error?: string; loading: boolean; editableFile?: boolean; savingFile?: boolean; onFileChange?: (content: string) => void; onFileSave?: () => void }) {
+export function MainPanel({ isWelcome = false, stones = [], onCreateSession, file, path, error, loading, editableFile, savingFile, onFileChange, onFileSave, thread }: { isWelcome?: boolean; stones?: Stone[]; onCreateSession?: (input: { sessionId: string; objectId: string; initialMessage?: string }) => Promise<void>; file?: FileContent; path?: string; error?: string; loading: boolean; editableFile?: boolean; savingFile?: boolean; onFileChange?: (content: string) => void; onFileSave?: () => void; thread?: ThreadContext }) {
   const showBlockingError = Boolean(error && file);
   return (
     <main className="main-panel gap-1">
@@ -23,7 +24,7 @@ export function MainPanel({ isWelcome = false, stones = [], onCreateSession, fil
           {isWelcome ? (
             <Welcome stones={stones} onCreateSession={onCreateSession} />
           ) : (
-            <FileViewer file={file} editable={editableFile} saving={savingFile} onChange={onFileChange} onSave={onFileSave} />
+            <FileViewer file={file} editable={editableFile} saving={savingFile} onChange={onFileChange} onSave={onFileSave} thread={thread} />
           )}
         </div>
       </div>

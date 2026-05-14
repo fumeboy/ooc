@@ -6,6 +6,9 @@ import { markdown } from "@codemirror/lang-markdown";
 import { json } from "@codemirror/lang-json";
 import { javascript } from "@codemirror/lang-javascript";
 import { LLMInputJsonViewer, isLlmInputJsonPath } from "./LLMInputJsonViewer";
+import { ContextSnapshotViewer } from "./ContextSnapshotViewer";
+import type { ThreadContext } from "../../chat";
+import type { ContextSnapshot } from "../context-snapshot";
 
 function extensionsFor(path: string) {
   if (path.endsWith(".md") || path.endsWith(".markdown")) return [markdown()];
@@ -14,8 +17,45 @@ function extensionsFor(path: string) {
   return [];
 }
 
-export function FileViewer({ file, editable = false, saving = false, onChange, onSave }: { file?: FileContent; editable?: boolean; saving?: boolean; onChange?: (content: string) => void; onSave?: () => void }) {
-  if (!file) return <EmptyState title="Select a file" detail="Choose a file from the tree to preview its text content." />;
+/** 把前端 chat ThreadContext 适配为 ContextSnapshotViewer 期望的 ContextSnapshot。 */
+function threadToSnapshot(thread: ThreadContext): ContextSnapshot {
+  return {
+    id: thread.id,
+    status: thread.status,
+    contextWindows: (thread.contextWindows ?? []) as ContextSnapshot["contextWindows"],
+    inbox: thread.inbox,
+    outbox: thread.outbox,
+    events: thread.events,
+  };
+}
+
+/**
+ * FileViewer：文件优先；无文件且有 thread 时展示 thread 的 context；都没有则空状态。
+ *
+ * thread 来自 chat 域（与右侧 ChatPanel 同源），仅用于"已选 session 但未选文件"时
+ * 把中间区域用作 thread context 的可视化展示，方便快速看 contextWindows / inbox / outbox。
+ */
+export function FileViewer({
+  file,
+  editable = false,
+  saving = false,
+  onChange,
+  onSave,
+  thread,
+}: {
+  file?: FileContent;
+  editable?: boolean;
+  saving?: boolean;
+  onChange?: (content: string) => void;
+  onSave?: () => void;
+  thread?: ThreadContext;
+}) {
+  if (!file) {
+    if (thread) {
+      return <ContextSnapshotViewer snapshot={threadToSnapshot(thread)} />;
+    }
+    return <EmptyState title="Select a file" detail="Choose a file from the tree to preview its text content." />;
+  }
   if (!editable && isLlmInputJsonPath(file.path)) {
     return <LLMInputJsonViewer file={file} />;
   }

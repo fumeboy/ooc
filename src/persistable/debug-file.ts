@@ -2,6 +2,26 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { threadDir, toJson, type ThreadPersistenceRef } from "./common";
 import type { LlmGenerateResult, LlmInputItem, LlmMessage } from "../thinkable/llm/types";
+import type { ProcessEvent, ThreadContext, ThreadMessage } from "../thinkable/context";
+import type { ContextWindow } from "../executable/windows/types";
+
+/**
+ * 调用 LLM 前同时落盘的 thread context 快照。
+ *
+ * 与 inputItems 中的 system message XML 一一对应，但用结构化 JSON 表示，
+ * 方便 UI 直接消费（无需重新 parse XML）。spec § 渲染示例。
+ */
+export interface ContextSnapshot {
+  id: string;
+  status?: string;
+  plan?: string;
+  contextWindows: ContextWindow[];
+  inbox?: ThreadMessage[];
+  outbox?: ThreadMessage[];
+  events?: ProcessEvent[];
+  creatorThreadId?: string;
+  parentThreadId?: string;
+}
 
 /** 调用 LLM 前写入的输入快照。 */
 export interface LlmInputDebugRecord {
@@ -9,6 +29,27 @@ export interface LlmInputDebugRecord {
   threadId: string;
   /** 传给 provider 的完整 input items。 */
   inputItems: LlmInputItem[];
+  /**
+   * 与 inputItems 中 system message XML 同源的结构化 thread 状态快照；
+   * 前端 UI 可不解析 XML，直接渲染该字段。
+   * 旧 llm.input.json 文件没有该字段，UI 应做兼容判断。
+   */
+  contextSnapshot?: ContextSnapshot;
+}
+
+/** 从 thread 中抽取调用 LLM 时刻的快照子集。 */
+export function captureContextSnapshot(thread: ThreadContext): ContextSnapshot {
+  return {
+    id: thread.id,
+    status: thread.status,
+    plan: thread.plan,
+    contextWindows: thread.contextWindows ?? [],
+    inbox: thread.inbox,
+    outbox: thread.outbox,
+    events: thread.events,
+    creatorThreadId: thread.creatorThreadId,
+    parentThreadId: thread.parentThreadId,
+  };
 }
 
 /** LLM 返回后写入的输出快照。 */
