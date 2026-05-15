@@ -1,60 +1,25 @@
 import type { ThreadContext } from "../../domains/chat";
 import { ChatPanel } from "../../domains/chat/components/ChatPanel";
-import type { SessionThread } from "../state";
 
 /**
  * RightPanel — chat 主面板。
  *
- * collaborable § cross-object talk（spec 2026-05-15）：
- * 顶部加 thread switcher（select），列出当前 session 下所有 (objectId, threadId)；
- * 切换后由 onSelectThread 通知外层重新 loadThread。
+ * Header（objectId / status / thread switcher）现在内联在 MainPanel 的 breadcrumb-bar 同一行，
+ * 这里只保留 chat 体本身。shell 决定是否渲染 RightPanel：当 thread 没有可与 user 对话的语义
+ * （如 user.root，user 不能和自己对话）时直接传 right=null，AppLayout 会切到两列布局。
  */
 export function RightPanel(props: {
   sessionId?: string;
   objectId?: string;
   threadId?: string;
   thread?: ThreadContext;
-  sessionThreads?: SessionThread[];
   paused?: boolean;
   pauseBusy?: boolean;
   onSend: (text: string) => Promise<void>;
   onTogglePause?: () => Promise<void>;
-  onSelectThread?: (sel: SessionThread) => void;
 }) {
-  const status = props.thread?.status;
-  const threads = props.sessionThreads ?? [];
-  const activeKey = props.objectId && props.threadId ? `${props.objectId}/${props.threadId}` : "";
-
   return (
     <aside className="panel right-panel">
-      <div className="assistant-head">
-        <div className="avatar">S</div>
-        <div className="assistant-head-meta">
-          <div className="header-title">{props.objectId ?? "supervisor"}</div>
-          <div className="muted small">{props.sessionId ?? "root thread"}</div>
-        </div>
-        {status && <span className={`status-pill status-pill-thread status-${status}`}>{status}</span>}
-        {threads.length > 1 && props.onSelectThread && (
-          <select
-            className="thread-switcher"
-            value={activeKey}
-            onChange={(event) => {
-              const [objectId, threadId] = event.target.value.split("/");
-              if (objectId && threadId) props.onSelectThread!({ objectId, threadId });
-            }}
-            title="切换 thread"
-          >
-            {threads.map((t) => {
-              const key = `${t.objectId}/${t.threadId}`;
-              return (
-                <option key={key} value={key}>
-                  {t.objectId} · {t.threadId}
-                </option>
-              );
-            })}
-          </select>
-        )}
-      </div>
       <ChatPanel
         sessionId={props.sessionId}
         objectId={props.objectId}
@@ -63,7 +28,28 @@ export function RightPanel(props: {
         pauseBusy={props.pauseBusy}
         onSend={props.onSend}
         onTogglePause={props.onTogglePause}
+        showComposer={isUserOwnedOrCreated(props.objectId, props.thread)}
       />
     </aside>
   );
+}
+
+/**
+ * 是否在 RightPanel 底部展示 message composer。
+ *
+ * 用户可以驱动消息发送的两类 thread：
+ * - thread 的 owner 是 user 自己（典型：user.root，输入即触发 user.root.talk_window.say）
+ * - thread 的 creator 是 user（典型：assistant 等被 user 通过 talk 派生的 callee thread；
+ *   composer 走 user.root.talk_window 路由回到 callee）
+ *
+ * 其他 thread（如 supervisor 内部 fork 的 child）不展示 composer——LLM 自己驱动，
+ * user 没有发起消息的语义入口。
+ */
+function isUserOwnedOrCreated(objectId: string | undefined, thread: ThreadContext | undefined): boolean {
+  if (objectId === "user") return true;
+  if (thread?.creatorObjectId === "user") return true;
+  // 兼容旧 thread.json：缺 creatorObjectId 时看 creator window 是不是指向 user 的 talk_window
+  const creator = thread?.contextWindows?.find((w) => "isCreatorWindow" in w && w.isCreatorWindow);
+  if (creator && creator.type === "talk" && creator.target === "user") return true;
+  return false;
 }

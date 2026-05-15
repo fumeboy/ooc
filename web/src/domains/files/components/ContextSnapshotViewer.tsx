@@ -14,6 +14,8 @@ import { useEffect, useMemo, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { json as jsonLanguage } from "@codemirror/lang-json";
 import {
+  ArrowLeft,
+  ArrowRight,
   Bell,
   ChevronRight,
   CircleDot,
@@ -40,6 +42,7 @@ import {
   type ContextNode,
   type ContextSnapshot,
   type ContextWindow,
+  type TranscriptEntry,
 } from "../context-snapshot";
 
 function previewText(value: string, limit = 88): string {
@@ -165,7 +168,20 @@ function TreeNode({
           </div>
           {node.summary && <div className="cw-row-summary">{node.summary}</div>}
         </div>
-        <span className="cw-row-size">{node.charCount}</span>
+        {node.messageCounts ? (
+          <div className="cw-row-msg-counts" aria-label={`inbox ${node.messageCounts.inbox}, outbox ${node.messageCounts.outbox}`}>
+            <span className="cw-row-msg-count cw-row-msg-count-inbox">
+              <ArrowRight size={11} aria-hidden="true" />
+              <span className="cw-row-msg-count-num">{node.messageCounts.inbox}</span>
+            </span>
+            <span className="cw-row-msg-count cw-row-msg-count-outbox">
+              <ArrowLeft size={11} aria-hidden="true" />
+              <span className="cw-row-msg-count-num">{node.messageCounts.outbox}</span>
+            </span>
+          </div>
+        ) : (
+          <span className="cw-row-size">{node.charCount}</span>
+        )}
       </div>
       {hasChildren && isExpanded && (
         <ul className="cw-children">
@@ -185,8 +201,68 @@ function TreeNode({
   );
 }
 
+/**
+ * 内联 talk-window 回复 composer。
+ *
+ * 仅在 talk window 的 caller 或 callee 含 user 时显示：
+ * - selfObjectId === "user"：当前 thread 是 user 的（caller 是 user）
+ * - window.target === "user"：对方是 user（callee 是 user）
+ *
+ * 发送走外层 onUserReply（由 shell 注入，最终调 continueThread）。
+ */
+function InlineTalkComposer({
+  onSend,
+  disabled,
+}: {
+  onSend: (text: string) => Promise<void>;
+  disabled?: boolean;
+}) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const cannotSend = disabled || busy || !text.trim();
+  return (
+    <div className="llm-input-talk-composer">
+      <textarea
+        className="llm-input-talk-composer-input"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        placeholder="以 user 身份回复…"
+        disabled={disabled || busy}
+        rows={2}
+      />
+      <button
+        type="button"
+        className="llm-input-talk-composer-btn"
+        disabled={cannotSend}
+        onClick={async () => {
+          if (cannotSend) return;
+          setBusy(true);
+          try {
+            await onSend(text);
+            setText("");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? "Sending…" : "Send"}
+      </button>
+    </div>
+  );
+}
+
 /** Window 详情：按 type narrow 渲染特定字段；通用字段（id/title/status）始终渲染。 */
-function WindowDetail({ window }: { window: ContextWindow }) {
+function WindowDetail({
+  window,
+  transcript,
+  selfObjectId,
+  onUserReply,
+}: {
+  window: ContextWindow;
+  transcript?: TranscriptEntry[];
+  selfObjectId?: string;
+  onUserReply?: (text: string) => Promise<void>;
+}) {
   const rows: Array<[string, string]> = [
     ["id", window.id],
     ["type", window.type],
@@ -340,12 +416,51 @@ function WindowDetail({ window }: { window: ContextWindow }) {
           {window.body && <pre className="llm-input-pre">{window.body}</pre>}
         </>
       )}
+      {transcript && transcript.length > 0 && (
+        <div className="llm-input-transcript">
+          <div className="llm-input-transcript-head">transcript · {transcript.length} message{transcript.length === 1 ? "" : "s"}</div>
+          <ul className="llm-input-transcript-list">
+            {transcript.map((entry, idx) => {
+              const m = entry.message;
+              const dir = entry.channel === "inbox"
+                ? `← ${m.fromThreadId ?? "?"}`
+                : `→ ${m.toThreadId ?? "?"}`;
+              return (
+                <li key={m.id ?? idx} className={`llm-input-transcript-item llm-input-transcript-item-${entry.channel}`}>
+                  <div className="llm-input-transcript-meta">
+                    <span className="llm-input-transcript-index">[#{idx}]</span>
+                    <span className="llm-input-transcript-dir">{dir}</span>
+                    {m.source && <span className="llm-input-transcript-source">{m.source}</span>}
+                  </div>
+                  <pre className="llm-input-transcript-content">{m.content ?? ""}</pre>
+                </li>
+              );
+            })}
+          </ul>
+          {window.type === "talk" && onUserReply && (selfObjectId === "user" || window.target === "user") && (
+            <InlineTalkComposer onSend={onUserReply} />
+          )}
+        </div>
+      )}
+      {window.type === "talk" && onUserReply && (selfObjectId === "user" || window.target === "user") && (!transcript || transcript.length === 0) && (
+        <div className="llm-input-transcript">
+          <InlineTalkComposer onSend={onUserReply} />
+        </div>
+      )}
     </div>
   );
 }
 
 /** 详情面板：按 ContextNode.data.kind 走分支。 */
-function NodeDetail({ node }: { node: ContextNode | null }) {
+function NodeDetail({
+  node,
+  selfObjectId,
+  onUserReply,
+}: {
+  node: ContextNode | null;
+  selfObjectId?: string;
+  onUserReply?: (text: string) => Promise<void>;
+}) {
   if (!node) return <div className="llm-input-empty">选择左侧节点查看详情。</div>;
   const data = node.data;
 
@@ -414,7 +529,7 @@ function NodeDetail({ node }: { node: ContextNode | null }) {
   }
 
   if (data.kind === "window") {
-    return <WindowDetail window={data.window} />;
+    return <WindowDetail window={data.window} transcript={data.transcript} selfObjectId={selfObjectId} onUserReply={onUserReply} />;
   }
 
   if (data.kind === "message") {
@@ -506,7 +621,17 @@ function NodeDetail({ node }: { node: ContextNode | null }) {
  * 没有 toolbar header（与 LLMInputJsonViewer 相比更紧凑），方便嵌入到 FileViewer
  * 或 LLMInputJsonViewer 的某个 input item 详情区。
  */
-export function ContextSnapshotViewer({ snapshot }: { snapshot: ContextSnapshot }) {
+export function ContextSnapshotViewer({
+  snapshot,
+  selfObjectId,
+  onUserReply,
+}: {
+  snapshot: ContextSnapshot;
+  /** 当前 thread 的 self objectId；用于决定 talk window 的 user 端 composer 是否要显示。 */
+  selfObjectId?: string;
+  /** 用户以 user 身份回复 talk window 时的发送回调；缺省时不显示 composer。 */
+  onUserReply?: (text: string) => Promise<void>;
+}) {
   const tree = useMemo(() => buildContextTree(snapshot), [snapshot]);
   const treeMap = useMemo(() => flattenContextTree(tree), [tree]);
   const [selectedKey, setSelectedKey] = useState<string | null>(tree.id);
@@ -555,7 +680,7 @@ export function ContextSnapshotViewer({ snapshot }: { snapshot: ContextSnapshot 
           </ul>
         </aside>
         <section className="llm-input-main">
-          <NodeDetail node={selectedNode} />
+          <NodeDetail node={selectedNode} selfObjectId={selfObjectId} onUserReply={onUserReply} />
         </section>
       </div>
     </div>

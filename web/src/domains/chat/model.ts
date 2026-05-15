@@ -114,6 +114,8 @@ export type ContextWindow =
 export type ThreadContext = {
   id: string;
   status?: string;
+  /** 创建本线程的 object id；与 self objectId 比较即可判断 creator 是否=自己。 */
+  creatorObjectId?: string;
   inbox?: ThreadMessage[];
   outbox?: ThreadMessage[];
   events?: unknown[];

@@ -11,13 +11,17 @@
  *   ├── plan
  *   ├── contextWindows
  *   │   ├── <window id type status title>
- *   │   │   ├── ...type 特有字段（form: args/result；do: target+transcript；
- *   │   │   │                   talk/program/file/knowledge: 对应字段）
+ *   │   │   ├── ...type 特有字段
+ *   │   │   ├── transcript（do/talk window：按目标 / windowId 收纳的消息）
  *   │   │   └── sub_windows
  *   │   └── ...
- *   ├── inbox
- *   ├── outbox
+ *   ├── inbox（fallback：未被任何 window 收纳的孤儿消息）
+ *   ├── outbox（同上）
  *   └── events
+ *
+ * 这与后端 src/thinkable/context/render.ts 的视图归纳保持一致：
+ * - filterMessagesForDoWindow / filterMessagesForTalkWindow 决定每条消息归属的 window
+ * - 顶层 inbox/outbox 仅渲染 fallback，避免与 window 内 transcript 重复
  *
  * 与 LLMInputJsonViewer 的旧 XML 树相比：
  * - 不再依赖 DOMParser 把 system message XML 解析回结构
@@ -155,15 +159,19 @@ export type ContextNode = {
   charCount: number;
   /** 类型徽章，例如 "DO" / "TALK"。 */
   badge?: string;
+  /** do/talk window 节点专用：inbox/outbox 各自命中的消息条数，用于右侧 badge。 */
+  messageCounts?: { inbox: number; outbox: number };
   children: ContextNode[];
   /** 节点详情：详情面板根据 kind 走不同分支。 */
   data: ContextNodeData;
 };
 
+export type TranscriptEntry = { message: ThreadMessage; channel: "inbox" | "outbox" };
+
 export type ContextNodeData =
   | { kind: "thread"; snapshot: ContextSnapshot }
   | { kind: "section"; section: "plan" | "contextWindows" | "inbox" | "outbox" | "events" }
-  | { kind: "window"; window: ContextWindow }
+  | { kind: "window"; window: ContextWindow; transcript?: TranscriptEntry[] }
   | { kind: "message"; message: ThreadMessage; channel: "inbox" | "outbox" }
   | { kind: "event"; event: unknown; index: number }
   | { kind: "exec"; exec: NonNullable<Extract<ContextWindow, { type: "program" }>>["history"][number] };
@@ -259,6 +267,76 @@ function windowCharCount(window: ContextWindow): number {
   return n;
 }
 
+// ---- Window 视图归纳（与后端 src/thinkable/context/render.ts 同语义） ----
+
+type DoWindowShape = Extract<ContextWindow, { type: "do" }>;
+type TalkWindowShape = Extract<ContextWindow, { type: "talk" }>;
+
+/**
+ * do_window 的视图过滤：选出与该 window targetThreadId 相关的消息。
+ * - 父侧 do_window：messages where to_thread_id == target（父 → 子）或 from_thread_id == target（子 → 父）
+ * - 创建 creator do_window：targetThreadId 是父；同样规则
+ */
+function filterMessagesForDoWindow(
+  window: DoWindowShape,
+  inbox: ThreadMessage[],
+  outbox: ThreadMessage[],
+): Array<{ message: ThreadMessage; channel: "inbox" | "outbox" }> {
+  const target = window.targetThreadId;
+  const seen = new Set<string>();
+  const acc: Array<{ message: ThreadMessage; channel: "inbox" | "outbox" }> = [];
+  const collect = (channel: "inbox" | "outbox", list: ThreadMessage[]) => {
+    for (const m of list) {
+      const id = m.id;
+      if (id && seen.has(id)) continue;
+      if (m.fromThreadId === target || m.toThreadId === target) {
+        if (id) seen.add(id);
+        acc.push({ message: m, channel });
+      }
+    }
+  };
+  collect("inbox", inbox);
+  collect("outbox", outbox);
+  acc.sort((a, b) => (a.message.createdAt ?? 0) - (b.message.createdAt ?? 0));
+  return acc;
+}
+
+/**
+ * talk_window 的视图过滤：
+ * - outbox 上 windowId === self.id（say 写入时的标记）
+ * - inbox 上 replyToWindowId === self.id（control plane / cross-object 路由回溯）
+ */
+function filterMessagesForTalkWindow(
+  window: TalkWindowShape,
+  inbox: ThreadMessage[],
+  outbox: ThreadMessage[],
+): Array<{ message: ThreadMessage; channel: "inbox" | "outbox" }> {
+  const acc: Array<{ message: ThreadMessage; channel: "inbox" | "outbox" }> = [];
+  for (const m of outbox) if (m.windowId === window.id) acc.push({ message: m, channel: "outbox" });
+  for (const m of inbox) if (m.replyToWindowId === window.id) acc.push({ message: m, channel: "inbox" });
+  acc.sort((a, b) => (a.message.createdAt ?? 0) - (b.message.createdAt ?? 0));
+  return acc;
+}
+
+/** 收集所有已被 do/talk window 视图收纳的消息 id；其余消息走顶层 inbox/outbox 兜底。 */
+function collectWindowConsumedMessageIds(snapshot: ContextSnapshot): Set<string> {
+  const consumed = new Set<string>();
+  const inbox = snapshot.inbox ?? [];
+  const outbox = snapshot.outbox ?? [];
+  for (const w of snapshot.contextWindows ?? []) {
+    if (w.type === "do") {
+      for (const e of filterMessagesForDoWindow(w, inbox, outbox)) {
+        if (e.message.id) consumed.add(e.message.id);
+      }
+    } else if (w.type === "talk") {
+      for (const e of filterMessagesForTalkWindow(w, inbox, outbox)) {
+        if (e.message.id) consumed.add(e.message.id);
+      }
+    }
+  }
+  return consumed;
+}
+
 /** 构造单个 program exec 的子节点。 */
 function buildExecNode(
   parentId: string,
@@ -279,13 +357,37 @@ function buildExecNode(
   };
 }
 
-/** 构造单个 window 节点（含 sub_windows + program history 展开）。 */
+/** 构造单个 window 节点（含 sub_windows + program history）。
+ *
+ * do/talk window 的 transcript（按窗口归纳的消息）不进入树的 children，
+ * 而是挂到 data.transcript 上由右侧详情面板平铺渲染；
+ * messageCounts 仍写入节点供左树右侧 badge 使用。
+ */
 function buildWindowNode(
   window: ContextWindow,
   allWindows: ContextWindow[],
+  inbox: ThreadMessage[],
+  outbox: ThreadMessage[],
   depth: number,
 ): ContextNode {
   const children: ContextNode[] = [];
+  let extraChars = 0;
+  let messageCounts: { inbox: number; outbox: number } | undefined;
+  let transcript: TranscriptEntry[] | undefined;
+
+  if (window.type === "do" || window.type === "talk") {
+    transcript = window.type === "do"
+      ? filterMessagesForDoWindow(window, inbox, outbox)
+      : filterMessagesForTalkWindow(window, inbox, outbox);
+    let inboxN = 0;
+    let outboxN = 0;
+    for (const entry of transcript) {
+      extraChars += (entry.message.content ?? "").length;
+      if (entry.channel === "inbox") inboxN += 1;
+      else outboxN += 1;
+    }
+    messageCounts = { inbox: inboxN, outbox: outboxN };
+  }
 
   // program window 把 history 当作子节点展开
   if (window.type === "program") {
@@ -299,7 +401,7 @@ function buildWindowNode(
     if (sub.type === "root") continue;
     const parentId = sub.parentWindowId;
     if (parentId === window.id) {
-      children.push(buildWindowNode(sub, allWindows, depth + 1));
+      children.push(buildWindowNode(sub, allWindows, inbox, outbox, depth + 1));
     }
   }
 
@@ -309,10 +411,11 @@ function buildWindowNode(
     label: `${window.title}${status}`,
     summary: windowSummary(window),
     depth,
-    charCount: windowCharCount(window),
+    charCount: windowCharCount(window) + extraChars,
     badge: windowBadge(window.type),
+    messageCounts,
     children,
-    data: { kind: "window", window },
+    data: { kind: "window", window, transcript },
   };
 }
 
@@ -323,19 +426,21 @@ function buildContextWindowsSection(
   depth: number,
 ): ContextNode {
   const all = snapshot.contextWindows ?? [];
+  const inbox = snapshot.inbox ?? [];
+  const outbox = snapshot.outbox ?? [];
   // 顶层 = 非 root 且 parentWindowId 缺省 / 等于 "root"；root 自身视为顶层
   const topLevel = all.filter((w) => {
     if (w.type === "root") return true;
     const pid = w.parentWindowId;
     return !pid || pid === "root";
   });
-  const children = topLevel.map((w) => buildWindowNode(w, all, depth + 1));
+  const children = topLevel.map((w) => buildWindowNode(w, all, inbox, outbox, depth + 1));
   return {
     id: "section:contextWindows",
     label: "context_windows",
     summary: `${all.length} window${all.length === 1 ? "" : "s"} total · ${topLevel.length} top-level`,
     depth,
-    charCount: all.reduce((sum, w) => sum + windowCharCount(w), 0),
+    charCount: children.reduce((sum, c) => sum + c.charCount, 0),
     children,
     data: { kind: "section", section: "contextWindows" },
   };
@@ -420,8 +525,14 @@ export function buildContextTree(snapshot: ContextSnapshot): ContextNode {
   const planNode = buildPlanSection(snapshot.plan, 1);
   if (planNode) sections.push(planNode);
   sections.push(buildContextWindowsSection(snapshot, 1));
-  if (snapshot.inbox && snapshot.inbox.length > 0) sections.push(buildMessagesSection("inbox", snapshot.inbox, 1));
-  if (snapshot.outbox && snapshot.outbox.length > 0) sections.push(buildMessagesSection("outbox", snapshot.outbox, 1));
+
+  // 顶层 inbox/outbox 仅展示未被 do/talk window 收纳的 fallback 消息（与后端 render 一致）
+  const consumedIds = collectWindowConsumedMessageIds(snapshot);
+  const isFallback = (m: ThreadMessage) => !m.id || !consumedIds.has(m.id);
+  const fallbackInbox = (snapshot.inbox ?? []).filter(isFallback);
+  const fallbackOutbox = (snapshot.outbox ?? []).filter(isFallback);
+  if (fallbackInbox.length > 0) sections.push(buildMessagesSection("inbox", fallbackInbox, 1));
+  if (fallbackOutbox.length > 0) sections.push(buildMessagesSection("outbox", fallbackOutbox, 1));
   if (snapshot.events && snapshot.events.length > 0) sections.push(buildEventsSection(snapshot.events, 1));
 
   const total = sections.reduce((sum, s) => sum + s.charCount, 0);

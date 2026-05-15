@@ -9,6 +9,7 @@ import { AppLayout } from "./layout/AppLayout";
 import { MainPanel } from "./layout/MainPanel";
 import { RightPanel } from "./layout/RightPanel";
 import { Sidebar } from "./layout/Sidebar";
+import { ThreadHeader } from "./layout/ThreadHeader";
 import { initialState, type AppState, type SessionThread } from "./state";
 
 export function AppShell() {
@@ -238,8 +239,8 @@ export function AppShell() {
   return (
     <AppLayout
       sidebar={<Sidebar scope={state.scope} flows={state.flows} tree={state.tree} activePath={state.activePath} activeSessionId={state.activeSessionId} activeSessionTitle={state.flows.find((flow) => flow.sessionId === state.activeSessionId)?.title ?? state.activeSessionId} showSessions={showSessions} onToggleSessions={() => setShowSessions((prev) => !prev)} onShowWelcome={handleShowWelcome} onScope={refreshBasics} onNode={handleNode} onSession={handleSession} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
-      main={<MainPanel isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={state.activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} />}
-      right={<RightPanel sessionId={state.activeSessionId} objectId={state.activeObjectId} threadId={state.activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} onSelectThread={(sel) => state.activeSessionId && void loadThread(state.activeSessionId, sel.objectId, sel.threadId)} />}
+      main={<MainPanel isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={state.activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} selfObjectId={state.activeObjectId} onUserReply={handleSend} threadHeader={state.activeObjectId ? <ThreadHeader objectId={state.activeObjectId} threadId={state.activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} onSelectThread={(sel) => state.activeSessionId && void loadThread(state.activeSessionId, sel.objectId, sel.threadId)} /> : undefined} />}
+      right={state.activeObjectId && state.activeObjectId !== "user" ? <RightPanel sessionId={state.activeSessionId} objectId={state.activeObjectId} threadId={state.activeThreadId} thread={state.thread} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} /> : undefined}
     >
       <CreateStoneModal open={stoneModalOpen} draft={stoneDraft} onDraft={setStoneDraft} onClose={() => setStoneModalOpen(false)} onSubmit={handleCreateStone} />
       <CreateKnowledgeModal modal={knowledgeModal} draft={knowledgeDraft} onDraft={setKnowledgeDraft} onClose={() => setKnowledgeModal(undefined)} onSubmit={handleCreateKnowledge} />

@@ -34,6 +34,9 @@ function threadToSnapshot(thread: ThreadContext): ContextSnapshot {
  *
  * thread 来自 chat 域（与右侧 ChatPanel 同源），仅用于"已选 session 但未选文件"时
  * 把中间区域用作 thread context 的可视化展示，方便快速看 contextWindows / inbox / outbox。
+ *
+ * 当 selfObjectId / onUserReply 同时给出时，ContextSnapshotViewer 里的 talk window 详情
+ * 会在 user 端（caller 或 callee 是 user）渲染一个内联 composer，让人直接以 user 身份回复。
  */
 export function FileViewer({
   file,
@@ -42,6 +45,8 @@ export function FileViewer({
   onChange,
   onSave,
   thread,
+  selfObjectId,
+  onUserReply,
 }: {
   file?: FileContent;
   editable?: boolean;
@@ -49,10 +54,12 @@ export function FileViewer({
   onChange?: (content: string) => void;
   onSave?: () => void;
   thread?: ThreadContext;
+  selfObjectId?: string;
+  onUserReply?: (text: string) => Promise<void>;
 }) {
   if (!file) {
     if (thread) {
-      return <ContextSnapshotViewer snapshot={threadToSnapshot(thread)} />;
+      return <ContextSnapshotViewer snapshot={threadToSnapshot(thread)} selfObjectId={selfObjectId} onUserReply={onUserReply} />;
     }
     return <EmptyState title="Select a file" detail="Choose a file from the tree to preview its text content." />;
   }
