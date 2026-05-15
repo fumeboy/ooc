@@ -17,6 +17,8 @@ export type {
   ProgramWindow,
   FileWindow,
   KnowledgeWindow,
+  SearchWindow,
+  SearchMatch,
 } from "./types.js";
 
 export {
@@ -71,3 +73,4 @@ import "./talk.js";
 import "./program.js";
 import "./file.js";
 import "./knowledge.js";
+import "./search.js";

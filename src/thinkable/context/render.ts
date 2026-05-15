@@ -12,6 +12,7 @@ import type {
   FileWindow,
   KnowledgeWindow,
   ProgramWindow,
+  SearchWindow,
   TalkWindow,
   TodoWindow,
 } from "../../executable/windows/types";
@@ -351,6 +352,57 @@ async function renderKnowledgeWindowChildren(
   return children;
 }
 
+/**
+ * search_window 渲染：query + matches（含截断标记）。
+ *
+ * 输出形态：
+ *   <window type="search" kind="glob|grep" status="open">
+ *     <title>...</title>
+ *     <query>...</query>
+ *     [<search_root>...</search_root>]   (仅 grep)
+ *     <matches count="N" truncated="true|false">
+ *       <match index="0" path="..." [line="42"]>[snippet 文本]</match>
+ *       ...
+ *     </matches>
+ *   </window>
+ *
+ * matches 在创建时已截断到 200，这里只反映；snippet 已在创建侧 trim 到 200 字符。
+ */
+function renderSearchWindowChildren(window: SearchWindow): XmlNode[] {
+  const children: XmlNode[] = [
+    xmlElement("kind", {}, [xmlText(window.kind)]),
+    xmlElement("query", {}, [xmlText(window.query)]),
+  ];
+  if (window.searchRoot) {
+    children.push(xmlElement("search_root", {}, [xmlText(window.searchRoot)]));
+  }
+
+  const matchNodes: XmlNode[] = window.matches.map((m) => {
+    const attrs: Record<string, string> = {
+      index: String(m.index),
+      path: m.path,
+    };
+    if (typeof m.line === "number") attrs.line = String(m.line);
+    return xmlElement(
+      "match",
+      attrs,
+      m.snippet ? [xmlText(m.snippet)] : [],
+    );
+  });
+
+  children.push(
+    xmlElement(
+      "matches",
+      {
+        count: String(window.matches.length),
+        truncated: window.truncated ? "true" : "false",
+      },
+      matchNodes,
+    ),
+  );
+  return children;
+}
+
 /** 按行/列范围切片文件正文；range 缺失则原样返回。 */
 function sliceByLinesColumns(
   raw: string,
@@ -414,6 +466,9 @@ async function renderWindowNode(
       break;
     case "knowledge":
       children.push(...(await renderKnowledgeWindowChildren(window, thread)));
+      break;
+    case "search":
+      children.push(...renderSearchWindowChildren(window));
       break;
     case "root":
       // root 一般不显式渲染（隐含 window）；如果出现就只渲染基本信息
