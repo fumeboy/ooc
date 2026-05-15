@@ -38,6 +38,7 @@ describe("executable commands", () => {
       "program",
       "talk",
       "todo",
+      "write_file",
     ]);
   });
 

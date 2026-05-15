@@ -353,3 +353,90 @@ describe("U2: file_window.edit", () => {
 
 void mkdir;
 
+// ---------- U3: root.write_file ----------
+
+import { dispatchToolCall } from "../tools";
+
+async function dispatchWriteFile(thread: ReturnType<typeof makeThread>, args: Record<string, unknown>) {
+  return dispatchToolCall(thread, {
+    id: `call_${Math.random().toString(36).slice(2, 8)}`,
+    name: "open",
+    arguments: {
+      title: "write file",
+      command: "write_file",
+      args,
+    },
+  });
+}
+
+describe("U3: root.write_file", () => {
+  it("happy: { path, content } writes file + spawns file_window", async () => {
+    const path = join(TEMP, "wf-happy.txt");
+    const thread = makeThread({ id: "t_wf_happy" });
+    const out = JSON.parse(await dispatchWriteFile(thread, { path, content: "hello write_file\n" }));
+    expect(out.ok).toBe(true);
+    expect(out.auto_submitted).toBe(true);
+
+    // file written
+    const onDisk = await readFile(path, "utf8");
+    expect(onDisk).toBe("hello write_file\n");
+
+    // file_window spawned
+    const fws = thread.contextWindows.filter((w) => w.type === "file" && (w as FileWindow).path === path);
+    expect(fws.length).toBe(1);
+  });
+
+  it("happy: overwriting existing file replaces content", async () => {
+    const path = join(TEMP, "wf-overwrite.txt");
+    await writeFile(path, "old content", "utf8");
+    const thread = makeThread({ id: "t_wf_overwrite" });
+    await dispatchWriteFile(thread, { path, content: "new content" });
+    expect(await readFile(path, "utf8")).toBe("new content");
+  });
+
+  it("edge: parent dir does not exist → mkdir -p creates it then writes", async () => {
+    const path = join(TEMP, "deep/dir/path/wf.txt");
+    const thread = makeThread({ id: "t_wf_mkdir" });
+    const out = JSON.parse(await dispatchWriteFile(thread, { path, content: "deep" }));
+    expect(out.ok).toBe(true);
+    expect(await readFile(path, "utf8")).toBe("deep");
+  });
+
+  it("edge: missing path → submit yields '缺少 path' error; no file_window spawned", async () => {
+    const thread = makeThread({ id: "t_wf_no_path" });
+    const out = JSON.parse(await dispatchWriteFile(thread, { content: "x" }));
+    expect(out.ok).toBe(true); // tool call accepted; failure expressed in result
+    expect(out.auto_submitted).toBe(true);
+    expect(out.result).toContain("缺少 path");
+    expect(thread.contextWindows.filter((w) => w.type === "file").length).toBe(0);
+  });
+
+  it("edge: missing content → submit yields '缺少 content' error; no file_window spawned", async () => {
+    const thread = makeThread({ id: "t_wf_no_content" });
+    const out = JSON.parse(await dispatchWriteFile(thread, { path: join(TEMP, "x.txt") }));
+    expect(out.ok).toBe(true);
+    expect(out.auto_submitted).toBe(true);
+    expect(out.result).toContain("缺少 content");
+    expect(thread.contextWindows.filter((w) => w.type === "file").length).toBe(0);
+  });
+
+  it("edge: empty string content → 0-byte file written", async () => {
+    const path = join(TEMP, "wf-empty.txt");
+    const thread = makeThread({ id: "t_wf_empty" });
+    const out = JSON.parse(await dispatchWriteFile(thread, { path, content: "" }));
+    expect(out.ok).toBe(true);
+    expect(out.auto_submitted).toBe(true);
+    expect(await readFile(path, "utf8")).toBe("");
+  });
+
+  it("auto-spawn: exactly one new file_window with path === args.path", async () => {
+    const path = join(TEMP, "wf-spawn-once.txt");
+    const thread = makeThread({ id: "t_wf_spawn_once" });
+    await dispatchWriteFile(thread, { path, content: "x" });
+    const matches = thread.contextWindows.filter(
+      (w) => w.type === "file" && (w as FileWindow).path === path,
+    );
+    expect(matches.length).toBe(1);
+  });
+});
+

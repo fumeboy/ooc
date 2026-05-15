@@ -20,6 +20,7 @@ import { planCommand } from "./plan.js";
 import { programCommand } from "./program.js";
 import { talkCommand } from "./talk.js";
 import { todoCommand } from "./todo.js";
+import { writeFileCommand } from "./write-file.js";
 import type { CommandTableEntry } from "../command-types.js";
 
 /**
@@ -37,6 +38,7 @@ export const ROOT_COMMANDS: Record<string, CommandTableEntry> = {
   end: endCommand,
   open_file: openFileCommand,
   open_knowledge: openKnowledgeCommand,
+  write_file: writeFileCommand,
 };
 
 /** Protocol knowledge path（与 plan.ts 等命令文件的 *_BASIC_PATH 形态一致）。 */
@@ -66,6 +68,7 @@ root window 是每个 thread 隐含的根窗口。在 root 上可用的 command 
 | end             | 标记 thread 完成                              | 仅副作用                                   |
 | open_file       | 把指定文件引入 context                        | 创建 file_window；后续 set_range/reload    |
 | open_knowledge  | 显式打开 stone knowledge doc                  | 创建 knowledge_window（force-full 渲染）   |
+| write_file      | 创建/覆盖文件内容                              | 写盘 + 自动 spawn file_window；后续可走 file_window.edit |
 
 每个 command 在进入 \`open\` 后，对应的知识会由系统自动激活；上面的清单只是入口索引。
 `.trim();
