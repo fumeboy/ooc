@@ -180,6 +180,78 @@ If something genuinely belongs outside the concept graph (a worked example, a gl
 - `docs/plans/2026-05-15-001-refactor-meta-concept-graph-executable-plan.md` — the plan that drove this work
 - `docs/brainstorms/2026-05-15-meta-concept-graph-requirements.md` — the brainstorm that established WHY
 - `docs/solutions/conventions/llm-tool-handlers-fail-loud-2026-05-15.md` — same session's other lesson; the meta concept graph is the structural realization of that fail-loud principle for documentation
+- `docs/solutions/conventions/agent-doc-work-verify-as-you-go-2026-05-15.md` — execution discipline for agents doing doc-graph work
 - `meta/__tests__/walk-concepts.ts` — the walker implementation
 - `meta/__tests__/concept-links.test.ts` — the schema-enforcement test
 - `meta/object/executable/` — the first module fully converted; use as the reference shape
+
+---
+
+## Field notes from the first migration (executable, 2026-05-15)
+
+Lessons surfaced while doing the first module conversion. Read before tackling the next module (thinkable / collaborable / web / ...).
+
+### Don't trust the walker without testing on the real tree
+
+The first walkConcepts implementation treated "concept = leaf": once a node satisfied the schema, descent stopped. This worked perfectly on the mini fixture in U1's tests. It failed silently on the real meta tree, where many nodes are **aggregators that are also concepts** (e.g., `tools_v...` carries `name + description + sources` AND wraps the per-tool concepts). Concepts buried under aggregator-shaped concepts never got walked.
+
+Surfaced only at U3 (~3 commits in), when the actual collected count `13` didn't match the expected `~17`. Fix was a one-line change to `walkConcepts` (always descend after recording), but the design issue should have been caught at U1.
+
+**Rule for next migration**: when writing the walker, immediately run it against the real target module tree (not just a fixture) and eyeball the collected concepts. The fixture proves the rule works on the cases you imagined; the real tree proves you imagined the right cases.
+
+### Codemod for `name`: special-case `index.doc.js`
+
+A small node script derived `name` field from filename via PascalCase. For `index.doc.js` files this produced `name: "Index"` — wrong, because aggregators should be named after their **directory**, not the literal filename. The actual right names are `Tools`, `Commands`, `Server`, `Client`.
+
+Surfaced when reviewing the diff visually right after the batch ran. Cost: one extra commit's worth of edits to fix.
+
+**Rule for next migration**: when running a name-derivation codemod, special-case `index` to use the parent directory's basename instead. Pseudocode:
+
+```
+basename = path.basename(file, ".doc.js")
+name = basename === "index"
+  ? pascalCase(path.basename(path.dirname(file)))
+  : pascalCase(basename)
+```
+
+### Leaf concepts not reachable from the aggregator are invisible to the schema test
+
+`actions/tools/open.doc.js` etc. were retrofitted with `name + description + sources` in U4. Schema-correct on paper. But none of them are listed as fields on `tools_v...` — the leaf docs import their parent, the parent doesn't enumerate them back. Result: `walkConcepts(executable_v...)` never sees them. The schema test passes vacuously for those files.
+
+This was discovered post-hoc and explicitly deferred — not a bug introduced by this work, but a coverage gap the migration didn't close.
+
+**Rule for next migration**: if you want leaf docs guarded by the schema test, the aggregator must enumerate them explicitly:
+
+```js
+export const tools_v... = {
+  // ... aggregator fields
+  children: {
+    open:    open_v...,
+    refine:  refine_v...,
+    submit:  submit_v...,
+    // ...
+  },
+};
+```
+
+Otherwise, leaf docs are first-class JS exports that other code may import directly, but their `sources` field has no automated guarantee. Decide per-module whether this matters; for executable's tool/command leaves, it likely does (these are the most-frequently-edited docs).
+
+### Plan must carry "Patterns to follow" with the level of specificity that survives a fresh agent
+
+The executable migration relied on `get parent() { return ... }` getters to break circular init between sibling doc.js files (e.g., `executable/index.doc.js` ↔ `tools/index.doc.js`). U2 / U4 both touched files with this pattern, and I almost dropped it twice via muscle memory; the plan's "Patterns to follow" field said `get parent() getter pattern` but didn't *show* the pattern. A fresh agent without my context would likely have re-introduced the circular import.
+
+**Rule for next plan**: the plan's "Patterns to follow" should include the actual code pattern when it exists for a non-obvious reason. For meta concept files specifically:
+
+```js
+// REQUIRED: parent must be a getter to break circular init when sibling
+// doc.js files import each other. Direct assignment causes ReferenceError.
+get parent() { return parent_v...; }
+```
+
+Cite the exact concern (circular init / TDZ) so the next reader knows what they break by removing it.
+
+### `description` getter aliasing `index` is the right migration shim
+
+For files that already had `index: \`...\``, the U4 batch added `get description() { return this.index; }` rather than duplicating the string. This kept the schema test happy (description present) without forcing a content rewrite, and lets the next sweep delete `.index` everywhere by deleting just the field (not the body).
+
+This pattern is reusable: when migrating an old field name to a new one and downstream code may still read the old name, prefer a getter alias over duplicating the value. One source of truth, no risk of drift.
