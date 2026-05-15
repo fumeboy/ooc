@@ -94,8 +94,8 @@ export type ThreadMessage = {
   content: string;
   /** 创建时间戳，用于排序和调试，不承担强一致时钟语义。 */
   createdAt: number;
-  /** 消息来源；step 2 加入 talk 与外部用户对话。 */
-  source: "do" | "system" | "talk";
+  /** 消息来源；step 2 加入 talk 与外部用户对话；user 区分"控制面代用户派送的 talk"。 */
+  source: "do" | "system" | "talk" | "user";
   /**
    * 消息归属的 window id；
    * - 由 talk_window.say 写 outbox 时设置为该 talk_window 的 id

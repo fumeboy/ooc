@@ -139,7 +139,7 @@ describe("flows service", () => {
     }
   });
 
-  test("continueThread flips failed thread back to running", async () => {
+  test("seedSession + continueThread delivers via cross-object talk", async () => {
     const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-"));
 
     try {
@@ -148,32 +148,42 @@ describe("flows service", () => {
         pauseStore: createPauseStore(),
         jobManager: createJobManager(),
       });
-      await service.createSession({ sessionId: "s1" });
-      await service.createFlowObject({ sessionId: "s1", objectId: "agent" });
-
-      // 模拟 LLM 失败：手动把 thread 改成 failed
-      const { readThread, writeThread } = await import("@src/persistable");
-      const thread = await readThread({ baseDir, sessionId: "s1", objectId: "agent" }, "root");
-      thread!.status = "failed";
-      await writeThread(thread!);
-
-      const out = await service.continueThread({
+      // 1) seedSession 等价于 user 对 agent 发起初次 talk
+      const seeded = await service.seedSession({
         sessionId: "s1",
-        objectId: "agent",
-        threadId: "root",
-        text: "继续推下去",
+        targetObjectId: "agent",
+        initialMessage: "first message",
       });
-      expect(out.status).toBe("running");
-      const after = await readThread({ baseDir, sessionId: "s1", objectId: "agent" }, "root");
-      const continuedMsgId = after?.inbox?.at(-1)?.id;
-      expect(continuedMsgId).toBeDefined();
-      expect(after?.status).toBe("running");
-      expect(after?.inbox?.at(-1)?.content).toBe("继续推下去");
-      expect(after?.events.at(-1)).toEqual({
-        category: "context_change",
-        kind: "inbox_message_arrived",
-        msgId: continuedMsgId as string
-      });
+      expect(seeded.targetObjectId).toBe("agent");
+      expect(seeded.targetThreadId).toBeDefined();
+      expect(seeded.jobId).toBeDefined();
+
+      // 2) callee thread 已生成且收到首条 user 消息
+      const { readThread } = await import("@src/persistable");
+      const callee = await readThread(
+        { baseDir, sessionId: "s1", objectId: "agent" },
+        seeded.targetThreadId,
+      );
+      expect(callee?.status).toBe("running");
+      expect(callee?.inbox?.[0]?.content).toBe("first message");
+      expect(callee?.inbox?.[0]?.source).toBe("user");
+
+      // 3) continueThread 再发一条；callee.inbox 累加
+      await service.continueThread({ sessionId: "s1", text: "继续推下去" });
+      const calleeAfter = await readThread(
+        { baseDir, sessionId: "s1", objectId: "agent" },
+        seeded.targetThreadId,
+      );
+      expect(calleeAfter?.inbox?.length).toBe(2);
+      expect(calleeAfter?.inbox?.at(-1)?.content).toBe("继续推下去");
+      expect(calleeAfter?.inbox?.at(-1)?.source).toBe("user");
+
+      // 4) user.root.outbox 也累计（双写正确）
+      const userThread = await readThread(
+        { baseDir, sessionId: "s1", objectId: "user" },
+        "root",
+      );
+      expect(userThread?.outbox?.length).toBe(2);
     } finally {
       await rm(baseDir, { recursive: true, force: true });
     }

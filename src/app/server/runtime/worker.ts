@@ -7,10 +7,23 @@ import { resumePausedThread } from "./resume";
 
 export type RuntimeJobRunner = (job: RuntimeJob, config: ServerConfig) => Promise<void>;
 
+/**
+ * 约定值：user 是 web session 中的特殊 flow object，由控制面（人类）驱动；
+ * worker 跳过它，让任何针对 user object 的 thread 都不被 LLM 调度。
+ *
+ * collaborable § cross-object talk（spec 2026-05-15）。
+ */
+const USER_OBJECT_ID = "user";
+
 export async function runJob(
   job: RuntimeJob,
   config: Pick<ServerConfig, "baseDir" | "workerMaxTicks">
 ): Promise<void> {
+  if (job.objectId === USER_OBJECT_ID) {
+    // user object 是被动对象——所有思考由 web 用户在 UI 上完成，worker 不调度
+    return;
+  }
+
   if (job.kind === "resume-thread") {
     await resumePausedThread({
       baseDir: config.baseDir,

@@ -77,13 +77,24 @@ describe("command execution side effects", () => {
     expect(talkWindow && talkWindow.type === "talk" && talkWindow.title).toBe("发布计划");
   });
 
-  it("talk rejects non-user target with a clear error in current phase", async () => {
+  it("talk accepts arbitrary objectId target (cross-object)", async () => {
     const thread = makeThread({ id: "thread-talk-other" });
     const result = await execRootCommand("talk", {
       thread,
-      args: { target: "another-object", title: "x" },
+      args: { target: "researcher", title: "ask" },
     });
-    expect(result).toContain("仅支持");
-    expect(thread.contextWindows.find((w) => w.type === "talk")).toBeUndefined();
+    expect(result).toBeUndefined();
+    const talkWindow = thread.contextWindows.find((w) => w.type === "talk");
+    expect(talkWindow?.type).toBe("talk");
+    expect(talkWindow && talkWindow.type === "talk" && talkWindow.target).toBe("researcher");
+  });
+
+  it("talk rejects empty target", async () => {
+    const thread = makeThread({ id: "thread-talk-empty" });
+    const result = await execRootCommand("talk", {
+      thread,
+      args: { target: "", title: "x" },
+    });
+    expect(result).toContain("缺少 target");
   });
 });

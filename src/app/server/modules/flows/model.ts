@@ -27,10 +27,23 @@ export const callMethodBody = t.Object({
 /**
  * 继续指定 thread 会话的请求体。
  *
- * Step 2（spec 2026-05-14）：可选 targetWindowId 用于把消息归到某个 talk_window 视图
- * （render 层据此过滤 transcript）。
+ * collaborable § cross-object talk（spec 2026-05-15）：
+ * - threadId/objectId 路径参数已移除：continueThread 现在固定走 user.root.talk_window
+ *   再 deliverTalkMessage 到 callee；前端只需要给 sessionId + 文本 + 可选 targetWindowId
  */
 export const continueThreadBody = t.Object({
   text: t.String(),
   targetWindowId: t.Optional(t.String()),
+});
+
+/**
+ * Seed 一个新 session：建 session + user flow object + user 对 target 的初次 talk。
+ *
+ * collaborable § cross-object talk（spec 2026-05-15）。
+ */
+export const seedSessionBody = t.Object({
+  sessionId: t.String(),
+  title: t.Optional(t.String()),
+  targetObjectId: t.String(),
+  initialMessage: t.String(),
 });

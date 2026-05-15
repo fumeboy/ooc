@@ -8,6 +8,12 @@ import { loadUiServerMethods } from "@src/executable/server/loader";
 import { collectExecutableKnowledgeEntries } from "@src/executable";
 import type { ThreadContext } from "@src/thinkable/context";
 import { initContextWindows } from "@src/executable/windows";
+import { deliverTalkMessage } from "@src/executable/windows/talk-delivery";
+import {
+  ROOT_WINDOW_ID,
+  generateWindowId,
+  type TalkWindow,
+} from "@src/executable/windows/types";
 import type { createJobManager } from "../../runtime/job-manager";
 import type { PauseStore } from "../../runtime/pause-store";
 import { scanPausedThreads } from "../../runtime/thread-query";
@@ -15,6 +21,9 @@ import { applyResumeTransition, canResumeThread } from "../../runtime/thread-tra
 import { AppServerError } from "../../bootstrap/errors";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
+
+/** 约定值：user 是 web session 的特殊 flow object，控制面代它发消息；worker 不调度它。 */
+const USER_OBJECT_ID = "user";
 
 function httpContext() {
   return {
@@ -118,6 +127,109 @@ export function createFlowsService(deps: {
         created: true,
       };
     },
+    /**
+     * 一次性 seed 一个 session：建 session + user flow object + 让 user 对 target 发起 talk。
+     *
+     * collaborable § cross-object talk（spec 2026-05-15）：web 用户创建 session 的入口，
+     * 等价于 user 这个 flow object 用 talk command 调起对 target 的会话。
+     *
+     * 流程：
+     * 1. createFlowSession（已存在则跳过）
+     * 2. 建/复用 user flow object 与 user.root thread；user.root 上挂一个指向 target 的 talk_window
+     * 3. 调 deliverTalkMessage：在 target object 下创建 callee thread + 写消息（source=user）
+     * 4. enqueue run-thread job（仅针对 callee thread；user thread 不入队 worker 也跳过）
+     */
+    async seedSession({
+      sessionId,
+      title,
+      targetObjectId,
+      initialMessage,
+    }: {
+      sessionId: string;
+      title?: string;
+      targetObjectId: string;
+      initialMessage: string;
+    }) {
+      if (!targetObjectId.trim()) {
+        throw new AppServerError("INVALID_INPUT", "targetObjectId is required");
+      }
+      if (targetObjectId === USER_OBJECT_ID) {
+        throw new AppServerError(
+          "INVALID_INPUT",
+          `targetObjectId cannot be "${USER_OBJECT_ID}"; pick the object the user wants to talk to`,
+        );
+      }
+      if (!initialMessage.trim()) {
+        throw new AppServerError("INVALID_INPUT", "initialMessage is required");
+      }
+
+      // 1) session
+      await createFlowSession(deps.baseDir, sessionId, title);
+
+      // 2) user flow object + user.root thread + 指向 target 的 talk_window
+      await createFlowObject({
+        baseDir: deps.baseDir,
+        sessionId,
+        objectId: USER_OBJECT_ID,
+      });
+      const userPersistence = {
+        baseDir: deps.baseDir,
+        sessionId,
+        objectId: USER_OBJECT_ID,
+        threadId: "root",
+      } as const;
+      let userThread: ThreadContext | undefined = await readThread(
+        { baseDir: deps.baseDir, sessionId, objectId: USER_OBJECT_ID },
+        "root",
+      );
+      if (!userThread) {
+        userThread = {
+          id: "root",
+          status: "running",
+          events: [],
+          contextWindows: [],
+          persistence: userPersistence,
+        };
+        initContextWindows(userThread, {
+          initialTaskTitle: `user @ ${sessionId}`,
+        });
+      }
+      const talkWindowId = generateWindowId("talk");
+      const talkWindow: TalkWindow = {
+        id: talkWindowId,
+        type: "talk",
+        parentWindowId: ROOT_WINDOW_ID,
+        title: targetObjectId,
+        status: "open",
+        createdAt: Date.now(),
+        target: targetObjectId,
+        conversationId: talkWindowId,
+      };
+      userThread.contextWindows = [...(userThread.contextWindows ?? []), talkWindow];
+
+      // 3) 派送 — talk-delivery 内部会在 target 下创建 callee thread 并写双方消息
+      const delivered = await deliverTalkMessage({
+        caller: { thread: userThread, talkWindow },
+        content: initialMessage,
+        source: "user",
+      });
+
+      // 4) callee 入队
+      const job = deps.jobManager.createRunThreadJob({
+        sessionId,
+        objectId: delivered.calleeObjectId,
+        threadId: delivered.calleeThreadId,
+      });
+
+      return {
+        sessionId,
+        userThreadId: userThread.id,
+        talkWindowId,
+        targetObjectId: delivered.calleeObjectId,
+        targetThreadId: delivered.calleeThreadId,
+        jobId: job.jobId,
+      };
+    },
     async createFlowObject({
       sessionId,
       objectId,
@@ -175,6 +287,37 @@ export function createFlowsService(deps: {
       };
     },
     /**
+     * 列出 session 下所有 (objectId, threadId)；前端用作 thread 切换器数据源。
+     *
+     * 当前实现：扫描 flows/<sid>/objects/<obj>/threads/<tid>；不展开嵌套 child thread（child
+     * 仍按 thread.json 里的 childThreadIds 嵌套，由前端按需展开）。
+     */
+    async listThreads({ sessionId }: { sessionId: string }) {
+      const objectsDir = join(deps.baseDir, "flows", sessionId, "objects");
+      let objectEntries: { name: string; isDirectory(): boolean }[];
+      try {
+        objectEntries = await readdir(objectsDir, { withFileTypes: true });
+      } catch {
+        return { items: [] };
+      }
+      const items: { objectId: string; threadId: string }[] = [];
+      for (const entry of objectEntries) {
+        if (!entry.isDirectory()) continue;
+        const threadsDir = join(objectsDir, entry.name, "threads");
+        let threadEntries: { name: string; isDirectory(): boolean }[];
+        try {
+          threadEntries = await readdir(threadsDir, { withFileTypes: true });
+        } catch {
+          continue;
+        }
+        for (const t of threadEntries) {
+          if (t.isDirectory()) items.push({ objectId: entry.name, threadId: t.name });
+        }
+      }
+      items.sort((a, b) => (a.objectId === b.objectId ? a.threadId.localeCompare(b.threadId) : a.objectId.localeCompare(b.objectId)));
+      return { items };
+    },
+    /**
      * 返回 thread 给前端 UI；contextWindows 中合成 protocol / activator 来源的 knowledge_window，
      * 让前端不需要单独跑合成逻辑就能看到 LLM 当前轮所见的全部 window。
      *
@@ -190,48 +333,70 @@ export function createFlowsService(deps: {
       };
     },
     /**
-     * 向已存在的 thread 追加一条用户文本（底层仍记录为 context_change/inbox_message_arrived 事件），
-     * 把 thread.status 翻回 running，并入队一个新的 run-thread job 让 worker 续跑。
+     * 控制面"用户回复"通道。
      *
-     * 用于多轮对话：用户在 thread 上一轮跑完后追加新需求。
+     * collaborable § cross-object talk（spec 2026-05-15）：等价于 user 这个 flow object
+     * 在它的 root thread 上调 talk_window.say —— 通过 talk-delivery 把消息派送到 callee。
      *
-     * Step 2：可选 targetWindowId（spec § talk_window） — 当 user 选择回复某个 talk_window 时，
-     * 写入 inbox 消息携带 replyToWindowId，render 层据此把消息归入对应 talk_window 的 transcript。
+     * 入参：
+     * - sessionId：当前 session
+     * - text：消息正文
+     * - targetWindowId：可选；user.root.contextWindows 里某个 talk_window 的 id；缺省时使用首个 talk_window
+     *
+     * 副作用：
+     * - user.root.outbox 与 callee.inbox 双写
+     * - callee 状态翻 running，入队一个 run-thread job
+     * - 不再使用 inject 事件路径
      */
     async continueThread({
       sessionId,
-      objectId,
-      threadId,
       text,
       targetWindowId,
     }: {
       sessionId: string;
-      objectId: string;
-      threadId: string;
       text: string;
       targetWindowId?: string;
     }) {
-      const ref = { baseDir: deps.baseDir, sessionId, objectId };
-      const thread = await readThread(ref, threadId);
-      if (!thread) {
+      const userThread = await readThread(
+        { baseDir: deps.baseDir, sessionId, objectId: USER_OBJECT_ID },
+        "root",
+      );
+      if (!userThread) {
         throw new AppServerError(
           "NOT_FOUND",
-          `thread '${threadId}' not found`,
-          { sessionId, objectId, threadId }
+          `user thread not found for session '${sessionId}' (call seedSession first)`,
+          { sessionId },
         );
       }
-      const nextThread = appendInboxMessage(reviveThreadForInboxMessage(thread), text, targetWindowId);
-      await writeThread(nextThread);
+      const talkWindows = (userThread.contextWindows ?? []).filter(
+        (w): w is TalkWindow => w.type === "talk" && !w.isCreatorWindow,
+      );
+      const target = targetWindowId
+        ? talkWindows.find((w) => w.id === targetWindowId)
+        : talkWindows[0];
+      if (!target) {
+        throw new AppServerError(
+          "NOT_FOUND",
+          `no talk_window on user.root for session '${sessionId}'${targetWindowId ? ` (looked for "${targetWindowId}")` : ""}`,
+          { sessionId, targetWindowId },
+        );
+      }
+
+      const delivered = await deliverTalkMessage({
+        caller: { thread: userThread, talkWindow: target },
+        content: text,
+        source: "user",
+      });
+
       const job = deps.jobManager.createRunThreadJob({
         sessionId,
-        objectId,
-        threadId,
+        objectId: delivered.calleeObjectId,
+        threadId: delivered.calleeThreadId,
       });
       return {
         sessionId,
-        objectId,
-        threadId,
-        status: nextThread.status,
+        targetObjectId: delivered.calleeObjectId,
+        targetThreadId: delivered.calleeThreadId,
         jobId: job.jobId,
       };
     },

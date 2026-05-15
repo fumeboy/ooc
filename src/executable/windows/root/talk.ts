@@ -1,13 +1,12 @@
 /**
- * root.talk command — 创建一个 talk_window，与外部 target 持续会话。
+ * root.talk command — 创建一个 talk_window，与另一个 flow object 持续会话。
  *
- * spec § talk_window：
- * - submit 副作用：在 thread.contextWindows 下挂 type=talk window，
- *   target=user, conversationId=windowId, title=args.title
+ * collaborable § cross-object talk（spec 2026-05-15）：
+ * - target 是任意 flow object 的 objectId（含 "user"）
+ * - submit 副作用：在 thread.contextWindows 下挂 type=talk window，初始无 targetThreadId；
+ *   首次通过 talk_window.say 派送时再创建 callee thread 并回填
  * - args 完整时（target/title）C 规则触发自动 submit
  * - 实际发消息走 talk_window.say，不在 root.talk 上发
- *
- * 当前阶段限制：target 只能是 "user"。
  */
 
 import type {
@@ -25,19 +24,21 @@ const TALK_BASIC_PATH = "internal/executable/talk/basic";
 const TALK_INPUT_PATH = "internal/executable/talk/input";
 
 const KNOWLEDGE = `
-talk 用于开启一个对外的会话窗口（talk_window）。当前阶段 target 只能是 "user"。
+talk 用于开启一个对外的会话窗口（talk_window），与另一个 flow object 持续会话。
 
 参数：
-- target: 必填，目前仅 "user"
-- title: 必填，本会话的简短主题（多窗口区分用）
+- target: 必填，目标 flow object 的 objectId（"user" 也是一个 flow object）
+- title: 必填，本会话的简短主题（同一 caller 多窗口区分用）
 
 submit 后副作用：
-- 在 thread.contextWindows 下挂一个 type=talk 的 window
-- 后续发消息：open(parent_window_id="<talk_window_id>", command="say", args={ msg: "...", wait: true|false })
+- 在 thread.contextWindows 下挂一个 type=talk 的 window（初始 targetThreadId 为空）
+- 首次发消息：open(parent_window_id="<talk_window_id>", command="say", args={ msg: "...", wait: true|false })
+  - 若 callee thread 尚未存在，系统会在 flows/{sid}/objects/{target}/threads/ 下创建一条
+  - 同时把消息追加到 callee.inbox + caller.outbox，callee 自动进入 running 等待 worker 调度
 - 等待回复：open(parent_window_id="<talk_window_id>", command="wait", args={})
 - 关闭窗口：close(window_id="<talk_window_id>", reason="...")
 
-允许同时打开多个 talk_window 来并行维护不同主题。
+允许同时打开多个 talk_window 来并行维护不同 target / 不同主题。
 `.trim();
 
 export enum TalkCommandPath {
@@ -51,13 +52,11 @@ export const talkCommand: CommandTableEntry = {
   knowledge: (args, formStatus): CommandKnowledgeEntries => {
     const entries: CommandKnowledgeEntries = { [TALK_BASIC_PATH]: KNOWLEDGE };
     if (formStatus !== "open") return entries;
-    const target = typeof args.target === "string" ? args.target : "";
-    const title = typeof args.title === "string" ? args.title : "";
+    const target = typeof args.target === "string" ? args.target.trim() : "";
+    const title = typeof args.title === "string" ? args.title.trim() : "";
     if (!target || !title) {
       entries[TALK_INPUT_PATH] =
-        "talk 需要 target 与 title；用 refine(args={ target: \"user\", title: \"...\" })，或在 open 时一次给齐。";
-    } else if (target !== "user") {
-      entries[TALK_INPUT_PATH] = `talk 当前阶段仅支持 target="user"，收到 "${target}"。`;
+        "talk 需要 target（任意 objectId）与 title；用 refine(args={ target: \"<objectId>\", title: \"...\" })，或在 open 时一次给齐。";
     }
     return entries;
   },
@@ -75,10 +74,8 @@ export async function executeTalkCommand(
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[talk] 缺少 thread context。";
-  const target = typeof ctx.args.target === "string" ? ctx.args.target : "";
-  if (target !== "user") {
-    return `[talk] 当前阶段仅支持 target="user"（收到 "${target}"）。`;
-  }
+  const target = typeof ctx.args.target === "string" ? ctx.args.target.trim() : "";
+  if (!target) return "[talk] 缺少 target 参数。";
   const title = typeof ctx.args.title === "string" ? deriveTitle(ctx.args.title) : "";
   if (!title) return "[talk] 缺少 title 参数。";
 
@@ -90,7 +87,7 @@ export async function executeTalkCommand(
     title,
     status: "open",
     createdAt: Date.now(),
-    target: "user",
+    target,
     conversationId: id,
   };
 

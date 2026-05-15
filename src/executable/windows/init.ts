@@ -1,40 +1,46 @@
 /**
- * Thread 初始化 helper — 给任何新建 thread 注入初始 creator do_window。
+ * Thread 初始化 helper — 给任何新建 thread 注入指向 creator 的初始 window。
  *
- * spec § 初始 creator 对话 window：每个 thread 启动时必有一个指向 creator 的 do_window，
- * 作为该 thread 与创建方的恒在通道。
+ * spec § 初始 creator 对话 window：每个 thread 启动时必有一条与创建方的恒在通道。
  *
- * - root thread：creatorThreadId 取约定值 SESSION_CREATOR_THREAD_ID（"__session__"），
- *   表示该 thread 由外部 session 启动
- * - child thread：creatorThreadId = 父 thread.id
- * - 已有 creator window 的 thread 不会重复注入（持久化恢复时也走这条 helper 兜底）
+ * 两种 creator 形态：
+ *
+ * - "do"  — fork 出来的子线程；creator 是父 thread。
+ *           creator window = type=do, targetThreadId=父 thread id, isCreatorWindow=true。
+ * - "talk" — 通过跨对象 talk 派生出来的 callee thread；creator 是 caller object 的某个 thread。
+ *           creator window = type=talk, target=caller object, targetThreadId=caller thread,
+ *           isCreatorWindow=true。callee 通过该 talk_window.say 回复给 caller。
+ *
+ * 两种 window 共用 creatorWindowIdOf(threadId) 派生的稳定 id；幂等插入。
  */
 
 import {
   ROOT_WINDOW_ID,
   SESSION_CREATOR_THREAD_ID,
   creatorWindowIdOf,
+  type ContextWindow,
   type DoWindow,
+  type TalkWindow,
 } from "./types.js";
 import type { ThreadContext } from "../../thinkable/context.js";
 
+export type CreatorKind = "do" | "talk";
+
 export interface InitContextWindowsOpts {
-  /** thread 的 creator id；缺省 = SESSION_CREATOR_THREAD_ID（仅 root thread 适用）。 */
+  /** thread 的 creator thread id；缺省 = SESSION_CREATOR_THREAD_ID（仅 root thread 适用）。 */
   creatorThreadId?: string;
-  /** 初始任务标题；将作为 creator do_window 的 title。 */
+  /** 初始任务标题；将作为 creator window 的 title。 */
   initialTaskTitle: string;
+  /**
+   * creator window 类型；
+   * - "do"  ：默认；fork 子线程或 root thread 兜底
+   * - "talk"：跨对象 talk 派生 callee thread；要求同时给 callerObjectId
+   */
+  creatorKind?: CreatorKind;
+  /** 仅 creatorKind === "talk" 时使用：caller 所在 object id。 */
+  callerObjectId?: string;
 }
 
-/**
- * 确保 thread.contextWindows 含一个 creator do_window。
- *
- * 幂等：如果已存在同 id 的 window 直接返回；不存在时插入到 contextWindows 数组开头。
- *
- * 使用场景：
- * - flows/service.ts 中创建 root thread 后调用一次
- * - persistable/thread-json.ts 反序列化旧数据时兜底调用
- * - commands/do.ts 创建 child thread 时已自行构造（保留独立路径，避免环依赖）
- */
 export function initContextWindows(
   thread: ThreadContext,
   opts: InitContextWindowsOpts,
@@ -45,15 +51,31 @@ export function initContextWindows(
     thread.contextWindows = list;
     return;
   }
-  const creatorWindow: DoWindow = {
-    id: creatorWindowId,
-    type: "do",
-    parentWindowId: ROOT_WINDOW_ID,
-    title: opts.initialTaskTitle,
-    status: "running",
-    createdAt: Date.now(),
-    targetThreadId: opts.creatorThreadId ?? SESSION_CREATOR_THREAD_ID,
-    isCreatorWindow: true,
-  };
+
+  const creatorThreadId = opts.creatorThreadId ?? SESSION_CREATOR_THREAD_ID;
+  const creatorWindow: ContextWindow = opts.creatorKind === "talk"
+    ? ({
+        id: creatorWindowId,
+        type: "talk",
+        parentWindowId: ROOT_WINDOW_ID,
+        title: opts.initialTaskTitle,
+        status: "open",
+        createdAt: Date.now(),
+        target: opts.callerObjectId ?? "user",
+        targetThreadId: creatorThreadId,
+        conversationId: creatorWindowId,
+        isCreatorWindow: true,
+      } satisfies TalkWindow)
+    : ({
+        id: creatorWindowId,
+        type: "do",
+        parentWindowId: ROOT_WINDOW_ID,
+        title: opts.initialTaskTitle,
+        status: "running",
+        createdAt: Date.now(),
+        targetThreadId: creatorThreadId,
+        isCreatorWindow: true,
+      } satisfies DoWindow);
+
   thread.contextWindows = [creatorWindow, ...list];
 }

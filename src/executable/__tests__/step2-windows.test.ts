@@ -21,35 +21,50 @@ import { makeThread } from "../../__tests__/make-thread";
  */
 
 describe("Step 2 window lifecycles", () => {
-  it("talk_window: root.talk creates window; say writes outbox; close releases", async () => {
-    const thread = makeThread({ id: "t_root" });
+  it("talk_window: root.talk creates window; say delivers cross-object; close releases", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "ooc-talk-"));
+    try {
+      // caller thread 必须有 persistence ref，talk-delivery 才能 createFlowObject + 写 callee
+      const thread = makeThread({
+        id: "root",
+        persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "alice", threadId: "root" },
+      });
+      // 必须先建 caller flow object 目录，writeThread 才能落盘
+      const { createFlowObject } = await import("../../persistable");
+      await createFlowObject({ baseDir: tempRoot, sessionId: "s1", objectId: "alice" });
 
-    // 创建 talk_window
-    await execRootCommand("talk", { thread, args: { target: "user", title: "release plan" } });
-    const talkWindow = thread.contextWindows.find((w): w is TalkWindow => w.type === "talk");
-    expect(talkWindow).toBeDefined();
-    expect(talkWindow!.target).toBe("user");
-    expect(talkWindow!.conversationId).toBe(talkWindow!.id);
+      // 创建 talk_window 指向 bob
+      await execRootCommand("talk", { thread, args: { target: "bob", title: "release plan" } });
+      const talkWindow = thread.contextWindows.find((w): w is TalkWindow => w.type === "talk" && !w.isCreatorWindow);
+      expect(talkWindow).toBeDefined();
+      expect(talkWindow!.target).toBe("bob");
 
-    // 通过 talk_window.say 发消息（C 规则触发自动 submit）
-    const mgr = WindowManager.fromThread(thread);
-    const opened = await mgr.openCommandExec({
-      thread,
-      parentWindowId: talkWindow!.id,
-      command: "say",
-      title: "ask",
-      args: { msg: "deploy tomorrow ok?" },
-    });
-    thread.contextWindows = mgr.toData();
-    expect(opened.autoSubmitted).toBe(true);
-    expect(thread.outbox?.[0]?.windowId).toBe(talkWindow!.id);
-    expect(thread.outbox?.[0]?.source).toBe("talk");
+      // talk_window.say 通过 C 规则自动 submit，派送一条消息到 bob
+      const mgr = WindowManager.fromThread(thread);
+      const opened = await mgr.openCommandExec({
+        thread,
+        parentWindowId: talkWindow!.id,
+        command: "say",
+        title: "ask",
+        args: { msg: "deploy tomorrow ok?" },
+      });
+      thread.contextWindows = mgr.toData();
+      expect(opened.autoSubmitted).toBe(true);
+      expect(thread.outbox?.[0]?.windowId).toBe(talkWindow!.id);
+      expect(thread.outbox?.[0]?.source).toBe("talk");
 
-    // close talk_window
-    const mgr2 = WindowManager.fromThread(thread);
-    expect(mgr2.close(talkWindow!.id, thread)).toBe(true);
-    thread.contextWindows = mgr2.toData();
-    expect(thread.contextWindows.find((w) => w.id === talkWindow!.id)).toBeUndefined();
+      // talk_window.targetThreadId 已被 talk-delivery 回填
+      const updated = thread.contextWindows.find((w): w is TalkWindow => w.id === talkWindow!.id);
+      expect(updated?.targetThreadId).toBeDefined();
+
+      // close（非 creator）允许
+      const mgr2 = WindowManager.fromThread(thread);
+      expect(mgr2.close(talkWindow!.id, thread)).toBe(true);
+      thread.contextWindows = mgr2.toData();
+      expect(thread.contextWindows.find((w) => w.id === talkWindow!.id)).toBeUndefined();
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
   });
 
   it("program_window: root.program runs first exec; window.exec appends to history", async () => {
