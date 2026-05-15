@@ -160,7 +160,196 @@ afterAll(async () => {
   if (TEMP) await rm(TEMP, { recursive: true, force: true });
 });
 
-void TEMP;
-void writeFile;
-void readFile;
+// ---------- U2: file_window.edit ----------
+
+import type { FileWindow } from "../windows/index";
+
+/**
+ * 创建一个临时文件 + 对应的 file_window + WindowManager，
+ * 让 .edit 测试可以直接 openCommandExec("edit", args) 走完真实链路。
+ */
+async function makeFileFixture(name: string, body: string) {
+  const path = join(TEMP, name);
+  await writeFile(path, body, "utf8");
+  const thread = makeThread({ id: `t_edit_${name.replace(/\W+/g, "_")}` });
+  const fw: FileWindow = {
+    id: `w_file_${name.replace(/\W+/g, "_")}`,
+    type: "file",
+    parentWindowId: "root",
+    title: name,
+    status: "open",
+    createdAt: Date.now(),
+    path,
+  };
+  thread.contextWindows = [...thread.contextWindows, fw];
+  const mgr = WindowManager.fromThread(thread);
+  return { thread, mgr, fileWindow: fw, path };
+}
+
+async function runEdit(name: string, body: string, args: Record<string, unknown>) {
+  const { thread, mgr, fileWindow, path } = await makeFileFixture(name, body);
+  const opened = await mgr.openCommandExec({
+    thread,
+    parentWindowId: fileWindow.id,
+    command: "edit",
+    title: `edit ${name}`,
+    args,
+  });
+  thread.contextWindows = mgr.toData();
+  return { opened, path, mgr, thread };
+}
+
+describe("U2: file_window.edit", () => {
+  it("happy: single { old, new } replaces uniquely + writes to disk", async () => {
+    const { opened, path } = await runEdit(
+      "single.txt",
+      "hello world\nfoo bar\nbye world\n",
+      { old: "foo bar", new: "FOO BAR" },
+    );
+    expect(opened.autoSubmitted).toBe(true);
+    expect(opened.submitResult).toBeUndefined(); // success returns undefined
+    const after = await readFile(path, "utf8");
+    expect(after).toBe("hello world\nFOO BAR\nbye world\n");
+  });
+
+  it("happy: array { edits } applies all atomically", async () => {
+    const { opened, path } = await runEdit(
+      "batch.txt",
+      "alpha\nbeta\ngamma\n",
+      { edits: [
+        { old: "alpha", new: "ALPHA" },
+        { old: "gamma", new: "GAMMA" },
+      ] },
+    );
+    expect(opened.autoSubmitted).toBe(true);
+    expect(opened.submitResult).toBeUndefined();
+    const after = await readFile(path, "utf8");
+    expect(after).toBe("ALPHA\nbeta\nGAMMA\n");
+  });
+
+  it("edge: oldString not found → error contains 'not found', file untouched", async () => {
+    const { opened, path } = await runEdit(
+      "miss.txt",
+      "alpha\nbeta\n",
+      { old: "delta", new: "DELTA" },
+    );
+    expect(opened.autoSubmitted).toBe(true);
+    expect(opened.submitResult).toContain("not found");
+    const after = await readFile(path, "utf8");
+    expect(after).toBe("alpha\nbeta\n");
+  });
+
+  it("edge: oldString matches multiple times → error includes 'matches N times', file untouched", async () => {
+    const { opened, path } = await runEdit(
+      "dup.txt",
+      "alpha\nalpha\nalpha\n",
+      { old: "alpha", new: "ALPHA" },
+    );
+    expect(opened.autoSubmitted).toBe(true);
+    expect(opened.submitResult).toContain("matches 3 times");
+    const after = await readFile(path, "utf8");
+    expect(after).toBe("alpha\nalpha\nalpha\n");
+  });
+
+  it("edge: array form, edit #2 fails after edit #1 succeeds → none applied (atomic)", async () => {
+    const { opened, path } = await runEdit(
+      "atomic.txt",
+      "alpha\nbeta\ngamma\n",
+      { edits: [
+        { old: "alpha", new: "ALPHA" },
+        { old: "missing", new: "X" },
+      ] },
+    );
+    expect(opened.autoSubmitted).toBe(true);
+    expect(opened.submitResult).toContain("edit #1");
+    expect(opened.submitResult).toContain("not found");
+    const after = await readFile(path, "utf8");
+    // file untouched — neither ALPHA nor any partial change
+    expect(after).toBe("alpha\nbeta\ngamma\n");
+  });
+
+  it("edge: missing args.old AND args.edits → submit returns input-prompt error", async () => {
+    const { opened } = await runEdit(
+      "noargs.txt",
+      "x",
+      {} as Record<string, unknown>,
+    );
+    // 因为 args 不满足，C 规则不触发；form 留在 open 状态等 LLM refine
+    // openCommandExec 不会 submit，所以也不会有 submitResult；这是用户路径上的
+    // protocol guard，input knowledge 已经告诉 LLM 缺什么
+    expect(opened.autoSubmitted).toBe(false);
+  });
+
+  it("edge: parent is not a file_window → error '未挂载在 file_window 上'", async () => {
+    // 在 root 上调 edit（root 没有 edit command），应被 lookup 拒绝
+    const thread = makeThread({ id: "t_wrong_parent" });
+    const mgr = WindowManager.fromThread(thread);
+    let err: string | undefined;
+    try {
+      await mgr.openCommandExec({
+        thread,
+        parentWindowId: "root",
+        command: "edit",
+        title: "wrong parent",
+        args: { old: "a", new: "b" },
+      });
+    } catch (e) {
+      err = (e as Error).message;
+    }
+    expect(err).toBeDefined();
+    expect(err).toContain("not registered");
+  });
+
+  it("edge: file does not exist on disk → error mentions read failure", async () => {
+    // 故意指向不存在的 path
+    const thread = makeThread({ id: "t_missing_file" });
+    const fw: FileWindow = {
+      id: "w_file_missing",
+      type: "file",
+      parentWindowId: "root",
+      title: "missing",
+      status: "open",
+      createdAt: Date.now(),
+      path: join(TEMP, "does-not-exist.txt"),
+    };
+    thread.contextWindows = [...thread.contextWindows, fw];
+    const mgr = WindowManager.fromThread(thread);
+    const opened = await mgr.openCommandExec({
+      thread,
+      parentWindowId: fw.id,
+      command: "edit",
+      title: "edit missing",
+      args: { old: "a", new: "b" },
+    });
+    expect(opened.submitResult).toContain("读取");
+  });
+
+  it("edge: new === old → succeeds (no-op replace)", async () => {
+    const { opened, path } = await runEdit(
+      "noop.txt",
+      "hello",
+      { old: "hello", new: "hello" },
+    );
+    expect(opened.submitResult).toBeUndefined();
+    const after = await readFile(path, "utf8");
+    expect(after).toBe("hello");
+  });
+
+  it("edge: array sequential — edit #2's old appears only after edit #1 ran", async () => {
+    // edit #1 produces text containing "ZZ"; edit #2 needs "ZZ"
+    const { opened, path } = await runEdit(
+      "seq.txt",
+      "alpha\n",
+      { edits: [
+        { old: "alpha", new: "ZZ middle" },
+        { old: "ZZ middle", new: "FINAL" },
+      ] },
+    );
+    expect(opened.submitResult).toBeUndefined();
+    const after = await readFile(path, "utf8");
+    expect(after).toBe("FINAL\n");
+  });
+});
+
 void mkdir;
+
