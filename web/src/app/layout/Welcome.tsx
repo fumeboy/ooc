@@ -7,7 +7,7 @@ export function Welcome({
   onCreateSession,
 }: {
   stones: Stone[];
-  onCreateSession?: (input: { sessionId: string; objectId: string; initialMessage?: string }) => Promise<void>;
+  onCreateSession?: (input: { sessionId: string; targetObjectId: string; initialMessage: string }) => Promise<void>;
 }) {
   return (
     <div className="welcome-shell">
@@ -22,7 +22,9 @@ export function Welcome({
         <Card className="welcome-card">
           <div className="welcome-card-head">
             <strong>Create session</strong>
-            <div className="muted small">Choose an entry object and optional initial message to create the next flow.</div>
+            <div className="muted small">
+              Pick the object you want to talk to, write the first message, and we'll seed a new session for you.
+            </div>
           </div>
           {onCreateSession && <SessionCreator stones={stones} onCreate={onCreateSession} />}
         </Card>

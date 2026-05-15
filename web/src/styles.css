@@ -346,3 +346,8 @@ button { cursor: pointer; }
 .cw-detail-value { color: var(--foreground); overflow-wrap: anywhere; word-break: break-word; }
 .cw-detail-pre { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
 .cw-sub-windows { margin-top: 2px; display: grid; gap: 2px; }
+
+/* assistant-head 内的 thread switcher（collaborable cross-object talk） */
+.assistant-head-meta { display: grid; gap: 1px; min-width: 0; }
+.thread-switcher { margin-left: 8px; padding: 3px 6px; border: 1px solid rgba(224, 227, 220, .8); border-radius: 6px; background: rgba(255, 255, 255, .85); color: var(--foreground); font-size: 11px; max-width: 220px; }
+.thread-switcher:focus { outline: 1px solid rgba(120, 175, 200, .8); outline-offset: -1px; }

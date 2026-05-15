@@ -4,15 +4,19 @@ export const endpoints = {
   stoneKnowledgeDirectories: (objectId: string) => `/api/stones/${encodeURIComponent(objectId)}/knowledge/directories`,
   stoneKnowledgeFiles: (objectId: string) => `/api/stones/${encodeURIComponent(objectId)}/knowledge/files`,
   flows: "/api/flows",
+  /** collaborable § cross-object talk: 一次性 seed 一个 session（user → talk → target）。 */
+  sessions: "/api/sessions",
   pauseSession: (sessionId: string) => `/api/flows/${encodeURIComponent(sessionId)}/pause`,
   resumeSession: (sessionId: string) => `/api/flows/${encodeURIComponent(sessionId)}/resume`,
+  /** 列出 session 下所有 (objectId, threadId) — UI thread 切换器数据源。 */
+  sessionThreads: (sessionId: string) => `/api/flows/${encodeURIComponent(sessionId)}/threads`,
   tree: "/api/tree",
   file: "/api/tree/file",
   createFlowObject: (sessionId: string) => `/api/flows/${encodeURIComponent(sessionId)}/objects/`,
   thread: (sessionId: string, objectId: string, threadId = "root") =>
     `/api/flows/${encodeURIComponent(sessionId)}/objects/${encodeURIComponent(objectId)}/threads/${encodeURIComponent(threadId)}`,
-  continueThread: (sessionId: string, objectId: string, threadId = "root") =>
-    `/api/flows/${encodeURIComponent(sessionId)}/objects/${encodeURIComponent(objectId)}/threads/${encodeURIComponent(threadId)}/continue`,
+  /** 控制面用户回复：固定走 user.root.talk_window；body 含 text + targetWindowId? */
+  continueThread: (sessionId: string) => `/api/flows/${encodeURIComponent(sessionId)}/continue`,
   job: (jobId: string) => `/api/runtime/jobs/${encodeURIComponent(jobId)}`,
   runtimeGlobalPauseStatus: "/api/runtime/global-pause/status",
   runtimeGlobalPauseEnable: "/api/runtime/global-pause/enable",

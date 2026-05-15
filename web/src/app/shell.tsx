@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { continueThread, fetchJob, fetchThread, waitForJob } from "../domains/chat";
+import { continueThread, fetchJob, fetchSessionThreads, fetchThread, waitForJob } from "../domains/chat";
 import { fetchFile, fetchTree, type FileTreeNode, type TreeScope } from "../domains/files";
 import { fetchFlows, pauseFlowSession, resumeFlowSession, type FlowSession } from "../domains/flows";
 import { createSessionWithObject } from "../domains/sessions";
@@ -9,7 +9,7 @@ import { AppLayout } from "./layout/AppLayout";
 import { MainPanel } from "./layout/MainPanel";
 import { RightPanel } from "./layout/RightPanel";
 import { Sidebar } from "./layout/Sidebar";
-import { initialState, type AppState } from "./state";
+import { initialState, type AppState, type SessionThread } from "./state";
 
 export function AppShell() {
   const [state, setState] = useState<AppState>(initialState);
@@ -41,11 +41,32 @@ export function AppShell() {
     setShowSessions(!state.activeSessionId);
   }, [state.scope, state.activeSessionId]);
 
-  async function loadThread(sessionId: string, objectId: string) {
+  /**
+   * 加载某个 (object, thread) 的 thread + session 下所有 thread 列表（switcher 数据源）。
+   *
+   * collaborable § cross-object talk（spec 2026-05-15）：sessionThreads 至少含 user.root
+   * 与一个 callee；用户在 switcher 上切换即更换 activeThreadId 后再次 loadThread。
+   */
+  async function loadThread(sessionId: string, objectId: string, threadId = "root") {
     try {
-      patch({ thread: await fetchThread(sessionId, objectId), activeSessionId: sessionId, activeObjectId: objectId });
+      const [thread, threads] = await Promise.all([
+        fetchThread(sessionId, objectId, threadId),
+        fetchSessionThreads(sessionId).catch(() => ({ items: [] as SessionThread[] })),
+      ]);
+      patch({
+        thread,
+        activeSessionId: sessionId,
+        activeObjectId: objectId,
+        activeThreadId: threadId,
+        sessionThreads: threads.items,
+      });
     } catch (error) {
-      patch({ error: messageFromError(error), activeSessionId: sessionId, activeObjectId: objectId });
+      patch({
+        error: messageFromError(error),
+        activeSessionId: sessionId,
+        activeObjectId: objectId,
+        activeThreadId: threadId,
+      });
     }
   }
 
@@ -70,10 +91,15 @@ export function AppShell() {
     return match ? { objectId: match[1], parentPath: match[2] ?? "" } : undefined;
   }
 
+  /**
+   * 用户从左侧 session 列表点开一条 session。
+   *
+   * 默认进入展示 user.root（user 视角看自己的 outbox），UI 上若用户切换 thread switcher
+   * 再去 loadThread(sessionId, otherObjectId, otherThreadId)。
+   */
   async function handleSession(flow: FlowSession) {
-    const objectId = state.stones[0]?.objectId;
-    patch({ activeSessionId: flow.sessionId, activeObjectId: objectId });
-    if (objectId) await loadThread(flow.sessionId, objectId);
+    patch({ activeSessionId: flow.sessionId });
+    await loadThread(flow.sessionId, "user", "root");
   }
 
   function updateFlowPausedState(sessionId: string, paused: boolean) {
@@ -87,36 +113,53 @@ export function AppShell() {
     patch({
       activeSessionId: undefined,
       activeObjectId: undefined,
+      activeThreadId: undefined,
       activePath: undefined,
       activeFile: undefined,
       activeStoneObjectId: undefined,
       activeKnowledgePath: undefined,
       thread: undefined,
+      sessionThreads: [],
       fileDirty: false,
       scope: "flows",
     });
     setShowSessions(true);
   }
 
-  async function handleCreate(input: { sessionId: string; objectId: string; initialMessage?: string }) {
+  /**
+   * 创建 session：等价于 user 对 target 的初次 talk。
+   *
+   * 流程：seedSession → 等 callee job 跑完 → 默认展示 user.root（user 视角能看到刚发的 message）。
+   */
+  async function handleCreate(input: { sessionId: string; targetObjectId: string; initialMessage: string }) {
     patch({ loading: true, error: undefined });
     try {
       const created = await createSessionWithObject(input);
       await waitForJob(created.jobId, fetchJob);
       await refreshBasics(state.scope);
-      await loadThread(input.sessionId, input.objectId);
+      await loadThread(input.sessionId, "user", "root");
     } catch (error) {
       patch({ error: messageFromError(error), loading: false });
     }
   }
 
+  /**
+   * 用户在 chat 框输入并发送。
+   *
+   * collaborable § cross-object talk（spec 2026-05-15）：固定走 user.root.talk_window；
+   * 后端 deliverTalkMessage 把消息派送到 callee + 入队 callee 的 think job。
+   * 等 job 完成后重新加载当前 thread（如果用户停在 user.root 就刷新 user.root；
+   * 如果用户切到了 callee 视角就刷新 callee）。
+   */
   async function handleSend(text: string) {
-    if (!state.activeSessionId || !state.activeObjectId) return;
+    if (!state.activeSessionId) return;
     patch({ loading: true, error: undefined });
     try {
-      const result = await continueThread(state.activeSessionId, state.activeObjectId, text);
+      const result = await continueThread(state.activeSessionId, text);
       await waitForJob(result.jobId, fetchJob);
-      await loadThread(state.activeSessionId, state.activeObjectId);
+      const objectId = state.activeObjectId ?? "user";
+      const threadId = state.activeThreadId ?? "root";
+      await loadThread(state.activeSessionId, objectId, threadId);
       patch({ loading: false });
     } catch (error) {
       patch({ error: messageFromError(error), loading: false });
@@ -137,7 +180,7 @@ export function AppShell() {
         updateFlowPausedState(state.activeSessionId, result.paused);
       }
       if (state.activeObjectId) {
-        await loadThread(state.activeSessionId, state.activeObjectId);
+        await loadThread(state.activeSessionId, state.activeObjectId, state.activeThreadId ?? "root");
       }
       await refreshBasics(state.scope);
     } catch (error) {
@@ -196,7 +239,7 @@ export function AppShell() {
     <AppLayout
       sidebar={<Sidebar scope={state.scope} flows={state.flows} tree={state.tree} activePath={state.activePath} activeSessionId={state.activeSessionId} activeSessionTitle={state.flows.find((flow) => flow.sessionId === state.activeSessionId)?.title ?? state.activeSessionId} showSessions={showSessions} onToggleSessions={() => setShowSessions((prev) => !prev)} onShowWelcome={handleShowWelcome} onScope={refreshBasics} onNode={handleNode} onSession={handleSession} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
       main={<MainPanel isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={state.activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} />}
-      right={<RightPanel sessionId={state.activeSessionId} objectId={state.activeObjectId} thread={state.thread} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} />}
+      right={<RightPanel sessionId={state.activeSessionId} objectId={state.activeObjectId} threadId={state.activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} onSelectThread={(sel) => state.activeSessionId && void loadThread(state.activeSessionId, sel.objectId, sel.threadId)} />}
     >
       <CreateStoneModal open={stoneModalOpen} draft={stoneDraft} onDraft={setStoneDraft} onClose={() => setStoneModalOpen(false)} onSubmit={handleCreateStone} />
       <CreateKnowledgeModal modal={knowledgeModal} draft={knowledgeDraft} onDraft={setKnowledgeDraft} onClose={() => setKnowledgeModal(undefined)} onSubmit={handleCreateKnowledge} />
