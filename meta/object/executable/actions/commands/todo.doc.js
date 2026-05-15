@@ -15,7 +15,7 @@ open(command="todo", title="登记后续待办", args={
 })
 \`\`\`
 
-> args 给齐时会触发 C 规则自动 submit；不需要再显式调 refine / submit。
+> args 给齐时 open 立即提交 form；不需要再显式调 refine / submit。
 
 ## 行为（Step 1 新模型 — spec 2026-05-14）
 

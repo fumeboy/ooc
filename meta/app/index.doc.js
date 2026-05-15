@@ -10,6 +10,22 @@ app 描述 OOC 内核之上的应用层入口。
 - server：基于 Elysia 的 HTTP 控制面，面向 UI、工程工具和人工操作暴露 OOC 基础能力。
 - web：基于 React/Vite 的最小 Web 控制面，调用 server API 浏览 world、管理 session 并继续 root thread chat。
 
+## 启动 app server 的世界根目录约定
+
+本仓库根 \`/Users/bytedance/x/ooc/ooc-2\` 仅放代码与 meta；world 状态（flows/stones/...）
+**不应**写在源码树里。约定使用 \`/Users/bytedance/x/ooc/ooc-2/.ooc-world-test\` 作为
+world 目录。
+
+启动命令必须显式传 \`--world\`：
+
+\`\`\`bash
+cd /Users/bytedance/x/ooc/ooc-2
+bun --env-file=.env src/app/server/index.ts --world /Users/bytedance/x/ooc/ooc-2/.ooc-world-test
+\`\`\`
+
+不带 \`--world\` 时 \`config.ts\` 会回退到 \`process.cwd()\`，把源码目录当 world——
+这是错误用法，禁止。
+
 ## 本地联调补充知识
 
 控制面 API 的“404 but 不是全部 404”在本地开发时，未必是代码没写进去，也可能是**旧 server 进程还活着**。

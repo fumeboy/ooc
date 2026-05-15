@@ -16,7 +16,7 @@ open(command="open_file", title="读 README", args={
 })
 \`\`\`
 
-> args 给齐时 C 规则触发自动 submit，无需 refine/submit。
+> args 给齐时 open 立即提交 form，无需 refine/submit。
 
 submit 副作用：在 thread.contextWindows 下挂一个 type=file 的 window。
 

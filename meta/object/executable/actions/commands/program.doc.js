@@ -18,7 +18,7 @@ open(command="program", title="…", args={
 })
 \`\`\`
 
-> args 给齐时 C 规则触发自动 submit，无需再 refine/submit。
+> args 给齐时 open 立即提交 form，无需再 refine/submit。
 
 ### 模式 B：调用对象函数方法（首次 exec）
 

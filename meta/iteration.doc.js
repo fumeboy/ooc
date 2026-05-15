@@ -83,7 +83,7 @@ ooc-2  (2026-05-08 ~ 2026-05-12)
         └── 关键决策：懒求值（无 thread 派生状态字段）+ 单篇 8KB / 总数 20 项渲染上限 + 删 thread.activatedKnowledge 字段（违反 SSoT）+ js-yaml 依赖
 
 └── 阶段 9：ContextWindow 统一抽象 — 把 form / inbox-outbox / windows 收敛为一种实体
-    ├── [2026-05-14] context-window-step1  ContextWindow flat 数组取代 activeForms / windows / pinnedKnowledge；root / command_exec / do_window / todo_window 真实落地；C 规则在 open tool 落地（next paths ⊇ baseline + next knowledge keys ⊆ baseline）；waitingType 字段取消（统一 inbox 唤醒）；初始 creator do_window 自动注入；持久化反序列化兼容旧 thread.json
+    ├── [2026-05-14] context-window-step1  ContextWindow flat 数组取代 activeForms / windows / pinnedKnowledge；root / command_exec / do_window / todo_window 真实落地；open tool 实现 args-complete 时立即提交 form 的能力（next paths ⊇ baseline + next knowledge keys ⊆ baseline）；waitingType 字段取消（统一 inbox 唤醒）；初始 creator do_window 自动注入；持久化反序列化兼容旧 thread.json
     │   ├── spec: docs/superpowers/specs/2026-05-14-context-window-unification-design.md
     │   └── plan: docs/superpowers/plans/2026-05-14-context-window-step1.md
     └── [2026-05-14] context-window-step2-3  talk_window / program_window / file_window / knowledge_window 全部上线；新 root commands open_file / open_knowledge；ProgramSelf 增 getThreadLocal/setThreadLocal；control plane continueThread 接 targetWindowId；persistable 删除 legacy migration shim；meta 全量回写

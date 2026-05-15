@@ -71,8 +71,8 @@ Step 1（spec 2026-05-14）后 form 改名为 \`command_exec window\`，是 Cont
 
 submit 成功后该 form **自动从 contextWindows 移除**，无需 close；失败时保留 \`status=executed\` + \`result\`，等 LLM 显式 close。
 
-注：todo 不再走 \`open → refine → submit\` 三步——\`open(command="todo", title=..., args={ content })\`
-在 C 规则下直接执行，产出独立的 \`todo_window\`；完成时 \`close(window_id="<todo_window_id>")\`。
+注：todo 不走 \`open → refine → submit\` 三步——\`open(command="todo", title=..., args={ content })\`
+在 args 给齐时 open 立即提交 form，产出独立的 \`todo_window\`；完成时 \`close(window_id="<todo_window_id>")\`。
 `,
   sources: {
     tools: toolsSource,

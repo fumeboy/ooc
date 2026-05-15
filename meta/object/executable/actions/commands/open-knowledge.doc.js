@@ -16,7 +16,7 @@ open(command="open_knowledge", title="pin file-ops", args={
 })
 \`\`\`
 
-> args 给齐时 C 规则触发自动 submit。
+> args 给齐时 open 立即提交 form。
 
 submit 副作用：在 thread.contextWindows 下挂一个 type=knowledge 的 window。
 
