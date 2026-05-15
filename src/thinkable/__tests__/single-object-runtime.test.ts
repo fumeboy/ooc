@@ -62,8 +62,8 @@ describe("single object runtime", () => {
       async generate() {
         callCount += 1;
         if (callCount === 1) {
-          // C 规则触发：args 给齐 plan，自动 submit；下一轮无需再 submit
-          return makeResult("I will set the plan via C-rule.", [
+          // args 给齐 plan 时 open 立即提交 form；下一轮无需再 submit
+          return makeResult("I will set the plan in one shot.", [
             {
               id: "tc1",
               name: "open",
@@ -97,7 +97,7 @@ describe("single object runtime", () => {
     const savedThread = JSON.parse(await readFile(threadFile(ref), "utf8"));
 
     expect(input.threadId).toBe("root");
-    // C 规则下 round 1 直接执行 plan；round 2 没有任何工具调用，所以 outputItems 只有 message
+    // round 1 时 open 立即提交 form 执行 plan；round 2 没有任何工具调用，所以 outputItems 只有 message
     expect(loopMeta.loopIndex).toBe(2);
     expect(loopMeta.status).toBe("ok");
     expect(root.plan).toBe("完成单 object 最小闭环");

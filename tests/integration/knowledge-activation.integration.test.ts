@@ -69,7 +69,7 @@ describe.skipIf(!hasLlmEnv)("integration: knowledge-activation", () => {
             "请帮我数一下 src/persistable/ 下有几个 .ts 文件（不含 __tests__/）。",
             "",
             "建议步骤：",
-            "1) open(command=\"program\", title=\"统计文件\", args={ language: \"shell\", code: \"find src/persistable -type f -name '*.ts' -not -path '*/__tests__/*' | wc -l\" })（C 规则会自动 submit）",
+            "1) open(command=\"program\", title=\"统计文件\", args={ language: \"shell\", code: \"find src/persistable -type f -name '*.ts' -not -path '*/__tests__/*' | wc -l\" })（args 给齐时 open 会立即提交 form）",
             "2) 看到 program_window.history 中有数字后，open(command=\"end\", args={ summary: \"数字是 N\" }) 结束",
             "",
             "提示：result 在 program_window.history 中可见，不需要 wait。",

@@ -12,8 +12,8 @@
  * 2. 解析或创建 callee thread：
  *    - 若 talkWindow.targetThreadId 已设置 → readThread 拿到 callee
  *    - 否则 → createFlowObject(callee) 兜底（已存在则 no-op），新建一条 thread，
- *      thread id 由派送时生成；callee 通过 initContextWindows({creatorKind:"talk"})
- *      自带一个指向 caller 的 creator talk_window
+ *      thread id 由派送时生成；callee 携带 creatorObjectId=caller object，
+ *      initContextWindows 据此自动注入指向 caller 的 creator talk_window
  *    - callee 创建好后 talkWindow.targetThreadId 回填，让下次 say 直接命中已有 thread
  *
  * 3. 写消息：
@@ -102,6 +102,7 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
       events: [],
       contextWindows: [],
       creatorThreadId: callerThread.id,
+      creatorObjectId: callerRef.objectId,
       persistence: {
         baseDir: callerRef.baseDir,
         sessionId: callerRef.sessionId,
@@ -111,8 +112,6 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
     };
     initContextWindows(calleeThread, {
       creatorThreadId: callerThread.id,
-      creatorKind: "talk",
-      callerObjectId: callerRef.objectId,
       initialTaskTitle: deriveCalleeThreadTitle(content),
     });
     // 回填 caller talk_window.targetThreadId

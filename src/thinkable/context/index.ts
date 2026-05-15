@@ -132,6 +132,15 @@ export type ThreadContext = {
   parentThreadId?: string;
   /** 创建本线程任务的线程，用于后续向 creator 汇报结果。 */
   creatorThreadId?: string;
+  /**
+   * 创建本线程的 object id；与 thread.persistence.objectId 比较即可判断 creator 是否=自己：
+   * - 相同（含缺省，视为 fork） → creator 关系是 do（同 object 内派生子线程）
+   * - 不同 → creator 关系是 talk（跨 object 的 callee thread）
+   *
+   * 由 talk-delivery / fork helper 在创建 callee/child thread 时写入；
+   * 历史 thread.json 没有此字段时保守按"相同"处理（do）。
+   */
+  creatorObjectId?: string;
   /** 子线程 ID 列表，保留创建顺序，便于展示和调试。 */
   childThreadIds?: string[];
   /** 子线程实体表；当前内存实现直接嵌套，不引入独立存储层。 */

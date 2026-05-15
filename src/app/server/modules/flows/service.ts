@@ -187,12 +187,11 @@ export function createFlowsService(deps: {
           id: "root",
           status: "running",
           events: [],
+          // user.root 不注入 creator window：user 是一切交互的起点，没有"创建它的人"，
+          // creator do_window 在这里是无意义的。详见 init.ts 的 isUserRootThread。
           contextWindows: [],
           persistence: userPersistence,
         };
-        initContextWindows(userThread, {
-          initialTaskTitle: `user @ ${sessionId}`,
-        });
       }
       const talkWindowId = generateWindowId("talk");
       const talkWindow: TalkWindow = {

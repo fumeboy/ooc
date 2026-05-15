@@ -1,9 +1,8 @@
 /**
  * root.open_file command — 创建一个 file_window，把指定文件内容引入 context。
  *
- * spec § file_window：
  * - args: path（必填）, lines?, columns?
- * - C 规则总命中：args 给齐 path 即直建 file_window
+ * - 给齐 path 即直建 file_window（open 立即提交 form）
  * - file_window 自身的 set_range / reload / close 由 windows/file.ts 注册
  */
 

@@ -14,7 +14,7 @@
  * - command_exec — 调用某 command 时的临时 sub-window，承载 args 累积与 knowledge 渐进激活
  *                  对应旧 ActiveForm 概念
  * - do           — fork 子线程后产生的对话窗口；transcript 是 inbox/outbox 在该子线程视角的视图
- * - todo         — 由 root.todo command 直建（C 规则总是命中），表示一条可见待办
+ * - todo         — 由 root.todo command 直建（args 完整时一步提交），表示一条可见待办
  *
  * Step 2 才会引入：talk / program / file / knowledge — 当前不在 union 中，避免假装已实现。
  */
@@ -111,7 +111,7 @@ export interface DoWindow extends BaseContextWindow {
 }
 
 /**
- * Todo window — 由 root.todo command 通过 C 规则直建。
+ * Todo window — 由 root.todo command 一步直建（args 给齐时 open 立即提交 form）。
  *
  * - content：待办正文（同时作为 title 来源；过长截断）
  * - onCommandPath：可选；命中这些 command path 时强提醒（替代旧 todo form 的 on_command_path）

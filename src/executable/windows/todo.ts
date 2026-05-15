@@ -1,10 +1,9 @@
 /**
- * todo_window — 由 root.todo command 通过 C 规则直建的可见待办。
+ * todo_window — 由 root.todo command 一步直建的可见待办。
  *
- * spec § todo_window：
  * - 没有 LLM 可调用的 command；唯一动作是 close（待办完成）
  * - onClose 无副作用，window 直接释放
- * - 渲染显示 content 与 onCommandPath（Step 2 的 file/knowledge window 同样模式）
+ * - 渲染显示 content 与 onCommandPath
  */
 
 import { registerWindowType } from "./registry.js";

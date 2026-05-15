@@ -1,9 +1,8 @@
 /**
  * root.open_knowledge command — 显式打开一个 knowledge doc 作为 knowledge_window。
  *
- * spec § knowledge_window：
  * - args: path（必填，相对 stones/{objectId}/knowledge/ 的路径，不带 .md）
- * - C 规则总命中：args 给齐 path 即直建 knowledge_window
+ * - 给齐 path 即直建 knowledge_window（open 立即提交 form）
  * - knowledge activator 在算激活集合时把所有打开的 knowledge_window.path 视为 force-full
  * - render 层从 loader index 拿 doc 正文渲染
  */

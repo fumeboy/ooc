@@ -39,7 +39,7 @@ describe("Step 2 window lifecycles", () => {
       expect(talkWindow).toBeDefined();
       expect(talkWindow!.target).toBe("bob");
 
-      // talk_window.say 通过 C 规则自动 submit，派送一条消息到 bob
+      // talk_window.say 在 args 给齐时 open 立即提交 form，派送一条消息到 bob
       const mgr = WindowManager.fromThread(thread);
       const opened = await mgr.openCommandExec({
         thread,
@@ -96,7 +96,7 @@ describe("Step 2 window lifecycles", () => {
     expect(reread.history[1]?.output).toContain("second");
   });
 
-  it("todo_window: created via C-rule; close via close tool", async () => {
+  it("todo_window: created via one-shot open (args complete → submit immediately); close via close tool", async () => {
     const thread = makeThread({ id: "t_root" });
     const mgr = WindowManager.fromThread(thread);
     await mgr.openCommandExec({
@@ -115,7 +115,7 @@ describe("Step 2 window lifecycles", () => {
     expect(thread.contextWindows.find((w) => w.id === todo.id)).toBeUndefined();
   });
 
-  it("file_window: created via open_file with C-rule; render reads file body", async () => {
+  it("file_window: created via open_file (args complete → submit immediately); render reads file body", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "ooc-fw-"));
     try {
       const file = join(tempRoot, "hello.txt");

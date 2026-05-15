@@ -20,11 +20,11 @@ describe.skipIf(!hasLlmEnv)("integration: executed-form-cleanup", () => {
     await cleanup();
   });
 
-  test("agent runs program (C-rule auto-submit), confirms no command_exec residue, then ends", async () => {
+  test("agent runs program (open auto-submits when args complete), confirms no command_exec residue, then ends", async () => {
     const root = await makeRootThread(
       tempRoot,
       [
-        "请用 open(command=\"program\", title=\"...\", args={ language: \"shell\", code: \"ls src/\" }) 执行 shell（C 规则会自动 submit）。",
+        "请用 open(command=\"program\", title=\"...\", args={ language: \"shell\", code: \"ls src/\" }) 执行 shell（args 给齐时 open 会立即提交 form）。",
         "结果会进 program_window.history，不会留下 command_exec form。",
         "然后用 close(window_id=<program_window id>) 关闭 program_window。",
         "最后 open(command=\"end\") 结束线程。",

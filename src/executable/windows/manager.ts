@@ -6,7 +6,8 @@
  * 职责：
  * - 持有 thread.contextWindows，封装所有增删改查
  * - 提供与 LLM 5 原语对齐的方法：
- *   - openCommandExec：在 parent window 下创建 command_exec sub-window；处理 C 规则自动 submit
+ *   - openCommandExec：在 parent window 下创建 command_exec sub-window；当 args 完整且不引入
+ *     新协议知识时，会立刻提交 form（具体行为由各 command 自己控制）
  *   - openTypedWindow：创建非 form 的 window（do_window / todo_window 等）
  *   - refine：累积 command_exec 的 args 并重算 commandPaths
  *   - submit：执行 command；成功自动移除 form；失败保留 result
@@ -64,7 +65,7 @@ function setEqual(a: string[], b: string[]): boolean {
   return true;
 }
 
-/** 判断 a 是否是 b 的子集（用于 C 规则的 knowledge keys 判定，详见 openCommandExec）。 */
+/** 判断 a 是否是 b 的子集（用于 openCommandExec 中的 auto-submit knowledge keys 判定）。 */
 function setSubset(a: string[], b: string[]): boolean {
   const setB = new Set(b);
   for (const v of a) if (!setB.has(v)) return false;
@@ -126,10 +127,11 @@ export class WindowManager {
    *
    * - parent_window_id 缺省 = ROOT_WINDOW_ID
    * - 如 args 非空，立刻 apply 一次 refine（累积到 form 上）
-   * - C 规则：args 非空且 baseline-vs-next 的 commandPaths / knowledge-keys 全等 → 自动 submit
+   * - 当 args 非空、commandPaths / knowledge keys 都未引入新内容时，open 立刻提交 form
+   *   （即"args 给齐 + 不引入新协议知识"⇒一步执行；具体由各 command 的 match/knowledge 控制）
    *
    * 返回 { formId, autoSubmitted, submitResult }
-   * - autoSubmitted=true 表示 C 规则触发；submitResult 是 command.exec 的返回值
+   * - autoSubmitted=true 表示 open 已经直接提交 form；submitResult 是 command.exec 的返回值
    *
    * 注意：本方法不直接 mutate thread；调用方负责 thread.contextWindows = mgr.toData()
    */
@@ -179,8 +181,8 @@ export class WindowManager {
     this.windows.set(formId, form);
     this.recordKnowledgeRefs(form);
 
-    // C 规则判定（spec § C 规则的判定算法）：
-    // - args 非空（无 args 等价于 LLM 想观察 form 状态再决定，不应自动 submit）
+    // auto-submit 判定：
+    // - args 非空（无 args 等价于 LLM 想观察 form 状态再决定，不应直接提交）
     // - next commandPaths ⊇ baseline（新 path 由 LLM 显式给出，不算"surprise"）
     // - next knowledge keys ⊆ baseline（command 自己不引入新协议知识，LLM 已知所有规则）
     if (Object.keys(args).length > 0) {

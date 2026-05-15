@@ -1,13 +1,12 @@
 /**
  * root.program command — 创建一个 program_window 并立即执行第一次 exec。
  *
- * spec § program_window：
  * - submit 副作用：在 thread.contextWindows 下挂 type=program 的 window；
  *   args 中的 language+code / function+args 作为首次 exec 立即跑，结果进 history[0]
  * - 后续 exec：通过 program_window 上注册的 \`exec\` command（windows/program.ts）
  * - 跨 exec 共享数据通道：仅 ts/js sandbox 可读写 thread.threadLocalData
  *
- * C 规则：args 含完整 language+code 或 function+args 时一步触发自动 submit。
+ * args 含完整 language+code 或 function+args 时，open 会立刻提交 form 一步执行。
  */
 
 import type {

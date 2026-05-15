@@ -1,17 +1,13 @@
 /**
  * open tool — 在某 window 上 open 一个 command，创建一个 command_exec sub-window。
  *
- * spec 依据：docs/superpowers/specs/2026-05-14-context-window-unification-design.md § 5 原语
- *
  * 形态：
  *   open(parent_window_id?, command, args?, title, description?)
  *
  * - parent_window_id 缺省 = "root"；root 上注册了今天 commands/ 目录的全部 command
  * - command 必须是 parent window 注册的某个 command 名
  * - args 非空时等价于 open + 立即 refine(args)
- * - C 规则：args 非空 + commandPaths 与空 args 时一致 + knowledge keys 不变 → 自动 submit
- *
- * Step 1 范围下：暂不支持 type=knowledge / type=file（spec § 迁移节奏 Step 2 才回归）。
+ * - 有时当 args 完整时，open 会立刻提交 form 而无需再额外 submit；这由各个具体 command 的实现自行控制
  */
 
 import type { LlmTool } from "../../thinkable/llm/types.js";
@@ -23,7 +19,7 @@ import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 export const OPEN_TOOL: LlmTool = {
   name: "open",
   description:
-    "在某 window 下打开一个 command（创建 command_exec form）。parent_window_id 缺省为 root；business 参数放在 args 里，会立刻被累积。当 args 已经无歧义且不引入新的协议知识时，系统会直接执行该 command（C 规则），无需再调 submit。",
+    "在某 window 下打开一个 command（创建 command_exec form）。parent_window_id 缺省为 root",
   inputSchema: {
     type: "object",
     properties: {
@@ -43,7 +39,7 @@ export const OPEN_TOOL: LlmTool = {
       },
       args: {
         type: "object",
-        description: "command 的业务参数；可在此一次性给齐让 C 规则触发自动 submit。",
+        description: "command 的业务参数；如果不知道填什么可以留空，open 后系统会激活相关知识说明参数",
       },
       mark: MARK_PARAM,
     },

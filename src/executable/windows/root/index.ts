@@ -53,21 +53,21 @@ export const ROOT_BASIC_PATH = "internal/windows/root/basic";
  */
 export const ROOT_KNOWLEDGE = `
 root window 是每个 thread 隐含的根窗口。在 root 上可用的 command 列表如下，
-通过 open(command="<name>", title="...", args={...}) 调用（args 给齐时 C 规则会自动 submit）：
+通过 open(command="<name>", title="...", args={...}) 调用（args 给齐时部分 command 会立即提交 form
+而无需再额外 submit；这由各个具体 command 的实现自行控制）：
 
 | command         | 作用                                          | 主要副作用                                 |
 |-----------------|-----------------------------------------------|--------------------------------------------|
 | do              | 派生子线程                                    | 创建 child thread + do_window              |
-| talk            | 与 user 持续会话（当前 target 仅 "user"）      | 创建 talk_window；发消息走 talk_window.say |
+| talk            | 与其它对象（含人类 user 与其它 flow object）持续会话；同一对象复用同一 talk_window | 创建 talk_window；发消息走 talk_window.say |
 | program         | 执行代码 / 调用 server 方法                   | 创建 program_window；首次 exec 立即运行    |
 | plan            | 写 thread.plan                                | 仅副作用，不产生 window                    |
-| todo            | 登记可见待办                                  | 创建 todo_window（C 规则常命中直建）       |
+| todo            | 登记可见待办                                  | 创建 todo_window（args 给齐时通常直接提交） |
 | end             | 标记 thread 完成                              | 仅副作用                                   |
 | open_file       | 把指定文件引入 context                        | 创建 file_window；后续 set_range/reload    |
 | open_knowledge  | 显式打开 stone knowledge doc                  | 创建 knowledge_window（force-full 渲染）   |
 
-每个 command 在进入 \`open\` 后，对应的详细 \`internal/executable/<name>/basic\` 协议
-知识会作为 form 自身的 protocol knowledge_window 出现；上面的清单只是入口索引。
+每个 command 在进入 \`open\` 后，对应的知识会由系统自动激活；上面的清单只是入口索引。
 `.trim();
 
 /** 返回所有 root 上可 open 的命令名称列表（已排序）。 */

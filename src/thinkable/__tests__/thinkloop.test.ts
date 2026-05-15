@@ -244,7 +244,7 @@ describe("think", () => {
     ).toHaveLength(1);
   });
 
-  it("连续多轮 think 可以跑通 open（C 规则）触发 todo_window 直建", async () => {
+  it("连续多轮 think 可以跑通 open（args 给齐时 open 立即提交 form）触发 todo_window 直建", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-5",
       status: "running",
@@ -257,7 +257,7 @@ describe("think", () => {
       async generate() {
         round += 1;
         if (round === 1) {
-          // C 规则：open 时给齐 args 且不引入新 path/knowledge，自动 submit 直建 todo_window
+          // open 时给齐 args 且不引入新 path/knowledge，立即提交 form 直建 todo_window
           return makeResult("openai", "gpt-test", "登记一个待办", [
             {
               id: "call_open",

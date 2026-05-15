@@ -61,6 +61,16 @@ export interface WindowTypeDefinition {
   onClose?: OnCloseHook;
   /** 渲染 hook；缺省时渲染层用通用 fallback。 */
   renderXml?: RenderHook;
+  /**
+   * 该 window 类型的"基础协议知识"——只要 thread.contextWindows 里出现该 type 的至少
+   * 一个实例，就由 collectExecutableKnowledgeEntries 合成为一个 protocol KnowledgeWindow，
+   * 让 LLM 在没有任何已 open 的 command_exec 时也知道：
+   * - 该 window 注册了哪些 command
+   * - 调用形态（open(parent_window_id, command, args)）与典型用法
+   *
+   * 缺省（undefined）= 不合成；root / command_exec 通常不需要。
+   */
+  basicKnowledge?: string;
 }
 
 /**
@@ -135,6 +145,7 @@ export function registerWindowType(
     commands: { ...existing.commands, ...(partial.commands ?? {}) },
     onClose: partial.onClose ?? existing.onClose,
     renderXml: partial.renderXml ?? existing.renderXml,
+    basicKnowledge: partial.basicKnowledge ?? existing.basicKnowledge,
   });
 }
 

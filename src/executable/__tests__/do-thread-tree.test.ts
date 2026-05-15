@@ -73,7 +73,7 @@ describe("do command (ContextWindow model)", () => {
     });
     parent.contextWindows = mgr.toData();
 
-    // C 规则触发自动 submit（args 完整 + 不引入新 knowledge）
+    // open 立即提交 form（args 完整 + 不引入新 knowledge）
     expect(opened.autoSubmitted).toBe(true);
 
     const child = parent.childThreads![childId]!;
@@ -102,7 +102,7 @@ describe("do command (ContextWindow model)", () => {
     expect(parent.childThreads![childId]!.status).toBe("paused");
   });
 
-  it("C 规则：open(do, args={msg, wait:true}) 一次调用即完成 fork+wait（spec § C 规则）", async () => {
+  it("open(do, args={msg, wait:true}) 一次调用即完成 fork+wait（args 给齐时 open 立即提交 form）", async () => {
     const parent = makeThread({ id: "t_parent" });
     const mgr = WindowManager.fromThread(parent);
     const opened = await mgr.openCommandExec({

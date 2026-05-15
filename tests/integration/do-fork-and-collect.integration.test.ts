@@ -28,7 +28,7 @@ describe.skipIf(!hasLlmEnv)("integration: do-fork-and-collect", () => {
       [
         "请用 open(command=\"do\", title=\"统计 ts 文件\", args={ msg: '请用 program(language=shell) 跑 find src -type f -name *.ts | wc -l 然后 end', wait: true }) 派生子线程。",
         "等子线程完成后（你会从 waiting 醒来），用 open(command=\"end\") 结束父线程。",
-        "重要：args 给齐时 C 规则会自动 submit；不要在父线程里直接跑 shell。",
+        "重要：args 给齐时 open 会立即提交 form；不要在父线程里直接跑 shell。",
       ].join("\n"),
     );
 

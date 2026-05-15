@@ -1,11 +1,10 @@
 /**
  * root.talk command — 创建一个 talk_window，与另一个 flow object 持续会话。
  *
- * collaborable § cross-object talk（spec 2026-05-15）：
  * - target 是任意 flow object 的 objectId（含 "user"）
  * - submit 副作用：在 thread.contextWindows 下挂 type=talk window，初始无 targetThreadId；
  *   首次通过 talk_window.say 派送时再创建 callee thread 并回填
- * - args 完整时（target/title）C 规则触发自动 submit
+ * - args 完整时（target/title）open 会立刻提交 form
  * - 实际发消息走 talk_window.say，不在 root.talk 上发
  */
 
@@ -38,7 +37,12 @@ submit 后副作用：
 - 等待回复：open(parent_window_id="<talk_window_id>", command="wait", args={})
 - 关闭窗口：close(window_id="<talk_window_id>", reason="...")
 
-允许同时打开多个 talk_window 来并行维护不同 target / 不同主题。
+**重要：talk_window 是持续会话窗口，应该复用。**
+- 同一个 target 在同一个 thread 内只需要一个 talk_window；后续消息全部从同一个 talk_window 的 say 走
+- 不要每发一条消息就 close，再下一轮 open 一个新的——这会丢失 conversation 关联，并产生大量噪声 window
+- 仅当与该对象的对话真正结束、明确不再需要回复时才 close
+
+允许同时打开多个 talk_window 来并行维护**不同 target / 不同主题**（不是为了重复同一对话）。
 `.trim();
 
 export enum TalkCommandPath {

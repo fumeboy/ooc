@@ -9,7 +9,7 @@ import { makeThread } from "../../__tests__/make-thread";
  * 覆盖：
  * - tool 集合定义
  * - open 创建 command_exec window 并预填 args
- * - C 规则（args 完整 + 无新 knowledge → 自动 submit）
+ * - args 完整 + 无新 knowledge 时 open 立即提交 form
  * - refine 累积 args
  * - submit 成功自动移除；失败保留
  * - close 释放任意 window
@@ -29,7 +29,7 @@ describe("executable tools (ContextWindow model)", () => {
     expect(tools).toHaveLength(5);
   });
 
-  it("open(command=plan) 创建 command_exec form 并预填 args（plan 缺 plan 文本时不会被 C 规则自动 submit）", async () => {
+  it("open(command=plan) 创建 command_exec form 并预填 args（plan 缺 plan 文本时不会被立即提交）", async () => {
     const thread = makeThread();
     const output = await dispatchToolCall(thread, {
       id: "call_1",
@@ -51,7 +51,7 @@ describe("executable tools (ContextWindow model)", () => {
     expect(forms[0]?.command).toBe("plan");
   });
 
-  it("C 规则触发自动 submit：plan 给齐 plan 字段一次到位执行", async () => {
+  it("args 给齐时 open 立即提交 form：plan 给齐 plan 字段一次到位执行", async () => {
     const thread = makeThread();
     await dispatchToolCall(thread, {
       id: "call_1",
@@ -79,7 +79,7 @@ describe("executable tools (ContextWindow model)", () => {
     const output = await dispatchToolCall(thread, {
       id: "call_2",
       name: "refine",
-      arguments: { title: "补 wait", form_id: formId, form_args: { wait: true } },
+      arguments: { title: "补 wait", form_id: formId, args: { wait: true } },
     });
 
     const form = thread.contextWindows.find((w) => w.id === formId);
@@ -99,7 +99,7 @@ describe("executable tools (ContextWindow model)", () => {
     await dispatchToolCall(thread, {
       id: "call_2",
       name: "refine",
-      arguments: { title: "补 msg", form_id: formId, form_args: { msg: "处理日志" } },
+      arguments: { title: "补 msg", form_id: formId, args: { msg: "处理日志" } },
     });
     const output = await dispatchToolCall(thread, {
       id: "call_3",
