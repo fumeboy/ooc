@@ -3,6 +3,8 @@ import * as openFileSource from "@src/executable/windows/root/open-file";
 
 export const open_file_v20260514_1 = {
   get parent() { return commands_v20260506_1; },
+  name: "OpenFile",
+  get description() { return this.index; },
   index: `
 \`open_file\` 用于把指定文件的内容引入 context（持续可见，每轮重新读）。
 

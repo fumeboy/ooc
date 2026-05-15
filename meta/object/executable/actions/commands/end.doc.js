@@ -3,6 +3,8 @@ import * as endSource from "@src/executable/windows/root/end";
 
 export const end_v20260506_1 = {
   get parent() { return commands_v20260506_1; },
+  name: "End",
+  get description() { return this.index; },
   index: `
 \`end\` 用于主动标记本线程已完成。
 

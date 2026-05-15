@@ -1,8 +1,7 @@
 import { tools_v20260506_1 } from "@meta/object/executable/actions/tools/index.doc";
+import * as toolSchema from "@src/executable/tools/schema";
 
-export const mark_v20260506_1 = {
-  get parent() { return tools_v20260506_1; },
-  index: `
+const MARK_DESCRIPTION = `
 \`mark\` 不是独立的 tool，而是任意 tool 调用都可以携带的**附加参数**。
 用于标记 inbox 中的消息已读。
 
@@ -30,5 +29,13 @@ open(type=command, command=program, ..., mark=[
 如果 mark 是独立 tool，LLM 想 "标记几条消息 + 同时做某件事" 就需要两轮 ThinkLoop。
 
 把 mark 做成附加参数，让 LLM 可以"边做事边整理收件箱"，节省往返。
-`,
+`.trim();
+
+export const mark_v20260506_1 = {
+  get parent() { return tools_v20260506_1; },
+  name: "Mark",
+  description: MARK_DESCRIPTION,
+  /** legacy alias；下次清理删 */
+  index: MARK_DESCRIPTION,
+  sources: { toolSchema },
 };

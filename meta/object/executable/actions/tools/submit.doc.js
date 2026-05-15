@@ -3,6 +3,8 @@ import * as submitSource from "@src/executable/tools/submit";
 
 export const submit_v20260506_1 = {
   get parent() { return tools_v20260506_1; },
+  name: "Submit",
+  get description() { return this.index; },
   index: `
 \`submit\` 用于提交一个已 open 的 form，触发对应 command 执行。
 

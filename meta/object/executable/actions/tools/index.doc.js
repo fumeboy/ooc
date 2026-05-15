@@ -6,6 +6,8 @@ import * as toolsSource from "@src/executable/tools/index";
 // 用 getter 让消费方按需访问，避开 ReferenceError。
 export const tools_v20260506_1 = {
   get parent() { return executable_v20260504_1; },
+  name: "Tools",
+  get description() { return this.index; },
   index: `
 Tools 是 LLM 在每一轮 ThinkLoop 中可以直接调用的原语集合。
 

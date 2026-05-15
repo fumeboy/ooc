@@ -3,6 +3,8 @@ import * as refineSource from "@src/executable/tools/refine";
 
 export const refine_v20260506_1 = {
   get parent() { return tools_v20260506_1; },
+  name: "Refine",
+  get description() { return this.index; },
   index: `
 \`refine\` 用于向已有 form 累积 / 修改参数。
 

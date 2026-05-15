@@ -1,8 +1,10 @@
 import { tools_v20260506_1 } from "@meta/object/executable/actions/tools/index.doc";
+// compress 没有独立的 src 实现文件，它是 thinkloop 内部触发的复合行为；
+// sources 指向 thinkloop 与 events 这两个最相关的源码 module，让 tsc 守住链路。
+import * as thinkloop from "@src/thinkable/thinkloop";
+import * as events from "@src/thinkable/context/index";
 
-export const compress_v20260506_1 = {
-  get parent() { return tools_v20260506_1; },
-  index: `
+const COMPRESS_DESCRIPTION = `
 \`compress\` 用于清理上下文 & 压缩本线程的 process events，缓解 Context 容量压力。
 
 ## 何时触发
@@ -25,5 +27,13 @@ compress 完成后，会将 context diff 应用到 parent thread 中
 
 压缩是删除式的——被截断的 events 内容不可恢复。原始 thread.json 文件不保留压缩前快照。
 所以 compress 只该用于"已经没价值的中间细节"。
-`,
+`.trim();
+
+export const compress_v20260506_1 = {
+  get parent() { return tools_v20260506_1; },
+  name: "Compress",
+  description: COMPRESS_DESCRIPTION,
+  /** legacy alias；下次清理删 */
+  index: COMPRESS_DESCRIPTION,
+  sources: { thinkloop, events },
 };

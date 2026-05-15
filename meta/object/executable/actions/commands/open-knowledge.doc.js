@@ -3,6 +3,8 @@ import * as openKnowledgeSource from "@src/executable/windows/root/open-knowledg
 
 export const open_knowledge_v20260514_1 = {
   get parent() { return commands_v20260506_1; },
+  name: "OpenKnowledge",
+  get description() { return this.index; },
   index: `
 \`open_knowledge\` 用于显式打开一个 knowledge doc，作为 knowledge_window 持续可见。
 

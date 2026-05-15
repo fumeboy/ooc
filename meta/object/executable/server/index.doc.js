@@ -6,6 +6,8 @@ import * as serverTypes from "@src/executable/server/types";
 // parent 改为 getter 以打破 executable/index ↔ server/index 的循环初始化死锁。
 export const server_v20260506_1 = {
   get parent() { return executable_v20260504_1; },
+  name: "Server",
+  get description() { return this.index; },
   sources: {
     loader: serverLoader,
     self: serverSelf,

@@ -3,6 +3,8 @@ import * as doSource from "@src/executable/windows/root/do";
 
 export const do_v20260514_1 = {
   get parent() { return commands_v20260506_1; },
+  name: "Do",
+  get description() { return this.index; },
   index: `
 \`do\` 用于在当前对象内派生子线程，submit 后产出一个 **do_window** 挂在父 thread 的 contextWindows 下。
 

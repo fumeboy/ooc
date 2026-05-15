@@ -3,6 +3,8 @@ import * as programSource from "@src/executable/windows/root/program";
 
 export const program_v20260514_1 = {
   get parent() { return commands_v20260506_1; },
+  name: "Program",
+  get description() { return this.index; },
   index: `
 \`program\` 用于执行一段代码或调用 server 方法。Step 2（spec 2026-05-14）后产出 **program_window**，
 首次 exec 立即跑完，后续可通过 program_window 的 \`exec\` command 在同一窗口反复执行。

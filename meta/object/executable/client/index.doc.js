@@ -1,8 +1,13 @@
 import { executable_v20260504_1 } from "@meta/object/executable/index.doc";
+// client 文档主要描述前端 React app（在 web/，不在本 tsconfig include 范围）；
+// 但 client 通过后端 ui_methods 调入，sources 指向后端的 ui module 是最稳定的锚点：
+// 该 module 删除 / 改名时，client 的入口契约也就变了。
+import * as serverUi from "@src/app/server/modules/ui/service";
 
 // parent 改为 getter 以打破 executable/index ↔ client/index 的循环初始化死锁。
 export const client_v20260506_1 = {
   get parent() { return executable_v20260504_1; },
+  name: "Client",
   index: `
 Client 描述 Object 如何为自己编写前端 React UI 组件。
 
@@ -118,4 +123,7 @@ ooc://client/flows/s_xyz/objects/alan/pages/report-2026
 [/navigate]
 \`\`\`
 `,
+  /** description 与 index 同字符串，给 walkConcepts schema 校验用；下次清理把 index 删掉。 */
+  get description() { return this.index; },
+  sources: { serverUi },
 };

@@ -3,6 +3,8 @@ import * as waitSource from "@src/executable/tools/wait";
 
 export const wait_v20260506_1 = {
   get parent() { return tools_v20260506_1; },
+  name: "Wait",
+  get description() { return this.index; },
   index: `
 \`wait\` 用于让当前线程主动等待新消息。
 

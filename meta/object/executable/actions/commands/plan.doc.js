@@ -3,6 +3,8 @@ import * as planSource from "@src/executable/windows/root/plan";
 
 export const plan_v20260506_1 = {
   get parent() { return commands_v20260506_1; },
+  name: "Plan",
+  get description() { return this.index; },
   index: `
 \`plan\` 用于设置或更新当前线程的计划文本。
 

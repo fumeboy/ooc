@@ -69,13 +69,11 @@ describe("walkConcepts helper", () => {
     };
     root.children = { child };
 
-    // 不抛 stack overflow / 不死循环即为通过；同时 parent getter 不被遍历
+    // 不抛 stack overflow / 不死循环即为通过；parent getter 不被遍历。
+    // walkConcepts 会同时收到 root 与 child（aggregator 既是概念也允许有子概念）。
     const found = walkConcepts(root, "root");
     const paths = found.map((c) => c.path).sort();
-    expect(paths).toEqual(["root"]);
-    // root 是概念，按规则被记录后不再下钻其内部字段（含 children），
-    // 这是 isConcept 的副作用：概念是叶节点。如果未来需要"概念也能套子概念"，
-    // 调整 walkConcepts 的下钻规则，并同步更新此用例。
+    expect(paths).toEqual(["root", "root.children.child"]);
   });
 });
 

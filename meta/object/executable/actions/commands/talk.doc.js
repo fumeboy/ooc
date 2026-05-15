@@ -3,6 +3,8 @@ import * as talkSource from "@src/executable/windows/root/talk";
 
 export const talk_v20260514_1 = {
   get parent() { return commands_v20260506_1; },
+  name: "Talk",
+  get description() { return this.index; },
   index: `
 \`talk\` 用于开启一个对外会话窗口（talk_window）。
 Step 2（spec 2026-05-14）后，talk 不直接发消息——发消息走 talk_window 上注册的 \`say\` command。

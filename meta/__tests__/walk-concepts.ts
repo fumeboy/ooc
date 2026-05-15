@@ -35,14 +35,18 @@ function isConcept(value: unknown): value is ConceptShape {
   return true;
 }
 
-const SKIP_KEYS = new Set(["parent"]);
+const SKIP_KEYS = new Set(["parent", "sources"]);
 
 /**
  * 递归遍历 root，收集所有概念对象。
  *
- * - 遇到概念对象时记录、不再下钻其内部字段（避免把 sources 内的 module ns 当作子对象）
- * - 遇到聚合对象时下钻所有非 SKIP_KEYS 的 plain-object 值
- * - visited Set 按对象 identity 去重，破 getter 形成的反向链路
+ * - 对每个 plain-object 节点：先判定是否是概念（满足 schema），是则记录
+ * - 然后无条件下钻所有非 SKIP_KEYS 的 plain-object 字段
+ *   （aggregator 既可以是概念也可以是子树容器，例如 tools_v...
+ *    自己是概念，同时把 open/refine/submit 等暴露在子字段上）
+ * - SKIP_KEYS 跳过：parent（避免反向链路）、sources（其值是 module
+ *   namespace，不应被当作子概念遍历）
+ * - visited Set 按对象 identity 去重，破任何 getter 形成的循环
  */
 export function walkConcepts(root: unknown, rootPath = "root"): WalkedConcept[] {
   const out: WalkedConcept[] = [];
@@ -55,7 +59,6 @@ export function walkConcepts(root: unknown, rootPath = "root"): WalkedConcept[] 
 
     if (isConcept(value)) {
       out.push({ path, concept: value });
-      return;
     }
 
     for (const [key, child] of Object.entries(value)) {

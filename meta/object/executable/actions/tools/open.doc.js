@@ -3,6 +3,8 @@ import * as openSource from "@src/executable/tools/open";
 
 export const open_v20260506_1 = {
   get parent() { return tools_v20260506_1; },
+  name: "Open",
+  get description() { return this.index; },
   index: `
 \`open\` 用于
 - 开始一次行动

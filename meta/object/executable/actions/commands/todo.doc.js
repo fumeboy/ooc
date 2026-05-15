@@ -3,6 +3,8 @@ import * as todoSource from "@src/executable/windows/root/todo";
 
 export const todo_v20260514_1 = {
   get parent() { return commands_v20260506_1; },
+  name: "Todo",
+  get description() { return this.index; },
   index: `
 \`todo\` 用于登记一个可见待办，提交后产出一个 todo_window 持久挂在当前 thread 的 contextWindows。
 
