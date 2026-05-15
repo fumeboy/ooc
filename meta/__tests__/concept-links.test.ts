@@ -88,8 +88,15 @@ describe("executable meta tree", () => {
     expect(Array.isArray(concepts)).toBe(true);
   });
 
-  // U2 落地后 flip：executable.concepts.* 至少 7 个顶层概念存在
-  it.todo("every executable concept satisfies the schema (flips to pass after U2)");
+  it("collects concepts from executable.concepts.* (≥7 from U2 top-level extraction)", () => {
+    const conceptPaths = concepts.map((c) => c.path);
+    // 防止 .concepts 误删 / 重命名导致大量概念失踪
+    expect(concepts.length).toBeGreaterThanOrEqual(7);
+    // 抽样断言几个代表性 path 在场（regression 防护）
+    expect(conceptPaths).toContain("executable.concepts.contextWindow");
+    expect(conceptPaths).toContain("executable.concepts.progressiveDisclosure");
+    expect(conceptPaths).toContain("executable.concepts.knowledgeActivation");
+  });
 
   it("every collected concept has non-empty sources Record<string, object>", () => {
     for (const { path, concept } of concepts) {

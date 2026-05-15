@@ -5,6 +5,16 @@ import { commands_v20260506_1 } from "@meta/object/executable/actions/commands/i
 import { server_v20260506_1 } from "@meta/object/executable/server/index.doc";
 import { client_v20260506_1 } from "@meta/object/executable/client/index.doc";
 
+// 顶层概念：每个文件 = 一个具名概念对象 + sources 锁定 src module。
+// 见 docs/solutions/conventions/meta-concept-graph-2026-05-15.md
+import { context_window_v20260515_1 } from "@meta/object/executable/concepts/context-window.doc";
+import { window_registry_v20260515_1 } from "@meta/object/executable/concepts/window-registry.doc";
+import { window_manager_v20260515_1 } from "@meta/object/executable/concepts/window-manager.doc";
+import { progressive_disclosure_v20260515_1 } from "@meta/object/executable/concepts/progressive-disclosure.doc";
+import { creator_window_v20260515_1 } from "@meta/object/executable/concepts/creator-window.doc";
+import { command_exec_lifecycle_v20260515_1 } from "@meta/object/executable/concepts/command-exec-lifecycle.doc";
+import { knowledge_activation_v20260515_1 } from "@meta/object/executable/concepts/knowledge-activation.doc";
+
 // 引用源代码模块
 import * as executable_tools from "@src/executable/tools/index";
 import * as executable_commands from "@src/executable/windows/root/index";
@@ -12,84 +22,39 @@ import * as executable_windows from "@src/executable/windows/index";
 
 export const executable_v20260504_1 = {
   get parent() { return object_v20260504_1; },
-  index: `
+  description: `
 Executable 描述 Object 的行动 / 编程能力。
 
-## ContextWindow（Step 1 — spec 2026-05-14）
+- root window 注册顶层 command（do/talk/program/plan/end/todo/open_file/open_knowledge）
+- LLM 通过 5 原语 \`open / refine / submit / close / wait\` 与 contextWindows 交互
+- 知识协议（KNOWLEDGE / ROOT_KNOWLEDGE / 各 command knowledge / 各 window basicKnowledge）
+  每轮自动合成进 context，由 collectExecutableKnowledgeEntries 派生
 
-整套行动协议围绕 **ContextWindow** 抽象统一：每个 thread 持有一组 context window
-（root / command_exec / do / todo / 后续 talk / program / file / knowledge），
-LLM 通过 5 原语 \`open / refine / submit / close / wait\` 与 window 交互。
-
-- root window 注册 do/talk/program/plan/end/todo 等顶层 command
-- command_exec window 是调用某 command 时产生的 sub-window（旧 form 概念新身份）
-- do_window / todo_window 是 submit 副作用产出的持久 window
-- 详细设计见 docs/superpowers/specs/2026-05-14-context-window-unification-design.md
-
-三部分：
-
-1. **如何进行行动**（actions）
-    - tools：LLM 直接调用的原语（open / refine / submit / close / wait / compress）
-    - commands：root window 上注册的具体行动（program / talk / do / plan / todo / end）
-    - 通过 command_exec 把"参数填写"和"执行"分开，让复杂行动可分步思考
-
-2. **如何编写后端方法**（server）
-    - 每个 server 模块 export llm_methods / ui_methods 两个函数索引
-    - 执行 command \`program\` 来执行 ts/js 脚本时，可以在脚本里调用 server export 的函数；
-    - 前端通过 HTTP call_method 调用 ui_methods
-
-3. **如何编写前端界面**（client）
-    - React 组件，给人看不给 LLM 看
-    - server 的 ui_methods 是 client 唯一可调入口
-
-Executable 还负责维护默认注入的协议知识（用于告诉 LLM 如何与系统进行交互）：
-
-- 每轮都会把基础 executable 协议知识整理进 context
-- command 级知识由 \`command.match(args) -> paths\` 与 \`command.knowledge(...)\` 动态派生
-- 对于 object 自定义的 server method 的知识也会在 执行 command program 时动态计算
-
-## 渐进式披露
-
-整个行动机制围绕**渐进式披露**设计：
-
-\`\`\`
-LLM 想做某件事
-   ↓
-open(parent_window_id?, command=X) 表达意图，分配 form_id
-（如 args 已给齐 → open 立即提交 form）
-   ↓
-对应 knowledge 进入 Context（LLM 看到完整 API、注意事项、示例）
-   ↓
-LLM 在已知信息基础上 refine 参数（可多次累积）
-   ↓
-refine 触发新的 command path → 增量激活更多 knowledge
-   ↓
-LLM 想清楚后 submit 执行
-   ↓
-form 切到 executing 状态
-   ↓
-command 完成且成功 → form 自动从 contextWindows 移除；
-                    若产出新 window（do_window 等），新 window 挂在 root 下
-失败 → form 保留 executed + result，等 LLM 显式 close
-\`\`\`
-
-意义：Context 每一刻只装载"当前必需"的知识，而不是预先塞满所有可能用到的能力描述。
-
-## 子领域
-
-- [actions/tools](./actions/tools/index.doc.js) — 5 原语 + mark
-- [actions/commands](./actions/commands/index.doc.js) — submit 触发的具体行动
-- [server](./server/index.doc.js) — 后端方法注册与调用
-- [client](./client/index.doc.js) — 前端 React 组件
-
-## 对应源代码
-
-src/executable/
-- tools/    — 5 原语实现
-- commands/ — root window 注册的命令实现
-- windows/  — ContextWindow 抽象、registry、WindowManager、各 type 实现
-- server/   — server method 装载、enrich
-`,
+具体设计点见 \`concepts.*\` 各条；子领域见 tools / commands / server / client。
+`.trim(),
+  /**
+   * 概念集合：每条都是具名 JS 对象，可作为 LLM context 拉取的最小单元单独引用，
+   * 例如 executable_v20260504_1.concepts.contextWindow。
+   *
+   * 新增概念：在 ./concepts/ 下加文件 + 在此 import + 在该 record 加一个 key 即可。
+   * meta/__tests__/concept-links.test.ts 会自动覆盖到新概念。
+   */
+  concepts: {
+    contextWindow: context_window_v20260515_1,
+    windowRegistry: window_registry_v20260515_1,
+    windowManager: window_manager_v20260515_1,
+    progressiveDisclosure: progressive_disclosure_v20260515_1,
+    creatorWindow: creator_window_v20260515_1,
+    commandExecLifecycle: command_exec_lifecycle_v20260515_1,
+    knowledgeActivation: knowledge_activation_v20260515_1,
+  },
+  /**
+   * legacyIndex —— 旧的 .index 大块 markdown 在 2026-05-15 重构里被拆到 .concepts 各条。
+   * 字段保留只为不破坏下游 import；下个 plan 删除。
+   * 同时保留 .index 字段名以做 alias，防止外部代码访问 .index 直接报 undefined。
+   */
+  legacyIndex: `（已被拆到 .concepts，本字段仅为兼容下游 import；新代码请走 .concepts.*）`,
+  index: `（已被拆到 .concepts，本字段仅为兼容下游 import；新代码请走 .concepts.*）`,
   tools: tools_v20260506_1,
   commands: commands_v20260506_1,
   server: server_v20260506_1,
