@@ -15,6 +15,14 @@ import { creator_window_v20260515_1 } from "@meta/object/executable/concepts/cre
 import { command_exec_lifecycle_v20260515_1 } from "@meta/object/executable/concepts/command-exec-lifecycle.doc";
 import { knowledge_activation_v20260515_1 } from "@meta/object/executable/concepts/knowledge-activation.doc";
 
+// 按 window type 拆出的概念：每种 type 上的命令面 + 副作用
+import { talk_window_v20260515_1 } from "@meta/object/executable/windows/talk-window.doc";
+import { do_window_v20260515_1 } from "@meta/object/executable/windows/do-window.doc";
+import { todo_window_v20260515_1 } from "@meta/object/executable/windows/todo-window.doc";
+import { program_window_v20260515_1 } from "@meta/object/executable/windows/program-window.doc";
+import { file_window_v20260515_1 } from "@meta/object/executable/windows/file-window.doc";
+import { knowledge_window_v20260515_1 } from "@meta/object/executable/windows/knowledge-window.doc";
+
 // 引用源代码模块
 import * as executable_tools from "@src/executable/tools/index";
 import * as executable_commands from "@src/executable/windows/root/index";
@@ -47,6 +55,18 @@ Executable 描述 Object 的行动 / 编程能力。
     creatorWindow: creator_window_v20260515_1,
     commandExecLifecycle: command_exec_lifecycle_v20260515_1,
     knowledgeActivation: knowledge_activation_v20260515_1,
+    /**
+     * 按 window type 拆出的概念组：每个 window type 一个独立概念，
+     * sources 指向 src/executable/windows/<type>.ts 等。
+     */
+    windows: {
+      talkWindow: talk_window_v20260515_1,
+      doWindow: do_window_v20260515_1,
+      todoWindow: todo_window_v20260515_1,
+      programWindow: program_window_v20260515_1,
+      fileWindow: file_window_v20260515_1,
+      knowledgeWindow: knowledge_window_v20260515_1,
+    },
   },
   /**
    * legacyIndex —— 旧的 .index 大块 markdown 在 2026-05-15 重构里被拆到 .concepts 各条。
