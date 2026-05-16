@@ -587,3 +587,128 @@ describe("U4: root.glob + search_window.open_match", () => {
   });
 });
 
+// ---------- U5: root.grep ----------
+
+import { runJsFallback } from "../windows/root/grep-impl";
+
+async function dispatchGrep(thread: ReturnType<typeof makeThread>, args: Record<string, unknown>) {
+  return dispatchToolCall(thread, {
+    id: `call_${Math.random().toString(36).slice(2, 8)}`,
+    name: "open",
+    arguments: {
+      title: "grep",
+      command: "grep",
+      args,
+    },
+  });
+}
+
+async function makeGrepFixtureDir(prefix: string, files: Record<string, string>) {
+  const dir = join(TEMP, prefix);
+  await mkdir(dir, { recursive: true });
+  for (const [relPath, body] of Object.entries(files)) {
+    const fullPath = join(dir, relPath);
+    await mkdir(dirname(fullPath), { recursive: true });
+    await writeFile(fullPath, body, "utf8");
+  }
+  return dir;
+}
+
+describe("U5: root.grep", () => {
+  it("happy: simple pattern in one file → 1 match with line+snippet", async () => {
+    const dir = await makeGrepFixtureDir("grep-simple", {
+      "a.ts": "function foo() {}\nfunction bar() {}\n",
+    });
+    const thread = makeThread({ id: "t_grep_simple" });
+    await dispatchGrep(thread, { pattern: "function foo", path: dir });
+    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    expect(sw.kind).toBe("grep");
+    expect(sw.matches.length).toBe(1);
+    expect(sw.matches[0]!.line).toBe(0);
+    expect(sw.matches[0]!.snippet).toContain("function foo");
+  });
+
+  it("happy: matches across multiple files sorted by (path, line)", async () => {
+    const dir = await makeGrepFixtureDir("grep-multi", {
+      "z.ts": "needle\n",
+      "a.ts": "filler\nneedle\nfiller\nneedle\n",
+    });
+    const thread = makeThread({ id: "t_grep_multi" });
+    await dispatchGrep(thread, { pattern: "needle", path: dir });
+    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    expect(sw.matches.length).toBe(3);
+    expect(sw.matches[0]!.line).toBe(1);
+    expect(sw.matches[2]!.path.endsWith("z.ts")).toBe(true);
+  });
+
+  it("happy: case_insensitive matches Foo and foo", async () => {
+    const dir = await makeGrepFixtureDir("grep-ci", {
+      "a.ts": "Foo bar\nfoo baz\nFOO qux\n",
+    });
+    const thread = makeThread({ id: "t_grep_ci" });
+    await dispatchGrep(thread, { pattern: "foo", path: dir, case_insensitive: true });
+    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    expect(sw.matches.length).toBe(3);
+  });
+
+  it("edge: no matches → empty matches array", async () => {
+    const dir = await makeGrepFixtureDir("grep-empty", { "a.ts": "nothing here\n" });
+    const thread = makeThread({ id: "t_grep_empty" });
+    await dispatchGrep(thread, { pattern: "needle", path: dir });
+    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    expect(sw.matches).toEqual([]);
+    expect(sw.truncated).toBe(false);
+  });
+
+  it("edge: path is a single file → still works", async () => {
+    const dir = await makeGrepFixtureDir("grep-onefile", { "only.ts": "needle here\nand here too needle\n" });
+    const filePath = join(dir, "only.ts");
+    const thread = makeThread({ id: "t_grep_onefile" });
+    await dispatchGrep(thread, { pattern: "needle", path: filePath });
+    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    expect(sw.matches.length).toBe(2);
+  });
+
+  it("edge: missing pattern → submit returns '缺少 pattern' error", async () => {
+    const thread = makeThread({ id: "t_grep_no_pattern" });
+    const out = JSON.parse(await dispatchGrep(thread, { path: TEMP }));
+    expect(out.auto_submitted).toBe(true);
+    expect(out.result).toContain("缺少 pattern");
+  });
+
+  it("integration: grep → open_match spawns file_window with line context slice", async () => {
+    const lines: string[] = [];
+    for (let i = 0; i < 80; i += 1) lines.push(i === 40 ? "TARGET_TOKEN" : `line ${i}`);
+    const dir = await makeGrepFixtureDir("grep-integ-open", { "big.ts": lines.join("\n") + "\n" });
+    const thread = makeThread({ id: "t_grep_integ_open" });
+    await dispatchGrep(thread, { pattern: "TARGET_TOKEN", path: dir });
+    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    expect(sw.matches.length).toBe(1);
+    expect(sw.matches[0]!.line).toBe(40);
+
+    await dispatchOpenMatch(thread, sw.id, { index: 0 });
+    const fw = thread.contextWindows.find((w) => w.type === "file") as FileWindow;
+    expect(fw.lines).toBeDefined();
+    expect(fw.lines![0]).toBeLessThanOrEqual(40);
+    expect(fw.lines![1]).toBeGreaterThanOrEqual(40);
+  });
+
+  it("fallback: runJsFallback produces equivalent shape on a small corpus", async () => {
+    const dir = await makeGrepFixtureDir("grep-fallback", {
+      "a.ts": "foo line one\nbar\nfoo line three\n",
+      "b.txt": "no match here\nfoo on b.txt\n",
+    });
+    const hits = await runJsFallback({
+      pattern: "foo",
+      path: dir,
+      caseInsensitive: false,
+    });
+    expect(hits.length).toBe(3);
+    for (const h of hits) {
+      expect(typeof h.path).toBe("string");
+      expect(typeof h.line).toBe("number");
+      expect(h.snippet.length).toBeGreaterThan(0);
+    }
+  });
+});
+

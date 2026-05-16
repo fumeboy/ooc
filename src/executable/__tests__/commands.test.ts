@@ -33,6 +33,7 @@ describe("executable commands", () => {
       "do",
       "end",
       "glob",
+      "grep",
       "open_file",
       "open_knowledge",
       "plan",
