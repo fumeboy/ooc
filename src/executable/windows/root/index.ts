@@ -14,6 +14,7 @@
 import { registerWindowType } from "../registry.js";
 import { doCommand } from "./do.js";
 import { endCommand } from "./end.js";
+import { globCommand } from "./glob.js";
 import { openFileCommand } from "./open-file.js";
 import { openKnowledgeCommand } from "./open-knowledge.js";
 import { planCommand } from "./plan.js";
@@ -39,6 +40,7 @@ export const ROOT_COMMANDS: Record<string, CommandTableEntry> = {
   open_file: openFileCommand,
   open_knowledge: openKnowledgeCommand,
   write_file: writeFileCommand,
+  glob: globCommand,
 };
 
 /** Protocol knowledge path（与 plan.ts 等命令文件的 *_BASIC_PATH 形态一致）。 */
@@ -69,6 +71,7 @@ root window 是每个 thread 隐含的根窗口。在 root 上可用的 command 
 | open_file       | 把指定文件引入 context                        | 创建 file_window；后续 set_range/reload    |
 | open_knowledge  | 显式打开 stone knowledge doc                  | 创建 knowledge_window（force-full 渲染）   |
 | write_file      | 创建/覆盖文件内容                              | 写盘 + 自动 spawn file_window；后续可走 file_window.edit |
+| glob            | 按 glob pattern 匹配文件名                     | 创建 search_window kind=glob；后续可 open_match(index) |
 
 每个 command 在进入 \`open\` 后，对应的知识会由系统自动激活；上面的清单只是入口索引。
 `.trim();

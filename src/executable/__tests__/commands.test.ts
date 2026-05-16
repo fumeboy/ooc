@@ -32,6 +32,7 @@ describe("executable commands", () => {
     expect(getOpenableCommands()).toEqual([
       "do",
       "end",
+      "glob",
       "open_file",
       "open_knowledge",
       "plan",
