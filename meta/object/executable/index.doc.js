@@ -22,6 +22,7 @@ import { todo_window_v20260515_1 } from "@meta/object/executable/windows/todo-wi
 import { program_window_v20260515_1 } from "@meta/object/executable/windows/program-window.doc";
 import { file_window_v20260515_1 } from "@meta/object/executable/windows/file-window.doc";
 import { knowledge_window_v20260515_1 } from "@meta/object/executable/windows/knowledge-window.doc";
+import { search_window_v20260516_1 } from "@meta/object/executable/windows/search-window.doc";
 
 // 引用源代码模块
 import * as executable_tools from "@src/executable/tools/index";
@@ -66,6 +67,7 @@ Executable 描述 Object 的行动 / 编程能力。
       programWindow: program_window_v20260515_1,
       fileWindow: file_window_v20260515_1,
       knowledgeWindow: knowledge_window_v20260515_1,
+      searchWindow: search_window_v20260516_1,
     },
   },
   /**
