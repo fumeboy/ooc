@@ -712,3 +712,19 @@ describe("U5: root.grep", () => {
   });
 });
 
+// ---------- U6: program anti-pattern note ----------
+
+import { programCommand } from "../windows/root/program";
+
+describe("U6: program knowledge mentions file_window.edit", () => {
+  it("program command knowledge text steers LLM toward file_window.edit + write_file", () => {
+    // 用代表性 args 调 knowledge()——只需要 basic path 包含建议段落
+    const k = programCommand.knowledge!({ language: "shell", code: "ls" }, "open");
+    const text = Object.values(k).join("\n");
+    expect(text).toContain("file_window.edit");
+    expect(text).toContain("write_file");
+    // 反模式提示在场
+    expect(text).toContain("不要用 shell sed");
+  });
+});
+

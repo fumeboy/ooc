@@ -50,6 +50,13 @@ ts/js 上下文：
 
 调用示例：
 open(command="program", title="统计 ts 文件数量", args={ language: "shell", code: "find src -name '*.ts' | wc -l" })
+
+## 建议
+
+- 修改已有文件优先使用 \`file_window.edit\`（在已 open 的 file_window 上做 oldString→newString 精确替换；支持 atomic 多点修改）
+- 新建文件优先使用 \`root.write_file\`（一步写盘 + 自动 spawn file_window）
+- 搜索文件名优先使用 \`root.glob\`；搜索文件内容优先使用 \`root.grep\`（结果是结构化 search_window，可被 open_match 直接打开）
+- \`program(language="shell")\` 适合临时计算 / 不修改 worktree 的探查（统计、查询版本、跑测试）；**不要用 shell sed / awk / cat-redirect 改文件**——会失去 file_window 的版本可见性，且转义容易出错
 `.trim();
 
 export enum ProgramCommandPath {
