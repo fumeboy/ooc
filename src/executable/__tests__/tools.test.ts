@@ -178,18 +178,24 @@ describe("executable tools (ContextWindow model)", () => {
     expect(thread.events.some((e) => e.kind === "inject" && e.text.includes("close 拒绝"))).toBe(true);
   });
 
-  it("wait 把线程切到 waiting 并记录 inboxSnapshotAtWait", async () => {
+  it("wait 把线程切到 waiting 并记录 inboxSnapshotAtWait + waitingOn", async () => {
     const thread = makeThread({ inbox: [] });
+    // makeThread 默认注入 creator do_window，作为合法 wait target
+    const creatorDo = thread.contextWindows.find(
+      (w) => w.type === "do" && w.isCreatorWindow,
+    );
+    expect(creatorDo).toBeDefined();
     const output = await dispatchToolCall(thread, {
       id: "call_1",
       name: "wait",
-      arguments: { reason: "等待用户" },
+      arguments: { on: creatorDo!.id, reason: "等待 creator 回信" },
     });
     expect(thread.status).toBe("waiting");
     expect(thread.inboxSnapshotAtWait).toBe(0);
+    expect(thread.waitingOn).toBe(creatorDo!.id);
     const parsed = JSON.parse(output);
     expect(parsed.ok).toBe(true);
-    expect(parsed.message).toContain("等待 inbox 新消息");
+    expect(parsed.on).toBe(creatorDo!.id);
   });
 
   it("未知 tool 返回错误", async () => {
