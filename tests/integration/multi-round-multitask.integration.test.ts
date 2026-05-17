@@ -6,7 +6,8 @@ import {
   readData,
 } from "../../src/persistable";
 import {
-  countEventsWithPrefix,
+  bootstrapInboxFromPrompt,
+  countFormExecutions,
   hasLlmEnv,
   llm,
   setupTempFlow,
@@ -40,43 +41,41 @@ describe.skipIf(!hasLlmEnv)("integration: multi-round-multitask", () => {
     await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
     const flow = await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
 
+    const { inbox, events } = bootstrapInboxFromPrompt(
+      [
+        "你有 4 件计数任务 + 1 件汇总任务，必须分步独立完成（看到上一步 result 再做下一步）：",
+        "",
+        "任务 1：用 program(language=shell) 跑命令",
+        "  find src/persistable -type f -name '*.ts' -not -path '*/__tests__/*' | wc -l",
+        "  看到 [returnValue] / [stdout] 中的数字后，用 program(language=ts) 写：",
+        "  await self.setData('c_persistable', <那个数字>);",
+        "",
+        "任务 2：同样的形式，但目录改为 src/thinkable/，字段名 'c_thinkable'",
+        "任务 3：目录 src/executable/，字段名 'c_executable'",
+        "任务 4：目录 src/observable/，字段名 'c_observable'",
+        "",
+        "任务 5：用 program(language=ts) 写：",
+        "  const a = await self.getData('c_persistable');",
+        "  const b = await self.getData('c_thinkable');",
+        "  const c = await self.getData('c_executable');",
+        "  const d = await self.getData('c_observable');",
+        "  const total = a + b + c + d;",
+        "  await self.setData('total', total);",
+        "  _result_ = total;",
+        "",
+        "最后 open(end, summary='4 个目录共 N 个 ts 文件') 结束，N 是上面算出的 total。",
+        "",
+        "重要：",
+        "- 必须分步做，每步独立 open + submit 一个 program form；不要把多个 shell / ts 操作合并到一段脚本",
+        "- form result 已在 contextWindows 中可见，不要 wait",
+        "- 严格按 1→2→3→4→5 的顺序完成",
+      ].join("\n"),
+    );
     const root: ThreadContext = {
       id: "root",
       status: "running",
-      events: [
-        {
-          category: "context_change",
-          kind: "inject",
-          text: [
-            "你有 4 件计数任务 + 1 件汇总任务，必须分步独立完成（看到上一步 result 再做下一步）：",
-            "",
-            "任务 1：用 program(language=shell) 跑命令",
-            "  find src/persistable -type f -name '*.ts' -not -path '*/__tests__/*' | wc -l",
-            "  看到 [returnValue] / [stdout] 中的数字后，用 program(language=ts) 写：",
-            "  await self.setData('c_persistable', <那个数字>);",
-            "",
-            "任务 2：同样的形式，但目录改为 src/thinkable/，字段名 'c_thinkable'",
-            "任务 3：目录 src/executable/，字段名 'c_executable'",
-            "任务 4：目录 src/observable/，字段名 'c_observable'",
-            "",
-            "任务 5：用 program(language=ts) 写：",
-            "  const a = await self.getData('c_persistable');",
-            "  const b = await self.getData('c_thinkable');",
-            "  const c = await self.getData('c_executable');",
-            "  const d = await self.getData('c_observable');",
-            "  const total = a + b + c + d;",
-            "  await self.setData('total', total);",
-            "  _result_ = total;",
-            "",
-            "最后 open(end, summary='4 个目录共 N 个 ts 文件') 结束，N 是上面算出的 total。",
-            "",
-            "重要：",
-            "- 必须分步做，每步独立 open + submit 一个 program form；不要把多个 shell / ts 操作合并到一段脚本",
-            "- form result 已在 contextWindows 中可见，不要 wait",
-            "- 严格按 1→2→3→4→5 的顺序完成",
-          ].join("\n"),
-        },
-      ],
+      inbox,
+      events,
       contextWindows: [],
       persistence: { ...flow, threadId: "root" },
     };
@@ -92,8 +91,7 @@ describe.skipIf(!hasLlmEnv)("integration: multi-round-multitask", () => {
     expect(root.events.length).toBeGreaterThanOrEqual(25);
 
     // 3) 至少 9 个 form 被执行：4 shell + 4 ts(setData) + 1 ts(汇总) = 9，end 是第 10 个
-    expect(countEventsWithPrefix(root, "[form executed]")).toBeGreaterThanOrEqual(9);
-    expect(countEventsWithPrefix(root, "[form executing]")).toBeGreaterThanOrEqual(9);
+    expect(countFormExecutions(root)).toBeGreaterThanOrEqual(9);
 
     // 4) data.json 在 stone 目录下被反复写入，最终持有 5 个字段
     const data = await readData({ baseDir: tempRoot, objectId: "agent" });

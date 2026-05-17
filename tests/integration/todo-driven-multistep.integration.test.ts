@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { runScheduler } from "../../src/thinkable/scheduler";
 import {
-  countEventsWithPrefix,
+  countFormExecutions,
   hasLlmEnv,
   llm,
   makeRootThread,
@@ -40,6 +40,6 @@ describe.skipIf(!hasLlmEnv)("integration: todo-driven-multistep", () => {
     expect(root.status).toBe("done");
 
     // 至少 2 个 program_window form executed（todo_window 在 args 给齐时被一步直建）
-    expect(countEventsWithPrefix(root, "[form executed]")).toBeGreaterThanOrEqual(2);
+    expect(countFormExecutions(root)).toBeGreaterThanOrEqual(2);
   }, 240_000);
 });

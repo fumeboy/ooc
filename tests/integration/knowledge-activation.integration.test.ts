@@ -9,7 +9,8 @@ import {
   llmInputFile,
 } from "../../src/persistable";
 import {
-  countEventsWithPrefix,
+  bootstrapInboxFromPrompt,
+  countFormExecutions,
   hasLlmEnv,
   llm,
   setupTempFlow,
@@ -58,24 +59,22 @@ describe.skipIf(!hasLlmEnv)("integration: knowledge-activation", () => {
       ].join("\n")
     );
 
+    const { inbox, events } = bootstrapInboxFromPrompt(
+      [
+        "请帮我数一下 src/persistable/ 下有几个 .ts 文件（不含 __tests__/）。",
+        "",
+        "建议步骤：",
+        "1) open(command=\"program\", title=\"统计文件\", args={ language: \"shell\", code: \"find src/persistable -type f -name '*.ts' -not -path '*/__tests__/*' | wc -l\" })（args 给齐时 open 会立即提交 form）",
+        "2) 看到 program_window.history 中有数字后，open(command=\"end\", args={ summary: \"数字是 N\" }) 结束",
+        "",
+        "提示：result 在 program_window.history 中可见，不需要 wait。",
+      ].join("\n"),
+    );
     const root: ThreadContext = {
       id: "root",
       status: "running",
-      events: [
-        {
-          category: "context_change",
-          kind: "inject",
-          text: [
-            "请帮我数一下 src/persistable/ 下有几个 .ts 文件（不含 __tests__/）。",
-            "",
-            "建议步骤：",
-            "1) open(command=\"program\", title=\"统计文件\", args={ language: \"shell\", code: \"find src/persistable -type f -name '*.ts' -not -path '*/__tests__/*' | wc -l\" })（args 给齐时 open 会立即提交 form）",
-            "2) 看到 program_window.history 中有数字后，open(command=\"end\", args={ summary: \"数字是 N\" }) 结束",
-            "",
-            "提示：result 在 program_window.history 中可见，不需要 wait。",
-          ].join("\n"),
-        },
-      ],
+      inbox,
+      events,
       contextWindows: [],
       persistence: { ...flow, threadId: "root" },
     };
@@ -85,7 +84,7 @@ describe.skipIf(!hasLlmEnv)("integration: knowledge-activation", () => {
     expect(root.status).toBe("done");
 
     // 至少 2 个 form executed（program shell + end）
-    expect(countEventsWithPrefix(root, "[form executed]")).toBeGreaterThanOrEqual(2);
+    expect(countFormExecutions(root)).toBeGreaterThanOrEqual(2);
 
     // 关键断言：读 llm.input.json 解析后看 system message 的 XML 内容。
     // 这比让 LLM 自己复述 marker-7xq9 可靠——不依赖模型是否乖乖按指令重复内容。

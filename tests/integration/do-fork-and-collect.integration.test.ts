@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { runScheduler } from "../../src/thinkable/scheduler";
 import { threadFile } from "../../src/persistable";
 import {
-  countEventsWithPrefix,
+  countFormExecutions,
   hasLlmEnv,
   llm,
   makeRootThread,
@@ -40,7 +40,7 @@ describe.skipIf(!hasLlmEnv)("integration: do-fork-and-collect", () => {
     const childId = root.childThreadIds![0]!;
     const child = root.childThreads![childId]!;
     expect(child.status).toBe("done");
-    expect(countEventsWithPrefix(child, "[form executed]")).toBeGreaterThanOrEqual(1);
+    expect(countFormExecutions(child)).toBeGreaterThanOrEqual(1);
 
     if (child.persistence) {
       const saved = JSON.parse(await readFile(threadFile(child.persistence), "utf8"));

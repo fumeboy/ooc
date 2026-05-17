@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { runScheduler } from "../../src/thinkable/scheduler";
 import {
-  countEventsWithPrefix,
+  countFormExecutions,
   hasLlmEnv,
   llm,
   makeRootThread,
@@ -42,6 +42,6 @@ describe.skipIf(!hasLlmEnv)("integration: do-continue-after-done", () => {
     expect(child.status).toBe("done");
 
     // 至少 2 次 program_window 创建（每次首 exec 都会写一条 form executed）
-    expect(countEventsWithPrefix(child, "[form executed]")).toBeGreaterThanOrEqual(2);
+    expect(countFormExecutions(child)).toBeGreaterThanOrEqual(2);
   }, 240_000);
 });

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { runScheduler } from "../../src/thinkable/scheduler";
 import {
-  countEventsWithPrefix,
+  countFormExecutions,
   hasLlmEnv,
   llm,
   makeRootThread,
@@ -35,6 +35,6 @@ describe.skipIf(!hasLlmEnv)("integration: shell-exec-basic", () => {
 
     expect(root.status).toBe("done");
     expect(root.endSummary?.length ?? 0).toBeGreaterThan(0);
-    expect(countEventsWithPrefix(root, "[form executed]")).toBeGreaterThanOrEqual(1);
+    expect(countFormExecutions(root)).toBeGreaterThanOrEqual(1);
   }, 120_000);
 });

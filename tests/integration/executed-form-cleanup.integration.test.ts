@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { runScheduler } from "../../src/thinkable/scheduler";
 import {
-  countEventsWithPrefix,
+  countFormExecutions,
   hasLlmEnv,
   llm,
   makeRootThread,
@@ -35,7 +35,7 @@ describe.skipIf(!hasLlmEnv)("integration: executed-form-cleanup", () => {
     await runScheduler(root, llm(), { maxTicks: 10 });
 
     expect(root.status).toBe("done");
-    expect(countEventsWithPrefix(root, "[form executed]")).toBeGreaterThanOrEqual(1);
+    expect(countFormExecutions(root)).toBeGreaterThanOrEqual(1);
 
     const programForms = root.contextWindows.filter(
       (w) => w.type === "command_exec" && w.command === "program",

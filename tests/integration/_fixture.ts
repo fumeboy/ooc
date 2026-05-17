@@ -29,18 +29,21 @@ export async function setupTempFlow(): Promise<{ tempRoot: string; cleanup: () =
 }
 
 /**
- * 在临时 flow object 下创建一个携带初始 prompt 的 root thread。
+ * 构造一对 (inbox + inbox_message_arrived 事件)，作为 thread 的初始 user 输入。
  *
- * 实现走 inbox/inbox_message_arrived 路径——OOC 的 processEventToItems 仅渲染 error-inject，
- * 普通 inject 视作"过期上下文"被丢弃；若把 prompt 塞进 inject，LLM 看不到任何用户意图，
- * 会陷入"I don't have any prior context to continue from"的无限自问自答。
+ * 用于自己手搭 ThreadContext 的测试（如带自定义 stoneRef / 自定义 contextWindows 等）。
+ * makeRootThread 内部也用它。
+ *
+ * 为什么不用 inject：OOC processEventToItems 仅渲染 error-inject，普通 inject 视作
+ * "过期上下文"被丢弃；用 inject 传 prompt → LLM 看不到任何用户意图，会陷入
+ * "I don't have any prior context to continue from"的无限自问自答。
  */
-export async function makeRootThread(tempRoot: string, prompt: string): Promise<ThreadContext> {
-  const flow = await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
+export function bootstrapInboxFromPrompt(prompt: string): {
+  inbox: NonNullable<ThreadContext["inbox"]>;
+  events: ThreadContext["events"];
+} {
   const msgId = `msg_init_${Math.random().toString(36).slice(2, 10)}`;
-  const thread: ThreadContext = {
-    id: "root",
-    status: "running",
+  return {
     inbox: [
       {
         id: msgId,
@@ -52,6 +55,18 @@ export async function makeRootThread(tempRoot: string, prompt: string): Promise<
       },
     ],
     events: [{ category: "context_change", kind: "inbox_message_arrived", msgId }],
+  };
+}
+
+/** 在临时 flow object 下创建一个携带初始 prompt 的 root thread。 */
+export async function makeRootThread(tempRoot: string, prompt: string): Promise<ThreadContext> {
+  const flow = await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
+  const { inbox, events } = bootstrapInboxFromPrompt(prompt);
+  const thread: ThreadContext = {
+    id: "root",
+    status: "running",
+    inbox,
+    events,
     contextWindows: [],
     persistence: { ...flow, threadId: "root" },
   };
@@ -64,4 +79,49 @@ export function countEventsWithPrefix(thread: ThreadContext, prefix: string): nu
   return thread.events.filter(
     (e) => e.category === "context_change" && e.kind === "inject" && e.text.startsWith(prefix)
   ).length;
+}
+
+/**
+ * 统计本 thread 内"实际执行成功的 form"次数：
+ * - 显式 submit 成功（tool_runtime.function_call_output, toolName="submit", ok=true）
+ * - 经 open 一步直建并 auto-submit 成功（toolName="open", output.auto_submitted=true）
+ *
+ * 旧 fixture 用 countEventsWithPrefix(thread, "[form executed]") 但那条 prefix 出现在
+ * function_call_output 的 message 字段（tool_runtime 事件），从未作为 inject 出现——
+ * 所以旧断言永远是 0；这是 responses-first item 模型上线后没跟上的测试债。
+ */
+export function countFormExecutions(thread: ThreadContext): number {
+  let n = 0;
+  for (const event of thread.events) {
+    if (event.category !== "tool_runtime") continue;
+    if (event.kind !== "function_call_output") continue;
+    if (!event.ok) continue;
+    if (event.toolName === "submit") {
+      n += 1;
+      continue;
+    }
+    if (event.toolName === "open") {
+      try {
+        const out = JSON.parse(event.output) as { auto_submitted?: boolean };
+        if (out.auto_submitted === true) n += 1;
+      } catch {
+        /* 非 JSON output 忽略 */
+      }
+    }
+  }
+  return n;
+}
+
+/**
+ * 统计某个 tool 的成功调用次数（如 "close" / "wait" / "refine"）；不限定 tool 时
+ * 统计所有成功的 function_call_output。
+ */
+export function countSuccessfulToolCalls(thread: ThreadContext, toolName?: string): number {
+  return thread.events.filter((event) => {
+    if (event.category !== "tool_runtime") return false;
+    if (event.kind !== "function_call_output") return false;
+    if (!event.ok) return false;
+    if (toolName && event.toolName !== toolName) return false;
+    return true;
+  }).length;
 }
