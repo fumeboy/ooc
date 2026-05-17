@@ -10,7 +10,18 @@ import * as executable from "@src/executable/index";
  */
 export const knowledge_activation_v20260515_1 = {
   name: "KnowledgeActivation",
-  description: `Knowledge 在 OOC 中按 commandPaths 与 window 类型动态激活，统一表示为 KnowledgeWindow（type=knowledge）出现在 context 里。`,
+  description: `
+Knowledge 在 OOC 中按 commandPaths 与 window 类型动态激活，统一表示为
+KnowledgeWindow（type=knowledge）出现在 context 里。
+
+按子字段展开：
+
+- sources — knowledge entries 的 3 类来源（protocol / activator / explicit）
+- synthesisPipeline — collectExecutableKnowledgeEntries 的 5 步合成流程
+- ephemeralVsPersisted — 合成结果的持久化策略（仅 explicit 写回）
+- duplicateAvoidance — explicit 与 activator 同 path 的去重规则
+- pathPrefixConvention — protocol entries 的 3 类 key 前缀（internal/commands / internal/windows / kernel）
+`.trim(),
   sources: { knowledge, executable },
 
   sourcesEntry: {

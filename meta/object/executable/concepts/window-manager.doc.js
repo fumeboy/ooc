@@ -8,7 +8,18 @@ import * as manager from "@src/executable/windows/manager";
  */
 export const window_manager_v20260515_1 = {
   name: "WindowManager",
-  description: `WindowManager 持有 thread.contextWindows，封装所有 window 的增删改查；对外暴露与 LLM 5 原语对齐的方法。`,
+  description: `
+WindowManager 持有 thread.contextWindows，封装所有 window 的增删改查；对外暴露与 LLM
+5 原语对齐的方法。
+
+按子字段展开：
+
+- lifecycleMethods — 与 5 原语对齐的核心方法（openCommandExec / insertTypedWindow / refine / submit / close / markExecuted）
+- stateLoaders — 状态装载与导出 helper（fromThread / toData / queries）
+- knowledgeRefCount — knowledge path 引用计数的两个分支（command_exec 合 3 字段 / 其它 type 仅 windowKnowledgePaths）
+- notResponsibleFor — 3 件不归 WindowManager 管的事（commandExec 实现 / knowledge entries / 持久化）
+- usagePattern — 典型 fromThread → 操作 → toData 调用范式
+`.trim(),
   sources: { manager },
 
   lifecycleMethods: {

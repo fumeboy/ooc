@@ -10,7 +10,17 @@ import * as windows from "@src/executable/windows/index";
  */
 export const context_window_v20260515_1 = {
   name: "ContextWindow",
-  description: `ContextWindow 是 thread 持有的上下文单元；每个 thread 持有一组 contextWindows，按各自 type 注册一组可被 LLM 调用的 command。`,
+  description: `
+ContextWindow 是 thread 持有的上下文单元；每个 thread 持有一组 contextWindows，按各自
+type 注册一组可被 LLM 调用的 command。
+
+按子字段展开：
+
+- commonFields — 所有 ContextWindow 共有的 6 个最小字段（id / type / title / status / parentWindowId / createdAt）
+- primitives — LLM 5 原语（open / refine / submit / close / wait）的入口签名
+- typeCatalog — WindowType union 的 9 个分支（root / command_exec / do / todo / talk / program / file / knowledge / search）
+- registryBinding — 每个 type 通过 registerWindowType 注入契约的关联点
+`.trim(),
   sources: { types, windows },
 
   commonFields: {

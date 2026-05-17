@@ -9,7 +9,16 @@ import * as executable from "@src/executable/index";
  */
 export const progressive_disclosure_v20260515_1 = {
   name: "ProgressiveDisclosure",
-  description: `整个行动机制围绕渐进式披露设计：意图通过 open 表达 → 知识进入 context → LLM 在已知信息基础上 refine → submit 执行。`,
+  description: `
+整个行动机制围绕渐进式披露设计：意图通过 open 表达 → 知识进入 context → LLM 在已知
+信息基础上 refine → submit 执行。
+
+按子字段展开：
+
+- flow — 典型行动序列 7 步（open / knowledgeEntry / refine / activator 扩展 / submit / 成功 / 失败）
+- designIntent — 设计意图：context 只装载"当前必需"知识，由 collectExecutableKnowledgeEntries 落地
+- windowKindsProduced — submit 副作用产出的 4 类持久 window（doWindow / talkWindow / programWindow / typedSideEffect）
+`.trim(),
   sources: { executable },
 
   flow: {

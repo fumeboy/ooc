@@ -8,7 +8,15 @@ import * as knowledgeWindow from "@src/executable/windows/knowledge";
  */
 export const knowledge_window_v20260515_1 = {
   name: "KnowledgeWindow",
-  description: `knowledge_window 是一段 knowledge 文本在 context 中的运行时载体。`,
+  description: `
+knowledge_window 是一段 knowledge 文本在 context 中的运行时载体。
+
+按子字段展开：
+
+- sources — source 字段的 3 类来源（explicit / protocol / activator），决定持久化与可关闭性
+- commands — 2 个命令（reload 强制重算 / close 仅 explicit 可关）
+- onCloseHook — onCloseKnowledgeWindow 拒绝 protocol/activator 关闭的 synthesizedGuard
+`.trim(),
   sources: { knowledgeWindow },
 
   sourcesEntry: {

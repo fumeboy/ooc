@@ -39,7 +39,15 @@ Executable 描述 Object 的行动 / 编程能力。
 - 知识协议（KNOWLEDGE / ROOT_KNOWLEDGE / 各 command knowledge / 各 window basicKnowledge）
   每轮自动合成进 context，由 collectExecutableKnowledgeEntries 派生
 
-具体设计点见 concepts.* 各条；子领域见 tools / commands / server / client。
+按子字段展开：
+
+- concepts — 7 个跨切面概念（contextWindow / windowRegistry / windowManager / progressiveDisclosure / creatorWindow / commandExecLifecycle / knowledgeActivation）
+- concepts.windows — 7 种 window type 的命令面与副作用（talk / do / todo / program / file / knowledge / search）
+- tools — LLM 调用原语（open / refine / submit / close / wait / compress / mark）
+- commands — 11 个内置 command（do / talk / program / plan / end / todo / open_file / open_knowledge / write_file / glob / grep）
+- server — Object 自己持有的后端方法集合（llm_methods / ui_methods）
+- client — Object 自己持有的前端 React UI 组件
+- reflectable — Object 自我反思能力（继承自 reflectable 基础）
 `,
   /**
    * 概念集合：每条都是具名 JS 对象，可作为 LLM context 拉取的最小单元单独引用，

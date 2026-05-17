@@ -8,7 +8,16 @@ import * as doWindow from "@src/executable/windows/do";
  */
 export const do_window_v20260515_1 = {
   name: "DoWindow",
-  description: `do_window 是同 object 内 fork 子线程后挂在父线程下的对话窗口；父线程通过它的 continue / wait / close 与子线程交互。`,
+  description: `
+do_window 是同 object 内 fork 子线程后挂在父线程下的对话窗口；父线程通过它的
+continue / wait / close 与子线程交互。
+
+按子字段展开：
+
+- fields — 3 个关键字段（targetThreadId / isCreatorWindow / status）
+- commands — 3 个命令（continue 拆 execution 4 步 + inputKnowledge / wait / close）
+- onCloseHook — close 时的两支处理（creatorGuard 拦截初始通道 / archiveChild 归档子线程）
+`.trim(),
   sources: { doWindow },
 
   fields: {

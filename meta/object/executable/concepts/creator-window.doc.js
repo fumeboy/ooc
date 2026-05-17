@@ -8,7 +8,17 @@ import * as init from "@src/executable/windows/init";
  */
 export const creator_window_v20260515_1 = {
   name: "CreatorWindow",
-  description: `每个有 creator 的 thread 启动时由 initContextWindows 注入一条 creator window，作为与创建方的恒在通道。`,
+  description: `
+每个有 creator 的 thread 启动时由 initContextWindows 注入一条 creator window，作为与
+创建方的恒在通道。
+
+按子字段展开：
+
+- typeSelection — creator window 的 4 个 type 分支（sameObject=do / crossObject=talk / userRoot 短路 / selfDrivenRoot 短路）
+- hasRealCreatorRule — "有 creator" 判定的 3 个 OR 条件
+- idempotency — 幂等插入的 3 条规则（stable id / skip if present / unshift to head）
+- closeGuard — 不可被 LLM 主动 close 的 3 条公共规则（flag-based / inject on reject / return false）
+`.trim(),
   sources: { init },
 
   typeSelection: {

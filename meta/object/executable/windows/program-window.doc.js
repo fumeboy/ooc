@@ -10,7 +10,16 @@ import * as programRuntime from "@src/executable/windows/program-runtime";
  */
 export const program_window_v20260515_1 = {
   name: "ProgramWindow",
-  description: `program_window 是代码执行窗口，由 root.program submit 创建并立即跑首次 exec；后续 exec 通过 program_window 上注册的 exec command 追加到 history。`,
+  description: `
+program_window 是代码执行窗口，由 root.program submit 创建并立即跑首次 exec；后续
+exec 通过 program_window 上注册的 exec command 追加到 history。
+
+按子字段展开：
+
+- fields — 关键字段（history 数组 / threadLocalData 跨 exec 共享通道）
+- executionModes — args.language 的 4 种执行模式（shell / ts / js / function）
+- commands — 2 个命令（exec 含 execution 4 步 + inputKnowledge / close）
+`.trim(),
   sources: { program, programRuntime },
 
   fields: {

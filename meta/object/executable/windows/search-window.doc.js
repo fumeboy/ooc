@@ -8,7 +8,17 @@ import * as search from "@src/executable/windows/search";
  */
 export const search_window_v20260516_1 = {
   name: "SearchWindow",
-  description: `search_window 是一次 glob 或 grep 搜索的结果窗口，由 root.glob / root.grep 直建；把每条命中表示成带稳定 index 的对象，避免 LLM 从裸 stdout 解析路径。`,
+  description: `
+search_window 是一次 glob 或 grep 搜索的结果窗口，由 root.glob / root.grep 直建；
+把每条命中表示成带稳定 index 的对象，避免 LLM 从裸 stdout 解析路径。
+
+按子字段展开：
+
+- fields — 5 个字段（kind / query / matches / truncated / searchRoot）
+- immutability — 创建后字段定型，不提供 next_page / refine_query
+- commands — 2 个命令（open_match 含 spawnAlgorithm 5 步 + inputKnowledge + lineContextConstant / close）
+- basicKnowledge — 注入到 context 的 4 条提醒（truncate200 / noRefineNewSearch / grepLineSnippet / grepOpenMatchSlice）
+`.trim(),
   sources: { search },
 
   fields: {

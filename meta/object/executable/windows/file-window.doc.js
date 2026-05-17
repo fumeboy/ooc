@@ -8,7 +8,15 @@ import * as file from "@src/executable/windows/file";
  */
 export const file_window_v20260515_1 = {
   name: "FileWindow",
-  description: `file_window 把指定文件的正文（按可选 lines / columns 切片）作为持久 window 引入 context；由 root.open_file / root.write_file 创建。`,
+  description: `
+file_window 把指定文件的正文（按可选 lines / columns 切片）作为持久 window 引入
+context；由 root.open_file / root.write_file 创建。
+
+按子字段展开：
+
+- fields — 关键字段（path / lines / columns 切片）
+- commands — 4 个命令（set_range / reload / close / edit 含 applyAlgorithm 4 步 + failureModes + recoveryGuide + alternativesComparison + inputKnowledge）
+`.trim(),
   sources: { file },
 
   fields: {

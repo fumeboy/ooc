@@ -8,7 +8,15 @@ import * as todo from "@src/executable/windows/todo";
  */
 export const todo_window_v20260515_1 = {
   name: "TodoWindow",
-  description: `todo_window 是一条可见待办，由 root.todo 在 args 给齐时 open 立即提交 form 直建。`,
+  description: `
+todo_window 是一条可见待办，由 root.todo 在 args 给齐时 open 立即提交 form 直建。
+
+按子字段展开：
+
+- fields — 2 个字段（content 待办正文 / onCommandPath 高亮触发 path 集合）
+- commands — 空表（无 LLM 可继续调用的动作，仅可通过顶层 close tool 释放）
+- onCloseHook — 未注册 hook，走 WindowManager 默认移除路径
+`.trim(),
   sources: { todo },
 
   fields: {

@@ -8,7 +8,16 @@ import * as registry from "@src/executable/windows/registry";
  */
 export const window_registry_v20260515_1 = {
   name: "WindowRegistry",
-  description: `每种 ContextWindow type 的契约集中在 WindowRegistry：commands 表、onClose hook、renderXml、basicKnowledge。`,
+  description: `
+每种 ContextWindow type 的契约集中在 WindowRegistry：commands 表、onClose hook、
+renderXml、basicKnowledge。
+
+按子字段展开：
+
+- definitionFields — WindowTypeDefinition 的 4 个字段（commands / onClose / renderXml / basicKnowledge）
+- registrationMechanics — 注册流程（initialRegistry 占位 / registerWindowType 合并 / queryHelpers 查询）
+- registrationCallers — registerWindowType 的调用方分布（rootCommands / typeImpls）
+`.trim(),
   sources: { registry },
 
   definitionFields: {

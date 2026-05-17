@@ -10,7 +10,17 @@ import * as talkDelivery from "@src/executable/windows/talk-delivery";
  */
 export const talk_window_v20260515_1 = {
   name: "TalkWindow",
-  description: `talk_window 是与一个对端 flow object（含 "user"）的持续会话窗口。`,
+  description: `
+talk_window 是与一个对端 flow object（含 "user"）的持续会话窗口。
+
+按子字段展开：
+
+- invocationShape — talk_window 命令的统一调用形态（open with parent_window_id）
+- commands — 3 个命令（say 含 execution + inputKnowledge / wait / close）
+- basicKnowledge — 注入到 context 的命令面 + 4 条关键约束（不接受 root.talk / 想发消息只用 say / 复用同一 talk_window / creator 是回信通道）
+- onCloseHook — creatorGuard 拦截初始 creator talk_window 关闭
+- delivery — deliverTalkMessage 跨对象派送（calleeThreadResolution 2 分支 + doubleWrite 3 子步）
+`.trim(),
   sources: { talk, talkDelivery },
 
   invocationShape: {

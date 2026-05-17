@@ -8,7 +8,18 @@ import * as manager from "@src/executable/windows/manager";
  */
 export const command_exec_lifecycle_v20260515_1 = {
   name: "CommandExecLifecycle",
-  description: `command_exec 是 LLM 调用某个 command 时产生的临时 sub-window；其状态机由 WindowManager 在 openCommandExec / refine / submit 三个入口推进。`,
+  description: `
+command_exec 是 LLM 调用某个 command 时产生的临时 sub-window；其状态机由 WindowManager
+在 openCommandExec / refine / submit 三个入口推进。
+
+按子字段展开：
+
+- states — 3 个状态枚举值（open / executing / executed）
+- transitions — 4 个关键过渡边（auto-refine / auto-submit / 成功移除 / 失败保留）
+- autoSubmitRule — open 时 auto-submit 的 3 条同时满足条件
+- failureDetection — submit 失败的 3 种判定路径（显式 outcome / legacy 前缀 / 抛异常）
+- knowledgeRefCount — 多 window 共享 knowledge path 的引用计数规则
+`.trim(),
   sources: { manager },
 
   states: {
