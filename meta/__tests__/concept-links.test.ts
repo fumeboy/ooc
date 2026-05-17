@@ -187,6 +187,9 @@ describe("thinkable meta tree", () => {
     expect(conceptPaths).toContain("thinkable.context");
     expect(conceptPaths).toContain("thinkable.llm");
     expect(conceptPaths).toContain("thinkable.thread.scheduler");
+    expect(conceptPaths).toContain("thinkable.identity");
+    expect(conceptPaths).toContain("thinkable.knowledge");
+    expect(conceptPaths).toContain("thinkable.thinkloop");
   });
 
   it("every collected thinkable concept has valid schema", () => {
@@ -242,6 +245,33 @@ describe("collaborable meta tree", () => {
   });
 
   it("every collected collaborable concept has valid schema", () => {
+    expectAllConceptsValid(concepts);
+  });
+});
+
+describe("extendable meta tree", () => {
+  const concepts = walkConcepts(extendable_v20260504_1, "extendable");
+
+  it("recognises extendable aggregator + kernel_extensions as合规 concepts", () => {
+    const conceptPaths = concepts.map((c) => c.path);
+    expect(conceptPaths).toContain("extendable");
+    expect(conceptPaths).toContain("extendable.kernel_extensions");
+  });
+
+  it("every collected extendable concept has valid schema", () => {
+    expectAllConceptsValid(concepts);
+  });
+});
+
+describe("reflectable meta tree", () => {
+  const concepts = walkConcepts(reflectable_v20260504_1, "reflectable");
+
+  it("recognises reflectable as合规 concept", () => {
+    const conceptPaths = concepts.map((c) => c.path);
+    expect(conceptPaths).toContain("reflectable");
+  });
+
+  it("every collected reflectable concept has valid schema", () => {
     expectAllConceptsValid(concepts);
   });
 });
