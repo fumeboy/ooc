@@ -51,8 +51,11 @@ export function makeThread(opts: MakeThreadOpts = {}): ThreadContext {
     persistence: opts.persistence,
   };
   if (!opts.skipCreatorWindow) {
+    // 兼容老单元测试默认行为：注入一个指向 placeholder parent 的 creator do_window。
+    // 产品端 initContextWindows 现在要求"真有 creator info"才注入（避免 phantom），
+    // 所以这里显式给个 placeholder thread id（即使是假的，对单元测试来说也是合理 stub）。
     initContextWindows(thread, {
-      creatorThreadId: opts.creatorThreadId,
+      creatorThreadId: opts.creatorThreadId ?? "t_test_creator",
       initialTaskTitle: opts.initialTaskTitle ?? "test-thread",
     });
   }

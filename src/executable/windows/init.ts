@@ -49,11 +49,35 @@ function isUserRootThread(thread: ThreadContext): boolean {
   return thread.persistence?.objectId === "user" && thread.id === "root";
 }
 
+/**
+ * thread 是否真有 creator（不是 self-driven root）。
+ *
+ * 任何一处携带 creator 信息都视为有：
+ * - opts.creatorThreadId 显式给（fork/talk-delivery 调用方）
+ * - thread.creatorThreadId（磁盘恢复时 thread.json 里写过）
+ * - thread.creatorObjectId（跨 object talk-delivery 总会设这条）
+ *
+ * 三者全无 → self-driven root，没有可指向的 creator，不应注入 phantom creator window。
+ * spec 2026-05-17 § wait 校验：phantom creator do_window 会被 wait 误判为合法 IO 来源，
+ * 让 self-driven root 死锁——本函数从源头堵住。
+ */
+function hasRealCreator(thread: ThreadContext, opts: InitContextWindowsOpts): boolean {
+  if (opts.creatorThreadId !== undefined) return true;
+  if (thread.creatorThreadId !== undefined) return true;
+  if (thread.creatorObjectId !== undefined) return true;
+  return false;
+}
+
 export function initContextWindows(
   thread: ThreadContext,
   opts: InitContextWindowsOpts,
 ): void {
   if (isUserRootThread(thread)) {
+    thread.contextWindows = thread.contextWindows ?? [];
+    return;
+  }
+  if (!hasRealCreator(thread, opts)) {
+    // self-driven root thread —— 没有可指向的 creator，don't inject phantom do_window
     thread.contextWindows = thread.contextWindows ?? [];
     return;
   }
