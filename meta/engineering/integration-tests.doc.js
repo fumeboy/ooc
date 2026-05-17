@@ -1,3 +1,6 @@
+import * as scheduler from "@src/thinkable/scheduler";
+import * as thinkloop from "@src/thinkable/thinkloop";
+import * as executable from "@src/executable";
 import { engineering_v20260506_1 } from "@meta/engineering/index.doc";
 
 /**
@@ -5,10 +8,17 @@ import { engineering_v20260506_1 } from "@meta/engineering/index.doc";
  *
  * 单元测试覆盖内部算法、错误路径、组件契约；集成测试在此之上做"真 LLM 端到端能否跑通"的硬验证。
  * 二者目的互补：单测保算法正确性，集成测保系统作为整体在真实 LLM 行为下不崩。
+ *
+ * sources（被本规范的测试集合覆盖的核心 loop）:
+ *  - scheduler  — 多 thread 调度与唤醒机制
+ *  - thinkloop  — 单 thread 内 LLM → tool 调度循环
+ *  - executable — 5 原语 + window / command 注册中枢
  */
 export const integration_tests_v20260511_1 = {
+  name: "IntegrationTests",
   get parent() { return engineering_v20260506_1; },
-  index: `
+  sources: { scheduler, thinkloop, executable },
+  description: `
 集成测试沉淀
 
 ## 1. 测试策略

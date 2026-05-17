@@ -13,6 +13,7 @@ import { describe, expect, it } from "bun:test";
 import { walkConcepts, type WalkedConcept } from "./walk-concepts";
 
 import { executable_v20260504_1 } from "@meta/object/executable/index.doc";
+import { engineering_v20260506_1 } from "@meta/engineering/index.doc";
 
 describe("walkConcepts helper", () => {
   it("identifies concepts that have name + description + sources", () => {
@@ -112,6 +113,37 @@ describe("executable meta tree", () => {
         expect(typeof mod, `${path}.sources.${key} must be a module namespace (object)`).toBe(
           "object",
         );
+        expect(mod, `${path}.sources.${key} must not be null`).not.toBeNull();
+      }
+    }
+  });
+});
+
+describe("engineering meta tree", () => {
+  const concepts = walkConcepts(engineering_v20260506_1, "engineering");
+
+  it("collects all 4 engineering sub-doc concepts as合规 concept objects", () => {
+    const conceptPaths = concepts.map((c) => c.path).sort();
+    // 4 个 engineering 子文档（refactoring-governance / integration-tests /
+    // llm-provider-debugging / meta-doc-maintenance）必须全部被识别为合规概念
+    expect(conceptPaths).toEqual(
+      [
+        "engineering.integration_tests",
+        "engineering.llm_provider_debugging",
+        "engineering.meta_doc_maintenance",
+        "engineering.refactoring_governance",
+      ].sort(),
+    );
+  });
+
+  it("every engineering concept has non-empty sources Record<string, object>", () => {
+    for (const { path, concept } of concepts) {
+      expect(concept.name.length, `${path}.name length`).toBeGreaterThan(0);
+      expect(concept.description.length, `${path}.description length`).toBeGreaterThan(0);
+      const sourceKeys = Object.keys(concept.sources);
+      expect(sourceKeys.length, `${path}.sources must be non-empty`).toBeGreaterThan(0);
+      for (const [key, mod] of Object.entries(concept.sources)) {
+        expect(typeof mod, `${path}.sources.${key} must be a module namespace`).toBe("object");
         expect(mod, `${path}.sources.${key} must not be null`).not.toBeNull();
       }
     }

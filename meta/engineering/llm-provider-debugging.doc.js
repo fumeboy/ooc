@@ -1,5 +1,23 @@
+import * as openaiProvider from "@src/thinkable/llm/providers/openai";
+import * as claudeProvider from "@src/thinkable/llm/providers/claude";
+import * as claudeTransport from "@src/thinkable/llm/providers/claude-transport";
+import * as claudeSse from "@src/thinkable/llm/providers/claude-sse";
+import { engineering_v20260506_1 } from "@meta/engineering/index.doc";
+
+/**
+ * LLM Provider 对接的可复用排查知识：schema 子集限制 / SSE 回退 / tool use 编码等。
+ *
+ * sources（本规范沉淀自这几个 provider transport 的踩坑历史）:
+ *  - openaiProvider   — OpenAI Responses API 实现，schema 子集教训来源
+ *  - claudeProvider   — Claude Messages 主入口
+ *  - claudeTransport  — Claude transport：messages 编码、tool_use/tool_result 块
+ *  - claudeSse        — Claude SSE 解析器
+ */
 export const llm_provider_debugging_v20260513_1 = {
-  index: `
+  name: "LlmProviderDebugging",
+  get parent() { return engineering_v20260506_1; },
+  sources: { openaiProvider, claudeProvider, claudeTransport, claudeSse },
+  description: `
 # LLM Provider Debugging
 
 本文件记录 OOC 与 LLM Provider 对接时的可复用排查知识。目标是把真实链路中出现过的 400、schema、协议回放问题沉淀为工程知识，避免重复依赖临时经验。
