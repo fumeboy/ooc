@@ -107,14 +107,21 @@
 | meta 模块 | 当前形态 | 概念数 | 评级 |
 |---|---|---|---|
 | `meta/object/executable/` | 全概念图（已完整迁移）| 37 | ✅ |
-| `meta/engineering/` | 全概念图（本轮升级）| 4 | ✅ |
-| `meta/object/thinkable/` | 部分（context 已拆，其它 blob）| 7 | 🟡 |
-| `meta/object/collaborable/` | 全 blob | 0 | ⚠️ |
-| `meta/object/persistable/` | 单 blob | 0 | ⚠️ |
-| `meta/object/observable/` | 多 blob 文件 | 0 | ⚠️ |
-| `meta/object/extendable/` | 单 blob | 0 | ⚠️ |
-| `meta/object/reflectable/` | 单 blob | 0 | ⚠️ |
+| `meta/object/thinkable/` | 全概念图 | 28 | ✅ |
+| `meta/object/collaborable/` | 全概念图 | 10 | ✅ |
+| `meta/object/observable/` | 全概念图 | 4 | ✅ |
+| `meta/engineering/` | 全概念图 | 4 | ✅ |
+| `meta/object/extendable/` | 概念图 | 2 | ✅ |
+| `meta/object/persistable/` | 单概念 | 1 | ✅ |
+| `meta/object/reflectable/` | 单概念（forward-looking，sources 占位） | 1 | 🟡 |
 | `meta/app/` | 多 blob | 0 | ⚠️ |
+
+总计 walker 识别合规概念数：**48 个**（起点 17）。
+
+> 注：reflectable / persistable 概念被 walker 识别在 `meta.object.thinkable.identity.*` 路径下
+> 而非 `meta.object.reflectable` / `meta.object.persistable`。原因是 walker visited Set 按对象
+> identity 去重，identity doc 内部先 visit 到这两个 module。不影响概念守护，但路径不直观；
+> 后续可通过调整 thinkable/identity.doc.js 不外露这两个引用解决。
 
 "概念数" = 通过 walkConcepts 识别为合规概念的数量。
 
