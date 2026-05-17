@@ -3,9 +3,12 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "test": "bun test"
+    "test": "bun test",
+    "test:e2e:backend": "RUN_BACKEND_E2E=1 bun test tests/e2e/backend",
+    "test:e2e:frontend": "RUN_FRONTEND_E2E=1 bunx playwright test --config tests/e2e/frontend/playwright.config.ts"
   },
   "devDependencies": {
+    "@playwright/test": "^1.48.0",
     "@types/bun": "latest",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.6.2",

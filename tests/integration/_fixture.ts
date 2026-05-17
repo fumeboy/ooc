@@ -28,13 +28,30 @@ export async function setupTempFlow(): Promise<{ tempRoot: string; cleanup: () =
   return { tempRoot, cleanup };
 }
 
-/** 在临时 flow object 下创建一个携带初始 prompt 的 root thread。 */
+/**
+ * 在临时 flow object 下创建一个携带初始 prompt 的 root thread。
+ *
+ * 实现走 inbox/inbox_message_arrived 路径——OOC 的 processEventToItems 仅渲染 error-inject，
+ * 普通 inject 视作"过期上下文"被丢弃；若把 prompt 塞进 inject，LLM 看不到任何用户意图，
+ * 会陷入"I don't have any prior context to continue from"的无限自问自答。
+ */
 export async function makeRootThread(tempRoot: string, prompt: string): Promise<ThreadContext> {
   const flow = await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
+  const msgId = `msg_init_${Math.random().toString(36).slice(2, 10)}`;
   const thread: ThreadContext = {
     id: "root",
     status: "running",
-    events: [{ category: "context_change", kind: "inject", text: prompt }],
+    inbox: [
+      {
+        id: msgId,
+        fromThreadId: "user",
+        toThreadId: "root",
+        content: prompt,
+        createdAt: Date.now(),
+        source: "user",
+      },
+    ],
+    events: [{ category: "context_change", kind: "inbox_message_arrived", msgId }],
     contextWindows: [],
     persistence: { ...flow, threadId: "root" },
   };

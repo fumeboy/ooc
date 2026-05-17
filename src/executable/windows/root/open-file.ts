@@ -16,6 +16,7 @@ import {
   generateWindowId,
   type FileWindow,
 } from "../types.js";
+import { resolveSessionPath } from "../session-path.js";
 
 const OPEN_FILE_BASIC_PATH = "internal/executable/open_file/basic";
 const OPEN_FILE_INPUT_PATH = "internal/executable/open_file/input";
@@ -24,7 +25,7 @@ const KNOWLEDGE = `
 open_file 用于把某个文件的内容作为 file_window 引入 context（持续可见，每轮重新读）。
 
 参数：
-- path: 必填，文件路径（绝对或工作目录相对）
+- path: 必填，文件路径（绝对，或相对 session baseDir）
 - lines: 可选 [start, end] 行范围
 - columns: 可选 [start, end] 列范围
 
@@ -74,8 +75,11 @@ export async function executeOpenFileCommand(
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[open_file] 缺少 thread context。";
-  const path = typeof ctx.args.path === "string" ? ctx.args.path : "";
-  if (!path) return "[open_file] 缺少 path。";
+  const rawPath = typeof ctx.args.path === "string" ? ctx.args.path : "";
+  if (!rawPath) return "[open_file] 缺少 path。";
+
+  // 相对路径以 session baseDir 为根（不再以 OOC 进程 cwd 为根）
+  const path = resolveSessionPath(thread, rawPath);
 
   const fileWindow: FileWindow = {
     id: generateWindowId("file"),

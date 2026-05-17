@@ -548,7 +548,10 @@ describe("U4: root.glob + search_window.open_match", () => {
     expect(out.ok).toBe(true);
     expect(out.auto_submitted).toBe(true);
     const fws = thread.contextWindows.filter((w) => w.type === "file") as FileWindow[];
-    expect(fws.some((fw) => fw.path === "three.ts")).toBe(true);
+    // open_match 现在把 match.path（相对 searchRoot）解析成绝对路径，让 file_window
+    // 走 fs.readFile 不再依赖 process.cwd()。
+    expect(fws.some((fw) => fw.path.endsWith("three.ts"))).toBe(true);
+    expect(fws.every((fw) => fw.path.startsWith("/"))).toBe(true);
   });
 
   it("open_match edge: index out of range → error", async () => {

@@ -20,6 +20,7 @@ import type {
   CommandTableEntry,
 } from "./command-types.js";
 import { registerWindowType } from "./registry.js";
+import { isAbsolute, resolve } from "node:path";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -143,6 +144,12 @@ export async function executeSearchOpenMatch(
       ? [Math.max(0, match.line - FILE_WINDOW_LINE_CONTEXT), match.line + FILE_WINDOW_LINE_CONTEXT]
       : undefined;
 
+  // match.path 可能是绝对（rg/JS fallback）或 search_window.searchRoot 相对（glob with absolute:false）。
+  // file_window 后续走 fs.readFile/writeFile，必须给绝对路径，否则会落到 process.cwd()。
+  const absPath = isAbsolute(match.path)
+    ? match.path
+    : resolve(sw.searchRoot ?? process.cwd(), match.path);
+
   const fileWindow: FileWindow = {
     id: generateWindowId("file"),
     type: "file",
@@ -150,7 +157,7 @@ export async function executeSearchOpenMatch(
     title: basename(match.path),
     status: "open",
     createdAt: Date.now(),
-    path: match.path,
+    path: absPath,
     lines,
   };
 

@@ -18,6 +18,7 @@ import {
   runJsFallback,
   type GrepHit,
 } from "./grep-impl.js";
+import { resolveSessionPath } from "../session-path.js";
 
 export const grepCommand: CommandTableEntry = {
   paths: ["grep"],
@@ -41,7 +42,9 @@ export async function executeGrepCommand(
   if (!thread) return "[grep] 缺少 thread context。";
   const pattern = typeof ctx.args.pattern === "string" ? ctx.args.pattern : "";
   if (!pattern) return "[grep] 缺少 pattern 参数。";
-  const path = typeof ctx.args.path === "string" ? ctx.args.path : process.cwd();
+  // 默认搜索根 = session 的 baseDir（thread.persistence.baseDir），不到则回退 process.cwd()
+  const rawPath = typeof ctx.args.path === "string" ? ctx.args.path : "";
+  const path = rawPath ? resolveSessionPath(thread, rawPath) : resolveSessionPath(thread, ".");
   const glob = typeof ctx.args.glob === "string" ? ctx.args.glob : undefined;
   const caseInsensitive = ctx.args.case_insensitive === true;
   const opts = { pattern, path, glob, caseInsensitive };

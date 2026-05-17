@@ -16,7 +16,7 @@ grep 用于按文件内容搜索（正则），结果作为 search_window kind=g
 
 参数：
 - pattern: 必填，正则表达式
-- path: 可选，搜索根目录或单个文件；缺省 = 当前工作目录
+- path: 可选，搜索根目录或单个文件（相对路径以 session baseDir 为根）；缺省 = session baseDir
 - glob: 可选，文件名过滤 glob（如 "*.ts"）
 - case_insensitive: 可选 bool
 

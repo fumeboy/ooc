@@ -226,6 +226,13 @@ function renderTalkWindowChildren(window: TalkWindow, thread: ThreadContext): Xm
     xmlElement("target", {}, [xmlText(window.target)]),
     xmlElement("conversation_id", {}, [xmlText(window.conversationId)]),
   ];
+  // 与 do_window 渲染对齐：creator talk_window 必须暴露 is_creator_window=true，
+  // 否则 LLM 无法识别"哪条 talk 是创建本 thread 的对端通道"，常见症状是任务做完直接 wait
+  // 而忘记 say 回去。protocol 文本（src/executable/index.ts § 一轮结束前的决策树）
+  // 显式引用了这个字段。
+  if (window.isCreatorWindow) {
+    children.push(xmlElement("is_creator_window", {}, [xmlText("true")]));
+  }
   const messages = filterMessagesForTalkWindow(window, thread);
   if (messages.length > 0) {
     children.push(

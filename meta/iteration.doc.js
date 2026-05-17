@@ -90,6 +90,16 @@ ooc-2  (2026-05-08 ~ 2026-05-12)
         ├── plan: docs/superpowers/plans/2026-05-14-context-window-step2-3.md
         ├── 关键决策：talk 当前阶段仅 target=user；program 一次 open 即创建 window + 执行首个 exec；activator 改用 knowledge_window.path 取代 pinnedKnowledge
         └── 后续：talk 跨 object 路由 / 真实沙箱隔离 / file_window 写权限
+
+└── 阶段 10：e2e 工程 + 真 LLM 暴露的契约/产品 bug 修补 — 把"OOC 作为 CodeAgent 端到端能不能用"这条主线接通
+    └── [2026-05-17] e2e-harness-and-llm-contract-fixes  按 docs/testing/strategy.md 落 backend (S1–S4) + frontend (F1–F5) e2e 骨架；首次真 LLM 跑通后修了 3 个被遮蔽多时的契约/产品 bug
+        ├── 测试入口: tests/e2e/backend/_fixture.ts + tests/e2e/frontend/_fixture.ts；Good/OK/Bad 评分裁判；RUN_BACKEND_E2E / RUN_FRONTEND_E2E gate
+        ├── 修复 1：Claude provider 在 messages 数组为空时补一条 placeholder user message（OOC 把 inbox/inject 都映射 system role，过滤后 messages=[] → Anthropic API 400 或代理 200+空 body；OpenAI Responses API 不受此约束，不动）
+        ├── 修复 2：grep / glob / open_file / write_file / search.open_match 用 thread.persistence.baseDir 解析相对路径（取代 process.cwd()），让多 session / --world 场景下数据原语对的是 session 工作树；新增 src/executable/windows/session-path.ts；program(shell) 保留 process.cwd() 语义（escape hatch）
+        ├── 修复 3：talk_window 渲染补 is_creator_window 标记（之前只 do_window 有），protocol 加"一轮结束前决策树"（callee 必须先 say 回创建者再 wait/end），消除"任务做完直接 wait 忘了回复"的 LLM 漂移
+        ├── 附带：tests/integration/_fixture.ts 把初始 prompt 从 inject 改走 inbox/inbox_message_arrived 路径——processEventToItems 仅渲染 error-inject，普通 inject 视作过期上下文丢弃，旧 fixture LLM 看不到任何用户意图
+        ├── 真 LLM 回归：S2/S3 Good，S1 OK，S4 Bad（LLM 偏好 write_file 全覆盖而非 file_window.edit，knowledge 引导不够强；下一轮处理）
+        └── 关键决策：契约边界 fix 优先（adapter 内补缺，不动 OOC "context 走 system" 的核心设计）；shell 与数据原语分开（escape hatch 不被强吃 baseDir）
 \`\`\`
 
 ## 阶段划分判据

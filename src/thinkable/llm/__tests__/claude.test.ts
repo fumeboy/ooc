@@ -62,6 +62,37 @@ describe("claude provider", () => {
     ]);
   });
 
+  it("input 中无非 system message 时，messages 兜底为一条 placeholder user 消息", async () => {
+    // 真实场景：OOC 把 inbox_message_arrived / inject 全部映射为 role=system，
+    // 经 toClaudeMessages 过滤后 messages 数组为空。Anthropic 官方 API 会 400；
+    // 个别代理会 200 + 空 body 让 retry 也无效。
+    // 适配器边界补一条 placeholder user message，保住协议契约。
+    let capturedBody: any;
+    globalThis.fetch = mock(async (_url: any, init: any) => {
+      capturedBody = JSON.parse(init.body as string);
+      return new Response(
+        JSON.stringify({ content: [{ type: "text", text: "ok" }] }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }) as unknown as typeof fetch;
+
+    await generateWithClaude(
+      {
+        provider: "claude",
+        apiKey: "test-key",
+        baseUrl: "https://example.com",
+        model: "claude-test"
+      },
+      { input: [{ type: "message", role: "system", content: "<context>...</context>" }] }
+    );
+
+    expect(Array.isArray(capturedBody.messages)).toBe(true);
+    expect(capturedBody.messages.length).toBe(1);
+    expect(capturedBody.messages[0].role).toBe("user");
+    expect(typeof capturedBody.messages[0].content).toBe("string");
+    expect(capturedBody.messages[0].content.length).toBeGreaterThan(0);
+  });
+
   it("解析非流式文本结果", async () => {
     globalThis.fetch = mock(async () =>
       new Response(

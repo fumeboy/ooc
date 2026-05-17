@@ -24,6 +24,7 @@ import {
   generateWindowId,
   type FileWindow,
 } from "../types.js";
+import { resolveSessionPath } from "../session-path.js";
 
 const WRITE_FILE_BASIC_PATH = "internal/executable/write_file/basic";
 const WRITE_FILE_INPUT_PATH = "internal/executable/write_file/input";
@@ -33,7 +34,7 @@ write_file 用于创建一个新文件或完整覆盖一个已有文件，并自
 便于后续用 file_window.edit 做精确修改。
 
 参数：
-- path: 必填，目标文件路径（绝对或工作目录相对）。父目录不存在会自动 mkdir -p
+- path: 必填，目标文件路径（绝对，或相对 session baseDir）。父目录不存在会自动 mkdir -p
 - content: 必填，要写入的完整文件内容（字符串；空字符串表示写一个 0 字节文件）
 
 写盘成功后副作用：
@@ -81,10 +82,13 @@ export async function executeWriteFileCommand(
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[write_file] 缺少 thread context。";
-  const path = typeof ctx.args.path === "string" ? ctx.args.path : "";
-  if (!path) return "[write_file] 缺少 path 参数。";
+  const rawPath = typeof ctx.args.path === "string" ? ctx.args.path : "";
+  if (!rawPath) return "[write_file] 缺少 path 参数。";
   const content = ctx.args.content;
   if (typeof content !== "string") return "[write_file] 缺少 content 参数（应是字符串，可为空）。";
+
+  // 相对路径以 session baseDir 为根（不再以 OOC 进程 cwd 为根）
+  const path = resolveSessionPath(thread, rawPath);
 
   try {
     await mkdir(dirname(path), { recursive: true });

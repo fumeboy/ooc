@@ -1,7 +1,7 @@
 /**
  * root.glob command — 用 Bun 内置 Glob 做文件名匹配，结果以 search_window 形式持久化。
  *
- * - args: pattern（必填）, cwd?（可选，默认 process.cwd()）
+ * - args: pattern（必填）, cwd?（可选，默认 session baseDir；相对路径以 baseDir 为根）
  * - 命中条目按 path 字典序排序；超过 200 条截断（truncated=true）
  * - 失败（pattern 非法 / cwd 不可读）：返回错误字符串，不留 search_window
  *
@@ -22,6 +22,7 @@ import {
   type SearchMatch,
   type SearchWindow,
 } from "../types.js";
+import { resolveSessionPath } from "../session-path.js";
 
 const GLOB_BASIC_PATH = "internal/executable/glob/basic";
 const GLOB_INPUT_PATH = "internal/executable/glob/input";
@@ -33,7 +34,7 @@ glob 用于按文件名通配符（glob pattern）查找文件，并把结果作
 
 参数：
 - pattern: 必填，glob 通配符。例：\`src/**/*.ts\`、\`*.md\`、\`tests/**/*\`
-- cwd: 可选，搜索根目录；缺省 = 当前工作目录
+- cwd: 可选，搜索根目录（相对路径以 session baseDir 为根）；缺省 = session baseDir
 
 行为：
 - 用 Bun 内置 Glob 扫描文件系统；只返回文件（onlyFiles=true）
@@ -76,7 +77,9 @@ export async function executeGlobCommand(
   if (!thread) return "[glob] 缺少 thread context。";
   const pattern = typeof ctx.args.pattern === "string" ? ctx.args.pattern : "";
   if (!pattern) return "[glob] 缺少 pattern 参数。";
-  const cwd = typeof ctx.args.cwd === "string" ? ctx.args.cwd : process.cwd();
+  // 默认 cwd = session 的 baseDir (thread.persistence.baseDir)，不到则回退 process.cwd()
+  const rawCwd = typeof ctx.args.cwd === "string" ? ctx.args.cwd : "";
+  const cwd = rawCwd ? resolveSessionPath(thread, rawCwd) : resolveSessionPath(thread, ".");
 
   let matchesRaw: string[];
   try {
