@@ -16,9 +16,9 @@ export const talk_window_v20260515_1 = {
   invocationShape_v20260517_1: {
     index: `
 talk_window 注册的 command 不挂在 root 上。调用形态统一是：
-\`open(parent_window_id="<talk_window_id>", command="...", args={...})\`。
+open(parent_window_id="<talk_window_id>", command="...", args={...})。
 root.talk 只用来"创建 talk_window"，**不是**用来发消息。
-`.trim(),
+`,
   },
 
   commands_v20260517_1: {
@@ -28,37 +28,37 @@ root.talk 只用来"创建 talk_window"，**不是**用来发消息。
       index: `
 ### say
 
-向对端发一条消息。paths: \`say\` / \`say.wait\`（args.wait=true 时追加 say.wait path）。
+向对端发一条消息。paths: say / say.wait（args.wait=true 时追加 say.wait path）。
 
 参数：
-- \`msg\`: 必填，消息正文
-- \`wait\`: 可选；true 时父线程在派送后切到 waiting，等对端回信进 inbox 唤醒
+- msg: 必填，消息正文
+- wait: 可选；true 时父线程在派送后切到 waiting，等对端回信进 inbox 唤醒
 
-执行体见 \`say.execution\`；缺 msg 时的 input knowledge 提示见 \`say.inputKnowledge\`。
-`.trim(),
+执行体见 say.execution；缺 msg 时的 input knowledge 提示见 say.inputKnowledge。
+`,
 
       execution_v20260517_1: {
         index: `
 #### execution（executeTalkWindowSay）
 
-1. 校验：parentWindow 必须是 type=talk；thread 必须带 \`persistence\` 才能跨对象派送
-2. 调 \`deliverTalkMessage({ caller:{thread,talkWindow}, content, source:"talk" })\`
-   —— 见 \`talk-window.delivery\` 子节点
-3. 派送成功后：若 \`args.wait===true\` →
-   - \`thread.status = "waiting"\`
-   - \`thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0\`
-   - \`thread.waitingOn = window.id\` （等的就是这个 talk_window 上的回信）
-4. 失败：返回 \`[talk_window.say] 派送失败：<msg>\`
-`.trim(),
+1. 校验：parentWindow 必须是 type=talk；thread 必须带 persistence 才能跨对象派送
+2. 调 deliverTalkMessage({ caller:{thread,talkWindow}, content, source:"talk" })
+   —— 见 talk-window.delivery 子节点
+3. 派送成功后：若 args.wait===true →
+   - thread.status = "waiting"
+   - thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0
+   - thread.waitingOn = window.id （等的就是这个 talk_window 上的回信）
+4. 失败：返回 [talk_window.say] 派送失败：<msg>
+`,
       },
 
       inputKnowledge_v20260517_1: {
         index: `
 #### inputKnowledge
 
-\`formStatus==="open"\` 且 \`args.msg\` 缺失/空串时，knowledge 表追加 key
-\`internal/windows/talk/say/input\`，正文提示 \`refine(args={ msg, wait })\`。
-`.trim(),
+formStatus==="open" 且 args.msg 缺失/空串时，knowledge 表追加 key
+internal/windows/talk/say/input，正文提示 refine(args={ msg, wait })。
+`,
       },
     },
 
@@ -70,10 +70,10 @@ root.talk 只用来"创建 talk_window"，**不是**用来发消息。
 
 参数：无。
 执行：
-- \`thread.status = "waiting"\`
-- \`thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0\`
-- \`thread.waitingOn = parentWindow.id\`
-`.trim(),
+- thread.status = "waiting"
+- thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0
+- thread.waitingOn = parentWindow.id
+`,
     },
 
     close_v20260517_1: {
@@ -84,80 +84,84 @@ root.talk 只用来"创建 talk_window"，**不是**用来发消息。
 
 - exec 体 no-op；副作用走 onClose hook
 - 非 creator talk_window：直接释放
-- creator talk_window：onClose 拒绝（见 \`onCloseHook.creatorGuard\`）
-`.trim(),
+- creator talk_window：onClose 拒绝（见 onCloseHook.creatorGuard）
+`,
     },
   },
 
   basicKnowledge_v20260517_1: {
     index: `
-通过 \`registerWindowType("talk", { basicKnowledge: TALK_WINDOW_BASIC_KNOWLEDGE })\`
+通过 registerWindowType("talk", { basicKnowledge: TALK_WINDOW_BASIC_KNOWLEDGE })
 注入；只要 thread.contextWindows 里出现至少一个 talk_window，全局基础知识合成阶段就把
 这段文本作为一个 protocol KnowledgeWindow 注入到 context。
 
 内容覆盖：命令面表（say/wait/close 各自的 args 与典型用法）+ 4 条关键约束（不接受 root
 级别的 talk command / 想发消息只用 say / 复用同一 talk_window / creator talk_window
 是回信通道）。
-`.trim(),
+`,
 
     constraints_v20260517_1: {
       index: `
 #### basicKnowledge.constraints（4 条关键约束）
 
-- \`不接受 root.talk\` — root.talk 用于"创建 talk_window"，不是发消息
-- \`想发消息只用 say\` — 一致心智，避免 LLM 把 say 与 talk 混淆
-- \`复用同一 talk_window\` — 不要每发一条就 close 再重开
-- \`creator talk_window 是回信通道\` — isCreatorWindow=true 的那条用于回 caller，
+- 不接受 root.talk — root.talk 用于"创建 talk_window"，不是发消息
+- 想发消息只用 say — 一致心智，避免 LLM 把 say 与 talk 混淆
+- 复用同一 talk_window — 不要每发一条就 close 再重开
+- creator talk_window 是回信通道 — isCreatorWindow=true 的那条用于回 caller，
   收到 inbox 后回复就走它的 say，不要 open 新 talk
-`.trim(),
+`,
     },
   },
 
   onCloseHook_v20260517_1: {
     index: `
-\`onCloseTalkWindow\` 是注册到 type=talk 的 onClose hook。仅处理一种特例。
-`.trim(),
+onCloseTalkWindow 是注册到 type=talk 的 onClose hook。仅处理一种特例。
+`,
 
     creatorGuard_v20260517_1: {
       index: `
 #### creatorGuard
 
-\`window.isCreatorWindow === true\` 时拒绝关闭：
+window.isCreatorWindow === true 时拒绝关闭：
 
-- 向 thread.events 追加一条 \`context_change.inject\`，文本 \`[close 拒绝] talk_window "<id>" 是初始 creator talk_window，与 caller 的恒在通道，不可关闭。\`
-- 返回 \`false\`，WindowManager.close 据此放弃删除并保留 window
-`.trim(),
+- 向 thread.events 追加一条 context_change.inject，文本 [close 拒绝] talk_window "<id>" 是初始 creator talk_window，与 caller 的恒在通道，不可关闭。
+- 返回 false，WindowManager.close 据此放弃删除并保留 window
+`,
     },
   },
 
   delivery_v20260517_1: {
     index: `
-\`deliverTalkMessage(opts)\` 由 \`talk-delivery\` 模块提供，承担跨对象派送的核心逻辑。
+deliverTalkMessage(opts) 由 talk-delivery 模块提供，承担跨对象派送的核心逻辑。
 talk_window.say 是它的唯一上游调用方。
-`.trim(),
+`,
 
     calleeThreadResolution_v20260517_1: {
-      index: `
-#### calleeThreadResolution
+      index: `按 caller.talkWindow.target（target objectId）定位或创建 callee thread；2 个分支详见子节点。`,
 
-按 \`caller.talkWindow.target\`（target objectId）定位或创建 callee thread：
+      firstDeliveryCreates_v20260517_1: {
+        index: `##### firstDeliveryCreates — 首次派送：创建 callee thread，注入 creator talk_window 指向 caller thread，确保 callee 一启动就持有回信通道。`,
+      },
 
-- 首次派送：创建 callee thread，注入 creator talk_window 指向 caller thread
-- 已存在：复用对应 callee thread
-`.trim(),
+      subsequentReuses_v20260517_1: {
+        index: `##### subsequentReuses — target objectId 已有对应 callee thread 时复用，不创建新线程。同一对话只会有一个 callee thread。`,
+      },
     },
 
     doubleWrite_v20260517_1: {
-      index: `
-#### doubleWrite
+      index: `派送时同时写 caller.outbox 与 callee.inbox；详见各子节点。`,
 
-派送时双写：
+      callerOutboxWrite_v20260517_1: {
+        index: `##### callerOutboxWrite — caller.thread.outbox 追加 message（windowId=本 talk_window.id, source=talk），让 caller 自己看到"我刚发了什么"。`,
+      },
 
-- caller.thread.outbox 追加 message（windowId=本 talk_window.id, source=talk）
-- callee.thread.inbox 追加 message + 事件 \`context_change.inbox_message_arrived\`
+      calleeInboxWrite_v20260517_1: {
+        index: `##### calleeInboxWrite — callee.thread.inbox 追加 message + 事件 context_change.inbox_message_arrived，让 callee 下一轮 transcript 能看到这条消息。`,
+      },
 
-callee thread 若处于 done/failed/paused 会被切到 running，由 scheduler 选中执行。
-`.trim(),
+      calleeStatusRevive_v20260517_1: {
+        index: `##### calleeStatusRevive — callee thread 若处于 done/failed/paused 会被切到 running，由 scheduler 选中执行；保证消息一定会被处理。`,
+      },
     },
   },
 };

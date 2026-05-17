@@ -4,36 +4,71 @@ import { tools_v20260506_1 } from "@meta/object/executable/actions/tools/index.d
 import * as thinkloop from "@src/thinkable/thinkloop";
 import * as events from "@src/thinkable/context/index";
 
-const COMPRESS_DESCRIPTION = `
-\`compress\` 用于清理上下文 & 压缩本线程的 process events，缓解 Context 容量压力。
-
-## 何时触发
-
-- **被动**：引擎检测到 events 估算 token 超过阈值，会在 Context 末尾注入压力提示，让 LLM 主动 open(command=compress)
-- **主动**：LLM 在合适时机（如完成一个阶段、即将开新任务）自发触发
-
-## 行为
-
-调用 compress tool 会 fork 一个 sub thread 负责进行上下文清理 & process events 压缩
-原 thread 会自动注入一条消息提示已异步开始 compress, 然后切换为 waiting 状态
-
-这个 sub thread 会自动折叠所有 knowledge 为只展示 description 或者前 200 行文本，然后再自动加载 compress 相关的 knowledge
-
-基于 compress knowledge 的指导通过 command program 调用相关 function 来编辑 context
-
-compress 完成后，会将 context diff 应用到 parent thread 中
-
-## 不可逆
-
-压缩是删除式的——被截断的 events 内容不可恢复。原始 thread.json 文件不保留压缩前快照。
-所以 compress 只该用于"已经没价值的中间细节"。
-`.trim();
-
 export const compress_v20260506_1 = {
   get parent() { return tools_v20260506_1; },
   name: "Compress",
-  description: COMPRESS_DESCRIPTION,
-  /** legacy alias；下次清理删 */
-  index: COMPRESS_DESCRIPTION,
   sources: { thinkloop, events },
+  description: `
+compress 清理上下文 / 压缩本线程的 process events，缓解 Context 容量压力。
+
+按子字段展开：
+
+- triggerModes — 被动 / 主动两种触发模式
+- subThreadForkBehavior — fork 出 sub thread 执行压缩，原线程切到 waiting
+- knowledgeFolding — sub thread 自动折叠 knowledge 后再加载 compress 专属 knowledge
+- diffApplication — compress 完成后把 context diff 应用到 parent thread
+- irreversibility — 压缩是删除式不可逆的约束
+`.trim(),
+
+  triggerModes_v20260517_1: {
+    index: `compress 的两种触发模式；详见各子节点。`,
+
+    passiveThresholdNudge_v20260517_1: {
+      index: `
+### 被动（阈值触发 + Context 末尾 nudge）
+
+引擎检测到 events 估算 token 超过阈值时，在 Context 末尾注入压力提示，
+让 LLM 主动 open(command=compress)。LLM 仍是主动调用方，引擎不强制截断。
+`.trim(),
+    },
+
+    activeSelfTrigger_v20260517_1: {
+      index: `
+### 主动（LLM 自发）
+
+LLM 在合适时机（如完成一个阶段、即将开新任务）自发调 open(command=compress)，
+不需要等到阈值警告。
+`.trim(),
+    },
+  },
+
+  subThreadForkBehavior_v20260517_1: {
+    index: `
+compress tool 调用会 fork 一个 sub thread 负责进行上下文清理 / process events 压缩。
+原 thread 自动注入一条消息提示已异步开始 compress，然后切换为 waiting 状态，
+直到 sub thread 把压缩结果回写到本线程才被唤醒。
+`.trim(),
+  },
+
+  knowledgeFolding_v20260517_1: {
+    index: `
+sub thread 启动时为压低自身 context 体积，自动折叠所有 knowledge：仅展示 description
+或前 200 行文本，然后再加载 compress 相关的专属 knowledge。
+随后基于 compress knowledge 的指导通过 command program 调用相关 function 来编辑 context。
+`.trim(),
+  },
+
+  diffApplication_v20260517_1: {
+    index: `
+compress 完成后，sub thread 把 context diff 应用到 parent thread；
+parent thread 唤醒时已经看到精简后的事件流，不再需要二次操作。
+`.trim(),
+  },
+
+  irreversibility_v20260517_1: {
+    index: `
+压缩是删除式的——被截断的 events 内容不可恢复。原始 thread.json 文件不保留压缩前快照。
+所以 compress 只该用于"已经没价值的中间细节"——尚有引用价值的事件应通过其它方式（如总结写回 thread.plan）保留。
+`.trim(),
+  },
 };
