@@ -121,6 +121,19 @@ export type ContextWindow =
       /** activator 来源时的描述（来自 frontmatter.description） */
       description?: string;
       createdAt?: number;
+    }
+  | {
+      id: string;
+      type: "search";
+      parentWindowId?: string;
+      title: string;
+      status: "open" | "closed";
+      kind: "glob" | "grep";
+      query: string;
+      matches: Array<{ index: number; path: string; line?: number; snippet?: string }>;
+      truncated: boolean;
+      searchRoot?: string;
+      createdAt?: number;
     };
 
 /** 与后端 ThreadMessage 同 shape；前端只读取关心的字段。 */
@@ -209,6 +222,7 @@ function windowBadge(type: ContextWindow["type"]): string {
     case "program":      return "PROG";
     case "file":         return "FILE";
     case "knowledge":    return "KNOW";
+    case "search":       return "SRCH";
     case "root":         return "ROOT";
   }
 }
@@ -229,6 +243,8 @@ function windowSummary(window: ContextWindow): string {
       return window.path + (window.lines ? ` [${window.lines.join("-")}]` : "");
     case "knowledge":
       return `${window.source ?? "explicit"} · ${window.path}` + (window.presentation ? ` · ${window.presentation}` : "");
+    case "search":
+      return `${window.kind} · ${window.query} · ${window.matches.length}${window.truncated ? "+" : ""} hit${window.matches.length === 1 ? "" : "s"}`;
     case "root":
       return "thread root";
   }
@@ -260,6 +276,10 @@ function windowCharCount(window: ContextWindow): number {
       break;
     case "knowledge":
       n += window.path.length + (window.body?.length ?? 0) + (window.description?.length ?? 0);
+      break;
+    case "search":
+      n += window.query.length;
+      for (const m of window.matches) n += m.path.length + (m.snippet?.length ?? 0);
       break;
     case "root":
       break;

@@ -23,7 +23,7 @@ close(
 - formExecAutoRemove — command_exec form 的自动移除规则
 `,
 
-  reasonRequired_v20260517_1: {
+  reasonRequired: {
     title: "reason Required",
     content: `
 reason 强制必填，避免 LLM 反复 open → close → open → close 振荡而不留下原因。
@@ -31,13 +31,13 @@ reason 帮助下一轮 LLM 理解"上一轮我为什么放弃了这个行动"。
     `,
   },
 
-  scope_v20260517_1: {
+  scope: {
     title: "scope",
     content: `
 close 覆盖的 ContextWindow 类型与级联规则。
     `,
 
-    coveredTypes_v20260517_1: {
+    coveredTypes: {
       title: "覆盖的 window 类型",
       content: `
 任意 ContextWindow 都可被 close：command_exec / do / todo / talk / file /
@@ -47,7 +47,7 @@ window_id 与 form_id 入参等价，前者是统一形态、后者是 command_e
       `,
     },
 
-    cascadeClose_v20260517_1: {
+    cascadeClose: {
       title: "级联关闭",
       content: `
 关闭一个 window 时，挂在其下的所有 sub-window 也一并关闭。
@@ -55,7 +55,7 @@ window_id 与 form_id 入参等价，前者是统一形态、后者是 command_e
       `,
     },
 
-    knowledgeRefCount_v20260517_1: {
+    knowledgeRefCount: {
       title: "knowledge 引用计数释放",
       content: `
 close 会减少该 window 引用的 knowledge 计数；
@@ -64,22 +64,22 @@ close 会减少该 window 引用的 knowledge 计数；
     },
   },
 
-  onCloseHooks_v20260517_1: {
+  onCloseHooks: {
     title: "on Close Hooks",
     content: `
 不同 window 类型在 close 时注册不同 onClose hook。
     `,
 
-    doWindowArchive_v20260517_1: {
-      title: "do_window onClose — 归档子线程",
+    doWindowArchive: {
+      title: "do_window onClose",
       content: `
 do_window 关闭时归档子线程对话（B=ii archive）：
 子线程不再继续 think，历史保留供后续回看。
       `,
     },
 
-    creatorDoReject_v20260517_1: {
-      title: "creator do_window onClose — 拒绝并 inject",
+    creatorDoReject: {
+      title: "creator do_window onClose",
       content: `
 子线程持有的指向父的 creator do_window 不允许 close——
 LLM 触发 close 时直接 reject 并写一条 inject 提示。
@@ -87,7 +87,7 @@ LLM 触发 close 时直接 reject 并写一条 inject 提示。
     },
   },
 
-  formExecAutoRemove_v20260517_1: {
+  formExecAutoRemove: {
     title: "form Exec Auto Remove",
     content: `
 command_exec form 成功 submit 后系统自动从 contextWindows 移除，**不需要显式 close**；

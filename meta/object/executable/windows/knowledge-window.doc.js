@@ -11,18 +11,18 @@ export const knowledge_window_v20260515_1 = {
   description: `knowledge_window 是一段 knowledge 文本在 context 中的运行时载体。`,
   sources: { knowledgeWindow },
 
-  sources_v20260517_1: {
+  sourcesEntry: {
     title: "sources",
     content: `knowledge_window 的 source 字段区分 3 类来源，决定持久化与可关闭性。`,
 
-    explicit_v20260517_1: {
+    explicit: {
       title: "explicit",
       content: `
 LLM 通过 root.open_knowledge 显式 pin 进 context；持久化进 thread.json；可被 close。
       `,
     },
 
-    protocol_v20260517_1: {
+    protocol: {
       title: "protocol",
       content: `
 每轮自动注入的协议常量（KNOWLEDGE）+ 各 command_exec form 的 knowledge() 派生 +
@@ -31,7 +31,7 @@ LLM 通过 root.open_knowledge 显式 pin 进 context；持久化进 thread.json
       `,
     },
 
-    activator_v20260517_1: {
+    activator: {
       title: "activator",
       content: `
 stones/{id}/knowledge/*.md 经 commandPaths 命中（computeActivations）后合成。
@@ -40,11 +40,11 @@ stones/{id}/knowledge/*.md 经 commandPaths 命中（computeActivations）后合
     },
   },
 
-  commands_v20260517_1: {
+  commands: {
     title: "commands",
     content: `knowledge_window 注册 2 个 command。`,
 
-    reload_v20260517_1: {
+    reload: {
       title: "reload",
       content: `
 强制下一轮重新计算激活集合。
@@ -54,7 +54,7 @@ stones/{id}/knowledge/*.md 经 commandPaths 命中（computeActivations）后合
       `,
     },
 
-    close_v20260517_1: {
+    close: {
       title: "close",
       content: `
 释放 window；不影响 knowledge 文件本身。
@@ -66,11 +66,11 @@ stones/{id}/knowledge/*.md 经 commandPaths 命中（computeActivations）后合
     },
   },
 
-  onCloseHook_v20260517_1: {
+  onCloseHook: {
     title: "on Close Hook",
     content: `onCloseKnowledgeWindow 注册到 type=knowledge 的 onClose hook。`,
 
-    synthesizedGuard_v20260517_1: {
+    synthesizedGuard: {
       title: "synthesizedGuard",
       content: `
 window.source 存在且非 "explicit"（即 protocol / activator）时拒绝关闭：

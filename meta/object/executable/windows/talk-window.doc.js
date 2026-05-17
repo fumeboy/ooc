@@ -13,7 +13,7 @@ export const talk_window_v20260515_1 = {
   description: `talk_window 是与一个对端 flow object（含 "user"）的持续会话窗口。`,
   sources: { talk, talkDelivery },
 
-  invocationShape_v20260517_1: {
+  invocationShape: {
     title: "invocation Shape",
     content: `
 talk_window 注册的 command 不挂在 root 上。调用形态统一是：
@@ -22,11 +22,11 @@ root.talk 只用来"创建 talk_window"，**不是**用来发消息。
     `,
   },
 
-  commands_v20260517_1: {
+  commands: {
     title: "commands",
     content: `talk_window 注册 3 个 command；详见各子节点。`,
 
-    say_v20260517_1: {
+    say: {
       title: "say",
       content: `
 向对端发一条消息。paths: say / say.wait（args.wait=true 时追加 say.wait path）。
@@ -38,7 +38,7 @@ root.talk 只用来"创建 talk_window"，**不是**用来发消息。
 执行体见 say.execution；缺 msg 时的 input knowledge 提示见 say.inputKnowledge。
       `,
 
-      execution_v20260517_1: {
+      execution: {
         title: "execution（executeTalkWindowSay）",
         content: `
 1. 校验：parentWindow 必须是 type=talk；thread 必须带 persistence 才能跨对象派送
@@ -52,7 +52,7 @@ root.talk 只用来"创建 talk_window"，**不是**用来发消息。
         `,
       },
 
-      inputKnowledge_v20260517_1: {
+      inputKnowledge: {
         title: "inputKnowledge",
         content: `
 formStatus==="open" 且 args.msg 缺失/空串时，knowledge 表追加 key
@@ -61,7 +61,7 @@ internal/windows/talk/say/input，正文提示 refine(args={ msg, wait })。
       },
     },
 
-    wait_v20260517_1: {
+    wait: {
       title: "wait",
       content: `
 不发消息，仅把父线程切到 waiting 等下一条 inbox。
@@ -74,7 +74,7 @@ internal/windows/talk/say/input，正文提示 refine(args={ msg, wait })。
       `,
     },
 
-    close_v20260517_1: {
+    close: {
       title: "close",
       content: `
 等价于 close tool，明确表达"结束本对话主题"。
@@ -86,7 +86,7 @@ internal/windows/talk/say/input，正文提示 refine(args={ msg, wait })。
     },
   },
 
-  basicKnowledge_v20260517_1: {
+  basicKnowledge: {
     title: "basic Knowledge",
     content: `
 通过 registerWindowType("talk", { basicKnowledge: TALK_WINDOW_BASIC_KNOWLEDGE })
@@ -98,7 +98,7 @@ internal/windows/talk/say/input，正文提示 refine(args={ msg, wait })。
 是回信通道）。
     `,
 
-    constraints_v20260517_1: {
+    constraints: {
       title: "basicKnowledge.constraints（4 条关键约束）",
       content: `
 - 不接受 root.talk — root.talk 用于"创建 talk_window"，不是发消息
@@ -110,13 +110,13 @@ internal/windows/talk/say/input，正文提示 refine(args={ msg, wait })。
     },
   },
 
-  onCloseHook_v20260517_1: {
+  onCloseHook: {
     title: "on Close Hook",
     content: `
 onCloseTalkWindow 是注册到 type=talk 的 onClose hook。仅处理一种特例。
     `,
 
-    creatorGuard_v20260517_1: {
+    creatorGuard: {
       title: "creatorGuard",
       content: `
 window.isCreatorWindow === true 时拒绝关闭：
@@ -127,45 +127,55 @@ window.isCreatorWindow === true 时拒绝关闭：
     },
   },
 
-  delivery_v20260517_1: {
+  delivery: {
     title: "delivery",
     content: `
 deliverTalkMessage(opts) 由 talk-delivery 模块提供，承担跨对象派送的核心逻辑。
 talk_window.say 是它的唯一上游调用方。
     `,
 
-    calleeThreadResolution_v20260517_1: {
+    calleeThreadResolution: {
       title: "callee Thread Resolution",
       content: `按 caller.talkWindow.target（target objectId）定位或创建 callee thread；2 个分支详见子节点。`,
 
-      firstDeliveryCreates_v20260517_1: {
-        title: "firstDeliveryCreates — 首次派送：创建 callee thread，注入 creator talk_window 指向 caller...",
-        content: `##### firstDeliveryCreates — 首次派送：创建 callee thread，注入 creator talk_window 指向 caller thread，确保 callee 一启动就持有回信通道。`,
+      firstDeliveryCreates: {
+        title: "firstDeliveryCreates",
+        content: `
+        首次派送：创建 callee thread，注入 creator talk_window 指向 caller thread，确保 callee 一启动就持有回信通道。
+        `,
       },
 
-      subsequentReuses_v20260517_1: {
-        title: "subsequentReuses — target objectId 已有对应 callee thread 时复用，不创建新线程。同一对话只会有一个 ca...",
-        content: `##### subsequentReuses — target objectId 已有对应 callee thread 时复用，不创建新线程。同一对话只会有一个 callee thread。`,
+      subsequentReuses: {
+        title: "subsequentReuses",
+        content: `
+        target objectId 已有对应 callee thread 时复用，不创建新线程。同一对话只会有一个 callee thread。
+        `,
       },
     },
 
-    doubleWrite_v20260517_1: {
+    doubleWrite: {
       title: "double Write",
       content: `派送时同时写 caller.outbox 与 callee.inbox；详见各子节点。`,
 
-      callerOutboxWrite_v20260517_1: {
-        title: "callerOutboxWrite — caller.thread.outbox 追加 message（windowId=本 talk_window.id...",
-        content: `##### callerOutboxWrite — caller.thread.outbox 追加 message（windowId=本 talk_window.id, source=talk），让 caller 自己看到"我刚发了什么"。`,
+      callerOutboxWrite: {
+        title: "callerOutboxWrite",
+        content: `
+        caller.thread.outbox 追加 message（windowId=本 talk_window.id, source=talk），让 caller 自己看到"我刚发了什么"。
+        `,
       },
 
-      calleeInboxWrite_v20260517_1: {
-        title: "calleeInboxWrite — callee.thread.inbox 追加 message + 事件 context_change.inbox_m...",
-        content: `##### calleeInboxWrite — callee.thread.inbox 追加 message + 事件 context_change.inbox_message_arrived，让 callee 下一轮 transcript 能看到这条消息。`,
+      calleeInboxWrite: {
+        title: "calleeInboxWrite",
+        content: `
+        callee.thread.inbox 追加 message + 事件 context_change.inbox_message_arrived，让 callee 下一轮 transcript 能看到这条消息。
+        `,
       },
 
-      calleeStatusRevive_v20260517_1: {
-        title: "calleeStatusRevive — callee thread 若处于 done/failed/paused 会被切到 running，由 sche...",
-        content: `##### calleeStatusRevive — callee thread 若处于 done/failed/paused 会被切到 running，由 scheduler 选中执行；保证消息一定会被处理。`,
+      calleeStatusRevive: {
+        title: "calleeStatusRevive",
+        content: `
+        callee thread 若处于 done/failed/paused 会被切到 running，由 scheduler 选中执行；保证消息一定会被处理。
+        `,
       },
     },
   },

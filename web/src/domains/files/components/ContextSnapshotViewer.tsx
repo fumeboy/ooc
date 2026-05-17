@@ -30,6 +30,7 @@ import {
   PanelTop,
   Play,
   ScrollText,
+  Search,
   Send,
   Terminal,
   type LucideIcon,
@@ -65,6 +66,7 @@ const WINDOW_TYPE_ICON: Record<ContextWindow["type"], LucideIcon> = {
   program: Play,
   file: FileText,
   knowledge: ScrollText,
+  search: Search,
 };
 
 /** 把节点状态映射成颜色基调；节点没有 status 时返回 "neutral"。 */
@@ -105,7 +107,7 @@ function nodeAffix(node: ContextNode): { icon: LucideIcon; tone: Tone; status?: 
     }
     case "window": {
       const w = node.data.window;
-      return { icon: WINDOW_TYPE_ICON[w.type], tone: statusToTone(w.status), status: w.status };
+      return { icon: WINDOW_TYPE_ICON[w.type] ?? CircleDot, tone: statusToTone(w.status), status: w.status };
     }
     case "message":
       return { icon: Mail, tone: "neutral" };

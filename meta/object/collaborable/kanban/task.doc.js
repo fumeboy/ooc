@@ -28,13 +28,13 @@ Task 是 Session 级的执行单元，多对多关联 Issue。
 - vsIssue — Task 与 Issue 的选择经验
 `,
 
-  shape_v20260517_1: {
+  shape: {
     title: "数据结构",
     content: `
 Task 由两个结构组成：主体 taskFields 与子任务 subtaskFields。
     `,
 
-    taskFields_v20260517_1: {
+    taskFields: {
       title: "Task 主体字段",
       content: `
 typescript
@@ -54,7 +54,7 @@ interface Task {
       `,
     },
 
-    subtaskFields_v20260517_1: {
+    subtaskFields: {
       title: "SubTask 字段",
       content: `
 typescript
@@ -69,7 +69,7 @@ interface SubTask {
     },
   },
 
-  statusFlow_v20260517_1: {
+  statusFlow: {
     title: "状态",
     content: `
 
@@ -79,7 +79,7 @@ running  → done  → closed
 详见两个子节点：状态枚举与 Task vs Issue 的简化对比。
     `,
 
-    threeStateEnum_v20260517_1: {
+    threeStateEnum: {
       title: "三态枚举",
       content: `
 只有 running / done / closed 三态——比 Issue 简单。
@@ -87,7 +87,7 @@ running：执行中；done：完成；closed：归档（含放弃）。
       `,
     },
 
-    simplerThanIssue_v20260517_1: {
+    simplerThanIssue: {
       title: "为什么比 Issue 简单",
       content: `
 Task 是执行单元，要么在做、要么做完、要么归档；没有"讨论"/"设计"/"评审"
@@ -97,14 +97,14 @@ Task 是执行容器"的边界。
     },
   },
 
-  subtasks_v20260517_1: {
+  subtasks: {
     title: "SubTask",
     content: `
 Task 可有 SubTask 列表。具体由三个子点构成：示例结构、SubTask 与 Task 的边界、
 assignee 自动通知机制。
     `,
 
-    example_v20260517_1: {
+    example: {
       title: "示例",
       content: `
 json
@@ -119,7 +119,7 @@ json
       `,
     },
 
-    boundary_v20260517_1: {
+    boundary: {
       title: "SubTask 与 Task 的边界",
       content: `
 - SubTask 不是独立的 Task——它是 Task 的"分步"
@@ -128,7 +128,7 @@ json
       `,
     },
 
-    assigneeNotification_v20260517_1: {
+    assigneeNotification: {
       title: "自动通知 assignee",
       content: `
 某 Object 被分配到 SubTask 时，系统通知该 Object：
@@ -143,21 +143,21 @@ Object 开始处理后，可主动 updateSubTask 把 status 改为 running，完
     },
   },
 
-  issueRefs_v20260517_1: {
+  issueRefs: {
     title: "issueRefs（多对多）",
     content: `
 与 Issue 双向关联，新增 / 修改时两侧都要更新。详见 collaborable.kanban.issue。
     `,
   },
 
-  hasNewInfo_v20260517_1: {
+  hasNewInfo: {
     title: "hasNewInfo",
     content: `
 与 Issue 同：有需要人类确认的新信息时设为 true，前端显示红点。
 具体见两个子节点：典型触发场景与清零路径。
     `,
 
-    triggers_v20260517_1: {
+    triggers: {
       title: "典型触发",
       content: `
 - Task 完成需要人工验收
@@ -166,7 +166,7 @@ Object 开始处理后，可主动 updateSubTask 把 status 改为 running，完
       `,
     },
 
-    ackPath_v20260517_1: {
+    ackPath: {
       title: "清零路径",
       content: `
 人类打开详情页 → POST /api/sessions/{sid}/tasks/{id}/ack → 自动调用
@@ -175,7 +175,7 @@ setTaskNewInfo(id, false) 把红点清零。
     },
   },
 
-  reportPages_v20260517_1: {
+  reportPages: {
     title: "reportPages",
     content: `
 Task 完成后的结果展示页面。由负责 Object 在自己的 Flow 目录下生成
@@ -193,13 +193,13 @@ json
     `,
   },
 
-  operations_v20260517_1: {
+  operations: {
     title: "典型操作",
     content: `
 由 supervisor 通过 server 方法操作。按对象分两组：Task 方法与 SubTask 方法。
     `,
 
-    taskMethods_v20260517_1: {
+    taskMethods: {
       title: "Task 方法",
       content: `
 - createTask(sessionDir, title, description?, issueRefs?)
@@ -209,7 +209,7 @@ json
       `,
     },
 
-    subtaskMethods_v20260517_1: {
+    subtaskMethods: {
       title: "SubTask 方法",
       content: `
 - createSubTask(sessionDir, taskId, title, assignee?)
@@ -218,7 +218,7 @@ json
     },
   },
 
-  vsIssue_v20260517_1: {
+  vsIssue: {
     title: "Task vs Issue 选择",
     content: `
 | 场景 | 用 Issue | 用 Task |

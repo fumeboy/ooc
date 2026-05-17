@@ -104,11 +104,11 @@ export const context_v20260505_1 = {
   description: Context 是 Object 每次思考时看到的全部信息。,  // 一句话总览
 
   组成_v20260505_1: { index: ThreadContext = { ... } 顶层字段表与组成图 },
-  self_v20260505_1: { index: self 字段的语义、来源、内容范围 },
-  knowledge_v20260505_1: { index: knowledge 字段的语义、激活规则、特例（relations / memory） },
-  creator_v20260505_1: { index: creator 字段的取值规则与用途 },
-  contextWindows_v20260505_1: { index: contextWindows 字段的形态、window 类型枚举、生命周期 },
-  llmInput_v20260505_1: { index: LLM 输入的两层拆分（system prompt + process event messages） },
+  self: { index: self 字段的语义、来源、内容范围 },
+  knowledge: { index: knowledge 字段的语义、激活规则、特例（relations / memory） },
+  creator: { index: creator 字段的取值规则与用途 },
+  contextWindows: { index: contextWindows 字段的形态、window 类型枚举、生命周期 },
+  llmInput: { index: LLM 输入的两层拆分（system prompt + process event messages） },
 };
 
 

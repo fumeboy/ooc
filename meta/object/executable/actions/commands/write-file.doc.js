@@ -17,7 +17,7 @@ write_file 创建或完整覆盖一个文件，并自动 spawn 一个 file_windo
 - contrastWithProgramShell — 与 program(shell) 写文件方式的对比
 `,
 
-  callShape_v20260517_1: {
+  callShape: {
     title: "call Shape",
     content: `
 
@@ -27,7 +27,7 @@ open(command="write_file", title="新建测试文件",
     `,
   },
 
-  params_v20260517_1: {
+  params: {
     title: "params",
     content: `
 | 参数    | 必填 | 说明 |
@@ -36,14 +36,14 @@ open(command="write_file", title="新建测试文件",
 | content | 是   | 完整文件内容（字符串；空字符串表示 0 字节文件）|
     `,
 
-    path_v20260517_1: {
+    path: {
       title: "path (必填)",
       content: `
 目标文件路径（绝对或工作目录相对）。父目录不存在时自动 mkdir -p。
       `,
     },
 
-    content_v20260517_1: {
+    content: {
       title: "content (必填)",
       content: `
 完整文件内容（字符串；空字符串表示 0 字节文件）。
@@ -52,7 +52,7 @@ open(command="write_file", title="新建测试文件",
     },
   },
 
-  submitEffects_v20260517_1: {
+  submitEffects: {
     title: "submit Effects",
     content: `
 写盘成功后在 thread.contextWindows 下挂一个 type=file 的 window 指向 path，
@@ -60,7 +60,7 @@ LLM 可以直接 open(parent_window_id="<file_window_id>", command="edit", ...) 
     `,
   },
 
-  contrastWithProgramShell_v20260517_1: {
+  contrastWithProgramShell: {
     title: "contrast With Program Shell",
     content: `
 不要用 program(language="shell", code="echo ... > ...") 创建文件——

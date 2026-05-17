@@ -19,6 +19,7 @@ import type { PauseStore } from "../../runtime/pause-store";
 import { scanPausedThreads } from "../../runtime/thread-query";
 import { applyResumeTransition, canResumeThread } from "../../runtime/thread-transition";
 import { AppServerError } from "../../bootstrap/errors";
+import { hashJson } from "../../bootstrap/hash";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -115,9 +116,9 @@ export function createFlowsService(deps: {
               };
             })
         );
-        return { items };
+        return { items, hash: hashJson(items) };
       } catch {
-        return { items: [] };
+        return { items: [], hash: hashJson([]) };
       }
     },
     async createSession({ sessionId, title }: { sessionId: string; title?: string }) {
@@ -327,10 +328,11 @@ export function createFlowsService(deps: {
       const thread = await readThread({ baseDir: deps.baseDir, sessionId, objectId }, threadId);
       if (!thread) return undefined;
       const enriched = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
-      return {
+      const payload = {
         ...thread,
         contextWindows: enriched.contextWindows ?? thread.contextWindows,
       };
+      return { ...payload, hash: hashJson(payload) };
     },
     /**
      * 控制面"用户回复"通道。

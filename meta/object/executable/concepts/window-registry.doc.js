@@ -11,11 +11,11 @@ export const window_registry_v20260515_1 = {
   description: `每种 ContextWindow type 的契约集中在 WindowRegistry：commands 表、onClose hook、renderXml、basicKnowledge。`,
   sources: { registry },
 
-  definitionFields_v20260517_1: {
+  definitionFields: {
     title: "definition Fields",
     content: `WindowTypeDefinition 4 个字段；详见各子节点。`,
 
-    commands_v20260517_1: {
+    commands: {
       title: "commands",
       content: `
 Record<string, CommandTableEntry>：该 window 注册的、LLM 可通过
@@ -33,7 +33,7 @@ open(parent_window_id, command, ...) 调用的 command 集合。
       `,
     },
 
-    onClose_v20260517_1: {
+    onClose: {
       title: "onClose",
       content: `
 (ctx: OnCloseContext) => boolean | void，close 触发时的副作用：
@@ -44,7 +44,7 @@ open(parent_window_id, command, ...) 调用的 command 集合。
       `,
     },
 
-    renderXml_v20260517_1: {
+    renderXml: {
       title: "renderXml",
       content: `
 (ctx: RenderContext) => unknown，把该 window 投影成 system context 的 XML 节点。
@@ -55,7 +55,7 @@ open(parent_window_id, command, ...) 调用的 command 集合。
       `,
     },
 
-    basicKnowledge_v20260517_1: {
+    basicKnowledge: {
       title: "basicKnowledge",
       content: `
 可选 string；当 thread.contextWindows 中出现该 type 的至少一个实例时，
@@ -68,11 +68,11 @@ collectExecutableKnowledgeEntries 自动把这段文本合成为一个 protocol 
     },
   },
 
-  registrationMechanics_v20260517_1: {
+  registrationMechanics: {
     title: "registration Mechanics",
     content: `注册流程；3 个子节点描述初始 REGISTRY、registerWindowType 与查询。`,
 
-    initialRegistry_v20260517_1: {
+    initialRegistry: {
       title: "initialRegistry",
       content: `
 模块加载时 REGISTRY 预先 set 每个已知 type 一个空契约占位（root / command_exec /
@@ -83,27 +83,35 @@ windows ↔ commands ↔ windows 的循环依赖。
       `,
     },
 
-    registerWindowType_v20260517_1: {
-      title: "registerWindowType(type, partial) — 合并策略详见各子节点。",
-      content: `##### registerWindowType(type, partial) — 合并策略详见各子节点。`,
+    registerWindowType: {
+      title: "registerWindowType(type, partial)",
+      content: `
+      合并策略详见各子节点。
+      `,
 
-      commandsShallowMerge_v20260517_1: {
-        title: "commandsShallowMerge — commands 字段浅合并；key 冲突时新值覆盖。允许 root 在多次注册中累积命令表。",
-        content: `###### commandsShallowMerge — commands 字段浅合并；key 冲突时新值覆盖。允许 root 在多次注册中累积命令表。`,
+      commandsShallowMerge: {
+        title: "commandsShallowMerge",
+        content: `
+        commands 字段浅合并；key 冲突时新值覆盖。允许 root 在多次注册中累积命令表。
+        `,
       },
 
-      otherFieldsOverwrite_v20260517_1: {
-        title: "otherFieldsOverwrite — onClose / renderXml / basicKnowledge 直接整体覆盖（缺省时保留原值）。这...",
-        content: `###### otherFieldsOverwrite — onClose / renderXml / basicKnowledge 直接整体覆盖（缺省时保留原值）。这些是单一契约函数，没有合并语义。`,
+      otherFieldsOverwrite: {
+        title: "otherFieldsOverwrite",
+        content: `
+        onClose / renderXml / basicKnowledge 直接整体覆盖（缺省时保留原值）。这些是单一契约函数，没有合并语义。
+        `,
       },
 
-      unknownTypeThrows_v20260517_1: {
-        title: "unknownTypeThrows — 未知 type 抛错（避免 typo 静默失败导致 hook 永不生效）。",
-        content: `###### unknownTypeThrows — 未知 type 抛错（避免 typo 静默失败导致 hook 永不生效）。`,
+      unknownTypeThrows: {
+        title: "unknownTypeThrows",
+        content: `
+        未知 type 抛错（避免 typo 静默失败导致 hook 永不生效）。
+        `,
       },
     },
 
-    queryHelpers_v20260517_1: {
+    queryHelpers: {
       title: "queryHelpers",
       content: `
 - getWindowTypeDefinition(type) — 取契约；未注册抛错
@@ -112,18 +120,22 @@ windows ↔ commands ↔ windows 的循环依赖。
     },
   },
 
-  registrationCallers_v20260517_1: {
+  registrationCallers: {
     title: "registration Callers",
     content: `registerWindowType 的调用方分布——每个 type 实现侧在模块加载时注入。`,
 
-    rootCommands_v20260517_1: {
-      title: "rootCommands — windows/root/index.ts 在初始化时注入 root 的 commands 表（do/talk/progra...",
-      content: `##### rootCommands — windows/root/index.ts 在初始化时注入 root 的 commands 表（do/talk/program/...）。`,
+    rootCommands: {
+      title: "rootCommands",
+      content: `
+      windows/root/index.ts 在初始化时注入 root 的 commands 表（do/talk/program/...）。
+      `,
     },
 
-    typeImpls_v20260517_1: {
-      title: "typeImpls — windows/do.ts / windows/talk.ts / windows/file.ts / windows/progr...",
-      content: `##### typeImpls — windows/do.ts / windows/talk.ts / windows/file.ts / windows/program.ts / windows/knowledge.ts / windows/search.ts / windows/todo.ts 各自在模块加载时注入自己的 commands + onClose + basicKnowledge。`,
+    typeImpls: {
+      title: "typeImpls",
+      content: `
+      windows/do.ts / windows/talk.ts / windows/file.ts / windows/program.ts / windows/knowledge.ts / windows/search.ts / windows/todo.ts 各自在模块加载时注入自己的 commands + onClose + basicKnowledge。
+      `,
     },
   },
 };

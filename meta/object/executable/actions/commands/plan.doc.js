@@ -15,7 +15,7 @@ plan 设置或更新当前线程的计划文本。
 - planVsTodo — plan 与 todo command form 的对比
 `,
 
-  callShape_v20260517_1: {
+  callShape: {
     title: "call Shape",
     content: `
 
@@ -28,20 +28,20 @@ submit(form_id)
     `,
   },
 
-  behavior_v20260517_1: {
+  behavior: {
     title: "behavior",
     content: `
 plan 的写入与作用域。
     `,
 
-    writeToContext_v20260517_1: {
+    writeToContext: {
       title: "写入 context",
       content: `
 submit 把 plan 文本写入 thread.plan，进入 XML system context 的稳定字段。
       `,
     },
 
-    threadLocal_v20260517_1: {
+    threadLocal: {
       title: "线程局部性",
       content: `
 plan 是**线程局部**的——同对象的其他线程看不见本线程的 plan。
@@ -50,7 +50,7 @@ plan 也不会自动同步给父线程。
     },
   },
 
-  planVsTodo_v20260517_1: {
+  planVsTodo: {
     title: "plan Vs Todo",
     content: `
 | 维度 | plan | todo command form |

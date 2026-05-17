@@ -3,7 +3,7 @@ import { requestJson } from "../../transport/http";
 import type { FlowSession } from "./model";
 
 export function fetchFlows() {
-  return requestJson<{ items: FlowSession[] }>(endpoints.flows);
+  return requestJson<{ items: FlowSession[]; hash: string }>(endpoints.flows);
 }
 
 export function pauseFlowSession(sessionId: string) {

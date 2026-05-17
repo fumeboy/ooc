@@ -5,7 +5,7 @@ import type { Stone } from "../../domains/stones";
 import type { ThreadContext } from "../../domains/chat";
 import { Welcome } from "./Welcome";
 
-export function MainPanel({ isWelcome = false, stones = [], onCreateSession, file, path, error, loading, editableFile, savingFile, onFileChange, onFileSave, thread, selfObjectId, onUserReply, threadHeader }: { isWelcome?: boolean; stones?: Stone[]; onCreateSession?: (input: { sessionId: string; targetObjectId: string; initialMessage: string }) => Promise<void>; file?: FileContent; path?: string; error?: string; loading: boolean; editableFile?: boolean; savingFile?: boolean; onFileChange?: (content: string) => void; onFileSave?: () => void; thread?: ThreadContext; selfObjectId?: string; onUserReply?: (text: string) => Promise<void>; threadHeader?: ReactNode }) {
+export function MainPanel({ isWelcome = false, stones = [], onCreateSession, file, path, error, loading, editableFile, savingFile, onFileChange, onFileSave, thread, selfObjectId, onUserReply, onRefresh, threadHeader }: { isWelcome?: boolean; stones?: Stone[]; onCreateSession?: (input: { sessionId: string; targetObjectId: string; initialMessage: string }) => Promise<void>; file?: FileContent; path?: string; error?: string; loading: boolean; editableFile?: boolean; savingFile?: boolean; onFileChange?: (content: string) => void; onFileSave?: () => void; thread?: ThreadContext; selfObjectId?: string; onUserReply?: (text: string) => Promise<void>; onRefresh?: () => void | Promise<void>; threadHeader?: ReactNode }) {
   const showBlockingError = Boolean(error && file);
   return (
     <main className="main-panel gap-1">
@@ -17,7 +17,7 @@ export function MainPanel({ isWelcome = false, stones = [], onCreateSession, fil
           {!isWelcome && editableFile && <span className="pill">codemirror</span>}
           {error && !file && !isWelcome && <span className="muted small">backend offline</span>}
           {threadHeader}
-          <span className="refresh">↻</span>
+          <button type="button" className="refresh" onClick={onRefresh} disabled={loading || !onRefresh} aria-label="Refresh" title="Refresh">↻</button>
         </div>
       </div>
       <div className="panel flex flex-col flex-grow">

@@ -20,13 +20,13 @@ program 执行一段代码或调用 server 方法。产出 **program_window**，
 - outOfScope — 不在范围内的能力
 `,
 
-  callShapes_v20260517_1: {
+  callShapes: {
     title: "call Shapes",
     content: `
 program 首次调用有两种模式；args 给齐时 open 立即提交 form，无需再 refine/submit。
     `,
 
-    modeAInlineCode_v20260517_1: {
+    modeAInlineCode: {
       title: "模式 A：执行一段临时代码",
       content: `
 
@@ -38,7 +38,7 @@ open(command="program", title="…", args={
       `,
     },
 
-    modeBFunctionCall_v20260517_1: {
+    modeBFunctionCall: {
       title: "模式 B：调用对象函数方法",
       content: `
 
@@ -51,7 +51,7 @@ open(command="program", title="…", args={
     },
   },
 
-  subsequentExec_v20260517_1: {
+  subsequentExec: {
     title: "subsequent Exec",
     content: `
 后续多次执行通过 program_window.exec 在同一窗口内进行：
@@ -67,7 +67,7 @@ open(parent_window_id="<program_window_id>", command="exec", args={
     `,
   },
 
-  pathList_v20260517_1: {
+  pathList: {
     title: "path List",
     content: `
 root.program 注册的 command path 集合：
@@ -83,27 +83,27 @@ program.function                （模式 B）
 每条路径独立激活对应的 knowledge——shell 帮助在 shell 模式才进入 context。
     `,
 
-    bare_v20260517_1: { index: `### program — bare path，总是激活` },
-    shell_v20260517_1: { index: `### program.shell — language === "shell" 时激活` },
-    typescript_v20260517_1: { index: `### program.typescript — language === "ts" / "typescript" 时激活` },
-    javascript_v20260517_1: { index: `### program.javascript — language === "js" / "javascript" 时激活` },
-    functionPath_v20260517_1: { index: `### program.function — 模式 B（function="<name>"）时激活，附带 method knowledge` },
+    bare: { index: `### program — bare path，总是激活` },
+    shell: { index: `### program.shell — language === "shell" 时激活` },
+    typescript: { index: `### program.typescript — language === "ts" / "typescript" 时激活` },
+    javascript: { index: `### program.javascript — language === "js" / "javascript" 时激活` },
+    functionPath: { index: `### program.function — 模式 B（function="<name>"）时激活，附带 method knowledge` },
   },
 
-  programWindowCommands_v20260517_1: {
+  programWindowCommands: {
     title: "program Window Commands",
     content: `
 program_window 上注册的两个 sub-command。
     `,
 
-    execCmd_v20260517_1: {
+    execCmd: {
       title: "exec (args: language+code | function+args)",
       content: `
 起独立 sandbox 跑一次，结果追加到 history。
       `,
     },
 
-    closeCmd_v20260517_1: {
+    closeCmd: {
       title: "close",
       content: `
 释放 window；不影响任何外部进程。
@@ -111,13 +111,13 @@ program_window 上注册的两个 sub-command。
     },
   },
 
-  languageBackends_v20260517_1: {
+  languageBackends: {
     title: "language Backends",
     content: `
 当前支持 3 种 language + 1 种 function 路径；各自语义、隔离边界与可用 API 不同。
     `,
 
-    shellBackend_v20260517_1: {
+    shellBackend: {
       title: "language=\"shell\"",
       content: `
 通过 sh -c 执行 code 字符串：
@@ -128,7 +128,7 @@ program_window 上注册的两个 sub-command。
       `,
     },
 
-    tsJsBackend_v20260517_1: {
+    tsJsBackend: {
       title: "language=\"ts\" / \"typescript\" / \"js\" / \"javascript\"",
       content: `
 in-process 动态 import 执行：
@@ -137,7 +137,7 @@ in-process 动态 import 执行：
 - _result_ 变量进 result 的 [returnValue] 段
       `,
 
-      selfApi_v20260517_1: {
+      selfApi: {
         title: "注入的 self 对象（ProgramSelf）",
         content: `
 - self.dir — 当前对象目录
@@ -149,7 +149,7 @@ in-process 动态 import 执行：
       },
     },
 
-    functionBackend_v20260517_1: {
+    functionBackend: {
       title: "function=\"<name>\"",
       content: `
 直接调用 server/index.ts 中 llm_methods 注册的方法：
@@ -159,7 +159,7 @@ in-process 动态 import 执行：
     },
   },
 
-  executionHistory_v20260517_1: {
+  executionHistory: {
     title: "execution History",
     content: `
 每次 exec（无论首次还是后续）都生成一条 ProgramExecRecord：
@@ -172,7 +172,7 @@ ts
     `,
   },
 
-  outOfScope_v20260517_1: {
+  outOfScope: {
     title: "out Of Scope",
     content: `
 当前实现明确不覆盖的能力：

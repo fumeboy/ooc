@@ -35,7 +35,68 @@ export function AppShell() {
     }
   }, [patch, state.scope]);
 
+  /**
+   * 显式刷新：覆盖当前可见的所有数据 —— flows / stones / 当前 scope 的 tree，
+   * 以及（如果命中）activeFile 与当前 thread。供面包屑 ↻ 按钮使用。
+   */
+  const refreshActiveView = useCallback(async () => {
+    patch({ loading: true, error: undefined });
+    try {
+      const [flowsRes, stonesRes, tree] = await Promise.all([fetchFlows(), fetchStones(), fetchTree(state.scope)]);
+      let thread = state.thread;
+      if (state.activeSessionId && state.activeObjectId) {
+        thread = await fetchThread(state.activeSessionId, state.activeObjectId, state.activeThreadId ?? "root");
+      }
+      let activeFile = state.activeFile;
+      if (state.activePath && state.activeFile) {
+        activeFile = await fetchFile(state.activePath);
+      }
+      patch({ flows: flowsRes.items, stones: stonesRes.items, tree, thread, activeFile, loading: false });
+    } catch (error) {
+      patch({ error: messageFromError(error), loading: false });
+    }
+  }, [patch, state.scope, state.activeSessionId, state.activeObjectId, state.activeThreadId, state.activePath, state.activeFile, state.thread]);
+
   useEffect(() => { void refreshBasics("world"); }, []);
+
+  /**
+   * Session 打开后静默轮询：同步 thread（chat 时间线）与 flows（session pause 状态），
+   * 不动 loading 标志，避免拍频闪。当前 thread 是 root-thread-only 控制面，
+   * 在 user 视角与 callee 视角间切换时由 activeObjectId / activeThreadId 重置定时器。
+   */
+  useEffect(() => {
+    const sessionId = state.activeSessionId;
+    const objectId = state.activeObjectId;
+    if (!sessionId || !objectId) return;
+    const threadId = state.activeThreadId ?? "root";
+    let lastThreadHash = state.thread?.hash;
+    let lastFlowsHash: string | undefined;
+    const tick = async () => {
+      try {
+        const [thread, flows] = await Promise.all([
+          fetchThread(sessionId, objectId, threadId),
+          fetchFlows(),
+        ]);
+        const threadChanged = thread.hash !== lastThreadHash;
+        const flowsChanged = flows.hash !== lastFlowsHash;
+        if (!threadChanged && !flowsChanged) return;
+        lastThreadHash = thread.hash;
+        lastFlowsHash = flows.hash;
+        setState((prev) => {
+          if (prev.activeSessionId !== sessionId || prev.activeObjectId !== objectId) return prev;
+          return {
+            ...prev,
+            thread: threadChanged ? thread : prev.thread,
+            flows: flowsChanged ? flows.items : prev.flows,
+          };
+        });
+      } catch {
+        // 轮询失败不打扰 UI；下一次 tick 会重试。
+      }
+    };
+    const timer = window.setInterval(() => { void tick(); }, 4000);
+    return () => window.clearInterval(timer);
+  }, [state.activeSessionId, state.activeObjectId, state.activeThreadId]);
 
   useEffect(() => {
     if (state.scope !== "flows") return;
@@ -239,7 +300,7 @@ export function AppShell() {
   return (
     <AppLayout
       sidebar={<Sidebar scope={state.scope} flows={state.flows} tree={state.tree} activePath={state.activePath} activeSessionId={state.activeSessionId} activeSessionTitle={state.flows.find((flow) => flow.sessionId === state.activeSessionId)?.title ?? state.activeSessionId} showSessions={showSessions} onToggleSessions={() => setShowSessions((prev) => !prev)} onShowWelcome={handleShowWelcome} onScope={refreshBasics} onNode={handleNode} onSession={handleSession} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
-      main={<MainPanel isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={state.activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} selfObjectId={state.activeObjectId} onUserReply={handleSend} threadHeader={state.activeObjectId ? <ThreadHeader objectId={state.activeObjectId} threadId={state.activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} onSelectThread={(sel) => state.activeSessionId && void loadThread(state.activeSessionId, sel.objectId, sel.threadId)} /> : undefined} />}
+      main={<MainPanel isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={state.activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} selfObjectId={state.activeObjectId} onUserReply={handleSend} onRefresh={refreshActiveView} threadHeader={state.activeObjectId ? <ThreadHeader objectId={state.activeObjectId} threadId={state.activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} onSelectThread={(sel) => state.activeSessionId && void loadThread(state.activeSessionId, sel.objectId, sel.threadId)} /> : undefined} />}
       right={state.activeObjectId && state.activeObjectId !== "user" ? <RightPanel sessionId={state.activeSessionId} objectId={state.activeObjectId} threadId={state.activeThreadId} thread={state.thread} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} /> : undefined}
     >
       <CreateStoneModal open={stoneModalOpen} draft={stoneDraft} onDraft={setStoneDraft} onClose={() => setStoneModalOpen(false)} onSubmit={handleCreateStone} />

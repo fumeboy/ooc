@@ -121,6 +121,8 @@ export type ThreadContext = {
   events?: unknown[];
   /** ContextWindow 集合；老 thread.json 可能不带，所以 optional。 */
   contextWindows?: ContextWindow[];
+  /** 服务端对响应内容算的稳定 hash；前端 polling 用它判断内容是否变化。 */
+  hash?: string;
 };
 
 export type ToolSummaryField = {
