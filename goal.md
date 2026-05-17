@@ -4,9 +4,9 @@
 
 当前正在对 OOC 系统进行重构。
 
-- 原系统目录：`/Users/bytedance/x/ooc/ooc-0`
-- 原系统文档入口：`/Users/bytedance/x/ooc/ooc-0/docs/meta.md`
-- 新系统文档入口：`/Users/bytedance/x/ooc/ooc-2/meta/index.doc.js`
+- 原系统目录：`~/x/ooc/ooc-0`
+- 原系统文档入口：`~/x/ooc/ooc-0/docs/meta.md`
+- 新系统文档入口：`~/x/ooc/ooc-2/meta/index.doc.js`
 
 本次重构不是对旧系统的机械搬运，而是一次面向长期演进的工程化收敛：保留真正有价值的核心能力，去掉导致系统持续失控的实现方式和复杂度来源。
 

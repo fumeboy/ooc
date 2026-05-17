@@ -274,7 +274,7 @@ Expected: build passes.
 
 - [ ] **Step 1: 启动 server**
 
-Run: `bun src/app/server/index.ts --world /Users/bytedance/x/ooc/ooc-2/.ooc-world-test`
+Run: `bun src/app/server/index.ts --world./.ooc-world-test`
 
 Expected: server listens on `:3000`.
 

@@ -239,12 +239,12 @@ import { Textarea } from "../../../shared/ui/textarea";
 
 - [ ] **Step 1: Run TypeScript typecheck**
 
-Run: `cd "/Users/bytedance/x/ooc/ooc-2/web" && ./node_modules/.bin/tsc --noEmit -p ./tsconfig.json`
+Run: `cd "~/x/ooc/ooc-2/web" && ./node_modules/.bin/tsc --noEmit -p ./tsconfig.json`
 Expected: exit code 0
 
 - [ ] **Step 2: Run production build in temp directory**
 
-Run: `cd "/Users/bytedance/x/ooc/ooc-2/web" && tmpdir=$(mktemp -d "/tmp/ooc-web-build-XXXXXX") && ./node_modules/.bin/vite build --outDir "$tmpdir" --emptyOutDir && rm -rf "$tmpdir"`
+Run: `cd "~/x/ooc/ooc-2/web" && tmpdir=$(mktemp -d "/tmp/ooc-web-build-XXXXXX") && ./node_modules/.bin/vite build --outDir "$tmpdir" --emptyOutDir && rm -rf "$tmpdir"`
 Expected: build completes successfully
 
 - [ ] **Step 3: Manual spot-check checklist**

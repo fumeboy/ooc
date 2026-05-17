@@ -13,17 +13,17 @@ App Server 是 OOC 的控制面 HTTP 服务，位于 \`src/app/server\`，使用
 
 ## 启动约定（本仓库）
 
-本仓库根目录 \`/Users/bytedance/x/ooc/ooc-2\` 是源码目录，**不是** world 数据目录。
+本仓库根目录 \`~/x/ooc/ooc-2\` 是源码目录，**不是** world 数据目录。
 启动 app server 必须显式传 \`--world\`，否则 server 会把源码目录当成 world，导致写出
 \`flows/\` / \`stones/\` 文件夹到代码树里。
 
-约定 world 目录：\`/Users/bytedance/x/ooc/ooc-2/.ooc-world-test\`（已 gitignore）。
+约定 world 目录：\`~/x/ooc/ooc-2/.ooc-world-test\`（已 gitignore）。
 
 启动命令：
 
 \`\`\`bash
-cd /Users/bytedance/x/ooc/ooc-2
-bun --env-file=.env src/app/server/index.ts --world /Users/bytedance/x/ooc/ooc-2/.ooc-world-test
+cd.
+bun --env-file=.env src/app/server/index.ts --world./.ooc-world-test
 \`\`\`
 
 \`config.ts\` 解析顺序为 \`--world\` flag → \`OOC_WORLD_DIR\` env → \`OOC_BASE_DIR\` env →

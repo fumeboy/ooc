@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-13
 
-**Scope:** 在当前仓库初始化独立 `web/` 前端项目，参考 `/Users/bytedance/x/ooc/ooc-0/kernel/web` 的网站架构与视觉组件，迁移一个最小可用 Web 控制面：flows / stones 目录树展示、create session、chat 会话、文件查看。同时在 `src/app/server` 增加最小 Web 支撑 API，补齐当前服务端缺失但本轮 UI 必需的目录树与文件读取能力。
+**Scope:** 在当前仓库初始化独立 `web/` 前端项目，参考 `~/x/ooc/ooc-0/kernel/web` 的网站架构与视觉组件，迁移一个最小可用 Web 控制面：flows / stones 目录树展示、create session、chat 会话、文件查看。同时在 `src/app/server` 增加最小 Web 支撑 API，补齐当前服务端缺失但本轮 UI 必需的目录树与文件读取能力。
 
 ---
 

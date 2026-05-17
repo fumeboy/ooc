@@ -31,7 +31,7 @@
 import { readThread, writeThread, createFlowObject } from "../../persistable/index.js";
 import type { ThreadContext, ThreadMessage } from "../../thinkable/context.js";
 import { initContextWindows } from "./init.js";
-import { creatorWindowIdOf, type TalkWindow } from "./types.js";
+import { creatorWindowIdOf, generateWindowId, type TalkWindow, type TodoWindow } from "./types.js";
 
 export interface TalkDeliveryInput {
   caller: { thread: ThreadContext; talkWindow: TalkWindow };
@@ -114,6 +114,26 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
       creatorThreadId: callerThread.id,
       initialTaskTitle: deriveCalleeThreadTitle(content),
     });
+
+    // Bug 2 最小修：在 callee thread 初始化时挂一条 "回复创建者" 待办，让 LLM 在每轮
+    // contextWindows 里看到它仍 open——比纯靠协议文本"决策树"更直观。
+    // 复用现成的 todo_window，不引入新概念（见 docs/solutions/conventions/
+    // reuse-before-introducing-new-concepts-2026-05-17.md）。
+    // 本次有意不做 auto-close / onCommandPath=["wait"]——先看裸 todo 提示的效果。
+    const replyTodo: TodoWindow = {
+      id: generateWindowId("todo"),
+      type: "todo",
+      title: "回复创建者",
+      status: "open",
+      createdAt: Date.now(),
+      content:
+        `任务来自创建者（${callerRef.objectId} thread=${callerThread.id}）：` +
+        `\n"${deriveCalleeThreadTitle(content, 200)}"` +
+        `\n\n完成任务后通过 creator talk_window 的 say 回复创建者，然后 close 本待办。` +
+        `不要直接 wait/end 而不 say——对面看不到你的结果。`,
+    };
+    calleeThread.contextWindows = [...calleeThread.contextWindows, replyTodo];
+
     // 回填 caller talk_window.targetThreadId
     callerWindow.targetThreadId = calleeThreadId;
   }

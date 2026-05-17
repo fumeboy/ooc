@@ -12,15 +12,15 @@ app 描述 OOC 内核之上的应用层入口。
 
 ## 启动 app server 的世界根目录约定
 
-本仓库根 \`/Users/bytedance/x/ooc/ooc-2\` 仅放代码与 meta；world 状态（flows/stones/...）
-**不应**写在源码树里。约定使用 \`/Users/bytedance/x/ooc/ooc-2/.ooc-world-test\` 作为
+本仓库根 \`~/x/ooc/ooc-2\` 仅放代码与 meta；world 状态（flows/stones/...）
+**不应**写在源码树里。约定使用 \`~/x/ooc/ooc-2/.ooc-world-test\` 作为
 world 目录。
 
 启动命令必须显式传 \`--world\`：
 
 \`\`\`bash
-cd /Users/bytedance/x/ooc/ooc-2
-bun --env-file=.env src/app/server/index.ts --world /Users/bytedance/x/ooc/ooc-2/.ooc-world-test
+cd.
+bun --env-file=.env src/app/server/index.ts --world./.ooc-world-test
 \`\`\`
 
 不带 \`--world\` 时 \`config.ts\` 会回退到 \`process.cwd()\`，把源码目录当 world——
