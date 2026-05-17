@@ -53,14 +53,20 @@ function makeSystemMessage(fromId: string, toId: string, content: string): Threa
  * spec § 等待语义的简化：
  * 旧 await_children 隐式唤醒被替换为"子线程结束 → 父 inbox 写 system 消息 → 父唤醒"。
  *
- * 幂等：同一 (parentId, childId) 只写一次；用 inbox 已有消息内容前缀检测重复。
+ * 幂等：同一 (parentId, childId, 本次 end 实例) 只写一次。
+ * "本次 end 实例" = child.lastExecutedAt——child 重启 (done→running) 后再 end 时
+ * lastExecutedAt 会被刷新，marker 不再与上次重复。这让 do_window.continue 触发
+ * 的多次 end 都能各自唤醒父线程一次。
  */
 function emitChildEndNotifications(root: ThreadContext): void {
   for (const thread of iterateThreads(root)) {
     const children = Object.values(thread.childThreads ?? {});
     for (const child of children) {
       if (child.status !== "done" && child.status !== "failed") continue;
-      const marker = `[child:${child.id}:${child.status}]`;
+      // tail 区分 child 的每次 end；lastExecutedAt 在 end 那一 tick 被设上，
+      // 之后 child 不再被调度直到父 continue 触发它重启
+      const tail = child.lastExecutedAt ?? 0;
+      const marker = `[child:${child.id}:${child.status}@${tail}]`;
       const already = (thread.inbox ?? []).some((m) => m.content.startsWith(marker));
       if (already) continue;
       const summary = child.endSummary ?? "(无 summary)";
