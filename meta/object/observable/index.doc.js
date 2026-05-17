@@ -26,7 +26,15 @@ export const observable_v20260517_1 = {
 Observable 描述 Object 的思考过程如何被记录、回放、调试。
 可观察性来自两个来源：thread 事件流（线程里发生过什么）与对象产生的 effects
 （program 执行结果、file_ops / http / git 痕迹等，当前主要体现在 events 中）。
-`,
+
+按子字段展开：
+
+- switches — pause / debug 两个独立运行时开关
+- runtime — 进程内 observable runtime 易失状态与对外 API
+- fileBoundary — latest 与 loop_NNNN debug 文件落盘边界
+- controlPlane — app server 提升出的控制面 API 与观察层级
+- concepts — 子概念集合（pause / debug / contextVisibility）
+`.trim(),
 
   switches: {
     title: "两个独立的运行时开关",

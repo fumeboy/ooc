@@ -34,7 +34,15 @@ export const debug_v20260517_1 = {
   description: `
 Debug 模式把每轮 ThinkLoop 的输入/输出/元数据写到文件，用于事后排查。
 debug 与 pause 互相独立：debug 不暂停执行，pause 也不要求写 debug。
-`,
+
+按子字段展开：
+
+- switch — 进程内 API / HTTP 控制面 / 状态生命周期
+- layout — 文件落盘布局（最近快照 + 留档 + 编号规则）
+- recordSchema — input / output / meta record 归一化结构
+- controlPlaneReads — debug viewer 读取的 HTTP endpoint 与共同约定
+- webViewer — web 调试视图各视角（主面板 / XML 树 / 状态条）
+`.trim(),
 
   switch: {
     title: "开关",

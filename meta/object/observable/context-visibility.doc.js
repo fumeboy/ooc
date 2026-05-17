@@ -29,7 +29,15 @@ export const context_visibility_v20260517_1 = {
 ContextVisibility 描述如何观察每轮 LLM 输入窗口中的信息来源：模型本轮看到的
 "上下文"不是聊天记录平铺，而是 system XML + 被挑选过的过程事件 transcript，
 两部分共同决定 debug/llm.input.json 里 inputItems 的形态。
-`,
+
+按子字段展开：
+
+- pipeline — 输入构造管线三步（input items / XML / 归一化落盘）
+- xmlSections — system XML 各节段的来源与内容
+- transcriptMapping — 过程事件到 transcript 的映射与过滤规则
+- renderingBoundaries — XML 渲染边界（截断 / 字节上限 / 转义）
+- viewerSemantics — debug viewer 解释输入结构的语义约定
+`.trim(),
 
   pipeline: {
     title: "输入构造管线",

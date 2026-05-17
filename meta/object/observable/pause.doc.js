@@ -32,7 +32,14 @@ export const pause_v20260517_1 = {
   description: `
 Pause 是 OOC 的人工检查点：对象在 LLM 返回后停止继续执行，把最近输出保留下来，
 允许人工介入，再 resume 接着把那一轮未执行的决策跑完。
-`,
+
+按子字段展开：
+
+- scopes — session / global 两层 pause 范围与状态生命周期
+- checkpoint — pause 在 ThinkLoop 中的固定检查点位置
+- resume — resume 的语义、步骤与 resume-thread job 内容
+- controlPlane — 控制面边界（状态权威 / UI 触发点 / 查询契约）
+`.trim(),
 
   scopes: {
     title: "两层 pause 范围",
