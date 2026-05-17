@@ -85,10 +85,10 @@ describe.skipIf(!hasLlmEnv)("integration: multi-round-multitask", () => {
     // 1) 线程跑完，没卡 wait / failed
     expect(root.status).toBe("done");
 
-    // 2) ≥15 轮 think 循环——按 LLM 真实行为，每个 form 通常占 1 个 tick（多 tool call 一轮提交），
-    //    9 个 form 至少 9 tick；events 每轮至少产 2-3 条（tool_use / executing / executed），
-    //    所以 events.length ≥ 25 是 multi-round 的稳健下界
-    expect(root.events.length).toBeGreaterThanOrEqual(25);
+    // 2) multi-round 确认：responses-first item model 后单轮可包含多 function_call，
+    //    每个 form 至少 1 function_call + 1 function_call_output = 2 events。
+    //    9 个 form ⇒ events ≥ 18；放宽下界避免随 LLM 调用效率波动而误报
+    expect(root.events.length).toBeGreaterThanOrEqual(18);
 
     // 3) 至少 9 个 form 被执行：4 shell + 4 ts(setData) + 1 ts(汇总) = 9，end 是第 10 个
     expect(countFormExecutions(root)).toBeGreaterThanOrEqual(9);

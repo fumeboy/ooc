@@ -7,19 +7,25 @@ const MAX_RESULTS = 20;
 /**
  * 给定线程上下文与 knowledge 索引，计算本轮应渲染的激活集合。
  *
- * Step 2 重构（spec 2026-05-14）：
- * - 显式打开的 knowledge_window.path 视为 force-full（取代旧 pinnedKnowledge）
- * - command_exec window 的 commandPaths union 仍是自动激活的来源
- * - 同一篇 knowledge 同时被 force-full 与命中 show_description_when 时，full 优先
+ * 命令路径来源（union 收集）：
+ * - command_exec window 的 commandPaths（form 进行中）
+ * - program_window 最近一次 exec 推断的路径（program / program.<language>）——
+ *   program form auto-submit 后 command_exec 会立即消失，但 program_window 仍持续；
+ *   仅依赖 command_exec 会让 show_content_when=[program.shell] 这类知识在 LLM 看到
+ *   exec 结果的下一轮无法激活。program_window 的"最近 exec"反映"我刚做了什么"，
+ *   与 activator 的"该轮应当出现什么知识"语义一致。
  *
- * 输出顺序：force-full（knowledge_window 显式打开）→ command-path full → command-path summary。
+ * 显式 knowledge_window：path 视为 force-full（取代旧 pinnedKnowledge）。
+ * 同一篇 knowledge 同时被 force-full 与命中 show_description_when 时，full 优先。
+ *
+ * 输出顺序：force-full → command-path full → command-path summary。
  * 超过 MAX_RESULTS 时截尾。
  */
 export function computeActivations(
   thread: ThreadContext,
   index: KnowledgeIndex
 ): ActivationResult[] {
-  // 收集 command_exec window 的 commandPaths union
+  // 收集命令路径 union（含 command_exec 进行中 + program_window 最近 exec 推断）
   const union = new Set<string>();
   // 收集显式打开的 knowledge_window 的 path（force-full）
   const forced = new Set<string>();
@@ -28,6 +34,15 @@ export function computeActivations(
       for (const p of window.commandPaths) union.add(p);
     } else if (window.type === "knowledge") {
       forced.add(window.path);
+    } else if (window.type === "program" && window.status === "open") {
+      const recent = window.history[window.history.length - 1];
+      if (recent) {
+        union.add("program");
+        if (recent.language === "shell") union.add("program.shell");
+        else if (recent.language === "ts") union.add("program.ts");
+        else if (recent.language === "js") union.add("program.js");
+        else if (recent.language === "function") union.add("program.function");
+      }
     }
   }
 
