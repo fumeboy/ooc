@@ -45,7 +45,7 @@ bunx tsc --noEmit
 在 worktree 中使用主工作区 `.env` 执行：
 
 ```bash
-bun --env-file=~/x/ooc/ooc-2/.env test tests/integration/meta-programming.integration.test.ts
+bun --env-file=./.env test tests/integration/meta-programming.integration.test.ts
 ```
 
 结果：
@@ -77,7 +77,7 @@ git merge feat/observable-debug-form-protocol
 按要求删除：
 
 ```text
-~/x/ooc/ooc-2/.ooc-world-test/stones/agent-meta-test/server/index.ts
+./.ooc-world-test/stones/agent-meta-test/server/index.ts
 ```
 
 说明：

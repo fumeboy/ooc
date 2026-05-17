@@ -6,8 +6,8 @@ export const talk_v20260514_1 = {
   name: "Talk",
   sources: { talk: talkSource },
   description: `
-\`talk\` 开启一个对外会话窗口（talk_window）；不直接发消息——发消息走 talk_window 上
-注册的 \`say\` command。
+talk 开启一个对外会话窗口（talk_window）；不直接发消息——发消息走 talk_window 上
+注册的 say command。
 
 按子字段展开：
 
@@ -18,19 +18,19 @@ export const talk_v20260514_1 = {
 - userReplyRouting — control plane user-reply API 的路由规则
 - pathList — root.talk 与 talk_window 的 path 列表
 - targetConstraints — 当前 target 限制
-`.trim(),
+`,
 
   callShape_v20260517_1: {
     index: `
-\`\`\`
+
 open(command="talk", title="发布计划确认", args={
   target: "user",          // 必填，当前阶段仅 "user"
   title:  "发布计划确认"   // 必填，多窗口区分用
 })
-\`\`\`
+
 
 args 给齐时 open 立即提交 form，无需 refine/submit。
-`.trim(),
+`,
   },
 
   submitEffects_v20260517_1: {
@@ -40,34 +40,34 @@ submit 在 thread.contextWindows 下挂一个 type=talk 的 window
 
 **允许同 target 多开**——同一对象与同一对端可有多个并行话题，
 每个 talk_window 用 title 区分。
-`.trim(),
+`,
   },
 
   talkWindowCommands_v20260517_1: {
     index: `
 talk_window 上注册的 3 个 sub-command。
-`.trim(),
+`,
 
     sayCmd_v20260517_1: {
       index: `
 ### say
 
-写一条消息到 \`thread.outbox\`（\`source=talk, windowId=本 window\`）；
-可选 \`wait=true\` 让父线程进入 waiting。
+写一条消息到 thread.outbox（source=talk, windowId=本 window）；
+可选 wait=true 让父线程进入 waiting。
 
-\`\`\`
+
 open(parent_window_id="<talk_window_id>", command="say",
      args={ msg: "明天发布可以吗？", wait: true })
-\`\`\`
-`.trim(),
+
+`,
     },
 
     waitCmd_v20260517_1: {
       index: `
 ### wait
 
-不发新消息，仅让父线程进入 \`status="waiting"\` 等对端回复。
-`.trim(),
+不发新消息，仅让父线程进入 status="waiting" 等对端回复。
+`,
     },
 
     closeCmd_v20260517_1: {
@@ -75,75 +75,75 @@ open(parent_window_id="<talk_window_id>", command="say",
 ### close
 
 释放 window；不影响 user 端（user 端无对应运行实体）。
-`.trim(),
+`,
     },
   },
 
   waitSemantics_v20260517_1: {
     index: `
-talk_window 的 wait 唤醒条件统一为 \`thread.inbox\` 出现新消息——
+talk_window 的 wait 唤醒条件统一为 thread.inbox 出现新消息——
 没有独立 waitingType 字段。对端回复进入 inbox 即触发唤醒。
-`.trim(),
+`,
   },
 
   userReplyRouting_v20260517_1: {
     index: `
-control plane 的 user-reply API（\`POST /api/flows/.../continue\`）接受可选
-\`targetWindowId\`，把 user 回复路由到指定 talk_window。
-`.trim(),
+control plane 的 user-reply API（POST /api/flows/.../continue）接受可选
+targetWindowId，把 user 回复路由到指定 talk_window。
+`,
 
     frontendChoosesWindow_v20260517_1: {
       index: `
 ### 前端选择回复窗口
 
 用户在 UI 上选择回复某个 talk_window 时，前端把该 window id 作为
-\`targetWindowId\` 传入 user-reply API。
-`.trim(),
+targetWindowId 传入 user-reply API。
+`,
     },
 
     backendInboxWrite_v20260517_1: {
       index: `
 ### 后端 inbox 写入
 
-后端把新消息写入 \`thread.inbox\`，携带 \`replyToWindowId = targetWindowId\`。
-`.trim(),
+后端把新消息写入 thread.inbox，携带 replyToWindowId = targetWindowId。
+`,
     },
 
     renderGrouping_v20260517_1: {
       index: `
 ### render 层归并
 
-render 层据 \`replyToWindowId\` 把消息归入对应 talk_window 的 transcript。
-`.trim(),
+render 层据 replyToWindowId 把消息归入对应 talk_window 的 transcript。
+`,
     },
   },
 
   pathList_v20260517_1: {
     index: `
 root.talk 与 talk_window 的 command path 列表。
-`.trim(),
+`,
 
     rootTalkPaths_v20260517_1: {
       index: `
 ### root.talk
 
-\`\`\`
+
 talk
-\`\`\`
-`.trim(),
+
+`,
     },
 
     talkWindowPaths_v20260517_1: {
       index: `
 ### talk_window
 
-\`\`\`
+
 say
 say.wait
 wait
 close
-\`\`\`
-`.trim(),
+
+`,
     },
   },
 
@@ -154,6 +154,6 @@ close
 - target 当前仅支持 "user"；其它 target 在 root.talk 阶段会被拒绝
 - 跨 object talk 在 root.talk 范围之外，由其他通信机制承载
 - user 不是普通 object，没有自己的 thread；回复路径靠 control plane 显式投递
-`.trim(),
+`,
   },
 };

@@ -42,7 +42,7 @@ export const refactoring_governance_v20260512_1 = {
 - commitGranularity — 按语义边界拆 commit
 - docSync — 与 meta-doc-maintenance 的接口
 - successCriteria — 一次重构是否成功的 5 条判据
-`.trim(),
+`,
 
   goal_v20260517_1: {
     index: `
@@ -53,7 +53,7 @@ export const refactoring_governance_v20260512_1 = {
 - **副作用边界模糊**：目录扫描、状态翻转、入队、网络请求、协议兼容等副作用在同一处混写
 
 如果一次重构没有显著降低这三类复杂度，它通常只是代码搬运，而不是有效治理。
-`.trim(),
+`,
   },
 
   fileSplit_v20260517_1: {
@@ -76,12 +76,12 @@ export const refactoring_governance_v20260512_1 = {
 当文件升级为目录：
 
 - 原对外入口保留稳定 import 路径
-- 新目录中的 \`index\` 承载主干编排
+- 新目录中的 index 承载主干编排
 - render / transport / formatter / protocol / query / adapter 各自下沉
 
-样板：\`src/thinkable/context/\`（主干在 \`index.ts\`、render/knowledge/protocol 下沉）、
-\`src/executable/windows/root/program.ts\`（command 入口保留，执行细节迁入 \`src/executable/program/\`）。
-`.trim(),
+样板：src/thinkable/context/（主干在 index.ts、render/knowledge/protocol 下沉）、
+src/executable/windows/root/program.ts（command 入口保留，执行细节迁入 src/executable/program/）。
+`,
   },
 
   stateGovernance_v20260517_1: {
@@ -99,13 +99,13 @@ export const refactoring_governance_v20260512_1 = {
 
 禁止的坏味道：
 
-- \`status = "running"\` 在多个 service / worker / helper 中手写
+- status = "running" 在多个 service / worker / helper 中手写
 - 同一字段清理规则在多处重复出现
 - 目录扫描 + 状态判断 + 入队逻辑堆在 HTTP service 中
 
-样板：\`src/app/server/runtime/thread-transition.ts\` 与 \`src/app/server/runtime/thread-query.ts\`
-把状态规则从 \`flowsService\` 下沉出来。
-`.trim(),
+样板：src/app/server/runtime/thread-transition.ts 与 src/app/server/runtime/thread-query.ts
+把状态规则从 flowsService 下沉出来。
+`,
   },
 
   directoryShape_v20260517_1: {
@@ -124,12 +124,12 @@ export const refactoring_governance_v20260512_1 = {
 
 ### 4.2 Command 子系统目录
 
-对 \`program\` 这类"对外单一 command、对内多执行模式"的能力：
+对 program 这类"对外单一 command、对内多执行模式"的能力：
 
 - 对外保持稳定的 command 名称与 usage
 - 对内按 shell / function / sandbox / formatter / env adapter 拆为子目录
-- command 文件本身只保留 \`KNOWLEDGE\` / path / match / 入口分发 / 参数兜底
-`.trim(),
+- command 文件本身只保留 KNOWLEDGE / path / match / 入口分发 / 参数兜底
+`,
   },
 
   testGate_v20260517_1: {
@@ -159,7 +159,7 @@ export const refactoring_governance_v20260512_1 = {
 - 只重复实现细节、不表达行为意图
 - 只验证 mock 调用了几次、没锁定真正对外契约
 - 因重构而重写大段无关测试
-`.trim(),
+`,
   },
 
   verificationGate_v20260517_1: {
@@ -186,9 +186,9 @@ export const refactoring_governance_v20260512_1 = {
 ### 6.3 禁止
 
 - 没重新跑验证命令就声称"通过"
-- 只因单测绿就忽略 \`tsc\` / diagnostics
+- 只因单测绿就忽略 tsc / diagnostics
 - 验证失败时继续提交，期待后续再补
-`.trim(),
+`,
   },
 
   commitGranularity_v20260517_1: {
@@ -204,7 +204,7 @@ export const refactoring_governance_v20260512_1 = {
 - 一次 commit 迁移一个目录并保留兼容入口
 
 不推荐：把状态迁移 / 目录搬家 / 文档更新 / provider 改造全塞进一个不可审阅的大提交。
-`.trim(),
+`,
   },
 
   docSync_v20260517_1: {
@@ -225,12 +225,12 @@ export const refactoring_governance_v20260512_1 = {
 3. 历史结果性文档只做最小必要修正，不大面积回填
 
 具体落地：meta 文档同步靠 meta-doc-maintenance 规范的机器闸
-（\`bun tsc --noEmit\` + \`bun test meta/__tests__\`），不靠纪律。任何重构在合规下都会
+（bun tsc --noEmit + bun test meta/__tests__），不靠纪律。任何重构在合规下都会
 顺带跑一遍 meta 一致性检查。
 
-约束反过来：源码改名 / 删除 → 对应 \`.doc.js\` 的 \`import * as ns\` 立即 tsc 失败。
+约束反过来：源码改名 / 删除 → 对应 .doc.js 的 import * as ns 立即 tsc 失败。
 失同步状态在门禁层即被拦下。
-`.trim(),
+`,
   },
 
   successCriteria_v20260517_1: {
@@ -246,6 +246,6 @@ export const refactoring_governance_v20260512_1 = {
 5. 验证证据是否新鲜且完整？
 
 5 个问题里有 ≥2 个回答"否" → 这次重构还没有真正完成。
-`.trim(),
+`,
   },
 };

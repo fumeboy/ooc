@@ -12,18 +12,18 @@ app 描述 OOC 内核之上的应用层入口。
 
 ## 启动 app server 的世界根目录约定
 
-本仓库根 \`~/x/ooc/ooc-2\` 仅放代码与 meta；world 状态（flows/stones/...）
-**不应**写在源码树里。约定使用 \`~/x/ooc/ooc-2/.ooc-world-test\` 作为
+本仓库根 仅放代码与 meta；world 状态（flows/stones/...）
+**不应**写在源码树里。约定使用 ./.ooc-world-test 作为
 world 目录。
 
-启动命令必须显式传 \`--world\`：
+启动命令必须显式传 --world：
 
-\`\`\`bash
+bash
 cd.
 bun --env-file=.env src/app/server/index.ts --world./.ooc-world-test
-\`\`\`
 
-不带 \`--world\` 时 \`config.ts\` 会回退到 \`process.cwd()\`，把源码目录当 world——
+
+不带 --world 时 config.ts 会回退到 process.cwd()，把源码目录当 world——
 这是错误用法，禁止。
 
 ## 本地联调补充知识
@@ -32,19 +32,19 @@ bun --env-file=.env src/app/server/index.ts --world./.ooc-world-test
 
 一个典型症状是：
 
-- \`GET /api/health\` 正常；
+- GET /api/health 正常；
 - 某些旧路由也正常；
-- 但新加的路由（例如 \`GET /api/runtime/debug/status\`）返回 404。
+- 但新加的路由（例如 GET /api/runtime/debug/status）返回 404。
 
 这通常说明当前端口上有多个 bun server 竞争或残留，实际收到请求的是旧实例；旧实例的路由表没有最新变更，于是看起来像“新接口不存在”。
 
 排查原则：
 
-- 先看端口监听：\`lsof -nP -iTCP:3000 -sTCP:LISTEN\`
+- 先看端口监听：lsof -nP -iTCP:3000 -sTCP:LISTEN
 - 若发现多个监听进程，先清理旧进程，再启动新的 app server
-- 不要只看 \`health\` 是否可用；要直接探测新增控制面路由本身
+- 不要只看 health 是否可用；要直接探测新增控制面路由本身
 
-另外，app server 读取的端口环境变量是 \`OOC_APP_PORT\`，不是 \`OOC_PORT\`。若切端口后服务仍然起在 3000，应优先检查这里的环境变量名是否写对。
+另外，app server 读取的端口环境变量是 OOC_APP_PORT，不是 OOC_PORT。若切端口后服务仍然起在 3000，应优先检查这里的环境变量名是否写对。
 
 这条经验背后的原则是：**控制面调试要先确认“你打到的是不是你以为的那个进程”**。
 `,

@@ -35,12 +35,12 @@ export const executable_v20260504_1 = {
 Executable 描述 Object 的行动 / 编程能力。
 
 - root window 注册顶层 command（do/talk/program/plan/end/todo/open_file/open_knowledge）
-- LLM 通过 5 原语 \`open / refine / submit / close / wait\` 与 contextWindows 交互
+- LLM 通过 5 原语 open / refine / submit / close / wait 与 contextWindows 交互
 - 知识协议（KNOWLEDGE / ROOT_KNOWLEDGE / 各 command knowledge / 各 window basicKnowledge）
   每轮自动合成进 context，由 collectExecutableKnowledgeEntries 派生
 
-具体设计点见 \`concepts.*\` 各条；子领域见 tools / commands / server / client。
-`.trim(),
+具体设计点见 concepts.* 各条；子领域见 tools / commands / server / client。
+`,
   /**
    * 概念集合：每条都是具名 JS 对象，可作为 LLM context 拉取的最小单元单独引用，
    * 例如 executable_v20260504_1.concepts.contextWindow。

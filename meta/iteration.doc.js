@@ -22,7 +22,7 @@ ooc-2 迭代历史
 
 阶段不是预先规划的，是事后回看的标签——为了让"还差什么"在一眼能看清。
 
-\`\`\`
+
 ooc-2  (2026-05-08 ~ 2026-05-12)
 │
 ├── 阶段 1：thinkable 骨架 — 让 LLM 接得通、tool 调得到
@@ -58,11 +58,11 @@ ooc-2  (2026-05-08 ~ 2026-05-12)
 │   └── [2026-05-11] stone-server-meta-programming  stone 全套持久化(.stone.json/self.md/readme.md/data.json/server/index.ts) + program.ts/js(in-process dynamic import) + program.function(callMethod) + ProgramSelf(callMethod/getData/setData) + 元编程 knowledge + 真 LLM 集成测试
 │       ├── spec: docs/superpowers/specs/2026-05-11-stone-server-meta-programming-design.md
 │       ├── plan: docs/superpowers/plans/2026-05-11-stone-server-meta-programming.md
-│       ├── 后续微调：method 注册支持可选 \`knowledge(args) → text\`（同 command.match 设计，基于当前 args 动态派生知识文本）；缺省回退到由 description+params 自动生成的基线文本；form 渲染段为 \`<method_knowledge>\`
+│       ├── 后续微调：method 注册支持可选 knowledge(args) → text（同 command.match 设计，基于当前 args 动态派生知识文本）；缺省回退到由 description+params 自动生成的基线文本；form 渲染段为 <method_knowledge>
 │       └── 工程沉淀：meta/engineering/integration-tests.doc.js 记录 11 个真 LLM 集成测试（含 multi-round-multitask long-horizon 压力测试）+ 5 个由真 LLM 触发并修复的 bug 历史
 │
 ├── 阶段 6：observable debug + form 协议增强 — 让"为什么 Agent 走偏"可定位 + 让 Agent 不再走偏
-│   └── [2026-05-11] observable-debug-and-form-protocol  observable 增加 debug mode + \`loop_NNN.{input,output,meta}.json\` 落盘；form 渲染加 \`<next_action>\` / \`<protocol_hint>\`；program 缺参时返回可操作纠偏提示；submit/refine/open 文档与 schema 明确"只在 refine/open 填业务参数，submit 不接受新参数"
+│   └── [2026-05-11] observable-debug-and-form-protocol  observable 增加 debug mode + loop_NNN.{input,output,meta}.json 落盘；form 渲染加 <next_action> / <protocol_hint>；program 缺参时返回可操作纠偏提示；submit/refine/open 文档与 schema 明确"只在 refine/open 填业务参数，submit 不接受新参数"
 │       ├── spec: docs/superpowers/specs/2026-05-11-observable-debug-and-form-protocol-design.md
 │       ├── plan: docs/superpowers/plans/2026-05-11-observable-debug-and-form-protocol.md
 │       └── 回归记录: meta/engineering/test/2026-05-11-meta-programming-regression-test.md
@@ -77,7 +77,7 @@ ooc-2  (2026-05-08 ~ 2026-05-12)
 │       └── 已记录的 6 项 TODO（见上述报告）：执行 meta 循环引用修复 / 集成测试稳定性 / call_method 错误映射 / runtime debug 控制器测试 / worker 可恢复 / flows.resume 入队
 │
 └── 阶段 8：knowledge 模块 — 让 Object 能在 context 中按需看到自己的知识库
-    └── [2026-05-12] knowledge-module  parser + loader(mtime cache 热重载) + activator(命令路径相交) + context 渲染(\`<active_knowledge>\`) + 手动 pin/unpin(open/close type=knowledge)
+    └── [2026-05-12] knowledge-module  parser + loader(mtime cache 热重载) + activator(命令路径相交) + context 渲染(<active_knowledge>) + 手动 pin/unpin(open/close type=knowledge)
         ├── spec: docs/superpowers/specs/2026-05-12-knowledge-module-design.md
         ├── plan: docs/superpowers/plans/2026-05-12-knowledge-module.md
         └── 关键决策：懒求值（无 thread 派生状态字段）+ 单篇 8KB / 总数 20 项渲染上限 + 删 thread.activatedKnowledge 字段（违反 SSoT）+ js-yaml 依赖
@@ -111,18 +111,18 @@ ooc-2  (2026-05-08 ~ 2026-05-12)
         ├── 附带：tests/integration/_fixture.ts 把初始 prompt 从 inject 改走 inbox/inbox_message_arrived 路径——processEventToItems 仅渲染 error-inject，普通 inject 视作过期上下文丢弃，旧 fixture LLM 看不到任何用户意图
         ├── 真 LLM 回归：S2/S3 Good，S1 OK，S4 Bad（LLM 偏好 write_file 全覆盖而非 file_window.edit，knowledge 引导不够强；下一轮处理）
         └── 关键决策：契约边界 fix 优先（adapter 内补缺，不动 OOC "context 走 system" 的核心设计）；shell 与数据原语分开（escape hatch 不被强吃 baseDir）
-\`\`\`
+
 
 ## 阶段划分判据
 
 - **阶段 1 完成标志**：能写一行 prompt，看到 LLM 用 tool 调用回复，没有 mock
 - **阶段 2 完成标志**：父子线程之间通过 inbox/outbox 协作，scheduler 公平选下一个 running thread
 - **阶段 3 完成标志**：杀进程重启后能从磁盘恢复线程态；任意时刻能从 llm.input/output.json 复盘上一轮 LLM 视角
-- **阶段 4 完成标志**：跑 \`bun --env-file=.env test tests/integration\` 9 个端到端场景全部 PASS（真 LLM 真 shell 真持久化）
-- **阶段 5 完成标志**：Agent 能用 program.shell 写 \`<self.dir>/server/index.ts\` 注册新方法 → 立即用 program.function 调用 → 看到结果；stone 全套目录骨架可创建，5 个核心文件可读写
-- **阶段 6 完成标志**：开 debug mode 后每轮 LLM 调用都有 \`loop_NNN.{input,output,meta}.json\` 落盘；Agent 的 program form 不再"把 language/code 写进 description"或"空 submit"
-- **阶段 7 完成标志**：HTTP \`POST /api/stones\` 创建对象、\`PATCH /api/stones/:id/data\` 写数据、\`POST /api/flows/:sid/objects\` 起 session、\`POST /api/stones/:id/call_method\` 调方法全部端到端可用；\`RUN_REAL_APP_SERVER_TEST=1 bun test src/app/server/__tests__/real-app-server.test.ts\` 通过
-- **阶段 8 完成标志**：在 stone/{objectId}/knowledge/ 放一篇 .md 含 \`activates_on.show_content_when=[program.shell]\` → Agent 一旦 open program 含 program.shell 路径 → 下一轮 system context 中 \`<active_knowledge>\` 段含该篇全文；Agent 编辑 .md 后下一轮 think 立即生效
+- **阶段 4 完成标志**：跑 bun --env-file=.env test tests/integration 9 个端到端场景全部 PASS（真 LLM 真 shell 真持久化）
+- **阶段 5 完成标志**：Agent 能用 program.shell 写 <self.dir>/server/index.ts 注册新方法 → 立即用 program.function 调用 → 看到结果；stone 全套目录骨架可创建，5 个核心文件可读写
+- **阶段 6 完成标志**：开 debug mode 后每轮 LLM 调用都有 loop_NNN.{input,output,meta}.json 落盘；Agent 的 program form 不再"把 language/code 写进 description"或"空 submit"
+- **阶段 7 完成标志**：HTTP POST /api/stones 创建对象、PATCH /api/stones/:id/data 写数据、POST /api/flows/:sid/objects 起 session、POST /api/stones/:id/call_method 调方法全部端到端可用；RUN_REAL_APP_SERVER_TEST=1 bun test src/app/server/__tests__/real-app-server.test.ts 通过
+- **阶段 8 完成标志**：在 stone/{objectId}/knowledge/ 放一篇 .md 含 activates_on.show_content_when=[program.shell] → Agent 一旦 open program 含 program.shell 路径 → 下一轮 system context 中 <active_knowledge> 段含该篇全文；Agent 编辑 .md 后下一轮 think 立即生效
 
 ## 后续阶段（未启动）
 
