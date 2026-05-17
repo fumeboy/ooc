@@ -24,20 +24,20 @@ Comment 是 Issue 下的评论单元。一经创建即不可修改，是 OOC 行
 - mentions — 显式 @ 机制与投递效果
 - sideEffects — 创建评论时附带的状态更新
 - ordering — 时序展示规则
-`.trim(),
+`,
 
   shape_v20260517_1: {
     index: `
 ## 数据结构
 
-Comment 由两部分构成：字段定义（\`fields\`）与存储位置（\`storage\`）。
-`.trim(),
+Comment 由两部分构成：字段定义（fields）与存储位置（storage）。
+`,
 
     fields_v20260517_1: {
       index: `
 ### 字段
 
-\`\`\`typescript
+typescript
 interface Comment {
   id: string;            // 在所属 Issue 内自增，如 "comment-001"
   author: string;        // Object 名（或 "user" 表示人类）
@@ -45,19 +45,19 @@ interface Comment {
   mentions?: string[];   // 显式列出的 @ 对象名列表
   createdAt: string;     // ISO 时间戳
 }
-\`\`\`
-`.trim(),
+
+`,
     },
 
     storage_v20260517_1: {
       index: `
 ### 存储位置
 
-- \`flows/{sid}/issues/{issueId}.json\` 的 \`comments\` 数组
-- 同时镜像到 \`flows/{sid}/issues/index.json\` 中对应 Issue 的 comments 字段
+- flows/{sid}/issues/{issueId}.json 的 comments 数组
+- 同时镜像到 flows/{sid}/issues/index.json 中对应 Issue 的 comments 字段
 
-镜像写入由 SerialQueue 保护（详见 \`collaborable.kanban.concurrentWrite.indexSync\`）。
-`.trim(),
+镜像写入由 SerialQueue 保护（详见 collaborable.kanban.concurrentWrite.indexSync）。
+`,
     },
   },
 
@@ -65,9 +65,9 @@ interface Comment {
     index: `
 ## 不可变性
 
-Comment 没有 \`updatedAt\` 字段。需要纠正时发新 comment 说明，原 comment 保留。
+Comment 没有 updatedAt 字段。需要纠正时发新 comment 说明，原 comment 保留。
 两个核心理由见子节点。
-`.trim(),
+`,
 
     reasonHonesty_v20260517_1: {
       index: `
@@ -75,7 +75,7 @@ Comment 没有 \`updatedAt\` 字段。需要纠正时发新 comment 说明，原
 
 如果允许修改，作者可能事后美化自己说过的话；不可变让历史成为客观事实，
 而不是当前可被改写的版本。
-`.trim(),
+`,
     },
 
     reasonReflection_v20260517_1: {
@@ -84,7 +84,7 @@ Comment 没有 \`updatedAt\` 字段。需要纠正时发新 comment 说明，原
 
 反思机制（详见 reflectable）需要真实历史作为素材；若评论可改，则没有
 "真实的历史"，只有"当前想让人相信的历史"，反思失去根基。
-`.trim(),
+`,
     },
   },
 
@@ -93,25 +93,25 @@ Comment 没有 \`updatedAt\` 字段。需要纠正时发新 comment 说明，原
 ## 创建 Comment
 
 任何 Object（含 user）都可创建评论。详见两个子节点：调用入口与系统自动填充字段。
-`.trim(),
+`,
 
     entries_v20260517_1: {
       index: `
 ### 调用入口
 
 - Object 通过 talkable 下 issue-discussion 相关的 server 方法
-- user 通过后端 HTTP API：\`POST /api/sessions/{sid}/issues/{issueId}/comments\`
-`.trim(),
+- user 通过后端 HTTP API：POST /api/sessions/{sid}/issues/{issueId}/comments
+`,
     },
 
     autoFields_v20260517_1: {
       index: `
 ### 系统自动填充
 
-- \`id\` —— 在所属 Issue 的 comments 内自增
-- \`author\` —— 调用方上下文中的对象名
-- \`createdAt\` —— 当前时间
-`.trim(),
+- id —— 在所属 Issue 的 comments 内自增
+- author —— 调用方上下文中的对象名
+- createdAt —— 当前时间
+`,
     },
   },
 
@@ -119,9 +119,9 @@ Comment 没有 \`updatedAt\` 字段。需要纠正时发新 comment 说明，原
     index: `
 ## mentions 机制
 
-\`mentions\` 是作者显式传入的对象列表，系统不从 content 自动解析 \`@name\`。
+mentions 是作者显式传入的对象列表，系统不从 content 自动解析 @name。
 详见三个子节点：消息投递、前端渲染、participants 边界。
-`.trim(),
+`,
 
     delivery_v20260517_1: {
       index: `
@@ -129,27 +129,27 @@ Comment 没有 \`updatedAt\` 字段。需要纠正时发新 comment 说明，原
 
 mentions 中每个对象（剔除作者自身）通过 inbox 收到通知：
 
-\`\`\`
+
 [@you-name 在 issue-XXX 中提到你]
-\`\`\`
-`.trim(),
+
+`,
     },
 
     rendering_v20260517_1: {
       index: `
 ### 前端高亮
 
-评论渲染时 \`@name\` 显示为可点击链接，点击跳转到对应 Object 的详情页。
-`.trim(),
+评论渲染时 @name 显示为可点击链接，点击跳转到对应 Object 的详情页。
+`,
     },
 
     participantsBoundary_v20260517_1: {
       index: `
 ### 与 participants 的边界
 
-被 @ 的对象**不会**自动加入 \`Issue.participants\`，避免被 @ 即被绑定到
+被 @ 的对象**不会**自动加入 Issue.participants，避免被 @ 即被绑定到
 长期跟踪列表。需要长期参与时由作者显式调用 updateIssue 添加。
-`.trim(),
+`,
     },
   },
 
@@ -157,27 +157,49 @@ mentions 中每个对象（剔除作者自身）通过 inbox 收到通知：
     index: `
 ## 副作用
 
-创建评论时：
+创建评论时触发三类副作用。每类独立子节点。
+`,
 
-- 若 \`author !== "user"\` 且不在 \`issue.participants\` 中，作者被自动加入 participants
-- \`issue.updatedAt\` 被刷新
-- 触发 mentions 通知（见上）
-`.trim(),
+    autoJoinAuthor_v20260517_1: {
+      index: `
+### 作者自动加入 participants
+
+若 author !== "user" 且不在 issue.participants 中，作者被自动加入 participants。
+user 例外——user 评论后不被加入 participants（user 不是"长期跟踪者"角色）。
+`,
+    },
+
+    refreshUpdatedAt_v20260517_1: {
+      index: `
+### 刷新 issue.updatedAt
+
+issue.updatedAt 被设为评论的 createdAt，让"最近活跃" Issue 上浮到前端列表头。
+`,
+    },
+
+    triggerMentions_v20260517_1: {
+      index: `
+### 触发 mentions 通知
+
+mentions 字段中的对象（剔除作者自身）通过 inbox 收到通知。详见 mentions
+子字段的 delivery 子节点。
+`,
+    },
   },
 
   ordering_v20260517_1: {
     index: `
 ## 时序展示
 
-前端按 \`createdAt\` 升序展示：
+前端按 createdAt 升序展示：
 
-\`\`\`
+
 2026-04-21 10:00 [alan]        @supervisor 我发现了一个问题...
 2026-04-21 10:05 [supervisor]  @alan 能详细说说吗
 2026-04-21 10:07 [user]        看起来是线程调度的 bug
-\`\`\`
+
 
 comments 不改写，时间戳客观可信。
-`.trim(),
+`,
   },
 };
