@@ -8,7 +8,8 @@ import * as serverUi from "@src/app/server/modules/ui/service";
 export const client_v20260506_1 = {
   get parent() { return executable_v20260504_1; },
   name: "Client",
-  index: `
+  title: "section",
+  content: `
 Client 描述 Object 如何为自己编写前端 React UI 组件。
 
 ## 物理结构
@@ -122,7 +123,7 @@ ooc://client/flows/{sid}/objects/{name}/pages/{pageName}    Flow 某个页面
 ooc://client/flows/s_xyz/objects/alan/pages/report-2026
 [/navigate]
 
-`,
+  `,
   /** description 与 index 同字符串，给 walkConcepts schema 校验用；下次清理把 index 删掉。 */
   get description() { return this.index; },
   sources: { serverUi },

@@ -29,146 +29,129 @@ Talk 是 Object 之间一对一的持续会话原语。按子字段展开：
 `,
 
   creation_v20260517_1: {
-    index: `
-## creation — 通道建立
-
+    title: "creation — 通道建立",
+    content: `
 caller 通过 root.talk 创建一个 talk_window，绑定到某个 target flow object，
 后续基于该窗口持续对话。详见三个子节点。
-`,
+    `,
 
     rootTalkCommand_v20260517_1: {
-      index: `
-### root.talk command
-
+      title: "root.talk command",
+      content: `
 入口是 root window 上的 talk command。每次 open(command="talk", args={target})
 都创建一个新的 talk_window（多次调用 → 多个独立窗口）。
-`,
+      `,
     },
 
     targetBinding_v20260517_1: {
-      index: `
-### target 绑定
-
+      title: "target 绑定",
+      content: `
 新 window 绑定到 target flow object 的 root thread——若 target flow 不存在则
 按需创建。绑定后 caller 与 callee 通过这一对 thread + window 进行后续对话。
-`,
+      `,
     },
 
     windowPersistence_v20260517_1: {
-      index: `
-### window 持久性
-
+      title: "window 持久性",
+      content: `
 window 在 thread 持久化范围内长期存在，直到显式 close。重启 server 后
 window 状态从 thread.json 恢复，不丢失。
-`,
+      `,
     },
   },
 
   commands_v20260517_1: {
-    index: `
-## commands — talk_window 命令面
-
+    title: "commands — talk_window 命令面",
+    content: `
 talk_window 暴露三条命令，详见子节点。
-`,
+    `,
 
     say_v20260517_1: {
-      index: `
-### say
-
+      title: "say",
+      content: `
 向 callee 投递一条消息，写入 callee inbox（同时镜像到 caller outbox）。
-`,
+      `,
     },
 
     wait_v20260517_1: {
-      index: `
-### wait
-
+      title: "wait",
+      content: `
 caller 进入 waiting 态，等待 callee 的下一条消息回来唤醒。详见两个子节点。
-`,
+      `,
 
       waitingState_v20260517_1: {
-        index: `
-#### waiting 状态语义
-
+        title: "waiting 状态语义",
+        content: `
 线程 status 翻为 waiting，scheduler 不再调度该线程进入下一轮 ThinkLoop。
 inbox 出现匹配新消息时翻回 running 触发唤醒。
-`,
+        `,
       },
 
       waitOnSubsemantics_v20260517_1: {
-        index: `
-#### on 子语义
-
+        title: "on 子语义",
+        content: `
 具体唤醒条件由 wait 的 on 子语义决定（详见 executable.windows.talkWindow）。
 on 决定"哪种 inbox 事件算唤醒"——避免无关消息误唤醒。
-`,
+        `,
       },
     },
 
     close_v20260517_1: {
-      index: `
-### close
-
+      title: "close",
+      content: `
 关闭 talk_window；后续无法 say / wait，但已落盘消息保留。详见两个子节点。
-`,
+      `,
 
       noPostCloseOps_v20260517_1: {
-        index: `
-#### 关闭后命令面失效
-
+        title: "关闭后命令面失效",
+        content: `
 close 后再调 say / wait 会返回 error——不重新打开 window，需要新建一个 window。
-`,
+        `,
       },
 
       messagesPreserved_v20260517_1: {
-        index: `
-#### 消息历史保留
-
+        title: "消息历史保留",
+        content: `
 inbox / outbox 中已写入的消息保留，可在 transcript 中继续被引用。
 close 不删除历史，只关闭通道。
-`,
+        `,
       },
     },
   },
 
   delivery_v20260517_1: {
-    index: `
-## delivery — talk-delivery 派送
-
+    title: "delivery — talk-delivery 派送",
+    content: `
 talk-delivery 模块在 say 触发时负责四步串行操作，详见子节点。
-`,
+    `,
 
     resolveCallee_v20260517_1: {
-      index: `
-### 解析或创建 callee thread
-
+      title: "解析或创建 callee thread",
+      content: `
 按 callee object id 解析其当前 root thread；不存在则创建。
-`,
+      `,
     },
 
     doubleWrite_v20260517_1: {
-      index: `
-### 双写 outbox / inbox
-
+      title: "双写 outbox / inbox",
+      content: `
 caller outbox + callee inbox 同步追加同一条 message 记录。
-`,
+      `,
     },
 
     statusFlip_v20260517_1: {
-      index: `
-### 状态翻转
-
+      title: "状态翻转",
+      content: `
 callee 若处于 waiting / done / failed，翻回 running 让 scheduler 派 worker 接手。
-`,
+      `,
     },
   },
 
   scopeNote_v20260517_1: {
-    index: `
-## scopeNote — 本概念与 talkWindow 的分工
-
+    title: "scopeNote — 本概念与 talkWindow 的分工",
+    content: `
 具体命令面与窗口语义在 executable.windows.talkWindow 概念中表达；
 本概念聚焦"talk 作为合作基础"的协作语义视角，不重复命令字段细节。
-`,
+    `,
   },
 };

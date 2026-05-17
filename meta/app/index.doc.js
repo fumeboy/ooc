@@ -2,7 +2,8 @@ import { app_server_v20260511_1 } from "@meta/app/server/index.doc";
 import { app_web_v20260513_1 } from "@meta/app/web/index.doc";
 
 export const app_v20260514_1 = {
-  index: `
+  title: "section",
+  content: `
 app 描述 OOC 内核之上的应用层入口。
 
 当前 app 层先聚焦控制面服务：
@@ -47,7 +48,7 @@ bun --env-file=.env src/app/server/index.ts --world./.ooc-world-test
 另外，app server 读取的端口环境变量是 OOC_APP_PORT，不是 OOC_PORT。若切端口后服务仍然起在 3000，应优先检查这里的环境变量名是否写对。
 
 这条经验背后的原则是：**控制面调试要先确认“你打到的是不是你以为的那个进程”**。
-`,
+  `,
   server: app_server_v20260511_1,
   web: app_web_v20260513_1,
 };

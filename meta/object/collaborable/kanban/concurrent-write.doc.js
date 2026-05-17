@@ -34,21 +34,19 @@ Kanban 数据可能被多方并发写入。通过 per-key 串行化队列（Seri
 `,
 
   writers_v20260517_1: {
-    index: `
-## 三类潜在写入方
-
+    title: "三类潜在写入方",
+    content: `
 | 写入方 | 通过什么 |
 |---|---|
 | supervisor | session-kanban 专属 server 模块（详见 collaborable/role/supervisor）|
 | 其他 Object | talkable 下 issue-discussion 相关 server 方法（仅评论 / 讨论）|
 | user | 后端 HTTP API（如 POST /api/sessions/{sid}/issues/{id}/comments）|
-`,
+    `,
   },
 
   raceCondition_v20260517_1: {
-    index: `
-## 没有保护会发生什么
-
+    title: "没有保护会发生什么",
+    content: `
 
 A 读 issue-001.json
 B 读 issue-001.json
@@ -59,72 +57,65 @@ B 写回  ← A 的 comment 丢失
 
 
 经典的"丢失更新"问题。
-`,
+    `,
   },
 
   serialQueue_v20260517_1: {
-    index: `
-## SerialQueue：per-key 串行化
-
+    title: "SerialQueue：per-key 串行化",
+    content: `
 通用 SerialQueue<K> 工具：同 key 任务按 FIFO 串行；不同 key 互不阻塞。
 详见三个子节点：接口签名、并发语义、三条设计要点。
-`,
+    `,
 
     signature_v20260517_1: {
-      index: `
-### 接口签名
-
+      title: "接口签名",
+      content: `
 typescript
 class SerialQueue<K = string> {
   enqueue<T>(key: K, fn: () => Promise<T>): Promise<T>;
 }
 
-`,
+      `,
     },
 
     concurrencySemantics_v20260517_1: {
-      index: `
-### 并发语义
-
+      title: "并发语义",
+      content: `
 - 同 key 的多次 enqueue 按 FIFO 严格串行
 - 不同 key 的 enqueue 互不阻塞，可在不同 microtask 并发执行
 - 同一 key 的链条长度只受调用速率影响，无显式上限
-`,
+      `,
     },
 
     designPoints_v20260517_1: {
-      index: `
-### 设计要点
-
+      title: "设计要点",
+      content: `
 - **错误隔离**：一个任务 reject 不污染同 key 后续任务
 - **返回值透传**：泛型保留 fn 的返回类型
 - **自然 GC**：内部只维护当前链尾 Promise
-`,
+      `,
     },
   },
 
   keyChoice_v20260517_1: {
-    index: `
-## 看板写入的 key 选择
-
+    title: "看板写入的 key 选择",
+    content: `
 key 选 sessionDir——同一 Session 内的 Issue / Task / Comment 写入串行；
 不同 Session 互不阻塞。具体见三个子节点：边界依据、调用形态、原子性保证。
-`,
+    `,
 
     rationale_v20260517_1: {
-      index: `
-### 边界依据
-
+      title: "边界依据",
+      content: `
 session 是看板数据的天然隔离边界——issues / tasks / comments 均挂在
 flows/{sid}/ 之下。以 sessionDir 为 key 可同时满足"同 session 内串行"
 与"跨 session 并行"两条诉求。
-`,
+      `,
     },
 
     callShape_v20260517_1: {
-      index: `
-### 调用形态
-
+      title: "调用形态",
+      content: `
 typescript
 const queue = new SerialQueue<string>();
 await queue.enqueue(sessionDir, async () => {
@@ -133,95 +124,85 @@ await queue.enqueue(sessionDir, async () => {
   await Bun.write(..., JSON.stringify(data));
 });
 
-`,
+      `,
     },
 
     atomicity_v20260517_1: {
-      index: `
-### 原子性
-
+      title: "原子性",
+      content: `
 读-改-写三步在队列的一次回合中原子完成；其他并发写入排队等待。
 "原子"指的是逻辑串行，并不是文件系统层 fsync 原子（见 limits 子节点）。
-`,
+      `,
     },
   },
 
   indexSync_v20260517_1: {
-    index: `
-## index.json 与单条文件的同步
-
+    title: "index.json 与单条文件的同步",
+    content: `
 修改单条 Issue / Task 时通常也要更新 index.json。详见两个子节点。
-`,
+    `,
 
     batchInOneEnqueue_v20260517_1: {
-      index: `
-### 批操作在一次 enqueue 内
-
+      title: "批操作在一次 enqueue 内",
+      content: `
 写入函数把"完整列表 + 单条文件"作为一个 enqueue 内的批操作完成。两次文件写
 不可分割——通过同一个 fn 内部连续 await 实现。
-`,
+      `,
     },
 
     noIntermediateState_v20260517_1: {
-      index: `
-### 无不一致中间态
-
+      title: "无不一致中间态",
+      content: `
 串行化保证不会出现 index 与单条文件不一致的中间态（前端读到 index 说有 3 条
 但只能找到 2 条单条文件的情况不会发生）。
-`,
+      `,
     },
   },
 
   failure_v20260517_1: {
-    index: `
-## 失败处理
-
+    title: "失败处理",
+    content: `
 enqueue 的 fn 抛错时的三条规则。每条独立子节点。
-`,
+    `,
 
     errorPropagation_v20260517_1: {
-      index: `
-### 错误向上抛
-
+      title: "错误向上抛",
+      content: `
 错误透传给调用方处理——SerialQueue 不吞错，调用方 await enqueue(...) 处直接捕获。
-`,
+      `,
     },
 
     queueContinues_v20260517_1: {
-      index: `
-### 队列继续
-
+      title: "队列继续",
+      content: `
 一个任务失败后，下一个写入正常执行——链尾被 .catch(() => {}) 包装吞错，
 不会因为一次失败而瘫痪整条 key 的后续写入。
-`,
+      `,
     },
 
     fileSnapshotIntact_v20260517_1: {
-      index: `
-### 文件保持抛错前状态
-
+      title: "文件保持抛错前状态",
+      content: `
 如果抛错发生在读后、写前，文件未改。但若抛错发生在第一次写入与第二次写入之间
 （batchInOneEnqueue 内），可能出现部分写入——见 limits 子节点。
-`,
+      `,
     },
   },
 
   performance_v20260517_1: {
-    index: `
-## 性能
-
+    title: "性能",
+    content: `
 串行化看似慢，实际：
 
 - 同一 key 的并发写必须串行化（数据正确性 > 速度）
 - 不同 key 的并发写不相互等待
 - 看板写入频率通常不高（每分钟几十次量级）
-`,
+    `,
   },
 
   otherUsers_v20260517_1: {
-    index: `
-## 其他使用 SerialQueue 的场景
-
+    title: "其他使用 SerialQueue 的场景",
+    content: `
 | 场景 | key |
 |---|---|
 | ThreadsTree 写 threads.json | 单 key（每个 ThreadsTree 实例一个 SerialQueue）|
@@ -229,18 +210,17 @@ enqueue 的 fn 抛错时的三条规则。每条独立子节点。
 | super 分身目录写入 | stoneName |
 
 每个上层调用点根据自身领域边界选 key。
-`,
+    `,
   },
 
   limits_v20260517_1: {
-    index: `
-## 不解决的问题：原子写入
-
+    title: "不解决的问题：原子写入",
+    content: `
 SerialQueue 解决并发竞态，不解决进程崩溃中途的"半写文件"。
 写文件用 Bun.write 直接写，不是 tmpfile + rename 模式。
 
 如需进程崩溃保护，调用方可在 enqueue 内加 tmp+rename 包装；
 系统认为崩溃中途的概率足够低，配合 git 历史可恢复。
-`,
+    `,
   },
 };

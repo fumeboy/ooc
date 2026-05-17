@@ -11,7 +11,8 @@ import { meta_v20260506_1 } from "@meta/index.doc";
  */
 export const iteration_v20260511_1 = {
   get parent() { return meta_v20260506_1; },
-  index: `
+  title: "section",
+  content: `
 ooc-2 迭代历史
 
 每个迭代必须满足最小契约：
@@ -132,5 +133,5 @@ ooc-2  (2026-05-08 ~ 2026-05-12)
 - **阶段 12**：UI / client / 与人协作（与 observable/pause 联动，做可视化 + 介入）
 
 后续阶段都不在当前主分支范围。每启动一个新阶段，都先在本文件追加一个新节点，然后再写 spec → plan → 实施。
-`,
+  `,
 };

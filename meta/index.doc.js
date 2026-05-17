@@ -14,9 +14,10 @@ export { object_v20260504_1 } from "@meta/object/index.doc";
 
 export const object_tree_v20260504_1 = {
   get parent() { return object_v20260504_1; },
-  index: `
+  title: "section",
+  content: `
 Object 能力维度包括 thinkable / collaborable / executable / persistable / extendable / observable / reflectable。
-`,
+  `,
   thinkable: thinkable_v20260504_1,
   collaborable: collaborable_v20260504_1,
   executable: executable_v20260504_1,
@@ -27,14 +28,15 @@ Object 能力维度包括 thinkable / collaborable / executable / persistable / 
 };
 
 export const meta_v20260506_1 = {
-  index: `
+  title: "section",
+  content: `
 kernel/meta 是 OOC 的元文档入口。
 
 - object：系统是什么（按能力维度）
 - app：系统如何对外提供应用层入口
 - engineering：我们如何做（实践侧元循环）
 - iteration：本项目的迭代过程（按时间线追溯每次产出）
-`,
+  `,
   object: object_tree_v20260504_1,
   app: app_tree_v20260511_1,
   engineering: engineering_v20260506_1,

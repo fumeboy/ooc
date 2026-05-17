@@ -12,76 +12,73 @@ export const knowledge_window_v20260515_1 = {
   sources: { knowledgeWindow },
 
   sources_v20260517_1: {
-    index: `knowledge_window 的 source 字段区分 3 类来源，决定持久化与可关闭性。`,
+    title: "sources",
+    content: `knowledge_window 的 source 字段区分 3 类来源，决定持久化与可关闭性。`,
 
     explicit_v20260517_1: {
-      index: `
-#### explicit
-
+      title: "explicit",
+      content: `
 LLM 通过 root.open_knowledge 显式 pin 进 context；持久化进 thread.json；可被 close。
-`,
+      `,
     },
 
     protocol_v20260517_1: {
-      index: `
-#### protocol
-
+      title: "protocol",
+      content: `
 每轮自动注入的协议常量（KNOWLEDGE）+ 各 command_exec form 的 knowledge() 派生 +
 每种 window type 的 basicKnowledge，由 collectExecutableKnowledgeEntries 合成。
 仅出现在响应体，不写回 thread.json。
-`,
+      `,
     },
 
     activator_v20260517_1: {
-      index: `
-#### activator
-
+      title: "activator",
+      content: `
 stones/{id}/knowledge/*.md 经 commandPaths 命中（computeActivations）后合成。
 带 presentation（full / summary）决定渲染体积。仅出现在响应体，不写回 thread.json。
-`,
+      `,
     },
   },
 
   commands_v20260517_1: {
-    index: `knowledge_window 注册 2 个 command。`,
+    title: "commands",
+    content: `knowledge_window 注册 2 个 command。`,
 
     reload_v20260517_1: {
-      index: `
-### reload
-
+      title: "reload",
+      content: `
 强制下一轮重新计算激活集合。
 
 - exec 体 no-op；loader 已按 mtime 自动失效缓存
 - 保留 command 主要是语义提示
-`,
+      `,
     },
 
     close_v20260517_1: {
-      index: `
-### close
-
+      title: "close",
+      content: `
 释放 window；不影响 knowledge 文件本身。
 
 - 仅 source=explicit 可被关闭
 - source=protocol / activator 由 onClose hook 拒绝（见 onCloseHook.synthesizedGuard）
 - 历史 window 没有 source 字段时按 explicit 处理（向后兼容）
-`,
+      `,
     },
   },
 
   onCloseHook_v20260517_1: {
-    index: `onCloseKnowledgeWindow 注册到 type=knowledge 的 onClose hook。`,
+    title: "on Close Hook",
+    content: `onCloseKnowledgeWindow 注册到 type=knowledge 的 onClose hook。`,
 
     synthesizedGuard_v20260517_1: {
-      index: `
-#### synthesizedGuard
-
+      title: "synthesizedGuard",
+      content: `
 window.source 存在且非 "explicit"（即 protocol / activator）时拒绝关闭：
 
 - 向 thread.events 追加 context_change.inject，文本
   [close 拒绝] knowledge_window "<path>" 来自 <source>，由系统每轮合成，不可显式关闭。
 - 返回 false，保留 window
-`,
+      `,
     },
   },
 };

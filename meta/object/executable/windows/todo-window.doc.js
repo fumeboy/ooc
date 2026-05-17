@@ -12,34 +12,37 @@ export const todo_window_v20260515_1 = {
   sources: { todo },
 
   fields_v20260517_1: {
-    index: `todo_window 的字段集合。`,
+    title: "fields",
+    content: `todo_window 的字段集合。`,
 
     content_v20260517_1: {
-      index: `#### content — 待办正文（同时作为 title 来源；过长截断）。`,
+      title: "content — 待办正文（同时作为 title 来源；过长截断）。",
+      content: `#### content — 待办正文（同时作为 title 来源；过长截断）。`,
     },
 
     onCommandPath_v20260517_1: {
-      index: `
-#### onCommandPath
-
+      title: "onCommandPath",
+      content: `
 可选；当 LLM 调用命中这些 command path 时，渲染层把该 todo 高亮为强提醒，
 让 LLM 在相关上下文时"想起这件事"。
-`,
+      `,
     },
   },
 
   commands_v20260517_1: {
-    index: `
+    title: "commands",
+    content: `
 todo_window 注册的 commands 表为空：没有 LLM 可继续调用的动作。
 唯一可触发的释放路径是顶层 close tool（windowId=该 todo_window.id）；
 等价语义：待办完成 / 撤销。
-`,
+    `,
   },
 
   onCloseHook_v20260517_1: {
-    index: `
+    title: "on Close Hook",
+    content: `
 todo_window 未注册 onClose hook；WindowManager.close 走默认路径——直接从 contextWindows 移除 window，
 无额外副作用。
-`,
+    `,
   },
 };

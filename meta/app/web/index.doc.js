@@ -1,5 +1,6 @@
 export const app_web_v20260513_1 = {
-  index: `
+  title: "section",
+  content: `
 web 是 OOC app 层的浏览与人工操作入口。
 
 职责边界：
@@ -118,5 +119,5 @@ web 是 OOC app 层的浏览与人工操作入口。
 
    cd web
    bun run build
-`,
+  `,
 };

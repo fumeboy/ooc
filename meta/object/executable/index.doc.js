@@ -76,7 +76,8 @@ Executable 描述 Object 的行动 / 编程能力。
    * 同时保留 .index 字段名以做 alias，防止外部代码访问 .index 直接报 undefined。
    */
   legacyIndex: `（已被拆到 .concepts，本字段仅为兼容下游 import；新代码请走 .concepts.*）`,
-  index: `（已被拆到 .concepts，本字段仅为兼容下游 import；新代码请走 .concepts.*）`,
+  title: "section",
+  content: `（已被拆到 .concepts，本字段仅为兼容下游 import；新代码请走 .concepts.*）`,
   tools: tools_v20260506_1,
   commands: commands_v20260506_1,
   server: server_v20260506_1,

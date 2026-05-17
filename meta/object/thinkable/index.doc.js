@@ -9,7 +9,8 @@ import { context_v20260505_1 } from "@meta/object/thinkable/context/index.doc";
 
 export const thinkable_v20260504_1 = {
     get parent() { return object_v20260504_1; },
-    index: `
+    title: "section",
+    content: `
 Thinkable 描述 Object 的思考能力。
 
 思考的核心是与 LLM 交互，关键是构造 LLM 输入（Context）。
@@ -33,7 +34,7 @@ LLM 可以通过 do command 派生子 Thread（具体见 executable 文档）。
     - 思考的运行时结构：线程树、节点状态、子线程、调度
 - thinkloop
     - 单轮循环的引擎：context-build → llm → tool_use → 循环
-`,
+    `,
     identity: identity_v20260505_1,
     llm: llm_v20260508_1,
     knowledge: knowledge_v20260505_1,

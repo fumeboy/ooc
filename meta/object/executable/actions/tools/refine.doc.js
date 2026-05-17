@@ -28,80 +28,76 @@ refine(
 `,
 
   behaviorSteps_v20260517_1: {
-    index: `
+    title: "behavior Steps",
+    content: `
 refine 单次调用按顺序执行 4 个步骤；任一步骤抛错会让 form 状态保持不变。
-`,
+    `,
 
     findForm_v20260517_1: {
-      index: `
-### Step 1 — 找 form
-
+      title: "Step 1 — 找 form",
+      content: `
 按 form_id 在 thread.contextWindows 中定位 command_exec window。
 找不到 → reject。
-`,
+      `,
     },
 
     mergeArgs_v20260517_1: {
-      index: `
-### Step 2 — 浅合并参数
-
+      title: "Step 2 — 浅合并参数",
+      content: `
 把 form_args 浅合并到 form.accumulatedArgs（同名键覆盖）。
 不做深 merge——嵌套对象整体替换。
-`,
+      `,
     },
 
     recomputePaths_v20260517_1: {
-      index: `
-### Step 3 — 重算激活路径
-
+      title: "Step 3 — 重算激活路径",
+      content: `
 根据合并后的 accumulatedArgs 重新计算激活的 command path 集合。
 路径计算逻辑由 command 自身定义（如 talk command 在 context="continue" 时
 追加 talk.continue 路径）。
-`,
+      `,
     },
 
     incrementalActivate_v20260517_1: {
-      index: `
-### Step 4 — 增量激活 knowledge
-
+      title: "Step 4 — 增量激活 knowledge",
+      content: `
 对比新旧路径集合，对新增路径触发 knowledge 激活并写入 inject 事件，
 让 LLM 在下一轮看到"我刚才的 refine 让 X knowledge 加入了视野"。
-`,
+      `,
     },
   },
 
   separationRationale_v20260517_1: {
-    index: `
+    title: "separation Rationale",
+    content: `
 为什么 refine 是独立原语而不与 submit 合并：把"填参数"和"执行"分开有 3 个收益。
-`,
+    `,
 
     stepwiseThinking_v20260517_1: {
-      index: `
-### 分步思考
-
+      title: "分步思考",
+      content: `
 第一次 refine 只填部分参数，看激活了哪些新 knowledge，再决定剩余参数。
-`,
+      `,
     },
 
     progressiveDisclosure_v20260517_1: {
-      index: `
-### 渐进披露
-
+      title: "渐进披露",
+      content: `
 每次 refine 都会触发 path → knowledge 重新计算，对话过程中 Context 动态变化。
-`,
+      `,
     },
 
     inFlightCorrection_v20260517_1: {
-      index: `
-### 撤销前修正
-
+      title: "撤销前修正",
+      content: `
 发现 args 写错了，再 refine 一次覆盖，无需 close 重开。
-`,
+      `,
     },
   },
 
   knowledgeIncrement_v20260517_1: {
-    index: `
+    title: "knowledge Increment",
+    content: `
 典型 refine 序列演示路径与激活的演化：
 
 
@@ -118,6 +114,6 @@ refine(form_id, form_args={ context: "continue" })          → 路径=[talk, ta
 每次激活变化会在 Context 的 process events 中 inject 一条提示。
 对 program.function 这种 method-aware 路径，refine 还会重新抓取当前 method
 knowledge——function 名称或 args 改变后，下一轮看到的方法说明同步变化。
-`,
+    `,
   },
 };

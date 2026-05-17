@@ -8,7 +8,8 @@ export const app_server_v20260511_1 = {
     config: appServerConfig,
     worker: appServerWorker,
   },
-  index: `
+  title: "section",
+  content: `
 App Server 是 OOC 的控制面 HTTP 服务，位于 src/app/server，使用 Elysia 实现。
 
 ## 启动约定（本仓库）
@@ -158,5 +159,5 @@ RUN_REAL_APP_SERVER_TEST=1 bun test src/app/server/__tests__/real-app-server.tes
 
 
 真实测试会读取当前工作区 .env，没有时回退读取上层仓库 .env，并设置 OOC_PROVIDER=openai。
-`,
+  `,
 };

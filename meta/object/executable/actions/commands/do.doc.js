@@ -23,7 +23,8 @@ contextWindows 下。
 `,
 
   callShape_v20260517_1: {
-    index: `
+    title: "call Shape",
+    content: `
 
 open(command="do", title="处理告警", args={
   msg: "...",        // 必填，写入子线程 inbox 的初始消息
@@ -36,132 +37,126 @@ open(command="do", title="处理告警", args={
 - args.wait 可选，true 时父线程在 submit 后立即进入 waiting
 - 不接 context / threadId / knowledge 等额外字段——continue / 知识挂载分别走
   do_window.continue 与 knowledge 体系
-`,
+    `,
   },
 
   submitEffects_v20260517_1: {
-    index: `
+    title: "submit Effects",
+    content: `
 do 的 submit 触发 5 项副作用，顺序执行；任一失败应整体回滚。
-`,
+    `,
 
     createChildThread_v20260517_1: {
-      index: `
-### 1. 创建 child thread
-
+      title: "1. 创建 child thread",
+      content: `
 分配 thread id、派生 persistence ref。
-`,
+      `,
     },
 
     creatorDoWindow_v20260517_1: {
-      index: `
-### 2. child 挂 creator do_window
-
+      title: "2. child 挂 creator do_window",
+      content: `
 在 child.contextWindows 下挂指向父的初始 creator do_window，
 不可被 LLM close（由 onClose hook 拒绝）。
-`,
+      `,
     },
 
     initialMessageDelivery_v20260517_1: {
-      index: `
-### 3. 初始消息投递
-
+      title: "3. 初始消息投递",
+      content: `
 - 写消息到 child.inbox
 - 写镜像消息到父.outbox
 - child 记录一条 inbox_message_arrived 事件
-`,
+      `,
     },
 
     parentDoWindow_v20260517_1: {
-      index: `
-### 4. 父挂 do_window
-
+      title: "4. 父挂 do_window",
+      content: `
 在父.contextWindows 下挂一个 do_window，targetThreadId=childId，
 作为父对该子线程的句柄。
-`,
+      `,
     },
 
     optionalWait_v20260517_1: {
-      index: `
-### 5. wait=true → 父进入 waiting
-
+      title: "5. wait=true → 父进入 waiting",
+      content: `
 args.wait === true 时父线程立即 status="waiting"；
 scheduler 见父 inbox 增长后唤醒。
-`,
+      `,
     },
   },
 
   doWindowCommands_v20260517_1: {
-    index: `
+    title: "do Window Commands",
+    content: `
 do_window 上注册了 3 个 sub-command，通过 open(parent_window_id="<do_window_id>", command=...) 调用：
-`,
+    `,
 
     continueCmd_v20260517_1: {
-      index: `
-### continue (args: msg, wait?)
-
+      title: "continue (args: msg, wait?)",
+      content: `
 向子线程追加一条消息；wait=true 同样使父进入 waiting。
 
 
 open(parent_window_id="<do_window_id>", command="continue",
      title="追加任务", args={ msg: "再处理一批", wait: true })
 
-`,
+      `,
     },
 
     waitCmd_v20260517_1: {
-      index: `
-### wait
-
+      title: "wait",
+      content: `
 不发新消息，仅让父进入 waiting 等子线程后续 outbox。
-`,
+      `,
     },
 
     closeCmd_v20260517_1: {
-      index: `
-### close
-
+      title: "close",
+      content: `
 归档子线程对话（B=ii archive）；子线程不再继续 think，历史保留。
-`,
+      `,
     },
   },
 
   pathList_v20260517_1: {
-    index: `
+    title: "path List",
+    content: `
 root.do 与 do_window 各自注册的 command path 列表。
-`,
+    `,
 
     rootDoPaths_v20260517_1: {
-      index: `
-### root.do
-
+      title: "root.do",
+      content: `
 
 do
 do.wait
 
-`,
+      `,
     },
 
     doWindowPaths_v20260517_1: {
-      index: `
-### do_window
-
+      title: "do_window",
+      content: `
 
 continue
 continue.wait
 wait
 close
 
-`,
+      `,
     },
   },
 
   contextInheritance_v20260517_1: {
-    index: `
+    title: "context Inheritance",
+    content: `
 设计目标上，子线程可以继承父线程知识；当前 thinkable/knowledge 没有实现父链
 knowledge 自动继承。
 
 已实现：子线程一经创建就自带"指向父 thread 的初始 creator do_window"作为锚点，
 作为子线程与父线程对话的统一句柄。
-`,
+    `,
   },
 };

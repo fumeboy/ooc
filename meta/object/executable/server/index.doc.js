@@ -13,7 +13,8 @@ export const server_v20260506_1 = {
     self: serverSelf,
     types: serverTypes,
   },
-  index: `
+  title: "section",
+  content: `
 Server 是 Object 自己拥有的后端方法集合。
 LLM 通过 sandbox 中的 callMethod(name, args) 调用；前端通过 HTTP call_method 端点调用。
 
@@ -107,5 +108,5 @@ Agent 通过 program.shell 编辑此文件后，下一次 program.function 或 p
 - ui_methods 的 HTTP 端点暴露
 - 跨 object 的 callMethod
 - 方法权限控制
-`,
+  `,
 };

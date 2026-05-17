@@ -14,130 +14,144 @@ export const context_window_v20260515_1 = {
   sources: { types, windows },
 
   commonFields_v20260517_1: {
-    index: `所有 ContextWindow 共有的最小字段集；每个字段独立子节点。`,
+    title: "common Fields",
+    content: `所有 ContextWindow 共有的最小字段集；每个字段独立子节点。`,
 
     id_v20260517_1: {
-      index: `
-##### id
-
+      title: "id",
+      content: `
 全局唯一字符串；通过 generateWindowId(type) 生成，type 嵌入 prefix 便于阅读时识别 window 类型。
 重复 id 在 insertTypedWindow 阶段会抛错，避免静默覆盖。
-`,
+      `,
     },
 
     type_v20260517_1: {
-      index: `##### type — WindowType union 的一个分支（root / command_exec / do / todo / talk / program / file / knowledge / search）。`,
+      title: "type — WindowType union 的一个分支（root / command_exec / do / todo / talk / progra...",
+      content: `##### type — WindowType union 的一个分支（root / command_exec / do / todo / talk / program / file / knowledge / search）。`,
     },
 
     title_v20260517_1: {
-      index: `##### title — 渲染给 LLM 的人类可读标签；同 type 多开时用以区分（如多个 talk_window 区分会话主题）。`,
+      title: "title — 渲染给 LLM 的人类可读标签；同 type 多开时用以区分（如多个 talk_window 区分会话主题）。",
+      content: `##### title — 渲染给 LLM 的人类可读标签；同 type 多开时用以区分（如多个 talk_window 区分会话主题）。`,
     },
 
     status_v20260517_1: {
-      index: `
-##### status
-
+      title: "status",
+      content: `
 type-specific 状态枚举：
 
 - command_exec: open / executing / executed
 - do: running / waiting / done / failed / paused（投影自子线程）
 - talk: open
 - program / file / knowledge / search / todo / root: 无显式 status（始终视为 open）
-`,
+      `,
     },
 
     parentWindowId_v20260517_1: {
-      index: `
-##### parentWindowId
-
+      title: "parentWindowId",
+      content: `
 可选 string；缺省时挂在 ROOT_WINDOW_ID（root window 是隐含 virtual view）。
 sub-window 关系通过这个字段构成树——级联 close 时按它向下递归。
-`,
+      `,
     },
 
     createdAt_v20260517_1: {
-      index: `##### createdAt — 创建时间戳；observability / 调试用，不影响调度。`,
+      title: "createdAt — 创建时间戳；observability / 调试用，不影响调度。",
+      content: `##### createdAt — 创建时间戳；observability / 调试用，不影响调度。`,
     },
   },
 
   primitives_v20260517_1: {
-    index: `LLM 通过 5 原语与 contextWindow 交互；每个原语独立子节点（compress 不直接作用于 window，归 tools 文档）。`,
+    title: "primitives",
+    content: `LLM 通过 5 原语与 contextWindow 交互；每个原语独立子节点（compress 不直接作用于 window，归 tools 文档）。`,
 
     open_v20260517_1: {
-      index: `##### open(parent_window_id?, command, args?) — 在 parent 下打开 command_exec sub-window；args 给齐时可走 auto-submit 一步到位。`,
+      title: "open(parent_window_id?, command, args?) — 在 parent 下打开 command_exec sub-windo...",
+      content: `##### open(parent_window_id?, command, args?) — 在 parent 下打开 command_exec sub-window；args 给齐时可走 auto-submit 一步到位。`,
     },
 
     refine_v20260517_1: {
-      index: `##### refine(form_id, args) — 累积 form 的 accumulatedArgs 并重算 commandPaths；仅 status=open 的 command_exec 可被 refine。`,
+      title: "refine(form_id, args) — 累积 form 的 accumulatedArgs 并重算 commandPaths；仅 status=o...",
+      content: `##### refine(form_id, args) — 累积 form 的 accumulatedArgs 并重算 commandPaths；仅 status=open 的 command_exec 可被 refine。`,
     },
 
     submit_v20260517_1: {
-      index: `##### submit(form_id) — 执行 form；成功自动从 contextWindows 移除，失败保留 status=executed + result。`,
+      title: "submit(form_id) — 执行 form；成功自动从 contextWindows 移除，失败保留 status=executed + result。",
+      content: `##### submit(form_id) — 执行 form；成功自动从 contextWindows 移除，失败保留 status=executed + result。`,
     },
 
     close_v20260517_1: {
-      index: `##### close(window_id, reason?) — 触发 type.onClose hook；hook 返回 false 时拒绝关闭；同时级联关闭所有 parentWindowId 指向它的子 window。`,
+      title: "close(window_id, reason?) — 触发 type.onClose hook；hook 返回 false 时拒绝关闭；同时级联关闭所有...",
+      content: `##### close(window_id, reason?) — 触发 type.onClose hook；hook 返回 false 时拒绝关闭；同时级联关闭所有 parentWindowId 指向它的子 window。`,
     },
 
     wait_v20260517_1: {
-      index: `##### wait(on) — 切换 thread.status 到 waiting，等 inbox 出现新消息唤醒；on 必须是 open talk_window 或 running do_window。`,
+      title: "wait(on) — 切换 thread.status 到 waiting，等 inbox 出现新消息唤醒；on 必须是 open talk_window...",
+      content: `##### wait(on) — 切换 thread.status 到 waiting，等 inbox 出现新消息唤醒；on 必须是 open talk_window 或 running do_window。`,
     },
   },
 
   typeCatalog_v20260517_1: {
-    index: `WindowType union 的 9 个分支；每个 type 的命令面 / 渲染 / onClose 见 windows/* 各概念。`,
+    title: "type Catalog",
+    content: `WindowType union 的 9 个分支；每个 type 的命令面 / 渲染 / onClose 见 windows/* 各概念。`,
 
     root_v20260517_1: {
-      index: `
-#### root
-
+      title: "root",
+      content: `
 每个 thread 隐含的根 window（不显式 insert 也存在虚拟视图）。
 注册顶层 command：do / talk / program / plan / end / todo / open_file / open_knowledge / glob / grep / ...
-`,
+      `,
     },
 
     commandExec_v20260517_1: {
-      index: `
-#### command_exec
-
+      title: "command_exec",
+      content: `
 LLM 调用某 command 时产生的临时 sub-window。生命周期 open → executing → executed
 （详见 commandExecLifecycle 概念）。
-`,
+      `,
     },
 
     do_v20260517_1: {
-      index: `#### do — fork 子线程后产生的对话窗口（root.do submit 副作用）。详见 windows.doWindow。`,
+      title: "do — fork 子线程后产生的对话窗口（root.do submit 副作用）。详见 windows.doWindow。",
+      content: `#### do — fork 子线程后产生的对话窗口（root.do submit 副作用）。详见 windows.doWindow。`,
     },
 
     todo_v20260517_1: {
-      index: `#### todo — root.todo 一步直建的可见待办。详见 windows.todoWindow。`,
+      title: "todo — root.todo 一步直建的可见待办。详见 windows.todoWindow。",
+      content: `#### todo — root.todo 一步直建的可见待办。详见 windows.todoWindow。`,
     },
 
     talk_v20260517_1: {
-      index: `#### talk — 与对端 flow object 的持续会话。详见 windows.talkWindow。`,
+      title: "talk — 与对端 flow object 的持续会话。详见 windows.talkWindow。",
+      content: `#### talk — 与对端 flow object 的持续会话。详见 windows.talkWindow。`,
     },
 
     program_v20260517_1: {
-      index: `#### program — 代码执行窗口（REPL 风格）。详见 windows.programWindow。`,
+      title: "program — 代码执行窗口（REPL 风格）。详见 windows.programWindow。",
+      content: `#### program — 代码执行窗口（REPL 风格）。详见 windows.programWindow。`,
     },
 
     file_v20260517_1: {
-      index: `#### file — 文件正文按 lines/columns 切片的持久 window。详见 windows.fileWindow。`,
+      title: "file — 文件正文按 lines/columns 切片的持久 window。详见 windows.fileWindow。",
+      content: `#### file — 文件正文按 lines/columns 切片的持久 window。详见 windows.fileWindow。`,
     },
 
     knowledge_v20260517_1: {
-      index: `#### knowledge — knowledge 文本运行时载体（explicit / protocol / activator 三 source）。详见 windows.knowledgeWindow。`,
+      title: "knowledge — knowledge 文本运行时载体（explicit / protocol / activator 三 source）。详见 wi...",
+      content: `#### knowledge — knowledge 文本运行时载体（explicit / protocol / activator 三 source）。详见 windows.knowledgeWindow。`,
     },
 
     search_v20260517_1: {
-      index: `#### search — glob / grep 结果窗口；matches 带稳定 index。详见 windows.searchWindow。`,
+      title: "search — glob / grep 结果窗口；matches 带稳定 index。详见 windows.searchWindow。",
+      content: `#### search — glob / grep 结果窗口；matches 带稳定 index。详见 windows.searchWindow。`,
     },
   },
 
   registryBinding_v20260517_1: {
-    index: `
+    title: "registry Binding",
+    content: `
 每个 type 通过 registerWindowType(type, partial) 注入：commands 表 / onClose hook /
 renderXml / basicKnowledge。详见 windowRegistry 概念。
-`,
+    `,
   },
 };
