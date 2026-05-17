@@ -1,60 +1,112 @@
-import { observable_v20260504_1 } from "@meta/object/observable/index.doc";
+import * as observable from "@src/observable/index";
+import * as debugFile from "@src/persistable/debug-file";
+import * as contextRender from "@src/thinkable/context/render";
+import * as getLatestDebugApi from "@src/app/server/modules/runtime/api.get-latest-debug";
+import * as getLoopDebugApi from "@src/app/server/modules/runtime/api.get-loop-debug";
 
-export const context_visibility_v20260506_1 = {
-  get parent() { return observable_v20260504_1; },
-  index: `
-Context Visibility 描述如何观察每轮 LLM 输入窗口中的信息来源。
+/**
+ * ContextVisibility 概念：让"本轮 LLM 输入窗口由什么组成、为什么会进入"可被逐层观察。
+ *
+ * sources:
+ *  - observable          — `writeLatestLlmInput` / `beginLlmLoop` 在调用 LLM 前抓取
+ *                          \`inputItems\` 与 contextSnapshot，是 viewer 的数据源头
+ *  - debugFile           — \`captureContextSnapshot\` / \`normalizeInputItems\` 把
+ *                          抓到的 input 归一化成可读 record
+ *  - contextRender       — 把 thread 稳定状态序列化为 system message 用的 XML context
+ *  - getLatestDebugApi   — viewer 读取最近一次快照的 HTTP 入口
+ *  - getLoopDebugApi     — viewer 读取指定轮次留档的 HTTP 入口
+ */
+export const context_visibility_v20260517_1 = {
+  name: "ContextVisibility",
+  sources: {
+    observable,
+    debugFile,
+    contextRender,
+    getLatestDebugApi,
+    getLoopDebugApi,
+  },
+  description: `
+ContextVisibility 描述如何观察每轮 LLM 输入窗口中的信息来源：模型本轮看到的
+"上下文"不是聊天记录平铺，而是 system XML + 被挑选过的过程事件 transcript，
+两部分共同决定 \`debug/llm.input.json\` 里 \`inputItems\` 的形态。
+`.trim(),
 
-当前落地方式：
+  pipeline_v20260517_1: {
+    index: `
+## 输入构造管线
 
-- \`buildInputItems()\` 会先构造一条 role=system 的 XML context，再把 thread.events 映射成后续 transcript input items。
-- debug 文件 \`llm.input.json\` / \`loop_*.input.json\` 记录的就是这组 Responses-first \`inputItems\`。
-- 其中第一条 system message 的 \`content\` 来自 \`src/thinkable/context/render.ts\` 生成的 XML context。
-- app web 在查看这些 debug 文件时，会把这段 XML 继续解析成树：
-  - 顶层可见 \`context > thread\`
-  - 再向下可追踪 \`active_forms\` / \`knowledge_entries\` / \`active_knowledge\` / \`windows\` / \`inbox\` / \`outbox\`
-  - XML 注释也会一并展示，保留 context builder 在结构上的说明信息
+1. \`buildInputItems()\` 先构造一条 role=system 的 XML context，再把 \`thread.events\`
+   映射成后续 transcript input items（Responses-first \`LlmInputItem\` 数组）。
+2. system message 的 \`content\` 由 \`contextRender.renderContextXml(thread)\` 生成。
+3. 调用 LLM 前，\`observable.beginLlmLoop\` 通过 \`debugFile.normalizeInputItems\` 归一化、
+   配合 \`captureContextSnapshot(thread)\` 一起写入 \`debug/llm.input.json\`
+   与（debug 模式下）\`debug/loop_NNNN.input.json\`。
 
-这让“哪些信息进入了本轮上下文、为什么会进入”从纯文本阅读，升级成可逐层展开的调试视图。
+落盘的 \`inputItems\` 即 viewer 展开 context 树时读取的原始数据源。
+`.trim(),
+  },
 
-## 当前 context 是如何被构造的
+  xmlSections_v20260517_1: {
+    index: `
+## System XML 节段
 
-1. **稳定状态走 XML system context**
-   - \`renderContextXml()\` 负责把 thread 的稳定状态序列化为 XML：
-     - \`plan\`
-     - \`active_forms\`
-     - \`knowledge_entries\`
-     - \`active_knowledge\`
-     - \`windows\`
-     - \`inbox / outbox\`
+\`renderContextXml()\` 把 thread 的稳定状态序列化为以下节段：
 
-2. **过程事件走 transcript items**
-   - \`function_call\` → \`function_call\` item
-   - \`function_call_output\` → \`function_call_output\` item
-   - \`thinking\` → assistant message
-   - 普通 \`llm_interaction.text\` → assistant message
+- \`plan\`
+- \`active_forms\`
+- \`knowledge_entries\`
+- \`active_knowledge\`
+- \`windows\`
+- \`inbox\` / \`outbox\`
 
-3. **不是所有事件都会进入 transcript**
-   - \`tool_use\` 只保留在事件流里，不直接复喂给模型
-   - 非错误 \`context_change.inject\` 会被过滤，不进入下一轮 transcript
-   - \`inbox_message_arrived\` 会变成一条 system 标记消息，而真正的消息正文仍通过 XML 中的 \`inbox\` 可见
+viewer 顶层可见 \`context > thread\`，再向下逐层展开上述节段；XML 注释一并展示，
+保留 context builder 在结构上的说明信息。
+`.trim(),
+  },
 
-这意味着：模型看到的“本轮上下文”并不是简单的聊天记录平铺，而是 **system XML + 被挑选过的过程事件 transcript**。
+  transcriptMapping_v20260517_1: {
+    index: `
+## 过程事件 → transcript 的映射
 
+| thread event | 映射 |
+|---|---|
+| \`function_call\` | \`function_call\` input item |
+| \`function_call_output\` | \`function_call_output\` input item |
+| \`thinking\` | assistant message |
+| 普通 \`llm_interaction.text\` | assistant message |
+
+不进 transcript：
+
+- \`tool_use\` 只保留在事件流里，不复喂模型
+- 非错误 \`context_change.inject\` 被过滤
+- \`inbox_message_arrived\` 化为一条 system 标记消息，真正消息正文走 XML 的 \`inbox\` 节段
+
+模型本轮看到的"上下文"由 system XML + 被挑选过的过程事件 transcript 共同决定，
+不是 thread 事件流的平铺复读。
+`.trim(),
+  },
+
+  renderingBoundaries_v20260517_1: {
+    index: `
 ## XML 渲染边界
 
-- knowledge 内容会按字节数截断，避免把整库文本一次性塞进 context。
-- file window 也有独立字节上限；读取失败时会写成 \`<error>\` 节点，而不是静默消失。
-- 当文本里出现 \`< > &\` 等会破坏 XML 结构的字符时，序列化会优先包成 CDATA，并处理 \`]]>\` 分裂问题，尽量保留原文本。
+- knowledge 内容按字节数截断，避免把整库文本塞进 context。
+- file window 有独立字节上限；读取失败写成 \`<error>\` 节点，不静默丢失。
+- 文本含 \`< > &\` 时序列化优先包成 CDATA，并处理 \`]]>\` 分裂，尽量保留原文本。
+- 与之配套的 chat 控制面同方向抽象：\`function_call\` 与 \`function_call_output\`
+  合并为一条 tool 语义；\`inject\` 降级为 notice 而非冒充用户消息；用户消息只在
+  \`inbox_message_arrived\` 时显示。
+`.trim(),
+  },
 
-与之配套的 chat 控制面也做了相同方向的抽象：
+  viewerSemantics_v20260517_1: {
+    index: `
+## Viewer 语义
 
-- \`function_call\` / \`function_call_output\` 会被合并成一条 tool 语义；
-- \`inject\` 被降级为 notice，而不是冒充用户消息；
-- 用户消息只在 \`inbox_message_arrived\` 时显示。
-
-本质上，这也是 context visibility 的一部分：**不是所有写进 thread 的东西都属于“对话”，要先区分“可见给模型的上下文”“系统过程事件”“真正的人机消息”。**
-
-补充一点：web viewer 不只是“能展开 XML”，它还会展示 XML attrs / comments、字符数与粗略 token 估算，并在 debug JSON 损坏时回退原始只读视图；因此它承担的是“解释输入结构”，不是“编辑输入内容”。
-`,
+debug viewer 通过 \`getLatestDebugApi\` 与 \`getLoopDebugApi\` 拿到归一化 \`inputItems\`，
+对 role=system 的 message 继续解析 XML context，展开为树形节点与详情面板。
+viewer 同时展示 XML attrs / comments、字符数与粗略 token 估算；JSON 损坏时
+回退原始只读视图。它承担的是"解释输入结构"，不是"编辑输入内容"——观察面板而非配置面板。
+`.trim(),
+  },
 };

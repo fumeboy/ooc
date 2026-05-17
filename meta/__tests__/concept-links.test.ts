@@ -16,6 +16,7 @@ import { executable_v20260504_1 } from "@meta/object/executable/index.doc";
 import { engineering_v20260506_1 } from "@meta/engineering/index.doc";
 import { thinkable_v20260504_1 } from "@meta/object/thinkable/index.doc";
 import { persistable_v20260504_1 } from "@meta/object/persistable/index.doc";
+import { observable_v20260517_1 } from "@meta/object/observable/index.doc";
 import { engineering_v20260506_1 } from "@meta/engineering/index.doc";
 
 describe("walkConcepts helper", () => {
@@ -199,6 +200,22 @@ describe("persistable meta tree", () => {
   });
 
   it("every collected persistable concept has valid schema", () => {
+    expectAllConceptsValid(concepts);
+  });
+});
+
+describe("observable meta tree", () => {
+  const concepts = walkConcepts(observable_v20260517_1, "observable");
+
+  it("observable aggregator + 3 sub-concepts (pause / debug / contextVisibility) all识别为合规概念", () => {
+    const conceptPaths = concepts.map((c) => c.path);
+    expect(conceptPaths).toContain("observable");
+    expect(conceptPaths).toContain("observable.concepts.pause");
+    expect(conceptPaths).toContain("observable.concepts.debug");
+    expect(conceptPaths).toContain("observable.concepts.contextVisibility");
+  });
+
+  it("every collected observable concept has valid schema", () => {
     expectAllConceptsValid(concepts);
   });
 });

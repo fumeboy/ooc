@@ -1,72 +1,95 @@
-import { observable_v20260504_1 } from "@meta/object/observable/index.doc";
+import * as observable from "@src/observable/index";
+import * as pauseStore from "@src/app/server/runtime/pause-store";
+import * as enableGlobalPauseApi from "@src/app/server/modules/runtime/api.enable-global-pause";
+import * as disableGlobalPauseApi from "@src/app/server/modules/runtime/api.disable-global-pause";
+import * as getGlobalPauseStatusApi from "@src/app/server/modules/runtime/api.get-global-pause-status";
+import * as pauseSessionApi from "@src/app/server/modules/flows/api.pause-session";
+import * as resumeSessionApi from "@src/app/server/modules/flows/api.resume-session";
 
-export const pause_v20260506_1 = {
-  get parent() { return observable_v20260504_1; },
-  index: `
-Pause 是 OOC 的“人工检查点”：让对象停止继续执行，把 LLM 的最新输出保留下来，允许人类介入，然后再 resume。
+/**
+ * Pause 概念：人工检查点，让对象在 LLM 返回后停下，允许介入再 resume。
+ *
+ * sources:
+ *  - observable                — `isPausing(thread)` / `setPauseChecker(...)`：thinkloop 调用入口
+ *  - pauseStore                — 进程内全局 + 单 session pause 状态容器
+ *  - enableGlobalPauseApi      — POST /api/runtime/global-pause/enable
+ *  - disableGlobalPauseApi     — POST /api/runtime/global-pause/disable
+ *  - getGlobalPauseStatusApi   — GET  /api/runtime/global-pause/status
+ *  - pauseSessionApi           — POST /api/flows/:sessionId/pause
+ *  - resumeSessionApi          — POST /api/flows/:sessionId/resume
+ */
+export const pause_v20260517_1 = {
+  name: "Pause",
+  sources: {
+    observable,
+    pauseStore,
+    enableGlobalPauseApi,
+    disableGlobalPauseApi,
+    getGlobalPauseStatusApi,
+    pauseSessionApi,
+    resumeSessionApi,
+  },
+  description: `
+Pause 是 OOC 的人工检查点：对象在 LLM 返回后停止继续执行，把最近输出保留下来，
+允许人工介入，再 resume 接着把那一轮未执行的决策跑完。
+`.trim(),
 
-OOC 里有两种“暂停”概念：
+  scopes_v20260517_1: {
+    index: `
+## 两层 pause 范围
 
-1) session 级 pause（暂停单个session下的所有对象）
-- API：
-  - POST /api/flows/:sessionId/pause
-  - POST /api/flows/:sessionId/resume
-- 语义：只影响该对象在某个 session 下的 ThinkLoop；暂停请求会让对象的 running 线程在“LLM 返回后”进入 paused。
+| 范围 | 入口 | 语义 |
+|---|---|---|
+| session | POST /api/flows/:sessionId/pause、/resume | 只影响该 session 下持有 \`thread.persistence.sessionId\` 的线程 |
+| global  | POST /api/runtime/global-pause/{enable,disable,status} | 影响所有对象、所有线程，含无 persistence 的纯内存线程 |
 
-2) 全局 pause（暂停所有对象）
-- API：
-  - POST /api/runtime/global-pause/enable
-  - POST /api/runtime/global-pause/disable
-  - GET  /api/runtime/global-pause/status
-- 语义：当 global-pause 开启，所有对象都会在当前轮次结束后暂停（进入 paused）。
+两层 pause 状态都由 \`pauseStore\` 在 server 进程内维护，互相独立；server 重启不保留。
+`.trim(),
+  },
 
+  checkpoint_v20260517_1: {
+    index: `
 ## 暂停发生在 ThinkLoop 的哪个点
 
-暂停不是“打断 LLM 调用”，而是发生在 LLM 返回之后：
+pause 不打断进行中的 LLM HTTP 请求。检查点固定在 LLM 返回之后、tool calls 执行之前：
 
-- Engine 在每轮构建完 messages 后会写入 \`threads/{id}/llm.input.json\`
-- LLM 返回后，如果 pause 信号被检测到：
-  - 把 LLM 输出缓存到 \`threads/{id}/llm.output.json\`
-  - 将线程状态置为 paused
-  - 本轮不再执行任何 tool calls
+1. Engine 构建 messages 后调用 \`beginLlmLoop\`，写入 \`threads/{id}/debug/llm.input.json\`
+2. LLM 返回，Engine 调用 \`finishLlmLoop\`，写入 \`threads/{id}/debug/llm.output.json\`
+3. 此时调用 \`isPausing(thread)\` 判定：true → 线程状态置 paused、本轮不再执行任何 tool calls
 
-## resume 的语义
+判定逻辑由 app server 启动时通过 \`setPauseChecker(...)\` 注入：
+\`globalPause || isSessionPaused(thread.persistence?.sessionId)\`。
+没有 persistence 的纯内存线程只受 global pause 影响。
+`.trim(),
+  },
 
-resume 不是“从头再跑一轮 LLM”，而是：
+  resume_v20260517_1: {
+    index: `
+## Resume 的语义
 
-- 把 paused 的线程恢复为 running
-- 从 \`threads/{id}/llm.output.json\` 读取上一轮尚未执行的 LLM 决策继续执行
-- 先回放上一轮 assistant text，再按保存的 toolCalls 逐个执行 tool handler
+resume 不重新请求 LLM。session-level \`POST /api/flows/:sessionId/resume\` 做的事：
 
-session 级 \`POST /api/flows/:sessionId/resume\` 的真实语义还包括：
+- 在 pauseStore 中清除该 session 的 pause 标记
+- 扫描 session 下持久化的 \`thread.json\`，找出 \`status === "paused"\` 的线程
+- 清掉 \`inboxSnapshotAtWait\`，把状态翻回 running
+- 为每个恢复的线程派发一个 \`resume-thread\` job，并返回 \`jobIds\` / \`resumedThreadIds\`
+- resume-thread job 从 \`threads/{id}/debug/llm.output.json\` 读取上一轮缓存的 LLM 决策，
+  先回放 assistant text，再按保存的 toolCalls 逐个执行 tool handler
 
-- server 先取消该 session 的 pause 标记
-- 扫描该 session 下所有 paused thread
-- 对可恢复的线程清掉 \`inboxSnapshotAtWait\`（spec 2026-05-14 后 waitingType / awaitingChildren 已删），把状态翻回 running
-- 为每个线程补一个 \`resume-thread\` job，并返回 \`jobIds\` / \`resumedThreadIds\`
+因此 resume 恢复的是"已拿到 LLM 输出、但还没来得及执行的那半轮工作"。
+`.trim(),
+  },
 
-因此 resume 恢复的是“已拿到 LLM 输出、但还没来得及执行的那半轮工作”，不是重新请求一次模型。
+  controlPlane_v20260517_1: {
+    index: `
+## 控制面边界
 
-## 运行时边界
-
-- session pause 与 global pause 都是 app server 进程内状态；server 重启后不会自动保留。
-- pause 请求本身不会中断当前中的 LLM HTTP 请求；真正暂停要等本轮 think 走到 pause 检查点。
-- observable / thinkloop 并不知道 session pause 的来源，它只调用 \`isPausing(thread)\`；具体判定由 app server 启动时通过 \`setPauseChecker(...)\` 注入。
-- 当前注入逻辑是：\`globalPause || isSessionPaused(thread.persistence?.sessionId)\`；因此**没有 persistence/sessionId 的纯内存线程只受 global pause 影响，不受 session pause 影响。**
-- session resume 当前不是维护一份独立 paused-thread 注册表，而是扫描 session 下持久化的 \`thread.json\`，找出 \`status === "paused"\` 的线程后逐个恢复。
-
-## Web 控制面当前如何使用 pause
-
-- session pause / resume 已经接入 chat composer 左下角按钮；
-- global pause / resume 已经接入 MainLogo 顶部状态条；
-- UI 不自己缓存另一套 pause 真相，而是直接读取 flows/runtime API 返回值。
-
-这背后的实现原则是：**pause 是运行时状态，不是纯 UI 状态。**
-
-因此：
-
-- 真正的 pause 语义必须由 engine / app server 决定；
-- web 只能查询、触发、展示；
-- 一旦 pause 被提升成控制面能力，就必须提供 status API，而不仅是 enable/disable 的写操作。
-`,
+- pause 是运行时状态，不是 UI 状态：真值由 \`pauseStore\` 持有，web 只读取与触发。
+- session pause / resume 接入 chat composer 左下角按钮。
+- global pause / resume 接入 MainLogo 顶部状态条。
+- 一旦 pause 被提升成控制面能力，必须同时提供 \`GET status\`，而不只是 enable/disable 的写入口。
+- observable 与 thinkloop 不知道 pause 来源，只调用 \`isPausing(thread)\`；
+  具体判定由 app server 在启动时注入。这让 observable 在纯内存测试与控制面 server 下复用同一套接口。
+`.trim(),
+  },
 };
