@@ -44,21 +44,31 @@ server 重启不保留——属于控制面状态而非 world 持久化配置。
     index: `
 ## 进程内运行时核心
 
-\`@src/observable\` 维护以下易失状态：
+\`@src/observable\` 维护若干易失状态并对外暴露一组 API。详见两个子节点。
+`.trim(),
+
+    volatileState_v20260517_1: {
+      index: `
+### 易失状态
 
 - \`latestLlmObservation\`：最近一次输入/输出快照
 - \`debugEnabled\`：loop 级 debug 开关
 - \`loopCounters\`：每线程的轮次计数器；持久化线程按
   \`baseDir:sessionId:objectId:threadId\` 计数，纯内存线程退化到 \`ephemeral:\${id}\`
 - \`pauseChecker\`：由 app server 注入的 pause 判定函数
+`.trim(),
+    },
 
-对外 API：
+    publicApi_v20260517_1: {
+      index: `
+### 对外 API
 
 - \`enableDebug() / disableDebug() / getDebugStatus()\`
 - \`setPauseChecker() / isPausing()\`
 - \`getLatestLlmObservation() / clearLatestLlmObservation() / clearObservableDebugState()\`
 - \`beginLlmLoop() / finishLlmLoop()\`
 `.trim(),
+    },
   },
 
   fileBoundary_v20260517_1: {
@@ -81,17 +91,44 @@ server 重启不保留——属于控制面状态而非 world 持久化配置。
     index: `
 ## 控制面层
 
-app server 把 observable 的 pause / debug 状态提升成控制面 API，允许 web
-直接查询与切换，而不是只在进程内部调用函数：
+app server 把 observable 的 pause / debug 状态提升成控制面 API。
+详见三个子节点：提升出的 API 列表、观察对象层级、整体目标。
+`.trim(),
+
+    apis_v20260517_1: {
+      index: `
+### 提升的 API
 
 - pause：session / global 两层范围（详见 pause 子概念）
 - debug：enable / disable / status + 文件读取（详见 debug 子概念）
 - context-visibility：在 debug viewer 中解释每轮输入窗口的组成（详见 contextVisibility 子概念）
 
-观察对象层级：thread tree（结构、节点状态、父子关系）、context（本轮输入窗口）、
-tool calls（行动）、errors（失败原因与堆栈）。Observable 的目标是让"对象为什么这么做"
-可解释、"对象做了什么"可追溯、"对象是否真的完成"可验证。
+允许 web 直接查询与切换，而不是只在进程内部调用函数。
 `.trim(),
+    },
+
+    observationLayers_v20260517_1: {
+      index: `
+### 观察对象层级
+
+- thread tree：结构、节点状态、父子关系
+- context：本轮输入窗口
+- tool calls：行动
+- errors：失败原因与堆栈
+`.trim(),
+    },
+
+    goals_v20260517_1: {
+      index: `
+### 整体目标
+
+Observable 的目标是让：
+
+- "对象为什么这么做" 可解释
+- "对象做了什么" 可追溯
+- "对象是否真的完成" 可验证
+`.trim(),
+    },
   },
 
   concepts: {

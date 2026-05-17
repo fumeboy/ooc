@@ -66,34 +66,82 @@ stones/supervisor/
     index: `
 ## 典型 Session 流程
 
+按 6 个阶段展开，每阶段对应一组 supervisor 与他者交互的动作。详见子节点。
+`.trim(),
+
+    phase1Initiate_v20260517_1: {
+      index: `
+### 1. user 发起
+
 \`\`\`
-1. user talk("supervisor", "实现 X 功能")
-
-2. supervisor 读消息：
-   - createIssue: "实现 X 功能"
-   - 分析涉及后端 + 前端
-   - talk("alan", "请设计 X 的后端方案", wait=true)
-   - talk("iris", "请设计 X 的前端方案", wait=true)
-
-3. alan / iris 各自处理，完成后 talk(target=creator, summary)
-
-4. supervisor 收到回复，inbox 含 alan + iris 的报告：
-   - createTask: "实现 X 后端", issueRefs=[issue-001]
-   - createTask: "实现 X 前端", issueRefs=[issue-001]
-   - talk("coder",    task 详情, wait=true)
-   - talk("ui-coder", task 详情, wait=true)
-
-5. coder / ui-coder 完成后：
-   - updateTaskStatus("task-002", "done")
-   - updateTaskStatus("task-003", "done")
-   - talk("bruce", "请体验测试", wait=true)
-
-6. bruce 完成后：
-   - updateIssueStatus("issue-001", "confirming")
-   - setIssueNewInfo("issue-001", true)
-   - talk("user", 摘要)
-   - end
+user talk("supervisor", "实现 X 功能")
 \`\`\`
 `.trim(),
+    },
+
+    phase2Plan_v20260517_1: {
+      index: `
+### 2. supervisor 规划与征询设计
+
+\`\`\`
+supervisor 读消息：
+  - createIssue: "实现 X 功能"
+  - 分析涉及后端 + 前端
+  - talk("alan", "请设计 X 的后端方案", wait=true)
+  - talk("iris", "请设计 X 的前端方案", wait=true)
+\`\`\`
+`.trim(),
+    },
+
+    phase3DesignReports_v20260517_1: {
+      index: `
+### 3. 设计回报
+
+\`\`\`
+alan / iris 各自处理，完成后 talk(target=creator, summary)
+\`\`\`
+`.trim(),
+    },
+
+    phase4Dispatch_v20260517_1: {
+      index: `
+### 4. supervisor 分派执行
+
+\`\`\`
+supervisor 收到回复，inbox 含 alan + iris 的报告：
+  - createTask: "实现 X 后端", issueRefs=[issue-001]
+  - createTask: "实现 X 前端", issueRefs=[issue-001]
+  - talk("coder",    task 详情, wait=true)
+  - talk("ui-coder", task 详情, wait=true)
+\`\`\`
+`.trim(),
+    },
+
+    phase5VerifyTest_v20260517_1: {
+      index: `
+### 5. 执行完成与体验测试
+
+\`\`\`
+coder / ui-coder 完成后：
+  - updateTaskStatus("task-002", "done")
+  - updateTaskStatus("task-003", "done")
+  - talk("bruce", "请体验测试", wait=true)
+\`\`\`
+`.trim(),
+    },
+
+    phase6Close_v20260517_1: {
+      index: `
+### 6. 收尾与汇报
+
+\`\`\`
+bruce 完成后：
+  - updateIssueStatus("issue-001", "confirming")
+  - setIssueNewInfo("issue-001", true)
+  - talk("user", 摘要)
+  - end
+\`\`\`
+`.trim(),
+    },
   },
 };

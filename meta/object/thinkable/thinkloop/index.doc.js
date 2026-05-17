@@ -39,6 +39,13 @@ ThinkLoop 是 Object 的思考引擎，单轮顺序为 感知 → 思考 → 行
     index: `
 ## 单轮流程
 
+分三个子节点：高层抽象、调度边界、Engine 单轮详细顺序。
+`.trim(),
+
+    abstract_v20260517_1: {
+      index: `
+### 高层抽象
+
 \`\`\`
 感知   ──  构建 Context（context-builder）
   ↓
@@ -50,10 +57,20 @@ ThinkLoop 是 Object 的思考引擎，单轮顺序为 感知 → 思考 → 行
   ↓
 循环   ──  Scheduler 驱动该线程进入下一轮（或切换状态）
 \`\`\`
+`.trim(),
+    },
 
-ThinkLoop 是**单个 thread 内的异步循环**：Scheduler 为每个 running 线程独立地调用
-Engine 跑一轮。
+    schedulingBoundary_v20260517_1: {
+      index: `
+### 调度边界
 
+ThinkLoop 是**单个 thread 内的异步循环**：Scheduler 为每个 running 线程
+独立地调用 Engine 跑一轮。多线程的并行性由 Scheduler 决定，不属于 thinkloop 本身。
+`.trim(),
+    },
+
+    engineSteps_v20260517_1: {
+      index: `
 ### Engine 单轮详细顺序
 
 \`\`\`
@@ -95,6 +112,7 @@ Engine.runThreadIteration(threadId):
      case "compress": handleCompress(args)
 \`\`\`
 `.trim(),
+    },
   },
 
   toolPrimitives_v20260517_1: {
@@ -127,22 +145,42 @@ thinkable/context/process-events 概念。
     index: `
 ## thinking 的设计目标与实现差距
 
+分两个子节点：设计意图（不进 Context 的三条理由）与现状映射。
+`.trim(),
+
+    designIntent_v20260517_1: {
+      index: `
+### 设计意图
+
 设计意图上，thinking 不应进入下一轮 Context：
 
-1. **套娃风险**：LLM 看到自己之前的 thinking，可能开始 meta-thinking（思考自己的思考），失控
+1. **套娃风险**：LLM 看到自己之前的 thinking，可能开始 meta-thinking
+   （思考自己的思考），失控
 2. **Context 爆炸**：thinking 通常比 content 长 2-5 倍，注入会急速耗 token
-3. **价值低**：thinking 是"本轮的推理过程"——过了就过了；有价值的结论应通过 content /
-   tool_use 显式表达
-
-实现层面：\`thinking\` 事件目前会被转换成 assistant message 继续进入下一轮 transcript。
-设计目标与实现存在差距；后续若收敛，以源码改动为准。
+3. **价值低**：thinking 是"本轮的推理过程"——过了就过了；有价值的结论
+   应通过 content / tool_use 显式表达
 `.trim(),
+    },
+
+    currentMapping_v20260517_1: {
+      index: `
+### 现状映射
+
+\`thinking\` 事件在 transcript 转换中被映射成 assistant message 进入下一轮
+transcript（详见 \`thinkable.context.processEvents.transcriptMapping.thinkingMapping\`）。
+`.trim(),
+    },
   },
 
   errorHandling_v20260517_1: {
     index: `
 ## 错误处理（分级）
 
+分三个子节点：Tool Call 失败、严重错误、实现补充语义。
+`.trim(),
+
+    toolCallFailure_v20260517_1: {
+      index: `
 ### Tool Call 失败
 
 \`\`\`
@@ -152,7 +190,11 @@ catch (error):
   // 不自动 fail 线程；写入 function_call_output(ok=false) 与错误提示 inject，
   // 然后结束本轮，把修复权交给下一轮 LLM
 \`\`\`
+`.trim(),
+    },
 
+    severeFailure_v20260517_1: {
+      index: `
 ### 严重错误（如 LLM 调用失败 / buildContext 失败）
 
 \`\`\`
@@ -162,25 +204,66 @@ catch (error):
   setNodeStatus("failed")
   // 失败时由系统向 creator 投递一条 inbox 消息告知失败原因
 \`\`\`
+`.trim(),
+    },
 
+    implementationNotes_v20260517_1: {
+      index: `
 ### 实现补充语义
 
 - 连续两轮若 assistant text 完全相同，thinkloop 做去重，不再追加重复 text event
 - 多个 tool call 按顺序串行执行，不做并发派发
-- thinkloop 与 observable 的 \`beginLlmLoop\` / \`finishLlmLoop\` 对接；pause / ok / error
-  三类结局都会进入 loop meta
+- thinkloop 与 observable 的 \`beginLlmLoop\` / \`finishLlmLoop\` 对接；
+  pause / ok / error 三类结局都会进入 loop meta
 `.trim(),
+    },
   },
 
   collaboration_v20260517_1: {
     index: `
 ## 与其他维度的协作
 
-- 感知阶段：context-builder 组装 Context（详见 thinkable/context）
-- 思考阶段：LLM Provider 抽象（Provider 接口由 thinkable/llm 实现）
-- 行动阶段：tool calls 由 Engine handler 分派到 executable 维度
-- 记录阶段：events 等数据的落盘由 storable / persistable 维度负责
-- 调度阶段：Scheduler 决定下一个执行的线程（详见 thread/scheduler）
+按 ThinkLoop 单轮 5 个阶段分别落到其它维度。详见子节点。
 `.trim(),
+
+    perceive_v20260517_1: {
+      index: `
+### 感知阶段
+
+context-builder 组装 Context（详见 thinkable/context）。
+`.trim(),
+    },
+
+    think_v20260517_1: {
+      index: `
+### 思考阶段
+
+LLM Provider 抽象（Provider 接口由 thinkable/llm 实现）。
+`.trim(),
+    },
+
+    act_v20260517_1: {
+      index: `
+### 行动阶段
+
+tool calls 由 Engine handler 分派到 executable 维度。
+`.trim(),
+    },
+
+    record_v20260517_1: {
+      index: `
+### 记录阶段
+
+events 等数据的落盘由 storable / persistable 维度负责。
+`.trim(),
+    },
+
+    schedule_v20260517_1: {
+      index: `
+### 调度阶段
+
+Scheduler 决定下一个执行的线程（详见 thread/scheduler）。
+`.trim(),
+    },
   },
 };

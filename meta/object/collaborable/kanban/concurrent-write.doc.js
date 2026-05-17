@@ -67,19 +67,40 @@ B 写回  ← A 的 comment 丢失
 ## SerialQueue：per-key 串行化
 
 通用 \`SerialQueue<K>\` 工具：同 key 任务按 FIFO 串行；不同 key 互不阻塞。
+详见三个子节点：接口签名、并发语义、三条设计要点。
+`.trim(),
+
+    signature_v20260517_1: {
+      index: `
+### 接口签名
 
 \`\`\`typescript
 class SerialQueue<K = string> {
   enqueue<T>(key: K, fn: () => Promise<T>): Promise<T>;
 }
 \`\`\`
+`.trim(),
+    },
 
-设计要点：
+    concurrencySemantics_v20260517_1: {
+      index: `
+### 并发语义
+
+- 同 key 的多次 enqueue 按 FIFO 严格串行
+- 不同 key 的 enqueue 互不阻塞，可在不同 microtask 并发执行
+- 同一 key 的链条长度只受调用速率影响，无显式上限
+`.trim(),
+    },
+
+    designPoints_v20260517_1: {
+      index: `
+### 设计要点
 
 - **错误隔离**：一个任务 reject 不污染同 key 后续任务
 - **返回值透传**：泛型保留 fn 的返回类型
 - **自然 GC**：内部只维护当前链尾 Promise
 `.trim(),
+    },
   },
 
   keyChoice_v20260517_1: {
@@ -87,9 +108,22 @@ class SerialQueue<K = string> {
 ## 看板写入的 key 选择
 
 key 选 \`sessionDir\`——同一 Session 内的 Issue / Task / Comment 写入串行；
-不同 Session 互不阻塞。
+不同 Session 互不阻塞。具体见三个子节点：边界依据、调用形态、原子性保证。
+`.trim(),
 
-调用方式：
+    rationale_v20260517_1: {
+      index: `
+### 边界依据
+
+session 是看板数据的天然隔离边界——issues / tasks / comments 均挂在
+\`flows/{sid}/\` 之下。以 sessionDir 为 key 可同时满足"同 session 内串行"
+与"跨 session 并行"两条诉求。
+`.trim(),
+    },
+
+    callShape_v20260517_1: {
+      index: `
+### 调用形态
 
 \`\`\`typescript
 const queue = new SerialQueue<string>();
@@ -99,9 +133,17 @@ await queue.enqueue(sessionDir, async () => {
   await Bun.write(..., JSON.stringify(data));
 });
 \`\`\`
+`.trim(),
+    },
+
+    atomicity_v20260517_1: {
+      index: `
+### 原子性
 
 读-改-写三步在队列的一次回合中原子完成；其他并发写入排队等待。
+"原子"指的是逻辑串行，并不是文件系统层 fsync 原子（见 \`limits\` 子节点）。
 `.trim(),
+    },
   },
 
   indexSync_v20260517_1: {
@@ -118,7 +160,7 @@ await queue.enqueue(sessionDir, async () => {
     index: `
 ## 失败处理
 
-enqueue 的 fn 抛错时：
+enqueue 的 fn 抛错时的三条规则：
 
 - 错误向上抛（调用方处理）
 - 队列继续（下一个写入正常执行——链尾被 \`.catch(() => {})\` 包装吞错）

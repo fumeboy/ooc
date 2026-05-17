@@ -77,14 +77,36 @@ flows/{sessionId}/
     index: `
 ## 谁能写
 
-| 写入方 | 通过什么机制 |
-|---|---|
-| supervisor | 拥有 \`session-kanban\` 专属 knowledge + server 模块（详见 collaborable.supervisor）|
-| 其他 Object | 通过 talkable 下 issue-discussion 相关 knowledge（仅评论 / 讨论，不能改 Issue/Task 结构与状态）|
-| user | 后端 HTTP API 直接写 |
-
+三类写入方各自的入口与能力面见子节点。
 三方写入需通过串行化队列保护，详见 \`collaborable.kanban.concurrentWrite\`。
 `.trim(),
+
+    supervisorWriter_v20260517_1: {
+      index: `
+### supervisor
+
+拥有 \`session-kanban\` 专属 knowledge + server 模块，可创建 / 改状态 /
+改结构。详见 \`collaborable.supervisor\`。
+`.trim(),
+    },
+
+    objectWriter_v20260517_1: {
+      index: `
+### 其他 Object
+
+通过 talkable 下 issue-discussion 相关 knowledge 仅能评论 / 讨论，
+不能改 Issue / Task 结构与状态。
+`.trim(),
+    },
+
+    userWriter_v20260517_1: {
+      index: `
+### user
+
+通过后端 HTTP API 直接写。常见入口如
+\`POST /api/sessions/{sid}/issues/{id}/comments\`、\`/ack\` 等。
+`.trim(),
+    },
   },
 
   hasNewInfoMechanism_v20260517_1: {
@@ -139,6 +161,13 @@ Session 结束后看板数据保留在磁盘，但不再被加载——
     index: `
 ## 与 talk 的边界
 
+详见两个子节点：场景对照表与经验规则。
+`.trim(),
+
+    scenarioTable_v20260517_1: {
+      index: `
+### 场景对照表
+
 | 场景 | 用 talk | 用 kanban |
 |---|---|---|
 | 一对一信息传递 | ✓ | ✗ |
@@ -146,13 +175,18 @@ Session 结束后看板数据保留在磁盘，但不再被加载——
 | 跟踪执行进度 | ✗ | ✓ Task + subtasks |
 | 跨对象协调 | 临时协调 | 结构化协调（多 Object 跨多任务）|
 | 让用户看见全貌 | 需要 Object 主动汇报 | 直接前端可视化 |
+`.trim(),
+    },
 
-经验规则：
+    heuristics_v20260517_1: {
+      index: `
+### 经验规则
 
 - 临时一两轮交互 → talk
 - 需要多方持续关注 + 状态机推进 → kanban
 - 二者经常并用：kanban 提供结构骨架，talk 在每个节点细化沟通
 `.trim(),
+    },
   },
 
   concepts: {

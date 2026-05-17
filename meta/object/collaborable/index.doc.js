@@ -28,20 +28,42 @@ export const collaborable_v20260504_1 = {
     flowObject,
   },
   description: `
-Collaborable 描述 Object 的协作与社交能力。
+Collaborable 描述 Object 的协作与社交能力。按子字段展开（详见各子节点）：
 
-四个子领域：
+- subdomains — talk / relation / kanban / role 四个子领域
+- layering — talk 与 kanban 在使用边界上的分工
+- supervisor — supervisor 在协作网络中的特殊角色
+`.trim(),
+
+  subdomains_v20260517_1: {
+    index: `
+## 四个子领域
 
 - talk      — 一对一通信：消息投递、inbox、跨对象语义、wait 同步
 - relation  — 对象的有向连接：peer 文件、局部关系网、有向 / 局部知识原则
 - kanban    — Session 级结构化协作：Issue / Task / Comment + 并发写入
 - role      — 协作网络中的角色定位，supervisor 是其中一个特化角色
+`.trim(),
+  },
+
+  layering_v20260517_1: {
+    index: `
+## talk 与 kanban 的分工
 
 talk 是点对点；kanban 把 Session 内的多方协作结构化。
 当一个话题需要多轮讨论 / 多人参与 / 长期跟踪时，需要 Issue + Task。
-supervisor 是 OOC 系统的默认协调对象，是 user 的默认对话目标，
-了解 OOC 系统的运行原理并能代理 user 操作系统。
+详细对照见 \`collaborable.kanban.vsTalk\`。
 `.trim(),
+  },
+
+  supervisor_v20260517_1: {
+    index: `
+## supervisor 在协作网络中
+
+supervisor 是 OOC 系统的默认协调对象，是 user 的默认对话目标，
+了解 OOC 系统的运行原理并能代理 user 操作系统。详见 \`collaborable.supervisor\`。
+`.trim(),
+  },
 
   concepts: {
     talk: talk_v20260506_1,

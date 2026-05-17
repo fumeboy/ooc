@@ -40,88 +40,210 @@ debug 与 pause 互相独立：debug 不暂停执行，pause 也不要求写 deb
     index: `
 ## 开关
 
-进程内 API（\`observable\` 暴露）：
+分三层：进程内 API、HTTP 控制面、状态生命周期。详见子节点。
+`.trim(),
+
+    processApi_v20260517_1: {
+      index: `
+### 进程内 API（\`observable\` 暴露）
 
 - \`enableDebug()\`
 - \`disableDebug()\`
 - \`getDebugStatus()\`
+`.trim(),
+    },
 
-app server 把它们包装成控制面 HTTP：
+    httpControlPlane_v20260517_1: {
+      index: `
+### HTTP 控制面
 
 - POST /api/runtime/debug/enable
 - POST /api/runtime/debug/disable
 - GET  /api/runtime/debug/status
-
-\`debugEnabled\` 是进程内布尔，server 重启不保留——属于控制面状态，不是 world 持久化配置。
 `.trim(),
+    },
+
+    stateLifecycle_v20260517_1: {
+      index: `
+### 状态生命周期
+
+\`debugEnabled\` 是进程内布尔，server 重启不保留——属于控制面状态，
+不是 world 持久化配置。
+`.trim(),
+    },
   },
 
   layout_v20260517_1: {
     index: `
 ## 文件落盘布局
 
-线程只要带 persistence ref，每轮就覆盖写最近一次快照：
+分三组：最近一次快照、debug 留档、轮次编号规则。
+`.trim(),
+
+    latestSnapshot_v20260517_1: {
+      index: `
+### 最近一次快照
+
+线程只要带 persistence ref，每轮就覆盖写：
 
 - \`threads/{threadId}/debug/llm.input.json\`
 - \`threads/{threadId}/debug/llm.output.json\`
 
-debug 开启后，每轮额外写留档文件：
+与 debug 开关无关。
+`.trim(),
+    },
+
+    loopArchive_v20260517_1: {
+      index: `
+### debug 留档（每轮）
+
+debug 开启后，每轮额外写：
 
 - \`threads/{threadId}/debug/loop_NNNN.input.json\`
 - \`threads/{threadId}/debug/loop_NNNN.output.json\`
 - \`threads/{threadId}/debug/loop_NNNN.meta.json\`
+`.trim(),
+    },
+
+    loopNumbering_v20260517_1: {
+      index: `
+### 轮次编号规则
 
 轮次编号固定 4 位 zero-pad（\`0001 / 0002 / ...\`），由 \`debugFile\` helper 统一生成；
 loop 计数 key 为 \`baseDir:sessionId:objectId:threadId\`，纯内存线程退化到 \`ephemeral:\${id}\`。
 `.trim(),
+    },
   },
 
   recordSchema_v20260517_1: {
     index: `
 ## 盘面 record schema
 
-落盘不是 provider 原始 payload，而是归一化后的调试记录：
+落盘不是 provider 原始 payload，而是归一化后的调试记录。
+分 input / output / meta 三种 record，加上失败时的部分写入边界。
+`.trim(),
 
-- input：\`{ threadId, inputItems, contextSnapshot }\`
-  - 不包含 provider 请求里的 \`tools\` / \`instructions\`
-- output：\`{ threadId, outputItems, provider, model }\`
-  - \`outputItems\` 从 \`thinking / text / toolCalls\` 投影出
-- meta：\`threadId / loopIndex / model / provider / startedAt / finishedAt / latencyMs /
-  messageCount / toolCount / toolCallCount / contextBytes / resultTextBytes /
-  status (ok | paused | error) / error\`
+    inputRecord_v20260517_1: {
+      index: `
+### input record
 
-边界：若本轮在拿到 provider result 之前失败，debug 模式仍会写 \`loop_NNNN.meta.json\`
+\`{ threadId, inputItems, contextSnapshot }\`
+
+- 不包含 provider 请求里的 \`tools\` / \`instructions\`
+- \`inputItems\` 与 ContextVisibility 概念中所述同源
+`.trim(),
+    },
+
+    outputRecord_v20260517_1: {
+      index: `
+### output record
+
+\`{ threadId, outputItems, provider, model }\`
+
+- \`outputItems\` 从 \`thinking / text / toolCalls\` 投影出
+- provider / model 字段固定为本轮使用的 LLM 通道与具体模型名
+`.trim(),
+    },
+
+    metaRecord_v20260517_1: {
+      index: `
+### meta record
+
+\`threadId / loopIndex / model / provider / startedAt / finishedAt / latencyMs /
+messageCount / toolCount / toolCallCount / contextBytes / resultTextBytes /
+status (ok | paused | error) / error\`
+`.trim(),
+    },
+
+    partialWriteBoundary_v20260517_1: {
+      index: `
+### 失败时的边界
+
+若本轮在拿到 provider result 之前失败，debug 模式仍会写 \`loop_NNNN.meta.json\`
 （status=error），但不保证存在对应 \`loop_NNNN.output.json\`。
 `.trim(),
+    },
   },
 
   controlPlaneReads_v20260517_1: {
     index: `
 ## 控制面读取接口
 
-- GET /api/runtime/flows/:sessionId/objects/:objectId/threads/:threadId/debug
-  返回最近一次快照（\`llm.input.json\` + \`llm.output.json\`）
-- GET /api/runtime/flows/:sessionId/objects/:objectId/threads/:threadId/debug/loops/:loopIndex
-  返回指定轮次留档（\`loop_NNNN.input/output/meta.json\`）
-
-两条 API 允许通过 query \`baseDir\` 覆盖世界根目录；未传时回退 \`process.cwd()\`。
-缺文件返回 404；JSON 损坏返回 500。
+两个 endpoint + 一组共同约定。详见子节点。
 `.trim(),
+
+    latestEndpoint_v20260517_1: {
+      index: `
+### GET .../debug
+
+\`GET /api/runtime/flows/:sessionId/objects/:objectId/threads/:threadId/debug\`
+
+返回最近一次快照（\`llm.input.json\` + \`llm.output.json\`）。
+`.trim(),
+    },
+
+    loopEndpoint_v20260517_1: {
+      index: `
+### GET .../debug/loops/:loopIndex
+
+\`GET /api/runtime/flows/:sessionId/objects/:objectId/threads/:threadId/debug/loops/:loopIndex\`
+
+返回指定轮次留档（\`loop_NNNN.input/output/meta.json\`）。
+`.trim(),
+    },
+
+    conventions_v20260517_1: {
+      index: `
+### 共同约定
+
+- 两条 API 允许通过 query \`baseDir\` 覆盖世界根目录；未传时回退 \`process.cwd()\`
+- 缺文件返回 404
+- JSON 损坏返回 500
+`.trim(),
+    },
   },
 
   webViewer_v20260517_1: {
     index: `
 ## Web 调试视图
 
-debug 不只是"文件会多写一点东西"，它是人工操作面上的一等状态：
-
-- \`llm.input.json\` / \`loop_*.input.json\` 有专门 viewer：按 \`inputItems\` 分组展示
-  本轮送入 provider 的 message / function_call / function_call_output / reasoning。
-- role=system 的 message 进一步解析其中的 XML context，展开为树形节点与详情面板。
-- viewer 同时展示 XML attrs / comments、字符数与粗略 token 估算；JSON 结构异常时
-  回退原始只读视图。
-- MainLogo 接入 \`/api/runtime/debug/{status,enable,disable}\`：未开启灰、开启蓝；
-  叠加全局 pause 时进入蓝橙渐变。
+debug 不只是"文件会多写一点东西"，它是人工操作面上的一等状态。
+分四个视角：viewer 主面板、XML 树解析、显示扩充、状态条入口。
 `.trim(),
+
+    mainPanel_v20260517_1: {
+      index: `
+### viewer 主面板
+
+\`llm.input.json\` / \`loop_*.input.json\` 有专门 viewer：按 \`inputItems\` 分组展示
+本轮送入 provider 的 message / function_call / function_call_output / reasoning。
+`.trim(),
+    },
+
+    xmlTree_v20260517_1: {
+      index: `
+### XML context 树解析
+
+role=system 的 message 进一步解析其中的 XML context，展开为树形节点与详情面板。
+`.trim(),
+    },
+
+    enrichment_v20260517_1: {
+      index: `
+### 显示扩充
+
+viewer 同时展示 XML attrs / comments、字符数与粗略 token 估算；
+JSON 结构异常时回退原始只读视图。
+`.trim(),
+    },
+
+    mainLogoStatus_v20260517_1: {
+      index: `
+### MainLogo 状态条
+
+MainLogo 接入 \`/api/runtime/debug/{status,enable,disable}\`：
+未开启灰、开启蓝；叠加全局 pause 时进入蓝橙渐变。
+`.trim(),
+    },
   },
 };

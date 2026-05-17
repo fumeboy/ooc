@@ -30,6 +30,13 @@ Comment 是 Issue 下的评论单元。一经创建即不可修改，是 OOC 行
     index: `
 ## 数据结构
 
+Comment 由两部分构成：字段定义（\`fields\`）与存储位置（\`storage\`）。
+`.trim(),
+
+    fields_v20260517_1: {
+      index: `
+### 字段
+
 \`\`\`typescript
 interface Comment {
   id: string;            // 在所属 Issue 内自增，如 "comment-001"
@@ -39,10 +46,19 @@ interface Comment {
   createdAt: string;     // ISO 时间戳
 }
 \`\`\`
-
-存储位置：\`flows/{sid}/issues/{issueId}.json\` 的 \`comments\` 数组；
-同时镜像到 \`flows/{sid}/issues/index.json\` 中对应 Issue 的 comments 字段。
 `.trim(),
+    },
+
+    storage_v20260517_1: {
+      index: `
+### 存储位置
+
+- \`flows/{sid}/issues/{issueId}.json\` 的 \`comments\` 数组
+- 同时镜像到 \`flows/{sid}/issues/index.json\` 中对应 Issue 的 comments 字段
+
+镜像写入由 SerialQueue 保护（详见 \`collaborable.kanban.concurrentWrite.indexSync\`）。
+`.trim(),
+    },
   },
 
   immutability_v20260517_1: {
@@ -50,30 +66,53 @@ interface Comment {
 ## 不可变性
 
 Comment 没有 \`updatedAt\` 字段。需要纠正时发新 comment 说明，原 comment 保留。
-
-两个核心理由：
-
-- **诚实**：如果允许修改，作者可能事后美化自己说过的话；不可变让历史是客观事实
-- **反思素材的真实性**：反思机制（见 reflectable）需要真实历史作为素材；
-  若评论可改则没有"真实的历史"，只有"当前想让人相信的历史"，反思失去根基
+两个核心理由见子节点。
 `.trim(),
+
+    reasonHonesty_v20260517_1: {
+      index: `
+### 诚实
+
+如果允许修改，作者可能事后美化自己说过的话；不可变让历史成为客观事实，
+而不是当前可被改写的版本。
+`.trim(),
+    },
+
+    reasonReflection_v20260517_1: {
+      index: `
+### 反思素材的真实性
+
+反思机制（详见 reflectable）需要真实历史作为素材；若评论可改，则没有
+"真实的历史"，只有"当前想让人相信的历史"，反思失去根基。
+`.trim(),
+    },
   },
 
   creation_v20260517_1: {
     index: `
 ## 创建 Comment
 
-任何 Object（含 user）都可创建评论：
+任何 Object（含 user）都可创建评论。详见两个子节点：调用入口与系统自动填充字段。
+`.trim(),
+
+    entries_v20260517_1: {
+      index: `
+### 调用入口
 
 - Object 通过 talkable 下 issue-discussion 相关的 server 方法
 - user 通过后端 HTTP API：\`POST /api/sessions/{sid}/issues/{issueId}/comments\`
+`.trim(),
+    },
 
-系统自动填充：
+    autoFields_v20260517_1: {
+      index: `
+### 系统自动填充
 
 - \`id\` —— 在所属 Issue 的 comments 内自增
 - \`author\` —— 调用方上下文中的对象名
 - \`createdAt\` —— 当前时间
 `.trim(),
+    },
   },
 
   mentions_v20260517_1: {
@@ -81,15 +120,37 @@ Comment 没有 \`updatedAt\` 字段。需要纠正时发新 comment 说明，原
 ## mentions 机制
 
 \`mentions\` 是作者显式传入的对象列表，系统不从 content 自动解析 \`@name\`。
-
-效果：
-
-1. **消息投递**：mentions 中每个对象（剔除作者自身）通过 inbox 收到通知
-   \`[@you-name 在 issue-XXX 中提到你]\`
-2. **前端高亮**：评论渲染时 \`@name\` 显示为可点击链接
-
-被 @ 的对象不会自动加入 \`Issue.participants\`，避免被 @ 即被绑定到长期跟踪列表。
+详见三个子节点：消息投递、前端渲染、participants 边界。
 `.trim(),
+
+    delivery_v20260517_1: {
+      index: `
+### 消息投递
+
+mentions 中每个对象（剔除作者自身）通过 inbox 收到通知：
+
+\`\`\`
+[@you-name 在 issue-XXX 中提到你]
+\`\`\`
+`.trim(),
+    },
+
+    rendering_v20260517_1: {
+      index: `
+### 前端高亮
+
+评论渲染时 \`@name\` 显示为可点击链接，点击跳转到对应 Object 的详情页。
+`.trim(),
+    },
+
+    participantsBoundary_v20260517_1: {
+      index: `
+### 与 participants 的边界
+
+被 @ 的对象**不会**自动加入 \`Issue.participants\`，避免被 @ 即被绑定到
+长期跟踪列表。需要长期参与时由作者显式调用 updateIssue 添加。
+`.trim(),
+    },
   },
 
   sideEffects_v20260517_1: {
