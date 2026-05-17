@@ -119,18 +119,20 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
     // contextWindows 里看到它仍 open——比纯靠协议文本"决策树"更直观。
     // 复用现成的 todo_window，不引入新概念（见 docs/solutions/conventions/
     // reuse-before-introducing-new-concepts-2026-05-17.md）。
-    // 本次有意不做 auto-close / onCommandPath=["wait"]——先看裸 todo 提示的效果。
+    // 本次仍不做 auto-close / onCommandPath=["wait"]——只调措辞试图分清"回复 creator"
+    // 与"close 本待办"两件事，看 LLM 是否还把后者当成可拖延的额外步骤。
     const replyTodo: TodoWindow = {
       id: generateWindowId("todo"),
       type: "todo",
-      title: "回复创建者",
+      title: "未完成：回复创建者",
       status: "open",
       createdAt: Date.now(),
       content:
         `任务来自创建者（${callerRef.objectId} thread=${callerThread.id}）：` +
         `\n"${deriveCalleeThreadTitle(content, 200)}"` +
-        `\n\n完成任务后通过 creator talk_window 的 say 回复创建者，然后 close 本待办。` +
-        `不要直接 wait/end 而不 say——对面看不到你的结果。`,
+        `\n\n硬约束：执行任何 wait / end 之前，必须先通过 creator talk_window 的 say` +
+        `把结果发回创建者——做了什么、结论是什么、是否需要进一步信息。` +
+        `直接 wait/end 而不 say，对面收不到任何结果，这次任务对外等于没做。`,
     };
     calleeThread.contextWindows = [...calleeThread.contextWindows, replyTodo];
 
