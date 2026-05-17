@@ -31,7 +31,7 @@
 import { readThread, writeThread, createFlowObject } from "../../persistable/index.js";
 import type { ThreadContext, ThreadMessage } from "../../thinkable/context.js";
 import { initContextWindows } from "./init.js";
-import { creatorWindowIdOf, generateWindowId, type TalkWindow, type TodoWindow } from "./types.js";
+import { creatorWindowIdOf, type TalkWindow } from "./types.js";
 
 export interface TalkDeliveryInput {
   caller: { thread: ThreadContext; talkWindow: TalkWindow };
@@ -115,26 +115,10 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
       initialTaskTitle: deriveCalleeThreadTitle(content),
     });
 
-    // Bug 2 最小修：在 callee thread 初始化时挂一条 "回复创建者" 待办，让 LLM 在每轮
-    // contextWindows 里看到它仍 open——比纯靠协议文本"决策树"更直观。
-    // 复用现成的 todo_window，不引入新概念（见 docs/solutions/conventions/
-    // reuse-before-introducing-new-concepts-2026-05-17.md）。
-    // 本次仍不做 auto-close / onCommandPath=["wait"]——只调措辞试图分清"回复 creator"
-    // 与"close 本待办"两件事，看 LLM 是否还把后者当成可拖延的额外步骤。
-    const replyTodo: TodoWindow = {
-      id: generateWindowId("todo"),
-      type: "todo",
-      title: "未完成：回复创建者",
-      status: "open",
-      createdAt: Date.now(),
-      content:
-        `任务来自创建者（${callerRef.objectId} thread=${callerThread.id}）：` +
-        `\n"${deriveCalleeThreadTitle(content, 200)}"` +
-        `\n\n硬约束：执行任何 wait / end 之前，必须先通过 creator talk_window 的 say` +
-        `把结果发回创建者——做了什么、结论是什么、是否需要进一步信息。` +
-        `直接 wait/end 而不 say，对面收不到任何结果，这次任务对外等于没做。`,
-    };
-    calleeThread.contextWindows = [...calleeThread.contextWindows, replyTodo];
+    // 早些时候（6fd12e3）这里还 spawn 过一条 "回复创建者" todo 用作 Bug 2 文本 nudge。
+    // 现在结构性约束（wait 要求 on=合法 IO 来源 window）已接管它的作用——
+    // LLM 不 say 就 wait 会直接 reject。todo 撤除以避免"双保险"带来的冗余。
+    // 详见 docs/superpowers/specs/2026-05-17-wait-requires-dependency-design.md §6。
 
     // 回填 caller talk_window.targetThreadId
     callerWindow.targetThreadId = calleeThreadId;
