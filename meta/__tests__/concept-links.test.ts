@@ -5,14 +5,17 @@
  * 核心：每个概念对象（{ name, description, sources }）的 sources 必须是非空
  * Record<string, ModuleNamespace>，每个 value 必须是一个 module（运行时即对象）。
  *
- * 当前覆盖范围：仅 executable 模块（U2/U3/U4 落地后该文件会自然覆盖到所有
- * executable 子树概念）。后续模块迁移时按需扩展。
+ * 覆盖范围：executable / engineering / thinkable / persistable 四棵子树的合规概念。
+ * 后续模块迁移时按需扩展（参考 docs/meta-source-binding-inventory.md）。
  */
 
 import { describe, expect, it } from "bun:test";
 import { walkConcepts, type WalkedConcept } from "./walk-concepts";
 
 import { executable_v20260504_1 } from "@meta/object/executable/index.doc";
+import { engineering_v20260506_1 } from "@meta/engineering/index.doc";
+import { thinkable_v20260504_1 } from "@meta/object/thinkable/index.doc";
+import { persistable_v20260504_1 } from "@meta/object/persistable/index.doc";
 import { engineering_v20260506_1 } from "@meta/engineering/index.doc";
 
 describe("walkConcepts helper", () => {
@@ -147,5 +150,55 @@ describe("engineering meta tree", () => {
         expect(mod, `${path}.sources.${key} must not be null`).not.toBeNull();
       }
     }
+  });
+});
+
+/**
+ * 辅助断言：给定子树，所有被 walker 识别的概念 schema 完整。
+ *
+ * 仅校验 schema 形状，不强制具体概念路径——子树内部还在持续迁移，路径列表
+ * 容易过时；schema 完整性是底线。
+ */
+function expectAllConceptsValid(concepts: WalkedConcept[]): void {
+  for (const { path, concept } of concepts) {
+    expect(typeof concept.name, `${path}.name`).toBe("string");
+    expect(concept.name.length, `${path}.name length`).toBeGreaterThan(0);
+    expect(typeof concept.description, `${path}.description`).toBe("string");
+    expect(concept.description.length, `${path}.description length`).toBeGreaterThan(0);
+    const sourceKeys = Object.keys(concept.sources);
+    expect(sourceKeys.length, `${path}.sources must be non-empty`).toBeGreaterThan(0);
+    for (const [key, mod] of Object.entries(concept.sources)) {
+      expect(typeof mod, `${path}.sources.${key} must be a module namespace`).toBe("object");
+      expect(mod, `${path}.sources.${key} must not be null`).not.toBeNull();
+    }
+  }
+}
+
+describe("thinkable meta tree", () => {
+  const concepts = walkConcepts(thinkable_v20260504_1, "thinkable");
+
+  it("recognises sub-concepts that have been upgraded to concept shape", () => {
+    const conceptPaths = concepts.map((c) => c.path);
+    // 这些子概念已完成合规升级；新增升级时在此追加，未升级的不强制
+    expect(conceptPaths).toContain("thinkable.context");
+    expect(conceptPaths).toContain("thinkable.llm");
+    expect(conceptPaths).toContain("thinkable.thread.scheduler");
+  });
+
+  it("every collected thinkable concept has valid schema", () => {
+    expectAllConceptsValid(concepts);
+  });
+});
+
+describe("persistable meta tree", () => {
+  const concepts = walkConcepts(persistable_v20260504_1, "persistable");
+
+  it("persistable itself is now a concept (post-Sprint 1 binding)", () => {
+    const conceptPaths = concepts.map((c) => c.path);
+    expect(conceptPaths).toContain("persistable");
+  });
+
+  it("every collected persistable concept has valid schema", () => {
+    expectAllConceptsValid(concepts);
   });
 });

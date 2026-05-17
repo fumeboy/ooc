@@ -1,12 +1,46 @@
 import { object_v20260504_1 } from "@meta/object/index.doc";
-import * as persistable from "@src/persistable/index";
+import * as persistableIndex from "@src/persistable/index";
+import * as persistableCommon from "@src/persistable/common";
+import * as stoneObject from "@src/persistable/stone-object";
+import * as stoneData from "@src/persistable/stone-data";
+import * as stoneSelf from "@src/persistable/stone-self";
+import * as stoneReadme from "@src/persistable/stone-readme";
+import * as stoneServer from "@src/persistable/stone-server";
+import * as flowObject from "@src/persistable/flow-object";
+import * as threadJson from "@src/persistable/thread-json";
+import * as debugFile from "@src/persistable/debug-file";
 
+/**
+ * Persistable 概念：Object 在文件系统中的完整持久化表达。
+ *
+ * sources（覆盖 src/persistable/ 全部主干文件）:
+ *  - persistableIndex   — re-export 入口
+ *  - persistableCommon  — 共享 path helper / FlowObjectRef / StoneObjectRef
+ *  - stoneObject        — stones/{id}/ 目录骨架与 .stone.json
+ *  - stoneData          — data.json 读写 + merge
+ *  - stoneSelf          — self.md 读写
+ *  - stoneReadme        — readme.md 读写
+ *  - stoneServer        — stones/{id}/server/ 源码读写
+ *  - flowObject         — flows/{sid}/objects/{id}/ 目录骨架与 .flow.json
+ *  - threadJson         — threads/{tid}/thread.json 读写 + 反序列化兜底
+ *  - debugFile          — debug/llm.input/output.json + loop_NNNN.* 落盘
+ */
 export const persistable_v20260504_1 = {
+  name: "Persistable",
   get parent() { return object_v20260504_1; },
   sources: {
-    persistable,
+    persistableIndex,
+    persistableCommon,
+    stoneObject,
+    stoneData,
+    stoneSelf,
+    stoneReadme,
+    stoneServer,
+    flowObject,
+    threadJson,
+    debugFile,
   },
-  index: `
+  description: `
 Persistable 描述 Object 如何在文件系统中存在。
 
 OOC 的核心断言：**对象的持久化目录就是它的物理存在**。

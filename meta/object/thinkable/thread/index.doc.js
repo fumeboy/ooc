@@ -1,15 +1,17 @@
 import { thinkable_v20260504_1 } from "@meta/object/thinkable/index.doc";
+import { scheduler_v20260505_1 } from "@meta/object/thinkable/thread/scheduler.doc";
 import * as contextSource from "@src/thinkable/context";
 import * as doCommandSource from "@src/executable/windows/root/do";
 
 // doc 仅绑定实现源代码，不再绑定 .test.ts（避免顶层 import meta 时触发 bun:test 运行时）。
 export const thread_v20260505_1 = {
+  name: "Thread",
   get parent() { return thinkable_v20260504_1; },
   sources: {
     context: contextSource,
     doCommand: doCommandSource,
   },
-  index: `
+  description: `
 Thread 描述 Object 思考的运行时结构。
 
 Object 的运行时 = 一棵 Thread Tree。
@@ -98,6 +100,8 @@ Scheduler 调度子线程独立运行 ThinkLoop
 
 ## 调度
 
-如何选择哪个线程执行下一轮，详见 [scheduler](./scheduler.doc.js)。
-`,
+如何选择哪个线程执行下一轮，详见 scheduler 子概念。
+`.trim(),
+
+  scheduler: scheduler_v20260505_1,
 };

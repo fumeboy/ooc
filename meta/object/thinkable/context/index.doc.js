@@ -1,16 +1,21 @@
 import { thinkable_v20260504_1 } from "@meta/object/thinkable/index.doc";
 import { process_events_v20260514_1 } from "@meta/object/thinkable/context/process-events.doc";
-import * as contextSource from "@src/thinkable/context";
+import * as contextIndex from "@src/thinkable/context";
+import * as contextIndexImpl from "@src/thinkable/context/index";
+import * as contextRender from "@src/thinkable/context/render";
 
 // doc 仅绑定实现源代码，不再绑定 .test.ts —— 测试文件包含 bun:test 运行时依赖，
 // 顶层 import "meta/index.doc.js" 时会触发 "describe outside test runner" 错误。
 // 测试文件本身可通过 src/**/__tests__/ 路径直接发现，不需要在 doc 里再 alias。
 export const context_v20260505_1 = {
+  name: "Context",
   get parent() { return thinkable_v20260504_1; },
   sources: {
-    context: contextSource,
+    contextEntry: contextIndex,
+    contextImpl: contextIndexImpl,
+    contextRender,
   },
-  index: `
+  description: `
 Context 是 Object 每次思考时看到的全部信息。
 
 **对象不知道 Context 之外的任何事情。Context 就是对象的全部世界。**
