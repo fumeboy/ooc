@@ -255,7 +255,8 @@ describe("buildContext (ContextWindow model)", () => {
     // KNOWLEDGE 现在的形态：一行一个原语，不再是 "open / refine / submit / close / wait"
     expect(xml).toContain("ContextWindow");
     expect(xml).toContain("open(parent_window_id");
-    expect(xml).toContain("wait(reason");
+    // wait 新签名（spec 2026-05-17）：on 必填，reason 可选
+    expect(xml).toContain("wait(on");
     // 关键提示：思考空间 + talk 是与 user 唯一通道
     expect(xml).toContain("思考空间");
     expect(xml).toContain('command="talk"');
