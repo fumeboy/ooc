@@ -129,10 +129,13 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S1 rename-symbol-via-edit",
       });
 
       if (result.tier === "Bad") {
-        // 把最后几条 event dump 到 stderr，便于本地调试 LLM 失败原因
-        const last = (callee?.events ?? []).slice(-8);
+        const last = (callee?.events ?? []).slice(-20);
         // eslint-disable-next-line no-console
-        console.error("[e2e debug] last events:", JSON.stringify(last, null, 2));
+        console.error("[e2e debug] last 20 events:", JSON.stringify(last, null, 2));
+        // eslint-disable-next-line no-console
+        console.error("[e2e debug] callee.outbox:", JSON.stringify(callee?.outbox ?? [], null, 2));
+        // eslint-disable-next-line no-console
+        console.error("[e2e debug] callee.contextWindows.types:", (callee?.contextWindows ?? []).map((w) => `${w.type}#${w.id}@${w.status}`));
       }
       expect(result.tier).not.toBe("Bad");
     },

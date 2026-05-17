@@ -96,3 +96,27 @@ Task 8 的 e2e 结果决定要不要回头微调（如错误消息太啰嗦 / ta
 - Task 4 撤 todo 是 high-confidence 改动（结构性约束更强）；如 Task 8 e2e 表明 todo 仍提供边际价值，可回退（git revert 单 file）
 - Task 2 错误消息形态如 e2e 显示 LLM 自纠失败，调措辞（参考 `llm-tool-handlers-fail-loud-2026-05-15.md`）
 - 若 R4（LLM 自建 talk 必须 say 过）在真用例里太严，放宽为"talk_window status=open 即合法"
+
+## Task 8 实测结果（2026-05-17）
+
+| 套件 | 修复前 | 修复后 | 备注 |
+|---|---|---|---|
+| e2e S1 rename | Bad ×3 (LLM 卡 waiting) | **OK** | thread.status=done；LLM 走 open_file→grep→write_file→say×2→end |
+| e2e S2 read-only | Good | Good | 无变化（之前就走 say+end） |
+| e2e S3 multi-turn | Good | Good | 无变化 |
+| e2e S4 invalid-edit | Bad | Bad | 与 wait 无关：LLM 偏好 write_file 全覆盖；属 edit 引导问题 |
+| integration | 1 → 6 pass / 11 → 6 fail | 6 pass / 6 fail | 与上次一致；剩余 fail 是其它独立 LLM-behavior 问题（见下） |
+
+剩 6 个 integration fail 不再是"wait 漂移"，而是更细的多种 root cause：
+
+1. **"Expected done, Received waiting"**：integration `makeThread()` 默认注入 phantom creator do_window
+   （targetThreadId 指向不存在的 thread），新 wait 校验把它视作合法候选 → LLM 合法 wait 在上面 →
+   永远等不到唤醒。**这是测试 fixture 设计 bug**：自驱 root 不应有 creator window。
+   修法：integration tests 改用 `makeThread({ skipCreatorWindow: true })`。**不在本 spec scope**。
+2. **"Expected done, Received running"**：LLM 用满 maxTicks 没收尾。属任务步数预算与 LLM 推理效率问题。
+3. **"用户连续发送 Continue ... 无任何先前任务上下文"**（meta-programming）：LLM 在多轮后丢失 prompt 上下文，
+   误把后续 Continue 当成新会话起点。这是 context 渲染 / inbox 累积的独立问题。
+
+**结论**：wait-requires-dependency Phase 1 目标达成 —— "LLM 无理由 wait 卡死"这条漂移路径被结构性
+关闭。S1 OK 是直接证据。其余测试残余 fail 是新暴露的独立 bug，**应各自立 spec/plan 处理**，不应
+回退本期改动。
