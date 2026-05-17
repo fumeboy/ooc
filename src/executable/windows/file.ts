@@ -81,10 +81,23 @@ open(parent_window_id="<file_window_id>", command="edit",
 - 修改立即写入磁盘；不存在"草稿/save"两阶段
 - 想"扩大上下文以避免歧义"时，把 \`old\` 写得更长（含前后多行）即可
 
-## 与 shell 改文件的对比
+## edit 失败后的正确反应（**不要退化**）
 
-不要再用 \`program(language="shell", code="sed -i ...")\` 改文件——容易踩转义陷阱、丢失
-file_window 的可见性、并且无法表达 atomic 多点修改。
+收到 \`matches N times\` 错误 → 直接的应对是**把 \`old\` 写得更长**，包含前后几行
+让它在全文中唯一，再 edit 一次。例：原 \`old: "count = 0"\` 全文 3 处 → 改成
+\`old: "// 第一处计数初始化\\nconst count = 0"\` 只剩 1 处。
+
+收到 \`not found\` 错误 → 用 file_window.reload 或重新读 file_window 当前可见内容
+确认实际字符串（注意空白、引号、行尾），再 edit。
+
+**不要**因为 edit 失败就改用 write_file 整文件覆盖——那等于放弃了精确性，重发整文件
+你也可能漏字符、改错位；本来一个"扩大 old 上下文"就能解决。
+
+## 与 shell / write_file 改文件的对比
+
+- 不要再用 \`program(language="shell", code="sed -i ...")\` 改文件——容易踩转义陷阱、丢失
+  file_window 的可见性、并且无法表达 atomic 多点修改
+- 不要用 \`write_file\` 做"修改局部"——write_file 是整文件覆盖语义，详见 root.write_file 的 KNOWLEDGE
 `.trim();
 
 const setRangeCommand: CommandTableEntry = {

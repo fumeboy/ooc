@@ -394,6 +394,26 @@ describe("U3: root.write_file", () => {
     expect(await readFile(path, "utf8")).toBe("new content");
   });
 
+  it("overwriting existing file emits [write_file hint] nudging toward edit", async () => {
+    const path = join(TEMP, "wf-hint.txt");
+    await writeFile(path, "old content", "utf8");
+    const thread = makeThread({ id: "t_wf_hint" });
+    const out = JSON.parse(await dispatchWriteFile(thread, { path, content: "new content" }));
+    expect(out.ok).toBe(true);
+    expect(out.auto_submitted).toBe(true);
+    expect(out.result).toContain("[write_file hint]");
+    expect(out.result).toContain("file_window.edit");
+  });
+
+  it("creating brand-new file does NOT emit overwrite hint", async () => {
+    const path = join(TEMP, "wf-new-no-hint.txt");
+    const thread = makeThread({ id: "t_wf_new_no_hint" });
+    const out = JSON.parse(await dispatchWriteFile(thread, { path, content: "fresh" }));
+    expect(out.ok).toBe(true);
+    expect(out.auto_submitted).toBe(true);
+    expect(out.result ?? "").not.toContain("[write_file hint]");
+  });
+
   it("edge: parent dir does not exist → mkdir -p creates it then writes", async () => {
     const path = join(TEMP, "deep/dir/path/wf.txt");
     const thread = makeThread({ id: "t_wf_mkdir" });

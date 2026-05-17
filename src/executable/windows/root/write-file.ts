@@ -11,10 +11,11 @@
  * "把这段内容当作文件版本"，自带版本可见性（file_window 渲染）；shell 重定向是黑盒。
  */
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 import type {
+  CommandExecOutcome,
   CommandExecutionContext,
   CommandKnowledgeEntries,
   CommandTableEntry,
@@ -30,29 +31,44 @@ const WRITE_FILE_BASIC_PATH = "internal/executable/write_file/basic";
 const WRITE_FILE_INPUT_PATH = "internal/executable/write_file/input";
 
 const KNOWLEDGE = `
-write_file 用于创建一个新文件或完整覆盖一个已有文件，并自动 spawn 一个 file_window 指向它，
-便于后续用 file_window.edit 做精确修改。
+write_file = **整文件覆盖**。只在下列两种场景使用：
 
-参数：
+1. **新建一个还不存在的文件**（path 在磁盘上不存在）
+2. **完整重写一个已存在文件**（你确实要丢弃旧内容、用新内容全部替代）
+
+**修改已有文件的局部内容 → 必须用 file_window.edit，不要用 write_file**
+- 原因 1（正确性）：write_file 要你重发整个文件，任何漏掉的字符或顺序错位都会
+  造成静默丢失；edit 用"精确唯一字符串替换"保证只动你指定的位置
+- 原因 2（成本）：edit 只送 old/new 两段；write_file 要送整文件，长文件可能上千行
+- 原因 3（可见性）：失败的 edit 给出准确错误（哪条 edit、为什么、几次匹配），write_file
+  失败你只会看到一个 path 错
+
+典型反模式（**不要这样做**）：
+- 用户说"把 src/foo.ts 里第一处 X 改成 Y" → 你 open_file 后直接 write_file 整篇
+  → 应该 \`open_file\` → \`open(parent_window_id=<file_window>, command="edit",
+  args={old: "X 的局部唯一上下文", new: "Y 的对应上下文"})\`
+
+## 参数
+
 - path: 必填，目标文件路径（绝对，或相对 session baseDir）。父目录不存在会自动 mkdir -p
 - content: 必填，要写入的完整文件内容（字符串；空字符串表示写一个 0 字节文件）
 
-写盘成功后副作用：
-- 在 thread.contextWindows 下挂一个 type=file 的 window 指向 path
-- LLM 接下来可以直接 \`open(parent_window_id="<file_window_id>", command="edit", ...)\`
+## 副作用
 
-失败场景（如权限不足、路径不合法）：返回错误字符串，不留 file_window，不写盘。
+- 写盘成功 → 在 thread.contextWindows 下挂一个 type=file 的 window 指向 path
+- 失败（权限不足 / 路径不合法）→ 返回错误字符串，不留 file_window，不写盘
 
-调用示例：
+## 调用示例（合法场景：新建）
 
 \`\`\`
 open(command="write_file", title="新建测试文件",
      args={ path: "tests/foo.test.ts", content: "import { it } from 'bun:test'; ..." })
 \`\`\`
 
-注意：
-- 这是创建新文件 / 完全覆盖的命令；要修改已有文件的部分内容，请用 file_window.edit
-- 不要用 program(language="shell", code="echo ... > ...") 做这件事——会失去 file_window 的版本可见性
+## 不要用 shell 替代
+
+不要用 \`program(language="shell", code="echo ... > ...")\` 做这件事——会失去
+file_window 的版本可见性，且转义容易出错。
 `.trim();
 
 function basename(path: string): string {
@@ -79,7 +95,7 @@ export const writeFileCommand: CommandTableEntry = {
 
 export async function executeWriteFileCommand(
   ctx: CommandExecutionContext,
-): Promise<string | undefined> {
+): Promise<string | undefined | CommandExecOutcome> {
   const thread = ctx.thread;
   if (!thread) return "[write_file] 缺少 thread context。";
   const rawPath = typeof ctx.args.path === "string" ? ctx.args.path : "";
@@ -89,6 +105,17 @@ export async function executeWriteFileCommand(
 
   // 相对路径以 session baseDir 为根（不再以 OOC 进程 cwd 为根）
   const path = resolveSessionPath(thread, rawPath);
+
+  // 写之前看一眼文件是否已存在——存在意味着 LLM 正在"整文件覆盖"已有文件。
+  // 这是 write_file 的合法用例之一（"完整重写"），但更常见的误用是"想改局部却用了 write_file"，
+  // 因此覆盖时附一条 hint，把 KNOWLEDGE 的"修改局部用 edit"的规则推到 LLM 眼前。
+  let preExisted = false;
+  try {
+    const s = await stat(path);
+    preExisted = s.isFile();
+  } catch {
+    /* 不存在 → 新建场景，无 hint */
+  }
 
   try {
     await mkdir(dirname(path), { recursive: true });
@@ -111,6 +138,17 @@ export async function executeWriteFileCommand(
     ctx.manager.insertTypedWindow(fileWindow);
   } else {
     thread.contextWindows = [...(thread.contextWindows ?? []), fileWindow];
+  }
+
+  if (preExisted) {
+    return {
+      ok: true,
+      result:
+        `[write_file hint] 你刚整文件覆盖了已有文件 ${path}。如果你的意图是"修改局部"` +
+        `（而不是完整重写），下次请改走 file_window.edit：先 open_file 把文件载入 file_window，` +
+        `再 open(parent_window_id=<file_window_id>, command="edit", args={ old, new })。` +
+        `write_file 适合新建文件或确实要丢弃整个旧版本的场景。`,
+    };
   }
   return undefined;
 }
