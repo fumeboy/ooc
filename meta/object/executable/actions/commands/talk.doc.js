@@ -4,13 +4,24 @@ import * as talkSource from "@src/executable/windows/root/talk";
 export const talk_v20260514_1 = {
   get parent() { return commands_v20260506_1; },
   name: "Talk",
-  get description() { return this.index; },
-  index: `
-\`talk\` 用于开启一个对外会话窗口（talk_window）。
-Step 2（spec 2026-05-14）后，talk 不直接发消息——发消息走 talk_window 上注册的 \`say\` command。
+  sources: { talk: talkSource },
+  description: `
+\`talk\` 开启一个对外会话窗口（talk_window）；不直接发消息——发消息走 talk_window 上
+注册的 \`say\` command。
 
-## 调用形式
+按子字段展开：
 
+- callShape — root.talk 的调用形态
+- submitEffects — submit 副作用与多开规则
+- talkWindowCommands — talk_window 上的 say / wait / close
+- waitSemantics — talk_window 的 wait 语义与唤醒规则
+- userReplyRouting — control plane user-reply API 的路由规则
+- pathList — root.talk 与 talk_window 的 path 列表
+- targetConstraints — 当前 target 限制
+`.trim(),
+
+  callShape_v20260517_1: {
+    index: `
 \`\`\`
 open(command="talk", title="发布计划确认", args={
   target: "user",          // 必填，当前阶段仅 "user"
@@ -18,44 +29,113 @@ open(command="talk", title="发布计划确认", args={
 })
 \`\`\`
 
-> args 给齐时 open 立即提交 form，无需 refine/submit。
+args 给齐时 open 立即提交 form，无需 refine/submit。
+`.trim(),
+  },
 
-submit 副作用：在 thread.contextWindows 下挂一个 type=talk 的 window
-（target=user, conversationId=windowId）。**允许同 target 多开**。
+  submitEffects_v20260517_1: {
+    index: `
+submit 在 thread.contextWindows 下挂一个 type=talk 的 window
+（target=user, conversationId=windowId）。
 
-## talk_window 的注册命令
+**允许同 target 多开**——同一对象与同一对端可有多个并行话题，
+每个 talk_window 用 title 区分。
+`.trim(),
+  },
 
-| command | 行为 |
-|---|---|
-| say     | 写一条消息到 thread.outbox（source=talk, windowId=本 window）；可选 wait=true 进 waiting |
-| wait    | 不发消息，仅父线程进入 status="waiting" 等对端回复 |
-| close   | 释放 window；不影响 user 端（user 端无对应运行实体） |
+  talkWindowCommands_v20260517_1: {
+    index: `
+talk_window 上注册的 3 个 sub-command。
+`.trim(),
 
-例：
+    sayCmd_v20260517_1: {
+      index: `
+### say
+
+写一条消息到 \`thread.outbox\`（\`source=talk, windowId=本 window\`）；
+可选 \`wait=true\` 让父线程进入 waiting。
 
 \`\`\`
-open(parent_window_id="<talk_window_id>", command="say", args={ msg: "明天发布可以吗？", wait: true })
+open(parent_window_id="<talk_window_id>", command="say",
+     args={ msg: "明天发布可以吗？", wait: true })
 \`\`\`
+`.trim(),
+    },
 
-## wait 语义
+    waitCmd_v20260517_1: {
+      index: `
+### wait
 
-Step 1 起 waitingType 字段已取消，唤醒条件统一为 thread.inbox 出现新消息。
-对端回复进入 inbox 即可触发唤醒。
+不发新消息，仅让父线程进入 \`status="waiting"\` 等对端回复。
+`.trim(),
+    },
 
-## user 回复路由
+    closeCmd_v20260517_1: {
+      index: `
+### close
 
-control plane 的 user-reply API（POST /api/flows/.../continue）接受可选 \`targetWindowId\`：
-- 用户在 UI 上选择回复某个 talk_window 时，前端把该 window id 作为 targetWindowId 传入
-- 后端把新消息写入 thread.inbox，携带 \`replyToWindowId = targetWindowId\`
-- render 层据此把消息归入对应 talk_window 的 transcript
+释放 window；不影响 user 端（user 端无对应运行实体）。
+`.trim(),
+    },
+  },
 
-## Path 列表（root.talk）
+  waitSemantics_v20260517_1: {
+    index: `
+talk_window 的 wait 唤醒条件统一为 \`thread.inbox\` 出现新消息——
+没有独立 waitingType 字段。对端回复进入 inbox 即触发唤醒。
+`.trim(),
+  },
+
+  userReplyRouting_v20260517_1: {
+    index: `
+control plane 的 user-reply API（\`POST /api/flows/.../continue\`）接受可选
+\`targetWindowId\`，把 user 回复路由到指定 talk_window。
+`.trim(),
+
+    frontendChoosesWindow_v20260517_1: {
+      index: `
+### 前端选择回复窗口
+
+用户在 UI 上选择回复某个 talk_window 时，前端把该 window id 作为
+\`targetWindowId\` 传入 user-reply API。
+`.trim(),
+    },
+
+    backendInboxWrite_v20260517_1: {
+      index: `
+### 后端 inbox 写入
+
+后端把新消息写入 \`thread.inbox\`，携带 \`replyToWindowId = targetWindowId\`。
+`.trim(),
+    },
+
+    renderGrouping_v20260517_1: {
+      index: `
+### render 层归并
+
+render 层据 \`replyToWindowId\` 把消息归入对应 talk_window 的 transcript。
+`.trim(),
+    },
+  },
+
+  pathList_v20260517_1: {
+    index: `
+root.talk 与 talk_window 的 command path 列表。
+`.trim(),
+
+    rootTalkPaths_v20260517_1: {
+      index: `
+### root.talk
 
 \`\`\`
 talk
 \`\`\`
+`.trim(),
+    },
 
-## Path 列表（talk_window 上）
+    talkWindowPaths_v20260517_1: {
+      index: `
+### talk_window
 
 \`\`\`
 say
@@ -63,14 +143,17 @@ say.wait
 wait
 close
 \`\`\`
+`.trim(),
+    },
+  },
 
-## 阶段限制
+  targetConstraints_v20260517_1: {
+    index: `
+当前 target 范围与限制：
 
 - target 当前仅支持 "user"；其它 target 在 root.talk 阶段会被拒绝
-- 跨 object talk 留待后续阶段引入
+- 跨 object talk 在 root.talk 范围之外，由其他通信机制承载
 - user 不是普通 object，没有自己的 thread；回复路径靠 control plane 显式投递
-`,
-  sources: {
-    talk: talkSource,
+`.trim(),
   },
 };

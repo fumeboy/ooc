@@ -4,14 +4,30 @@ import * as programSource from "@src/executable/windows/root/program";
 export const program_v20260514_1 = {
   get parent() { return commands_v20260506_1; },
   name: "Program",
-  get description() { return this.index; },
-  index: `
-\`program\` 用于执行一段代码或调用 server 方法。Step 2（spec 2026-05-14）后产出 **program_window**，
+  sources: { program: programSource },
+  description: `
+\`program\` 执行一段代码或调用 server 方法。产出 **program_window**，
 首次 exec 立即跑完，后续可通过 program_window 的 \`exec\` command 在同一窗口反复执行。
 
-## 调用形式
+按子字段展开：
 
-### 模式 A：执行一段临时代码（首次 exec）
+- callShapes — 两种首次调用模式（临时代码 / 调用对象函数方法）
+- subsequentExec — 通过 program_window.exec 反复执行
+- pathList — root.program 注册的 command path
+- programWindowCommands — program_window 上的 exec / close
+- languageBackends — 4 种 language / function 路径的实现细节
+- executionHistory — program_window 的 history 与渲染规则
+- outOfScope — 不在范围内的能力
+`.trim(),
+
+  callShapes_v20260517_1: {
+    index: `
+program 首次调用有两种模式；args 给齐时 open 立即提交 form，无需再 refine/submit。
+`.trim(),
+
+    modeAInlineCode_v20260517_1: {
+      index: `
+### 模式 A：执行一段临时代码
 
 \`\`\`
 open(command="program", title="…", args={
@@ -19,19 +35,26 @@ open(command="program", title="…", args={
   code: "..."
 })
 \`\`\`
+`.trim(),
+    },
 
-> args 给齐时 open 立即提交 form，无需再 refine/submit。
-
-### 模式 B：调用对象函数方法（首次 exec）
+    modeBFunctionCall_v20260517_1: {
+      index: `
+### 模式 B：调用对象函数方法
 
 \`\`\`
 open(command="program", title="…", args={
-  function: "readFile",              // 对象的 server 模块导出的 llm_methods 函数索引中注册的函数名
+  function: "readFile",              // 对象 server 模块 llm_methods 中注册的函数名
   args:   { path: "foo.txt" }
 })
 \`\`\`
+`.trim(),
+    },
+  },
 
-### 后续多次执行：通过 program_window 上的 exec command
+  subsequentExec_v20260517_1: {
+    index: `
+后续多次执行通过 program_window.exec 在同一窗口内进行：
 
 \`\`\`
 open(parent_window_id="<program_window_id>", command="exec", args={
@@ -40,7 +63,13 @@ open(parent_window_id="<program_window_id>", command="exec", args={
 })
 \`\`\`
 
-## Path 列表
+每次 exec 都共享 program_window 的 thread-local 通道（ts/js）。
+`.trim(),
+  },
+
+  pathList_v20260517_1: {
+    index: `
+root.program 注册的 command path 集合：
 
 \`\`\`
 program                         （bare path，总是激活）
@@ -50,33 +79,91 @@ program.javascript
 program.function                （模式 B）
 \`\`\`
 
-## program_window 的注册命令
+每条路径独立激活对应的 knowledge——shell 帮助在 shell 模式才进入 context。
+`.trim(),
 
-- \`exec\` (args: language+code | function+args) — 起独立 sandbox 跑一次，结果追加到 history
-- \`close\` — 释放 window；不影响任何外部进程
+    bare_v20260517_1: { index: `### program — bare path，总是激活` },
+    shell_v20260517_1: { index: `### program.shell — language === "shell" 时激活` },
+    typescript_v20260517_1: { index: `### program.typescript — language === "ts" / "typescript" 时激活` },
+    javascript_v20260517_1: { index: `### program.javascript — language === "js" / "javascript" 时激活` },
+    functionPath_v20260517_1: { index: `### program.function — 模式 B（function="<name>"）时激活，附带 method knowledge` },
+  },
 
-## 当前实现阶段
+  programWindowCommands_v20260517_1: {
+    index: `
+program_window 上注册的两个 sub-command。
+`.trim(),
 
-支持 3 种 language + 1 种 function 路径：
+    execCmd_v20260517_1: {
+      index: `
+### exec (args: language+code | function+args)
 
-- \`language="shell"\`：通过 \`sh -c\` 执行 code 字符串
-  - cwd 固定为 \`process.cwd()\`，env 继承 parent process
-  - 30 秒超时（exit code 124），stdout/stderr 各 4KB 截断
-  - 注入 env \`OOC_SELF_DIR\` 用于在 shell 中定位当前对象目录
+起独立 sandbox 跑一次，结果追加到 \`history\`。
+`.trim(),
+    },
 
-- \`language="ts" / "typescript" / "js" / "javascript"\`：in-process 动态 import 执行
-  - 用户代码被包成 \`async function(console, self) { let _result_; ... return _result_; }\`
-  - 注入的 \`self\` 是 ProgramSelf 对象
-    - \`self.dir\` / \`self.callMethod\` / \`self.getData\` / \`self.setData\` 不变
-    - **\`self.getThreadLocal(key)\` / \`self.setThreadLocal(key, value)\`**：跨 exec 共享 thread-local 数据（仅 ts/js；shell 不接此通道）
-  - console.log/warn/error 进 result 的 [stdout] 段
-  - \`_result_\` 变量进 result 的 [returnValue] 段
+    closeCmd_v20260517_1: {
+      index: `
+### close
 
-- \`function="<name>"\`：直接调用 server/index.ts 中 llm_methods 注册的方法
-  - 自动激活方法知识：method 的 \`knowledge(args)\` 写入 form 的 command_knowledge
+释放 window；不影响任何外部进程。
+`.trim(),
+    },
+  },
 
-## program_window 的 history
+  languageBackends_v20260517_1: {
+    index: `
+当前支持 3 种 language + 1 种 function 路径；各自语义、隔离边界与可用 API 不同。
+`.trim(),
 
+    shellBackend_v20260517_1: {
+      index: `
+### language="shell"
+
+通过 \`sh -c\` 执行 code 字符串：
+- cwd 固定为 \`process.cwd()\`，env 继承 parent process
+- 30 秒超时（exit code 124），stdout/stderr 各 4KB 截断
+- 注入 env \`OOC_SELF_DIR\` 用于在 shell 中定位当前对象目录
+- shell 之间**不**共享 thread-local 数据（OS 进程隔离）
+`.trim(),
+    },
+
+    tsJsBackend_v20260517_1: {
+      index: `
+### language="ts" / "typescript" / "js" / "javascript"
+
+in-process 动态 import 执行：
+- 用户代码被包成 \`async function(console, self) { let _result_; ... return _result_; }\`
+- console.log/warn/error 进 result 的 [stdout] 段
+- \`_result_\` 变量进 result 的 [returnValue] 段
+`.trim(),
+
+      selfApi_v20260517_1: {
+        index: `
+#### 注入的 self 对象（ProgramSelf）
+
+- \`self.dir\` — 当前对象目录
+- \`self.callMethod\` — 调用 llm_methods 注册的方法
+- \`self.getData\` / \`self.setData\` — 对象级数据
+- \`self.getThreadLocal(key)\` / \`self.setThreadLocal(key, value)\` — 跨 exec
+  共享 thread-local 数据（仅 ts/js；shell 不接此通道）
+`.trim(),
+      },
+    },
+
+    functionBackend_v20260517_1: {
+      index: `
+### function="<name>"
+
+直接调用 server/index.ts 中 llm_methods 注册的方法：
+- 自动激活方法知识：method 的 \`knowledge(args)\` 写入 form 的 \`commandKnowledgePaths\`
+- 在 open / refine 阶段就开始影响下一轮 context
+`.trim(),
+    },
+  },
+
+  executionHistory_v20260517_1: {
+    index: `
 每次 exec（无论首次还是后续）都生成一条 ProgramExecRecord：
 
 \`\`\`ts
@@ -84,15 +171,17 @@ program.function                （模式 B）
 \`\`\`
 
 渲染时：history 列出所有 exec 一行摘要 + 最近一条 last_output 全文（按 32KB 截断）。
+`.trim(),
+  },
 
-## 不在范围内
+  outOfScope_v20260517_1: {
+    index: `
+当前实现明确不覆盖的能力：
 
 - 代码沙箱隔离（in-process 与内核共享进程）
 - ui_methods 的 HTTP 暴露
 - 命令白名单 / 真正的沙箱隔离
 - shell 之间的 thread-local 共享（OS 进程隔离）
-`,
-  sources: {
-    program: programSource,
+`.trim(),
   },
 };
