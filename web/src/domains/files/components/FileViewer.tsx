@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { FileContent } from "../model";
 import { formatFileContent } from "../formatter";
 import { EmptyState } from "../../../shared/ui/EmptyState";
@@ -57,9 +58,12 @@ export function FileViewer({
   selfObjectId?: string;
   onUserReply?: (text: string) => Promise<void>;
 }) {
+  // 必须 hooks 在条件分支前。snapshot 只随 thread ref 变化而变化；ref 稳定时
+  // ContextSnapshotViewer 内部的 useMemo / useEffect 不会被重置 → 选中态/展开态保留。
+  const snapshot = useMemo(() => (thread ? threadToSnapshot(thread) : undefined), [thread]);
   if (!file) {
-    if (thread) {
-      return <ContextSnapshotViewer snapshot={threadToSnapshot(thread)} selfObjectId={selfObjectId} onUserReply={onUserReply} />;
+    if (snapshot) {
+      return <ContextSnapshotViewer snapshot={snapshot} selfObjectId={selfObjectId} onUserReply={onUserReply} />;
     }
     return <EmptyState title="Select a file" detail="Choose a file from the tree to preview its text content." />;
   }

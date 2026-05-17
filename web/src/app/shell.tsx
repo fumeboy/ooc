@@ -29,7 +29,7 @@ export function AppShell() {
     patch({ loading: true, error: undefined });
     try {
       const [flows, stones, tree] = await Promise.all([fetchFlows(), fetchStones(), fetchTree(scope)]);
-      patch({ flows: flows.items, stones: stones.items, tree, scope, loading: false });
+      patch({ flows: flows.items, flowsHash: flows.hash, stones: stones.items, tree, scope, loading: false });
     } catch (error) {
       patch({ error: messageFromError(error), loading: false });
     }
@@ -38,24 +38,43 @@ export function AppShell() {
   /**
    * 显式刷新：覆盖当前可见的所有数据 —— flows / stones / 当前 scope 的 tree，
    * 以及（如果命中）activeFile 与当前 thread。供面包屑 ↻ 按钮使用。
+   *
+   * 内容未变（按 hash 或字符串相等比较）时保留旧 ref，避免下游组件（FileViewer →
+   * ContextSnapshotViewer）因引用变化而失效 memo / 重置选中态。
    */
   const refreshActiveView = useCallback(async () => {
     patch({ loading: true, error: undefined });
     try {
-      const [flowsRes, stonesRes, tree] = await Promise.all([fetchFlows(), fetchStones(), fetchTree(state.scope)]);
-      let thread = state.thread;
-      if (state.activeSessionId && state.activeObjectId) {
-        thread = await fetchThread(state.activeSessionId, state.activeObjectId, state.activeThreadId ?? "root");
-      }
-      let activeFile = state.activeFile;
-      if (state.activePath && state.activeFile) {
-        activeFile = await fetchFile(state.activePath);
-      }
-      patch({ flows: flowsRes.items, stones: stonesRes.items, tree, thread, activeFile, loading: false });
+      const sessionId = state.activeSessionId;
+      const objectId = state.activeObjectId;
+      const threadId = state.activeThreadId ?? "root";
+      const activePath = state.activePath;
+      const hadFile = Boolean(state.activeFile);
+      const scope = state.scope;
+      const [flowsRes, stonesRes, tree] = await Promise.all([fetchFlows(), fetchStones(), fetchTree(scope)]);
+      const nextThread = sessionId && objectId
+        ? await fetchThread(sessionId, objectId, threadId)
+        : undefined;
+      const nextFile = activePath && hadFile ? await fetchFile(activePath) : undefined;
+      setState((prev) => {
+        const flowsChanged = flowsRes.hash !== prev.flowsHash;
+        const threadChanged = nextThread !== undefined && nextThread.hash !== prev.thread?.hash;
+        const fileChanged = nextFile !== undefined && nextFile.content !== prev.activeFile?.content;
+        return {
+          ...prev,
+          flows: flowsChanged ? flowsRes.items : prev.flows,
+          flowsHash: flowsChanged ? flowsRes.hash : prev.flowsHash,
+          stones: stonesRes.items,
+          tree,
+          thread: threadChanged ? nextThread : prev.thread,
+          activeFile: fileChanged ? nextFile : prev.activeFile,
+          loading: false,
+        };
+      });
     } catch (error) {
       patch({ error: messageFromError(error), loading: false });
     }
-  }, [patch, state.scope, state.activeSessionId, state.activeObjectId, state.activeThreadId, state.activePath, state.activeFile, state.thread]);
+  }, [patch, state.scope, state.activeSessionId, state.activeObjectId, state.activeThreadId, state.activePath, state.activeFile]);
 
   useEffect(() => { void refreshBasics("world"); }, []);
 
@@ -69,25 +88,22 @@ export function AppShell() {
     const objectId = state.activeObjectId;
     if (!sessionId || !objectId) return;
     const threadId = state.activeThreadId ?? "root";
-    let lastThreadHash = state.thread?.hash;
-    let lastFlowsHash: string | undefined;
     const tick = async () => {
       try {
         const [thread, flows] = await Promise.all([
           fetchThread(sessionId, objectId, threadId),
           fetchFlows(),
         ]);
-        const threadChanged = thread.hash !== lastThreadHash;
-        const flowsChanged = flows.hash !== lastFlowsHash;
-        if (!threadChanged && !flowsChanged) return;
-        lastThreadHash = thread.hash;
-        lastFlowsHash = flows.hash;
         setState((prev) => {
           if (prev.activeSessionId !== sessionId || prev.activeObjectId !== objectId) return prev;
+          const threadChanged = thread.hash !== prev.thread?.hash;
+          const flowsChanged = flows.hash !== prev.flowsHash;
+          if (!threadChanged && !flowsChanged) return prev;
           return {
             ...prev,
             thread: threadChanged ? thread : prev.thread,
             flows: flowsChanged ? flows.items : prev.flows,
+            flowsHash: flowsChanged ? flows.hash : prev.flowsHash,
           };
         });
       } catch {

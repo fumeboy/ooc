@@ -8,6 +8,8 @@ export type SessionThread = { objectId: string; threadId: string };
 export type AppState = {
   scope: TreeScope;
   flows: FlowSession[];
+  /** 服务端给 flows 列表算的内容 hash；polling / refresh 用它判断要不要更新 state。 */
+  flowsHash?: string;
   stones: Stone[];
   tree?: FileTreeNode;
   activePath?: string;

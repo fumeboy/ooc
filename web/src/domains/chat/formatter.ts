@@ -171,6 +171,19 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
   const lines: ChatLine[] = [];
   const events = thread.events ?? [];
 
+  // 预扫描所有 function_call_output 并按 callId 建索引，让 function_call 能
+  // 跨距离配对其 output（LLM 一次抛多个并行 tool_call 时，输出不会紧跟在调用之后）。
+  // 同一 callId 出现多次时取首条；被消费过的 output index 标记跳过，避免渲染孤儿卡。
+  const outputsByCallId = new Map<string, { event: Record<string, unknown>; index: number }>();
+  for (let i = 0; i < events.length; i += 1) {
+    const ev = events[i];
+    if (!isRecord(ev)) continue;
+    if (ev.category === "tool_runtime" && ev.kind === "function_call_output" && typeof ev.callId === "string") {
+      if (!outputsByCallId.has(ev.callId)) outputsByCallId.set(ev.callId, { event: ev, index: i });
+    }
+  }
+  const consumedOutputIndices = new Set<number>();
+
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];
     if (!isRecord(event)) continue;
@@ -209,31 +222,25 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
     }
 
     if (category === "llm_interaction" && kind === "function_call") {
-      const nextEvent = events[index + 1];
-      const nextRecord = isRecord(nextEvent) ? nextEvent : undefined;
-      const mergedOutput =
-        nextRecord?.category === "tool_runtime" &&
-        nextRecord?.kind === "function_call_output" &&
-        typeof nextRecord.callId === "string" &&
-        typeof event.callId === "string" &&
-        nextRecord.callId === event.callId
-          ? nextRecord
-          : undefined;
+      const callId = typeof event.callId === "string" ? event.callId : undefined;
+      const matched = callId ? outputsByCallId.get(callId) : undefined;
+      if (matched) consumedOutputIndices.add(matched.index);
 
       lines.push(buildToolLine({
-        id: typeof event.callId === "string" ? event.callId : `event-${index}`,
+        id: callId ?? `event-${index}`,
         toolName: typeof event.toolName === "string" ? event.toolName : "tool",
-        callId: typeof event.callId === "string" ? event.callId : undefined,
+        callId,
         argumentsValue: event.arguments,
-        outputValue: mergedOutput?.output,
-        ok: mergedOutput ? Boolean(mergedOutput.ok) : undefined,
-        pending: !mergedOutput,
+        outputValue: matched?.event.output,
+        ok: matched ? Boolean(matched.event.ok) : undefined,
+        pending: !matched,
       }));
-      if (mergedOutput) index += 1;
       continue;
     }
 
     if (category === "tool_runtime" && kind === "function_call_output") {
+      // 已被某个 function_call 通过 callId 索引消费过 → 跳过，避免渲染空的孤儿卡。
+      if (consumedOutputIndices.has(index)) continue;
       lines.push(buildToolLine({
         id: typeof event.callId === "string" ? `${event.callId}-output` : `event-${index}`,
         toolName: typeof event.toolName === "string" ? event.toolName : "tool",

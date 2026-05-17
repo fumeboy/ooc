@@ -132,6 +132,61 @@ describe("TuiBlock tool cards", () => {
     expect(waitHtml).not.toContain("REASON");
   });
 
+  it("pairs parallel tool_calls with their non-adjacent function_call_output by callId", () => {
+    // LLM 一次抛多个 tool_call 时，事件序列是 call1, call2, output1, output2；
+    // formatter 必须按 callId 配对而不是按相邻顺序。
+    const lines = formatThread({
+      id: "thread_parallel",
+      status: "running",
+      events: [
+        {
+          category: "llm_interaction",
+          kind: "function_call",
+          callId: "call_open_idx",
+          toolName: "open",
+          arguments: { title: "读取 index.doc.js" },
+        },
+        {
+          category: "llm_interaction",
+          kind: "function_call",
+          callId: "call_open_iter",
+          toolName: "open",
+          arguments: { title: "读取 iteration.doc.js" },
+        },
+        {
+          category: "tool_runtime",
+          kind: "function_call_output",
+          callId: "call_open_idx",
+          toolName: "open",
+          ok: true,
+          output: JSON.stringify({ ok: true, tool: "open" }),
+        },
+        {
+          category: "tool_runtime",
+          kind: "function_call_output",
+          callId: "call_open_iter",
+          toolName: "open",
+          ok: true,
+          output: JSON.stringify({ ok: true, tool: "open" }),
+        },
+      ],
+    });
+
+    expect(lines).toHaveLength(2);
+    const [first, second] = lines as Array<Extract<(typeof lines)[number], { kind: "tool" }>>;
+    expect(first.kind).toBe("tool");
+    expect(first.callId).toBe("call_open_idx");
+    expect(first.pending).toBe(false);
+    expect(first.ok).toBe(true);
+    expect(first.title).toBe("读取 index.doc.js");
+
+    expect(second.kind).toBe("tool");
+    expect(second.callId).toBe("call_open_iter");
+    expect(second.pending).toBe(false);
+    expect(second.ok).toBe(true);
+    expect(second.title).toBe("读取 iteration.doc.js");
+  });
+
   it("uses distinct icons for open, refine, submit, close, and wait tool cards", () => {
     const toolCases = [
       ["open", "lucide-folder-plus"],

@@ -12,6 +12,7 @@ import { deliverTalkMessage } from "@src/executable/windows/talk-delivery";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
+  type ContextWindow,
   type TalkWindow,
 } from "@src/executable/windows/types";
 import type { createJobManager } from "../../runtime/job-manager";
@@ -76,6 +77,28 @@ function reviveThreadForInboxMessage(thread: ThreadContext): ThreadContext {
     status: "running",
     inboxSnapshotAtWait: undefined,
     waitingOn: undefined,
+  };
+}
+
+/**
+ * 用于 getThread 响应的 hash 输入：剔除 collectExecutableKnowledgeEntries 在每次响应里
+ * 重新合成的 ephemeral 字段（id / createdAt），它们由 nextSyntheticId / Date.now 生成，
+ * 对前端语义无影响，但会让 hash 永远变化、polling 永远命中"内容变了"。
+ *
+ * 只对 source=protocol/activator 这两类合成 knowledge window 做剔除；explicit knowledge
+ * 与其它持久 window 的 id/createdAt 是真实状态，原样保留。
+ */
+function stripVolatileForHash(payload: { contextWindows?: ContextWindow[] }) {
+  if (!payload.contextWindows) return payload;
+  return {
+    ...payload,
+    contextWindows: payload.contextWindows.map((window) => {
+      if (window.type === "knowledge" && (window.source === "protocol" || window.source === "activator")) {
+        const { id: _id, createdAt: _createdAt, ...rest } = window;
+        return rest;
+      }
+      return window;
+    }),
   };
 }
 
@@ -332,7 +355,7 @@ export function createFlowsService(deps: {
         ...thread,
         contextWindows: enriched.contextWindows ?? thread.contextWindows,
       };
-      return { ...payload, hash: hashJson(payload) };
+      return { ...payload, hash: hashJson(stripVolatileForHash(payload)) };
     },
     /**
      * 控制面"用户回复"通道。

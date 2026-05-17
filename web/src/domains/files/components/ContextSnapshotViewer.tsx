@@ -69,6 +69,19 @@ const WINDOW_TYPE_ICON: Record<ContextWindow["type"], LucideIcon> = {
   search: Search,
 };
 
+/** 已有专用渲染分支的 window type 集合；不在集合中的类型由 NodeDetail 末尾的 JSON 兜底渲染。 */
+const HANDLED_WINDOW_TYPES = new Set<string>([
+  "root",
+  "command_exec",
+  "do",
+  "todo",
+  "talk",
+  "program",
+  "file",
+  "knowledge",
+  "search",
+]);
+
 /** 把节点状态映射成颜色基调；节点没有 status 时返回 "neutral"。 */
 type Tone = "info" | "warning" | "success" | "error" | "neutral";
 function statusToTone(status?: string): Tone {
@@ -417,6 +430,54 @@ function WindowDetail({
           </div>
           {window.body && <pre className="llm-input-pre">{window.body}</pre>}
         </>
+      )}
+      {window.type === "search" && (
+        <>
+          <div className="llm-input-attrs">
+            <div className="llm-input-attr-row">
+              <span className="llm-input-attr-key">kind</span>
+              <span className="llm-input-attr-value">{window.kind}</span>
+            </div>
+            <div className="llm-input-attr-row">
+              <span className="llm-input-attr-key">query</span>
+              <span className="llm-input-attr-value">{window.query}</span>
+            </div>
+            {window.searchRoot && (
+              <div className="llm-input-attr-row">
+                <span className="llm-input-attr-key">search_root</span>
+                <span className="llm-input-attr-value">{window.searchRoot}</span>
+              </div>
+            )}
+            <div className="llm-input-attr-row">
+              <span className="llm-input-attr-key">matches</span>
+              <span className="llm-input-attr-value">{window.matches.length}{window.truncated ? " (truncated)" : ""}</span>
+            </div>
+          </div>
+          {window.matches.length > 0 && (
+            <ul className="llm-input-transcript-list">
+              {window.matches.map((m) => (
+                <li key={m.index} className="llm-input-transcript-item">
+                  <div className="llm-input-transcript-meta">
+                    <span className="llm-input-transcript-index">[#{m.index}]</span>
+                    <span className="llm-input-transcript-dir">{m.path}{m.line ? `:${m.line}` : ""}</span>
+                  </div>
+                  {m.snippet && <pre className="llm-input-transcript-content">{m.snippet}</pre>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      {/* 未知 window 类型兜底：把整个对象按 JSON 显示，保证新增 type 即使前端没补
+          专用渲染也能看到内容。已实现 case 的类型在这里被跳过，避免重复显示。 */}
+      {!HANDLED_WINDOW_TYPES.has(window.type) && (
+        <CodeMirror
+          className="code-editor is-readonly"
+          value={formatJson(window)}
+          editable={false}
+          extensions={[jsonLanguage()]}
+          basicSetup={{ lineNumbers: false, foldGutter: true }}
+        />
       )}
       {transcript && transcript.length > 0 && (
         <div className="llm-input-transcript">
