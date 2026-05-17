@@ -92,6 +92,10 @@ ooc-2  (2026-05-08 ~ 2026-05-12)
         └── 后续：talk 跨 object 路由 / 真实沙箱隔离 / file_window 写权限
 
 └── 阶段 10：e2e 工程 + 真 LLM 暴露的契约/产品 bug 修补 — 把"OOC 作为 CodeAgent 端到端能不能用"这条主线接通
+    ├── [2026-05-17] wait-requires-dependency  把 wait(reason) 改成 wait(on, reason?)：on 必填且必须 resolve 到一个 open 状态、可产生未来 IO 的 window（talk/do）。无合法 on 时 wait 直接 reject，强 nudge end。这一刀消除了 LLM "做完任务不 say/不 end 卡 waiting" 漂移的结构性根因（前置 todo nudge / protocol 文本 / onCommandPath 等所有方案都是在 system 允许 idle 的前提下劝退 LLM，治标不治本）。同步：撤掉 talk-delivery 的 reply-creator todo（结构性约束接管）；协议 KNOWLEDGE / meta 文档全量改写；do_window.wait / talk_window.wait / do.continue(wait=true) / talk.say(wait=true) 都写 waitingOn 保持中间态一致
+    │   ├── spec: docs/superpowers/specs/2026-05-17-wait-requires-dependency-design.md
+    │   ├── plan: docs/superpowers/plans/2026-05-17-wait-requires-dependency.md
+    │   └── 关键决策：Phase 1 不动 wakeup 逻辑（保持"任何 inbox 唤醒"宽松语义）；R4 严格要求自建 talk 必须 say 过才能 wait（avoid"对端不知有人在等"）；reject 错误消息枚举当前合法候选 + 直指 end 替代
     └── [2026-05-17] e2e-harness-and-llm-contract-fixes  按 docs/testing/strategy.md 落 backend (S1–S4) + frontend (F1–F5) e2e 骨架；首次真 LLM 跑通后修了 3 个被遮蔽多时的契约/产品 bug
         ├── 测试入口: tests/e2e/backend/_fixture.ts + tests/e2e/frontend/_fixture.ts；Good/OK/Bad 评分裁判；RUN_BACKEND_E2E / RUN_FRONTEND_E2E gate
         ├── 修复 1：Claude provider 在 messages 数组为空时补一条 placeholder user message（OOC 把 inbox/inject 都映射 system role，过滤后 messages=[] → Anthropic API 400 或代理 200+空 body；OpenAI Responses API 不受此约束，不动）

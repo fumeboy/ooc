@@ -19,7 +19,7 @@ OOC 把"行动"建模为这些原语：
 | refine  | 累积 / 修改 form 参数（不执行） |
 | submit  | 提交 form，触发对应 command 执行 |
 | close   | 取消 form |
-| wait    | 放弃当前思考循环，等待新事件 |
+| wait    | 声明等待指定 window (talk/do) 上的未来 IO；无合法 on 时被 reject |
 | compress | 压缩本线程的 process events |
 
 通用附加参数：
@@ -51,9 +51,11 @@ close(form_id, reason)               →  FormManager.close(formId)
                                           ↓
                                        form 真正离开 active_forms（任何状态都可关）
                                        非 pinned 的 knowledge 自动卸载
-wait()                               →  setNodeStatus("waiting")
+wait(on=<window_id>)                 →  setNodeStatus("waiting") + waitingOn=on
                                           ↓
-                                       本线程让出调度权，直到新事件到达
+                                       on 必须 resolve 到 open 的 talk_window
+                                       或 do_window；否则 reject（无合法 on
+                                       通常意味着应该 end，不是 wait）
 \`\`\`
 
 当前协议还要补两点：
