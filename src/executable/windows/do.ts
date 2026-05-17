@@ -145,6 +145,8 @@ export async function executeDoWindowContinue(ctx: CommandExecutionContext): Pro
   if (ctx.args.wait === true) {
     thread.status = "waiting";
     thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0;
+    // 等子线程在 do_window 上回报；spec 2026-05-17 § 5
+    thread.waitingOn = ctx.parentWindow?.id;
   }
   return undefined;
 }
@@ -155,6 +157,7 @@ export async function executeDoWindowWait(ctx: CommandExecutionContext): Promise
   if (!thread) return undefined;
   thread.status = "waiting";
   thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0;
+  thread.waitingOn = ctx.parentWindow?.id;
   return undefined;
 }
 

@@ -148,6 +148,8 @@ export async function executeTalkWindowSay(ctx: CommandExecutionContext): Promis
   if (ctx.args.wait === true) {
     thread.status = "waiting";
     thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0;
+    // say 完顺手 wait —— 等的就是这个 talk_window 上的回信；spec 2026-05-17 § 5
+    thread.waitingOn = window.id;
   }
   return undefined;
 }
@@ -158,6 +160,7 @@ export async function executeTalkWindowWait(ctx: CommandExecutionContext): Promi
   if (!thread) return "[talk_window.wait] 缺少 thread context。";
   thread.status = "waiting";
   thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0;
+  thread.waitingOn = ctx.parentWindow?.id;
   return undefined;
 }
 

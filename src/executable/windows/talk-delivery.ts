@@ -151,10 +151,11 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
     { category: "context_change", kind: "inbox_message_arrived", msgId: messageId },
   ];
 
-  // 3) callee 状态：waiting/done/failed → running；inboxSnapshotAtWait 清空
+  // 3) callee 状态：waiting/done/failed → running；inboxSnapshotAtWait / waitingOn 清空
   if (calleeThread.status !== "running" && calleeThread.status !== "paused") {
     calleeThread.status = "running";
     calleeThread.inboxSnapshotAtWait = undefined;
+    calleeThread.waitingOn = undefined;
   }
 
   // 4) 持久化双方

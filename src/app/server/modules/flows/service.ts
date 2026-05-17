@@ -74,6 +74,7 @@ function reviveThreadForInboxMessage(thread: ThreadContext): ThreadContext {
     ...thread,
     status: "running",
     inboxSnapshotAtWait: undefined,
+    waitingOn: undefined,
   };
 }
 

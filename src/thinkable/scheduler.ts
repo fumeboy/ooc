@@ -95,6 +95,8 @@ function wakeWaitingThreadsOnInbox(root: ThreadContext): void {
     if (now > snapshot) {
       thread.status = "running";
       thread.inboxSnapshotAtWait = undefined;
+      // waitingOn 与 inboxSnapshotAtWait 同生命周期；wakeup 后清空（observability 字段）
+      thread.waitingOn = undefined;
     }
   }
 }
