@@ -5,8 +5,9 @@
  * 核心：每个概念对象（{ name, description, sources }）的 sources 必须是非空
  * Record<string, ModuleNamespace>，每个 value 必须是一个 module（运行时即对象）。
  *
- * 覆盖范围：executable / engineering / thinkable / persistable 四棵子树的合规概念。
- * 后续模块迁移时按需扩展（参考 docs/meta-source-binding-inventory.md）。
+ * 覆盖范围：executable / engineering / thinkable / persistable / observable /
+ * collaborable 子树的合规概念。后续模块迁移时按需扩展（参考
+ * docs/meta-source-binding-inventory.md）。
  */
 
 import { describe, expect, it } from "bun:test";
@@ -17,7 +18,9 @@ import { engineering_v20260506_1 } from "@meta/engineering/index.doc";
 import { thinkable_v20260504_1 } from "@meta/object/thinkable/index.doc";
 import { persistable_v20260504_1 } from "@meta/object/persistable/index.doc";
 import { observable_v20260517_1 } from "@meta/object/observable/index.doc";
-import { engineering_v20260506_1 } from "@meta/engineering/index.doc";
+import { collaborable_v20260504_1 } from "@meta/object/collaborable/index.doc";
+import { extendable_v20260504_1 } from "@meta/object/extendable/index.doc";
+import { reflectable_v20260504_1 } from "@meta/object/reflectable/index.doc";
 
 describe("walkConcepts helper", () => {
   it("identifies concepts that have name + description + sources", () => {
@@ -216,6 +219,29 @@ describe("observable meta tree", () => {
   });
 
   it("every collected observable concept has valid schema", () => {
+    expectAllConceptsValid(concepts);
+  });
+});
+
+describe("collaborable meta tree", () => {
+  const concepts = walkConcepts(collaborable_v20260504_1, "collaborable");
+
+  it("recognises collaborable root + 4 sub-areas + supervisor + 4 kanban leaves as合规概念", () => {
+    const conceptPaths = concepts.map((c) => c.path);
+    // 防止 concepts.* 漏挂或子文件忘记导出
+    expect(conceptPaths).toContain("collaborable");
+    expect(conceptPaths).toContain("collaborable.concepts.talk");
+    expect(conceptPaths).toContain("collaborable.concepts.relation");
+    expect(conceptPaths).toContain("collaborable.concepts.kanban");
+    expect(conceptPaths).toContain("collaborable.concepts.role");
+    expect(conceptPaths).toContain("collaborable.concepts.supervisor");
+    expect(conceptPaths).toContain("collaborable.concepts.kanban.concepts.issue");
+    expect(conceptPaths).toContain("collaborable.concepts.kanban.concepts.task");
+    expect(conceptPaths).toContain("collaborable.concepts.kanban.concepts.comment");
+    expect(conceptPaths).toContain("collaborable.concepts.kanban.concepts.concurrentWrite");
+  });
+
+  it("every collected collaborable concept has valid schema", () => {
     expectAllConceptsValid(concepts);
   });
 });
