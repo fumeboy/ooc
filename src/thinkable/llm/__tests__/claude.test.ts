@@ -93,6 +93,121 @@ describe("claude provider", () => {
     expect(capturedBody.messages[0].content.length).toBeGreaterThan(0);
   });
 
+  it("inbox_message_arrived 标记的 system 消息被抽到 messages 作为 user 文本", async () => {
+    // OOC processEventToItems 把 inbox 渲染成 role=system + 特殊前缀。
+    // Claude transport 识别该前缀，把"真实正文"抽出来作 user 文本块，让 Claude
+    // 看到对话起点，不需要 Continue 兜底。
+    let capturedBody: any;
+    globalThis.fetch = mock(async (_url: any, init: any) => {
+      capturedBody = JSON.parse(init.body as string);
+      return new Response(
+        JSON.stringify({ content: [{ type: "text", text: "ok" }] }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }) as unknown as typeof fetch;
+
+    await generateWithClaude(
+      {
+        provider: "claude",
+        apiKey: "test-key",
+        baseUrl: "https://example.com",
+        model: "claude-test",
+      },
+      {
+        input: [
+          { type: "message", role: "system", content: "<context>...</context>" },
+          {
+            type: "message",
+            role: "system",
+            content: "[context_change:inbox_message_arrived] msg_id=m1 from=user\n请帮我数文件",
+          },
+        ],
+      },
+    );
+
+    expect(capturedBody.messages.length).toBe(1);
+    expect(capturedBody.messages[0].role).toBe("user");
+    expect(Array.isArray(capturedBody.messages[0].content)).toBe(true);
+    expect(capturedBody.messages[0].content[0]).toEqual({
+      type: "text",
+      text: "请帮我数文件",
+    });
+    // <context>...</context> 仍然进 system 字段
+    expect(capturedBody.system).toContain("<context>");
+    // 不应在 system 里出现 inbox 标记原文
+    expect(capturedBody.system).not.toContain("[context_change:inbox_message_arrived]");
+  });
+
+  it("function_call 转 assistant tool_use 块、function_call_output 转 user tool_result 块", async () => {
+    let capturedBody: any;
+    globalThis.fetch = mock(async (_url: any, init: any) => {
+      capturedBody = JSON.parse(init.body as string);
+      return new Response(
+        JSON.stringify({ content: [{ type: "text", text: "ok" }] }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }) as unknown as typeof fetch;
+
+    await generateWithClaude(
+      {
+        provider: "claude",
+        apiKey: "test-key",
+        baseUrl: "https://example.com",
+        model: "claude-test",
+      },
+      {
+        input: [
+          {
+            type: "message",
+            role: "system",
+            content: "[context_change:inbox_message_arrived] msg_id=m1 from=user\nhi",
+          },
+          {
+            type: "function_call",
+            call_id: "tooluse_1",
+            name: "open",
+            arguments: { command: "talk", title: "say hi" },
+          },
+          {
+            type: "function_call_output",
+            call_id: "tooluse_1",
+            name: "open",
+            output: '{"ok":true}',
+          },
+          {
+            type: "function_call",
+            call_id: "tooluse_2",
+            name: "wait",
+            arguments: { on: "w_creator" },
+          },
+        ],
+      },
+    );
+
+    // 期望：user(text:hi) → assistant(tool_use:open) → user(tool_result) → assistant(tool_use:wait)
+    expect(capturedBody.messages.length).toBe(4);
+    expect(capturedBody.messages[0]).toEqual({
+      role: "user",
+      content: [{ type: "text", text: "hi" }],
+    });
+    expect(capturedBody.messages[1].role).toBe("assistant");
+    expect(capturedBody.messages[1].content[0]).toEqual({
+      type: "tool_use",
+      id: "tooluse_1",
+      name: "open",
+      input: { command: "talk", title: "say hi" },
+    });
+    expect(capturedBody.messages[2].role).toBe("user");
+    expect(capturedBody.messages[2].content[0]).toEqual({
+      type: "tool_result",
+      tool_use_id: "tooluse_1",
+      content: '{"ok":true}',
+    });
+    expect(capturedBody.messages[3].role).toBe("assistant");
+    expect(capturedBody.messages[3].content[0].type).toBe("tool_use");
+    expect(capturedBody.messages[3].content[0].name).toBe("wait");
+  });
+
   it("解析非流式文本结果", async () => {
     globalThis.fetch = mock(async () =>
       new Response(
