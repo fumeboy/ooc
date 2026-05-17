@@ -175,6 +175,13 @@ export type ThreadContext = {
    * 见 spec § 等待语义的简化。
    */
   inboxSnapshotAtWait?: number;
+  /**
+   * status="waiting" 时由 wait tool 写入：本次 wait 引用的 IO 来源 window id。
+   * 唤醒后由 scheduler 清空。observability/debug 用，Phase 1 不参与 wakeup 决策
+   * （任何 inbox 新消息都唤醒）；Phase 2 可能据此做精确路由。
+   * 见 docs/superpowers/specs/2026-05-17-wait-requires-dependency-design.md。
+   */
+  waitingOn?: string;
   /** 当前线程的持久化位置；缺失时系统只以内存模式运行。 */
   persistence?: ThreadPersistenceRef;
 };

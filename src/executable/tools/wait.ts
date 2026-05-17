@@ -1,10 +1,13 @@
 /**
- * wait tool — 把当前线程切到 waiting 状态，等待 inbox 新消息唤醒。
+ * wait tool — 显式声明"等指定 window 上的未来 IO 事件"，把 thread 切到 waiting。
  *
- * spec § 5 原语 wait + § 等待语义的简化：
- * - 不再写 waitingType（字段已删）
- * - 用 thread.inboxSnapshotAtWait 记录入眠时刻 inbox 长度，scheduler 据此判断是否有新消息
- * - 任何 inbox 新消息（子线程 end 通知 / talk 回复 / 外部 inject）都能唤醒
+ * spec: docs/superpowers/specs/2026-05-17-wait-requires-dependency-design.md
+ *
+ * - `on` 必填：必须 resolve 到当前 contextWindows 一个 open 且可产生未来 IO 的 window
+ *   （talk_window / do_window）。
+ * - 没有任何合法 `on` 候选时 → reject，强 nudge 改 end command。
+ * - thread.inboxSnapshotAtWait 仍用于 wakeup（Phase 1 wakeup 逻辑不变）；
+ *   thread.waitingOn 仅作 observability，不参与 wakeup 决策。
  */
 
 import type { LlmTool } from "../../thinkable/llm/types.js";
@@ -14,15 +17,28 @@ import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 export const WAIT_TOOL: LlmTool = {
   name: "wait",
   description:
-    "把当前线程切到 waiting 状态，暂停执行直到 inbox 收到任意新消息。适用于：等待用户输入 / 等待子线程结束 / 主动让出执行权。必填 reason。",
+    "声明你在等指定 window 上的未来 IO 事件，把当前 thread 切到 waiting。" +
+    "on 必填且必须 resolve 到当前 contextWindows 里 open 状态的 talk_window 或 do_window" +
+    "（这是允许产生未来 IO 的两种 window type）。没有合法 on 时不能 wait——" +
+    "意味着任务已完成 / 无 IO 预期，请改用 end command 收尾。",
   inputSchema: {
     type: "object",
     properties: {
       title: TITLE_PARAM,
-      reason: { type: "string", description: "等待原因" },
+      on: {
+        type: "string",
+        description:
+          "未来 IO 来源 window id。必须是当前 contextWindows 里 open 的 talk_window 或 do_window。" +
+          "talk_window：等对端发新消息（creator talk 一律合法；自建 talk 需先 say 过）。" +
+          "do_window：等子线程 outbox 回报（子线程必须仍 running/waiting）。",
+      },
+      reason: {
+        type: "string",
+        description: "（可选）人类可读的等待说明，observability 用。",
+      },
       mark: MARK_PARAM,
     },
-    required: ["reason"],
+    required: ["on"],
   },
 };
 
@@ -30,12 +46,15 @@ export async function handleWaitTool(
   thread: ThreadContext,
   args: Record<string, unknown>,
 ): Promise<string> {
+  // Task 2 will fill in the actual validation; this is the Task 1 stub.
+  const on = args.on as string | undefined;
   const reason = (args.reason as string | undefined) ?? "";
   thread.status = "waiting";
   thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0;
+  thread.waitingOn = on;
   return JSON.stringify({
     ok: true,
     tool: "wait",
-    message: `[wait] 线程进入 waiting，等待 inbox 新消息。原因：${reason}`,
+    message: `[wait] 线程进入 waiting，等待 ${on ?? "(unset)"} 上的事件。原因：${reason}`,
   });
 }
