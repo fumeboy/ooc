@@ -10,28 +10,124 @@ import * as executable from "@src/executable/index";
  */
 export const knowledge_activation_v20260515_1 = {
   name: "KnowledgeActivation",
-  description: `
-Knowledge 在 OOC 中按 commandPaths 与 window 类型动态激活，最终统一表示为
-KnowledgeWindow（type=knowledge）出现在 context 里。
+  description: `Knowledge 在 OOC 中按 commandPaths 与 window 类型动态激活，统一表示为 KnowledgeWindow（type=knowledge）出现在 context 里。`,
+  sources: { knowledge, executable },
 
-来源分三类：
+  sources_v20260517_1: {
+    index: `knowledge entries 的 3 类来源；详见各子节点。`,
 
-- **protocol**：全局 KNOWLEDGE 常量、root 命令清单（ROOT_KNOWLEDGE）、每个
-  command_exec form 的 knowledge() 派生条目、每种 window type 注册的 basicKnowledge
-- **activator**：stones/{id}/knowledge/*.md 经 commandPaths 命中。命中算法在
-  computeActivations；命中后 presentation 决定 full vs summary
-- **explicit**：用户通过 root.open_knowledge 主动 pin 的 knowledge_window
+    protocol_v20260517_1: {
+      index: `
+#### protocol
 
-合成入口：collectExecutableKnowledgeEntries(thread.contextWindows, thread)。
-该函数：
+固定下发的协议常量集合。4 个子来源详见 \`protocol.subSources\`。
+`.trim(),
 
-1. 收集 protocol 来源 entries
-2. 按 thread.contextWindows 中实际出现的 window type，注入该 type 的 basicKnowledge
-3. 把 protocol entries 合成为 KnowledgeWindow（source=protocol）
-4. 加 activator 命中（source=activator + presentation）
-5. 显式 knowledge_window 原样保留；activator 命中重复 path 时跳过
+      subSources_v20260517_1: {
+        index: `\`protocol\` 的 4 个子来源。`,
 
+        globalKnowledge_v20260517_1: {
+          index: `##### globalKnowledge — 模块级 \`KNOWLEDGE\` 常量；任何 thread 都看到。`,
+        },
+
+        rootCommandList_v20260517_1: {
+          index: `##### rootCommandList — \`ROOT_KNOWLEDGE\`，描述 root window 上注册的全部顶层 command 与调用形态。`,
+        },
+
+        commandExecForm_v20260517_1: {
+          index: `##### commandExecForm — 每个 command_exec 的 \`entry.knowledge(args, formStatus)\` 派生条目；按 form 当前 args / status 动态变化。`,
+        },
+
+        windowBasicKnowledge_v20260517_1: {
+          index: `##### windowBasicKnowledge — 每种 window type 在 \`registerWindowType\` 时注入的 \`basicKnowledge\` 字段；只要该 type 至少一个实例在场就合成。`,
+        },
+      },
+    },
+
+    activator_v20260517_1: {
+      index: `
+#### activator
+
+\`stones/{id}/knowledge/*.md\` 经 commandPaths 命中。命中算法见 \`activator.computeActivations\`；
+命中后 \`presentation\`（full / summary）决定渲染体积。
+`.trim(),
+
+      computeActivations_v20260517_1: {
+        index: `
+##### computeActivations
+
+按 thread 当前所有 command_exec 的 \`commandPaths\` 并集与 stones/{id}/knowledge/*.md 的 front-matter
+匹配规则比对，命中即激活。loader 按 mtime 失效缓存（knowledge_window.reload 主要是语义提示）。
+`.trim(),
+      },
+
+      presentation_v20260517_1: {
+        index: `##### presentation — \`"full" | "summary"\`，对应渲染层不同的体积截断（knowledge 8KB）。`,
+      },
+    },
+
+    explicit_v20260517_1: {
+      index: `
+#### explicit
+
+用户 / LLM 通过 \`root.open_knowledge\` 主动 pin 的 knowledge_window；
+源自 stones/{id}/knowledge/{path}.md，持久化进 thread.json。
+`.trim(),
+    },
+  },
+
+  synthesisPipeline_v20260517_1: {
+    index: `
+\`collectExecutableKnowledgeEntries(thread.contextWindows, thread)\` 是合成入口；按顺序 5 步。
 合成 window 仅在响应体里出现，不写回 thread.json 持久化字段。
 `.trim(),
-  sources: { knowledge, executable },
+
+    step1ProtocolEntries_v20260517_1: {
+      index: `
+##### step1ProtocolEntries
+
+收集 protocol 来源 entries：globalKnowledge + rootCommandList + 当前所有 command_exec form
+的 knowledge() 派生。
+`.trim(),
+    },
+
+    step2WindowBasicKnowledge_v20260517_1: {
+      index: `
+##### step2WindowBasicKnowledge
+
+遍历 \`thread.contextWindows\` 看实际出现哪些 window type；对每个出现的 type 调
+\`getWindowTypeDefinition(type).basicKnowledge\` 注入到 entries。
+`.trim(),
+    },
+
+    step3ProtocolWindows_v20260517_1: {
+      index: `##### step3ProtocolWindows — 把 step1 + step2 的 entries 合成为 \`source="protocol"\` 的 KnowledgeWindow。`,
+    },
+
+    step4ActivatorWindows_v20260517_1: {
+      index: `
+##### step4ActivatorWindows
+
+计算 activator 命中（按 step1 中所有 commandPaths 并集查 stones/*/knowledge/*.md），
+合成 \`source="activator"\` + 各自 presentation 的 KnowledgeWindow。
+`.trim(),
+    },
+
+    step5ExplicitMerge_v20260517_1: {
+      index: `
+##### step5ExplicitMerge
+
+显式 knowledge_window（thread.contextWindows 里 source=explicit / source 缺省）原样保留；
+activator 命中重复 path 时跳过（避免同 path 出现两份）。
+`.trim(),
+    },
+  },
+
+  ephemeralVsPersisted_v20260517_1: {
+    index: `
+合成出的 protocol / activator KnowledgeWindow 只挂在响应体上传给 LLM，**不写回**
+\`thread.contextWindows\` 持久化数组——thread.json 中只保留 source=explicit 的 KnowledgeWindow。
+这让协议层 knowledge 可以随源码 / 命令面变化随时调整，无需迁移持久化数据。
+`.trim(),
+  },
 };
