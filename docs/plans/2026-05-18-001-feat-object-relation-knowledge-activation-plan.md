@@ -2,7 +2,9 @@
 type: feat
 origin: docs/brainstorms/2026-05-18-object-relation-knowledge-activation-requirements.md
 created: 2026-05-18
-status: active
+status: completed
+shipped_commit: 97ce6b9
+shipped_branch: feat/object-relation-activation
 ---
 
 # feat: Object relation knowledge auto-activation
