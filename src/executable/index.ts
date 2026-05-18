@@ -11,6 +11,8 @@
 import { deriveStoneFromThread } from "../persistable";
 import type { ThreadContext } from "../thinkable/context";
 import { ROOT_BASIC_PATH, ROOT_COMMANDS, ROOT_KNOWLEDGE } from "./windows/root/index.js";
+import { REFLECTABLE_BASIC_PATH, REFLECTABLE_KNOWLEDGE } from "./reflectable-knowledge.js";
+import { SUPER_SESSION_ID } from "./windows/super-constants.js";
 import type { CommandKnowledgeEntries } from "./windows/command-types.js";
 import { getWindowTypeDefinition } from "./windows/registry.js";
 import type { CommandExecWindow, ContextWindow, KnowledgeWindow } from "./windows/types.js";
@@ -258,6 +260,11 @@ export async function collectExecutableKnowledgeEntries(
     [EXECUTABLE_BASIC_PATH]: KNOWLEDGE,
     [ROOT_BASIC_PATH]: ROOT_KNOWLEDGE,
   };
+
+  // spec 2026-05-18 super-flow-channel：sessionId="super" 是反思场景门控
+  if (thread.persistence?.sessionId === SUPER_SESSION_ID) {
+    protocolEntries[REFLECTABLE_BASIC_PATH] = REFLECTABLE_KNOWLEDGE;
+  }
 
   const list = contextWindows ?? [];
   const enriched: ContextWindow[] = [];

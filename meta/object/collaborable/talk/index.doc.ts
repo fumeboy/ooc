@@ -168,7 +168,15 @@ close 不删除历史，只关闭通道。
 
     resolveCallee: {
       title: "解析或创建 callee thread",
-      content: "按 callee object id 解析其当前 root thread；不存在则创建。",
+      content: `
+按 callee object id 解析其当前 root thread；不存在则创建。
+
+**target='super' 自指别名**（spec 2026-05-18 super-flow-channel）：
+\`callerWindow.target === "super"\` 时翻译为 \`calleeObjectId = caller.objectId\`
++ \`calleeSessionId = "super"\`——派送到 caller 自己的 super 分身（详见
+\`reflectable.invocation.selfAlias\`）。这是 talk-delivery 第一处跨 session
+派送场景；其它 target 保持同 session 行为。
+      `.trim(),
     },
 
     doubleWrite: {

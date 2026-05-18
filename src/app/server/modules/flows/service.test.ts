@@ -216,4 +216,86 @@ describe("flows service", () => {
       await rm(baseDir, { recursive: true, force: true });
     }
   });
+
+  describe("super sessionId is reserved", () => {
+    test("createSession rejects sessionId='super' with INVALID_INPUT", async () => {
+      const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-"));
+      try {
+        const service = createFlowsService({
+          baseDir, pauseStore: createPauseStore(), jobManager: createJobManager(),
+        });
+        await expect(service.createSession({ sessionId: "super" })).rejects.toMatchObject({
+          code: "INVALID_INPUT",
+        });
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+
+    test("createSession rejects any case of 'super' (case-insensitive guard for HFS+)", async () => {
+      const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-"));
+      try {
+        const service = createFlowsService({
+          baseDir, pauseStore: createPauseStore(), jobManager: createJobManager(),
+        });
+        await expect(service.createSession({ sessionId: "Super" })).rejects.toMatchObject({
+          code: "INVALID_INPUT",
+        });
+        await expect(service.createSession({ sessionId: "SUPER" })).rejects.toMatchObject({
+          code: "INVALID_INPUT",
+        });
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+
+    test("seedSession rejects sessionId='super'", async () => {
+      const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-"));
+      try {
+        const service = createFlowsService({
+          baseDir, pauseStore: createPauseStore(), jobManager: createJobManager(),
+        });
+        await expect(
+          service.seedSession({
+            sessionId: "super",
+            targetObjectId: "alice",
+            initialMessage: "hi",
+          }),
+        ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+
+    test("createFlowObject rejects sessionId='super' (防止绕过 createSession 守卫直接创建受保护目录)", async () => {
+      const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-"));
+      try {
+        const service = createFlowsService({
+          baseDir, pauseStore: createPauseStore(), jobManager: createJobManager(),
+        });
+        await expect(
+          service.createFlowObject({ sessionId: "super", objectId: "mallory" }),
+        ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+        await expect(
+          service.createFlowObject({ sessionId: "SUPER", objectId: "mallory" }),
+        ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+
+    test("regression: createSession accepts normal sessionId", async () => {
+      const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-"));
+      try {
+        const service = createFlowsService({
+          baseDir, pauseStore: createPauseStore(), jobManager: createJobManager(),
+        });
+        const out = await service.createSession({ sessionId: "web-test-1" });
+        expect(out.sessionId).toBe("web-test-1");
+        expect(out.created).toBe(true);
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+  });
 });

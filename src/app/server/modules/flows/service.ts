@@ -15,6 +15,10 @@ import {
   type ContextWindow,
   type TalkWindow,
 } from "@src/executable/windows/types";
+import {
+  SUPER_SESSION_ID,
+  isSuperSessionId,
+} from "@src/executable/windows/super-constants";
 import type { createJobManager } from "../../runtime/job-manager";
 import type { PauseStore } from "../../runtime/pause-store";
 import { scanPausedThreads } from "../../runtime/thread-query";
@@ -26,6 +30,19 @@ import { join } from "node:path";
 
 /** 约定值：user 是 web session 的特殊 flow object，控制面代它发消息；worker 不调度它。 */
 const USER_OBJECT_ID = "user";
+
+/**
+ * 受保护的 super sessionId（spec 2026-05-18 super-flow-channel）：用户通过
+ * HTTP API 创建 / seed 必须 reject；只由 talk-delivery 内部按需创建（系统路径）。
+ */
+function assertNotSuperSessionId(sessionId: string): void {
+  if (isSuperSessionId(sessionId)) {
+    throw new AppServerError(
+      "INVALID_INPUT",
+      `sessionId '${SUPER_SESSION_ID}' is reserved for system reflection flow; pick a different sessionId`,
+    );
+  }
+}
 
 function httpContext() {
   return {
@@ -145,6 +162,7 @@ export function createFlowsService(deps: {
       }
     },
     async createSession({ sessionId, title }: { sessionId: string; title?: string }) {
+      assertNotSuperSessionId(sessionId);
       await createFlowSession(deps.baseDir, sessionId, title);
       return {
         sessionId,
@@ -178,6 +196,7 @@ export function createFlowsService(deps: {
       if (!targetObjectId.trim()) {
         throw new AppServerError("INVALID_INPUT", "targetObjectId is required");
       }
+      assertNotSuperSessionId(sessionId);
       if (targetObjectId === USER_OBJECT_ID) {
         throw new AppServerError(
           "INVALID_INPUT",
@@ -263,6 +282,7 @@ export function createFlowsService(deps: {
       objectId: string;
       initialMessage?: string;
     }) {
+      assertNotSuperSessionId(sessionId);
       const ref = await createFlowObject({
         baseDir: deps.baseDir,
         sessionId,

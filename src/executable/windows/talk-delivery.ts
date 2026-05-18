@@ -6,14 +6,20 @@
  * 一次"派送"做以下 5 件事：
  *
  * 1. 解析 caller 与 target：caller = ctx.thread + ctx.talkWindow；target = talkWindow.target
- *    （objectId）。两者必须都带 persistence ref，且共享同一个 sessionId（跨 session talk
- *    不在本期）。
+ *    （objectId）。两者必须都带 persistence ref。
+ *
+ *    **target="super" 自指别名**（spec 2026-05-18 super-flow-channel）：
+ *    callerWindow.target === "super" 时翻译为
+ *    `(calleeObjectId = caller.objectId, calleeSessionId = "super")`——派送到
+ *    自己的 super 分身。这是跨 session 派送（caller 的当前 session 与 "super" 不同），
+ *    talk-delivery 不再约束 caller/callee 同 session。
  *
  * 2. 解析或创建 callee thread：
  *    - 若 talkWindow.targetThreadId 已设置 → readThread 拿到 callee
  *    - 否则 → createFlowObject(callee) 兜底（已存在则 no-op），新建一条 thread，
  *      thread id 由派送时生成；callee 携带 creatorObjectId=caller object，
  *      initContextWindows 据此自动注入指向 caller 的 creator talk_window
+ *    - 跨 session 派送（如 super alias）：必要时 createFlowSession 创建目标 session 目录
  *    - callee 创建好后 talkWindow.targetThreadId 回填，让下次 say 直接命中已有 thread
  *
  * 3. 写消息：
@@ -28,9 +34,11 @@
  * 不在本模块负责：调度（由 worker 自然轮询）、UI 通知（控制面自己决定何时 refresh）。
  */
 
-import { readThread, writeThread, createFlowObject } from "../../persistable/index.js";
+import { readThread, writeThread, createFlowObject, createFlowSession, sessionMetadataFile } from "../../persistable/index.js";
+import { stat } from "node:fs/promises";
 import type { ThreadContext, ThreadMessage } from "../../thinkable/context.js";
 import { initContextWindows } from "./init.js";
+import { isSuperSessionId, SUPER_SESSION_ID } from "./super-constants.js";
 import { creatorWindowIdOf, type TalkWindow } from "./types.js";
 
 export interface TalkDeliveryInput {
@@ -73,8 +81,12 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
   }
 
   const callerRef = callerThread.persistence;
-  const calleeObjectId = callerWindow.target;
-  if (!calleeObjectId) throw new Error("talk_window.target is empty");
+  const rawTarget = callerWindow.target;
+  if (!rawTarget) throw new Error("talk_window.target is empty");
+
+  const isSuperAlias = isSuperSessionId(rawTarget);
+  const calleeObjectId = isSuperAlias ? callerRef.objectId : rawTarget;
+  const calleeSessionId = isSuperAlias ? SUPER_SESSION_ID : callerRef.sessionId;
 
   // 1) 解析 callee thread；首条消息时创建
   let calleeThreadId = callerWindow.targetThreadId;
@@ -82,16 +94,21 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
 
   if (calleeThreadId) {
     calleeThread = await readThread(
-      { baseDir: callerRef.baseDir, sessionId: callerRef.sessionId, objectId: calleeObjectId },
+      { baseDir: callerRef.baseDir, sessionId: calleeSessionId, objectId: calleeObjectId },
       calleeThreadId,
     );
   }
 
   if (!calleeThread) {
-    // 第一次派送：创建 callee object 目录（已存在则 no-op）+ 新 thread
+    // super session 第一次出现时才创建 .session.json；已存在不重写（避免覆盖
+    // 既有 title）
+    if (isSuperAlias && !(await pathExists(sessionMetadataFile(callerRef.baseDir, SUPER_SESSION_ID)))) {
+      await createFlowSession(callerRef.baseDir, SUPER_SESSION_ID, "OOC self-reflection");
+    }
+
     await createFlowObject({
       baseDir: callerRef.baseDir,
-      sessionId: callerRef.sessionId,
+      sessionId: calleeSessionId,
       objectId: calleeObjectId,
     });
 
@@ -105,7 +122,7 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
       creatorObjectId: callerRef.objectId,
       persistence: {
         baseDir: callerRef.baseDir,
-        sessionId: callerRef.sessionId,
+        sessionId: calleeSessionId,
         objectId: calleeObjectId,
         threadId: calleeThreadId,
       },
@@ -202,4 +219,14 @@ function resolveCalleeReplyToWindowId(
   const byObjectId = windows.find((w) => w.target === callerObjectId);
   if (byObjectId) return byObjectId.id;
   return creatorWindowIdOf(calleeThread.id);
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
 }

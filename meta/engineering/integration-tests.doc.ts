@@ -29,7 +29,7 @@ export type IntegrationTestsConcept = Concept & {
   /** 通用 fixture（tests/integration/_fixture.ts）签名 */
   fixture: ExampleNode;
 
-  /** 当前测试清单：6 个分类 × 11 + 1 文件 */
+  /** 当前测试清单：7 个分类 × 12 + 1 文件 */
   testInventory: {
     title: string;
     summary?: string;
@@ -45,6 +45,8 @@ export type IntegrationTestsConcept = Concept & {
     metaProgramming: ExampleNode;
     /** 身份注入 1 个测试 */
     identityInjection: ExampleNode;
+    /** 反思通道 1 个测试 */
+    reflectionChannel: ExampleNode;
   };
 
   /** 历次真 LLM 跑出来的具体 bug + 修复记录 */
@@ -124,7 +126,7 @@ countEventsWithPrefix(thread, prefix): number     // 数 inject 文案前缀
 
   testInventory: {
     title: "当前测试清单",
-    summary: "11 + 1 个集成测试，按覆盖能力 6 组分类",
+    summary: "12 + 1 个集成测试，按覆盖能力 7 组分类",
 
     singleThreadBasic: {
       kind: "example",
@@ -204,6 +206,32 @@ Phase 1 多 Object 身份切片的端到端验证：证明 self.md 真的通过
 
 OK 档当前在断言上仍 fail（缺 \`<self>\` 即认定渲染层退化太大）；若未来出现
 "instructions 通道生效但 render 通道偶发漏" 的合理情形，再把 OK 转为软警告。
+      `.trim(),
+    },
+
+    reflectionChannel: {
+      kind: "example",
+      title: "反思通道",
+      content: `
+| # | 文件 | 覆盖能力 |
+|---|---|---|
+| 13 | super-flow-channel | talk(target='super') 自指别名 / 跨 session 派送 / flows/super/objects/alice/ 落盘 / debug/llm.input.json 含 \`<self object_id="alice">\` + \`internal/executable/reflectable/basic\` |
+
+Phase 1 super flow 通道贯通切片的端到端验证：证明 alice 在普通 session 里
+\`talk(target="super")\` 真的派送到 \`flows/super/objects/alice/\` 下；super
+alice thread 收到 reflectable knowledge 提示后 LLM 正常 end。
+
+**评分基准**（遵循 how_to_test/strategy.md §2 三档基准）：
+
+| 档 | 触发条件 |
+|---|---|
+| Good | super-alice thread.json 落在 flows/super/objects/alice/threads/ 下，status=done；debug/llm.input.json 第 0 个 system message 含 \`<self object_id="alice">\` 且含路径串 \`internal/executable/reflectable/basic\`；endSummary 非空 |
+| OK   | super-alice done 但 reflectable 路径串没出现（U3 注入失效但 U1+U2 工作） |
+| Bad  | super-alice 没起身 / status=failed / 落错位置（如 flows/web-test/objects/super 或 flows/super/objects/super） |
+
+精确锚点设计：reflectable 检测用路径串 \`internal/executable/reflectable/basic\`
+而非自然语言匹配（"反思" / "super flow" 等会被用户 prompt 误触发）——这条路径
+只可能出现在 U3 合成的 \`<knowledge_window>\` 标签里。
       `.trim(),
     },
   },

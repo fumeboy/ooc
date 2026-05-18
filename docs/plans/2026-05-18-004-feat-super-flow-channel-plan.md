@@ -1,6 +1,6 @@
 ---
 title: Super Flow Phase 1 — Channel-Only Slice
-status: active
+status: completed
 date: 2026-05-18
 type: feat
 origin: docs/brainstorms/2026-05-18-super-flow-channel-requirements.md
