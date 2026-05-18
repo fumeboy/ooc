@@ -89,7 +89,7 @@ export function AppShell() {
       const nextFile = activePath && hadFile ? await fetchFile(activePath) : undefined;
       setState((prev) => {
         const flowsChanged = flowsRes.hash !== prev.flowsHash;
-        const threadChanged = nextThread !== undefined && nextThread.hash !== prev.thread?.hash;
+        const threadChanged = nextThread != null && nextThread.hash !== prev.thread?.hash;
         const fileChanged = nextFile !== undefined && nextFile.content !== prev.activeFile?.content;
         return {
           ...prev,
@@ -147,7 +147,11 @@ export function AppShell() {
     ])
       .then(([thread, threads]) => {
         if (cancelled) return;
-        patch({ thread, sessionThreads: threads.items });
+        // thread 可能为 null(后端临时找不到 / 空 body),null 时不覆盖旧 state.thread
+        patch({
+          ...(thread != null ? { thread } : {}),
+          sessionThreads: threads.items,
+        });
       })
       .catch((e) => { if (!cancelled) patch({ error: messageFromError(e) }); });
     return () => { cancelled = true; };
@@ -167,7 +171,10 @@ export function AppShell() {
           fetchFlows(),
         ]);
         setState((prev) => {
-          const threadChanged = thread.hash !== prev.thread?.hash;
+          // thread 可能为 null:fetchThread 类型 ThreadContext 但底层 requestJson
+          // 在空 body / null body 时返回 null(thread 还在创建中等场景)。
+          // 此时只更新 flows,thread 保留旧值。
+          const threadChanged = thread !== null && thread.hash !== prev.thread?.hash;
           const flowsChanged = flows.hash !== prev.flowsHash;
           if (!threadChanged && !flowsChanged) return prev;
           return {
@@ -247,7 +254,11 @@ export function AppShell() {
         fetchThread(activeSessionId, objectId, threadId),
         fetchSessionThreads(activeSessionId).catch(() => ({ items: [] as SessionThread[] })),
       ]);
-      patch({ thread, sessionThreads: threads.items, loading: false });
+      patch({
+        ...(thread != null ? { thread } : {}),
+        sessionThreads: threads.items,
+        loading: false,
+      });
     } catch (error) {
       patch({ error: messageFromError(error), loading: false });
     }

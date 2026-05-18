@@ -10,7 +10,7 @@
  *    XML 子树替换为本组件
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { json as jsonLanguage } from "@codemirror/lang-json";
 import {
@@ -139,7 +139,20 @@ function nodeAffix(node: ContextNode): { icon: LucideIcon; tone: Tone; status?: 
 }
 
 /** 复用 cw-* 样式做美化的左树行。 */
-function TreeNode({
+/**
+ * 复用 cw-* 样式做美化的左树行。
+ *
+ * 性能:用 React.memo + 自定义 areEqual,只比较真正影响该行 DOM 输出的字段。
+ * polling 刷新时 buildContextTree 会重建整棵树(node 引用都变了),但只要某行的
+ * 可见字段没变就 short-circuit,避免长 events / 多 window 列表全量 re-render。
+ *
+ * 同时把 selectedId/expanded 整个 Set 传入子组件(而非 boolean),让递归子节点
+ * 能继续自己判断 — 这意味着 areEqual 必须比较 selectedId 是否仍命中 self 或某个
+ * descendant、expanded 集合是否含本节点。出于实用考虑,我们只比较"本行需要的":
+ * self.id === selectedId 与 expanded.has(node.id);递归 children 由 React 自行
+ * 沿组件树重新检查(每一层都会跑 memo 比较)。
+ */
+function TreeNodeImpl({
   node,
   selectedId,
   expanded,
@@ -228,6 +241,61 @@ function TreeNode({
     </li>
   );
 }
+
+/**
+ * TreeNode 的 memo wrapper。areEqual 只比较影响本行 DOM 的字段:
+ * - 本行 id / label / summary / charCount / badge / messageCounts(reference 比较够)
+ * - 本行 isSelected / isExpanded(从 selectedId / expanded.has 派生)
+ * - children 数组(用 length + 第一个 child id 做轻量 fingerprint;不准但够用)
+ *
+ * 如果某行的可见状态没变,本组件 short-circuit,React 仍会沿 children 数组传 prop
+ * 给孙 TreeNode,孙节点各自跑自己的 memo 比较。
+ */
+const TreeNode = memo(TreeNodeImpl, (prev, next) => {
+  if (prev.depthOffset !== next.depthOffset) return false;
+  if (prev.onSelect !== next.onSelect || prev.onToggle !== next.onToggle) return false;
+  const a = prev.node;
+  const b = next.node;
+  if (a === b) {
+    // 同一引用 + 同 selectedId/expanded 命中 → 跳过
+    return (
+      prev.selectedId === next.selectedId ||
+      (prev.selectedId !== a.id && next.selectedId !== a.id)
+    ) && prev.expanded.has(a.id) === next.expanded.has(a.id);
+  }
+  // 不同引用:逐字段比较"可见输出"
+  if (
+    a.id !== b.id ||
+    a.label !== b.label ||
+    a.summary !== b.summary ||
+    a.charCount !== b.charCount ||
+    a.badge !== b.badge ||
+    a.depth !== b.depth
+  ) {
+    return false;
+  }
+  // messageCounts 字段比较
+  const am = a.messageCounts;
+  const bm = b.messageCounts;
+  if (am !== bm) {
+    if (!am || !bm) return false;
+    if (am.inbox !== bm.inbox || am.outbox !== bm.outbox) return false;
+  }
+  // children 轻量 fingerprint:数量 + 首尾 id;够用,因为顺序由 buildContextTree 决定
+  if (a.children.length !== b.children.length) return false;
+  if (a.children.length > 0) {
+    if (a.children[0]!.id !== b.children[0]!.id) return false;
+    const last = a.children.length - 1;
+    if (a.children[last]!.id !== b.children[last]!.id) return false;
+  }
+  // 选中/展开:仅本行命中或脱离命中才需要 re-render
+  if ((prev.selectedId === a.id) !== (next.selectedId === b.id)) return false;
+  if (prev.expanded.has(a.id) !== next.expanded.has(b.id)) return false;
+  // window 类型的 status 可能变 — 我们不专门比 data,但 status 通常会反映到 label/summary,
+  // 上面的 label 比较能间接捕获。execfully changing status 会改 isExecuting,通过 a !== b
+  // 引用差异 + label/summary 差异传导
+  return true;
+});
 
 /**
  * 内联 talk-window 回复 composer。
@@ -839,10 +907,27 @@ export function ContextSnapshotViewer({
   const [selectedKey, setSelectedKey] = useState<string | null>(defaultSelected);
   const [expanded, setExpanded] = useState<Set<string>>(() => collectInitialExpandedIds(tree));
 
+  // 跨 snapshot 保留用户态:只在 thread.id 切换(用户切到不同 thread)时重置;
+  // 同 thread 内的 polling 刷新(events 增长等)保留 selection / expand 集。
+  // 新增节点(如新 talk_window 派生的 relation knowledge)默认折叠 — 用户没主动
+  // 展开过的就不展开,与"events 默认折叠"哲学一致;避免新内容跳出来分散注意力。
+  const threadIdRef = useRef(snapshot.id);
   useEffect(() => {
-    setSelectedKey(tree.children[0]?.id ?? tree.id);
-    setExpanded(collectInitialExpandedIds(tree));
-  }, [tree]);
+    if (threadIdRef.current !== snapshot.id) {
+      threadIdRef.current = snapshot.id;
+      setSelectedKey(tree.children[0]?.id ?? tree.id);
+      setExpanded(collectInitialExpandedIds(tree));
+    } else {
+      // 同 thread 内的更新:剔除掉树里已经不存在的 id(避免 expanded set 无限膨胀);
+      // 选中节点若被移除则 fallback 到第一个 child
+      setExpanded((prev) => {
+        const next = new Set<string>();
+        for (const id of prev) if (treeMap.has(id)) next.add(id);
+        return next.size === prev.size ? prev : next;
+      });
+      setSelectedKey((prev) => (prev && treeMap.has(prev) ? prev : tree.children[0]?.id ?? tree.id));
+    }
+  }, [tree, treeMap, snapshot.id]);
 
   // 跨组件导航:外部 dispatchNavigateToWindow(id) 时,定位到该 window 节点。
   // 候选 id 形式 "window:<id>"(buildWindowNode 使用的 id pattern);兼容传入裸 window id。
@@ -871,6 +956,16 @@ export function ContextSnapshotViewer({
   const selectedNode = selectedKey ? treeMap.get(selectedKey) ?? null : null;
   const totalChars = tree.charCount;
 
+  // 稳定 toggle handler 引用,让 TreeNode 的 memo areEqual 不会因 fn 引用变化而 cache miss
+  const handleToggle = useCallback((id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
   return (
     <div className="llm-input-viewer">
       <div className="llm-input-header">
@@ -896,14 +991,7 @@ export function ContextSnapshotViewer({
                 selectedId={selectedKey}
                 expanded={expanded}
                 onSelect={setSelectedKey}
-                onToggle={(id) => {
-                  setExpanded((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(id)) next.delete(id);
-                    else next.add(id);
-                    return next;
-                  });
-                }}
+                onToggle={handleToggle}
                 depthOffset={1}
               />
             ))}

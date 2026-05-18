@@ -102,15 +102,16 @@ function reviveThreadForInboxMessage(thread: ThreadContext): ThreadContext {
  * 重新合成的 ephemeral 字段（id / createdAt），它们由 nextSyntheticId / Date.now 生成，
  * 对前端语义无影响，但会让 hash 永远变化、polling 永远命中"内容变了"。
  *
- * 只对 source=protocol/activator 这两类合成 knowledge window 做剔除；explicit knowledge
- * 与其它持久 window 的 id/createdAt 是真实状态，原样保留。
+ * 对所有非 explicit 来源的合成 knowledge window 做剔除(protocol / activator / relation
+ * 都是每轮派生);explicit knowledge 与其它持久 window 的 id/createdAt 是真实状态,
+ * 原样保留。新增 source 时这里默认覆盖,不会再像 relation 那样漏改。
  */
 function stripVolatileForHash(payload: { contextWindows?: ContextWindow[] }) {
   if (!payload.contextWindows) return payload;
   return {
     ...payload,
     contextWindows: payload.contextWindows.map((window) => {
-      if (window.type === "knowledge" && (window.source === "protocol" || window.source === "activator")) {
+      if (window.type === "knowledge" && window.source !== undefined && window.source !== "explicit") {
         const { id: _id, createdAt: _createdAt, ...rest } = window;
         return rest;
       }
