@@ -67,6 +67,8 @@ export const client_v20260506_1: ClientConcept = {
   },
   sources: { clientPersistable },
   description: `
+OOC 系统中 Object 具有元编程能力，其中包括为自己编写前端页面。
+
 Client 描述 Object 如何为自己编写前端 React UI 组件。Object 的 client 通过 HTTP
 \`/call_method\` 端点调用自己 server 模块导出的 \`ui_methods\`；前端动态加载失败时由
 ErrorBoundary 兜底。

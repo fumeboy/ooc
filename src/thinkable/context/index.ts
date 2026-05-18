@@ -2,7 +2,7 @@ import type { LlmInputItem, LlmMessage } from "../llm/types";
 import { collectExecutableKnowledgeEntries } from "../../executable/index";
 import type { ContextWindow } from "../../executable/windows/types";
 import type { ThreadPersistenceRef } from "../../persistable/common";
-import { deriveStoneFromThread, readSelf } from "../../persistable";
+import { deriveStoneFromThread, objectDir, readSelf, stoneDir, threadDir } from "../../persistable";
 import { renderContextXml } from "./render";
 
 /**
@@ -298,6 +298,11 @@ export async function buildInputItems(
   // 注入 LLM，让多个 Object 在同一 Session 中持有可区分的身份；不存在则保持原行为。
   const instructions = await loadSelfInstructions(thread);
 
+  // [ooc:paths] 信息节点:把 Object 的持久化目录与 OOC world 路径告诉 LLM,
+  // 让元编程动作("write_file 到我的 stones/<self>/..." / "engineer 一个新 server method")
+  // 能落到正确路径。无 persistence(测试 fixture) 时不注入此节点。
+  const pathsItem = buildPathsItem(thread);
+
   return {
     ...(instructions ? { instructions } : {}),
     input: [
@@ -306,8 +311,43 @@ export async function buildInputItems(
         role: "system",
         content
       },
+      ...(pathsItem ? [pathsItem] : []),
       ...transcript
     ]
+  };
+}
+
+/**
+ * 构造 [ooc:paths] system message。
+ *
+ * 把以下绝对路径告诉 LLM(每轮都注入,作为元编程 / 路径引用的稳定锚点):
+ * - world_root:               OOC world 根目录(stones / flows 等所有子树的父目录)
+ * - object_stone_dir:         本 Object 的 stone 目录(身份 / 知识 / server / client 长期存放)
+ * - object_flow_dir:          本 Object 在当前 session 下的 flow 目录(临时产出 / 本次任务文件)
+ * - current_thread_dir:       当前 thread 的 thread.json 所在目录(debug / loop_*.json 在这里)
+ * - session_id / object_id / thread_id:  人类可读的标识
+ *
+ * 之所以放在 system message 而非 instructions:每轮都需要稳定看到、不被对话历史挤占;
+ * 用 system role 与 XML context message 平行 — 都属于"环境信息"。
+ */
+function buildPathsItem(thread: ThreadContext): LlmInputItem | undefined {
+  const ref = thread.persistence;
+  if (!ref) return undefined;
+  const stoneRef = deriveStoneFromThread(ref);
+  const lines = [
+    "[ooc:paths]",
+    `world_root: ${ref.baseDir}`,
+    `object_id: ${ref.objectId}`,
+    `object_stone_dir: ${stoneDir(stoneRef)}`,
+    `object_flow_dir: ${objectDir(ref)}`,
+    `session_id: ${ref.sessionId}`,
+    `current_thread_id: ${ref.threadId}`,
+    `current_thread_dir: ${threadDir(ref)}`,
+  ];
+  return {
+    type: "message",
+    role: "system",
+    content: lines.join("\n"),
   };
 }
 
