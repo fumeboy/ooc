@@ -5,8 +5,8 @@
  * === "super" 时注入 REFLECTABLE knowledge entry。
  */
 import { describe, expect, it } from "bun:test";
-import { collectExecutableKnowledgeEntries } from "../index";
-import { REFLECTABLE_BASIC_PATH, REFLECTABLE_KNOWLEDGE } from "../reflectable-knowledge";
+import { collectExecutableKnowledgeEntries } from "../../executable/index";
+import { REFLECTABLE_BASIC_PATH, REFLECTABLE_KNOWLEDGE } from "./reflectable-knowledge";
 import { makeThread } from "../../__tests__/make-thread";
 
 describe("reflectable knowledge protocol injection", () => {

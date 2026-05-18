@@ -3,7 +3,7 @@ import { object_v20260504_1 } from "@meta/object/index.doc";
 import * as stoneObject from "@src/persistable/stone-object";
 import * as talkDelivery from "@src/executable/windows/talk-delivery";
 import * as executableIndex from "@src/executable/index";
-import * as reflectableKnowledge from "@src/executable/reflectable-knowledge";
+import * as reflectableKnowledge from "@src/thinkable/reflectable/reflectable-knowledge";
 
 /* ────────────────────────────────────────────────────────────────
  *  目录页：Reflectable 概念骨架

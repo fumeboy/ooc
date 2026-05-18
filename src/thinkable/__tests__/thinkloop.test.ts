@@ -436,8 +436,8 @@ describe("think", () => {
       ? observedFirstItem.content
       : "";
     expect(observedFirstContent).toContain('<thread id="thread-7" status="running">');
-    // protocol KNOWLEDGE 现在合成为 type=knowledge window，path=internal/executable/basic
-    expect(observedFirstContent).toContain('<path>internal/executable/basic</path>');
+    // protocol KNOWLEDGE 现在合成为 type=knowledge window，path=internal/basic
+    expect(observedFirstContent).toContain('<path>internal/basic</path>');
     expect(observedFirstContent).toContain('<source>protocol</source>');
     expect(observation?.input?.inputItems?.[1]).toEqual({
       type: "message",
