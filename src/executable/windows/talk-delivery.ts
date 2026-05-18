@@ -126,13 +126,14 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
 
   // 2) 构造消息：双方共享同一个 message id；caller 视图、callee 视图各自的 windowId 不同
   const messageId = generateMessageId();
-  const calleeCreatorWindowId = creatorWindowIdOf(calleeThread.id);
+  const calleeReplyToWindowId = resolveCalleeReplyToWindowId(calleeThread, callerThread.id, callerRef.objectId);
   const createdAt = Date.now();
 
   const callerMessage: ThreadMessage = {
     id: messageId,
     fromThreadId: callerThread.id,
     toThreadId: calleeThread.id,
+    fromObjectId: callerRef.objectId,
     content,
     createdAt,
     source,
@@ -140,8 +141,10 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
   };
   const calleeMessage: ThreadMessage = {
     ...callerMessage,
-    // callee 视角下，replyToWindowId = 它自己 creator talk_window，让 transcript 归位
-    replyToWindowId: calleeCreatorWindowId,
+    // callee 视角下,replyToWindowId 决定这条消息归到 callee 哪个 talk window 的 transcript。
+    // 见 resolveCalleeReplyToWindowId 的注释:精确按 callerThreadId → fallback 按 objectId →
+    // fallback 到 callee 的 creator talk window(初次创建场景)。
+    replyToWindowId: calleeReplyToWindowId,
   };
 
   callerThread.outbox = [...(callerThread.outbox ?? []), callerMessage];
@@ -167,4 +170,36 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
     calleeThreadId: calleeThread.id,
     messageId,
   };
+}
+
+/**
+ * 在 callee 的 contextWindows 里找出"这条入站消息归属的 talk_window id"。
+ *
+ * 用作 calleeMessage.replyToWindowId,决定 transcript 视图归位:
+ *   filterMessagesForTalkWindow 的入站规则是 `m.replyToWindowId === self.id`。
+ *
+ * 老实现硬写为 callee 的 creator talk_window (creatorWindowIdOf(calleeThread.id))。
+ * 在 user→callee 的初次派送 OK,但 callee 自己也当 caller 时(典型:assistant 派给 critic,
+ * critic 回 assistant) 会把回信错误地塞到 callee 的 creator window(target=user) 上,
+ * 与 user 完全无关的消息显示成 user 的消息,且对应的 caller→callee talk_window 反而
+ * 看不到回信。
+ *
+ * 正确解析优先级:
+ *   1. callee 的 talk_window 中 targetThreadId === callerThread.id  → 精确命中本条 conversation
+ *   2. callee 的 talk_window 中 target === callerRef.objectId 且未匹配过      → 对象级 fallback
+ *   3. callee 的 creator talk_window                                       → 初次创建场景
+ */
+function resolveCalleeReplyToWindowId(
+  calleeThread: ThreadContext,
+  callerThreadId: string,
+  callerObjectId: string,
+): string {
+  const windows = (calleeThread.contextWindows ?? []).filter(
+    (w): w is TalkWindow => w.type === "talk",
+  );
+  const byThreadId = windows.find((w) => w.targetThreadId === callerThreadId);
+  if (byThreadId) return byThreadId.id;
+  const byObjectId = windows.find((w) => w.target === callerObjectId);
+  if (byObjectId) return byObjectId.id;
+  return creatorWindowIdOf(calleeThread.id);
 }

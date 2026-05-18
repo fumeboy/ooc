@@ -1,4 +1,4 @@
-import type { ChatLine, ThreadContext, ToolMark, ToolSummaryField } from "./model";
+import type { ChatLine, ThreadContext, ThreadMessage, ToolMark, ToolSummaryField } from "./model";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object";
@@ -141,14 +141,137 @@ function buildToolLine(input: {
     rawOutput: input.outputValue,
     argumentsText: stringifyData(input.argumentsValue),
     outputText: stringifyData(input.outputValue),
-    ok: input.ok,
+    // 优先以 output JSON 里的 ok 为准(覆盖旧 thread.json 里 event.ok 硬 true 的 bug);
+    // 仅当 output 不能解析或没有 ok 字段时,回退用 event.ok。
+    ok: deriveOk(input.outputValue, input.ok),
     pending: input.pending,
   };
 }
 
-function findInboxContent(thread: ThreadContext, msgId?: string) {
+/**
+ * 优先看 output JSON 中的 ok(reliable source — 由 tool handler 显式写入);
+ * 若 output 不是合规 JSON 或无 ok 字段,退而用 event.ok(旧数据可能不准但聊胜于无)。
+ */
+function deriveOk(outputValue: unknown, eventOk: boolean | undefined): boolean | undefined {
+  const parsed = parseJsonString(outputValue);
+  if (parsed && typeof parsed === "object" && "ok" in parsed) {
+    const v = (parsed as Record<string, unknown>).ok;
+    if (typeof v === "boolean") return v;
+  }
+  return eventOk;
+}
+
+function parseJsonString(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function findInboxMessage(thread: ThreadContext, msgId?: string) {
   if (!msgId) return undefined;
-  return thread.inbox?.find((message) => message.id === msgId)?.content;
+  return thread.inbox?.find((message) => message.id === msgId);
+}
+
+/**
+ * 识别 "open(command=say) on talk_window" 这类对外消息工具调用,把里面的 msg 提升为
+ * 一条 message line。让查看 assistant.t_user_xxx 这种 thread 时,assistant 发回 user
+ * 的消息能像普通对话一样出现在 timeline,而不是只藏在 tool card 的 args JSON 里。
+ *
+ * 触发条件(全部满足才生成 message line,否则返回 undefined):
+ * - toolName === "open"
+ * - arguments.command === "say"
+ * - arguments.parent_window_id 对应一个 talk_window(存在 talkWindowTargets 中)
+ * - arguments.args.msg 是非空字符串
+ *
+ * 返回 role="assistant" 的 message,senderLabel 标"→ <target>",让用户秒懂去向。
+ */
+function maybeBuildOutboundSayLine(
+  event: Record<string, unknown>,
+  baseId: string,
+  talkWindowTargets: Map<string, string>,
+): ChatLine | undefined {
+  if (event.toolName !== "open") return undefined;
+  const args = isRecord(event.arguments) ? event.arguments : undefined;
+  if (!args || args.command !== "say") return undefined;
+  const parentWindowId = typeof args.parent_window_id === "string" ? args.parent_window_id : undefined;
+  if (!parentWindowId) return undefined;
+  const target = talkWindowTargets.get(parentWindowId);
+  if (!target) return undefined;
+  const inner = isRecord(args.args) ? args.args : undefined;
+  const msg = inner && typeof inner.msg === "string" ? inner.msg : undefined;
+  if (!msg) return undefined;
+  return {
+    id: `${baseId}-say`,
+    kind: "message",
+    role: "assistant",
+    content: msg,
+    senderLabel: `→ ${target}`,
+  };
+}
+
+/**
+ * 从 thread.outbox 直接生成"发给指定对端的消息" chat lines。
+ *
+ * 为什么需要这一招:LLM 常用 open(command=say) → refine(args.msg) → submit 三段式,
+ * 消息正文最终在 refine.args.msg → 通过 submit 提交后落到 thread.outbox。
+ * 直接从 outbox 取已发送消息更简单可靠:outbox 自带 windowId,与 talk_window 一查
+ * 就能判断"是不是发给目标对端的"。
+ *
+ * 返回 ChatLine + createdAt(用作排序键),让调用方按 createdAt 与 inbox 行合并。
+ */
+function buildOutboundMessageLinesForTargets(
+  outbox: ThreadMessage[],
+  talkWindowTargets: Map<string, string>,
+  targetFilter: (target: string) => boolean,
+): Array<{ createdAt: number; line: ChatLine }> {
+  const items: Array<{ createdAt: number; line: ChatLine }> = [];
+  for (const m of outbox) {
+    const target = m.windowId ? talkWindowTargets.get(m.windowId) : undefined;
+    if (!target) continue;
+    if (!targetFilter(target)) continue;
+    if (!m.content) continue;
+    items.push({
+      createdAt: m.createdAt ?? 0,
+      line: {
+        id: m.id ? `outbox-${m.id}` : `outbox-${target}-${m.createdAt ?? items.length}`,
+        kind: "message",
+        role: "assistant",
+        content: m.content,
+        senderLabel: `→ ${target}`,
+      },
+    });
+  }
+  return items;
+}
+
+/**
+ * 构造 inbox 消息的发送方标签。
+ * 优先级:
+ * - fromObjectId 存在 → "<obj>:<short threadId>"(主要场景:跨对象 talk)
+ * - source="user"  → "user"
+ * - source="system" → "system"
+ * - source="talk"  → "talk · <fromThreadId>" (fallback;旧数据无 fromObjectId)
+ * - 其它/缺省      → fromThreadId 或 "?"
+ */
+function senderLabelOf(message: {
+  source?: string;
+  fromThreadId?: string;
+  fromObjectId?: string;
+}): string {
+  const src = message.source;
+  const from = message.fromThreadId;
+  const obj = message.fromObjectId;
+  if (obj) {
+    return from ? `${obj} · ${from}` : obj;
+  }
+  if (src === "user") return "user";
+  if (src === "system") return "system";
+  if (src === "talk") return from ? `talk · ${from}` : "talk";
+  if (from) return from;
+  return "?";
 }
 
 function isErrorText(text: string) {
@@ -171,6 +294,36 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
   const lines: ChatLine[] = [];
   const events = thread.events ?? [];
 
+  // 预先索引:talk window id → target,用于把 "open(command=say, parent_window_id=...)"
+  // 这种隐藏在 tool args 里的"对外消息"识别出来并提升为可读的 message line。
+  // 典型场景:assistant.t_user_xxx 给 user 发的回信 — 我们希望在时间线上看到"→ user: 内容",
+  // 而不是只看到 JSON 化的 open 工具卡。
+  const talkWindowTargets = new Map<string, string>();
+  for (const w of thread.contextWindows ?? []) {
+    if (w.type === "talk") talkWindowTargets.set(w.id, w.target);
+  }
+
+  // 收集"发给 user 的 outbox 消息"作为 outbound message lines。
+  // 仅在 thread.creatorObjectId === "user" 时启用 — 此场景下 RightPanel 显示该 thread,
+  // user 看不到 assistant 给自己发的回信(因为消息体在三段式 say tool 的 refine.args 里,
+  // 单看 events 看不到内容);从 outbox 直接取已落盘的消息最可靠。
+  const showOutboundToUser = thread.creatorObjectId === "user";
+  const pendingOutbound = showOutboundToUser
+    ? buildOutboundMessageLinesForTargets(
+        thread.outbox ?? [],
+        talkWindowTargets,
+        (target) => target === "user",
+      ).sort((a, b) => a.createdAt - b.createdAt)
+    : [];
+  let outboundCursor = 0;
+  /** 把所有 createdAt <= maxCreatedAt 的未消费 outbound 行先 push 进去。 */
+  function flushOutboundUpTo(maxCreatedAt: number): void {
+    while (outboundCursor < pendingOutbound.length && pendingOutbound[outboundCursor]!.createdAt <= maxCreatedAt) {
+      lines.push(pendingOutbound[outboundCursor]!.line);
+      outboundCursor += 1;
+    }
+  }
+
   // 预扫描所有 function_call_output 并按 callId 建索引，让 function_call 能
   // 跨距离配对其 output（LLM 一次抛多个并行 tool_call 时，输出不会紧跟在调用之后）。
   // 同一 callId 出现多次时取首条；被消费过的 output index 标记跳过，避免渲染孤儿卡。
@@ -192,13 +345,16 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
     const kind = typeof event.kind === "string" ? event.kind : undefined;
 
     if (category === "context_change" && kind === "inbox_message_arrived") {
-      const content = findInboxContent(thread, typeof event.msgId === "string" ? event.msgId : undefined);
-      if (content) {
+      const message = findInboxMessage(thread, typeof event.msgId === "string" ? event.msgId : undefined);
+      if (message?.content) {
+        // 先把所有早于这条 inbox 的 outbound→user 消息 push 进去,实现时间穿插
+        if (message.createdAt !== undefined) flushOutboundUpTo(message.createdAt);
         lines.push({
           id: typeof event.msgId === "string" ? event.msgId : `event-${index}`,
           kind: "message",
           role: "user",
-          content,
+          content: message.content,
+          senderLabel: senderLabelOf(message),
         });
       }
       continue;
@@ -225,6 +381,12 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
       const callId = typeof event.callId === "string" ? event.callId : undefined;
       const matched = callId ? outputsByCallId.get(callId) : undefined;
       if (matched) consumedOutputIndices.add(matched.index);
+
+      // 如果是 open(command=say) 并且 parent_window 是个 talk_window,
+      // 把"对外发出的消息内容"提升为可读的 message line(在 tool card 之前)。
+      // 这样 assistant ↔ user 的 thread 上能直接看到双方对话,不必去翻 tool args JSON。
+      const sayLine = maybeBuildOutboundSayLine(event, callId ?? `event-${index}`, talkWindowTargets);
+      if (sayLine) lines.push(sayLine);
 
       lines.push(buildToolLine({
         id: callId ?? `event-${index}`,
@@ -275,6 +437,9 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
 
     lines.push(fallbackNotice(index, event));
   }
+
+  // 处理完所有 events 后,flush 剩余 outbound→user 消息(比最后一个 inbox 还晚的)
+  flushOutboundUpTo(Number.POSITIVE_INFINITY);
 
   return lines;
 }

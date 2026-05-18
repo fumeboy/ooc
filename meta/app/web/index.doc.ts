@@ -74,7 +74,7 @@ web 是 OOC app 层的浏览与人工操作入口。
 
   fileViewer: {
     title: "文件查看器",
-    summary: "通用预览 + llm.input.json / loop_*.input.json 专用 viewer",
+    summary: "通用预览 + llm.input.json / loop_*.input.json 专用 viewer + 任意路径文件预览",
     content: `
 - 普通文本、JSON、Markdown 沿用通用 CodeMirror 预览
 - 当打开 \`llm.input.json\` 或 \`loop_*.input.json\` 时，
@@ -89,6 +89,101 @@ web 是 OOC app 层的浏览与人工操作入口。
 
 注意：debug viewer 当前**不是**走 runtime debug 文件 HTTP API，而是仍然通过
 \`/api/tree/file\` 读取 world 里的 debug JSON 文件，再在前端按路径切换 viewer。
+
+任意路径文件预览：
+- 新增 \`GET /api/file/read?path=&maxBytes=\` 不受 world 隔离的只读 endpoint
+  （\`src/app/server/modules/ui/api.read-any-file.ts\`），用于服务 file_window
+  详情面板的内容预览（file_window.path 通常是绝对路径，不在 \`--world\` 内）
+- 256KB 软上限，超出标 \`truncated\`；仅本地 dev 场景使用，公开部署需再加策略层
+- 前端通过 \`fetchAnyFile(path)\` 消费，\`.md\` / \`.markdown\` 走 MarkdownContent
+  渲染，其它扩展名走 CodeMirror 语法高亮
+    `.trim(),
+  },
+
+  contextWindowViewer: {
+    title: "ContextSnapshotViewer：thread context 可视化",
+    summary: "左树 + 右详情；按 type 分组；file/edit/program/diff/markdown 增强；events 默认折叠",
+    content: `
+\`ContextSnapshotViewer\` 把后端 \`ContextSnapshot\`（与 \`thread.json\` 同 shape）
+渲染成结构化的左树 + 右详情面板，是排查 thread 状态的主要入口。两处使用：
+1. \`FileViewer\` 在选了 session 但未选文件时直接展示 thread context
+2. \`LLMInputJsonViewer\` 在新版 \`llm.input.json\` 中替代 system message XML 子树
+
+**左树组织：**
+- thread 根节点对用户隐藏（已经在 viewer header 显示 thread id 了，重复无用）；
+  TreeNode 用 \`depthOffset=1\` 让 children 表现为 depth=0 顶层
+- top-level windows **按 type 分组**（root / command_exec / do / talk / todo /
+  program / file / knowledge / search），组内按 \`createdAt\` 升序，避免 15+ 个
+  混杂 window 难以扫读
+- events section **默认折叠**（\`collectInitialExpandedIds\` 不把 events section
+  自身加进展开集，children 自然不渲染），避免 100+ 条 llm_interaction /
+  tool_runtime 事件淹没视图
+
+**右详情按 window type 增强：**
+- **file_window** 调 \`FileWindowContentView\` 实时 fetch 文件内容，按 lines /
+  columns 切片显示；\`.md\` 走 MarkdownContent，其它走 CodeMirror
+- **command_exec(command=edit)** 把 \`accumulatedArgs.{old,new}\` 渲染为
+  \`@codemirror/merge\` 的 unifiedMergeView 红绿 diff；\`edits[]\` 多条按顺序展示
+- **command_exec(command=write_file)** 把 content 单独成大段预览
+- **program** 详情平铺 history（lang / status / time + 首行 code），最后一次
+  完整展开 code+args+output，前面 output 截断 200 字预览
+- **knowledge** body 走 MarkdownContent，与 file_window 一致
+- **command_exec.result** 按 success/error 加色调
+
+**transcript / message 展示 fromObjectId：**
+- 后端 \`ThreadMessage\` 增加可选 \`fromObjectId\`（由 \`talk-delivery\` 写入）
+- 前端三处（左树 message label / 右侧 transcript dir / message detail header）
+  都改成 \`<obj> · <thread>\` 双字段显示，让对端身份一目了然
+
+**跨组件导航：**
+- \`web/src/domains/files/navigation-events.ts\` 提供 CustomEvent 总线
+  \`dispatchNavigateToWindow(windowId)\` / \`subscribeNavigateToWindow(handler)\`
+- ContextSnapshotViewer 订阅后会展开目标节点的祖先链 + smooth scrollIntoView
+  + select；TreeNode row 元素带 \`data-cw-node-id\` 便于定位
+- TuiBlock 中 \`WindowLinkRow\` 从 tool call 的 \`rawOutput.window_id / form_id\`
+  → \`rawArguments\` → \`wait.on\` 顺序提取目标 id，渲染 "view in context tree" 按钮
+    `.trim(),
+  },
+
+  chatTimelineEnhancements: {
+    title: "chat 时间线显示增强",
+    summary: "sender label / outbox-to-user 穿插 / tool ok 校正 / window 跳转",
+    content: `
+在原"message | tool | notice 三元模型"基础上的增量改进，都集中在
+\`web/src/domains/chat/formatter.ts\` 与 \`TuiBlock.tsx\`：
+
+- **inbox 消息按 source / fromObjectId 显示真实标签** —
+  原来 \`inbox_message_arrived\` 全部硬编码 \`role: "user"\`，多 object talk 场景
+  下完全错位。\`senderLabel\` 现按 \`fromObjectId\` 优先（\`<obj> · <thread>\`），
+  fallback \`source\`（\`user\` / \`system\` / \`talk · <thread>\`），再 fallback
+  \`fromThreadId\`
+- **tool ok/fail 优先用 output JSON 的 ok 字段** —
+  \`deriveOk(outputValue, eventOk)\`：JSON.parse output，取里面的 \`ok\`；
+  无法解析时退回 \`event.ok\`。这覆盖了后端 \`thinkloop\` 老版本硬写 \`ok:true\`
+  留下的旧 thread 数据，让 refine 拦截错误能正确显示红色 fail 徽章
+- **assistant→user 的回信穿插到时间线** —
+  当 \`thread.creatorObjectId === "user"\` 时，从 \`thread.outbox\` 取所有
+  \`windowId\` 对应 \`talk_window.target=user\` 的消息，按 createdAt 用游标在
+  inbox events 之间穿插 push。否则 LLM 三段式 \`open(say) → refine(msg) →
+  submit\` 的内容只落 outbox，events 里只有 tool call，timeline 上看不到对话
+- **tool card 末尾的"view in context tree"按钮** —
+  \`WindowLinkRow\` 从 tool 的 \`rawOutput.window_id / form_id\` → \`rawArguments\`
+  → \`wait.on\` 顺序提取目标 id，点击 dispatch \`navigate-window\` 事件，
+  ContextSnapshotViewer 自动展开父链 + scrollIntoView + select
+    `.trim(),
+  },
+
+  routingNotes: {
+    title: "路由细节",
+    summary: "文件路径反推 sessionId 以保持侧栏在 flow tree 而非 session list",
+    content: `
+\`web/src/app/shell.tsx\` 派生 \`activeSessionId\` 时，除了
+\`route.kind ∈ {session, thread, flowPage}\`，还会在 \`route.kind === "file"\` 且
+路径以 \`flows/<sid>/...\` 开头时反推 sessionId。
+
+这是为了避免一个原本误导的行为：用户在 flow 树里点开任意文件，路由变成
+\`kind: "file"\`，\`activeSessionId\` 派生为 undefined → effect \`setShowSessions(true)\`
+→ 侧栏从 file tree 翻回 session list。反推后浏览文件不再丢 session 上下文。
     `.trim(),
   },
 

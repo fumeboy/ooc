@@ -15,3 +15,11 @@ export type FileContent = {
   size: number;
 };
 
+/** /api/file/read 的返回:可能被 maxBytes 截断,truncated 标记。 */
+export type AnyFileContent = {
+  path: string;
+  content: string;
+  size: number;
+  truncated: boolean;
+};
+

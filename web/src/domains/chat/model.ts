@@ -9,9 +9,15 @@ export type ThreadMessage = {
   id?: string;
   fromThreadId?: string;
   toThreadId?: string;
+  /** 跨对象 talk 时由后端写入,UI 用作 sender label。旧 thread.json 可能缺。 */
+  fromObjectId?: string;
   content?: string;
   createdAt?: number;
   source?: string;
+  /** outbox 中由 talk_window.say 派送时写入;用作 formatter 反查这条消息属于哪个 talk_window。 */
+  windowId?: string;
+  /** inbox 中由控制面 user-reply 或 talk-delivery 派送时写入;用于 transcript 视图归位。 */
+  replyToWindowId?: string;
 };
 
 /** 与后端 src/executable/windows/types.ts 对齐的最小子集，仅取前端渲染所需字段。 */
@@ -143,6 +149,8 @@ export type ChatLine =
       role: "user" | "assistant";
       content: string;
       meta?: string;
+      /** 消息发送方的展示标签,如 "user"、"supervisor:t_..."。缺省时 TuiBlock 用 role 兜底。 */
+      senderLabel?: string;
     }
   | {
       id: string;

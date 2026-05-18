@@ -6,6 +6,7 @@ import { execRootCommand } from "../windows";
 import { WindowManager } from "../windows";
 import {
   ROOT_WINDOW_ID,
+  creatorWindowIdOf,
   type FileWindow,
   type KnowledgeWindow,
   type ProgramWindow,
@@ -175,6 +176,93 @@ describe("Step 2 window lifecycles", () => {
       expect(xml).toContain('type="knowledge"');
       // knowledge_window 自身渲染 + activator force-full 渲染各一次都包含正文
       expect(xml).toContain("手册正文内容");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * 回归测试:cross-object talk 的回信路由。
+   *
+   * 场景:
+   *   user → assistant.say(target=bob)
+   *   bob 收到后,通过自己的 creator talk_window (target=assistant) 回复 assistant
+   *
+   * 期望:
+   *   bob 的回信落到 assistant 上 `target=bob` 的那个 talk_window 上(replyToWindowId 命中),
+   *   而不是错落到 assistant 的 creator talk_window (target=user)。
+   *
+   * 旧实现写死 replyToWindowId = creatorWindowIdOf(calleeThread.id) → 把 bob 的回信
+   * 标成"指向 user 的 creator window 的回信",和 user 无关的消息显示成 user 消息。
+   */
+  it("talk_window: cross-object 回信落到正确的对端 talk_window 上,而非 creator window", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "ooc-talk-reply-"));
+    try {
+      const { createFlowObject, readThread } = await import("../../persistable");
+      await createFlowObject({ baseDir: tempRoot, sessionId: "s1", objectId: "assistant" });
+
+      // assistant.t_user 是 user 派生的 assistant 主 thread
+      const assistantThread = makeThread({
+        id: "t_user_assistant",
+        persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "assistant", threadId: "t_user_assistant" },
+        creatorThreadId: "root",
+        creatorObjectId: "user",
+      });
+      const { initContextWindows } = await import("../windows/init");
+      initContextWindows(assistantThread, { creatorThreadId: "root", initialTaskTitle: "user task" });
+
+      // assistant 创建 talk_window 指向 bob
+      await execRootCommand("talk", { thread: assistantThread, args: { target: "bob", title: "ask bob" } });
+      const talkToBob = assistantThread.contextWindows.find(
+        (w): w is TalkWindow => w.type === "talk" && w.target === "bob",
+      );
+      expect(talkToBob).toBeDefined();
+
+      // assistant say → bob
+      const mgr1 = WindowManager.fromThread(assistantThread);
+      await mgr1.openCommandExec({
+        thread: assistantThread,
+        parentWindowId: talkToBob!.id,
+        command: "say",
+        title: "ask",
+        args: { msg: "hi bob" },
+      });
+      assistantThread.contextWindows = mgr1.toData();
+      const bobThreadId = assistantThread.contextWindows.find(
+        (w): w is TalkWindow => w.id === talkToBob!.id,
+      )!.targetThreadId!;
+
+      // 读 bob 的 thread,它现在有 creator talk_window (target=assistant)
+      const bobThread = (await readThread(
+        { baseDir: tempRoot, sessionId: "s1", objectId: "bob" },
+        bobThreadId,
+      ))!;
+      expect(bobThread).toBeTruthy();
+      const bobCreatorTalk = bobThread.contextWindows.find(
+        (w): w is TalkWindow => w.type === "talk" && w.target === "assistant" && Boolean(w.isCreatorWindow),
+      );
+      expect(bobCreatorTalk).toBeDefined();
+
+      // bob 通过 creator talk_window 回 assistant
+      const mgr2 = WindowManager.fromThread(bobThread);
+      await mgr2.openCommandExec({
+        thread: bobThread,
+        parentWindowId: bobCreatorTalk!.id,
+        command: "say",
+        title: "reply",
+        args: { msg: "hi assistant, got it" },
+      });
+      bobThread.contextWindows = mgr2.toData();
+
+      // 关键断言:重新读 assistant.thread,bob 的回信应该归到 talkToBob (not creator)
+      const refreshed = (await readThread(
+        { baseDir: tempRoot, sessionId: "s1", objectId: "assistant" },
+        "t_user_assistant",
+      ))!;
+      const reply = refreshed.inbox?.find((m) => m.content === "hi assistant, got it");
+      expect(reply).toBeDefined();
+      expect(reply!.replyToWindowId).toBe(talkToBob!.id);
+      expect(reply!.replyToWindowId).not.toBe(creatorWindowIdOf("t_user_assistant"));
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

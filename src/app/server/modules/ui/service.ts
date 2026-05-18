@@ -124,5 +124,40 @@ export function createUiService({ baseDir }: { baseDir: string }) {
         size: info.size,
       };
     },
+
+    /**
+     * 读取任意 LLM 视角的文件路径 — 不受 world 隔离限制,服务 UI 中 file_window
+     * 详情面板"看 LLM 看到了什么"的预览需求。
+     *
+     * 仅本地 dev / 调试场景使用;读取任意路径在公开部署应再加策略层。
+     *
+     * 参数:
+     * - path: 绝对路径 或 工作目录相对路径(与 file_window.path 一致)
+     * - maxBytes: 软上限,超过则只返回前 maxBytes 并标记 truncated
+     */
+    async readAnyFile(path: string, maxBytes = 256 * 1024) {
+      if (!path || path.includes("\0")) {
+        throw new AppServerError("INVALID_INPUT", `unsafe path '${path}'`, { path });
+      }
+      const absPath = isAbsolute(path) ? path : resolve(process.cwd(), path);
+      let info;
+      try {
+        info = await stat(absPath);
+      } catch {
+        throw new AppServerError("NOT_FOUND", `file not found: ${path}`, { path });
+      }
+      if (!info.isFile()) {
+        throw new AppServerError("INVALID_INPUT", `path is not a file: ${path}`, { path });
+      }
+      const buf = await readFile(absPath);
+      const truncated = buf.byteLength > maxBytes;
+      const slice = truncated ? buf.subarray(0, maxBytes) : buf;
+      return {
+        path: absPath,
+        content: slice.toString("utf8"),
+        size: info.size,
+        truncated,
+      };
+    },
   };
 }

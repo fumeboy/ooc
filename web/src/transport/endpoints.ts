@@ -12,6 +12,8 @@ export const endpoints = {
   sessionThreads: (sessionId: string) => `/api/flows/${encodeURIComponent(sessionId)}/threads`,
   tree: "/api/tree",
   file: "/api/tree/file",
+  /** 读取任意 LLM 视角的本地文件(不受 world 隔离),服务 file_window 内容预览。 */
+  readAnyFile: "/api/file/read",
   createFlowObject: (sessionId: string) => `/api/flows/${encodeURIComponent(sessionId)}/objects/`,
   thread: (sessionId: string, objectId: string, threadId = "root") =>
     `/api/flows/${encodeURIComponent(sessionId)}/objects/${encodeURIComponent(objectId)}/threads/${encodeURIComponent(threadId)}`,

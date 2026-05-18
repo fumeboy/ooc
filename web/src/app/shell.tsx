@@ -38,9 +38,18 @@ export function AppShell() {
 
   // URL 派生导航维度 —— 下游只读这几个变量，不再读 state.scope / state.active* 的导航字段
   const scope: TreeScope = scopeOf(route);
-  const activeSessionId = route.kind === "session" || route.kind === "thread" || route.kind === "flowPage"
-    ? route.sessionId
-    : undefined;
+  const activeSessionId = (() => {
+    if (route.kind === "session" || route.kind === "thread" || route.kind === "flowPage") {
+      return route.sessionId;
+    }
+    // 浏览 flows/<sid>/... 下的文件时仍视为"在 session 内",
+    // 让侧栏保持 file tree 视图,而不是被 showSessions effect 翻回 SessionList
+    if (route.kind === "file") {
+      const m = route.path.match(/^flows\/([^/]+)/);
+      if (m) return m[1];
+    }
+    return undefined;
+  })();
   const activeObjectId = route.kind === "thread"
     ? route.objectId
     : route.kind === "session"

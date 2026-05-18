@@ -2,6 +2,7 @@ import type { LlmInputItem, LlmMessage } from "../llm/types";
 import { collectExecutableKnowledgeEntries } from "../../executable/index";
 import type { ContextWindow } from "../../executable/windows/types";
 import type { ThreadPersistenceRef } from "../../persistable/common";
+import { deriveStoneFromThread, readSelf } from "../../persistable";
 import { renderContextXml } from "./render";
 
 /**
@@ -90,6 +91,9 @@ export type ThreadMessage = {
   fromThreadId: string;
   /** 接收消息的线程 ID。 */
   toThreadId: string;
+  /** 发送方的 flow object id；跨对象 talk 时由 deliverTalkMessage 写入,便于 UI 标注发送方身份。
+   *  旧 thread.json 缺该字段;前端要兼容空值。 */
+  fromObjectId?: string;
   /** 消息正文，直接作为接收线程可见的协作输入。 */
   content: string;
   /** 创建时间戳，用于排序和调试，不承担强一致时钟语义。 */
@@ -289,7 +293,13 @@ export async function buildInputItems(
 
   const transcript = thread.events.flatMap((event) => processEventToItems(thread, event));
 
+  // self.md 是 Object 的对内身份说明（identity.innerSelf，见
+  // meta/object/persistable/index.doc.ts stoneLayout）。这里把它作为顶层 instructions
+  // 注入 LLM，让多个 Object 在同一 Session 中持有可区分的身份；不存在则保持原行为。
+  const instructions = await loadSelfInstructions(thread);
+
   return {
+    ...(instructions ? { instructions } : {}),
     input: [
       {
         type: "message",
@@ -299,4 +309,19 @@ export async function buildInputItems(
       ...transcript
     ]
   };
+}
+
+/**
+ * 读取 thread 所属 Object 的 self.md 作为 instructions。
+ *
+ * - 内存模式（无 persistence）→ undefined，保持现有测试契约
+ * - self.md 不存在或为空 → undefined
+ * - 否则返回原文（trim 后非空校验）
+ */
+async function loadSelfInstructions(thread: ThreadContext): Promise<string | undefined> {
+  if (!thread.persistence) return undefined;
+  const stoneRef = deriveStoneFromThread(thread.persistence);
+  const selfText = await readSelf(stoneRef);
+  if (!selfText || !selfText.trim()) return undefined;
+  return selfText;
 }

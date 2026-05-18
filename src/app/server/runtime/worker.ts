@@ -4,6 +4,7 @@ import { runScheduler } from "@src/thinkable/scheduler";
 import type { ServerConfig } from "../bootstrap/config";
 import type { RuntimeJob } from "./types";
 import { resumePausedThread } from "./resume";
+import { scanRunningThreads } from "./thread-query";
 
 export type RuntimeJobRunner = (job: RuntimeJob, config: ServerConfig) => Promise<void>;
 
@@ -52,6 +53,15 @@ export async function processQueuedJobs(
   config: ServerConfig,
   runner: RuntimeJobRunner = runJob
 ): Promise<void> {
+  // 入口先做一次"全 session 兜底扫描":对每个有 running thread 但当前没在 jobManager
+  // 队列里的 (session,object,thread) 入队 run-thread job。createRunThreadJob 自带去重,
+  // 已有 queued/running 的 (session,object) 不会重复入队。
+  // 这覆盖两种场景:
+  // 1. server 启动后 jobManager 是空的,但磁盘上有 running thread(上次没跑完)
+  // 2. 跨对象 talk:caller say 后 callee 变 running,但 executor 拿不到 jobManager,
+  //    依赖这里把 callee 兜起来
+  await enqueueOrphanRunningThreads(config);
+
   const jobs = config.jobManager.listJobs().filter((job) => job.status === "queued");
 
   for (const job of jobs) {
@@ -74,6 +84,42 @@ export async function processQueuedJobs(
         error: error instanceof Error ? error.message : String(error),
       });
     }
+
+    // 同一目的的事后扫描:本 job 中可能产生新的 callee running thread
+    await enqueueOrphanRunningThreads(config, job.sessionId);
+  }
+}
+
+/**
+ * 扫指定 session(或全部 session) 的 running thread 入队 follow-up job。
+ * 失败不抛,以保证 worker 循环不被一个坏 session 拖垮。
+ */
+async function enqueueOrphanRunningThreads(
+  config: ServerConfig,
+  onlySessionId?: string,
+): Promise<void> {
+  try {
+    const sessionIds = onlySessionId ? [onlySessionId] : await listSessionIds(config.baseDir);
+    for (const sessionId of sessionIds) {
+      const running = await scanRunningThreads(config.baseDir, sessionId);
+      for (const { objectId, threadId } of running) {
+        if (objectId === USER_OBJECT_ID) continue;
+        config.jobManager.createRunThreadJob({ sessionId, objectId, threadId });
+      }
+    }
+  } catch {
+    // swallow — 扫描失败不阻塞主循环
+  }
+}
+
+async function listSessionIds(baseDir: string): Promise<string[]> {
+  const { readdir } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  try {
+    const entries = await readdir(join(baseDir, "flows"), { withFileTypes: true });
+    return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+  } catch {
+    return [];
   }
 }
 

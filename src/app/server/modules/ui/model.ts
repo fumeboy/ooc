@@ -9,6 +9,12 @@ export const fileQuery = t.Object({
   path: t.String(),
 });
 
+export const anyFileQuery = t.Object({
+  path: t.String(),
+  /** 可选最大字节数(默认 256KB),超过则截断返回 truncated=true。 */
+  maxBytes: t.Optional(t.Number()),
+});
+
 export type TreeScope = "world" | "flows" | "stones";
 
 export type UiTreeNode = {

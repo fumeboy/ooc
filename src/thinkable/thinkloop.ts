@@ -75,13 +75,25 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
       try {
         const output = (await dispatchToolCall(thread, toolCall))
           ?? JSON.stringify({ ok: true, tool: toolCall.name });
+        // 解析 handler 返回的 JSON output 中的 ok 字段;handler 用 {ok:false,...} 报业务错时,
+        // event.ok 也要跟着 false,以便 UI 和后续逻辑能正确识别失败。
+        // 旧实现硬写 ok:true 导致 LLM 端拿到错误消息但 event 显示 ok。
+        let ok = true;
+        try {
+          const parsed = JSON.parse(output);
+          if (parsed && typeof parsed === "object" && "ok" in parsed) {
+            ok = Boolean((parsed as Record<string, unknown>).ok);
+          }
+        } catch {
+          // output 不是 JSON 时默认认为成功(handler 没遵循 ok-shape)
+        }
         thread.events.push({
           category: "tool_runtime",
           kind: "function_call_output",
           callId: toolCall.id,
           toolName: toolCall.name,
           output,
-          ok: true
+          ok,
         });
       } catch (error) {
         thread.events.push({

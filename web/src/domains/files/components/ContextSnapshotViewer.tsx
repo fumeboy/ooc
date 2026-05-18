@@ -37,14 +37,19 @@ import {
 } from "lucide-react";
 import {
   buildContextTree,
-  collectAllNodeIds,
+  collectInitialExpandedIds,
   estimateTokens,
+  findNodePath,
   flattenContextTree,
   type ContextNode,
   type ContextSnapshot,
   type ContextWindow,
   type TranscriptEntry,
 } from "../context-snapshot";
+import { subscribeNavigateToWindow } from "../navigation-events";
+import { FileEditDiffView, parseEditArgs } from "./FileEditDiffView";
+import { FileWindowContentView } from "./FileWindowContentView";
+import { MarkdownContent } from "../../../shared/ui/MarkdownContent";
 
 function previewText(value: string, limit = 88): string {
   const singleLine = value.replace(/\s+/g, " ").trim();
@@ -118,6 +123,8 @@ function nodeAffix(node: ContextNode): { icon: LucideIcon; tone: Tone; status?: 
       };
       return { icon: sectionIcon[node.data.section] ?? CircleDot, tone: "neutral" };
     }
+    case "windowGroup":
+      return { icon: WINDOW_TYPE_ICON[node.data.windowType] ?? CircleDot, tone: "neutral" };
     case "window": {
       const w = node.data.window;
       return { icon: WINDOW_TYPE_ICON[w.type] ?? CircleDot, tone: statusToTone(w.status), status: w.status };
@@ -138,24 +145,29 @@ function TreeNode({
   expanded,
   onSelect,
   onToggle,
+  depthOffset = 0,
 }: {
   node: ContextNode;
   selectedId: string | null;
   expanded: Set<string>;
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
+  /** 渲染时把 node.depth 减去这个偏移,用来支持"隐藏根节点,从 children 起当作 depth=0"。 */
+  depthOffset?: number;
 }) {
   const isSelected = selectedId === node.id;
   const isExpanded = expanded.has(node.id);
   const hasChildren = node.children.length > 0;
   const { icon: Icon, tone, status } = nodeAffix(node);
   const isExecuting = node.data.kind === "window" && node.data.window.type === "command_exec" && node.data.window.status === "executing";
+  const renderDepth = Math.max(0, node.depth - depthOffset);
 
   return (
     <li>
       <div
         className={`cw-row cw-tone-${tone}${isSelected ? " is-selected" : ""}`}
-        style={{ paddingLeft: `${node.depth * 14 + 6}px` }}
+        style={{ paddingLeft: `${renderDepth * 14 + 6}px` }}
+        data-cw-node-id={node.id}
         onClick={() => onSelect(node.id)}
       >
         <button
@@ -208,6 +220,7 @@ function TreeNode({
               expanded={expanded}
               onSelect={onSelect}
               onToggle={onToggle}
+              depthOffset={depthOffset}
             />
           ))}
         </ul>
@@ -323,17 +336,64 @@ function WindowDetail({
               </div>
             )}
           </div>
-          {window.accumulatedArgs && Object.keys(window.accumulatedArgs).length > 0 && (
-            <CodeMirror
-              className="code-editor is-readonly"
-              value={formatJson(window.accumulatedArgs)}
-              editable={false}
-              extensions={[jsonLanguage()]}
-              basicSetup={{ lineNumbers: false, foldGutter: true }}
-            />
-          )}
+          {(() => {
+            const args = window.accumulatedArgs ?? {};
+            const isEdit = window.command === "edit";
+            const isWriteFile = window.command === "write_file";
+            // edit:渲染为 unified diff
+            if (isEdit) {
+              const pairs = parseEditArgs(args);
+              if (pairs) {
+                return (
+                  <div className="llm-input-edit-block">
+                    <div className="llm-input-edit-head">
+                      file edit · {pairs.length} change{pairs.length === 1 ? "" : "s"}
+                    </div>
+                    <FileEditDiffView pairs={pairs} />
+                  </div>
+                );
+              }
+            }
+            // write_file:把 content 作为大段文本预览,其它字段平铺
+            if (isWriteFile && typeof (args as Record<string, unknown>).content === "string") {
+              const rec = args as Record<string, unknown>;
+              return (
+                <>
+                  <div className="llm-input-attrs">
+                    {typeof rec.path === "string" && (
+                      <div className="llm-input-attr-row">
+                        <span className="llm-input-attr-key">path</span>
+                        <span className="llm-input-attr-value">{rec.path}</span>
+                      </div>
+                    )}
+                    <div className="llm-input-attr-row">
+                      <span className="llm-input-attr-key">content size</span>
+                      <span className="llm-input-attr-value">{(rec.content as string).length} chars</span>
+                    </div>
+                  </div>
+                  <div className="llm-input-edit-block">
+                    <div className="llm-input-edit-head">write_file content</div>
+                    <pre className="llm-input-pre">{rec.content as string}</pre>
+                  </div>
+                </>
+              );
+            }
+            // 兜底:展示 JSON
+            if (Object.keys(args).length > 0) {
+              return (
+                <CodeMirror
+                  className="code-editor is-readonly"
+                  value={formatJson(args)}
+                  editable={false}
+                  extensions={[jsonLanguage()]}
+                  basicSetup={{ lineNumbers: false, foldGutter: true }}
+                />
+              );
+            }
+            return null;
+          })()}
           {window.status === "executed" && window.result && (
-            <pre className="llm-input-pre">{window.result}</pre>
+            <pre className={`llm-input-pre llm-input-result-${statusToTone(window.status)}`}>{window.result}</pre>
           )}
         </>
       )}
@@ -375,32 +435,78 @@ function WindowDetail({
         </div>
       )}
       {window.type === "program" && (
-        <div className="llm-input-attrs">
-          <div className="llm-input-attr-row">
-            <span className="llm-input-attr-key">execs</span>
-            <span className="llm-input-attr-value">{window.history.length}</span>
+        <>
+          <div className="llm-input-attrs">
+            <div className="llm-input-attr-row">
+              <span className="llm-input-attr-key">execs</span>
+              <span className="llm-input-attr-value">{window.history.length}</span>
+            </div>
           </div>
-        </div>
+          {window.history.length > 0 && (
+            <ul className="llm-input-exec-list">
+              {window.history.map((exec, idx) => {
+                const isLast = idx === window.history.length - 1;
+                const head = exec.language === "function"
+                  ? `fn:${exec.function ?? "?"}`
+                  : `${exec.language}: ${(exec.code ?? "").split("\n")[0] ?? ""}`;
+                return (
+                  <li key={exec.execId} className={`llm-input-exec-item llm-input-exec-${exec.ok ? "ok" : "fail"}`}>
+                    <div className="llm-input-exec-head">
+                      <span className="llm-input-exec-index">[#{idx}]</span>
+                      <span className="llm-input-exec-lang">{exec.language}</span>
+                      <span className="llm-input-exec-status">{exec.ok ? "ok" : "fail"}</span>
+                      <span className="llm-input-exec-time">{new Date(exec.startedAt).toLocaleTimeString()}</span>
+                    </div>
+                    <div className="llm-input-exec-title">{head}</div>
+                    {isLast && exec.code && (
+                      <CodeMirror
+                        className="code-editor is-readonly"
+                        value={exec.code}
+                        editable={false}
+                        basicSetup={{ lineNumbers: true, foldGutter: true }}
+                      />
+                    )}
+                    {isLast && exec.args !== undefined && (
+                      <CodeMirror
+                        className="code-editor is-readonly"
+                        value={formatJson(exec.args)}
+                        editable={false}
+                        extensions={[jsonLanguage()]}
+                        basicSetup={{ lineNumbers: false, foldGutter: true }}
+                      />
+                    )}
+                    {exec.output && (
+                      <pre className="llm-input-pre llm-input-exec-output">{isLast ? exec.output : previewText(exec.output, 200)}</pre>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
       )}
       {window.type === "file" && (
-        <div className="llm-input-attrs">
-          <div className="llm-input-attr-row">
-            <span className="llm-input-attr-key">path</span>
-            <span className="llm-input-attr-value">{window.path}</span>
+        <>
+          <div className="llm-input-attrs">
+            <div className="llm-input-attr-row">
+              <span className="llm-input-attr-key">path</span>
+              <span className="llm-input-attr-value">{window.path}</span>
+            </div>
+            {window.lines && (
+              <div className="llm-input-attr-row">
+                <span className="llm-input-attr-key">lines</span>
+                <span className="llm-input-attr-value">{window.lines.join("-")}</span>
+              </div>
+            )}
+            {window.columns && (
+              <div className="llm-input-attr-row">
+                <span className="llm-input-attr-key">columns</span>
+                <span className="llm-input-attr-value">{window.columns.join("-")}</span>
+              </div>
+            )}
           </div>
-          {window.lines && (
-            <div className="llm-input-attr-row">
-              <span className="llm-input-attr-key">lines</span>
-              <span className="llm-input-attr-value">{window.lines.join("-")}</span>
-            </div>
-          )}
-          {window.columns && (
-            <div className="llm-input-attr-row">
-              <span className="llm-input-attr-key">columns</span>
-              <span className="llm-input-attr-value">{window.columns.join("-")}</span>
-            </div>
-          )}
-        </div>
+          <FileWindowContentView path={window.path} lines={window.lines} columns={window.columns} />
+        </>
       )}
       {window.type === "knowledge" && (
         <>
@@ -428,7 +534,11 @@ function WindowDetail({
               </div>
             )}
           </div>
-          {window.body && <pre className="llm-input-pre">{window.body}</pre>}
+          {window.body && (
+            <div className="llm-input-md-body">
+              <MarkdownContent content={window.body} />
+            </div>
+          )}
         </>
       )}
       {window.type === "search" && (
@@ -485,8 +595,10 @@ function WindowDetail({
           <ul className="llm-input-transcript-list">
             {transcript.map((entry, idx) => {
               const m = entry.message;
+              // 把 fromThreadId / toThreadId 与可选的 fromObjectId 一起渲染,
+              // 让 transcript 中既能看到对端 thread id(精确定位)又能看到 object id(语义)
               const dir = entry.channel === "inbox"
-                ? `← ${m.fromThreadId ?? "?"}`
+                ? `← ${m.fromObjectId ? `${m.fromObjectId} · ` : ""}${m.fromThreadId ?? "?"}`
                 : `→ ${m.toThreadId ?? "?"}`;
               return (
                 <li key={m.id ?? idx} className={`llm-input-transcript-item llm-input-transcript-item-${entry.channel}`}>
@@ -500,12 +612,20 @@ function WindowDetail({
               );
             })}
           </ul>
-          {window.type === "talk" && onUserReply && (selfObjectId === "user" || window.target === "user") && (
+          {/*
+            InlineTalkComposer 仅在 selfObjectId === "user" 时显示。
+            原条件 (window.target === "user") 在对端(如 critic)的 talk window 视图也会激活,
+            但发送走 handleSend → continueThread,后端永远从 user.root.talk_window[0] 派送,
+            目标是该 talk_window 的对端(通常 = supervisor),并不会回到当前 critic thread。
+            结果是"用户在 critic 视图发了消息,自己视图看不到,切回对端才看到"——非常误导。
+            修复:严格只在 user.root 自己的 thread 视图里允许内联回复。
+          */}
+          {window.type === "talk" && onUserReply && selfObjectId === "user" && (
             <InlineTalkComposer onSend={onUserReply} />
           )}
         </div>
       )}
-      {window.type === "talk" && onUserReply && (selfObjectId === "user" || window.target === "user") && (!transcript || transcript.length === 0) && (
+      {window.type === "talk" && onUserReply && selfObjectId === "user" && (!transcript || transcript.length === 0) && (
         <div className="llm-input-transcript">
           <InlineTalkComposer onSend={onUserReply} />
         </div>
@@ -595,15 +715,32 @@ function NodeDetail({
     return <WindowDetail window={data.window} transcript={data.transcript} selfObjectId={selfObjectId} onUserReply={onUserReply} />;
   }
 
+  if (data.kind === "windowGroup") {
+    return (
+      <div className="llm-input-detail-body">
+        <div className="llm-input-detail-header">
+          <div>
+            <div className="llm-input-detail-title">{data.windowType} windows</div>
+            <div className="llm-input-detail-meta">
+              {node.children.length} window{node.children.length === 1 ? "" : "s"} · {node.charCount} chars
+            </div>
+          </div>
+        </div>
+        <div className="llm-input-empty">展开左侧条目查看单个 window 详情。</div>
+      </div>
+    );
+  }
+
   if (data.kind === "message") {
     const m = data.message;
+    const fromLabel = m.fromObjectId ? `${m.fromObjectId} · ${m.fromThreadId ?? "?"}` : (m.fromThreadId ?? "?");
     return (
       <div className="llm-input-detail-body">
         <div className="llm-input-detail-header">
           <div>
             <div className="llm-input-detail-title">{data.channel} message</div>
             <div className="llm-input-detail-meta">
-              from: {m.fromThreadId ?? "?"} → to: {m.toThreadId ?? "?"}
+              from: {fromLabel} → to: {m.toThreadId ?? "?"}
               {m.source ? ` · ${m.source}` : ""}
               {m.windowId ? ` · window=${m.windowId}` : ""}
               {m.replyToWindowId ? ` · replyTo=${m.replyToWindowId}` : ""}
@@ -697,13 +834,39 @@ export function ContextSnapshotViewer({
 }) {
   const tree = useMemo(() => buildContextTree(snapshot), [snapshot]);
   const treeMap = useMemo(() => flattenContextTree(tree), [tree]);
-  const [selectedKey, setSelectedKey] = useState<string | null>(tree.id);
-  const [expanded, setExpanded] = useState<Set<string>>(() => collectAllNodeIds(tree));
+  // 默认选中第一个子节点(隐藏 thread 根节点后,根节点对用户不可见,不应作为默认选中)。
+  const defaultSelected = tree.children[0]?.id ?? tree.id;
+  const [selectedKey, setSelectedKey] = useState<string | null>(defaultSelected);
+  const [expanded, setExpanded] = useState<Set<string>>(() => collectInitialExpandedIds(tree));
 
   useEffect(() => {
-    setSelectedKey(tree.id);
-    setExpanded(collectAllNodeIds(tree));
+    setSelectedKey(tree.children[0]?.id ?? tree.id);
+    setExpanded(collectInitialExpandedIds(tree));
   }, [tree]);
+
+  // 跨组件导航:外部 dispatchNavigateToWindow(id) 时,定位到该 window 节点。
+  // 候选 id 形式 "window:<id>"(buildWindowNode 使用的 id pattern);兼容传入裸 window id。
+  useEffect(() => {
+    return subscribeNavigateToWindow(({ windowId }) => {
+      const candidates = [windowId, `window:${windowId}`];
+      const hit = candidates.find((c) => treeMap.has(c));
+      if (!hit) return;
+      const path = findNodePath(tree, hit);
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        for (const node of path) next.add(node.id);
+        return next;
+      });
+      setSelectedKey(hit);
+      // 滚动到目标行(用 row id 选择器)
+      requestAnimationFrame(() => {
+        const el = document.querySelector(`[data-cw-node-id="${CSS.escape(hit)}"]`);
+        if (el && "scrollIntoView" in el) {
+          (el as HTMLElement).scrollIntoView({ block: "center", behavior: "smooth" });
+        }
+      });
+    });
+  }, [tree, treeMap]);
 
   const selectedNode = selectedKey ? treeMap.get(selectedKey) ?? null : null;
   const totalChars = tree.charCount;
@@ -726,20 +889,24 @@ export function ContextSnapshotViewer({
         <aside className="llm-input-items">
           <div className="llm-input-sidebar-title">context tree</div>
           <ul className="cw-children llm-input-item-list">
-            <TreeNode
-              node={tree}
-              selectedId={selectedKey}
-              expanded={expanded}
-              onSelect={setSelectedKey}
-              onToggle={(id) => {
-                setExpanded((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(id)) next.delete(id);
-                  else next.add(id);
-                  return next;
-                });
-              }}
-            />
+            {tree.children.map((child) => (
+              <TreeNode
+                key={child.id}
+                node={child}
+                selectedId={selectedKey}
+                expanded={expanded}
+                onSelect={setSelectedKey}
+                onToggle={(id) => {
+                  setExpanded((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(id)) next.delete(id);
+                    else next.add(id);
+                    return next;
+                  });
+                }}
+                depthOffset={1}
+              />
+            ))}
           </ul>
         </aside>
         <section className="llm-input-main">

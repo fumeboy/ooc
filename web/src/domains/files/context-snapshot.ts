@@ -141,6 +141,8 @@ export type ThreadMessage = {
   id?: string;
   fromThreadId?: string;
   toThreadId?: string;
+  /** 跨对象 talk 时由 deliverTalkMessage 写入,UI 用作 sender label。旧数据可能缺。 */
+  fromObjectId?: string;
   content?: string;
   createdAt?: number;
   source?: string;
@@ -184,6 +186,7 @@ export type TranscriptEntry = { message: ThreadMessage; channel: "inbox" | "outb
 export type ContextNodeData =
   | { kind: "thread"; snapshot: ContextSnapshot }
   | { kind: "section"; section: "plan" | "contextWindows" | "inbox" | "outbox" | "events" }
+  | { kind: "windowGroup"; windowType: ContextWindow["type"] }
   | { kind: "window"; window: ContextWindow; transcript?: TranscriptEntry[] }
   | { kind: "message"; message: ThreadMessage; channel: "inbox" | "outbox" }
   | { kind: "event"; event: unknown; index: number }
@@ -441,6 +444,19 @@ function buildWindowNode(
 
 // ---- 顶层 section 构造 ----
 
+/** 在分组视图中,window type 之间的稳定显示顺序(语义优先级)。 */
+const WINDOW_TYPE_ORDER: ContextWindow["type"][] = [
+  "root",
+  "command_exec",
+  "do",
+  "talk",
+  "todo",
+  "program",
+  "file",
+  "knowledge",
+  "search",
+];
+
 function buildContextWindowsSection(
   snapshot: ContextSnapshot,
   depth: number,
@@ -454,14 +470,51 @@ function buildContextWindowsSection(
     const pid = w.parentWindowId;
     return !pid || pid === "root";
   });
-  const children = topLevel.map((w) => buildWindowNode(w, all, inbox, outbox, depth + 1));
+
+  // 按 type 分组;组内按 createdAt 升序(早 → 晚),createdAt 缺省视为 0
+  const buckets = new Map<ContextWindow["type"], ContextWindow[]>();
+  for (const w of topLevel) {
+    const bucket = buckets.get(w.type) ?? [];
+    bucket.push(w);
+    buckets.set(w.type, bucket);
+  }
+  for (const bucket of buckets.values()) {
+    bucket.sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+  }
+
+  // 输出顺序:WINDOW_TYPE_ORDER 中已知类型优先,未知类型按字典序追加
+  const orderedTypes: ContextWindow["type"][] = [];
+  for (const t of WINDOW_TYPE_ORDER) {
+    if (buckets.has(t)) orderedTypes.push(t);
+  }
+  for (const t of Array.from(buckets.keys()).sort()) {
+    if (!orderedTypes.includes(t)) orderedTypes.push(t);
+  }
+
+  const groupChildren: ContextNode[] = orderedTypes.map((type) => {
+    const bucket = buckets.get(type)!;
+    const windowChildren = bucket.map((w) =>
+      buildWindowNode(w, all, inbox, outbox, depth + 2),
+    );
+    const groupCharCount = windowChildren.reduce((sum, c) => sum + c.charCount, 0);
+    return {
+      id: `windowGroup:${type}`,
+      label: `${type} (${bucket.length})`,
+      summary: undefined,
+      depth: depth + 1,
+      charCount: groupCharCount,
+      children: windowChildren,
+      data: { kind: "windowGroup", windowType: type },
+    };
+  });
+
   return {
     id: "section:contextWindows",
     label: "context_windows",
-    summary: `${all.length} window${all.length === 1 ? "" : "s"} total · ${topLevel.length} top-level`,
+    summary: `${all.length} window${all.length === 1 ? "" : "s"} total · ${topLevel.length} top-level · ${orderedTypes.length} type${orderedTypes.length === 1 ? "" : "s"}`,
     depth,
-    charCount: children.reduce((sum, c) => sum + c.charCount, 0),
-    children,
+    charCount: groupChildren.reduce((sum, c) => sum + c.charCount, 0),
+    children: groupChildren,
     data: { kind: "section", section: "contextWindows" },
   };
 }
@@ -473,7 +526,8 @@ function buildMessagesSection(
 ): ContextNode {
   const list = messages ?? [];
   const children: ContextNode[] = list.map((m, idx) => {
-    const dir = channel === "inbox" ? `← ${m.fromThreadId ?? "?"}` : `→ ${m.toThreadId ?? "?"}`;
+    const fromLabel = m.fromObjectId ? `${m.fromObjectId} · ${m.fromThreadId ?? "?"}` : (m.fromThreadId ?? "?");
+    const dir = channel === "inbox" ? `← ${fromLabel}` : `→ ${m.toThreadId ?? "?"}`;
     return {
       id: `${channel}:${m.id ?? idx}`,
       label: `[#${idx}] ${dir}${m.source ? ` · ${m.source}` : ""}`,
@@ -589,4 +643,48 @@ export function collectAllNodeIds(root: ContextNode): Set<string> {
     for (const child of node.children) stack.push(child);
   }
   return ids;
+}
+
+/**
+ * 收集初次进入 viewer 时应展开的节点 id。
+ *
+ * 与 collectAllNodeIds 的区别:**events section 自身不加入展开集合**,
+ * 让长串 event 默认折叠(parent 折叠 → children 不渲染),
+ * 避免左树被 100+ 条 llm_interaction / tool_runtime 事件淹没。
+ * 用户想看 events 时手动展开 section 即可。
+ */
+export function collectInitialExpandedIds(root: ContextNode): Set<string> {
+  const ids = new Set<string>();
+  const stack: ContextNode[] = [root];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    // events section 自己保持折叠(不进 expanded 集);其它节点全展开
+    const isEventsSection = node.data.kind === "section" && node.data.section === "events";
+    if (!isEventsSection) {
+      ids.add(node.id);
+      for (const child of node.children) stack.push(child);
+    }
+    // events section 既不加入 expanded,也不递归 children(children 反正不渲染,
+    // 即使预先展开它们,折叠的父节点也不会显示——但还是省掉这次遍历)
+  }
+  return ids;
+}
+
+/**
+ * 找出树上 id == targetId 的节点路径(从 root 到该节点);找不到返回空数组。
+ *
+ * 用作"导航到某个 window":拿到完整路径后把每一级父 node id 都加进 expanded set,
+ * 保证目标节点在折叠视图下也能可见。
+ */
+export function findNodePath(root: ContextNode, targetId: string): ContextNode[] {
+  function dfs(node: ContextNode, path: ContextNode[]): ContextNode[] | undefined {
+    const next = [...path, node];
+    if (node.id === targetId) return next;
+    for (const child of node.children) {
+      const found = dfs(child, next);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  return dfs(root, []) ?? [];
 }
