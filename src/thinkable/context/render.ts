@@ -603,8 +603,24 @@ export async function renderContextXml(input: {
   appendNode(threadChildren, renderMessagesNode("outbox", fallbackOutbox));
 
   const root = xmlElement("context", {}, [
+    ...renderSelfNodes(threadForRender),
     xmlElement("thread", { id: threadForRender.id, status: threadForRender.status }, threadChildren),
   ]);
 
   return serializeXml(root);
+}
+
+/**
+ * <self object_id="..."> — Object 的对内身份标记。
+ *
+ * 让 LLM 在系统上下文顶部就能看到"我是谁"，对多 Object 共存的 Session 尤其重要。
+ * 详细身份说明 (self.md 正文) 通过 LlmGenerateParams.instructions 传递，
+ * 由 buildInputItems 读取并塞进 instructions 字段；此处只暴露稳定的 objectId 标记。
+ *
+ * thread.persistence 缺失（in-memory 测试模式）时返回空数组，保持原有渲染契约。
+ */
+function renderSelfNodes(thread: ThreadContext): XmlNode[] {
+  const objectId = thread.persistence?.objectId;
+  if (!objectId) return [];
+  return [xmlElement("self", { object_id: objectId })];
 }

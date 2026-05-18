@@ -190,6 +190,10 @@ callee 若处于 waiting / done / failed，翻回 running 让 scheduler 派 work
     content: `
 具体命令面与窗口语义在 \`executable.windows.talkWindow\` 概念中表达；
 本概念聚焦"talk 作为合作基础"的协作语义视角，不重复命令字段细节。
+
+talk 跨对象的可识别性由 \`thinkable.identity\` 提供：caller / callee 各自的
+self.md 通过 instructions 通道进入 LLM，渲染 \`<self object_id="…">\` 标记，
+使多 Object 在同一 Session 中持有可区分的身份。
     `.trim(),
   },
 };

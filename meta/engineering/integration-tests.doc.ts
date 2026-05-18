@@ -29,7 +29,7 @@ export type IntegrationTestsConcept = Concept & {
   /** 通用 fixture（tests/integration/_fixture.ts）签名 */
   fixture: ExampleNode;
 
-  /** 当前测试清单：5 个分类 × 10 + 1 文件 */
+  /** 当前测试清单：6 个分类 × 11 + 1 文件 */
   testInventory: {
     title: string;
     summary?: string;
@@ -43,6 +43,8 @@ export type IntegrationTestsConcept = Concept & {
     multiThread: ExampleNode;
     /** 元编程 1 个测试 */
     metaProgramming: ExampleNode;
+    /** 身份注入 1 个测试 */
+    identityInjection: ExampleNode;
   };
 
   /** 历次真 LLM 跑出来的具体 bug + 修复记录 */
@@ -122,7 +124,7 @@ countEventsWithPrefix(thread, prefix): number     // 数 inject 文案前缀
 
   testInventory: {
     title: "当前测试清单",
-    summary: "10 + 1 个集成测试，按覆盖能力 5 组分类",
+    summary: "11 + 1 个集成测试，按覆盖能力 6 组分类",
 
     singleThreadBasic: {
       kind: "example",
@@ -177,6 +179,31 @@ countEventsWithPrefix(thread, prefix): number     // 数 inject 文案前缀
 | # | 文件 | 覆盖能力 |
 |---|---|---|
 | 10 | meta-programming | Agent 写 server/index.ts → 注册方法 → 立即 program.function 调用 → 看到 returnValue |
+      `.trim(),
+    },
+
+    identityInjection: {
+      kind: "example",
+      title: "身份注入",
+      content: `
+| # | 文件 | 覆盖能力 |
+|---|---|---|
+| 12 | multi-object-persona | 两个 stone 各自 self.md 含独特 token / runScheduler 并行 / endSummary 复述本身 token 且不串台 / debug/llm.input.json 含 \`<self object_id="...">\` 标记 |
+
+Phase 1 多 Object 身份切片的端到端验证：证明 self.md 真的通过
+\`instructions\` 通道 + \`<self object_id>\` XML 标记进入对应 Object 的 LLM 调用，
+让多 Object 在同一 baseDir 下持有可区分的身份。
+
+**评分基准**（遵循 how_to_test/strategy.md §2 三档基准）：
+
+| 档 | 触发条件 |
+|---|---|
+| Good | 两个 thread 都 status=done；各自 endSummary 包含自己 self.md 指定的 token；各自 debug/llm.input.json 第 0 个 system message 含 \`<self object_id="...">\` |
+| OK   | 两个 thread 都 status=done 且 endSummary 含自己的 token，但 \`<self object_id>\` 标记缺失（机制残缺，产品体验仍正确） |
+| Bad  | 任一 thread 未到 done / 任一 endSummary 不含自己的 token / 出现身份串台（alice 的输出含 bob 的 token 或反之） |
+
+OK 档当前在断言上仍 fail（缺 \`<self>\` 即认定渲染层退化太大）；若未来出现
+"instructions 通道生效但 render 通道偶发漏" 的合理情形，再把 OK 转为软警告。
       `.trim(),
     },
   },

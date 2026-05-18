@@ -229,7 +229,9 @@ OOC 的核心断言：**对象的持久化目录就是它的物理存在**。
 \`\`\`
 stones/{objectId}/
 ├── .stone.json              配置 & 标识这是一个 stone 目录
-├── self.md                  对象身份与自我说明（→ identity.innerSelf）
+├── self.md                  对象身份与自我说明（→ identity.innerSelf）；
+│                            think loop 在每轮请求中作为 LLM instructions 注入
+│                            （sources.stoneSelf.readSelf → buildInputItems）
 ├── readme.md                对外介绍（→ identity.outerReadme）
 ├── data.json                Object 的属性与数据（顶层 merge 语义）
 ├── knowledge/               知识库根

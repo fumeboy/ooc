@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "bun:test";
 import { buildContext, buildInputItems, type ThreadContext } from "../context";
 import { clearKnowledgeLoaderCache } from "../knowledge";
-import { createStoneObject, knowledgeDir } from "../../persistable";
+import { createStoneObject, knowledgeDir, writeSelf } from "../../persistable";
 import {
   ROOT_WINDOW_ID,
   type CommandExecWindow,
@@ -375,3 +375,54 @@ describe("buildContext knowledge synthesis (activator → knowledge_window)", ()
 
 // 防 import 不使用 lint 报错
 void [makeThread, ROOT_WINDOW_ID, execForm];
+
+describe("buildInputItems self.md injection", () => {
+  let tempRoot: string | undefined;
+
+  afterEach(async () => {
+    if (tempRoot) {
+      await rm(tempRoot, { recursive: true, force: true });
+      tempRoot = undefined;
+    }
+  });
+
+  it("returns self.md body as instructions and renders <self object_id> in XML", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-self-"));
+    const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
+    await writeSelf(stoneRef, "I am Alice, a careful reviewer.");
+
+    const thread = makeThread({
+      id: "t_alice",
+      persistence: { baseDir: tempRoot, sessionId: "s", objectId: "alice", threadId: "t_alice" },
+    });
+    const out = await buildInputItems(thread);
+    expect(out.instructions).toBe("I am Alice, a careful reviewer.");
+
+    const xml = (out.input[0] as { content: string }).content;
+    expect(xml).toContain('<self object_id="alice">');
+  });
+
+  it("omits instructions and <self> when thread has no persistence", async () => {
+    const thread = makeThread({ id: "t_in_memory" });
+    const out = await buildInputItems(thread);
+    expect(out.instructions).toBeUndefined();
+
+    const xml = (out.input[0] as { content: string }).content;
+    expect(xml).not.toContain("<self ");
+  });
+
+  it("omits instructions when self.md is missing or empty", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-self-"));
+    await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
+    // 不写 self.md
+    const thread = makeThread({
+      id: "t_bob",
+      persistence: { baseDir: tempRoot, sessionId: "s", objectId: "bob", threadId: "t_bob" },
+    });
+    const out = await buildInputItems(thread);
+    expect(out.instructions).toBeUndefined();
+    // 仍然渲染 <self>：objectId 是稳定标记，与 self.md 是否存在解耦
+    const xml = (out.input[0] as { content: string }).content;
+    expect(xml).toContain('<self object_id="bob">');
+  });
+});
