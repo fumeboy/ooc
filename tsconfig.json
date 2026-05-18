@@ -4,6 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "allowImportingTsExtensions": true,
+    "allowJs": true,
     "strict": true,
     "noEmit": true,
     "baseUrl": ".",
@@ -15,5 +16,5 @@
     "types": ["bun", "node"],
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "meta/**/*.js", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "meta/**/*.js", "meta/**/*.ts", "tests/**/*.ts"]
 }

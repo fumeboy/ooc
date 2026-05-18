@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import { continueThread, fetchJob, fetchSessionThreads, fetchThread, waitForJob } from "../domains/chat";
 import { fetchFile, fetchTree, type FileTreeNode, type TreeScope } from "../domains/files";
 import { fetchFlows, pauseFlowSession, resumeFlowSession, type FlowSession } from "../domains/flows";
@@ -11,8 +12,22 @@ import { RightPanel } from "./layout/RightPanel";
 import { Sidebar } from "./layout/Sidebar";
 import { ThreadHeader } from "./layout/ThreadHeader";
 import { initialState, type AppState, type SessionThread } from "./state";
+import { scopeOf, toPath, useRouteState, type RouteState } from "./routing";
 
+/**
+ * AppShell — URL 是导航源；本地 state 只缓存"已派生的数据 + transient UI"。
+ *
+ * 改造前（plan-002）：scope / activePath / activeSessionId / activeObjectId /
+ * activeThreadId 全部 useState；handler 内 setState 改它们。
+ *
+ * 改造后（plan-003 step 3 + 实施变体）：从 useRouteState() 派生导航维度；
+ * handler 改调 navigate(toPath(...))；useEffect 监 URL 变化触发数据加载。
+ *
+ * shell.tsx 整体不拆 Page；通过 URL 派生分支替代单体 setState 分支。
+ */
 export function AppShell() {
+  const route = useRouteState();
+  const navigate = useNavigate();
   const [state, setState] = useState<AppState>(initialState);
   const [showSessions, setShowSessions] = useState(true);
   const [stoneModalOpen, setStoneModalOpen] = useState(false);
@@ -20,40 +35,47 @@ export function AppShell() {
   const [knowledgeModal, setKnowledgeModal] = useState<{ objectId: string; parentPath: string } | undefined>();
   const [knowledgeDraft, setKnowledgeDraft] = useState({ kind: "file" as "file" | "folder", path: "", content: "" });
   const [pauseBusy, setPauseBusy] = useState(false);
-  const activeFlow = state.flows.find((flow) => flow.sessionId === state.activeSessionId);
+
+  // URL 派生导航维度 —— 下游只读这几个变量，不再读 state.scope / state.active* 的导航字段
+  const scope: TreeScope = scopeOf(route);
+  const activeSessionId = route.kind === "session" || route.kind === "thread" || route.kind === "flowPage"
+    ? route.sessionId
+    : undefined;
+  const activeObjectId = route.kind === "thread"
+    ? route.objectId
+    : route.kind === "session"
+      ? "user" // 默认进 user.root
+      : undefined;
+  const activeThreadId = route.kind === "thread"
+    ? route.threadId
+    : route.kind === "session"
+      ? "root"
+      : undefined;
+  const activePath = useMemo(() => derivePathFromRoute(route), [route]);
+
+  const activeFlow = state.flows.find((flow) => flow.sessionId === activeSessionId);
   const isSessionPaused = Boolean(activeFlow?.paused);
 
   const patch = useCallback((next: Partial<AppState>) => setState((prev) => ({ ...prev, ...next })), []);
 
-  const refreshBasics = useCallback(async (scope: TreeScope = state.scope) => {
+  const refreshBasics = useCallback(async (targetScope: TreeScope = scope) => {
     patch({ loading: true, error: undefined });
     try {
-      const [flows, stones, tree] = await Promise.all([fetchFlows(), fetchStones(), fetchTree(scope)]);
-      patch({ flows: flows.items, flowsHash: flows.hash, stones: stones.items, tree, scope, loading: false });
+      const [flows, stones, tree] = await Promise.all([fetchFlows(), fetchStones(), fetchTree(targetScope)]);
+      patch({ flows: flows.items, flowsHash: flows.hash, stones: stones.items, tree, scope: targetScope, loading: false });
     } catch (error) {
       patch({ error: messageFromError(error), loading: false });
     }
-  }, [patch, state.scope]);
+  }, [patch, scope]);
 
-  /**
-   * 显式刷新：覆盖当前可见的所有数据 —— flows / stones / 当前 scope 的 tree，
-   * 以及（如果命中）activeFile 与当前 thread。供面包屑 ↻ 按钮使用。
-   *
-   * 内容未变（按 hash 或字符串相等比较）时保留旧 ref，避免下游组件（FileViewer →
-   * ContextSnapshotViewer）因引用变化而失效 memo / 重置选中态。
-   */
   const refreshActiveView = useCallback(async () => {
     patch({ loading: true, error: undefined });
     try {
-      const sessionId = state.activeSessionId;
-      const objectId = state.activeObjectId;
-      const threadId = state.activeThreadId ?? "root";
-      const activePath = state.activePath;
+      const threadId = activeThreadId ?? "root";
       const hadFile = Boolean(state.activeFile);
-      const scope = state.scope;
       const [flowsRes, stonesRes, tree] = await Promise.all([fetchFlows(), fetchStones(), fetchTree(scope)]);
-      const nextThread = sessionId && objectId
-        ? await fetchThread(sessionId, objectId, threadId)
+      const nextThread = activeSessionId && activeObjectId
+        ? await fetchThread(activeSessionId, activeObjectId, threadId)
         : undefined;
       const nextFile = activePath && hadFile ? await fetchFile(activePath) : undefined;
       setState((prev) => {
@@ -74,28 +96,68 @@ export function AppShell() {
     } catch (error) {
       patch({ error: messageFromError(error), loading: false });
     }
-  }, [patch, state.scope, state.activeSessionId, state.activeObjectId, state.activeThreadId, state.activePath, state.activeFile]);
+  }, [patch, scope, activeSessionId, activeObjectId, activeThreadId, activePath, state.activeFile]);
 
-  useEffect(() => { void refreshBasics("world"); }, []);
+  // 首屏 + scope 变化时拉 basics
+  useEffect(() => { void refreshBasics(scope); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [scope]);
 
   /**
-   * Session 打开后静默轮询：同步 thread（chat 时间线）与 flows（session pause 状态），
-   * 不动 loading 标志，避免拍频闪。当前 thread 是 root-thread-only 控制面，
-   * 在 user 视角与 callee 视角间切换时由 activeObjectId / activeThreadId 重置定时器。
+   * URL 变化触发文件加载。
+   * 仅 route.kind = file 且非 client 入口（client 入口走 ClientWithSourceToggle，
+   * 不需要 activeFile）时 fetch。
    */
   useEffect(() => {
-    const sessionId = state.activeSessionId;
-    const objectId = state.activeObjectId;
-    if (!sessionId || !objectId) return;
-    const threadId = state.activeThreadId ?? "root";
+    let cancelled = false;
+    if (route.kind !== "file") {
+      // 离开 file 视图 → 清缓存
+      patch({ activeFile: undefined, activeStoneObjectId: undefined, activeKnowledgePath: undefined, fileDirty: false });
+      return;
+    }
+    const path = route.path;
+    const editable = knowledgeTarget(path);
+    patch({ activeFile: undefined, activeStoneObjectId: editable?.objectId, activeKnowledgePath: editable?.path, fileDirty: false });
+    fetchFile(path)
+      .then((f) => { if (!cancelled) patch({ activeFile: f }); })
+      .catch((e) => { if (!cancelled) patch({ error: messageFromError(e) }); });
+    return () => { cancelled = true; };
+  }, [route, patch]);
+
+  /**
+   * URL 命中 session / thread 时加载 thread 数据 + sessionThreads。
+   */
+  useEffect(() => {
+    if (!activeSessionId || !activeObjectId) {
+      patch({ thread: undefined, sessionThreads: [] });
+      return;
+    }
+    const tid = activeThreadId ?? "root";
+    let cancelled = false;
+    Promise.all([
+      fetchThread(activeSessionId, activeObjectId, tid),
+      fetchSessionThreads(activeSessionId).catch(() => ({ items: [] as SessionThread[] })),
+    ])
+      .then(([thread, threads]) => {
+        if (cancelled) return;
+        patch({ thread, sessionThreads: threads.items });
+      })
+      .catch((e) => { if (!cancelled) patch({ error: messageFromError(e) }); });
+    return () => { cancelled = true; };
+  }, [activeSessionId, activeObjectId, activeThreadId, patch]);
+
+  /**
+   * Session 打开后静默轮询 thread + flows pause 状态。
+   * URL 变化时自动重置（useEffect deps）。
+   */
+  useEffect(() => {
+    if (!activeSessionId || !activeObjectId) return;
+    const threadId = activeThreadId ?? "root";
     const tick = async () => {
       try {
         const [thread, flows] = await Promise.all([
-          fetchThread(sessionId, objectId, threadId),
+          fetchThread(activeSessionId, activeObjectId, threadId),
           fetchFlows(),
         ]);
         setState((prev) => {
-          if (prev.activeSessionId !== sessionId || prev.activeObjectId !== objectId) return prev;
           const threadChanged = thread.hash !== prev.thread?.hash;
           const flowsChanged = flows.hash !== prev.flowsHash;
           if (!threadChanged && !flowsChanged) return prev;
@@ -112,51 +174,18 @@ export function AppShell() {
     };
     const timer = window.setInterval(() => { void tick(); }, 4000);
     return () => window.clearInterval(timer);
-  }, [state.activeSessionId, state.activeObjectId, state.activeThreadId]);
+  }, [activeSessionId, activeObjectId, activeThreadId]);
 
+  // showSessions 同步：进 session 时关掉 list，回 welcome 时打开
   useEffect(() => {
-    if (state.scope !== "flows") return;
-    setShowSessions(!state.activeSessionId);
-  }, [state.scope, state.activeSessionId]);
+    if (scope !== "flows") return;
+    setShowSessions(!activeSessionId);
+  }, [scope, activeSessionId]);
 
-  /**
-   * 加载某个 (object, thread) 的 thread + session 下所有 thread 列表（switcher 数据源）。
-   *
-   * collaborable § cross-object talk（spec 2026-05-15）：sessionThreads 至少含 user.root
-   * 与一个 callee；用户在 switcher 上切换即更换 activeThreadId 后再次 loadThread。
-   */
-  async function loadThread(sessionId: string, objectId: string, threadId = "root") {
-    try {
-      const [thread, threads] = await Promise.all([
-        fetchThread(sessionId, objectId, threadId),
-        fetchSessionThreads(sessionId).catch(() => ({ items: [] as SessionThread[] })),
-      ]);
-      patch({
-        thread,
-        activeSessionId: sessionId,
-        activeObjectId: objectId,
-        activeThreadId: threadId,
-        sessionThreads: threads.items,
-      });
-    } catch (error) {
-      patch({
-        error: messageFromError(error),
-        activeSessionId: sessionId,
-        activeObjectId: objectId,
-        activeThreadId: threadId,
-      });
-    }
-  }
-
-  async function handleNode(node: FileTreeNode) {
-    patch({ activePath: node.path, error: undefined, activeFile: undefined, activeStoneObjectId: undefined, activeKnowledgePath: undefined, fileDirty: false });
-    if (node.type === "file") {
-      try {
-        const editable = knowledgeTarget(node.path);
-        patch({ activeFile: await fetchFile(node.path), activeStoneObjectId: editable?.objectId, activeKnowledgePath: editable?.path, fileDirty: false });
-      }
-      catch (error) { patch({ error: messageFromError(error), activeFile: undefined, activeStoneObjectId: undefined, activeKnowledgePath: undefined, fileDirty: false }); }
-    }
+  // FileTree 点击 → navigate
+  function handleNode(node: FileTreeNode) {
+    if (node.type !== "file") return; // 目录只展开，不导航（plan-003 D2）
+    navigate(toPath({ kind: "file", path: node.path }));
   }
 
   function knowledgeTarget(path: string) {
@@ -169,15 +198,8 @@ export function AppShell() {
     return match ? { objectId: match[1], parentPath: match[2] ?? "" } : undefined;
   }
 
-  /**
-   * 用户从左侧 session 列表点开一条 session。
-   *
-   * 默认进入展示 user.root（user 视角看自己的 outbox），UI 上若用户切换 thread switcher
-   * 再去 loadThread(sessionId, otherObjectId, otherThreadId)。
-   */
-  async function handleSession(flow: FlowSession) {
-    patch({ activeSessionId: flow.sessionId });
-    await loadThread(flow.sessionId, "user", "root");
+  function handleSession(flow: FlowSession) {
+    navigate(toPath({ kind: "session", sessionId: flow.sessionId }));
   }
 
   function updateFlowPausedState(sessionId: string, paused: boolean) {
@@ -188,79 +210,54 @@ export function AppShell() {
   }
 
   function handleShowWelcome() {
-    patch({
-      activeSessionId: undefined,
-      activeObjectId: undefined,
-      activeThreadId: undefined,
-      activePath: undefined,
-      activeFile: undefined,
-      activeStoneObjectId: undefined,
-      activeKnowledgePath: undefined,
-      thread: undefined,
-      sessionThreads: [],
-      fileDirty: false,
-      scope: "flows",
-    });
+    navigate(toPath({ kind: "welcome" }));
     setShowSessions(true);
   }
 
-  /**
-   * 创建 session：等价于 user 对 target 的初次 talk。
-   *
-   * 流程：seedSession → 等 callee job 跑完 → 默认展示 user.root（user 视角能看到刚发的 message）。
-   */
   async function handleCreate(input: { sessionId: string; targetObjectId: string; initialMessage: string }) {
     patch({ loading: true, error: undefined });
     try {
       const created = await createSessionWithObject(input);
       await waitForJob(created.jobId, fetchJob);
-      await refreshBasics(state.scope);
-      await loadThread(input.sessionId, "user", "root");
+      await refreshBasics(scope);
+      navigate(toPath({ kind: "session", sessionId: input.sessionId }));
     } catch (error) {
       patch({ error: messageFromError(error), loading: false });
     }
   }
 
-  /**
-   * 用户在 chat 框输入并发送。
-   *
-   * collaborable § cross-object talk（spec 2026-05-15）：固定走 user.root.talk_window；
-   * 后端 deliverTalkMessage 把消息派送到 callee + 入队 callee 的 think job。
-   * 等 job 完成后重新加载当前 thread（如果用户停在 user.root 就刷新 user.root；
-   * 如果用户切到了 callee 视角就刷新 callee）。
-   */
   async function handleSend(text: string) {
-    if (!state.activeSessionId) return;
+    if (!activeSessionId) return;
     patch({ loading: true, error: undefined });
     try {
-      const result = await continueThread(state.activeSessionId, text);
+      const result = await continueThread(activeSessionId, text);
       await waitForJob(result.jobId, fetchJob);
-      const objectId = state.activeObjectId ?? "user";
-      const threadId = state.activeThreadId ?? "root";
-      await loadThread(state.activeSessionId, objectId, threadId);
-      patch({ loading: false });
+      const objectId = activeObjectId ?? "user";
+      const threadId = activeThreadId ?? "root";
+      const [thread, threads] = await Promise.all([
+        fetchThread(activeSessionId, objectId, threadId),
+        fetchSessionThreads(activeSessionId).catch(() => ({ items: [] as SessionThread[] })),
+      ]);
+      patch({ thread, sessionThreads: threads.items, loading: false });
     } catch (error) {
       patch({ error: messageFromError(error), loading: false });
     }
   }
 
   async function handleToggleSessionPause() {
-    if (!state.activeSessionId) return;
+    if (!activeSessionId) return;
     setPauseBusy(true);
     patch({ error: undefined });
     try {
       if (activeFlow?.paused) {
-        const result = await resumeFlowSession(state.activeSessionId);
-        updateFlowPausedState(state.activeSessionId, result.paused);
+        const result = await resumeFlowSession(activeSessionId);
+        updateFlowPausedState(activeSessionId, result.paused);
         await Promise.all(result.jobIds.map((jobId) => waitForJob(jobId, fetchJob)));
       } else {
-        const result = await pauseFlowSession(state.activeSessionId);
-        updateFlowPausedState(state.activeSessionId, result.paused);
+        const result = await pauseFlowSession(activeSessionId);
+        updateFlowPausedState(activeSessionId, result.paused);
       }
-      if (state.activeObjectId) {
-        await loadThread(state.activeSessionId, state.activeObjectId, state.activeThreadId ?? "root");
-      }
-      await refreshBasics(state.scope);
+      await refreshBasics(scope);
     } catch (error) {
       patch({ error: messageFromError(error) });
     } finally {
@@ -305,24 +302,52 @@ export function AppShell() {
     try {
       await updateKnowledgeFile({ objectId: state.activeStoneObjectId, path: state.activeKnowledgePath, content: state.activeFile.content });
       patch({ savingFile: false, fileDirty: false });
-      await refreshBasics(state.scope);
+      await refreshBasics(scope);
     } catch (error) {
       patch({ error: messageFromError(error), savingFile: false });
     }
   }
 
-  const isWelcome = state.scope === "flows" && !state.activeSessionId;
+  function handleScope(targetScope: TreeScope) {
+    navigate(toPath({ kind: "scope", scope: targetScope }));
+  }
+
+  function handleSelectThread(sel: SessionThread) {
+    if (!activeSessionId) return;
+    navigate(toPath({ kind: "thread", sessionId: activeSessionId, objectId: sel.objectId, threadId: sel.threadId }));
+  }
+
+  const isWelcome = route.kind === "welcome";
 
   return (
     <AppLayout
-      sidebar={<Sidebar scope={state.scope} flows={state.flows} tree={state.tree} activePath={state.activePath} activeSessionId={state.activeSessionId} activeSessionTitle={state.flows.find((flow) => flow.sessionId === state.activeSessionId)?.title ?? state.activeSessionId} showSessions={showSessions} onToggleSessions={() => setShowSessions((prev) => !prev)} onShowWelcome={handleShowWelcome} onScope={refreshBasics} onNode={handleNode} onSession={handleSession} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
-      main={<MainPanel isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={state.activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} selfObjectId={state.activeObjectId} onUserReply={handleSend} onRefresh={refreshActiveView} threadHeader={state.activeObjectId ? <ThreadHeader objectId={state.activeObjectId} threadId={state.activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} onSelectThread={(sel) => state.activeSessionId && void loadThread(state.activeSessionId, sel.objectId, sel.threadId)} /> : undefined} />}
-      right={state.activeObjectId && state.activeObjectId !== "user" ? <RightPanel sessionId={state.activeSessionId} objectId={state.activeObjectId} threadId={state.activeThreadId} thread={state.thread} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} /> : undefined}
+      sidebar={<Sidebar scope={scope} flows={state.flows} tree={state.tree} activePath={activePath} activeSessionId={activeSessionId} activeSessionTitle={state.flows.find((flow) => flow.sessionId === activeSessionId)?.title ?? activeSessionId} showSessions={showSessions} onToggleSessions={() => setShowSessions((prev) => !prev)} onShowWelcome={handleShowWelcome} onScope={handleScope} onNode={handleNode} onSession={handleSession} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
+      main={<MainPanel isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} selfObjectId={activeObjectId} onUserReply={handleSend} onRefresh={refreshActiveView} threadHeader={activeObjectId ? <ThreadHeader objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} onSelectThread={handleSelectThread} /> : undefined} />}
+      right={activeObjectId && activeObjectId !== "user" ? <RightPanel sessionId={activeSessionId} objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} /> : undefined}
     >
       <CreateStoneModal open={stoneModalOpen} draft={stoneDraft} onDraft={setStoneDraft} onClose={() => setStoneModalOpen(false)} onSubmit={handleCreateStone} />
       <CreateKnowledgeModal modal={knowledgeModal} draft={knowledgeDraft} onDraft={setKnowledgeDraft} onClose={() => setKnowledgeModal(undefined)} onSubmit={handleCreateKnowledge} />
     </AppLayout>
   );
+}
+
+/**
+ * 把 RouteState 派生为 "world 相对路径"。
+ *
+ * 让 MainPanel 现有 matchClientTarget(path) 在 stoneClient / flowPage 路由下
+ * 也能命中——shortcut URL → 同步的长 path → ClientWithSourceToggle 自动挂上。
+ */
+function derivePathFromRoute(route: RouteState): string | undefined {
+  switch (route.kind) {
+    case "file":
+      return route.path;
+    case "stoneClient":
+      return `stones/${route.objectId}/client/index.tsx`;
+    case "flowPage":
+      return `flows/${route.sessionId}/objects/${route.objectId}/client/pages/${route.page}.tsx`;
+    default:
+      return undefined;
+  }
 }
 
 function CreateStoneModal({ open, draft, onDraft, onClose, onSubmit }: { open: boolean; draft: { name: string; description: string; self: string; readme: string }; onDraft: (draft: { name: string; description: string; self: string; readme: string }) => void; onClose: () => void; onSubmit: () => void }) {

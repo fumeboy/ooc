@@ -1,0 +1,142 @@
+import { meta_v20260506_1 } from "@meta/index.doc";
+
+/**
+ * 迭代历史 — 按时间线追溯本项目从空到能跑 ReAct 闭环的全部主题。
+ *
+ * 每个节点对应"一个有明确产出的设计/实现循环"，物理上落在
+ * `docs/superpowers/specs/` 与 `docs/superpowers/plans/` 下的同名文件。
+ *
+ * 此文件只描述"做了什么、为什么做、对应的 spec/plan 在哪"，不重复每次迭代
+ * 的具体实施细节——细节去 spec/plan 看。
+ *
+ * 节点形态：DocNode（title + content），不挂 sources，因为它是元文档而非
+ * 源码绑定概念。
+ */
+export const iteration_v20260511_1 = {
+  get parent() {
+    return meta_v20260506_1;
+  },
+  title: "迭代历史",
+  content: `
+ooc-2 迭代历史
+
+每个迭代必须满足最小契约：
+1. 一个明确目的（要让系统获得什么新能力 / 解决什么具体问题）
+2. 一份文档（spec 或 plan，至少之一）
+3. 一组提交（每个 commit 一个原子改动）
+4. 验证（单元测试新增 / 已有测试不退化 / tsc clean）
+
+阶段不是预先规划的，是事后回看的标签——为了让"还差什么"在一眼能看清。
+
+
+ooc-2  (2026-05-08 ~ 2026-05-12)
+│
+├── 阶段 1：thinkable 骨架 — 让 LLM 接得通、tool 调得到
+│   ├── [2026-05-08] thinkable-llm-client          统一 LLM client（OpenAI + Claude 双 provider，按 OOC_PROVIDER 切换）
+│   │   ├── spec: docs/superpowers/specs/2026-05-08-thinkable-llm-client-design.md
+│   │   └── plan: docs/superpowers/plans/2026-05-08-thinkable-llm-client.md
+│   ├── [2026-05-08] thinkloop-tool-call           ThinkLoop 工具调用骨架(5 原语 + form 三阶段)
+│   │   ├── spec: docs/superpowers/specs/2026-05-08-thinkloop-tool-call-design.md
+│   │   └── plan: docs/superpowers/plans/2026-05-08-think-tool-call.md
+│   └── [2026-05-09] thinkloop-real-verification   真 LLM 验证骨架，确认 provider 通路
+│       └── plan: docs/superpowers/plans/2026-05-09-thinkloop-real-verification.md
+│
+├── 阶段 2：context 与多线程 — 让 Object 能在内部派生协作
+│   ├── [2026-05-09] build-context-inbox-outbox    Context 渲染加 inbox/outbox + activeForms
+│   │   └── plan: docs/superpowers/plans/2026-05-09-build-context-inbox-outbox.md
+│   ├── [2026-05-09] thread-tree-do-core           线程树 + do.fork/continue 派生子线程
+│   │   └── plan: docs/superpowers/plans/2026-05-09-thread-tree-do-core.md
+│   └── [2026-05-09] todo-command-unification      todo 收敛到 form 生命周期，不再有独立 todos 窗口
+│       └── plan: docs/superpowers/plans/2026-05-09-todo-command-unification.md
+│
+├── 阶段 3：单 object 闭环 — 让运行态可落盘可观测
+│   ├── [2026-05-10] current-thinkable-doc-alignment   meta doc.js 与现有源码对齐，消除孤儿
+│   │   └── plan: docs/superpowers/plans/2026-05-10-current-thinkable-doc-alignment.md
+│   └── [2026-05-10] single-object-core-implementation persistable 落 thread.json + observable 落 llm.input/output.json + scheduler 集成
+│       └── plan: docs/superpowers/plans/2026-05-10-single-object-core-implementation.md
+│
+├── 阶段 4：可用执行 + 真 LLM 验证 — 让 Agent 真能对外做事
+│   └── [2026-05-10] executable-completion          Form 三段生命周期(open→executing→executed→close) + program.shell + do.continue+wait + 9 个真 LLM 集成测试
+│       ├── spec: docs/superpowers/specs/2026-05-10-executable-completion-design.md
+│       └── plan: docs/superpowers/plans/2026-05-10-executable-completion.md
+│
+├── 阶段 5：元编程 + stone 持久化 — 让 Object 能给自己写方法、保留身份
+│   └── [2026-05-11] stone-server-meta-programming  stone 全套持久化(.stone.json/self.md/readme.md/data.json/server/index.ts) + program.ts/js(in-process dynamic import) + program.function(callMethod) + ProgramSelf(callMethod/getData/setData) + 元编程 knowledge + 真 LLM 集成测试
+│       ├── spec: docs/superpowers/specs/2026-05-11-stone-server-meta-programming-design.md
+│       ├── plan: docs/superpowers/plans/2026-05-11-stone-server-meta-programming.md
+│       ├── 后续微调：method 注册支持可选 knowledge(args) → text（同 command.match 设计，基于当前 args 动态派生知识文本）；缺省回退到由 description+params 自动生成的基线文本；form 渲染段为 <method_knowledge>
+│       └── 工程沉淀：meta/engineering/integration-tests.doc.js 记录 11 个真 LLM 集成测试（含 multi-round-multitask long-horizon 压力测试）+ 5 个由真 LLM 触发并修复的 bug 历史
+│
+├── 阶段 6：observable debug + form 协议增强 — 让"为什么 Agent 走偏"可定位 + 让 Agent 不再走偏
+│   └── [2026-05-11] observable-debug-and-form-protocol  observable 增加 debug mode + loop_NNN.{input,output,meta}.json 落盘；form 渲染加 <next_action> / <protocol_hint>；program 缺参时返回可操作纠偏提示；submit/refine/open 文档与 schema 明确"只在 refine/open 填业务参数，submit 不接受新参数"
+│       ├── spec: docs/superpowers/specs/2026-05-11-observable-debug-and-form-protocol-design.md
+│       ├── plan: docs/superpowers/plans/2026-05-11-observable-debug-and-form-protocol.md
+│       └── 回归记录: meta/engineering/test/2026-05-11-meta-programming-regression-test.md
+│
+├── 阶段 7：app-server 控制面 — 把 OOC 内核暴露为 HTTP API + 可恢复 worker
+│   └── [2026-05-11] app-server-elysia-control-plane  src/app/server 基于 Elysia 的控制面：health/runtime/stones/flows 4 模块 23 个 API；jobManager + pauseStore + worker + resumePausedThread；meta/app 文档树
+│       ├── spec(主体): docs/superpowers/specs/2026-05-11-app-server-elysia-control-plane-design.md
+│       ├── plan(主体): docs/superpowers/plans/2026-05-11-app-server-elysia-control-plane.md
+│       ├── spec(测试+文档): docs/superpowers/specs/2026-05-11-app-server-testing-and-docs-design.md
+│       ├── plan(测试+文档): docs/superpowers/plans/2026-05-11-app-server-testing-and-docs.md
+│       ├── 工程沉淀: meta/engineering/test/2026-05-11-app-server-control-plane-result-and-todo.md
+│       └── 已记录的 6 项 TODO（见上述报告）：执行 meta 循环引用修复 / 集成测试稳定性 / call_method 错误映射 / runtime debug 控制器测试 / worker 可恢复 / flows.resume 入队
+│
+└── 阶段 8：knowledge 模块 — 让 Object 能在 context 中按需看到自己的知识库
+    └── [2026-05-12] knowledge-module  parser + loader(mtime cache 热重载) + activator(命令路径相交) + context 渲染(<active_knowledge>) + 手动 pin/unpin(open/close type=knowledge)
+        ├── spec: docs/superpowers/specs/2026-05-12-knowledge-module-design.md
+        ├── plan: docs/superpowers/plans/2026-05-12-knowledge-module.md
+        └── 关键决策：懒求值（无 thread 派生状态字段）+ 单篇 8KB / 总数 20 项渲染上限 + 删 thread.activatedKnowledge 字段（违反 SSoT）+ js-yaml 依赖
+
+└── 阶段 9：ContextWindow 统一抽象 — 把 form / inbox-outbox / windows 收敛为一种实体
+    ├── [2026-05-14] context-window-step1  ContextWindow flat 数组取代 activeForms / windows / pinnedKnowledge；root / command_exec / do_window / todo_window 真实落地；open tool 实现 args-complete 时立即提交 form 的能力（next paths ⊇ baseline + next knowledge keys ⊆ baseline）；waitingType 字段取消（统一 inbox 唤醒）；初始 creator do_window 自动注入；持久化反序列化兼容旧 thread.json
+    │   ├── spec: docs/superpowers/specs/2026-05-14-context-window-unification-design.md
+    │   └── plan: docs/superpowers/plans/2026-05-14-context-window-step1.md
+    └── [2026-05-14] context-window-step2-3  talk_window / program_window / file_window / knowledge_window 全部上线；新 root commands open_file / open_knowledge；ProgramSelf 增 getThreadLocal/setThreadLocal；control plane continueThread 接 targetWindowId；persistable 删除 legacy migration shim；meta 全量回写
+        ├── plan: docs/superpowers/plans/2026-05-14-context-window-step2-3.md
+        ├── 关键决策：talk 当前阶段仅 target=user；program 一次 open 即创建 window + 执行首个 exec；activator 改用 knowledge_window.path 取代 pinnedKnowledge
+        └── 后续：talk 跨 object 路由 / 真实沙箱隔离 / file_window 写权限
+
+└── 阶段 10：e2e 工程 + 真 LLM 暴露的契约/产品 bug 修补 — 把"OOC 作为 CodeAgent 端到端能不能用"这条主线接通
+    ├── [2026-05-17] phantom-creator-do-window-removed  initContextWindows 不再为 self-driven root thread 注入指向 SESSION_CREATOR_THREAD_ID 占位的 phantom creator do_window：检查 opts/thread 三处 creator 信息源都缺时直接跳过。修产线 createFlowObject legacy 路径 + integration test fixture phantom，让新 wait 校验真正能拦住"无理由 wait"
+    ├── [2026-05-17] claude-transport-tool-use-encoding  Claude provider 把 OOC 的 function_call / function_call_output 正确编码成 Anthropic 的 tool_use / tool_result content blocks；inbox_message_arrived 标记的 system message 抽出来作 user 消息。LLM 多轮调用现在能看到完整 tool 历史，不再陷入"用户连续发送 Continue"的幻觉。S1 OK 率从 1/3 → 3/3，integration 6→10/12 pass，e2e backend 4/4 全绿（S4 顺带 Bad→OK）
+    ├── [2026-05-17] child-end-notification-marker  scheduler emitChildEndNotifications 的 marker 加 lastExecutedAt 区分 child 多次 end（do_window.continue 触发 child done→running→done 时）；之前 marker 仅含 status，第二次 end 被 already 拦死锁。修后 integration: do-continue-after-done 通过
+    ├── [2026-05-17] activator-program-window-history  knowledge activator 收集 union 时除 command_exec.commandPaths 外，还看 program_window 最近一次 exec 的 language 推断 program/program.<language>；解决 LLM 一次给齐 args 触发 auto-submit 后 command_exec 消失、activator 失活的盲点。修后 integration: knowledge-activation 通过；整套 integration 12/12 通过
+    ├── [2026-05-17] meta-concept-graph-full-coverage  把 meta/object/ 子树全部 23 个 blob 文件升级到 meta-doc-maintenance §2 schema：collaborable (10) / observable (4) / thinkable 残余 (4) / extendable (1) / reflectable (1) + engineering 3 个补合规 + Sprint 1 已落 5 个核心 thinkable/persistable。3 个 sub agent 并行处理 collaborable / observable / thinkable+extendable+reflectable 三棵互不冲突子树。walker 守护范围从 executable 子树扩到全树；合规概念数 17 → 48；任何源码模块改名都会通过 tsc 立即在对应 .doc.js 报错。新增 docs/meta-source-binding-inventory.md 给出 src → meta 绑定覆盖度报告 + Sprint 1/2/3 后续路径
+    │   ├── spec: docs/meta-source-binding-inventory.md
+    │   └── 关键决策：sub agent 按目录子树分派（互不冲突）；reflectable / kanban / issue 等 forward-looking 概念 sources 占位绑到最近相关 persistable module；§5 时态清理（"Step 1"/"spec 2026-05-14"等过程性表述全删）；meta-doc-maintenance 规范文件本身首次纳入版本控制
+    ├── [2026-05-17] wait-requires-dependency  把 wait(reason) 改成 wait(on, reason?)：on 必填且必须 resolve 到一个 open 状态、可产生未来 IO 的 window（talk/do）。无合法 on 时 wait 直接 reject，强 nudge end。这一刀消除了 LLM "做完任务不 say/不 end 卡 waiting" 漂移的结构性根因（前置 todo nudge / protocol 文本 / onCommandPath 等所有方案都是在 system 允许 idle 的前提下劝退 LLM，治标不治本）。同步：撤掉 talk-delivery 的 reply-creator todo（结构性约束接管）；协议 KNOWLEDGE / meta 文档全量改写；do_window.wait / talk_window.wait / do.continue(wait=true) / talk.say(wait=true) 都写 waitingOn 保持中间态一致
+    │   ├── spec: docs/superpowers/specs/2026-05-17-wait-requires-dependency-design.md
+    │   ├── plan: docs/superpowers/plans/2026-05-17-wait-requires-dependency.md
+    │   └── 关键决策：Phase 1 不动 wakeup 逻辑（保持"任何 inbox 唤醒"宽松语义）；R4 严格要求自建 talk 必须 say 过才能 wait（avoid"对端不知有人在等"）；reject 错误消息枚举当前合法候选 + 直指 end 替代
+    └── [2026-05-17] e2e-harness-and-llm-contract-fixes  按 docs/testing/strategy.md 落 backend (S1–S4) + frontend (F1–F5) e2e 骨架；首次真 LLM 跑通后修了 3 个被遮蔽多时的契约/产品 bug
+        ├── 测试入口: tests/e2e/backend/_fixture.ts + tests/e2e/frontend/_fixture.ts；Good/OK/Bad 评分裁判；RUN_BACKEND_E2E / RUN_FRONTEND_E2E gate
+        ├── 修复 1：Claude provider 在 messages 数组为空时补一条 placeholder user message（OOC 把 inbox/inject 都映射 system role，过滤后 messages=[] → Anthropic API 400 或代理 200+空 body；OpenAI Responses API 不受此约束，不动）
+        ├── 修复 2：grep / glob / open_file / write_file / search.open_match 用 thread.persistence.baseDir 解析相对路径（取代 process.cwd()），让多 session / --world 场景下数据原语对的是 session 工作树；新增 src/executable/windows/session-path.ts；program(shell) 保留 process.cwd() 语义（escape hatch）
+        ├── 修复 3：talk_window 渲染补 is_creator_window 标记（之前只 do_window 有），protocol 加"一轮结束前决策树"（callee 必须先 say 回创建者再 wait/end），消除"任务做完直接 wait 忘了回复"的 LLM 漂移
+        ├── 附带：tests/integration/_fixture.ts 把初始 prompt 从 inject 改走 inbox/inbox_message_arrived 路径——processEventToItems 仅渲染 error-inject，普通 inject 视作过期上下文丢弃，旧 fixture LLM 看不到任何用户意图
+        ├── 真 LLM 回归：S2/S3 Good，S1 OK，S4 Bad（LLM 偏好 write_file 全覆盖而非 file_window.edit，knowledge 引导不够强；下一轮处理）
+        └── 关键决策：契约边界 fix 优先（adapter 内补缺，不动 OOC "context 走 system" 的核心设计）；shell 与数据原语分开（escape hatch 不被强吃 baseDir）
+
+
+## 阶段划分判据
+
+- **阶段 1 完成标志**：能写一行 prompt，看到 LLM 用 tool 调用回复，没有 mock
+- **阶段 2 完成标志**：父子线程之间通过 inbox/outbox 协作，scheduler 公平选下一个 running thread
+- **阶段 3 完成标志**：杀进程重启后能从磁盘恢复线程态；任意时刻能从 llm.input/output.json 复盘上一轮 LLM 视角
+- **阶段 4 完成标志**：跑 bun --env-file=.env test tests/integration 9 个端到端场景全部 PASS（真 LLM 真 shell 真持久化）
+- **阶段 5 完成标志**：Agent 能用 program.shell 写 <self.dir>/server/index.ts 注册新方法 → 立即用 program.function 调用 → 看到结果；stone 全套目录骨架可创建，5 个核心文件可读写
+- **阶段 6 完成标志**：开 debug mode 后每轮 LLM 调用都有 loop_NNN.{input,output,meta}.json 落盘；Agent 的 program form 不再"把 language/code 写进 description"或"空 submit"
+- **阶段 7 完成标志**：HTTP POST /api/stones 创建对象、PATCH /api/stones/:id/data 写数据、POST /api/flows/:sid/objects 起 session、POST /api/stones/:id/call_method 调方法全部端到端可用；RUN_REAL_APP_SERVER_TEST=1 bun test src/app/server/__tests__/real-app-server.test.ts 通过
+- **阶段 8 完成标志**：在 stone/{objectId}/knowledge/ 放一篇 .md 含 activates_on.show_content_when=[program.shell] → Agent 一旦 open program 含 program.shell 路径 → 下一轮 system context 中 <active_knowledge> 段含该篇全文；Agent 编辑 .md 后下一轮 think 立即生效
+
+## 后续阶段（未启动）
+
+- **阶段 9**：跨 object talk + 全 stone 数据合并（让多 object session 协作）
+- **阶段 10**：reflectable + super flow（让 Object 通过 super flow 持续反思、沉淀 memory）
+- **阶段 11**：跨线程 knowledge 继承 + kernel built-in knowledge + flow 第二来源
+- **阶段 12**：UI / client / 与人协作（与 observable/pause 联动，做可视化 + 介入）
+
+后续阶段都不在当前主分支范围。每启动一个新阶段，都先在本文件追加一个新节点，然后再写 spec → plan → 实施。
+  `.trim(),
+};

@@ -24,4 +24,10 @@ export const endpoints = {
   runtimeDebugStatus: "/api/runtime/debug/status",
   runtimeDebugEnable: "/api/runtime/debug/enable",
   runtimeDebugDisable: "/api/runtime/debug/disable",
+  /** Stone 级 server ui_methods 调用入口。 */
+  stoneCallMethod: (objectId: string) =>
+    `/api/stones/${encodeURIComponent(objectId)}/call_method`,
+  /** Flow object 级 server ui_methods 调用入口。 */
+  flowCallMethod: (sessionId: string, objectId: string) =>
+    `/api/flows/${encodeURIComponent(sessionId)}/objects/${encodeURIComponent(objectId)}/call_method`,
 };

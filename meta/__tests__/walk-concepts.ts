@@ -35,7 +35,7 @@ function isConcept(value: unknown): value is ConceptShape {
   return true;
 }
 
-const SKIP_KEYS = new Set(["parent", "sources"]);
+const SKIP_KEYS = new Set(["parent", "sources", "refs"]);
 
 /**
  * 递归遍历 root，收集所有概念对象。
@@ -45,7 +45,9 @@ const SKIP_KEYS = new Set(["parent", "sources"]);
  *   （aggregator 既可以是概念也可以是子树容器，例如 tools_v...
  *    自己是概念，同时把 open/refine/submit 等暴露在子字段上）
  * - SKIP_KEYS 跳过：parent（避免反向链路）、sources（其值是 module
- *   namespace，不应被当作子概念遍历）
+ *   namespace，不应被当作子概念遍历）、refs（跨概念引用，目标概念会在它自己
+ *   原生路径下被发现，refs 仅作渲染层链接用——不下钻避免重复发现与精确路径
+ *   断言被破坏）
  * - visited Set 按对象 identity 去重，破任何 getter 形成的循环
  */
 export function walkConcepts(root: unknown, rootPath = "root"): WalkedConcept[] {

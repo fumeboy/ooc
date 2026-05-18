@@ -53,3 +53,13 @@ export { readSelf, selfFile, writeSelf } from "./stone-self";
 export { readReadme, readmeFile, writeReadme } from "./stone-readme";
 export { dataFile, mergeData, readData, writeData } from "./stone-data";
 export { readServerSource, serverIndexFile, writeServerSource } from "./stone-server";
+
+export {
+  clientIndexFile,
+  flowClientPageFile,
+  flowClientPagesDir,
+  readFlowClientPage,
+  readStoneClientSource,
+  writeFlowClientPage,
+  writeStoneClientSource,
+} from "./stone-client";
