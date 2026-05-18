@@ -45,6 +45,19 @@ talk_window 是与一个对端 flow object 的持续会话窗口。它注册的 
 - 同一个对端复用同一个 talk_window，不要每发一条消息就 close 再重开
 - creator talk_window（isCreatorWindow=true）= 创建本 thread 的对端给你的回信通道；
   收到 inbox 消息后回复就走它的 \`say\`，不要 open 新的 talk
+
+## 关系记录（relation）
+
+你对每个 peer 的长期认知请写到 \`stones/<self>/knowledge/relations/<peer>.md\`
+（普通 markdown，一个 peer 一份）。每当 thread 里存在指向某 peer 的 talk_window 时，
+系统会自动在 context 注入两条 knowledge:
+- \`stones/<peer>/readme.md\` —— peer 公开自述
+- \`stones/<self>/knowledge/relations/<peer>.md\` —— 你对该 peer 的认知
+
+如果你**还没**对该 peer 写过 relation，第二条会显示一段占位提示，告诉你按上述
+路径写入。形成新认知后通过 \`open(command="write_file", path="stones/<self>/knowledge/relations/<peer>.md", content="...")\`
+（或 \`open(command="open_file") + edit\` 增量更新）即可。下次再与该 peer 对话时，
+文件会自动作为 knowledge 出现在你的 context。
 `.trim();
 
 const SAY_KNOWLEDGE = `

@@ -13,6 +13,9 @@ import type {
   CommandKnowledgeEntries,
   CommandTableEntry,
 } from "../command-types.js";
+import { stat } from "node:fs/promises";
+import { stoneDir } from "../../../persistable/index.js";
+import { SUPER_ALIAS_TARGET } from "../super-constants.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -82,6 +85,24 @@ export async function executeTalkCommand(
   if (!target) return "[talk] 缺少 target 参数。";
   const title = typeof ctx.args.title === "string" ? deriveTitle(ctx.args.title) : "";
   if (!title) return "[talk] 缺少 title 参数。";
+
+  // target 校验:对应 stones/{target}/ 必须存在,否则 LLM 容易因 typo 等错误
+  // 与"幻 peer"对话,且 relation 派生(meta/object/collaborable/relation)会全部
+  // 静默跳过,无视错。super alias 是预定义自反目标,豁免。thread.persistence 缺失
+  // (测试 fixture 等异常)走安全网跳过校验,不破现有单元测试。
+  if (target !== SUPER_ALIAS_TARGET && thread.persistence?.baseDir) {
+    const dir = stoneDir({ baseDir: thread.persistence.baseDir, objectId: target });
+    let exists = false;
+    try {
+      const info = await stat(dir);
+      exists = info.isDirectory();
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    }
+    if (!exists) {
+      return `[talk] target \`${target}\` 不存在(stones/${target}/ 目录未找到)。请检查 target 拼写是否正确;若是新对象,先创建 stone object 再 open talk_window。`;
+    }
+  }
 
   const id = generateWindowId("talk");
   const talkWindow: TalkWindow = {

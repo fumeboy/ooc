@@ -13,6 +13,8 @@ export interface MakeThreadOpts {
   status?: ThreadContext["status"];
   parentThreadId?: string;
   creatorThreadId?: string;
+  /** 见 ThreadContext.creatorObjectId;cross-object talk 测试需要构造它。 */
+  creatorObjectId?: string;
   persistence?: ThreadPersistenceRef;
   /** 初始 events，会原样写入 thread.events。 */
   events?: ThreadContext["events"];
@@ -45,6 +47,7 @@ export function makeThread(opts: MakeThreadOpts = {}): ThreadContext {
     events: opts.events ?? [],
     parentThreadId: opts.parentThreadId,
     creatorThreadId: opts.creatorThreadId,
+    creatorObjectId: opts.creatorObjectId,
     inbox: opts.inbox,
     outbox: opts.outbox,
     contextWindows: opts.extraWindows ? [...opts.extraWindows] : [],

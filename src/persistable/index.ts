@@ -41,6 +41,8 @@ export {
   createStoneObject,
   knowledgeDir,
   memoryDir,
+  relationFile,
+  readRelation,
   relationsDir,
   serverDir,
   clientDir,

@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { stoneDir, toJson, type StoneObjectRef } from "./common";
 
@@ -30,6 +30,29 @@ export function memoryDir(ref: StoneObjectRef): string {
 /** stone 的 knowledge/relations 目录。 */
 export function relationsDir(ref: StoneObjectRef): string {
   return join(knowledgeDir(ref), "relations");
+}
+
+/** stone 对某 peer 的 relation 文件 `knowledge/relations/{peerId}.md` 的绝对路径。 */
+export function relationFile(ref: StoneObjectRef, peerId: string): string {
+  return join(relationsDir(ref), `${peerId}.md`);
+}
+
+/**
+ * 读取 stone 对某 peer 的 relation 文件,不存在(ENOENT)返回 undefined。
+ *
+ * 与 readReadme 同风格;caller 信任 peerId 合法性(目前来源是 talk_window.target,
+ * 由 root.talk 在 open 时已做存在校验)。其它 IO 错误向上抛。
+ */
+export async function readRelation(
+  ref: StoneObjectRef,
+  peerId: string,
+): Promise<string | undefined> {
+  try {
+    return await readFile(relationFile(ref, peerId), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
 }
 
 /** stone 的 server 目录。 */

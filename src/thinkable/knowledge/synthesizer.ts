@@ -22,15 +22,15 @@
  * 内部的 commands / windows registry），故归位到 thinkable/knowledge。
  */
 
-import { deriveStoneFromThread } from "../../persistable/index.js";
+import { deriveStoneFromThread, readReadme, readRelation } from "../../persistable/index.js";
 import type { ThreadContext } from "../context.js";
 import { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge.js";
 import { ROOT_BASIC_PATH, ROOT_COMMANDS, ROOT_KNOWLEDGE } from "../../executable/windows/root/index.js";
 import { REFLECTABLE_BASIC_PATH, REFLECTABLE_KNOWLEDGE } from "../reflectable/reflectable-knowledge.js";
-import { SUPER_SESSION_ID } from "../../executable/windows/super-constants.js";
+import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../../executable/windows/super-constants.js";
 import type { CommandKnowledgeEntries, CommandTableEntry } from "../../executable/windows/command-types.js";
 import { getWindowTypeDefinition } from "../../executable/windows/registry.js";
-import type { CommandExecWindow, ContextWindow, KnowledgeWindow } from "../../executable/windows/types.js";
+import type { CommandExecWindow, ContextWindow, KnowledgeWindow, TalkWindow } from "../../executable/windows/types.js";
 import { loadServerMethods } from "../../executable/server/loader.js";
 import type { ServerMethod } from "../../executable/server/types.js";
 import { computeActivations } from "./activator.js";
@@ -230,10 +230,125 @@ export async function collectExecutableKnowledgeEntries(
     }
   }
 
-  // 4) 返回时把 synthetic windows 附加到 enriched 的副本上
+  // 4) relation 派生 → KnowledgeWindow（source=relation）
+  //    spec: meta/object/collaborable/relation；详见 deriveRelationKnowledge JSDoc
+  const relationWindows = await deriveRelationKnowledge(thread);
+  for (const rw of relationWindows) synthetic.push(rw);
+
+  // 5) 返回时把 synthetic windows 附加到 enriched 的副本上
   const finalWindows = synthetic.length > 0 ? [...enriched, ...synthetic] : enriched;
 
   return { contextWindows: finalWindows, knowledgeEntries: protocolEntries };
+}
+
+/**
+ * 按 thread 中存在的 talk_window 派生 relation knowledge_window。
+ *
+ * 对每个去重 peerId（target）尝试派生最多两条:
+ *   - peer readme:    stones/{peerId}/readme.md（缺失则跳过该条）
+ *   - self relation:  stones/{selfId}/knowledge/relations/{peerId}.md
+ *                     **缺失时合成"占位"KnowledgeWindow**:body 含可直接复制的
+ *                     `write_file` 提示,驱动 LLM 主动写入(替代弱 prompt)
+ *
+ * 跳过规则(全部静默,不写 inject,仅 console.debug):
+ * - target === SUPER_ALIAS_TARGET (super 自反)→ 完全跳过 (readme + relation)
+ * - thread.persistence 缺失 → 完全跳过(测试 fixture / 异常 thread)
+ * - peer stones 目录 / readme.md 不存在 → 跳过 readme(relation 仍走占位)
+ * - IO 错误 → 跳过该条
+ *
+ * 不持久化:返回的 windows 不会进入 thread.contextWindows,每轮 render 重派生。
+ * id 用稳定派生 `kn_rel_<peerId>_readme` / `kn_rel_<peerId>_self`,方便 UI 跨轮稳定。
+ */
+export async function deriveRelationKnowledge(
+  thread: ThreadContext,
+): Promise<KnowledgeWindow[]> {
+  if (!thread.persistence) return [];
+  const { baseDir, objectId: selfId } = thread.persistence;
+
+  const talkWindows = (thread.contextWindows ?? []).filter(
+    (w): w is TalkWindow => w.type === "talk",
+  );
+  const peerIds = new Set<string>();
+  for (const w of talkWindows) {
+    if (!w.target) continue;
+    if (w.target === SUPER_ALIAS_TARGET) {
+      console.debug(`[relation] skip ${w.target} reason=super_alias`);
+      continue;
+    }
+    peerIds.add(w.target);
+  }
+  if (peerIds.size === 0) return [];
+
+  const out: KnowledgeWindow[] = [];
+  const selfRef = { baseDir, objectId: selfId };
+
+  for (const peerId of peerIds) {
+    const peerRef = { baseDir, objectId: peerId };
+
+    // peer readme — full body or skip
+    try {
+      const readme = await readReadme(peerRef);
+      if (readme !== undefined) {
+        out.push(makeRelationWindow(
+          `kn_rel_${peerId}_readme`,
+          `stones/${peerId}/readme.md`,
+          truncateKnowledgeBody(readme),
+        ));
+      } else {
+        console.debug(`[relation] skip ${peerId} reason=readme_missing`);
+      }
+    } catch (err) {
+      console.debug(`[relation] skip ${peerId} reason=readme_io_error msg=${(err as Error).message}`);
+    }
+
+    // self relation — full body OR 占位提示
+    try {
+      const relation = await readRelation(selfRef, peerId);
+      const path = `stones/${selfId}/knowledge/relations/${peerId}.md`;
+      if (relation !== undefined) {
+        out.push(makeRelationWindow(
+          `kn_rel_${peerId}_self`,
+          path,
+          truncateKnowledgeBody(relation),
+        ));
+      } else {
+        console.debug(`[relation] placeholder ${peerId} reason=relation_missing`);
+        out.push(makeRelationWindow(
+          `kn_rel_${peerId}_self`,
+          path,
+          buildRelationPlaceholder(selfId, peerId),
+        ));
+      }
+    } catch (err) {
+      console.debug(`[relation] skip ${peerId} reason=relation_io_error msg=${(err as Error).message}`);
+    }
+  }
+
+  return out;
+}
+
+function buildRelationPlaceholder(selfId: string, peerId: string): string {
+  return `暂无对 ${peerId} 的关系记录。
+
+可通过 \`open(command="write_file", path="stones/${selfId}/knowledge/relations/${peerId}.md", content="...")\`
+写入对该 peer 的认知要点(背景、合作模式、偏好、过往关键交互)。
+文件会在下一轮 render 自动作为 knowledge 出现在 context。
+`;
+}
+
+function makeRelationWindow(id: string, path: string, body: string): KnowledgeWindow {
+  return {
+    id,
+    type: "knowledge",
+    parentWindowId: "root",
+    title: path,
+    status: "open",
+    createdAt: Date.now(),
+    path,
+    source: "relation",
+    body,
+    presentation: "full",
+  };
 }
 
 /** 与 render 层共用的 8KB 截断；本地实现避免反向 import render.ts。 */

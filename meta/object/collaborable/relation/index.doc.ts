@@ -2,6 +2,7 @@ import type { Concept, DocNode } from "@meta/doc-types";
 import { collaborable_v20260504_1 } from "@meta/object/collaborable/index.doc";
 import * as stoneObject from "@src/persistable/stone-object";
 import * as stoneData from "@src/persistable/stone-data";
+import * as relationSynth from "@src/thinkable/knowledge/synthesizer";
 
 /* ────────────────────────────────────────────────────────────────
  *  目录页：Relation 概念全貌
@@ -10,14 +11,18 @@ import * as stoneData from "@src/persistable/stone-data";
 /**
  * Relation 概念：Object 与其他 Object 之间的长期关系信息。
  *
- * sources（关系数据落在 stone 持久化层的 knowledge/relations/ 目录）:
- *  - stoneObject — stones/{id}/ 目录骨架，承载 knowledge/relations/ 子树
- *  - stoneData   — stone 数据读写入口
+ * sources（关系数据落在 stone 持久化层 + 由 knowledge synthesizer 派生激活）:
+ *  - stoneObject    — stones/{id}/ 目录骨架，承载 knowledge/relations/ 子树;
+ *                     `relationFile` / `readRelation` helper 也在这里
+ *  - stoneData      — stone 数据读写入口
+ *  - relationSynth  — `deriveRelationKnowledge(thread)` 在每轮 render 派生
+ *                     relation 类型 KnowledgeWindow,与 protocol/activator 同管线
  */
 export type RelationConcept = Concept & {
   sources: {
     stoneObject: typeof stoneObject;
     stoneData: typeof stoneData;
+    relationSynth: typeof relationSynth;
   };
 
   /** 关系存储：peer 文件路径 + 作为 knowledge 激活 */
@@ -55,10 +60,14 @@ export const relation_v20260506_1: RelationConcept = {
   get parent() {
     return collaborable_v20260504_1;
   },
-  sources: { stoneObject, stoneData },
+  sources: { stoneObject, stoneData, relationSynth },
   description: `
 Relation 描述 Object 之间长期关系信息的形成、更新与使用。
 每个对象只维护自己看到的关系，没有中心化索引——更接近现实中"我对你的印象"。
+
+Implementation status (2026-05-18): 读侧 + 占位驱动写侧已落地;由
+\`src/thinkable/knowledge/synthesizer.ts:deriveRelationKnowledge\` 在每轮 render
+按 talk_window 派生 KnowledgeWindow(source="relation")。
 `.trim(),
 
   peerFile: {
@@ -78,6 +87,12 @@ Relation 描述 Object 之间长期关系信息的形成、更新与使用。
       content: `
 \`relations/{peer}.md\` 是普通 knowledge，按 \`activates_on\` 在与 peer 的 talk
 上下文中自动加载。LLM 看到的不是"关系表"，而是与对方对话时浮现的相关知识页。
+
+实现:\`src/thinkable/knowledge/synthesizer.ts:deriveRelationKnowledge\` 在每轮
+render 扫 \`thread.contextWindows\` 的 talk_window,按 \`target\` 派生最多 2 条
+KnowledgeWindow(source="relation"):peer 的 readme.md + 自己对 peer 的
+relations/{peer}.md。后者缺失时合成占位 KnowledgeWindow,提示 LLM 用
+\`write_file\` 写入要点。
       `.trim(),
     },
   },

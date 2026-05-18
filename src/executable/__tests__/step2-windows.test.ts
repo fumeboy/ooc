@@ -33,6 +33,9 @@ describe("Step 2 window lifecycles", () => {
       // 必须先建 caller flow object 目录，writeThread 才能落盘
       const { createFlowObject } = await import("../../persistable");
       await createFlowObject({ baseDir: tempRoot, sessionId: "s1", objectId: "alice" });
+      // root.talk 校验 target 对应 stones/ 存在(spec relation activation 2026-05-18);
+      // 测试场景需要预先建 bob stone 才能 open talk_window
+      await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
 
       // 创建 talk_window 指向 bob
       await execRootCommand("talk", { thread, args: { target: "bob", title: "release plan" } });
@@ -210,6 +213,8 @@ describe("Step 2 window lifecycles", () => {
       });
       const { initContextWindows } = await import("../windows/init");
       initContextWindows(assistantThread, { creatorThreadId: "root", initialTaskTitle: "user task" });
+      // root.talk target 校验需要 bob stone 存在
+      await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
 
       // assistant 创建 talk_window 指向 bob
       await execRootCommand("talk", { thread: assistantThread, args: { target: "bob", title: "ask bob" } });
