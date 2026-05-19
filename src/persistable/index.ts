@@ -69,6 +69,17 @@ export {
   writeIssueIndex,
 } from "./issue";
 
+export { enqueueSessionWrite, __resetSerialQueueForTests } from "./serial-queue";
+export { parseMentions } from "./mention";
+export {
+  issuesService,
+  findIssueSubscribers,
+  type CreateIssueInput,
+  type AppendCommentInput,
+  type AppendCommentResult,
+  type CloseIssueInput,
+} from "./issue-service";
+
 export {
   clientIndexFile,
   flowClientPageFile,

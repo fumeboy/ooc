@@ -20,7 +20,7 @@
  */
 
 /** Window 类型枚举；新增类型必须同步在 WINDOW_REGISTRY 中注册。 */
-export type WindowType = "root" | "command_exec" | "do" | "todo" | "talk" | "program" | "file" | "knowledge" | "search";
+export type WindowType = "root" | "command_exec" | "do" | "todo" | "talk" | "program" | "file" | "knowledge" | "search" | "issue";
 
 /**
  * Window 状态值汇总。
@@ -214,11 +214,11 @@ export interface KnowledgeWindow extends BaseContextWindow {
   type: "knowledge";
   status: "open" | "closed";
   path: string;
-  /** 四类来源；缺省视为 explicit（向后兼容旧 thread.json）。 */
-  source?: "explicit" | "protocol" | "activator" | "relation";
+  /** 五类来源；缺省视为 explicit（向后兼容旧 thread.json）。 */
+  source?: "explicit" | "protocol" | "activator" | "relation" | "issue";
   /** 合成 window 携带正文；explicit 来源时由 render 层从 loader 取。 */
   body?: string;
-  /** activator / relation 来源时区分 full（含正文）与 summary（仅 description）。 */
+  /** activator / relation / issue 来源时区分 full（含正文）与 summary（仅 description）。 */
   presentation?: "full" | "summary";
   /** activator 来源时记录 doc.frontmatter.description，便于 summary 渲染。 */
   description?: string;
@@ -258,6 +258,35 @@ export interface SearchMatch {
   snippet?: string;
 }
 
+/**
+ * Issue window — 把 session 级 Issue(`flows/{sid}/issues/issue-{id}.json`)挂进
+ * thread 作为可订阅资源。Issue 协作模型见 origin §3 与 plan U1-U9。
+ *
+ * 设计要点(plan §4 决策 7 / 10 / 11):
+ * - **不引入 status 字段**:close 即移除 window(WindowManager.close 默认语义)。
+ *   Issue 自身 status(open/closed)通过每轮 deriveIssueWindowKnowledge 渲染给
+ *   LLM,window 本身只表示 "本 thread 是否订阅该 Issue"
+ * - `lastSeenCommentId` / `lastNotifiedAt` 是 **in-process 内存语义**,
+ *   writeThread 时会被 strip(防止重启后游标过期 / Issue 文件回滚导致 hang);
+ *   worker 重启后首次 sync 视为 undefined → 初值=当前最新 commentId
+ */
+export interface IssueWindow extends BaseContextWindow {
+  type: "issue";
+  /** 所属 session 内的 Issue id(全局唯一)。 */
+  issueId: number;
+  /**
+   * 已读评论游标 — 仅供 worker syncIssueWindowComments 判定 newComments;
+   * **不持久化**(stripVolatileForPersist 删除该字段)。
+   * undefined 表示 "刚 open 或刚重启,下次 sync 视为已读全部"。
+   */
+  lastSeenCommentId?: number;
+  /**
+   * 上次写 inbox 通知的时间戳 — 用于 10s 限频(plan §4 决策 7);
+   * **不持久化**。wait-all 路径绕过限频(plan A1 修正)。
+   */
+  lastNotifiedAt?: number;
+}
+
 /** 所有 ContextWindow 类型的 discriminated union。新增 type 后必须扩这里 + WINDOW_REGISTRY。 */
 export type ContextWindow =
   | RootWindow
@@ -268,7 +297,8 @@ export type ContextWindow =
   | ProgramWindow
   | FileWindow
   | KnowledgeWindow
-  | SearchWindow;
+  | SearchWindow
+  | IssueWindow;
 
 /** Root window 的固定 id。 */
 export const ROOT_WINDOW_ID = "root";
@@ -284,6 +314,7 @@ export function generateWindowId(type: Exclude<WindowType, "root">): string {
     file: "w_file",
     knowledge: "w_kn",
     search: "w_search",
+    issue: "w_issue",
   } as const)[type];
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }

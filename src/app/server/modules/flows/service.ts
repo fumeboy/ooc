@@ -103,8 +103,11 @@ function reviveThreadForInboxMessage(thread: ThreadContext): ThreadContext {
  * 对前端语义无影响，但会让 hash 永远变化、polling 永远命中"内容变了"。
  *
  * 对所有非 explicit 来源的合成 knowledge window 做剔除(protocol / activator / relation
- * 都是每轮派生);explicit knowledge 与其它持久 window 的 id/createdAt 是真实状态,
- * 原样保留。新增 source 时这里默认覆盖,不会再像 relation 那样漏改。
+ * / issue 都是每轮派生);explicit knowledge 与其它持久 window 的 id/createdAt 是真实状态,
+ * 原样保留。
+ *
+ * IssueWindow 的 `lastSeenCommentId` / `lastNotifiedAt` 是 in-process 内存语义
+ * (plan §4 决策 11),不参与 hash;polling 时若只是游标移动不应判定为内容变化。
  */
 function stripVolatileForHash(payload: { contextWindows?: ContextWindow[] }) {
   if (!payload.contextWindows) return payload;
@@ -113,6 +116,10 @@ function stripVolatileForHash(payload: { contextWindows?: ContextWindow[] }) {
     contextWindows: payload.contextWindows.map((window) => {
       if (window.type === "knowledge" && window.source !== undefined && window.source !== "explicit") {
         const { id: _id, createdAt: _createdAt, ...rest } = window;
+        return rest;
+      }
+      if (window.type === "issue") {
+        const { lastSeenCommentId: _seen, lastNotifiedAt: _notif, ...rest } = window;
         return rest;
       }
       return window;

@@ -17,11 +17,35 @@ export function threadFile(ref: ThreadPersistenceRef): string {
   return join(threadDir(ref), "thread.json");
 }
 
+/**
+ * 持久化前剥离 in-process 内存字段。
+ *
+ * 当前规则:
+ * - IssueWindow.lastSeenCommentId / lastNotifiedAt 是 worker 内存语义
+ *   (plan §4 决策 11),不应进 thread.json,否则重启后游标可能比 Issue 文件
+ *   还前进,导致永远收不到通知(plan A5 修正)
+ *
+ * 新增 in-process 字段时在这里扩。
+ */
+function stripVolatileForPersist(thread: ThreadContext): ThreadContext {
+  return {
+    ...thread,
+    contextWindows: thread.contextWindows.map((window) => {
+      if (window.type === "issue") {
+        const { lastSeenCommentId: _seen, lastNotifiedAt: _notif, ...rest } = window;
+        return rest;
+      }
+      return window;
+    }),
+  };
+}
+
 /** 把线程上下文持久化到 `thread.json`；线程未携带 persistence ref 时静默跳过。 */
 export async function writeThread(thread: ThreadContext): Promise<void> {
   if (!thread.persistence) return;
   await mkdir(threadDir(thread.persistence), { recursive: true });
-  await writeFile(threadFile(thread.persistence), toJson(thread), "utf8");
+  const sanitized = stripVolatileForPersist(thread);
+  await writeFile(threadFile(thread.persistence), toJson(sanitized), "utf8");
 }
 
 /** 从磁盘恢复线程上下文，并把 persistence ref 重新挂上。 */
