@@ -257,6 +257,79 @@ export default function Report({ sessionId, objectName, callMethod }: ClientProp
 - 写完后用户可以通过 \`ooc://client/flows/<sid>/objects/<self>/pages/report-2026\`
   跳转访问;你 say 给 user 时附上这条链接,user 在 UI 里点开即看到
 
+## 看板协作:Issue 上的多方讨论
+
+talk 是一对一持续会话;**Issue 是 session 内的多订阅者共享议题**。何时用哪个:
+
+| 场景 | 用 |
+|------|-----|
+| 一对一短问答 / 私聊 | talk |
+| 3+ agent 一起评估某个方案 / 决策 | Issue |
+| 决策需要后续追溯(谁说了什么) | Issue(comment 流是结构化历史) |
+| 异步广播(我不知道谁会处理) | Issue + @ mention |
+
+### 命令面
+
+| command | 在哪里 open | 作用 |
+|---------|-------------|------|
+| create_issue | root | 创建新 Issue + 本 thread 自动订阅 |
+| open_issue   | root | 把已有 Issue 拉进本 thread |
+| comment      | issue_window | 在 Issue 上发评论(支持 mentions) |
+| close        | 通用原语 | 本 thread 退订该 Issue(其它 thread 不受影响,Issue 文件不动) |
+| wait         | 通用原语 | wait(on=<issue_window>) → 进入 wait-all 模式,所有新评论都唤醒(无 mention 要求);wait 期间限频被绕过 |
+
+### Mention 双轨(推荐显式)
+
+发评论时 mention 其他 agent 让他们被唤醒:
+
+- 文本里 \`@<objectId>\`:正则解析,要前置空白(否则被忽略 — 避免 \`user@example.com\` 假阳性)
+- args 里 \`mentions: ["a", "b"]\` 字段:**推荐显式声明**;不依赖文本格式,不会因
+  忘记空白而漏掉
+
+两路取并集去重,resolved_mentions 在 command output 里反馈。
+
+### 通知规则
+
+- **不持有该 IssueWindow 的 thread 不会被通知**(就算别人 @ 你也要先 open_issue 才能收到)
+- **持有 + wait(on=<issue>)**:wait-all 模式,所有新 comment 都进 inbox 唤醒
+- **持有 + 不 wait**:只有 comment.mentions 含本 objectId 时才进 inbox(且 10s 限频)
+- **自己写的 comment**:不会自唤醒(self-skip 按 objectId)
+
+### 示例
+
+\`\`\`
+// 1) 创建 Issue 并 ping 两个 reviewer
+open(command="create_issue",
+     title="重命名提案",
+     args={
+       title: "rename function processData to handleEvent",
+       description: "上下文 / 动机 / 影响范围..."
+     })
+
+// 2) 在 issue_window 上发起讨论,显式 mention
+open(parent_window_id="<issue_window_id>",
+     command="comment",
+     title="@critic @reviewer 评估",
+     args={
+       text: "我建议改名,理由如下: ...\\n@critic 看看有没有性能影响?",
+       mentions: ["critic", "reviewer"]
+     })
+
+// 3) 等回复(wait-all 模式)
+wait(on="<issue_window_id>", reason="等 reviewer 反馈")
+
+// 4) 收到 @ 的另一 agent 进场
+//   inbox 出现 [issue:42:comment author=alice ...] → mark + open_issue(42)
+open(command="open_issue", args={ issueId: 42 })
+open(parent_window_id="<issue_window_id>",
+     command="comment",
+     title="反馈",
+     args={ text: "同意,但建议先在 dev 跑一轮 benchmark。" })
+
+// 5) 决策结束后退订(其它人仍可继续讨论)
+close(window_id="<issue_window_id>", reason="我的反馈已给完")
+\`\`\`
+
 ## 工具调用规则
 
 - 每次工具调用都附带 title，一句话说明在做什么

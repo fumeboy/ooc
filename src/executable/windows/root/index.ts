@@ -12,11 +12,13 @@
  */
 
 import { registerWindowType } from "../registry.js";
+import { createIssueCommand } from "./create-issue.js";
 import { doCommand } from "./do.js";
 import { endCommand } from "./end.js";
 import { globCommand } from "./glob.js";
 import { grepCommand } from "./grep.js";
 import { openFileCommand } from "./open-file.js";
+import { openIssueCommand } from "./open-issue.js";
 import { openKnowledgeCommand } from "./open-knowledge.js";
 import { planCommand } from "./plan.js";
 import { programCommand } from "./program.js";
@@ -43,6 +45,8 @@ export const ROOT_COMMANDS: Record<string, CommandTableEntry> = {
   write_file: writeFileCommand,
   glob: globCommand,
   grep: grepCommand,
+  create_issue: createIssueCommand,
+  open_issue: openIssueCommand,
 };
 
 /** Protocol knowledge path（与 plan.ts 等命令文件的 *_BASIC_PATH 形态一致）。 */
@@ -75,6 +79,8 @@ root window 是每个 thread 隐含的根窗口。在 root 上可用的 command 
 | write_file      | 创建/覆盖文件内容                              | 写盘 + 自动 spawn file_window；后续可走 file_window.edit |
 | glob            | 按 glob pattern 匹配文件名                     | 创建 search_window kind=glob；后续可 open_match(index) |
 | grep            | 按正则在文件内容里搜索                          | 创建 search_window kind=grep（含 line+snippet）；后续可 open_match(index) |
+| create_issue    | 在 session 内创建 Issue 看板议题                | 创建 issue_window;本 thread 自动订阅 |
+| open_issue      | 把已有 Issue 拉进本 thread 作为订阅 window      | 创建 issue_window;dedup,不重复挂 |
 
 每个 command 在进入 \`open\` 后，对应的知识会由系统自动激活；上面的清单只是入口索引。
 `.trim();

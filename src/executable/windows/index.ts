@@ -19,6 +19,7 @@ export type {
   KnowledgeWindow,
   SearchWindow,
   SearchMatch,
+  IssueWindow,
 } from "./types.js";
 
 export {
@@ -74,3 +75,4 @@ import "./program.js";
 import "./file.js";
 import "./knowledge.js";
 import "./search.js";
+import "./issue.js";

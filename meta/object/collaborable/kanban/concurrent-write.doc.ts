@@ -2,6 +2,8 @@ import type { Concept, DocNode, InvariantNode } from "@meta/doc-types";
 import { kanban_v20260506_1 } from "@meta/object/collaborable/kanban/index.doc";
 import * as flowObject from "@src/persistable/flow-object";
 import * as threadJson from "@src/persistable/thread-json";
+import * as serialQueue from "@src/persistable/serial-queue";
+import * as issueService from "@src/persistable/issue-service";
 
 /* ────────────────────────────────────────────────────────────────
  *  目录页：ConcurrentWrite 概念全貌
@@ -11,13 +13,22 @@ import * as threadJson from "@src/persistable/thread-json";
  * ConcurrentWrite 概念：kanban 数据多方并发写入的串行化保护。
  *
  * sources（保护对象是 flow 目录下的 JSON 文件）:
- *  - flowObject — flows/{sid}/objects/{id}/ 目录骨架，承载 issues/ tasks/ 子树
- *  - threadJson — thread.json 读写，是同类串行化保护的另一个使用点
+ *  - flowObject  — flows/{sid}/objects/{id}/ 目录骨架,承载 issues/ tasks/ 子树
+ *  - threadJson  — thread.json 读写,是同类串行化保护的另一个使用点
+ *  - serialQueue — per-key Promise chain 实现(U2);HTTP 与 worker 共用同一模块
+ *                 单例,保证同 session 内 createIssue/appendComment/closeIssue
+ *                 严格串行
+ *  - issueService — 调 enqueueSessionWrite 的具体业务路径(U2)
+ *
+ * implementation status (2026-05-19): per-session SerialQueue 已落地;多进程
+ * 部署需文件锁,留给 follow-up(plan §7 Risk 3)。
  */
 export type ConcurrentWriteConcept = Concept & {
   sources: {
     flowObject: typeof flowObject;
     threadJson: typeof threadJson;
+    serialQueue: typeof serialQueue;
+    issueService: typeof issueService;
   };
 
   /** 三类潜在写入方 */
@@ -80,7 +91,7 @@ export const concurrent_write_v20260506_1: ConcurrentWriteConcept = {
   get parent() {
     return kanban_v20260506_1;
   },
-  sources: { flowObject, threadJson },
+  sources: { flowObject, threadJson, serialQueue, issueService },
   description: `
 Kanban 数据可能被多方并发写入。通过 per-key 串行化队列（SerialQueue）保护
 读-改-写竞态——同 key 任务按 FIFO 串行，不同 key 互不阻塞。

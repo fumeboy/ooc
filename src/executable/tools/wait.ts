@@ -17,7 +17,7 @@ import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 interface WaitCandidate {
   id: string;
-  type: "talk" | "do";
+  type: "talk" | "do" | "issue";
   hint: string;
 }
 
@@ -25,7 +25,8 @@ interface WaitCandidate {
 function listValidWaitTargets(thread: ThreadContext): WaitCandidate[] {
   const out: WaitCandidate[] = [];
   for (const w of thread.contextWindows ?? []) {
-    // 注意：每种 window 的"alive"状态不同——talk=open，do=running，不能用统一过滤
+    // 注意：每种 window 的"alive"状态不同——talk=open，do=running，issue=只要在
+    // contextWindows 里就 alive(F3 决议 close 即 remove,挂着的 issue 都是 active)
     switch (w.type) {
       case "talk": {
         if (w.status !== "open") break;
@@ -51,6 +52,14 @@ function listValidWaitTargets(thread: ThreadContext): WaitCandidate[] {
           id: w.id,
           type: "do",
           hint: `do (target_thread=${w.targetThreadId}) — 等子线程回报`,
+        });
+        break;
+      }
+      case "issue": {
+        out.push({
+          id: w.id,
+          type: "issue",
+          hint: `issue (issueId=${w.issueId}) — 等 Issue 上的新评论或关闭信号`,
         });
         break;
       }
@@ -88,8 +97,8 @@ export const WAIT_TOOL: LlmTool = {
   name: "wait",
   description:
     "声明你在等指定 window 上的未来 IO 事件，把当前 thread 切到 waiting。" +
-    "on 必填且必须 resolve 到当前 contextWindows 里 open 状态的 talk_window 或 do_window" +
-    "（这是允许产生未来 IO 的两种 window type）。没有合法 on 时不能 wait——" +
+    "on 必填且必须 resolve 到当前 contextWindows 里 open 状态的 talk_window / do_window / issue_window" +
+    "（这是允许产生未来 IO 的三种 window type）。没有合法 on 时不能 wait——" +
     "意味着任务已完成 / 无 IO 预期，请改用 end command 收尾。",
   inputSchema: {
     type: "object",
@@ -98,9 +107,10 @@ export const WAIT_TOOL: LlmTool = {
       on: {
         type: "string",
         description:
-          "未来 IO 来源 window id。必须是当前 contextWindows 里 open 的 talk_window 或 do_window。" +
+          "未来 IO 来源 window id。必须是当前 contextWindows 里 open 的 talk_window / do_window / issue_window。" +
           "talk_window：等对端发新消息（creator talk 一律合法；自建 talk 需先 say 过）。" +
-          "do_window：等子线程 outbox 回报（子线程必须仍 running/waiting）。",
+          "do_window：等子线程 outbox 回报（子线程必须仍 running/waiting）。" +
+          "issue_window：等 Issue 上的新 comment(此时 wait-all 模式,所有新 comment 都会写 inbox)或 close 信号。",
       },
       reason: {
         type: "string",
@@ -149,17 +159,17 @@ export async function handleWaitTool(
     );
   }
 
-  // R3: on 类型不合法（非 talk / 非 do）—— 这同时盖掉了 root/command_exec/file 等
-  if (target.type !== "talk" && target.type !== "do") {
+  // R3: on 类型不合法（非 talk / 非 do / 非 issue）—— 这同时盖掉了 root/command_exec/file 等
+  if (target.type !== "talk" && target.type !== "do" && target.type !== "issue") {
     return errorOutput(
       `[wait] on="${onRaw}" 指向的是 ${target.type} window，不能作为 IO 来源——` +
-        "只有 talk_window（等对端消息）与 do_window（等子线程回报）这两种 window " +
-        "才可被 wait 引用。当前合法候选：\n" +
+        "只有 talk_window（等对端消息）/ do_window（等子线程回报）/ issue_window(等 Issue 新评论) " +
+        "三种 window 才可被 wait 引用。当前合法候选：\n" +
         renderCandidates(candidates),
     );
   }
 
-  // 类型已收窄到 talk | do。各自的"alive"状态不同，分别校验
+  // 类型已收窄到 talk | do | issue。各自的"alive"状态不同，分别校验
   if (target.type === "talk" && target.status !== "open") {
     return errorOutput(
       `[wait] talk_window "${onRaw}" 状态是 ${target.status}（非 open），不能再等它产生 IO。\n` +
@@ -174,6 +184,7 @@ export async function handleWaitTool(
         renderCandidates(candidates),
     );
   }
+  // issue:F3 决议 close 即 remove,在 contextWindows 里能找到即合法,无需查 status
 
   // R4: 自建（非 creator）talk_window 且未 say 过 → 拒绝
   if (target.type === "talk" && !target.isCreatorWindow && !hasOutgoingSayOnTalk(thread, target.id)) {
@@ -195,7 +206,9 @@ export async function handleWaitTool(
   const targetDesc =
     target.type === "talk"
       ? `creator/自建 talk (target=${target.target})`
-      : `do (target_thread=${target.targetThreadId})`;
+      : target.type === "do"
+        ? `do (target_thread=${target.targetThreadId})`
+        : `issue (issueId=${target.issueId})`;
   const reasonSuffix = reason ? ` 原因：${reason}` : "";
   return successOutput(
     `[wait] 线程进入 waiting，等待 ${onRaw} (${targetDesc}) 上的未来 IO 事件。${reasonSuffix}`,

@@ -17,6 +17,14 @@ import {
   type ConcurrentWriteConcept,
 } from "@meta/object/collaborable/kanban/concurrent-write.doc";
 import * as flowObject from "@src/persistable/flow-object";
+import * as issuePersistence from "@src/persistable/issue";
+import * as issueService from "@src/persistable/issue-service";
+import * as serialQueue from "@src/persistable/serial-queue";
+import * as mention from "@src/persistable/mention";
+import * as issuesHttp from "@src/app/server/modules/issues";
+import * as issueWindowReg from "@src/executable/windows/issue";
+import * as createIssueCmd from "@src/executable/windows/root/create-issue";
+import * as openIssueCmd from "@src/executable/windows/root/open-issue";
 
 /* ────────────────────────────────────────────────────────────────
  *  目录页：Kanban 概念全貌
@@ -25,17 +33,32 @@ import * as flowObject from "@src/persistable/flow-object";
 /**
  * Kanban 概念：Session 级的结构化协作机制。
  *
- * sources（看板数据落在 flow 目录下）:
- *  - flowObject — flows/{sid}/objects/{id}/ 目录骨架，承载 issues/ 与 tasks/ 子树
+ * sources（看板数据落在 flow 目录下 + Issue 子树的完整实现 stack）:
+ *  - flowObject       — flows/{sid}/objects/{id}/ 目录骨架,承载 issues/ 与 tasks/ 子树
+ *  - issuePersistence — flows/{sid}/issues/issue-{id}.json + index.json 类型与 IO(U1)
+ *  - issueService     — Tier A 业务逻辑(create/comment/close)+ SerialQueue + 订阅扫描(U2)
+ *  - serialQueue      — per-key Promise chain,HTTP 与 worker 共用(U2)
+ *  - mention          — 文本 @ 解析正则(U2)
+ *  - issuesHttp       — Tier A 5 个 HTTP endpoint(U3)
+ *  - issueWindowReg   — Tier B issue_window 注册 + comment command(U6)
+ *  - createIssueCmd / openIssueCmd — Tier B root 命令(U5)
  *
- * 子概念（通过 concepts 暴露给 walker）：
- *  - issue            — Session 级讨论单元
- *  - task             — Session 级执行单元
- *  - comment          — Issue 下不可变评论
- *  - concurrentWrite  — 多方写入串行化保护
+ * implementation status (2026-05-19): Tier A 持久化 + HTTP + Tier B IssueWindow
+ * + 双轨 mention(structured + 正则) + pull-on-tick 兜底已落地;详见
+ * docs/plans/2026-05-19-001-feat-issue-context-window-plan.md。
  */
 export type KanbanConcept = Concept & {
-  sources: { flowObject: typeof flowObject };
+  sources: {
+    flowObject: typeof flowObject;
+    issuePersistence: typeof issuePersistence;
+    issueService: typeof issueService;
+    serialQueue: typeof serialQueue;
+    mention: typeof mention;
+    issuesHttp: typeof issuesHttp;
+    issueWindowReg: typeof issueWindowReg;
+    createIssueCmd: typeof createIssueCmd;
+    openIssueCmd: typeof openIssueCmd;
+  };
 
   /** Issue / Task 数据结构与多对多关系 */
   coreConcepts: DocNode;
@@ -99,7 +122,17 @@ export const kanban_v20260506_1: KanbanConcept = {
   get parent() {
     return collaborable_v20260504_1;
   },
-  sources: { flowObject },
+  sources: {
+    flowObject,
+    issuePersistence,
+    issueService,
+    serialQueue,
+    mention,
+    issuesHttp,
+    issueWindowReg,
+    createIssueCmd,
+    openIssueCmd,
+  },
   description: `
 Kanban 是 Session 级的结构化、多方可见的协作机制。
 

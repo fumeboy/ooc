@@ -1,6 +1,13 @@
 import type { Concept, DocNode } from "@meta/doc-types";
 import { kanban_v20260506_1 } from "@meta/object/collaborable/kanban/index.doc";
 import * as flowObject from "@src/persistable/flow-object";
+import * as issuePersistence from "@src/persistable/issue";
+import * as issueService from "@src/persistable/issue-service";
+import * as createIssueCmd from "@src/executable/windows/root/create-issue";
+import * as openIssueCmd from "@src/executable/windows/root/open-issue";
+import * as issueWindowReg from "@src/executable/windows/issue";
+import * as deriveSynthesizer from "@src/thinkable/knowledge/synthesizer";
+import * as worker from "@src/app/server/runtime/worker";
 
 /* ────────────────────────────────────────────────────────────────
  *  目录页：Issue 概念全貌
@@ -9,11 +16,44 @@ import * as flowObject from "@src/persistable/flow-object";
 /**
  * Issue 概念：Session 级的需求 / 问题讨论单元。
  *
- * sources（issue 数据落在 flow 目录的 issues 子树中）:
- *  - flowObject — flows/{sid}/objects/{id}/ 目录骨架，承载 issues/ 子树
+ * sources（issue 数据落在 flow 目录的 issues 子树中,完整实现栈在 src/persistable +
+ * src/executable/windows + src/thinkable/knowledge + src/app/server）:
+ *  - flowObject       — flows/{sid}/objects/{id}/ 目录骨架(承载 issues/ 子树)
+ *  - issuePersistence — Issue/Comment/Index 类型 + 文件 IO(U1)
+ *  - issueService     — create/append/close 业务 + per-session SerialQueue(U2)
+ *  - createIssueCmd   — root.create_issue LLM 命令(U5)
+ *  - openIssueCmd     — root.open_issue LLM 命令(U5)
+ *  - issueWindowReg   — issue_window 注册 + comment command(U6)
+ *  - deriveSynthesizer — 每轮 derive Issue 内容为 KnowledgeWindow(U8)
+ *  - worker           — syncIssueWindowComments pull-on-tick + close fallback(U9)
+ *
+ * implementation status (2026-05-19):
+ * - Tier A: 持久化 + 5 个 HTTP endpoint(POST /api/flows/:sid/issues, ...)落地
+ * - Tier B: IssueWindow + 3 命令 + wait 扩展 + 双轨 mention + 拉取式通知 落地
+ * - 详见 docs/plans/2026-05-19-001-feat-issue-context-window-plan.md
+ *
+ * LLM 视角(由 LLM 在 thread 中看到的命令面):
+ * - 在 root 上 \`create_issue(title, description?)\` 创建并订阅
+ * - 在 root 上 \`open_issue(issueId)\` 订阅已存在的 Issue
+ * - 在 issue_window 上 \`comment(text, mentions?)\` 发评论(双轨 mention 推荐 args)
+ * - 在 issue_window 上通用 \`close\` 退订(其它 thread 不受影响)
+ * - 通用 \`wait(on=<issue_window>)\` 进入 wait-all,所有新 comment 都唤醒
+ * - 派生 body 每条 comment 用 \`<comment author="X" id="N">...</comment>\` XML
+ *   fence 包裹(防 prompt injection)
+ * - lastSeenCommentId / lastNotifiedAt 是 in-process 内存语义,不持久化
+ *   (重启视 undefined,初值=当前最新 commentId)
  */
 export type IssueConcept = Concept & {
-  sources: { flowObject: typeof flowObject };
+  sources: {
+    flowObject: typeof flowObject;
+    issuePersistence: typeof issuePersistence;
+    issueService: typeof issueService;
+    createIssueCmd: typeof createIssueCmd;
+    openIssueCmd: typeof openIssueCmd;
+    issueWindowReg: typeof issueWindowReg;
+    deriveSynthesizer: typeof deriveSynthesizer;
+    worker: typeof worker;
+  };
 
   /** 数据结构：实体字段 + 状态枚举 */
   shape: {
@@ -78,7 +118,16 @@ export const issue_v20260506_1: IssueConcept = {
   get parent() {
     return kanban_v20260506_1;
   },
-  sources: { flowObject },
+  sources: {
+    flowObject,
+    issuePersistence,
+    issueService,
+    createIssueCmd,
+    openIssueCmd,
+    issueWindowReg,
+    deriveSynthesizer,
+    worker,
+  },
   description: `
 Issue 是 Session 级的需求 / 问题讨论单元。跨对象讨论，多对多关联 Task。
 `.trim(),

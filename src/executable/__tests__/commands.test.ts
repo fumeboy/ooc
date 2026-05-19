@@ -30,11 +30,13 @@ describe("executable commands", () => {
       expect("openable" in entry).toBe(false);
     }
     expect(getOpenableCommands()).toEqual([
+      "create_issue",
       "do",
       "end",
       "glob",
       "grep",
       "open_file",
+      "open_issue",
       "open_knowledge",
       "plan",
       "program",

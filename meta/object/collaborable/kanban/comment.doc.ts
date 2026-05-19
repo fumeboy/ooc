@@ -1,6 +1,9 @@
 import type { Concept, DocNode, InvariantNode } from "@meta/doc-types";
 import { kanban_v20260506_1 } from "@meta/object/collaborable/kanban/index.doc";
 import * as flowObject from "@src/persistable/flow-object";
+import * as issuePersistence from "@src/persistable/issue";
+import * as issueService from "@src/persistable/issue-service";
+import * as mention from "@src/persistable/mention";
 
 /* ────────────────────────────────────────────────────────────────
  *  目录页：Comment 概念全貌
@@ -9,11 +12,22 @@ import * as flowObject from "@src/persistable/flow-object";
 /**
  * Comment 概念：Issue 下不可变的评论单元。
  *
- * sources（comment 数据落在 flow 目录的 issues 子树中）:
- *  - flowObject — flows/{sid}/objects/{id}/ 目录骨架，承载 issues/ 子树
+ * sources（comment 数据 + 业务逻辑）:
+ *  - flowObject       — flows/{sid}/objects/{id}/ 目录骨架,承载 issues/ 子树
+ *  - issuePersistence — Comment interface(id/text/authorObjectId/authorKind/mentions/createdAt)
+ *  - issueService     — appendComment 业务(双轨 mention 并集去重 + S2 4KB + S3 author 校验)
+ *  - mention          — parseMentions 文本正则解析
+ *
+ * implementation status (2026-05-19): Comment 持久化(U1)+ appendComment 服务(U2)
+ * 已落地。
  */
 export type CommentConcept = Concept & {
-  sources: { flowObject: typeof flowObject };
+  sources: {
+    flowObject: typeof flowObject;
+    issuePersistence: typeof issuePersistence;
+    issueService: typeof issueService;
+    mention: typeof mention;
+  };
 
   /** 数据结构：字段定义 + 存储位置 */
   shape: {
@@ -71,7 +85,7 @@ export const comment_v20260506_1: CommentConcept = {
   get parent() {
     return kanban_v20260506_1;
   },
-  sources: { flowObject },
+  sources: { flowObject, issuePersistence, issueService, mention },
   description: `
 Comment 是 Issue 下的评论单元。一经创建即不可修改，是 OOC 行动记录不可变约束的体现。
 `.trim(),
