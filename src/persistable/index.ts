@@ -57,6 +57,19 @@ export { dataFile, mergeData, readData, writeData } from "./stone-data";
 export { readServerSource, serverIndexFile, writeServerSource } from "./stone-server";
 
 export {
+  type Comment,
+  type Issue,
+  type IssueIndex,
+  type IssueIndexEntry,
+  issueFile,
+  issueIndexFile,
+  readIssue,
+  readIssueIndex,
+  writeIssue,
+  writeIssueIndex,
+} from "./issue";
+
+export {
   clientIndexFile,
   flowClientPageFile,
   flowClientPagesDir,
