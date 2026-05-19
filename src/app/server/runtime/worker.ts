@@ -388,3 +388,6 @@ export function startJobWorker(config: ServerConfig): { stop(): void } {
     },
   };
 }
+
+/** Test-only export of internal syncIssueWindowComments(integration tests). */
+export const syncIssueWindowCommentsForTest = syncIssueWindowComments;
