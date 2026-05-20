@@ -118,9 +118,10 @@ function ToolExpandedPanels({ line, openPanels }: { line: Extract<ChatLine, { ki
   );
 }
 
-function ToolCardShell({ line, children }: {
+function ToolCardShell({ line, children, liveWindowIds }: {
   line: Extract<ChatLine, { kind: "tool" }>;
   children?: React.ReactNode;
+  liveWindowIds?: Set<string>;
 }) {
   // Issue #3 A5 fix: failed tool card 默认展开 + output 面板默认打开,
   // 让用户立即看到 error 文本而不是孤立的 `failed` 状态。仍可点击折叠回去。
@@ -149,6 +150,8 @@ function ToolCardShell({ line, children }: {
             <span className="tui-label">{line.toolName}</span>
             {line.title && <div className="tui-tool-title-main">{line.title}</div>}
             <div className="tui-tool-head-actions">
+              {/* 把 link 按钮放在 head 行, 折叠时也能用 (用户反馈 2026-05-20). */}
+              <WindowLinkInline line={line} liveWindowIds={liveWindowIds} />
               <span
                 className={`tui-tool-status${line.pending ? " is-pending" : line.ok ? " is-success" : " is-fail"}`}
                 title={statusTitle}
@@ -198,57 +201,58 @@ function ToolCardShell({ line, children }: {
   );
 }
 
-function OpenToolCard({ line }: ToolCardShellProps) {
+function OpenToolCard({ line, liveWindowIds }: ToolCardShellProps) {
   return (
-    <ToolCardShell line={line}>
+    <ToolCardShell line={line} liveWindowIds={liveWindowIds}>
       <ToolFieldList line={line} />
       <WindowLinkRow line={line} />
     </ToolCardShell>
   );
 }
 
-function RefineToolCard({ line }: ToolCardShellProps) {
+function RefineToolCard({ line, liveWindowIds }: ToolCardShellProps) {
   return (
-    <ToolCardShell line={line}>
+    <ToolCardShell line={line} liveWindowIds={liveWindowIds}>
       <ToolFieldList line={line} />
       <WindowLinkRow line={line} />
     </ToolCardShell>
   );
 }
 
-function SubmitToolCard({ line }: ToolCardShellProps) {
+function SubmitToolCard({ line, liveWindowIds }: ToolCardShellProps) {
   return (
-    <ToolCardShell line={line}>
+    <ToolCardShell line={line} liveWindowIds={liveWindowIds}>
       <ToolFieldList line={line} />
       <WindowLinkRow line={line} />
     </ToolCardShell>
   );
 }
 
-function CloseToolCard({ line }: ToolCardShellProps) {
+function CloseToolCard({ line, liveWindowIds }: ToolCardShellProps) {
   return (
-    <ToolCardShell line={line}>
+    <ToolCardShell line={line} liveWindowIds={liveWindowIds}>
       <ToolFieldList line={line} />
       <WindowLinkRow line={line} />
     </ToolCardShell>
   );
 }
 
-function WaitToolCard({ line }: ToolCardShellProps) {
+function WaitToolCard({ line, liveWindowIds }: ToolCardShellProps) {
   return (
-    <ToolCardShell line={line}>
+    <ToolCardShell line={line} liveWindowIds={liveWindowIds}>
       <ToolFieldList line={line} />
       <WindowLinkRow line={line} />
     </ToolCardShell>
   );
 }
 
-function GenericToolCard({ line }: ToolCardShellProps) {
-  return <ToolCardShell line={line}><ToolFieldList line={line} /></ToolCardShell>;
+function GenericToolCard({ line, liveWindowIds }: ToolCardShellProps) {
+  return <ToolCardShell line={line} liveWindowIds={liveWindowIds}><ToolFieldList line={line} /></ToolCardShell>;
 }
 
 type ToolCardShellProps = {
   line: Extract<ChatLine, { kind: "tool" }>;
+  liveWindowIds?: Set<string>;
 };
 
 /**
@@ -265,13 +269,28 @@ type ToolCardShellProps = {
  * 解析顺序:output 优先(执行结果),fallback 到 arguments(意图)。
  */
 function extractTargetWindowId(line: Extract<ChatLine, { kind: "tool" }>): string | undefined {
-  const out = isPlainObject(line.rawOutput) ? (line.rawOutput as Record<string, unknown>) : undefined;
-  const args = isPlainObject(line.rawArguments) ? (line.rawArguments as Record<string, unknown>) : undefined;
+  const out = coerceToObject(line.rawOutput);
+  const args = coerceToObject(line.rawArguments);
   const fromOut = pickWindowIdField(out);
   if (fromOut) return fromOut;
   const fromArgs = pickWindowIdField(args);
   if (fromArgs) return fromArgs;
   if (args && typeof args.on === "string") return args.on;
+  return undefined;
+}
+
+/** rawOutput/rawArguments 在 thread event 上是 JSON 字符串 (function_call_output.output 字段);
+ * 历史路径有时已 parse 成 object. 这里两种都支持: 已是 object 直接返回, 是字符串就尝试 JSON.parse. */
+function coerceToObject(v: unknown): Record<string, unknown> | undefined {
+  if (isPlainObject(v)) return v;
+  if (typeof v === "string" && v.length > 0) {
+    try {
+      const parsed = JSON.parse(v);
+      if (isPlainObject(parsed)) return parsed;
+    } catch {
+      return undefined;
+    }
+  }
   return undefined;
 }
 
@@ -286,6 +305,40 @@ function pickWindowIdField(obj: Record<string, unknown> | undefined): string | u
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+/** Inline link button placed in tool card head (always visible, even when collapsed). */
+function WindowLinkInline({ line, liveWindowIds }: { line: Extract<ChatLine, { kind: "tool" }>; liveWindowIds?: Set<string> }) {
+  const id = extractTargetWindowId(line);
+  if (!id) return null;
+  // 如果 ChatPanel 提供了 liveWindowIds, 且 id 不在其中 → 表示这个 window 已 auto_removed,
+  // 跳转后只会 fallback 到无关节点 (用户反馈 2026-05-20 "点击没反应" 的根因), 此时 disable button
+  const isLive = !liveWindowIds || liveWindowIds.has(id);
+  if (!isLive) {
+    return (
+      <span
+        className="tui-tool-window-link-btn tui-tool-window-link-inline is-dead"
+        title={`${id} 已不在 context tree (form 被 submit 后 auto-removed)`}
+        aria-disabled="true"
+      >
+        <ExternalLink size={11} aria-hidden="true" />
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="tui-tool-window-link-btn tui-tool-window-link-inline"
+      onClick={(e) => {
+        e.stopPropagation();
+        dispatchNavigateToWindow(id);
+      }}
+      title={`在 Context Tree 中定位 ${id}`}
+      aria-label={`在 Context Tree 中定位 ${id}`}
+    >
+      <ExternalLink size={11} aria-hidden="true" />
+    </button>
+  );
 }
 
 /** tool card 末尾的"在 Context Tree 中查看 <id>"跳转按钮。 */
@@ -311,24 +364,24 @@ function WindowLinkRow({ line }: { line: Extract<ChatLine, { kind: "tool" }> }) 
   );
 }
 
-function ToolCardRouter({ line }: ToolCardShellProps) {
+function ToolCardRouter({ line, liveWindowIds }: ToolCardShellProps) {
   switch (line.toolName) {
     case "open":
-      return <OpenToolCard line={line} />;
+      return <OpenToolCard line={line} liveWindowIds={liveWindowIds} />;
     case "refine":
-      return <RefineToolCard line={line} />;
+      return <RefineToolCard line={line} liveWindowIds={liveWindowIds} />;
     case "submit":
-      return <SubmitToolCard line={line} />;
+      return <SubmitToolCard line={line} liveWindowIds={liveWindowIds} />;
     case "close":
-      return <CloseToolCard line={line} />;
+      return <CloseToolCard line={line} liveWindowIds={liveWindowIds} />;
     case "wait":
-      return <WaitToolCard line={line} />;
+      return <WaitToolCard line={line} liveWindowIds={liveWindowIds} />;
     default:
-      return <GenericToolCard line={line} />;
+      return <GenericToolCard line={line} liveWindowIds={liveWindowIds} />;
   }
 }
 
-export function TuiBlock({ line, loading = false }: { line: ChatLine; loading?: boolean }) {
+export function TuiBlock({ line, loading = false, liveWindowIds }: { line: ChatLine; loading?: boolean; liveWindowIds?: Set<string> }) {
   const config = ROLE_CONFIG[line.role];
   const PrefixIcon = config.icon;
 
@@ -376,7 +429,7 @@ export function TuiBlock({ line, loading = false }: { line: ChatLine; loading?: 
       );
     }
 
-    return <ToolCardRouter line={line} />;
+    return <ToolCardRouter line={line} liveWindowIds={liveWindowIds} />;
   };
 
   return (

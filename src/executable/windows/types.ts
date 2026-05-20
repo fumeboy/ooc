@@ -20,7 +20,7 @@
  */
 
 /** Window 类型枚举；新增类型必须同步在 WINDOW_REGISTRY 中注册。 */
-export type WindowType = "root" | "command_exec" | "do" | "todo" | "talk" | "program" | "file" | "knowledge" | "search" | "issue";
+export type WindowType = "root" | "command_exec" | "do" | "todo" | "talk" | "program" | "file" | "knowledge" | "search" | "issue" | "relation";
 
 /**
  * Window 状态值汇总。
@@ -287,6 +287,28 @@ export interface IssueWindow extends BaseContextWindow {
   lastNotifiedAt?: number;
 }
 
+/**
+ * Relation window — 与某个 peer flow object 的关系窗口,自带 `edit` 命令面。
+ *
+ * collaborable § relation_window(spec 2026-05-20):
+ * - 每个 thread 中的 talk_window(target=peerId) 在 derive 时按 peerId 去重派生
+ *   一条 RelationWindow,id 稳定为 `w_rel_<peerId>`;不持久化(每轮重派生)。
+ * - 注册的 command:`edit`(整文件替换语义);通过 args.scope 路由:
+ *   - scope="session" → 直接写 flow 层 `flows/<sid>/objects/<self>/knowledge/relations/<peer>.md`
+ *   - scope="long_term" → 派一条 talk message 给 super flow,由 super 写
+ *     `stones/<self>/knowledge/relations/<peer>.md`(跨 session 长期生效)
+ * - super alias(target="super")的 talk_window 不派生 RelationWindow。
+ *
+ * 详见 src/executable/windows/relation.ts 与
+ * src/thinkable/knowledge/synthesizer.ts:deriveRelationWindow。
+ */
+export interface RelationWindow extends BaseContextWindow {
+  type: "relation";
+  status: "open" | "closed";
+  /** 对端 objectId(去重 key);与 talk_window.target 同源。 */
+  peerId: string;
+}
+
 /** 所有 ContextWindow 类型的 discriminated union。新增 type 后必须扩这里 + WINDOW_REGISTRY。 */
 export type ContextWindow =
   | RootWindow
@@ -298,7 +320,8 @@ export type ContextWindow =
   | FileWindow
   | KnowledgeWindow
   | SearchWindow
-  | IssueWindow;
+  | IssueWindow
+  | RelationWindow;
 
 /** Root window 的固定 id。 */
 export const ROOT_WINDOW_ID = "root";
@@ -315,6 +338,7 @@ export function generateWindowId(type: Exclude<WindowType, "root">): string {
     knowledge: "w_kn",
     search: "w_search",
     issue: "w_issue",
+    relation: "w_rel",
   } as const)[type];
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }

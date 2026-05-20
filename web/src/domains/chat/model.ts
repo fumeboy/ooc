@@ -115,6 +115,16 @@ export type ContextWindow =
       presentation?: "full" | "summary";
       description?: string;
       createdAt?: number;
+    }
+  | {
+      id: string;
+      type: "relation";
+      parentWindowId?: string;
+      title: string;
+      status: "open" | "closed";
+      /** 对端 objectId(去重 key);与 talk_window.target 同源。 */
+      peerId: string;
+      createdAt?: number;
     };
 
 export type ThreadContext = {

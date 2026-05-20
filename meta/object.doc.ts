@@ -873,29 +873,77 @@ export const root: DocTreeNode = {
                         },
                     },
                 },
-                "relation_knowledge": {
-                    title: "relation_knowledge - 自动派生的关系知识",
+                "relation_window": {
+                    title: "relation_window - peer 关系的专属 window type",
                     content: `
                     当 thread.contextWindows 中存在指向某 peer 的 talk_window 时，
-                    deriveRelationKnowledge（src/thinkable/knowledge/synthesizer.ts:268）会自动派生最多两条 knowledge_window:
+                    每轮 render 时由 synthesizer 自动派生一组 window，承载"你对该 peer 的关系认知":
 
-                    1. peer readme: \`stones/<peerId>/readme.md\` — peer 公开自述；不存在则跳过。
-                    2. self relation: \`stones/<selfId>/knowledge/relations/<peerId>.md\` — 你对该 peer 的认知；
-                       不存在时合成"占位" knowledge_window，body 含可直接复制的 write_file 提示，驱动 LLM 主动写入。
+                    1. **RelationWindow**（type="relation"，id 稳定 \`w_rel_<peerId>\`）：
+                       专属 window type，注册 \`edit\` command（详见 children/edit_command）。
+                       这是 relation 的命令面入口——LLM 想更新 relation 不再依赖 write_file 弱 prompt。
+                    2. **伴随 KnowledgeWindow**（source="relation"）：peer readme + 双层 self relation 正文：
+                       - peer readme: \`stones/<peerId>/readme.md\`；不存在则跳过该条。
+                       - self relation 合并体: 同一 KnowledgeWindow body 内分两段:
+                         \`## long_term (stones/<self>/knowledge/relations/<peer>.md)\` +
+                         \`## session (flows/<sid>/objects/<self>/knowledge/relations/<peer>.md)\`。
+                         缺失的段显示占位提示，引导 LLM 走 \`relation_window.edit\` 命令。
 
-                    这两条 knowledge 每轮 render 时重派生，不持久化进 thread.contextWindows。
-                    id 用稳定派生 \`kn_rel_<peerId>_readme\` / \`kn_rel_<peerId>_self\`，方便 UI 跨轮稳定。
+                    **两层文件 (long_term × session)**:
+                    - long_term: \`stones/<self>/knowledge/relations/<peer>.md\` —— 跨 session 长期认知；
+                      只能由 super flow 写入（保 reflectable 元编程闭环）。
+                    - session: \`flows/<sid>/objects/<self>/knowledge/relations/<peer>.md\` —— 本 session 临时认知；
+                      由 relation_window.edit(scope="session") 直接落盘，不污染长期 relations。
+
+                    派生不持久化进 thread.contextWindows；id 稳定方便 UI 跨轮稳定。
 
                     跳过规则（全部静默，仅 console.debug）:
-                    - target === SUPER_ALIAS_TARGET（super 自反）→ 完全跳过。
+                    - target === SUPER_ALIAS_TARGET（super 自反）→ 完全跳过整组派生。
                     - thread.persistence 缺失 → 完全跳过。
-                    - peer stones 目录 / readme.md 不存在 → 跳过 readme（relation 仍走占位）。
+                    - peer stones 目录 / readme.md 不存在 → 跳过 peer readme 那条（其它仍生成）。
                     `,
                     named: {
-                        "deriveRelationKnowledge": "按 talk_window peer 派生 relation knowledge 的函数",
-                        "self relation": "本 Object 对某 peer 的认知记录文件",
-                        "relation 占位": "缺失 relation 文件时合成的提示型 knowledge_window",
+                        "RelationWindow": "type=\"relation\" 的 ContextWindow；relation 命令面入口",
+                        "deriveRelationWindow": "按 talk_window peer 派生 RelationWindow 的函数",
+                        "long_term relation": "stones/<self>/knowledge/relations/<peer>.md，跨 session 长期",
+                        "session relation": "flows/<sid>/objects/<self>/knowledge/relations/<peer>.md，仅本 session",
                     },
+                    children: {
+                        "edit_command": {
+                            title: "relation_window.edit - 双 scope 编辑",
+                            content: `
+                            relation_window 注册唯一一个 command \`edit\`，参数:
+                            - \`content\`: 必填，relation 文件完整正文（整文件替换语义，与 write_file 一致）
+                            - \`scope\`: 必填，\`"session"\` | \`"long_term"\`
+
+                            行为按 scope 分路:
+
+                            **scope="session"**:
+                            直接通过 writeFlowRelation 写 \`flows/<sid>/objects/<self>/knowledge/relations/<peer>.md\`，
+                            下一轮 render 自动出现在伴随 KnowledgeWindow 的 \`## session\` 段。
+                            不动 stones/——本 session 临时认知不污染长期 relations。
+
+                            **scope="long_term"**:
+                            必须经过 super flow（reflectable 维度的元编程闭环约束）。
+                            executeRelationEdit 优先复用 thread 已有的 talk_window(target=super)；
+                            没有则**构造临时 TalkWindow 对象**（不挂到 thread.contextWindows，避免常驻通道污染），
+                            调用 deliverTalkMessage 派一条 relation 更新请求到 super session 的 callee thread。
+                            super 收到后由 super flow 协议正常处理 stone 层 relation 的编辑。
+
+                            两种 scope 都不绕过 reflectable 协议:
+                            - session 是真正"局部认知"，本来就不属 reflectable 写入面；
+                            - long_term 严格走 super，相当于把 "write_file stones/.../relations/..." 替换为
+                              结构化的 talk 请求，super 仍是 stones 写入的唯一通道。
+                            `,
+                            named: {
+                                "scope=session": "写 flow 层，立即生效，仅本 session 可见",
+                                "scope=long_term": "派给 super flow，由 super 写 stone 层",
+                                "临时 TalkWindow": "不挂到 thread 的一次性派送载体；避免 super 通道常驻 contextWindows",
+                            },
+                            sources: [["src/executable/windows/relation.ts", "RelationWindow + edit command 注册与 executeRelationEdit；派送复用 src/executable/windows/talk-delivery.ts:deliverTalkMessage；scope=session 写盘 src/persistable/flow-relation.ts:writeFlowRelation"]],
+                        },
+                    },
+                    sources: [["src/executable/windows/relation.ts", "RelationWindow 与 edit command；派生函数 deriveRelationWindow / deriveRelationCompanionKnowledge 见 src/thinkable/knowledge/synthesizer.ts；flow 层文件 IO 见 src/persistable/flow-relation.ts"]],
                 },
             },
             patches: {
@@ -1167,7 +1215,7 @@ export const root: DocTreeNode = {
                       示例: ooc-collaboration-framework.md、tool-error-handling.md。
                     - stones/<self>/self.md: 内部第一人称叙述（caller 明确要求改身份时）。
                     - stones/<self>/readme.md: 对外公开自述（caller 明确要求改对外说明时）。
-                    - stones/<self>/knowledge/relations/<peer>.md: 对某 peer 的关系认知（与 collaborable.relation_knowledge 联动）。
+                    - stones/<self>/knowledge/relations/<peer>.md: long_term relation 文件（与 collaborable.relation_window 联动；session 层另有 flows/<sid>/objects/<self>/knowledge/relations/<peer>.md 由 relation_window.edit(scope="session") 直接写入）。
 
                     禁止动的路径（不在 super flow 的工作范围内）:
                     - stones/<self>/server/ / client/ / files/ / .stone.json
@@ -1326,7 +1374,7 @@ export const root: DocTreeNode = {
 
                     子项与用途:
                     - self.md (stone-self.ts): 对内身份；readSelf / writeSelf；buildInputItems 时读取并注入 LlmGenerateParams.instructions。
-                    - readme.md (stone-readme.ts): 对外公开介绍；其它 Object 在 collaborable.relation_knowledge 中会读到。
+                    - readme.md (stone-readme.ts): 对外公开介绍；其它 Object 在 collaborable.relation_window 的伴随 KnowledgeWindow 中会读到。
                     - data.json (stone-data.ts): 结构化数据；readData / writeData 整体覆盖、mergeData 顶层 spread 合并。
                     - knowledge/ (stone-object.ts knowledgeDir / memoryDir / relationsDir / relationFile / readRelation):
                       Object 的知识文档；memory 子目录是 reflectable 的写入位置，relations 子目录承载关系认知。

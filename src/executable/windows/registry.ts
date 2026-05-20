@@ -137,6 +137,11 @@ REGISTRY.set("issue", {
   commands: {},
 });
 
+REGISTRY.set("relation", {
+  type: "relation",
+  commands: {},
+});
+
 /**
  * 替换或合并某 type 的契约，用于 windows/do.ts、windows/todo.ts 在模块加载时注入实现。
  *

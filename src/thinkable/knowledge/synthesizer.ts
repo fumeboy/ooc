@@ -22,7 +22,7 @@
  * 内部的 commands / windows registry），故归位到 thinkable/knowledge。
  */
 
-import { deriveStoneFromThread, readReadme, readRelation, readIssue } from "../../persistable/index.js";
+import { deriveStoneFromThread, readReadme, readRelation, readFlowRelation, readIssue } from "../../persistable/index.js";
 import type { ThreadContext } from "../context.js";
 import { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge.js";
 import { ROOT_BASIC_PATH, ROOT_COMMANDS, ROOT_KNOWLEDGE } from "../../executable/windows/root/index.js";
@@ -30,7 +30,7 @@ import { REFLECTABLE_BASIC_PATH, REFLECTABLE_KNOWLEDGE } from "../reflectable/re
 import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../../executable/windows/super-constants.js";
 import type { CommandKnowledgeEntries, CommandTableEntry } from "../../executable/windows/command-types.js";
 import { getWindowTypeDefinition } from "../../executable/windows/registry.js";
-import type { CommandExecWindow, ContextWindow, IssueWindow, KnowledgeWindow, TalkWindow } from "../../executable/windows/types.js";
+import type { CommandExecWindow, ContextWindow, IssueWindow, KnowledgeWindow, RelationWindow, TalkWindow } from "../../executable/windows/types.js";
 import { loadServerMethods } from "../../executable/server/loader.js";
 import type { ServerMethod } from "../../executable/server/types.js";
 import { computeActivations } from "./activator.js";
@@ -201,7 +201,7 @@ export async function collectExecutableKnowledgeEntries(
   }
 
   // 2) protocol entries → KnowledgeWindow（source=protocol）
-  const synthetic: KnowledgeWindow[] = [];
+  const synthetic: ContextWindow[] = [];
   for (const [path, body] of Object.entries(protocolEntries)) {
     synthetic.push(makeKnowledgeWindow(path, body, "protocol"));
   }
@@ -230,10 +230,13 @@ export async function collectExecutableKnowledgeEntries(
     }
   }
 
-  // 4) relation 派生 → KnowledgeWindow（source=relation）
-  //    spec: meta/object/collaborable/relation；详见 deriveRelationKnowledge JSDoc
-  const relationWindows = await deriveRelationKnowledge(thread);
+  // 4) relation 派生 → RelationWindow + 伴随的 KnowledgeWindow(source=relation)
+  //    spec: meta/object/collaborable/relation_window;详见 deriveRelationWindow /
+  //    deriveRelationCompanionKnowledge JSDoc
+  const relationWindows = await deriveRelationWindow(thread);
   for (const rw of relationWindows) synthetic.push(rw);
+  const relationKnowledgeWindows = await deriveRelationCompanionKnowledge(thread);
+  for (const rk of relationKnowledgeWindows) synthetic.push(rk);
 
   // 5) issue 派生 → KnowledgeWindow（source=issue）
   //    spec: docs/plans/2026-05-19-001-feat-issue-context-window-plan.md U8;
@@ -248,28 +251,70 @@ export async function collectExecutableKnowledgeEntries(
 }
 
 /**
- * 按 thread 中存在的 talk_window 派生 relation knowledge_window。
+ * 按 thread 中存在的 talk_window 派生 RelationWindow(每个 peer 一条)。
  *
- * 对每个去重 peerId（target）尝试派生最多两条:
- *   - peer readme:    stones/{peerId}/readme.md（缺失则跳过该条）
- *   - self relation:  stones/{selfId}/knowledge/relations/{peerId}.md
- *                     **缺失时合成"占位"KnowledgeWindow**:body 含可直接复制的
- *                     `write_file` 提示,驱动 LLM 主动写入(替代弱 prompt)
+ * spec 2026-05-20 relation-window-design:relation 升级为专属 window type,
+ * 自带 edit 命令面;不持久化,每轮 derive。id 稳定 `w_rel_<peerId>`。
  *
- * 跳过规则(全部静默,不写 inject,仅 console.debug):
- * - target === SUPER_ALIAS_TARGET (super 自反)→ 完全跳过 (readme + relation)
- * - thread.persistence 缺失 → 完全跳过(测试 fixture / 异常 thread)
- * - peer stones 目录 / readme.md 不存在 → 跳过 readme(relation 仍走占位)
+ * 跳过规则:
+ * - target === SUPER_ALIAS_TARGET → 跳过(super 自反不需要 relation)
+ * - thread.persistence 缺失 → 全部跳过
+ */
+export async function deriveRelationWindow(
+  thread: ThreadContext,
+): Promise<RelationWindow[]> {
+  if (!thread.persistence) return [];
+  const talkWindows = (thread.contextWindows ?? []).filter(
+    (w): w is TalkWindow => w.type === "talk",
+  );
+  const peerIds = new Set<string>();
+  for (const w of talkWindows) {
+    if (!w.target) continue;
+    if (w.target === SUPER_ALIAS_TARGET) continue;
+    peerIds.add(w.target);
+  }
+  if (peerIds.size === 0) return [];
+
+  const now = Date.now();
+  const out: RelationWindow[] = [];
+  for (const peerId of peerIds) {
+    out.push({
+      id: `w_rel_${peerId}`,
+      type: "relation",
+      parentWindowId: "root",
+      title: `relation: ${peerId}`,
+      status: "open",
+      createdAt: now,
+      peerId,
+    });
+  }
+  return out;
+}
+
+/**
+ * 派生伴随 RelationWindow 的 KnowledgeWindow(source="relation")。
+ *
+ * 每个去重 peerId 派生最多 2 条:
+ *   - peer readme:    stones/{peerId}/readme.md(缺失则跳过该条)
+ *   - self relation:  合并 long_term + session 双层 body 的单条 KnowledgeWindow
+ *                     - long_term: stones/{selfId}/knowledge/relations/{peerId}.md
+ *                     - session:   flows/{sid}/objects/{selfId}/knowledge/relations/{peerId}.md
+ *                     缺失段显示占位提示,每段独立 8KB 截断。union path 取 long_term 路径。
+ *
+ * 跳过规则(全部静默,仅 console.debug):
+ * - target === SUPER_ALIAS_TARGET → 完全跳过
+ * - thread.persistence 缺失 → 完全跳过
+ * - peer stones 目录 / readme.md 不存在 → 跳过 readme(self relation 仍输出)
  * - IO 错误 → 跳过该条
  *
  * 不持久化:返回的 windows 不会进入 thread.contextWindows,每轮 render 重派生。
  * id 用稳定派生 `kn_rel_<peerId>_readme` / `kn_rel_<peerId>_self`,方便 UI 跨轮稳定。
  */
-export async function deriveRelationKnowledge(
+export async function deriveRelationCompanionKnowledge(
   thread: ThreadContext,
 ): Promise<KnowledgeWindow[]> {
   if (!thread.persistence) return [];
-  const { baseDir, objectId: selfId } = thread.persistence;
+  const { baseDir, sessionId, objectId: selfId } = thread.persistence;
 
   const talkWindows = (thread.contextWindows ?? []).filter(
     (w): w is TalkWindow => w.type === "talk",
@@ -286,7 +331,8 @@ export async function deriveRelationKnowledge(
   if (peerIds.size === 0) return [];
 
   const out: KnowledgeWindow[] = [];
-  const selfRef = { baseDir, objectId: selfId };
+  const selfStoneRef = { baseDir, objectId: selfId };
+  const selfFlowRef = { baseDir, sessionId, objectId: selfId };
 
   for (const peerId of peerIds) {
     const peerRef = { baseDir, objectId: peerId };
@@ -307,39 +353,51 @@ export async function deriveRelationKnowledge(
       console.debug(`[relation] skip ${peerId} reason=readme_io_error msg=${(err as Error).message}`);
     }
 
-    // self relation — full body OR 占位提示
+    // self relation — 合并双层 body
+    let longTermBody: string | undefined;
     try {
-      const relation = await readRelation(selfRef, peerId);
-      const path = `stones/${selfId}/knowledge/relations/${peerId}.md`;
-      if (relation !== undefined) {
-        out.push(makeRelationWindow(
-          `kn_rel_${peerId}_self`,
-          path,
-          truncateKnowledgeBody(relation),
-        ));
-      } else {
-        console.debug(`[relation] placeholder ${peerId} reason=relation_missing`);
-        out.push(makeRelationWindow(
-          `kn_rel_${peerId}_self`,
-          path,
-          buildRelationPlaceholder(selfId, peerId),
-        ));
-      }
+      longTermBody = await readRelation(selfStoneRef, peerId);
     } catch (err) {
-      console.debug(`[relation] skip ${peerId} reason=relation_io_error msg=${(err as Error).message}`);
+      console.debug(`[relation] long_term io_error ${peerId} msg=${(err as Error).message}`);
     }
+    let sessionBody: string | undefined;
+    try {
+      sessionBody = await readFlowRelation(selfFlowRef, peerId);
+    } catch (err) {
+      console.debug(`[relation] session io_error ${peerId} msg=${(err as Error).message}`);
+    }
+
+    const longTermPath = `stones/${selfId}/knowledge/relations/${peerId}.md`;
+    const sessionPath = `flows/${sessionId}/objects/${selfId}/knowledge/relations/${peerId}.md`;
+    const longTermSection = longTermBody !== undefined
+      ? truncateKnowledgeBody(longTermBody)
+      : `(暂无;通过 open(parent_window_id="w_rel_${peerId}", command="edit", args={ content: "...", scope: "long_term" }) 写入)`;
+    const sessionSection = sessionBody !== undefined
+      ? truncateKnowledgeBody(sessionBody)
+      : `(暂无;通过 open(parent_window_id="w_rel_${peerId}", command="edit", args={ content: "...", scope: "session" }) 写入)`;
+
+    const combinedBody =
+      `## long_term (${longTermPath})\n\n${longTermSection}\n\n` +
+      `## session (${sessionPath})\n\n${sessionSection}\n`;
+
+    out.push(makeRelationWindow(
+      `kn_rel_${peerId}_self`,
+      longTermPath,
+      combinedBody,
+    ));
   }
 
   return out;
 }
 
-function buildRelationPlaceholder(selfId: string, peerId: string): string {
-  return `暂无对 ${peerId} 的关系记录。
-
-可通过 \`open(command="write_file", path="stones/${selfId}/knowledge/relations/${peerId}.md", content="...")\`
-写入对该 peer 的认知要点(背景、合作模式、偏好、过往关键交互)。
-文件会在下一轮 render 自动作为 knowledge 出现在 context。
-`;
+/**
+ * @deprecated 使用 deriveRelationWindow + deriveRelationCompanionKnowledge 替代。
+ * 此函数保留为 backward-compat 别名,仅返回伴随的 KnowledgeWindow 部分。
+ */
+export async function deriveRelationKnowledge(
+  thread: ThreadContext,
+): Promise<KnowledgeWindow[]> {
+  return await deriveRelationCompanionKnowledge(thread);
 }
 
 function makeRelationWindow(id: string, path: string, body: string): KnowledgeWindow {

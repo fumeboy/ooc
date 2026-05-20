@@ -38,12 +38,16 @@ export function ThreadHeader({
 
   return (
     <div className="thread-header">
-      <span className="thread-header-id">
-        <strong title={objectId}>{ownerDisplay}</strong>
-        {threadId && (
-          <span className="muted small thread-header-tid" title={threadId}>· {displayTid}</span>
-        )}
-      </span>
+      {/* 当 select 存在时, 它已显示 objectId · threadId, 这里不再渲染同样信息避免重复 (用户反馈 2026-05-20).
+          单 thread 场景 (没有 select) 仍需显示标识. */}
+      {threads.length <= 1 && (
+        <span className="thread-header-id">
+          <strong title={objectId}>{ownerDisplay}</strong>
+          {threadId && (
+            <span className="muted small thread-header-tid" title={threadId}>· {displayTid}</span>
+          )}
+        </span>
+      )}
       {status && <span className={`status-pill status-pill-thread status-${status}`}>{status}</span>}
       {threads.length > 1 && onSelectThread && (
         <select

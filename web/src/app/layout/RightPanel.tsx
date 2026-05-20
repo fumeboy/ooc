@@ -26,7 +26,10 @@ export function RightPanel(props: {
 }) {
   return (
     <aside className="right-column gap-1">
-      <div className="breadcrumb-bar panel right-breadcrumb-spacer" aria-hidden="true" />
+      {/* invisible spacer 保持两列顶部对齐 (Issue #2 bad #a 修复). 用户反馈 2026-05-20:
+          原 .breadcrumb-bar.panel 样式让 spacer 看起来像空 breadcrumb-bar — 改用纯 spacer 元素
+          (无 border / 无 background, 仅占 height) 让用户视觉上看不见. */}
+      <div className="right-breadcrumb-spacer" aria-hidden="true" />
       <div className="panel right-panel">
         <ChatPanel
           sessionId={props.sessionId}

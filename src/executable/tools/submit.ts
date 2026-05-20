@@ -28,13 +28,17 @@ export const SUBMIT_TOOL: LlmTool = {
   },
 };
 
-const successOutput = (message: string, result?: string, autoRemoved?: boolean) =>
+const successOutput = (message: string, result?: string, autoRemoved?: boolean, windowId?: string) =>
   JSON.stringify({
     ok: true,
     tool: "submit",
     message,
     ...(result !== undefined ? { result } : {}),
     ...(autoRemoved ? { auto_removed: true } : {}),
+    // submit 触发的 command 通常会派生 sub-window (grep→search_window, open_file→file_window, ...).
+    // 把它的 id 写到 output, 让 ChatPanel 的 link 按钮可以跳转到这个真正仍在 context 中的 window,
+    // 而不是已 auto_removed 的 form_id (用户反馈 2026-05-20).
+    ...(windowId ? { window_id: windowId } : {}),
   });
 const errorOutput = (error: string) => JSON.stringify({ ok: false, tool: "submit", error });
 
@@ -55,6 +59,9 @@ export async function handleSubmitTool(
     return errorOutput(`submit 失败：Form ${formId} 不在 open 状态（当前 ${target.status}）。`);
   }
 
+  // 记录 submit 前的 window id 集合, 用来识别本次 submit 派生的新 sub-window
+  const beforeIds = new Set((thread.contextWindows ?? []).map((w) => w?.id).filter(Boolean) as string[]);
+
   let result: string | undefined;
   try {
     result = await mgr.submit(formId, thread);
@@ -69,5 +76,10 @@ export async function handleSubmitTool(
   const messageBase = autoRemoved
     ? `[form executed] form "${title}" 已成功执行并自动释放。`
     : `[form executed] form "${title}" 执行完成（保留待 close）。`;
-  return successOutput(messageBase, result, autoRemoved);
+  // 找到本次 submit 派生的第一个新 window (典型: grep→search, open_file→file 等).
+  // 排除 form 自己 (id === formId) 以防失败 form 还在 contextWindows.
+  const createdWindowId = (thread.contextWindows ?? [])
+    .map((w) => w?.id)
+    .filter((id): id is string => Boolean(id) && id !== formId && !beforeIds.has(id))[0];
+  return successOutput(messageBase, result, autoRemoved, createdWindowId);
 }

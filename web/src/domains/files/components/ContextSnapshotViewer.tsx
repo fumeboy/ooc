@@ -33,6 +33,7 @@ import {
   Search,
   Send,
   Terminal,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -72,6 +73,7 @@ const WINDOW_TYPE_ICON: Record<ContextWindow["type"], LucideIcon> = {
   file: FileText,
   knowledge: ScrollText,
   search: Search,
+  relation: Users,
 };
 
 /** 已有专用渲染分支的 window type 集合；不在集合中的类型由 NodeDetail 末尾的 JSON 兜底渲染。 */
@@ -181,13 +183,21 @@ function TreeNodeImpl({
         className={`cw-row cw-tone-${tone}${isSelected ? " is-selected" : ""}`}
         style={{ paddingLeft: `${renderDepth * 14 + 6}px` }}
         data-cw-node-id={node.id}
-        onClick={() => onSelect(node.id)}
+        aria-selected={isSelected}
+        onClick={() => {
+          onSelect(node.id);
+          // 点击行也切换展开 — 用户反馈 2026-05-20:
+          // 此前只能点 chevron 才能折叠/展开, 误点行只 select 不 toggle 让用户以为"展开后无法收起"
+          if (hasChildren) onToggle(node.id);
+        }}
       >
         <button
           type="button"
           className="cw-chevron-btn"
           onClick={(event) => {
+            // 让事件冒泡到 row 触发 select+toggle, 避免两次切换
             event.stopPropagation();
+            onSelect(node.id);
             if (hasChildren) onToggle(node.id);
           }}
           disabled={!hasChildren}
@@ -527,24 +537,33 @@ function WindowDetail({
                     </div>
                     <div className="llm-input-exec-title">{head}</div>
                     {isLast && exec.code && (
-                      <CodeMirror
-                        className="code-editor is-readonly"
-                        value={exec.code}
-                        editable={false}
-                        basicSetup={{ lineNumbers: true, foldGutter: true }}
-                      />
+                      <div className="llm-input-exec-section">
+                        <div className="llm-input-exec-section-label">script</div>
+                        <CodeMirror
+                          className="code-editor is-readonly llm-input-exec-code"
+                          value={exec.code}
+                          editable={false}
+                          basicSetup={{ lineNumbers: true, foldGutter: false }}
+                        />
+                      </div>
                     )}
                     {isLast && exec.args !== undefined && (
-                      <CodeMirror
-                        className="code-editor is-readonly"
-                        value={formatJson(exec.args)}
-                        editable={false}
-                        extensions={[jsonLanguage()]}
-                        basicSetup={{ lineNumbers: false, foldGutter: true }}
-                      />
+                      <div className="llm-input-exec-section">
+                        <div className="llm-input-exec-section-label">args</div>
+                        <CodeMirror
+                          className="code-editor is-readonly llm-input-exec-code"
+                          value={formatJson(exec.args)}
+                          editable={false}
+                          extensions={[jsonLanguage()]}
+                          basicSetup={{ lineNumbers: false, foldGutter: false }}
+                        />
+                      </div>
                     )}
                     {exec.output && (
-                      <pre className="llm-input-pre llm-input-exec-output">{isLast ? exec.output : previewText(exec.output, 200)}</pre>
+                      <div className="llm-input-exec-section">
+                        <div className="llm-input-exec-section-label">output</div>
+                        <pre className="llm-input-pre llm-input-exec-output">{isLast ? exec.output : previewText(exec.output, 200)}</pre>
+                      </div>
                     )}
                   </li>
                 );

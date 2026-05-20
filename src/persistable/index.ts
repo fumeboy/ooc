@@ -51,6 +51,13 @@ export {
   type StoneObjectMetadata
 } from "./stone-object";
 
+export {
+  flowRelationsDir,
+  flowRelationFile,
+  readFlowRelation,
+  writeFlowRelation,
+} from "./flow-relation";
+
 export { readSelf, selfFile, writeSelf } from "./stone-self";
 export { readReadme, readmeFile, writeReadme } from "./stone-readme";
 export { dataFile, mergeData, readData, writeData } from "./stone-data";

@@ -76,6 +76,8 @@ export async function handleOpenTool(
   const nestedArgs = getArgs(args);
 
   const mgr = WindowManager.fromThread(thread);
+  // 记录 open 前的 window id 集合, 用来识别本次 open (含 auto-submit) 派生的新 sub-window
+  const beforeIds = new Set((thread.contextWindows ?? []).map((w) => w?.id).filter(Boolean) as string[]);
   let opened: { formId: string; autoSubmitted: boolean; submitResult?: string };
   try {
     opened = await mgr.openCommandExec({
@@ -99,9 +101,20 @@ export async function handleOpenTool(
   thread.contextWindows = mgr.toData();
 
   if (opened.autoSubmitted) {
+    // 找到本次 auto-submit 派生的新 sub-window (e.g. grep → search_window, open_file → file_window).
+    // 让 ChatPanel 的 link 按钮可以跳转到这个真正仍在 context 中的 window,
+    // 而不是已 auto-removed 的 form_id (用户反馈 2026-05-20).
+    const createdWindowId = (thread.contextWindows ?? [])
+      .map((w) => w?.id)
+      .filter((id): id is string => Boolean(id) && id !== opened.formId && !beforeIds.has(id))[0];
     return successOutput(
       `Form ${opened.formId} 已基于完整参数自动 submit；执行结果见下一轮 context。`,
-      { form_id: opened.formId, auto_submitted: true, result: opened.submitResult },
+      {
+        form_id: opened.formId,
+        auto_submitted: true,
+        result: opened.submitResult,
+        ...(createdWindowId ? { window_id: createdWindowId } : {}),
+      },
     );
   }
   return successOutput(

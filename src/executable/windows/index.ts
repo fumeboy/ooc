@@ -20,6 +20,7 @@ export type {
   SearchWindow,
   SearchMatch,
   IssueWindow,
+  RelationWindow,
 } from "./types.js";
 
 export {
@@ -76,3 +77,4 @@ import "./file.js";
 import "./knowledge.js";
 import "./search.js";
 import "./issue.js";
+import "./relation.js";

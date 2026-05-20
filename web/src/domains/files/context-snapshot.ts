@@ -134,6 +134,16 @@ export type ContextWindow =
       truncated: boolean;
       searchRoot?: string;
       createdAt?: number;
+    }
+  | {
+      id: string;
+      type: "relation";
+      parentWindowId?: string;
+      title: string;
+      status: "open" | "closed";
+      /** 对端 objectId(去重 key);与 talk_window.target 同源。 */
+      peerId: string;
+      createdAt?: number;
     };
 
 /** 与后端 ThreadMessage 同 shape；前端只读取关心的字段。 */
@@ -226,6 +236,7 @@ function windowBadge(type: ContextWindow["type"]): string {
     case "file":         return "FILE";
     case "knowledge":    return "KNOW";
     case "search":       return "SRCH";
+    case "relation":     return "REL";
     case "root":         return "ROOT";
   }
 }
@@ -248,6 +259,8 @@ function windowSummary(window: ContextWindow): string {
       return `${window.source ?? "explicit"} · ${window.path}` + (window.presentation ? ` · ${window.presentation}` : "");
     case "search":
       return `${window.kind} · ${window.query} · ${window.matches.length}${window.truncated ? "+" : ""} hit${window.matches.length === 1 ? "" : "s"}`;
+    case "relation":
+      return `relation: ${window.peerId}`;
     case "root":
       return "thread root";
   }
@@ -283,6 +296,9 @@ function windowCharCount(window: ContextWindow): number {
     case "search":
       n += window.query.length;
       for (const m of window.matches) n += m.path.length + (m.snippet?.length ?? 0);
+      break;
+    case "relation":
+      // relation_window 自身无大文本(正文在伴随的 knowledge_window);title 兜底已计
       break;
     case "root":
       break;
@@ -450,6 +466,7 @@ const WINDOW_TYPE_ORDER: ContextWindow["type"][] = [
   "command_exec",
   "do",
   "talk",
+  "relation",
   "todo",
   "program",
   "file",

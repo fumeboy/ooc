@@ -702,6 +702,25 @@ describe("U5: root.grep", () => {
     expect(sw.truncated).toBe(false);
   });
 
+  // 2026-05-20 用户反馈: chat panel 上 link-btn 跳转无效, 因为 form 在 auto-submit 后 auto_removed,
+  // 仅有 form_id 找不到 ContextTree 节点. 修复让 open auto-submit / submit 都在 output 暴露
+  // 派生的 sub-window id (window_id), 让 link-btn 跳到真正仍在 context 的 search_window 等.
+  it("output.window_id 指向 auto-submit 派生的 search_window (link-btn 修复 2026-05-20)", async () => {
+    const dir = await makeGrepFixtureDir("grep-link-fix", { "a.ts": "needle here\n" });
+    const thread = makeThread({ id: "t_grep_link_fix" });
+    const rawOutput = await dispatchGrep(thread, { pattern: "needle", path: dir });
+    const parsed = JSON.parse(rawOutput);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.auto_submitted).toBe(true);
+    // 关键: window_id 字段必须出现, 且指向 search_window
+    expect(parsed.window_id).toBeDefined();
+    const sw = thread.contextWindows.find((w) => w.type === "search");
+    expect(sw).toBeDefined();
+    expect(parsed.window_id).toBe(sw!.id);
+    // window_id 必须不是 form_id (form 已 auto_removed)
+    expect(parsed.window_id).not.toBe(parsed.form_id);
+  });
+
   it("edge: path is a single file → still works", async () => {
     const dir = await makeGrepFixtureDir("grep-onefile", { "only.ts": "needle here\nand here too needle\n" });
     const filePath = join(dir, "only.ts");
