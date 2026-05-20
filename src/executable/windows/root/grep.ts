@@ -41,7 +41,7 @@ export async function executeGrepCommand(
   const thread = ctx.thread;
   if (!thread) return "[grep] 缺少 thread context。";
   const pattern = typeof ctx.args.pattern === "string" ? ctx.args.pattern : "";
-  if (!pattern) return "[grep] 缺少 pattern 参数。";
+  if (!pattern) return "[grep] 缺少 pattern 参数。submit 后 form 已 executed, 请 close(form_id) 后重新 open(command=\"grep\", args={ pattern: \"<regex>\", path: \"<dir-or-file>\", glob: \"*.ts\", case_insensitive: true }) 一次性给齐参数; 下次直接在 open 时附 args 可避免再次进入失败回路。";
   // 默认搜索根 = session 的 baseDir（thread.persistence.baseDir），不到则回退 process.cwd()
   const rawPath = typeof ctx.args.path === "string" ? ctx.args.path : "";
   const path = rawPath ? resolveSessionPath(thread, rawPath) : resolveSessionPath(thread, ".");

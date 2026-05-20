@@ -1,4 +1,5 @@
 import type { ThreadContext } from "..";
+import { useDisplayName } from "../../objects";
 import { ChatComposer } from "./ChatComposer";
 import { ThreadTimeline } from "./ThreadTimeline";
 
@@ -22,6 +23,7 @@ export function ChatPanel({
   onTogglePause?: () => Promise<void>;
   showComposer?: boolean;
 }) {
+  const { displayName: peerDisplayName } = useDisplayName(objectId);
   return (
     <div className="right-body chat-body">
       {sessionId && objectId ? (
@@ -31,7 +33,7 @@ export function ChatPanel({
           </div>
           {showComposer && (
             <div className="chat-composer-shell">
-              <ChatComposer onSend={onSend} paused={paused} pauseBusy={pauseBusy} onTogglePause={onTogglePause} />
+              <ChatComposer onSend={onSend} paused={paused} pauseBusy={pauseBusy} onTogglePause={onTogglePause} peerObjectId={objectId} peerDisplayName={peerDisplayName} />
             </div>
           )}
         </>

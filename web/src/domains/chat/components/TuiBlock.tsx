@@ -122,15 +122,24 @@ function ToolCardShell({ line, children }: {
   line: Extract<ChatLine, { kind: "tool" }>;
   children?: React.ReactNode;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [openPanels, setOpenPanels] = useState<Record<ToolPanelKey, boolean>>({ marks: false, arguments: false, output: false });
+  // Issue #3 A5 fix: failed tool card 默认展开 + output 面板默认打开,
+  // 让用户立即看到 error 文本而不是孤立的 `failed` 状态。仍可点击折叠回去。
+  const isFailed = !line.pending && !line.ok;
+  const [expanded, setExpanded] = useState(isFailed);
+  const [openPanels, setOpenPanels] = useState<Record<ToolPanelKey, boolean>>({
+    marks: false,
+    arguments: false,
+    output: isFailed,
+  });
   const togglePanel = (panel: ToolPanelKey) => setOpenPanels((current) => ({ ...current, [panel]: !current[panel] }));
   const hasFooter = Boolean(line.marks?.length || line.argumentsText || line.outputText);
   const hasBody = Boolean(children || openPanels.marks || openPanels.arguments || openPanels.output);
   const ToolIcon = getToolIcon(line.toolName);
+  // failed 状态下把 output 一句话摘要塞进 status pill 的 title attr, 让 hover 也能拿到 error
+  const statusTitle = isFailed && line.outputText ? line.outputText.slice(0, 400) : undefined;
 
   return (
-    <div className={`tui-tool-card tui-tool-card-${line.toolName}`}>
+    <div className={`tui-tool-card tui-tool-card-${line.toolName}${isFailed ? " is-failed" : ""}`}>
       <div className="tui-tool-shell-head">
         <div className="tui-card-head tui-card-head-embedded tui-tool-card-head">
           <div className="tui-tool-head-row tui-tool-head-row-main">
@@ -140,7 +149,10 @@ function ToolCardShell({ line, children }: {
             <span className="tui-label">{line.toolName}</span>
             {line.title && <div className="tui-tool-title-main">{line.title}</div>}
             <div className="tui-tool-head-actions">
-              <span className={`tui-tool-status${line.pending ? " is-pending" : line.ok ? " is-success" : " is-fail"}`}>
+              <span
+                className={`tui-tool-status${line.pending ? " is-pending" : line.ok ? " is-success" : " is-fail"}`}
+                title={statusTitle}
+              >
                 {line.pending ? "pending" : line.ok ? "ok" : "failed"}
               </span>
               <button
@@ -157,6 +169,13 @@ function ToolCardShell({ line, children }: {
           {line.headerDescription && (
             <div className="tui-tool-head-row tui-tool-head-row-sub">
               <div className="tui-tool-title-sub">{line.headerDescription}</div>
+            </div>
+          )}
+          {isFailed && !expanded && line.outputText && (
+            <div className="tui-tool-head-row tui-tool-head-row-sub">
+              <div className="tui-tool-fail-inline" title={line.outputText}>
+                {line.outputText.split("\n")[0]?.slice(0, 200)}
+              </div>
             </div>
           )}
         </div>

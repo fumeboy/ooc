@@ -1343,6 +1343,7 @@ export const root: DocTreeNode = {
                         "knowledge/relations/<peer>.md": "对各 peer 的认知文件",
                         "stone server / client": "stone 自带的服务端 / 客户端源码",
                         "createStoneObject": "创建 stone 骨架的函数；不写入业务内容文件",
+                        "self.md 第一行 = displayName": "UI 表层展示 objectId 时从 self.md 首行派生语义化标题；详见 visible.display_name_from_self_md",
                     },
                 },
                 "flow": {
@@ -1816,6 +1817,46 @@ export const root: DocTreeNode = {
                     - 把临时 session 状态放 stone client → 其它 session 看到陈旧/无关 UI。
                     - 把跨 session 资源放 flow page → 每个 session 都得复制一遍，不易维护。
                     `,
+                },
+                "display_name_from_self_md": {
+                    title: "displayName 派生约定 - UI 表层展示 objectId 时的语义化标题",
+                    content: `
+                    决策（2026-05-20，Supervisor）：OOC **不引入新的 displayName 字段**到 stone/flow 数据模型；
+                    UI 表层需要展示 \`objectId\` 时（thread selector、breadcrumb、sidebar、chat 头、Issue author chip 等）
+                    应**从该 Object 自己的 stone self.md 第一行 \`# Title\` 派生 displayName**。
+
+                    设计动机:
+                    - 与 reflectable 哲学一致：身份由 Object **自己写在 self.md 里**，不由外部赋予；
+                      这与 \`createStoneObject\` 留白 self.md 让 Object 后续主动写入的契约也匹配（persistable.stone）。
+                    - 零 schema 变更：现有 10 个 agent_of_* / supervisor 的 self.md 都已自然以
+                      \`# AgentOfX（中文名）\` / \`# Supervisor\` 起首，无需 backend 迁移。
+                    - 自洽元编程：Object 通过 super flow 更新 self.md 改自己身份 → 下一次 UI 加载看到新 displayName，
+                      与 client_evolution 的演化链路对称。
+
+                    UI 派生规则（前端实现指南）:
+                    1. 取 self.md 内容 → split('\\n')[0] → 去掉前导 \`# \` → trim() → 即 displayName。
+                    2. 缓存：UI 端按 objectId 缓存 self.md（与现有 stone-self.ts read 接口一致），TTL 同 stone 读取范式。
+                    3. fallback：self.md 不存在 / 第一行不是 \`# ...\` / 内容为空 → 退回原始 objectId（防止空字符串）。
+                    4. tooltip：UI 显示 displayName 的位置必须保留原始 objectId 在 hover/title attr，让调试可见。
+                    5. 不要在 LLM 上下文中替换 objectId —— LLM 看到的仍是 objectId，displayName 纯前端表层。
+
+                    边界与不做的事:
+                    - 不引入 \`stone.displayName\` 字段、不引入 \`flow.displayName\` 字段、不引入 alias 表。
+                    - 不允许 UI "重命名 Object" 的可写动作（如果有需求，Object 自己改 self.md 即可，复用 reflectable）。
+                    - thread id 的语义化不在本约定范围（thread 没有 self.md）——
+                      thread id 由 visible 自己用 createdAt / threadKind 等元信息做表层 humanize（参见 issue #3 A2 修复）。
+
+                    与其它维度的关系:
+                    - persistable.stone.self.md 是数据源（content[0] line）。
+                    - collaborable: Issue.createdByObjectId / message.from 在 UI 层展示时同样适用本约定。
+                    - reflectable: Object 想改自己的 displayName，去改 self.md 即可，是元编程闭环的自然延伸。
+                    `,
+                    named: {
+                        "displayName 派生": "UI 表层从 self.md 第一行 # Title 派生的语义化标题",
+                        "self.md 第一行": "约定的 displayName 数据源；空 / 缺失时退回 objectId",
+                        "不引入 displayName 字段": "刻意不动 schema，保持数据模型最小",
+                    },
+                    sources: [["src/persistable/stone-self.ts", "self.md 的读写接口；displayName 派生只需 readSelf 后取首行"]],
                 },
             },
             todo: [

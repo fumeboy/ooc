@@ -50,5 +50,18 @@ export function createJobManager() {
       jobs.set(jobId, next);
       return next;
     },
+    /**
+     * Atomic claim: 把 queued job 翻成 running, 返回更新后的 job. 失败 (不存在 / 已不是 queued) 返回 undefined.
+     *
+     * 用于 worker 并发 tick 安全处理 queued jobs — 多个 tick 同时进 processQueuedJobs 时, 每个 job 只会被 claim 一次.
+     * 因为 JS 是单线程, Map.set 是原子的, 这里的 if + set 在单 tick 内不会被打断.
+     */
+    tryClaimQueuedJob(jobId: string): RuntimeJob | undefined {
+      const current = jobs.get(jobId);
+      if (!current || current.status !== "queued") return undefined;
+      const next: RuntimeJob = { ...current, status: "running", startedAt: Date.now(), error: undefined };
+      jobs.set(jobId, next);
+      return next;
+    },
   };
 }

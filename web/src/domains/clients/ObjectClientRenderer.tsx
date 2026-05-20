@@ -24,6 +24,7 @@ import {
 import { WORLD_ROOT } from "../../shared/world-root";
 import { endpoints } from "../../transport/endpoints";
 import { requestJson } from "../../transport/http";
+import { StoneFallback } from "./StoneFallback";
 
 /** 调用入口由 scope 决定，避免上游手拼路径。 */
 export type ClientTarget =
@@ -177,6 +178,16 @@ export function ObjectClientRenderer({
       // 先 HEAD 判 404：避免和语法错 / 转译错混淆。
       const exists = await fileExists(importUrl);
       if (!exists) {
+        // Stone scope 不再用空白的 "信息待产出..."; 改用 StoneFallback 拼出
+        // self.md / readme.md / knowledge / 入口 名片 (Supervisor 决策)。
+        // Flow scope 维持原 NotProducedYet — flow page 语义还不明确, 不在本次范围。
+        if (target.scope === "stone") {
+          const objectId = target.objectId;
+          const Fallback: ComponentType<ClientComponentProps> = () => (
+            <StoneFallback objectId={objectId} />
+          );
+          return { default: Fallback };
+        }
         const Fallback: ComponentType<ClientComponentProps> = () => <NotProducedYet />;
         return { default: Fallback };
       }
@@ -185,6 +196,20 @@ export function ObjectClientRenderer({
           default?: ComponentType<ClientComponentProps>;
         };
         if (!mod.default) {
+          if (target.scope === "stone") {
+            const objectId = target.objectId;
+            const Fallback: ComponentType<ClientComponentProps> = () => (
+              <StoneFallback
+                objectId={objectId}
+                loadError={{
+                  message:
+                    "模块未 default export 任何组件。期望：export default function ...(props) { ... }",
+                  absPath,
+                }}
+              />
+            );
+            return { default: Fallback };
+          }
           const Fallback: ComponentType<ClientComponentProps> = () => (
             <LoadErrorBox
               message="模块未 default export 任何组件。期望：export default function ...(props) { ... }"
@@ -197,13 +222,20 @@ export function ObjectClientRenderer({
         return { default: mod.default };
       } catch (e) {
         const msg = e instanceof Error ? e.stack ?? e.message : String(e);
+        if (target.scope === "stone") {
+          const objectId = target.objectId;
+          const Fallback: ComponentType<ClientComponentProps> = () => (
+            <StoneFallback objectId={objectId} loadError={{ message: msg, absPath }} />
+          );
+          return { default: Fallback };
+        }
         const Fallback: ComponentType<ClientComponentProps> = () => (
           <LoadErrorBox message={msg} absPath={absPath} kind="load" />
         );
         return { default: Fallback };
       }
     });
-  }, [importUrl, absPath]);
+  }, [importUrl, absPath, target]);
 
   return (
     <ClientRenderErrorBoundary absPath={absPath}>

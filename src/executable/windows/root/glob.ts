@@ -76,7 +76,7 @@ export async function executeGlobCommand(
   const thread = ctx.thread;
   if (!thread) return "[glob] 缺少 thread context。";
   const pattern = typeof ctx.args.pattern === "string" ? ctx.args.pattern : "";
-  if (!pattern) return "[glob] 缺少 pattern 参数。";
+  if (!pattern) return "[glob] 缺少 pattern 参数。submit 后 form 已 executed, 请 close(form_id) 后重新 open(command=\"glob\", args={ pattern: \"<glob-string>\", cwd: \"<dir>\" }) 一次性给齐参数; 下次直接在 open 时附 args 可避免再次进入失败回路。";
   // 默认 cwd = session 的 baseDir (thread.persistence.baseDir)，不到则回退 process.cwd()
   const rawCwd = typeof ctx.args.cwd === "string" ? ctx.args.cwd : "";
   const cwd = rawCwd ? resolveSessionPath(thread, rawCwd) : resolveSessionPath(thread, ".");

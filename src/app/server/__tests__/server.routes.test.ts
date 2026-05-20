@@ -317,7 +317,7 @@ describe("app server routes", () => {
     const update = await app.handle(
       new Request("http://localhost/api/stones/researcher/knowledge/files", {
         method: "PUT",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "x-overwrite-confirm": "true" },
         body: JSON.stringify({ path: "notes/idea.md", content: "# Updated" }),
       })
     );

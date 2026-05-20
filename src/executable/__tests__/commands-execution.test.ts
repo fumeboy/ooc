@@ -96,5 +96,29 @@ describe("command execution side effects", () => {
       args: { target: "", title: "x" },
     });
     expect(result).toContain("缺少 target");
+    expect(result).toContain("close");
+    expect(result).toContain("open");
+  });
+
+  it("talk rejects empty title (with close+reopen hint)", async () => {
+    const thread = makeThread({ id: "thread-talk-no-title" });
+    const result = await execRootCommand("talk", {
+      thread,
+      args: { target: "user", title: "" },
+    });
+    expect(result).toContain("缺少 title");
+    expect(result).toContain("close");
+    expect(result).toContain("open");
+  });
+
+  it("todo rejects empty content (with close+reopen hint)", async () => {
+    const thread = makeThread({ id: "thread-todo-empty" });
+    const result = await execRootCommand("todo", {
+      thread,
+      args: { content: "" },
+    });
+    expect(result).toContain("缺少 content");
+    expect(result).toContain("close");
+    expect(result).toContain("open");
   });
 });

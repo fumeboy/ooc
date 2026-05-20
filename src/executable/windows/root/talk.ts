@@ -82,9 +82,9 @@ export async function executeTalkCommand(
   const thread = ctx.thread;
   if (!thread) return "[talk] 缺少 thread context。";
   const target = typeof ctx.args.target === "string" ? ctx.args.target.trim() : "";
-  if (!target) return "[talk] 缺少 target 参数。";
+  if (!target) return "[talk] 缺少 target 参数。submit 后 form 已 executed, 请 close(form_id) 后重新 open(command=\"talk\", args={ target: \"<objectId>\", title: \"<会话主题>\" }) 一次性给齐; 下次 open 时直接附 args 可避免失败回路。";
   const title = typeof ctx.args.title === "string" ? deriveTitle(ctx.args.title) : "";
-  if (!title) return "[talk] 缺少 title 参数。";
+  if (!title) return "[talk] 缺少 title 参数。submit 后 form 已 executed, 请 close(form_id) 后重新 open(command=\"talk\", args={ target: \"<objectId>\", title: \"<会话主题>\" }) 一次性给齐; 下次 open 时直接附 args 可避免失败回路。";
 
   // target 校验:对应 stones/{target}/ 必须存在,否则 LLM 容易因 typo 等错误
   // 与"幻 peer"对话,且 relation 派生(meta/object/collaborable/relation)会全部

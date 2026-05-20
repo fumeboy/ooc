@@ -366,6 +366,43 @@ export const root: DocTreeNode = {
                 "human-in-the-loop": "危险动作仍由人类批准的协议",
             },
         },
+        test_session_hygiene: {
+            title: "测试 session 卫生 - AgentOfVisible / AgentOfExperience 自验证产物隔离",
+            content: `
+            **背景**: interim_runtime 形态下, sub agent 跑回归常需要真发 \`POST /api/sessions\` 验证修复
+            (例: AgentOfVisible 改 A6 后真创建一个 session 看 title 派生是否正确)。这些 session 会
+            **落盘到 .ooc-world-test/flows/**, 污染 sidebar 列表, 影响后续体验官 UI 评审的真实性
+            (体验官会被迫看到一堆 \`a8-verify-...\`, 干扰对真实使用场景的判断)。
+
+            **规约 (2026-05-20, 派单时强制要求 sub agent 遵守)**:
+
+            1. **sessionId 前缀约定**: 任何 sub agent 在自验证中创建的 session, sessionId 必须以
+               \`_test_<agent>_<timestamp>\` 形式 (例: \`_test_visible_1779218044014\`)。
+               下划线前缀让前端 sidebar 渲染时**显式跳过**这类 session。
+            2. **前端过滤规则 (AgentOfVisible 实现)**: sidebar SessionList 默认隐藏 sessionId 以 \`_test_\` 起首的 session;
+               提供一个 toggle 让人类按需展开 (默认折叠)。
+            3. **回归后清理**: sub agent 完成自验证后应清理自己创建的 \`_test_*\` session;若没清, 由
+               Supervisor 或人类在终审 comment 中点名催收, 或在下轮启动前用脚本批量 rm。
+            4. **不依赖前端隐藏作为唯一防线**: 后端不强制拒绝普通 sessionId 命名以防破坏现有 user 创建;
+               前端隐藏只是体验层卫生, 测试产物自身应主动清理。
+
+            **派单模板加一条** (Supervisor 写给 sub agent 的 prompt 应包含):
+            > 自验证产生的 session 一律用 sessionId 前缀 \`_test_<agent>_<timestamp>\`, 验证完毕后 rm 自己创建的目录。
+
+            **跟历史污染的关系**: 2026-05-20 之前的 sub agent (A2-A8 / A1+B5 那几轮) 没有此约束,
+            在 .ooc-world-test/flows/ 落了一批 \`web-*\` / \`regress-*\` / \`a8-verify-*\` 等污染 session,
+            Supervisor 已在 Task #23 中手动清理。本规约从落地之后的派单开始强制执行。
+            `,
+            named: {
+                "_test_<agent>_<ts> 前缀": "sub agent 自验证 session 的约定 sessionId 形态",
+                "sidebar 隐藏 _test_": "前端体验层卫生, AgentOfVisible 落地",
+                "回归后清理": "sub agent 自己创建的 _test_* session 应主动 rm",
+            },
+            todo: [
+                "AgentOfVisible 落地: SessionList 默认隐藏 _test_ 前缀 session, 加 toggle 展开;尚未实现",
+                "Supervisor 派单模板补这条; 派给体验官 UI 评审 / sub agent 自验证时显式加入约定",
+            ],
+        },
     },
     warnings: [
         "AgentOfX 各 stone (stones/agent_of_thinkable/ 等) 当前仓库内并未创建; 这是预期的——短期通过 Claude Code sub agent 暂行,不需要 stone 目录 (详见 patches.interim_runtime)。stones 的真正创建发生在该 Agent 从 Claude Code 形态迁移到 OOC 内 Object 形态的那一刻。",

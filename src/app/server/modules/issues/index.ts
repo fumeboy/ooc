@@ -1,5 +1,7 @@
 import { Elysia } from "elysia";
 import { issuesService } from "@src/persistable";
+import { stat } from "node:fs/promises";
+import { join } from "node:path";
 import type { ServerConfig } from "../../bootstrap/config";
 import { AppServerError } from "../../bootstrap/errors";
 import {
@@ -8,6 +10,26 @@ import {
   issueIdParams,
   sessionIdParams,
 } from "./model";
+
+/**
+ * Issue #6 Bad #1: session 存在性前置校验。在所有 per-session issue 接口
+ * 之前调用,缺失 session → 404 NOT_FOUND;避免 listIssues 对不存在 session
+ * 静默返回空数组,无法和"session 存在但没 issue"区分。
+ */
+async function ensureSessionExists(baseDir: string, sessionId: string): Promise<void> {
+  const sDir = join(baseDir, "flows", sessionId);
+  try {
+    const stats = await stat(sDir);
+    if (!stats.isDirectory()) {
+      throw new AppServerError("NOT_FOUND", `session '${sessionId}' is not a directory`, { sessionId });
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new AppServerError("NOT_FOUND", `session '${sessionId}' does not exist`, { sessionId });
+    }
+    throw error;
+  }
+}
 
 /**
  * Issues HTTP module — Tier A 暴露面。
@@ -24,6 +46,7 @@ export function issuesModule(config: Pick<ServerConfig, "baseDir">) {
     .post(
       "/flows/:sessionId/issues",
       async ({ params, body }) => {
+        await ensureSessionExists(baseDir, params.sessionId);
         try {
           const issue = await issuesService.createIssue({
             baseDir,
@@ -44,6 +67,7 @@ export function issuesModule(config: Pick<ServerConfig, "baseDir">) {
     .get(
       "/flows/:sessionId/issues",
       async ({ params }) => {
+        await ensureSessionExists(baseDir, params.sessionId);
         const issues = await issuesService.listIssues({ baseDir, sessionId: params.sessionId });
         return { issues };
       },
@@ -54,6 +78,7 @@ export function issuesModule(config: Pick<ServerConfig, "baseDir">) {
     .get(
       "/flows/:sessionId/issues/:id",
       async ({ params }) => {
+        await ensureSessionExists(baseDir, params.sessionId);
         const issue = await issuesService.getIssue({
           baseDir,
           sessionId: params.sessionId,
@@ -69,6 +94,7 @@ export function issuesModule(config: Pick<ServerConfig, "baseDir">) {
     .post(
       "/flows/:sessionId/issues/:id/comments",
       async ({ params, body }) => {
+        await ensureSessionExists(baseDir, params.sessionId);
         try {
           const result = await issuesService.appendComment({
             baseDir,
@@ -92,6 +118,7 @@ export function issuesModule(config: Pick<ServerConfig, "baseDir">) {
     .post(
       "/flows/:sessionId/issues/:id/close",
       async ({ params }) => {
+        await ensureSessionExists(baseDir, params.sessionId);
         try {
           const issue = await issuesService.closeIssue({
             baseDir,

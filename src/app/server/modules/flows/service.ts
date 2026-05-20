@@ -142,6 +142,44 @@ export function createFlowsService(deps: {
   pauseStore: PauseStore;
   jobManager: ReturnType<typeof createJobManager>;
 }) {
+  /**
+   * Issue #6 Bad #1: session 存在性前置校验。所有 per-session 读 / 写接口
+   * (getThread/listThreads/getFlowObject/pause/resume/continue) 之前调用,
+   * 不存在 → 抛 NOT_FOUND。listFlows 自身不调本函数(父目录 flows/ 不存在
+   * 时返回 [] 是合理的)。
+   */
+  async function ensureSessionExists(sessionId: string): Promise<void> {
+    const sDir = join(deps.baseDir, "flows", sessionId);
+    try {
+      const stats = await stat(sDir);
+      if (!stats.isDirectory()) {
+        throw new AppServerError("NOT_FOUND", `session '${sessionId}' is not a directory`, { sessionId });
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new AppServerError("NOT_FOUND", `session '${sessionId}' does not exist`, { sessionId });
+      }
+      throw error;
+    }
+  }
+
+  /** Issue #6 Bad #1: flow object 存在性前置校验。 */
+  async function ensureFlowObjectExists(sessionId: string, objectId: string): Promise<void> {
+    await ensureSessionExists(sessionId);
+    const oDir = join(deps.baseDir, "flows", sessionId, "objects", objectId);
+    try {
+      const stats = await stat(oDir);
+      if (!stats.isDirectory()) {
+        throw new AppServerError("NOT_FOUND", `flow object '${sessionId}/${objectId}' is not a directory`, { sessionId, objectId });
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new AppServerError("NOT_FOUND", `flow object '${sessionId}/${objectId}' does not exist`, { sessionId, objectId });
+      }
+      throw error;
+    }
+  }
+
   return {
     async listFlows() {
       const flowsDir = join(deps.baseDir, "flows");
@@ -291,6 +329,7 @@ export function createFlowsService(deps: {
       initialMessage?: string;
     }) {
       assertNotSuperSessionId(sessionId);
+      await ensureSessionExists(sessionId);
       const ref = await createFlowObject({
         baseDir: deps.baseDir,
         sessionId,
@@ -331,6 +370,7 @@ export function createFlowsService(deps: {
       };
     },
     async getFlowObject({ sessionId, objectId }: { sessionId: string; objectId: string }) {
+      await ensureFlowObjectExists(sessionId, objectId);
       return {
         sessionId,
         objectId,
@@ -345,6 +385,7 @@ export function createFlowsService(deps: {
      * 仍按 thread.json 里的 childThreadIds 嵌套，由前端按需展开）。
      */
     async listThreads({ sessionId }: { sessionId: string }) {
+      await ensureSessionExists(sessionId);
       const objectsDir = join(deps.baseDir, "flows", sessionId, "objects");
       let objectEntries: { name: string; isDirectory(): boolean }[];
       try {
@@ -376,8 +417,15 @@ export function createFlowsService(deps: {
      * 不会改写磁盘上的 thread.json —— 合成只发生在响应体里。
      */
     async getThread({ sessionId, objectId, threadId }: { sessionId: string; objectId: string; threadId: string }) {
+      await ensureFlowObjectExists(sessionId, objectId);
       const thread = await readThread({ baseDir: deps.baseDir, sessionId, objectId }, threadId);
-      if (!thread) return undefined;
+      if (!thread) {
+        throw new AppServerError(
+          "NOT_FOUND",
+          `thread '${threadId}' not found on object '${sessionId}/${objectId}'`,
+          { sessionId, objectId, threadId },
+        );
+      }
       const enriched = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
       const payload = {
         ...thread,
@@ -410,6 +458,7 @@ export function createFlowsService(deps: {
       text: string;
       targetWindowId?: string;
     }) {
+      await ensureSessionExists(sessionId);
       const userThread = await readThread(
         { baseDir: deps.baseDir, sessionId, objectId: USER_OBJECT_ID },
         "root",
@@ -453,11 +502,13 @@ export function createFlowsService(deps: {
         jobId: job.jobId,
       };
     },
-    pauseSession({ sessionId }: { sessionId: string }) {
+    async pauseSession({ sessionId }: { sessionId: string }) {
+      await ensureSessionExists(sessionId);
       deps.pauseStore.pauseSession(sessionId);
       return { sessionId, paused: true };
     },
     async resumeSession({ sessionId }: { sessionId: string }) {
+      await ensureSessionExists(sessionId);
       deps.pauseStore.resumeSession(sessionId);
       // 扫 paused threads 并各入队一个 resume-thread job
       const paused = await scanPausedThreads(deps.baseDir, sessionId);
@@ -491,6 +542,7 @@ export function createFlowsService(deps: {
       method: string;
       args?: Record<string, unknown>;
     }) {
+      await ensureFlowObjectExists(sessionId, objectId);
       void sessionId;
       let methods;
       try {

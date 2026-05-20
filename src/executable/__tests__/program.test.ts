@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, test } from "bun:test";
 import { runOneExec } from "../windows/program-runtime";
 import { executeProgramCommand } from "../windows/root/program";
+import { executeProgramWindowExec } from "../windows/program";
+import type { ProgramWindow } from "../windows/types";
 import { createStoneObject, writeServerSource } from "../../persistable";
 import { clearServerLoaderCache } from "../server/loader";
 import { makeThread } from "../../__tests__/make-thread";
@@ -197,5 +199,29 @@ describe("executeProgramCommand creates a program_window with first exec", () =>
     const result = await executeProgramCommand({ thread, args: {} });
     expect(typeof result).toBe("string");
     expect(thread.contextWindows.find((w) => w.type === "program")).toBeUndefined();
+  });
+});
+
+describe("executeProgramWindowExec missing-args error path", () => {
+  it("returns close+reopen-hint error when both language+code and function are missing", async () => {
+    const thread = makeThread({ id: "t_pw_exec_no_args" });
+    const programWindow: ProgramWindow = {
+      id: "program_test",
+      type: "program",
+      parentWindowId: "root",
+      title: "test",
+      status: "open",
+      createdAt: Date.now(),
+      history: [],
+    };
+    const result = await executeProgramWindowExec({
+      thread,
+      args: {},
+      parentWindow: programWindow,
+    });
+    expect(typeof result).toBe("string");
+    expect(result as string).toContain("缺少执行参数");
+    expect(result as string).toContain("close");
+    expect(result as string).toContain("open");
   });
 });

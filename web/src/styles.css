@@ -35,6 +35,9 @@ button { cursor: pointer; }
 .app-layout-fixed { height: calc(100vh - 16px); overflow: hidden; }
 .panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 0 0 1px rgba(255,255,255,.42), 0 8px 24px rgba(71, 78, 62, .05); overflow: hidden; backdrop-filter: blur(12px); min-height: 0; }
 .sidebar, .main-panel, .right-panel { display: flex; flex-direction: column; min-height: 0; height: 100%;}
+.right-column { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.right-column > .right-panel { flex: 1; min-height: 0; }
+.right-breadcrumb-spacer { flex: 0 0 auto; }
 .sidebar-body, .main-body, .right-body { overflow: auto; min-height: 0; flex: 1; }
 .section { padding: 10px; border-top: 1px solid rgba(224, 227, 220, .72); }
 .section:first-child { border-top: 0; }
@@ -88,6 +91,9 @@ button { cursor: pointer; }
 .session-list-item-row { display: flex; align-items: center; gap: 8px; }
 .session-list-item-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .session-list-item-meta { margin-top: 2px; font-size: 11px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-list-item-test { opacity: .68; font-style: italic; }
+.session-list-item-test .session-list-item-label, .session-list-item-test .session-list-item-meta { color: var(--muted-foreground); }
+.session-list-item-tag { font-style: normal; font-size: 9px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; padding: 1px 5px; border-radius: 999px; background: #e3e7dd; color: #80867b; border: 1px solid var(--border); flex-shrink: 0; }
 .muted { color: var(--muted-foreground); }
 .small { font-size: 11px; }
 .header { padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 10px; align-items: center; }
@@ -273,6 +279,9 @@ button { cursor: pointer; }
 .tui-tool-status.is-success { border-color: rgba(59, 184, 132, .24); color: #237954; background: rgba(225, 247, 237, .95); }
 .tui-tool-status.is-fail { border-color: rgba(198, 106, 10, .24); color: #9a4d10; background: rgba(255, 240, 228, .95); }
 .tui-tool-status.is-pending { border-color: rgba(120, 128, 120, .2); color: #6f766d; background: rgba(243, 244, 241, .95); }
+/* Issue #3 A5: failed tool card 高亮 + inline error 提示 */
+.tui-tool-card.is-failed { border-color: rgba(198, 106, 10, .28); box-shadow: 0 0 0 1px rgba(255, 240, 228, .55) inset; }
+.tui-tool-fail-inline { min-width: 0; font-size: 11px; line-height: 1.45; color: #9a4d10; background: rgba(255, 240, 228, .6); border-radius: 6px; padding: 4px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; }
 .tui-tool-body { display: grid; gap: 8px; padding: 8px 10px 9px; }
 .tui-tool-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 7px 10px; border-top: 1px solid rgba(224, 227, 220, .64); background: rgba(250, 250, 248, .42); }
 .tui-tool-section { display: grid; gap: 6px; padding: 10px 12px; }
@@ -323,6 +332,9 @@ button { cursor: pointer; }
 .ui-select-icon { position: absolute; right: 11px; top: 50%; transform: translateY(-50%); color: var(--muted-foreground); pointer-events: none; display: inline-flex; align-items: center; justify-content: center; }
 .ui-select:disabled + .ui-select-icon { opacity: .5; }
 .welcome-form-grid { display: grid; gap: 12px; }
+/* Issue #3 A8: SessionCreator 用 fieldset 包裹以便 disabled 时 freeze 整个表单; 抹掉浏览器默认边框/内边距 */
+.welcome-form-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.welcome-form-fieldset[disabled] { opacity: .72; cursor: progress; }
 .welcome-form-field { display: grid; gap: 6px; }
 .welcome-form-notice { border: 1px solid #f0d8d2; background: #fff7f5; color: #9a463b; border-radius: 10px; padding: 10px 12px; font-size: 12px; }
 .welcome-form-actions { padding-top: 4px; }
@@ -355,6 +367,11 @@ button { cursor: pointer; }
 .calendar-title { display: flex; justify-content: space-between; color: #8d9189; font-size: 11px; margin-bottom: 8px; }
 .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .calendar-grid span { height: 13px; border-radius: 2px; background: #e8ebe4; }
+.calendar-grid span.empty { background: transparent; }
+.calendar-grid span.lvl1 { background: #dff5ea; }
+.calendar-grid span.lvl2 { background: #78e3bd; }
+.calendar-grid span.lvl3 { background: #238d61; }
+.calendar-grid span.today { outline: 1.5px solid #2f6f4d; outline-offset: 1px; }
 .calendar-grid span.hot { background: #78e3bd; }
 .calendar-grid span.selected { background: #dff5ea; outline: 1px solid #42a878; }
 .lower-form { display: none; }
@@ -427,3 +444,70 @@ button { cursor: pointer; }
 .assistant-head-meta .muted.small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thread-switcher { flex: 0 0 auto; padding: 3px 6px; border: 1px solid rgba(224, 227, 220, .8); border-radius: 6px; background: rgba(255, 255, 255, .85); color: var(--foreground); font-size: 11px; max-width: 220px; }
 .thread-switcher:focus { outline: 1px solid rgba(120, 175, 200, .8); outline-offset: -1px; }
+
+/* IssueDetailView (issue-4 B1+B2) */
+.issue-detail { padding: 24px 28px 32px; max-width: 920px; }
+.issue-detail-header { padding-bottom: 16px; border-bottom: 1px solid rgba(224, 227, 220, .72); margin-bottom: 20px; }
+.issue-detail-title { font-size: 22px; font-weight: 600; line-height: 1.3; margin: 0 0 12px; color: var(--foreground); }
+.issue-detail-id { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 500; color: var(--muted-foreground); }
+.issue-detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
+.issue-status-badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; text-transform: lowercase; border: 1px solid; line-height: 1; }
+.issue-status-open { background: #d8f8e8; color: #1f6f4a; border-color: #b8efd5; }
+.issue-status-closed { background: #eef0ea; color: #5e645a; border-color: #d6dbd0; }
+.issue-author-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: rgba(246, 247, 244, .9); border: 1px solid rgba(224, 227, 220, .92); color: #525851; font-size: 11px; }
+.issue-author-dot { color: #8b9485; font-size: 8px; line-height: 1; }
+.issue-time-chip { color: var(--muted-foreground); font-size: 11px; }
+.issue-detail-description { margin-bottom: 24px; padding: 16px 18px; background: rgba(252, 252, 250, .8); border: 1px solid rgba(224, 227, 220, .65); border-radius: 10px; }
+.issue-detail-comments-divider { display: flex; align-items: center; gap: 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted-foreground); font-weight: 700; margin: 20px 0 14px; padding-top: 14px; border-top: 1px solid rgba(224, 227, 220, .72); }
+.issue-detail-comments { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.issue-detail-comments-empty { font-size: 12px; color: var(--muted-foreground); padding: 14px 0; }
+.issue-comment-card { background: rgba(250, 251, 248, .85); border: 1px solid rgba(224, 227, 220, .85); border-radius: 10px; padding: 14px 18px 16px; }
+.issue-comment-head { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted-foreground); margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed rgba(224, 227, 220, .65); }
+.issue-comment-index { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #8b9485; }
+.issue-comment-time { margin-left: auto; }
+.issue-comment-body { font-size: 13px; }
+
+/* ===== Stone fallback (没有自定义 client/index.tsx 时的"Object 名片") ===== */
+.stone-fallback { padding: 20px 24px 28px; display: flex; flex-direction: column; gap: 18px; max-width: 1100px; margin: 0 auto; width: 100%; }
+.stone-fallback-header { display: flex; flex-direction: column; gap: 6px; padding-bottom: 14px; border-bottom: 1px solid rgba(224, 227, 220, .72); }
+.stone-fallback-title { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 650; color: var(--foreground); }
+.stone-fallback-id { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--muted-foreground); }
+.stone-fallback-tagline { margin: 4px 0 0; }
+.stone-fallback-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 22px; align-items: start; }
+@media (max-width: 900px) { .stone-fallback-grid { grid-template-columns: 1fr; } }
+.stone-fallback-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.stone-fallback-aside { display: flex; flex-direction: column; gap: 12px; }
+.stone-fallback-section { border: 1px solid var(--border); border-radius: 10px; background: rgba(252, 252, 250, .7); overflow: hidden; }
+.stone-fallback-section[open] .stone-fallback-section-summary { border-bottom: 1px solid rgba(224, 227, 220, .65); }
+.stone-fallback-section-summary { padding: 10px 14px; display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; list-style: none; }
+.stone-fallback-section-summary::-webkit-details-marker { display: none; }
+.stone-fallback-section-summary::before { content: '›'; display: inline-block; transition: transform .15s ease; color: var(--muted-foreground); font-size: 14px; }
+.stone-fallback-section[open] .stone-fallback-section-summary::before { transform: rotate(90deg); }
+.stone-fallback-section-label { font-size: 12px; font-weight: 650; letter-spacing: .04em; color: var(--foreground); }
+.stone-fallback-section-source { margin-left: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.stone-fallback-section-body { padding: 14px 16px 18px; min-width: 0; }
+.stone-fallback-knowledge-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.stone-fallback-knowledge-item { display: flex; align-items: baseline; gap: 10px; padding: 6px 8px; border-radius: 7px; }
+.stone-fallback-knowledge-item:hover { background: rgba(245, 246, 242, .8); }
+.stone-fallback-knowledge-name { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--foreground); text-decoration: none; }
+.stone-fallback-knowledge-name:hover { text-decoration: underline; }
+.stone-fallback-entries { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; background: rgba(252, 252, 250, .7); }
+.stone-fallback-entries-title { margin: 0 0 4px; font-size: 11px; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; color: var(--muted-foreground); }
+.stone-fallback-entry { display: flex; flex-direction: column; gap: 2px; padding: 9px 11px; border: 1px solid rgba(224, 227, 220, .72); border-radius: 8px; background: rgba(255, 255, 255, .65); text-decoration: none; color: var(--foreground); transition: background .15s ease, border-color .15s ease; }
+a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color: rgba(168, 172, 161, .8); }
+.stone-fallback-entry-static { cursor: default; }
+.stone-fallback-entry-label { font-size: 12px; font-weight: 600; }
+.stone-fallback-recent-list { list-style: none; padding: 4px 0 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.stone-fallback-recent-link { font-size: 12px; color: var(--foreground); text-decoration: none; }
+.stone-fallback-recent-link:hover { text-decoration: underline; }
+.stone-fallback-error { margin-top: 10px; padding: 10px 14px; border: 1px dashed rgba(224, 168, 168, .8); border-radius: 8px; background: rgba(255, 247, 245, .7); }
+
+/* Issue #5 Bad #3 fix: breadcrumb 段结构化后, 容器需要可截断、可滚出, 同时给可点击段
+   一个柔和的下划线 + hover 高亮, 视觉上提示 affordance. */
+.breadcrumb-segments { display: inline-flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+.breadcrumb-segment-wrap { display: inline-flex; align-items: center; min-width: 0; }
+.breadcrumb-segment { color: inherit; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.breadcrumb-segment.is-link { color: #4561e4; text-decoration: none; }
+.breadcrumb-segment.is-link:hover { text-decoration: underline; }
+.breadcrumb-sep { color: var(--muted-foreground); padding: 0 2px; flex: 0 0 auto; }
+.stone-fallback-error-pre { margin: 8px 0 0; font-size: 11px; white-space: pre-wrap; color: #9a463b; max-height: 240px; overflow: auto; }

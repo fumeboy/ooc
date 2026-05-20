@@ -95,7 +95,7 @@ export async function executeProgramWindowExec(
     args: ctx.args.args as Record<string, unknown> | undefined,
   };
   if (!args.function && !(args.language && args.code)) {
-    return "[program_window.exec] 缺少执行参数。";
+    return "[program_window.exec] 缺少执行参数。submit 后 form 已 executed, 请 close(form_id) 后重新 open(parent_window_id=\"<program_window_id>\", command=\"exec\", args={ language: \"shell\"|\"ts\"|\"js\", code: \"...\" }) 或 open(..., args={ function: \"<name>\", args: {...} }) 一次性给齐参数; 下次直接在 open 时附 args 可避免再次进入失败回路。";
   }
   const record = await runOneExec(thread, args);
 

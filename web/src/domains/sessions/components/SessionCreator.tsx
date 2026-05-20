@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Stone } from "../../stones";
+import { useDisplayNames } from "../../objects";
 import { defaultObjectId, defaultSessionId } from "../policy";
 import { Button } from "../../../shared/ui/Button";
 import { Input } from "../../../shared/ui/input";
@@ -30,9 +31,13 @@ export function SessionCreator({
   }, [targetObjectId, stones]);
 
   const canSubmit = !busy && sessionId.trim() && targetObjectId.trim() && initialMessage.trim();
+  // Issue #3 A8 fix: 创建期间整个表单 freeze, 避免用户重复编辑 / 重复提交。
+  const inputsDisabled = busy;
+  // displayName 派生(spec):option label 显示语义化名,value 仍是 objectId
+  const names = useDisplayNames(stones.map((s) => s.objectId));
 
   return (
-    <div className="welcome-form-grid">
+    <fieldset className="welcome-form-grid welcome-form-fieldset" disabled={inputsDisabled}>
       {stones.length === 0 && (
         <div className="welcome-form-notice">需要先创建至少一个 stone，才能选择对话对象。</div>
       )}
@@ -44,6 +49,7 @@ export function SessionCreator({
           value={sessionId}
           onChange={(event) => setSessionId(event.target.value)}
           placeholder="session id"
+          disabled={inputsDisabled}
         />
       </div>
 
@@ -53,10 +59,10 @@ export function SessionCreator({
           id="target-object-id"
           value={targetObjectId}
           onChange={(event) => setTargetObjectId(event.target.value)}
-          disabled={stones.length === 0}
+          disabled={stones.length === 0 || inputsDisabled}
         >
           {stones.map((stone) => (
-            <option key={stone.objectId} value={stone.objectId}>{stone.objectId}</option>
+            <option key={stone.objectId} value={stone.objectId} title={stone.objectId}>{names[stone.objectId] ?? stone.objectId}</option>
           ))}
         </Select>
       </div>
@@ -68,6 +74,7 @@ export function SessionCreator({
           value={initialMessage}
           onChange={(event) => setInitialMessage(event.target.value)}
           placeholder="user 发给对方的第一条消息（必填）"
+          disabled={inputsDisabled}
         />
       </div>
 
@@ -95,6 +102,6 @@ export function SessionCreator({
           {busy ? "Creating…" : "Create session"}
         </Button>
       </div>
-    </div>
+    </fieldset>
   );
 }

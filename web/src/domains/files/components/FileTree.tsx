@@ -27,6 +27,7 @@ function TreeNode({ node, depth, selectedPath, onSelect, onCreate }: { node: Nod
       <button
         className={`tree-button ${selected ? "active" : ""}`}
         style={{ paddingLeft: depth * 14 + 6 }}
+        title={node.name}
         onClick={() => {
           if (node.type === "directory") setExpanded(!expanded);
           onSelect(node);
@@ -34,7 +35,7 @@ function TreeNode({ node, depth, selectedPath, onSelect, onCreate }: { node: Nod
       >
         <span className="twisty">{node.type === "directory" ? (expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />) : null}</span>
         {icon(node, expanded)}
-        <span className="tree-label">{node.name}</span>
+        <span className="tree-label" title={node.name}>{node.name}</span>
         {node.size !== undefined && <span className="muted small" style={{ marginLeft: "auto" }}>{node.size}B</span>}
       </button>
       {onCreate && canCreateIn(node) && <button className="tree-inline-action" title="Create knowledge file or folder" onClick={() => onCreate(node)} style={{ left: depth * 14 + 2 }}><Plus size={11} /></button>}

@@ -2,22 +2,25 @@
  * Frontend e2e — Object Client Renderer
  *
  * 覆盖 plan §7 完成判据 1-6（除 2/3/4 真 LLM 路径外）：
- * - FC1: 没写 client → 显示 "信息待产出..."
+ * - FC1: 没写 client (stone scope) → StoneFallback 名片 (Identity / About / Entry points)
  * - FC2: 写了正常的 stone client → 渲染按钮，callMethod 命中 ui_methods 返回值显示
  * - FC3: 写了会抛错的 client → 红色错误块带堆栈，且不发任何 talk 请求
- * - FC4: 写了语法错误的 client → 红色加载错误块
+ * - FC4: 写了语法错误的 client → 红色加载错误块 (stone scope 改为 StoneFallback + error 折叠)
  * - FC5: 写了 flow page → 渲染并能拿到 sessionId
  */
 
 import { collectConsoleErrors, expect, test } from "./_fixture-client";
 
 test.describe("Object Client Renderer e2e", () => {
-  test("FC1 没写 client → 信息待产出...", async ({ page, world }) => {
+  test("FC1 没写 client (stone) → StoneFallback 名片", async ({ page, world }) => {
     world.createStone("alan");
     await world.startStack();
 
     await page.goto(world.previewUrl({ scope: "stone", objectId: "alan" }));
-    await expect(page.getByText("信息待产出...")).toBeVisible({ timeout: 15_000 });
+    // StoneFallback 替代了旧的 "信息待产出..." 死区 — 用 Entry points 标题断言
+    await expect(page.getByText("Entry points / 入口")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("entry-view-source")).toBeVisible();
+    await expect(page.getByTestId("entry-start-thread")).toBeVisible();
   });
 
   test("FC2 正常 stone client + callMethod → ping/pong 回显", async ({ page, world }) => {

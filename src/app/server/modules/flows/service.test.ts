@@ -201,7 +201,7 @@ describe("flows service", () => {
 
       await service.createSession({ sessionId: "s-pause" });
 
-      expect(service.pauseSession({ sessionId: "s-pause" })).toEqual({
+      await expect(service.pauseSession({ sessionId: "s-pause" })).resolves.toEqual({
         sessionId: "s-pause",
         paused: true,
       });

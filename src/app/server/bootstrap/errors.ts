@@ -10,6 +10,8 @@ export class AppServerError extends Error {
       | "THREAD_NOT_PAUSED"
       | "JOB_ALREADY_RUNNING"
       | "PAUSE_STILL_ENABLED"
+      | "OVERWRITE_REQUIRES_CONFIRM"
+      | "VALIDATION"
       | "INTERNAL_ERROR",
     message: string,
     public readonly details?: Record<string, unknown>

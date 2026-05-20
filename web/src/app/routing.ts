@@ -18,6 +18,7 @@ export type RouteState =
   | { kind: "stoneClient"; objectId: string }
   | { kind: "flowPage"; sessionId: string; objectId: string; page: string }
   | { kind: "session"; sessionId: string }
+  | { kind: "issueDetail"; sessionId: string; issueId: number }
   | { kind: "thread"; sessionId: string; objectId: string; threadId: string };
 
 /**
@@ -42,6 +43,8 @@ export function toPath(state: RouteState): string {
       return `/flows/${encodeURIComponent(state.sessionId)}/objects/${encodeURIComponent(state.objectId)}/pages/${encodeURIComponent(state.page)}`;
     case "session":
       return `/flows/${encodeURIComponent(state.sessionId)}`;
+    case "issueDetail":
+      return `/flows/${encodeURIComponent(state.sessionId)}/issues/${state.issueId}`;
     case "thread":
       return `/flows/${encodeURIComponent(state.sessionId)}/threads/${encodeURIComponent(state.objectId)}/${encodeURIComponent(state.threadId)}`;
   }
@@ -72,12 +75,13 @@ export function useRouteState(): RouteState {
     sessionId?: string;
     threadId?: string;
     page?: string;
+    id?: string;
   }>();
   // 必须 memoize：useEffect deps 比较 RouteState 对象 ref；不 memo 会触发
   // "Maximum update depth exceeded" 循环。
   return useMemo(
     () => parsePathname(location.pathname, params),
-    [location.pathname, params.objectId, params.sessionId, params.threadId, params.page],
+    [location.pathname, params.objectId, params.sessionId, params.threadId, params.page, params.id],
   );
 }
 
@@ -93,6 +97,7 @@ export function parsePathname(
     sessionId?: string;
     threadId?: string;
     page?: string;
+    id?: string;
   } = {},
 ): RouteState {
   // 末尾 slash 去掉，方便比较
@@ -120,6 +125,14 @@ export function parsePathname(
     };
   }
 
+  // /flows/:sessionId/issues/:id  (first-class Issue 详情, issue-4 B3)
+  if (params.sessionId && params.id !== undefined && /\/issues\//.test(path)) {
+    const issueId = parseIssueIdToken(params.id);
+    if (issueId !== undefined) {
+      return { kind: "issueDetail", sessionId: params.sessionId, issueId };
+    }
+  }
+
   // /flows/:sessionId
   if (path.startsWith("/flows/") && params.sessionId && !params.objectId) {
     return { kind: "session", sessionId: params.sessionId };
@@ -142,11 +155,53 @@ export function parsePathname(
   // /files/* —— splat
   if (path.startsWith("/files/")) {
     const rel = path.slice("/files/".length);
-    if (rel) return { kind: "file", path: decodeURI(rel) };
+    if (rel) {
+      // issue-4 B3 fallback: 旧链接 `/files/flows/<sid>/issues/issue-N.json` (或
+      // 其它变体) 现在直达 IssueDetailView, 不再撞 file viewer raw JSON。
+      const decoded = decodeURI(rel);
+      const issueHit = matchIssueFilePath(decoded);
+      if (issueHit) {
+        return { kind: "issueDetail", sessionId: issueHit.sessionId, issueId: issueHit.issueId };
+      }
+      return { kind: "file", path: decoded };
+    }
+  }
+
+  // issue-4 B3 fallback: 未走 /files/ 前缀的"裸 file path"形式
+  // `/flows/<sid>/issues/issue-N.json` 也归一到 detail (react-router 不会有
+  // 命名 param `id` 命中, 因为路由表里 `:id` 段不允许带 `.json`)。
+  {
+    const issueHit = matchIssueFilePath(path.startsWith("/") ? path.slice(1) : path);
+    if (issueHit) {
+      return { kind: "issueDetail", sessionId: issueHit.sessionId, issueId: issueHit.issueId };
+    }
   }
 
   // 兜底
   return { kind: "welcome" };
+}
+
+/**
+ * 解析 issue id token: `4` / `issue-4` / `issue-4.json` 都接受, 取数字部分。
+ * 失败返回 undefined。
+ */
+function parseIssueIdToken(token: string): number | undefined {
+  const m = /^(?:issue-)?(\d+)(?:\.json)?$/.exec(token);
+  if (!m) return undefined;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * 匹配 world 相对路径 `flows/<sid>/issues/issue-N.json`,
+ * 返回 { sessionId, issueId }。用于把旧的 file-viewer 链接归一到 IssueDetailView。
+ */
+function matchIssueFilePath(rel: string): { sessionId: string; issueId: number } | undefined {
+  const m = /^flows\/([^/]+)\/issues\/issue-(\d+)\.json$/.exec(rel);
+  if (!m) return undefined;
+  const issueId = Number(m[2]);
+  if (!Number.isFinite(issueId)) return undefined;
+  return { sessionId: m[1]!, issueId };
 }
 
 /** 由 RouteState 派生 scope（Sidebar 用以高亮 tab）。 */
@@ -165,6 +220,7 @@ export function scopeOf(route: RouteState): "stones" | "flows" | "world" {
       return "stones";
     case "flowPage":
     case "session":
+    case "issueDetail":
     case "thread":
       return "flows";
   }

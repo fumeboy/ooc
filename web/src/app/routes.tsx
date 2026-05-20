@@ -22,6 +22,7 @@ export const router = createBrowserRouter([
   { path: "/stones/:objectId", ...shell },
   { path: "/flows", ...shell },
   { path: "/flows/:sessionId", ...shell },
+  { path: "/flows/:sessionId/issues/:id", ...shell },
   { path: "/flows/:sessionId/threads/:objectId/:threadId", ...shell },
   { path: "/flows/:sessionId/objects/:objectId/pages/:page", ...shell },
   { path: "*", element: <RouteErrorBoundary /> },

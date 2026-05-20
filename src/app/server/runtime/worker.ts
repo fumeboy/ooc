@@ -74,30 +74,35 @@ export async function processQueuedJobs(
 
   const jobs = config.jobManager.listJobs().filter((job) => job.status === "queued");
 
-  for (const job of jobs) {
-    config.jobManager.updateJob(job.jobId, {
-      status: "running",
-      startedAt: Date.now(),
-      error: undefined,
-    });
+  // **并行处理本批 queued jobs** (2026-05-20 修): 此前是 for-await 串行, 当 caller
+  // 在 thinkloop 内 await 跨 object talk 派生的 callee 回复时, callee 永远拿不到
+  // schedule (因为 caller job 占着 worker, processing guard 阻止下一 tick 进入)。
+  // 并行化让 caller / callee 同时跑 — LLM 调用是 IO bound, jobManager 用 atomic claim
+  // 保证多 tick 并发进入也不会重复 process 同一 job。
+  await Promise.all(
+    jobs.map(async (job) => {
+      // atomic claim — 如果别的并发 tick 已经 claim 这个 job, 跳过
+      const claimed = config.jobManager.tryClaimQueuedJob(job.jobId);
+      if (!claimed) return;
 
-    try {
-      await runner(job, config);
-      config.jobManager.updateJob(job.jobId, {
-        status: "done",
-        finishedAt: Date.now(),
-      });
-    } catch (error) {
-      config.jobManager.updateJob(job.jobId, {
-        status: "failed",
-        finishedAt: Date.now(),
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+      try {
+        await runner(claimed, config);
+        config.jobManager.updateJob(claimed.jobId, {
+          status: "done",
+          finishedAt: Date.now(),
+        });
+      } catch (error) {
+        config.jobManager.updateJob(claimed.jobId, {
+          status: "failed",
+          finishedAt: Date.now(),
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
 
-    // 同一目的的事后扫描:本 job 中可能产生新的 callee running thread
-    await enqueueOrphanRunningThreads(config, job.sessionId);
-  }
+      // 同一目的的事后扫描:本 job 中可能产生新的 callee running thread
+      await enqueueOrphanRunningThreads(config, claimed.sessionId);
+    })
+  );
 }
 
 /**
@@ -369,12 +374,14 @@ function buildSystemInboxMessage(msgId: string, toThreadId: string, content: str
 }
 
 export function startJobWorker(config: ServerConfig): { stop(): void } {
-  let processing = false;
+  // **每个 tick 独立并行进入** (2026-05-20 修): 此前 `if (processing) return` guard 让
+  // 当一个 tick 内 caller thinkloop 跑很久 (workerMaxTicks 默认 15 * LLM ~30s/tick) 时,
+  // 后续所有 tick 全部 skip, 跨 object talk 派生的 super callee 永远等不到 schedule。
+  // 改为允许多 tick 并发, jobManager.tryClaimQueuedJob 用 atomic claim 保证不重复处理.
   const interval = setInterval(() => {
-    if (processing) return;
-    processing = true;
-    processQueuedJobs(config).finally(() => {
-      processing = false;
+    processQueuedJobs(config).catch((err) => {
+      // 不抛, 不让一次失败拖垮整个 setInterval
+      console.error("[worker] processQueuedJobs error:", err);
     });
   }, config.workerPollMs);
 

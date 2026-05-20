@@ -81,7 +81,7 @@ export async function executeTodoCommand(
   const thread = ctx.thread;
   if (!thread) return "[todo] 缺少 thread context。";
   const content = typeof ctx.args.content === "string" ? ctx.args.content : "";
-  if (!content) return "[todo] 缺少 content 参数。";
+  if (!content) return "[todo] 缺少 content 参数。submit 后 form 已 executed, 请 close(form_id) 后重新 open(command=\"todo\", args={ content: \"<待办内容>\", on_command_path: [\"<cmd>\"] }) 一次性给齐参数; 下次直接在 open 时附 args 可避免再次进入失败回路。";
 
   const onCommandPath = Array.isArray(ctx.args.on_command_path)
     ? (ctx.args.on_command_path as unknown[]).filter((v): v is string => typeof v === "string")

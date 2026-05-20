@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { continueThread, fetchJob, fetchSessionThreads, fetchThread, waitForJob } from "../domains/chat";
 import { fetchFile, fetchTree, type FileTreeNode, type TreeScope } from "../domains/files";
-import { fetchFlows, pauseFlowSession, resumeFlowSession, type FlowSession } from "../domains/flows";
+import { fetchFlows, flowTitle, pauseFlowSession, resumeFlowSession, type FlowSession } from "../domains/flows";
+import { fetchSelfFirstLine } from "../domains/objects";
 import { createSessionWithObject } from "../domains/sessions";
 import { createKnowledgeDirectory, createKnowledgeFile, createStone, fetchStones, updateKnowledgeFile } from "../domains/stones";
 import { messageFromError } from "../transport/errors";
@@ -39,7 +40,12 @@ export function AppShell() {
   // URL 派生导航维度 —— 下游只读这几个变量，不再读 state.scope / state.active* 的导航字段
   const scope: TreeScope = scopeOf(route);
   const activeSessionId = (() => {
-    if (route.kind === "session" || route.kind === "thread" || route.kind === "flowPage") {
+    if (
+      route.kind === "session" ||
+      route.kind === "thread" ||
+      route.kind === "flowPage" ||
+      route.kind === "issueDetail"
+    ) {
       return route.sessionId;
     }
     // 浏览 flows/<sid>/... 下的文件时仍视为"在 session 内",
@@ -64,6 +70,8 @@ export function AppShell() {
 
   const activeFlow = state.flows.find((flow) => flow.sessionId === activeSessionId);
   const isSessionPaused = Boolean(activeFlow?.paused);
+  // Issue #5 Bad #2 fix: 让 MainPanel 能 cheap 判 session 存在性
+  const knownSessionIds = useMemo(() => new Set(state.flows.map((f) => f.sessionId)), [state.flows]);
 
   const patch = useCallback((next: Partial<AppState>) => setState((prev) => ({ ...prev, ...next })), []);
 
@@ -201,6 +209,13 @@ export function AppShell() {
   // FileTree 点击 → navigate
   function handleNode(node: FileTreeNode) {
     if (node.type !== "file") return; // 目录只展开，不导航（plan-003 D2）
+    // issue-4 B3: issues 节点的合成 child (path `flows/<sid>/issues/issue-N.json`)
+    // 命中时直接进 first-class detail 路由, 不再走 file viewer raw JSON。
+    const issueMatch = node.path.match(/^flows\/([^/]+)\/issues\/issue-(\d+)\.json$/);
+    if (issueMatch) {
+      navigate(toPath({ kind: "issueDetail", sessionId: issueMatch[1]!, issueId: Number(issueMatch[2]) }));
+      return;
+    }
     navigate(toPath({ kind: "file", path: node.path }));
   }
 
@@ -233,10 +248,26 @@ export function AppShell() {
   async function handleCreate(input: { sessionId: string; targetObjectId: string; initialMessage: string }) {
     patch({ loading: true, error: undefined });
     try {
-      const created = await createSessionWithObject(input);
+      // Issue #3 A6 fix + displayName spec: 派生友好 title 给后端 (后端 schema 已支持 title 可选),
+      // 避免 sidebar 列表显示 `web-1779214834923` 字面值。规则:
+      //   `<displayName | targetObjectId>: <initialMessage 首行截 40 字>`
+      // displayName 从 target 的 self.md 第一行派生(spec: visible.display_name_from_self_md);
+      // 取不到时 fallback 回 targetObjectId,不阻塞 session 创建。
+      const firstLine = input.initialMessage.split("\n")[0] ?? "";
+      const snippet = firstLine.length > 40 ? firstLine.slice(0, 39) + "…" : firstLine;
+      const targetDisplay = (await fetchSelfFirstLine(input.targetObjectId)) ?? input.targetObjectId;
+      const derivedTitle = snippet ? `${targetDisplay}: ${snippet}` : undefined;
+      const created = await createSessionWithObject({ ...input, title: derivedTitle });
       await waitForJob(created.jobId, fetchJob);
       await refreshBasics(scope);
-      navigate(toPath({ kind: "session", sessionId: input.sessionId }));
+      // A1 fix (issue-3): 落地到 callee thread (有 chat panel) 而非 user.root (Context Tree, 无 chat panel)。
+      // seedSession 返回 targetObjectId / targetThreadId, 数据完备 — 直接用。
+      navigate(toPath({
+        kind: "thread",
+        sessionId: created.sessionId,
+        objectId: created.targetObjectId,
+        threadId: created.targetThreadId,
+      }));
     } catch (error) {
       patch({ error: messageFromError(error), loading: false });
     }
@@ -341,8 +372,8 @@ export function AppShell() {
 
   return (
     <AppLayout
-      sidebar={<Sidebar scope={scope} flows={state.flows} tree={state.tree} activePath={activePath} activeSessionId={activeSessionId} activeSessionTitle={state.flows.find((flow) => flow.sessionId === activeSessionId)?.title ?? activeSessionId} showSessions={showSessions} onToggleSessions={() => setShowSessions((prev) => !prev)} onShowWelcome={handleShowWelcome} onScope={handleScope} onNode={handleNode} onSession={handleSession} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
-      main={<MainPanel isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} selfObjectId={activeObjectId} onUserReply={handleSend} onRefresh={refreshActiveView} threadHeader={activeObjectId ? <ThreadHeader objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} onSelectThread={handleSelectThread} /> : undefined} />}
+      sidebar={<Sidebar scope={scope} flows={state.flows} tree={state.tree} activePath={activePath} activeSessionId={activeSessionId} activeSessionTitle={(() => { const f = state.flows.find((flow) => flow.sessionId === activeSessionId); return f ? flowTitle(f) : activeSessionId; })()} showSessions={showSessions} onToggleSessions={() => setShowSessions((prev) => !prev)} onShowWelcome={handleShowWelcome} onScope={handleScope} onNode={handleNode} onSession={handleSession} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
+      main={<MainPanel route={route} isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} selfObjectId={activeObjectId} onUserReply={handleSend} onRefresh={refreshActiveView} threadHeader={activeObjectId ? <ThreadHeader objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} onSelectThread={handleSelectThread} /> : undefined} knownSessionIds={knownSessionIds} flowsReady={state.flowsHash !== undefined} />}
       right={activeObjectId && activeObjectId !== "user" ? <RightPanel sessionId={activeSessionId} objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} /> : undefined}
     >
       <CreateStoneModal open={stoneModalOpen} draft={stoneDraft} onDraft={setStoneDraft} onClose={() => setStoneModalOpen(false)} onSubmit={handleCreateStone} />
@@ -365,6 +396,9 @@ function derivePathFromRoute(route: RouteState): string | undefined {
       return `stones/${route.objectId}/client/index.tsx`;
     case "flowPage":
       return `flows/${route.sessionId}/objects/${route.objectId}/client/pages/${route.page}.tsx`;
+    case "issueDetail":
+      // sidebar 中 issues 节点的合成 child node.path 即此形式 — 保持 active 高亮一致
+      return `flows/${route.sessionId}/issues/issue-${route.issueId}.json`;
     default:
       return undefined;
   }

@@ -15,7 +15,7 @@ export function Welcome({
         <div className="welcome-hero">
           <strong className="welcome-title">Welcome</strong>
           <div className="welcome-copy">
-            Create or continue a flow session from the left sidebar, then inspect files and root thread activity from this control surface.
+            Create your first session, or pick one from the sidebar to continue.
           </div>
         </div>
 
@@ -23,7 +23,7 @@ export function Welcome({
           <div className="welcome-card-head">
             <strong>Create session</strong>
             <div className="muted small">
-              Pick the object you want to talk to, write the first message, and we'll seed a new session for you.
+              Choose who you want to talk to and type your first message — we'll start a new session for you.
             </div>
           </div>
           {onCreateSession && <SessionCreator stones={stones} onCreate={onCreateSession} />}

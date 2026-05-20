@@ -7,6 +7,12 @@ import { ChatPanel } from "../../domains/chat/components/ChatPanel";
  * Header（objectId / status / thread switcher）现在内联在 MainPanel 的 breadcrumb-bar 同一行，
  * 这里只保留 chat 体本身。shell 决定是否渲染 RightPanel：当 thread 没有可与 user 对话的语义
  * （如 user.root，user 不能和自己对话）时直接传 right=null，AppLayout 会切到两列布局。
+ *
+ * 布局对齐：MainPanel 顶部是 34px 高的 breadcrumb-bar.panel + 主 panel；RightPanel 自己只有
+ * 一个 panel，且其内部 chat-body 从顶端就开始渲染对话。两列同 row 时若 RightPanel 不补一个
+ * 同高的 spacer，ChatPanel 顶部内容会与 MainPanel 的 breadcrumb-bar 在同一 Y 出现，造成
+ * "ChatPanel 浮在 header 之上"的视觉错觉（Issue #2 Bad #a）。
+ * 这里给 .right-panel 一个空的 .breadcrumb-bar 占位条，让两列顶部对齐。
  */
 export function RightPanel(props: {
   sessionId?: string;
@@ -19,17 +25,20 @@ export function RightPanel(props: {
   onTogglePause?: () => Promise<void>;
 }) {
   return (
-    <aside className="panel right-panel">
-      <ChatPanel
-        sessionId={props.sessionId}
-        objectId={props.objectId}
-        thread={props.thread}
-        paused={props.paused}
-        pauseBusy={props.pauseBusy}
-        onSend={props.onSend}
-        onTogglePause={props.onTogglePause}
-        showComposer={isUserOwnedOrCreated(props.objectId, props.thread)}
-      />
+    <aside className="right-column gap-1">
+      <div className="breadcrumb-bar panel right-breadcrumb-spacer" aria-hidden="true" />
+      <div className="panel right-panel">
+        <ChatPanel
+          sessionId={props.sessionId}
+          objectId={props.objectId}
+          thread={props.thread}
+          paused={props.paused}
+          pauseBusy={props.pauseBusy}
+          onSend={props.onSend}
+          onTogglePause={props.onTogglePause}
+          showComposer={isUserOwnedOrCreated(props.objectId, props.thread)}
+        />
+      </div>
     </aside>
   );
 }

@@ -553,6 +553,8 @@ describe("U4: root.glob + search_window.open_match", () => {
     const out = JSON.parse(await dispatchGlob(thread, { cwd: TEMP }));
     expect(out.auto_submitted).toBe(true);
     expect(out.result).toContain("缺少 pattern");
+    expect(out.result).toContain("close");
+    expect(out.result).toContain("open");
     expect(thread.contextWindows.find((w) => w.type === "search")).toBeUndefined();
   });
 
@@ -592,6 +594,23 @@ describe("U4: root.glob + search_window.open_match", () => {
     const out = JSON.parse(await dispatchOpenMatch(thread, sw.id, {}));
     expect(out.ok).toBe(true);
     expect(out.auto_submitted).toBe(false);
+  });
+
+  it("open_match exec edge: missing index error message includes refine recovery hint", async () => {
+    const { executeSearchOpenMatch } = await import("../windows/search");
+    const dir = await makeGlobFixtureDir("glob-no-idx-exec", ["a.ts"]);
+    const thread = makeThread({ id: "t_open_match_exec_no_idx" });
+    await dispatchGlob(thread, { pattern: "*.ts", cwd: dir });
+    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    const result = await executeSearchOpenMatch({
+      thread,
+      args: {}, // missing index
+      parentWindow: sw,
+    });
+    expect(typeof result).toBe("string");
+    expect(result as string).toContain("缺少 index");
+    expect(result as string).toContain("close");
+    expect(result as string).toContain("open");
   });
 
   it("integration: glob → open_match → file_window in place; search_window unchanged", async () => {
@@ -697,6 +716,8 @@ describe("U5: root.grep", () => {
     const out = JSON.parse(await dispatchGrep(thread, { path: TEMP }));
     expect(out.auto_submitted).toBe(true);
     expect(out.result).toContain("缺少 pattern");
+    expect(out.result).toContain("close");
+    expect(out.result).toContain("open");
   });
 
   it("integration: grep → open_match spawns file_window with line context slice", async () => {
