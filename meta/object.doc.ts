@@ -1542,6 +1542,57 @@ export const root: DocTreeNode = {
                     这让 super session 不必在系统启动时预创建；只有真的发生第一次反思派送，才在磁盘上出现。
                     `,
                 },
+                "stone_versioning": {
+                    title: "stone-versioning - stones/ 的 git 版本管理（bare repo + linked worktrees）",
+                    content: `
+                    stones/ 目录采用 **bare repo + linked worktrees** 模式：
+                    - \`stones/.stones_repo/\`：bare git repo（\`bare = true\`），承载所有 refs / objects /
+                      packed-refs / 远端关系等元数据；自身不是任何分支的 checkout
+                    - \`stones/main/\`：main 分支的 linked worktree，agent 文件直接位于其下（如
+                      \`stones/main/agent_of_x/self.md\`）；其 \`.git\` 是个**文件**（不是目录），
+                      内容形如 \`gitdir: …/.stones_repo/worktrees/main\`
+                    - \`stones/{branch}/\`：其它分支的 linked worktree（如 \`stones/metaprog/agent_of_x/abc123/\`），
+                      跟 main 平级共享同一 bare；删 main 不破坏其它 worktree
+                    - flows/、debug/ 等运行时产物不入 git（R2）
+
+                    架构对称性：main 不再是"主仓库"，跟未来添加的任何 worktree 平级。
+                    新 worktree 通过 \`git -C stones/.stones_repo worktree add ../{name} {branch}\` 加挂。
+                    （灵感来自 plugins_worktrees 的 \`.plugins_repo/\` 模式。）
+
+                    OOC Server 启动接受 \`--stones-branch=<name>\`（默认 main），所有 stoneDir 解析为
+                    \`{baseDir}/stones/{stonesBranch}/{objectId}\`。Object 想做高赌注修改时不直接写 main，
+                    通过 metaprog 协议（programmable.metaprog_protocol）开 worktree → 编辑 → 试运行 → commit → merge。
+
+                    路径划界（R5/R6）：commit 累积 diff（vs main merge-base）的所有路径都以 \`{authorObjectId}/\`
+                    开头 → self-scope，自治 fast-forward merge；任一路径越界 → cross-scope，整 commit 走 PR-Issue
+                    给 supervisor 评审。Supervisor（R12）是元自治例外，不参与本协议。
+
+                    错误自我编程的恢复（F3）：启动期 recovery-check 自检每个 Object 的 server/index.ts；
+                    加载失败的开 [recovery-needed] PR-Issue 给 supervisor，由 supervisor metaprog rollback。
+
+                    布局演化兼容：早期非 bare 形态（\`stones/main/.git/\` 是目录）被识别为
+                    \`layout: "legacy-embedded"\`，保持原状不强制升级；新建 world 一律走 bare。
+                    `,
+                    named: {
+                        "stone-versioning": "persistable 内的高层编排，封装 worktree / commit / 路径划界 / merge / PR-Issue / rollback",
+                        "stone-git": "stone-versioning 底层的 git CLI 薄包装；不引入 git npm 依赖",
+                        "stones-branch": "OOC Server 启动参数；指定本进程绑定的 git 分支，决定 stoneDir 解析根",
+                        ".stones_repo": "stones/ 下的 bare git repo 目录；承载所有 git 元数据，与任何 worktree 物理分离",
+                        "linked worktree": "git worktree 模式下的非主工作树；其 .git 是文件不是目录，gitdir 指回 bare 的 worktrees admin",
+                        "metaprog worktree": "Object 元编程的隔离工作树；branch 形态 metaprog/{objectId}/{token}",
+                        "self-scope / cross-scope": "路径划界判定结果；前者自治 ff merge，后者必须经 PR-Issue",
+                        "PR-Issue": "落在 super session 的 Issue（带 prPayload diff/branch/intent）；Supervisor 评审通道",
+                        "recovery-check": "启动期自检；server/index.ts 加载失败的 Object 自动开 [recovery-needed] Issue",
+                        "Bootstrap commit": "首次启动 author=bootstrap 的一次性 squash commit，通过临时 clone scratch 灌入 bare repo 后 push",
+                        "legacy-embedded": "已有 world 的非 bare 老式布局（main/.git/ 是目录）；ensureStoneRepo 兼容识别但不强制升级",
+                    },
+                    sources: [
+                        [
+                            "src/persistable/stone-versioning.ts",
+                            "openMetaprogWorktree / commitWorktree / classifyWorktreeBranch / tryMergeSelf / requestPrIssueReview / resolvePrIssue / rollback / pruneStaleWorktrees；R12 supervisor 例外；所有 git 操作通过 enqueueSessionWrite('git:'+baseDir) 串行；底层 git 命令在 src/persistable/stone-git.ts；bare init + linked worktree 编排在 src/persistable/stone-bootstrap.ts:ensureStoneRepo (createBareRepoWithMainWorktree 处理 bootstrap commit 通过 scratch clone 灌入 bare)；启动期 recovery-check 在 src/app/server/bootstrap/recovery-check.ts",
+                        ],
+                    ],
+                },
             },
         },
         "programmable": {

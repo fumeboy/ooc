@@ -26,6 +26,7 @@ import {
   type Comment,
   type Issue,
   type IssueIndexEntry,
+  type PrIssuePayload,
   readIssue,
   readIssueIndex,
   writeIssue,
@@ -55,6 +56,56 @@ async function ensureAuthorExists(baseDir: string, authorObjectId: string): Prom
       throw new Error(`[issue-service] authorObjectId "${authorObjectId}" does not exist in stones/`);
     }
     throw error;
+  }
+}
+
+/** U5: PR-Issue 持久化的 super-session 约定（plan §0.7 / Q1 用户决策）。 */
+export const PR_ISSUE_SESSION_ID = "super";
+
+/** PR-Issue 载荷上限（diff 文本 + intent + paths 约束，防止 super session 被超大 patch 撑爆）。 */
+const MAX_PR_DIFF_LENGTH = 65536; // 64KB
+const MAX_PR_INTENT_LENGTH = 4096;
+const MAX_PR_PATHS = 200;
+
+export interface CreatePrIssueInput {
+  baseDir: string;
+  /** 标题前缀；service 自动加 `[PR]` 让列表 UI 区分。 */
+  title: string;
+  /**
+   * 创建 Object（开 worktree 的那个 Object 的 main-side objectId）；service 校验
+   * `stones/main/<objectId>/` 存在。
+   */
+  createdByObjectId: string;
+  /** 详细说明（可选；通常 LLM 用来写决策背景）。 */
+  description?: string;
+  /** PR-Issue payload：diff、worktree branch、intent、baseSha、paths 列表。 */
+  prPayload: PrIssuePayload;
+}
+
+function validatePrPayload(payload: PrIssuePayload): void {
+  if (!payload.intent || !payload.intent.trim()) throw new Error("[issue-service] prPayload.intent required");
+  if (payload.intent.length > MAX_PR_INTENT_LENGTH) {
+    throw new Error(`[issue-service] prPayload.intent too long: ${payload.intent.length} > ${MAX_PR_INTENT_LENGTH}`);
+  }
+  if (!payload.branch || !payload.branch.trim()) throw new Error("[issue-service] prPayload.branch required");
+  if (payload.branch.includes("..") || payload.branch.includes("\0")) {
+    throw new Error(`[issue-service] prPayload.branch unsafe: ${JSON.stringify(payload.branch)}`);
+  }
+  if (typeof payload.diff !== "string") throw new Error("[issue-service] prPayload.diff required");
+  if (payload.diff.length > MAX_PR_DIFF_LENGTH) {
+    throw new Error(`[issue-service] prPayload.diff too long: ${payload.diff.length} > ${MAX_PR_DIFF_LENGTH}`);
+  }
+  if (!Array.isArray(payload.paths)) throw new Error("[issue-service] prPayload.paths must be array");
+  if (payload.paths.length > MAX_PR_PATHS) {
+    throw new Error(`[issue-service] prPayload.paths too many: ${payload.paths.length} > ${MAX_PR_PATHS}`);
+  }
+  for (const p of payload.paths) {
+    if (typeof p !== "string" || p.includes("\0")) {
+      throw new Error(`[issue-service] prPayload.paths contains invalid entry: ${JSON.stringify(p)}`);
+    }
+  }
+  if (!payload.baseSha || typeof payload.baseSha !== "string") {
+    throw new Error("[issue-service] prPayload.baseSha required");
   }
 }
 
@@ -130,6 +181,50 @@ export const issuesService = {
         createdAt: now,
         lastUpdatedAt: now,
         comments: [],
+      };
+      await writeIssue(baseDir, sessionId, issue);
+      await writeIssueIndex(baseDir, sessionId, {
+        nextId: newId + 1,
+        issues: [...index.issues, summarize(issue)],
+      });
+      return issue;
+    });
+  },
+
+  /**
+   * U5: 创建 PR-Issue —— 落在 super session（`flows/super/issues/`），永久持久化，
+   * 由 Supervisor 在自己的 super flow 中读到并审阅。
+   *
+   * 与 `createIssue` 的差别：
+   * - sessionId 强制为 "super"
+   * - 标题自动加 `[PR]` 前缀（UI list 视图区分）
+   * - 必带 prPayload（diff / branch / intent / paths / baseSha）
+   */
+  async createPrIssue(input: CreatePrIssueInput): Promise<Issue> {
+    const { baseDir, title, description, createdByObjectId, prPayload } = input;
+    if (!title || !title.trim()) {
+      throw new Error("[issue-service] PR title is required");
+    }
+    validatePrPayload(prPayload);
+    const sessionId = PR_ISSUE_SESSION_ID;
+    const decoratedTitle = title.trim().startsWith("[PR]") ? title.trim() : `[PR] ${title.trim()}`;
+
+    return enqueueSessionWrite(sessionId, async () => {
+      await ensureAuthorExists(baseDir, createdByObjectId);
+
+      const index = await readIssueIndex(baseDir, sessionId);
+      const newId = index.nextId;
+      const now = Date.now();
+      const issue: Issue = {
+        id: newId,
+        title: decoratedTitle,
+        description,
+        status: "open",
+        createdByObjectId,
+        createdAt: now,
+        lastUpdatedAt: now,
+        comments: [],
+        prPayload,
       };
       await writeIssue(baseDir, sessionId, issue);
       await writeIssueIndex(baseDir, sessionId, {

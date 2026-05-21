@@ -17,8 +17,8 @@ import { putSelfApi } from "./api.put-self";
 import { putServerSourceApi } from "./api.put-server-source";
 import { createStonesService } from "./service";
 
-export function stonesModule(config: Pick<ServerConfig, "baseDir">) {
-  const service = createStonesService({ baseDir: config.baseDir });
+export function stonesModule(config: Pick<ServerConfig, "baseDir" | "stonesBranch">) {
+  const service = createStonesService({ baseDir: config.baseDir, stonesBranch: config.stonesBranch });
   return new Elysia({ prefix: "/api", name: "ooc.stones" })
     .use(listStonesApi(service))
     .use(createStoneApi(service))

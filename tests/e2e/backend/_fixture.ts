@@ -151,6 +151,7 @@ export async function startApp(opts: {
   const config = {
     port: 0,
     baseDir,
+    stonesBranch: "main",
     workerPollMs: 50,
     // workerEnabled=false 让 buildServer 不自动起 worker；我们手动起 / 关，
     // 否则 buildServer 把 worker.stop 挂在 app.onStop 上，而我们不调 .listen()/.stop()，

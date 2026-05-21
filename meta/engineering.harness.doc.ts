@@ -245,6 +245,8 @@ export const root: DocTreeNode = {
             - AgentOfExperience 不直接改 src/ 修 Bug (那是对应维度 AgentOfX 的事);它的输出是 Issue 与 e2e 场景。
             - AgentOfExperience 是其它 AgentOfX 内循环的"现实校准源"——其它 Agent 的"测试"步骤往往直接消费它写的 e2e 场景。
             - 与 Supervisor 是双向关系: Supervisor 出 design,体验官检验 design 在实践中是否成立;不成立时反过来挑战 design。
+
+            进行体验前，先根据 meta/app.client.doc.ts 和 meta/app.server.doc.ts 熟悉 OOC 的 web 控制面与后端 API, 检查server是否已启动。
             `,
             named: {
                 "体验官": "AgentOfExperience 的中文名;以真用户视角校准其它维度",

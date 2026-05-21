@@ -51,6 +51,31 @@ export interface Issue {
   lastUpdatedAt: number;
   /** 评论流,按 id 单调递增追加;LLM derive 时通常只展示最后 N 条 + description。 */
   comments: Comment[];
+  /**
+   * U5: PR-Issue payload —— 当 Object 元编程跨自治区、需 Supervisor 评审时附带。
+   * 非 PR 类 Issue 该字段 undefined。详见 docs/plans/2026-05-20-001-feat-stones-git-versioning-plan.md U5。
+   */
+  prPayload?: PrIssuePayload;
+}
+
+/**
+ * PR-Issue 载荷：Object 在 worktree 内 commit 后请求 cross-scope merge 时填。
+ * Supervisor 在自己的 super flow 中读到该 Issue 即可看到 diff、修改意图、来源 worktree。
+ */
+export interface PrIssuePayload {
+  /** 修改意图说明(LLM 自由文本，长度由 service 层校验)。 */
+  intent: string;
+  /** 待评审的 worktree branch 名（如 `metaprog/agent_of_x/abc123`）。 */
+  branch: string;
+  /**
+   * branch 相对 main merge-base 的累积 patch（unified diff 文本）。Supervisor
+   * 看到的就是这段——不是 inline 单行 hunk，而是完整可读的 diff。
+   */
+  diff: string;
+  /** 涉及的文件路径列表（diff 解析后的相对 stones/ 根的路径，便于 list 端只读 names）。 */
+  paths: string[];
+  /** 触发 PR 时的 main HEAD sha（Supervisor 决议时验证 base 未飘）。 */
+  baseSha: string;
 }
 
 /** index.json 内对单个 Issue 的摘要条目(避免列表渲染时全量加载 issue-*.json)。 */

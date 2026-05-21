@@ -1,0 +1,633 @@
+/**
+ * stone-versioning —— U4 高层编排，把 worktree / commit / scope 评估 / merge /
+ * PR-Issue / rollback / GC 收口在 persistable 层。
+ *
+ * Caller 视角：
+ * - `openMetaprogWorktree({ baseDir, objectId })` 在 `${baseDir}/stones/{branch}/`
+ *   开 worktree（branch 形态：`metaprog/{objectId}/{token}`），返回 ref
+ * - `commitWorktree(ref, { intent, authorObjectId })` stage 全部并 commit
+ * - `tryMergeSelf(ref, authorObjectId)` 尝试 self-scope ff merge：rebase 到 main
+ *   HEAD → 路径分类 → 全在自治区则 ff，否则提示 caller 走 PR-Issue
+ * - `requestPrIssueReview(ref, { intent, authorObjectId })` 在 super session 创
+ *   PR-Issue
+ * - `resolvePrIssue(opts)` 让 Supervisor 的决议生效
+ * - `rollback(opts)` Supervisor 署名回滚
+ * - `pruneStaleWorktrees(baseDir)` 启动 hygiene
+ *
+ * 所有 git 子命令通过 `enqueueSessionWrite("git:" + baseDir, ...)` 串行化（plan §U4
+ * Approach）。R12 Supervisor 例外：`authorObjectId === "supervisor"` 时直接走 main
+ * 直写、不开 worktree、不走 PR-Issue。
+ */
+
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
+import { STONES_MAIN_BRANCH } from "./stone-bootstrap";
+import {
+  gitArchiveBranch,
+  gitCheckout,
+  gitCommit,
+  gitCommitAll,
+  gitCurrentBranch,
+  gitDiffNames,
+  gitDiffPatch,
+  gitHead,
+  gitMergeFastForward,
+  gitRebase,
+  gitRevParse,
+  gitWorktreeAdd,
+  gitWorktreeList,
+  gitWorktreePrune,
+  gitWorktreeRemove,
+  isValidBranchName,
+  type GitErrorCode,
+  type GitResult,
+} from "./stone-git";
+import { issuesService, PR_ISSUE_SESSION_ID } from "./issue-service";
+import { enqueueSessionWrite } from "./serial-queue";
+import type { Issue } from "./issue";
+
+/** Supervisor 的 objectId（R12 元自治例外用）。 */
+export const SUPERVISOR_OBJECT_ID = "supervisor";
+
+/** worktree branch 命名约定：`metaprog/{objectId}/{token}`（{token} 由 caller 提供或自动生成）。 */
+const WORKTREE_BRANCH_PREFIX = "metaprog";
+
+export interface MetaprogWorktreeRef {
+  /** OOC world 根。 */
+  baseDir: string;
+  /** worktree 的发起 Object（main-side authorObjectId）。 */
+  objectId: string;
+  /** worktree 对应的 git branch 名（即 `${WORKTREE_BRANCH_PREFIX}/${objectId}/${token}`）。 */
+  branch: string;
+  /** worktree 在磁盘上的绝对路径（`${baseDir}/stones/${branch}`）。 */
+  path: string;
+  /** 创建时 main 当前 commit sha（资料用，merge 时通过 gitMergeBase 重新解析）。 */
+  baseCommit: string;
+}
+
+/** 主仓库（main 工作树）目录，所有 git 操作的 cwd。 */
+function repoDir(baseDir: string): string {
+  return join(baseDir, "stones", STONES_MAIN_BRANCH);
+}
+
+function worktreePath(baseDir: string, branch: string): string {
+  return join(baseDir, "stones", branch);
+}
+
+/** caller-supplied scope-key 用于串行化所有同一 baseDir 上的 git 操作。 */
+function gitQueueKey(baseDir: string): string {
+  return `git:${baseDir}`;
+}
+
+/** 生成短随机 token —— Date.now base36 + 4 位随机，避免外部依赖。 */
+function generateToken(): string {
+  const t = Date.now().toString(36);
+  const r = Math.random().toString(36).slice(2, 6);
+  return `${t}${r}`;
+}
+
+/** 校验 objectId（同 stoneRefs：禁止 `..` / 路径分隔符 / 控制字符 / 空）。 */
+function isValidObjectId(value: string): boolean {
+  if (typeof value !== "string" || value.length === 0 || value.length > 64) return false;
+  return /^[A-Za-z0-9_-][A-Za-z0-9_.-]*$/.test(value);
+}
+
+/* ---------------------------------------------------------------- *
+ * openMetaprogWorktree
+ * ---------------------------------------------------------------- */
+
+export interface OpenMetaprogWorktreeInput {
+  baseDir: string;
+  objectId: string;
+  /** 可选 token，缺省自动生成。便于测试用稳定值。 */
+  token?: string;
+}
+
+export interface OpenMetaprogWorktreeResult {
+  ok: true;
+  worktree: MetaprogWorktreeRef;
+}
+
+export type OpenMetaprogWorktreeError =
+  | { ok: false; code: "INVALID_INPUT"; message: string }
+  | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string };
+
+/** 创建 metaprog worktree。Supervisor 不应调用本函数（R12）。 */
+export async function openMetaprogWorktree(
+  input: OpenMetaprogWorktreeInput,
+): Promise<OpenMetaprogWorktreeResult | OpenMetaprogWorktreeError> {
+  if (!isValidObjectId(input.objectId)) {
+    return { ok: false, code: "INVALID_INPUT", message: `invalid objectId '${input.objectId}'` };
+  }
+  if (input.objectId === SUPERVISOR_OBJECT_ID) {
+    return {
+      ok: false,
+      code: "INVALID_INPUT",
+      message: "supervisor must not open metaprog worktrees (R12 exception); write directly to stones/main/supervisor/",
+    };
+  }
+
+  return enqueueSessionWrite(gitQueueKey(input.baseDir), async () => {
+    const repo = repoDir(input.baseDir);
+    const token = input.token ?? generateToken();
+    const branch = `${WORKTREE_BRANCH_PREFIX}/${input.objectId}/${token}`;
+
+    if (!isValidBranchName(branch)) {
+      return { ok: false, code: "INVALID_INPUT", message: `generated branch unsafe '${branch}'` } as const;
+    }
+
+    const head = gitHead(repo);
+    if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr } as const;
+    const baseCommit = head.value;
+    if (!baseCommit) {
+      return {
+        ok: false,
+        code: "INVALID_INPUT",
+        message: "stones/main has no commits — bootstrap not run yet?",
+      } as const;
+    }
+
+    const path = worktreePath(input.baseDir, branch);
+    const add = gitWorktreeAdd(repo, { path, branch, baseRef: STONES_MAIN_BRANCH });
+    if (!add.ok) return { ok: false, code: "GIT", gitCode: add.code, stderr: add.stderr } as const;
+
+    return {
+      ok: true,
+      worktree: { baseDir: input.baseDir, objectId: input.objectId, branch, path, baseCommit },
+    } as const;
+  });
+}
+
+/* ---------------------------------------------------------------- *
+ * commitWorktree
+ * ---------------------------------------------------------------- */
+
+export interface CommitWorktreeInput {
+  worktree: MetaprogWorktreeRef;
+  intent: string;
+  authorObjectId: string;
+}
+
+export type CommitWorktreeResult =
+  | { ok: true; commitSha: string }
+  | { ok: false; code: "INVALID_INPUT"; message: string }
+  | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string };
+
+/** 在 worktree 内 stage 全部变更并 commit；author 写为 authorObjectId。 */
+export async function commitWorktree(input: CommitWorktreeInput): Promise<CommitWorktreeResult> {
+  if (!isValidObjectId(input.authorObjectId)) {
+    return { ok: false, code: "INVALID_INPUT", message: `invalid authorObjectId '${input.authorObjectId}'` };
+  }
+  if (!input.intent.trim()) {
+    return { ok: false, code: "INVALID_INPUT", message: "intent required" };
+  }
+
+  return enqueueSessionWrite(gitQueueKey(input.worktree.baseDir), async () => {
+    const r = gitCommitAll(input.worktree.path, {
+      authorName: input.authorObjectId,
+      authorEmail: `${input.authorObjectId}@ooc.local`,
+      message: input.intent,
+    });
+    if (!r.ok) return { ok: false, code: "GIT", gitCode: r.code, stderr: r.stderr } as const;
+    return { ok: true, commitSha: r.value } as const;
+  });
+}
+
+/* ---------------------------------------------------------------- *
+ * classifyWorktreeBranch
+ * ---------------------------------------------------------------- */
+
+export type ScopeClass = "self-scope" | "cross-scope";
+
+export interface ClassifyResult {
+  ok: true;
+  scope: ScopeClass;
+  /** branch 累积 diff vs main merge-base 的文件路径列表。 */
+  paths: string[];
+}
+
+export type ClassifyError =
+  | { ok: false; code: "INVALID_INPUT"; message: string }
+  | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string };
+
+/**
+ * 路径划界判定：branch 累积 diff vs main merge-base，每个文件路径必须以
+ * `${authorObjectId}/` 起头才算 self-scope（R5/R6）。Supervisor 例外（R12）
+ * 永远视为 self-scope。
+ */
+export async function classifyWorktreeBranch(
+  worktree: MetaprogWorktreeRef,
+  authorObjectId: string,
+): Promise<ClassifyResult | ClassifyError> {
+  if (!isValidObjectId(authorObjectId)) {
+    return { ok: false, code: "INVALID_INPUT", message: `invalid authorObjectId '${authorObjectId}'` };
+  }
+  if (authorObjectId === SUPERVISOR_OBJECT_ID) {
+    // R12: Supervisor 不参与 R5 协议；caller 应直接在 main 工作树写
+    return { ok: true, scope: "self-scope", paths: [] };
+  }
+
+  return enqueueSessionWrite(gitQueueKey(worktree.baseDir), async () => {
+    const repo = repoDir(worktree.baseDir);
+    const r = gitDiffNames(repo, STONES_MAIN_BRANCH, worktree.branch);
+    if (!r.ok) return { ok: false, code: "GIT", gitCode: r.code, stderr: r.stderr } as const;
+    const prefix = `${authorObjectId}/`;
+    const scope: ScopeClass = r.value.every((p) => p.startsWith(prefix)) ? "self-scope" : "cross-scope";
+    return { ok: true, scope, paths: r.value } as const;
+  });
+}
+
+/* ---------------------------------------------------------------- *
+ * tryMergeSelf
+ * ---------------------------------------------------------------- */
+
+export type TryMergeSelfResult =
+  | { ok: true; kind: "merged"; commitSha: string }
+  | { ok: true; kind: "must-pr-issue"; paths: string[] }
+  | { ok: true; kind: "rebase-conflict"; stderr: string }
+  | { ok: true; kind: "non-fast-forward"; stderr: string }
+  | { ok: false; code: "INVALID_INPUT"; message: string }
+  | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string };
+
+/**
+ * 尝试自治区 fast-forward merge。流程：
+ *   1. cd worktree → rebase main HEAD（冲突 abort 后返回 rebase-conflict）
+ *   2. 重新 classify（rebase 后 path 集合可能变化）
+ *   3. cross-scope → 返回 must-pr-issue（caller 应转 requestPrIssueReview）
+ *   4. self-scope → 在 main 上 ff merge worktree branch；non-FF 返回 non-fast-forward
+ *      （正常情况下 rebase 后必能 FF；non-FF 表示 main 又飘了，caller 应重试）
+ *   5. 成功 ff → cleanup worktree
+ */
+export async function tryMergeSelf(
+  worktree: MetaprogWorktreeRef,
+  authorObjectId: string,
+): Promise<TryMergeSelfResult> {
+  if (!isValidObjectId(authorObjectId)) {
+    return { ok: false, code: "INVALID_INPUT", message: `invalid authorObjectId '${authorObjectId}'` };
+  }
+
+  return enqueueSessionWrite(gitQueueKey(worktree.baseDir), async () => {
+    const repo = repoDir(worktree.baseDir);
+    // step 1: rebase
+    const rebase = gitRebase(worktree.path, STONES_MAIN_BRANCH);
+    if (!rebase.ok) {
+      if (rebase.code === "REBASE_CONFLICT") {
+        return { ok: true, kind: "rebase-conflict", stderr: rebase.stderr } as const;
+      }
+      return { ok: false, code: "GIT", gitCode: rebase.code, stderr: rebase.stderr } as const;
+    }
+
+    // step 2: classify
+    const diff = gitDiffNames(repo, STONES_MAIN_BRANCH, worktree.branch);
+    if (!diff.ok) return { ok: false, code: "GIT", gitCode: diff.code, stderr: diff.stderr } as const;
+    const prefix = `${authorObjectId}/`;
+    const isSelf = authorObjectId === SUPERVISOR_OBJECT_ID || diff.value.every((p) => p.startsWith(prefix));
+    if (!isSelf) {
+      return { ok: true, kind: "must-pr-issue", paths: diff.value } as const;
+    }
+
+    // step 3: ff merge in repo (main work-tree)
+    const checkoutMain = gitCheckout(repo, STONES_MAIN_BRANCH);
+    if (!checkoutMain.ok) {
+      return { ok: false, code: "GIT", gitCode: checkoutMain.code, stderr: checkoutMain.stderr } as const;
+    }
+    const ff = gitMergeFastForward(repo, worktree.branch);
+    if (!ff.ok) {
+      if (ff.code === "NON_FAST_FORWARD") {
+        return { ok: true, kind: "non-fast-forward", stderr: ff.stderr } as const;
+      }
+      return { ok: false, code: "GIT", gitCode: ff.code, stderr: ff.stderr } as const;
+    }
+
+    const head = gitHead(repo);
+    if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr } as const;
+
+    // step 4: cleanup worktree（移除目录 + branch）
+    const removeWt = gitWorktreeRemove(repo, worktree.path);
+    // 失败不阻塞 ff 成功，记录 stderr 即可（caller 可以下次启动 prune）
+    void removeWt;
+    return { ok: true, kind: "merged", commitSha: head.value } as const;
+  });
+}
+
+/* ---------------------------------------------------------------- *
+ * requestPrIssueReview
+ * ---------------------------------------------------------------- */
+
+export interface RequestPrIssueInput {
+  worktree: MetaprogWorktreeRef;
+  intent: string;
+  authorObjectId: string;
+  /** 可选的 PR 标题；缺省由 intent 前 60 字符构造。 */
+  title?: string;
+  /** 可选的扩展描述。 */
+  description?: string;
+}
+
+export type RequestPrIssueResult =
+  | { ok: true; issueId: number }
+  | { ok: false; code: "INVALID_INPUT"; message: string }
+  | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string }
+  | { ok: false; code: "ISSUE_SERVICE"; message: string };
+
+/**
+ * 拿到 worktree branch 的 diff（vs main），构造 PrIssuePayload，调
+ * `issuesService.createPrIssue` 落到 super session。
+ */
+export async function requestPrIssueReview(input: RequestPrIssueInput): Promise<RequestPrIssueResult> {
+  if (!isValidObjectId(input.authorObjectId)) {
+    return { ok: false, code: "INVALID_INPUT", message: `invalid authorObjectId '${input.authorObjectId}'` };
+  }
+  if (!input.intent.trim()) {
+    return { ok: false, code: "INVALID_INPUT", message: "intent required" };
+  }
+
+  return enqueueSessionWrite(gitQueueKey(input.worktree.baseDir), async () => {
+    const repo = repoDir(input.worktree.baseDir);
+    const head = gitHead(repo);
+    if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr } as const;
+    const baseSha = head.value;
+
+    const names = gitDiffNames(repo, STONES_MAIN_BRANCH, input.worktree.branch);
+    if (!names.ok) return { ok: false, code: "GIT", gitCode: names.code, stderr: names.stderr } as const;
+
+    const patch = gitDiffPatch(repo, STONES_MAIN_BRANCH, input.worktree.branch);
+    if (!patch.ok) return { ok: false, code: "GIT", gitCode: patch.code, stderr: patch.stderr } as const;
+
+    const title = (input.title ?? input.intent).slice(0, 80);
+    try {
+      const issue = await issuesService.createPrIssue({
+        baseDir: input.worktree.baseDir,
+        title,
+        description: input.description,
+        createdByObjectId: input.authorObjectId,
+        prPayload: {
+          intent: input.intent,
+          branch: input.worktree.branch,
+          diff: patch.value,
+          paths: names.value,
+          baseSha,
+        },
+      });
+      return { ok: true, issueId: issue.id } as const;
+    } catch (e) {
+      return {
+        ok: false,
+        code: "ISSUE_SERVICE",
+        message: e instanceof Error ? e.message : String(e),
+      } as const;
+    }
+  });
+}
+
+/* ---------------------------------------------------------------- *
+ * resolvePrIssue
+ * ---------------------------------------------------------------- */
+
+export type PrIssueDecision = "merge" | "reject" | "request-changes";
+
+export interface ResolvePrIssueInput {
+  baseDir: string;
+  issueId: number;
+  decision: PrIssueDecision;
+}
+
+export type ResolvePrIssueResult =
+  | { ok: true; kind: "merged"; commitSha: string }
+  | { ok: true; kind: "rejected"; archivedRef: string }
+  | { ok: true; kind: "changes-requested" }
+  | { ok: false; code: "NOT_FOUND"; message: string }
+  | { ok: false; code: "INVALID_STATE"; message: string }
+  | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string }
+  | { ok: false; code: "ISSUE_SERVICE"; message: string };
+
+/**
+ * Supervisor 决议生效：
+ * - merge → 在 main 上 ff-merge worktree branch；成功后关闭 Issue
+ * - reject → archive branch 到 `refs/ooc/rejected/<branch>`，删原 branch + worktree；关闭 Issue
+ * - request-changes → 不动 worktree，不关闭 Issue（caller 在 issue 上加 comment 通知 Object 重做）
+ */
+export async function resolvePrIssue(input: ResolvePrIssueInput): Promise<ResolvePrIssueResult> {
+  return enqueueSessionWrite(gitQueueKey(input.baseDir), async () => {
+    // 取出 PR-Issue
+    let issue: Issue | undefined;
+    try {
+      // dynamic import 避免类型循环；issuesService 已是稳定 API
+      const { readIssue } = await import("./issue");
+      issue = await readIssue(input.baseDir, PR_ISSUE_SESSION_ID, input.issueId);
+    } catch (e) {
+      return {
+        ok: false,
+        code: "ISSUE_SERVICE",
+        message: e instanceof Error ? e.message : String(e),
+      } as const;
+    }
+    if (!issue) {
+      return { ok: false, code: "NOT_FOUND", message: `PR-Issue #${input.issueId} not found` } as const;
+    }
+    if (!issue.prPayload) {
+      return {
+        ok: false,
+        code: "INVALID_STATE",
+        message: `Issue #${input.issueId} is not a PR-Issue (missing prPayload)`,
+      } as const;
+    }
+    if (issue.status !== "open") {
+      return {
+        ok: false,
+        code: "INVALID_STATE",
+        message: `PR-Issue #${input.issueId} already ${issue.status}`,
+      } as const;
+    }
+
+    const repo = repoDir(input.baseDir);
+    const branch = issue.prPayload.branch;
+
+    if (input.decision === "request-changes") {
+      // 仅记录决议；caller 应另行 appendComment 通知发起 Object
+      return { ok: true, kind: "changes-requested" } as const;
+    }
+
+    if (input.decision === "merge") {
+      const checkoutMain = gitCheckout(repo, STONES_MAIN_BRANCH);
+      if (!checkoutMain.ok) {
+        return { ok: false, code: "GIT", gitCode: checkoutMain.code, stderr: checkoutMain.stderr } as const;
+      }
+      const ff = gitMergeFastForward(repo, branch);
+      if (!ff.ok) return { ok: false, code: "GIT", gitCode: ff.code, stderr: ff.stderr } as const;
+      const head = gitHead(repo);
+      if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr } as const;
+
+      // cleanup worktree (best-effort)
+      void gitWorktreeRemove(repo, worktreePath(input.baseDir, branch));
+      void gitWorktreePrune(repo);
+
+      try {
+        await issuesService.closeIssue({
+          baseDir: input.baseDir,
+          sessionId: PR_ISSUE_SESSION_ID,
+          issueId: input.issueId,
+        });
+      } catch (e) {
+        return {
+          ok: false,
+          code: "ISSUE_SERVICE",
+          message: e instanceof Error ? e.message : String(e),
+        } as const;
+      }
+      return { ok: true, kind: "merged", commitSha: head.value } as const;
+    }
+
+    // reject
+    void gitWorktreeRemove(repo, worktreePath(input.baseDir, branch));
+    void gitWorktreePrune(repo);
+    const archive = gitArchiveBranch(repo, branch);
+    if (!archive.ok) {
+      return { ok: false, code: "GIT", gitCode: archive.code, stderr: archive.stderr } as const;
+    }
+    try {
+      await issuesService.closeIssue({
+        baseDir: input.baseDir,
+        sessionId: PR_ISSUE_SESSION_ID,
+        issueId: input.issueId,
+      });
+    } catch (e) {
+      return {
+        ok: false,
+        code: "ISSUE_SERVICE",
+        message: e instanceof Error ? e.message : String(e),
+      } as const;
+    }
+    return { ok: true, kind: "rejected", archivedRef: `refs/ooc/rejected/${branch}` } as const;
+  });
+}
+
+/* ---------------------------------------------------------------- *
+ * rollback (F3)
+ * ---------------------------------------------------------------- */
+
+export interface RollbackInput {
+  baseDir: string;
+  /** 待回滚 stone 所属的 objectId（其文件位于 main work-tree 的 `${objectId}/` 下）。 */
+  objectId: string;
+  /** 目标 commit sha（必须在 main 历史上）。 */
+  targetCommit: string;
+  /**
+   * Supervisor 身份；R4 例外允许其它 Object 实例化不动时 Supervisor 代签 commit。
+   * 缺省强制 SUPERVISOR_OBJECT_ID。
+   */
+  supervisorAuthor?: string;
+}
+
+export type RollbackResult =
+  | { ok: true; commitSha: string }
+  | { ok: false; code: "INVALID_INPUT"; message: string }
+  | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string };
+
+/**
+ * Supervisor 主导回滚：把 main 上 `${objectId}/` 子树恢复到目标 commit 状态，
+ * 并以 Supervisor 署名提交。
+ */
+export async function rollback(input: RollbackInput): Promise<RollbackResult> {
+  if (!isValidObjectId(input.objectId)) {
+    return { ok: false, code: "INVALID_INPUT", message: `invalid objectId '${input.objectId}'` };
+  }
+  const supervisorAuthor = input.supervisorAuthor ?? SUPERVISOR_OBJECT_ID;
+  if (!isValidObjectId(supervisorAuthor)) {
+    return { ok: false, code: "INVALID_INPUT", message: `invalid supervisorAuthor '${supervisorAuthor}'` };
+  }
+  if (typeof input.targetCommit !== "string" || input.targetCommit.length === 0) {
+    return { ok: false, code: "INVALID_INPUT", message: "targetCommit required" };
+  }
+
+  return enqueueSessionWrite(gitQueueKey(input.baseDir), async () => {
+    const repo = repoDir(input.baseDir);
+    // 验证 targetCommit 存在
+    const target = gitRevParse(repo, input.targetCommit);
+    if (!target.ok) return { ok: false, code: "GIT", gitCode: target.code, stderr: target.stderr } as const;
+
+    // 切到 main
+    const checkout = gitCheckout(repo, STONES_MAIN_BRANCH);
+    if (!checkout.ok) return { ok: false, code: "GIT", gitCode: checkout.code, stderr: checkout.stderr } as const;
+
+    // git checkout {target} -- {objectId}/
+    const restore = Bun.spawnSync(
+      ["git", "checkout", target.value, "--", `${input.objectId}/`],
+      { cwd: repo, stdout: "pipe", stderr: "pipe" },
+    );
+    if (restore.exitCode !== 0) {
+      const stderr = new TextDecoder().decode(restore.stderr ?? new Uint8Array()).trim();
+      return { ok: false, code: "GIT", gitCode: "GIT_GENERIC", stderr } as const;
+    }
+
+    // commit 由 supervisor 署名
+    const commit = gitCommit(repo, {
+      authorName: supervisorAuthor,
+      authorEmail: `${supervisorAuthor}@ooc.local`,
+      message: `chore(rollback): restore ${input.objectId}/ to ${target.value.slice(0, 8)}`,
+    });
+    if (!commit.ok) {
+      // 索引可能为空（target 与 head 一致）—— allowEmpty 走一次
+      if (commit.code === "GIT_GENERIC" && commit.stderr.includes("nothing to commit")) {
+        const head = gitHead(repo);
+        if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr } as const;
+        return { ok: true, commitSha: head.value } as const;
+      }
+      return { ok: false, code: "GIT", gitCode: commit.code, stderr: commit.stderr } as const;
+    }
+    return { ok: true, commitSha: commit.value } as const;
+  });
+}
+
+/* ---------------------------------------------------------------- *
+ * pruneStaleWorktrees (启动 hygiene)
+ * ---------------------------------------------------------------- */
+
+export interface PruneResult {
+  ok: true;
+  removed: string[];
+  pruned: boolean;
+}
+
+/**
+ * 启动期清理：list worktrees → 移除 main 之外的所有"分支已 merge / 已 archived"
+ * 的 worktree。简化策略：本期只跑 `git worktree prune`（清掉 admin 文件 stale），
+ * 不主动删任何 branch / 工作树目录——保留 Object 自己的判断。
+ */
+export async function pruneStaleWorktrees(baseDir: string): Promise<PruneResult> {
+  return enqueueSessionWrite(gitQueueKey(baseDir), async () => {
+    const repo = repoDir(baseDir);
+    const list = gitWorktreeList(repo);
+    const removed: string[] = [];
+    if (list.ok) {
+      for (const e of list.value) {
+        // 物理路径不存在的 worktree（脏状态）—— 顺手清
+        if (e.path === repo) continue;
+        try {
+          const stat = await import("node:fs/promises").then((m) => m.stat(e.path));
+          void stat;
+        } catch {
+          // 路径已不存在，prune 会清掉对应 admin 文件
+          removed.push(e.path);
+        }
+      }
+    }
+    void gitWorktreePrune(repo);
+    return { ok: true, removed, pruned: true } as const;
+  });
+}
+
+/* ---------------------------------------------------------------- *
+ * test-only helpers
+ * ---------------------------------------------------------------- */
+
+export const __testing = {
+  generateToken,
+  gitQueueKey,
+  isValidObjectId,
+  worktreePath,
+  repoDir,
+};
+
+// 强制把 rm 当作活跃符号，避免未来误删（pruneStaleWorktrees 实际可能扩展用之）
+void rm;

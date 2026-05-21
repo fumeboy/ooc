@@ -55,9 +55,9 @@ function createHttpMethodContext(dir: string) {
   } as never;
 }
 
-export function createStonesService({ baseDir }: { baseDir: string }) {
-  const ref = (objectId: string) => ({ baseDir, objectId });
-  const dir = (objectId: string) => `${baseDir}/stones/${objectId}`;
+export function createStonesService({ baseDir, stonesBranch }: { baseDir: string; stonesBranch?: string }) {
+  const ref = (objectId: string) => ({ baseDir, objectId, stonesBranch });
+  const dir = (objectId: string) => stoneDir(ref(objectId));
 
   /**
    * Issue #6 Bad #1: 资源存在性前置校验。
@@ -111,7 +111,8 @@ export function createStonesService({ baseDir }: { baseDir: string }) {
   return {
     async listStones() {
       try {
-        const entries = await readdir(`${baseDir}/stones`, { withFileTypes: true });
+        // U2: list 当前 stones-branch 下的 Object 目录，而非 stones/ 根（根下是 branch 子目录）
+        const entries = await readdir(`${baseDir}/stones/${stonesBranch ?? "main"}`, { withFileTypes: true });
         return {
           items: entries
             .filter((entry) => entry.isDirectory())

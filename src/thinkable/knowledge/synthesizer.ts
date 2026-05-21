@@ -26,7 +26,12 @@ import { deriveStoneFromThread, readReadme, readRelation, readFlowRelation, read
 import type { ThreadContext } from "../context.js";
 import { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge.js";
 import { ROOT_BASIC_PATH, ROOT_COMMANDS, ROOT_KNOWLEDGE } from "../../executable/windows/root/index.js";
-import { REFLECTABLE_BASIC_PATH, REFLECTABLE_KNOWLEDGE } from "../reflectable/reflectable-knowledge.js";
+import {
+  REFLECTABLE_BASIC_PATH,
+  REFLECTABLE_KNOWLEDGE,
+  REFLECTABLE_METAPROG_KNOWLEDGE,
+  REFLECTABLE_METAPROG_PATH,
+} from "../reflectable/reflectable-knowledge.js";
 import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../../executable/windows/super-constants.js";
 import type { CommandKnowledgeEntries, CommandTableEntry } from "../../executable/windows/command-types.js";
 import { getWindowTypeDefinition } from "../../executable/windows/registry.js";
@@ -161,6 +166,8 @@ export async function collectExecutableKnowledgeEntries(
   // spec 2026-05-18 super-flow-channel：sessionId="super" 是反思场景门控
   if (thread.persistence?.sessionId === SUPER_SESSION_ID) {
     protocolEntries[REFLECTABLE_BASIC_PATH] = REFLECTABLE_KNOWLEDGE;
+    // U7: 元编程协议指引——只在 super 注入；教 LLM 何时走 worktree 沙箱
+    protocolEntries[REFLECTABLE_METAPROG_PATH] = REFLECTABLE_METAPROG_KNOWLEDGE;
   }
 
   const list = contextWindows ?? [];

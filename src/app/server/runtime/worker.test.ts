@@ -12,6 +12,7 @@ describe("worker", () => {
     const config = {
       port: 0,
       baseDir: mkdtempSync(join(tmpdir(), "ooc-worker-")),
+      stonesBranch: "main",
       workerPollMs: 5,
       workerEnabled: false,
       workerMaxTicks: 15,

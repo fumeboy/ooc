@@ -25,6 +25,7 @@ import { programCommand } from "./program.js";
 import { talkCommand } from "./talk.js";
 import { todoCommand } from "./todo.js";
 import { writeFileCommand } from "./write-file.js";
+import { metaprogCommand } from "./metaprog.js";
 import type { CommandTableEntry } from "../command-types.js";
 
 /**
@@ -47,6 +48,7 @@ export const ROOT_COMMANDS: Record<string, CommandTableEntry> = {
   grep: grepCommand,
   create_issue: createIssueCommand,
   open_issue: openIssueCommand,
+  metaprog: metaprogCommand,
 };
 
 /** Protocol knowledge path（与 plan.ts 等命令文件的 *_BASIC_PATH 形态一致）。 */

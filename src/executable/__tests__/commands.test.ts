@@ -35,6 +35,7 @@ describe("executable commands", () => {
       "end",
       "glob",
       "grep",
+      "metaprog",
       "open_file",
       "open_issue",
       "open_knowledge",

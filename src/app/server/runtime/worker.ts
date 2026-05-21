@@ -21,7 +21,7 @@ const USER_OBJECT_ID = "user";
 
 export async function runJob(
   job: RuntimeJob,
-  config: Pick<ServerConfig, "baseDir" | "workerMaxTicks">
+  config: Pick<ServerConfig, "baseDir" | "stonesBranch" | "workerMaxTicks">
 ): Promise<void> {
   if (job.objectId === USER_OBJECT_ID) {
     // user object 是被动对象——所有思考由 web 用户在 UI 上完成，worker 不调度
@@ -34,6 +34,7 @@ export async function runJob(
       sessionId: job.sessionId,
       objectId: job.objectId,
       threadId: job.threadId,
+      stonesBranch: config.stonesBranch,
     });
     return;
   }
@@ -43,6 +44,7 @@ export async function runJob(
       baseDir: config.baseDir,
       sessionId: job.sessionId,
       objectId: job.objectId,
+      stonesBranch: config.stonesBranch,
     },
     job.threadId
   );
@@ -51,7 +53,7 @@ export async function runJob(
   }
   // 跑 scheduler 前先把"caller waiting on 已结束的 cross-object callee" 唤醒
   // (scheduler.emitChildEndNotifications 只覆盖 in-tree childThreads,无法跨 object)
-  await syncCrossObjectCalleeEnds(rootThread, config.baseDir, job.sessionId);
+  await syncCrossObjectCalleeEnds(rootThread, config.baseDir, job.sessionId, config.stonesBranch);
   // pull-on-tick:扫本 thread IssueWindow,发现新 comment 时按规则写 inbox
   // (push 主路径由 issuesService.appendComment 调 enqueueSubscribers 触发;
   //  本 sync 是兜底,覆盖 push 路径漏 enqueue / worker 重启等场景)
@@ -166,6 +168,7 @@ async function syncCrossObjectCalleeEnds(
   caller: ThreadContext,
   baseDir: string,
   callerSessionId: string,
+  stonesBranch?: string,
 ): Promise<void> {
   if (!caller.persistence) return;
   const talkWindows = (caller.contextWindows ?? []).filter(
@@ -181,7 +184,7 @@ async function syncCrossObjectCalleeEnds(
     const isSuperAlias = w.target === SUPER_ALIAS_TARGET;
     const calleeObjectId = isSuperAlias ? caller.persistence.objectId : w.target;
     const calleeSessionId = isSuperAlias ? SUPER_SESSION_ID : callerSessionId;
-    const calleeRef = { baseDir, sessionId: calleeSessionId, objectId: calleeObjectId };
+    const calleeRef = { baseDir, sessionId: calleeSessionId, objectId: calleeObjectId, stonesBranch };
     let callee: ThreadContext | undefined;
     try {
       callee = await readThread(calleeRef, w.targetThreadId!);

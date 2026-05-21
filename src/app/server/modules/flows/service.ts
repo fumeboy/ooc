@@ -139,6 +139,8 @@ async function readSessionTitle(sessionDir: string, fallback: string) {
 
 export function createFlowsService(deps: {
   baseDir: string;
+  /** U2: 当前 server 实例绑定的 stones-branch；UI server method 加载时拼路径用。 */
+  stonesBranch?: string;
   pauseStore: PauseStore;
   jobManager: ReturnType<typeof createJobManager>;
 }) {
@@ -546,7 +548,7 @@ export function createFlowsService(deps: {
       void sessionId;
       let methods;
       try {
-        methods = await loadUiServerMethods({ baseDir: deps.baseDir, objectId });
+        methods = await loadUiServerMethods({ baseDir: deps.baseDir, objectId, stonesBranch: deps.stonesBranch });
       } catch (error) {
         throw new AppServerError(
           "METHOD_LOAD_FAILED",

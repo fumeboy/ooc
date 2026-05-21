@@ -59,6 +59,7 @@ describe("[e2e backend] relation-window-edit-session", () => {
     const app = buildServer({
       port: 0,
       baseDir,
+      stonesBranch: "main",
       workerPollMs: 50,
       workerEnabled: false,
       workerMaxTicks: 10,

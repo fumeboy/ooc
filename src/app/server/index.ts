@@ -1,6 +1,8 @@
 import { Elysia } from "elysia";
 import { setPauseChecker } from "@src/observable";
+import { ensureStoneRepo } from "@src/persistable";
 import { readServerConfig, type ServerConfig } from "./bootstrap/config";
+import { runRecoveryCheck } from "./bootstrap/recovery-check";
 import { AppServerError } from "./bootstrap/errors";
 import { healthModule } from "./modules/health";
 import { runtimeModule } from "./modules/runtime";
@@ -115,8 +117,44 @@ export function buildServer(config: ServerConfig = readServerConfig()) {
 
 if (import.meta.main) {
   const config = readServerConfig();
+  // U1: stones/ git auto-init + 旧扁平布局迁移到 stones/main/。bare repo + linked
+  // worktrees 模式：bare 仓库在 stones/.stones_repo/，main worktree 在 stones/main/。
+  // 失败抛错并退出（启动期一次性副作用，无法静默继续）。
+  const repoStatus = await ensureStoneRepo({ baseDir: config.baseDir });
+  if (repoStatus.initialized) {
+    console.log(
+      `[ooc-app-server] stones/.stones_repo (bare) initialized + main worktree attached ` +
+        `(commit ${repoStatus.bootstrapCommit?.slice(0, 8)})`,
+    );
+  } else if (repoStatus.bootstrapCommit) {
+    console.log(`[ooc-app-server] stones/ HEAD unborn — wrote bootstrap commit ${repoStatus.bootstrapCommit.slice(0, 8)}`);
+  }
+  if (repoStatus.layout === "legacy-embedded") {
+    console.log(
+      `[ooc-app-server] stones/ uses legacy embedded .git layout (.stones_repo + worktrees not active)`,
+    );
+  }
+  if (repoStatus.migrated) {
+    console.log(`[ooc-app-server] stones/ migrated flat layout into stones/main/`);
+  }
+
+  // U8: Recovery 自检——遍历 stones/main/{Object}/server/index.ts，加载失败的开 PR-Issue。
+  // 不阻塞启动；Supervisor 在自己的 super flow 看到 recovery-needed Issue 后决策回滚。
+  try {
+    const recovery = await runRecoveryCheck({ baseDir: config.baseDir });
+    if (recovery.broken.length > 0) {
+      console.log(
+        `[ooc-app-server] recovery-check: ${recovery.broken.length} broken stone(s) — ` +
+          `${recovery.newIssues.length} new PR-Issue(s) opened in super session`,
+      );
+    }
+  } catch (e) {
+    console.warn(`[ooc-app-server] recovery-check failed (non-fatal): ${e instanceof Error ? e.message : e}`);
+  }
+
   buildServer(config).listen(config.port);
   console.log(`[ooc-app-server] listening on :${config.port}`);
   console.log(`[ooc-app-server] world dir: ${config.baseDir}`);
+  console.log(`[ooc-app-server] stones-branch: ${config.stonesBranch}`);
   console.log(`[ooc-app-server] debug chat: http://127.0.0.1:${config.port}/debug/chat.html`);
 }

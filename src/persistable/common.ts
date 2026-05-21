@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { STONES_MAIN_BRANCH } from "./stone-bootstrap";
 
 /**
  * 标识磁盘上的单个 flow object 目录。
@@ -12,6 +13,11 @@ export interface FlowObjectRef {
   sessionId: string;
   /** `flows/{sessionId}/objects/` 下的 object 目录名。 */
   objectId: string;
+  /**
+   * 当前 server 实例绑定的 stones-branch，用于派生 StoneObjectRef 时承接（U2）。
+   * 缺省时下游 stoneDir() 回退到 "main"。
+   */
+  stonesBranch?: string;
 }
 
 /**
@@ -42,21 +48,37 @@ export function toJson(value: unknown): string {
 /**
  * 标识磁盘上的单个 stone 对象。
  *
- * 路径形态：`{baseDir}/stones/{objectId}`
+ * 路径形态：`{baseDir}/stones/{stonesBranch}/{objectId}`
+ *
+ * `stonesBranch` 是 server 实例启动时绑定的 git 分支（默认 "main"，可通过
+ * `--stones-branch` 切换至 worktree 分支用于元编程沙箱，详见 U2/U4 设计）。
+ * 旧调用点未传 stonesBranch 时回退到 "main"，与单 worktree 时代行为对齐。
  */
 export interface StoneObjectRef {
   /** 包含 `stones/` 的根目录。 */
   baseDir: string;
   /** `stones/` 下的 object 目录名。 */
   objectId: string;
+  /**
+   * 落到 `stones/{stonesBranch}/` 下；缺省时 stoneDir() 用 "main"。
+   * U4 元编程沙箱会显式传 worktree 分支名。
+   */
+  stonesBranch?: string;
 }
 
-/** 计算 stone 目录绝对路径。 */
+/** 计算 stone 目录绝对路径。stonesBranch 缺省时回退到 main。 */
 export function stoneDir(ref: StoneObjectRef): string {
-  return join(ref.baseDir, "stones", ref.objectId);
+  return join(ref.baseDir, "stones", ref.stonesBranch ?? STONES_MAIN_BRANCH, ref.objectId);
 }
 
-/** 从 ThreadPersistenceRef 派生 StoneObjectRef，便于 program/server 模块复用。 */
+/**
+ * 从 ThreadPersistenceRef 派生 StoneObjectRef，便于 program/server 模块复用。
+ * stonesBranch 透传——thread 在哪个 server 实例上跑就属于哪个 branch。
+ */
 export function deriveStoneFromThread(threadRef: ThreadPersistenceRef): StoneObjectRef {
-  return { baseDir: threadRef.baseDir, objectId: threadRef.objectId };
+  return {
+    baseDir: threadRef.baseDir,
+    objectId: threadRef.objectId,
+    stonesBranch: threadRef.stonesBranch,
+  };
 }

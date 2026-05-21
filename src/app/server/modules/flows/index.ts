@@ -18,13 +18,14 @@ const defaultPauseStore = createPauseStore();
 const defaultJobManager = createJobManager();
 
 export function flowsModule(
-  config: Pick<ServerConfig, "baseDir"> & {
+  config: Pick<ServerConfig, "baseDir" | "stonesBranch"> & {
     pauseStore?: import("../../runtime/pause-store").PauseStore;
     jobManager?: ReturnType<typeof createJobManager>;
   }
 ) {
   const service = createFlowsService({
     baseDir: config.baseDir,
+    stonesBranch: config.stonesBranch,
     pauseStore: config.pauseStore ?? defaultPauseStore,
     jobManager: config.jobManager ?? defaultJobManager,
   });
