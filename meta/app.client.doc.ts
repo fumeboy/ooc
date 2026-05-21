@@ -307,9 +307,71 @@ export const root: DocTreeNode = {
                     - **消息文本支持 inline UI token**（详见 \`inline_ui\` 子节点）：
                       Object 写 \`[[ui{"comp":"file-link","path":"..."}ui]]\` 嵌入文本，
                       \`InlineUiContent\` 解析后渲染成 React 组件。
+                    - **连续 tool 卡合并**：\`open\` 后紧邻同一 window_id 的
+                      \`refine / submit / close\` 会折叠成一张主卡 + 紧凑 followUps 列表
+                      （\`formatter.ts:groupConsecutiveToolLines\`）；中间夹 message /
+                      notice / 不同 window 即断链。\`ChatLine.tool.followUps\` 是新加的
+                      可选字段，旧消费者忽略时仍能渲染主行。详见
+                      \`web/src/domains/chat/formatter.test.ts\` 7 项单测。
                     `,
                 },
             },
+        },
+        "layout_mode": {
+            title: "Layout mode 切换：三栏 / 两栏",
+            content: `
+            \`web/src/app/layout/LayoutModeToggle.tsx\` 提供单独的切换按钮组件，状态由
+            \`shell.tsx\` 的 \`useState<LayoutMode>\` + localStorage（\`ooc:layoutMode\`）
+            持久化。AppLayout 接收 \`mode\`：\`"three-column"\` 走原 grid（280 + 1fr + 350），
+            \`"two-column"\` 时强制 \`!showSidebar\` 并改为 \`1fr + 1fr\`，让主面板与右面板
+            各占 50%——典型场景：用户进入"专注 chat ↔ 主视图"模式，把 sidebar 暂时挪开。
+
+            按钮挂在两个常用视区：
+            - \`MainPanel\` breadcrumb-bar 最左（\`.breadcrumb-layout-toggle\`）
+            - \`RightPanel\` 顶部 header（取代原 invisible spacer，详见 \`right_header\`）
+
+            状态共享但 UI 复制——同 \`mode\` 渲染同 icon（\`Columns3\` ↔ \`Columns2\`），点
+            任一处都触发 \`toggleLayoutMode\` 走 setter + persist。
+            `,
+            named: {
+                "LayoutMode": "判别联合 'three-column' | 'two-column'，决定 sidebar 是否渲染 + grid 列数",
+                "LayoutModeToggle": "单一按钮组件，shell 决定 mode 与回调",
+                "ooc:layoutMode": "localStorage key，跨刷新保持用户偏好",
+            },
+            sources: [
+                [
+                    "web/src/app/layout/LayoutModeToggle.tsx",
+                    "LayoutMode type / LayoutModeToggle 按钮 / readPersistedLayoutMode + persistLayoutMode；AppLayout 在 mode='two-column' 时省略 sidebar、加 .app-layout-two-col 类（grid-template-columns: 1fr 1fr）；shell.tsx 的 toggleLayoutMode 包 setState + persistLayoutMode；MainPanel 的 breadcrumb-bar 最左、RightPanel 的 .right-header 内各挂一份",
+                ],
+            ],
+        },
+        "right_header": {
+            title: "RightPanel header：对话对象 + 主视图切换 + layout 切换",
+            content: `
+            原 \`right-breadcrumb-spacer\`（仅占位的 invisible div）已替换为完整 header
+            行（2026-05-21 改造）。布局：左侧"对话对象 displayName"（取自 self.md 首行，
+            fallback 到 objectId），右侧两个图标按钮——
+
+            1. **查看 context windows**（\`Network\` icon）：调 shell.handleShowContextWindows，
+               其本质是 \`navigate(toPath({ kind: "session", sessionId, objectId, threadId }))\`，
+               把 MainPanel 从 file viewer / issueDetail / 其它视图切回 thread context tree
+               视图（即用户从 chat 里 file-link 跳到 file 视图后，一键回 chat 主视图）。
+            2. **LayoutModeToggle**：与 breadcrumb-bar 那个共享同一 mode（详见 \`layout_mode\`）。
+
+            行为契约：与原 spacer 同高（\`.right-header\` 高 34px），保证两列顶部对齐
+            （breadcrumb-bar 也是 34px）；不渲染 RightPanel 时（user.root）整个 header
+            连同 ChatPanel 一起隐藏。
+            `,
+            named: {
+                "对话对象 displayName": "通过 useDisplayNames(objectId) 解析 self.md 首行；fallback 到 objectId",
+                "查看 context windows 按钮": "shell.handleShowContextWindows，本质是导航到当前 session+thread 的 URL，让 MainPanel 退回 thread 视图",
+            },
+            sources: [
+                [
+                    "web/src/app/layout/RightPanel.tsx",
+                    ".right-header 行（左侧 displayName / 右侧 Network 按钮 + LayoutModeToggle）；shell.handleShowContextWindows 走 navigate(toPath({kind:'session',...}))；样式见 web/src/styles.css 的 .right-header* 段（与 breadcrumb-bar 同高 34px 保证两列顶部对齐）",
+                ],
+            ],
         },
         "inline_ui": {
             title: "inline UI tokens：消息文本里的可交互组件",

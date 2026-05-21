@@ -1,4 +1,4 @@
-import type { ChatLine, ThreadContext, ThreadMessage, ToolMark, ToolSummaryField } from "./model";
+import type { ChatLine, ThreadContext, ThreadMessage, ToolFollowUp, ToolMark, ToolSummaryField } from "./model";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object";
@@ -146,6 +146,93 @@ function buildToolLine(input: {
     ok: deriveOk(input.outputValue, input.ok),
     pending: input.pending,
   };
+}
+
+/**
+ * 抽出 tool 调用所"作用于"的 window_id：
+ * - `open`: 创建了新 window，window_id 在 OUTPUT JSON 里
+ * - `refine`/`submit`: window_id = arguments.parent_window_id（fallback form_id）
+ * - `close`: window_id = arguments.window_id（fallback form_id）
+ *
+ * 取不到时返回 undefined（caller 自行决定不分组）。
+ */
+function deriveTargetWindowId(
+  toolName: string,
+  argumentsValue: unknown,
+  outputValue: unknown,
+): string | undefined {
+  if (toolName === "open") {
+    const parsed = parseStructuredValue(outputValue);
+    if (isRecord(parsed)) {
+      const id = asDisplayText(parsed.window_id) ?? asDisplayText(parsed.windowId);
+      if (id) return id;
+    }
+    return undefined;
+  }
+  if (!isRecord(argumentsValue)) return undefined;
+  if (toolName === "refine" || toolName === "submit") {
+    return asDisplayText(argumentsValue.parent_window_id) ?? asDisplayText(argumentsValue.form_id);
+  }
+  if (toolName === "close") {
+    return asDisplayText(argumentsValue.window_id) ?? asDisplayText(argumentsValue.form_id);
+  }
+  return undefined;
+}
+
+const MERGEABLE_FOLLOWUP_TOOLS = new Set(["refine", "submit", "close"]);
+
+/**
+ * 把连续的 `open → refine/submit/close（同 window_id）` 折叠成主 tool 卡的
+ * `followUps` 列表。仅作用于"完全相邻"的 tool line 链 —— 中间夹任何 message / notice
+ * / 不同 window 的 tool 时立即断链，避免把语义上无关的两组 form 操作粘在一起。
+ *
+ * 不修改输入 lines 的引用语义；输出新数组。
+ */
+function groupConsecutiveToolLines(lines: ChatLine[]): ChatLine[] {
+  const result: ChatLine[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const head = lines[i]!;
+    if (head.kind !== "tool" || head.toolName !== "open") {
+      result.push(head);
+      continue;
+    }
+    const headWindowId = deriveTargetWindowId(head.toolName, head.rawArguments, head.rawOutput);
+    if (!headWindowId) {
+      result.push(head);
+      continue;
+    }
+    const followUps: ToolFollowUp[] = [];
+    let j = i + 1;
+    while (j < lines.length) {
+      const next = lines[j]!;
+      if (next.kind !== "tool") break;
+      if (!MERGEABLE_FOLLOWUP_TOOLS.has(next.toolName)) break;
+      const nextWindowId = deriveTargetWindowId(next.toolName, next.rawArguments, next.rawOutput);
+      if (nextWindowId !== headWindowId) break;
+      followUps.push({
+        id: next.id,
+        toolName: next.toolName,
+        callId: next.callId,
+        title: next.title,
+        headerDescription: next.headerDescription,
+        summaryFields: next.summaryFields,
+        argumentsText: next.argumentsText,
+        outputText: next.outputText,
+        rawArguments: next.rawArguments,
+        rawOutput: next.rawOutput,
+        ok: next.ok,
+        pending: next.pending,
+      });
+      j += 1;
+    }
+    if (followUps.length > 0) {
+      result.push({ ...head, followUps });
+      i = j - 1; // 让外层循环 i+=1 跳到 j
+    } else {
+      result.push(head);
+    }
+  }
+  return result;
 }
 
 /**
@@ -441,5 +528,7 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
   // 处理完所有 events 后,flush 剩余 outbound→user 消息(比最后一个 inbox 还晚的)
   flushOutboundUpTo(Number.POSITIVE_INFINITY);
 
-  return lines;
+  // 把连续的 open → refine / submit / close（同一 window_id）合并成一张卡，
+  // followUps 渲染在主卡下面的紧凑 step 行（详见 TuiBlock）。
+  return groupConsecutiveToolLines(lines);
 }

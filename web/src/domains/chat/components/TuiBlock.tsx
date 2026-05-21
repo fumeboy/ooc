@@ -207,7 +207,44 @@ function OpenToolCard({ line, liveWindowIds }: ToolCardShellProps) {
     <ToolCardShell line={line} liveWindowIds={liveWindowIds}>
       <ToolFieldList line={line} />
       <WindowLinkRow line={line} />
+      {line.followUps && line.followUps.length > 0 && <ToolFollowUpsList line={line} />}
     </ToolCardShell>
+  );
+}
+
+/**
+ * 把跟在 open 后面、操作同一 window 的 refine/submit/close 显示为紧凑 step 行。
+ * 节省纵向空间 + 让 form 的"open → fill → submit → close"全过程一眼可见。
+ */
+function ToolFollowUpsList({ line }: { line: Extract<ChatLine, { kind: "tool" }> }) {
+  if (!line.followUps?.length) return null;
+  return (
+    <ul className="tui-tool-followups">
+      {line.followUps.map((fu) => {
+        const Icon = getToolIcon(fu.toolName);
+        const status = fu.pending ? "pending" : fu.ok ? "ok" : "failed";
+        return (
+          <li key={fu.id} className={`tui-tool-followup tui-tool-followup-${fu.toolName} status-${status}`}>
+            <span className="tui-tool-followup-icon">
+              <Icon size={11} strokeWidth={2} aria-hidden="true" />
+            </span>
+            <span className="tui-tool-followup-name">{fu.toolName}</span>
+            {fu.title && <span className="tui-tool-followup-title">{fu.title}</span>}
+            {fu.headerDescription && (
+              <span className="tui-tool-followup-desc" title={fu.headerDescription}>
+                {fu.headerDescription}
+              </span>
+            )}
+            <span
+              className={`tui-tool-status${fu.pending ? " is-pending" : fu.ok ? " is-success" : " is-fail"}`}
+              title={!fu.ok && !fu.pending && fu.outputText ? fu.outputText.slice(0, 400) : undefined}
+            >
+              {status}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

@@ -13,6 +13,7 @@ import {
   matchClientTarget,
 } from "../../domains/clients/ClientWithSourceToggle";
 import type { RouteState } from "../routing";
+import { LayoutModeToggle, type LayoutMode } from "./LayoutModeToggle";
 import { humanizeThreadId } from "./threadDisplay";
 
 export function MainPanel({
@@ -35,6 +36,8 @@ export function MainPanel({
   threadHeader,
   knownSessionIds,
   flowsReady,
+  layoutMode,
+  onToggleLayoutMode,
 }: {
   route: RouteState;
   isWelcome?: boolean;
@@ -57,6 +60,10 @@ export function MainPanel({
   knownSessionIds?: ReadonlySet<string>;
   /** flows 列表是否已经被首次加载完 (避免首屏数据未到时误报 not-found) */
   flowsReady?: boolean;
+  /** 当前布局模式（三栏 / 两栏）；用于 breadcrumb-bar 最左的切换按钮。 */
+  layoutMode?: LayoutMode;
+  /** 切换布局模式回调；shell 持有状态。 */
+  onToggleLayoutMode?: () => void;
 }) {
   const showBlockingError = Boolean(error && file);
   // 命中 plan-003 §3.1 时优先走 ClientWithSourceToggle；不命中走原 FileViewer 分支
@@ -85,6 +92,13 @@ export function MainPanel({
   return (
     <main className="main-panel gap-1">
       <div className="breadcrumb-bar panel">
+        {layoutMode && onToggleLayoutMode && (
+          <LayoutModeToggle
+            mode={layoutMode}
+            onToggle={onToggleLayoutMode}
+            className="breadcrumb-layout-toggle"
+          />
+        )}
         <span className="breadcrumb-segments" title={breadcrumbText}>
           {breadcrumbSegments.map((seg, i) => (
             <span key={i} className="breadcrumb-segment-wrap">

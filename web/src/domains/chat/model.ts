@@ -152,6 +152,26 @@ export type ToolMark = {
   tip?: string;
 };
 
+/**
+ * 一条折叠到主 tool 卡里的"后续操作"——典型链路：
+ *   open(...) → refine(parent_window_id=W) → submit(parent_window_id=W) → close(window_id=W)
+ * 后三条 follow-up 都共享 window W，与首个 open 显示在同一张卡上以减少视觉噪声。
+ */
+export interface ToolFollowUp {
+  id: string;
+  toolName: string;
+  callId?: string;
+  title?: string;
+  headerDescription?: string;
+  summaryFields?: ToolSummaryField[];
+  argumentsText?: string;
+  outputText?: string;
+  rawArguments?: unknown;
+  rawOutput?: unknown;
+  ok?: boolean;
+  pending?: boolean;
+}
+
 export type ChatLine =
   | {
       id: string;
@@ -178,6 +198,15 @@ export type ChatLine =
       outputText?: string;
       ok?: boolean;
       pending?: boolean;
+      /**
+       * 当本 tool 是 `open` 创建了一个 window，且后续紧邻（无其它 message/notice 间断）
+       * 还有同一 window_id 的 refine/submit/close 调用时，把它们折叠成一组 followUp，
+       * 在 UI 上以紧凑 step 行展示（共享同一张 card）。
+       *
+       * 与原 ChatLine 形态完全兼容：旧消费者忽略 followUps 时仍能渲染主行；
+       * TuiBlock 在 tool 分支中检测 followUps 后追加 step 列表。
+       */
+      followUps?: ToolFollowUp[];
     }
   | {
       id: string;

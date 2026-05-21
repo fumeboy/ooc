@@ -10,6 +10,11 @@ import { messageFromError } from "../transport/errors";
 import { AppLayout } from "./layout/AppLayout";
 import { MainPanel } from "./layout/MainPanel";
 import { RightPanel } from "./layout/RightPanel";
+import {
+  type LayoutMode,
+  persistLayoutMode,
+  readPersistedLayoutMode,
+} from "./layout/LayoutModeToggle";
 import { Sidebar } from "./layout/Sidebar";
 import { ThreadHeader } from "./layout/ThreadHeader";
 import { initialState, type AppState, type SessionThread } from "./state";
@@ -36,6 +41,15 @@ export function AppShell() {
   const [knowledgeModal, setKnowledgeModal] = useState<{ objectId: string; parentPath: string } | undefined>();
   const [knowledgeDraft, setKnowledgeDraft] = useState({ kind: "file" as "file" | "folder", path: "", content: "" });
   const [pauseBusy, setPauseBusy] = useState(false);
+  // 布局模式：三栏（默认）/ 两栏（隐藏 sidebar，main+right 各 50%）。localStorage 持久化。
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => readPersistedLayoutMode());
+  const toggleLayoutMode = useCallback(() => {
+    setLayoutMode((prev) => {
+      const next: LayoutMode = prev === "three-column" ? "two-column" : "three-column";
+      persistLayoutMode(next);
+      return next;
+    });
+  }, []);
 
   // URL 派生导航维度 —— 下游只读这几个变量，不再读 state.scope / state.active* 的导航字段
   const scope: TreeScope = scopeOf(route);
@@ -396,13 +410,26 @@ export function AppShell() {
     navigate(toPath({ kind: "session", sessionId: activeSessionId, objectId: sel.objectId, threadId: sel.threadId }));
   }
 
+  function handleShowContextWindows() {
+    if (!activeSessionId) return;
+    navigate(
+      toPath({
+        kind: "session",
+        sessionId: activeSessionId,
+        objectId: activeObjectId ?? "user",
+        threadId: activeThreadId ?? "root",
+      }),
+    );
+  }
+
   const isWelcome = route.kind === "welcome";
 
   return (
     <AppLayout
+      mode={layoutMode}
       sidebar={<Sidebar scope={scope} flows={state.flows} tree={state.tree} activePath={activePath} activeSessionId={activeSessionId} activeSessionTitle={(() => { const f = state.flows.find((flow) => flow.sessionId === activeSessionId); return f ? flowTitle(f) : activeSessionId; })()} showSessions={showSessions} onToggleSessions={() => setShowSessions((prev) => !prev)} onShowWelcome={handleShowWelcome} onScope={handleScope} onNode={handleNode} onSession={handleSession} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
-      main={<MainPanel route={route} isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} selfObjectId={activeObjectId} onUserReply={handleSend} onRefresh={refreshActiveView} threadHeader={activeObjectId ? <ThreadHeader objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} onSelectThread={handleSelectThread} /> : undefined} knownSessionIds={knownSessionIds} flowsReady={state.flowsHash !== undefined} />}
-      right={activeObjectId && activeObjectId !== "user" ? <RightPanel sessionId={activeSessionId} objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} /> : undefined}
+      main={<MainPanel route={route} isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} selfObjectId={activeObjectId} onUserReply={handleSend} onRefresh={refreshActiveView} threadHeader={activeObjectId ? <ThreadHeader objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} onSelectThread={handleSelectThread} /> : undefined} knownSessionIds={knownSessionIds} flowsReady={state.flowsHash !== undefined} layoutMode={layoutMode} onToggleLayoutMode={toggleLayoutMode} />}
+      right={activeObjectId && activeObjectId !== "user" ? <RightPanel sessionId={activeSessionId} objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} layoutMode={layoutMode} onToggleLayoutMode={toggleLayoutMode} onShowContextWindows={handleShowContextWindows} /> : undefined}
     >
       <CreateStoneModal open={stoneModalOpen} draft={stoneDraft} onDraft={setStoneDraft} onClose={() => setStoneModalOpen(false)} onSubmit={handleCreateStone} />
       <CreateKnowledgeModal modal={knowledgeModal} draft={knowledgeDraft} onDraft={setKnowledgeDraft} onClose={() => setKnowledgeModal(undefined)} onSubmit={handleCreateKnowledge} />

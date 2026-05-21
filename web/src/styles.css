@@ -526,3 +526,30 @@ a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color
 .inline-ui-file-link:hover { background: rgba(220, 232, 252, .9); text-decoration: none; }
 .inline-ui-file-link::before { content: "📄 "; opacity: .6; }
 .inline-ui-unknown { color: #9a463b; background: rgba(255, 240, 235, .8); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+
+/* Tool followUps：open 卡内嵌的 refine/submit/close 紧凑 step 行（chat 优化 2026-05-21）。 */
+.tui-tool-followups { list-style: none; padding: 6px 0 0; margin: 6px 0 0; border-top: 1px dashed rgba(0,0,0,.06); display: flex; flex-direction: column; gap: 3px; }
+.tui-tool-followup { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 5px; font-size: 11px; }
+.tui-tool-followup:hover { background: rgba(0,0,0,.025); }
+.tui-tool-followup-icon { display: inline-flex; opacity: .7; }
+.tui-tool-followup-name { font-weight: 600; font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); color: var(--foreground); }
+.tui-tool-followup-title { color: var(--foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+.tui-tool-followup-desc { color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; }
+.tui-tool-followup .tui-tool-status { margin-left: auto; flex: 0 0 auto; }
+.tui-tool-followup.status-failed { background: rgba(255, 245, 240, .5); }
+
+/* Layout mode toggle + 两栏布局（2026-05-21）。 */
+.app-layout-two-col { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.layout-mode-toggle { display: inline-flex; align-items: center; justify-content: center; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: rgba(255,255,255,.7); color: var(--muted-foreground); cursor: pointer; transition: background .15s ease, color .15s ease; }
+.layout-mode-toggle:hover { background: rgba(245, 246, 242, .9); color: var(--foreground); }
+.layout-mode-toggle[data-mode="two-column"] { color: #4561e4; border-color: rgba(180, 198, 232, .6); background: rgba(232, 240, 254, .6); }
+.breadcrumb-layout-toggle { margin-right: 6px; flex: 0 0 auto; }
+
+/* RightPanel header（2026-05-21 取代原 invisible spacer）。 */
+.right-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; height: 34px; box-sizing: border-box; }
+.right-header-title { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.right-header-label { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted-foreground); }
+.right-header-object { font-size: 12px; font-weight: 600; color: var(--foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+.right-header-actions { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.right-header-action { display: inline-flex; align-items: center; justify-content: center; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: rgba(255,255,255,.7); color: var(--muted-foreground); cursor: pointer; transition: background .15s ease, color .15s ease; }
+.right-header-action:hover { background: rgba(245, 246, 242, .9); color: var(--foreground); }

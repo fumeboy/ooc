@@ -1,18 +1,19 @@
 import type { ThreadContext } from "../../domains/chat";
 import { ChatPanel } from "../../domains/chat/components/ChatPanel";
+import { LayoutModeToggle, type LayoutMode } from "./LayoutModeToggle";
+import { useDisplayNames } from "../../domains/objects";
+import { Network } from "lucide-react";
 
 /**
- * RightPanel — chat 主面板。
+ * RightPanel — chat 主面板，顶部带一行 header（取代了原 invisible spacer）。
  *
- * Header（objectId / status / thread switcher）现在内联在 MainPanel 的 breadcrumb-bar 同一行，
- * 这里只保留 chat 体本身。shell 决定是否渲染 RightPanel：当 thread 没有可与 user 对话的语义
- * （如 user.root，user 不能和自己对话）时直接传 right=null，AppLayout 会切到两列布局。
+ * Header 内容（2026-05-21 改造）：
+ * - 对话对象的 displayName（取自 self.md 首行；fallback 到 objectId）
+ * - "查看 context windows"按钮：把 MainPanel 切回 thread 视图（kind: "session" + thread）；
+ *   常见场景是 user 看完文件后想回到 context tree 而不是手动改 URL
+ * - LayoutModeToggle：切换两栏 / 三栏
  *
- * 布局对齐：MainPanel 顶部是 34px 高的 breadcrumb-bar.panel + 主 panel；RightPanel 自己只有
- * 一个 panel，且其内部 chat-body 从顶端就开始渲染对话。两列同 row 时若 RightPanel 不补一个
- * 同高的 spacer，ChatPanel 顶部内容会与 MainPanel 的 breadcrumb-bar 在同一 Y 出现，造成
- * "ChatPanel 浮在 header 之上"的视觉错觉（Issue #2 Bad #a）。
- * 这里给 .right-panel 一个空的 .breadcrumb-bar 占位条，让两列顶部对齐。
+ * 行为契约：composer 仅当 thread 是 user 自己 own 或被 user creator 派生时显示。
  */
 export function RightPanel(props: {
   sessionId?: string;
@@ -23,13 +24,36 @@ export function RightPanel(props: {
   pauseBusy?: boolean;
   onSend: (text: string) => Promise<void>;
   onTogglePause?: () => Promise<void>;
+  layoutMode: LayoutMode;
+  onToggleLayoutMode: () => void;
+  onShowContextWindows: () => void;
 }) {
+  const names = useDisplayNames(props.objectId ? [props.objectId] : []);
+  const objectName = props.objectId ? names[props.objectId] ?? props.objectId : undefined;
   return (
     <aside className="right-column gap-1">
-      {/* invisible spacer 保持两列顶部对齐 (Issue #2 bad #a 修复). 用户反馈 2026-05-20:
-          原 .breadcrumb-bar.panel 样式让 spacer 看起来像空 breadcrumb-bar — 改用纯 spacer 元素
-          (无 border / 无 background, 仅占 height) 让用户视觉上看不见. */}
-      <div className="right-breadcrumb-spacer" aria-hidden="true" />
+      <div className="right-header panel" aria-label="right panel header">
+        <div className="right-header-title" title={props.objectId}>
+          <span className="right-header-label">对话对象</span>
+          <span className="right-header-object">{objectName ?? "(未选择)"}</span>
+        </div>
+        <div className="right-header-actions">
+          <button
+            type="button"
+            className="right-header-action"
+            title="把主面板切回 thread context windows 视图"
+            aria-label="查看 context windows"
+            onClick={props.onShowContextWindows}
+          >
+            <Network size={13} strokeWidth={2} />
+          </button>
+          <LayoutModeToggle
+            mode={props.layoutMode}
+            onToggle={props.onToggleLayoutMode}
+            className="right-header-action"
+          />
+        </div>
+      </div>
       <div className="panel right-panel">
         <ChatPanel
           sessionId={props.sessionId}
