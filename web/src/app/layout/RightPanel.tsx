@@ -34,7 +34,7 @@ export function RightPanel(props: {
     <aside className="right-column gap-1">
       <div className="right-header panel" aria-label="right panel header">
         <div className="right-header-title" title={props.objectId}>
-          <span className="right-header-label">对话对象</span>
+          <span className="right-header-label">对话: </span>
           <span className="right-header-object">{objectName ?? "(未选择)"}</span>
         </div>
         <div className="right-header-actions">
@@ -54,7 +54,7 @@ export function RightPanel(props: {
           />
         </div>
       </div>
-      <div className="panel right-panel">
+      <div className="right-panel">
         <ChatPanel
           sessionId={props.sessionId}
           objectId={props.objectId}

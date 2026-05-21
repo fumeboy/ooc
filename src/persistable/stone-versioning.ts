@@ -231,7 +231,8 @@ export async function classifyWorktreeBranch(
     const repo = repoDir(worktree.baseDir);
     const r = gitDiffNames(repo, STONES_MAIN_BRANCH, worktree.branch);
     if (!r.ok) return { ok: false, code: "GIT", gitCode: r.code, stderr: r.stderr } as const;
-    const prefix = `${authorObjectId}/`;
+    // 自治区路径 = `objects/<authorObjectId>/...`（2026-05-21 stones/main/objects/ 重组）
+    const prefix = `objects/${authorObjectId}/`;
     const scope: ScopeClass = r.value.every((p) => p.startsWith(prefix)) ? "self-scope" : "cross-scope";
     return { ok: true, scope, paths: r.value } as const;
   });
@@ -280,7 +281,7 @@ export async function tryMergeSelf(
     // step 2: classify
     const diff = gitDiffNames(repo, STONES_MAIN_BRANCH, worktree.branch);
     if (!diff.ok) return { ok: false, code: "GIT", gitCode: diff.code, stderr: diff.stderr } as const;
-    const prefix = `${authorObjectId}/`;
+    const prefix = `objects/${authorObjectId}/`;
     const isSelf = authorObjectId === SUPERVISOR_OBJECT_ID || diff.value.every((p) => p.startsWith(prefix));
     if (!isSelf) {
       return { ok: true, kind: "must-pr-issue", paths: diff.value } as const;
@@ -550,9 +551,9 @@ export async function rollback(input: RollbackInput): Promise<RollbackResult> {
     const checkout = gitCheckout(repo, STONES_MAIN_BRANCH);
     if (!checkout.ok) return { ok: false, code: "GIT", gitCode: checkout.code, stderr: checkout.stderr } as const;
 
-    // git checkout {target} -- {objectId}/
+    // git checkout {target} -- objects/{objectId}/  (2026-05-21 layout)
     const restore = Bun.spawnSync(
-      ["git", "checkout", target.value, "--", `${input.objectId}/`],
+      ["git", "checkout", target.value, "--", `objects/${input.objectId}/`],
       { cwd: repo, stdout: "pipe", stderr: "pipe" },
     );
     if (restore.exitCode !== 0) {

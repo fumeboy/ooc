@@ -1,5 +1,5 @@
 /**
- * Recovery 启动自检（U8）—— Server 启动时遍历 `stones/main/` 下所有 Object 目录，
+ * Recovery 启动自检（U8）—— Server 启动时遍历 `stones/main/objects/` 下所有 Object 目录，
  * 试加载它们的 `server/index.ts`；任何 Object 加载失败则在 super session 创一条
  * `[recovery-needed]` PR-Issue（不带 prPayload，因为这不是元编程修改而是诊断信号），
  * 让 Supervisor 在自己的 super flow 中看到并决定是否触发 metaprog rollback。
@@ -15,6 +15,7 @@ import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
   STONES_MAIN_BRANCH,
+  STONE_OBJECTS_SUBDIR,
   issuesService,
   PR_ISSUE_SESSION_ID,
   readIssueIndex,
@@ -42,10 +43,10 @@ export interface BrokenObject {
  * 主入口。idempotent：重复运行不重复开 issue。
  */
 export async function runRecoveryCheck(opts: { baseDir: string }): Promise<RecoveryCheckResult> {
-  const stonesMainDir = join(opts.baseDir, "stones", STONES_MAIN_BRANCH);
+  const stonesObjectsDir = join(opts.baseDir, "stones", STONES_MAIN_BRANCH, STONE_OBJECTS_SUBDIR);
   let entries: { name: string; isDir: boolean }[] = [];
   try {
-    const dir = await readdir(stonesMainDir, { withFileTypes: true });
+    const dir = await readdir(stonesObjectsDir, { withFileTypes: true });
     entries = dir
       .filter((e) => e.isDirectory() && !e.name.startsWith("."))
       .map((e) => ({ name: e.name, isDir: true }));
@@ -58,7 +59,7 @@ export async function runRecoveryCheck(opts: { baseDir: string }): Promise<Recov
     const stoneRef = { baseDir: opts.baseDir, objectId: e.name, stonesBranch: STONES_MAIN_BRANCH };
     try {
       // 试加载 server/index.ts；不存在/空文件视为正常（绝大多数 stone 没有 server 方法）
-      const serverFile = join(stonesMainDir, e.name, "server", "index.ts");
+      const serverFile = join(stonesObjectsDir, e.name, "server", "index.ts");
       try {
         await stat(serverFile);
       } catch {
@@ -99,7 +100,7 @@ export async function runRecoveryCheck(opts: { baseDir: string }): Promise<Recov
         baseDir: opts.baseDir,
         sessionId: PR_ISSUE_SESSION_ID,
         title,
-        description: `Server startup self-check failed to load stones/main/${b.objectId}/server/index.ts.\n\nReason:\n${b.reason}\n\nSupervisor: consider \`metaprog rollback\` to a previous commit, or directly fix the stone.`,
+        description: `Server startup self-check failed to load stones/main/objects/${b.objectId}/server/index.ts.\n\nReason:\n${b.reason}\n\nSupervisor: consider \`metaprog rollback\` to a previous commit, or directly fix the stone.`,
         createdByObjectId: "supervisor",
       });
     } catch {

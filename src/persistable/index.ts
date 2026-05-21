@@ -1,5 +1,5 @@
 export type { FlowObjectRef, ThreadPersistenceRef, StoneObjectRef } from "./common";
-export { objectDir, stoneDir, threadDir, deriveStoneFromThread } from "./common";
+export { objectDir, stoneDir, threadDir, deriveStoneFromThread, STONE_OBJECTS_SUBDIR } from "./common";
 
 export {
   createFlowSession,

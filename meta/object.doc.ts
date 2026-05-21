@@ -1300,14 +1300,18 @@ export const root: DocTreeNode = {
 
             核心组成:
             1. world root: \`{baseDir}/\`，包含 \`stones/\` 与 \`flows/\` 两棵子树。
-            2. stone tree: Object 的长期身份与知识（跨 session 持续存在）。
-            3. flow tree: 某次 session 内的临时运行状态（thread / debug / issue）。
+            2. stone tree: 持久层，包含 \`stones/{branch}/objects/<objectId>/\`（per-Object
+               长期身份与知识，跨 session 共享）以及未来挂在 \`stones/{branch}/\` 根的
+               world-level 持久资源。
+            3. flow tree: ephemeral 层，\`flows/{sessionId}/\` 既有 \`objects/<objectId>/\`
+               （per-Object 在该 session 的工作产物）也有 session 级共享文件（如 \`issues/\`）。
             4. 三种 ref 抽象: FlowObjectRef / ThreadPersistenceRef / StoneObjectRef。
             5. 序列化策略: 写盘前剥离 in-process 内存字段（IssueWindow 的游标等），读盘时兜底补 creator window。
 
-            两棵子树的分工:
-            - stone 是 Object 的"长期记忆与方法库"，跨任意多个 session 共享。
-            - flow 是 Object 在某个 session 内的"工作轨迹"，session 结束后可以保留也可以归档。
+            **stone vs flow 是 World 级别的二分**（不是 Agent 级别的）：
+            - stone = 持久（跨 session 永存）；flow = ephemeral（一次会话）
+            - 两侧都有 \`objects/\` 中间层把 per-Object 与 world/session 级共享分开
+            - LLM 提示词仍写 \`stones/<self>/...\`（rewriter 自动注入 branch + objects/）
 
             所有路径计算 / IO 都集中在 src/persistable/；其它层（executable / thinkable / observable）
             通过 ref + 函数调用访问磁盘，不直接拼路径。
@@ -1331,18 +1335,24 @@ export const root: DocTreeNode = {
                     \`\`\`
                     {baseDir}/
                       stones/
-                        <objectId>/
-                          .stone.json            ← stone 元数据（type='stone', objectId）
-                          self.md                ← 对内身份（写入 LlmGenerateParams.instructions）
-                          readme.md              ← 对外公开介绍
-                          data.json              ← stone 数据（顶层 spread merge）
-                          knowledge/
-                            memory/              ← 长期记忆（reflectable 写入位置）
-                            relations/<peer>.md  ← 对各 peer 的认知（collaborable.relation 自动派生）
-                            ...其它 knowledge 文档
-                          server/index.ts        ← stone server 源码
-                          client/index.tsx       ← stone client 源码
-                          files/                 ← 用户文件留存位
+                        .stones_repo/              ← bare git repo（详见 stone_versioning）
+                        <branch>/                  ← linked worktree（main + 任意 metaprog 分支）
+                          .git                     ← 文件，gitdir 指回 .stones_repo/worktrees/<branch>
+                          objects/                 ← per-Object 持久区（2026-05-21 引入）
+                            <objectId>/
+                              .stone.json          ← stone 元数据（type='stone', objectId）
+                              self.md              ← 对内身份（写入 LlmGenerateParams.instructions）
+                              readme.md            ← 对外公开介绍
+                              data.json            ← stone 数据（顶层 spread merge）
+                              knowledge/
+                                memory/            ← 长期记忆（reflectable 写入位置）
+                                relations/<peer>.md ← 对各 peer 的认知
+                                ...其它 knowledge 文档
+                              server/index.ts      ← stone server 源码
+                              client/index.tsx     ← stone client 源码
+                              files/               ← 用户文件留存位
+                          # （未来：world-level 资源放在 stones/<branch>/ 根本身，
+                          #   与 objects/ 子目录物理分离）
                       flows/
                         <sessionId>/
                           .session.json          ← session 元数据（type='flow-session', sessionId, title）
@@ -1357,6 +1367,19 @@ export const root: DocTreeNode = {
                                 debug/           ← observable 落盘的 input/output/loop 文件
                               client/pages/      ← flow 级 client 页面
                     \`\`\`
+
+                    **关于 stones/<branch>/objects/ 中间层（2026-05-21 重组）**：
+                    flow vs stone 不是 OOC Agent 才有的状态——整个 OOC World 都按
+                    "stone（持久）vs flow（单次会话）" 二分；flows/ 已有 \`<sid>/objects/\`
+                    把"per-Object 在该 session 的工作产物"与"session 级共享文件（如
+                    issues/）"分开，stones/ 现在对称地用 \`<branch>/objects/\` 把
+                    "per-Object 持久身份"与"world-level 持久资源"分开。
+
+                    这让 \`stones/<branch>/\` 根本身可承载未来的 world-level stone 资源
+                    （注册表、共享知识、PR-Issue 长寿存储等），不必为它们造新的顶级目录。
+                    LLM 提示词仍写 \`stones/<self>/...\`（\`session-path.ts:rewriteStonesPath\`
+                    自动注入 branch 与 \`objects/\`）；只有 metaprog 协议 / scope 判定 /
+                    bootstrap migration 等系统层显式知道 \`objects/\` 这一层。
 
                     路径计算函数：objectDir / threadDir / stoneDir / sessionDir / issueFile / issueIndexFile /
                     llmInputFile / llmOutputFile / loopInputFile / loopOutputFile / loopMetaFile。
@@ -1560,10 +1583,11 @@ export const root: DocTreeNode = {
                     （灵感来自 plugins_worktrees 的 \`.plugins_repo/\` 模式。）
 
                     OOC Server 启动接受 \`--stones-branch=<name>\`（默认 main），所有 stoneDir 解析为
-                    \`{baseDir}/stones/{stonesBranch}/{objectId}\`。Object 想做高赌注修改时不直接写 main，
+                    \`{baseDir}/stones/{stonesBranch}/objects/{objectId}\`（2026-05-21 起 \`objects/\`
+                    中间层，详见 world_layout）。Object 想做高赌注修改时不直接写 main，
                     通过 metaprog 协议（programmable.metaprog_protocol）开 worktree → 编辑 → 试运行 → commit → merge。
 
-                    路径划界（R5/R6）：commit 累积 diff（vs main merge-base）的所有路径都以 \`{authorObjectId}/\`
+                    路径划界（R5/R6）：commit 累积 diff（vs main merge-base）的所有路径都以 \`objects/{authorObjectId}/\`
                     开头 → self-scope，自治 fast-forward merge；任一路径越界 → cross-scope，整 commit 走 PR-Issue
                     给 supervisor 评审。Supervisor（R12）是元自治例外，不参与本协议。
 

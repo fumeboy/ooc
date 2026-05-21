@@ -111,8 +111,10 @@ export function createStonesService({ baseDir, stonesBranch }: { baseDir: string
   return {
     async listStones() {
       try {
-        // U2: list 当前 stones-branch 下的 Object 目录，而非 stones/ 根（根下是 branch 子目录）
-        const entries = await readdir(`${baseDir}/stones/${stonesBranch ?? "main"}`, { withFileTypes: true });
+        // U2 + 2026-05-21: list 当前 stones-branch 的 objects/ 子目录下的 Object
+        // 目录（stones/{branch}/objects/{objectId}/）；branch 根本身现在保留给
+        // world-level stone 资源使用。
+        const entries = await readdir(`${baseDir}/stones/${stonesBranch ?? "main"}/objects`, { withFileTypes: true });
         return {
           items: entries
             .filter((entry) => entry.isDirectory())

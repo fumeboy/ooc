@@ -19,8 +19,8 @@ afterEach(async () => {
 
 async function newWorld(): Promise<string> {
   tempRoot = await mkdtemp(join(tmpdir(), "ooc-pr-issue-"));
-  // pre-create stones/main/agent_of_x to satisfy ensureAuthorExists
-  await mkdir(join(tempRoot, "stones", "main", "agent_of_x"), { recursive: true });
+  // pre-create stones/main/objects/agent_of_x to satisfy ensureAuthorExists
+  await mkdir(join(tempRoot, "stones", "main", "objects", "agent_of_x"), { recursive: true });
   return tempRoot;
 }
 

@@ -87,7 +87,7 @@ describe("ensureStoneRepo: bare init from empty world", () => {
 });
 
 describe("ensureStoneRepo: migration from flat layout (still bare-target)", () => {
-  test("moves stones/agent_of_X/ → stones/main/agent_of_X/ then commits via bare", async () => {
+  test("moves stones/agent_of_X/ → stones/main/objects/agent_of_X/ then commits via bare", async () => {
     const baseDir = await newWorld();
     await mkdir(join(baseDir, "stones", "agent_of_thinkable"), { recursive: true });
     await writeFile(join(baseDir, "stones", "agent_of_thinkable", "self.md"), "I think.\n");
@@ -100,14 +100,14 @@ describe("ensureStoneRepo: migration from flat layout (still bare-target)", () =
     expect(result.initialized).toBe(true);
     expect(result.layout).toBe("bare");
 
-    expect(existsSync(join(baseDir, "stones", "main", "agent_of_thinkable", "self.md"))).toBe(true);
-    expect(existsSync(join(baseDir, "stones", "main", "supervisor", "self.md"))).toBe(true);
+    expect(existsSync(join(baseDir, "stones", "main", "objects", "agent_of_thinkable", "self.md"))).toBe(true);
+    expect(existsSync(join(baseDir, "stones", "main", "objects", "supervisor", "self.md"))).toBe(true);
     expect(existsSync(join(baseDir, "stones", "agent_of_thinkable"))).toBe(false);
 
-    // 仓库根是 stones/main/，所以 git 跟踪的路径不带 main/ 前缀
+    // 仓库根是 stones/main/，git 跟踪路径形如 objects/agent_of_thinkable/self.md
     const tree = gitOutput(join(baseDir, "stones", "main"), ["ls-tree", "-r", "HEAD", "--name-only"]);
-    expect(tree).toContain("agent_of_thinkable/self.md");
-    expect(tree).toContain("supervisor/self.md");
+    expect(tree).toContain("objects/agent_of_thinkable/self.md");
+    expect(tree).toContain("objects/supervisor/self.md");
     expect(tree).not.toContain("main/agent_of_thinkable");
   });
 });

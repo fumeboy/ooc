@@ -48,27 +48,33 @@ export function toJson(value: unknown): string {
 /**
  * 标识磁盘上的单个 stone 对象。
  *
- * 路径形态：`{baseDir}/stones/{stonesBranch}/{objectId}`
+ * 路径形态：`{baseDir}/stones/{stonesBranch}/objects/{objectId}`
  *
  * `stonesBranch` 是 server 实例启动时绑定的 git 分支（默认 "main"，可通过
  * `--stones-branch` 切换至 worktree 分支用于元编程沙箱，详见 U2/U4 设计）。
- * 旧调用点未传 stonesBranch 时回退到 "main"，与单 worktree 时代行为对齐。
+ *
+ * `objects/` 中间层（2026-05-21 引入）：把 stone 对象从分支根挪到 `objects/`
+ * 子目录，让 `stones/{branch}/` 根本身可以承载 world-level stone 资源（注册表、
+ * 共享数据、PR-Issue 索引等），与 per-Object 内容物物理分离。
  */
 export interface StoneObjectRef {
   /** 包含 `stones/` 的根目录。 */
   baseDir: string;
-  /** `stones/` 下的 object 目录名。 */
+  /** `stones/{stonesBranch}/objects/` 下的 object 目录名。 */
   objectId: string;
   /**
-   * 落到 `stones/{stonesBranch}/` 下；缺省时 stoneDir() 用 "main"。
+   * 落到 `stones/{stonesBranch}/objects/` 下；缺省时 stoneDir() 用 "main"。
    * U4 元编程沙箱会显式传 worktree 分支名。
    */
   stonesBranch?: string;
 }
 
+/** stones/{branch}/objects/ 子目录名。集中常量便于其它模块（recovery / listStones / scope 判定）复用。 */
+export const STONE_OBJECTS_SUBDIR = "objects";
+
 /** 计算 stone 目录绝对路径。stonesBranch 缺省时回退到 main。 */
 export function stoneDir(ref: StoneObjectRef): string {
-  return join(ref.baseDir, "stones", ref.stonesBranch ?? STONES_MAIN_BRANCH, ref.objectId);
+  return join(ref.baseDir, "stones", ref.stonesBranch ?? STONES_MAIN_BRANCH, STONE_OBJECTS_SUBDIR, ref.objectId);
 }
 
 /**

@@ -52,7 +52,7 @@ describe("openMetaprogWorktree", () => {
     expect(r.worktree.branch).toBe("metaprog/agent_of_x/t1");
     expect(r.worktree.path).toBe(__testing.worktreePath(baseDir, "metaprog/agent_of_x/t1"));
     // 工作树有 agent_of_x/self.md（其它 Object 也在）
-    const content = await readFile(join(r.worktree.path, "agent_of_x", "self.md"), "utf8");
+    const content = await readFile(join(r.worktree.path, "objects", "agent_of_x", "self.md"), "utf8");
     expect(content).toBe("agent_of_x v1\n");
   });
 
@@ -77,7 +77,7 @@ describe("commitWorktree + classifyWorktreeBranch", () => {
     expect(open.ok).toBe(true);
     if (!open.ok) return;
 
-    await writeFile(join(open.worktree.path, "agent_of_x", "self.md"), "v2\n");
+    await writeFile(join(open.worktree.path, "objects", "agent_of_x", "self.md"), "v2\n");
     const c = await commitWorktree({
       worktree: open.worktree,
       intent: "update self",
@@ -89,7 +89,7 @@ describe("commitWorktree + classifyWorktreeBranch", () => {
     expect(cls.ok).toBe(true);
     if (cls.ok) {
       expect(cls.scope).toBe("self-scope");
-      expect(cls.paths).toEqual(["agent_of_x/self.md"]);
+      expect(cls.paths).toEqual(["objects/agent_of_x/self.md"]);
     }
   });
 
@@ -99,8 +99,8 @@ describe("commitWorktree + classifyWorktreeBranch", () => {
     expect(open.ok).toBe(true);
     if (!open.ok) return;
 
-    await writeFile(join(open.worktree.path, "agent_of_x", "self.md"), "v2\n");
-    await writeFile(join(open.worktree.path, "agent_of_y", "self.md"), "edited by x\n");
+    await writeFile(join(open.worktree.path, "objects", "agent_of_x", "self.md"), "v2\n");
+    await writeFile(join(open.worktree.path, "objects", "agent_of_y", "self.md"), "edited by x\n");
     const c = await commitWorktree({
       worktree: open.worktree,
       intent: "cross",
@@ -112,7 +112,7 @@ describe("commitWorktree + classifyWorktreeBranch", () => {
     expect(cls.ok).toBe(true);
     if (cls.ok) {
       expect(cls.scope).toBe("cross-scope");
-      expect(cls.paths.sort()).toEqual(["agent_of_x/self.md", "agent_of_y/self.md"]);
+      expect(cls.paths.sort()).toEqual(["objects/agent_of_x/self.md", "objects/agent_of_y/self.md"]);
     }
   });
 
@@ -138,7 +138,7 @@ describe("tryMergeSelf", () => {
     const open = await openMetaprogWorktree({ baseDir, objectId: "agent_of_x", token: "ff1" });
     if (!open.ok) throw new Error("open failed");
 
-    await writeFile(join(open.worktree.path, "agent_of_x", "self.md"), "v2\n");
+    await writeFile(join(open.worktree.path, "objects", "agent_of_x", "self.md"), "v2\n");
     expect(
       (
         await commitWorktree({
@@ -159,7 +159,7 @@ describe("tryMergeSelf", () => {
     }
 
     // main 上 agent_of_x/self.md 内容为 v2
-    const after = await readFile(join(baseDir, "stones", "main", "agent_of_x", "self.md"), "utf8");
+    const after = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_x", "self.md"), "utf8");
     expect(after).toBe("v2\n");
   });
 
@@ -168,7 +168,7 @@ describe("tryMergeSelf", () => {
     const open = await openMetaprogWorktree({ baseDir, objectId: "agent_of_x", token: "cross" });
     if (!open.ok) throw new Error("open failed");
 
-    await writeFile(join(open.worktree.path, "agent_of_y", "self.md"), "violated\n");
+    await writeFile(join(open.worktree.path, "objects", "agent_of_y", "self.md"), "violated\n");
     expect(
       (
         await commitWorktree({
@@ -186,7 +186,7 @@ describe("tryMergeSelf", () => {
     }
 
     // main 上 agent_of_y/self.md 仍是 v1
-    const yMain = await readFile(join(baseDir, "stones", "main", "agent_of_y", "self.md"), "utf8");
+    const yMain = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_y", "self.md"), "utf8");
     expect(yMain).toBe("agent_of_y v1\n");
   });
 
@@ -196,9 +196,9 @@ describe("tryMergeSelf", () => {
     if (!open.ok) throw new Error("open failed");
 
     // 95% self, 5% cross
-    await writeFile(join(open.worktree.path, "agent_of_x", "self.md"), "self-edit\n");
-    await writeFile(join(open.worktree.path, "agent_of_x", "extra.md"), "more\n");
-    await writeFile(join(open.worktree.path, "agent_of_y", "single.md"), "tiny\n");
+    await writeFile(join(open.worktree.path, "objects", "agent_of_x", "self.md"), "self-edit\n");
+    await writeFile(join(open.worktree.path, "objects", "agent_of_x", "extra.md"), "more\n");
+    await writeFile(join(open.worktree.path, "objects", "agent_of_y", "single.md"), "tiny\n");
     expect(
       (
         await commitWorktree({
@@ -219,7 +219,7 @@ describe("requestPrIssueReview + resolvePrIssue", () => {
     const baseDir = await newWorld();
     const open = await openMetaprogWorktree({ baseDir, objectId: "agent_of_x", token: "pr1" });
     if (!open.ok) throw new Error("open failed");
-    await writeFile(join(open.worktree.path, "agent_of_y", "self.md"), "x edits y\n");
+    await writeFile(join(open.worktree.path, "objects", "agent_of_y", "self.md"), "x edits y\n");
     expect(
       (
         await commitWorktree({
@@ -241,13 +241,13 @@ describe("requestPrIssueReview + resolvePrIssue", () => {
     const issue = await readIssue(baseDir, "super", pr.issueId);
     expect(issue?.title.startsWith("[PR]")).toBe(true);
     expect(issue?.prPayload?.branch).toBe(open.worktree.branch);
-    expect(issue?.prPayload?.paths).toEqual(["agent_of_y/self.md"]);
+    expect(issue?.prPayload?.paths).toEqual(["objects/agent_of_y/self.md"]);
 
     const resolved = await resolvePrIssue({ baseDir, issueId: pr.issueId, decision: "merge" });
     expect(resolved.ok).toBe(true);
     if (resolved.ok) expect(resolved.kind).toBe("merged");
 
-    const yAfter = await readFile(join(baseDir, "stones", "main", "agent_of_y", "self.md"), "utf8");
+    const yAfter = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_y", "self.md"), "utf8");
     expect(yAfter).toBe("x edits y\n");
 
     const issueAfter = await readIssue(baseDir, "super", pr.issueId);
@@ -258,7 +258,7 @@ describe("requestPrIssueReview + resolvePrIssue", () => {
     const baseDir = await newWorld();
     const open = await openMetaprogWorktree({ baseDir, objectId: "agent_of_x", token: "rej" });
     if (!open.ok) throw new Error("open failed");
-    await writeFile(join(open.worktree.path, "agent_of_y", "self.md"), "rejected change\n");
+    await writeFile(join(open.worktree.path, "objects", "agent_of_y", "self.md"), "rejected change\n");
     expect(
       (
         await commitWorktree({
@@ -281,7 +281,7 @@ describe("requestPrIssueReview + resolvePrIssue", () => {
     if (r.ok) expect(r.kind).toBe("rejected");
 
     // main 上 agent_of_y 仍是 v1
-    const yMain = await readFile(join(baseDir, "stones", "main", "agent_of_y", "self.md"), "utf8");
+    const yMain = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_y", "self.md"), "utf8");
     expect(yMain).toBe("agent_of_y v1\n");
 
     // archived ref 存在
@@ -296,7 +296,7 @@ describe("rollback", () => {
     // 让 agent_of_x merge 一个新版本 v2 进 main
     const open = await openMetaprogWorktree({ baseDir, objectId: "agent_of_x", token: "v2" });
     if (!open.ok) throw new Error();
-    await writeFile(join(open.worktree.path, "agent_of_x", "self.md"), "broken-v2\n");
+    await writeFile(join(open.worktree.path, "objects", "agent_of_x", "self.md"), "broken-v2\n");
     expect(
       (
         await commitWorktree({
@@ -321,7 +321,7 @@ describe("rollback", () => {
     expect(r.ok).toBe(true);
 
     // self.md 回到 v1
-    const restored = await readFile(join(baseDir, "stones", "main", "agent_of_x", "self.md"), "utf8");
+    const restored = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_x", "self.md"), "utf8");
     expect(restored).toBe("agent_of_x v1\n");
 
     // 最新 commit 的 author 是 supervisor

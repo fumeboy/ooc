@@ -282,12 +282,12 @@ describe("app server routes", () => {
 
     expect(response.status).toBe(200);
     expect(body.objectId).toBe("writer");
-    expect(await readFile(join(baseDir, "stones", "main", "writer", "self.md"), "utf8")).toBe("# Writer\nI write notes.");
-    expect(await readFile(join(baseDir, "stones", "main", "writer", "readme.md"), "utf8")).toBe("# Writer README");
-    const data = JSON.parse(await readFile(join(baseDir, "stones", "main", "writer", "data.json"), "utf8"));
+    expect(await readFile(join(baseDir, "stones", "main", "objects", "writer", "self.md"), "utf8")).toBe("# Writer\nI write notes.");
+    expect(await readFile(join(baseDir, "stones", "main", "objects", "writer", "readme.md"), "utf8")).toBe("# Writer README");
+    const data = JSON.parse(await readFile(join(baseDir, "stones", "main", "objects", "writer", "data.json"), "utf8"));
     expect(data.name).toBe("writer");
     expect(data.description).toBe("Writes project notes");
-    expect((await stat(join(baseDir, "stones", "main", "writer", "knowledge", "memory"))).isDirectory()).toBe(true);
+    expect((await stat(join(baseDir, "stones", "main", "objects", "writer", "knowledge", "memory"))).isDirectory()).toBe(true);
   });
 
   test("POST /api/stones/:id/knowledge creates files and folders only under knowledge", async () => {
@@ -333,7 +333,7 @@ describe("app server routes", () => {
     expect(folder.status).toBe(200);
     expect(file.status).toBe(200);
     expect(update.status).toBe(200);
-    expect(await readFile(join(baseDir, "stones", "main", "researcher", "knowledge", "notes", "idea.md"), "utf8")).toBe("# Updated");
+    expect(await readFile(join(baseDir, "stones", "main", "objects", "researcher", "knowledge", "notes", "idea.md"), "utf8")).toBe("# Updated");
     expect(escape.status).toBe(400);
     expect(escapeBody.error.code).toBe("INVALID_INPUT");
   });

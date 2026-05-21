@@ -77,13 +77,16 @@ export async function ensureStoneRepo(opts: { baseDir: string }): Promise<Ensure
     return ensureLegacyEmbedded(mainDir, migrated);
   }
 
-  // bare 路径
-  await mkdir(mainDir, { recursive: true });
+  // bare 路径——注意：这里不能无条件 mkdir(mainDir)，否则 `git worktree add ../main`
+  // 会在已存在的空目录处报 fatal: '../main' already exists。
+  // 只在 bare 不存在时（要走 createBareRepoWithMainWorktree 的临时 scratch 流程）
+  // 才需要预创建 mainDir；其余路径让 git worktree add 自己创建。
 
   let initialized = false;
   let bootstrapCommit: string | undefined;
 
   if (!bareExists) {
+    await mkdir(mainDir, { recursive: true });
     // 全新初始化 → 建 bare + seed initial commit + 把 main 挂成 linked worktree
     bootstrapCommit = await createBareRepoWithMainWorktree({ stonesDir, bareDir, mainDir });
     initialized = true;
@@ -189,8 +192,11 @@ async function createBareRepoWithMainWorktree(opts: {
 }
 
 /**
- * 把 `stones/<id>/` 扁平布局迁移到 `stones/main/<id>/`。已迁移则 no-op。
+ * 把 `stones/<id>/` 扁平布局迁移到 `stones/main/objects/<id>/`。已迁移则 no-op。
  * 返回 true 表示本次确实做了迁移。
+ *
+ * 2026-05-21 重组：把 stone 对象从分支根挪到 `objects/` 子目录，让 `stones/{branch}/`
+ * 根本身可承载 world-level stone 资源（注册表、共享数据等）。
  */
 async function migrateFlatToMain(stonesDir: string): Promise<boolean> {
   const entries = await readdir(stonesDir, { withFileTypes: true });
@@ -202,15 +208,18 @@ async function migrateFlatToMain(stonesDir: string): Promise<boolean> {
     (e) => e.isDirectory() && !e.name.startsWith(".") && !RESERVED_TOP_LEVEL.has(e.name),
   );
 
-  const mainDir = join(stonesDir, STONES_MAIN_BRANCH);
-  await mkdir(mainDir, { recursive: true });
-
   if (candidates.length === 0) {
+    // 空 stones/，不要凭空 mkdir main/——后续 worktree add 会自己创建工作树根。
     return false;
   }
 
+  // 真有 Object 要迁，才物化 main/objects/
+  const mainDir = join(stonesDir, STONES_MAIN_BRANCH);
+  const objectsDir = join(mainDir, "objects");
+  await mkdir(objectsDir, { recursive: true });
+
   for (const cand of candidates) {
-    await rename(join(stonesDir, cand.name), join(mainDir, cand.name));
+    await rename(join(stonesDir, cand.name), join(objectsDir, cand.name));
   }
   return true;
 }
