@@ -42,30 +42,30 @@ export function AppShell() {
   const activeSessionId = (() => {
     if (
       route.kind === "session" ||
-      route.kind === "thread" ||
       route.kind === "flowPage" ||
       route.kind === "issueDetail"
     ) {
       return route.sessionId;
     }
-    // 浏览 flows/<sid>/... 下的文件时仍视为"在 session 内",
-    // 让侧栏保持 file tree 视图,而不是被 showSessions effect 翻回 SessionList
+    // file 视图：query 里有 sessionId（chat 上下文）则用之；否则从 path 推断
     if (route.kind === "file") {
+      if (route.thread?.sessionId) return route.thread.sessionId;
       const m = route.path.match(/^flows\/([^/]+)/);
       if (m) return m[1];
     }
     return undefined;
   })();
-  const activeObjectId = route.kind === "thread"
-    ? route.objectId
-    : route.kind === "session"
-      ? "user" // 默认进 user.root
-      : undefined;
-  const activeThreadId = route.kind === "thread"
-    ? route.threadId
-    : route.kind === "session"
-      ? "root"
-      : undefined;
+  // 2026-05 重构：thread 上下文从路径段改 query string；session/file 路由都可携带
+  const activeObjectId = (() => {
+    if (route.kind === "session") return route.objectId ?? "user"; // 缺省 user.root
+    if (route.kind === "file" && route.thread) return route.thread.objectId;
+    return undefined;
+  })();
+  const activeThreadId = (() => {
+    if (route.kind === "session") return route.threadId ?? "root";
+    if (route.kind === "file" && route.thread) return route.thread.threadId;
+    return undefined;
+  })();
   const activePath = useMemo(() => derivePathFromRoute(route), [route]);
 
   const activeFlow = state.flows.find((flow) => flow.sessionId === activeSessionId);
@@ -117,6 +117,28 @@ export function AppShell() {
 
   // 首屏 + scope 变化时拉 basics
   useEffect(() => { void refreshBasics(scope); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [scope]);
+
+  /**
+   * activeSessionId 变化时若当前 tree 不含该 session（被切到一个未在 cached tree 里的
+   * session，例如新建后才出现的），重新 fetch tree。这让 sidebar 的 FLOW TREE 始终能
+   * 把 root 缩到 `flows/<sessionId>/` 层级，而不是回退到 `flows/` 全树并且缺少该 session。
+   *
+   * lastTreeFetchSessionRef 防止 session 真的不存在时 fetch → patch → effect 重跑的死循环。
+   */
+  const lastTreeFetchSessionRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (scope !== "flows" || !activeSessionId) return;
+    const inTree = state.tree?.children?.some(
+      (c) => c.path === `flows/${activeSessionId}` || c.name === activeSessionId,
+    );
+    if (inTree) return;
+    if (lastTreeFetchSessionRef.current === activeSessionId) return; // 已为该 session 拉过一次
+    lastTreeFetchSessionRef.current = activeSessionId;
+    fetchTree("flows")
+      .then((tree) => patch({ tree }))
+      .catch(() => {});
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [activeSessionId, scope, state.tree]);
 
   /**
    * URL 变化触发文件加载。
@@ -216,7 +238,13 @@ export function AppShell() {
       navigate(toPath({ kind: "issueDetail", sessionId: issueMatch[1]!, issueId: Number(issueMatch[2]) }));
       return;
     }
-    navigate(toPath({ kind: "file", path: node.path }));
+    // 保留 thread 上下文：当前在 session 内查看文件时，URL 带上 ?sessionId=&objectId=&threadId=
+    // 让右侧 chat panel 跨文件查看持续显示。
+    const thread =
+      activeSessionId && activeObjectId && activeThreadId
+        ? { sessionId: activeSessionId, objectId: activeObjectId, threadId: activeThreadId }
+        : undefined;
+    navigate(toPath({ kind: "file", path: node.path, thread }));
   }
 
   function knowledgeTarget(path: string) {
@@ -263,7 +291,7 @@ export function AppShell() {
       // A1 fix (issue-3): 落地到 callee thread (有 chat panel) 而非 user.root (Context Tree, 无 chat panel)。
       // seedSession 返回 targetObjectId / targetThreadId, 数据完备 — 直接用。
       navigate(toPath({
-        kind: "thread",
+        kind: "session",
         sessionId: created.sessionId,
         objectId: created.targetObjectId,
         threadId: created.targetThreadId,
@@ -365,7 +393,7 @@ export function AppShell() {
 
   function handleSelectThread(sel: SessionThread) {
     if (!activeSessionId) return;
-    navigate(toPath({ kind: "thread", sessionId: activeSessionId, objectId: sel.objectId, threadId: sel.threadId }));
+    navigate(toPath({ kind: "session", sessionId: activeSessionId, objectId: sel.objectId, threadId: sel.threadId }));
   }
 
   const isWelcome = route.kind === "welcome";

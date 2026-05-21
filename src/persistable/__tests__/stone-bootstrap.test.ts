@@ -163,3 +163,11 @@ describe("ensureStoneRepo: legacy embedded compatibility", () => {
     expect(existsSync(join(baseDir, "stones", STONES_BARE_REPO_DIR))).toBe(false);
   });
 });
+
+describe("ensureStoneRepo: world dir scaffolding", () => {
+  test("creates flows/ alongside stones/ — UI /api/tree?scope=flows depends on it", async () => {
+    const baseDir = await newWorld();
+    await ensureStoneRepo({ baseDir });
+    expect(existsSync(join(baseDir, "flows"))).toBe(true);
+  });
+});

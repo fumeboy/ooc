@@ -33,7 +33,15 @@ export function createProgramSelf(
               kind: "inject",
               text
             });
-          }
+          },
+          persistence: thread.persistence
+            ? {
+                baseDir: thread.persistence.baseDir,
+                sessionId: thread.persistence.sessionId,
+                objectId: thread.persistence.objectId,
+                threadId: thread.persistence.threadId,
+              }
+            : undefined,
         }
       };
       return method.fn(ctx, args);

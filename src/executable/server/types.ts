@@ -29,6 +29,20 @@ export interface ServerMethodContext {
   thread: {
     id: string;
     inject: (text: string) => void;
+    /**
+     * 当前线程的 persistence 信息，让 method 能定位到 flow 级目录（写
+     * flows/<sid>/objects/<oid>/files/... 等大块产物时必需）。
+     *
+     * 当 method 被通过 HTTP /call_method 路径触发时（ui_methods），不存在
+     * thread persistence —— 该字段为 undefined；method 应当 fallback 到
+     * self.dir 或拒绝执行。
+     */
+    persistence?: {
+      baseDir: string;
+      sessionId: string;
+      objectId: string;
+      threadId: string;
+    };
   };
 }
 

@@ -2,6 +2,7 @@ import { ChevronDown, CircleX, Clock3, Copy, ExternalLink, FolderPlus, Info, Loa
 import { useState } from "react";
 import type { ChatLine } from "../model";
 import { MarkdownContent } from "../../../shared/ui/MarkdownContent";
+import { InlineUiContent } from "../../../shared/ui/InlineUiContent";
 import { dispatchNavigateToWindow } from "../../files/navigation-events";
 
 const ROLE_CONFIG: Record<ChatLine["role"], { prefix?: string; icon?: LucideIcon; label: string; className: string }> = {
@@ -410,7 +411,7 @@ export function TuiBlock({ line, loading = false, liveWindowIds }: { line: ChatL
         <>
           {renderHeader("tui-block-head", undefined, undefined, labelOverride)}
           <div className="tui-block-body">
-            <MarkdownContent content={line.content} />
+            <InlineUiContent content={line.content} />
           </div>
         </>
       );

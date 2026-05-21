@@ -125,31 +125,54 @@ export const root: DocTreeNode = {
             title: "routing：URL 单向真相",
             content: `
             \`web/src/app/routing.ts\` 定义 \`RouteState\` 7 个 kind（welcome / scope /
-            file / stoneClient / flowPage / session / thread）；\`useRouteState()\` 用
-            \`useLocation()\` + \`useParams()\` 从当前 URL 派生 \`RouteState\`，\`toPath(state)\`
-            是反向构造函数（shortcut 优先：命中 client 入口的 file path 会规范化为
-            \`/stones/:id\` 或 \`/flows/.../pages/:page\`）。
+            file / stoneClient / flowPage / session / issueDetail）；\`useRouteState()\`
+            用 \`useLocation()\` + \`useParams()\` 从当前 URL（含 pathname + search）派生
+            \`RouteState\`，\`toPath(state)\` 是反向构造函数（shortcut 优先：命中 client
+            入口的 file path 会规范化为 \`/stones/:id\` 或 \`/flows/.../pages/:page\`）。
 
             AppShell 不再 \`setState\` 改 \`activePath / activeSessionId\` 等导航字段；
             所有 handler 都走 \`navigate(toPath(...))\`，URL 变化经 \`useRouteState\` 回流
             为下一帧 state。这让浏览器前进/后退、刷新、复制粘贴 URL 都能恢复页面。
 
-            派生关系（\`shell.tsx:40-63\`）：
+            **Thread 上下文 = query string overlay（2026-05 重构）**：原 \`kind: "thread"\`
+            的路径段 \`/flows/<sid>/threads/<oid>/<tid>\` 已废弃；改为 \`kind: "session"\`
+            可附带 \`objectId? threadId?\` 字段（在 URL 里编码为 \`?objectId=&threadId=\`）。
+            同样 \`kind: "file"\` 也可携带可选 \`thread: { sessionId, objectId, threadId }\`，
+            URL 形如 \`/files/<path>?sessionId=&objectId=&threadId=\`。这意味着：在 chat
+            里看文件时 RightPanel 的 chat 不再消失——chat 上下文随 file URL 一起带过去。
+            老 \`/threads/...\` 路径在 \`parseRoute\` 里仍能识别（归一为 \`kind: "session"\`
+            + thread 字段），保证已收藏的链接不挂；\`toPath\` 不再产此形态。
+
+            派生关系（\`shell.tsx:40-72\`）：
             - \`scope = scopeOf(route)\`（welcome 视作 flows）。
-            - \`activeSessionId\`：route.kind ∈ {session, thread, flowPage} 直接取；
-              route.kind = file 且 path 以 \`flows/<sid>/\` 开头时反推（保留 file 浏览的
-              session 上下文，避免侧栏从 file tree 翻回 SessionList）。
-            - \`activeObjectId\`：thread 取 \`route.objectId\`；session 默认 \`"user"\`（即
-              user.root，让 chat 直接落在 cross-object talk 的入口 thread 上）。
-            - \`activeThreadId\`：thread 取 \`route.threadId\`；session 默认 \`"root"\`。
+            - \`activeSessionId\`：route.kind ∈ {session, flowPage, issueDetail} 直接取；
+              file 路由先看 \`thread.sessionId\`，再 fallback 从 \`flows/<sid>/\` path 前缀
+              反推（保留 file 浏览的 session 上下文，避免侧栏从 file tree 翻回 SessionList）。
+            - \`activeObjectId\`：session 路由取 \`route.objectId ?? "user"\`（缺省 user.root）；
+              file 路由取 \`route.thread?.objectId\`（仅在 chat 上下文携带过来时存在）。
+            - \`activeThreadId\`：session 路由取 \`route.threadId ?? "root"\`；file 路由取
+              \`route.thread?.threadId\`。
             - \`activePath\`：file/stoneClient/flowPage 三者按 \`derivePathFromRoute\`
               拼成 world 相对路径，让 \`MainPanel\` 的 \`matchClientTarget\` 命中 client 入口。
+
+            FileTree 点击时（\`shell.tsx:handleNode\`）会主动续上当前 thread 上下文：
+            \`navigate(toPath({ kind: "file", path, thread: { sessionId, objectId, threadId } }))\`，
+            这样切换文件时 RightPanel 不被销毁。stale-tree 自愈见 \`useEffect\` on
+            \`activeSessionId\`（不在 cached tree.children 中时主动 \`fetchTree\`）。
             `,
             named: {
-                "RouteState": "7 个 kind 的判别联合：welcome / scope / file / stoneClient / flowPage / session / thread",
-                "toPath": "RouteState → URL 反向构造函数；shortcut 优先",
-                "useRouteState": "从 react-router 当前 URL 派生 RouteState 的 hook",
+                "RouteState": "判别联合：welcome / scope / file / stoneClient / flowPage / session / issueDetail；session/file 可携带 thread 上下文",
+                "toPath": "RouteState → URL 反向构造函数；shortcut 优先；thread 上下文走 query string",
+                "useRouteState": "从 react-router 当前 URL（pathname + search）派生 RouteState 的 hook",
+                "parseRoute": "纯函数版本，签名 (pathname, search, params)；老的 parsePathname 是 deprecated 同名 wrapper",
+                "extractThreadContext": "从任意 RouteState 抽出 thread context（若有），navigate handler 需要保留时使用",
             },
+            sources: [
+                [
+                    "web/src/app/routing.ts",
+                    "RouteState / toPath / parseRoute / useRouteState / extractThreadContext；session 路由的 objectId/threadId 字段、file 路由的 thread 字段；老 /threads/... 路径在 parser 中归一到 session+thread context 保证向后兼容；shell.tsx:40-72 的 active* 派生 + handleNode 保留 thread 上下文逻辑；测试见 web/src/app/routing.test.ts（17 项 toPath ↔ parseRoute roundtrip + 老路径兼容）",
+                ],
+            ],
         },
         "chat": {
             title: "chat / session 控制面",
@@ -281,9 +304,66 @@ export const root: DocTreeNode = {
                       把用户输入直接显示成气泡，必须等 thread 事件回灌。
                     - **chat 是 cross-object talk，不是自由对话**：composer 输入永远
                       经 user.root.talk_window 派送，没有"裸消息"通道。
+                    - **消息文本支持 inline UI token**（详见 \`inline_ui\` 子节点）：
+                      Object 写 \`[[ui{"comp":"file-link","path":"..."}ui]]\` 嵌入文本，
+                      \`InlineUiContent\` 解析后渲染成 React 组件。
                     `,
                 },
             },
+        },
+        "inline_ui": {
+            title: "inline UI tokens：消息文本里的可交互组件",
+            content: `
+            **场景**：Agent（user readme 里给出的协议）向 user 发消息时，可在文本里
+            嵌入特殊 token \`[[ui{"comp":"<name>",...其它参数}ui]]\`，让前端渲染成可
+            点击 / 可交互的 inline 组件，而不只是纯文本。Agent 端只产 token 文本，
+            前端集中 dispatch 渲染——不让 Agent 直接写 HTML，避免 XSS。
+
+            **语法**：
+            - \`[[ui\` 起首、\`ui]]\` 结束（双方括号 + ui 标记）
+            - 中间是**严格 JSON 对象**（key 必须双引号），其中 \`comp\` 字段指定组件名，
+              其余字段是该组件的参数
+            - 一条消息里任意多个 token，与普通文本混排
+
+            **已注册组件**：
+            - \`file-link\` —— 必选 \`path\`，可选 \`label\`；渲染 React-Router \`<Link>\`，
+              点击跳到 file viewer 视图。**关键**：\`FileLinkInline\` 用 \`useLocation()\`
+              读当前 thread 上下文（query string 里的 \`sessionId / objectId / threadId\`），
+              拼到 file URL 上让 RightPanel 的 chat 跨文件查看持续显示。
+
+            **失败回退**：
+            - JSON 解析失败 → 原文按字面文本展示
+            - 缺 \`comp\` 字段 / \`comp\` 非 string → 同上
+            - 未知 \`comp\` → 渲染 \`<code>[unknown ui: <comp>]</code>\` 占位
+
+            **渲染入口**：\`TuiBlock\` 在渲染 \`line.kind === "message"\` 时不再直接调
+            \`<MarkdownContent>\`，而是走 \`<InlineUiContent>\`：fast path（无 \`[[ui\` 子串）
+            退回原 MarkdownContent；含 token 时 \`parseInlineUiSegments\` 切分成
+            \`[text, ui, text, ...]\` 段，分别渲染。
+
+            **协议来源**：\`stones/main/user/readme.md\` 是约定的权威文本——Agent 在 super
+            flow 注入到 LLM context 时通过读 user 的 readme 学习这套语法。新组件
+            注册时同步更新 readme 即可，Agent 端零改动。
+
+            **扩展点**：加新组件只需在 \`InlineUiContent.tsx\` 的 \`InlineUiComponent\`
+            switch 加一条 case，更新 user readme 注册表。例子：未来可加
+            \`image\` / \`chart\` / \`confirm-button\` / \`code-snippet\`；都走同一通道、
+            零 \`dangerouslySetInnerHTML\`。
+            `,
+            named: {
+                "[[ui...ui]]": "inline UI token 语法外壳；中间是 JSON 对象描述要渲染的组件",
+                "comp": "JSON 字段，指定组件名（如 file-link）；其余字段是组件 props",
+                "InlineUiContent": "消息文本渲染入口，替代 TuiBlock 里直调的 MarkdownContent",
+                "parseInlineUiSegments": "把含 token 的文本切成 text / ui 段的纯函数（9 个单测）",
+                "FileLinkInline": "已注册组件之一；用 useLocation 续 thread 上下文到 file URL，让 chat 不消失",
+                "user readme 协议来源": "stones/main/user/readme.md 是 Agent 学这套语法的权威文档",
+            },
+            sources: [
+                [
+                    "web/src/shared/ui/InlineUiContent.tsx",
+                    "parseInlineUiSegments / InlineUiContent / InlineUiComponent dispatch / FileLinkInline 用 useLocation 续 thread context；TuiBlock 在 message 渲染处用 InlineUiContent 替换 MarkdownContent；样式 .inline-ui-container / .inline-ui-file-link / .inline-ui-unknown 在 web/src/styles.css；语法约定见 .ooc-world/stones/main/user/readme.md；测试 web/src/shared/ui/InlineUiContent.test.ts 9 项",
+                ],
+            ],
         },
         "main-logo": {
             title: "MainLogo / 顶部状态控制",

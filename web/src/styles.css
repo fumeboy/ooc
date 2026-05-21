@@ -518,3 +518,11 @@ a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color
 .breadcrumb-segment.is-link:hover { text-decoration: underline; }
 .breadcrumb-sep { color: var(--muted-foreground); padding: 0 2px; flex: 0 0 auto; }
 .stone-fallback-error-pre { margin: 8px 0 0; font-size: 11px; white-space: pre-wrap; color: #9a463b; max-height: 240px; overflow: auto; }
+
+/* Inline UI tokens in chat messages — 来源 stones/main/user/readme.md 的 [[ui...ui]] 语法。 */
+.inline-ui-container { display: flex; flex-direction: column; gap: 4px; }
+.inline-ui-container > .markdown-content { display: contents; }
+.inline-ui-file-link { display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: 5px; background: rgba(232, 240, 254, .7); border: 1px solid rgba(180, 198, 232, .6); color: #4561e4; text-decoration: none; font-size: 12px; font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); }
+.inline-ui-file-link:hover { background: rgba(220, 232, 252, .9); text-decoration: none; }
+.inline-ui-file-link::before { content: "📄 "; opacity: .6; }
+.inline-ui-unknown { color: #9a463b; background: rgba(255, 240, 235, .8); padding: 1px 5px; border-radius: 4px; font-size: 11px; }

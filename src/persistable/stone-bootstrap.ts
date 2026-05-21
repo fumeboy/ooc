@@ -56,6 +56,10 @@ export interface EnsureStoneRepoResult {
 export async function ensureStoneRepo(opts: { baseDir: string }): Promise<EnsureStoneRepoResult> {
   const stonesDir = join(opts.baseDir, "stones");
   await mkdir(stonesDir, { recursive: true });
+  // 顺手 mkdir flows/ —— 不属于 git 跟踪范围（R2），但前端 /api/tree?scope=flows
+  // 在目录不存在时返回 404 会让 refreshBasics 的 Promise.all reject、连带 stones
+  // 数组也回不到 UI。空 flows/ 让初次 cold-start 体验顺滑。
+  await mkdir(join(opts.baseDir, "flows"), { recursive: true });
 
   const migrated = await migrateFlatToMain(stonesDir);
 

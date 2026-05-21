@@ -155,7 +155,6 @@ function SessionNotFound({ sessionId }: { sessionId: string }) {
 function sessionIdFromRouteHelper(route: RouteState): string | undefined {
   switch (route.kind) {
     case "session":
-    case "thread":
     case "flowPage":
     case "issueDetail":
       return route.sessionId;
@@ -195,6 +194,18 @@ function deriveBreadcrumbSegments(route: RouteState, isWelcome: boolean, path: s
         { label: objectDisplay || route.objectId, fullText: route.objectId },
       ];
     case "session":
+      // session 路由可附带 thread query (?objectId=&threadId=)；带 thread 时
+      // 展开完整 breadcrumb（含 objects / threads 段），否则仅 sessionId
+      if (route.objectId && route.threadId) {
+        return [
+          { label: "flows", href: "/flows" },
+          { label: route.sessionId, href: `/flows/${encodeURIComponent(route.sessionId)}`, fullText: route.sessionId },
+          { label: "objects" },
+          { label: objectDisplay || route.objectId, fullText: route.objectId },
+          { label: "threads" },
+          { label: humanizeThreadId(route.threadId), fullText: route.threadId },
+        ];
+      }
       return [
         { label: "flows", href: "/flows" },
         { label: route.sessionId, fullText: route.sessionId },
@@ -205,15 +216,6 @@ function deriveBreadcrumbSegments(route: RouteState, isWelcome: boolean, path: s
         { label: route.sessionId, href: `/flows/${encodeURIComponent(route.sessionId)}`, fullText: route.sessionId },
         { label: "issues" },
         { label: `#${route.issueId}` },
-      ];
-    case "thread":
-      return [
-        { label: "flows", href: "/flows" },
-        { label: route.sessionId, href: `/flows/${encodeURIComponent(route.sessionId)}`, fullText: route.sessionId },
-        { label: "objects" },
-        { label: objectDisplay || route.objectId, fullText: route.objectId },
-        { label: "threads" },
-        { label: humanizeThreadId(route.threadId), fullText: route.threadId },
       ];
     case "flowPage":
       return [
@@ -238,9 +240,12 @@ function deriveBreadcrumbSegments(route: RouteState, isWelcome: boolean, path: s
 function objectIdFromRoute(route: RouteState): string | undefined {
   switch (route.kind) {
     case "stoneClient":
-    case "thread":
     case "flowPage":
       return route.objectId;
+    case "session":
+      return route.objectId;
+    case "file":
+      return route.thread?.objectId;
     default:
       return undefined;
   }
@@ -265,12 +270,11 @@ function deriveHeaderTitle(route: RouteState, isWelcome: boolean, path: string |
     case "stoneClient":
       return objectDisplay || route.objectId;
     case "session":
+      // 带 thread 上下文时由 ThreadHeader 显示 oid+tid，避免顶栏与之重复 → 留空
+      if (route.objectId && route.threadId) return "";
       return route.sessionId;
     case "issueDetail":
       return `Issue #${route.issueId}`;
-    case "thread":
-      // ThreadHeader 已展示 objectId + threadId + status, 这里不再重复 — 避免顶栏出现 2-3 次相同 token
-      return "";
     case "flowPage":
       return route.page;
     case "file":
