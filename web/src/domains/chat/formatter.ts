@@ -149,10 +149,13 @@ function buildToolLine(input: {
 }
 
 /**
- * 抽出 tool 调用所"作用于"的 window_id：
- * - `open`: 创建了新 window，window_id 在 OUTPUT JSON 里
- * - `refine`/`submit`: window_id = arguments.parent_window_id（fallback form_id）
- * - `close`: window_id = arguments.window_id（fallback form_id）
+ * 抽出 tool 调用所"作用于"的 window/form id：
+ * - `open`: 创建了新 form_window，id 在 OUTPUT JSON 里（`form_id` 主、`window_id` fallback）
+ * - `refine`/`submit`: id = arguments.form_id（fallback parent_window_id / window_id）
+ * - `close`: id = arguments.form_id（fallback window_id）
+ *
+ * 注：实际后端约定字段是 `form_id`（command_exec window 的别名）；老路径或不同
+ * 命令族可能用 `window_id`/`parent_window_id`，全部一并接受以兼容。
  *
  * 取不到时返回 undefined（caller 自行决定不分组）。
  */
@@ -164,17 +167,24 @@ function deriveTargetWindowId(
   if (toolName === "open") {
     const parsed = parseStructuredValue(outputValue);
     if (isRecord(parsed)) {
-      const id = asDisplayText(parsed.window_id) ?? asDisplayText(parsed.windowId);
+      const id =
+        asDisplayText(parsed.form_id) ??
+        asDisplayText(parsed.window_id) ??
+        asDisplayText(parsed.windowId);
       if (id) return id;
     }
     return undefined;
   }
   if (!isRecord(argumentsValue)) return undefined;
   if (toolName === "refine" || toolName === "submit") {
-    return asDisplayText(argumentsValue.parent_window_id) ?? asDisplayText(argumentsValue.form_id);
+    return (
+      asDisplayText(argumentsValue.form_id) ??
+      asDisplayText(argumentsValue.parent_window_id) ??
+      asDisplayText(argumentsValue.window_id)
+    );
   }
   if (toolName === "close") {
-    return asDisplayText(argumentsValue.window_id) ?? asDisplayText(argumentsValue.form_id);
+    return asDisplayText(argumentsValue.form_id) ?? asDisplayText(argumentsValue.window_id);
   }
   return undefined;
 }

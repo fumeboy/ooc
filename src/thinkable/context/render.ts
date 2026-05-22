@@ -12,6 +12,7 @@ import type {
   FileWindow,
   KnowledgeWindow,
   ProgramWindow,
+  RelationWindow,
   SearchWindow,
   TalkWindow,
   TodoWindow,
@@ -410,6 +411,41 @@ function renderSearchWindowChildren(window: SearchWindow): XmlNode[] {
   return children;
 }
 
+/**
+ * 渲染 RelationWindow 给 LLM。把原来分散在三条 KnowledgeWindow 的内容(peer readme +
+ * self long_term + self session)合并为本 window 的子元素。缺失字段渲染为占位提示,
+ * 引导 LLM 用 open(parent_window_id="<rel>", command="edit", ...) 写入。
+ */
+function renderRelationWindowChildren(window: RelationWindow): XmlNode[] {
+  const children: XmlNode[] = [
+    xmlElement("peer_id", {}, [xmlText(window.peerId)]),
+  ];
+
+  // peer readme — 缺失就不渲染节点(LLM 不需要"占位"提示,不像 self relation 它能 edit)
+  if (window.peerReadme !== undefined) {
+    children.push(
+      xmlElement("peer_readme", { path: window.peerReadmePath }, [xmlText(window.peerReadme)]),
+    );
+  }
+
+  // self long_term / session — 缺失也保留节点 + 占位,让 LLM 知道有 edit 入口可写
+  const longTermBody = window.selfLongTermBody !== undefined
+    ? window.selfLongTermBody
+    : `(暂无;通过 open(parent_window_id="${window.id}", command="edit", args={ content: "...", scope: "long_term" }) 写入)`;
+  children.push(
+    xmlElement("self_long_term", { path: window.selfLongTermPath }, [xmlText(longTermBody)]),
+  );
+
+  const sessionBody = window.selfSessionBody !== undefined
+    ? window.selfSessionBody
+    : `(暂无;通过 open(parent_window_id="${window.id}", command="edit", args={ content: "...", scope: "session" }) 写入)`;
+  children.push(
+    xmlElement("self_session", { path: window.selfSessionPath }, [xmlText(sessionBody)]),
+  );
+
+  return children;
+}
+
 /** 按行/列范围切片文件正文；range 缺失则原样返回。 */
 function sliceByLinesColumns(
   raw: string,
@@ -476,6 +512,9 @@ async function renderWindowNode(
       break;
     case "search":
       children.push(...renderSearchWindowChildren(window));
+      break;
+    case "relation":
+      children.push(...renderRelationWindowChildren(window));
       break;
     case "root":
       // root 一般不显式渲染（隐含 window）；如果出现就只渲染基本信息

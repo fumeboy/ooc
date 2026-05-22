@@ -51,6 +51,7 @@ import { subscribeNavigateToWindow } from "../navigation-events";
 import { FileEditDiffView, parseEditArgs } from "./FileEditDiffView";
 import { FileWindowContentView } from "./FileWindowContentView";
 import { MarkdownContent } from "../../../shared/ui/MarkdownContent";
+import { useDisplayName, useWindowTypes } from "../../objects";
 
 function previewText(value: string, limit = 88): string {
   const singleLine = value.replace(/\s+/g, " ").trim();
@@ -87,6 +88,7 @@ const HANDLED_WINDOW_TYPES = new Set<string>([
   "file",
   "knowledge",
   "search",
+  "relation",
 ]);
 
 /** 把节点状态映射成颜色基调；节点没有 status 时返回 "neutral"。 */
@@ -253,25 +255,32 @@ function TreeNodeImpl({
 }
 
 /**
- * TreeNode 的 memo wrapper。areEqual 只比较影响本行 DOM 的字段:
- * - 本行 id / label / summary / charCount / badge / messageCounts(reference 比较够)
- * - 本行 isSelected / isExpanded(从 selectedId / expanded.has 派生)
- * - children 数组(用 length + 第一个 child id 做轻量 fingerprint;不准但够用)
+ * TreeNode 的 memo wrapper。
  *
- * 如果某行的可见状态没变,本组件 short-circuit,React 仍会沿 children 数组传 prop
- * 给孙 TreeNode,孙节点各自跑自己的 memo 比较。
+ * 关键约束(2026-05-21 修复后):memo 不能"只看本行 expanded.has(self.id)" —— 因为如果父
+ * 节点 memo 跳过 re-render,React 会重用整棵子树的旧 element,descendant memo 根本不会跑。
+ * 用户在深层 window 行触发 toggle 时,中间的 section 节点 expanded 位没变,会被旧逻辑误判
+ * 为"等同 → skip",于是被切换那一行永远拿不到新的 expanded 集 —— 视觉上表现为"无法折叠"。
+ *
+ * 现在的策略:expanded 用引用比较。
+ * - 没有 toggle 发生时(polling 刷新 events),useEffect 里的 filter 检测到 size 不变会返回
+ *   原引用,memo 仍然能 short-circuit。
+ * - 一旦 toggle/Navigate-to 改了 set,引用变化会沿整棵树打穿 memo —— 这是必须的,因为我们
+ *   不知道是哪一层 descendant 翻了位。
  */
 const TreeNode = memo(TreeNodeImpl, (prev, next) => {
   if (prev.depthOffset !== next.depthOffset) return false;
   if (prev.onSelect !== next.onSelect || prev.onToggle !== next.onToggle) return false;
+  // expanded set 引用变化 = 用户切了某行 expand 状态;不知道改的是不是 descendant,必须 re-render
+  if (prev.expanded !== next.expanded) return false;
   const a = prev.node;
   const b = next.node;
   if (a === b) {
-    // 同一引用 + 同 selectedId/expanded 命中 → 跳过
+    // 同 node ref + expanded 引用相同 → 只剩 selectedId 可能影响本行
     return (
       prev.selectedId === next.selectedId ||
       (prev.selectedId !== a.id && next.selectedId !== a.id)
-    ) && prev.expanded.has(a.id) === next.expanded.has(a.id);
+    );
   }
   // 不同引用:逐字段比较"可见输出"
   if (
@@ -300,10 +309,6 @@ const TreeNode = memo(TreeNodeImpl, (prev, next) => {
   }
   // 选中/展开:仅本行命中或脱离命中才需要 re-render
   if ((prev.selectedId === a.id) !== (next.selectedId === b.id)) return false;
-  if (prev.expanded.has(a.id) !== next.expanded.has(b.id)) return false;
-  // window 类型的 status 可能变 — 我们不专门比 data,但 status 通常会反映到 label/summary,
-  // 上面的 label 比较能间接捕获。execfully changing status 会改 isExecuting,通过 a !== b
-  // 引用差异 + label/summary 差异传导
   return true;
 });
 
@@ -357,6 +362,103 @@ function InlineTalkComposer({
   );
 }
 
+/**
+ * Relation window 详情面板。
+ *
+ * 2026-05-21:relation 内容已在后端 derive 阶段并入 RelationWindow(peerReadme /
+ * selfLongTermBody / selfSessionBody),无需再从 web/objects 单独 fetch。窗口字段
+ * 缺失时显示占位 + 引导写入提示,与 LLM 看到的 XML 渲染保持一致。
+ */
+function RelationWindowDetail({
+  window,
+}: {
+  window: Extract<ContextWindow, { type: "relation" }>;
+}) {
+  const { displayName } = useDisplayName(window.peerId);
+  const longTermPath =
+    window.selfLongTermPath ?? `stones/.../knowledge/relations/${window.peerId}.md`;
+  const sessionPath =
+    window.selfSessionPath ?? `flows/.../knowledge/relations/${window.peerId}.md`;
+  const readmePath = window.peerReadmePath ?? `stones/${window.peerId}/readme.md`;
+  return (
+    <div className="llm-input-md-body" style={{ padding: "8px 12px" }}>
+      <div className="llm-input-attrs" style={{ marginBottom: 8 }}>
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">peer</span>
+          <span className="llm-input-attr-value">
+            {displayName !== window.peerId ? `${displayName} (${window.peerId})` : window.peerId}
+          </span>
+        </div>
+      </div>
+
+      <h3 style={{ marginTop: 12 }}>peer readme</h3>
+      <div className="muted small" style={{ marginBottom: 4 }}>{readmePath}</div>
+      {window.peerReadme ? (
+        <MarkdownContent content={window.peerReadme} />
+      ) : (
+        <div className="muted small">(no public readme)</div>
+      )}
+
+      <h3 style={{ marginTop: 16 }}>self · long_term</h3>
+      <div className="muted small" style={{ marginBottom: 4 }}>{longTermPath}</div>
+      {window.selfLongTermBody ? (
+        <MarkdownContent content={window.selfLongTermBody} />
+      ) : (
+        <div className="muted small">
+          (暂无;通过 open(parent_window_id="{window.id}", command="edit", args={`{ content: "...", scope: "long_term" }`}) 写入)
+        </div>
+      )}
+
+      <h3 style={{ marginTop: 16 }}>self · session</h3>
+      <div className="muted small" style={{ marginBottom: 4 }}>{sessionPath}</div>
+      {window.selfSessionBody ? (
+        <MarkdownContent content={window.selfSessionBody} />
+      ) : (
+        <div className="muted small">
+          (暂无;通过 open(parent_window_id="{window.id}", command="edit", args={`{ content: "...", scope: "session" }`}) 写入)
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Window 上可用的 command 清单(chips)。catalog 来自 `/api/windows/types`,缓存在
+ * useWindowTypes 内,不随 thread polling 重拉。空数组(如 todo)隐藏整段;catalog
+ * 还没到位先不渲染,避免 "0 commands" 闪烁。
+ *
+ * Hover chip 时弹一个 markdown tooltip 展示 command 描述(取自后端 *_BASIC 路径,
+ * 通常 200~1500 字符)。无 description 的 chip 退化成只显示名字。
+ */
+function WindowCommandsChips({ type }: { type: string }) {
+  const catalog = useWindowTypes();
+  const entry = catalog?.[type];
+  if (!entry || entry.commands.length === 0) return null;
+  const hint = type === "root"
+    ? "open(command=\"<name>\", args={...})"
+    : `open(parent_window_id="<this>", command="<name>", args={...})`;
+  return (
+    <div className="llm-input-commands">
+      <div className="llm-input-commands-head">
+        <span className="llm-input-commands-label">commands</span>
+        <span className="llm-input-commands-hint muted small">{hint}</span>
+      </div>
+      <div className="llm-input-commands-chips">
+        {entry.commands.map((cmd) => (
+          <span key={cmd.name} className="llm-input-command-chip" tabIndex={0}>
+            {cmd.name}
+            {cmd.description && (
+              <span className="llm-input-command-tip" role="tooltip">
+                <MarkdownContent content={cmd.description} />
+              </span>
+            )}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Window 详情：按 type narrow 渲染特定字段；通用字段（id/title/status）始终渲染。 */
 function WindowDetail({
   window,
@@ -394,6 +496,7 @@ function WindowDetail({
           </div>
         ))}
       </div>
+      <WindowCommandsChips type={window.type} />
       {window.type === "command_exec" && (
         <>
           <div className="llm-input-attrs">
@@ -500,6 +603,7 @@ function WindowDetail({
           )}
         </>
       )}
+      {window.type === "relation" && <RelationWindowDetail window={window} />}
       {window.type === "talk" && (
         <div className="llm-input-attrs">
           <div className="llm-input-attr-row">

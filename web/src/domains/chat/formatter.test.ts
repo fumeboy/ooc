@@ -235,4 +235,70 @@ describe("formatThread: groupConsecutiveToolLines", () => {
     expect(fs?.[0].ok).toBe(false);
     expect(fs?.[1].pending).toBe(true);
   });
+
+  it("real-world shape: form_id field on open output + refine/submit args.form_id", () => {
+    // 真实 OOC 后端用 form_id 作为 form-window 标识符（不是 window_id /
+    // parent_window_id）。回归 2026-05-21：deriveTargetWindowId 应当先看
+    // form_id，再 fallback window_id / parent_window_id。
+    const lines = formatThread(
+      makeThread([
+        {
+          category: "llm_interaction",
+          kind: "function_call",
+          callId: "c1",
+          toolName: "open",
+          arguments: { title: "汇总查询结果", command: "program" },
+        },
+        {
+          category: "tool_runtime",
+          kind: "function_call_output",
+          callId: "c1",
+          toolName: "open",
+          ok: true,
+          // 真实后端 output —— 含 form_id 字段
+          output: JSON.stringify({
+            ok: true,
+            tool: "open",
+            message: "Form f_xyz 已创建（program）。",
+            form_id: "f_xyz",
+            auto_submitted: false,
+          }),
+        },
+        {
+          category: "llm_interaction",
+          kind: "function_call",
+          callId: "c2",
+          toolName: "refine",
+          arguments: { title: "填写汇总脚本", form_id: "f_xyz", args: { code: "..." } },
+        },
+        {
+          category: "tool_runtime",
+          kind: "function_call_output",
+          callId: "c2",
+          toolName: "refine",
+          ok: true,
+          output: JSON.stringify({ ok: true }),
+        },
+        {
+          category: "llm_interaction",
+          kind: "function_call",
+          callId: "c3",
+          toolName: "submit",
+          arguments: { title: "提交汇总脚本", form_id: "f_xyz" },
+        },
+        {
+          category: "tool_runtime",
+          kind: "function_call_output",
+          callId: "c3",
+          toolName: "submit",
+          ok: true,
+          output: JSON.stringify({ ok: true }),
+        },
+      ]),
+    );
+    expect(lines.length).toBe(1);
+    if (lines[0].kind !== "tool") throw new Error("expected tool kind");
+    expect(lines[0].toolName).toBe("open");
+    expect(lines[0].followUps?.map((f) => f.toolName)).toEqual(["refine", "submit"]);
+  });
 });

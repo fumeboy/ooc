@@ -177,3 +177,84 @@ export function __resetDisplayNameCacheForTest() {
   cache.clear();
   inflight.clear();
 }
+
+/* ----------------------------- peer readme ----------------------------- */
+
+/**
+ * 取 stones/main/objects/<peerId>/readme.md 的全文（peer 公开自述）。
+ *
+ * 用于：
+ * - relation_window 详情面板展示对端身份介绍
+ * - 任何"查看 peer 是谁"的 inline 场景
+ *
+ * 缓存策略与 displayName 同——TTL 30s + inflight 去重 + 进程内 LRU；
+ * cache key 与 displayName 隔离避免互相打架。返回 null = 文件不存在 / fetch 失败。
+ */
+const readmeCache = new Map<string, { text: string | null; expiresAt: number }>();
+const readmeInflight = new Map<string, Promise<string | null>>();
+const readmeSubscribers = new Set<() => void>();
+
+async function loadReadme(objectId: string): Promise<string | null> {
+  const now = Date.now();
+  const cached = readmeCache.get(objectId);
+  if (cached && cached.expiresAt > now) return cached.text;
+  const existing = readmeInflight.get(objectId);
+  if (existing) return existing;
+  const p = (async () => {
+    let text: string | null = null;
+    try {
+      const res = await requestJson<{ text?: string }>(
+        `/api/stones/${encodeURIComponent(objectId)}/readme`,
+      );
+      text = typeof res?.text === "string" ? res.text : null;
+    } catch {
+      text = null;
+    }
+    if (readmeCache.has(objectId)) readmeCache.delete(objectId);
+    readmeCache.set(objectId, { text, expiresAt: Date.now() + TTL_MS });
+    while (readmeCache.size > LRU_CAP) {
+      const oldest = readmeCache.keys().next().value;
+      if (oldest === undefined) break;
+      readmeCache.delete(oldest);
+    }
+    readmeInflight.delete(objectId);
+    readmeSubscribers.forEach((fn) => fn());
+    return text;
+  })();
+  readmeInflight.set(objectId, p);
+  return p;
+}
+
+/** `usePeerReadme(objectId)` —— 取 peer 的 readme.md；未命中先返回 loading。 */
+export function usePeerReadme(objectId: string | undefined): {
+  text: string | null;
+  isLoading: boolean;
+} {
+  const [, forceUpdate] = useState(0);
+
+  useEffect(() => {
+    if (!objectId) return;
+    let cancelled = false;
+    const sub = () => { if (!cancelled) forceUpdate((n) => n + 1); };
+    readmeSubscribers.add(sub);
+    const cached = readmeCache.get(objectId);
+    if (!cached || cached.expiresAt < Date.now()) {
+      void loadReadme(objectId);
+    }
+    return () => {
+      cancelled = true;
+      readmeSubscribers.delete(sub);
+    };
+  }, [objectId]);
+
+  if (!objectId) return { text: null, isLoading: false };
+  const cached = readmeCache.get(objectId);
+  if (cached && cached.expiresAt > Date.now()) return { text: cached.text, isLoading: false };
+  return { text: null, isLoading: true };
+}
+
+/** 测试用：清掉 readme 缓存。 */
+export function __resetReadmeCacheForTest() {
+  readmeCache.clear();
+  readmeInflight.clear();
+}

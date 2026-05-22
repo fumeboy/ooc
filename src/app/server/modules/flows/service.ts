@@ -118,6 +118,13 @@ function stripVolatileForHash(payload: { contextWindows?: ContextWindow[] }) {
         const { id: _id, createdAt: _createdAt, ...rest } = window;
         return rest;
       }
+      // relation_window 也是每轮 derive 出来的非持久化 window;createdAt 即便用稳定来源
+      // (见 deriveRelationWindow:取对端 talk_window.createdAt 最小值),作为 hash 输入也无意义,
+      // 只有 body / peer fields 变化才该让 hash 变。
+      if (window.type === "relation") {
+        const { createdAt: _createdAt, ...rest } = window;
+        return rest;
+      }
       if (window.type === "issue") {
         const { lastSeenCommentId: _seen, lastNotifiedAt: _notif, ...rest } = window;
         return rest;

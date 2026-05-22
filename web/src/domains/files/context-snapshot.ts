@@ -143,6 +143,15 @@ export type ContextWindow =
       status: "open" | "closed";
       /** 对端 objectId(去重 key);与 talk_window.target 同源。 */
       peerId: string;
+      /** peer readme(stones/<peer>/readme.md);缺失/IO 失败时 undefined。 */
+      peerReadmePath?: string;
+      peerReadme?: string;
+      /** self 对该 peer 的 long_term relation(stones/<self>/knowledge/relations/<peer>.md)。 */
+      selfLongTermPath?: string;
+      selfLongTermBody?: string;
+      /** self 对该 peer 的本 session relation(flows/<sid>/objects/<self>/knowledge/relations/<peer>.md)。 */
+      selfSessionPath?: string;
+      selfSessionBody?: string;
       createdAt?: number;
     };
 

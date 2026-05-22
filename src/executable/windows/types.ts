@@ -307,6 +307,25 @@ export interface RelationWindow extends BaseContextWindow {
   status: "open" | "closed";
   /** 对端 objectId(去重 key);与 talk_window.target 同源。 */
   peerId: string;
+
+  // ── relation body(2026-05-21 把原来伴随 KnowledgeWindow 的内容内联进来,详见
+  //     synthesizer.ts:deriveRelationWindow + render.ts case "relation"。
+  //     都 optional —— 缺失字段对应"暂无,通过 edit 写入"占位。)
+
+  /** peer 的 stones/<peer>/readme.md 路径(始终给出,不论文件是否存在)。 */
+  peerReadmePath: string;
+  /** peer readme.md 正文;peer 没有 stone 目录或 readme.md 缺失/IO 失败 → undefined。 */
+  peerReadme?: string;
+
+  /** self long_term relation 路径:`stones/<self>/knowledge/relations/<peer>.md`。 */
+  selfLongTermPath: string;
+  /** long_term 正文;文件缺失 → undefined(渲染为占位提示)。 */
+  selfLongTermBody?: string;
+
+  /** self session relation 路径:`flows/<sid>/objects/<self>/knowledge/relations/<peer>.md`。 */
+  selfSessionPath: string;
+  /** session 正文;文件缺失 → undefined(渲染为占位提示)。 */
+  selfSessionBody?: string;
 }
 
 /** 所有 ContextWindow 类型的 discriminated union。新增 type 后必须扩这里 + WINDOW_REGISTRY。 */

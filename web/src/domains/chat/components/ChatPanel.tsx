@@ -24,11 +24,11 @@ export function ChatPanel({
   showComposer?: boolean;
 }) {
   const { displayName: peerDisplayName } = useDisplayName(objectId);
-  return (
-    <div className="right-body chat-body">
+  return (<>
+    <div className="right-body chat-body gap-1">
       {sessionId && objectId ? (
         <>
-          <div className="chat-timeline">
+          <div className="chat-timeline panel">
             <ThreadTimeline thread={thread} />
           </div>
           {showComposer && (
@@ -38,10 +38,10 @@ export function ChatPanel({
           )}
         </>
       ) : (
-        <div className="chat-timeline">
+        <div className="chat-timeline panel">
           <div className="empty">Select or create a session to chat.</div>
         </div>
       )}
     </div>
-  );
+  </>);
 }

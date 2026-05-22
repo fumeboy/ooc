@@ -206,7 +206,6 @@ function OpenToolCard({ line, liveWindowIds }: ToolCardShellProps) {
   return (
     <ToolCardShell line={line} liveWindowIds={liveWindowIds}>
       <ToolFieldList line={line} />
-      <WindowLinkRow line={line} />
       {line.followUps && line.followUps.length > 0 && <ToolFollowUpsList line={line} />}
     </ToolCardShell>
   );
@@ -252,7 +251,6 @@ function RefineToolCard({ line, liveWindowIds }: ToolCardShellProps) {
   return (
     <ToolCardShell line={line} liveWindowIds={liveWindowIds}>
       <ToolFieldList line={line} />
-      <WindowLinkRow line={line} />
     </ToolCardShell>
   );
 }
@@ -261,7 +259,6 @@ function SubmitToolCard({ line, liveWindowIds }: ToolCardShellProps) {
   return (
     <ToolCardShell line={line} liveWindowIds={liveWindowIds}>
       <ToolFieldList line={line} />
-      <WindowLinkRow line={line} />
     </ToolCardShell>
   );
 }
@@ -270,7 +267,6 @@ function CloseToolCard({ line, liveWindowIds }: ToolCardShellProps) {
   return (
     <ToolCardShell line={line} liveWindowIds={liveWindowIds}>
       <ToolFieldList line={line} />
-      <WindowLinkRow line={line} />
     </ToolCardShell>
   );
 }
@@ -279,7 +275,6 @@ function WaitToolCard({ line, liveWindowIds }: ToolCardShellProps) {
   return (
     <ToolCardShell line={line} liveWindowIds={liveWindowIds}>
       <ToolFieldList line={line} />
-      <WindowLinkRow line={line} />
     </ToolCardShell>
   );
 }
@@ -350,17 +345,11 @@ function WindowLinkInline({ line, liveWindowIds }: { line: Extract<ChatLine, { k
   const id = extractTargetWindowId(line);
   if (!id) return null;
   // 如果 ChatPanel 提供了 liveWindowIds, 且 id 不在其中 → 表示这个 window 已 auto_removed,
-  // 跳转后只会 fallback 到无关节点 (用户反馈 2026-05-20 "点击没反应" 的根因), 此时 disable button
   const isLive = !liveWindowIds || liveWindowIds.has(id);
   if (!isLive) {
     return (
-      <span
-        className="tui-tool-window-link-btn tui-tool-window-link-inline is-dead"
-        title={`${id} 已不在 context tree (form 被 submit 后 auto-removed)`}
-        aria-disabled="true"
-      >
-        <ExternalLink size={11} aria-hidden="true" />
-      </span>
+      <>
+      </>
     );
   }
   return (
@@ -376,29 +365,6 @@ function WindowLinkInline({ line, liveWindowIds }: { line: Extract<ChatLine, { k
     >
       <ExternalLink size={11} aria-hidden="true" />
     </button>
-  );
-}
-
-/** tool card 末尾的"在 Context Tree 中查看 <id>"跳转按钮。 */
-function WindowLinkRow({ line }: { line: Extract<ChatLine, { kind: "tool" }> }) {
-  const id = extractTargetWindowId(line);
-  if (!id) return null;
-  return (
-    <div className="tui-tool-window-link">
-      <button
-        type="button"
-        className="tui-tool-window-link-btn"
-        onClick={(e) => {
-          e.stopPropagation();
-          dispatchNavigateToWindow(id);
-        }}
-        title={`在 Context Tree 中查看 ${id}`}
-      >
-        <ExternalLink size={11} aria-hidden="true" />
-        <span>view in context tree</span>
-        <code className="tui-tool-window-link-id">{id}</code>
-      </button>
-    </div>
   );
 }
 
