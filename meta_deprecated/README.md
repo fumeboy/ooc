@@ -183,7 +183,7 @@ Flow 与 Stone 同构，多一个 `threads/{threadId}/` 子层（含 `thread.jso
 启动约定：
 
 ```bash
-bun --env-file=.env src/app/server/index.ts --world ./.ooc-world-test
+bun --env-file=.env src/app/server/index.ts --world ./.ooc-world
 ```
 
 > ⚠️ 仓库根**不是** world 目录。不传 `--world` 会把源码目录当 world 写出 `flows/`、`stones/`。

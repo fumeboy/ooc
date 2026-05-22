@@ -77,11 +77,11 @@ git merge feat/observable-debug-form-protocol
 按要求删除：
 
 ```text
-./.ooc-world-test/stones/agent-meta-test/server/index.ts
+./.ooc-world/stones/agent-meta-test/server/index.ts
 ```
 
 说明：
-- 该文件属于本地 `.ooc-world-test/` 测试产物
+- 该文件属于本地 `.ooc-world/` 测试产物
 - 删除后不影响正式代码路径
 
 ### 5. main 分支复验
@@ -98,7 +98,7 @@ bun --env-file=.env test tests/integration/meta-programming.integration.test.ts
 - 耗时约 `126.30s`
 
 说明：
-- 即使清理了 `.ooc-world-test/stones/agent-meta-test/server/index.ts`
+- 即使清理了 `.ooc-world/stones/agent-meta-test/server/index.ts`
 - 集成测试仍能在临时目录内自行创建 stone / flow / server 文件并独立通过
 - 说明测试对外部测试遗留物无隐式依赖
 
@@ -110,7 +110,7 @@ bun --env-file=.env test tests/integration/meta-programming.integration.test.ts
 - `program` 缺参纠偏提示生效
 - `active_forms` 中的 `next_action` / `protocol_hint` 提升了 Agent 对 form 协议的遵循
 - `meta-programming.integration.test.ts` 在真实 LLM 环境下可通过
-- 删除历史 `.ooc-world-test` 里的 `server/index.ts` 后，测试仍然通过，说明链路具备隔离性
+- 删除历史 `.ooc-world` 里的 `server/index.ts` 后，测试仍然通过，说明链路具备隔离性
 
 ## 建议
 

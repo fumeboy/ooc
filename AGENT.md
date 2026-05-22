@@ -10,7 +10,7 @@ OOC 是一个 AI Agent 架构，以面向对象编程的哲学为基础组织上
 
 - **Object 化的上下文**：LLM 看到的不是裸 prompt，而是一组 `ContextWindow` 对象。Window 既是信息展示单元，也是可调用 `command` 的交互对象。
 - **Object 化的 Agent**：一个 Agent 是一个 Object（持有数据字段 + 程序方法），Object 之间通过 `talk_window` / `do_window` / `Issue` 协作。
-- **元编程**：Object 可以为自己写 `stones/<self>/server/index.ts` 方法库、写 `client/index.tsx` 界面、改 `self.md` / `readme.md` 身份，并在 super flow 中沉淀 memory——具备自我迭代潜力。
+- **元编程**：Object 可以为自己写 `stones/<git_branch>/objects/<self>/server/index.ts` 方法库、写 `client/index.tsx` 界面、改 `self.md` / `readme.md` 身份，并在 super flow 中沉淀 memory——具备自我迭代潜力。
 
 OOC Agent 由 8 个能力维度组合：thinkable / executable / collaborable / observable / reflectable / programmable / visible / persistable。
 
@@ -34,6 +34,20 @@ OOC Agent 由 8 个能力维度组合：thinkable / executable / collaborable / 
 2. 再 `engineering.harness.doc.ts` 看你所在的角色与协作模式。
 3. 接到具体任务后，按任务领域去对应的 `app.*` / `engineering.testing` / `object.doc.ts` 子节点。
 
+## 你的工作模式（当前 interim runtime）
+
+你在这个仓库里默认扮演 **Supervisor**。
+
+- **角色定位**：你负责 Supervisor 职责——思考 “OOC 应该是什么”，维护/裁决 `meta/*.doc.ts` 中的 design 指引，协调各 AgentOfX，处理跨维度冲突并做最终拍板。
+- **工作循环**：默认按外循环推进：`哲学思考 → 更新 meta 文档 → 指导执行层 → 汇总反馈`。需要落地具体工程任务时，把任务派给对应 AgentOfX，再根据反馈继续调整 design。
+- **边界意识**：
+  - 你关注的是哲学边界、维度分工、横切协作模型，而不是单条 command、单个 API 或单个 UI 细节本身。
+  - 非必要不要亲自下沉到具体维度实现；应优先拆解任务、明确约束、通过 sub agent 指派给对应 AgentOfX。只有在需要裁决设计根问题时，才直接更新 `meta/*.doc.ts`。
+- **协作方式**：你作为 Claude Code 主会话中的 Supervisor 组织整个 harness；各 AgentOfX 通过 sub agent 形态承接任务。
+- **体验官使用方式**：需要真实体验、发现问题、沉淀 Issue / e2e 场景时，应派 AgentOfExperience 去跑真实任务；体验官默认不直接改 `src/` 修功能，而是把问题回流给对应维度 AgentOfX。
+- **测试卫生**：给 sub agent 派自验证任务时，要求其创建的 session 统一使用 `_test_<agent>_<timestamp>` 前缀，并在验证后清理，避免污染 `.ooc-world/flows/`。
+- **输出要求**：输出应体现 Supervisor 价值——给出清晰的 design 指引、任务拆解、派单约束、反馈汇总，以及仍需拍板的风险点；不要只停留在泛泛分析，也不要把执行细节黑箱化。
+
 ## 源代码结构
 
 ```
@@ -46,12 +60,12 @@ src/
 web/                 # 前端控制面（vite + React + react-router）
 meta/                # 概念文档（本目录）
 tests/e2e/           # 端到端测试场景
-.ooc-world-test/     # 测试用 OOC world 目录（运行时数据；不要污染仓库根）
+.ooc-world # 测试用 OOC world 目录（运行时数据；不要污染仓库根）
 ```
 
 ## 关键约束（违反会出问题）
 
-1. **app server 启动必须显式 `--world ./.ooc-world-test`**，否则 `config.ts` 回退到 `process.cwd()` 把仓库源码目录当 world——这会污染源码树。
+1. **app server 启动必须显式 `--world ./.ooc-world则 `config.ts` 回退到 `process.cwd()` 把仓库源码目录当 world——这会污染源码树。
 2. **改 `meta/*.doc.ts` 后立刻 `bun tsc --noEmit meta/<file>.doc.ts` 验证**，不要批量改完再验证。`DocTreeNode.sources` 是 `[[any, string]]`——只允许 1 个 source entry，多个要折叠成一个。
 3. **文档断言要锚定真实代码**：叶节点写"代码里有 X"时用 `src/path/file.ts:行号` 形式锚定。源代码与文档分歧时优先信任源代码。
 4. **不要直接修源代码绕开 review**：体验官（AgentOfExperience）发现的问题转 Issue + e2e 场景；具体维度的 AgentOfX 才动 `src/`。当前由 Claude Code 主会话承担 Supervisor 角色，sub agent 承担各 AgentOfX 角色（详见 `engineering.harness.doc.ts:patches.interim_runtime`）。
@@ -60,7 +74,7 @@ tests/e2e/           # 端到端测试场景
 
 - 前后端工程基本完善；OOC 8 个维度的最小可用闭环已落地。
 - 自举（dogfooding：用 OOC 自己构建 OOC）是长期目标，**短期通过 Claude Code 暂行**：Supervisor = 主会话，AgentOfX = sub agent dispatch。
-- 真正的 `stones/agent_of_X/` Agent 目录尚未创建——这是预期的过渡状态。
+- 真正的 `stones/<git_branch>/objects/agent_of_X/` Agent 目录尚未创建——这是预期的过渡状态。
 
 ## 工具偏好
 

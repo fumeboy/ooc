@@ -267,7 +267,7 @@ web 是 OOC app 层的浏览与人工操作入口。
 1. 启动后端 app server，指向要浏览和操作的 world 目录：
 
    \`\`\`bash
-   bun src/app/server/index.ts --world .ooc-world-test
+   bun src/app/server/index.ts --world .ooc-world
    \`\`\`
 
    后端默认监听 3000 端口，通过 \`/api\` 暴露 stones、flows、runtime 与

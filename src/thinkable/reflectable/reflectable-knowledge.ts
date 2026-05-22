@@ -110,7 +110,7 @@ shell 启动一个独立 OOC Server 指向新 branch，然后在那里跑反思 
 \`\`\`bash
 # 在 super flow 中用 program(language="shell") 跑
 bun run src/app/server/index.ts \\
-  --world ./.ooc-world-test \\
+  --world ./.ooc-world \\
   --stones-branch <branch> \\
   --port 0 &
 \`\`\`

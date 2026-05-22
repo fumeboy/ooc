@@ -89,9 +89,9 @@ session: dialog-1778520615266
 ## 真实日志与产物位置
 
 - 对话进度日志：`/tmp/dialog-out.log`（本机会话内）
-- 自动报告：`/Users/zhangzhefu/x/ooc-2/ooc/.ooc-world-test/dialog-1778520615266-report.md`
-- 全 events 录像：`.ooc-world-test/flows/dialog-1778520615266/objects/assistant/threads/root/thread.json`（189 events）
-- 副产物：`.ooc-world-test/stones/assistant/data.json` 包含 `{ counter: 3, final_counter: 3 }`
+- 自动报告：`/Users/zhangzhefu/x/ooc-2/ooc/.ooc-world/dialog-1778520615266-report.md`
+- 全 events 录像：`.ooc-world/flows/dialog-1778520615266/objects/assistant/threads/root/thread.json`（189 events）
+- 副产物：`.ooc-world/stones/assistant/data.json` 包含 `{ counter: 3, final_counter: 3 }`
 
 ## 验收
 

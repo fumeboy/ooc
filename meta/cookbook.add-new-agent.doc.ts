@@ -44,7 +44,7 @@ export const root: DocTreeNode = {
 
     步骤总览:
     1. 在 \`meta/object.doc.ts\` 与 \`meta/engineering.harness.doc.ts\` 加新维度的概念定义 (Supervisor 哲学层)
-    2. 在 \`.ooc-world-test/stones/agent_of_<x>/\` 创建 stone 目录骨架
+    2. 在 \`.ooc-world/stones/agent_of_<x>/\` 创建 stone 目录骨架
     3. 写 \`self.md\` (Object 自己的身份) + \`readme.md\` (对外公开介绍)
     4. (可选) 写 \`server/index.ts\` (方法库) + \`client/index.tsx\` (自己的 UI)
     5. 验证: web 控制面能看到新 stone + displayName 正确派生
@@ -91,7 +91,7 @@ export const root: DocTreeNode = {
 
             手工创建 (interim_runtime 期):
             \`\`\`
-            .ooc-world-test/stones/agent_of_<x>/
+            .ooc-world/stones/agent_of_<x>/
             ├── self.md           # 留空 step 3 写
             ├── readme.md         # 留空 step 3 写
             ├── client/           # 可选, step 4
@@ -282,7 +282,7 @@ export const root: DocTreeNode = {
         },
     },
     warnings: [
-        "本 cookbook 假设 .ooc-world-test 作为 world 目录; 如果你用不同 world (例: 部署到生产环境), 把 .ooc-world-test 替换成你的实际 world 路径",
+        "本 cookbook 假设 .ooc-world 作为 world 目录; 如果你用不同 world (例: 部署到生产环境), 把 .ooc-world 替换成你的实际 world 路径",
         "objectId 一旦创建就是永久 ID, 不要重命名 — 它已经被持久化到 Issue.createdByObjectId / message.from / talk_window.target 等多处",
     ],
 };

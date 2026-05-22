@@ -90,12 +90,12 @@ app server 的入口与启动期配置都在 src/app/server/bootstrap 与顶层 
 config 解析顺序: \`--world flag → OOC_WORLD_DIR env → OOC_BASE_DIR env → process.cwd()\`。
 
 本仓库根仅放代码与 meta，**不是** world 数据目录。约定 world 目录为
-\`./.ooc-world-test\`（已 gitignore）。
+\`./.ooc-world\`（已 gitignore）。
 
 启动命令必须显式传 \`--world\`:
 
 \`\`\`bash
-bun --env-file=.env src/app/server/index.ts --world ./.ooc-world-test
+bun --env-file=.env src/app/server/index.ts --world ./.ooc-world
 \`\`\`
 
 .env 也可固化 \`OOC_WORLD_DIR\`，但 CLI 起 server 时优先用 flag 明示，避免误用

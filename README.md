@@ -13,7 +13,7 @@ OOC = **每个 Object 是 (上下文 + 方法 + 身份 + 协作通道) 的统一
 bun install
 
 # 启动 backend (HTTP 控制面, 端口 3000)
-bun --env-file=.env src/app/server/index.ts --world ./.ooc-world-test
+bun --env-file=.env src/app/server/index.ts --world ./.ooc-world
 
 # 启动 web 控制面 (端口 5173)
 cd web && bun run dev
@@ -21,7 +21,7 @@ cd web && bun run dev
 
 打开 http://localhost:5173/welcome 创建第一个 session。
 
-**关键约束**：启动 backend 必须显式 `--world ./.ooc-world-test` —— 否则会把仓库源码目录当 OOC world 数据写入。
+**关键约束**：启动 backend 必须显式 `--world ./.ooc-world` —— 否则会把仓库源码目录当 OOC world 数据写入。
 
 ## 项目结构
 

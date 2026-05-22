@@ -15,7 +15,7 @@ const worldDir = process.env.OOC_WORLD_DIR;
 if (!worldDir) {
   throw new Error(
     "OOC_WORLD_DIR is not set; required for dynamic Object client loading. " +
-      "Set it to the same world directory as the backend (e.g. OOC_WORLD_DIR=./.ooc-world-test bun run dev).",
+      "Set it to the same world directory as the backend (e.g. OOC_WORLD_DIR=./.ooc-world bun run dev).",
   );
 }
 const worldRoot = resolve(worldDir);

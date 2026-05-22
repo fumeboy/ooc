@@ -70,7 +70,7 @@ export const root: DocTreeNode = {
     - context snapshot viewer：把 thread 的 ContextSnapshot 渲染成左树 + 右详情。
     - object client renderer：动态 \`/@fs/\` 加载 stones/flows 自带的 client 入口
       （\`client/index.tsx\` / \`client/pages/*.tsx\`），主控制面内联渲染。
-    - knowledge 编辑：唯一开放写入的区域，仅限 \`stones/{objectId}/knowledge/**\`。
+    - knowledge 编辑：唯一开放写入的区域，仅限 \`stones/<git_branch>/<objectId}/{objectId}/knowledge/**\`。
     - 顶部状态（MainLogo）：health / global pause / debug 状态轮询与切换。
 
     app.client 的 chat 默认 \`threadId="root"\`，但已经具备 session 内 thread 切换器
@@ -715,7 +715,7 @@ export const root: DocTreeNode = {
             1. 启动后端 app server，指向要浏览和操作的 world 目录：
 
                \`\`\`bash
-               bun --env-file=.env src/app/server/index.ts --world ./.ooc-world-test
+               bun --env-file=.env src/app/server/index.ts --world ./.ooc-world
                \`\`\`
 
                后端默认监听 3000 端口（环境变量名为 \`OOC_APP_PORT\`，不是
@@ -728,7 +728,7 @@ export const root: DocTreeNode = {
                \`\`\`bash
                cd web
                bun install
-               OOC_WORLD_DIR=../.ooc-world-test bun run dev
+               OOC_WORLD_DIR=../.ooc-world bun run dev
                \`\`\`
 
                vite 在 \`web/vite.config.ts\` 启动期若没读到 \`OOC_WORLD_DIR\` 会直接
@@ -745,7 +745,7 @@ export const root: DocTreeNode = {
                \`\`\`
             `,
             warnings: [
-                "启动 app server 必须显式传 --world ./.ooc-world-test，否则 config.ts 会回退到 process.cwd() 把源码目录当 world，污染源码树。",
+                "启动 app server 必须显式传 --world ./.ooc-world，否则 config.ts 会回退到 process.cwd() 把源码目录当 world，污染源码树。",
                 "启动 web dev server 必须显式传 OOC_WORLD_DIR；vite.config.ts 缺时直接 throw，不会回退到任何默认值。",
             ],
         },

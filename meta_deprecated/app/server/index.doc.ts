@@ -35,12 +35,12 @@ App Server 是 OOC 的控制面 HTTP 服务，位于 src/app/server，使用 Ely
 本仓库根目录是源码目录，**不是** world 数据目录。启动 app server 必须显式传
 \`--world\`，否则 server 会把源码目录当成 world，写出 flows/ / stones/ 到代码树里。
 
-约定 world 目录：\`./.ooc-world-test\`（已 gitignore）。
+约定 world 目录：\`./.ooc-world\`（已 gitignore）。
 
 启动命令：
 
 \`\`\`bash
-bun --env-file=.env src/app/server/index.ts --world ./.ooc-world-test
+bun --env-file=.env src/app/server/index.ts --world ./.ooc-world
 \`\`\`
 
 config.ts 解析顺序为 \`--world flag → OOC_WORLD_DIR env → OOC_BASE_DIR env →

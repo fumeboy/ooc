@@ -7,7 +7,7 @@
  * 运行：
  *   bun --env-file=.env scripts/dialog-experience.ts
  *
- * baseDir 用 `.ooc-world-test/` 保留 Agent 的长期产物（.gitignore 中已排除）。
+ * baseDir 用 `.ooc-world/` 保留 Agent 的长期产物（.gitignore 中已排除）。
  */
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
@@ -29,7 +29,7 @@ function loadEnv(): void {
 }
 loadEnv();
 
-const BASE_DIR = resolve(process.cwd(), ".ooc-world-test");
+const BASE_DIR = resolve(process.cwd(), ".ooc-world");
 mkdirSync(BASE_DIR, { recursive: true });
 
 const SESSION_ID = `dialog-${Date.now()}`;

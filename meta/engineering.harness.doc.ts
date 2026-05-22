@@ -373,7 +373,7 @@ export const root: DocTreeNode = {
             content: `
             **背景**: interim_runtime 形态下, sub agent 跑回归常需要真发 \`POST /api/sessions\` 验证修复
             (例: AgentOfVisible 改 A6 后真创建一个 session 看 title 派生是否正确)。这些 session 会
-            **落盘到 .ooc-world-test/flows/**, 污染 sidebar 列表, 影响后续体验官 UI 评审的真实性
+            **落盘到 .ooc-world/flows/**, 污染 sidebar 列表, 影响后续体验官 UI 评审的真实性
             (体验官会被迫看到一堆 \`a8-verify-...\`, 干扰对真实使用场景的判断)。
 
             **规约 (2026-05-20, 派单时强制要求 sub agent 遵守)**:
@@ -392,7 +392,7 @@ export const root: DocTreeNode = {
             > 自验证产生的 session 一律用 sessionId 前缀 \`_test_<agent>_<timestamp>\`, 验证完毕后 rm 自己创建的目录。
 
             **跟历史污染的关系**: 2026-05-20 之前的 sub agent (A2-A8 / A1+B5 那几轮) 没有此约束,
-            在 .ooc-world-test/flows/ 落了一批 \`web-*\` / \`regress-*\` / \`a8-verify-*\` 等污染 session,
+            在 .ooc-world/flows/ 落了一批 \`web-*\` / \`regress-*\` / \`a8-verify-*\` 等污染 session,
             Supervisor 已在 Task #23 中手动清理。本规约从落地之后的派单开始强制执行。
             `,
             named: {
