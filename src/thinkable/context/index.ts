@@ -149,6 +149,14 @@ export type ThreadContext = {
   childThreadIds?: string[];
   /** 子线程实体表；当前内存实现直接嵌套，不引入独立存储层。 */
   childThreads?: Record<string, ThreadContext>;
+  /**
+   * 父 thread 反向引用（运行时设置，不持久化）。
+   *
+   * 用于 do_window.move 等命令需要从子 thread 访问父 thread 的场景；
+   * 由 fork 路径（root.do executeDoCommand）在创建 child 时建立。
+   * thread.json 序列化时被 strip（避免循环引用）。
+   */
+  _parentThreadRef?: ThreadContext;
   /** 其他线程投递给当前线程的消息。 */
   inbox?: ThreadMessage[];
   /** 当前线程发出的协作消息记录。 */

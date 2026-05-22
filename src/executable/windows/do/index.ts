@@ -12,6 +12,7 @@ import { registerWindowType, type OnCloseContext } from "../_shared/registry.js"
 import { continueCommand } from "./command.continue.js";
 import { waitCommand } from "./command.wait.js";
 import { closeCommand } from "./command.close.js";
+import { moveCommand } from "./command.move.js";
 import { archiveDoWindowChild } from "./helpers.js";
 
 function onCloseDoWindow(ctx: OnCloseContext): boolean | void {
@@ -33,6 +34,7 @@ registerWindowType("do", {
     continue: continueCommand,
     wait: waitCommand,
     close: closeCommand,
+    move: moveCommand,
   },
   onClose: onCloseDoWindow,
 });

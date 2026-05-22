@@ -122,6 +122,12 @@ export async function collectExecutableKnowledgeEntries(
       enriched.push(window);
       continue;
     }
+    // sharing 状态的 command_exec form 不参与 knowledge 派生（plan §do_window.move）：
+    // ref 看 snapshot；lent_out 已离手；都不应触发活动 knowledge 激活
+    if (window.sharing) {
+      enriched.push(window);
+      continue;
+    }
     const enrichedForm = await enrichFormCommandKnowledge(window, thread);
     enriched.push(enrichedForm);
 

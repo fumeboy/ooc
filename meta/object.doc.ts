@@ -522,6 +522,7 @@ export const root: DocTreeNode = {
                         "create_issue": "在 session 内创建 Issue 看板议题的 command",
                         "open_issue": "把已存在 Issue 订阅为 issue_window 的 command",
                         "refine / submit": "command_exec window 上注册的两条命令；用 exec(form_id, ...) 触发",
+                        "do_window.move": "do_window 上注册的命令；通过本 do_window 把 ContextWindow 以 ref / move 模式分享给对端 thread；归还路径按 id 自动识别 lent_out ↔ owner 配对（plan §do_window.move）",
                     },
                     patches: {
                         "command_path_activation": {
@@ -536,6 +537,37 @@ export const root: DocTreeNode = {
 
                             这样 LLM 只有在真正进入某条行动路径时，才看到该路径的完整操作说明。
                             `,
+                        },
+                        "do_window_move": {
+                            title: "do_window.move - 跨 thread 共享 ContextWindow 的统一通道",
+                            content: `
+                            do_window 上注册的 \`move\` 命令，是父子双向传递 ContextWindow 的唯一机制。
+                            （详见 executable.context_window.children.sharing）
+
+                            **形态**：
+                                exec(window_id=<do_window_id>, command="move",
+                                     args={ window_id: <target>, mode: "ref" | "move" })
+
+                            **三种语义路径**（path 自动 match）：
+                            - move.ref：对端获得只读 snapshot；自己保留 owner
+                            - move.move：所有权移交对端；自己变 lent_out 占位（看 snapshot）
+                            - 归还（隐含）：当 borrower 用 mode="move" 在 creator do_window 上发起时，
+                              系统按 id 检测对端有同 id 的 lent_out → 视为归还，自动合并 latest 内容
+
+                            **多层嵌套**：孙线程拿到 owner 后可以再 move 给曾孙；归还路径每层独立处理。
+
+                            **自动归还**：do_window archive（onClose hook）时，子 thread 持有的所有
+                            "对应父 lent_out 配对"的 owner windows 自动归还父 thread。
+
+                            **root.do.share_windows 语法糖**：do command 的 share_windows 参数等价于"创建 do_window
+                            后顺序调 do_window.move"，方便一次性带走多个 windows。
+                            `,
+                            named: {
+                                "ref vs move": "ref 是只读引用；move 是所有权转移",
+                                "归还": "borrower 用 mode=move 还回原 owner thread；按 id 自动识别 lent_out 配对",
+                                "多层嵌套": "支持递归；每层 do_window archive 时各自归还到对应 owner",
+                                "share_windows 语法糖": "root.do 创建子线程时一次性带走 windows，等价于多次 do_window.move",
+                            },
                         },
                     },
                 },
@@ -583,6 +615,36 @@ export const root: DocTreeNode = {
                             LLM 可以看见自己正在填写什么参数、还缺什么、激活了哪些知识、执行结果是什么。
                             `,
                         },
+                        "sharing": {
+                            title: "sharing - 跨 thread 共享 ContextWindow",
+                            content: `
+                            BaseContextWindow 的可选字段 \`sharing: SharingState\` 表达"这个 window 当前
+                            的所有权与可见性状态"。缺省 = owner-live（当前 thread 独占持有，可正常操作）。
+
+                            两种 sharing kind（plan §do_window.move）:
+
+                            - **kind="ref"**：当前 thread 持有的是只读引用；snapshot 是分享时刻的 freeze。
+                              真 owner 在 ownerThreadId 所在 thread 那边继续 live；之后 owner 改动不会同步。
+                              ref 上不能 exec 任何命令（仅可 close 释放本地引用）。
+                            - **kind="lent_out"**：当前 thread 曾是 owner，已把 owner 移交给 borrowerThreadId。
+                              自己看到的是分享时刻的 snapshot，临时只读；borrower thread 结束/归还时自动恢复 live。
+                              lent_out 上所有命令（含 close）都被拒绝。
+
+                            **id 协议**：window 跨 thread move 时 id 严格保持不变；按 id 配对识别 lent_out ↔ owner，
+                            实现归还路径自动识别（borrower 用 do_window.move 把 window 还回原 owner，对端按 id 找
+                            自己的 lent_out 占位 → 视为归还）。
+
+                            **持久化**：sharing.snapshot 是嵌套 ContextWindow，JSON-safe，自然落 thread.json。
+
+                            **render**：sharing 状态的 window 用 snapshot 内容渲染，title 加前缀
+                            \`[ref → owner@thread:X]\` / \`[已借给 thread:Y]\`，并标 \`read_only="true"\` 属性。
+                            `,
+                            named: {
+                                "SharingState": "BaseContextWindow.sharing 的联合类型；kind=ref|lent_out",
+                                "snapshot": "分享时刻的 ContextWindow freeze 副本（不带 sharing 字段）",
+                                "id 协议": "跨 thread move 保留同一 id；用于归还路径自动识别 lent_out ↔ owner 配对",
+                            },
+                        },
                     },
                     patches: {
                         "cascade_close": {
@@ -621,7 +683,7 @@ export const root: DocTreeNode = {
                     named: {
                         "root": "thread 的隐含根窗口，提供顶层 command",
                         "command_exec": "一次 command 调用的临时窗口",
-                        "do_window": "父 thread 观察和继续子 thread 的窗口",
+                        "do_window": "父 thread 观察和继续子 thread 的窗口；注册 continue/wait/close/move 命令；archive 时自动归还所有 borrowed owner windows（plan §do_window.move）",
                         "talk_window": "与 user 或其他 Object 对话的窗口",
                         "todo_window": "可见待办窗口",
                         "program_window": "程序执行窗口",
@@ -960,14 +1022,48 @@ export const root: DocTreeNode = {
             },
             patches: {
                 "no_shared_state_across_threads": {
-                    title: "thread 之间不共享内存状态",
+                    title: "thread 之间不共享内存状态（do_window.move 是唯一例外）",
                     content: `
                     thread 不能直接读取彼此的 contextWindows / events / threadLocalData。
 
                     跨线程影响必须显式经过 inbox / outbox、do_window transcript 或 talk_window transcript。
                     这是 collaborable 的硬约束:让协作链路始终可观察、可回放、可 debug，
                     而不是依靠隐式的共享指针。
+
+                    **唯一例外**：do_window.move 提供 ContextWindow 的跨 thread ref / 移交语义
+                    （详见 cross_thread_window_sharing patch 与 executable.context_window.children.sharing）。
                     `,
+                },
+                "cross_thread_window_sharing": {
+                    title: "do_window.move：跨 thread 共享 ContextWindow 的第二条协作通道",
+                    content: `
+                    在 inbox/outbox 文本消息之外，OOC 提供了第二条协作通道：通过 do_window 上注册的 \`move\` 命令，
+                    把整个 ContextWindow（含其内部状态）以 ref / move 模式传递给对端 thread。
+
+                    **两种 sharing 模式**（plan §do_window.move）:
+                    - **ref**（只读引用）：对端获得分享时刻的 freeze snapshot；自己保留 owner 继续 live 操作。
+                      ref 上不能 exec 任何命令（仅 close 释放本地引用）。
+                    - **move**（所有权移交）：对端获得完整 owner（live）；自己变 lent_out 占位（看 snapshot），临时只读。
+
+                    **归还路径**：当 borrower 用 mode="move" 在 creator do_window 上发起时，按 id 检测对端有同 id
+                    的 lent_out → 视为归还，对端恢复 owner（吸收 borrower 的 latest 内容），自己副本被移除。
+
+                    **自动归还**：do_window archive（onClose）时，子 thread 持有的所有"对应父 lent_out 配对"的
+                    owner windows 自动归还父 thread。
+
+                    **id 协议**：跨 thread 时 window id 严格保持不变（用于配对识别 lent_out ↔ owner）。
+
+                    **可被 share 的 window 类型**：file / knowledge / search / program / todo / talk / issue / relation / custom；
+                    do_window 自身、command_exec、root 不可分享（语义不合理）。
+
+                    与 inbox/outbox 的关系：消息通道仍是协作的主路径；window 共享只是把"已经组织好的上下文"
+                    一次性带过去，避免对端重复打开 file / search / knowledge 等。
+                    `,
+                    named: {
+                        "ref vs move": "ref 是只读 snapshot；move 是所有权转移",
+                        "id 协议": "跨 thread move 保留同一 id；用于自动配对识别归还",
+                        "自动归还": "do_window archive 时把子的 borrowed owner 全部回写父",
+                    },
                 },
                 "super_alias_target": {
                     title: "talk_window.target === 'super' 是自指别名",

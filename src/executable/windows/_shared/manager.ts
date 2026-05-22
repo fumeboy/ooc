@@ -145,6 +145,21 @@ export class WindowManager {
   }): Promise<{ formId: string; autoSubmitted: boolean; submitResult?: string }> {
     const parentId = opts.parentWindowId ?? ROOT_WINDOW_ID;
     const parent = this.requireParent(parentId);
+
+    // sharing 守门（plan §do_window.move）：
+    // - ref：只允许 close（释放本地 ref 引用）
+    // - lent_out：所有命令拒绝（含 close），等归还后才能操作
+    if (parent.sharing) {
+      const isCloseOnRef = parent.sharing.kind === "ref" && opts.command === "close";
+      if (!isCloseOnRef) {
+        const reason =
+          parent.sharing.kind === "ref"
+            ? `window ${parent.id} 是只读 ref（owner 在 thread "${parent.sharing.ownerThreadId}"），不允许执行命令 "${opts.command}"。仅可 close 释放本地 ref 引用。`
+            : `window ${parent.id} 已借出给 thread "${parent.sharing.borrowerThreadId}"，等其归还后才能执行命令。`;
+        throw new Error(`openCommandExec: ${reason}`);
+      }
+    }
+
     const entry = lookupCommandEntry(parent, opts.command);
     if (!entry) {
       throw new Error(
@@ -409,6 +424,24 @@ export class WindowManager {
     if (!window) return;
     this.releaseKnowledgeRefs(window);
     this.windows.delete(windowId);
+  }
+
+  /**
+   * 公开版 removeWindow —— 不触发 onClose hook，仅释放 mgr 持有的状态。
+   *
+   * 适用于 do_window.move 等场景：command 自己已处理副作用，需要 mgr 同步移除 window。
+   * 与 close() 的区别：close() 走 onClose hook + 级联子 window；本方法仅 raw remove。
+   */
+  removeWindowSilent(windowId: string): boolean {
+    if (!this.windows.has(windowId)) return false;
+    this.removeWindow(windowId);
+    return true;
+  }
+
+  /** 公开版 insert/update：command 直接构造好 sharing 状态后写回 mgr。 */
+  upsertWindow(window: ContextWindow): void {
+    this.windows.set(window.id, window);
+    this.recordKnowledgeRefs(window);
   }
 }
 

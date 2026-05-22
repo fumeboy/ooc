@@ -24,7 +24,9 @@ import {
   ROOT_WINDOW_ID,
   creatorWindowIdOf,
   generateWindowId,
+  type ContextWindow,
   type DoWindow,
+  type SharingState,
 } from "../_shared/types.js";
 
 const DO_BASIC_PATH = "internal/executable/do/basic";
@@ -36,16 +38,23 @@ do 用于在当前对象内部派生子线程，并在父线程下产生一个 d
 参数：
 - msg: 必填，写入子线程 inbox 的初始消息
 - wait: 可选，true 时父线程立刻进入 waiting，等子线程回写消息再唤醒
-- knowledge: 可选，子线程额外引入的 knowledge path 列表（Step 2 才生效，本阶段忽略）
+- share_windows: 可选，要在子线程创建时一并分享的 windows 列表，每条形如
+  { window_id: "<id>", mode: "ref" | "move" }；ref = 只读 snapshot；move = 移交所有权
+  内部展开为多次 do_window.move 命令；之后还可以随时通过 do_window.move 继续分享/归还
 
 示例：
-open(command="do", title="处理告警", args={ msg: "请检查 ERROR 日志", wait: true })
+exec(command="do", title="处理告警", args={ msg: "请检查 ERROR 日志", wait: true })
+exec(command="do", title="一起读 file_x", args={
+  msg: "看 file_x 第 100-200 行",
+  share_windows: [{ window_id: "w_file_abc", mode: "ref" }]
+})
 
 submit 后：
 - 子线程创建并 running；初始消息进 child inbox
 - 父线程下挂 do_window（type=do, targetThreadId=<childId>）
-- 后续追加消息：open(parent_window_id="<do_window_id>", command="continue", args={ msg: "..." })
-- 关闭对话：close(window_id="<do_window_id>")（子线程会被标记 archived）
+- 后续追加消息：exec(window_id="<do_window_id>", command="continue", args={ msg: "..." })
+- 后续分享 window：exec(window_id="<do_window_id>", command="move", args={ window_id, mode })
+- 关闭对话：close(window_id="<do_window_id>")（子线程会被标记 archived；borrowed owner 自动归还）
 `.trim();
 
 export enum DoCommandPath {
@@ -184,9 +193,17 @@ export async function executeDoCommand(ctx: CommandExecutionContext): Promise<st
   });
   parent.outbox = [...(parent.outbox ?? []), message];
 
-  // 3) 把 child 挂到父线程树
+  // 3) 把 child 挂到父线程树（双向引用：parent.childThreads + child._parentThreadRef）
   parent.childThreadIds = [...(parent.childThreadIds ?? []), childId];
   parent.childThreads = { ...(parent.childThreads ?? {}), [childId]: child };
+  // 反向引用：仅运行时使用，不持久化（thread.json strip）；用于 do_window.move 等
+  // 命令从子 thread 访问父 thread。
+  Object.defineProperty(child, "_parentThreadRef", {
+    value: parent,
+    enumerable: false,
+    writable: true,
+    configurable: true,
+  });
 
   // 4) 在父线程下挂一个 do_window 指向 child
   const doWindow: DoWindow = {
@@ -210,5 +227,111 @@ export async function executeDoCommand(ctx: CommandExecutionContext): Promise<st
     parent.inboxSnapshotAtWait = parent.inbox?.length ?? 0;
   }
 
+  // 6) share_windows 语法糖：按顺序对每个条目模拟 do_window.move（plan §do_window.move）
+  const shareWindows = parseShareWindows(ctx.args.share_windows);
+  if (shareWindows && shareWindows.length > 0) {
+    const errors: string[] = [];
+    for (const entry of shareWindows) {
+      const result = applyInitialShare(parent, child, doWindow, entry);
+      if (result) errors.push(result);
+    }
+    if (errors.length > 0) {
+      parent.events.push({
+        category: "context_change",
+        kind: "inject",
+        text: `[do.share_windows] 部分分享失败：\n${errors.join("\n")}`,
+      });
+    }
+  }
+
+  return undefined;
+}
+
+interface ShareWindowEntry {
+  window_id: string;
+  mode: "ref" | "move";
+}
+
+function parseShareWindows(raw: unknown): ShareWindowEntry[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const result: ShareWindowEntry[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const wid = (item as { window_id?: unknown }).window_id;
+    const mode = (item as { mode?: unknown }).mode;
+    if (typeof wid !== "string" || (mode !== "ref" && mode !== "move")) continue;
+    result.push({ window_id: wid, mode });
+  }
+  return result;
+}
+
+/**
+ * root.do 创建子线程时的初始分享：直接在父→子方向上 transfer。
+ *
+ * 复用 do_window.move 的同等语义：
+ * - mode=ref：子追加 ref placeholder + snapshot；父 owner 不变
+ * - mode=move：父 owner → lent_out（含 snapshot）；子追加完整 owner 副本
+ *
+ * 错误形式 → 返回 string；成功 → 返回 undefined
+ */
+function applyInitialShare(
+  parent: ThreadContext,
+  child: ThreadContext,
+  doWindow: DoWindow,
+  entry: ShareWindowEntry,
+): string | undefined {
+  const parentWindows = parent.contextWindows ?? [];
+  const sourceIdx = parentWindows.findIndex((w) => w.id === entry.window_id);
+  if (sourceIdx < 0) {
+    return `window "${entry.window_id}" 不在父 thread.contextWindows 里`;
+  }
+  const source = parentWindows[sourceIdx]!;
+  if (source.sharing) {
+    return `window "${entry.window_id}" 已是 sharing 状态，不能再分享`;
+  }
+  if (source.type === "do" || source.type === "command_exec" || source.type === "root") {
+    return `window "${entry.window_id}" 是 ${source.type} 类型，不允许分享`;
+  }
+
+  const childWindows = child.contextWindows ?? (child.contextWindows = []);
+  if (childWindows.some((w) => w.id === entry.window_id)) {
+    return `子 thread 已有同 id window "${entry.window_id}"`;
+  }
+
+  const snapshot: ContextWindow = JSON.parse(JSON.stringify(source));
+  delete (snapshot as { sharing?: SharingState }).sharing;
+
+  if (entry.mode === "ref") {
+    const refPlaceholder: ContextWindow = {
+      ...snapshot,
+      sharing: {
+        kind: "ref",
+        ownerThreadId: parent.id,
+        lentByWindowId: doWindow.id,
+        sharedAt: Date.now(),
+        snapshot,
+      },
+    };
+    child.contextWindows = [...childWindows, refPlaceholder];
+    return undefined;
+  }
+
+  // mode=move
+  const lentOut: ContextWindow = {
+    ...snapshot,
+    sharing: {
+      kind: "lent_out",
+      borrowerThreadId: child.id,
+      lentToWindowId: doWindow.id,
+      sharedAt: Date.now(),
+      snapshot,
+    },
+  };
+  parentWindows[sourceIdx] = lentOut;
+  parent.contextWindows = parentWindows;
+
+  const ownerCopy: ContextWindow = JSON.parse(JSON.stringify(source));
+  delete (ownerCopy as { sharing?: SharingState }).sharing;
+  child.contextWindows = [...childWindows, ownerCopy];
   return undefined;
 }

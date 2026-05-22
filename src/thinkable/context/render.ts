@@ -484,37 +484,49 @@ async function renderWindowNode(
   thread: ThreadContext,
   allWindows: ContextWindow[],
 ): Promise<XmlNode> {
+  // sharing 状态（plan §do_window.move）：用 snapshot 内容渲染，title 加前缀
+  // - ref：自己持有的只读引用，owner 在别处
+  // - lent_out：自己曾是 owner，已借出，临时只读
+  const sharingState = window.sharing;
+  const renderedWindow: ContextWindow = sharingState ? sharingState.snapshot : window;
+
+  const titlePrefix = sharingState
+    ? sharingState.kind === "ref"
+      ? `[ref → owner@thread:${sharingState.ownerThreadId}] `
+      : `[已借给 thread:${sharingState.borrowerThreadId}] `
+    : "";
+
   const children: XmlNode[] = [
-    xmlElement("title", {}, [xmlText(window.title)]),
+    xmlElement("title", {}, [xmlText(titlePrefix + renderedWindow.title)]),
   ];
 
-  switch (window.type) {
+  switch (renderedWindow.type) {
     case "command_exec":
-      children.push(...renderCommandExecWindowChildren(window));
+      children.push(...renderCommandExecWindowChildren(renderedWindow));
       break;
     case "do":
-      children.push(...renderDoWindowChildren(window, thread));
+      children.push(...renderDoWindowChildren(renderedWindow, thread));
       break;
     case "todo":
-      children.push(...renderTodoWindowChildren(window));
+      children.push(...renderTodoWindowChildren(renderedWindow));
       break;
     case "talk":
-      children.push(...renderTalkWindowChildren(window, thread));
+      children.push(...renderTalkWindowChildren(renderedWindow, thread));
       break;
     case "program":
-      children.push(...renderProgramWindowChildren(window));
+      children.push(...renderProgramWindowChildren(renderedWindow));
       break;
     case "file":
-      children.push(...(await renderFileWindowChildren(window)));
+      children.push(...(await renderFileWindowChildren(renderedWindow)));
       break;
     case "knowledge":
-      children.push(...(await renderKnowledgeWindowChildren(window, thread)));
+      children.push(...(await renderKnowledgeWindowChildren(renderedWindow, thread)));
       break;
     case "search":
-      children.push(...renderSearchWindowChildren(window));
+      children.push(...renderSearchWindowChildren(renderedWindow));
       break;
     case "relation":
-      children.push(...renderRelationWindowChildren(window));
+      children.push(...renderRelationWindowChildren(renderedWindow));
       break;
     case "root":
       // root 一般不显式渲染（隐含 window）；如果出现就只渲染基本信息
@@ -530,11 +542,23 @@ async function renderWindowNode(
     children.push(xmlElement("sub_windows", {}, subNodes));
   }
 
-  return xmlElement(
-    "window",
-    { id: window.id, type: window.type, status: window.status },
-    children,
-  );
+  // sharing 属性 + read_only 标记
+  const attrs: Record<string, string> = {
+    id: window.id,
+    type: window.type,
+    status: window.status,
+  };
+  if (sharingState) {
+    attrs.read_only = "true";
+    attrs.sharing = sharingState.kind;
+    if (sharingState.kind === "ref") {
+      attrs.owner_thread = sharingState.ownerThreadId;
+    } else {
+      attrs.borrower_thread = sharingState.borrowerThreadId;
+    }
+  }
+
+  return xmlElement("window", attrs, children);
 }
 
 /** 渲染 thread.contextWindows 的整体节点，按 root 下的直接子 window 自顶向下展开。 */

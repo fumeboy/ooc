@@ -41,6 +41,8 @@ export type WindowStatus = "open" | "executing" | "executed" | "running" | "arch
  * - parentWindowId：command_exec 必有 parent；其它类型不显式挂 parent 时默认在 root 下
  * - title：所有 window 强制必填（spec § ContextWindow 抽象）
  * - windowKnowledgePaths：本 window 自身关联的 knowledge path（用于 close 时释放引用计数）
+ * - sharing：跨 thread 共享状态；缺省 = 该 thread 独占持有（owner，可正常操作）
+ *   详见 SharingState 与 do_window.move 命令（plan: do_window.move 跨 thread 共享）
  */
 export interface BaseContextWindow {
   id: string;
@@ -50,7 +52,44 @@ export interface BaseContextWindow {
   status: WindowStatus;
   createdAt: number;
   windowKnowledgePaths?: string[];
+  /** 跨 thread 共享状态；缺省 = owner-live。 */
+  sharing?: SharingState;
 }
+
+/**
+ * 跨 thread 共享 ContextWindow 的状态（plan §sharing）。
+ *
+ * - kind="ref"：我（当前 thread）持有的是只读 ref；snapshot 是分享时刻的 freeze。
+ *   owner 在 ownerThreadId 所在的 thread 那边继续 live；我看到的内容不会随 owner 改动而更新。
+ *   ref 上不能 exec 任何命令（除 close 释放本地引用）。
+ * - kind="lent_out"：我曾是 owner，已把 owner 移交给 borrowerThreadId；当前我自己看到的是
+ *   分享时刻的 snapshot，临时只读。borrower thread 结束/归还时，我恢复 owner 状态。
+ *
+ * window 跨 thread move 时 id 严格保持不变（用 id 做 lent_out ↔ owner 的配对识别归还）。
+ */
+export type SharingState =
+  | {
+      kind: "ref";
+      /** 真 owner 所在 thread。 */
+      ownerThreadId: string;
+      /** 把这个 ref 引进来的 do_window.id（对端 do_window；用于 UI 反查"由哪个 do 进来的"）。 */
+      lentByWindowId: string;
+      /** 分享时刻 timestamp（ms）。 */
+      sharedAt: number;
+      /** 不带 sharing 字段的 freeze 副本；render / 渲染 knowledge 时使用。 */
+      snapshot: ContextWindow;
+    }
+  | {
+      kind: "lent_out";
+      /** 借给谁。 */
+      borrowerThreadId: string;
+      /** 自己持有的指向 borrower 的 do_window.id（用于 UI 反查"借给哪个 do"）。 */
+      lentToWindowId: string;
+      /** 分享时刻 timestamp（ms）。 */
+      sharedAt: number;
+      /** 借出时刻的 freeze 副本；render 时自己用（自己看不到 latest，因为 latest 在 borrower 那边）。 */
+      snapshot: ContextWindow;
+    };
 
 // ─────────────────────────── per-type interface re-exports ────────────────────
 

@@ -98,14 +98,11 @@ export function countFormExecutions(thread: ThreadContext): number {
     if (!event.ok) continue;
     if (event.toolName !== "exec") continue;
     try {
-      const out = JSON.parse(event.output) as { executed?: boolean; executed?: boolean };
-      if (out.executed === true || out.executed === true) {
-        // exec auto-executed (旧 executed 字段保留兼容已落盘旧数据)
-        n += 1;
-      } else {
-        // 普通 exec 调用也算一次 form 执行（form 自身的 refine/submit 也走 exec）
-        n += 1;
-      }
+      const out = JSON.parse(event.output) as { executed?: boolean };
+      // 普通 exec 调用算一次 form 执行（form 自身的 refine/submit 也走 exec）；
+      // executed=true 表示 args 齐全直接执行
+      void out.executed;
+      n += 1;
     } catch {
       n += 1;
     }
