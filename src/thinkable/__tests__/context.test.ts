@@ -9,7 +9,7 @@ import {
   ROOT_WINDOW_ID,
   type CommandExecWindow,
   type ContextWindow,
-} from "../../executable/windows/types";
+} from "../../executable/windows/_shared/types";
 import { makeThread } from "../../__tests__/make-thread";
 
 /** 构造一个 command_exec window，便于 context render 测试 */

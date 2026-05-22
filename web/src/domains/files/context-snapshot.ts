@@ -28,7 +28,7 @@
  * - 字段名直接对齐后端类型；前端不需要"猜"标签语义
  */
 
-/** 后端 src/executable/windows/types.ts ContextWindow 在前端的最小镜像。 */
+/** 后端 src/executable/windows/_shared/types.ts ContextWindow 在前端的最小镜像。 */
 export type ContextWindow =
   | { id: string; type: "root"; title: string; status?: string; createdAt?: number }
   | {

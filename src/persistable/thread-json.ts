@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { threadDir, toJson, type FlowObjectRef, type ThreadPersistenceRef } from "./common";
 import type { ThreadContext } from "../thinkable/context";
-import { initContextWindows } from "../executable/windows/init";
+import { initContextWindows } from "../executable/windows/_shared/init";
 
 /**
  * thread.json 的最小读写。

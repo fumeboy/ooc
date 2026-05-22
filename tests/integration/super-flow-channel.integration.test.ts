@@ -34,7 +34,7 @@ import {
   writeSelf,
   writeThread,
 } from "../../src/persistable";
-import { deliverTalkMessage } from "../../src/executable/windows/talk-delivery";
+import { deliverTalkMessage } from "../../src/executable/windows/talk/delivery";
 import {
   initContextWindows,
   ROOT_WINDOW_ID,

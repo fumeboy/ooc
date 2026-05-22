@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { execRootCommand } from "../windows";
 import { WindowManager } from "../windows";
-import { creatorWindowIdOf, type DoWindow } from "../windows/types";
+import { creatorWindowIdOf, type DoWindow } from "../windows/_shared/types";
 import { makeThread } from "../../__tests__/make-thread";
 
 /**

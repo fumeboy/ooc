@@ -31,7 +31,7 @@ import { hasLlmEnv, llm, setupTempFlow } from "./_fixture";
 import { initContextWindows } from "../../src/executable/windows";
 import { syncIssueWindowCommentsForTest } from "../../src/app/server/runtime/worker";
 import type { ThreadContext } from "../../src/thinkable/context";
-import type { IssueWindow } from "../../src/executable/windows/types";
+import type { IssueWindow } from "../../src/executable/windows/_shared/types";
 
 // trigger windows registry (issue.ts registerWindowType side-effect)
 import "../../src/executable/windows";

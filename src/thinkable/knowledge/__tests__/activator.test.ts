@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { computeActivations } from "../activator";
 import type { KnowledgeDoc, KnowledgeIndex } from "../types";
 import type { ThreadContext } from "../../context";
-import type { CommandExecWindow } from "../../../executable/windows/types";
+import type { CommandExecWindow } from "../../../executable/windows/_shared/types";
 
 function doc(
   path: string,

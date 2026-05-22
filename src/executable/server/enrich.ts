@@ -6,7 +6,7 @@
  */
 
 import type { ThreadContext } from "../../thinkable/context.js";
-import type { CommandExecWindow } from "../windows/types.js";
+import type { CommandExecWindow } from "../windows/_shared/types.js";
 import { enrichFormCommandKnowledge } from "../index.js";
 
 /**

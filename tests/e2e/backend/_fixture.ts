@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import type { ThreadContext, ProcessEvent, ThreadMessage } from "@src/thinkable/context";
-import type { ContextWindow } from "@src/executable/windows/types";
+import type { ContextWindow } from "@src/executable/windows/_shared/types";
 
 // 重型依赖（Elysia / openai / executable 全家桶）走 lazy import — 测试 skip 时不触发，
 // 避免因 node_modules 未完整安装而连"能不能加载该 spec"都失败。

@@ -80,7 +80,7 @@ describe("stone file IO", () => {
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "dave" });
 
     expect(await readServerSource(ref)).toBeUndefined();
-    const code = "export const llm_methods = { foo: { fn: async () => 1 } };";
+    const code = "export const window = { commands: { foo: { paths: ['foo'], match: () => ['foo'], exec: async () => ({ ok: true }) } } }; export const ui_methods = {};";
     await writeServerSource(ref, code);
     expect(await readServerSource(ref)).toBe(code);
     expect(serverIndexFile(ref)).toBe(join(stoneDir(ref), "server", "index.ts"));

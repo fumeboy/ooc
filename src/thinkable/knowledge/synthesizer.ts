@@ -32,16 +32,15 @@ import {
   REFLECTABLE_METAPROG_KNOWLEDGE,
   REFLECTABLE_METAPROG_PATH,
 } from "../reflectable/reflectable-knowledge.js";
-import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../../executable/windows/super-constants.js";
-import type { CommandKnowledgeEntries, CommandTableEntry } from "../../executable/windows/command-types.js";
-import { getWindowTypeDefinition } from "../../executable/windows/registry.js";
-import type { CommandExecWindow, ContextWindow, IssueWindow, KnowledgeWindow, RelationWindow, TalkWindow } from "../../executable/windows/types.js";
-import { loadServerMethods } from "../../executable/server/loader.js";
-import type { ServerMethod } from "../../executable/server/types.js";
+import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../../executable/windows/_shared/super-constants.js";
+import type { CommandKnowledgeEntries, CommandTableEntry } from "../../executable/windows/_shared/command-types.js";
+import { getWindowTypeDefinition } from "../../executable/windows/_shared/registry.js";
+import type { CommandExecWindow, ContextWindow, IssueWindow, KnowledgeWindow, RelationWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
+import { loadObjectWindow } from "../../executable/server/loader.js";
 import { computeActivations } from "./activator.js";
 import { loadKnowledgeIndex } from "./loader.js";
 
-const PROGRAM_FUNCTION_PATH = "internal/executable/program/function";
+const PROGRAM_CALL_COMMAND_PATH = "internal/executable/program/callCommand";
 const KNOWLEDGE_BODY_BYTES = 8192;
 
 function samePaths(left: string[] | undefined, right: string[]): boolean {
@@ -50,45 +49,52 @@ function samePaths(left: string[] | undefined, right: string[]): boolean {
   return left.every((value, index) => value === right[index]);
 }
 
-function defaultMethodKnowledge(method: ServerMethod): string {
-  const lines: string[] = [];
-  if (method.description) {
-    lines.push(method.description);
-  }
-  if (method.params && method.params.length > 0) {
-    lines.push("参数：");
-    for (const p of method.params) {
-      const required = p.required ? "（必填）" : "（可选）";
-      const type = p.type ? ` [${p.type}]` : "";
-      const desc = p.description ? `：${p.description}` : "";
-      lines.push(`- ${p.name}${type}${required}${desc}`);
-    }
-  }
-  return lines.join("\n");
+function defaultMethodKnowledge(_method: unknown): string {
+  // 旧 ServerMethod 时代的 description/params 派生已废弃；统一在 CommandTableEntry.knowledge() 里写。
+  return "";
 }
 
-async function computeProgramFunctionKnowledge(
+async function computeProgramCallCommandKnowledge(
   form: CommandExecWindow,
   thread: ThreadContext,
 ): Promise<string | undefined> {
-  const fn = form.accumulatedArgs.function;
-  if (form.command !== "program" || typeof fn !== "string" || fn.length === 0) {
+  // plan D4：program form 的 callCommand 模式 —— window_id + command 双必填
+  const windowId = form.accumulatedArgs.window_id;
+  const cmd = form.accumulatedArgs.command;
+  if (form.command !== "program" || typeof windowId !== "string" || typeof cmd !== "string") {
     return undefined;
   }
-  if (!thread.persistence) return undefined;
+  const targetWindow = thread.contextWindows.find((w) => w.id === windowId);
+  if (!targetWindow) return undefined;
 
-  try {
-    const stoneRef = deriveStoneFromThread(thread.persistence);
-    const methods = await loadServerMethods(stoneRef);
-    const method = methods[fn];
-    if (!method) return undefined;
-    const methodArgs = (form.accumulatedArgs.args as Record<string, unknown> | undefined) ?? {};
-    let text: string;
+  // type=custom 时 lazy load ObjectWindowDefinition.commands[cmd].knowledge()
+  if (targetWindow.type === "custom" && thread.persistence) {
     try {
-      text = method.knowledge ? method.knowledge(methodArgs) : defaultMethodKnowledge(method);
+      const stoneRef = deriveStoneFromThread(thread.persistence);
+      const objectId = (targetWindow as { objectId?: string }).objectId;
+      if (!objectId) return undefined;
+      const def = await loadObjectWindow({ ...stoneRef, objectId });
+      const entry = def?.commands?.[cmd];
+      if (!entry) return undefined;
+      const cmdArgs = (form.accumulatedArgs.args as Record<string, unknown> | undefined) ?? {};
+      try {
+        const ks = entry.knowledge ? entry.knowledge(cmdArgs, form.status) : {};
+        const text = Object.values(ks).join("\n\n");
+        return text === "" ? undefined : text;
+      } catch {
+        return undefined;
+      }
     } catch {
-      text = defaultMethodKnowledge(method);
+      return undefined;
     }
+  }
+  // 内置 type 通过 registry 取
+  try {
+    const entry = getWindowTypeDefinition(targetWindow.type).commands[cmd];
+    if (!entry?.knowledge) return undefined;
+    const cmdArgs = (form.accumulatedArgs.args as Record<string, unknown> | undefined) ?? {};
+    const ks = entry.knowledge(cmdArgs, form.status);
+    const text = Object.values(ks).join("\n\n");
     return text === "" ? undefined : text;
   } catch {
     return undefined;
@@ -110,10 +116,10 @@ export async function computeFormKnowledgeEntries(
     ? { ...entry.knowledge(form.accumulatedArgs, form.status) }
     : {};
 
-  const functionKnowledge = await computeProgramFunctionKnowledge(form, thread);
+  const functionKnowledge = await computeProgramCallCommandKnowledge(form, thread);
   if (functionKnowledge) {
-    knowledgeEntries[PROGRAM_FUNCTION_PATH] = knowledgeEntries[PROGRAM_FUNCTION_PATH]
-      ? `${knowledgeEntries[PROGRAM_FUNCTION_PATH]}\n\n${functionKnowledge}`
+    knowledgeEntries[PROGRAM_CALL_COMMAND_PATH] = knowledgeEntries[PROGRAM_CALL_COMMAND_PATH]
+      ? `${knowledgeEntries[PROGRAM_CALL_COMMAND_PATH]}\n\n${functionKnowledge}`
       : functionKnowledge;
   }
 

@@ -30,7 +30,7 @@ async function fetchWindowTypes(): Promise<Record<string, WindowTypeCatalogEntry
   if (inflight) return inflight;
   inflight = (async () => {
     try {
-      const res = await requestJson<{ items: WindowTypeCatalogEntry[] }>("/api/windows/types");
+      const res = await requestJson<{ items: WindowTypeCatalogEntry[] }>("/api/windows/_shared/types");
       const map: Record<string, WindowTypeCatalogEntry> = {};
       for (const e of res.items ?? []) map[e.type] = e;
       cache = map;

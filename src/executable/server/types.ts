@@ -1,42 +1,62 @@
+/**
+ * server 层公共类型。
+ *
+ * D6 硬切后：旧的 `LlmMethods` / `ServerMethod` / `ServerMethodContext` 三件套被
+ * 删除；LLM 路径上的"自定义方法"统一通过 `ObjectWindowDefinition.commands`
+ * （见 `./window-types.ts`）以标准 `CommandTableEntry` 形态注册到 type=`custom`
+ * 的 ContextWindow 上。
+ *
+ * 仅保留：
+ * - `ProgramSelf` —— program 模式 ts/js sandbox 注入的 self；`callCommand`
+ *   按 windowId 查 thread.contextWindows 并执行该 window 上的 command
+ * - UI 路径相关：`UiServerMethod` / `UiMethods` / `UiServerMethodContext` ——
+ *   `ui_methods` 仍由 server/index.ts 平行导出（plan D3 完全保留）；HTTP
+ *   `flows.callMethod` / `stones.callMethod` 路径只服务这一字典
+ */
+
 import type { ThreadContext } from "../../thinkable/context";
 import type { StoneObjectRef } from "../../persistable";
+import type { ObjectWindowDefinition } from "./window-types";
 
-/** program 中注入的 self 对象，让用户代码能调用本对象的 method 与读写 data。 */
+/** program 中注入的 self 对象，让用户代码能调用任意 window 上任意 command 与读写 data。 */
 export interface ProgramSelf {
   /** stone 目录绝对路径。 */
   dir: string;
-  /** 调用 server/index.ts 中 llm_methods 注册的方法。 */
-  callMethod: (name: string, args?: Record<string, unknown>) => Promise<unknown>;
+  /**
+   * 调用任意 window 上的任意已注册 command。
+   *
+   * - windowId：thread.contextWindows 中已存在的 window id（含 custom window）
+   * - command：该 window 的 commands 表中的命令名
+   * - args：command exec ctx.args 的内容
+   *
+   * 行为：在当前 thread 的 contextWindows 里 lookup window → 通过 WindowRegistry 取
+   * commands[command] → 走 entry.exec（type=custom 时由 dispatcher 注入 self）。
+   *
+   * 找不到 windowId / command 时抛清晰错误（包含当前可见 window/command 列表）。
+   */
+  callCommand: (windowId: string, command: string, args?: Record<string, unknown>) => Promise<unknown>;
   /** 读 data.json 中的字段；不存在返回 undefined。 */
   getData: (key: string) => Promise<unknown>;
   /** 顶层 merge 写 data.json 中的字段。 */
   setData: (key: string, value: unknown) => Promise<void>;
   /**
    * 读取当前 thread 的局部数据（program_window 跨 exec 共享通道）。
-   * spec § program_window：仅 ts/js exec 之间通过 thread.threadLocalData 传值；
-   * shell 模式没有访问入口，需要落到 stone data 才能跨 exec。
    */
   getThreadLocal: (key: string) => unknown;
   /** 写当前 thread 的局部数据。 */
   setThreadLocal: (key: string, value: unknown) => void;
 }
 
-/** server method 调用时的上下文。 */
-export interface ServerMethodContext {
-  /** 同 self；server method 内部可继续调其它 method。 */
+// ─────────────────────────── ui_methods 路径（保留） ───────────────────────────
+
+/** ui_methods 调用时的上下文；只在 HTTP /call_method 入口被使用。 */
+export interface UiServerMethodContext {
+  /** 同 self；ui method 内部可再调本对象其它方法 */
   self: ProgramSelf;
-  /** 当前调用方线程，方便方法主动注入提示。 */
+  /** 当前调用方线程；HTTP 路径可能没有线程上下文 */
   thread: {
     id: string;
     inject: (text: string) => void;
-    /**
-     * 当前线程的 persistence 信息，让 method 能定位到 flow 级目录（写
-     * flows/<sid>/objects/<oid>/files/... 等大块产物时必需）。
-     *
-     * 当 method 被通过 HTTP /call_method 路径触发时（ui_methods），不存在
-     * thread persistence —— 该字段为 undefined；method 应当 fallback 到
-     * self.dir 或拒绝执行。
-     */
     persistence?: {
       baseDir: string;
       sessionId: string;
@@ -46,41 +66,30 @@ export interface ServerMethodContext {
   };
 }
 
-/** 单个注册到 server 的 LLM 可调用方法。 */
-export interface ServerMethod {
-  /** 给 LLM 看的方法说明（可选；不写时由默认 knowledge 生成器使用）。 */
+/** 单个 ui_methods 方法。 */
+export interface UiServerMethod {
   description?: string;
-  /** 参数定义（可选；不写时由默认 knowledge 生成器使用；当前不强制校验）。 */
   params?: Array<{
     name: string;
     type?: string;
     description?: string;
     required?: boolean;
   }>;
-  /**
-   * 动态知识函数（可选）。
-   *
-   * 与 command.match(args) → paths 同理：当 form 处于 program.function 模式时，
-   * 系统在 open/refine 后调用 knowledge(currentArgs)，并把结果并入
-   * `internal/executable/program/function` 对应的 knowledge entry。
-   *
-   * 缺省时由默认实现从 description + params 拼出基线文本，保证 LLM 至少有静态提示。
-   */
   knowledge?: (args: Record<string, unknown>) => string;
-  /** 真正的执行函数。返回值会被 program 路径作为 returnValue 暴露给 LLM。 */
-  fn: (ctx: ServerMethodContext, args: Record<string, unknown>) => unknown | Promise<unknown>;
+  fn: (ctx: UiServerMethodContext, args: Record<string, unknown>) => unknown | Promise<unknown>;
 }
 
-/** server/index.ts 暴露的 llm_methods 字典。 */
-export type LlmMethods = Record<string, ServerMethod>;
-
 /** server/index.ts 暴露的 ui_methods 字典。 */
-export type UiMethods = Record<string, ServerMethod>;
+export type UiMethods = Record<string, UiServerMethod>;
 
-/** 内部用：缓存 stoneRef 与对应已加载的 methods（按 mtime 失效）。 */
+// ─────────────────────────── loader 内部缓存条目 ───────────────────────────
+
+/** 缓存 stoneRef 与对应已加载的 server 配置（按 mtime 失效）。 */
 export interface ServerLoaderEntry {
   mtime: number;
-  llmMethods: LlmMethods;
+  /** Object 自定义 custom window；server/index.ts 没有 `export const window` 时为 undefined */
+  window: ObjectWindowDefinition | undefined;
+  /** ui_methods 字典；server/index.ts 没有则为空对象 */
   uiMethods: UiMethods;
 }
 

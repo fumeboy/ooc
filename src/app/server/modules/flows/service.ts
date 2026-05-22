@@ -8,17 +8,17 @@ import { loadUiServerMethods } from "@src/executable/server/loader";
 import { collectExecutableKnowledgeEntries } from "@src/executable";
 import type { ThreadContext } from "@src/thinkable/context";
 import { initContextWindows } from "@src/executable/windows";
-import { deliverTalkMessage } from "@src/executable/windows/talk-delivery";
+import { deliverTalkMessage } from "@src/executable/windows/talk/delivery";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
   type ContextWindow,
   type TalkWindow,
-} from "@src/executable/windows/types";
+} from "@src/executable/windows/_shared/types";
 import {
   SUPER_SESSION_ID,
   isSuperSessionId,
-} from "@src/executable/windows/super-constants";
+} from "@src/executable/windows/_shared/super-constants";
 import type { createJobManager } from "../../runtime/job-manager";
 import type { PauseStore } from "../../runtime/pause-store";
 import { scanPausedThreads } from "../../runtime/thread-query";

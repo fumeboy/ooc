@@ -2,10 +2,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, test } from "bun:test";
-import { runOneExec } from "../windows/program-runtime";
-import { executeProgramCommand } from "../windows/root/program";
+import { runOneExec } from "../windows/program/runtime";
+import { executeProgramCommand } from "../windows/root/command.program";
 import { executeProgramWindowExec } from "../windows/program";
-import type { ProgramWindow } from "../windows/types";
+import type { ProgramWindow } from "../windows/_shared/types";
 import { createStoneObject, writeServerSource } from "../../persistable";
 import { clearServerLoaderCache } from "../server/loader";
 import { makeThread } from "../../__tests__/make-thread";
@@ -141,38 +141,59 @@ describe("program runtime — runOneExec (ts/js + function)", () => {
     expect(second.output).toContain("1");
   });
 
-  test("function path calls registered method", async () => {
+  test("callCommand path runs custom command on the self window", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-prog-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
     await writeServerSource(
       ref,
-      `export const llm_methods = { add: { fn: async (_c, { a, b }) => a + b } };`,
+      `export const window = { commands: { add: { paths: ["add"], match: () => ["add"], exec: async ({ args }) => ({ ok: true, result: String(Number(args.a) + Number(args.b)) }) } } }; export const ui_methods = {};`,
     );
     const thread = makeThread({
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
     });
-    const rec = await runOneExec(thread, { function: "add", args: { a: 7, b: 8 } });
-    expect(rec.output).toContain("[returnValue]");
+    const customId = "custom:agent";
+    thread.contextWindows.push({
+      id: customId,
+      type: "custom",
+      title: "agent",
+      status: "open",
+      createdAt: Date.now(),
+      objectId: "agent",
+    });
+    const rec = await runOneExec(thread, {
+      window_id: customId,
+      command: "add",
+      args: { a: 7, b: 8 },
+    });
     expect(rec.output).toContain("15");
   });
 
-  test("function path errors clearly when method missing", async () => {
+  test("callCommand path errors clearly when command missing", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-prog-"));
     await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
     const thread = makeThread({
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
     });
-    const rec = await runOneExec(thread, { function: "nope" });
+    const customId = "custom:agent";
+    thread.contextWindows.push({
+      id: customId,
+      type: "custom",
+      title: "agent",
+      status: "open",
+      createdAt: Date.now(),
+      objectId: "agent",
+    });
+    const rec = await runOneExec(thread, { window_id: customId, command: "nope" });
     expect(rec.output).toContain("不存在");
     expect(rec.ok).toBe(false);
   });
 
-  test("function path errors clearly when no persistence", async () => {
+  test("callCommand path errors clearly when window missing", async () => {
     const thread = makeThread({ id: "t" });
-    const rec = await runOneExec(thread, { function: "any" });
-    expect(rec.output).toContain("无 persistence");
+    const rec = await runOneExec(thread, { window_id: "ghost", command: "any" });
+    expect(rec.output).toContain("不在");
     expect(rec.ok).toBe(false);
   });
 });

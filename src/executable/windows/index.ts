@@ -21,20 +21,20 @@ export type {
   SearchMatch,
   IssueWindow,
   RelationWindow,
-} from "./types.js";
+} from "./_shared/types.js";
 
 export {
   ROOT_WINDOW_ID,
   SESSION_CREATOR_THREAD_ID,
   generateWindowId,
   creatorWindowIdOf,
-} from "./types.js";
+} from "./_shared/types.js";
 
 export {
   registerWindowType,
   getWindowTypeDefinition,
   listRegisteredWindowTypes,
-} from "./registry.js";
+} from "./_shared/registry.js";
 
 export type {
   WindowTypeDefinition,
@@ -42,18 +42,18 @@ export type {
   OnCloseContext,
   RenderHook,
   RenderContext,
-} from "./registry.js";
+} from "./_shared/registry.js";
 
 export type {
   CommandTableEntry,
   CommandExecutionContext,
   CommandKnowledgeEntries,
-} from "./command-types.js";
+} from "./_shared/command-types.js";
 
-export { WindowManager } from "./manager.js";
+export { WindowManager } from "./_shared/manager.js";
 
-export { initContextWindows } from "./init.js";
-export type { InitContextWindowsOpts } from "./init.js";
+export { initContextWindows } from "./_shared/init.js";
+export type { InitContextWindowsOpts } from "./_shared/init.js";
 
 // root commands 的工具函数（仅服务 root level；非 root window 的 command 通过 WINDOW_REGISTRY 查）
 export {
@@ -69,12 +69,13 @@ export {
 // root 必须最先 load，因为其它 window type 的 onClose / 注册可能间接依赖 ROOT_COMMANDS
 // （目前没有此依赖，但保留这一顺序更稳妥）。
 import "./root/index.js";
-import "./do.js";
-import "./todo.js";
-import "./talk.js";
-import "./program.js";
-import "./file.js";
-import "./knowledge.js";
-import "./search.js";
-import "./issue.js";
-import "./relation.js";
+import "./do/index.js";
+import "./todo/index.js";
+import "./talk/index.js";
+import "./program/index.js";
+import "./file/index.js";
+import "./knowledge/index.js";
+import "./search/index.js";
+import "./issue/index.js";
+import "./relation/index.js";
+import "./custom/index.js";

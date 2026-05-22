@@ -6,7 +6,7 @@ import { __resetSerialQueueForTests } from "../serial-queue";
 import { createStoneObject } from "../stone-object";
 import { findIssueSubscribers, issuesService } from "../issue-service";
 import type { ThreadContext } from "../../thinkable/context";
-import type { IssueWindow } from "../../executable/windows/types";
+import type { IssueWindow } from "../../executable/windows/_shared/types";
 
 let tempBase: string | undefined;
 

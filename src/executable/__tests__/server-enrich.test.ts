@@ -5,8 +5,11 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { createStoneObject, writeServerSource } from "../../persistable";
 import { clearServerLoaderCache } from "../server/loader";
 import { enrichProgramFormCommand } from "../server/enrich";
-import type { CommandExecWindow } from "../windows/types";
+import type { CommandExecWindow } from "../windows/_shared/types";
+import { customWindowIdOf } from "../windows/_shared/types";
 import { makeThread } from "../../__tests__/make-thread";
+// 触发 custom dispatcher 注册
+import "../windows/custom/index";
 
 let tempRoot: string | undefined;
 
@@ -36,10 +39,20 @@ function makeForm(overrides: Partial<CommandExecWindow> = {}): CommandExecWindow
 }
 
 function makeThreadWithStone(tempRoot: string) {
-  return makeThread({
+  const thread = makeThread({
     id: "t",
     persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
   });
+  // custom window 单例（plan §6.4 实际由 initContextWindows 注入；这里手工补）
+  thread.contextWindows.push({
+    id: customWindowIdOf("agent"),
+    type: "custom",
+    title: "agent",
+    status: "open",
+    createdAt: Date.now(),
+    objectId: "agent",
+  });
+  return thread;
 }
 
 describe("enrichProgramFormCommand", () => {
@@ -54,7 +67,7 @@ describe("enrichProgramFormCommand", () => {
     ]);
   });
 
-  test("returns form unchanged-shape when no function arg present", async () => {
+  test("returns form unchanged-shape when no callCommand args present", async () => {
     const form = makeForm({ accumulatedArgs: { language: "shell", code: "ls" } });
     const thread = makeThread({ id: "t" });
     const result = await enrichProgramFormCommand(form, thread);
@@ -64,96 +77,45 @@ describe("enrichProgramFormCommand", () => {
     ]);
   });
 
-  test("returns command knowledge even when thread has no persistence", async () => {
-    const form = makeForm({ accumulatedArgs: { function: "add" } });
-    const thread = makeThread({ id: "t" });
-    const result = await enrichProgramFormCommand(form, thread);
-    expect(result.commandKnowledgePaths).toEqual([
-      "internal/executable/program/basic",
-      "internal/executable/program/input",
-    ]);
-  });
-
-  test("adds program function knowledge path when method has default knowledge", async () => {
+  test("adds program callCommand knowledge path when command exists on a custom window", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-enrich-"));
     const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
     await writeServerSource(
       stoneRef,
-      `export const llm_methods = {
-        add: {
-          description: "两数相加",
-          params: [
-            { name: "a", type: "number", description: "第一个加数", required: true },
-            { name: "b", type: "number", description: "第二个加数", required: true },
-          ],
-          fn: async (_ctx, { a, b }) => a + b,
+      `export const window = {
+        commands: {
+          add: {
+            paths: ["add"],
+            match: () => ["add"],
+            knowledge: () => ({ "internal/windows/custom/add/basic": "两数相加" }),
+            exec: async ({ args }) => ({ ok: true, result: String(Number(args.a) + Number(args.b)) }),
+          },
         },
-      };`
+      };
+      export const ui_methods = {};`,
     );
 
-    const form = makeForm({ accumulatedArgs: { function: "add" } });
+    const customId = customWindowIdOf("agent");
+    const form = makeForm({
+      accumulatedArgs: { window_id: customId, command: "add" },
+    });
     const result = await enrichProgramFormCommand(form, makeThreadWithStone(tempRoot));
 
     expect(result).not.toBe(form);
-    expect(result.commandKnowledgePaths).toContain("internal/executable/program/function");
+    expect(result.commandKnowledgePaths).toContain("internal/executable/program/callCommand");
   });
 
-  test("uses custom knowledge fn when method provides one", async () => {
+  test("keeps generic program knowledge when callCommand target is unknown", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-enrich-"));
     const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
     await writeServerSource(
       stoneRef,
-      `export const llm_methods = {
-        deploy: {
-          description: "部署服务",
-          knowledge: (args) => {
-            if (args.mode === "prod") {
-              return "生产环境部署：必须先经过 review，且需带 release_notes 字段。";
-            }
-            return "开发环境部署：直接传 service_name 即可，不需要 review。";
-          },
-          fn: async () => "deployed",
-        },
-      };`
+      `export const window = { commands: { foo: { paths: ["foo"], match: () => ["foo"], exec: async () => ({ ok: true }) } } }; export const ui_methods = {};`,
     );
 
-    const formDev = makeForm({ accumulatedArgs: { function: "deploy", args: { mode: "dev" } } });
-    const dev = await enrichProgramFormCommand(formDev, makeThreadWithStone(tempRoot));
-    expect(dev.commandKnowledgePaths).toContain("internal/executable/program/function");
-
-    const formProd = makeForm({ accumulatedArgs: { function: "deploy", args: { mode: "prod" } } });
-    const prod = await enrichProgramFormCommand(formProd, makeThreadWithStone(tempRoot));
-    expect(prod.commandKnowledgePaths).toContain("internal/executable/program/function");
-  });
-
-  test("falls back to default when custom knowledge fn throws", async () => {
-    tempRoot = await mkdtemp(join(tmpdir(), "ooc-enrich-"));
-    const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
-    await writeServerSource(
-      stoneRef,
-      `export const llm_methods = {
-        boom: {
-          description: "总是炸",
-          knowledge: () => { throw new Error("intentional"); },
-          fn: async () => null,
-        },
-      };`
-    );
-
-    const form = makeForm({ accumulatedArgs: { function: "boom" } });
-    const result = await enrichProgramFormCommand(form, makeThreadWithStone(tempRoot));
-    expect(result.commandKnowledgePaths).toContain("internal/executable/program/function");
-  });
-
-  test("keeps generic program knowledge when function name does not match any registered method", async () => {
-    tempRoot = await mkdtemp(join(tmpdir(), "ooc-enrich-"));
-    const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
-    await writeServerSource(
-      stoneRef,
-      `export const llm_methods = { foo: { fn: async () => 1 } };`
-    );
-
-    const form = makeForm({ accumulatedArgs: { function: "bar" } });
+    const form = makeForm({
+      accumulatedArgs: { window_id: customWindowIdOf("agent"), command: "bar" },
+    });
     const result = await enrichProgramFormCommand(form, makeThreadWithStone(tempRoot));
     expect(result.commandKnowledgePaths).toEqual([
       "internal/executable/program/basic",
@@ -161,25 +123,35 @@ describe("enrichProgramFormCommand", () => {
     ]);
   });
 
-  test("clears function-specific command knowledge when function arg is removed in subsequent refine", async () => {
+  test("clears callCommand-specific knowledge when callCommand args are removed in subsequent refine", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-enrich-"));
     const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
     await writeServerSource(
       stoneRef,
-      `export const llm_methods = { add: { description: "test", fn: async () => 0 } };`
+      `export const window = {
+        commands: {
+          add: {
+            paths: ["add"],
+            match: () => ["add"],
+            knowledge: () => ({ "internal/windows/custom/add/basic": "test" }),
+            exec: async () => ({ ok: true }),
+          },
+        },
+      };
+      export const ui_methods = {};`,
     );
 
     const enriched = await enrichProgramFormCommand(
-      makeForm({ accumulatedArgs: { function: "add" } }),
-      makeThreadWithStone(tempRoot)
+      makeForm({ accumulatedArgs: { window_id: customWindowIdOf("agent"), command: "add" } }),
+      makeThreadWithStone(tempRoot),
     );
-    expect(enriched.commandKnowledgePaths).toContain("internal/executable/program/function");
+    expect(enriched.commandKnowledgePaths).toContain("internal/executable/program/callCommand");
 
     const cleared = await enrichProgramFormCommand(
       { ...enriched, accumulatedArgs: { language: "shell", code: "ls" } },
-      makeThreadWithStone(tempRoot)
+      makeThreadWithStone(tempRoot),
     );
-    expect(cleared.commandKnowledgePaths).not.toContain("internal/executable/program/function");
+    expect(cleared.commandKnowledgePaths).not.toContain("internal/executable/program/callCommand");
     expect(cleared.commandKnowledgePaths).toContain("internal/executable/program/input");
   });
 });

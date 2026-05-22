@@ -4,7 +4,7 @@
  * 用途:前端 WindowDetail 想展示某 window type 上能用的 command 清单(每个 type 不同),
  * 一次性拉到 catalog 后客户端按 type 索引即可,无需每次 getThread 都嵌入。
  *
- * 数据来源:src/executable/windows/registry.ts 里 registerWindowType 注入的 commands,
+ * 数据来源:src/executable/windows/_shared/registry.ts 里 registerWindowType 注入的 commands,
  * 加上 root window 的 ROOT_COMMANDS。两边都是静态注册,服务启动后不变。
  *
  * 每条 command 的 description:从 `entry.knowledge({}, "open")` 取 `*_BASIC` 路径的值
@@ -35,7 +35,7 @@ export type WindowTypeCatalogEntry = {
 
 export function listWindowTypesApi() {
   return new Elysia({ name: "ooc.windows.api.list-types" }).get(
-    "/windows/types",
+    "/windows/_shared/types",
     (): { items: WindowTypeCatalogEntry[] } => {
       const types = listRegisteredWindowTypes();
       const items: WindowTypeCatalogEntry[] = types.map((type) => {

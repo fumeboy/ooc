@@ -12,7 +12,7 @@
 
 import type { LlmTool } from "../../thinkable/llm/types.js";
 import type { ThreadContext } from "../../thinkable/context.js";
-import type { ContextWindow } from "../windows/types.js";
+import type { ContextWindow } from "../windows/_shared/types.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 interface WaitCandidate {

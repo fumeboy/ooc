@@ -1350,7 +1350,7 @@ export const root: DocTreeNode = {
                                 ...其它 knowledge 文档
                               server/index.ts      ← stone server 源码
                               client/index.tsx     ← stone client 源码
-                              files/               ← 用户文件留存位
+                              files/               ← 其他文件留存位
                           # （未来：world-level 资源放在 stones/<branch>/ 根本身，
                           #   与 objects/ 子目录物理分离）
                       flows/
@@ -1366,6 +1366,7 @@ export const root: DocTreeNode = {
                                 thread.json      ← thread 序列化
                                 debug/           ← observable 落盘的 input/output/loop 文件
                               client/pages/      ← flow 级 client 页面
+                              files/               ← 其他文件留存位
                     \`\`\`
 
                     **关于 stones/<branch>/objects/ 中间层（2026-05-21 重组）**：
@@ -1622,58 +1623,75 @@ export const root: DocTreeNode = {
         "programmable": {
             title: "OOC Agent programmable 概念",
             content: `
-            Programmable 描述 Object 持有并演化自身函数方法库的能力。
+            Programmable 描述 Object 持有并演化自身**自定义 ContextWindow + 命令表**的能力。
 
-            Object 在自己的 stone 里有一份 \`server/index.ts\`，导出 llm_methods / ui_methods 两份方法字典。
-            这些方法 *不是* OOC 的内置 tool，也不是新的 LLM tool；它们是 Object 自己写给自己的"可被复用的函数程序"。
-            LLM 通过既有的 \`executable.commands.program\` (function 模式) 调用 llm_methods；
-            UI / agent-native 客户端通过 HTTP 调用 ui_methods。
+            Object 在自己的 stone 里有一份 \`server/index.ts\`，导出 \`window: ObjectWindowDefinition\`
+            （type=\`"custom"\` 的 self window 定义）+ 可选的 \`ui_methods\` 字典（visible 维度的 UI 入口）。
+            \`window.commands\` 是标准 \`CommandTableEntry\` 字典；LLM 通过
+            \`open(parent_window_id="custom:<self>", command="<name>", args={...})\` 直接调用，
+            与调 do_window.continue / talk_window.say 完全同构。
+            UI / agent-native 客户端通过 HTTP \`callMethod\` 调用 \`ui_methods\`（与 LLM 路径完全解耦）。
 
-            核心组成:
-            1. server method 形状: ServerMethod = { description? / params? / knowledge? / fn }；fn(ctx, args) 是真正执行入口。
-            2. 双字典分流: llm_methods 给 LLM 用（通过 program.function）；ui_methods 给 UI / agent-native 用（通过 HTTP callMethod）。
-            3. ProgramSelf 注入: program ts/js sandbox 收到 self = { dir, callMethod, getData, setData, getThreadLocal, setThreadLocal }。
-            4. 动态加载与热更: loader 按 \`server/index.ts\` 的 mtime 缓存；写文件后下一次调用自动重新 import。
-            5. 元编程闭环（与 reflectable 配合）: super flow 通过 write_file 写 server/index.ts → 下一次 callMethod 看到新方法。
+            核心组成（plan §6.2 / §6.5）:
+            1. ObjectWindowDefinition 形状: { title?, description?, renderXml?, basicKnowledge?, onClose?, commands? }；
+               commands 字典里每条 entry 是头等的 CommandTableEntry，与内置 window 上的命令同构。
+            2. type=custom dispatcher: WindowRegistry 注册一份固定 type=custom 的契约，行为按 \`window.objectId\`
+               路由到对应 Object 的 ObjectWindowDefinition；commands dispatcher 在 entry.exec 包装层注入 self。
+            3. 单例注入: 仅当 thread.objectId === self（thread 由该 Object 自己持有）时由 initContextWindows
+               幂等注入一个 \`custom:<objectId>\` window。
+            4. ProgramSelf 注入: program ts/js sandbox 收到 self = { dir, callCommand, getData, setData, getThreadLocal, setThreadLocal }；
+               \`callCommand(windowId, command, args?)\` 可调任意 thread 内 window 上的任意已注册命令。
+            5. 动态加载与热更: loader 按 \`server/index.ts\` 的 mtime 缓存；写文件后下一次调用自动重新 import。
+            6. 元编程闭环（与 reflectable 配合）: super flow 通过 write_file 写 server/index.ts → 下一次调命令时看到新形态。
 
-            Programmable 不是新增 LLM tool 面，而是给 Object 一个"私有函数库"，让它可以把高频动作或复杂逻辑封装成命名方法，
-            然后通过 program.function 一行调用，避免每次都重写代码。
+            Programmable 不是新增 LLM tool 面，而是给 Object 一个**"自我门面 window"+其上一组命令**，
+            让它把高频动作或复杂逻辑封装成命名命令；LLM 通过统一的 open/refine/submit 协议直接调用，
+            或在 ts/js sandbox 里 \`await self.callCommand("custom:<self>", "<name>", {...})\` 触发。
+            旧 \`llm_methods\` 字典已硬切删除（plan D6）。
             `,
             named: {
-                "Programmable": "Object 持有/演化自身函数方法库的能力维度",
-                "ServerMethod": "单个可被注册到 server 的方法：{ description?, params?, knowledge?, fn }",
-                "llm_methods": "server/index.ts 导出的、给 LLM 通过 program.function 调用的方法字典",
-                "ui_methods": "server/index.ts 导出的、给 UI/agent-native 通过 HTTP callMethod 调用的方法字典",
-                "ProgramSelf": "program ts/js sandbox 注入的 self 对象，承载 callMethod / getData / setData / getThreadLocal",
-                "loadLlmServerMethods / loadUiServerMethods": "按 mtime 缓存、自动热更的 server 方法加载器",
-                "ServerMethodContext": "server method 执行时收到的 ctx：{ self, thread: { id, inject } }",
+                "Programmable": "Object 持有/演化自身自定义 ContextWindow + 命令表的能力维度",
+                "ObjectWindowDefinition": "server/index.ts 中 export const window 的形状：{ title?, description?, renderXml?, basicKnowledge?, onClose?, commands? }",
+                "ui_methods": "server/index.ts 导出的、给 UI/agent-native 通过 HTTP callMethod 调用的方法字典（plan D3 完全保留）",
+                "ProgramSelf": "program ts/js sandbox 注入的 self 对象，承载 callCommand / getData / setData / getThreadLocal",
+                "loadObjectWindow / loadUiServerMethods": "按 mtime 缓存、自动热更的 server 加载器",
+                "CustomCommandContext": "custom window 命令 exec 收到的 ctx：CommandExecutionContext + self: ProgramSelf",
             },
             children: {
-                "server_method_library": {
-                    title: "server_method_library - 方法库的形状",
+                "object_window_definition": {
+                    title: "object_window_definition - custom self window 的形状",
                     content: `
-                    每个 Object 的方法库定义在 \`stones/<self>/server/index.ts\`，导出两份字典:
+                    每个 Object 的 self window 定义在 \`stones/<self>/server/index.ts\` 中：
                     \`\`\`
-                    export const llm_methods: Record<string, ServerMethod> = { ... };
-                    export const ui_methods: Record<string, ServerMethod> = { ... };
+                    export const window: ObjectWindowDefinition = {
+                      title: "<self>",
+                      description: "...",
+                      basicKnowledge: ({ self }) => "...",
+                      commands: {
+                        <name>: {
+                          paths: ["<name>"],
+                          match: (args) => ["<name>"],
+                          knowledge: (args, formStatus) => ({ "internal/windows/custom/<name>/basic": "..." }),
+                          exec: async (ctx) => { /* ctx.self / ctx.thread / ctx.parentWindow / ctx.args */ },
+                        },
+                      },
+                    };
+                    export const ui_methods = { /* visible 维度，HTTP 路径 */ };
                     \`\`\`
 
-                    ServerMethod 字段（src/executable/server/types.ts:36-58）:
-                    - description?: 给调用方看的方法说明。
-                    - params?: 参数定义（name / type? / description? / required?）；当前 *不强制* schema 校验。
-                    - knowledge?: 动态知识函数 (args) => string；与 command.match(args) → paths 同理，
-                      在 program.function 模式下被并入 \`internal/executable/program/function\` 的 knowledge entry。
-                      缺省时由默认实现从 description + params 拼基线文本。
-                    - fn: (ctx: ServerMethodContext, args: Record<string, unknown>) => unknown | Promise<unknown>，真正执行入口。
+                    ObjectWindowDefinition 字段（src/executable/server/window-types.ts）:
+                    - title? / description?: 进 basicKnowledge 与 LLM 视野
+                    - renderXml?: 渲染该 window 为 context XML（同 WindowRegistry.renderXml）
+                    - basicKnowledge?: 该 window 出现时合成的协议知识；可静态字符串或 ({ self }) => string
+                    - onClose?: close 触发 hook（同 WindowRegistry.OnCloseHook）
+                    - commands?: Record<string, CommandTableEntry> —— 命令字典；exec ctx 由 dispatcher 注入 self
 
-                    ctx 形态:
-                    - ctx.self: 同 ProgramSelf，方法内部可以继续调其它 method。
-                    - ctx.thread: { id, inject(text) }，方便方法在执行中向调用方线程注入 context_change/inject 事件。
+                    custom window 上的 commands 与内置 window（do/talk/...）上的命令完全同构：paths / match /
+                    knowledge(args, formStatus) / exec(ctx)。
                     `,
                     named: {
-                        "stones/<self>/server/index.ts": "方法库源码文件路径",
-                        "ServerMethod.fn": "方法的真正执行入口；返回值由 program 路径作为 returnValue 暴露",
-                        "ctx.thread.inject": "方法主动写一条 context_change/inject 事件给调用方",
+                        "stones/<self>/server/index.ts": "self window + ui_methods 源码文件路径",
+                        "ObjectWindowDefinition.commands": "Object 自定义命令字典；dispatcher 自动注入 self 到 exec ctx",
                     },
                 },
                 "loader": {
@@ -1686,14 +1704,15 @@ export const root: DocTreeNode = {
                     \`\`\`
 
                     行为:
-                    - 文件 ENOENT → 返回 {}，调用方拿到空字典而非异常。
+                    - 文件 ENOENT → 返回 undefined。
+                    - 旧 \`llm_methods\` 出现 → 抛清晰错误（plan D6 硬切；不再静默吃掉）。
                     - mtime 未变 → 复用缓存条目，不重新 import。
                     - mtime 变化 → 走新的 query string，等价于强制重新 import 一份新模块。
                     - 解析失败 → 抛带原始错误信息的异常，由调用方决定怎么呈现。
 
                     暴露的接口:
-                    - loadLlmServerMethods(stoneRef) / loadUiServerMethods(stoneRef): 分别取两份字典。
-                    - loadServerMethods 是 loadLlmServerMethods 的别名（兼容旧调用方）。
+                    - loadObjectWindow(stoneRef): 取 Object 的 ObjectWindowDefinition；没有 \`export const window\` 时返回 undefined。
+                    - loadUiServerMethods(stoneRef): 取 ui_methods 字典（D3 保留）。
                     - clearServerLoaderCache(): 测试钩子，清空缓存以避免测试间互相污染。
                     `,
                     named: {
@@ -1717,87 +1736,95 @@ export const root: DocTreeNode = {
                     src/executable/server/self.ts createProgramSelf(stoneRef, thread) 构造一个 ProgramSelf 对象:
 
                     - dir: stone 目录绝对路径，用于在 ts/js sandbox 里拼相对路径。
-                    - callMethod(name, args?): lazy load + reload server/index.ts，找到 llm_methods[name] 后调用 fn(ctx, args)。
-                      找不到时抛出 \`方法 X 不存在；当前可用：a, b, c\` 的错误。
+                    - callCommand(windowId, command, args?): 在 thread.contextWindows 里 lookup window → 通过
+                      WindowRegistry 取该 window type 的 commands[command] → exec(ctx)。type=custom 时
+                      dispatcher 自带 self 注入；其它 type 由调用方按需补 ctx.self。找不到 windowId / command
+                      时抛清晰错误（含当前可见 window/command 列表）。
                     - getData(key) / setData(key, value): 读写 stone 的 data.json；setData 是顶层 merge 而非整体覆盖。
                     - getThreadLocal(key) / setThreadLocal(key, value): 读写 thread.threadLocalData；
                       跨 exec 共享（程序窗口同一线程内的 ts/js exec 之间），但不持久化（重启即丢）。
 
                     ProgramSelf 在两条路径上被使用:
                     - program command ts/js exec: sandbox 把 self 注入到用户代码（详见 executable.commands.program 与 src/executable/program/sandbox/）。
-                    - program.function exec: runFunctionProgram(thread, fn, args) 直接 self.callMethod(fn, args) 拿返回值。
+                    - program.callCommand exec: runCallCommandProgram(thread, windowId, command, args) 构造 self 后调
+                      \`entry.exec(ctx)\` 拿返回值。
                     `,
                     named: {
                         "createProgramSelf": "构造 ProgramSelf 的工厂函数",
-                        "self.callMethod": "调用 server 方法的入口；自动 lazy load + 按 mtime reload",
+                        "self.callCommand": "调任意 window 上任意命令的入口；自动 lazy load + 按 mtime reload",
                         "threadLocalData": "thread 级共享数据；ts/js exec 间通过 self.getThreadLocal/setThreadLocal 传值",
                     },
                 },
-                "llm_invocation_paths": {
-                    title: "llm_invocation_paths - LLM 调用方法的两条路径",
+                "custom_window_invocation": {
+                    title: "custom_window_invocation - LLM 调用 custom 命令的两条路径",
                     content: `
-                    LLM 不直接看见 server 方法库，它通过既有的 program command 间接调用，有两种调用形态:
+                    LLM 通过两种入口调 custom window 上的命令:
 
-                    **路径 A: program.function 一行调用（推荐）**
+                    **路径 A: 直接 open custom window 的 command（推荐）**
                     \`\`\`
-                    open(command="program", args={ function: "doX", args: { ... } })
+                    open(parent_window_id="custom:<self>", command="<name>", args={ ... })
+                    refine(...)
+                    submit(...)
                     \`\`\`
-                    系统走 src/executable/program/function.ts:runFunctionProgram，直接 self.callMethod(fn, args)，
-                    返回值被 formatProgramResult 包成可读字符串进入 program_window.history。
-                    适合"调用一个明确的、命名好的方法"。
+                    与调 do_window.continue / talk_window.say 完全同构。custom dispatcher 在 commands[<name>].exec
+                    被取出时包一层 self 注入，对 manager.submit 完全透明。
 
-                    **路径 B: program ts/js exec 里手动调用**
+                    **路径 B: program.callCommand 通用元操作通道**
                     \`\`\`
-                    open(command="program", args={ language: "ts", code: "return await self.callMethod('doX', { ... });" })
+                    open(command="program", args={ window_id: "custom:<self>", command: "<name>", args: {...} })
                     \`\`\`
-                    sandbox 注入了 self，用户代码可以做任意计算 + 多次 callMethod。
-                    适合"组合多个方法、做一些数据处理后再调用"。
+                    或 ts/js exec 里:
+                    \`\`\`
+                    open(command="program", args={ language: "ts", code: "return await self.callCommand('custom:<self>', '<name>', { ... });" })
+                    \`\`\`
+                    callCommand 不仅可调 custom window 的命令，也可调 do_window/talk_window/file_window 等任意 window
+                    上的已注册命令——把"调 commands"统一成 \`(window_id, command, args)\` 一个签名。
 
-                    两条路径共享同一份 ProgramSelf 与同一份 llm_methods 字典，行为一致；只是入口形态不同。
-                    program.function 模式下，knowledge() 函数会针对当前 args 给 LLM 注入更具体的提示。
+                    两条路径共享同一份 ObjectWindowDefinition.commands 字典；只是入口形态不同。
                     `,
                     named: {
-                        "program.function": "program command 的 function 模式；一行直接调 server 方法",
-                        "runFunctionProgram": "function 路径的执行入口",
-                        "formatProgramResult": "把 returnValue / error 包成可读字符串的格式化函数",
+                        "program.callCommand": "program command 的 callCommand 模式；一行直接调任意 window 上的命令",
+                        "runCallCommandProgram": "callCommand 路径的执行入口",
+                        "formatProgramResult": "把 result / error 包成可读字符串的格式化函数",
                     },
                 },
-                "method_evolution": {
-                    title: "method_evolution - 方法库的演化路径",
+                "window_evolution": {
+                    title: "window_evolution - custom window 的演化路径",
                     content: `
-                    Object 演化自身方法库的标准路径:
+                    Object 演化自身 self window 的标准路径:
 
                     1. 触发点（典型: reflectable.metaprogramming 的反思请求）。
-                    2. super flow 中通过 \`open(command="write_file", path="stones/<self>/server/index.ts", content="...")\` 重写方法库源码。
-                    3. 下一次 callMethod 触发时，loader 看到 mtime 变化 → ?t=mtime 强制重新 import → 新方法立刻生效。
+                    2. super flow 中通过 \`open(command="write_file", path="stones/<self>/server/index.ts", content="...")\` 重写 self window 源码。
+                    3. 下一次 \`open(parent_window_id="custom:<self>", command=<new>)\` 或 \`self.callCommand(...)\` 触发时，
+                       loader 看到 mtime 变化 → ?t=mtime 强制重新 import → 新形态立刻生效。
                     4. 不需要重启进程、不需要重新部署。
 
-                    写新方法时需要遵守 ServerMethod 形状（fn 必填）；description / params / knowledge 可选但建议补全，
-                    因为 LLM 在 program.function 模式下会看见对应的 knowledge entry，写得清楚直接影响调用质量。
+                    写新命令时需要遵守 CommandTableEntry 形状（exec 必填）；paths / match / knowledge 可选但建议补全，
+                    因为 LLM 在 callCommand 模式下会看见对应的 knowledge entry，写得清楚直接影响调用质量。
 
                     更细的边界（路径权限、是否允许 super flow 自动写 server）由 reflectable.business_task_isolation 与
                     caller 的显式请求共同决定；programmable 本身只描述 *如何写* 才能生效，不规定 *谁可以写*。
                     `,
                     named: {
-                        "writeServerSource": "src/persistable/stone-server.ts:22-25，覆盖式写 server/index.ts",
-                        "热更生效条件": "mtime 变化 → loader cache 失效 → 下一次 callMethod 重新 import",
+                        "writeServerSource": "src/persistable/stone-server.ts，覆盖式写 server/index.ts",
+                        "热更生效条件": "mtime 变化 → loader cache 失效 → 下一次调命令重新 import",
                     },
                 },
             },
             patches: {
-                "llm_vs_ui_methods": {
-                    title: "llm_methods 与 ui_methods 的分流",
+                "custom_window_vs_ui_methods": {
+                    title: "custom window commands 与 ui_methods 的分流",
                     content: `
-                    同一份 server/index.ts 中两个字典服务不同调用方:
+                    同一份 server/index.ts 中两个导出服务不同调用方（plan D3）:
 
-                    - llm_methods: 给 LLM 通过 program.function 调用；走 createProgramSelf → loadLlmServerMethods。
-                      入参由 LLM 在 program form 里填，返回值进 program_window.history 让 LLM 看到。
-                    - ui_methods: 给 UI / agent-native 客户端通过 HTTP 调用；由 app/server flows.callMethod 或
-                      stones.callMethod 路径 (src/app/server/modules/flows/service.ts:483- / stones/service.ts:157)
-                      走 loadUiServerMethods 拿到方法字典并执行。
+                    - \`window.commands\` (custom dispatcher 路由): 给 LLM 通过 \`open(parent_window_id="custom:<self>", ...)\`
+                      或 \`program.callCommand\` 调用。入参由 LLM 在 form 里填，返回值进 program_window.history 或
+                      form.result 让 LLM 看到。
+                    - \`ui_methods\`: 给 UI / agent-native 客户端通过 HTTP 调用；由 app/server flows.callMethod 或
+                      stones.callMethod 路径走 loadUiServerMethods 拿到方法字典并执行。
 
-                    两个字典共享同一份 ServerMethod 形状与 loader 缓存条目；但调用入口、调用方身份、错误呈现位置不同。
-                    一个方法到底该放哪个字典，看的是"调用方是 LLM 还是用户/agent"。如果两者都需要，可以同时挂在两个字典里。
+                    两套形状不同（CommandTableEntry vs UiServerMethod）；调用入口、调用方身份、错误呈现位置不同。
+                    一个动作到底该放哪个，看的是"调用方是 LLM 还是用户/agent 客户端"。如果两者都需要，需要分别写两份。
                     `,
                 },
                 "per_object_isolation": {
@@ -1806,15 +1833,16 @@ export const root: DocTreeNode = {
                     server/index.ts 位于 \`stones/<self>/\` 下，不是 \`flows/<sid>/objects/<obj>/\` 下。
 
                     含义:
-                    - 同一个 Object 在不同 session 里看见同一份方法库；不会"换 session 就丢方法"。
-                    - 多个 session 并发调用同一个方法时共享 loader 缓存条目；mtime 变化对所有 session 一起生效。
-                    - 没有 flow 级私有方法库；如需 session 特化逻辑，应该在方法内通过 ctx.thread / self.getData 区分，
+                    - 同一个 Object 在不同 session 里看见同一份 self window；不会"换 session 就丢命令"。
+                    - 多个 session 并发调用同一个命令时共享 loader 缓存条目；mtime 变化对所有 session 一起生效。
+                    - 没有 flow 级私有 self window；如需 session 特化逻辑，应该在命令内通过 ctx.thread / self.getData 区分，
                       而不是 fork 一份新的 server。
                     `,
                 },
             },
             todo: [
-                "params schema 校验当前未实现（src/executable/server/types.ts:42 注释明确 '当前不强制校验'）。如果未来要支持自动参数检查/转换，需要在 program.function 路径 + ui callMethod 路径都加上。",
+                "params schema 校验当前未实现。如果未来要支持自动参数检查/转换，需要在 callCommand 路径 + ui callMethod 路径都加上。",
+                "Object 注册多个自定义 window 类型（不仅仅 self window）：本轮 export const window 是单数。后续可演化为复数 windows 字典。",
             ],
         },
         "visible": {
@@ -1899,12 +1927,12 @@ export const root: DocTreeNode = {
                     - 方法不存在 → \`METHOD_NOT_FOUND\`。
                     - 执行抛错 → 由 service 层兜底转 AppServerError 返回给 HTTP 调用方。
 
-                    这条路径与 LLM 的 program.function 路径在同一份 server/index.ts 上分流（按 llm_methods vs ui_methods 字典），
+                    这条路径与 LLM 的 \`program.callCommand\` 路径在同一份 server/index.ts 上分流（按 \`window.commands\` vs \`ui_methods\`），
                     互不干扰。
                     `,
                     named: {
                         "flows.callMethod / stones.callMethod": "app/server 暴露的 HTTP 入口",
-                        "loadUiServerMethods": "拿到 ui_methods 字典的 loader 接口（与 llm_methods 共用缓存条目）",
+                        "loadUiServerMethods": "拿到 ui_methods 字典的 loader 接口",
                         "AppServerError": "app/server 统一错误协议",
                     },
                 },

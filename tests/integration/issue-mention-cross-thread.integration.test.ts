@@ -24,7 +24,7 @@ import {
   writeThread,
 } from "../../src/persistable";
 import type { ThreadContext } from "../../src/thinkable/context";
-import type { IssueWindow } from "../../src/executable/windows/types";
+import type { IssueWindow } from "../../src/executable/windows/_shared/types";
 import { setupTempFlow } from "./_fixture";
 
 // 触发 windows registry seed(import "issue.js" 副作用)

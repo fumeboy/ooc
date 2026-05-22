@@ -21,7 +21,7 @@ import {
   type FlowObjectRef,
 } from "../../../persistable";
 import { makeThread } from "../../../__tests__/make-thread";
-import type { TalkWindow } from "../../../executable/windows/types";
+import type { TalkWindow } from "../../../executable/windows/_shared/types";
 import {
   deriveRelationWindow,
   deriveRelationCompanionKnowledge,

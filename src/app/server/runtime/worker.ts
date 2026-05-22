@@ -4,8 +4,8 @@ import { runScheduler } from "@src/thinkable/scheduler";
 import type { ServerConfig } from "../bootstrap/config";
 import type { RuntimeJob } from "./types";
 import type { ThreadContext, ThreadMessage } from "@src/thinkable/context";
-import type { IssueWindow, TalkWindow } from "@src/executable/windows/types";
-import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "@src/executable/windows/super-constants";
+import type { IssueWindow, TalkWindow } from "@src/executable/windows/_shared/types";
+import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "@src/executable/windows/_shared/super-constants";
 import { resumePausedThread } from "./resume";
 import { scanRunningThreads } from "./thread-query";
 

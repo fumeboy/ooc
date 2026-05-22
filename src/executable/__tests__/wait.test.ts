@@ -15,7 +15,7 @@ import {
   type DoWindow,
   type FileWindow,
   type TalkWindow,
-} from "../windows/types";
+} from "../windows/_shared/types";
 
 function findCreatorDoWindow(thread: ThreadContext): DoWindow {
   const found = thread.contextWindows.find(

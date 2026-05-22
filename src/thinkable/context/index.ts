@@ -1,6 +1,6 @@
 import type { LlmInputItem, LlmMessage } from "../llm/types";
 import { collectExecutableKnowledgeEntries } from "../../executable/index";
-import type { ContextWindow } from "../../executable/windows/types";
+import type { ContextWindow } from "../../executable/windows/_shared/types";
 import type { ThreadPersistenceRef } from "../../persistable/common";
 import { deriveStoneFromThread, objectDir, readSelf, stoneDir, threadDir } from "../../persistable";
 import { renderContextXml } from "./render";
@@ -159,7 +159,7 @@ export type ThreadContext = {
    * 当前线程的所有 ContextWindow（flat 数组，层级通过 parentWindowId 表达）。
    *
    * 取代旧的 activeForms / windows / pinnedKnowledge 三套并列字段。
-   * 见 src/executable/windows/types.ts 与 spec § 模型骨架。
+   * 见 src/executable/windows/_shared/types.ts 与 spec § 模型骨架。
    */
   contextWindows: ContextWindow[];
   /**

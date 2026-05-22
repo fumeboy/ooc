@@ -12,10 +12,10 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createFlowObject, createFlowSession, readThread, writeThread } from "../../../persistable";
-import { deliverTalkMessage } from "../talk-delivery";
-import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../super-constants";
-import { initContextWindows } from "../init";
-import { ROOT_WINDOW_ID, generateWindowId, type TalkWindow } from "../types";
+import { deliverTalkMessage } from "../talk/delivery";
+import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../_shared/super-constants";
+import { initContextWindows } from "../_shared/init";
+import { ROOT_WINDOW_ID, generateWindowId, type TalkWindow } from "../_shared/types";
 import type { ThreadContext } from "../../../thinkable/context";
 
 async function setupCaller(opts: {

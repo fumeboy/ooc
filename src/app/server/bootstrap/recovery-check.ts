@@ -20,7 +20,7 @@ import {
   PR_ISSUE_SESSION_ID,
   readIssueIndex,
 } from "@src/persistable";
-import { loadServerMethods } from "@src/executable/server/loader";
+import { loadObjectWindow } from "@src/executable/server/loader";
 import type { Issue } from "@src/persistable";
 
 const RECOVERY_PREFIX = "[recovery-needed]";
@@ -65,7 +65,7 @@ export async function runRecoveryCheck(opts: { baseDir: string }): Promise<Recov
       } catch {
         continue;
       }
-      await loadServerMethods(stoneRef);
+      await loadObjectWindow(stoneRef);
     } catch (err) {
       broken.push({
         objectId: e.name,

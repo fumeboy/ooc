@@ -22,7 +22,7 @@ import { createJobManager } from "@src/app/server/runtime/job-manager";
 import { readThread, flowRelationFile } from "@src/persistable";
 import { collectExecutableKnowledgeEntries } from "@src/thinkable/knowledge/synthesizer";
 import { executeRelationEdit } from "@src/executable/windows/relation";
-import type { RelationWindow } from "@src/executable/windows/types";
+import type { RelationWindow } from "@src/executable/windows/_shared/types";
 
 const SID = "_test_relation_e2e";
 const TARGET = "assistant";

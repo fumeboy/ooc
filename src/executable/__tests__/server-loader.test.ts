@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
 import { createStoneObject, writeServerSource } from "../../persistable";
-import { clearServerLoaderCache, loadServerMethods, loadUiServerMethods } from "../server/loader";
+import { clearServerLoaderCache, loadObjectWindow, loadUiServerMethods } from "../server/loader";
 
 let tempRoot: string | undefined;
 
@@ -15,48 +15,65 @@ afterEach(async () => {
   clearServerLoaderCache();
 });
 
-describe("loadServerMethods", () => {
-  test("returns empty when server/index.ts missing", async () => {
+describe("loadObjectWindow", () => {
+  test("returns undefined when server/index.ts missing", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-srv-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "x" });
-    const methods = await loadServerMethods(ref);
-    expect(methods).toEqual({});
+    const win = await loadObjectWindow(ref);
+    expect(win).toBeUndefined();
   });
 
-  test("loads llm_methods from server/index.ts", async () => {
+  test("loads window.commands from server/index.ts", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-srv-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "x" });
 
     await writeServerSource(
       ref,
-      `export const llm_methods = {
-        echo: {
-          description: "回声",
-          params: [{ name: "text", type: "string", required: true }],
-          fn: async (_ctx, { text }) => text,
+      `export const window = {
+        title: "x",
+        commands: {
+          echo: {
+            paths: ["echo"],
+            match: () => ["echo"],
+            exec: async ({ args }) => ({ ok: true, result: String(args.text) }),
+          },
         },
       };`
     );
 
-    const methods = await loadServerMethods(ref);
-    expect(Object.keys(methods)).toEqual(["echo"]);
-    const result = await methods.echo!.fn({} as never, { text: "hi" });
-    expect(result).toBe("hi");
+    const win = await loadObjectWindow(ref);
+    expect(Object.keys(win?.commands ?? {})).toEqual(["echo"]);
+    const result = await win!.commands!.echo!.exec({ args: { text: "hi" } } as never);
+    expect((result as { result: string }).result).toBe("hi");
   });
 
   test("reloads when server/index.ts mtime changes", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-srv-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "x" });
 
-    await writeServerSource(ref, `export const llm_methods = { v1: { fn: async () => 1 } };`);
-    let methods = await loadServerMethods(ref);
-    expect(Object.keys(methods)).toEqual(["v1"]);
+    await writeServerSource(
+      ref,
+      `export const window = { commands: { v1: { paths: ["v1"], match: () => ["v1"], exec: async () => ({ ok: true, result: "1" }) } } };`,
+    );
+    let win = await loadObjectWindow(ref);
+    expect(Object.keys(win?.commands ?? {})).toEqual(["v1"]);
 
     await new Promise((r) => setTimeout(r, 5));
-    await writeServerSource(ref, `export const llm_methods = { v2: { fn: async () => 2 } };`);
+    await writeServerSource(
+      ref,
+      `export const window = { commands: { v2: { paths: ["v2"], match: () => ["v2"], exec: async () => ({ ok: true, result: "2" }) } } };`,
+    );
 
-    methods = await loadServerMethods(ref);
-    expect(Object.keys(methods)).toEqual(["v2"]);
+    win = await loadObjectWindow(ref);
+    expect(Object.keys(win?.commands ?? {})).toEqual(["v2"]);
+  });
+
+  test("throws when llm_methods is present (D6 hard cutover)", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-srv-"));
+    const ref = await createStoneObject({ baseDir: tempRoot, objectId: "x" });
+    await writeServerSource(ref, `export const llm_methods = { foo: { fn: async () => 1 } };`);
+
+    await expect(loadObjectWindow(ref)).rejects.toThrow(/llm_methods/);
   });
 
   test("loads ui_methods from server/index.ts", async () => {

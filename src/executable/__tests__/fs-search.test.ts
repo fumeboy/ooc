@@ -631,7 +631,7 @@ describe("U4: root.glob + search_window.open_match", () => {
 
 // ---------- U5: root.grep ----------
 
-import { runJsFallback } from "../windows/root/grep-impl";
+import { runJsFallback } from "../windows/root/command.grep.impl";
 
 async function dispatchGrep(thread: ReturnType<typeof makeThread>, args: Record<string, unknown>) {
   return dispatchToolCall(thread, {
@@ -777,7 +777,7 @@ describe("U5: root.grep", () => {
 
 // ---------- U6: program anti-pattern note ----------
 
-import { programCommand } from "../windows/root/program";
+import { programCommand } from "../windows/root/command.program";
 
 describe("U6: program knowledge mentions file_window.edit", () => {
   it("program command knowledge text steers LLM toward file_window.edit + write_file", () => {

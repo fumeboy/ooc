@@ -11,7 +11,7 @@ import {
   type KnowledgeWindow,
   type ProgramWindow,
   type TalkWindow,
-} from "../windows/types";
+} from "../windows/_shared/types";
 import { createStoneObject, knowledgeDir } from "../../persistable";
 import { buildContext } from "../../thinkable/context";
 import { clearKnowledgeLoaderCache } from "../../thinkable/knowledge";
@@ -211,7 +211,7 @@ describe("Step 2 window lifecycles", () => {
         creatorThreadId: "root",
         creatorObjectId: "user",
       });
-      const { initContextWindows } = await import("../windows/init");
+      const { initContextWindows } = await import("../windows/_shared/init");
       initContextWindows(assistantThread, { creatorThreadId: "root", initialTaskTitle: "user task" });
       // root.talk target 校验需要 bob stone 存在
       await createStoneObject({ baseDir: tempRoot, objectId: "bob" });

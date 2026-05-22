@@ -21,11 +21,11 @@ import {
   writeThread,
 } from "../../../persistable";
 import { executeRelationEdit } from "../relation";
-import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../super-constants";
-import { initContextWindows } from "../init";
-import { ROOT_WINDOW_ID, type RelationWindow, type TalkWindow } from "../types";
+import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../_shared/super-constants";
+import { initContextWindows } from "../_shared/init";
+import { ROOT_WINDOW_ID, type RelationWindow, type TalkWindow } from "../_shared/types";
 import type { ThreadContext } from "../../../thinkable/context";
-import type { CommandExecutionContext } from "../command-types";
+import type { CommandExecutionContext } from "../_shared/command-types";
 
 const SELF = "alice";
 const PEER = "critic";

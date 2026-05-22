@@ -11,9 +11,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests, readIssueIndex, PR_ISSUE_SESSION_ID } from "@src/persistable";
-import { executeMetaprog } from "@src/executable/windows/root/metaprog";
+import { executeMetaprog } from "@src/executable/windows/root/command.metaprog";
 import { runRecoveryCheck } from "@src/app/server/bootstrap/recovery-check";
-import type { CommandExecutionContext } from "@src/executable/windows/command-types";
+import type { CommandExecutionContext } from "@src/executable/windows/_shared/command-types";
 import type { ThreadContext } from "@src/thinkable/context";
 
 let tempRoot: string | undefined;

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { __testing } from "../session-path";
+import { __testing } from "../_shared/session-path";
 
 const { rewriteStonesPath } = __testing;
 

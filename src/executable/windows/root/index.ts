@@ -2,7 +2,7 @@
  * Root window registration — 把 root window 上注册的所有 command 集中在此处。
  *
  * Step 2 重构（spec 2026-05-14）：
- * - 旧 src/executable/commands/index.ts 拆分到这里 + windows/registry.ts；
+ * - 旧 src/executable/commands/index.ts 拆分到这里 + windows/_shared/registry.ts；
  *   commands/ 目录已迁到 windows/root/，体现 "root 是一种 window type" 的从属关系
  * - 通过 registerWindowType("root", { commands }) 注入；与其它 window type 形态一致
  * - 暴露的工具函数（getOpenableCommands / deriveRootCommandPaths）只服务于 root 上的命令
@@ -11,22 +11,22 @@
  *   protocol 来源的 knowledge_window，每轮注入 context（参照 plan.ts 的 KNOWLEDGE 形态）
  */
 
-import { registerWindowType } from "../registry.js";
-import { createIssueCommand } from "./create-issue.js";
-import { doCommand } from "./do.js";
-import { endCommand } from "./end.js";
-import { globCommand } from "./glob.js";
-import { grepCommand } from "./grep.js";
-import { openFileCommand } from "./open-file.js";
-import { openIssueCommand } from "./open-issue.js";
-import { openKnowledgeCommand } from "./open-knowledge.js";
-import { planCommand } from "./plan.js";
-import { programCommand } from "./program.js";
-import { talkCommand } from "./talk.js";
-import { todoCommand } from "./todo.js";
-import { writeFileCommand } from "./write-file.js";
-import { metaprogCommand } from "./metaprog.js";
-import type { CommandTableEntry } from "../command-types.js";
+import { registerWindowType } from "../_shared/registry.js";
+import { createIssueCommand } from "./command.create-issue.js";
+import { doCommand } from "./command.do.js";
+import { endCommand } from "./command.end.js";
+import { globCommand } from "./command.glob.js";
+import { grepCommand } from "./command.grep.js";
+import { openFileCommand } from "./command.open-file.js";
+import { openIssueCommand } from "./command.open-issue.js";
+import { openKnowledgeCommand } from "./command.open-knowledge.js";
+import { planCommand } from "./command.plan.js";
+import { programCommand } from "./command.program.js";
+import { talkCommand } from "./command.talk.js";
+import { todoCommand } from "./command.todo.js";
+import { writeFileCommand } from "./command.write-file.js";
+import { metaprogCommand } from "./command.metaprog.js";
+import type { CommandTableEntry } from "../_shared/command-types.js";
 
 /**
  * Root window 上注册的命令清单（核心数据）。
@@ -105,7 +105,7 @@ export function getOpenableCommands(): string[] {
  */
 export async function execRootCommand(
   name: string,
-  ctx: import("../command-types.js").CommandExecutionContext,
+  ctx: import("../_shared/command-types.js").CommandExecutionContext,
 ): Promise<string | undefined> {
   const entry = ROOT_COMMANDS[name];
   if (!entry) throw new Error(`execRootCommand: unknown root command "${name}"`);

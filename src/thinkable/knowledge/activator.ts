@@ -41,7 +41,7 @@ export function computeActivations(
         if (recent.language === "shell") union.add("program.shell");
         else if (recent.language === "ts") union.add("program.ts");
         else if (recent.language === "js") union.add("program.js");
-        else if (recent.language === "function") union.add("program.function");
+        else if (recent.language === "callCommand") union.add("program.callCommand");
       }
     }
   }

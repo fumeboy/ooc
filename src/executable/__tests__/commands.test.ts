@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { ROOT_COMMANDS, getOpenableCommands, deriveRootCommandPaths } from "../windows";
-import { programCommand } from "../windows/root/program";
+import { programCommand } from "../windows/root/command.program";
 
 describe("executable commands", () => {
   it("should have command table with all commands", () => {
@@ -89,9 +89,9 @@ describe("executable commands", () => {
       "program",
       "program.javascript"
     ]);
-    expect(deriveRootCommandPaths("program", { function: "readFile" })).toEqual([
+    expect(deriveRootCommandPaths("program", { window_id: "custom:x", command: "doit" })).toEqual([
       "program",
-      "program.function"
+      "program.callCommand"
     ]);
   });
 

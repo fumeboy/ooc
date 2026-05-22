@@ -195,13 +195,13 @@ async function main() {
   await turn(3, "shell-basics",
     "刚才那些 .ts 文件总共多少行（用 wc -l）？给我一个总数。");
 
-  // 主题 2：元编程 — 让 Agent 给自己写 server method
+  // 主题 2：元编程 — 让 Agent 给自己写 custom command
   await turn(4, "meta-program",
-    "现在给你自己写一个 server method 叫 'wordcount'，接收 { text: string } 返回该文本的单词数。请用 program(shell) 写到 \"$OOC_SELF_DIR/server/index.ts\"（注意双引号包裹路径）。" +
-    "示例：export const llm_methods = { wordcount: { description: '统计单词数', params: [{name:'text',required:true}], fn: async (_ctx, {text}) => String(text).split(/\\s+/).filter(Boolean).length } };");
+    "现在给你自己写一个 custom command 叫 'wordcount'，接收 { text: string } 返回该文本的单词数。请用 program(shell) 写到 \"$OOC_SELF_DIR/server/index.ts\"（注意双引号包裹路径）。" +
+    "示例：export const window = { commands: { wordcount: { paths: ['wordcount'], match: () => ['wordcount'], exec: async ({ args }) => ({ ok: true, result: String(String(args.text).split(/\\s+/).filter(Boolean).length) }) } } }; export const ui_methods = {};");
 
   await turn(5, "meta-program",
-    "调用刚才注册的 wordcount，传入 text='The quick brown fox jumps over the lazy dog'，告诉我数字。用 program(function='wordcount', args={text:...}) 模式。");
+    "调用刚才注册的 wordcount，传入 text='The quick brown fox jumps over the lazy dog'，告诉我数字。用 program(window_id='custom:<self>', command='wordcount', args={text:...}) 模式。");
 
   await turn(6, "meta-program",
     "再给自己加一个 method 'greet'，接收 { name: string }，返回 'Hello, NAME!'。注意：保留 wordcount 不要删。然后调一次 greet({name:'world'})。");

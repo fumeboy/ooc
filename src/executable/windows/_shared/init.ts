@@ -1,0 +1,157 @@
+/**
+ * Thread 初始化 helper — 给任何新建 thread 注入指向 creator 的初始 window。
+ *
+ * spec § 初始 creator 对话 window：每个 thread 启动时必有一条与创建方的恒在通道。
+ *
+ * Creator window 类型由 thread 本身决定，不再由调用方指定：
+ * - thread.creatorObjectId === thread.persistence?.objectId（含两者都缺省）→ "do"
+ *   同 object 内 fork 出的子线程；creator 是父 thread。
+ *   creator window = type=do, targetThreadId=父 thread id, isCreatorWindow=true。
+ * - thread.creatorObjectId 与 self 不同 → "talk"
+ *   跨对象 talk 派生 callee thread；creator 是 caller object 的某个 thread。
+ *   creator window = type=talk, target=caller object, targetThreadId=caller thread,
+ *   isCreatorWindow=true。callee 通过该 talk_window.say 回复给 caller。
+ *
+ * 两种 window 共用 creatorWindowIdOf(threadId) 派生的稳定 id；幂等插入。
+ */
+
+import {
+  ROOT_WINDOW_ID,
+  SESSION_CREATOR_THREAD_ID,
+  creatorWindowIdOf,
+  customWindowIdOf,
+  type ContextWindow,
+  type CustomWindow,
+  type DoWindow,
+  type TalkWindow,
+} from "./types.js";
+import type { ThreadContext } from "../../../thinkable/context.js";
+
+export interface InitContextWindowsOpts {
+  /** thread 的 creator thread id；缺省 = SESSION_CREATOR_THREAD_ID（仅 root thread 适用）。 */
+  creatorThreadId?: string;
+  /** 初始任务标题；将作为 creator window 的 title。 */
+  initialTaskTitle: string;
+}
+
+/** thread 的 creator 是否=自己（同 object）。缺省字段视为同 object，回退 do_window。 */
+function isCreatorSelf(thread: ThreadContext): boolean {
+  const self = thread.persistence?.objectId;
+  const creator = thread.creatorObjectId;
+  if (!creator) return true;
+  if (!self) return true;
+  return creator === self;
+}
+
+/**
+ * user.root 是整个 session 的交互起点；它不存在 "creator"，所以也不应该有
+ * 初始 creator window（do/talk 都不合适）。本函数 short-circuit 这种 thread。
+ */
+function isUserRootThread(thread: ThreadContext): boolean {
+  return thread.persistence?.objectId === "user" && thread.id === "root";
+}
+
+/**
+ * thread 是否真有 creator（不是 self-driven root）。
+ *
+ * 任何一处携带 creator 信息都视为有：
+ * - opts.creatorThreadId 显式给（fork/talk-delivery 调用方）
+ * - thread.creatorThreadId（磁盘恢复时 thread.json 里写过）
+ * - thread.creatorObjectId（跨 object talk-delivery 总会设这条）
+ *
+ * 三者全无 → self-driven root，没有可指向的 creator，不应注入 phantom creator window。
+ * spec 2026-05-17 § wait 校验：phantom creator do_window 会被 wait 误判为合法 IO 来源，
+ * 让 self-driven root 死锁——本函数从源头堵住。
+ */
+function hasRealCreator(thread: ThreadContext, opts: InitContextWindowsOpts): boolean {
+  if (opts.creatorThreadId !== undefined) return true;
+  if (thread.creatorThreadId !== undefined) return true;
+  if (thread.creatorObjectId !== undefined) return true;
+  return false;
+}
+
+export function initContextWindows(
+  thread: ThreadContext,
+  opts: InitContextWindowsOpts,
+): void {
+  // plan §6.4 / D2: 仅当 thread 由该 Object 自己持有时注入 custom window 单例
+  // （thread.persistence.objectId 即"持有方"；user thread / super-* 等无 persistence 的不注入）
+  injectCustomWindowIfSelfThread(thread);
+
+  if (isUserRootThread(thread)) {
+    thread.contextWindows = thread.contextWindows ?? [];
+    return;
+  }
+  if (!hasRealCreator(thread, opts)) {
+    // self-driven root thread —— 没有可指向的 creator，don't inject phantom do_window
+    thread.contextWindows = thread.contextWindows ?? [];
+    return;
+  }
+  const creatorWindowId = creatorWindowIdOf(thread.id);
+  const list = thread.contextWindows ?? [];
+  if (list.some((w) => w.id === creatorWindowId)) {
+    thread.contextWindows = list;
+    return;
+  }
+
+  const creatorThreadId = opts.creatorThreadId ?? SESSION_CREATOR_THREAD_ID;
+  const sameObject = isCreatorSelf(thread);
+
+  const creatorWindow: ContextWindow = sameObject
+    ? ({
+        id: creatorWindowId,
+        type: "do",
+        parentWindowId: ROOT_WINDOW_ID,
+        title: opts.initialTaskTitle,
+        status: "running",
+        createdAt: Date.now(),
+        targetThreadId: creatorThreadId,
+        isCreatorWindow: true,
+      } satisfies DoWindow)
+    : ({
+        id: creatorWindowId,
+        type: "talk",
+        parentWindowId: ROOT_WINDOW_ID,
+        title: opts.initialTaskTitle,
+        status: "open",
+        createdAt: Date.now(),
+        target: thread.creatorObjectId!,
+        targetThreadId: creatorThreadId,
+        conversationId: creatorWindowId,
+        isCreatorWindow: true,
+      } satisfies TalkWindow);
+
+  thread.contextWindows = [creatorWindow, ...list];
+}
+
+/**
+ * plan §6.4 / D2 —— 当 thread 持有方是某 Object 时，幂等注入一个 custom window
+ * 单例作为该 Object 的"自我门面"。
+ *
+ * 注入条件：
+ * - thread.persistence?.objectId 存在（thread 由该 Object 持有）
+ * - 该 objectId 不是 "user"（user 不是 Agent，不需要 self window）
+ *
+ * id 稳定为 customWindowIdOf(objectId) = `custom:<objectId>`；重复跳过。
+ * 位置：root 之后，creator window 之前；保证 LLM 视野中 self window 的位置稳定。
+ */
+function injectCustomWindowIfSelfThread(thread: ThreadContext): void {
+  const objectId = thread.persistence?.objectId;
+  if (!objectId || objectId === "user") return;
+
+  const id = customWindowIdOf(objectId);
+  const list = thread.contextWindows ?? (thread.contextWindows = []);
+  if (list.some((w) => w.id === id)) return;
+
+  const customWindow: CustomWindow = {
+    id,
+    type: "custom",
+    parentWindowId: ROOT_WINDOW_ID,
+    title: objectId,
+    status: "open",
+    createdAt: Date.now(),
+    objectId,
+  };
+  // 紧跟 root 之后；creator window 仍由后续路径插到这之前/之后均可
+  thread.contextWindows = [customWindow, ...list];
+}

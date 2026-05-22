@@ -189,12 +189,24 @@ export const root: DocTreeNode = {
 
             \`\`\`ts
             // stones/agent_of_monitor/server/index.ts
-            export const llm_methods = {
-                check_threshold: {
-                    description: "查询某个指标是否越界",
-                    params: { metric: "string" },
-                    knowledge: () => "metric 取自 OOC 运行时指标白名单 (cpu/memory/latency)",
-                    fn: async (self, { metric }) => { /* ... */ },
+            import type { ObjectWindowDefinition } from "ooc/executable/server/window-types";
+
+            export const window: ObjectWindowDefinition = {
+                title: "agent_of_monitor",
+                description: "监控 Agent 自我门面",
+                commands: {
+                    check_threshold: {
+                        paths: ["check_threshold"],
+                        match: () => ["check_threshold"],
+                        knowledge: () => ({
+                            "internal/windows/custom/check_threshold/basic":
+                                "查询某个指标是否越界 (metric: cpu/memory/latency)",
+                        }),
+                        exec: async (ctx) => {
+                            const metric = ctx.args.metric as string;
+                            return { ok: true, result: "..." };
+                        },
+                    },
                 },
             };
 
@@ -219,7 +231,7 @@ export const root: DocTreeNode = {
             **method 加载**: server/index.ts 是 ESM 热加载 (mtime cache + ?t=mtime), 改完不需要重启 server, 详见 \`meta/object.doc.ts:programmable.method_evolution\`。
             `,
             named: {
-                "llm_methods / ui_methods": "method 分流: 前者给 LLM (program command 调), 后者给 web UI (HTTP callMethod 调)",
+                "window.commands / ui_methods": "method 分流: 前者给 LLM (program command 调), 后者给 web UI (HTTP callMethod 调)",
                 "Stone fallback": "无 client/index.tsx 时 web 默认展示 self.md/readme.md/knowledge/Recent flows",
             },
         },

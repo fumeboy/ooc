@@ -16,11 +16,11 @@ describe("command execution side effects", () => {
     }
 
     const modules = await Promise.all([
-      import("../windows/root/do"),
-      import("../windows/root/end"),
-      import("../windows/root/plan"),
-      import("../windows/root/talk"),
-      import("../windows/root/todo"),
+      import("../windows/root/command.do"),
+      import("../windows/root/command.end"),
+      import("../windows/root/command.plan"),
+      import("../windows/root/command.talk"),
+      import("../windows/root/command.todo"),
     ]);
     for (const module of modules) {
       expect("KNOWLEDGE" in module).toBe(false);
@@ -42,7 +42,7 @@ describe("command execution side effects", () => {
       thread,
       args: {
         content: "补充 thinkloop 集成测试",
-        on_command_path: ["program", "program.function"],
+        on_command_path: ["program", "program.callCommand"],
       },
     });
     const todoWindow = thread.contextWindows.find((w) => w.type === "todo");
@@ -50,7 +50,7 @@ describe("command execution side effects", () => {
     expect(todoWindow && todoWindow.type === "todo" && todoWindow.content).toBe("补充 thinkloop 集成测试");
     expect(
       todoWindow && todoWindow.type === "todo" && todoWindow.onCommandPath,
-    ).toEqual(["program", "program.function"]);
+    ).toEqual(["program", "program.callCommand"]);
   });
 
   it("end should mark thread as done and persist remaining fields", async () => {
