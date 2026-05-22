@@ -80,3 +80,4 @@ import "./search/index.js";
 import "./issue/index.js";
 import "./relation/index.js";
 import "./custom/index.js";
+import "./skill_index/index.js";

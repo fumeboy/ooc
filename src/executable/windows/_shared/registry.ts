@@ -147,6 +147,11 @@ REGISTRY.set("custom", {
   commands: {},
 });
 
+REGISTRY.set("skill_index", {
+  type: "skill_index",
+  commands: {},
+});
+
 /**
  * 替换或合并某 type 的契约，用于 windows/do.ts、windows/todo.ts 在模块加载时注入实现。
  *

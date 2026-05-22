@@ -155,3 +155,11 @@ export {
   writeFlowClientPage,
   writeStoneClientSource,
 } from "./stone-client";
+export type { SkillEntry } from "./stone-skills";
+export {
+  branchSkillsDir,
+  objectSkillsDir,
+  listBranchSkills,
+  listObjectSkills,
+  clearStoneSkillsCache,
+} from "./stone-skills";

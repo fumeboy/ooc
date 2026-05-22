@@ -22,7 +22,7 @@
  * 内部的 commands / windows registry），故归位到 thinkable/knowledge。
  */
 
-import { deriveStoneFromThread, readReadme, readRelation, readFlowRelation, readIssue } from "../../persistable/index.js";
+import { deriveStoneFromThread, listBranchSkills, listObjectSkills, readReadme, readRelation, readFlowRelation, readIssue } from "../../persistable/index.js";
 import type { ThreadContext } from "../context.js";
 import { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge.js";
 import { ROOT_BASIC_PATH, ROOT_COMMANDS, ROOT_KNOWLEDGE } from "../../executable/windows/root/index.js";
@@ -35,7 +35,8 @@ import {
 import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../../executable/windows/_shared/super-constants.js";
 import type { CommandKnowledgeEntries, CommandTableEntry } from "../../executable/windows/_shared/command-types.js";
 import { getWindowTypeDefinition } from "../../executable/windows/_shared/registry.js";
-import type { CommandExecWindow, ContextWindow, IssueWindow, KnowledgeWindow, RelationWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
+import type { CommandExecWindow, ContextWindow, IssueWindow, KnowledgeWindow, RelationWindow, SkillIndexWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
+import { ROOT_WINDOW_ID, SKILL_INDEX_WINDOW_ID } from "../../executable/windows/_shared/types.js";
 import { computeActivations } from "./activator.js";
 import { loadKnowledgeIndex } from "./loader.js";
 
@@ -142,6 +143,7 @@ export async function collectExecutableKnowledgeEntries(
   // 1.5) 按 thread.contextWindows 出现的 type 注入 type-level basicKnowledge——
   //      让 LLM 在没有 open 任何 command_exec 的情况下也能知道每种 window 上有哪些 command。
   //      防止"看到 talk_window 但只会试 root 上的 talk command"的常见误用。
+  //      注：skill_index 在 §1.6 派生后再补一次（顺序原因）。
   const presentTypes = new Set<string>();
   for (const w of list) presentTypes.add(w.type);
   for (const t of presentTypes) {
@@ -155,6 +157,50 @@ export async function collectExecutableKnowledgeEntries(
     const path = `internal/windows/${t}/basic`;
     if (!(path in protocolEntries)) {
       protocolEntries[path] = def.basicKnowledge;
+    }
+  }
+
+  // 1.6) skill_index 派生（plan §skills 支持 / D2 + D6 + 用户补充）：
+  //      扫描 stones/<branch>/skills 与 stones/<branch>/objects/<self>/skills，合并去重；
+  //      非空时注入一个 SkillIndexWindow 到 enriched contextWindows；空时不注入；
+  //      thread.persistence 缺省（user/super 等场景）→ 没法定位 stoneRef，跳过。
+  if (thread.persistence) {
+    try {
+      const stoneRef = deriveStoneFromThread(thread.persistence);
+      const [branchSkills, objectSkills] = await Promise.all([
+        listBranchSkills(thread.persistence.baseDir, thread.persistence.stonesBranch),
+        listObjectSkills(stoneRef),
+      ]);
+      // 同名 object 级优先（plan §D1）
+      const byName = new Map<string, typeof branchSkills[number]>();
+      for (const s of branchSkills) byName.set(s.name, s);
+      for (const s of objectSkills) byName.set(s.name, s); // object 覆盖 branch
+      const merged = Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
+      if (merged.length > 0) {
+        const skillIndex: SkillIndexWindow = {
+          id: SKILL_INDEX_WINDOW_ID,
+          type: "skill_index",
+          parentWindowId: ROOT_WINDOW_ID,
+          title: `Skills (${merged.length})`,
+          status: "active",
+          createdAt: Date.now(),
+          skills: merged,
+        };
+        // 防重：如果已有同 id（理论上不会有，因为 thread.json 不持久化），覆盖
+        const existing = enriched.findIndex((w) => w.id === SKILL_INDEX_WINDOW_ID);
+        if (existing >= 0) enriched[existing] = skillIndex;
+        else enriched.push(skillIndex);
+        // 派生后补一次 type-level basicKnowledge（§1.5 是基于原 list 计算的，不含 skill_index）
+        const skillIndexBasicPath = "internal/windows/skill_index/basic";
+        if (!(skillIndexBasicPath in protocolEntries)) {
+          try {
+            const def = getWindowTypeDefinition("skill_index");
+            if (def.basicKnowledge) protocolEntries[skillIndexBasicPath] = def.basicKnowledge;
+          } catch { /* skip */ }
+        }
+      }
+    } catch {
+      // skills 扫描失败不应阻断 LLM 渲染；静默跳过
     }
   }
 

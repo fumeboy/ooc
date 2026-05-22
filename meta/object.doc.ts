@@ -522,7 +522,7 @@ export const root: DocTreeNode = {
                         "create_issue": "在 session 内创建 Issue 看板议题的 command",
                         "open_issue": "把已存在 Issue 订阅为 issue_window 的 command",
                         "refine / submit": "command_exec window 上注册的两条命令；用 exec(form_id, ...) 触发",
-                        "do_window.move": "do_window 上注册的命令；通过本 do_window 把 ContextWindow 以 ref / move 模式分享给对端 thread；归还路径按 id 自动识别 lent_out ↔ owner 配对（plan §do_window.move）",
+                        "do_window.move": "do_window 上注册的命令；通过本 do_window 把 ContextWindow 以 ref / move 模式分享给对端 thread；归还路径按 id 自动识别 lent_out ↔ owner 配对",
                     },
                     patches: {
                         "command_path_activation": {
@@ -645,6 +645,39 @@ export const root: DocTreeNode = {
                                 "id 协议": "跨 thread move 保留同一 id；用于归还路径自动识别 lent_out ↔ owner 配对",
                             },
                         },
+                        "skill_index_window": {
+                            title: "skill_index window - stone skills 索引",
+                            content: `
+                            skill_index 是 LLM 看到的 stone skills 公共与私有索引（plan §skills 支持）。
+                            每个 skill 是一个独立目录，含 \`SKILL.md\`（带 frontmatter description）+ 任意辅助文件。
+
+                            **双层 skills 目录**（plan §D1）:
+                            - **branch 级**（公共，跨 Object 共享）：\`stones/<branch>/skills/<skill-name>/SKILL.md\`
+                            - **object 级**（仅 self）：\`stones/<branch>/objects/<self>/skills/<skill-name>/SKILL.md\`
+                            - 同名 skill 时 object 级优先；展示时 scope 徽标区分来源
+
+                            **生成方式**（plan §D2 + 用户补充）:
+                            - 完全由 \`thinkable/knowledge/synthesizer.ts:collectExecutableKnowledgeEntries\` 派生
+                            - 每轮渲染时调用 \`persistable/stone-skills.ts:listBranchSkills\` + \`listObjectSkills\`
+                            - 内部 10s TTL 缓存，避免 readdir + readFile 在每轮 thread render 都跑
+                            - **空时不注入**：如果两层目录都没有 skill，skill_index 不出现在 contextWindows 里
+                            - 不持久化（thread.json 中不出现）；reload 后由 synthesizer 重新派生
+
+                            **使用协议**：LLM 通过 \`exec(command="open_file", args={ path: "<skillFilePath>" })\` 打开
+                            具体 SKILL.md 阅读完整说明；OOC 不实现 SKILL.md 内的字段（user-invocable / allowed-tools 等）；
+                            那些字段是 SKILL.md 自由约定，由 LLM 自行处理。
+
+                            不注册任何 command；onClose 拒绝（与 root 同级，理论不会被 close）。
+                            `,
+                            named: {
+                                "SkillEntry": "{ name, description, skillFilePath, scope: \"branch\" | \"object\" }",
+                                "SkillIndexWindow": "type=\"skill_index\"，固定 id \"skill_index\"，单例每 thread 一个；status=\"active\"",
+                                "stones/<branch>/skills/": "branch 级公共 skills 目录",
+                                "stones/<branch>/objects/<self>/skills/": "object 级私有 skills 目录",
+                                "10s TTL 缓存": "stone-skills.ts 模块级缓存；skills 改动 ≤10s 后才反映",
+                            },
+                            sources: [["src/persistable/stone-skills.ts", "skills 目录扫描器与 10s 缓存；listBranchSkills / listObjectSkills；clearStoneSkillsCache 测试钩子。SkillIndexWindow 派生在 src/thinkable/knowledge/synthesizer.ts:collectExecutableKnowledgeEntries §1.6"]],
+                        },
                     },
                     patches: {
                         "cascade_close": {
@@ -691,6 +724,7 @@ export const root: DocTreeNode = {
                         "knowledge_window": "知识文档窗口",
                         "search_window": "搜索结果窗口",
                         "issue_window": "session 级 Issue 看板的订阅窗口",
+                        "skill_index_window": "stone skills 索引窗口；每轮由 synthesizer 派生（10s TTL 缓存），列出 stones/<branch>/skills 与 stones/<branch>/objects/<self>/skills 下的所有 SKILL.md；空时不注入；详见 children.skill_index_window",
                     },
                 },
                 "registry_and_manager": {

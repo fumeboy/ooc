@@ -73,10 +73,15 @@ export const root: DocTreeNode = {
             ├── server/index.ts      # custom self window + ui_methods（必备）
             ├── client/index.tsx     # 可选；对外的 web 单页入口（缺省走 Stone fallback）
             ├── data.json            # 自动维护；setData/getData 落盘
-            └── knowledge/           # 长期记忆 / 协议知识；按 frontmatter activates_on 自动激活
-                ├── memory/<slug>.md
-                └── relations/<peerId>.md   # 你对每个 peer 的关系认知
+            ├── knowledge/           # 长期记忆 / 协议知识；按 frontmatter activates_on 自动激活
+            │   ├── memory/<slug>.md
+            │   └── relations/<peerId>.md   # 你对每个 peer 的关系认知
+            └── skills/              # 可选；object 级 skills（仅自己的 thread 可见）
+                └── <skill-name>/SKILL.md   # 详见后面 "Step X — 写 skill" 小节
             \`\`\`
+
+            另外 branch 级公共 skills 路径：\`stones/<branch>/skills/<skill-name>/SKILL.md\`
+            （跨所有 Object 共享；与 \`stones/<branch>/objects/\` 平级）。
 
             最小骨架命令（可以一次性跑完）:
             \`\`\`
@@ -366,6 +371,67 @@ export const root: DocTreeNode = {
                 "client/index.tsx": "stone 级单页入口；缺省走 Stone fallback",
                 "callMethod (UI 路径)": "前端 props 注入；调 server/index.ts 的 ui_methods 字典；HTTP /api/{flows,stones}/.../call_method",
                 "Stone fallback": "无 client/index.tsx 时 web 默认展示 self.md/readme.md/knowledge/Recent flows",
+            },
+        },
+        "step5b_skills": {
+            title: "Step 5.5 — 写 skill（可选；可复用操作模式）",
+            content: `
+            skills 让 Agent 把可复用的操作模式 / 协议 / 工作流程封装成独立目录，每个含
+            \`SKILL.md\` + 任意辅助文件（references / scripts / 子文档）。
+
+            **目录结构**（双层；按需选一层或两层都用）:
+
+            \`\`\`
+            # branch 级（跨 Object 共享）
+            stones/<branch>/skills/<skill-name>/SKILL.md
+
+            # object 级（仅自己的 thread 可见）
+            stones/<branch>/objects/<self>/skills/<skill-name>/SKILL.md
+            \`\`\`
+
+            **SKILL.md 形态**：
+
+            \`\`\`md
+            ---
+            description: 一句话说明这个 skill 解决什么问题；LLM 通过 description 决定是否进入
+            ---
+
+            # <Skill 名>
+
+            ## 何时使用
+
+            - 用户说 "..." 时
+            - 任务匹配 "..." 模式时
+
+            ## 步骤
+
+            1. 第一步...
+            2. 第二步...
+
+            ## 参考文件
+
+            - \`./references/<topic>.md\` — 详细规范
+            - \`./scripts/<helper>.js\` — 辅助脚本
+            \`\`\`
+
+            **使用流程**（Agent 视角）:
+            1. skill_index window 自动出现在 context（仅当至少有一个 skill 时）
+            2. Agent 看 skill_index 列表 + description，按需 \`exec(command="open_file", args={ path: "<skillFilePath>" })\` 打开 SKILL.md
+            3. 进一步 \`open_file\` 读 references / scripts
+            4. 按 SKILL.md 指引完成任务
+
+            **何时写 skill 而不是 knowledge / server method**:
+            - knowledge：被动激活（按 command path 命中），适合"协议补全 / 行为习惯"
+            - server method（custom command）：调用即执行，适合"明确无歧义的函数操作"
+            - **skill**：主动选择（LLM 看索引判断要不要进入），适合"多步骤工作流 / 大块协议 / 需要辅助文件的复杂操作"
+
+            **演化路径**：与其它 stone 资源一样，通过 \`exec(command="write_file", path="stones/<self>/skills/<name>/SKILL.md", content="...")\`
+            写入；skill_index 在 10s 缓存窗口后自动刷新。
+            `,
+            named: {
+                "SKILL.md frontmatter": "至少需要 description 字段；其它字段对 OOC 透明",
+                "branch / object 双层": "branch 级共享，object 级私有；同名时 object 级优先",
+                "10s TTL": "skill_index 缓存间隔；写新 skill 后 ≤10s 内 LLM 才会看到",
             },
         },
         "step6_evolution": {

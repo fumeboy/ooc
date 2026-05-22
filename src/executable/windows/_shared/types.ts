@@ -17,7 +17,7 @@
  */
 
 /** Window 类型枚举；新增类型必须同步在 WINDOW_REGISTRY 中注册。 */
-export type WindowType = "root" | "command_exec" | "do" | "todo" | "talk" | "program" | "file" | "knowledge" | "search" | "issue" | "relation" | "custom";
+export type WindowType = "root" | "command_exec" | "do" | "todo" | "talk" | "program" | "file" | "knowledge" | "search" | "issue" | "relation" | "custom" | "skill_index";
 
 /**
  * Window 状态值汇总。
@@ -105,6 +105,7 @@ export type { SearchWindow, SearchMatch } from "../search/types.js";
 export type { IssueWindow } from "../issue/types.js";
 export type { RelationWindow } from "../relation/types.js";
 export type { CustomWindow } from "../custom/types.js";
+export type { SkillIndexWindow, SkillEntry } from "../skill_index/types.js";
 
 // 用 import 形式拿到具体类型构造 ContextWindow union（type-only re-export 在 union 里不直接可见）
 import type { RootWindow } from "../root/types.js";
@@ -119,6 +120,7 @@ import type { SearchWindow } from "../search/types.js";
 import type { IssueWindow } from "../issue/types.js";
 import type { RelationWindow } from "../relation/types.js";
 import type { CustomWindow } from "../custom/types.js";
+import type { SkillIndexWindow } from "../skill_index/types.js";
 
 /** 所有 ContextWindow 类型的 discriminated union。新增 type 后必须扩这里 + WINDOW_REGISTRY。 */
 export type ContextWindow =
@@ -133,10 +135,14 @@ export type ContextWindow =
   | SearchWindow
   | IssueWindow
   | RelationWindow
-  | CustomWindow;
+  | CustomWindow
+  | SkillIndexWindow;
 
 /** Root window 的固定 id。 */
 export const ROOT_WINDOW_ID = "root";
+
+/** Skill 索引 window 的固定 id（每个 thread 唯一一份；plan §skills 支持）。 */
+export const SKILL_INDEX_WINDOW_ID = "skill_index";
 
 /** 生成 window id；前缀按类型区分，便于日志阅读。 */
 export function generateWindowId(type: Exclude<WindowType, "root">): string {
@@ -152,6 +158,7 @@ export function generateWindowId(type: Exclude<WindowType, "root">): string {
     issue: "w_issue",
     relation: "w_rel",
     custom: "w_custom",
+    skill_index: "w_skills",
   } as const)[type];
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }
