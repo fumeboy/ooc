@@ -1,11 +1,16 @@
 /**
  * program_window 的运行时 — runOneExec。
  *
- * 由 root.program 与 program_window.exec 共用：根据 args 路由到 shell / ts / js / function，
+ * 由 root.program 与 program_window.exec 共用：根据 args 路由到 shell / ts / js，
  * 把每次执行的输出包装成 ProgramExecRecord 追加到对应 window 的 history。
  *
  * 注意：thread.threadLocalData 的读写发生在 ProgramSelf 内部（src/executable/server/self.ts）；
  * shell sandbox 通过 OOC_SELF_DIR env 访问 stone 目录，不接 threadLocal 通道。
+ *
+ * 历史：旧版本支持 callCommand / function 子模式，调任意 window 上的命令。
+ * 顶层 `exec` tool 上线后（plan exec-refactor），LLM 直接用 exec 调命令；
+ * program 只剩 shell/ts/js 三种语言模式。ts/js sandbox 的 `self.callCommand`
+ * 仍保留，供脚本编排时多步调命令。
  */
 
 import type { ThreadContext } from "../../../thinkable/context.js";
@@ -14,18 +19,13 @@ import { createProgramSelf } from "../../server/self.js";
 import { deriveStoneFromThread } from "../../../persistable/index.js";
 import { executeUserCode } from "../../program/sandbox/executor.js";
 import { runShellProgram } from "../../program/shell.js";
-import { runCallCommandProgram } from "../../program/call-command.js";
 import { buildProgramShellEnv } from "../../program/self-env.js";
 import { formatProgramResult } from "../../program/format.js";
 
-/** 一次 exec 调用的入参形态（plan §6.3 D4：function 字段被替换为 window_id + command）。 */
+/** 一次 exec 调用的入参形态。 */
 export interface ProgramExecArgs {
   language?: "shell" | "ts" | "typescript" | "js" | "javascript";
   code?: string;
-  /** plan D4：调任意 window 上任意 command；与 command 配套使用 */
-  window_id?: string;
-  command?: string;
-  args?: Record<string, unknown>;
 }
 
 function generateExecId(): string {
@@ -54,26 +54,6 @@ export async function runOneExec(
   const execId = generateExecId();
   const startedAt = Date.now();
 
-  // callCommand 模式（旧 function 模式的升级版；plan D4）
-  if (
-    typeof args.window_id === "string" &&
-    args.window_id.length > 0 &&
-    typeof args.command === "string" &&
-    args.command.length > 0
-  ) {
-    const output = await runCallCommandProgram(thread, args.window_id, args.command, args.args ?? {});
-    return {
-      execId,
-      language: "callCommand",
-      window_id: args.window_id,
-      command: args.command,
-      args: args.args,
-      output,
-      ok: isOkResult(output),
-      startedAt,
-    };
-  }
-
   const lang = args.language;
   const code = args.code;
 
@@ -97,7 +77,7 @@ export async function runOneExec(
     return { execId, language: normLang, code, output, ok: isOkResult(output), startedAt };
   }
 
-  const output = `[program] 未知 language="${lang ?? "<undefined>"}"，支持 shell / ts / js / function`;
+  const output = `[program] 未知 language="${lang ?? "<undefined>"}"，支持 shell / ts / js`;
   return { execId, language: "shell", code, output, ok: false, startedAt };
 }
 

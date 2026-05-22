@@ -66,7 +66,7 @@ describe("single object runtime", () => {
           return makeResult("I will set the plan in one shot.", [
             {
               id: "tc1",
-              name: "open",
+              name: "exec",
               arguments: {
                 title: "open plan",
                 command: "plan",

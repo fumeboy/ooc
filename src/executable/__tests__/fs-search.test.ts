@@ -360,7 +360,7 @@ import { dispatchToolCall } from "../tools";
 async function dispatchWriteFile(thread: ReturnType<typeof makeThread>, args: Record<string, unknown>) {
   return dispatchToolCall(thread, {
     id: `call_${Math.random().toString(36).slice(2, 8)}`,
-    name: "open",
+    name: "exec",
     arguments: {
       title: "write file",
       command: "write_file",
@@ -375,7 +375,7 @@ describe("U3: root.write_file", () => {
     const thread = makeThread({ id: "t_wf_happy" });
     const out = JSON.parse(await dispatchWriteFile(thread, { path, content: "hello write_file\n" }));
     expect(out.ok).toBe(true);
-    expect(out.auto_submitted).toBe(true);
+    expect(out.executed).toBe(true);
 
     // file written
     const onDisk = await readFile(path, "utf8");
@@ -400,7 +400,7 @@ describe("U3: root.write_file", () => {
     const thread = makeThread({ id: "t_wf_hint" });
     const out = JSON.parse(await dispatchWriteFile(thread, { path, content: "new content" }));
     expect(out.ok).toBe(true);
-    expect(out.auto_submitted).toBe(true);
+    expect(out.executed).toBe(true);
     expect(out.result).toContain("[write_file hint]");
     expect(out.result).toContain("file_window.edit");
   });
@@ -410,7 +410,7 @@ describe("U3: root.write_file", () => {
     const thread = makeThread({ id: "t_wf_new_no_hint" });
     const out = JSON.parse(await dispatchWriteFile(thread, { path, content: "fresh" }));
     expect(out.ok).toBe(true);
-    expect(out.auto_submitted).toBe(true);
+    expect(out.executed).toBe(true);
     expect(out.result ?? "").not.toContain("[write_file hint]");
   });
 
@@ -426,7 +426,7 @@ describe("U3: root.write_file", () => {
     const thread = makeThread({ id: "t_wf_no_path" });
     const out = JSON.parse(await dispatchWriteFile(thread, { content: "x" }));
     expect(out.ok).toBe(true); // tool call accepted; failure expressed in result
-    expect(out.auto_submitted).toBe(true);
+    expect(out.executed).toBe(true);
     expect(out.result).toContain("缺少 path");
     expect(thread.contextWindows.filter((w) => w.type === "file").length).toBe(0);
   });
@@ -435,7 +435,7 @@ describe("U3: root.write_file", () => {
     const thread = makeThread({ id: "t_wf_no_content" });
     const out = JSON.parse(await dispatchWriteFile(thread, { path: join(TEMP, "x.txt") }));
     expect(out.ok).toBe(true);
-    expect(out.auto_submitted).toBe(true);
+    expect(out.executed).toBe(true);
     expect(out.result).toContain("缺少 content");
     expect(thread.contextWindows.filter((w) => w.type === "file").length).toBe(0);
   });
@@ -445,7 +445,7 @@ describe("U3: root.write_file", () => {
     const thread = makeThread({ id: "t_wf_empty" });
     const out = JSON.parse(await dispatchWriteFile(thread, { path, content: "" }));
     expect(out.ok).toBe(true);
-    expect(out.auto_submitted).toBe(true);
+    expect(out.executed).toBe(true);
     expect(await readFile(path, "utf8")).toBe("");
   });
 
@@ -467,7 +467,7 @@ import { dirname } from "node:path";
 async function dispatchGlob(thread: ReturnType<typeof makeThread>, args: Record<string, unknown>) {
   return dispatchToolCall(thread, {
     id: `call_${Math.random().toString(36).slice(2, 8)}`,
-    name: "open",
+    name: "exec",
     arguments: {
       title: "glob",
       command: "glob",
@@ -483,10 +483,10 @@ async function dispatchOpenMatch(
 ) {
   return dispatchToolCall(thread, {
     id: `call_${Math.random().toString(36).slice(2, 8)}`,
-    name: "open",
+    name: "exec",
     arguments: {
       title: "open match",
-      parent_window_id: searchWindowId,
+      window_id: searchWindowId,
       command: "open_match",
       args,
     },
@@ -510,7 +510,7 @@ describe("U4: root.glob + search_window.open_match", () => {
     const thread = makeThread({ id: "t_glob_happy" });
     const out = JSON.parse(await dispatchGlob(thread, { pattern: "*.ts", cwd: dir }));
     expect(out.ok).toBe(true);
-    expect(out.auto_submitted).toBe(true);
+    expect(out.executed).toBe(true);
 
     const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow | undefined;
     expect(sw).toBeDefined();
@@ -551,7 +551,7 @@ describe("U4: root.glob + search_window.open_match", () => {
   it("edge: missing pattern → submit returns '缺少 pattern' error", async () => {
     const thread = makeThread({ id: "t_glob_no_pattern" });
     const out = JSON.parse(await dispatchGlob(thread, { cwd: TEMP }));
-    expect(out.auto_submitted).toBe(true);
+    expect(out.executed).toBe(true);
     expect(out.result).toContain("缺少 pattern");
     expect(out.result).toContain("close");
     expect(out.result).toContain("open");
@@ -568,7 +568,7 @@ describe("U4: root.glob + search_window.open_match", () => {
 
     const out = JSON.parse(await dispatchOpenMatch(thread, sw.id, { index: 1 }));
     expect(out.ok).toBe(true);
-    expect(out.auto_submitted).toBe(true);
+    expect(out.executed).toBe(true);
     const fws = thread.contextWindows.filter((w) => w.type === "file") as FileWindow[];
     // open_match 现在把 match.path（相对 searchRoot）解析成绝对路径，让 file_window
     // 走 fs.readFile 不再依赖 process.cwd()。
@@ -593,7 +593,7 @@ describe("U4: root.glob + search_window.open_match", () => {
     // empty args → no auto-submit per WindowManager rule; form left open with input knowledge prompt
     const out = JSON.parse(await dispatchOpenMatch(thread, sw.id, {}));
     expect(out.ok).toBe(true);
-    expect(out.auto_submitted).toBe(false);
+    expect(out.executed).toBe(false);
   });
 
   it("open_match exec edge: missing index error message includes refine recovery hint", async () => {
@@ -636,7 +636,7 @@ import { runJsFallback } from "../windows/root/command.grep.impl";
 async function dispatchGrep(thread: ReturnType<typeof makeThread>, args: Record<string, unknown>) {
   return dispatchToolCall(thread, {
     id: `call_${Math.random().toString(36).slice(2, 8)}`,
-    name: "open",
+    name: "exec",
     arguments: {
       title: "grep",
       command: "grep",
@@ -702,7 +702,7 @@ describe("U5: root.grep", () => {
     expect(sw.truncated).toBe(false);
   });
 
-  // 2026-05-20 用户反馈: chat panel 上 link-btn 跳转无效, 因为 form 在 auto-submit 后 auto_removed,
+  // 2026-05-20 用户反馈: chat panel 上 link-btn 跳转无效, 因为 form 在 auto-submit 后 executed,
   // 仅有 form_id 找不到 ContextTree 节点. 修复让 open auto-submit / submit 都在 output 暴露
   // 派生的 sub-window id (window_id), 让 link-btn 跳到真正仍在 context 的 search_window 等.
   it("output.window_id 指向 auto-submit 派生的 search_window (link-btn 修复 2026-05-20)", async () => {
@@ -711,13 +711,13 @@ describe("U5: root.grep", () => {
     const rawOutput = await dispatchGrep(thread, { pattern: "needle", path: dir });
     const parsed = JSON.parse(rawOutput);
     expect(parsed.ok).toBe(true);
-    expect(parsed.auto_submitted).toBe(true);
+    expect(parsed.executed).toBe(true);
     // 关键: window_id 字段必须出现, 且指向 search_window
     expect(parsed.window_id).toBeDefined();
     const sw = thread.contextWindows.find((w) => w.type === "search");
     expect(sw).toBeDefined();
     expect(parsed.window_id).toBe(sw!.id);
-    // window_id 必须不是 form_id (form 已 auto_removed)
+    // window_id 必须不是 form_id (form 已 executed)
     expect(parsed.window_id).not.toBe(parsed.form_id);
   });
 
@@ -733,7 +733,7 @@ describe("U5: root.grep", () => {
   it("edge: missing pattern → submit returns '缺少 pattern' error", async () => {
     const thread = makeThread({ id: "t_grep_no_pattern" });
     const out = JSON.parse(await dispatchGrep(thread, { path: TEMP }));
-    expect(out.auto_submitted).toBe(true);
+    expect(out.executed).toBe(true);
     expect(out.result).toContain("缺少 pattern");
     expect(out.result).toContain("close");
     expect(out.result).toContain("open");

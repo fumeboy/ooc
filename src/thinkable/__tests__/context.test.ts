@@ -73,14 +73,14 @@ describe("buildContext (ContextWindow model)", () => {
           category: "llm_interaction",
           kind: "function_call",
           callId: "call_1",
-          toolName: "open",
+          toolName: "exec",
           arguments: { command: "talk", title: "向用户回复" },
         },
         {
           category: "tool_runtime",
           kind: "function_call_output",
           callId: "call_1",
-          toolName: "open",
+          toolName: "exec",
           output: '{"ok":true,"tool":"open"}',
           ok: true,
         },
@@ -89,7 +89,7 @@ describe("buildContext (ContextWindow model)", () => {
     const out = await buildInputItems(thread);
     expect(out.input).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ type: "function_call", call_id: "call_1", name: "open" }),
+        expect.objectContaining({ type: "function_call", call_id: "call_1", name: "exec" }),
         expect.objectContaining({ type: "function_call_output", call_id: "call_1" }),
       ]),
     );
@@ -222,7 +222,7 @@ describe("buildContext (ContextWindow model)", () => {
         {
           category: "llm_interaction",
           kind: "tool_use",
-          toolName: "open",
+          toolName: "exec",
           arguments: { command: "todo" },
         },
         {
@@ -254,7 +254,7 @@ describe("buildContext (ContextWindow model)", () => {
     const xml = messages[0]?.content ?? "";
     // KNOWLEDGE 现在的形态：一行一个原语，不再是 "open / refine / submit / close / wait"
     expect(xml).toContain("ContextWindow");
-    expect(xml).toContain("open(parent_window_id");
+    expect(xml).toContain("exec(window_id");
     // wait 新签名（spec 2026-05-17）：on 必填，reason 可选
     expect(xml).toContain("wait(on");
     // 关键提示：思考空间 + talk 是与 user 唯一通道
@@ -280,7 +280,7 @@ describe("buildContext (ContextWindow model)", () => {
     const xml = messages[0]?.content ?? "";
     // basic 出现 2 次（每个 form 一份 path），但合成的 knowledge_window 中只 1 份正文
     expect(xml.match(/<path>internal\/executable\/program\/basic<\/path>/g)?.length).toBe(3);
-    expect(xml.match(/program 用于执行一段代码/g)?.length).toBe(1);
+    expect(xml.match(/program 用于执行一段 shell \/ ts \/ js 代码/g)?.length).toBe(1);
   });
 
   it("wraps text content in CDATA when plain text would require XML escaping", async () => {

@@ -2,8 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import * as toolsModule from "../../executable/tools";
-import { OPEN_TOOL } from "../../executable/tools/open";
-import { SUBMIT_TOOL } from "../../executable/tools/submit";
+import { EXEC_TOOL } from "../../executable/tools/exec";
 import { createLlmClient } from "../llm/client";
 import * as contextModule from "../context";
 import { think } from "../thinkloop";
@@ -50,7 +49,7 @@ describe.skipIf(!shouldRunRealTest)("real thinkloop integration", () => {
       contextWindows: []
     };
 
-    spyOn(toolsModule, "getAvailableTools").mockReturnValue([OPEN_TOOL, SUBMIT_TOOL]);
+    spyOn(toolsModule, "getAvailableTools").mockReturnValue([EXEC_TOOL]);
 
     spyOn(contextModule, "buildContext").mockImplementation(async (currentThread) => {
       const activeForm = currentThread.contextWindows.find((w) => w.type === "command_exec");
@@ -85,7 +84,7 @@ describe.skipIf(!shouldRunRealTest)("real thinkloop integration", () => {
     await think(thread, client);
     const formsAfter = thread.contextWindows.filter((w) => w.type === "command_exec");
     // end 命令在 args 给齐时 open 可能直接提交 form；这里只验证 think 跑过、且没崩
-    expect(thread.events.some((event) => event.kind === "tool_use" && event.toolName === "open")).toBe(true);
+    expect(thread.events.some((event) => event.kind === "tool_use" && event.toolName === "exec")).toBe(true);
     void formsAfter;
     expect(["running", "done"]).toContain(thread.status);
   }, 120000);

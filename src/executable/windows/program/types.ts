@@ -15,12 +15,8 @@ export interface ProgramWindow extends BaseContextWindow {
 
 export interface ProgramExecRecord {
   execId: string;
-  language: "shell" | "ts" | "js" | "callCommand";
+  language: "shell" | "ts" | "js";
   code?: string;
-  /** plan D4：callCommand 模式 */
-  window_id?: string;
-  command?: string;
-  args?: unknown;
   output: string;
   ok: boolean;
   startedAt: number;

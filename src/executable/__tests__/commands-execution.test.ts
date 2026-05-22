@@ -42,7 +42,7 @@ describe("command execution side effects", () => {
       thread,
       args: {
         content: "补充 thinkloop 集成测试",
-        on_command_path: ["program", "program.callCommand"],
+        on_command_path: ["program", "exec"],
       },
     });
     const todoWindow = thread.contextWindows.find((w) => w.type === "todo");
@@ -50,7 +50,7 @@ describe("command execution side effects", () => {
     expect(todoWindow && todoWindow.type === "todo" && todoWindow.content).toBe("补充 thinkloop 集成测试");
     expect(
       todoWindow && todoWindow.type === "todo" && todoWindow.onCommandPath,
-    ).toEqual(["program", "program.callCommand"]);
+    ).toEqual(["program", "exec"]);
   });
 
   it("end should mark thread as done and persist remaining fields", async () => {

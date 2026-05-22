@@ -54,7 +54,7 @@ describe("openai provider", () => {
             {
               type: "function_call",
               call_id: "call_1",
-              name: "submit",
+              name: "exec",
               arguments: "{\"command\":\"plan\"}"
             }
           ]
@@ -73,7 +73,7 @@ describe("openai provider", () => {
         input: [{ type: "message", role: "user", content: "hi" }],
         tools: [
           {
-            name: "submit",
+            name: "exec",
             description: "提交命令",
             inputSchema: {
               type: "object",
@@ -91,7 +91,7 @@ describe("openai provider", () => {
     expect(result.toolCalls).toEqual([
       {
         id: "call_1",
-        name: "submit",
+        name: "exec",
         arguments: { command: "plan" }
       }
     ]);
@@ -104,7 +104,7 @@ describe("openai provider", () => {
       {
         type: "function_call",
         call_id: "call_1",
-        name: "submit",
+        name: "exec",
         arguments: { command: "plan" }
       }
     ]);

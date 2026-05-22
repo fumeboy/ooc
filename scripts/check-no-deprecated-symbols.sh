@@ -28,6 +28,14 @@ declare -a FORBIDDEN_PATTERNS=(
   "loadServerMethods\\b"
   "runFunctionProgram"
   "program\\.function\\b"
+  "OPEN_TOOL"
+  "REFINE_TOOL"
+  "SUBMIT_TOOL"
+  "handleOpenTool"
+  "handleRefineTool"
+  "handleSubmitTool"
+  "runCallCommandProgram"
+  "program\\.callCommand"
 )
 
 # 允许列表（D6 硬切的合法引用点 + 概念文档）

@@ -140,62 +140,6 @@ describe("program runtime — runOneExec (ts/js + function)", () => {
     expect(second.output).toContain("[returnValue]");
     expect(second.output).toContain("1");
   });
-
-  test("callCommand path runs custom command on the self window", async () => {
-    tempRoot = await mkdtemp(join(tmpdir(), "ooc-prog-"));
-    const ref = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
-    await writeServerSource(
-      ref,
-      `export const window = { commands: { add: { paths: ["add"], match: () => ["add"], exec: async ({ args }) => ({ ok: true, result: String(Number(args.a) + Number(args.b)) }) } } }; export const ui_methods = {};`,
-    );
-    const thread = makeThread({
-      id: "t",
-      persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
-    });
-    const customId = "custom:agent";
-    thread.contextWindows.push({
-      id: customId,
-      type: "custom",
-      title: "agent",
-      status: "open",
-      createdAt: Date.now(),
-      objectId: "agent",
-    });
-    const rec = await runOneExec(thread, {
-      window_id: customId,
-      command: "add",
-      args: { a: 7, b: 8 },
-    });
-    expect(rec.output).toContain("15");
-  });
-
-  test("callCommand path errors clearly when command missing", async () => {
-    tempRoot = await mkdtemp(join(tmpdir(), "ooc-prog-"));
-    await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
-    const thread = makeThread({
-      id: "t",
-      persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
-    });
-    const customId = "custom:agent";
-    thread.contextWindows.push({
-      id: customId,
-      type: "custom",
-      title: "agent",
-      status: "open",
-      createdAt: Date.now(),
-      objectId: "agent",
-    });
-    const rec = await runOneExec(thread, { window_id: customId, command: "nope" });
-    expect(rec.output).toContain("不存在");
-    expect(rec.ok).toBe(false);
-  });
-
-  test("callCommand path errors clearly when window missing", async () => {
-    const thread = makeThread({ id: "t" });
-    const rec = await runOneExec(thread, { window_id: "ghost", command: "any" });
-    expect(rec.output).toContain("不在");
-    expect(rec.ok).toBe(false);
-  });
 });
 
 describe("executeProgramCommand creates a program_window with first exec", () => {
@@ -242,7 +186,7 @@ describe("executeProgramWindowExec missing-args error path", () => {
     });
     expect(typeof result).toBe("string");
     expect(result as string).toContain("缺少执行参数");
-    expect(result as string).toContain("close");
-    expect(result as string).toContain("open");
+    expect(result as string).toContain("exec");
+    expect(result as string).toContain("language");
   });
 });

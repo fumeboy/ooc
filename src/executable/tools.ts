@@ -2,9 +2,7 @@ import type { ThreadContext } from "../thinkable/context";
 import type { LlmTool, LlmToolCall } from "../thinkable/llm/types";
 import { handleCloseTool } from "./tools/close";
 import { buildAvailableTools } from "./tools/index";
-import { handleOpenTool } from "./tools/open";
-import { handleRefineTool } from "./tools/refine";
-import { handleSubmitTool } from "./tools/submit";
+import { handleExecTool } from "./tools/exec";
 import { handleWaitTool } from "./tools/wait";
 
 /** 单个 LLM tool 的运行时 handler 签名。 */
@@ -20,11 +18,9 @@ function errorToolOutput(tool: string, error: string) {
 
 /** tool 名到 handler 的路由表；未实现的 tool 会转成 context_change 提示。 */
 const TOOL_HANDLERS: Partial<Record<LlmToolCall["name"], ToolHandler>> = {
-  open: handleOpenTool,
-  refine: handleRefineTool,
-  submit: handleSubmitTool,
+  exec: handleExecTool,
   close: handleCloseTool,
-  wait: handleWaitTool
+  wait: handleWaitTool,
 };
 
 /** 返回当前线程可暴露给 LLM 的工具定义。 */

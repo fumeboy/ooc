@@ -401,22 +401,24 @@ export const root: DocTreeNode = {
             在 OOC 中，LLM 不直接调用任意函数，也不直接读写任意状态；它只能通过一组稳定的 tool 原语与 ContextWindow 交互。
 
             Executable 的核心分层:
-            1. Tool 原语层: open / refine / submit / close / wait，是 LLM 直接看见的稳定接口（见 executable.tools.todo: compress 仍是规划项）。
-            2. Command 层: do / talk / program / plan / todo / end / open_file / open_knowledge / write_file / glob / grep / create_issue / open_issue 等具体行动。
-            3. ContextWindow 层: 行动产生或操作的上下文对象，比如 file_window、talk_window、program_window、do_window、issue_window。
+            1. Tool 原语层: exec / close / wait，是 LLM 直接看见的稳定接口（compress 仍是规划项）。
+            2. Command 层: do / talk / program / plan / todo / end / open_file / open_knowledge / write_file / glob / grep / create_issue / open_issue 等具体行动；form 自身的 refine / submit 也是 command_exec window 上的命令。
+            3. ContextWindow 层: 行动产生或操作的上下文对象，比如 file_window、talk_window、program_window、do_window、issue_window、custom window。
             4. Registry / Manager 层: 注册不同 window type 的 command、render、close hook、basicKnowledge。
             5. Knowledge Activation 层: 根据 command path 自动激活执行所需知识。
 
             因此，Executable 不是 "给 LLM 一堆工具"。
-            它是一套以 ContextWindow 为中心的行动协议: LLM 先打开一个行动窗口，逐步补充参数，提交执行，再根据执行结果继续思考。
+            它是一套以 ContextWindow 为中心的行动协议: LLM 通过 exec 在某 window 上调一条命令；
+            args 齐全立即执行，args 不齐时系统创建一个 command_exec form，LLM 后续通过
+            \`exec(form_id, "refine"/"submit")\` 推进。
             `,
             named: {
                 "Executable": "Object 的行动能力维度，定义 LLM 如何通过 tool、command、ContextWindow 改变系统状态",
-                "Tool": "LLM 直接可调用的稳定原语，如 open/refine/submit/close/wait",
-                "Command": "具体行动单元，如 do/talk/program/open_file",
+                "Tool": "LLM 直接可调用的稳定原语：exec / close / wait",
+                "Command": "具体行动单元，挂在某 window 上注册；如 do/talk/program 在 root 上、refine/submit 在 command_exec 上",
                 "ContextWindow": "可展示、可操作、可挂载 command 的上下文窗口对象",
-                "WindowType": "ContextWindow 的类型分支，如 root/file/program/talk/do/knowledge/search/issue",
-                "CommandExec": "一次 command 调用过程对应的临时窗口，也可理解为 form window",
+                "WindowType": "ContextWindow 的类型分支，如 root/file/program/talk/do/knowledge/search/issue/custom",
+                "CommandExec": "一次 command 调用过程对应的临时窗口；自身注册 refine/submit 命令",
                 "WindowRegistry": "注册各类 window type 行为的机制",
                 "WindowManager": "管理 thread.contextWindows 增删改查和生命周期的机制",
             },
@@ -429,29 +431,24 @@ export const root: DocTreeNode = {
                     OOC 不鼓励为每个能力都暴露一个新 tool。
                     相反，tool 集合尽量保持稳定，新的能力通过 command 和 window type 扩展。
 
-                    基础 tool（当前实现 5 个）:
-                    - open: 打开一个 ContextWindow，或打开一次 command_exec 行动入口。
-                    - refine: 为已经打开的 command_exec window 继续补充或修改参数。
-                    - submit: 提交 command_exec window，真正触发 command 执行。
-                    - close: 关闭一个 ContextWindow，或取消/清理一个 command_exec window。
-                    - wait: 声明当前 thread 等待某个 talk_window / do_window 的未来 IO。
+                    基础 tool（当前实现 3 个）:
+                    - exec: 在某 window 上调用一条 command。args 齐全 + 不引入新 path/knowledge 时立即执行；
+                      否则创建 command_exec form 让 LLM 后续推进。
+                    - close: 关闭一个 ContextWindow（form / do_window / todo_window 等）。
+                    - wait: 声明当前 thread 等待某个 talk_window / do_window / issue_window 的未来 IO。
 
                     Tool 层的设计目标是让 LLM 学会少量稳定动作:
-                    - 需要新信息时 open。
-                    - 参数不够时 refine。
-                    - 准备好后 submit。
+                    - 需要执行命令时 exec。args 不全 → 系统给你 form，再继续 exec(form_id, "refine"/"submit")。
                     - 用完后 close。
                     - 没有未来输入就 end，有未来输入才 wait。
                     `,
                     named: {
-                        "open": "打开 window 或 command_exec 的工具原语",
-                        "refine": "补充 command_exec 参数但不执行的工具原语",
-                        "submit": "提交 command_exec 并触发 command 执行的工具原语",
+                        "exec": "在某 window 上调用一条 command 的工具原语；可能立即执行或创建 form",
                         "close": "关闭 window 或取消行动入口的工具原语",
                         "wait": "让当前 thread 等待未来 IO 的工具原语",
                     },
                     todo: [
-                        "compress tool: 用于压缩当前 thread 的 events，控制长期运行体积。当前仅在 LlmToolName 类型联合与 ProcessEvent.toolName 中保留位置（src/thinkable/llm/types.ts、src/thinkable/context/index.ts），src/executable/tools/index.ts 注释明确 '暂不包括 compress'，TOOL_HANDLERS 也未注册。等待实现策略与触发时机定义后落地。",
+                        "compress tool: 用于压缩当前 thread 的 events，控制长期运行体积。当前仅在 LlmToolName 类型联合与 ProcessEvent.toolName 中保留位置，TOOL_HANDLERS 也未注册。等待实现策略与触发时机定义后落地。",
                     ],
                     patches: {
                         "stable_tool_surface": {
@@ -463,23 +460,33 @@ export const root: DocTreeNode = {
                             因此新能力应优先表现为新的 command 或新的 window type，而不是新的顶层 tool。
                             `,
                         },
+                        "form_lifecycle_via_commands": {
+                            title: "form lifecycle 下沉为 command_exec 的命令",
+                            content: `
+                            历史：旧版本有 5 个原语 open/refine/submit/close/wait，其中 refine/submit 仅服务 form lifecycle。
+
+                            升级后：refine/submit 不再是顶层 tool，而是 CommandExecWindow 上注册的两条命令；
+                            通过 \`exec(form_id, "refine", args={...})\` / \`exec(form_id, "submit")\` 调用，与
+                            do_window.continue / talk_window.say / custom 命令同构。tool surface 收敛为 3 个，
+                            但行为表达力不变。
+                            `,
+                        },
                     },
                 },
                 "commands": {
                     title: "commands - 具体行动单元",
                     content: `
-                    Command 是 LLM 通过 open / refine / submit 间接调用的具体行动。
+                    Command 是 LLM 通过 exec 间接调用的具体行动。
 
                     LLM 通常不是直接 "调用 program 函数"，而是:
-                    1. open(command="program") 打开一个 command_exec window。
-                    2. refine(...) 补充代码、语言、执行参数等。
-                    3. submit(...) 执行 command。
-                    4. command 产生副作用，比如创建 program_window 或写入 thread.plan。
+                    1. exec(command="program", args={ language: "shell", code: "..." }) → args 齐全立即执行
+                    2. 或 exec(command="program") → 系统创建 form，后续 exec(form_id, "refine", args={...}) + exec(form_id, "submit")
+                    3. command 产生副作用，比如创建 program_window 或写入 thread.plan。
 
                     root window 注册一组顶层 command（与 src/executable/windows/root/index.ts ROOT_COMMANDS 一致）:
                     - do: 派生子 thread，创建 do_window。
                     - talk: 与 user 或其他 Object 对话，创建 talk_window。
-                    - program: 执行 shell / javascript / typescript 等程序，创建 program_window。
+                    - program: 执行 shell / javascript / typescript 程序，创建 program_window。
                     - plan: 更新当前 thread 的 plan。
                     - todo: 创建可见待办 todo_window。
                     - end: 标记当前 thread 完成。
@@ -490,6 +497,10 @@ export const root: DocTreeNode = {
                     - grep: 按文件内容正则搜索，创建 search_window。
                     - create_issue: 在 session 内创建 Issue 看板议题，创建 issue_window 并自动订阅。
                     - open_issue: 把已有 Issue 拉进本 thread 作为订阅 window（dedup，不重复挂）。
+
+                    其它 window 上也注册命令（do_window: continue/wait/close；talk_window: say/wait/close；
+                    file_window: edit/reload/set_range/close；command_exec: refine/submit；custom: Object 自定义 ...）。
+                    Object 自定义 commands 通过 server/index.ts 的 \`export const window\` 注册到 type=custom 的 self window 上。
 
                     Command Path 是 command 与 knowledge 协作的关键。
                     command 可以根据当前参数暴露更细的语义路径，比如 talk.continue、talk.wait、talk.relation_update。
@@ -510,6 +521,7 @@ export const root: DocTreeNode = {
                         "grep": "按内容正则查找文件的 command",
                         "create_issue": "在 session 内创建 Issue 看板议题的 command",
                         "open_issue": "把已存在 Issue 订阅为 issue_window 的 command",
+                        "refine / submit": "command_exec window 上注册的两条命令；用 exec(form_id, ...) 触发",
                     },
                     patches: {
                         "command_path_activation": {
@@ -518,7 +530,7 @@ export const root: DocTreeNode = {
                             command path 是一种渐进式语义披露机制。
 
                             例:
-                            - open(command="talk") 时，只激活 talk 基础知识。
+                            - exec(command="talk") 时，只激活 talk 基础知识。
                             - refine({ context: "continue" }) 后，激活 talk.continue 知识。
                             - refine({ type: "relation_update" }) 后，再激活 talk.relation_update 知识。
 
@@ -1222,7 +1234,7 @@ export const root: DocTreeNode = {
                     - 任何业务 session 下的 thread.json
                     - 业务代码（program shell / file_window.edit 业务文件）
 
-                    写入方式: 通过 open(command="write_file", path="...", content="...") 命令；
+                    写入方式: 通过 exec(command="write_file", path="...", content="...") 命令；
                     已存在的文件可用 open_file + edit 增量更新。
                     `,
                     named: {
@@ -1628,7 +1640,7 @@ export const root: DocTreeNode = {
             Object 在自己的 stone 里有一份 \`server/index.ts\`，导出 \`window: ObjectWindowDefinition\`
             （type=\`"custom"\` 的 self window 定义）+ 可选的 \`ui_methods\` 字典（visible 维度的 UI 入口）。
             \`window.commands\` 是标准 \`CommandTableEntry\` 字典；LLM 通过
-            \`open(parent_window_id="custom:<self>", command="<name>", args={...})\` 直接调用，
+            \`exec(window_id="custom:<self>", command="<name>", args={...})\` 直接调用，
             与调 do_window.continue / talk_window.say 完全同构。
             UI / agent-native 客户端通过 HTTP \`callMethod\` 调用 \`ui_methods\`（与 LLM 路径完全解耦）。
 
@@ -1762,7 +1774,7 @@ export const root: DocTreeNode = {
 
                     **路径 A: 直接 open custom window 的 command（推荐）**
                     \`\`\`
-                    open(parent_window_id="custom:<self>", command="<name>", args={ ... })
+                    exec(window_id="custom:<self>", command="<name>", args={ ... })
                     refine(...)
                     submit(...)
                     \`\`\`
@@ -1771,11 +1783,11 @@ export const root: DocTreeNode = {
 
                     **路径 B: program.callCommand 通用元操作通道**
                     \`\`\`
-                    open(command="program", args={ window_id: "custom:<self>", command: "<name>", args: {...} })
+                    exec(command="program", args={ window_id: "custom:<self>", command: "<name>", args: {...} })
                     \`\`\`
                     或 ts/js exec 里:
                     \`\`\`
-                    open(command="program", args={ language: "ts", code: "return await self.callCommand('custom:<self>', '<name>', { ... });" })
+                    exec(command="program", args={ language: "ts", code: "return await self.callCommand('custom:<self>', '<name>', { ... });" })
                     \`\`\`
                     callCommand 不仅可调 custom window 的命令，也可调 do_window/talk_window/file_window 等任意 window
                     上的已注册命令——把"调 commands"统一成 \`(window_id, command, args)\` 一个签名。
@@ -1794,8 +1806,8 @@ export const root: DocTreeNode = {
                     Object 演化自身 self window 的标准路径:
 
                     1. 触发点（典型: reflectable.metaprogramming 的反思请求）。
-                    2. super flow 中通过 \`open(command="write_file", path="stones/<self>/server/index.ts", content="...")\` 重写 self window 源码。
-                    3. 下一次 \`open(parent_window_id="custom:<self>", command=<new>)\` 或 \`self.callCommand(...)\` 触发时，
+                    2. super flow 中通过 \`exec(command="write_file", path="stones/<self>/server/index.ts", content="...")\` 重写 self window 源码。
+                    3. 下一次 \`exec(window_id="custom:<self>", command=<new>)\` 或 \`self.callCommand(...)\` 触发时，
                        loader 看到 mtime 变化 → ?t=mtime 强制重新 import → 新形态立刻生效。
                     4. 不需要重启进程、不需要重新部署。
 
@@ -1817,7 +1829,7 @@ export const root: DocTreeNode = {
                     content: `
                     同一份 server/index.ts 中两个导出服务不同调用方（plan D3）:
 
-                    - \`window.commands\` (custom dispatcher 路由): 给 LLM 通过 \`open(parent_window_id="custom:<self>", ...)\`
+                    - \`window.commands\` (custom dispatcher 路由): 给 LLM 通过 \`exec(window_id="custom:<self>", ...)\`
                       或 \`program.callCommand\` 调用。入参由 LLM 在 form 里填，返回值进 program_window.history 或
                       form.result 让 LLM 看到。
                     - \`ui_methods\`: 给 UI / agent-native 客户端通过 HTTP 调用；由 app/server flows.callMethod 或
@@ -1942,8 +1954,8 @@ export const root: DocTreeNode = {
                     Object 演化自身 UI 的标准路径:
 
                     1. 触发点（典型: caller 明确要求 'UI 需要加一个 X 视图' 类反思请求）。
-                    2. super flow 中通过 \`open(command="write_file", path="stones/<self>/client/index.tsx", content="...")\` 重写 stone client；
-                       或写 flow 级 page \`open(command="write_file", path="flows/<sid>/objects/<obj>/client/pages/<page>.tsx", content="...")\`。
+                    2. super flow 中通过 \`exec(command="write_file", path="stones/<self>/client/index.tsx", content="...")\` 重写 stone client；
+                       或写 flow 级 page \`exec(command="write_file", path="flows/<sid>/objects/<obj>/client/pages/<page>.tsx", content="...")\`。
                     3. 下次客户端加载该路径时拿到新 tsx 源码（具体打包/渲染管线由消费方实现）。
                     4. 如果新 UI 要调用新方法，需要先把对应 ui_methods 写到 server/index.ts（程序面与界面面分别演化）。
 

@@ -72,7 +72,7 @@ test("F3 grep → search_window 出现在 ContextSnapshotViewer", async ({ page,
     (e) =>
       e.category === "llm_interaction" &&
       e.kind === "function_call" &&
-      e.toolName === "open" &&
+      e.toolName === "exec" &&
       e.arguments?.command === "root.grep",
   );
 

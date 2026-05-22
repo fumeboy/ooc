@@ -183,7 +183,7 @@ describe("think", () => {
     const llmClient: LlmClient = {
       async generate() {
         return makeResult("claude", "claude-test", "", [
-          { id: "call_1", name: "open", arguments: {} },
+          { id: "call_1", name: "exec", arguments: {} },
           { id: "call_2", name: "close", arguments: {} }
         ]);
       },
@@ -261,7 +261,7 @@ describe("think", () => {
           return makeResult("openai", "gpt-test", "登记一个待办", [
             {
               id: "call_open",
-              name: "open",
+              name: "exec",
               arguments: {
                 title: "登记 thinkloop 集成待办",
                 command: "todo",

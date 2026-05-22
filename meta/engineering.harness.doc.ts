@@ -200,14 +200,14 @@ export const root: DocTreeNode = {
             - CommandTableEntry schema (description / params / knowledge / fn) 与 window.commands / ui_methods 分流。
             - loader 热更: 按 mtime 缓存 + ?t=mtime 破坏 import cache。
             - ProgramSelf 注入: program ts/js sandbox 收到的 self 对象。
-            - program command 两条调用路径: program.callCommand 一行调 vs ts/js exec 里 self.callCommand。
+            - program command 两条调用路径: exec 一行调 vs ts/js exec 里 self.callCommand。
             - 元编程闭环: 配合 reflectable 在 super flow 改 server/index.ts 后,下一次调用自动看见新方法。
 
-            内循环典型动作: 调研某个高频 LLM 操作的提取需求 → 设计 ServerMethod 形状与 knowledge() → 写到 stone server/index.ts → 跑 e2e 确认 program.callCommand 路径能拿到结果。
+            内循环典型动作: 调研某个高频 LLM 操作的提取需求 → 设计 CommandTableEntry 形状与 knowledge() → 写到 stone server/index.ts → 跑 e2e 确认 exec 路径能拿到结果。
 
             维度定义见 meta/object.doc.ts 的 programmable child。
             `,
-            sources: [["src/executable/server/", "server method 加载与 ProgramSelf 注入;program.callCommand 路径入口见 src/executable/program/call-command.ts;server/index.ts 读写见 src/persistable/stone-server.ts;概念定义见 meta/object.doc.ts:children.programmable"]],
+            sources: [["src/executable/server/", "server method 加载与 ProgramSelf 注入;exec 路径入口见 src/executable/program/exec.ts;server/index.ts 读写见 src/persistable/stone-server.ts;概念定义见 meta/object.doc.ts:children.programmable"]],
         },
         agent_of_reflectable: {
             title: "AgentOfReflectable - reflectable 维度的工程实现",

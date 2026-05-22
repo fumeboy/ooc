@@ -182,10 +182,12 @@ export class WindowManager {
     this.recordKnowledgeRefs(form);
 
     // auto-submit 判定：
-    // - args 非空（无 args 等价于 LLM 想观察 form 状态再决定，不应直接提交）
+    // - args 非空（无 args 等价于 LLM 想观察 form 状态再决定，不应直接提交）—— 但
+    //   parent 是 command_exec 时除外（refine/submit 是 atomic 命令，无需观察）
     // - next commandPaths ⊇ baseline（新 path 由 LLM 显式给出，不算"surprise"）
     // - next knowledge keys ⊆ baseline（command 自己不引入新协议知识，LLM 已知所有规则）
-    if (Object.keys(args).length > 0) {
+    const isMetaForm = parent.type === "command_exec";
+    if (Object.keys(args).length > 0 || isMetaForm) {
       const nextKnowledgeKeys = entry.knowledge
         ? Object.keys(entry.knowledge(args, "open"))
         : [];

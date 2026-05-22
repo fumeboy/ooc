@@ -262,7 +262,7 @@ function renderProgramWindowChildren(window: ProgramWindow): XmlNode[] {
   }
   // 摘要：所有 exec 的 language + ok 状态
   const summary = window.history.map((rec, idx) => {
-    const tag = rec.language === "callCommand" ? `cmd:${rec.window_id}.${rec.command}` : rec.language;
+    const tag = rec.language;
     const okFlag = rec.ok ? "ok" : "fail";
     return xmlElement(
       "exec",

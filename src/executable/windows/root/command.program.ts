@@ -2,11 +2,14 @@
  * root.program command — 创建一个 program_window 并立即执行第一次 exec。
  *
  * - submit 副作用：在 thread.contextWindows 下挂 type=program 的 window；
- *   args 中的 language+code / function+args 作为首次 exec 立即跑，结果进 history[0]
- * - 后续 exec：通过 program_window 上注册的 \`exec\` command（windows/program.ts）
+ *   args 中的 language+code 作为首次 exec 立即跑，结果进 history[0]
+ * - 后续 exec：通过 program_window 上注册的 \`exec\` command（windows/program/index.ts）
  * - 跨 exec 共享数据通道：仅 ts/js sandbox 可读写 thread.threadLocalData
  *
- * args 含完整 language+code 或 function+args 时，open 会立刻提交 form 一步执行。
+ * args 含完整 language+code 时，exec(command="program") 立即执行。
+ *
+ * 历史：旧 program 还支持 callCommand / function 模式（window_id+command 调命令），
+ * 顶层 exec tool 上线后此模式已下线（plan exec-refactor）；要调命令直接用顶层 exec tool。
  */
 
 import type {
@@ -26,32 +29,31 @@ const PROGRAM_INPUT_PATH = "internal/executable/program/input";
 const PROGRAM_FORM_STATUS_PATH = "internal/executable/program/form-status";
 
 const KNOWLEDGE = `
-program 用于执行一段代码或调用任意 ContextWindow 上的 command；submit 后产出一个
-program_window，首次 exec 立即跑完，结果进 program_window.history。后续 exec 通过
-该 window 的 \`exec\` command 触发。
+program 用于执行一段 shell / ts / js 代码；submit 后产出一个 program_window，
+首次 exec 立即跑完，结果进 program_window.history。后续 exec 通过该 window 的
+\`exec\` command 触发。
 
 参数（首次 exec）：
-- language: 可选，shell / ts / js（与 code 配合）
-- code: 模式 A 待执行代码字符串
-- window_id: 模式 B 目标 ContextWindow id（含 custom window）
-- command: 模式 B 该 window 上已注册的命令名
-- args: 模式 B 该 command 的参数对象
+- language: shell / ts / js（与 code 配合，必填）
+- code: 待执行代码字符串（必填）
 
 shell 环境变量：
 - shell 命令的 cwd 是 OOC 进程的工作目录
 - 想读写自己的 stone 目录（self.dir），用 env $OOC_SELF_DIR
 
 ts/js 上下文：
-- self.dir / self.callCommand(windowId, command, args?) / self.getData / self.setData 不变
+- self.dir / self.callCommand(windowId, command, args?) / self.getData / self.setData 可用
 - 跨 exec 共享：self.getThreadLocal(key) / self.setThreadLocal(key, value)
 - shell 之间不共享 threadLocal（OS 进程隔离），需要时自行写入 stone data
 
 后续多次执行：
-- open(parent_window_id="<program_window_id>", command="exec", args={ language, code })
+- exec(window_id="<program_window_id>", command="exec", args={ language, code })
 
 调用示例：
-open(command="program", title="统计 ts 文件数量", args={ language: "shell", code: "find src -name '*.ts' | wc -l" })
-open(command="program", title="调 custom 命令", args={ window_id: "custom:factor_workshop", command: "create_factor", args: { name: "x" } })
+exec(command="program", title="统计 ts 文件数量", args={ language: "shell", code: "find src -name '*.ts' | wc -l" })
+
+要调任意 window 上的命令请直接用顶层 \`exec\` tool（不再走 program）；
+ts/js sandbox 内仍可 \`await self.callCommand("custom:<self>", "<name>", {...})\` 编排多步调用。
 
 ## 建议
 
@@ -66,7 +68,6 @@ export enum ProgramCommandPath {
   Shell = "program.shell",
   TypeScript = "program.typescript",
   JavaScript = "program.javascript",
-  CallCommand = "program.callCommand",
 }
 
 export const programCommand: CommandTableEntry = {
@@ -75,7 +76,6 @@ export const programCommand: CommandTableEntry = {
     ProgramCommandPath.Shell,
     ProgramCommandPath.TypeScript,
     ProgramCommandPath.JavaScript,
-    ProgramCommandPath.CallCommand,
   ],
   match: (args) => {
     const hit: string[] = [ProgramCommandPath.Program];
@@ -83,18 +83,12 @@ export const programCommand: CommandTableEntry = {
     if (lang === "shell") hit.push(ProgramCommandPath.Shell);
     if (lang === "ts" || lang === "typescript") hit.push(ProgramCommandPath.TypeScript);
     if (lang === "js" || lang === "javascript") hit.push(ProgramCommandPath.JavaScript);
-    if (typeof args.window_id === "string" && typeof args.command === "string") {
-      hit.push(ProgramCommandPath.CallCommand);
-    }
     return hit;
   },
   knowledge: (args, formStatus): CommandKnowledgeEntries => {
     const entries: CommandKnowledgeEntries = { [PROGRAM_BASIC_PATH]: KNOWLEDGE };
     const lang = (args.language ?? args.lang) as string | undefined;
     const code = typeof args.code === "string" ? args.code.trim() : "";
-    const wid = typeof args.window_id === "string" ? args.window_id : undefined;
-    const cmd = typeof args.command === "string" ? args.command : undefined;
-    const fnArgs = args.args;
 
     if (formStatus === "executing") {
       entries[PROGRAM_FORM_STATUS_PATH] = "对于 command program 的 executing 状态的 form，应等待 result 写入后再继续，不要再次 refine 或 submit。";
@@ -105,21 +99,12 @@ export const programCommand: CommandTableEntry = {
       return entries;
     }
 
-    if (wid && cmd) {
-      if (fnArgs && typeof fnArgs === "object" && !Array.isArray(fnArgs)) {
-        entries[PROGRAM_INPUT_PATH] = "program.callCommand 参数已具备；submit 即创建 program_window 并执行。";
-      } else {
-        entries[PROGRAM_INPUT_PATH] = "program.callCommand 缺少 args 对象；refine(args={ window_id: \"...\", command: \"...\", args: {...} })，再 submit。";
-      }
-      return entries;
-    }
-
     if (lang && code) {
-      entries[PROGRAM_INPUT_PATH] = "program shell/ts/js 参数已具备；submit 即创建 program_window 并执行。";
+      entries[PROGRAM_INPUT_PATH] = "program 参数已具备；submit 即创建 program_window 并执行。";
       return entries;
     }
 
-    entries[PROGRAM_INPUT_PATH] = "program form 缺少可执行参数；refine(args={ language: \"shell\" | \"ts\" | \"js\", code: \"...\" }) 或 refine(args={ window_id: \"...\", command: \"...\", args: {...} })，再 submit。";
+    entries[PROGRAM_INPUT_PATH] = "program form 缺少可执行参数；refine(args={ language: \"shell\" | \"ts\" | \"js\", code: \"...\" })，再 submit。";
     return entries;
   },
   exec: (ctx) => executeProgramCommand(ctx),
@@ -128,11 +113,9 @@ export const programCommand: CommandTableEntry = {
 /** 截断 title。 */
 function deriveTitle(args: ProgramExecArgs, max = 60): string {
   const summary =
-    args.window_id !== undefined && args.command !== undefined
-      ? `cmd:${args.window_id}.${args.command}`
-      : args.language && args.code
-        ? `${args.language}: ${args.code.split("\n")[0] ?? ""}`
-        : "program";
+    args.language && args.code
+      ? `${args.language}: ${args.code.split("\n")[0] ?? ""}`
+      : "program";
   return summary.length <= max ? summary : `${summary.slice(0, max)}...`;
 }
 
@@ -151,14 +134,9 @@ export async function executeProgramCommand(
   const execArgs: ProgramExecArgs = {
     language: ctx.args.language as ProgramExecArgs["language"],
     code: ctx.args.code as string | undefined,
-    window_id: ctx.args.window_id as string | undefined,
-    command: ctx.args.command as string | undefined,
-    args: ctx.args.args as Record<string, unknown> | undefined,
   };
-  // 验证至少有一种执行模式
-  const hasCallCommand = !!(execArgs.window_id && execArgs.command);
-  if (!hasCallCommand && !(execArgs.language && execArgs.code)) {
-    return "[program] 缺少执行参数；需要 language+code 或 window_id+command(+args)。";
+  if (!(execArgs.language && execArgs.code)) {
+    return "[program] 缺少执行参数；需要 language+code。";
   }
 
   const record = await runOneExec(thread, execArgs);

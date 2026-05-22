@@ -36,69 +36,15 @@ import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../../executable/windows/_
 import type { CommandKnowledgeEntries, CommandTableEntry } from "../../executable/windows/_shared/command-types.js";
 import { getWindowTypeDefinition } from "../../executable/windows/_shared/registry.js";
 import type { CommandExecWindow, ContextWindow, IssueWindow, KnowledgeWindow, RelationWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
-import { loadObjectWindow } from "../../executable/server/loader.js";
 import { computeActivations } from "./activator.js";
 import { loadKnowledgeIndex } from "./loader.js";
 
-const PROGRAM_CALL_COMMAND_PATH = "internal/executable/program/callCommand";
 const KNOWLEDGE_BODY_BYTES = 8192;
 
 function samePaths(left: string[] | undefined, right: string[]): boolean {
   if (!left && right.length === 0) return true;
   if (!left || left.length !== right.length) return false;
   return left.every((value, index) => value === right[index]);
-}
-
-function defaultMethodKnowledge(_method: unknown): string {
-  // 旧 ServerMethod 时代的 description/params 派生已废弃；统一在 CommandTableEntry.knowledge() 里写。
-  return "";
-}
-
-async function computeProgramCallCommandKnowledge(
-  form: CommandExecWindow,
-  thread: ThreadContext,
-): Promise<string | undefined> {
-  // plan D4：program form 的 callCommand 模式 —— window_id + command 双必填
-  const windowId = form.accumulatedArgs.window_id;
-  const cmd = form.accumulatedArgs.command;
-  if (form.command !== "program" || typeof windowId !== "string" || typeof cmd !== "string") {
-    return undefined;
-  }
-  const targetWindow = thread.contextWindows.find((w) => w.id === windowId);
-  if (!targetWindow) return undefined;
-
-  // type=custom 时 lazy load ObjectWindowDefinition.commands[cmd].knowledge()
-  if (targetWindow.type === "custom" && thread.persistence) {
-    try {
-      const stoneRef = deriveStoneFromThread(thread.persistence);
-      const objectId = (targetWindow as { objectId?: string }).objectId;
-      if (!objectId) return undefined;
-      const def = await loadObjectWindow({ ...stoneRef, objectId });
-      const entry = def?.commands?.[cmd];
-      if (!entry) return undefined;
-      const cmdArgs = (form.accumulatedArgs.args as Record<string, unknown> | undefined) ?? {};
-      try {
-        const ks = entry.knowledge ? entry.knowledge(cmdArgs, form.status) : {};
-        const text = Object.values(ks).join("\n\n");
-        return text === "" ? undefined : text;
-      } catch {
-        return undefined;
-      }
-    } catch {
-      return undefined;
-    }
-  }
-  // 内置 type 通过 registry 取
-  try {
-    const entry = getWindowTypeDefinition(targetWindow.type).commands[cmd];
-    if (!entry?.knowledge) return undefined;
-    const cmdArgs = (form.accumulatedArgs.args as Record<string, unknown> | undefined) ?? {};
-    const ks = entry.knowledge(cmdArgs, form.status);
-    const text = Object.values(ks).join("\n\n");
-    return text === "" ? undefined : text;
-  } catch {
-    return undefined;
-  }
 }
 
 /**
@@ -115,13 +61,6 @@ export async function computeFormKnowledgeEntries(
   const knowledgeEntries = entry?.knowledge
     ? { ...entry.knowledge(form.accumulatedArgs, form.status) }
     : {};
-
-  const functionKnowledge = await computeProgramCallCommandKnowledge(form, thread);
-  if (functionKnowledge) {
-    knowledgeEntries[PROGRAM_CALL_COMMAND_PATH] = knowledgeEntries[PROGRAM_CALL_COMMAND_PATH]
-      ? `${knowledgeEntries[PROGRAM_CALL_COMMAND_PATH]}\n\n${functionKnowledge}`
-      : functionKnowledge;
-  }
 
   return Object.fromEntries(
     Object.entries(knowledgeEntries).filter(([, content]) => typeof content === "string" && content.trim() !== ""),

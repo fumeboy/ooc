@@ -89,10 +89,6 @@ describe("executable commands", () => {
       "program",
       "program.javascript"
     ]);
-    expect(deriveRootCommandPaths("program", { window_id: "custom:x", command: "doit" })).toEqual([
-      "program",
-      "program.callCommand"
-    ]);
   });
 
   it("should return empty array for unknown command", () => {

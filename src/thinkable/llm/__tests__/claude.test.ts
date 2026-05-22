@@ -11,7 +11,7 @@ describe("claude provider", () => {
             {
               type: "tool_use",
               id: "toolu_1",
-              name: "open",
+              name: "exec",
               input: { title: "README", type: "file" }
             }
           ]
@@ -31,7 +31,7 @@ describe("claude provider", () => {
         input: [{ type: "message", role: "user", content: "hi" }],
         tools: [
           {
-            name: "open",
+            name: "exec",
             description: "打开资源",
             inputSchema: { type: "object" }
           }
@@ -43,7 +43,7 @@ describe("claude provider", () => {
     expect(result.toolCalls).toEqual([
       {
         id: "toolu_1",
-        name: "open",
+        name: "exec",
         arguments: { title: "README", type: "file" }
       }
     ]);
@@ -56,7 +56,7 @@ describe("claude provider", () => {
       {
         type: "function_call",
         call_id: "toolu_1",
-        name: "open",
+        name: "exec",
         arguments: { title: "README", type: "file" }
       }
     ]);
@@ -165,13 +165,13 @@ describe("claude provider", () => {
           {
             type: "function_call",
             call_id: "tooluse_1",
-            name: "open",
+            name: "exec",
             arguments: { command: "talk", title: "say hi" },
           },
           {
             type: "function_call_output",
             call_id: "tooluse_1",
-            name: "open",
+            name: "exec",
             output: '{"ok":true}',
           },
           {
@@ -194,7 +194,7 @@ describe("claude provider", () => {
     expect(capturedBody.messages[1].content[0]).toEqual({
       type: "tool_use",
       id: "tooluse_1",
-      name: "open",
+      name: "exec",
       input: { command: "talk", title: "say hi" },
     });
     expect(capturedBody.messages[2].role).toBe("user");

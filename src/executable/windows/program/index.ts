@@ -23,21 +23,20 @@ const PROGRAM_WINDOW_EXEC_INPUT = "internal/windows/program/exec/input";
 const PROGRAM_WINDOW_CLOSE_BASIC = "internal/windows/program/close/basic";
 
 const EXEC_KNOWLEDGE = `
-program_window.exec 用于在已打开的 program_window 中再次执行一段代码或调用任意 ContextWindow 上的命令。
+program_window.exec 用于在已打开的 program_window 中再次执行一段 shell / ts / js 代码。
 
 参数（与 root.program 相同）：
-- language: shell / ts / js（与 code 配合）
-- code: 待执行代码字符串
-- window_id: 调任意 ContextWindow 命令时填该 window 的 id
-- command: window 上已注册的命令名
-- args: callCommand / function 模式的参数对象
+- language: shell / ts / js（与 code 配合，必填）
+- code: 待执行代码字符串（必填）
 
 每次 exec 都是独立 sandbox：
 - shell：起新进程
-- ts/js：每次新加载用户代码模块；可通过 self.getThreadLocal/setThreadLocal 跨 exec 共享数据
-- callCommand：直接走 WindowRegistry → entry.exec（每次都是 fresh 调用）
+- ts/js：每次新加载用户代码模块；可通过 self.getThreadLocal/setThreadLocal 跨 exec 共享数据；
+  ts/js 内仍可 \`await self.callCommand("custom:<self>", "<name>", {...})\` 调命令
 
 执行结果会追加到 program_window.history；窗口本身保留打开。
+
+要调任意 window 上的命令请直接用顶层 \`exec\` tool；program_window.exec 只用来跑代码。
 `.trim();
 
 const CLOSE_KNOWLEDGE = `
@@ -46,16 +45,13 @@ program_window.close 等价于 close tool；释放 window 与 history。
 `.trim();
 
 const execCommand: CommandTableEntry = {
-  paths: ["exec", "exec.shell", "exec.ts", "exec.js", "exec.callCommand"],
+  paths: ["exec", "exec.shell", "exec.ts", "exec.js"],
   match: (args) => {
     const hit: string[] = ["exec"];
     const lang = (args.language ?? args.lang) as string | undefined;
     if (lang === "shell") hit.push("exec.shell");
     if (lang === "ts" || lang === "typescript") hit.push("exec.ts");
     if (lang === "js" || lang === "javascript") hit.push("exec.js");
-    if (typeof args.window_id === "string" && typeof args.command === "string") {
-      hit.push("exec.callCommand");
-    }
     return hit;
   },
   knowledge: (args, formStatus): CommandKnowledgeEntries => {
@@ -63,11 +59,9 @@ const execCommand: CommandTableEntry = {
     if (formStatus !== "open") return entries;
     const lang = (args.language ?? args.lang) as string | undefined;
     const code = typeof args.code === "string" ? args.code.trim() : "";
-    const wid = typeof args.window_id === "string" ? args.window_id : "";
-    const cmd = typeof args.command === "string" ? args.command : "";
-    if (!(wid && cmd) && !(lang && code)) {
+    if (!(lang && code)) {
       entries[PROGRAM_WINDOW_EXEC_INPUT] =
-        "program_window.exec 缺少执行参数；refine(args={ language, code }) 或 refine(args={ window_id, command, args })。";
+        "program_window.exec 缺少执行参数；refine(args={ language, code })。";
     }
     return entries;
   },
@@ -95,13 +89,9 @@ export async function executeProgramWindowExec(
   const args: ProgramExecArgs = {
     language: ctx.args.language as ProgramExecArgs["language"],
     code: ctx.args.code as string | undefined,
-    window_id: ctx.args.window_id as string | undefined,
-    command: ctx.args.command as string | undefined,
-    args: ctx.args.args as Record<string, unknown> | undefined,
   };
-  const hasCallCommand = !!(args.window_id && args.command);
-  if (!hasCallCommand && !(args.language && args.code)) {
-    return "[program_window.exec] 缺少执行参数。submit 后 form 已 executed, 请 close(form_id) 后重新 open(parent_window_id=\"<program_window_id>\", command=\"exec\", args={ language: \"shell\"|\"ts\"|\"js\", code: \"...\" }) 或 open(..., args={ window_id: \"...\", command: \"...\", args: {...} }) 一次性给齐参数; 下次直接在 open 时附 args 可避免再次进入失败回路。";
+  if (!(args.language && args.code)) {
+    return "[program_window.exec] 缺少执行参数。请重新 exec(window_id=\"<program_window_id>\", command=\"exec\", args={ language: \"shell\"|\"ts\"|\"js\", code: \"...\" }) 一次性给齐参数。";
   }
   const record = await runOneExec(thread, args);
 
@@ -111,7 +101,6 @@ export async function executeProgramWindowExec(
       ...window,
       history: [...window.history, record],
     };
-    // 直接 mutate 更直接（manager 内部 map 已有引用）
     Object.assign(window, next);
   } else {
     window.history.push(record);

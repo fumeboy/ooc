@@ -69,6 +69,7 @@ export {
 // root 必须最先 load，因为其它 window type 的 onClose / 注册可能间接依赖 ROOT_COMMANDS
 // （目前没有此依赖，但保留这一顺序更稳妥）。
 import "./root/index.js";
+import "./command_exec/index.js";
 import "./do/index.js";
 import "./todo/index.js";
 import "./talk/index.js";

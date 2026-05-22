@@ -336,7 +336,7 @@ export function listOpenedCommands(thread: ThreadContext | undefined): string[] 
   if (!thread) return [];
   const seen: string[] = [];
   for (const e of thread.events) {
-    if (!isFnCall(e) || e.toolName !== "open") continue;
+    if (!isFnCall(e) || e.toolName !== "exec") continue;
     const cmd = (e.arguments as { command?: unknown } | undefined)?.command;
     if (typeof cmd === "string") seen.push(cmd);
   }
@@ -347,7 +347,7 @@ export function listOpenedCommands(thread: ThreadContext | undefined): string[] 
 export function usedShellProgram(thread: ThreadContext | undefined): boolean {
   if (!thread) return false;
   for (const e of thread.events) {
-    if (!isFnCall(e) || e.toolName !== "open") continue;
+    if (!isFnCall(e) || e.toolName !== "exec") continue;
     const args = (e.arguments ?? {}) as Record<string, unknown>;
     if (args.command !== "root.program") continue;
     const nested = (args.args as Record<string, unknown> | undefined) ?? {};
@@ -362,7 +362,7 @@ export function countCommandOpens(thread: ThreadContext | undefined, commandPath
   if (!thread) return 0;
   let n = 0;
   for (const e of thread.events) {
-    if (!isFnCall(e) || e.toolName !== "open") continue;
+    if (!isFnCall(e) || e.toolName !== "exec") continue;
     if ((e.arguments as { command?: unknown } | undefined)?.command === commandPath) n += 1;
   }
   return n;

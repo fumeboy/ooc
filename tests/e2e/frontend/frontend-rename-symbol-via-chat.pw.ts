@@ -69,13 +69,13 @@ test("F2 用户让 assistant 通过 chat 改文件 → fs 真改", async ({ page
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const events = (calleeThread?.events ?? []) as any[];
   const openCmds = events
-    .filter((e) => e.category === "llm_interaction" && e.kind === "function_call" && e.toolName === "open")
+    .filter((e) => e.category === "llm_interaction" && e.kind === "function_call" && e.toolName === "exec")
     .map((e) => (e.arguments?.command as string) ?? "")
     .filter(Boolean);
   const usedFileWindowEdit = openCmds.includes("file_window.edit");
   const usedWriteFile = openCmds.includes("root.write_file");
   const usedShell = events.some((e) => {
-    if (e.category !== "llm_interaction" || e.kind !== "function_call" || e.toolName !== "open") return false;
+    if (e.category !== "llm_interaction" || e.kind !== "function_call" || e.toolName !== "exec") return false;
     if (e.arguments?.command !== "root.program") return false;
     const lang = (e.arguments?.args?.language ?? e.arguments?.args?.lang) as string | undefined;
     return lang === "shell";

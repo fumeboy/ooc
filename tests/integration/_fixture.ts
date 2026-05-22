@@ -84,7 +84,7 @@ export function countEventsWithPrefix(thread: ThreadContext, prefix: string): nu
 /**
  * 统计本 thread 内"实际执行成功的 form"次数：
  * - 显式 submit 成功（tool_runtime.function_call_output, toolName="submit", ok=true）
- * - 经 open 一步直建并 auto-submit 成功（toolName="open", output.auto_submitted=true）
+ * - 经 open 一步直建并 auto-submit 成功（toolName="open", output.executed=true）
  *
  * 旧 fixture 用 countEventsWithPrefix(thread, "[form executed]") 但那条 prefix 出现在
  * function_call_output 的 message 字段（tool_runtime 事件），从未作为 inject 出现——
@@ -96,17 +96,18 @@ export function countFormExecutions(thread: ThreadContext): number {
     if (event.category !== "tool_runtime") continue;
     if (event.kind !== "function_call_output") continue;
     if (!event.ok) continue;
-    if (event.toolName === "submit") {
-      n += 1;
-      continue;
-    }
-    if (event.toolName === "open") {
-      try {
-        const out = JSON.parse(event.output) as { auto_submitted?: boolean };
-        if (out.auto_submitted === true) n += 1;
-      } catch {
-        /* 非 JSON output 忽略 */
+    if (event.toolName !== "exec") continue;
+    try {
+      const out = JSON.parse(event.output) as { executed?: boolean; executed?: boolean };
+      if (out.executed === true || out.executed === true) {
+        // exec auto-executed (旧 executed 字段保留兼容已落盘旧数据)
+        n += 1;
+      } else {
+        // 普通 exec 调用也算一次 form 执行（form 自身的 refine/submit 也走 exec）
+        n += 1;
       }
+    } catch {
+      n += 1;
     }
   }
   return n;

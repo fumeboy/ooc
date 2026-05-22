@@ -137,7 +137,7 @@ describe.skipIf(!hasLlmEnv)("integration: backend-relation-self-write-on-talk", 
       (e) =>
         e.category === "tool_runtime" &&
         e.kind === "function_call_output" &&
-        e.toolName === "open" &&
+        e.toolName === "exec" &&
         e.ok &&
         // open 的 arguments 含 command:"write_file";由于 output 是字符串,稍微宽松一点匹配
         typeof e.output === "string" &&
@@ -147,7 +147,7 @@ describe.skipIf(!hasLlmEnv)("integration: backend-relation-self-write-on-talk", 
       (e) =>
         e.category === "llm_interaction" &&
         e.kind === "function_call" &&
-        e.toolName === "open" &&
+        e.toolName === "exec" &&
         typeof e.arguments === "object" &&
         e.arguments !== null &&
         (e.arguments as Record<string, unknown>).command === "write_file" &&

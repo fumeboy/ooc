@@ -42,7 +42,7 @@ export const root: DocTreeNode = {
     - 旧：写 \`export const llm_methods = { ... }\`，LLM 通过 \`program.function\`
       间接调用 → 二等公民、无 form lifecycle、无 path 激活。
     - 新：写 \`export const window: ObjectWindowDefinition = { commands: { ... } }\`，
-      LLM 通过 \`open(parent_window_id="custom:<self>", command="<name>", ...)\`
+      LLM 通过 \`exec(window_id="custom:<self>", command="<name>", ...)\`
       直接调用 → 与 do_window/talk_window 上的命令完全同构，享受 form/refine/submit
       / path-based knowledge 激活 / submit 即执行的所有红利。
 
@@ -50,7 +50,7 @@ export const root: DocTreeNode = {
     HTTP \`callMethod\` 调用，与 LLM 路径完全解耦。
 
     Agent 自我演化的元编程闭环：
-      LLM → \`open(command="write_file", path="stones/<self>/server/index.ts", content="...")\`
+      LLM → \`exec(command="write_file", path="stones/<self>/server/index.ts", content="...")\`
         → loader 看到 mtime 变化 → ?t=mtime 强制重 import → 下一次调命令立刻看到新形态。
     `,
     named: {
@@ -126,7 +126,7 @@ export const root: DocTreeNode = {
 
               // 该 window 出现时合成的协议知识（每轮自动注入到 LLM context）
               basicKnowledge: () => \`
-            你是 factor_workshop。可用命令（通过 open(parent_window_id="custom:factor_workshop", command="<name>", args={...}) 调用）:
+            你是 factor_workshop。可用命令（通过 exec(window_id="custom:factor_workshop", command="<name>", args={...}) 调用）:
 
             | command         | 作用                       |
             |-----------------|----------------------------|
@@ -226,7 +226,7 @@ export const root: DocTreeNode = {
             **路径 A：直接 open 命令（推荐）**
 
             \`\`\`
-            open(parent_window_id="custom:<self>", command="create_factor", args={ name: "动量因子", formula: "..." })
+            exec(window_id="custom:<self>", command="create_factor", args={ name: "动量因子", formula: "..." })
             refine(form_id=..., args={ ... })   # 可选：分步填参
             submit(form_id=...)
             \`\`\`
@@ -237,7 +237,7 @@ export const root: DocTreeNode = {
             **路径 B：program.callCommand 通用元操作（脚本编排时用）**
 
             \`\`\`
-            open(command="program", args={
+            exec(command="program", args={
               window_id: "custom:<self>",
               command: "create_factor",
               args: { name: "动量因子", formula: "..." }
@@ -247,7 +247,7 @@ export const root: DocTreeNode = {
             或者在 ts/js sandbox 里编排多次调用：
 
             \`\`\`
-            open(command="program", args={
+            exec(command="program", args={
               language: "ts",
               code: \`
                 const r1 = await self.callCommand("custom:factor_workshop", "create_factor",
@@ -266,7 +266,7 @@ export const root: DocTreeNode = {
             把"调命令"统一成一个签名。
             `,
             named: {
-                "open(parent_window_id=\"custom:<self>\", ...)": "直接路径；form lifecycle 完整",
+                "exec(window_id=\"custom:<self>\", ...)": "直接路径；form lifecycle 完整",
                 "program.callCommand": "脚本编排路径；可在 ts/js sandbox 里多步调命令",
                 "self.callCommand": "ProgramSelf 上的统一入口；与 program.callCommand 共享同一行为",
             },
@@ -292,7 +292,7 @@ export const root: DocTreeNode = {
             \`\`\`
 
             把它写到 \`stones/<self>/knowledge/memory/factor-decomposition.md\`，下次
-            LLM 在 \`open(command="create_factor")\` 或与你 talk 时，系统会自动把这段
+            LLM 在 \`exec(command="create_factor")\` 或与你 talk 时，系统会自动把这段
             knowledge 注入 context。
 
             关系文件 \`knowledge/relations/<peerId>.md\`：当 thread 里出现
@@ -313,8 +313,8 @@ export const root: DocTreeNode = {
             - 他对回测耗时敏感；如果回测超过 30 分钟，先 talk 给他确认再继续
             \`\`\`
 
-            形成新认知后通过 \`open(command="write_file", path="stones/<self>/knowledge/relations/<peer>.md", content="...")\`
-            或 \`open(command="open_file") + edit\` 增量更新即可。下次再与该 peer 对话时，
+            形成新认知后通过 \`exec(command="write_file", path="stones/<self>/knowledge/relations/<peer>.md", content="...")\`
+            或 \`exec(command="open_file") + edit\` 增量更新即可。下次再与该 peer 对话时，
             文件自动作为 knowledge 出现在你的 context。
             `,
             named: {
@@ -374,7 +374,7 @@ export const root: DocTreeNode = {
             Agent 在运行中可以通过元编程自演化：
 
             \`\`\`
-            open(command="write_file",
+            exec(command="write_file",
                  path="stones/<self>/server/index.ts",
                  content="...")
             \`\`\`
@@ -382,11 +382,11 @@ export const root: DocTreeNode = {
             写完之后：
 
             1. loader 看到文件 mtime 变化 → ?t=mtime 强制重新 import
-            2. 下一次 \`open(parent_window_id="custom:<self>", command="<name>")\` 或
+            2. 下一次 \`exec(window_id="custom:<self>", command="<name>")\` 或
                \`self.callCommand(...)\` 立即看到新命令
             3. **不需要重启进程、不需要重新部署**
 
-            **增量演化更稳**：用 \`open(command="open_file", args={path:...}) + edit\`
+            **增量演化更稳**：用 \`exec(command="open_file", args={path:...}) + edit\`
             在 \`window.commands\` 字面量里追加一条 key，比每次重写整文件更安全。
 
             **演化触发场景**：

@@ -4,7 +4,7 @@ import { llmOutputFile, readThread, writeThread, type ThreadPersistenceRef } fro
 import { applyResumeTransition, canResumeThread } from "./thread-transition";
 
 type SavedToolCall = {
-  name: "open" | "refine" | "submit" | "close" | "wait" | "compress";
+  name: "exec" | "close" | "wait" | "compress";
   arguments: Record<string, unknown>;
 };
 

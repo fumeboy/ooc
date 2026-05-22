@@ -5,15 +5,15 @@
  *
  * 核心思想：
  * - 一个 thread 持有一组 ContextWindow（flat 数组，层级通过 parentWindowId 表达）
- * - 每个 window 都是"持续占 context 的实体"，对 LLM 而言行为一致：通过 5 原语 open / refine /
- *   submit / close / wait 与之交互
+ * - 每个 window 都是"持续占 context 的实体"，对 LLM 而言行为一致：通过 3 原语 exec /
+ *   close / wait 与之交互（exec 是命令调用入口；form 自身的 refine/submit 现在
+ *   是 CommandExecWindow 上注册的命令，与其它 window 命令同构）
  * - 各 window type 通过 WindowRegistry（registry.ts）声明自身注册的 command、关闭副作用与渲染规则
  *
  * 类型组织（plan §12 标准化 + 用户 #18 请求）：
  * - 每个 builtin window type 的 interface 定义在 windows/<type>/types.ts
  * - 本文件保留：BaseContextWindow / WindowType / WindowStatus / ContextWindow union /
- *   command_exec window（无独立目录）/ 公共常量与 id 工具函数 /
- *   re-export 各子目录 types.ts
+ *   公共常量与 id 工具函数 / re-export 各子目录 types.ts
  */
 
 /** Window 类型枚举；新增类型必须同步在 WINDOW_REGISTRY 中注册。 */
@@ -52,28 +52,10 @@ export interface BaseContextWindow {
   windowKnowledgePaths?: string[];
 }
 
-/**
- * Command exec form — 调用某 command 时的临时 sub-window。
- *
- * 替代旧 ActiveForm 概念；字段与 ActiveForm 一一对应。
- * command_exec 没有独立目录，因此其 interface 留在本文件。
- */
-export interface CommandExecWindow extends BaseContextWindow {
-  type: "command_exec";
-  parentWindowId: string;
-  command: string;
-  description: string;
-  accumulatedArgs: Record<string, unknown>;
-  commandPaths: string[];
-  loadedKnowledgePaths: string[];
-  commandKnowledgePaths?: string[];
-  status: "open" | "executing" | "executed";
-  result?: string;
-}
-
 // ─────────────────────────── per-type interface re-exports ────────────────────
 
 export type { RootWindow } from "../root/types.js";
+export type { CommandExecWindow } from "../command_exec/types.js";
 export type { DoWindow } from "../do/types.js";
 export type { TodoWindow } from "../todo/types.js";
 export type { TalkWindow } from "../talk/types.js";
@@ -87,6 +69,7 @@ export type { CustomWindow } from "../custom/types.js";
 
 // 用 import 形式拿到具体类型构造 ContextWindow union（type-only re-export 在 union 里不直接可见）
 import type { RootWindow } from "../root/types.js";
+import type { CommandExecWindow } from "../command_exec/types.js";
 import type { DoWindow } from "../do/types.js";
 import type { TodoWindow } from "../todo/types.js";
 import type { TalkWindow } from "../talk/types.js";
