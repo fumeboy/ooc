@@ -1052,10 +1052,10 @@ export const root: DocTreeNode = {
                                 "scope=long_term": "派给 super flow，由 super 写 pool 层 knowledge/relations",
                                 "临时 TalkWindow": "不挂到 thread 的一次性派送载体；避免 super 通道常驻 contextWindows",
                             },
-                            sources: [["src/executable/windows/relation.ts", "RelationWindow + edit command 注册与 executeRelationEdit；派送复用 src/executable/windows/talk-delivery.ts:deliverTalkMessage；scope=session 写盘 src/persistable/flow-relation.ts:writeFlowRelation"]],
+                            sources: [["src/executable/windows/relation/index.ts", "RelationWindow + edit command 注册与 executeRelationEdit；派送复用 src/executable/windows/talk-delivery.ts:deliverTalkMessage；scope=session 写盘 src/persistable/flow-relation.ts:writeFlowRelation"]],
                         },
                     },
-                    sources: [["src/executable/windows/relation.ts", "RelationWindow 与 edit command；派生函数 deriveRelationWindow / deriveRelationCompanionKnowledge 见 src/thinkable/knowledge/synthesizer.ts；flow 层文件 IO 见 src/persistable/flow-relation.ts"]],
+                    sources: [["src/executable/windows/relation/index.ts", "RelationWindow 与 edit command；派生函数 deriveRelationWindow / deriveRelationCompanionKnowledge 见 src/thinkable/knowledge/synthesizer.ts；flow 层文件 IO 见 src/persistable/flow-relation.ts"]],
                 },
             },
             patches: {
@@ -1568,7 +1568,7 @@ export const root: DocTreeNode = {
 
                     路径计算函数：objectDir / threadDir / stoneDir / sessionDir / issueFile / issueIndexFile /
                     llmInputFile / llmOutputFile / loopInputFile / loopOutputFile / loopMetaFile / poolDir
-                    （poolDir 待 src/persistable/pool-object.ts 落地）。
+                    （poolDir 在 src/persistable/pool-object.ts）。
                     `,
                     named: {
                         ".stone.json / .flow.json / .session.json / .pool.json": "四类元数据文件，标记目录类型与归属",
@@ -1643,8 +1643,7 @@ export const root: DocTreeNode = {
                         },
                     },
                     todo: [
-                        "代码层迁移：src/persistable/stone-data.ts 删除（数据迁到 flow 层；详见 persistable.flow.session_data）；knowledge 相关路径函数（knowledgeDir / memoryDir / relationsDir / relationFile / readRelation）从 stone-object.ts 迁到 pool-object.ts。",
-                        "存量数据迁移：已有 .ooc-world*/stones/<b>/objects/<id>/{knowledge/, files/} 一次性迁到 pools/objects/<id>/{knowledge/, files/}；旧 data.json 不迁（语义已变为 session-scoped，跨 session 数据不再有 stone 级载体）；写一次性 migration 命令，不悄悄做。",
+                        "存量数据迁移：已有 .ooc-world*/stones/<b>/objects/<id>/{knowledge/, files/} 通过 CLI 命令 migrate-stone-knowledge-to-pool 复制到 pools/objects/<id>/{knowledge/, files/}（命令已落地，仅复制不 git rm；用户需在 stones worktree 内手工 git rm + commit 才完整脱钩 git 追踪）。旧 data.json 不迁（语义已变为 session-scoped，跨 session 数据不再有 stone 级载体）。",
                     ],
                 },
                 "flow": {
@@ -1699,7 +1698,7 @@ export const root: DocTreeNode = {
                             - 顶层 JSON object；setData 是顶层 spread merge 而非整体覆盖（API 形状保留）。
                             - 文件不存在时 readData 返回空 object \`{}\`，getData(key) 返回 undefined。
                             - 写盘前 mkdir flow object 目录；并发写复用 flow object 级串行化键
-                              （详见 src/persistable/flow-data.ts 待落地）。
+                              （src/persistable/flow-data.ts，串行键前缀 \`flow-data:\`）。
 
                             **语义影响（升级时注意）**：
                             如果 server method 实现者历史上依赖 "在 session A 写的，session B 能读到"，
@@ -1934,10 +1933,9 @@ export const root: DocTreeNode = {
                         },
                     },
                     todo: [
-                        "代码层落地：src/persistable/pool-object.ts（PoolObjectRef + 路径函数 + bun:sqlite 连接 + WAL + connection cache）。",
-                        "migration runner 实现：复用 enqueueSessionWrite 的串行化键命名。",
-                        "ProgramSelf.getData/setData 的去 data.json 后落地形态待定（见 persistable.stone.todo）。",
-                        "存量数据迁移工具：将 .ooc-world*/stones/<b>/objects/<id>/{knowledge,files} 迁到 pools/objects/<id>/{knowledge,files}。",
+                        "pool sql runtime: bun:sqlite 连接 + WAL + connection cache（按 PoolObjectRef 复用），目前 pool-object.ts 只创建空 sql/ 目录，未做连接管理。",
+                        "migration runner 实现：扫描 stones/<self>/database/migrations/<n>_*.sql 比对 PRAGMA user_version forward-apply；通过 enqueueSessionWrite('db:'+baseDir+':'+objectId) 串行化。",
+                        "params schema 校验（与 programmable.todo 重叠）：用 stones/<self>/database/schemas/<n>.ts 同时驱动运行时校验。",
                     ],
                 },
                 "issue_files": {
@@ -2012,8 +2010,8 @@ export const root: DocTreeNode = {
                     转换:
                     - deriveStoneFromThread(threadRef): { baseDir: threadRef.baseDir, objectId: threadRef.objectId }，
                       让 program / server / 反思场景从 thread 切到 stone 视角。
-                    - derivePoolFromThread(threadRef): 同形状返回 PoolObjectRef，让 server method 切到 pool 视角访问数据。
-                      （待 src/persistable/pool-object.ts 落地。）
+                    - derivePoolFromThread(threadRef): 同形状返回 PoolObjectRef，让 server method 切到 pool 视角访问数据
+                      （src/persistable/pool-object.ts）。
 
                     设计要点:
                     - ref 是纯数据，不持有句柄；可以自由序列化、跨进程传递。
@@ -2028,7 +2026,7 @@ export const root: DocTreeNode = {
                         "StoneObjectRef": "{ baseDir, objectId } —— 定位 stone 目录",
                         "PoolObjectRef": "{ baseDir, objectId } —— 定位 pool 目录",
                         "deriveStoneFromThread": "从 thread ref 派生 stone ref",
-                        "derivePoolFromThread": "从 thread ref 派生 pool ref（待落地）",
+                        "derivePoolFromThread": "从 thread ref 派生 pool ref（src/persistable/pool-object.ts）",
                     },
                 },
             },
