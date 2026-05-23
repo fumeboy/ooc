@@ -3,7 +3,7 @@ import { runScheduler } from "../../src/thinkable/scheduler";
 import {
   createFlowObject,
   createStoneObject,
-  readData,
+  readFlowData,
 } from "../../src/persistable";
 import {
   bootstrapInboxFromPrompt,
@@ -93,8 +93,8 @@ describe.skipIf(!hasLlmEnv)("integration: multi-round-multitask", () => {
     // 3) 至少 9 个 form 被执行：4 shell + 4 ts(setData) + 1 ts(汇总) = 9，end 是第 10 个
     expect(countFormExecutions(root)).toBeGreaterThanOrEqual(9);
 
-    // 4) data.json 在 stone 目录下被反复写入，最终持有 5 个字段
-    const data = await readData({ baseDir: tempRoot, objectId: "agent" });
+    // 4) data.json 现在落 flow 层（2026-05-23 起 session-scoped），最终持有 5 个字段
+    const data = await readFlowData({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
     expect(data).toBeDefined();
     expect(data!.c_persistable).toBeTypeOf("number");
     expect(data!.c_thinkable).toBeTypeOf("number");

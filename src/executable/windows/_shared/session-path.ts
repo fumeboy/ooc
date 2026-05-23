@@ -12,6 +12,11 @@
  *   - 2026-05-21 起，stone 对象统一落在 `stones/{branch}/objects/` 子目录下，
  *     让 stones/{branch}/ 根本身可承载 world-level stone 资源
  *
+ * pools routing（2026-05-23 起）：当路径形如 `pools/<id>/...` 时，自动重写为
+ * `pools/objects/<id>/...`：
+ *   - pools 不挂 branch（事实是单向积累的；详见 meta/object.doc.ts persistable.pool.no_branch patch）。
+ *   - 已经形如 `pools/objects/...` 的路径不重写。
+ *
  * 注意：program(language="shell") 不走这里——shell 显式承诺"cwd 等于 OOC 进程的
  * 工作目录"，是 raw escape hatch（详见 src/executable/windows/root/command.program.ts 的
  * KNOWLEDGE）。
@@ -24,7 +29,8 @@ import type { ThreadContext } from "../../../thinkable/context";
  * 把 LLM 传入的路径解析为绝对路径：
  * - 绝对路径：原样返回
  * - 相对路径 + thread.persistence.baseDir 已知：相对 baseDir 解析；
- *   形如 `stones/<id>/...` 的路径自动注入当前 stonesBranch + `objects/`
+ *   形如 `stones/<id>/...` 的路径自动注入当前 stonesBranch + `objects/`；
+ *   形如 `pools/<id>/...` 的路径自动注入 `objects/`（pools 不挂 branch）
  * - 相对路径 + baseDir 未知：回退 process.cwd()（仅纯内存测试场景）
  */
 export function resolveSessionPath(thread: ThreadContext | undefined, p: string): string {
@@ -32,7 +38,8 @@ export function resolveSessionPath(thread: ThreadContext | undefined, p: string)
   const baseDir = thread?.persistence?.baseDir;
   if (!baseDir) return resolve(process.cwd(), p);
 
-  const rewritten = rewriteStonesPath(p, thread?.persistence?.stonesBranch ?? "main");
+  const stonesRewritten = rewriteStonesPath(p, thread?.persistence?.stonesBranch ?? "main");
+  const rewritten = rewritePoolsPath(stonesRewritten);
   return resolve(baseDir, rewritten);
 }
 
@@ -61,4 +68,24 @@ function rewriteStonesPath(p: string, stonesBranch: string): string {
   return `stones/${stonesBranch}/objects/${rest}`;
 }
 
-export const __testing = { rewriteStonesPath };
+/**
+ * 形如 `pools/<id>/...` 的路径中，若 `<id>` 不是已知的中间层（`objects/`），则注入
+ * `objects/` 中间层。pools 不挂 branch（事实层单向累积，不跟着 metaprog branch 切换；
+ * 详见 meta/object.doc.ts persistable.pool.no_branch patch）。
+ *
+ * 即：`pools/agent_of_x/sql/data.sqlite` → `pools/objects/agent_of_x/sql/data.sqlite`
+ *
+ * 已经形如 `pools/objects/...` 的路径直接放行（避免双重注入）。
+ */
+function rewritePoolsPath(p: string): string {
+  const norm = p.replace(/\\/g, "/").replace(/^\.\//, "");
+  if (!norm.startsWith("pools/")) return p;
+  const rest = norm.slice("pools/".length);
+  if (rest.length === 0) return p;
+  // 已经带 objects/{...}: 直接放行
+  if (rest === "objects" || rest.startsWith("objects/")) return p;
+  // 其它形态视为 LLM 写的 pools/<id>/...，注入 objects/
+  return `pools/objects/${rest}`;
+}
+
+export const __testing = { rewriteStonesPath, rewritePoolsPath };

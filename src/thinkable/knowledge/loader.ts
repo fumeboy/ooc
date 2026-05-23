@@ -1,6 +1,6 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { knowledgeDir, type StoneObjectRef } from "../../persistable";
+import { poolKnowledgeDir, type PoolObjectRef } from "../../persistable";
 import { parseKnowledgeFile } from "./parser";
 import type { KnowledgeDoc, KnowledgeIndex } from "./types";
 
@@ -8,15 +8,15 @@ import type { KnowledgeDoc, KnowledgeIndex } from "./types";
 const cache = new Map<string, { index: KnowledgeIndex; signature: string }>();
 
 /**
- * 加载 stone 的 knowledge 索引。
+ * 加载 Object 的 knowledge 索引（2026-05-23 起改读 pool 层）。
  *
- * - 第一次：递归扫 knowledge/ 下所有 .md，解析 frontmatter + body
+ * - 第一次：递归扫 `pools/objects/<id>/knowledge/` 下所有 .md，解析 frontmatter + body
  * - 后续：按 "文件路径 + mtime" 组成签名；签名未变即返回上次索引（同一对象引用）
  *
  * memory/ / relations/ 也是 knowledge 的一部分，按相对路径作为 ID（如 memory/index）。
  */
-export async function loadKnowledgeIndex(ref: StoneObjectRef): Promise<KnowledgeIndex> {
-  const root = knowledgeDir(ref);
+export async function loadKnowledgeIndex(ref: PoolObjectRef): Promise<KnowledgeIndex> {
+  const root = poolKnowledgeDir(ref);
   const files = await collectMdFiles(root);
   const signature = files
     .map((f) => `${f.path}@${f.mtime}`)

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "bun:test";
 import { buildContext, buildInputItems, type ThreadContext } from "../context";
 import { clearKnowledgeLoaderCache } from "../knowledge";
-import { createStoneObject, knowledgeDir, writeSelf } from "../../persistable";
+import { createStoneObject, createPoolObject, poolKnowledgeDir, writeSelf } from "../../persistable";
 import {
   ROOT_WINDOW_ID,
   type CommandExecWindow,
@@ -315,8 +315,9 @@ describe("buildContext knowledge synthesis (activator → knowledge_window)", ()
 
   it("renders summary entry when only show_description_when hits", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-kn-"));
-    const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
-    const root = knowledgeDir(stoneRef);
+    await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+    const poolRef = await createPoolObject({ baseDir: tempRoot, objectId: "agent" });
+    const root = poolKnowledgeDir(poolRef);
     await writeFile(
       join(root, "summary-only.md"),
       `---\ndescription: 仅描述\nactivates_on:\n  show_description_when: [program]\n---\nbody summary-only`,
@@ -338,8 +339,9 @@ describe("buildContext knowledge synthesis (activator → knowledge_window)", ()
 
   it("renders full entry with body when show_content_when hits", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-kn-"));
-    const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
-    const root = knowledgeDir(stoneRef);
+    await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+    const poolRef = await createPoolObject({ baseDir: tempRoot, objectId: "agent" });
+    const root = poolKnowledgeDir(poolRef);
     await writeFile(
       join(root, "full-doc.md"),
       `---\ndescription: 全文\nactivates_on:\n  show_content_when: [program.shell]\n---\n这是 full-doc 正文`,

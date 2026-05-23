@@ -9,7 +9,7 @@ import type { BaseContextWindow } from "../_shared/types.js";
  * - 注册的 command:`edit`(整文件替换语义);通过 args.scope 路由:
  *   - scope="session" → 直接写 flow 层 `flows/<sid>/objects/<self>/knowledge/relations/<peer>.md`
  *   - scope="long_term" → 派一条 talk message 给 super flow,由 super 写
- *     `stones/<self>/knowledge/relations/<peer>.md`(跨 session 长期生效)
+ *     `pools/<self>/knowledge/relations/<peer>.md`(跨 session 长期生效)
  * - super alias(target="super")的 talk_window 不派生 RelationWindow。
  *
  * 详见 src/executable/windows/relation/index.ts 与
@@ -30,7 +30,7 @@ export interface RelationWindow extends BaseContextWindow {
   /** peer readme.md 正文;peer 没有 stone 目录或 readme.md 缺失/IO 失败 → undefined。 */
   peerReadme?: string;
 
-  /** self long_term relation 路径:`stones/<self>/knowledge/relations/<peer>.md`。 */
+  /** self long_term relation 路径:`pools/<self>/knowledge/relations/<peer>.md`。 */
   selfLongTermPath: string;
   /** long_term 正文;文件缺失 → undefined(渲染为占位提示)。 */
   selfLongTermBody?: string;

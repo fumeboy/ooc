@@ -1,4 +1,5 @@
-import { mergeData, readData, stoneDir, type StoneObjectRef } from "../../persistable";
+import { stoneDir, type StoneObjectRef } from "../../persistable";
+import { mergeFlowData, readFlowData } from "../../persistable";
 import type { ThreadContext } from "../../thinkable/context";
 import type { ProgramSelf } from "./types";
 import { getWindowTypeDefinition } from "../windows/_shared/registry";
@@ -13,7 +14,11 @@ import type { ObjectWindowDefinition } from "./window-types";
  * - callCommand(windowId, command, args?)：在当前 thread.contextWindows 里 lookup
  *   window → 通过 WindowRegistry 取 commands[command] → exec(ctx)；type=custom
  *   时 dispatcher 会把 self 注入到 ctx.self
- * - getData/setData：读写 stone 的 data.json（顶层 merge）
+ * - getData/setData：读写 flow object 的 `data.json`
+ *   （`flows/<sid>/objects/<self>/data.json`；2026-05-23 起从 stone 迁到 flow，
+ *   详见 meta/object.doc.ts persistable.flow.session_data）。
+ *   语义变化：不再是跨 session 长期数据；要跨 session 共享请走 stone server method
+ *   写 pool/sql。无 thread.persistence 时 getData 返回 undefined / setData no-op。
  * - getThreadLocal/setThreadLocal：thread 级临时数据，跨 ts/js exec 共享
  */
 export function createProgramSelf(
@@ -66,11 +71,17 @@ export function createProgramSelf(
       return entry.exec(ctx);
     },
     async getData(key) {
-      const data = (await readData(stoneRef)) ?? {};
+      // 无 thread.persistence 时 → 没有可读的 flow data.json，返回 undefined
+      const persistence = thread.persistence;
+      if (!persistence) return undefined;
+      const data = await readFlowData(persistence);
       return data[key];
     },
     async setData(key, value) {
-      await mergeData(stoneRef, { [key]: value });
+      // 无 thread.persistence 时 → setData 静默 no-op（与 getData 对称；测试场景下不期望写盘）
+      const persistence = thread.persistence;
+      if (!persistence) return;
+      await mergeFlowData(persistence, { [key]: value });
     },
     /**
      * thread-local 数据：program_window 跨 exec 时由 ts/js sandbox 通过这里传值。

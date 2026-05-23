@@ -22,7 +22,7 @@
  * 内部的 commands / windows registry），故归位到 thinkable/knowledge。
  */
 
-import { deriveStoneFromThread, listBranchSkills, listObjectSkills, readReadme, readRelation, readFlowRelation, readIssue } from "../../persistable/index.js";
+import { deriveStoneFromThread, derivePoolFromThread, listBranchSkills, listObjectSkills, readReadme, readPoolRelation, readFlowRelation, readIssue } from "../../persistable/index.js";
 import type { ThreadContext } from "../context.js";
 import { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge.js";
 import { ROOT_BASIC_PATH, ROOT_COMMANDS, ROOT_KNOWLEDGE } from "../../executable/windows/root/index.js";
@@ -216,8 +216,9 @@ export async function collectExecutableKnowledgeEntries(
   );
   if (thread.persistence) {
     try {
-      const stoneRef = deriveStoneFromThread(thread.persistence);
-      const index = await loadKnowledgeIndex(stoneRef);
+      // 2026-05-23: knowledge 已迁到 pool 层；loader 改读 pools/objects/<id>/knowledge/。
+      const poolRef = derivePoolFromThread(thread.persistence);
+      const index = await loadKnowledgeIndex(poolRef);
       const activations = computeActivations(thread, index);
       for (const act of activations) {
         // explicit 优先；activator 重复命中同一 path 时跳过
@@ -293,13 +294,13 @@ export async function deriveRelationWindow(
   if (peerEarliest.size === 0) return [];
 
   const out: RelationWindow[] = [];
-  const selfStoneRef = { baseDir, objectId: selfId };
+  const selfPoolRef = { baseDir, objectId: selfId };
   const selfFlowRef = { baseDir, sessionId, objectId: selfId };
 
   for (const [peerId, createdAt] of peerEarliest) {
     const peerRef = { baseDir, objectId: peerId };
     const peerReadmePath = `stones/${peerId}/readme.md`;
-    const selfLongTermPath = `stones/${selfId}/knowledge/relations/${peerId}.md`;
+    const selfLongTermPath = `pools/${selfId}/knowledge/relations/${peerId}.md`;
     const selfSessionPath = `flows/${sessionId}/objects/${selfId}/knowledge/relations/${peerId}.md`;
 
     let peerReadme: string | undefined;
@@ -312,7 +313,7 @@ export async function deriveRelationWindow(
 
     let selfLongTermBody: string | undefined;
     try {
-      const text = await readRelation(selfStoneRef, peerId);
+      const text = await readPoolRelation(selfPoolRef, peerId);
       selfLongTermBody = text === undefined ? undefined : truncateKnowledgeBody(text);
     } catch (err) {
       console.debug(`[relation] long_term io_error ${peerId} msg=${(err as Error).message}`);

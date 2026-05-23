@@ -6,7 +6,7 @@
  * 注入路径：src/thinkable/knowledge/synthesizer.ts collectExecutableKnowledgeEntries
  * 触发条件：thread.persistence?.sessionId === SUPER_SESSION_ID
  *
-允许 LLM 在 super flow 里写 `stones/<self>/knowledge/memory/`
+允许 LLM 在 super flow 里写 `pools/<self>/knowledge/memory/`
  * (并允许更新 self.md / readme.md),让 caller "请帮我把 X 沉淀为记忆" 这种请求
  * 真的落到磁盘。
  *
@@ -30,10 +30,10 @@ export const REFLECTABLE_KNOWLEDGE = `
 ## 本轮该做什么
 
 1. **读 inbox 中 caller 的反思请求**,理解对方要你沉淀/调整什么
-2. **写到 \`stones/<self>/knowledge/memory/<slug>.md\`** —— 这是你的长期记忆
+2. **写到 \`pools/<self>/knowledge/memory/<slug>.md\`** —— 这是你的长期记忆
    仓库。每条记忆一个文件,slug 用 kebab-case 概括主题(如
    \`ooc-collaboration-framework.md\` / \`tool-error-handling.md\`)。
-   用 \`open(command="write_file", path="stones/<self>/knowledge/memory/<slug>.md",
+   用 \`open(command="write_file", path="pools/<self>/knowledge/memory/<slug>.md",
    content="...")\` 写入。已存在的文件可以用 open_file + edit 增量更新。
 3. 必要时(caller 明确要求改身份/对外说明) 也允许写
    \`stones/<self>/self.md\`(内部第一人称叙述)或 \`stones/<self>/readme.md\`

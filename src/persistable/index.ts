@@ -1,6 +1,29 @@
 export type { FlowObjectRef, ThreadPersistenceRef, StoneObjectRef } from "./common";
 export { objectDir, stoneDir, threadDir, deriveStoneFromThread, STONE_OBJECTS_SUBDIR } from "./common";
 
+export type { PoolObjectRef, PoolObjectMetadata } from "./pool-object";
+export {
+  POOL_OBJECTS_SUBDIR,
+  poolDir,
+  poolMetadataFile,
+  poolSqlDir,
+  poolKnowledgeDir,
+  poolKnowledgeMemoryDir,
+  poolKnowledgeRelationsDir,
+  poolKnowledgeRelationFile,
+  poolFilesDir,
+  readPoolRelation,
+  createPoolObject,
+  derivePoolFromThread,
+} from "./pool-object";
+
+export {
+  flowDataFile,
+  readData as readFlowData,
+  writeData as writeFlowData,
+  mergeData as mergeFlowData,
+} from "./flow-data";
+
 export {
   createFlowSession,
   createFlowObject,
@@ -39,14 +62,11 @@ export {
 
 export {
   createStoneObject,
-  knowledgeDir,
-  memoryDir,
-  relationFile,
-  readRelation,
-  relationsDir,
   serverDir,
   clientDir,
-  filesDir,
+  stoneDatabaseDir,
+  stoneDatabaseSchemasDir,
+  stoneDatabaseMigrationsDir,
   stoneMetadataFile,
   type StoneObjectMetadata
 } from "./stone-object";
@@ -60,7 +80,7 @@ export {
 
 export { readSelf, selfFile, writeSelf } from "./stone-self";
 export { readReadme, readmeFile, writeReadme } from "./stone-readme";
-export { dataFile, mergeData, readData, writeData } from "./stone-data";
+// stone-data 已删除（2026-05-23）：data.json 语义改为 session-scoped 落 flow（详见 ./flow-data）。
 export { readServerSource, serverIndexFile, writeServerSource } from "./stone-server";
 
 export {

@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
-import { createStoneObject, readData, writeServerSource } from "../../persistable";
+import { createStoneObject, readFlowData, writeServerSource } from "../../persistable";
 import { createProgramSelf } from "../server/self";
 import { clearServerLoaderCache } from "../server/loader";
 import type { ThreadContext } from "../../thinkable/context";
@@ -93,10 +93,17 @@ describe("createProgramSelf", () => {
     await expect(self.callCommand(customId, "nope", {})).rejects.toThrow(/不存在/);
   });
 
-  test("setData/getData round trip via mergeData", async () => {
+  test("setData/getData round trip via flow-data mergeData (session-scoped)", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-self-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
     const thread: ThreadContext = makeThread({ id: "t1" });
+    // 2026-05-23: getData/setData 现在是 session-scoped，需要 thread.persistence。
+    thread.persistence = {
+      baseDir: tempRoot!,
+      sessionId: "s1",
+      objectId: "alice",
+      threadId: "t1",
+    };
     const self = createProgramSelf(ref, thread);
 
     expect(await self.getData("counter")).toBeUndefined();
@@ -104,6 +111,19 @@ describe("createProgramSelf", () => {
     expect(await self.getData("counter")).toBe(1);
     await self.setData("counter", 2);
     expect(await self.getData("counter")).toBe(2);
-    expect(await readData(ref)).toEqual({ counter: 2 });
+    expect(await readFlowData(thread.persistence)).toEqual({ counter: 2 });
+  });
+
+  test("getData / setData no-op when thread.persistence missing", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-self-"));
+    const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
+    const thread: ThreadContext = makeThread({ id: "t1" });
+    // 故意不设 persistence
+    const self = createProgramSelf(ref, thread);
+
+    expect(await self.getData("anything")).toBeUndefined();
+    // setData no-op；不抛错
+    await self.setData("foo", "bar");
+    expect(await self.getData("foo")).toBeUndefined();
   });
 });

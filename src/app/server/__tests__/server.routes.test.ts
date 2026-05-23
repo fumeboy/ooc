@@ -263,7 +263,7 @@ describe("app server routes", () => {
     expect(escapeBody.error.code).toBe("INVALID_INPUT");
   });
 
-  test("POST /api/stones creates object with description self and readme content", async () => {
+  test("POST /api/stones creates object with self and readme content (data.json 已迁到 flow 层)", async () => {
     const { app, baseDir } = makeAppWithBaseDir();
 
     const response = await app.handle(
@@ -272,7 +272,6 @@ describe("app server routes", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name: "writer",
-          description: "Writes project notes",
           self: "# Writer\nI write notes.",
           readme: "# Writer README",
         }),
@@ -284,10 +283,11 @@ describe("app server routes", () => {
     expect(body.objectId).toBe("writer");
     expect(await readFile(join(baseDir, "stones", "main", "objects", "writer", "self.md"), "utf8")).toBe("# Writer\nI write notes.");
     expect(await readFile(join(baseDir, "stones", "main", "objects", "writer", "readme.md"), "utf8")).toBe("# Writer README");
-    const data = JSON.parse(await readFile(join(baseDir, "stones", "main", "objects", "writer", "data.json"), "utf8"));
-    expect(data.name).toBe("writer");
-    expect(data.description).toBe("Writes project notes");
-    expect((await stat(join(baseDir, "stones", "main", "objects", "writer", "knowledge", "memory"))).isDirectory()).toBe(true);
+    // 2026-05-23：stone 级 data.json 已删除；description 字段已从 schema 移除（无承载位置）。
+    // name 在没有显式 self 时会写成 self.md 首行（display_name_from_self_md 协议）；
+    // 本 case 显式传了 self，因此 self 优先。
+    // knowledge 已迁到 pool 层；createPoolObject 在 createStone 中创建。
+    expect((await stat(join(baseDir, "pools", "objects", "writer", "knowledge", "memory"))).isDirectory()).toBe(true);
   });
 
   test("POST /api/stones/:id/knowledge creates files and folders only under knowledge", async () => {
@@ -333,7 +333,8 @@ describe("app server routes", () => {
     expect(folder.status).toBe(200);
     expect(file.status).toBe(200);
     expect(update.status).toBe(200);
-    expect(await readFile(join(baseDir, "stones", "main", "objects", "researcher", "knowledge", "notes", "idea.md"), "utf8")).toBe("# Updated");
+    // 2026-05-23: knowledge 已迁到 pool 层；HTTP API 入口名保留 "knowledge"，但落点是 pools/objects/<id>/knowledge/。
+    expect(await readFile(join(baseDir, "pools", "objects", "researcher", "knowledge", "notes", "idea.md"), "utf8")).toBe("# Updated");
     expect(escape.status).toBe(400);
     expect(escapeBody.error.code).toBe("INVALID_INPUT");
   });

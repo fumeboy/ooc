@@ -5,7 +5,8 @@ import { runScheduler } from "../../src/thinkable/scheduler";
 import {
   createFlowObject,
   createStoneObject,
-  knowledgeDir,
+  createPoolObject,
+  poolKnowledgeDir,
   llmInputFile,
 } from "../../src/persistable";
 import {
@@ -36,9 +37,10 @@ describe.skipIf(!hasLlmEnv)("integration: knowledge-activation", () => {
   });
 
   test("knowledge file with show_content_when=program.shell auto-activates", async () => {
-    const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+    await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+    const poolRef = await createPoolObject({ baseDir: tempRoot, objectId: "agent" });
     const flow = await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
-    const kdir = knowledgeDir(stoneRef);
+    const kdir = poolKnowledgeDir(poolRef);
     await mkdir(kdir, { recursive: true });
     await writeFile(
       join(kdir, "shell-cheatsheet.md"),

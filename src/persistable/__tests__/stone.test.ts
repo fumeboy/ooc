@@ -5,7 +5,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { createStoneObject, stoneDir, stoneMetadataFile } from "../stone-object";
 import { readSelf, selfFile, writeSelf } from "../stone-self";
 import { readReadme, readmeFile, writeReadme } from "../stone-readme";
-import { dataFile, mergeData, readData, writeData } from "../stone-data";
 import { readServerSource, serverIndexFile, writeServerSource } from "../stone-server";
 
 let tempRoot: string | undefined;
@@ -18,22 +17,26 @@ afterEach(async () => {
 });
 
 describe("createStoneObject", () => {
-  test("creates full directory skeleton with metadata", async () => {
+  test("creates stone five-piece skeleton with metadata (2026-05-23 三分重组)", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
 
     const dir = stoneDir(ref);
+    // stone 缩水到设计五件套：server + client + database/{schemas,migrations}
     for (const sub of [
-      "knowledge",
-      "knowledge/memory",
-      "knowledge/relations",
       "server",
       "client",
-      "files"
+      "database",
+      "database/schemas",
+      "database/migrations",
     ]) {
       const stats = await stat(join(dir, sub));
       expect(stats.isDirectory()).toBe(true);
     }
+
+    // knowledge / files 不再由 createStoneObject 创建（迁到 pool 层）
+    await expect(stat(join(dir, "knowledge"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(join(dir, "files"))).rejects.toMatchObject({ code: "ENOENT" });
 
     const metadata = JSON.parse(await readFile(stoneMetadataFile(ref), "utf8"));
     expect(metadata).toEqual({ type: "stone", objectId: "alice" });
@@ -61,19 +64,7 @@ describe("stone file IO", () => {
     expect(readmeFile(ref)).toBe(join(stoneDir(ref), "readme.md"));
   });
 
-  test("data.json round trip + merge", async () => {
-    tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-"));
-    const ref = await createStoneObject({ baseDir: tempRoot, objectId: "charlie" });
-
-    expect(await readData(ref)).toBeUndefined();
-    await writeData(ref, { age: 42, city: "Beijing" });
-    expect(await readData(ref)).toEqual({ age: 42, city: "Beijing" });
-
-    await mergeData(ref, { city: "Shanghai", role: "engineer" });
-    expect(await readData(ref)).toEqual({ age: 42, city: "Shanghai", role: "engineer" });
-
-    expect(dataFile(ref)).toBe(join(stoneDir(ref), "data.json"));
-  });
+  // data.json 迁到 flow 层；详见 src/persistable/__tests__/flow-data.test.ts（待补）。
 
   test("server/index.ts round trip", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-"));

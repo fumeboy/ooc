@@ -4,13 +4,11 @@ import { callMethodApi } from "./api.call-method";
 import { createKnowledgeDirectoryApi } from "./api.create-knowledge-directory";
 import { createKnowledgeFileApi } from "./api.create-knowledge-file";
 import { createStoneApi } from "./api.create-stone";
-import { getDataApi } from "./api.get-data";
 import { getReadmeApi } from "./api.get-readme";
 import { getSelfApi } from "./api.get-self";
 import { getServerSourceApi } from "./api.get-server-source";
 import { getStoneApi } from "./api.get-stone";
 import { listStonesApi } from "./api.list-stones";
-import { patchDataApi } from "./api.patch-data";
 import { putReadmeApi } from "./api.put-readme";
 import { putKnowledgeFileApi } from "./api.put-knowledge-file";
 import { putSelfApi } from "./api.put-self";
@@ -30,8 +28,6 @@ export function stonesModule(config: Pick<ServerConfig, "baseDir" | "stonesBranc
     .use(putSelfApi(service))
     .use(getReadmeApi(service))
     .use(putReadmeApi(service))
-    .use(getDataApi(service))
-    .use(patchDataApi(service))
     .use(getServerSourceApi(service))
     .use(putServerSourceApi(service))
     .use(callMethodApi(service));

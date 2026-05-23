@@ -11,11 +11,11 @@ import type { BaseContextWindow } from "../_shared/types.js";
  *               与每个 command_exec form 的 \`knowledge()\` 派生条目；
  *               不持久化，每轮 buildInputItems / captureContextSnapshot 时合成；
  *               LLM 不可 close（\`close\` hook 会拒绝并写 inject）。
- * - activator ：stones/{id}/knowledge/*.md 经 commandPaths 命中激活的条目；
+ * - activator ：pools/objects/{id}/knowledge/*.md 经 commandPaths 命中激活的条目；
  *               同样合成、不持久化、不可 close；额外携带 presentation=full|summary。
  * - relation  ：thread.contextWindows 中存在 talk_window(target=peerId) 时,
  *               按 peerId 派生最多 2 条:peer 的 stones/{peer}/readme.md 与
- *               自己的 stones/{self}/knowledge/relations/{peer}.md(后者缺失时
+ *               自己的 pools/{self}/knowledge/relations/{peer}.md(后者缺失时
  *               合成占位 body 提示 LLM 写入)。同样不持久化、不可 close;由
  *               src/thinkable/knowledge/synthesizer.ts:deriveRelationKnowledge 派生。
  *

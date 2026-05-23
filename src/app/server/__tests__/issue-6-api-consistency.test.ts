@@ -44,12 +44,6 @@ describe("Issue #6 Bad #1: silent-fabricate", () => {
     expect(body.error.code).toBe("NOT_FOUND");
   });
 
-  test("GET /api/stones/<nonexistent>/data → 404", async () => {
-    const { app } = makeApp();
-    const res = await app.handle(new Request("http://localhost/api/stones/_test_no_such_obj/data"));
-    expect(res.status).toBe(404);
-  });
-
   test("GET /api/stones/<nonexistent>/server-source → 404", async () => {
     const { app } = makeApp();
     const res = await app.handle(new Request("http://localhost/api/stones/_test_no_such_obj/server-source"));

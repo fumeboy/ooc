@@ -1,8 +1,7 @@
 import {
   createStoneObject,
-  knowledgeDir,
-  mergeData,
-  readData,
+  createPoolObject,
+  poolKnowledgeDir,
   readReadme,
   readSelf,
   readServerSource,
@@ -128,26 +127,26 @@ export function createStonesService({ baseDir, stonesBranch }: { baseDir: string
     async createStone({
       objectId,
       name,
-      description,
       self,
       readme,
     }: {
       objectId?: string;
       name?: string;
-      description?: string;
       self?: string;
       readme?: string;
     }) {
       objectId = safeObjectId(objectId, name);
       await createStoneObject(ref(objectId));
-      if (self !== undefined) await writeSelf(ref(objectId), self);
-      if (readme !== undefined) await writeReadme(ref(objectId), readme);
-      if (name !== undefined || description !== undefined) {
-        await mergeData(ref(objectId), {
-          ...(name !== undefined ? { name } : {}),
-          ...(description !== undefined ? { description } : {}),
-        });
+      // 2026-05-23 三分重组：knowledge / files 落 pool；createStone 顺手把 pool 骨架也建起来。
+      await createPoolObject({ baseDir, objectId });
+      // self.md 协议（visible.display_name_from_self_md）：首行 = displayName。
+      // 显式 self 文本优先；否则把 name 写成首行（提供有意义的 displayName）。
+      if (self !== undefined) {
+        await writeSelf(ref(objectId), self);
+      } else if (name !== undefined) {
+        await writeSelf(ref(objectId), name);
       }
+      if (readme !== undefined) await writeReadme(ref(objectId), readme);
       return { objectId, dir: dir(objectId), created: true };
     },
     async getStone({ objectId }: { objectId: string }) {
@@ -174,15 +173,6 @@ export function createStonesService({ baseDir, stonesBranch }: { baseDir: string
       await writeReadme(ref(objectId), text);
       return { ok: true };
     },
-    async getData({ objectId }: { objectId: string }) {
-      await ensureStoneExists(objectId);
-      return { data: (await readData(ref(objectId))) ?? {} };
-    },
-    async patchData({ objectId, patch }: { objectId: string; patch: Record<string, unknown> }) {
-      await ensureStoneExists(objectId);
-      await mergeData(ref(objectId), patch);
-      return { ok: true };
-    },
     async getServerSource({ objectId }: { objectId: string }) {
       await ensureStoneExists(objectId);
       return { code: (await readServerSource(ref(objectId))) ?? "" };
@@ -195,7 +185,8 @@ export function createStonesService({ baseDir, stonesBranch }: { baseDir: string
     },
     async createKnowledgeDirectory({ objectId, path }: { objectId: string; path: string }) {
       await ensureStoneExists(objectId);
-      const root = knowledgeDir(ref(objectId));
+      // 2026-05-23: knowledge 已迁到 pool 层；HTTP 仍由 stones API 入口 expose 但落点改了。
+      const root = poolKnowledgeDir({ baseDir, objectId });
       const safePath = safeKnowledgePath(path);
       const target = ensureInside(root, join(root, safePath), { objectId, path });
       await mkdir(target, { recursive: true });
@@ -203,7 +194,7 @@ export function createStonesService({ baseDir, stonesBranch }: { baseDir: string
     },
     async createKnowledgeFile({ objectId, path, content = "" }: { objectId: string; path: string; content?: string }) {
       await ensureStoneExists(objectId);
-      const root = knowledgeDir(ref(objectId));
+      const root = poolKnowledgeDir({ baseDir, objectId });
       const safePath = safeKnowledgePath(path);
       const target = ensureInside(root, join(root, safePath), { objectId, path });
       await mkdir(dirname(target), { recursive: true });
@@ -212,7 +203,7 @@ export function createStonesService({ baseDir, stonesBranch }: { baseDir: string
     },
     async putKnowledgeFile({ objectId, path, content = "", confirmOverwrite = false }: { objectId: string; path: string; content?: string; confirmOverwrite?: boolean }) {
       await ensureStoneExists(objectId);
-      const root = knowledgeDir(ref(objectId));
+      const root = poolKnowledgeDir({ baseDir, objectId });
       const safePath = safeKnowledgePath(path);
       const target = ensureInside(root, join(root, safePath), { objectId, path });
       await ensureOverwriteAllowed(target, confirmOverwrite, { objectId, path });

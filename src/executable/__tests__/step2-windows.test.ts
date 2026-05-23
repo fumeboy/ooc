@@ -12,7 +12,7 @@ import {
   type ProgramWindow,
   type TalkWindow,
 } from "../windows/_shared/types";
-import { createStoneObject, knowledgeDir } from "../../persistable";
+import { createStoneObject, createPoolObject, poolKnowledgeDir } from "../../persistable";
 import { buildContext } from "../../thinkable/context";
 import { clearKnowledgeLoaderCache } from "../../thinkable/knowledge";
 import { makeThread } from "../../__tests__/make-thread";
@@ -151,8 +151,11 @@ describe("Step 2 window lifecycles", () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "ooc-kw-"));
     clearKnowledgeLoaderCache();
     try {
-      const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
-      const knDir = knowledgeDir(stoneRef);
+      // 2026-05-23: knowledge 已迁到 pool 层；createStoneObject 仍创建 stone 骨架，
+      // 但 knowledge 文档现在落在 pools/objects/<id>/knowledge/。
+      await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+      const poolRef = await createPoolObject({ baseDir: tempRoot, objectId: "agent" });
+      const knDir = poolKnowledgeDir(poolRef);
       await writeFile(
         join(knDir, "manual.md"),
         `---\ndescription: 手册\n---\n手册正文内容`,

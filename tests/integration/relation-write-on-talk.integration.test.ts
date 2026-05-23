@@ -31,7 +31,8 @@ import { createJobManager } from "../../src/app/server/runtime/job-manager";
 import {
   createFlowObject,
   createStoneObject,
-  relationFile,
+  createPoolObject,
+  poolKnowledgeRelationFile,
   writeReadme,
 } from "../../src/persistable";
 import { hasLlmEnv, llm, setupTempFlow } from "./_fixture";
@@ -55,7 +56,7 @@ const PROMPT = [
   '   "请审视方案 X:用 grep -l 找出所有 *.ts 文件并 wc -l 统计"',
   "3. 等 critic 回复(open talk_window.wait)",
   "4. 看完 critic 的回信后,形成对 critic 的认知,",
-  "   用 open(command=write_file, path=\"stones/assistant/knowledge/relations/critic.md\",",
+  "   用 open(command=write_file, path=\"pools/assistant/knowledge/relations/critic.md\",",
   "   content=\"...\") 把你对 critic 的认知写下来",
   "5. close talk_window 并 end thread",
   "",
@@ -75,9 +76,10 @@ describe.skipIf(!hasLlmEnv)("integration: backend-relation-self-write-on-talk", 
   });
 
   test("assistant writes relation file after talk with critic", async () => {
-    // 1) 建 assistant + critic stones;critic 的 readme 给 assistant 看
+    // 1) 建 assistant + critic stones + assistant pool;critic 的 readme 给 assistant 看
     await createStoneObject({ baseDir: tempRoot, objectId: "assistant" });
     await createStoneObject({ baseDir: tempRoot, objectId: "critic" });
+    await createPoolObject({ baseDir: tempRoot, objectId: "assistant" });
     await writeReadme({ baseDir: tempRoot, objectId: "critic" }, CRITIC_README);
 
     // 2) 建 assistant root thread,挂初始 prompt
@@ -118,7 +120,7 @@ describe.skipIf(!hasLlmEnv)("integration: backend-relation-self-write-on-talk", 
     await runScheduler(assistantThread, llm(), { maxTicks: 30 });
 
     // 4) 评分 — 检查 disk
-    const relPath = relationFile({ baseDir: tempRoot, objectId: "assistant" }, "critic");
+    const relPath = poolKnowledgeRelationFile({ baseDir: tempRoot, objectId: "assistant" }, "critic");
     let fileExists = false;
     let fileBytes = 0;
     let fileBody = "";
@@ -154,7 +156,7 @@ describe.skipIf(!hasLlmEnv)("integration: backend-relation-self-write-on-talk", 
         typeof ((e.arguments as Record<string, unknown>).args as Record<string, unknown> | undefined)?.path === "string" &&
         (
           ((e.arguments as Record<string, unknown>).args as Record<string, unknown>).path as string
-        ).includes("stones/assistant/knowledge/relations/"),
+        ).includes("knowledge/relations/"),
     );
 
     const isPlaceholderEcho = fileBody.trim().startsWith("暂无对");

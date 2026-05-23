@@ -14,10 +14,12 @@ import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   createStoneObject,
+  createPoolObject,
+  poolKnowledgeRelationFile,
   readmeFile,
-  relationFile,
   flowRelationFile,
   type StoneObjectRef,
+  type PoolObjectRef,
   type FlowObjectRef,
 } from "../../../persistable";
 import { makeThread } from "../../../__tests__/make-thread";
@@ -64,15 +66,18 @@ describe("deriveRelationWindow", () => {
   let tempRoot: string;
   let selfRef: StoneObjectRef;
   let peerRef: StoneObjectRef;
+  let selfPoolRef: PoolObjectRef;
   let selfFlowRef: FlowObjectRef;
 
   beforeEach(async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-relation-derive-"));
     selfRef = { baseDir: tempRoot, objectId: SELF };
     peerRef = { baseDir: tempRoot, objectId: PEER };
+    selfPoolRef = { baseDir: tempRoot, objectId: SELF };
     selfFlowRef = { baseDir: tempRoot, sessionId: SID, objectId: SELF };
     await createStoneObject(selfRef);
     await createStoneObject(peerRef);
+    await createPoolObject(selfPoolRef);
   });
 
   afterEach(async () => {
@@ -91,7 +96,7 @@ describe("deriveRelationWindow", () => {
     expect(out[0]!.title).toBe(`relation: ${PEER}`);
     // 路径字段:始终给出,不论文件是否存在
     expect(out[0]!.peerReadmePath).toBe(`stones/${PEER}/readme.md`);
-    expect(out[0]!.selfLongTermPath).toBe(`stones/${SELF}/knowledge/relations/${PEER}.md`);
+    expect(out[0]!.selfLongTermPath).toBe(`pools/${SELF}/knowledge/relations/${PEER}.md`);
     expect(out[0]!.selfSessionPath).toBe(`flows/${SID}/objects/${SELF}/knowledge/relations/${PEER}.md`);
   });
 
@@ -151,7 +156,7 @@ describe("deriveRelationWindow", () => {
     });
 
     test("long_term + session 都在 → 两个 body 含实际内容", async () => {
-      await writeFile(relationFile(selfRef, PEER), "我对 critic 的长期认知", "utf8");
+      await writeFile(poolKnowledgeRelationFile(selfPoolRef, PEER), "我对 critic 的长期认知", "utf8");
       await writeSessionRelation(selfFlowRef, PEER, "本 session 临时认知");
       const thread = selfThread(tempRoot, [talkTo(PEER)]);
       const out = await deriveRelationWindow(thread);

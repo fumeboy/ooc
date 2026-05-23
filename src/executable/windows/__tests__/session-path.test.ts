@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { __testing } from "../_shared/session-path";
 
-const { rewriteStonesPath } = __testing;
+const { rewriteStonesPath, rewritePoolsPath } = __testing;
 
 describe("rewriteStonesPath: stonesBranch + objects/ injection", () => {
   test("stones/<id>/foo → stones/main/objects/<id>/foo when branch is main", () => {
@@ -49,6 +49,39 @@ describe("rewriteStonesPath: stonesBranch + objects/ injection", () => {
   test("backslash separator normalized", () => {
     expect(rewriteStonesPath("stones\\agent_of_x\\self.md", "main")).toBe(
       "stones/main/objects/agent_of_x/self.md",
+    );
+  });
+});
+
+describe("rewritePoolsPath: pools/objects/ injection (no branch)", () => {
+  test("pools/<id>/foo → pools/objects/<id>/foo", () => {
+    expect(rewritePoolsPath("pools/agent_of_x/sql/data.sqlite")).toBe(
+      "pools/objects/agent_of_x/sql/data.sqlite",
+    );
+  });
+
+  test("already explicit pools/objects/<id>/... is left alone", () => {
+    expect(rewritePoolsPath("pools/objects/agent_of_x/knowledge/memory/foo.md")).toBe(
+      "pools/objects/agent_of_x/knowledge/memory/foo.md",
+    );
+  });
+
+  test("non-pools paths are not rewritten", () => {
+    expect(rewritePoolsPath("flows/super/threads/root.json")).toBe("flows/super/threads/root.json");
+    expect(rewritePoolsPath("stones/main/objects/agent_of_x/self.md")).toBe(
+      "stones/main/objects/agent_of_x/self.md",
+    );
+  });
+
+  test("'./pools/<id>' prefix is honored", () => {
+    expect(rewritePoolsPath("./pools/agent_of_x/files/foo.bin")).toBe(
+      "pools/objects/agent_of_x/files/foo.bin",
+    );
+  });
+
+  test("backslash separator normalized", () => {
+    expect(rewritePoolsPath("pools\\agent_of_x\\knowledge\\memory\\foo.md")).toBe(
+      "pools/objects/agent_of_x/knowledge/memory/foo.md",
     );
   });
 });
