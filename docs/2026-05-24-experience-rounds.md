@@ -275,10 +275,87 @@ e2e-21 [persistable]   POST /api/flows/:sid/objects/:id 不应立即入队 run-t
 
 ---
 
+## Round 5（2026-05-24）— 探索 worker 调度 / stones git-versioning / recovery-check
+
+**任务范围**：避开 Round 1-4 backlog；选 3 个深度场景。
+
+**🔥 揭示了 OOC 防御深度、HTTP-git 语义关系、worker 调度哲学三块系统性张力。**
+
+**选定场景与评分**：
+
+| 场景 | 维度 | 评分 |
+|---|---|---|
+| A. worker / jobManager 调度生命周期 | observable / executable.server | **Bad（critical）** |
+| B. stones git-versioning 全链路（programmatic API） | persistable.stone-versioning / programmable | **Bad（critical）** |
+| C. 启动期 recovery-check 全链路（broken server/index.ts） | persistable / observable | **Bad** |
+
+### Round 5 Issue 清单（新，不与 R1-4 backlog 重复）
+
+| # | 严重度 | 维度 | Issue 一句话 | 派单 |
+|---|---|---|---|---|
+| **🔥 28** | Critical | persistable | `rollback()` 不强制 `supervisorAuthor==="supervisor"`；R12 supervisor-only 仅在 LLM 命令层执行；任何 caller 可越权 rollback | AgentOfPersistable（C8 新） |
+| **🔥 29** | Critical | persistable / executable.server | R3 #12 同源新 facet：HTTP 创建 stone 不入 git → `openMetaprogWorktree` 后 worktree 看不到 stone → 元编程推荐流程第一步 ENOENT，**dogfooding 阻断** | C5 cluster 扩展 |
+| **🔥 30** | Critical | executable.server / observable | worker 对单一 waiting thread 每 100ms 入队 1 job；in-memory jobManager 无 eviction → 10 jobs/s 线性膨胀；findRunning dedupe 不覆盖 done | C9 cluster（新，worker scheduler） |
+| **🔥 31** | Critical | persistable | `pruneStaleWorktrees` 注释"启动 hygiene"但 src 无 caller（仅测试调用）；orphan worktree+branch 永远累积 | C8 cluster |
+| **🔥 32** | Critical | observable / persistable | recovery-check 空 world 无 supervisor stone → catch {} 静默吞 → broken 列表丢失 | C8 cluster + bootstrap order 决策 |
+| **33** | High | visible / executable.server | `GET /api/stones` 不暴露 unloadable 标记；前端/外部 agent 无法识别 broken stone | C4/C5 cluster |
+| **34** | High | persistable | `tryMergeSelf` 忽略 `gitWorktreeRemove` 结果（void），失败静默，与 #31 复合放大 orphan | C8 cluster |
+| **35** | High | observable | `enqueueOrphanRunningThreads` bare catch{}（worker.ts:134-136），无日志；与 R4 F2 / R4 #23 同源 silent-swallow 家族 | C6+ silent-swallow audit |
+| **36** | Medium | persistable | `openMetaprogWorktree` 同 token 重复抛 git 原文（`WORKTREE_EXISTS`）；caller 不易区分故障类型 | C8 cluster |
+| **37** | Medium | observable | recovery-check 日志只打 broken count，不打 objectId + reason；无 actionable | bootstrap 输出 polish |
+| **38** | Low | visible | `/health`（无 /api 前缀）500 而非 404 | C2 cluster（Round 2 #7 同源） |
+
+### Round 5 e2e 场景候选
+
+```
+e2e-22 [persistable]  rollback({supervisorAuthor:"alpha"}) 应在 persistable 层就被拒
+e2e-23 [persistable]  HTTP POST /api/stones → openMetaprogWorktree 应能 stat objects/<id>/self.md
+e2e-24 [executable]   单 waiting thread 60s 内入队 job 数 ≤ N (N << 600), 应有 backoff
+e2e-25 [observable]   GET /api/runtime/jobs?status=done 应支持分页 / 默认隐藏 done / 有 cap
+e2e-26 [persistable]  server 重启后 pruneStaleWorktrees 自动运行
+e2e-27 [persistable]  broken stone + 空 super → supervisor stone + super session auto-bootstrap; recovery PR-Issue 真实落盘
+e2e-28 [visible]      GET /api/stones 携带 loadable:boolean / loadError?:string
+e2e-29 [observable]   recovery-check 日志 dump broken[].objectId + reason
+```
+
+### Round 5 反向 design 反馈（**5 条，含 2 条系统性哲学张力**）
+
+| 反馈 | Supervisor 决策建议 |
+|---|---|
+| **🔥 F6 — 防御深度缺失**：SUPERVISOR 校验只在 LLM 命令层；persistable 层 rollback() 不强制；自治区边界应在最深层（persistable）强制，不能依赖入口 | **建议** patch `meta/persistable.stone-versioning`：写"R12 supervisor-only enforcement at persistable layer, not entry wrapper"原则 |
+| **🔥 F7 — HTTP 直写 vs git-versioning 结构性不一致（R3 #12 升级版）**：本轮发现后果——**整个 metaprog 协议在 dogfooding 第一步崩**。问题不是"加 commit"，是 stone lifecycle 与 git 的语义关系待拍板 | **拍板**进 `meta/programmable.method_evolution`：明确"所有 stone 写入必须走 git-versioning 通路；HTTP 是入口语法糖，语义上调用同一套底层" |
+| **🔥 F8 — silent-swallow 横切系统性问题**：R4（end({result}) 吞）+ R4 F2（子→父无回流）+ R5 (#32/#35/#34) 5+ 处同源 bare catch{} / void result | **建议**写入 `meta/object.doc.ts:observable`：新增"silent-swallow ban"约束——catch 块必须 (a) 重新抛 / (b) 写 event / (c) console.warn 至少一项；grep audit 周期 |
+| **🔥 F9 — worker 调度缺哲学**：当前是"周期扫 + 兜底入队"，把"调度发起"与"做 work 判断"耦合；waiting thread 不应被 worker 主动 enqueue | **拍板** `meta/executable.server.worker`：**事件驱动 enqueue + worker 只跑队列**（不再扫 fs）；至少加 backoff |
+| **F10 — recovery-check 假设 supervisor 已存在但空 world 没有**：第一启动永远拿不到 recovery 信号 | **拍板** `meta/engineering.harness:bootstrap`：明确"supervisor stone + super session 是 world 第一启动必备 invariant"；recovery-check 之前先 ensure |
+
+### Round 5 新增 Cluster
+
+| Cluster | sub agent | 包含 Issue | 优先级 |
+|---|---|---|---|
+| **🔥 C8 — persistable 防御深度 + worktree 生命周期** | AgentOfPersistable | #28 / #31 / #32 / #34 / #36 | 高 |
+| **🔥 C9 — worker 事件驱动调度** | AgentOfApp(server) / scheduler | #30 + F9 哲学 | 高 |
+
+---
+
+## 下一轮（Round 6）任务方向
+
+**避开 Round 1-5 backlog**（含 worker 调度 / stones git-versioning / recovery-check）。
+
+**仍未充分探索的方向**：
+
+1. **visible 前端浏览器真实视角**（playwright 或浏览器手工）— **Round 3-5 都没真碰浏览器**，URL routing / ObjectClientRenderer / layout 切换 / chat 时间线 / agent-native 双通道
+2. **stone client / flow client 双层 UI**：`stones/<id>/client/index.tsx` 与 `flows/<sid>/.../client/pages/<page>.tsx` 协作；visible 另一面
+3. **非 skill_index/talk 的 ContextWindow 类型激活**：file / search / program / issue / relation 等具体 window 的渐进激活路径
+4. **search / glob / grep / file_window 真实使用**：write_file / open_file / edit / read 多 command 链路
+5. **knowledge frontmatter activates_on 边界**：跨多个 command_path 的复杂 activation、生命周期跟随 / 永久打开
+
+---
+
 ## 历史
 
-- **Round 1（2026-05-24）**：验证 stone/pool 简化主干；4 Issue 全部修；产出 3 条设计规范
-- **Round 2（2026-05-24）**：横向探索 visible / observable / thinkable；10 Issue + 6 设计反馈 → C1/C2/C3 cluster
-- **Round 3（2026-05-24）**：Issue 协议 / programmable / visible HTTP；7 新 Issue + 5 架构反馈 → C4/C5 cluster
-- **Round 4（2026-05-24）**：reflectable 自演化 / collaborable.do_window / flow.session_data HTTP；10 新 Issue + 5 反馈，**揭示协议级 dogfooding 缺口** → C6（最高）/ C7 cluster
-- **Round 5（计划）**：visible 浏览器视角 / stones git-versioning / worker 调度 / 其他 window 类型 knowledge 激活 / recovery-check 全链路
+- **Round 1（2026-05-24）**：验证 stone/pool 简化主干；4 Issue 全部修
+- **Round 2（2026-05-24）**：visible / observable / thinkable；10 Issue + 6 反馈 → C1/C2/C3
+- **Round 3（2026-05-24）**：Issue 协议 / programmable / visible HTTP；7 新 Issue + 5 反馈 → C4/C5
+- **Round 4（2026-05-24）**：reflectable / collaborable.do / flow.session_data HTTP；10 新 Issue + 5 反馈，**协议级 dogfooding 缺口** → C6（最高）/C7
+- **Round 5（2026-05-24）**：worker 调度 / stones git-versioning / recovery-check；11 新 Issue + 5 反馈，**系统性张力 F7+F8+F9** → C8/C9
+- **Round 6（计划）**：visible 浏览器真实视角 / 非 talk/skill_index window 类型激活 / search/glob/grep 链路 / knowledge activation 边界
