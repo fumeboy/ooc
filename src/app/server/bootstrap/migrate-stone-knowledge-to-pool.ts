@@ -8,6 +8,21 @@
  * - 旧 stone 层 data.json 不迁（语义已变为 session-scoped；跨 session stone 级载体不再存在）。
  * - 报告每个 object 的 source / target 大小 + 是否成功，便于人工核对。
  *
+ * **2026-05-24 注意事项（重要）**:
+ * 自 2026-05-24 起 knowledge 改为 **seed / sediment 二分**（详见
+ * meta/object.doc.ts persistable.stone.children.seed_knowledge 与
+ * persistable.pool.children.knowledge_pool）：
+ * - seed knowledge 留在 `stones/<self>/knowledge/`，进 git review，是 Object 先天能力基底。
+ * - sediment knowledge 落在 `pools/<id>/knowledge/{memory,relations}/`，运行时沉淀，写就生效。
+ *
+ * 本 CLI **没有这种区分**——它把 stone 层全部 knowledge 都当 sediment 迁到 pool，
+ * 这是**过度操作**。迁移后用户需自行判定：
+ * - 哪些条目其实属于 **seed**（设计意图、初始能力库）→ 应迁回 stone（或在 stones worktree
+ *   内 `git rm` 并以 stone 形态的新 seed 版本提交）。
+ * - 哪些条目确实是 **sediment**（运行时沉淀、记忆、关系认知）→ 保留在 pool 即可。
+ *
+ * 这一 CLI 的存在仅为支撑 2026-05-23 那一波旧 world 升级；新建 world 不应触发它。
+ *
  * 调用方式（接到 CLI 后通过 `bun run` 入口转发）：
  *
  *   await migrateStoneKnowledgeToPool({ baseDir: "/abs/.ooc-world" });
@@ -262,7 +277,11 @@ export async function migrateStoneKnowledgeToPool(opts: MigrateOptions): Promise
   const hint =
     "Migration only copies (not removes) stone-side knowledge/ + files/. " +
     "After verifying pool data integrity, manually `git rm -r stones/<branch>/objects/<id>/{knowledge,files}` " +
-    "in each stone worktree and commit to detach for real.";
+    "in each stone worktree and commit to detach for real. " +
+    "NOTE (2026-05-24): knowledge is now split seed/sediment — this CLI treats ALL knowledge as sediment " +
+    "and migrates it to pool, which is an over-migration. After running, review each .md and decide which " +
+    "entries are actually **seed** (design intent / initial capability base) — those should be kept (or " +
+    "restored) under stones/<branch>/objects/<id>/knowledge/ (with git tracking) instead of pool.";
 
   return { baseDir, dryRun, objects, hint };
 }
@@ -308,6 +327,13 @@ export async function runMigrateCli(argv: string[]): Promise<number> {
   }
   console.log("");
   console.log(report.hint);
+  console.log("");
+  console.log(
+    "Hint: after migration, inspect each migrated .md file under " +
+      "pools/objects/<id>/knowledge/ and decide whether it is actually **seed knowledge** " +
+      "(design intent — should live in stones/<branch>/objects/<id>/knowledge/ under git) " +
+      "rather than sediment. Move seed entries back to stone; keep sediment in pool.",
+  );
   return 0;
 }
 

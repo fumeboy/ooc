@@ -55,8 +55,8 @@ describe("rewriteStonesPath: stonesBranch + objects/ injection", () => {
 
 describe("rewritePoolsPath: pools/objects/ injection (no branch)", () => {
   test("pools/<id>/foo → pools/objects/<id>/foo", () => {
-    expect(rewritePoolsPath("pools/agent_of_x/sql/data.sqlite")).toBe(
-      "pools/objects/agent_of_x/sql/data.sqlite",
+    expect(rewritePoolsPath("pools/agent_of_x/data/events.csv")).toBe(
+      "pools/objects/agent_of_x/data/events.csv",
     );
   });
 

@@ -73,7 +73,7 @@ function rewriteStonesPath(p: string, stonesBranch: string): string {
  * `objects/` 中间层。pools 不挂 branch（事实层单向累积，不跟着 metaprog branch 切换；
  * 详见 meta/object.doc.ts persistable.pool.no_branch patch）。
  *
- * 即：`pools/agent_of_x/sql/data.sqlite` → `pools/objects/agent_of_x/sql/data.sqlite`
+ * 即：`pools/agent_of_x/data/events.csv` → `pools/objects/agent_of_x/data/events.csv`
  *
  * 已经形如 `pools/objects/...` 的路径直接放行（避免双重注入）。
  */

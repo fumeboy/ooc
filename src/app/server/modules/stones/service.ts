@@ -83,10 +83,14 @@ export function createStonesService({ baseDir, stonesBranch }: { baseDir: string
   /**
    * Issue #6 Bad #4: 覆盖性写入前置校验。
    *
-   * 若目标文件已存在,要求 caller 显式带 confirm=true 才允许覆盖;否则抛
-   * OVERWRITE_REQUIRES_CONFIRM(409)。confirm=false 时若文件不存在,允许首次写入。
+   * 若目标文件已存在**且非空**,要求 caller 显式带 confirm=true 才允许覆盖;否则抛
+   * OVERWRITE_REQUIRES_CONFIRM(409)。confirm=false 时若文件不存在或为空占位,允许首次写入。
    *
    * 校验由 route 层从 `X-Overwrite-Confirm: true` header 派生 boolean 传入。
+   *
+   * 空文件等价于"未写过"（2026-05-24）：createStoneObject 现在预创 self.md / readme.md 空文件
+   * 作为 visibility-first 占位；这里把 size===0 视为等价 ENOENT 放行，对应 protection 的初衷
+   * （避免覆盖用户已经写过的内容，空占位不算内容）。
    */
   async function ensureOverwriteAllowed(
     targetFile: string,
@@ -94,12 +98,15 @@ export function createStonesService({ baseDir, stonesBranch }: { baseDir: string
     details: Record<string, unknown>,
   ): Promise<void> {
     if (confirm) return;
+    let size: number;
     try {
-      await stat(targetFile);
+      const st = await stat(targetFile);
+      size = st.size;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return; // 首次写入,放行
       throw error;
     }
+    if (size === 0) return; // 空占位（如 createStoneObject 预创）视为未写过,放行
     throw new AppServerError(
       "OVERWRITE_REQUIRES_CONFIRM",
       `PUT 会覆盖已存在的 ${targetFile} — 如果确实要覆盖, 加 header 'X-Overwrite-Confirm: true'`,

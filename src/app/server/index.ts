@@ -4,6 +4,7 @@ import { ensureStoneRepo } from "@src/persistable";
 import { readServerConfig, type ServerConfig } from "./bootstrap/config";
 import { runRecoveryCheck } from "./bootstrap/recovery-check";
 import { checkStoneToPoolMigration, reportPoolMigration } from "./bootstrap/check-pool-migration";
+import { checkStaleDatabaseDir } from "./bootstrap/check-stale-database-dir";
 import { AppServerError } from "./bootstrap/errors";
 import { healthModule } from "./modules/health";
 import { runtimeModule } from "./modules/runtime";
@@ -161,6 +162,10 @@ if (import.meta.main) {
   } catch (e) {
     console.warn(`[ooc-app-server] pool-migration check failed (non-fatal): ${e instanceof Error ? e.message : e}`);
   }
+
+  // 2026-05-24 二次简化：检测 stone 仍持有 database/ 残留子目录（2026-05-23 六件套时代遗留；
+  // sql_pool 删除后该目录已无语义）。advisory，不阻塞启动。
+  await checkStaleDatabaseDir(config.baseDir, config.stonesBranch);
 
   buildServer(config).listen(config.port);
   console.log(`[ooc-app-server] listening on :${config.port}`);

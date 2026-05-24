@@ -1,5 +1,5 @@
 /**
- * Pool 持久层 —— Object 跨 session 累积的事实数据（sql / knowledge / files 三件套）。
+ * Pool 持久层 —— Object 跨 session 累积的事实数据（data / knowledge / files 三件套）。
  *
  * 与 stone（设计层 + git）/ flow（运行层 + ephemeral）三分。pool 持久但不进 git。
  *
@@ -7,13 +7,12 @@
  *
  *   {baseDir}/pools/objects/{objectId}/
  *     .pool.json
- *     sql/data.sqlite           ← bun:sqlite 主文件（runtime 待落地）
+ *     data/<name>.csv                  ← csv-based 表数据（详见 ./csv-pool.ts）
  *     knowledge/memory/<slug>.md
  *     knowledge/relations/<peer>.md
  *     files/...
  *
- * 本文件只负责路径计算与目录骨架创建；bun:sqlite 连接 / migration runner 待
- * follow-up（详见 meta/object.doc.ts persistable.pool.todo）。
+ * 本文件负责路径计算与目录骨架创建；data 子层的读写在 ./csv-pool.ts。
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -56,11 +55,6 @@ export function poolMetadataFile(ref: PoolObjectRef): string {
   return join(poolDir(ref), ".pool.json");
 }
 
-/** pool 的 sql 顶层目录（bun:sqlite 主文件 + WAL）。 */
-export function poolSqlDir(ref: PoolObjectRef): string {
-  return join(poolDir(ref), "sql");
-}
-
 /** pool 的 knowledge 顶层目录。 */
 export function poolKnowledgeDir(ref: PoolObjectRef): string {
   return join(poolDir(ref), "knowledge");
@@ -87,6 +81,36 @@ export function poolFilesDir(ref: PoolObjectRef): string {
 }
 
 /**
+ * pool 的 data 顶层目录（csv-based 表数据；一张表 = 一个 csv 文件）。
+ *
+ * 详见 ./csv-pool.ts 与 meta/object.doc.ts persistable.pool.children.data_pool 节点。
+ */
+export function poolDataDir(ref: PoolObjectRef): string {
+  return join(poolDir(ref), "data");
+}
+
+/**
+ * 校验 csv 表名：kebab-case，首字符小写字母，仅允许 [a-z0-9-]，最多 64 字符。
+ *
+ * 严格校验是为了防 path-traversal（与 stone-versioning 中 sessionId 校验同动机）；
+ * 同时强制 kebab-case 命名习惯，避免 data/ 目录散落各种风格的文件名。
+ */
+const CSV_NAME_RE = /^[a-z][a-z0-9-]{0,63}$/;
+
+/**
+ * pool 的某张 csv 表文件路径 `data/<name>.csv`。
+ *
+ * name 必须匹配 kebab-case 约束（详见 CSV_NAME_RE 注释），否则抛错——
+ * 这层校验保护下游 fs API 不被恶意路径串入侵。
+ */
+export function poolDataFile(ref: PoolObjectRef, name: string): string {
+  if (!CSV_NAME_RE.test(name)) {
+    throw new Error(`Invalid csv name: ${name}`);
+  }
+  return join(poolDataDir(ref), `${name}.csv`);
+}
+
+/**
  * 读取 pool 对某 peer 的 relation 文件，不存在（ENOENT）返回 undefined。
  *
  * 与 stone-object 时代的 readRelation 同形态，只是基底改为 pool（2026-05-23 起 knowledge
@@ -108,15 +132,18 @@ export async function readPoolRelation(
  * 创建 pool 目录骨架 + 写入 `.pool.json`。
  *
  * 创建的子树:
- * - sql/                         ← 数据文件由 sql runtime 在首次连接时落地
+ * - data/
  * - knowledge/memory/
  * - knowledge/relations/
  * - files/
  *
- * 不预创建任何 .md / .sqlite —— 这些由 runtime / Object 后续按需写入。
+ * 不预创建任何 .md / .csv —— 这些由 runtime / Object 后续按需写入。
+ * data/ 预创为空目录，与 knowledge/relations 等子目录预创风格保持一致：
+ * Object 创建后立刻 `ls` 看见的目录骨架反映 pool 的三件套全貌（data/knowledge/files），
+ * 而不是按需懒创——后者会让"pool 有几种子能力"这个事实变得隐式。
  */
 export async function createPoolObject(ref: PoolObjectRef): Promise<PoolObjectRef> {
-  await mkdir(poolSqlDir(ref), { recursive: true });
+  await mkdir(poolDataDir(ref), { recursive: true });
   await mkdir(poolKnowledgeMemoryDir(ref), { recursive: true });
   await mkdir(poolKnowledgeRelationsDir(ref), { recursive: true });
   await mkdir(poolFilesDir(ref), { recursive: true });

@@ -17,29 +17,25 @@ afterEach(async () => {
 });
 
 describe("createStoneObject", () => {
-  test("creates stone five-piece skeleton with metadata (2026-05-23 三分重组)", async () => {
+  test("creates minimal visible skeleton: .stone.json + self.md + readme.md (2026-05-24 visibility-first)", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
 
     const dir = stoneDir(ref);
-    // stone 缩水到设计五件套：server + client + database/{schemas,migrations}
-    for (const sub of [
-      "server",
-      "client",
-      "database",
-      "database/schemas",
-      "database/migrations",
-    ]) {
-      const stats = await stat(join(dir, sub));
-      expect(stats.isDirectory()).toBe(true);
-    }
 
-    // knowledge / files 不再由 createStoneObject 创建（迁到 pool 层）
-    await expect(stat(join(dir, "knowledge"))).rejects.toMatchObject({ code: "ENOENT" });
-    await expect(stat(join(dir, "files"))).rejects.toMatchObject({ code: "ENOENT" });
-
+    // 预创的初始文件：.stone.json / self.md / readme.md
     const metadata = JSON.parse(await readFile(stoneMetadataFile(ref), "utf8"));
     expect(metadata).toEqual({ type: "stone", objectId: "alice" });
+
+    // 空文件占位：ls 可见，但 readSelf/readReadme 返回 ""（loadSelfInstructions 视 empty 等价 undefined）
+    expect(await readSelf(ref)).toBe("");
+    expect(await readReadme(ref)).toBe("");
+
+    // 不预创的子目录：server / client / knowledge / files / database
+    // 由对应 IO 函数（writeServerSource / writeStoneClientSource / seed write_file 等）按需 lazy mkdir
+    for (const sub of ["server", "client", "knowledge", "files", "database"]) {
+      await expect(stat(join(dir, sub))).rejects.toMatchObject({ code: "ENOENT" });
+    }
   });
 });
 
@@ -48,7 +44,8 @@ describe("stone file IO", () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
 
-    expect(await readSelf(ref)).toBeUndefined();
+    // createStoneObject 预创空文件占位；写入覆盖
+    expect(await readSelf(ref)).toBe("");
     await writeSelf(ref, "# Alice\n\nI am Alice.");
     expect(await readSelf(ref)).toBe("# Alice\n\nI am Alice.");
     expect(selfFile(ref)).toBe(join(stoneDir(ref), "self.md"));
@@ -58,7 +55,8 @@ describe("stone file IO", () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
 
-    expect(await readReadme(ref)).toBeUndefined();
+    // createStoneObject 预创空文件占位；写入覆盖
+    expect(await readReadme(ref)).toBe("");
     await writeReadme(ref, "Hello visitors.");
     expect(await readReadme(ref)).toBe("Hello visitors.");
     expect(readmeFile(ref)).toBe(join(stoneDir(ref), "readme.md"));

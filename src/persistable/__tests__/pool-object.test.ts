@@ -6,7 +6,6 @@ import {
   createPoolObject,
   poolDir,
   poolMetadataFile,
-  poolSqlDir,
   poolKnowledgeDir,
   poolKnowledgeMemoryDir,
   poolKnowledgeRelationsDir,
@@ -32,7 +31,6 @@ describe("pool-object: 路径函数 + createPoolObject", () => {
     const expectedRoot = join("/abs/world", "pools", POOL_OBJECTS_SUBDIR, "agent");
     expect(poolDir(ref)).toBe(expectedRoot);
     expect(poolMetadataFile(ref)).toBe(join(expectedRoot, ".pool.json"));
-    expect(poolSqlDir(ref)).toBe(join(expectedRoot, "sql"));
     expect(poolKnowledgeDir(ref)).toBe(join(expectedRoot, "knowledge"));
     expect(poolKnowledgeMemoryDir(ref)).toBe(join(expectedRoot, "knowledge", "memory"));
     expect(poolKnowledgeRelationsDir(ref)).toBe(join(expectedRoot, "knowledge", "relations"));
@@ -46,7 +44,7 @@ describe("pool-object: 路径函数 + createPoolObject", () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-pool-"));
     const ref = await createPoolObject({ baseDir: tempRoot, objectId: "alice" });
 
-    for (const sub of ["sql", "knowledge", "knowledge/memory", "knowledge/relations", "files"]) {
+    for (const sub of ["knowledge", "knowledge/memory", "knowledge/relations", "files"]) {
       const stats = await stat(join(poolDir(ref), sub));
       expect(stats.isDirectory()).toBe(true);
     }

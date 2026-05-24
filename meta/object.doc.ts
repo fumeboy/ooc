@@ -70,9 +70,9 @@ export const root: DocTreeNode = {
 
     面向对象 是基础哲学，在具体实现中，不同领域可能会有自己的 Object 去进行实现。
 
-    Agent 具有 stone、pool、flow 三种持久层（World 级三分，2026-05-23 起）:
-    - stone: 象征"静"——持有 Object 的长期身份与设计源码（self.md / readme.md / server / client / database 五件套），跨 session 共享，进 git review。
-    - pool:  象征"积"——持有 Object 跨 session 累积的事实数据（sql / knowledge / files 三件套），不进 git。
+    Agent 具有 stone、pool、flow 三种持久层（World 级三分，2026-05-23 起；2026-05-24 修订 knowledge 分工 + 删 sql 改 csv）:
+    - stone: 象征"静"——持有 Object 的长期身份与设计源码（self.md / readme.md / server / client / knowledge 五件套），跨 session 共享，进 git review。其中 \`knowledge/\` 是 **seed knowledge**（人类设计的初始知识库），可挂 eval gate。
+    - pool:  象征"积"——持有 Object 跨 session 累积的事实数据（data / knowledge / files 三件套），不进 git。data 用 csv（不用 sql；详见 persistable.pool.children.data_pool）；knowledge 是 **sediment knowledge**（运行时由 reflectable / collaborable 沉淀的 memory / relations）。
     - flow:  象征"动"——一个 Object 可以参与多个 session，每个 session 下有一个 flow，每个 flow 都有自己的 session 级数据字段和程序方法。
 
     Agent 由几个维度组合:
@@ -96,9 +96,11 @@ export const root: DocTreeNode = {
         "programmable": "OOC Agent 由几个维度组合，programmable 是其中之一，定义 Agent 持有/演化自身函数方法库的能力",
         "visible": "OOC Agent 由几个维度组合，visible 是其中之一，定义 Agent 持有/演化自身 UI 页面的能力",
         "persistable": "OOC Agent 由几个维度组合，persistable 是其中之一，定义 Agent 的持久化存储能力",
-        "stone": "OOC 持久层之一（静）：长期身份与设计源码，进 git review",
-        "pool": "OOC 持久层之一（积）：跨 session 累积的事实数据，不进 git",
+        "stone": "OOC 持久层之一（静）：长期身份与设计源码（含 seed knowledge），进 git review",
+        "pool": "OOC 持久层之一（积）：跨 session 累积的事实数据（含 sediment knowledge），不进 git",
         "flow": "OOC 持久层之一（动）：session 级临时数据与程序",
+        "seed knowledge": "人类在 stone 中预置的初始知识库（stones/<self>/knowledge/）；进 git review，可挂 eval gate",
+        "sediment knowledge": "Agent 运行时由 reflectable / collaborable 沉淀的知识（pools/<id>/knowledge/memory + relations）；写就生效，不进 git",
     },
     children: {
         "thinkable": {
@@ -297,12 +299,22 @@ export const root: DocTreeNode = {
                     - 显式 open_knowledge 时，把某篇知识作为 knowledge_window 打开。
 
                     这样可以避免所有知识一股脑进入 Context，控制 token 体积，同时让 LLM 在需要时获得足够指导。
+
+                    Knowledge 的两个来源（2026-05-24 起 seed / sediment 二分，详见 persistable.stone.children.seed_knowledge 与 persistable.pool.children.knowledge_pool）:
+                    - **seed knowledge**: \`stones/<self>/knowledge/<slug>.md\`——人类设计的初始知识库，进 git review、可挂 eval gate。
+                    - **sediment knowledge**: \`pools/objects/<self>/knowledge/{memory,relations}/\`——运行时由 reflectable / collaborable 自动沉淀，不进 git。
+
+                    synthesizer **双源扫描**：seed 与 sediment 都被加载，frontmatter + activates_on 协议统一；
+                    LLM 看到的不分来源（只看到激活后的 knowledge_window 正文）。
                     `,
                     named: {
                         "frontmatter": "markdown 文档头部的结构化元信息",
                         "activates_on": "knowledge 声明自身何时进入 Context 的激活规则",
                         "command path": "某个 command 的语义路径，如 talk.continue、talk.relation_update、program",
                         "knowledge_window": "把 knowledge 正文作为 ContextWindow 展示给 LLM 的窗口",
+                        "seed knowledge": "stones/<self>/knowledge/，人类设计的初始知识库；进 git review",
+                        "sediment knowledge": "pools/<id>/knowledge/{memory,relations}/，运行时沉淀；不进 git",
+                        "双源扫描": "synthesizer 同时扫 stone seed 与 pool sediment，统一渐进激活",
                     },
                     patches: {
                         "activation_scope": {
@@ -1001,8 +1013,8 @@ export const root: DocTreeNode = {
 
                     **两层文件 (long_term × session)**:
                     - long_term: \`pools/objects/<self>/knowledge/relations/<peer>.md\` —— 跨 session 长期认知；
-                      只能由 super flow 写入（保 reflectable 元编程闭环）。落在 pool 而非 stone：knowledge 是事实型数据，
-                      不进 git review/rollback；详见 persistable.pool。
+                      只能由 super flow 写入（保 reflectable 元编程闭环）。落在 pool 而非 stone：relation 是 sediment knowledge
+                      （运行时沉淀的事实），写就生效不进 git review/rollback；与 stone 中的 seed knowledge 二分。详见 persistable.pool。
                     - session: \`flows/<sid>/objects/<self>/knowledge/relations/<peer>.md\` —— 本 session 临时认知；
                       由 relation_window.edit(scope="session") 直接落盘，不污染长期 relations。
 
@@ -1264,16 +1276,23 @@ export const root: DocTreeNode = {
             Object 可以反思自己、沉淀经验、修改自身的知识与方法。
             OOC 不为此专门设一套"反思 API"，而是复用既有协作设施 —— 通过一个名为
             "super" 的特殊 session 把 Object 引到一条专用反思线程上，在那里改写自身
-            stone（self.md / readme.md）与 pool（knowledge/memory、knowledge/relations）。
-            下一轮新 thread 自动看见这些落盘的新内容，行为随之自我演化。
+            stone 中的身份文件（self.md / readme.md）与 pool 中的 sediment knowledge
+            （pools/<self>/knowledge/memory / relations）。下一轮新 thread 自动看见这些落盘的新内容，
+            行为随之自我演化。
+
+            注意 stone 中的 **seed knowledge**（\`stones/<self>/knowledge/\`，人类设计的初始知识库）
+            **不在 super flow 默认写入面**——它与 server / client 同属高赌注设计变更，
+            走 stone-versioning 的 PR-Issue 流程（可挂 eval gate）。reflectable 只动 sediment（运行时沉淀），
+            不直接改 seed（先天能力基底）。
 
             核心组成:
             1. super session: 受保护的 sessionId（"super"），表示 Object 的反思通道。
             2. super alias target: talk_window.target === "super" 时被 talk-delivery 翻译为指向自己的 super 分身。
             3. Reflectable protocol knowledge: 当 thread.persistence.sessionId === "super" 时，synthesizer 自动注入 REFLECTABLE_KNOWLEDGE。
-            4. memory 写入: super flow 中允许写自身 stone 的身份文件（self.md / readme.md）与 pool 的长期知识
+            4. memory 写入: super flow 中允许写自身 stone 的身份文件（self.md / readme.md）与 pool 的 sediment knowledge
                （pools/objects/<self>/knowledge/memory/*.md、pools/objects/<self>/knowledge/relations/*.md）。
-               注意 knowledge 已从 stone 迁到 pool（不再进 git review），身份文件仍在 stone（进 git review）。
+               注意 sediment knowledge 不进 git review（事实型，写就生效）；身份文件仍在 stone 进 git review；
+               seed knowledge（stones/<self>/knowledge/）不在 super flow 默认面。
             5. 元编程范围分工: reflectable 提供"为什么 / 何时 / 在哪条线程上"做元编程的协议；
                具体可改的对象由 programmable（函数方法库）与 visible（UI 页面）两个维度承担。
 
@@ -1285,8 +1304,8 @@ export const root: DocTreeNode = {
                 "super session": "受保护的 sessionId='super'，承载 Object 的反思线程",
                 "super alias target": "talk_window.target='super'，翻译为指向自身的 super 分身",
                 "REFLECTABLE_KNOWLEDGE": "进入 super flow 时自动注入的协议知识；告诉 LLM 反思场景该做什么",
-                "memory": "pools/objects/<self>/knowledge/memory/<slug>.md，Object 的长期记忆仓库（从 stone 迁来）",
-                "metaprogramming": "通过 write_file 把新认知 / 新方法落到自己的 stone（身份/源码）或 pool（知识/事实），下一轮自动生效",
+                "memory": "pools/objects/<self>/knowledge/memory/<slug>.md，Object 运行时沉淀的长期记忆（sediment）；与 stone 中的 seed knowledge 配对",
+                "metaprogramming": "通过 write_file 把新认知 / 新方法落到自己的 stone（身份/源码）或 pool（sediment 知识 / 事实），下一轮自动生效；seed knowledge 改动走 PR-Issue",
             },
             children: {
                 "super_session": {
@@ -1372,11 +1391,13 @@ export const root: DocTreeNode = {
                     - stones/<self>/readme.md: 对外公开自述（caller 明确要求改对外说明时）。
 
                     禁止动的路径（不在 super flow 的工作范围内）:
-                    - stones/<self>/server/ / client/ / database/ / .stone.json
-                      （schema/migration 演化是高赌注，需走 stone-versioning 的 PR-Issue 流程；不由 super flow 直接改）
+                    - stones/<self>/server/ / client/ / .stone.json
+                      （源码演化是高赌注，需走 stone-versioning 的 PR-Issue 流程；不由 super flow 直接改）
+                    - stones/<self>/knowledge/（**seed knowledge** 设计层；与 server / client 同级，
+                      走 stone-versioning 的 PR-Issue 流程 + eval gate；不由 super flow 直接改）
                     - 任何业务 session 下的 thread.json
                     - 业务代码（program shell / file_window.edit 业务文件）
-                    - pool 的 sql/ 与 files/（业务数据由 stone server method 维护，不由反思直接写）
+                    - pool 的 data/ 与 files/（业务数据由 stone server method 维护，不由反思直接写）
 
                     写入方式: 通过 exec(command="write_file", path="...", content="...") 命令；
                     已存在的文件可用 open_file + edit 增量更新。
@@ -1384,8 +1405,9 @@ export const root: DocTreeNode = {
                     named: {
                         "memory/<slug>.md": "长期记忆条目；一条记忆一个文件",
                         "kebab-case slug": "用短横线小写连字概括主题的命名风格",
-                        "knowledge in pool": "knowledge/memory/* 与 knowledge/relations/* 落 pool（事实型，不进 git）",
+                        "sediment in pool": "knowledge/memory/* 与 knowledge/relations/* 落 pool（事实型，不进 git）",
                         "self.md / readme.md in stone": "身份文件留 stone（设计型，进 git review）",
+                        "seed not in super flow": "stones/<self>/knowledge/ 是 seed knowledge，不在 super flow 默认写入面；走 PR-Issue + eval",
                     },
                 },
                 "metaprogramming": {
@@ -1404,11 +1426,15 @@ export const root: DocTreeNode = {
                     Reflectable 只负责"为什么 / 何时 / 在哪条线程上"做元编程，不定义"改的东西具体是什么形状":
                     - 修改自身函数方法（server method library 的形状、加载、调用约定、版本演化）→ 见 programmable 维度。
                     - 修改自身 UI 页面（stone client / flow client/pages 的形状、agent-native 访问）→ 见 visible 维度。
-                    - 修改自身知识 / 身份（stones/<self>/self.md/readme.md 与 pools/objects/<self>/knowledge/）→ 这是 reflectable 默认覆盖的范围，
+                    - 修改自身身份与 sediment knowledge（stones/<self>/self.md/readme.md 与
+                      pools/objects/<self>/knowledge/{memory,relations}/）→ 这是 reflectable 默认覆盖的范围，
                       因为它们直接喂回 thinkable 的 context，闭环最短。
+                    - 修改 seed knowledge（stones/<self>/knowledge/）→ **不在 reflectable 默认面**；
+                      与 server / client 同级走 stone-versioning 的 PR-Issue 流程（先天能力基底应过 review + eval）。
 
-                    因此 super flow 的典型工作是写知识/身份/记忆/关系记录；如果 caller 显式请求改 server / client / database schema，
-                    需要走 programmable / visible 定义的演化路径或 stone-versioning 的 PR-Issue 流程（详见对应维度的 patches）。
+                    因此 super flow 的典型工作是写身份 / sediment 记忆 / 关系记录；如果 caller 显式请求改
+                    server / client / seed knowledge，需要走 programmable / visible 定义的演化路径或
+                    stone-versioning 的 PR-Issue 流程（详见对应维度的 patches）。
                     `,
                     named: {
                         "self-evolution loop": "通过 super flow 写自身 stone，让下一轮行为自动演化",
@@ -1438,12 +1464,12 @@ export const root: DocTreeNode = {
                     - 开任何 do command 派生子任务去执行业务。
 
                     super flow 默认仅写 stone 中的 self.md / readme.md（身份）与 pool 中的
-                    knowledge/memory/* / knowledge/relations/*（长期事实）。
-                    如果 caller 明确请求修改自身函数方法、UI 页面或 schema，应走对应维度定义的演化路径:
+                    sediment knowledge（knowledge/memory/* / knowledge/relations/*，长期事实）。
+                    如果 caller 明确请求修改自身函数方法、UI 页面或 seed knowledge，应走对应维度定义的演化路径:
                     - 编辑 stones/<self>/server/index.ts → 见 programmable.method_evolution。
                     - 编辑 stones/<self>/client/index.tsx 或 flow client/pages/*.tsx → 见 visible.client_evolution。
-                    - 编辑 stones/<self>/database/schemas|migrations → 走 stone-versioning 的 PR-Issue 流程
-                      （schema 演化是高赌注，不在 super flow 默认面）。
+                    - 编辑 stones/<self>/knowledge/<slug>.md（**seed knowledge**）→ 走 stone-versioning 的 PR-Issue 流程
+                      （seed 是 Object 的"先天能力基底"，改动应过 review + eval gate；详见 persistable.stone.children.seed_knowledge）。
 
                     如果 caller 请求模糊到无法形成具体记忆条目，允许"已收到反思请求，本轮无新认知形成" + end，
                     但这是最低限度的兜底，不应作为默认动作。
@@ -1463,11 +1489,12 @@ export const root: DocTreeNode = {
             核心组成（**三层而非二分**，2026-05-23 起）:
             1. world root: \`{baseDir}/\`，包含 \`stones/\` / \`pools/\` / \`flows/\` 三棵子树。
             2. stone tree: 设计层（持久 + git 版本化）。\`stones/{branch}/objects/<objectId>/\` 持有
-               per-Object 长期身份与设计源码（self.md / readme.md / server / client / database 五件套）；
+               per-Object 长期身份与设计源码（self.md / readme.md / server / client / knowledge 五件套）；
                未来挂在 \`stones/{branch}/\` 根的是 world-level 持久资源。
-            3. pool tree: 事实层（持久 + 不版本化）。\`pools/objects/<objectId>/\` 持有 per-Object
-               跨 session 累积的事实数据（sql / knowledge / files 三件套）。pool 不挂 branch，
-               因为事实是单向积累的（详见 children/pool）。
+            3. pool tree: 事实层（持久 + 不版本化）。两类挂载（2026-05-24 拓宽）:
+               - \`pools/objects/<objectId>/\`：per-Object 事实（data csv / knowledge / files 三件套）
+               - \`pools/repos/<repo-name>/\`：World 级共享的外部 git repo（工作中涉及的所有外部 repo 统一管理）
+               pool 不挂 metaprog branch，因为事实是单向积累的（详见 children/pool）。
             4. flow tree: 运行层（ephemeral）。\`flows/{sessionId}/\` 既有 \`objects/<objectId>/\`
                （per-Object 在该 session 的工作产物）也有 session 级共享文件（如 \`issues/\`）。
             5. ref 抽象: FlowObjectRef / ThreadPersistenceRef / StoneObjectRef / PoolObjectRef。
@@ -1514,24 +1541,24 @@ export const root: DocTreeNode = {
                               readme.md              ← 对外公开介绍
                               server/index.ts        ← stone server 源码
                               client/index.tsx       ← stone client 源码
-                              database/              ← pool/sql 的 schema 设计层（2026-05-23）
-                                schemas/<n>.ts       ← TS 类型定义
-                                migrations/<n>_*.sql ← forward-only 迁移
+                              knowledge/             ← seed knowledge：人类预置的初始知识库（2026-05-24）
+                                <slug>.md            ← frontmatter + activates_on 渐进激活协议
                           # （未来：world-level 资源放在 stones/<branch>/ 根本身，
                           #   与 objects/ 子目录物理分离）
                       pools/                         ← 事实层（持久 + 不版本化；2026-05-23 引入）
-                        objects/
+                        objects/                     ← per-Object 事实
                           <objectId>/
                             .pool.json               ← pool 元数据
-                            sql/
-                              data.sqlite            ← bun:sqlite 主文件（WAL 模式）
-                              data.sqlite-wal
-                              data.sqlite-shm
-                            knowledge/               ← 从 stone 迁来
+                            data/                    ← 结构化数据（csv 格式；2026-05-24 起替代 sql）
+                              <name>.csv             ← 一张表 = 一个 csv 文件；首行 header，后续行记录
+                            knowledge/               ← sediment-only（运行时沉淀；seed 在 stone）
                               memory/<slug>.md       ← 长期记忆（reflectable 写入位置）
-                              relations/<peer>.md    ← long_term 关系认知
-                              ...其它 markdown 知识
-                            files/                   ← 任意文件（二进制 / 大体量 / sql 行外 blob）
+                              relations/<peer>.md    ← long_term 关系认知（collaborable 写入位置）
+                            files/                   ← 任意文件（二进制 / 大体量 / 非结构化 blob）
+                        repos/                       ← World 级共享外部 git repo（2026-05-24）
+                          <repo-name>/               ← 外部 repo 工作面；自带 .git；详见 children/repos_pool
+                            .git/
+                            ...working tree
                       flows/                         ← 运行层（ephemeral）
                         <sessionId>/
                           .session.json              ← session 元数据（type='flow-session', sessionId, title）
@@ -1586,64 +1613,109 @@ export const root: DocTreeNode = {
                     persistable.pool）；轨迹数据落 flow。这条边界让 stone-versioning 的 git review / PR-Issue
                     只看见真正值得审核的演化，而不是被 memory 写入这类高频脏 commit 淹没。
 
-                    子项与用途:
+                    子项与用途（五件套）:
                     - self.md (stone-self.ts): 对内身份；readSelf / writeSelf；buildInputItems 时读取并注入 LlmGenerateParams.instructions。
                     - readme.md (stone-readme.ts): 对外公开介绍；其它 Object 在 collaborable.relation_window 的伴随 KnowledgeWindow 中会读到。
                     - server/index.ts (stone-server.ts): stone server 源码；readServerSource / writeServerSource，自动 mkdir。
                     - client/index.tsx (stone-client.ts): stone client 源码；readStoneClientSource / writeStoneClientSource。
-                    - database/ (新增): pool 中 sql 数据的 schema 设计层；详见 children/database。
+                    - knowledge/ (2026-05-24 重纳): **seed knowledge**——人类设计的初始知识库；
+                      与 pool 中的 sediment knowledge (memory / relations) 二分。seed 是 Object 的"先天能力基底"，
+                      进 git review、可挂 eval gate；sediment 是运行时沉淀的事实，写就生效不进 git。详见 children/seed_knowledge。
 
-                    createStoneObject 创建完整目录骨架 + 写 .stone.json，但不写 self.md / readme.md / server/index.ts ——
-                    这些由 Object 后续主动写入。
+                    **逻辑契约 vs 物理骨架（2026-05-24 三次修订，visibility-first）**:
 
-                    **历史变更（2026-05-23）**：
-                    - 移除 \`data.json\`：去掉这个介于"配置"和"小记录"之间的暧昧形态；小数据要么进 pool/sql，要么进 pool/knowledge md。
-                    - 移除 \`knowledge/\` 子树：迁到 pool（事实型数据不该跟 git 走）。原 stones/<self>/knowledge/memory|relations/
-                      迁到 pools/objects/<self>/knowledge/memory|relations/。
-                    - 移除 \`files/\` 子树：迁到 pool 顶层 files/（与 sql 行外 blob 共享一个家）。
-                    - 新增 \`database/\` 子目录：作为 pool/sql 数据的 schema 源码层（schemas/ TS 类型 + migrations/ forward-only SQL）。
+                    "五件套" 是 **逻辑契约**——这 5 类内容可能存在于 stone 中，每类有明确语义角色。
+                    但 \`createStoneObject\` 的**物理骨架**只预创 3 件可见小文件，其余按需 lazy mkdir:
+
+                    | 类别 | 由 createStoneObject 预创？ | 实际创建时机 |
+                    |---|---|---|
+                    | .stone.json | ✓ | createStoneObject |
+                    | self.md | ✓（**空文件占位**） | createStoneObject |
+                    | readme.md | ✓（**空文件占位**） | createStoneObject |
+                    | server/ | ✗ | 首次 writeServerSource（自带 mkdir） |
+                    | client/ | ✗ | 首次 writeStoneClientSource（自带 mkdir） |
+                    | knowledge/ | ✗ | 首次 seed knowledge write_file（按需） |
+
+                    理由（visibility-first）:
+                    - 预创 self.md / readme.md 空文件：让 \`ls stoneDir\` 立刻看到完整形态；
+                      readSelf / readReadme 返回 ""，被 loadSelfInstructions 等消费者
+                      视为 empty 等价 undefined（语义零变更）。displayName 由 Object 后续主动 writeSelf 时设置。
+                    - 不预创 server/ / client/ / knowledge/：空目录"骨架不全"的视觉噪音 > 预创价值；
+                      对应 writer 都自带 mkdir 兜底，按需创建零成本。
+
+                    **历史变更**:
+                    - **2026-05-23**：移除 \`data.json\`（去掉介于"配置"和"小记录"之间的暧昧形态）；
+                      移除 \`files/\` 子树（迁到 pool 顶层 files/）。
+                    - **2026-05-24（一次修订）**：重组 \`knowledge/\` 子树为 seed / sediment 两层。
+                      - sediment（运行时沉淀，memory / relations）迁到 \`pools/objects/<self>/knowledge/memory|relations/\`；写就生效，不进 git。
+                      - seed（人类设计的初始知识库）保留在 stone 顶层 \`stones/<self>/knowledge/<slug>.md\`；
+                        进 git review，可挂 eval gate（详见 children/seed_knowledge）。
+                    - **2026-05-24（二次修订，简化）**：删除 \`database/\` 子目录。
+                      - 起因：pool sql + bun:sqlite + forward-only migration 协议过于复杂；OOC 当前阶段用不到
+                        这个工程化重量级。删 sql、改用 **csv** 作为结构化数据载体（pool/data/<name>.csv），
+                        实现用现有文件操作即可——见 persistable.pool.children.data_pool。
+                      - 由于 csv 没有 schema migration 概念（列变了直接改文件），stone 不再需要 database/ 作为 schema 设计层。
+                      - 未来真有 sql 工程化需求时再重新引入，但当前保持精简。
+                    - **2026-05-24（三次修订，visibility-first）**：\`createStoneObject\` 物理骨架精化为
+                      "只预创 .stone.json + self.md + readme.md 三个可见小文件"；server/ / client/ / knowledge/
+                      由对应 writer 按需 lazy mkdir。理由：避免"骨架不全"误判，让 UI 立刻有显示名。
                     `,
                     named: {
                         "self.md / readme.md": "stone 的身份 + 公开介绍两件套",
                         "stone server / client": "stone 自带的服务端 / 客户端源码",
-                        "database/": "stone 内 pool/sql 的 schema 源码层（schemas/ TS 类型 + migrations/ forward-only SQL）",
-                        "createStoneObject": "创建 stone 骨架的函数；不写入业务内容文件",
+                        "knowledge/": "stone 内 seed knowledge：人类设计的初始知识库；进 git review、可挂 eval gate",
+                        "seed vs sediment": "seed 在 stone（设计型，review）vs sediment 在 pool（运行时，写就生效）",
+                        "createStoneObject": "创建 stone 物理骨架（.stone.json + self.md + readme.md 三件占位）；其它按需 lazy 创建",
+                        "逻辑契约 vs 物理骨架": "五件套是逻辑契约（哪些可能存在）；createStoneObject 只预创 3 件可见小文件",
                         "self.md 第一行 = displayName": "UI 表层展示 objectId 时从 self.md 首行派生语义化标题；详见 visible.display_name_from_self_md",
                     },
                     children: {
-                        "database": {
-                            title: "database - pool/sql 的 schema 设计层",
+                        "seed_knowledge": {
+                            title: "seed_knowledge - 人类设计的初始知识库",
                             content: `
-                            \`stones/<self>/database/\` 不是数据本身，是给 pool/sql 用的 schema 与 migration 的源码层。
+                            \`stones/<self>/knowledge/\` 是 Object 的 **seed knowledge**——人类（或 metaprog Agent）
+                            预置的初始知识库，定义 Object "先天懂什么"。与 pool 中的 sediment knowledge
+                            （\`pools/<id>/knowledge/memory + relations/\`，运行时沉淀的事实）相对。
 
                             目录形态:
-                            - \`schemas/<collection>.ts\`: TS interface 与类型定义；被 server/index.ts 的 query/upsert
-                              方法 import，用作返回值类型与参数 normalize 的依据。
-                            - \`migrations/<n>_<name>.sql\`: forward-only 迁移文件；启动时由 migration runner 比对
-                              \`PRAGMA user_version\` 与目录内容，逐条 apply。
+                            \`\`\`
+                            stones/<self>/knowledge/
+                              <slug>.md         ← 一篇 seed knowledge；frontmatter + markdown body
+                              <topic>/<slug>.md ← 允许按主题分组（可选）
+                            \`\`\`
 
-                            为什么不叫 \`db/\` / \`pool/\`:
-                            - OOC 其它目录都不用缩写（self.md 不叫 s.md / readme.md 不叫 rm.md / server/ 不叫 srv/）。
-                            - 不叫 \`pool/\`：避免与 pools/ 撞名；这里的内容是 pool 的设计层而非数据本身。
+                            协议:
+                            - 文件格式与 thinkable.knowledge 完全一致：frontmatter（title / description / activates_on）+ markdown body。
+                            - 渐进激活规则与 sediment 统一；synthesizer 双源扫描，LLM 看到的不分来源。
+                            - **不引入 memory/ / relations/ 子目录**——那是 sediment 的运行时分类；seed 按主题/能力命名。
 
-                            为什么 schema 在 stone 而 data 在 pool:
-                            - schema 演化是设计性、低频、需要 review 的（forward-only migration 一旦合错就脏，PR-Issue 把关）。
-                            - data 是事实性、高频、不能回滚的（事实是事实，不该跟着 schema branch 切换）。
-                            - 这条 "schema-in-stone, data-in-pool" 原则与 reflectable 元编程协议一致：
-                              schema 改动落 stone-versioning 的 PR-Issue 流程，不在 super flow 默认写入面。
+                            为什么 seed 在 stone 而 sediment 在 pool:
+                            - seed 是设计意图，影响 Object 的先天能力，应当过 review + eval；与 server / client 同级。
+                            - sediment 是运行时事实，由 reflectable / collaborable 自动沉淀；高频累积，过 git 会让 PR-Issue 失去意义。
 
-                            注意 docs（pool 中的 knowledge markdown）不在这里——文档型存储不需要 migration，
-                            schema 即文件结构本身（memory/<slug>.md / relations/<peer>.md）。
+                            演化路径:
+                            - seed knowledge 改动走 stone-versioning 的 PR-Issue 流程（与 server / client 同级，高赌注变更）。
+                            - **不在 super flow 默认写入面**——reflectable 维度仅写 sediment（详见 reflectable.memory_layout）。
+                            - 未来可挂 eval gate：CI 在 seed 改动时跑能力评估测试，防止能力退化。
+
+                            访问通道:
+                            - thinkable.knowledge 的 synthesizer 同时扫描 stone seed 与 pool sediment（双源加载）。
+                            - 渐进激活机制（activates_on）对两侧统一适用。
                             `,
                             named: {
-                                "schemas/": "TS 类型定义；server method 的参数与返回值类型来源",
-                                "migrations/": "forward-only SQL；启动时 migration runner 自动 apply",
-                                "schema-in-stone, data-in-pool": "OOC 持久层的核心边界原则",
+                                "seed knowledge": "人类设计的初始知识库；先天能力基底",
+                                "双源扫描": "synthesizer 同时扫 stone seed 与 pool sediment",
+                                "eval gate": "seed 改动时 CI 跑能力评估测试（待落地）",
                             },
+                            sources: [["src/persistable/stone-object.ts", "stoneKnowledgeDir 返回 stones/<branch>/objects/<self>/knowledge/；createStoneObject 故意不预创该目录（seed 可选）。双源加载入口见 src/thinkable/knowledge/loader.ts:loadKnowledgeIndex，接受 { stone, pool } 两个 ref；同 idPath 冲突 sediment 胜出 + console.warn。"]],
+                            todo: [
+                                "eval gate 协议：seed 改动 PR 时如何挂能力评估？（未拍板）",
+                            ],
                         },
                     },
                     todo: [
-                        "存量数据迁移：已有 .ooc-world*/stones/<b>/objects/<id>/{knowledge/, files/} 通过 CLI 命令 migrate-stone-knowledge-to-pool 复制到 pools/objects/<id>/{knowledge/, files/}（命令已落地，仅复制不 git rm；用户需在 stones worktree 内手工 git rm + commit 才完整脱钩 git 追踪）。旧 data.json 不迁（语义已变为 session-scoped，跨 session 数据不再有 stone 级载体）。",
+                        "存量数据迁移：已有 .ooc-world*/stones/<b>/objects/<id>/{knowledge/, files/} 通过 CLI 命令 migrate-stone-knowledge-to-pool 复制到 pools/objects/<id>/{knowledge/, files/}（命令已落地，仅复制不 git rm）。**注意**：2026-05-24 起 knowledge 改为 seed/sediment 二分，旧 CLI 把全部 knowledge 当 sediment 迁到 pool 是过度操作——用户在迁移后需自行判定哪些条目属于 seed 并迁回 stone（或在 worktree 内 git rm 并保留 stone 的新 seed 版本）。旧 data.json 不迁（语义已变为 session-scoped）。",
+                        "存量 database/ 子目录清理：2026-05-23 创建过 stone database/ 骨架的 world 在 2026-05-24 简化中失去意义；需 CLI 检测并提示用户在 stones worktree 内 git rm（不强制，留空目录无害）。",
                     ],
                 },
                 "flow": {
@@ -1691,7 +1763,7 @@ export const root: DocTreeNode = {
                             - 原 stone 层 \`stones/<self>/data.json\`（顶层 spread merge）已删除。
                             - getData/setData 不再是"跨 session 长期数据"，而是 **session 级临时数据**——
                               语义边界与 flow 层定位一致。
-                            - 真要跨 session 共享，应通过 stone server method 写 pool/sql（结构化）或
+                            - 真要跨 session 共享，应通过 stone server method 写 pool/data csv（结构化）或
                               pool/knowledge md（半结构化）。
 
                             形态:
@@ -1703,7 +1775,7 @@ export const root: DocTreeNode = {
                             **语义影响（升级时注意）**：
                             如果 server method 实现者历史上依赖 "在 session A 写的，session B 能读到"，
                             迁移后这种用法将失效——读到的永远是当前 session 的 data.json。
-                            想保留旧语义需要显式改写为走 pool/sql。
+                            想保留旧语义需要显式改写为走 pool/data csv。
                             `,
                             named: {
                                 "data.json": "flow object 的 session 级 JSON 数据",
@@ -1728,95 +1800,140 @@ export const root: DocTreeNode = {
 
                     三分总览:
                     | 层 | 内容 | 形态 | git | review |
-                    | stone | 设计 | 源码 + schema 声明 | 是 | PR-Issue |
-                    | pool  | 事实 | sql 行 + 文件 + markdown | 否 | 写就生效 |
+                    | stone | 设计 | 身份 + 源码 + seed knowledge | 是 | PR-Issue |
+                    | pool  | 事实 | csv 表 + markdown + 文件 | 否 | 写就生效 |
                     | flow  | 运行 | thread.json + debug | 否 | 即用即弃 |
 
-                    pool 的三种内容形态（children）:
-                    - sql/: 关系型存储；bun:sqlite 单文件 + WAL；schema 来自 stone 的 database/migrations。
-                    - knowledge/: markdown 知识文档（memory/<slug>.md / relations/<peer>.md / 其它）；
-                      从 stone 迁来；与 thinkable.knowledge 的渐进激活机制配合。
-                    - files/: 任意文件留存位（二进制、大体量、sql 行外 blob 等）。
+                    pool 顶层挂两类事实（**2026-05-24 起拓宽**）:
 
-                    路径形态（持有 .pool.json 元数据）:
+                    - **per-Object 事实**（\`pools/objects/<id>/\`）：单个 Object 累积的数据
+                      - data/: **csv 结构化数据**（2026-05-24 起替代 sql）；一张表一个文件 \`<name>.csv\`；
+                        首行 header，后续行记录；详见 children/data_pool。
+                      - knowledge/: **sediment-only** markdown 知识文档（memory/<slug>.md / relations/<peer>.md）；
+                        由 reflectable / collaborable 在运行时自动沉淀，写就生效不进 git。
+                        与 stone 中的 **seed knowledge**（\`stones/<self>/knowledge/<slug>.md\`，人类设计的初始知识库）配对——
+                        二者都被 thinkable.knowledge 的 synthesizer 双源扫描激活。详见 children/knowledge_pool。
+                      - files/: 任意文件留存位（二进制、大体量、非结构化 blob 等）。
+                    - **World 级共享单元**（\`pools/repos/\`）：跨 Object 协作的外部 git repo
+                      （工作中涉及的所有外部业务 repo 统一管理于此；详见 children/repos_pool）。
+                      不挂在任何 Object 下，因为它是多 Object 协作的共享单元，不是 per-Object 资产。
+
+                    路径形态:
                     \`\`\`
-                    pools/objects/<objectId>/
-                      .pool.json
-                      sql/data.sqlite
-                      knowledge/memory/<slug>.md
-                      knowledge/relations/<peer>.md
-                      files/...
+                    pools/
+                      objects/<objectId>/          ← per-Object 事实
+                        .pool.json
+                        data/<name>.csv
+                        knowledge/memory/<slug>.md
+                        knowledge/relations/<peer>.md
+                        files/...
+                      repos/<repo-name>/           ← World 级共享外部 git repo
+                        .git/
+                        ...working tree（默认 default branch）
                     \`\`\`
 
-                    pool 不挂 branch（与 stones/<branch>/ 不同），因为事实是单向积累的——
-                    metaprog branch 切换不带数据走，schema 改动通过 forward-only migration 演化。
+                    pool 不挂 metaprog branch（与 stones/<branch>/ 不同），因为事实是单向积累的——
+                    metaprog branch 切换不带数据走。csv 列变更直接改文件（无 migration 概念）。
+                    （注意：\`pools/repos/<name>/\` 内部当然有自己的 git branch，那是外部 repo 自身的 branch，
+                    与 OOC 的 metaprog branch 是两码事。）
                     `,
                     named: {
                         "pool": "Object 的事实型数据层；持久但不版本化",
-                        "pools/objects/<id>/": "pool 的根路径；不挂 branch",
+                        "pools/objects/<id>/": "pool 中 per-Object 事实的挂载点",
+                        "pools/repos/<name>/": "pool 中 World 级共享外部 git repo 的挂载点（2026-05-24）",
                         "三分: stone / pool / flow": "OOC 持久层的设计 / 事实 / 运行三分",
-                        "schema-in-stone, data-in-pool": "schema 在 stone（versioned）, 数据在 pool（unversioned）",
+                        "data csv": "pool 中结构化数据的载体（2026-05-24 起替代 sql）；一张表 = 一个 .csv 文件",
+                        "外部 repo 统一管理": "工作中涉及的所有外部 git repo 都落在 pools/repos/，不散落到 Object 个体下",
                     },
                     children: {
-                        "sql_pool": {
-                            title: "sql_pool - 关系型数据",
+                        "data_pool": {
+                            title: "data_pool - 结构化数据（csv）",
                             content: `
-                            \`pools/objects/<id>/sql/data.sqlite\` 是 Object 的关系型存储。
+                            \`pools/objects/<id>/data/<name>.csv\` 是 Object 的结构化数据载体
+                            （**2026-05-24 起替代 sql；删 bun:sqlite + migration runner，回归简单**）。
 
-                            形态:
-                            - 单一 sqlite 文件 + WAL：\`data.sqlite\` / \`data.sqlite-wal\` / \`data.sqlite-shm\`。
-                            - 引擎：bun:sqlite（OOC 的 runtime 是 bun，原生支持）。
-                            - schema 来源：\`stones/<self>/database/migrations/<n>_*.sql\` 的 forward-only 迁移；
-                              启动时（或首次访问时）由 migration runner 比对 \`PRAGMA user_version\` 自动 apply。
+                            形态约束:
+                            - **一张表 = 一个 csv 文件**：\`data/factors.csv\` / \`data/users.csv\` / \`data/metrics.csv\` ...
+                            - 首行 header（列名），后续行记录；逗号分隔；标准 csv 转义。
+                            - 命名 kebab-case，对应 Object 内"逻辑表名"。
+                            - 无 schema 声明文件：列即文件第一行；列变了直接改文件，无 forward-only migration 概念。
 
-                            访问通道（LLM 不直接看 SQL）:
-                            - LLM 只通过 \`stones/<self>/server/index.ts\` 暴露的语义方法访问，例如
-                              \`exec(window_id="custom:<self>", command="upsert_factor", args={...})\`
-                              或 \`self.callCommand("custom:<self>", "query_factors_by_psm", {...})\`。
-                              详见 programmable.pool_methods。
-                            - 这与 programmable.custom_window_invocation 的两条路径完全同构，不引入新心智模型。
+                            为什么用 csv 而不是 sql:
+                            - **实现简单**：用现有文件操作能力（fs.readFile / write）即可读写；不引入 bun:sqlite 依赖
+                              / 不要 connection cache / 不要 migration runner。
+                            - **可读性强**：csv 是人类可直接审阅、用 LLM file_window.open 直接看的格式；
+                              sql 行需要解码才能看见。
+                            - **够用**：OOC 当前阶段不需要复杂查询 / 索引 / 并发事务；中小规模数据（< 几万行）csv 全表扫即可。
+                            - **未来留口**：真有 sql 需求（如百万行级数据、复杂聚合）时再重新引入 sql_pool，
+                              与 data_pool 并存即可；当前保持精简。
 
-                            并发:
-                            - 同进程内 bun:sqlite WAL 模式支持多读单写。
-                            - 跨进程或同进程跨 worker 写入建议复用 \`enqueueSessionWrite('db:'+baseDir+':'+objectId)\` 串行化。
+                            访问通道（**LLM 路径直接可见，是合法例外**）:
+                            - LLM 可通过 \`file_window.open path="pools/<self>/data/<name>.csv"\` 直接读 csv；
+                              也可通过 \`file_window.edit\` 编辑（小批量写）。
+                            - 大批量写 / 复杂查询应包装为 stone server method（语义化命令，如
+                              \`exec(command="upsert_factor", args={...})\` / \`query_factors_by_psm\`），
+                              method 内部用 fs API + csv 解析库读写。
+                            - 与 knowledge md 同属 pool 路径暴露例外（详见 patches.llm_access_via_server_method）。
 
-                            适用场景: 多条同构记录 + 索引 + 聚合查询；因子库、issue tracker、metrics、向量+元数据
-                            （sqlite-vec 扩展）等。
+                            并发与一致性:
+                            - csv 整文件写：用 \`enqueueSessionWrite('data:'+baseDir+':'+objectId+':'+name)\` 串行化，避免读写撕裂。
+                            - 不支持复杂事务；如果数据一致性要求强，应用层（server method）自己保证（write-then-rename 等）。
+
+                            适用场景:
+                            - 中小规模结构化数据（< 几万行）：因子库、用户列表、metrics 快照、配置表。
+                            - 需要人/LLM 直接审阅的数据。
+                            - 不需要复杂查询的简单表格。
+
+                            不适用场景（未来再考虑 sql）:
+                            - 百万行级数据 / 复杂聚合查询。
+                            - 高频并发事务。
+                            - 需要二级索引 / 全文搜索 / 向量检索。
                             `,
                             named: {
-                                "data.sqlite / -wal / -shm": "WAL 模式下的三个文件",
-                                "bun:sqlite": "OOC runtime 原生提供的 sqlite 绑定",
-                                "PRAGMA user_version": "migration runner 用于对齐 schema 版本的内置游标",
-                                "enqueueSessionWrite('db:...')": "跨进程/跨 worker 写串行化键",
+                                "data/<name>.csv": "Object 的一张表；首行 header，后续行记录",
+                                "csv 作为 sql 的简化替代": "2026-05-24 起 OOC 用 csv 替代 sql；未来真有需求再引入 sql_pool",
+                                "enqueueSessionWrite('data:...')": "csv 整文件写串行化键，避免读写撕裂",
+                                "无 migration 概念": "csv 列变更直接改文件；不存在 forward-only migration 流程",
                             },
+                            sources: [
+                                [
+                                    "src/persistable/csv-pool.ts + src/persistable/pool-object.ts:poolDataDir/poolDataFile",
+                                    "数据载体实现两处合并锚点：csv-pool.ts 提供 readCsv / writeCsv / appendRow（含 write-then-rename 原子写）；pool-object.ts 的 poolDataDir(ref) 返回 pools/objects/<id>/data/、poolDataFile(ref, name) 返回 .csv 全路径并对 name 做 kebab-case 校验防 path-traversal。",
+                                ],
+                            ],
                         },
                         "knowledge_pool": {
-                            title: "knowledge_pool - markdown 知识文档",
+                            title: "knowledge_pool - sediment markdown 知识文档",
                             content: `
-                            \`pools/objects/<id>/knowledge/\` 是 Object 的长期 markdown 知识库。
-                            （历史上挂在 stone 下，2026-05-23 起迁到 pool；不进 git。）
+                            \`pools/objects/<id>/knowledge/\` 是 Object 的 **sediment knowledge** 仓库
+                            ——Agent 运行时由 reflectable / collaborable 自动沉淀的事实型知识；不进 git。
 
-                            标准子目录:
+                            与 **seed knowledge**（\`stones/<self>/knowledge/\`，人类设计的初始知识库）二分:
+                            - seed: 设计意图，按主题/能力命名；进 git review，可挂 eval gate；详见 persistable.stone.children.seed_knowledge。
+                            - sediment: 运行时事实，按 memory / relations 分类；写就生效，不过 PR-Issue review。
+
+                            标准子目录（仅 sediment）:
                             - \`memory/<slug>.md\`: 长期记忆；reflectable 的主要写入位置，每条记忆一个文件，slug 用 kebab-case。
                             - \`relations/<peer>.md\`: 对各 peer 的 long_term 关系认知；与 collaborable.relation_window 联动
                               （session 层 relations 仍在 flows/<sid>/objects/<self>/knowledge/relations/）。
-                            - 其它任意 markdown 知识文档：按 thinkable.knowledge 的 frontmatter + activates_on 协议组织。
 
                             形态约束:
-                            - 一个文档 = 一个 markdown 文件；不引入 collection / docId 抽象，文件路径本身即语义路径。
+                            - 一个文档 = 一个 markdown 文件；不引入 collection / docId 抽象。
                             - 不需要索引：knowledge 量级通常 <1000 篇，渐进激活靠 activates_on 而非数据库索引。
-                            - 不需要 migration：schema 即文件结构本身（memory/、relations/）；新增类型直接 mkdir。
+                            - 不需要 migration：schema 即文件结构本身（memory/、relations/）。
 
                             访问通道:
-                            - thinkable.knowledge 的 synthesizer 扫描 base path 改为 pool（原 stone）；
-                              frontmatter / activates_on 的渐进激活机制不变。
+                            - thinkable.knowledge 的 synthesizer **双源扫描**：同时扫 stone 的 seed 与 pool 的 sediment，
+                              frontmatter / activates_on 协议统一，LLM 看到的不分来源。
                             - LLM 写入：reflectable.memory_layout 规定的写盘协议；通过 super flow 的 write_file 命令落盘。
+                              注意 super flow **只写 sediment**——seed 改动属于设计变更，走 stone-versioning PR-Issue。
                             - 直接读取：collaborable.relation_window 派生的伴随 KnowledgeWindow 读 long_term 段。
                             `,
                             named: {
-                                "memory/<slug>.md": "长期记忆条目；一条一文件",
-                                "relations/<peer>.md": "对各 peer 的 long_term 认知文件",
-                                "schema 即文件结构": "knowledge 的 schema 不在 database/migrations，而在文件路径约定本身",
+                                "memory/<slug>.md": "长期记忆条目；一条一文件（sediment）",
+                                "relations/<peer>.md": "对各 peer 的 long_term 认知文件（sediment）",
+                                "sediment vs seed": "sediment 在 pool（运行时沉淀）vs seed 在 stone（人类设计）；双源扫描统一激活",
+                                "schema 即文件结构": "knowledge 的 schema 就是文件路径约定本身（memory/、relations/）",
                             },
                         },
                         "files_pool": {
@@ -1827,115 +1944,202 @@ export const root: DocTreeNode = {
                             典型用途:
                             - 二进制附件（PDF、图片、音视频）。
                             - 大体量文本（日志、长文档）。
-                            - sql 的行外 blob（embedding shard、模型权重等不适合塞进 sqlite 的内容）。
+                            - embedding shard / 模型权重等大体量非结构化 blob。
                             - 用户上传 / 外部抓取的原始资料。
 
                             形态约束:
                             - 不限定子目录结构；由 Object 自己的 server method 维护命名约定。
-                            - 不进 git，不进 sqlite——纯文件系统。
+                            - 不进 git——纯文件系统。
                             - 大体量备份是部署/运维事，不是 OOC 概念事（cron + cp 即可）。
 
-                            为什么和 sql 行外 blob 共用一个目录: 二进制存储无论谁引用，物理形态都是一个文件；
-                            分两个目录（attachments/ vs files/）只制造心智负担。
+                            与 data/ 的边界: data/ 是**结构化表格**（csv，列固定，可查询）；files/ 是**非结构化 blob**
+                            （二进制 / 大文本 / 不打算用 csv 表达的任意内容）。一行能映射到 csv 的就进 data/，不能的进 files/。
                             `,
                             named: {
-                                "files/": "pool 的通用文件目录；二进制 / 大文件 / sql 行外 blob",
+                                "files/": "pool 的通用文件目录；二进制 / 大文件 / 非结构化 blob",
+                                "data/ vs files/": "data 是结构化 csv 表，files 是非结构化 blob",
                             },
+                        },
+                        "repos_pool": {
+                            title: "repos_pool - 外部 git repo 工作面（World 级共享）",
+                            content: `
+                            \`pools/repos/<repo-name>/\` 是 OOC world **统一管理外部 git repo 的工作面**
+                            （2026-05-24 引入）。工作中涉及到的所有外部 git repo（业务代码库、第三方依赖 fork、
+                            协作项目等）都统一落在这个目录，不散落到各 Object 私有目录下。
+
+                            **位置选择**: 挂在 pool 顶层（与 \`pools/objects/\` 平级），不挂在任何 Object 下。
+                            理由:
+                            - repo 是 World 级共享单元，多个 Object 可能都要协作同一个 repo；放 per-Object
+                              会让"协作"退化为"各自 fork 一份"——既冗余又破坏唯一事实源。
+                            - repo 仍属事实层（不是 OOC 自己的设计），所以挂 pool 而非 stone；不是 OOC 自治
+                              资源，但归 OOC 统一管理。
+
+                            **顶层规范（约定）**:
+
+                            1. **统一目录**: 工作中涉及的所有外部 git repo 都 clone 到 \`pools/repos/<name>/\`；
+                               不允许散落到 \`pools/objects/<id>/repos/\`、\`flows/<sid>/.../repos/\` 等位置。
+                               （session 临时 worktree 可派生到 flow，见下文，但 repo 本体只有一份在 pools/repos/。）
+                            2. **repo-name**: 用规范化的简短名（如 \`ooc\`、\`riffrec\`、\`vendor-foo\`），
+                               不必与 remote url 一致。命名冲突由 Agent 在 clone 时检测。
+                            3. **OOC 不追踪**: pools/repos/ 整体在 OOC 的 .gitignore 内（pool 不进 OOC 的 git）；
+                               但 repo **自带的 .git** 当然由 repo 自己管理。
+                            4. **修改权**: 任何 Object 都可访问；并发协调由 git branch + talk_window 完成
+                               （详见"多 Agent 协作"段）。
+
+                            **目录形态**:
+                            \`\`\`
+                            pools/repos/<repo-name>/
+                              .git/                    ← 外部 repo 自带的 git history（OOC 不动）
+                              ...working tree (default branch)
+                            \`\`\`
+                            （是否需要 \`.repo.json\` 元数据记录 origin url / clone 时间等，**待落地时再拍板**——
+                            最简实现可不要，远程 url 直接读 \`.git/config\`。）
+
+                            **多 Agent 协作的协议**:
+
+                            \`pools/repos/<name>/\` 是 main worktree（持有完整 git history）。多个 Object 想并发
+                            工作时，**不直接共享同一 working tree**（这违反 OOC "不共享 Context" 原则）；
+                            而是用 git worktree 派生：
+
+                            - **持久 worktree**（Object 长期维护某 repo）：派生到
+                              \`pools/objects/<id>/repo-worktrees/<name>/\`，checkout 自己的 branch。
+                            - **session 临时 worktree**（一次性任务）：派生到
+                              \`flows/<sid>/objects/<id>/repo-worktrees/<name>/\`，session 结束 \`git worktree remove\`。
+
+                            协调流程: Agent X 在自己 branch 工作 → push 到 pools/repos/<name> 自身（互作 origin）→
+                            通过 talk_window 通知 review/merge → main 上的 merge 由整合 Agent 或人类拍板。
+
+                            **LLM 路径暴露的例外**:
+
+                            pool 原则是"LLM 不直接看物理路径，一律走 stone server method"（详见 patches.llm_access_via_server_method）。
+                            repos 是**合法例外**——开发场景下 LLM 必须看到 repo 内的文件路径才能 \`file_window.edit\`。
+                            这与 knowledge md 直接进 LLM 视野的例外同构。
+
+                            **与 .stones_repo 的关系**:
+
+                            \`.stones_repo\` 是 OOC world **自身**的 metaprog repo（管理 stones 演化）；
+                            \`pools/repos/<name>/\` 是 Object 们协作的**外部业务** repo。模型同构（bare/main + worktrees），
+                            但语义边界清晰：metaprog repo 是 OOC 内部基础设施，外部 repo 是 OOC 之外的工作对象。
+                            `,
+                            named: {
+                                "pools/repos/<name>/": "外部 git repo 在 OOC world 内的统一工作面",
+                                "repos_pool": "pool 顶层的第四种内容形态：World 级共享外部 repo",
+                                "外部 repo 统一管理": "工作中涉及的所有外部 git repo 都进 pools/repos/，不散落",
+                                "repo-worktrees/": "Object 或 session 从主 repo 派生的 git worktree 目录名约定",
+                                "main worktree + 派生 worktree": "多 Agent 协作模式——main 在 pools/repos/，per-Object/per-session 工作面用 git worktree 派生",
+                                "LLM 路径例外": "repos 内文件路径合法暴露给 LLM（与 knowledge md 同构），不走 server method 透明化",
+                            },
+                            todo: [
+                                "首批落地路径函数：repoDir(baseDir, name) / repoWorktreeDir(poolObjectRef, name) / sessionRepoWorktreeDir(flowObjectRef, name)。",
+                                "是否引入 .repo.json 元数据（origin url / 上次同步时间 / 管理 Agent 引用）？等真有用例再决定。",
+                                "命名冲突协议：两个 Object 都想 clone 同一 url 但起不同 name，或不同 url 抢同一 name；clone 时显式检查。",
+                                "worktree 生命周期回收：session 结束应自动 git worktree remove flow 层 worktree；pool 层 worktree 谁回收？",
+                                "main 上的 merge 由谁拍板（'整合 Agent' 角色 vs 人类必经）——未拍板。",
+                                "与 Object≡repo 远景的协调路径：详见 docs/2026-05-24-draft-object-as-repo.md。",
+                            ],
                         },
                     },
                     patches: {
                         "no_branch": {
-                            title: "pool 不挂 branch",
+                            title: "pool 不挂 metaprog branch",
                             content: `
-                            \`pools/objects/<id>/\` 不像 stones/<branch>/objects/<id>/ 那样挂 branch。
+                            \`pools/objects/<id>/\` 不像 stones/<branch>/objects/<id>/ 那样挂 metaprog branch。
+                            \`pools/repos/<name>/\` 同理（虽然 repo 内部自带 git branch，但那是外部 repo 自己的事，
+                            与 OOC metaprog branch 无关）。
 
                             理由:
                             - 事实是单向累积的：用户产生的真实数据不应跟着 metaprog branch 切来切去。
-                            - schema 演化通过 stone 的 database/migrations forward-only apply，不用 branch 隔离。
+                            - csv 列变更直接改文件，不需要 branch 隔离（无 migration 概念）。
                             - 数据回滚不是 OOC 的语义层概念：备份是运维事（cron + cp），不是维度事。
+                            - 外部 repo 的 branch 切换是 repo 自己的事；OOC 不在 pool 路径布局里反映它。
 
-                            metaprog branch 在沙箱测试 schema 改动时，可以从 main 的 sqlite snapshot 复制一份临时数据库
-                            做隔离测试；merge 后丢弃。但这不是 pool 路径布局要表达的事，是 stone-versioning 的工作面。
+                            metaprog branch 在沙箱测试想要"试探性改 csv"，可从 main 复制一份临时 data/ 目录隔离测试；
+                            merge 后丢弃。但这不是 pool 路径布局要表达的事。
                             `,
                         },
-                        "schema_in_stone_data_in_pool": {
-                            title: "schema-in-stone, data-in-pool 原则",
+                        "design_in_stone_data_in_pool": {
+                            title: "design-in-stone, data-in-pool 原则（轻量版）",
                             content: `
-                            这条原则横跨 stone 与 pool 两侧:
+                            这条原则横跨 stone 与 pool 两侧（2026-05-24 起从 "schema-in-stone" 简化为 "design-in-stone"，
+                            因为删除了 sql / migration 工程化重量级）:
 
-                            **stone 持有 schema 的源码**:
-                            - sql 用 \`stones/<self>/database/migrations/<n>_*.sql\` (forward-only) 与
-                              \`stones/<self>/database/schemas/<collection>.ts\` (TS 类型)。
-                            - knowledge 不需要 schema migration——文件路径约定即 schema（memory/<slug>.md 等）；
-                              如有需要可在 \`stones/<self>/database/schemas/\` 中放 frontmatter TS 类型。
+                            **stone 持有数据"如何被理解"的设计**:
+                            - knowledge seed：人类预置的能力基底（stones/<self>/knowledge/<slug>.md）。
+                            - server method 源码：Object 对外暴露的语义命令（query_X / upsert_Y 等）。
+                              这些命令体现"数据应该如何被读写"，是真正的数据契约设计。
+                            - self.md：身份层对数据语义的高层约定（如"我管理因子库"）。
 
-                            **pool 持有 data 本身**:
-                            - sql 行在 \`pools/objects/<id>/sql/data.sqlite\`。
-                            - knowledge 文档在 \`pools/objects/<id>/knowledge/\`。
-                            - 文件在 \`pools/objects/<id>/files/\`。
+                            **pool 持有数据本身**:
+                            - csv 表在 \`pools/objects/<id>/data/<name>.csv\`（结构化）。
+                            - knowledge 文档在 \`pools/objects/<id>/knowledge/\`（**仅 sediment**；seed 在 stone）。
+                            - 文件在 \`pools/objects/<id>/files/\`（非结构化）。
 
-                            **访问通道一律走 stone 的 server method**:
-                            - LLM 不看到 SQL、不看到 .json 文件路径、不看到 knowledge md 全文路径。
-                            - 看到的只是语义命令（query_X / upsert_Y / find_Z）。
-                            - 这让 Object 完全掌控自身数据的对外契约，schema 演化对 LLM 透明。
+                            **csv 没有显式 schema 文件**:
+                            - csv 列定义就是文件第一行；列变了直接改 csv，无 forward-only migration 流程。
+                            - 如需 TS 类型，可在 server/ 源码里 inline 定义（如 \`type Factor = { psm: string; ... }\`），
+                              或将来若需要可加 \`stones/<self>/types/\` 目录——但当前不强制。
+
+                            **访问通道**:
+                            - csv：LLM 可直接 file_window.open 读路径；大批量/复杂查询包装为 server method。
+                            - knowledge md：双源扫描渐进激活；不暴露文件路径。
+                            - files：必须经 server method（路径对 LLM 透明）。
                             `,
                         },
                         "knowledge_no_git": {
-                            title: "knowledge 从 stone 迁出后不进 git",
+                            title: "sediment knowledge 不进 git；seed 仍在 stone 走 git review",
                             content: `
-                            knowledge 历史上在 \`stones/<self>/knowledge/\` 下，跟着 stone-versioning 进 git。
-                            2026-05-23 迁到 \`pools/objects/<self>/knowledge/\`，git 不再追踪。
+                            2026-05-24 起，knowledge 按生成来源拆分为 seed / sediment 二分，落盘位置随之分离:
 
-                            含义变化:
-                            - reflectable 沉淀 memory 不再产生 git commit；写盘即生效，不过 PR-Issue review。
-                            - long_term relation 同理：relation_window.edit(scope="long_term") 经 super flow 落到 pool。
-                            - stone-versioning 的 PR-Issue 流程聚焦到真正的设计变更：self.md / readme.md / server / client / database。
+                            **sediment knowledge**（运行时沉淀，落 pool，**不进 git**）:
+                            - \`pools/<id>/knowledge/memory/<slug>.md\` —— reflectable 自反思写入
+                            - \`pools/<id>/knowledge/relations/<peer>.md\` —— collaborable long_term 写入
+                            - 写就生效，不过 PR-Issue review；如果某条 memory 写错，让 reflectable 直接覆盖即可。
+                            - 整树回滚不在 OOC 语义层（pool 不分版本，靠外部备份）。
 
-                            这与 stone 缩水到"设计层"的定位一致——knowledge 是事实，事实不该 review。
+                            **seed knowledge**（人类设计的初始知识库，留在 stone，**进 git review**）:
+                            - \`stones/<self>/knowledge/<slug>.md\` —— 设计者预置的能力基底
+                            - 走 stone-versioning 的 PR-Issue 流程；可挂 eval gate 防能力退化。
+                            - 不在 super flow 默认写入面（与 server / client 同级，高赌注变更）。
 
-                            如果某条 memory 写错了，让 reflectable 直接覆盖即可（自我演化），不需要 git revert。
-                            如果整个 knowledge 树需要回滚，那是运维级备份恢复（pool 不分版本，靠外部备份）。
+                            这条边界对应能力来源的二分:
+                            - 能力的"先天"部分（设计者赋予）需要严格 review + eval —— seed in stone。
+                            - 能力的"后天"部分（运行中沉淀）需要低摩擦累积 —— sediment in pool。
+
+                            历史：2026-05-23 一度把整个 knowledge 全迁到 pool；2026-05-24 修正——
+                            seed 影响 Agent 先天能力，应当版本管理 + 评估测试。详见 persistable.stone.children.seed_knowledge。
                             `,
                         },
                         "llm_access_via_server_method": {
-                            title: "LLM 不直接读写 pool，走 stone server method",
+                            title: "LLM 不直接读写 pool，走 stone server method（含例外清单）",
                             content: `
-                            pool 的物理路径（pools/objects/<id>/sql/data.sqlite 等）不应出现在 LLM 的视野里。
+                            pool 的物理路径默认不应出现在 LLM 的视野里——LLM 应通过 stone server method 间接访问。
 
-                            访问规则:
+                            访问规则（默认）:
                             - LLM 通过 \`exec(window_id="custom:<self>", command="<name>", args={...})\` 调用 stone server method。
                             - 或 program.callCommand 在 ts/js sandbox 里 \`await self.callCommand("custom:<self>", "<name>", {...})\`。
-                            - server method 内部使用 bun:sqlite / fs API 操作 pool 文件。
+                            - server method 内部使用 fs API（含 csv 解析）操作 pool 文件。
 
-                            例外: knowledge md 通过 thinkable.knowledge 的 synthesizer 渐进激活作为
-                            \`knowledge_window\` 出现在 Context 里——LLM 看见的是知识正文，不是文件路径。
-                            写入仍走 reflectable 的 super flow write_file 协议（路径在 super flow 知识里被告知，
-                            不在普通业务线程视野中）。
-                            `,
-                        },
-                        "migration_runner_protocol": {
-                            title: "migration runner 协议（仅 sql）",
-                            content: `
-                            sql pool 启动时由 migration runner 自动对齐 schema:
+                            **合法例外清单**（这些 pool 子树的路径/文件 LLM 直接可见，且这是有意为之）:
 
-                            1. 读取 \`pools/objects/<id>/sql/data.sqlite\` 的 \`PRAGMA user_version\`。
-                            2. 扫描 \`stones/<self>/database/migrations/\` 下的 \`<n>_<name>.sql\` 文件，按 n 排序。
-                            3. 对所有 n > user_version 的文件按序 apply；每个 apply 在事务中完成。
-                            4. apply 成功后写回新的 user_version。
+                            1. **knowledge md**（pools/<id>/knowledge/{memory,relations}/）——通过 thinkable.knowledge
+                               的 synthesizer 渐进激活作为 \`knowledge_window\` 出现在 Context 里；LLM 看见的是知识正文。
+                               写入仍走 reflectable 的 super flow write_file 协议（详见 reflectable.memory_layout）。
+                            2. **data csv**（pools/<id>/data/<name>.csv）——LLM 可直接 \`file_window.open\` 读 csv；
+                               小批量 \`file_window.edit\` 写。复杂查询/大批量写仍包装为 server method。
+                            3. **repos 内文件**（pools/repos/<name>/...）——开发场景下 LLM 必须看到 repo 内的文件
+                               路径才能 \`file_window.edit\` / \`grep\` / \`glob\`。
 
-                            约束:
-                            - forward-only：不支持 down migration；schema 错误用 supersede 风格的新 migration 修正。
-                            - 单调编号：n 从 0001 起递增，不允许跳号或冲突。
-                            - 跨 session 串行化：通过 \`enqueueSessionWrite('db:'+baseDir+':'+objectId)\` 保证不并发 apply。
+                            三种例外的共性：**LLM 的工作面**（直接读写有价值），不是 OOC 内部数据黑箱。
 
-                            knowledge pool / files pool 不需要 migration——前者 schema 即文件路径约定，后者无 schema。
+                            **不在例外清单的**：files/ 下二进制——必须经 server method 访问，
+                            路径对 LLM 透明，让 Object 自治掌控数据契约。
                             `,
                         },
                     },
                     todo: [
-                        "pool sql runtime: bun:sqlite 连接 + WAL + connection cache（按 PoolObjectRef 复用），目前 pool-object.ts 只创建空 sql/ 目录，未做连接管理。",
-                        "migration runner 实现：扫描 stones/<self>/database/migrations/<n>_*.sql 比对 PRAGMA user_version forward-apply；通过 enqueueSessionWrite('db:'+baseDir+':'+objectId) 串行化。",
-                        "params schema 校验（与 programmable.todo 重叠）：用 stones/<self>/database/schemas/<n>.ts 同时驱动运行时校验。",
+                        "data pool runtime：csv 读写工具函数（readCsv / writeCsv / appendRow / queryRows），用 fs + csv 解析库；以及串行化键 enqueueSessionWrite('data:'+baseDir+':'+objectId+':'+name)。",
+                        "csv 解析库选型：bun 生态 / npm（papaparse / csv-parse 等）；选轻量、零依赖优先。",
+                        "params schema 校验（与 programmable.todo 重叠）：如未来需要，server method 命令的 params 类型可在 server/index.ts 内 inline 定义；当前不强制。",
                     ],
                 },
                 "issue_files": {
@@ -2100,11 +2304,12 @@ export const root: DocTreeNode = {
                     布局演化兼容：早期非 bare 形态（\`stones/main/.git/\` 是目录）被识别为
                     \`layout: "legacy-embedded"\`，保持原状不强制升级；新建 world 一律走 bare。
 
-                    **2026-05-23 起 git 追踪面收缩到设计层**：
-                    knowledge / data.json / files 已迁出 stone（详见 persistable.pool 与 persistable.stone）。
-                    stone 现在只有 self.md / readme.md / server / client / database 五件套全部进 git。
+                    **2026-05-23 起 git 追踪面收缩到设计层**（2026-05-24 修订五件套）:
+                    sediment knowledge / data.json / files 已迁出 stone（详见 persistable.pool 与 persistable.stone）。
+                    stone 现在只有 self.md / readme.md / server / client / knowledge 五件套全部进 git
+                    （其中 knowledge 是 seed knowledge——人类设计的初始知识库；2026-05-24 删除 database/ 后五件套定型）。
                     PR-Issue review 不再被 memory 写入这类高频脏 commit 淹没；
-                    每个 commit 都是真正的设计演化（身份 / 源码 / schema）。
+                    每个 commit 都是真正的设计演化（身份 / 源码 / seed knowledge）。
                     `,
                     named: {
                         "stone-versioning": "persistable 内的高层编排，封装 worktree / commit / 路径划界 / merge / PR-Issue / rollback",
@@ -2118,7 +2323,7 @@ export const root: DocTreeNode = {
                         "recovery-check": "启动期自检；server/index.ts 加载失败的 Object 自动开 [recovery-needed] Issue",
                         "Bootstrap commit": "首次启动 author=bootstrap 的一次性 squash commit，通过临时 clone scratch 灌入 bare repo 后 push",
                         "legacy-embedded": "已有 world 的非 bare 老式布局（main/.git/ 是目录）；ensureStoneRepo 兼容识别但不强制升级",
-                        "git 追踪面 = stone 五件套": "self.md / readme.md / server / client / database；knowledge/data.json/files 已迁出",
+                        "git 追踪面 = stone 五件套": "self.md / readme.md / server / client / knowledge（seed）；sediment knowledge / data.json / files 已迁出",
                     },
                     sources: [
                         [
@@ -2253,7 +2458,7 @@ export const root: DocTreeNode = {
                       (session 级数据；2026-05-23 起从 stone 迁到 flow，详见 persistable.flow.session_data)。
                       setData 是顶层 spread merge 而非整体覆盖（API 形状保留）。
                       **语义变化**：不再是跨 session 长期数据；读到的永远是 ctx.thread 当前 session 的 data.json。
-                      要跨 session 共享请走 stone server method 写 pool/sql。无 thread.persistence 时返回空 / 静默跳过。
+                      要跨 session 共享请走 stone server method 写 pool/data csv。无 thread.persistence 时返回空 / 静默跳过。
                     - getThreadLocal(key) / setThreadLocal(key, value): 读写 thread.threadLocalData；
                       跨 exec 共享（程序窗口同一线程内的 ts/js exec 之间），但不持久化（重启即丢）。
 
@@ -2355,9 +2560,9 @@ export const root: DocTreeNode = {
                 "pool_methods": {
                     title: "pool_methods - server 暴露 pool 数据访问的命令形状",
                     content: `
-                    server/index.ts 里访问 pool 数据的 commands 遵循统一约束：
+                    server/index.ts 里访问 pool 数据的 commands 遵循统一约束（2026-05-24 起 csv 替代 sql）：
 
-                    **1. 命名语义化，不暴露 SQL / 文件路径**：
+                    **1. 命名语义化**：
                     \`\`\`
                     commands: {
                       upsert_factor: { ... },
@@ -2368,23 +2573,34 @@ export const root: DocTreeNode = {
                     LLM 在 form / knowledge 里看见的是"这个命令做什么"，不是"它去哪个表/哪个文件"。
 
                     **2. 实现内聚**：每个 method 内部:
-                    - sql 数据：通过 bun:sqlite 连接（由 pool runtime 提供 connection cache，按 PoolObjectRef 复用）
-                      执行参数化查询；schema 类型从 \`stones/<self>/database/schemas/<n>.ts\` import。
-                    - knowledge / files：通过 fs API 读 \`pools/objects/<self>/knowledge/...\` 或 files/...；
+                    - **data csv**：通过 fs API + csv 解析库（papaparse / 自实现）读
+                      \`pools/objects/<self>/data/<name>.csv\`；
+                      写入用 \`enqueueSessionWrite('data:'+baseDir+':'+objectId+':'+name)\` 串行化。
+                      小批量更新可读全表 → 修改 → 整文件写回；大批量考虑 append-only + 定期 compact。
+                    - **knowledge / files**：通过 fs API 读 \`pools/objects/<self>/knowledge/...\` 或 files/...；
                       路径由 derivePoolFromThread + helper 计算，不在命令体里手拼。
 
-                    **3. migration runner 不暴露成 command**：
-                    schema 演化由 pool runtime 在打开 sql 连接前自动 forward-apply（详见 persistable.pool.migration_runner_protocol）。
-                    LLM 不需要看到 "run_migration" 这种命令；如果需要 force-rerun（极少数场景），用一次性 ad-hoc program。
+                    **3. 类型定义内联**:
+                    csv 没有外部 schema 声明文件；如果 server method 需要 TS 类型（如 \`type Factor = { psm: string; ... }\`），
+                    在 server/ 源码内 inline 定义即可。未来若类型膨胀，可加 \`stones/<self>/types/\` 目录承载共享类型，
+                    但当前不强制。
 
-                    **4. params schema 校验是 todo**：当前 CommandTableEntry 没强制 schema；落地 pool 后可考虑用
-                    \`stones/<self>/database/schemas/<n>.ts\` 的类型同时驱动运行时校验（见 programmable.todo）。
+                    **4. LLM 也可直接读 csv**:
+                    与 sql 时代不同，csv 路径对 LLM 是合法可见的（详见 persistable.pool.patches.llm_access_via_server_method）。
+                    server method 主要在两个场景下提供价值：
+                    - 大批量写 / 复杂查询（避免 LLM 反复读全表）。
+                    - 语义化封装（让 LLM 看见"upsert_factor"比"读 factors.csv 找一行改一行写回"更顺手）。
+                    简单的"查看 / 偶尔小改"，LLM 直接 file_window.open / edit 即可，无需 server method 包装。
+
+                    **5. params schema 校验是 todo**：当前 CommandTableEntry 没强制 schema；
+                    如未来要支持自动参数检查 / 转换，需在 callCommand 路径 + ui callMethod 路径都加上（见 programmable.todo）。
                     `,
                     named: {
                         "pool method": "server/index.ts 中 commands 字典里访问 pool 数据的语义命令",
-                        "connection cache": "pool runtime 按 PoolObjectRef 复用 bun:sqlite 连接的缓存；避免每个命令重开",
-                        "schema-driven validation": "用 stones/<self>/database/schemas/<n>.ts 同时做类型与运行时 params 校验",
+                        "csv-based pool method": "用 fs + csv 解析库读写 pool/data/<name>.csv 的 server method",
+                        "enqueueSessionWrite('data:...')": "csv 整文件写串行化键",
                     },
+                    sources: [["src/persistable/csv-pool.ts", "csv-based pool method 的实现路径——readCsv / writeCsv / appendRow API + write-then-rename + kebab-case name 校验；server method 在 stone server/index.ts 中以 fs API 调用本模块（或 papaparse 等等价 csv 库）。"]],
                 },
             },
             todo: [

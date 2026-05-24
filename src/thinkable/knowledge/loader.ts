@@ -1,55 +1,112 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { poolKnowledgeDir, type PoolObjectRef } from "../../persistable";
+import {
+  poolKnowledgeDir,
+  stoneKnowledgeDir,
+  type PoolObjectRef,
+  type StoneObjectRef,
+} from "../../persistable";
 import { parseKnowledgeFile } from "./parser";
 import type { KnowledgeDoc, KnowledgeIndex } from "./types";
 
-/** 内部 cache：根目录 → { 上次索引 + 文件签名 }。 */
+/** 双源 loader 输入：stone (seed) + pool (sediment) 两个 ref。 */
+export interface KnowledgeLoadRefs {
+  /** stone 侧 ref（seed knowledge：`stones/<branch>/objects/<id>/knowledge/`，进 git）。 */
+  stone: StoneObjectRef;
+  /** pool 侧 ref（sediment knowledge：`pools/objects/<id>/knowledge/`，不进 git）。 */
+  pool: PoolObjectRef;
+}
+
+/** 内部 cache：两侧目录组合签名 → { 上次索引 + 文件签名 }。 */
 const cache = new Map<string, { index: KnowledgeIndex; signature: string }>();
 
 /**
- * 加载 Object 的 knowledge 索引（2026-05-23 起改读 pool 层）。
+ * 双源加载 Object 的 knowledge 索引（2026-05-24 起：stone seed + pool sediment 合并）。
  *
- * - 第一次：递归扫 `pools/objects/<id>/knowledge/` 下所有 .md，解析 frontmatter + body
- * - 后续：按 "文件路径 + mtime" 组成签名；签名未变即返回上次索引（同一对象引用）
+ * 两侧扫描：
+ * - seed：`stones/<branch>/objects/<id>/knowledge/`（设计层；进 git review）
+ * - sediment：`pools/objects/<id>/knowledge/`（运行时认知；不进 git）
  *
- * memory/ / relations/ 也是 knowledge 的一部分，按相对路径作为 ID（如 memory/index）。
+ * 合并规则：
+ * - 相对路径（去 .md 后缀）相同视为冲突；sediment 胜出（运行时认知覆盖先天），但 console.warn
+ * - 由于 seed 一般在一级 `knowledge/<slug>.md`、sediment 在二级 `knowledge/memory|relations/<slug>.md`，
+ *   实际冲突极少；防御性代码保证安全
+ *
+ * 容错：
+ * - 任一侧目录 ENOENT/不可读 → 静默继续扫另一侧，不报错
+ *
+ * Cache：以两侧 (path, mtime) 联合签名为键；签名未变即返回上次索引（同对象引用）。
  */
-export async function loadKnowledgeIndex(ref: PoolObjectRef): Promise<KnowledgeIndex> {
-  const root = poolKnowledgeDir(ref);
-  const files = await collectMdFiles(root);
-  const signature = files
-    .map((f) => `${f.path}@${f.mtime}`)
-    .sort()
-    .join("|");
-  const cached = cache.get(root);
+export async function loadKnowledgeIndex(refs: KnowledgeLoadRefs): Promise<KnowledgeIndex> {
+  const stoneRoot = stoneKnowledgeDir(refs.stone);
+  const poolRoot = poolKnowledgeDir(refs.pool);
+
+  const stoneFiles = await collectMdFiles(stoneRoot);
+  const poolFiles = await collectMdFiles(poolRoot);
+
+  const signature = [
+    `stone:${stoneRoot}`,
+    ...stoneFiles.map((f) => `s:${f.path}@${f.mtime}`).sort(),
+    `pool:${poolRoot}`,
+    ...poolFiles.map((f) => `p:${f.path}@${f.mtime}`).sort(),
+  ].join("|");
+
+  const cacheKey = `${stoneRoot}::${poolRoot}`;
+  const cached = cache.get(cacheKey);
   if (cached && cached.signature === signature) {
     return cached.index;
   }
 
   const byPath = new Map<string, KnowledgeDoc>();
-  for (const f of files) {
+
+  // 先加载 seed（stone 侧）—— 让 sediment 在 set 时自然覆盖并触发 warn
+  for (const f of stoneFiles) {
     const text = await readFile(f.path, "utf8");
     const { frontmatter, body } = parseKnowledgeFile(text);
-    const rel = relative(root, f.path).replace(/\.md$/, "");
-    const idPath = rel.split(/[\\/]/).join("/"); // 统一斜杠
+    const idPath = toIdPath(stoneRoot, f.path);
     byPath.set(idPath, {
       path: idPath,
       file: f.path,
       frontmatter,
       body,
-      mtime: f.mtime
+      mtime: f.mtime,
+    });
+  }
+
+  // 后加载 sediment（pool 侧）—— 同 idPath 时覆盖 seed 并 warn
+  for (const f of poolFiles) {
+    const text = await readFile(f.path, "utf8");
+    const { frontmatter, body } = parseKnowledgeFile(text);
+    const idPath = toIdPath(poolRoot, f.path);
+    if (byPath.has(idPath)) {
+      const prev = byPath.get(idPath)!;
+      console.warn(
+        `[knowledge-loader] conflict path="${idPath}" seed=${prev.file} sediment=${f.path} resolution=sediment_wins`,
+      );
+    }
+    byPath.set(idPath, {
+      path: idPath,
+      file: f.path,
+      frontmatter,
+      body,
+      mtime: f.mtime,
     });
   }
 
   const index: KnowledgeIndex = { byPath };
-  cache.set(root, { index, signature });
+  cache.set(cacheKey, { index, signature });
   return index;
 }
 
 /** 测试钩子：清空 loader 缓存。 */
 export function clearKnowledgeLoaderCache(): void {
   cache.clear();
+}
+
+/** 相对路径（去 .md 后缀，统一斜杠）作为 KnowledgeDoc.path 的 idPath。 */
+function toIdPath(root: string, abs: string): string {
+  const rel = relative(root, abs).replace(/\.md$/, "");
+  return rel.split(/[\\/]/).join("/");
 }
 
 async function collectMdFiles(root: string): Promise<Array<{ path: string; mtime: number }>> {

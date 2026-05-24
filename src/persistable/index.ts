@@ -6,16 +6,19 @@ export {
   POOL_OBJECTS_SUBDIR,
   poolDir,
   poolMetadataFile,
-  poolSqlDir,
   poolKnowledgeDir,
   poolKnowledgeMemoryDir,
   poolKnowledgeRelationsDir,
   poolKnowledgeRelationFile,
   poolFilesDir,
+  poolDataDir,
+  poolDataFile,
   readPoolRelation,
   createPoolObject,
   derivePoolFromThread,
 } from "./pool-object";
+
+export { readCsv, writeCsv, appendRow } from "./csv-pool";
 
 export {
   flowDataFile,
@@ -64,9 +67,7 @@ export {
   createStoneObject,
   serverDir,
   clientDir,
-  stoneDatabaseDir,
-  stoneDatabaseSchemasDir,
-  stoneDatabaseMigrationsDir,
+  stoneKnowledgeDir,
   stoneMetadataFile,
   type StoneObjectMetadata
 } from "./stone-object";

@@ -216,9 +216,11 @@ export async function collectExecutableKnowledgeEntries(
   );
   if (thread.persistence) {
     try {
-      // 2026-05-23: knowledge 已迁到 pool 层；loader 改读 pools/objects/<id>/knowledge/。
+      // 2026-05-24: 双源扫描——stone seed（设计层，进 git）+ pool sediment（运行时）。
+      // LLM 看到的不分来源；同名冲突 sediment 胜出（详见 loader.ts loadKnowledgeIndex）。
+      const stoneRef = deriveStoneFromThread(thread.persistence);
       const poolRef = derivePoolFromThread(thread.persistence);
-      const index = await loadKnowledgeIndex(poolRef);
+      const index = await loadKnowledgeIndex({ stone: stoneRef, pool: poolRef });
       const activations = computeActivations(thread, index);
       for (const act of activations) {
         // explicit 优先；activator 重复命中同一 path 时跳过
@@ -306,7 +308,8 @@ export async function deriveRelationWindow(
     let peerReadme: string | undefined;
     try {
       const text = await readReadme(peerRef);
-      peerReadme = text === undefined ? undefined : truncateKnowledgeBody(text);
+      // 空字符串等价 "未写过"（createStoneObject 预创空占位语义，2026-05-24 visibility-first）
+      peerReadme = text === undefined || text.trim() === "" ? undefined : truncateKnowledgeBody(text);
     } catch (err) {
       console.debug(`[relation] readme io_error ${peerId} msg=${(err as Error).message}`);
     }

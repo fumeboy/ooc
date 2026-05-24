@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { deriveStoneFromThread } from "../../persistable/common";
+import { derivePoolFromThread } from "../../persistable/pool-object";
 import {
   computeActivations,
   loadKnowledgeIndex,
@@ -343,8 +344,10 @@ async function renderKnowledgeWindowChildren(
     return children;
   }
   try {
+    // 2026-05-24: 双源扫描——seed (stone) + sediment (pool)。
     const stoneRef = deriveStoneFromThread(thread.persistence);
-    const index = await loadKnowledgeIndex(stoneRef);
+    const poolRef = derivePoolFromThread(thread.persistence);
+    const index = await loadKnowledgeIndex({ stone: stoneRef, pool: poolRef });
     const doc = index.byPath.get(window.path);
     if (!doc) {
       children.push(xmlElement("error", {}, [xmlText(`knowledge "${window.path}" 不存在`)]));
