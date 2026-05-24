@@ -394,15 +394,40 @@ export const root: DocTreeNode = {
             **跟历史污染的关系**: 2026-05-20 之前的 sub agent (A2-A8 / A1+B5 那几轮) 没有此约束,
             在 .ooc-world/flows/ 落了一批 \`web-*\` / \`regress-*\` / \`a8-verify-*\` 等污染 session,
             Supervisor 已在 Task #23 中手动清理。本规约从落地之后的派单开始强制执行。
+
+            **🔥 进程卫生（2026-05-25 新加，比 session 卫生严重）**:
+
+            体验官 Round 6 启动了一个长寿 vite dev server（port 5173）做 Playwright 体验,
+            sub agent 退出时**没 kill 该 vite 进程**——它带着 sub agent 当时设置的 env
+            （\`OOC_API_TARGET=http://127.0.0.1:7882\` Round 6 临时 port、\`OOC_WORLD_DIR=/tmp/ooc-exp6-world\`
+            已删除的临时目录）**在用户本地一直跑了几天**, 让用户的浏览器永远 proxy 到死端口、
+            world 错指、debug 永远 502。Supervisor 在用户报告"backend offline"时才发现。
+
+            **规约**:
+
+            1. **任何 sub agent 启动的 long-running 进程**（vite dev server / backend server /
+               watch loop / playwright headless / 自己写的 daemon）**必须在 sub agent 退出前 kill**。
+               典型实现：在 sub agent 脚本顶部 \`PIDS=()\`; 启动后 \`PIDS+=($!)\`; 末尾 \`trap 'kill "\${PIDS[@]}" 2>/dev/null' EXIT\`。
+            2. **不要假设 sub agent 进程退出 → 子进程自动死**: macOS bun / node 默认不传 SIGHUP 给孙子进程,
+               vite + react fast-refresh 是分叉 daemon, 与 sub agent shell 完全脱钩。**主动 kill 才安全**。
+            3. **如果 sub agent 需要"暴露给用户后续会话用"的 server**, 必须 **明确告诉 Supervisor 并请求授权**,
+               不要悄悄留下来。
+            4. **诊断 hint**: 如果用户报告 "前端 offline / proxy 错 port / debug 502", 第一步检查
+               \`ps eww <vite_pid>\` 看 env 是否带 \`/tmp/ooc-exp*\` 类临时路径 → 立即 kill + 提示用户重启。
+
+            **派单模板加一条**:
+            > 启动的 vite / backend / 任何 long-running 进程, sub agent 退出前必须 kill
+            > (\`trap 'kill \${PIDS[@]}' EXIT\`); 不要悄悄留进程给 user 后续会话。
             `,
             named: {
                 "_test_<agent>_<ts> 前缀": "sub agent 自验证 session 的约定 sessionId 形态",
                 "sidebar 隐藏 _test_": "前端体验层卫生, AgentOfVisible 落地",
                 "回归后清理": "sub agent 自己创建的 _test_* session 应主动 rm",
+                "进程卫生": "sub agent 启动的 vite/backend/daemon 必须退出前 kill",
             },
             todo: [
                 "AgentOfVisible 落地: SessionList 默认隐藏 _test_ 前缀 session, 加 toggle 展开;尚未实现",
-                "Supervisor 派单模板补这条; 派给体验官 UI 评审 / sub agent 自验证时显式加入约定",
+                "Supervisor 派单模板补这两条; 派给体验官 UI 评审 / sub agent 自验证时显式加入约定 (session 前缀 + 进程 kill)",
             ],
         },
         design_doc_historization: {

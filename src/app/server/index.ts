@@ -273,8 +273,11 @@ if (import.meta.main) {
   // sql_pool 删除后该目录已无语义）。advisory，不阻塞启动。
   await checkStaleDatabaseDir(config.baseDir, config.stonesBranch);
 
-  buildServer(config).listen(config.port);
-  console.log(`[ooc-app-server] listening on :${config.port}`);
+  // hostname: "0.0.0.0" 显式 IPv4 监听（兼 IPv6 dual-stack on macOS）。
+  // 之前默认 listen 在 macOS bun 上只绑 IPv6（lsof: `*:3000` 但 IPv6 only），
+  // vite proxy target 用 `127.0.0.1`（IPv4）连不上 → /api/* 全 502。
+  buildServer(config).listen({ port: config.port, hostname: "0.0.0.0" });
+  console.log(`[ooc-app-server] listening on 0.0.0.0:${config.port}`);
   console.log(`[ooc-app-server] world dir: ${config.baseDir}`);
   console.log(`[ooc-app-server] stones-branch: ${config.stonesBranch}`);
 }
