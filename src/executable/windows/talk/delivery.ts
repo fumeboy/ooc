@@ -121,6 +121,11 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
       contextWindows: [],
       creatorThreadId: callerThread.id,
       creatorObjectId: callerRef.objectId,
+      // C5（2026-05-25）：cross-session 派送时记录 caller 的 sessionId，
+      // 让后续 end({result}) auto-reply 知道把通知派回原 session
+      // （super-alias 场景下 callee.persistence.sessionId === "super"，但 caller
+      // 在 user session；缺这字段 notify 会找错 session）。
+      creatorSessionId: callerRef.sessionId,
       persistence: {
         baseDir: callerRef.baseDir,
         sessionId: calleeSessionId,

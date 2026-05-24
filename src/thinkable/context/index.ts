@@ -145,6 +145,19 @@ export type ThreadContext = {
    * 历史 thread.json 没有此字段时保守按"相同"处理（do）。
    */
   creatorObjectId?: string;
+  /**
+   * 创建本线程的 session id（C5：cross-session notify 修复，2026-05-25）。
+   *
+   * 大多数 thread 的 creator 与自己在同一 session，此时该字段与 persistence.sessionId 相等，
+   * 通常缺省。**关键场景**：super-alias 派送时 callee thread 在 "super" session，
+   * 但 caller thread 在 user session——此字段记录 caller 的 sessionId，让
+   * notifyThreadActivated / end({result}) auto-reply 知道把 enqueue 派到哪个 session。
+   *
+   * 缺省回退（向后兼容）：使用 thread.persistence.sessionId（同 session）。
+   *
+   * 由 talk-delivery 在跨 session 创建 callee thread 时写入；其他路径可不设。
+   */
+  creatorSessionId?: string;
   /** 子线程 ID 列表，保留创建顺序，便于展示和调试。 */
   childThreadIds?: string[];
   /** 子线程实体表；当前内存实现直接嵌套，不引入独立存储层。 */

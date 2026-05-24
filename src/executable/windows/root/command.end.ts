@@ -183,19 +183,17 @@ export async function executeEndCommand(ctx: CommandExecutionContext): Promise<s
   ctx.thread.status = "done";
 
   // 根因 #5：callee 结束时通知 creator thread，确保 caller 即使在 waiting
-  // 也能被 worker 调度（runJob 内的 syncCrossObjectCalleeEnds 会读到本 callee 状态
-  // 并唤醒 caller）。
+  // 也能被 worker 调度。
   //
   // `result` 路径已经通过 continue/say → deliverTalkMessage 内部 notify 过 caller；
   // 这里**无条件**再调一次：notifyThreadActivated 由 jobManager.createRunThreadJob 去重，
   // 多次调用幂等。这覆盖 end({}) 不带 result 的常见路径。
   //
-  // 跨 session 处理（super alias）：通过 creator window 的 target 字段拿到 caller object,
-  // session 取 callee 自身的 persistence.sessionId — 但 super alias 时 caller 在另一个
-  // session。此处优先用 creator do_window（同 object 同 session）；creator talk_window 时
-  // caller 可能跨 session，我们读 talk_window.target 但 session 仍取 callee 当前 session,
-  // notify 命中错误 session 的话 jobManager 不会找到目标 thread → runner 抛错 → job 标记
-  // failed,不污染其它正常流。可接受的过渡 trade-off,见 syncCrossObjectCalleeEnds 兜底注释。
+  // C5（2026-05-25）：cross-session 修复 — 优先使用 thread.creatorSessionId（由 talk-delivery
+  // 在跨 session 创建 callee 时写入），fallback 到 callee 自身的 persistence.sessionId。
+  // 这解决了 super-alias 场景下 callee 在 super session、caller 在 user session 时
+  // notify 派错 session、jobManager 找不到 thread → job failed 的 caveat。
+  // syncCrossObjectCalleeEnds 仍是后备 fallback（不依赖 notify 但 latency 高），保持兼容。
   const persistence = ctx.thread.persistence;
   if (persistence) {
     const creator = findCreatorWindow(ctx);
@@ -204,9 +202,11 @@ export async function executeEndCommand(ctx: CommandExecutionContext): Promise<s
         creator.type === "do" ? persistence.objectId : creator.target;
       const callerThreadId =
         creator.type === "do" ? (creator as DoWindow).targetThreadId : (creator as TalkWindow).targetThreadId;
+      // C5: 优先 creatorSessionId（cross-session），fallback persistence.sessionId（同 session）
+      const callerSessionId = ctx.thread.creatorSessionId ?? persistence.sessionId;
       if (callerObjectId && callerThreadId && callerObjectId !== "user") {
         notifyThreadActivated({
-          sessionId: persistence.sessionId,
+          sessionId: callerSessionId,
           objectId: callerObjectId,
           threadId: callerThreadId,
         });
