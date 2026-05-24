@@ -26,7 +26,7 @@ OOC Agent 由 8 个能力维度组合：thinkable / executable / collaborable / 
 | `meta/app.server.doc.ts` | HTTP 控制面（Elysia）：路由表、worker 调度、jobManager、debug 文件落盘。 |
 | `meta/app.client.doc.ts` | Web 控制面（vite + React）：AppShell、URL routing、chat 模型（cross-object talk_window）、ObjectClientRenderer。 |
 | `meta/harness.md` | harness 组织结构的原始 narrative（被 `engineering.harness.doc.ts` 结构化收编，留作历史背景）。 |
-| `meta/case.factor-dev.doc.ts` | **第一个外部场景 case**：把哨兵平台因子开发助手（`plugins_with_agent` 项目，50+ Claude Code skill）收编成 4 个 OOC 业务 Object——`factor_requirement` / `factor_workshop` / `sentry_platform` / `codebase_repo`。展示外部场景如何用 Object 模式表达。 |
+| `meta/case.factor-dev-agents.doc.ts` | **第一个外部场景 case**：把哨兵平台因子开发助手（`plugins_with_agent` 项目，15 个 Claude Code SKILL.md）收编成 **3 个 OOC Agent + 1 个项目级 skill**——`sentry_factor_dev`（流程编排）/ `sentry_event_factor` / `sentry_factor_group` + branch 级 `psm-query` skill。展示外部场景如何用 Agent + skill 的层次表达。 |
 | `meta/cookbook.add-new-agent.doc.ts` | **添加新 Agent 的 cookbook**：5 步从空到能跑（meta 概念 → stone 目录 → self/readme → server/client → 验证）。 |
 
 阅读顺序建议：
