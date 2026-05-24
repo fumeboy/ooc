@@ -22,7 +22,7 @@
  * 内部的 commands / windows registry），故归位到 thinkable/knowledge。
  */
 
-import { deriveStoneFromThread, derivePoolFromThread, listBranchSkills, listObjectSkills, readReadme, readPoolRelation, readFlowRelation, readIssue } from "../../persistable/index.js";
+import { deriveStoneFromThread, derivePoolFromThread, listBranchSkills, listObjectSkills, readPoolRelation, readFlowRelation, readIssue } from "../../persistable/index.js";
 import type { ThreadContext } from "../context.js";
 import { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge.js";
 import { ROOT_BASIC_PATH, ROOT_COMMANDS, ROOT_KNOWLEDGE } from "../../executable/windows/root/index.js";
@@ -276,17 +276,20 @@ export async function collectExecutableKnowledgeEntries(
  * spec 2026-05-20 relation-window-design:relation 升级为专属 window type,
  * 自带 edit 命令面;不持久化,每轮 derive。id 稳定 `w_rel_<peerId>`。
  *
- * 2026-05-21:把原来伴随的 KnowledgeWindow(kn_rel_*_readme / kn_rel_*_self)整合到
- * RelationWindow 自身的字段(peerReadme / selfLongTermBody / selfSessionBody),让 UI
- * 不再出现"relation_window + 两条 knowledge_window"三份重复;render.ts case "relation"
- * 负责按字段渲染给 LLM。createdAt 不用 Date.now() —— polling 会让 hash 抖动 ——
- * 改用对端 talk_window 的最早 createdAt(没有就 0)。
+ * 2026-05-25 R8-5:
+ * - 删除 peerReadme/peerReadmePath: relation 文档在设计中只存在于 pools 与 flows
+ *   (self 视角的 self-relation), 不含 peer stone readme; peer readme 是
+ *   collaborable.talk_window 维度的"对端身份介绍", 与 self-relation 是不同维度
+ *   的资源, 不该被 RelationWindow 内联。需要 peer readme 时 LLM 走 file_window
+ *   直接 open peer stone 路径即可。
+ * - 加 selfLongTermExists / selfSessionExists boolean flag: 让 API caller 显式
+ *   知道"懒创建未写"(exists=false, body=undefined) vs "读失败"(future scope)。
  *
  * 跳过规则:
  * - target === SUPER_ALIAS_TARGET → 跳过(super 自反不需要 relation)
  * - thread.persistence 缺失 → 全部跳过
  *
- * IO 错误规则:全部静默(console.debug),body 字段保持 undefined,renderer 显示占位提示。
+ * IO 错误规则:全部静默(console.debug),body 保持 undefined, exists 据 read 返回值判定。
  */
 export async function deriveRelationWindow(
   thread: ThreadContext,
@@ -314,32 +317,29 @@ export async function deriveRelationWindow(
   const selfFlowRef = { baseDir, sessionId, objectId: selfId };
 
   for (const [peerId, createdAt] of peerEarliest) {
-    const peerRef = { baseDir, objectId: peerId };
-    const peerReadmePath = `stones/${peerId}/readme.md`;
     const selfLongTermPath = `pools/${selfId}/knowledge/relations/${peerId}.md`;
     const selfSessionPath = `flows/${sessionId}/objects/${selfId}/knowledge/relations/${peerId}.md`;
 
-    let peerReadme: string | undefined;
-    try {
-      const text = await readReadme(peerRef);
-      // 空字符串等价 "未写过"（createStoneObject 预创空占位语义，2026-05-24 visibility-first）
-      peerReadme = text === undefined || text.trim() === "" ? undefined : truncateKnowledgeBody(text);
-    } catch (err) {
-      console.debug(`[relation] readme io_error ${peerId} msg=${(err as Error).message}`);
-    }
-
     let selfLongTermBody: string | undefined;
+    let selfLongTermExists = false;
     try {
       const text = await readPoolRelation(selfPoolRef, peerId);
-      selfLongTermBody = text === undefined ? undefined : truncateKnowledgeBody(text);
+      if (text !== undefined) {
+        selfLongTermExists = true;
+        selfLongTermBody = truncateKnowledgeBody(text);
+      }
     } catch (err) {
       console.debug(`[relation] long_term io_error ${peerId} msg=${(err as Error).message}`);
     }
 
     let selfSessionBody: string | undefined;
+    let selfSessionExists = false;
     try {
       const text = await readFlowRelation(selfFlowRef, peerId);
-      selfSessionBody = text === undefined ? undefined : truncateKnowledgeBody(text);
+      if (text !== undefined) {
+        selfSessionExists = true;
+        selfSessionBody = truncateKnowledgeBody(text);
+      }
     } catch (err) {
       console.debug(`[relation] session io_error ${peerId} msg=${(err as Error).message}`);
     }
@@ -352,12 +352,12 @@ export async function deriveRelationWindow(
       status: "open",
       createdAt,
       peerId,
-      peerReadmePath,
-      peerReadme,
       selfLongTermPath,
       selfLongTermBody,
+      selfLongTermExists,
       selfSessionPath,
       selfSessionBody,
+      selfSessionExists,
     });
   }
   return out;

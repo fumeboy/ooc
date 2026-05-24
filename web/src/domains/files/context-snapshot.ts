@@ -143,15 +143,18 @@ export type ContextWindow =
       status: "open" | "closed";
       /** 对端 objectId(去重 key);与 talk_window.target 同源。 */
       peerId: string;
-      /** peer readme(stones/<peer>/readme.md);缺失/IO 失败时 undefined。 */
-      peerReadmePath?: string;
-      peerReadme?: string;
-      /** self 对该 peer 的 long_term relation(stones/<self>/knowledge/relations/<peer>.md)。 */
+      // 2026-05-25 R8-5:relation 文档在设计中只存在于 pools 与 flows
+      // (self 视角的 self-relation), 不含 peer stone readme。
+      /** self 对该 peer 的 long_term relation(`pools/objects/<self>/knowledge/relations/<peer>.md`)。 */
       selfLongTermPath?: string;
       selfLongTermBody?: string;
-      /** self 对该 peer 的本 session relation(flows/<sid>/objects/<self>/knowledge/relations/<peer>.md)。 */
+      /** R8-5: long_term 文件是否实际存在(false = 懒创建未写)。 */
+      selfLongTermExists?: boolean;
+      /** self 对该 peer 的本 session relation(`flows/<sid>/objects/<self>/knowledge/relations/<peer>.md`)。 */
       selfSessionPath?: string;
       selfSessionBody?: string;
+      /** R8-5: session 文件是否实际存在(false = 懒创建未写)。 */
+      selfSessionExists?: boolean;
       createdAt?: number;
     };
 

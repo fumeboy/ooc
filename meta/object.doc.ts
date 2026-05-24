@@ -1075,22 +1075,29 @@ export const root: DocTreeNode = {
                     title: "relation_window - peer 关系的专属 window type",
                     content: `
                     当 thread.contextWindows 中存在指向某 peer 的 talk_window 时，
-                    每轮 render 时由 synthesizer 自动派生一组 window，承载"你对该 peer 的关系认知":
+                    每轮 render 时由 synthesizer 自动派生 RelationWindow，承载"你对该 peer 的关系认知":
 
-                    1. **RelationWindow**（type="relation"，id 稳定 \`w_rel_<peerId>\`）：
-                       专属 window type，注册 \`edit\` command（详见 children/edit_command）。
-                       这是 relation 的命令面入口——LLM 想更新 relation 不再依赖 write_file 弱 prompt。
-                    2. **伴随 KnowledgeWindow**（source="relation"）：peer readme + 双层 self relation 正文：
-                       - peer readme: \`stones/<peerId>/readme.md\`；不存在则跳过该条。
-                       - self relation 合并体: 同一 KnowledgeWindow body 内分两段:
-                         \`## long_term (pools/objects/<self>/knowledge/relations/<peer>.md)\` +
-                         \`## session (flows/<sid>/objects/<self>/knowledge/relations/<peer>.md)\`。
-                         缺失的段显示占位提示，引导 LLM 走 \`relation_window.edit\` 命令。
+                    **RelationWindow**（type="relation"，id 稳定 \`w_rel_<peerId>\`）：
+                    专属 window type，注册 \`edit\` command（详见 children/edit_command）。
+                    这是 relation 的命令面入口——LLM 想更新 relation 不再依赖 write_file 弱 prompt。
+
+                    **2026-05-25 R8-5 修订**：
+                    relation 文档在设计中**只存在于 pools 与 flows**（self 视角的 self-relation），
+                    **不包含 peer stone readme**。原因：peer readme 属 collaborable.talk_window 维度的
+                    "对端身份介绍"，与 self-relation 是不同维度的资源，不该被 RelationWindow 内联。
+                    需要 peer readme 时 LLM 通过 file_window 直接 open peer stone 路径即可。
+
+                    RelationWindow 暴露字段:
+                    - \`peerId\`: 对端 objectId（去重 key）
+                    - \`selfLongTermPath\` + \`selfLongTermBody?\` + \`selfLongTermExists\`:
+                      pool 层长期 relation（懒创建；exists=false 时 body=undefined）
+                    - \`selfSessionPath\` + \`selfSessionBody?\` + \`selfSessionExists\`:
+                      flow 层 session 临时 relation
 
                     **两层文件 (long_term × session)**:
                     - long_term: \`pools/objects/<self>/knowledge/relations/<peer>.md\` —— 跨 session 长期认知；
                       只能由 super flow 写入（保 reflectable 元编程闭环）。落在 pool 而非 stone：relation 是 sediment knowledge
-                      （运行时沉淀的事实），写就生效不进 git review/rollback；与 stone 中的 seed knowledge 二分。详见 persistable.pool。
+                      （运行时沉淀的事实），写就生效不进 git review/rollback；与 stone 中的 seed knowledge 二分。
                     - session: \`flows/<sid>/objects/<self>/knowledge/relations/<peer>.md\` —— 本 session 临时认知；
                       由 relation_window.edit(scope="session") 直接落盘，不污染长期 relations。
 
@@ -1099,13 +1106,14 @@ export const root: DocTreeNode = {
                     跳过规则（全部静默，仅 console.debug）:
                     - target === SUPER_ALIAS_TARGET（super 自反）→ 完全跳过整组派生。
                     - thread.persistence 缺失 → 完全跳过。
-                    - peer stones 目录 / readme.md 不存在 → 跳过 peer readme 那条（其它仍生成）。
                     `,
                     named: {
                         "RelationWindow": "type=\"relation\" 的 ContextWindow；relation 命令面入口",
                         "deriveRelationWindow": "按 talk_window peer 派生 RelationWindow 的函数",
                         "long_term relation": "pools/objects/<self>/knowledge/relations/<peer>.md，跨 session 长期；落 pool 不落 stone",
                         "session relation": "flows/<sid>/objects/<self>/knowledge/relations/<peer>.md，仅本 session",
+                        "self-relation only": "relation 文档只在 pools+flows, 不含 peer stone readme (R8-5)",
+                        "*Exists flag": "API caller 用 selfLongTermExists/selfSessionExists 区分 lazy-create vs read-fail",
                     },
                     children: {
                         "edit_command": {

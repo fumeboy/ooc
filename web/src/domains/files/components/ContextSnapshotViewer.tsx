@@ -365,9 +365,10 @@ function InlineTalkComposer({
 /**
  * Relation window 详情面板。
  *
- * 2026-05-21:relation 内容已在后端 derive 阶段并入 RelationWindow(peerReadme /
- * selfLongTermBody / selfSessionBody),无需再从 web/objects 单独 fetch。窗口字段
- * 缺失时显示占位 + 引导写入提示,与 LLM 看到的 XML 渲染保持一致。
+ * 2026-05-25 R8-5:删除 peer_readme section。relation 文档在设计中只存在于
+ * pools 与 flows(self 视角的 self-relation),不含 peer stone readme;
+ * peer readme 是 collaborable.talk_window 维度的"对端身份介绍",
+ * 应当通过 FileViewer 直接打开 peer stone 路径而不是被 RelationWindow 内联。
  */
 function RelationWindowDetail({
   window,
@@ -376,10 +377,9 @@ function RelationWindowDetail({
 }) {
   const { displayName } = useDisplayName(window.peerId);
   const longTermPath =
-    window.selfLongTermPath ?? `stones/.../knowledge/relations/${window.peerId}.md`;
+    window.selfLongTermPath ?? `pools/objects/.../knowledge/relations/${window.peerId}.md`;
   const sessionPath =
     window.selfSessionPath ?? `flows/.../knowledge/relations/${window.peerId}.md`;
-  const readmePath = window.peerReadmePath ?? `stones/${window.peerId}/readme.md`;
   return (
     <div className="llm-input-md-body" style={{ padding: "8px 12px" }}>
       <div className="llm-input-attrs" style={{ marginBottom: 8 }}>
@@ -390,14 +390,6 @@ function RelationWindowDetail({
           </span>
         </div>
       </div>
-
-      <h3 style={{ marginTop: 12 }}>peer readme</h3>
-      <div className="muted small" style={{ marginBottom: 4 }}>{readmePath}</div>
-      {window.peerReadme ? (
-        <MarkdownContent content={window.peerReadme} />
-      ) : (
-        <div className="muted small">(no public readme)</div>
-      )}
 
       <h3 style={{ marginTop: 16 }}>self · long_term</h3>
       <div className="muted small" style={{ marginBottom: 4 }}>{longTermPath}</div>

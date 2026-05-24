@@ -175,33 +175,33 @@ export async function executeRelationEdit(
   }
 }
 
-/** relation_window 的 renderXml hook：peer_id + peer_readme + self long_term/session。 */
+/**
+ * relation_window 的 renderXml hook：peer_id + self long_term/session。
+ *
+ * 2026-05-25 R8-5：删除 peer_readme 渲染。relation 文档在设计中只存在于
+ * pools 与 flows（self 视角的 self-relation），不含 peer stone readme。需要
+ * peer readme 时 LLM 通过 file_window 直接 open peer stone 路径即可。
+ */
 function renderRelationWindow(ctx: RenderContext): XmlNode[] {
   const window = ctx.window as RelationWindow;
   const children: XmlNode[] = [
     xmlElement("peer_id", {}, [xmlText(window.peerId)]),
   ];
 
-  // peer readme — 缺失就不渲染（peer 没有 stone 或文件不存在；不需要"占位"提示，因为 LLM 改不了对端的 readme）
-  if (window.peerReadme !== undefined) {
-    children.push(
-      xmlElement("peer_readme", { path: window.peerReadmePath }, [xmlText(window.peerReadme)]),
-    );
-  }
-
   // self long_term / session — 缺失也保留节点 + 占位文案，提示 LLM 用 edit 写入
+  // exists=false 时 body undefined → 渲染占位；exists=true 但 body=undefined 不会出现（synthesizer 保证两者一致）
   const longTermBody = window.selfLongTermBody !== undefined
     ? window.selfLongTermBody
     : `(暂无;通过 open(parent_window_id="${window.id}", command="edit", args={ content: "...", scope: "long_term" }) 写入)`;
   children.push(
-    xmlElement("self_long_term", { path: window.selfLongTermPath }, [xmlText(longTermBody)]),
+    xmlElement("self_long_term", { path: window.selfLongTermPath, exists: String(window.selfLongTermExists) }, [xmlText(longTermBody)]),
   );
 
   const sessionBody = window.selfSessionBody !== undefined
     ? window.selfSessionBody
     : `(暂无;通过 open(parent_window_id="${window.id}", command="edit", args={ content: "...", scope: "session" }) 写入)`;
   children.push(
-    xmlElement("self_session", { path: window.selfSessionPath }, [xmlText(sessionBody)]),
+    xmlElement("self_session", { path: window.selfSessionPath, exists: String(window.selfSessionExists) }, [xmlText(sessionBody)]),
   );
 
   return children;

@@ -425,7 +425,9 @@
 - [x] **R8-2**（trivial）backlog A3 文档勾选已同步：**DONE**（本次更新）
 - [ ] **R8-3**（design）Vite dev server 与 backend 分裂——是否在 backend dev 模式嵌入 minimal SSR 让单 process 端到端跑？涉及 visible 维度 dev runtime 协议决策：___
 - [x] **R8-4**（medium / security）debug API path-traversal：**DONE**（本次 commit）
-- [ ] **R8-5**（low）relation_window not-materialized signal——API response 是否补 `{exists:false}` flag 给 caller 区分 lazy-create vs bug？涉及 contextWindow shape 契约调整：___
+- [x] **R8-5** relation_window 双修：**DONE**
+  - API 显式补 `selfLongTermExists/selfSessionExists: boolean`（区分 lazy-create vs read-fail）
+  - **删除 peerReadme/peerReadmePath**（用户指令，2026-05-25）：relation 文档只存在于 pools+flows（self-relation），不含 peer stone readme；peer readme 是 talk_window 维度资源，LLM 需要时直接 file_window.open peer 路径
 
 ---
 

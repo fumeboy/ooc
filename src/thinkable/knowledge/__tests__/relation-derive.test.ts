@@ -1,12 +1,14 @@
 /**
  * relation derive — 单元测试
  *
- * 覆盖 spec 2026-05-20 relation-window-design + 2026-05-21 合并伴随 KnowledgeWindow:
- *   - deriveRelationWindow:为每个非 super peer 派生 RelationWindow,带 peerReadme /
- *     selfLongTermBody / selfSessionBody 字段(原伴随 kn_rel_*_readme / kn_rel_*_self)
+ * 覆盖 spec 2026-05-20 relation-window-design + 2026-05-25 R8-5:
+ *   - deriveRelationWindow:为每个非 super peer 派生 RelationWindow,带
+ *     selfLongTermBody/Exists + selfSessionBody/Exists 字段
+ *     (R8-5 删 peer_readme/peerReadmePath: relation 只在 pools/flows;
+ *      加 *Exists boolean 给 API caller 区分 lazy-create vs read-fail)
  *   - deriveRelationCompanionKnowledge:已废弃;返回 [](backward-compat shim)
  *
- * 矩阵:readme × long_term × session 关键差分组合;super alias 跳过;多 peer;无 persistence。
+ * 矩阵:long_term × session 关键差分组合;super alias 跳过;多 peer;无 persistence。
  */
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -16,9 +18,7 @@ import {
   createStoneObject,
   createPoolObject,
   poolKnowledgeRelationFile,
-  readmeFile,
   flowRelationFile,
-  type StoneObjectRef,
   type PoolObjectRef,
   type FlowObjectRef,
 } from "../../../persistable";
@@ -64,19 +64,17 @@ async function writeSessionRelation(ref: FlowObjectRef, peerId: string, content:
 
 describe("deriveRelationWindow", () => {
   let tempRoot: string;
-  let selfRef: StoneObjectRef;
-  let peerRef: StoneObjectRef;
   let selfPoolRef: PoolObjectRef;
   let selfFlowRef: FlowObjectRef;
 
   beforeEach(async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-relation-derive-"));
-    selfRef = { baseDir: tempRoot, objectId: SELF };
-    peerRef = { baseDir: tempRoot, objectId: PEER };
     selfPoolRef = { baseDir: tempRoot, objectId: SELF };
     selfFlowRef = { baseDir: tempRoot, sessionId: SID, objectId: SELF };
-    await createStoneObject(selfRef);
-    await createStoneObject(peerRef);
+    // R8-5: relation derivation 不再读 peer stone readme; 但创建 stone 让 init.ts
+    // 注入 creator window 等关联逻辑不至于撞 ENOENT
+    await createStoneObject({ baseDir: tempRoot, objectId: SELF });
+    await createStoneObject({ baseDir: tempRoot, objectId: PEER });
     await createPoolObject(selfPoolRef);
   });
 
@@ -95,9 +93,12 @@ describe("deriveRelationWindow", () => {
     expect(out[0]!.status).toBe("open");
     expect(out[0]!.title).toBe(`relation: ${PEER}`);
     // 路径字段:始终给出,不论文件是否存在
-    expect(out[0]!.peerReadmePath).toBe(`stones/${PEER}/readme.md`);
+    // R8-5: peerReadmePath 已删除（relation 只在 pools/flows）
     expect(out[0]!.selfLongTermPath).toBe(`pools/${SELF}/knowledge/relations/${PEER}.md`);
     expect(out[0]!.selfSessionPath).toBe(`flows/${SID}/objects/${SELF}/knowledge/relations/${PEER}.md`);
+    // R8-5: 新增 exists flag
+    expect(out[0]!.selfLongTermExists).toBe(false);
+    expect(out[0]!.selfSessionExists).toBe(false);
   });
 
   test("super alias 跳过:target='super' 不派生 RelationWindow", async () => {
@@ -145,51 +146,50 @@ describe("deriveRelationWindow", () => {
     expect(out).toHaveLength(0);
   });
 
-  describe("body fields(原 kn_rel_*_readme / kn_rel_*_self 已合并进来)", () => {
-    test("00: readme 缺 + long_term 缺 + session 缺 → 全部 undefined", async () => {
+  describe("body + exists fields(R8-5: 删 peer_readme; 加 *Exists flag)", () => {
+    test("00: long_term 缺 + session 缺 → body undefined + exists=false", async () => {
       const thread = selfThread(tempRoot, [talkTo(PEER)]);
       const out = await deriveRelationWindow(thread);
       expect(out).toHaveLength(1);
-      expect(out[0]!.peerReadme).toBeUndefined();
       expect(out[0]!.selfLongTermBody).toBeUndefined();
+      expect(out[0]!.selfLongTermExists).toBe(false);
       expect(out[0]!.selfSessionBody).toBeUndefined();
+      expect(out[0]!.selfSessionExists).toBe(false);
     });
 
-    test("long_term + session 都在 → 两个 body 含实际内容", async () => {
+    test("long_term + session 都在 → 两个 body 含实际内容 + exists=true", async () => {
       await writeFile(poolKnowledgeRelationFile(selfPoolRef, PEER), "我对 critic 的长期认知", "utf8");
       await writeSessionRelation(selfFlowRef, PEER, "本 session 临时认知");
       const thread = selfThread(tempRoot, [talkTo(PEER)]);
       const out = await deriveRelationWindow(thread);
       expect(out[0]!.selfLongTermBody).toBe("我对 critic 的长期认知");
+      expect(out[0]!.selfLongTermExists).toBe(true);
       expect(out[0]!.selfSessionBody).toBe("本 session 临时认知");
+      expect(out[0]!.selfSessionExists).toBe(true);
     });
 
-    test("仅 session 存在 → long_term 为 undefined, session 含内容", async () => {
+    test("仅 session 存在 → long_term undefined+exists=false, session 含内容+exists=true", async () => {
       await writeSessionRelation(selfFlowRef, PEER, "session-only 内容");
       const thread = selfThread(tempRoot, [talkTo(PEER)]);
       const out = await deriveRelationWindow(thread);
       expect(out[0]!.selfLongTermBody).toBeUndefined();
+      expect(out[0]!.selfLongTermExists).toBe(false);
       expect(out[0]!.selfSessionBody).toBe("session-only 内容");
-    });
-
-    test("readme 在 → peerReadme 含 readme 全文", async () => {
-      await writeFile(readmeFile(peerRef), "peer 的自述", "utf8");
-      const thread = selfThread(tempRoot, [talkTo(PEER)]);
-      const out = await deriveRelationWindow(thread);
-      expect(out[0]!.peerReadme).toBe("peer 的自述");
+      expect(out[0]!.selfSessionExists).toBe(true);
     });
 
     test("multi-peer:每个 peer 的 body 字段独立", async () => {
-      const reviewerRef: StoneObjectRef = { baseDir: tempRoot, objectId: "reviewer" };
-      await createStoneObject(reviewerRef);
-      await writeFile(readmeFile(peerRef), "critic readme", "utf8");
-      await writeFile(readmeFile(reviewerRef), "reviewer readme", "utf8");
+      const reviewerPoolRef: PoolObjectRef = { baseDir: tempRoot, objectId: "reviewer" };
+      await createPoolObject(reviewerPoolRef);
+      // 写两个 peer 的 long_term 到 self 的 pool, 验证 multi-peer 不串台
+      await writeFile(poolKnowledgeRelationFile(selfPoolRef, PEER), "对 critic 的认知", "utf8");
+      await writeFile(poolKnowledgeRelationFile(selfPoolRef, "reviewer"), "对 reviewer 的认知", "utf8");
       const thread = selfThread(tempRoot, [talkTo(PEER), talkTo("reviewer")]);
       const out = await deriveRelationWindow(thread);
       const critic = out.find((w) => w.peerId === PEER)!;
       const reviewer = out.find((w) => w.peerId === "reviewer")!;
-      expect(critic.peerReadme).toBe("critic readme");
-      expect(reviewer.peerReadme).toBe("reviewer readme");
+      expect(critic.selfLongTermBody).toBe("对 critic 的认知");
+      expect(reviewer.selfLongTermBody).toBe("对 reviewer 的认知");
     });
   });
 });
