@@ -351,11 +351,88 @@ e2e-29 [observable]   recovery-check 日志 dump broken[].objectId + reason
 
 ---
 
+## Round 6（2026-05-24）— visible 浏览器真实视角（**首次用 Playwright**）+ activator union 边界
+
+**任务范围**：避开 R1-5 backlog。**首次跑真 Chromium 浏览器**（前 5 轮全部 HTTP 模拟）。
+
+**🔥 揭示 F11（前后端存储路径契约缺）— R2 #6 / R3 #11 / R6 #39 #43 同一架构根因。**
+
+**选定场景与评分**：
+
+| 场景 | 维度 | 评分 |
+|---|---|---|
+| A. visible 前端浏览器真实视角（Playwright 真 Chromium） | visible / app.client | **Bad（critical 多处）** |
+| B. 非 skill_index/talk 类 window render + activator union 窗口类型缺口 | thinkable / executable | **Bad** |
+| C. open_knowledge 路径合法性 + 启动期 friction | thinkable.knowledge / onboarding | OK with sharp edges |
+
+### Round 6 Issue 清单（新，不与 R1-5 backlog 重复）
+
+| # | 严重度 | 维度 | Issue 一句话 |
+|---|---|---|---|
+| **🔥 39** | Critical | visible / app.client | `ObjectClientRenderer.clientAbsPath` 拼 `${WORLD_ROOT}/stones/${objectId}/client/...` **未加 `main/objects/` 段**；2026-05-21 stones 重组后所有 stone client 加载死路（前端硬编码漂移） |
+| **🔥 40** | Critical | visible / app.client | `object-client.html` 独立预览页 mount 在 Router 外；stone client 引用 react-router 的 Link/useNavigate → `Cannot destructure 'basename' of useContext(...) as null` 立崩 |
+| **41** | High | visible / app.server | vite `OOC_API_TARGET` 默认 `127.0.0.1:3000`；与 backend `--port` 不一致时 `/api/*` 全 500，无提示；与 OOC_WORLD_DIR fail-loud 不对称 |
+| **42** | High | thinkable.knowledge | activator.union 只接受 command_exec/program/knowledge 三类窗口的 path；file/search/talk/do/issue/relation 类窗口持续 open 时不贡献 union（**R4 #24 同源新 facet**：R4 只指 root；本 Issue 扩到几乎所有 window 类型） |
+| **43** | High | visible / app.client | seeded stone 不出现在 sidebar tree；`/api/tree?scope=stones` 与 sidebar 读取不一致（**R2 #6 同源新 facet**：R2 是 API marker 错位，本 Issue 是 frontend tree-listing 没读 objects/ 下层） |
+| **44** | Medium | thinkable.knowledge / executable | `open_knowledge` exec 不校验 path 存在性；render 层产 `<error>` 内联，LLM 不作为命令失败 retry（与 R4 F2 silent-swallow 家族同源新成员） |
+| **45** | Medium | visible / app.client | `/world` 直 URL 访问 Unknown route，但 sidebar 有 "World" tab 按钮 → tab 与路由不一致；deep-link 损坏 |
+| **46** | Medium | thinkable / executable.windows | `render.ts` switch 缺 `case "skill_index":` —— 与 R2 #1 同源（确认 R6 仍未修） |
+| **47** | Low | visible / app.client | AppShell 全页只有 1 个真 `<a href>`；导航全是 JS 按钮 → 浏览器返回键 / 新标签 / 复制链接全失效 |
+| **48** | Low | visible / app.client | flows / stones 列表空时仍渲染月份分组头（"2026年5月\n0 sessions"）——空状态信号弱 |
+| **49** | Low | app.server | `/api/runtime/<bad>` 返回 `{error:{code:"INTERNAL_ERROR",message:"NOT_FOUND"}}` —— code 与 message 自相矛盾（R2 #7/R5 #38 同源新 facet：双层错误包装 leak） |
+
+### Round 6 e2e 场景候选
+
+```
+e2e-30 [visible]   POST /api/stones/<id> 后访问 web /stones sidebar tree 应见 <id>
+e2e-31 [visible]   object-client.html?scope=stone&objectId=<existing> 应成功 fallback，不抛 router null
+e2e-32 [visible]   clientAbsPath 必须对齐 backend dir 字段（含 main/objects/ 段）
+e2e-33 [thinkable] file/search/talk/issue/relation window open 时 union 应包含相应 type path
+e2e-34 [executable] open_knowledge(path=不存在) 应 exec 层返回错误而非 render 内联
+e2e-35 [visible]   onboarding test：vite OOC_API_TARGET 与 backend --port 必须一致
+e2e-36 [visible]   sidebar tree marker:"stone" 必须打在真 stone object 层级而非 git 分支
+e2e-37 [visible]   sidebar World tab 点击导航到 /world 应有合法路由
+e2e-38 [app.server] 404 类响应 code 与 message 不应自相矛盾
+```
+
+### Round 6 反向 design 反馈（**5 条，含 F11/F12 系统性**）
+
+| 反馈 | Supervisor 决策建议 |
+|---|---|
+| **🔥 F11 — frontend-backend 存储分层契约缺失（架构级）**：2026-05-21 stones 重组后 backend dir 是 `stones/main/objects/<id>/`，但 `ObjectClientRenderer` 与 `markerFor` 按旧 `stones/<id>/` 硬编码；`/api/stones` items 已暴露正确 `dir` 字段——**frontend 不应自己拼路径**。R2 #6 / R3 #11 / R6 #39 / R6 #43 是同根因四个表面，需架构级修 | **必须修 + 写 meta**：`app.client.doc.ts` 加 "frontend 路径解析必须经 backend resolver"；`app.server.doc.ts:modules.ui` 加 "tree marker 应基于后端权威而非 path-prefix 启发式"；驱动 **C10 cluster（前后端路径契约统一）** |
+| **🔥 F12 — activator union 不接受 window-type-as-state**：当前 `activates_on.show_content_when:["talk"]` 只在 command_exec form 进行中命中；window 持续 open 的后续轮失激活——与 LLM 直觉相反 | **建议接受**：扩 union = command_exec.paths + program.recent + knowledge.path + `thread.contextWindows.where(status="open").map(w → "${w.type}.open")` + `root`；写进 `thinkable.knowledge.activator`；把"窗口存在性"视为 implicit command_path |
+| **F13 — onboarding fail-loud 不对称**：OOC_WORLD_DIR 缺 fail-loud，OOC_API_TARGET 缺/错 silent 500 | vite 启动 health-check OOC_API_TARGET；`engineering.harness.doc.ts` 加 "onboarding fail-loud 对称约束" |
+| **F14 — silent-swallow 家族再添新员**：open_knowledge 找不到 path 只 render 内联 `<error>`，exec 视为成功——与 R5 F8 ban 约束同源 | 扩到 "exec 不得依赖 render 报告自身语义失败"；audit 范围加 open_knowledge / open_file / open_issue 等所有 open_* 命令 |
+| **F15 — AppShell sidebar tab 与 URL route 模型未对齐**：sidebar tab 与 URL route 耦合不彻底，/world 不合法但 sidebar 有 World tab | `app.client.doc.ts` 加 "sidebar tab ↔ URL route 一一对应" 规则；要么 /world 合法（加 WorldPage），要么 sidebar tab 不导航而仅切 sidebar 内容 |
+
+### Round 6 新增 Cluster
+
+| Cluster | sub agent | 包含 Issue | 优先级 |
+|---|---|---|---|
+| **🔥 C10 — 前后端存储路径契约统一** | AgentOfApp(client+server) | #39 / #43 + R2 #6 + R3 #11（4 处同根因） | 高 |
+
+---
+
+## 下一轮（Round 7）任务方向
+
+**避开 R1-6 backlog**。Round 6 体验官自己建议方向：
+
+1. **LLM 真链路下浏览器交互**（chat composer / talk_window 时间线渲染 / create-session 全程 / do_window 父子可视化）—— 前 6 轮多数未真跑 LLM
+2. **stone client 自定义 + flow client/pages 双层 UI 实跑**（搭配 F11 修后或 dir mock）
+3. **collaborable.relation_window 真链路**：relation 文件 IO / long_term + session 双层 / edit command（前 6 轮均未触达）
+4. **collaborable.talk_window 完整生命周期**：open / refine / submit / say / mark / close 全 command + delivery 跨 session
+5. **observable.debug_file 全量协议**：llm.input / llm.output / loop.input / loop.output / loop.meta 5 类落盘文件读写
+
+---
+
 ## 历史
 
-- **Round 1（2026-05-24）**：验证 stone/pool 简化主干；4 Issue 全部修
+- **Round 1（2026-05-24）**：stone/pool 简化主干验证；4 Issue 全部修
 - **Round 2（2026-05-24）**：visible / observable / thinkable；10 Issue + 6 反馈 → C1/C2/C3
-- **Round 3（2026-05-24）**：Issue 协议 / programmable / visible HTTP；7 新 Issue + 5 反馈 → C4/C5
+- **Round 3（2026-05-24）**：Issue / programmable / visible HTTP；7 新 Issue + 5 反馈 → C4/C5
 - **Round 4（2026-05-24）**：reflectable / collaborable.do / flow.session_data HTTP；10 新 Issue + 5 反馈，**协议级 dogfooding 缺口** → C6（最高）/C7
-- **Round 5（2026-05-24）**：worker 调度 / stones git-versioning / recovery-check；11 新 Issue + 5 反馈，**系统性张力 F7+F8+F9** → C8/C9
-- **Round 6（计划）**：visible 浏览器真实视角 / 非 talk/skill_index window 类型激活 / search/glob/grep 链路 / knowledge activation 边界
+- **Round 5（2026-05-24）**：worker / git-versioning / recovery；11 新 Issue + 5 反馈，**系统性张力 F7+F8+F9** → C8/C9
+- **Round 6（2026-05-24）**：visible 浏览器真实视角（**首次 Playwright**）+ activator union 边界；11 新 Issue + 5 反馈，**架构级 F11 路径契约** → C10
+- **Round 7（计划）**：LLM 真链路浏览器交互 / stone+flow client 双层 UI / relation_window / talk_window 完整生命周期 / debug_file 协议
+
+**累计 backlog**：49 Issue（含 27 Critical/High）+ 10 cluster（C1-C10）+ 17 反向 design 反馈（F1-F15）+ 38 e2e 场景候选。
