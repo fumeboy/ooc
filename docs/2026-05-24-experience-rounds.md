@@ -433,6 +433,43 @@ e2e-38 [app.server] 404 类响应 code 与 message 不应自相矛盾
 - **Round 4（2026-05-24）**：reflectable / collaborable.do / flow.session_data HTTP；10 新 Issue + 5 反馈，**协议级 dogfooding 缺口** → C6（最高）/C7
 - **Round 5（2026-05-24）**：worker / git-versioning / recovery；11 新 Issue + 5 反馈，**系统性张力 F7+F8+F9** → C8/C9
 - **Round 6（2026-05-24）**：visible 浏览器真实视角（**首次 Playwright**）+ activator union 边界；11 新 Issue + 5 反馈，**架构级 F11 路径契约** → C10
-- **Round 7（计划）**：LLM 真链路浏览器交互 / stone+flow client 双层 UI / relation_window / talk_window 完整生命周期 / debug_file 协议
+- **Round 7（2026-05-24，闭环验证）**：10 根因 fix 复测；**8 Fixed Good + 2 Fixed OK + 0 Regression**；4 个 Residual（其中 R7-1 中：createIssue 路径 mentions 未对称校验 — 立即修）
 
-**累计 backlog**：49 Issue（含 27 Critical/High）+ 10 cluster（C1-C10）+ 17 反向 design 反馈（F1-F15）+ 38 e2e 场景候选。
+**累计 backlog（初始）→ 收敛**：
+- 49 Issue（27 Critical/High）+ 10 cluster + 17 反向 design 反馈 + 38 e2e 场景
+- **收敛**：→ 3 条契约 + 10 根因（fix-plan）→ 10 commits（cbf2cc0 → 27788ca）→ 0 Regression
+- **Residual**：4 个低/中优先级（mentions 对称校验 / sandbox bare catch / typebox 信息可读性 / tree scope 含 pools）
+
+---
+
+## Round 7 闭环验证表（2026-05-24）
+
+| # | Cluster | Commit | 评分 | 关键证据 |
+|---|---|---|---|---|
+| 1 | dogfooding 协议契约 | cbf2cc0 | **Fixed Good** | sediment frontmatter 强制 / creator-reply 知识注入 / end({result}) auto-archive |
+| 2 | HTTP-git 语义统一 | 18bf294 | **Fixed Good** | POST /api/stones 后 git log 真有 commit + ff merged |
+| 3 | 前后端路径契约 | 0c1ef38 | **Fixed Good** | markerFor 元数据探针 / client-source-url endpoint / X-Deprecated header |
+| 4 | render type-dispatch | d6ac515 | **Fixed Good** | 13 type 注册 renderXml / skill_index XML 含 skills / commands 节点输出 |
+| 5 | worker 事件驱动 | 5772a33 | **Fixed Good** | idle 5s jobs 队列 ~0；事件驱动 enqueue 路径接通 |
+| 6 | silent-swallow ban | 4e9060a | **Fixed OK** | grep 净化；2 处 sandbox bare catch 残留（Residual #R7-2） |
+| 7 | persistable 防御深度 | 6ecfe65 | **Fixed Good** | rollback FORBIDDEN enforce + pruneStaleWorktrees bootstrap 接入 |
+| 8 | 错误模型统一 | b217aae | **Fixed Good** | 404 NOT_FOUND envelope 一致；code/message 不再矛盾 |
+| 9 | activator union 完整化 | 92e973c | **Fixed Good** | root + open windows.type 进 union |
+| 10 | polish 收尾 | 27788ca | **Fixed OK** | close noop / recovery 日志 / /world 路由 / vite warn 全过；mentions 仅在 appendComment 校验（Residual #R7-1） |
+
+### Round 7 Residual（4 个）
+
+| # | 严重 | 位置 | 现象 | 处理 |
+|---|---|---|---|---|
+| R7-1 | 中 | issues/index.ts createIssue | mentions:[\"ghost\"] 未拒（appendComment 已修但 createIssue 未对称） | **立即修** |
+| R7-2 | 低 | program/sandbox/{executor,console}.ts | bare catch{} 2 处（tmp cleanup / JSON-stringify fallback） | 写入 meta 例外白名单 |
+| R7-3 | 低 | bootstrap/errors.ts | typebox union 错误信息字面值未展开（"'string','string','string'"） | 后续 polish |
+| R7-4 | 低 | ui/model.ts TreeScope | 未含 "pools"；2026-05-23 三分落地后设计漂移 | 后续 polish |
+
+### Round 7 反向 design 反馈（5 条）
+
+1. **fix-plan acceptance criteria 没拆成可机器检查的断言** — 建议引入 "verification probe" 段
+2. **silent-swallow ban 的 sandbox 例外未显式声明** — 建议 meta/observable 加 "sandbox cleanup / serialization fallback 白名单"
+3. **typebox VALIDATION 信息可读性差** — 加 `flattenValidationDetails` 提 anyOf 字面值
+4. **tree scope 未跟三分（设计漂移）** — engineering.testing trinary-landing checklist 加 pools
+5. **cluster 化方法论值得沉淀** — 49→10 收敛过程作为 backlog 收敛范本

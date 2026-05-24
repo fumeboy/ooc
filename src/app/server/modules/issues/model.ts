@@ -21,6 +21,9 @@ export const createIssueBody = t.Object({
   title: t.String({ minLength: 1, maxLength: 200 }),
   description: t.Optional(t.String({ maxLength: 8192 })),
   createdByObjectId: t.String({ pattern: "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$" }),
+  // R7-1：mentions 与 appendComment 对称；默认严格校验存在性
+  mentions: t.Optional(t.Array(t.String({ pattern: "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$" }))),
+  allowGhostMentions: t.Optional(t.Boolean()),
 });
 
 /**

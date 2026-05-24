@@ -55,6 +55,8 @@ export function issuesModule(config: Pick<ServerConfig, "baseDir">) {
             title: body.title,
             description: body.description,
             createdByObjectId: body.createdByObjectId,
+            mentions: body.mentions,
+            allowGhostMentions: body.allowGhostMentions,
           });
           return { issue };
         } catch (err) {

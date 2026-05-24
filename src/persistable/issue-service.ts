@@ -148,6 +148,13 @@ export interface CreateIssueInput {
   description?: string;
   /** 创建者 objectId;必须是 stones/ 下已存在的 object。 */
   createdByObjectId: string;
+  /**
+   * Structured mention 列表（R7-1 修复）：HTTP createIssue 也对称校验。
+   * 默认严格——每个 mention 必须是 stones/ 下已存在的 object。
+   */
+  mentions?: string[];
+  /** R7-1：与 appendComment 对称；显式放宽校验（跨 session / 未来 object）。 */
+  allowGhostMentions?: boolean;
 }
 
 export interface AppendCommentInput {
@@ -196,7 +203,7 @@ function summarize(issue: Issue): IssueIndexEntry {
 export const issuesService = {
   /** 创建新 Issue;分配 id;返回完整 Issue。 */
   async createIssue(input: CreateIssueInput): Promise<Issue> {
-    const { baseDir, sessionId, title, description, createdByObjectId } = input;
+    const { baseDir, sessionId, title, description, createdByObjectId, mentions, allowGhostMentions } = input;
     if (!title || !title.trim()) {
       throw new Error("[issue-service] title is required");
     }
@@ -205,6 +212,10 @@ export const issuesService = {
       // S3 校验放在 SerialQueue 内,保证 enqueue 顺序由 caller 同步入队即决定,
       // 不被并发的 stat IO 重排
       await ensureAuthorExists(baseDir, createdByObjectId);
+      // R7-1：mentions 与 appendComment 对称校验。默认严格;allowGhostMentions 显式放宽。
+      if (mentions && mentions.length > 0) {
+        await ensureMentionsExist(baseDir, mentions, allowGhostMentions ?? false);
+      }
 
       const index = await readIssueIndex(baseDir, sessionId);
       const newId = index.nextId;
