@@ -7,13 +7,15 @@ const MAX_RESULTS = 20;
 /**
  * 给定线程上下文与 knowledge 索引，计算本轮应渲染的激活集合。
  *
- * 命令路径来源（union 收集）：
+ * 命令路径来源（union 收集，根因 #9 扩充）：
+ * - `root`：永远在 union 中——base path，允许 `activates_on:[root]` 这类
+ *   "无论何时都该露面"的 seed knowledge 激活（R4 #24 修）
+ * - 任何 thread.contextWindows 中 status="open" 的 window 类型贡献 path：
+ *   talk / do / file / search / issue / relation / knowledge / ... 持续 open 时
+ *   每轮都贡献其 type 作为 path——让 `activates_on:[talk]` 这种"我在跟人 talk
+ *   就该看到 talk 知识"的直觉成立（R6 #42 修）
  * - command_exec window 的 commandPaths（form 进行中）
- * - program_window 最近一次 exec 推断的路径（program / program.<language>）——
- *   program form auto-submit 后 command_exec 会立即消失，但 program_window 仍持续；
- *   仅依赖 command_exec 会让 show_content_when=[program.shell] 这类知识在 LLM 看到
- *   exec 结果的下一轮无法激活。program_window 的"最近 exec"反映"我刚做了什么"，
- *   与 activator 的"该轮应当出现什么知识"语义一致。
+ * - program_window 最近一次 exec 推断的路径（program / program.<language>）
  *
  * 显式 knowledge_window：path 视为 force-full（取代旧 pinnedKnowledge）。
  * 同一篇 knowledge 同时被 force-full 与命中 show_description_when 时，full 优先。
@@ -25,11 +27,18 @@ export function computeActivations(
   thread: ThreadContext,
   index: KnowledgeIndex
 ): ActivationResult[] {
-  // 收集命令路径 union（含 command_exec 进行中 + program_window 最近 exec 推断）
+  // 收集命令路径 union（含 root、open windows、command_exec、program 推断）
   const union = new Set<string>();
+  // root 永远在 union 中：允许 activates_on:[root] 类 seed knowledge 在任意轮激活
+  union.add("root");
   // 收集显式打开的 knowledge_window 的 path（force-full）
   const forced = new Set<string>();
   for (const window of thread.contextWindows ?? []) {
+    // 任何 status="open" 的 window，type 都贡献 implicit path
+    // (R6 #42: window-type-as-state)。command_exec/program 仍保留下面更细致的路径
+    if (window.status === "open" || window.status === undefined) {
+      union.add(window.type);
+    }
     if (window.type === "command_exec") {
       for (const p of window.commandPaths) union.add(p);
     } else if (window.type === "knowledge") {

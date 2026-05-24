@@ -823,10 +823,30 @@ export const root: DocTreeNode = {
                     5. LLM submit 执行。
 
                     这个闭环让 OOC 可以把复杂能力拆成多步披露，而不是在一开始把所有说明都塞给 LLM。
+
+                    **🔥 activator union 路径来源（2026-05-24 根因 #9 扩充）**：
+
+                    src/thinkable/knowledge/activator.ts:computeActivations 收集的 union 包括：
+
+                    1. \`root\` — 永远在 union 中。允许 \`activates_on:[root]\` 类 seed knowledge
+                       在任意轮激活；这是 base path（**R4 #24 修**）
+                    2. **任何 status="open" 的 window 类型** —— 持续 open 的 window 每轮贡献其
+                       \`type\` 作为 implicit path：talk / do / file / search / issue / relation 等
+                       （**R6 #42 修**）。这让 "我在跟人 talk 就该看到 talk 知识" 的直觉成立
+                    3. command_exec window 的 commandPaths（form 进行中的细路径）
+                    4. program_window 最近一次 exec 推断的路径（program / program.<lang>）
+
+                    设计动机：以前只看 command_exec.commandPaths + program 推断 + 显式
+                    knowledge_window，导致 \`activates_on:[talk]\` 只在 form 进行中命中、talk_window
+                    持续存在的后续轮失激活。把"窗口存在性"视为 implicit command_path 后，
+                    LLM 在 talk 上下文中的整段时间都能看到 talk 知识；seed knowledge 的 root
+                    路径也能命中。
                     `,
                     named: {
                         "knowledge activation": "根据 command path 把相关 knowledge 注入 Context 的过程",
                         "progressive disclosure": "渐进式披露，只在需要时展示更具体的信息",
+                        "activator union": "root + open windows[type] + command_exec.paths + program 推断",
+                        "implicit command_path": "持续 open 的 window 的 type 自动作为 union path",
                     },
                 },
             },
