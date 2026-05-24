@@ -17,6 +17,9 @@ import {
   generateWindowId,
   type KnowledgeWindow,
 } from "../_shared/types.js";
+import { deriveStoneFromThread } from "../../../persistable/common.js";
+import { derivePoolFromThread } from "../../../persistable/pool-object.js";
+import { loadKnowledgeIndex } from "../../../thinkable/knowledge/index.js";
 
 const OPEN_KNOWLEDGE_BASIC_PATH = "internal/executable/open_knowledge/basic";
 const OPEN_KNOWLEDGE_INPUT_PATH = "internal/executable/open_knowledge/input";
@@ -65,6 +68,21 @@ export async function executeOpenKnowledgeCommand(
   if (!thread) return "[open_knowledge] 缺少 thread context。";
   const path = typeof ctx.args.path === "string" ? ctx.args.path : "";
   if (!path) return "[open_knowledge] 缺少 path。";
+
+  // silent-swallow ban (R6 #44): exec 层显式校验 path 存在性,
+  // 避免 render 层用 <error> 内联兜底报告 "knowledge 不存在"
+  if (thread.persistence) {
+    try {
+      const stoneRef = deriveStoneFromThread(thread.persistence);
+      const poolRef = derivePoolFromThread(thread.persistence);
+      const index = await loadKnowledgeIndex({ stone: stoneRef, pool: poolRef });
+      if (!index.byPath.has(path)) {
+        return `[open_knowledge] knowledge "${path}" 不存在 (index 没有该路径)。可用 grep 在 knowledge/ 下确认路径,或 refine 重新提交。`;
+      }
+    } catch (err) {
+      return `[open_knowledge] 校验 path 失败: ${(err as Error).message}`;
+    }
+  }
 
   const knowledgeWindow: KnowledgeWindow = {
     id: generateWindowId("knowledge"),

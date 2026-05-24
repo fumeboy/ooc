@@ -82,4 +82,5 @@ export async function createStoneObject(ref: StoneObjectRef): Promise<StoneObjec
 //   → 语义改为 session-scoped；详见 src/persistable/flow-data.ts
 //
 // 保留 readFile import 以备未来 stone 内其它"内容文件"读取需要；目前未直接使用。
+// intentional: silent-swallow ban 例外——这是 unused-import keep-alive，不是错误吞噬。
 void readFile;

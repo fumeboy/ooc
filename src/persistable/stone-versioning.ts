@@ -305,8 +305,13 @@ export async function tryMergeSelf(
 
     // step 4: cleanup worktree（移除目录 + branch）
     const removeWt = gitWorktreeRemove(repo, worktree.path);
-    // 失败不阻塞 ff 成功，记录 stderr 即可（caller 可以下次启动 prune）
-    void removeWt;
+    // silent-swallow ban: 失败不阻塞 ff 成功，但必须 warn 让运维知情（caller 可下次启动 prune）
+    if (!removeWt.ok) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[stone-versioning] tryMergeSelf worktree cleanup failed branch=${worktree.branch} stderr=${removeWt.stderr}`,
+      );
+    }
     return { ok: true, kind: "merged", commitSha: head.value } as const;
   });
 }
@@ -459,9 +464,21 @@ export async function resolvePrIssue(input: ResolvePrIssueInput): Promise<Resolv
       const head = gitHead(repo);
       if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr } as const;
 
-      // cleanup worktree (best-effort)
-      void gitWorktreeRemove(repo, worktreePath(input.baseDir, branch));
-      void gitWorktreePrune(repo);
+      // cleanup worktree (best-effort) — silent-swallow ban: 失败 warn 但不阻塞 merge
+      const rmMerge = gitWorktreeRemove(repo, worktreePath(input.baseDir, branch));
+      if (!rmMerge.ok) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[stone-versioning] resolvePrIssue(merge) worktree remove failed branch=${branch} stderr=${rmMerge.stderr}`,
+        );
+      }
+      const pruneMerge = gitWorktreePrune(repo);
+      if (!pruneMerge.ok) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[stone-versioning] resolvePrIssue(merge) worktree prune failed stderr=${pruneMerge.stderr}`,
+        );
+      }
 
       try {
         await issuesService.closeIssue({
@@ -479,9 +496,21 @@ export async function resolvePrIssue(input: ResolvePrIssueInput): Promise<Resolv
       return { ok: true, kind: "merged", commitSha: head.value } as const;
     }
 
-    // reject
-    void gitWorktreeRemove(repo, worktreePath(input.baseDir, branch));
-    void gitWorktreePrune(repo);
+    // reject — silent-swallow ban: 失败 warn 但不阻塞 reject
+    const rmReject = gitWorktreeRemove(repo, worktreePath(input.baseDir, branch));
+    if (!rmReject.ok) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[stone-versioning] resolvePrIssue(reject) worktree remove failed branch=${branch} stderr=${rmReject.stderr}`,
+      );
+    }
+    const pruneReject = gitWorktreePrune(repo);
+    if (!pruneReject.ok) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[stone-versioning] resolvePrIssue(reject) worktree prune failed stderr=${pruneReject.stderr}`,
+      );
+    }
     const archive = gitArchiveBranch(repo, branch);
     if (!archive.ok) {
       return { ok: false, code: "GIT", gitCode: archive.code, stderr: archive.stderr } as const;
@@ -606,15 +635,24 @@ export async function pruneStaleWorktrees(baseDir: string): Promise<PruneResult>
         if (e.path === repo) continue;
         try {
           const stat = await import("node:fs/promises").then((m) => m.stat(e.path));
+          // intentional: stat 仅作存在性探测，成功时无需进一步使用，下一轮迭代
           void stat;
         } catch {
-          // 路径已不存在，prune 会清掉对应 admin 文件
+          // intentional: 路径已不存在（ENOENT 等），记入 removed 让 caller 看到；
+          // prune 会清掉对应 admin 文件
           removed.push(e.path);
         }
       }
     }
-    void gitWorktreePrune(repo);
-    return { ok: true, removed, pruned: true } as const;
+    // silent-swallow ban: prune 失败 warn 但不影响整体 ok（caller 仍能拿到 removed）
+    const prune = gitWorktreePrune(repo);
+    if (!prune.ok) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[stone-versioning] pruneStaleWorktrees prune failed stderr=${prune.stderr}`,
+      );
+    }
+    return { ok: true, removed, pruned: prune.ok } as const;
   });
 }
 
@@ -631,4 +669,5 @@ export const __testing = {
 };
 
 // 强制把 rm 当作活跃符号，避免未来误删（pruneStaleWorktrees 实际可能扩展用之）
+// intentional: silent-swallow ban 例外——这是 unused-import keep-alive，不是错误吞噬。
 void rm;

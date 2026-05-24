@@ -552,6 +552,8 @@ export function createFlowsService(deps: {
       args?: Record<string, unknown>;
     }) {
       await ensureFlowObjectExists(sessionId, objectId);
+      // intentional: silent-swallow ban 例外——sessionId 在 loadUiServerMethods 之外未直接用，
+      // void 抑制 unused-var 警告，并非错误吞噬。
       void sessionId;
       let methods;
       try {

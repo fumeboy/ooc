@@ -31,6 +31,8 @@ export function createSessionApi(service: ReturnType<typeof createFlowsService>)
         return service.listFlows();
       }
       if (request.method === "POST") {
+        // intentional: silent-swallow ban 例外——JSON 解析失败时回退到 undefined，
+        // 下方显式发 422 VALIDATION 错误响应（不是吞噬，是显式错误模型）。
         const body = await request.json().catch(() => undefined);
         if (!body || typeof body !== "object" || typeof (body as { sessionId?: unknown }).sessionId !== "string") {
           set.status = 422;

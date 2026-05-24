@@ -17,6 +17,7 @@ import {
   type FileWindow,
 } from "../_shared/types.js";
 import { resolveSessionPath } from "../_shared/session-path.js";
+import { stat } from "node:fs/promises";
 
 const OPEN_FILE_BASIC_PATH = "internal/executable/open_file/basic";
 const OPEN_FILE_INPUT_PATH = "internal/executable/open_file/input";
@@ -80,6 +81,16 @@ export async function executeOpenFileCommand(
 
   // 相对路径以 session baseDir 为根（不再以 OOC 进程 cwd 为根）
   const path = resolveSessionPath(thread, rawPath);
+
+  // silent-swallow ban: exec 层显式校验 path 存在性,避免 render 层 <error> 内联兜底
+  try {
+    await stat(path);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      return `[open_file] 文件不存在: ${path}`;
+    }
+    return `[open_file] 校验 path 失败: ${(err as Error).message}`;
+  }
 
   const fileWindow: FileWindow = {
     id: generateWindowId("file"),

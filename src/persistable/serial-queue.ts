@@ -20,6 +20,8 @@ export function enqueueSessionWrite<T>(key: string, task: () => Promise<T>): Pro
   const prev = tails.get(key) ?? Promise.resolve();
   // 不让上游错误污染 chain;但当前 caller 仍然拿到原始 promise(带错)
   const next = prev.then(task, task);
+  // intentional: silent-swallow ban 例外——caller 通过 next 已经拿到原始错误，
+  // tail 处 .catch(() => undefined) 仅防止 promise rejection 毒化后续同 key 的 task。
   tails.set(
     key,
     next.catch(() => undefined),

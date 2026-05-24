@@ -1322,6 +1322,43 @@ export const root: DocTreeNode = {
                     clearObservableDebugState 会把 pauseChecker 重置回默认 false，测试套件间不会互相泄漏。
                     `,
                 },
+                "silent_swallow_ban": {
+                    title: "silent-swallow ban — 失败必须可见",
+                    content: `
+                    跨 observable / persistable / executable 的横切契约（根因 #6）。
+
+                    所有 catch 块 / 错误返回 必须做以下至少一项：
+                    (a) 重新抛（拒绝在此层处理，让 caller 决定）
+                    (b) 写 event（thread.events / Issue / debug 文件 — 让 LLM 看见）
+                    (c) console.warn（启动期 / runtime advisory — 让运维看见）
+
+                    禁止：
+                    - bare \`catch {}\` / \`catch (e) {}\`（无任何动作，错误彻底吞噬）
+                    - \`void someAsyncCall()\` 忽略函数返回的错误信号（除 unused-import/unused-var keep-alive 外，需注明 \`// intentional: ...\`）
+                    - exec 层依赖 render 报告自身的语义错误（如 open_knowledge 不校验 path 存在性，让 render 内联 <error> 兜底）
+                    - \`.catch(() => undefined)\` 默默吞 promise rejection（serial-queue 防毒化是 intentional 例外，需注释解释）
+
+                    历史依据：
+                    R4 #19 子→父 reply 通道不可发现 / R4 #23 end({result}) 静默吞 /
+                    R5 #32 recovery-check catch{} / R5 #34 tryMergeSelf void removeWt /
+                    R5 #35 enqueueOrphanRunningThreads bare catch / R6 #44 open_knowledge 不校验 path。
+                    5+ 处同源 facet，跨 dogfooding 协议、git merge、worker 调度、knowledge 命令多个域。
+
+                    审计周期：每次大重构后跑一次 grep：
+                    \`grep -rn 'catch.*{}' src/\`
+                    \`grep -rn 'void [a-z]' src/ | grep -v 'return void'\`
+                    \`grep -rn '\\.catch.*=>.*{}' src/\`
+                    除带 \`// intentional: ...\` 注释的合理静默外，应当**零**真 silent-swallow。
+
+                    合理静默必须加注释说明意图，例如：
+                    \`\`\`
+                    try { await stat(p); } catch {
+                      // intentional: explicit fall-through，ENOENT 视为路径不存在，作为下一步条件分支
+                    }
+                    \`\`\`
+                    `,
+                    sources: [["audit/根因#6/2026-05-24", "docs/2026-05-24-fix-plan.md"]],
+                },
             },
         },
         "reflectable": {
