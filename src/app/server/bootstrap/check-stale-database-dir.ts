@@ -81,21 +81,19 @@ export function reportStaleDatabaseDir(
 ): void {
   const n = result.staleObjectIds.length;
   if (n === 0) return;
-  console.warn(
-    `[ooc-app-server] stale stone-side database/ subdirs detected: ${n} object(s). ` +
-      `These were created in the 2026-05-23 "six-piece stone" layout; the 2026-05-24 simplification ` +
-      `removed sql_pool / migration_runner, so database/ no longer has semantics (stone is now five-piece: ` +
-      `self / readme / server / client / knowledge).`,
-  );
-  console.warn(
-    `  Suggestion: in each stones worktree, run \`git rm -r objects/<id>/database/\` and commit to clean ` +
-      `up the stone shape. Empty directories are harmless, so this is not mandatory.`,
-  );
+  // 关键 actionable 信息放最前（窄终端 / 截断时优先可见）；背景叙述折到后续行
+  console.warn(`[ooc-app-server] ${n} object(s) have stale stone-side \`database/\` subdirs.`);
+  console.warn(`  Fix: in each stones worktree, run \`git rm -r objects/<id>/database/\` && commit.`);
   console.warn(
     `  Affected (under stones/${result.branch}/${STONE_OBJECTS_SUBDIR}/<id>/database/): ` +
       result.staleObjectIds.join(", "),
   );
   console.warn(`  Base dir: ${baseDir}`);
+  console.warn(
+    `  Why: 2026-05-23 "six-piece stone" included database/{schemas,migrations}/ for sql_pool; ` +
+      `2026-05-24 simplification dropped sql/migration runner (csv-only), so database/ has no semantics. ` +
+      `Empty dirs are harmless — this advisory is not mandatory.`,
+  );
 }
 
 /**

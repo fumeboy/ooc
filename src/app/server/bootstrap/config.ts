@@ -62,9 +62,17 @@ export function readServerConfig(source: ConfigSource = {}): ServerConfig {
   const argv = source.argv ?? process.argv;
   const explicitBaseDir = readFlagValue(argv, ["--world", "--world-dir", "--base-dir"]);
   const explicitBranch = readFlagValue(argv, ["--stones-branch"]);
+  const explicitPort = readFlagValue(argv, ["--port"]);
+
+  const port = explicitPort !== undefined ? Number(explicitPort) : Number(env.OOC_APP_PORT ?? 3000);
+  if (!Number.isFinite(port) || port <= 0 || port > 65535) {
+    throw new Error(
+      `invalid port '${explicitPort ?? env.OOC_APP_PORT}': must be an integer in (0, 65535]`,
+    );
+  }
 
   return {
-    port: Number(env.OOC_APP_PORT ?? 3000),
+    port,
     baseDir: explicitBaseDir ?? env.OOC_WORLD_DIR ?? env.OOC_BASE_DIR ?? process.cwd(),
     stonesBranch: validateStonesBranch(
       explicitBranch ?? env.OOC_STONES_BRANCH ?? STONES_MAIN_BRANCH,

@@ -405,6 +405,54 @@ export const root: DocTreeNode = {
                 "Supervisor 派单模板补这条; 派给体验官 UI 评审 / sub agent 自验证时显式加入约定",
             ],
         },
+        design_doc_historization: {
+            title: "Design doc 历史化模板 - 重大修订时如何标记 deprecated 内容",
+            content: `
+            **背景**: \`docs/<date>-<topic>.md\` 是 design 决策的时间快照, 重大后续修订时不应改写历史叙述
+            (那是当时的决策, 抹掉等于丢失推理脉络), 但也不能让新读者把过时内容当现状。
+            2026-05-24 AgentOfExperience 报告: \`docs/2026-05-23-stone-pool-flow-trinary-landing.md:53\`
+            展示 \`sql/data.sqlite\` 作为当前 pool 形态, 但 05-24 已删 sql 改 csv——新读者会被误导。
+
+            **模板规约 (2026-05-24, 重大修订时强制)**:
+
+            1. **顶部指针段**: 文档第一段加块引用指针, 明确"原文中 X 表述以 N 月 N 日修订段为准"
+               (避免读者只看到中间段就当现状)。例:
+               \`\`\`
+               > **2026-05-24 修订**: knowledge 进一步拆为 seed/sediment 二分——
+               > 详见文末"YYYY-MM-DD 修订"段。原文中"X"以修订段为准。
+               \`\`\`
+            2. **内联 deprecated 标记**: 代码块 / 形态描述 / 关键 narrative **不删除**, 但加内联
+               \`[OBSOLETE YY-MM] <原因>\` 标记或上方块引用警告, 让 \`grep\`-able 也可视。例:
+               \`\`\`
+               sql/data.sqlite  ← [OBSOLETE 05-24] bun:sqlite + WAL (已删除, 改用 data/<name>.csv)
+               \`\`\`
+            3. **修订段在文末**: 每次重大修订追加一段 \`## YYYY-MM-DD 修订: <主题>\`,
+               含起因 / 边界变化 / 影响 / 涉及的 meta 与代码改动清单。修订段是当前权威, 顶部指针指向它。
+            4. **历史段补行**: 文末"历史"小节 (如有) 加一行
+               \`- **YYYY-MM-DD** (修订/二次修订/...): <一句话>\`, 与 git log 形成时间轴双轨。
+            5. **指针 vs 改写的边界**: 永远不改写原文段落本身; 只追加修订段 + 内联 deprecated 标记 + 顶部指针。
+               这保证 design 推理链可追溯, 不让"现状变化"反向擦除"历史决策"。
+
+            **触发条件 (什么算"重大修订")**:
+            - 该 doc 描述的设计被推翻 / 简化 / 拆分;
+            - 文档内任何代码块 / 形态图与新代码不一致;
+            - 顶层裁决 (如"二分扩三分"、"删 sql 改 csv") 在该 doc 落地后被改了。
+
+            非重大修订 (typo / 措辞润色) 不必走此模板, 直接改即可。
+
+            **历史符合度**: \`docs/2026-05-23-stone-pool-flow-trinary-landing.md\` 已按本模板补齐
+            (2026-05-24 一次 + 二次修订段); 后续重大修订都应参照此例。
+            `,
+            named: {
+                "顶部指针段": "文档头部块引用, 把读者指向文末修订段",
+                "内联废弃标记": "[OBSOLETE YY-MM] 内联 grep-able 标记, 不删原文",
+                "修订段在文末": "## YYYY-MM-DD 修订: <主题>; 含起因 / 边界 / 影响 / 改动清单",
+                "指针而非改写": "永远追加, 不改写; 保 design 推理链",
+            },
+            todo: [
+                "其他 docs/<date>-*.md (如 brainstorms/, plans/) 检查是否有未标记的 deprecated 内容, 按本模板补齐 (低优先, 触发条件出现时再处理)",
+            ],
+        },
     },
     warnings: [
         "AgentOfX 各 stone (stones/agent_of_thinkable/ 等) 当前仓库内并未创建; 这是预期的——短期通过 Claude Code sub agent 暂行,不需要 stone 目录 (详见 patches.interim_runtime)。stones 的真正创建发生在该 Agent 从 Claude Code 形态迁移到 OOC 内 Object 形态的那一刻。",

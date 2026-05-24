@@ -2137,9 +2137,9 @@ export const root: DocTreeNode = {
                         },
                     },
                     todo: [
-                        "data pool runtime：csv 读写工具函数（readCsv / writeCsv / appendRow / queryRows），用 fs + csv 解析库；以及串行化键 enqueueSessionWrite('data:'+baseDir+':'+objectId+':'+name)。",
-                        "csv 解析库选型：bun 生态 / npm（papaparse / csv-parse 等）；选轻量、零依赖优先。",
+                        "data pool runtime：csv 读写工具已落地于 src/persistable/csv-pool.ts（手写 RFC 4180 子集）；如未来需要 queryRows / bulk update / 索引，再增量加。",
                         "params schema 校验（与 programmable.todo 重叠）：如未来需要，server method 命令的 params 类型可在 server/index.ts 内 inline 定义；当前不强制。",
+                        "**csv schema drift 可观测性**（AgentOfExperience 2026-05-24 反馈）：csv-pool 不校验 row.keys 与 header 一致性（务实选择——appendRow typo 会静默丢字段）。短期为 known-limitation；长期建议给 observable 维度加 'csv health' 诊断（启动期或 reflectable 主动扫一遍 row.keys 与 header 差异，warn 出异常 csv）。",
                     ],
                 },
                 "issue_files": {
