@@ -367,11 +367,11 @@
 
 请对每项填写：**做 / 推迟 / 不做 / 改方向**。
 
-### A 段
-- [ ] A1（R7-2 sandbox 例外白名单）: ___
-- [ ] A2（R7-3 typebox flatten）: ___
-- [ ] A3（R7-4 TreeScope 加 pools）: ___
-- [ ] A4（fix-plan verification probe）: ___
+### A 段（全部完成 ✓）
+- [x] A1（R7-2 sandbox 例外白名单）: **DONE** commit 5e38691
+- [x] A2（R7-3 typebox flatten）: **DONE** commit 5e38691
+- [x] A3（R7-4 TreeScope 加 pools）: **DONE** commit 5e38691（含 sidebar tab + /pools route）
+- [x] A4（fix-plan verification probe）: **DONE** commit 5e38691（10 根因每个附 probe）
 
 ### B 段
 - [ ] B1（LLM 真链路浏览器交互）: ___
@@ -384,8 +384,8 @@
 - [ ] C1（ui_methods 沙箱 vs 信任）: ___（A / B / 其它）
 - [ ] C2（seed knowledge eval gate）: ___（A / B / 其它）
 - [ ] C3（Object ≡ repo 升级 v2）: ___（A / B / C / 其它）
-- [ ] C4（cross-session end notify）: ___
-- [ ] C5（ThreadContext creatorSessionId）: ___
+- [x] C4（cross-session end notify）: **DONE** commit 54c31447
+- [x] C5（ThreadContext creatorSessionId）: **DONE** commit 54c31447
 
 ### D 段
 - [ ] D1（ESLint no-empty-catch）: ___
@@ -393,7 +393,39 @@
 - [ ] D3（CI 配置）: ___
 
 ### E 段
-- [ ] E1（cluster 化方法论沉淀）: ___
+- [x] E1（cluster 化方法论沉淀）: **DONE** commit 1f367c66（docs/methodology-cluster-rooting.md, 218 行）
+
+---
+
+## Round 8 体验官产出（2026-05-25 B 段验证）
+
+5 方向全部跑：
+
+| 方向 | 评分 | 关键发现 |
+|---|---|---|
+| B1 LLM 真链路浏览器交互 | Good | 跨 thread say delivery 完整、worker 入队 0 漂浮 |
+| B2 stone/flow client 双层 UI | Good | client-source-url contract OK；path-traversal 防护已有 |
+| B3 relation_window 真链路 | OK | 三路径派生正确；测试 fixture 漂移已修 |
+| B4 talk_window 完整生命周期 | Good | open→say→end→close 全 form 链跑通 |
+| B5 observable.debug_file 全量协议 | Good（修后） | debug API 旧版用 process.cwd() → 隔离 world 永远 404；已修 |
+
+### Round 8 自动修复（已 commit 在 B 段同一批 commit）
+
+| # | 修复 |
+|--|--|
+| 1 | runtime debug API 从 ServerConfig.baseDir 注入（R8 B5 严重缺陷） |
+| 2 | loop debug error label 4 位 zero-pad 与磁盘文件名对齐 |
+| 3 | debug-ui/chat.html 修旧路由 → canonical `/api/flows/:sid/continue` |
+| 4 | relation-window test fixture 补 3 个 required path 字段（漂移漏跟） |
+| 5 | R8-4 path-traversal 防护：删除 debug API `?baseDir=` query override |
+
+### Round 8 Issue 候选（剩余，未修，需 user 决策）
+
+- [ ] **R8-1**（low）chat.html 用两步法 createSession 而非 canonical seedSession：___
+- [x] **R8-2**（trivial）backlog A3 文档勾选已同步：**DONE**（本次更新）
+- [ ] **R8-3**（design）Vite dev server 与 backend 分裂——是否在 backend dev 模式嵌入 minimal SSR 让单 process 端到端跑？涉及 visible 维度 dev runtime 协议决策：___
+- [x] **R8-4**（medium / security）debug API path-traversal：**DONE**（本次 commit）
+- [ ] **R8-5**（low）relation_window not-materialized signal——API response 是否补 `{exists:false}` flag 给 caller 区分 lazy-create vs bug？涉及 contextWindow shape 契约调整：___
 
 ---
 

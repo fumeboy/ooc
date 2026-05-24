@@ -44,6 +44,11 @@ async function setupSelfThread(baseDir: string, opts: { withSuperTalk?: TalkWind
     status: "open",
     createdAt: Date.now(),
     peerId: PEER,
+    // Round 8 B3 fix: RelationWindow 类型 2026-05-21 扩展把这三个 path 改成 required
+    // (见 src/executable/windows/relation/types.ts:29/34/39)；测试 fixture 漏跟。
+    peerReadmePath: `stones/main/objects/${PEER}/readme.md`,
+    selfLongTermPath: `pools/${SELF}/knowledge/relations/${PEER}.md`,
+    selfSessionPath: `flows/${SID}/objects/${SELF}/knowledge/relations/${PEER}.md`,
   };
   const thread: ThreadContext = {
     id: "t_root",

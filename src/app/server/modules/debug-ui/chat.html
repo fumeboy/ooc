@@ -300,9 +300,11 @@
       }
       async function sendMessage() {
         const sessionId = $("activeSessionId").value.trim();
-        const objectId = $("activeObjectId").value.trim();
         const text = $("chatInput").value;
-        const body = await request(`/api/flows/${encodeURIComponent(sessionId)}/objects/${encodeURIComponent(objectId)}/threads/root/continue`, {
+        // Round 8 B1 fix: 旧路径 `/flows/:sid/objects/:oid/threads/root/continue`
+        // 已不存在；canonical route 是 `/flows/:sid/continue`（不带 objectId/threadId，
+        // 后端按 user.root.talk_window 路由到 callee）。
+        const body = await request(`/api/flows/${encodeURIComponent(sessionId)}/continue`, {
           method: "POST",
           body: JSON.stringify({ text }),
         });

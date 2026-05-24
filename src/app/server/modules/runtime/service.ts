@@ -134,10 +134,13 @@ export function createRuntimeService(deps: {
         threadId: ref.threadId,
         loopIndex,
       };
+      // Round 8 B5: label 与磁盘 zero-pad 4 位文件名对齐（loop_0001.*.json），
+      // 而不是用裸 loopIndex（如 loop_1）——后者让错误信息无法直接指向文件。
+      const padded = String(loopIndex).padStart(4, "0");
       return {
-        input: await readDebugJson(loopInputFile(ref, loopIndex), `loop_${loopIndex}.input.json`, details),
-        output: await readDebugJson(loopOutputFile(ref, loopIndex), `loop_${loopIndex}.output.json`, details),
-        meta: await readDebugJson(loopMetaFile(ref, loopIndex), `loop_${loopIndex}.meta.json`, details),
+        input: await readDebugJson(loopInputFile(ref, loopIndex), `loop_${padded}.input.json`, details),
+        output: await readDebugJson(loopOutputFile(ref, loopIndex), `loop_${padded}.output.json`, details),
+        meta: await readDebugJson(loopMetaFile(ref, loopIndex), `loop_${padded}.meta.json`, details),
       };
     },
   };

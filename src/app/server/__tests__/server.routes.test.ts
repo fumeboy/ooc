@@ -77,7 +77,8 @@ describe("app server routes", () => {
     expect(html).toContain("threadStatus");
     expect(html).toContain("/api/stones");
     expect(html).toContain("/api/flows/");
-    expect(html).toContain("/threads/root/continue");
+    // Round 8 B1: 旧 `/threads/root/continue` 路径已不存在；canonical 是 `/api/flows/:sid/continue`。
+    expect(html).toContain("/continue");
     expect(html).toContain("/api/runtime/jobs/");
   });
 

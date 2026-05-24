@@ -39,6 +39,6 @@ export function runtimeModule(config: RuntimeModuleConfig) {
     .use(enableDebugApi(service))
     .use(disableDebugApi(service))
     .use(getDebugStatusApi(service))
-    .use(getLatestDebugApi(service))
-    .use(getLoopDebugApi(service));
+    .use(getLatestDebugApi(service, config.baseDir))
+    .use(getLoopDebugApi(service, config.baseDir));
 }

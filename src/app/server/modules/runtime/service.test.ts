@@ -113,7 +113,7 @@ describe("runtime service", () => {
       expect(error).toBeInstanceOf(AppServerError);
       const appError = error as AppServerError;
       expect(appError.code).toBe("NOT_FOUND");
-      expect(appError.message).toContain("loop_3.input.json");
+      expect(appError.message).toContain("loop_0003.input.json");
       expect(appError.details?.loopIndex).toBe(3);
     }
   });
