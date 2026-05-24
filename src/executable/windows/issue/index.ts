@@ -15,7 +15,8 @@ import type {
   CommandTableEntry,
 } from "../_shared/command-types.js";
 import { registerWindowType, type RenderContext } from "../_shared/registry.js";
-import { issuesService } from "../../../persistable/index.js";
+import { findIssueSubscribers, issuesService } from "../../../persistable/index.js";
+import { notifyThreadActivated } from "../../../observable/index.js";
 import { xmlElement, xmlText, type XmlNode } from "../../../thinkable/context/xml.js";
 import type { IssueWindow } from "./types.js";
 
@@ -122,6 +123,34 @@ export async function executeIssueWindowComment(
   // 同步更准确)。lastSeenCommentId 是 in-process 字段,直接 mutate window 即可
   // (不持久化)。
   window.lastSeenCommentId = commentId;
+
+  // 根因 #5：事件源 enqueue。除作者本人外，扫所有订阅本 Issue 的 thread 入队。
+  try {
+    const subscribers = await findIssueSubscribers(
+      thread.persistence.baseDir,
+      thread.persistence.sessionId,
+      window.issueId,
+      {
+        exceptObjectId: thread.persistence.objectId,
+        exceptThreadId: thread.persistence.threadId,
+      },
+    );
+    for (const ref of subscribers) {
+      notifyThreadActivated({
+        sessionId: ref.sessionId,
+        objectId: ref.objectId,
+        threadId: ref.threadId,
+      });
+    }
+  } catch (err) {
+    // 通知失败不阻塞 comment 流程（silent-swallow ban → 显式 warn）
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[issue_window.comment] notify subscribers failed for issue=${window.issueId}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
 
   return `[issue_window.comment] 已发表 comment#${commentId};resolved mentions: ${
     resolved.length > 0 ? `[${resolved.join(", ")}]` : "(无)"

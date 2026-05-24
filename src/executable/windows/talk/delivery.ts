@@ -36,6 +36,7 @@
 
 import { readThread, writeThread, createFlowObject, createFlowSession, sessionMetadataFile } from "../../../persistable/index.js";
 import { stat } from "node:fs/promises";
+import { notifyThreadActivated } from "../../../observable/index.js";
 import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
 import { initContextWindows } from "../_shared/init.js";
 import { isSuperSessionId, SUPER_SESSION_ID } from "../_shared/super-constants.js";
@@ -181,6 +182,16 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
   // 4) 持久化双方
   await writeThread(callerThread);
   await writeThread(calleeThread);
+
+  // 5) 根因 #5：状态翻转 → 直接通知 runtime 入队 callee。worker 不再周期扫 fs 兜底。
+  //    user 是被动 flow object（控制面驱动）— 不入队，避免被 worker 处理。
+  if (calleeObjectId !== "user") {
+    notifyThreadActivated({
+      sessionId: calleeSessionId,
+      objectId: calleeObjectId,
+      threadId: calleeThread.id,
+    });
+  }
 
   return {
     calleeObjectId,

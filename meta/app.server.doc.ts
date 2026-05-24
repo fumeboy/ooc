@@ -379,23 +379,34 @@ observable / thinkloop；web 只能查询和触发这些状态，不能自行推
                     `.trim(),
                 },
                 worker: {
-                    title: "Worker 执行规则",
+                    title: "Worker 执行规则（事件驱动）",
                     content: `
-worker 轮询 queued job，成功标 done、异常标 failed。
+worker **只跑队列**：从 jobManager 取 queued job 跑 → 成功标 done / 异常标 failed。
+不再周期扫 fs 兜底入队（2026-05-24 根因 #5 改造，删除旧 enqueueOrphanRunningThreads
+路径以避免 waiting thread 被 10 jobs/s 线性膨胀入队 → jobManager 内存无 cap 爆炸）。
 
 - 默认生产配置启用 worker: \`OOC_WORKER_ENABLED !== "0"\`
 - 测试中可通过 \`workerEnabled: false\` 关闭 worker，避免普通测试触达真实 LLM
-- worker "标记 done" ≠ 线程到达 done; 仅表示"这次 worker 调度完成"，
+- worker "标记 done" ≠ 线程到达 done；仅表示"这次 worker 调度完成"，
   \`workerMaxTicks\` 可能让线程停在 running / waiting / paused，等待下一次 job
-- **orphan running 兜底扫描**: 除了消费 queued job，worker 每轮还会在
-  \`processQueuedJobs\` 前后通过 \`enqueueOrphanRunningThreads\`（见
-  src/app/server/modules/runtime/worker.ts:62-101）扫描所有 running thread
-  并补 enqueue，避免跨 object talk-delivery 创建的 callee 线程因没有显式
-  enqueue 而 stuck。这是理解 cross-object talk 推进的关键。
+
+**状态翻转 → enqueue 由事件源直接触发**（src/observable.notifyThreadActivated）：
+- **talk-delivery**（caller talk_window.say → deliver 到 callee inbox）→ enqueue callee
+- **do_window.continue**（父→子 / 子→父 inbox 写入）→ enqueue target thread
+- **issue appendComment**（HTTP + LLM 命令两个入口都调）→ enqueue 所有订阅 thread（排除 author）
+- **end command**（无 result 时手工 notify creator；带 result 时通过内部 continue/say 自动 notify）
+- **resume**（HTTP resume-session）→ 显式 enqueue resume-thread job
+- **seedSession / createFlowObject(initialMessage)/ continueThread** → flows/service.ts 显式 enqueue
+
+启动期兜底（仅一次，非周期）：
+- buildServer(workerEnabled=true) 启动 worker 时调 \`enqueueRunningThreadsAtBootstrap\`，
+  把磁盘上 running/waiting 的 thread 入队一次。用于覆盖"上次 server crash / 重启后
+  仍 running 的 orphan thread"场景；不阻塞启动，失败 warn 不抛。
                     `.trim(),
                     named: {
                         "workerMaxTicks": "单次 worker 调度允许推进的最大 tick 数，超出后线程留在中间态等待下一个 job",
-                        "enqueueOrphanRunningThreads": "worker 每轮兜底扫描，把已是 running 但不在队列里的线程补回队列",
+                        "notifyThreadActivated": "事件源（talk/do/issue/end）写完目标 inbox 后调用的薄通知；由 buildServer 注入 jobManager 后转成 createRunThreadJob",
+                        "enqueueRunningThreadsAtBootstrap": "buildServer 启动时一次性扫描入队 orphan running thread，替代旧的周期扫兜底",
                     },
                 },
             },

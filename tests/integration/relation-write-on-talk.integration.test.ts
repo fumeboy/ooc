@@ -108,9 +108,9 @@ describe.skipIf(!hasLlmEnv)("integration: backend-relation-self-write-on-talk", 
     };
     initContextWindows(assistantThread, { initialTaskTitle: "write relation about critic" });
 
-    // 3) 走 worker 完整调度(processQueuedJobs 会自动捕获 talk-delivery 创建的 critic
-    //    thread 入队,保证 critic 跑一轮 LLM 回复;参考 src/app/server/runtime/worker.ts
-    //    的 enqueueOrphanRunningThreads 机制)
+    // 3) 走 worker 完整调度(deliverTalkMessage 内的 notifyThreadActivated 把 callee
+    //    thread 直接 enqueue,保证 critic 跑一轮 LLM 回复;事件驱动改造后 worker 不再
+    //    周期扫,见 src/app/server/runtime/worker.ts:processQueuedJobs)
     const jobManager = createJobManager();
     jobManager.createRunThreadJob({ sessionId: "s", objectId: "assistant", threadId: "root" });
 

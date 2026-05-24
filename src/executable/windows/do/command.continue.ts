@@ -3,6 +3,7 @@ import type {
   CommandKnowledgeEntries,
   CommandTableEntry,
 } from "../_shared/command-types.js";
+import { notifyThreadActivated } from "../../../observable/index.js";
 import { appendInbox, findThreadInScope, makeMessage } from "./helpers.js";
 
 const DO_WINDOW_CONTINUE_BASIC = "internal/windows/do/continue/basic";
@@ -57,6 +58,17 @@ async function executeDoWindowContinue(ctx: CommandExecutionContext): Promise<st
     thread.status = "waiting";
     thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0;
     thread.waitingOn = ctx.parentWindow?.id;
+  }
+
+  // 根因 #5：父→子 / 子→父 inbox 写入后通知 runtime 入队 target。
+  // target.persistence 可能缺失（child thread 在父 thread 内存树里时只挂在父 thread.json
+  // 上，没独立 ref）— 此时无需通知，target 与父在同一 thread.json，下一轮 runJob 自然处理。
+  if (target.persistence) {
+    notifyThreadActivated({
+      sessionId: target.persistence.sessionId,
+      objectId: target.persistence.objectId,
+      threadId: target.id,
+    });
   }
   return undefined;
 }

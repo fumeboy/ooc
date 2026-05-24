@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { setPauseChecker } from "@src/observable";
+import { setPauseChecker, setThreadActivationNotifier } from "@src/observable";
 import { ensureStoneRepo } from "@src/persistable";
 import { readServerConfig, type ServerConfig } from "./bootstrap/config";
 import { runRecoveryCheck } from "./bootstrap/recovery-check";
@@ -14,7 +14,7 @@ import { flowsModule } from "./modules/flows";
 import { issuesModule } from "./modules/issues";
 import { uiModule } from "./modules/ui";
 import { debugUiModule } from "./modules/debug-ui";
-import { startJobWorker } from "./runtime/worker";
+import { enqueueRunningThreadsAtBootstrap, startJobWorker } from "./runtime/worker";
 
 /** AppServerError 类别码 → HTTP 状态码映射。 */
 const ERROR_HTTP_STATUS: Record<AppServerError["code"], number> = {
@@ -91,6 +91,13 @@ export function buildServer(config: ServerConfig = readServerConfig()) {
     const sessionId = thread.persistence?.sessionId;
     return config.pauseStore.isGlobalPauseEnabled() || (sessionId ? config.pauseStore.isSessionPaused(sessionId) : false);
   });
+  // 根因 #5（2026-05-24）：worker 事件驱动改造。事件源（talk-delivery /
+  // do_window.continue / issue appendComment / end auto-reply）写完对端 inbox 后
+  // 调 notifyThreadActivated → 这里把它转成 jobManager.createRunThreadJob。
+  // 不再依赖 worker 周期扫 fs 兜底入队。
+  setThreadActivationNotifier((ref) => {
+    config.jobManager.createRunThreadJob(ref);
+  });
 
   const app = new Elysia({ name: "ooc.app.server" })
     // Issue #6 Bad #2: 统一所有错误为 { error: { code, message, details } } shape;
@@ -110,6 +117,14 @@ export function buildServer(config: ServerConfig = readServerConfig()) {
     .use(issuesModule(config));
 
   if (config.workerEnabled) {
+    // 根因 #5：启动期把磁盘上 running/waiting 的 thread 入队一次（bootstrap-only，
+    // 替代旧的"周期扫 fs 兜底"路径）。然后 worker 只跑队列，不再周期扫。
+    // fire-and-forget：不阻塞 buildServer 同步返回。
+    void enqueueRunningThreadsAtBootstrap(config).catch((err) => {
+      console.warn(
+        `[ooc-app-server] bootstrap enqueue failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`,
+      );
+    });
     const worker = startJobWorker(config);
     app.onStop(() => {
       worker.stop();

@@ -2,6 +2,7 @@ import type { CommandExecutionContext, CommandKnowledgeEntries, CommandTableEntr
 import type { ContextWindow, DoWindow, TalkWindow } from "../_shared/types.js";
 import { continueCommand } from "../do/command.continue.js";
 import { sayCommand } from "../talk/command.say.js";
+import { notifyThreadActivated } from "../../../observable/index.js";
 
 /** end command 暴露给 LLM 的知识说明。 */
 const KNOWLEDGE = `
@@ -180,5 +181,37 @@ export async function executeEndCommand(ctx: CommandExecutionContext): Promise<s
   ctx.thread.endReason = reason;
   ctx.thread.endSummary = summary;
   ctx.thread.status = "done";
+
+  // 根因 #5：callee 结束时通知 creator thread，确保 caller 即使在 waiting
+  // 也能被 worker 调度（runJob 内的 syncCrossObjectCalleeEnds 会读到本 callee 状态
+  // 并唤醒 caller）。
+  //
+  // `result` 路径已经通过 continue/say → deliverTalkMessage 内部 notify 过 caller；
+  // 这里**无条件**再调一次：notifyThreadActivated 由 jobManager.createRunThreadJob 去重，
+  // 多次调用幂等。这覆盖 end({}) 不带 result 的常见路径。
+  //
+  // 跨 session 处理（super alias）：通过 creator window 的 target 字段拿到 caller object,
+  // session 取 callee 自身的 persistence.sessionId — 但 super alias 时 caller 在另一个
+  // session。此处优先用 creator do_window（同 object 同 session）；creator talk_window 时
+  // caller 可能跨 session，我们读 talk_window.target 但 session 仍取 callee 当前 session,
+  // notify 命中错误 session 的话 jobManager 不会找到目标 thread → runner 抛错 → job 标记
+  // failed,不污染其它正常流。可接受的过渡 trade-off,见 syncCrossObjectCalleeEnds 兜底注释。
+  const persistence = ctx.thread.persistence;
+  if (persistence) {
+    const creator = findCreatorWindow(ctx);
+    if (creator) {
+      const callerObjectId =
+        creator.type === "do" ? persistence.objectId : creator.target;
+      const callerThreadId =
+        creator.type === "do" ? (creator as DoWindow).targetThreadId : (creator as TalkWindow).targetThreadId;
+      if (callerObjectId && callerThreadId && callerObjectId !== "user") {
+        notifyThreadActivated({
+          sessionId: persistence.sessionId,
+          objectId: callerObjectId,
+          threadId: callerThreadId,
+        });
+      }
+    }
+  }
   return undefined;
 }

@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
-import { issuesService } from "@src/persistable";
+import { findIssueSubscribers, issuesService } from "@src/persistable";
+import { notifyThreadActivated } from "@src/observable";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { ServerConfig } from "../../bootstrap/config";
@@ -106,6 +107,22 @@ export function issuesModule(config: Pick<ServerConfig, "baseDir">) {
             authorKind: "user",
             mentions: body.mentions,
           });
+          // 根因 #5：事件源 enqueue。把订阅本 Issue 的所有 thread 入队,
+          // 跳过作者自身 thread(author 无 thread context 在 HTTP 路径上 ——
+          // 用 exceptObjectId 排除作者 object)。
+          const subscribers = await findIssueSubscribers(
+            baseDir,
+            params.sessionId,
+            params.id,
+            { exceptObjectId: body.authorObjectId },
+          );
+          for (const ref of subscribers) {
+            notifyThreadActivated({
+              sessionId: ref.sessionId,
+              objectId: ref.objectId,
+              threadId: ref.threadId,
+            });
+          }
           return result;
         } catch (err) {
           throw new AppServerError("INVALID_INPUT", (err as Error).message);

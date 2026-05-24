@@ -59,10 +59,27 @@ export interface ObservableDebugStatus {
 /** 运行时可注入的 pause 判定器。 */
 export type PauseChecker = (thread: ThreadContext) => boolean | Promise<boolean>;
 
+/**
+ * 状态翻转通知：事件源（talk/do/issue/end）写完对端 thread.inbox 后调一次,
+ * 告诉 runtime "这个 thread 现在该被调度了"。runtime 把它转成 jobManager.enqueue。
+ *
+ * 根因 #5（worker 事件驱动改造，2026-05-24）：
+ * - worker 不再周期扫 fs 兜底入队；状态翻转由事件源直接 enqueue
+ * - 默认 notifier 是 no-op，单元测试 / 跨层调用不依赖 runtime 注入也能跑
+ * - app/server/buildServer 启动时调 setThreadActivationNotifier 把 jobManager 接进来
+ */
+export type ThreadActivationRef = {
+  sessionId: string;
+  objectId: string;
+  threadId: string;
+};
+export type ThreadActivationNotifier = (ref: ThreadActivationRef) => void;
+
 let latestLlmObservation: LlmObservation | undefined;
 let debugEnabled = false;
 const loopCounters = new Map<string, number>();
 let pauseChecker: PauseChecker = () => false;
+let threadActivationNotifier: ThreadActivationNotifier = () => {};
 
 /** 把线程定位为稳定 key；持久化线程按磁盘 ref 区分，内存线程退化到 id。 */
 function loopKey(thread: ThreadContext): string {
@@ -109,6 +126,36 @@ export function setPauseChecker(checker: PauseChecker): void {
 /** pause 能力由 runtime 注入；默认关闭。 */
 export function isPausing(thread: ThreadContext): Promise<boolean> | boolean {
   return pauseChecker(thread);
+}
+
+/**
+ * 注入 thread 激活通知（jobManager.createRunThreadJob 的薄封装）。
+ * 默认 no-op；buildServer 启动时把 jobManager 接入。
+ */
+export function setThreadActivationNotifier(notifier: ThreadActivationNotifier): void {
+  threadActivationNotifier = notifier;
+}
+
+/**
+ * 通知 runtime：ref 指向的 thread 应被 worker 调度。
+ *
+ * 调用约束：
+ * - 必须在写完目标 thread.inbox + 翻 status 为 running 之后调
+ * - 多次调用幂等（jobManager.createRunThreadJob 自带去重 by (sessionId,objectId)）
+ * - 单元测试无 runtime 时是 no-op，不抛错
+ */
+export function notifyThreadActivated(ref: ThreadActivationRef): void {
+  try {
+    threadActivationNotifier(ref);
+  } catch (err) {
+    // silent-swallow ban：通知失败时 warn 但不阻塞调用方
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[thread-activation] notifier threw for ${ref.sessionId}/${ref.objectId}/${ref.threadId}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
 }
 
 /** 清空最近一次 LLM 观测，避免测试之间互相污染。 */

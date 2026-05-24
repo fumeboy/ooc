@@ -926,7 +926,7 @@ export const root: DocTreeNode = {
                     deliverTalkMessage（src/executable/windows/talk-delivery.ts）是跨 object 派送的唯一路径。
                     无论是 LLM 通过 talk_window.say 还是控制面代用户发，都汇集到这里。
 
-                    一次派送做 5 件事:
+                    一次派送做 6 件事:
                     1. 解析 caller 与 target: caller = ctx.thread + ctx.talkWindow；target = talkWindow.target（objectId）。
                        target === "super" 时翻译为指向自己的 super 分身（calleeObjectId = caller.objectId，calleeSessionId = "super"），见 reflectable。
                     2. 解析或创建 callee thread:
@@ -937,8 +937,9 @@ export const root: DocTreeNode = {
                        （replyToWindowId 由 resolveCalleeReplyToWindowId 解析）；callee 同时 push inbox_message_arrived 事件。
                     4. callee 状态: waiting/done/failed → 翻回 running，等 worker 调度；paused 不动。
                     5. 持久化: caller / callee 双写 thread.json。
+                    6. 状态翻转通知（根因 #5）: notifyThreadActivated(callee ref) → buildServer 注入的 jobManager.createRunThreadJob 把 callee 入队；worker 不再周期扫 fs 兜底。
 
-                    UI 通知与 worker 调度不在本模块；前者由控制面自己决定何时 refresh，后者由 worker 自然轮询 running thread。
+                    UI 通知由控制面自己决定何时 refresh；worker 调度由本派送的 step 6 直接触发，事件驱动。
                     `,
                     named: {
                         "deliverTalkMessage": "跨 object 派送的入口函数",

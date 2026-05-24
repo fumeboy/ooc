@@ -8,6 +8,8 @@ import type { IssueWindow, TalkWindow } from "@src/executable/windows/_shared/ty
 import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "@src/executable/windows/_shared/super-constants";
 import { resumePausedThread } from "./resume";
 import { scanRunningThreads } from "./thread-query";
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 
 export type RuntimeJobRunner = (job: RuntimeJob, config: ServerConfig) => Promise<void>;
 
@@ -65,15 +67,12 @@ export async function processQueuedJobs(
   config: ServerConfig,
   runner: RuntimeJobRunner = runJob
 ): Promise<void> {
-  // 入口先做一次"全 session 兜底扫描":对每个有 running thread 但当前没在 jobManager
-  // 队列里的 (session,object,thread) 入队 run-thread job。createRunThreadJob 自带去重,
-  // 已有 queued/running 的 (session,object) 不会重复入队。
-  // 这覆盖两种场景:
-  // 1. server 启动后 jobManager 是空的,但磁盘上有 running thread(上次没跑完)
-  // 2. 跨对象 talk:caller say 后 callee 变 running,但 executor 拿不到 jobManager,
-  //    依赖这里把 callee 兜起来
-  await enqueueOrphanRunningThreads(config);
-
+  // 根因 #5（worker 事件驱动改造，2026-05-24）：worker 不再周期扫 fs 兜底入队。
+  // 状态翻转（talk-delivery / do_window.continue / issue appendComment / resume /
+  // end auto-reply）由事件源在写完目标 inbox 后直接调 notifyThreadActivated
+  // → jobManager.createRunThreadJob。worker 只跑队列。
+  //
+  // 启动期兜底（捕获上次未跑完的 running thread）已迁到 bootstrap (enqueueRunningThreadsAtBootstrap)。
   const jobs = config.jobManager.listJobs().filter((job) => job.status === "queued");
 
   // **并行处理本批 queued jobs** (2026-05-20 修): 此前是 for-await 串行, 当 caller
@@ -100,45 +99,42 @@ export async function processQueuedJobs(
           error: error instanceof Error ? error.message : String(error),
         });
       }
-
-      // 同一目的的事后扫描:本 job 中可能产生新的 callee running thread
-      await enqueueOrphanRunningThreads(config, claimed.sessionId);
     })
   );
 }
 
 /**
- * 扫指定 session(或全部 session) 的 running thread 入队 follow-up job。
- * 失败不抛,以保证 worker 循环不被一个坏 session 拖垮。
+ * Bootstrap-only：server 启动时调一次，把磁盘上 running/waiting 的 thread 入队。
  *
- * 注意:scanRunningThreads 含 running + waiting(spec 2026-05-17 wait 扩展),
- * 所以"waiting on IssueWindow"的 thread 也会被周期性入队 → runJob → 触发
- * syncIssueWindowComments 处理新 comment。这是 F4 push 路径的实际实现方式
- * (plan §4 决策 3 描述的"appendComment 内 enqueueSubscribers"在实现上等价于
- * "周期性扫 waiting + sync 兜底",二者效果一致 — 都保证订阅 thread 不会永久
- * 错过新 comment;延迟差为一次 worker poll 间隔)。
+ * 用于：上次 server crash 留下的 orphan thread；workerEnabled=true 的 buildServer
+ * 启动后第一次扫一遍。**不**周期扫——周期扫已在根因 #5 中删除。
+ *
+ * 失败不抛，保证 server 启动不被磁盘异常拖垮。
  */
-async function enqueueOrphanRunningThreads(
-  config: ServerConfig,
-  onlySessionId?: string,
-): Promise<void> {
+export async function enqueueRunningThreadsAtBootstrap(
+  config: Pick<ServerConfig, "baseDir" | "jobManager">,
+): Promise<{ enqueued: number }> {
+  let enqueued = 0;
   try {
-    const sessionIds = onlySessionId ? [onlySessionId] : await listSessionIds(config.baseDir);
+    const sessionIds = await listSessionIds(config.baseDir);
     for (const sessionId of sessionIds) {
       const running = await scanRunningThreads(config.baseDir, sessionId);
       for (const { objectId, threadId } of running) {
         if (objectId === USER_OBJECT_ID) continue;
         config.jobManager.createRunThreadJob({ sessionId, objectId, threadId });
+        enqueued += 1;
       }
     }
-  } catch {
-    // swallow — 扫描失败不阻塞主循环
+  } catch (err) {
+    // bootstrap 期失败 warn 但不阻塞启动（silent-swallow ban → 显式 warn）
+    console.warn(
+      `[worker] enqueueRunningThreadsAtBootstrap failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
+  return { enqueued };
 }
 
 async function listSessionIds(baseDir: string): Promise<string[]> {
-  const { readdir } = await import("node:fs/promises");
-  const { join } = await import("node:path");
   try {
     const entries = await readdir(join(baseDir, "flows"), { withFileTypes: true });
     return entries.filter((e) => e.isDirectory()).map((e) => e.name);
