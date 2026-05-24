@@ -33,29 +33,76 @@ const ERROR_HTTP_STATUS: Record<AppServerError["code"], number> = {
 };
 
 /**
- * 把任意未知 error 归一为统一 JSON shape。Issue #6 Bad #2 修复:
- * - AppServerError → 走 ERROR_HTTP_STATUS 映射
- * - fs ENOENT(没经 service 层 catch 的兜底) → NOT_FOUND 404
- * - Elysia schema 验证错误 (code === "VALIDATION") → 422
- * - 其它 unknown → INTERNAL_ERROR 500;原始 message 进 details.cause
+ * Elysia ValidationError.all 项压缩：每条只保留 {path, expected (schema 类型), message}。
+ * 避免 R2 #8 的 >2KB 噪音（原始项嵌套整个 schema JSON）。
  */
-function normalizeErrorToJson(error: unknown): { status: number; body: { error: { code: string; message: string; details: unknown } } } {
+function compressValidationItem(item: unknown): { path?: string; expected?: string; message?: string } {
+  const it = item as { path?: string; schema?: { type?: string }; message?: string; summary?: string };
+  return {
+    path: it?.path,
+    expected: it?.schema?.type,
+    message: it?.summary ?? it?.message,
+  };
+}
+
+/**
+ * 根因 #8（2026-05-24）：错误模型统一。所有错误来源经此归一为
+ * `{error:{code,message,details}}` 包络。
+ *
+ * - `elysiaCode === "NOT_FOUND"`（Elysia 默认未匹配路由）→ NOT_FOUND 404 +
+ *   details.{path,method}（修 R5 #38 /health 500、R6 #49 code+message 自相矛盾）
+ * - `elysiaCode === "VALIDATION"` 或 error.code === "VALIDATION" → 422，details
+ *   压缩为 [{path,expected,message}]，message 用 summary（修 R2 #8 >2KB 嘈杂）
+ * - `AppServerError` → 走 ERROR_HTTP_STATUS 映射
+ * - 裸 fs ENOENT/EISDIR → NOT_FOUND 404
+ * - 其它 unknown → INTERNAL_ERROR 500
+ */
+function normalizeErrorToJson(
+  error: unknown,
+  // Elysia onError 的 `code` 字段可能是 string（内置错误类别）或 number（status 码兜底）。
+  elysiaCode?: string | number,
+  reqInfo?: { path?: string; method?: string },
+): { status: number; body: { error: { code: string; message: string; details: unknown } } } {
+  // AppServerError 优先（注意：抛出的 AppServerError 若 .code === "NOT_FOUND"，
+  // Elysia 也会把 onError 的 `elysiaCode` 设为 "NOT_FOUND"——所以必须先按错误对象
+  // 类型分流，再走 Elysia code dispatch，否则 service 层 throw 的 NOT_FOUND 会被
+  // 误判为 Elysia route 未匹配）。
   if (error instanceof AppServerError) {
     return {
       status: ERROR_HTTP_STATUS[error.code] ?? 500,
       body: { error: { code: error.code, message: error.message, details: error.details ?? null } },
     };
   }
-  // Elysia 验证错误对象:含 .code === "VALIDATION" 和 .all / .summary 字段。
+  // Elysia 默认未匹配路由：onError 收到 code="NOT_FOUND" 且 error 是 NotFoundError。
+  // 修 R5 #38 /health 500、R6 #49 code+message 自相矛盾（之前落到 INTERNAL_ERROR 500
+  // + message="NOT_FOUND" 兜底分支）。
+  if (elysiaCode === "NOT_FOUND") {
+    return {
+      status: 404,
+      body: {
+        error: {
+          code: "NOT_FOUND",
+          message: reqInfo?.path
+            ? `route not found: ${reqInfo.method ?? "GET"} ${reqInfo.path}`
+            : "route not found",
+          details: reqInfo ?? null,
+        },
+      },
+    };
+  }
+  // Elysia 验证错误：error.code === "VALIDATION" 且 .all 为数组；压缩 details。
   const anyErr = error as { code?: string; message?: string; all?: unknown; summary?: string };
-  if (anyErr && anyErr.code === "VALIDATION") {
+  if (elysiaCode === "VALIDATION" || (anyErr && anyErr.code === "VALIDATION")) {
+    const all = Array.isArray(anyErr?.all) ? anyErr.all.map(compressValidationItem) : null;
+    // friendly message：优先用第一项的 summary，避免 ValidationError.message 含整个 schema dump
+    const firstMsg = all && all[0]?.message;
     return {
       status: 422,
       body: {
         error: {
           code: "VALIDATION",
-          message: anyErr.summary ?? anyErr.message ?? "request validation failed",
-          details: anyErr.all ?? null,
+          message: anyErr.summary ?? firstMsg ?? "request validation failed",
+          details: all,
         },
       },
     };
@@ -100,10 +147,13 @@ export function buildServer(config: ServerConfig = readServerConfig()) {
   });
 
   const app = new Elysia({ name: "ooc.app.server" })
-    // Issue #6 Bad #2: 统一所有错误为 { error: { code, message, details } } shape;
-    // AppServerError / Elysia 验证 / 裸 fs ENOENT 都走 normalizeErrorToJson。
-    .onError(({ error, set }) => {
-      const { status, body } = normalizeErrorToJson(error);
+    // 根因 #8（2026-05-24）：统一所有错误为 { error: { code, message, details } } shape。
+    // Elysia 的 `code` 参数区分内置错误类型（NOT_FOUND / VALIDATION / PARSE /
+    // INTERNAL_SERVER_ERROR / UNKNOWN），透传给 normalizeErrorToJson 以避免
+    // Elysia 默认 not-found 被兜底成 INTERNAL_ERROR(R6 #49 / R5 #38 根因)。
+    .onError(({ error, code, set, request, path }) => {
+      const reqInfo = { path: path ?? (request ? new URL(request.url).pathname : undefined), method: request?.method };
+      const { status, body } = normalizeErrorToJson(error, code, reqInfo);
       set.status = status;
       return body;
     })

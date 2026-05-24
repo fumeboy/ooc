@@ -113,10 +113,26 @@ app server 读取的端口环境变量是 \`OOC_APP_PORT\`，不是 \`OOC_PORT\`
                     `.trim(),
                 },
                 errors: {
-                    title: "AppServerError 统一错误模型",
+                    title: "AppServerError 统一错误模型 / onError 全覆盖包络",
                     content: `
 所有控制面错误统一走 \`AppServerError\`（src/app/server/bootstrap/errors.ts），
 映射成 JSON 错误对象与明确 HTTP 状态码，不一律返回 500。
+
+**根因 #8（2026-05-24）onError 全覆盖**：src/app/server/index.ts 的 onError handler
+不再只处理 AppServerError，而是统一所有错误来源为
+\`{error:{code,message,details}}\` 包络：
+
+- \`AppServerError\` → ERROR_HTTP_STATUS 映射（必须优先判定，避免
+  AppServerError("NOT_FOUND") 被 Elysia 的 elysiaCode="NOT_FOUND" 错认成 route 未匹配）
+- Elysia route 未匹配（elysiaCode="NOT_FOUND" / NotFoundError）→ 404 +
+  details.{path,method}（修 R5 #38 /health 500、R6 #49 code+message 自相矛盾）
+- Elysia ValidationError → 422，details 压缩为 \`[{path,expected,message}]\`，
+  message 取首项 summary（修 R2 #8 >2KB 嘈杂；不再嵌套整个 schema JSON）
+- 裸 fs ENOENT/EISDIR → 404 NOT_FOUND
+- 兜底 → 500 INTERNAL_ERROR
+
+**契约**：service 层错误一律 \`throw new AppServerError(code, msg, details)\`，
+端点层不要 \`set.status=404; return {code,...}\` 裸返回——否则形态分裂（R3 #16 根因）。
                     `.trim(),
                 },
             },
