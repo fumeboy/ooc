@@ -15,6 +15,7 @@
 
 import { registerWindowType, type OnCloseContext, type RenderContext } from "../_shared/registry.js";
 import type { SkillIndexWindow } from "./types.js";
+import { xmlElement, xmlText, type XmlNode } from "../../../thinkable/context/xml.js";
 
 const SKILL_INDEX_BASIC_KNOWLEDGE = `
 skill_index window 列出当前 stone 上可用的 skills——每个 skill 是一个独立目录（含
@@ -35,26 +36,32 @@ SKILL.md + 任意辅助文件），用于复用某种操作模式或协议。
  * skill_index 的 renderXml hook。
  *
  * 实际派生逻辑放在 synthesizer 里（异步 IO 不适合在 render 层做）；本函数只负责
- * 把已经填好的 window.skills 字段渲染成 XML。skill 列表为空时输出空 XML 节点
- * （理论上不应触发——synthesizer 在 skills 为空时不会注入这个 window）。
+ * 把已经填好的 window.skills 字段渲染成 XML 子节点序列。
+ *
+ * 调度器（render.ts）会负责外层 `<window id type status>` + `<title>` + `<commands>`；
+ * 本函数返回的是内层 `<hint>` + `<skills>` 子树。
  */
-function renderSkillIndex(ctx: RenderContext): unknown {
+function renderSkillIndex(ctx: RenderContext): XmlNode[] {
   const window = ctx.window as SkillIndexWindow;
   const skills = window.skills ?? [];
-  return {
-    tag: "skill_index",
-    attrs: { id: window.id, count: String(skills.length) },
-    children: [
-      { tag: "hint", attrs: {}, children: [
+  return [
+    xmlElement("hint", {}, [
+      xmlText(
         '使用 exec(command="open_file", args={ path: "<skillFilePath>" }) 打开具体 SKILL.md 阅读完整说明',
-      ] },
-      { tag: "skills", attrs: {}, children: skills.map((s) => ({
-        tag: "skill",
-        attrs: { name: s.name, scope: s.scope, path: s.skillFilePath },
-        children: [{ tag: "description", attrs: {}, children: [s.description] }],
-      })) },
-    ],
-  };
+      ),
+    ]),
+    xmlElement(
+      "skills",
+      { count: String(skills.length) },
+      skills.map((s) =>
+        xmlElement(
+          "skill",
+          { name: s.name, scope: s.scope, path: s.skillFilePath },
+          [xmlElement("description", {}, [xmlText(s.description)])],
+        ),
+      ),
+    ),
+  ];
 }
 
 function onCloseSkillIndex(_ctx: OnCloseContext): boolean {

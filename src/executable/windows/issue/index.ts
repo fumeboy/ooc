@@ -14,8 +14,10 @@ import type {
   CommandKnowledgeEntries,
   CommandTableEntry,
 } from "../_shared/command-types.js";
-import { registerWindowType } from "../_shared/registry.js";
+import { registerWindowType, type RenderContext } from "../_shared/registry.js";
 import { issuesService } from "../../../persistable/index.js";
+import { xmlElement, xmlText, type XmlNode } from "../../../thinkable/context/xml.js";
+import type { IssueWindow } from "./types.js";
 
 const ISSUE_COMMENT_BASIC = "internal/windows/issue/comment/basic";
 const ISSUE_COMMENT_INPUT = "internal/windows/issue/comment/input";
@@ -126,9 +128,27 @@ export async function executeIssueWindowComment(
   }`;
 }
 
+/**
+ * issue_window 的 renderXml hook：dump issueId + lastSeen 游标。
+ *
+ * Issue 的具体内容（title / status / comments）由 deriveIssueWindowKnowledge
+ * 派生为伴随的 KnowledgeWindow 渲染；本 window 只负责暴露订阅入口元信息。
+ */
+function renderIssueWindow(ctx: RenderContext): XmlNode[] {
+  const window = ctx.window as IssueWindow;
+  const children: XmlNode[] = [
+    xmlElement("issue_id", {}, [xmlText(String(window.issueId))]),
+  ];
+  if (typeof window.lastSeenCommentId === "number") {
+    children.push(xmlElement("last_seen_comment_id", {}, [xmlText(String(window.lastSeenCommentId))]));
+  }
+  return children;
+}
+
 registerWindowType("issue", {
   commands: {
     comment: commentCommand,
   },
+  renderXml: renderIssueWindow,
   basicKnowledge: ISSUE_WINDOW_BASIC_KNOWLEDGE,
 });

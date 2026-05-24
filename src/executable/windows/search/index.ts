@@ -19,7 +19,7 @@ import type {
   CommandKnowledgeEntries,
   CommandTableEntry,
 } from "../_shared/command-types.js";
-import { registerWindowType } from "../_shared/registry.js";
+import { registerWindowType, type RenderContext } from "../_shared/registry.js";
 import { isAbsolute, resolve } from "node:path";
 import {
   ROOT_WINDOW_ID,
@@ -27,6 +27,7 @@ import {
   type FileWindow,
   type SearchWindow,
 } from "../_shared/types.js";
+import { xmlElement, xmlText, type XmlNode } from "../../../thinkable/context/xml.js";
 
 export const SEARCH_WINDOW_BASIC_PATH = "internal/windows/search/basic";
 export const SEARCH_WINDOW_CLOSE_BASIC = "internal/windows/search/close/basic";
@@ -169,10 +170,44 @@ export async function executeSearchOpenMatch(
   return undefined;
 }
 
+/** search_window 的 renderXml hook：kind + query + matches。 */
+function renderSearchWindow(ctx: RenderContext): XmlNode[] {
+  const window = ctx.window as SearchWindow;
+  const children: XmlNode[] = [
+    xmlElement("kind", {}, [xmlText(window.kind)]),
+    xmlElement("query", {}, [xmlText(window.query)]),
+  ];
+  if (window.searchRoot) {
+    children.push(xmlElement("search_root", {}, [xmlText(window.searchRoot)]));
+  }
+
+  const matchNodes: XmlNode[] = window.matches.map((m) => {
+    const attrs: Record<string, string> = {
+      index: String(m.index),
+      path: m.path,
+    };
+    if (typeof m.line === "number") attrs.line = String(m.line);
+    return xmlElement("match", attrs, m.snippet ? [xmlText(m.snippet)] : []);
+  });
+
+  children.push(
+    xmlElement(
+      "matches",
+      {
+        count: String(window.matches.length),
+        truncated: window.truncated ? "true" : "false",
+      },
+      matchNodes,
+    ),
+  );
+  return children;
+}
+
 registerWindowType("search", {
   commands: {
     close: closeCommand,
     open_match: openMatchCommand,
   },
+  renderXml: renderSearchWindow,
   basicKnowledge: SEARCH_WINDOW_BASIC_KNOWLEDGE,
 });

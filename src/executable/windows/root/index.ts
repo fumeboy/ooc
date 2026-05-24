@@ -136,6 +136,16 @@ export function deriveRootCommandPaths(
   }
 }
 
+/**
+ * root window 的 renderXml hook。
+ *
+ * root 通常不显式渲染（外层包装 + commands 块已经足够说明 root 上可调命令），这里
+ * 只返回空 children 数组，让调度器的 commands 子节点自然承担表达。
+ */
+function renderRoot(): import("../../../thinkable/context/xml.js").XmlNode[] {
+  return [];
+}
+
 // 向 WindowRegistry 注入 root window type 的契约。
 // side-effect 注册：windows/index.ts 通过 import "./root/index.js" 触发本模块加载。
-registerWindowType("root", { commands: ROOT_COMMANDS });
+registerWindowType("root", { commands: ROOT_COMMANDS, renderXml: renderRoot });

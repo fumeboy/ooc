@@ -17,8 +17,11 @@ import type {
   CommandKnowledgeEntries,
   CommandTableEntry,
 } from "../_shared/command-types.js";
-import { registerWindowType } from "../_shared/registry.js";
+import { registerWindowType, type RenderContext } from "../_shared/registry.js";
 import type { FileWindow } from "../_shared/types.js";
+import { xmlElement, xmlText, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
+
+const MAX_FILE_WINDOW_BYTES = 32768;
 
 const FILE_WINDOW_SET_RANGE_BASIC = "internal/windows/file/set_range/basic";
 const FILE_WINDOW_RELOAD_BASIC = "internal/windows/file/reload/basic";
@@ -292,6 +295,50 @@ export async function executeFileWindowEdit(
   return undefined;
 }
 
+/** 按行/列范围切片文件正文；range 缺失则原样返回。 */
+function sliceByLinesColumns(
+  raw: string,
+  lines?: [number, number],
+  columns?: [number, number],
+): string {
+  let body = raw;
+  if (lines) {
+    const arr = body.split("\n");
+    const [start, end] = lines;
+    body = arr.slice(start, end).join("\n");
+  }
+  if (columns) {
+    const [start, end] = columns;
+    body = body
+      .split("\n")
+      .map((line) => line.slice(start, end))
+      .join("\n");
+  }
+  return body;
+}
+
+/** file_window 的 renderXml hook：path + lines/columns + 文件正文。 */
+async function renderFileWindow(ctx: RenderContext): Promise<XmlNode[]> {
+  const window = ctx.window as FileWindow;
+  const children: XmlNode[] = [
+    xmlElement("path", {}, [xmlText(window.path)]),
+  ];
+  if (window.lines) {
+    children.push(xmlElement("lines", {}, [xmlText(`${window.lines[0]}-${window.lines[1]}`)]));
+  }
+  if (window.columns) {
+    children.push(xmlElement("columns", {}, [xmlText(`${window.columns[0]}-${window.columns[1]}`)]));
+  }
+  try {
+    const raw = await readFile(window.path, "utf8");
+    const sliced = sliceByLinesColumns(raw, window.lines, window.columns);
+    children.push(xmlElement("content", {}, [xmlText(truncateBytes(sliced, MAX_FILE_WINDOW_BYTES))]));
+  } catch (error) {
+    children.push(xmlElement("error", {}, [xmlText((error as Error).message)]));
+  }
+  return children;
+}
+
 registerWindowType("file", {
   commands: {
     set_range: setRangeCommand,
@@ -299,4 +346,5 @@ registerWindowType("file", {
     edit: editCommand,
     close: closeCommand,
   },
+  renderXml: renderFileWindow,
 });

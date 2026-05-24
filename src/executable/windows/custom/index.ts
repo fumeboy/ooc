@@ -18,6 +18,7 @@ import { loadObjectWindow } from "../../server/loader.js";
 import { createProgramSelf } from "../../server/self.js";
 import type { ProgramSelf } from "../../server/types.js";
 import type { ObjectWindowDefinition } from "../../server/window-types.js";
+import { xmlElement, xmlText, type XmlNode } from "../../../thinkable/context/xml.js";
 
 function customWindowOf(window: { type: string }): CustomWindow {
   if (window.type !== "custom") {
@@ -98,28 +99,47 @@ const customCommandsDispatcher: Record<string, CommandTableEntry> = new Proxy({}
   },
 });
 
-/** custom window 的 renderXml dispatcher。 */
-async function renderCustomWindow(ctx: RenderContext): Promise<unknown> {
+/**
+ * custom window 的 renderXml dispatcher。
+ *
+ * 路由到对应 Object 的 `ObjectWindowDefinition.renderXml`；缺失/失败时退化为
+ * 一组占位 XmlNode（仍包含 objectId/title/description，让 LLM 知道这是哪个 Object 的
+ * custom window，便于排查）。
+ */
+async function renderCustomWindow(ctx: RenderContext): Promise<XmlNode[]> {
   const cw = customWindowOf(ctx.window);
   const thread = ctx.thread;
+  const children: XmlNode[] = [
+    xmlElement("object_id", {}, [xmlText(cw.objectId)]),
+  ];
   if (!thread.persistence) {
-    return { tag: "custom_window", attrs: { id: cw.id, objectId: cw.objectId, error: "no persistence" } };
+    children.push(xmlElement("error", {}, [xmlText("thread 无 persistence；无法加载 ObjectWindowDefinition")]));
+    return children;
   }
   try {
     const def = await loadObjectWindow(resolveStoneRef(cw, thread.persistence.baseDir));
     if (!def) {
-      return { tag: "custom_window", attrs: { id: cw.id, objectId: cw.objectId, status: "no-window-export" } };
+      children.push(xmlElement("status", {}, [xmlText("no-window-export")]));
+      return children;
     }
     if (typeof def.renderXml === "function") {
-      return def.renderXml(ctx);
+      const objChildren = await def.renderXml(ctx);
+      if (Array.isArray(objChildren)) {
+        children.push(...objChildren);
+      }
+      return children;
     }
-    return {
-      tag: "custom_window",
-      attrs: { id: cw.id, objectId: cw.objectId, title: def.title ?? cw.title },
-      children: def.description ? [def.description] : [],
-    };
+    // 没有 renderXml — 用 title/description 兜底
+    if (def.title) {
+      children.push(xmlElement("custom_title", {}, [xmlText(def.title)]));
+    }
+    if (def.description) {
+      children.push(xmlElement("description", {}, [xmlText(def.description)]));
+    }
+    return children;
   } catch (e) {
-    return { tag: "custom_window", attrs: { id: cw.id, objectId: cw.objectId, error: (e as Error).message } };
+    children.push(xmlElement("error", {}, [xmlText((e as Error).message)]));
+    return children;
   }
 }
 

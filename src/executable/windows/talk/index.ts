@@ -9,10 +9,63 @@
  * - 视图：transcript 按 outbox.windowId === self.id || inbox.replyToWindowId === self.id 过滤
  */
 
-import { registerWindowType, type OnCloseContext } from "../_shared/registry.js";
+import { registerWindowType, type OnCloseContext, type RenderContext } from "../_shared/registry.js";
 import { sayCommand } from "./command.say.js";
 import { waitCommand } from "./command.wait.js";
 import { closeCommand } from "./command.close.js";
+import { xmlElement, xmlText, type XmlNode } from "../../../thinkable/context/xml.js";
+import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
+import type { TalkWindow } from "./types.js";
+
+/**
+ * talk_window 的视图过滤（R3 #15）：
+ * - outbox 上 windowId === self.id（self 在该 window say 时打的标记）
+ * - inbox 上 replyToWindowId === self.id（对端回信的路由标记）
+ *
+ * spec § ThreadMessage 字段扩展。
+ */
+export function filterMessagesForTalkWindow(window: TalkWindow, thread: ThreadContext): ThreadMessage[] {
+  const messages: ThreadMessage[] = [];
+  for (const m of thread.outbox ?? []) {
+    if (m.windowId === window.id) messages.push(m);
+  }
+  for (const m of thread.inbox ?? []) {
+    if (m.replyToWindowId === window.id) messages.push(m);
+  }
+  messages.sort((a, b) => a.createdAt - b.createdAt);
+  return messages;
+}
+
+/** talk_window 的 renderXml hook：target + transcript（按 windowId / replyToWindowId 过滤）。 */
+function renderTalkWindow(ctx: RenderContext): XmlNode[] {
+  const window = ctx.window as TalkWindow;
+  const children: XmlNode[] = [
+    xmlElement("target", {}, [xmlText(window.target)]),
+    xmlElement("conversation_id", {}, [xmlText(window.conversationId)]),
+  ];
+  // 与 do_window 渲染对齐：creator talk_window 必须暴露 is_creator_window=true，
+  // 否则 LLM 无法识别"哪条 talk 是创建本 thread 的对端通道"。
+  if (window.isCreatorWindow) {
+    children.push(xmlElement("is_creator_window", {}, [xmlText("true")]));
+  }
+  const messages = filterMessagesForTalkWindow(window, ctx.thread);
+  if (messages.length > 0) {
+    children.push(
+      xmlElement(
+        "transcript",
+        {},
+        messages.map((m) =>
+          xmlElement("message", { id: m.id, source: m.source }, [
+            xmlElement("from_thread_id", {}, [xmlText(m.fromThreadId)]),
+            xmlElement("to_thread_id", {}, [xmlText(m.toThreadId)]),
+            xmlElement("content", {}, [xmlText(m.content)]),
+          ]),
+        ),
+      ),
+    );
+  }
+  return children;
+}
 
 /**
  * talk_window 的 type-level basicKnowledge。
@@ -74,5 +127,6 @@ registerWindowType("talk", {
     close: closeCommand,
   },
   onClose: onCloseTalkWindow,
+  renderXml: renderTalkWindow,
   basicKnowledge: TALK_WINDOW_BASIC_KNOWLEDGE,
 });

@@ -34,6 +34,7 @@ export {
   registerWindowType,
   getWindowTypeDefinition,
   listRegisteredWindowTypes,
+  assertAllRenderHooksRegistered,
 } from "./_shared/registry.js";
 
 export type {
@@ -81,3 +82,8 @@ import "./issue/index.js";
 import "./relation/index.js";
 import "./custom/index.js";
 import "./skill_index/index.js";
+
+// Boot-time 校验：所有 window type 必须配齐 renderXml hook（render.ts 调度器要求）。
+// 缺失会在此 fail-loud（根因 #4 接口 explicit），不让"空白 XML"问题流到 LLM。
+import { assertAllRenderHooksRegistered as _assertHooks } from "./_shared/registry.js";
+_assertHooks();

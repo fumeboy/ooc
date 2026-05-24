@@ -16,11 +16,13 @@ import type {
   CommandKnowledgeEntries,
   CommandTableEntry,
 } from "../_shared/command-types.js";
-import { registerWindowType } from "../_shared/registry.js";
+import { registerWindowType, type RenderContext } from "../_shared/registry.js";
 import { writeFlowRelation } from "../../../persistable/index.js";
 import { deliverTalkMessage } from "../talk/delivery.js";
 import { SUPER_ALIAS_TARGET } from "../_shared/super-constants.js";
 import { generateWindowId, type TalkWindow } from "../_shared/types.js";
+import { xmlElement, xmlText, type XmlNode } from "../../../thinkable/context/xml.js";
+import type { RelationWindow } from "./types.js";
 
 const RELATION_EDIT_BASIC = "internal/windows/relation/edit/basic";
 const RELATION_EDIT_INPUT = "internal/windows/relation/edit/input";
@@ -173,10 +175,43 @@ export async function executeRelationEdit(
   }
 }
 
+/** relation_window 的 renderXml hook：peer_id + peer_readme + self long_term/session。 */
+function renderRelationWindow(ctx: RenderContext): XmlNode[] {
+  const window = ctx.window as RelationWindow;
+  const children: XmlNode[] = [
+    xmlElement("peer_id", {}, [xmlText(window.peerId)]),
+  ];
+
+  // peer readme — 缺失就不渲染（peer 没有 stone 或文件不存在；不需要"占位"提示，因为 LLM 改不了对端的 readme）
+  if (window.peerReadme !== undefined) {
+    children.push(
+      xmlElement("peer_readme", { path: window.peerReadmePath }, [xmlText(window.peerReadme)]),
+    );
+  }
+
+  // self long_term / session — 缺失也保留节点 + 占位文案，提示 LLM 用 edit 写入
+  const longTermBody = window.selfLongTermBody !== undefined
+    ? window.selfLongTermBody
+    : `(暂无;通过 open(parent_window_id="${window.id}", command="edit", args={ content: "...", scope: "long_term" }) 写入)`;
+  children.push(
+    xmlElement("self_long_term", { path: window.selfLongTermPath }, [xmlText(longTermBody)]),
+  );
+
+  const sessionBody = window.selfSessionBody !== undefined
+    ? window.selfSessionBody
+    : `(暂无;通过 open(parent_window_id="${window.id}", command="edit", args={ content: "...", scope: "session" }) 写入)`;
+  children.push(
+    xmlElement("self_session", { path: window.selfSessionPath }, [xmlText(sessionBody)]),
+  );
+
+  return children;
+}
+
 registerWindowType("relation", {
   commands: {
     edit: editCommand,
   },
+  renderXml: renderRelationWindow,
   basicKnowledge: RELATION_WINDOW_BASIC_KNOWLEDGE,
 });
 

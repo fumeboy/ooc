@@ -19,6 +19,7 @@ import type {
   CommandTableEntry,
 } from "../windows/_shared/command-types.js";
 import type { OnCloseContext, RenderContext } from "../windows/_shared/registry.js";
+import type { XmlNode } from "../../thinkable/context/xml.js";
 import type { ProgramSelf } from "./types.js";
 
 /** custom window 的 commands[name].exec 收到的 ctx —— 标准 CommandExecutionContext + self。 */
@@ -30,8 +31,11 @@ export interface ObjectWindowDefinition {
   title?: string;
   /** 一行说明，会进 basicKnowledge */
   description?: string;
-  /** 渲染该 window 为 context XML（同 WindowRegistry.renderXml） */
-  renderXml?: (ctx: RenderContext) => unknown;
+  /**
+   * 渲染该 window 内层子节点（同 WindowRegistry.renderXml）；
+   * 返回 `XmlNode[]`——即 `<window ...>` 包裹的 children 序列。
+   */
+  renderXml?: (ctx: RenderContext) => XmlNode[] | Promise<XmlNode[]>;
   /** 该 window 出现时合成的协议知识；可静态字符串或动态函数 */
   basicKnowledge?: string | ((ctx: { self: ProgramSelf }) => string);
   /** close 触发 hook；缺省 = 直接释放 */

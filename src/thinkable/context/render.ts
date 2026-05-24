@@ -1,146 +1,42 @@
-import { readFile } from "node:fs/promises";
-import { deriveStoneFromThread } from "../../persistable/common";
-import { derivePoolFromThread } from "../../persistable/pool-object";
+/**
+ * Context XML 渲染调度器。
+ *
+ * 设计哲学（根因 #4 接口 explicit；2026-05-24 fix-plan）：
+ * - render.ts 只负责通用框架：外层 `<context><self/><thread>...</thread></context>` +
+ *   每个 window 的 `<window id type status>` 外壳 + `<title>` + `<commands>` 元数据 +
+ *   `<sub_windows>` 折叠 + sharing 属性 + 顶层 inbox/outbox 兜底
+ * - 各 window type 的"内容渲染"作为 RenderHook 注册到 WindowRegistry，本文件按 type
+ *   调度而不再 switch-by-case；缺 hook 会在启动期 fail-loud（registry.assertAll...）
+ *
+ * 修复点对照：
+ * - R2 #1  : skill_index / custom 的 renderXml hook 不再被忽略 — 通过 def.renderXml 调度
+ * - R2 #5  : 每个 window 末尾输出 `<commands>` 块（命令名 + 简要说明），LLM 直接看到该
+ *            window 上可调用的命令面
+ * - R2 #10 : 同上；不再需要让 LLM 翻 knowledge 文本去猜命令
+ * - R3 #15 : talk_window transcript 已由 talk/index.ts:renderTalkWindow + filter 函数渲染
+ * - R6 #46 : skill_index 通过通用调度器输出，不再被 switch 漏掉
+ */
+
 import {
-  computeActivations,
-  loadKnowledgeIndex,
-  type ActivationResult
-} from "../knowledge";
-import type {
-  CommandExecWindow,
-  ContextWindow,
-  DoWindow,
-  FileWindow,
-  KnowledgeWindow,
-  ProgramWindow,
-  RelationWindow,
-  SearchWindow,
-  TalkWindow,
-  TodoWindow,
-} from "../../executable/windows/_shared/types";
+  getWindowTypeDefinition,
+  type RenderContext,
+} from "../../executable/windows/_shared/registry";
+import { filterMessagesForDoWindow } from "../../executable/windows/do/index";
+import { filterMessagesForTalkWindow } from "../../executable/windows/talk/index";
+import type { ContextWindow } from "../../executable/windows/_shared/types";
 import { ROOT_WINDOW_ID } from "../../executable/windows/_shared/types";
 import type { ThreadContext, ThreadMessage } from "./index";
+import {
+  appendNode,
+  optionalElement,
+  serializeXml,
+  xmlComment,
+  xmlElement,
+  xmlText,
+  type XmlNode,
+} from "./xml";
 
-type XmlNode =
-  | {
-      kind: "element";
-      tag: string;
-      attrs?: Record<string, string>;
-      children?: XmlNode[];
-    }
-  | {
-      kind: "text";
-      value: string;
-    }
-  | {
-      kind: "comment";
-      value: string;
-    };
-
-const INDENT = "  ";
-const MAX_KNOWLEDGE_BYTES = 8192;
-const MAX_FILE_WINDOW_BYTES = 32768;
-
-/** 转义 XML 特殊字符，保证 context 内容不会破坏标签结构。 */
-export function escapeXml(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
-}
-
-function shouldUseCdata(text: string): boolean {
-  return escapeXml(text) !== text;
-}
-
-function wrapCdata(text: string): string {
-  return `<![CDATA[${text.replaceAll("]]>", "]]]]><![CDATA[>")}]]>`;
-}
-
-function renderXmlTextValue(text: string): string {
-  return shouldUseCdata(text) ? wrapCdata(text) : escapeXml(text);
-}
-
-function escapeXmlComment(text: string): string {
-  return text.replaceAll("--", "- -");
-}
-
-function xmlElement(tag: string, attrs: Record<string, string> = {}, children: XmlNode[] = []): XmlNode {
-  return { kind: "element", tag, attrs, children };
-}
-
-function xmlText(value: string): XmlNode {
-  return { kind: "text", value };
-}
-
-function xmlComment(value: string): XmlNode {
-  return { kind: "comment", value };
-}
-
-function optionalElement(tag: string, value: string | undefined): XmlNode | null {
-  if (!value) return null;
-  return xmlElement(tag, {}, [xmlText(value)]);
-}
-
-function renderPathList(tag: string, paths: string[] | undefined): XmlNode | null {
-  if (!paths || paths.length === 0) return null;
-  return xmlElement(
-    tag,
-    {},
-    paths.map((path) => xmlElement("path", {}, [xmlText(path)]))
-  );
-}
-
-function appendNode(nodes: XmlNode[], node: XmlNode | null): void {
-  if (node) nodes.push(node);
-}
-
-function serializeXml(node: XmlNode, depth = 0): string {
-  const indent = INDENT.repeat(depth);
-
-  if (node.kind === "comment") {
-    return `${indent}<!-- ${escapeXmlComment(node.value)} -->`;
-  }
-
-  if (node.kind === "text") {
-    return `${indent}${renderXmlTextValue(node.value)}`;
-  }
-
-  const attrs = Object.entries(node.attrs ?? {})
-    .map(([key, value]) => ` ${key}="${escapeXml(value)}"`)
-    .join("");
-  const children = node.children ?? [];
-
-  if (children.length === 0) {
-    return `${indent}<${node.tag}${attrs}></${node.tag}>`;
-  }
-
-  if (children.length === 1 && children[0]?.kind === "text") {
-    return `${indent}<${node.tag}${attrs}>${renderXmlTextValue(children[0].value)}</${node.tag}>`;
-  }
-
-  const renderedChildren = children
-    .map((child) => serializeXml(child, depth + 1))
-    .join("\n");
-
-  return `${indent}<${node.tag}${attrs}>\n${renderedChildren}\n${indent}</${node.tag}>`;
-}
-
-function truncateKnowledgeBody(body: string): string {
-  const bytes = new TextEncoder().encode(body);
-  if (bytes.length <= MAX_KNOWLEDGE_BYTES) return body;
-  const head = new TextDecoder().decode(bytes.slice(0, MAX_KNOWLEDGE_BYTES));
-  return `${head}...[truncated, original ${bytes.length} bytes]`;
-}
-
-function truncateFileBody(body: string): string {
-  const bytes = new TextEncoder().encode(body);
-  if (bytes.length <= MAX_FILE_WINDOW_BYTES) return body;
-  const head = new TextDecoder().decode(bytes.slice(0, MAX_FILE_WINDOW_BYTES));
-  return `${head}...[truncated, original ${bytes.length} bytes]`;
-}
+// ─────────────────────────── helpers (顶层 inbox/outbox) ──────────────────────
 
 /** 渲染 inbox/outbox 的扁平消息列表（仅顶层兜底，未被 window 视图收纳的消息）。 */
 function renderMessagesNode(tag: "inbox" | "outbox", messages: ThreadMessage[] | undefined): XmlNode | null {
@@ -156,331 +52,64 @@ function renderMessagesNode(tag: "inbox" | "outbox", messages: ThreadMessage[] |
         xmlElement("content", {}, [xmlText(message.content)]),
         xmlElement("source", {}, [xmlText(message.source)]),
         xmlElement("created_at", {}, [xmlText(String(message.createdAt))]),
-      ])
-    )
-  );
-}
-
-// ---- Window 渲染（spec § 渲染示例） ----
-
-/** command_exec form 的内容渲染：accumulated_args / command_paths / loaded_knowledge / result。 */
-function renderCommandExecWindowChildren(form: CommandExecWindow): XmlNode[] {
-  const children: XmlNode[] = [
-    xmlElement("command", {}, [xmlText(form.command)]),
-    xmlElement("description", {}, [xmlText(form.description)]),
-    xmlElement("accumulated_args", {}, [xmlText(JSON.stringify(form.accumulatedArgs))]),
-  ];
-  appendNode(children, renderPathList("command_paths", form.commandPaths));
-  appendNode(children, renderPathList("loaded_knowledge", form.loadedKnowledgePaths));
-  appendNode(children, renderPathList("command_knowledge_paths", form.commandKnowledgePaths));
-  if (form.status === "executed" && form.result) {
-    children.push(xmlElement("result", {}, [xmlText(form.result)]));
-  }
-  return children;
-}
-
-/** do_window 的渲染：target_thread + creator 标记 + 该 window 视图下的消息时间线。 */
-function renderDoWindowChildren(window: DoWindow, thread: ThreadContext): XmlNode[] {
-  const children: XmlNode[] = [
-    xmlElement("target_thread", {}, [xmlText(window.targetThreadId)]),
-  ];
-  if (window.isCreatorWindow) {
-    children.push(xmlElement("is_creator_window", {}, [xmlText("true")]));
-  }
-  // 视图过滤：from/to 端涉及 target 的消息进入该 window 的 transcript
-  const transcriptMessages = filterMessagesForDoWindow(window, thread);
-  if (transcriptMessages.length > 0) {
-    children.push(
-      xmlElement(
-        "transcript",
-        {},
-        transcriptMessages.map((m) =>
-          xmlElement(
-            "message",
-            { id: m.id, source: m.source },
-            [
-              xmlElement("from_thread_id", {}, [xmlText(m.fromThreadId)]),
-              xmlElement("to_thread_id", {}, [xmlText(m.toThreadId)]),
-              xmlElement("content", {}, [xmlText(m.content)]),
-            ]
-          )
-        )
-      )
-    );
-  }
-  return children;
-}
-
-/** todo_window 的渲染：content + on_command_path。 */
-function renderTodoWindowChildren(window: TodoWindow): XmlNode[] {
-  const children: XmlNode[] = [
-    xmlElement("content", {}, [xmlText(window.content)]),
-  ];
-  if (window.onCommandPath && window.onCommandPath.length > 0) {
-    children.push(renderPathList("on_command_path", window.onCommandPath)!);
-  }
-  return children;
-}
-
-/** talk_window 渲染：target + transcript（按 windowId / replyToWindowId 过滤）。 */
-function renderTalkWindowChildren(window: TalkWindow, thread: ThreadContext): XmlNode[] {
-  const children: XmlNode[] = [
-    xmlElement("target", {}, [xmlText(window.target)]),
-    xmlElement("conversation_id", {}, [xmlText(window.conversationId)]),
-  ];
-  // 与 do_window 渲染对齐：creator talk_window 必须暴露 is_creator_window=true，
-  // 否则 LLM 无法识别"哪条 talk 是创建本 thread 的对端通道"，常见症状是任务做完直接 wait
-  // 而忘记 say 回去。protocol 文本（src/executable/index.ts § 一轮结束前的决策树）
-  // 显式引用了这个字段。
-  if (window.isCreatorWindow) {
-    children.push(xmlElement("is_creator_window", {}, [xmlText("true")]));
-  }
-  const messages = filterMessagesForTalkWindow(window, thread);
-  if (messages.length > 0) {
-    children.push(
-      xmlElement(
-        "transcript",
-        {},
-        messages.map((m) =>
-          xmlElement("message", { id: m.id, source: m.source }, [
-            xmlElement("from_thread_id", {}, [xmlText(m.fromThreadId)]),
-            xmlElement("to_thread_id", {}, [xmlText(m.toThreadId)]),
-            xmlElement("content", {}, [xmlText(m.content)]),
-          ]),
-        ),
-      ),
-    );
-  }
-  return children;
-}
-
-/** program_window 渲染：history 列表（每条 exec 一行 + 最近一条全文）。 */
-function renderProgramWindowChildren(window: ProgramWindow): XmlNode[] {
-  const children: XmlNode[] = [];
-  if (window.history.length === 0) {
-    children.push(xmlComment("(no exec yet)"));
-    return children;
-  }
-  // 摘要：所有 exec 的 language + ok 状态
-  const summary = window.history.map((rec, idx) => {
-    const tag = rec.language;
-    const okFlag = rec.ok ? "ok" : "fail";
-    return xmlElement(
-      "exec",
-      { id: rec.execId, n: String(idx), kind: tag, ok: okFlag },
-      [],
-    );
-  });
-  children.push(xmlElement("history", {}, summary));
-
-  // 最近一条 full output（过长时截断）
-  const last = window.history[window.history.length - 1]!;
-  children.push(
-    xmlElement(
-      "last_output",
-      { exec_id: last.execId },
-      [xmlText(truncateFileBody(last.output))],
+      ]),
     ),
   );
-  return children;
 }
 
-/** file_window 渲染：path + lines/columns + 文件正文（按切片+截断）。 */
-async function renderFileWindowChildren(window: FileWindow): Promise<XmlNode[]> {
-  const children: XmlNode[] = [
-    xmlElement("path", {}, [xmlText(window.path)]),
-  ];
-  if (window.lines) {
-    children.push(xmlElement("lines", {}, [xmlText(`${window.lines[0]}-${window.lines[1]}`)]));
-  }
-  if (window.columns) {
-    children.push(xmlElement("columns", {}, [xmlText(`${window.columns[0]}-${window.columns[1]}`)]));
-  }
-  try {
-    const raw = await readFile(window.path, "utf8");
-    const sliced = sliceByLinesColumns(raw, window.lines, window.columns);
-    children.push(xmlElement("content", {}, [xmlText(truncateFileBody(sliced))]));
-  } catch (error) {
-    children.push(xmlElement("error", {}, [xmlText((error as Error).message)]));
-  }
-  return children;
-}
+// ─────────────────────────── commands 元数据节点 ──────────────────────────────
+
+const COMMAND_BRIEF_MAX = 80;
 
 /**
- * knowledge_window 渲染：path + 正文。
+ * 为某 window 输出一段 `<commands>` 元数据，列出该 type 上注册的所有 command 名
+ * 与简要说明（R2 #5 / R2 #10 修复）。
  *
- * Step 2 之后所有 knowledge 都通过 contextWindows 走，包括协议常量与 activator 命中：
- * - source=explicit  ：window.body 通常为空 → 回退到 loader 取（兼容旧 thread.json）
- * - source=protocol  ：window.body 必填，直接渲染
- * - source=activator ：window.body 在 presentation=full 时含正文，summary 时仅 description
+ * 简要说明取自 `def.commands[name]` 的 paths 末尾或 — 因为 CommandTableEntry 没有
+ * 独立的 "brief" 字段——我们以 command name 加上"通过 open/exec(parent_window_id=...,
+ * command=...) 调用"的标准提示。具体的 knowledge 文本仍由 form 上下文 / basicKnowledge
+ * 提供，本节点只做"命令面索引"。
+ *
+ * 空 commands 表的 window（如 todo / skill_index）不输出该节点，避免噪音。
  */
-async function renderKnowledgeWindowChildren(
-  window: KnowledgeWindow,
-  thread: ThreadContext,
-): Promise<XmlNode[]> {
-  const children: XmlNode[] = [
-    xmlElement("path", {}, [xmlText(window.path)]),
-  ];
-  if (window.source) {
-    children.push(xmlElement("source", {}, [xmlText(window.source)]));
-  }
-  if (window.presentation) {
-    children.push(xmlElement("presentation", {}, [xmlText(window.presentation)]));
-  }
-  if (window.description) {
-    children.push(xmlElement("description", {}, [xmlText(window.description)]));
-  }
-  // body 已合成时直接用；否则（explicit 或老数据）回退 loader
-  if (typeof window.body === "string" && window.body.length > 0) {
-    children.push(xmlElement("content", {}, [xmlText(truncateKnowledgeBody(window.body))]));
-    return children;
-  }
-  if (window.presentation === "summary") {
-    // summary 来源不渲染正文
-    return children;
-  }
-  if (!thread.persistence) {
-    children.push(xmlElement("error", {}, [xmlText("thread 无 persistence ref")]));
-    return children;
-  }
-  try {
-    // 2026-05-24: 双源扫描——seed (stone) + sediment (pool)。
-    const stoneRef = deriveStoneFromThread(thread.persistence);
-    const poolRef = derivePoolFromThread(thread.persistence);
-    const index = await loadKnowledgeIndex({ stone: stoneRef, pool: poolRef });
-    const doc = index.byPath.get(window.path);
-    if (!doc) {
-      children.push(xmlElement("error", {}, [xmlText(`knowledge "${window.path}" 不存在`)]));
-    } else {
-      if (doc.frontmatter.description && !window.description) {
-        children.push(xmlElement("description", {}, [xmlText(doc.frontmatter.description)]));
-      }
-      children.push(xmlElement("content", {}, [xmlText(truncateKnowledgeBody(doc.body))]));
-    }
-  } catch (error) {
-    children.push(xmlElement("error", {}, [xmlText((error as Error).message)]));
-  }
-  return children;
-}
+function renderCommandsNode(window: ContextWindow): XmlNode | null {
+  const def = getWindowTypeDefinition(window.type);
+  const names = Object.keys(def.commands ?? {});
+  if (names.length === 0) return null;
+  names.sort();
 
-/**
- * search_window 渲染：query + matches（含截断标记）。
- *
- * 输出形态：
- *   <window type="search" kind="glob|grep" status="open">
- *     <title>...</title>
- *     <query>...</query>
- *     [<search_root>...</search_root>]   (仅 grep)
- *     <matches count="N" truncated="true|false">
- *       <match index="0" path="..." [line="42"]>[snippet 文本]</match>
- *       ...
- *     </matches>
- *   </window>
- *
- * matches 在创建时已截断到 200，这里只反映；snippet 已在创建侧 trim 到 200 字符。
- */
-function renderSearchWindowChildren(window: SearchWindow): XmlNode[] {
-  const children: XmlNode[] = [
-    xmlElement("kind", {}, [xmlText(window.kind)]),
-    xmlElement("query", {}, [xmlText(window.query)]),
-  ];
-  if (window.searchRoot) {
-    children.push(xmlElement("search_root", {}, [xmlText(window.searchRoot)]));
-  }
-
-  const matchNodes: XmlNode[] = window.matches.map((m) => {
-    const attrs: Record<string, string> = {
-      index: String(m.index),
-      path: m.path,
-    };
-    if (typeof m.line === "number") attrs.line = String(m.line);
+  const children: XmlNode[] = names.map((name) => {
+    const entry = def.commands[name];
+    const paths = entry?.paths ?? [name];
+    const brief = paths.join(", ").slice(0, COMMAND_BRIEF_MAX);
     return xmlElement(
-      "match",
-      attrs,
-      m.snippet ? [xmlText(m.snippet)] : [],
+      "command",
+      { name },
+      [xmlText(brief)],
     );
   });
 
-  children.push(
-    xmlElement(
-      "matches",
-      {
-        count: String(window.matches.length),
-        truncated: window.truncated ? "true" : "false",
-      },
-      matchNodes,
-    ),
+  return xmlElement(
+    "commands",
+    {
+      hint: `通过 open(parent_window_id="${window.id}", command="<name>", args={...}) 调用`,
+    },
+    children,
   );
-  return children;
 }
 
-/**
- * 渲染 RelationWindow 给 LLM。把原来分散在三条 KnowledgeWindow 的内容(peer readme +
- * self long_term + self session)合并为本 window 的子元素。缺失字段渲染为占位提示,
- * 引导 LLM 用 open(parent_window_id="<rel>", command="edit", ...) 写入。
- */
-function renderRelationWindowChildren(window: RelationWindow): XmlNode[] {
-  const children: XmlNode[] = [
-    xmlElement("peer_id", {}, [xmlText(window.peerId)]),
-  ];
-
-  // peer readme — 缺失就不渲染节点(LLM 不需要"占位"提示,不像 self relation 它能 edit)
-  if (window.peerReadme !== undefined) {
-    children.push(
-      xmlElement("peer_readme", { path: window.peerReadmePath }, [xmlText(window.peerReadme)]),
-    );
-  }
-
-  // self long_term / session — 缺失也保留节点 + 占位,让 LLM 知道有 edit 入口可写
-  const longTermBody = window.selfLongTermBody !== undefined
-    ? window.selfLongTermBody
-    : `(暂无;通过 open(parent_window_id="${window.id}", command="edit", args={ content: "...", scope: "long_term" }) 写入)`;
-  children.push(
-    xmlElement("self_long_term", { path: window.selfLongTermPath }, [xmlText(longTermBody)]),
-  );
-
-  const sessionBody = window.selfSessionBody !== undefined
-    ? window.selfSessionBody
-    : `(暂无;通过 open(parent_window_id="${window.id}", command="edit", args={ content: "...", scope: "session" }) 写入)`;
-  children.push(
-    xmlElement("self_session", { path: window.selfSessionPath }, [xmlText(sessionBody)]),
-  );
-
-  return children;
-}
-
-/** 按行/列范围切片文件正文；range 缺失则原样返回。 */
-function sliceByLinesColumns(
-  raw: string,
-  lines?: [number, number],
-  columns?: [number, number],
-): string {
-  let body = raw;
-  if (lines) {
-    const arr = body.split("\n");
-    const [start, end] = lines;
-    body = arr.slice(start, end).join("\n");
-  }
-  if (columns) {
-    const [start, end] = columns;
-    body = body
-      .split("\n")
-      .map((line) => line.slice(start, end))
-      .join("\n");
-  }
-  return body;
-}
+// ─────────────────────────── window 节点调度 ──────────────────────────────────
 
 /**
  * 把单个 window 投影成 XmlNode。
  *
  * 通用结构：
- *   <window id type status title>
- *     ...type 特有内容
- *     <sub_windows>...</sub_windows>
+ *   <window id type status [sharing read_only]>
+ *     <title>...</title>
+ *     ...type-specific children (由 def.renderXml 提供)
+ *     <commands hint="...">...</commands>
+ *     <sub_windows>...</sub_windows>?
  *   </window>
- *
- * 异步版本：file_window / knowledge_window 需要 IO 读 body。
  */
 async function renderWindowNode(
   window: ContextWindow,
@@ -503,40 +132,21 @@ async function renderWindowNode(
     xmlElement("title", {}, [xmlText(titlePrefix + renderedWindow.title)]),
   ];
 
-  switch (renderedWindow.type) {
-    case "command_exec":
-      children.push(...renderCommandExecWindowChildren(renderedWindow));
-      break;
-    case "do":
-      children.push(...renderDoWindowChildren(renderedWindow, thread));
-      break;
-    case "todo":
-      children.push(...renderTodoWindowChildren(renderedWindow));
-      break;
-    case "talk":
-      children.push(...renderTalkWindowChildren(renderedWindow, thread));
-      break;
-    case "program":
-      children.push(...renderProgramWindowChildren(renderedWindow));
-      break;
-    case "file":
-      children.push(...(await renderFileWindowChildren(renderedWindow)));
-      break;
-    case "knowledge":
-      children.push(...(await renderKnowledgeWindowChildren(renderedWindow, thread)));
-      break;
-    case "search":
-      children.push(...renderSearchWindowChildren(renderedWindow));
-      break;
-    case "relation":
-      children.push(...renderRelationWindowChildren(renderedWindow));
-      break;
-    case "root":
-      // root 一般不显式渲染（隐含 window）；如果出现就只渲染基本信息
-      break;
+  // ── 调度到 type-specific renderXml hook（接口契约，无 fallback）
+  const def = getWindowTypeDefinition(renderedWindow.type);
+  if (!def.renderXml) {
+    throw new Error(
+      `render.ts: window type "${renderedWindow.type}" 缺少 renderXml hook（接口契约）。`,
+    );
   }
+  const renderCtx: RenderContext = { thread, window: renderedWindow };
+  const typeChildren = await def.renderXml(renderCtx);
+  children.push(...typeChildren);
 
-  // 子 window 折叠
+  // ── commands 元数据（R2 #5 / R2 #10）
+  appendNode(children, renderCommandsNode(renderedWindow));
+
+  // ── 子 window 折叠
   const subWindows = allWindows.filter((w) => w.parentWindowId === window.id);
   if (subWindows.length > 0) {
     const subNodes = await Promise.all(
@@ -545,7 +155,7 @@ async function renderWindowNode(
     children.push(xmlElement("sub_windows", {}, subNodes));
   }
 
-  // sharing 属性 + read_only 标记
+  // ── attrs：id / type / status / sharing
   const attrs: Record<string, string> = {
     id: window.id,
     type: window.type,
@@ -574,50 +184,6 @@ async function renderContextWindowsNode(thread: ThreadContext): Promise<XmlNode 
   return xmlElement("context_windows", {}, children);
 }
 
-/**
- * do_window 的视图过滤：选出与该 window targetThreadId 相关的消息。
- *
- * 规则（spec § inbox / outbox 在新模型下的归属）：
- * - 父侧 do_window：messages where to_thread_id == target（父 → 子）或 from_thread_id == target（子 → 父）
- * - 创建 creator do_window：targetThreadId 是父；同样规则
- *
- * 全部从 thread.inbox + thread.outbox 拉取并按 createdAt 升序。
- */
-function filterMessagesForDoWindow(window: DoWindow, thread: ThreadContext): ThreadMessage[] {
-  const target = window.targetThreadId;
-  const all: ThreadMessage[] = [...(thread.inbox ?? []), ...(thread.outbox ?? [])];
-  const seen = new Set<string>();
-  const filtered = all.filter((m) => {
-    if (seen.has(m.id)) return false;
-    if (m.fromThreadId === target || m.toThreadId === target) {
-      seen.add(m.id);
-      return true;
-    }
-    return false;
-  });
-  filtered.sort((a, b) => a.createdAt - b.createdAt);
-  return filtered;
-}
-
-/**
- * talk_window 的视图过滤：
- * - outbox 上 windowId === self.id（say 写入时的标记）
- * - inbox 上 replyToWindowId === self.id（control plane user-reply 路由）
- *
- * spec § ThreadMessage 字段扩展。
- */
-function filterMessagesForTalkWindow(window: TalkWindow, thread: ThreadContext): ThreadMessage[] {
-  const messages: ThreadMessage[] = [];
-  for (const m of thread.outbox ?? []) {
-    if (m.windowId === window.id) messages.push(m);
-  }
-  for (const m of thread.inbox ?? []) {
-    if (m.replyToWindowId === window.id) messages.push(m);
-  }
-  messages.sort((a, b) => a.createdAt - b.createdAt);
-  return messages;
-}
-
 /** 收集所有已被 window 视图收纳的消息 id；其余消息走顶层 inbox/outbox 兜底渲染。 */
 function collectWindowConsumedMessageIds(thread: ThreadContext): Set<string> {
   const consumed = new Set<string>();
@@ -631,9 +197,7 @@ function collectWindowConsumedMessageIds(thread: ThreadContext): Set<string> {
   return consumed;
 }
 
-// （renderActiveKnowledgeNode / computeActiveKnowledgeNode 已统一到
-//  src/executable/index.ts: collectExecutableKnowledgeEntries 合成 KnowledgeWindow，
-//  通过 contextWindows 渲染；本文件不再维护 <active_knowledge> 顶级节点。）
+// ─────────────────────────── entry point ──────────────────────────────────────
 
 export async function renderContextXml(input: {
   thread: ThreadContext;
@@ -656,10 +220,6 @@ export async function renderContextXml(input: {
     threadChildren.push(xmlComment("context windows: persistent or in-flight windows the LLM is currently interacting with (knowledge synthesized as knowledge_window with source=protocol|activator|explicit)"));
     threadChildren.push(contextWindowsNode);
   }
-
-  // <knowledge_entries> / <active_knowledge> 旧顶级节点已统一吸收进 contextWindows
-  // （src/executable/index.ts: collectExecutableKnowledgeEntries 合成 KnowledgeWindow），
-  // 这里不再单独渲染。input.knowledgeEntries 仅作为渲染回退兼容字段保留在签名中。
 
   // 顶层 inbox/outbox 渲染：仅展示未被任何 window 视图收纳的兜底消息（避免重复）
   const consumedMsgIds = collectWindowConsumedMessageIds(threadForRender);
@@ -690,3 +250,6 @@ function renderSelfNodes(thread: ThreadContext): XmlNode[] {
   if (!objectId) return [];
   return [xmlElement("self", { object_id: objectId })];
 }
+
+/** 兼容 re-export：旧代码引用 escapeXml 时可继续从本模块拿到。 */
+export { escapeXml } from "./xml";

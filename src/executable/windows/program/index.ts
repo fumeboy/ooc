@@ -14,9 +14,10 @@ import type {
   CommandKnowledgeEntries,
   CommandTableEntry,
 } from "../_shared/command-types.js";
-import { registerWindowType } from "../_shared/registry.js";
+import { registerWindowType, type RenderContext } from "../_shared/registry.js";
 import { runOneExec, type ProgramExecArgs } from "./runtime.js";
 import type { ProgramWindow } from "../_shared/types.js";
+import { xmlElement, xmlText, xmlComment, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
 
 const PROGRAM_WINDOW_EXEC_BASIC = "internal/windows/program/exec/basic";
 const PROGRAM_WINDOW_EXEC_INPUT = "internal/windows/program/exec/input";
@@ -108,9 +109,38 @@ export async function executeProgramWindowExec(
   return undefined;
 }
 
+/** program_window 的 renderXml hook：history 摘要 + 最近一条 full output。 */
+function renderProgramWindow(ctx: RenderContext): XmlNode[] {
+  const window = ctx.window as ProgramWindow;
+  const children: XmlNode[] = [];
+  if (window.history.length === 0) {
+    children.push(xmlComment("(no exec yet)"));
+    return children;
+  }
+  const summary = window.history.map((rec, idx) =>
+    xmlElement(
+      "exec",
+      { id: rec.execId, n: String(idx), kind: rec.language, ok: rec.ok ? "ok" : "fail" },
+      [],
+    ),
+  );
+  children.push(xmlElement("history", {}, summary));
+
+  const last = window.history[window.history.length - 1]!;
+  children.push(
+    xmlElement(
+      "last_output",
+      { exec_id: last.execId },
+      [xmlText(truncateBytes(last.output))],
+    ),
+  );
+  return children;
+}
+
 registerWindowType("program", {
   commands: {
     exec: execCommand,
     close: closeCommand,
   },
+  renderXml: renderProgramWindow,
 });

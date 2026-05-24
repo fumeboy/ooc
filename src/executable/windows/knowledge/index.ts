@@ -18,7 +18,14 @@ import type {
   CommandKnowledgeEntries,
   CommandTableEntry,
 } from "../_shared/command-types.js";
-import { registerWindowType, type OnCloseContext } from "../_shared/registry.js";
+import { registerWindowType, type OnCloseContext, type RenderContext } from "../_shared/registry.js";
+import { xmlElement, xmlText, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
+import type { KnowledgeWindow } from "./types.js";
+import { deriveStoneFromThread } from "../../../persistable/common.js";
+import { derivePoolFromThread } from "../../../persistable/pool-object.js";
+import { loadKnowledgeIndex } from "../../../thinkable/knowledge/index.js";
+
+const MAX_KNOWLEDGE_BYTES = 8192;
 
 const KNOWLEDGE_WINDOW_RELOAD_BASIC = "internal/windows/knowledge/reload/basic";
 const KNOWLEDGE_WINDOW_CLOSE_BASIC = "internal/windows/knowledge/close/basic";
@@ -65,10 +72,64 @@ function onCloseKnowledgeWindow(ctx: OnCloseContext): boolean | void {
   }
 }
 
+/**
+ * knowledge_window 的 renderXml hook：path + 正文。
+ *
+ * 多 source 处理：
+ * - source=protocol  : window.body 必填，直接渲染
+ * - source=activator : presentation=full 时 window.body 含正文；summary 仅 description
+ * - source=explicit  : window.body 通常为空 → 回退到 loader 拉取（兼容旧 thread.json）
+ */
+async function renderKnowledgeWindow(ctx: RenderContext): Promise<XmlNode[]> {
+  const window = ctx.window as KnowledgeWindow;
+  const children: XmlNode[] = [
+    xmlElement("path", {}, [xmlText(window.path)]),
+  ];
+  if (window.source) {
+    children.push(xmlElement("source", {}, [xmlText(window.source)]));
+  }
+  if (window.presentation) {
+    children.push(xmlElement("presentation", {}, [xmlText(window.presentation)]));
+  }
+  if (window.description) {
+    children.push(xmlElement("description", {}, [xmlText(window.description)]));
+  }
+  // body 已合成时直接用；否则（explicit 或旧数据）回退 loader
+  if (typeof window.body === "string" && window.body.length > 0) {
+    children.push(xmlElement("content", {}, [xmlText(truncateBytes(window.body, MAX_KNOWLEDGE_BYTES))]));
+    return children;
+  }
+  if (window.presentation === "summary") {
+    return children;
+  }
+  if (!ctx.thread.persistence) {
+    children.push(xmlElement("error", {}, [xmlText("thread 无 persistence ref")]));
+    return children;
+  }
+  try {
+    const stoneRef = deriveStoneFromThread(ctx.thread.persistence);
+    const poolRef = derivePoolFromThread(ctx.thread.persistence);
+    const index = await loadKnowledgeIndex({ stone: stoneRef, pool: poolRef });
+    const doc = index.byPath.get(window.path);
+    if (!doc) {
+      children.push(xmlElement("error", {}, [xmlText(`knowledge "${window.path}" 不存在`)]));
+    } else {
+      if (doc.frontmatter.description && !window.description) {
+        children.push(xmlElement("description", {}, [xmlText(doc.frontmatter.description)]));
+      }
+      children.push(xmlElement("content", {}, [xmlText(truncateBytes(doc.body, MAX_KNOWLEDGE_BYTES))]));
+    }
+  } catch (error) {
+    children.push(xmlElement("error", {}, [xmlText((error as Error).message)]));
+  }
+  return children;
+}
+
 registerWindowType("knowledge", {
   commands: {
     reload: reloadCommand,
     close: closeCommand,
   },
   onClose: onCloseKnowledgeWindow,
+  renderXml: renderKnowledgeWindow,
 });

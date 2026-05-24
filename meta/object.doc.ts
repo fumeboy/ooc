@@ -664,6 +664,37 @@ export const root: DocTreeNode = {
                                 "id 协议": "跨 thread move 保留同一 id；用于归还路径自动识别 lent_out ↔ owner 配对",
                             },
                         },
+                        "render_dispatch": {
+                            title: "render dispatch - window type-dispatch 接口契约",
+                            content: `
+                            **设计原则**：context XML 的渲染采用 "接口 explicit" 契约：每个 window type
+                            必须在 \`WindowTypeDefinition.renderXml\` 上注册自己的渲染 hook；render.ts 退化为
+                            纯调度器，不再 switch-by-case（根因 #4：2026-05-24 fix-plan）。
+
+                            **调度器职责**（src/thinkable/context/render.ts）：
+                            - 通用外壳：\`<window id type status [sharing read_only]>\` + \`<title>\`
+                            - 调度到 \`def.renderXml(ctx)\` 取 type-specific 子节点（XmlNode[]）
+                            - 通用尾部：每个 window 末尾输出 \`<commands hint="...">\` 节点（列出该 type 注册的
+                              command 名 + 调用形态），让 LLM 直接看到当前 window 上可调命令，无需翻 knowledge 猜
+                            - 子 window 折叠（按 parentWindowId 嵌套到 \`<sub_windows>\`）
+
+                            **启动期 fail-loud**：windows/index.ts 在所有 side-effect import 完成后调用
+                            \`assertAllRenderHooksRegistered()\`，缺 renderXml 的 type 立即抛错——不让"空白 XML"
+                            的问题流到 LLM context 才被发现。
+
+                            **修复点**：
+                            - skill_index / custom 之前已实现 renderXml hook 但被旧 switch 忽略 → 现在被正确调度
+                            - 各 window（talk / do / file / search 等）的 commands 元数据 → \`<commands>\` 节点显式输出
+                            - talk_window transcript 一直存在过滤函数，但调度路径下载现在更显式（移到 talk/index.ts）
+                            `,
+                            named: {
+                                "WindowTypeDefinition.renderXml": "RenderHook 类型 (ctx) => XmlNode[] | Promise<XmlNode[]>，注册到 WindowRegistry",
+                                "调度器": "src/thinkable/context/render.ts:renderWindowNode；无 switch，按 def.renderXml 调度",
+                                "<commands> 节点": "通用层为每个 window 输出的命令面索引；空 commands 表的 window 跳过该节点",
+                                "assertAllRenderHooksRegistered": "src/executable/windows/_shared/registry.ts；启动期校验所有 type 已配齐 renderXml",
+                            },
+                            sources: [["src/thinkable/context/render.ts", "调度器实现 + commands 元数据节点；接口契约（缺 hook 抛错）"]],
+                        },
                         "skill_index_window": {
                             title: "skill_index window - stone skills 索引",
                             content: `

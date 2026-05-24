@@ -16,6 +16,7 @@
 
 import type { CommandTableEntry } from "./command-types.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
+import type { XmlNode } from "../../../thinkable/context/xml.js";
 import type { ContextWindow, WindowType } from "./types.js";
 
 /**
@@ -33,17 +34,22 @@ export interface OnCloseContext {
 export type OnCloseHook = (ctx: OnCloseContext) => boolean | void;
 
 /**
- * 渲染上下文 — 各 type 把自身字段投影成节点；具体 XmlNode 类型由渲染层 import。
+ * 渲染上下文 — 各 type 把自身字段投影成"window 外壳内的子节点序列"。
  *
- * 此处只定义最小约束，避免 windows 模块反向依赖渲染层的 XmlNode 类型。
- * 渲染层会在调用前装配 helpers 并消费 unknown 返回值。
+ * 契约（根因 #4 接口 explicit）：
+ * - renderXml 返回 `XmlNode[]`（同步或异步）——即 `<window ...>` 包裹下的 children
+ * - 通用层（render.ts）负责外壳 / title / commands / sub_windows 折叠 / sharing 属性
+ * - 每个 builtin window type 必须实现 renderXml；注册期 fail-loud 见 registerWindowType
+ *
+ * thread 字段始终非 undefined（即便是 in-memory 测试 thread 也会构造空 inbox/outbox），
+ * 各 hook 通过 ctx.thread 拿到完整 ThreadContext（含 inbox/outbox/persistence/...）。
  */
 export interface RenderContext {
   thread: ThreadContext;
   window: ContextWindow;
 }
 
-export type RenderHook = (ctx: RenderContext) => unknown;
+export type RenderHook = (ctx: RenderContext) => XmlNode[] | Promise<XmlNode[]>;
 
 /** 单个 window type 的完整契约。 */
 export interface WindowTypeDefinition {
@@ -186,4 +192,24 @@ export function getWindowTypeDefinition(type: WindowType): WindowTypeDefinition 
 /** 列出所有已注册 type，按字母序返回。 */
 export function listRegisteredWindowTypes(): WindowType[] {
   return Array.from(REGISTRY.keys()).sort();
+}
+
+/**
+ * Boot-time 校验：所有已注册的 window type 必须配齐 renderXml hook。
+ *
+ * 由 windows/index.ts 在所有 side-effect import 之后调用一次，把"缺 renderXml"的失误
+ * 从 LLM context（空白 XML 难以察觉）提前到启动期，fail-loud（根因 #4）。
+ */
+export function assertAllRenderHooksRegistered(): void {
+  const missing: WindowType[] = [];
+  for (const [type, def] of REGISTRY) {
+    if (!def.renderXml) missing.push(type);
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `WindowRegistry: 以下 window type 缺少 renderXml hook（render.ts 调度器要求每个 type 实现接口契约）: ${missing.join(
+        ", ",
+      )}`,
+    );
+  }
 }
