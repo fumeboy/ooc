@@ -2445,9 +2445,37 @@ export const root: DocTreeNode = {
                     sources: [
                         [
                             "src/persistable/stone-versioning.ts",
-                            "openMetaprogWorktree / commitWorktree / classifyWorktreeBranch / tryMergeSelf / requestPrIssueReview / resolvePrIssue / rollback / pruneStaleWorktrees；R12 supervisor 例外；所有 git 操作通过 enqueueSessionWrite('git:'+baseDir) 串行；底层 git 命令在 src/persistable/stone-git.ts；bare init + linked worktree 编排在 src/persistable/stone-bootstrap.ts:ensureStoneRepo (createBareRepoWithMainWorktree 处理 bootstrap commit 通过 scratch clone 灌入 bare)；启动期 recovery-check 在 src/app/server/bootstrap/recovery-check.ts",
+                            "openMetaprogWorktree / commitWorktree / classifyWorktreeBranch / tryMergeSelf / requestPrIssueReview / resolvePrIssue / rollback / pruneStaleWorktrees；R12 supervisor 例外（rollback 在 persistable 层强制 supervisorAuthor === SUPERVISOR_OBJECT_ID，FORBIDDEN code）；所有 git 操作通过 enqueueSessionWrite('git:'+baseDir) 串行；底层 git 命令在 src/persistable/stone-git.ts；bare init + linked worktree 编排在 src/persistable/stone-bootstrap.ts:ensureStoneRepo (createBareRepoWithMainWorktree 处理 bootstrap commit 通过 scratch clone 灌入 bare，末尾自动调 pruneStaleWorktrees)；启动期 recovery-check 在 src/app/server/bootstrap/recovery-check.ts",
                         ],
                     ],
+                    patches: {
+                        "r12_enforcement_at_persistable_layer": {
+                            title: "R12 supervisor-only 校验必须在 persistable 层",
+                            content: `
+                            rollback() 函数自身强制 supervisorAuthor === SUPERVISOR_OBJECT_ID（src/persistable/stone-versioning.ts，
+                            返回 { ok: false, code: "FORBIDDEN", ... }）；LLM 命令层（src/executable/windows/root/command.metaprog.ts:188）/
+                            HTTP route / 测试夹具的校验是补充防御，不是唯一防线。
+
+                            任何新入口（cron / 未来子模块 / 工具脚本）调 rollback 时都自动得到边界保护，
+                            无需 caller 记得校验。双层防御：caller-side 给用户友好提示，persistable-side 是不可绕过的边界。
+
+                            历史：R5 #28 揭示——LLM 命令层校验后，persistable 层只 isValidObjectId 接受任何字符串 supervisorAuthor。
+                            `,
+                        },
+                        "bootstrap_includes_worktree_prune": {
+                            title: "ensureStoneRepo 末尾自动跑 pruneStaleWorktrees",
+                            content: `
+                            bootstrap 一次性清理 orphan worktree admin 记录；非周期扫，运行成本 O(worktree count)。
+
+                            与 worker 事件驱动模型对齐：cleanup 是启动期 invariant，不是 runtime safety net。
+                            通过 dynamic import 调用 pruneStaleWorktrees，避免 stone-bootstrap.ts 与 stone-versioning.ts 的静态循环依赖。
+                            失败仅 advisory console.warn，不阻止 bootstrap（pruneStaleWorktrees 内部已 silent-swallow ban 处理 prune 失败）。
+
+                            历史：R5 #31 揭示 pruneStaleWorktrees 注释承诺"启动期 hygiene"但 src/ 无 caller，
+                            只在测试调，导致 orphan worktree + branch 永远累积。
+                            `,
+                        },
+                    },
                 },
             },
         },

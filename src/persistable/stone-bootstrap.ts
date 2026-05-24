@@ -114,6 +114,26 @@ export async function ensureStoneRepo(opts: { baseDir: string }): Promise<Ensure
     }
   }
 
+  // bootstrap 一次性 hygiene：清理 orphan worktree admin 记录。非周期扫描——
+  // 与 worker 事件驱动模型对齐：cleanup 是启动期 invariant，不是 runtime safety net。
+  // 失败仅 advisory warn，不阻止 bootstrap（R5 #31）。dynamic import 避免与
+  // stone-versioning.ts 形成静态循环依赖。
+  try {
+    const { pruneStaleWorktrees } = await import("./stone-versioning");
+    const pr = await pruneStaleWorktrees(opts.baseDir);
+    if (pr.ok && pr.removed.length > 0) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[stone-bootstrap] pruneStaleWorktrees removed ${pr.removed.length} orphan worktree entries: ${pr.removed.join(", ")}`,
+      );
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[stone-bootstrap] pruneStaleWorktrees failed (advisory, non-fatal): ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+
   return { initialized, migrated, bootstrapCommit, layout: "bare" };
 }
 

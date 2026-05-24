@@ -195,6 +195,7 @@ export async function executeMetaprog(ctx: CommandExecutionContext): Promise<str
       const r = await rollback({ baseDir, objectId, targetCommit, supervisorAuthor: callerId });
       if (!r.ok) {
         if (r.code === "INVALID_INPUT") return `[metaprog] rollback 失败：${r.message}`;
+        if (r.code === "FORBIDDEN") return `[metaprog] rollback 禁止：${r.message}`;
         return `[metaprog] rollback git 失败 (${r.gitCode})：${r.stderr}`;
       }
       return JSON.stringify({ ok: true, commitSha: r.commitSha });

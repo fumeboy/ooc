@@ -552,11 +552,17 @@ export interface RollbackInput {
 export type RollbackResult =
   | { ok: true; commitSha: string }
   | { ok: false; code: "INVALID_INPUT"; message: string }
+  | { ok: false; code: "FORBIDDEN"; message: string }
   | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string };
 
 /**
  * Supervisor 主导回滚：把 main 上 `${objectId}/` 子树恢复到目标 commit 状态，
  * 并以 Supervisor 署名提交。
+ *
+ * R12 enforcement at persistable layer：本函数自身强制 supervisorAuthor ===
+ * SUPERVISOR_OBJECT_ID（参考 R5 #28）。LLM 命令层 / HTTP route / 测试夹具的
+ * caller 校验是补充防御，但 persistable 层是唯一可信防线——任何新入口（cron /
+ * 工具脚本 / 未来子模块）调本函数时都自动得到边界保护。
  */
 export async function rollback(input: RollbackInput): Promise<RollbackResult> {
   if (!isValidObjectId(input.objectId)) {
@@ -565,6 +571,15 @@ export async function rollback(input: RollbackInput): Promise<RollbackResult> {
   const supervisorAuthor = input.supervisorAuthor ?? SUPERVISOR_OBJECT_ID;
   if (!isValidObjectId(supervisorAuthor)) {
     return { ok: false, code: "INVALID_INPUT", message: `invalid supervisorAuthor '${supervisorAuthor}'` };
+  }
+  // R12 supervisor-only: persistable 层强制最深防御，与 command.metaprog.ts:188 的
+  // caller-side check 形成双层防御。任何绕过 LLM 命令层的入口都过不去这一关。
+  if (supervisorAuthor !== SUPERVISOR_OBJECT_ID) {
+    return {
+      ok: false,
+      code: "FORBIDDEN",
+      message: `rollback requires supervisorAuthor === '${SUPERVISOR_OBJECT_ID}', got '${supervisorAuthor}'`,
+    };
   }
   if (typeof input.targetCommit !== "string" || input.targetCommit.length === 0) {
     return { ok: false, code: "INVALID_INPUT", message: "targetCommit required" };
