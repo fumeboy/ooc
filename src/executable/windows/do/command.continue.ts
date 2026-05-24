@@ -3,20 +3,29 @@ import type {
   CommandKnowledgeEntries,
   CommandTableEntry,
 } from "../_shared/command-types.js";
-import { appendInbox, findChild, makeMessage } from "./helpers.js";
+import { appendInbox, findThreadInScope, makeMessage } from "./helpers.js";
 
 const DO_WINDOW_CONTINUE_BASIC = "internal/windows/do/continue/basic";
 const DO_WINDOW_CONTINUE_INPUT = "internal/windows/do/continue/input";
 
 const CONTINUE_KNOWLEDGE = `
-do_window.continue 用于向 do_window 关联的子线程追加消息。
+do_window.continue 用于向 do_window 关联的对端线程追加消息。
+
+适用方向（两种都合法）：
+- **父→子（主流）**：父 thread 在自己创建的子 do_window 上调，向 child 追加任务/消息
+- **子→父 reply（root cause #1 dogfooding 闭环）**：子 thread 在自身的 creator do_window
+  （isCreatorWindow=true）上调，把结果 / 状态 / 中间进展回报给父——这是子→父的**唯一**
+  合法通道，不要试图通过 \`end({result})\` 等隐式参数夹带
 
 参数：
 - msg: 必填，要追加的消息
-- wait: 可选，true 时父线程进入 waiting，等子线程回写消息再唤醒
+- wait: 可选，true 时本 thread 进入 waiting，等对端回写消息再唤醒
 
-示例：
+示例（父向子追加）：
 open(parent_window_id="<do_window_id>", command="continue", title="追加任务", args={ msg: "再处理一批", wait: true })
+
+示例（子向父回报）：
+open(parent_window_id="<creator_do_window_id>", command="continue", args={ msg: "已处理完毕：见 memo/x.md" })
 `.trim();
 
 async function executeDoWindowContinue(ctx: CommandExecutionContext): Promise<string | undefined> {
@@ -27,7 +36,9 @@ async function executeDoWindowContinue(ctx: CommandExecutionContext): Promise<st
     return "[do_window.continue] 未挂载在 do_window 上，无法执行。";
   }
   const targetThreadId = window.targetThreadId;
-  const target = findChild(thread, targetThreadId);
+  // 同时支持 parent→child（findChild 向下）与 child→parent（沿 _parentThreadRef 向上）
+  // 用法；后者是 root cause #1 子→父 reply 协议的实现基础。
+  const target = findThreadInScope(thread, targetThreadId);
   if (!target) {
     return `[do_window.continue] 找不到目标线程 ${targetThreadId}。`;
   }

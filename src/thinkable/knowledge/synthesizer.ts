@@ -160,6 +160,20 @@ export async function collectExecutableKnowledgeEntries(
     }
   }
 
+  // 1.5.1) 🔥 子→父 reply 协议（root cause #1 / collaborable.creator_window）：
+  //        若当前 thread 的 contextWindows 含 isCreatorWindow=true 的 do/talk window，
+  //        注入一段**显式 reply 协议** knowledge——告诉子 thread LLM 唯一合法的回报
+  //        通道是在 creator window 上调 continue / say，而不是 hallucinate end({result}).
+  //        没有这段提示，LLM 会反复 silently 把结果塞进 end({result})，父侧永远收不到。
+  //        path 派生稳定（含 window_id），同 path 不重复注入。
+  for (const w of list) {
+    const isCreator = (w.type === "do" || w.type === "talk") && w.isCreatorWindow === true;
+    if (!isCreator) continue;
+    const path = `internal/windows/${w.type}/creator-reply/${w.id}`;
+    if (path in protocolEntries) continue;
+    protocolEntries[path] = buildCreatorReplyKnowledge(w);
+  }
+
   // 1.6) skill_index 派生（plan §skills 支持 / D2 + D6 + 用户补充）：
   //      扫描 stones/<branch>/skills 与 stones/<branch>/objects/<self>/skills，合并去重；
   //      非空时注入一个 SkillIndexWindow 到 enriched contextWindows；空时不注入；
@@ -378,6 +392,61 @@ let syntheticIdCounter = 0;
 function nextSyntheticId(): string {
   syntheticIdCounter += 1;
   return `kn_${Date.now().toString(36)}_${syntheticIdCounter.toString(36)}`;
+}
+
+/**
+ * 子→父 reply 协议（root cause #1）：构造一段 per-window 的 protocol knowledge，
+ * 显式告诉子 thread LLM "你的 creator window id 是 X；想回报结果调它的
+ * continue/say，end command 不是回报通道"。
+ *
+ * 为什么不放在 type-level basicKnowledge：
+ * - 同一 type 的 creator vs 非 creator 视角不同；type-level 没法分视角。
+ * - 不引入新抽象：仍然是 KnowledgeWindow + protocol source，只是 path 含 window_id。
+ *
+ * 内容贴合 collaborable.creator_window 段（meta/object.doc.ts:952-968）。
+ */
+function buildCreatorReplyKnowledge(window: ContextWindow): string {
+  if (window.type === "do") {
+    return [
+      "# 子→父 reply 协议（你的 creator do_window）",
+      "",
+      `你当前 thread 的 creator window 是 \`${window.id}\`（type=do_window，isCreatorWindow=true，不可被 close）。`,
+      "",
+      "**想把结果 / 状态 / 中间进展带回父线程，唯一通道**：",
+      "",
+      "```",
+      `exec(window_id="${window.id}", command="continue", args={ msg: "<结果或状态描述>" })`,
+      "```",
+      "",
+      "这条消息会被自动 deliver 到父 thread 的 inbox，父 LLM 下一轮就能看到。",
+      "",
+      "**重要边界**：",
+      "- `end` command 只用于声明本轮**自己**结束，**不是回报通道**。",
+      "- 即便 end 接受 `result` 参数（便捷糖），它内部仍是模拟在 creator window 上调一次 continue；",
+      "  多段对话 / 复杂状态汇报，请显式走 `creator_do_window.continue`，不要塞到 end 里。",
+      "- 不要 hallucinate \"reply\" / \"report\" / \"finish_with\" 等不存在的 command；只有 continue / say / wait / close。",
+    ].join("\n");
+  }
+  // talk creator window
+  return [
+    "# 子→父 reply 协议（你的 creator talk_window）",
+    "",
+    `你当前 thread 的 creator window 是 \`${window.id}\`（type=talk_window，isCreatorWindow=true，不可被 close）。`,
+    "",
+    "**想给 caller 回信，唯一通道**：",
+    "",
+    "```",
+    `exec(window_id="${window.id}", command="say", args={ msg: "<回复内容>", wait: false|true })`,
+    "```",
+    "",
+    "这条消息会通过 talk-delivery 派送到 caller object 的对端 thread；caller 下一轮就能看到。",
+    "",
+    "**重要边界**：",
+    "- `end` command 只用于声明本轮**自己**结束，**不是回报通道**。",
+    "- 即便 end 接受 `result` 参数（便捷糖），它内部仍是模拟在 creator window 上调一次 say；",
+    "  多轮往返 / 复杂确认，请显式走 `creator_talk_window.say`，不要塞到 end 里。",
+    "- 不要 open 新的 talk_window 给同一个 caller；用现有的 creator talk_window 复用。",
+  ].join("\n");
 }
 
 function makeKnowledgeWindow(

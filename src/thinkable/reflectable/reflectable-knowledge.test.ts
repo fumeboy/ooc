@@ -65,4 +65,17 @@ describe("reflectable knowledge protocol injection", () => {
     expect(REFLECTABLE_METAPROG_KNOWLEDGE).toContain("metaprog");
     expect(REFLECTABLE_METAPROG_KNOWLEDGE).toContain("rollback");
   });
+
+  it("REFLECTABLE_KNOWLEDGE includes sediment write contract with frontmatter template", () => {
+    // dogfooding 闭环关键（root cause #1）：sediment 必须含 frontmatter 才能被 activator 命中
+    expect(REFLECTABLE_KNOWLEDGE).toContain("sediment write contract");
+    expect(REFLECTABLE_KNOWLEDGE).toContain("frontmatter");
+    expect(REFLECTABLE_KNOWLEDGE).toContain("activates_on");
+    expect(REFLECTABLE_KNOWLEDGE).toContain("show_description_when");
+    expect(REFLECTABLE_KNOWLEDGE).toContain("show_content_when");
+    // 强调"没有 frontmatter = silently 失效"
+    expect(REFLECTABLE_KNOWLEDGE).toMatch(/永远无法激活|永远无法被|断裂/);
+    // 完整模板 fence
+    expect(REFLECTABLE_KNOWLEDGE).toMatch(/```markdown[\s\S]*---[\s\S]*activates_on[\s\S]*---[\s\S]*```/);
+  });
 });

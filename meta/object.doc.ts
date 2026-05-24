@@ -503,7 +503,12 @@ export const root: DocTreeNode = {
                     - program: 执行 shell / javascript / typescript 程序，创建 program_window。
                     - plan: 更新当前 thread 的 plan。
                     - todo: 创建可见待办 todo_window。
-                    - end: 标记当前 thread 完成。
+                    - end: 标记当前 thread 完成。args = { reason?, summary?, result? }。其中 result 是子 thread
+                      想带回父 thread 的一段文本——2026-05-24 起，传 result 时 end 会**自动调用
+                      creator window 的 continue/say** 把内容写入 transcript（等价于子主动 reply），并
+                      auto-archive 父侧 creator window（do_window 类）。如果不传 result，end 只标记本轮结束，
+                      不触发任何 reply。注意：result 是便捷糖，**不是回报通道**——明确的多段对话仍应通过
+                      creator window.continue / say 完成。
                     - open_file: 把文件作为 file_window 引入 Context。
                     - open_knowledge: 把知识文档作为 knowledge_window 引入 Context。
                     - write_file: 创建或覆盖文件，并通常打开对应 file_window。
@@ -943,12 +948,31 @@ export const root: DocTreeNode = {
                     - user.root（objectId === "user" 且 thread.id === "root"）: 整个 session 的交互起点，没有 creator，跳过。
                     - self-driven root: 既没 opts.creatorThreadId、又没 thread.creatorThreadId、也没 thread.creatorObjectId 时，
                       不注入 phantom creator window（否则会被 wait 误判为合法 IO 来源导致死锁）。
+
+                    **🔥 子→父 reply 协议（2026-05-24 增，dogfooding 闭环关键）**：
+
+                    子 thread 想把结果带回父 thread 时，**唯一合法通道**是在 **creator do_window / talk_window**
+                    上调 \`continue\`（do_window）或 \`say\`（talk_window），写入 transcript；这条消息会自动
+                    deliver 到父 thread 的 inbox。
+
+                    **禁止依赖 \`end({result})\` 隐式回报**——end command 的 result 参数（若存在）只用于
+                    auto-archive 触发器，不是 reply 通道；result 内容会被自动作为最后一条 continue 写入
+                    creator window transcript（详见 root.end children/result_auto_continue）。
+
+                    子线程 LLM 在 basicKnowledge 里看到的 creator window 段必须**显式说明**：
+                    > 你的 creator window 是 \`<window_id>\`。**若想把结果 / 状态带回父线程，调
+                    > \`exec(window_id="<creator_id>", command="continue", args={msg:"..."})\` 写入 transcript**。
+                    > end command 只用于声明本轮自己结束，不是回报通道。
+
+                    没有这条 prompt，子 LLM 会 hallucinate \`end({result})\` 等非协议参数，导致 result
+                    被静默吞、父侧 do_window 永不 archive（体验官 Round 4 #19/#20 揭示）。
                     `,
                     named: {
                         "creatorWindowIdOf": "派生 creator window 稳定 id 的函数",
                         "isCreatorWindow": "标记某 window 为 creator window 的字段；true 时不可 close",
                         "user.root": "objectId='user' 且 thread.id='root' 的特殊 root thread，没有 creator",
                         "self-driven root": "没有 creator 信息的 root thread；不注入 phantom creator",
+                        "子→父 reply 协议": "唯一通道是 creator window 上的 continue/say；end 不是回报通道",
                     },
                 },
                 "issue": {
@@ -1401,6 +1425,29 @@ export const root: DocTreeNode = {
 
                     写入方式: 通过 exec(command="write_file", path="...", content="...") 命令；
                     已存在的文件可用 open_file + edit 增量更新。
+
+                    **🔥 sediment write contract（2026-05-24 增，dogfooding 闭环关键）**：
+                    所有 super flow 写入 \`pools/<self>/knowledge/memory/<slug>.md\` 与
+                    \`knowledge/relations/<peer>.md\` 的 markdown 文件 **必须含 frontmatter**：
+
+                    \`\`\`markdown
+                    ---
+                    title: <一句话主题>
+                    description: <让下轮 LLM 知道这篇是否相关的一句>
+                    activates_on:
+                      show_description_when: [<command_path 或 window-type，至少一项>]
+                      show_content_when: [<同上，至少一项>]
+                    ---
+
+                    <正文，可以是几句也可以是长文>
+                    \`\`\`
+
+                    没有 frontmatter 的 sediment 会被 thinkable.knowledge synthesizer 加载但
+                    **永远无法被 activator 激活**——下轮新 thread 完全看不见这篇沉淀，
+                    自演化闭环 silently 断裂（体验官 Round 4 #18 揭示的 dogfooding 协议级缺口）。
+
+                    REFLECTABLE_KNOWLEDGE 必须显式把这条契约写进 LLM 协议提示，让 LLM 写 .md
+                    时**始终包含合法 frontmatter**。模板示例可放在 reflectable basicKnowledge 末尾。
                     `,
                     named: {
                         "memory/<slug>.md": "长期记忆条目；一条记忆一个文件",
@@ -1408,6 +1455,7 @@ export const root: DocTreeNode = {
                         "sediment in pool": "knowledge/memory/* 与 knowledge/relations/* 落 pool（事实型，不进 git）",
                         "self.md / readme.md in stone": "身份文件留 stone（设计型，进 git review）",
                         "seed not in super flow": "stones/<self>/knowledge/ 是 seed knowledge，不在 super flow 默认写入面；走 PR-Issue + eval",
+                        "sediment write contract": "所有 super flow 写入的 .md 必须含 frontmatter（title/description/activates_on）；否则 activator 永远不命中，自演化闭环断裂",
                     },
                 },
                 "metaprogramming": {

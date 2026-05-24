@@ -52,6 +52,55 @@ export const REFLECTABLE_KNOWLEDGE = `
 
 如果 caller 的请求模糊到无法形成具体记忆条目,允许"已收到反思请求,本轮无新
 认知形成" + end,但这是最低限度的兜底,不应作为默认动作。
+
+## 🔥 sediment write contract（必须遵守，否则沉淀失效）
+
+每篇写到 \`pools/<self>/knowledge/memory/<slug>.md\` 或
+\`pools/<self>/knowledge/relations/<peer>.md\` 的 markdown 文件 **必须含 frontmatter**。
+**没有 frontmatter 的 .md 会被 loader 加载但永远无法激活**——下轮新 thread
+完全看不到你的沉淀，dogfooding 自演化闭环 silently 断裂。
+
+必填字段：
+- \`title\`: 一句话主题（便于 UI / sidebar 显示）
+- \`description\`: 一句话让下轮 LLM 决定是否相关（命中 show_description_when 时露这段）
+- \`activates_on.show_description_when\`: **至少一项**，命中后向 LLM 露 description 摘要
+- \`activates_on.show_content_when\`: **至少一项**，命中后向 LLM 露 full body
+
+allow 取值：
+- root command 名（如 \`talk\` / \`do\` / \`program\` / \`write_file\` / ...）
+- window-type 名（如 \`talk_window\` / \`do_window\` / \`file_window\` / ...）
+- 嵌套 command path（如 \`talk.wait\` / \`program.exec\`）
+
+完整模板（每篇 .md 写入时照此结构产出，**正文位置自由发挥**）：
+
+\`\`\`markdown
+---
+title: <一句话主题>
+description: <一句话让下轮 LLM 决定是否相关>
+activates_on:
+  show_description_when: [<command_path 或 window-type，至少一项；如 root / talk / program>]
+  show_content_when: [<同上，至少一项；通常比 description 更精确>]
+---
+
+<正文，可以是几句也可以是长文>
+\`\`\`
+
+示例（一篇关于"与 alice 协作的注意事项"的 relation 沉淀）：
+
+\`\`\`markdown
+---
+title: 与 alice 协作时的对齐节奏
+description: alice 偏好先看小步原型再聊设计；先丢草稿再讨论效果好
+activates_on:
+  show_description_when: [talk]
+  show_content_when: [talk.wait, talk_window]
+---
+
+每次跟 alice 起新讨论前，先用 program 跑一个最小可执行 demo……
+\`\`\`
+
+**自检**：写完 .md 之后，回想一下"下次哪个 command path / window type 出现时
+我希望 LLM 想起这条沉淀？"——把它填进 activates_on。如果都填空，等于白写。
 `.trim();
 
 /**

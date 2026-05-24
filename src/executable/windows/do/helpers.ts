@@ -39,6 +39,36 @@ export function findChild(parent: ThreadContext, childId: string): ThreadContext
 }
 
 /**
+ * 子→父 reply 协议（root cause #1 dogfooding 闭环）：
+ *
+ * 当 do_window.continue 由子 thread 在自身 creator do_window 上调用时，
+ * targetThreadId 指向**祖先**而非后裔。先尝试 findChild（兼容 parent→child 用法）；
+ * 没找到再沿 \`_parentThreadRef\` 链向上查找。
+ *
+ * 为什么不只走 _parentThreadRef：parent→child 仍是主要场景（父调 do_window.continue
+ * 给已知子）；保留 findChild 路径无成本。
+ *
+ * _parentThreadRef 是运行时反向引用（root.do 创建 child 时建立，见
+ * windows/root/command.do.ts:201），不参与持久化；磁盘恢复的 thread 没有这条链，
+ * 此时子→父 reply 仍可能失败——recovery 路径的 supplement 由 persistable 层负责。
+ */
+export function findThreadInScope(self: ThreadContext, targetId: string): ThreadContext | null {
+  // 向下：自身 + 后裔
+  const downward = findChild(self, targetId);
+  if (downward) return downward;
+  // 向上：沿 _parentThreadRef 链
+  let cur: ThreadContext | undefined = self._parentThreadRef;
+  while (cur) {
+    if (cur.id === targetId) return cur;
+    // 上层的 sibling 子树也应可达（罕见但合法：grandchild → 兄弟节点 reply）
+    const sibling = findChild(cur, targetId);
+    if (sibling) return sibling;
+    cur = cur._parentThreadRef;
+  }
+  return null;
+}
+
+/**
  * archive 子 thread 时的归还路径（plan §do_window.move 自动归还）：
  *
  * 在切 child.status 之前，遍历 child.contextWindows
