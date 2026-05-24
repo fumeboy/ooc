@@ -33,15 +33,51 @@ const ERROR_HTTP_STATUS: Record<AppServerError["code"], number> = {
 };
 
 /**
+ * 从 typebox schema 提取字面允许值列表（R7-3 修）。
+ *
+ * typebox 把 `t.Union([t.Literal("stone"), t.Literal("flow")])` 渲染成
+ * `{ anyOf: [{ const: "stone", type: "string" }, { const: "flow", type: "string" }] }`。
+ * 默认 ValidationError.summary 只输出 type 名（"'string', 'string'"）——开发者看不到
+ * 真正允许的值。本函数提取所有 const 字面值，拼成 friendly hint。
+ */
+function extractAllowedConsts(schema: unknown): string[] | undefined {
+  const s = schema as { anyOf?: Array<{ const?: unknown }>; const?: unknown };
+  if (s?.const !== undefined) {
+    return [JSON.stringify(s.const)];
+  }
+  if (Array.isArray(s?.anyOf)) {
+    const consts = s.anyOf
+      .map((branch) => branch?.const)
+      .filter((c): c is string | number | boolean => c !== undefined && c !== null);
+    if (consts.length > 0) {
+      return consts.map((c) => JSON.stringify(c));
+    }
+  }
+  return undefined;
+}
+
+/**
  * Elysia ValidationError.all 项压缩：每条只保留 {path, expected (schema 类型), message}。
  * 避免 R2 #8 的 >2KB 噪音（原始项嵌套整个 schema JSON）。
+ *
+ * R7-3（2026-05-25）：若 schema 是 union of literals，message 改为
+ * "should be one of: <const list>"，让 typebox union 错误真正可读。
  */
 function compressValidationItem(item: unknown): { path?: string; expected?: string; message?: string } {
-  const it = item as { path?: string; schema?: { type?: string }; message?: string; summary?: string };
+  const it = item as {
+    path?: string;
+    schema?: { type?: string; anyOf?: unknown; const?: unknown };
+    message?: string;
+    summary?: string;
+  };
+  const allowedConsts = extractAllowedConsts(it?.schema);
+  const friendlyMessage = allowedConsts
+    ? `should be one of: ${allowedConsts.join(", ")}`
+    : (it?.summary ?? it?.message);
   return {
     path: it?.path,
     expected: it?.schema?.type,
-    message: it?.summary ?? it?.message,
+    message: friendlyMessage,
   };
 }
 

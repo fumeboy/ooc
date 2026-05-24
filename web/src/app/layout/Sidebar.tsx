@@ -1,5 +1,5 @@
 import { MainLogo } from "../../shared/brand/MainLogo";
-import { Box, Globe2, List, Plus, Zap } from "lucide-react";
+import { Box, Database, Globe2, List, Plus, Zap } from "lucide-react";
 import type { ReactNode } from "react";
 import type { FileTreeNode, TreeScope } from "../../domains/files";
 import { FileTree } from "../../domains/files/components/FileTree";
@@ -188,6 +188,8 @@ export function Sidebar({ scope, flows, tree, activePath, activeSessionId, activ
   const tabs: Array<{ scope: TreeScope; label: string; icon: ReactNode }> = [
     { scope: "flows", label: "Flows", icon: <Zap size={13} /> },
     { scope: "stones", label: "Stones", icon: <Box size={13} /> },
+    // R7-4（2026-05-25）：pools 是 2026-05-23 三分一等公民，应作为 sidebar tab 显式呈现
+    { scope: "pools", label: "Pools", icon: <Database size={13} /> },
     { scope: "world", label: "World", icon: <Globe2 size={13} /> },
   ];
   const flowTree = getFlowTree(tree, activeSessionId);
@@ -259,6 +261,11 @@ export function Sidebar({ scope, flows, tree, activePath, activeSessionId, activ
                 </button>
               </div>
               <FileTree root={stonesTreeDisplay} selectedPath={activePath} onSelect={onNode} onCreate={onCreateKnowledge} />
+            </div>
+          ) : scope === "pools" ? (
+            <div className="section tree-section">
+              <p className="section-title">Pools tree</p>
+              <FileTree root={tree} selectedPath={activePath} onSelect={onNode} onCreate={onCreateKnowledge} />
             </div>
           ) : (
             <div className="section tree-section">

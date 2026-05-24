@@ -1376,6 +1376,24 @@ export const root: DocTreeNode = {
                       // intentional: explicit fall-through，ENOENT 视为路径不存在，作为下一步条件分支
                     }
                     \`\`\`
+
+                    **🔥 sandbox 例外白名单（2026-05-25, Round 7 R7-2 落地）**：
+
+                    \`src/executable/program/sandbox/\` 下有 2 类 catch 块被显式列为 ban 例外，
+                    必须带 \`// intentional:\` 注释，不视为违反 silent-swallow ban：
+
+                    1. **tmp file cleanup**（如 \`executor.ts\` finally 块里 unlink 失败）：
+                       sandbox 执行已经在 finally 中，exec 结果对 caller 仍有效；
+                       tmp 文件由 OS 周期清理；throw 会破坏主流程返回值。
+                    2. **serialization fallback**（如 \`console.ts\` 把 JSON.stringify 失败降级为 String(a)）：
+                       sandbox console.log 内部细节；BigInt / circular ref 等非常规值用 String 降级
+                       对 LLM/observability 无意义；写 event/warn 会噪音。
+
+                    这 2 类是"完成主功能后的善后失败"——本质上不是错误吞噬（主功能成功了），
+                    而是 cleanup/fallback 路径自有 fallback 行为。**不允许扩张到其它场景**——
+                    业务 catch 仍必须做 (a)(b)(c) 至少一项。
+
+                    audit grep 时跳过带 \`// intentional: sandbox\` 标签的 catch。
                     `,
                     sources: [["audit/根因#6/2026-05-24", "docs/2026-05-24-fix-plan.md"]],
                 },

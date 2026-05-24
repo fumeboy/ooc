@@ -34,6 +34,7 @@ function ensureInsideBase(baseDir: string, target: string, details: Record<strin
 function scopeRoot(baseDir: string, scope: TreeScope) {
   if (scope === "flows") return join(baseDir, "flows");
   if (scope === "stones") return join(baseDir, "stones");
+  if (scope === "pools") return join(baseDir, "pools");
   return baseDir;
 }
 

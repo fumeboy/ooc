@@ -1,4 +1,5 @@
-export type TreeScope = "world" | "flows" | "stones";
+/** R7-4 同 backend：补 "pools"。 */
+export type TreeScope = "world" | "flows" | "stones" | "pools";
 
 export type FileTreeNode = {
   name: string;

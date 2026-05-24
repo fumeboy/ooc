@@ -23,6 +23,8 @@ export const router = createBrowserRouter([
   // R6 #45:sidebar "World" tab 之前导航到 /world 触发 Unknown route; 这里补齐
   // (parseRoute + scopeOf 早就支持 world scope,只是 route table 缺了一行)
   { path: "/world", ...shell },
+  // R7-4 (2026-05-25): pools 是 2026-05-23 三分一等公民, sidebar 加 Pools tab
+  { path: "/pools", ...shell },
   { path: "/flows", ...shell },
   { path: "/flows/:sessionId", ...shell },
   { path: "/flows/:sessionId/issues/:id", ...shell },

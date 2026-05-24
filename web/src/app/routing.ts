@@ -26,7 +26,7 @@ export interface ThreadContext {
 
 export type RouteState =
   | { kind: "welcome" }
-  | { kind: "scope"; scope: "stones" | "flows" | "world" }
+  | { kind: "scope"; scope: "stones" | "flows" | "world" | "pools" }
   | { kind: "file"; path: string; thread?: ThreadContext }
   | { kind: "stoneClient"; objectId: string }
   | { kind: "flowPage"; sessionId: string; objectId: string; page: string }
@@ -179,6 +179,9 @@ export function parseRoute(
   // /stones
   if (path === "/stones") return { kind: "scope", scope: "stones" };
 
+  // /pools (R7-4)
+  if (path === "/pools") return { kind: "scope", scope: "pools" };
+
   // /world
   if (path === "/world") return { kind: "scope", scope: "world" };
 
@@ -252,8 +255,8 @@ function matchIssueFilePath(rel: string): { sessionId: string; issueId: number }
   return { sessionId: m[1]!, issueId };
 }
 
-/** 由 RouteState 派生 scope（Sidebar 用以高亮 tab）。 */
-export function scopeOf(route: RouteState): "stones" | "flows" | "world" {
+/** 由 RouteState 派生 scope（Sidebar 用以高亮 tab）。R7-4 加 "pools"。 */
+export function scopeOf(route: RouteState): "stones" | "flows" | "world" | "pools" {
   switch (route.kind) {
     case "welcome":
       return "flows";
@@ -261,6 +264,7 @@ export function scopeOf(route: RouteState): "stones" | "flows" | "world" {
       return route.scope;
     case "file": {
       if (route.path.startsWith("stones/")) return "stones";
+      if (route.path.startsWith("pools/")) return "pools";
       if (route.path.startsWith("flows/")) return "flows";
       return "world";
     }

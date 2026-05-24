@@ -54,7 +54,9 @@ export async function executeUserCode(
     try {
       await unlink(file);
     } catch {
-      // 忽略清理失败
+      // intentional: sandbox tmp cleanup 失败不应破坏主流程——已经在 finally 里，
+      // exec 结果对 caller 仍然有效；tmp 文件由 OS 周期清理。
+      // 属 meta/observable.silent_swallow_ban 的 sandbox 例外白名单（tmp cleanup）。
     }
   }
 }

@@ -296,7 +296,7 @@ function deriveHeaderTitle(route: RouteState, isWelcome: boolean, path: string |
   }
 }
 
-function scopeEmptyState(scope: "stones" | "flows" | "world"): { title: string; detail: string } {
+function scopeEmptyState(scope: "stones" | "flows" | "world" | "pools"): { title: string; detail: string } {
   if (scope === "flows") {
     return {
       title: "Select a session",
@@ -307,6 +307,12 @@ function scopeEmptyState(scope: "stones" | "flows" | "world"): { title: string; 
     return {
       title: "Select a stone",
       detail: "Pick a stone from the left sidebar to view its self.md / readme.md / client.tsx and knowledge tree.",
+    };
+  }
+  if (scope === "pools") {
+    return {
+      title: "Browse pools",
+      detail: "Pick a pool object from the left sidebar to view its data / knowledge / files (sediment & shared repos).",
     };
   }
   return {
