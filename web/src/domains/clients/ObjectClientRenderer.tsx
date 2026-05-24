@@ -21,10 +21,17 @@ import {
   lazy,
   useMemo,
 } from "react";
-import { WORLD_ROOT } from "../../shared/world-root";
 import { endpoints } from "../../transport/endpoints";
 import { requestJson } from "../../transport/http";
 import { StoneFallback } from "./StoneFallback";
+
+/**
+ * 根因 #3 (2026-05-24)：frontend 不再硬编码 `${WORLD_ROOT}/stones/${id}/client/index.tsx`。
+ * 走 backend `/api/objects/:scope/:objectId/client-source-url` 拿权威 absPath + fsUrl。
+ *
+ * 旧实现见 git history（依赖 WORLD_ROOT + path-prefix 拼接）；2026-05-21 stones
+ * 重组（加 `<branch>/objects/`）后硬编码漂移，本次彻底删掉。
+ */
 
 /** 调用入口由 scope 决定，避免上游手拼路径。 */
 export type ClientTarget =
@@ -45,15 +52,33 @@ export interface ClientComponentProps {
   [key: string]: unknown;
 }
 
-function clientAbsPath(target: ClientTarget): string {
-  if (target.scope === "stone") {
-    return `${WORLD_ROOT}/stones/${target.objectId}/client/index.tsx`;
-  }
-  return `${WORLD_ROOT}/flows/${target.sessionId}/objects/${target.objectId}/client/pages/${target.page}.tsx`;
+interface ClientSourceResolution {
+  absPath: string;
+  fsUrl: string;
+  /** true = backend 报 404 (源文件不存在)；让上游走 fallback。 */
+  notFound: boolean;
 }
 
-function fsImportUrl(absPath: string): string {
-  return `/@fs${absPath}`;
+async function resolveClientSource(target: ClientTarget): Promise<ClientSourceResolution> {
+  const url =
+    target.scope === "stone"
+      ? endpoints.clientSourceUrl("stone", target.objectId)
+      : endpoints.clientSourceUrl("flow", target.objectId, {
+          sessionId: target.sessionId,
+          page: target.page,
+        });
+  try {
+    const res = await requestJson<{ absPath: string; fsUrl: string }>(url);
+    return { absPath: res.absPath, fsUrl: res.fsUrl, notFound: false };
+  } catch (e) {
+    // 任何错误（404 / 网络）走 fallback；上层用 absPath="" 的占位，notFound=true 触发 StoneFallback/NotProducedYet。
+    const msg = e instanceof Error ? e.message : String(e);
+    // 仅 NOT_FOUND 是预期失败（无 client 文件，走 fallback）；其它错误 console.warn 供排查。
+    if (!/not\s*found|404/i.test(msg)) {
+      console.warn("[ObjectClientRenderer] resolveClientSource failed:", msg);
+    }
+    return { absPath: "", fsUrl: "", notFound: true };
+  }
 }
 
 function callMethodFor(target: ClientTarget) {
@@ -131,34 +156,10 @@ class ClientRenderErrorBoundary extends Component<
   }
 }
 
-/**
- * 用 HEAD 请求显式判文件是否存在，避免与"语法错"等其它失败混淆：
- *
- * Vite dev server 对 /@fs/<missing> 与 /@fs/<exists> 都返回 200，但 Content-Type
- * 不同：实际文件是 `text/javascript`（转译后），不存在则返回 SPA fallback HTML
- * （`text/html`）。靠 content-type 判存在与否最稳。
- *
- * 网络层失败按"不存在"处理（开发机断网时 fallback 比红块友好）。
- */
-async function fileExists(importUrl: string): Promise<boolean> {
-  try {
-    const res = await fetch(importUrl, { method: "HEAD" });
-    if (res.status === 404) return false;
-    const ctype = res.headers.get("content-type") ?? "";
-    // text/javascript / application/javascript 算存在；text/html 是 SPA fallback
-    return /(?:^|\W)javascript\b/i.test(ctype);
-  } catch {
-    return false;
-  }
-}
-
 export function ObjectClientRenderer({
   target,
   extraProps,
 }: ObjectClientRendererProps) {
-  const absPath = useMemo(() => clientAbsPath(target), [target]);
-  const importUrl = useMemo(() => fsImportUrl(absPath), [absPath]);
-
   const componentProps = useMemo<ClientComponentProps>(() => {
     const base: ClientComponentProps = {
       ...extraProps,
@@ -175,12 +176,10 @@ export function ObjectClientRenderer({
 
   const LazyComponent = useMemo(() => {
     return lazy<ComponentType<ClientComponentProps>>(async () => {
-      // 先 HEAD 判 404：避免和语法错 / 转译错混淆。
-      const exists = await fileExists(importUrl);
-      if (!exists) {
-        // Stone scope 不再用空白的 "信息待产出..."; 改用 StoneFallback 拼出
-        // self.md / readme.md / knowledge / 入口 名片 (Supervisor 决策)。
-        // Flow scope 维持原 NotProducedYet — flow page 语义还不明确, 不在本次范围。
+      // 通过 backend 权威 endpoint 拿 absPath / fsUrl；404 → 走 fallback。
+      const resolution = await resolveClientSource(target);
+      if (resolution.notFound) {
+        // Stone scope 用 StoneFallback 拼名片；flow scope 维持 NotProducedYet。
         if (target.scope === "stone") {
           const objectId = target.objectId;
           const Fallback: ComponentType<ClientComponentProps> = () => (
@@ -191,8 +190,9 @@ export function ObjectClientRenderer({
         const Fallback: ComponentType<ClientComponentProps> = () => <NotProducedYet />;
         return { default: Fallback };
       }
+      const { absPath, fsUrl } = resolution;
       try {
-        const mod = (await import(/* @vite-ignore */ importUrl)) as {
+        const mod = (await import(/* @vite-ignore */ fsUrl)) as {
           default?: ComponentType<ClientComponentProps>;
         };
         if (!mod.default) {
@@ -235,10 +235,10 @@ export function ObjectClientRenderer({
         return { default: Fallback };
       }
     });
-  }, [importUrl, absPath, target]);
+  }, [target]);
 
   return (
-    <ClientRenderErrorBoundary absPath={absPath}>
+    <ClientRenderErrorBoundary absPath="">
       <Suspense
         fallback={
           <div className="p-4 text-sm text-[var(--muted-foreground)]">

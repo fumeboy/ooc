@@ -5,7 +5,7 @@ export type FileTreeNode = {
   type: "directory" | "file";
   path: string;
   size?: number;
-  marker?: "flow" | "stone";
+  marker?: "flow" | "stone" | "pool";
   children?: FileTreeNode[];
 };
 

@@ -8,6 +8,7 @@ import { checkStaleDatabaseDir } from "./bootstrap/check-stale-database-dir";
 import { AppServerError } from "./bootstrap/errors";
 import { healthModule } from "./modules/health";
 import { runtimeModule } from "./modules/runtime";
+import { poolsModule } from "./modules/pools";
 import { stonesModule } from "./modules/stones";
 import { flowsModule } from "./modules/flows";
 import { issuesModule } from "./modules/issues";
@@ -103,6 +104,7 @@ export function buildServer(config: ServerConfig = readServerConfig()) {
     .use(healthModule)
     .use(runtimeModule(config))
     .use(stonesModule(config))
+    .use(poolsModule(config))
     .use(uiModule(config))
     .use(flowsModule(config))
     .use(issuesModule(config));

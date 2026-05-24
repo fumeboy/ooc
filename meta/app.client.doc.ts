@@ -633,6 +633,41 @@ export const root: DocTreeNode = {
         },
     },
     patches: {
+        "backend-resolver-authority": {
+            title: "frontend 路径解析必须经 backend resolver（2026-05-24，根因 #3）",
+            content: `
+            **契约 1（接口 explicit）**：frontend 不假设 backend 存储路径，所有
+            path / marker 解析必经 backend resolver。
+
+            **历史踩坑（4 处同根因 facet）**：
+            - R2 #6 tree marker 错位：前端按 path-prefix 启发式判 marker，2026-05-21
+              stones 重组（加 \`<branch>/objects/\` 中间层）后失效。
+            - R3 #11 stones knowledge HTTP 写到 pools：路径标签 \`/api/stones/.../knowledge\`
+              语义错位。
+            - R6 #39 ObjectClientRenderer 未加 \`main/objects/\`：硬编码
+              \`\${WORLD_ROOT}/stones/<id>/client/index.tsx\`，stones 重组后 404。
+            - R6 #43 seeded stone 不在 sidebar tree：marker 启发式 4 段路径失效。
+
+            **新约定**：
+            - marker：backend \`/api/tree\` 基于 \`.stone.json\` / \`.pool.json\` /
+              \`.flow.json\` / \`.session.json\` 元数据存在性给出。
+            - client 源文件路径：frontend 走 \`/api/objects/:scope/:id/client-source-url\`
+              endpoint 拿 backend 用 \`stoneDir() / objectDir()\` 权威解析的
+              \`{ absPath, fsUrl }\`。
+            - knowledge 写入：用 \`/api/pools/...\`（旧 \`/api/stones/.../knowledge/...\`
+              保留 deprecation 兼容）。
+
+            **反熵**：删除前端 path 拼接代码（\`web/src/shared/world-root.ts:WORLD_ROOT\`
+            目前仅在 vite config inject 时使用，不再被业务代码 import）；不引入新的
+            "路径标准化"抽象——backend 已经给 path，frontend 用就是了。
+            `,
+            sources: [
+                [
+                    "web/src/domains/clients/ObjectClientRenderer.tsx",
+                    "resolveClientSource() 调 backend /api/objects/:scope/:id/client-source-url 拿 absPath/fsUrl；clientAbsPath 自拼逻辑已删除。",
+                ],
+            ],
+        },
         "write-boundary": {
             title: "写入边界（invariant）：仅 stones/{objectId}/knowledge/**",
             content: `

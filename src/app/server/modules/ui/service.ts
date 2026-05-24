@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { access, readdir, readFile, stat } from "node:fs/promises";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { AppServerError } from "../../bootstrap/errors";
 import type { TreeScope, UiTreeNode } from "./model";
@@ -42,10 +42,34 @@ function scopePrefix(scope: TreeScope) {
   return scope;
 }
 
-function markerFor(nodePath: string): UiTreeNode["marker"] | undefined {
-  const parts = nodePath.split("/");
-  if (parts.length === 2 && parts[0] === "flows") return "flow";
-  if (parts.length === 2 && parts[0] === "stones") return "stone";
+/**
+ * 根因 #3：marker 元数据化（2026-05-24）。
+ *
+ * 旧实现按 path-prefix 启发式判 marker（`stones/<id>` length===2 → stone）；
+ * 2026-05-21 stones 重组（加 `<branch>/objects/` 中间层）后 4 段路径下启发式失效。
+ *
+ * 新实现：基于 backend 元数据文件存在性判 marker——目录下含
+ *   - `.stone.json` → marker="stone"
+ *   - `.pool.json`  → marker="pool"
+ *   - `.session.json` 或 `.flow.json` → marker="flow"
+ *
+ * 元数据文件由 `src/persistable/{stone,pool,flow}-object.ts` 在 create 时写入；
+ * 这里只检查存在性，不解析内容（便宜、解耦）。
+ */
+async function fileExists(absPath: string): Promise<boolean> {
+  try {
+    await access(absPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function markerFor(absDirPath: string): Promise<UiTreeNode["marker"] | undefined> {
+  if (await fileExists(join(absDirPath, ".stone.json"))) return "stone";
+  if (await fileExists(join(absDirPath, ".pool.json"))) return "pool";
+  if (await fileExists(join(absDirPath, ".flow.json"))) return "flow";
+  if (await fileExists(join(absDirPath, ".session.json"))) return "flow";
   return undefined;
 }
 
@@ -82,7 +106,7 @@ export function createUiService({ baseDir }: { baseDir: string }) {
       name: entryName,
       type: "directory",
       path: webPath,
-      marker: markerFor(webPath),
+      marker: await markerFor(absPath),
       children,
     };
   }

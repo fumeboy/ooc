@@ -1,8 +1,25 @@
 export const endpoints = {
   health: "/api/health",
   stones: "/api/stones",
-  stoneKnowledgeDirectories: (objectId: string) => `/api/stones/${encodeURIComponent(objectId)}/knowledge/directories`,
-  stoneKnowledgeFiles: (objectId: string) => `/api/stones/${encodeURIComponent(objectId)}/knowledge/files`,
+  /**
+   * 根因 #3 (2026-05-24)：knowledge 实际写入 pool 层，路径迁到 `/api/pools/...`。
+   * 旧 `/api/stones/.../knowledge/...` 在后端保留兼容并加 `X-Deprecated` header。
+   */
+  stoneKnowledgeDirectories: (objectId: string) => `/api/pools/${encodeURIComponent(objectId)}/knowledge/directories`,
+  stoneKnowledgeFiles: (objectId: string) => `/api/pools/${encodeURIComponent(objectId)}/knowledge/files`,
+  /**
+   * 根因 #3：frontend 不假设 backend client/index.tsx 路径，通过本 endpoint 拿权威 absPath / fsUrl。
+   * stone：scope=stone；flow：scope=flow，需带 sessionId + page query。
+   */
+  clientSourceUrl: (scope: "stone" | "flow", objectId: string, opts?: { sessionId?: string; page?: string }) => {
+    const base = `/api/objects/${scope}/${encodeURIComponent(objectId)}/client-source-url`;
+    if (scope === "stone") return base;
+    const params = new URLSearchParams();
+    if (opts?.sessionId) params.set("sessionId", opts.sessionId);
+    if (opts?.page) params.set("page", opts.page);
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
+  },
   flows: "/api/flows",
   /** collaborable § cross-object talk: 一次性 seed 一个 session（user → talk → target）。 */
   sessions: "/api/sessions",

@@ -229,6 +229,9 @@ describe("app server routes", () => {
     await mkdir(join(baseDir, "flows", "web-session"), { recursive: true });
     await mkdir(join(baseDir, "stones", "assistant"), { recursive: true });
     await writeFile(join(baseDir, "flows", "web-session", "notes.txt"), "hello web");
+    // 根因 #3 (2026-05-24)：marker 由后端元数据文件存在性决定（.session.json /
+    // .stone.json / .pool.json / .flow.json），不再用路径前缀启发式。
+    await writeFile(join(baseDir, "flows", "web-session", ".session.json"), "{}");
 
     const flowsResponse = await app.handle(new Request("http://localhost/api/tree?scope=flows"));
     const flowsTree = await flowsResponse.json();
@@ -341,5 +344,110 @@ describe("app server routes", () => {
     expect(await readFile(join(baseDir, "pools", "objects", "researcher", "knowledge", "notes", "idea.md"), "utf8")).toBe("# Updated");
     expect(escape.status).toBe(400);
     expect(escapeBody.error.code).toBe("INVALID_INPUT");
+  });
+
+  // 根因 #3：knowledge 路径已迁到 /api/pools/...；旧 /api/stones/.../knowledge/* 加 X-Deprecated header。
+  test("POST /api/pools/:id/knowledge/files writes to pool, and deprecated stones path keeps working with X-Deprecated header", async () => {
+    const { app, baseDir } = await makeAppWithBaseDir();
+    await app.handle(
+      new Request("http://localhost/api/stones", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ objectId: "alice" }),
+      }),
+    );
+
+    // 新对称路径：/api/pools/:id/knowledge/files
+    const okPool = await app.handle(
+      new Request("http://localhost/api/pools/alice/knowledge/files", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: "via-pool.md", content: "new path" }),
+      }),
+    );
+    expect(okPool.status).toBe(200);
+    expect(okPool.headers.get("x-deprecated")).toBeNull();
+    expect(await readFile(join(baseDir, "pools", "objects", "alice", "knowledge", "via-pool.md"), "utf8")).toBe("new path");
+
+    // 兼容旧 stones 路径：必须 set X-Deprecated header + 仍能写入
+    const okLegacy = await app.handle(
+      new Request("http://localhost/api/stones/alice/knowledge/files", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: "via-stones.md", content: "legacy" }),
+      }),
+    );
+    expect(okLegacy.status).toBe(200);
+    expect(okLegacy.headers.get("x-deprecated")).toBe("true");
+    expect(okLegacy.headers.get("x-deprecation-info") ?? "").toMatch(/\/api\/pools/);
+    expect(await readFile(join(baseDir, "pools", "objects", "alice", "knowledge", "via-stones.md"), "utf8")).toBe("legacy");
+  });
+
+  // 根因 #3：tree marker 元数据化——基于 .stone.json / .pool.json / .session.json 存在性。
+  test("GET /api/tree marks directories based on metadata files (.stone.json / .pool.json)", async () => {
+    const { app, baseDir } = await makeAppWithBaseDir();
+    // 用 HTTP createStone 触发 createStoneObject + createPoolObject，会写出 .stone.json + .pool.json
+    await app.handle(
+      new Request("http://localhost/api/stones", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ objectId: "alice" }),
+      }),
+    );
+
+    const res = await app.handle(new Request("http://localhost/api/tree?scope=stones"));
+    const tree = await res.json();
+    // 期望：stones/main 自己没 marker；stones/main/objects/alice 有 marker="stone"
+    expect(tree.name).toBe("stones");
+    const mainNode = tree.children.find((c: { name: string }) => c.name === "main");
+    expect(mainNode?.marker).toBeUndefined();
+    const objectsNode = mainNode.children.find((c: { name: string }) => c.name === "objects");
+    const aliceNode = objectsNode.children.find((c: { name: string }) => c.name === "alice");
+    expect(aliceNode.marker).toBe("stone");
+
+    // pool 侧
+    const worldRes = await app.handle(new Request("http://localhost/api/tree?scope=world"));
+    const worldTree = await worldRes.json();
+    const poolsNode = worldTree.children.find((c: { name: string }) => c.name === "pools");
+    const poolObjects = poolsNode.children.find((c: { name: string }) => c.name === "objects");
+    const alicePool = poolObjects.children.find((c: { name: string }) => c.name === "alice");
+    expect(alicePool.marker).toBe("pool");
+  });
+
+  // 根因 #3：client-source-url endpoint 给 frontend 权威路径。
+  test("GET /api/objects/stone/:id/client-source-url returns absPath/fsUrl or 404", async () => {
+    const { app, baseDir } = await makeAppWithBaseDir();
+    await app.handle(
+      new Request("http://localhost/api/stones", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ objectId: "alice" }),
+      }),
+    );
+
+    // 还没创建 client/index.tsx → 404 NOT_FOUND
+    const miss = await app.handle(new Request("http://localhost/api/objects/stone/alice/client-source-url"));
+    expect(miss.status).toBe(404);
+    const missBody = await miss.json();
+    expect(missBody.error.code).toBe("NOT_FOUND");
+
+    // 创建 client/index.tsx
+    await mkdir(join(baseDir, "stones", "main", "objects", "alice", "client"), { recursive: true });
+    await writeFile(join(baseDir, "stones", "main", "objects", "alice", "client", "index.tsx"), "export default () => null;", "utf8");
+
+    const hit = await app.handle(new Request("http://localhost/api/objects/stone/alice/client-source-url"));
+    expect(hit.status).toBe(200);
+    const hitBody = await hit.json();
+    expect(hitBody.absPath).toBe(join(baseDir, "stones", "main", "objects", "alice", "client", "index.tsx"));
+    expect(hitBody.fsUrl).toBe(`/@fs${hitBody.absPath}`);
+  });
+
+  test("GET /api/objects/flow/:id/client-source-url requires sessionId+page (400)", async () => {
+    const { app } = await makeAppWithBaseDir();
+    const res = await app.handle(new Request("http://localhost/api/objects/flow/alice/client-source-url"));
+    // 缺 sessionId/page → INVALID_INPUT 400
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe("INVALID_INPUT");
   });
 });

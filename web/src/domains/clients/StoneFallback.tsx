@@ -220,7 +220,8 @@ function KnowledgeSummary({
   return (
     <CollapsibleSection
       label="Knowledge / 持续记忆"
-      sourceHint={`stones/${objectId}/knowledge/`}
+      // 根因 #3 (2026-05-24)：knowledge 在 pool 层，路径 pools/objects/<id>/knowledge/。
+      sourceHint={`pools/objects/${objectId}/knowledge/`}
       defaultOpen
       loading={state.loading}
       empty={!state.loading && (state.error !== undefined || state.dirs.length === 0)}
@@ -234,7 +235,7 @@ function KnowledgeSummary({
         {state.dirs.map((entry) => (
           <li key={entry.name} className="stone-fallback-knowledge-item">
             <Link
-              to={`/files/stones/${objectId}/knowledge/${entry.name}`}
+              to={`/files/pools/objects/${objectId}/knowledge/${entry.name}`}
               className="stone-fallback-knowledge-name"
               data-testid={`knowledge-entry-${entry.name}`}
             >
@@ -346,7 +347,9 @@ function useKnowledgeTree(objectId: string): KnowledgeState {
   useEffect(() => {
     let cancelled = false;
     setState({ dirs: [], loading: true });
-    fetchTree("stones", `${objectId}/knowledge`)
+    // 根因 #3 (2026-05-24): knowledge 在 pool 层，路径 pools/objects/<id>/knowledge/；
+    // ui.tree 的 scopes 是 world|flows|stones，pools 走 world scope + path。
+    fetchTree("world", `pools/objects/${objectId}/knowledge`)
       .then((node) => {
         if (cancelled) return;
         const dirs = summarizeKnowledge(node);
