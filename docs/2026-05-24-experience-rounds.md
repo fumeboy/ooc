@@ -195,9 +195,90 @@ e2e-12 [app server]   错路径 / 不存在 job 走统一 {error:{code,message,d
 
 ---
 
+## Round 4（2026-05-24）— 探索 reflectable / collaborable.do / flow.session_data
+
+**任务范围**：避开 Round 2+3 backlog（render / pause-resume / tree-marker / route 错位 / HTTP 不入 git / ui_methods 沙箱 / Issue 协议 / programmable HTTP）。
+
+**🔥 关键提醒**：Round 4 揭示**协议级 dogfooding 缺口**——OOC 自我承诺的"自演化闭环"与"Agent 协作回报"在执行层断裂。**优先级高于 Round 2/3 视觉/路由型 backlog。**
+
+**选定场景与评分**：
+
+| 场景 | 维度 | 评分 |
+|---|---|---|
+| A. **reflectable 自演化闭环（dogfooding 核心）** | reflectable / persistable.pool | **Bad（critical）** |
+| B. **collaborable.do_window 子→父结果回流** | collaborable / executable | **Bad（critical）** |
+| C. **flow.session_data + ProgramSelf HTTP 入口** | persistable.flow / executable.server | **Bad** |
+| D. knowledge 渐进激活（非 skill_index） | thinkable.knowledge | OK with sharp edges（Round 2 #1 同源新 facet） |
+
+### Round 4 Issue 清单（新 Issue，不与 Round 1-3 backlog 重复）
+
+> 🚨 **#18 / #19 / #20 是哲学承诺级缺口**——超优先级。
+
+| # | 严重度 | 维度 | Issue 一句话 | 派单归属 |
+|---|---|---|---|---|
+| **🔥 18** | Critical | reflectable / thinkable.knowledge | super reflectable 写出的 sediment markdown **无 frontmatter `activates_on`**——下轮 activator 永不命中，**自演化闭环断裂** | C6 cluster（新）→ AgentOfReflectable |
+| **🔥 19** | Critical | collaborable | 子线程在 creator do_window 上**无可发现的 reply 通道**；basicKnowledge 没说"用 continue 回写"；LLM 只能 hallucinate `end({result})` 被静默吞 | C6 cluster |
+| **🔥 20** | Critical | collaborable | 子 thread end 后**父侧 do_window 永不 archive**；父被迫 glob+open_file 反向读子 thread.json 取结果 | C6 cluster（与 #19 同源） |
+| **21** | High | executable.server / persistable.flow | HTTP `/call_method` 的 `httpContext()` 返回空壳 self={dir:""}；**getData/setData/callCommand 全缺**——flow.session_data 在 HTTP 死路 | C7 cluster（新） |
+| **22** | High | executable.server | flows `/call_method` 接到 sessionId 但**没传给 httpContext**；即使补 getData/setData 也无法定位 data.json | C7 cluster |
+| **23** | High | executable / root.end | `end` command 仅接受 reason/summary；`args.result` 静默丢弃；KNOWLEDGE 没说明 | C6 cluster |
+| **24** | Medium | thinkable.knowledge | activator union **永不包含 `root` 路径**；`show_description_when:[root]` 的 seed knowledge 永不激活 | Round 2 C1 cluster 扩展 |
+| **25** | Medium | observable | done thread 后 activation 不持久化；HTTP/前端**无法反推 LLM 当时实际激活了哪些 knowledge**——观测盲区 | Round 2 C1 + observable |
+| **26** | Medium | persistable.flow | 初次创建 flow object 时 root thread **立刻入队 run-thread job**（即使无 inbox 消息）；LLM 在空状态下被启动，产生"空 kickoff 幻觉" | AgentOfPersistable / scheduler |
+| **27** | Low | reflectable | super reflection prompt 让 LLM 倾向幻觉"past-me repeatedly..."；guardrail 缺失 | C6 cluster |
+
+### Round 4 e2e 场景候选
+
+```
+e2e-13 [reflectable]   super 写出的 sediment .md 必须含合法 frontmatter (activates_on)
+e2e-14 [reflectable]   跑完 super 后下轮新 thread llm.input.json 必须出现 sediment knowledge path
+e2e-15 [collaborable]  子 end 后父侧 do_window 自动转 archived/done
+e2e-16 [collaborable]  子线程 LLM input 应在 creator do_window 段明确出现"用 continue 回写"协议
+e2e-17 [root.end]      end({result}) 应被 reject 或映射到 summary，不可静默丢弃
+e2e-18 [executable.server] POST /call_method 调 self.getData/setData 应落 flows/<sid>/objects/<id>/data.json
+e2e-19 [thinkable]     seed knowledge activates_on:[root] 应在 root 阶段激活
+e2e-20 [observable]    thread API 响应附加 lastActivatedKnowledgePaths 字段（done thread 也能反推）
+e2e-21 [persistable]   POST /api/flows/:sid/objects/:id 不应立即入队 run-thread job (除非 explicit kickoff)
+```
+
+### Round 4 反向 design 反馈（**5 条，含 2 条哲学承诺级**）
+
+| 反馈 | Supervisor 决策建议 |
+|---|---|
+| **🔥 F1 — Reflectable sediment 写出契约缺失（最关键）**：自演化是哲学闭环关键，但执行层没有 schema enforcement——LLM 写啥写啥、frontmatter 全缺，下轮永不激活。看上去能跑通但**第二轮永远复发**——OOC 自演化承诺的根本失守。 | **必须修**：`meta/object.doc.ts:reflectable` 加 "sediment write contract" 节；要求所有 super reflection 写入 .md 含 `activates_on`；reflectable basicKnowledge 强制告诉 LLM，或在 write 入口校验 |
+| **🔥 F2 — do_window 双向通道子侧 visibility 失守**：meta 明确"子线程通过 creator window 回报"，但子线程 LLM 看到的 creator do_window 段**只有 transcript，无 reply 协议**；`end({result})` 自然写法被静默吞 | **必须修**：do_window basicKnowledge 拆分父/子视角（基于 `is_creator_window`）；end command knowledge 加"想带结果给父，请改用 creator do_window 上的 continue"；或更彻底——end 加 result 参数自动同步到 creator do_window transcript + auto-archive |
+| **F3 — flow.session_data 在 HTTP 入口完全死路**：ProgramSelf 注入 getData/setData 设计在 `httpContext` 实现里彻底缺失（空壳）；前端调 ui_methods 想读写 session 数据全 broken | **待拍板**：HTTP `/call_method` 是否注入完整 ProgramSelf？是→sessionId 透传 + flow-data IO 联通；否→meta 显式标"HTTP ui_methods 不暴露 session_data" |
+| **F4 — initial run-thread auto-enqueue 哲学问题**：创建 flow object 立即跑一轮，LLM 在空状态下产生"空 kickoff 反思"幻觉 | **建议**：`meta/persistable.flow` 显式声明"create flow object 不自动 kickoff"；移除 service 自动入队 |
+| **F5 — activator union root 路径缺失 + done thread 观测盲区** | 与 Round 2 C1 一起处理：activator 加隐式 path（root + 当前 active window types）；render 时把 activation 结果写入 thread.events `kind=knowledge_activated`，落盘可反查 |
+
+### Round 4 新增 Cluster
+
+| Cluster | sub agent | 包含 Issue | 优先级 |
+|---|---|---|---|
+| **🔥 C6 — dogfooding 协议补全** | AgentOfReflectable + AgentOfCollaborable | #18 / #19 / #20 / #23 / #27 | **最高**（哲学承诺级） |
+| **C7 — HTTP ui_methods 接通 flow.session_data** | AgentOfApp(server) + AgentOfPersistable | #21 / #22 | 高 |
+
+---
+
+## 下一轮（Round 5）任务方向
+
+**避开 Round 2+3+4 backlog**：所有已识别 Issue 区域（含 reflectable / collaborable.do / flow.session_data HTTP / activator root + done observability / initial auto-enqueue）。
+
+**仍未充分探索的方向**（Round 5 自选）：
+
+1. **visible 前端浏览器真实视角**（playwright / 浏览器手工）：URL routing / ObjectClientRenderer / layout 切换 / chat 时间线 / agent-native 双通道（Round 3 仅 HTTP 模拟未碰浏览器）
+2. **stones git-versioning 全链路**：metaprog branch 创建 / worktree 隔离 / commit / classifyWorktreeBranch / ff merge / cross-scope PR-Issue / supervisor rollback（Round 3 #12 是 "HTTP 直写不入 git"，这里是 **git 流程本身**的体验）
+3. **worker 调度 / jobManager**：job 入队顺序、超时、retry、cleanup；与 thread.status 的双向状态同步
+4. **knowledge 渐进激活（file / search / program 等 window）**：非 skill_index、非 talk 的其他 ContextWindow 类型激活路径
+5. **启动期 recovery-check 全链路**：故意写 broken server/index.ts → 启动期 [recovery-needed] PR-Issue → resolve 全程
+6. **stone client / flow client 双层 UI**（visible 维度的另一面）：stone/<id>/client/index.tsx 与 flow/<sid>/.../client/pages/<page>.tsx 协作
+
+---
+
 ## 历史
 
 - **Round 1（2026-05-24）**：验证 stone/pool 简化主干；4 Issue 全部修；产出 3 条设计规范
-- **Round 2（2026-05-24）**：横向探索 visible / observable / thinkable；10 Issue + 6 设计反馈 → C1/C2/C3 cluster backlog
-- **Round 3（2026-05-24）**：探索 Issue 协议 / programmable / visible 前端 HTTP；7 新 Issue + 5 架构级 design 反馈 → C4/C5 cluster backlog；揭示 pool 引入未贯通 HTTP / HTTP 不入 git / ui_methods 信任边界三大架构张力
-- **Round 4（计划）**：探索 reflectable / collaborable.do / visible 浏览器视角 / knowledge 非 skill_index 路径 / flow.session_data / stones git-versioning
+- **Round 2（2026-05-24）**：横向探索 visible / observable / thinkable；10 Issue + 6 设计反馈 → C1/C2/C3 cluster
+- **Round 3（2026-05-24）**：Issue 协议 / programmable / visible HTTP；7 新 Issue + 5 架构反馈 → C4/C5 cluster
+- **Round 4（2026-05-24）**：reflectable 自演化 / collaborable.do_window / flow.session_data HTTP；10 新 Issue + 5 反馈，**揭示协议级 dogfooding 缺口** → C6（最高）/ C7 cluster
+- **Round 5（计划）**：visible 浏览器视角 / stones git-versioning / worker 调度 / 其他 window 类型 knowledge 激活 / recovery-check 全链路
