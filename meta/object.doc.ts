@@ -2605,6 +2605,43 @@ export const root: DocTreeNode = {
                       而不是 fork 一份新的 server。
                     `,
                 },
+                "http_writes_go_through_versioning": {
+                    title: "🔥 HTTP 写 stone 必经 stone-versioning（root-cause #2，2026-05-24）",
+                    content: `
+                    **设计哲学（契约 3：状态翻转唯一 owner）**：所有写 stone 的入口（HTTP / LLM 命令 /
+                    未来的 cron / 测试夹具）共享同一底层语义——open metaprog worktree →
+                    write in worktree → commitWorktree → tryMergeSelf 或 requestPrIssueReview。
+
+                    **症状**（体验官 R3 #12 / R5 #29 揭示）：
+                    HTTP \`POST /api/stones\` / \`PUT /api/stones/:id/server-source\` 等 endpoint
+                    历史上**绕开** stone-versioning 直接 \`writeFile\`，导致：
+                    - HTTP 创建的 stone 不入 git；\`openMetaprogWorktree\` 后 worktree 看不到该 stone
+                    - 元编程协议在 dogfooding 场景**第一步崩**
+                    - audit trail 散在两路（"git 看到的世界" vs "filesystem 看到的世界"分裂）
+
+                    **简化设计**（克制熵增 - 删特殊路径而非加补丁）：
+                    - HTTP route 不再直接 writeFile；改调 \`wrapHttpWriteInWorktree(write, ref, authorObjectId, intent)\`
+                      helper，自动 open worktree → exec write → commit → merge
+                    - 不引入"uncommitted working tree"半成品状态——每个 HTTP 写操作都产生一个 commit
+                    - HTTP 与 LLM 命令是同一个 evolution 流程的两个入口，不再有"快/慢"两条路
+
+                    **不在本契约内**：
+                    - knowledge 文件操作（\`POST /api/stones/:id/knowledge/files\`）写到
+                      \`pools/objects/<id>/knowledge/\`（sediment, pool 层不进 git）——route 命名
+                      与存储位置错位是 root-cause #3 范围。
+                    - call_method（ui_methods 调用）不涉及 stone 写入。
+
+                    **实现见**：
+                    - \`src/app/server/modules/stones/versioning-helper.ts:wrapHttpWriteInWorktree\`
+                    - \`src/app/server/modules/stones/service.ts\`：createStone / putSelf / putReadme / putServerSource
+                      改调 helper
+                    `,
+                    named: {
+                        "HTTP 必经 versioning": "所有 HTTP stone 写操作经 stone-versioning open/commit/merge 流程",
+                        "wrapHttpWriteInWorktree": "把 HTTP 写操作 wrap 成 worktree+commit+merge 序列的 helper",
+                        "状态翻转唯一 owner": "HTTP 与 LLM 共享同一底层 stone 写入语义，不再分裂",
+                    },
+                },
                 "pool_methods": {
                     title: "pool_methods - server 暴露 pool 数据访问的命令形状",
                     content: `

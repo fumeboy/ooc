@@ -2,11 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ensureStoneRepo } from "@src/persistable";
 import { readServerConfig } from "../bootstrap/config";
 import { buildServer } from "../index";
 
-function makeApp() {
+// 根因 #2：HTTP stone 写入必经 stone-versioning，需先 bootstrap stones/ bare repo。
+async function makeApp() {
   const baseDir = mkdtempSync(join(tmpdir(), "ooc-app-server-e2e-"));
+  await ensureStoneRepo({ baseDir });
   const app = buildServer({
     ...readServerConfig(),
     port: 0,
@@ -19,7 +22,7 @@ function makeApp() {
 
 describe("app server local e2e", () => {
   test("create stone -> write self -> read self", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
 
     const createStone = await app.handle(
       new Request("http://localhost/api/stones", {
@@ -48,7 +51,7 @@ describe("app server local e2e", () => {
   });
 
   test("create session -> create flow object returns initialThreadId and jobId", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
 
     const createSession = await app.handle(
       new Request("http://localhost/api/flows/", {

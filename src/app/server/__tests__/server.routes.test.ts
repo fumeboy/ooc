@@ -3,11 +3,15 @@ import { mkdtempSync } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ensureStoneRepo } from "@src/persistable";
 import { readServerConfig } from "../bootstrap/config";
 import { buildServer } from "../index";
 
-function makeAppWithBaseDir() {
+// 根因 #2：HTTP stone 写入现在必经 stone-versioning（worktree → commit → ff merge），
+// 测试 helper 必须先 bootstrap stones/ bare repo + main worktree。
+async function makeAppWithBaseDir() {
   const baseDir = mkdtempSync(join(tmpdir(), "ooc-app-server-routes-"));
+  await ensureStoneRepo({ baseDir });
   const app = buildServer({
     ...readServerConfig(),
     port: 0,
@@ -18,13 +22,13 @@ function makeAppWithBaseDir() {
   return { app, baseDir };
 }
 
-function makeApp() {
-  return makeAppWithBaseDir().app;
+async function makeApp() {
+  return (await makeAppWithBaseDir()).app;
 }
 
 describe("app server routes", () => {
   test("GET /api/health returns ok", async () => {
-    const app = makeApp();
+    const app = await makeApp();
     const response = await app.handle(new Request("http://localhost/api/health"));
     const body = await response.json();
 
@@ -34,7 +38,7 @@ describe("app server routes", () => {
   });
 
   test("runtime debug routes expose and toggle debug status", async () => {
-    const app = makeApp();
+    const app = await makeApp();
 
     const initial = await app.handle(new Request("http://localhost/api/runtime/debug/status"));
     const initialBody = await initial.json();
@@ -56,7 +60,7 @@ describe("app server routes", () => {
   });
 
   test("GET /debug/chat.html returns the debug chat page", async () => {
-    const app = makeApp();
+    const app = await makeApp();
     const response = await app.handle(new Request("http://localhost/debug/chat.html"));
     const html = await response.text();
 
@@ -78,7 +82,7 @@ describe("app server routes", () => {
   });
 
   test("GET /api/stones lists created objects for debug UI selection", async () => {
-    const app = makeApp();
+    const app = await makeApp();
     await app.handle(
       new Request("http://localhost/api/stones", {
         method: "POST",
@@ -105,7 +109,7 @@ describe("app server routes", () => {
   });
 
   test("POST /api/stones rejects missing object identity", async () => {
-    const app = makeApp();
+    const app = await makeApp();
     const response = await app.handle(
       new Request("http://localhost/api/stones", {
         method: "POST",
@@ -121,7 +125,7 @@ describe("app server routes", () => {
   });
 
   test("POST /api/flows creates session", async () => {
-    const app = makeApp();
+    const app = await makeApp();
     const response = await app.handle(
       new Request("http://localhost/api/flows/", {
         method: "POST",
@@ -137,7 +141,7 @@ describe("app server routes", () => {
   });
 
   test("POST /api/stones/:id/call_method returns 404 for missing method", async () => {
-    const app = makeApp();
+    const app = await makeApp();
     // 先创建一个 stone（不写任何 ui_methods）
     await app.handle(
       new Request("http://localhost/api/stones", {
@@ -162,7 +166,7 @@ describe("app server routes", () => {
   });
 
   test("POST /api/flows/:sid/objects/:id/call_method returns 404 for missing method", async () => {
-    const app = makeApp();
+    const app = await makeApp();
     // 先创建 stone + flow session
     await app.handle(
       new Request("http://localhost/api/stones", {
@@ -203,7 +207,7 @@ describe("app server routes", () => {
   });
 
   test("GET /api/flows lists flow sessions from world directory", async () => {
-    const { app, baseDir } = makeAppWithBaseDir();
+    const { app, baseDir } = await makeAppWithBaseDir();
     const sessionDir = join(baseDir, "flows", "web-session");
     await mkdir(sessionDir, { recursive: true });
     await writeFile(join(sessionDir, ".session.json"), JSON.stringify({ title: "Web Session" }));
@@ -221,7 +225,7 @@ describe("app server routes", () => {
   });
 
   test("GET /api/tree reads scoped world directory trees with markers", async () => {
-    const { app, baseDir } = makeAppWithBaseDir();
+    const { app, baseDir } = await makeAppWithBaseDir();
     await mkdir(join(baseDir, "flows", "web-session"), { recursive: true });
     await mkdir(join(baseDir, "stones", "assistant"), { recursive: true });
     await writeFile(join(baseDir, "flows", "web-session", "notes.txt"), "hello web");
@@ -242,7 +246,7 @@ describe("app server routes", () => {
   });
 
   test("GET /api/tree/file reads text files and reports missing or unsafe paths", async () => {
-    const { app, baseDir } = makeAppWithBaseDir();
+    const { app, baseDir } = await makeAppWithBaseDir();
     await mkdir(join(baseDir, "flows", "web-session"), { recursive: true });
     await writeFile(join(baseDir, "flows", "web-session", "notes.txt"), "hello web");
 
@@ -264,7 +268,7 @@ describe("app server routes", () => {
   });
 
   test("POST /api/stones creates object with self and readme content (data.json 已迁到 flow 层)", async () => {
-    const { app, baseDir } = makeAppWithBaseDir();
+    const { app, baseDir } = await makeAppWithBaseDir();
 
     const response = await app.handle(
       new Request("http://localhost/api/stones", {
@@ -291,7 +295,7 @@ describe("app server routes", () => {
   });
 
   test("POST /api/stones/:id/knowledge creates files and folders only under knowledge", async () => {
-    const { app, baseDir } = makeAppWithBaseDir();
+    const { app, baseDir } = await makeAppWithBaseDir();
     await app.handle(
       new Request("http://localhost/api/stones", {
         method: "POST",

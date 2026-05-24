@@ -14,6 +14,7 @@ import { loadUiServerMethods } from "@src/executable/server/loader";
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { AppServerError } from "../../bootstrap/errors";
+import { wrapHttpWriteInWorktree, type HttpWriteOk } from "./versioning-helper";
 
 function safeObjectId(input: string | undefined, fallback?: string) {
   const value = (input ?? fallback ?? "").trim();
@@ -57,6 +58,31 @@ function createHttpMethodContext(dir: string) {
 export function createStonesService({ baseDir, stonesBranch }: { baseDir: string; stonesBranch?: string }) {
   const ref = (objectId: string) => ({ baseDir, objectId, stonesBranch });
   const dir = (objectId: string) => stoneDir(ref(objectId));
+
+  /**
+   * 根因 #2：把 wrapHttpWriteInWorktree 的失败结果转 AppServerError。
+   * 成功结果原样返回（caller 在外层拼到 response body）。
+   */
+  async function runVersioned(
+    objectId: string,
+    intent: string,
+    write: (worktreeBranch: string) => Promise<void>,
+  ): Promise<HttpWriteOk> {
+    const r = await wrapHttpWriteInWorktree({
+      baseDir,
+      authorObjectId: objectId,
+      intent,
+      write: async ({ branch }) => write(branch),
+    });
+    if (!r.ok) {
+      throw new AppServerError("INTERNAL_ERROR", `versioned write failed (${r.code}): ${r.message}`, {
+        objectId,
+        intent,
+        code: r.code,
+      });
+    }
+    return r;
+  }
 
   /**
    * Issue #6 Bad #1: 资源存在性前置校验。
@@ -143,18 +169,31 @@ export function createStonesService({ baseDir, stonesBranch }: { baseDir: string
       readme?: string;
     }) {
       objectId = safeObjectId(objectId, name);
-      await createStoneObject(ref(objectId));
-      // 2026-05-23 三分重组：knowledge / files 落 pool；createStone 顺手把 pool 骨架也建起来。
+      // pool 骨架在 stones/ 之外（pools/objects/<id>/），与 git versioning 无关；
+      // 提前建好，避免 worktree write 之后还要等 commit。
       await createPoolObject({ baseDir, objectId });
-      // self.md 协议（visible.display_name_from_self_md）：首行 = displayName。
-      // 显式 self 文本优先；否则把 name 写成首行（提供有意义的 displayName）。
-      if (self !== undefined) {
-        await writeSelf(ref(objectId), self);
-      } else if (name !== undefined) {
-        await writeSelf(ref(objectId), name);
-      }
-      if (readme !== undefined) await writeReadme(ref(objectId), readme);
-      return { objectId, dir: dir(objectId), created: true };
+      // 根因 #2：stone 目录 + self.md + readme.md 全部经 worktree → commit → ff merge。
+      // 同一个 commit 涵盖 createStoneObject + 可选的 self/readme overwrite，避免拆分多个 commit。
+      const versioned = await runVersioned(objectId, `http:createStone ${objectId}`, async (branch) => {
+        const wtRef = { baseDir, objectId, stonesBranch: branch };
+        await createStoneObject(wtRef);
+        // self.md 协议（visible.display_name_from_self_md）：首行 = displayName。
+        // 显式 self 文本优先；否则把 name 写成首行（提供有意义的 displayName）。
+        if (self !== undefined) {
+          await writeSelf(wtRef, self);
+        } else if (name !== undefined) {
+          await writeSelf(wtRef, name);
+        }
+        if (readme !== undefined) await writeReadme(wtRef, readme);
+      });
+      return {
+        objectId,
+        dir: dir(objectId),
+        created: true,
+        commitSha: versioned.commitSha,
+        merged: versioned.merged,
+        prIssueId: versioned.prIssueId,
+      };
     },
     async getStone({ objectId }: { objectId: string }) {
       await ensureStoneExists(objectId);
@@ -167,8 +206,10 @@ export function createStonesService({ baseDir, stonesBranch }: { baseDir: string
     async putSelf({ objectId, text, confirmOverwrite = false }: { objectId: string; text: string; confirmOverwrite?: boolean }) {
       await ensureStoneExists(objectId);
       await ensureOverwriteAllowed(join(dir(objectId), "self.md"), confirmOverwrite, { objectId, field: "self" });
-      await writeSelf(ref(objectId), text);
-      return { ok: true };
+      const versioned = await runVersioned(objectId, `http:putSelf ${objectId}`, async (branch) => {
+        await writeSelf({ baseDir, objectId, stonesBranch: branch }, text);
+      });
+      return { ok: true, commitSha: versioned.commitSha, merged: versioned.merged, prIssueId: versioned.prIssueId };
     },
     async getReadme({ objectId }: { objectId: string }) {
       await ensureStoneExists(objectId);
@@ -177,8 +218,10 @@ export function createStonesService({ baseDir, stonesBranch }: { baseDir: string
     async putReadme({ objectId, text, confirmOverwrite = false }: { objectId: string; text: string; confirmOverwrite?: boolean }) {
       await ensureStoneExists(objectId);
       await ensureOverwriteAllowed(join(dir(objectId), "readme.md"), confirmOverwrite, { objectId, field: "readme" });
-      await writeReadme(ref(objectId), text);
-      return { ok: true };
+      const versioned = await runVersioned(objectId, `http:putReadme ${objectId}`, async (branch) => {
+        await writeReadme({ baseDir, objectId, stonesBranch: branch }, text);
+      });
+      return { ok: true, commitSha: versioned.commitSha, merged: versioned.merged, prIssueId: versioned.prIssueId };
     },
     async getServerSource({ objectId }: { objectId: string }) {
       await ensureStoneExists(objectId);
@@ -187,8 +230,10 @@ export function createStonesService({ baseDir, stonesBranch }: { baseDir: string
     async putServerSource({ objectId, code, confirmOverwrite = false }: { objectId: string; code: string; confirmOverwrite?: boolean }) {
       await ensureStoneExists(objectId);
       await ensureOverwriteAllowed(join(dir(objectId), "server", "index.ts"), confirmOverwrite, { objectId, field: "server-source" });
-      await writeServerSource(ref(objectId), code);
-      return { ok: true };
+      const versioned = await runVersioned(objectId, `http:putServerSource ${objectId}`, async (branch) => {
+        await writeServerSource({ baseDir, objectId, stonesBranch: branch }, code);
+      });
+      return { ok: true, commitSha: versioned.commitSha, merged: versioned.merged, prIssueId: versioned.prIssueId };
     },
     async createKnowledgeDirectory({ objectId, path }: { objectId: string; path: string }) {
       await ensureStoneExists(objectId);
