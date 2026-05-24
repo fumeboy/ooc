@@ -421,7 +421,7 @@
 
 ### Round 8 Issue 候选（剩余，未修，需 user 决策）
 
-- [ ] **R8-1**（low）chat.html 用两步法 createSession 而非 canonical seedSession：___
+- [x] **R8-1**（low）chat.html 用两步法 createSession：**DONE — debug-ui 模块整体废弃删除**（用户指令，2026-05-25）。chat.html 随协议演化失维；web/ 前端控制面已是 canonical 调试入口。
 - [x] **R8-2**（trivial）backlog A3 文档勾选已同步：**DONE**（本次更新）
 - [ ] **R8-3**（design）Vite dev server 与 backend 分裂——是否在 backend dev 模式嵌入 minimal SSR 让单 process 端到端跑？涉及 visible 维度 dev runtime 协议决策：___
 - [x] **R8-4**（medium / security）debug API path-traversal：**DONE**（本次 commit）

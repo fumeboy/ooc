@@ -59,30 +59,11 @@ describe("app server routes", () => {
     expect(disabledBody.enabled).toBe(false);
   });
 
-  test("GET /debug/chat.html returns the debug chat page", async () => {
-    const app = await makeApp();
-    const response = await app.handle(new Request("http://localhost/debug/chat.html"));
-    const html = await response.text();
+  // 注：debug-ui 模块（/debug/chat.html）已在 2026-05-25 废弃删除。
+  // 用 web/ 前端控制面替代；此 legacy 调试入口的路由演化跟不上
+  // canonical API 协议（Round 8 R8-1 报告确认）。
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toContain("text/html");
-    expect(html).toContain("OOC Debug Chat");
-    expect(html).toContain("Create Object");
-    expect(html).toContain("Create Session");
-    expect(html).toContain("Process Events");
-    expect(html).toContain("Thread Context");
-    expect(html).toContain("Auto refresh");
-    expect(html).toContain("autoRefresh");
-    expect(html).toContain("setInterval");
-    expect(html).toContain("threadStatus");
-    expect(html).toContain("/api/stones");
-    expect(html).toContain("/api/flows/");
-    // Round 8 B1: 旧 `/threads/root/continue` 路径已不存在；canonical 是 `/api/flows/:sid/continue`。
-    expect(html).toContain("/continue");
-    expect(html).toContain("/api/runtime/jobs/");
-  });
-
-  test("GET /api/stones lists created objects for debug UI selection", async () => {
+  test("GET /api/stones lists created objects (used by web frontend / debug tooling)", async () => {
     const app = await makeApp();
     await app.handle(
       new Request("http://localhost/api/stones", {

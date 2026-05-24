@@ -55,7 +55,7 @@ App Server 是 OOC 的控制面 HTTP 服务，位于 src/app/server，基于 Ely
 
 由以下几块组成:
 - bootstrap: 启动入口、config 解析、错误模型、签名 hash
-- modules: 按 feature 组织的路由模块（health / runtime / stones / pools / flows / ui / issues / debug-ui）
+- modules: 按 feature 组织的路由模块（health / runtime / stones / pools / flows / ui / issues）
 - runtime: 进程内 job / worker / pause / resume / thread query 等运行时编排
 - testLayers: service / routes / local e2e / real e2e 四层测试
 
@@ -152,7 +152,7 @@ src/app/server/modules/<feature>/
 └── api.<action>.ts // 每个端点一个文件
 \`\`\`
 
-当前模块清单: health / runtime / stones / pools / flows / ui / issues / debug-ui。
+当前模块清单: health / runtime / stones / pools / flows / ui / issues。
 只有 ui_methods 走 HTTP 暴露，window.commands 不暴露。
             `.trim(),
             children: {
@@ -346,17 +346,9 @@ src/app/server/modules/issues/。
 - POST /api/flows/:sid/issues/:id/close — 关闭 issue
                     `.trim(),
                 },
-                debugUi: {
-                    title: "debug-ui",
-                    content: `
-本地最小调试页面，src/app/server/modules/debug-ui/。
-
-- GET /debug
-- GET /debug/chat.html — 已具备 create stone、create session/object、continue root
-  thread、自动刷新，并能查看 process events / thread context / API trace 的人工
-  调试闭环（不是纯静态占位页）。
-                    `.trim(),
-                },
+                // debug-ui 模块已于 2026-05-25 废弃删除：随路由协议演化失维
+                // （体验官 Round 8 R8-1 报告 chat.html 仍调旧路由），
+                // 用 web/ 前端控制面替代（详见 meta/app.client.doc.ts）。
             },
         },
 

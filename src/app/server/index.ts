@@ -13,7 +13,6 @@ import { stonesModule } from "./modules/stones";
 import { flowsModule } from "./modules/flows";
 import { issuesModule } from "./modules/issues";
 import { uiModule } from "./modules/ui";
-import { debugUiModule } from "./modules/debug-ui";
 import { enqueueRunningThreadsAtBootstrap, startJobWorker } from "./runtime/worker";
 
 /** AppServerError 类别码 → HTTP 状态码映射。 */
@@ -193,7 +192,6 @@ export function buildServer(config: ServerConfig = readServerConfig()) {
       set.status = status;
       return body;
     })
-    .use(debugUiModule())
     .use(healthModule)
     .use(runtimeModule(config))
     .use(stonesModule(config))
@@ -279,5 +277,4 @@ if (import.meta.main) {
   console.log(`[ooc-app-server] listening on :${config.port}`);
   console.log(`[ooc-app-server] world dir: ${config.baseDir}`);
   console.log(`[ooc-app-server] stones-branch: ${config.stonesBranch}`);
-  console.log(`[ooc-app-server] debug chat: http://127.0.0.1:${config.port}/debug/chat.html`);
 }
