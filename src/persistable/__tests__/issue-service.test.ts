@@ -178,6 +178,7 @@ describe("issuesService.appendComment", () => {
   test("mentions: structured + text regex union deduped (P1)", async () => {
     const base = await newBase();
     await seedStone(base, "alice");
+    await seedStone(base, "bob"); // R3 #14: mentions 默认严格校验,bob 须存在
     const issue = await issuesService.createIssue({
       baseDir: base,
       sessionId: "s1",
@@ -197,6 +198,48 @@ describe("issuesService.appendComment", () => {
 
     const got = await issuesService.getIssue({ baseDir: base, sessionId: "s1", issueId: issue.id });
     expect(got?.comments[0]?.mentions).toEqual(["alice", "bob"]);
+  });
+
+  test("R3 #14: mentions 默认严格,引用不存在 object 抛错", async () => {
+    const base = await newBase();
+    await seedStone(base, "alice");
+    const issue = await issuesService.createIssue({
+      baseDir: base,
+      sessionId: "s1",
+      title: "x",
+      createdByObjectId: "alice",
+    });
+    await expect(
+      issuesService.appendComment({
+        baseDir: base,
+        sessionId: "s1",
+        issueId: issue.id,
+        text: "ping @ghost",
+        authorObjectId: "alice",
+        authorKind: "llm",
+      }),
+    ).rejects.toThrow(/ghost.*does not exist/);
+  });
+
+  test("R3 #14: allowGhostMentions=true 时放宽,不校验 mention 存在性", async () => {
+    const base = await newBase();
+    await seedStone(base, "alice");
+    const issue = await issuesService.createIssue({
+      baseDir: base,
+      sessionId: "s1",
+      title: "x",
+      createdByObjectId: "alice",
+    });
+    const r = await issuesService.appendComment({
+      baseDir: base,
+      sessionId: "s1",
+      issueId: issue.id,
+      text: "ping @ghost",
+      authorObjectId: "alice",
+      authorKind: "llm",
+      allowGhostMentions: true,
+    });
+    expect(r.resolved_mentions).toEqual(["ghost"]);
   });
 
   test("rejects appending to closed issue", async () => {
@@ -282,13 +325,14 @@ describe("issuesService.closeIssue", () => {
       sessionId: "s1",
       issueId: issue.id,
     });
-    expect(closed.status).toBe("closed");
+    expect(closed.issue.status).toBe("closed");
+    expect(closed.noop).toBe(false);
 
     const list = await issuesService.listIssues({ baseDir: base, sessionId: "s1" });
     expect(list[0]?.status).toBe("closed");
   });
 
-  test("closing twice is idempotent", async () => {
+  test("closing twice is idempotent (second returns noop:true)", async () => {
     const base = await newBase();
     await seedStone(base, "alice");
     const issue = await issuesService.createIssue({
@@ -297,13 +341,15 @@ describe("issuesService.closeIssue", () => {
       title: "x",
       createdByObjectId: "alice",
     });
-    await issuesService.closeIssue({ baseDir: base, sessionId: "s1", issueId: issue.id });
+    const first = await issuesService.closeIssue({ baseDir: base, sessionId: "s1", issueId: issue.id });
+    expect(first.noop).toBe(false);
     const again = await issuesService.closeIssue({
       baseDir: base,
       sessionId: "s1",
       issueId: issue.id,
     });
-    expect(again.status).toBe("closed");
+    expect(again.issue.status).toBe("closed");
+    expect(again.noop).toBe(true);
   });
 });
 

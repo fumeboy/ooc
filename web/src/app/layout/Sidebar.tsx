@@ -209,11 +209,25 @@ export function Sidebar({ scope, flows, tree, activePath, activeSessionId, activ
       <div className="sidebar-frame panel">
         <div className="section nav-section">
           <div className="tabs">
+            {/*
+              R6 #47:scope tabs 改用 `<a href>` 让浏览器右键 / 中键 / 复制链接 /
+              返回键全部生效;onClick preventDefault + 调 onScope 走 react-router
+              SPA 路径(不触发整页 reload)。
+             */}
             {tabs.map((item) => (
-              <button key={item.scope} className={`tab ${scope === item.scope ? "active" : ""}`} onClick={() => onScope(item.scope)}>
+              <a
+                key={item.scope}
+                href={`/${item.scope}`}
+                className={`tab ${scope === item.scope ? "active" : ""}`}
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // 让浏览器原生处理新标签 / 新窗口
+                  e.preventDefault();
+                  onScope(item.scope);
+                }}
+              >
                 {item.icon}
                 {item.label}
-              </button>
+              </a>
             ))}
           </div>
         </div>
@@ -254,10 +268,20 @@ export function Sidebar({ scope, flows, tree, activePath, activeSessionId, activ
           )}
         </div>
 
-        <div className="session-calendar">
-          <div className="calendar-title"><span>{calendarMonth(flows).label}</span><span>{flows.length} sessions</span></div>
-          <div className="calendar-grid">{buildHeatmapCells(flows, calendarMonth(flows).year, calendarMonth(flows).month).map((cell, index) => <span key={index} className={cell.className} title={cell.title} />)}</div>
-        </div>
+        {/*
+          R6 #48:flows 为空时不再渲染"2026年5月 / 0 sessions"+ 灰格 heatmap
+          —— 空状态信号 stronger,空 list 显示明确文案而非误以为是月份分组头。
+         */}
+        {flows.length === 0 ? (
+          <div className="session-calendar session-calendar-empty">
+            <span className="muted small">No sessions yet</span>
+          </div>
+        ) : (
+          <div className="session-calendar">
+            <div className="calendar-title"><span>{calendarMonth(flows).label}</span><span>{flows.length} sessions</span></div>
+            <div className="calendar-grid">{buildHeatmapCells(flows, calendarMonth(flows).year, calendarMonth(flows).month).map((cell, index) => <span key={index} className={cell.className} title={cell.title} />)}</div>
+          </div>
+        )}
       </div>
     </aside>
   );

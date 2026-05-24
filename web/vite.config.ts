@@ -6,6 +6,38 @@ import { resolve } from "node:path";
 const apiTarget = process.env.OOC_API_TARGET ?? "http://127.0.0.1:3000";
 
 /**
+ * R6 #41:启动期 advisory health-check —— 若 OOC_API_TARGET 指错 / backend 未起,
+ * proxy `/api/*` 全 500 但无任何提示;与 OOC_WORLD_DIR 的 fail-loud 形成不对称。
+ *
+ * 做法：vite 启动期对 `${apiTarget}/api/health` 发一次 GET;失败仅 console.warn,
+ * 不阻断 dev server(allow developer 先起 vite 后起 backend 的常见流程)。
+ */
+function probeApiTarget(target: string): void {
+  // fire-and-forget;3 秒 timeout 避免 vite startup 卡住
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 3000);
+  fetch(`${target}/api/health`, { signal: ctl.signal })
+    .then((res) => {
+      clearTimeout(timer);
+      if (!res.ok) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[vite] OOC_API_TARGET=${target} responded ${res.status} on /api/health — backend may be misconfigured`,
+        );
+      }
+    })
+    .catch((err) => {
+      clearTimeout(timer);
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[vite] OOC_API_TARGET=${target} unreachable (${err instanceof Error ? err.message : String(err)}); ` +
+          `/api/* proxy will 5xx until backend is up. Start backend or override OOC_API_TARGET to match its --port.`,
+      );
+    });
+}
+probeApiTarget(apiTarget);
+
+/**
  * OOC_WORLD_DIR：与 backend 同名 env（src/app/server/bootstrap/config.ts:43）。
  * 用作 ObjectClientRenderer 拼 `/@fs/${WORLD_ROOT}/stones|flows/...` 的根。
  *

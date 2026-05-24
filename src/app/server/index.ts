@@ -216,6 +216,11 @@ if (import.meta.main) {
         `[ooc-app-server] recovery-check: ${recovery.broken.length} broken stone(s) — ` +
           `${recovery.newIssues.length} new PR-Issue(s) opened in super session`,
       );
+      // R5 #37:dump 每个 broken stone 的 objectId + reason,让运维不用翻 super
+      // session 也能看到 root cause
+      for (const b of recovery.broken) {
+        console.log(`[ooc-app-server] recovery-check broken: objectId=${b.objectId} reason=${b.reason}`);
+      }
     }
   } catch (e) {
     console.warn(`[ooc-app-server] recovery-check failed (non-fatal): ${e instanceof Error ? e.message : e}`);

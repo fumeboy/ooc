@@ -104,11 +104,19 @@ export function SessionList({ flows, activeSessionId, onSelect }: { flows: FlowS
                 {items.map((flow) => {
                   const label = flowTitle(flow);
                   const test = isTestSession(flow.sessionId);
+                  // R6 #47:session 列表项改 `<a href>` 让浏览器中键 / 复制链接 /
+                  // 返回键生效;click 仍走 onSelect 触发 react-router SPA 导航
+                  const href = `/flows/${encodeURIComponent(flow.sessionId)}`;
                   return (
-                    <button
+                    <a
                       key={flow.sessionId}
+                      href={href}
                       className={`list-button session-list-item ${flow.sessionId === activeSessionId ? "active" : ""} ${test ? "session-list-item-test" : ""}`}
-                      onClick={() => onSelect(flow)}
+                      onClick={(e) => {
+                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+                        e.preventDefault();
+                        onSelect(flow);
+                      }}
                       title={`${label}\n${flow.sessionId}${test ? "\n(test session — hidden by default)" : ""}`}
                     >
                       <div className="session-list-item-row">
@@ -116,7 +124,7 @@ export function SessionList({ flows, activeSessionId, onSelect }: { flows: FlowS
                         {test && <span className="session-list-item-tag">test</span>}
                       </div>
                       <div className="session-list-item-meta" title={flow.sessionId}>{flow.sessionId}</div>
-                    </button>
+                    </a>
                   );
                 })}
               </div>

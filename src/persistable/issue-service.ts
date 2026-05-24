@@ -59,6 +59,38 @@ async function ensureAuthorExists(baseDir: string, authorObjectId: string): Prom
   }
 }
 
+/**
+ * R3 #14: mentions[] 对称校验。createdByObjectId 已严格校验存在性（ensureAuthorExists），
+ * mentions 之前不校验形成不对称——补上：每个 mention objectId 必须是 stones/ 下存在的
+ * 真实 object，否则抛错。caller 可通过 allowGhostMentions=true 显式放宽（跨 session /
+ * 未来 object / 测试场景）。默认严格。
+ */
+async function ensureMentionsExist(
+  baseDir: string,
+  mentions: string[],
+  allowGhost: boolean,
+): Promise<void> {
+  if (allowGhost) return;
+  for (const id of mentions) {
+    if (!id || typeof id !== "string") {
+      throw new Error(`[issue-service] invalid mention: ${JSON.stringify(id)}`);
+    }
+    try {
+      const stats = await stat(stoneDir({ baseDir, objectId: id }));
+      if (!stats.isDirectory()) {
+        throw new Error(`[issue-service] mention "${id}" not a stone object`);
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new Error(
+          `[issue-service] mention "${id}" does not exist in stones/ (use allowGhostMentions=true to bypass)`,
+        );
+      }
+      throw error;
+    }
+  }
+}
+
 /** U5: PR-Issue 持久化的 super-session 约定（plan §0.7 / Q1 用户决策）。 */
 export const PR_ISSUE_SESSION_ID = "super";
 
@@ -131,6 +163,11 @@ export interface AppendCommentInput {
    * 出的 mention 取并集去重作为 `Comment.mentions`。
    */
   mentions?: string[];
+  /**
+   * R3 #14:默认每个 mention 必须是 stones/ 下已存在的 object;
+   * 跨 session / 未来 object 等场景显式置 true 放宽校验。
+   */
+  allowGhostMentions?: boolean;
 }
 
 export interface AppendCommentResult {
@@ -237,7 +274,7 @@ export const issuesService = {
 
   /** 追加 comment;返回 commentId + resolved_mentions(并集去重)。Issue 已关闭 → 抛错。 */
   async appendComment(input: AppendCommentInput): Promise<AppendCommentResult> {
-    const { baseDir, sessionId, issueId, text, authorObjectId, authorKind, mentions } = input;
+    const { baseDir, sessionId, issueId, text, authorObjectId, authorKind, mentions, allowGhostMentions } = input;
     if (!text || !text.trim()) {
       throw new Error("[issue-service] comment text is required");
     }
@@ -268,6 +305,9 @@ export const issuesService = {
           resolved.push(id);
         }
       }
+
+      // R3 #14:mentions 对称校验(默认严格,allowGhostMentions=true 放宽)
+      await ensureMentionsExist(baseDir, resolved, allowGhostMentions === true);
 
       const commentId = issue.comments.length + 1;
       const comment: Comment = {
@@ -301,15 +341,19 @@ export const issuesService = {
     });
   },
 
-  /** 关闭 Issue;status → "closed";后续 appendComment 抛错。 */
-  async closeIssue(input: CloseIssueInput): Promise<Issue> {
+  /**
+   * 关闭 Issue;status → "closed";后续 appendComment 抛错。
+   * R3 #17:close 幂等;若调用时 issue 已 closed,返回的 result.noop === true,
+   * 让 caller 区分"刚被本次关闭"vs"本就 closed"。
+   */
+  async closeIssue(input: CloseIssueInput): Promise<{ issue: Issue; noop: boolean }> {
     const { baseDir, sessionId, issueId } = input;
     return enqueueSessionWrite(sessionId, async () => {
       const issue = await readIssue(baseDir, sessionId, issueId);
       if (!issue) {
         throw new Error(`[issue-service] Issue #${issueId} not found in session ${sessionId}`);
       }
-      if (issue.status === "closed") return issue; // idempotent
+      if (issue.status === "closed") return { issue, noop: true }; // idempotent
       const closed: Issue = { ...issue, status: "closed", lastUpdatedAt: Date.now() };
       await writeIssue(baseDir, sessionId, closed);
       const index = await readIssueIndex(baseDir, sessionId);
@@ -321,7 +365,7 @@ export const issuesService = {
             : entry,
         ),
       });
-      return closed;
+      return { issue: closed, noop: false };
     });
   },
 

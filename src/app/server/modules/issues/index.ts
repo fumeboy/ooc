@@ -137,12 +137,14 @@ export function issuesModule(config: Pick<ServerConfig, "baseDir">) {
       async ({ params }) => {
         await ensureSessionExists(baseDir, params.sessionId);
         try {
-          const issue = await issuesService.closeIssue({
+          // R3 #17:closeIssue 返回 { issue, noop };把 noop 直接透传出去,
+          // 让 caller 区分"刚 closed"vs"本就 closed"
+          const result = await issuesService.closeIssue({
             baseDir,
             sessionId: params.sessionId,
             issueId: params.id,
           });
-          return { issue };
+          return { issue: result.issue, noop: result.noop };
         } catch (err) {
           throw new AppServerError("INVALID_INPUT", (err as Error).message);
         }

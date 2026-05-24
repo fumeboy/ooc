@@ -20,6 +20,9 @@ export const router = createBrowserRouter([
   { path: "/files/*", ...shell },
   { path: "/stones", ...shell },
   { path: "/stones/:objectId", ...shell },
+  // R6 #45:sidebar "World" tab 之前导航到 /world 触发 Unknown route; 这里补齐
+  // (parseRoute + scopeOf 早就支持 world scope,只是 route table 缺了一行)
+  { path: "/world", ...shell },
   { path: "/flows", ...shell },
   { path: "/flows/:sessionId", ...shell },
   { path: "/flows/:sessionId/issues/:id", ...shell },
