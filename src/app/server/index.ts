@@ -5,6 +5,7 @@ import { readServerConfig, type ServerConfig } from "./bootstrap/config";
 import { runRecoveryCheck } from "./bootstrap/recovery-check";
 import { checkStoneToPoolMigration, reportPoolMigration } from "./bootstrap/check-pool-migration";
 import { checkStaleDatabaseDir } from "./bootstrap/check-stale-database-dir";
+import { ensureSupervisorObject } from "./bootstrap/ensure-supervisor";
 import { AppServerError } from "./bootstrap/errors";
 import { healthModule } from "./modules/health";
 import { runtimeModule } from "./modules/runtime";
@@ -239,6 +240,23 @@ if (import.meta.main) {
   }
   if (repoStatus.migrated) {
     console.log(`[ooc-app-server] stones/ migrated flat layout into stones/main/`);
+  }
+
+  // 2026-05-25: supervisor stone 是 World bootstrap invariant。
+  // 第一启动自动建（含 self.md / readme.md / 5 篇 seed knowledge），后续 idempotent skip。
+  // 是 R5 #32 (recovery-check 假设 supervisor 存在但空 world 没有) 的彻底解。
+  try {
+    const supervisor = await ensureSupervisorObject({ baseDir: config.baseDir, branch: config.stonesBranch });
+    if (supervisor.created) {
+      console.log(
+        `[ooc-app-server] supervisor stone created (commit ${supervisor.commitSha?.slice(0, 8)}) — ` +
+          `OOC World bootstrap invariant: user 默认通过 supervisor 与系统交互`,
+      );
+    }
+  } catch (e) {
+    // bootstrap invariant 失败不允许 server 跑下去——区别于后续的 advisory 类 check
+    console.error(`[ooc-app-server] ensureSupervisorObject FATAL: ${e instanceof Error ? e.message : e}`);
+    throw e;
   }
 
   // U8: Recovery 自检——遍历 stones/main/{Object}/server/index.ts，加载失败的开 PR-Issue。
