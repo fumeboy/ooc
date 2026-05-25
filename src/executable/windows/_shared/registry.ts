@@ -51,6 +51,20 @@ export interface RenderContext {
 
 export type RenderHook = (ctx: RenderContext) => XmlNode[] | Promise<XmlNode[]>;
 
+/**
+ * 压缩视图渲染 hook（design: docs/2026-05-25-context-compression-design.md §4.1）。
+ *
+ * 与 RenderHook 同协议:返回"<window> 外壳内的子节点序列",render.ts 调度器在
+ * window.compressLevel ≥ 1 时按 type 派发到本 hook。
+ *
+ * 本 phase(P0b) 各 builtin type 暂不强制实现,缺省时 render.ts 走通用 fallback
+ * (仅输出 `<compressed>` 元节点);P0c 起逐个 type 注册具体 compressView。
+ */
+export type CompressViewHook = (
+  ctx: RenderContext,
+  level: 1 | 2,
+) => XmlNode[] | Promise<XmlNode[]>;
+
 /** 单个 window type 的完整契约。 */
 export interface WindowTypeDefinition {
   type: WindowType;
@@ -67,6 +81,12 @@ export interface WindowTypeDefinition {
   onClose?: OnCloseHook;
   /** 渲染 hook；缺省时渲染层用通用 fallback。 */
   renderXml?: RenderHook;
+  /**
+   * 压缩态渲染 hook;缺省时 render.ts 在 compressLevel ≥ 1 时走通用 fallback
+   * (title + `<compressed level=N>` + `<commands hint="expand">`)。
+   * P0c 起各 builtin type 按需注册具体的 folded / snapshot 渲染。
+   */
+  compressView?: CompressViewHook;
   /**
    * 该 window 类型的"基础协议知识"——只要 thread.contextWindows 里出现该 type 的至少
    * 一个实例，就由 collectExecutableKnowledgeEntries 合成为一个 protocol KnowledgeWindow，
@@ -176,6 +196,7 @@ export function registerWindowType(
     commands: { ...existing.commands, ...(partial.commands ?? {}) },
     onClose: partial.onClose ?? existing.onClose,
     renderXml: partial.renderXml ?? existing.renderXml,
+    compressView: partial.compressView ?? existing.compressView,
     basicKnowledge: partial.basicKnowledge ?? existing.basicKnowledge,
   });
 }

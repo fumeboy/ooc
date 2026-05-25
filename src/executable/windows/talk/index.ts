@@ -105,6 +105,58 @@ talk_window 是与一个对端 flow object 的持续会话窗口。它注册的 
 文件会自动作为 knowledge 出现在你的 context。
 `.trim();
 
+const TALK_RECENT_COUNT = 2;
+const TALK_MESSAGE_TRUNCATE = 200;
+
+/**
+ * talk_window 的 compressView hook（design §4.1）。
+ *
+ * - Level 1 (folded):  peer + total_messages + 最近 2 条消息(各截断到 200 字)
+ * - Level 2 (snapshot): peer + total_messages
+ *
+ * peer 取 window.target(目标 flow object id;"user" 也算合法 peer)。
+ */
+function compressTalkWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
+  const window = ctx.window as TalkWindow;
+  const messages = filterMessagesForTalkWindow(window, ctx.thread);
+  const children: XmlNode[] = [
+    xmlElement("peer", {}, [xmlText(window.target)]),
+    xmlElement("total_messages", {}, [xmlText(String(messages.length))]),
+  ];
+  if (window.isCreatorWindow) {
+    children.push(xmlElement("is_creator_window", {}, [xmlText("true")]));
+  }
+  if (level === 1 && messages.length > 0) {
+    const recent = messages.slice(-TALK_RECENT_COUNT);
+    children.push(
+      xmlElement(
+        "recent_messages",
+        { count: String(recent.length) },
+        recent.map((m) =>
+          xmlElement(
+            "message",
+            { id: m.id, source: m.source },
+            [
+              xmlElement("from_thread_id", {}, [xmlText(m.fromThreadId)]),
+              xmlElement("to_thread_id", {}, [xmlText(m.toThreadId)]),
+              xmlElement("content", {}, [
+                xmlText(m.content.slice(0, TALK_MESSAGE_TRUNCATE)),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  children.push(
+    xmlElement("compressed", {
+      level: String(level),
+      hint: "exec(window_id, 'expand') to restore",
+    }),
+  );
+  return children;
+}
+
 /** talk_window 的 onClose hook：creator talk_window 不可关闭。 */
 function onCloseTalkWindow(ctx: OnCloseContext): boolean | void {
   const w = ctx.window;
@@ -128,5 +180,6 @@ registerWindowType("talk", {
   },
   onClose: onCloseTalkWindow,
   renderXml: renderTalkWindow,
+  compressView: compressTalkWindow,
   basicKnowledge: TALK_WINDOW_BASIC_KNOWLEDGE,
 });

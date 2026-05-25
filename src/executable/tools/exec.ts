@@ -16,7 +16,8 @@
  */
 
 import type { LlmTool } from "../../thinkable/llm/types.js";
-import type { ThreadContext } from "../../thinkable/context.js";
+import type { ThreadContext, ProcessEvent } from "../../thinkable/context.js";
+import type { ContextWindow } from "../windows/_shared/types.js";
 import { getOpenableCommands, ROOT_WINDOW_ID, WindowManager } from "../windows/index.js";
 import { enrichProgramFormCommand } from "../server/enrich.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
@@ -90,6 +91,14 @@ export async function handleExecTool(
   const windowId = (args.window_id as string | undefined) ?? ROOT_WINDOW_ID;
   const nestedArgs = getArgs(args);
 
+  // 通用 expand command (design: docs/2026-05-25-context-compression-design.md §4.1 / §D 可逆性):
+  // 任何 compressLevel ≥ 1 的 window 自动获得 expand,无需在 registry 里给每个 type 注册。
+  // 在 exec 路径上拦截 command="expand" 并对 target window 做 level → 0 的切换;
+  // 落一条 context_compressed 事件,与 compress tool 同协议。
+  if (command === "expand") {
+    return handleExpandCommand(thread, windowId);
+  }
+
   const mgr = WindowManager.fromThread(thread);
   const beforeIds = new Set(
     (thread.contextWindows ?? []).map((w) => w?.id).filter(Boolean) as string[],
@@ -134,4 +143,50 @@ export async function handleExecTool(
     `Form ${opened.formId} 已创建（${command}）。后续用 exec(form_id, "refine", args={...}) 或 exec(form_id, "submit") 推进；不再需要时 close(form_id)。`,
     { form_id: opened.formId, executed: false },
   );
+}
+
+/**
+ * expand command — 把 compressLevel ≥ 1 的 window 切回 0 (live)。
+ *
+ * 由 handleExecTool 在 command === "expand" 分支调用。生效条件:
+ * - 目标 window 存在 (非 root)
+ * - 目标 window 当前 compressLevel ≥ 1
+ * 否则返回 ok=false 让 LLM 看见(silent-swallow ban)。
+ *
+ * 切档不可变写回 thread.contextWindows,并落一条 context_compressed 事件
+ * (reason="user-expand", levelChange="<old>→0")。
+ */
+function handleExpandCommand(thread: ThreadContext, windowId: string): string {
+  if (windowId === ROOT_WINDOW_ID) {
+    return errorOutput("expand: 不能对 root window 调用 expand(root 永不压缩)。");
+  }
+  const target = (thread.contextWindows ?? []).find((w) => w.id === windowId);
+  if (!target) {
+    return errorOutput(`expand: window ${windowId} 不存在。`);
+  }
+  const current = (target.compressLevel ?? 0) as 0 | 1 | 2;
+  if (current === 0) {
+    return errorOutput(`expand: window ${windowId} 已经是 live (compressLevel=0),无需 expand。`);
+  }
+
+  const next: ContextWindow[] = (thread.contextWindows ?? []).map((w) =>
+    w.id === windowId ? ({ ...w, compressLevel: 0 } as ContextWindow) : w,
+  );
+  thread.contextWindows = next;
+
+  const event: ProcessEvent = {
+    category: "context_change",
+    kind: "context_compressed",
+    windowIds: [windowId],
+    levelChange: `${current}→0`,
+    reason: "user-expand",
+    scope: "windows",
+  };
+  thread.events.push(event);
+
+  return successOutput(`window ${windowId} 已 expand 回 live (compressLevel ${current} → 0)。`, {
+    window_id: windowId,
+    previous_level: current,
+    current_level: 0,
+  });
 }

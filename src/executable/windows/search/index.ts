@@ -203,11 +203,60 @@ function renderSearchWindow(ctx: RenderContext): XmlNode[] {
   return children;
 }
 
+const SEARCH_PREVIEW_COUNT = 3;
+const SEARCH_SNIPPET_TRUNCATE = 200;
+
+/**
+ * search_window 的 compressView hook（design §4.1）。
+ *
+ * - Level 1 (folded):  kind + query + matches.count + 前 3 条 match 预览(仅 path + line)
+ * - Level 2 (snapshot): kind + query + matches.count
+ *
+ * snippet 在预览节点内截断到 SEARCH_SNIPPET_TRUNCATE 字符,避免单次 grep 命中一行特别长
+ * 时把折叠态又撑回去。
+ */
+function compressSearchWindow(
+  ctx: RenderContext,
+  level: 1 | 2,
+): XmlNode[] {
+  const window = ctx.window as SearchWindow;
+  const children: XmlNode[] = [
+    xmlElement("kind", {}, [xmlText(window.kind)]),
+    xmlElement("query", {}, [xmlText(window.query)]),
+    xmlElement("matches", {
+      count: String(window.matches.length),
+      truncated: window.truncated ? "true" : "false",
+    }),
+  ];
+  if (level === 1 && window.matches.length > 0) {
+    const previewNodes: XmlNode[] = window.matches
+      .slice(0, SEARCH_PREVIEW_COUNT)
+      .map((m) => {
+        const attrs: Record<string, string> = {
+          index: String(m.index),
+          path: m.path,
+        };
+        if (typeof m.line === "number") attrs.line = String(m.line);
+        const snippet = m.snippet ? m.snippet.slice(0, SEARCH_SNIPPET_TRUNCATE) : undefined;
+        return xmlElement("preview", attrs, snippet ? [xmlText(snippet)] : []);
+      });
+    children.push(xmlElement("preview_list", {}, previewNodes));
+  }
+  children.push(
+    xmlElement("compressed", {
+      level: String(level),
+      hint: "exec(window_id, 'expand') to restore",
+    }),
+  );
+  return children;
+}
+
 registerWindowType("search", {
   commands: {
     close: closeCommand,
     open_match: openMatchCommand,
   },
   renderXml: renderSearchWindow,
+  compressView: compressSearchWindow,
   basicKnowledge: SEARCH_WINDOW_BASIC_KNOWLEDGE,
 });

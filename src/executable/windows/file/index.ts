@@ -339,6 +339,48 @@ async function renderFileWindow(ctx: RenderContext): Promise<XmlNode[]> {
   return children;
 }
 
+/**
+ * file_window 的 compressView hook（design: docs/2026-05-25-context-compression-design.md §4.1）。
+ *
+ * - Level 1 (folded):  `<file path=... total_lines=N read_range="a-b"?/>` — 还保留"读哪段"
+ * - Level 2 (snapshot): `<file path=... total_lines=N/>` — 不暴露 read_range
+ *
+ * total_lines 通过实时读文件统计;读取失败则省略 total_lines 属性并附 `<error>`。
+ * read_range 仅在 window.lines 存在时输出(没有 lines 即整文件读)。
+ *
+ * 末尾追加 `<compressed level=N hint="exec(window_id, 'expand') to restore"/>` 元节点,
+ * 让 LLM 知道当前处于压缩态。
+ */
+async function compressFileWindow(
+  ctx: RenderContext,
+  level: 1 | 2,
+): Promise<XmlNode[]> {
+  const window = ctx.window as FileWindow;
+  const attrs: Record<string, string> = { path: window.path };
+  let errorMsg: string | undefined;
+  try {
+    const raw = await readFile(window.path, "utf8");
+    const totalLines = raw === "" ? 0 : raw.split("\n").length;
+    attrs.total_lines = String(totalLines);
+  } catch (err) {
+    errorMsg = (err as Error).message;
+  }
+  if (level === 1 && window.lines) {
+    attrs.read_range = `${window.lines[0]}-${window.lines[1]}`;
+  }
+  const children: XmlNode[] = [xmlElement("file", attrs)];
+  if (errorMsg) {
+    children.push(xmlElement("error", {}, [xmlText(errorMsg)]));
+  }
+  children.push(
+    xmlElement("compressed", {
+      level: String(level),
+      hint: "exec(window_id, 'expand') to restore",
+    }),
+  );
+  return children;
+}
+
 registerWindowType("file", {
   commands: {
     set_range: setRangeCommand,
@@ -347,4 +389,5 @@ registerWindowType("file", {
     close: closeCommand,
   },
   renderXml: renderFileWindow,
+  compressView: compressFileWindow,
 });

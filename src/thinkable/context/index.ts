@@ -6,12 +6,29 @@ import { deriveStoneFromThread, objectDir, readSelf, stoneDir, threadDir } from 
 import { renderContextXml } from "./render";
 
 /**
+ * ProcessEvent 共享的可选字段;所有 variants 都可承载它们。
+ *
+ * - `id` (P0f): events_summary 必须可被 _foldedBy 引用,所以引入稳定 event id 概念。
+ *   其他类型的 event 也可选地携带 id (用于 compress(scope=events, target_event_ids) 指定);
+ *   旧 thread.json 没有 id 字段属于正常情况,渲染层会按数组下标 fallback。
+ * - `_foldedBy` (P0f): 该事件已被某条 events_summary 折叠;渲染时跳过,实际数据仍在
+ *   thread.events 中保留。下划线前缀但**保留**进 thread.json (与 _decayMeta 相反),
+ *   因为它是 fold 状态的唯一持久化锚点。design §4.2 + 任务 F2/F3。
+ */
+export type ProcessEventCommon = {
+  /** 事件稳定标识 (P0f 引入); events_summary 必填,其他 variants 可选。 */
+  id?: string;
+  /** P0f: 该事件已被指定 events_summary event id 折叠,渲染层跳过,持久化保留。 */
+  _foldedBy?: string;
+};
+
+/**
  * 线程过程事件。
  *
  * 只记录 ThinkLoop 单轮会直接产生或消费的事件；持久化、前端时间线和压缩策略
  * 都应围绕这个稳定事件流扩展，而不是把临时状态混入 system context。
  */
-export type ProcessEvent =
+export type ProcessEvent = ProcessEventCommon & (
   | {
       /** 事件来源：LLM 本轮交互输出。 */
       category: "llm_interaction";
@@ -81,7 +98,56 @@ export type ProcessEvent =
       output: string;
       /** 是否成功。 */
       ok: boolean;
-    };
+    }
+  | {
+      /**
+       * 事件来源：context 压缩档位变化。
+       *
+       * 由 compress tool / expand command / 后续 phase 的自然衰减 + emergency guard 触发,
+       * design: docs/2026-05-25-context-compression-design.md §F(silent-swallow ban) /
+       * §4.5 / §4.4。每次压缩档位切换写一条本事件,与现有 ProcessEvent 同序进 thread.json /
+       * debug 落盘 / contextSnapshot,LLM 视野中也可见。
+       */
+      category: "context_change";
+      /** 压缩档位切换:每次 compressLevel 变化一次写一条。 */
+      kind: "context_compressed";
+      /** 受影响的 window id 列表(events scope 时为空数组)。 */
+      windowIds: string[];
+      /** 档位变化,形如 "0→1" / "1→0" / "1→2"。 */
+      levelChange: string;
+      /** 触发原因:user-compress / user-expand / idle-fold / age-fold / emergency 等。 */
+      reason: string;
+      /** 触发 scope:windows / events / auto;LLM 主动 compress 时来自 args。 */
+      scope?: "windows" | "events" | "auto";
+    }
+  | {
+      /**
+       * 事件来源：events 流中段折叠后形成的摘要节点。
+       *
+       * Design: docs/2026-05-25-context-compression-design.md §4.2 / §4.4
+       * P0f 任务 F1: 由 LLM 在 compress(scope=events, summary=...) 调用中主动提供摘要文本。
+       * 未来 P0e emergency guard 也可触发本 event (scope="auto") — 那时 summary 是占位文本。
+       *
+       * 渲染策略 (processEventToItems): events_summary 渲染为一条 system message,
+       * 内含 count + summary,LLM 视野中替换被 _foldedBy 标记的原 events 序列。
+       */
+      category: "context_change";
+      /** events 流中段被折叠为一条摘要。 */
+      kind: "events_summary";
+      /** 被折叠掉的原 event 数量。 */
+      count: number;
+      /** 被折叠区段最早 event 的 id (可选; 旧 event 可能无 id)。 */
+      earliestEventId?: string;
+      /** 被折叠区段最晚 event 的 id (可选; 旧 event 可能无 id)。 */
+      latestEventId?: string;
+      /** 摘要正文; LLM 在 compress(scope=events) 调用中提供。 */
+      summary: string;
+      /** 摘要质量提示 (LLM 自评 / P0e auto 时为 "rough")。 */
+      qualityHint?: "rough" | "curated";
+      /** 谁触发本次 fold: user=LLM 主动 compress, auto=未来 emergency_guard 自动触发。 */
+      scope?: "user" | "auto";
+    }
+);
 
 /** 线程之间通过 inbox/outbox 传递的最小消息模型。 */
 export type ThreadMessage = {
@@ -236,7 +302,42 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
     ];
   }
 
-  if (event.category === "context_change") {
+  if (event.category === "context_change" && event.kind === "context_compressed") {
+    // 压缩档位切换:silent-swallow ban 要求 LLM 能看见;以 system message 注入,
+    // 简洁陈述档位变化 + 原因,不引入新协议(LLM 看到后可继续 / 也可 expand 回滚)。
+    const target = event.windowIds.length > 0 ? event.windowIds.join(",") : "(events scope)";
+    return [
+      {
+        type: "message",
+        role: "system",
+        content:
+          `[context_change:context_compressed] ${event.levelChange} ` +
+          `window_ids=${target} reason=${event.reason}` +
+          (event.scope ? ` scope=${event.scope}` : ""),
+      },
+    ];
+  }
+
+  if (event.category === "context_change" && event.kind === "events_summary") {
+    // events 中段被折叠后的摘要节点:LLM 视野中替换被 _foldedBy 标记的原 events,
+    // visibility-first 仍可见(否则就 silent-swallow 了)。
+    const idTag = event.id ? ` id=${event.id}` : "";
+    const earliest = event.earliestEventId ? ` earliest=${event.earliestEventId}` : "";
+    const latest = event.latestEventId ? ` latest=${event.latestEventId}` : "";
+    const quality = event.qualityHint ? ` quality=${event.qualityHint}` : "";
+    const scope = event.scope ? ` scope=${event.scope}` : "";
+    return [
+      {
+        type: "message",
+        role: "system",
+        content:
+          `[OOC events_summary count=${event.count}${idTag}${earliest}${latest}${quality}${scope}] ` +
+          `${event.count} events folded, summary by LLM:\n${event.summary}`,
+      },
+    ];
+  }
+
+  if (event.category === "context_change" && event.kind === "inject") {
     if (!isErrorInject(event.text)) {
       return [];
     }
@@ -312,7 +413,12 @@ export async function buildInputItems(
     knowledgeEntries: executableState.knowledgeEntries,
   });
 
-  const transcript = thread.events.flatMap((event) => processEventToItems(thread, event));
+  // P0f 渲染层 fold: 被 _foldedBy 标记的 event 跳过(实际数据仍在 thread.events 中,
+  // 持久化保留); 它们的位置由对应的 events_summary event 自身渲染为占位 system message。
+  // events_summary event 不带 _foldedBy 标记 — 它就是"代替被折叠区段"的渲染单元。
+  const transcript = thread.events.flatMap((event) =>
+    event._foldedBy ? [] : processEventToItems(thread, event),
+  );
 
   // self.md 是 Object 的对内身份说明（identity.innerSelf，见
   // meta/object/persistable/index.doc.ts stoneLayout）。这里把它作为顶层 instructions

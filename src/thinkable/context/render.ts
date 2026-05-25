@@ -71,11 +71,15 @@ const COMMAND_BRIEF_MAX = 80;
  * 提供，本节点只做"命令面索引"。
  *
  * 空 commands 表的 window（如 todo / skill_index）不输出该节点，避免噪音。
+ *
+ * 压缩态(window.compressLevel ≥ 1)的 window 额外注入一条通用 `expand` command —
+ * 不需要每个 type 自己注册;由 expand-command 模块在 exec 路径上响应(B5)。
  */
 function renderCommandsNode(window: ContextWindow): XmlNode | null {
   const def = getWindowTypeDefinition(window.type);
   const names = Object.keys(def.commands ?? {});
-  if (names.length === 0) return null;
+  const isCompressed = (window.compressLevel ?? 0) >= 1;
+  if (names.length === 0 && !isCompressed) return null;
   names.sort();
 
   const children: XmlNode[] = names.map((name) => {
@@ -88,6 +92,14 @@ function renderCommandsNode(window: ContextWindow): XmlNode | null {
       [xmlText(brief)],
     );
   });
+
+  if (isCompressed) {
+    children.push(
+      xmlElement("command", { name: "expand" }, [
+        xmlText("expand: 把本 window 从压缩态恢复为完整态(compressLevel → 0)"),
+      ]),
+    );
+  }
 
   return xmlElement(
     "commands",
@@ -132,16 +144,41 @@ async function renderWindowNode(
     xmlElement("title", {}, [xmlText(titlePrefix + renderedWindow.title)]),
   ];
 
-  // ── 调度到 type-specific renderXml hook（接口契约，无 fallback）
+  // ── 调度到 type-specific renderXml / compressView hook
+  //   compressLevel >= 1 → 走 compressView(若 type 注册了)；否则走通用 fallback
+  //   compressLevel = 0 / undefined → 走 renderXml（接口契约，无 fallback）
   const def = getWindowTypeDefinition(renderedWindow.type);
-  if (!def.renderXml) {
-    throw new Error(
-      `render.ts: window type "${renderedWindow.type}" 缺少 renderXml hook（接口契约）。`,
-    );
-  }
+  const compressLevel = (renderedWindow.compressLevel ?? 0) as 0 | 1 | 2;
   const renderCtx: RenderContext = { thread, window: renderedWindow };
-  const typeChildren = await def.renderXml(renderCtx);
-  children.push(...typeChildren);
+
+  if (compressLevel === 1 || compressLevel === 2) {
+    if (def.compressView) {
+      const typeChildren = await def.compressView(renderCtx, compressLevel);
+      children.push(...typeChildren);
+    } else {
+      // 通用 fallback: 仅输出 <compressed> 元节点;commands 末尾再追加 expand 由
+      // renderCommandsNode 注入(任何 compressLevel >= 1 的 window 都自动获得 expand)
+      children.push(
+        xmlElement(
+          "compressed",
+          { level: String(compressLevel) },
+          [
+            xmlText(
+              `本 window 处于压缩态(level=${compressLevel}); type "${renderedWindow.type}" 未注册 compressView hook(P0c 待补)。通过 expand 命令恢复完整内容。`,
+            ),
+          ],
+        ),
+      );
+    }
+  } else {
+    if (!def.renderXml) {
+      throw new Error(
+        `render.ts: window type "${renderedWindow.type}" 缺少 renderXml hook（接口契约）。`,
+      );
+    }
+    const typeChildren = await def.renderXml(renderCtx);
+    children.push(...typeChildren);
+  }
 
   // ── commands 元数据（R2 #5 / R2 #10）
   appendNode(children, renderCommandsNode(renderedWindow));

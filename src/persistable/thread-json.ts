@@ -26,16 +26,34 @@ export function threadFile(ref: ThreadPersistenceRef): string {
  *   还前进,导致永远收不到通知(plan A5 修正)
  *
  * 新增 in-process 字段时在这里扩。
+ *
+ * P0f note: ProcessEvent._foldedBy 与 _decayMeta 同样下划线前缀但**保留**进 thread.json
+ *   (fold 状态的唯一锚点,strip 掉会导致 reload 后折叠丢失)。
+ *   events 数组目前不在本 fn 内做任何字段裁剪——保持默认行为即可。
  */
 function stripVolatileForPersist(thread: ThreadContext): ThreadContext {
   return {
     ...thread,
     contextWindows: thread.contextWindows.map((window) => {
-      if (window.type === "issue") {
-        const { lastSeenCommentId: _seen, lastNotifiedAt: _notif, ...rest } = window;
-        return rest;
+      let next = window;
+      if (next.type === "issue") {
+        const { lastSeenCommentId: _seen, lastNotifiedAt: _notif, ...rest } = next;
+        next = rest as typeof next;
       }
-      return window;
+      // compressLevel = 0 / undefined 是默认值,不进 thread.json,避免在所有历史 window
+      // 上增加噪音字段(design §risk: compressLevel 持久化把 thread.json 撑大)。
+      if (!next.compressLevel) {
+        const { compressLevel: _drop, ...rest } = next;
+        next = rest as typeof next;
+      }
+      // _decayMeta 是 budget.applyNaturalDecay 的运行时计数器(下划线前缀),不进 thread.json。
+      // 下一次启动后从 0 重新计数即可——衰减语义是 "持续 N 轮无访问",冷启动重置不会引起错误折叠,
+      // 只是把已经折叠的窗口的 "下一档" 计时器重置一次。
+      if (next._decayMeta !== undefined) {
+        const { _decayMeta: _drop, ...rest } = next;
+        next = rest as typeof next;
+      }
+      return next;
     }),
   };
 }

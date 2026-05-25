@@ -1,6 +1,7 @@
 import type { ThreadContext } from "../thinkable/context";
 import type { LlmTool, LlmToolCall } from "../thinkable/llm/types";
 import { handleCloseTool } from "./tools/close";
+import { handleCompressTool } from "./tools/compress";
 import { buildAvailableTools } from "./tools/index";
 import { handleExecTool } from "./tools/exec";
 import { handleWaitTool } from "./tools/wait";
@@ -21,6 +22,7 @@ const TOOL_HANDLERS: Partial<Record<LlmToolCall["name"], ToolHandler>> = {
   exec: handleExecTool,
   close: handleCloseTool,
   wait: handleWaitTool,
+  compress: handleCompressTool,
 };
 
 /** 返回当前线程可暴露给 LLM 的工具定义。 */

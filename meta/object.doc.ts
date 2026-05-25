@@ -404,6 +404,97 @@ export const root: DocTreeNode = {
                         },
                     },
                 },
+                "context_budget": {
+                    title: "context_budget - 控制 Context token 体积的压缩策略",
+                    content: `
+                    Context 不是无限的。一个 thread 跑得越久，contextWindows 累积越多、events 流越长、单 window 内容越大，
+                    最终都会撞 LLM 的 token 上限。OOC 不沿用 CCB 风格的"线性会话三层 compaction"——OOC 的 context 是
+                    结构化对象集合（windows[] + events[] + knowledge + ...），压缩必须按 OOC 自己的本性来：每个 window
+                    type 自负责自己的折叠（与 renderXml 同协议），events 流走独立的 ring + 摘要。
+
+                    三档压缩状态 (compressLevel 0|1|2):
+                    - 0 live: 完整渲染。
+                    - 1 folded: 仅 title + summary + 一条 expand 命令；信息可恢复。
+                    - 2 snapshot: 仅元信息 (title + status + 持久化指针)；细节按需从 stone/flow 持久化层读回。
+
+                    三路触发并行 (互不替代):
+                    - 主动: LLM 调 compress tool (见 executable.tools.children.compress)，自觉判断 "context 太杂"。
+                    - 自然衰减: ThinkLoop 每轮按 status / age 自动 fold idle window (见 patches.natural_decay)。
+                    - 紧急兜底: 接近 budget.hard 时强制降级 (见 patches.emergency_guard)。
+
+                    visibility-first: 每次压缩落一条 ProcessEvent (type=context_compressed)；LLM / debug / UI 永远可见。
+
+                    设计完整版见 docs/2026-05-25-context-compression-design.md。
+                    `,
+                    named: {
+                        "compressLevel": "ContextWindow 当前压缩档位; 0=live, 1=folded, 2=snapshot",
+                        "compress tool": "LLM 主动入口; 见 executable.tools.children.compress",
+                        "events_summary": "events 流中段折叠后形成的特殊 ProcessEvent type",
+                        "budget.soft / budget.hard": "stone 级配置的 token 阈值; soft 触发警告, hard 触发自动降级",
+                        "context_compressed": "每次压缩动作落盘的 ProcessEvent type; visibility-first 不变量",
+                    },
+                    patches: {
+                        "type_dispatch": {
+                            title: "type-dispatch - 每个 window type 自负责 compressView",
+                            content: `
+                            WindowTypeDefinition 加可选字段 compressView(window, level, ctx) → XmlNode[]。
+                            render.ts 调度器读 window.compressLevel: level=0 走 renderXml; level≥1 走 compressView,
+                            缺省时 fallback 到通用 title-only 渲染。
+                            绝不让一个全局算法压所有东西——这是 OOC 与 CCB 的根本分歧。
+                            每个 type 自定义 fold 时保留什么 (file 保 path+行数, search 保 query+命中数,
+                            talk 保 peer+消息数, do 保 child id+status...)。
+                            compressView 与 renderXml 同协议; 启动期同样 fail-loud (如配 hook 但未注册则抛错)。
+                            `,
+                        },
+                        "natural_decay": {
+                            title: "自然衰减 - status / age 驱动的自动折叠",
+                            content: `
+                            ThinkLoop 在 buildContext 前跑一次 applyNaturalDecay。规则:
+                            - idle-fold: window status ∈ {done, archived, idle} 持续 N 轮 → level 0→1。
+                            - age-fold: window 自上次被 exec 操作起 M 轮无访问 → level 0→1。
+                            - double-fold: level 1 状态再持续 K 轮 → level 1→2。
+                            - cascade: parent fold 时所有 child fold 同档。
+                            默认 N=3, M=10, K=8; 各 Object 可在 stones/<self>/config/context-budget.json 调参。
+                            command_exec / root window 豁免自然衰减 (是活动操作的当前 focus)。
+                            `,
+                        },
+                        "emergency_guard": {
+                            title: "紧急兜底 - 接近 budget 时强制降级",
+                            content: `
+                            ThinkLoop 第 1 步估算当前 thread 若全 level 0 渲染的 token (粗估 JSON.stringify length / 4)。
+                            - 超 budget.soft (默认 100K): 在 system prompt 顶部插入 <context_budget_warning>; LLM 自行决定是否 compress。
+                            - 超 budget.hard (默认 180K): 系统自动 level 0→1, 再超自动 level 1→2, 最后 fold events_summary。
+                            每一步落 ProcessEvent。emergency 路径不调用 LLM 生成 summary, 仅按 type 默认 fallback 折叠
+                            (避免引入幽灵 LLM 流量)。
+                            `,
+                        },
+                        "events_ring": {
+                            title: "events 流单独治理 - head/tail ring + 中段摘要",
+                            content: `
+                            events 不属于 window 系统, 走独立协议:
+                            events = [head_ring(J=10), <events_summary count=N earliest latest/>, tail_ring(K=40)]
+                            中段 events 超容时, 由 LLM 在 compress(scope=events, summary=...) 调用中提供摘要文本——
+                            不在后台偷偷调用 LLM (no ghost LLM traffic)。原 events 仍留在 thread.json (持久化不真删),
+                            仅 LLM 视图中替换为 summary 节点。
+                            `,
+                        },
+                        "invariants": {
+                            title: "不变量 - 压缩协议的硬约束",
+                            content: `
+                            压缩协议必须满足:
+                            1. 可见性: 每次压缩落 ProcessEvent (type=context_compressed); silent-swallow ban 同样适用。
+                            2. 可逆性: 所有 level≥1 window 自动挂 expand command; exec(window_id, "expand") 恢复 level 0。
+                            3. type-dispatch 不破: 不允许 render.ts 出现 switch-by-case; compress 只走 compressView hook。
+                            4. 持久化不丢: compressLevel 字段进 thread.json (默认值 0 时不序列化); 原 events fold 后留盘。
+                            5. 无幽灵 LLM 流量: events 摘要由 LLM 在 compress 调用中主动产出, 系统不偷偷调用 LLM 生成摘要。
+                            `,
+                        },
+                    },
+                    sources: [["docs/2026-05-25-context-compression-design.md", "完整 design (含 4 个高频 type 的 compressView 建议表 + P0a~P0f 分阶段实施 + 风险清单)"]],
+                    todo: [
+                        "实施分阶段见 docs/2026-05-25-context-compression-design.md §6 (P0a meta 已落, 进入 P0b)",
+                    ],
+                },
             },
         },
         "executable": {
@@ -460,10 +551,45 @@ export const root: DocTreeNode = {
                         "exec": "在某 window 上调用一条 command 的工具原语；可能立即执行或创建 form",
                         "close": "关闭 window 或取消行动入口的工具原语",
                         "wait": "让当前 thread 等待未来 IO 的工具原语",
+                        "compress": "控制 thread 上下文体积的元 tool；见 children.compress",
                     },
-                    todo: [
-                        "compress tool: 用于压缩当前 thread 的 events，控制长期运行体积。当前仅在 LlmToolName 类型联合与 ProcessEvent.toolName 中保留位置，TOOL_HANDLERS 也未注册。等待实现策略与触发时机定义后落地。",
-                    ],
+                    children: {
+                        "compress": {
+                            title: "compress - 控制 thread 体积的元 tool",
+                            content: `
+                            compress 是控制 thread 上下文体积的元 tool, 与 exec/close/wait 不同——
+                            它操纵 thread 自身 (windows[] + events[]) 而非具体某个 window 的行动。
+
+                            签名:
+                            compress(args: {
+                                scope: "windows" | "events" | "auto",
+                                targetIds?: string[],
+                                level?: 1 | 2,
+                                summary?: string,
+                            })
+
+                            三种 scope:
+                            - windows: 主动折叠指定 window (targetIds 必传); 各 window 走注册的 compressView 渲染折叠态。
+                            - events: LLM 自己 fold 中段 events; LLM 自写 summary 文本, 不引入 ghost LLM traffic。
+                            - auto: 让系统按当前 budget 自动决策 (提前触发 thinkable.context_budget.patches.emergency_guard 路径)。
+
+                            与 thinkable.context_budget 配套: compressView hook 协议、自然衰减、emergency guard、不变量
+                            都在那里定义。compress 是 LLM 视野内的 first-class action, 让 "控制自身上下文体积"
+                            不再是会话外的指令。
+
+                            为什么 compress 是 tool 而非 command (与 stable_tool_surface patch 不冲突):
+                            command 挂在某 window 上, 操纵 window-local 状态; compress 操纵 thread 自身的 windows[] +
+                            events[] 集合, 没有合适的 window 可挂。这是与 close/wait 一样的"操纵 thread 自身"类元 tool。
+                            `,
+                            named: {
+                                "scope=windows": "主动折叠指定 window 集合",
+                                "scope=events": "LLM 自写 summary fold events 中段",
+                                "scope=auto": "让系统按 budget 自动决策",
+                                "expand": "level≥1 window 自动挂载的恢复 command; exec(window_id, \"expand\") 复位 level 0",
+                            },
+                            sources: [["src/executable/tools/", "compress 实现待落; 协议见 docs/2026-05-25-context-compression-design.md §4.5; 当前 src/thinkable/llm/types.ts:5 LlmToolName 已留位"]],
+                        },
+                    },
                     patches: {
                         "stable_tool_surface": {
                             title: "tool surface 应保持稳定",

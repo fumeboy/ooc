@@ -71,6 +71,53 @@ function renderDoWindow(ctx: RenderContext): XmlNode[] {
   return children;
 }
 
+const DO_TRANSCRIPT_TRUNCATE = 200;
+
+/**
+ * do_window 的 compressView hook（design §4.1）。
+ *
+ * - Level 1 (folded):  target_thread + status + 最近 1 条 transcript 消息(截断到 200 字)
+ *   + total_messages 总数
+ * - Level 2 (snapshot): target_thread + status + total_messages
+ *
+ * 设计表格里写 "child status",但 do_window 自身已经有 status 字段(running / archived)——
+ * window 外壳已暴露 status;这里把它再以 child_status 子节点显式出来,避免 LLM 漏看。
+ */
+function compressDoWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
+  const window = ctx.window as DoWindow;
+  const transcript = filterMessagesForDoWindow(window, ctx.thread);
+  const children: XmlNode[] = [
+    xmlElement("target_thread", {}, [xmlText(window.targetThreadId)]),
+    xmlElement("child_status", {}, [xmlText(window.status)]),
+    xmlElement("total_messages", {}, [xmlText(String(transcript.length))]),
+  ];
+  if (window.isCreatorWindow) {
+    children.push(xmlElement("is_creator_window", {}, [xmlText("true")]));
+  }
+  if (level === 1 && transcript.length > 0) {
+    const last = transcript[transcript.length - 1]!;
+    const content = last.content.slice(0, DO_TRANSCRIPT_TRUNCATE);
+    children.push(
+      xmlElement(
+        "last_message",
+        { id: last.id, source: last.source },
+        [
+          xmlElement("from_thread_id", {}, [xmlText(last.fromThreadId)]),
+          xmlElement("to_thread_id", {}, [xmlText(last.toThreadId)]),
+          xmlElement("content", {}, [xmlText(content)]),
+        ],
+      ),
+    );
+  }
+  children.push(
+    xmlElement("compressed", {
+      level: String(level),
+      hint: "exec(window_id, 'expand') to restore",
+    }),
+  );
+  return children;
+}
+
 function onCloseDoWindow(ctx: OnCloseContext): boolean | void {
   const window = ctx.window;
   if (window.type !== "do") return;
@@ -94,4 +141,5 @@ registerWindowType("do", {
   },
   onClose: onCloseDoWindow,
   renderXml: renderDoWindow,
+  compressView: compressDoWindow,
 });

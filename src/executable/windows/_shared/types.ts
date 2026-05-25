@@ -54,6 +54,40 @@ export interface BaseContextWindow {
   windowKnowledgePaths?: string[];
   /** 跨 thread 共享状态；缺省 = owner-live。 */
   sharing?: SharingState;
+  /**
+   * 上下文压缩档位（design: docs/2026-05-25-context-compression-design.md §4.1）。
+   *
+   * - undefined / 0 → live 全量渲染（默认）
+   * - 1              → folded 折叠态（title + 摘要 + expand 提示）
+   * - 2              → snapshot 仅元信息
+   *
+   * 切档由 compress tool（B4）或后续 phase 的自然衰减 / emergency guard 触发；
+   * 每次切档系统会写一条 `context_compressed` ProcessEvent（B6），落 thread.json events 流。
+   *
+   * 持久化策略：thread.json 写盘时 0/undefined 视为默认值,被 stripVolatileForPersist 剥离,
+   * 避免在历史 thread 上增加无意义字段。
+   */
+  compressLevel?: 0 | 1 | 2;
+  /**
+   * 自然衰减元数据（design: docs/2026-05-25-context-compression-design.md §4.3,
+   * meta/object.doc.ts:thinkable.children.context_budget.patches.natural_decay）。
+   *
+   * 由 src/thinkable/context/budget.ts 的 applyNaturalDecay 维护：
+   * - idleRounds:        window.status ∈ idle-set 持续轮数（连续命中 idle 状态的计数器）
+   * - sinceExecRounds:   自上次被 LLM 通过 exec/close 等操作起,未被访问的轮数
+   * - level1Rounds:      compressLevel=1 状态持续轮数（用于 double-fold）
+   * - lastSeenEventIdx:  上一轮 applyNaturalDecay 看过的 thread.events.length；用于增量扫描
+   *
+   * **持久化策略**：下划线前缀属于运行时辅助字段，**不应**进 thread.json；
+   * 由 stripVolatileForPersist 剥离（见 src/persistable/thread-json.ts）。
+   * 缺省 / undefined 时 applyNaturalDecay 会把它当 0 处理。
+   */
+  _decayMeta?: {
+    idleRounds: number;
+    sinceExecRounds: number;
+    level1Rounds: number;
+    lastSeenEventIdx: number;
+  };
 }
 
 /**

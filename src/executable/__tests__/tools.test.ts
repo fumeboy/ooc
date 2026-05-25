@@ -16,17 +16,16 @@ import { makeThread } from "../../__tests__/make-thread";
  * - wait 切到 waiting + 写 inboxSnapshotAtWait
  */
 describe("executable tools (ContextWindow model)", () => {
-  it("export 3 OOC tools (excluding compress)", () => {
-    expect(OOC_TOOLS).toHaveLength(3);
+  it("export 4 OOC tools (P0b: compress 已加入)", () => {
+    expect(OOC_TOOLS).toHaveLength(4);
     const toolNames = OOC_TOOLS.map((t) => t.name);
-    expect(toolNames).toEqual(expect.arrayContaining(["exec", "close", "wait"]));
-    expect(toolNames).not.toContain("compress");
+    expect(toolNames).toEqual(expect.arrayContaining(["exec", "close", "wait", "compress"]));
   });
 
-  it("buildAvailableTools 返回固定三件套", () => {
+  it("buildAvailableTools 返回固定四件套", () => {
     const tools = buildAvailableTools(makeThread());
     expect(tools).toBe(OOC_TOOLS);
-    expect(tools).toHaveLength(3);
+    expect(tools).toHaveLength(4);
   });
 
   it("exec(command=plan) 创建 command_exec form 并预填 args（plan 缺 plan 文本时不会被立即提交）", async () => {
@@ -205,17 +204,43 @@ describe("executable tools (ContextWindow model)", () => {
     expect(parsed.on).toBe(creatorDo!.id);
   });
 
-  it("未知 tool 返回错误", async () => {
+  it("compress(scope=windows) 缺 target_ids 时返回结构化错误", async () => {
     const thread = makeThread();
     const output = await dispatchToolCall(thread, {
-      id: "call_unknown",
-      name: "compress" as never,
-      arguments: {},
+      id: "call_compress_empty",
+      name: "compress",
+      arguments: { scope: "windows" },
     });
     expect(JSON.parse(output)).toEqual({
       ok: false,
       tool: "compress",
-      error: "[compress] tool 暂未实现。",
+      error: "compress(scope=windows) 缺少 target_ids 参数(string[])。",
     });
+  });
+
+  it("compress(scope=auto) 抛 not-implemented (留给 P0e emergency_guard)", async () => {
+    const thread = makeThread();
+    const output = await dispatchToolCall(thread, {
+      id: "call_compress_auto",
+      name: "compress",
+      arguments: { scope: "auto" },
+    });
+    const parsed = JSON.parse(output);
+    expect(parsed.ok).toBe(false);
+    expect(parsed.tool).toBe("compress");
+    expect(parsed.error).toContain("not implemented yet");
+  });
+
+  it("compress(scope=events) 缺 summary → 结构化错误 (P0f)", async () => {
+    const thread = makeThread();
+    const output = await dispatchToolCall(thread, {
+      id: "call_compress_events_no_summary",
+      name: "compress",
+      arguments: { scope: "events" },
+    });
+    const parsed = JSON.parse(output);
+    expect(parsed.ok).toBe(false);
+    expect(parsed.tool).toBe("compress");
+    expect(parsed.error).toContain("summary");
   });
 });
