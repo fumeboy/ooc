@@ -3188,6 +3188,116 @@ export const root: DocTreeNode = {
                         "界面与方法分离演化": "tsx 与 server/index.ts 是两份文件；界面要新能力时常需先扩 ui_methods",
                     },
                 },
+                "loop_timeline": {
+                    title: "loop_timeline - thread 一轮 thinkloop 在做什么的可视化",
+                    content: `
+                    Loop Timeline 是 thread 详情页的"agent loop 时间轴"视图——把一个 thread 在 N 轮
+                    ThinkLoop 中的发生事件按 loopIndex 排开, 让人类 (与未来 agent-native 等价路径中的
+                    Agent 自己) 一眼看到 "这一轮做了什么 / 用了多久 / 调了什么 tool / 是否压缩/拒绝/暂停"。
+
+                    数据完全派生自既有持久化, 不引入新存储或采集:
+                    - thread.events: ProcessEvent[] (始终落盘, thread.json 持久化)
+                    - <threadDir>/debug/loop_NNNN.{input,output,meta}.json (仅 enableDebug 后落盘)
+                    - <threadDir>/llm.{input,output}.json (始终, 最近一次)
+                    - ContextSnapshot (始终, 与 system XML 同源)
+
+                    与 observable 维度的关系: observable 决定 "记什么/何时记" (LlmObservation /
+                    debug_files / context_snapshot); loop_timeline 决定 "如何把这些数据按 loop
+                    维度聚合给人看"。两者职责清晰: observable 不画 UI, loop_timeline 不动数据。
+
+                    UI 设计原则:
+                    - **派生而非采集**: 不引入新文件、不在前端缓存; 全部 lazy load。
+                    - **type-dispatch**: 关键 ProcessEvent (context_compressed / events_summary /
+                      permission_ask / permission_denied / tool_result 失败) 的图标 / 颜色由
+                      LoopEventBadge 按事件 type+kind 分发, 与 WindowTypeDefinition.renderXml /
+                      compressView 同协议。新增 event type 只加 badge entry, 不改 timeline 主框架。
+                    - **退化优雅**: enableDebug 关闭时仍展示 thread.events 派生的简化时间轴
+                      (无 loop boundary 但能看 event sequence), 顶部提示一键启用 debug 看完整。
+                    - **agent-native 预留**: 后端 API 路径与 RuntimeService 一致;
+                      server method 等价路径 (Agent 自查 timeline) 可后续 phase 落地。
+                    - **不破坏现有 viewer**: LLMInputJsonViewer / ContextSnapshotViewer 保持原貌,
+                      loop_timeline 在自己视图内嵌入它们。
+
+                    完整 plan (含 API 增量 + 组件分解 + LoopEventBadge type-dispatch 表 + R0a~R0d 分阶段)
+                    见 docs/2026-05-25-agent-loop-visualizer-plan.md。
+                    `,
+                    named: {
+                        "Loop Timeline": "thread 详情页的 agent loop 时间轴视图; 按 loopIndex 排开",
+                        "LoopEntry": "时间轴上的单 loop 行; 含 loopIndex / latency / 关键 event chips",
+                        "LoopEventBadge": "关键 ProcessEvent 的视觉胶囊; type-dispatch 风格按 type+kind 分发图标/颜色",
+                        "退化模式": "enableDebug 关闭时, timeline 仅从 thread.events 派生事件序列, 无 loop boundary",
+                        "list-loops endpoint": "GET /api/runtime/.../debug/loops; 只返回 meta 数组, 不带 input/output 全文",
+                    },
+                    patches: {
+                        "api_increment": {
+                            title: "后端 API 增量 - list-loops",
+                            content: `
+                            本概念落地需要 1 个新 endpoint:
+                            GET /api/runtime/flows/:sessionId/objects/:objectId/threads/:threadId/debug/loops
+                            返回 { loops: Array<{ loopIndex, hasInput, hasOutput, hasMeta, meta? }> }
+
+                            - 仅扫 <threadDir>/debug/ 下 loop_NNNN.meta.json, 按 loopIndex 升序
+                            - 不携带 input/output 全文 (前端按需 GET 单条 .../debug/loops/:loopIndex)
+                            - debug 未启用 / 目录不存在 → 返回 { loops: [] }, 不抛错
+                            - 复用 RuntimeService 现有 baseDir 路径解析
+
+                            其它 endpoint (latest debug / 单 loop debug / thread.json) 全部复用现有, 不动。
+                            `,
+                        },
+                        "degraded_mode": {
+                            title: "退化模式 - debug 关闭时的兜底视图",
+                            content: `
+                            enableDebug 关闭的 thread 没有 loop_NNNN.*.json, 但 thread.events 仍始终落盘。
+                            退化规则:
+                            - timeline 标题加 hint: "debug 关闭, 仅显示事件序列; <一键启用按钮>"
+                            - 没有 loop boundary (无法精确分组); events 按 createdAt 升序展开
+                            - latency / contextBytes / messageCount 等 meta 字段不显示 (无数据)
+                            - 关键 event (LoopEventBadge) 仍正常 surfacing (data 都在 thread.events)
+                            - 启用 debug 后, 后续轮次自动有完整 loop 视图; 老轮次仍是退化态 (历史数据不可补)
+                            `,
+                        },
+                        "event_badge_taxonomy": {
+                            title: "LoopEventBadge type-dispatch 表 - 关键事件视觉编码",
+                            content: `
+                            高亮事件 (其它 text/tool_use 不进 badge, 减噪音):
+
+                            context_compressed:
+                              - reason=user-compress → 🗜️ blue
+                              - reason=idle-fold / age-fold / double-fold / cascade-fold → 🍂 gray
+                              - reason=emergency-guard-* → ⚠️ orange
+                              - reason=user-expand → ↩️ green
+                            events_summary → 📚 purple (单击展示 summary 文本)
+                            permission_ask (无 decided) → ⏸️ yellow (单击跳 approve/reject 入口)
+                            permission_ask (decided=approve) → ✅ green
+                            permission_ask (decided=reject) → ❌ red
+                            permission_denied → 🚫 red
+                            tool_result (ok=false) → ⚠️ orange
+
+                            emoji 仅占位; 实施时用 SVG 图标库, 与现有 web 风格一致。
+                            `,
+                        },
+                        "agent_native_parity": {
+                            title: "agent-native 等价预留 - Agent 自查 loop timeline",
+                            content: `
+                            UI 通过 HTTP API 拿 list-loops + 单 loop debug; Agent 通过 server method 拿同样数据
+                            (尚未实现, 列后续 phase)。等价路径要保证:
+                            - server method 与 HTTP endpoint 返回结构一致 (避免两套 schema 漂移)
+                            - 任何 UI 高亮规则 (event badge taxonomy) 都可被 server method 等价表达
+                              (比如 Agent 调 self.list_recent_compressions() 等价于 UI 过滤 context_compressed badge)
+
+                            这条等价是 visible 维度的硬约束 (parent visible 概念 + agent-native UI 等价路径
+                            一致性的要求); 本节先把 UI 做出来, Q0e 或后续 phase 补 server method。
+                            `,
+                        },
+                    },
+                    sources: [["docs/2026-05-25-agent-loop-visualizer-plan.md", "完整 plan (R0a~R0d 分阶段 + 数据来源映射 + 不变量 + 风险)"]],
+                    todo: [
+                        "R0b: list-loops endpoint + service method + 单测",
+                        "R0c: LoopTimeline / LoopEntry / LoopEventBadge 主组件 + thread 页接入",
+                        "R0d: 退化模式 + 关键 event 高亮 + 跳转交互 (可选: timeline 内直接 approve/reject permission_ask)",
+                        "后续 phase: server method 等价路径 (Agent 自查 timeline)",
+                    ],
+                },
             },
             patches: {
                 "stone_vs_flow_scope": {

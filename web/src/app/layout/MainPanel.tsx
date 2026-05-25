@@ -10,6 +10,7 @@ import { EmptyState } from "../../shared/ui/EmptyState";
 import { IssueDetailView } from "../../domains/issues/components/IssueDetailView";
 import { IssueListView } from "../../domains/issues/components/IssueListView";
 import { UserThreadHome } from "../../domains/sessions/components/UserThreadHome";
+import { ThreadDetailTabs } from "../../domains/sessions/components/ThreadDetailTabs";
 import { Welcome } from "./Welcome";
 import {
   ClientWithSourceToggle,
@@ -87,6 +88,16 @@ export function MainPanel({
   const isUserThreadHome =
     route.kind === "session" &&
     (route.objectId === undefined || route.objectId === "user") &&
+    !clientTarget &&
+    !file;
+  // R0c (Agent-loop Visualizer): 当 route 是 peer thread 上下文 (objectId !== "user")
+  // 且未选文件 / client 时, 把原本直接 render 的 ContextSnapshotViewer (via FileViewer)
+  // 替换为 ThreadDetailTabs (Context Snapshot ↔ Loop Timeline 两 tab 切换)。
+  const isPeerThreadDetail =
+    route.kind === "session" &&
+    route.objectId !== undefined &&
+    route.objectId !== "user" &&
+    route.threadId !== undefined &&
     !clientTarget &&
     !file;
   // Issue #5 Bad #2 fix: `/flows/<bogus>` 进入 session 路由后既不是 scope 也不是
@@ -167,6 +178,15 @@ export function MainPanel({
             <UserThreadHome
               sessionId={route.sessionId}
               thread={thread}
+              onUserReply={onUserReply}
+            />
+          ) : isPeerThreadDetail && route.kind === "session" && route.objectId && route.threadId ? (
+            <ThreadDetailTabs
+              sessionId={route.sessionId}
+              objectId={route.objectId}
+              threadId={route.threadId}
+              thread={thread}
+              selfObjectId={selfObjectId}
               onUserReply={onUserReply}
             />
           ) : (

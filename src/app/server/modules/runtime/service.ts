@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   disableDebug,
   enableDebug,
@@ -12,9 +13,11 @@ import {
   loopMetaFile,
   loopOutputFile,
   readThread,
+  threadDir,
   writeThread,
   type ThreadPersistenceRef,
 } from "@src/persistable";
+import type { ListLoopsResponse, LoopListEntry, LoopMeta } from "./model";
 import { readLlmEnv } from "@src/thinkable/llm/env";
 import type { PauseStore } from "../../runtime/pause-store";
 import type { createJobManager } from "../../runtime/job-manager";
@@ -69,6 +72,18 @@ export interface RuntimeService {
   getDebugStatus(): { enabled: boolean };
   getLatestDebug(ref: ThreadPersistenceRef): Promise<{ input: unknown; output: unknown }>;
   getLoopDebug(ref: ThreadPersistenceRef, loopIndex: number): Promise<{ input: unknown; output: unknown; meta: unknown }>;
+  /**
+   * R0b: 列出指定 thread 下 debug/ 目录里所有 loop_NNNN.{input,output,meta}.json
+   * 文件, 按 loopIndex 升序返回. 不携带 input/output 全文 (前端按需 GET 单条).
+   *
+   * 退化路径 (返回 { loops: [] }, 不抛):
+   * - debug/ 目录不存在 (debug 从未启用)
+   * - readdir 失败 (权限错误等)
+   * - persistence 缺失
+   *
+   * meta.json 损坏 (非合法 JSON) → 该条目 hasMeta=true 但 meta=undefined.
+   */
+  listLoops(ref: ThreadPersistenceRef): Promise<ListLoopsResponse>;
   /**
    * Q0c: HITL approve/reject (design §原则F + 落地分配 Q0c)。
    *
@@ -280,6 +295,77 @@ export function createRuntimeService(deps: {
         output: await readDebugJson(loopOutputFile(ref, loopIndex), `loop_${padded}.output.json`, details),
         meta: await readDebugJson(loopMetaFile(ref, loopIndex), `loop_${padded}.meta.json`, details),
       };
+    },
+    async listLoops(ref: ThreadPersistenceRef): Promise<ListLoopsResponse> {
+      const dir = join(threadDir(ref), "debug");
+      let entries: string[];
+      try {
+        entries = await readdir(dir);
+      } catch (error) {
+        // 退化路径: ENOENT (debug 目录不存在) / EACCES (权限) / ENOTDIR / 其它 fs 错
+        // 一律视为 "无 loop 数据", 返回空数组而非 throw — 让前端在 debug 关闭场景
+        // 也能拿到稳定的 200 响应.
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+          return { loops: [] };
+        }
+        return { loops: [] };
+      }
+
+      // 按 loopIndex 聚合 input/output/meta 三类文件
+      const loopMap = new Map<number, LoopListEntry>();
+      const metaFiles = new Map<number, string>(); // loopIndex → meta 文件名 (用于第二轮读)
+
+      // 匹配 loop_NNNN.{input|output|meta}.json (允许 NNNN 是任意长度数字, 与
+      // formatLoopIndex 的 4 位 padStart 兼容但不强绑死).
+      const pattern = /^loop_(\d+)\.(input|output|meta)\.json$/;
+      for (const fname of entries) {
+        const match = pattern.exec(fname);
+        if (!match) continue;
+        const loopIndex = Number.parseInt(match[1]!, 10);
+        if (!Number.isFinite(loopIndex)) continue;
+        const kind = match[2] as "input" | "output" | "meta";
+        const current = loopMap.get(loopIndex) ?? {
+          loopIndex,
+          hasInput: false,
+          hasOutput: false,
+          hasMeta: false,
+        };
+        const next: LoopListEntry = {
+          ...current,
+          ...(kind === "input" ? { hasInput: true } : {}),
+          ...(kind === "output" ? { hasOutput: true } : {}),
+          ...(kind === "meta" ? { hasMeta: true } : {}),
+        };
+        loopMap.set(loopIndex, next);
+        if (kind === "meta") {
+          metaFiles.set(loopIndex, fname);
+        }
+      }
+
+      // 读取所有 meta.json (并行); 损坏的 meta → 该条目 meta 字段保持 undefined,
+      // hasMeta 仍为 true (区分 "存在但损坏" vs "不存在").
+      const loops: LoopListEntry[] = [];
+      const sortedIndices = Array.from(loopMap.keys()).sort((a, b) => a - b);
+      const reads = await Promise.all(
+        sortedIndices.map(async (idx): Promise<LoopMeta | undefined> => {
+          const fname = metaFiles.get(idx);
+          if (!fname) return undefined;
+          try {
+            const raw = await readFile(join(dir, fname), "utf8");
+            return JSON.parse(raw) as LoopMeta;
+          } catch {
+            // meta 文件损坏 / 读失败 → 返回 undefined, 不抛
+            return undefined;
+          }
+        }),
+      );
+      for (let i = 0; i < sortedIndices.length; i += 1) {
+        const idx = sortedIndices[i]!;
+        const entry = loopMap.get(idx)!;
+        const meta = reads[i];
+        loops.push(meta !== undefined ? { ...entry, meta } : entry);
+      }
+      return { loops };
     },
   };
 }

@@ -13,6 +13,7 @@ import { getLatestDebugApi } from "./api.get-latest-debug";
 import { getLlmConfigApi } from "./api.get-llm-config";
 import { getLoopDebugApi } from "./api.get-loop-debug";
 import { listJobsApi } from "./api.list-jobs";
+import { listLoopDebugApi } from "./api.list-loop-debug";
 import { permissionDecisionApi } from "./api.permission-decision";
 import { createRuntimeService } from "./service";
 
@@ -42,5 +43,6 @@ export function runtimeModule(config: RuntimeModuleConfig) {
     .use(getDebugStatusApi(service))
     .use(getLatestDebugApi(service, config.baseDir))
     .use(getLoopDebugApi(service, config.baseDir))
+    .use(listLoopDebugApi(service, config.baseDir))
     .use(permissionDecisionApi(service, config.baseDir));
 }

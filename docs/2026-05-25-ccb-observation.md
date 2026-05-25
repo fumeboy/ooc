@@ -242,4 +242,12 @@ P0-1 (Permission 模型) Q0a~Q0d 完成；Q0e 列 todo（自改 server/index.ts 
 - **2026-05-25**：首版。Supervisor Round 1 外循环。
 - **2026-05-25**（当日 Round 1 闭环）：P0-2 完整实施完成，5 套 e2e PASS / 全仓单测 PASS / meta tsc clean。差异与残留如上。
 - **2026-05-25**（当日 Round 2 闭环）：P0-1 Q0a~Q0d 完成，2 套 e2e (Q0b+Q0c) PASS / 联合 P0-1+P0-2 42 用例 PASS / 全仓 550 单测 PASS。3 项歧义 Supervisor 拍板；Q0e 列 todo。
+- **2026-05-25**（当日 Round 3 闭环）：P1-3 Agent-loop Visualizer R0a~R0d 完成。
+  - R0a meta 落 `visible.children.loop_timeline` 子节点（含 4 个 patches）+ tsc clean
+  - R0b 新增 `GET /api/runtime/.../debug/loops` list-loops endpoint + 6/6 service+HTTP 单测 + LoopMeta 类型复用 LlmLoopDebugMetaRecord
+  - R0c 三件套组件（LoopTimeline / LoopEntry / LoopEventBadge）+ ThreadDetailTabs 容器 + MainPanel 接入 + 退化模式 banner + 16/16 单测
+  - R0d 三件事（badge 单击跳转 + LoopActionPopover 含 permission approve/reject + events_summary 全文）+ 14/14 新单测
+  - 整体校验：全仓 src/ 586 pass、web/ 71 pass、P0-1+P0-2 七套 e2e 42 pass — 总计 699 tests / 0 fail
+  - 与 plan 主要差异：events 无 createdAt 用等分启发；emoji 占位（plan 允许）；popover 单文件双 mode 而非分两个 Dialog；forceExpand prop 避免 state 上移
+  - 验收指标 §13 全部 10 项 ✓ 达成（含 R0d 新增的跳转 / approve dialog / summary 全文 3 项）
 
