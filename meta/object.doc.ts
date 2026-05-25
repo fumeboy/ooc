@@ -716,6 +716,123 @@ export const root: DocTreeNode = {
                         },
                     },
                 },
+                "permission": {
+                    title: "permission - command 级三档准入控制",
+                    content: `
+                    OOC 元编程闭环让 Agent 可以改自己的 server / self / 文件系统;
+                    每条 command 必须有"该不该让 LLM 直接执行"的三档判定。
+                    OOC 不沿用 CCB 的"88+ feature flags + AI 分类器"重型门控——按 OOC 本性,
+                    permission 是 CommandTableEntry 上的一个声明字段, 与 description / params / knowledge
+                    / fn 同层级, runtime 在 thinkloop 分派 tool call 之前查询。
+
+                    三档语义:
+                    - **Allow** (默认): 无人工介入直接执行。适合纯读 / 控制流 (open_file, glob, grep, compress, close, wait, plan, end)。
+                    - **Ask**: 触发 PauseChecker, thread 进 paused 状态, 等待人工 approve/reject。适合写副作用 (write_file, relation_update, program, super flow 改 self.md)。
+                    - **Deny**: 系统直接拒绝, 在 events 流写一条 function_call_output, 让 LLM 看见原因。适合"永远不该让 LLM 直接干"的事 (本轮: 程序自改 server/index.ts; 未来 plan mode 通过后再放开)。
+
+                    声明 + 配置 = 最终决定:
+                    - **声明**: CommandTableEntry.permission 字段, 由 command 作者填写。
+                    - **配置**: stones/<self>/objects/<id>/config/policies.json 可 override 任意 command 的 permission (用户/Supervisor 微调)。
+                    - **runtime 决定**: policies.json 优先, 否则用 CommandTableEntry 声明; 都没填默认 Allow (向后兼容)。
+
+                    设计原则:
+                    - **可见性**: 三档决策每一种都至少落一条 ProcessEvent (permission_allowed 不必落, allow 是默认; permission_ask / permission_denied 必须落)。
+                    - **可恢复**: Ask 暂停后, approve 必须能让 thread 恢复并真正执行原 tool call (不是"批准了但没执行")。
+                    - **Deny 信息流**: 拒绝必须写 function_call_output, 让 LLM 看见原因; 不能让 LLM "以为成功"。
+                    - **演化 PauseChecker, 不替换**: 旧 setPauseChecker (thread => bool) 全局开关保留向后兼容; 新 setPermissionDecider (thread, call) => Decision 是细粒度入口, thinkloop 优先用 decider, 没注入则 fallback 到默认 policy 表 + PauseChecker。
+
+                    完整 design (含分阶段实施 + command 默认 policy 表 + 风险清单) 见
+                    docs/2026-05-25-permission-model-design.md。
+                    `,
+                    named: {
+                        "PermissionLevel": "\"allow\" | \"ask\" | \"deny\"",
+                        "CommandTableEntry.permission": "command 的声明字段; 缺省 allow",
+                        "policies.json": "stones/<self>/objects/<id>/config/policies.json; runtime 覆盖声明",
+                        "PermissionDecider": "(thread, call) => Decision | Promise<Decision>; 通过 setPermissionDecider 注入",
+                        "permission_denied / permission_ask": "ProcessEvent type; 落盘 + visibility-first",
+                    },
+                    patches: {
+                        "thinkloop_integration": {
+                            title: "thinkloop 接入点 - 在 dispatchToolCall 之前查权限",
+                            content: `
+                            thinkloop 协议 (src/thinkable/thinkloop.ts) 在第 6 步分派 tool call 之前
+                            插入 decidePermission 查询:
+                            1. 记录 reasoning / text / function_call 到 thread.events。
+                            2. 走老的 isPausing (向后兼容路径)。
+                            3. 对每个 pending tool call: decidePermission(thread, call) →
+                               - allow: 继续 dispatchToolCall;
+                               - ask: 写 permission_ask ProcessEvent + thread.status="paused" + return (与现有 pause 时序一致);
+                               - deny: 写 permission_denied ProcessEvent + 合成 function_call_output ("denied: <reason>") + 跳过分派, 让下一轮 LLM 看到。
+                            4. 没注入 PermissionDecider 时, 默认 policy 表生效 (CommandTableEntry.permission || allow)。
+
+                            这种顺序复用了现有 pause 的"安全暂停点"——assistant output 已记录可被人查看, tool call 还没执行。
+                            `,
+                            named: {
+                                "decidePermission": "thinkloop 调用的查询函数; 内部走 policies.json + CommandTableEntry + Decider",
+                                "permission_ask 时序": "与现有 pause 复用; thread.status='paused' 后等控制面 approve/reject",
+                            },
+                        },
+                        "approve_reject_path": {
+                            title: "approve / reject 路径 - 控制面的 HITL 入口",
+                            content: `
+                            当 thread.status="paused" 因 permission_ask 触发时, 控制面 (Web UI / CLI) 可以:
+                            - **approve**: 标记对应 permission_ask event 为 approved, thread 回 running,
+                              下一轮重新走该 tool call (这次 decider 返回 allow)。
+                            - **reject**: 同 deny 路径——写 permission_denied (reason="user-rejected"), 合成
+                              function_call_output, 让 LLM 看见。
+
+                            HTTP API: POST /api/threads/<id>/permission { eventId, action: "approve"|"reject", reason? }
+                            (具体路径与现有 runtime 控制面接口风格一致, 由 AgentOfVisible 实施期决定)。
+                            `,
+                        },
+                        "command_default_table": {
+                            title: "command 默认 permission 表 (草案)",
+                            content: `
+                            allow (纯读 / 控制流):
+                            - open_file / glob / grep / open_knowledge
+                            - compress / expand / close / wait / end
+                            - plan / todo.*
+                            - do (fork 子线程; 子线程的 root command 各自 gate)
+                            - talk / talk_window.say (协作主线; 内部副作用 command 自有 gate)
+                            - create_issue / open_issue
+
+                            ask (写副作用):
+                            - write_file
+                            - relation_update
+                            - program (shell) / program (ts/js)
+                            - super flow 中改 self.md / readme.md
+                            - delete_* 任何删除类
+
+                            deny (本轮硬拦):
+                            - 程序自改 stones/<self>/server/index.ts (元编程闭环未成熟前)
+
+                            这是 design 草案; 具体 command 名以仓库实际注册为准, 实施期 (Q0d) 校准。
+                            未在表中的 command 默认 allow。
+                            `,
+                        },
+                        "invariants": {
+                            title: "不变量 - permission 协议硬约束",
+                            content: `
+                            1. 向后兼容: 未声明 permission 的 command 默认 allow; 旧 setPauseChecker 保留。
+                            2. 可见性: ask / deny 必落 ProcessEvent; allow 不必 (是默认)。
+                            3. 可恢复: approve 后 thread 必须真正执行原 tool call (不是"批准了但跳过")。
+                            4. Deny 信息流: 必写 function_call_output, 让 LLM 看见拒绝原因。
+                            5. 配置错误容错: policies.json 缺失 / JSON 错 / 字段拼错 → fallback 到声明默认, 不抛崩溃。
+                            6. silent-swallow ban: permission 决策不允许静默; 与 observable.silent-swallow ban 一致。
+                            `,
+                        },
+                    },
+                    sources: [["docs/2026-05-25-permission-model-design.md", "完整 design (含 Q0a~Q0d 分阶段 + 默认 policy 草案 + 风险清单 + Supervisor 拍板记录)"]],
+                    todo: [
+                        "Q0e 抽专用 program_self_modify command 或在 write_file exec 中加路径前缀检查 (stones/*/server/index.ts → deny); Plan Mode 落地前保持 deny",
+                        "Q0e Stone 作者的 permission 声明传递: programmable.loader 把 ObjectWindowDefinition.commands[*].permission 透传到 CommandTableEntry (custom window proxy 当前一律缺省 allow, 由 stone 作者自行声明)",
+                        "远景: Auto Mode (AI 分类器) / Plan Mode (LLM plan + user approve) / OS-level Sandbox 集成——本轮全部不做",
+                    ],
+                    warnings: [
+                        "Q0d 截止 2026-05-25 状态: 6 项 command 已填 ask (write_file / root.program / program_window.exec / file_window.edit / relation.edit / metaprog); deny 0 项 (列 Q0e); 其余 command 缺省 allow",
+                        "自改 stones/<self>/server/index.ts 当前**没有硬拦** — 通过 metaprog 整族 ask + write_file ask 形成弱约束; Q0e 需补硬 deny",
+                    ],
+                },
                 "context_window": {
                     title: "ContextWindow - Context 中可操作的信息单元",
                     content: `

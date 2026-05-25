@@ -60,6 +60,34 @@ export interface ObservableDebugStatus {
 export type PauseChecker = (thread: ThreadContext) => boolean | Promise<boolean>;
 
 /**
+ * 运行时可注入的 permission 判定器 (Q0b 新增; design:
+ * docs/2026-05-25-permission-model-design.md, meta:
+ * meta/object.doc.ts:executable.children.permission)。
+ *
+ * 与 PauseChecker 完全独立 — 旧的全局 pause 路径保持向后兼容,新 per-command
+ * 权限检查走 permission decider / policies.json / CommandTableEntry 三层。
+ *
+ * 类型定义放在 src/executable/permissions.ts; 这里只持有 setter / getter,
+ * 避免 observable 反向依赖 executable (executable 依赖 observable, 不能反过来)。
+ */
+export type RuntimePermissionDecision =
+  | { decision: "allow" }
+  | { decision: "ask" }
+  | { decision: "deny"; reason: string };
+
+export type RuntimePendingToolCall = {
+  toolName: "exec" | "close" | "wait" | "compress";
+  command?: string;
+  args?: unknown;
+  windowId?: string;
+};
+
+export type RuntimePermissionDecider = (
+  thread: ThreadContext,
+  call: RuntimePendingToolCall,
+) => RuntimePermissionDecision | Promise<RuntimePermissionDecision>;
+
+/**
  * 状态翻转通知：事件源（talk/do/issue/end）写完对端 thread.inbox 后调一次,
  * 告诉 runtime "这个 thread 现在该被调度了"。runtime 把它转成 jobManager.enqueue。
  *
@@ -79,6 +107,7 @@ let latestLlmObservation: LlmObservation | undefined;
 let debugEnabled = false;
 const loopCounters = new Map<string, number>();
 let pauseChecker: PauseChecker = () => false;
+let permissionDecider: RuntimePermissionDecider | null = null;
 let threadActivationNotifier: ThreadActivationNotifier = () => {};
 
 /** 把线程定位为稳定 key；持久化线程按磁盘 ref 区分，内存线程退化到 id。 */
@@ -129,6 +158,22 @@ export function isPausing(thread: ThreadContext): Promise<boolean> | boolean {
 }
 
 /**
+ * 注入 permission decider (Q0b)。传 null 即清除注入,回到默认链
+ * (policies.json + CommandTableEntry + allow)。
+ *
+ * 与 setPauseChecker 完全独立 — pause 是旧的"全局开关"路径,permission 是新的
+ * "per-command 三档"路径,两者互不干扰。
+ */
+export function setPermissionDecider(decider: RuntimePermissionDecider | null): void {
+  permissionDecider = decider;
+}
+
+/** 读取当前注入的 permission decider; 未注入返回 null。 */
+export function getPermissionDecider(): RuntimePermissionDecider | null {
+  return permissionDecider;
+}
+
+/**
  * 注入 thread 激活通知（jobManager.createRunThreadJob 的薄封装）。
  * 默认 no-op；buildServer 启动时把 jobManager 接入。
  */
@@ -169,6 +214,7 @@ export function clearObservableDebugState(): void {
   debugEnabled = false;
   loopCounters.clear();
   pauseChecker = () => false;
+  permissionDecider = null;
 }
 
 /** 读取最近一次 LLM 输入/输出观测快照。 */

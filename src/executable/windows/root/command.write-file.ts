@@ -78,6 +78,8 @@ function basename(path: string): string {
 
 export const writeFileCommand: CommandTableEntry = {
   paths: ["write_file"],
+  // Q0d: 写工作区文件 = 落盘副作用; design §3 默认 ask。
+  permission: "ask",
   match: () => ["write_file"],
   knowledge: (args, formStatus): CommandKnowledgeEntries => {
     const entries: CommandKnowledgeEntries = { [WRITE_FILE_BASIC_PATH]: KNOWLEDGE };

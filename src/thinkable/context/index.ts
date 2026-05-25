@@ -147,6 +147,77 @@ export type ProcessEvent = ProcessEventCommon & (
       /** 谁触发本次 fold: user=LLM 主动 compress, auto=未来 emergency_guard 自动触发。 */
       scope?: "user" | "auto";
     }
+  | {
+      /**
+       * 事件来源: thinkloop 在 dispatchToolCall 之前调 decidePermission 返回 "ask"。
+       *
+       * Design: docs/2026-05-25-permission-model-design.md
+       * Meta:   meta/object.doc.ts:executable.children.permission.patches.approve_reject_path
+       *
+       * Q0b: 写完事件后 thread.status="paused"。
+       * Q0c: HTTP endpoint 写入 decided 字段 + 翻回 running; thinkloop 在 resume 路径
+       *      扫"最近一条 permission_ask"按 decided.action 处理:
+       *        approve → 用 pendingCall 字段重放该 tool call (绕过 decidePermission)
+       *        reject  → 写 permission_denied + 合成 function_call_output
+       *
+       * 渲染层根据 decided 区分 pending / approved / rejected 三态 system message。
+       */
+      category: "permission";
+      kind: "permission_ask";
+      /** 触发本次 ask 的 function_call id (与 llm_interaction.function_call.callId 对齐)。 */
+      toolCallId: string;
+      /** 解析后的实际 command 路径 (例如 "talk", "write_file" 或 "exec" / "close" 等 tool 名)。 */
+      command: string;
+      /** args 摘要 (截断到 200 字以内, 防止 events 流爆炸)。 */
+      argsSummary?: string;
+      /** exec 时目标 window id。 */
+      windowId?: string;
+      /**
+       * Q0c: HITL 审批决议。无 → 待审批; "approve" → 已批准 (thinkloop resume 时重放);
+       * "reject" → 已拒绝 (thinkloop resume 时合成 denied + function_call_output)。
+       */
+      decided?: {
+        action: "approve" | "reject";
+        at: number;
+        reason?: string;
+      };
+      /**
+       * Q0c: 完整序列化的原 pending tool call。approve 路径用它直接 dispatchToolCall,
+       * 不依赖 LLM 重新发起 (LLM 可能换 args 或干脆不发了)。
+       *
+       * 字段冗余 (toolCallId / command / windowId 已经在外层) 是为了一站式重建 LlmToolCall,
+       * 避免 resume 路径再次推断。
+       */
+      pendingCall?: {
+        toolName: "exec" | "close" | "wait" | "compress";
+        command: string;
+        args: Record<string, unknown>;
+        windowId?: string;
+        toolCallId: string;
+      };
+    }
+  | {
+      /**
+       * 事件来源: thinkloop 在 dispatchToolCall 之前调 decidePermission 返回 "deny"。
+       *
+       * Design + meta 同 permission_ask。
+       *
+       * 系统已拒绝该 tool call, 并合成了一条 function_call_output (在 thread.events
+       * 紧邻位置) 让 LLM 看见拒绝原因 (silent-swallow ban + Deny 信息流不变量)。
+       */
+      category: "permission";
+      kind: "permission_denied";
+      /** 被拒绝的 function_call id。 */
+      toolCallId: string;
+      /** 实际 command 路径。 */
+      command: string;
+      /** 拒绝原因 (来自 PermissionDecision.reason 或默认描述)。 */
+      reason: string;
+      /** args 摘要 (截断到 200 字)。 */
+      argsSummary?: string;
+      /** exec 时目标 window id。 */
+      windowId?: string;
+    }
 );
 
 /** 线程之间通过 inbox/outbox 传递的最小消息模型。 */
@@ -333,6 +404,46 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
         content:
           `[OOC events_summary count=${event.count}${idTag}${earliest}${latest}${quality}${scope}] ` +
           `${event.count} events folded, summary by LLM:\n${event.summary}`,
+      },
+    ];
+  }
+
+  if (event.category === "permission" && event.kind === "permission_ask") {
+    // Q0c: 渲染区分 pending / approved / rejected 三态;让 LLM 在 transcript 中看到完整审批历史。
+    const windowTag = event.windowId ? ` window_id=${event.windowId}` : "";
+    const argsTag = event.argsSummary ? `\n  args: ${event.argsSummary}` : "";
+    const decided = event.decided;
+    let statusLine: string;
+    if (!decided) {
+      statusLine = "  status: awaiting human approval; thread paused";
+    } else if (decided.action === "approve") {
+      statusLine = `  status: approved at ${decided.at}${decided.reason ? ` reason: ${decided.reason}` : ""}`;
+    } else {
+      statusLine = `  status: rejected at ${decided.at}${decided.reason ? ` reason: ${decided.reason}` : ""}`;
+    }
+    return [
+      {
+        type: "message",
+        role: "system",
+        content:
+          `[permission:permission_ask] tool_call_id=${event.toolCallId} command=${event.command}${windowTag}` +
+          `${argsTag}\n${statusLine}`,
+      },
+    ];
+  }
+
+  if (event.category === "permission" && event.kind === "permission_denied") {
+    // Q0b: deny 路径渲染 — 紧邻位置还会有一条合成的 function_call_output, 这里只补一条
+    // 给 LLM 的 system 提示, 便于 LLM 在多步 reasoning 中识别拒绝。
+    const windowTag = event.windowId ? ` window_id=${event.windowId}` : "";
+    const argsTag = event.argsSummary ? `\n  args: ${event.argsSummary}` : "";
+    return [
+      {
+        type: "message",
+        role: "system",
+        content:
+          `[permission:permission_denied] tool_call_id=${event.toolCallId} command=${event.command}${windowTag}` +
+          `\n  reason: ${event.reason}${argsTag}`,
       },
     ];
   }

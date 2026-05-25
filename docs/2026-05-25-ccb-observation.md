@@ -177,8 +177,69 @@ P0-2 (Context budget + 压缩策略) 整轮完成；P0-1 / P1 / P2 推迟后续 
 
 ---
 
+## Round 2 闭环 — P0-1 Permission 模型 (2026-05-25 当日)
+
+P0-1 (Permission 模型) Q0a~Q0d 完成；Q0e 列 todo（自改 server/index.ts 硬 deny + stone 作者 permission 声明传递）。
+
+### 实施轨迹
+| Phase | 范围 | 派单 | 产物 |
+|---|---|---|---|
+| Q0a | meta design 落地（executable.permission + 4 个 patches）| Supervisor 直写 | `meta/object.doc.ts` 新增 `executable.children.permission` |
+| Q0b | CommandTableEntry.permission 字段 + permissions.ts + PermissionDecider API + thinkloop 接入 + Deny + permission_denied/permission_ask ProcessEvent + policies.json 读取 + e2e | sub agent | 6 文件改 / 2 新；e2e 8/8 PASS (6 场景) |
+| Q0c | permission_ask 加 decided/pendingCall + thinkloop resume 路径（approved 重放 + 幂等保护）+ HTTP API /api/runtime/.../permission + decidePermission 短路 + 渲染三态 | sub agent (并行 Q0d) | 5 文件改 / 2 新；e2e 8/8 PASS (4 场景) |
+| Q0d | 仓库 commands 全量盘点 + 6 项填 ask（write_file / root.program / program_window.exec / file_window.edit / relation.edit / metaprog）+ 0 项填 deny（列 Q0e）| sub agent (并行 Q0c) | 6 文件改；全仓单测 + 全部 e2e 无补救通过 |
+
+### 整体校验
+- **Permission e2e (Q0b + Q0c)**：16/16 PASS (10 场景)
+- **联合 e2e (P0-2 5 套 + P0-1 2 套)**：42/42 PASS / 475 expect
+- **全仓单测 `bun test src/`**：550 pass / 0 fail / 3 skip / 1634 expect
+- **`bun tsc --noEmit meta/object.doc.ts`**：clean
+- **session / 进程卫生**：3 个 sub agent 均报告无 long-running 进程残留
+
+### Supervisor 拍板记录（3 项 Q0d 抛回的歧义）
+1. **issue.comment** → 保持 allow（与协作主线一致，跨 thread 但 session 内）
+2. **custom window Proxy** → 保持 allow，由 stone 作者自行声明 permission（programmable loader 透传——Q0e）
+3. **自改 stones/<self>/server/index.ts deny** → 列 Q0e（仓库无单独 command；通过 write_file 路径前缀检查或专用 program_self_modify command 落地）
+
+### Design ↔ 实现差异 (3 sub agent 协同发现，已回写)
+1. CommandTableEntry 实际位置：`src/executable/windows/_shared/command-types.ts`（已迁移）
+2. policies.json 实际路径多一层 branch：`stones/<branch>/objects/<id>/config/policies.json`
+3. observable 反向依赖 executable 不能 — PermissionDecider 类型在 observable 重新声明，permissions.ts 用 alias（干净的依赖反转）
+4. HTTP endpoint 路径调整：`/api/runtime/flows/:sessionId/objects/:objectId/threads/:threadId/permission`（按 ref 三元组而非裸 threadId，与现有 runtime 模块风格一致）
+
+### P0-1 不变量校验（6 条全部成立）
+| 不变量 | 怎么验证 |
+|---|---|
+| 向后兼容 — 未声明 permission 默认 allow | Q0d 全仓单测 + e2e 全过，未触发任何 ask/deny |
+| 可见性 — ask/deny 必落 ProcessEvent | Q0b/Q0c e2e 断言 permission_ask / permission_denied 落 thread.events |
+| 可恢复 — approve 后真正执行 | Q0c e2e 场景 A：approve → dispatcher 被调，命令真正执行 |
+| Deny 信息流 — 必写 function_call_output | Q0b e2e 场景 B/C：events 中出现 function_call_output 含 "denied" |
+| 配置容错 — policies.json 错误不抛 | Q0b e2e 场景 F：empty/invalid-json/字段拼错 全 fallback |
+| silent-swallow ban | 所有 deny/ask 路径均写 event + function_call_output（reject 路径），无静默 |
+
+### 工作循环统计
+- 外循环 2 轮（Round 1 P0-2 / Round 2 P0-1）
+- sub agent 内循环 8 个（P0b/c/d/e/f + Q0b/c/d）；其中 P0c+P0d / P0e+P0f / Q0c+Q0d 三组并行
+- meta 修改 2 次（thinkable.context_budget + executable.permission）
+- e2e 新增 7 套 42 用例 / 475 expect
+- 总 sub agent token：~960K（累计 8 sub agent）
+
+### 推迟到下轮
+- **Q0e** — 自改 server/index.ts 硬 deny + stone 作者 permission 声明传递
+- **P1-3** — agent-loop visualizer（context_compressed / permission_* ProcessEvent 已就位，UI 可视化条件已具备）
+- **P1-4** — hooks 体系（compress / expand / natural-decay / permission_ask 都已是 ProcessEvent 流的一员）
+- **远景** — Auto Mode / Plan Mode / OS Sandbox / 跨进程 talk-delivery / runtime feature flags
+
+### 当前 OOC 安全姿态
+- 元编程闭环（programmable.metaprogramming）下，LLM 不能再"无声"修改 self.md / server/index.ts / 写任意文件 / 跑任意 shell——这些全部走 ask
+- 控制面（Web UI / CLI）可通过 HTTP POST 实现 HITL approve / reject
+- Q0e 落地后元编程边界硬约束完成
+
+---
+
 ## 历史
 
 - **2026-05-25**：首版。Supervisor Round 1 外循环。
 - **2026-05-25**（当日 Round 1 闭环）：P0-2 完整实施完成，5 套 e2e PASS / 全仓单测 PASS / meta tsc clean。差异与残留如上。
+- **2026-05-25**（当日 Round 2 闭环）：P0-1 Q0a~Q0d 完成，2 套 e2e (Q0b+Q0c) PASS / 联合 P0-1+P0-2 42 用例 PASS / 全仓 550 单测 PASS。3 项歧义 Supervisor 拍板；Q0e 列 todo。
 

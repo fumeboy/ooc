@@ -1,11 +1,18 @@
 import { readFile } from "node:fs/promises";
-import { disableDebug, enableDebug, getDebugStatus } from "@src/observable";
+import {
+  disableDebug,
+  enableDebug,
+  getDebugStatus,
+  notifyThreadActivated,
+} from "@src/observable";
 import {
   llmInputFile,
   llmOutputFile,
   loopInputFile,
   loopMetaFile,
   loopOutputFile,
+  readThread,
+  writeThread,
   type ThreadPersistenceRef,
 } from "@src/persistable";
 import { readLlmEnv } from "@src/thinkable/llm/env";
@@ -62,6 +69,26 @@ export interface RuntimeService {
   getDebugStatus(): { enabled: boolean };
   getLatestDebug(ref: ThreadPersistenceRef): Promise<{ input: unknown; output: unknown }>;
   getLoopDebug(ref: ThreadPersistenceRef, loopIndex: number): Promise<{ input: unknown; output: unknown; meta: unknown }>;
+  /**
+   * Q0c: HITL approve/reject (design §原则F + 落地分配 Q0c)。
+   *
+   * 接收来自控制面 / 测试 fixture 的决议, 把 thread.events 中最近一条 (或 eventId
+   * 指定的) permission_ask 标记 decided + 翻 status="paused"→"running" + 调
+   * notifyThreadActivated 让 worker 重新调度该 thread; thinkloop 在下一轮入口
+   * 由 processDecidedPermissionAsks 消费 decided 字段, approve 直接重放, reject 写
+   * permission_denied + 合成 function_call_output。
+   */
+  decidePermission(args: {
+    ref: ThreadPersistenceRef;
+    eventId?: string;
+    action: "approve" | "reject";
+    reason?: string;
+  }): Promise<{
+    ok: true;
+    threadId: string;
+    eventId: string;
+    newStatus: "running";
+  }>;
 }
 
 export function createRuntimeService(deps: {
@@ -125,6 +152,117 @@ export function createRuntimeService(deps: {
       return {
         input: await readDebugJson(llmInputFile(ref), "llm.input.json", details),
         output: await readDebugJson(llmOutputFile(ref), "llm.output.json", details),
+      };
+    },
+    async decidePermission({
+      ref,
+      eventId,
+      action,
+      reason,
+    }: {
+      ref: ThreadPersistenceRef;
+      eventId?: string;
+      action: "approve" | "reject";
+      reason?: string;
+    }) {
+      const details = {
+        sessionId: ref.sessionId,
+        objectId: ref.objectId,
+        threadId: ref.threadId,
+      };
+      const thread = await readThread(ref, ref.threadId);
+      if (!thread) {
+        throw new AppServerError(
+          "NOT_FOUND",
+          `thread '${ref.threadId}' not found`,
+          details,
+        );
+      }
+      if (thread.status !== "paused") {
+        throw new AppServerError(
+          "THREAD_NOT_PAUSED",
+          `thread '${ref.threadId}' is not paused (current=${thread.status}); cannot accept permission decision`,
+          { ...details, currentStatus: thread.status },
+        );
+      }
+      // 找目标 permission_ask event。
+      // - 给定 eventId: 精确匹配; 找不到 → 404; 已 decided → 400 already-decided
+      // - 未给定: 倒序找最近一条无 decided 的 ask
+      type PermAskEvent = Extract<
+        (typeof thread.events)[number],
+        { category: "permission"; kind: "permission_ask" }
+      >;
+      let target: PermAskEvent | undefined;
+      if (eventId) {
+        target = thread.events.find(
+          (e): e is PermAskEvent =>
+            e.category === "permission" &&
+            e.kind === "permission_ask" &&
+            e.id === eventId,
+        );
+        if (!target) {
+          throw new AppServerError(
+            "NOT_FOUND",
+            `permission_ask event '${eventId}' not found on thread '${ref.threadId}'`,
+            { ...details, eventId },
+          );
+        }
+        if (target.decided) {
+          throw new AppServerError(
+            "CONFLICT",
+            `permission_ask event '${eventId}' already decided (action=${target.decided.action})`,
+            { ...details, eventId, existingDecision: target.decided.action },
+          );
+        }
+      } else {
+        for (let i = thread.events.length - 1; i >= 0; i -= 1) {
+          const ev = thread.events[i];
+          if (
+            ev.category === "permission" &&
+            ev.kind === "permission_ask" &&
+            !ev.decided
+          ) {
+            target = ev as PermAskEvent;
+            break;
+          }
+        }
+        if (!target) {
+          throw new AppServerError(
+            "INVALID_INPUT",
+            `no pending permission_ask event on thread '${ref.threadId}'`,
+            details,
+          );
+        }
+      }
+      // 标 decided + 翻 status + writeThread
+      target.decided = {
+        action,
+        at: Date.now(),
+        ...(reason !== undefined ? { reason } : {}),
+      };
+      // 为 event 分配稳定 id (用于本次返回值; 若没有 id 字段则赋一个)。
+      // 缺省策略: 用 toolCallId + "-ask" 作 fallback (toolCallId 在 thread.events 中
+      // 仅出现一次, 在 permission_ask + function_call_output 间复用 — 给本 event 一个
+      // 派生 id 即可)。
+      if (!target.id) {
+        target.id = `${target.toolCallId}_ask`;
+      }
+      const updated = {
+        ...thread,
+        status: "running" as const,
+      };
+      await writeThread(updated);
+      // 触发 worker 调度 (与 talk-delivery / end auto-reply 同款唤醒路径)
+      notifyThreadActivated({
+        sessionId: ref.sessionId,
+        objectId: ref.objectId,
+        threadId: ref.threadId,
+      });
+      return {
+        ok: true as const,
+        threadId: ref.threadId,
+        eventId: target.id,
+        newStatus: "running" as const,
       };
     },
     async getLoopDebug(ref: ThreadPersistenceRef, loopIndex: number) {
