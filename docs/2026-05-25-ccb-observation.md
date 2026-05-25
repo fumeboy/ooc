@@ -242,6 +242,35 @@ P0-1 (Permission 模型) Q0a~Q0d 完成；Q0e 列 todo（自改 server/index.ts 
 - **2026-05-25**：首版。Supervisor Round 1 外循环。
 - **2026-05-25**（当日 Round 1 闭环）：P0-2 完整实施完成，5 套 e2e PASS / 全仓单测 PASS / meta tsc clean。差异与残留如上。
 - **2026-05-25**（当日 Round 2 闭环）：P0-1 Q0a~Q0d 完成，2 套 e2e (Q0b+Q0c) PASS / 联合 P0-1+P0-2 42 用例 PASS / 全仓 550 单测 PASS。3 项歧义 Supervisor 拍板；Q0e 列 todo。
+- **2026-05-25**（当日 Round 6 闭环）：体验官 Round 5 报告的 6 个 UX/UI/parity/data 问题清零，3 sub agent 并行修复。
+  - **Batch A** (AgentOfVisible, 4 UI/UX 修)：
+    - H-1 backend offline pill 误报 → MainPanel.tsx 改用真 error 摘要而非误导 "backend offline"；MainLogo 仍是唯一健康度真相源
+    - H-2 `/files/<path>` dead link → FileViewer 新增 path+error fallback 卡片 ("File not available" + 用户 path + 后端错误摘要)
+    - H-3 user thread no composer → UserThreadHome 空态加 "→ 去 welcome" 按钮；Welcome 读 `?session=` query；SessionCreator 加 `initialSessionId` prop 预填
+    - M-3 stones/{user,main}/self 404 噪音 → query.ts 加 `NON_STONE_OBJECT_IDS` 集合 + 一次性 console.warn（silent-swallow ban 合规）
+    - 单测增量：FileViewer.test.tsx 3 + query.test.ts 5 = 8 个；web/ 共 79 pass
+  - **Batch B** (AgentOfProgrammable + AgentOfVisible, M-4 agent-native parity dogfood)：
+    - 写 OOC World **第一份**真 stone client/index.tsx：`.ooc-world/stones/main/objects/supervisor/client/index.tsx`（534 行）
+    - 内容：displayName 按 `display_name_from_self_md` 派生 + readme 摘要 + 8 维度卡片（inline）+ knowledge 列表（HTTP API 派生）
+    - 设计原则：不跨 stone 边界（不 import web/、不读 meta/object.doc.ts）；用 CSS var fallback 适配主题
+    - 新 e2e `tests/e2e/backend/stone-client-parity.e2e.test.ts`（2 pass：supervisor 200 + feedback-tracker 仍 404 哨兵作 todo 提醒）
+    - 落地结果：`/api/objects/stone/supervisor/client-source-url` 不再 404，StoneFallback 不再触发；agent-native UI "design-only" 状态被打破
+    - ⚠️ stone tsx 在 `.ooc-world/` 下 (gitignored)，fresh world 启动不会自动出现——是否把 supervisor client 升格 World invariant 留下一轮拍板
+  - **Batch C** (AgentOfPersistable, M-5 pool sediment 迁移)：
+    - 真因诊断：**不是需要迁移数据**，而是 `check-pool-migration.ts` 的判定逻辑过时——把合法 seed knowledge（stone/knowledge/）当 legacy 误报
+    - 修：判定从"stones/knowledge 存在"改为"sediment 形态信号 (memory/relations 子目录、files/ 子目录)"
+    - 给 supervisor + user 预创 pool skeleton (`.pool.json` marker；idempotent)；ensureSupervisorPool / ensureUserPool 函数化
+    - 新增 6 单测 (check-pool-migration.test.ts) 覆盖 seed/sediment 判定 4 种 + 混合 + 空 world
+    - 启动 banner 警告消失；`curl pools/objects/supervisor/knowledge` 不再 404
+  - **整体校验**：
+    - `bun tsc --noEmit`：clean
+    - `bun test src/`：**603 pass / 0 fail / 3 skip / 1768 expect**（baseline 589 + 14 新单测）
+    - `bun test web/`：**79 pass / 0 fail / 215 expect**（baseline 71 + 8 新）
+    - `bun test tests/e2e/backend/`：**54 pass / 0 fail / 8 skip / 527 expect**（含 stone-client-parity 2 pass + route-audit 1 pass + 其余）
+    - 总计 **736 tests / 0 fail**
+  - **派单效率**：3 sub agent 完全并行（文件域不重叠：web/ + .ooc-world/stones/ + src/app/server/bootstrap/）；累计 ~290K tokens
+  - **现在 supervisor 在用户访问 `/stones/main/objects/supervisor` 时看到的不是 fallback 占位，而是 OOC 第一份真 dogfood agent-native UI**
+
 - **2026-05-25**（当日 Round 5 闭环）：AgentOfExperience 首次真用户校准 + 暴露 e2e 假阳性盲区。
   - 派 sub agent 用 Playwright 操作 Web UI 跑 7 场景剧本，深度体验 Round 1-3 全部新功能
   - **关键发现**：

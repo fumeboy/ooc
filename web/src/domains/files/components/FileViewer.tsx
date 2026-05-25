@@ -45,6 +45,8 @@ function threadToSnapshot(thread: ThreadContext): ContextSnapshot {
  */
 export function FileViewer({
   file,
+  path,
+  error,
   editable = false,
   saving = false,
   onChange,
@@ -54,6 +56,13 @@ export function FileViewer({
   onUserReply,
 }: {
   file?: FileContent;
+  /**
+   * H-2 (Round 5): 用户进入 `/files/<path>` 时即使 backend 404, 也应该把"用户原本
+   * 要看哪个 path"+ "为什么没看到" 透传出来; 否则只显示通用 "Select a file" 占位
+   * 让用户误以为 URL 路径参数没起作用 (实际是文件不存在 / 不在 world 内)。
+   */
+  path?: string;
+  error?: string;
   editable?: boolean;
   saving?: boolean;
   onChange?: (content: string) => void;
@@ -66,6 +75,16 @@ export function FileViewer({
   // ContextSnapshotViewer 内部的 useMemo / useEffect 不会被重置 → 选中态/展开态保留。
   const snapshot = useMemo(() => (thread ? threadToSnapshot(thread) : undefined), [thread]);
   if (!file) {
+    // H-2: URL 路径明确指定了文件 (`/files/<path>`) 但 fetch 失败 → 不是"没选文件",
+    // 是"文件不存在 / 不在 world 内"。优先呈现错误,避免与"未选文件"的占位混淆。
+    if (path && error) {
+      return (
+        <EmptyState
+          title="File not available"
+          detail={`无法预览 ${path} — ${error}. 该路径可能不在 OOC world 内, 或拼写有误. 用左侧 tree 浏览 world 文件; meta/ 等仓库源代码不在 world 内、当前不支持预览.`}
+        />
+      );
+    }
     if (snapshot) {
       return <ContextSnapshotViewer snapshot={snapshot} selfObjectId={selfObjectId} onUserReply={onUserReply} />;
     }

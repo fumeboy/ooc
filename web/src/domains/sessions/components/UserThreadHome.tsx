@@ -115,7 +115,24 @@ export function UserThreadHome({ sessionId, thread, onUserReply }: UserThreadHom
           </div>
           {talkWindows.length === 0 ? (
             <div className="user-thread-home-empty">
-              No conversations yet. Use the welcome page to seed a new session.
+              <div style={{ marginBottom: 8 }}>
+                No conversations yet. This session was created without a
+                first message — seed one via welcome to start talking.
+              </div>
+              {/*
+               * H-3 (Round 5 体验报告): 显式渲染一个跳转按钮 (不只是文案),
+               * 跳到 /welcome?session=<sid> 让 welcome 表单预填该 sessionId,
+               * 用户继续选 Talk to + First message 即可补 seed。
+               */}
+              <Link
+                to={`/welcome?session=${encodeURIComponent(sessionId)}`}
+                className="btn small"
+                data-testid="seed-via-welcome"
+              >
+                <MessageSquare size={11} style={{ marginRight: 4 }} />
+                Seed first conversation via welcome
+                <ArrowRight size={11} style={{ marginLeft: 4 }} />
+              </Link>
             </div>
           ) : (
             <ul className="user-thread-home-talk-list">

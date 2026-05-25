@@ -17,11 +17,17 @@ import { Textarea } from "../../../shared/ui/textarea";
 export function SessionCreator({
   stones,
   onCreate,
+  initialSessionId,
 }: {
   stones: Stone[];
   onCreate: (input: { sessionId: string; targetObjectId: string; initialMessage: string }) => Promise<void>;
+  /**
+   * H-3 (Round 5): 当用户从 UserThreadHome 的"Seed via welcome"按钮跳来时,
+   * 预填这个 sessionId(已被裸创建过的空 session),避免用户复制 / 错填。
+   */
+  initialSessionId?: string;
 }) {
-  const [sessionId, setSessionId] = useState(defaultSessionId());
+  const [sessionId, setSessionId] = useState(initialSessionId ?? defaultSessionId());
   const [targetObjectId, setTargetObjectId] = useState(defaultObjectId(stones));
   const [initialMessage, setInitialMessage] = useState("");
   const [busy, setBusy] = useState(false);

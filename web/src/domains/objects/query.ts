@@ -3,6 +3,41 @@ import { requestJson } from "../../transport/http";
 import type { DisplayName } from "./model";
 
 /**
+ * M-3 (Round 5 体验报告) — UI 高频对 `user` / `main` / 等非 stone object id 请求
+ * `/api/stones/<id>/self`, 后端 404 充斥 network 面板, 干扰 debug。
+ *
+ * 这些 id **结构上**不是 stone object:
+ *   - `user`: ephemeral caller, 永远不会在 stones/ 下落地
+ *   - `main`: git branch 名, 不是 object
+ *   - 空字符串 / undefined: 上层 hook 还在拼数据时偶尔传入
+ *
+ * 命中 → 静默 fallback (不发 HTTP), 但 console.warn 一次让真问题 (例如某天
+ * `user` 真升级为 stone 但我们仍在屏蔽) 可被发现。silent-swallow ban 合规。
+ */
+const NON_STONE_OBJECT_IDS = new Set<string>(["user", "main"]);
+const warnedNonStoneIds = new Set<string>();
+
+function isLikelyStoneObjectId(objectId: string | undefined): boolean {
+  if (!objectId) return false;
+  if (NON_STONE_OBJECT_IDS.has(objectId)) {
+    if (!warnedNonStoneIds.has(objectId)) {
+      warnedNonStoneIds.add(objectId);
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[objects/query] skip stones/self lookup for non-stone object id "${objectId}" (filtered to avoid 404 noise; see M-3 fix)`,
+      );
+    }
+    return false;
+  }
+  return true;
+}
+
+/** Export for tests. */
+export function __isLikelyStoneObjectIdForTest(objectId: string | undefined): boolean {
+  return isLikelyStoneObjectId(objectId);
+}
+
+/**
  * 从 self.md 第一行派生 displayName(spec: `display_name_from_self_md`)。
  *
  * 规则:
@@ -12,8 +47,11 @@ import type { DisplayName } from "./model";
  *   4. 任一步失败 / 结果空字符串 → 返回 null
  *
  * 返回 null 让上层 fallback 到原 objectId,避免空字符串渲染出"什么也没显示"。
+ *
+ * M-3: 命中 NON_STONE_OBJECT_IDS 直接返回 null, 不发 HTTP。
  */
 export async function fetchSelfFirstLine(objectId: string): Promise<string | null> {
+  if (!isLikelyStoneObjectId(objectId)) return null;
   try {
     const res = await requestJson<{ text?: string }>(
       `/api/stones/${encodeURIComponent(objectId)}/self`,
@@ -202,13 +240,18 @@ async function loadReadme(objectId: string): Promise<string | null> {
   if (existing) return existing;
   const p = (async () => {
     let text: string | null = null;
-    try {
-      const res = await requestJson<{ text?: string }>(
-        `/api/stones/${encodeURIComponent(objectId)}/readme`,
-      );
-      text = typeof res?.text === "string" ? res.text : null;
-    } catch {
-      text = null;
+    // M-3: 与 fetchSelfFirstLine 对称, 跳过 `user` / `main` 等非 stone id。
+    if (!isLikelyStoneObjectId(objectId)) {
+      // pass through, text remains null
+    } else {
+      try {
+        const res = await requestJson<{ text?: string }>(
+          `/api/stones/${encodeURIComponent(objectId)}/readme`,
+        );
+        text = typeof res?.text === "string" ? res.text : null;
+      } catch {
+        text = null;
+      }
     }
     if (readmeCache.has(objectId)) readmeCache.delete(objectId);
     readmeCache.set(objectId, { text, expiresAt: Date.now() + TTL_MS });

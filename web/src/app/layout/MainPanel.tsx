@@ -144,7 +144,17 @@ export function MainPanel({
           {isIssueDetail && <span className="pill">issue</span>}
           {isIssueList && <span className="pill">issues</span>}
           {isUserThreadHome && <span className="pill">user home</span>}
-          {error && !file && !isWelcome && <span className="muted small">backend offline</span>}
+          {/*
+           * H-1 (Round 5 体验报告) — 此处原本写 "backend offline";
+           * 但触发条件仅是"页面级 loader 出错(404 / 500)",并非 backend 整体宕机
+           * (左下角 MainLogo 的 health-check pill 是 backend 健康度真相源)。
+           * 改为直接显示真实 error 摘要(截短),并标 "error",避免误导。
+           */}
+          {error && !file && !isWelcome && (
+            <span className="muted small" title={error}>
+              error: {error.length > 60 ? error.slice(0, 59) + "…" : error}
+            </span>
+          )}
           {threadHeader}
           <button type="button" className="refresh" onClick={onRefresh} disabled={loading || !onRefresh} aria-label="Refresh" title="Refresh">↻</button>
           {sessionIdFromRoute && (
@@ -190,7 +200,18 @@ export function MainPanel({
               onUserReply={onUserReply}
             />
           ) : (
-            <FileViewer file={file} editable={editableFile} saving={savingFile} onChange={onFileChange} onSave={onFileSave} thread={thread} selfObjectId={selfObjectId} onUserReply={onUserReply} />
+            <FileViewer
+              file={file}
+              path={route.kind === "file" ? route.path : undefined}
+              error={route.kind === "file" ? error : undefined}
+              editable={editableFile}
+              saving={savingFile}
+              onChange={onFileChange}
+              onSave={onFileSave}
+              thread={thread}
+              selfObjectId={selfObjectId}
+              onUserReply={onUserReply}
+            />
           )}
         </div>
       </div>

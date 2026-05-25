@@ -31,6 +31,7 @@ import {
   SUPERVISOR_OBJECT_ID,
   gitCommitAll,
 } from "@src/persistable";
+import { createPoolObject, poolMetadataFile } from "@src/persistable/pool-object";
 import { USER_OBJECT_ID, USER_README_MD } from "./user-seed";
 
 /** ensureUserObject 的返回值，告诉 caller 是否真创建过、对应 commit。 */
@@ -93,14 +94,37 @@ async function createUserStone(baseDir: string, branch: string): Promise<string 
  * 失败处理：抛错并退出（与 ensureSupervisorObject 同风格——bootstrap invariant
  * 失败不允许 server 跑下去）。
  */
+/**
+ * Idempotent pool skeleton for user（2026-05-25 Round 6 Batch C, M-5 解）。
+ *
+ * 与 ensureSupervisorPool 同款：通过 .pool.json marker 判 idempotent。
+ * user 虽不是 LLM Agent，但 sediment 端仍可能写（如 collaborable.relations 中
+ * 其它 Object 对 user 的 long_term 认知；或 user 上传 files），所以 pool skeleton
+ * 同样预创——和 supervisor 一致地把 pool 视为 World 第一类骨架。
+ */
+async function ensureUserPool(baseDir: string): Promise<boolean> {
+  const ref = { baseDir, objectId: USER_OBJECT_ID };
+  try {
+    await stat(poolMetadataFile(ref));
+    return false; // already exists
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+  }
+  await createPoolObject(ref);
+  return true;
+}
+
 export async function ensureUserObject(opts: {
   baseDir: string;
   branch?: string;
 }): Promise<EnsureUserResult> {
   const branch = opts.branch ?? STONES_MAIN_BRANCH;
-  if (await userStoneExists(opts.baseDir, branch)) {
-    return { created: false };
+  let commitSha: string | undefined;
+  let created = false;
+  if (!(await userStoneExists(opts.baseDir, branch))) {
+    commitSha = await createUserStone(opts.baseDir, branch);
+    created = true;
   }
-  const commitSha = await createUserStone(opts.baseDir, branch);
-  return { created: true, commitSha };
+  await ensureUserPool(opts.baseDir);
+  return { created, commitSha };
 }

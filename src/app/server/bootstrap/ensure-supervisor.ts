@@ -29,6 +29,7 @@ import {
   STONES_MAIN_BRANCH,
   gitCommitAll,
 } from "@src/persistable";
+import { createPoolObject, poolMetadataFile } from "@src/persistable/pool-object";
 import {
   SUPERVISOR_OBJECT_ID,
   SUPERVISOR_SELF_MD,
@@ -116,14 +117,45 @@ async function createSupervisorStone(baseDir: string, branch: string): Promise<s
  * 失败处理：抛错并退出（与 ensureStoneRepo 同风格——bootstrap invariant 失败
  * 不允许 server 跑下去；区别于 advisory 类 check）。
  */
+/**
+ * Idempotent pool skeleton for supervisor.
+ *
+ * 2026-05-25 Round 6 Batch C 增（M-5 解）：体验官报告
+ * `/api/tree?scope=world&path=pools/objects/supervisor/knowledge` 404，根因是
+ * pools/objects/supervisor/ 在 bootstrap 时不预创——只有等 supervisor 第一次写
+ * sediment 才会出现。把 pool 骨架升格为 bootstrap invariant 之一：
+ *
+ * - 新 world: 第一启动建 supervisor stone 后顺手 createPoolObject(supervisor)
+ * - 已有 world 但缺 pool: 后续启动检测到 .pool.json 不存在 → createPoolObject 补建
+ * - 已有 pool: skip（通过 .pool.json marker 判定）
+ *
+ * 与 createStoneObject + ensureSupervisorObject 同款 idempotent 风格。
+ * 不写 git（pool 不进 git）。
+ */
+async function ensureSupervisorPool(baseDir: string): Promise<boolean> {
+  const ref = { baseDir, objectId: SUPERVISOR_OBJECT_ID };
+  try {
+    await stat(poolMetadataFile(ref));
+    return false; // already exists
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+  }
+  await createPoolObject(ref);
+  return true;
+}
+
 export async function ensureSupervisorObject(opts: {
   baseDir: string;
   branch?: string;
 }): Promise<EnsureSupervisorResult> {
   const branch = opts.branch ?? STONES_MAIN_BRANCH;
-  if (await supervisorStoneExists(opts.baseDir, branch)) {
-    return { created: false };
+  let commitSha: string | undefined;
+  let created = false;
+  if (!(await supervisorStoneExists(opts.baseDir, branch))) {
+    commitSha = await createSupervisorStone(opts.baseDir, branch);
+    created = true;
   }
-  const commitSha = await createSupervisorStone(opts.baseDir, branch);
-  return { created: true, commitSha };
+  // pool skeleton: idempotent，与 stone 创建解耦——已有 stone 但缺 pool 的旧 world 也补建
+  await ensureSupervisorPool(opts.baseDir);
+  return { created, commitSha };
 }

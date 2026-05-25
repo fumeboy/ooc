@@ -1,20 +1,23 @@
 /**
- * Bootstrap warning for stone→pool migration（2026-05-23）。
+ * Bootstrap warning for stone→pool migration（2026-05-23 / 修订 2026-05-25）。
  *
- * 当某 stone object 还有 `knowledge/` / `files/` 子目录、但对应的 pool
- * `pools/objects/<id>/{knowledge,files}` 不存在时，启动期 console.warn 提示用户
- * 处理一下。
+ * **2026-05-25 修订（Round 6 Batch C, AgentOfPersistable）**:
+ * 旧逻辑触发条件 "stones/<id>/knowledge/ 存在 AND pools/objects/<id>/knowledge/ 不存在"
+ * 在 seed / sediment 二分后失真——任何含 seed 的合法 stone（如 supervisor 5 篇 seed
+ * knowledge）都会被打"legacy"标签，导致警告永久挂着、无 actionable 含义。
  *
- * **2026-05-24 注意事项**:
- * knowledge 已改为 **seed / sediment 二分**（详见
- * meta/object.doc.ts persistable.stone.children.seed_knowledge）：
- * - `stones/<self>/knowledge/` 现在是 **seed knowledge** 的合法路径（不再需要迁移）。
- * - 只有"运行时沉淀"语义的旧条目才属于 sediment、应当迁到 pool。
+ * 现在按 **sediment 形态信号** 触发：
+ * - stone 下 `knowledge/memory/` 或 `knowledge/relations/` 子目录存在 → 这是 sediment
+ *   命名约定（详见 meta/object.doc.ts persistable.pool.children.knowledge_pool），出现
+ *   在 stone 侧意味着旧 world 把 sediment 错存到了 stone 层，**应当迁移到 pool**。
+ * - stone 下 `files/` 存在 → files 是 sediment-only（meta 已固化），出现在 stone 侧
+ *   同样应当迁移。
+ * - stone 下 `knowledge/<*.md>`（无 memory/relations 子目录）→ 这是 **seed knowledge**
+ *   的合法形态，**不触发警告**。
  *
- * 因此，当本检查发现旧 world 还有 `stones/<id>/knowledge/` 时，**不要简单跑迁移 CLI**
- * 一股脑迁到 pool —— 用户需要参照新二分人工判定每个 .md：
- * - 设计意图/初始能力 → 留在 stone/knowledge（已经是合法位置）。
- * - 运行时沉淀/记忆 → 在 pool/knowledge 下分到 memory/ 或 relations/。
+ * 配合 ensure-supervisor / ensure-user 现在在 bootstrap 时预创 pool skeleton
+ * (pools/objects/<id>/{knowledge/{memory,relations},files}) ——这是 M-5 体验官报告的
+ * /api/tree?scope=world&path=pools/objects/supervisor/knowledge 404 的根因解。
  *
  * 不自动迁移（CLAUDE.md "不悄悄做"），不阻塞启动。
  */
@@ -22,7 +25,7 @@
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { STONES_MAIN_BRANCH, STONE_OBJECTS_SUBDIR } from "@src/persistable";
-import { poolKnowledgeDir, poolFilesDir } from "@src/persistable/pool-object";
+import { poolKnowledgeMemoryDir, poolKnowledgeRelationsDir, poolFilesDir } from "@src/persistable/pool-object";
 
 async function pathExists(p: string): Promise<boolean> {
   try {
@@ -34,15 +37,19 @@ async function pathExists(p: string): Promise<boolean> {
 }
 
 export interface PoolMigrationCheckResult {
-  /** Object 数: 仍持有 stone 层 knowledge/ 但 pool 还没建。 */
-  knowledgeNeedsMigrate: string[];
-  /** Object 数: 仍持有 stone 层 files/ 但 pool 还没建。 */
-  filesNeedsMigrate: string[];
+  /** Object id: 仍在 stone 下持有 `knowledge/memory/` 或 `knowledge/relations/` 子目录（sediment 错位）。 */
+  sedimentInStoneKnowledge: string[];
+  /** Object id: 仍在 stone 下持有 `files/`（sediment-only，应迁 pool）。 */
+  sedimentInStoneFiles: string[];
 }
 
 /**
- * 扫描 stones/<branch>/objects/ 下所有 Object，对每个检查 stone 侧 knowledge/files
- * 是否存在但 pool 侧目标不存在。返回需迁移的 objectId 列表，由调用方决定是否警告。
+ * 扫描 stones/<branch>/objects/ 下所有 Object，识别 stone 侧错放的 sediment：
+ * - `knowledge/memory/` 或 `knowledge/relations/` 子目录 → sedimentInStoneKnowledge
+ * - `files/` 目录       → sedimentInStoneFiles
+ *
+ * 与对应 pool 是否已存在 **无关** —— 即使 pool 已有 memory/，只要 stone 里同时还有
+ * sediment 痕迹就应该提示用户清理（双源会让 synthesizer 同 idPath 冲突告警）。
  *
  * 静默策略：任何 fs 错误（除 ENOENT 自然处理）都吞掉——这只是个 advisory。
  */
@@ -56,52 +63,54 @@ export async function checkStoneToPoolMigration(opts: {
   try {
     entries = await readdir(objectsDir, { withFileTypes: true });
   } catch {
-    return { knowledgeNeedsMigrate: [], filesNeedsMigrate: [] };
+    return { sedimentInStoneKnowledge: [], sedimentInStoneFiles: [] };
   }
-  const knowledgeNeedsMigrate: string[] = [];
-  const filesNeedsMigrate: string[] = [];
+  const sedimentInStoneKnowledge: string[] = [];
+  const sedimentInStoneFiles: string[] = [];
   for (const e of entries) {
     if (!e.isDirectory() || e.name.startsWith(".")) continue;
     const objectId = e.name;
-    const stoneKnowledge = join(objectsDir, objectId, "knowledge");
+    const stoneKnowledgeMemory = join(objectsDir, objectId, "knowledge", "memory");
+    const stoneKnowledgeRelations = join(objectsDir, objectId, "knowledge", "relations");
     const stoneFiles = join(objectsDir, objectId, "files");
-    const poolKnowledge = poolKnowledgeDir({ baseDir: opts.baseDir, objectId });
-    const poolFiles = poolFilesDir({ baseDir: opts.baseDir, objectId });
     try {
-      if ((await pathExists(stoneKnowledge)) && !(await pathExists(poolKnowledge))) {
-        knowledgeNeedsMigrate.push(objectId);
+      if ((await pathExists(stoneKnowledgeMemory)) || (await pathExists(stoneKnowledgeRelations))) {
+        sedimentInStoneKnowledge.push(objectId);
       }
-      if ((await pathExists(stoneFiles)) && !(await pathExists(poolFiles))) {
-        filesNeedsMigrate.push(objectId);
+      if (await pathExists(stoneFiles)) {
+        sedimentInStoneFiles.push(objectId);
       }
     } catch {
       // ignore per-object failures
     }
   }
-  return { knowledgeNeedsMigrate, filesNeedsMigrate };
+  // 显式 reference unused exports to keep tsc happy and signal intent of these helpers
+  void poolKnowledgeMemoryDir;
+  void poolKnowledgeRelationsDir;
+  void poolFilesDir;
+  return { sedimentInStoneKnowledge, sedimentInStoneFiles };
 }
 
 /** 把检查结果用 console.warn 输出（如果非空）；空时不 noisy。 */
 export function reportPoolMigration(result: PoolMigrationCheckResult, baseDir: string): void {
-  const k = result.knowledgeNeedsMigrate.length;
-  const f = result.filesNeedsMigrate.length;
+  const k = result.sedimentInStoneKnowledge.length;
+  const f = result.sedimentInStoneFiles.length;
   if (k === 0 && f === 0) return;
   console.warn(
-    `[ooc-app-server] legacy stone-side knowledge/ or files/ detected: ${k} object(s) with knowledge/, ` +
-      `${f} object(s) with files/.`,
+    `[ooc-app-server] sediment-shaped content detected under stone/: ${k} object(s) with ` +
+      `knowledge/{memory,relations}/, ${f} object(s) with files/.`,
   );
   console.warn(
-    `  NOTE (2026-05-24): knowledge is now split seed (stone) / sediment (pool). Do NOT just run the migrate ` +
-      `CLI to move everything to pool — inspect each .md and decide whether it is seed (design intent → keep ` +
-      `under stones/<branch>/objects/<id>/knowledge/, the new legitimate path) or sediment (runtime accumulation ` +
-      `→ move into pools/objects/<id>/knowledge/{memory,relations}/).`,
+    `  These dirs are sediment-only by 2026-05-24 seed/sediment split — they should live under ` +
+      `pools/objects/<id>/{knowledge,files}/, NOT stones/. Move them, then \`git rm -r\` the stone-side copy ` +
+      `in the corresponding stones worktree.`,
   );
   console.warn(
-    `  If you still want the legacy bulk-migrate (treats everything as sediment), run:`,
+    `  Bulk migrate CLI (treats stone knowledge as sediment; review report after):`,
   );
   console.warn(
     `  bun run src/app/server/bootstrap/migrate-stone-knowledge-to-pool.ts --world ${baseDir}`,
   );
-  if (k > 0) console.warn(`  knowledge: ${result.knowledgeNeedsMigrate.join(", ")}`);
-  if (f > 0) console.warn(`  files:     ${result.filesNeedsMigrate.join(", ")}`);
+  if (k > 0) console.warn(`  knowledge sediment: ${result.sedimentInStoneKnowledge.join(", ")}`);
+  if (f > 0) console.warn(`  files sediment:     ${result.sedimentInStoneFiles.join(", ")}`);
 }
