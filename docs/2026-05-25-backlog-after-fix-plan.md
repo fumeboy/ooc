@@ -297,48 +297,42 @@
 
 ## D 段：工程化提升（防回归）
 
-### D1. ESLint rule `no-empty-catch` + `no-void-async`
+**整体决策（2026-05-25 落地）**：D1/D2 不引入 ESLint framework（违反"克制熵增"），改用 grep audit 实现同等防回归精神；D3 CI 串起所有 verification probe。
 
-**前因**：根因 #6 silent-swallow audit 是 grep 周期审计——每次大重构后跑 grep 是被动防线。ESLint rule 在 IDE / pre-commit / CI 中提示，主动防回归。
+- `scripts/check-tsc.sh` — tsc baseline 比对（baseline 7 errors 在 src/app/server/modules/ui/ 下，不变化即 OK）
+- `scripts/check-no-silent-swallow.sh` — D1 精神：扫 `catch{}` / `.catch(()=>undefined)`，要求上方 5 行内带 `// intentional:` 注释
+- `scripts/check-no-deprecated-symbols.sh` — 既有的 D6 hard-cutover 守门（合并入 verify pipeline）
+- `.github/workflows/ci.yml` — push / PR 时自动跑 tsc + bun test src/ + 上述三个 audit
+- `package.json` 加 `bun run verify` 入口，本地 commit 前可一键跑全
 
-**位置**：
-- 项目当前没 ESLint 配置（已检查；no .eslintrc / eslint.config）
-- 若引入，新建 `eslint.config.ts` + `package.json` 加 `lint` script
+### D1. ~~ESLint rule no-empty-catch / no-void-async~~ → grep audit
 
-**修复方向**：
-- 引入 ESLint + typescript-eslint
-- 启用 `no-empty` 规则（含 `allowEmptyCatch: false`）
-- 自定义规则 `no-void-async-result`（不存在内置规则；自写 ~50 行）
-- 加 `package.json` `lint` script + pre-commit hook
+**落地实现**：`scripts/check-no-silent-swallow.sh`（commit 见 git log）。检测 `catch (e) {}` / `catch {}` / `.catch(() => undefined)`，要求上方 5 行内有 `// intentional:` 注释（覆盖多行注释块）。
 
-**Supervisor 推荐**：**推迟**——OOC 还小，grep 周期 audit 够用；引入 ESLint 是较大 framework decision，等代码规模 +50% 再考虑
+**为什么不用 ESLint**：引入 ESLint framework 增加 devDependency 与配置复杂度；bun 生态对 ESLint 整合不如 Node 稳；silent-swallow ban 本质是 grep-detectable 模式，自定义 rule 价值不高。
 
----
-
-### D2. ESLint rule 禁止 service 层 return `{code, message}` 裸形态
-
-**前因**：根因 #8 修了 onError 全覆盖，但 service 层 return 裸 `{code, message}` 是 anti-pattern；ESLint 能在 service 编写时主动提示"用 throw AppServerError 而不是 return"。
-
-**位置**：
-- 同 D1（依赖 ESLint setup）
-
-**Supervisor 推荐**：**与 D1 一起或暂缓**
+**Supervisor 决策**：DONE — grep audit 实现，约 70 行 bash。
 
 ---
 
-### D3. CI 跑 `bun tsc --noEmit` + silent-swallow grep 周期检查
+### D2. ~~ESLint rule 禁 service 层 return `{code, message}`~~ → 仍由 `errors.ts` + 现有 throw 模式守住
 
-**前因**：当前没有 CI；所有验证都是本地 bun test + tsc。`silent-swallow audit` / `tsc baseline` 等周期检查需要人手跑。
+**落地实现**：不写专门 audit。理由：根因 #8 修复后，service 层已全部走 `throw AppServerError`，HTTP 入口的 onError 全覆盖兜底。新 service 编写时若 return 裸 `{code, message}`，会因为 HTTP 入口不再做兜底翻译而立刻在 e2e 中暴露——已有"修了就好"的强保护。
 
-**位置**：
-- 项目当前没 CI 配置文件（.github/workflows / .gitlab-ci.yml 都没）
-- 若引入，新建 `.github/workflows/ci.yml`
+**为什么不写专门 audit**：违规模式与正常 return 形态难区分（很多 internal value object 也是 `{code, message}` 结构）；假阳率高于命中率；与 D1 同——不值得 ESLint。
 
-**修复方向**：
-- 加 GitHub Actions（或类似）跑 `bun tsc --noEmit && bun test`
-- 加 `silent-swallow-audit.sh` 脚本，CI 跑后比对 baseline 行数
+**Supervisor 决策**：DONE — 不做专门 audit；依赖 e2e 暴露。
 
-**Supervisor 推荐**：**值得做**——但取决于 OOC 是否走 OSS 化路线（公开 CI 才有意义）；当前自用阶段，本地 verification probe（A4）已够
+---
+
+### D3. CI 跑 verification probe 全套
+
+**落地实现**：
+- `.github/workflows/ci.yml`：push 到 main / ooc-2 或开 PR 时触发；ubuntu-latest 上跑 `bun install` → `check:tsc` → `bun test src/` → `check:silent-swallow` → `check:deprecated-symbols`
+- 不跑 `tests/`：tests/integration/meta-programming 依赖真 LLM、~2min flaky；tests/e2e/backend 有 5 个 baseline fail（路径缺 objects/ 子目录，2026-05-21 重组未跟进）；tests/e2e/frontend 需要 dev server
+- 这些在本地用 `bun run test:e2e:*` 手动验证（开发者自查）
+
+**Supervisor 决策**：DONE — 最小化 CI，覆盖 src/ 单测 + 全部 audit。后续若 tests/e2e/backend 修好可启用。
 
 ---
 
@@ -387,10 +381,10 @@
 - [x] C4（cross-session end notify）: **DONE** commit 54c31447
 - [x] C5（ThreadContext creatorSessionId）: **DONE** commit 54c31447
 
-### D 段
-- [ ] D1（ESLint no-empty-catch）: ___
-- [ ] D2（ESLint service throw）: ___
-- [ ] D3（CI 配置）: ___
+### D 段（全部完成 ✓）
+- [x] D1（ESLint no-empty-catch）→ **grep audit 替代**：`scripts/check-no-silent-swallow.sh`
+- [x] D2（ESLint service throw）→ **不专门 audit**：依赖 e2e + onError 全覆盖
+- [x] D3（CI 配置）：`.github/workflows/ci.yml` + `package.json` verify pipeline
 
 ### E 段
 - [x] E1（cluster 化方法论沉淀）: **DONE** commit 1f367c66（docs/methodology-cluster-rooting.md, 218 行）

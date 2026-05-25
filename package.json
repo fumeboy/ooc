@@ -5,7 +5,11 @@
   "scripts": {
     "test": "bun test",
     "test:e2e:backend": "RUN_BACKEND_E2E=1 bun test tests/e2e/backend",
-    "test:e2e:frontend": "RUN_FRONTEND_E2E=1 bunx playwright test --config tests/e2e/frontend/playwright.config.ts"
+    "test:e2e:frontend": "RUN_FRONTEND_E2E=1 bunx playwright test --config tests/e2e/frontend/playwright.config.ts",
+    "check:tsc": "bash scripts/check-tsc.sh",
+    "check:silent-swallow": "bash scripts/check-no-silent-swallow.sh",
+    "check:deprecated-symbols": "bash scripts/check-no-deprecated-symbols.sh",
+    "verify": "bun run check:tsc && bun test src/ && bun run check:silent-swallow && bun run check:deprecated-symbols"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",

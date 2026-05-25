@@ -1,0 +1,50 @@
+# GitHub Actions CI for ooc-2
+#
+# 跑 verification probe（D 段 backlog 落地）：
+#   - tsc baseline 比对（scripts/check-tsc.sh）
+#   - bun test src/（不含 tests/，因为 tests/integration/meta-programming 依赖
+#     真 LLM，tests/e2e/backend 部分有 2026-05-21 重组未跟进的 baseline fail）
+#   - silent-swallow audit（scripts/check-no-silent-swallow.sh）
+#   - deprecated-symbols audit（scripts/check-no-deprecated-symbols.sh）
+#
+# 不在 CI 跑的：
+#   - tests/integration/meta-programming.*.test.ts —— 依赖 OPENAI_API_KEY、~2min
+#     单测，flaky
+#   - tests/e2e/backend/* —— 5 个 baseline fail（路径缺 objects/ 子目录），与
+#     2026-05-21 stones/main/objects 重组未跟进有关
+#   - tests/e2e/frontend/* —— Playwright，需要 dev server
+#
+# 这些在本地用 `bun run test:e2e:*` 手动验证。
+
+name: CI
+
+on:
+  push:
+    branches: [main, ooc-2]
+  pull_request:
+
+jobs:
+  verify:
+    name: tsc + test + audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: TypeScript baseline check
+        run: bun run check:tsc
+
+      - name: Unit tests (src/)
+        run: bun test src/
+
+      - name: silent-swallow audit
+        run: bun run check:silent-swallow
+
+      - name: deprecated-symbols audit
+        run: bun run check:deprecated-symbols
