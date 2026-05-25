@@ -53,12 +53,29 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
   const [debugEnabled, setDebugEnabled] = useState(false);
   const [pauseBusy, setPauseBusy] = useState(false);
   const [debugBusy, setDebugBusy] = useState(false);
+  // 站名来自 .world.json 的 siteName（GET /api/world/config）；fetch 完成前显示默认值，
+  // 避免因网络抖动出现"先空白再蹦出"的闪烁。
+  const [siteName, setSiteName] = useState<string>("Oriented Object Context");
 
   const onlineLabel = useMemo(() => (online === false ? "offline" : "online"), [online]);
   const onlineClassName = useMemo(
     () => `${PILL_STYLE} ${online === false ? "bg-orange-500/15 text-orange-700" : "bg-green-500/20 text-green-600"}`,
     [online],
   );
+
+  // 一次性拉 world config（站名极少变；不进 REFRESH_MS 周期里）。
+  useEffect(() => {
+    let cancelled = false;
+    void requestJson<{ siteName: string }>(endpoints.worldConfig).then((cfg) => {
+      if (cancelled) return;
+      if (typeof cfg?.siteName === "string" && cfg.siteName.trim().length > 0) {
+        setSiteName(cfg.siteName.trim());
+      }
+    }).catch(() => {
+      // 静默：拿不到就保留默认值
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -127,7 +144,7 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
       <OocLogo px={logoPx} color={logoColor} />
 
       <h1 className="text-xs tracking-wide text-[var(--muted-foreground)] mt-1" style={{ fontFamily: "monospace" }}>
-        Oriented Object Context
+        {siteName}
       </h1>
 
       <div className="w-full mt-2">

@@ -30,8 +30,13 @@ export interface SkillEntry {
   description: string;
   /** SKILL.md 的绝对路径，用作 open_file 提示。 */
   skillFilePath: string;
-  /** 来源：branch（公共）/ object（私有）。 */
-  scope: "branch" | "object";
+  /**
+   * 来源 scope：
+   * - branch  — 公共：stones/<branch>/skills/<name>/SKILL.md
+   * - object  — 私有：stones/<branch>/objects/<self>/skills/<name>/SKILL.md
+   * - external — 外部目录：由 .world.json 的 externalSkillsDir 指定（与 stone 无关）
+   */
+  scope: "branch" | "object" | "external";
 }
 
 /** branch 级 skills 目录绝对路径。 */
@@ -79,7 +84,7 @@ export function clearStoneSkillsCache(): void {
  * - skills 目录本身不存在（ENOENT）→ 返回 []
  * - 其它 IO 错误向上抛
  */
-async function scanSkillsDir(skillsDirPath: string, scope: "branch" | "object"): Promise<SkillEntry[]> {
+async function scanSkillsDir(skillsDirPath: string, scope: "branch" | "object" | "external"): Promise<SkillEntry[]> {
   let entries;
   try {
     entries = await readdir(skillsDirPath, { withFileTypes: true });
@@ -140,6 +145,23 @@ export async function listObjectSkills(ref: StoneObjectRef): Promise<SkillEntry[
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
   const skills = await scanSkillsDir(objectSkillsDir(ref), "object");
+  cacheSet(cacheKey, skills);
+  return skills;
+}
+
+/**
+ * 列出外部 skills 目录（与 stone 无关；由 \`<baseDir>/.world.json\` 的 externalSkillsDir 字段配置）。
+ *
+ * 行为与 listBranchSkills / listObjectSkills 同款（10s TTL 缓存 + ENOENT 静默返回 []）；
+ * scope="external"。调用方负责传入展开后的绝对路径（见 persistable/world-config.ts:resolveExternalSkillsDir）。
+ *
+ * 调用方未配置 externalSkillsDir → 不应调用本函数（直接给 [] 即可，不必走缓存）。
+ */
+export async function listExternalSkills(externalSkillsDir: string): Promise<SkillEntry[]> {
+  const cacheKey = `external:${externalSkillsDir}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
+  const skills = await scanSkillsDir(externalSkillsDir, "external");
   cacheSet(cacheKey, skills);
   return skills;
 }

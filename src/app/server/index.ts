@@ -15,6 +15,7 @@ import { stonesModule } from "./modules/stones";
 import { flowsModule } from "./modules/flows";
 import { issuesModule } from "./modules/issues";
 import { uiModule } from "./modules/ui";
+import { worldConfigModule } from "./modules/world-config";
 import { enqueueRunningThreadsAtBootstrap, startJobWorker } from "./runtime/worker";
 
 /** AppServerError 类别码 → HTTP 状态码映射。 */
@@ -200,7 +201,8 @@ export function buildServer(config: ServerConfig = readServerConfig()) {
     .use(poolsModule(config))
     .use(uiModule(config))
     .use(flowsModule(config))
-    .use(issuesModule(config));
+    .use(issuesModule(config))
+    .use(worldConfigModule(config));
 
   if (config.workerEnabled) {
     // 根因 #5：启动期把磁盘上 running/waiting 的 thread 入队一次（bootstrap-only，

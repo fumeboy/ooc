@@ -22,7 +22,7 @@
  * 内部的 commands / windows registry），故归位到 thinkable/knowledge。
  */
 
-import { deriveStoneFromThread, derivePoolFromThread, listBranchSkills, listObjectSkills, readPoolRelation, readFlowRelation, readIssue } from "../../persistable/index.js";
+import { deriveStoneFromThread, derivePoolFromThread, listBranchSkills, listObjectSkills, listExternalSkills, readPoolRelation, readFlowRelation, readIssue, readWorldConfig } from "../../persistable/index.js";
 import type { ThreadContext } from "../context.js";
 import { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge.js";
 import { ROOT_BASIC_PATH, ROOT_COMMANDS, ROOT_KNOWLEDGE } from "../../executable/windows/root/index.js";
@@ -176,19 +176,25 @@ export async function collectExecutableKnowledgeEntries(
 
   // 1.6) skill_index 派生（plan §skills 支持 / D2 + D6 + 用户补充）：
   //      扫描 stones/<branch>/skills 与 stones/<branch>/objects/<self>/skills，合并去重；
+  //      2026-05-25 加入：若 .world.json 配置了 externalSkillsDir，也扫该目录（scope=external）。
   //      非空时注入一个 SkillIndexWindow 到 enriched contextWindows；空时不注入；
   //      thread.persistence 缺省（user/super 等场景）→ 没法定位 stoneRef，跳过。
   if (thread.persistence) {
     try {
       const stoneRef = deriveStoneFromThread(thread.persistence);
-      const [branchSkills, objectSkills] = await Promise.all([
+      const worldConfig = await readWorldConfig(thread.persistence.baseDir);
+      const externalDir = worldConfig.externalSkillsDir;
+      const [branchSkills, objectSkills, externalSkills] = await Promise.all([
         listBranchSkills(thread.persistence.baseDir, thread.persistence.stonesBranch),
         listObjectSkills(stoneRef),
+        externalDir ? listExternalSkills(externalDir) : Promise.resolve([]),
       ]);
-      // 同名 object 级优先（plan §D1）
+      // 同名优先级（特异性递增）：external < branch < object。
+      // object 私有 skill 覆盖 branch 公共，branch 公共覆盖 external 系统级。
       const byName = new Map<string, typeof branchSkills[number]>();
+      for (const s of externalSkills) byName.set(s.name, s);
       for (const s of branchSkills) byName.set(s.name, s);
-      for (const s of objectSkills) byName.set(s.name, s); // object 覆盖 branch
+      for (const s of objectSkills) byName.set(s.name, s);
       const merged = Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
       if (merged.length > 0) {
         const skillIndex: SkillIndexWindow = {

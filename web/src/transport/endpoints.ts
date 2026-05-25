@@ -54,4 +54,6 @@ export const endpoints = {
   /** Flow object 级 server ui_methods 调用入口。 */
   flowCallMethod: (sessionId: string, objectId: string) =>
     `/api/flows/${encodeURIComponent(sessionId)}/objects/${encodeURIComponent(objectId)}/call_method`,
+  /** World 级配置（站名 / 是否配置外部 skills 目录），来自 \`<baseDir>/.world.json\`。 */
+  worldConfig: "/api/world/config",
 };
