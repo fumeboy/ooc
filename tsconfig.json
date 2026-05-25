@@ -16,5 +16,11 @@
     "types": ["bun", "node"],
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "meta/**/*.js", "meta/**/*.ts", "tests/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "meta/**/*.js",
+    "meta/**/*.ts",
+    "tests/**/*.ts",
+    ".ooc-world/stones/**/*.ts"
+  ]
 }

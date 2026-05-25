@@ -23,6 +23,9 @@ export const endpoints = {
   flows: "/api/flows",
   /** collaborable § cross-object talk: 一次性 seed 一个 session（user → talk → target）。 */
   sessions: "/api/sessions",
+  /** 在已存在 session 的 user.root 上追加一个新 talk_window 指向另一 object（idempotent）。 */
+  addUserTalkWindow: (sessionId: string) =>
+    `/api/flows/${encodeURIComponent(sessionId)}/talk-windows`,
   pauseSession: (sessionId: string) => `/api/flows/${encodeURIComponent(sessionId)}/pause`,
   resumeSession: (sessionId: string) => `/api/flows/${encodeURIComponent(sessionId)}/resume`,
   /** 列出 session 下所有 (objectId, threadId) — UI thread 切换器数据源。 */

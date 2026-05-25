@@ -71,7 +71,10 @@ export type ContextWindow =
       title: string;
       status: "open" | "closed";
       target: string;
+      /** 对端 thread id；首条消息派送时由 talk-delivery 回填。 */
+      targetThreadId?: string;
       conversationId: string;
+      isCreatorWindow?: boolean;
       createdAt?: number;
     }
   | {

@@ -106,6 +106,10 @@ function reviveThreadForInboxMessage(thread: ThreadContext): ThreadContext {
  * / issue 都是每轮派生);explicit knowledge 与其它持久 window 的 id/createdAt 是真实状态,
  * 原样保留。
  *
+ * 同样要剔除每轮 derive 的 skill_index：id 稳定（SKILL_INDEX_WINDOW_ID）但
+ * createdAt=Date.now() 每次都新，否则 hash 永远翻动。skills 数组本身是稳定排序的
+ * 内容字段，参与 hash。
+ *
  * IssueWindow 的 `lastSeenCommentId` / `lastNotifiedAt` 是 in-process 内存语义
  * (plan §4 决策 11),不参与 hash;polling 时若只是游标移动不应判定为内容变化。
  */
@@ -122,6 +126,11 @@ function stripVolatileForHash(payload: { contextWindows?: ContextWindow[] }) {
       // (见 deriveRelationWindow:取对端 talk_window.createdAt 最小值),作为 hash 输入也无意义,
       // 只有 body / peer fields 变化才该让 hash 变。
       if (window.type === "relation") {
+        const { createdAt: _createdAt, ...rest } = window;
+        return rest;
+      }
+      // skill_index 也是每轮 derive 出来的非持久化 window;createdAt=Date.now() 每次都新。
+      if (window.type === "skill_index") {
         const { createdAt: _createdAt, ...rest } = window;
         return rest;
       }
@@ -326,6 +335,118 @@ export function createFlowsService(deps: {
         targetObjectId: delivered.calleeObjectId,
         targetThreadId: delivered.calleeThreadId,
         jobId: job.jobId,
+      };
+    },
+    /**
+     * 在已存在 session 的 user.root 上追加一个新的 talk_window 指向 targetObjectId。
+     *
+     * 与 seedSession 的差别：
+     * - 不再 createFlowSession / 不再建 user flow object（要求 user.root 已存在；
+     *   不存在抛 NOT_FOUND，提示先 seedSession）
+     * - 同 target 已有非 creator talk_window 时**幂等**返回既有那一条，不重复创建
+     * - initialMessage 可选：缺省时只挂 talk_window 不派送、不入 callee job；提供时
+     *   走 deliverTalkMessage（与 seedSession 一致），创建 callee thread + 双写消息 + 入队
+     */
+    async addUserTalkWindow({
+      sessionId,
+      targetObjectId,
+      initialMessage,
+    }: {
+      sessionId: string;
+      targetObjectId: string;
+      initialMessage?: string;
+    }) {
+      assertNotSuperSessionId(sessionId);
+      await ensureSessionExists(sessionId);
+      const target = targetObjectId.trim();
+      if (!target) {
+        throw new AppServerError("INVALID_INPUT", "targetObjectId is required");
+      }
+      if (target === USER_OBJECT_ID) {
+        throw new AppServerError(
+          "INVALID_INPUT",
+          `targetObjectId cannot be "${USER_OBJECT_ID}"; pick the object the user wants to talk to`,
+        );
+      }
+
+      const userPersistence = {
+        baseDir: deps.baseDir,
+        sessionId,
+        objectId: USER_OBJECT_ID,
+        threadId: "root",
+      } as const;
+      const userThread = await readThread(
+        { baseDir: deps.baseDir, sessionId, objectId: USER_OBJECT_ID },
+        "root",
+      );
+      if (!userThread) {
+        throw new AppServerError(
+          "NOT_FOUND",
+          `user.root thread not found for session '${sessionId}'; call seedSession first`,
+          { sessionId },
+        );
+      }
+      // 保险：旧版 thread.json 可能没写 persistence 字段；deliverTalkMessage 强制要求它
+      if (!userThread.persistence) userThread.persistence = userPersistence;
+
+      // 幂等：已经有指向同 target 的非 creator talk_window 直接返回
+      const existing = (userThread.contextWindows ?? []).find(
+        (w): w is TalkWindow => w.type === "talk" && !w.isCreatorWindow && w.target === target,
+      );
+      if (existing) {
+        return {
+          sessionId,
+          talkWindowId: existing.id,
+          targetObjectId: target,
+          targetThreadId: existing.targetThreadId,
+          jobId: undefined as string | undefined,
+          created: false,
+        };
+      }
+
+      const talkWindowId = generateWindowId("talk");
+      const talkWindow: TalkWindow = {
+        id: talkWindowId,
+        type: "talk",
+        parentWindowId: ROOT_WINDOW_ID,
+        title: target,
+        status: "open",
+        createdAt: Date.now(),
+        target,
+        conversationId: talkWindowId,
+      };
+      userThread.contextWindows = [...(userThread.contextWindows ?? []), talkWindow];
+
+      // initialMessage 缺省：仅持久化 talk_window；提供时走 deliverTalkMessage（同 seedSession）
+      if (!initialMessage || !initialMessage.trim()) {
+        await writeThread(userThread);
+        return {
+          sessionId,
+          talkWindowId,
+          targetObjectId: target,
+          targetThreadId: undefined as string | undefined,
+          jobId: undefined as string | undefined,
+          created: true,
+        };
+      }
+
+      const delivered = await deliverTalkMessage({
+        caller: { thread: userThread, talkWindow },
+        content: initialMessage,
+        source: "user",
+      });
+      const job = deps.jobManager.createRunThreadJob({
+        sessionId,
+        objectId: delivered.calleeObjectId,
+        threadId: delivered.calleeThreadId,
+      });
+      return {
+        sessionId,
+        talkWindowId,
+        targetObjectId: delivered.calleeObjectId,
+        targetThreadId: delivered.calleeThreadId,
+        jobId: job.jobId,
+        created: true,
       };
     },
     async createFlowObject({

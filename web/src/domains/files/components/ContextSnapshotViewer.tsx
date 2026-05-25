@@ -831,6 +831,7 @@ function WindowDetail({
           <div className="llm-input-detail-meta">{window.id}</div>
         </div>
       </div>
+            <WindowCommandsChips type={window.type} />
       <div className="llm-input-attrs">
         {rows.map(([k, v]) => (
           <div key={k} className="llm-input-attr-row">
@@ -839,7 +840,6 @@ function WindowDetail({
           </div>
         ))}
       </div>
-      <WindowCommandsChips type={window.type} />
       {window.type === "command_exec" && (
         <>
           <div className="llm-input-attrs">

@@ -161,7 +161,7 @@ button { cursor: pointer; }
 .llm-input-talk-composer-btn:hover:not(:disabled) { background: var(--background); }
 .llm-input-empty { padding: 14px; color: var(--muted-foreground); font-size: 12px; }
 .llm-input-empty-error { color: #b34a3c; }
-.llm-input-md-body { padding: 12px 16px; max-height: 60vh; overflow: auto; }
+.llm-input-md-body { padding: 12px 16px; max-height: 60vh; }
 .llm-input-md-body .markdown-content { font-size: 13px; }
 
 /* tool card: 跳转到 ContextSnapshotViewer 中对应 window 的链接 */
@@ -626,7 +626,7 @@ a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color
 .file-viewer-rendered > .json-tree { padding: 4px; }
 
 /* --- Task B: UserThreadHome --- */
-.user-thread-home { display: flex; flex-direction: column; padding: 18px 22px 22px; gap: 16px; min-height: 0; overflow: auto; }
+.user-thread-home { display: flex; flex-direction: column; padding: 8px 8px; min-height: 0; flex: 1 1 auto; overflow: hidden; }
 .user-thread-home-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .user-thread-home-title { margin: 0; font-size: 18px; font-weight: 600; color: var(--foreground); line-height: 1.3; }
 .user-thread-home-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: flex-start; }
@@ -683,6 +683,35 @@ a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color
 .user-thread-composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .user-thread-composer-actions .btn { font-size: 12px; padding: 5px 14px; }
 .user-thread-composer-error { font-size: 12px; color: #a44045; background: rgba(255, 232, 232, .65); border: 1px solid #f2c8c8; border-radius: 6px; padding: 6px 10px; }
+
+/* --- 2026-05-26 user-home 双栏布局（v2: 简化 header / 左栏合并 50/50） --- */
+.user-thread-home { display: flex; flex-direction: column; padding: 8px 8px; height: 100%; min-height: 0; overflow: hidden; }
+.user-home-split { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 8px; min-height: 0; flex: 1 1 auto; }
+@media (max-width: 900px) { .user-home-split { grid-template-columns: 1fr; } }
+.user-home-left { display: flex; flex-direction: column; min-height: 0; overflow: hidden; background: rgba(252, 252, 250, .75); border: 1px solid var(--border); border-radius: 10px; }
+.user-home-divider { height: 1px; background: var(--border); flex: 0 0 auto; }
+.user-home-right { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.user-home-group { display: flex; flex-direction: column; min-height: 0; flex: 1 1 0; overflow: hidden; padding: 10px 12px; }
+.user-home-group-head { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--muted-foreground); padding-bottom: 8px; margin-bottom: 6px; flex: 0 0 auto; }
+.user-home-group-head .group-count { margin-left: 4px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.user-home-group-head .icon-btn { margin-left: auto; padding: 2px 6px; font-size: 11px; line-height: 1; display: inline-flex; align-items: center; }
+.user-home-empty { color: var(--muted-foreground); font-size: 12px; padding: 8px 4px; }
+.user-home-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; flex: 1 1 auto; }
+.user-home-list-row { width: 100%; display: grid; grid-template-columns: auto auto 1fr auto; gap: 8px; align-items: center; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; text-align: left; font: inherit; }
+.user-home-list-row:hover { background: rgba(232, 240, 254, .35); }
+.user-home-list-row.is-active { background: rgba(70, 96, 220, .12); }
+.user-home-list-row-dot { color: #4561e4; font-size: 9px; flex: 0 0 auto; }
+.user-home-list-row-issue-open { color: #1f6f4a; }
+.user-home-list-row-issue-closed { color: #7c3aed; }
+.user-home-list-row-id { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted-foreground); font-size: 11px; flex: 0 0 auto; }
+.user-home-list-row-label { font-size: 12px; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-home-list-row-status { font-size: 9px; padding: 1px 6px; border-radius: 999px; text-transform: lowercase; border: 1px solid; font-weight: 600; }
+.user-home-list-row-status-open { background: #d8f8e8; color: #1f6f4a; border-color: #b8efd5; }
+.user-home-list-row-status-closed { background: #eef0ea; color: #5e645a; border-color: #d6dbd0; }
+.user-home-list-row-meta { font-size: 10px; color: var(--muted-foreground); flex: 0 0 auto; }
+.user-home-empty-panel { display: flex; flex-direction: column; gap: 6px; align-items: center; justify-content: center; min-height: 200px; padding: 32px; color: var(--muted-foreground); text-align: center; flex: 1 1 auto; }
+
+.modal-error { font-size: 12px; color: #a44045; background: rgba(255, 232, 232, .65); border: 1px solid #f2c8c8; border-radius: 6px; padding: 6px 10px; }
 
 /* --- Task C: Issue list (GitHub-style) --- */
 .issue-list-view { display: flex; flex-direction: column; padding: 18px 22px 22px; gap: 14px; }
