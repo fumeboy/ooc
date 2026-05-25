@@ -205,7 +205,7 @@ async function ackReceived(messageId: string): Promise<void> {
   try {
     const resp = await state.larkClient.im.v1.messageReaction.create({
       path: { message_id: messageId },
-      data: { reaction_type: { emoji_type: "EYES" } },
+      data: { reaction_type: { emoji_type: "OK" } },
     });
     if (resp && resp.code !== 0) {
       console.warn(
