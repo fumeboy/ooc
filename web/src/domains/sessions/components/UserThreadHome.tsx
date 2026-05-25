@@ -24,12 +24,12 @@
  */
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowRight, MessageSquare, Network } from "lucide-react";
+import { ArrowRight, MessageSquare, Network, CircleDot, FileWarning } from "lucide-react";
 import type { ThreadContext, ContextWindow, ThreadMessage } from "../../chat";
 import { ContextSnapshotViewer } from "../../files/components/ContextSnapshotViewer";
 import type { ContextSnapshot } from "../../files/context-snapshot";
 import { useDisplayName } from "../../objects";
-import { useIssues } from "../../issues";
+import { useIssues, createIssue } from "../../issues";
 import { timeAgo } from "../../issues/components/IssueDetailView";
 import { toPath } from "../../../app/routing";
 
@@ -136,7 +136,166 @@ export function UserThreadHome({ sessionId, thread, onUserReply }: UserThreadHom
           <IssuesPanel sessionId={sessionId} />
         </aside>
       </div>
+
+      <NewWindowComposer sessionId={sessionId} onUserReply={onUserReply} />
     </div>
+  );
+}
+
+/**
+ * NewWindowComposer —— user thread home 底部输入区域，发起新 talk / 新 issue。
+ *
+ * - "Chat" tab: 输入消息文字 → 调 onUserReply（user.root 的 talk_window 派单）
+ *   不切 target object —— 默认走当前 user.root 既有的 supervisor talk window
+ *   （session 默认接入的 conversational entry）。
+ *   后续要扩展到 "切换 target" 时再加 dropdown，避免一开始就过设计。
+ * - "Issue" tab: title + body → createIssue API（当前 session 下创建 Issue，
+ *   createdByObjectId 默认 supervisor）
+ */
+function NewWindowComposer({
+  sessionId,
+  onUserReply,
+}: {
+  sessionId: string;
+  onUserReply?: (text: string) => Promise<void>;
+}) {
+  const [tab, setTab] = useState<"chat" | "issue">("chat");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | undefined>(undefined);
+  // chat tab state
+  const [chatText, setChatText] = useState("");
+  // issue tab state
+  const [issueTitle, setIssueTitle] = useState("");
+  const [issueBody, setIssueBody] = useState("");
+
+  async function submitChat() {
+    const text = chatText.trim();
+    if (!text || busy) return;
+    if (!onUserReply) {
+      setErr("当前视图未提供消息发送通路（onUserReply 缺失）。");
+      return;
+    }
+    setBusy(true);
+    setErr(undefined);
+    try {
+      await onUserReply(text);
+      setChatText("");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitIssue() {
+    const title = issueTitle.trim();
+    if (!title || busy) return;
+    setBusy(true);
+    setErr(undefined);
+    try {
+      await createIssue(sessionId, {
+        title,
+        description: issueBody.trim() || undefined,
+      });
+      setIssueTitle("");
+      setIssueBody("");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="user-thread-composer" aria-label="New window composer">
+      <div className="user-thread-composer-tabs">
+        <button
+          type="button"
+          className={`user-thread-composer-tab ${tab === "chat" ? "is-active" : ""}`}
+          onClick={() => setTab("chat")}
+        >
+          <MessageSquare size={12} style={{ marginRight: 5 }} />
+          New message
+        </button>
+        <button
+          type="button"
+          className={`user-thread-composer-tab ${tab === "issue" ? "is-active" : ""}`}
+          onClick={() => setTab("issue")}
+        >
+          <CircleDot size={12} style={{ marginRight: 5 }} />
+          New issue
+        </button>
+      </div>
+
+      {tab === "chat" ? (
+        <div className="user-thread-composer-body">
+          <textarea
+            className="user-thread-composer-input"
+            placeholder="Send a message to supervisor…"
+            value={chatText}
+            onChange={(e) => setChatText(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                e.preventDefault();
+                void submitChat();
+              }
+            }}
+            disabled={busy}
+            rows={3}
+          />
+          <div className="user-thread-composer-actions">
+            <span className="muted small">⌘/Ctrl + Enter to send</span>
+            <button
+              type="button"
+              className="btn small"
+              onClick={() => void submitChat()}
+              disabled={busy || !chatText.trim() || !onUserReply}
+            >
+              {busy ? "Sending…" : "Send"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="user-thread-composer-body">
+          <input
+            type="text"
+            className="user-thread-composer-input user-thread-composer-input-title"
+            placeholder="Issue title"
+            value={issueTitle}
+            onChange={(e) => setIssueTitle(e.target.value)}
+            disabled={busy}
+            maxLength={200}
+          />
+          <textarea
+            className="user-thread-composer-input"
+            placeholder="Describe the issue (optional, markdown supported)…"
+            value={issueBody}
+            onChange={(e) => setIssueBody(e.target.value)}
+            disabled={busy}
+            rows={3}
+            maxLength={8192}
+          />
+          <div className="user-thread-composer-actions">
+            <span className="muted small">created by supervisor</span>
+            <button
+              type="button"
+              className="btn small"
+              onClick={() => void submitIssue()}
+              disabled={busy || !issueTitle.trim()}
+            >
+              {busy ? "Creating…" : "Create issue"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {err && (
+        <div className="user-thread-composer-error" role="alert">
+          <FileWarning size={11} style={{ marginRight: 5, verticalAlign: "middle" }} />
+          {err}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -174,7 +333,7 @@ function TalkWindowCard({
         </div>
         <button
           type="button"
-          className="btn small primary"
+          className="btn small"
           onClick={() => {
             // user.root.talk_window 不存对端 threadId; 让 shell 默认派生 (root)
             // ChatPanel 拿到对端 thread 后会展示完整 timeline.

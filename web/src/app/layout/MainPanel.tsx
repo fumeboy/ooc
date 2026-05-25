@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
+import { Home } from "lucide-react";
 import type { FileContent } from "../../domains/files";
 import { FileViewer } from "../../domains/files/components/FileViewer";
 import type { Stone } from "../../domains/stones";
@@ -135,6 +136,16 @@ export function MainPanel({
           {error && !file && !isWelcome && <span className="muted small">backend offline</span>}
           {threadHeader}
           <button type="button" className="refresh" onClick={onRefresh} disabled={loading || !onRefresh} aria-label="Refresh" title="Refresh">↻</button>
+          {sessionIdFromRoute && (
+            <Link
+              to={`/flows/${encodeURIComponent(sessionIdFromRoute)}/objects/user/threads/root`}
+              className="refresh"
+              aria-label="User home"
+              title="User home (talk + issues)"
+            >
+              <Home size={14} strokeWidth={1.8} />
+            </Link>
+          )}
         </div>
       </div>
       <div className="panel flex flex-col flex-grow">

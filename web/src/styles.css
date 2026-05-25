@@ -669,6 +669,21 @@ a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color
 .user-thread-issues-foot { padding-top: 10px; border-top: 1px dashed var(--border); margin-top: 10px; }
 .user-thread-issues-foot .btn { font-size: 11px; padding: 5px 10px; }
 
+/* --- NewWindowComposer (user thread home 底部) --- */
+.user-thread-composer { margin-top: 8px; background: rgba(252, 252, 250, .75); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+.user-thread-composer-tabs { display: inline-flex; align-self: flex-start; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: rgba(255, 255, 255, .6); }
+.user-thread-composer-tab { border: 0; background: transparent; color: var(--muted-foreground); padding: 6px 12px; font-size: 12px; cursor: pointer; border-right: 1px solid var(--border); display: inline-flex; align-items: center; }
+.user-thread-composer-tab:last-child { border-right: 0; }
+.user-thread-composer-tab.is-active { background: rgba(232, 240, 254, .35); color: var(--foreground); font-weight: 600; }
+.user-thread-composer-tab:hover:not(.is-active) { background: rgba(232, 240, 254, .2); color: var(--foreground); }
+.user-thread-composer-body { display: flex; flex-direction: column; gap: 8px; }
+.user-thread-composer-input { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; line-height: 1.5; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; background: rgba(255, 255, 255, .85); color: var(--foreground); resize: vertical; min-height: 60px; width: 100%; box-sizing: border-box; }
+.user-thread-composer-input:focus { outline: none; border-color: rgba(70, 96, 220, .5); box-shadow: 0 0 0 3px rgba(70, 96, 220, .12); }
+.user-thread-composer-input-title { min-height: 0; resize: none; }
+.user-thread-composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.user-thread-composer-actions .btn { font-size: 12px; padding: 5px 14px; }
+.user-thread-composer-error { font-size: 12px; color: #a44045; background: rgba(255, 232, 232, .65); border: 1px solid #f2c8c8; border-radius: 6px; padding: 6px 10px; }
+
 /* --- Task C: Issue list (GitHub-style) --- */
 .issue-list-view { display: flex; flex-direction: column; padding: 18px 22px 22px; gap: 14px; }
 .issue-list-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -678,7 +693,8 @@ a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color
 .issue-list-filter { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .issue-list-filter-tab { border: 0; background: rgba(255, 255, 255, .7); color: var(--muted-foreground); padding: 6px 12px; font-size: 12px; cursor: pointer; border-right: 1px solid var(--border); }
 .issue-list-filter-tab:last-child { border-right: 0; }
-.issue-list-filter-tab.is-active { background: var(--foreground); color: #fff; font-weight: 600; }
+.issue-list-filter-tab.is-active { background: rgba(232, 240, 254, .35); color: var(--foreground); font-weight: 600; }
+.issue-list-filter-tab:hover:not(.is-active) { background: rgba(232, 240, 254, .2); color: var(--foreground); }
 .issue-list-rows { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: rgba(252, 252, 250, .75); }
 .issue-list-empty { padding: 32px 16px; text-align: center; color: var(--muted-foreground); font-size: 13px; }
 .issue-list-ul { list-style: none; padding: 0; margin: 0; }

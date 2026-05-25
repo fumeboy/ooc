@@ -43,6 +43,36 @@ export function appendIssueComment(
 }
 
 /**
+ * 创建 Issue — `POST /api/flows/<sid>/issues`。
+ *
+ * createdByObjectId 必须是 stones/ 下存在的 object（service 层校验）；
+ * UI 默认填 "supervisor"，与 issue comment 对齐。
+ */
+export function createIssue(
+  sessionId: string,
+  body: {
+    title: string;
+    description?: string;
+    createdByObjectId?: string;
+    mentions?: string[];
+  },
+) {
+  return requestJson<{ issue: Issue }>(
+    `/api/flows/${encodeURIComponent(sessionId)}/issues`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        title: body.title,
+        description: body.description,
+        createdByObjectId: body.createdByObjectId ?? "supervisor",
+        mentions: body.mentions ?? [],
+      }),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+}
+
+/**
  * 关闭 Issue — `POST /api/flows/<sid>/issues/<id>/close`。
  */
 export function closeIssue(sessionId: string, issueId: number | string) {
