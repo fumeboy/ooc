@@ -66,9 +66,10 @@ async function supervisorStoneExists(baseDir: string, branch: string): Promise<b
 /**
  * 第一启动时创建 supervisor stone。
  *
- * **Supervisor 不走 metaprog worktree**（R12 例外，见 stone-versioning.ts:122）：
- * supervisor 是自治区外的协调者，stone 改动不该走"metaprog branch + PR-Issue
- * review"流程（流程本身需要 supervisor 审阅，circular）。直写 main worktree。
+ * **Bootstrap 直写 main**：此时尚未进入 LLM 上下文运行 metaprog 命令，最简
+ * 方式是直接 createStoneObject + writeSelf/Readme + 写 seed knowledge +
+ * gitCommitAll on main worktree。运行期 supervisor 创建他人 Object 走 metaprog
+ * `create_object`（与本函数同款实现的快捷命令）或标准 metaprog 流程。
  *
  * 流程：
  *   1. ref 用 stonesBranch="main"（main worktree path）
@@ -92,7 +93,7 @@ async function createSupervisorStone(baseDir: string, branch: string): Promise<s
     await writeFile(join(knowledgeBaseDir, filename), content, "utf8");
   }
 
-  // git commit on main worktree (R12 supervisor 例外: 直写 main, 不走 metaprog branch)
+  // git commit on main worktree (bootstrap-time 直写：尚无 LLM 上下文运行 metaprog)
   const mainWorktreePath = join(baseDir, "stones", branch);
   const commit = gitCommitAll(mainWorktreePath, {
     authorName: SUPERVISOR_OBJECT_ID,

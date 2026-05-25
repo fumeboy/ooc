@@ -11,6 +11,7 @@ import {
   requestPrIssueReview,
   resolvePrIssue,
   rollback,
+  supervisorCreateObject,
   tryMergeSelf,
   pruneStaleWorktrees,
   __testing,
@@ -56,11 +57,13 @@ describe("openMetaprogWorktree", () => {
     expect(content).toBe("agent_of_x v1\n");
   });
 
-  test("rejects supervisor (R12 exception)", async () => {
+  test("supervisor 也能开 worktree（R12 例外撤销后对称化）", async () => {
     const baseDir = await newWorld();
-    const r = await openMetaprogWorktree({ baseDir, objectId: "supervisor" });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("INVALID_INPUT");
+    const r = await openMetaprogWorktree({ baseDir, objectId: "supervisor", token: "svc1" });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.worktree.branch).toBe("metaprog/supervisor/svc1");
+    }
   });
 
   test("rejects invalid objectId", async () => {
@@ -116,19 +119,44 @@ describe("commitWorktree + classifyWorktreeBranch", () => {
     }
   });
 
-  test("supervisor always returns self-scope (R12)", async () => {
+  test("supervisor 走标准 path-based 判定（R12 例外撤销）：改自己 stones → self-scope", async () => {
     const baseDir = await newWorld();
-    // 构造一个假的 worktree ref（不会被使用）；classifyWorktreeBranch 应短路
-    const fakeRef = {
-      baseDir,
-      objectId: "supervisor",
-      branch: "main",
-      path: join(baseDir, "stones", "main"),
-      baseCommit: "x",
-    };
-    const cls = await classifyWorktreeBranch(fakeRef, "supervisor");
+    const open = await openMetaprogWorktree({ baseDir, objectId: "supervisor", token: "sv2" });
+    if (!open.ok) throw new Error("open failed");
+    // 改 supervisor 自己自治区
+    await writeFile(join(open.worktree.path, "objects", "supervisor", "self.md"), "supervisor v2\n");
+    const commit = await commitWorktree({
+      worktree: open.worktree,
+      intent: "supervisor self",
+      authorObjectId: "supervisor",
+    });
+    expect(commit.ok).toBe(true);
+    const cls = await classifyWorktreeBranch(open.worktree, "supervisor");
     expect(cls.ok).toBe(true);
-    if (cls.ok) expect(cls.scope).toBe("self-scope");
+    if (cls.ok) {
+      expect(cls.scope).toBe("self-scope");
+      expect(cls.paths).toEqual(["objects/supervisor/self.md"]);
+    }
+  });
+
+  test("supervisor 改他人 stones → cross-scope（PR-Issue 由 supervisor 自审）", async () => {
+    const baseDir = await newWorld();
+    const open = await openMetaprogWorktree({ baseDir, objectId: "supervisor", token: "sv3" });
+    if (!open.ok) throw new Error("open failed");
+    // 改 agent_of_x stone（不在 objects/supervisor/ 下 → cross-scope）
+    await writeFile(join(open.worktree.path, "objects", "agent_of_x", "self.md"), "agent_of_x edited by supervisor\n");
+    const commit = await commitWorktree({
+      worktree: open.worktree,
+      intent: "supervisor cross",
+      authorObjectId: "supervisor",
+    });
+    expect(commit.ok).toBe(true);
+    const cls = await classifyWorktreeBranch(open.worktree, "supervisor");
+    expect(cls.ok).toBe(true);
+    if (cls.ok) {
+      expect(cls.scope).toBe("cross-scope");
+      expect(cls.paths).toEqual(["objects/agent_of_x/self.md"]);
+    }
   });
 });
 
@@ -338,5 +366,81 @@ describe("pruneStaleWorktrees", () => {
     const baseDir = await newWorld();
     const r = await pruneStaleWorktrees(baseDir);
     expect(r.ok).toBe(true);
+  });
+});
+
+describe("supervisorCreateObject", () => {
+  test("creates new stone with self/readme/knowledge and commits to main", async () => {
+    const baseDir = await newWorld();
+    const r = await supervisorCreateObject({
+      baseDir,
+      newObjectId: "weather",
+      selfMd: "# weather — query weather\n",
+      readmeMd: "# weather\n\nAsk for forecasts.\n",
+      knowledge: { "usage.md": "Pass {city}.\n" },
+      intent: "feat: introduce weather agent",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(typeof r.commitSha).toBe("string");
+    // 文件落盘 main
+    const selfOnMain = await readFile(join(baseDir, "stones", "main", "objects", "weather", "self.md"), "utf8");
+    expect(selfOnMain).toBe("# weather — query weather\n");
+    const kn = await readFile(join(baseDir, "stones", "main", "objects", "weather", "knowledge", "usage.md"), "utf8");
+    expect(kn).toBe("Pass {city}.\n");
+    const meta = await readFile(join(baseDir, "stones", "main", "objects", "weather", ".stone.json"), "utf8");
+    expect(JSON.parse(meta)).toMatchObject({ type: "stone", objectId: "weather" });
+  });
+
+  test("rejects when stone already exists", async () => {
+    const baseDir = await newWorld();
+    const first = await supervisorCreateObject({
+      baseDir,
+      newObjectId: "weather",
+      selfMd: "v1",
+      readmeMd: "v1",
+    });
+    expect(first.ok).toBe(true);
+    const dup = await supervisorCreateObject({
+      baseDir,
+      newObjectId: "weather",
+      selfMd: "v2",
+      readmeMd: "v2",
+    });
+    expect(dup.ok).toBe(false);
+    if (!dup.ok) expect(dup.code).toBe("ALREADY_EXISTS");
+  });
+
+  test("rejects supervisor itself (bootstrap path only)", async () => {
+    const baseDir = await newWorld();
+    const r = await supervisorCreateObject({
+      baseDir,
+      newObjectId: "supervisor",
+      selfMd: "x",
+      readmeMd: "y",
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("INVALID_INPUT");
+  });
+
+  test("rejects empty selfMd / readmeMd", async () => {
+    const baseDir = await newWorld();
+    const r1 = await supervisorCreateObject({ baseDir, newObjectId: "x", selfMd: "", readmeMd: "y" });
+    expect(r1.ok).toBe(false);
+    const r2 = await supervisorCreateObject({ baseDir, newObjectId: "x", selfMd: "x", readmeMd: "  " });
+    expect(r2.ok).toBe(false);
+  });
+
+  test("rejects unsafe knowledge filenames", async () => {
+    const baseDir = await newWorld();
+    const r = await supervisorCreateObject({
+      baseDir,
+      newObjectId: "weather",
+      selfMd: "x",
+      readmeMd: "y",
+      knowledge: { "../escape.md": "bad" },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("INVALID_INPUT");
   });
 });
