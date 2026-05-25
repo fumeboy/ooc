@@ -15,7 +15,7 @@ import {
   ClientWithSourceToggle,
   matchClientTarget,
 } from "../../domains/clients/ClientWithSourceToggle";
-import type { RouteState } from "../routing";
+import { toPath, type RouteState } from "../routing";
 import { LayoutModeToggle, type LayoutMode } from "./LayoutModeToggle";
 import { humanizeThreadId } from "./threadDisplay";
 
@@ -138,7 +138,7 @@ export function MainPanel({
           <button type="button" className="refresh" onClick={onRefresh} disabled={loading || !onRefresh} aria-label="Refresh" title="Refresh">↻</button>
           {sessionIdFromRoute && (
             <Link
-              to={`/flows/${encodeURIComponent(sessionIdFromRoute)}/objects/user/threads/root`}
+              to={toPath({ kind: "session", sessionId: sessionIdFromRoute })}
               className="refresh"
               aria-label="User home"
               title="User home (talk + issues)"
