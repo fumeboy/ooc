@@ -6,6 +6,7 @@ import { runRecoveryCheck } from "./bootstrap/recovery-check";
 import { checkStoneToPoolMigration, reportPoolMigration } from "./bootstrap/check-pool-migration";
 import { checkStaleDatabaseDir } from "./bootstrap/check-stale-database-dir";
 import { ensureSupervisorObject } from "./bootstrap/ensure-supervisor";
+import { ensureUserObject } from "./bootstrap/ensure-user";
 import { AppServerError } from "./bootstrap/errors";
 import { healthModule } from "./modules/health";
 import { runtimeModule } from "./modules/runtime";
@@ -256,6 +257,22 @@ if (import.meta.main) {
   } catch (e) {
     // bootstrap invariant 失败不允许 server 跑下去——区别于后续的 advisory 类 check
     console.error(`[ooc-app-server] ensureSupervisorObject FATAL: ${e instanceof Error ? e.message : e}`);
+    throw e;
+  }
+
+  // 2026-05-25: user stone 也是 World bootstrap invariant。
+  // 它是真人用户的占位 Object，readme.md 定义 inline UI token 协议；其它 Object 通过
+  // relation_window 读到 user.readme，学到怎么用 [[ui...ui]] 指给用户看东西。
+  try {
+    const userStone = await ensureUserObject({ baseDir: config.baseDir, branch: config.stonesBranch });
+    if (userStone.created) {
+      console.log(
+        `[ooc-app-server] user stone created (commit ${userStone.commitSha?.slice(0, 8)}) — ` +
+          `OOC World bootstrap invariant: Object → user 消息渲染入口 + inline UI 协议`,
+      );
+    }
+  } catch (e) {
+    console.error(`[ooc-app-server] ensureUserObject FATAL: ${e instanceof Error ? e.message : e}`);
     throw e;
   }
 
