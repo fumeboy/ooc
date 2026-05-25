@@ -29,6 +29,9 @@ afterEach(async () => {
 
 async function newWorld(agents: string[]): Promise<string> {
   tempRoot = await mkdtemp(join(tmpdir(), "ooc-stones-git-e2e-"));
+  // 2026-05-21 重组 (commit 8799e5bb) 后布局：stones/{branch}/objects/{id}/。
+  // 这里直接走 ensureStoneRepo 的 flat→main migrate：把 stones/<id>/ 摆给它，
+  // bootstrap 会自动迁到 stones/main/objects/<id>/。
   for (const id of agents) {
     await mkdir(join(tempRoot, "stones", id), { recursive: true });
     await writeFile(join(tempRoot, "stones", id, "self.md"), `${id} v1\n`);
@@ -76,8 +79,8 @@ describe("e2e: metaprog command — AE1 self-scope ff merge", () => {
     const branch: string = open.branch;
     const path: string = open.path;
 
-    // 2. 直接 fs 写到 worktree
-    await writeFile(join(path, "agent_of_x", "self.md"), "v2\n");
+    // 2. 直接 fs 写到 worktree（2026-05-21 重组后 stone 落在 objects/ 下）
+    await writeFile(join(path, "objects", "agent_of_x", "self.md"), "v2\n");
 
     // 3. commit
     const commitRaw = await executeMetaprog(
@@ -94,7 +97,7 @@ describe("e2e: metaprog command — AE1 self-scope ff merge", () => {
     expect(merged.kind).toBe("merged");
 
     // 5. main 上 self.md 是 v2
-    const after = await readFile(join(baseDir, "stones", "main", "agent_of_x", "self.md"), "utf8");
+    const after = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_x", "self.md"), "utf8");
     expect(after).toBe("v2\n");
   });
 });
@@ -111,8 +114,8 @@ describe("e2e: metaprog command — AE2/AE7 cross-scope → PR-Issue", () => {
     const branch: string = open.branch;
     const path: string = open.path;
 
-    await writeFile(join(path, "agent_of_x", "self.md"), "x edits self\n");
-    await writeFile(join(path, "agent_of_y", "self.md"), "x edits y\n");
+    await writeFile(join(path, "objects", "agent_of_x", "self.md"), "x edits self\n");
+    await writeFile(join(path, "objects", "agent_of_y", "self.md"), "x edits y\n");
 
     expect(
       JSON.parse(
@@ -130,7 +133,7 @@ describe("e2e: metaprog command — AE2/AE7 cross-scope → PR-Issue", () => {
     expect(merge.ok).toBe(true);
     expect(merge.kind).toBe("must-pr-issue");
     expect(typeof merge.issueId).toBe("number");
-    expect(merge.paths.sort()).toEqual(["agent_of_x/self.md", "agent_of_y/self.md"]);
+    expect(merge.paths.sort()).toEqual(["objects/agent_of_x/self.md", "objects/agent_of_y/self.md"]);
 
     // PR-Issue 落在 super session
     const index = await readIssueIndex(baseDir, PR_ISSUE_SESSION_ID);
@@ -139,7 +142,7 @@ describe("e2e: metaprog command — AE2/AE7 cross-scope → PR-Issue", () => {
     expect(prIssue?.title.startsWith("[PR]")).toBe(true);
 
     // main 上 agent_of_y/self.md 仍是 v1
-    const yMain = await readFile(join(baseDir, "stones", "main", "agent_of_y", "self.md"), "utf8");
+    const yMain = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_y", "self.md"), "utf8");
     expect(yMain).toBe("agent_of_y v1\n");
   });
 });
@@ -154,7 +157,7 @@ describe("e2e: metaprog command — supervisor resolve merge / reject", () => {
         makeCtx({ baseDir, callerId: "agent_of_x", args: { action: "open_worktree" } }),
       )) as string,
     );
-    await writeFile(join(open1.path, "agent_of_y", "self.md"), "approved\n");
+    await writeFile(join(open1.path, "objects", "agent_of_y", "self.md"), "approved\n");
     await executeMetaprog(
       makeCtx({
         baseDir,
@@ -187,7 +190,7 @@ describe("e2e: metaprog command — supervisor resolve merge / reject", () => {
     expect(r1.kind).toBe("merged");
 
     // y/self.md 已合并
-    const y = await readFile(join(baseDir, "stones", "main", "agent_of_y", "self.md"), "utf8");
+    const y = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_y", "self.md"), "utf8");
     expect(y).toBe("approved\n");
 
     // 准备第二个 cross-scope PR 走 reject
@@ -196,7 +199,7 @@ describe("e2e: metaprog command — supervisor resolve merge / reject", () => {
         makeCtx({ baseDir, callerId: "agent_of_x", args: { action: "open_worktree" } }),
       )) as string,
     );
-    await writeFile(join(open2.path, "agent_of_y", "self.md"), "rejected change\n");
+    await writeFile(join(open2.path, "objects", "agent_of_y", "self.md"), "rejected change\n");
     await executeMetaprog(
       makeCtx({
         baseDir,
@@ -227,7 +230,7 @@ describe("e2e: metaprog command — supervisor resolve merge / reject", () => {
     expect(r2.kind).toBe("rejected");
 
     // main 上 y/self.md 仍是 "approved"（未被 rejected 的 PR 改回去）
-    const y2 = await readFile(join(baseDir, "stones", "main", "agent_of_y", "self.md"), "utf8");
+    const y2 = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_y", "self.md"), "utf8");
     expect(y2).toBe("approved\n");
   });
 });
@@ -242,7 +245,7 @@ describe("e2e: metaprog command — AE4/AE8 supervisor rollback + Supervisor 例
         makeCtx({ baseDir, callerId: "agent_of_x", args: { action: "open_worktree" } }),
       )) as string,
     );
-    await writeFile(join(open.path, "agent_of_x", "self.md"), "broken-v2\n");
+    await writeFile(join(open.path, "objects", "agent_of_x", "self.md"), "broken-v2\n");
     await executeMetaprog(
       makeCtx({ baseDir, callerId: "agent_of_x", args: { action: "commit", branch: open.branch, intent: "broken" } }),
     );
@@ -270,7 +273,7 @@ describe("e2e: metaprog command — AE4/AE8 supervisor rollback + Supervisor 例
     expect(r.ok).toBe(true);
 
     // self.md 回到 v1
-    const restored = await readFile(join(baseDir, "stones", "main", "agent_of_x", "self.md"), "utf8");
+    const restored = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_x", "self.md"), "utf8");
     expect(restored).toBe("agent_of_x v1\n");
 
     // author = supervisor
@@ -327,9 +330,9 @@ describe("e2e: U8 recovery-check 端到端", () => {
   test("broken stone 的 server/index.ts → 启动期产 [recovery-needed] PR-Issue", async () => {
     const baseDir = await newWorld(["agent_of_x", "supervisor"]);
     // 故意写坏 agent_of_x 的 server/index.ts
-    await mkdir(join(baseDir, "stones", "main", "agent_of_x", "server"), { recursive: true });
+    await mkdir(join(baseDir, "stones", "main", "objects", "agent_of_x", "server"), { recursive: true });
     await writeFile(
-      join(baseDir, "stones", "main", "agent_of_x", "server", "index.ts"),
+      join(baseDir, "stones", "main", "objects", "agent_of_x", "server", "index.ts"),
       "this is &^&^ not valid &@!!\n",
     );
 

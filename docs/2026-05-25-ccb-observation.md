@@ -242,6 +242,22 @@ P0-1 (Permission 模型) Q0a~Q0d 完成；Q0e 列 todo（自改 server/index.ts 
 - **2026-05-25**：首版。Supervisor Round 1 外循环。
 - **2026-05-25**（当日 Round 1 闭环）：P0-2 完整实施完成，5 套 e2e PASS / 全仓单测 PASS / meta tsc clean。差异与残留如上。
 - **2026-05-25**（当日 Round 2 闭环）：P0-1 Q0a~Q0d 完成，2 套 e2e (Q0b+Q0c) PASS / 联合 P0-1+P0-2 42 用例 PASS / 全仓 550 单测 PASS。3 项歧义 Supervisor 拍板；Q0e 列 todo。
+- **2026-05-25**（当日 Round 4 闭环）：baseline tsc + e2e 漂移清零。
+  - **A 段** ui 模块 tsc 7 错全修：
+    - `api.list-flows.ts` 调 `service.listFlows()` 但 service 未实现 → 补 `listFlows()` (返 `<world>/flows/` 目录条目, fallback `{ flows: [] }`)
+    - `service.ts` 7 个 `Dirent<NonSharedBuffer>` 类型不匹配 → 显式 import `Dirent` from node:fs + readdir 处加 `as Dirent[]` 断言（路径 1：最小改动）
+    - 新增 ui module 单测 3 个 (listFlows: 正常列表 / 不存在 / 空)
+    - 决策：listFlows API 不挂 index.ts，保持"行为不变"（漏写实现修补，等需要再 wire）
+  - **B 段** stones-versioning.e2e 5 漂移全修：
+    - 真因：commit `8799e5bb refactor(world): nest stone objects under stones/{branch}/objects/` 把 stone 布局加 `objects/` 中间层；源代码 (`stoneDir` / `migrateFlatToMain` / `stone-versioning.ts` / `recovery-check.ts`) 全跟上，**但 e2e 测试漏了**
+    - 单测 `stone-versioning.test.ts` 已正确用 `objects/` 布局；e2e 与之偏差 = 测试漂移而非源代码 bug
+    - 修法：测试 11 处补 `objects/` 中间层 + 1 处 fixture 注释；不掩盖 bug（断言语义 100% 保留）
+  - **整体校验**：
+    - `bun tsc --noEmit`：**clean（首次全仓 0 errors）**
+    - `bun test src/`：**589 pass / 0 fail / 3 skip / 1740 expect**
+    - `bun test tests/e2e/backend/`：**51 pass / 0 fail / 8 skip / 516 expect**（含 stones-versioning 8/8）
+  - 派单效率：2 sub agent 并行（独立改动文件无冲突）
+
 - **2026-05-25**（当日 Round 3 闭环）：P1-3 Agent-loop Visualizer R0a~R0d 完成。
   - R0a meta 落 `visible.children.loop_timeline` 子节点（含 4 个 patches）+ tsc clean
   - R0b 新增 `GET /api/runtime/.../debug/loops` list-loops endpoint + 6/6 service+HTTP 单测 + LoopMeta 类型复用 LlmLoopDebugMetaRecord
