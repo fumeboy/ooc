@@ -242,6 +242,29 @@ P0-1 (Permission 模型) Q0a~Q0d 完成；Q0e 列 todo（自改 server/index.ts 
 - **2026-05-25**：首版。Supervisor Round 1 外循环。
 - **2026-05-25**（当日 Round 1 闭环）：P0-2 完整实施完成，5 套 e2e PASS / 全仓单测 PASS / meta tsc clean。差异与残留如上。
 - **2026-05-25**（当日 Round 2 闭环）：P0-1 Q0a~Q0d 完成，2 套 e2e (Q0b+Q0c) PASS / 联合 P0-1+P0-2 42 用例 PASS / 全仓 550 单测 PASS。3 项歧义 Supervisor 拍板；Q0e 列 todo。
+- **2026-05-25**（当日 Round 5 闭环）：AgentOfExperience 首次真用户校准 + 暴露 e2e 假阳性盲区。
+  - 派 sub agent 用 Playwright 操作 Web UI 跑 7 场景剧本，深度体验 Round 1-3 全部新功能
+  - **关键发现**：
+    - 体验官报告 3 CRITICAL：`POST .../permission` 404、`GET .../debug/loops` 404、Loop Timeline 完全不可用
+    - sub agent 二次诊断真因：**不是 Elysia routing bug，是 long-running backend 进程漂移**——体验官的 backend 启动时点早于 `96ffb2df` (P0-1) + `68a46b3b` (P1-3) 落地，那个 backend 实例没有这两个 commit 引入的路由
+    - 在当前 HEAD 上真启 backend → curl 全部正常（`POST .../permission` 返 409 业务错；`GET .../debug/loops` 返 200 `{"loops":[]}`）
+  - **教训沉淀**：
+    - e2e 用 `app.handle(new Request(...))` PASS 不等于真 HTTP server 路由通——漏掉"路由真没注册" + "long-running backend 漂移"两类问题
+    - Round 1-3 全部 P0-1 + P1-3 e2e PASS 在体验中**对真用户全 404**（虽然 root cause 是 backend 没重启，但暴露了我们的测试方法盲区）
+    - 已写 2 个 memory：派单环境前提清单 + e2e 假阳性根源
+  - **永久 regression gate 落地**：`tests/e2e/backend/route-audit.e2e.test.ts` 真 `Bun.spawn` 启子进程 + 枚举 15 条 transport URL + 仅 Elysia `NotFoundError` 触发 fail；audit 在临时注释 `.use()` 时**精准报出 2 条 fail**，证明能拦截此类 bug
+  - **其他体验发现（未修，列后续 round）**：
+    - H-1 backend offline pill 误报（topbar 检测信号源与 sidebar 不一致）
+    - H-2 `/files/*` 路由几乎是 dead link（URL 路径参数完全无效）
+    - H-3 裸 API 创建 session 后 user thread composer disabled + 缺"去 welcome"按钮
+    - M-3 `/api/stones/{user,main}/self` 高频 404 不是 stone object（user 是 ephemeral / main 是分支）但 UI 不停 fetch
+    - M-4 `/api/objects/stone/supervisor/client-source-url` 404 — feedback-tracker + supervisor 两个 stone 都没写 client/index.tsx → **agent-native UI parity 缺 dogfood 样例**
+    - M-5 pool sediment 迁移未完成（启动 banner 已警告）
+  - **现实校准结论**：P0-1 / P0-2 / P1-3 / Round 4 设计与代码层都对，但需要"真启 backend + 真 LLM + Playwright"才能验真用户路径；本轮成为 OOC 第一次"agent-native UI vs 真用户体验"对账的基准
+  - 整体校验：`bun test tests/e2e/backend/`：52 pass / 0 fail（含新 route-audit 1 pass）；全仓 src/ 单测仍 589 pass / 0 fail / 3 skip
+  - 派单效率：2 sub agent 串行（体验官跑剧本 → 修复 agent 诊断 routing）；体验官产出 27 张截图 + 体验脚本 + 完整报告
+  - 产出文件：`docs/2026-05-25-round-5-experience-report.md` + `docs/round-5-experience/` (screenshots + playwright-driver-v2.ts + 原始日志)
+
 - **2026-05-25**（当日 Round 4 闭环）：baseline tsc + e2e 漂移清零。
   - **A 段** ui 模块 tsc 7 错全修：
     - `api.list-flows.ts` 调 `service.listFlows()` 但 service 未实现 → 补 `listFlows()` (返 `<world>/flows/` 目录条目, fallback `{ flows: [] }`)

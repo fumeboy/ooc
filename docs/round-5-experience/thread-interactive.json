@@ -1,0 +1,450 @@
+[
+  {
+    "tag": "button",
+    "text": "pause",
+    "aria": "",
+    "title": "",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "debug",
+    "aria": "",
+    "title": "",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "a",
+    "text": "Flows",
+    "aria": "",
+    "title": "",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "a",
+    "text": "Stones",
+    "aria": "",
+    "title": "",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "a",
+    "text": "Pools",
+    "aria": "",
+    "title": "",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "a",
+    "text": "World",
+    "aria": "",
+    "title": "",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "",
+    "title": "Show sessions",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "R11 Demo — 产品反馈管理流程",
+    "aria": "",
+    "title": "R11 Demo — 产品反馈管理流程",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "Create session",
+    "title": "Create session",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "demo-2026-05-25-r11",
+    "aria": "",
+    "title": "demo-2026-05-25-r11",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "issues",
+    "aria": "",
+    "title": "issues",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "objects",
+    "aria": "",
+    "title": "objects",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "切换到 两栏布局",
+    "title": "切换到两栏布局（隐藏左侧栏，主面板与右面板各占 50%）",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "a",
+    "text": "flows",
+    "aria": "",
+    "title": "flows",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "a",
+    "text": "demo-2026-05-25-r11",
+    "aria": "",
+    "title": "demo-2026-05-25-r11",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "↻",
+    "aria": "Refresh",
+    "title": "Refresh",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "a",
+    "text": "",
+    "aria": "User home",
+    "title": "User home (talk + issues)",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "Context Snapshot",
+    "aria": "",
+    "title": "",
+    "role": "tab",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "Loop Timeline",
+    "aria": "",
+    "title": "按 LLM 轮次展开 thread (R0c)",
+    "role": "tab",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "查看 context windows",
+    "title": "把主面板切回 thread context windows 视图",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "切换到 两栏布局",
+    "title": "切换到两栏布局（隐藏左侧栏，主面板与右面板各占 50%）",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "",
+    "title": "复制",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "展开 tool card",
+    "title": "展开 tool card",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "",
+    "title": "复制",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "",
+    "title": "复制",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "在 Context Tree 中定位 w_issue_mpkj9wve_879b",
+    "title": "在 Context Tree 中定位 w_issue_mpkj9wve_879b",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "展开 tool card",
+    "title": "展开 tool card",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "展开 tool card",
+    "title": "展开 tool card",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "",
+    "title": "复制",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "",
+    "title": "复制",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "展开 tool card",
+    "title": "展开 tool card",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "展开 tool card",
+    "title": "展开 tool card",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "",
+    "title": "复制",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "",
+    "title": "复制",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "在 Context Tree 中定位 f_mpkjby7h_bu5j",
+    "title": "在 Context Tree 中定位 f_mpkjby7h_bu5j",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "展开 tool card",
+    "title": "展开 tool card",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "展开 tool card",
+    "title": "展开 tool card",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "",
+    "title": "复制",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "",
+    "title": "复制",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "在 Context Tree 中定位 w_file_mpkjdkit_gp5b",
+    "title": "在 Context Tree 中定位 w_file_mpkjdkit_gp5b",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "展开 tool card",
+    "title": "展开 tool card",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "在 Context Tree 中定位 w_file_mpkjdkiu_ribo",
+    "title": "在 Context Tree 中定位 w_file_mpkjdkiu_ribo",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "展开 tool card",
+    "title": "展开 tool card",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "在 Context Tree 中定位 w_file_mpkjdkiu_3vei",
+    "title": "在 Context Tree 中定位 w_file_mpkjdkiu_3vei",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "展开 tool card",
+    "title": "展开 tool card",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "在 Context Tree 中定位 w_file_mpkjdkiu_rkxw",
+    "title": "在 Context Tree 中定位 w_file_mpkjdkiu_rkxw",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "展开 tool card",
+    "title": "展开 tool card",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "展开 tool card",
+    "title": "展开 tool card",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "",
+    "title": "复制",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "",
+    "title": "复制",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "展开 tool card",
+    "title": "展开 tool card",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "在 Context Tree 中定位 w_creator_t_user_mpkj8hn2_5z6m",
+    "title": "在 Context Tree 中定位 w_creator_t_user_mpkj8hn2_5z6m",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "展开 tool card",
+    "title": "展开 tool card",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "",
+    "title": "复制",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "Pause session",
+    "title": "Pause session",
+    "role": "",
+    "disabled": false
+  },
+  {
+    "tag": "button",
+    "text": "",
+    "aria": "Send message (⌘↵)",
+    "title": "Send (⌘↵)",
+    "role": "",
+    "disabled": true
+  }
+]
