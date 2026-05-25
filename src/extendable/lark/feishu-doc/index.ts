@@ -220,6 +220,18 @@ function pickStr(obj: unknown, ...keys: string[]): string | undefined {
   return undefined;
 }
 
+/**
+ * 从飞书 markdown 输出抽取文档标题（嵌在首部 \`<title>...</title>\` 标签）。
+ * 没找到返回 undefined（保留调用方的 fallback 行为）。
+ */
+function extractMarkdownTitle(body: string): string | undefined {
+  if (!body) return undefined;
+  const m = body.match(/<title>([\s\S]*?)<\/title>/i);
+  if (!m) return undefined;
+  const t = m[1]?.trim();
+  return t && t.length > 0 ? t : undefined;
+}
+
 async function executeRead(ctx: CommandExecutionContext): Promise<string | undefined> {
   const window = ctx.parentWindow;
   if (!window || window.type !== "feishu_doc") {
@@ -248,15 +260,22 @@ async function executeRead(ctx: CommandExecutionContext): Promise<string | undef
   const docId = doc?.document_id ?? window.docToken;
 
   if (format === "markdown") {
+    // 飞书 docs +fetch v2 的 markdown 输出把文档标题嵌在内容首部 \`<title>...</title>\`
+    // 标签里（document.content 没有独立的 title 字段）。这里抽出来同步到 docTitle / window.title，
+    // 让前端 detail / 树节点 / 顶部都能展示真实标题（之前 fallback 是 docToken 尾巴）。
+    const extractedTitle = extractMarkdownTitle(body);
+    const docTitle = extractedTitle ?? window.docTitle;
     const next: FeishuDocWindow = {
       ...window,
+      title: extractedTitle ?? window.title,
+      docTitle,
       content: { format: "markdown", body },
       versionId,
       mode: "read",
       lastFetchedAtMs: Date.now(),
     };
     Object.assign(window, next);
-    return `已拉取（markdown）${body.length} 字符；revision_id=${versionId ?? "(unknown)"}, doc_id=${docId}。`;
+    return `已拉取（markdown）${body.length} 字符；revision_id=${versionId ?? "(unknown)"}, doc_id=${docId}, title=${docTitle}。`;
   }
 
   // blocks (XML with-ids)：内容是 XML 字符串，body 直接放原文，blocks 字段不再尝试解析（用 search_in_doc 在 body 里 grep id 即可）

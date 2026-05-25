@@ -723,3 +723,40 @@ a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color
 .btn.small { font-size: 11px; padding: 4px 10px; }
 .btn.primary { background: var(--foreground); color: #fff; border-color: var(--foreground); }
 .btn.primary:disabled { opacity: .5; cursor: not-allowed; }
+
+/* --- 5 类 window 专用 detail 组件样式（custom / skill_index / issue / feishu_chat / feishu_doc） --- */
+
+/* skill_index */
+.cw-skill-groups { padding: 12px 14px; display: flex; flex-direction: column; gap: 14px; }
+.cw-skill-group { display: flex; flex-direction: column; gap: 6px; }
+.cw-skill-group-head { display: flex; align-items: baseline; gap: 8px; }
+.cw-skill-scope-badge { font-size: 10px; padding: 1px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.cw-skill-scope-badge[data-scope="object"] { background: rgba(47, 73, 200, .1); color: var(--blue); border: 1px solid rgba(47, 73, 200, .25); }
+.cw-skill-scope-badge[data-scope="branch"] { background: rgba(59, 184, 132, .1); color: #237954; border: 1px solid rgba(59, 184, 132, .28); }
+.cw-skill-scope-badge[data-scope="external"] { background: rgba(208, 138, 40, .1); color: #9a4d10; border: 1px solid rgba(208, 138, 40, .25); }
+.cw-skill-count { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.cw-skill-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.cw-skill-item { padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: rgba(255, 255, 255, .55); display: flex; flex-direction: column; gap: 3px; }
+.cw-skill-item-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.cw-skill-name { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; font-weight: 600; color: var(--foreground); }
+.cw-skill-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.cw-skill-desc { font-size: 12px; line-height: 1.45; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* feishu_chat */
+.cw-feishu-msg-list { list-style: none; padding: 12px 14px; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.cw-feishu-msg-row { display: flex; align-items: baseline; gap: 8px; padding: 4px 8px; border-radius: 4px; font-size: 12px; line-height: 1.5; flex-wrap: wrap; }
+.cw-feishu-msg-row:hover { background: rgba(232, 235, 228, .55); }
+.cw-feishu-msg-time { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted-foreground); font-size: 10.5px; flex: 0 0 auto; }
+.cw-feishu-msg-sender { font-weight: 600; color: var(--foreground); flex: 0 0 auto; }
+.cw-feishu-msg-kind { font-size: 9.5px; padding: 1px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: .04em; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; flex: 0 0 auto; }
+.cw-feishu-msg-kind[data-kind="user"] { background: rgba(47, 73, 200, .1); color: var(--blue); }
+.cw-feishu-msg-kind[data-kind="bot"] { background: rgba(59, 184, 132, .12); color: #237954; }
+.cw-feishu-msg-kind[data-kind="system"] { background: rgba(0, 0, 0, .06); color: var(--muted-foreground); }
+.cw-feishu-msg-reply { flex: 0 0 auto; }
+.cw-feishu-msg-text { flex: 1 1 auto; min-width: 0; word-break: break-word; }
+
+/* feishu_doc */
+.cw-feishu-doc-link { display: inline-flex; align-items: center; gap: 3px; color: var(--blue); text-decoration: none; font-size: 11px; }
+.cw-feishu-doc-link:hover { text-decoration: underline; }
+.cw-feishu-doc-expand { margin-top: 8px; padding: 4px 12px; font-size: 11px; border: 1px solid var(--border); border-radius: 999px; background: var(--background2); color: var(--foreground); cursor: pointer; font-family: inherit; }
+.cw-feishu-doc-expand:hover { background: var(--background); border-color: var(--foreground); }

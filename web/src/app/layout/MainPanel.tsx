@@ -133,7 +133,7 @@ export function MainPanel({
           {isIssueDetail && <span className="pill">issue</span>}
           {isIssueList && <span className="pill">issues</span>}
           {isUserThreadHome && <span className="pill">user home</span>}
-          {error && !file && !isWelcome && <span className="muted small">backend offline</span>}
+          
           {threadHeader}
           <button type="button" className="refresh" onClick={onRefresh} disabled={loading || !onRefresh} aria-label="Refresh" title="Refresh">↻</button>
           {sessionIdFromRoute && (

@@ -23,3 +23,5 @@ export type { LarkExecOptions, LarkExecResult } from "./cli.js";
 
 export { openFeishuChatCommand } from "./feishu-chat/open-command.js";
 export { openFeishuDocCommand } from "./feishu-doc/open-command.js";
+
+export { startLarkEventRelay, maybeForwardToLark } from "./event-relay/index.js";

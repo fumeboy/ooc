@@ -156,6 +156,82 @@ export type ContextWindow =
       /** R8-5: session 文件是否实际存在(false = 懒创建未写)。 */
       selfSessionExists?: boolean;
       createdAt?: number;
+    }
+  | {
+      id: string;
+      type: "custom";
+      parentWindowId?: string;
+      title: string;
+      status: "open" | "closed";
+      /** 自定义 window 所属 Object;UI 用于展示与跳转 stone。 */
+      objectId: string;
+      createdAt?: number;
+    }
+  | {
+      id: string;
+      type: "skill_index";
+      parentWindowId?: string;
+      title: string;
+      status: "active";
+      skills: Array<{
+        name: string;
+        description: string;
+        skillFilePath: string;
+        scope: "branch" | "object" | "external";
+      }>;
+      createdAt?: number;
+    }
+  | {
+      id: string;
+      type: "issue";
+      parentWindowId?: string;
+      title: string;
+      status?: string;
+      issueId: number;
+      createdAt?: number;
+    }
+  | {
+      id: string;
+      type: "feishu_chat";
+      parentWindowId?: string;
+      title: string;
+      status: "open" | "closed";
+      chatId: string;
+      chatName: string;
+      chatType?: "group" | "p2p" | "topic";
+      mode: "tail" | "search" | "thread";
+      tailCount?: number;
+      searchQuery?: string;
+      threadAnchorMessageId?: string;
+      lastRefreshAtMs?: number;
+      buffer: Array<{
+        messageId: string;
+        sender: string;
+        senderKind?: "user" | "bot" | "system";
+        createTimeMs: number;
+        text: string;
+        replyToMessageId?: string;
+      }>;
+      createdAt?: number;
+    }
+  | {
+      id: string;
+      type: "feishu_doc";
+      parentWindowId?: string;
+      title: string;
+      status: "open" | "closed";
+      docToken: string;
+      docKind: "doc" | "docx" | "sheet" | "base" | "wiki" | "drive_md";
+      docTitle: string;
+      content: {
+        format: "markdown" | "blocks";
+        body: string;
+        blocks?: Array<{ blockId: string; blockType?: string; text?: string; parentBlockId?: string }>;
+      };
+      versionId?: string;
+      mode: "read" | "edit";
+      lastFetchedAtMs?: number;
+      createdAt?: number;
     };
 
 /** 与后端 ThreadMessage 同 shape；前端只读取关心的字段。 */
@@ -250,6 +326,11 @@ function windowBadge(type: ContextWindow["type"]): string {
     case "search":       return "SRCH";
     case "relation":     return "REL";
     case "root":         return "ROOT";
+    case "custom":       return "CUST";
+    case "skill_index":  return "SKILLS";
+    case "issue":        return "ISSUE";
+    case "feishu_chat":  return "FSCHAT";
+    case "feishu_doc":   return "FSDOC";
   }
 }
 
@@ -275,6 +356,16 @@ function windowSummary(window: ContextWindow): string {
       return `relation: ${window.peerId}`;
     case "root":
       return "thread root";
+    case "custom":
+      return `objectId: ${window.objectId}`;
+    case "skill_index":
+      return `${window.skills.length} skill${window.skills.length === 1 ? "" : "s"}`;
+    case "issue":
+      return `issue #${window.issueId}`;
+    case "feishu_chat":
+      return `${window.chatName} · ${window.mode} · ${window.buffer.length} msg${window.buffer.length === 1 ? "" : "s"}`;
+    case "feishu_doc":
+      return `${window.docKind} · ${window.docTitle}`;
   }
 }
 
@@ -313,6 +404,21 @@ function windowCharCount(window: ContextWindow): number {
       // relation_window 自身无大文本(正文在伴随的 knowledge_window);title 兜底已计
       break;
     case "root":
+      break;
+    case "custom":
+      n += window.objectId.length;
+      break;
+    case "skill_index":
+      for (const s of window.skills) n += s.name.length + s.description.length;
+      break;
+    case "issue":
+      // issue_window 自身只占 issueId,正文走 sync 出来的 knowledge_window
+      break;
+    case "feishu_chat":
+      for (const m of window.buffer) n += m.text.length + m.sender.length;
+      break;
+    case "feishu_doc":
+      n += window.content.body.length;
       break;
   }
   return n;
@@ -484,6 +590,11 @@ const WINDOW_TYPE_ORDER: ContextWindow["type"][] = [
   "file",
   "knowledge",
   "search",
+  "issue",
+  "custom",
+  "skill_index",
+  "feishu_chat",
+  "feishu_doc",
 ];
 
 function buildContextWindowsSection(

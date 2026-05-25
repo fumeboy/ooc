@@ -55,9 +55,19 @@ export interface WorldConfig {
    * 国际版 = "lark.com"。仅 host 段，不带 scheme 与路径。
    */
   larkTenantHost: string;
+  /**
+   * 飞书机器人凭证。配置后 OOC 启动 lark event-relay worker：通过 SDK ws 长连接接收
+   * im.message.receive_v1 事件，反向触发 OOC session（详见 src/extendable/lark/event-relay）。
+   * 缺省（任一字段为空）时不启动 relay。
+   *
+   * **安全**：larkAppSecret 是机密，不通过 GET /api/world/config 下发前端；
+   *           前端只能拿到布尔标志 hasLarkBot。
+   */
+  larkAppId?: string;
+  larkAppSecret?: string;
 }
 
-/** 原始 JSON 形态（解析前；字段全 optional + 大小写兼容 user 指令的 SiteName / ExternalSkillsDir 写法）。 */
+/** 原始 JSON 形态（解析前；字段全 optional + 大小写兼容写法）。 */
 interface RawWorldConfig {
   siteName?: unknown;
   SiteName?: unknown;
@@ -65,6 +75,10 @@ interface RawWorldConfig {
   ExternalSkillsDir?: unknown;
   larkTenantHost?: unknown;
   LarkTenantHost?: unknown;
+  larkAppId?: unknown;
+  LarkAppId?: unknown;
+  larkAppSecret?: unknown;
+  LarkAppSecret?: unknown;
 }
 
 interface CachedEntry {
@@ -160,7 +174,7 @@ export async function readWorldConfig(baseDir: string): Promise<WorldConfig> {
     return defaults;
   }
 
-  // 字段大小写兼容：user 指令里写的是 SiteName / ExternalSkillsDir / LarkTenantHost，
+  // 字段大小写兼容：user 指令里写的是 SiteName / ExternalSkillsDir / LarkTenantHost / LarkAppId / LarkAppSecret，
   // 但 JS 习惯 camelCase；两种都接受。
   const siteName = pickString(parsed, "siteName", "SiteName") ?? DEFAULT_SITE_NAME;
   const larkTenantHost =
@@ -169,10 +183,13 @@ export async function readWorldConfig(baseDir: string): Promise<WorldConfig> {
     parsed.externalSkillsDir ?? parsed.ExternalSkillsDir,
     baseDir,
   );
+  const larkAppId = pickString(parsed, "larkAppId", "LarkAppId");
+  const larkAppSecret = pickString(parsed, "larkAppSecret", "LarkAppSecret");
 
-  const config: WorldConfig = externalSkillsDir
-    ? { siteName, larkTenantHost, externalSkillsDir }
-    : { siteName, larkTenantHost };
+  const config: WorldConfig = { siteName, larkTenantHost };
+  if (externalSkillsDir) config.externalSkillsDir = externalSkillsDir;
+  if (larkAppId) config.larkAppId = larkAppId;
+  if (larkAppSecret) config.larkAppSecret = larkAppSecret;
   cacheSet(baseDir, config);
   return config;
 }

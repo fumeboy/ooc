@@ -70,7 +70,9 @@ export async function executeOpenFeishuDoc(
     id: generateWindowId("feishu_doc"),
     type: "feishu_doc",
     parentWindowId: ROOT_WINDOW_ID,
-    title: `[飞书文档] ${docTitle}`,
+    // window.title 直接用 docTitle；window type 徽章 (FSDOC) 已标明是飞书文档，
+    // 不再加 "[飞书文档]" 前缀冗余。
+    title: docTitle,
     status: "open",
     createdAt: Date.now(),
     docToken,

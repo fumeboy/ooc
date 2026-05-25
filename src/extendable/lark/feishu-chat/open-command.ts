@@ -72,7 +72,9 @@ export async function executeOpenFeishuChat(
     id: generateWindowId("feishu_chat"),
     type: "feishu_chat",
     parentWindowId: ROOT_WINDOW_ID,
-    title: `[飞书群] ${chatName}`,
+    // window.title 直接用 chatName；window type 徽章 (FSCHAT) 已标明是飞书群聊，
+    // 不再加 "[飞书群]" 前缀冗余（避免 sidebar / 树节点截断时真名被前缀挤掉）。
+    title: chatName,
     status: "open",
     createdAt: Date.now(),
     chatId,
