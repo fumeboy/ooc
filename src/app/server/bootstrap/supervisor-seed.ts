@@ -408,9 +408,15 @@ Object 能响应，然后向用户回报新 Object 已就绪 + commit sha。
 
 ## 失败处理
 
-- \`create_object\` 返回 \`INVALID_INPUT\` → 检查 objectId 合法性 + selfMd/readmeMd 非空
-- \`create_object\` 返回 \`ALREADY_EXISTS\` → 选不同 objectId
-- \`create_object\` 返回 \`GIT\` 失败 → 上报错误码与 stderr，请用户 / 我自己研判
+\`create_object\` 失败时返回字符串带结构化 token \`[metaprog:create_object:<CODE>] <msg>\`，
+我用 substring 匹配 CODE 做决策：
+
+- \`INVALID_INPUT\` → 检查 objectId 合法性 + selfMd/readmeMd 非空 + knowledge filename
+- \`ALREADY_EXISTS\` → 选不同 objectId，或确认是否要给现有 Object 加内容（走路径 B）
+- \`FORBIDDEN\` → 不应当出现（我是 supervisor，权限充足）；若出现说明 caller 上下文异常
+- \`GIT:<gitCode>\` → 上报错误码与 stderr，请用户 / 我自己研判
+
+其它路径错误：
 - 走路径 B 时 \`merge\` 返回 \`must-pr-issue\` → 这是预期的（cross-scope），直接
   调 \`resolve\` action 自审 merge
 - 想改其它 Object 的**已有** stone（非新建）→ 走标准 metaprog 流程（必产生
