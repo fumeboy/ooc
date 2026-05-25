@@ -8,6 +8,10 @@ import { json } from "@codemirror/lang-json";
 import { javascript } from "@codemirror/lang-javascript";
 import { LLMInputJsonViewer, isLlmInputJsonPath } from "./LLMInputJsonViewer";
 import { ContextSnapshotViewer } from "./ContextSnapshotViewer";
+import { MarkdownContent } from "../../../shared/ui/MarkdownContent";
+import { JsonTreeView } from "./JsonTreeView";
+import { CsvTableView } from "./CsvTableView";
+import { ImagePreview, isImagePath } from "./ImagePreview";
 import type { ThreadContext } from "../../chat";
 import type { ContextSnapshot } from "../context-snapshot";
 
@@ -69,6 +73,62 @@ export function FileViewer({
   }
   if (!editable && isLlmInputJsonPath(file.path)) {
     return <LLMInputJsonViewer file={file} />;
+  }
+  // 只读模式下按扩展名 dispatch 专用 viewer。editable 模式（knowledge 写入）仍用 CodeMirror。
+  if (!editable) {
+    const lower = file.path.toLowerCase();
+    if (/\.(md|markdown)$/.test(lower)) {
+      return (
+        <div className="file-viewer">
+          <div className="file-viewer-rendered">
+            <MarkdownContent content={file.content} />
+          </div>
+          <div className="file-viewer-footer">
+            <span className="pill">{file.size}B</span>
+            <span className="pill">markdown</span>
+          </div>
+        </div>
+      );
+    }
+    if (lower.endsWith(".json")) {
+      try {
+        const parsed = JSON.parse(file.content);
+        return (
+          <div className="file-viewer">
+            <div className="file-viewer-rendered">
+              <JsonTreeView value={parsed} rootLabel={file.path.split("/").slice(-1)[0] ?? "root"} />
+            </div>
+            <div className="file-viewer-footer">
+              <span className="pill">{file.size}B</span>
+              <span className="pill">json tree</span>
+            </div>
+          </div>
+        );
+      } catch {
+        // fall through to CodeMirror
+      }
+    }
+    if (/\.(csv|tsv)$/.test(lower)) {
+      const delimiter = lower.endsWith(".tsv") ? "\t" : ",";
+      return (
+        <div className="file-viewer">
+          <div className="file-viewer-rendered">
+            <CsvTableView content={file.content} delimiter={delimiter} />
+          </div>
+          <div className="file-viewer-footer">
+            <span className="pill">{file.size}B</span>
+            <span className="pill">{lower.endsWith(".tsv") ? "tsv" : "csv"}</span>
+          </div>
+        </div>
+      );
+    }
+    if (isImagePath(lower)) {
+      return (
+        <div className="file-viewer">
+          <ImagePreview path={file.path} />
+        </div>
+      );
+    }
   }
   const formatted = formatFileContent(file.path, file.content);
   return (

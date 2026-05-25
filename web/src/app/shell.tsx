@@ -57,7 +57,8 @@ export function AppShell() {
     if (
       route.kind === "session" ||
       route.kind === "flowPage" ||
-      route.kind === "issueDetail"
+      route.kind === "issueDetail" ||
+      route.kind === "issueList"
     ) {
       return route.sessionId;
     }
@@ -454,6 +455,9 @@ function derivePathFromRoute(route: RouteState): string | undefined {
     case "issueDetail":
       // sidebar 中 issues 节点的合成 child node.path 即此形式 — 保持 active 高亮一致
       return `flows/${route.sessionId}/issues/issue-${route.issueId}.json`;
+    case "issueList":
+      // sidebar 高亮: 命中 issues/ 父节点
+      return `flows/${route.sessionId}/issues`;
     default:
       return undefined;
   }

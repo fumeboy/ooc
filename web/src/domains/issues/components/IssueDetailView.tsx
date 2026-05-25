@@ -1,6 +1,9 @@
+import { useState } from "react";
+import { Link } from "react-router";
 import { MarkdownContent } from "../../../shared/ui/MarkdownContent";
 import { useDisplayName } from "../../objects";
-import { useIssue } from "../query";
+import { useIssue, appendIssueComment, closeIssue } from "../query";
+import { messageFromError } from "../../../transport/errors";
 import type { Issue, IssueComment } from "../model";
 
 /**
@@ -22,7 +25,7 @@ export function IssueDetailView({
   sessionId: string;
   issueId: number;
 }) {
-  const { issue, loading, error } = useIssue(sessionId, issueId);
+  const { issue, loading, error, refresh } = useIssue(sessionId, issueId);
 
   if (error && !issue) {
     return (
@@ -38,12 +41,25 @@ export function IssueDetailView({
       </div>
     );
   }
-  return <IssueDetailBody issue={issue} />;
+  return <IssueDetailBody sessionId={sessionId} issue={issue} refresh={refresh} />;
 }
 
-function IssueDetailBody({ issue }: { issue: Issue }) {
+function IssueDetailBody({
+  sessionId,
+  issue,
+  refresh,
+}: {
+  sessionId: string;
+  issue: Issue;
+  refresh: () => void;
+}) {
   return (
     <article className="issue-detail">
+      <div className="issue-detail-back">
+        <Link to={`/flows/${encodeURIComponent(sessionId)}/issues`} className="issue-detail-back-link">
+          ← All issues
+        </Link>
+      </div>
       <header className="issue-detail-header">
         <h1 className="issue-detail-title">
           <span className="issue-detail-id">#{issue.id}</span>{" "}
@@ -64,7 +80,99 @@ function IssueDetailBody({ issue }: { issue: Issue }) {
       </section>
 
       <CommentsSection comments={issue.comments} />
+
+      <CommentComposer sessionId={sessionId} issue={issue} refresh={refresh} />
     </article>
+  );
+}
+
+function CommentComposer({
+  sessionId,
+  issue,
+  refresh,
+}: {
+  sessionId: string;
+  issue: Issue;
+  refresh: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+  const [closing, setClosing] = useState(false);
+
+  const canSubmit = text.trim().length > 0 && !submitting;
+
+  async function handleComment() {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(undefined);
+    try {
+      await appendIssueComment(sessionId, issue.id, { text });
+      setText("");
+      refresh();
+    } catch (e) {
+      setError(messageFromError(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleClose() {
+    if (closing) return;
+    setClosing(true);
+    setError(undefined);
+    try {
+      await closeIssue(sessionId, issue.id);
+      refresh();
+    } catch (e) {
+      setError(messageFromError(e));
+    } finally {
+      setClosing(false);
+    }
+  }
+
+  return (
+    <section className="issue-detail-composer">
+      <label className="field-label">
+        <span className="muted small">Add a comment</span>
+        <textarea
+          className="textarea code-textarea issue-detail-composer-input"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Leave a comment (markdown supported)…"
+          rows={4}
+          disabled={submitting}
+        />
+      </label>
+      {error && <div className="error small">{error}</div>}
+      <div className="issue-detail-composer-actions">
+        {issue.status === "open" && (
+          <button
+            type="button"
+            className="btn"
+            onClick={handleClose}
+            disabled={closing}
+            title="Mark this issue as closed"
+          >
+            {closing ? "Closing…" : "Close issue"}
+          </button>
+        )}
+        {issue.status === "closed" && (
+          <span className="pill" style={{ marginRight: "auto" }}>
+            closed
+          </span>
+        )}
+        <button
+          type="button"
+          className="btn primary"
+          onClick={handleComment}
+          disabled={!canSubmit}
+          title="Post comment"
+        >
+          {submitting ? "Posting…" : "Comment"}
+        </button>
+      </div>
+    </section>
   );
 }
 

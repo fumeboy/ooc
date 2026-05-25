@@ -19,6 +19,40 @@ export function fetchIssue(sessionId: string, issueId: number | string) {
 }
 
 /**
+ * 追加评论 — `POST /api/flows/<sid>/issues/<id>/comments`。
+ * authorObjectId 默认 "user"；后端再补 authorKind="user"（HTTP 路径默认值）。
+ */
+export function appendIssueComment(
+  sessionId: string,
+  issueId: number | string,
+  body: { text: string; authorObjectId?: string; mentions?: string[] },
+) {
+  // 后端返回 `{ commentId, resolved_mentions }`；调用方应在成功后 refresh() 拉新 issue。
+  return requestJson<{ commentId: number; resolved_mentions: string[] }>(
+    `/api/flows/${encodeURIComponent(sessionId)}/issues/${encodeURIComponent(String(issueId))}/comments`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        text: body.text,
+        authorObjectId: body.authorObjectId ?? "supervisor",
+        mentions: body.mentions ?? [],
+      }),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+}
+
+/**
+ * 关闭 Issue — `POST /api/flows/<sid>/issues/<id>/close`。
+ */
+export function closeIssue(sessionId: string, issueId: number | string) {
+  return requestJson<{ issue: Issue; noop?: boolean }>(
+    `/api/flows/${encodeURIComponent(sessionId)}/issues/${encodeURIComponent(String(issueId))}/close`,
+    { method: "POST" },
+  );
+}
+
+/**
  * `useIssues(sessionId)` — sidebar 展开 issues 节点时取列表。
  *
  * 跟随项目现有"组件内部 useEffect + setState"的极简 hook 范式

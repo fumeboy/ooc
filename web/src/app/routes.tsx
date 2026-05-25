@@ -27,6 +27,7 @@ export const router = createBrowserRouter([
   { path: "/pools", ...shell },
   { path: "/flows", ...shell },
   { path: "/flows/:sessionId", ...shell },
+  { path: "/flows/:sessionId/issues", ...shell },
   { path: "/flows/:sessionId/issues/:id", ...shell },
   { path: "/flows/:sessionId/threads/:objectId/:threadId", ...shell },
   { path: "/flows/:sessionId/objects/:objectId/pages/:page", ...shell },

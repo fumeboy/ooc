@@ -31,6 +31,7 @@ export type RouteState =
   | { kind: "stoneClient"; objectId: string }
   | { kind: "flowPage"; sessionId: string; objectId: string; page: string }
   | { kind: "session"; sessionId: string; objectId?: string; threadId?: string }
+  | { kind: "issueList"; sessionId: string }
   | { kind: "issueDetail"; sessionId: string; issueId: number };
 
 /**
@@ -63,6 +64,8 @@ export function toPath(state: RouteState): string {
       }
       return base;
     }
+    case "issueList":
+      return `/flows/${encodeURIComponent(state.sessionId)}/issues`;
     case "issueDetail":
       return `/flows/${encodeURIComponent(state.sessionId)}/issues/${state.issueId}`;
   }
@@ -157,6 +160,11 @@ export function parseRoute(
     if (issueId !== undefined) {
       return { kind: "issueDetail", sessionId: params.sessionId, issueId };
     }
+  }
+
+  // /flows/:sessionId/issues  (Issue list 页 — GitHub 风格列表)
+  if (params.sessionId && /\/issues\/?$/.test(path)) {
+    return { kind: "issueList", sessionId: params.sessionId };
   }
 
   // /flows/:sessionId  (+ optional ?objectId=&threadId=)
@@ -272,6 +280,7 @@ export function scopeOf(route: RouteState): "stones" | "flows" | "world" | "pool
       return "stones";
     case "flowPage":
     case "session":
+    case "issueList":
     case "issueDetail":
       return "flows";
   }
