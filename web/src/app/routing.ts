@@ -40,8 +40,14 @@ export type RouteState =
        * undefined 表示空选中（右栏渲染 empty state）。
        *
        * 2026-05-26 Round 7 A3：issue 看板已移除，selected 仅剩 chat 一种。
+       *
+       * 2026-05-26 Round 8 D3：SessionThreadsIndex 加 `thread:<obj>:<tid>` 形态，
+       * 选中跨 object 的任意 thread；右栏切到 ThreadInspectDetail（只读）。
+       * URL: `?selected=thread:<objectId>:<threadId>`。
        */
-      selected?: { kind: "chat"; windowId: string };
+      selected?:
+        | { kind: "chat"; windowId: string }
+        | { kind: "thread"; objectId: string; threadId: string };
     };
 
 /**
@@ -77,7 +83,10 @@ export function toPath(state: RouteState): string {
         parts.push(`threadId=${encodeURIComponent(state.threadId)}`);
       }
       if (state.selected) {
-        const v = `chat:${state.selected.windowId}`;
+        const v =
+          state.selected.kind === "chat"
+            ? `chat:${state.selected.windowId}`
+            : `thread:${state.selected.objectId}:${state.selected.threadId}`;
         parts.push(`selected=${encodeURIComponent(v)}`);
       }
       return parts.length > 0 ? `${base}?${parts.join("&")}` : base;
@@ -230,14 +239,21 @@ export function parsePathname(
 }
 
 /**
- * 解析 ?selected=chat:<wid> query 值；不识别格式时返回 undefined（不报错）。
- * windowId 允许任意非空字符串。
+ * 解析 `?selected=<tag>:<value>` query 值；不识别格式时返回 undefined（silently 丢）。
  *
- * 2026-05-26 Round 7 A3：issue 看板已移除，selected 仅剩 chat 一种 tag。
+ * 支持的 tag：
+ *  - `chat:<windowId>`             — user.root 的 talk_window（Round 7+）
+ *  - `thread:<objectId>:<threadId>` — Session Threads Index 选中任意 thread（Round 8）
+ *
+ * 2026-05-26 Round 7 A3：issue 看板移除。
+ * 2026-05-26 Round 8 D3：扩展 thread tag。
  */
 function parseSelectedQuery(
   raw: string | null,
-): { kind: "chat"; windowId: string } | undefined {
+):
+  | { kind: "chat"; windowId: string }
+  | { kind: "thread"; objectId: string; threadId: string }
+  | undefined {
   if (!raw) return undefined;
   const colon = raw.indexOf(":");
   if (colon <= 0) return undefined;
@@ -245,6 +261,14 @@ function parseSelectedQuery(
   const value = raw.slice(colon + 1);
   if (!value) return undefined;
   if (tag === "chat") return { kind: "chat", windowId: value };
+  if (tag === "thread") {
+    const sep = value.indexOf(":");
+    if (sep <= 0) return undefined;
+    const objectId = value.slice(0, sep);
+    const threadId = value.slice(sep + 1);
+    if (!objectId || !threadId) return undefined;
+    return { kind: "thread", objectId, threadId };
+  }
   return undefined;
 }
 

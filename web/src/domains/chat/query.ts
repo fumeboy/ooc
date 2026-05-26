@@ -1,5 +1,6 @@
 import { endpoints } from "../../transport/endpoints";
 import { requestJson } from "../../transport/http";
+import type { ListThreadsResponse } from "../sessions/types";
 import type { ThreadContext } from "./model";
 
 export function fetchThread(sessionId: string, objectId: string, threadId = "root") {
@@ -32,4 +33,17 @@ export function fetchSessionThreads(sessionId: string) {
   return requestJson<{ items: Array<{ objectId: string; threadId: string }> }>(
     endpoints.sessionThreads(sessionId),
   );
+}
+
+/**
+ * 列出 session 下所有 (objectId, threadId) 的完整 metadata —— Session Threads Index 用。
+ *
+ * 与 `fetchSessionThreads` 同 endpoint, 但用 SessionThreads Index 的扩展 shape 类型
+ * 标注（D2 后端扩展完成后字段填齐; 期间字段缺失由前端按 ListThreadsItem 中 optional
+ * 字段优雅退化）。返回类型故意比后端实际宽松, 允许 minimal `{objectId,threadId}` 也通过。
+ */
+export async function fetchSessionThreadsFull(
+  sessionId: string,
+): Promise<ListThreadsResponse> {
+  return requestJson<ListThreadsResponse>(endpoints.sessionThreads(sessionId));
 }

@@ -178,6 +178,7 @@ export function MainPanel({
             <UserThreadHome
               sessionId={route.sessionId}
               thread={thread}
+              selfObjectId={selfObjectId}
               onUserReply={onUserReply}
             />
           ) : isPeerThreadDetail && route.kind === "session" && route.objectId && route.threadId ? (

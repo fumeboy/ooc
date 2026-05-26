@@ -2,8 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { readThread } from "@src/persistable";
+import { readThread, writeThread } from "@src/persistable";
 import { clearStoneSkillsCache } from "@src/persistable/stone-skills";
+import type { ThreadContext } from "@src/thinkable/context";
+import type {
+  ContextWindow,
+  TalkWindow,
+  PlanWindow,
+} from "@src/executable/windows/_shared/types";
 import { createJobManager } from "../../runtime/job-manager";
 import { createPauseStore } from "../../runtime/pause-store";
 import { createFlowsService } from "./service";
@@ -515,6 +521,286 @@ describe("flows service", () => {
           threadId: seeded.targetThreadId,
         });
         expect(a.hash).toBe(b.hash);
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  /**
+   * Round 8 D2（design: docs/2026-05-26-session-threads-index-design.md §4.1）：
+   * listThreads 扩展返回 thread metadata + 4 种关系字段；测试覆盖：
+   * 1) 基础 metadata：status / createdAt / objectId / threadId 都正确
+   * 2) threadTree 关系：parent / creator / childThreadIds
+   * 3) talkPeers：从 contextWindows[type==="talk"] 提取
+   * 4) shares：从 contextWindows[*].sharing 提取（kind=ref / lent_out）
+   * 5) 失败容错：损坏的 thread.json → status="failed"，listThreads 不抛
+   */
+  describe("listThreads metadata extension (Round 8 D2)", () => {
+    test("基础 metadata：user.root + agent.root 各自 status / objectId / threadId 正确", async () => {
+      const baseDir = await mkdtemp(join(tmpdir(), "_test_collab_basic_"));
+      try {
+        const service = createFlowsService({
+          baseDir,
+          pauseStore: createPauseStore(),
+          jobManager: createJobManager(),
+        });
+        await service.seedSession({
+          sessionId: "s1",
+          targetObjectId: "supervisor",
+          initialMessage: "hi sup",
+        });
+
+        const out = await service.listThreads({ sessionId: "s1" });
+        // 至少含 user.root + supervisor.<calleeThreadId>
+        const objectIds = out.items.map((i) => i.objectId).sort();
+        expect(objectIds).toContain("user");
+        expect(objectIds).toContain("supervisor");
+
+        const userItem = out.items.find(
+          (i) => i.objectId === "user" && i.threadId === "root",
+        );
+        expect(userItem).toBeDefined();
+        expect(userItem!.status).toBe("running");
+        expect(typeof userItem!.createdAt).toBe("number");
+        expect(userItem!.childThreadIds).toEqual([]);
+        // user.root 含一个 talk_window 指向 supervisor
+        expect(userItem!.talkPeers.length).toBeGreaterThanOrEqual(1);
+        const peer = userItem!.talkPeers.find((p) => p.targetObjectId === "supervisor");
+        expect(peer).toBeDefined();
+        expect(peer!.windowId).toMatch(/^w_talk_/);
+        // 非 super session → isSuperFlow 缺省
+        expect(userItem!.isSuperFlow).toBeUndefined();
+
+        // 排序：items 按 (objectId, threadId) localeCompare
+        const sorted = [...out.items].sort((a, b) =>
+          a.objectId === b.objectId
+            ? a.threadId.localeCompare(b.threadId)
+            : a.objectId.localeCompare(b.objectId),
+        );
+        expect(out.items).toEqual(sorted);
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+
+    test("threadTree 关系：parentThreadId / creatorThreadId / childThreadIds 正确填充", async () => {
+      const baseDir = await mkdtemp(join(tmpdir(), "_test_collab_tree_"));
+      try {
+        const service = createFlowsService({
+          baseDir,
+          pauseStore: createPauseStore(),
+          jobManager: createJobManager(),
+        });
+        await service.createSession({ sessionId: "s-tree" });
+        // 手工构造 parent + child 关系（避开真启 LLM）
+        await service.createFlowObject({ sessionId: "s-tree", objectId: "agent" });
+        const parent = await readThread(
+          { baseDir, sessionId: "s-tree", objectId: "agent" },
+          "root",
+        );
+        expect(parent).toBeDefined();
+        // child thread 与 parent 同 object
+        const childId = "child_t1";
+        const child: ThreadContext = {
+          id: childId,
+          status: "running",
+          events: [],
+          parentThreadId: "root",
+          creatorThreadId: "root",
+          creatorObjectId: "agent",
+          contextWindows: [],
+          persistence: {
+            baseDir,
+            sessionId: "s-tree",
+            objectId: "agent",
+            threadId: childId,
+          },
+        };
+        await writeThread(child);
+        // 在 parent 写入 childThreadIds 链
+        parent!.childThreadIds = [childId];
+        await writeThread(parent!);
+
+        const out = await service.listThreads({ sessionId: "s-tree" });
+        const rootItem = out.items.find((i) => i.threadId === "root");
+        const childItem = out.items.find((i) => i.threadId === childId);
+        expect(rootItem).toBeDefined();
+        expect(childItem).toBeDefined();
+        expect(rootItem!.childThreadIds).toEqual([childId]);
+        expect(childItem!.parentThreadId).toBe("root");
+        expect(childItem!.creatorThreadId).toBe("root");
+        expect(childItem!.creatorObjectId).toBe("agent");
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+
+    test("talkPeers：含 target / targetThreadId / windowId 从 talk_window 提取", async () => {
+      const baseDir = await mkdtemp(join(tmpdir(), "_test_collab_talkpeers_"));
+      try {
+        const service = createFlowsService({
+          baseDir,
+          pauseStore: createPauseStore(),
+          jobManager: createJobManager(),
+        });
+        // seedSession 自动构造 user.root.talk_window → supervisor
+        const seeded = await service.seedSession({
+          sessionId: "s-peers",
+          targetObjectId: "supervisor",
+          initialMessage: "hi",
+        });
+
+        const out = await service.listThreads({ sessionId: "s-peers" });
+        const userItem = out.items.find(
+          (i) => i.objectId === "user" && i.threadId === "root",
+        );
+        expect(userItem).toBeDefined();
+        const peer = userItem!.talkPeers.find(
+          (p) => p.targetObjectId === "supervisor",
+        );
+        expect(peer).toBeDefined();
+        // talk-delivery 应已回填 targetThreadId
+        expect(peer!.targetThreadId).toBe(seeded.targetThreadId);
+        expect(peer!.windowId).toBe(seeded.talkWindowId);
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+
+    test("shares：sharing.kind=lent_out / ref 分别进 lentOut / holding", async () => {
+      const baseDir = await mkdtemp(join(tmpdir(), "_test_collab_shares_"));
+      try {
+        const service = createFlowsService({
+          baseDir,
+          pauseStore: createPauseStore(),
+          jobManager: createJobManager(),
+        });
+        await service.createSession({ sessionId: "s-shares" });
+        await service.createFlowObject({ sessionId: "s-shares", objectId: "owner" });
+        await service.createFlowObject({ sessionId: "s-shares", objectId: "borrower" });
+
+        // 给 owner.root 手工挂一个 lent_out plan_window
+        const ownerThread = await readThread(
+          { baseDir, sessionId: "s-shares", objectId: "owner" },
+          "root",
+        );
+        expect(ownerThread).toBeDefined();
+        const planSnapshotBase: PlanWindow = {
+          id: "w_plan_share_1",
+          type: "plan",
+          title: "shared plan",
+          status: "active",
+          createdAt: Date.now(),
+          steps: [],
+        };
+        const lentOutWindow: PlanWindow = {
+          ...planSnapshotBase,
+          sharing: {
+            kind: "lent_out",
+            borrowerThreadId: "root",
+            lentToWindowId: "w_do_xyz",
+            sharedAt: Date.now(),
+            snapshot: planSnapshotBase,
+          },
+        };
+        ownerThread!.contextWindows = [
+          ...(ownerThread!.contextWindows ?? []),
+          lentOutWindow as ContextWindow,
+        ];
+        await writeThread(ownerThread!);
+
+        // 给 borrower.root 手工挂一个 ref 进来的 plan_window（同 id 配对）
+        const borrowerThread = await readThread(
+          { baseDir, sessionId: "s-shares", objectId: "borrower" },
+          "root",
+        );
+        expect(borrowerThread).toBeDefined();
+        const refWindow: PlanWindow = {
+          ...planSnapshotBase,
+          sharing: {
+            kind: "ref",
+            ownerThreadId: "root",
+            lentByWindowId: "w_do_abc",
+            sharedAt: Date.now(),
+            snapshot: planSnapshotBase,
+          },
+        };
+        borrowerThread!.contextWindows = [
+          ...(borrowerThread!.contextWindows ?? []),
+          refWindow as ContextWindow,
+        ];
+        await writeThread(borrowerThread!);
+
+        const out = await service.listThreads({ sessionId: "s-shares" });
+        const ownerItem = out.items.find((i) => i.objectId === "owner");
+        const borrowerItem = out.items.find((i) => i.objectId === "borrower");
+        expect(ownerItem).toBeDefined();
+        expect(borrowerItem).toBeDefined();
+
+        expect(ownerItem!.shares.lentOut.length).toBe(1);
+        expect(ownerItem!.shares.lentOut[0]!.windowId).toBe("w_plan_share_1");
+        expect(ownerItem!.shares.lentOut[0]!.borrowerThreadId).toBe("root");
+        // borrowerObjectId 未持久化 → undefined（design 预留位）
+        expect(ownerItem!.shares.lentOut[0]!.borrowerObjectId).toBeUndefined();
+        expect(ownerItem!.shares.holding).toEqual([]);
+
+        expect(borrowerItem!.shares.holding.length).toBe(1);
+        expect(borrowerItem!.shares.holding[0]!.windowId).toBe("w_plan_share_1");
+        expect(borrowerItem!.shares.holding[0]!.kind).toBe("ref");
+        expect(borrowerItem!.shares.holding[0]!.ownerThreadId).toBe("root");
+        expect(borrowerItem!.shares.holding[0]!.ownerObjectId).toBeUndefined();
+        expect(borrowerItem!.shares.lentOut).toEqual([]);
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+
+    test("失败容错：损坏的 thread.json → status='failed'，listThreads 不抛", async () => {
+      const baseDir = await mkdtemp(join(tmpdir(), "_test_collab_corrupt_"));
+      try {
+        const service = createFlowsService({
+          baseDir,
+          pauseStore: createPauseStore(),
+          jobManager: createJobManager(),
+        });
+        await service.createSession({ sessionId: "s-corrupt" });
+        await service.createFlowObject({
+          sessionId: "s-corrupt",
+          objectId: "broken",
+        });
+        // 直接写一个非法 JSON 进去
+        const corruptDir = join(
+          baseDir,
+          "flows",
+          "s-corrupt",
+          "objects",
+          "broken",
+          "threads",
+          "corrupt_thread",
+        );
+        await mkdir(corruptDir, { recursive: true });
+        await writeFile(join(corruptDir, "thread.json"), "{not valid json", "utf8");
+
+        // 不应抛错
+        const out = await service.listThreads({ sessionId: "s-corrupt" });
+        const corruptItem = out.items.find(
+          (i) => i.objectId === "broken" && i.threadId === "corrupt_thread",
+        );
+        expect(corruptItem).toBeDefined();
+        expect(corruptItem!.status).toBe("failed");
+        expect(corruptItem!.parentThreadId).toBeUndefined();
+        expect(corruptItem!.creatorThreadId).toBeUndefined();
+        expect(corruptItem!.creatorObjectId).toBeUndefined();
+        expect(corruptItem!.createdAt).toBeUndefined();
+        expect(corruptItem!.childThreadIds).toEqual([]);
+        expect(corruptItem!.talkPeers).toEqual([]);
+        expect(corruptItem!.shares.holding).toEqual([]);
+        expect(corruptItem!.shares.lentOut).toEqual([]);
+        // 其它正常 thread 仍在
+        const normalItem = out.items.find((i) => i.threadId === "root");
+        expect(normalItem).toBeDefined();
+        expect(normalItem!.status).toBe("running");
       } finally {
         await rm(baseDir, { recursive: true, force: true });
       }

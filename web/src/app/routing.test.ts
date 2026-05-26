@@ -129,10 +129,69 @@ describe("session ?selected= round-trip", () => {
   });
 });
 
+/**
+ * 2026-05-26 Round 8 D3：Session Threads Index 选中任意 thread 的协议
+ * `?selected=thread:<objectId>:<threadId>` round-trip 无损；
+ * 缺少 threadId / 多冒号边界 case 不应崩,而是 silently 丢。
+ */
+describe("session ?selected=thread: round-trip", () => {
+  it("toPath embeds thread selection", () => {
+    expect(
+      toPath({
+        kind: "session",
+        sessionId: "s1",
+        selected: { kind: "thread", objectId: "supervisor", threadId: "t_abc123" },
+      }),
+    ).toBe("/flows/s1?selected=thread%3Asupervisor%3At_abc123");
+  });
+
+  it("parseRoute reads thread selection", () => {
+    const r = parseRoute("/flows/s1", "?selected=thread:supervisor:t_abc123", {
+      sessionId: "s1",
+    });
+    expect(r).toEqual({
+      kind: "session",
+      sessionId: "s1",
+      selected: { kind: "thread", objectId: "supervisor", threadId: "t_abc123" },
+    });
+  });
+
+  it("toPath combines thread query + thread selected", () => {
+    expect(
+      toPath({
+        kind: "session",
+        sessionId: "s1",
+        objectId: "user",
+        threadId: "root",
+        selected: { kind: "thread", objectId: "fb", threadId: "t_xyz" },
+      }),
+    ).toBe("/flows/s1?objectId=user&threadId=root&selected=thread%3Afb%3At_xyz");
+  });
+
+  it("parseRoute drops malformed thread selection (no threadId)", () => {
+    const r = parseRoute("/flows/s1", "?selected=thread:supervisor", {
+      sessionId: "s1",
+    });
+    expect(r).toEqual({ kind: "session", sessionId: "s1" });
+  });
+
+  it("parseRoute drops malformed thread selection (empty objectId)", () => {
+    const r = parseRoute("/flows/s1", "?selected=thread::t_abc", {
+      sessionId: "s1",
+    });
+    expect(r).toEqual({ kind: "session", sessionId: "s1" });
+  });
+});
+
 describe("toPath ↔ parseRoute roundtrip", () => {
   for (const route of [
     { kind: "session", sessionId: "s1" },
     { kind: "session", sessionId: "s1", objectId: "user", threadId: "root" },
+    {
+      kind: "session",
+      sessionId: "s1",
+      selected: { kind: "thread", objectId: "supervisor", threadId: "t_abc" },
+    },
     { kind: "file", path: "stones/main/agent_of_x/self.md" },
     {
       kind: "file",

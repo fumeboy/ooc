@@ -242,6 +242,34 @@ P0-1 (Permission 模型) Q0a~Q0d 完成；Q0e 列 todo（自改 server/index.ts 
 - **2026-05-25**：首版。Supervisor Round 1 外循环。
 - **2026-05-25**（当日 Round 1 闭环）：P0-2 完整实施完成，5 套 e2e PASS / 全仓单测 PASS / meta tsc clean。差异与残留如上。
 - **2026-05-25**（当日 Round 2 闭环）：P0-1 Q0a~Q0d 完成，2 套 e2e (Q0b+Q0c) PASS / 联合 P0-1+P0-2 42 用例 PASS / 全仓 550 单测 PASS。3 项歧义 Supervisor 拍板；Q0e 列 todo。
+- **2026-05-26**（Round 8 闭环）：user home 完全重设计 = session 内 threads 索引目录 + 4 种关系可见 + RelationOverlay 选中关系连线（A+B 折中视图）。
+  - **设计选型（A+B 折中）**：默认渲染多 Object 分栏 + 栏内 threadTree（A），选中某 thread 时叠加关系连线（B 的局部，不画全图）
+  - **4 种关系全部 derive 自 OOC 既有数据**（不发明新协议）：
+    - creator (do fork): parentThreadId / childThreadIds → 树形缩进
+    - talk (跨 object): talk_window.target → 跨栏箭头
+    - share (window 转移): window.sharing → 节点 chip + 详情
+    - reflectable (super flow): sessionId="super" → 折叠区
+  - **D1 (Supervisor)**: meta 加 `visible.children.session_threads_index` 完整子节点 + 4 patches (data_extension / relation_overlay / select_routing / chat_pane_preserved) + tsc clean
+  - **D2 (Backend AgentOfCollaborable+AgentOfPersistable)**: 扩展 `GET /api/flows/:sid/threads` 返回 ListThreadsItem (含 status/parentThreadId/creatorThreadId/childThreadIds/talkPeers/shares/createdAt/isSuperFlow); 对每 thread 调 readThread + 退化容错 (readThread 失败 → status="failed" 不抛); createdAt 用 stat.birthtimeMs 兜底; 5 新单测 PASS
+  - **D3+D4+D5 (Web AgentOfVisible 一气完成)**:
+    - **8 新组件**: SessionThreadsIndex / ObjectColumn / ThreadNode / ThreadInspectDetail / RelationOverlay + helpers + types 镜像 + 单测
+    - **RelationOverlay (D4)**: ResizeObserver + scroll listener + rAF 节流位置计算; 4 种关系实/虚线 × marker arrow (蓝/绿/橙); 同栏 bottom-center → top-center, 跨栏 right-center → left-center; **未选中时不画任何线** (减杂乱)
+    - **routing (D6)**: Selected union 加 `{ kind: "thread", objectId, threadId }` variant; `?selected=thread:<obj>:<tid>` URL 协议; 5 新 routing test case
+    - **退化处理**: D2 数据未到时 banner + status undefined 软退化 + computeEdges 全空 → overlay 不画线; web 端永远不崩
+    - **保留路径**: ChatPanel 在 chat:<wid> 路径完整保留 (含 composer + polling + H-3 "去 welcome" 按钮)
+    - **UserThreadHome.tsx 主体完全替换**为 `<SessionThreadsIndex>`; 保留外壳与 MainPanel 调用签名
+  - **整体校验**:
+    - meta tsc clean
+    - 全仓 tsc 残余 3 错: 全 lark baseline (与本轮无关)
+    - web 单测: 62 pass / 6 fail (rehype-raw baseline; 新增 SessionThreadsIndex 19 + routing 5 全 PASS)
+    - backend e2e: 68 pass / 0 fail (含 D2 新增 service.test 5 个用例)
+  - **派单效率**: 2 sub agent 完全并行 (D2 src/ + D3-D5 web/); 文件域不重叠; 累计 ~270K tokens
+  - **设计 ↔ 实施差异**:
+    - SharingState 当前未持久化 ownerObjectId / borrowerObjectId（design 预留位），UI 端字段永远 undefined; 不破坏
+    - createdAt 用 fs.stat.birthtimeMs 兜底（ThreadContext 不带）
+    - design § 9 "object 多时折叠次要 object" → 本轮未做改为允许横向滚动; 留后续优化
+    - RelationOverlay 实现了完整 4 种关系（design 允许 MVP 跳过）
+
 - **2026-05-26**（Round 7 闭环）：A 段移除 issue 看板整套 + B 段新增 plan_window first-class object 化 + sub plan + 复用 do_window.move sharing 协议。
   - **A 段（减法 — issue 看板移除）**：
     - meta：删 `collaborable.children.issue` 整段 + `persistable.issue_files` 整段 + 30+ 处引用清理；加 root.warnings 移除特性说明（明确 issue 看板 ≠ stone-versioning 的 PR-Issue）

@@ -57,3 +57,53 @@ export const addUserTalkWindowBody = t.Object({
   targetObjectId: t.String(),
   initialMessage: t.Optional(t.String()),
 });
+
+/**
+ * GET /api/flows/:sessionId/threads 的返回 shape（Round 8 D2 扩展，design:
+ * docs/2026-05-26-session-threads-index-design.md §4.1）。
+ *
+ * 旧 shape 仅 `{ objectId, threadId }`；新版扩展为 thread metadata + 4 种关系字段，
+ * 让前端 SessionThreadsIndex 能据此画分栏 + 关系。向后兼容：旧字段保留、新字段都是
+ * 可选 / 空数组退化，老前端不会因为多字段而炸。
+ */
+export type ThreadShareInfo = {
+  /** 本 thread 持有的、由别处借进来的只读 ref window。 */
+  holding: Array<{
+    windowId: string;
+    kind: "ref";
+    /** sharing.ownerThreadId（来自 SharingState.ref）。 */
+    ownerThreadId?: string;
+    /** sharing 未持久化 ownerObjectId；当前永远 undefined（design 预留位）。 */
+    ownerObjectId?: string;
+  }>;
+  /** 本 thread 持有的、已借出给别处的 window（自己保留 freeze snapshot）。 */
+  lentOut: Array<{
+    windowId: string;
+    /** sharing.borrowerThreadId（来自 SharingState.lent_out）。 */
+    borrowerThreadId?: string;
+    /** sharing 未持久化 borrowerObjectId；当前永远 undefined（design 预留位）。 */
+    borrowerObjectId?: string;
+  }>;
+};
+
+export type ListThreadsItem = {
+  objectId: string;
+  threadId: string;
+  status: "running" | "waiting" | "done" | "failed" | "paused";
+  createdAt?: number;
+  parentThreadId?: string;
+  creatorThreadId?: string;
+  creatorObjectId?: string;
+  childThreadIds: string[];
+  /** thread 的 talk_window 摘要；跨 object talk 关系数据源。 */
+  talkPeers: Array<{
+    targetObjectId: string;
+    targetThreadId?: string;
+    windowId: string;
+  }>;
+  shares: ThreadShareInfo;
+  /** sessionId === "super" 时为 true（reflectable super flow）。 */
+  isSuperFlow?: boolean;
+};
+
+export type ListThreadsResponse = { items: ListThreadsItem[] };

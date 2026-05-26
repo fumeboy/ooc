@@ -19,6 +19,11 @@ import {
   SUPER_SESSION_ID,
   isSuperSessionId,
 } from "@src/executable/windows/_shared/super-constants";
+import type {
+  ListThreadsItem,
+  ListThreadsResponse,
+  ThreadShareInfo,
+} from "./model";
 import type { createJobManager } from "../../runtime/job-manager";
 import type { PauseStore } from "../../runtime/pause-store";
 import { scanPausedThreads } from "../../runtime/thread-query";
@@ -135,6 +140,131 @@ function stripVolatileForHash(payload: { contextWindows?: ContextWindow[] }) {
       }
       return window;
     }),
+  };
+}
+
+/**
+ * 从一个 ThreadContext 抽取 shares 摘要（holding + lentOut）。
+ *
+ * 输入是已 readThread 出来的 ThreadContext.contextWindows；遍历每个 window 的
+ * sharing 字段：
+ * - sharing.kind === "ref" → 进 holding（我持有别人借给我的 ref；ownerThreadId 来自 sharing）
+ * - sharing.kind === "lent_out" → 进 lentOut（我借出去；borrowerThreadId 来自 sharing）
+ *
+ * 注意：当前 SharingState（src/executable/windows/_shared/types.ts）**不持久化**
+ * ownerObjectId / borrowerObjectId 字段 —— 它们是 design 预留位（design:
+ * docs/2026-05-26-session-threads-index-design.md §4.1），实现里永远 undefined。
+ * 未来若 sharing 扩展，这里读出来即可。
+ *
+ * 退化：sharing 字段不存在 / shape 异常 → 跳过该 entry，不抛错。
+ */
+function extractShareInfo(windows: ContextWindow[] | undefined): ThreadShareInfo {
+  const holding: ThreadShareInfo["holding"] = [];
+  const lentOut: ThreadShareInfo["lentOut"] = [];
+  for (const window of windows ?? []) {
+    const sharing = (window as { sharing?: unknown }).sharing;
+    if (!sharing || typeof sharing !== "object") continue;
+    const s = sharing as Record<string, unknown>;
+    if (s.kind === "ref") {
+      holding.push({
+        windowId: window.id,
+        kind: "ref",
+        ownerThreadId:
+          typeof s.ownerThreadId === "string" ? s.ownerThreadId : undefined,
+        // ownerObjectId 暂未持久化在 SharingState；design 预留位。
+        ownerObjectId: undefined,
+      });
+    } else if (s.kind === "lent_out") {
+      lentOut.push({
+        windowId: window.id,
+        borrowerThreadId:
+          typeof s.borrowerThreadId === "string" ? s.borrowerThreadId : undefined,
+        // borrowerObjectId 暂未持久化在 SharingState；design 预留位。
+        borrowerObjectId: undefined,
+      });
+    }
+    // 其它未知 kind / shape 异常 → 静默跳过（design 要求"不抛错"）
+  }
+  return { holding, lentOut };
+}
+
+/**
+ * 从 ThreadContext 抽取 talkPeers 摘要。
+ *
+ * 来源：contextWindows[type==="talk"]；每个 TalkWindow 对应一个 talkPeer。
+ * - targetObjectId ← talk.target
+ * - targetThreadId ← talk.targetThreadId（首条 say 之前可能 undefined）
+ * - windowId      ← talk_window.id 自身
+ */
+function extractTalkPeers(
+  windows: ContextWindow[] | undefined,
+): ListThreadsItem["talkPeers"] {
+  const peers: ListThreadsItem["talkPeers"] = [];
+  for (const window of windows ?? []) {
+    if (window.type !== "talk") continue;
+    peers.push({
+      targetObjectId: window.target,
+      targetThreadId: window.targetThreadId,
+      windowId: window.id,
+    });
+  }
+  return peers;
+}
+
+/**
+ * 构造单个 ListThreadsItem。
+ *
+ * 读 thread.json + thread 目录 stat（拿 createdAt）；任一步失败 → 退化为
+ * status="failed"，其它字段 undefined / 空数组，**不抛错**。
+ */
+async function buildListThreadsItem(args: {
+  baseDir: string;
+  sessionId: string;
+  objectId: string;
+  threadId: string;
+  isSuperFlow: boolean | undefined;
+}): Promise<ListThreadsItem> {
+  const { baseDir, sessionId, objectId, threadId, isSuperFlow } = args;
+  const base: ListThreadsItem = {
+    objectId,
+    threadId,
+    status: "failed",
+    childThreadIds: [],
+    talkPeers: [],
+    shares: { holding: [], lentOut: [] },
+    ...(isSuperFlow ? { isSuperFlow: true } : {}),
+  };
+  // 读 thread.json：损坏 / ENOENT → 退化（保持 base 的 status="failed"）
+  let thread;
+  try {
+    thread = await readThread({ baseDir, sessionId, objectId }, threadId);
+  } catch {
+    return base;
+  }
+  if (!thread) return base;
+
+  // createdAt 不在 ThreadContext 里；用 thread 目录的 birthtime 兜底
+  let createdAt: number | undefined;
+  try {
+    const tDir = join(baseDir, "flows", sessionId, "objects", objectId, "threads", threadId);
+    const info = await stat(tDir);
+    createdAt = info.birthtimeMs;
+  } catch {
+    createdAt = undefined;
+  }
+
+  return {
+    objectId,
+    threadId,
+    status: thread.status,
+    createdAt,
+    parentThreadId: thread.parentThreadId,
+    creatorThreadId: thread.creatorThreadId,
+    creatorObjectId: thread.creatorObjectId,
+    childThreadIds: thread.childThreadIds ?? [],
+    talkPeers: extractTalkPeers(thread.contextWindows),
+    shares: extractShareInfo(thread.contextWindows),
+    ...(isSuperFlow ? { isSuperFlow: true } : {}),
   };
 }
 
@@ -504,12 +634,24 @@ export function createFlowsService(deps: {
       };
     },
     /**
-     * 列出 session 下所有 (objectId, threadId)；前端用作 thread 切换器数据源。
+     * 列出 session 下所有 (objectId, threadId) + thread metadata + 4 种关系字段。
      *
-     * 当前实现：扫描 flows/<sid>/objects/<obj>/threads/<tid>；不展开嵌套 child thread（child
-     * 仍按 thread.json 里的 childThreadIds 嵌套，由前端按需展开）。
+     * Round 8 D2 扩展（design: docs/2026-05-26-session-threads-index-design.md §4.1）：
+     * 在原 `{ objectId, threadId }` 基础上增加 status / createdAt / parent / creator /
+     * childThreadIds / talkPeers / shares / isSuperFlow，让前端 SessionThreadsIndex
+     * 能据此画分栏 + 关系，不再需要拉每个 thread 详情。
+     *
+     * 实现：
+     * 1. 扫描 flows/<sid>/objects/<obj>/threads/<tid>，得到所有二元组
+     * 2. 对每个 (objectId, threadId) 调 readThread 拿 ThreadContext，提取字段
+     * 3. 退化：readThread 失败 / 损坏 → status="failed"，其它字段 undefined，**不抛错**
+     * 4. talkPeers 来源：contextWindows[type==="talk"]
+     * 5. shares 来源：contextWindows[*].sharing（kind=ref 进 holding，kind=lent_out 进 lentOut）
+     * 6. isSuperFlow：sessionId === SUPER_SESSION_ID
+     *
+     * 性能：一个 session 内 threads 数预估 < 50；50 次 fs.read 串行 OK。
      */
-    async listThreads({ sessionId }: { sessionId: string }) {
+    async listThreads({ sessionId }: { sessionId: string }): Promise<ListThreadsResponse> {
       await ensureSessionExists(sessionId);
       const objectsDir = join(deps.baseDir, "flows", sessionId, "objects");
       let objectEntries: { name: string; isDirectory(): boolean }[];
@@ -518,7 +660,8 @@ export function createFlowsService(deps: {
       } catch {
         return { items: [] };
       }
-      const items: { objectId: string; threadId: string }[] = [];
+      const isSuperFlow = isSuperSessionId(sessionId) || undefined;
+      const items: ListThreadsItem[] = [];
       for (const entry of objectEntries) {
         if (!entry.isDirectory()) continue;
         const threadsDir = join(objectsDir, entry.name, "threads");
@@ -529,10 +672,23 @@ export function createFlowsService(deps: {
           continue;
         }
         for (const t of threadEntries) {
-          if (t.isDirectory()) items.push({ objectId: entry.name, threadId: t.name });
+          if (!t.isDirectory()) continue;
+          items.push(
+            await buildListThreadsItem({
+              baseDir: deps.baseDir,
+              sessionId,
+              objectId: entry.name,
+              threadId: t.name,
+              isSuperFlow,
+            }),
+          );
         }
       }
-      items.sort((a, b) => (a.objectId === b.objectId ? a.threadId.localeCompare(b.threadId) : a.objectId.localeCompare(b.objectId)));
+      items.sort((a, b) =>
+        a.objectId === b.objectId
+          ? a.threadId.localeCompare(b.threadId)
+          : a.objectId.localeCompare(b.objectId),
+      );
       return { items };
     },
     /**

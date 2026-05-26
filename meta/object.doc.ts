@@ -3294,6 +3294,137 @@ export const root: DocTreeNode = {
                         "后续 phase: server method 等价路径 (Agent 自查 timeline)",
                     ],
                 },
+                "session_threads_index": {
+                    title: "session_threads_index - user home = session 内 threads 索引目录",
+                    content: `
+                    User home (访问 \`/flows/<sid>\` 或 \`/flows/<sid>/threads/user/root\`) 不再是
+                    "user 视角的 chat list", 而重定位为 **session 内 threads 的索引目录 + 关系可见**。
+                    设计完整版见 docs/2026-05-26-session-threads-index-design.md。
+
+                    视图形态 (A + B 折中):
+                    - 默认渲染**多 Object 分栏 + 栏内 threadTree** (A)
+                    - 选中某 thread 时**叠加关系连线** (B 的局部); 不画全图避免杂乱
+
+                    threads 之间 4 种关系 (全部来自 OOC 已有数据, 不发明新协议):
+                    - **creator** (do fork 子线程): thread.parentThreadId / childThreadIds → 树形缩进
+                    - **talk** (跨 object callee): talk_window.target / targetThreadId → 跨栏箭头 / hover tooltip
+                    - **share** (window 转移): window.sharing.kind="ref"|"lent_out" → 节点 chip + 详情
+                    - **reflectable** (super flow): sessionId="super" → 折叠区域单独列 (不混入主分栏)
+
+                    保留原 user.root 发消息流程:
+                    - 选中 user.root 的 talk_window → 右栏仍渲染 ChatPanel (现有交互不破坏)
+                    - 选中其它 thread → 右栏渲染 ThreadInspectDetail (只读检查面板)
+
+                    路由扩展 (?selected= 协议):
+                    - \`?selected=chat:<wid>\` → user.root 的 talk_window (现有)
+                    - \`?selected=thread:<obj>:<tid>\` → 任意 (object, thread) 二元组 (新)
+
+                    数据流 (lazy fetch):
+                    - 列表: \`GET /api/flows/:sid/threads\` 扩展返回 metadata (status / parentThreadId /
+                      childThreadIds / creatorThreadId / talkPeers / shares / createdAt / isSuperFlow)
+                    - 选中后: \`GET /api/flows/:sid/objects/:oid/threads/:tid\` 拿完整 ThreadContext
+
+                    不变量:
+                    - **session 视角**: 只显示 sessionId 对应的 threads; super flow 独立 session 不混入
+                    - **纯只读**: UI 不修改 thread 数据
+                    - **不发明新协议**: 4 种关系全部 derive 自既有字段
+                    - **不破坏 ChatPanel 流**: user.root.talk_window 选中时完全保留现有发消息能力
+                    - **lazy fetch**: 列表用 metadata; 详情按需获取
+                    `,
+                    named: {
+                        "SessionThreadsIndex": "user home 主组件; 渲染 session 内所有 (object, thread) 二元组",
+                        "ObjectColumn": "单 object 分栏组件; 含 threadTree (root + children)",
+                        "ThreadNode": "单 thread 节点; 含状态色点 + title + relation chips + hover tooltip",
+                        "ThreadInspectDetail": "右栏 — 非 chat thread 的只读检查面板 (status / created / parent / shares / LoopTimeline 集成)",
+                        "RelationOverlay": "选中 thread 时的关系叠加层; SVG 在 ObjectColumn 之上画连线 (creator/talk/share)",
+                        "selected=thread:<obj>:<tid>": "URL 中表达选中任意 thread 的协议 (与 chat:<wid> 并列)",
+                    },
+                    patches: {
+                        "data_extension": {
+                            title: "listThreads API 扩展 - 关系字段返回",
+                            content: `
+                            原 \`GET /api/flows/:sid/threads\` 仅返 \`{ items: [{ objectId, threadId }] }\`,
+                            不足以表达 4 种关系。本概念要求扩展 listThreads 返回:
+
+                            \`\`\`
+                            type ListThreadsItem = {
+                              objectId: string;
+                              threadId: string;
+                              status: ThreadStatus;
+                              createdAt?: number;
+                              parentThreadId?: string;
+                              creatorThreadId?: string;
+                              creatorObjectId?: string;
+                              childThreadIds: string[];
+                              talkPeers: Array<{ targetObjectId, targetThreadId?, windowId }>;
+                              shares: {
+                                holding: Array<{ windowId, kind: "ref", ownerObjectId?, ownerThreadId? }>;
+                                lentOut: Array<{ windowId, borrowerObjectId?, borrowerThreadId? }>;
+                              };
+                              isSuperFlow?: boolean;
+                            }
+                            \`\`\`
+
+                            实现: 对每个 thread 调 readThread 拿完整 ThreadContext 后提取字段;
+                            预期 session 内 threads < 50, 一次 listing 串行 fs.read 可接受 (<100ms)。
+                            退化: thread.json 损坏 / ENOENT → status="failed" + 其它字段 undefined, 不抛错。
+                            `,
+                        },
+                        "relation_overlay": {
+                            title: "RelationOverlay - 选中 thread 时的关系连线 (A+B 折中)",
+                            content: `
+                            选中某 thread 后, SVG overlay 在分栏之上画该 thread 与其它 thread 的关系连线:
+                            - **creator/parent**: 实线箭头 (子→父) 或 (父→子)
+                            - **talk peer**: 虚线带箭头 (本 thread 的 talk_window → callee thread)
+                            - **share lent_out**: 虚线 (本 thread → borrower thread)
+                            - **share ref holding**: 虚线 (本 thread ← owner thread)
+
+                            实现: 每个 ThreadNode 在 DOM 上有 \`data-thread-id\` + \`data-object-id\`;
+                            overlay 通过 getBoundingClientRect 算出端点位置画 SVG line/path。
+
+                            **不画全图**: 仅在选中状态下画当前 thread 的关系; 未选中时分栏内只有 hover tooltip
+                            提示关系。这是 A (分栏) + B (按需画线) 的折中: 视觉清晰 + 关系可见。
+                            `,
+                        },
+                        "select_routing": {
+                            title: "?selected= 协议扩展 - chat + thread 两种 variant",
+                            content: `
+                            web/src/app/routing.ts 需扩展 \`selected\` 联合类型:
+                            \`\`\`
+                            type Selected =
+                              | { kind: "chat"; windowId: string }      // 现有
+                              | { kind: "thread"; objectId: string; threadId: string }; // 新
+                            \`\`\`
+
+                            URL 形态:
+                            - 现有: \`?selected=chat:<wid>\`
+                            - 新: \`?selected=thread:<obj>:<tid>\`
+
+                            未识别的 tag silently dropped (与现有 unknown tag 处理一致)。
+                            parseRouteState / toPath 同步更新。
+                            `,
+                        },
+                        "chat_pane_preserved": {
+                            title: "ChatPanel 保留路径 - 不破坏现有发消息流程",
+                            content: `
+                            SelectionDetail 根据 selected.kind 路由:
+                            - \`chat:<wid>\` (user.root 的 talk_window) → 渲染 ChatPanel (现有, 不变)
+                            - \`thread:<obj>:<tid>\` (任意 thread) → 渲染 ThreadInspectDetail (新, 只读)
+                            - 未选中 → empty state (含 H-3 "去 welcome" 按钮 if no talk_windows)
+
+                            这条边界保护: SessionThreadsIndex 是新的"枚举视图", 不替代 chat 交互。
+                            选 user.root + talk_window 时, 整个 ChatPanel + composer + polling 都按现有逻辑工作。
+                            `,
+                        },
+                    },
+                    sources: [["docs/2026-05-26-session-threads-index-design.md", "完整 design (含 4 种关系定义 + 视图选型 + 数据需求 + 实施 D1~D5 分阶段)"]],
+                    todo: [
+                        "D2: 后端 service.listThreads 扩展返回 metadata + route-audit schema 断言",
+                        "D3: 前端 SessionThreadsIndex / ObjectColumn / ThreadNode / ThreadInspectDetail + routing 扩展",
+                        "D4: RelationOverlay 关系连线叠加层 (本 round MVP 必做)",
+                        "D5: UserThreadHome 内部主体完全替换为 SessionThreadsIndex (保留 ChatPanel 路径)",
+                    ],
+                },
             },
             patches: {
                 "stone_vs_flow_scope": {
