@@ -178,6 +178,16 @@ REGISTRY.set("skill_index", {
   commands: {},
 });
 
+REGISTRY.set("feishu_chat", {
+  type: "feishu_chat",
+  commands: {},
+});
+
+REGISTRY.set("feishu_doc", {
+  type: "feishu_doc",
+  commands: {},
+});
+
 /**
  * 替换或合并某 type 的契约，用于 windows/do.ts、windows/todo.ts 在模块加载时注入实现。
  *

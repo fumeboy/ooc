@@ -188,15 +188,15 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
   await writeThread(callerThread);
   await writeThread(calleeThread);
 
-  // 5) 根因 #5：状态翻转 → 直接通知 runtime 入队 callee。worker 不再周期扫 fs 兜底。
-  //    user 是被动 flow object（控制面驱动）— 不入队，避免被 worker 处理。
-  if (calleeObjectId !== "user") {
-    notifyThreadActivated({
-      sessionId: calleeSessionId,
-      objectId: calleeObjectId,
-      threadId: calleeThread.id,
-    });
-  }
+  // 5) 根因 #5：状态翻转 → 通知 runtime。callback 自己决定要不要入队 worker。
+  //    历史上这里对 user 短路（避免 user 被 worker 跑），现在改在 buildServer 的
+  //    setThreadActivationNotifier callback 里判 user 后跳过 jobManager —
+  //    talk-delivery 总是发 notify，让 lark event-relay 等订阅方都能收到 user 激活信号。
+  notifyThreadActivated({
+    sessionId: calleeSessionId,
+    objectId: calleeObjectId,
+    threadId: calleeThread.id,
+  });
 
   return {
     calleeObjectId,

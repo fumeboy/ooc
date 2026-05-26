@@ -17,6 +17,10 @@ import { doCommand } from "./command.do.js";
 import { endCommand } from "./command.end.js";
 import { globCommand } from "./command.glob.js";
 import { grepCommand } from "./command.grep.js";
+import {
+  openFeishuChatCommand,
+  openFeishuDocCommand,
+} from "../../../extendable/lark/index.js";
 import { openFileCommand } from "./command.open-file.js";
 import { openIssueCommand } from "./command.open-issue.js";
 import { openKnowledgeCommand } from "./command.open-knowledge.js";
@@ -49,6 +53,8 @@ export const ROOT_COMMANDS: Record<string, CommandTableEntry> = {
   create_issue: createIssueCommand,
   open_issue: openIssueCommand,
   metaprog: metaprogCommand,
+  open_feishu_chat: openFeishuChatCommand,
+  open_feishu_doc: openFeishuDocCommand,
 };
 
 /** Protocol knowledge path（与 plan.ts 等命令文件的 *_BASIC_PATH 形态一致）。 */
@@ -83,6 +89,8 @@ root window 是每个 thread 隐含的根窗口。在 root 上可用的 command 
 | grep            | 按正则在文件内容里搜索                          | 创建 search_window kind=grep（含 line+snippet）；后续可 open_match(index) |
 | create_issue    | 在 session 内创建 Issue 看板议题                | 创建 issue_window;本 thread 自动订阅 |
 | open_issue      | 把已有 Issue 拉进本 thread 作为订阅 window      | 创建 issue_window;dedup,不重复挂 |
+| open_feishu_chat | 把飞书群聊 / 单聊作为 ContextWindow 引入        | 创建 feishu_chat_window；不立即拉取，建议随后 refresh |
+| open_feishu_doc  | 把飞书文档作为 ContextWindow 引入              | 创建 feishu_doc_window；不立即拉取，建议随后 read |
 
 每个 command 在进入 \`open\` 后，对应的知识会由系统自动激活；上面的清单只是入口索引。
 `.trim();

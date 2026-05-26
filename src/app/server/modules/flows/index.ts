@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import type { ServerConfig } from "../../bootstrap/config";
 import { createJobManager } from "../../runtime/job-manager";
 import { createPauseStore } from "../../runtime/pause-store";
+import { addUserTalkWindowApi } from "./api.add-user-talk-window";
 import { callMethodApi } from "./api.call-method";
 import { createFlowObjectApi } from "./api.create-flow-object";
 import { createSessionApi } from "./api.create-session";
@@ -32,6 +33,7 @@ export function flowsModule(
 
   return new Elysia({ prefix: "/api", name: "ooc.flows" })
     .use(seedSessionApi(service))
+    .use(addUserTalkWindowApi(service))
     .use(createSessionApi(service))
     .use(createFlowObjectApi(service))
     .use(getFlowObjectApi(service))

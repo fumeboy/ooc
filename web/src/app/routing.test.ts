@@ -88,6 +88,58 @@ describe("parseRoute: legacy /threads/ path stays parseable as session+thread", 
   });
 });
 
+/**
+ * 2026-05-26 user-home 双栏：?selected=chat:<wid> / issue:<id> 在 session 路由
+ * 内 round-trip 必须无损；解析失败时 silently 丢弃（不报错），其它 query 字段不受影响。
+ */
+describe("session ?selected= round-trip", () => {
+  it("toPath embeds chat selection", () => {
+    expect(
+      toPath({ kind: "session", sessionId: "s1", selected: { kind: "chat", windowId: "w_talk_abc" } }),
+    ).toBe("/flows/s1?selected=chat%3Aw_talk_abc");
+  });
+  it("toPath embeds issue selection", () => {
+    expect(
+      toPath({ kind: "session", sessionId: "s1", selected: { kind: "issue", issueId: 42 } }),
+    ).toBe("/flows/s1?selected=issue%3A42");
+  });
+  it("toPath combines thread query with selected", () => {
+    expect(
+      toPath({
+        kind: "session",
+        sessionId: "s1",
+        objectId: "user",
+        threadId: "root",
+        selected: { kind: "chat", windowId: "w_talk_x" },
+      }),
+    ).toBe("/flows/s1?objectId=user&threadId=root&selected=chat%3Aw_talk_x");
+  });
+  it("parseRoute reads chat selection", () => {
+    const r = parseRoute("/flows/s1", "?selected=chat:w_talk_abc", { sessionId: "s1" });
+    expect(r).toEqual({
+      kind: "session",
+      sessionId: "s1",
+      selected: { kind: "chat", windowId: "w_talk_abc" },
+    });
+  });
+  it("parseRoute reads issue selection", () => {
+    const r = parseRoute("/flows/s1", "?selected=issue:42", { sessionId: "s1" });
+    expect(r).toEqual({
+      kind: "session",
+      sessionId: "s1",
+      selected: { kind: "issue", issueId: 42 },
+    });
+  });
+  it("parseRoute drops malformed selected silently", () => {
+    const r = parseRoute("/flows/s1", "?selected=garbage", { sessionId: "s1" });
+    expect(r).toEqual({ kind: "session", sessionId: "s1" });
+  });
+  it("parseRoute drops issue:<non-number> silently", () => {
+    const r = parseRoute("/flows/s1", "?selected=issue:abc", { sessionId: "s1" });
+    expect(r).toEqual({ kind: "session", sessionId: "s1" });
+  });
+});
+
 describe("toPath ↔ parseRoute roundtrip", () => {
   for (const route of [
     { kind: "session", sessionId: "s1" },

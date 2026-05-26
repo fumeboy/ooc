@@ -19,6 +19,7 @@
     "typescript": "^5.9.0"
   },
   "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.65.0",
     "elysia": "^1.4.28",
     "js-yaml": "^4.1.1",
     "openai": "^6.37.0"

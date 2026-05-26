@@ -21,9 +21,15 @@ import type { Issue, IssueComment } from "../model";
 export function IssueDetailView({
   sessionId,
   issueId,
+  hideBackLink = false,
 }: {
   sessionId: string;
   issueId: number;
+  /**
+   * 2026-05-26 user-home 双栏：inline 嵌入右栏时不需要 ← All issues 跳转，会破坏左右
+   * 一体化导航。route 路径直接进 IssueDetailView 时（MainPanel.tsx）保留默认行为。
+   */
+  hideBackLink?: boolean;
 }) {
   const { issue, loading, error, refresh } = useIssue(sessionId, issueId);
 
@@ -41,25 +47,29 @@ export function IssueDetailView({
       </div>
     );
   }
-  return <IssueDetailBody sessionId={sessionId} issue={issue} refresh={refresh} />;
+  return <IssueDetailBody sessionId={sessionId} issue={issue} refresh={refresh} hideBackLink={hideBackLink} />;
 }
 
 function IssueDetailBody({
   sessionId,
   issue,
   refresh,
+  hideBackLink,
 }: {
   sessionId: string;
   issue: Issue;
   refresh: () => void;
+  hideBackLink: boolean;
 }) {
   return (
     <article className="issue-detail">
-      <div className="issue-detail-back">
-        <Link to={`/flows/${encodeURIComponent(sessionId)}/issues`} className="issue-detail-back-link">
-          ← All issues
-        </Link>
-      </div>
+      {!hideBackLink && (
+        <div className="issue-detail-back">
+          <Link to={`/flows/${encodeURIComponent(sessionId)}/issues`} className="issue-detail-back-link">
+            ← All issues
+          </Link>
+        </div>
+      )}
       <header className="issue-detail-header">
         <h1 className="issue-detail-title">
           <span className="issue-detail-id">#{issue.id}</span>{" "}

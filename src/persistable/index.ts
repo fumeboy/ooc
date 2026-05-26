@@ -185,5 +185,14 @@ export {
   objectSkillsDir,
   listBranchSkills,
   listObjectSkills,
+  listExternalSkills,
   clearStoneSkillsCache,
 } from "./stone-skills";
+export type { WorldConfig } from "./world-config";
+export {
+  DEFAULT_SITE_NAME,
+  DEFAULT_LARK_TENANT_HOST,
+  WORLD_CONFIG_FILENAME,
+  readWorldConfig,
+  clearWorldConfigCache,
+} from "./world-config";

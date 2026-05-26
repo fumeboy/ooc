@@ -30,7 +30,19 @@ export type RouteState =
   | { kind: "file"; path: string; thread?: ThreadContext }
   | { kind: "stoneClient"; objectId: string }
   | { kind: "flowPage"; sessionId: string; objectId: string; page: string }
-  | { kind: "session"; sessionId: string; objectId?: string; threadId?: string }
+  | {
+      kind: "session";
+      sessionId: string;
+      objectId?: string;
+      threadId?: string;
+      /**
+       * 2026-05-26 user-home 双栏：左栏选中项写进 URL `?selected=chat:<wid>` 或
+       * `selected=issue:<id>`；undefined 表示空选中（右栏渲染 empty state）。
+       */
+      selected?:
+        | { kind: "chat"; windowId: string }
+        | { kind: "issue"; issueId: number };
+    }
   | { kind: "issueList"; sessionId: string }
   | { kind: "issueDetail"; sessionId: string; issueId: number };
 
@@ -59,10 +71,21 @@ export function toPath(state: RouteState): string {
       return `/flows/${encodeURIComponent(state.sessionId)}/objects/${encodeURIComponent(state.objectId)}/pages/${encodeURIComponent(state.page)}`;
     case "session": {
       const base = `/flows/${encodeURIComponent(state.sessionId)}`;
+      // 手拼 query 而非 URLSearchParams：后者把空格编成 `+`（form-urlencoded），
+      // 既有 routing.test 锁定的是 `%20`（encodeURIComponent 风格），保持一致。
+      const parts: string[] = [];
       if (state.objectId && state.threadId) {
-        return `${base}?objectId=${encodeURIComponent(state.objectId)}&threadId=${encodeURIComponent(state.threadId)}`;
+        parts.push(`objectId=${encodeURIComponent(state.objectId)}`);
+        parts.push(`threadId=${encodeURIComponent(state.threadId)}`);
       }
-      return base;
+      if (state.selected) {
+        const v =
+          state.selected.kind === "chat"
+            ? `chat:${state.selected.windowId}`
+            : `issue:${state.selected.issueId}`;
+        parts.push(`selected=${encodeURIComponent(v)}`);
+      }
+      return parts.length > 0 ? `${base}?${parts.join("&")}` : base;
     }
     case "issueList":
       return `/flows/${encodeURIComponent(state.sessionId)}/issues`;
@@ -130,6 +153,7 @@ export function parseRoute(
   const qObjectId = query.get("objectId") ?? undefined;
   const qThreadId = query.get("threadId") ?? undefined;
   const qSessionId = query.get("sessionId") ?? undefined;
+  const qSelected = parseSelectedQuery(query.get("selected"));
 
   if (path === "/" || path === "/welcome") return { kind: "welcome" };
 
@@ -167,11 +191,14 @@ export function parseRoute(
     return { kind: "issueList", sessionId: params.sessionId };
   }
 
-  // /flows/:sessionId  (+ optional ?objectId=&threadId=)
+  // /flows/:sessionId  (+ optional ?objectId=&threadId=&selected=)
   if (path.startsWith("/flows/") && params.sessionId && !params.objectId) {
     const r: RouteState = { kind: "session", sessionId: params.sessionId };
     if (qObjectId && qThreadId) {
-      return { ...r, objectId: qObjectId, threadId: qThreadId };
+      Object.assign(r, { objectId: qObjectId, threadId: qThreadId });
+    }
+    if (qSelected) {
+      Object.assign(r, { selected: qSelected });
     }
     return r;
   }
@@ -249,6 +276,31 @@ function parseIssueIdToken(token: string): number | undefined {
   if (!m) return undefined;
   const n = Number(m[1]);
   return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * 解析 ?selected=chat:<wid> / issue:<id> query 值；不识别格式时返回 undefined（不报错）。
+ * windowId 允许任意非空字符串；issueId 必须能解析成有限数字。
+ */
+function parseSelectedQuery(
+  raw: string | null,
+):
+  | { kind: "chat"; windowId: string }
+  | { kind: "issue"; issueId: number }
+  | undefined {
+  if (!raw) return undefined;
+  const colon = raw.indexOf(":");
+  if (colon <= 0) return undefined;
+  const tag = raw.slice(0, colon);
+  const value = raw.slice(colon + 1);
+  if (!value) return undefined;
+  if (tag === "chat") return { kind: "chat", windowId: value };
+  if (tag === "issue") {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return undefined;
+    return { kind: "issue", issueId: n };
+  }
+  return undefined;
 }
 
 /**

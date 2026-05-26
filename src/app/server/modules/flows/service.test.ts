@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { readThread } from "@src/persistable";
+import { clearStoneSkillsCache } from "@src/persistable/stone-skills";
 import { createJobManager } from "../../runtime/job-manager";
 import { createPauseStore } from "../../runtime/pause-store";
 import { createFlowsService } from "./service";
@@ -189,6 +190,122 @@ describe("flows service", () => {
     }
   });
 
+  /**
+   * addUserTalkWindow（spec 2026-05-26 user-home 双栏）：在已存在 session 的 user.root 上
+   * 追加新 talk_window 指向另一个 object。区别于 seedSession：不再建 session、user 已存在
+   * 时复用、同 target 已有 talk_window 时幂等返回。
+   */
+  describe("addUserTalkWindow", () => {
+    test("appends a new talk_window pointing at another object and delivers initialMessage", async () => {
+      const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-add-talk-"));
+      try {
+        const service = createFlowsService({
+          baseDir,
+          pauseStore: createPauseStore(),
+          jobManager: createJobManager(),
+        });
+        // 先 seed 一个跟 supervisor 的 session
+        const seeded = await service.seedSession({
+          sessionId: "s1",
+          targetObjectId: "supervisor",
+          initialMessage: "hi sup",
+        });
+        // 再加一个跟 pdf-extractor 的 talk_window
+        const out = await service.addUserTalkWindow({
+          sessionId: "s1",
+          targetObjectId: "pdf-extractor",
+          initialMessage: "extract this PDF",
+        });
+
+        expect(out.created).toBe(true);
+        expect(out.targetObjectId).toBe("pdf-extractor");
+        expect(out.targetThreadId).toBeDefined();
+        expect(out.jobId).toBeDefined();
+        expect(out.talkWindowId).not.toBe(seeded.talkWindowId);
+
+        // user.root.contextWindows 应同时含两个 talk_window（supervisor + pdf-extractor）
+        const userThread = await readThread(
+          { baseDir, sessionId: "s1", objectId: "user" },
+          "root",
+        );
+        const targets = (userThread?.contextWindows ?? [])
+          .filter((w) => w.type === "talk")
+          .map((w) => (w as { target: string }).target);
+        expect(targets).toContain("supervisor");
+        expect(targets).toContain("pdf-extractor");
+
+        // pdf-extractor callee thread 真创建了，inbox 含首条消息
+        const callee = await readThread(
+          { baseDir, sessionId: "s1", objectId: "pdf-extractor" },
+          out.targetThreadId!,
+        );
+        expect(callee?.inbox?.[0]?.content).toBe("extract this PDF");
+        expect(callee?.inbox?.[0]?.source).toBe("user");
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+
+    test("idempotent: same target twice returns the existing talk_window without re-creating", async () => {
+      const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-add-talk-idem-"));
+      try {
+        const service = createFlowsService({
+          baseDir,
+          pauseStore: createPauseStore(),
+          jobManager: createJobManager(),
+        });
+        await service.seedSession({
+          sessionId: "s1",
+          targetObjectId: "supervisor",
+          initialMessage: "hi",
+        });
+        const first = await service.addUserTalkWindow({
+          sessionId: "s1",
+          targetObjectId: "alice",
+          initialMessage: "hello alice",
+        });
+        const second = await service.addUserTalkWindow({
+          sessionId: "s1",
+          targetObjectId: "alice",
+          initialMessage: "second call ignored",
+        });
+        expect(first.created).toBe(true);
+        expect(second.created).toBe(false);
+        expect(second.talkWindowId).toBe(first.talkWindowId);
+        // alice callee inbox 应当只有第一条消息（第二次不重新派送）
+        const callee = await readThread(
+          { baseDir, sessionId: "s1", objectId: "alice" },
+          first.targetThreadId!,
+        );
+        expect(callee?.inbox?.length).toBe(1);
+        expect(callee?.inbox?.[0]?.content).toBe("hello alice");
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+
+    test("rejects when user.root not seeded yet", async () => {
+      const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-add-talk-no-user-"));
+      try {
+        const service = createFlowsService({
+          baseDir,
+          pauseStore: createPauseStore(),
+          jobManager: createJobManager(),
+        });
+        await service.createSession({ sessionId: "s1" });
+        await expect(
+          service.addUserTalkWindow({
+            sessionId: "s1",
+            targetObjectId: "alice",
+            initialMessage: "hi",
+          }),
+        ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+  });
+
   test("pauseSession and resumeSession return latest paused flag", async () => {
     const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-"));
 
@@ -293,6 +410,111 @@ describe("flows service", () => {
         const out = await service.createSession({ sessionId: "web-test-1" });
         expect(out.sessionId).toBe("web-test-1");
         expect(out.created).toBe(true);
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  /**
+   * getThread response 的 `hash` 字段是前端 polling 触发 refresh 的依据 ——
+   * 同输入两次必须返回相同 hash，否则前端会永远命中"内容变了"。
+   *
+   * 这是反复回归点：synthesizer 每轮 derive 出的合成 window（KnowledgeWindow /
+   * RelationWindow / SkillIndexWindow / Issue knowledge）带 ephemeral id+createdAt，
+   * 必须在 service.ts:stripVolatileForHash 里剔掉。任意一条没剔，hash 就翻动。
+   *
+   * 历史踩过：
+   * - 2026-05-25：skill_index 漏剔 createdAt（用户报告 supervisor thread hash 一直变）
+   * - 之前：relation / issue / non-explicit knowledge 陆续补齐
+   */
+  describe("getThread hash is stable for unchanged context", () => {
+    test("hash unchanged across two calls with derived knowledge + relation windows", async () => {
+      const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-hash-"));
+      try {
+        const service = createFlowsService({
+          baseDir,
+          pauseStore: createPauseStore(),
+          jobManager: createJobManager(),
+        });
+        // seedSession：建 user.root + agent.root，user.root 上挂指向 agent 的 talk_window
+        // → agent.root 自带 creator talk_window；两边都会 derive RelationWindow + protocol knowledge。
+        const seeded = await service.seedSession({
+          sessionId: "s1",
+          targetObjectId: "agent",
+          initialMessage: "hi",
+        });
+
+        const a = await service.getThread({
+          sessionId: "s1",
+          objectId: "agent",
+          threadId: seeded.targetThreadId,
+        });
+        const b = await service.getThread({
+          sessionId: "s1",
+          objectId: "agent",
+          threadId: seeded.targetThreadId,
+        });
+        expect(a.hash).toBe(b.hash);
+
+        // 同样验证 user.root：含 talk_window → relation derive
+        const u1 = await service.getThread({
+          sessionId: "s1",
+          objectId: "user",
+          threadId: "root",
+        });
+        const u2 = await service.getThread({
+          sessionId: "s1",
+          objectId: "user",
+          threadId: "root",
+        });
+        expect(u1.hash).toBe(u2.hash);
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+
+    test("hash unchanged when SkillIndexWindow is injected (skill_index.createdAt must be stripped)", async () => {
+      // 回归点：skill_index window 每轮 derive 时 createdAt=Date.now()；
+      // stripVolatileForHash 没剔会让 hash 永远翻。
+      const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-hash-skill-"));
+      try {
+        // 在 stones/main/skills/<name>/SKILL.md 放一个 skill，让 listBranchSkills 扫到。
+        const skillDir = join(baseDir, "stones", "main", "skills", "dummy-skill");
+        await mkdir(skillDir, { recursive: true });
+        await writeFile(
+          join(skillDir, "SKILL.md"),
+          "---\nname: dummy-skill\ndescription: test skill for hash stability\n---\n\n# Dummy\n",
+        );
+        // skills 有 10s TTL 缓存；每轮 derive 都从缓存拿同一份；清缓存以确保本测试不被旧条目干扰。
+        clearStoneSkillsCache();
+
+        const service = createFlowsService({
+          baseDir,
+          pauseStore: createPauseStore(),
+          jobManager: createJobManager(),
+        });
+        const seeded = await service.seedSession({
+          sessionId: "s1",
+          targetObjectId: "agent",
+          initialMessage: "hi",
+        });
+
+        const a = await service.getThread({
+          sessionId: "s1",
+          objectId: "agent",
+          threadId: seeded.targetThreadId,
+        });
+        // 确认 skill_index 真的被注入（否则该测试就退化成跟前一条重复）
+        const hasSkillIndex = (a.contextWindows ?? []).some((w) => w.type === "skill_index");
+        expect(hasSkillIndex).toBe(true);
+
+        const b = await service.getThread({
+          sessionId: "s1",
+          objectId: "agent",
+          threadId: seeded.targetThreadId,
+        });
+        expect(a.hash).toBe(b.hash);
       } finally {
         await rm(baseDir, { recursive: true, force: true });
       }

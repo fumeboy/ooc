@@ -15,7 +15,9 @@ import { stonesModule } from "./modules/stones";
 import { flowsModule } from "./modules/flows";
 import { issuesModule } from "./modules/issues";
 import { uiModule } from "./modules/ui";
+import { worldConfigModule } from "./modules/world-config";
 import { enqueueRunningThreadsAtBootstrap, startJobWorker } from "./runtime/worker";
+import { maybeForwardToLark, startLarkEventRelay } from "@src/extendable/lark";
 
 /** AppServerError 类别码 → HTTP 状态码映射。 */
 const ERROR_HTTP_STATUS: Record<AppServerError["code"], number> = {
@@ -179,8 +181,18 @@ export function buildServer(config: ServerConfig = readServerConfig()) {
   // do_window.continue / issue appendComment / end auto-reply）写完对端 inbox 后
   // 调 notifyThreadActivated → 这里把它转成 jobManager.createRunThreadJob。
   // 不再依赖 worker 周期扫 fs 兜底入队。
+  //
+  // 2026-05-25：新增 lark event-relay 反向钩子 — 当 lark-chat-* session 的 user.root
+  // 被激活（说明 supervisor 给 user 发了消息），透传到飞书 chat。
   setThreadActivationNotifier((ref) => {
-    config.jobManager.createRunThreadJob(ref);
+    // user 是被动 flow object（控制面驱动）—— 不入 worker 队列，避免被 LLM tick。
+    // 但 lark event-relay 仍然要收到 user 激活信号，把 supervisor 的回复透传到飞书。
+    // 历史上这个 skip 在 talk-delivery 里直接短路 notify，现在下移到这里：
+    // talk-delivery 总 notify，callback 决定要不要 forward 到 jobManager。
+    if (ref.objectId !== "user") {
+      config.jobManager.createRunThreadJob(ref);
+    }
+    maybeForwardToLark(ref);
   });
 
   const app = new Elysia({ name: "ooc.app.server" })
@@ -200,7 +212,8 @@ export function buildServer(config: ServerConfig = readServerConfig()) {
     .use(poolsModule(config))
     .use(uiModule(config))
     .use(flowsModule(config))
-    .use(issuesModule(config));
+    .use(issuesModule(config))
+    .use(worldConfigModule(config));
 
   if (config.workerEnabled) {
     // 根因 #5：启动期把磁盘上 running/waiting 的 thread 入队一次（bootstrap-only，
@@ -212,8 +225,21 @@ export function buildServer(config: ServerConfig = readServerConfig()) {
       );
     });
     const worker = startJobWorker(config);
+    // 2026-05-25 lark event-relay：若 .world.json 配了 LarkAppId/Secret，启动 ws 长连接
+    // 接收 im.message.receive_v1，反向触发 OOC session（fire-and-forget；缺凭证时 noop）。
+    let stopLarkRelay: () => Promise<void> = async () => {};
+    void startLarkEventRelay(config)
+      .then((stop) => {
+        stopLarkRelay = stop;
+      })
+      .catch((err) => {
+        console.warn(
+          `[ooc-app-server] startLarkEventRelay failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
     app.onStop(() => {
       worker.stop();
+      void stopLarkRelay();
     });
   }
 

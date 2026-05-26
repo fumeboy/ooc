@@ -23,6 +23,9 @@ export const endpoints = {
   flows: "/api/flows",
   /** collaborable § cross-object talk: 一次性 seed 一个 session（user → talk → target）。 */
   sessions: "/api/sessions",
+  /** 在已存在 session 的 user.root 上追加一个新 talk_window 指向另一 object（idempotent）。 */
+  addUserTalkWindow: (sessionId: string) =>
+    `/api/flows/${encodeURIComponent(sessionId)}/talk-windows`,
   pauseSession: (sessionId: string) => `/api/flows/${encodeURIComponent(sessionId)}/pause`,
   resumeSession: (sessionId: string) => `/api/flows/${encodeURIComponent(sessionId)}/resume`,
   /** 列出 session 下所有 (objectId, threadId) — UI thread 切换器数据源。 */
@@ -71,4 +74,6 @@ export const endpoints = {
   /** Flow object 级 server ui_methods 调用入口。 */
   flowCallMethod: (sessionId: string, objectId: string) =>
     `/api/flows/${encodeURIComponent(sessionId)}/objects/${encodeURIComponent(objectId)}/call_method`,
+  /** World 级配置（站名 / 是否配置外部 skills 目录），来自 \`<baseDir>/.world.json\`。 */
+  worldConfig: "/api/world/config",
 };

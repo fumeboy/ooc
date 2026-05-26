@@ -25,7 +25,7 @@ export function ChatPanel({
 }) {
   const { displayName: peerDisplayName } = useDisplayName(objectId);
   return (<>
-    <div className="right-body chat-body gap-1">
+    <div className="right-body chat-body gap-2">
       {sessionId && objectId ? (
         <>
           <div className="chat-timeline panel">

@@ -1,464 +1,500 @@
 /**
- * UserThreadHome —— 当 user thread（caller=user，objectId="user"，threadId="root"）
- * 打开时取代 ContextSnapshotViewer 的默认主视图，呈现 talk-first 体验：
+ * UserThreadHome —— user 的 root thread 主视图（user.root）。
  *
- *   +-----------------------------------------------+
- *   | Talk threads      | Issues (8 most recent)    |
- *   |  [open chat]      |  ● #N title (open)        |
- *   |  · transcript     |  ○ #M title (closed)      |
- *   |                   |  [View all issues →]      |
- *   +-----------------------------------------------+
+ * 2026-05-26 双栏重构 + 简化 header（参照 Thread Context 页面风格）：
  *
- * "Advanced view" 按钮切换回原 ContextSnapshotViewer（thread context tree），
- * 状态用本地 useState（不进 URL；刷新回归默认 talk-first 视图）。
+ *   +-----------+--------------------------------------+
+ *   | ── Chats+ |                                      |
+ *   |  · sup    |   <SelectionDetail>                  |
+ *   |  · alice  |     - chat: ChatPanel（peer thread   |
+ *   | --------- |              polling 独立轨）         |
+ *   | ── Issues+|     - issue: IssueDetailView        |
+ *   |  ● #3 …   |                  (hideBackLink)      |
+ *   |  ○ #2 …   |                                      |
+ *   +-----------+--------------------------------------+
+ *
+ * 左栏 Chats / Issues 合并在同一个 panel 容器内，上下 50/50 分；中间细分隔线，
+ * 不再两块独立卡片。顶部 "User session" header 与 Advanced view 按钮已移除——
+ * 顶部 breadcrumb-bar 已经显示 sessionId / running / user · root，重复无意义。
+ *
+ * 选中状态写进 URL `?selected=chat:<wid>` 或 `?selected=issue:<id>`，刷新保留。
  *
  * 数据来源：
- * - thread.contextWindows 中所有 type=talk window → talk thread cards
- * - useIssues(sessionId) → 侧栏 issue 列表
- *
- * 跳转：
- * - "Open chat" 按钮 → navigate 到 `/flows/<sid>?objectId=<peer>&threadId=<peerThread>`，
- *   但 user.root 上的 talk_window 只持有 `target` (peer objectId) 与 `conversationId`，
- *   不直接持有对端 threadId。退而求其次：navigate 到 `/flows/<sid>?objectId=<peer>`
- *   → shell 的 effect 用默认 threadId=root 派生，足够进入对端 chat 视图。
+ * - thread.contextWindows 中所有 type=talk window → 左栏 chat list
+ * - useIssues(sessionId) → 左栏 issue list
+ * - 选中 chat 时：usePollingThread(sessionId, peer.target, peer.targetThreadId)
+ *   独立 4s 轮询 peer thread；右栏 ChatPanel 渲染 timeline + composer
  */
 import { useState } from "react";
-import { Link, useNavigate } from "react-router";
-import { ArrowRight, MessageSquare, Network, CircleDot, FileWarning } from "lucide-react";
-import type { ThreadContext, ContextWindow, ThreadMessage } from "../../chat";
-import { ContextSnapshotViewer } from "../../files/components/ContextSnapshotViewer";
-import type { ContextSnapshot } from "../../files/context-snapshot";
+import { useNavigate } from "react-router";
+import { Plus, MessageSquare, CircleDot } from "lucide-react";
+import type { ThreadContext, ContextWindow } from "../../chat";
 import { useDisplayName } from "../../objects";
 import { useIssues, createIssue } from "../../issues";
+import { IssueDetailView } from "../../issues/components/IssueDetailView";
 import { timeAgo } from "../../issues/components/IssueDetailView";
-import { toPath } from "../../../app/routing";
+import { ChatPanel } from "../../chat/components/ChatPanel";
+import { continueThread, usePollingThread } from "../../chat";
+import { addUserTalkWindow } from "../query";
+import { toPath, useRouteState } from "../../../app/routing";
+import { messageFromError } from "../../../transport/errors";
 
 interface UserThreadHomeProps {
   sessionId: string;
   thread?: ThreadContext;
+  /** 旧的 user.root 默认 talk_window 派单回调；本视图改走 continueThread + 显式 windowId 直调，不再依赖此 prop。 */
   onUserReply?: (text: string) => Promise<void>;
 }
 
-export function UserThreadHome({ sessionId, thread, onUserReply }: UserThreadHomeProps) {
-  const [advancedView, setAdvancedView] = useState(false);
+type TalkWindow = Extract<ContextWindow, { type: "talk" }>;
 
-  if (advancedView && thread) {
-    const snapshot: ContextSnapshot = {
-      id: thread.id,
-      status: thread.status,
-      contextWindows: (thread.contextWindows ?? []) as ContextSnapshot["contextWindows"],
-      inbox: thread.inbox,
-      outbox: thread.outbox,
-      events: thread.events,
-    };
-    return (
-      <div className="user-thread-home">
-        <div className="user-thread-home-header">
-          <div>
-            <h2 className="user-thread-home-title">Context Tree (advanced)</h2>
-            <div className="muted small">Raw view: thread.json 全树结构</div>
-          </div>
-          <button
-            type="button"
-            className="btn small"
-            onClick={() => setAdvancedView(false)}
-            title="Switch back to talk + issues home"
-          >
-            ← Back to talk view
-          </button>
-        </div>
-        <ContextSnapshotViewer
-          snapshot={snapshot}
-          selfObjectId="user"
-          onUserReply={onUserReply}
-        />
-      </div>
-    );
-  }
+export function UserThreadHome({ sessionId, thread }: UserThreadHomeProps) {
+  const [newChatModalOpen, setNewChatModalOpen] = useState(false);
+  const [newIssueModalOpen, setNewIssueModalOpen] = useState(false);
+  const route = useRouteState();
+  const selected = route.kind === "session" ? route.selected : undefined;
 
   const talkWindows = (thread?.contextWindows ?? []).filter(
-    (w): w is Extract<ContextWindow, { type: "talk" }> => w.type === "talk",
+    (w): w is TalkWindow => w.type === "talk",
   );
 
   return (
     <div className="user-thread-home">
-      <div className="user-thread-home-header">
-        <div>
-          <h2 className="user-thread-home-title">User session</h2>
-          <div className="muted small">
-            <code title={sessionId}>{sessionId}</code>
-            {thread?.status && (
-              <>
-                {" · "}
-                <span className="pill">{thread.status}</span>
-              </>
-            )}
-          </div>
-        </div>
-        <button
-          type="button"
-          className="btn small"
-          onClick={() => setAdvancedView(true)}
-          title="Switch to raw context tree view"
-        >
-          <Network size={12} style={{ marginRight: 4 }} />
-          Advanced view
-        </button>
-      </div>
-
-      <div className="user-thread-home-grid">
-        <section className="user-thread-home-talks">
-          <div className="user-thread-home-section-head">
-            <MessageSquare size={13} />
-            <span>Conversations</span>
-            <span className="muted small">{talkWindows.length} talk window{talkWindows.length === 1 ? "" : "s"}</span>
-          </div>
-          {talkWindows.length === 0 ? (
-            <div className="user-thread-home-empty">
-              <div style={{ marginBottom: 8 }}>
-                No conversations yet. This session was created without a
-                first message — seed one via welcome to start talking.
-              </div>
-              {/*
-               * H-3 (Round 5 体验报告): 显式渲染一个跳转按钮 (不只是文案),
-               * 跳到 /welcome?session=<sid> 让 welcome 表单预填该 sessionId,
-               * 用户继续选 Talk to + First message 即可补 seed。
-               */}
-              <Link
-                to={`/welcome?session=${encodeURIComponent(sessionId)}`}
-                className="btn small"
-                data-testid="seed-via-welcome"
-              >
-                <MessageSquare size={11} style={{ marginRight: 4 }} />
-                Seed first conversation via welcome
-                <ArrowRight size={11} style={{ marginLeft: 4 }} />
-              </Link>
-            </div>
-          ) : (
-            <ul className="user-thread-home-talk-list">
-              {talkWindows.map((w) => (
-                <TalkWindowCard
-                  key={w.id}
-                  sessionId={sessionId}
-                  window={w}
-                  inbox={thread?.inbox ?? []}
-                  outbox={thread?.outbox ?? []}
-                />
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <aside className="user-thread-home-issues">
-          <IssuesPanel sessionId={sessionId} />
+      <div className="user-home-split">
+        <aside className="user-home-left">
+          <ChatListSection
+            sessionId={sessionId}
+            talkWindows={talkWindows}
+            selectedWindowId={selected?.kind === "chat" ? selected.windowId : undefined}
+            onAdd={() => setNewChatModalOpen(true)}
+          />
+          <div className="user-home-divider" aria-hidden />
+          <IssueListSection
+            sessionId={sessionId}
+            selectedIssueId={selected?.kind === "issue" ? selected.issueId : undefined}
+            onAdd={() => setNewIssueModalOpen(true)}
+          />
         </aside>
+        <section className="user-home-right">
+          <SelectionDetail
+            sessionId={sessionId}
+            selected={selected}
+            talkWindows={talkWindows}
+          />
+        </section>
       </div>
 
-      <NewWindowComposer sessionId={sessionId} onUserReply={onUserReply} />
+      {newChatModalOpen && (
+        <NewChatModal
+          sessionId={sessionId}
+          onClose={() => setNewChatModalOpen(false)}
+        />
+      )}
+      {newIssueModalOpen && (
+        <NewIssueModal
+          sessionId={sessionId}
+          onClose={() => setNewIssueModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
 
-/**
- * NewWindowComposer —— user thread home 底部输入区域，发起新 talk / 新 issue。
- *
- * - "Chat" tab: 输入消息文字 → 调 onUserReply（user.root 的 talk_window 派单）
- *   不切 target object —— 默认走当前 user.root 既有的 supervisor talk window
- *   （session 默认接入的 conversational entry）。
- *   后续要扩展到 "切换 target" 时再加 dropdown，避免一开始就过设计。
- * - "Issue" tab: title + body → createIssue API（当前 session 下创建 Issue，
- *   createdByObjectId 默认 supervisor）
- */
-function NewWindowComposer({
+function ChatListSection({
   sessionId,
-  onUserReply,
+  talkWindows,
+  selectedWindowId,
+  onAdd,
 }: {
   sessionId: string;
-  onUserReply?: (text: string) => Promise<void>;
+  talkWindows: TalkWindow[];
+  selectedWindowId?: string;
+  onAdd: () => void;
 }) {
-  const [tab, setTab] = useState<"chat" | "issue">("chat");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | undefined>(undefined);
-  // chat tab state
-  const [chatText, setChatText] = useState("");
-  // issue tab state
-  const [issueTitle, setIssueTitle] = useState("");
-  const [issueBody, setIssueBody] = useState("");
-
-  async function submitChat() {
-    const text = chatText.trim();
-    if (!text || busy) return;
-    if (!onUserReply) {
-      setErr("当前视图未提供消息发送通路（onUserReply 缺失）。");
-      return;
-    }
-    setBusy(true);
-    setErr(undefined);
-    try {
-      await onUserReply(text);
-      setChatText("");
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function submitIssue() {
-    const title = issueTitle.trim();
-    if (!title || busy) return;
-    setBusy(true);
-    setErr(undefined);
-    try {
-      await createIssue(sessionId, {
-        title,
-        description: issueBody.trim() || undefined,
-      });
-      setIssueTitle("");
-      setIssueBody("");
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
+  const navigate = useNavigate();
   return (
-    <section className="user-thread-composer" aria-label="New window composer">
-      <div className="user-thread-composer-tabs">
+    <section className="user-home-group">
+      <div className="user-home-group-head">
+        <MessageSquare size={12} />
+        <span>Chats</span>
+        <span className="muted small group-count">{talkWindows.length}</span>
         <button
           type="button"
-          className={`user-thread-composer-tab ${tab === "chat" ? "is-active" : ""}`}
-          onClick={() => setTab("chat")}
+          className="btn icon-btn"
+          onClick={onAdd}
+          title="Start a new chat with another object"
+          aria-label="New chat"
         >
-          <MessageSquare size={12} style={{ marginRight: 5 }} />
-          New message
-        </button>
-        <button
-          type="button"
-          className={`user-thread-composer-tab ${tab === "issue" ? "is-active" : ""}`}
-          onClick={() => setTab("issue")}
-        >
-          <CircleDot size={12} style={{ marginRight: 5 }} />
-          New issue
+          <Plus size={12} />
         </button>
       </div>
-
-      {tab === "chat" ? (
-        <div className="user-thread-composer-body">
-          <textarea
-            className="user-thread-composer-input"
-            placeholder="Send a message to supervisor…"
-            value={chatText}
-            onChange={(e) => setChatText(e.target.value)}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                e.preventDefault();
-                void submitChat();
-              }
-            }}
-            disabled={busy}
-            rows={3}
-          />
-          <div className="user-thread-composer-actions">
-            <span className="muted small">⌘/Ctrl + Enter to send</span>
-            <button
-              type="button"
-              className="btn small"
-              onClick={() => void submitChat()}
-              disabled={busy || !chatText.trim() || !onUserReply}
-            >
-              {busy ? "Sending…" : "Send"}
-            </button>
-          </div>
-        </div>
+      {talkWindows.length === 0 ? (
+        <div className="user-home-empty">No conversations yet.</div>
       ) : (
-        <div className="user-thread-composer-body">
-          <input
-            type="text"
-            className="user-thread-composer-input user-thread-composer-input-title"
-            placeholder="Issue title"
-            value={issueTitle}
-            onChange={(e) => setIssueTitle(e.target.value)}
-            disabled={busy}
-            maxLength={200}
-          />
-          <textarea
-            className="user-thread-composer-input"
-            placeholder="Describe the issue (optional, markdown supported)…"
-            value={issueBody}
-            onChange={(e) => setIssueBody(e.target.value)}
-            disabled={busy}
-            rows={3}
-            maxLength={8192}
-          />
-          <div className="user-thread-composer-actions">
-            <span className="muted small">created by supervisor</span>
-            <button
-              type="button"
-              className="btn small"
-              onClick={() => void submitIssue()}
-              disabled={busy || !issueTitle.trim()}
-            >
-              {busy ? "Creating…" : "Create issue"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {err && (
-        <div className="user-thread-composer-error" role="alert">
-          <FileWarning size={11} style={{ marginRight: 5, verticalAlign: "middle" }} />
-          {err}
-        </div>
+        <ul className="user-home-list">
+          {talkWindows.map((w) => (
+            <ChatListItem
+              key={w.id}
+              sessionId={sessionId}
+              window={w}
+              isActive={w.id === selectedWindowId}
+              onSelect={() =>
+                navigate(
+                  toPath({
+                    kind: "session",
+                    sessionId,
+                    selected: { kind: "chat", windowId: w.id },
+                  }),
+                )
+              }
+            />
+          ))}
+        </ul>
       )}
     </section>
   );
 }
 
-function TalkWindowCard({
-  sessionId,
+function ChatListItem({
+  sessionId: _sid,
   window: w,
-  inbox,
-  outbox,
+  isActive,
+  onSelect,
 }: {
   sessionId: string;
-  window: Extract<ContextWindow, { type: "talk" }>;
-  inbox: ThreadMessage[];
-  outbox: ThreadMessage[];
+  window: TalkWindow;
+  isActive: boolean;
+  onSelect: () => void;
 }) {
-  const navigate = useNavigate();
   const { displayName } = useDisplayName(w.target);
-  // 取本 talk_window 关联的最后 3 条消息（outbox.windowId === w.id, inbox.replyToWindowId === w.id）
-  const related: Array<{ msg: ThreadMessage; channel: "inbox" | "outbox" }> = [];
-  for (const m of outbox) if (m.windowId === w.id) related.push({ msg: m, channel: "outbox" });
-  for (const m of inbox) if (m.replyToWindowId === w.id) related.push({ msg: m, channel: "inbox" });
-  related.sort((a, b) => (a.msg.createdAt ?? 0) - (b.msg.createdAt ?? 0));
-  const recent = related.slice(-3);
-
   return (
-    <li className="user-thread-talk-card">
-      <div className="user-thread-talk-head">
-        <div className="user-thread-talk-peer">
-          <span className="user-thread-talk-peer-dot" aria-hidden>●</span>
-          <span className="user-thread-talk-peer-name" title={w.target}>
-            {displayName}
-          </span>
-          <span className={`user-thread-talk-status user-thread-talk-status-${w.status}`}>
-            {w.status}
-          </span>
-        </div>
-        <button
-          type="button"
-          className="btn small"
-          onClick={() => {
-            // user.root.talk_window 不存对端 threadId; 让 shell 默认派生 (root)
-            // ChatPanel 拿到对端 thread 后会展示完整 timeline.
-            navigate(
-              toPath({
-                kind: "session",
-                sessionId,
-                objectId: w.target,
-                threadId: "root",
-              }),
-            );
-          }}
-          title={`Open chat with ${displayName}`}
-        >
-          Open chat
-          <ArrowRight size={11} style={{ marginLeft: 4 }} />
-        </button>
-      </div>
-      <div className="user-thread-talk-title">{w.title}</div>
-      <div className="user-thread-talk-meta muted small">
-        conversation <code>{w.conversationId}</code>
-        {related.length > 0 && (
-          <>
-            {" · "}
-            {related.length} message{related.length === 1 ? "" : "s"}
-          </>
-        )}
-      </div>
-      {recent.length > 0 && (
-        <ul className="user-thread-talk-transcript">
-          {recent.map((entry, i) => {
-            const m = entry.msg;
-            const arrow = entry.channel === "outbox" ? "→" : "←";
-            const senderLabel =
-              entry.channel === "outbox"
-                ? "you"
-                : m.fromObjectId ?? m.fromThreadId ?? "peer";
-            const text = m.content ?? "";
-            return (
-              <li key={m.id ?? i} className={`user-thread-talk-msg user-thread-talk-msg-${entry.channel}`}>
-                <span className="user-thread-talk-msg-arrow" aria-hidden>{arrow}</span>
-                <span className="user-thread-talk-msg-sender">{senderLabel}</span>
-                <span className="user-thread-talk-msg-body" title={text}>
-                  {text.length > 200 ? text.slice(0, 200) + "…" : text}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+    <li>
+      <button
+        type="button"
+        className={`user-home-list-row ${isActive ? "is-active" : ""}`}
+        onClick={onSelect}
+        title={`Open chat with ${displayName}`}
+      >
+        <span className="user-home-list-row-dot" aria-hidden>●</span>
+        <span className="user-home-list-row-label">{displayName}</span>
+        <span className={`user-home-list-row-status user-home-list-row-status-${w.status}`}>
+          {w.status}
+        </span>
+      </button>
     </li>
   );
 }
 
-function IssuesPanel({ sessionId }: { sessionId: string }) {
+function IssueListSection({
+  sessionId,
+  selectedIssueId,
+  onAdd,
+}: {
+  sessionId: string;
+  selectedIssueId?: number;
+  onAdd: () => void;
+}) {
+  const navigate = useNavigate();
   const { issues, loading } = useIssues(sessionId);
   const sorted = [...issues].sort((a, b) => b.lastUpdatedAt - a.lastUpdatedAt);
-  const top = sorted.slice(0, 8);
+  const top = sorted.slice(0, 12);
   return (
-    <>
-      <div className="user-thread-home-section-head">
+    <section className="user-home-group">
+      <div className="user-home-group-head">
+        <CircleDot size={12} />
         <span>Issues</span>
-        <span className="muted small">
-          {loading && issues.length === 0
-            ? "…"
-            : `${issues.length} total`}
+        <span className="muted small group-count">
+          {loading && issues.length === 0 ? "…" : `${issues.length}`}
         </span>
+        <button
+          type="button"
+          className="btn icon-btn"
+          onClick={onAdd}
+          title="Open a new issue"
+          aria-label="New issue"
+        >
+          <Plus size={12} />
+        </button>
       </div>
       {top.length === 0 ? (
-        <div className="user-thread-home-empty">
-          {loading ? "Loading…" : "No issues yet."}
-        </div>
+        <div className="user-home-empty">{loading ? "Loading…" : "No issues yet."}</div>
       ) : (
-        <ul className="user-thread-issues-list">
+        <ul className="user-home-list">
           {top.map((iss) => (
             <li key={iss.id}>
-              <Link
-                to={toPath({
-                  kind: "issueDetail",
-                  sessionId,
-                  issueId: iss.id,
-                })}
-                className="user-thread-issue-row"
+              <button
+                type="button"
+                className={`user-home-list-row ${iss.id === selectedIssueId ? "is-active" : ""}`}
+                onClick={() =>
+                  navigate(
+                    toPath({
+                      kind: "session",
+                      sessionId,
+                      selected: { kind: "issue", issueId: iss.id },
+                    }),
+                  )
+                }
                 title={iss.title}
               >
                 <span
-                  className={`user-thread-issue-status user-thread-issue-status-${iss.status}`}
+                  className={`user-home-list-row-dot user-home-list-row-issue-${iss.status}`}
                   aria-label={iss.status}
                   aria-hidden
                 >
                   ●
                 </span>
-                <span className="user-thread-issue-id">#{iss.id}</span>
-                <span className="user-thread-issue-title">{iss.title}</span>
-                <span className="user-thread-issue-meta">
-                  {timeAgo(iss.lastUpdatedAt)}
-                </span>
-              </Link>
+                <span className="user-home-list-row-id">#{iss.id}</span>
+                <span className="user-home-list-row-label">{iss.title}</span>
+                <span className="user-home-list-row-meta">{timeAgo(iss.lastUpdatedAt)}</span>
+              </button>
             </li>
           ))}
         </ul>
       )}
-      <div className="user-thread-issues-foot">
-        <Link to={`/flows/${encodeURIComponent(sessionId)}/issues`} className="btn small">
-          View all issues
-          <ArrowRight size={11} style={{ marginLeft: 4 }} />
-        </Link>
+    </section>
+  );
+}
+
+function SelectionDetail({
+  sessionId,
+  selected,
+  talkWindows,
+}: {
+  sessionId: string;
+  selected:
+    | { kind: "chat"; windowId: string }
+    | { kind: "issue"; issueId: number }
+    | undefined;
+  talkWindows: TalkWindow[];
+}) {
+  if (!selected) {
+    return (
+      <div className="user-home-empty-panel">
+        <p>Pick a chat or issue from the left.</p>
+        <p className="muted small">点击 + 号可以开新会话或开 issue。</p>
       </div>
-    </>
+    );
+  }
+  if (selected.kind === "chat") {
+    const w = talkWindows.find((tw) => tw.id === selected.windowId);
+    if (!w) {
+      return (
+        <div className="user-home-empty-panel">
+          <p className="muted small">
+            Chat <code>{selected.windowId}</code> not found on user.root —— 可能 talk_window 已被关闭。
+          </p>
+        </div>
+      );
+    }
+    return <SelectedChat sessionId={sessionId} window={w} />;
+  }
+  return (
+    <IssueDetailView sessionId={sessionId} issueId={selected.issueId} hideBackLink />
+  );
+}
+
+function SelectedChat({ sessionId, window: w }: { sessionId: string; window: TalkWindow }) {
+  // peer thread polling 独立轨：sessionId 不变，object/thread 跟着选中的 talk_window 走。
+  // targetThreadId 在首次 deliverTalkMessage 时回填；尚未派送过的新 talk_window 会是 undefined,
+  // 此时 hook 不启动，ChatPanel 显示 empty state。
+  const { thread } = usePollingThread(sessionId, w.target, w.targetThreadId);
+  const handleSend = async (text: string) => {
+    // 显式带 targetWindowId 走 user.root.talkWindow.say —— 与 onUserReply 默认走第一个 talk
+    // 不同，这里精确选中当前 talk_window，避免发到其它 chat。
+    await continueThread(sessionId, text, w.id);
+  };
+  return (
+    <ChatPanel
+        sessionId={sessionId}
+        objectId={w.target}
+        thread={thread}
+        onSend={handleSend}
+      />
+  );
+}
+
+/** + 号弹窗：在当前 session 加新 talk_window 指向某 object，并发首条消息。 */
+function NewChatModal({
+  sessionId,
+  onClose,
+}: {
+  sessionId: string;
+  onClose: () => void;
+}) {
+  const navigate = useNavigate();
+  const [target, setTarget] = useState("");
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | undefined>();
+
+  async function submit() {
+    const t = target.trim();
+    const m = text.trim();
+    if (!t || !m || busy) return;
+    setBusy(true);
+    setErr(undefined);
+    try {
+      const out = await addUserTalkWindow(sessionId, {
+        targetObjectId: t,
+        initialMessage: m,
+      });
+      onClose();
+      navigate(
+        toPath({
+          kind: "session",
+          sessionId,
+          selected: { kind: "chat", windowId: out.talkWindowId },
+        }),
+      );
+    } catch (e) {
+      setErr(messageFromError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card compact-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="row space-between">
+          <strong>New chat</strong>
+          <button type="button" className="btn" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        <p className="muted small">
+          在当前 session 的 user.root 上挂一个新 talk_window 指向 target object 并发首条消息。
+          target 已存在则复用既有 talk_window。
+        </p>
+        <label className="field-label">
+          Target object id
+          <input
+            className="input"
+            placeholder="e.g. supervisor / pdf-extractor / alice"
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            disabled={busy}
+            autoFocus
+          />
+        </label>
+        <label className="field-label">
+          First message
+          <textarea
+            className="textarea"
+            rows={4}
+            placeholder="Say something to start the conversation…"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                e.preventDefault();
+                void submit();
+              }
+            }}
+            disabled={busy}
+          />
+        </label>
+        {err && <div className="modal-error">{err}</div>}
+        <div className="row space-between modal-actions">
+          <span className="muted small">⌘/Ctrl + Enter to submit</span>
+          <button
+            type="button"
+            className="btn primary"
+            onClick={() => void submit()}
+            disabled={busy || !target.trim() || !text.trim()}
+          >
+            {busy ? "Creating…" : "Start chat"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NewIssueModal({
+  sessionId,
+  onClose,
+}: {
+  sessionId: string;
+  onClose: () => void;
+}) {
+  const navigate = useNavigate();
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | undefined>();
+
+  async function submit() {
+    const t = title.trim();
+    if (!t || busy) return;
+    setBusy(true);
+    setErr(undefined);
+    try {
+      const res = await createIssue(sessionId, {
+        title: t,
+        description: body.trim() || undefined,
+      });
+      onClose();
+      navigate(
+        toPath({
+          kind: "session",
+          sessionId,
+          selected: { kind: "issue", issueId: res.issue.id },
+        }),
+      );
+    } catch (e) {
+      setErr(messageFromError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card compact-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="row space-between">
+          <strong>New issue</strong>
+          <button type="button" className="btn" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        <label className="field-label">
+          Title
+          <input
+            className="input"
+            placeholder="Short title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={200}
+            disabled={busy}
+            autoFocus
+          />
+        </label>
+        <label className="field-label">
+          Description (markdown, optional)
+          <textarea
+            className="textarea"
+            rows={6}
+            placeholder="Describe the issue…"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            maxLength={8192}
+            disabled={busy}
+          />
+        </label>
+        {err && <div className="modal-error">{err}</div>}
+        <div className="row space-between modal-actions">
+          <span className="muted small">created by supervisor</span>
+          <button
+            type="button"
+            className="btn primary"
+            onClick={() => void submit()}
+            disabled={busy || !title.trim()}
+          >
+            {busy ? "Creating…" : "Create issue"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

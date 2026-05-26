@@ -19,8 +19,10 @@ import {
   Bell,
   ChevronRight,
   CircleDot,
+  ExternalLink,
   FileCheck,
   FileText,
+  Hash,
   Inbox,
   Layers,
   ListChecks,
@@ -29,9 +31,11 @@ import {
   MessageSquare,
   PanelTop,
   Play,
+  Puzzle,
   ScrollText,
   Search,
   Send,
+  Sparkles,
   Terminal,
   Users,
   type LucideIcon,
@@ -75,6 +79,11 @@ const WINDOW_TYPE_ICON: Record<ContextWindow["type"], LucideIcon> = {
   knowledge: ScrollText,
   search: Search,
   relation: Users,
+  custom: Puzzle,
+  skill_index: Sparkles,
+  issue: Hash,
+  feishu_chat: MessageSquare,
+  feishu_doc: FileText,
 };
 
 /** 已有专用渲染分支的 window type 集合；不在集合中的类型由 NodeDetail 末尾的 JSON 兜底渲染。 */
@@ -89,6 +98,11 @@ const HANDLED_WINDOW_TYPES = new Set<string>([
   "knowledge",
   "search",
   "relation",
+  "custom",
+  "skill_index",
+  "issue",
+  "feishu_chat",
+  "feishu_doc",
 ]);
 
 /** 把节点状态映射成颜色基调；节点没有 status 时返回 "neutral"。 */
@@ -426,15 +440,10 @@ function WindowCommandsChips({ type }: { type: string }) {
   const catalog = useWindowTypes();
   const entry = catalog?.[type];
   if (!entry || entry.commands.length === 0) return null;
-  const hint = type === "root"
-    ? "open(command=\"<name>\", args={...})"
-    : `open(parent_window_id="<this>", command="<name>", args={...})`;
+  // 历史上这里有一行 hint："commands open(parent_window_id=..., command=..., args={...})"
+  // 用户反馈：对真实使用是噪声（chips 已自带名字，hover 看 description 即可）。去掉。
   return (
     <div className="llm-input-commands">
-      <div className="llm-input-commands-head">
-        <span className="llm-input-commands-label">commands</span>
-        <span className="llm-input-commands-hint muted small">{hint}</span>
-      </div>
       <div className="llm-input-commands-chips">
         {entry.commands.map((cmd) => (
           <span key={cmd.name} className="llm-input-command-chip" tabIndex={0}>
@@ -448,6 +457,348 @@ function WindowCommandsChips({ type }: { type: string }) {
         ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * 模块级缓存的 world config(siteName / larkTenantHost)。
+ *
+ * - 同一会话内多个 detail 组件共享一份;首次 mount 触发 fetch,后续直接返回。
+ * - 10 秒 TTL 已经够用:siteName/larkTenantHost 几乎不会运行时改;真要刷只需 reload。
+ * - 避免每个 feishu_doc / feishu_chat detail 都自带 fetch 抖,也避免引入全局 Context。
+ */
+type WorldConfigCache = {
+  siteName?: string;
+  larkTenantHost?: string;
+  hasLarkBot?: boolean;
+};
+let worldConfigCache: WorldConfigCache | null = null;
+let worldConfigInflight: Promise<WorldConfigCache> | null = null;
+let worldConfigFetchedAt = 0;
+const worldConfigSubscribers = new Set<() => void>();
+
+async function fetchWorldConfigCached(): Promise<WorldConfigCache> {
+  const now = Date.now();
+  if (worldConfigCache && now - worldConfigFetchedAt < 10_000) return worldConfigCache;
+  if (worldConfigInflight) return worldConfigInflight;
+  worldConfigInflight = (async () => {
+    try {
+      // 直接 fetch 避免引入 transport 依赖循环
+      const res = await fetch("/api/world/config");
+      const data = (await res.json()) as WorldConfigCache;
+      worldConfigCache = data;
+      worldConfigFetchedAt = Date.now();
+      for (const cb of worldConfigSubscribers) cb();
+      return data;
+    } finally {
+      worldConfigInflight = null;
+    }
+  })();
+  return worldConfigInflight;
+}
+
+function useWorldConfig(): WorldConfigCache | null {
+  const [, force] = useState(0);
+  useEffect(() => {
+    let active = true;
+    void fetchWorldConfigCached().then(() => {
+      if (active) force((x) => x + 1);
+    });
+    const sub = () => active && force((x) => x + 1);
+    worldConfigSubscribers.add(sub);
+    return () => {
+      active = false;
+      worldConfigSubscribers.delete(sub);
+    };
+  }, []);
+  return worldConfigCache;
+}
+
+/** kindSlug 映射;参考 spec:`https://{larkTenantHost}/{kindSlug}/{docToken}`。 */
+function feishuDocKindSlug(kind: string): string {
+  switch (kind) {
+    case "docx": return "docx";
+    case "doc": return "docs";
+    case "sheet": return "sheets";
+    case "base": return "base";
+    case "wiki": return "wiki";
+    case "drive_md": return "file";
+    default: return kind;
+  }
+}
+
+/** Custom window 详情面板。 */
+function CustomWindowDetail({
+  window,
+}: {
+  window: Extract<ContextWindow, { type: "custom" }>;
+}) {
+  const { displayName } = useDisplayName(window.objectId);
+  const stonePath = `stones/main/objects/${window.objectId}/`;
+  const label = displayName !== window.objectId ? `${displayName} (${window.objectId})` : window.objectId;
+  return (
+    <>
+      <div className="llm-input-attrs">
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">objectId</span>
+          <span className="llm-input-attr-value">{label}</span>
+        </div>
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">stone path</span>
+          <span className="llm-input-attr-value">{stonePath}</span>
+        </div>
+      </div>
+      <div className="llm-input-empty">
+        custom window 行为由 <code>{stonePath}server/index.ts</code> 的 <code>ObjectWindowDefinition</code> 决定;
+        通过上方 commands chip 调用。
+      </div>
+    </>
+  );
+}
+
+/** Skill index window 详情面板:按 scope 分组。 */
+function SkillIndexWindowDetail({
+  window,
+}: {
+  window: Extract<ContextWindow, { type: "skill_index" }>;
+}) {
+  // scope 分组顺序:object > branch > external(由近到远;Agent 自己的 skill 最先看到)
+  const groups: Array<{ scope: "object" | "branch" | "external"; label: string; skills: typeof window.skills }> = [
+    { scope: "object", label: "object", skills: window.skills.filter((s) => s.scope === "object") },
+    { scope: "branch", label: "branch", skills: window.skills.filter((s) => s.scope === "branch") },
+    { scope: "external", label: "external", skills: window.skills.filter((s) => s.scope === "external") },
+  ];
+  return (
+    <>
+      <div className="llm-input-attrs">
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">total</span>
+          <span className="llm-input-attr-value">
+            {window.skills.length} skill{window.skills.length === 1 ? "" : "s"}
+          </span>
+        </div>
+      </div>
+      <div className="cw-skill-groups">
+        {groups.map((g) => {
+          if (g.skills.length === 0) return null;
+          return (
+            <div key={g.scope} className="cw-skill-group">
+              <div className="cw-skill-group-head">
+                <span className="cw-skill-scope-badge" data-scope={g.scope}>{g.label}</span>
+                <span className="cw-skill-count muted small">{g.skills.length}</span>
+              </div>
+              <ul className="cw-skill-list">
+                {g.skills.map((s) => (
+                  <li key={`${g.scope}:${s.name}`} className="cw-skill-item" title={s.skillFilePath}>
+                    <div className="cw-skill-item-head">
+                      <span className="cw-skill-name">{s.name}</span>
+                      <span className="cw-skill-path muted small">{s.skillFilePath}</span>
+                    </div>
+                    <div className="cw-skill-desc">{s.description}</div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+        {window.skills.length === 0 && (
+          <div className="llm-input-empty">该 thread 当前未挂载任何 skill。</div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** Issue window 详情面板:GitHub issue 风格简洁列出。 */
+function IssueWindowDetail({
+  window,
+}: {
+  window: Extract<ContextWindow, { type: "issue" }>;
+}) {
+  return (
+    <>
+      <div className="llm-input-attrs">
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">issue id</span>
+          <span className="llm-input-attr-value">#{window.issueId}</span>
+        </div>
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">window status</span>
+          <span className="llm-input-attr-value">{window.status ?? "open"}</span>
+        </div>
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">title</span>
+          <span className="llm-input-attr-value">{window.title}</span>
+        </div>
+      </div>
+      <div className="llm-input-empty">
+        Issue 评论/状态来自 <code>flows/&lt;sid&gt;/issues/issue-{window.issueId}.json</code>;
+        每轮 thread render 时由 deriveIssueWindowKnowledge 注入到 LLM context。
+      </div>
+    </>
+  );
+}
+
+/** Feishu chat window 详情面板:行式消息流。 */
+function FeishuChatWindowDetail({
+  window,
+}: {
+  window: Extract<ContextWindow, { type: "feishu_chat" }>;
+}) {
+  const lastRefresh = window.lastRefreshAtMs
+    ? new Date(window.lastRefreshAtMs).toLocaleString()
+    : "(never)";
+  return (
+    <>
+      <div className="llm-input-attrs">
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">chat</span>
+          <span className="llm-input-attr-value">{window.chatName} ({window.chatId})</span>
+        </div>
+        {window.chatType && (
+          <div className="llm-input-attr-row">
+            <span className="llm-input-attr-key">chat type</span>
+            <span className="llm-input-attr-value">{window.chatType}</span>
+          </div>
+        )}
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">mode</span>
+          <span className="llm-input-attr-value">
+            {window.mode}
+            {window.mode === "tail" && window.tailCount ? ` (${window.tailCount})` : ""}
+            {window.mode === "search" && window.searchQuery ? ` "${window.searchQuery}"` : ""}
+            {window.mode === "thread" && window.threadAnchorMessageId ? ` @${window.threadAnchorMessageId}` : ""}
+          </span>
+        </div>
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">last refresh</span>
+          <span className="llm-input-attr-value">{lastRefresh}</span>
+        </div>
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">buffer size</span>
+          <span className="llm-input-attr-value">{window.buffer.length} message{window.buffer.length === 1 ? "" : "s"}</span>
+        </div>
+      </div>
+      {window.buffer.length === 0 ? (
+        <div className="llm-input-empty">buffer 为空,先 refresh。</div>
+      ) : (
+        <ul className="cw-feishu-msg-list">
+          {window.buffer.map((m) => {
+            const time = new Date(m.createTimeMs).toLocaleTimeString();
+            return (
+              <li key={m.messageId} className="cw-feishu-msg-row">
+                <span className="cw-feishu-msg-time">{time}</span>
+                <span className="cw-feishu-msg-sender">{m.sender}</span>
+                {m.senderKind && (
+                  <span className="cw-feishu-msg-kind" data-kind={m.senderKind}>
+                    {m.senderKind}
+                  </span>
+                )}
+                {m.replyToMessageId && (
+                  <span className="cw-feishu-msg-reply muted small">↪ {m.replyToMessageId}</span>
+                )}
+                <span className="cw-feishu-msg-text">{m.text}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
+  );
+}
+
+/** Feishu doc window 详情面板:markdown 长正文支持折叠。 */
+const FEISHU_DOC_PREVIEW_LIMIT = 400;
+
+function FeishuDocWindowDetail({
+  window,
+}: {
+  window: Extract<ContextWindow, { type: "feishu_doc" }>;
+}) {
+  const config = useWorldConfig();
+  const tenantHost = config?.larkTenantHost;
+  const slug = feishuDocKindSlug(window.docKind);
+  const docUrl = tenantHost ? `https://${tenantHost}/${slug}/${window.docToken}` : null;
+  const lastFetched = window.lastFetchedAtMs
+    ? new Date(window.lastFetchedAtMs).toLocaleString()
+    : "(never)";
+
+  const [expanded, setExpanded] = useState(false);
+  const body = window.content?.body ?? "";
+  const isMarkdown = window.content?.format === "markdown";
+  const longBody = body.length > FEISHU_DOC_PREVIEW_LIMIT;
+  const previewBody = longBody && !expanded ? body.slice(0, FEISHU_DOC_PREVIEW_LIMIT) + "…" : body;
+
+  return (
+    <>
+      <div className="llm-input-attrs">
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">doc</span>
+          <span className="llm-input-attr-value">
+            {window.docTitle}{" "}
+            {docUrl ? (
+              <a href={docUrl} target="_blank" rel="noreferrer" className="cw-feishu-doc-link">
+                <ExternalLink size={11} aria-hidden="true" /> open
+              </a>
+            ) : (
+              <span className="muted small">(host 未配置)</span>
+            )}
+          </span>
+        </div>
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">kind / token</span>
+          <span className="llm-input-attr-value">{window.docKind} · {window.docToken}</span>
+        </div>
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">mode</span>
+          <span className="llm-input-attr-value">{window.mode}</span>
+        </div>
+        {window.versionId && (
+          <div className="llm-input-attr-row">
+            <span className="llm-input-attr-key">version</span>
+            <span className="llm-input-attr-value">{window.versionId}</span>
+          </div>
+        )}
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">last fetched</span>
+          <span className="llm-input-attr-value">{lastFetched}</span>
+        </div>
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">format</span>
+          <span className="llm-input-attr-value">{window.content?.format ?? "(empty)"} · {body.length} chars</span>
+        </div>
+      </div>
+      {body.length === 0 ? (
+        <div className="llm-input-empty">content 为空;先用 read 拉一次。</div>
+      ) : isMarkdown ? (
+        <div className="llm-input-md-body">
+          <MarkdownContent content={previewBody} />
+          {longBody && (
+            <button
+              type="button"
+              className="cw-feishu-doc-expand"
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? "收起" : `展开全文 (${body.length} 字)`}
+            </button>
+          )}
+        </div>
+      ) : (
+        // blocks 形态:暂展示 body 字符串(后端通常是 with-ids XML 文本)
+        <pre className="llm-input-pre">{previewBody}</pre>
+      )}
+      {!isMarkdown && longBody && (
+        <div style={{ padding: "0 14px 12px" }}>
+          <button
+            type="button"
+            className="cw-feishu-doc-expand"
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? "收起" : `展开全文 (${body.length} 字)`}
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -480,6 +831,7 @@ function WindowDetail({
           <div className="llm-input-detail-meta">{window.id}</div>
         </div>
       </div>
+            <WindowCommandsChips type={window.type} />
       <div className="llm-input-attrs">
         {rows.map(([k, v]) => (
           <div key={k} className="llm-input-attr-row">
@@ -488,7 +840,6 @@ function WindowDetail({
           </div>
         ))}
       </div>
-      <WindowCommandsChips type={window.type} />
       {window.type === "command_exec" && (
         <>
           <div className="llm-input-attrs">
@@ -596,6 +947,11 @@ function WindowDetail({
         </>
       )}
       {window.type === "relation" && <RelationWindowDetail window={window} />}
+      {window.type === "custom" && <CustomWindowDetail window={window} />}
+      {window.type === "skill_index" && <SkillIndexWindowDetail window={window} />}
+      {window.type === "issue" && <IssueWindowDetail window={window} />}
+      {window.type === "feishu_chat" && <FeishuChatWindowDetail window={window} />}
+      {window.type === "feishu_doc" && <FeishuDocWindowDetail window={window} />}
       {window.type === "talk" && (
         <div className="llm-input-attrs">
           <div className="llm-input-attr-row">

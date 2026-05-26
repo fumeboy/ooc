@@ -47,3 +47,13 @@ export const seedSessionBody = t.Object({
   targetObjectId: t.String(),
   initialMessage: t.String(),
 });
+
+/**
+ * 在已存在 session 的 user.root 上追加一个新 talk_window 指向 targetObjectId。
+ * initialMessage 可选：缺省时只挂 talk_window 不派送；提供时同 seedSession 一样
+ * 走 deliverTalkMessage 创建 callee thread + 写消息 + 入队。
+ */
+export const addUserTalkWindowBody = t.Object({
+  targetObjectId: t.String(),
+  initialMessage: t.Optional(t.String()),
+});

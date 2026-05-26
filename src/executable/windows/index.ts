@@ -83,6 +83,10 @@ import "./relation/index.js";
 import "./custom/index.js";
 import "./skill_index/index.js";
 
+// Extendable 子系统 — 第三方 / 外部世界集成（lark 等）通过 barrel 自注册到 WindowRegistry。
+// 必须在 builtin window type 全部加载完成后、boot-time renderXml 校验之前 import。
+import "../../extendable/index.js";
+
 // Boot-time 校验：所有 window type 必须配齐 renderXml hook（render.ts 调度器要求）。
 // 缺失会在此 fail-loud（根因 #4 接口 explicit），不让"空白 XML"问题流到 LLM。
 import { assertAllRenderHooksRegistered as _assertHooks } from "./_shared/registry.js";
