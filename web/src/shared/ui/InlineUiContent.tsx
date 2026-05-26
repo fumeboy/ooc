@@ -1,14 +1,17 @@
 /**
  * Inline UI component rendering — 解析消息文本中的 `[[ui{...}ui]]` token，
- * 渲染成可交互的小组件（file-link 等），与 Markdown 文本混排。
+ * 渲染成可交互的小组件（file-link / follow-ups），与 Markdown 文本混排。
  *
  * 与 stones/main/user/readme.md 的语法约定保持一致；Agent 端只产 token 文本，
  * 前端集中 dispatch 渲染——不让 Agent 直接写 HTML，避免 XSS。
  */
 
+import { useState } from "react";
 import { Link, useLocation } from "react-router";
+import { ArrowRight } from "lucide-react";
 import { toPath } from "../../app/routing";
 import { MarkdownContent } from "./MarkdownContent";
+import { useChatSend } from "./ChatSendContext";
 
 export type InlineUiSegment =
   | { kind: "text"; text: string }
@@ -87,6 +90,7 @@ export function InlineUiContent({ content }: { content: string }) {
 
 function InlineUiComponent({ comp, props }: { comp: string; props: Record<string, unknown> }) {
   if (comp === "file-link") return <FileLinkInline props={props} />;
+  if (comp === "follow-ups") return <FollowUpsInline props={props} />;
   return (
     <code className="inline-ui-unknown" title={`unknown ui component: ${comp}`}>
       [unknown ui: {comp}]
@@ -122,4 +126,49 @@ function FileLinkInline({ props }: { props: Record<string, unknown> }) {
 function extractSessionFromPath(pathname: string): string | null {
   const m = /^\/flows\/([^/?#]+)/.exec(pathname);
   return m ? decodeURIComponent(m[1]!) : null;
+}
+
+/**
+ * follow-ups 组件：Agent 在消息末尾给出几个建议追问 / 选项，用户点击直接发送。
+ *
+ * 协议：`[[ui{"comp":"follow-ups","options":["选项A","选项B","选项C"]}ui]]`
+ * - `options`：string 数组，每条不超过 100 字（前端不强校验，UI 自然换行 + ellipsis）
+ * - 渲染为竖排按钮，点击后通过 ChatSendContext 调 onSend(text) 把该 option 当作 user 输入派出
+ * - 不在 ChatPanel 之内（比如纯 markdown 预览）→ 退化为不可点击
+ */
+function FollowUpsInline({ props }: { props: Record<string, unknown> }) {
+  const onSend = useChatSend();
+  const [busy, setBusy] = useState(false);
+  const optionsRaw = props.options;
+  if (!Array.isArray(optionsRaw)) return null;
+  const options = optionsRaw.filter((o): o is string => typeof o === "string" && o.trim().length > 0);
+  if (options.length === 0) return null;
+
+  const click = async (text: string) => {
+    if (!onSend || busy) return;
+    setBusy(true);
+    try {
+      await onSend(text);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="inline-ui-follow-ups" role="group" aria-label="suggested replies">
+      {options.map((opt, i) => (
+        <button
+          key={i}
+          type="button"
+          className="inline-ui-follow-up-btn"
+          onClick={() => void click(opt)}
+          disabled={!onSend || busy}
+          title={opt}
+        >
+          <span className="inline-ui-follow-up-text">{opt}</span>
+          <ArrowRight size={12} className="inline-ui-follow-up-arrow" aria-hidden />
+        </button>
+      ))}
+    </div>
+  );
 }

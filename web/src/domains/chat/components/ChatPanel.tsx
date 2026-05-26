@@ -2,6 +2,7 @@ import type { ThreadContext } from "..";
 import { useDisplayName } from "../../objects";
 import { ChatComposer } from "./ChatComposer";
 import { ThreadTimeline } from "./ThreadTimeline";
+import { ChatSendProvider } from "../../../shared/ui/ChatSendContext";
 
 export function ChatPanel({
   sessionId,
@@ -24,24 +25,26 @@ export function ChatPanel({
   showComposer?: boolean;
 }) {
   const { displayName: peerDisplayName } = useDisplayName(objectId);
-  return (<>
-    <div className="right-body chat-body gap-2">
-      {sessionId && objectId ? (
-        <>
-          <div className="chat-timeline panel">
-            <ThreadTimeline thread={thread} />
-          </div>
-          {showComposer && (
-            <div className="chat-composer-shell">
-              <ChatComposer onSend={onSend} paused={paused} pauseBusy={pauseBusy} onTogglePause={onTogglePause} peerObjectId={objectId} peerDisplayName={peerDisplayName} />
+  return (
+    <ChatSendProvider onSend={onSend}>
+      <div className="right-body chat-body gap-2">
+        {sessionId && objectId ? (
+          <>
+            <div className="chat-timeline panel">
+              <ThreadTimeline thread={thread} />
             </div>
-          )}
-        </>
-      ) : (
-        <div className="chat-timeline panel">
-          <div className="empty">Select or create a session to chat.</div>
-        </div>
-      )}
-    </div>
-  </>);
+            {showComposer && (
+              <div className="chat-composer-shell">
+                <ChatComposer onSend={onSend} paused={paused} pauseBusy={pauseBusy} onTogglePause={onTogglePause} peerObjectId={objectId} peerDisplayName={peerDisplayName} />
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="chat-timeline panel">
+            <div className="empty">Select or create a session to chat.</div>
+          </div>
+        )}
+      </div>
+    </ChatSendProvider>
+  );
 }

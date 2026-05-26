@@ -524,6 +524,15 @@ a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color
 .inline-ui-file-link::before { content: "📄 "; opacity: .6; }
 .inline-ui-unknown { color: #9a463b; background: rgba(255, 240, 235, .8); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
 
+/* Inline UI: follow-ups 选项按钮（Agent 主动给 user 的追问选项） */
+.inline-ui-follow-ups { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.inline-ui-follow-up-btn { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; background: rgba(252, 252, 250, .8); border: 1px solid var(--border); border-radius: 8px; color: var(--foreground); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; transition: background .12s ease, border-color .12s ease, box-shadow .12s ease; }
+.inline-ui-follow-up-btn:hover:not(:disabled) { background: rgba(232, 240, 254, .65); border-color: rgba(70, 96, 220, .35); box-shadow: 0 1px 2px rgba(70, 96, 220, .08); }
+.inline-ui-follow-up-btn:disabled { opacity: .55; cursor: not-allowed; }
+.inline-ui-follow-up-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inline-ui-follow-up-arrow { flex: 0 0 auto; color: var(--muted-foreground); }
+.inline-ui-follow-up-btn:hover:not(:disabled) .inline-ui-follow-up-arrow { color: #2f49c8; }
+
 /* Tool followUps：open 卡内嵌的 refine/submit/close 紧凑 step 行（chat 优化 2026-05-21）。 */
 .tui-tool-followups { list-style: none; padding: 6px 0 0; margin: 6px 0 0; border-top: 1px dashed rgba(0,0,0,.06); display: flex; flex-direction: column; gap: 3px; }
 .tui-tool-followup { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 5px; font-size: 11px; }

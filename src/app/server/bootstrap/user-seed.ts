@@ -53,12 +53,26 @@ export const USER_README_MD = `# user
 | comp | 必选参数 | 可选参数 | 行为 |
 |---|---|---|---|
 | \`file-link\` | \`path\` | \`label\` | 渲染一个可点击的链接，点击会在主视图打开该文件（路径相对 world root） |
+| \`follow-ups\` | \`options\` | — | 在消息末尾渲染一组**建议追问按钮**，竖排卡片样式；用户点击任一按钮即把该文本作为下一轮 user 输入直接发送给本 thread 的对端。\`options\` 是 string 数组，每条建议一句完整的话，长度建议 ≤ 80 字。仅当对端 thread（user 这条 chat）是 user 自己 own 或被 user 派生时才有用——其它场景下按钮不渲染。 |
 
 ### 示例
 
 \`\`\`
 分析完了，结论写在 [[ui{"comp":"file-link","path":"flows/main/agent_of_x/threads/root/findings.md","label":"findings.md"}ui]] 里，你看一下。
 \`\`\`
+
+\`\`\`
+完成。还需要我做什么？
+
+[[ui{"comp":"follow-ups","options":["把这个改动应用到 handler.go","继续生成 TCC 配置示例","帮我整理 PR 描述"]}ui]]
+\`\`\`
+
+### 何时使用 follow-ups
+
+- 任务完成 / 阶段总结后，列出 2–4 条**用户大概率会接着问**的下一步动作
+- 选项要写成完整的、可独立发送的句子（点击直接发出去），不要写成"是 / 否"或"选项 A / 选项 B"这种依赖上下文才能解读的标签
+- 不必每条消息都加；信息查询类 / 已确定下一步时省略
+- 一般放在消息末尾。中部嵌入也合法，但视觉上会打断阅读流
 
 ### 失败回退
 
