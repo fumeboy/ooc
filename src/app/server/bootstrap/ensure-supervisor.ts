@@ -7,7 +7,8 @@
  *
  * 也是体验官 R5 #32 caveat 的彻底解：recovery-check 之前假设 supervisor 存在
  * 但空 world 没有，导致 [recovery-needed] PR-Issue 创建抛错被静默吞、broken
- * 列表丢失。supervisor 升格为 bootstrap invariant 后：
+ * 列表丢失。supervisor 升格为 bootstrap invariant 后（PR-Issue 是 stone-versioning
+ * 决议链路用的，不是已移除的 issue 看板）：
  *
  * 1. 第一启动自动建 supervisor stone（self.md / readme.md / 5 篇 seed knowledge）
  * 2. 后续启动 idempotent skip（stone 已存在则跳过）

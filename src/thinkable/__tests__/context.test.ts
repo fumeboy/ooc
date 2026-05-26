@@ -100,16 +100,27 @@ describe("buildContext (ContextWindow model)", () => {
       id: "t_parent",
       creatorThreadId: "t_root",
     });
-    thread.plan = "先处理 inbox";
+    // 2026-05-26: thread.plan 字段已废弃；用 plan_window 验证 plan 已渲染。
+    const planId = `${thread.id}_plan`;
+    thread.contextWindows.push({
+      id: planId,
+      type: "plan",
+      title: "Plan",
+      status: "active",
+      createdAt: 0,
+      description: "先处理 inbox",
+      steps: [],
+    });
     const messages = await buildContext(thread);
     expect(messages).toHaveLength(1);
     const xml = messages[0]!.content;
     expect(xml).toContain("<context>");
     expect(xml).toContain('<thread id="t_parent" status="running">');
     expect(xml).toContain("<creator_thread_id>t_root</creator_thread_id>");
-    expect(xml).toContain("<plan>先处理 inbox</plan>");
+    expect(xml).toContain("<description>先处理 inbox</description>");
     expect(xml).toContain("<context_windows>");
     expect(xml).toContain('type="do"');
+    expect(xml).toContain('type="plan"');
     expect(xml).toContain("<is_creator_window>true</is_creator_window>");
   });
 

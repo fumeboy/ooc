@@ -88,7 +88,7 @@ export type RuntimePermissionDecider = (
 ) => RuntimePermissionDecision | Promise<RuntimePermissionDecision>;
 
 /**
- * 状态翻转通知：事件源（talk/do/issue/end）写完对端 thread.inbox 后调一次,
+ * 状态翻转通知：事件源（talk/do/end）写完对端 thread.inbox 后调一次,
  * 告诉 runtime "这个 thread 现在该被调度了"。runtime 把它转成 jobManager.enqueue。
  *
  * 根因 #5（worker 事件驱动改造，2026-05-24）：

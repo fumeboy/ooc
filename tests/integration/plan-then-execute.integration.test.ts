@@ -34,7 +34,9 @@ describe.skipIf(!hasLlmEnv)("integration: plan-then-execute", () => {
     await runScheduler(root, llm(), { maxTicks: 14 });
 
     expect(root.status).toBe("done");
-    expect(root.plan?.length ?? 0).toBeGreaterThan(0);
+    // 2026-05-26: plan 升格为 plan_window
+    const planWindow = root.contextWindows.find((w) => w.type === "plan");
+    expect(planWindow?.type).toBe("plan");
     expect(countFormExecutions(root)).toBeGreaterThanOrEqual(1);
   }, 180_000);
 });

@@ -27,13 +27,18 @@ describe("command execution side effects", () => {
     }
   });
 
-  it("plan should write thread.plan", async () => {
+  it("plan should create a root plan_window in contextWindows", async () => {
     const thread = makeThread({ id: "thread-plan" });
+    // 2026-05-26: plan 升格为 plan_window；不再写 thread.plan 字段
     await execRootCommand("plan", {
       thread,
       args: { plan: "完成 thinkloop 真实测试\n\n先打通 tool call 与 command execute" },
     });
-    expect(thread.plan).toContain("完成 thinkloop 真实测试");
+    const planWindow = thread.contextWindows.find((w) => w.type === "plan");
+    expect(planWindow?.type).toBe("plan");
+    expect(planWindow && planWindow.type === "plan" && planWindow.description).toContain(
+      "完成 thinkloop 真实测试",
+    );
   });
 
   it("todo should produce a todo_window in contextWindows", async () => {

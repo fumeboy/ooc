@@ -250,7 +250,8 @@ export async function renderContextXml(input: {
   const threadChildren: XmlNode[] = [];
   appendNode(threadChildren, optionalElement("creator_thread_id", threadForRender.creatorThreadId));
   appendNode(threadChildren, optionalElement("parent_thread_id", threadForRender.parentThreadId));
-  appendNode(threadChildren, optionalElement("plan", threadForRender.plan));
+  // thread.plan 字段已废弃 (2026-05-26, patches.thread_plan_deprecated)；
+  // 行动计划现以 first-class plan_window 形式渲染在 <context_windows> 子树中。
 
   const contextWindowsNode = await renderContextWindowsNode(threadForRender);
   if (contextWindowsNode) {

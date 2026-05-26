@@ -63,7 +63,12 @@ describe("executable tools (ContextWindow model)", () => {
     });
     const forms = thread.contextWindows.filter((w) => w.type === "command_exec");
     expect(forms).toHaveLength(0);
-    expect(thread.plan).toBe("先 reshape，再迁移测试");
+    // 2026-05-26: plan 升格为 plan_window；不再写 thread.plan 字段
+    const planWindow = thread.contextWindows.find((w) => w.type === "plan");
+    expect(planWindow?.type).toBe("plan");
+    expect(planWindow && planWindow.type === "plan" && planWindow.description).toBe(
+      "先 reshape，再迁移测试",
+    );
   });
 
   it("CommandExecWindow.refine 累积 args 并刷新 commandPaths（do 加 wait 触发 do.wait path）", async () => {

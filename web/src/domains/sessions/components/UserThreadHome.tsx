@@ -1,38 +1,36 @@
 /**
  * UserThreadHome —— user 的 root thread 主视图（user.root）。
  *
- * 2026-05-26 双栏重构 + 简化 header（参照 Thread Context 页面风格）：
+ * 2026-05-26 Round 7 A3 重构（移除 issue 看板）：
  *
  *   +-----------+--------------------------------------+
  *   | ── Chats+ |                                      |
  *   |  · sup    |   <SelectionDetail>                  |
  *   |  · alice  |     - chat: ChatPanel（peer thread   |
  *   | --------- |              polling 独立轨）         |
- *   | ── Issues+|     - issue: IssueDetailView        |
- *   |  ● #3 …   |                  (hideBackLink)      |
- *   |  ○ #2 …   |                                      |
+ *   |           |     - 空: empty state + 引导文案     |
  *   +-----------+--------------------------------------+
  *
- * 左栏 Chats / Issues 合并在同一个 panel 容器内，上下 50/50 分；中间细分隔线，
- * 不再两块独立卡片。顶部 "User session" header 与 Advanced view 按钮已移除——
- * 顶部 breadcrumb-bar 已经显示 sessionId / running / user · root，重复无意义。
+ * 选择 single-column 左栏 + 右栏详情。原远端双栏（Chats + Issues）的 IssueListSection /
+ * NewIssueModal / IssueDetailView 选中路径已随 issue 看板移除一并删除。
  *
- * 选中状态写进 URL `?selected=chat:<wid>` 或 `?selected=issue:<id>`，刷新保留。
+ * 空态保留 H-3（Round 5 体验官报告）"Seed first conversation via welcome" 跳转按钮：
+ * - 当 session 中没有任何 talk_window 时显式提供一个跳到 /welcome?session=<sid> 的入口，
+ *   让 welcome 表单预填该 sessionId 继续 seed。
+ * - 远端 commit 7c7ae4d2 重构双栏时把它丢了，本轮顺便加回来。
+ *
+ * 选中状态写进 URL `?selected=chat:<wid>`，刷新保留。
  *
  * 数据来源：
  * - thread.contextWindows 中所有 type=talk window → 左栏 chat list
- * - useIssues(sessionId) → 左栏 issue list
  * - 选中 chat 时：usePollingThread(sessionId, peer.target, peer.targetThreadId)
  *   独立 4s 轮询 peer thread；右栏 ChatPanel 渲染 timeline + composer
  */
 import { useState } from "react";
-import { useNavigate } from "react-router";
-import { Plus, MessageSquare, CircleDot } from "lucide-react";
+import { Link, useNavigate } from "react-router";
+import { ArrowRight, Plus, MessageSquare } from "lucide-react";
 import type { ThreadContext, ContextWindow } from "../../chat";
 import { useDisplayName } from "../../objects";
-import { useIssues, createIssue } from "../../issues";
-import { IssueDetailView } from "../../issues/components/IssueDetailView";
-import { timeAgo } from "../../issues/components/IssueDetailView";
 import { ChatPanel } from "../../chat/components/ChatPanel";
 import { continueThread, usePollingThread } from "../../chat";
 import { addUserTalkWindow } from "../query";
@@ -50,7 +48,6 @@ type TalkWindow = Extract<ContextWindow, { type: "talk" }>;
 
 export function UserThreadHome({ sessionId, thread }: UserThreadHomeProps) {
   const [newChatModalOpen, setNewChatModalOpen] = useState(false);
-  const [newIssueModalOpen, setNewIssueModalOpen] = useState(false);
   const route = useRouteState();
   const selected = route.kind === "session" ? route.selected : undefined;
 
@@ -68,12 +65,6 @@ export function UserThreadHome({ sessionId, thread }: UserThreadHomeProps) {
             selectedWindowId={selected?.kind === "chat" ? selected.windowId : undefined}
             onAdd={() => setNewChatModalOpen(true)}
           />
-          <div className="user-home-divider" aria-hidden />
-          <IssueListSection
-            sessionId={sessionId}
-            selectedIssueId={selected?.kind === "issue" ? selected.issueId : undefined}
-            onAdd={() => setNewIssueModalOpen(true)}
-          />
         </aside>
         <section className="user-home-right">
           <SelectionDetail
@@ -88,12 +79,6 @@ export function UserThreadHome({ sessionId, thread }: UserThreadHomeProps) {
         <NewChatModal
           sessionId={sessionId}
           onClose={() => setNewChatModalOpen(false)}
-        />
-      )}
-      {newIssueModalOpen && (
-        <NewIssueModal
-          sessionId={sessionId}
-          onClose={() => setNewIssueModalOpen(false)}
         />
       )}
     </div>
@@ -129,7 +114,7 @@ function ChatListSection({
         </button>
       </div>
       {talkWindows.length === 0 ? (
-        <div className="user-home-empty">No conversations yet.</div>
+        <EmptyChatList sessionId={sessionId} />
       ) : (
         <ul className="user-home-list">
           {talkWindows.map((w) => (
@@ -152,6 +137,32 @@ function ChatListSection({
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * H-3 (Round 5 体验报告) 恢复版：当 session 里完全没有 talk_window 时，
+ * 显式渲染一个"去 welcome 补 seed"跳转按钮，不只留一行干瘪的文案。
+ *
+ * 跳到 /welcome?session=<sid>，Welcome 读 ?session= query 后让 SessionCreator 预填 sessionId。
+ */
+function EmptyChatList({ sessionId }: { sessionId: string }) {
+  return (
+    <div className="user-home-empty user-home-empty-chats">
+      <div style={{ marginBottom: 8 }}>
+        No conversations yet. This session was created without a first message — seed one via
+        welcome to start talking.
+      </div>
+      <Link
+        to={`/welcome?session=${encodeURIComponent(sessionId)}`}
+        className="btn small"
+        data-testid="seed-via-welcome"
+      >
+        <MessageSquare size={11} style={{ marginRight: 4 }} />
+        Seed first conversation via welcome
+        <ArrowRight size={11} style={{ marginLeft: 4 }} />
+      </Link>
+    </div>
   );
 }
 
@@ -185,112 +196,34 @@ function ChatListItem({
   );
 }
 
-function IssueListSection({
-  sessionId,
-  selectedIssueId,
-  onAdd,
-}: {
-  sessionId: string;
-  selectedIssueId?: number;
-  onAdd: () => void;
-}) {
-  const navigate = useNavigate();
-  const { issues, loading } = useIssues(sessionId);
-  const sorted = [...issues].sort((a, b) => b.lastUpdatedAt - a.lastUpdatedAt);
-  const top = sorted.slice(0, 12);
-  return (
-    <section className="user-home-group">
-      <div className="user-home-group-head">
-        <CircleDot size={12} />
-        <span>Issues</span>
-        <span className="muted small group-count">
-          {loading && issues.length === 0 ? "…" : `${issues.length}`}
-        </span>
-        <button
-          type="button"
-          className="btn icon-btn"
-          onClick={onAdd}
-          title="Open a new issue"
-          aria-label="New issue"
-        >
-          <Plus size={12} />
-        </button>
-      </div>
-      {top.length === 0 ? (
-        <div className="user-home-empty">{loading ? "Loading…" : "No issues yet."}</div>
-      ) : (
-        <ul className="user-home-list">
-          {top.map((iss) => (
-            <li key={iss.id}>
-              <button
-                type="button"
-                className={`user-home-list-row ${iss.id === selectedIssueId ? "is-active" : ""}`}
-                onClick={() =>
-                  navigate(
-                    toPath({
-                      kind: "session",
-                      sessionId,
-                      selected: { kind: "issue", issueId: iss.id },
-                    }),
-                  )
-                }
-                title={iss.title}
-              >
-                <span
-                  className={`user-home-list-row-dot user-home-list-row-issue-${iss.status}`}
-                  aria-label={iss.status}
-                  aria-hidden
-                >
-                  ●
-                </span>
-                <span className="user-home-list-row-id">#{iss.id}</span>
-                <span className="user-home-list-row-label">{iss.title}</span>
-                <span className="user-home-list-row-meta">{timeAgo(iss.lastUpdatedAt)}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
 function SelectionDetail({
   sessionId,
   selected,
   talkWindows,
 }: {
   sessionId: string;
-  selected:
-    | { kind: "chat"; windowId: string }
-    | { kind: "issue"; issueId: number }
-    | undefined;
+  selected: { kind: "chat"; windowId: string } | undefined;
   talkWindows: TalkWindow[];
 }) {
   if (!selected) {
     return (
       <div className="user-home-empty-panel">
-        <p>Pick a chat or issue from the left.</p>
-        <p className="muted small">点击 + 号可以开新会话或开 issue。</p>
+        <p>Pick a chat from the left.</p>
+        <p className="muted small">点击 + 号可以与新 object 开聊。</p>
       </div>
     );
   }
-  if (selected.kind === "chat") {
-    const w = talkWindows.find((tw) => tw.id === selected.windowId);
-    if (!w) {
-      return (
-        <div className="user-home-empty-panel">
-          <p className="muted small">
-            Chat <code>{selected.windowId}</code> not found on user.root —— 可能 talk_window 已被关闭。
-          </p>
-        </div>
-      );
-    }
-    return <SelectedChat sessionId={sessionId} window={w} />;
+  const w = talkWindows.find((tw) => tw.id === selected.windowId);
+  if (!w) {
+    return (
+      <div className="user-home-empty-panel">
+        <p className="muted small">
+          Chat <code>{selected.windowId}</code> not found on user.root —— 可能 talk_window 已被关闭。
+        </p>
+      </div>
+    );
   }
-  return (
-    <IssueDetailView sessionId={sessionId} issueId={selected.issueId} hideBackLink />
-  );
+  return <SelectedChat sessionId={sessionId} window={w} />;
 }
 
 function SelectedChat({ sessionId, window: w }: { sessionId: string; window: TalkWindow }) {
@@ -404,94 +337,6 @@ function NewChatModal({
             disabled={busy || !target.trim() || !text.trim()}
           >
             {busy ? "Creating…" : "Start chat"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function NewIssueModal({
-  sessionId,
-  onClose,
-}: {
-  sessionId: string;
-  onClose: () => void;
-}) {
-  const navigate = useNavigate();
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | undefined>();
-
-  async function submit() {
-    const t = title.trim();
-    if (!t || busy) return;
-    setBusy(true);
-    setErr(undefined);
-    try {
-      const res = await createIssue(sessionId, {
-        title: t,
-        description: body.trim() || undefined,
-      });
-      onClose();
-      navigate(
-        toPath({
-          kind: "session",
-          sessionId,
-          selected: { kind: "issue", issueId: res.issue.id },
-        }),
-      );
-    } catch (e) {
-      setErr(messageFromError(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card compact-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="row space-between">
-          <strong>New issue</strong>
-          <button type="button" className="btn" onClick={onClose}>
-            Close
-          </button>
-        </div>
-        <label className="field-label">
-          Title
-          <input
-            className="input"
-            placeholder="Short title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            maxLength={200}
-            disabled={busy}
-            autoFocus
-          />
-        </label>
-        <label className="field-label">
-          Description (markdown, optional)
-          <textarea
-            className="textarea"
-            rows={6}
-            placeholder="Describe the issue…"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            maxLength={8192}
-            disabled={busy}
-          />
-        </label>
-        {err && <div className="modal-error">{err}</div>}
-        <div className="row space-between modal-actions">
-          <span className="muted small">created by supervisor</span>
-          <button
-            type="button"
-            className="btn primary"
-            onClick={() => void submit()}
-            disabled={busy || !title.trim()}
-          >
-            {busy ? "Creating…" : "Create issue"}
           </button>
         </div>
       </div>

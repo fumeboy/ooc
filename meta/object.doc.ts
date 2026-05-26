@@ -231,7 +231,6 @@ export const root: DocTreeNode = {
 
                     Context 的主要组成（参见 src/thinkable/context/index.ts ThreadContext）:
                     - status: 调度状态（running / waiting / done / failed / paused）。
-                    - plan: 当前 thread 显式记录的计划，由 plan command 覆盖式更新。
                     - inbox / outbox: 当前 thread 的协作消息。
                     - contextWindows: 当前打开的信息窗口与行动窗口（统一抽象）。
                     - events: 当前 thread 的历史 ProcessEvent 流（字段名为 events，类型为 ProcessEvent[]）。
@@ -268,7 +267,6 @@ export const root: DocTreeNode = {
                             - do_window 展示子线程任务。
                             - program_window 展示程序执行过程。
                             - search_window 展示一次 glob / grep 的命中。
-                            - issue_window 订阅 session 级 Issue 看板。
                             - command_exec window 展示一次 command 调用的表单状态。
 
                             因此 Context 不是一段字符串，而是一组可被打开、关闭、更新、执行 command 的窗口对象。
@@ -366,6 +364,28 @@ export const root: DocTreeNode = {
 
                             跨线程影响必须显式经过 inbox / outbox、do_window transcript 或 talk_window transcript。
                             这样所有协作痕迹都能被观察、回放和 debug。
+                            `,
+                        },
+                        "thread_plan_deprecated": {
+                            title: "thread.plan 字段废弃 (2026-05-26, P2)",
+                            content: `
+                            **2026-05-26 起 ThreadContext.plan: string 字段被废弃**。
+
+                            原因: 一个字符串 plan 不足以表达 sub plan 嵌套、跨 thread share、进度回流等更结构化的协作需求。
+                            升级路径: plan 升格为 first-class plan_window (详见 executable.children.context_window.children.plan_window)。
+
+                            迁移规则:
+                            - 新代码: **绝不**读写 thread.plan; 完全走 root.plan command 创建 plan_window
+                            - 旧代码 (如有): 在 B2 实施时一并扫除; ThreadContext type 中 plan 字段移除
+                            - thread.json 历史数据: 历史 plan 字符串数据丢弃 (无迁移; OOC 当前不承诺历史 thread 兼容)
+
+                            访问 plan 内容的新姿势:
+                            - LLM: 看 contextWindows 中 type==="plan" 的 PlanWindow
+                            - UI: ContextSnapshotViewer 渲染 PlanWindow tree
+                            - server method: 走标准 ContextWindow 查询（如 \`self.findWindowsByType("plan")\`）
+
+                            这是 P2 决策（user 拍板, 完全废弃 thread.plan 而非保留为 fallback summary）;
+                            原因: 维护两条 plan 数据源会产生不一致风险。
                             `,
                         },
                     },
@@ -507,8 +527,8 @@ export const root: DocTreeNode = {
 
             Executable 的核心分层:
             1. Tool 原语层: exec / close / wait，是 LLM 直接看见的稳定接口（compress 仍是规划项）。
-            2. Command 层: do / talk / program / plan / todo / end / open_file / open_knowledge / write_file / glob / grep / create_issue / open_issue 等具体行动；form 自身的 refine / submit 也是 command_exec window 上的命令。
-            3. ContextWindow 层: 行动产生或操作的上下文对象，比如 file_window、talk_window、program_window、do_window、issue_window、custom window。
+            2. Command 层: do / talk / program / plan / todo / end / open_file / open_knowledge / write_file / glob / grep 等具体行动；form 自身的 refine / submit 也是 command_exec window 上的命令。
+            3. ContextWindow 层: 行动产生或操作的上下文对象，比如 file_window、talk_window、program_window、do_window、plan_window、custom window。
             4. Registry / Manager 层: 注册不同 window type 的 command、render、close hook、basicKnowledge。
             5. Knowledge Activation 层: 根据 command path 自动激活执行所需知识。
 
@@ -522,7 +542,7 @@ export const root: DocTreeNode = {
                 "Tool": "LLM 直接可调用的稳定原语：exec / close / wait",
                 "Command": "具体行动单元，挂在某 window 上注册；如 do/talk/program 在 root 上、refine/submit 在 command_exec 上",
                 "ContextWindow": "可展示、可操作、可挂载 command 的上下文窗口对象",
-                "WindowType": "ContextWindow 的类型分支，如 root/file/program/talk/do/knowledge/search/issue/custom",
+                "WindowType": "ContextWindow 的类型分支，如 root/file/program/talk/do/knowledge/search/plan/custom",
                 "CommandExec": "一次 command 调用过程对应的临时窗口；自身注册 refine/submit 命令",
                 "WindowRegistry": "注册各类 window type 行为的机制",
                 "WindowManager": "管理 thread.contextWindows 增删改查和生命周期的机制",
@@ -540,7 +560,7 @@ export const root: DocTreeNode = {
                     - exec: 在某 window 上调用一条 command。args 齐全 + 不引入新 path/knowledge 时立即执行；
                       否则创建 command_exec form 让 LLM 后续推进。
                     - close: 关闭一个 ContextWindow（form / do_window / todo_window 等）。
-                    - wait: 声明当前 thread 等待某个 talk_window / do_window / issue_window 的未来 IO。
+                    - wait: 声明当前 thread 等待某个 talk_window / do_window 的未来 IO。
 
                     Tool 层的设计目标是让 LLM 学会少量稳定动作:
                     - 需要执行命令时 exec。args 不全 → 系统给你 form，再继续 exec(form_id, "refine"/"submit")。
@@ -621,7 +641,7 @@ export const root: DocTreeNode = {
                     LLM 通常不是直接 "调用 program 函数"，而是:
                     1. exec(command="program", args={ language: "shell", code: "..." }) → args 齐全立即执行
                     2. 或 exec(command="program") → 系统创建 form，后续 exec(form_id, "refine", args={...}) + exec(form_id, "submit")
-                    3. command 产生副作用，比如创建 program_window 或写入 thread.plan。
+                    3. command 产生副作用，比如创建 program_window 或派生 plan_window。
 
                     root window 注册一组顶层 command（与 src/executable/windows/root/index.ts ROOT_COMMANDS 一致）:
                     - do: 派生子 thread，创建 do_window。
@@ -640,8 +660,6 @@ export const root: DocTreeNode = {
                     - write_file: 创建或覆盖文件，并通常打开对应 file_window。
                     - glob: 按文件名模式搜索，创建 search_window。
                     - grep: 按文件内容正则搜索，创建 search_window。
-                    - create_issue: 在 session 内创建 Issue 看板议题，创建 issue_window 并自动订阅。
-                    - open_issue: 把已有 Issue 拉进本 thread 作为订阅 window（dedup，不重复挂）。
 
                     其它 window 上也注册命令（do_window: continue/wait/close；talk_window: say/wait/close；
                     file_window: edit/reload/set_range/close；command_exec: refine/submit；custom: Object 自定义 ...）。
@@ -656,7 +674,7 @@ export const root: DocTreeNode = {
                         "do": "派生子 thread 的 command",
                         "talk": "开启或继续对话的 command",
                         "program": "执行程序的 command",
-                        "plan": "更新 thread.plan 的 command",
+                        "plan": "创建 / 更新 plan_window 的 command（root.plan）",
                         "todo": "创建待办窗口的 command",
                         "end": "结束当前 thread 的 command",
                         "open_file": "把文件载入 Context 的 command",
@@ -664,8 +682,6 @@ export const root: DocTreeNode = {
                         "write_file": "写入文件的 command",
                         "glob": "按路径模式查找文件的 command",
                         "grep": "按内容正则查找文件的 command",
-                        "create_issue": "在 session 内创建 Issue 看板议题的 command",
-                        "open_issue": "把已存在 Issue 订阅为 issue_window 的 command",
                         "refine / submit": "command_exec window 上注册的两条命令；用 exec(form_id, ...) 触发",
                         "do_window.move": "do_window 上注册的命令；通过本 do_window 把 ContextWindow 以 ref / move 模式分享给对端 thread；归还路径按 id 自动识别 lent_out ↔ owner 配对",
                     },
@@ -794,7 +810,6 @@ export const root: DocTreeNode = {
                             - plan / todo.*
                             - do (fork 子线程; 子线程的 root command 各自 gate)
                             - talk / talk_window.say (协作主线; 内部副作用 command 自有 gate)
-                            - create_issue / open_issue
 
                             ask (写副作用):
                             - write_file
@@ -971,6 +986,69 @@ export const root: DocTreeNode = {
                             },
                             sources: [["src/persistable/stone-skills.ts", "skills 目录扫描器与 10s 缓存；listBranchSkills / listObjectSkills；clearStoneSkillsCache 测试钩子。SkillIndexWindow 派生在 src/thinkable/knowledge/synthesizer.ts:collectExecutableKnowledgeEntries §1.6"]],
                         },
+                        "plan_window": {
+                            title: "plan_window - 行动计划窗口（支持 sub plan + share to sub thread）",
+                            content: `
+                            plan_window 是 thread 的行动计划窗口，由 root.plan command 创建。
+                            2026-05-26 起 plan 升格为 first-class ContextWindow（不再是 thread.plan 字符串字段；详见 patches.thread_plan_deprecated）。
+
+                            **数据形态**（src/executable/windows/plan/types.ts）:
+                            \`\`\`
+                            type PlanWindowStep = {
+                              id: string;                  // plan 树内唯一稳定 id
+                              text: string;                // 步骤描述
+                              status: "pending" | "in-progress" | "done" | "blocked";
+                              subPlanWindowId?: string;    // 若该 step 展开为 sub plan，指向 child plan_window.id
+                            }
+                            type PlanWindow = BaseContextWindow & {
+                              type: "plan";
+                              title: string;
+                              description?: string;
+                              steps: PlanWindowStep[];
+                              parentPlanWindowId?: string; // 父 plan_window.id（root plan 无此字段）
+                              parentStepId?: string;       // 父 plan 中哪个 step 把当前 plan 作为 sub
+                              status: "active" | "done" | "archived";
+                            }
+                            \`\`\`
+
+                            **commands**（注册到 plan_window）:
+                            - update_plan: 更新 title / description
+                            - add_step: 在 steps 末尾追加一个 step
+                            - update_step: 修改某 step 的 text / status
+                            - expand_step: 把某 step 展开为 sub plan_window（创建 child plan_window + 写回 subPlanWindowId）
+                            - collapse_subplan: 反向; archive sub plan_window + 清 subPlanWindowId
+                            - mark_done: plan_window status → "done"
+                            - close: 关闭 plan_window（cascade close 所有 sub plan）
+
+                            **sub plan 嵌套**:
+                            - sub plan_window 由 expand_step 自动创建，挂在父 plan 的某 step 上
+                            - 父子链由 parentPlanWindowId + parentStepId 维护（单向引用）
+                            - 嵌套深度无硬限制，但 renderXml 默认不内联渲染 sub plan（避免无限嵌套），LLM 通过 subPlanWindowId 单独 open
+
+                            **跨 thread sharing**（与 do_window.move 同协议）:
+                            - 父 thread 通过 \`exec(command="do", args={ task, share_windows: ["plan-window-abc"] })\` 派生子 thread
+                            - 复用现有 sharing kind="ref" / "lent_out"（meta/object.doc.ts:executable.context_window.children.sharing）
+                            - **ref 模式**: 子 thread 只读看父 plan（不能 exec 命令），适合"子看父 plan 但不改"
+                            - **move 模式**: 子拿 owner，父变 lent_out（临时只读）；子可 update_step + expand_step；do_window archive 时自动归还
+                            - **进度回流**: move 模式自动归还时父收到子改动后的最新 plan；ref 模式靠子用 talk 报告再让父自己 update_step
+
+                            **renderXml**（与 file / talk / do 同协议）:
+                            - level 0 (live): <plan_window id status><title/><description/><steps count><step id status sub_plan_window_id?/>...</steps><commands/></plan_window>
+                            - level 1 (folded): title + status + step count + done/total 比例
+                            - level 2 (snapshot): title + status
+
+                            **可被 share**: 是（在 executable.context_window.children.sharing 的可分享 type 列表里）。
+
+                            **持久化**: 走标准 ContextWindow 持久化（thread.json 内）；不单独 plan-file。
+                            完整设计见 docs/2026-05-26-remove-issue-add-subplan-design.md §3。
+                            `,
+                            named: {
+                                "PlanWindowStep": "plan 内单个 step；含 id / text / status / subPlanWindowId?",
+                                "expand_step": "把某 step 展开为 child plan_window 的 command；写回 subPlanWindowId",
+                                "share_to_sub_thread": "通过 do.share_windows 把 plan_window 以 ref/move 模式传给子 thread；归还后父见到进度",
+                            },
+                            sources: [["src/executable/windows/plan/", "plan_window 实现（待 B2 落地）；renderXml / commands / compressView 与 file/talk/do 同协议"]],
+                        },
                     },
                     patches: {
                         "cascade_close": {
@@ -998,7 +1076,7 @@ export const root: DocTreeNode = {
                     - file: 文件内容窗口，支持 range / reload / edit 等操作。
                     - knowledge: 知识文档窗口，承载显式打开或协议合成的 knowledge。
                     - search: glob / grep 搜索结果窗口，支持 open_match。
-                    - issue: session 级 Issue 看板的订阅窗口；close 即取消订阅，Issue 自身 status 由每轮 deriveIssueWindowKnowledge 渲染。
+                    - plan: 行动计划窗口；支持 sub plan 嵌套 + 通过 do.share_windows 共享给子 thread (见 B 段设计)。
 
                     每个 window type 都应该回答四个问题:
                     1. 它在 Context 中如何渲染给 LLM？
@@ -1016,7 +1094,7 @@ export const root: DocTreeNode = {
                         "file_window": "文件内容窗口",
                         "knowledge_window": "知识文档窗口",
                         "search_window": "搜索结果窗口",
-                        "issue_window": "session 级 Issue 看板的订阅窗口",
+                        "plan_window": "行动计划窗口；可嵌套 sub plan; 复用 do_window.move sharing 协议共享给 sub thread",
                         "skill_index_window": "stone skills 索引窗口；每轮由 synthesizer 派生（10s TTL 缓存），列出 stones/<branch>/skills 与 stones/<branch>/objects/<self>/skills 下的所有 SKILL.md；空时不注入；详见 children.skill_index_window",
                     },
                 },
@@ -1074,7 +1152,7 @@ export const root: DocTreeNode = {
                     1. \`root\` — 永远在 union 中。允许 \`activates_on:[root]\` 类 seed knowledge
                        在任意轮激活；这是 base path（**R4 #24 修**）
                     2. **任何 status="open" 的 window 类型** —— 持续 open 的 window 每轮贡献其
-                       \`type\` 作为 implicit path：talk / do / file / search / issue / relation 等
+                       \`type\` 作为 implicit path：talk / do / file / search / plan / relation 等
                        （**R6 #42 修**）。这让 "我在跟人 talk 就该看到 talk 知识" 的直觉成立
                     3. command_exec window 的 commandPaths（form 进行中的细路径）
                     4. program_window 最近一次 exec 推断的路径（program / program.<lang>）
@@ -1109,7 +1187,6 @@ export const root: DocTreeNode = {
             3. talk_window: 跨 object 的持续会话窗口；source="talk"（LLM 发）或 "user"（控制面代用户发）。
             4. talk-delivery: 跨 object 派送的统一入口（解析 callee、必要时创建 callee thread、双写 thread.json）。
             5. creator window: 每个新 thread 启动时的"恒在通道"，指向创建方；不可 close。
-            6. Issue: session 级共享议题；通过 create_issue / open_issue 派生 issue_window，构成跨 thread 的订阅协作。
 
             因此 collaborable 是 thinkable 和 executable 之上的协作语义层:
             thread 用消息说话，用 ContextWindow 持续维护一段对话或一个共享议题。
@@ -1122,7 +1199,6 @@ export const root: DocTreeNode = {
                 "talk_window": "跨 object 持续会话窗口",
                 "talk-delivery": "跨 object 派送消息的统一入口",
                 "creator window": "thread 启动时指向创建方的恒在窗口",
-                "Issue": "session 级共享议题，用于多 object 协作",
             },
             children: {
                 "messages": {
@@ -1270,50 +1346,6 @@ export const root: DocTreeNode = {
                         "子→父 reply 协议": "唯一通道是 creator window 上的 continue/say；end 不是回报通道",
                     },
                 },
-                "issue": {
-                    title: "issue - session 级共享议题",
-                    content: `
-                    Issue 是 session 内多个 flow object 共享的协作议题（参见 src/persistable/issue.ts / issue-service.ts）。
-
-                    与 talk / do 的区别:
-                    - talk / do 是一对一/父子的消息流，归属某条 thread。
-                    - Issue 不归属任何 object，存放在 \`flows/<sessionId>/issues/\` 下（session 级共享）。
-                    - 任何 object 都可订阅同一个 Issue（通过 issue_window），通过 comment + @mention 协作。
-
-                    数据形态:
-                    - Issue: { id, title, description?, status: open|closed, createdByObjectId, comments: Comment[], ... }
-                    - Comment: { id, text, authorObjectId, authorKind: llm|user, mentions: string[], createdAt }
-                    - IssueIndex: { nextId, issues: IssueIndexEntry[] } — 列表渲染用摘要，避免全量加载。
-
-                    访问路径:
-                    - LLM: 通过 root.create_issue / root.open_issue command 创建或订阅；产生 issue_window。
-                    - 控制面 (HTTP): 通过 issue-service 走 enqueueSessionWrite 串行化写入，避免 index.json 被踩坏。
-
-                    issue_window:
-                    - 表示"本 thread 是否订阅该 Issue"；close 即取消订阅（WindowManager.close 默认语义）。
-                    - 不带 status 字段，Issue 自身 status 每轮由 deriveIssueWindowKnowledge 渲染给 LLM。
-                    - 内存字段 lastSeenCommentId / lastNotifiedAt 不持久化（详见 persistable.strip_volatile_for_persist）。
-                    `,
-                    named: {
-                        "Issue": "session 级共享议题；status 为 open / closed",
-                        "Comment": "Issue 内部按 id 单调递增追加的评论；带 @mention",
-                        "issue_window": "本 thread 对某 Issue 的订阅窗口",
-                        "create_issue / open_issue": "root window 上创建或订阅 Issue 的 command",
-                        "@mention": "评论中 @ 某 objectId 触发对应 object 的 worker 唤醒",
-                    },
-                    patches: {
-                        "session_scope": {
-                            title: "Issue 是 session 级而非 object 级",
-                            content: `
-                            Issue 存放在 \`flows/<sessionId>/issues/\` 下，而不是某个 object 的 threads/ 目录里。
-
-                            这一选择让多个 object 自然地共享同一个议题，不需要把 Issue 复制到每个 subscriber 的本地。
-                            订阅关系通过各 thread 自己的 issue_window 表达；取消订阅 = close 自己的 issue_window，
-                            不影响 Issue 本体与其它订阅者。
-                            `,
-                        },
-                    },
-                },
                 "relation_window": {
                     title: "relation_window - peer 关系的专属 window type",
                     content: `
@@ -1430,7 +1462,7 @@ export const root: DocTreeNode = {
 
                     **id 协议**：跨 thread 时 window id 严格保持不变（用于配对识别 lent_out ↔ owner）。
 
-                    **可被 share 的 window 类型**：file / knowledge / search / program / todo / talk / issue / relation / custom；
+                    **可被 share 的 window 类型**：file / knowledge / search / program / todo / talk / plan / relation / custom；
                     do_window 自身、command_exec、root 不可分享（语义不合理）。
 
                     与 inbox/outbox 的关系：消息通道仍是协作的主路径；window 共享只是把"已经组织好的上下文"
@@ -1600,7 +1632,7 @@ export const root: DocTreeNode = {
 
                     所有 catch 块 / 错误返回 必须做以下至少一项：
                     (a) 重新抛（拒绝在此层处理，让 caller 决定）
-                    (b) 写 event（thread.events / Issue / debug 文件 — 让 LLM 看见）
+                    (b) 写 event（thread.events / debug 文件 — 让 LLM 看见）
                     (c) console.warn（启动期 / runtime advisory — 让运维看见）
 
                     禁止：
@@ -1901,10 +1933,10 @@ export const root: DocTreeNode = {
                - \`pools/objects/<objectId>/\`：per-Object 事实（data csv / knowledge / files 三件套）
                - \`pools/repos/<repo-name>/\`：World 级共享的外部 git repo（工作中涉及的所有外部 repo 统一管理）
                pool 不挂 metaprog branch，因为事实是单向积累的（详见 children/pool）。
-            4. flow tree: 运行层（ephemeral）。\`flows/{sessionId}/\` 既有 \`objects/<objectId>/\`
-               （per-Object 在该 session 的工作产物）也有 session 级共享文件（如 \`issues/\`）。
+            4. flow tree: 运行层（ephemeral）。\`flows/{sessionId}/\` 由 \`objects/<objectId>/\`
+               承载 per-Object 在该 session 的工作产物。
             5. ref 抽象: FlowObjectRef / ThreadPersistenceRef / StoneObjectRef / PoolObjectRef。
-            6. 序列化策略: 写盘前剥离 in-process 内存字段（IssueWindow 的游标等），读盘时兜底补 creator window。
+            6. 序列化策略: 写盘前剥离 in-process 内存字段（_decayMeta 等），读盘时兜底补 creator window。
 
             **stone vs pool vs flow 是 World 级别的三分**（不是 Agent 级别的）：
             - stone = 持久 + 版本化（跨 session 永存，过 git review）
@@ -1932,7 +1964,7 @@ export const root: DocTreeNode = {
                 "world_layout": {
                     title: "world_layout - OOC world 目录结构",
                     content: `
-                    完整目录形态（参见 src/persistable/common.ts + flow-object.ts + stone-object.ts + issue.ts + debug-file.ts）:
+                    完整目录形态（参见 src/persistable/common.ts + flow-object.ts + stone-object.ts + debug-file.ts）:
 
                     \`\`\`
                     {baseDir}/
@@ -1968,9 +2000,6 @@ export const root: DocTreeNode = {
                       flows/                         ← 运行层（ephemeral）
                         <sessionId>/
                           .session.json              ← session 元数据（type='flow-session', sessionId, title）
-                          issues/
-                            index.json               ← Issue 索引（nextId + 摘要列表）
-                            issue-{id}.json          ← 单 Issue 完整内容
                           objects/
                             <objectId>/
                               .flow.json             ← flow object 元数据
@@ -1986,7 +2015,7 @@ export const root: DocTreeNode = {
                     **关于 stones/<branch>/objects/ 中间层（2026-05-21 重组）**：
                     flow vs stone 不是 OOC Agent 才有的状态——整个 OOC World 都按
                     "stone（持久 + git）vs pool（持久 + 不 git）vs flow（单次会话）"三分；flows/ 已有 \`<sid>/objects/\`
-                    把"per-Object 在该 session 的工作产物"与"session 级共享文件（如 issues/）"分开，
+                    把"per-Object 在该 session 的工作产物"与"session 级共享文件"分开，
                     stones/ 现在对称地用 \`<branch>/objects/\` 把"per-Object 持久身份"与"world-level 持久资源"分开，
                     pools/ 进一步用 \`objects/\` 把"per-Object 事实数据"与未来可能的"world-level pool 数据"分开。
 
@@ -1999,7 +2028,7 @@ export const root: DocTreeNode = {
                     **关于 pools/ 不挂 branch**: 与 stones/ 的 \`<branch>/\` 中间层不同，pools/ 直接挂 \`objects/\`。
                     事实是单向积累的，不应跟着 metaprog branch 切来切去（详见 pool.no_branch patch）。
 
-                    路径计算函数：objectDir / threadDir / stoneDir / sessionDir / issueFile / issueIndexFile /
+                    路径计算函数：objectDir / threadDir / stoneDir / sessionDir /
                     llmInputFile / llmOutputFile / loopInputFile / loopOutputFile / loopMetaFile / poolDir
                     （poolDir 在 src/persistable/pool-object.ts）。
                     `,
@@ -2548,37 +2577,6 @@ export const root: DocTreeNode = {
                         "**csv schema drift 可观测性**（AgentOfExperience 2026-05-24 反馈）：csv-pool 不校验 row.keys 与 header 一致性（务实选择——appendRow typo 会静默丢字段）。短期为 known-limitation；长期建议给 observable 维度加 'csv health' 诊断（启动期或 reflectable 主动扫一遍 row.keys 与 header 差异，warn 出异常 csv）。",
                     ],
                 },
-                "issue_files": {
-                    title: "issue_files - session 级共享议题文件",
-                    content: `
-                    Issue 文件不在某个 object 下，而在 \`flows/<sessionId>/issues/\` 中（src/persistable/issue.ts）。
-                    这与 collaborable.issue 的"session 级共享"决定相符。
-
-                    文件:
-                    - index.json: { nextId, issues: IssueIndexEntry[] }；列表渲染用摘要，避免每次全量加载 issue-*.json。
-                    - issue-{id}.json: 单 Issue 完整内容（含 comments[]）。
-
-                    路径计算函数: issuesDir / issueFile(baseDir, sessionId, issueId) / issueIndexFile(baseDir, sessionId)。
-
-                    sessionId 严格校验（防 path-traversal）:
-                    - 模式 \`/^[a-zA-Z0-9_-]{1,64}$/\`，不允许 . / \\ .. 等。
-                    - 拼绝对文件路径前一律调用 ensureSessionId，HFS+ percent-encoded 也阻挡。
-
-                    读 API 兜底:
-                    - readIssue 不存在返回 undefined（ENOENT 静默）。
-                    - readIssueIndex 不存在返回空 \`{ nextId: 1, issues: [] }\`，便于首次创建。
-
-                    串行化:
-                    - issue-service.ts 通过 enqueueSessionWrite(sessionId, ...) 串行 createIssue / appendComment / closeIssue，
-                      避免 index.json 被踩坏。
-                    `,
-                    named: {
-                        "issues/index.json": "Issue 索引文件；含 nextId 与摘要列表",
-                        "issues/issue-{id}.json": "单 Issue 完整内容",
-                        "ensureSessionId": "拼路径前的严格校验",
-                        "enqueueSessionWrite": "session 级写串行化队列",
-                    },
-                },
                 "debug_files": {
                     title: "debug_files - 与 observable 协作的落盘",
                     content: `
@@ -2644,15 +2642,13 @@ export const root: DocTreeNode = {
                 "strip_volatile_for_persist": {
                     title: "持久化前剥离 in-process 字段",
                     content: `
-                    stripVolatileForPersist（src/persistable/thread-json.ts:30-41）在 writeThread 前剥离纯内存字段:
-                    - IssueWindow.lastSeenCommentId: worker 内存里维护的"已读评论游标"。
-                    - IssueWindow.lastNotifiedAt: 10s 限频的"上次写 inbox 通知时间"。
+                    stripVolatileForPersist（src/persistable/thread-json.ts）在 writeThread 前剥离纯内存字段:
+                    - BaseContextWindow._decayMeta（P0d 自然衰减计数器，冷启动重算无副作用）
+                    - compressLevel === 0 或 undefined（默认值不持久化）
 
-                    这两个字段不进 thread.json，否则:
-                    - worker 重启后游标可能比 Issue 文件还前进，导致永远收不到新评论通知。
-                    - 或者 Issue 文件回滚后游标错位，造成 hang。
+                    持久化保留的下划线字段（与剥离相反）:
+                    - ProcessEvent._foldedBy（P0f events fold 锚点）必须持久化，否则 reload 后丢失 fold 状态
 
-                    重启后首次 sync 视为"已读全部当前评论"，再增量推进。
                     新增 in-process 字段时在这里扩。
                     `,
                 },
@@ -2726,7 +2722,7 @@ export const root: DocTreeNode = {
                         "metaprog worktree": "Object 元编程的隔离工作树；branch 形态 metaprog/{objectId}/{token}",
                         "self-scope / cross-scope": "路径划界判定结果；前者自治 ff merge，后者必须经 PR-Issue",
                         "PR-Issue": "落在 super session 的 Issue（带 prPayload diff/branch/intent）；Supervisor 评审通道",
-                        "recovery-check": "启动期自检；server/index.ts 加载失败的 Object 自动开 [recovery-needed] Issue",
+                        "recovery-check": "启动期自检；server/index.ts 加载失败的 Object 自动开 [recovery-needed] PR-Issue 给 supervisor",
                         "Bootstrap commit": "首次启动 author=bootstrap 的一次性 squash commit，通过临时 clone scratch 灌入 bare repo 后 push",
                         "legacy-embedded": "已有 world 的非 bare 老式布局（main/.git/ 是目录）；ensureStoneRepo 兼容识别但不强制升级",
                         "git 追踪面 = stone 五件套": "self.md / readme.md / server / client / knowledge（seed）；sediment knowledge / data.json / files 已迁出",
@@ -3317,7 +3313,7 @@ export const root: DocTreeNode = {
                     title: "displayName 派生约定 - UI 表层展示 objectId 时的语义化标题",
                     content: `
                     决策（2026-05-20，Supervisor）：OOC **不引入新的 displayName 字段**到 stone/flow 数据模型；
-                    UI 表层需要展示 \`objectId\` 时（thread selector、breadcrumb、sidebar、chat 头、Issue author chip 等）
+                    UI 表层需要展示 \`objectId\` 时（thread selector、breadcrumb、sidebar、chat 头等）
                     应**从该 Object 自己的 stone self.md 第一行 \`# Title\` 派生 displayName**。
 
                     设计动机:
@@ -3343,7 +3339,7 @@ export const root: DocTreeNode = {
 
                     与其它维度的关系:
                     - persistable.stone.self.md 是数据源（content[0] line）。
-                    - collaborable: Issue.createdByObjectId / message.from 在 UI 层展示时同样适用本约定。
+                    - collaborable: message.from 在 UI 层展示时同样适用本约定。
                     - reflectable: Object 想改自己的 displayName，去改 self.md 即可，是元编程闭环的自然延伸。
                     `,
                     named: {
@@ -3362,5 +3358,8 @@ export const root: DocTreeNode = {
                 "stones/<self>/client/index.tsx 与 flow client/pages/*.tsx 文件被 OOC 写下来，但仓库内没有提供配套的客户端渲染器；纯文档/纯仓库层面无法直接 '看见' UI 效果，必须由外部消费方接入渲染。",
             ],
         },
-    }
+    },
+    warnings: [
+        "【2026-05-26 移除特性】issue 看板（session 级共享议题 + issue_window + create_issue / open_issue / issue.comment / @mention 唤醒 + flows/<sid>/issues/ 文件存储 + issue-service / IssueWindow / deriveIssueWindowKnowledge）整套已从 OOC 中移除。原因：协作语义未想清楚，避免半成品概念污染设计空间。**不要**重新引入该概念到 meta 或代码；如未来需要类似机制，应作为新设计而非历史回滚。**注意区分**：stone-versioning 内部的 'PR-Issue' 是冲突决策的命名（self-scope vs cross-scope merge），与本处移除的 issue 看板**不是同一概念**，PR-Issue 保留。",
+    ],
 };

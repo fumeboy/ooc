@@ -18,11 +18,14 @@ import {
   ArrowRight,
   Bell,
   ChevronRight,
+  Circle,
+  CircleDashed,
   CircleDot,
+  CircleSlash,
+  ClipboardList,
   ExternalLink,
   FileCheck,
   FileText,
-  Hash,
   Inbox,
   Layers,
   ListChecks,
@@ -40,6 +43,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import {
   buildContextTree,
   collectInitialExpandedIds,
@@ -51,7 +55,7 @@ import {
   type ContextWindow,
   type TranscriptEntry,
 } from "../context-snapshot";
-import { subscribeNavigateToWindow } from "../navigation-events";
+import { dispatchNavigateToWindow, subscribeNavigateToWindow } from "../navigation-events";
 import { FileEditDiffView, parseEditArgs } from "./FileEditDiffView";
 import { FileWindowContentView } from "./FileWindowContentView";
 import { MarkdownContent } from "../../../shared/ui/MarkdownContent";
@@ -81,9 +85,9 @@ const WINDOW_TYPE_ICON: Record<ContextWindow["type"], LucideIcon> = {
   relation: Users,
   custom: Puzzle,
   skill_index: Sparkles,
-  issue: Hash,
   feishu_chat: MessageSquare,
   feishu_doc: FileText,
+  plan: ClipboardList,
 };
 
 /** 已有专用渲染分支的 window type 集合；不在集合中的类型由 NodeDetail 末尾的 JSON 兜底渲染。 */
@@ -100,9 +104,9 @@ const HANDLED_WINDOW_TYPES = new Set<string>([
   "relation",
   "custom",
   "skill_index",
-  "issue",
   "feishu_chat",
   "feishu_doc",
+  "plan",
 ]);
 
 /** 把节点状态映射成颜色基调；节点没有 status 时返回 "neutral"。 */
@@ -609,36 +613,6 @@ function SkillIndexWindowDetail({
   );
 }
 
-/** Issue window 详情面板:GitHub issue 风格简洁列出。 */
-function IssueWindowDetail({
-  window,
-}: {
-  window: Extract<ContextWindow, { type: "issue" }>;
-}) {
-  return (
-    <>
-      <div className="llm-input-attrs">
-        <div className="llm-input-attr-row">
-          <span className="llm-input-attr-key">issue id</span>
-          <span className="llm-input-attr-value">#{window.issueId}</span>
-        </div>
-        <div className="llm-input-attr-row">
-          <span className="llm-input-attr-key">window status</span>
-          <span className="llm-input-attr-value">{window.status ?? "open"}</span>
-        </div>
-        <div className="llm-input-attr-row">
-          <span className="llm-input-attr-key">title</span>
-          <span className="llm-input-attr-value">{window.title}</span>
-        </div>
-      </div>
-      <div className="llm-input-empty">
-        Issue 评论/状态来自 <code>flows/&lt;sid&gt;/issues/issue-{window.issueId}.json</code>;
-        每轮 thread render 时由 deriveIssueWindowKnowledge 注入到 LLM context。
-      </div>
-    </>
-  );
-}
-
 /** Feishu chat window 详情面板:行式消息流。 */
 function FeishuChatWindowDetail({
   window,
@@ -802,6 +776,139 @@ function FeishuDocWindowDetail({
   );
 }
 
+/**
+ * Plan window 详情面板（2026-05-26 R7 B5）。
+ *
+ * 最小可工作渲染：
+ * - header: title + description + step 进度 (X/Y done)
+ * - steps: 每条 step 配 status icon（pending ○ / in-progress ◐ / done ✓ / blocked ⊘）+ 文本
+ * - 若 step.subPlanWindowId 存在：渲染可点击链接，点击调 dispatchNavigateToWindow 切换到子 plan
+ * - 若 parentPlanWindowId 存在：底部渲染回父 plan 的链接（含 parentStepId）
+ * - status === "archived" 时整个面板加 muted 类做视觉灰化
+ */
+function PlanWindowDetail({
+  window,
+}: {
+  window: Extract<ContextWindow, { type: "plan" }>;
+}) {
+  const total = window.steps.length;
+  const doneN = window.steps.filter((s) => s.status === "done").length;
+  const isArchived = window.status === "archived";
+
+  const renderStepIcon = (status: "pending" | "in-progress" | "done" | "blocked") => {
+    switch (status) {
+      case "done":
+        return <CheckCircle2 size={13} aria-label="done" className="cw-plan-step-icon cw-plan-step-done" />;
+      case "in-progress":
+        return <CircleDot size={13} aria-label="in-progress" className="cw-plan-step-icon cw-plan-step-inprogress" />;
+      case "blocked":
+        return <CircleSlash size={13} aria-label="blocked" className="cw-plan-step-icon cw-plan-step-blocked" />;
+      case "pending":
+      default:
+        return <Circle size={13} aria-label="pending" className="cw-plan-step-icon cw-plan-step-pending" />;
+    }
+  };
+
+  return (
+    <div
+      className={`llm-input-md-body cw-plan-detail${isArchived ? " muted" : ""}`}
+      style={{ padding: "8px 12px" }}
+      data-testid="plan-window-detail"
+    >
+      <div className="llm-input-attrs" style={{ marginBottom: 8 }}>
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">plan</span>
+          <span className="llm-input-attr-value">{window.title}</span>
+        </div>
+        <div className="llm-input-attr-row">
+          <span className="llm-input-attr-key">progress</span>
+          <span className="llm-input-attr-value">
+            {doneN}/{total} done
+          </span>
+        </div>
+      </div>
+
+      {window.description && (
+        <div className="cw-plan-description" style={{ marginBottom: 12 }}>
+          <MarkdownContent content={window.description} />
+        </div>
+      )}
+
+      <h3 style={{ marginTop: 8 }}>
+        Steps ({doneN}/{total} done)
+      </h3>
+      {total === 0 ? (
+        <div className="llm-input-empty">该 plan 尚未添加 step。</div>
+      ) : (
+        <ul className="cw-plan-step-list" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          {window.steps.map((step) => (
+            <li
+              key={step.id}
+              className={`cw-plan-step cw-plan-step-status-${step.status}`}
+              style={{ display: "flex", flexDirection: "column", gap: 2, padding: "6px 0", borderBottom: "1px solid var(--border, #e5e7eb)" }}
+              data-step-id={step.id}
+              data-step-status={step.status}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {renderStepIcon(step.status)}
+                <span className="cw-plan-step-id muted small">{step.id}</span>
+                <span className="cw-plan-step-status-label muted small">({step.status})</span>
+                <span className="cw-plan-step-text">{step.text}</span>
+              </div>
+              {step.subPlanWindowId && (
+                <div style={{ marginLeft: 22 }}>
+                  <button
+                    type="button"
+                    className="cw-plan-subplan-link"
+                    onClick={() => dispatchNavigateToWindow(step.subPlanWindowId!)}
+                    title="跳转到 sub plan"
+                    style={{
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      color: "var(--link, #2563eb)",
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                      fontSize: "0.85em",
+                    }}
+                  >
+                    [sub plan: {step.subPlanWindowId}]
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {window.parentPlanWindowId && (
+        <div className="cw-plan-parent-link" style={{ marginTop: 12 }}>
+          <span className="muted small">Parent: </span>
+          <button
+            type="button"
+            className="cw-plan-parent-link-btn"
+            onClick={() => dispatchNavigateToWindow(window.parentPlanWindowId!)}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              color: "var(--link, #2563eb)",
+              cursor: "pointer",
+              textDecoration: "underline",
+              fontSize: "0.9em",
+            }}
+          >
+            {window.parentPlanWindowId}
+          </button>
+          {window.parentStepId && (
+            <span className="muted small"> at step {window.parentStepId}</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Window 详情：按 type narrow 渲染特定字段；通用字段（id/title/status）始终渲染。 */
 function WindowDetail({
   window,
@@ -949,9 +1056,9 @@ function WindowDetail({
       {window.type === "relation" && <RelationWindowDetail window={window} />}
       {window.type === "custom" && <CustomWindowDetail window={window} />}
       {window.type === "skill_index" && <SkillIndexWindowDetail window={window} />}
-      {window.type === "issue" && <IssueWindowDetail window={window} />}
       {window.type === "feishu_chat" && <FeishuChatWindowDetail window={window} />}
       {window.type === "feishu_doc" && <FeishuDocWindowDetail window={window} />}
+      {window.type === "plan" && <PlanWindowDetail window={window} />}
       {window.type === "talk" && (
         <div className="llm-input-attrs">
           <div className="llm-input-attr-row">

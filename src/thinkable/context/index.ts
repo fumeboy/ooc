@@ -311,8 +311,6 @@ export type ThreadContext = {
   inbox?: ThreadMessage[];
   /** 当前线程发出的协作消息记录。 */
   outbox?: ThreadMessage[];
-  /** 当前线程的计划文本，由 plan command 覆盖式更新。 */
-  plan?: string;
   /**
    * 当前线程的所有 ContextWindow（flat 数组，层级通过 parentWindowId 表达）。
    *

@@ -242,6 +242,36 @@ P0-1 (Permission 模型) Q0a~Q0d 完成；Q0e 列 todo（自改 server/index.ts 
 - **2026-05-25**：首版。Supervisor Round 1 外循环。
 - **2026-05-25**（当日 Round 1 闭环）：P0-2 完整实施完成，5 套 e2e PASS / 全仓单测 PASS / meta tsc clean。差异与残留如上。
 - **2026-05-25**（当日 Round 2 闭环）：P0-1 Q0a~Q0d 完成，2 套 e2e (Q0b+Q0c) PASS / 联合 P0-1+P0-2 42 用例 PASS / 全仓 550 单测 PASS。3 项歧义 Supervisor 拍板；Q0e 列 todo。
+- **2026-05-26**（Round 7 闭环）：A 段移除 issue 看板整套 + B 段新增 plan_window first-class object 化 + sub plan + 复用 do_window.move sharing 协议。
+  - **A 段（减法 — issue 看板移除）**：
+    - meta：删 `collaborable.children.issue` 整段 + `persistable.issue_files` 整段 + 30+ 处引用清理；加 root.warnings 移除特性说明（明确 issue 看板 ≠ stone-versioning 的 PR-Issue）
+    - backend：删 4 整文件（issue.ts / issue-service.ts + 两个测试）+ `executable/windows/issue/` 整目录 + `app/server/modules/issues/` 整 module + 2 个 commands；改 ~20 文件去引用
+    - **新建 `src/persistable/pr-issue.ts`** —— PR-Issue 概念独立出来（design 隐含必需，因为 issue 看板与 PR-Issue 之前共享了 issue.ts 的 schema）；createPrIssue / readPrIssue / closePrIssue / createRecoveryIssue 抽离
+    - web：删 `web/src/domains/issues/` 整目录 + `IssueDetailView` / `IssueListView` / `IssueListSection` 等；user home 改回 single-column；保留 H-3 "去 welcome" 按钮（Round 6 修复，被远端 merge 时丢了，本轮加回来）
+    - 持久化：`.ooc-world/flows/*/issues/` rm + supervisor seed `using-issues.md` 删
+  - **B 段（加法 — plan_window）**：
+    - meta：`thinkable.children.thread.patches.thread_plan_deprecated`（P2 完全废弃 thread.plan 字段）+ `executable.children.context_window.children.plan_window` 详细子节点（含 PlanWindowStep shape + 7 commands + sharing 协议 + renderXml + compressView）
+    - backend：新 `src/executable/windows/plan/` module（types + index, 7 commands inline；renderXml; compressView 与 P0-2 同协议; onClose cascade archive sub plans）
+    - root.plan command 完全重写：兼容简单 string + 完整 object 入参；幂等更新 root plan_window（无 parentPlanWindowId 的）；返回 plan_window id
+    - ThreadContext.plan 字段完全删除（0 行活跃残留）；4 个测试文件改用 plan_window 验证；context/render/budget/debug-file 全部去 plan 字段
+    - sharing 复用：plan_window 在 do.share_windows 中自动可被 share（黑名单是 do/command_exec/root，plan 自动允许）
+  - **质量门（本会话受 lark baseline 网络阻塞影响）**：
+    - meta tsc clean
+    - 全仓 tsc：3 个 baseline 错（lark sdk 找不到 + 2 个 lark implicit any），与本轮无关
+    - plan-window-basic.e2e.test.ts：9/9 PASS（含 share 基础路径）
+    - 全 backend e2e：63 pass / 0 fail（含 permission + context-compression + route-audit + stones-versioning + stone-client-parity + plan-window-basic）
+    - web 单测：37 pass / 6 fail（rehype-raw baseline 与本轮无关；新增 3 个 plan UI 测试 pass）
+    - **B6 plan-share-parent-child.e2e.test.ts 实际未跑**：lark baseline 网络阻塞 → `@larksuiteoapi/node-sdk` 装不上 → 任何 import `src/executable/windows` 的测试在 module load 阶段失败；e2e 逻辑严格按代码反推写完，待能装依赖环境跑一次
+  - **重要发现（Supervisor 拍板留 todo）**：
+    - **sub plan 不随父 plan 回流**：当父 share root plan_window 给子 + 子 expand_step 创建 PW2 + 子归还父时，父只看到 step.subPlanWindowId 引用（PW2 实体留在子）。子线程 archive 后 PW2 消失，变成 orphan reference。设计明确为：**ref-only**（子归还不带 sub plan；父需要 sub plan 时显式 share 子 plan）—— 这符合 OOC "显式协作" 哲学
+    - **ref + close 通用语义模糊**：plan.close 是空 exec，本地引用释放靠 mgr.close API（但通用 close 路径不调 mgr.close）—— 这是 sharing 协议通用问题，非 plan 特有，列后续 round
+  - **设计 ↔ 实施差异回写 design doc**：
+    - PR-Issue 抽出独立模块（design 未明说但 issue 看板移除必需）
+    - sub plan 不跟随回流（design § 3.6 暗示流程被 ref-only 落地版替代）
+    - sharing 协议是 type-agnostic 黑名单形式，plan_window 自动可 share（无需新加白名单）
+  - **派单效率**：5 sub agent（A2 + A3 并行 / B2-B4 串行 / B5 + B6 并行）；累计 ~990K tokens；A2 + A3 并行成功，B5 + B6 并行成功
+  - 总改动：**68 files / +765 / -4461**（净 -3696 行；issue 看板整体移除带来的大额负数）
+
 - **2026-05-25**（当日 Round 6 闭环）：体验官 Round 5 报告的 6 个 UX/UI/parity/data 问题清零，3 sub agent 并行修复。
   - **Batch A** (AgentOfVisible, 4 UI/UX 修)：
     - H-1 backend offline pill 误报 → MainPanel.tsx 改用真 error 摘要而非误导 "backend offline"；MainLogo 仍是唯一健康度真相源

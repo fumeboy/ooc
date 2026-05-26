@@ -103,15 +103,14 @@ function reviveThreadForInboxMessage(thread: ThreadContext): ThreadContext {
  * 对前端语义无影响，但会让 hash 永远变化、polling 永远命中"内容变了"。
  *
  * 对所有非 explicit 来源的合成 knowledge window 做剔除(protocol / activator / relation
- * / issue 都是每轮派生);explicit knowledge 与其它持久 window 的 id/createdAt 是真实状态,
+ * 都是每轮派生);explicit knowledge 与其它持久 window 的 id/createdAt 是真实状态,
  * 原样保留。
  *
  * 同样要剔除每轮 derive 的 skill_index：id 稳定（SKILL_INDEX_WINDOW_ID）但
  * createdAt=Date.now() 每次都新，否则 hash 永远翻动。skills 数组本身是稳定排序的
  * 内容字段，参与 hash。
  *
- * IssueWindow 的 `lastSeenCommentId` / `lastNotifiedAt` 是 in-process 内存语义
- * (plan §4 决策 11),不参与 hash;polling 时若只是游标移动不应判定为内容变化。
+ * 历史：2026-05-26 移除 IssueWindow strip 分支（issue 看板已整体下线）。
  */
 function stripVolatileForHash(payload: { contextWindows?: ContextWindow[] }) {
   if (!payload.contextWindows) return payload;
@@ -132,10 +131,6 @@ function stripVolatileForHash(payload: { contextWindows?: ContextWindow[] }) {
       // skill_index 也是每轮 derive 出来的非持久化 window;createdAt=Date.now() 每次都新。
       if (window.type === "skill_index") {
         const { createdAt: _createdAt, ...rest } = window;
-        return rest;
-      }
-      if (window.type === "issue") {
-        const { lastSeenCommentId: _seen, lastNotifiedAt: _notif, ...rest } = window;
         return rest;
       }
       return window;

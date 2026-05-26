@@ -100,8 +100,16 @@ describe("single object runtime", () => {
     // round 1 时 open 立即提交 form 执行 plan；round 2 没有任何工具调用，所以 outputItems 只有 message
     expect(loopMeta.loopIndex).toBe(2);
     expect(loopMeta.status).toBe("ok");
-    expect(root.plan).toBe("完成单 object 最小闭环");
-    expect(savedThread.plan).toBe("完成单 object 最小闭环");
+    // 2026-05-26: plan 升格为 plan_window；旧 thread.plan 字段已废弃。
+    const rootPlanWindow = root.contextWindows.find((w) => w.type === "plan");
+    expect(rootPlanWindow?.type).toBe("plan");
+    expect(rootPlanWindow && rootPlanWindow.type === "plan" && rootPlanWindow.description).toBe(
+      "完成单 object 最小闭环",
+    );
+    const savedPlanWindow = (savedThread.contextWindows as Array<{ type: string; description?: string }>).find(
+      (w) => w.type === "plan",
+    );
+    expect(savedPlanWindow?.description).toBe("完成单 object 最小闭环");
     expect(
       savedThread.events.some(
         (event: { category: string; kind: string }) =>

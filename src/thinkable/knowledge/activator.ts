@@ -11,7 +11,7 @@ const MAX_RESULTS = 20;
  * - `root`：永远在 union 中——base path，允许 `activates_on:[root]` 这类
  *   "无论何时都该露面"的 seed knowledge 激活（R4 #24 修）
  * - 任何 thread.contextWindows 中 status="open" 的 window 类型贡献 path：
- *   talk / do / file / search / issue / relation / knowledge / ... 持续 open 时
+ *   talk / do / file / search / relation / knowledge / ... 持续 open 时
  *   每轮都贡献其 type 作为 path——让 `activates_on:[talk]` 这种"我在跟人 talk
  *   就该看到 talk 知识"的直觉成立（R6 #42 修）
  * - command_exec window 的 commandPaths（form 进行中）

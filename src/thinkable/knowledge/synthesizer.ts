@@ -22,7 +22,7 @@
  * 内部的 commands / windows registry），故归位到 thinkable/knowledge。
  */
 
-import { deriveStoneFromThread, derivePoolFromThread, listBranchSkills, listObjectSkills, listExternalSkills, readPoolRelation, readFlowRelation, readIssue, readWorldConfig } from "../../persistable/index.js";
+import { deriveStoneFromThread, derivePoolFromThread, listBranchSkills, listObjectSkills, listExternalSkills, readPoolRelation, readFlowRelation, readWorldConfig } from "../../persistable/index.js";
 import type { ThreadContext } from "../context.js";
 import { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge.js";
 import { ROOT_BASIC_PATH, ROOT_COMMANDS, ROOT_KNOWLEDGE } from "../../executable/windows/root/index.js";
@@ -35,7 +35,7 @@ import {
 import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../../executable/windows/_shared/super-constants.js";
 import type { CommandKnowledgeEntries, CommandTableEntry } from "../../executable/windows/_shared/command-types.js";
 import { getWindowTypeDefinition } from "../../executable/windows/_shared/registry.js";
-import type { CommandExecWindow, ContextWindow, IssueWindow, KnowledgeWindow, RelationWindow, SkillIndexWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
+import type { CommandExecWindow, ContextWindow, KnowledgeWindow, RelationWindow, SkillIndexWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
 import { ROOT_WINDOW_ID, SKILL_INDEX_WINDOW_ID } from "../../executable/windows/_shared/types.js";
 import { computeActivations } from "./activator.js";
 import { loadKnowledgeIndex } from "./loader.js";
@@ -264,13 +264,7 @@ export async function collectExecutableKnowledgeEntries(
   const relationWindows = await deriveRelationWindow(thread);
   for (const rw of relationWindows) synthetic.push(rw);
 
-  // 5) issue 派生 → KnowledgeWindow（source=issue）
-  //    spec: docs/plans/2026-05-19-001-feat-issue-context-window-plan.md U8;
-  //    详见 deriveIssueWindowKnowledge JSDoc
-  const issueWindows = await deriveIssueWindowKnowledge(thread);
-  for (const iw of issueWindows) synthetic.push(iw);
-
-  // 6) 返回时把 synthetic windows 附加到 enriched 的副本上
+  // 5) 返回时把 synthetic windows 附加到 enriched 的副本上
   const finalWindows = synthetic.length > 0 ? [...enriched, ...synthetic] : enriched;
 
   return { contextWindows: finalWindows, knowledgeEntries: protocolEntries };
@@ -473,115 +467,3 @@ function makeKnowledgeWindow(
   };
 }
 
-/** Issue 派生 body 中每条 comment 用 XML fence 包裹的截断数(只展示最近 N 条)。 */
-const ISSUE_COMMENT_RECENT_N = 20;
-
-/**
- * 按 thread 中存在的 IssueWindow 派生 issue knowledge_window。
- *
- * 对每个 IssueWindow:
- * - readIssue 读 issue-{id}.json;不存在 → 跳过 + console.debug
- * - 把 description + 最近 N=20 条 comment 渲染成 markdown body
- * - 每条 comment 用 `<comment author="X" id="N">...</comment>` XML fence 包裹
- *   (S2 防 prompt injection,LLM 把 fenced 内容当数据不当指令)
- * - 超过 N 条 → 头部加 `<omitted count="X" />` 占位
- * - 文本中的 `<` `>` `&` `"` 做 XML escape
- *
- * 不持久化:每轮 render 重派生;id 用 `kn_issue_<issueId>_body` 稳定派生方便
- * UI 跨轮稳定。
- */
-export async function deriveIssueWindowKnowledge(
-  thread: ThreadContext,
-): Promise<KnowledgeWindow[]> {
-  if (!thread.persistence) return [];
-  const { baseDir, sessionId } = thread.persistence;
-
-  const issueWindows = (thread.contextWindows ?? []).filter(
-    (w): w is IssueWindow => w.type === "issue",
-  );
-  if (issueWindows.length === 0) return [];
-
-  const out: KnowledgeWindow[] = [];
-  // 去重:同 thread 可能多个 IssueWindow 指向同一 issueId(理论上 U5/U6 dedup
-  // 已阻止,但 derive 层稳健起见再过一次)
-  const seen = new Set<number>();
-  for (const w of issueWindows) {
-    if (seen.has(w.issueId)) continue;
-    seen.add(w.issueId);
-
-    let issue;
-    try {
-      issue = await readIssue(baseDir, sessionId, w.issueId);
-    } catch (err) {
-      console.debug(`[issue-derive] skip #${w.issueId} reason=io_error msg=${(err as Error).message}`);
-      continue;
-    }
-    if (!issue) {
-      console.debug(`[issue-derive] skip #${w.issueId} reason=issue_file_missing`);
-      continue;
-    }
-
-    const body = renderIssueBody(issue.title, issue.status, issue.description, issue.comments);
-    out.push({
-      id: `kn_issue_${w.issueId}_body`,
-      type: "knowledge",
-      parentWindowId: "root",
-      title: `Issue #${w.issueId}: ${issue.title}`,
-      status: "open",
-      createdAt: Date.now(),
-      path: `flows/${sessionId}/issues/issue-${w.issueId}.json`,
-      source: "issue",
-      body: truncateKnowledgeBody(body),
-      presentation: "full",
-    });
-  }
-
-  return out;
-}
-
-/** 把 Issue 数据渲染为 markdown body;每条 comment 在 XML fence 内(S2 防注入)。 */
-function renderIssueBody(
-  title: string,
-  status: "open" | "closed",
-  description: string | undefined,
-  comments: Array<{ id: number; text: string; authorObjectId: string; authorKind: "llm" | "user" }>,
-): string {
-  const lines: string[] = [];
-  lines.push(`# ${title}`);
-  lines.push("");
-  lines.push(`status: ${status}`);
-  lines.push("");
-  if (description && description.trim()) {
-    lines.push("## description");
-    lines.push("");
-    lines.push(description.trim());
-    lines.push("");
-  }
-  const total = comments.length;
-  const shown = comments.slice(-ISSUE_COMMENT_RECENT_N);
-  const omitted = total - shown.length;
-  lines.push(`## comments (showing ${shown.length} of ${total})`);
-  lines.push("");
-  if (omitted > 0) {
-    lines.push(`<omitted count="${omitted}" />`);
-    lines.push("");
-  }
-  for (const c of shown) {
-    lines.push(
-      `<comment author="${xmlEscape(c.authorObjectId)}" id="${c.id}" kind="${c.authorKind}">`,
-    );
-    lines.push(xmlEscape(c.text));
-    lines.push(`</comment>`);
-    lines.push("");
-  }
-  return lines.join("\n");
-}
-
-/** 最小 XML escape:防 comment 文本破坏 fence。 */
-function xmlEscape(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}

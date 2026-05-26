@@ -12,7 +12,6 @@
  */
 
 import { registerWindowType } from "../_shared/registry.js";
-import { createIssueCommand } from "./command.create-issue.js";
 import { doCommand } from "./command.do.js";
 import { endCommand } from "./command.end.js";
 import { globCommand } from "./command.glob.js";
@@ -22,7 +21,6 @@ import {
   openFeishuDocCommand,
 } from "../../../extendable/lark/index.js";
 import { openFileCommand } from "./command.open-file.js";
-import { openIssueCommand } from "./command.open-issue.js";
 import { openKnowledgeCommand } from "./command.open-knowledge.js";
 import { planCommand } from "./command.plan.js";
 import { programCommand } from "./command.program.js";
@@ -50,8 +48,6 @@ export const ROOT_COMMANDS: Record<string, CommandTableEntry> = {
   write_file: writeFileCommand,
   glob: globCommand,
   grep: grepCommand,
-  create_issue: createIssueCommand,
-  open_issue: openIssueCommand,
   metaprog: metaprogCommand,
   open_feishu_chat: openFeishuChatCommand,
   open_feishu_doc: openFeishuDocCommand,
@@ -79,7 +75,7 @@ root window 是每个 thread 隐含的根窗口。在 root 上可用的 command 
 | do              | 派生子线程                                    | 创建 child thread + do_window              |
 | talk            | 与其它对象（含人类 user 与其它 flow object）持续会话；同一对象复用同一 talk_window | 创建 talk_window；发消息走 talk_window.say |
 | program         | 执行代码 / 调用 server 方法                   | 创建 program_window；首次 exec 立即运行    |
-| plan            | 写 thread.plan                                | 仅副作用，不产生 window                    |
+| plan            | 创建/更新 root plan_window                    | 创建 plan_window（已存在则就地 update；返回 plan_window.id）|
 | todo            | 登记可见待办                                  | 创建 todo_window（args 给齐时通常直接提交） |
 | end             | 标记 thread 完成                              | 仅副作用                                   |
 | open_file       | 把指定文件引入 context                        | 创建 file_window；后续 set_range/reload    |
@@ -87,8 +83,6 @@ root window 是每个 thread 隐含的根窗口。在 root 上可用的 command 
 | write_file      | 创建/覆盖文件内容                              | 写盘 + 自动 spawn file_window；后续可走 file_window.edit |
 | glob            | 按 glob pattern 匹配文件名                     | 创建 search_window kind=glob；后续可 open_match(index) |
 | grep            | 按正则在文件内容里搜索                          | 创建 search_window kind=grep（含 line+snippet）；后续可 open_match(index) |
-| create_issue    | 在 session 内创建 Issue 看板议题                | 创建 issue_window;本 thread 自动订阅 |
-| open_issue      | 把已有 Issue 拉进本 thread 作为订阅 window      | 创建 issue_window;dedup,不重复挂 |
 | open_feishu_chat | 把飞书群聊 / 单聊作为 ContextWindow 引入        | 创建 feishu_chat_window；不立即拉取，建议随后 refresh |
 | open_feishu_doc  | 把飞书文档作为 ContextWindow 引入              | 创建 feishu_doc_window；不立即拉取，建议随后 read |
 

@@ -16,12 +16,11 @@ import { join } from "node:path";
 import {
   STONES_MAIN_BRANCH,
   STONE_OBJECTS_SUBDIR,
-  issuesService,
-  PR_ISSUE_SESSION_ID,
-  readIssueIndex,
+  createRecoveryIssue,
+  readPrIssueIndex,
+  type PrIssueRecord,
 } from "@src/persistable";
 import { loadObjectWindow } from "@src/executable/server/loader";
-import type { Issue } from "@src/persistable";
 
 const RECOVERY_PREFIX = "[recovery-needed]";
 
@@ -77,7 +76,7 @@ export async function runRecoveryCheck(opts: { baseDir: string }): Promise<Recov
   // 列出 super session 既有 PR-Issues，做去重
   let existingTitles = new Set<string>();
   try {
-    const index = await readIssueIndex(opts.baseDir, PR_ISSUE_SESSION_ID);
+    const index = await readPrIssueIndex(opts.baseDir);
     for (const entry of index.issues) {
       if (entry.status === "open" && entry.title.startsWith(RECOVERY_PREFIX)) {
         existingTitles.add(entry.title);
@@ -92,13 +91,12 @@ export async function runRecoveryCheck(opts: { baseDir: string }): Promise<Recov
     const title = `${RECOVERY_PREFIX} ${b.objectId} stone unloadable`;
     if (existingTitles.has(title)) continue;
 
-    // 用普通 super-session Issue 而非 PR-Issue：recovery 是诊断信号，不是评审请求；
-    // 没有 diff/branch 可填。Supervisor 看到后决定走 metaprog rollback。
-    let issue: Issue | undefined;
+    // recovery-needed 是诊断信号（无 diff/branch），用 createRecoveryIssue 落到 super session。
+    // Supervisor 在自己的 super flow 看到后决定走 metaprog rollback。
+    let issue: PrIssueRecord | undefined;
     try {
-      issue = await issuesService.createIssue({
+      issue = await createRecoveryIssue({
         baseDir: opts.baseDir,
-        sessionId: PR_ISSUE_SESSION_ID,
         title,
         description: `Server startup self-check failed to load stones/main/objects/${b.objectId}/server/index.ts.\n\nReason:\n${b.reason}\n\nSupervisor: consider \`metaprog rollback\` to a previous commit, or directly fix the stone.`,
         createdByObjectId: "supervisor",

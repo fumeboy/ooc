@@ -36,15 +36,13 @@ export type RouteState =
       objectId?: string;
       threadId?: string;
       /**
-       * 2026-05-26 user-home 双栏：左栏选中项写进 URL `?selected=chat:<wid>` 或
-       * `selected=issue:<id>`；undefined 表示空选中（右栏渲染 empty state）。
+       * 2026-05-26 user-home：左栏选中 chat 时写进 URL `?selected=chat:<wid>`；
+       * undefined 表示空选中（右栏渲染 empty state）。
+       *
+       * 2026-05-26 Round 7 A3：issue 看板已移除，selected 仅剩 chat 一种。
        */
-      selected?:
-        | { kind: "chat"; windowId: string }
-        | { kind: "issue"; issueId: number };
-    }
-  | { kind: "issueList"; sessionId: string }
-  | { kind: "issueDetail"; sessionId: string; issueId: number };
+      selected?: { kind: "chat"; windowId: string };
+    };
 
 /**
  * 把 RouteState 反向转成 URL；shortcut 路径优先（plan-003 §3.3）。
@@ -79,18 +77,11 @@ export function toPath(state: RouteState): string {
         parts.push(`threadId=${encodeURIComponent(state.threadId)}`);
       }
       if (state.selected) {
-        const v =
-          state.selected.kind === "chat"
-            ? `chat:${state.selected.windowId}`
-            : `issue:${state.selected.issueId}`;
+        const v = `chat:${state.selected.windowId}`;
         parts.push(`selected=${encodeURIComponent(v)}`);
       }
       return parts.length > 0 ? `${base}?${parts.join("&")}` : base;
     }
-    case "issueList":
-      return `/flows/${encodeURIComponent(state.sessionId)}/issues`;
-    case "issueDetail":
-      return `/flows/${encodeURIComponent(state.sessionId)}/issues/${state.issueId}`;
   }
 }
 
@@ -178,19 +169,6 @@ export function parseRoute(
     };
   }
 
-  // /flows/:sessionId/issues/:id  (first-class Issue 详情, issue-4 B3)
-  if (params.sessionId && params.id !== undefined && /\/issues\//.test(path)) {
-    const issueId = parseIssueIdToken(params.id);
-    if (issueId !== undefined) {
-      return { kind: "issueDetail", sessionId: params.sessionId, issueId };
-    }
-  }
-
-  // /flows/:sessionId/issues  (Issue list 页 — GitHub 风格列表)
-  if (params.sessionId && /\/issues\/?$/.test(path)) {
-    return { kind: "issueList", sessionId: params.sessionId };
-  }
-
   // /flows/:sessionId  (+ optional ?objectId=&threadId=&selected=)
   if (path.startsWith("/flows/") && params.sessionId && !params.objectId) {
     const r: RouteState = { kind: "session", sessionId: params.sessionId };
@@ -224,28 +202,12 @@ export function parseRoute(
   if (path.startsWith("/files/")) {
     const rel = path.slice("/files/".length);
     if (rel) {
-      // issue-4 B3 fallback: 旧链接 `/files/flows/<sid>/issues/issue-N.json` (或
-      // 其它变体) 现在直达 IssueDetailView, 不再撞 file viewer raw JSON。
       const decoded = decodeURI(rel);
-      const issueHit = matchIssueFilePath(decoded);
-      if (issueHit) {
-        return { kind: "issueDetail", sessionId: issueHit.sessionId, issueId: issueHit.issueId };
-      }
       const r: RouteState = { kind: "file", path: decoded };
       if (qSessionId && qObjectId && qThreadId) {
         return { ...r, thread: { sessionId: qSessionId, objectId: qObjectId, threadId: qThreadId } };
       }
       return r;
-    }
-  }
-
-  // issue-4 B3 fallback: 未走 /files/ 前缀的"裸 file path"形式
-  // `/flows/<sid>/issues/issue-N.json` 也归一到 detail (react-router 不会有
-  // 命名 param `id` 命中, 因为路由表里 `:id` 段不允许带 `.json`)。
-  {
-    const issueHit = matchIssueFilePath(path.startsWith("/") ? path.slice(1) : path);
-    if (issueHit) {
-      return { kind: "issueDetail", sessionId: issueHit.sessionId, issueId: issueHit.issueId };
     }
   }
 
@@ -268,26 +230,14 @@ export function parsePathname(
 }
 
 /**
- * 解析 issue id token: `4` / `issue-4` / `issue-4.json` 都接受, 取数字部分。
- * 失败返回 undefined。
- */
-function parseIssueIdToken(token: string): number | undefined {
-  const m = /^(?:issue-)?(\d+)(?:\.json)?$/.exec(token);
-  if (!m) return undefined;
-  const n = Number(m[1]);
-  return Number.isFinite(n) ? n : undefined;
-}
-
-/**
- * 解析 ?selected=chat:<wid> / issue:<id> query 值；不识别格式时返回 undefined（不报错）。
- * windowId 允许任意非空字符串；issueId 必须能解析成有限数字。
+ * 解析 ?selected=chat:<wid> query 值；不识别格式时返回 undefined（不报错）。
+ * windowId 允许任意非空字符串。
+ *
+ * 2026-05-26 Round 7 A3：issue 看板已移除，selected 仅剩 chat 一种 tag。
  */
 function parseSelectedQuery(
   raw: string | null,
-):
-  | { kind: "chat"; windowId: string }
-  | { kind: "issue"; issueId: number }
-  | undefined {
+): { kind: "chat"; windowId: string } | undefined {
   if (!raw) return undefined;
   const colon = raw.indexOf(":");
   if (colon <= 0) return undefined;
@@ -295,24 +245,7 @@ function parseSelectedQuery(
   const value = raw.slice(colon + 1);
   if (!value) return undefined;
   if (tag === "chat") return { kind: "chat", windowId: value };
-  if (tag === "issue") {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return undefined;
-    return { kind: "issue", issueId: n };
-  }
   return undefined;
-}
-
-/**
- * 匹配 world 相对路径 `flows/<sid>/issues/issue-N.json`,
- * 返回 { sessionId, issueId }。用于把旧的 file-viewer 链接归一到 IssueDetailView。
- */
-function matchIssueFilePath(rel: string): { sessionId: string; issueId: number } | undefined {
-  const m = /^flows\/([^/]+)\/issues\/issue-(\d+)\.json$/.exec(rel);
-  if (!m) return undefined;
-  const issueId = Number(m[2]);
-  if (!Number.isFinite(issueId)) return undefined;
-  return { sessionId: m[1]!, issueId };
 }
 
 /** 由 RouteState 派生 scope（Sidebar 用以高亮 tab）。R7-4 加 "pools"。 */
@@ -332,8 +265,6 @@ export function scopeOf(route: RouteState): "stones" | "flows" | "world" | "pool
       return "stones";
     case "flowPage":
     case "session":
-    case "issueList":
-    case "issueDetail":
       return "flows";
   }
 }

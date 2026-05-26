@@ -158,11 +158,6 @@ REGISTRY.set("search", {
   commands: {},
 });
 
-REGISTRY.set("issue", {
-  type: "issue",
-  commands: {},
-});
-
 REGISTRY.set("relation", {
   type: "relation",
   commands: {},
@@ -185,6 +180,11 @@ REGISTRY.set("feishu_chat", {
 
 REGISTRY.set("feishu_doc", {
   type: "feishu_doc",
+  commands: {},
+});
+
+REGISTRY.set("plan", {
+  type: "plan",
   commands: {},
 });
 

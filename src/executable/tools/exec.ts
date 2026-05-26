@@ -44,7 +44,7 @@ export const EXEC_TOOL: LlmTool = {
         enum: getOpenableCommands(),
         description:
           "要在 target window 上调用的 command 名。" +
-          "root 上典型有 do/talk/program/plan/end/todo/open_file/open_knowledge/write_file/glob/grep/create_issue/open_issue 等；" +
+          "root 上典型有 do/talk/program/plan/end/todo/open_file/open_knowledge/write_file/glob/grep/metaprog 等；" +
           "其它 window 上注册的命令（如 do_window.continue / talk_window.say / form 自身的 refine/submit / custom 命令）" +
           "也通过本字段传入，运行时按 window_id 路由。",
       },

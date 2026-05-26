@@ -53,9 +53,8 @@ import {
   type GitErrorCode,
   type GitResult,
 } from "./stone-git";
-import { issuesService, PR_ISSUE_SESSION_ID } from "./issue-service";
+import { closePrIssue, createPrIssue, readPrIssue, type PrIssueRecord } from "./pr-issue";
 import { enqueueSessionWrite } from "./serial-queue";
-import type { Issue } from "./issue";
 
 /** Supervisor 的 objectId（治理身份：rollback 仅 supervisor 可调；PR-Issue 默认收件人）。 */
 export const SUPERVISOR_OBJECT_ID = "supervisor";
@@ -339,7 +338,7 @@ export type RequestPrIssueResult =
 
 /**
  * 拿到 worktree branch 的 diff（vs main），构造 PrIssuePayload，调
- * `issuesService.createPrIssue` 落到 super session。
+ * `createPrIssue` 落到 super session。
  */
 export async function requestPrIssueReview(input: RequestPrIssueInput): Promise<RequestPrIssueResult> {
   if (!isValidObjectId(input.authorObjectId)) {
@@ -363,7 +362,7 @@ export async function requestPrIssueReview(input: RequestPrIssueInput): Promise<
 
     const title = (input.title ?? input.intent).slice(0, 80);
     try {
-      const issue = await issuesService.createPrIssue({
+      const issue = await createPrIssue({
         baseDir: input.worktree.baseDir,
         title,
         description: input.description,
@@ -417,11 +416,9 @@ export type ResolvePrIssueResult =
 export async function resolvePrIssue(input: ResolvePrIssueInput): Promise<ResolvePrIssueResult> {
   return enqueueSessionWrite(gitQueueKey(input.baseDir), async () => {
     // 取出 PR-Issue
-    let issue: Issue | undefined;
+    let issue: PrIssueRecord | undefined;
     try {
-      // dynamic import 避免类型循环；issuesService 已是稳定 API
-      const { readIssue } = await import("./issue");
-      issue = await readIssue(input.baseDir, PR_ISSUE_SESSION_ID, input.issueId);
+      issue = await readPrIssue(input.baseDir, input.issueId);
     } catch (e) {
       return {
         ok: false,
@@ -482,9 +479,8 @@ export async function resolvePrIssue(input: ResolvePrIssueInput): Promise<Resolv
       }
 
       try {
-        await issuesService.closeIssue({
+        await closePrIssue({
           baseDir: input.baseDir,
-          sessionId: PR_ISSUE_SESSION_ID,
           issueId: input.issueId,
         });
       } catch (e) {
@@ -517,9 +513,8 @@ export async function resolvePrIssue(input: ResolvePrIssueInput): Promise<Resolv
       return { ok: false, code: "GIT", gitCode: archive.code, stderr: archive.stderr } as const;
     }
     try {
-      await issuesService.closeIssue({
+      await closePrIssue({
         baseDir: input.baseDir,
-        sessionId: PR_ISSUE_SESSION_ID,
         issueId: input.issueId,
       });
     } catch (e) {

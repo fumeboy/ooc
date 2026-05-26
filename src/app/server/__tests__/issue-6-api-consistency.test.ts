@@ -56,15 +56,6 @@ describe("Issue #6 Bad #1: silent-fabricate", () => {
     expect(res.status).toBe(404);
   });
 
-  test("GET /api/flows/<nonexistent_sid>/issues → 404 (区分父资源缺失)", async () => {
-    const { app } = makeApp();
-    const res = await app.handle(new Request("http://localhost/api/flows/_test_no_such_session/issues"));
-    expect(res.status).toBe(404);
-    const body = await res.json();
-    expect(body.error.code).toBe("NOT_FOUND");
-    expect(body.error.message).toContain("_test_no_such_session");
-  });
-
   test("GET /api/flows/<nonexistent_sid>/threads → 404", async () => {
     const { app } = makeApp();
     const res = await app.handle(new Request("http://localhost/api/flows/_test_no_such_session/threads"));
@@ -101,22 +92,13 @@ describe("Issue #6 Bad #2: 错误 shape 统一为 { error: { code, message, deta
 
   test("422 (schema validation) 返回相同 shape", async () => {
     const { app } = makeApp();
-    // POST /api/stones with empty body — validation fails (object missing required-derived input)
-    // 用 issues append-comment 触发,缺 text+authorObjectId
-    // 先建一个 session
-    await app.handle(
-      new Request("http://localhost/api/flows/", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sessionId: "_test_e_sess" }),
-      })
-    );
-    // POST 不合法 body
+    // POST /api/stones with malformed body 触发 schema validation 失败
+    // (createStone schema 要求 objectId 是合法字符串;给 number 会触发 422)
     const res = await app.handle(
-      new Request("http://localhost/api/flows/_test_e_sess/issues", {
+      new Request("http://localhost/api/stones", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ objectId: 12345 }),
       })
     );
     expect(res.status).toBe(422);
@@ -127,7 +109,8 @@ describe("Issue #6 Bad #2: 错误 shape 统一为 { error: { code, message, deta
 
   test("AppServerError NOT_FOUND 不再是裸 text", async () => {
     const { app } = makeApp();
-    const res = await app.handle(new Request("http://localhost/api/flows/_no_sess/issues"));
+    // 用 /api/stones/<nonexistent>/self 触发 NOT_FOUND（替代已下线的 issue 路由）
+    const res = await app.handle(new Request("http://localhost/api/stones/_no_such_stone/self"));
     expect(res.headers.get("content-type")).toContain("application/json");
     const body = await res.json();
     expect(body.error.code).toBe("NOT_FOUND");

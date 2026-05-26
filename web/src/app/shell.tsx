@@ -56,9 +56,7 @@ export function AppShell() {
   const activeSessionId = (() => {
     if (
       route.kind === "session" ||
-      route.kind === "flowPage" ||
-      route.kind === "issueDetail" ||
-      route.kind === "issueList"
+      route.kind === "flowPage"
     ) {
       return route.sessionId;
     }
@@ -246,13 +244,6 @@ export function AppShell() {
   // FileTree 点击 → navigate
   function handleNode(node: FileTreeNode) {
     if (node.type !== "file") return; // 目录只展开，不导航（plan-003 D2）
-    // issue-4 B3: issues 节点的合成 child (path `flows/<sid>/issues/issue-N.json`)
-    // 命中时直接进 first-class detail 路由, 不再走 file viewer raw JSON。
-    const issueMatch = node.path.match(/^flows\/([^/]+)\/issues\/issue-(\d+)\.json$/);
-    if (issueMatch) {
-      navigate(toPath({ kind: "issueDetail", sessionId: issueMatch[1]!, issueId: Number(issueMatch[2]) }));
-      return;
-    }
     // 保留 thread 上下文：当前在 session 内查看文件时，URL 带上 ?sessionId=&objectId=&threadId=
     // 让右侧 chat panel 跨文件查看持续显示。
     const thread =
@@ -452,12 +443,6 @@ function derivePathFromRoute(route: RouteState): string | undefined {
       return `stones/${route.objectId}/client/index.tsx`;
     case "flowPage":
       return `flows/${route.sessionId}/objects/${route.objectId}/client/pages/${route.page}.tsx`;
-    case "issueDetail":
-      // sidebar 中 issues 节点的合成 child node.path 即此形式 — 保持 active 高亮一致
-      return `flows/${route.sessionId}/issues/issue-${route.issueId}.json`;
-    case "issueList":
-      // sidebar 高亮: 命中 issues/ 父节点
-      return `flows/${route.sessionId}/issues`;
     default:
       return undefined;
   }

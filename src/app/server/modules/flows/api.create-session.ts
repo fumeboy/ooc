@@ -17,7 +17,7 @@ import type { createFlowsService } from "./service";
  * 不在本轮:
  * - 不删除 `/api/flows` 任何端点(前端 web/src/transport/endpoints.ts 仍在用,
  *   下一轮 AgentOfVisible 迁移)
- * - per-session 路径(`/api/flows/:sid/issues`,`/api/flows/:sid/threads` 等)
+ * - per-session 路径(`/api/flows/:sid/threads` 等)
  *   不在本次 alias 范围,迁移成本高;下一个大版本统一收口
  */
 export function createSessionApi(service: ReturnType<typeof createFlowsService>) {

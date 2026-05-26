@@ -19,6 +19,8 @@ import type { BaseContextWindow } from "../_shared/types.js";
  *               合成占位 body 提示 LLM 写入)。同样不持久化、不可 close;由
  *               src/thinkable/knowledge/synthesizer.ts:deriveRelationKnowledge 派生。
  *
+ * 历史：2026-05-26 移除 source="issue"（issue 看板整体下线）。
+ *
  * 合成的 KnowledgeWindow 自带 \`body\`，render 层不再需要回调 loader。
  * activator 来源走总数 20 项 + 单篇 8KB 截断。
  */
@@ -26,11 +28,11 @@ export interface KnowledgeWindow extends BaseContextWindow {
   type: "knowledge";
   status: "open" | "closed";
   path: string;
-  /** 五类来源；缺省视为 explicit（向后兼容旧 thread.json）。 */
-  source?: "explicit" | "protocol" | "activator" | "relation" | "issue";
+  /** 四类来源；缺省视为 explicit（向后兼容旧 thread.json）。 */
+  source?: "explicit" | "protocol" | "activator" | "relation";
   /** 合成 window 携带正文；explicit 来源时由 render 层从 loader 取。 */
   body?: string;
-  /** activator / relation / issue 来源时区分 full（含正文）与 summary（仅 description）。 */
+  /** activator / relation 来源时区分 full（含正文）与 summary（仅 description）。 */
   presentation?: "full" | "summary";
   /** activator 来源时记录 doc.frontmatter.description，便于 summary 渲染。 */
   description?: string;

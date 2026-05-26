@@ -10,7 +10,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { ensureStoneRepo, __resetSerialQueueForTests, readIssueIndex, PR_ISSUE_SESSION_ID } from "@src/persistable";
+import { ensureStoneRepo, __resetSerialQueueForTests, readPrIssueIndex } from "@src/persistable";
 import { executeMetaprog } from "@src/executable/windows/root/command.metaprog";
 import { runRecoveryCheck } from "@src/app/server/bootstrap/recovery-check";
 import type { CommandExecutionContext } from "@src/executable/windows/_shared/command-types";
@@ -136,8 +136,8 @@ describe("e2e: metaprog command — AE2/AE7 cross-scope → PR-Issue", () => {
     expect(merge.paths.sort()).toEqual(["objects/agent_of_x/self.md", "objects/agent_of_y/self.md"]);
 
     // PR-Issue 落在 super session
-    const index = await readIssueIndex(baseDir, PR_ISSUE_SESSION_ID);
-    const prIssue = index.issues.find((i) => i.id === merge.issueId);
+    const index = await readPrIssueIndex(baseDir);
+    const prIssue = index.issues.find((i: { id: number }) => i.id === merge.issueId);
     expect(prIssue).toBeDefined();
     expect(prIssue?.title.startsWith("[PR]")).toBe(true);
 
@@ -340,7 +340,7 @@ describe("e2e: U8 recovery-check 端到端", () => {
     expect(r.broken.length).toBe(1);
     expect(r.newIssues.length).toBe(1);
 
-    const idx = await readIssueIndex(baseDir, PR_ISSUE_SESSION_ID);
-    expect(idx.issues.some((i) => i.title.startsWith("[recovery-needed] agent_of_x"))).toBe(true);
+    const idx = await readPrIssueIndex(baseDir);
+    expect(idx.issues.some((i: { title: string }) => i.title.startsWith("[recovery-needed] agent_of_x"))).toBe(true);
   });
 });

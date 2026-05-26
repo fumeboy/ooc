@@ -14,6 +14,10 @@ import type { ContextWindow } from "../executable/windows/_shared/types";
 export interface ContextSnapshot {
   id: string;
   status?: string;
+  /**
+   * @deprecated 2026-05-26 起 thread.plan 字段已废弃（plan 升格为 plan_window in contextWindows）。
+   * 字段保留以兼容历史 llm.input.json，新写入永远是 undefined。
+   */
   plan?: string;
   contextWindows: ContextWindow[];
   inbox?: ThreadMessage[];
@@ -42,7 +46,6 @@ export function captureContextSnapshot(thread: ThreadContext): ContextSnapshot {
   return {
     id: thread.id,
     status: thread.status,
-    plan: thread.plan,
     contextWindows: thread.contextWindows ?? [],
     inbox: thread.inbox,
     outbox: thread.outbox,

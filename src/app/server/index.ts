@@ -13,7 +13,6 @@ import { runtimeModule } from "./modules/runtime";
 import { poolsModule } from "./modules/pools";
 import { stonesModule } from "./modules/stones";
 import { flowsModule } from "./modules/flows";
-import { issuesModule } from "./modules/issues";
 import { uiModule } from "./modules/ui";
 import { worldConfigModule } from "./modules/world-config";
 import { enqueueRunningThreadsAtBootstrap, startJobWorker } from "./runtime/worker";
@@ -178,7 +177,7 @@ export function buildServer(config: ServerConfig = readServerConfig()) {
     return config.pauseStore.isGlobalPauseEnabled() || (sessionId ? config.pauseStore.isSessionPaused(sessionId) : false);
   });
   // 根因 #5（2026-05-24）：worker 事件驱动改造。事件源（talk-delivery /
-  // do_window.continue / issue appendComment / end auto-reply）写完对端 inbox 后
+  // do_window.continue / end auto-reply）写完对端 inbox 后
   // 调 notifyThreadActivated → 这里把它转成 jobManager.createRunThreadJob。
   // 不再依赖 worker 周期扫 fs 兜底入队。
   //
@@ -212,7 +211,6 @@ export function buildServer(config: ServerConfig = readServerConfig()) {
     .use(poolsModule(config))
     .use(uiModule(config))
     .use(flowsModule(config))
-    .use(issuesModule(config))
     .use(worldConfigModule(config));
 
   if (config.workerEnabled) {

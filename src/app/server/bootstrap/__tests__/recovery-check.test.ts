@@ -2,7 +2,12 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { ensureStoneRepo, __resetSerialQueueForTests, readIssueIndex, PR_ISSUE_SESSION_ID } from "@src/persistable";
+import {
+  ensureStoneRepo,
+  __resetSerialQueueForTests,
+  readPrIssueIndex,
+  createRecoveryIssue,
+} from "@src/persistable";
 import { runRecoveryCheck } from "../recovery-check";
 import { clearServerLoaderCache } from "@src/executable/server/loader";
 
@@ -56,7 +61,7 @@ describe("runRecoveryCheck", () => {
     expect(r.broken[0].objectId).toBe("agent_of_x");
     expect(r.newIssues.length).toBe(1);
 
-    const index = await readIssueIndex(baseDir, PR_ISSUE_SESSION_ID);
+    const index = await readPrIssueIndex(baseDir);
     expect(index.issues[0].title.startsWith("[recovery-needed]")).toBe(true);
   });
 
@@ -70,10 +75,8 @@ describe("runRecoveryCheck", () => {
     await ensureStoneRepo({ baseDir });
 
     // 预置一条同 title 的 issue 模拟"上一次启动已经报过"
-    const { issuesService } = await import("@src/persistable");
-    await issuesService.createIssue({
+    await createRecoveryIssue({
       baseDir,
-      sessionId: PR_ISSUE_SESSION_ID,
       title: "[recovery-needed] agent_of_y stone unloadable",
       createdByObjectId: "supervisor",
     });
@@ -83,7 +86,7 @@ describe("runRecoveryCheck", () => {
     // 已存在同 title open issue → 不开新的
     expect(r.newIssues.length).toBe(0);
 
-    const index = await readIssueIndex(baseDir, PR_ISSUE_SESSION_ID);
+    const index = await readPrIssueIndex(baseDir);
     const recoveryIssues = index.issues.filter((i) => i.title.startsWith("[recovery-needed]"));
     expect(recoveryIssues.length).toBe(1);
   });

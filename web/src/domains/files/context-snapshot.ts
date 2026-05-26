@@ -183,15 +183,6 @@ export type ContextWindow =
     }
   | {
       id: string;
-      type: "issue";
-      parentWindowId?: string;
-      title: string;
-      status?: string;
-      issueId: number;
-      createdAt?: number;
-    }
-  | {
-      id: string;
       type: "feishu_chat";
       parentWindowId?: string;
       title: string;
@@ -231,6 +222,28 @@ export type ContextWindow =
       versionId?: string;
       mode: "read" | "edit";
       lastFetchedAtMs?: number;
+      createdAt?: number;
+    }
+  | {
+      /**
+       * Plan window (2026-05-26 R7 B5):
+       * - 由 src/executable/windows/plan/types.ts 的 PlanWindow 在前端做最小镜像
+       * - 支持 sub plan 嵌套：parentPlanWindowId + parentStepId 反向链；step.subPlanWindowId 正向链
+       */
+      id: string;
+      type: "plan";
+      parentWindowId?: string;
+      title: string;
+      status: "active" | "done" | "archived";
+      description?: string;
+      steps: Array<{
+        id: string;
+        text: string;
+        status: "pending" | "in-progress" | "done" | "blocked";
+        subPlanWindowId?: string;
+      }>;
+      parentPlanWindowId?: string;
+      parentStepId?: string;
       createdAt?: number;
     };
 
@@ -314,8 +327,8 @@ export function estimateTokens(chars: number): number {
 
 // ---- 单个 window 节点构造 ----
 
-function windowBadge(type: ContextWindow["type"]): string {
-  switch (type) {
+function windowBadge(window: ContextWindow): string {
+  switch (window.type) {
     case "command_exec": return "FORM";
     case "do":           return "DO";
     case "todo":         return "TODO";
@@ -328,9 +341,14 @@ function windowBadge(type: ContextWindow["type"]): string {
     case "root":         return "ROOT";
     case "custom":       return "CUST";
     case "skill_index":  return "SKILLS";
-    case "issue":        return "ISSUE";
     case "feishu_chat":  return "FSCHAT";
     case "feishu_doc":   return "FSDOC";
+    case "plan": {
+      // plan 分支：badge 携带 step count 摘要(如 "3/5 done")，方便在左树一眼看进度。
+      const total = window.steps.length;
+      const doneN = window.steps.filter((s) => s.status === "done").length;
+      return `PLAN ${doneN}/${total}`;
+    }
   }
 }
 
@@ -360,12 +378,13 @@ function windowSummary(window: ContextWindow): string {
       return `objectId: ${window.objectId}`;
     case "skill_index":
       return `${window.skills.length} skill${window.skills.length === 1 ? "" : "s"}`;
-    case "issue":
-      return `issue #${window.issueId}`;
     case "feishu_chat":
       return `${window.chatName} · ${window.mode} · ${window.buffer.length} msg${window.buffer.length === 1 ? "" : "s"}`;
     case "feishu_doc":
       return `${window.docKind} · ${window.docTitle}`;
+    case "plan":
+      // 一行摘要：plan title；description 留给详情面板渲染避免左树太宽。
+      return window.title;
   }
 }
 
@@ -411,14 +430,16 @@ function windowCharCount(window: ContextWindow): number {
     case "skill_index":
       for (const s of window.skills) n += s.name.length + s.description.length;
       break;
-    case "issue":
-      // issue_window 自身只占 issueId,正文走 sync 出来的 knowledge_window
-      break;
     case "feishu_chat":
       for (const m of window.buffer) n += m.text.length + m.sender.length;
       break;
     case "feishu_doc":
       n += window.content.body.length;
+      break;
+    case "plan":
+      // title 已在外层兜底；这里加 description + 所有 step text。
+      n += (window.description ?? "").length;
+      for (const s of window.steps) n += s.text.length;
       break;
   }
   return n;
@@ -569,7 +590,7 @@ function buildWindowNode(
     summary: windowSummary(window),
     depth,
     charCount: windowCharCount(window) + extraChars,
-    badge: windowBadge(window.type),
+    badge: windowBadge(window),
     messageCounts,
     children,
     data: { kind: "window", window, transcript },
@@ -585,12 +606,13 @@ const WINDOW_TYPE_ORDER: ContextWindow["type"][] = [
   "do",
   "talk",
   "relation",
+  // plan 与 todo 同属行动结构，先于具体执行 (program/file/…) 渲染让用户先看到任务规划
+  "plan",
   "todo",
   "program",
   "file",
   "knowledge",
   "search",
-  "issue",
   "custom",
   "skill_index",
   "feishu_chat",

@@ -76,7 +76,6 @@ function buildRouteCases(): RouteCase[] {
       body: { sessionId: sid },
     },
     { name: "flows.threads.list", method: "GET", path: `/api/flows/${sid}/threads` },
-    { name: "flows.issues.list", method: "GET", path: `/api/flows/${sid}/issues` },
 
     // Stones / pools (knowledge endpoint — pool 顶层没有 list endpoint, 走 knowledge prefix)
     { name: "stones.list", method: "GET", path: "/api/stones" },

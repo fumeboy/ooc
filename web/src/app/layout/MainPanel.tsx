@@ -7,8 +7,6 @@ import type { Stone } from "../../domains/stones";
 import type { ThreadContext } from "../../domains/chat";
 import { useDisplayName } from "../../domains/objects";
 import { EmptyState } from "../../shared/ui/EmptyState";
-import { IssueDetailView } from "../../domains/issues/components/IssueDetailView";
-import { IssueListView } from "../../domains/issues/components/IssueListView";
 import { UserThreadHome } from "../../domains/sessions/components/UserThreadHome";
 import { ThreadDetailTabs } from "../../domains/sessions/components/ThreadDetailTabs";
 import { Welcome } from "./Welcome";
@@ -60,7 +58,7 @@ export function MainPanel({
   onUserReply?: (text: string) => Promise<void>;
   onRefresh?: () => void | Promise<void>;
   threadHeader?: ReactNode;
-  /** 已知存在的 sessionId 集合 — 用于在 session/thread/flowPage/issueDetail 路由下做 not-found 判定 */
+  /** 已知存在的 sessionId 集合 — 用于在 session/thread/flowPage 路由下做 not-found 判定 */
   knownSessionIds?: ReadonlySet<string>;
   /** flows 列表是否已经被首次加载完 (避免首屏数据未到时误报 not-found) */
   flowsReady?: boolean;
@@ -82,8 +80,6 @@ export function MainPanel({
   // route.kind === "scope" 时不进 FileViewer / Welcome / ClientToggle，
   // 而是渲染对应 scope 的引导空态（避免 fallback 到 file viewer 残留态）。
   const scopeEmpty = route.kind === "scope" ? scopeEmptyState(route.scope) : undefined;
-  const isIssueDetail = route.kind === "issueDetail";
-  const isIssueList = route.kind === "issueList";
   // user thread default: route.kind === "session" + (objectId 缺省 / === "user") + 非 file/client 路径
   const isUserThreadHome =
     route.kind === "session" &&
@@ -101,7 +97,7 @@ export function MainPanel({
     !clientTarget &&
     !file;
   // Issue #5 Bad #2 fix: `/flows/<bogus>` 进入 session 路由后既不是 scope 也不是
-  // issueDetail / stoneClient,会 fallback 到 FileViewer 显示 "Select a file" —
+  // stoneClient,会 fallback 到 FileViewer 显示 "Select a file" —
   // 用户无法区分 "我没选文件" vs "session 根本不存在"。在 flows 列表已 ready 时
   // 用 knownSessionIds 做 cheap 判存在,不存在 → 显示 SessionNotFound 卡片。
   const sessionIdFromRoute = sessionIdFromRouteHelper(route);
@@ -139,10 +135,8 @@ export function MainPanel({
         <div className="flex items-center gap-3">
           <strong title={typeof headerTitle === "string" ? headerTitle : undefined}>{headerTitle}</strong>
           {loading && <span className="pill">loading</span>}
-          {!isWelcome && editableFile && !clientTarget && !isIssueDetail && <span className="pill">codemirror</span>}
+          {!isWelcome && editableFile && !clientTarget && <span className="pill">codemirror</span>}
           {clientTarget && <span className="pill">object client</span>}
-          {isIssueDetail && <span className="pill">issue</span>}
-          {isIssueList && <span className="pill">issues</span>}
           {isUserThreadHome && <span className="pill">user home</span>}
           {/*
            * H-1 (Round 5 体验报告) — 此处原本写 "backend offline";
@@ -162,7 +156,7 @@ export function MainPanel({
               to={toPath({ kind: "session", sessionId: sessionIdFromRoute })}
               className="refresh"
               aria-label="User home"
-              title="User home (talk + issues)"
+              title="User home (talk)"
             >
               <Home size={14} strokeWidth={1.8} />
             </Link>
@@ -174,14 +168,10 @@ export function MainPanel({
           {showBlockingError && <div className="section compact"><div className="error">{error}</div></div>}
           {isWelcome ? (
             <Welcome stones={stones} onCreateSession={onCreateSession} />
-          ) : sessionMissing && !isIssueDetail ? (
+          ) : sessionMissing ? (
             <SessionNotFound sessionId={sessionIdFromRoute!} />
           ) : scopeEmpty ? (
             <EmptyState title={scopeEmpty.title} detail={scopeEmpty.detail} />
-          ) : route.kind === "issueDetail" ? (
-            <IssueDetailView sessionId={route.sessionId} issueId={route.issueId} />
-          ) : route.kind === "issueList" ? (
-            <IssueListView sessionId={route.sessionId} />
           ) : clientTarget && path ? (
             <ClientWithSourceToggle target={clientTarget} sourcePath={path} />
           ) : isUserThreadHome && route.kind === "session" ? (
@@ -241,8 +231,6 @@ function sessionIdFromRouteHelper(route: RouteState): string | undefined {
   switch (route.kind) {
     case "session":
     case "flowPage":
-    case "issueList":
-    case "issueDetail":
       return route.sessionId;
     default:
       return undefined;
@@ -296,19 +284,6 @@ function deriveBreadcrumbSegments(route: RouteState, isWelcome: boolean, path: s
         { label: "flows", href: "/flows" },
         { label: route.sessionId, fullText: route.sessionId },
       ];
-    case "issueList":
-      return [
-        { label: "flows", href: "/flows" },
-        { label: route.sessionId, href: `/flows/${encodeURIComponent(route.sessionId)}`, fullText: route.sessionId },
-        { label: "issues" },
-      ];
-    case "issueDetail":
-      return [
-        { label: "flows", href: "/flows" },
-        { label: route.sessionId, href: `/flows/${encodeURIComponent(route.sessionId)}`, fullText: route.sessionId },
-        { label: "issues", href: `/flows/${encodeURIComponent(route.sessionId)}/issues` },
-        { label: `#${route.issueId}` },
-      ];
     case "flowPage":
       return [
         { label: "flows", href: "/flows" },
@@ -327,7 +302,7 @@ function deriveBreadcrumbSegments(route: RouteState, isWelcome: boolean, path: s
 
 /**
  * 取当前路由中"被用作 objectId"的那一段(用来 useDisplayName 派生标题)。
- * 没有 objectId 段的路由(scope / session / issueDetail / file / welcome)返回 undefined。
+ * 没有 objectId 段的路由(scope / session / file / welcome)返回 undefined。
  */
 function objectIdFromRoute(route: RouteState): string | undefined {
   switch (route.kind) {
@@ -365,10 +340,6 @@ function deriveHeaderTitle(route: RouteState, isWelcome: boolean, path: string |
       // 带 thread 上下文时由 ThreadHeader 显示 oid+tid，避免顶栏与之重复 → 留空
       if (route.objectId && route.threadId) return "";
       return route.sessionId;
-    case "issueList":
-      return "Issues";
-    case "issueDetail":
-      return `Issue #${route.issueId}`;
     case "flowPage":
       return route.page;
     case "file":

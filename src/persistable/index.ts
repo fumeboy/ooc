@@ -85,18 +85,20 @@ export { readReadme, readmeFile, writeReadme } from "./stone-readme";
 export { readServerSource, serverIndexFile, writeServerSource } from "./stone-server";
 
 export {
-  type Comment,
-  type Issue,
-  type IssueIndex,
-  type IssueIndexEntry,
+  // PR-Issue（stone-versioning 决策协议；issue 看板已 2026-05-26 移除）
+  PR_ISSUE_SESSION_ID,
+  createPrIssue,
+  createRecoveryIssue,
+  closePrIssue,
+  readPrIssue,
+  readPrIssueIndex,
   type PrIssuePayload,
-  issueFile,
-  issueIndexFile,
-  readIssue,
-  readIssueIndex,
-  writeIssue,
-  writeIssueIndex,
-} from "./issue";
+  type PrIssueRecord,
+  type PrIssueIndex,
+  type PrIssueIndexEntry,
+  type CreatePrIssueInput,
+  type CreateRecoveryIssueInput,
+} from "./pr-issue";
 
 export { enqueueSessionWrite, __resetSerialQueueForTests } from "./serial-queue";
 export {
@@ -159,16 +161,6 @@ export {
   type ResolvePrIssueResult,
 } from "./stone-versioning";
 export { parseMentions } from "./mention";
-export {
-  issuesService,
-  findIssueSubscribers,
-  PR_ISSUE_SESSION_ID,
-  type CreateIssueInput,
-  type CreatePrIssueInput,
-  type AppendCommentInput,
-  type AppendCommentResult,
-  type CloseIssueInput,
-} from "./issue-service";
 
 export {
   clientIndexFile,

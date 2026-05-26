@@ -17,7 +17,7 @@ import {
   __testing,
 } from "../stone-versioning";
 import { gitHead, gitRevParse } from "../stone-git";
-import { readIssue } from "../issue";
+import { readPrIssue } from "../pr-issue";
 
 let tempRoots: string[] = [];
 
@@ -266,7 +266,7 @@ describe("requestPrIssueReview + resolvePrIssue", () => {
     expect(pr.ok).toBe(true);
     if (!pr.ok) return;
 
-    const issue = await readIssue(baseDir, "super", pr.issueId);
+    const issue = await readPrIssue(baseDir, pr.issueId);
     expect(issue?.title.startsWith("[PR]")).toBe(true);
     expect(issue?.prPayload?.branch).toBe(open.worktree.branch);
     expect(issue?.prPayload?.paths).toEqual(["objects/agent_of_y/self.md"]);
@@ -278,7 +278,7 @@ describe("requestPrIssueReview + resolvePrIssue", () => {
     const yAfter = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_y", "self.md"), "utf8");
     expect(yAfter).toBe("x edits y\n");
 
-    const issueAfter = await readIssue(baseDir, "super", pr.issueId);
+    const issueAfter = await readPrIssue(baseDir, pr.issueId);
     expect(issueAfter?.status).toBe("closed");
   });
 

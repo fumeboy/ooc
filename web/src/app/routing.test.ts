@@ -89,19 +89,16 @@ describe("parseRoute: legacy /threads/ path stays parseable as session+thread", 
 });
 
 /**
- * 2026-05-26 user-home 双栏：?selected=chat:<wid> / issue:<id> 在 session 路由
- * 内 round-trip 必须无损；解析失败时 silently 丢弃（不报错），其它 query 字段不受影响。
+ * 2026-05-26 user-home：?selected=chat:<wid> 在 session 路由内 round-trip
+ * 必须无损；解析失败时 silently 丢弃（不报错），其它 query 字段不受影响。
+ *
+ * 2026-05-26 Round 7 A3：issue 看板已移除，selected 仅保留 chat 一种 tag。
  */
 describe("session ?selected= round-trip", () => {
   it("toPath embeds chat selection", () => {
     expect(
       toPath({ kind: "session", sessionId: "s1", selected: { kind: "chat", windowId: "w_talk_abc" } }),
     ).toBe("/flows/s1?selected=chat%3Aw_talk_abc");
-  });
-  it("toPath embeds issue selection", () => {
-    expect(
-      toPath({ kind: "session", sessionId: "s1", selected: { kind: "issue", issueId: 42 } }),
-    ).toBe("/flows/s1?selected=issue%3A42");
   });
   it("toPath combines thread query with selected", () => {
     expect(
@@ -122,20 +119,12 @@ describe("session ?selected= round-trip", () => {
       selected: { kind: "chat", windowId: "w_talk_abc" },
     });
   });
-  it("parseRoute reads issue selection", () => {
-    const r = parseRoute("/flows/s1", "?selected=issue:42", { sessionId: "s1" });
-    expect(r).toEqual({
-      kind: "session",
-      sessionId: "s1",
-      selected: { kind: "issue", issueId: 42 },
-    });
-  });
   it("parseRoute drops malformed selected silently", () => {
     const r = parseRoute("/flows/s1", "?selected=garbage", { sessionId: "s1" });
     expect(r).toEqual({ kind: "session", sessionId: "s1" });
   });
-  it("parseRoute drops issue:<non-number> silently", () => {
-    const r = parseRoute("/flows/s1", "?selected=issue:abc", { sessionId: "s1" });
+  it("parseRoute drops unknown tag silently (Round 7 A3: issue 已移除)", () => {
+    const r = parseRoute("/flows/s1", "?selected=issue:42", { sessionId: "s1" });
     expect(r).toEqual({ kind: "session", sessionId: "s1" });
   });
 });
@@ -151,21 +140,15 @@ describe("toPath ↔ parseRoute roundtrip", () => {
       thread: { sessionId: "s1", objectId: "x", threadId: "t1" },
     },
     { kind: "scope", scope: "flows" },
-    { kind: "issueDetail", sessionId: "s1", issueId: 4 },
   ] as const) {
     it(`roundtrip ${JSON.stringify(route)}`, () => {
       const url = toPath(route as never);
       const [pathname, search] = url.split("?");
-      // 模拟 react-router 的 useParams 行为：抽出 sessionId / objectId / id 等
+      // 模拟 react-router 的 useParams 行为：抽出 sessionId / objectId 等
       const params: Record<string, string> = {};
       const fp = pathname!.replace(/\/+$/, "");
       const flowM = /^\/flows\/([^/]+)/.exec(fp);
       if (flowM) params.sessionId = flowM[1]!;
-      const issueM = /^\/flows\/([^/]+)\/issues\/(.+)$/.exec(fp);
-      if (issueM) {
-        params.sessionId = issueM[1]!;
-        params.id = issueM[2]!;
-      }
       const r = parseRoute(pathname!, search ? "?" + search : "", params);
       expect(r).toEqual(route as never);
     });
