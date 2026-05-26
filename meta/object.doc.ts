@@ -3400,7 +3400,7 @@ export const root: DocTreeNode = {
                             `,
                         },
                         "windows_snapshot_data_source": {
-                            title: "windowsSnapshot 数据源 - 后端落盘契约",
+                            title: "windowsSnapshot 数据源 - 后端落盘契约 (Round 10 扩展 fileDiff)",
                             content: `
                             后端在每轮 thinkloop 写 loop_NNNN.meta.json 时附加:
 
@@ -3412,17 +3412,82 @@ export const root: DocTreeNode = {
                               parentWindowId?: string;
                               status?: string;
                               compressLevel?: 0 | 1 | 2;
+                              fileDiff?: {           // Round 10: 仅 file_window; 用于前端 CodeMirror Merge unified 渲染
+                                previousContent: string;  // 上一 loop file 内容 (added 时 empty)
+                                currentContent: string;   // 本 loop file 内容 (removed 时为 "")
+                                path: string;
+                                isBinary?: boolean;       // 二进制 / 超大文件时 true; previousContent/currentContent 为空
+                                tooLarge?: boolean;       // > 200KB 时 true; 同上
+                              };
                             }>
                             \`\`\`
 
                             **位置**: src/persistable/debug-file.ts 的 LlmLoopDebugMetaRecord 扩展 + writeLoopDebugMeta 写入点
-                            **算 hash**: src/observable/window-hash.ts (新; 见 observable.debug_files patch windows_snapshot)
-                            **stripVolatile**: 复用 thread-json.ts 的 in-process 字段剥离规则 (_decayMeta / compressLevel 默认值 / 等)
-                            **不进 thread.json**: contentHash 是 debug 视角派生字段, 业务字段保持最小
+                            **算 hash**: src/observable/window-hash.ts (Round 9; 见 observable.debug_files patch windows_snapshot)
+                            **stripVolatile**: 复用 thread-json.ts 的 in-process 字段剥离规则
+                            **不进 thread.json**: contentHash / fileDiff 都是 debug 视角派生字段, 业务字段保持最小
 
                             前端通过现有 GET /api/runtime/.../debug/loops/:N endpoint 拿到带 windowsSnapshot 的 meta;
                             不引入新 endpoint。
                             `,
+                        },
+                        "type_dispatch_diff_renderer": {
+                            title: "Type-Dispatch Window Diff Renderer (Round 10, 2026-05-27)",
+                            content: `
+                            用户痛点 (2026-05-27): Round 9 展开 "changed" window 时统一嵌 LLMInputJsonViewer 看全文,
+                            肉眼找 diff 太累。Round 10 升级: 每个 window type 自己 dispatch 一个 diff renderer
+                            (web 端注册, 与 backend renderXml/compressView/contentHash 同精神, 但纯前端 dispatch)。
+
+                            **架构** (web/src/domains/sessions/components/window-diff-renderers/):
+                            - registry.ts: registerWindowDiffRenderer / getWindowDiffRenderer
+                            - 每 type 一个 .tsx 独立文件; index.ts side-effect 注册
+                            - LoopDiffView 在 row 展开时调 \`getWindowDiffRenderer(type)\` dispatch; 未注册 → FallbackJsonDiff
+                            - ErrorBoundary 包裹每个 renderer, 抛错 fallback 到 JSON tree + 一行 "renderer X failed" 提示
+
+                            **type 设计**:
+                            - **file_window**: **CodeMirror Merge unified 单栏** (复用 @codemirror/merge);
+                              **数据来源: backend 预算的 fileDiff.{previousContent,currentContent}** (见 windowsSnapshot
+                              扩展; 在 buildWindowsSnapshot 时读上一 loop meta 的 fileDiff.currentContent 作为 prev,
+                              当前 file_window 的 content 作为 current; 不重复算 unified diff text, 让前端库做)
+                            - **talk_window**: 消息级 diff (按 message.id 配对; 新加绿底 / 修改 inline / 删除 strike)
+                            - **do_window**: child status 变化 + transcript diff
+                            - **plan_window**: step-level diff (按 step.id 配对; status / text / subPlanWindowId 变化)
+                            - **search_window**: match 集合 diff (按 path+line 配对)
+                            - **knowledge_window**: body 文本 diff (复用 CodeMirror Merge unified)
+                            - **program_window**: history 执行记录 diff (新增 exec / output 变化)
+                            - **command_exec**: args 字段级 diff (refine 累积)
+                            - **relation_window**: body 文本 diff (CodeMirror Merge unified)
+                            - **root / skill_index / todo / custom**: FallbackJsonDiff (通用 JSON tree 高亮变化)
+
+                            **数据获取策略** (hybrid):
+                            - **file_window** (可能大文本): backend 预算 fileDiff 写进 snapshot;
+                              前端直接渲, 不 fetch input.json
+                            - **其它 type** (内容小): 前端展开时 fetch loop N + loop N-1 的 input.json,
+                              提取该 window id 的完整对象, 喂 type-specific renderer
+                            - 缓存: 单 component lifetime 内 loop input keyed by loopIndex
+                            - 切 loop / 切 window 时重置 cache (避免内存膨胀)
+
+                            **不变量**:
+                            - Type-dispatch (新 type 加 renderer 不动主框架; 未注册自动 fallback)
+                            - 前端 only (除 file_window backend 预算外, 不动 backend 协议)
+                            - Fallback 优雅 (renderer 抛错 / 数据缺 → JSON tree)
+                            - 不破坏现有 (LLMInputJsonViewer / WindowDiffRow 折叠态 / LoopActionPopover 全保留)
+                            - visibility-first (变化是视觉信号; renderer 错误打 console.warn)
+
+                            **CodeMirror Merge 选 unified 单栏** (user 拍板; 不是 split 双栏): 同一窗口内行级 +/-,
+                            视觉信息密度高, 适合 loop diff 浏览场景。
+
+                            完整 design 见 docs/2026-05-27-type-dispatch-window-diff-view-design.md。
+                            `,
+                            named: {
+                                "WindowDiffRenderer": "web 端的 dispatch hook 类型; (previous, current, windowType, windowId) => ReactNode",
+                                "registerWindowDiffRenderer": "在 web/.../window-diff-renderers/registry.ts; side-effect 注册",
+                                "FallbackJsonDiff": "通用 JSON tree diff; 未注册 type / renderer 抛错时兜底",
+                                "fileDiff": "WindowSnapshotEntry 上的可选字段; 仅 file_window 类填; 含 previousContent + currentContent + path + isBinary?/tooLarge?",
+                                "ErrorBoundary": "包裹每个 renderer; 抛错 fallback + console.warn 显式 'renderer X failed: <msg>'",
+                                "CodeMirror Merge unified": "@codemirror/merge ^6.0.0; unified 单栏行级 diff; web/package.json 已有依赖",
+                                "数据获取 hybrid": "file_window 走 backend 预算 fileDiff; 其它 type 前端 fetch input.json 提取",
+                            },
                         },
                     },
                     sources: [

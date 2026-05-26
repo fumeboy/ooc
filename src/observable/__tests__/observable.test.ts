@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "bun:test";
@@ -271,5 +271,66 @@ describe("observable persistable debug files", () => {
     observableModule.disableDebug();
     // 防 unused 警告
     void hashB1;
+  });
+
+  it("populates fileDiff with previousContent/currentContent across loops (Round 10 F2)", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-observable-filediff-"));
+    const flowRef = await createFlowObject({
+      baseDir: tempRoot,
+      sessionId: "_test_observable_" + Date.now(),
+      objectId: "obj"
+    });
+    // 准备一个真实磁盘上的文件
+    const filePath = join(tempRoot, "tracked.ts");
+    await writeFile(filePath, "v1\n", "utf8");
+
+    const thread: ThreadContext = {
+      id: "root",
+      status: "running",
+      events: [],
+      contextWindows: [
+        {
+          id: "w_file_tracked",
+          type: "file",
+          title: "tracked.ts",
+          status: "open",
+          createdAt: 1,
+          path: filePath,
+        } as never,
+      ],
+      persistence: { ...flowRef, threadId: "root" }
+    };
+    const inputItems: LlmInputItem[] = [{ type: "message", role: "system", content: "<context />" }];
+    const tools: LlmTool[] = [];
+    const result: LlmGenerateResult = {
+      provider: "openai",
+      model: "test",
+      outputItems: [],
+      text: "ok",
+      toolCalls: [],
+    };
+
+    observableModule.clearObservableDebugState();
+    observableModule.enableDebug();
+
+    // Loop 1: 文件 v1
+    const h1 = await observableModule.beginLlmLoop(thread, inputItems, tools);
+    await observableModule.finishLlmLoop(thread, h1, { result, status: "ok" });
+    const meta1 = JSON.parse(await readFile(loopMetaFile(thread.persistence!, 1), "utf8"));
+    expect(meta1.windowsSnapshot[0].fileDiff).toBeDefined();
+    expect(meta1.windowsSnapshot[0].fileDiff.previousContent).toBe("");
+    expect(meta1.windowsSnapshot[0].fileDiff.currentContent).toBe("v1\n");
+    expect(meta1.windowsSnapshot[0].fileDiff.path).toBe(filePath);
+
+    // Loop 2: 改文件到 v2
+    await writeFile(filePath, "v2 with edit\n", "utf8");
+    const h2 = await observableModule.beginLlmLoop(thread, inputItems, tools);
+    await observableModule.finishLlmLoop(thread, h2, { result, status: "ok" });
+    const meta2 = JSON.parse(await readFile(loopMetaFile(thread.persistence!, 2), "utf8"));
+    expect(meta2.windowsSnapshot[0].fileDiff).toBeDefined();
+    expect(meta2.windowsSnapshot[0].fileDiff.previousContent).toBe("v1\n");
+    expect(meta2.windowsSnapshot[0].fileDiff.currentContent).toBe("v2 with edit\n");
+
+    observableModule.disableDebug();
   });
 });

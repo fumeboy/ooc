@@ -242,6 +242,41 @@ P0-1 (Permission 模型) Q0a~Q0d 完成；Q0e 列 todo（自改 server/index.ts 
 - **2026-05-25**：首版。Supervisor Round 1 外循环。
 - **2026-05-25**（当日 Round 1 闭环）：P0-2 完整实施完成，5 套 e2e PASS / 全仓单测 PASS / meta tsc clean。差异与残留如上。
 - **2026-05-25**（当日 Round 2 闭环）：P0-1 Q0a~Q0d 完成，2 套 e2e (Q0b+Q0c) PASS / 联合 P0-1+P0-2 42 用例 PASS / 全仓 550 单测 PASS。3 项歧义 Supervisor 拍板；Q0e 列 todo。
+- **2026-05-27**（Round 10 闭环）：Type-Dispatch Window Diff Renderer — 为每种 window type 设计 diff 视图 + file_window CodeMirror Merge unified。
+  - **设计触发**：Round 9 Time Machine 落地后用户反馈"changed 展开后所有 type 都用 LLMInputJsonViewer 全文，肉眼找差异太累"
+  - **核心机制**：web 端 type-dispatch renderer（registerWindowDiffRenderer / getWindowDiffRenderer），未注册 type → FallbackJsonDiff，renderer 抛错 → ErrorBoundary 兜底 + console.warn
+  - **F1 (Supervisor)**：meta `visible.loop_timeline.patches.type_dispatch_diff_renderer` + 扩展 `windows_snapshot_data_source` 加 fileDiff 字段 schema；tsc clean
+  - **F2 (Backend, 并行)**：windowsSnapshot 加 fileDiff 字段（previousContent + currentContent + path + isBinary?/tooLarge?）
+    - FileWindow content 通过 `fs.readFile(path)` 在 buildWindowsSnapshot 时读（lazy, 不持久化 thread.json）
+    - `buildWindowsSnapshot` 改 async + 接 previousSnapshot 参数
+    - `finishLlmLoop` 在写当前 meta 前调 `readLoopDebugMeta(loopIndex-1)` 拿上一 loop 的 fileDiff.currentContent 作为 prev
+    - 二进制（含 \0 byte）/ tooLarge (>200KB) / read 失败 → 优雅退化（content="" + 标 flag，warn 不抛）
+    - 13+6=19 新 hash 单测 + 1 集成测试（跨 loop file v1→v2 真磁盘）
+  - **F3 (Web, 并行)**：9 type renderer + 注册机制 + ErrorBoundary
+    - `window-diff-renderers/` 新目录：registry + 9 renderer + FallbackJsonDiff + ErrorBoundary + index.ts side-effect 注册
+    - **FileWindowDiff**：CodeMirror **unifiedMergeView** 单栏（user 明确）；hybrid 数据获取（current.fileDiff 优先 / content fallback / Notice 退化）；isBinary / tooLarge / 缺失三档软退化
+    - TalkWindowDiff: 消息级按 id 配对 + status/title/target 字段 diff
+    - DoWindowDiff: child status 大字号 highlight + transcript diff
+    - PlanWindowDiff: step 级按 step.id 配对 + status/text/subPlanWindowId 变化标记
+    - SearchWindowDiff: matches 按 path+line 配对
+    - KnowledgeWindowDiff: frontmatter 字段 diff + body 走 MarkdownBodyDiff (CodeMirror Merge)
+    - ProgramWindowDiff: history 按 execId 配对 + code/output 预览
+    - CommandExecDiff: accumulatedArgs 字段级 diff
+    - RelationWindowDiff: peerId/paths 字段 + dual scope body (CodeMirror Merge)
+    - **LoopDiffView 改造**：file_window 走 fileDiff 直接路径，其它 type 走 fetch input.json + 提取 window 路径，cache by loopIndex
+    - 54 新单测（registry + FileWindowDiff + TalkWindowDiff + PlanWindowDiff + FallbackJsonDiff + OtherRenderers + ErrorBoundary）
+  - **整体校验**：
+    - tsc clean
+    - src/: **726 pass / 1 baseline fail / 3 skip / 2079 expect**（+62: F2 backend 新增）
+    - web/: **194 pass / 0 fail / 438 expect**（+54: F3 9 个 renderer test）
+    - backend e2e: 68 pass / 0 fail / 8 skip
+    - 总 **988 tests / 1 baseline fail**
+  - **派单效率**: 2 sub agent 完全并行 (F2 src/ + F3 web/); 文件域不重叠; 累计 ~258K tokens
+  - **设计 ↔ 实施差异**:
+    - root / skill_index / todo：未实现专门 renderer → 走 FallbackJsonDiff 兜底（root 永不被展开, skill_index hash 通常稳定）
+    - CodeMirror Merge 单测限制：web 无 RTL，内部 EditorView 视觉验证留给体验官 + vite build smoke
+    - "存储 diff" 解读：选 hybrid（snapshot 自带 prev+current content for file，前端用 unifiedMergeView 算）— 而非 backend 算 unified patch text
+
 - **2026-05-26**（Round 9 闭环）：LoopTimeline 升级为 Time Machine 模式 + Window Content Diff + Bun.hash 落盘。
   - **设计触发**：肉眼对比两个 input.json 字符串 diff 累且不直观；LLM 视角下"context windows 变化"才是关键信号（哪个 window 加/改/删）
   - **核心升级**（替换 Round 3 P1-3 主形态）：

@@ -29,6 +29,24 @@
  * E2 数据未到时：snapshot 字段不存在 → computeWindowDiff 直接走 undefined 分支 → UI 显示
  * "no snapshot data"，不会炸。
  */
+/**
+ * Round 10 F3 — type-dispatch window diff renderer 协议扩展：
+ * file_window 的 prev/current 内容由 backend F2 直接附在 snapshot entry 上，
+ * 避免前端跨 loop 重新 fetch input.json + 拼装。
+ *
+ * F2 未到位时（fileDiff 字段缺失）→ FileWindowDiff 软退化：显示 path link 提示
+ * "file diff payload not yet available"。
+ */
+export interface FileDiffData {
+  previousContent: string;
+  currentContent: string;
+  path: string;
+  /** 二进制文件 → 不应做行级 diff；显示提示。 */
+  isBinary?: boolean;
+  /** 超过阈值（如 200KB）→ 不应做行级 diff；显示提示 + path。 */
+  tooLarge?: boolean;
+}
+
 export interface WindowSnapshotEntry {
   id: string;
   type: string;
@@ -38,6 +56,11 @@ export interface WindowSnapshotEntry {
   compressLevel?: 0 | 1 | 2;
   /** 后端可能附 summary 供 UI 显示，避免 expand 才知道 window 在讲什么。 */
   summary?: string;
+  /**
+   * Round 10 F3：file_window 类型专属。
+   * 与 backend F2 sub agent 实现的 shape 对齐；F2 未到位时 undefined → FileWindowDiff 软退化。
+   */
+  fileDiff?: FileDiffData;
 }
 
 export type WindowDiffStatus = "added" | "changed" | "removed" | "unchanged";

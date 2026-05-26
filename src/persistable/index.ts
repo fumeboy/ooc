@@ -57,6 +57,7 @@ export {
   writeLoopDebugInput,
   writeLoopDebugOutput,
   writeLoopDebugMeta,
+  readLoopDebugMeta,
   type ContextSnapshot,
   type LlmInputDebugRecord,
   type LlmOutputDebugRecord,
