@@ -4,6 +4,7 @@ import { threadDir, toJson, type ThreadPersistenceRef } from "./common";
 import type { LlmGenerateResult, LlmInputItem, LlmMessage } from "../thinkable/llm/types";
 import type { ProcessEvent, ThreadContext, ThreadMessage } from "../thinkable/context";
 import type { ContextWindow } from "../executable/windows/_shared/types";
+import type { WindowSnapshotEntry } from "@src/observable/window-hash";
 
 /**
  * 调用 LLM 前同时落盘的 thread context 快照。
@@ -129,6 +130,18 @@ export interface LlmLoopDebugMetaRecord {
   status: "ok" | "paused" | "error";
   /** 本轮失败原因。 */
   error?: string;
+  /**
+   * 本轮调用 LLM 时刻 thread.contextWindows 的 hash 快照。
+   *
+   * 设计依据: docs/2026-05-26-loop-time-machine-with-window-diff-design.md § 3.2
+   * 文档锚点: meta/object.doc.ts:observable.children.debug_files.patches.windows_snapshot
+   *
+   * - 数据由 src/observable/window-hash.ts:buildWindowsSnapshot 计算
+   * - 前端 LoopTimeline 用相邻 loop 的 windowsSnapshot 在客户端算 diff
+   *   (added / removed / changed / unchanged)
+   * - optional：向后兼容旧 loop_NNNN.meta.json
+   */
+  windowsSnapshot?: WindowSnapshotEntry[];
 }
 
 /** debug 目录绝对路径，仅本文件内部使用。 */

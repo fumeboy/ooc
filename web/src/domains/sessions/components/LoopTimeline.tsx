@@ -1,38 +1,57 @@
 /**
- * LoopTimeline — Agent-loop Visualizer 主组件 (R0c plan §6.1).
+ * LoopTimeline — Loop Time Machine 主组件 (Round 9 E3 重构).
  *
- * 数据流:
- * 1. GET /api/runtime/.../debug/loops → list loops (只含 meta, 不含 input/output 全文)
- * 2. GET /api/flows/:sid/objects/:oid/threads/:tid → thread.events
- * 3. 把 thread.events 按时间戳启发分配到对应 loopIndex (见 partitionEventsByLoop)
- * 4. 渲染 LoopEntry 列表; 退化模式 (loops 为空) 直接展示 events 升序序列
+ * 从 Round 3 的"纵向 N 个 LoopEntry"升级为时光机式"单 loop 视图 + 左右切换 + Window Diff"：
  *
- * 退化模式 (debug 关闭):
- * - 顶部提示条 "Loop debug 未启用, 仅显示事件序列。" + 一键启用按钮 (POST runtimeDebugEnable)
- * - events 直接平铺, 无 loop 分组; 关键 event 仍用 LoopEventBadge 高亮
- * - 不显示 latency / messageCount (无数据)
+ *   ┌────────────────────────────────────────────────────────────────┐
+ *   │ Loop Time Machine                                       Refresh│
+ *   │ ────────────────────────────────────────────────────────────── │
+ *   │ ◯─◯─●─◯─◯─◯ ...                          (LoopMiniTimeline)   │
+ *   │ ────────────────────────────────────────────────────────────── │
+ *   │ [← Prev]  #0023 of 50  [Next →]  [⏭ Latest]  (LoopNavigator)  │
+ *   │ 12:34:56 · 1.2s · 8 msg · 3 tools                              │
+ *   │ ────────────────────────────────────────────────────────────── │
+ *   │ Windows (vs Loop #0022)                       (LoopDiffView)   │
+ *   │   🆕 talk_window  w_1   summary…              added             │
+ *   │   ✏️ plan_window  w_2   refactor              changed           │
+ *   │   ·  do_window    w_3   plan1                 unchanged         │
+ *   │ ────────────────────────────────────────────────────────────── │
+ *   │ Key events in this loop                       (KeyEventsBar)   │
+ *   │   ⏸️ permission_ask · 🗜️ context_compressed                     │
+ *   └────────────────────────────────────────────────────────────────┘
  *
- * 不做的事 (本轮):
- * - 不监听 SSE / 不轮询 — Mount + 手动 refresh; 父组件可在用户切回 tab 时强制 re-mount
- * - 不持久化展开状态到 URL — tab 切换时丢失;后续 phase 可加 query param
+ * 数据 fetch：
+ *   - runtimeListLoops → 全部 loop meta + windowsSnapshot（E2 数据；不存在时 UI 退化）
+ *   - thread 端点 → events 列表（用于底部 KeyEventsBar + 退化模式时间序列）
+ *   - 切 loop 不重新 fetch list；按需 fetch 单个 loop 的 input/output 由 LoopDiffView 处理
+ *
+ * URL：`?loop=N` 表示当前查看的 loopIndex；不传 = Latest。
+ *
+ * 退化模式（design §E）：debug 未启用 / loops 为空 → 顶部 banner + 一键启用 + 显示 events 时间序列。
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useLocation } from "react-router";
 import { RefreshCw, Power } from "lucide-react";
 import { endpoints } from "../../../transport/endpoints";
 import { requestJson } from "../../../transport/http";
-import { LoopEntry, loopEventAnchorId, type LoopListEntry } from "./LoopEntry";
 import { LoopEventBadge, isKeyEvent, type LoopEvent } from "./LoopEventBadge";
 import { LoopActionPopover, type LoopActionPopoverMode } from "./LoopActionPopover";
+import { LoopNavigator, planNavigate } from "./LoopNavigator";
+import { LoopMiniTimeline } from "./LoopMiniTimeline";
+import { LoopDiffView } from "./LoopDiffView";
+import type { LoopListEntry } from "./loop-types";
+import { parseRoute, toPath } from "../../../app/routing";
+
+// Re-export so callers (其它组件 / 老代码) 仍可 import LoopListEntry / LoopMeta from
+// "./LoopTimeline"。原 LoopEntry.tsx 已废弃。
+export type { LoopListEntry, LoopMeta } from "./loop-types";
 
 export interface LoopTimelineProps {
   sessionId: string;
   objectId: string;
   threadId: string;
-  /**
-   * 测试注入点: 替换默认 requestJson, 让单测可以 mock 后端响应。
-   * 生产环境保持 undefined → 走真实 HTTP。
-   */
+  /** 测试注入点。 */
   fetcher?: typeof requestJson;
 }
 
@@ -54,17 +73,8 @@ interface EnableDebugResponse {
 /**
  * partitionEventsByLoop —— 把 thread.events 按时间戳启发地分配到 loops。
  *
- * 启发式 (plan §4 不强制要求精确分组):
- * - ProcessEvent 当前没有 createdAt; 唯一可用信号是 events 数组的 **顺序**。
- * - 按 loopIndex 升序对 loops 做 "区段切片": 用 meta.startedAt/finishedAt 做边界 hint,
- *   但因 events 无时间戳, 实际只能用 **比例切分** — 把 events 按 loops 数量等分。
- * - 这是 plan 允许的 "回退到 events 升序分页, 每个 loop 包含上一 loop 之后到本 loop
- *   结束前的所有 events" 的最简实现; 后续可加更聪明的对齐 (例如 thinkloop 写入时给
- *   events 附 loopIndex 字段)。
- *
- * 返回 { perLoop: Map<loopIndex, events[]>, unassigned: events[] }。
- * unassigned 在 plan 允许时显示在 timeline 底部 ("unassigned events" 区);
- * 当前实现 events 全部分配, unassigned 始终为空 — 留个 hook 给未来精确对齐用。
+ * R0c 的简单等分实现保留：events 没有 createdAt 字段，只能按数组顺序在 loops 间等分。
+ * 单测覆盖 4 个 case。
  */
 export function partitionEventsByLoop(
   loops: LoopListEntry[],
@@ -77,7 +87,6 @@ export function partitionEventsByLoop(
     return { perLoop, unassigned: [] };
   }
 
-  // 简单等分: events 数 / loops 数, 余数堆到最后一个 loop。
   const sortedLoops = [...loops].sort((a, b) => a.loopIndex - b.loopIndex);
   const perLoopSize = Math.floor(events.length / sortedLoops.length);
   let cursor = 0;
@@ -92,15 +101,8 @@ export function partitionEventsByLoop(
 }
 
 /**
- * R0d: 纯函数 — 把 badge 单击映射到 timeline 的下一步动作。
- *
- * 决策表:
- *  - permission_ask + 无 decided → "open-permission" (弹层让用户决议)
- *  - events_summary               → "open-summary"   (弹层显示全文)
- *  - 其它关键 event               → "scroll"         (滚到 anchor + 展开所在 loop)
- *
- * 拎出来便于单测在无 DOM 环境下断言交互意图,
- * UI 层 (handleBadgeClick) 调用本函数后再执行 side effect。
+ * R0d: 单击 badge → 决定下一步动作（permission popover / summary popover / scroll）。
+ * 时光机模式下 "scroll" 退化为 "切到该 loop"（如果还知道该 event 属于哪个 loop）。
  */
 export type BadgeClickAction =
   | { type: "open-permission"; event: LoopEvent }
@@ -120,15 +122,24 @@ export function planBadgeClickAction(event: LoopEvent): BadgeClickAction {
 }
 
 /**
- * R0d: 纯函数 — 把 popover 提交参数 + 目标 event 编排成发给 backend 的 decide body。
+ * R0d: 给单个 ProcessEvent 派生稳定 anchor id。
  *
- * 选 eventId 的优先级:
- *  1. event.id (Q0c 写入或 backend 兜底写过的)
- *  2. event.toolCallId + "_ask" (与 backend service.decidePermission 同款 fallback)
- *  3. 都没有 → 不带 eventId, 让 backend 选最近一条 pending
- *
- * reason 为空字符串 / undefined → 不进 body (与 popover 内 UI 行为一致)。
+ * 优先级：event.id → toolCallId → loop_idx fallback。本函数原在 LoopEntry.tsx 内，
+ * Round 9 E3 LoopEntry 已废弃 → 搬到 LoopTimeline 让既有测试仍可 import（test 文件改为
+ * 从 ./LoopTimeline import）。
  */
+export function loopEventAnchorId(
+  event: LoopEvent,
+  loopIndex: number,
+  idxInLoop: number,
+): string {
+  const id = typeof event.id === "string" ? event.id : undefined;
+  if (id) return `loop-event-${id}`;
+  const toolCallId = typeof event.toolCallId === "string" ? event.toolCallId : undefined;
+  if (toolCallId) return `loop-event-${toolCallId}`;
+  return `loop-event-loop${loopIndex}-${idxInLoop}`;
+}
+
 export function buildDecideBody(
   event: LoopEvent,
   args: { action: "approve" | "reject"; reason?: string },
@@ -143,10 +154,6 @@ export function buildDecideBody(
   return body;
 }
 
-/**
- * R0d: 把 "build body + fire HTTP" 抽出来便于单测 (注入 fetcher mock 即可断言收到的 body / path)。
- * 失败时 throw — popover 负责 catch + 显示。
- */
 export async function executeDecide(args: {
   fetcher: typeof requestJson;
   sessionId: string;
@@ -167,19 +174,26 @@ export async function executeDecide(args: {
 
 export function LoopTimeline({ sessionId, objectId, threadId, fetcher }: LoopTimelineProps) {
   const req = fetcher ?? requestJson;
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [loops, setLoops] = useState<LoopListEntry[] | undefined>(undefined);
   const [thread, setThread] = useState<ThreadResponse | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [enablingDebug, setEnablingDebug] = useState(false);
   const [debugToggleError, setDebugToggleError] = useState<string | undefined>(undefined);
-  // R0d: 父级受控 forceExpand — 单击其它 loop 内 badge 时把目标 loop 展开。
-  const [forcedExpandLoopIndex, setForcedExpandLoopIndex] = useState<number | undefined>(undefined);
-  // R0d: 弹层状态 (permission ask 决议 / events_summary 全文展开)
   const [popoverState, setPopoverState] = useState<
     | { mode: LoopActionPopoverMode; event: LoopEvent }
     | undefined
   >(undefined);
+
+  // 从 URL 读取当前 loop（不传 → undefined → Latest）。
+  const routeState = useMemo(
+    () => parseRoute(location.pathname, location.search),
+    [location.pathname, location.search],
+  );
+  const urlLoop = routeState.kind === "flowsView" ? routeState.loop : undefined;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -202,19 +216,93 @@ export function LoopTimeline({ sessionId, objectId, threadId, fetcher }: LoopTim
     void load();
   }, [load]);
 
-  /**
-   * R0d: badge 单击的总调度。
-   * - permission_ask 且 pending → 开 popover (mode=permission)
-   * - permission_ask 且 decided → 仅 scroll + 展开所在 loop (无需弹层)
-   * - events_summary → 开 popover (mode=summary)
-   * - 其它关键 event (context_compressed / permission_denied / tool_result fail) →
-   *   只做 scroll + 展开 (退化 timeline 没有 loop entry, 仅 scroll 即可)。
-   *
-   * 退化模式 (loopsList 空) 不传 onBadgeClick, 这里只服务正常模式;
-   * 退化模式 badge 直接走 LoopEventBadge 默认无 onClick 行为。
-   */
+  const loopsList = loops ?? [];
+  const events = (thread?.events ?? []) as LoopEvent[];
+  const debugDisabled = loopsList.length === 0;
+
+  // 当前查看的 loopIndex：URL 显式 → 用；否则 Latest（max loopIndex）。
+  const sortedLoops = useMemo(
+    () => [...loopsList].sort((a, b) => a.loopIndex - b.loopIndex),
+    [loopsList],
+  );
+  const latestLoopIndex = sortedLoops.length > 0
+    ? sortedLoops[sortedLoops.length - 1]!.loopIndex
+    : undefined;
+  const currentLoopIndex = (() => {
+    if (typeof urlLoop === "number" && sortedLoops.some((l) => l.loopIndex === urlLoop)) {
+      return urlLoop;
+    }
+    return latestLoopIndex;
+  })();
+
+  // 写 URL —— 切 loop / Prev / Next / Latest 都走这里。
+  const selectLoop = useCallback(
+    (loopIndex: number) => {
+      if (routeState.kind !== "flowsView") return;
+      // Latest 等价于不传（保持 URL 精简）
+      const isLatest = loopIndex === latestLoopIndex;
+      const nextState = isLatest
+        ? { ...routeState, loop: undefined }
+        : { ...routeState, loop: loopIndex };
+      navigate(toPath(nextState), { replace: true });
+    },
+    [navigate, routeState, latestLoopIndex],
+  );
+
+  // 键盘 ←/→
+  useEffect(() => {
+    if (debugDisabled || currentLoopIndex === undefined) return;
+    const handler = (e: KeyboardEvent) => {
+      // 忽略 input / textarea / contenteditable focus 时的按键
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (e.key === "ArrowLeft") {
+        const next = planNavigate(sortedLoops, currentLoopIndex, "prev");
+        if (next !== undefined) {
+          e.preventDefault();
+          selectLoop(next);
+        }
+      } else if (e.key === "ArrowRight") {
+        const next = planNavigate(sortedLoops, currentLoopIndex, "next");
+        if (next !== undefined) {
+          e.preventDefault();
+          selectLoop(next);
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [debugDisabled, currentLoopIndex, sortedLoops, selectLoop]);
+
+  // 算每个 loop 的关键 event 数（mini timeline 角标 + KeyEventsBar）
+  const { perLoop } = useMemo(
+    () => partitionEventsByLoop(loopsList, events),
+    [loopsList, events],
+  );
+  const perLoopKeyEventCount = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const [idx, evts] of perLoop.entries()) {
+      m.set(idx, evts.filter(isKeyEvent).length);
+    }
+    return m;
+  }, [perLoop]);
+
+  const currentLoopKeyEvents = useMemo(() => {
+    if (currentLoopIndex === undefined) return [];
+    return (perLoop.get(currentLoopIndex) ?? []).filter(isKeyEvent);
+  }, [perLoop, currentLoopIndex]);
+
+  const currentEntry = sortedLoops.find((l) => l.loopIndex === currentLoopIndex);
+  const previousEntry = (() => {
+    if (!currentEntry) return undefined;
+    for (let i = sortedLoops.length - 1; i >= 0; i--) {
+      if (sortedLoops[i]!.loopIndex < currentEntry.loopIndex) return sortedLoops[i]!;
+    }
+    return undefined;
+  })();
+
   const handleBadgeClick = useCallback(
-    (event: LoopEvent, ownerLoopIndex: number | undefined, anchorId: string) => {
+    (event: LoopEvent, ownerLoopIndex: number | undefined, _anchorId: string) => {
       const action = planBadgeClickAction(event);
       if (action.type === "open-permission") {
         setPopoverState({ mode: "permission", event });
@@ -224,30 +312,14 @@ export function LoopTimeline({ sessionId, objectId, threadId, fetcher }: LoopTim
         setPopoverState({ mode: "summary", event });
         return;
       }
-      // scroll: 展开目标 loop + scroll 到 anchor。
-      if (typeof ownerLoopIndex === "number") {
-        setForcedExpandLoopIndex(ownerLoopIndex);
+      // scroll: 时光机里 "scroll" 退化为 "切到该 event 所属 loop"
+      if (typeof ownerLoopIndex === "number" && ownerLoopIndex !== currentLoopIndex) {
+        selectLoop(ownerLoopIndex);
       }
-      // 用 rAF 等 forceExpand 引起的 render 落地再 scroll, 避免在 collapsed 时滚到空 DOM。
-      const raf =
-        typeof requestAnimationFrame === "function"
-          ? requestAnimationFrame
-          : (cb: () => void) => setTimeout(cb, 16);
-      raf(() => {
-        const el = typeof document !== "undefined" ? document.getElementById(anchorId) : null;
-        if (el && typeof el.scrollIntoView === "function") {
-          el.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-      });
     },
-    [],
+    [currentLoopIndex, selectLoop],
   );
 
-  /**
-   * R0d: permission popover 内 Approve / Reject 提交 — 触发 backend HTTP,
-   * 成功后 refresh timeline (拉取最新 thread.events, badge 由 yellow → green/red 自然过渡)。
-   * 失败时 throw 让 popover 显示错误 (silent-swallow ban)。
-   */
   const handleDecide = useCallback(
     async (
       event: LoopEvent,
@@ -261,7 +333,6 @@ export function LoopTimeline({ sessionId, objectId, threadId, fetcher }: LoopTim
         event,
         decision: args,
       });
-      // 成功 — refresh + 关闭 popover
       setPopoverState(undefined);
       await load();
     },
@@ -273,8 +344,6 @@ export function LoopTimeline({ sessionId, objectId, threadId, fetcher }: LoopTim
     setDebugToggleError(undefined);
     try {
       await req<EnableDebugResponse>(endpoints.runtimeDebugEnable, { method: "POST" });
-      // 不自动 reload — 已存在的 thread.events 不会因 enable 立刻获得 loop debug;
-      // 提示用户 "新一轮 LLM 调用后 loops 会出现"。父级若想 reload 可点 refresh 按钮。
     } catch (e: unknown) {
       setDebugToggleError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -286,7 +355,7 @@ export function LoopTimeline({ sessionId, objectId, threadId, fetcher }: LoopTim
     return (
       <div className="loop-timeline">
         <div className="loop-timeline-header">
-          <div className="loop-timeline-title">Loop Timeline</div>
+          <div className="loop-timeline-title">Loop Time Machine</div>
           <div className="muted small">loading…</div>
         </div>
       </div>
@@ -297,7 +366,7 @@ export function LoopTimeline({ sessionId, objectId, threadId, fetcher }: LoopTim
     return (
       <div className="loop-timeline">
         <div className="loop-timeline-header">
-          <div className="loop-timeline-title">Loop Timeline</div>
+          <div className="loop-timeline-title">Loop Time Machine</div>
           <button type="button" className="btn small" onClick={() => void load()} title="Retry">
             <RefreshCw size={11} style={{ marginRight: 4 }} />
             Retry
@@ -310,17 +379,14 @@ export function LoopTimeline({ sessionId, objectId, threadId, fetcher }: LoopTim
     );
   }
 
-  const loopsList = loops ?? [];
-  const events = (thread?.events ?? []) as LoopEvent[];
-  const debugDisabled = loopsList.length === 0;
   const hasAnyData = loopsList.length > 0 || events.length > 0;
 
-  // 空态: 没有 loops 也没有 events
+  // 空态: 既无 loop 也无 events
   if (!hasAnyData) {
     return (
       <div className="loop-timeline">
         <div className="loop-timeline-header">
-          <div className="loop-timeline-title">Loop Timeline</div>
+          <div className="loop-timeline-title">Loop Time Machine</div>
           <button type="button" className="btn small" onClick={() => void load()} title="Refresh">
             <RefreshCw size={11} style={{ marginRight: 4 }} />
             Refresh
@@ -333,12 +399,12 @@ export function LoopTimeline({ sessionId, objectId, threadId, fetcher }: LoopTim
     );
   }
 
-  // 退化模式: loops 空 + events 非空
+  // 退化模式: loops 空 + events 非空（debug 未启用 / 老 thread）
   if (debugDisabled) {
     return (
       <div className="loop-timeline">
         <div className="loop-timeline-header">
-          <div className="loop-timeline-title">Loop Timeline</div>
+          <div className="loop-timeline-title">Loop Time Machine</div>
           <span className="muted small">{events.length} events (degraded)</span>
           <button type="button" className="btn small" onClick={() => void load()} title="Refresh">
             <RefreshCw size={11} style={{ marginRight: 4 }} />
@@ -371,7 +437,9 @@ export function LoopTimeline({ sessionId, objectId, threadId, fetcher }: LoopTim
               key={i}
               index={i}
               event={evt}
-              onBadgeClick={(e) => handleBadgeClick(e, undefined, `loop-event-degraded-${i}`)}
+              onBadgeClick={(e) =>
+                handleBadgeClick(e, undefined, `loop-event-degraded-${i}`)
+              }
               anchorId={`loop-event-degraded-${i}`}
             />
           ))}
@@ -392,13 +460,11 @@ export function LoopTimeline({ sessionId, objectId, threadId, fetcher }: LoopTim
     );
   }
 
-  // 正常模式
-  const { perLoop, unassigned } = partitionEventsByLoop(loopsList, events);
-
+  // 正常模式 — Time Machine
   return (
     <div className="loop-timeline">
       <div className="loop-timeline-header">
-        <div className="loop-timeline-title">Loop Timeline</div>
+        <div className="loop-timeline-title">Loop Time Machine</div>
         <span className="muted small">
           {loopsList.length} loop{loopsList.length === 1 ? "" : "s"} · {events.length} events
         </span>
@@ -407,37 +473,60 @@ export function LoopTimeline({ sessionId, objectId, threadId, fetcher }: LoopTim
           Refresh
         </button>
       </div>
-      <ol className="loop-timeline-list" data-testid="loop-timeline-list">
-        {loopsList.map((entry) => {
-          const loopEvents = (perLoop.get(entry.loopIndex) ?? []).filter(isKeyEvent);
-          return (
-            <LoopEntry
-              key={entry.loopIndex}
-              sessionId={sessionId}
-              objectId={objectId}
-              threadId={threadId}
-              entry={entry}
-              events={loopEvents}
-              forceExpand={forcedExpandLoopIndex === entry.loopIndex}
-              onBadgeClick={(evt) => {
-                const idx = loopEvents.indexOf(evt);
-                const anchorId = loopEventAnchorId(evt, entry.loopIndex, idx >= 0 ? idx : 0);
-                handleBadgeClick(evt, entry.loopIndex, anchorId);
-              }}
-            />
-          );
-        })}
-      </ol>
-      {unassigned.length > 0 && (
-        <details className="loop-timeline-unassigned">
-          <summary className="muted small">{unassigned.length} unassigned events</summary>
-          <ol>
-            {unassigned.map((evt, i) => (
-              <EventRow key={i} index={i} event={evt} />
-            ))}
-          </ol>
-        </details>
+
+      <LoopMiniTimeline
+        loops={sortedLoops}
+        currentLoopIndex={currentLoopIndex ?? sortedLoops[0]!.loopIndex}
+        perLoopKeyEventCount={perLoopKeyEventCount}
+        onSelectLoop={selectLoop}
+      />
+
+      <LoopNavigator
+        loops={sortedLoops}
+        currentLoopIndex={currentLoopIndex ?? sortedLoops[0]!.loopIndex}
+        onSelectLoop={selectLoop}
+      />
+
+      {currentEntry && currentLoopIndex !== undefined && (
+        <LoopDiffView
+          sessionId={sessionId}
+          objectId={objectId}
+          threadId={threadId}
+          currentLoopIndex={currentLoopIndex}
+          currentSnapshot={currentEntry.meta?.windowsSnapshot}
+          previousSnapshot={previousEntry?.meta?.windowsSnapshot}
+          fetcher={req}
+        />
       )}
+
+      {currentLoopKeyEvents.length > 0 && (
+        <div className="loop-key-events-bar" data-testid="loop-key-events-bar">
+          <span className="muted small loop-key-events-bar-label">
+            Key events in this loop ({currentLoopKeyEvents.length})
+          </span>
+          <div className="loop-key-events-bar-badges">
+            {currentLoopKeyEvents.map((evt, i) => (
+              <span
+                key={i}
+                id={loopEventAnchorId(evt, currentLoopIndex!, i)}
+                className="loop-key-events-bar-anchor"
+              >
+                <LoopEventBadge
+                  event={evt}
+                  onClick={(e) =>
+                    handleBadgeClick(
+                      e,
+                      currentLoopIndex,
+                      loopEventAnchorId(e, currentLoopIndex!, i),
+                    )
+                  }
+                />
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {popoverState && (
         <LoopActionPopover
           mode={popoverState.mode}
@@ -454,7 +543,7 @@ export function LoopTimeline({ sessionId, objectId, threadId, fetcher }: LoopTim
   );
 }
 
-/** 退化模式 / unassigned 区的事件单行 — 关键 event 用 badge, 其它显示 category/kind 文字。 */
+/** 退化模式 / unassigned 区的事件单行 — 与 R0c 版本一致。 */
 function EventRow({
   index,
   event,

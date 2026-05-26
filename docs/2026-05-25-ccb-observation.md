@@ -242,6 +242,43 @@ P0-1 (Permission 模型) Q0a~Q0d 完成；Q0e 列 todo（自改 server/index.ts 
 - **2026-05-25**：首版。Supervisor Round 1 外循环。
 - **2026-05-25**（当日 Round 1 闭环）：P0-2 完整实施完成，5 套 e2e PASS / 全仓单测 PASS / meta tsc clean。差异与残留如上。
 - **2026-05-25**（当日 Round 2 闭环）：P0-1 Q0a~Q0d 完成，2 套 e2e (Q0b+Q0c) PASS / 联合 P0-1+P0-2 42 用例 PASS / 全仓 550 单测 PASS。3 项歧义 Supervisor 拍板；Q0e 列 todo。
+- **2026-05-26**（Round 9 闭环）：LoopTimeline 升级为 Time Machine 模式 + Window Content Diff + Bun.hash 落盘。
+  - **设计触发**：肉眼对比两个 input.json 字符串 diff 累且不直观；LLM 视角下"context windows 变化"才是关键信号（哪个 window 加/改/删）
+  - **核心升级**（替换 Round 3 P1-3 主形态）：
+    - 从"纵向 N 个 loop entry"换成"单 loop 视图 + 左右切换"
+    - 顶部 mini timeline strip（横向滚动 + 关键 event 角标）+ LoopNavigator（[← Prev] [Next →] [⏭ Latest] + 键盘 ←/→ debounce 200ms）
+    - 主区 LoopDiffView 4 态 diff：🆕 added (绿) / ✏️ changed (橙) / 🗑️ removed (灰 strike) / · unchanged
+    - 单击 window → 嵌入 LLMInputJsonViewer 看完整 input
+    - **废弃 LoopEntry.tsx**（删整文件）
+    - 保留 LoopEventBadge + LoopActionPopover 全部交互（移到 KeyEventsBar 底部）
+  - **E1 (Supervisor)**: meta visible.loop_timeline 重写主形态 + 3 个 patches (time_machine_navigation / window_diff_algorithm / windows_snapshot_data_source) + observable.debug_files 加 windowsSnapshot 字段说明
+  - **E2 (Backend AgentOfObservable + AgentOfPersistable, 并行)**:
+    - 新建 `src/observable/window-hash.ts` — `stripVolatileWindow` / `computeWindowContentHash` / `buildWindowsSnapshot`
+    - **算法**：type-agnostic — `Bun.hash(JSON.stringify(stripped, Object.keys(stripped).sort())).toString(36)`
+    - 剥 `_decayMeta` + `compressLevel === 0 / undefined`（与 thread-json.ts 同款）
+    - `LlmLoopDebugMetaRecord` 加 optional `windowsSnapshot?: WindowSnapshotEntry[]`
+    - 写入点：`src/observable/index.ts:328-348` `finishLlmLoop` 在写 meta 前调 `buildWindowsSnapshot(thread.contextWindows)`
+    - 13 单测 PASS（确定性 / volatile 剥离 / 字段序稳定 / compressLevel 边界）
+    - **contentHash 不进 thread.json**（业务字段保持最小；debug 视角派生）
+  - **E3 (Web AgentOfVisible, 并行)**:
+    - **8 新文件**：LoopNavigator + LoopMiniTimeline + LoopDiffView + WindowDiffRow + window-diff.helpers + loop-types + 测试
+    - LoopTimeline.tsx 整体重构主结构
+    - routing 加 `?loop=N` query param（与 `?selected=` 并存；非法值静默丢；loop=0 合法）
+    - 退化模式：debug 未启用 → banner + 事件序列（保留 Round 3 退化形态）
+    - **R0c/R0d 16+14 单测改造保留**（不简单删；改为测等价新组件行为）
+    - 视觉冒烟：vite build clean
+  - **整体校验**：
+    - tsc clean
+    - src/: **664 pass / 1 fail (baseline) / 3 skip / 1961 expect** (E2 新加 13)
+    - web/: **140 pass / 0 fail / 354 expect** (E3 新加 23: window-diff 10 + LoopNavigator 6 + routing 7)
+    - backend e2e: **68 pass / 0 fail / 8 skip / 618 expect** (不破坏)
+    - 总 **872 tests / 1 baseline fail**
+  - **派单效率**: 2 sub agent 完全并行 (E2 src/ + E3 web/); 文件域不重叠; 累计 ~210K tokens
+  - **bun install 解决**: fresh install 走 npmmirror (lockfile 重新 resolve) + 259 packages 装齐; rehype-raw / lark sdk baseline 全消失; src/ 测试数从 503 涨到 664 (之前被 lark 阻塞的全跑通)
+  - **设计 ↔ 实施差异**:
+    - mini timeline 不做远 loop 折叠（MVP 横向滚动）
+    - WindowDiffRow expand 用 LLMInputJsonViewer 全文（不按 windowId 高亮过滤；列后续增强）
+
 - **2026-05-26**（Round 8 闭环）：user home 完全重设计 = session 内 threads 索引目录 + 4 种关系可见 + RelationOverlay 选中关系连线（A+B 折中视图）。
   - **设计选型（A+B 折中）**：默认渲染多 Object 分栏 + 栏内 threadTree（A），选中某 thread 时叠加关系连线（B 的局部，不画全图）
   - **4 种关系全部 derive 自 OOC 既有数据**（不发明新协议）：

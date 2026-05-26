@@ -1542,7 +1542,8 @@ export const root: DocTreeNode = {
                     开启后，每轮 LLM 调用会在 \`<threadDir>/debug/\` 下写三类文件（loopIndex 用 4 位 0 padding）:
                     - loop_NNNN.input.json: 本轮 inputItems + contextSnapshot。
                     - loop_NNNN.output.json: 本轮 normalized outputItems + provider/model。
-                    - loop_NNNN.meta.json: provider / model / latencyMs / messageCount / toolCount / toolCallCount / contextBytes / status / error。
+                    - loop_NNNN.meta.json: provider / model / latencyMs / messageCount / toolCount / toolCallCount / contextBytes / status / error
+                      / **windowsSnapshot** (Round 9, 2026-05-26 加; 见 patches.windows_snapshot)。
 
                     始终落盘的两个文件（与 enableDebug 无关，只要 thread.persistence 存在就写）:
                     - llm.input.json: 与最近一次 writeLatestLlmInput 同步覆盖。
@@ -1556,6 +1557,49 @@ export const root: DocTreeNode = {
                         "loopIndex": "thread 内的轮次编号，4 位 0 padding 作文件名",
                         "loop_NNNN.input.json / output.json / meta.json": "loop-level debug 的三类文件",
                         "llm.input.json / llm.output.json": "始终落盘的最近一次快照",
+                        "windowsSnapshot": "loop_NNNN.meta.json 中的 window content hash 数组; 给前端 LoopDiffView 做 added/changed/removed/unchanged 判定 (Round 9)",
+                    },
+                    patches: {
+                        "windows_snapshot": {
+                            title: "windowsSnapshot - 每轮 ContextWindow content hash 落盘 (Round 9, 2026-05-26)",
+                            content: `
+                            **目的**: 让 visible.loop_timeline 的 Time Machine 模式能做 window diff
+                            (添加/修改/删除/不变四态)。前端拿 loop N + loop N-1 的 windowsSnapshot 算 diff。
+
+                            **字段** (扩展 LlmLoopDebugMetaRecord):
+                            \`\`\`
+                            windowsSnapshot?: Array<{
+                              id: string;
+                              type: string;          // file / talk / do / plan / search / ...
+                              contentHash: string;   // Bun.hash(JSON.stringify(stripVolatile(window), sortedKeys)).toString(36)
+                              parentWindowId?: string;
+                              status?: string;
+                              compressLevel?: 0 | 1 | 2;
+                            }>
+                            \`\`\`
+
+                            **算法** (src/observable/window-hash.ts 新建):
+                            - **type-agnostic**: 不为每个 type 注册 hashContent; 统一
+                              \`Bun.hash(JSON.stringify(stripVolatileWindow(window), Object.keys(stripped).sort()))\`
+                            - **稳定 key 序**: 用 sorted keys 防止 V8 字段顺序变化漂移
+                            - **stripVolatile**: 剥离 in-process 字段 (_decayMeta / compressLevel 默认值 / 等),
+                              与 src/persistable/thread-json.ts stripVolatileForPersist 同款规则
+                            - **64-bit number → toString(36)**: 短编码
+
+                            **写入点**: writeLoopDebugMeta 之前算所有 contextWindows 的 hash, 填进 meta record。
+
+                            **不变量**:
+                            - contentHash **不进 thread.json** (业务字段保持最小; hash 是 debug 视角派生字段)
+                            - 同 content (剥 volatile 后) → 同 hash (Bun.hash 稳定 API)
+                            - windowsSnapshot 是 optional (旧 loop 数据无此字段; 前端 graceful fallback)
+
+                            **测试关注点**:
+                            - 同 window 反复 hash → 一致
+                            - 不同 content (改 file_window.content) → 不同 hash
+                            - volatile 字段变化 (_decayMeta.idleRounds) → 同 hash (剥掉)
+                            - 字段顺序 (V8 内部 key insert order) → 同 hash (sortedKeys 防漂移)
+                            `,
+                        },
                     },
                 },
                 "pause": {
@@ -3185,44 +3229,73 @@ export const root: DocTreeNode = {
                     },
                 },
                 "loop_timeline": {
-                    title: "loop_timeline - thread 一轮 thinkloop 在做什么的可视化",
+                    title: "loop_timeline - thread 一轮 thinkloop 在做什么的可视化（2026-05-26 升级为 Time Machine 模式）",
                     content: `
-                    Loop Timeline 是 thread 详情页的"agent loop 时间轴"视图——把一个 thread 在 N 轮
-                    ThinkLoop 中的发生事件按 loopIndex 排开, 让人类 (与未来 agent-native 等价路径中的
-                    Agent 自己) 一眼看到 "这一轮做了什么 / 用了多久 / 调了什么 tool / 是否压缩/拒绝/暂停"。
+                    Loop Timeline 是 thread 详情页的"agent loop 时间轴 + 时光机"视图。
+                    2026-05-26 起从"纵向列 N 个 loop entry"升级为**Time Machine 模式**:
+                    单次显示一个 loop + 左右切换 + Window Diff 视图 (vs 上一 loop 的 added/changed/removed/unchanged)。
+
+                    设计动机: LLM 视角下"context windows 变化"才是关键信号 (哪个 window 加了/改了/删了),
+                    肉眼对比两个 input.json 字符串 diff 累且不直观; window diff 视图直接 surface 变化。
 
                     数据完全派生自既有持久化, 不引入新存储或采集:
                     - thread.events: ProcessEvent[] (始终落盘, thread.json 持久化)
                     - <threadDir>/debug/loop_NNNN.{input,output,meta}.json (仅 enableDebug 后落盘)
+                      **2026-05-26 起 meta.json 加 windowsSnapshot 字段** (见 observable.debug_files)
                     - <threadDir>/llm.{input,output}.json (始终, 最近一次)
                     - ContextSnapshot (始终, 与 system XML 同源)
 
                     与 observable 维度的关系: observable 决定 "记什么/何时记" (LlmObservation /
-                    debug_files / context_snapshot); loop_timeline 决定 "如何把这些数据按 loop
-                    维度聚合给人看"。两者职责清晰: observable 不画 UI, loop_timeline 不动数据。
+                    debug_files / context_snapshot / windowsSnapshot); loop_timeline 决定 "如何把这些数据
+                    按 loop 维度聚合给人看"。两者职责清晰: observable 不画 UI, loop_timeline 不动数据。
 
                     UI 设计原则:
                     - **派生而非采集**: 不引入新文件、不在前端缓存; 全部 lazy load。
-                    - **type-dispatch**: 关键 ProcessEvent (context_compressed / events_summary /
-                      permission_ask / permission_denied / tool_result 失败) 的图标 / 颜色由
-                      LoopEventBadge 按事件 type+kind 分发, 与 WindowTypeDefinition.renderXml /
-                      compressView 同协议。新增 event type 只加 badge entry, 不改 timeline 主框架。
-                    - **退化优雅**: enableDebug 关闭时仍展示 thread.events 派生的简化时间轴
-                      (无 loop boundary 但能看 event sequence), 顶部提示一键启用 debug 看完整。
-                    - **agent-native 预留**: 后端 API 路径与 RuntimeService 一致;
-                      server method 等价路径 (Agent 自查 timeline) 可后续 phase 落地。
+                    - **diff 在前端算**: 后端只提供 windowsSnapshot 数组; 前端拿 loop N + loop N-1 算
+                      added / changed (hash 不同) / removed / unchanged 四态。
+                    - **type-agnostic hash**: 不为每个 type 注册 hashContent; 统一
+                      \`Bun.hash(JSON.stringify(stripVolatile(window), sortedKeys))\`。目标是
+                      "内容变没变", 不是"哪些字段变"。
+                    - **type-dispatch (event badge)**: 关键 ProcessEvent 仍由 LoopEventBadge 按 type+kind 分发,
+                      与 P1-3 R0c/R0d 协议一致; 新增 event type 只加 badge entry, 不改主框架。
+                    - **退化优雅**: enableDebug 关闭时退到 thread.events 简化时间轴 (无 loop boundary,
+                      无 diff), 顶部提示一键启用 debug。
+                    - **保留现有交互**: LoopEventBadge / LoopActionPopover / permission approve /
+                      events_summary 全保留; 时光机只换主导航方式 (横向左右切换 vs 纵向滚动)。
+                    - **agent-native 预留**: 后端 windowsSnapshot 是 raw data; 未来 Agent 调 server method
+                      自查 diff 用同源数据。
                     - **不破坏现有 viewer**: LLMInputJsonViewer / ContextSnapshotViewer 保持原貌,
-                      loop_timeline 在自己视图内嵌入它们。
+                      展开 window detail 时嵌入它们。
 
-                    完整 plan (含 API 增量 + 组件分解 + LoopEventBadge type-dispatch 表 + R0a~R0d 分阶段)
-                    见 docs/2026-05-25-agent-loop-visualizer-plan.md。
+                    时光机布局 (核心交互):
+                    1. 顶部: mini timeline strip (◯◯●◯◯◯, 横向滚动; 关键 event 在某 loop → 该点加角标)
+                    2. 导航: [← Prev] Loop #N of M [Next →] [⏭ Latest] + 键盘 ←/→ 快捷键
+                    3. 主区: LoopDiffView 列出 windowsSnapshot, 每个 window 显示 diff 状态:
+                       - 🆕 added (绿色高亮)
+                       - ✏️ changed (橙色边框; hash 不同)
+                       - 🗑️ removed (灰化 strike-through)
+                       - · unchanged (普通灰色)
+                    4. 单击 window → 展开 LLMInputJsonViewer / ContextSnapshotViewer 看完整内容
+                    5. 底部: 当前 loop 的关键 event badges (LoopEventBadge 复用)
+
+                    URL 状态: 复用 ?selected=thread:<obj>:<tid>; 新加 ?loop=<N>; 不传 = Latest。
+
+                    完整 plan (Round 3 R0a~R0d 历史 + Round 9 E1~E4 时光机升级)
+                    见 docs/2026-05-25-agent-loop-visualizer-plan.md +
+                    docs/2026-05-26-loop-time-machine-with-window-diff-design.md。
                     `,
                     named: {
-                        "Loop Timeline": "thread 详情页的 agent loop 时间轴视图; 按 loopIndex 排开",
-                        "LoopEntry": "时间轴上的单 loop 行; 含 loopIndex / latency / 关键 event chips",
-                        "LoopEventBadge": "关键 ProcessEvent 的视觉胶囊; type-dispatch 风格按 type+kind 分发图标/颜色",
-                        "退化模式": "enableDebug 关闭时, timeline 仅从 thread.events 派生事件序列, 无 loop boundary",
-                        "list-loops endpoint": "GET /api/runtime/.../debug/loops; 只返回 meta 数组, 不带 input/output 全文",
+                        "Loop Time Machine": "升级后的主形态; 单 loop 视图 + 左右切换 + window diff (Round 9, 2026-05-26)",
+                        "LoopNavigator": "时光机导航组件; [← Prev] Loop #N [Next →] [⏭ Latest] + 键盘快捷",
+                        "LoopMiniTimeline": "顶部 mini timeline strip; 横向滚动; 关键 event 角标",
+                        "LoopDiffView": "主区组件; 列 windowsSnapshot + 4 态 diff 标记 (added/changed/removed/unchanged)",
+                        "WindowDiffRow": "单 window diff 行; 含 icon + type + summary + diff status",
+                        "LoopEventBadge": "关键 ProcessEvent 视觉胶囊 (Round 3 沿用); type-dispatch 按 type+kind 分发",
+                        "LoopActionPopover": "permission_ask approve/reject + events_summary 全文 popover (Round 3 沿用)",
+                        "windowsSnapshot": "loop_NNNN.meta.json 中的 Array<{id, type, contentHash, parentWindowId?, status?, compressLevel?}>; 数据源自 observable",
+                        "contentHash": "Bun.hash(JSON.stringify(stripVolatile(window), sortedKeys)).toString(36); type-agnostic; 不进 thread.json",
+                        "退化模式": "enableDebug 关闭时仅展示 thread.events 序列, 无 loop boundary 无 diff",
+                        "list-loops endpoint": "GET /api/runtime/.../debug/loops; 只返回 meta 数组",
                     },
                     patches: {
                         "api_increment": {
@@ -3285,13 +3358,81 @@ export const root: DocTreeNode = {
                             一致性的要求); 本节先把 UI 做出来, Q0e 或后续 phase 补 server method。
                             `,
                         },
+                        "time_machine_navigation": {
+                            title: "Time Machine 导航 - 单 loop 视图 + 左右切换 (Round 9)",
+                            content: `
+                            导航行为:
+                            - **← Prev**: 跳 loop N-1; loop 0 时 disabled
+                            - **→ Next**: 跳 loop N+1; 最新时 disabled
+                            - **⏭ Latest**: 跳到 max loopIndex
+                            - **键盘 ←/→**: 焦点在主组件时生效; debounce 200ms 防 fetch 风暴
+                            - **mini timeline 点击**: 直接跳到任一 loop
+                            - **URL ?loop=N**: 同步进 URL; 不传 = Latest; 刷新保留
+
+                            横向滚动策略 (大量 loop):
+                            - mini timeline 横向滚动 (overflow-x: auto); 当前 loop scroll-into-view (smooth)
+                            - 不做"智能折叠"(远 loop 隐藏 "... earlier loops ...") — MVP 选横向滚动, 复杂度低; 若未来 loop > 200 再考虑
+
+                            **废弃 LoopEntry**: Round 3 的纵向列出多 loop entry 形态完全替换为时光机;
+                            LoopEntry.tsx 文件不再使用 (本轮删除或保留为空 stub)。
+                            "View raw" 模式靠 LLMInputJsonViewer / ContextSnapshotViewer 嵌入展开实现。
+                            `,
+                        },
+                        "window_diff_algorithm": {
+                            title: "Window Diff 算法 - 前端 client-side 计算",
+                            content: `
+                            前端拿 loop N + loop N-1 的 windowsSnapshot 数组, 按 window id 配对:
+
+                            \`\`\`
+                            for each window in {N, N-1} 取并集:
+                              - id in N+1 only      → "added"     🆕
+                              - id in N-1 only      → "removed"   🗑️
+                              - id in both, hash same  → "unchanged"  ·
+                              - id in both, hash diff  → "changed"    ✏️
+                            \`\`\`
+
+                            渲染: WindowDiffRow 按 diff status 着色 (绿/橙/灰 strike/普通灰)
+                            + window type icon + summary (来自 window.title 或 type-specific summary)。
+
+                            **边界**:
+                            - loop 0 / 没上一 loop → 所有 window 显示为 "added" 占位 (或 "First loop snapshot" hint)
+                            - loop N 缺 windowsSnapshot (老 loop, 升级前数据) → fallback 显示 "no diff data" + 一行 list
+                            `,
+                        },
+                        "windows_snapshot_data_source": {
+                            title: "windowsSnapshot 数据源 - 后端落盘契约",
+                            content: `
+                            后端在每轮 thinkloop 写 loop_NNNN.meta.json 时附加:
+
+                            \`\`\`
+                            windowsSnapshot: Array<{
+                              id: string;
+                              type: string;          // file / talk / do / plan / search / ...
+                              contentHash: string;   // Bun.hash(JSON.stringify(stripVolatile(window), sortedKeys)).toString(36)
+                              parentWindowId?: string;
+                              status?: string;
+                              compressLevel?: 0 | 1 | 2;
+                            }>
+                            \`\`\`
+
+                            **位置**: src/persistable/debug-file.ts 的 LlmLoopDebugMetaRecord 扩展 + writeLoopDebugMeta 写入点
+                            **算 hash**: src/observable/window-hash.ts (新; 见 observable.debug_files patch windows_snapshot)
+                            **stripVolatile**: 复用 thread-json.ts 的 in-process 字段剥离规则 (_decayMeta / compressLevel 默认值 / 等)
+                            **不进 thread.json**: contentHash 是 debug 视角派生字段, 业务字段保持最小
+
+                            前端通过现有 GET /api/runtime/.../debug/loops/:N endpoint 拿到带 windowsSnapshot 的 meta;
+                            不引入新 endpoint。
+                            `,
+                        },
                     },
-                    sources: [["docs/2026-05-25-agent-loop-visualizer-plan.md", "完整 plan (R0a~R0d 分阶段 + 数据来源映射 + 不变量 + 风险)"]],
+                    sources: [
+                        ["docs/2026-05-25-agent-loop-visualizer-plan.md", "Round 3 R0a~R0d 原版 plan (含 list-loops endpoint + LoopEventBadge taxonomy)"],
+                    ],
                     todo: [
-                        "R0b: list-loops endpoint + service method + 单测",
-                        "R0c: LoopTimeline / LoopEntry / LoopEventBadge 主组件 + thread 页接入",
-                        "R0d: 退化模式 + 关键 event 高亮 + 跳转交互 (可选: timeline 内直接 approve/reject permission_ask)",
-                        "后续 phase: server method 等价路径 (Agent 自查 timeline)",
+                        "E2: src/observable/window-hash.ts 新建 + LlmLoopDebugMetaRecord 扩展 windowsSnapshot + 写入点 + 单测",
+                        "E3: 前端 LoopTimeline 重构为时光机 (LoopNavigator / LoopMiniTimeline / LoopDiffView / WindowDiffRow) + 废弃 LoopEntry + 保留 LoopEventBadge/LoopActionPopover",
+                        "E4: e2e 用 fixture meta.json 模拟 N+1 loop hash 变化 → 断言 UI 渲染 added/changed/removed/unchanged",
+                        "后续 phase: server method 等价路径 (Agent 自查 diff)",
                     ],
                 },
                 "session_threads_index": {

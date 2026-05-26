@@ -10,6 +10,7 @@ import {
   writeLoopDebugMeta,
   writeLoopDebugOutput,
 } from "../persistable";
+import { buildWindowsSnapshot } from "./window-hash";
 
 /** 最近一次 LLM 输入/输出观测快照，用于本地调试和测试断言。 */
 export type LlmObservation = {
@@ -326,6 +327,9 @@ export async function finishLlmLoop(
     }
   }
   if (debugEnabled && thread.persistence) {
+    // Round 9 E2: 落 windowsSnapshot 供前端 LoopTimeline 算 diff
+    // (docs/2026-05-26-loop-time-machine-with-window-diff-design.md § 3.2)
+    const windowsSnapshot = buildWindowsSnapshot(thread.contextWindows ?? []);
     await writeLoopDebugMeta(thread.persistence, handle.loopIndex, {
       threadId: thread.id,
       loopIndex: handle.loopIndex,
@@ -340,7 +344,8 @@ export async function finishLlmLoop(
       contextBytes: handle.contextBytes,
       resultTextBytes: payload.result ? byteLength(payload.result.text) : 0,
       status: payload.status,
-      error: payload.error
+      error: payload.error,
+      windowsSnapshot,
     });
   }
 }

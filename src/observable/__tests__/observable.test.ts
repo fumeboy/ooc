@@ -194,5 +194,82 @@ describe("observable persistable debug files", () => {
     expect(loopMeta.loopIndex).toBe(1);
     expect(loopMeta.status).toBe("ok");
     expect(loopMeta.messageCount).toBe(1);
+    // Round 9 E2: 即使 contextWindows 为空也应写一个空数组（buildWindowsSnapshot([]) → []）
+    expect(Array.isArray(loopMeta.windowsSnapshot)).toBe(true);
+    expect(loopMeta.windowsSnapshot).toHaveLength(0);
+  });
+
+  it("writes windowsSnapshot with content hashes across loops (Round 9 E2)", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-observable-snap-"));
+    const flowRef = await createFlowObject({
+      baseDir: tempRoot,
+      sessionId: "_test_observable_" + Date.now(),
+      objectId: "obj"
+    });
+    const thread: ThreadContext = {
+      id: "root",
+      status: "running",
+      events: [],
+      contextWindows: [
+        {
+          id: "w_file_a",
+          type: "file",
+          title: "src/a.ts",
+          status: "open",
+          createdAt: 1,
+          path: "src/a.ts",
+        } as never,
+        {
+          id: "w_file_b",
+          type: "file",
+          title: "src/b.ts",
+          status: "open",
+          createdAt: 2,
+          path: "src/b.ts",
+        } as never,
+      ],
+      persistence: { ...flowRef, threadId: "root" }
+    };
+    const inputItems: LlmInputItem[] = [{ type: "message", role: "system", content: "<context />" }];
+    const tools: LlmTool[] = [];
+    const result: LlmGenerateResult = {
+      provider: "openai",
+      model: "test",
+      outputItems: [],
+      text: "ok",
+      toolCalls: [],
+    };
+
+    observableModule.clearObservableDebugState();
+    observableModule.enableDebug();
+
+    // Loop 1: 两个 window 都在
+    const h1 = await observableModule.beginLlmLoop(thread, inputItems, tools);
+    await observableModule.finishLlmLoop(thread, h1, { result, status: "ok" });
+    const meta1 = JSON.parse(await readFile(loopMetaFile(thread.persistence!, 1), "utf8"));
+    expect(meta1.windowsSnapshot).toHaveLength(2);
+    expect(meta1.windowsSnapshot[0].id).toBe("w_file_a");
+    expect(meta1.windowsSnapshot[1].id).toBe("w_file_b");
+    expect(typeof meta1.windowsSnapshot[0].contentHash).toBe("string");
+    expect(meta1.windowsSnapshot[0].contentHash.length).toBeGreaterThan(0);
+    const hashA1 = meta1.windowsSnapshot[0].contentHash;
+    const hashB1 = meta1.windowsSnapshot[1].contentHash;
+
+    // Loop 2: 改 a 的 path（内容变化），删 b（close 关闭）
+    (thread.contextWindows[0] as { path: string }).path = "src/a-v2.ts";
+    thread.contextWindows = [thread.contextWindows[0]!];
+    const h2 = await observableModule.beginLlmLoop(thread, inputItems, tools);
+    await observableModule.finishLlmLoop(thread, h2, { result, status: "ok" });
+    const meta2 = JSON.parse(await readFile(loopMetaFile(thread.persistence!, 2), "utf8"));
+    expect(meta2.windowsSnapshot).toHaveLength(1);
+    expect(meta2.windowsSnapshot[0].id).toBe("w_file_a");
+    // a 的 hash 应该变了
+    expect(meta2.windowsSnapshot[0].contentHash).not.toBe(hashA1);
+    // b 不再出现
+    expect(meta2.windowsSnapshot.find((e: { id: string }) => e.id === "w_file_b")).toBeUndefined();
+
+    observableModule.disableDebug();
+    // 防 unused 警告
+    void hashB1;
   });
 });
