@@ -54,10 +54,8 @@ export function AppShell() {
   // URL 派生导航维度 —— 下游只读这几个变量，不再读 state.scope / state.active* 的导航字段
   const scope: TreeScope = scopeOf(route);
   const activeSessionId = (() => {
-    if (
-      route.kind === "session" ||
-      route.kind === "flowPage"
-    ) {
+    // 2026-05-27 路由重构：sessionId 从 path 移到 query；flowsView 直接读 route.sessionId
+    if (route.kind === "flowsView" || route.kind === "flowPage") {
       return route.sessionId;
     }
     // file 视图：query 里有 sessionId（chat 上下文）则用之；否则从 path 推断
@@ -68,14 +66,15 @@ export function AppShell() {
     }
     return undefined;
   })();
-  // 2026-05 重构：thread 上下文从路径段改 query string；session/file 路由都可携带
+  // 2026-05 重构：thread 上下文在 query string；flowsView / file 路由都可携带
+  // 2026-05-27：缺省**不**自动补 "user" / "root"，只有 query 显式带才视为有 thread 上下文
   const activeObjectId = (() => {
-    if (route.kind === "session") return route.objectId ?? "user"; // 缺省 user.root
+    if (route.kind === "flowsView") return route.objectId;
     if (route.kind === "file" && route.thread) return route.thread.objectId;
     return undefined;
   })();
   const activeThreadId = (() => {
-    if (route.kind === "session") return route.threadId ?? "root";
+    if (route.kind === "flowsView") return route.threadId;
     if (route.kind === "file" && route.thread) return route.thread.threadId;
     return undefined;
   })();
@@ -264,7 +263,7 @@ export function AppShell() {
   }
 
   function handleSession(flow: FlowSession) {
-    navigate(toPath({ kind: "session", sessionId: flow.sessionId }));
+    navigate(toPath({ kind: "flowsView", view: "index", sessionId: flow.sessionId }));
   }
 
   function updateFlowPausedState(sessionId: string, paused: boolean) {
@@ -294,10 +293,11 @@ export function AppShell() {
       const created = await createSessionWithObject({ ...input, title: derivedTitle });
       await waitForJob(created.jobId, fetchJob);
       await refreshBasics(scope);
-      // A1 fix (issue-3): 落地到 callee thread (有 chat panel) 而非 user.root (Context Tree, 无 chat panel)。
-      // seedSession 返回 targetObjectId / targetThreadId, 数据完备 — 直接用。
+      // 落地到 user-home（index view）+ 把新建 callee 的 thread 写进 query，让右侧 RightPanel
+      // 立刻显示 ChatPanel（seedSession 返回 targetObjectId / targetThreadId 数据完备）。
       navigate(toPath({
-        kind: "session",
+        kind: "flowsView",
+        view: "index",
         sessionId: created.sessionId,
         objectId: created.targetObjectId,
         threadId: created.targetThreadId,
@@ -399,17 +399,28 @@ export function AppShell() {
 
   function handleSelectThread(sel: SessionThread) {
     if (!activeSessionId) return;
-    navigate(toPath({ kind: "session", sessionId: activeSessionId, objectId: sel.objectId, threadId: sel.threadId }));
+    // 切换 thread 时**保留当前 view kind**（在 thread_context 视图切 thread 不切回 index）。
+    const view = route.kind === "flowsView" ? route.view : "thread_context";
+    navigate(
+      toPath({
+        kind: "flowsView",
+        view,
+        sessionId: activeSessionId,
+        objectId: sel.objectId,
+        threadId: sel.threadId,
+      }),
+    );
   }
 
   function handleShowContextWindows() {
-    if (!activeSessionId) return;
+    if (!activeSessionId || !activeObjectId || !activeThreadId) return;
     navigate(
       toPath({
-        kind: "session",
+        kind: "flowsView",
+        view: "thread_context",
         sessionId: activeSessionId,
-        objectId: activeObjectId ?? "user",
-        threadId: activeThreadId ?? "root",
+        objectId: activeObjectId,
+        threadId: activeThreadId,
       }),
     );
   }
@@ -421,7 +432,7 @@ export function AppShell() {
       mode={layoutMode}
       sidebar={<Sidebar scope={scope} flows={state.flows} tree={state.tree} activePath={activePath} activeSessionId={activeSessionId} activeSessionTitle={(() => { const f = state.flows.find((flow) => flow.sessionId === activeSessionId); return f ? flowTitle(f) : activeSessionId; })()} showSessions={showSessions} onToggleSessions={() => setShowSessions((prev) => !prev)} onShowWelcome={handleShowWelcome} onScope={handleScope} onNode={handleNode} onSession={handleSession} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
       main={<MainPanel route={route} isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} selfObjectId={activeObjectId} onUserReply={handleSend} onRefresh={refreshActiveView} threadHeader={activeObjectId ? <ThreadHeader objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} onSelectThread={handleSelectThread} /> : undefined} knownSessionIds={knownSessionIds} flowsReady={state.flowsHash !== undefined} layoutMode={layoutMode} onToggleLayoutMode={toggleLayoutMode} />}
-      right={activeObjectId && activeObjectId !== "user" ? <RightPanel sessionId={activeSessionId} objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} layoutMode={layoutMode} onToggleLayoutMode={toggleLayoutMode} onShowContextWindows={handleShowContextWindows} /> : undefined}
+      right={activeSessionId && activeObjectId && activeThreadId ? <RightPanel sessionId={activeSessionId} objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} layoutMode={layoutMode} onToggleLayoutMode={toggleLayoutMode} onShowContextWindows={handleShowContextWindows} /> : undefined}
     >
       <CreateStoneModal open={stoneModalOpen} draft={stoneDraft} onDraft={setStoneDraft} onClose={() => setStoneModalOpen(false)} onSubmit={handleCreateStone} />
       <CreateKnowledgeModal modal={knowledgeModal} draft={knowledgeDraft} onDraft={setKnowledgeDraft} onClose={() => setKnowledgeModal(undefined)} onSubmit={handleCreateKnowledge} />

@@ -12,6 +12,19 @@ export interface KnowledgeFrontmatter {
     /** 命中时注入完整正文。 */
     show_content_when?: string[];
   };
+  /**
+   * 是否允许被子 Agent 继承（B-tree 协议，2026-05-26）。
+   *
+   * - `true`：父 Agent 的这篇 knowledge 会被子 Agent 的 loadKnowledgeIndex 自动纳入索引；
+   *   子 Agent 自己 knowledge 目录下同 idPath 的 knowledge 仍然胜出（override）。
+   * - `false` / 缺省：仅父 Agent 自己可见，不下传。
+   *
+   * 注意：sediment（pool 侧 memory / relations）默认不下传——它们没有这个字段，
+   * loader 也不会扫描祖先 pool。本字段只对 stone seed knowledge 生效。
+   *
+   * 详见 meta/object.doc.ts:thinkable.children.knowledge.patches.domain_axis。
+   */
+  inheritable?: boolean;
 }
 
 /** 解析后的单篇 knowledge 文档。 */

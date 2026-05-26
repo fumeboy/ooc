@@ -68,6 +68,8 @@ export {
   serverDir,
   clientDir,
   stoneKnowledgeDir,
+  stoneChildrenDir,
+  ancestorObjectIds,
   stoneMetadataFile,
   type StoneObjectMetadata
 } from "./stone-object";

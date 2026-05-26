@@ -211,9 +211,11 @@ function ThreadRefLink({
       onClick={() =>
         navigate(
           toPath({
-            kind: "session",
+            kind: "flowsView",
+            view: "index",
             sessionId,
-            selected: { kind: "thread", objectId, threadId },
+            objectId,
+            threadId,
           }),
         )
       }

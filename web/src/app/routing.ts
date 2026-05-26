@@ -1,28 +1,42 @@
 /**
  * 路由 ↔ 应用导航状态 双向映射。
  *
- * 设计见 plan-003 §3.3、§3.4；2026-05 重构：thread 上下文从路径段
- * `/threads/<oid>/<tid>` 改为 query string `?objectId=...&threadId=...`，并允许
- * 任意路由（含 file）携带 thread 上下文，让 chat panel 跨文件查看保持显示。
+ * 设计：
+ * - **URL path 决定视图（"我在看哪种页面"）**；不再用来记录 sessionId。
+ * - **URL query 记忆会话状态（sessionId / objectId / threadId）**——切视图时
+ *   query 不变，右侧 RightPanel 持续显示同一 thread chat。
  *
- * 单向真相：URL 是导航维度的源。AppShell 不再 setState 改 activePath /
- * activeSessionId 等；只调 toPath(...) + navigate(...)；URL 变化经 useRouteState
- * 回流为下一帧 state。
+ * 当前覆盖的 path 形态：
+ * - `/`、`/welcome` —— Welcome
+ * - `/flows`、`/stones`、`/world`、`/pools` —— scope landing
+ * - `/flows/index?sessionId=…&objectId=…&threadId=…[&selected=…]` —— user home / SessionThreadsIndex
+ * - `/flows/thread_context?sessionId=…&objectId=…&threadId=…` —— Context Tree（ThreadDetailTabs）
+ * - `/flows/:sessionId/objects/:objectId/pages/:page` —— flowPage（object client page）
+ * - `/stones/:objectId` —— stone client
+ * - `/files/<world-relative path>?[sessionId=&objectId=&threadId=]` —— 文件查看
+ *
+ * 兼容（**只解析不产出**）：
+ * - `/flows/:sessionId[?objectId=&threadId=]` —— 旧形态，objectId !== "user" → thread_context；否则 → index
+ * - `/flows/:sessionId/threads/:objectId/:threadId` —— 老书签，统一归 thread_context
+ *
+ * 单向真相：URL 是导航源。AppShell 不再 setState 改 activePath / activeSessionId 等；
+ * 只调 toPath(...) + navigate(...)；URL 变化经 useRouteState 回流为下一帧 state。
  */
 
 import { useMemo } from "react";
 import { useLocation, useParams } from "react-router";
 
 /**
- * Thread 上下文：可选地附在任何路由上，让 chat panel 跨页面（含 file viewer）
- * 持续显示。在 query string 里编码为 `?sessionId=&objectId=&threadId=`（session
- * 路由因为 sessionId 已在 path 内，省略 sessionId）。
+ * Thread 上下文：附在路由上，让 chat panel 跨页面持续显示。在 query string 里编码为
+ * `?sessionId=&objectId=&threadId=`（所有视图共用同一组 query keys，不再因路径形态而异）。
  */
 export interface ThreadContext {
   sessionId: string;
   objectId: string;
   threadId: string;
 }
+
+export type FlowsView = "index" | "thread_context";
 
 export type RouteState =
   | { kind: "welcome" }
@@ -31,19 +45,20 @@ export type RouteState =
   | { kind: "stoneClient"; objectId: string }
   | { kind: "flowPage"; sessionId: string; objectId: string; page: string }
   | {
-      kind: "session";
-      sessionId: string;
+      kind: "flowsView";
+      /** 视图类型：path 第二段（/flows/index 或 /flows/thread_context）。 */
+      view: FlowsView;
+      /**
+       * 当前会话状态（query string）。三者要么齐全（→ RightPanel 显示），要么 sessionId 单独
+       * 出现（user home 仅"挑了 session 但没选 thread"），要么全缺（"Pick a session" 空态）。
+       */
+      sessionId?: string;
       objectId?: string;
       threadId?: string;
       /**
-       * 2026-05-26 user-home：左栏选中 chat 时写进 URL `?selected=chat:<wid>`；
-       * undefined 表示空选中（右栏渲染 empty state）。
-       *
-       * 2026-05-26 Round 7 A3：issue 看板已移除，selected 仅剩 chat 一种。
-       *
-       * 2026-05-26 Round 8 D3：SessionThreadsIndex 加 `thread:<obj>:<tid>` 形态，
-       * 选中跨 object 的任意 thread；右栏切到 ThreadInspectDetail（只读）。
-       * URL: `?selected=thread:<objectId>:<threadId>`。
+       * 2026-05-26 Round 7：左栏选中 chat / thread 也写进 URL；当前 SessionThreadsIndex
+       * 已改为通过 objectId+threadId 切右栏，selected 字段保留只为旧链接兼容；新代码
+       * 不再产出（toPath 仍然支持写出，确保 round-trip 测试通过）。
        */
       selected?:
         | { kind: "chat"; windowId: string }
@@ -52,8 +67,6 @@ export type RouteState =
 
 /**
  * 把 RouteState 反向转成 URL；shortcut 路径优先（plan-003 §3.3）。
- *
- * 命中 §3.1 的 file path 会规范化为 /stones/{id} 或 /flows/.../pages/{name}。
  */
 export function toPath(state: RouteState): string {
   switch (state.kind) {
@@ -73,15 +86,14 @@ export function toPath(state: RouteState): string {
       return `/stones/${encodeURIComponent(state.objectId)}`;
     case "flowPage":
       return `/flows/${encodeURIComponent(state.sessionId)}/objects/${encodeURIComponent(state.objectId)}/pages/${encodeURIComponent(state.page)}`;
-    case "session": {
-      const base = `/flows/${encodeURIComponent(state.sessionId)}`;
+    case "flowsView": {
+      const base = `/flows/${state.view}`;
       // 手拼 query 而非 URLSearchParams：后者把空格编成 `+`（form-urlencoded），
       // 既有 routing.test 锁定的是 `%20`（encodeURIComponent 风格），保持一致。
       const parts: string[] = [];
-      if (state.objectId && state.threadId) {
-        parts.push(`objectId=${encodeURIComponent(state.objectId)}`);
-        parts.push(`threadId=${encodeURIComponent(state.threadId)}`);
-      }
+      if (state.sessionId) parts.push(`sessionId=${encodeURIComponent(state.sessionId)}`);
+      if (state.objectId) parts.push(`objectId=${encodeURIComponent(state.objectId)}`);
+      if (state.threadId) parts.push(`threadId=${encodeURIComponent(state.threadId)}`);
       if (state.selected) {
         const v =
           state.selected.kind === "chat"
@@ -132,9 +144,6 @@ export function useRouteState(): RouteState {
 
 /**
  * 纯函数版本——给单测 / 不在 react-router 上下文里用。
- *
- * params 优先取（react-router 已经解过 encode），fallback 自己手工切。
- * search 形如 `?objectId=&threadId=`，缺省即无 thread 上下文。
  */
 export function parseRoute(
   pathname: string,
@@ -147,28 +156,38 @@ export function parseRoute(
     id?: string;
   } = {},
 ): RouteState {
-  // 末尾 slash 去掉，方便比较
   const path = pathname === "/" ? "/" : pathname.replace(/\/+$/, "");
   const query = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const qSessionId = query.get("sessionId") ?? undefined;
   const qObjectId = query.get("objectId") ?? undefined;
   const qThreadId = query.get("threadId") ?? undefined;
-  const qSessionId = query.get("sessionId") ?? undefined;
   const qSelected = parseSelectedQuery(query.get("selected"));
 
   if (path === "/" || path === "/welcome") return { kind: "welcome" };
 
-  // Legacy: /flows/:sessionId/threads/:objectId/:threadId — 老书签兼容；统一回归
-  // 到 session + thread query 的语义（toPath 不再产此形态）
+  // /flows/index, /flows/thread_context —— 新 path 形态（path = view）
+  if (path === "/flows/index" || path === "/flows/thread_context") {
+    const view: FlowsView = path === "/flows/thread_context" ? "thread_context" : "index";
+    const r: RouteState = { kind: "flowsView", view };
+    if (qSessionId) Object.assign(r, { sessionId: qSessionId });
+    if (qObjectId) Object.assign(r, { objectId: qObjectId });
+    if (qThreadId) Object.assign(r, { threadId: qThreadId });
+    if (qSelected) Object.assign(r, { selected: qSelected });
+    return r;
+  }
+
+  // Legacy /flows/:sessionId/threads/:objectId/:threadId —— 老书签兼容；统一 thread_context
   if (params.sessionId && params.threadId && params.objectId && path.includes("/threads/")) {
     return {
-      kind: "session",
+      kind: "flowsView",
+      view: "thread_context",
       sessionId: params.sessionId,
       objectId: params.objectId,
       threadId: params.threadId,
     };
   }
 
-  // /flows/:sessionId/objects/:objectId/pages/:page
+  // /flows/:sessionId/objects/:objectId/pages/:page —— flowPage 不变
   if (params.sessionId && params.objectId && params.page) {
     return {
       kind: "flowPage",
@@ -178,15 +197,19 @@ export function parseRoute(
     };
   }
 
-  // /flows/:sessionId  (+ optional ?objectId=&threadId=&selected=)
+  // Legacy /flows/:sessionId[?objectId=&threadId=] —— 老形态：objectId !== "user" → thread_context；
+  // 否则归 index（与旧 isUserThreadHome 行为对齐）。**不**产出，只解析。
   if (path.startsWith("/flows/") && params.sessionId && !params.objectId) {
-    const r: RouteState = { kind: "session", sessionId: params.sessionId };
-    if (qObjectId && qThreadId) {
-      Object.assign(r, { objectId: qObjectId, threadId: qThreadId });
-    }
-    if (qSelected) {
-      Object.assign(r, { selected: qSelected });
-    }
+    const isPeer = qObjectId !== undefined && qObjectId !== "user" && qThreadId !== undefined;
+    const view: FlowsView = isPeer ? "thread_context" : "index";
+    const r: RouteState = {
+      kind: "flowsView",
+      view,
+      sessionId: params.sessionId,
+    };
+    if (qObjectId) Object.assign(r, { objectId: qObjectId });
+    if (qThreadId) Object.assign(r, { threadId: qThreadId });
+    if (qSelected) Object.assign(r, { selected: qSelected });
     return r;
   }
 
@@ -201,7 +224,7 @@ export function parseRoute(
   // /stones
   if (path === "/stones") return { kind: "scope", scope: "stones" };
 
-  // /pools (R7-4)
+  // /pools
   if (path === "/pools") return { kind: "scope", scope: "pools" };
 
   // /world
@@ -220,7 +243,6 @@ export function parseRoute(
     }
   }
 
-  // 兜底
   return { kind: "welcome" };
 }
 
@@ -239,14 +261,7 @@ export function parsePathname(
 }
 
 /**
- * 解析 `?selected=<tag>:<value>` query 值；不识别格式时返回 undefined（silently 丢）。
- *
- * 支持的 tag：
- *  - `chat:<windowId>`             — user.root 的 talk_window（Round 7+）
- *  - `thread:<objectId>:<threadId>` — Session Threads Index 选中任意 thread（Round 8）
- *
- * 2026-05-26 Round 7 A3：issue 看板移除。
- * 2026-05-26 Round 8 D3：扩展 thread tag。
+ * 解析 `?selected=<tag>:<value>`；不识别格式 → undefined（silently 丢）。
  */
 function parseSelectedQuery(
   raw: string | null,
@@ -272,7 +287,7 @@ function parseSelectedQuery(
   return undefined;
 }
 
-/** 由 RouteState 派生 scope（Sidebar 用以高亮 tab）。R7-4 加 "pools"。 */
+/** 由 RouteState 派生 scope（Sidebar 用以高亮 tab）。 */
 export function scopeOf(route: RouteState): "stones" | "flows" | "world" | "pools" {
   switch (route.kind) {
     case "welcome":
@@ -288,15 +303,24 @@ export function scopeOf(route: RouteState): "stones" | "flows" | "world" | "pool
     case "stoneClient":
       return "stones";
     case "flowPage":
-    case "session":
+    case "flowsView":
       return "flows";
   }
 }
 
 /** 从一个 RouteState 抽出 thread 上下文（若有）；nav handler 保留 thread 用。 */
 export function extractThreadContext(route: RouteState): ThreadContext | undefined {
-  if (route.kind === "session" && route.objectId && route.threadId) {
-    return { sessionId: route.sessionId, objectId: route.objectId, threadId: route.threadId };
+  if (
+    route.kind === "flowsView" &&
+    route.sessionId &&
+    route.objectId &&
+    route.threadId
+  ) {
+    return {
+      sessionId: route.sessionId,
+      objectId: route.objectId,
+      threadId: route.threadId,
+    };
   }
   if (route.kind === "file" && route.thread) return route.thread;
   return undefined;

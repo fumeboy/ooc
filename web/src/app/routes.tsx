@@ -26,6 +26,11 @@ export const router = createBrowserRouter([
   // R7-4 (2026-05-25): pools 是 2026-05-23 三分一等公民, sidebar 加 Pools tab
   { path: "/pools", ...shell },
   { path: "/flows", ...shell },
+  // 2026-05-27 路由重构：path = view，sessionId 进 query
+  { path: "/flows/index", ...shell },
+  { path: "/flows/thread_context", ...shell },
+  // Legacy 兼容：旧形态 /flows/:sessionId 与 /flows/:sessionId/threads/...
+  // 仅 parseRoute 兼容，不再产出。命中后 useRouteState 会派回 flowsView，下次 navigate 重写。
   { path: "/flows/:sessionId", ...shell },
   { path: "/flows/:sessionId/threads/:objectId/:threadId", ...shell },
   { path: "/flows/:sessionId/objects/:objectId/pages/:page", ...shell },

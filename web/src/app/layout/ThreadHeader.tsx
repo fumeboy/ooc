@@ -29,7 +29,11 @@ export function ThreadHeader({
 }) {
   if (!objectId) return null;
   const status = thread?.status;
-  const threads = sessionThreads ?? [];
+  // 2026-05-27: thread-switcher 隐藏 user.root —— 它是 session 主入口，不通过 switcher
+  // 切换查看（路由 path 决定 view，user.root 不再是右栏可选 thread）。
+  const threads = (sessionThreads ?? []).filter(
+    (t) => !(t.objectId === "user" && t.threadId === "root"),
+  );
   const activeKey = objectId && threadId ? `${objectId}/${threadId}` : "";
   const displayTid = threadId ? humanizeThreadId(threadId) : undefined;
   const { displayName: ownerDisplay } = useDisplayName(objectId);
@@ -38,16 +42,6 @@ export function ThreadHeader({
 
   return (
     <div className="thread-header">
-      {/* 当 select 存在时, 它已显示 objectId · threadId, 这里不再渲染同样信息避免重复 (用户反馈 2026-05-20).
-          单 thread 场景 (没有 select) 仍需显示标识. */}
-      {threads.length <= 1 && (
-        <span className="thread-header-id">
-          <strong title={objectId}>{ownerDisplay}</strong>
-          {threadId && (
-            <span className="muted small thread-header-tid" title={threadId}>· {displayTid}</span>
-          )}
-        </span>
-      )}
       {status && <span className={`status-pill status-pill-thread status-${status}`}>{status}</span>}
       {threads.length > 1 && onSelectThread && (
         <select

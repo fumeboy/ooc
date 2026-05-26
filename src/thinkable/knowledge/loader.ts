@@ -1,6 +1,7 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import {
+  ancestorObjectIds,
   poolKnowledgeDir,
   stoneKnowledgeDir,
   type PoolObjectRef,
@@ -23,35 +24,60 @@ const cache = new Map<string, { index: KnowledgeIndex; signature: string }>();
 /**
  * 双源加载 Object 的 knowledge 索引（2026-05-24 起：stone seed + pool sediment 合并）。
  *
- * 两侧扫描：
- * - seed：`stones/<branch>/objects/<id>/knowledge/`（设计层；进 git review）
- * - sediment：`pools/objects/<id>/knowledge/`（运行时认知；不进 git）
+ * 两侧扫描 + 祖先继承（2026-05-26 起 B-tree 协议）：
+ * - **祖先 seed**：`stones/<branch>/objects/<ancestor>/knowledge/` 下 frontmatter `inheritable: true`
+ *   的文件，从 root 向 immediate parent 顺序加载；后加载者覆盖前者（更近的祖先 override 更远的）
+ * - **self seed**：`stones/<branch>/objects/<id>/knowledge/`（设计层；进 git review）
+ * - **self sediment**：`pools/objects/<id>/knowledge/`（运行时认知；不进 git）
+ *
+ * 加载顺序（前面被后面覆盖）：祖先 seed → self seed → self sediment。
+ * 这样保证：
+ * - 子 Agent 自己的 knowledge 永远 override 父级（CSS-cascade 语义）
+ * - 运行时 sediment 仍 override 设计层 seed（保留原有行为）
  *
  * 合并规则：
- * - 相对路径（去 .md 后缀）相同视为冲突；sediment 胜出（运行时认知覆盖先天），但 console.warn
- * - 由于 seed 一般在一级 `knowledge/<slug>.md`、sediment 在二级 `knowledge/memory|relations/<slug>.md`，
- *   实际冲突极少；防御性代码保证安全
+ * - 相对路径（去 .md 后缀）相同视为冲突；后 set 胜出
+ * - sediment 与 seed 冲突 console.warn（保留原有诊断）
+ * - 祖先继承覆盖 / 子级覆盖父级祖先 → 不 warn，是设计正常路径
  *
  * 容错：
- * - 任一侧目录 ENOENT/不可读 → 静默继续扫另一侧，不报错
+ * - 任一侧目录 ENOENT/不可读 → 静默继续扫其它路径，不报错
  *
- * Cache：以两侧 (path, mtime) 联合签名为键；签名未变即返回上次索引（同对象引用）。
+ * 祖先 sediment（祖先的 pool）**不下传**：sediment 默认私有于该 Agent，
+ * 不通过本协议跨边界共享。
+ *
+ * Cache：以两侧目录路径联合签名为键；签名未变即返回上次索引（同对象引用）。
  */
 export async function loadKnowledgeIndex(refs: KnowledgeLoadRefs): Promise<KnowledgeIndex> {
   const stoneRoot = stoneKnowledgeDir(refs.stone);
   const poolRoot = poolKnowledgeDir(refs.pool);
 
+  // 祖先 seed 目录列表（从 root → immediate parent）。
+  const ancestorIds = ancestorObjectIds(refs.stone.objectId);
+  const ancestorRoots = ancestorIds.map((id) =>
+    stoneKnowledgeDir({ ...refs.stone, objectId: id }),
+  );
+
+  // 收集所有 md 文件（祖先 + self stone + self pool）。
+  const ancestorFilesByRoot: Array<{ root: string; files: Awaited<ReturnType<typeof collectMdFiles>> }> = [];
+  for (const root of ancestorRoots) {
+    ancestorFilesByRoot.push({ root, files: await collectMdFiles(root) });
+  }
   const stoneFiles = await collectMdFiles(stoneRoot);
   const poolFiles = await collectMdFiles(poolRoot);
 
   const signature = [
+    ...ancestorFilesByRoot.flatMap(({ root, files }) => [
+      `anc:${root}`,
+      ...files.map((f) => `a:${f.path}@${f.mtime}`).sort(),
+    ]),
     `stone:${stoneRoot}`,
     ...stoneFiles.map((f) => `s:${f.path}@${f.mtime}`).sort(),
     `pool:${poolRoot}`,
     ...poolFiles.map((f) => `p:${f.path}@${f.mtime}`).sort(),
   ].join("|");
 
-  const cacheKey = `${stoneRoot}::${poolRoot}`;
+  const cacheKey = [...ancestorRoots, stoneRoot, poolRoot].join("::");
   const cached = cache.get(cacheKey);
   if (cached && cached.signature === signature) {
     return cached.index;
@@ -59,7 +85,25 @@ export async function loadKnowledgeIndex(refs: KnowledgeLoadRefs): Promise<Knowl
 
   const byPath = new Map<string, KnowledgeDoc>();
 
-  // 先加载 seed（stone 侧）—— 让 sediment 在 set 时自然覆盖并触发 warn
+  // Step 1: 祖先 seed —— 仅 frontmatter.inheritable === true 的文件。
+  // 顺序：root → immediate parent，更近的祖先后 set 自然 override 更远的。
+  for (const { root, files } of ancestorFilesByRoot) {
+    for (const f of files) {
+      const text = await readFile(f.path, "utf8");
+      const { frontmatter, body } = parseKnowledgeFile(text);
+      if (frontmatter.inheritable !== true) continue;
+      const idPath = toIdPath(root, f.path);
+      byPath.set(idPath, {
+        path: idPath,
+        file: f.path,
+        frontmatter,
+        body,
+        mtime: f.mtime,
+      });
+    }
+  }
+
+  // Step 2: self seed —— 自然 override 同 idPath 的祖先 knowledge。
   for (const f of stoneFiles) {
     const text = await readFile(f.path, "utf8");
     const { frontmatter, body } = parseKnowledgeFile(text);
@@ -73,7 +117,7 @@ export async function loadKnowledgeIndex(refs: KnowledgeLoadRefs): Promise<Knowl
     });
   }
 
-  // 后加载 sediment（pool 侧）—— 同 idPath 时覆盖 seed 并 warn
+  // Step 3: self sediment —— 同 idPath 时覆盖 seed（含祖先 seed）并 warn。
   for (const f of poolFiles) {
     const text = await readFile(f.path, "utf8");
     const { frontmatter, body } = parseKnowledgeFile(text);

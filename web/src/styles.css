@@ -49,7 +49,7 @@ button { cursor: pointer; }
 .sidebar-frame { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 .logo-title { font-weight: 700; font-size: 12px; text-align: center; letter-spacing: .16em; text-transform: uppercase; }
 .logo-subtitle { color: var(--muted-foreground); font-size: 12px; letter-spacing: .12em; }
-.pill { border: 1px solid var(--border); background: var(--muted); color: var(--muted-foreground); border-radius: 999px; padding: 2px 7px; font-size: 11px; }
+.pill { text-wrap-mode: nowrap; border: 1px solid var(--border); background: var(--muted); color: var(--muted-foreground); border-radius: 999px; padding: 2px 7px; font-size: 11px; }
 .status-row { display: flex; align-items: center; gap: 8px; width: calc(100% - 16px); margin-top: 2px; }
 .status-pill { border-radius: 999px; padding: 3px 10px; font-size: 11px; border: 1px solid var(--border); background: #f2f4ef; color: #8c9187; line-height: 1; }
 .status-pill.pause { color: #8f948b; background: #eef0ea; }
@@ -675,43 +675,105 @@ a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color
 .user-home-list-row-meta { font-size: 10px; color: var(--muted-foreground); flex: 0 0 auto; }
 .user-home-empty-panel { display: flex; flex-direction: column; gap: 6px; align-items: center; justify-content: center; min-height: 200px; padding: 32px; color: var(--muted-foreground); text-align: center; flex: 1 1 auto; }
 
-/* --- Round 8 D3: Session Threads Index (multi-object columns + relation overlay) --- */
-.session-threads-index { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; height: 100%; overflow: hidden; }
-.session-threads-index-split { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(360px, 1fr); gap: 8px; min-height: 0; flex: 1 1 auto; height: 100%; }
-@media (max-width: 960px) { .session-threads-index-split { grid-template-columns: 1fr; } }
-.session-threads-index-columns-wrap { position: relative; display: flex; flex-direction: column; min-height: 0; background: rgba(252, 252, 250, .75); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.session-threads-index-banner { padding: 6px 10px; margin: 8px 8px 0; border-radius: 6px; }
-.session-threads-index-columns-scroll { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; padding: 10px; }
-.session-threads-index-columns { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
-.session-threads-index-empty { padding: 24px; text-align: center; border: 1px dashed var(--border); border-radius: 6px; width: 100%; }
-.session-threads-index-empty-state { display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center; padding: 32px; color: var(--muted-foreground); text-align: center; flex: 1 1 auto; }
-.session-threads-index-toolbar { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-top: 1px solid var(--border); background: rgba(252, 252, 250, .9); flex: 0 0 auto; }
-.session-threads-index-toolbar .muted { margin-left: auto; }
-.session-threads-index-detail { min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: rgba(252, 252, 250, .75); border: 1px solid var(--border); border-radius: 10px; }
-.session-threads-index-empty-panel { display: flex; flex-direction: column; gap: 6px; align-items: center; justify-content: center; padding: 32px; color: var(--muted-foreground); text-align: center; flex: 1 1 auto; }
+/* --- 2026-05-27 v3：横向 ObjectColumn + staff view（选中后五线谱布局） --- */
+.session-threads-index { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; height: 100%; overflow: hidden; padding: 12px 14px 14px; gap: 10px; }
 
-/* Object Column */
-.threads-object-column { min-width: 200px; max-width: 260px; flex: 0 0 auto; display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px 8px 6px; gap: 6px; }
-.threads-object-column-head { display: flex; align-items: center; gap: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
-.threads-object-column-title { font-size: 12px; font-weight: 700; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.threads-object-column-counts { margin-left: auto; display: inline-flex; gap: 4px; flex-wrap: wrap; }
-.threads-count-chip { font-size: 9.5px; padding: 1px 6px; border-radius: 999px; border: 1px solid; font-weight: 600; text-transform: lowercase; }
+/* 顶部 session header strip */
+.session-threads-index-header { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; flex: 0 0 auto; }
+.session-threads-index-header-main { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; }
+.session-threads-index-header-actions { display: inline-flex; gap: 6px; flex: 0 0 auto; }
+.session-threads-index-title { margin: 0; font-size: 13px; font-weight: 700; color: var(--foreground); letter-spacing: .02em; }
+.session-threads-index-stats { white-space: nowrap; }
+.session-threads-index-mode-pill { background: rgba(70, 96, 220, .12); color: #2f49c8; border: 1px solid rgba(70, 96, 220, .25); padding: 1px 8px; border-radius: 999px; font-weight: 600; }
+.session-threads-index-new-chat { font-size: 12px; padding: 5px 12px; }
+
+.session-threads-index-banner { padding: 6px 10px; border-radius: 6px; flex: 0 0 auto; font-size: 12px; }
+
+.session-threads-index-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 0; }
+.session-threads-index-empty { padding: 24px; text-align: center; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted-foreground); }
+.session-threads-index-empty-state { display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center; padding: 40px 20px; color: var(--muted-foreground); text-align: center; flex: 1 1 auto; }
+
+/* default 模式：横向 ObjectColumn 自由排列 */
+.session-threads-index-columns { display: flex; gap: 12px; align-items: flex-start; min-width: 0; padding: 2px 0; }
+
+/* --- Object Card（default mode）：accent border + avatar header --- */
+.threads-object-card { min-width: 220px; max-width: 320px; flex: 0 0 auto; display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--object-accent, var(--border)); border-radius: 10px; box-shadow: 0 1px 2px rgba(34, 39, 31, .04); overflow: hidden; }
+.threads-object-card.is-selected-column { box-shadow: 0 0 0 1px var(--object-accent, rgba(70, 96, 220, .35)), 0 4px 16px rgba(34, 39, 31, .08); }
+.threads-object-card-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(255,255,255,.6), rgba(255,255,255,0)); }
+.threads-object-card-avatar { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--object-accent, var(--muted)); color: #fff; font-size: 12px; font-weight: 700; flex: 0 0 auto; user-select: none; }
+.threads-object-card-title-block { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
+.threads-object-card-title { font-size: 13px; font-weight: 700; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.threads-object-card-id { font-size: 10.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.threads-object-card-counts { display: inline-flex; gap: 4px; flex-wrap: wrap; flex: 0 0 auto; }
+
+.threads-count-chip { font-size: 10px; padding: 2px 8px; border-radius: 999px; border: 1px solid; font-weight: 600; text-transform: lowercase; line-height: 1.4; }
 .threads-count-chip-active { background: #d8f8e8; color: #1f6f4a; border-color: #b8efd5; }
 .threads-count-chip-done { background: #eef0ea; color: #5e645a; border-color: #d6dbd0; }
 .threads-count-chip-failed { background: #fde2e2; color: #a4321c; border-color: #f1a7a7; }
 .threads-count-chip-paused { background: #fff4d4; color: #7a5a1c; border-color: #f1d995; }
-.threads-object-column-body { display: flex; flex-direction: column; gap: 6px; }
-.threads-object-column-empty { padding: 6px 4px; }
-.threads-object-column-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; }
-.threads-object-column-super { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
-.threads-object-column-super-head { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11px; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: .04em; padding: 2px 4px; }
-.threads-object-column-super-head:hover { color: var(--foreground); }
-.threads-object-column-super-icon { color: #6726c2; }
 
-/* Thread Node */
-.thread-node { width: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center; padding: 4px 6px 4px 6px; border: 0; border-radius: 5px; background: transparent; color: inherit; cursor: pointer; text-align: left; font: inherit; }
-.thread-node:hover { background: rgba(232, 240, 254, .35); }
-.thread-node.is-active { background: rgba(70, 96, 220, .14); outline: 1px solid rgba(70, 96, 220, .4); }
+.threads-object-card-body { padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 2px; }
+.threads-object-card-empty { padding: 6px 8px; }
+.threads-object-card-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 1px; }
+.threads-object-card-super { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
+.threads-object-card-super-head { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11px; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: .04em; padding: 2px 4px; }
+.threads-object-card-super-head:hover { color: var(--foreground); }
+.threads-object-card-super-icon { color: #6726c2; }
+
+/* --- Staff View（选中后）：CSS Grid，列 = object，行 = 时间槽 --- */
+.threads-staff {
+  display: grid;
+  grid-template-columns: repeat(var(--staff-cols, 1), minmax(220px, 1fr));
+  gap: 0;
+  align-items: stretch;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0;
+  overflow: hidden;
+  /* 五线谱质感：每行底部一根淡色横线（用 grid-row 占位的 cell border 实现，
+     这里 staff 容器自身仅给 column 之间画 1px 分隔线） */
+}
+.threads-staff-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, var(--card), rgba(252, 252, 250, .9));
+  border-bottom: 2px solid var(--object-accent, var(--border));
+  border-right: 1px solid var(--border);
+}
+.threads-staff-header:last-child { border-right: 0; }
+.threads-staff-header-avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--object-accent, var(--muted)); color: #fff;
+  font-size: 11px; font-weight: 700; flex: 0 0 auto; user-select: none;
+}
+.threads-staff-header-title-block { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
+.threads-staff-header-title { font-size: 12.5px; font-weight: 700; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.threads-staff-header-id { font-size: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.threads-staff-cell {
+  padding: 6px 8px;
+  border-top: 1px dashed rgba(94, 106, 86, 0.2);
+  border-right: 1px solid var(--border);
+  /* 让占据本行的 cell 在自己列里显示，未被占据的列在该行视觉上是空的 spacer */
+}
+/* 最右一列不画右边竖线 */
+.threads-staff-cell:nth-child(var(--staff-cols)) { border-right: 0; }
+/* 五线谱整体留 8px inner padding via row 1 gap：用 header 的 padding 实现 */
+
+/* --- Thread Node 行（default + staff 共用） --- */
+.thread-node { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; text-align: left; font: inherit; transition: background .12s ease; outline: none; }
+.thread-node:hover { background: rgba(232, 240, 254, .45); }
+.thread-node:focus-visible { outline: 2px solid rgba(70, 96, 220, .35); outline-offset: -2px; }
+.thread-node.is-active { background: rgba(70, 96, 220, .12); box-shadow: inset 2px 0 0 rgba(70, 96, 220, .65); }
+.thread-node.is-disabled { cursor: default; opacity: .55; }
+.thread-node.is-disabled:hover { background: transparent; }
 .thread-node-dot { font-size: 11px; line-height: 1; flex: 0 0 auto; }
 .thread-node-dot-running { color: #1f6f4a; }
 .thread-node-dot-waiting { color: #b58414; }
@@ -720,11 +782,18 @@ a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color
 .thread-node-dot-paused { color: #a35a14; }
 .thread-node-dot-ephemeral { color: var(--muted-foreground); opacity: .65; }
 .thread-node-dot-unknown { color: var(--muted-foreground); opacity: .5; }
-.thread-node-title { font-size: 12px; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.thread-node-title { font-size: 12.5px; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; flex: 1 1 auto; min-width: 0; }
+.thread-node-badge { font-size: 9.5px; padding: 1px 6px; border-radius: 999px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; flex: 0 0 auto; line-height: 1.5; }
+.thread-node-badge-entry { background: var(--muted); color: var(--muted-foreground); border: 1px solid var(--border); }
 .thread-node-chips { display: inline-flex; gap: 3px; flex: 0 0 auto; }
-.thread-node-chip { font-size: 9px; padding: 0 5px; border-radius: 999px; background: var(--muted); color: var(--muted-foreground); border: 1px solid var(--border); font-family: ui-monospace, monospace; }
+.thread-node-chip { font-size: 9.5px; padding: 1px 6px; border-radius: 999px; background: var(--muted); color: var(--muted-foreground); border: 1px solid var(--border); font-family: ui-monospace, monospace; line-height: 1.5; }
 .thread-node-chip-borrow { background: #fde9d6; color: #a35a14; border-color: #f1c98e; }
 .thread-node-chip-lent { background: #ede0ff; color: #6726c2; border-color: #d2b9f0; }
+/* 右侧 → context 按钮 */
+.thread-node-context-btn { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 5px; background: transparent; color: var(--muted-foreground); border: 1px solid transparent; flex: 0 0 auto; text-decoration: none; opacity: .55; transition: background .12s ease, opacity .12s ease, color .12s ease; }
+.thread-node:hover .thread-node-context-btn { opacity: 1; }
+.thread-node-context-btn:hover { background: rgba(70, 96, 220, .14); border-color: rgba(70, 96, 220, .28); color: #2f49c8; opacity: 1; }
+.thread-node-context-btn:focus-visible { opacity: 1; outline: 2px solid rgba(70, 96, 220, .4); outline-offset: 1px; }
 
 /* Thread Inspect Detail */
 .thread-inspect-detail { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; min-height: 0; height: 100%; overflow: auto; }

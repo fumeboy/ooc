@@ -1,55 +1,49 @@
 /**
- * SessionThreadsIndex — Round 8 D3 主组件。
+ * SessionThreadsIndex — Round 9 v3：横向 ObjectColumn + 选中后五线谱 staff view。
  *
- * 形态（design §3 折中 A+B）:
+ * 两种模式：
  *
- *   +------------------------+--------------------+
- *   | Object Columns         |  SelectionDetail   |
- *   | [user] [sup] [fb]      |  ChatPanel (chat)  |
- *   |  ●root  ●root  root    |  or                |
- *   |   ├talk  ├do  ...      |  ThreadInspectDetail(thread)
- *   |  ...                   |                    |
- *   | <RelationOverlay svg>  |                    |
- *   +------------------------+--------------------+
+ * **default**（无选中）：经典横向 ObjectColumn 排列，每列展示该 object 的全部 thread 树。
  *
- * 数据 fetch:
- *   - `runtimeListThreads(sessionId)` → ListThreadsResponse
- *   - 4s polling (与既有 thread polling 同节拍)
- *   - 后端返回 minimal `{objectId,threadId}` shape 时优雅退化:
- *     仅渲染 thread 列表 + 无 status/关系
+ * **staff**（点击某 thread 后）：BFS 出"上下游相关 thread"集合（talk 链 + parent/child +
+ *   creator 链），按 createdAt 升序在所有 column 间共享同一组「时间行」，每个 thread
+ *   仍渲染在自己的 column 里，行高随大者；视觉上像五线谱：
  *
- * 路由:
- *   - 复用 ?selected=chat:<wid>   —— ChatPanel
- *   - 新增 ?selected=thread:<obj>:<tid> —— ThreadInspectDetail
- *   - 无 selected → empty hint
+ *     ┌─ user ──┬─ supervisor ─┬─ assistant ─┐
+ *  t0 │  ●root  │              │             │
+ *  t1 │         │  ●user-talk  │             │
+ *  t2 │         │              │  ●fork-1    │
+ *  t3 │         │  ✓done       │             │
+ *     └─────────┴──────────────┴─────────────┘
  *
- * H-3 保留: empty session (无任何 talk + 无任何 threads) 时仍提供
- *   "去 welcome 补 seed" 跳转按钮。
+ *   每行一条 thread；列保持「所属 object」语义。点击其它 thread 重新计算 staff，仍按
+ *   时间排列。再次点击同一 thread（或刷掉 query 的 objectId/threadId）退回 default。
+ *
+ * 路由（沿用 2026-05-27 路由模型）：
+ *   - 列表项点击 → navigate `/flows/index?sessionId=&objectId=&threadId=`
+ *   - user.root 节点 disabled，不可切换查看
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowRight, MessageSquare, Plus } from "lucide-react";
+import { ArrowRight, MessageSquare, Plus, Layers } from "lucide-react";
 import type { ContextWindow, ThreadContext } from "../../chat";
-import { continueThread, fetchSessionThreadsFull, usePollingThread } from "../../chat";
-import { ChatPanel } from "../../chat/components/ChatPanel";
+import { fetchSessionThreadsFull } from "../../chat";
 import { addUserTalkWindow } from "../query";
 import { toPath, useRouteState } from "../../../app/routing";
-import { useDisplayNames } from "../../objects";
+import { useDisplayName, useDisplayNames } from "../../objects";
 import { messageFromError } from "../../../transport/errors";
 import type { ListThreadsItem } from "../types";
 import { ObjectColumn } from "./ObjectColumn";
-import { ThreadInspectDetail } from "./ThreadInspectDetail";
-import { RelationOverlay } from "./RelationOverlay";
+import { ThreadNode } from "./ThreadNode";
 import { groupByObject } from "./session-threads-index.helpers";
 
 const POLL_INTERVAL_MS = 4000;
 
 interface SessionThreadsIndexProps {
   sessionId: string;
-  /** 主 user.root thread (来自 shell 的 polling) — 用于派 ChatPanel 路径 */
+  /** 主 user.root thread (来自 shell 的 polling) — 用于派 talk_window 列表 */
   thread?: ThreadContext;
-  /** 当前 self objectId (传给 ThreadInspectDetail 内嵌 ThreadDetailTabs) */
   selfObjectId?: string;
 }
 
@@ -58,7 +52,6 @@ type TalkWindow = Extract<ContextWindow, { type: "talk" }>;
 export function SessionThreadsIndex({
   sessionId,
   thread,
-  selfObjectId,
 }: SessionThreadsIndexProps) {
   const [items, setItems] = useState<ListThreadsItem[]>([]);
   const [loadError, setLoadError] = useState<string | undefined>();
@@ -66,7 +59,8 @@ export function SessionThreadsIndex({
   const [newChatOpen, setNewChatOpen] = useState(false);
 
   const route = useRouteState();
-  const selected = route.kind === "session" ? route.selected : undefined;
+  const selectedObjectId = route.kind === "flowsView" ? route.objectId : undefined;
+  const selectedThreadId = route.kind === "flowsView" ? route.threadId : undefined;
   const navigate = useNavigate();
 
   // 4s polling listThreads
@@ -79,7 +73,6 @@ export function SessionThreadsIndex({
         const its = Array.isArray(resp?.items) ? resp.items : [];
         setItems(its);
         setLoadError(undefined);
-        // 退化判定: 所有 items 都没有 status —— D2 未跑完时 backend 返 minimal shape
         setDegraded(its.length > 0 && its.every((i) => i.status === undefined));
       } catch (e) {
         if (cancelled) return;
@@ -94,13 +87,35 @@ export function SessionThreadsIndex({
     };
   }, [sessionId]);
 
-  // 把 items 按 objectId 分组并稳定排序（user 在最左, 然后按 thread 数降序）
-  const groupedColumns = useMemo(() => groupByObject(items), [items]);
-  const objectIds = useMemo(() => groupedColumns.map((g) => g.objectId), [groupedColumns]);
-  // 触发 displayName 批量加载 —— 派生列宽 / breadcrumb 用
+  // 命中 staff mode 的条件：query 带 objectId+threadId，且该 thread 在 items 列表里
+  // （未在的话回 default，避免选中状态指向不存在的 thread）
+  const selectionExistsInItems =
+    !!selectedObjectId &&
+    !!selectedThreadId &&
+    items.some(
+      (i) => i.objectId === selectedObjectId && i.threadId === selectedThreadId,
+    );
+
+  const relatedItems = useMemo(() => {
+    if (!selectionExistsInItems) return undefined;
+    return collectRelated(items, selectedObjectId!, selectedThreadId!);
+  }, [items, selectedObjectId, selectedThreadId, selectionExistsInItems]);
+
+  // default 模式分组（全量）
+  const groupedAll = useMemo(() => groupByObject(items), [items]);
+  // staff 模式分组（仅相关 items；保留 groupedAll 的列序与权重）
+  const groupedStaff = useMemo(() => {
+    if (!relatedItems) return undefined;
+    return groupByObject(relatedItems);
+  }, [relatedItems]);
+
+  const visibleColumns = groupedStaff ?? groupedAll;
+  const objectIds = useMemo(
+    () => visibleColumns.map((g) => g.objectId),
+    [visibleColumns],
+  );
   useDisplayNames(objectIds);
 
-  // 派 ChatPanel 路径需要的 talk_windows（user.root 的 talk windows，来自 props.thread）
   const talkWindows = useMemo(
     () =>
       (thread?.contextWindows ?? []).filter((w): w is TalkWindow => w.type === "talk"),
@@ -110,96 +125,111 @@ export function SessionThreadsIndex({
   const onSelectThread = (objectId: string, threadId: string) => {
     navigate(
       toPath({
-        kind: "session",
+        kind: "flowsView",
+        view: "index",
         sessionId,
-        selected: { kind: "thread", objectId, threadId },
+        objectId,
+        threadId,
       }),
     );
   };
 
-  // 空 session 判定 (H-3): 没 talk_windows 且 listThreads 返空
   const isEmptySession = talkWindows.length === 0 && items.length === 0;
-
-  // RelationOverlay 容器 ref
-  const columnsRef = useRef<HTMLDivElement | null>(null);
-  const relationSelected =
-    selected?.kind === "thread"
-      ? { objectId: selected.objectId, threadId: selected.threadId }
-      : undefined;
+  const totalTalks = items.reduce((sum, i) => sum + (i.talkPeers?.length ?? 0), 0);
 
   return (
     <div className="session-threads-index">
-      <div className="session-threads-index-split">
-        <aside className="session-threads-index-columns-wrap">
-          {loadError && (
-            <div className="session-threads-index-banner error small" role="alert">
-              listThreads error: {loadError}
-            </div>
-          )}
-          {degraded && (
-            <div className="session-threads-index-banner muted small" role="status">
-              Backend returned minimal shape — status/relations unavailable until D2 lands.
-            </div>
-          )}
-          {isEmptySession ? (
-            <EmptySession sessionId={sessionId} />
-          ) : (
-            <div className="session-threads-index-columns-scroll" ref={columnsRef}>
-              <div className="session-threads-index-columns">
-                {groupedColumns.length === 0 ? (
-                  <div className="session-threads-index-empty muted small">
-                    No threads yet — start a chat to see this session take shape.
-                  </div>
-                ) : (
-                  groupedColumns.map((g) => (
-                    <ObjectColumn
-                      key={g.objectId}
-                      objectId={g.objectId}
-                      items={g.items}
-                      selectedThreadId={
-                        selected?.kind === "thread" ? selected.threadId : undefined
-                      }
-                      selectedObjectId={
-                        selected?.kind === "thread" ? selected.objectId : undefined
-                      }
-                      onSelectThread={onSelectThread}
-                    />
-                  ))
-                )}
-              </div>
-              <RelationOverlay
-                containerRef={columnsRef}
-                items={items}
-                selected={relationSelected}
-              />
-            </div>
-          )}
-
-          <div className="session-threads-index-toolbar">
+      <header className="session-threads-index-header">
+        <div className="session-threads-index-header-main">
+          <Layers size={14} className="muted" />
+          <h2 className="session-threads-index-title">Session threads</h2>
+          <span className="muted small session-threads-index-stats">
+            {groupedAll.length} object{groupedAll.length === 1 ? "" : "s"}
+            {" · "}
+            {items.length} thread{items.length === 1 ? "" : "s"}
+            {totalTalks > 0 && (
+              <>
+                {" · "}
+                {totalTalks} talk link{totalTalks === 1 ? "" : "s"}
+              </>
+            )}
+            {relatedItems && (
+              <>
+                {" · "}
+                <span className="session-threads-index-mode-pill">
+                  staff view ({relatedItems.length} related)
+                </span>
+              </>
+            )}
+          </span>
+        </div>
+        <div className="session-threads-index-header-actions">
+          {relatedItems && (
             <button
               type="button"
               className="btn small"
-              onClick={() => setNewChatOpen(true)}
-              title="Start a chat with another object"
+              onClick={() =>
+                navigate(toPath({ kind: "flowsView", view: "index", sessionId }))
+              }
+              title="清除选中，回到全量视图"
             >
-              <Plus size={11} style={{ marginRight: 3 }} />
-              New chat
+              Clear filter
             </button>
-            <span className="muted small">
-              {items.length} thread(s) · {groupedColumns.length} object(s)
-            </span>
-          </div>
-        </aside>
+          )}
+          <button
+            type="button"
+            className="btn primary session-threads-index-new-chat"
+            onClick={() => setNewChatOpen(true)}
+            title="Start a chat with another object"
+          >
+            <Plus size={12} style={{ marginRight: 4 }} />
+            New chat
+          </button>
+        </div>
+      </header>
 
-        <section className="session-threads-index-detail">
-          <SelectionDetail
+      {loadError && (
+        <div className="session-threads-index-banner error small" role="alert">
+          listThreads error: {loadError}
+        </div>
+      )}
+      {degraded && (
+        <div className="session-threads-index-banner muted small" role="status">
+          Backend returned minimal shape — status/relations unavailable until D2 lands.
+        </div>
+      )}
+
+      <div className="session-threads-index-body">
+        {isEmptySession ? (
+          <EmptySession sessionId={sessionId} />
+        ) : visibleColumns.length === 0 ? (
+          <div className="session-threads-index-empty muted small">
+            No threads yet — start a chat to see this session take shape.
+          </div>
+        ) : relatedItems && groupedStaff ? (
+          <StaffView
             sessionId={sessionId}
-            selected={selected}
-            talkWindows={talkWindows}
-            items={items}
-            selfObjectId={selfObjectId}
+            columns={groupedStaff}
+            items={relatedItems}
+            selectedObjectId={selectedObjectId}
+            selectedThreadId={selectedThreadId}
+            onSelectThread={onSelectThread}
           />
-        </section>
+        ) : (
+          <div className="session-threads-index-columns">
+            {groupedAll.map((g) => (
+              <ObjectColumn
+                key={g.objectId}
+                sessionId={sessionId}
+                objectId={g.objectId}
+                items={g.items}
+                selectedThreadId={selectedThreadId}
+                selectedObjectId={selectedObjectId}
+                onSelectThread={onSelectThread}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {newChatOpen && (
@@ -209,88 +239,175 @@ export function SessionThreadsIndex({
   );
 }
 
-// groupByObject 移到 ./session-threads-index.helpers.ts —— 让纯函数可被单测引用
-// 而不连带 import 整个 SessionThreadsIndex 组件链 (避免拉入 ChatPanel → MarkdownContent
-// → rehype-raw 的 dev 依赖缺失)。
-
-function SelectionDetail({
+/**
+ * StaffView — 五线谱布局：
+ * - column 数 = visibleColumns.length；每列对应一个 object
+ * - 每个 thread 占一整行；行索引由 createdAt 升序决定
+ * - 同一行内只有一个 cell 渲染 ThreadNode（其它列对应的 cell 为空 spacer）
+ * - 横线在每行底部画淡淡分隔，强化"五线谱"视觉
+ */
+function StaffView({
   sessionId,
-  selected,
-  talkWindows,
+  columns,
   items,
-  selfObjectId,
+  selectedObjectId,
+  selectedThreadId,
+  onSelectThread,
 }: {
   sessionId: string;
-  selected:
-    | { kind: "chat"; windowId: string }
-    | { kind: "thread"; objectId: string; threadId: string }
-    | undefined;
-  talkWindows: TalkWindow[];
+  columns: ReturnType<typeof groupByObject>;
   items: ListThreadsItem[];
-  selfObjectId?: string;
+  selectedObjectId?: string;
+  selectedThreadId?: string;
+  onSelectThread: (objectId: string, threadId: string) => void;
 }) {
-  if (!selected) {
-    return (
-      <div className="session-threads-index-empty-panel">
-        <p>Pick a thread or chat from the left.</p>
-        <p className="muted small">
-          Threads are grouped by object; click any node to inspect; relations show as
-          overlay lines when selected.
-        </p>
-      </div>
-    );
-  }
-  if (selected.kind === "chat") {
-    const w = talkWindows.find((tw) => tw.id === selected.windowId);
-    if (!w) {
-      return (
-        <div className="session-threads-index-empty-panel">
-          <p className="muted small">
-            Chat <code>{selected.windowId}</code> not found on user.root —— 可能 talk_window 已被关闭。
-          </p>
-        </div>
-      );
-    }
-    return <SelectedChat sessionId={sessionId} window={w} />;
-  }
-  // selected.kind === "thread"
-  const item = items.find(
-    (i) => i.objectId === selected.objectId && i.threadId === selected.threadId,
+  const colIndexOf = useMemo(() => {
+    const m = new Map<string, number>();
+    columns.forEach((c, i) => m.set(c.objectId, i));
+    return m;
+  }, [columns]);
+  const sortedItems = useMemo(
+    () => items.slice().sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0)),
+    [items],
   );
-  if (!item) {
-    // 退化场景: 后端 listThreads 还没列到这条 / 已删除 → 用 selected 兜底拼一个最小 item
-    const stub: ListThreadsItem = {
-      objectId: selected.objectId,
-      threadId: selected.threadId,
-    };
-    return (
-      <ThreadInspectDetail sessionId={sessionId} item={stub} selfObjectId={selfObjectId} />
-    );
-  }
+
   return (
-    <ThreadInspectDetail sessionId={sessionId} item={item} selfObjectId={selfObjectId} />
+    <div
+      className="threads-staff"
+      style={{ "--staff-cols": columns.length } as React.CSSProperties}
+    >
+      {/* Header row */}
+      {columns.map((g, i) => (
+        <StaffHeader key={g.objectId} objectId={g.objectId} colIndex={i} />
+      ))}
+      {/* Time-aligned thread rows */}
+      {sortedItems.map((item, rowIdx) => {
+        const col = (colIndexOf.get(item.objectId) ?? 0) + 1;
+        const active =
+          selectedObjectId === item.objectId && selectedThreadId === item.threadId;
+        const disabled = item.objectId === "user" && item.threadId === "root";
+        return (
+          <div
+            key={`${item.objectId}/${item.threadId}`}
+            className="threads-staff-cell"
+            style={{ gridRow: rowIdx + 2, gridColumn: col }}
+          >
+            <ThreadNode
+              sessionId={sessionId}
+              item={item}
+              level={0}
+              active={active}
+              disabled={disabled}
+              onSelect={() => onSelectThread(item.objectId, item.threadId)}
+            />
+          </div>
+        );
+      })}
+      {/* Staff line: 每行底部画一条淡淡的横线（包括 header 下方）；
+          用 ::after spacer 不容易跨整行，改用 grid 上的 background row 实现 —
+          见 .threads-staff::before / 背景 layered rules in styles.css */}
+    </div>
   );
 }
 
-function SelectedChat({ sessionId, window: w }: { sessionId: string; window: TalkWindow }) {
-  // peer thread polling 独立轨 —— 与 Round 7 SelectionDetail 同款，保留发消息能力
-  const { thread } = usePollingThread(sessionId, w.target, w.targetThreadId);
-  const handleSend = async (text: string) => {
-    await continueThread(sessionId, text, w.id);
-  };
+function StaffHeader({ objectId, colIndex }: { objectId: string; colIndex: number }) {
+  const { displayName } = useDisplayName(objectId);
+  const initial = (displayName || objectId || "?").trim().slice(0, 1).toUpperCase();
+  const accent = pickAccentForObject(objectId);
   return (
-    <ChatPanel
-      sessionId={sessionId}
-      objectId={w.target}
-      thread={thread}
-      onSend={handleSend}
-    />
+    <div
+      className="threads-staff-header"
+      style={
+        {
+          gridRow: 1,
+          gridColumn: colIndex + 1,
+          "--object-accent": accent,
+        } as React.CSSProperties
+      }
+    >
+      <span className="threads-staff-header-avatar" aria-hidden>
+        {initial}
+      </span>
+      <div className="threads-staff-header-title-block">
+        <span className="threads-staff-header-title" title={objectId}>
+          {displayName}
+        </span>
+        <span className="threads-staff-header-id muted" title={objectId}>
+          {objectId}
+        </span>
+      </div>
+    </div>
   );
+}
+
+function pickAccentForObject(objectId: string): string {
+  let h = 0;
+  for (let i = 0; i < objectId.length; i++) {
+    h = (h * 31 + objectId.charCodeAt(i)) % 360;
+  }
+  if (objectId === "user") return "hsl(220, 12%, 60%)";
+  return `hsl(${h}, 55%, 55%)`;
 }
 
 /**
- * H-3 (Round 5 体验官报告) 保留版：空 session 时跳到 /welcome 补 seed。
+ * BFS 出与 (seedObjectId, seedThreadId) 上下游相关的所有 thread。
+ *
+ * 关系边：
+ *   - talk_peers 双向：A.talk → B 视作 A↔B
+ *   - parent / child（同 object 内）
+ *   - creator 链（child.creatorObjectId/creatorThreadId → parent thread）
+ *
+ * 性能：N×O(N) BFS；session 规模 < 50 threads 完全够用。
  */
+function collectRelated(
+  items: ListThreadsItem[],
+  seedObjectId: string,
+  seedThreadId: string,
+): ListThreadsItem[] {
+  const key = (o: string, t: string) => `${o}/${t}`;
+  const byKey = new Map(
+    items.map((i) => [key(i.objectId, i.threadId), i] as const),
+  );
+  const visited = new Set<string>();
+  const queue: string[] = [key(seedObjectId, seedThreadId)];
+  while (queue.length > 0) {
+    const k = queue.shift()!;
+    if (visited.has(k)) continue;
+    visited.add(k);
+    const item = byKey.get(k);
+    if (!item) continue;
+    // 出边：talk peers
+    for (const p of item.talkPeers ?? []) {
+      if (p.targetThreadId) queue.push(key(p.targetObjectId, p.targetThreadId));
+    }
+    // 同 object 内的 parent / child
+    if (item.parentThreadId) queue.push(key(item.objectId, item.parentThreadId));
+    for (const cid of item.childThreadIds ?? []) {
+      queue.push(key(item.objectId, cid));
+    }
+    // 跨 object 的 creator 链
+    if (item.creatorObjectId && item.creatorThreadId) {
+      queue.push(key(item.creatorObjectId, item.creatorThreadId));
+    }
+    // 入边：扫描其它 item，谁 talk 到我 / 谁 creator 是我
+    for (const other of items) {
+      if (other === item) continue;
+      const otherTalksToMe = (other.talkPeers ?? []).some(
+        (p) =>
+          p.targetObjectId === item.objectId && p.targetThreadId === item.threadId,
+      );
+      if (otherTalksToMe) queue.push(key(other.objectId, other.threadId));
+      if (
+        other.creatorObjectId === item.objectId &&
+        other.creatorThreadId === item.threadId
+      ) {
+        queue.push(key(other.objectId, other.threadId));
+      }
+    }
+  }
+  return items.filter((i) => visited.has(key(i.objectId, i.threadId)));
+}
+
 function EmptySession({ sessionId }: { sessionId: string }) {
   return (
     <div className="session-threads-index-empty-state">
@@ -313,7 +430,6 @@ function EmptySession({ sessionId }: { sessionId: string }) {
   );
 }
 
-/** + 号弹窗 (沿用 Round 7 UserThreadHome 形态)。 */
 function NewChatModal({
   sessionId,
   onClose,
@@ -339,13 +455,19 @@ function NewChatModal({
         initialMessage: m,
       });
       onClose();
-      navigate(
-        toPath({
-          kind: "session",
-          sessionId,
-          selected: { kind: "chat", windowId: out.talkWindowId },
-        }),
-      );
+      if (out.targetObjectId && out.targetThreadId) {
+        navigate(
+          toPath({
+            kind: "flowsView",
+            view: "index",
+            sessionId,
+            objectId: out.targetObjectId,
+            threadId: out.targetThreadId,
+          }),
+        );
+      } else {
+        navigate(toPath({ kind: "flowsView", view: "index", sessionId }));
+      }
     } catch (e) {
       setErr(messageFromError(e));
     } finally {

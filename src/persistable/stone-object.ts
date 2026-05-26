@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { stoneDir, toJson, type StoneObjectRef } from "./common";
+import { stoneDir, STONE_CHILDREN_SUBDIR, toJson, type StoneObjectRef } from "./common";
 import { selfFile } from "./stone-self";
 import { readmeFile } from "./stone-readme";
 
@@ -40,6 +40,34 @@ export function clientDir(ref: StoneObjectRef): string {
  */
 export function stoneKnowledgeDir(ref: StoneObjectRef): string {
   return join(stoneDir(ref), "knowledge");
+}
+
+/**
+ * stone 的 children 目录（B-tree 协议，2026-05-26）。子 Agent 物理嵌套在
+ * `<parent>/children/<child>/`。详见 meta/object.doc.ts:thinkable.children.knowledge.patches.domain_axis。
+ */
+export function stoneChildrenDir(ref: StoneObjectRef): string {
+  return join(stoneDir(ref), STONE_CHILDREN_SUBDIR);
+}
+
+/**
+ * 把嵌套 objectId 解析为从根到 immediate parent 的祖先 objectId 列表。
+ *
+ * 例：
+ * - "sentry"              → []          // 顶层 Agent 没有祖先
+ * - "sentry/event"        → ["sentry"]
+ * - "a/b/c"               → ["a", "a/b"]
+ *
+ * 用于 knowledge loader 在加载子 Agent 时遍历祖先目录，按 frontmatter `inheritable`
+ * 决定是否下传知识（详见 src/thinkable/knowledge/loader.ts）。
+ */
+export function ancestorObjectIds(objectId: string): string[] {
+  const segments = objectId.split("/").filter(Boolean);
+  const result: string[] = [];
+  for (let i = 1; i < segments.length; i++) {
+    result.push(segments.slice(0, i).join("/"));
+  }
+  return result;
 }
 
 /**

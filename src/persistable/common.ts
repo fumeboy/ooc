@@ -72,9 +72,33 @@ export interface StoneObjectRef {
 /** stones/{branch}/objects/ 子目录名。集中常量便于其它模块（recovery / listStones / scope 判定）复用。 */
 export const STONE_OBJECTS_SUBDIR = "objects";
 
-/** 计算 stone 目录绝对路径。stonesBranch 缺省时回退到 main。 */
+/**
+ * stone 目录用来分隔嵌套子 Agent 的 marker 子目录名（B-tree 协议，2026-05-26）。
+ *
+ * 物理布局示例：
+ *   objectId = "sentry/sentry_event"
+ *   → stones/<branch>/objects/sentry/children/sentry_event
+ *
+ * 详见 meta/object.doc.ts:thinkable.children.knowledge.patches.domain_axis。
+ */
+export const STONE_CHILDREN_SUBDIR = "children";
+
+/**
+ * 计算 stone 目录绝对路径。stonesBranch 缺省时回退到 main。
+ *
+ * objectId 支持 "/" 编码嵌套层级：第 N 段（N≥2）会被插入 `STONE_CHILDREN_SUBDIR`
+ * 作为父子边界。形态：`stones/<branch>/objects/<a>/children/<b>/children/<c>`。
+ */
 export function stoneDir(ref: StoneObjectRef): string {
-  return join(ref.baseDir, "stones", ref.stonesBranch ?? STONES_MAIN_BRANCH, STONE_OBJECTS_SUBDIR, ref.objectId);
+  const segments = ref.objectId.split("/").filter(Boolean);
+  const physical = segments.flatMap((seg, i) => (i === 0 ? [seg] : [STONE_CHILDREN_SUBDIR, seg]));
+  return join(
+    ref.baseDir,
+    "stones",
+    ref.stonesBranch ?? STONES_MAIN_BRANCH,
+    STONE_OBJECTS_SUBDIR,
+    ...physical,
+  );
 }
 
 /**
