@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { threadDir, toJson, type FlowObjectRef, type ThreadPersistenceRef } from "./common";
 import type { ThreadContext } from "../thinkable/context";
 import { initContextWindows } from "../executable/windows/_shared/init";
+import { listRegisteredWindowTypes } from "../executable/windows/_shared/registry";
 
 /**
  * thread.json 的最小读写。
@@ -67,9 +68,23 @@ export async function readThread(
   try {
     const raw = await readFile(threadFile(persistence), "utf8");
     const parsed = JSON.parse(raw) as ThreadContext;
+    // 过滤掉未注册 type 的 windows (Round 7 移除 issue 后, 历史 thread.json 可能含 type="issue"
+    // 等遗留 entries; 不过滤会让 getWindowTypeDefinition 抛 INTERNAL_ERROR 阻塞所有依赖 thread
+    // 的 API。过滤是上游 graceful skip — registry 仍 fail-loud, 但读历史 thread 时不 crash。
+    // 打 console.warn 让运维知道发生了 silent drop, 符合 silent-swallow ban。)
+    const rawWindows = Array.isArray(parsed.contextWindows) ? parsed.contextWindows : [];
+    const known = new Set(listRegisteredWindowTypes());
+    const contextWindows = rawWindows.filter((w) => known.has(w.type));
+    if (contextWindows.length !== rawWindows.length) {
+      const dropped = rawWindows.filter((w) => !known.has(w.type));
+      console.warn(
+        `[readThread] ${persistence.objectId}/${threadId}: dropped ${dropped.length} window(s) with unregistered types:`,
+        dropped.map((w) => `${w.id}=${w.type}`).join(", "),
+      );
+    }
     const restored: ThreadContext = {
       ...parsed,
-      contextWindows: Array.isArray(parsed.contextWindows) ? parsed.contextWindows : [],
+      contextWindows,
       persistence,
     };
     // 兜底：缺 creator window 时补一个（spec § 初始 creator 对话 window）
