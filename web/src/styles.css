@@ -911,6 +911,124 @@ a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color
 .thread-detail-tab-body { flex: 1; min-height: 0; overflow: auto; }
 .btn.primary:disabled { opacity: .5; cursor: not-allowed; }
 
+/* ────────────────────────────────────────────────────────────────
+ * Round 9 E3 — Loop Time Machine
+ * 顶部 mini timeline + Navigator + DiffView + KeyEventsBar
+ * ──────────────────────────────────────────────────────────────── */
+
+.loop-mini-timeline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 4px 2px 6px;
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: thin;
+}
+.loop-mini-timeline-dot {
+  position: relative;
+  border: 0;
+  background: transparent;
+  padding: 4px 2px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.loop-mini-timeline-dot:hover { color: var(--foreground); }
+.loop-mini-timeline-dot.is-current { color: #1f3fa8; font-weight: 700; }
+.loop-mini-timeline-dot-marker { font-size: 13px; }
+.loop-mini-timeline-event-flag {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 5px;
+  background: #f1a72f;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.loop-navigator { display: flex; flex-direction: column; gap: 4px; padding: 8px 4px; }
+.loop-navigator-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.loop-navigator-title { display: inline-flex; align-items: baseline; gap: 8px; padding: 0 8px; }
+.loop-navigator-index {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--foreground);
+}
+.loop-navigator-meta { display: inline-flex; align-items: center; gap: 6px; padding-left: 4px; flex-wrap: wrap; }
+.loop-navigator-meta .pill { padding: 1px 6px; font-size: 10.5px; }
+
+.loop-diff-view { display: flex; flex-direction: column; gap: 6px; padding: 4px 0; }
+.loop-diff-view-head { display: flex; justify-content: space-between; padding: 0 4px; }
+.loop-diff-view-empty { padding: 16px; border: 1px dashed var(--border); border-radius: 6px; text-align: center; }
+.loop-diff-view-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.window-diff-row { border: 1px solid var(--border); border-radius: 6px; background: var(--card); overflow: hidden; }
+.window-diff-row-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; cursor: pointer; user-select: none;
+  flex-wrap: wrap;
+}
+.window-diff-row-head:hover { background: rgba(232, 240, 254, .15); }
+.window-diff-row-chevron { transition: transform .12s ease; color: var(--muted-foreground); flex: 0 0 auto; }
+.window-diff-row-chevron.is-open { transform: rotate(90deg); }
+.window-diff-row-status-icon { font-size: 12px; line-height: 1; flex: 0 0 auto; }
+.window-diff-row-type {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.window-diff-row-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.window-diff-row-summary { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.window-diff-row-pill {
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+.window-diff-row-body { border-top: 1px solid var(--border); padding: 10px; background: var(--background2); }
+
+/* 4 态视觉编码 */
+.window-diff-row-added { background: rgba(216, 248, 232, .35); border-color: #b8efd5; }
+.window-diff-row-added .window-diff-row-pill-added { background: #d8f8e8; color: #238d61; border-color: #b8efd5; }
+.window-diff-row-changed { border-color: #f1c98e; }
+.window-diff-row-changed .window-diff-row-pill-changed { background: #fde9d6; color: #a35a14; border-color: #f1c98e; }
+.window-diff-row-removed { opacity: .55; }
+.window-diff-row-removed .window-diff-row-type,
+.window-diff-row-removed .window-diff-row-id,
+.window-diff-row-removed .window-diff-row-summary { text-decoration: line-through; }
+.window-diff-row-removed .window-diff-row-pill-removed { background: var(--muted); color: var(--muted-foreground); border-color: var(--border); }
+.window-diff-row-unchanged .window-diff-row-pill-unchanged { background: var(--muted); color: var(--muted-foreground); border-color: var(--border); }
+
+/* Key events bar (底部) */
+.loop-key-events-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.loop-key-events-bar-label { flex: 0 0 auto; }
+.loop-key-events-bar-badges { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.loop-key-events-bar-anchor { display: inline-flex; }
+
 /* --- 4 类 window 专用 detail 组件样式（custom / skill_index / feishu_chat / feishu_doc） --- */
 
 /* skill_index */

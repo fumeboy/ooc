@@ -28,8 +28,8 @@ import {
   planBadgeClickAction,
   buildDecideBody,
   executeDecide,
+  loopEventAnchorId,
 } from "./LoopTimeline";
-import { loopEventAnchorId } from "./LoopEntry";
 import type { LoopEvent } from "./LoopEventBadge";
 
 describe("R0d-1: planBadgeClickAction — badge 单击意图分发", () => {

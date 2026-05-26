@@ -22,7 +22,7 @@ import {
   isKeyEvent,
   type LoopEvent,
 } from "./LoopEventBadge";
-import type { LoopListEntry } from "./LoopEntry";
+import type { LoopListEntry } from "./loop-types";
 
 function loop(idx: number): LoopListEntry {
   return {

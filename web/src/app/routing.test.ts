@@ -233,6 +233,99 @@ describe("flowsView ?selected= round-trip (legacy compat)", () => {
   });
 });
 
+/**
+ * Round 9 E3 (2026-05-26): `?loop=N` 表示 Loop Time Machine 当前查看的 loopIndex。
+ * 仅在 flowsView 上有意义；非法值（负数 / NaN / 非整数）静默丢；不传 = Latest。
+ */
+describe("flowsView ?loop= — Loop Time Machine 状态", () => {
+  it("toPath 写出 loop=N", () => {
+    expect(
+      toPath({
+        kind: "flowsView",
+        view: "thread_context",
+        sessionId: "s1",
+        objectId: "supervisor",
+        threadId: "t1",
+        loop: 23,
+      }),
+    ).toBe(
+      "/flows/thread_context?sessionId=s1&objectId=supervisor&threadId=t1&loop=23",
+    );
+  });
+  it("toPath 不写 loop 字段（undefined）", () => {
+    expect(
+      toPath({
+        kind: "flowsView",
+        view: "thread_context",
+        sessionId: "s1",
+      }),
+    ).toBe("/flows/thread_context?sessionId=s1");
+  });
+  it("toPath loop=0 也写出（loop 0 是合法值）", () => {
+    expect(
+      toPath({
+        kind: "flowsView",
+        view: "index",
+        sessionId: "s1",
+        loop: 0,
+      }),
+    ).toBe("/flows/index?sessionId=s1&loop=0");
+  });
+  it("parseRoute 读出 loop=N", () => {
+    const r = parseRoute(
+      "/flows/thread_context",
+      "?sessionId=s1&objectId=supervisor&threadId=t1&loop=23",
+    );
+    expect(r).toEqual({
+      kind: "flowsView",
+      view: "thread_context",
+      sessionId: "s1",
+      objectId: "supervisor",
+      threadId: "t1",
+      loop: 23,
+    });
+  });
+  it("parseRoute 非法 loop（负数 / NaN / 浮点）静默丢", () => {
+    expect(parseRoute("/flows/index", "?sessionId=s1&loop=-1")).toEqual({
+      kind: "flowsView",
+      view: "index",
+      sessionId: "s1",
+    });
+    expect(parseRoute("/flows/index", "?sessionId=s1&loop=abc")).toEqual({
+      kind: "flowsView",
+      view: "index",
+      sessionId: "s1",
+    });
+    expect(parseRoute("/flows/index", "?sessionId=s1&loop=1.5")).toEqual({
+      kind: "flowsView",
+      view: "index",
+      sessionId: "s1",
+    });
+  });
+  it("parseRoute loop=0 合法", () => {
+    expect(parseRoute("/flows/index", "?sessionId=s1&loop=0")).toEqual({
+      kind: "flowsView",
+      view: "index",
+      sessionId: "s1",
+      loop: 0,
+    });
+  });
+  it("loop round-trip", () => {
+    const route = {
+      kind: "flowsView" as const,
+      view: "thread_context" as const,
+      sessionId: "s1",
+      objectId: "x",
+      threadId: "t1",
+      loop: 7,
+    };
+    const url = toPath(route);
+    const [pathname, search] = url.split("?");
+    const r = parseRoute(pathname!, search ? "?" + search : "");
+    expect(r).toEqual(route);
+  });
+});
+
 describe("toPath ↔ parseRoute roundtrip", () => {
   for (const route of [
     { kind: "flowsView", view: "index" },

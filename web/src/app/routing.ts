@@ -63,6 +63,13 @@ export type RouteState =
       selected?:
         | { kind: "chat"; windowId: string }
         | { kind: "thread"; objectId: string; threadId: string };
+      /**
+       * Round 9 E3 (2026-05-26): Loop Time Machine 当前查看的 loopIndex。
+       * - 仅在 thread 详情页（Loop Timeline tab）有意义；其它视图忽略。
+       * - 不传 → 显示 Latest。
+       * - 切 loop 不重新 navigate 整个页面；用 navigate + replace 微调 query 即可。
+       */
+      loop?: number;
     };
 
 /**
@@ -100,6 +107,9 @@ export function toPath(state: RouteState): string {
             ? `chat:${state.selected.windowId}`
             : `thread:${state.selected.objectId}:${state.selected.threadId}`;
         parts.push(`selected=${encodeURIComponent(v)}`);
+      }
+      if (typeof state.loop === "number" && Number.isFinite(state.loop) && state.loop >= 0) {
+        parts.push(`loop=${state.loop}`);
       }
       return parts.length > 0 ? `${base}?${parts.join("&")}` : base;
     }
@@ -162,6 +172,7 @@ export function parseRoute(
   const qObjectId = query.get("objectId") ?? undefined;
   const qThreadId = query.get("threadId") ?? undefined;
   const qSelected = parseSelectedQuery(query.get("selected"));
+  const qLoop = parseLoopQuery(query.get("loop"));
 
   if (path === "/" || path === "/welcome") return { kind: "welcome" };
 
@@ -173,6 +184,7 @@ export function parseRoute(
     if (qObjectId) Object.assign(r, { objectId: qObjectId });
     if (qThreadId) Object.assign(r, { threadId: qThreadId });
     if (qSelected) Object.assign(r, { selected: qSelected });
+    if (qLoop !== undefined) Object.assign(r, { loop: qLoop });
     return r;
   }
 
@@ -210,6 +222,7 @@ export function parseRoute(
     if (qObjectId) Object.assign(r, { objectId: qObjectId });
     if (qThreadId) Object.assign(r, { threadId: qThreadId });
     if (qSelected) Object.assign(r, { selected: qSelected });
+    if (qLoop !== undefined) Object.assign(r, { loop: qLoop });
     return r;
   }
 
@@ -258,6 +271,18 @@ export function parsePathname(
   } = {},
 ): RouteState {
   return parseRoute(pathname, "", params);
+}
+
+/**
+ * 解析 `?loop=<N>` → 非负整数；非法值（负数 / NaN / 非数字）→ undefined 静默丢。
+ *
+ * Round 9 E3：Loop Time Machine 当前查看 loopIndex；不传 = Latest。
+ */
+function parseLoopQuery(raw: string | null): number | undefined {
+  if (raw === null || raw === "") return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return undefined;
+  return n;
 }
 
 /**
