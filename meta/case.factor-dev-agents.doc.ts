@@ -119,8 +119,8 @@ export const root: DocTreeNode = {
 
             **拓扑非循环**: sentry_factor_dev 是上游, 两个领域 Agent 是下游; 下游遇到阻塞时
             **反向 talk** 回 sentry_factor_dev (不是直接 talk 用户), 由 sentry_factor_dev 决定是补齐还是转交用户。
-            循环约定写在 \`stones/main/objects/sentry_event_factor/knowledge/relations/sentry_factor_dev.md\` 与
-            \`stones/main/objects/sentry_factor_group/knowledge/relations/sentry_factor_dev.md\`。
+            循环约定写在 \`stones/main/objects/sentry/children/sentry_event_factor/knowledge/relations/sentry_factor_dev.md\` 与
+            \`stones/main/objects/sentry/children/sentry_factor_group/knowledge/relations/sentry_factor_dev.md\`。
             `,
             named: {
                 "do_window.move(mode=ref)": "do_window 共享只读快照给另一个 thread; 详见 object.doc.ts:collaborable.do_window_move",
@@ -216,7 +216,7 @@ export const root: DocTreeNode = {
         agent_event_factor: {
             title: "Agent 2 — sentry_event_factor (事件因子领域)",
             content: `
-            **stone 路径**: \`.ooc-world/stones/main/objects/sentry_event_factor/\`
+            **stone 路径**: \`.ooc-world/stones/main/objects/sentry/children/sentry_event_factor/\`
 
             **身份** (self.md): 事件因子领域 All-in-One Agent — 包揽该领域的 API 查询、知识沉淀、开发执行。
 
@@ -244,7 +244,7 @@ export const root: DocTreeNode = {
         agent_factor_group: {
             title: "Agent 3 — sentry_factor_group (因子组领域)",
             content: `
-            **stone 路径**: \`.ooc-world/stones/main/objects/sentry_factor_group/\`
+            **stone 路径**: \`.ooc-world/stones/main/objects/sentry/children/sentry_factor_group/\`
 
             **身份** (self.md): 因子组领域 All-in-One Agent — go / offline 两种实现都包揽。
 
@@ -378,8 +378,8 @@ export const root: DocTreeNode = {
             **下游回报协议** (sentry_event_factor / sentry_factor_group → sentry_factor_dev):
 
             - 通过 \`creator do_window\` 上的 \`say\` 回报 (而不是 talk; 因为 do_window 已经是双方都能看的协作通道)。
-            - 回报格式见 \`stones/main/objects/sentry_event_factor/knowledge/relations/sentry_factor_dev.md\` 与
-              \`stones/main/objects/sentry_factor_group/knowledge/relations/sentry_factor_dev.md\` (各有具体模板)。
+            - 回报格式见 \`stones/main/objects/sentry/children/sentry_event_factor/knowledge/relations/sentry_factor_dev.md\` 与
+              \`stones/main/objects/sentry/children/sentry_factor_group/knowledge/relations/sentry_factor_dev.md\` (各有具体模板)。
 
             **阻塞处理**:
             - 下游遇到阻塞 (缺接口 / plan 不清晰) → talk 回 sentry_factor_dev, 描述阻塞原因;

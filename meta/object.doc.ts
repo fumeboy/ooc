@@ -324,6 +324,108 @@ export const root: DocTreeNode = {
                             如果 LLM 希望长期保留某篇知识，应通过显式 open_knowledge 打开 knowledge_window。
                             `,
                         },
+                        "domain_axis": {
+                            title: "B-tree 协议：领域父子继承（2026-05-26）",
+                            content: `
+                            **背景**：现有 \`activates_on\` 提供的是"任务进度轴"——根据 LLM 当前 command path 渐进激活；
+                            但**领域层级轴**（从大领域到子领域）此前没有协议表达，导致 sentry/* 类一组同领域 Agent
+                            的公共知识无处放：放 \`stones/main/knowledge/\` 全局可见但其实没人加载、放每个子 Agent 自己的
+                            \`knowledge/\` 又会重复 N 份。
+
+                            **协议**：knowledge 激活的实际是二维 grid：
+                            - 横轴 = 任务进度（command path / form refinement）—— 既有 \`activates_on\`
+                            - 纵轴 = 领域层级（B-tree 父子继承）—— 本协议新增
+
+                            纵轴通过**物理嵌套** + **frontmatter 显式声明** 两件事解决：
+
+                            ## 1. 物理嵌套（B-tree）
+
+                            子 Agent 物理嵌套在 parent 的 \`children/\` 子目录下：
+
+                            \`\`\`
+                            stones/<branch>/objects/sentry/
+                            ├── .stone.json
+                            ├── self.md
+                            ├── readme.md
+                            ├── knowledge/
+                            │   ├── sentry_intro.md      (frontmatter inheritable: true)
+                            │   └── sentry_factor.md     (frontmatter inheritable: true)
+                            └── children/
+                                ├── sentry_event/        (子 Agent，objectId="sentry/sentry_event")
+                                ├── sentry_event_factor/ (子 Agent)
+                                └── sentry_factor_group/ (子 Agent)
+                            \`\`\`
+
+                            **objectId 路径编码**：嵌套子 Agent 的 objectId 用 "/" 编码层级：
+                            - \`sentry\` → \`stones/<branch>/objects/sentry/\`（顶层）
+                            - \`sentry/sentry_event\` → \`stones/<branch>/objects/sentry/children/sentry_event/\`
+                            - \`a/b/c\` → \`stones/<branch>/objects/a/children/b/children/c/\`
+
+                            实现：\`src/persistable/common.ts:stoneDir\` 把 objectId split("/")，segments 间插入 \`children/\` marker。
+
+                            ## 2. frontmatter 继承门控
+
+                            knowledge 文件的 frontmatter 必须显式声明 \`inheritable: true\` 才能被子 Agent 继承：
+
+                            \`\`\`yaml
+                            ---
+                            title: 哨兵主链路
+                            inheritable: true        # 必须显式 true，缺省 / false 都不下传
+                            ---
+                            \`\`\`
+
+                            缺省（不写此字段）= 不下传——这个**默认安全**的设计避免了"父级 knowledge 大量误下传膨胀子 Agent context"。
+
+                            ## 3. loader 加载顺序（CSS-cascade 语义）
+
+                            \`loadKnowledgeIndex\` 加载顺序（前者被后者覆盖）：
+
+                            1. **祖先 seed**：从 root → immediate parent，扫每个祖先 \`stones/.../<ancestor>/knowledge/\`，
+                               仅纳入 \`inheritable: true\` 的文件
+                            2. **self seed**：扫 \`stones/.../<self>/knowledge/\`（自然 override 父级同 idPath）
+                            3. **self sediment**：扫 \`pools/objects/<self>/knowledge/\`（保留原有 sediment 覆盖 seed 语义）
+
+                            子 Agent 自己的 knowledge 永远**override** 父级（CSS cascade，更具体的覆盖更宽泛的）。
+
+                            ## 4. sediment 不下传
+
+                            **祖先的 pool（sediment knowledge：memory / relations）默认不下传**：
+
+                            - sediment 是该 Agent 私有的运行时认知（reflectable / collaborable 沉淀），跨 Agent 共享有隐私问题
+                            - loader 只扫祖先 \`stoneKnowledgeDir\`，不扫祖先 \`poolKnowledgeDir\`
+                            - 即便 sediment 文件 frontmatter 写了 \`inheritable: true\` 也不下传——是 loader 路径选择决定的，不是 frontmatter 决定的
+
+                            如确需跨 Agent 共享某条认知，应该把它从 sediment 提升到 stone seed 并标 \`inheritable: true\`，进 git review。
+
+                            ## 5. 边界 / 已知未解决
+
+                            本期（2026-05-26 MVP）只实现：
+                            - \`stoneDir\` 的 "/" 路径解析
+                            - knowledge loader 的祖先继承
+                            - frontmatter \`inheritable\` 字段
+
+                            **暂不解决**（标记为已知 issue，按需后续推进）：
+                            - listStones() 不递归扫 children/，nested Agents 不在 list 输出里
+                            - web sidebar / \`/stones/:id\` URL 路由对 "/" 编码的 objectId 处理
+                            - flow 侧 \`flows/<sess>/objects/<id>/\` 对嵌套 objectId 的展开（路径会自然嵌套，但 readdir 类扫描需更新）
+                            - eval gate 跨层语义、context budget 距离衰减、DAG 多继承
+                            - 已有 sentry_event_factor 等 8 个平铺 sentry_* Agent 的物理迁移
+
+                            实现锚点：
+                            - \`src/persistable/common.ts:stoneDir\` / \`STONE_CHILDREN_SUBDIR\`
+                            - \`src/persistable/stone-object.ts:ancestorObjectIds\` / \`stoneChildrenDir\`
+                            - \`src/thinkable/knowledge/loader.ts:loadKnowledgeIndex\`
+                            - \`src/thinkable/knowledge/types.ts:KnowledgeFrontmatter.inheritable\`
+                            - 测试：\`src/thinkable/knowledge/__tests__/loader-inheritance.test.ts\`
+                            - 首个使用：\`.ooc-world/stones/main/objects/sentry/\`（parent stone + 3 份 inheritable knowledge）
+                            `,
+                            named: {
+                                "B-tree": "Agent 物理嵌套形成的树（每个 Agent 可有 children/ 子目录），与 children 之间多分支即 B-tree",
+                                "inheritable": "knowledge frontmatter 字段，true 才下传给子 Agent",
+                                "CSS-cascade": "更具体的（子级）覆盖更宽泛的（父级）—— web CSS 经典语义",
+                                "objectId 路径编码": "用 \"/\" 分隔多级，stoneDir 解析时插入 children/ marker",
+                            },
+                        },
                     },
                 },
                 "thread": {
