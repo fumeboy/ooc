@@ -143,7 +143,7 @@ afterAll(async () => {
 });
 
 describe("stone client parity (agent-native UI dogfood)", () => {
-  test.skip("supervisor stone 自带 client/index.tsx — endpoint 返回 200 + 真 tsx 源码", async () => {
+  test("supervisor stone 自带 client/index.tsx — endpoint 返回 200 + 真 tsx 源码", async () => {
     if (!backend) throw new Error("backend not started");
 
     // 1) client-source-url endpoint 必须 200
@@ -154,11 +154,19 @@ describe("stone client parity (agent-native UI dogfood)", () => {
     expect(typeof body.absPath).toBe("string");
     expect(typeof body.fsUrl).toBe("string");
     expect(body.absPath!).toMatch(/supervisor[/\\]client[/\\]index\.tsx$/);
-    expect(body.fsUrl!.startsWith("/@fs")).toBe(true);
+
+    // === visible 渲染回归 gate (Round 17) ===
+    // backend 以相对 `--world ./.ooc-world` 启动 (见 startBackend), config.baseDir
+    // 必须已归一为绝对路径, 于是 fsUrl = `/@fs` + 绝对 absPath = `/@fs/...`。
+    // 旧 bug: baseDir 取相对原值 → fsUrl = `/@fs.ooc-world/...`, vite `/@fs` 协议
+    // 要求绝对路径, 浏览器 dynamic import 必失败, client page 渲染不出来。
+    expect(body.absPath!.startsWith("/")).toBe(true); // absPath 名副其实: 真绝对
+    expect(body.fsUrl!.startsWith("/@fs/")).toBe(true); // 绝对 /@fs/, 不是相对 /@fs.
+    expect(body.fsUrl!.startsWith("/@fs.")).toBe(false); // 显式拦旧坏形态
 
     // 2) absPath 必须真实存在且可读 (用 fs 直接读, 不走 vite)
-    //    absPath 可能是相对 `--world ./.ooc-world` 前缀的相对路径; resolve 一下.
-    const absPath = resolve(process.cwd(), body.absPath!);
+    //    baseDir 已归一为绝对, absPath 直接可用; resolve 对绝对路径幂等。
+    const absPath = resolve(body.absPath!);
     const st = await stat(absPath);
     expect(st.isFile()).toBe(true);
 

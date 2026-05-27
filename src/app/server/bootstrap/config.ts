@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { createJobManager } from "../runtime/job-manager";
 import { createPauseStore } from "../runtime/pause-store";
 import { STONES_MAIN_BRANCH } from "@src/persistable";
@@ -61,6 +62,11 @@ export function readServerConfig(source: ConfigSource = {}): ServerConfig {
   const env = source.env ?? process.env;
   const argv = source.argv ?? process.argv;
   const explicitBaseDir = readFlagValue(argv, ["--world", "--world-dir", "--base-dir"]);
+  // baseDir 归一为绝对路径（root-cause #1）：下游 stoneDir()/objectDir()/client-source-url
+  // 的 `/@fs${absPath}` 要求绝对路径；相对 `--world ./.ooc-world` 启动若不归一会产出
+  // 坏的 `/@fs.ooc-world/...` 让浏览器 import client page 失败。process.cwd() 默认值
+  // 已是绝对，path.resolve 对其幂等。
+  const rawBaseDir = explicitBaseDir ?? env.OOC_WORLD_DIR ?? env.OOC_BASE_DIR ?? process.cwd();
   const explicitBranch = readFlagValue(argv, ["--stones-branch"]);
   const explicitPort = readFlagValue(argv, ["--port"]);
 
@@ -73,7 +79,7 @@ export function readServerConfig(source: ConfigSource = {}): ServerConfig {
 
   return {
     port,
-    baseDir: explicitBaseDir ?? env.OOC_WORLD_DIR ?? env.OOC_BASE_DIR ?? process.cwd(),
+    baseDir: resolve(rawBaseDir),
     stonesBranch: validateStonesBranch(
       explicitBranch ?? env.OOC_STONES_BRANCH ?? STONES_MAIN_BRANCH,
     ),
