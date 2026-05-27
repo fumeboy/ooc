@@ -763,8 +763,6 @@ a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color
   gap: 0;
   align-items: stretch;
   background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
   padding: 0;
   overflow: hidden;
   /* 五线谱质感：每行底部一根淡色横线（用 grid-row 占位的 cell border 实现，

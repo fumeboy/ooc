@@ -1,27 +1,22 @@
 /**
- * SessionThreadsIndex — Round 9 v3：横向 ObjectColumn + 选中后五线谱 staff view。
+ * SessionThreadsIndex — 2026-05-27 v4：永远走 StaffView（五线谱）布局。
  *
- * 两种模式：
+ *   ┌─ user ──┬─ supervisor ─┬─ assistant ─┐
+ *t0│  ●root  │              │             │
+ *t1│         │  ●user-talk  │             │
+ *t2│         │              │  ●fork-1    │
+ *t3│         │  ✓done       │             │
+ *   └─────────┴──────────────┴─────────────┘
  *
- * **default**（无选中）：经典横向 ObjectColumn 排列，每列展示该 object 的全部 thread 树。
- *
- * **staff**（点击某 thread 后）：BFS 出"上下游相关 thread"集合（talk 链 + parent/child +
- *   creator 链），按 createdAt 升序在所有 column 间共享同一组「时间行」，每个 thread
- *   仍渲染在自己的 column 里，行高随大者；视觉上像五线谱：
- *
- *     ┌─ user ──┬─ supervisor ─┬─ assistant ─┐
- *  t0 │  ●root  │              │             │
- *  t1 │         │  ●user-talk  │             │
- *  t2 │         │              │  ●fork-1    │
- *  t3 │         │  ✓done       │             │
- *     └─────────┴──────────────┴─────────────┘
- *
- *   每行一条 thread；列保持「所属 object」语义。点击其它 thread 重新计算 staff，仍按
- *   时间排列。再次点击同一 thread（或刷掉 query 的 objectId/threadId）退回 default。
+ * 两种 items 输入：
+ *   **default**（无选中）：items = 全量 listThreads，所有 thread 按 createdAt 升序占行
+ *   **filtered**（选中某 thread）：items = 通过 BFS 上下游算出的 relatedItems，列也只
+ *     保留有相关 thread 的 object —— 视觉只是"行被裁过"，**不**切换组件形态，避免抖动
  *
  * 路由（沿用 2026-05-27 路由模型）：
  *   - 列表项点击 → navigate `/flows/index?sessionId=&objectId=&threadId=`
  *   - user.root 节点 disabled，不可切换查看
+ *   - 右侧 "→" 按钮跳 thread_context view，保留 query
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -34,7 +29,6 @@ import { toPath, useRouteState } from "../../../app/routing";
 import { useDisplayName, useDisplayNames } from "../../objects";
 import { messageFromError } from "../../../transport/errors";
 import type { ListThreadsItem } from "../types";
-import { ObjectColumn } from "./ObjectColumn";
 import { ThreadNode } from "./ThreadNode";
 import { groupByObject } from "./session-threads-index.helpers";
 
@@ -206,29 +200,18 @@ export function SessionThreadsIndex({
           <div className="session-threads-index-empty muted small">
             No threads yet — start a chat to see this session take shape.
           </div>
-        ) : relatedItems && groupedStaff ? (
+        ) : (
+          // 无选中 → 用全量 items；选中 → 用 relatedItems。统一走 StaffView 避免两套
+          // 不一致的 UI 形态（早期版本 default 走 ObjectColumn 横向树，selected 走 staff
+          // grid，视觉跳变明显）。default 模式下"列时间排序"也是合理的全局视图。
           <StaffView
             sessionId={sessionId}
-            columns={groupedStaff}
-            items={relatedItems}
+            columns={visibleColumns}
+            items={relatedItems ?? items}
             selectedObjectId={selectedObjectId}
             selectedThreadId={selectedThreadId}
             onSelectThread={onSelectThread}
           />
-        ) : (
-          <div className="session-threads-index-columns">
-            {groupedAll.map((g) => (
-              <ObjectColumn
-                key={g.objectId}
-                sessionId={sessionId}
-                objectId={g.objectId}
-                items={g.items}
-                selectedThreadId={selectedThreadId}
-                selectedObjectId={selectedObjectId}
-                onSelectThread={onSelectThread}
-              />
-            ))}
-          </div>
         )}
       </div>
 
