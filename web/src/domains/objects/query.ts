@@ -17,11 +17,51 @@ import type { DisplayName } from "./model";
 const NON_STONE_OBJECT_IDS = new Set<string>(["user", "main"]);
 const warnedNonStoneIds = new Set<string>();
 
+/**
+ * Round 15 L2 (体验官 Round 14 报告): vite dev console 在每次刷新 / HMR 重载 module
+ * 时会重置 module-scope `warnedNonStoneIds`，导致 "skip stones/self lookup for non-stone
+ * object id" warning spam。改用 sessionStorage 持久化首次 warn 标记，让 dedup 在整个
+ * 浏览器 session 内有效（HMR / hard refresh 不再重复 warn）。
+ *
+ * - 保留首次 warn（让真问题"新 stone 没注册"仍可被发现）
+ * - sessionStorage 不可用 / 写失败 → fallback 到 module Set（无回归）
+ * - test 用 __resetWarnedNonStoneIdsForTest 清掉跨用例污染
+ */
+const WARNED_STORAGE_KEY = "ooc.warnedNonStoneIds";
+
+function hasWarned(objectId: string): boolean {
+  if (warnedNonStoneIds.has(objectId)) return true;
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = window.sessionStorage.getItem(WARNED_STORAGE_KEY);
+    if (!raw) return false;
+    const list = raw.split(",");
+    return list.includes(objectId);
+  } catch {
+    return false;
+  }
+}
+
+function markWarned(objectId: string): void {
+  warnedNonStoneIds.add(objectId);
+  if (typeof window === "undefined") return;
+  try {
+    const raw = window.sessionStorage.getItem(WARNED_STORAGE_KEY) ?? "";
+    const list = raw ? raw.split(",") : [];
+    if (!list.includes(objectId)) {
+      list.push(objectId);
+      window.sessionStorage.setItem(WARNED_STORAGE_KEY, list.join(","));
+    }
+  } catch {
+    // ignore: 隐私模式 / quota 满都不该阻断 UI
+  }
+}
+
 function isLikelyStoneObjectId(objectId: string | undefined): boolean {
   if (!objectId) return false;
   if (NON_STONE_OBJECT_IDS.has(objectId)) {
-    if (!warnedNonStoneIds.has(objectId)) {
-      warnedNonStoneIds.add(objectId);
+    if (!hasWarned(objectId)) {
+      markWarned(objectId);
       // eslint-disable-next-line no-console
       console.warn(
         `[objects/query] skip stones/self lookup for non-stone object id "${objectId}" (filtered to avoid 404 noise; see M-3 fix)`,
@@ -30,6 +70,17 @@ function isLikelyStoneObjectId(objectId: string | undefined): boolean {
     return false;
   }
   return true;
+}
+
+/** 测试用：清掉 dedup 状态（module-level + sessionStorage）。 */
+export function __resetWarnedNonStoneIdsForTest(): void {
+  warnedNonStoneIds.clear();
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(WARNED_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
 }
 
 /** Export for tests. */

@@ -411,6 +411,7 @@ button { cursor: pointer; }
 .right-body .markdown, .right-body .muted, .right-body .small { overflow-wrap: anywhere; word-break: break-word; }
 .session-calendar { margin: 8px; padding: 10px; border: 1px solid rgba(224, 227, 220, .72); border-radius: 8px; background: rgba(255,255,255,.45); flex: 0 0 auto; }
 .calendar-title { display: flex; justify-content: space-between; color: #8d9189; font-size: 11px; margin-bottom: 8px; }
+.calendar-hidden-tag { color: var(--muted-foreground); font-size: 10px; opacity: 0.78; }
 .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-template-rows: repeat(5, 12px); gap: 3px; }
 .calendar-grid span { height: 12px; min-height: 12px; max-height: 12px; border-radius: 2px; background: #e8ebe4; }
 .calendar-grid span.empty { background: transparent; }

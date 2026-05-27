@@ -242,6 +242,23 @@ P0-1 (Permission 模型) Q0a~Q0d 完成；Q0e 列 todo（自改 server/index.ts 
 - **2026-05-25**：首版。Supervisor Round 1 外循环。
 - **2026-05-25**（当日 Round 1 闭环）：P0-2 完整实施完成，5 套 e2e PASS / 全仓单测 PASS / meta tsc clean。差异与残留如上。
 - **2026-05-25**（当日 Round 2 闭环）：P0-1 Q0a~Q0d 完成，2 套 e2e (Q0b+Q0c) PASS / 联合 P0-1+P0-2 42 用例 PASS / 全仓 550 单测 PASS。3 项歧义 Supervisor 拍板；Q0e 列 todo。
+- **2026-05-27**（Round 15 闭环）：清 Round 14 体验官报告 L1-L3 + 加 Round 11 end-reflection 集成 e2e。
+  - **L1** user home calendar 隐藏提示：Sidebar.tsx + SessionList.tsx 联动；月份 chip 右侧 "(N 隐藏)" 微标签（仅 hiddenTestCount>0 显示）；sessionStorage `ooc.showTestSessions` + CustomEvent `ooc:show-test-sessions-changed` 跨组件同步
+  - **L2** console.warn dedup（stones/self 非 stone object）：方案 1 — sessionStorage key `ooc.warnedNonStoneIds` 持久化首次 warn 标记，跨 HMR / hard refresh 不再 spam；保留首次 warn 让真问题可发现；fallback 到 module Set（sessionStorage 不可用时）
+  - **L3** Unknown route fallback：route-error.tsx 全替换；智能 `guessIntendedPath()` 把 `/sessions/<sid>` 推 `/flows/<sid>` + 固定 2 个 fallback 链接（Flows 列表 + 首页）
+  - **Round 11 end-reflection 集成 e2e**: `tests/e2e/backend/end-reflection-reminder.e2e.test.ts` 3 用例
+    - 业务 thread + end form → buildInputItems 后 system content 含 reminder path + `target:"super"` + `title:` + `memory/<slug>.md` + `endSummary`
+    - super session + end form → 不含 reminder（套娃门控）
+    - 业务 thread + talk form → 不含 reminder（form.command 门控）
+    - 直调 synthesizer + 完整 buildInputItems 路径（非真启 backend）
+  - **派单纪律连续生效**: sub agent 留 working tree, Supervisor 统一 commit（Round 12→13→14→15 风格一致）
+  - **整体校验**:
+    - tsc clean
+    - src/: 792 pass / 0 fail / 3 skip
+    - web/: 201 pass / 0 fail（不破坏）
+    - backend e2e: **70 pass / 0 fail / 9 skip**（+3 新 reminder e2e）
+  - **未做（M2 留下轮单独 design）**: failed form 长期残留 GC 协议
+
 - **2026-05-27**（Round 14 闭环）：AgentOfExperience 自由体验 + 暴露 Round 10 F3 实际失效 + H1/M1 fix。
   - **体验官派单**：自由体验（非固定剧本）+ 必覆盖 Round 11-13 新功能 (form 状态机 / end reflection / type-dispatch diff) + 自由探索远端新功能 (recovery / timeout / sentry / peer_readme)
   - **环境**: 真 LLM（Claude opus-4-7）+ Playwright chromium headless + 用户预启 vite dev (5173)

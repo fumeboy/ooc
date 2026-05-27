@@ -46,6 +46,13 @@ function writeShowTestSessions(value: boolean): void {
   } catch {
     // ignore: 隐私模式 / quota 满都不该阻断 UI
   }
+  // Round 15 L1: 通知 sidebar calendar 月份 chip 联动隐藏计数显示。
+  // 同标签页 localStorage 不会触发 'storage' 事件, 用自定义事件桥接。
+  try {
+    window.dispatchEvent(new CustomEvent("ooc:show-test-sessions-changed"));
+  } catch {
+    // ignore: 非浏览器环境（SSR / 测试桩）下 CustomEvent 不可用
+  }
 }
 
 export function SessionList({ flows, activeSessionId, onSelect }: { flows: FlowSession[]; activeSessionId?: string; onSelect: (flow: FlowSession) => void }) {

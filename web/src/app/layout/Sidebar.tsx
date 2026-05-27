@@ -1,11 +1,48 @@
 import { MainLogo } from "../../shared/brand/MainLogo";
 import { Box, Database, Globe2, List, Plus, Zap } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { FileTreeNode, TreeScope } from "../../domains/files";
 import { FileTree } from "../../domains/files/components/FileTree";
 import type { FlowSession } from "../../domains/flows";
 import { useDisplayNames } from "../../domains/objects";
 import { SessionList } from "../../domains/sessions/components/SessionList";
+
+/**
+ * Round 15 L1: user home calendar 月份 chip 加 "(N 隐藏)" 微标签——sidebar 列表默认隐藏
+ * `_test_` 前缀的 session 时，"X sessions" 总数与可见列表不直观联动，初看有困惑。
+ * 这里读取 `ooc.showTestSessions` localStorage（与 SessionList 同源）并在 hidden > 0
+ * 时显示一个紧凑的隐藏计数。
+ */
+const TEST_SESSION_STORAGE_KEY = "ooc.showTestSessions";
+const TEST_SESSION_PREFIX = "_test_";
+
+function readShowTestSessions(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(TEST_SESSION_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+/** 订阅 localStorage 与 SessionList 内 toggle 引发的隐藏计数变化，保持 chip 与列表联动。 */
+function useShowTestSessions(): boolean {
+  const [value, setValue] = useState<boolean>(() => readShowTestSessions());
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sync = () => setValue(readShowTestSessions());
+    // 跨标签页 / 同标签页 SessionList toggle 同步：
+    // - storage 事件: 其他标签页改 localStorage
+    // - 自定义事件 ooc:show-test-sessions-changed: SessionList toggle 时 dispatch
+    window.addEventListener("storage", sync);
+    window.addEventListener("ooc:show-test-sessions-changed", sync as EventListener);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("ooc:show-test-sessions-changed", sync as EventListener);
+    };
+  }, []);
+  return value;
+}
 
 function getFlowTree(root: FileTreeNode | undefined, sessionId: string | undefined) {
   if (!root || !sessionId) return root;
@@ -145,6 +182,12 @@ export function Sidebar({ scope, flows, tree, activePath, activeSessionId, activ
   const stonesTreeDisplay = scope === "stones" ? applyDisplayNameToTree(tree, names) : tree;
   const flowTreeDisplay = scope === "flows" ? applyDisplayNameToTree(flowTree, names) : flowTree;
 
+  // Round 15 L1: calendar 月份 chip 联动 _test_ 隐藏计数
+  const showTestSessions = useShowTestSessions();
+  const hiddenTestCount = showTestSessions
+    ? 0
+    : flows.reduce((n, flow) => (flow.sessionId.startsWith(TEST_SESSION_PREFIX) ? n + 1 : n), 0);
+
   return (
     <aside className="sidebar gap-2">
       <div className="sidebar-brand panel">
@@ -228,7 +271,21 @@ export function Sidebar({ scope, flows, tree, activePath, activeSessionId, activ
           </div>
         ) : (
           <div className="session-calendar">
-            <div className="calendar-title"><span>{calendarMonth(flows).label}</span><span>{flows.length} sessions</span></div>
+            <div className="calendar-title">
+              <span>{calendarMonth(flows).label}</span>
+              <span>
+                {flows.length} sessions
+                {hiddenTestCount > 0 && (
+                  <span
+                    className="calendar-hidden-tag"
+                    title={`${hiddenTestCount} _test_ session${hiddenTestCount === 1 ? "" : "s"} 已隐藏；点眼睛 toggle 显示`}
+                    data-testid="calendar-hidden-tag"
+                  >
+                    {" "}({hiddenTestCount} 隐藏)
+                  </span>
+                )}
+              </span>
+            </div>
             <div className="calendar-grid">{buildHeatmapCells(flows, calendarMonth(flows).year, calendarMonth(flows).month).map((cell, index) => <span key={index} className={cell.className} title={cell.title} />)}</div>
           </div>
         )}
