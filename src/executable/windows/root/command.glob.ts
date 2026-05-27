@@ -63,7 +63,9 @@ export const globCommand: CommandTableEntry = {
     const pattern = typeof args.pattern === "string" ? args.pattern : "";
     if (!pattern) {
       entries[GLOB_INPUT_PATH] =
-        "glob 缺少 pattern；用 args={ pattern: \"<glob-string>\", cwd?: \"<dir>\" }。";
+        "glob 还缺以下参数: pattern。\n" +
+        "请用 refine(form_id, args={ pattern: \"<glob-string>\", cwd?: \"<dir>\" }) 补齐后 submit(form_id)。\n" +
+        "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
     return entries;
   },
@@ -76,7 +78,7 @@ export async function executeGlobCommand(
   const thread = ctx.thread;
   if (!thread) return "[glob] 缺少 thread context。";
   const pattern = typeof ctx.args.pattern === "string" ? ctx.args.pattern : "";
-  if (!pattern) return "[glob] 缺少 pattern 参数。submit 后 form 已 executed, 请 close(form_id) 后重新 open(command=\"glob\", args={ pattern: \"<glob-string>\", cwd: \"<dir>\" }) 一次性给齐参数; 下次直接在 open 时附 args 可避免再次进入失败回路。";
+  if (!pattern) return "[glob] 缺少 pattern 参数（form 已 submit 进入 executed, 无法再 refine）。下次请在 open 状态下用 refine(form_id, args={ pattern: \"<glob-string>\", cwd: \"<dir>\" }) 补齐后再 submit; 当前 form 已 executed, 只能 close + 重 open——这是被迫路径, 不是常规修复策略。";
   // 默认 cwd = session 的 baseDir (thread.persistence.baseDir)，不到则回退 process.cwd()
   const rawCwd = typeof ctx.args.cwd === "string" ? ctx.args.cwd : "";
   const cwd = rawCwd ? resolveSessionPath(thread, rawCwd) : resolveSessionPath(thread, ".");

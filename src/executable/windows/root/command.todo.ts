@@ -55,7 +55,9 @@ export const todoCommand: CommandTableEntry = {
     if (formStatus !== "open") return entries;
     if (typeof args.content !== "string" || args.content.trim().length === 0) {
       entries[TODO_INPUT_PATH] =
-        "todo 需要 content；用 refine(args={ content: \"...\", on_command_path: [...] })，或在 open 时一次性给齐。";
+        "todo 还缺以下参数: content。\n" +
+        "请用 refine(form_id, args={ content: \"<待办内容>\", on_command_path?: [\"<cmd>\"] }) 补齐后 submit(form_id)。\n" +
+        "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
     return entries;
   },
@@ -81,7 +83,7 @@ export async function executeTodoCommand(
   const thread = ctx.thread;
   if (!thread) return "[todo] 缺少 thread context。";
   const content = typeof ctx.args.content === "string" ? ctx.args.content : "";
-  if (!content) return "[todo] 缺少 content 参数。submit 后 form 已 executed, 请 close(form_id) 后重新 open(command=\"todo\", args={ content: \"<待办内容>\", on_command_path: [\"<cmd>\"] }) 一次性给齐参数; 下次直接在 open 时附 args 可避免再次进入失败回路。";
+  if (!content) return "[todo] 缺少 content 参数（form 已 submit 进入 executed, 无法再 refine）。下次请在 open 状态下用 refine(form_id, args={ content: \"<待办内容>\", on_command_path: [\"<cmd>\"] }) 补齐后再 submit; 当前 form 已 executed, 只能 close + 重 open——这是被迫路径, 不是常规修复策略。";
 
   const onCommandPath = Array.isArray(ctx.args.on_command_path)
     ? (ctx.args.on_command_path as unknown[]).filter((v): v is string => typeof v === "string")

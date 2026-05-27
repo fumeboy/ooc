@@ -338,11 +338,44 @@ export default function Report({ sessionId, objectName, callMethod }: ClientProp
 - 每个 window 的 title 强制必填
 - 收到 inbox 消息后，下一次工具调用通过 mark 标记 msg_id
 
-## form 生命周期
+## form 生命周期 与 参数修复（重要）
 
-- open：刚创建，可继续 refine 或 submit
-- executing：正在执行
-- executed：已执行，成功则系统自动移除；失败保留 result，需要显式 close
+command_exec form 有三态: \`open → executing → executed\`。
+
+- **open**：刚创建，可继续 refine 或 submit
+- **executing**：正在执行
+- **executed**：已执行，成功则系统自动移除；失败保留 result，需要显式 close
+
+### open 状态参数缺失/错误 → 用 refine 修复（不要 close 重开）
+
+\`\`\`
+exec(form_id, "refine", args={ <补的字段>: ... })   // form 仍 open
+exec(form_id, "submit")                              // 触发执行
+\`\`\`
+
+- refine 仅允许 \`status="open"\` 的 form；累积式覆盖（相同 field 后写覆盖前写）
+- 多个字段一起补：把全部缺/错的字段一次性放进 refine 的 args
+
+### submit 后 form 立刻 executed，不再允许 refine
+
+- 失败状态 (exec 返回 error) 的 form 已固化在 executed，**无路可走只能 close + 重 open**
+- 这是"被迫路径"，**不是首选修复策略**
+
+### 关键提示
+
+**open 状态发现参数不全时，优先 refine；不要为了"重新填一遍"就 close 重开。**
+
+- close + 重开会丢失 form 上已激活的 knowledge / 已派生的 commandPaths
+- 产生额外噪声 window，污染 context，拖慢 thread
+- 每个 command 的 input prompt 在缺参数时会列出缺失的字段，按提示 refine 即可
+
+### 典型路径
+
+1. \`open(command="X", args={ <部分参数> })\` → 系统创建 form, status=open
+2. 看 form 的 KNOWLEDGE 提示发现缺参数 → \`exec(form_id, "refine", args={ <缺的字段>: ... })\` → 状态仍 open
+3. 全部齐了 → \`exec(form_id, "submit")\` → executing → executed
+   - 成功：自动从 contextWindows 移除
+   - 失败：保留 executed + result, 此时才需要 close 重 open
 
 ## 一轮结束的决策
 

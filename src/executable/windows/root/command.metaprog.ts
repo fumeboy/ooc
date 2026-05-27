@@ -116,7 +116,9 @@ export const metaprogCommand: CommandTableEntry = {
     const action = asString(args.action) as MetaprogAction | undefined;
     if (!action) {
       entries[METAPROG_INPUT_PATH] =
-        "metaprog 缺少 action：args={ action: 'open_worktree' | 'commit' | 'merge' | 'resolve' | 'rollback', ... }";
+        "metaprog 还缺以下参数: action。\n" +
+        "请用 refine(form_id, args={ action: 'open_worktree' | 'commit' | 'merge' | 'resolve' | 'rollback' | 'create_object', ... }) 补齐后 submit(form_id)。\n" +
+        "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
     return entries;
   },

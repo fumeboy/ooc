@@ -49,7 +49,9 @@ export const openKnowledgeCommand: CommandTableEntry = {
     const path = typeof args.path === "string" ? args.path : "";
     if (!path) {
       entries[OPEN_KNOWLEDGE_INPUT_PATH] =
-        "open_knowledge 缺少 path；用 refine(args={ path: \"...\" })。";
+        "open_knowledge 还缺以下参数: path。\n" +
+        "请用 refine(form_id, args={ path: \"<knowledge-doc-path-不带.md>\" }) 补齐后 submit(form_id)。\n" +
+        "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
     return entries;
   },

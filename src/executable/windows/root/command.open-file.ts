@@ -47,7 +47,9 @@ export const openFileCommand: CommandTableEntry = {
     const path = typeof args.path === "string" ? args.path : "";
     if (!path) {
       entries[OPEN_FILE_INPUT_PATH] =
-        "open_file 缺少 path；用 refine(args={ path: \"...\", lines?: [start,end], columns?: [start,end] })。";
+        "open_file 还缺以下参数: path。\n" +
+        "请用 refine(form_id, args={ path: \"<file path>\", lines?: [start,end], columns?: [start,end] }) 补齐后 submit(form_id)。\n" +
+        "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
     return entries;
   },

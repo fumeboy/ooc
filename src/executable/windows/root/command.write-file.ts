@@ -87,8 +87,13 @@ export const writeFileCommand: CommandTableEntry = {
     const path = typeof args.path === "string" ? args.path : "";
     const hasContent = typeof args.content === "string";
     if (!path || !hasContent) {
+      const missing: string[] = [];
+      if (!path) missing.push("path");
+      if (!hasContent) missing.push("content");
       entries[WRITE_FILE_INPUT_PATH] =
-        "write_file 缺少必填参数：args={ path: \"...\", content: \"...\" }。content 可以是空字符串。";
+        `write_file 还缺以下参数: ${missing.join(", ")}。\n` +
+        "请用 refine(form_id, args={ path: \"<path>\", content: \"<完整文件内容, 可空串>\" }) 补齐后 submit(form_id)。\n" +
+        "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
     return entries;
   },

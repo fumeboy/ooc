@@ -106,7 +106,13 @@ export const programCommand: CommandTableEntry = {
       return entries;
     }
 
-    entries[PROGRAM_INPUT_PATH] = "program form 缺少可执行参数；refine(args={ language: \"shell\" | \"ts\" | \"js\", code: \"...\" })，再 submit。";
+    const missing: string[] = [];
+    if (!lang) missing.push("language");
+    if (!code) missing.push("code");
+    entries[PROGRAM_INPUT_PATH] =
+      `program 还缺以下参数: ${missing.join(", ")}。\n` +
+      "请用 refine(form_id, args={ language: \"shell\" | \"ts\" | \"js\", code: \"<待执行代码>\" }) 补齐后 submit(form_id)。\n" +
+      "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     return entries;
   },
   exec: (ctx) => executeProgramCommand(ctx),

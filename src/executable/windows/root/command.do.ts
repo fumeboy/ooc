@@ -75,7 +75,9 @@ export const doCommand: CommandTableEntry = {
     if (formStatus !== "open") return entries;
     if (typeof args.msg !== "string" || args.msg.trim().length === 0) {
       entries[DO_INPUT_PATH] =
-        "do 需要 msg；用 refine(args={ msg: \"...\", wait: true|false })。";
+        "do 还缺以下参数: msg。\n" +
+        "请用 refine(form_id, args={ msg: \"<给子线程的初始消息>\", wait: true|false }) 补齐后 submit(form_id)。\n" +
+        "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
     return entries;
   },
