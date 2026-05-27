@@ -242,6 +242,29 @@ P0-1 (Permission 模型) Q0a~Q0d 完成；Q0e 列 todo（自改 server/index.ts 
 - **2026-05-25**：首版。Supervisor Round 1 外循环。
 - **2026-05-25**（当日 Round 1 闭环）：P0-2 完整实施完成，5 套 e2e PASS / 全仓单测 PASS / meta tsc clean。差异与残留如上。
 - **2026-05-25**（当日 Round 2 闭环）：P0-1 Q0a~Q0d 完成，2 套 e2e (Q0b+Q0c) PASS / 联合 P0-1+P0-2 42 用例 PASS / 全仓 550 单测 PASS。3 项歧义 Supervisor 拍板；Q0e 列 todo。
+- **2026-05-27**（Round 12 闭环）：修 OOC agent 倾向 close+重 open 而非 refine 的行为偏差。
+  - **用户观察**：command_exec form 参数填错时，LLM 倾向 close 后重新 exec，不 refine；其次 submit 之前 knowledge 函数应当预检查参数并提示
+  - **根因诊断**：
+    - `command.talk.ts:85/87` 等 exec error message **直接引导 LLM "close 后重新 open"**（暗示这是常规修复路径）
+    - 11 个 root command 的 knowledge() 预检查文本不够 explicit（如 write_file 提示 "缺少必填参数：args={...}" 没说"用 refine"）
+    - basic-knowledge 没强调 "open 状态用 refine / executed 状态才需要 close 重开" 的二元规则
+  - **修复（sub agent commit `a63309e5`）**：
+    - **talk/todo/grep/glob exec error**：不再把 close+重 open 描述为常规修复，改为"当前 form 已 executed, 这是被迫路径; 下次应在 open 状态先 refine 再 submit"
+    - **11 个 command knowledge() 预检查**统一格式：
+      ```
+      <command> 还缺以下参数: <list>。
+      请用 refine(form_id, args={...}) 补齐后 submit(form_id)。
+      不要 close 重 open——form 当前在 open 状态, refine 是正确路径。
+      ```
+    - **basic-knowledge** form lifecycle 段重写：明确三态机 + open 状态用 refine + close+重开会丢失激活的 knowledge/commandPaths + 典型 3 步路径
+  - **新测试**：`command.refine-hint.test.ts` 25 用例（11 command × 2 + basic-knowledge 3）全 pass
+  - **整体校验**：
+    - tsc clean
+    - src/: **756 pass / 1 baseline fail / 3 skip / 2119 expect**（+25）
+    - backend e2e: 68 pass / 0 fail / 8 skip
+  - **harness 循环价值**：用户观察 → Supervisor 诊断 → sub agent 集中修 11 处 + 全局 form lifecycle 协议；典型的"行为偏差由知识文本质量决定"案例
+  - **附记**：sub agent 这次自主 commit（无 co-author footer），结果 OK；未来派单应明确"不要自己 commit, 交 Supervisor 统一节奏"
+
 - **2026-05-27**（Round 11 闭环）：reflectable 闭环 — 业务 thread 调 end 时自动激活 super flow 反思提醒。
   - **触发**：用户问 "OOC agent 主动调 end command 时，是否会自动激活一个知识提醒它通过 super 进行经验沉淀 / 记忆更新"
   - **诊断**：当前 `command.end.ts` 只描述 end 自身用法（reason/summary/result）；`REFLECTABLE_KNOWLEDGE` 仅在 `sessionId === "super"` 时注入，**业务 thread 调 end 看不到任何反思提醒**
