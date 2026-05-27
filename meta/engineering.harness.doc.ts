@@ -50,8 +50,8 @@ export const root: DocTreeNode = {
     - Supervisor: 最高哲学设计层,思考 "OOC 应该是什么",输出 design 指引;不直接写代码。
     - AgentOfThinkable: 上下文构建、ThreadTree、思考循环的工程实现。
     - AgentOfExecutable: tool 原语 / command / window registry 的工程实现。
-    - AgentOfCollaborable: ThreadMessage / talk-delivery / Issue 协作机制的工程实现。
-    - AgentOfPersistable: stone / flow 文件树、thread.json、Issue 文件等持久化层的工程实现。
+    - AgentOfCollaborable: ThreadMessage / talk-delivery / relation 协作机制的工程实现。
+    - AgentOfPersistable: stone / flow 文件树、thread.json、relation 文件等持久化层的工程实现。
     - AgentOfVisible: stone client / flow client/pages / web 控制面 / 交互设计的工程实现。
     - AgentOfObservable: debug 落盘、ContextSnapshot、pause 协议、监控/日志的工程实现。
     - AgentOfProgrammable: stone server method 库、loader 热更、program command 的工程实现。
@@ -133,14 +133,14 @@ export const root: DocTreeNode = {
             - do_window (同 object fork 子线程) 与 talk_window (跨 object 持续会话) 的语义边界。
             - talk-delivery 跨 object 派送的 5 步流程与 callee thread 创建。
             - creator window 恒在通道 (isCreatorWindow + cascade close 拒绝)。
-            - Issue 看板的 session 级共享 + @mention 唤醒 + issue_window 订阅。
+            - relation_window peer 关系的专属 window type 与双 scope 编辑。
             - relation_knowledge 自动派生 (peer readme + self relation 占位)。
 
-            内循环典型动作: 设计一种新协作模式 (例: broadcast issue) → 决定走 talk-delivery 还是新建一种 window → 实现 + 测试跨 object 派送的双写 / 状态翻转。
+            内循环典型动作: 设计一种新协作模式 (例: 跨 object 广播) → 决定走 talk-delivery 还是新建一种 window → 实现 + 测试跨 object 派送的双写 / 状态翻转。
 
             维度定义见 meta/object.doc.ts 的 collaborable child。
             `,
-            sources: [["src/executable/windows/", "talk/delivery.ts / talk/index.ts / do/index.ts / issue 协作核心;Issue 业务层见 src/persistable/pr-issue.ts;概念定义见 meta/object.doc.ts:children.collaborable"]],
+            sources: [["src/executable/windows/", "talk/delivery.ts / talk/index.ts / do/index.ts / relation/index.ts 协作核心;概念定义见 meta/object.doc.ts:children.collaborable"]],
         },
         agent_of_persistable: {
             title: "AgentOfPersistable - persistable 维度的工程实现",
@@ -148,7 +148,7 @@ export const root: DocTreeNode = {
             负责思考如何把 OOC 的 persistable 能力落到代码里。关注:
             - OOC world 目录结构 (stones/ + flows/ + 三类元数据 .stone.json / .flow.json / .session.json)。
             - thread.json 的最小读写 (writeThread / readThread) + stripVolatileForPersist 内存字段剥离。
-            - Issue 文件 session 级共享 (issues/index.json + issue-{id}.json) + enqueueSessionWrite 串行化。
+            - relation 文件 session 级写盘 (src/persistable/flow-relation.ts:writeFlowRelation) + enqueueSessionWrite 串行化。
             - debug 文件层 (供 observable 调用)。
             - FlowObjectRef / ThreadPersistenceRef / StoneObjectRef 三种 ref 抽象。
 

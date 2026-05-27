@@ -84,6 +84,8 @@ export const root: DocTreeNode = {
     - programmable: 可以为自己编写函数方法（server 方法库）
     - visible: 可以为自己编写 UI 页面
     - persistable: 可以持久化存储
+
+    上述 8 个是 Agent 的**内在能力维度**。除此之外，OOC 还有一个**非维度的外接集成层 extendable**：把外部世界（飞书 / notion / slack / github 等）按统一模板接入为可调用的 Window 与 command。它不是 Agent 的固有能力，而是 OOC 触达外部系统的扩展点——实现见 src/extendable/，首个 case 见 meta/case.feishu-integration.doc.ts，详见 children.extendable。
     `,
     named: {
         "OOC": "Object Oriented Context, 以面向对象的方式组织上下文，以面向对象的方式构建 MultiAgent 系统",
@@ -96,6 +98,7 @@ export const root: DocTreeNode = {
         "programmable": "OOC Agent 由几个维度组合，programmable 是其中之一，定义 Agent 持有/演化自身函数方法库的能力",
         "visible": "OOC Agent 由几个维度组合，visible 是其中之一，定义 Agent 持有/演化自身 UI 页面的能力",
         "persistable": "OOC Agent 由几个维度组合，persistable 是其中之一，定义 Agent 的持久化存储能力",
+        "extendable": "非能力维度的外接集成层：把外部世界（飞书 / notion / slack 等）按统一模板接入为可调用的 Window 与 command；实现见 src/extendable/",
         "stone": "OOC 持久层之一（静）：长期身份与设计源码（含 seed knowledge），进 git review",
         "pool": "OOC 持久层之一（积）：跨 session 累积的事实数据（含 sediment knowledge），不进 git",
         "flow": "OOC 持久层之一（动）：session 级临时数据与程序",
@@ -3895,6 +3898,33 @@ export const root: DocTreeNode = {
             warnings: [
                 "stones/<self>/client/index.tsx 与 flow client/pages/*.tsx 文件被 OOC 写下来，但仓库内没有提供配套的客户端渲染器；纯文档/纯仓库层面无法直接 '看见' UI 效果，必须由外部消费方接入渲染。",
             ],
+        },
+        "extendable": {
+            title: "extendable - 外接外部世界的集成层（非能力维度）",
+            content: `
+            extendable 不是 Agent 的内在能力维度（与上面 8 个并列），而是 OOC 触达外部系统的**扩展层**:
+            把外部世界（飞书 / notion / slack / github 等）按统一模板接入为 Object 可调用的 ContextWindow 与 command。
+
+            为什么独立于 8 维度: 8 维度描述"一个 Object 自身具备什么能力"；extendable 描述"OOC 如何把外部 SaaS 收编成可被 executable 调用的对象"。
+            它寄生在 executable（新增 WindowType + command）之上，但代码物理隔离在 src/extendable/ 下，避免外部 OAPI 细节污染 executable 核心。
+
+            统一模板:
+            1. OAPI 调用收口到 \`src/extendable/lark/cli.ts\` 的 larkExec helper（凭据 / 超时 / as-user 统一处理）。
+            2. 每个外部系统建 \`src/extendable/<name>/\`，barrel（index.ts）自注册 WindowType + open command。
+            3. executable 侧（src/executable/windows/root/index.ts）通过 extendable barrel 拉 open command，不反向依赖。
+
+            新接一个外部世界（notion / slack / github）按相同模板建 \`src/extendable/<name>/\` 即可，不触碰 executable 核心（除非要新增 WindowType 字面量）。
+            完整 case 见 meta/case.feishu-integration.doc.ts。
+            `,
+            named: {
+                "extendable": "非能力维度的外接集成层：把外部世界按统一模板接入为可调用的 Window 与 command",
+                "larkExec": "所有飞书 OAPI 调用的收口 helper，定义于 src/extendable/lark/cli.ts",
+                "barrel 自注册": "每个 src/extendable/<name>/index.ts 导出 WindowType + open command，由 executable root 拉取注册",
+            },
+            relations: [
+                [{ title: "executable", content: "extendable 寄生于 executable：新增 WindowType + open command 经 executable root 注册" }, "extendable 是 executable 的扩展点，物理隔离但逻辑挂载"],
+            ],
+            sources: [["src/extendable/", "外接集成层实现根目录；lark barrel 见 src/extendable/lark/index.ts，OAPI helper 见 src/extendable/lark/cli.ts:larkExec；case 见 meta/case.feishu-integration.doc.ts"]],
         },
     },
     warnings: [
