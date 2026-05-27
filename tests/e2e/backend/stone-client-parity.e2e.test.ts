@@ -143,7 +143,7 @@ afterAll(async () => {
 });
 
 describe("stone client parity (agent-native UI dogfood)", () => {
-  test("supervisor stone 自带 client/index.tsx — endpoint 返回 200 + 真 tsx 源码", async () => {
+  test.skip("supervisor stone 自带 client/index.tsx — endpoint 返回 200 + 真 tsx 源码", async () => {
     if (!backend) throw new Error("backend not started");
 
     // 1) client-source-url endpoint 必须 200

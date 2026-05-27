@@ -35,6 +35,8 @@ describe("executable commands", () => {
       "glob",
       "grep",
       "metaprog",
+      "open_feishu_chat",
+      "open_feishu_doc",
       "open_file",
       "open_knowledge",
       "plan",
