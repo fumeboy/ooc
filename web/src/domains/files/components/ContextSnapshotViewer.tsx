@@ -119,7 +119,7 @@ function statusToTone(status?: string): Tone {
       return "info";
     case "executing":
       return "warning";
-    case "executed":
+    case "success":
     case "done":
       return "success";
     case "failed":
@@ -1023,7 +1023,8 @@ function WindowDetail({
             }
             return null;
           })()}
-          {window.status === "executed" && window.result && (
+          {/* Round 13: 仅 failed 状态保留 result 渲染 (success 已自动移除) */}
+          {window.status === "failed" && window.result && (
             <pre className={`llm-input-pre llm-input-result-${statusToTone(window.status)}`}>{window.result}</pre>
           )}
         </>

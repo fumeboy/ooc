@@ -984,15 +984,43 @@ export const root: DocTreeNode = {
                             content: `
                             command_exec window 是 LLM 调用 command 时产生的临时窗口。
 
-                            它类似一个 form:
-                            - open 时创建，记录 command 名称和初始参数。
-                            - refine 时累积参数，并重新计算 command path。
-                            - submit 时执行 command。
-                            - 成功后可自动移除，失败时保留 result 供 LLM 查看和修正。
+                            它类似一个 form。**四态状态机** (Round 13, 2026-05-27 升级; 之前是
+                            三态 open→executing→executed, executed 混合 success/failure 且不可 refine):
+
+                            \`\`\`
+                            open → executing → success  (自动从 contextWindows 移除)
+                                            ↘ failed   (保留 + result 含错; 可 refine 回 open 重 submit)
+                            \`\`\`
+
+                            状态语义:
+                            - **open**: 参数未提交。可 refine 累积 args, submit 触发执行
+                            - **executing**: exec 函数运行中。短暂状态; LLM 不应在此态做动作
+                            - **success**: 执行成功; **自动从 contextWindows 移除**, 下一轮 LLM 看不到这个 form
+                            - **failed**: 执行失败; result 含错误信息;
+                              **可以 refine 修回 open 状态再 submit** (refine 时累积新 args + 清旧 result + 切回 open)
 
                             command_exec window 让 "函数调用" 不再是一次性黑盒。
                             LLM 可以看见自己正在填写什么参数、还缺什么、激活了哪些知识、执行结果是什么。
+
+                            **失败修复路径** (Round 13 新增):
+                            - submit 失败 (form 进 failed) → refine 修正 args → 自动切回 open → 重 submit
+                            - 不再需要 close + 重 open (那会丢失 form 已累积 args 与已激活 knowledge)
+                            - close 仍可用作 "彻底放弃这次调用" 的兜底, 但不是失败修复首选
+
+                            **历史 thread.json 含 status="executed" 的 form**: readThread 反序列化时
+                            把 "executed" 迁移为 "failed" (保守; 让 LLM 能 refine 修复); 与 Round 7 移除
+                            issue 时的未注册 type 过滤同款思路。
+
+                            完整 design 见 docs/2026-05-27-form-status-success-failed-design.md。
                             `,
+                            named: {
+                                "open": "form 初始态; 可 refine / submit",
+                                "executing": "exec 函数运行中; 短暂状态",
+                                "success": "执行成功; 自动从 contextWindows 移除",
+                                "failed": "执行失败; result 含错; 可 refine 回 open 重 submit (Round 13)",
+                                "refine-from-failed": "Round 13 新路径: failed 状态可调 refine, 累积 args + 清 result + 状态切回 open",
+                                "executed → failed 迁移": "readThread 反序列化时把历史 executed 转 failed, 保留 LLM 修复能力",
+                            },
                         },
                         "sharing": {
                             title: "sharing - 跨 thread 共享 ContextWindow",
@@ -1944,6 +1972,44 @@ export const root: DocTreeNode = {
                     named: {
                         "REFLECTABLE_BASIC_PATH": "字符串常量 'internal/executable/reflectable/basic'",
                         "REFLECTABLE_KNOWLEDGE": "super flow 中要给 LLM 的协议知识正文",
+                    },
+                },
+                "end_reflection_reminder": {
+                    title: "end_reflection_reminder - 业务 thread 调 end 时的反思提醒 (Round 11, 2026-05-27)",
+                    content: `
+                    **触发**: 当 OOC agent 在**非 super flow** 的业务 thread 中创建 \`command="end"\` 的
+                    command_exec form 时, synthesizer 注入一段简短的 reflection reminder knowledge。
+
+                    **目的**: 让 agent 在结束业务 thread 之前自觉考虑 — 本次工作是否产生了值得沉淀的认知 /
+                    经验 / 对 peer 的认识更新 / 反复犯的错。如果有, 建议在 end 之前开 super flow 走一次反思:
+                    \`exec(command="talk", args={ target: "super", initialMessage: "请帮我沉淀 ..." })\`。
+
+                    **门控条件** (synthesizer 内):
+                    - \`thread.persistence?.sessionId !== SUPER_SESSION_ID\` — super flow 内 end 是反思自身的结束,
+                      不该再提示反思 (避免无限套娃)
+                    - form.command === "end" — 只在 end 的 form 被打开 / 持续展示时激活
+                    - 可选: \`thread.events.length > N\` (阈值默认未启用; 简单 thread 也允许提示, LLM 自己决定是否触发)
+
+                    **不强制反思**: knowledge 只是 hint, 不是 deny gate。LLM 看完之后:
+                    - 觉得有沉淀价值 → 取消 end 表单, 改调 talk target=super
+                    - 觉得无值得反思的 → 直接 submit end, 正常结束
+
+                    **与 REFLECTABLE_KNOWLEDGE 的关系**:
+                    - REFLECTABLE_KNOWLEDGE: 在 super flow 内告诉 LLM "你现在在反思场景, 应该写 memory"
+                    - END_REFLECTION_REMINDER: 在业务 thread 调 end 时告诉 LLM "你刚才工作了一段, 考虑反思"
+                    - 两者互补: 一个是反思入口提示, 一个是反思场景内的指引
+
+                    **实现位置**:
+                    - 常量在 src/thinkable/reflectable/reflectable-knowledge.ts (与 REFLECTABLE_KNOWLEDGE 同文件)
+                    - 注入在 src/thinkable/knowledge/synthesizer.ts (检查 form.command === "end" + super 门控)
+
+                    完整 design / harness 循环优化记录见 docs/2026-05-27-end-reflection-reminder-design.md。
+                    `,
+                    named: {
+                        "END_REFLECTION_REMINDER_KNOWLEDGE": "常量名; 与 REFLECTABLE_KNOWLEDGE 同文件 export",
+                        "END_REFLECTION_REMINDER_PATH": "字符串常量 'internal/executable/end/reflection-reminder'",
+                        "门控条件": "thread.persistence?.sessionId !== SUPER_SESSION_ID; super flow 内 end 不重提",
+                        "non-blocking hint": "提醒不是 deny; LLM 自己决定是否反思",
                     },
                 },
                 "memory_layout": {

@@ -242,6 +242,77 @@ P0-1 (Permission 模型) Q0a~Q0d 完成；Q0e 列 todo（自改 server/index.ts 
 - **2026-05-25**：首版。Supervisor Round 1 外循环。
 - **2026-05-25**（当日 Round 1 闭环）：P0-2 完整实施完成，5 套 e2e PASS / 全仓单测 PASS / meta tsc clean。差异与残留如上。
 - **2026-05-25**（当日 Round 2 闭环）：P0-1 Q0a~Q0d 完成，2 套 e2e (Q0b+Q0c) PASS / 联合 P0-1+P0-2 42 用例 PASS / 全仓 550 单测 PASS。3 项歧义 Supervisor 拍板；Q0e 列 todo。
+- **2026-05-27**（Round 13 闭环）：form 状态机升级 — `executed` → `success` / `failed` + failed 可 refine 回 open。
+  - **设计触发**：Round 12 修了 LLM close 偏好，但 root cause 是 `executed` 状态混合 success/failure 且**不可 refine** — 只能 close 重开
+  - **核心改动**：
+    - `CommandExecWindow.status`: `"open" | "executing" | "executed"` → `"open" | "executing" | "success" | "failed"`
+    - `WindowStatus` 联合同步删除 "executed"
+    - **manager.refine** 允许 `status="failed"`：累积新 args + **清 result** + **status 切回 "open"**（复活路径）
+    - **manager.submit** 失败：`status="executed"` → `"failed"`
+    - `setResultExecuted` → `setResultFailed`
+  - **历史数据迁移**: `readThread` 反序列化时把 `command_exec.status="executed"` 转 `"failed"` + console.warn（与 Round 7 unregistered type 过滤同款风格）
+  - **11 个 root command** knowledge / exec error 同步：强调"submit 失败 → refine 复活"是失败修复**首选**
+  - **basic-knowledge form lifecycle 重写**：四态机 + 失败修复路径首选 refine（不是 close）
+  - **web 端**: `context-snapshot.ts` + `ContextSnapshotViewer.tsx` 视觉编码 (open=blue / executing=warning / **success=green** / **failed=red**)
+  - **新测试** `manager-refine-failed.test.ts` 5 用例（open refine / failed 复活 / failed submit throws / executing refine false / 完整复活闭环）
+  - **派单进步**: G2 prompt 明确"不要自己 commit"（按 Round 12 memory feedback_subagent_no_self_commit），sub agent 这次乖乖留 working tree, Supervisor 统一 commit
+  - **整体校验**:
+    - tsc clean
+    - src/: **762 pass / 1 baseline fail / 3 skip / 2138 expect**（+19）
+    - web/: **194 pass / 0 fail / 438 expect**（不破坏）
+    - backend e2e: 68 pass / 0 fail / 8 skip
+  - **设计 ↔ 实施差异**:
+    - command_exec 内部 `command.refine.ts` 入口校验也放开为 open|failed（之前只允许 open）
+    - command_exec/index.ts renderXml status="executed" → "failed"
+    - basicKnowledge 重写为四态机表述
+    - 这些是 sub agent 主动延伸但符合 design 精神，记一笔
+
+- **2026-05-27**（Round 12 闭环）：修 OOC agent 倾向 close+重 open 而非 refine 的行为偏差。
+  - **用户观察**：command_exec form 参数填错时，LLM 倾向 close 后重新 exec，不 refine；其次 submit 之前 knowledge 函数应当预检查参数并提示
+  - **根因诊断**：
+    - `command.talk.ts:85/87` 等 exec error message **直接引导 LLM "close 后重新 open"**（暗示这是常规修复路径）
+    - 11 个 root command 的 knowledge() 预检查文本不够 explicit（如 write_file 提示 "缺少必填参数：args={...}" 没说"用 refine"）
+    - basic-knowledge 没强调 "open 状态用 refine / executed 状态才需要 close 重开" 的二元规则
+  - **修复（sub agent commit `a63309e5`）**：
+    - **talk/todo/grep/glob exec error**：不再把 close+重 open 描述为常规修复，改为"当前 form 已 executed, 这是被迫路径; 下次应在 open 状态先 refine 再 submit"
+    - **11 个 command knowledge() 预检查**统一格式：
+      ```
+      <command> 还缺以下参数: <list>。
+      请用 refine(form_id, args={...}) 补齐后 submit(form_id)。
+      不要 close 重 open——form 当前在 open 状态, refine 是正确路径。
+      ```
+    - **basic-knowledge** form lifecycle 段重写：明确三态机 + open 状态用 refine + close+重开会丢失激活的 knowledge/commandPaths + 典型 3 步路径
+  - **新测试**：`command.refine-hint.test.ts` 25 用例（11 command × 2 + basic-knowledge 3）全 pass
+  - **整体校验**：
+    - tsc clean
+    - src/: **756 pass / 1 baseline fail / 3 skip / 2119 expect**（+25）
+    - backend e2e: 68 pass / 0 fail / 8 skip
+  - **harness 循环价值**：用户观察 → Supervisor 诊断 → sub agent 集中修 11 处 + 全局 form lifecycle 协议；典型的"行为偏差由知识文本质量决定"案例
+  - **附记**：sub agent 这次自主 commit（无 co-author footer），结果 OK；未来派单应明确"不要自己 commit, 交 Supervisor 统一节奏"
+
+- **2026-05-27**（Round 11 闭环）：reflectable 闭环 — 业务 thread 调 end 时自动激活 super flow 反思提醒。
+  - **触发**：用户问 "OOC agent 主动调 end command 时，是否会自动激活一个知识提醒它通过 super 进行经验沉淀 / 记忆更新"
+  - **诊断**：当前 `command.end.ts` 只描述 end 自身用法（reason/summary/result）；`REFLECTABLE_KNOWLEDGE` 仅在 `sessionId === "super"` 时注入，**业务 thread 调 end 看不到任何反思提醒**
+  - **G1 (Supervisor)**：meta `reflectable.children.end_reflection_reminder` 新子节点 — 定义注入条件、与 REFLECTABLE_KNOWLEDGE 的关系、non-blocking hint 不变量
+  - **G2 (Backend sub agent)**：
+    - 新常量 `END_REFLECTION_REMINDER_PATH` + `END_REFLECTION_REMINDER_KNOWLEDGE` 在 `src/thinkable/reflectable/reflectable-knowledge.ts`
+    - synthesizer `collectExecutableKnowledgeEntries` 注入条件：`form.command === "end" && thread.persistence?.sessionId !== SUPER_SESSION_ID`
+    - 不动 `command.end.ts`（reminder 走 protocol 档注入，与 form-scoped commandKnowledgePaths 解耦）
+    - 5 单测 + 0 fail（业务 end 注入 / super flow 不注入 / 非 end form 不注入 / 无 form 不注入 / 文本自检）
+  - **G3 (Supervisor 效果优化)** — harness 循环关键环节：
+    - 审视发现**真 API 错误**：原文 `exec(command="talk", args={target:"super", initialMessage:"..."})` — `initialMessage` **不是 talk 命令参数**（实际签名 `target + title`，发首条消息要走 `say(msg)`）；LLM 真用会撞 `[talk] 缺少 title` 错误
+    - 修正为正确两步流程：(1) `talk(target="super", title="<反思主题>")` 创建 talk_window → (2) `say(msg="...", wait=true)` 发首条消息
+    - 加 msg 写什么的好/坏例子（✅ 具体可形成 memory / ❌ "随便反思一下"无法落地）
+    - 强化"下一轮自动激活 memory"闭环（dogfood 自演化价值）
+    - 替换"反复犯的错"为"踩过的坑 / 反直觉的点"（中性措辞，LLM 更愿意承认）
+    - 文本扩到 1606 字符（每次 end form 才注入，不在每轮上下文，OK）
+  - **整体校验**：
+    - meta tsc clean
+    - src/: **731 pass / 1 baseline fail / 3 skip / 2092 expect** (+5 G2 新)
+    - backend e2e: 68 pass / 0 fail / 8 skip
+  - **派单效率**: 1 sub agent + Supervisor 直接 G3 文本审视（harness 循环关键价值：发现真 API 错误，避免 LLM 实际用时崩溃）
+  - **关键 lesson**: knowledge 文本如包含具体 API 调用形态，**必须验证签名匹配**，否则就是 silent broken hint
+
 - **2026-05-27**（Round 10 闭环）：Type-Dispatch Window Diff Renderer — 为每种 window type 设计 diff 视图 + file_window CodeMirror Merge unified。
   - **设计触发**：Round 9 Time Machine 落地后用户反馈"changed 展开后所有 type 都用 LLMInputJsonViewer 全文，肉眼找差异太累"
   - **核心机制**：web 端 type-dispatch renderer（registerWindowDiffRenderer / getWindowDiffRenderer），未注册 type → FallbackJsonDiff，renderer 抛错 → ErrorBoundary 兜底 + console.warn

@@ -124,15 +124,15 @@ describe("buildContext (ContextWindow model)", () => {
     expect(xml).toContain("<is_creator_window>true</is_creator_window>");
   });
 
-  it("renders command_exec form result only when status=executed", async () => {
+  it("renders command_exec form result only when status=failed (Round 13 四态机)", async () => {
     const thread = makeThread({
       id: "t_status",
       extraWindows: [
         execForm({ id: "f_open", status: "open" }),
         execForm({ id: "f_executing", status: "executing" }),
         execForm({
-          id: "f_executed",
-          status: "executed",
+          id: "f_failed",
+          status: "failed",
           result: "$ ls\n[stdout]\nfoo\n[exit 0]",
         }),
       ],
@@ -141,14 +141,14 @@ describe("buildContext (ContextWindow model)", () => {
     const xml = messages[0]!.content;
     expect(xml).toContain('id="f_open" type="command_exec" status="open"');
     expect(xml).toContain('id="f_executing" type="command_exec" status="executing"');
-    expect(xml).toContain('id="f_executed" type="command_exec" status="executed"');
+    expect(xml).toContain('id="f_failed" type="command_exec" status="failed"');
 
     function sliceWindow(id: string): string {
       const start = xml.indexOf(`id="${id}"`);
       const end = xml.indexOf("</window>", start) + "</window>".length;
       return xml.slice(start, end);
     }
-    expect(sliceWindow("f_executed")).toContain("<result>$ ls");
+    expect(sliceWindow("f_failed")).toContain("<result>$ ls");
     expect(sliceWindow("f_open")).not.toContain("<result>");
     expect(sliceWindow("f_executing")).not.toContain("<result>");
   });

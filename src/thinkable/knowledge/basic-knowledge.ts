@@ -338,11 +338,54 @@ export default function Report({ sessionId, objectName, callMethod }: ClientProp
 - 每个 window 的 title 强制必填
 - 收到 inbox 消息后，下一次工具调用通过 mark 标记 msg_id
 
-## form 生命周期
+## form 生命周期 与 参数修复（重要）
 
-- open：刚创建，可继续 refine 或 submit
-- executing：正在执行
-- executed：已执行，成功则系统自动移除；失败保留 result，需要显式 close
+command_exec form 有四态: \`open → executing → success | failed\` (Round 13 升级)。
+
+- **open**：刚创建或从 failed 复活, 可继续 refine 或 submit
+- **executing**：正在执行 (短暂状态; 不要做动作)
+- **success**：执行成功; **自动从 contextWindows 移除**, 你下一轮看不到这个 form
+- **failed**：执行失败; result 含错误信息; **可以 refine 修回 open 状态再 submit**
+
+### open 状态参数缺失/错误 → 用 refine 修复（不要 close 重开）
+
+\`\`\`
+exec(form_id, "refine", args={ <补的字段>: ... })   // form 仍 open
+exec(form_id, "submit")                              // 触发执行
+\`\`\`
+
+- refine 允许 \`status="open"\` 或 \`status="failed"\` 的 form；累积式覆盖（相同 field 后写覆盖前写）
+- 多个字段一起补：把全部缺/错的字段一次性放进 refine 的 args
+
+### submit 失败 (form 进 failed) → refine 复活 → 重 submit
+
+Round 13 新增"复活"路径。失败的 form 可以直接 refine 修复, 不再需要 close + 重 open:
+
+\`\`\`
+exec(form_id, "refine", args={ <修正字段>: ... })   // form 从 failed → open + 清旧 result
+exec(form_id, "submit")                              // 重新执行
+\`\`\`
+
+- refine 检测到 failed 状态时自动: 累积新 args + 清旧 result + 切回 open
+- 保留原 form id + 已激活的 knowledge / 已派生的 commandPaths (不丢上下文)
+- **这是失败修复的首选路径**
+
+### 关键提示
+
+**open 或 failed 状态发现参数不全/错时，优先 refine；不要 close + 重开。**
+
+- close + 重开会丢失 form 上已激活的 knowledge / 已派生的 commandPaths / form id 关联
+- 产生额外噪声 window，污染 context，拖慢 thread
+- 每个 command 的 input prompt 在缺参数时会列出缺失的字段，按提示 refine 即可
+- close 仍可用作 "彻底放弃此次调用" 的兜底, 但不是失败修复首选
+
+### 典型路径
+
+1. \`open(command="X", args={ <部分参数> })\` → 系统创建 form, status=open
+2. 看 form 的 KNOWLEDGE 提示发现缺参数 → \`exec(form_id, "refine", args={ <缺的字段>: ... })\` → 状态仍 open
+3. 全部齐了 → \`exec(form_id, "submit")\` → executing → success | failed
+   - **success**: 自动从 contextWindows 移除 (form 消失)
+   - **failed**: 保留 form + result; refine 修正后自动回 open, 可重 submit (首选), 或 close 放弃
 
 ## 一轮结束的决策
 

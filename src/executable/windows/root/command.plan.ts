@@ -80,7 +80,9 @@ export const planCommand: CommandTableEntry = {
     };
     if (!hasAnyInput(args)) {
       entries[PLAN_INPUT_PATH] =
-        "plan 需要给出 args.plan (简单文本) 或 args.title / args.description / args.steps 之一; 请 refine 后再 submit。";
+        "plan 还缺以下参数: plan 文本 (或 title / description / steps 任一)。\n" +
+        "请用 refine(form_id, args={ plan: \"<计划文本>\" }) 或 refine(form_id, args={ title: \"...\", description: \"...\", steps: [...] }) 补齐后 submit(form_id)。\n" +
+        "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
     return entries;
   },

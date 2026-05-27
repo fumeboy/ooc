@@ -240,21 +240,27 @@ export class WindowManager {
   /**
    * 累积 command_exec form 的 args 并重算 commandPaths。
    *
-   * 仅 status="open" 的 command_exec 可被 refine。
-   * 返回 false 表示 form 不存在或不在 open 状态。
+   * Round 13: 允许 status="open" 或 status="failed" 上调 refine。
+   * - open: 累积 args, 状态保持 open（原行为）
+   * - failed: 累积 args + 清旧 result + 状态切回 open（"复活"路径，新增）
+   *
+   * executing / success / 其它状态返回 false（success 已被自动移除, 理论不会触发）。
    */
   refine(formId: string, args: Record<string, unknown>): boolean {
     const form = this.windows.get(formId);
-    if (!form || form.type !== "command_exec" || form.status !== "open") {
-      return false;
-    }
+    if (!form || form.type !== "command_exec") return false;
+    if (form.status !== "open" && form.status !== "failed") return false;
     const parent = this.requireParent(form.parentWindowId);
     const entry = lookupCommandEntry(parent, form.command);
     if (!entry) return false;
     const nextArgs = { ...form.accumulatedArgs, ...args };
     const nextPaths = computeCommandPaths(entry, form.command, nextArgs);
+    // failed → open 复活: 清 result, 把 status 切回 "open"。
+    // open → open: 仅累积 args / 重算 paths。
     const next: CommandExecWindow = {
       ...form,
+      status: "open",
+      result: undefined,
       accumulatedArgs: nextArgs,
       commandPaths: nextPaths,
     };
@@ -265,9 +271,9 @@ export class WindowManager {
   /**
    * 提交 command_exec form：跑 command.exec → 写 result。
    *
-   * 状态过渡：open → executing → executed
-   * 成功时：自动从 contextWindows 移除（spec § submit 段）
-   * 失败时：保留 executed 状态 + result 含错误，等 LLM 显式 close
+   * 状态过渡：open → executing → success | failed (Round 13 升级；旧 "executed" 已废弃)
+   * 成功 (success) 时：自动从 contextWindows 移除（spec § submit 段）
+   * 失败 (failed) 时：保留 result 含错误；LLM 可 refine 修正后重 submit（首选）, 或 close 放弃。
    *
    * 失败判定：command.exec 抛异常 → 失败；result 字符串以 "[command-error]" / "[error]" /
    *           "缺少" / "失败" 开头时也视为失败（与旧 form-status 协议保持一致）。
@@ -333,8 +339,8 @@ export class WindowManager {
       return result;
     }
 
-    // 失败：保留 executed + result，等 LLM 显式 close
-    const failed: CommandExecWindow = { ...executing, status: "executed", result };
+    // 失败：保留 failed + result；LLM 可 refine 修正后重 submit（首选）, 或 close 放弃
+    const failed: CommandExecWindow = { ...executing, status: "failed", result };
     this.windows.set(formId, failed);
     return result;
   }
@@ -368,11 +374,11 @@ export class WindowManager {
     return true;
   }
 
-  /** 仅供 command 实现使用：把 form 的 result 字段写入并保留 executed 状态（成功时不调用——会自动移除）。 */
-  markExecuted(formId: string, result: string): void {
+  /** 仅供 command 实现使用：把 form 的 result 字段写入并保留 failed 状态（成功时不调用——会自动移除）。 */
+  setResultFailed(formId: string, result: string): void {
     const form = this.windows.get(formId);
     if (!form || form.type !== "command_exec") return;
-    this.windows.set(formId, { ...form, status: "executed", result });
+    this.windows.set(formId, { ...form, status: "failed", result });
   }
 
   // ---- 内部 helper ----

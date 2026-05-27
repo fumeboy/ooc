@@ -22,8 +22,9 @@ async function executeRefine(ctx: CommandExecutionContext): Promise<string | und
   if (!form || form.type !== "command_exec") {
     return "[command_exec.refine] 必须挂在 command_exec form 上调用。";
   }
-  if (form.status !== "open") {
-    return `[command_exec.refine] form ${form.id} 不在 open 状态（当前 ${form.status}）。`;
+  // Round 13: 允许 open 或 failed (failed 上 refine 触发"复活"路径, 自动切回 open)
+  if (form.status !== "open" && form.status !== "failed") {
+    return `[command_exec.refine] form ${form.id} 不在 open / failed 状态（当前 ${form.status}）, 无法 refine。`;
   }
   const incoming = ctx.args;
   if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
@@ -37,11 +38,13 @@ async function executeRefine(ctx: CommandExecutionContext): Promise<string | und
   }
   const ok = ctx.manager.refine(form.id, incoming);
   if (!ok) {
-    return `[command_exec.refine] refine 失败：form ${form.id} 不存在或不在 open 状态。`;
+    return `[command_exec.refine] refine 失败：form ${form.id} 不存在或不在 open / failed 状态。`;
   }
   const updated = ctx.manager.get(form.id);
   const paths = updated && updated.type === "command_exec" ? updated.commandPaths.join(", ") : "";
-  return `Form ${form.id} 已累积参数。当前路径：${paths}。`;
+  // Round 13: 如果是从 failed 复活, 标注一下让 LLM 知道 form 已切回 open。
+  const revived = form.status === "failed" ? "（form 从 failed 复活, 已切回 open, 可 submit）" : "";
+  return `Form ${form.id} 已累积参数${revived}。当前路径：${paths}。`;
 }
 
 export const refineCommand: CommandTableEntry = {
@@ -52,6 +55,7 @@ export const refineCommand: CommandTableEntry = {
       "command_exec.refine 用于向 form 累积参数；ctx.args 整体作为要累积的键值对。",
       "调用：exec(window_id=<form_id>, command=\"refine\", args={ <要累积的键值对> })",
       "多次调用会叠加；填齐参数后用 exec(form_id, \"submit\") 触发执行。",
+      "Round 13: refine 也接受 status=failed 的 form (submit 失败后); 调 refine 会自动把 form 切回 open + 清旧 result, 可重 submit。这是首选的失败修复路径 (保留 form 上下文)。",
     ].join("\n"),
   }),
   exec: (ctx) => executeRefine(ctx),

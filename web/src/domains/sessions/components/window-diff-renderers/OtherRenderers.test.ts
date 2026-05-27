@@ -176,10 +176,10 @@ describe("CommandExecDiff", () => {
     expect(countByStatus(tree, "changed")).toBeGreaterThanOrEqual(1);
   });
 
-  it("Case 3: status 变 → changed", () => {
+  it("Case 3: status 变 → changed (Round 13 四态机: open → failed)", () => {
     const tree = CommandExecDiff({
       previous: { type: "command_exec", command: "search", status: "open" },
-      current: { type: "command_exec", command: "search", status: "executed" },
+      current: { type: "command_exec", command: "search", status: "failed" },
       windowType: "command_exec",
       windowId: "w_ce_3",
     });

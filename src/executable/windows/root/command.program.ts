@@ -94,8 +94,13 @@ export const programCommand: CommandTableEntry = {
       entries[PROGRAM_FORM_STATUS_PATH] = "对于 command program 的 executing 状态的 form，应等待 result 写入后再继续，不要再次 refine 或 submit。";
       return entries;
     }
-    if (formStatus === "executed") {
-      entries[PROGRAM_FORM_STATUS_PATH] = "对于 command program 的 executed 状态的 form，应先阅读 result；如果结果已经消费，使用 close(form_id, reason=...) 释放 form。";
+    if (formStatus === "success") {
+      // 理论上 success 后 form 已被自动移除; 这里保留兜底以防 render 时机问题。
+      entries[PROGRAM_FORM_STATUS_PATH] = "对于 command program 的 success 状态的 form，结果已成功生成；form 将自动从 context 移除。";
+      return entries;
+    }
+    if (formStatus === "failed") {
+      entries[PROGRAM_FORM_STATUS_PATH] = "对于 command program 的 failed 状态的 form，先阅读 result 排查错误：可 refine(form_id, args={ language, code }) 修正参数后重 submit（form 会自动切回 open），或 close(form_id, reason=...) 彻底放弃。";
       return entries;
     }
 
@@ -104,7 +109,13 @@ export const programCommand: CommandTableEntry = {
       return entries;
     }
 
-    entries[PROGRAM_INPUT_PATH] = "program form 缺少可执行参数；refine(args={ language: \"shell\" | \"ts\" | \"js\", code: \"...\" })，再 submit。";
+    const missing: string[] = [];
+    if (!lang) missing.push("language");
+    if (!code) missing.push("code");
+    entries[PROGRAM_INPUT_PATH] =
+      `program 还缺以下参数: ${missing.join(", ")}。\n` +
+      "请用 refine(form_id, args={ language: \"shell\" | \"ts\" | \"js\", code: \"<待执行代码>\" }) 补齐后 submit(form_id)。\n" +
+      "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     return entries;
   },
   exec: (ctx) => executeProgramCommand(ctx),
