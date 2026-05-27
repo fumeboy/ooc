@@ -48,6 +48,66 @@ export interface LoopDiffViewProps {
 
 type LoopFullDetails = { input: unknown; output: unknown; meta: unknown };
 
+/**
+ * Round 14 H1 修复 — fetch-loop-inputs 纯函数 helper（可单测）。
+ *
+ * 把 LoopDiffView useEffect 内部 "拉 current + previous loop input.json" 的协作逻辑
+ * 抽出来，便于 bun:test 真异步覆盖（防 Round 10 单测 mock 同步返回掩盖 self-cancelling
+ * bug 这种回归）。
+ *
+ * 行为契约：
+ *   - 若 needsCurrent → 调 fetchLoop(currentLoopIndex) 拿当前 loop input
+ *   - 若 needsPrevious 且 currentLoopIndex>0 → 拉前一 loop input；前一 loop 不存在不应
+ *     传染整体失败（catch 内 warn 即可）
+ *   - 任何 fetcher reject（current 维度）→ rethrow，调用方 setDetailsError 暴露
+ *   - 返回 { current, previous }，由调用方写 state
+ */
+export interface LoopInputFetchPlan {
+  fetchLoop: (loopIdx: number) => Promise<unknown>;
+  currentLoopIndex: number;
+  needsCurrent: boolean;
+  needsPrevious: boolean;
+}
+
+export interface LoopInputFetchResult {
+  current?: unknown;
+  previous?: unknown;
+}
+
+export async function fetchLoopInputsForDiff(
+  plan: LoopInputFetchPlan,
+): Promise<LoopInputFetchResult> {
+  const result: LoopInputFetchResult = {};
+  const tasks: Promise<void>[] = [];
+  if (plan.needsCurrent) {
+    tasks.push(
+      plan.fetchLoop(plan.currentLoopIndex).then((inp) => {
+        result.current = inp;
+      }),
+    );
+  }
+  if (plan.needsPrevious && plan.currentLoopIndex > 0) {
+    tasks.push(
+      plan.fetchLoop(plan.currentLoopIndex - 1).then(
+        (inp) => {
+          result.previous = inp;
+        },
+        // previous loop 不存在不应传染整体失败 — 与原 effect 行为对齐
+        (e: unknown) => {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[LoopDiffView] fetch previous loop ${plan.currentLoopIndex - 1} failed:`,
+            e,
+          );
+        },
+      ),
+    );
+  }
+  // current 维度任一抛错 → Promise.all reject → 调用方 catch
+  await Promise.all(tasks);
+  return result;
+}
+
 /** 在一个 contextSnapshot 中按 id 找到对应 window 对象。 */
 function extractWindowFromInput(input: unknown, windowId: string): unknown {
   if (!input || typeof input !== "object") return undefined;
@@ -99,6 +159,10 @@ export function LoopDiffView({
   const [previousInputState, setPreviousInputState] = useState<unknown>(undefined);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState<string | undefined>(undefined);
+  // Round 14 H1: inFlightRef 防重入。ref 不进 deps array → effect 不会因为 detailsLoading
+  // 自己 set 自己而 self-cancel（旧 bug: cleanup 设 cancelled=true 后 finally 不再写
+  // setDetailsLoading(false), UI 永远 stuck on "Loading…"）。
+  const inFlightRef = useRef(false);
 
   const diff = useMemo(
     () => computeWindowDiff(currentSnapshot, previousSnapshot),
@@ -136,6 +200,9 @@ export function LoopDiffView({
   );
 
   // 展开某 window 时，按 type 判断是否需要 fetch input.json
+  // Round 14 H1: 用 inFlightRef 防重入；从 deps array 删除 detailsLoading 避免 self-cancel；
+  // 即便组件 unmount / loop 切换 (cancelled=true), 也保证 inFlightRef 清零，下次 effect
+  // 触发能继续工作。setDetailsLoading(false) 同样无条件执行 —— 避免 stuck on loading。
   useEffect(() => {
     if (!expandedId) return;
     const entry = entryByIdMemo.get(expandedId);
@@ -147,61 +214,47 @@ export function LoopDiffView({
       if (cur?.fileDiff) return;
     }
     // 其它 type：要 fetch current + previous input
-    if (detailsLoading) return;
-    if (
-      currentInputState !== undefined &&
-      (previousSnapshot === undefined || previousInputState !== undefined)
-    ) {
-      return;
-    }
+    if (inFlightRef.current) return;
+    const needsCurrent = currentInputState === undefined;
+    const needsPrevious =
+      previousInputState === undefined && previousSnapshot !== undefined;
+    if (!needsCurrent && !needsPrevious) return;
+
     let cancelled = false;
+    inFlightRef.current = true;
     setDetailsLoading(true);
     setDetailsError(undefined);
-    const tasks: Promise<void>[] = [];
-    if (currentInputState === undefined) {
-      tasks.push(
-        fetchLoopInput(currentLoopIndex).then((inp) => {
-          if (!cancelled) setCurrentInputState(inp);
-        }),
-      );
-    }
-    if (
-      previousInputState === undefined &&
-      previousSnapshot !== undefined &&
-      currentLoopIndex > 0
-    ) {
-      tasks.push(
-        fetchLoopInput(currentLoopIndex - 1).then(
-          (inp) => {
-            if (!cancelled) setPreviousInputState(inp);
-          },
-          // previous loop 不存在不应 throw 整个加载；记 warn 即可
-          (e: unknown) => {
-            console.warn(
-              `[LoopDiffView] fetch previous loop ${currentLoopIndex - 1} failed:`,
-              e,
-            );
-          },
-        ),
-      );
-    }
-    Promise.all(tasks)
+
+    fetchLoopInputsForDiff({
+      fetchLoop: fetchLoopInput,
+      currentLoopIndex,
+      needsCurrent,
+      needsPrevious,
+    })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.current !== undefined) setCurrentInputState(res.current);
+        if (res.previous !== undefined) setPreviousInputState(res.previous);
+      })
       .catch((e: unknown) => {
         if (!cancelled)
           setDetailsError(e instanceof Error ? e.message : String(e));
       })
       .finally(() => {
-        if (!cancelled) setDetailsLoading(false);
+        // 无条件清零 inFlight + loading — 即便 cancelled，避免下次 effect 触发时
+        // inFlightRef 残留 true 卡死，或 detailsLoading 残留 true 让 UI stuck。
+        inFlightRef.current = false;
+        setDetailsLoading(false);
       });
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     expandedId,
     entryByIdMemo,
     fetchLoopInput,
     currentLoopIndex,
-    detailsLoading,
     currentInputState,
     previousInputState,
     previousSnapshot,

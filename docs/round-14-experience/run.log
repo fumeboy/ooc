@@ -1,0 +1,29 @@
+--- Round 14 drive @ 2026-05-27T10:44:35.434Z ---
+=== 0. enable global debug
+debug-enable 200 {"enabled":true}
+=== 1. seed session _test_experience_1779878675434
+seed-session 200 {"sessionId":"_test_experience_1779878675434","userThreadId":"root","talkWindowId":"w_talk_mpnxt3hv_c9uv","targetObjectId":"supervisor","targetThreadId":"t_user_mpnxt3hv_vnbm","jobId":"3d5138ad-31a1-4e0a-a8fb-6763f5231767"}
+=== boot browser
+=== 2. user home
+[shot] 01-user-home
+supervisor thread: t_user_mpnxt3hv_vnbm
+=== 4. visit supervisor thread http://localhost:5173/sessions/_test_experience_1779878675434/objects/supervisor/threads/t_user_mpnxt3hv_vnbm
+[shot] 02-supervisor-thread-initial
+=== 5. poll until thread settles
+poll[0] status=running windows=12
+poll[22] status=done windows=12
+settled at iter=22 status=done
+settled: true
+[shot] 03-after-loop-settled
+forms found: 0
+=== 7. find time machine UI
+buttons sample: ["回首页"]
+loop list count: 5 sample: [{"loopIndex":1,"hasInput":true,"hasOutput":true,"hasMeta":true,"meta":{"threadId":"t_user_mpnxt3hv_vnbm","loopIndex":1,"provider":"claude","model":"claude-opus-4-7","startedAt":1779878675472,"finishedAt":1779878695541,"latencyMs":20069,"messageCount":3,"toolCount":4,"toolCallCount":1,"contextBytes":35003,"resultTextBytes":211,"status":"ok","windowsSnapshot":[{"id":"w_creator_t_user_mpnxt3hv_vnbm","type":"talk","contentHash":"252o6mi8lwn44","parentWindowId":"root","status":"open"},{"id":"custom:supervisor","type":"custom","contentHash":"kujl8epdpyas","parentWindowId":"root","status":"open"},{"id":"f_mpnxtj04_juyd","type":"command_exec","contentHash":"h9kyzb1xaqn2","parentWindowId":"w_creator_t_user_mpnxt3hv_vnbm","status":"open"}]}},{"loopIndex":2,"hasInput":true,"hasOutput":true,"hasMeta":true,"meta":{"threadId":"t_user_mpnxt3hv_vnbm","loopIndex":2,"provider":"claude","model":"claude-opus-4-7","startedAt":1779878695548,"finishedAt":1779878703089,"latencyMs":7541,"messageCount":6,"toolCount":4,"toolCallCount":1,"contextBytes":41147,"resultTextBytes":90,"status":"ok","windowsSnapshot":[{"id":"w_creator_t_user_mpnxt3hv_vnbm","type":"talk","contentHash":"252o6mi8lwn44","parentWindowId":"root","status":"open"},{"id":"custom:supervisor","type":"custom","contentHash":"kujl8epdpyas","parentWindowId":"root","status":"open"},{"id":"f_mpnxtj04_juyd","type":"command_exec","contentHash":"h9kyzb1xaqn2","parentWindowId":"w_creator_t_user_mpnxt3hv_vnbm","status":"open"}]}},{"loopIndex":3,"hasInput":true,"hasOutput":true,"hasMeta":true,"meta":{"threadId":"t_user_mpnxt3hv_vnbm","loopIndex":3,"provider":"claude","model":"claude-opus-4-7","startedAt":1779878703095,"finishedAt":1779878708343,"latencyMs":5248,"messageCount":9,"toolCount":4,"toolCallCount":1,"contextBytes":41838,"resultTextBytes":65,"status":"ok","windowsSnapshot":[{"id":"w_creator_t_user_mpnxt3hv_vnbm","type":"talk","contentHash":"252o6mi8lwn44","parentWindowId":"root","status":"open"},{"id":"custom:supervisor","type":"custom","contentHash":"kujl8epdpyas","parentWindowId":"root","status":"open"}]}},{"loopIndex":4,"hasInput":true,"hasOutput":true,"hasMeta":true,"meta":{"threadId":"t_user_mpnxt3hv_vnbm","loopIndex":4,"provider":"claude","model":"claude-opus-4-7","startedAt":1779878708348,"finishedAt":1779878714139,"latencyMs":5791,"messageCount":12,"toolCount":4,"toolCallCount":1,"contextBytes":37944,"resultTextBytes":122,"status":"ok","windowsSnapshot":[{"id":"w_creator_t_user_mpnxt3hv_vnbm","type":"talk","contentHash":"252o6mi8lwn44","parentWindowId":"root","status":"open"},{"id":"custom:supervisor","type":"custom","contentHash":"kujl8epdpyas","parentWindowId":"root","status":"open"},{"id":"f_mpnxtxcr_eu23","type":"command_exec","contentHash":"1xa881164ua2y","parentWindowId":"root","status":"open"}]}},{"loopIndex":5,"hasInput":true,"hasOutput":true,"hasMeta":true,"meta":{"threadId":"t_user_mpnxt3hv_vnbm","loopIndex":5,"provider":"claude","model":"claude-opus-4-7","startedAt":1779878714146,"finishedAt":1779878724408,"latencyMs":10262,"messageCount":15,"toolCount":4,"toolCallCount":1,"contextBytes":46333,"resultTextBytes":0,"status":"ok","windowsSnapshot":[{"id":"w_creator_t_user_mpnxt3hv_vnbm","type":"talk","contentHash":"252o6mi8lwn44","parentWindowId":"root","status":"open"},{"id":"custom:supervisor","type":"custom","contentHash":"kujl8epdpyas","parentWindowId":"root","status":"open"}]}}]
+dumped loop 5
+=== 9. look at form DOM
+form-related text sample: []
+[shot] 05-final-state
+=== DONE ===
+session: _test_experience_1779878675434
+forms count: 0
+settled: true

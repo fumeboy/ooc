@@ -242,6 +242,38 @@ P0-1 (Permission 模型) Q0a~Q0d 完成；Q0e 列 todo（自改 server/index.ts 
 - **2026-05-25**：首版。Supervisor Round 1 外循环。
 - **2026-05-25**（当日 Round 1 闭环）：P0-2 完整实施完成，5 套 e2e PASS / 全仓单测 PASS / meta tsc clean。差异与残留如上。
 - **2026-05-25**（当日 Round 2 闭环）：P0-1 Q0a~Q0d 完成，2 套 e2e (Q0b+Q0c) PASS / 联合 P0-1+P0-2 42 用例 PASS / 全仓 550 单测 PASS。3 项歧义 Supervisor 拍板；Q0e 列 todo。
+- **2026-05-27**（Round 14 闭环）：AgentOfExperience 自由体验 + 暴露 Round 10 F3 实际失效 + H1/M1 fix。
+  - **体验官派单**：自由体验（非固定剧本）+ 必覆盖 Round 11-13 新功能 (form 状态机 / end reflection / type-dispatch diff) + 自由探索远端新功能 (recovery / timeout / sentry / peer_readme)
+  - **环境**: 真 LLM（Claude opus-4-7）+ Playwright chromium headless + 用户预启 vite dev (5173)
+  - **必覆盖验证结果**:
+    - **Round 13 form 状态机 + failed 复活**: **Good** — LLM 真实跑通 open→submit→failed→refine 复活→open→submit→success 全链路，**dogfooding 闭环成立**（Round 12 basic-knowledge 重写真让 LLM 选 refine 而非 close）
+    - **Round 11 end reflection reminder**: **Good** — KNOWLEDGE 文本 `target:"super" + title:...` 正确（Round 11 G3 修复无回归），单测 gate 锁住；但本轮 LLM 未自然调 end，需补 thread-level 集成测试
+    - **Round 10 Type-Dispatch Window Diff**: **Mixed** — file_window CodeMirror Merge 单栏跑通；**但 H1 critical bug**: 非 file 类型展开永远 stuck "Loading loop details…" → 8 个非 file renderer 完全不可达（Round 10 F3 整段实际失效）
+  - **H1 根因**（体验官高确信度诊断）: `LoopDiffView.tsx:199-208` useEffect deps array 含 `detailsLoading`，effect 内 `setDetailsLoading(true)` 自触发 cleanup → `cancelled=true` → `.finally(setDetailsLoading(false))` 不执行 → 永远 Loading
+  - **H1 修法** (sub agent, **没自主 commit**)：
+    - 用 `inFlightRef = useRef(false)` 防重入（不进 deps，不触 re-run）
+    - `.finally()` 无条件清零（旧代码 cancelled 时跳过这两步）
+    - fetch 编排抽成 `fetchLoopInputsForDiff` 纯函数 export 便于真异步单测
+    - **新 e2e** `LoopDiffView.expand.test.ts` 7 用例（真异步 microtask 串行；防 Round 10 同步 mock 掩盖）
+  - **M1**: failed pill 颜色统一深红 `#fde2e2/#a4321c`（与 `.thread-inspect-detail-status-failed` 对齐；之前是橙红 `#fff1ed/#b2541e` 反差不够）
+  - **M3** (Supervisor 自做): 更新 memory `feedback_subagent_dispatch_onboarding` — 加 session 创建 API 注意事项（旧 `POST /api/flows/<sid>` 已弃用 → `POST /api/sessions`；体验官第一反应踩坑）
+  - **派单进步连续生效**: G2 prompt 明确"不要自己 commit"，sub agent 这次乖乖留 working tree, Supervisor 统一 commit（Round 13 → Round 14 风格一致）
+  - **整体校验**:
+    - tsc clean
+    - src/: 792 pass / 0 fail / 3 skip / 2189 expect
+    - web/: **201 pass / 0 fail / 460 expect**（+7 H1 防回归用例）
+    - backend e2e: 67 pass / 0 fail / 9 skip
+  - **产出**:
+    - `docs/2026-05-27-round-14-experience-report.md` — 完整体验报告
+    - `docs/round-14-experience/` — 42 截图 + Playwright driver + LLM input/output 落盘
+    - H1 + M1 修复
+  - **留 todo（下轮）**:
+    - M2: failed form 长期残留（thread 内堆积；考虑 GC hint 或自动 close 超 N loop 无动作）
+    - L1: user home calendar 计数与列表不一致提示
+    - L2: vite dev console warning spam（stones/self 非 stone object 警告）
+    - L3: Unknown route fallback 加 "你可能想去 /flows" 链接
+    - Round 11 end reflection 加 thread-level 集成测试（验证真注入路径）
+
 - **2026-05-27**（Round 13 闭环）：form 状态机升级 — `executed` → `success` / `failed` + failed 可 refine 回 open。
   - **设计触发**：Round 12 修了 LLM close 偏好，但 root cause 是 `executed` 状态混合 success/failure 且**不可 refine** — 只能 close 重开
   - **核心改动**：

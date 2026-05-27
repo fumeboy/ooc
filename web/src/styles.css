@@ -57,7 +57,9 @@ button { cursor: pointer; }
 .status-pill-thread.status-running { background: #d8f8e8; color: #238d61; border-color: #b8efd5; }
 .status-pill-thread.status-waiting { background: #eef0ea; color: #7a8077; border-color: #d6dbd0; }
 .status-pill-thread.status-done { background: #edf2ff; color: #4a61c9; border-color: #d9e1ff; }
-.status-pill-thread.status-failed { background: #fff1ed; color: #b2541e; border-color: #f1d0c1; }
+/* Round 14 M1: failed pill 与 .thread-inspect-detail-status-failed (line 843) 统一深红，
+   避免与 warning amber (executing) 反差不足。 */
+.status-pill-thread.status-failed { background: #fde2e2; color: #a4321c; border-color: #f1a7a7; }
 .status-pill-thread.status-paused { background: #fde9d6; color: #a35a14; border-color: #f1c98e; }
 .status-pill.debug { background: var(--blue); color: white; border-color: var(--blue); font-weight: 700; flex: 1; text-align: center; }
 .status-pill.online { background: #d8f8e8; color: #238d61; border-color: #b8efd5; }
