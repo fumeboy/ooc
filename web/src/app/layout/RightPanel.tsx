@@ -2,16 +2,17 @@ import type { ThreadContext } from "../../domains/chat";
 import { ChatPanel } from "../../domains/chat/components/ChatPanel";
 import { LayoutModeToggle, type LayoutMode } from "./LayoutModeToggle";
 import { useDisplayNames } from "../../domains/objects";
-import { Network } from "lucide-react";
+import { LoaderCircle, Network, Pause, Play } from "lucide-react";
 
 /**
  * RightPanel — chat 主面板，顶部带一行 header（取代了原 invisible spacer）。
  *
- * Header 内容（2026-05-21 改造）：
- * - 对话对象的 displayName（取自 self.md 首行；fallback 到 objectId）
- * - "查看 context windows"按钮：把 MainPanel 切回 thread 视图（kind: "session" + thread）；
- *   常见场景是 user 看完文件后想回到 context tree 而不是手动改 URL
- * - LayoutModeToggle：切换两栏 / 三栏
+ * Header (top): 对话对象 displayName + actions (Network / LayoutModeToggle)
+ * Body  (mid): ChatPanel = ThreadTimeline + 可选 ChatComposer
+ * Footer (bot, 2026-05-27 新增): thread status pill + session-pause 按钮。
+ *   - status pill: 反映 **thread.status** (running/paused HITL/waiting/done/failed)
+ *   - pause 按钮: 反映并 toggle **session 级** paused (POST /flows/.../pause)
+ *   - footer 始终展示, composer 隐藏时仍可看到 thread 状态与 session pause 入口
  *
  * 行为契约：composer 仅当 thread 是 user 自己 own 或被 user creator 派生时显示。
  */
@@ -60,14 +61,86 @@ export function RightPanel(props: {
           objectId={props.objectId}
           threadId={props.threadId}
           thread={props.thread}
-          paused={props.paused}
-          pauseBusy={props.pauseBusy}
           onSend={props.onSend}
-          onTogglePause={props.onTogglePause}
           showComposer={isUserOwnedOrCreated(props.objectId, props.thread)}
         />
       </div>
+      <RightFooter
+        threadStatus={props.thread?.status}
+        sessionPaused={props.paused}
+        pauseBusy={props.pauseBusy}
+        onTogglePause={props.onTogglePause}
+      />
     </aside>
+  );
+}
+
+/**
+ * RightFooter — 与 right-header 对称的底部条。
+ *
+ * 左：thread.status pill（thread 自身状态机：running / paused (HITL) / waiting / done / failed）。
+ * 右：session-pause 按钮（user 主动暂停 / 恢复整个 flow 的 worker 调度）。
+ *
+ * 两层独立显示，避免之前"thread.status=running 但 composer 写着已暂停"的视觉矛盾。
+ */
+function RightFooter({
+  threadStatus,
+  sessionPaused = false,
+  pauseBusy = false,
+  onTogglePause,
+}: {
+  threadStatus?: string;
+  sessionPaused?: boolean;
+  pauseBusy?: boolean;
+  onTogglePause?: () => Promise<void> | void;
+}) {
+  const pauseTitle = pauseBusy
+    ? sessionPaused
+      ? "正在恢复 session…"
+      : "正在暂停 session…"
+    : sessionPaused
+      ? "session 已暂停 · 点击恢复"
+      : "暂停整个 session";
+  const pauseLabel = pauseBusy
+    ? sessionPaused
+      ? "恢复中"
+      : "暂停中"
+    : sessionPaused
+      ? "已暂停 · 点击恢复"
+      : "暂停 session";
+  return (
+    <div className="right-footer panel" aria-label="right panel footer">
+      <div className="right-footer-status">
+        {threadStatus ? (
+          <span className={`status-pill status-pill-thread status-${threadStatus}`} title={`thread.status = ${threadStatus}`}>
+            {threadStatus}
+          </span>
+        ) : (
+          <span className="muted small">—</span>
+        )}
+      </div>
+      <div className="right-footer-actions">
+        {onTogglePause && (
+          <button
+            type="button"
+            className={`right-footer-pause${sessionPaused ? " is-paused" : ""}`}
+            aria-label={pauseTitle}
+            title={pauseTitle}
+            disabled={pauseBusy}
+            onClick={() => void onTogglePause()}
+          >
+            {pauseBusy ? (
+              <LoaderCircle size={13} className="chat-side-icon is-spinning" />
+            ) : sessionPaused ? (
+              <Play size={13} />
+            ) : (
+              <Pause size={13} />
+            )}
+            <span className="right-footer-pause-label">{pauseLabel}</span>
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
