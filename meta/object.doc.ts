@@ -1206,7 +1206,7 @@ export const root: DocTreeNode = {
                     content: `
                     OOC 内置多种 ContextWindow type。
 
-                    这些 type 不是 UI 组件分类，而是 LLM 的上下文对象分类（与 src/executable/windows/types.ts WindowType 联合一致）:
+                    这些 type 不是 UI 组件分类，而是 LLM 的上下文对象分类（与 src/executable/windows/_shared/types.ts WindowType 联合一致）:
                     - root: 每个 thread 隐含存在的根 window，注册顶层 command。
                     - command_exec: 一次 command 调用的临时 form window。
                     - do: 子 thread 的父侧窗口，展示子任务状态与 transcript。
@@ -1374,7 +1374,7 @@ export const root: DocTreeNode = {
                 "do_vs_talk": {
                     title: "do vs talk - 同 object fork vs 跨 object 会话",
                     content: `
-                    do_window 与 talk_window 长得像，但语义不同。判定规则在 src/executable/windows/init.ts isCreatorSelf:
+                    do_window 与 talk_window 长得像，但语义不同。判定规则在 src/executable/windows/_shared/init.ts isCreatorSelf:
                     - thread.creatorObjectId === thread.persistence?.objectId（含两者都缺省）→ 创建关系是 "do"，
                       由同一个 Object 内部 fork 出来；creator window 是 do_window。
                     - thread.creatorObjectId 与 self 不同 → 创建关系是 "talk"，是跨 object 派生的 callee thread；
@@ -1402,7 +1402,7 @@ export const root: DocTreeNode = {
                 "talk_delivery": {
                     title: "talk_delivery - 跨 object 派送的统一入口",
                     content: `
-                    deliverTalkMessage（src/executable/windows/talk-delivery.ts）是跨 object 派送的唯一路径。
+                    deliverTalkMessage（src/executable/windows/talk/delivery.ts）是跨 object 派送的唯一路径。
                     无论是 LLM 通过 talk_window.say 还是控制面代用户发，都汇集到这里。
 
                     一次派送做 6 件事:
@@ -1444,7 +1444,7 @@ export const root: DocTreeNode = {
                     title: "creator_window - thread 启动时的恒在通道",
                     content: `
                     每个新 thread 启动时都需要一条指向创建方的恒在窗口；由 initContextWindows 注入
-                    （src/executable/windows/init.ts）。
+                    （src/executable/windows/_shared/init.ts）。
 
                     类型由 thread 自身的 creatorObjectId 决定（见 do_vs_talk）:
                     - 同 object fork → creator window = type=do, targetThreadId=父 thread id, isCreatorWindow=true。
@@ -1586,7 +1586,7 @@ export const root: DocTreeNode = {
                                 "scope=long_term": "派给 super flow，由 super 写 pool 层 knowledge/relations",
                                 "临时 TalkWindow": "不挂到 thread 的一次性派送载体；避免 super 通道常驻 contextWindows",
                             },
-                            sources: [["src/executable/windows/relation/index.ts", "RelationWindow + edit command 注册与 executeRelationEdit；派送复用 src/executable/windows/talk-delivery.ts:deliverTalkMessage；scope=session 写盘 src/persistable/flow-relation.ts:writeFlowRelation"]],
+                            sources: [["src/executable/windows/relation/index.ts", "RelationWindow + edit command 注册与 executeRelationEdit；派送复用 src/executable/windows/talk/delivery.ts:deliverTalkMessage；scope=session 写盘 src/persistable/flow-relation.ts:writeFlowRelation"]],
                         },
                     },
                     sources: [["src/executable/windows/relation/index.ts", "RelationWindow 与 edit command；派生函数 deriveRelationWindow / deriveRelationCompanionKnowledge 见 src/thinkable/knowledge/synthesizer.ts；flow 层文件 IO 见 src/persistable/flow-relation.ts"]],
@@ -1932,7 +1932,7 @@ export const root: DocTreeNode = {
                 "super_session": {
                     title: "super_session - 受保护的反思通道",
                     content: `
-                    SUPER_SESSION_ID = "super"（src/executable/windows/super-constants.ts）是被全系统硬编码识别的
+                    SUPER_SESSION_ID = "super"（src/executable/windows/_shared/super-constants.ts）是被全系统硬编码识别的
                     特殊 sessionId。它代表 Object 的反思通道，不是普通业务 session。
 
                     校验规则:
@@ -1953,7 +1953,7 @@ export const root: DocTreeNode = {
                     content: `
                     talk_window.target 一般是另一个 flow object id。
                     特殊地 target === "super" 时，talk-delivery 翻译为指向自己的 super 分身
-                    （src/executable/windows/talk-delivery.ts:87-89）:
+                    （src/executable/windows/talk/delivery.ts:89-90）:
                     - calleeObjectId = caller.objectId
                     - calleeSessionId = "super"
 

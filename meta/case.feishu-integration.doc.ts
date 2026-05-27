@@ -49,7 +49,7 @@ export const root: DocTreeNode = {
     - \`feishu_doc_window\`  — 飞书 doc / docx / sheet / base / wiki / drive_md；commands: read / search_in_doc / append / patch_block / share_link / attach_to_chat / close
     - root commands 入口：\`open_feishu_chat\` / \`open_feishu_doc\`
 
-    所有飞书 OAPI 调用收口到 \`src/executable/windows/_shared/lark-cli.ts\` 的 \`larkExec\` helper，
+    所有飞书 OAPI 调用收口到 \`src/extendable/lark/cli.ts\` 的 \`larkExec\` helper，
     通过子进程方式调用官方 \`@larksuite/cli\`（Go 二进制，带 OS keychain 凭证存储 + OAuth device-code 流）。
 
     **不在本 case 范围**：
@@ -104,7 +104,7 @@ export const root: DocTreeNode = {
             设计方案讨论时存在两种形态：
             - **两层**：建 \`agent_of_feishu\` stone（凭证元数据 / 配额 / scope 白名单 / lark-cli helper）
               + Window type 引用 helper。
-            - **单层**：直接把 helper 放 \`src/executable/windows/_shared/lark-cli.ts\`，Window type
+            - **单层**：直接把 helper 放 \`src/extendable/lark/cli.ts\`，Window type
               直接调；不建 stone。
 
             最终采用**单层**（supervisor §decisions.1）。判断标准与 cookbook.add-new-agent §when_to_say_no

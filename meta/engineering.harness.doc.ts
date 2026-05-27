@@ -140,7 +140,7 @@ export const root: DocTreeNode = {
 
             维度定义见 meta/object.doc.ts 的 collaborable child。
             `,
-            sources: [["src/executable/windows/", "talk-delivery.ts / talk.ts / do.ts / issue 协作核心;Issue 业务层见 src/persistable/issue-service.ts;概念定义见 meta/object.doc.ts:children.collaborable"]],
+            sources: [["src/executable/windows/", "talk/delivery.ts / talk/index.ts / do/index.ts / issue 协作核心;Issue 业务层见 src/persistable/pr-issue.ts;概念定义见 meta/object.doc.ts:children.collaborable"]],
         },
         agent_of_persistable: {
             title: "AgentOfPersistable - persistable 维度的工程实现",
@@ -207,7 +207,7 @@ export const root: DocTreeNode = {
 
             维度定义见 meta/object.doc.ts 的 programmable child。
             `,
-            sources: [["src/executable/server/", "server method 加载与 ProgramSelf 注入;exec 路径入口见 src/executable/program/exec.ts;server/index.ts 读写见 src/persistable/stone-server.ts;概念定义见 meta/object.doc.ts:children.programmable"]],
+            sources: [["src/executable/server/", "server method 加载与 ProgramSelf 注入;exec 路径入口见 src/executable/tools/exec.ts;server/index.ts 读写见 src/persistable/stone-server.ts;概念定义见 meta/object.doc.ts:children.programmable"]],
         },
         agent_of_reflectable: {
             title: "AgentOfReflectable - reflectable 维度的工程实现",
@@ -224,7 +224,7 @@ export const root: DocTreeNode = {
 
             维度定义见 meta/object.doc.ts 的 reflectable child。
             `,
-            sources: [["src/thinkable/reflectable/", "reflectable 维度的实现根目录;super 常量见 src/executable/windows/super-constants.ts;注入条件见 src/thinkable/knowledge/synthesizer.ts;概念定义见 meta/object.doc.ts:children.reflectable"]],
+            sources: [["src/thinkable/reflectable/", "reflectable 维度的实现根目录;super 常量见 src/executable/windows/_shared/super-constants.ts;注入条件见 src/thinkable/knowledge/synthesizer.ts;概念定义见 meta/object.doc.ts:children.reflectable"]],
         },
         agent_of_experience: {
             title: "AgentOfExperience - 体验官",
