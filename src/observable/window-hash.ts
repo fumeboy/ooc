@@ -1,10 +1,13 @@
 /**
  * Window content hash + snapshot helpers — debug-only.
  *
- * 设计依据: docs/2026-05-26-loop-time-machine-with-window-diff-design.md § 3.1-3.3
+ * 设计依据:
+ *   - docs/2026-05-26-loop-time-machine-with-window-diff-design.md § 3.1-3.3
+ *   - docs/2026-05-27-type-dispatch-window-diff-view-design.md § 4.1 (Round 10 F2: fileDiff)
  * 文档锚点:
  *   - meta/object.doc.ts:observable.children.debug_files.patches.windows_snapshot
  *   - meta/object.doc.ts:visible.children.loop_timeline.patches.windows_snapshot_data_source
+ *   - meta/object.doc.ts:visible.children.loop_timeline.patches.type_dispatch_diff_renderer
  *
  * 不变量:
  *   - contentHash **不进** thread.json，只在 loop_NNNN.meta.json 的 windowsSnapshot 里
@@ -12,9 +15,40 @@
  *   - stripVolatile 与 src/persistable/thread-json.ts:stripVolatileForPersist 单 window 段保持一致：
  *     剥 _decayMeta；剥 compressLevel === 0/undefined
  *   - hash 稳定性靠 Object.keys(stripped).sort() 保证；字段插入顺序不影响 hash
+ *   - fileDiff 字段只对 file_window 计算；previousContent 由 finishLlmLoop 读上一 loop meta 拿到
+ *   - fileDiff 不进 thread.json（debug 视角派生数据），只落 loop_NNNN.meta.json
  */
 
-import type { ContextWindow } from "@src/executable/windows/_shared/types";
+import { readFile } from "node:fs/promises";
+
+import type { ContextWindow, FileWindow } from "@src/executable/windows/_shared/types";
+
+/**
+ * file_window 的 diff 数据；用于前端 CodeMirror Merge 双侧渲染。
+ *
+ * 设计依据: docs/2026-05-27-type-dispatch-window-diff-view-design.md § 4.1
+ *
+ * 字段语义：
+ * - previousContent: 上一 loop 该 file 的内容（added 时为 ""；二进制 / 过大时也为 ""）
+ * - currentContent:  当前 loop 该 file 的内容（removed 时为 ""；二进制 / 过大时也为 ""）
+ * - path:            file_window.path（绝对或相对工作目录）
+ * - isBinary:        true → 文件含 \0 byte，按二进制处理，两侧 content 都为 ""
+ * - tooLarge:        true → 文件 > 200KB，按过大处理，两侧 content 都为 ""
+ *
+ * isBinary / tooLarge 互斥优先级：tooLarge 先判（避免 read 200MB 的二进制文件先扫 \0）。
+ * 实际实现里 readFile 拿 string，size 判定走 length（char count）；utf8 字节大致 ≈ length，
+ * 200KB 阈值已留足缓冲，不需要精确字节数。
+ */
+export type FileDiffData = {
+  previousContent: string;
+  currentContent: string;
+  path: string;
+  isBinary?: boolean;
+  tooLarge?: boolean;
+};
+
+/** 200KB 阈值；超过则 tooLarge=true，不再嵌正文。 */
+const FILE_DIFF_MAX_BYTES = 200 * 1024;
 
 /**
  * 剥离 in-process volatile 字段后的 window snapshot；用于 hash 计算。
@@ -57,12 +91,15 @@ export function computeWindowContentHash(window: ContextWindow): string {
  *
  * shape 锚点:
  *   - docs/2026-05-26-loop-time-machine-with-window-diff-design.md § 3.2
+ *   - docs/2026-05-27-type-dispatch-window-diff-view-design.md § 4.1 (fileDiff)
  *   - meta/object.doc.ts:observable.children.debug_files.patches.windows_snapshot
+ *   - meta/object.doc.ts:visible.children.loop_timeline.patches.windows_snapshot_data_source
  *
  * 字段语义：
  * - id / type：等同源 window
  * - contentHash：computeWindowContentHash 结果
  * - parentWindowId / status / compressLevel：optional，便于前端不再 fetch 完整 window 也能渲染基本 row
+ * - fileDiff：仅 file_window 填；含 path + previousContent + currentContent（hybrid 数据策略 backend 半）
  */
 export type WindowSnapshotEntry = {
   id: string;
@@ -71,15 +108,74 @@ export type WindowSnapshotEntry = {
   parentWindowId?: string;
   status?: string;
   compressLevel?: 0 | 1 | 2;
+  fileDiff?: FileDiffData;
 };
+
+/**
+ * 对 file_window 计算 fileDiff：
+ * - currentContent 从 fs.readFile(window.path) 读（FileWindow 本身不持有 content；与 renderFileWindow 同款）
+ * - previousContent 从 prev snapshot 同 id entry 的 fileDiff.currentContent 拿（首次出现 → ""）
+ * - 二进制（含 \0）或过大（>200KB）时两侧 content 都设 ""，isBinary / tooLarge 字段标记
+ * - 读失败（文件不存在 / 权限）→ console.warn + currentContent="" 退化，不抛错
+ *
+ * 注意：previousContent 只信任 prev snapshot 的记录，不再回读 fs（避免拿到当前磁盘内容而非
+ * 上一 loop 时刻的内容；时间机器的核心就是 prev = "上一 loop 那一刻"）。
+ */
+async function computeFileDiff(
+  w: FileWindow,
+  previousSnapshot: WindowSnapshotEntry[] | undefined,
+): Promise<FileDiffData> {
+  const path = w.path;
+  const previousContent =
+    previousSnapshot?.find((s) => s.id === w.id)?.fileDiff?.currentContent ?? "";
+
+  let currentContent = "";
+  let isBinary = false;
+  let tooLarge = false;
+
+  try {
+    const raw = await readFile(path, "utf8");
+    if (raw.length > FILE_DIFF_MAX_BYTES) {
+      tooLarge = true;
+    } else if (raw.includes("\0")) {
+      isBinary = true;
+    } else {
+      currentContent = raw;
+    }
+  } catch (err) {
+    // silent-swallow ban: read 失败必 warn，不抛
+    const msg = err instanceof Error ? err.message : String(err);
+    // eslint-disable-next-line no-console
+    console.warn(`[fileDiff] failed to read ${path}: ${msg}`);
+  }
+
+  const blocked = tooLarge || isBinary;
+  const result: FileDiffData = {
+    previousContent: blocked ? "" : previousContent,
+    currentContent: blocked ? "" : currentContent,
+    path,
+  };
+  if (isBinary) result.isBinary = true;
+  if (tooLarge) result.tooLarge = true;
+  return result;
+}
 
 /**
  * 给一组 ContextWindow 算 snapshot 数组。
  *
  * 输出顺序与输入顺序一致（前端按数组顺序渲染 diff row）。
+ *
+ * @param windows           当前 loop 的 contextWindows
+ * @param previousSnapshot  上一 loop 的 windowsSnapshot（由 finishLlmLoop 读 loop_NNNN-1.meta.json
+ *                          得到；undefined 表示首轮 / 无 prev）。仅用于派生 file_window 的
+ *                          previousContent。
  */
-export function buildWindowsSnapshot(windows: ContextWindow[]): WindowSnapshotEntry[] {
-  return windows.map((w) => {
+export async function buildWindowsSnapshot(
+  windows: ContextWindow[],
+  previousSnapshot?: WindowSnapshotEntry[],
+): Promise<WindowSnapshotEntry[]> {
+  const out: WindowSnapshotEntry[] = [];
+  for (const w of windows) {
     const entry: WindowSnapshotEntry = {
       id: w.id,
       type: w.type,
@@ -90,6 +186,10 @@ export function buildWindowsSnapshot(windows: ContextWindow[]): WindowSnapshotEn
     if (w.compressLevel !== undefined && w.compressLevel !== 0) {
       entry.compressLevel = w.compressLevel;
     }
-    return entry;
-  });
+    if (w.type === "file") {
+      entry.fileDiff = await computeFileDiff(w as FileWindow, previousSnapshot);
+    }
+    out.push(entry);
+  }
+  return out;
 }

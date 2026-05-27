@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { threadDir, toJson, type ThreadPersistenceRef } from "./common";
 import type { LlmGenerateResult, LlmInputItem, LlmMessage } from "../thinkable/llm/types";
@@ -225,4 +225,25 @@ export async function writeLoopDebugMeta(
 ): Promise<void> {
   await mkdir(debugDir(ref), { recursive: true });
   await writeFile(loopMetaFile(ref, loopIndex), toJson(record), "utf8");
+}
+
+/**
+ * 读取单轮 LLM 元数据；文件不存在 / 解析失败时返回 undefined（不抛）。
+ *
+ * Round 10 F2 引入：finishLlmLoop 在写 loop_NNNN.meta.json 前先读 loop_NNNN-1.meta.json
+ * 拿 prev snapshot，给 buildWindowsSnapshot 算 file_window 的 previousContent。
+ *
+ * 失败退化语义（首次出现 / 文件被外部删 / JSON 损坏）→ undefined →
+ * buildWindowsSnapshot 把 previousContent 当 ""（视为 added）。
+ */
+export async function readLoopDebugMeta(
+  ref: ThreadPersistenceRef,
+  loopIndex: number
+): Promise<LlmLoopDebugMetaRecord | undefined> {
+  try {
+    const raw = await readFile(loopMetaFile(ref, loopIndex), "utf8");
+    return JSON.parse(raw) as LlmLoopDebugMetaRecord;
+  } catch {
+    return undefined;
+  }
 }

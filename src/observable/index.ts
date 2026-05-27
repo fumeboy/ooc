@@ -4,6 +4,7 @@ import {
   captureContextSnapshot,
   deriveOutputItems,
   normalizeInputItems,
+  readLoopDebugMeta,
   writeDebugInput,
   writeDebugOutput,
   writeLoopDebugInput,
@@ -329,7 +330,17 @@ export async function finishLlmLoop(
   if (debugEnabled && thread.persistence) {
     // Round 9 E2: 落 windowsSnapshot 供前端 LoopTimeline 算 diff
     // (docs/2026-05-26-loop-time-machine-with-window-diff-design.md § 3.2)
-    const windowsSnapshot = buildWindowsSnapshot(thread.contextWindows ?? []);
+    // Round 10 F2: 读上一 loop meta 拿 prev snapshot，给 buildWindowsSnapshot 算
+    // file_window 的 previousContent (docs/2026-05-27-type-dispatch-window-diff-view-design.md § 4.1)
+    let previousSnapshot;
+    if (handle.loopIndex > 1) {
+      const prevMeta = await readLoopDebugMeta(thread.persistence, handle.loopIndex - 1);
+      previousSnapshot = prevMeta?.windowsSnapshot;
+    }
+    const windowsSnapshot = await buildWindowsSnapshot(
+      thread.contextWindows ?? [],
+      previousSnapshot,
+    );
     await writeLoopDebugMeta(thread.persistence, handle.loopIndex, {
       threadId: thread.id,
       loopIndex: handle.loopIndex,
