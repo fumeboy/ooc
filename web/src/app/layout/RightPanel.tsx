@@ -58,6 +58,7 @@ export function RightPanel(props: {
         <ChatPanel
           sessionId={props.sessionId}
           objectId={props.objectId}
+          threadId={props.threadId}
           thread={props.thread}
           paused={props.paused}
           pauseBusy={props.pauseBusy}

@@ -532,6 +532,31 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
       continue;
     }
 
+    if (category === "permission" && kind === "permission_ask") {
+      const toolCallId = typeof event.toolCallId === "string" ? event.toolCallId : undefined;
+      const command = typeof event.command === "string" ? event.command : "(unknown)";
+      const argsSummary = typeof event.argsSummary === "string" ? event.argsSummary : undefined;
+      const windowId = typeof event.windowId === "string" ? event.windowId : undefined;
+      // decided 写在 same event 上 (backend mutates in place); kind=permission_denied 是另一种
+      // 系统级拒绝路径, 不会带 decided. 这里只读 same-event.decided.action.
+      let decided: "approve" | "reject" | undefined;
+      const decidedRecord = isRecord(event.decided) ? event.decided : undefined;
+      if (decidedRecord && (decidedRecord.action === "approve" || decidedRecord.action === "reject")) {
+        decided = decidedRecord.action;
+      }
+      lines.push({
+        id: toolCallId ? `permission-${toolCallId}` : `event-${index}`,
+        kind: "permission_card",
+        role: "notice",
+        toolCallId,
+        command,
+        argsSummary,
+        windowId,
+        decided,
+      });
+      continue;
+    }
+
     lines.push(fallbackNotice(index, event));
   }
 

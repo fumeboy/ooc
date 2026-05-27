@@ -125,7 +125,7 @@ beforeAll(() => {
       _test_q0b_danger: {
         paths: ["_test_q0b_danger"],
         match: () => ["_test_q0b_danger"],
-        permission: "deny",
+        permission: () => "deny",
         exec: () => ({ ok: true, result: "should-never-execute" }),
       },
       _test_q0b_safe: {

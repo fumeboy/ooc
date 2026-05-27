@@ -218,4 +218,16 @@ export type ChatLine =
       title: string;
       content: string;
       tone?: "info" | "warning" | "error";
+    }
+  | {
+      id: string;
+      kind: "permission_card";
+      role: "notice";
+      /** 触发本次 ask 的 function_call id (与 backend permission_ask.toolCallId 对齐, 用于拼 eventId)。 */
+      toolCallId?: string;
+      command: string;
+      argsSummary?: string;
+      windowId?: string;
+      /** 同一条 permission_ask event 的 decided 字段镜像 (backend 在 approve / reject 后回写此字段)。 */
+      decided?: "approve" | "reject";
     };

@@ -81,9 +81,6 @@ scope="long_term" 的路径详解:
 
 const editCommand: CommandTableEntry = {
   paths: ["edit", "edit.session", "edit.long_term"],
-  // Q0d: relation_window.edit 写跨 Object 关系 (session 直接落盘; long_term 派 super flow);
-  // 跨边界副作用, design §3 "relation_update" 表项默认 ask。
-  permission: "ask",
   match: (args) => {
     const scope = args.scope;
     if (scope === "session") return ["edit", "edit.session"];

@@ -77,8 +77,6 @@ export const programCommand: CommandTableEntry = {
     ProgramCommandPath.TypeScript,
     ProgramCommandPath.JavaScript,
   ],
-  // Q0d: program 执行 OS 命令 / 任意代码; design §3 默认 ask (shell 与 ts/js 同)。
-  permission: "ask",
   match: (args) => {
     const hit: string[] = [ProgramCommandPath.Program];
     const lang = (args.language ?? args.lang) as string | undefined;

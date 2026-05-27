@@ -46,15 +46,15 @@ export interface CommandTableEntry {
    * - "ask"    → 触发 PermissionDecider HITL，写 permission_ask ProcessEvent + thread.status="paused"
    * - "deny"   → 系统直接拒绝，写 permission_denied ProcessEvent + 合成 function_call_output
    *
-   * **缺省视为 "allow"**（向后兼容）：本轮（Q0b）不给任何具体 command 设置 permission，
-   * 由后续 phase（Q0d）按 design §3 默认 policy 表填齐。
+   * 现在是函数：args 来自 form.accumulatedArgs，可按入参派生 level（例如 write_file 命中
+   * cwd 外路径才 ask）。**缺省（字段未声明）视为 "allow"**；函数抛错时也回落 "allow"。
    *
    * runtime override: stones/<self>/objects/<id>/config/policies.json 中 commands[<command>]
    * 字段可在不改源码的情况下覆盖本声明。
    *
    * 参考 meta/object.doc.ts:executable.children.permission。
    */
-  permission?: "allow" | "ask" | "deny";
+  permission?: (args: Record<string, unknown>) => "allow" | "ask" | "deny";
   /**
    * 给定 args，返回此次激活的 path 子集（必含 command 自身名）。多条路径并行。
    *

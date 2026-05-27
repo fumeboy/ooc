@@ -36,6 +36,29 @@ export function fetchSessionThreads(sessionId: string) {
 }
 
 /**
+ * Q0c: HITL 决议 chat 面板 permission_card 的 approve / reject。
+ *
+ * eventId = `${toolCallId}_ask`（与 LoopTimeline.buildDecideBody 同款 fallback 规则，避免后端
+ * 在多 pending ask 场景下选错事件）。toolCallId 缺失时不传 eventId，由 backend 自动选最近一条。
+ *
+ * 成功后 backend 会翻 thread.status=running + 触发 jobManager 重启，前端 polling 会自动同步。
+ */
+export function decideChatPermission(args: {
+  sessionId: string;
+  objectId: string;
+  threadId: string;
+  toolCallId?: string;
+  action: "approve" | "reject";
+}) {
+  const body: Record<string, unknown> = { action: args.action };
+  if (args.toolCallId) body.eventId = `${args.toolCallId}_ask`;
+  return requestJson<{ ok?: boolean }>(
+    endpoints.runtimeDecidePermission(args.sessionId, args.objectId, args.threadId),
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+/**
  * 列出 session 下所有 (objectId, threadId) 的完整 metadata —— Session Threads Index 用。
  *
  * 与 `fetchSessionThreads` 同 endpoint, 但用 SessionThreads Index 的扩展 shape 类型

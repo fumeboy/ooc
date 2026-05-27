@@ -1,6 +1,7 @@
-import { ChevronDown, CircleX, Clock3, Copy, ExternalLink, FolderPlus, Info, Loader2, SendHorizontal, SlidersHorizontal, Wrench, type LucideIcon } from "lucide-react";
+import { ChevronDown, CircleX, Clock3, Copy, ExternalLink, FolderPlus, Info, Loader2, ShieldCheck, SendHorizontal, SlidersHorizontal, Wrench, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import type { ChatLine } from "../model";
+import { decideChatPermission } from "../query";
 import { MarkdownContent } from "../../../shared/ui/MarkdownContent";
 import { InlineUiContent } from "../../../shared/ui/InlineUiContent";
 import { dispatchNavigateToWindow } from "../../files/navigation-events";
@@ -27,6 +28,9 @@ function getToolIcon(toolName: string): LucideIcon {
 function buildCopyText(line: ChatLine) {
   if (line.kind === "message") return line.content;
   if (line.kind === "notice") return `${line.title}\n${line.content}`;
+  if (line.kind === "permission_card") {
+    return `permission_ask command=${line.command}${line.argsSummary ? `\nargs=${line.argsSummary}` : ""}${line.windowId ? `\nwindow=${line.windowId}` : ""}`;
+  }
   return JSON.stringify(
     {
       toolName: line.toolName,
@@ -385,7 +389,7 @@ function ToolCardRouter({ line, liveWindowIds }: ToolCardShellProps) {
   }
 }
 
-export function TuiBlock({ line, loading = false, liveWindowIds }: { line: ChatLine; loading?: boolean; liveWindowIds?: Set<string> }) {
+export function TuiBlock({ line, loading = false, liveWindowIds, sessionId, objectId, threadId }: { line: ChatLine; loading?: boolean; liveWindowIds?: Set<string>; sessionId?: string; objectId?: string; threadId?: string }) {
   const config = ROLE_CONFIG[line.role];
   const PrefixIcon = config.icon;
 
@@ -420,6 +424,17 @@ export function TuiBlock({ line, loading = false, liveWindowIds }: { line: ChatL
       );
     }
 
+    if (line.kind === "permission_card") {
+      return (
+        <PermissionCard
+          line={line}
+          sessionId={sessionId}
+          objectId={objectId}
+          threadId={threadId}
+        />
+      );
+    }
+
     if (line.kind === "notice") {
       return (
         <div className={`tui-notice-card is-${line.tone ?? "info"}`}>
@@ -439,6 +454,106 @@ export function TuiBlock({ line, loading = false, liveWindowIds }: { line: ChatL
   return (
     <div className={`tui-block ${config.className}`}>
       {renderBody()}
+    </div>
+  );
+}
+
+/**
+ * permission_ask 决议卡 — chat 面板内联，单按钮「同意并继续」（拒绝路径走 LoopTimeline 决议层，
+ * 不在 chat 面板暴露二级 UI）。decided 状态下按钮替换为静态徽章，pending 时点击调用
+ * `decideChatPermission`，成功后由 polling 自动拉到下一份 thread context。
+ */
+function PermissionCard({
+  line,
+  sessionId,
+  objectId,
+  threadId,
+}: {
+  line: Extract<ChatLine, { kind: "permission_card" }>;
+  sessionId?: string;
+  objectId?: string;
+  threadId?: string;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const decided = line.decided;
+
+  const canDecide = !decided && Boolean(sessionId && objectId && threadId);
+  async function handleApprove() {
+    if (!sessionId || !objectId || !threadId) return;
+    setSubmitting(true);
+    setError(undefined);
+    try {
+      await decideChatPermission({
+        sessionId,
+        objectId,
+        threadId,
+        toolCallId: line.toolCallId,
+        action: "approve",
+      });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="tui-notice-card tui-permission-card is-info" data-testid="permission-card">
+      <div className="tui-notice-card-head">
+        <span className="tui-prefix tui-prefix-icon">
+          <ShieldCheck size={12} strokeWidth={2} aria-hidden="true" />
+        </span>
+        <span className="tui-label">permission</span>
+        <span className="tui-permission-title">需要授权才能继续</span>
+      </div>
+      <div className="tui-notice-body tui-permission-body">
+        <dl className="tui-permission-meta">
+          <dt>command</dt>
+          <dd><code>{line.command}</code></dd>
+          {line.argsSummary && (
+            <>
+              <dt>args</dt>
+              <dd className="tui-permission-args">{line.argsSummary}</dd>
+            </>
+          )}
+          {line.windowId && (
+            <>
+              <dt>window</dt>
+              <dd><code>{line.windowId}</code></dd>
+            </>
+          )}
+        </dl>
+        {error && (
+          <div className="error tui-permission-error" role="alert" data-testid="permission-card-error">
+            决议失败: {error}
+          </div>
+        )}
+        <div className="tui-permission-actions">
+          {decided === "approve" && (
+            <span className="tui-permission-badge is-approved" data-testid="permission-card-approved">
+              ✓ 已同意
+            </span>
+          )}
+          {decided === "reject" && (
+            <span className="tui-permission-badge is-rejected" data-testid="permission-card-rejected">
+              已拒绝
+            </span>
+          )}
+          {!decided && (
+            <button
+              type="button"
+              className="btn small primary tui-permission-approve"
+              disabled={submitting || !canDecide}
+              onClick={() => void handleApprove()}
+              data-testid="permission-card-approve"
+              title={canDecide ? "同意并继续" : "缺少 session/thread 上下文,无法决议"}
+            >
+              {submitting ? "处理中…" : "同意并继续"}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

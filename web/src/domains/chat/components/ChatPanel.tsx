@@ -7,6 +7,7 @@ import { ChatSendProvider } from "../../../shared/ui/ChatSendContext";
 export function ChatPanel({
   sessionId,
   objectId,
+  threadId,
   thread,
   paused = false,
   pauseBusy = false,
@@ -17,6 +18,7 @@ export function ChatPanel({
 }: {
   sessionId?: string;
   objectId?: string;
+  threadId?: string;
   thread?: ThreadContext;
   paused?: boolean;
   pauseBusy?: boolean;
@@ -31,7 +33,7 @@ export function ChatPanel({
         {sessionId && objectId ? (
           <>
             <div className="chat-timeline panel">
-              <ThreadTimeline thread={thread} />
+              <ThreadTimeline thread={thread} sessionId={sessionId} objectId={objectId} threadId={threadId} />
             </div>
             {showComposer && (
               <div className="chat-composer-shell">

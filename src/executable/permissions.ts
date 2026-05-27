@@ -136,7 +136,16 @@ function lookupDeclaredPermission(
     try {
       const def = getWindowTypeDefinition(windowType as never);
       const entry = def.commands[command];
-      return entry?.permission;
+      const fn = entry?.permission;
+      if (!fn) return undefined;
+      try {
+        const args = call.args && typeof call.args === "object" && !Array.isArray(call.args)
+          ? (call.args as Record<string, unknown>)
+          : {};
+        return fn(args);
+      } catch {
+        return undefined;
+      }
     } catch {
       return undefined;
     }

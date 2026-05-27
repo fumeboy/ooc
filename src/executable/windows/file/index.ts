@@ -126,8 +126,6 @@ const closeCommand: CommandTableEntry = {
 
 const editCommand: CommandTableEntry = {
   paths: ["edit"],
-  // Q0d: file_window.edit 写回磁盘 (精确替换); 等同 write_file 的"修改"分支, design §3 默认 ask。
-  permission: "ask",
   match: () => ["edit"],
   knowledge: (args, formStatus): CommandKnowledgeEntries => {
     const entries: CommandKnowledgeEntries = { [FILE_WINDOW_EDIT_BASIC]: EDIT_KNOWLEDGE };

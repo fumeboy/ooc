@@ -47,8 +47,6 @@ program_window.close 等价于 close tool；释放 window 与 history。
 
 const execCommand: CommandTableEntry = {
   paths: ["exec", "exec.shell", "exec.ts", "exec.js"],
-  // Q0d: program_window.exec 等价于 root.program 的二次执行; design §3 ask。
-  permission: "ask",
   match: (args) => {
     const hit: string[] = ["exec"];
     const lang = (args.language ?? args.lang) as string | undefined;

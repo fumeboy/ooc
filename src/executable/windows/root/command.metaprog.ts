@@ -106,9 +106,7 @@ export const metaprogCommand: CommandTableEntry = {
   paths: ["metaprog"],
   // Q0d: metaprog 是元编程入口 (open_worktree / commit / merge / resolve / rollback / create_object),
   // 全部触发 stones git 副作用 (修改 stones/<self>/ 下的 self.md / server / knowledge);
-  // 等价 design §3 中的 "super flow 改 self.md / readme.md" + "delete_* 任何删除类",
-  // 一律 ask, 由 caller (Supervisor 或 self) 在 HITL 中确认。
-  permission: "ask",
+  // 等价 design §3 中的 "super flow 改 self.md / readme.md" + "delete_* 任何删除类"。
   match: () => ["metaprog"],
   knowledge: (args, formStatus): CommandKnowledgeEntries => {
     const entries: CommandKnowledgeEntries = { [METAPROG_BASIC_PATH]: KNOWLEDGE };

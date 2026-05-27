@@ -48,6 +48,7 @@ export function ChatComposer({
     void trySend();
   }
   const pauseLabel = pauseBusy ? (paused ? "Resuming session" : "Pausing session") : paused ? "Resume session" : "Pause session";
+  const pauseLabelCN = pauseBusy ? (paused ? "恢复中" : "暂停中") : paused ? "已暂停 · 点击继续" : "点击暂停";
   // Issue #3 A4 fix: 原写死 'Continue root thread...' 与 callee thread 现实脱节。
   // 改为从 peer 派生 `Reply to <name>...`(优先 displayName,缺省回退 objectId);缺 peer 时退回通用 `Continue thread...`。
   const peerLabel = peerDisplayName || peerObjectId;
@@ -76,6 +77,7 @@ export function ChatComposer({
           onClick={() => void onTogglePause?.()}
         >
           {pauseBusy ? <LoaderCircle size={16} className="chat-side-icon is-spinning" /> : paused ? <Play size={16} className="chat-side-icon" /> : <Pause size={16} className="chat-side-icon" />}
+          <span className="chat-pause-label">{pauseLabelCN}</span>
         </button>
         <button
           type="button"

@@ -58,6 +58,7 @@ button { cursor: pointer; }
 .status-pill-thread.status-waiting { background: #eef0ea; color: #7a8077; border-color: #d6dbd0; }
 .status-pill-thread.status-done { background: #edf2ff; color: #4a61c9; border-color: #d9e1ff; }
 .status-pill-thread.status-failed { background: #fff1ed; color: #b2541e; border-color: #f1d0c1; }
+.status-pill-thread.status-paused { background: #fde9d6; color: #a35a14; border-color: #f1c98e; }
 .status-pill.debug { background: var(--blue); color: white; border-color: var(--blue); font-weight: 700; flex: 1; text-align: center; }
 .status-pill.online { background: #d8f8e8; color: #238d61; border-color: #b8efd5; }
 .nav-section { padding: 8px; flex: 0 0 auto; }
@@ -337,6 +338,25 @@ button { cursor: pointer; }
 .tui-notice-body { padding: 10px 12px; display: grid; gap: 6px; }
 .tui-notice-title { font-size: 10px; font-weight: 700; color: #55635c; letter-spacing: .04em; text-transform: uppercase; }
 .tui-notice-pre { font-size: 11px; line-height: 1.55; color: #4e5c55; }
+.tui-permission-card { background: rgba(253, 233, 214, .55); border-color: rgba(241, 201, 142, .8); }
+.tui-permission-card .tui-notice-card-head { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: rgba(253, 224, 196, .55); border-bottom: 1px solid rgba(241, 201, 142, .55); }
+.tui-permission-card .tui-prefix { color: #a35a14; }
+.tui-permission-card .tui-label { color: #a35a14; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.tui-permission-title { margin-left: auto; font-size: 11px; color: #7a4a14; }
+.tui-permission-body { padding: 12px; gap: 10px; }
+.tui-permission-meta { display: grid; grid-template-columns: 64px 1fr; gap: 4px 10px; margin: 0; font-size: 11px; color: #4e5c55; }
+.tui-permission-meta dt { color: #8a7a5a; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; align-self: center; }
+.tui-permission-meta dd { margin: 0; min-width: 0; word-break: break-word; }
+.tui-permission-meta code { font-size: 11px; padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,.6); }
+.tui-permission-args { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #4e5c55; }
+.tui-permission-error { font-size: 11px; }
+.tui-permission-actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
+.tui-permission-approve { background: #a35a14; color: #fff; border: 0; }
+.tui-permission-approve:hover:not(:disabled) { background: #8c4a10; }
+.tui-permission-approve:disabled { opacity: .55; cursor: not-allowed; }
+.tui-permission-badge { font-size: 11px; padding: 3px 10px; border-radius: 999px; line-height: 1; border: 1px solid; }
+.tui-permission-badge.is-approved { background: #d8f8e8; color: #1f6f4a; border-color: #b8efd5; }
+.tui-permission-badge.is-rejected { background: #fff1ed; color: #b2541e; border-color: #f1d0c1; }
 .tui-spinner { color: var(--muted-foreground); animation: spin 1s linear infinite; }
 .error { color: #a43a31; background: #fff6f4; border: 1px solid #f3d7d2; border-radius: 8px; padding: 8px; font-size: 12px; }
 .breadcrumb-bar { min-height: 34px; max-height: 34px; border-bottom: 1px solid rgba(224, 227, 220, .72); display: flex; align-items: center; justify-content: space-between; padding: 0 12px; font-size: 11px; color: #7d8279; background: var(--background2); }
@@ -383,6 +403,8 @@ button { cursor: pointer; }
 .chat-composer-side-btn:disabled { opacity: .55; cursor: not-allowed; }
 .chat-pause-btn { left: 8px; border: 1px solid rgba(214, 219, 208, .96); background: rgba(250, 250, 248, .96); color: #7a8077; box-shadow: inset 0 0 0 1px rgba(255,255,255,.72); }
 .chat-pause-btn.is-paused { border-color: rgba(69, 97, 228, .18); background: rgba(237, 241, 255, .96); color: #3e58d7; }
+.chat-composer-side-btn.chat-pause-btn { width: auto; padding: 0 10px; gap: 6px; }
+.chat-pause-label { font-size: 11px; line-height: 1; white-space: nowrap; }
 .chat-send-btn { right: 8px; border: 0; background: linear-gradient(180deg, #4561e4 0%, #3149c8 100%); color: #fff; }
 .chat-send-btn:disabled { opacity: .45; cursor: not-allowed; }
 .chat-side-icon { display: block; }
