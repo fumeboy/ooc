@@ -13,7 +13,23 @@ import { scanRunningThreads } from "./thread-query";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
-export type RuntimeJobRunner = (job: RuntimeJob, config: ServerConfig) => Promise<void>;
+/**
+ * runner 返回的 thread 终态对账结果（observability 根因 #4，2026-05-27）。
+ *
+ * thinkloop 把 LLM 超时/异常**内部消化**（标 thread.status="failed" + 写 statusReason），
+ * 不向 runner 抛 → runner 正常返回。若不对账，processQueuedJobs 会把 job 裸标 "done"，
+ * 造成"job done 但 thread failed"的假成功。runner 返回 root thread 终态，让
+ * processQueuedJobs 据此把 job 标 failed（带 statusReason）。
+ *
+ * undefined 表示无需对账（user object 跳过 / resume-thread 路径 / thread 不存在已抛错）。
+ */
+export interface RuntimeJobResult {
+  threadStatus?: ThreadContext["status"];
+  threadStatusReason?: string;
+  threadLastError?: string;
+}
+
+export type RuntimeJobRunner = (job: RuntimeJob, config: ServerConfig) => Promise<RuntimeJobResult | void>;
 
 /**
  * 约定值：user 是 web session 中的特殊 flow object，由控制面（人类）驱动；
@@ -26,7 +42,7 @@ const USER_OBJECT_ID = "user";
 export async function runJob(
   job: RuntimeJob,
   config: Pick<ServerConfig, "baseDir" | "stonesBranch" | "workerMaxTicks">
-): Promise<void> {
+): Promise<RuntimeJobResult | void> {
   if (job.objectId === USER_OBJECT_ID) {
     // user object 是被动对象——所有思考由 web 用户在 UI 上完成，worker 不调度
     return;
@@ -59,6 +75,14 @@ export async function runJob(
   // (scheduler.emitChildEndNotifications 只覆盖 in-tree childThreads,无法跨 object)
   await syncCrossObjectCalleeEnds(rootThread, config.baseDir, job.sessionId, config.stonesBranch);
   await runScheduler(rootThread, createLlmClient(), { maxTicks: config.workerMaxTicks ?? 15 });
+
+  // 根因 #4: scheduler 原地推进 rootThread 并落盘；返回其终态供 processQueuedJobs 对账。
+  // thinkloop 把 LLM 超时/异常消化成 status="failed"（不抛），不对账就会被裸标 done。
+  return {
+    threadStatus: rootThread.status,
+    threadStatusReason: rootThread.statusReason,
+    threadLastError: rootThread.lastError,
+  };
 }
 
 export async function processQueuedJobs(
@@ -85,15 +109,28 @@ export async function processQueuedJobs(
       if (!claimed) return;
 
       try {
-        await runner(claimed, config);
-        config.jobManager.updateJob(claimed.jobId, {
-          status: "done",
-          finishedAt: Date.now(),
-        });
+        const result = await runner(claimed, config);
+        // 根因 #4: thread 以 failed 收场时 job 不裸标 done — thinkloop 内部消化
+        // LLM 超时/异常（不向 runner 抛），裸标 done 会造成"job done 但 thread failed"
+        // 的假成功。对账 thread 终态：failed → job 标 failed + 带 statusReason。
+        if (result?.threadStatus === "failed") {
+          config.jobManager.updateJob(claimed.jobId, {
+            status: "failed",
+            finishedAt: Date.now(),
+            statusReason: result.threadStatusReason ?? "thread_failed",
+            error: result.threadLastError,
+          });
+        } else {
+          config.jobManager.updateJob(claimed.jobId, {
+            status: "done",
+            finishedAt: Date.now(),
+          });
+        }
       } catch (error) {
         config.jobManager.updateJob(claimed.jobId, {
           status: "failed",
           finishedAt: Date.now(),
+          statusReason: "runner_error",
           error: error instanceof Error ? error.message : String(error),
         });
       }
@@ -162,7 +199,7 @@ async function maybeMarkInterrupted(
     try {
       await stat(llmInputFile(ref));
       debugInputExists = true;
-    } catch {}
+    } catch {} // intentional: stat 仅探测 llm.input 是否存在；不存在(ENOENT)即 debugInputExists 保持 false
     const detection = detectInterruptedThread(thread, { debugInputExists });
     if (!detection.interrupted) return;
     markInterrupted(thread);

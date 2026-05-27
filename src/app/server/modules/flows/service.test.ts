@@ -252,7 +252,7 @@ describe("flows service", () => {
       }
     });
 
-    test("idempotent: same target twice returns the existing talk_window without re-creating", async () => {
+    test("idempotent (no initialMessage): same target twice reuses the existing talk_window without re-creating or re-delivering", async () => {
       const baseDir = await mkdtemp(join(tmpdir(), "ooc-flows-add-talk-idem-"));
       try {
         const service = createFlowsService({
@@ -270,21 +270,100 @@ describe("flows service", () => {
           targetObjectId: "alice",
           initialMessage: "hello alice",
         });
+        // 第二次不带 initialMessage → 纯幂等：复用窗口、不重新派送、无 job
         const second = await service.addUserTalkWindow({
           sessionId: "s1",
           targetObjectId: "alice",
-          initialMessage: "second call ignored",
         });
         expect(first.created).toBe(true);
         expect(second.created).toBe(false);
         expect(second.talkWindowId).toBe(first.talkWindowId);
-        // alice callee inbox 应当只有第一条消息（第二次不重新派送）
+        expect(second.jobId).toBeUndefined();
+        // alice callee inbox 仍只有第一条消息（第二次无消息 → 不派送）
         const callee = await readThread(
           { baseDir, sessionId: "s1", objectId: "alice" },
           first.targetThreadId!,
         );
         expect(callee?.inbox?.length).toBe(1);
         expect(callee?.inbox?.[0]?.content).toBe("hello alice");
+      } finally {
+        await rm(baseDir, { recursive: true, force: true });
+      }
+    });
+
+    /**
+     * 根因 #5（待办 #5，2026-05-27）回归 gate：
+     * 对一个**已存在 talk_window** 的 object 再次调 addUserTalkWindow 且**带 initialMessage**，
+     * 旧实现会幂等早返回、静默丢弃这条消息（HTTP 仍 200，"假成功"）。体验官实测踩坑被迫改用 /continue。
+     *
+     * 修复后不变量：带 initialMessage 时无论窗口新建/复用，消息必须送达 callee.inbox + 触发 run-thread 入队；
+     * created:false（复用窗口）但 jobId 真实存在 — 调用方据此区分新建 vs 复用且拿得到 job。
+     */
+    test("reuse + initialMessage: second call with a message DELIVERS (must not silently drop) and returns a real jobId", async () => {
+      const baseDir = await mkdtemp(join(tmpdir(), "_test_collab_reuse_deliver_"));
+      try {
+        const jobManager = createJobManager();
+        const service = createFlowsService({
+          baseDir,
+          pauseStore: createPauseStore(),
+          jobManager,
+        });
+        await service.seedSession({
+          sessionId: "s1",
+          targetObjectId: "supervisor",
+          initialMessage: "hi",
+        });
+        const first = await service.addUserTalkWindow({
+          sessionId: "s1",
+          targetObjectId: "alice",
+          initialMessage: "hello alice",
+        });
+        // 第二次带 initialMessage 命中既有 talk_window → 必须仍投递，不得静默丢
+        const second = await service.addUserTalkWindow({
+          sessionId: "s1",
+          targetObjectId: "alice",
+          initialMessage: "second message must be delivered",
+        });
+
+        // 复用既有窗口，但消息确实送达
+        expect(second.created).toBe(false);
+        expect(second.talkWindowId).toBe(first.talkWindowId);
+        expect(second.targetObjectId).toBe("alice");
+        expect(second.targetThreadId).toBe(first.targetThreadId);
+        // 真实 jobId（不再 undefined）
+        expect(typeof second.jobId).toBe("string");
+        const job = jobManager.getJob(second.jobId!);
+        expect(job?.kind).toBe("run-thread");
+        expect(job?.objectId).toBe("alice");
+        expect(job?.threadId).toBe(first.targetThreadId);
+
+        // alice callee inbox 现在含两条消息；第二条进了 target thread（events 可搜到）
+        const callee = await readThread(
+          { baseDir, sessionId: "s1", objectId: "alice" },
+          first.targetThreadId!,
+        );
+        expect(callee?.inbox?.length).toBe(2);
+        expect(callee?.inbox?.at(-1)?.content).toBe("second message must be delivered");
+        expect(callee?.inbox?.at(-1)?.source).toBe("user");
+        const secondMsgId = callee?.inbox?.at(-1)?.id;
+        expect(secondMsgId).toBeDefined();
+        // inbox_message_arrived 事件入了 target thread（两条派送各一条）
+        const arrived = (callee?.events ?? []).filter(
+          (e) => e.kind === "inbox_message_arrived",
+        );
+        expect(arrived.length).toBe(2);
+        expect(arrived.some((e) => (e as { msgId?: string }).msgId === secondMsgId)).toBe(true);
+
+        // user.root.outbox 双写：两条
+        const userThread = await readThread(
+          { baseDir, sessionId: "s1", objectId: "user" },
+          "root",
+        );
+        const aliceOutbox = (userThread?.outbox ?? []).filter(
+          (m) => m.toThreadId === first.targetThreadId,
+        );
+        expect(aliceOutbox.length).toBe(2);
+        expect(aliceOutbox.at(-1)?.content).toBe("second message must be delivered");
       } finally {
         await rm(baseDir, { recursive: true, force: true });
       }

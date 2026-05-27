@@ -65,6 +65,16 @@ open(command="write_file", title="新建测试文件",
      args={ path: "tests/foo.test.ts", content: "import { it } from 'bun:test'; ..." })
 \`\`\`
 
+## 大文件分段产出（避免单轮超时）
+
+产出较大文件（完整 UI 页面 / 长文档 / 多 section 模块）时，**不要一次 write_file 灌入整页**——
+单轮生成超长 content 会触发 LLM 输出超时，最坏 0 产物失败。改为两步：
+
+1. write_file 先写**骨架**：结构框架 + 各 section 的标题/空壳/占位（短而完整）
+2. 再对生成的 file_window 逐段 \`edit\`：把每个 section 的空壳替换成真实内容（见 file_window.edit）
+
+骨架 + 分段填充让每一轮输出都短、可恢复、可见。
+
 ## 不要用 shell 替代
 
 不要用 \`program(language="shell", code="echo ... > ...")\` 做这件事——会失去

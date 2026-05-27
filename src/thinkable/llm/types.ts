@@ -72,6 +72,14 @@ export type LlmGenerateParams = {
   temperature?: number;
   /** 最大输出 token，原样透传给 provider。 */
   maxTokens?: number;
+  /**
+   * 任务级 LLM 超时覆盖（ms；observability 根因 #1，2026-05-27）。
+   *
+   * 缺省时 createLlmClient.generate 回落全局默认（readLlmTimeoutMs：120s，
+   * OOC_LLM_TIMEOUT_MS 可覆写）。由 thinkloop 从 thread.llmTimeoutMs 透传，
+   * 让特定 thread 申请更长超时而不全局拔高。
+   */
+  timeoutMs?: number;
 };
 
 /** 非流式生成结果。 */

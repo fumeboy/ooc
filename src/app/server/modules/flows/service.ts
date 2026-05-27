@@ -471,9 +471,12 @@ export function createFlowsService(deps: {
      * 与 seedSession 的差别：
      * - 不再 createFlowSession / 不再建 user flow object（要求 user.root 已存在；
      *   不存在抛 NOT_FOUND，提示先 seedSession）
-     * - 同 target 已有非 creator talk_window 时**幂等**返回既有那一条，不重复创建
+     * - 同 target 已有非 creator talk_window 时**幂等**复用既有那一条，不重复创建窗口
      * - initialMessage 可选：缺省时只挂 talk_window 不派送、不入 callee job；提供时
      *   走 deliverTalkMessage（与 seedSession 一致），创建 callee thread + 双写消息 + 入队
+     * - 根因 #5（2026-05-27）：幂等命中既有窗口时**仍要投递 initialMessage**——
+     *   带消息无论窗口新建/复用都必须送达 + 触发 thinkloop，不得静默丢；返回里
+     *   created 区分新建(true)/复用(false)，jobId 表示消息确实入队
      */
     async addUserTalkWindow({
       sessionId,
@@ -517,17 +520,41 @@ export function createFlowsService(deps: {
       // 保险：旧版 thread.json 可能没写 persistence 字段；deliverTalkMessage 强制要求它
       if (!userThread.persistence) userThread.persistence = userPersistence;
 
-      // 幂等：已经有指向同 target 的非 creator talk_window 直接返回
+      // 幂等：已经有指向同 target 的非 creator talk_window 时复用它。
       const existing = (userThread.contextWindows ?? []).find(
         (w): w is TalkWindow => w.type === "talk" && !w.isCreatorWindow && w.target === target,
       );
       if (existing) {
+        // 无 initialMessage：纯幂等创建窗口语义，无消息要送，早返回。
+        if (!initialMessage || !initialMessage.trim()) {
+          return {
+            sessionId,
+            talkWindowId: existing.id,
+            targetObjectId: target,
+            targetThreadId: existing.targetThreadId,
+            jobId: undefined as string | undefined,
+            created: false,
+          };
+        }
+        // 根因 #5：带了 initialMessage 时不得静默丢弃。复用既有 talk_window，
+        // 但仍走 deliverTalkMessage 投递 + run-thread 入队（与 continueThread / 新建分支一致），
+        // 返回真 jobId；created:false 表示复用了既有窗口。
+        const delivered = await deliverTalkMessage({
+          caller: { thread: userThread, talkWindow: existing },
+          content: initialMessage,
+          source: "user",
+        });
+        const job = deps.jobManager.createRunThreadJob({
+          sessionId,
+          objectId: delivered.calleeObjectId,
+          threadId: delivered.calleeThreadId,
+        });
         return {
           sessionId,
           talkWindowId: existing.id,
-          targetObjectId: target,
-          targetThreadId: existing.targetThreadId,
-          jobId: undefined as string | undefined,
+          targetObjectId: delivered.calleeObjectId,
+          targetThreadId: delivered.calleeThreadId,
+          jobId: job.jobId,
           created: false,
         };
       }

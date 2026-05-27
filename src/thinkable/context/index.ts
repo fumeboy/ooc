@@ -347,6 +347,27 @@ export type ThreadContext = {
   endReason?: string;
   /** end command 写入的最终摘要。 */
   endSummary?: string;
+  /**
+   * 结构化失败原因（observability 根因 #4，2026-05-27）。
+   *
+   * 当 status="failed" 由 thinkloop catch 块写入时，给出机读的失败分类，让控制面 /
+   * GET .../threads/:id 不必去 events 里扒文本：
+   * - "llm_timeout"：LlmTimeoutError（LLM 调用超时兜底触发）
+   * - "think_error"：think 单轮中其他异常
+   *
+   * 仅失败终态写入；done/running/waiting/paused 不带此字段。
+   */
+  statusReason?: string;
+  /** 失败时的人读错误消息（与 statusReason 配套；observability 根因 #4）。 */
+  lastError?: string;
+  /**
+   * 任务级 LLM 超时覆盖（ms；observability 根因 #1，2026-05-27）。
+   *
+   * 缺省时 think → llmClient.generate 回落全局默认（120s，由 OOC_LLM_TIMEOUT_MS 覆写）。
+   * 设置后本 thread 的每轮 generate 用此值兜底超时，让"已知慢任务"能申请更长超时，
+   * 而不必全局拔高（全局拔高会让真卡死 thread 拖更久才暴露，反伤 observability）。
+   */
+  llmTimeoutMs?: number;
   /** 最近一次被 scheduler 执行的时间，用于公平选择下一个 running thread。 */
   lastExecutedAt?: number;
   /**

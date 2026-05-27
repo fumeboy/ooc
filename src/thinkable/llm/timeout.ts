@@ -21,6 +21,20 @@ export function readLlmTimeoutMs(): number {
   return parsed;
 }
 
+/**
+ * 解析本次 generate 实际生效的超时 ms（根因 #1，2026-05-27）。
+ *
+ * 优先级：任务级 override（合法正数）> 全局默认（readLlmTimeoutMs）。
+ * override 非法（undefined / 非有限 / <=0）时回落全局默认 — 不静默吞掉非法值，
+ * 而是按"未设置"处理（与 readLlmTimeoutMs 对待非法 env 的策略一致）。
+ */
+export function resolveLlmTimeoutMs(overrideMs?: number): number {
+  if (overrideMs !== undefined && Number.isFinite(overrideMs) && overrideMs > 0) {
+    return overrideMs;
+  }
+  return readLlmTimeoutMs();
+}
+
 /** LLM 调用超时错误; thinkloop 的 catch 块会把它转成 thread.status="failed"。 */
 export class LlmTimeoutError extends Error {
   readonly waitedMs: number;

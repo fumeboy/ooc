@@ -4,6 +4,7 @@ import * as observableModule from "../../observable/index.ts";
 import * as contextModule from "../context.ts";
 import type { LlmClient, LlmGenerateResult, LlmInputItem, LlmToolCall } from "../llm/types";
 import { think } from "../thinkloop.ts";
+import { LlmTimeoutError } from "../llm/timeout.ts";
 
 function makeResult(
   provider: "openai" | "claude",
@@ -493,5 +494,103 @@ describe("think", () => {
       ok: true
     });
     expect(dispatch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("think 失败终态结构化 (observability 根因 #4)", () => {
+  it("LLM 超时 → thread.status='failed' + statusReason='llm_timeout' + lastError 有内容", async () => {
+    const thread: contextModule.ThreadContext = {
+      id: "thread-timeout",
+      status: "running",
+      events: [],
+      contextWindows: []
+    };
+
+    spyOn(contextModule, "buildInputItems").mockResolvedValue({
+      input: [{ type: "message", role: "system", content: "context" }]
+    });
+    spyOn(toolsModule, "getAvailableTools").mockReturnValue([]);
+
+    // 模拟 client.generate 抛 LlmTimeoutError (provider hang 被 withLlmTimeout 兜底)。
+    const llmClient: LlmClient = {
+      async generate() {
+        throw new LlmTimeoutError(120_000);
+      },
+      async *stream() {
+        yield { type: "start", provider: "openai", model: "gpt-test" };
+        yield { type: "done", text: "", toolCalls: [] };
+      }
+    };
+
+    await think(thread, llmClient);
+
+    expect(thread.status).toBe("failed");
+    expect(thread.statusReason).toBe("llm_timeout");
+    expect(typeof thread.lastError).toBe("string");
+    expect(thread.lastError!.length).toBeGreaterThan(0);
+    // failed 时写了一条 inject event 让后续能看到原因
+    expect(
+      thread.events.some((e) => e.category === "context_change" && e.kind === "inject")
+    ).toBe(true);
+  });
+
+  it("其他 think 异常 → statusReason='think_error'", async () => {
+    const thread: contextModule.ThreadContext = {
+      id: "thread-err",
+      status: "running",
+      events: [],
+      contextWindows: []
+    };
+
+    spyOn(contextModule, "buildInputItems").mockResolvedValue({
+      input: [{ type: "message", role: "system", content: "context" }]
+    });
+    spyOn(toolsModule, "getAvailableTools").mockReturnValue([]);
+
+    const llmClient: LlmClient = {
+      async generate() {
+        throw new Error("boom: provider 500");
+      },
+      async *stream() {
+        yield { type: "start", provider: "openai", model: "gpt-test" };
+        yield { type: "done", text: "", toolCalls: [] };
+      }
+    };
+
+    await think(thread, llmClient);
+
+    expect(thread.status).toBe("failed");
+    expect(thread.statusReason).toBe("think_error");
+    expect(thread.lastError).toBe("boom: provider 500");
+  });
+
+  it("透传 thread.llmTimeoutMs 到 generate 的 params.timeoutMs (根因 #1 plumbing)", async () => {
+    const thread: contextModule.ThreadContext = {
+      id: "thread-task-timeout",
+      status: "running",
+      events: [],
+      contextWindows: [],
+      llmTimeoutMs: 600_000
+    };
+
+    spyOn(contextModule, "buildInputItems").mockResolvedValue({
+      input: [{ type: "message", role: "system", content: "context" }]
+    });
+    spyOn(toolsModule, "getAvailableTools").mockReturnValue([]);
+
+    let observedTimeout: number | undefined = -1;
+    const llmClient: LlmClient = {
+      async generate(params) {
+        observedTimeout = params.timeoutMs;
+        return makeResult("openai", "gpt-test", "ok", []);
+      },
+      async *stream() {
+        yield { type: "start", provider: "openai", model: "gpt-test" };
+        yield { type: "done", text: "", toolCalls: [] };
+      }
+    };
+
+    await think(thread, llmClient);
+    expect(observedTimeout).toBe(600_000);
   });
 });

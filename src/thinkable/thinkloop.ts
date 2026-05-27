@@ -11,6 +11,7 @@ import {
   type BudgetWarning,
 } from "./context/budget";
 import type { LlmClient, LlmInputItem, LlmToolCall } from "./llm/types";
+import { LlmTimeoutError } from "./llm/timeout";
 
 /**
  * 构造 P0e emergency guard 的临时警告 LlmInputItem。
@@ -309,7 +310,9 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
     const result = await llmClient.generate({
       input: llmInput.input,
       instructions: llmInput.instructions,
-      tools
+      tools,
+      // 根因 #1: 任务级超时覆盖透传到 client；缺省回落全局默认。
+      timeoutMs: thread.llmTimeoutMs,
     });
 
     // thinking 只记录，不负责回注到下一轮 context。
@@ -466,17 +469,22 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
     }
     await finishLlmLoop(thread, loopHandle, { result, status: "ok" });
   } catch (error) {
+    const message = (error as Error).message;
     if (loopHandle) {
       await finishLlmLoop(thread, loopHandle, {
         status: "error",
-        error: (error as Error).message
+        error: message
       });
     }
     thread.events.push({
       category: "context_change",
       kind: "inject",
-      text: (error as Error).message
+      text: message
     });
     thread.status = "failed";
+    // 根因 #4: 给 failed 终态补结构化失败原因，让 worker 对账 + 控制面直接读，
+    // 不必去 events 里扒文本。LlmTimeoutError → "llm_timeout"；其他 → "think_error"。
+    thread.statusReason = error instanceof LlmTimeoutError ? "llm_timeout" : "think_error";
+    thread.lastError = message;
   }
 }
