@@ -82,6 +82,11 @@ describe("think", () => {
     expect(thread.events).toEqual([
       {
         category: "llm_interaction",
+        kind: "call_started",
+        loopIndex: 1
+      },
+      {
+        category: "llm_interaction",
         kind: "text",
         text: "需要等待"
       },

@@ -1,6 +1,8 @@
 import { createLlmClient } from "@src/thinkable/llm/client";
-import { readThread, writeThread } from "@src/persistable";
+import { readThread, writeThread, llmInputFile } from "@src/persistable";
 import { runScheduler } from "@src/thinkable/scheduler";
+import { detectInterruptedThread, markInterrupted } from "@src/thinkable/recovery";
+import { stat } from "node:fs/promises";
 import type { ServerConfig } from "../bootstrap/config";
 import type { RuntimeJob } from "./types";
 import type { ThreadContext } from "@src/thinkable/context";
@@ -117,6 +119,7 @@ export async function enqueueRunningThreadsAtBootstrap(
       const running = await scanRunningThreads(config.baseDir, sessionId);
       for (const { objectId, threadId } of running) {
         if (objectId === USER_OBJECT_ID) continue;
+        await maybeMarkInterrupted(config.baseDir, sessionId, objectId, threadId);
         config.jobManager.createRunThreadJob({ sessionId, objectId, threadId });
         enqueued += 1;
       }
@@ -136,6 +139,38 @@ async function listSessionIds(baseDir: string): Promise<string[]> {
     return entries.filter((e) => e.isDirectory()).map((e) => e.name);
   } catch {
     return [];
+  }
+}
+
+/**
+ * Bootstrap recovery: 检测上次 server crash / LLM hang 留下的"中断 thread"，写一条
+ * inject event 告诉 LLM 上一轮 LLM 调用被打断，让 worker 把它正常入队后 LLM 看到
+ * 标记会重试。不删 debug 文件（observability 资产）；不改 status（让常规 enqueue
+ * 推进）。详见 src/thinkable/recovery.ts。
+ */
+async function maybeMarkInterrupted(
+  baseDir: string,
+  sessionId: string,
+  objectId: string,
+  threadId: string,
+): Promise<void> {
+  try {
+    const ref = { baseDir, sessionId, objectId, threadId };
+    const thread = await readThread(ref, threadId);
+    if (!thread) return;
+    let debugInputExists = false;
+    try {
+      await stat(llmInputFile(ref));
+      debugInputExists = true;
+    } catch {}
+    const detection = detectInterruptedThread(thread, { debugInputExists });
+    if (!detection.interrupted) return;
+    markInterrupted(thread);
+    await writeThread(thread);
+  } catch (err) {
+    console.warn(
+      `[worker] maybeMarkInterrupted failed for ${sessionId}/${objectId}/${threadId}: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 

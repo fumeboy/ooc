@@ -1,6 +1,7 @@
 import { decidePermission, type PendingToolCall } from "../executable/permissions";
 import { dispatchToolCall, getAvailableTools } from "../executable/tools";
 import { beginLlmLoop, finishLlmLoop, isPausing } from "../observable";
+import { writeThread } from "../persistable";
 import { buildInputItems, type ProcessEvent, type ThreadContext } from "./context";
 import {
   applyEmergencyGuard,
@@ -293,6 +294,18 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
 
     // 输入输出记录点先挂到 observable 占位模块上。
     loopHandle = await beginLlmLoop(thread, llmInput.input, tools);
+
+    // 中断恢复锚点: beginLlmLoop 已写 llm.input.json, 现在把 call_started 事件落进 thread.json,
+    // 让磁盘上的 thread.json 与 debug llm.input.json atomic 对应。任何"call_started 之后无
+    // 任何 llm_interaction 后续"的 thread.json 即被 detectInterruptedThread 判定为中断。
+    // 见 src/thinkable/recovery.ts。
+    thread.events.push({
+      category: "llm_interaction",
+      kind: "call_started",
+      loopIndex: loopHandle.loopIndex,
+    });
+    await writeThread(thread);
+
     const result = await llmClient.generate({
       input: llmInput.input,
       instructions: llmInput.instructions,

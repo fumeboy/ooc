@@ -32,6 +32,26 @@ export type ProcessEvent = ProcessEventCommon & (
   | {
       /** 事件来源：LLM 本轮交互输出。 */
       category: "llm_interaction";
+      /**
+       * 标记本轮 think 即将真正调 LLM (写完此 event 后立即 writeThread 一次)。
+       *
+       * 用途: 中断 (SIGKILL / 网络挂死 / 进程重启 / LlmTimeoutError) 后, bootstrap 期
+       * detectInterruptedThread 看到尾部 call_started 后无任何后续 llm_interaction 即可
+       * 判定 "上一轮 LLM 没跑完", 注入一条 inject 提示让 LLM 下一 tick 看到, 不改 status,
+       * 让 worker 正常重新调度。
+       *
+       * 详见 src/thinkable/recovery.ts。
+       */
+      kind: "call_started";
+      /**
+       * 本轮 loop 编号 (来自 beginLlmLoop 的 LlmLoopHandle.loopIndex), observability 字段;
+       * recovery 检测不依赖该字段, 只看 kind = "call_started"。
+       */
+      loopIndex: number;
+    }
+  | {
+      /** 事件来源：LLM 本轮交互输出。 */
+      category: "llm_interaction";
       /** 普通文本回复，会作为 assistant message 进入下一轮 transcript。 */
       kind: "text";
       /** LLM 对外可见的文本内容。 */
@@ -486,6 +506,12 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
   }
 
   if (event.kind === "thinking") {
+    return [];
+  }
+
+  // call_started 是 thinkloop 给 recovery 的磁盘锚点 (writeThread 之后即可被读到),
+  // 对 LLM 视野无意义, 不进 transcript。详见 ProcessEvent.call_started + recovery.ts。
+  if (event.category === "llm_interaction" && event.kind === "call_started") {
     return [];
   }
 
