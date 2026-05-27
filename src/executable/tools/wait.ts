@@ -151,10 +151,17 @@ export async function handleWaitTool(
 
   // R3: on 类型不合法（非 talk / 非 do）—— 这同时盖掉了 root/command_exec/file 等
   if (target.type !== "talk" && target.type !== "do") {
+    // program window 给针对性提示:它是同步执行,结果已落在 history 里,不需要 wait
+    const typeSpecificHint =
+      target.type === "program"
+        ? `\nprogram_window 是同步执行的:exec 提交时 runOneExec 立即跑完,输出已在该 window.history 里;不存在"运行中"状态可等。直接读 program_window 的 history 即可。`
+        : "";
     return errorOutput(
       `[wait] on="${onRaw}" 指向的是 ${target.type} window，不能作为 IO 来源——` +
         "只有 talk_window（等对端消息）/ do_window（等子线程回报）" +
-        "两种 window 才可被 wait 引用。当前合法候选：\n" +
+        "两种 window 才可被 wait 引用。" +
+        typeSpecificHint +
+        "\n当前合法候选：\n" +
         renderCandidates(candidates),
     );
   }
