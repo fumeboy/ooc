@@ -71,10 +71,10 @@ describe("deriveRelationWindow", () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-relation-derive-"));
     selfPoolRef = { baseDir: tempRoot, objectId: SELF };
     selfFlowRef = { baseDir: tempRoot, sessionId: SID, objectId: SELF };
-    // R8-5: relation derivation 不再读 peer stone readme; 但创建 stone 让 init.ts
-    // 注入 creator window 等关联逻辑不至于撞 ENOENT
+    // 只创 self stone;不创 PEER 与 reviewer stone,避免 hierarchical sibling 扫描
+    // (spec 2026-05-27 default visibility) 把它们当默认 sibling 自动注入 relation_window,
+    // 干扰本测试只测 talk_window-derived 路径。
     await createStoneObject({ baseDir: tempRoot, objectId: SELF });
-    await createStoneObject({ baseDir: tempRoot, objectId: PEER });
     await createPoolObject(selfPoolRef);
   });
 
@@ -192,6 +192,44 @@ describe("deriveRelationWindow", () => {
       expect(reviewer.selfLongTermBody).toBe("对 reviewer 的认知");
     });
   });
+
+  describe("default visibility(spec 2026-05-27): 同级 + 一级 children 默认派生 relation_window", () => {
+    test("top-level 同级 sibling 默认进 relation_window 列表", async () => {
+      // 同级 stone:bob; 一级 children 不存在
+      await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
+      const thread = selfThread(tempRoot, []);
+      const out = await deriveRelationWindow(thread);
+      const ids = out.map((w) => w.peerId).sort();
+      expect(ids).toEqual(["bob"]);
+    });
+
+    test("一级 children 默认进 relation_window 列表;深层不递归", async () => {
+      await createStoneObject({ baseDir: tempRoot, objectId: `${SELF}/sub1` });
+      await createStoneObject({ baseDir: tempRoot, objectId: `${SELF}/sub2` });
+      // 深层孙不算
+      await createStoneObject({ baseDir: tempRoot, objectId: `${SELF}/sub1/grand` });
+      const thread = selfThread(tempRoot, []);
+      const out = await deriveRelationWindow(thread);
+      const ids = out.map((w) => w.peerId).sort();
+      expect(ids).toEqual([`${SELF}/sub1`, `${SELF}/sub2`]);
+    });
+
+    test("user 永远不在 sibling 列表(passive object)", async () => {
+      await createStoneObject({ baseDir: tempRoot, objectId: "user" });
+      await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
+      const thread = selfThread(tempRoot, []);
+      const out = await deriveRelationWindow(thread);
+      expect(out.map((w) => w.peerId).sort()).toEqual(["bob"]);
+    });
+
+    test("talk_window 已有的 peer 优先用 talk createdAt(不被 hierarchical 覆盖)", async () => {
+      await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
+      const thread = selfThread(tempRoot, [talkTo("bob", "w_talk_bob", 1234)]);
+      const out = await deriveRelationWindow(thread);
+      const bob = out.find((w) => w.peerId === "bob")!;
+      expect(bob.createdAt).toBe(1234);
+    });
+  });
 });
 
 describe("deriveRelationCompanionKnowledge / deriveRelationKnowledge(已废弃 shim)", () => {
@@ -200,7 +238,6 @@ describe("deriveRelationCompanionKnowledge / deriveRelationKnowledge(已废弃 s
   beforeEach(async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-relation-derive-"));
     await createStoneObject({ baseDir: tempRoot, objectId: SELF });
-    await createStoneObject({ baseDir: tempRoot, objectId: PEER });
   });
 
   afterEach(async () => {

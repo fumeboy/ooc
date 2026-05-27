@@ -1458,6 +1458,18 @@ export const root: DocTreeNode = {
                     专属 window type，注册 \`edit\` command（详见 children/edit_command）。
                     这是 relation 的命令面入口——LLM 想更新 relation 不再依赖 write_file 弱 prompt。
 
+                    **2026-05-27 default visibility 扩展**：
+                    除 talk_window 派生的 peer 外，每轮还**默认派生**两类 peer 的 relation_window，
+                    让 Agent 一上场就看见身边有谁，不必先 talk 才能写 relation：
+                    - **同级 Agent**: 与 self 同父的其它 OOC Agent（top-level 时 = 其它顶层 Agent）
+                    - **一级 children Agent**: self 自身 children/ 下一级的 OOC Agent（不递归到孙）
+
+                    判定规则（见 src/persistable/stone-object.ts:discoverStoneHierarchicalPeers）：
+                    - 含 \`self.md\` 的 stone 目录视为 OOC Agent
+                    - \`user\` 永远过滤（passive object 不是 Agent）
+                    - 自身被排除
+                    - 已在 talk_window peer 列表中的不重复加，不覆盖 createdAt
+
                     **2026-05-25 R8-5 修订**：
                     relation 文档在设计中**只存在于 pools 与 flows**（self 视角的 self-relation），
                     **不包含 peer stone readme**。原因：peer readme 属 collaborable.talk_window 维度的

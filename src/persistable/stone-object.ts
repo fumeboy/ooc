@@ -1,6 +1,7 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { stoneDir, STONE_CHILDREN_SUBDIR, toJson, type StoneObjectRef } from "./common";
+import { stoneDir, STONE_CHILDREN_SUBDIR, STONE_OBJECTS_SUBDIR, toJson, type StoneObjectRef } from "./common";
+import { STONES_MAIN_BRANCH } from "./stone-bootstrap";
 import { selfFile } from "./stone-self";
 import { readmeFile } from "./stone-readme";
 
@@ -112,3 +113,78 @@ export async function createStoneObject(ref: StoneObjectRef): Promise<StoneObjec
 // 保留 readFile import 以备未来 stone 内其它"内容文件"读取需要；目前未直接使用。
 // intentional: silent-swallow ban 例外——这是 unused-import keep-alive，不是错误吞噬。
 void readFile;
+
+/**
+ * 发现 ref 在 stone 树上的"层级邻居"：
+ * - siblings: 与 ref 同父的其它 OOC Agent objectId（top-level 时 = 其它顶层 Agent）
+ * - children: ref 自身 children/ 下一级的 OOC Agent objectId（不递归）
+ *
+ * "OOC Agent" 判定：目录内含 `self.md`（Agent identity marker）。`user` 是 passive
+ * flow object，不算 Agent，永远过滤掉（无论它出现在 sibling 还是 child 列表）。
+ *
+ * 用于 thinkable.deriveRelationWindow 每轮派生默认 relation_window，让 Agent 默认
+ * 看见同级 + 一级 children 的关系窗口（spec 2026-05-27 collaborable.relation_window
+ * default visibility）。任何路径异常（ENOENT / EACCES）静默回空，不抛——deriveRelationWindow
+ * 是热路径，不能被一次磁盘抖动拖垮。
+ */
+export async function discoverStoneHierarchicalPeers(
+  ref: StoneObjectRef,
+): Promise<{ siblings: string[]; children: string[] }> {
+  const segments = ref.objectId.split("/").filter(Boolean);
+  const branch = ref.stonesBranch ?? STONES_MAIN_BRANCH;
+  const objectsRoot = join(ref.baseDir, "stones", branch, STONE_OBJECTS_SUBDIR);
+
+  // 兄弟扫描：top-level 时直接 objectsRoot；嵌套时父对象的 children/
+  let siblingsDir: string;
+  let parentObjectId: string | undefined;
+  if (segments.length <= 1) {
+    siblingsDir = objectsRoot;
+    parentObjectId = undefined;
+  } else {
+    parentObjectId = segments.slice(0, -1).join("/");
+    siblingsDir = stoneChildrenDir({ baseDir: ref.baseDir, objectId: parentObjectId, stonesBranch: branch });
+  }
+  const lastSegment = segments[segments.length - 1] ?? "";
+  const siblings = await listAgentDirsAt(siblingsDir, parentObjectId, lastSegment);
+
+  // 子 Agent 扫描：自身 children/
+  const childrenDir = stoneChildrenDir(ref);
+  const children = await listAgentDirsAt(childrenDir, ref.objectId, undefined);
+
+  return { siblings, children };
+}
+
+/**
+ * 枚举一个目录下的 Agent 子目录（含 self.md），返回它们的 objectId。
+ * - prefix === undefined → 视为 top-level 扫描，objectId = entry.name
+ * - prefix !== undefined → objectId = `${prefix}/${entry.name}`
+ * - excludeName: 同名跳过（用于排除 self）
+ * - "user" / STONE_CHILDREN_SUBDIR 永远跳过；前者非 Agent，后者是 marker 子目录
+ */
+async function listAgentDirsAt(
+  dir: string,
+  prefix: string | undefined,
+  excludeName: string | undefined,
+): Promise<string[]> {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    if (e.name === "user") continue;
+    if (e.name === STONE_CHILDREN_SUBDIR) continue;
+    if (excludeName !== undefined && e.name === excludeName) continue;
+    try {
+      const s = await stat(join(dir, e.name, "self.md"));
+      if (!s.isFile()) continue;
+    } catch {
+      continue;
+    }
+    out.push(prefix ? `${prefix}/${e.name}` : e.name);
+  }
+  return out.sort();
+}

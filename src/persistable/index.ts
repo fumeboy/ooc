@@ -71,6 +71,7 @@ export {
   stoneKnowledgeDir,
   stoneChildrenDir,
   ancestorObjectIds,
+  discoverStoneHierarchicalPeers,
   stoneMetadataFile,
   type StoneObjectMetadata
 } from "./stone-object";

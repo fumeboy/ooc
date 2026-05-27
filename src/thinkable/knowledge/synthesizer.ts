@@ -22,7 +22,7 @@
  * 内部的 commands / windows registry），故归位到 thinkable/knowledge。
  */
 
-import { deriveStoneFromThread, derivePoolFromThread, listBranchSkills, listObjectSkills, listExternalSkills, readPoolRelation, readFlowRelation, readWorldConfig } from "../../persistable/index.js";
+import { deriveStoneFromThread, derivePoolFromThread, discoverStoneHierarchicalPeers, listBranchSkills, listObjectSkills, listExternalSkills, readPoolRelation, readFlowRelation, readWorldConfig } from "../../persistable/index.js";
 import type { ThreadContext } from "../context.js";
 import { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge.js";
 import { ROOT_BASIC_PATH, ROOT_COMMANDS, ROOT_KNOWLEDGE } from "../../executable/windows/root/index.js";
@@ -310,6 +310,28 @@ export async function deriveRelationWindow(
     const prev = peerEarliest.get(w.target);
     if (prev === undefined || w.createdAt < prev) peerEarliest.set(w.target, w.createdAt);
   }
+
+  // 默认相邻 Agent（spec 2026-05-27 collaborable.relation_window default visibility）：
+  // 即使没主动 talk 过,也把同级 + 一级 children Agent 的 relation_window 默认可见,
+  // 让 Agent 一上场就知道身边有谁。已在 peerEarliest 的 peer 不覆盖 createdAt。
+  // 自身不是 user 时才扫(user 不是 Agent 也无 stone 子树)。
+  if (selfId !== "user") {
+    try {
+      const { siblings, children } = await discoverStoneHierarchicalPeers(
+        deriveStoneFromThread(thread.persistence),
+      );
+      const now = Date.now();
+      for (const peer of [...siblings, ...children]) {
+        if (peer === selfId) continue;
+        if (!peerEarliest.has(peer)) peerEarliest.set(peer, now);
+      }
+    } catch (err) {
+      console.debug(
+        `[relation] hierarchical peers io_error self=${selfId} msg=${(err as Error).message}`,
+      );
+    }
+  }
+
   if (peerEarliest.size === 0) return [];
 
   const out: RelationWindow[] = [];
