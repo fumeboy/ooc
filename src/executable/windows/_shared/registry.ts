@@ -203,7 +203,10 @@ export function registerWindowType(
   }
   REGISTRY.set(type, {
     ...existing,
-    commands: { ...existing.commands, ...(partial.commands ?? {}) },
+    // 直接替换不展开:custom window 用 Proxy 做 dynamic dispatcher,
+    // 展开 (...) 会触发 ownKeys() trap (返 []) → 丢掉所有动态 lookup 能力。
+    // 现实上每个 type 只 register 一次 + 给完整 commands,无 merge 需求。
+    commands: partial.commands !== undefined ? partial.commands : existing.commands,
     onClose: partial.onClose ?? existing.onClose,
     renderXml: partial.renderXml ?? existing.renderXml,
     compressView: partial.compressView ?? existing.compressView,
