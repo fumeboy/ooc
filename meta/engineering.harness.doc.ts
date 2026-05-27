@@ -236,13 +236,13 @@ export const root: DocTreeNode = {
             - **真实体验**: 把 OOC 当 CodeAgent 真的跑业务任务 (重命名、重构、读 + 改、跨文件搜索 + 编辑、跨 object talk 等),不是看代码看出来的体验。
             - **评估功能**: 对照 design 期望与实际行为,落到 engineering.testing 的三档评分基准 (Good / OK / Bad)。
             - **发现问题**: 把卡顿 / 反直觉 / 死区 / Bug / 视觉漂移落到结构化报告——尤其抓 visibility-first 失守的地方 (Agent 看不到的状态、用户看不到的反馈)。
-            - **沉淀报告**: 把问题写到 Issue (collaborable.issue) / 经验写到自己的 memory / 哲学根问题抛回 Supervisor (super flow 反思请求)。
+            - **沉淀报告**: 把问题落成 e2e 场景 + 经 talk_window 反馈给对应维度 AgentOfX / 经验写到自己的 memory / 哲学根问题抛回 Supervisor (super flow 反思请求)。
             - **编写 e2e 测试用例**: 每个新发现的问题都应转成 engineering.testing 维度下的一个具体场景 (backend / frontend 二选一或两份),保证回归不漂回去。
 
-            内循环典型动作: 选一个真实任务跑 OOC → 用 visibility-first 视角对照三档评分 → 发现 Bad/OK → 写 Issue + 提交 e2e 场景 PR → 抛给对应维度的 AgentOfX 修复。
+            内循环典型动作: 选一个真实任务跑 OOC → 用 visibility-first 视角对照三档评分 → 发现 Bad/OK → 提交 e2e 场景 PR + 经 talk_window 抛给对应维度的 AgentOfX 修复。
 
             协作姿态:
-            - AgentOfExperience 不直接改 src/ 修 Bug (那是对应维度 AgentOfX 的事);它的输出是 Issue 与 e2e 场景。
+            - AgentOfExperience 不直接改 src/ 修 Bug (那是对应维度 AgentOfX 的事);它的输出是 e2e 场景与 talk_window 反馈。
             - AgentOfExperience 是其它 AgentOfX 内循环的"现实校准源"——其它 Agent 的"测试"步骤往往直接消费它写的 e2e 场景。
             - 与 Supervisor 是双向关系: Supervisor 出 design,体验官检验 design 在实践中是否成立;不成立时反过来挑战 design。
 
@@ -280,7 +280,7 @@ export const root: DocTreeNode = {
             - 内循环快: 单个 Agent 在一个工程任务上的完整 cycle (典型为一次 feature / 一次 bugfix)。
 
             外循环的 "汇总反馈" 步骤是 Supervisor 决定下一轮 design 走向的关键输入;
-            反馈不一定走文档,可以走 Issue (collaborable.issue) 或 super flow 的 talk_window (reflectable.super_alias_target)。
+            反馈不一定走文档,可以走 talk_window 跨 object 反馈 或 super flow 的自反思 (reflectable.super_alias_target)。
             `,
             named: {
                 "外循环": "Supervisor 驱动的全局循环",
@@ -299,7 +299,7 @@ export const root: DocTreeNode = {
             1. **每个 AgentOfX 都有自己的 stone**: stones/agent_of_thinkable/ / stones/agent_of_executable/ / ...
                里面写 self.md (Agent 的工作风格)、knowledge/memory/ (沉淀)、server/index.ts (方法库)。
 
-            2. **AgentOfX 之间通过 collaborable 协作**: 跨 Agent 派任务走 talk_window,跨 Agent 共享议题走 Issue。
+            2. **AgentOfX 之间通过 collaborable 协作**: 跨 Agent 派任务走 talk_window,跨 Agent 共享 peer 关系/上下文走 relation_window 与 do_window.move。
                不需要为 "OOC 工程协作" 单独发明协议,直接复用 OOC 自己的协作语义。
 
             3. **AgentOfX 的迭代走 reflectable**: Agent 完成一轮内循环后,通过 super flow 反思,把经验落到自己 stone 的 memory。
@@ -324,14 +324,14 @@ export const root: DocTreeNode = {
             - **Supervisor** = 人类 + Claude Code 主会话: meta/*.doc.ts 的编辑、design 决策、跨 Agent 协调、最终拍板都在主会话进行。
             - **各 AgentOfX** = Claude Code 的 sub agent: 在主会话用 Agent 工具 dispatch (subagent_type 选 general-purpose / Explore / Plan 等),
               把任务 prompt + 关键上下文 + 文件路径喂给子 Agent;子 Agent 执行完通过返回值汇报结果。
-            - **AgentOfExperience** 同样走 Claude Code sub agent 形态,可以专门做"跑一个真实任务 + 写 Issue + 起 e2e 场景"这条链路;也可由人类直接驱动,按需要拉 Claude Code 主会话辅助。
+            - **AgentOfExperience** 同样走 Claude Code sub agent 形态,可以专门做"跑一个真实任务 + 起 e2e 场景 + talk_window 反馈"这条链路;也可由人类直接驱动,按需要拉 Claude Code 主会话辅助。
 
             **与长期 dogfooding 的差异 (即当前的妥协)**:
             - 没有 stones/agent_of_X/ 目录: 子 Agent 的"记忆"靠主会话每次注入的 prompt + 上下文,不在磁盘持久化。
-            - 没有 talk_window / Issue / inbox 协作: 子 Agent 之间的协调通过主会话 (Supervisor) 中转;子 Agent 之间无法直接 talk。
+            - 没有 talk_window / inbox 协作: 子 Agent 之间的协调通过主会话 (Supervisor) 中转;子 Agent 之间无法直接 talk。
             - 没有 super flow 自我演化: Agent 经验的沉淀靠人类写回 meta/*.doc.ts 或 docs/;子 Agent 自己改不了自己。
 
-            **迁移路径**: 每当 OOC 某个能力维度成熟到可以承载工程协作 (例: talk-delivery 稳定 + Issue 看板可用 + super flow 反思闭环跑通),
+            **迁移路径**: 每当 OOC 某个能力维度成熟到可以承载工程协作 (例: talk-delivery 稳定 + relation 协作可用 + super flow 反思闭环跑通),
             就把对应的 Agent 从 Claude Code sub agent 形态迁移到 OOC 内部 Object 形态。完全迁移完成 = bootstrapping 实现 = dogfooding 落地。
 
             这条迁移路径本身也是 AgentOfExperience 的关键观察点: 每次迁移前后跑同一组场景,验证 OOC 自托管的 Agent 不输于 Claude Code 暂行模式。
@@ -356,7 +356,7 @@ export const root: DocTreeNode = {
 
             - **Agent (Execute)**:
               - 所有具体动作: open / refine / submit / wait / talk-delivery / write_file / 跑测试 / 改代码。
-              - 把内循环结果回报给 Supervisor (通过 Issue / super flow 反思)。
+              - 把内循环结果回报给 Supervisor (通过 talk_window / super flow 反思)。
               - 在 stone 自己的 server method 库与 knowledge 文档中沉淀经验。
 
             两条边界:
