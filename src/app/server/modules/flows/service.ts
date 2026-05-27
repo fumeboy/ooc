@@ -5,6 +5,7 @@ import {
   readThread,
   threadDir,
   writeThread,
+  STONE_CHILDREN_SUBDIR,
 } from "@src/persistable";
 import { loadUiServerMethods } from "@src/executable/server/loader";
 import { collectExecutableKnowledgeEntries } from "@src/executable";
@@ -656,36 +657,74 @@ export function createFlowsService(deps: {
     async listThreads({ sessionId }: { sessionId: string }): Promise<ListThreadsResponse> {
       await ensureSessionExists(sessionId);
       const objectsDir = join(deps.baseDir, "flows", sessionId, "objects");
-      let objectEntries: { name: string; isDirectory(): boolean }[];
+      const isSuperFlow = isSuperSessionId(sessionId) || undefined;
+      const items: ListThreadsItem[] = [];
+
+      // 递归扫嵌套子 object（与 thread-query.scanThreadsByStatus 同款 children/ marker
+      // 协议）。一个目录是 flow object iff 直接含 .flow.json；递归只下到 children/ 子目录。
+      // objectId 由相对 objects/ 路径剥掉所有 children/ 段后用 "/" 拼。
+      async function walkObjectDir(dir: string, idSegments: string[]): Promise<void> {
+        let entries: import("node:fs").Dirent[];
+        try {
+          entries = await readdir(dir, { withFileTypes: true });
+        } catch (error) {
+          const code = (error as NodeJS.ErrnoException).code;
+          if (code === "ENOENT" || code === "EACCES" || code === "ENOTDIR") return;
+          throw error;
+        }
+        const isFlowObject = entries.some((e) => e.isFile() && e.name === ".flow.json");
+        const objectId = idSegments.join("/");
+        if (isFlowObject && objectId) {
+          const threadsDir = join(dir, "threads");
+          let threadEntries: import("node:fs").Dirent[] = [];
+          try {
+            threadEntries = await readdir(threadsDir, { withFileTypes: true });
+          } catch {
+            threadEntries = [];
+          }
+          for (const t of threadEntries) {
+            if (!t.isDirectory()) continue;
+            items.push(
+              await buildListThreadsItem({
+                baseDir: deps.baseDir,
+                sessionId,
+                objectId,
+                threadId: t.name,
+                isSuperFlow,
+              }),
+            );
+          }
+        }
+        const childrenDirEntry = entries.find(
+          (e) => e.isDirectory() && e.name === STONE_CHILDREN_SUBDIR,
+        );
+        if (!childrenDirEntry) return;
+        const childrenDir = join(dir, STONE_CHILDREN_SUBDIR);
+        let childEntries: import("node:fs").Dirent[];
+        try {
+          childEntries = await readdir(childrenDir, { withFileTypes: true });
+        } catch {
+          return;
+        }
+        for (const ce of childEntries) {
+          if (!ce.isDirectory()) continue;
+          if (ce.name.startsWith(".")) continue;
+          await walkObjectDir(join(childrenDir, ce.name), [...idSegments, ce.name]);
+        }
+      }
+
+      let topEntries: import("node:fs").Dirent[];
       try {
-        objectEntries = await readdir(objectsDir, { withFileTypes: true });
+        topEntries = await readdir(objectsDir, { withFileTypes: true });
       } catch {
         return { items: [] };
       }
-      const isSuperFlow = isSuperSessionId(sessionId) || undefined;
-      const items: ListThreadsItem[] = [];
-      for (const entry of objectEntries) {
+      for (const entry of topEntries) {
         if (!entry.isDirectory()) continue;
-        const threadsDir = join(objectsDir, entry.name, "threads");
-        let threadEntries: { name: string; isDirectory(): boolean }[];
-        try {
-          threadEntries = await readdir(threadsDir, { withFileTypes: true });
-        } catch {
-          continue;
-        }
-        for (const t of threadEntries) {
-          if (!t.isDirectory()) continue;
-          items.push(
-            await buildListThreadsItem({
-              baseDir: deps.baseDir,
-              sessionId,
-              objectId: entry.name,
-              threadId: t.name,
-              isSuperFlow,
-            }),
-          );
-        }
+        if (entry.name.startsWith(".")) continue;
+        await walkObjectDir(join(objectsDir, entry.name), [entry.name]);
       }
+
       items.sort((a, b) =>
         a.objectId === b.objectId
           ? a.threadId.localeCompare(b.threadId)
