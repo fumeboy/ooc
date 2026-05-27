@@ -70,7 +70,7 @@ export const root: DocTreeNode = {
 
     面向对象 是基础哲学，在具体实现中，不同领域可能会有自己的 Object 去进行实现。
 
-    Agent 具有 stone、pool、flow 三种持久层（World 级三分，2026-05-23 起；2026-05-24 修订 knowledge 分工 + 删 sql 改 csv）:
+    Agent 具有 stone、pool、flow 三种持久层（World 级三分，2026-05-23 起）:
     - stone: 象征"静"——持有 Object 的长期身份与设计源码（self.md / readme.md / server / client / knowledge 五件套），跨 session 共享，进 git review。其中 \`knowledge/\` 是 **seed knowledge**（人类设计的初始知识库），可挂 eval gate。
     - pool:  象征"积"——持有 Object 跨 session 累积的事实数据（data / knowledge / files 三件套），不进 git。data 用 csv（不用 sql；详见 persistable.pool.children.data_pool）；knowledge 是 **sediment knowledge**（运行时由 reflectable / collaborable 沉淀的 memory / relations）。
     - flow:  象征"动"——一个 Object 可以参与多个 session，每个 session 下有一个 flow，每个 flow 都有自己的 session 级数据字段和程序方法。
@@ -342,7 +342,7 @@ export const root: DocTreeNode = {
                             `,
                         },
                         "domain_axis": {
-                            title: "B-tree 协议：领域父子继承（2026-05-26）",
+                            title: "B-tree 协议：领域父子继承",
                             content: `
                             **背景**：现有 \`activates_on\` 提供的是"任务进度轴"——根据 LLM 当前 command path 渐进激活；
                             但**领域层级轴**（从大领域到子领域）此前没有协议表达，导致 sentry/* 类一组同领域 Agent
@@ -416,7 +416,7 @@ export const root: DocTreeNode = {
 
                             ## 5. 边界 / 已知未解决
 
-                            本期（2026-05-26 MVP）只实现：
+                            本期（MVP）只实现：
                             - \`stoneDir\` 的 "/" 路径解析
                             - knowledge loader 的祖先继承
                             - frontmatter \`inheritable\` 字段
@@ -479,19 +479,18 @@ export const root: DocTreeNode = {
                         "no_shared_context": {
                             title: "thread 之间不共享 Context",
                             content: `
-                            thread 之间不能直接读取彼此的 contextWindows / events / threadLocalData。
-
-                            跨线程影响必须显式经过 inbox / outbox、do_window transcript 或 talk_window transcript。
-                            这样所有协作痕迹都能被观察、回放和 debug。
+                            thread 之间不能直接读取彼此的 contextWindows / events / threadLocalData；
+                            跨线程影响必须显式经过 inbox / outbox、do_window transcript 或 talk_window transcript，
+                            所有协作痕迹都能被观察、回放和 debug（详见 collaborable.patches.no_shared_state_across_threads）。
 
                             唯一例外: do_window.move 提供 ContextWindow 的跨 thread ref / 移交语义
                             （详见 collaborable.patches.cross_thread_window_sharing 与 executable.context_window.children.sharing）。
                             `,
                         },
                         "thread_plan_deprecated": {
-                            title: "thread.plan 字段废弃 (2026-05-26, P2)",
+                            title: "thread.plan 字段废弃 (P2)",
                             content: `
-                            **2026-05-26 起 ThreadContext.plan: string 字段被废弃**。
+                            **ThreadContext.plan: string 字段被废弃**。
 
                             原因: 一个字符串 plan 不足以表达 sub plan 嵌套、跨 thread share、进度回流等更结构化的协作需求。
                             升级路径: plan 升格为 first-class plan_window (详见 executable.children.context_window.children.plan_window)。
@@ -518,7 +517,7 @@ export const root: DocTreeNode = {
                             - fork sub-thread（同 object，do command + do_window）: 把自己"分身"成并行子线程。子 thread **共享我这个 object 的 seed / pool**，只有 session / thread-local 状态独立。临时，session 结束即归档，无独立身份。分的是**算力**。
                             - 建 child Agent（跨 object，物理嵌套在 stones/.../<self>/children/<child>/）: 一个**独立 object**，有自己的 stone(seed) / pool(sediment) / 自己的 super / 自己的 self.md，通过 talk 协作。持久、跨 session，可被别的 Agent 独立发现 / 引用。分的是**身份与经验**。
 
-                            分界线（2026-05-27 用户拍板）: 是否需要**跨 session 的持久身份 + 独立经验积累**。
+                            分界线: 是否需要**跨 session 的持久身份 + 独立经验积累**。
                             - 一次性、本 session 内、共享我知识的并行 / 探索 / 分治 → fork sub-thread。
                             - 需要跨 session 复用、需要自己的 pool 沉淀专精领域经验、需要被独立 talk 到的长期专精角色 → child Agent。
 
@@ -572,7 +571,7 @@ export const root: DocTreeNode = {
                     title: "context_budget - 控制 Context token 体积的压缩策略",
                     content: `
                     Context 不是无限的。一个 thread 跑得越久，contextWindows 累积越多、events 流越长、单 window 内容越大，
-                    最终都会撞 LLM 的 token 上限。OOC 不沿用 CCB 风格的"线性会话三层 compaction"——OOC 的 context 是
+                    最终都会撞 LLM 的 token 上限。OOC 的 context 是
                     结构化对象集合（windows[] + events[] + knowledge + ...），压缩必须按 OOC 自己的本性来：每个 window
                     type 自负责自己的折叠（与 renderXml 同协议），events 流走独立的 ring + 摘要。
 
@@ -604,7 +603,7 @@ export const root: DocTreeNode = {
                             WindowTypeDefinition 加可选字段 compressView(window, level, ctx) → XmlNode[]。
                             render.ts 调度器读 window.compressLevel: level=0 走 renderXml; level≥1 走 compressView,
                             缺省时 fallback 到通用 title-only 渲染。
-                            绝不让一个全局算法压所有东西——这是 OOC 与 CCB 的根本分歧。
+                            绝不让一个全局算法压所有东西。
                             每个 type 自定义 fold 时保留什么 (file 保 path+行数, search 保 query+命中数,
                             talk 保 peer+消息数, do 保 child id+status...)。
                             compressView 与 renderXml 同协议; 启动期同样 fail-loud (如配 hook 但未注册则抛错)。
@@ -620,15 +619,13 @@ export const root: DocTreeNode = {
                             - cascade: parent fold 时所有 child fold 同档。
                             默认 N=3, M=10, K=8; 各 Object 可在 stones/<self>/config/context-budget.json 调参。
 
-                            **豁免规则** (Round 16, 2026-05-27 精修):
+                            **豁免规则**：
                             - root: thread 同生命周期, 不可关闭
                             - command_exec.status ∈ {open, executing}: 真活动 form (LLM 正在用 / exec 在跑)
-                            - **command_exec.status === "failed": 不豁免** (Round 13 状态机 + Round 14 体验官观察:
-                              failed 不是焦点; LLM 可能永远不回头修; 让它走自然衰减 fold)
+                            - **command_exec.status === "failed": 不豁免**（failed 不是焦点; LLM 可能永远不回头修; 让它走自然衰减 fold）
                             - command_exec.status === "success": 不会到衰减阶段 (success 自动从 contextWindows 移除)
 
-                            Round 16 修改前: command_exec **整类豁免**;
-                            修改后: 仅 open/executing 豁免, failed 参与衰减 (复用既有 idle-fold 而非发明新 GC 机制)。
+                            当前：仅 open/executing 豁免，failed 参与衰减（复用既有 idle-fold 而非发明新 GC 机制）。
                             完整 design 见 docs/2026-05-27-failed-form-gc-design.md。
                             `,
                         },
@@ -804,7 +801,7 @@ export const root: DocTreeNode = {
                     - plan: 更新当前 thread 的 plan。
                     - todo: 创建可见待办 todo_window。
                     - end: 标记当前 thread 完成。args = { reason?, summary?, result? }。其中 result 是子 thread
-                      想带回父 thread 的一段文本——2026-05-24 起，传 result 时 end 会**自动调用
+                      想带回父 thread 的一段文本——传 result 时 end 会**自动调用
                       creator window 的 continue/say** 把内容写入 transcript（等价于子主动 reply），并
                       auto-archive 父侧 creator window（do_window 类）。如果不传 result，end 只标记本轮结束，
                       不触发任何 reply。注意：result 是便捷糖，**不是回报通道**——明确的多段对话仍应通过
@@ -856,33 +853,13 @@ export const root: DocTreeNode = {
                         "do_window_move": {
                             title: "do_window.move - 跨 thread 共享 ContextWindow 的统一通道",
                             content: `
-                            do_window 上注册的 \`move\` 命令，是父子双向传递 ContextWindow 的唯一机制。
-                            （详见 executable.context_window.children.sharing）
+                            do_window 上注册的 \`move\` 命令，是父子双向传递 ContextWindow（ref / move 两种模式）的唯一机制；
+                            形态为 \`exec(window_id=<do_window_id>, command="move", args={ window_id: <target>, mode: "ref" | "move" })\`。
+                            root.do.share_windows 是其语法糖（创建 do_window 后顺序调 move，一次性带走多个 windows）。
 
-                            **形态**：
-                                exec(window_id=<do_window_id>, command="move",
-                                     args={ window_id: <target>, mode: "ref" | "move" })
-
-                            **三种语义路径**（path 自动 match）：
-                            - move.ref：对端获得只读 snapshot；自己保留 owner
-                            - move.move：所有权移交对端；自己变 lent_out 占位（看 snapshot）
-                            - 归还（隐含）：当 borrower 用 mode="move" 在 creator do_window 上发起时，
-                              系统按 id 检测对端有同 id 的 lent_out → 视为归还，自动合并 latest 内容
-
-                            **多层嵌套**：孙线程拿到 owner 后可以再 move 给曾孙；归还路径每层独立处理。
-
-                            **自动归还**：do_window archive（onClose hook）时，子 thread 持有的所有
-                            "对应父 lent_out 配对"的 owner windows 自动归还父 thread。
-
-                            **root.do.share_windows 语法糖**：do command 的 share_windows 参数等价于"创建 do_window
-                            后顺序调 do_window.move"，方便一次性带走多个 windows。
+                            完整的 ref / move / 归还语义、多层嵌套、自动归还、id 配对协议、可分享 window 类型，
+                            详见 collaborable.patches.cross_thread_window_sharing（与 executable.context_window.children.sharing）。
                             `,
-                            named: {
-                                "ref vs move": "ref 是只读引用；move 是所有权转移",
-                                "归还": "borrower 用 mode=move 还回原 owner thread；按 id 自动识别 lent_out 配对",
-                                "多层嵌套": "支持递归；每层 do_window archive 时各自归还到对应 owner",
-                                "share_windows 语法糖": "root.do 创建子线程时一次性带走 windows，等价于多次 do_window.move",
-                            },
                         },
                     },
                 },
@@ -891,7 +868,7 @@ export const root: DocTreeNode = {
                     content: `
                     OOC 元编程闭环让 Agent 可以改自己的 server / self / 文件系统;
                     每条 command 必须有"该不该让 LLM 直接执行"的三档判定。
-                    OOC 不沿用 CCB 的"88+ feature flags + AI 分类器"重型门控——按 OOC 本性,
+                    按 OOC 本性,
                     permission 是 CommandTableEntry 上的一个声明字段, 与 description / params / knowledge
                     / fn 同层级, runtime 在 thinkloop 分派 tool call 之前查询。
 
@@ -1041,8 +1018,7 @@ export const root: DocTreeNode = {
                             content: `
                             command_exec window 是 LLM 调用 command 时产生的临时窗口。
 
-                            它类似一个 form。**四态状态机** (Round 13, 2026-05-27 升级; 之前是
-                            三态 open→executing→executed, executed 混合 success/failure 且不可 refine):
+                            它类似一个 form。**四态状态机**（open / executing / success / failed）：
 
                             \`\`\`
                             open → executing → success  (自动从 contextWindows 移除)
@@ -1059,14 +1035,13 @@ export const root: DocTreeNode = {
                             command_exec window 让 "函数调用" 不再是一次性黑盒。
                             LLM 可以看见自己正在填写什么参数、还缺什么、激活了哪些知识、执行结果是什么。
 
-                            **失败修复路径** (Round 13 新增):
+                            **失败修复路径**：
                             - submit 失败 (form 进 failed) → refine 修正 args → 自动切回 open → 重 submit
                             - 不再需要 close + 重 open (那会丢失 form 已累积 args 与已激活 knowledge)
                             - close 仍可用作 "彻底放弃这次调用" 的兜底, 但不是失败修复首选
 
                             **历史 thread.json 含 status="executed" 的 form**: readThread 反序列化时
-                            把 "executed" 迁移为 "failed" (保守; 让 LLM 能 refine 修复); 与 Round 7 移除
-                            issue 时的未注册 type 过滤同款思路。
+                            把 "executed" 迁移为 "failed" (保守; 让 LLM 能 refine 修复)。
 
                             完整 design 见 docs/2026-05-27-form-status-success-failed-design.md。
                             `,
@@ -1074,8 +1049,8 @@ export const root: DocTreeNode = {
                                 "open": "form 初始态; 可 refine / submit",
                                 "executing": "exec 函数运行中; 短暂状态",
                                 "success": "执行成功; 自动从 contextWindows 移除",
-                                "failed": "执行失败; result 含错; 可 refine 回 open 重 submit (Round 13)",
-                                "refine-from-failed": "Round 13 新路径: failed 状态可调 refine, 累积 args + 清 result + 状态切回 open",
+                                "failed": "执行失败; result 含错; 可 refine 回 open 重 submit",
+                                "refine-from-failed": "failed 状态可调 refine, 累积 args + 清 result + 状态切回 open",
                                 "executed → failed 迁移": "readThread 反序列化时把历史 executed 转 failed, 保留 LLM 修复能力",
                             },
                         },
@@ -1114,7 +1089,7 @@ export const root: DocTreeNode = {
                             content: `
                             **设计原则**：context XML 的渲染采用 "接口 explicit" 契约：每个 window type
                             必须在 \`WindowTypeDefinition.renderXml\` 上注册自己的渲染 hook；render.ts 退化为
-                            纯调度器，不再 switch-by-case（根因 #4：2026-05-24 fix-plan）。
+                            纯调度器，不再 switch-by-case。
 
                             **调度器职责**（src/thinkable/context/render.ts）：
                             - 通用外壳：\`<window id type status [sharing read_only]>\` + \`<title>\`
@@ -1126,11 +1101,6 @@ export const root: DocTreeNode = {
                             **启动期 fail-loud**：windows/index.ts 在所有 side-effect import 完成后调用
                             \`assertAllRenderHooksRegistered()\`，缺 renderXml 的 type 立即抛错——不让"空白 XML"
                             的问题流到 LLM context 才被发现。
-
-                            **修复点**：
-                            - skill_index / custom 之前已实现 renderXml hook 但被旧 switch 忽略 → 现在被正确调度
-                            - 各 window（talk / do / file / search 等）的 commands 元数据 → \`<commands>\` 节点显式输出
-                            - talk_window transcript 一直存在过滤函数，但调度路径下载现在更显式（移到 talk/index.ts）
                             `,
                             named: {
                                 "WindowTypeDefinition.renderXml": "RenderHook 类型 (ctx) => XmlNode[] | Promise<XmlNode[]>，注册到 WindowRegistry",
@@ -1177,7 +1147,7 @@ export const root: DocTreeNode = {
                             title: "plan_window - 行动计划窗口（支持 sub plan + share to sub thread）",
                             content: `
                             plan_window 是 thread 的行动计划窗口，由 root.plan command 创建。
-                            2026-05-26 起 plan 升格为 first-class ContextWindow（不再是 thread.plan 字符串字段；详见 patches.thread_plan_deprecated）。
+                            plan 升格为 first-class ContextWindow（不再是 thread.plan 字符串字段；详见 patches.thread_plan_deprecated）。
 
                             **数据形态**（src/executable/windows/plan/types.ts）:
                             \`\`\`
@@ -1332,23 +1302,19 @@ export const root: DocTreeNode = {
 
                     这个闭环让 OOC 可以把复杂能力拆成多步披露，而不是在一开始把所有说明都塞给 LLM。
 
-                    **🔥 activator union 路径来源（2026-05-24 根因 #9 扩充）**：
+                    **activator union 路径来源**：
 
                     src/thinkable/knowledge/activator.ts:computeActivations 收集的 union 包括：
 
                     1. \`root\` — 永远在 union 中。允许 \`activates_on:[root]\` 类 seed knowledge
-                       在任意轮激活；这是 base path（**R4 #24 修**）
+                       在任意轮激活；这是 base path
                     2. **任何 status="open" 的 window 类型** —— 持续 open 的 window 每轮贡献其
-                       \`type\` 作为 implicit path：talk / do / file / search / plan / relation 等
-                       （**R6 #42 修**）。这让 "我在跟人 talk 就该看到 talk 知识" 的直觉成立
+                       \`type\` 作为 implicit path：talk / do / file / search / plan / relation 等。
+                       这让 "我在跟人 talk 就该看到 talk 知识" 的直觉成立
                     3. command_exec window 的 commandPaths（form 进行中的细路径）
                     4. program_window 最近一次 exec 推断的路径（program / program.<lang>）
 
-                    设计动机：以前只看 command_exec.commandPaths + program 推断 + 显式
-                    knowledge_window，导致 \`activates_on:[talk]\` 只在 form 进行中命中、talk_window
-                    持续存在的后续轮失激活。把"窗口存在性"视为 implicit command_path 后，
-                    LLM 在 talk 上下文中的整段时间都能看到 talk 知识；seed knowledge 的 root
-                    路径也能命中。
+                    把 window 存在性视为 implicit command_path，使 activates_on 在窗口持续 open 期间始终命中。
                     `,
                     named: {
                         "knowledge activation": "根据 command path 把相关 knowledge 注入 Context 的过程",
@@ -1511,7 +1477,7 @@ export const root: DocTreeNode = {
                     - self-driven root: 既没 opts.creatorThreadId、又没 thread.creatorThreadId、也没 thread.creatorObjectId 时，
                       不注入 phantom creator window（否则会被 wait 误判为合法 IO 来源导致死锁）。
 
-                    **🔥 子→父 reply 协议（2026-05-24 增，dogfooding 闭环关键）**：
+                    **子→父 reply 协议（dogfooding 闭环关键）**：
 
                     子 thread 想把结果带回父 thread 时，**唯一合法通道**是在 **creator do_window / talk_window**
                     上调 \`continue\`（do_window）或 \`say\`（talk_window），写入 transcript；这条消息会自动
@@ -1527,7 +1493,7 @@ export const root: DocTreeNode = {
                     > end command 只用于声明本轮自己结束，不是回报通道。
 
                     没有这条 prompt，子 LLM 会 hallucinate \`end({result})\` 等非协议参数，导致 result
-                    被静默吞、父侧 do_window 永不 archive（体验官 Round 4 #19/#20 揭示）。
+                    被静默吞、父侧 do_window 永不 archive。
                     `,
                     named: {
                         "creatorWindowIdOf": "派生 creator window 稳定 id 的函数",
@@ -1547,7 +1513,7 @@ export const root: DocTreeNode = {
                     专属 window type，注册 \`edit\` command（详见 children/edit_command）。
                     这是 relation 的命令面入口——LLM 想更新 relation 不再依赖 write_file 弱 prompt。
 
-                    **2026-05-27 default visibility 扩展**：
+                    **default visibility 扩展**：
                     除 talk_window 派生的 peer 外，每轮还**默认派生**两类 peer 的 relation_window，
                     让 Agent 一上场就看见身边有谁，不必先 talk 才能写 relation：
                     - **同级 Agent**: 与 self 同父的其它 OOC Agent（top-level 时 = 其它顶层 Agent）
@@ -1559,7 +1525,7 @@ export const root: DocTreeNode = {
                     - 自身被排除
                     - 已在 talk_window peer 列表中的不重复加，不覆盖 createdAt
 
-                    **2026-05-27 撤回 R8-5 的 peerReadme 删除**：
+                    **peer readme 挂回 RelationWindow**：
                     default visibility 让大量自动派生的 sibling/child relation_window 出现在 LLM 视野，
                     但 self 大概率没写过它们的 relation note → window body 全空只剩 path。这违背
                     default visibility 的初衷（让 Agent 一上场就知道身边有谁干什么）。把 peer readme
@@ -1568,7 +1534,7 @@ export const root: DocTreeNode = {
                     双层（pools/flows）。维度上 RelationWindow 现在承担"peer 身份介绍 + self-relation
                     双层认知"两块（不是严格的"只 self-relation"）。
 
-                    **2026-05-27 渲染策略**：
+                    **渲染策略**：
                     缺失的字段节点不再渲染占位文案（旧版 \`(暂无;通过 open(...) 写入)\`）。节点本身
                     缺席就是信号；占位文案对 LLM 是噪声，basicKnowledge 已讲清楚 edit 用法不必重复。
                     \`*Exists=false\` 或 body 为空时直接跳过该 XML 节点，render 出来的窗口只含真有内容
@@ -1601,7 +1567,7 @@ export const root: DocTreeNode = {
                         "deriveRelationWindow": "按 talk_window peer 派生 RelationWindow 的函数",
                         "long_term relation": "pools/objects/<self>/knowledge/relations/<peer>.md，跨 session 长期；落 pool 不落 stone",
                         "session relation": "flows/<sid>/objects/<self>/knowledge/relations/<peer>.md，仅本 session",
-                        "self-relation only": "relation 文档只在 pools+flows, 不含 peer stone readme (R8-5)",
+                        "self-relation only": "relation 文档只在 pools+flows, 不含 peer stone readme",
                         "*Exists flag": "API caller 用 selfLongTermExists/selfSessionExists 区分 lazy-create vs read-fail",
                     },
                     children: {
@@ -1795,7 +1761,7 @@ export const root: DocTreeNode = {
                     - loop_NNNN.input.json: 本轮 inputItems + contextSnapshot。
                     - loop_NNNN.output.json: 本轮 normalized outputItems + provider/model。
                     - loop_NNNN.meta.json: provider / model / latencyMs / messageCount / toolCount / toolCallCount / contextBytes / status / error
-                      / **windowsSnapshot** (Round 9, 2026-05-26 加; 见 patches.windows_snapshot)。
+                      / **windowsSnapshot**（见 patches.windows_snapshot）。
 
                     始终落盘的两个文件（与 enableDebug 无关，只要 thread.persistence 存在就写）:
                     - llm.input.json: 与最近一次 writeLatestLlmInput 同步覆盖。
@@ -1809,11 +1775,11 @@ export const root: DocTreeNode = {
                         "loopIndex": "thread 内的轮次编号，4 位 0 padding 作文件名",
                         "loop_NNNN.input.json / output.json / meta.json": "loop-level debug 的三类文件",
                         "llm.input.json / llm.output.json": "始终落盘的最近一次快照",
-                        "windowsSnapshot": "loop_NNNN.meta.json 中的 window content hash 数组; 给前端 LoopDiffView 做 added/changed/removed/unchanged 判定 (Round 9)",
+                        "windowsSnapshot": "loop_NNNN.meta.json 中的 window content hash 数组; 给前端 LoopDiffView 做 added/changed/removed/unchanged 判定",
                     },
                     patches: {
                         "windows_snapshot": {
-                            title: "windowsSnapshot - 每轮 ContextWindow content hash 落盘 (Round 9, 2026-05-26)",
+                            title: "windowsSnapshot - 每轮 ContextWindow content hash 落盘",
                             content: `
                             **目的**: 让 visible.loop_timeline 的 Time Machine 模式能做 window diff
                             (添加/修改/删除/不变四态)。前端拿 loop N + loop N-1 的 windowsSnapshot 算 diff。
@@ -1924,7 +1890,7 @@ export const root: DocTreeNode = {
                 "silent_swallow_ban": {
                     title: "silent-swallow ban — 失败必须可见",
                     content: `
-                    跨 observable / persistable / executable 的横切契约（根因 #6）。
+                    跨 observable / persistable / executable 的横切契约。
 
                     所有 catch 块 / 错误返回 必须做以下至少一项：
                     (a) 重新抛（拒绝在此层处理，让 caller 决定）
@@ -1937,11 +1903,7 @@ export const root: DocTreeNode = {
                     - exec 层依赖 render 报告自身的语义错误（如 open_knowledge 不校验 path 存在性，让 render 内联 <error> 兜底）
                     - \`.catch(() => undefined)\` 默默吞 promise rejection（serial-queue 防毒化是 intentional 例外，需注释解释）
 
-                    历史依据：
-                    R4 #19 子→父 reply 通道不可发现 / R4 #23 end({result}) 静默吞 /
-                    R5 #32 recovery-check catch{} / R5 #34 tryMergeSelf void removeWt /
-                    R5 #35 enqueueOrphanRunningThreads bare catch / R6 #44 open_knowledge 不校验 path。
-                    5+ 处同源 facet，跨 dogfooding 协议、git merge、worker 调度、knowledge 命令多个域。
+                    5+ 处同源 facet，跨 dogfooding 协议 / git merge / worker 调度 / knowledge 命令多个域。
 
                     审计周期：每次大重构后跑一次 grep：
                     \`grep -rn 'catch.*{}' src/\`
@@ -1956,7 +1918,7 @@ export const root: DocTreeNode = {
                     }
                     \`\`\`
 
-                    **🔥 sandbox 例外白名单（2026-05-25, Round 7 R7-2 落地）**：
+                    **sandbox 例外白名单**：
 
                     \`src/executable/program/sandbox/\` 下有 2 类 catch 块被显式列为 ban 例外，
                     必须带 \`// intentional:\` 注释，不视为违反 silent-swallow ban：
@@ -2004,7 +1966,7 @@ export const root: DocTreeNode = {
                注意 sediment knowledge 不进 git review（事实型，写就生效）；身份文件仍在 stone 进 git review；
                seed knowledge（stones/<self>/knowledge/）不在 super flow 默认面。
             5. 元编程范围分工: reflectable 提供"为什么 / 何时 / 在哪条线程上"做元编程的协议；
-               具体可改的对象由 programmable（函数方法库）与 visible（UI 页面）两个维度承担。
+               具体可改的对象由 programmable（函数方法库）与 visible（UI 页面）两个维度承担（详见 children/metaprogramming）。
 
             Reflectable 不是新机制，是几个既有维度（collaborable.talk-delivery / persistable.stone /
             persistable.pool / thinkable.knowledge）在 sessionId="super" 这个特殊上下文下被协同利用的结果。
@@ -2099,7 +2061,7 @@ export const root: DocTreeNode = {
                     },
                 },
                 "end_reflection_reminder": {
-                    title: "end_reflection_reminder - 业务 thread 调 end 时的反思提醒 (Round 11, 2026-05-27)",
+                    title: "end_reflection_reminder - 业务 thread 调 end 时的反思提醒",
                     content: `
                     **触发**: 当 OOC agent 在**非 super flow** 的业务 thread 中创建 \`command="end"\` 的
                     command_exec form 时, synthesizer 注入一段简短的 reflection reminder knowledge。
@@ -2164,7 +2126,7 @@ export const root: DocTreeNode = {
                     写入方式: 通过 exec(command="write_file", path="...", content="...") 命令；
                     已存在的文件可用 open_file + edit 增量更新。
 
-                    **🔥 sediment write contract（2026-05-24 增，dogfooding 闭环关键）**：
+                    **sediment write contract（dogfooding 闭环关键）**：
                     所有 super flow 写入 \`pools/<self>/knowledge/memory/<slug>.md\` 与
                     \`knowledge/relations/<peer>.md\` 的 markdown 文件 **必须含 frontmatter**：
 
@@ -2182,7 +2144,7 @@ export const root: DocTreeNode = {
 
                     没有 frontmatter 的 sediment 会被 thinkable.knowledge synthesizer 加载但
                     **永远无法被 activator 激活**——下轮新 thread 完全看不见这篇沉淀，
-                    自演化闭环 silently 断裂（体验官 Round 4 #18 揭示的 dogfooding 协议级缺口）。
+                    自演化闭环 silently 断裂（dogfooding 协议级缺口）。
 
                     REFLECTABLE_KNOWLEDGE 必须显式把这条契约写进 LLM 协议提示，让 LLM 写 .md
                     时**始终包含合法 frontmatter**。模板示例可放在 reflectable basicKnowledge 末尾。
@@ -2425,23 +2387,6 @@ export const root: DocTreeNode = {
                       视为 empty 等价 undefined（语义零变更）。displayName 由 Object 后续主动 writeSelf 时设置。
                     - 不预创 server/ / client/ / knowledge/：空目录"骨架不全"的视觉噪音 > 预创价值；
                       对应 writer 都自带 mkdir 兜底，按需创建零成本。
-
-                    **历史变更**:
-                    - **2026-05-23**：移除 \`data.json\`（去掉介于"配置"和"小记录"之间的暧昧形态）；
-                      移除 \`files/\` 子树（迁到 pool 顶层 files/）。
-                    - **2026-05-24（一次修订）**：重组 \`knowledge/\` 子树为 seed / sediment 两层。
-                      - sediment（运行时沉淀，memory / relations）迁到 \`pools/objects/<self>/knowledge/memory|relations/\`；写就生效，不进 git。
-                      - seed（人类设计的初始知识库）保留在 stone 顶层 \`stones/<self>/knowledge/<slug>.md\`；
-                        进 git review，可挂 eval gate（详见 children/seed_knowledge）。
-                    - **2026-05-24（二次修订，简化）**：删除 \`database/\` 子目录。
-                      - 起因：pool sql + bun:sqlite + forward-only migration 协议过于复杂；OOC 当前阶段用不到
-                        这个工程化重量级。删 sql、改用 **csv** 作为结构化数据载体（pool/data/<name>.csv），
-                        实现用现有文件操作即可——见 persistable.pool.children.data_pool。
-                      - 由于 csv 没有 schema migration 概念（列变了直接改文件），stone 不再需要 database/ 作为 schema 设计层。
-                      - 未来真有 sql 工程化需求时再重新引入，但当前保持精简。
-                    - **2026-05-24（三次修订，visibility-first）**：\`createStoneObject\` 物理骨架精化为
-                      "只预创 .stone.json + self.md + readme.md 三个可见小文件"；server/ / client/ / knowledge/
-                      由对应 writer 按需 lazy mkdir。理由：避免"骨架不全"误判，让 UI 立刻有显示名。
                     `,
                     named: {
                         "self.md / readme.md": "stone 的身份 + 公开介绍两件套",
@@ -2888,7 +2833,6 @@ export const root: DocTreeNode = {
                             - 能力的"先天"部分（设计者赋予）需要严格 review + eval —— seed in stone。
                             - 能力的"后天"部分（运行中沉淀）需要低摩擦累积 —— sediment in pool。
 
-                            历史：2026-05-23 一度把整个 knowledge 全迁到 pool；2026-05-24 修正——
                             seed 影响 Agent 先天能力，应当版本管理 + 评估测试。详见 persistable.stone.children.seed_knowledge。
                             `,
                         },
@@ -3122,7 +3066,7 @@ export const root: DocTreeNode = {
                             任何新入口（cron / 未来子模块 / 工具脚本）调 rollback 时都自动得到边界保护，
                             无需 caller 记得校验。双层防御：caller-side 给用户友好提示，persistable-side 是不可绕过的边界。
 
-                            历史：R5 #28 揭示——LLM 命令层校验后，persistable 层只 isValidObjectId 接受任何字符串 supervisorAuthor。
+                            LLM 命令层校验后，persistable 层只 isValidObjectId 接受任何字符串 supervisorAuthor 是不够的——故校验下沉到此层。
                             `,
                         },
                         "bootstrap_includes_worktree_prune": {
@@ -3134,8 +3078,8 @@ export const root: DocTreeNode = {
                             通过 dynamic import 调用 pruneStaleWorktrees，避免 stone-bootstrap.ts 与 stone-versioning.ts 的静态循环依赖。
                             失败仅 advisory console.warn，不阻止 bootstrap（pruneStaleWorktrees 内部已 silent-swallow ban 处理 prune 失败）。
 
-                            历史：R5 #31 揭示 pruneStaleWorktrees 注释承诺"启动期 hygiene"但 src/ 无 caller，
-                            只在测试调，导致 orphan worktree + branch 永远累积。
+                            若 pruneStaleWorktrees 注释承诺"启动期 hygiene"但 src/ 无 caller、只在测试调，
+                            会导致 orphan worktree + branch 永远累积——故在 bootstrap 末尾显式调用。
                             `,
                         },
                     },
@@ -3366,13 +3310,13 @@ export const root: DocTreeNode = {
                     `,
                 },
                 "http_writes_go_through_versioning": {
-                    title: "🔥 HTTP 写 stone 必经 stone-versioning（root-cause #2，2026-05-24）",
+                    title: "HTTP 写 stone 必经 stone-versioning",
                     content: `
                     **设计哲学（契约 3：状态翻转唯一 owner）**：所有写 stone 的入口（HTTP / LLM 命令 /
                     未来的 cron / 测试夹具）共享同一底层语义——open metaprog worktree →
                     write in worktree → commitWorktree → tryMergeSelf 或 requestPrIssueReview。
 
-                    **症状**（体验官 R3 #12 / R5 #29 揭示）：
+                    **症状**：
                     HTTP \`POST /api/stones\` / \`PUT /api/stones/:id/server-source\` 等 endpoint
                     历史上**绕开** stone-versioning 直接 \`writeFile\`，导致：
                     - HTTP 创建的 stone 不入 git；\`openMetaprogWorktree\` 后 worktree 看不到该 stone
@@ -3563,10 +3507,10 @@ export const root: DocTreeNode = {
                     },
                 },
                 "loop_timeline": {
-                    title: "loop_timeline - thread 一轮 thinkloop 在做什么的可视化（2026-05-26 升级为 Time Machine 模式）",
+                    title: "loop_timeline - thread 一轮 thinkloop 在做什么的可视化（Time Machine 模式）",
                     content: `
                     Loop Timeline 是 thread 详情页的"agent loop 时间轴 + 时光机"视图。
-                    2026-05-26 起从"纵向列 N 个 loop entry"升级为**Time Machine 模式**:
+                    从"纵向列 N 个 loop entry"升级为**Time Machine 模式**:
                     单次显示一个 loop + 左右切换 + Window Diff 视图 (vs 上一 loop 的 added/changed/removed/unchanged)。
 
                     设计动机: LLM 视角下"context windows 变化"才是关键信号 (哪个 window 加了/改了/删了),
@@ -3575,7 +3519,7 @@ export const root: DocTreeNode = {
                     数据完全派生自既有持久化, 不引入新存储或采集:
                     - thread.events: ProcessEvent[] (始终落盘, thread.json 持久化)
                     - <threadDir>/debug/loop_NNNN.{input,output,meta}.json (仅 enableDebug 后落盘)
-                      **2026-05-26 起 meta.json 加 windowsSnapshot 字段** (见 observable.debug_files)
+                      **meta.json 加 windowsSnapshot 字段** (见 observable.debug_files)
                     - <threadDir>/llm.{input,output}.json (始终, 最近一次)
                     - ContextSnapshot (始终, 与 system XML 同源)
 
@@ -3614,18 +3558,17 @@ export const root: DocTreeNode = {
 
                     URL 状态: 复用 ?selected=thread:<obj>:<tid>; 新加 ?loop=<N>; 不传 = Latest。
 
-                    完整 plan (Round 3 R0a~R0d 历史 + Round 9 E1~E4 时光机升级)
-                    见 docs/2026-05-25-agent-loop-visualizer-plan.md +
+                    完整 plan 见 docs/2026-05-25-agent-loop-visualizer-plan.md +
                     docs/2026-05-26-loop-time-machine-with-window-diff-design.md。
                     `,
                     named: {
-                        "Loop Time Machine": "升级后的主形态; 单 loop 视图 + 左右切换 + window diff (Round 9, 2026-05-26)",
+                        "Loop Time Machine": "升级后的主形态; 单 loop 视图 + 左右切换 + window diff",
                         "LoopNavigator": "时光机导航组件; [← Prev] Loop #N [Next →] [⏭ Latest] + 键盘快捷",
                         "LoopMiniTimeline": "顶部 mini timeline strip; 横向滚动; 关键 event 角标",
                         "LoopDiffView": "主区组件; 列 windowsSnapshot + 4 态 diff 标记 (added/changed/removed/unchanged)",
                         "WindowDiffRow": "单 window diff 行; 含 icon + type + summary + diff status",
-                        "LoopEventBadge": "关键 ProcessEvent 视觉胶囊 (Round 3 沿用); type-dispatch 按 type+kind 分发",
-                        "LoopActionPopover": "permission_ask approve/reject + events_summary 全文 popover (Round 3 沿用)",
+                        "LoopEventBadge": "关键 ProcessEvent 视觉胶囊; type-dispatch 按 type+kind 分发",
+                        "LoopActionPopover": "permission_ask approve/reject + events_summary 全文 popover",
                         "windowsSnapshot": "loop_NNNN.meta.json 中的 Array<{id, type, contentHash, parentWindowId?, status?, compressLevel?}>; 数据源自 observable",
                         "contentHash": "Bun.hash(JSON.stringify(stripVolatile(window), sortedKeys)).toString(36); type-agnostic; 不进 thread.json",
                         "退化模式": "enableDebug 关闭时仅展示 thread.events 序列, 无 loop boundary 无 diff",
@@ -3693,7 +3636,7 @@ export const root: DocTreeNode = {
                             `,
                         },
                         "time_machine_navigation": {
-                            title: "Time Machine 导航 - 单 loop 视图 + 左右切换 (Round 9)",
+                            title: "Time Machine 导航 - 单 loop 视图 + 左右切换",
                             content: `
                             导航行为:
                             - **← Prev**: 跳 loop N-1; loop 0 时 disabled
@@ -3707,7 +3650,7 @@ export const root: DocTreeNode = {
                             - mini timeline 横向滚动 (overflow-x: auto); 当前 loop scroll-into-view (smooth)
                             - 不做"智能折叠"(远 loop 隐藏 "... earlier loops ...") — MVP 选横向滚动, 复杂度低; 若未来 loop > 200 再考虑
 
-                            **废弃 LoopEntry**: Round 3 的纵向列出多 loop entry 形态完全替换为时光机;
+                            **废弃 LoopEntry**: 纵向列出多 loop entry 的旧形态完全替换为时光机;
                             LoopEntry.tsx 文件不再使用 (本轮删除或保留为空 stub)。
                             "View raw" 模式靠 LLMInputJsonViewer / ContextSnapshotViewer 嵌入展开实现。
                             `,
@@ -3734,31 +3677,23 @@ export const root: DocTreeNode = {
                             `,
                         },
                         "windows_snapshot_data_source": {
-                            title: "windowsSnapshot 数据源 - 后端落盘契约 (Round 10 扩展 fileDiff)",
+                            title: "windowsSnapshot 数据源 - 后端落盘契约（含 fileDiff 扩展）",
                             content: `
-                            后端在每轮 thinkloop 写 loop_NNNN.meta.json 时附加:
+                            windowsSnapshot 的基础字段（id / type / contentHash / parentWindowId / status /
+                            compressLevel）与落盘契约见 observable.debug_files.patches.windows_snapshot。本节只记
+                            visible 侧独有的 **fileDiff 扩展**:
 
                             \`\`\`
-                            windowsSnapshot: Array<{
-                              id: string;
-                              type: string;          // file / talk / do / plan / search / ...
-                              contentHash: string;   // Bun.hash(JSON.stringify(stripVolatile(window), sortedKeys)).toString(36)
-                              parentWindowId?: string;
-                              status?: string;
-                              compressLevel?: 0 | 1 | 2;
-                              fileDiff?: {           // Round 10: 仅 file_window; 用于前端 CodeMirror Merge unified 渲染
-                                previousContent: string;  // 上一 loop file 内容 (added 时 empty)
-                                currentContent: string;   // 本 loop file 内容 (removed 时为 "")
-                                path: string;
-                                isBinary?: boolean;       // 二进制 / 超大文件时 true; previousContent/currentContent 为空
-                                tooLarge?: boolean;       // > 200KB 时 true; 同上
-                              };
-                            }>
+                            fileDiff?: {           // 仅 file_window; 用于前端 CodeMirror Merge unified 渲染
+                              previousContent: string;  // 上一 loop file 内容 (added 时 empty)
+                              currentContent: string;   // 本 loop file 内容 (removed 时为 "")
+                              path: string;
+                              isBinary?: boolean;       // 二进制 / 超大文件时 true; previousContent/currentContent 为空
+                              tooLarge?: boolean;       // > 200KB 时 true; 同上
+                            }
                             \`\`\`
 
                             **位置**: src/persistable/debug-file.ts 的 LlmLoopDebugMetaRecord 扩展 + writeLoopDebugMeta 写入点
-                            **算 hash**: src/observable/window-hash.ts (Round 9; 见 observable.debug_files patch windows_snapshot)
-                            **stripVolatile**: 复用 thread-json.ts 的 in-process 字段剥离规则
                             **不进 thread.json**: contentHash / fileDiff 都是 debug 视角派生字段, 业务字段保持最小
 
                             前端通过现有 GET /api/runtime/.../debug/loops/:N endpoint 拿到带 windowsSnapshot 的 meta;
@@ -3766,10 +3701,10 @@ export const root: DocTreeNode = {
                             `,
                         },
                         "type_dispatch_diff_renderer": {
-                            title: "Type-Dispatch Window Diff Renderer (Round 10, 2026-05-27)",
+                            title: "Type-Dispatch Window Diff Renderer",
                             content: `
-                            用户痛点 (2026-05-27): Round 9 展开 "changed" window 时统一嵌 LLMInputJsonViewer 看全文,
-                            肉眼找 diff 太累。Round 10 升级: 每个 window type 自己 dispatch 一个 diff renderer
+                            用户痛点: 展开 "changed" window 时统一嵌 LLMInputJsonViewer 看全文,
+                            肉眼找 diff 太累。升级方向: 每个 window type 自己 dispatch 一个 diff renderer
                             (web 端注册, 与 backend renderXml/compressView/contentHash 同精神, 但纯前端 dispatch)。
 
                             **架构** (web/src/domains/sessions/components/window-diff-renderers/):
@@ -4035,8 +3970,7 @@ export const root: DocTreeNode = {
             extendable 不是 Agent 的内在能力维度（与上面 8 个并列），而是 OOC 触达外部系统的**扩展层**:
             把外部世界（飞书 / notion / slack / github 等）按统一模板接入为 Object 可调用的 ContextWindow 与 command。
 
-            为什么不是维度（判据见 root.patches.dimension_criterion）: 维度要构成 Agent 的「自我」；extendable 够的是**外部世界**，外部系统不构成自我，故是外接层。
-            "寄生于 executable"只是物理挂载事实（新增 WindowType + command），不是排除理由——reflectable 也寄生。代码隔离在 src/extendable/ 下，避免外部 OAPI 细节污染 executable 核心。
+            为什么不是维度: 它够的是外部世界、不构成 Agent 自我（判据见 root.patches.dimension_criterion）。"寄生于 executable"只是物理挂载事实，非排除理由。代码隔离在 src/extendable/ 下，避免外部 OAPI 细节污染 executable 核心。
 
             统一模板:
             1. OAPI 调用收口到 \`src/extendable/lark/cli.ts\` 的 larkExec helper（凭据 / 超时 / as-user 统一处理）。
@@ -4063,7 +3997,7 @@ export const root: DocTreeNode = {
             content: `
             判定一个东西是不是 OOC Agent 的"内在能力维度"，标准是: 它是否**构成 Agent 的「自我」(self-constitutive)**。
 
-            这条标准的来历（2026-05-27 grill 定稿，否掉了一版更弱的标准）:
+            这条标准的来历（grill 定稿，否掉了一版更弱的标准）:
             - 弃用版: "维度 = 无法由组合其他维度得到的能力"。问题在于这是**静态实现快照**，会误砍掉"想发展的演化方向"——reflectable / visible 今天实现上确实寄生在别的维度上，但它们各自扛着"自我进化""GenUI"两条招牌演化轴。用"今天可不可组合"当尺子是错的。
             - 定稿版: 维度 = 构成 Agent「自我」的能力。即使实现寄生，只要它描述的是"Agent 自己的某个可演化面"，就是维度。
 
