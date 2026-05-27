@@ -124,8 +124,8 @@ export const root: DocTreeNode = {
         "routing": {
             title: "routing：URL 单向真相",
             content: `
-            \`web/src/app/routing.ts\` 定义 \`RouteState\` 7 个 kind（welcome / scope /
-            file / stoneClient / flowPage / session / issueDetail）；\`useRouteState()\`
+            \`web/src/app/routing.ts\` 定义 \`RouteState\` 6 个 kind（welcome / scope /
+            file / stoneClient / flowPage / flowsView）；\`useRouteState()\`
             用 \`useLocation()\` + \`useParams()\` 从当前 URL（含 pathname + search）派生
             \`RouteState\`，\`toPath(state)\` 是反向构造函数（shortcut 优先：命中 client
             入口的 file path 会规范化为 \`/stones/:id\` 或 \`/flows/.../pages/:page\`）。
@@ -135,22 +135,23 @@ export const root: DocTreeNode = {
             为下一帧 state。这让浏览器前进/后退、刷新、复制粘贴 URL 都能恢复页面。
 
             **Thread 上下文 = query string overlay（2026-05 重构）**：原 \`kind: "thread"\`
-            的路径段 \`/flows/<sid>/threads/<oid>/<tid>\` 已废弃；改为 \`kind: "session"\`
-            可附带 \`objectId? threadId?\` 字段（在 URL 里编码为 \`?objectId=&threadId=\`）。
+            的路径段 \`/flows/<sid>/threads/<oid>/<tid>\` 已废弃；改为 \`kind: "flowsView"\`
+            （带 \`view: "index" | "thread_context"\` 判别）可附带 \`sessionId? objectId? threadId?\`
+            字段（在 URL 里编码为 \`?sessionId=&objectId=&threadId=\`；另有 \`selected?\` / \`loop?\` 可选 overlay）。
             同样 \`kind: "file"\` 也可携带可选 \`thread: { sessionId, objectId, threadId }\`，
             URL 形如 \`/files/<path>?sessionId=&objectId=&threadId=\`。这意味着：在 chat
             里看文件时 RightPanel 的 chat 不再消失——chat 上下文随 file URL 一起带过去。
-            老 \`/threads/...\` 路径在 \`parseRoute\` 里仍能识别（归一为 \`kind: "session"\`
-            + thread 字段），保证已收藏的链接不挂；\`toPath\` 不再产此形态。
+            老 \`/threads/...\` 路径在 \`parseRoute\` 里仍能识别（归一为 \`kind: "flowsView"\`
+            + view="thread_context" + thread 字段，见 routing.ts:191-194），保证已收藏的链接不挂；\`toPath\` 不再产此形态。
 
-            派生关系（\`shell.tsx:40-72\`）：
+            派生关系（\`shell.tsx:56-83\`）：
             - \`scope = scopeOf(route)\`（welcome 视作 flows）。
-            - \`activeSessionId\`：route.kind ∈ {session, flowPage, issueDetail} 直接取；
+            - \`activeSessionId\`：route.kind ∈ {flowsView, flowPage} 直接取；
               file 路由先看 \`thread.sessionId\`，再 fallback 从 \`flows/<sid>/\` path 前缀
               反推（保留 file 浏览的 session 上下文，避免侧栏从 file tree 翻回 SessionList）。
-            - \`activeObjectId\`：session 路由取 \`route.objectId ?? "user"\`（缺省 user.root）；
+            - \`activeObjectId\`：flowsView 路由取 \`route.objectId\`；
               file 路由取 \`route.thread?.objectId\`（仅在 chat 上下文携带过来时存在）。
-            - \`activeThreadId\`：session 路由取 \`route.threadId ?? "root"\`；file 路由取
+            - \`activeThreadId\`：flowsView 路由取 \`route.threadId\`；file 路由取
               \`route.thread?.threadId\`。
             - \`activePath\`：file/stoneClient/flowPage 三者按 \`derivePathFromRoute\`
               拼成 world 相对路径，让 \`MainPanel\` 的 \`matchClientTarget\` 命中 client 入口。
@@ -161,7 +162,7 @@ export const root: DocTreeNode = {
             \`activeSessionId\`（不在 cached tree.children 中时主动 \`fetchTree\`）。
             `,
             named: {
-                "RouteState": "判别联合：welcome / scope / file / stoneClient / flowPage / session / issueDetail；session/file 可携带 thread 上下文",
+                "RouteState": "判别联合：welcome / scope / file / stoneClient / flowPage / flowsView；flowsView（带 view + sessionId/objectId/threadId query string）/ file 可携带 thread 上下文",
                 "toPath": "RouteState → URL 反向构造函数；shortcut 优先；thread 上下文走 query string",
                 "useRouteState": "从 react-router 当前 URL（pathname + search）派生 RouteState 的 hook",
                 "parseRoute": "纯函数版本，签名 (pathname, search, params)；老的 parsePathname 是 deprecated 同名 wrapper",
@@ -170,7 +171,7 @@ export const root: DocTreeNode = {
             sources: [
                 [
                     "web/src/app/routing.ts",
-                    "RouteState / toPath / parseRoute / useRouteState / extractThreadContext；session 路由的 objectId/threadId 字段、file 路由的 thread 字段；老 /threads/... 路径在 parser 中归一到 session+thread context 保证向后兼容；shell.tsx:40-72 的 active* 派生 + handleNode 保留 thread 上下文逻辑；测试见 web/src/app/routing.test.ts（17 项 toPath ↔ parseRoute roundtrip + 老路径兼容）",
+                    "RouteState / toPath / parseRoute / useRouteState / extractThreadContext；flowsView 路由的 sessionId/objectId/threadId 字段、file 路由的 thread 字段；老 /threads/... 路径在 parser 中归一到 flowsView(view=thread_context)+thread context 保证向后兼容（routing.ts:191-194）；shell.tsx:56-83 的 active* 派生 + handleNode 保留 thread 上下文逻辑；测试见 web/src/app/routing.test.ts（toPath ↔ parseRoute roundtrip + 老路径兼容）",
                 ],
             ],
         },
@@ -197,7 +198,7 @@ export const root: DocTreeNode = {
               user.root.talk_window，返回 \`{ jobId?, targetObjectId, targetThreadId }\`。
               \`targetWindowId\` 缺省时后端取首个非 creator talk_window；多 talk 主题时 UI
               应显式传。
-            - 直接打开既有 session（\`route.kind = "session"\`）默认进入 \`user.root\`，
+            - 直接打开既有 session（\`route.kind = "flowsView"\`，仅 sessionId）默认进入 \`user.root\`，
               先看到 user 视角的 talk 时间线。
 
             chat composer 位置：
@@ -353,8 +354,8 @@ export const root: DocTreeNode = {
             fallback 到 objectId），右侧两个图标按钮——
 
             1. **查看 context windows**（\`Network\` icon）：调 shell.handleShowContextWindows，
-               其本质是 \`navigate(toPath({ kind: "session", sessionId, objectId, threadId }))\`，
-               把 MainPanel 从 file viewer / issueDetail / 其它视图切回 thread context tree
+               其本质是 \`navigate(toPath({ kind: "flowsView", view: "thread_context", sessionId, objectId, threadId }))\`，
+               把 MainPanel 从 file viewer / 其它视图切回 thread context tree
                视图（即用户从 chat 里 file-link 跳到 file 视图后，一键回 chat 主视图）。
             2. **LayoutModeToggle**：与 breadcrumb-bar 那个共享同一 mode（详见 \`layout_mode\`）。
 

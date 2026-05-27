@@ -55,7 +55,7 @@ App Server 是 OOC 的控制面 HTTP 服务，位于 src/app/server，基于 Ely
 
 由以下几块组成:
 - bootstrap: 启动入口、config 解析、错误模型、签名 hash
-- modules: 按 feature 组织的路由模块（health / runtime / stones / pools / flows / ui / issues）
+- modules: 按 feature 组织的路由模块（health / runtime / stones / pools / flows / ui / world-config）
 - runtime: 进程内 job / worker / pause / resume / thread query 等运行时编排
 - testLayers: service / routes / local e2e / real e2e 四层测试
 
@@ -152,7 +152,7 @@ src/app/server/modules/<feature>/
 └── api.<action>.ts // 每个端点一个文件
 \`\`\`
 
-当前模块清单: health / runtime / stones / pools / flows / ui / issues。
+当前模块清单: health / runtime / stones / pools / flows / ui / world-config。
 只有 ui_methods 走 HTTP 暴露，window.commands 不暴露。
             `.trim(),
             children: {
@@ -332,20 +332,9 @@ ui 只做 fs.access 存在性检查，不解析内容（便宜、解耦）。
                         },
                     },
                 },
-                issues: {
-                    title: "issues",
-                    content: `
-issue / comment 跨线程上下文窗口能力的控制面入口。
-src/app/server/modules/issues/。
-
-路由（均以 \`:sid\` 作为 session id）:
-- POST /api/flows/:sid/issues — 创建 issue
-- GET  /api/flows/:sid/issues — 列出 session 下的 issue
-- GET  /api/flows/:sid/issues/:id — 读取单个 issue
-- POST /api/flows/:sid/issues/:id/comments — 追加 comment
-- POST /api/flows/:sid/issues/:id/close — 关闭 issue
-                    `.trim(),
-                },
+                // issues 模块已于 2026-05-26 随 issue 看板整套移除：
+                // src/app/server/modules/issues/ 已删，/api/flows/:sid/issues* 路由不再注册
+                // （权威移除声明见 meta/object.doc.ts root.warnings；勿重新引入）。
                 // debug-ui 模块已于 2026-05-25 废弃删除：随路由协议演化失维
                 // （体验官 Round 8 R8-1 报告 chat.html 仍调旧路由），
                 // 用 web/ 前端控制面替代（详见 meta/app.client.doc.ts）。
