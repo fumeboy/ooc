@@ -75,17 +75,25 @@ export const root: DocTreeNode = {
     - pool:  象征"积"——持有 Object 跨 session 累积的事实数据（data / knowledge / files 三件套），不进 git。data 用 csv（不用 sql；详见 persistable.pool.children.data_pool）；knowledge 是 **sediment knowledge**（运行时由 reflectable / collaborable 沉淀的 memory / relations）。
     - flow:  象征"动"——一个 Object 可以参与多个 session，每个 session 下有一个 flow，每个 flow 都有自己的 session 级数据字段和程序方法。
 
-    Agent 由几个维度组合:
+    Agent 由 8 个**内在能力维度**组合。判定一个东西是不是维度的标准是: 它是否**构成 Agent 的「自我」(self-constitutive)**（判定轴详见 patches.dimension_criterion）。按此标准 8 维度分两组:
+
+    运行时底座（Agent 据以存在、思考、行动的基础）:
     - thinkable: 可以思考
     - executable: 可以行动
     - collaborable: 可以协作
     - observable: 可观测、记录、debug
-    - reflectable: 可以自我反思、经验沉淀、元编程
-    - programmable: 可以为自己编写函数方法（server 方法库）
-    - visible: 可以为自己编写 UI 页面
     - persistable: 可以持久化存储
 
-    上述 8 个是 Agent 的**内在能力维度**。除此之外，OOC 还有一个**非维度的外接集成层 extendable**：把外部世界（飞书 / notion / slack / github 等）按统一模板接入为可调用的 Window 与 command。它不是 Agent 的固有能力，而是 OOC 触达外部系统的扩展点——实现见 src/extendable/，首个 case 见 meta/case.feishu-integration.doc.ts，详见 children.extendable。
+    自我塑造三件套（Agent 改写"自己"的三个面，OOC 自我进化主张的载体）:
+    - reflectable: 自我反思、经验沉淀、元编程（改自己的知识）
+    - programmable: 为自己编写函数方法（改自己的方法 / server 方法库）
+    - visible: 为自己编写 UI 页面（改自己的界面）
+
+    **extendable** 是**非维度的外接集成层**（不在 8 维度内）: 把外部世界（飞书 / notion / slack / github 等）按统一模板接入为可调用的 Window 与 command。它够的是**外部世界**，而外部系统不构成 Agent 自我，故不是维度（实现见 src/extendable/，首个 case 见 meta/case.feishu-integration.doc.ts，详见 children.extendable）。
+
+    两条贯穿全维度的横切设计:
+    - 对象关系三轴（详见 patches.object_relations）: 自我(super) / peer 平等(talk) / parent-child 层级。Supervisor 即这棵 object 树的 root parent。
+    - agent-native parity 公理（详见 patches.agent_native_parity）: 每个维度都有"人类面 / agent 面"两个消费方，设计时都要回答这两面分别是什么。
     `,
     named: {
         "OOC": "Object Oriented Context, 以面向对象的方式组织上下文，以面向对象的方式构建 MultiAgent 系统",
@@ -104,6 +112,12 @@ export const root: DocTreeNode = {
         "flow": "OOC 持久层之一（动）：session 级临时数据与程序",
         "seed knowledge": "人类在 stone 中预置的初始知识库（stones/<self>/knowledge/）；进 git review，可挂 eval gate",
         "sediment knowledge": "Agent 运行时由 reflectable / collaborable 沉淀的知识（pools/<id>/knowledge/memory + relations）；写就生效，不进 git",
+        "self-constitutive": "维度判定轴: 一个能力是否构成 Agent 的「自我」；是则为维度，否则为外接层/协议（详见 patches.dimension_criterion）",
+        "运行时底座": "thinkable/executable/collaborable/observable/persistable，Agent 存在与运作的基础五维",
+        "自我塑造三件套": "reflectable/programmable/visible，Agent 改写自己知识/方法/界面的三维",
+        "agent-native parity": "横切公理: 用户能做的事 agent 也能做；每维度都有人类面/agent 面两个消费方（详见 patches.agent_native_parity）",
+        "对象关系三轴": "自我(super) / peer 平等(talk) / parent-child 层级，三种不同权力语义的关系（详见 patches.object_relations）",
+        "Supervisor": "world 级最顶层 parent object；harness 的 1 Supervisor + N Agent 即 object 树的一个实例，Supervisor 是 root parent",
     },
     children: {
         "thinkable": {
@@ -469,6 +483,9 @@ export const root: DocTreeNode = {
 
                             跨线程影响必须显式经过 inbox / outbox、do_window transcript 或 talk_window transcript。
                             这样所有协作痕迹都能被观察、回放和 debug。
+
+                            唯一例外: do_window.move 提供 ContextWindow 的跨 thread ref / 移交语义
+                            （详见 collaborable.patches.cross_thread_window_sharing 与 executable.context_window.children.sharing）。
                             `,
                         },
                         "thread_plan_deprecated": {
@@ -492,6 +509,28 @@ export const root: DocTreeNode = {
                             这是 P2 决策（user 拍板, 完全废弃 thread.plan 而非保留为 fallback summary）;
                             原因: 维护两条 plan 数据源会产生不一致风险。
                             `,
+                        },
+                        "subthread_vs_child_agent": {
+                            title: "sub-thread vs child Agent - 委派任务时分的是什么",
+                            content: `
+                            "让别的执行体替我干活"在 OOC 里有两种机制，性质和代价完全不同，doc 别处分散在 thinkable / persistable，这里集中对比:
+
+                            - fork sub-thread（同 object，do command + do_window）: 把自己"分身"成并行子线程。子 thread **共享我这个 object 的 seed / pool**，只有 session / thread-local 状态独立。临时，session 结束即归档，无独立身份。分的是**算力**。
+                            - 建 child Agent（跨 object，物理嵌套在 stones/.../<self>/children/<child>/）: 一个**独立 object**，有自己的 stone(seed) / pool(sediment) / 自己的 super / 自己的 self.md，通过 talk 协作。持久、跨 session，可被别的 Agent 独立发现 / 引用。分的是**身份与经验**。
+
+                            分界线（2026-05-27 用户拍板）: 是否需要**跨 session 的持久身份 + 独立经验积累**。
+                            - 一次性、本 session 内、共享我知识的并行 / 探索 / 分治 → fork sub-thread。
+                            - 需要跨 session 复用、需要自己的 pool 沉淀专精领域经验、需要被独立 talk 到的长期专精角色 → child Agent。
+
+                            固化触发器: 当**同一类 sub-thread 任务在多个 session 反复出现、且每次都要重新喂同样的领域知识**，就该把它固化成 child Agent——把反复用的领域知识沉淀进 child 的 seed knowledge（接 thinkable.knowledge 的 B-tree 继承）。child Agent 存在的理由，正是它持有 sub-thread 不该常驻的专精 seed。
+
+                            一句话: sub-thread 分"算力"，child Agent 分"身份与经验"。parent-child 的修改权 / 治理见 root.patches.object_relations。
+                            `,
+                            named: {
+                                "sub-thread": "同 object 内 do command 派生的临时子线程，共享 seed/pool，无独立身份",
+                                "child Agent": "跨 object 的持久下属，物理嵌套在 parent/children/<child>/，有独立 seed/pool/super",
+                                "固化触发器": "同类 sub-thread 任务多 session 反复 + 重喂领域知识 → 升级为 child Agent",
+                            },
                         },
                     },
                 },
@@ -874,6 +913,11 @@ export const root: DocTreeNode = {
 
                     完整 design (含分阶段实施 + command 默认 policy 表 + 风险清单) 见
                     docs/2026-05-25-permission-model-design.md。
+
+                    与 agent-native parity 的关系: Ask 档的 approve/reject 当前是纯**人类面**（控制面 HITL）。
+                    按 root.patches.agent_native_parity，它的 **agent 面**（如 Supervisor / parent 作为 agent
+                    审批 children 的高赌注 command，呼应 root.patches.object_relations 的 seed review 链）是
+                    演化方向，当前尚未实现——属 parity 公理下的显式缺口。
                     `,
                     named: {
                         "PermissionLevel": "\"allow\" | \"ask\" | \"deny\"",
@@ -1333,6 +1377,10 @@ export const root: DocTreeNode = {
 
             因此 collaborable 是 thinkable 和 executable 之上的协作语义层:
             thread 用消息说话，用 ContextWindow 持续维护一段对话或一个共享议题。
+
+            在对象关系三轴（详见 root.patches.object_relations）中，collaborable 主要承载 **peer 平等轴**
+            （同级 Agent 平等协作，只能 talk 说服、不能支配对方）；自我轴见 reflectable，parent-child
+            层级轴见 patches.parent_child_hierarchy。
             `,
             named: {
                 "Collaborable": "Object 的协作能力维度，定义 thread/object 间如何用消息与窗口协作",
@@ -1651,6 +1699,33 @@ export const root: DocTreeNode = {
                     详见 reflectable.super_session / reflectable.super_alias_target。
                     `,
                 },
+                "parent_child_hierarchy": {
+                    title: "parent-child 层级 - peer 之外的第三种关系轴",
+                    content: `
+                    collaborable 的 talk / do / relation_window 主要承载 **peer 平等轴**（同级 Agent 平等协作，
+                    只能说服不能支配）。但 Object 之间还有第三种关系轴: **parent-child 层级**（child Agent
+                    物理嵌套在 parent 的 children/ 下）。完整语义见 root.patches.object_relations，这里只记
+                    collaborable 侧的分工:
+
+                    - 可见性（已落地）: relation_window 每轮默认派生 self 的"同级 Agent"+"一级 children Agent"，
+                      让 Agent 一上场就看见身边有谁（见 relation_window；判定见
+                      src/persistable/stone-object.ts:discoverStoneHierarchicalPeers，不递归到孙）。
+                    - 修改权（design-ahead-of-code）: parent 拥有 child 的 seed，通过 stone-versioning 的 review
+                      链行使，**不在 collaborable 的运行时通道里**。这里要分清两件事:
+                      - 设计期治理（改 child 的 seed）→ 走 persistable.stone-versioning 的 review，不走 talk。
+                      - 运行时管控（叫停跑偏的 child）→ 走 talk（发消息让 child 自己停），**不暴力写** child 运行时状态。
+
+                    所以 collaborable 只负责"运行时的 peer 协作 + 运行时管控的 talk 通道"；parent 对 child 的
+                    设计期权力落在 persistable，不在这里。
+                    `,
+                    named: {
+                        "peer 平等轴": "同级 Agent 平等协作，只能 talk 说服、不能直接改对方",
+                        "parent-child 层级轴": "child 嵌套在 parent/children/<child>/；可见性已落地，修改权是设计",
+                    },
+                    todo: [
+                        "parent 对 child seed 的 stone-versioning 跨 object review 授权链尚未实现（design-ahead-of-code），落地见 persistable.stone-versioning。",
+                    ],
+                },
             },
         },
         "observable": {
@@ -1659,8 +1734,17 @@ export const root: DocTreeNode = {
             Observable 描述 Object 的可观测能力。
 
             Object 在每一轮思考中产生的 LLM 输入输出、tool 调用、context 状态都应该可记录、可查看、
-            可暂停、可回放。observable 不改变 Object 的行为，只在 thinkloop 周围加观测点，
-            让人类（或上层控制面）能"看进去"。
+            可暂停、可回放。observable 不改变 Object 的行为，只在 thinkloop 周围加观测点。
+
+            observable 有**两个消费方**（agent-native parity，见 root.patches.agent_native_parity）:
+            - 人类面（已落地）: 控制面 / UI 通过 debug 文件、loop timeline、ContextSnapshot、PauseChecker
+              "看进去"、暂停、介入。
+            - agent 面（当前是 parity 缺口，演化方向）: Agent **自己**读自己的历史并据此调整。关键约束:
+              自观测**不在业务 thread 内做**（会撞 thinkable.context_budget + "reasoning 不反复喂回"），
+              而是在 **super flow** 里做——Agent 以 super 之眼读"另一个自己（业务 thread）"的落盘产物
+              （debug 文件 / windowsSnapshot / ContextSnapshot），独立 context、不挤占业务 thread 预算。
+              因此 observable 的 agent 面**从属于 reflectable 的 super 通道**（见 reflectable）。这不是"豁免
+              对称"，而是"换执行场所": 人类在控制面看、agent 在 super flow 看同一份落盘产物。
 
             核心组成:
             1. LlmObservation: 内存中保留的最近一次 LLM 输入/输出快照，供测试与控制面查询。
@@ -1678,6 +1762,8 @@ export const root: DocTreeNode = {
                 "PauseChecker": "runtime 可注入的暂停判定器 (thread) => boolean",
                 "ContextSnapshot": "与 system message XML 同源的结构化 thread 状态快照",
                 "debug 文件": "<threadDir>/debug/llm.input.json、llm.output.json、loop_NNNN.{input,output,meta}.json",
+                "双消费方": "observable 同时服务人类面（控制面 debug/timeline）与 agent 面（super flow 自观测）",
+                "agent 自观测": "Agent 在 super flow 里读另一个自己（业务 thread）的落盘产物；从属 reflectable.super 通道",
             },
             children: {
                 "llm_observation": {
@@ -1922,6 +2008,18 @@ export const root: DocTreeNode = {
 
             Reflectable 不是新机制，是几个既有维度（collaborable.talk-delivery / persistable.stone /
             persistable.pool / thinkable.knowledge）在 sessionId="super" 这个特殊上下文下被协同利用的结果。
+            （它仍是一个**维度**而非"非维度协议"——按 root.patches.dimension_criterion 的 self-constitutive
+            标准，它描述的是"Agent 自我演化"这个可演化面，哪怕实现是组合的。）
+
+            super 是 Agent 一切"自我相关"能力的**统一执行场所**: 自观测（读自己历史）、自反思（沉淀经验）、
+            自修改（改 self / sediment）都收敛到 super flow。其中自观测的落盘产物由 observable 产生
+            （见 observable 的 agent 面），super 只是"读它们、据此调整自己"的场所。
+
+            scope —— super 是 **self-scoped** 的: object A 的 super flow 只能观察 / 修改 A 自己
+            （talk_window.target="super" 是自指别名，见 super_alias_target）。**层级例外**: parent-child 下
+            parent 拥有 child 的 seed、可改 child 的 self.md / server / knowledge，但这条权力**不在 super 的
+            运行时写面里**，而是走 persistable.stone-versioning 的 review 链（详见 root.patches.object_relations）。
+            super 本身从不跨 object。
             `,
             named: {
                 "Reflectable": "Object 的反思 / 元编程能力维度",
@@ -1930,6 +2028,8 @@ export const root: DocTreeNode = {
                 "REFLECTABLE_KNOWLEDGE": "进入 super flow 时自动注入的协议知识；告诉 LLM 反思场景该做什么",
                 "memory": "pools/objects/<self>/knowledge/memory/<slug>.md，Object 运行时沉淀的长期记忆（sediment）；与 stone 中的 seed knowledge 配对",
                 "metaprogramming": "通过 write_file 把新认知 / 新方法落到自己的 stone（身份/源码）或 pool（sediment 知识 / 事实），下一轮自动生效；seed knowledge 改动走 PR-Issue",
+                "self-scoped": "super 只能观察 / 修改 Object 自己；parent 改 child 的 seed 走 stone-versioning，不走 super 跨 object",
+                "自我相关能力统一场所": "super flow 收敛 Agent 的自观测 / 自反思 / 自修改三类自我相关动作",
             },
             children: {
                 "super_session": {
@@ -2982,6 +3082,36 @@ export const root: DocTreeNode = {
                         ],
                     ],
                     patches: {
+                        "seed_trust_chain_and_hierarchy": {
+                            title: "seed 信任链 + parent-child 修改权如何落在路径划界上",
+                            content: `
+                            本节是 root.patches.object_relations 里"parent 拥有 child seed""seed 信任链锚定 user"
+                            两条的 persistable 实现侧。
+
+                            **parent 改 child seed 天然是 self-scope（已被现有路径划界支持）**:
+                            child Agent 物理嵌套在 objects/<parent>/children/<child>/。parent（authorObjectId=<parent>）
+                            改 child 的 seed 时，commit 路径以 objects/<parent>/ 开头 → 命中 self-scope，自治 ff merge。
+                            反之 child（authorObjectId=<parent>/<child>）改 parent 自己的 objects/<parent>/self.md →
+                            不以自己前缀开头 → cross-scope 越界，走 PR-Issue。于是"parent 拥有整个 children 子树的 seed、
+                            child 不能改 parent"被路径前缀规则**自动表达**，无需新机制。
+                            （注意: 这是对现有 self-scope 前缀语义的解读；跨 object 授权的显式校验仍是 design-ahead-of-code。）
+
+                            **seed 信任链的根闸门 = user（design-ahead-of-code）**:
+                            cross-scope 的 PR-Issue 给上层 parent / Supervisor 评审，一级一级往上。但 root（Supervisor）
+                            自身的 seed 改动谁把关？按 root.patches.object_relations，是 **user**（树外终极 reviewer，
+                            通过真人 git review）——而非 root self-approve，否则 root 成不受约束的特权奇点。
+                            注意区分: R12 的"supervisor 元自治例外"仅指 **rollback 操作的权限**（只有 supervisor 能 rollback）；
+                            它**不等于**"supervisor 改自己的 seed 无需任何把关"。user-review-supervisor-seed 这一层当前
+                            尚未在代码中实现。
+                            `,
+                            named: {
+                                "self-scope 覆盖子树": "parent 的 objects/<parent>/ 前缀天然覆盖 children/<child>/，故 parent 改 child seed 自治",
+                                "根闸门": "root（Supervisor）的 seed 由 user 通过真人 git review 把关；非 self-approve",
+                            },
+                            todo: [
+                                "user-review-supervisor-seed 与 parent 跨 object 改 child seed 的显式授权校验当前未实现（design-ahead-of-code）；现有代码仅靠 self-scope 路径前缀隐式表达层级修改权。",
+                            ],
+                        },
                         "r12_enforcement_at_persistable_layer": {
                             title: "R12 supervisor-only 校验必须在 persistable 层",
                             content: `
@@ -3892,7 +4022,7 @@ export const root: DocTreeNode = {
                 },
             },
             todo: [
-                "agent-native UI 等价路径尚未实现：当前 ui_methods 只通过 HTTP 暴露给客户端，agent 端没有等价的 tool 路径可走（'任何用户能做的事 agent 也能做'尚未在代码层达成）。设计上属于 visible 维度的下一步演化。",
+                "agent-native parity 缺口（见 root.patches.agent_native_parity）：ui_methods 只经 HTTP 暴露给客户端，agent 端无等价 tool 路径。这是 parity 公理下的显式技术债，非可选演化。",
                 "客户端渲染入口（把 .tsx 真正渲染成可交互页面的 host）当前仓库内没有；OOC 仅提供 tsx 文件路径与读写接口，渲染管线由外部消费方实现。需要在文档与 README 里明示这一边界。",
             ],
             warnings: [
@@ -3905,8 +4035,8 @@ export const root: DocTreeNode = {
             extendable 不是 Agent 的内在能力维度（与上面 8 个并列），而是 OOC 触达外部系统的**扩展层**:
             把外部世界（飞书 / notion / slack / github 等）按统一模板接入为 Object 可调用的 ContextWindow 与 command。
 
-            为什么独立于 8 维度: 8 维度描述"一个 Object 自身具备什么能力"；extendable 描述"OOC 如何把外部 SaaS 收编成可被 executable 调用的对象"。
-            它寄生在 executable（新增 WindowType + command）之上，但代码物理隔离在 src/extendable/ 下，避免外部 OAPI 细节污染 executable 核心。
+            为什么不是维度（判据见 root.patches.dimension_criterion）: 维度要构成 Agent 的「自我」；extendable 够的是**外部世界**，外部系统不构成自我，故是外接层。
+            "寄生于 executable"只是物理挂载事实（新增 WindowType + command），不是排除理由——reflectable 也寄生。代码隔离在 src/extendable/ 下，避免外部 OAPI 细节污染 executable 核心。
 
             统一模板:
             1. OAPI 调用收口到 \`src/extendable/lark/cli.ts\` 的 larkExec helper（凭据 / 超时 / as-user 统一处理）。
@@ -3925,6 +4055,90 @@ export const root: DocTreeNode = {
                 [{ title: "executable", content: "extendable 寄生于 executable：新增 WindowType + open command 经 executable root 注册" }, "extendable 是 executable 的扩展点，物理隔离但逻辑挂载"],
             ],
             sources: [["src/extendable/", "外接集成层实现根目录；lark barrel 见 src/extendable/lark/index.ts，OAPI helper 见 src/extendable/lark/cli.ts:larkExec；case 见 meta/case.feishu-integration.doc.ts"]],
+        },
+    },
+    patches: {
+        "dimension_criterion": {
+            title: "维度判定轴 - self-constitutive",
+            content: `
+            判定一个东西是不是 OOC Agent 的"内在能力维度"，标准是: 它是否**构成 Agent 的「自我」(self-constitutive)**。
+
+            这条标准的来历（2026-05-27 grill 定稿，否掉了一版更弱的标准）:
+            - 弃用版: "维度 = 无法由组合其他维度得到的能力"。问题在于这是**静态实现快照**，会误砍掉"想发展的演化方向"——reflectable / visible 今天实现上确实寄生在别的维度上，但它们各自扛着"自我进化""GenUI"两条招牌演化轴。用"今天可不可组合"当尺子是错的。
+            - 定稿版: 维度 = 构成 Agent「自我」的能力。即使实现寄生，只要它描述的是"Agent 自己的某个可演化面"，就是维度。
+
+            按此标准，8 维度分两组:
+            - 运行时底座: thinkable / executable / collaborable / observable / persistable —— Agent 据以存在、思考、行动、协作、被观测、落盘的基础。
+            - 自我塑造三件套: reflectable（改知识/反思）/ programmable（改方法）/ visible（改界面）—— Agent 改写"自己"的三个面，是 OOC 自我进化主张的载体。
+
+            extendable 被排除的**正面理由**: 它够的是**外部世界**（飞书/notion/...），外部系统不构成 Agent 自我，所以是"外接集成层"而非维度。
+            注意: "寄生于 executable"**不是** extendable 被排除的真正理由（reflectable 也寄生于多个维度），真正的判据是"是否构成自我"。
+            `,
+            named: {
+                "self-constitutive": "维度判定轴: 一个能力是否构成 Agent 的「自我」；是则为维度，否则为外接层/协议",
+                "运行时底座": "thinkable/executable/collaborable/observable/persistable，Agent 存在与运作的基础五维",
+                "自我塑造三件套": "reflectable/programmable/visible，Agent 改写自己知识/方法/界面的三维",
+            },
+        },
+        "agent_native_parity": {
+            title: "agent-native parity - 双消费方对称公理",
+            content: `
+            一条贯穿全维度的横切公理: **任何"用户（人类）能做的事，agent 也应能做"**——每个维度都同时有"人类面"与"agent 面"两个消费方，设计时都要回答这两面分别是什么、当前缺哪个。
+
+            它不是某个维度专属，已在多处独立冒头:
+            - observable: 人类在控制面看 debug/timeline；agent 自查自己历史（当前仍是缺口）。
+            - visible: 人类通过 HTTP callMethod 调 ui_methods；agent 端等价 tool 路径（当前仍是缺口，见 visible.warnings）。
+            - collaborable: agent 用 talk_window.say；人类用 app.client ChatPanel——同一件"发消息"两条通道。
+            - executable.permission: agent 发起 command；人类在控制面 approve/reject。
+
+            边界（对称的是"能不能做"，不是"看到的体量"）:
+            - 对称的: 能否做某动作（发消息 / 调方法 / 查状态 / 反思）。
+            - 不必对称的: 看到的体量。典型是 observable——人类 debug 可翻全量历史；agent 不在业务 thread 里全量自观测（会撞 context_budget + reasoning 不反复喂回）。
+            - 正确形态不是"豁免对称"，而是"换执行场所": agent 的自观测放到 **super flow** 里做（独立 context，读落盘产物），人类在控制面看同一份产物。两面都全量，只是场所不同。
+
+            落地要求: 升为公理后，各维度里"agent 面还没做"的 todo 应从"预留"改写为"违反 parity 公理的显式缺口"。
+            `,
+            named: {
+                "agent-native parity": "横切公理: 用户能做的事 agent 也能做；每维度都有人类面/agent 面两个消费方",
+                "双消费方对称": "agent-native parity 的别名，强调每个能力都要服务 agent 与人类两个消费方",
+            },
+        },
+        "object_relations": {
+            title: "对象关系三轴 + Supervisor=root parent + seed 信任链",
+            content: `
+            OOC 里 Object 之间有三种关系轴，各有不同的权力语义:
+
+            1. 自我轴 — super（self-scoped）: Object 通过 sessionId="super" 的反思通道观察 / 修改"自己"。详见 reflectable。
+            2. peer 平等轴 — talk / do / relation_window: 同级 Agent 之间平等协作，只能 talk（说服）不能直接改对方。详见 collaborable。
+            3. parent-child 层级轴: child Agent 物理嵌套在 parent 的 children/ 下（objectId 用 "/" 编码）。此轴有三个侧面:
+               - knowledge 继承（已有）: child 继承祖先 seed knowledge，见 thinkable.knowledge 的 B-tree 协议。
+               - 可见性（已有）: 每轮默认派生 sibling + 一级 child 的 relation_window，见 collaborable.relation_window。
+               - 修改权（本轮新增的设计）: parent 拥有 child 的 **seed**——见下。
+
+            Supervisor = world 级最顶层 parent object: harness 的"1 Supervisor + N Agent"即这棵 object 树的实例——Supervisor 是 root parent，AgentOfX 是一级 children。
+
+            parent 改 child 的修改权 = "parent 拥有 child 的 seed"（零新机制，复用 seed/sediment + stone-versioning）:
+            - child seed（先天: stones/.../<child>/ self.md / readme.md / server / knowledge）: owner 是 parent。child 自己的 super 只能"提议"（发 stone-versioning PR）；parent 的 super 有权主动改 + review / 合并。
+            - child sediment（后天: pools/.../<child>/knowledge/memory|relations）: child 运行时自治，写就生效，parent 不碰。
+            - "谁赢"不存在: seed 改动经 git review 串行化，parent 是裁决者；sediment 与 seed 不在同一写面并发。
+            - scope: 直接修改权只到一级 children（每级 parent review 自己直接 children 的 seed PR）；Supervisor 作为 root 靠 git review 链的传递性获全局兜底，不直接伸手改孙辈。与 relation 可见性"只一级"自洽。
+            - 运行时管控不走暴力写: parent 要叫停跑偏的 child，走 collaborable talk（发消息让 child 自己停），不直接写 child 运行时状态。"设计期治理（seed review）"与"运行时管控（talk）"分离。
+
+            seed 信任链锚定 user: user → Supervisor（root）→ AgentOfX（一级 children）→ 子 Agent → …，每层 git review 把关下一层的 seed，user 把关 root（root 无 parent，由 user 这个树外终极 reviewer 通过真人 git review 把关）。
+            - 选 user 把关而非 root self-approve: 否则 root 成不受约束的特权奇点，破坏"seed 必须经 review"不变量，违反 OOC 第一约束（避免失控的自举）。
+            - user 双重语义: 运行时 passive（不思考、不作 peer，是交互起点 user.root）；设计期 supreme（seed git review 终极闸门）。与"运行时管控走 talk / 设计期治理走 seed review"同构。
+            - 推论: seed 进 git review（终极裁决者 = user，是信任链物理锚点）；sediment 不进 git（运行时自治可脱离 user 闸门快跑）；dogfooding 极限 = Supervisor 可自我迭代，但 seed 演化永留 user 闸门，自举 ≠ 失控。
+            `,
+            named: {
+                "对象关系三轴": "自我(super) / peer 平等(talk) / parent-child 层级，三种不同权力语义的关系",
+                "parent-child 层级轴": "child Agent 嵌套在 parent/children/<child>/；含 knowledge 继承 / 可见性 / 修改权三侧面",
+                "Supervisor=root parent": "harness 的最顶层 Supervisor 即 object 树的 root parent object",
+                "seed 信任链": "user → Supervisor → AgentOfX → … 每层 git review 把关下一层 seed，user 锚定根",
+                "user 双重语义": "运行时 passive object（交互起点）/ 设计期 supreme reviewer（seed 终极闸门）",
+            },
+            todo: [
+                "修改权 / review 链目前是 design-ahead-of-code: 代码里仅有 knowledge 继承（B-tree）与一级可见性（relation_window）支撑；'parent review child seed PR' 的 stone-versioning 跨 object 授权链尚未实现，落地见 persistable.stone-versioning。",
+            ],
         },
     },
     warnings: [
