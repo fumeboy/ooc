@@ -27,6 +27,8 @@ import type { ThreadContext } from "../context.js";
 import { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge.js";
 import { ROOT_BASIC_PATH, ROOT_COMMANDS, ROOT_KNOWLEDGE } from "../../executable/windows/root/index.js";
 import {
+  END_REFLECTION_REMINDER_KNOWLEDGE,
+  END_REFLECTION_REMINDER_PATH,
   REFLECTABLE_BASIC_PATH,
   REFLECTABLE_KNOWLEDGE,
   REFLECTABLE_METAPROG_KNOWLEDGE,
@@ -137,6 +139,27 @@ export async function collectExecutableKnowledgeEntries(
       if (!(path in protocolEntries)) {
         protocolEntries[path] = content;
       }
+    }
+
+    // G2 (Round 11): end-form reflection reminder —— 业务 thread 内开了 end form
+    // 时，自动激活一段 hint knowledge，提醒 LLM 在 submit 前考虑是否需要走 super
+    // flow 反思沉淀。
+    //
+    // 注入条件：
+    // - form.command === "end"
+    // - thread.persistence?.sessionId !== SUPER_SESSION_ID（super flow 内不套娃）
+    //
+    // 注入位置：protocolEntries（与 REFLECTABLE_KNOWLEDGE 同档；不是 form-scoped）
+    // 设计原则：非阻塞 hint，LLM 自由判断；与 command.end.ts 的 KNOWLEDGE 描述独立。
+    try {
+      const isEndForm = enrichedForm.command === "end";
+      const inSuperSession = thread.persistence?.sessionId === SUPER_SESSION_ID;
+      if (isEndForm && !inSuperSession && !(END_REFLECTION_REMINDER_PATH in protocolEntries)) {
+        protocolEntries[END_REFLECTION_REMINDER_PATH] = END_REFLECTION_REMINDER_KNOWLEDGE;
+      }
+    } catch (err) {
+      // silent-swallow ban：注入失败不抛，warn 后继续
+      console.warn(`[synthesizer] end-reflection-reminder inject failed: ${(err as Error).message}`);
     }
   }
 

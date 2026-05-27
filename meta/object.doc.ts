@@ -1832,6 +1832,44 @@ export const root: DocTreeNode = {
                         "REFLECTABLE_KNOWLEDGE": "super flow 中要给 LLM 的协议知识正文",
                     },
                 },
+                "end_reflection_reminder": {
+                    title: "end_reflection_reminder - 业务 thread 调 end 时的反思提醒 (Round 11, 2026-05-27)",
+                    content: `
+                    **触发**: 当 OOC agent 在**非 super flow** 的业务 thread 中创建 \`command="end"\` 的
+                    command_exec form 时, synthesizer 注入一段简短的 reflection reminder knowledge。
+
+                    **目的**: 让 agent 在结束业务 thread 之前自觉考虑 — 本次工作是否产生了值得沉淀的认知 /
+                    经验 / 对 peer 的认识更新 / 反复犯的错。如果有, 建议在 end 之前开 super flow 走一次反思:
+                    \`exec(command="talk", args={ target: "super", initialMessage: "请帮我沉淀 ..." })\`。
+
+                    **门控条件** (synthesizer 内):
+                    - \`thread.persistence?.sessionId !== SUPER_SESSION_ID\` — super flow 内 end 是反思自身的结束,
+                      不该再提示反思 (避免无限套娃)
+                    - form.command === "end" — 只在 end 的 form 被打开 / 持续展示时激活
+                    - 可选: \`thread.events.length > N\` (阈值默认未启用; 简单 thread 也允许提示, LLM 自己决定是否触发)
+
+                    **不强制反思**: knowledge 只是 hint, 不是 deny gate。LLM 看完之后:
+                    - 觉得有沉淀价值 → 取消 end 表单, 改调 talk target=super
+                    - 觉得无值得反思的 → 直接 submit end, 正常结束
+
+                    **与 REFLECTABLE_KNOWLEDGE 的关系**:
+                    - REFLECTABLE_KNOWLEDGE: 在 super flow 内告诉 LLM "你现在在反思场景, 应该写 memory"
+                    - END_REFLECTION_REMINDER: 在业务 thread 调 end 时告诉 LLM "你刚才工作了一段, 考虑反思"
+                    - 两者互补: 一个是反思入口提示, 一个是反思场景内的指引
+
+                    **实现位置**:
+                    - 常量在 src/thinkable/reflectable/reflectable-knowledge.ts (与 REFLECTABLE_KNOWLEDGE 同文件)
+                    - 注入在 src/thinkable/knowledge/synthesizer.ts (检查 form.command === "end" + super 门控)
+
+                    完整 design / harness 循环优化记录见 docs/2026-05-27-end-reflection-reminder-design.md。
+                    `,
+                    named: {
+                        "END_REFLECTION_REMINDER_KNOWLEDGE": "常量名; 与 REFLECTABLE_KNOWLEDGE 同文件 export",
+                        "END_REFLECTION_REMINDER_PATH": "字符串常量 'internal/executable/end/reflection-reminder'",
+                        "门控条件": "thread.persistence?.sessionId !== SUPER_SESSION_ID; super flow 内 end 不重提",
+                        "non-blocking hint": "提醒不是 deny; LLM 自己决定是否反思",
+                    },
+                },
                 "memory_layout": {
                     title: "memory_layout - 长期记忆的落盘位置",
                     content: `

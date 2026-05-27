@@ -242,6 +242,29 @@ P0-1 (Permission 模型) Q0a~Q0d 完成；Q0e 列 todo（自改 server/index.ts 
 - **2026-05-25**：首版。Supervisor Round 1 外循环。
 - **2026-05-25**（当日 Round 1 闭环）：P0-2 完整实施完成，5 套 e2e PASS / 全仓单测 PASS / meta tsc clean。差异与残留如上。
 - **2026-05-25**（当日 Round 2 闭环）：P0-1 Q0a~Q0d 完成，2 套 e2e (Q0b+Q0c) PASS / 联合 P0-1+P0-2 42 用例 PASS / 全仓 550 单测 PASS。3 项歧义 Supervisor 拍板；Q0e 列 todo。
+- **2026-05-27**（Round 11 闭环）：reflectable 闭环 — 业务 thread 调 end 时自动激活 super flow 反思提醒。
+  - **触发**：用户问 "OOC agent 主动调 end command 时，是否会自动激活一个知识提醒它通过 super 进行经验沉淀 / 记忆更新"
+  - **诊断**：当前 `command.end.ts` 只描述 end 自身用法（reason/summary/result）；`REFLECTABLE_KNOWLEDGE` 仅在 `sessionId === "super"` 时注入，**业务 thread 调 end 看不到任何反思提醒**
+  - **G1 (Supervisor)**：meta `reflectable.children.end_reflection_reminder` 新子节点 — 定义注入条件、与 REFLECTABLE_KNOWLEDGE 的关系、non-blocking hint 不变量
+  - **G2 (Backend sub agent)**：
+    - 新常量 `END_REFLECTION_REMINDER_PATH` + `END_REFLECTION_REMINDER_KNOWLEDGE` 在 `src/thinkable/reflectable/reflectable-knowledge.ts`
+    - synthesizer `collectExecutableKnowledgeEntries` 注入条件：`form.command === "end" && thread.persistence?.sessionId !== SUPER_SESSION_ID`
+    - 不动 `command.end.ts`（reminder 走 protocol 档注入，与 form-scoped commandKnowledgePaths 解耦）
+    - 5 单测 + 0 fail（业务 end 注入 / super flow 不注入 / 非 end form 不注入 / 无 form 不注入 / 文本自检）
+  - **G3 (Supervisor 效果优化)** — harness 循环关键环节：
+    - 审视发现**真 API 错误**：原文 `exec(command="talk", args={target:"super", initialMessage:"..."})` — `initialMessage` **不是 talk 命令参数**（实际签名 `target + title`，发首条消息要走 `say(msg)`）；LLM 真用会撞 `[talk] 缺少 title` 错误
+    - 修正为正确两步流程：(1) `talk(target="super", title="<反思主题>")` 创建 talk_window → (2) `say(msg="...", wait=true)` 发首条消息
+    - 加 msg 写什么的好/坏例子（✅ 具体可形成 memory / ❌ "随便反思一下"无法落地）
+    - 强化"下一轮自动激活 memory"闭环（dogfood 自演化价值）
+    - 替换"反复犯的错"为"踩过的坑 / 反直觉的点"（中性措辞，LLM 更愿意承认）
+    - 文本扩到 1606 字符（每次 end form 才注入，不在每轮上下文，OK）
+  - **整体校验**：
+    - meta tsc clean
+    - src/: **731 pass / 1 baseline fail / 3 skip / 2092 expect** (+5 G2 新)
+    - backend e2e: 68 pass / 0 fail / 8 skip
+  - **派单效率**: 1 sub agent + Supervisor 直接 G3 文本审视（harness 循环关键价值：发现真 API 错误，避免 LLM 实际用时崩溃）
+  - **关键 lesson**: knowledge 文本如包含具体 API 调用形态，**必须验证签名匹配**，否则就是 silent broken hint
+
 - **2026-05-27**（Round 10 闭环）：Type-Dispatch Window Diff Renderer — 为每种 window type 设计 diff 视图 + file_window CodeMirror Merge unified。
   - **设计触发**：Round 9 Time Machine 落地后用户反馈"changed 展开后所有 type 都用 LLMInputJsonViewer 全文，肉眼找差异太累"
   - **核心机制**：web 端 type-dispatch renderer（registerWindowDiffRenderer / getWindowDiffRenderer），未注册 type → FallbackJsonDiff，renderer 抛错 → ErrorBoundary 兜底 + console.warn

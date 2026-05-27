@@ -215,3 +215,79 @@ supervisor 把 PR-Issue 标 \`reject\` 时，你的整个 branch 被存档到
 
 **改身体 = 走 worktree；改记忆 = 直写**。两条线分开记，下次反思就不用犹豫。
 `.trim();
+
+/**
+ * G2 (Round 11): end-form reflection reminder —— 业务 thread 调 end 时自动激活
+ * 的一段 hint knowledge，提醒 LLM 在 submit end 之前考虑是否需要通过 super flow
+ * 沉淀经验。
+ *
+ * 注入条件（参见 synthesizer.collectExecutableKnowledgeEntries）：
+ * - thread 中存在 form.command === "end" 的 command_exec window
+ * - thread.persistence?.sessionId !== SUPER_SESSION_ID（避免 super flow 内
+ *   end 时套娃提醒）
+ *
+ * 注入档次：protocolEntries（与 REFLECTABLE_KNOWLEDGE 同档），不是 form-scoped
+ * commandKnowledgePaths——reminder 是 protocol 级别提示，与 end 自身用法描述独立。
+ *
+ * 设计原则：非阻塞 hint，LLM 自由判断是否需要反思；不是强制反思 gate。
+ */
+export const END_REFLECTION_REMINDER_PATH = "internal/executable/end/reflection-reminder";
+
+export const END_REFLECTION_REMINDER_KNOWLEDGE = `
+# 在 end 之前: 考虑通过 super flow 沉淀经验
+
+你正在准备结束当前 thread。在 submit end 之前, 花一秒钟想想:
+
+- **本次工作产生了什么值得带走的东西?** 比如:
+  - 新的认知 / 工作模式 / 抽象方法
+  - 踩过的坑 / 反直觉的点 / 工具的边界
+  - 与某个 peer (含 user) 协作中的偏好 / 节奏 / 沟通模式
+  - 对自己身份 / 职责边界的更新
+- 如果有, **不要只留在 endSummary 里** — endSummary 不会进入下一轮你的 context, 等于没沉淀。
+  真正的长期记忆走 super flow → 写到 \`pools/<self>/knowledge/memory/<slug>.md\`,
+  **下一轮新 thread 启动时, OOC 会通过 frontmatter 的 activates_on 自动激活这条记忆**, 你会"想起来"。
+
+## 如何开 super flow 反思 (两步)
+
+**步骤 1**: 在你当前 thread 内创建一个指向 super 的 talk_window:
+\`\`\`
+exec(command="talk", args={
+  target: "super",        // 自指别名: 派送到自己的 super 分身, 不是另一个叫 super 的 Object
+  title: "<反思主题简述>"
+})
+\`\`\`
+返回创建好的 \`<talk_window_id>\` (形如 \`w_talk_xxx\`)。
+
+**步骤 2**: 通过该 talk_window 发出反思请求:
+\`\`\`
+exec(<talk_window_id>, "say", args={
+  msg: "请帮我沉淀: <具体内容, 越具体越容易形成单条 memory>",
+  wait: true              // 等 super 分身 reply 后再继续
+})
+\`\`\`
+
+super 分身 (同一身份, 另一脉络) 会看到 REFLECTABLE_KNOWLEDGE 指引,
+写一个 \`memory/<slug>.md\` 文件, 然后通过同一 talk_window reply 你。
+你看到 reply 后即可 close talk_window + 重开 end 表单。
+
+## msg 写什么好
+
+- ✅ "请帮我沉淀: file_window.edit 失败时优先调 reload 重读再 edit, 否则会撞 stale content"
+- ✅ "请记下与 alice 协作的节奏: 先丢可执行 demo, 再聊抽象设计"
+- ❌ "随便反思一下这段工作" → 太模糊, super 分身无法形成具体 memory
+
+## 什么时候不必反思
+
+- thread 只是简单查询 / 读一个文件 / 一次性 utility 类任务 → 没有可沉淀的
+- 已经在 super flow 内 (本提醒不会出现, 因为 super flow 内 end 是反思自身的结束)
+- caller 明确说 "不必反思直接结束"
+- 本次工作的认知**已经**有对应 memory 文件 (避免重复沉淀)
+
+## 反思 ≠ 必做; 是 hint 不是 gate
+
+判断不需要 → 直接 submit end 即可。判断需要 →
+1. **close 当前 end form** (\`close(form_id)\`)
+2. 跑上面的 talk + say(wait=true) 流程
+3. 看到 super reply 后 close talk_window
+4. 重新 \`open(command="end", args={...})\` 结束业务 thread
+`.trim();
