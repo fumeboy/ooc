@@ -128,17 +128,12 @@ export const root: DocTreeNode = {
             核心组成:
             1. LLM 交互模块: 思考的核心是与 LLM 交互，常规需要适配 OpenAI 和 Claude provider，并以 Responses-first 的 item 模型表达消息、tool call 与 tool result。
             2. ContextBuilder 模块: 设计如何构建 LLM 输入（context），通过统一的抽象信息单元 ContextWindow 来构建 context，ContextWindow 具有名为 command 的方法供 LLM 调用。
-            3. 函数调用模块: 支持 LLM 调用函数程序，通过基础 tool (open/refine/submit/close) 来调用 ContextWindow command。额外具有 tool wait 用于等待 IO 结果。
+            3. 函数调用模块: LLM 通过 4 个基础 tool 操作世界——exec（唯一的"调用 command"原语）/ close（关 window）/ wait（等 IO）/ compress（压上下文）。exec(window_id?, command, args?) 调某 window 上的 command，window_id 缺省为 root（全局 command）。
             4. 类 SubAgent 模式支持: 思考的过程通过 thread 承载，thread 可以派生子 thread，形成一个 Thread Tree，每个 thread 可以并行思考。
 
-            ContextWindow 是信息展示单元，也是可操作的对象，ContextWindow 提供名为 command 的窗口方法供 LLM 交互。
+            ContextWindow 是信息展示单元，也是可操作对象，挂载名为 command 的窗口方法供 LLM 交互。
 
-            基础工具 open 用于开启一个 ContextWindow，close 用于关闭一个 ContextWindow。
-            基础场景是可以通过 open 工具打开一个文件，文件内容就会以 file 类型的 ContextWindow 出现在 LLM 的输入中。
-
-            使用渐进式披露思想的多步函数调用:
-                执行 command 时，会先通过 open tool 开启一个 form 类型的 ContextWindow，open 后系统会自动激活这个 command 的初始知识，告诉 LLM 如何执行这个 command。
-                Form 可以通过 refine 工具多次填充表单参数，系统可以根据 CommandForm 填充的参数动态计算出填表所需的相应知识，最后通过 submit tool 触发 command 执行。
+            渐进式披露的多步 command 调用: LLM 调 exec(window_id, command, args)；若 args 不齐或会引入新 knowledge path，系统创建一个 command_exec form 并激活该 command 的初始知识，告诉 LLM 怎么填；LLM 通过 exec(form_id, "refine", args) 多次累积参数（每次可触发更细的知识激活），最后 exec(form_id, "submit") 执行。例如打开文件 = exec(command="open_file", args={path})，文件以 file 类型 ContextWindow 进入 LLM 输入。close 关闭一个 ContextWindow。
 
             Thinkable 围绕上述模块拆分为以下子维度:
             - identity: Object 如何认识自己，以及如何被其他 Object 认识。
@@ -158,8 +153,8 @@ export const root: DocTreeNode = {
                 "Thread": "Object 思考过程的运行时节点，多个 thread 组成 Thread Tree",
                 "Thread Tree": "thread 派生子 thread 形成的树形结构，多个 thread 可并行思考",
                 "ThinkLoop": "单个 thread 内的一轮思考循环",
-                "Command": "ContextWindow 上挂载的窗口方法，通过 open/refine/submit/close 由 LLM 间接调用",
-                "open/refine/submit/close/wait": "基础 tool 集合，open/close 管理 ContextWindow，refine/submit 驱动 command 表单，wait 等待 IO",
+                "Command": "ContextWindow 上挂载的窗口方法，由 LLM 通过 exec tool 调用（args 不齐时经 command_exec form 的 refine/submit 推进）",
+                "exec/close/wait/compress": "LLM 的 4 个基础 tool：exec 调某 window 上的 command（含 form 的 refine/submit）/ close 关 window / wait 等 IO / compress 压上下文",
                 "form ContextWindow": "执行 command 时由 open 创建的表单型 ContextWindow，承载渐进式参数填充与知识激活",
                 "ProcessEvent": "thread 运行中产生的过程事件，包括 LLM 输出、tool 调用和上下文变化",
             },
@@ -378,7 +373,7 @@ export const root: DocTreeNode = {
                             - \`sentry/sentry_event\` → \`stones/<branch>/objects/sentry/children/sentry_event/\`
                             - \`a/b/c\` → \`stones/<branch>/objects/a/children/b/children/c/\`
 
-                            实现：\`src/persistable/common.ts:stoneDir\` 把 objectId split("/")，segments 间插入 \`children/\` marker。
+                            实现：\`src/persistable/common.ts:nestedObjectPath\` 把 objectId split("/")，segments 间插入 \`children/\` marker；\`stoneDir\` 调用它得到物理布局。
 
                             ## 2. frontmatter 继承门控
 
@@ -544,7 +539,7 @@ export const root: DocTreeNode = {
                     3. 调用 LLM: 带上可用 tool schema，让模型产生 assistant text 或 tool call。
                     4. 记录输出: 把 assistant text、reasoning、function_call 写入 thread.events（ProcessEvent[]）。
                     5. 检查 pause/debug: 必要时把 input/output 落盘，允许人工观察或介入。
-                    6. 分派 tool call: 把 open/refine/submit/close/wait 等调用交给 executable。
+                    6. 分派 tool call: 把 exec / close / wait / compress 调用交给 executable。
                     7. 更新 thread 状态: 可能继续 running，也可能 waiting、done、failed、paused。
 
                     ThinkLoop 只处理 "当前 thread 的下一轮"。
@@ -677,7 +672,7 @@ export const root: DocTreeNode = {
             在 OOC 中，LLM 不直接调用任意函数，也不直接读写任意状态；它只能通过一组稳定的 tool 原语与 ContextWindow 交互。
 
             Executable 的核心分层:
-            1. Tool 原语层: exec / close / wait，是 LLM 直接看见的稳定接口（compress 仍是规划项）。
+            1. Tool 原语层: exec / close / wait / compress，是 LLM 直接看见的稳定接口（4 个）。
             2. Command 层: do / talk / program / plan / todo / end / open_file / open_knowledge / write_file / glob / grep 等具体行动；form 自身的 refine / submit 也是 command_exec window 上的命令。
             3. ContextWindow 层: 行动产生或操作的上下文对象，比如 file_window、talk_window、program_window、do_window、plan_window、custom window。
             4. Registry / Manager 层: 注册不同 window type 的 command、render、close hook、basicKnowledge。
@@ -707,11 +702,12 @@ export const root: DocTreeNode = {
                     OOC 不鼓励为每个能力都暴露一个新 tool。
                     相反，tool 集合尽量保持稳定，新的能力通过 command 和 window type 扩展。
 
-                    基础 tool（当前实现 3 个）:
+                    基础 tool（当前实现 4 个，src/executable/tools/index.ts OOC_TOOLS）:
                     - exec: 在某 window 上调用一条 command。args 齐全 + 不引入新 path/knowledge 时立即执行；
                       否则创建 command_exec form 让 LLM 后续推进。
                     - close: 关闭一个 ContextWindow（form / do_window / todo_window 等）。
                     - wait: 声明当前 thread 等待某个 talk_window / do_window 的未来 IO。
+                    - compress: 控制 thread 上下文体积（折叠 window / fold events）。见 children.compress。
 
                     Tool 层的设计目标是让 LLM 学会少量稳定动作:
                     - 需要执行命令时 exec。args 不全 → 系统给你 form，再继续 exec(form_id, "refine"/"submit")。
@@ -758,7 +754,7 @@ export const root: DocTreeNode = {
                                 "scope=auto": "让系统按 budget 自动决策",
                                 "expand": "level≥1 window 自动挂载的恢复 command; exec(window_id, \"expand\") 复位 level 0",
                             },
-                            sources: [["src/executable/tools/", "compress 实现待落; 协议见 docs/2026-05-25-context-compression-design.md §4.5; 当前 src/thinkable/llm/types.ts:5 LlmToolName 已留位"]],
+                            sources: [["src/executable/tools/compress.ts", "compress 已实现（OOC 第 4 个 LLM tool, 注册于 src/executable/tools/index.ts OOC_TOOLS）; 当前仅 scope=windows 落地, scope=events/auto 抛 not-implemented; 完整协议见 docs/2026-05-25-context-compression-design.md §4.5"]],
                         },
                     },
                     patches: {
@@ -774,12 +770,12 @@ export const root: DocTreeNode = {
                         "form_lifecycle_via_commands": {
                             title: "form lifecycle 下沉为 command_exec 的命令",
                             content: `
-                            历史：旧版本有 5 个原语 open/refine/submit/close/wait，其中 refine/submit 仅服务 form lifecycle。
+                            旧版本曾有 5 个原语 open/refine/submit/close/wait，其中 refine/submit 仅服务 form lifecycle。
 
-                            升级后：refine/submit 不再是顶层 tool，而是 CommandExecWindow 上注册的两条命令；
-                            通过 \`exec(form_id, "refine", args={...})\` / \`exec(form_id, "submit")\` 调用，与
-                            do_window.continue / talk_window.say / custom 命令同构。tool surface 收敛为 3 个，
-                            但行为表达力不变。
+                            迁移后：open 并入 exec（exec 是唯一"调 command"原语）；refine/submit 不再是顶层 tool，
+                            而是 CommandExecWindow 上注册的两条命令；通过 \`exec(form_id, "refine", args={...})\` /
+                            \`exec(form_id, "submit")\` 调用，与 do_window.continue / talk_window.say / custom 命令同构。
+                            LLM tool surface = exec / close / wait / compress（4 个），但行为表达力不变。
                             `,
                         },
                     },
@@ -811,6 +807,11 @@ export const root: DocTreeNode = {
                     - write_file: 创建或覆盖文件，并通常打开对应 file_window。
                     - glob: 按文件名模式搜索，创建 search_window。
                     - grep: 按文件内容正则搜索，创建 search_window。
+                    - metaprog: 开元编程 worktree 沙箱，自改 stones/<branch>/objects/<self>/ 方法库 / 界面 / 身份。
+                    - open_feishu_chat: 把飞书群会话作为 feishu_chat_window 引入 Context。
+                    - open_feishu_doc: 把飞书文档作为 feishu_doc_window 引入 Context。
+
+                    （共 14 个全局 command，与 src/executable/windows/root/index.ts ROOT_COMMANDS 一致。）
 
                     其它 window 上也注册命令（do_window: continue/wait/close；talk_window: say/wait/close；
                     file_window: edit/reload/set_range/close；command_exec: refine/submit；custom: Object 自定义 ...）。
@@ -833,6 +834,9 @@ export const root: DocTreeNode = {
                         "write_file": "写入文件的 command",
                         "glob": "按路径模式查找文件的 command",
                         "grep": "按内容正则查找文件的 command",
+                        "metaprog": "开元编程 worktree 沙箱自改自身 stone 的 command",
+                        "open_feishu_chat": "把飞书群会话载入 Context 的 command",
+                        "open_feishu_doc": "把飞书文档载入 Context 的 command",
                         "refine / submit": "command_exec window 上注册的两条命令；用 exec(form_id, ...) 触发",
                         "do_window.move": "do_window 上注册的命令；通过本 do_window 把 ContextWindow 以 ref / move 模式分享给对端 thread；归还路径按 id 自动识别 lent_out ↔ owner 配对",
                     },
@@ -1204,7 +1208,7 @@ export const root: DocTreeNode = {
                                 "expand_step": "把某 step 展开为 child plan_window 的 command；写回 subPlanWindowId",
                                 "share_to_sub_thread": "通过 do.share_windows 把 plan_window 以 ref/move 模式传给子 thread；归还后父见到进度",
                             },
-                            sources: [["src/executable/windows/plan/", "plan_window 实现（待 B2 落地）；renderXml / commands / compressView 与 file/talk/do 同协议"]],
+                            sources: [["src/executable/windows/plan/", "plan_window 实现；renderXml / commands / compressView 与 file/talk/do 同协议"]],
                         },
                     },
                     patches: {
@@ -1223,7 +1227,7 @@ export const root: DocTreeNode = {
                     content: `
                     OOC 内置多种 ContextWindow type。
 
-                    这些 type 不是 UI 组件分类，而是 LLM 的上下文对象分类（与 src/executable/windows/_shared/types.ts WindowType 联合一致）:
+                    这些 type 不是 UI 组件分类，而是 LLM 的上下文对象分类（共 14 种，与 src/executable/windows/_shared/types.ts WindowType 联合一致）:
                     - root: 每个 thread 隐含存在的根 window，注册顶层 command。
                     - command_exec: 一次 command 调用的临时 form window。
                     - do: 子 thread 的父侧窗口，展示子任务状态与 transcript。
@@ -1233,6 +1237,11 @@ export const root: DocTreeNode = {
                     - file: 文件内容窗口，支持 range / reload / edit 等操作。
                     - knowledge: 知识文档窗口，承载显式打开或协议合成的 knowledge。
                     - search: glob / grep 搜索结果窗口，支持 open_match。
+                    - relation: 跨 Object 关系窗口；含 peer stone readme 只读 + self-relation 双层（见 children.relation_window）。
+                    - skill_index: stone skills 索引窗口；每轮由 synthesizer 派生。
+                    - custom: Object 自定义窗口（server/index.ts \`export const window\` 注册的 self window）。
+                    - feishu_chat: 飞书群会话窗口。
+                    - feishu_doc: 飞书文档窗口。
                     - plan: 行动计划窗口；支持 sub plan 嵌套 + 通过 do.share_windows 共享给子 thread (见 B 段设计)。
 
                     每个 window type 都应该回答四个问题:
@@ -1567,7 +1576,7 @@ export const root: DocTreeNode = {
                         "deriveRelationWindow": "按 talk_window peer 派生 RelationWindow 的函数",
                         "long_term relation": "pools/objects/<self>/knowledge/relations/<peer>.md，跨 session 长期；落 pool 不落 stone",
                         "session relation": "flows/<sid>/objects/<self>/knowledge/relations/<peer>.md，仅本 session",
-                        "self-relation only": "relation 文档只在 pools+flows, 不含 peer stone readme",
+                        "peer readme + self-relation 双层": "RelationWindow 含 peer stone readme 只读（peerReadmePath/Body/Exists, synthesizer 注入 peer 的 stones/<branch>/objects/<peer>/readme.md）+ self-relation 双层（self 对 peer 的 long_term/session 认知, 可 edit）；2026-05-27 撤回了'只在 pools+flows'的删除",
                         "*Exists flag": "API caller 用 selfLongTermExists/selfSessionExists 区分 lazy-create vs read-fail",
                     },
                     children: {
@@ -1606,7 +1615,7 @@ export const root: DocTreeNode = {
                             sources: [["src/executable/windows/relation/index.ts", "RelationWindow + edit command 注册与 executeRelationEdit；派送复用 src/executable/windows/talk/delivery.ts:deliverTalkMessage；scope=session 写盘 src/persistable/flow-relation.ts:writeFlowRelation"]],
                         },
                     },
-                    sources: [["src/executable/windows/relation/index.ts", "RelationWindow 与 edit command；派生函数 deriveRelationWindow / deriveRelationCompanionKnowledge 见 src/thinkable/knowledge/synthesizer.ts；flow 层文件 IO 见 src/persistable/flow-relation.ts"]],
+                    sources: [["src/executable/windows/relation/index.ts", "RelationWindow 与 edit command；派生函数 deriveRelationWindow（含 peer readme 注入）见 src/thinkable/knowledge/synthesizer.ts（deriveRelationCompanionKnowledge 已 @deprecated 返回空——KnowledgeWindow 合并进 RelationWindow 字段）；flow 层文件 IO 见 src/persistable/flow-relation.ts"]],
                 },
             },
             patches: {
@@ -1862,7 +1871,7 @@ export const root: DocTreeNode = {
                     `,
                     named: {
                         "captureContextSnapshot": "从 ThreadContext 抽取快照的函数",
-                        "ContextSnapshot": "结构化快照类型；字段子集见 src/persistable/debug-file.ts:14-24",
+                        "ContextSnapshot": "结构化快照类型；字段子集见 src/persistable/debug-file.ts ContextSnapshot",
                         "LlmInputDebugRecord": "落盘 input 的记录类型，包含 inputItems + contextSnapshot",
                     },
                 },
@@ -2037,12 +2046,15 @@ export const root: DocTreeNode = {
                 "reflectable_knowledge": {
                     title: "reflectable_knowledge - super flow 中的协议知识注入",
                     content: `
-                    src/thinkable/knowledge/synthesizer.ts:162 处会检查 thread.persistence?.sessionId:
+                    src/thinkable/knowledge/synthesizer.ts（SUPER_SESSION_ID 门控块）会检查 thread.persistence?.sessionId:
                     \`\`\`
                     if (thread.persistence?.sessionId === SUPER_SESSION_ID) {
                       protocolEntries[REFLECTABLE_BASIC_PATH] = REFLECTABLE_KNOWLEDGE;
+                      protocolEntries[REFLECTABLE_METAPROG_PATH] = REFLECTABLE_METAPROG_KNOWLEDGE;
                     }
                     \`\`\`
+                    同一 if 块注入两条：REFLECTABLE_BASIC_PATH（反思基础协议）+ REFLECTABLE_METAPROG_PATH
+                    （元编程协议指引，教 LLM 何时走 worktree 沙箱）。
 
                     REFLECTABLE_KNOWLEDGE（src/thinkable/reflectable/reflectable-knowledge.ts）告诉 LLM:
                     - 你还是同一个 Object，super flow 只是另一条会话脉络。
@@ -2057,7 +2069,8 @@ export const root: DocTreeNode = {
                     `,
                     named: {
                         "REFLECTABLE_BASIC_PATH": "字符串常量 'internal/executable/reflectable/basic'",
-                        "REFLECTABLE_KNOWLEDGE": "super flow 中要给 LLM 的协议知识正文",
+                        "REFLECTABLE_KNOWLEDGE": "super flow 中要给 LLM 的反思基础协议知识正文",
+                        "REFLECTABLE_METAPROG_PATH": "元编程协议路径；同 if 块与 BASIC 一起在 super flow 注入 REFLECTABLE_METAPROG_KNOWLEDGE",
                     },
                 },
                 "end_reflection_reminder": {
@@ -2887,7 +2900,7 @@ export const root: DocTreeNode = {
                     类型:
                     - LlmInputDebugRecord: { threadId, inputItems, contextSnapshot? }。
                     - LlmOutputDebugRecord: { threadId, outputItems, provider?, model? }。
-                    - LlmLoopDebugMetaRecord: 见 src/persistable/debug-file.ts:100-129，包含 latency / messageCount / status / error 等观测指标。
+                    - LlmLoopDebugMetaRecord: 见 src/persistable/debug-file.ts LlmLoopDebugMetaRecord，包含 latency / messageCount / status / error 等观测指标。
                     `,
                     named: {
                         "debugDir": "thread 的 debug 子目录路径",
@@ -2990,7 +3003,12 @@ export const root: DocTreeNode = {
 
                     路径划界（R5/R6）：commit 累积 diff（vs main merge-base）的所有路径都以 \`objects/{authorObjectId}/\`
                     开头 → self-scope，自治 fast-forward merge；任一路径越界 → cross-scope，整 commit 走 PR-Issue
-                    给 supervisor 评审。Supervisor（R12）是元自治例外，不参与本协议。
+                    给 supervisor 评审（classifyWorktreeBranch prefix = \`objects/<authorObjectId>/\`）。
+                    关于 supervisor 的两个"R12"指不同约束，须区分：
+                    (1) **路径绕过限制已撤销**（2026-05-25）——supervisor 走与其它 Object 同款的前缀判定，
+                        \`objects/supervisor/\` 下为 self-scope ff merge，跨自治区同样自动开 PR-Issue（可由 supervisor 自审）。
+                    (2) **rollback 的 supervisor-only 强制仍在**——rollback 是治理操作，src/persistable/stone-versioning.ts
+                        强制 supervisorAuthor === SUPERVISOR_OBJECT_ID（FORBIDDEN），不属于 worktree 路径特殊化。
 
                     错误自我编程的恢复（F3）：启动期 recovery-check 自检每个 Object 的 server/index.ts；
                     加载失败的开 [recovery-needed] PR-Issue 给 supervisor，由 supervisor metaprog rollback。
@@ -3054,6 +3072,7 @@ export const root: DocTreeNode = {
                             },
                             todo: [
                                 "user-review-supervisor-seed 与 parent 跨 object 改 child seed 的显式授权校验当前未实现（design-ahead-of-code）；现有代码仅靠 self-scope 路径前缀隐式表达层级修改权。",
+                                "isValidObjectId（src/persistable/stone-versioning.ts，regex /^[A-Za-z0-9_-][A-Za-z0-9_.-]*$/）不允许 \"/\"，故嵌套 child（objectId 含 \"/\"）当前无法用自己完整 objectId 调 openMetaprogWorktree 自行 metaprog——child 改自己 seed 实际只能由 parent 代劳；这是 design-ahead-of-code（grill 设计的'child 发 PR 提议'路径尚不可走）。",
                             ],
                         },
                         "r12_enforcement_at_persistable_layer": {
@@ -3103,7 +3122,8 @@ export const root: DocTreeNode = {
                commands 字典里每条 entry 是头等的 CommandTableEntry，与内置 window 上的命令同构。
             2. type=custom dispatcher: WindowRegistry 注册一份固定 type=custom 的契约，行为按 \`window.objectId\`
                路由到对应 Object 的 ObjectWindowDefinition；commands dispatcher 在 entry.exec 包装层注入 self。
-            3. 单例注入: 仅当 thread.objectId === self（thread 由该 Object 自己持有）时由 initContextWindows
+            3. 单例注入: 仅当 thread.persistence?.objectId 存在（thread 由该 Object 自己持有，见
+               src/executable/windows/_shared/init.ts）时由 initContextWindows
                幂等注入一个 \`custom:<objectId>\` window。
             4. ProgramSelf 注入: program ts/js sandbox 收到 self = { dir, callCommand, getData, setData, getThreadLocal, setThreadLocal }；
                \`callCommand(windowId, command, args?)\` 可调任意 thread 内 window 上的任意已注册命令。
@@ -3111,7 +3131,7 @@ export const root: DocTreeNode = {
             6. 元编程闭环（与 reflectable 配合）: super flow 通过 write_file 写 server/index.ts → 下一次调命令时看到新形态。
 
             Programmable 不是新增 LLM tool 面，而是给 Object 一个**"自我门面 window"+其上一组命令**，
-            让它把高频动作或复杂逻辑封装成命名命令；LLM 通过统一的 open/refine/submit 协议直接调用，
+            让它把高频动作或复杂逻辑封装成命名命令；LLM 通过统一的 exec 协议直接调用，
             或在 ts/js sandbox 里 \`await self.callCommand("custom:<self>", "<name>", {...})\` 触发。
             旧 \`llm_methods\` 字典已硬切删除（plan D6）。
             `,
@@ -3166,7 +3186,7 @@ export const root: DocTreeNode = {
                     src/executable/server/loader.ts 负责按需 import server/index.ts，并按 mtime 缓存:
 
                     \`\`\`
-                    const mod = await import(\`\${file}?t=\${mtime}\`);  // ?t=mtime 破坏 Node import cache
+                    const mod = await import(\`\${file}?t=\${mtime}\`);  // ?t=mtime 破坏 bun import cache
                     \`\`\`
 
                     行为:
@@ -3182,7 +3202,7 @@ export const root: DocTreeNode = {
                     - clearServerLoaderCache(): 测试钩子，清空缓存以避免测试间互相污染。
                     `,
                     named: {
-                        "?t=mtime": "破坏 Node import cache 的 query string trick",
+                        "?t=mtime": "破坏 bun import cache 的 query string trick",
                         "clearServerLoaderCache": "测试用清缓存接口",
                     },
                     patches: {
@@ -3470,9 +3490,9 @@ export const root: DocTreeNode = {
                     客户端 tsx 不直接 import server 方法（它在浏览器里跑，看不见 Node fs）。
                     UI 与 Object 交互的通道是 HTTP callMethod:
 
-                    - flow 级: src/app/server/modules/flows/service.ts:483- callMethod({ sessionId, objectId, method, args })
+                    - flow 级: src/app/server/modules/flows/service.ts callMethod({ sessionId, objectId, method, args })
                       → loadUiServerMethods({ baseDir, objectId }) → 找到 ui_methods[method] → 执行 fn。
-                    - stone 级: src/app/server/modules/stones/service.ts:157 走同样的 loader + 调度路径。
+                    - stone 级: src/app/server/modules/stones/service.ts callMethod 走同样的 loader + 调度路径。
 
                     错误形态（与 AppServerError 协议一致）:
                     - 加载失败 → \`METHOD_LOAD_FAILED\`。
