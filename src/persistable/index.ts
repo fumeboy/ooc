@@ -1,5 +1,5 @@
 export type { FlowObjectRef, ThreadPersistenceRef, StoneObjectRef } from "./common";
-export { objectDir, stoneDir, threadDir, deriveStoneFromThread, STONE_OBJECTS_SUBDIR } from "./common";
+export { objectDir, stoneDir, threadDir, deriveStoneFromThread, nestedObjectPath, STONE_OBJECTS_SUBDIR, STONE_CHILDREN_SUBDIR } from "./common";
 
 export type { PoolObjectRef, PoolObjectMetadata } from "./pool-object";
 export {

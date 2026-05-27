@@ -1,7 +1,9 @@
 import {
   createFlowObject,
   createFlowSession,
+  objectDir,
   readThread,
+  threadDir,
   writeThread,
 } from "@src/persistable";
 import { loadUiServerMethods } from "@src/executable/server/loader";
@@ -246,7 +248,7 @@ async function buildListThreadsItem(args: {
   // createdAt 不在 ThreadContext 里；用 thread 目录的 birthtime 兜底
   let createdAt: number | undefined;
   try {
-    const tDir = join(baseDir, "flows", sessionId, "objects", objectId, "threads", threadId);
+    const tDir = threadDir({ baseDir, sessionId, objectId, threadId });
     const info = await stat(tDir);
     createdAt = info.birthtimeMs;
   } catch {
@@ -309,7 +311,7 @@ export function createFlowsService(deps: {
   /** Issue #6 Bad #1: flow object 存在性前置校验。 */
   async function ensureFlowObjectExists(sessionId: string, objectId: string): Promise<void> {
     await ensureSessionExists(sessionId);
-    const oDir = join(deps.baseDir, "flows", sessionId, "objects", objectId);
+    const oDir = objectDir({ baseDir: deps.baseDir, sessionId, objectId });
     try {
       const stats = await stat(oDir);
       if (!stats.isDirectory()) {
@@ -618,7 +620,7 @@ export function createFlowsService(deps: {
       return {
         sessionId,
         objectId,
-        dir: `${deps.baseDir}/flows/${sessionId}/objects/${objectId}`,
+        dir: objectDir({ baseDir: deps.baseDir, sessionId, objectId }),
         created: true,
         initialThreadId: "root",
         jobId,
@@ -629,7 +631,7 @@ export function createFlowsService(deps: {
       return {
         sessionId,
         objectId,
-        dir: `${deps.baseDir}/flows/${sessionId}/objects/${objectId}`,
+        dir: objectDir({ baseDir: deps.baseDir, sessionId, objectId }),
         exists: true,
       };
     },

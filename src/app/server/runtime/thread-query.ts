@@ -1,6 +1,7 @@
 import { readdir } from "node:fs/promises";
+import type { Dirent } from "node:fs";
 import { join } from "node:path";
-import { readThread } from "@src/persistable";
+import { readThread, STONE_CHILDREN_SUBDIR } from "@src/persistable";
 
 /**
  * 扫 flows/{sessionId}/objects/ 下所有 object 的 threads/，
@@ -35,6 +36,24 @@ export async function scanRunningThreads(
   return scanThreadsByStatus(baseDir, sessionId, ["running", "waiting"]);
 }
 
+/**
+ * 递归扫 flows/{sessionId}/objects/ 下任意深度的 flow object 目录，按 thread.json
+ * 的 status 过滤。
+ *
+ * 子 object 嵌套布局（与 stone 对齐——`children/` marker，2026-05-27）：
+ *   flows/<sid>/objects/<a>/threads/<t1>                          → objectId="a"
+ *   flows/<sid>/objects/<a>/children/<b>/threads/<t2>             → objectId="a/b"
+ *   flows/<sid>/objects/<a>/children/<b>/children/<c>/threads/<t3>→ objectId="a/b/c"
+ *
+ * 一个目录被识别为 flow object iff 它直接含 `.flow.json`（与 createFlowObject 一致）。
+ * 该目录内 `threads/` 子目录读 thread.json，按 status 过滤；同时进入它的 `children/`
+ * 子目录对每个条目递归——`children/` 是 sub-object 的唯一物理出入口。
+ *
+ * objectId 派生规则：路径相对 `objects/` 的所有 segment **剥掉 `children/` 段**后用
+ * "/" 拼。例：`objects/a/children/b/children/c/.flow.json` → objectId="a/b/c"。
+ *
+ * 所有 ENOENT / EACCES 都吞为空集，保证 worker bootstrap 不被磁盘异常拖垮。
+ */
 async function scanThreadsByStatus(
   baseDir: string,
   sessionId: string,
@@ -42,31 +61,104 @@ async function scanThreadsByStatus(
 ): Promise<Array<{ objectId: string; threadId: string }>> {
   const wanted = new Set(Array.isArray(statuses) ? statuses : [statuses]);
   const objectsRoot = join(baseDir, "flows", sessionId, "objects");
-  let objectDirs;
+  const found: Array<{ objectId: string; threadId: string }> = [];
+
+  // 入口：扫 objects/ 下每个 top-level 条目，每个都是 objectId 的第一 segment（无 children/ 包裹）。
+  let topEntries: Dirent[];
   try {
-    objectDirs = await readdir(objectsRoot, { withFileTypes: true });
+    topEntries = await readdir(objectsRoot, { withFileTypes: true });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "EACCES" || code === "ENOTDIR") return found;
+    throw error;
+  }
+  for (const entry of topEntries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith(".")) continue; // 隐藏目录（如 .session.json 不可能；但稳妥）
+    await walkObjectDir(
+      join(objectsRoot, entry.name),
+      [entry.name],
+      baseDir,
+      sessionId,
+      wanted,
+      found,
+    );
+  }
+  return found;
+}
+
+/**
+ * 递归一层 flow object 目录。
+ *
+ * @param dir 当前 flow object 目录的绝对路径（一级 segment 已并入；从 objects/ 视角看，
+ *            形如 `objects/a` 或 `objects/a/children/b`）。
+ * @param idSegments 当前 objectId 的逻辑 segment 数组（不含 children/）。dir 自身被识别为
+ *            objectId = idSegments.join("/")。
+ *
+ * dir 自身含 `.flow.json` 时视为一个 flow object，扫它的 threads/，并对它的 `children/`
+ * 子目录里的每一项递归（作为下一级 sub-object）。
+ */
+async function walkObjectDir(
+  dir: string,
+  idSegments: string[],
+  baseDir: string,
+  sessionId: string,
+  wanted: Set<string>,
+  found: Array<{ objectId: string; threadId: string }>,
+): Promise<void> {
+  let entries: Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "EACCES" || code === "ENOTDIR") return;
     throw error;
   }
 
-  const found: Array<{ objectId: string; threadId: string }> = [];
-  for (const obj of objectDirs) {
-    if (!obj.isDirectory()) continue;
-    const threadsDir = join(objectsRoot, obj.name, "threads");
-    let threadDirs;
+  // 是否是 flow object：含 `.flow.json`（与 createFlowObject 一致）
+  const isFlowObject = entries.some((e) => e.isFile() && e.name === ".flow.json");
+  const objectId = idSegments.join("/");
+
+  if (isFlowObject && idSegments.length > 0) {
+    const threadsDir = join(dir, "threads");
+    let threadDirs: Dirent[] = [];
     try {
       threadDirs = await readdir(threadsDir, { withFileTypes: true });
     } catch {
-      continue;
+      threadDirs = [];
     }
     for (const td of threadDirs) {
       if (!td.isDirectory()) continue;
-      const thread = await readThread({ baseDir, sessionId, objectId: obj.name }, td.name);
+      const thread = await readThread({ baseDir, sessionId, objectId }, td.name);
       if (thread?.status && wanted.has(thread.status)) {
-        found.push({ objectId: obj.name, threadId: td.name });
+        found.push({ objectId, threadId: td.name });
       }
     }
   }
-  return found;
+
+  // 递归 sub-object：只下到 `children/` 目录里（其它子目录如 knowledge/ data.json 不属于
+  // sub-object 物理空间，必须被忽略，否则 walker 会把 knowledge/ 误识别成 object）。
+  const childrenEntry = entries.find(
+    (e) => e.isDirectory() && e.name === STONE_CHILDREN_SUBDIR,
+  );
+  if (!childrenEntry) return;
+  const childrenDir = join(dir, STONE_CHILDREN_SUBDIR);
+  let childEntries: Dirent[];
+  try {
+    childEntries = await readdir(childrenDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const ce of childEntries) {
+    if (!ce.isDirectory()) continue;
+    if (ce.name.startsWith(".")) continue;
+    await walkObjectDir(
+      join(childrenDir, ce.name),
+      [...idSegments, ce.name],
+      baseDir,
+      sessionId,
+      wanted,
+      found,
+    );
+  }
 }

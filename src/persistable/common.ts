@@ -4,14 +4,17 @@ import { STONES_MAIN_BRANCH } from "./stone-bootstrap";
 /**
  * 标识磁盘上的单个 flow object 目录。
  *
- * 路径形态：`{baseDir}/flows/{sessionId}/objects/{objectId}`
+ * 路径形态（2026-05-27 children/ marker 对齐 stone）：
+ *   objectId="a"       → `{baseDir}/flows/{sessionId}/objects/a`
+ *   objectId="a/b"     → `{baseDir}/flows/{sessionId}/objects/a/children/b`
+ *   objectId="a/b/c"   → `{baseDir}/flows/{sessionId}/objects/a/children/b/children/c`
  */
 export interface FlowObjectRef {
   /** 包含 `flows/` 的根目录。 */
   baseDir: string;
   /** `flows/` 下的 session 目录名。 */
   sessionId: string;
-  /** `flows/{sessionId}/objects/` 下的 object 目录名。 */
+  /** `flows/{sessionId}/objects/` 下的 object 目录名。逻辑 id；嵌套 segment 由 children/ 物理隔开。 */
   objectId: string;
   /**
    * 当前 server 实例绑定的 stones-branch，用于派生 StoneObjectRef 时承接（U2）。
@@ -23,16 +26,53 @@ export interface FlowObjectRef {
 /**
  * 标识 flow object 内的单个线程持久化位置。
  *
- * 路径形态：`{baseDir}/flows/{sessionId}/objects/{objectId}/threads/{threadId}`
+ * 路径形态：`{objectDir(ref)}/threads/{threadId}`
  */
 export interface ThreadPersistenceRef extends FlowObjectRef {
   /** `threads/` 下的线程目录名。 */
   threadId: string;
 }
 
-/** 计算 flow object 目录绝对路径。 */
+/**
+ * stone / flow 目录用来分隔嵌套子 Agent 的 marker 子目录名（B-tree 协议，2026-05-26
+ * 起 stone；2026-05-27 起 flow 对齐）。
+ *
+ * 物理布局示例（stone 与 flow 形态对齐）：
+ *   objectId = "sentry/sentry_event"
+ *   → stones/<branch>/objects/sentry/children/sentry_event
+ *   → flows/<sid>/objects/sentry/children/sentry_event
+ *
+ * 详见 meta/object.doc.ts:thinkable.children.knowledge.patches.domain_axis。
+ */
+export const STONE_CHILDREN_SUBDIR = "children";
+
+/**
+ * 把 "/" 分隔的 objectId 翻译成 children/ 嵌套的物理 path segments。
+ *
+ * 例：
+ *   "a"       → ["a"]
+ *   "a/b"     → ["a", "children", "b"]
+ *   "a/b/c"   → ["a", "children", "b", "children", "c"]
+ *
+ * 与 stoneDir / objectDir 共用，避免双份逻辑（2026-05-27 flow 与 stone 物理布局对齐）。
+ */
+export function nestedObjectPath(objectId: string, childrenSubdir: string = STONE_CHILDREN_SUBDIR): string[] {
+  const segments = objectId.split("/").filter(Boolean);
+  return segments.flatMap((seg, i) => (i === 0 ? [seg] : [childrenSubdir, seg]));
+}
+
+/**
+ * 计算 flow object 目录绝对路径。objectId 中的 "/" 被翻译为 children/ 嵌套
+ * （与 stoneDir 对称；详见 nestedObjectPath）。
+ */
 export function objectDir(ref: FlowObjectRef): string {
-  return join(ref.baseDir, "flows", ref.sessionId, "objects", ref.objectId);
+  return join(
+    ref.baseDir,
+    "flows",
+    ref.sessionId,
+    "objects",
+    ...nestedObjectPath(ref.objectId),
+  );
 }
 
 /** 计算线程目录绝对路径，被 thread-json 与 debug-file 共用。 */
@@ -73,31 +113,18 @@ export interface StoneObjectRef {
 export const STONE_OBJECTS_SUBDIR = "objects";
 
 /**
- * stone 目录用来分隔嵌套子 Agent 的 marker 子目录名（B-tree 协议，2026-05-26）。
- *
- * 物理布局示例：
- *   objectId = "sentry/sentry_event"
- *   → stones/<branch>/objects/sentry/children/sentry_event
- *
- * 详见 meta/object.doc.ts:thinkable.children.knowledge.patches.domain_axis。
- */
-export const STONE_CHILDREN_SUBDIR = "children";
-
-/**
  * 计算 stone 目录绝对路径。stonesBranch 缺省时回退到 main。
  *
  * objectId 支持 "/" 编码嵌套层级：第 N 段（N≥2）会被插入 `STONE_CHILDREN_SUBDIR`
  * 作为父子边界。形态：`stones/<branch>/objects/<a>/children/<b>/children/<c>`。
  */
 export function stoneDir(ref: StoneObjectRef): string {
-  const segments = ref.objectId.split("/").filter(Boolean);
-  const physical = segments.flatMap((seg, i) => (i === 0 ? [seg] : [STONE_CHILDREN_SUBDIR, seg]));
   return join(
     ref.baseDir,
     "stones",
     ref.stonesBranch ?? STONES_MAIN_BRANCH,
     STONE_OBJECTS_SUBDIR,
-    ...physical,
+    ...nestedObjectPath(ref.objectId),
   );
 }
 

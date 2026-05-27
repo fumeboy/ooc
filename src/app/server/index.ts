@@ -5,6 +5,7 @@ import { readServerConfig, type ServerConfig } from "./bootstrap/config";
 import { runRecoveryCheck } from "./bootstrap/recovery-check";
 import { checkStoneToPoolMigration, reportPoolMigration } from "./bootstrap/check-pool-migration";
 import { checkStaleDatabaseDir } from "./bootstrap/check-stale-database-dir";
+import { checkFlowChildrenMigration } from "./bootstrap/check-flow-children-migration";
 import { ensureSupervisorObject } from "./bootstrap/ensure-supervisor";
 import { ensureUserObject } from "./bootstrap/ensure-user";
 import { AppServerError } from "./bootstrap/errors";
@@ -331,6 +332,11 @@ if (import.meta.main) {
   // 2026-05-24 二次简化：检测 stone 仍持有 database/ 残留子目录（2026-05-23 六件套时代遗留；
   // sql_pool 删除后该目录已无语义）。advisory，不阻塞启动。
   await checkStaleDatabaseDir(config.baseDir, config.stonesBranch);
+
+  // 2026-05-27: flow 子 object 物理布局迁移到 children/ marker（与 stone 对称）。
+  // 幂等：已是 children/ 形态的不动。必须在 worker bootstrap 入队前跑（worker.scanRunningThreads
+  // 期望 children/ 布局）。
+  await checkFlowChildrenMigration(config.baseDir);
 
   // hostname: "0.0.0.0" 显式 IPv4 监听（兼 IPv6 dual-stack on macOS）。
   // 之前默认 listen 在 macOS bun 上只绑 IPv6（lsof: `*:3000` 但 IPv6 only），
