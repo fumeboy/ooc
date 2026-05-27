@@ -22,9 +22,10 @@ export type WindowType = "root" | "command_exec" | "do" | "todo" | "talk" | "pro
 /**
  * Window 状态值汇总。
  *
- * - command_exec：open → executing → executed
- *   - 成功后系统自动从 contextWindows 移除（spec § submit 段）
- *   - 失败则保留 executed + result（错误信息），等 LLM 显式 close
+ * - command_exec：open → executing → success | failed（Round 13 升级，旧 "executed" 已彻底删除）
+ *   - 成功 (success) 后系统自动从 contextWindows 移除（spec § submit 段）
+ *   - 失败 (failed) 保留 result（错误信息）；可通过 refine 回 open 重 submit（"复活"路径），
+ *     或 close 彻底放弃；refine-from-failed 是首选修复路径，保留 form 上下文
  * - do：running → archived（被 close 时切到 archived，对应 B=ii archive 语义）
  * - todo：open → done（被 close 时切到 done）
  * - talk：open → closed（close 释放，与对端无关）
@@ -32,7 +33,7 @@ export type WindowType = "root" | "command_exec" | "do" | "todo" | "talk" | "pro
  * - file / knowledge：open → closed（close 释放，可触发 reload）
  * - root：仅 active；与 thread 同生命周期，不能被关闭
  */
-export type WindowStatus = "open" | "executing" | "executed" | "running" | "archived" | "done" | "active" | "closed";
+export type WindowStatus = "open" | "executing" | "success" | "failed" | "running" | "archived" | "done" | "active" | "closed";
 
 /**
  * 所有 ContextWindow 共享的字段。

@@ -43,7 +43,7 @@ export async function executeGrepCommand(
   const thread = ctx.thread;
   if (!thread) return "[grep] 缺少 thread context。";
   const pattern = typeof ctx.args.pattern === "string" ? ctx.args.pattern : "";
-  if (!pattern) return "[grep] 缺少 pattern 参数（form 已 submit 进入 executed, 无法再 refine）。下次请在 open 状态下用 refine(form_id, args={ pattern: \"<regex>\", path: \"<dir-or-file>\", glob: \"*.ts\", case_insensitive: true }) 补齐后再 submit; 当前 form 已 executed, 只能 close + 重 open——这是被迫路径, 不是常规修复策略。";
+  if (!pattern) return "[grep] 缺少 pattern 参数。form 已 submit 失败 (status=failed)。**可以 refine 修正参数后重 submit**（推荐）: refine(form_id, args={ pattern: \"<regex>\", path: \"<dir-or-file>\", glob: \"*.ts\", case_insensitive: true }) 会自动把 form 切回 open, 再 submit; 或 close(form_id) 彻底放弃这次调用。";
   // 默认搜索根 = session 的 baseDir（thread.persistence.baseDir），不到则回退 process.cwd()
   const rawPath = typeof ctx.args.path === "string" ? ctx.args.path : "";
   const path = rawPath ? resolveSessionPath(thread, rawPath) : resolveSessionPath(thread, ".");

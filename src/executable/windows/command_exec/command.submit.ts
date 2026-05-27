@@ -13,8 +13,8 @@ import type {
  * - parentWindow = 该 form 自身（type=command_exec）
  * - ctx.thread / ctx.manager 是必需的
  *
- * 命令体走 manager.submit：状态 open → executing → executed；成功移除 form，
- * 失败保留 form + result。
+ * 命令体走 manager.submit：状态 open → executing → success | failed (Round 13 升级)。
+ * 成功 (success) 自动移除 form；失败 (failed) 保留 form + result，LLM 可 refine 修复后重 submit。
  *
  * 这条命令本身不引入新 path/knowledge，走 exec tool 的 auto-execute 路径。
  */
@@ -34,9 +34,11 @@ async function executeSubmit(ctx: CommandExecutionContext): Promise<string | und
     const after = ctx.manager.get(form.id);
     const removed = !after;
     const title = form.command;
+    // Round 13: removed = success 路径 (form 已自动从 contextWindows 移除);
+    // 留下来的必然是 failed 状态 (open → executing → failed)。
     const messageBase = removed
-      ? `[form executed] form "${title}" 已成功执行并自动释放。`
-      : `[form executed] form "${title}" 执行完成（保留待 close）。`;
+      ? `[form success] form "${title}" 已成功执行并自动释放。`
+      : `[form failed] form "${title}" 执行失败（status=failed; refine 修正参数后可重 submit, 或 close 放弃）。`;
     return result !== undefined ? `${messageBase}\n${result}` : messageBase;
   } catch (err) {
     return `[command_exec.submit] submit 失败：${(err as Error).message}`;

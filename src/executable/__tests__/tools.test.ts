@@ -125,7 +125,7 @@ describe("executable tools (ContextWindow model)", () => {
     expect(thread.contextWindows.find((w) => w.id === formId)).toBeUndefined();
   });
 
-  it("CommandExecWindow.submit 失败时 form 保留，等显式 close", async () => {
+  it("CommandExecWindow.submit 失败时 form 保留 status=failed, 可 refine 复活 (Round 13)", async () => {
     const thread = makeThread();
     // do 缺 msg 直接 submit 会失败
     await dispatchToolCall(thread, {
@@ -141,7 +141,7 @@ describe("executable tools (ContextWindow model)", () => {
     });
     const form = thread.contextWindows.find((w) => w.id === formId);
     expect(form?.type).toBe("command_exec");
-    expect(form && form.type === "command_exec" && form.status).toBe("executed");
+    expect(form && form.type === "command_exec" && form.status).toBe("failed");
     expect(form && form.type === "command_exec" && form.result).toContain("[do] 缺少 msg");
   });
 

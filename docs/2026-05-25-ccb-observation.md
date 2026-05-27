@@ -242,6 +242,31 @@ P0-1 (Permission 模型) Q0a~Q0d 完成；Q0e 列 todo（自改 server/index.ts 
 - **2026-05-25**：首版。Supervisor Round 1 外循环。
 - **2026-05-25**（当日 Round 1 闭环）：P0-2 完整实施完成，5 套 e2e PASS / 全仓单测 PASS / meta tsc clean。差异与残留如上。
 - **2026-05-25**（当日 Round 2 闭环）：P0-1 Q0a~Q0d 完成，2 套 e2e (Q0b+Q0c) PASS / 联合 P0-1+P0-2 42 用例 PASS / 全仓 550 单测 PASS。3 项歧义 Supervisor 拍板；Q0e 列 todo。
+- **2026-05-27**（Round 13 闭环）：form 状态机升级 — `executed` → `success` / `failed` + failed 可 refine 回 open。
+  - **设计触发**：Round 12 修了 LLM close 偏好，但 root cause 是 `executed` 状态混合 success/failure 且**不可 refine** — 只能 close 重开
+  - **核心改动**：
+    - `CommandExecWindow.status`: `"open" | "executing" | "executed"` → `"open" | "executing" | "success" | "failed"`
+    - `WindowStatus` 联合同步删除 "executed"
+    - **manager.refine** 允许 `status="failed"`：累积新 args + **清 result** + **status 切回 "open"**（复活路径）
+    - **manager.submit** 失败：`status="executed"` → `"failed"`
+    - `setResultExecuted` → `setResultFailed`
+  - **历史数据迁移**: `readThread` 反序列化时把 `command_exec.status="executed"` 转 `"failed"` + console.warn（与 Round 7 unregistered type 过滤同款风格）
+  - **11 个 root command** knowledge / exec error 同步：强调"submit 失败 → refine 复活"是失败修复**首选**
+  - **basic-knowledge form lifecycle 重写**：四态机 + 失败修复路径首选 refine（不是 close）
+  - **web 端**: `context-snapshot.ts` + `ContextSnapshotViewer.tsx` 视觉编码 (open=blue / executing=warning / **success=green** / **failed=red**)
+  - **新测试** `manager-refine-failed.test.ts` 5 用例（open refine / failed 复活 / failed submit throws / executing refine false / 完整复活闭环）
+  - **派单进步**: G2 prompt 明确"不要自己 commit"（按 Round 12 memory feedback_subagent_no_self_commit），sub agent 这次乖乖留 working tree, Supervisor 统一 commit
+  - **整体校验**:
+    - tsc clean
+    - src/: **762 pass / 1 baseline fail / 3 skip / 2138 expect**（+19）
+    - web/: **194 pass / 0 fail / 438 expect**（不破坏）
+    - backend e2e: 68 pass / 0 fail / 8 skip
+  - **设计 ↔ 实施差异**:
+    - command_exec 内部 `command.refine.ts` 入口校验也放开为 open|failed（之前只允许 open）
+    - command_exec/index.ts renderXml status="executed" → "failed"
+    - basicKnowledge 重写为四态机表述
+    - 这些是 sub agent 主动延伸但符合 design 精神，记一笔
+
 - **2026-05-27**（Round 12 闭环）：修 OOC agent 倾向 close+重 open 而非 refine 的行为偏差。
   - **用户观察**：command_exec form 参数填错时，LLM 倾向 close 后重新 exec，不 refine；其次 submit 之前 knowledge 函数应当预检查参数并提示
   - **根因诊断**：

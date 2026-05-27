@@ -10,7 +10,9 @@ import type { BaseContextWindow } from "../_shared/types.js";
  * - 自身注册了两条命令 `refine` / `submit`，LLM 通过
  *   \`exec(<form_id>, "refine", args={...})\` 累加参数；
  *   \`exec(<form_id>, "submit")\` 触发执行
- * - 状态过渡：open → executing → executed
+ * - 状态过渡：open → executing → success | failed
+ *   - success：自动从 contextWindows 移除（spec § submit 段）
+ *   - failed：保留 result，且可通过 refine 回 open（"复活"路径，Round 13 新增）
  * - parentWindowId 是该 command 注册到的 window 的 id（root 命令时 = "root"；
  *   do_window 上的 continue 时 = 该 do_window 的 id）。
  */
@@ -23,6 +25,6 @@ export interface CommandExecWindow extends BaseContextWindow {
   commandPaths: string[];
   loadedKnowledgePaths: string[];
   commandKnowledgePaths?: string[];
-  status: "open" | "executing" | "executed";
+  status: "open" | "executing" | "success" | "failed";
   result?: string;
 }

@@ -243,7 +243,7 @@ describe("[p0d] context budget — applyNaturalDecay", () => {
       id: "f_test_exec",
       type: "command_exec",
       title: "command form",
-      status: "executed" as const,
+      status: "failed" as const,
       createdAt: Date.now(),
       parentWindowId: "root",
     } as ContextWindow);

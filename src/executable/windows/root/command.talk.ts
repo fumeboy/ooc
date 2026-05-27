@@ -87,9 +87,9 @@ export async function executeTalkCommand(
   const thread = ctx.thread;
   if (!thread) return "[talk] 缺少 thread context。";
   const target = typeof ctx.args.target === "string" ? ctx.args.target.trim() : "";
-  if (!target) return "[talk] 缺少 target 参数（form 已 submit 进入 executed, 无法再 refine）。下次请在 open 状态下用 refine(form_id, args={ target: \"<objectId>\", title: \"<会话主题>\" }) 补齐后再 submit; 当前 form 已 executed, 只能 close + 重 open——这是被迫路径, 不是常规修复策略。";
+  if (!target) return "[talk] 缺少 target 参数。form 已 submit 失败 (status=failed)。**可以 refine 修正参数后重 submit**（推荐）: refine(form_id, args={ target: \"<objectId>\", title: \"<会话主题>\" }) 会自动把 form 切回 open, 再 submit; 或 close(form_id) 彻底放弃这次调用。";
   const title = typeof ctx.args.title === "string" ? deriveTitle(ctx.args.title) : "";
-  if (!title) return "[talk] 缺少 title 参数（form 已 submit 进入 executed, 无法再 refine）。下次请在 open 状态下用 refine(form_id, args={ target: \"<objectId>\", title: \"<会话主题>\" }) 补齐后再 submit; 当前 form 已 executed, 只能 close + 重 open——这是被迫路径, 不是常规修复策略。";
+  if (!title) return "[talk] 缺少 title 参数。form 已 submit 失败 (status=failed)。**可以 refine 修正参数后重 submit**（推荐）: refine(form_id, args={ target: \"<objectId>\", title: \"<会话主题>\" }) 会自动把 form 切回 open, 再 submit; 或 close(form_id) 彻底放弃这次调用。";
 
   // target 校验:对应 stones/{target}/ 必须存在,否则 LLM 容易因 typo 等错误
   // 与"幻 peer"对话,且 relation 派生(meta/object/collaborable/relation)会全部

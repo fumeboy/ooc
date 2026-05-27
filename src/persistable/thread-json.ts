@@ -74,14 +74,26 @@ export async function readThread(
     // 打 console.warn 让运维知道发生了 silent drop, 符合 silent-swallow ban。)
     const rawWindows = Array.isArray(parsed.contextWindows) ? parsed.contextWindows : [];
     const known = new Set(listRegisteredWindowTypes());
-    const contextWindows = rawWindows.filter((w) => known.has(w.type));
-    if (contextWindows.length !== rawWindows.length) {
+    const filteredWindows = rawWindows.filter((w) => known.has(w.type));
+    if (filteredWindows.length !== rawWindows.length) {
       const dropped = rawWindows.filter((w) => !known.has(w.type));
       console.warn(
         `[readThread] ${persistence.objectId}/${threadId}: dropped ${dropped.length} window(s) with unregistered types:`,
         dropped.map((w) => `${w.id}=${w.type}`).join(", "),
       );
     }
+    // Round 13 迁移: command_exec form.status="executed" 已被四态机替换为 success|failed;
+    // 历史数据可能仍含 "executed" 字面值。把它们迁为 "failed" (保守路径; 让 LLM 能 refine 修复),
+    // 与 unregistered type 同款 silent-swallow ban: warn 但不抛。
+    const contextWindows = filteredWindows.map((w) => {
+      if (w.type === "command_exec" && (w as { status?: string }).status === "executed") {
+        console.warn(
+          `[readThread] ${persistence.objectId}/${threadId}: migrated form ${w.id} status "executed" → "failed" (Round 13)`,
+        );
+        return { ...w, status: "failed" as const };
+      }
+      return w;
+    });
     const restored: ThreadContext = {
       ...parsed,
       contextWindows,

@@ -83,7 +83,7 @@ export async function executeTodoCommand(
   const thread = ctx.thread;
   if (!thread) return "[todo] 缺少 thread context。";
   const content = typeof ctx.args.content === "string" ? ctx.args.content : "";
-  if (!content) return "[todo] 缺少 content 参数（form 已 submit 进入 executed, 无法再 refine）。下次请在 open 状态下用 refine(form_id, args={ content: \"<待办内容>\", on_command_path: [\"<cmd>\"] }) 补齐后再 submit; 当前 form 已 executed, 只能 close + 重 open——这是被迫路径, 不是常规修复策略。";
+  if (!content) return "[todo] 缺少 content 参数。form 已 submit 失败 (status=failed)。**可以 refine 修正参数后重 submit**（推荐）: refine(form_id, args={ content: \"<待办内容>\", on_command_path: [\"<cmd>\"] }) 会自动把 form 切回 open, 再 submit; 或 close(form_id) 彻底放弃这次调用。";
 
   const onCommandPath = Array.isArray(ctx.args.on_command_path)
     ? (ctx.args.on_command_path as unknown[]).filter((v): v is string => typeof v === "string")

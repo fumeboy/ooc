@@ -882,15 +882,43 @@ export const root: DocTreeNode = {
                             content: `
                             command_exec window 是 LLM 调用 command 时产生的临时窗口。
 
-                            它类似一个 form:
-                            - open 时创建，记录 command 名称和初始参数。
-                            - refine 时累积参数，并重新计算 command path。
-                            - submit 时执行 command。
-                            - 成功后可自动移除，失败时保留 result 供 LLM 查看和修正。
+                            它类似一个 form。**四态状态机** (Round 13, 2026-05-27 升级; 之前是
+                            三态 open→executing→executed, executed 混合 success/failure 且不可 refine):
+
+                            \`\`\`
+                            open → executing → success  (自动从 contextWindows 移除)
+                                            ↘ failed   (保留 + result 含错; 可 refine 回 open 重 submit)
+                            \`\`\`
+
+                            状态语义:
+                            - **open**: 参数未提交。可 refine 累积 args, submit 触发执行
+                            - **executing**: exec 函数运行中。短暂状态; LLM 不应在此态做动作
+                            - **success**: 执行成功; **自动从 contextWindows 移除**, 下一轮 LLM 看不到这个 form
+                            - **failed**: 执行失败; result 含错误信息;
+                              **可以 refine 修回 open 状态再 submit** (refine 时累积新 args + 清旧 result + 切回 open)
 
                             command_exec window 让 "函数调用" 不再是一次性黑盒。
                             LLM 可以看见自己正在填写什么参数、还缺什么、激活了哪些知识、执行结果是什么。
+
+                            **失败修复路径** (Round 13 新增):
+                            - submit 失败 (form 进 failed) → refine 修正 args → 自动切回 open → 重 submit
+                            - 不再需要 close + 重 open (那会丢失 form 已累积 args 与已激活 knowledge)
+                            - close 仍可用作 "彻底放弃这次调用" 的兜底, 但不是失败修复首选
+
+                            **历史 thread.json 含 status="executed" 的 form**: readThread 反序列化时
+                            把 "executed" 迁移为 "failed" (保守; 让 LLM 能 refine 修复); 与 Round 7 移除
+                            issue 时的未注册 type 过滤同款思路。
+
+                            完整 design 见 docs/2026-05-27-form-status-success-failed-design.md。
                             `,
+                            named: {
+                                "open": "form 初始态; 可 refine / submit",
+                                "executing": "exec 函数运行中; 短暂状态",
+                                "success": "执行成功; 自动从 contextWindows 移除",
+                                "failed": "执行失败; result 含错; 可 refine 回 open 重 submit (Round 13)",
+                                "refine-from-failed": "Round 13 新路径: failed 状态可调 refine, 累积 args + 清 result + 状态切回 open",
+                                "executed → failed 迁移": "readThread 反序列化时把历史 executed 转 failed, 保留 LLM 修复能力",
+                            },
                         },
                         "sharing": {
                             title: "sharing - 跨 thread 共享 ContextWindow",

@@ -70,15 +70,15 @@ describe("Round 12 refine-hint", () => {
     }
   });
 
-  describe("basic-knowledge form lifecycle", () => {
-    it("contains '开 → executing → executed' 三态描述", () => {
-      // 文本里描述: 'open → executing → executed'
-      expect(BASIC_KNOWLEDGE).toContain("open → executing → executed");
+  describe("basic-knowledge form lifecycle (Round 13: open → executing → success | failed)", () => {
+    it("contains 四态机描述", () => {
+      // Round 13: 'open → executing → success | failed'
+      expect(BASIC_KNOWLEDGE).toContain("open → executing → success | failed");
     });
 
     it("explicitly tells LLM to use refine on open-state forms", () => {
       // 关键提示: open 状态发现参数不全时，优先 refine
-      expect(BASIC_KNOWLEDGE).toContain("open 状态");
+      expect(BASIC_KNOWLEDGE).toContain("open");
       expect(BASIC_KNOWLEDGE).toContain("refine");
     });
 
@@ -92,6 +92,18 @@ describe("Round 12 refine-hint", () => {
         BASIC_KNOWLEDGE.includes("不要为了") ||
         BASIC_KNOWLEDGE.includes("close 重 open");
       expect(hasCloseReopenWarning).toBe(true);
+    });
+
+    it("Round 13: 描述 failed 可 refine 复活路径", () => {
+      // 关键: failed 状态可以 refine 修回 open
+      expect(BASIC_KNOWLEDGE).toContain("failed");
+      // 复活措辞: "复活" / "切回 open" / "回 open"
+      const hasReviveWording =
+        BASIC_KNOWLEDGE.includes("复活") ||
+        BASIC_KNOWLEDGE.includes("切回 open") ||
+        BASIC_KNOWLEDGE.includes("回 open") ||
+        BASIC_KNOWLEDGE.includes("修回 open");
+      expect(hasReviveWording).toBe(true);
     });
   });
 });
