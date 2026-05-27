@@ -228,10 +228,10 @@ describe("[p0d] context budget — applyNaturalDecay", () => {
     }
   });
 
-  it("exempt: root / command_exec 永不被衰减 (即使在 idle-set 状态下)", () => {
+  it("exempt: root / command_exec(open|executing) 永不被衰减 (Round 16 精修后)", () => {
+    // Round 16 (2026-05-27): command_exec.status=failed 不再豁免, 改用 status=open 测豁免。
+    // 完整新规则: isDecayExempt = (type=root) || (type=command_exec && status∈{open,executing})
     const thread = makeThread();
-    // 手工注入一个 root + 一个 command_exec window,二者 status 都设为 "closed" (idle-set)
-    // 验证它们即使 idleRounds >> N 也不会被自然衰减
     thread.contextWindows.push({
       id: "root",
       type: "root",
@@ -243,7 +243,7 @@ describe("[p0d] context budget — applyNaturalDecay", () => {
       id: "f_test_exec",
       type: "command_exec",
       title: "command form",
-      status: "failed" as const,
+      status: "open" as const,
       createdAt: Date.now(),
       parentWindowId: "root",
     } as ContextWindow);

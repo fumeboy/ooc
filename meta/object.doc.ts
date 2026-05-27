@@ -572,12 +572,22 @@ export const root: DocTreeNode = {
                             title: "自然衰减 - status / age 驱动的自动折叠",
                             content: `
                             ThinkLoop 在 buildContext 前跑一次 applyNaturalDecay。规则:
-                            - idle-fold: window status ∈ {done, archived, idle} 持续 N 轮 → level 0→1。
+                            - idle-fold: window status ∈ {done, archived, closed, idle, failed} 持续 N 轮 → level 0→1。
                             - age-fold: window 自上次被 exec 操作起 M 轮无访问 → level 0→1。
                             - double-fold: level 1 状态再持续 K 轮 → level 1→2。
                             - cascade: parent fold 时所有 child fold 同档。
                             默认 N=3, M=10, K=8; 各 Object 可在 stones/<self>/config/context-budget.json 调参。
-                            command_exec / root window 豁免自然衰减 (是活动操作的当前 focus)。
+
+                            **豁免规则** (Round 16, 2026-05-27 精修):
+                            - root: thread 同生命周期, 不可关闭
+                            - command_exec.status ∈ {open, executing}: 真活动 form (LLM 正在用 / exec 在跑)
+                            - **command_exec.status === "failed": 不豁免** (Round 13 状态机 + Round 14 体验官观察:
+                              failed 不是焦点; LLM 可能永远不回头修; 让它走自然衰减 fold)
+                            - command_exec.status === "success": 不会到衰减阶段 (success 自动从 contextWindows 移除)
+
+                            Round 16 修改前: command_exec **整类豁免**;
+                            修改后: 仅 open/executing 豁免, failed 参与衰减 (复用既有 idle-fold 而非发明新 GC 机制)。
+                            完整 design 见 docs/2026-05-27-failed-form-gc-design.md。
                             `,
                         },
                         "emergency_guard": {

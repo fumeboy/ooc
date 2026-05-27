@@ -387,6 +387,19 @@ exec(form_id, "submit")                              // 重新执行
    - **success**: 自动从 contextWindows 移除 (form 消失)
    - **failed**: 保留 form + result; refine 修正后自动回 open, 可重 submit (首选), 或 close 放弃
 
+### failed form 长期残留的 GC
+
+failed form 如果长期 (N 轮) 无 refine / close, OOC 会自动让它走自然衰减:
+- N 轮 idle (status="failed") → compressLevel 0→1 (折叠为 summary)
+- K 轮持续无访问 → compressLevel 1→2 (snapshot 形态)
+- fold 不会物理移除 form, LLM 仍可调 refine 复活回 open 或 close 释放
+
+**建议**: 主动 close 你不打算 refine 的 failed forms, 避免 thread 堆积占 context_bytes。
+检查 thread.contextWindows 内 failed forms; 不再相关的直接 close。
+
+(自然衰减规则: 单 Object 可在 stones/<self>/config/context-budget.json
+调 naturalDecay.idleRoundsN / ageRoundsM / doubleFoldRoundsK)
+
 ## 一轮结束的决策
 
 每一轮结束时只挑一个**对外可见**的收尾动作。wait 有结构性硬约束（schema 校验

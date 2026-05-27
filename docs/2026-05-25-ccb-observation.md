@@ -242,6 +242,35 @@ P0-1 (Permission 模型) Q0a~Q0d 完成；Q0e 列 todo（自改 server/index.ts 
 - **2026-05-25**：首版。Supervisor Round 1 外循环。
 - **2026-05-25**（当日 Round 1 闭环）：P0-2 完整实施完成，5 套 e2e PASS / 全仓单测 PASS / meta tsc clean。差异与残留如上。
 - **2026-05-25**（当日 Round 2 闭环）：P0-1 Q0a~Q0d 完成，2 套 e2e (Q0b+Q0c) PASS / 联合 P0-1+P0-2 42 用例 PASS / 全仓 550 单测 PASS。3 项歧义 Supervisor 拍板；Q0e 列 todo。
+- **2026-05-27**（Round 16 闭环）：failed form GC 协议 — 精修 P0-2 衰减豁免规则，让 command_exec.failed 参与自然衰减。
+  - **触发**：Round 14 体验官 M2 — failed form 不阻塞 thread waiting，但 LLM 可能永远不回头修，长期堆积占 context_bytes
+  - **设计哲学**: 复用 P0-2 已有自然衰减协议，**不发明新 GC 机制**；精修豁免规则即可
+  - **核心改动 (单文件 1 函数)**:
+    - 抽 `isDecayExempt(window): boolean` helper 替代 `DECAY_EXEMPT_TYPES` / `EMERGENCY_EXEMPT_TYPES` 常量
+    - 规则精修：从 "command_exec 整类豁免" → "仅 `status ∈ {open, executing}` 豁免"
+    - `failed` 不豁免，参与自然衰减（idle-fold N 轮 → level 1 → double-fold K 轮 → level 2）
+    - `success` 不会到这里（自动从 contextWindows 移除）
+  - **IDLE_STATUS_SET 加 "failed"**：让 failed 走 idle-fold（更快感知），不只 age-fold
+  - **basic-knowledge hint**：form lifecycle 段末追加"failed form 长期残留 GC"小节；建议 LLM 主动 close 不打算 refine 的 failed forms
+  - **不变量保持**:
+    - fold ≠ close（仍可 refine 复活 / LLM 可 close）
+    - visibility-first（fold 落 `context_compressed` ProcessEvent）
+    - active form 仍豁免（open/executing）
+  - **必要的兼容性修改**：`tests/e2e/backend/context-compression-p0d-decay.test.ts` 一处用例之前 fixture 用 `status="failed"` 测豁免，Round 16 后该假设不成立 → 改为 `status="open"`（语义保留，只换状态）
+  - **G1 (Supervisor)**: meta `thinkable.children.context_budget.patches.natural_decay` 加新豁免规则说明 + design doc
+  - **G2 (sub agent, 留 working tree)**: budget.ts 改 + basic-knowledge 追加 + 3 新单测
+  - **G3 (Supervisor)**: 整合 commit + push
+  - **整体校验**:
+    - tsc clean
+    - src/: **795 pass / 0 fail / 3 skip / 2199 expect**（+3 新 budget 测试）
+    - backend e2e: **70 pass / 0 fail / 9 skip**
+    - web/: 201 pass / 0 fail（不破坏）
+  - **派单纪律连续 5 轮**: Round 12 → 13 → 14 → 15 → 16, sub agent 都乖乖留 working tree
+  - **Round 14 体验官报告 todo 状态**:
+    - H1/M1/M3/L1/L2/L3 — Round 14/15 已清零
+    - **M2 — Round 16 清零** ✅
+    - 仅留：Round 11 end-reflection thread-level e2e（Round 15 已加）
+
 - **2026-05-27**（Round 15 闭环）：清 Round 14 体验官报告 L1-L3 + 加 Round 11 end-reflection 集成 e2e。
   - **L1** user home calendar 隐藏提示：Sidebar.tsx + SessionList.tsx 联动；月份 chip 右侧 "(N 隐藏)" 微标签（仅 hiddenTestCount>0 显示）；sessionStorage `ooc.showTestSessions` + CustomEvent `ooc:show-test-sessions-changed` 跨组件同步
   - **L2** console.warn dedup（stones/self 非 stone object）：方案 1 — sessionStorage key `ooc.warnedNonStoneIds` 持久化首次 warn 标记，跨 HMR / hard refresh 不再 spam；保留首次 warn 让真问题可发现；fallback 到 module Set（sessionStorage 不可用时）

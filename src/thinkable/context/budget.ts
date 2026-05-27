@@ -13,8 +13,11 @@
  * - double-fold K=8:  compressLevel=1 再持续 K 轮 → 1→2
  * - cascade:          parent 被 fold 到 ≥1 时,所有 child window 同档对齐
  *
- * 豁免:
- * - window.type ∈ {root, command_exec} 永不被自然衰减
+ * 豁免 (Round 16 精修, 2026-05-27):
+ * - window.type === "root" 永不被自然衰减
+ * - window.type === "command_exec" 且 status ∈ {open, executing} 豁免
+ *   (command_exec.status === "failed" **不再豁免**, 参与 idle-fold;
+ *    command_exec.status === "success" 自动从 contextWindows 移除, 不会到这里)
  * - window.status ∈ {active, running, executing, open} 表示 "LLM 当前在用/IO 在跑",
  *   不计入 idle-fold (idleRounds 重置为 0)
  *
@@ -121,15 +124,33 @@ function readBudgetConfigFile(thread: ThreadContext): BudgetConfigFile | null {
 
 /** "idle" 状态集合 (design 的 idle-set; 字面 "idle" 留作前向兼容,即使当前 WindowStatus 未列举)。
  *  - done / archived / closed:                明确进入收纳态的 window
+ *  - failed:                                  command_exec 失败态 (Round 16, 2026-05-27);
+ *                                             与 isDecayExempt 配合让 failed form 走 idle-fold
  *  - idle:                                    保留 design 字面值 (未来 WindowStatus 扩展用)
  */
-const IDLE_STATUS_SET: ReadonlySet<string> = new Set(["done", "archived", "closed", "idle"]);
+const IDLE_STATUS_SET: ReadonlySet<string> = new Set(["done", "archived", "closed", "idle", "failed"]);
 
-/** 豁免类型:永不被自然衰减触发 (无论 status / age)。
- *  - root:         thread 同生命周期, 不能被关闭
- *  - command_exec: design 明确豁免 "当前活动 form" — 类型本身即是 form 容器
+/** 永不衰减/降级的豁免判定。
+ *  - root: thread 同生命周期, 不可关闭
+ *  - command_exec.status ∈ {open, executing}: 真活动 form, LLM 正在用 / exec 在跑
+ *  - command_exec.status === "failed": **不豁免** (Round 13 四态机 + Round 14 体验官观察:
+ *    failed 不是焦点; LLM 可能永远不回头修; 让它走自然衰减 fold)
+ *  - command_exec.status === "success": 永远不会到这里 (success 自动从 contextWindows 移除)
+ *
+ *  Round 16 (2026-05-27) 精修: 之前 command_exec 整类豁免;
+ *  现在仅 open/executing 豁免, failed 参与衰减。
+ *
+ *  与 IDLE_STATUS_SET 含 "failed" 配合: failed form 进 idle-fold 路径。
+ *
+ *  natural_decay + emergency_guard 共用同一豁免函数 (确保两处行为一致)。
  */
-const DECAY_EXEMPT_TYPES: ReadonlySet<string> = new Set(["root", "command_exec"]);
+function isDecayExempt(window: ContextWindow): boolean {
+  if (window.type === "root") return true;
+  if (window.type === "command_exec") {
+    return window.status === "open" || window.status === "executing";
+  }
+  return false;
+}
 
 /** 类型 / 状态层面的 "正在等待外部 IO" 豁免集 (额外保护 active in-flight 操作)。
  *  - do_window status=running:    child thread 正在跑, 等待 wait/notify;
@@ -263,7 +284,7 @@ export function applyNaturalDecay(
   }
 
   for (const w of windows) {
-    if (DECAY_EXEMPT_TYPES.has(w.type)) {
+    if (isDecayExempt(w)) {
       // 豁免:不改 level, 但还是把 lastSeenEventIdx 同步,避免 events 累积爆栈
       const n = getNext(w);
       n._decayMeta!.lastSeenEventIdx = eventsLength;
@@ -335,7 +356,7 @@ export function applyNaturalDecay(
     if (parentLevel === 0) continue;
     const kids = childIdx.get(parentId) ?? [];
     for (const child of kids) {
-      if (DECAY_EXEMPT_TYPES.has(child.type)) continue;
+      if (isDecayExempt(child)) continue;
       const childFinal = nextById.get(child.id) ?? child;
       const childLevel = (childFinal.compressLevel ?? 0) as 0 | 1 | 2;
       if (childLevel >= parentLevel) continue;
@@ -437,9 +458,6 @@ export interface ApplyEmergencyGuardResult {
   eventsFolded: boolean;
 }
 
-/** Emergency-guard 不能动的 window 类型 (与自然衰减豁免一致)。 */
-const EMERGENCY_EXEMPT_TYPES: ReadonlySet<string> = new Set(["root", "command_exec"]);
-
 /** "活动 do_window" 的判定:do 且 status=running (子线程在跑) — 不应被 emergency 折叠。 */
 function isActiveDoWindow(w: ContextWindow): boolean {
   return w.type === "do" && w.status === "running";
@@ -457,7 +475,7 @@ function emergencyPromoteLevel(
   const windows = thread.contextWindows ?? [];
   const changes: WindowLevelChange[] = [];
   const next = windows.map((w) => {
-    if (EMERGENCY_EXEMPT_TYPES.has(w.type)) return w;
+    if (isDecayExempt(w)) return w;
     if (isActiveDoWindow(w)) return w;
     const cur = (w.compressLevel ?? 0) as 0 | 1 | 2;
     if (cur !== filterLevel) return w;
