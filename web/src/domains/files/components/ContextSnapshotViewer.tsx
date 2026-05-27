@@ -383,10 +383,11 @@ function InlineTalkComposer({
 /**
  * Relation window 详情面板。
  *
- * 2026-05-25 R8-5:删除 peer_readme section。relation 文档在设计中只存在于
- * pools 与 flows(self 视角的 self-relation),不含 peer stone readme;
- * peer readme 是 collaborable.talk_window 维度的"对端身份介绍",
- * 应当通过 FileViewer 直接打开 peer stone 路径而不是被 RelationWindow 内联。
+ * 2026-05-27 修订（撤回 R8-5 + 删除占位文案）：
+ * - peer_readme section 重新挂回（render: stones/<peer>/readme.md, 只读）；
+ *   default visibility 让大量 sibling/child relation 自动派生，没 readme 内容
+ *   则空壳，违背 default visibility 初衷
+ * - 缺失的 section 不再渲染占位文案；exists=false 或 body 空直接跳过整段
  */
 function RelationWindowDetail({
   window,
@@ -394,10 +395,6 @@ function RelationWindowDetail({
   window: Extract<ContextWindow, { type: "relation" }>;
 }) {
   const { displayName } = useDisplayName(window.peerId);
-  const longTermPath =
-    window.selfLongTermPath ?? `pools/objects/.../knowledge/relations/${window.peerId}.md`;
-  const sessionPath =
-    window.selfSessionPath ?? `flows/.../knowledge/relations/${window.peerId}.md`;
   return (
     <div className="llm-input-md-body" style={{ padding: "8px 12px" }}>
       <div className="llm-input-attrs" style={{ marginBottom: 8 }}>
@@ -409,25 +406,35 @@ function RelationWindowDetail({
         </div>
       </div>
 
-      <h3 style={{ marginTop: 16 }}>self · long_term</h3>
-      <div className="muted small" style={{ marginBottom: 4 }}>{longTermPath}</div>
-      {window.selfLongTermBody ? (
-        <MarkdownContent content={window.selfLongTermBody} />
-      ) : (
-        <div className="muted small">
-          (暂无;通过 open(parent_window_id="{window.id}", command="edit", args={`{ content: "...", scope: "long_term" }`}) 写入)
-        </div>
-      )}
+      {window.peerReadmeExists && window.peerReadmeBody ? (
+        <>
+          <h3 style={{ marginTop: 16 }}>peer · readme</h3>
+          {window.peerReadmePath ? (
+            <div className="muted small" style={{ marginBottom: 4 }}>{window.peerReadmePath}</div>
+          ) : null}
+          <MarkdownContent content={window.peerReadmeBody} />
+        </>
+      ) : null}
 
-      <h3 style={{ marginTop: 16 }}>self · session</h3>
-      <div className="muted small" style={{ marginBottom: 4 }}>{sessionPath}</div>
-      {window.selfSessionBody ? (
-        <MarkdownContent content={window.selfSessionBody} />
-      ) : (
-        <div className="muted small">
-          (暂无;通过 open(parent_window_id="{window.id}", command="edit", args={`{ content: "...", scope: "session" }`}) 写入)
-        </div>
-      )}
+      {window.selfLongTermExists && window.selfLongTermBody ? (
+        <>
+          <h3 style={{ marginTop: 16 }}>self · long_term</h3>
+          {window.selfLongTermPath ? (
+            <div className="muted small" style={{ marginBottom: 4 }}>{window.selfLongTermPath}</div>
+          ) : null}
+          <MarkdownContent content={window.selfLongTermBody} />
+        </>
+      ) : null}
+
+      {window.selfSessionExists && window.selfSessionBody ? (
+        <>
+          <h3 style={{ marginTop: 16 }}>self · session</h3>
+          {window.selfSessionPath ? (
+            <div className="muted small" style={{ marginBottom: 4 }}>{window.selfSessionPath}</div>
+          ) : null}
+          <MarkdownContent content={window.selfSessionBody} />
+        </>
+      ) : null}
     </div>
   );
 }

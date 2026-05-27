@@ -143,8 +143,14 @@ export type ContextWindow =
       status: "open" | "closed";
       /** 对端 objectId(去重 key);与 talk_window.target 同源。 */
       peerId: string;
-      // 2026-05-25 R8-5:relation 文档在设计中只存在于 pools 与 flows
-      // (self 视角的 self-relation), 不含 peer stone readme。
+      // 2026-05-27: 撤回 R8-5 的 peerReadme 删除。default visibility 派生大量
+      // sibling/child relation 后,没 peer 身份介绍则空壳;peer readme 重新挂回。
+      /** peer stone readme 路径(`stones/<branch>/objects/<peer>/readme.md`)。 */
+      peerReadmePath?: string;
+      /** peer readme 正文(只读;文件缺失/空 → undefined)。 */
+      peerReadmeBody?: string;
+      /** peer readme 文件是否存在(false = peer stone 没 readme 或 lazy)。 */
+      peerReadmeExists?: boolean;
       /** self 对该 peer 的 long_term relation(`pools/objects/<self>/knowledge/relations/<peer>.md`)。 */
       selfLongTermPath?: string;
       selfLongTermBody?: string;
