@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { resolve } from "node:path";
 import { __testing } from "../_shared/session-path";
 
-const { rewriteStonesPath, rewritePoolsPath } = __testing;
+const { rewriteStonesPath, rewritePoolsPath, classifyStonesPath } = __testing;
 
 describe("rewriteStonesPath: stonesBranch + objects/ injection", () => {
   test("stones/<id>/foo → stones/main/objects/<id>/foo when branch is main", () => {
@@ -83,5 +84,55 @@ describe("rewritePoolsPath: pools/objects/ injection (no branch)", () => {
     expect(rewritePoolsPath("pools\\agent_of_x\\knowledge\\memory\\foo.md")).toBe(
       "pools/objects/agent_of_x/knowledge/memory/foo.md",
     );
+  });
+});
+
+describe("classifyStonesPath: stone-versioning routing 归属判定", () => {
+  const baseDir = "/world";
+
+  test("objects/<id>/... → stone-object（ownerObjectId + relInObjects）", () => {
+    const abs = resolve(baseDir, "stones/main/objects/agent_of_x/self.md");
+    const r = classifyStonesPath(abs, baseDir, "main");
+    expect(r.kind).toBe("stone-object");
+    if (r.kind === "stone-object") {
+      expect(r.ownerObjectId).toBe("agent_of_x");
+      expect(r.relInObjects).toBe("objects/agent_of_x/self.md");
+    }
+  });
+
+  test("嵌套子 Object objects/parent/children/child/... → owner = 第一段", () => {
+    const abs = resolve(baseDir, "stones/main/objects/parent/children/child/self.md");
+    const r = classifyStonesPath(abs, baseDir, "main");
+    expect(r.kind).toBe("stone-object");
+    if (r.kind === "stone-object") {
+      expect(r.ownerObjectId).toBe("parent");
+      expect(r.relInObjects).toBe("objects/parent/children/child/self.md");
+    }
+  });
+
+  test("stones/<branch>/ 根下非 objects/ 资源 → stones-world", () => {
+    const abs = resolve(baseDir, "stones/main/.gitignore");
+    const r = classifyStonesPath(abs, baseDir, "main");
+    expect(r.kind).toBe("stones-world");
+  });
+
+  test("非 stones 树（pools/）→ non-stone", () => {
+    const abs = resolve(baseDir, "pools/objects/agent_of_x/data/x.csv");
+    expect(classifyStonesPath(abs, baseDir, "main").kind).toBe("non-stone");
+  });
+
+  test("不同 branch 隔离：写 main 但 session branch 是 metaprog → non-stone", () => {
+    const abs = resolve(baseDir, "stones/main/objects/agent_of_x/self.md");
+    expect(classifyStonesPath(abs, baseDir, "metaprog/x/abc").kind).toBe("non-stone");
+  });
+
+  test("无 baseDir → non-stone（纯内存测试场景不路由）", () => {
+    const abs = resolve(baseDir, "stones/main/objects/agent_of_x/self.md");
+    expect(classifyStonesPath(abs, undefined, "main").kind).toBe("non-stone");
+  });
+
+  test("objects/ 根本身（无 ownerId 段）→ stones-world", () => {
+    const abs = resolve(baseDir, "stones/main/objects");
+    expect(classifyStonesPath(abs, baseDir, "main").kind).toBe("stones-world");
   });
 });

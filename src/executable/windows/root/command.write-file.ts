@@ -12,7 +12,7 @@
  */
 
 import { mkdir, stat, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 
 import type {
   CommandExecOutcome,
@@ -25,7 +25,8 @@ import {
   generateWindowId,
   type FileWindow,
 } from "../_shared/types.js";
-import { resolveSessionPath } from "../_shared/session-path.js";
+import { classifyStonesPath, resolveSessionPath } from "../_shared/session-path.js";
+import { versionedStoneWrite } from "../../../persistable/index.js";
 
 const WRITE_FILE_BASIC_PATH = "internal/executable/write_file/basic";
 const WRITE_FILE_INPUT_PATH = "internal/executable/write_file/input";
@@ -86,6 +87,24 @@ function basename(path: string): string {
   return idx >= 0 ? path.slice(idx + 1) : path;
 }
 
+/** 写盘成功后在 thread 下挂一个 file_window 指向 path（stone 与 non-stone 路径共用）。 */
+function spawnFileWindow(ctx: CommandExecutionContext, path: string): void {
+  const fileWindow: FileWindow = {
+    id: generateWindowId("file"),
+    type: "file",
+    parentWindowId: ROOT_WINDOW_ID,
+    title: basename(path),
+    status: "open",
+    createdAt: Date.now(),
+    path,
+  };
+  if (ctx.manager) {
+    ctx.manager.insertTypedWindow(fileWindow);
+  } else if (ctx.thread) {
+    ctx.thread.contextWindows = [...(ctx.thread.contextWindows ?? []), fileWindow];
+  }
+}
+
 export const writeFileCommand: CommandTableEntry = {
   paths: ["write_file"],
   match: () => ["write_file"],
@@ -132,6 +151,58 @@ export async function executeWriteFileCommand(
     /* 不存在 → 新建场景，无 hint */
   }
 
+  // stones/ 路径归属判定（2026-05-28）：写 stone 自治区必须经 stone-versioning
+  // （git commit + self-scope ff-merge / cross-scope PR-Issue），不能裸 writeFile 绕过版本控制。
+  // pools/ flows/ work/ 等非 stones 路径保持现状直写（运行时数据不进 git）。
+  const baseDir = thread.persistence?.baseDir;
+  const stonesBranch = thread.persistence?.stonesBranch;
+  const stoneClass = classifyStonesPath(path, baseDir, stonesBranch);
+
+  if (stoneClass.kind === "stone-object") {
+    const authorObjectId = thread.persistence?.objectId;
+    if (!baseDir || !authorObjectId) {
+      // fail-loud：无法确定 author / world 根时不能静默直写绕过 versioning。
+      return (
+        `[write_file] 路径落在 stones 自治区 (${path}) 需走 stone-versioning，但当前 thread ` +
+        `缺少 ${!baseDir ? "persistence.baseDir" : "persistence.objectId"}，无法版本化写入。`
+      );
+    }
+    const versioned = await versionedStoneWrite({
+      baseDir,
+      authorObjectId,
+      intent: `write_file ${stoneClass.relInObjects}`,
+      // 写入 worktree 工作树：${worktree.path}/objects/<ownerObjectId>/...（relInObjects 已含 objects/ 前缀）
+      write: async (wt) => {
+        const target = join(wt.path, stoneClass.relInObjects);
+        await mkdir(dirname(target), { recursive: true });
+        await writeFile(target, content, "utf8");
+      },
+    });
+    if (!versioned.ok) {
+      return `[write_file] stone-versioning 写入失败 (${versioned.code})：${versioned.message}`;
+    }
+    // self-scope ff-merge 后 main 工作区已反映新内容；cross-scope 落 PR-Issue 等 Supervisor 决议。
+    spawnFileWindow(ctx, path);
+    const scopeNote = versioned.merged
+      ? `已 commit 并合并回 main（commit ${versioned.commitSha.slice(0, 8)}）`
+      : `改动越出你的自治区，已开 PR-Issue #${versioned.prIssueId} 等 Supervisor 评审（暂未合并到 main）`;
+    return {
+      ok: true,
+      result: `[write_file] ${path} 经 stone-versioning ${scopeNote}。`,
+    };
+  }
+
+  if (stoneClass.kind === "stones-world") {
+    // world-level stone 资源（如 stones/main/.gitignore，不在 objects/ 下）——LLM 不该
+    // 通过 write_file 改它（属于 world/治理边界）。fail-loud，不静默直写绕过 versioning。
+    return (
+      `[write_file] 路径 ${path} 落在 stones/${stonesBranch ?? "main"}/ 根但不在某个 Object 的 ` +
+      `objects/<id>/ 自治区内（world-level stone 资源）。这类资源不能通过 write_file 修改；` +
+      `如确需变更请走治理流程（HTTP 控制面 / Supervisor）。`
+    );
+  }
+
+  // non-stone（pools/ flows/ work/ 任意其它路径）：保持现状直写。
   try {
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, content, "utf8");
@@ -139,21 +210,7 @@ export async function executeWriteFileCommand(
     return `[write_file] 写入 ${path} 失败：${(err as Error).message}`;
   }
 
-  const fileWindow: FileWindow = {
-    id: generateWindowId("file"),
-    type: "file",
-    parentWindowId: ROOT_WINDOW_ID,
-    title: basename(path),
-    status: "open",
-    createdAt: Date.now(),
-    path,
-  };
-
-  if (ctx.manager) {
-    ctx.manager.insertTypedWindow(fileWindow);
-  } else {
-    thread.contextWindows = [...(thread.contextWindows ?? []), fileWindow];
-  }
+  spawnFileWindow(ctx, path);
 
   if (preExisted) {
     return {

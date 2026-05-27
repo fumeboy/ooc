@@ -22,7 +22,7 @@
  * KNOWLEDGE）。
  */
 
-import { isAbsolute, resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { ThreadContext } from "../../../thinkable/context";
 
 /**
@@ -88,4 +88,46 @@ function rewritePoolsPath(p: string): string {
   return `pools/objects/${rest}`;
 }
 
-export const __testing = { rewriteStonesPath, rewritePoolsPath };
+/**
+ * stones-path 归属判定（write_file → stone-versioning 路由用）。
+ *
+ * 输入是 `resolveSessionPath` 已解析好的**绝对**路径 + 当前 session 的 baseDir /
+ * stonesBranch。判断该路径是否落在某个 Object 的 stone 自治区
+ * `${baseDir}/stones/${stonesBranch}/objects/<ownerObjectId>/...` 下：
+ *
+ * - kind="stone-object"：是 → 返回 ownerObjectId（路径所属 Object）+ relInObjects
+ *   （相对 `objects/` 的剩余路径，含 owner 段，供写入 worktree 时拼回落点）。
+ *   caller 据此走 versioning：owner === author → self-scope ff；否则 cross-scope PR。
+ * - kind="stones-world"：落在 `stones/<branch>/` 下但不在 `objects/<id>/` 里
+ *   （world-level 资源，如 stones/main/.gitignore）→ caller fail-loud，不静默直写。
+ * - kind="non-stone"：不在 stones 树下（pools/ flows/ work/ 任意其它路径）→ 直写。
+ */
+export type StonesPathClass =
+  | { kind: "stone-object"; ownerObjectId: string; relInObjects: string }
+  | { kind: "stones-world"; relInBranch: string }
+  | { kind: "non-stone" };
+
+export function classifyStonesPath(
+  absPath: string,
+  baseDir: string | undefined,
+  stonesBranch: string | undefined,
+): StonesPathClass {
+  if (!baseDir) return { kind: "non-stone" };
+  const branch = stonesBranch ?? "main";
+  const stonesRoot = resolve(baseDir, "stones", branch);
+  const rel = relative(stonesRoot, resolve(absPath));
+  // 越出 stones/<branch>/ 树（rel 以 .. 开头或为绝对路径）→ 非 stone
+  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return { kind: "non-stone" };
+
+  const segs = rel.split(sep).filter(Boolean);
+  // `objects/<ownerObjectId>/...` 形态 → stone 自治区写入
+  if (segs.length >= 2 && segs[0] === "objects") {
+    const ownerObjectId = segs[1]!;
+    const relInObjects = segs.join("/");
+    return { kind: "stone-object", ownerObjectId, relInObjects };
+  }
+  // stones/<branch>/ 下但不在 objects/<id>/ 里 → world-level stone 资源
+  return { kind: "stones-world", relInBranch: segs.join("/") };
+}
+
+export const __testing = { rewriteStonesPath, rewritePoolsPath, classifyStonesPath };

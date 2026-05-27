@@ -164,6 +164,15 @@ export {
   type RequestPrIssueResult,
   type ResolvePrIssueResult,
 } from "./stone-versioning";
+export {
+  // versioned-write: 把"写一个 stone 文件"包进 versioning 流程的单一 owner
+  versionedStoneWrite,
+  type VersionedStoneWriteInput,
+  type VersionedWriteContext,
+  type VersionedWriteOk,
+  type VersionedWriteErr,
+} from "./versioned-write";
+
 export { parseMentions } from "./mention";
 
 export {
