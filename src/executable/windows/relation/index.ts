@@ -176,11 +176,14 @@ export async function executeRelationEdit(
 }
 
 /**
- * relation_window 的 renderXml hook：peer_id + self long_term/session。
+ * relation_window 的 renderXml hook：peer_id + peer_readme + self long_term/session。
  *
- * 2026-05-25 R8-5：删除 peer_readme 渲染。relation 文档在设计中只存在于
- * pools 与 flows（self 视角的 self-relation），不含 peer stone readme。需要
- * peer readme 时 LLM 通过 file_window 直接 open peer stone 路径即可。
+ * 2026-05-27 修订:
+ * - 撤回 R8-5 的 peer_readme 删除决定:default visibility 让大量 sibling/child relation
+ *   自动派生,不带 peer 身份介绍则空壳,违背初衷;peer_readme 重新挂回。
+ * - 文件缺失节点时不再渲染占位文案("(暂无;通过 open(...) 写入)"):节点本身缺席就是
+ *   信号,占位文案对 LLM 是噪声,不需要主动指引(basicKnowledge 已经讲清楚 edit 用法)。
+ *   exists=false 时直接跳过该节点;exists=true 才输出节点。
  */
 function renderRelationWindow(ctx: RenderContext): XmlNode[] {
   const window = ctx.window as RelationWindow;
@@ -188,21 +191,23 @@ function renderRelationWindow(ctx: RenderContext): XmlNode[] {
     xmlElement("peer_id", {}, [xmlText(window.peerId)]),
   ];
 
-  // self long_term / session — 缺失也保留节点 + 占位文案，提示 LLM 用 edit 写入
-  // exists=false 时 body undefined → 渲染占位；exists=true 但 body=undefined 不会出现（synthesizer 保证两者一致）
-  const longTermBody = window.selfLongTermBody !== undefined
-    ? window.selfLongTermBody
-    : `(暂无;通过 open(parent_window_id="${window.id}", command="edit", args={ content: "...", scope: "long_term" }) 写入)`;
-  children.push(
-    xmlElement("self_long_term", { path: window.selfLongTermPath, exists: String(window.selfLongTermExists) }, [xmlText(longTermBody)]),
-  );
+  if (window.peerReadmeExists && window.peerReadmeBody !== undefined) {
+    children.push(
+      xmlElement("peer_readme", { path: window.peerReadmePath }, [xmlText(window.peerReadmeBody)]),
+    );
+  }
 
-  const sessionBody = window.selfSessionBody !== undefined
-    ? window.selfSessionBody
-    : `(暂无;通过 open(parent_window_id="${window.id}", command="edit", args={ content: "...", scope: "session" }) 写入)`;
-  children.push(
-    xmlElement("self_session", { path: window.selfSessionPath, exists: String(window.selfSessionExists) }, [xmlText(sessionBody)]),
-  );
+  if (window.selfLongTermExists && window.selfLongTermBody !== undefined) {
+    children.push(
+      xmlElement("self_long_term", { path: window.selfLongTermPath }, [xmlText(window.selfLongTermBody)]),
+    );
+  }
+
+  if (window.selfSessionExists && window.selfSessionBody !== undefined) {
+    children.push(
+      xmlElement("self_session", { path: window.selfSessionPath }, [xmlText(window.selfSessionBody)]),
+    );
+  }
 
   return children;
 }

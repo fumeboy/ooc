@@ -1498,14 +1498,25 @@ export const root: DocTreeNode = {
                     - 自身被排除
                     - 已在 talk_window peer 列表中的不重复加，不覆盖 createdAt
 
-                    **2026-05-25 R8-5 修订**：
-                    relation 文档在设计中**只存在于 pools 与 flows**（self 视角的 self-relation），
-                    **不包含 peer stone readme**。原因：peer readme 属 collaborable.talk_window 维度的
-                    "对端身份介绍"，与 self-relation 是不同维度的资源，不该被 RelationWindow 内联。
-                    需要 peer readme 时 LLM 通过 file_window 直接 open peer stone 路径即可。
+                    **2026-05-27 撤回 R8-5 的 peerReadme 删除**：
+                    default visibility 让大量自动派生的 sibling/child relation_window 出现在 LLM 视野，
+                    但 self 大概率没写过它们的 relation note → window body 全空只剩 path。这违背
+                    default visibility 的初衷（让 Agent 一上场就知道身边有谁干什么）。把 peer readme
+                    （\`stones/<branch>/objects/<peer>/readme.md\`）作为只读字段挂回 RelationWindow，
+                    LLM 一眼看到 peer 是谁，无须再 file_window open；同时不影响 self-relation 的可写
+                    双层（pools/flows）。维度上 RelationWindow 现在承担"peer 身份介绍 + self-relation
+                    双层认知"两块（不是严格的"只 self-relation"）。
+
+                    **2026-05-27 渲染策略**：
+                    缺失的字段节点不再渲染占位文案（旧版 \`(暂无;通过 open(...) 写入)\`）。节点本身
+                    缺席就是信号；占位文案对 LLM 是噪声，basicKnowledge 已讲清楚 edit 用法不必重复。
+                    \`*Exists=false\` 或 body 为空时直接跳过该 XML 节点，render 出来的窗口只含真有内容
+                    的字段。
 
                     RelationWindow 暴露字段:
                     - \`peerId\`: 对端 objectId（去重 key）
+                    - \`peerReadmePath\` + \`peerReadmeBody?\` + \`peerReadmeExists\`:
+                      peer 身份介绍（只读；从 stone readme 派生）
                     - \`selfLongTermPath\` + \`selfLongTermBody?\` + \`selfLongTermExists\`:
                       pool 层长期 relation（懒创建；exists=false 时 body=undefined）
                     - \`selfSessionPath\` + \`selfSessionBody?\` + \`selfSessionExists\`:

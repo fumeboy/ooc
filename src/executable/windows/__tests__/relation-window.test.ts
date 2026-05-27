@@ -44,8 +44,9 @@ async function setupSelfThread(baseDir: string, opts: { withSuperTalk?: TalkWind
     status: "open",
     createdAt: Date.now(),
     peerId: PEER,
-    // R8-5 (2026-05-25): peerReadmePath/peerReadme 删除（relation 只在 pools+flows）；
-    // 加 selfLongTermExists/selfSessionExists boolean flag。
+    // 2026-05-27: peer_readme 撤回 R8-5 删除决定;default visibility 需要 peer 身份介绍
+    peerReadmePath: `stones/main/objects/${PEER}/readme.md`,
+    peerReadmeExists: false,
     selfLongTermPath: `pools/${SELF}/knowledge/relations/${PEER}.md`,
     selfLongTermExists: false,
     selfSessionPath: `flows/${SID}/objects/${SELF}/knowledge/relations/${PEER}.md`,

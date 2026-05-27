@@ -22,7 +22,7 @@
  * 内部的 commands / windows registry），故归位到 thinkable/knowledge。
  */
 
-import { deriveStoneFromThread, derivePoolFromThread, discoverStoneHierarchicalPeers, listBranchSkills, listObjectSkills, listExternalSkills, readPoolRelation, readFlowRelation, readWorldConfig } from "../../persistable/index.js";
+import { deriveStoneFromThread, derivePoolFromThread, discoverStoneHierarchicalPeers, listBranchSkills, listObjectSkills, listExternalSkills, readPoolRelation, readFlowRelation, readReadme, readmeFile, readWorldConfig } from "../../persistable/index.js";
 import type { ThreadContext } from "../context.js";
 import { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge.js";
 import { ROOT_BASIC_PATH, ROOT_COMMANDS, ROOT_KNOWLEDGE } from "../../executable/windows/root/index.js";
@@ -364,6 +364,23 @@ export async function deriveRelationWindow(
   for (const [peerId, createdAt] of peerEarliest) {
     const selfLongTermPath = `pools/${selfId}/knowledge/relations/${peerId}.md`;
     const selfSessionPath = `flows/${sessionId}/objects/${selfId}/knowledge/relations/${peerId}.md`;
+    const peerStoneRef = { baseDir, objectId: peerId, stonesBranch: thread.persistence.stonesBranch };
+    const peerReadmePath = readmeFile(peerStoneRef);
+
+    let peerReadmeBody: string | undefined;
+    let peerReadmeExists = false;
+    try {
+      const text = await readReadme(peerStoneRef);
+      if (text !== undefined && text.trim() !== "") {
+        peerReadmeExists = true;
+        peerReadmeBody = truncateKnowledgeBody(text);
+      } else if (text !== undefined) {
+        // 文件存在但空 — 当作 exists=true 但 body undefined（与"完全没文件"区分）
+        peerReadmeExists = true;
+      }
+    } catch (err) {
+      console.debug(`[relation] peer_readme io_error ${peerId} msg=${(err as Error).message}`);
+    }
 
     let selfLongTermBody: string | undefined;
     let selfLongTermExists = false;
@@ -397,6 +414,9 @@ export async function deriveRelationWindow(
       status: "open",
       createdAt,
       peerId,
+      peerReadmePath,
+      peerReadmeBody,
+      peerReadmeExists,
       selfLongTermPath,
       selfLongTermBody,
       selfLongTermExists,

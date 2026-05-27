@@ -230,6 +230,38 @@ describe("deriveRelationWindow", () => {
       expect(bob.createdAt).toBe(1234);
     });
   });
+
+  describe("peer_readme(spec 2026-05-27): peer stone readme 作为 RelationWindow 只读字段", () => {
+    test("peer 有 readme 内容 → peerReadmeBody 含内容 + peerReadmeExists=true", async () => {
+      const { writeReadme } = await import("../../../persistable");
+      await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
+      await writeReadme({ baseDir: tempRoot, objectId: "bob" }, "## bob\n是个评审 Agent");
+      const thread = selfThread(tempRoot, [talkTo("bob")]);
+      const out = await deriveRelationWindow(thread);
+      const bob = out.find((w) => w.peerId === "bob")!;
+      expect(bob.peerReadmeExists).toBe(true);
+      expect(bob.peerReadmeBody).toBe("## bob\n是个评审 Agent");
+      expect(bob.peerReadmePath).toMatch(/stones\/.*\/objects\/bob\/readme\.md$/);
+    });
+
+    test("peer 没 readme 文件 → peerReadmeExists=false + peerReadmeBody undefined", async () => {
+      const thread = selfThread(tempRoot, [talkTo("ghost")]);
+      const out = await deriveRelationWindow(thread);
+      const ghost = out.find((w) => w.peerId === "ghost")!;
+      expect(ghost.peerReadmeExists).toBe(false);
+      expect(ghost.peerReadmeBody).toBeUndefined();
+    });
+
+    test("peer readme 是空文件 → exists=true 但 body=undefined(空文件不渲染)", async () => {
+      // createStoneObject 默认写空 readme
+      await createStoneObject({ baseDir: tempRoot, objectId: "empty" });
+      const thread = selfThread(tempRoot, [talkTo("empty")]);
+      const out = await deriveRelationWindow(thread);
+      const empty = out.find((w) => w.peerId === "empty")!;
+      expect(empty.peerReadmeExists).toBe(true);
+      expect(empty.peerReadmeBody).toBeUndefined();
+    });
+  });
 });
 
 describe("deriveRelationCompanionKnowledge / deriveRelationKnowledge(已废弃 shim)", () => {
