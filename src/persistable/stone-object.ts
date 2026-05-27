@@ -55,8 +55,8 @@ export function stoneChildrenDir(ref: StoneObjectRef): string {
  * 把嵌套 objectId 解析为从根到 immediate parent 的祖先 objectId 列表。
  *
  * 例：
- * - "sentry"              → []          // 顶层 Agent 没有祖先
- * - "sentry/event"        → ["sentry"]
+ * - "parent"              → []          // 顶层 Agent 没有祖先
+ * - "parent/child"        → ["parent"]
  * - "a/b/c"               → ["a", "a/b"]
  *
  * 用于 knowledge loader 在加载子 Agent 时遍历祖先目录，按 frontmatter `inheritable`

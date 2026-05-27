@@ -23,7 +23,7 @@ import type { ProcessEvent, ThreadContext } from "./context";
 
 export interface DetectInterruptedOptions {
   /**
-   * 历史数据 fallback: 真实样本 (如修复前的 t_sentry_mpmvg6yd_fy4c) 没有 call_started 标记,
+   * 历史数据 fallback: 没有 call_started 标记,
    * 但 debug/llm.input.json 存在。caller 可显式传 debugInputExists=true, 配合 events 中
    * **任意位置**都没有 llm_interaction 事件 → 也判定为中断。
    *

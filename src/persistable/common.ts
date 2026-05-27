@@ -38,9 +38,9 @@ export interface ThreadPersistenceRef extends FlowObjectRef {
  * 起 stone；2026-05-27 起 flow 对齐）。
  *
  * 物理布局示例（stone 与 flow 形态对齐）：
- *   objectId = "sentry/sentry_event"
- *   → stones/<branch>/objects/sentry/children/sentry_event
- *   → flows/<sid>/objects/sentry/children/sentry_event
+ *   objectId = "parent/child"
+ *   → stones/<branch>/objects/parent/child
+ *   → flows/<sid>/objects/parent/child
  *
  * 详见 meta/object.doc.ts:thinkable.children.knowledge.patches.domain_axis。
  */
