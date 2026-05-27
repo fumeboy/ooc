@@ -897,7 +897,7 @@ export const root: DocTreeNode = {
 
                     与 agent-native parity 的关系: Ask 档的 approve/reject 当前是纯**人类面**（控制面 HITL）。
                     按 root.patches.agent_native_parity，它的 **agent 面**（如 Supervisor / parent 作为 agent
-                    审批 children 的高赌注 command，呼应 root.patches.object_relations 的 seed review 链）是
+                    审批 children 的高赌注 command，呼应 root.patches.object_relations 的 cross-object PR review）是
                     演化方向，当前尚未实现——属 parity 公理下的显式缺口。
                     `,
                     named: {
@@ -1685,20 +1685,20 @@ export const root: DocTreeNode = {
                     - 可见性（已落地）: relation_window 每轮默认派生 self 的"同级 Agent"+"一级 children Agent"，
                       让 Agent 一上场就看见身边有谁（见 relation_window；判定见
                       src/persistable/stone-object.ts:discoverStoneHierarchicalPeers，不递归到孙）。
-                    - 修改权（design-ahead-of-code）: parent 拥有 child 的 seed，通过 stone-versioning 的 review
-                      链行使，**不在 collaborable 的运行时通道里**。这里要分清两件事:
-                      - 设计期治理（改 child 的 seed）→ 走 persistable.stone-versioning 的 review，不走 talk。
-                      - 运行时管控（叫停跑偏的 child）→ 走 talk（发消息让 child 自己停），**不暴力写** child 运行时状态。
+                    - 修改权: **self-scope 自治**（见 root.patches.object_relations）。object 改自己子树（含自己 seed）
+                      经 stone-versioning self-scope 自治 ff-merge、不经他人 review；cross-object（如 child 改 parent）
+                      才 PR。这不在 collaborable 运行时通道里——设计期改 seed 走 stone-versioning，运行时管控
+                      （叫停跑偏的 child）才走 talk（发消息让 child 自己停），**不暴力写** child 运行时状态。
 
-                    所以 collaborable 只负责"运行时的 peer 协作 + 运行时管控的 talk 通道"；parent 对 child 的
-                    设计期权力落在 persistable，不在这里。
+                    所以 collaborable 只负责"运行时的 peer 协作 + 运行时管控的 talk 通道"；改 seed 的 self/cross
+                    划界落在 persistable.stone-versioning，不在这里。
                     `,
                     named: {
                         "peer 平等轴": "同级 Agent 平等协作，只能 talk 说服、不能直接改对方",
-                        "parent-child 层级轴": "child 嵌套在 parent/children/<child>/；可见性已落地，修改权是设计",
+                        "parent-child 层级轴": "child 嵌套在 parent/children/<child>/；含 knowledge 继承 / 可见性 / 修改权(self-scope 自治)",
                     },
                     todo: [
-                        "parent 对 child seed 的 stone-versioning 跨 object review 授权链尚未实现（design-ahead-of-code），落地见 persistable.stone-versioning。",
+                        "self-scope 自治改 seed 已由 write_file→stone-versioning 落地；嵌套 child 自 metaprog 需放开 isValidObjectId（见 persistable.stone-versioning）。",
                     ],
                 },
             },
@@ -1987,10 +1987,9 @@ export const root: DocTreeNode = {
             （见 observable 的 agent 面），super 只是"读它们、据此调整自己"的场所。
 
             scope —— super 是 **self-scoped** 的: object A 的 super flow 只能观察 / 修改 A 自己
-            （talk_window.target="super" 是自指别名，见 super_alias_target）。**层级例外**: parent-child 下
-            parent 拥有 child 的 seed、可改 child 的 self.md / server / knowledge，但这条权力**不在 super 的
-            运行时写面里**，而是走 persistable.stone-versioning 的 review 链（详见 root.patches.object_relations）。
-            super 本身从不跨 object。
+            （talk_window.target="super" 是自指别名，见 super_alias_target）。改自身 stone（self.md / server /
+            knowledge）经 write_file → stone-versioning 的 **self-scope 自治 ff-merge**，不经他人 review；
+            cross-object（改别人子树）才 PR（详见 root.patches.object_relations）。super 本身从不跨 object。
             `,
             named: {
                 "Reflectable": "Object 的反思 / 元编程能力维度",
@@ -3072,7 +3071,7 @@ export const root: DocTreeNode = {
                             },
                             todo: [
                                 "user-review-supervisor-seed 与 parent 跨 object 改 child seed 的显式授权校验当前未实现（design-ahead-of-code）；现有代码仅靠 self-scope 路径前缀隐式表达层级修改权。",
-                                "isValidObjectId（src/persistable/stone-versioning.ts，regex /^[A-Za-z0-9_-][A-Za-z0-9_.-]*$/）不允许 \"/\"，故嵌套 child（objectId 含 \"/\"）当前无法用自己完整 objectId 调 openMetaprogWorktree 自行 metaprog——child 改自己 seed 实际只能由 parent 代劳；这是 design-ahead-of-code（grill 设计的'child 发 PR 提议'路径尚不可走）。",
+                                "isValidObjectId（src/persistable/stone-versioning.ts）regex 不允许 \"/\"，嵌套 child（objectId 含 \"/\"）暂无法用完整 objectId 调 openMetaprogWorktree 自 metaprog。放开后：child 改自己子树 = self-scope 自治 ff-merge（不经 parent review），child 改 parent = cross-scope PR。需同时确认 self-scope 前缀对 nested 用 nestedObjectPath（objects/<p>/children/<c>/）而非直拼。",
                             ],
                         },
                         "r12_enforcement_at_persistable_layer": {
@@ -4067,31 +4066,31 @@ export const root: DocTreeNode = {
             3. parent-child 层级轴: child Agent 物理嵌套在 parent 的 children/ 下（objectId 用 "/" 编码）。此轴有三个侧面:
                - knowledge 继承（已有）: child 继承祖先 seed knowledge，见 thinkable.knowledge 的 B-tree 协议。
                - 可见性（已有）: 每轮默认派生 sibling + 一级 child 的 relation_window，见 collaborable.relation_window。
-               - 修改权（本轮新增的设计）: parent 拥有 child 的 **seed**——见下。
+               - 修改权: **self-scope 自治**——object 改自己子树（含自己 seed）自治，cross-object 才 PR——见下。
 
             Supervisor = world 级最顶层 parent object: harness 的"1 Supervisor + N Agent"即这棵 object 树的实例——Supervisor 是 root parent，AgentOfX 是一级 children。
 
-            parent 改 child 的修改权 = "parent 拥有 child 的 seed"（零新机制，复用 seed/sediment + stone-versioning）:
-            - child seed（先天: stones/.../<child>/ self.md / readme.md / server / knowledge）: owner 是 parent。child 自己的 super 只能"提议"（发 stone-versioning PR）；parent 的 super 有权主动改 + review / 合并。
-            - child sediment（后天: pools/.../<child>/knowledge/memory|relations）: child 运行时自治，写就生效，parent 不碰。
-            - "谁赢"不存在: seed 改动经 git review 串行化，parent 是裁决者；sediment 与 seed 不在同一写面并发。
-            - scope: 直接修改权只到一级 children（每级 parent review 自己直接 children 的 seed PR）；Supervisor 作为 root 靠 git review 链的传递性获全局兜底，不直接伸手改孙辈。与 relation 可见性"只一级"自洽。
-            - 运行时管控不走暴力写: parent 要叫停跑偏的 child，走 collaborable talk（发消息让 child 自己停），不直接写 child 运行时状态。"设计期治理（seed review）"与"运行时管控（talk）"分离。
+            修改权 = **self-scope 自治**（唯一规则，对所有 object 一视同仁；复用 stone-versioning 的 self/cross 划界）:
+            - 任何 object 改自己子树 objects/<self>/...（含自己的 seed: self.md / readme.md / server / knowledge）= self-scope → 自治 ff-merge，无需任何人 review。
+            - child 改自己（含自己 seed）= self-scope 自治，**不经 parent review**。
+            - parent 改 child（child 物理在 objects/<parent>/children/<child>/，落在 parent 子树）= 对 parent 也是 self-scope → 自治。
+            - cross-object（改不在自己子树的别人，如 child 改 parent）= cross-scope → PR-Issue review。
+            - child sediment（pools/.../knowledge/memory|relations）= 运行时自治，写就生效，不进 git。
+            - 运行时管控（叫停跑偏的 child）走 collaborable talk，不暴力写 child 运行时状态。
 
-            seed 信任链锚定 user: user → Supervisor（root）→ AgentOfX（一级 children）→ 子 Agent → …，每层 git review 把关下一层的 seed，user 把关 root（root 无 parent，由 user 这个树外终极 reviewer 通过真人 git review 把关）。
-            - 选 user 把关而非 root self-approve: 否则 root 成不受约束的特权奇点，破坏"seed 必须经 review"不变量，违反 OOC 第一约束（避免失控的自举）。
-            - user 双重语义: 运行时 passive（不思考、不作 peer，是交互起点 user.root）；设计期 supreme（seed git review 终极闸门）。与"运行时管控走 talk / 设计期治理走 seed review"同构。
-            - 推论: seed 进 git review（终极裁决者 = user，是信任链物理锚点）；sediment 不进 git（运行时自治可脱离 user 闸门快跑）；dogfooding 极限 = Supervisor 可自我迭代，但 seed 演化永留 user 闸门，自举 ≠ 失控。
+            user 闸门 = **git 本身**（不是 OOC 内的 PR gate）: 所有 stone 改动都进 git（write_file 写 stones/ 经 stone-versioning，详见 persistable.stone-versioning）。self-scope 自治 commit + git 历史给 user 兜底（review / rollback）。
+            - user 双重语义: 运行时 passive（不思考、不作 peer，是交互起点 user.root）；设计期 supreme（git 层终极闸门）。
+            - dogfooding 极限 = Object 自治演化自己（self-scope 不阻塞），但每次改动留 git 痕迹，user 通过 git 兜底——自举 ≠ 失控。
             `,
             named: {
                 "对象关系三轴": "自我(super) / peer 平等(talk) / parent-child 层级，三种不同权力语义的关系",
                 "parent-child 层级轴": "child Agent 嵌套在 parent/children/<child>/；含 knowledge 继承 / 可见性 / 修改权三侧面",
                 "Supervisor=root parent": "harness 的最顶层 Supervisor 即 object 树的 root parent object",
-                "seed 信任链": "user → Supervisor → AgentOfX → … 每层 git review 把关下一层 seed，user 锚定根",
-                "user 双重语义": "运行时 passive object（交互起点）/ 设计期 supreme reviewer（seed 终极闸门）",
+                "self-scope 自治": "object 改自己子树（含自己 seed）自治 ff-merge 无需 review；cross-object 才 PR",
+                "user 闸门=git": "user 通过 git history/review/rollback 兜底所有 stone 改动，非 OOC 内 PR gate",
             },
             todo: [
-                "修改权 / review 链目前是 design-ahead-of-code: 代码里仅有 knowledge 继承（B-tree）与一级可见性（relation_window）支撑；'parent review child seed PR' 的 stone-versioning 跨 object 授权链尚未实现，落地见 persistable.stone-versioning。",
+                "self-scope 自治已由 task#17 落地（write_file 写 stones/ 经 stone-versioning，self 自动 ff-merge / cross 走 PR）；嵌套 child 用完整 objectId 自 metaprog 需放开 isValidObjectId 允许 \"/\"（见 persistable.stone-versioning todo）。",
             ],
         },
     },
