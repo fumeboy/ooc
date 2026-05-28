@@ -455,6 +455,55 @@ export default defineObject({
             return { ok: true, path: args.path, bytes: Buffer.byteLength(args.content) };
         },
 
+        async exec_command(args: any, ctx: ObjectContext) {
+            if (!args?.command || !Array.isArray(args.command) || args.command.length === 0) {
+                throw new Error("exec_command: args.command (string[]) required and non-empty");
+            }
+            const cmd = args.command.map((s: any) => String(s));
+            const cwd = args.cwd ? path.resolve(args.cwd) : ctx.worldRoot;
+            if (!cwd.startsWith(path.resolve(ctx.worldRoot))) {
+                throw new Error(`exec_command: cwd outside worldRoot: ${args.cwd}`);
+            }
+            const timeoutMs = typeof args.timeout_ms === "number" ? Math.min(args.timeout_ms, 60_000) : 15_000;
+
+            try {
+                const proc = Bun.spawn({
+                    cmd,
+                    cwd,
+                    stdout: "pipe",
+                    stderr: "pipe",
+                    env: { ...process.env, PATH: process.env.PATH ?? "/usr/bin:/bin" },
+                });
+
+                // Race with timeout
+                const exitCode = await Promise.race([
+                    proc.exited,
+                    new Promise<number>((_, rej) =>
+                        setTimeout(() => { proc.kill(); rej(new Error(`exec_command: timeout after ${timeoutMs}ms`)); }, timeoutMs),
+                    ),
+                ]).catch((err) => {
+                    return { _timeoutErr: err };
+                });
+
+                if (typeof exitCode === "object" && exitCode && "_timeoutErr" in exitCode) {
+                    const stdoutText = await new Response(proc.stdout as any).text().catch(() => "");
+                    const stderrText = await new Response(proc.stderr as any).text().catch(() => "");
+                    return { ok: false, error: "timeout", stdout: stdoutText.slice(0, 4000), stderr: stderrText.slice(0, 4000) };
+                }
+
+                const stdoutText = await new Response(proc.stdout as any).text().catch(() => "");
+                const stderrText = await new Response(proc.stderr as any).text().catch(() => "");
+                return {
+                    ok: exitCode === 0,
+                    exit_code: exitCode,
+                    stdout: stdoutText.slice(0, 8000),
+                    stderr: stderrText.slice(0, 4000),
+                };
+            } catch (err) {
+                throw new Error(`exec_command failed: ${(err as Error).message}`);
+            }
+        },
+
         async end(_args: unknown, _ctx: ObjectContext) {
             return { ok: true, status: "skeleton" };
         },
