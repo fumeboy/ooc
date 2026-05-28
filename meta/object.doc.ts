@@ -549,5 +549,40 @@ export const root: DocTreeNode = {
         sub-thread 因共享 owner 身份，能调 owner 的 private; 这条边界是 do 路径的关键 invariant。
         `,
     },
+        b_class_collapse: {
+            title: "B 类塌缩判据 - talk/do/todo/plan/relation 不再独立",
+            content: `
+            归一前 OOC 系统有 14 个 window 类型；归一时按"实体 vs 关系/状态/过程"二分:
+
+            - **A 类（实体）**: 有自己的数据 / 生命周期，独立于任何 owner → 保留为内置原型 Object（builtin prototype）。包含 7 个: program / search / file / knowledge / command_exec / skill_index / custom + root（共 8 个 builtin prototype）。
+            - **B 类（关系/状态/过程）**: 是 owner Object 处于某种关系/模式时的依附状态，非独立实体 → **塌缩**为 owner 的字段 + root 原型上的方法 + defaultContext 切片。共 5 个: talk / do / todo / plan / relation。
+
+            B 类塌缩映射表（V2 §2.4 + §2.5）:
+
+            | 旧 window | 字段载体（持久层） | root 原型方法 | defaultContext 切片 |
+            |---|---|---|---|
+            | talk | **flow**: \`talks/<peer>.jsonl\` 每 peer 一文件，append-only | \`talk(target, content)\` 单动词（无 say） | 最近 N 条 talks 摘要 |
+            | do | **flow**: \`threads/<thread_id>/\` 每子线程一目录 | \`do(intent)\` → thread_id；\`do_close(id)\` | active threads 列表 |
+            | todo | **flow**: \`todos.json\` 当前 thread 结构化列表 | \`todo_add\` / \`todo_check\` / \`todo_uncheck\` / \`todo_remove\` / \`todo_list\` | 未完成 todos |
+            | plan | **flow**: \`plan.md\` 当前 thread 引导文本 | \`plan_set(text)\` / \`plan_clear()\` | active plan 顶置 |
+            | relation | **stone**: \`children/\` 目录 + 同级扫描；**pool**: \`knowledge/relations/<peer>.md\` 长期认知 | 读自动注入；写靠 super flow（落 pool）或 metaprog（落 stone children） | siblings + children URI + sediment relations |
+
+            **塌缩判据公式**: 实体（有自己的数据/生命周期）→ Object 原型；关系/状态/过程（依附于 owner）→ 字段。
+
+            **关键 invariant**: talk / do 对偶——前者跨 Object 沟通（每 peer 一文件，peer 推进），后者同 Object 内 spawn sub-thread（每子线程一目录，owner spawn 推进）。两者都在 active flow 层；不进 stone 也不进 pool。详见 children.persistable.children.flow。
+
+            塌缩外的横切影响:
+            - **talk_window 中介消失**: 唯一对话实体 = 双方各自的 \`talks/<peer>.jsonl\` 文件；UI 渲染共享视图时两端按 timestamp merge。
+            - **say verb 消失**: 统一为 \`talk(target, content)\` 单动词，无 \`say\`。
+            - **sub-thread 嵌套扁平**: 所有 do 派生的 sub-thread 都在 owner 的 \`threads/\` 同层，靠 \`intent.md\` 的 \`parent_thread_id\` 字段记录派生关系，避免深层目录。
+            `,
+            named: {
+                "B 类塌缩": "talk/do/todo/plan/relation 5 个旧 window 类型塌缩为 owner 字段+root 方法+defaultContext 切片",
+                "A 类原型": "program/search/file/knowledge/command_exec/skill_index/custom 7 个+root 共 8 个 builtin prototype",
+                "塌缩判据": "实体→Object 原型；关系/状态/过程→字段",
+                "talk/do 对偶": "talk 跨 Object（peer 推进）/ do 同 Object 内 spawn（owner 推进）；两者都落 flow 层",
+                "sub-thread 扁平": "所有 do 派生 sub-thread 在同层 threads/，parent_thread_id 字段记录派生",
+            },
+        },
 },
 };
