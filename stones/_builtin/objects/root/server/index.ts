@@ -5,6 +5,8 @@
  *
  * P4 阶段: methods 是 skeleton (参数解析 + 占位返回 + TODO 标 P5)；
  *          defaultContext() 是真实实装（按 spec §3.5）。
+ * P5 阶段: 11 个 B 类 method body 替换为真实 flow 层写入实装；
+ *          其余 6 个 (grep/glob/open_file/open_knowledge/metaprog/write_file/end) 仍 skeleton (P6+)。
  *
  * 详见 spec V2 §3 + meta/object.doc.ts:patches.b_class_collapse。
  */
@@ -12,6 +14,16 @@
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
 import { defineObject, type ObjectContext } from "@src/executable/server";
+import {
+    appendTalkEntry,
+    ensureFlowDir,
+    ensureThreadDir,
+    nameFromUri,
+    planFile,
+    shortId,
+    threadDir,
+    todosFile,
+} from "@src/persistable/flow-paths";
 
 /* -------------------- defaultContext: 真实实装 -------------------- */
 
@@ -151,68 +163,190 @@ function computeRelations(ctx: ObjectContext): { siblings: string[]; children: s
     return { siblings, children };
 }
 
-/* -------------------- public methods: skeletons (P5 fill in) -------------------- */
+/* -------------------- private module-level helper -------------------- */
+
+async function _mutateTodoChecked(
+    ctx: ObjectContext,
+    id: string,
+    checked: boolean,
+): Promise<{ ok: boolean }> {
+    if (!ctx.sessionId) throw new Error("todo: no active sessionId");
+    const selfName = nameFromUri(ctx.record.uri);
+    await ensureFlowDir(ctx.worldRoot, ctx.sessionId, selfName);
+    const f = todosFile(ctx.worldRoot, ctx.sessionId, selfName);
+    let data: { items: any[] } = { items: [] };
+    try {
+        data = JSON.parse(await fs.readFile(f, "utf8"));
+        if (!Array.isArray(data.items)) data.items = [];
+    } catch { return { ok: false }; }
+    let found = false;
+    for (const it of data.items) {
+        if (it.id === id) {
+            it.checked = checked;
+            it.updated_at = new Date().toISOString();
+            found = true;
+        }
+    }
+    await fs.writeFile(f, JSON.stringify(data, null, 2));
+    return { ok: found };
+}
+
+/* -------------------- public methods: B 类 real impl + skeleton 其余 -------------------- */
 
 export default defineObject({
     public: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async talk(args: any, _ctx: ObjectContext) {
-            // TODO P5: 实装 flow 层双端 talks/<peer>.jsonl append + 唤起 target LLM
-            if (!args.target || !args.content) {
-                throw new Error("talk: missing target or content");
+        async talk(args: any, ctx: ObjectContext) {
+            if (!args || typeof args.target !== "string" || typeof args.content !== "string") {
+                throw new Error("talk: args.target (string) and args.content (string) required");
             }
-            return { ok: true, status: "skeleton", _todo: "P5 implements talk-直投回路" };
+            if (!ctx.sessionId) {
+                throw new Error("talk: no active sessionId");
+            }
+            const ts = new Date().toISOString();
+            const selfName = nameFromUri(ctx.record.uri);
+            const targetName = nameFromUri(args.target);
+
+            // 1. self 端 → talks/<target>.jsonl direction=out
+            await appendTalkEntry(ctx.worldRoot, ctx.sessionId, selfName, {
+                ts,
+                direction: "out",
+                peer: args.target,
+                content: args.content,
+            });
+
+            // 2. target 端 → talks/<self>.jsonl direction=in (auto-create flow dir for target)
+            await appendTalkEntry(ctx.worldRoot, ctx.sessionId, targetName, {
+                ts,
+                direction: "in",
+                peer: ctx.record.uri,
+                content: args.content,
+            });
+
+            // TODO P6: schedule target's worker to wake
+            return { ok: true, ts };
         },
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async do(args: any, _ctx: ObjectContext) {
-            // TODO P5: 实装 flow 层 threads/<id>/ 创建 + spawn sub-thread worker
-            if (!args.intent) throw new Error("do: missing intent");
-            return { ok: true, status: "skeleton", thread_id: "stub_" + String(Date.now()) };
+        async do(args: any, ctx: ObjectContext) {
+            if (!args || typeof args.intent !== "string") {
+                throw new Error("do: args.intent (string) required");
+            }
+            if (!ctx.sessionId) {
+                throw new Error("do: no active sessionId");
+            }
+            const selfName = nameFromUri(ctx.record.uri);
+            const threadId = shortId("t");
+            const dir = await ensureThreadDir(ctx.worldRoot, ctx.sessionId, selfName, threadId);
+            const intent: any = { intent: args.intent };
+            if (typeof args.parent_thread_id === "string") {
+                intent.parent_thread_id = args.parent_thread_id;
+            }
+            await fs.writeFile(
+                path.join(dir, "intent.md"),
+                `---\n${Object.entries(intent).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join("\n")}\n---\n\n${args.intent}\n`,
+            );
+            await fs.writeFile(
+                path.join(dir, "thread.json"),
+                JSON.stringify({ id: threadId, status: "active", created_at: new Date().toISOString() }, null, 2),
+            );
+            return { ok: true, thread_id: threadId };
         },
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async do_close(args: any, _ctx: ObjectContext) {
-            if (!args.thread_id) throw new Error("do_close: missing thread_id");
-            return { ok: true, status: "skeleton" };
+        async do_close(args: any, ctx: ObjectContext) {
+            if (!args || typeof args.thread_id !== "string") {
+                throw new Error("do_close: args.thread_id required");
+            }
+            if (!ctx.sessionId) throw new Error("do_close: no active sessionId");
+            const selfName = nameFromUri(ctx.record.uri);
+            const dir = threadDir(ctx.worldRoot, ctx.sessionId, selfName, args.thread_id);
+            const jsonPath = path.join(dir, "thread.json");
+            try {
+                const body = await fs.readFile(jsonPath, "utf8");
+                const obj = JSON.parse(body);
+                obj.status = "closed";
+                obj.closed_at = new Date().toISOString();
+                await fs.writeFile(jsonPath, JSON.stringify(obj, null, 2));
+            } catch {
+                throw new Error(`do_close: thread not found or invalid: ${args.thread_id}`);
+            }
+            return { ok: true };
         },
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async todo_add(args: any, _ctx: ObjectContext) {
-            if (!args.content) throw new Error("todo_add: missing content");
-            return { ok: true, status: "skeleton", id: "stub_" + String(Date.now()) };
+        async todo_add(args: any, ctx: ObjectContext) {
+            if (!args || typeof args.content !== "string") {
+                throw new Error("todo_add: args.content required");
+            }
+            if (!ctx.sessionId) throw new Error("todo_add: no active sessionId");
+            const selfName = nameFromUri(ctx.record.uri);
+            await ensureFlowDir(ctx.worldRoot, ctx.sessionId, selfName);
+            const f = todosFile(ctx.worldRoot, ctx.sessionId, selfName);
+            let data: { items: any[] } = { items: [] };
+            try {
+                const body = await fs.readFile(f, "utf8");
+                data = JSON.parse(body);
+                if (!Array.isArray(data.items)) data.items = [];
+            } catch { /* file 不存在或损坏 → 初始化 */ }
+            const id = shortId("td");
+            data.items.push({ id, content: args.content, checked: false, created_at: new Date().toISOString() });
+            await fs.writeFile(f, JSON.stringify(data, null, 2));
+            return { ok: true, id };
         },
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async todo_check(args: any, _ctx: ObjectContext) {
-            if (!args.id) throw new Error("todo_check: missing id");
-            return { ok: true, status: "skeleton" };
+        async todo_check(args: any, ctx: ObjectContext) {
+            if (!args || typeof args.id !== "string") throw new Error("todo_check: args.id required");
+            return await _mutateTodoChecked(ctx, args.id, true);
         },
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async todo_uncheck(args: any, _ctx: ObjectContext) {
-            if (!args.id) throw new Error("todo_uncheck: missing id");
-            return { ok: true, status: "skeleton" };
+        async todo_uncheck(args: any, ctx: ObjectContext) {
+            if (!args || typeof args.id !== "string") throw new Error("todo_uncheck: args.id required");
+            return await _mutateTodoChecked(ctx, args.id, false);
         },
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async todo_remove(args: any, _ctx: ObjectContext) {
-            if (!args.id) throw new Error("todo_remove: missing id");
-            return { ok: true, status: "skeleton" };
+        async todo_remove(args: any, ctx: ObjectContext) {
+            if (!args || typeof args.id !== "string") throw new Error("todo_remove: args.id required");
+            if (!ctx.sessionId) throw new Error("todo_remove: no active sessionId");
+            const selfName = nameFromUri(ctx.record.uri);
+            await ensureFlowDir(ctx.worldRoot, ctx.sessionId, selfName);
+            const f = todosFile(ctx.worldRoot, ctx.sessionId, selfName);
+            let data: { items: any[] } = { items: [] };
+            try {
+                data = JSON.parse(await fs.readFile(f, "utf8"));
+                if (!Array.isArray(data.items)) data.items = [];
+            } catch { return { ok: false, error: "no todos.json" }; }
+            const before = data.items.length;
+            data.items = data.items.filter((it: any) => it.id !== args.id);
+            await fs.writeFile(f, JSON.stringify(data, null, 2));
+            return { ok: data.items.length < before };
         },
 
-        async todo_list(_args: unknown, _ctx: ObjectContext) {
-            return { ok: true, status: "skeleton", items: [] as unknown[] };
+        async todo_list(_args: any, ctx: ObjectContext) {
+            if (!ctx.sessionId) throw new Error("todo_list: no active sessionId");
+            const selfName = nameFromUri(ctx.record.uri);
+            const f = todosFile(ctx.worldRoot, ctx.sessionId, selfName);
+            try {
+                const body = await fs.readFile(f, "utf8");
+                const data = JSON.parse(body);
+                return { ok: true, items: data.items ?? [] };
+            } catch {
+                return { ok: true, items: [] };
+            }
         },
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async plan_set(args: any, _ctx: ObjectContext) {
-            if (typeof args.text !== "string") throw new Error("plan_set: text required");
-            return { ok: true, status: "skeleton" };
+        async plan_set(args: any, ctx: ObjectContext) {
+            if (typeof args?.text !== "string") throw new Error("plan_set: args.text required");
+            if (!ctx.sessionId) throw new Error("plan_set: no active sessionId");
+            const selfName = nameFromUri(ctx.record.uri);
+            await ensureFlowDir(ctx.worldRoot, ctx.sessionId, selfName);
+            await fs.writeFile(planFile(ctx.worldRoot, ctx.sessionId, selfName), args.text);
+            return { ok: true };
         },
 
-        async plan_clear(_args: unknown, _ctx: ObjectContext) {
-            return { ok: true, status: "skeleton" };
+        async plan_clear(_args: any, ctx: ObjectContext) {
+            if (!ctx.sessionId) throw new Error("plan_clear: no active sessionId");
+            const selfName = nameFromUri(ctx.record.uri);
+            try {
+                await fs.unlink(planFile(ctx.worldRoot, ctx.sessionId, selfName));
+            } catch { /* no plan → ok */ }
+            return { ok: true };
         },
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
