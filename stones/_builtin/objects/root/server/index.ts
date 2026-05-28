@@ -226,6 +226,12 @@ export default defineObject({
             return { ok: true, ts };
         },
 
+        /**
+         * do(): Skeleton — creates a thread record (intent.md + thread.json) in the flow layer
+         * to express the intent of a sub-task, but does NOT automatically spawn a worker to
+         * execute it. Full sub-thread worker loop is P6+ infrastructure work.
+         * Use do_close() to mark a thread as closed once the intent is fulfilled externally.
+         */
         async do(args: any, ctx: ObjectContext) {
             if (!args || typeof args.intent !== "string") {
                 throw new Error("do: args.intent (string) required");
@@ -248,7 +254,7 @@ export default defineObject({
                 path.join(dir, "thread.json"),
                 JSON.stringify({ id: threadId, status: "active", created_at: new Date().toISOString() }, null, 2),
             );
-            return { ok: true, thread_id: threadId };
+            return { ok: true, thread_id: threadId, _note: "thread record created; worker execution requires P6+ sub-thread loop" };
         },
 
         async do_close(args: any, ctx: ObjectContext) {
@@ -351,10 +357,12 @@ export default defineObject({
 
         async grep(args: any, ctx: ObjectContext) {
             if (!args?.pattern) throw new Error("grep: args.pattern required");
-            const searchDir = args.path || ctx.worldRoot;
-            const resolved = path.resolve(searchDir);
+            const searchDir = args.path
+                ? path.resolve(ctx.worldRoot, args.path)
+                : ctx.worldRoot;
+            const resolved = searchDir;
             if (!resolved.startsWith(path.resolve(ctx.worldRoot)) && resolved !== path.resolve(ctx.worldRoot)) {
-                throw new Error(`grep: path outside worldRoot: ${searchDir}`);
+                throw new Error(`grep: path outside worldRoot: ${args.path}`);
             }
             const results: Array<{ file: string; line: number; content: string }> = [];
             const maxFiles = 200;
@@ -429,8 +437,10 @@ export default defineObject({
 
         async glob(args: any, ctx: ObjectContext) {
             if (!args?.pattern) throw new Error("glob: args.pattern required");
-            const searchDir = args.path || ctx.worldRoot;
-            const resolved = path.resolve(searchDir);
+            const searchDir = args.path
+                ? path.resolve(ctx.worldRoot, args.path)
+                : ctx.worldRoot;
+            const resolved = searchDir;
             if (!resolved.startsWith(path.resolve(ctx.worldRoot))) {
                 throw new Error(`glob: path outside worldRoot`);
             }
@@ -494,7 +504,7 @@ export default defineObject({
 
         async open_file(args: any, ctx: ObjectContext) {
             if (!args?.path) throw new Error("open_file: args.path required");
-            const target = path.resolve(args.path);
+            const target = path.resolve(ctx.worldRoot, args.path);
             if (!target.startsWith(path.resolve(ctx.worldRoot))) {
                 throw new Error(`open_file: path outside worldRoot: ${args.path}`);
             }
@@ -522,7 +532,7 @@ export default defineObject({
         async write_file(args: any, ctx: ObjectContext) {
             if (!args?.path) throw new Error("write_file: args.path required");
             if (typeof args.content !== "string") throw new Error("write_file: args.content (string) required");
-            const target = path.resolve(args.path);
+            const target = path.resolve(ctx.worldRoot, args.path);
             if (!target.startsWith(path.resolve(ctx.worldRoot))) {
                 throw new Error(`write_file: path outside worldRoot: ${args.path}`);
             }
@@ -536,7 +546,7 @@ export default defineObject({
                 throw new Error("exec_command: args.command (string[]) required and non-empty");
             }
             const cmd = args.command.map((s: any) => String(s));
-            const cwd = args.cwd ? path.resolve(args.cwd) : ctx.worldRoot;
+            const cwd = args.cwd ? path.resolve(ctx.worldRoot, args.cwd) : ctx.worldRoot;
             if (!cwd.startsWith(path.resolve(ctx.worldRoot))) {
                 throw new Error(`exec_command: cwd outside worldRoot: ${args.cwd}`);
             }

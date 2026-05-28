@@ -133,6 +133,20 @@ export function buildApp(deps: HttpDeps): Elysia {
     const sharedRegistry = deps.registry;
     const defaultBranch = deps.branch ?? "main";
 
+    /* -------- global error → JSON -------- */
+
+    app.onError(({ code, error }) => {
+        const message = error instanceof Error ? error.message : String(error);
+        const status =
+            code === "NOT_FOUND" ? 404
+            : code === "VALIDATION" || code === "PARSE" ? 400
+            : 500;
+        return new Response(
+            JSON.stringify({ ok: false, error: message, code }),
+            { status, headers: { "Content-Type": "application/json" } },
+        );
+    });
+
     /* -------- health -------- */
 
     app.get("/api/health", () => ({
@@ -220,6 +234,18 @@ export function buildApp(deps: HttpDeps): Elysia {
 
         worker.submit(thread);
 
+        // Write .session.json (idempotent)
+        const sessionMeta = { createdAt: new Date().toISOString(), objectUri };
+        const sessionDir = path.join(worker.worldRoot, "flows", sessionId);
+        await fs.mkdir(sessionDir, { recursive: true });
+        const sessionFile = path.join(sessionDir, ".session.json");
+        try {
+            await fs.access(sessionFile);
+            // already exists — idempotent
+        } catch {
+            await fs.writeFile(sessionFile, JSON.stringify(sessionMeta, null, 2));
+        }
+
         return {
             ok: true,
             sessionId,
@@ -272,7 +298,7 @@ export function buildApp(deps: HttpDeps): Elysia {
      * body: { objectUri: string; method: string; args?: unknown }
      *
      * 直接调用 Object method（不经过 LLM 调度）——用于控制面操作 / 测试。
-     * 加载 world 目录下的 Object、调用指定 method、返回结果。
+     * 复用 deps.registry（包含 builtins）避免原型链解析失败。
      */
     app.post("/api/sessions/:sessionId/invoke", async ({ params, body }) => {
         const { sessionId } = params;
@@ -288,14 +314,22 @@ export function buildApp(deps: HttpDeps): Elysia {
         }
 
         try {
-            const registry = new ObjectRegistry();
-            const records = await loadObjects({
-                worldRoot: worker.worldRoot,
-                branch: "main",
-                sessionId,
-            });
-            for (const r of records) {
-                registry.set(r);
+            // Reuse shared registry (includes builtins); supplement with any ephemeral flow objects
+            let registry: ObjectRegistry;
+            if (sharedRegistry) {
+                registry = sharedRegistry;
+                const flowRecords = await loadObjects({ worldRoot: worker.worldRoot, sessionId });
+                for (const r of flowRecords) {
+                    if (r.kind === "ephemeral") registry.set(r);
+                }
+            } else {
+                registry = new ObjectRegistry();
+                const records = await loadObjects({
+                    worldRoot: worker.worldRoot,
+                    branch: defaultBranch,
+                    sessionId,
+                });
+                for (const r of records) registry.set(r);
             }
 
             const ctx = {
@@ -486,6 +520,7 @@ export function buildApp(deps: HttpDeps): Elysia {
      * body: { method: string; args?: unknown; sessionId?: string }
      *
      * 调用 stone public method（通过 dispatcher.invokeMethod）。
+     * 复用 deps.registry（包含 builtins）避免原型链解析失败。
      */
     app.post("/api/stones/:branch/:name/call-method", async ({ params, body }) => {
         const { branch, name } = params;
@@ -507,13 +542,23 @@ export function buildApp(deps: HttpDeps): Elysia {
         const objectUri = `ooc://stones/${branch}/objects/${name}`;
 
         try {
-            const registry = new ObjectRegistry();
-            const records = await loadObjects({
-                worldRoot: worker.worldRoot,
-                branch,
-                sessionId,
-            });
-            for (const r of records) registry.set(r);
+            // Reuse shared registry (includes builtins); supplement with any ephemeral flow objects
+            let registry: ObjectRegistry;
+            if (sharedRegistry) {
+                registry = sharedRegistry;
+                const flowRecords = await loadObjects({ worldRoot: worker.worldRoot, sessionId });
+                for (const r of flowRecords) {
+                    if (r.kind === "ephemeral") registry.set(r);
+                }
+            } else {
+                registry = new ObjectRegistry();
+                const records = await loadObjects({
+                    worldRoot: worker.worldRoot,
+                    branch,
+                    sessionId,
+                });
+                for (const r of records) registry.set(r);
+            }
 
             const ctx = { worldRoot: worker.worldRoot, sessionId, registry };
             const result = await invokeMethod(registry, objectUri, method, b.args ?? {}, ctx);
@@ -569,10 +614,29 @@ export function buildApp(deps: HttpDeps): Elysia {
      * GET /api/flows/:sessionId/objects/:objectName
      *
      * object 摘要：plan + todos + recent talks + threads。
+     * 若 object 目录不存在（且无 active worker thread）返回 404。
      */
     app.get("/api/flows/:sessionId/objects/:objectName", async ({ params }) => {
         const { sessionId, objectName } = params;
         const flowDir = path.join(worker.worldRoot, "flows", sessionId, "objects", objectName);
+
+        // Check if object exists (flow dir or active thread)
+        let flowDirExists = false;
+        try {
+            const stat = await fs.stat(flowDir);
+            flowDirExists = stat.isDirectory();
+        } catch {
+            // doesn't exist
+        }
+        const hasActiveThread = worker.list().some(
+            (t) => t.sessionId === sessionId && t.objectUri.endsWith(`/${objectName}`),
+        );
+        if (!flowDirExists && !hasActiveThread) {
+            return new Response(
+                JSON.stringify({ ok: false, error: `object not found: ${objectName}` }),
+                { status: 404, headers: { "Content-Type": "application/json" } },
+            );
+        }
 
         const plan = await readFileOrNull(path.join(flowDir, "plan.md"));
         let todos: unknown = null;
@@ -834,7 +898,22 @@ export function buildApp(deps: HttpDeps): Elysia {
                 content,
             });
 
+            // Write .session.json for this session (idempotent)
+            const sessionDir = path.join(worker.worldRoot, "flows", sessionId);
+            await fs.mkdir(sessionDir, { recursive: true });
+            const sessionFile = path.join(sessionDir, ".session.json");
+            try {
+                await fs.access(sessionFile);
+            } catch {
+                await fs.writeFile(
+                    sessionFile,
+                    JSON.stringify({ createdAt: ts, objectUri: targetUri }, null, 2),
+                );
+            }
+
             // 3. Create ThinkThread for target with the in-talk as initial user message
+            // Record startTs BEFORE submitting so we can filter only new out messages below
+            const startTs = ts;
             const threadId = shortId("t");
             const thread: ThinkThread = {
                 id: threadId,
@@ -851,7 +930,7 @@ export function buildApp(deps: HttpDeps): Elysia {
                     },
                 ],
                 status: "running",
-                maxTicks: typeof b?.maxTicks === "number" ? b.maxTicks : 5,
+                maxTicks: typeof b?.maxTicks === "number" ? b.maxTicks : 12,
                 ticks: 0,
                 llmTimeoutMs: 60_000,
             };
@@ -860,7 +939,7 @@ export function buildApp(deps: HttpDeps): Elysia {
             worker.submit(thread);
             await worker.runUntilDone(90_000);
 
-            // 5. Read target's talks file for latest out message (response to user)
+            // 5. Read target's talks file for out messages with ts > startTs (time-scoped to this request)
             const talksDir = path.join(worker.worldRoot, "flows", sessionId, "objects", targetName, "talks");
             const userSlug = userUri.replace(/^ooc:\/\//, "").replace(/\//g, "__");
             const talksFile = path.join(talksDir, `${userSlug}.jsonl`);
@@ -868,12 +947,22 @@ export function buildApp(deps: HttpDeps): Elysia {
             try {
                 const raw = await fs.readFile(talksFile, "utf8");
                 const lines = raw.trim().split("\n").filter(Boolean);
-                // Find last out message
+                // Find last out message with ts strictly after startTs (avoids stale multi-turn attribution)
                 for (let i = lines.length - 1; i >= 0; i--) {
-                    const entry = JSON.parse(lines[i]!) as { direction: string; content: string };
-                    if (entry.direction === "out") {
+                    const entry = JSON.parse(lines[i]!) as { direction: string; content: string; ts?: string };
+                    if (entry.direction === "out" && (!entry.ts || entry.ts > startTs)) {
                         response = entry.content;
                         break;
+                    }
+                }
+                // Fall back to any out message if none found with ts filter
+                if (!response) {
+                    for (let i = lines.length - 1; i >= 0; i--) {
+                        const entry = JSON.parse(lines[i]!) as { direction: string; content: string };
+                        if (entry.direction === "out") {
+                            response = entry.content;
+                            break;
+                        }
                     }
                 }
             } catch {
