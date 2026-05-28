@@ -2,12 +2,16 @@
  * file_window — 在 context 中显示某个文件的内容窗口。
  *
  * - 由 root.open_file / root.write_file 创建（args: path, lines?, columns?）
- * - 注册的 command：set_range / reload / edit / close
- *   - set_range：调整 lines / columns 切片
+ *   open 时自动填默认 viewport = 0-200 行 / 0-200 字符（DEFAULT_VIEWPORT）
+ * - 注册的 command：set_viewport / set_range / reload / edit / close
+ *   - **set_viewport（推荐）**：精细化调整渲染窗口（line_start/line_end/column_start/column_end）
+ *   - set_range：遗留命令，调整 lines / columns 切片（保留向后兼容）
  *   - reload：重新读文件（render 层每轮都会读，所以 reload 主要是语义提示）
  *   - edit：基于"oldString → newString"做精确唯一替换；支持 array 形式做 atomic 多点修改
  *   - close：释放 window
- * - 渲染：render 层在 renderFileWindowChildren 中按 lines/columns 切片，32KB 截断
+ * - 渲染：viewport 控制行/列切片 + overflow marker；32KB 兜底截断
+ *
+ * 详见 meta/object.doc.ts:executable.context_window.patches.viewport_protocol。
  */
 
 import { readFile, writeFile } from "node:fs/promises";
@@ -19,24 +23,62 @@ import type {
 } from "../_shared/command-types.js";
 import { registerWindowType, type RenderContext } from "../_shared/registry.js";
 import type { FileWindow } from "../_shared/types.js";
+import {
+  DEFAULT_VIEWPORT,
+  applyViewport,
+  executeWindowSetViewport,
+  hasAnyViewportField,
+  type Viewport,
+} from "../_shared/viewport.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
 
 const MAX_FILE_WINDOW_BYTES = 32768;
 
 const FILE_WINDOW_SET_RANGE_BASIC = "internal/windows/file/set_range/basic";
+const FILE_WINDOW_SET_VIEWPORT_BASIC = "internal/windows/file/set_viewport/basic";
+const FILE_WINDOW_SET_VIEWPORT_INPUT = "internal/windows/file/set_viewport/input";
 const FILE_WINDOW_RELOAD_BASIC = "internal/windows/file/reload/basic";
 const FILE_WINDOW_CLOSE_BASIC = "internal/windows/file/close/basic";
 const FILE_WINDOW_EDIT_BASIC = "internal/windows/file/edit/basic";
 const FILE_WINDOW_EDIT_INPUT = "internal/windows/file/edit/input";
 
 const SET_RANGE_KNOWLEDGE = `
-file_window.set_range 调整文件的可见范围（行/列切片）。
+file_window.set_range 调整文件的可见范围（行/列切片）—— **遗留命令，新代码用 set_viewport**。
 
 参数：
 - lines: 可选 [start, end]
 - columns: 可选 [start, end]
 
 例：refine(form, args={ lines: [0, 200] }) → 仅展示前 200 行
+`.trim();
+
+const SET_VIEWPORT_KNOWLEDGE = `
+file_window.set_viewport 精细化调整渲染窗口大小（行+列）。
+
+打开 file_window 时默认 viewport = { line_start: 0, line_end: 200, column_start: 0, column_end: 200 }
+（即前 200 行 × 每行前 200 个字符）。需要看更多内容时显式扩窗。
+
+参数（**全部可选**，未传字段保留当前值）：
+- line_start: 起始行（含；从 0 开始）
+- line_end:   结束行（不含）
+- column_start: 起始字符列（含；从 0 开始）
+- column_end:   结束字符列（不含）
+
+约束（fail-loud）：
+- 全部必须是**非负整数**
+- line_start <= line_end
+- column_start <= column_end
+
+渲染：超 line_end 标 \`…(+N more lines)\`；行长 > column_end 标 \`…(+N more)\`；
+column_start > 0 行首标 \`(+N before)…\`。
+
+**注意**：viewport 只影响**渲染**给 LLM 的内容；edit / reload 等命令仍基于文件完整内容。
+想做精确文本替换时不需要先扩 viewport——edit 的 old/new 匹配看的是磁盘文件全文。
+
+例：
+- refine(form, args={ line_end: 1000 }) → 一次看前 1000 行
+- refine(form, args={ line_start: 200, line_end: 400 }) → 看 200-400 行
+- refine(form, args={ column_end: 500 }) → 把每行可见宽度扩到 500 字符
 `.trim();
 
 const RELOAD_KNOWLEDGE = `
@@ -111,6 +153,23 @@ const setRangeCommand: CommandTableEntry = {
   match: () => ["set_range"],
   knowledge: (): CommandKnowledgeEntries => ({ [FILE_WINDOW_SET_RANGE_BASIC]: SET_RANGE_KNOWLEDGE }),
   exec: (ctx) => executeFileWindowSetRange(ctx),
+};
+
+const setViewportCommand: CommandTableEntry = {
+  paths: ["set_viewport"],
+  match: () => ["set_viewport"],
+  knowledge: (args, formStatus): CommandKnowledgeEntries => {
+    const entries: CommandKnowledgeEntries = {
+      [FILE_WINDOW_SET_VIEWPORT_BASIC]: SET_VIEWPORT_KNOWLEDGE,
+    };
+    if (formStatus === "open" && !hasAnyViewportField(args)) {
+      entries[FILE_WINDOW_SET_VIEWPORT_INPUT] =
+        "set_viewport 至少需要传入 line_start / line_end / column_start / column_end 之一。\n" +
+        "未传字段保留当前值。请 refine 补齐后 submit。";
+    }
+    return entries;
+  },
+  exec: (ctx) => executeWindowSetViewport(ctx, "file"),
 };
 
 const reloadCommand: CommandTableEntry = {
@@ -320,12 +379,26 @@ function sliceByLinesColumns(
   return body;
 }
 
-/** file_window 的 renderXml hook：path + lines/columns + 文件正文。 */
+/** file_window 的 renderXml hook：path + viewport + 文件正文（按 viewport 切片）。 */
 async function renderFileWindow(ctx: RenderContext): Promise<XmlNode[]> {
   const window = ctx.window as FileWindow;
   const children: XmlNode[] = [
     xmlElement("path", {}, [xmlText(window.path)]),
   ];
+  const viewport: Viewport = window.viewport ?? DEFAULT_VIEWPORT;
+  children.push(
+    xmlElement(
+      "viewport",
+      {
+        line_start: String(viewport.lineStart),
+        line_end: String(viewport.lineEnd),
+        column_start: String(viewport.columnStart),
+        column_end: String(viewport.columnEnd),
+      },
+      [],
+    ),
+  );
+  // 兼容旧 lines/columns（遗留 set_range 路径）
   if (window.lines) {
     children.push(xmlElement("lines", {}, [xmlText(`${window.lines[0]}-${window.lines[1]}`)]));
   }
@@ -334,8 +407,12 @@ async function renderFileWindow(ctx: RenderContext): Promise<XmlNode[]> {
   }
   try {
     const raw = await readFile(window.path, "utf8");
-    const sliced = sliceByLinesColumns(raw, window.lines, window.columns);
-    children.push(xmlElement("content", {}, [xmlText(truncateBytes(sliced, MAX_FILE_WINDOW_BYTES))]));
+    // 优先按 viewport 切；如有遗留 lines/columns 在 viewport 之后再叠加（向后兼容）
+    let body = applyViewport(raw, viewport);
+    if (window.lines || window.columns) {
+      body = sliceByLinesColumns(body, window.lines, window.columns);
+    }
+    children.push(xmlElement("content", {}, [xmlText(truncateBytes(body, MAX_FILE_WINDOW_BYTES))]));
   } catch (error) {
     children.push(xmlElement("error", {}, [xmlText((error as Error).message)]));
   }
@@ -387,6 +464,7 @@ async function compressFileWindow(
 registerWindowType("file", {
   commands: {
     set_range: setRangeCommand,
+    set_viewport: setViewportCommand,
     reload: reloadCommand,
     edit: editCommand,
     close: closeCommand,

@@ -19,6 +19,13 @@ import type {
   CommandTableEntry,
 } from "../_shared/command-types.js";
 import { registerWindowType, type OnCloseContext, type RenderContext } from "../_shared/registry.js";
+import {
+  DEFAULT_VIEWPORT,
+  applyViewport,
+  executeWindowSetViewport,
+  hasAnyViewportField,
+  type Viewport,
+} from "../_shared/viewport.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
 import type { KnowledgeWindow } from "./types.js";
 import { deriveStoneFromThread } from "../../../persistable/common.js";
@@ -29,6 +36,8 @@ const MAX_KNOWLEDGE_BYTES = 8192;
 
 const KNOWLEDGE_WINDOW_RELOAD_BASIC = "internal/windows/knowledge/reload/basic";
 const KNOWLEDGE_WINDOW_CLOSE_BASIC = "internal/windows/knowledge/close/basic";
+const KNOWLEDGE_WINDOW_SET_VIEWPORT_BASIC = "internal/windows/knowledge/set_viewport/basic";
+const KNOWLEDGE_WINDOW_SET_VIEWPORT_INPUT = "internal/windows/knowledge/set_viewport/input";
 
 const RELOAD_KNOWLEDGE = `
 knowledge_window.reload 强制下一轮重新计算激活集合。当前 loader 已按 mtime 自动失效缓存，
@@ -43,6 +52,23 @@ knowledge_window.close 释放 window；不影响 knowledge 文件本身。
 仅 source=explicit（来自 open_knowledge）的 window 可被 close。
 `.trim();
 
+const SET_VIEWPORT_KNOWLEDGE = `
+knowledge_window.set_viewport 精细化调整渲染窗口（行+列）。
+
+打开 explicit knowledge_window 时默认 viewport = { line_start: 0, line_end: 200, column_start: 0, column_end: 200 }。
+对大多数短 markdown 知识等价"全文显示"；超长知识需要扩窗时显式 set_viewport。
+
+参数（**全部可选**，未传字段保留当前值）：
+- line_start / line_end / column_start / column_end
+
+约束：非负整数；line_start <= line_end；column_start <= column_end。
+
+渲染：超 line_end 标 \`…(+N more lines)\`；行长 > column_end 标 \`…(+N more)\`。
+
+注意：viewport 仅对 source=explicit 的 knowledge_window 有效；
+protocol / activator / relation 来源的 knowledge_window 由系统按 description / full / summary 决定展示形态。
+`.trim();
+
 const reloadCommand: CommandTableEntry = {
   paths: ["reload"],
   match: () => ["reload"],
@@ -55,6 +81,23 @@ const closeCommand: CommandTableEntry = {
   match: () => ["close"],
   knowledge: (): CommandKnowledgeEntries => ({ [KNOWLEDGE_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
   exec: () => undefined,
+};
+
+const setViewportCommand: CommandTableEntry = {
+  paths: ["set_viewport"],
+  match: () => ["set_viewport"],
+  knowledge: (args, formStatus): CommandKnowledgeEntries => {
+    const entries: CommandKnowledgeEntries = {
+      [KNOWLEDGE_WINDOW_SET_VIEWPORT_BASIC]: SET_VIEWPORT_KNOWLEDGE,
+    };
+    if (formStatus === "open" && !hasAnyViewportField(args)) {
+      entries[KNOWLEDGE_WINDOW_SET_VIEWPORT_INPUT] =
+        "set_viewport 至少需要传入 line_start / line_end / column_start / column_end 之一。\n" +
+        "未传字段保留当前值。请 refine 补齐后 submit。";
+    }
+    return entries;
+  },
+  exec: (ctx) => executeWindowSetViewport(ctx, "knowledge"),
 };
 
 /** 拒绝 close 非 explicit 来源的 knowledge_window（合成 window 不可关闭）。 */
@@ -94,9 +137,32 @@ async function renderKnowledgeWindow(ctx: RenderContext): Promise<XmlNode[]> {
   if (window.description) {
     children.push(xmlElement("description", {}, [xmlText(window.description)]));
   }
+  // viewport 仅对 explicit 来源生效；其它来源（protocol/activator/relation）由系统决定 presentation
+  const useViewport = window.source === "explicit" || !window.source;
+  const viewport: Viewport | undefined = useViewport
+    ? window.viewport ?? DEFAULT_VIEWPORT
+    : undefined;
+  if (viewport) {
+    children.push(
+      xmlElement(
+        "viewport",
+        {
+          line_start: String(viewport.lineStart),
+          line_end: String(viewport.lineEnd),
+          column_start: String(viewport.columnStart),
+          column_end: String(viewport.columnEnd),
+        },
+        [],
+      ),
+    );
+  }
+  const renderBody = (raw: string): string => {
+    const sliced = viewport ? applyViewport(raw, viewport) : raw;
+    return truncateBytes(sliced, MAX_KNOWLEDGE_BYTES);
+  };
   // body 已合成时直接用；否则（explicit 或旧数据）回退 loader
   if (typeof window.body === "string" && window.body.length > 0) {
-    children.push(xmlElement("content", {}, [xmlText(truncateBytes(window.body, MAX_KNOWLEDGE_BYTES))]));
+    children.push(xmlElement("content", {}, [xmlText(renderBody(window.body))]));
     return children;
   }
   if (window.presentation === "summary") {
@@ -117,7 +183,7 @@ async function renderKnowledgeWindow(ctx: RenderContext): Promise<XmlNode[]> {
       if (doc.frontmatter.description && !window.description) {
         children.push(xmlElement("description", {}, [xmlText(doc.frontmatter.description)]));
       }
-      children.push(xmlElement("content", {}, [xmlText(truncateBytes(doc.body, MAX_KNOWLEDGE_BYTES))]));
+      children.push(xmlElement("content", {}, [xmlText(renderBody(doc.body))]));
     }
   } catch (error) {
     children.push(xmlElement("error", {}, [xmlText((error as Error).message)]));
@@ -129,6 +195,7 @@ registerWindowType("knowledge", {
   commands: {
     reload: reloadCommand,
     close: closeCommand,
+    set_viewport: setViewportCommand,
   },
   onClose: onCloseKnowledgeWindow,
   renderXml: renderKnowledgeWindow,

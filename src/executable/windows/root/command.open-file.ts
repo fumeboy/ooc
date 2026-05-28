@@ -17,6 +17,7 @@ import {
   type FileWindow,
 } from "../_shared/types.js";
 import { resolveSessionPath } from "../_shared/session-path.js";
+import { DEFAULT_VIEWPORT } from "../_shared/viewport.js";
 import { stat } from "node:fs/promises";
 
 const OPEN_FILE_BASIC_PATH = "internal/executable/open_file/basic";
@@ -102,6 +103,7 @@ export async function executeOpenFileCommand(
     status: "open",
     createdAt: Date.now(),
     path,
+    viewport: { ...DEFAULT_VIEWPORT },
     lines: asTuple(ctx.args.lines),
     columns: asTuple(ctx.args.columns),
   };

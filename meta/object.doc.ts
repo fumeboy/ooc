@@ -589,6 +589,11 @@ export const root: DocTreeNode = {
 
                     visibility-first: 每次压缩落一条 ProcessEvent (type=context_compressed)；LLM / debug / UI 永远可见。
 
+                    **LLM 主动节流的精细补充**：单 window 内部体量由 viewport 协议管理
+                    （见 executable.context_window.patches.viewport_protocol）—— file / knowledge window 的
+                    \`set_viewport\` 调整行+列范围；与 compressLevel 正交（compress 是 window 之间宏观；
+                    viewport 是 window 内部微观）。
+
                     设计完整版见 docs/2026-05-25-context-compression-design.md。
                     `,
                     named: {
@@ -1230,6 +1235,80 @@ export const root: DocTreeNode = {
                             是否允许关闭、是否级联关闭、关闭时是否需要释放资源，由该 window type 的 onClose hook 决定。
                             `,
                         },
+                        "viewport_protocol": {
+                            title: "viewport - 精细化控制单 window 渲染体量",
+                            content: `
+                            每个有"长内容"的 window type 都应提供 \`viewport\` 字段（行+列范围）让 LLM 精细控制
+                            渲染给自己的内容量。viewport 与 thinkable.context_budget 的 compressLevel 同层但正交：
+                            compressLevel 由系统/LLM 在整个 window 之间做"宏观压缩"；viewport 由 LLM 在单个
+                            window 内部做"微观节流"。
+
+                            **当前已实施**（file_window / knowledge_window）：
+
+                            \`viewport: { lineStart, lineEnd, columnStart, columnEnd }\` — open 时默认
+                            **0-200 / 0-200**（前 200 行 × 每行前 200 字符）。LLM 通过 \`set_viewport\` 命令
+                            调整：
+
+                            \`\`\`
+                            exec(window_id="<id>", command="set_viewport",
+                                 args={ line_end: 1000 })            # 看前 1000 行
+                            exec(..., args={ line_start: 200, line_end: 400 })  # 看 200-400 行
+                            exec(..., args={ column_end: 500 })       # 行宽扩到 500 字符
+                            \`\`\`
+
+                            未传字段保留当前值（partial merge）。约束 fail-loud：非负整数 / line_start ≤ line_end / column_start ≤ column_end。
+
+                            **渲染溢出标记**：
+                            - 行数超 lineEnd → 末尾追加 \`…(+N more lines)\`
+                            - 行长超 columnEnd → 行尾 \`…(+N more)\`
+                            - columnStart > 0 时行首 \`(+N before)…\`
+
+                            **viewport vs edit**：viewport 仅影响**渲染**给 LLM 的内容；
+                            \`file_window.edit\` 的 old/new 匹配仍按文件完整内容——不需要先扩 viewport 才能精确替换。
+
+                            **共享实现**：src/executable/windows/_shared/viewport.ts 提供 DEFAULT_VIEWPORT /
+                            mergeViewport / applyViewport / executeWindowSetViewport（被 file + knowledge 共用）。
+
+                            **其它 window type 的信息量轴设计提案**（**未实施**，仅作 design proposal；
+                            后续按需逐个落地）：
+
+                            - **talk_window / do_window**：transcript message range（最近 N 条 / idx 区间）→ 推荐
+                              \`set_transcript_window\` command，args = { messages_tail?: N, messages_range?: [i, j] }；
+                              默认 tail=20 条
+                            - **search_window**：matches 区间 → \`set_results_window\` args = { matches_start, matches_end }；
+                              默认 0-50
+                            - **program_window**：exec 历史区间 → \`set_history_window\` args = { history_tail?: N }；
+                              默认 tail=10
+                            - **plan_window**：展开深度 / 当前 step 高亮 → \`focus_step\` (step_id) + \`set_depth\` (max_depth)；
+                              默认全展开
+                            - **relation_window**：sections 选择（peer_readme 收起 / self_long_term 展开）→
+                              \`set_sections\` args = { peer_readme: "full"|"summary"|"hidden", self_long_term: ... }
+                            - **command_exec window**：args 显示（高频 refine 时多冗余）→ \`set_args_display\`
+                              args = { mode: "full"|"summary" }
+                            - **custom window**：交由 stone 作者决定（programmable 维度），不强加协议
+
+                            **设计原则**：viewport-like 协议是"LLM 主动节流"的精细补充，与
+                            thinkable.context_budget.patches.natural_decay（系统被动衰减）一起组成完整的
+                            上下文体量治理。
+
+                            **取舍记录**：
+                            - column 截断按**字符**（非 grapheme cluster / 非 markdown 语义）— markdown 表格 / 代码块
+                              超 columnEnd 会被截尾；LLM 看到 \`…(+N more)\` 自然知道扩窗。可接受的初版近似。
+                            - 默认 200/200 偏保守——LLM 看一个长函数（>200 行）需显式 set_viewport，是有意为之
+                              （强制 LLM 表态"我要看这么多"，避免悄悄塞满 context）。
+                            `,
+                            named: {
+                                "viewport": "{ lineStart, lineEnd, columnStart, columnEnd } — 单 window 的渲染窗口大小",
+                                "DEFAULT_VIEWPORT": "0-200 / 0-200；open 时填默认；可通过 set_viewport 调整",
+                                "set_viewport": "file_window / knowledge_window 上的命令；partial merge + fail-loud",
+                                "overflow marker": "行数 / 列长超限时的标记字符串，让 LLM 知道窗口外还有内容",
+                            },
+                            sources: [["src/executable/windows/_shared/viewport.ts", "viewport 协议共享实现（types + helpers + exec 入口）"]],
+                            todo: [
+                                "其它 window type（talk/do/search/program/plan/relation/command_exec）的信息量轴尚未实施",
+                                "viewport 默认值是否对'看长函数'场景过紧——待 AgentOfExperience 真实体验后回调",
+                            ],
+                        },
                     },
                 },
                 "window_types": {
@@ -1244,8 +1323,8 @@ export const root: DocTreeNode = {
                     - talk: 与 user 或其他 Object 的持续会话窗口。
                     - todo: 可见待办窗口。
                     - program: 程序执行窗口，可多次 exec。
-                    - file: 文件内容窗口，支持 range / reload / edit 等操作。
-                    - knowledge: 知识文档窗口，承载显式打开或协议合成的 knowledge。
+                    - file: 文件内容窗口，支持 viewport / set_viewport / set_range（遗留）/ reload / edit / close。
+                    - knowledge: 知识文档窗口，承载显式打开或协议合成的 knowledge；explicit 来源支持 viewport / set_viewport。
                     - search: glob / grep 搜索结果窗口，支持 open_match。
                     - relation: 跨 Object 关系窗口；含 peer stone readme 只读 + self-relation 双层（见 children.relation_window）。
                     - skill_index: stone skills 索引窗口；每轮由 synthesizer 派生。
@@ -1267,8 +1346,8 @@ export const root: DocTreeNode = {
                         "talk_window": "与 user 或其他 Object 对话的窗口",
                         "todo_window": "可见待办窗口",
                         "program_window": "程序执行窗口",
-                        "file_window": "文件内容窗口",
-                        "knowledge_window": "知识文档窗口",
+                        "file_window": "文件内容窗口；含 viewport 字段（行+列范围）精细控制渲染体量；详见 patches.viewport_protocol",
+                        "knowledge_window": "知识文档窗口；explicit 来源支持 viewport 同 file_window",
                         "search_window": "搜索结果窗口",
                         "plan_window": "行动计划窗口；可嵌套 sub plan; 复用 do_window.move sharing 协议共享给 sub thread",
                         "skill_index_window": "stone skills 索引窗口；每轮由 synthesizer 派生（10s TTL 缓存），列出 stones/<branch>/skills 与 stones/<branch>/objects/<self>/skills 下的所有 SKILL.md；空时不注入；详见 children.skill_index_window",
