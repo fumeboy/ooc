@@ -23,6 +23,11 @@ OOC (Object Oriented Context) 第 3 代实现——把 OOC Agent 与 Context Win
 - `agent_of_persistable` / `agent_of_reflectable` / `agent_of_programmable` / `agent_of_visible`
 - `agent_of_experience`（体验官）
 
+> **Note:** AgentOfX stones (`agent_of_*`) are source-tree harness artifacts. They are loaded into
+> the registry at server startup alongside other `stones/main/objects/` entries, and are visible via
+> `GET /api/stones?branch=main`. They are not hidden from the API — they live in the same `stones/main`
+> branch as any other persistent object.
+
 ## 文档
 
 | 文件 | 内容 |
