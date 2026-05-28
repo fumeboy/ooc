@@ -93,7 +93,8 @@ export function SessionObjectView() {
 
   async function handleSend() {
     if (!text.trim() || !objectName || !sessionId) return;
-    const targetUri = `ooc://flows/${sessionId}/objects/${objectName}`;
+    // Target the persistent stone (not the ephemeral flow projection) so the full prototype chain is available
+    const targetUri = `ooc://stones/main/objects/${objectName}`;
     setSending(true);
     setError(undefined);
     setTalkResponse(undefined);

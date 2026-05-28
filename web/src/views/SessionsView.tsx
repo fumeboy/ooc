@@ -9,7 +9,7 @@ export function SessionsView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>();
   const [creating, setCreating] = useState(false);
-  const [draft, setDraft] = useState({ objectUri: "", systemPrompt: "" });
+  const [draft, setDraft] = useState({ objectUri: "ooc://stones/main/objects/supervisor", systemPrompt: "" });
   const [showForm, setShowForm] = useState(false);
 
   async function load() {
@@ -77,7 +77,7 @@ export function SessionsView() {
                   className="input"
                   value={draft.objectUri}
                   onChange={(e) => setDraft({ ...draft, objectUri: e.target.value })}
-                  placeholder="ooc://stones/main/objects/my-object"
+                  placeholder="ooc://stones/main/objects/supervisor"
                 />
               </label>
               <label className="field-label">
