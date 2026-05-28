@@ -451,7 +451,10 @@ function derivePathFromRoute(route: RouteState): string | undefined {
     case "file":
       return route.path;
     case "stoneClient":
-      return `stones/${route.objectId}/client/index.tsx`;
+      // 2026-05-21 stones repo 重组：bare repo + linked worktrees。frontend 暂硬编码
+      // `main` 与项目其它处（如 ContextSnapshotViewer / case docs）保持一致；多 branch
+      // 支持是另一项工作（需要 frontend 拿 stonesBranch 配置）。
+      return `stones/main/objects/${route.objectId}/client/index.tsx`;
     case "flowPage":
       return `flows/${route.sessionId}/objects/${route.objectId}/client/pages/${route.page}.tsx`;
     default:

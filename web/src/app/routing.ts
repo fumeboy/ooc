@@ -121,7 +121,10 @@ export function toPath(state: RouteState): string {
  * 与 ClientWithSourceToggle.matchClientTarget 同一组 regex。
  */
 export function normalizeClientFilePath(path: string): string | undefined {
-  const stone = /^stones\/([^/]+)\/client\/index\.tsx$/.exec(path);
+  // 2026-05-21 stones repo 重组：bare repo + linked worktrees，路径变成
+  // `stones/<stonesBranch>/objects/<objectId>/client/index.tsx`。第一段是 branch（不捕获），
+  // 第二段 objects/<objectId> 是 client 入口的 owner。
+  const stone = /^stones\/[^/]+\/objects\/([^/]+)\/client\/index\.tsx$/.exec(path);
   if (stone) return `/stones/${encodeURIComponent(stone[1]!)}`;
   const flow = /^flows\/([^/]+)\/objects\/([^/]+)\/client\/pages\/([A-Za-z0-9_-]+)\.tsx$/.exec(path);
   if (flow) {
