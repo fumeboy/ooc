@@ -22,7 +22,7 @@ description: |
 - **搜索类**: `grep` / `glob` （创建 ephemeral search Object 到 flows/<session>/objects/）
 - **打开类**: `open_file` / `open_knowledge` （创建 ephemeral file/knowledge Object）
 - **元编程**: `metaprog` / `write_file` （改自己的 stone；走 super flow 协议）
-- **结束**: `end` （主 thread 主动 close）
+- **结束**: `end` （主 thread 主动 close；务必在 talk() 回复用户后调用，否则 thinkloop 不会停止）
 
 子原型 Object 通过 `extends: root` 继承这些方法；任意一个可被 override。
 

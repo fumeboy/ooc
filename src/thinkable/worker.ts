@@ -160,4 +160,29 @@ export class Worker {
         }
         throw new Error(`Worker.runUntilDone: timed out after ${maxWaitMs}ms`);
     }
+
+    /**
+     * 等待指定 thread 完成（status = "done" | "failed"）。
+     *
+     * 与 runUntilDone 的区别：只等一个 thread，不阻塞其他并发 thread。
+     * 用于 /api/talk：每次请求只关心自己提交的那个 thread，不等待其他 session
+     * 的 thread，从而支持并发 talk 请求。
+     *
+     * @param threadId  要等待的 thread id
+     * @param maxWaitMs 最大等待时间（ms），超时抛错
+     */
+    async runUntilThread(threadId: string, maxWaitMs = 90_000): Promise<void> {
+        const deadline = Date.now() + maxWaitMs;
+        while (Date.now() < deadline) {
+            const thread = this.queue.get(threadId);
+            if (!thread) {
+                throw new Error(`Worker.runUntilThread: thread ${threadId} not found in queue`);
+            }
+            if (thread.status !== "running") return;
+            await this.tick();
+            // 短暂 yield
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        }
+        throw new Error(`Worker.runUntilThread: thread ${threadId} timed out after ${maxWaitMs}ms`);
+    }
 }

@@ -33,8 +33,8 @@ export const root: DocTreeNode = {
     children: {},
     patches: {},
     todo: [
-        "loader: 实现三层源扫描 + extends 解析 + 循环检测 (P3)",
-        "worker: 实现 talk 直投 + sub-thread spawn (P5)",
-        "ephemeral 创建: 实现 grep / program / search 等方法的落盘机制 (P6)",
+        "todo: /api/pools/* 路由尚未实装（仅 stone/flow 层已有；pool 层 P7+）",
+        "todo: talk() worker wake 为 skeleton（POST /api/talk 已落盘并 runUntilThread，但 B.talk(C) 不自动唤起 C worker）",
+        "todo: ObjectClientRenderer 为规划阶段（client/index.tsx fallback 链尚未实现，目前 root.client 提供兜底）",
     ],
 };

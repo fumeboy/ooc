@@ -88,7 +88,8 @@ describe.skipIf(!hasApiKey)("bug-fix real-LLM e2e (P6f milestone)", () => {
                 objectUri: root.uri,
                 messages: [
                     {
-                        role: "system",
+                        type: "message" as const,
+                        role: "system" as const,
                         content: [
                             "You are a code agent. You have tools: grep, glob, open_file, write_file, exec_command.",
                             "Work iteratively: read source files, understand the bug, fix it, run tests to verify.",
@@ -98,7 +99,8 @@ describe.skipIf(!hasApiKey)("bug-fix real-LLM e2e (P6f milestone)", () => {
                         ].join("\n"),
                     },
                     {
-                        role: "user",
+                        type: "message" as const,
+                        role: "user" as const,
                         content: [
                             `Working directory: ${worldRoot}`,
                             `There is a bug in ${join(worldRoot, "math.ts")}. The tests in ${join(worldRoot, "math.test.ts")} fail.`,
@@ -120,18 +122,16 @@ describe.skipIf(!hasApiKey)("bug-fix real-LLM e2e (P6f milestone)", () => {
             console.log("[bug-fix-e2e] thread status:", thread.status);
             console.log("[bug-fix-e2e] total messages:", thread.messages.length);
 
-            // Log all tool calls for tracing (tool results appended as user messages with [tool_result ...] prefix)
-            const toolResultMsgs = thread.messages.filter(
-                m => m.role === "user" && m.content.startsWith("[tool_result")
-            );
-            const toolsUsed = toolResultMsgs.map(m => {
-                const match = /name="([^"]+)"/.exec(m.content);
-                return match ? match[1] : "unknown";
-            });
+            // Log all tool calls for tracing (function_call_output items in thread.messages)
+            const toolResultMsgs = thread.messages.filter(m => m.type === "function_call_output");
+            const toolsUsed = toolResultMsgs.map(m => (m as { type: string; name?: string }).name ?? "unknown");
             console.log("[bug-fix-e2e] tool calls:", toolResultMsgs.length, "tools used:", toolsUsed.join(", "));
 
-            const lastAssistant = [...thread.messages].reverse().find(m => m.role === "assistant");
-            console.log("[bug-fix-e2e] LLM final:", lastAssistant?.content?.slice(0, 500));
+            const lastAssistant = [...thread.messages].reverse().find(
+                m => m.type === "message" && (m as { type: string; role: string }).role === "assistant"
+            );
+            const lastContent = lastAssistant && "content" in lastAssistant ? (lastAssistant as { content: string }).content : "";
+            console.log("[bug-fix-e2e] LLM final:", lastContent?.slice(0, 500));
 
             expect(thread.status).toBe("done");
 
@@ -152,7 +152,7 @@ describe.skipIf(!hasApiKey)("bug-fix real-LLM e2e (P6f milestone)", () => {
             expect(afterProc.exitCode).toBe(0);
 
             // 3. LLM final response should indicate success
-            const text = lastAssistant?.content?.toLowerCase() ?? "";
+            const text = lastContent?.toLowerCase() ?? "";
             expect(text.includes("pass") || text.includes("fix")).toBe(true);
         },
         300_000,

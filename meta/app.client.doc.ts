@@ -32,8 +32,8 @@ export const root: DocTreeNode = {
     children: {},
     patches: {},
     todo: [
-        "AppShell: 实现四类路由 (P7)",
-        "ObjectClientRenderer: 原型链 fallback resolver (P7)",
-        "root.client/index.tsx: 兜底 UI 实现 (P4)",
+        "todo: AppShell 四类路由已实现基础骨架；pool 路由 (/pools/*) 尚未上线",
+        "todo: ObjectClientRenderer 规划阶段——原型链 fallback resolver 未实现，当前用 root.client 统一兜底",
+        "todo: chat 模型 cross-object talk_window 为 UI 层规划，后端 /api/talk 已落地",
     ],
 };

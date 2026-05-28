@@ -591,7 +591,9 @@ export default defineObject({
         },
 
         async end(_args: unknown, _ctx: ObjectContext) {
-            return { ok: true, status: "skeleton" };
+            // Returns a sentinel that thinkloop checks to terminate the thread.
+            // Call this after sending your final reply via talk().
+            return { ok: true, __ooc_thread_action: "end" };
         },
     },
     private: {

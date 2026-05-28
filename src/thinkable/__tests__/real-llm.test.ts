@@ -64,10 +64,12 @@ describe.skipIf(!shouldRun)("real LLM thinkloop integration", () => {
             objectUri: "ooc://stones/main/objects/root",
             messages: [
                 {
+                    type: "message",
                     role: "system",
                     content: "You are a concise test assistant. Reply with only the word 'OK'.",
                 },
                 {
+                    type: "message",
                     role: "user",
                     content: "Reply with 'OK'.",
                 },
@@ -88,7 +90,9 @@ describe.skipIf(!shouldRun)("real LLM thinkloop integration", () => {
 
         if (thread.status === "done") {
             // 至少有一条 assistant 消息
-            const hasAssistant = thread.messages.some((m) => m.role === "assistant");
+            const hasAssistant = thread.messages.some(
+                (m) => m.type === "message" && (m as { type: string; role: string }).role === "assistant"
+            );
             expect(hasAssistant).toBe(true);
         }
     }, 90_000);

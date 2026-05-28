@@ -3,17 +3,22 @@
  *
  * 负责编排一轮 LLM 调用：
  * 1. 检查 thread 状态（只处理 running）
- * 2. 调用 LlmClient.generate（使用 thread.messages 作为 input）
- * 3. 若 LLM 返回 tool calls → 逐个 dispatch，把结果追加为 user message（tool_result）
- * 4. 若 LLM 返回 text 且没有 tool call → 追加 assistant 消息并视为 done
- * 5. ticks++ 到达 maxTicks → status=done
- * 6. 错误 → status=failed + lastError
+ * 2. 注入 defaultContext 快照（每 tick 刷新，确保状态变化可见）
+ * 3. 调用 LlmClient.generate（使用 thread.messages 作为 input）
+ * 4. 将 LLM 输出 function_call items 存入 thread.messages（原生类型，非 plain text 包裹）
+ * 5. dispatch 每个 tool call，结果存为 function_call_output item
+ * 6. 若 tool result 携带 __ooc_thread_action:"end" → status=done，终止 loop
+ * 7. 若 LLM 返回 text 且没有 tool call → 追加 assistant message，status=done
+ * 8. ticks++ 到达 maxTicks → status=done
+ * 9. 错误 → status=failed + lastError
  */
 
-import type { LlmClient, LlmTool } from "./llm/types";
+import * as path from "node:path";
+import type { LlmClient, LlmInputItem, LlmTool } from "./llm/types";
 import type { ThinkThread } from "./think-thread";
 import type { ObjectRegistry } from "@src/executable/registry";
 import { invokeMethod, listPublicMethods } from "@src/executable/dispatcher";
+import { nameFromUri } from "@src/persistable/flow-paths";
 
 /**
  * Known method schemas: provide typed descriptions + parameter schemas so the LLM doesn't waste
@@ -81,7 +86,7 @@ const METHOD_SCHEMAS: Record<string, { description: string; properties?: Record<
     do_close: { description: "Close an active sub-thread.", properties: { thread_id: { type: "string" } }, required: ["thread_id"] },
     metaprog: { description: "(Skeleton, P8+) Modify your own stone source.", properties: { intent: { type: "string" } }, required: ["intent"] },
     open_knowledge: { description: "(Skeleton, P6+) Open a knowledge slug.", properties: { slug: { type: "string" } }, required: ["slug"] },
-    end: { description: "End the conversation.", properties: {} },
+    end: { description: "End the conversation. Call this after you've sent your final reply via talk().", properties: {} },
 };
 
 /**
@@ -106,49 +111,53 @@ export async function think(
     }
 
     try {
-        // Inject defaultContext slices as a context block before the first LLM call in this tick.
-        // Only inject on tick 0 to avoid re-injecting on every tick.
-        let messagesWithContext = thread.messages;
-        if (thread.ticks === 0) {
-            try {
-                const record = registry.get(thread.objectUri);
-                if (record) {
-                    const ctx = { record, worldRoot, sessionId: thread.sessionId, registry };
-                    // Dynamically import defaultContext to avoid hard coupling
-                    const rootModule = await import("stones/_builtin/objects/root/server/index.ts");
-                    if (typeof rootModule.defaultContext === "function") {
-                        const slices = await rootModule.defaultContext(ctx);
-                        if (slices.length > 0) {
-                            const contextText = slices.map((s: { kind: string; payload: unknown }) => {
-                                const payload = typeof s.payload === "string"
-                                    ? s.payload
-                                    : JSON.stringify(s.payload, null, 2);
-                                return `[context:${s.kind}]\n${payload}\n[/context:${s.kind}]`;
-                            }).join("\n\n");
-                            const contextMessage = {
-                                role: "user" as const,
-                                content: `[OOC context snapshot for this tick]\n${contextText}\n[/OOC context snapshot]`,
-                            };
-                            // Insert context message right before the last user message
-                            const lastUserIdx = [...messagesWithContext].reduce(
-                                (acc, m, i) => (m.role === "user" ? i : acc),
-                                -1,
-                            );
-                            if (lastUserIdx >= 0) {
-                                messagesWithContext = [
-                                    ...messagesWithContext.slice(0, lastUserIdx),
-                                    contextMessage,
-                                    ...messagesWithContext.slice(lastUserIdx),
-                                ];
-                            } else {
-                                messagesWithContext = [...messagesWithContext, contextMessage];
-                            }
+        // Inject defaultContext snapshot as a system message before the LLM call.
+        // Done every tick so state changes (new todos, plan updates) are visible.
+        // The context message is injected into the call input but NOT stored in thread.messages
+        // (avoids ever-growing message history; treat it as ephemeral prompt injection).
+        let inputItems: LlmInputItem[] = thread.messages;
+        try {
+            const record = registry.get(thread.objectUri);
+            if (record) {
+                // Synthesize flow path for this session (registry record may not have it)
+                const objectName = nameFromUri(thread.objectUri);
+                const flowPath = path.join(worldRoot, "flows", thread.sessionId, "objects", objectName);
+                const ctxRecord = { ...record, paths: { ...record.paths, flow: flowPath } };
+                const rootModule = await import("stones/_builtin/objects/root/server/index.ts");
+                if (typeof rootModule.defaultContext === "function") {
+                    const ctx = { record: ctxRecord, worldRoot, sessionId: thread.sessionId, registry };
+                    const slices = await rootModule.defaultContext(ctx);
+                    if (slices.length > 0) {
+                        const contextText = slices.map((s: { kind: string; payload: unknown }) => {
+                            const payload = typeof s.payload === "string"
+                                ? s.payload
+                                : JSON.stringify(s.payload, null, 2);
+                            return `[context:${s.kind}]\n${payload}\n[/context:${s.kind}]`;
+                        }).join("\n\n");
+                        const contextItem: LlmInputItem = {
+                            type: "message",
+                            role: "system",
+                            content: `[OOC context snapshot]\n${contextText}\n[/OOC context snapshot]`,
+                        };
+                        // Insert context item right before the last non-system message
+                        const lastUserIdx = [...inputItems].reduce(
+                            (acc, m, i) => (m.type === "message" && m.role === "user" ? i : acc),
+                            -1,
+                        );
+                        if (lastUserIdx >= 0) {
+                            inputItems = [
+                                ...inputItems.slice(0, lastUserIdx),
+                                contextItem,
+                                ...inputItems.slice(lastUserIdx),
+                            ];
+                        } else {
+                            inputItems = [...inputItems, contextItem];
                         }
                     }
                 }
-            } catch {
-                // defaultContext injection is best-effort; don't block execution on failure
             }
+        } catch {
+            // defaultContext injection is best-effort; don't block execution on failure
         }
 
         // 动态从 Object prototype 链收集 public methods，构建 LlmTool 定义传给 LLM。
@@ -182,21 +191,25 @@ export async function think(
         }
 
         const result = await llmClient.generate({
-            input: messagesWithContext.map((m) => ({
-                type: "message" as const,
-                role: m.role,
-                content: m.content,
-            })),
+            input: inputItems,
             tools: tools.length > 0 ? tools : undefined,
             timeoutMs: thread.llmTimeoutMs,
         });
 
-        // 追加 LLM 文本回复到 messages
+        // 追加 LLM 文本回复到 messages（assistant message item）
         if (result.text) {
             thread.messages = [
                 ...thread.messages,
-                { role: "assistant", content: result.text },
+                { type: "message", role: "assistant", content: result.text },
             ];
+        }
+
+        // Store function_call items from LLM output directly in thread.messages (native type).
+        // This is critical for provider transports to generate proper tool_result blocks.
+        for (const item of result.outputItems) {
+            if (item.type === "function_call") {
+                thread.messages = [...thread.messages, item];
+            }
         }
 
         thread.ticks += 1;
@@ -207,9 +220,10 @@ export async function think(
             return;
         }
 
-        // 有 tool call → dispatch 每一个，把结果追加为 user message
+        // 有 tool call → dispatch 每一个，把结果存为 function_call_output item（原生类型）
         for (const toolCall of result.toolCalls) {
             let output: string;
+            let isEndAction = false;
             try {
                 const args =
                     typeof toolCall.arguments === "string"
@@ -227,6 +241,16 @@ export async function think(
                         registry,
                     },
                 );
+
+                // Check for end() sentinel
+                if (
+                    dispatchResult !== null &&
+                    typeof dispatchResult === "object" &&
+                    (dispatchResult as Record<string, unknown>).__ooc_thread_action === "end"
+                ) {
+                    isEndAction = true;
+                }
+
                 output = typeof dispatchResult === "string"
                     ? dispatchResult
                     : JSON.stringify(dispatchResult);
@@ -235,14 +259,22 @@ export async function think(
                 output = `ERROR: ${(err as Error).message}`;
             }
 
-            // 把 tool result 追加为 user message，供下一轮 LLM 消费
+            // Store as function_call_output item (native type, not plain text wrapper)
             thread.messages = [
                 ...thread.messages,
                 {
-                    role: "user",
-                    content: `[tool_result tool_call_id="${toolCall.id}" name="${toolCall.name}"]\n${output}\n[/tool_result]`,
+                    type: "function_call_output",
+                    call_id: toolCall.id,
+                    name: toolCall.name,
+                    output,
                 },
             ];
+
+            // If end() sentinel received, terminate thread immediately
+            if (isEndAction) {
+                thread.status = "done";
+                return;
+            }
         }
 
         // maxTicks 检查（dispatch 后）

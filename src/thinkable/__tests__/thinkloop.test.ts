@@ -23,7 +23,7 @@ function makeThread(overrides: Partial<ThinkThread> = {}): ThinkThread {
         id: "t_test",
         sessionId: "s_test",
         objectUri: "ooc://stones/main/objects/agent_a",
-        messages: [{ role: "system", content: "You are a test agent." }],
+        messages: [{ type: "message", role: "system", content: "You are a test agent." }],
         status: "running",
         maxTicks: 5,
         ticks: 0,
@@ -60,8 +60,9 @@ describe("think()", () => {
         expect(thread.status).toBe("done");
         expect(thread.ticks).toBe(1);
         const last = thread.messages[thread.messages.length - 1]!;
-        expect(last.role).toBe("assistant");
-        expect(last.content).toBe("task done");
+        expect(last.type).toBe("message");
+        expect((last as { type: string; role: string; content: string }).role).toBe("assistant");
+        expect((last as { type: string; role: string; content: string }).content).toBe("task done");
     });
 
     test("空文本不追加 assistant message", async () => {
@@ -186,11 +187,10 @@ describe("think()", () => {
         expect(thread.ticks).toBe(1);
         expect(thread.status).toBe("running");  // tool call dispatched, still running
 
-        // Last message should be the tool_result user message
+        // Last message should be the function_call_output item (native type)
         const lastMsg = thread.messages[thread.messages.length - 1]!;
-        expect(lastMsg.role).toBe("user");
-        expect(lastMsg.content).toContain("tool_result");
-        expect(lastMsg.content).toContain("todo_add");
+        expect(lastMsg.type).toBe("function_call_output");
+        expect((lastMsg as { type: string; call_id: string; name: string; output: string }).name).toBe("todo_add");
 
         // todos.json should exist under temp worldRoot (not project root)
         const todosPath = join(worldRoot, "flows", sessionId, "objects", "root", "todos.json");
@@ -202,8 +202,9 @@ describe("think()", () => {
         await think(thread, llm, registry, worldRoot);
         expect(thread.status).toBe("done");
         const assistantMsg = thread.messages[thread.messages.length - 1]!;
-        expect(assistantMsg.role).toBe("assistant");
-        expect(assistantMsg.content).toBe("All done!");
+        expect(assistantMsg.type).toBe("message");
+        expect((assistantMsg as { type: string; role: string; content: string }).role).toBe("assistant");
+        expect((assistantMsg as { type: string; role: string; content: string }).content).toBe("All done!");
     });
 
     test("tool call dispatch: method not found → error appended as user message, no crash", async () => {
@@ -239,11 +240,11 @@ describe("think()", () => {
 
         await think(thread, llm, registry, "/tmp/test-world");
 
-        // Should NOT crash; status stays running; error message appended as user message
+        // Should NOT crash; status stays running; error appended as function_call_output
         expect(thread.status).toBe("running");
         expect(thread.ticks).toBe(1);
         const lastMsg = thread.messages[thread.messages.length - 1]!;
-        expect(lastMsg.role).toBe("user");
-        expect(lastMsg.content).toContain("ERROR:");
+        expect(lastMsg.type).toBe("function_call_output");
+        expect((lastMsg as { type: string; output: string }).output).toContain("ERROR:");
     });
 });

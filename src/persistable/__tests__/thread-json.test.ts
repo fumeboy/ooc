@@ -24,8 +24,8 @@ function sampleThread(overrides: Partial<ThinkThread> = {}): ThinkThread {
         sessionId: "ses_abc",
         objectUri: "ooc://stones/main/objects/agent_a",
         messages: [
-            { role: "system", content: "You are an agent." },
-            { role: "user", content: "Hello" },
+            { type: "message" as const, role: "system" as const, content: "You are an agent." },
+            { type: "message" as const, role: "user" as const, content: "Hello" },
         ],
         status: "done",
         maxTicks: 5,
@@ -125,7 +125,7 @@ describe("writeThread + readThread roundtrip", () => {
         // 模拟 tick 推进
         thread.ticks = 3;
         thread.status = "done";
-        thread.messages.push({ role: "assistant", content: "Done!" });
+        thread.messages.push({ type: "message" as const, role: "assistant" as const, content: "Done!" });
         await writeThread(thread, worldRoot);
 
         const loaded = await readThread(worldRoot, "ses_abc", "agent_a", "t_test01");

@@ -42,7 +42,7 @@ function makeThread(id: string, overrides: Partial<ThinkThread> = {}): ThinkThre
         id,
         sessionId: "s_test",
         objectUri: "ooc://stones/main/objects/agent_a",
-        messages: [{ role: "system", content: "Be helpful." }],
+        messages: [{ type: "message", role: "system", content: "Be helpful." }],
         status: "running",
         maxTicks: 3,
         ticks: 0,

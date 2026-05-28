@@ -60,7 +60,8 @@ describe.skipIf(!hasApiKey)("code-agent real-LLM e2e (P6d milestone)", () => {
                 objectUri: root.uri,
                 messages: [
                     {
-                        role: "system",
+                        type: "message" as const,
+                        role: "system" as const,
                         content: [
                             "You are a code agent with these tools: grep, glob, open_file, write_file.",
                             "Use them to complete the task. Keep responses concise.",
@@ -69,7 +70,8 @@ describe.skipIf(!hasApiKey)("code-agent real-LLM e2e (P6d milestone)", () => {
                         ].join("\n"),
                     },
                     {
-                        role: "user",
+                        type: "message" as const,
+                        role: "user" as const,
                         content: [
                             `World root for this task: ${worldRoot}`,
                             `The file to read is: ${join(worldRoot, "data", "sample.txt")}`,
@@ -90,8 +92,11 @@ describe.skipIf(!hasApiKey)("code-agent real-LLM e2e (P6d milestone)", () => {
             await worker.runUntilDone(120_000);
 
             expect(thread.status).toBe("done");
-            const lastAssistant = [...thread.messages].reverse().find(m => m.role === "assistant");
-            console.log("[code-agent-real] LLM final response:", lastAssistant?.content?.slice(0, 400));
+            const lastAssistant = [...thread.messages].reverse().find(
+                m => m.type === "message" && (m as { type: string; role: string }).role === "assistant"
+            );
+            const lastContent = lastAssistant && "content" in lastAssistant ? (lastAssistant as { content: string }).content : "";
+            console.log("[code-agent-real] LLM final response:", lastContent?.slice(0, 400));
 
             // Verify the output file was created
             const outputPath = join(worldRoot, "data", "found-a.txt");

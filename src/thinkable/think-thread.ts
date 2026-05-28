@@ -3,15 +3,18 @@
  *
  * 比 ooc-2 的 ThreadContext 轻得多——只保留 P6 harness loop 所需的字段：
  * - 身份: id / sessionId / objectUri
- * - LLM 对话历史: messages (role/content 对)
+ * - LLM 对话历史: messages (LlmInputItem[] — 含 message/function_call/function_call_output)
  * - 生命周期: status
  * - 配置: maxTicks / llmTimeoutMs
  *
- * 线程不持有 ContextWindow 也不持有 tool call tree；exec 结果作为 user message 追加。
+ * messages 使用 LlmInputItem[] 而非 LlmMessage[]，以支持 function_call /
+ * function_call_output 的原生类型——让 provider transport 能正确生成 tool_result 块，
+ * 避免 plain text 包裹导致 LLM 无法关联 tool call。
+ *
  * 若未来需要 sub-thread 或 pause/permission，在此类型上扩展。
  */
 
-import type { LlmMessage } from "./llm/types";
+import type { LlmInputItem } from "./llm/types";
 
 export type ThreadStatus =
     | "running"     // 正在 / 待调度执行
@@ -26,8 +29,8 @@ export interface ThinkThread {
     sessionId: string;
     /** 被驱动的 Object URI, e.g. "ooc://stones/main/objects/agent_a". */
     objectUri: string;
-    /** LLM 对话历史（包含 system / user / assistant 三种角色）. */
-    messages: LlmMessage[];
+    /** LLM 对话历史（含 message / function_call / function_call_output 三种 item 类型）. */
+    messages: LlmInputItem[];
     /** 当前生命周期状态. */
     status: ThreadStatus;
     /** 到达 maxTicks 后强制终止；0 = 无限（仅测试用）. */

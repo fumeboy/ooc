@@ -86,7 +86,8 @@ describe.skipIf(!hasApiKey)("harness real-LLM e2e (P6b milestone)", () => {
                 objectUri,
                 messages: [
                     {
-                        role: "system",
+                        type: "message" as const,
+                        role: "system" as const,
                         content: [
                             "You are a helpful assistant with access to the todo_add tool.",
                             "When asked to add a todo, call the todo_add tool with the content parameter.",
@@ -96,7 +97,8 @@ describe.skipIf(!hasApiKey)("harness real-LLM e2e (P6b milestone)", () => {
                         ].join("\n"),
                     },
                     {
-                        role: "user",
+                        type: "message" as const,
+                        role: "user" as const,
                         content: "Please add a todo: 'buy milk', then say what you did.",
                     },
                 ],
@@ -115,9 +117,11 @@ describe.skipIf(!hasApiKey)("harness real-LLM e2e (P6b milestone)", () => {
             expect(thread.messages.length).toBeGreaterThan(0);
 
             // 8. Verify: LLM produced some response text
-            const assistantMessages = thread.messages.filter((m) => m.role === "assistant");
+            const assistantMessages = thread.messages.filter(
+                (m) => m.type === "message" && (m as { type: string; role: string }).role === "assistant"
+            );
             expect(assistantMessages.length).toBeGreaterThan(0);
-            const llmText = assistantMessages[assistantMessages.length - 1]!.content;
+            const llmText = (assistantMessages[assistantMessages.length - 1] as { content: string }).content;
             console.log("[harness-real-llm] LLM response (first 200):", llmText.slice(0, 200));
 
             // 9. Verify: todos.json exists and contains "buy milk"

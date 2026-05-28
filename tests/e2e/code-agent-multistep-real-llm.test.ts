@@ -53,7 +53,8 @@ describe.skipIf(!hasApiKey)("multi-step code-agent real-LLM e2e", () => {
                 objectUri: root.uri,
                 messages: [
                     {
-                        role: "system",
+                        type: "message" as const,
+                        role: "system" as const,
                         content: [
                             "You are a code agent. You have tools: write_file, exec_command, open_file, grep, glob.",
                             "Task: complete what the user asks step by step using tools. Be efficient.",
@@ -61,7 +62,8 @@ describe.skipIf(!hasApiKey)("multi-step code-agent real-LLM e2e", () => {
                         ].join("\n"),
                     },
                     {
-                        role: "user",
+                        type: "message" as const,
+                        role: "user" as const,
                         content: [
                             `Your working directory: ${worldRoot}`,
                             "Task:",
@@ -81,15 +83,18 @@ describe.skipIf(!hasApiKey)("multi-step code-agent real-LLM e2e", () => {
             await worker.runUntilDone(180_000);
 
             expect(thread.status).toBe("done");
-            const lastAssistant = [...thread.messages].reverse().find(m => m.role === "assistant");
-            console.log("[multistep-e2e] LLM final:", lastAssistant?.content?.slice(0, 500));
+            const lastAssistant = [...thread.messages].reverse().find(
+                m => m.type === "message" && (m as { type: string; role: string }).role === "assistant"
+            );
+            const lastContent = lastAssistant && "content" in lastAssistant ? (lastAssistant as { content: string }).content : "";
+            console.log("[multistep-e2e] LLM final:", lastContent?.slice(0, 500));
 
             // Verify: counter.sh exists
             const scriptPath = join(worldRoot, "counter.sh");
             expect(existsSync(scriptPath)).toBe(true);
 
             // Verify: LLM final answer mentions the numbers 1 and 5
-            const finalText = lastAssistant?.content?.toLowerCase() ?? "";
+            const finalText = lastContent?.toLowerCase() ?? "";
             const hasNumber1 = finalText.includes("1");
             const hasNumber5 = finalText.includes("5");
             expect(hasNumber1 && hasNumber5).toBe(true);

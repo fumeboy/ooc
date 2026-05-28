@@ -215,7 +215,7 @@ export function buildApp(deps: HttpDeps): Elysia {
 
         const sessionId = shortId("ses");
         const threadId = shortId("t");
-        const maxTicks = typeof b?.maxTicks === "number" ? b.maxTicks : 10;
+        const maxTicks = typeof b?.maxTicks === "number" ? b.maxTicks : 12;
         const systemPrompt = typeof b?.systemPrompt === "string"
             ? b.systemPrompt
             : `You are an OOC Object at ${objectUri}. Complete your task and stop.`;
@@ -225,7 +225,7 @@ export function buildApp(deps: HttpDeps): Elysia {
             sessionId,
             objectUri,
             messages: [
-                { role: "system", content: systemPrompt },
+                { type: "message" as const, role: "system" as const, content: systemPrompt },
             ],
             status: "running",
             maxTicks,
@@ -577,19 +577,39 @@ export function buildApp(deps: HttpDeps): Elysia {
      * GET /api/flows/:sessionId/objects
      *
      * 列出 session 内所有 objects（ephemeral + persistent active in session）。
+     * 过滤条件：排除由 talk() 自动创建的用户侧 inbox 目录（不含 self.md 且名称
+     * 匹配 slugified user URI 模式，如 "me"，"users__me" 等）。
      */
     app.get("/api/flows/:sessionId/objects", async ({ params }) => {
         const { sessionId } = params;
         const flowObjectsDir = path.join(worker.worldRoot, "flows", sessionId, "objects");
         const objects: Array<{ name: string; uri: string; kind: string }> = [];
+        const registry = sharedRegistry;
+
+        /** Ghost names: directories created as side-effects of talk() for user addresses. */
+        const GHOST_NAMES = new Set(["me", "users__me"]);
+
         try {
             const entries = await fs.readdir(flowObjectsDir, { withFileTypes: true });
             for (const entry of entries) {
                 if (!entry.isDirectory()) continue;
                 const name = entry.name;
+                const uri = `ooc://flows/${sessionId}/objects/${name}`;
+
+                // Filter out ghost user-inbox directories that have no self.md AND
+                // are not registered as known objects in the registry
+                if (GHOST_NAMES.has(name)) {
+                    const selfMdPath = path.join(flowObjectsDir, name, "self.md");
+                    const hasSelfMd = await fileExists(selfMdPath);
+                    const isRegistered = registry
+                        ? !!registry.get(`ooc://stones/main/objects/${name}`) || !!registry.get(`ooc://users/${name}`)
+                        : false;
+                    if (!hasSelfMd && !isRegistered) continue;
+                }
+
                 objects.push({
                     name,
-                    uri: `ooc://flows/${sessionId}/objects/${name}`,
+                    uri,
                     kind: "ephemeral",
                 });
             }
@@ -921,11 +941,13 @@ export function buildApp(deps: HttpDeps): Elysia {
                 objectUri: targetUri,
                 messages: [
                     {
-                        role: "system",
-                        content: `You are an OOC Object at ${targetUri}. A user has sent you a message via talk. Respond to the user's message using your available methods, then call talk() to send your response back to the user (target: "${userUri}"). When done, stop responding.`,
+                        type: "message" as const,
+                        role: "system" as const,
+                        content: `You are an OOC Object at ${targetUri}. A user has sent you a message via talk. Respond to the user's message using your available methods, then call talk() to send your response back to the user (target: "${userUri}"). After sending your reply, call end() to terminate the conversation.`,
                     },
                     {
-                        role: "user",
+                        type: "message" as const,
+                        role: "user" as const,
                         content: `[talk from ${userUri}]\n${content}\n[/talk]`,
                     },
                 ],
@@ -935,9 +957,10 @@ export function buildApp(deps: HttpDeps): Elysia {
                 llmTimeoutMs: 60_000,
             };
 
-            // 4. Submit and run worker until done
+            // 4. Submit and run worker until this specific thread is done
+            // Use runUntilThread (not runUntilDone) to avoid blocking concurrent talk requests
             worker.submit(thread);
-            await worker.runUntilDone(90_000);
+            await worker.runUntilThread(threadId, 90_000);
 
             // 5. Read target's talks file for out messages with ts > startTs (time-scoped to this request)
             const talksDir = path.join(worker.worldRoot, "flows", sessionId, "objects", targetName, "talks");
@@ -971,16 +994,23 @@ export function buildApp(deps: HttpDeps): Elysia {
 
             // If no talk-back found, check thread's final assistant message as fallback
             if (!response) {
-                const lastAssistant = [...thread.messages].reverse().find((m) => m.role === "assistant");
-                response = lastAssistant?.content as string | undefined;
+                const lastAssistant = [...thread.messages]
+                    .reverse()
+                    .find((m) => m.type === "message" && m.role === "assistant");
+                response = lastAssistant && "content" in lastAssistant ? lastAssistant.content as string : undefined;
             }
+
+            // Explicit incomplete signal: if thread hit maxTicks and no response was produced,
+            // return null response + "incomplete" status rather than returning mid-reasoning text.
+            const hitMaxTicks = thread.ticks >= thread.maxTicks && thread.status === "done";
+            const incomplete = hitMaxTicks && !response;
 
             return {
                 ok: true,
                 sessionId,
                 threadId,
-                response: response ?? "",
-                threadStatus: thread.status,
+                response: incomplete ? null : (response ?? ""),
+                threadStatus: incomplete ? "incomplete" : thread.status,
             };
         } catch (error) {
             return new Response(
