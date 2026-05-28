@@ -114,7 +114,7 @@ export {
     type VersionedWriteErr,
 } from "./versioned-write";
 
-// debug-file.ts: LLM debug snapshots (depends on thinkable/observable)
+// debug-file.ts: LLM debug snapshots
 export {
     llmInputFile,
     llmOutputFile,
@@ -123,7 +123,6 @@ export {
     loopMetaFile,
     normalizeInputItems,
     deriveOutputItems,
-    captureContextSnapshot,
     writeDebugInput,
     writeDebugOutput,
     writeLoopDebugInput,

@@ -1,7 +1,6 @@
-import type { ThreadContext } from "../thinkable/context";
+import { readFile } from "node:fs/promises";
 import type { LlmGenerateResult, LlmInputItem, LlmMessage, LlmTool } from "../thinkable/llm/types";
 import {
-  captureContextSnapshot,
   deriveOutputItems,
   normalizeInputItems,
   readLoopDebugMeta,
@@ -11,7 +10,156 @@ import {
   writeLoopDebugMeta,
   writeLoopDebugOutput,
 } from "../persistable";
-import { buildWindowsSnapshot } from "./window-hash";
+import type { ThreadPersistenceRef } from "../persistable";
+
+/**
+ * P2 slim: ThreadContext の最小構造 — Window 概念を除去。
+ *
+ * ooc-3 では Window 概念は spec V2 §6.1 により塌缩されており、
+ * contextWindows フィールドは generic スロット配列として扱う。
+ * フル実装は P4+ で ObjectRecord-aware 型に置換予定。
+ */
+export type ThreadContext = {
+  id: string;
+  status?: string;
+  /**
+   * P2 slim: 旧 ContextWindow[] を unknown[] に変更。
+   * observable 内では id/type/path フィールドのみダックタイプでアクセスする。
+   */
+  contextWindows?: Array<{ id: string; type: string; [key: string]: unknown }>;
+  inbox?: unknown[];
+  outbox?: unknown[];
+  events?: unknown[];
+  creatorThreadId?: string;
+  parentThreadId?: string;
+  /** Optional disk persistence reference (absent for in-memory / test threads). */
+  persistence?: ThreadPersistenceRef;
+  [key: string]: unknown;
+};
+
+// ---------------------------------------------------------------------------
+// Inlined snapshot types (previously in window-hash.ts; deleted per spec V2 §6.1)
+// ---------------------------------------------------------------------------
+
+/**
+ * file スロットの diff データ（UI の CodeMirror Merge 両側レンダリング用）。
+ *
+ * P2 注: Window 型依存を除去し observable 内に内蔵。
+ * P4+ で ObjectRecord-aware セマンティクスに再設計予定。
+ */
+export type FileDiffData = {
+  previousContent: string;
+  currentContent: string;
+  path: string;
+  isBinary?: boolean;
+  tooLarge?: boolean;
+};
+
+/** 200KB 阈值；超过则 tooLarge=true，不再嵌正文。 */
+const FILE_DIFF_MAX_BYTES = 200 * 1024;
+
+/** loop_NNNN.meta.json に落とす windowsSnapshot の 1 entry。 */
+export type WindowSnapshotEntry = {
+  id: string;
+  type: string;
+  contentHash: string;
+  parentWindowId?: string;
+  status?: string;
+  compressLevel?: 0 | 1 | 2;
+  fileDiff?: FileDiffData;
+};
+
+type ObservableSlot = { id: string; type: string; [key: string]: unknown };
+
+/** volatile フィールドを除いた shallow clone を返す。 */
+function stripVolatileSlot(slot: ObservableSlot): Record<string, unknown> {
+  const rest: Record<string, unknown> = { ...(slot as unknown as Record<string, unknown>) };
+  if ("_decayMeta" in rest) delete rest._decayMeta;
+  if (!rest.compressLevel) {
+    delete rest.compressLevel;
+  }
+  return rest;
+}
+
+/** スロットの content hash を計算する（Bun.hash、型非依存）。 */
+function computeSlotContentHash(slot: ObservableSlot): string {
+  const stripped = stripVolatileSlot(slot);
+  const sortedKeys = Object.keys(stripped).sort();
+  const json = JSON.stringify(stripped, sortedKeys);
+  return Bun.hash(json).toString(36);
+}
+
+/** file スロットの fileDiff を計算する。 */
+async function computeFileDiff(
+  slot: ObservableSlot & { path: string },
+  previousSnapshot: WindowSnapshotEntry[] | undefined,
+): Promise<FileDiffData> {
+  const path = slot.path;
+  const previousContent =
+    previousSnapshot?.find((s) => s.id === slot.id)?.fileDiff?.currentContent ?? "";
+
+  let currentContent = "";
+  let isBinary = false;
+  let tooLarge = false;
+
+  try {
+    const raw = await readFile(path, "utf8");
+    if (raw.length > FILE_DIFF_MAX_BYTES) {
+      tooLarge = true;
+    } else if (raw.includes("\0")) {
+      isBinary = true;
+    } else {
+      currentContent = raw;
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // eslint-disable-next-line no-console
+    console.warn(`[fileDiff] failed to read ${path}: ${msg}`);
+  }
+
+  const blocked = tooLarge || isBinary;
+  const result: FileDiffData = {
+    previousContent: blocked ? "" : previousContent,
+    currentContent: blocked ? "" : currentContent,
+    path,
+  };
+  if (isBinary) result.isBinary = true;
+  if (tooLarge) result.tooLarge = true;
+  return result;
+}
+
+/** スロット配列からスナップショット配列を生成する。 */
+async function buildSlotsSnapshot(
+  slots: Array<{ id: string; type: string; [key: string]: unknown }>,
+  previousSnapshot?: WindowSnapshotEntry[],
+): Promise<WindowSnapshotEntry[]> {
+  const out: WindowSnapshotEntry[] = [];
+  for (const slot of slots) {
+    const entry: WindowSnapshotEntry = {
+      id: slot.id,
+      type: slot.type,
+      contentHash: computeSlotContentHash(slot),
+    };
+    if (typeof slot.parentWindowId === "string") entry.parentWindowId = slot.parentWindowId;
+    if (typeof slot.status === "string") entry.status = slot.status;
+    const cl = slot.compressLevel;
+    if (typeof cl === "number" && cl !== 0) {
+      entry.compressLevel = cl as 0 | 1 | 2;
+    }
+    if (slot.type === "file" && typeof slot.path === "string") {
+      entry.fileDiff = await computeFileDiff(
+        slot as ObservableSlot & { path: string },
+        previousSnapshot,
+      );
+    }
+    out.push(entry);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Observable types
+// ---------------------------------------------------------------------------
 
 /** 最近一次 LLM 输入/输出观测快照，用于本地调试和测试断言。 */
 export type LlmObservation = {
@@ -243,7 +391,6 @@ export async function writeLatestLlmInput(
     await writeDebugInput(thread.persistence, {
       threadId: thread.id,
       inputItems,
-      contextSnapshot: captureContextSnapshot(thread),
     });
   }
 }
@@ -287,7 +434,6 @@ export async function beginLlmLoop(
     await writeLoopDebugInput(thread.persistence, loopIndex, {
       threadId: thread.id,
       inputItems,
-      contextSnapshot: captureContextSnapshot(thread),
     });
   }
   return {
@@ -328,16 +474,12 @@ export async function finishLlmLoop(
     }
   }
   if (debugEnabled && thread.persistence) {
-    // Round 9 E2: 落 windowsSnapshot 供前端 LoopTimeline 算 diff
-    // (docs/2026-05-26-loop-time-machine-with-window-diff-design.md § 3.2)
-    // Round 10 F2: 读上一 loop meta 拿 prev snapshot，给 buildWindowsSnapshot 算
-    // file_window 的 previousContent (docs/2026-05-27-type-dispatch-window-diff-view-design.md § 4.1)
-    let previousSnapshot;
+    let previousSnapshot: WindowSnapshotEntry[] | undefined;
     if (handle.loopIndex > 1) {
       const prevMeta = await readLoopDebugMeta(thread.persistence, handle.loopIndex - 1);
-      previousSnapshot = prevMeta?.windowsSnapshot;
+      previousSnapshot = prevMeta?.windowsSnapshot as WindowSnapshotEntry[] | undefined;
     }
-    const windowsSnapshot = await buildWindowsSnapshot(
+    const windowsSnapshot = await buildSlotsSnapshot(
       thread.contextWindows ?? [],
       previousSnapshot,
     );
