@@ -386,6 +386,44 @@ export default defineObject({
                 }
             }
             await walk(resolved);
+
+            // §3.4: create ephemeral search Object in flows/<sessionId>/objects/search_<hash>/
+            if (ctx.sessionId) {
+                const objectId = `search_${shortId()}`;
+                const objectDir = path.join(ctx.worldRoot, "flows", ctx.sessionId, "objects", objectId);
+                await fs.mkdir(objectDir, { recursive: true });
+                // Write self.md with frontmatter identifying this ephemeral instance
+                const selfMd = [
+                    "---",
+                    "extends: search",
+                    `pattern: ${JSON.stringify(args.pattern)}`,
+                    `path: ${JSON.stringify(args.path ?? ctx.worldRoot)}`,
+                    `created_at: ${new Date().toISOString()}`,
+                    "---",
+                    "",
+                    `# search_result`,
+                    "",
+                    `Pattern: \`${args.pattern}\`  `,
+                    `Path: \`${args.path ?? ctx.worldRoot}\`  `,
+                    `Matches: ${results.length}`,
+                ].join("\n");
+                await fs.writeFile(path.join(objectDir, "self.md"), selfMd);
+                // Write results.json (all results, not just top 50)
+                await fs.writeFile(
+                    path.join(objectDir, "results.json"),
+                    JSON.stringify({ pattern: args.pattern, path: args.path ?? ctx.worldRoot, count: results.length, results }, null, 2),
+                );
+                // Register ephemeral Object in registry so subsequent calls can find it
+                const ephemeralUri = `ooc://flows/${ctx.sessionId}/objects/${objectId}`;
+                ctx.registry.set({
+                    uri: ephemeralUri,
+                    paths: { flow: objectDir },
+                    kind: "ephemeral",
+                    self: { extends: "search", pattern: args.pattern, path: args.path ?? ctx.worldRoot },
+                });
+                return { ok: true, uri: ephemeralUri, count: results.length, results: results.slice(0, 10) };
+            }
+
             return { ok: true, count: results.length, results: results.slice(0, 50) };
         },
 
@@ -413,6 +451,44 @@ export default defineObject({
                 }
             }
             await walk(resolved);
+
+            // §3.4: create ephemeral glob Object in flows/<sessionId>/objects/glob_<hash>/
+            if (ctx.sessionId) {
+                const objectId = `glob_${shortId()}`;
+                const objectDir = path.join(ctx.worldRoot, "flows", ctx.sessionId, "objects", objectId);
+                await fs.mkdir(objectDir, { recursive: true });
+                // Write self.md with frontmatter identifying this ephemeral instance
+                const selfMd = [
+                    "---",
+                    "extends: glob",
+                    `pattern: ${JSON.stringify(args.pattern)}`,
+                    `path: ${JSON.stringify(args.path ?? ctx.worldRoot)}`,
+                    `created_at: ${new Date().toISOString()}`,
+                    "---",
+                    "",
+                    `# glob_result`,
+                    "",
+                    `Pattern: \`${args.pattern}\`  `,
+                    `Path: \`${args.path ?? ctx.worldRoot}\`  `,
+                    `Matches: ${matches.length}`,
+                ].join("\n");
+                await fs.writeFile(path.join(objectDir, "self.md"), selfMd);
+                // Write matches.json with all matching file paths
+                await fs.writeFile(
+                    path.join(objectDir, "matches.json"),
+                    JSON.stringify({ pattern: args.pattern, path: args.path ?? ctx.worldRoot, count: matches.length, files: matches }, null, 2),
+                );
+                // Register ephemeral Object in registry so subsequent calls can find it
+                const ephemeralUri = `ooc://flows/${ctx.sessionId}/objects/${objectId}`;
+                ctx.registry.set({
+                    uri: ephemeralUri,
+                    paths: { flow: objectDir },
+                    kind: "ephemeral",
+                    self: { extends: "glob", pattern: args.pattern, path: args.path ?? ctx.worldRoot },
+                });
+                return { ok: true, uri: ephemeralUri, count: matches.length, files: matches };
+            }
+
             return { ok: true, count: matches.length, files: matches };
         },
 
