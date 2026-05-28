@@ -23,6 +23,7 @@ import {
   type SearchWindow,
 } from "../_shared/types.js";
 import { resolveSessionPath } from "../_shared/session-path.js";
+import { DEFAULT_RESULTS_VIEWPORT } from "../search/results-viewport.js";
 
 const GLOB_BASIC_PATH = "internal/executable/glob/basic";
 const GLOB_INPUT_PATH = "internal/executable/glob/input";
@@ -111,6 +112,7 @@ export async function executeGlobCommand(
     matches,
     truncated,
     searchRoot: cwd,
+    resultsViewport: { ...DEFAULT_RESULTS_VIEWPORT },
   };
 
   if (ctx.manager) {

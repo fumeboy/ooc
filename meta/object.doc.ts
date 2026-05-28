@@ -1243,7 +1243,7 @@ export const root: DocTreeNode = {
                             compressLevel 由系统/LLM 在整个 window 之间做"宏观压缩"；viewport 由 LLM 在单个
                             window 内部做"微观节流"。
 
-                            **当前已实施**（file_window / knowledge_window / talk_window / do_window）：
+                            **当前已实施**（file_window / knowledge_window / talk_window / do_window / search_window）：
 
                             **file / knowledge** —— 行+列 viewport：
 
@@ -1294,11 +1294,38 @@ export const root: DocTreeNode = {
                             DEFAULT_TRANSCRIPT_VIEWPORT / mergeTranscriptViewport / applyTranscriptViewport /
                             executeWindowSetTranscriptViewport（被 talk + do 共用）。
 
+                            **search_window** —— matches viewport（按 match 条数；复用 transcript-viewport 泛型算法）：
+
+                            \`resultsViewport: { tail?: N } | { rangeStart, rangeEnd }\` — 创建 search_window
+                            时默认 **{ tail: 50 }**（只渲染末 50 个 match）。LLM 通过 \`set_results_window\`
+                            命令切换：
+
+                            \`\`\`
+                            exec(window_id="<id>", command="set_results_window",
+                                 args={ matches_tail: 100 })                          # 看末 100 个 match
+                            exec(..., args={ matches_start: 0, matches_end: 30 })     # 看固定区间 [0, 30)
+                            \`\`\`
+
+                            字段名采用 search-specific 前缀 \`matches_*\`（matches_tail / matches_start / matches_end），
+                            语义与 transcript viewport 同（互斥、fail-loud、非负整数、必须成对）。
+
+                            **渲染元数据**：每次 render 输出 \`<results_viewport>\` 元节点，属性含
+                            \`total=<总数> tail=N\`（或 \`matches_start=i matches_end=j\`）+ 必要时
+                            \`earlier_omitted=<前部省略数>\`。\`<matches count=...>\` 的 \`count\` 仍是
+                            **全集数**（非 visible 数），与 truncated 标志互补。
+
+                            **open_match 不受 viewport 影响**：viewport 仅截**渲染**给 LLM 的 match 列表；
+                            \`open_match(index=N)\` 仍按完整 matches 数组寻址，即使 N 不在 visible 区间也能命中。
+
+                            **共享实现**：search/results-viewport.ts 提供 DEFAULT_RESULTS_VIEWPORT /
+                            hasAnyResultsViewportField / executeSearchSetResultsViewport（薄包装层，
+                            字段名 matches_* ↔ tail / range_* 翻译；fail-loud 错误信息也用 matches_* 暴露给 LLM）；
+                            核心算法直接复用 _shared/transcript-viewport.ts 的 applyTranscriptViewport<M> 与
+                            mergeTranscriptViewport。
+
                             **其它 window type 的信息量轴设计提案**（**未实施**，仅作 design proposal；
                             后续按需逐个落地）：
 
-                            - **search_window**：matches 区间 → \`set_results_window\` args = { matches_start, matches_end }；
-                              默认 0-50
                             - **program_window**：exec 历史区间 → \`set_history_window\` args = { history_tail?: N }；
                               默认 tail=10
                             - **plan_window**：展开深度 / 当前 step 高亮 → \`focus_step\` (step_id) + \`set_depth\` (max_depth)；
@@ -1326,12 +1353,16 @@ export const root: DocTreeNode = {
                                 "transcriptViewport": "{ tail? } | { rangeStart, rangeEnd } — talk/do_window 的 transcript 渲染窗口；tail/range 互斥",
                                 "DEFAULT_TRANSCRIPT_VIEWPORT": "talk/do 默认 { tail: 20 }；可通过 set_transcript_window 调整",
                                 "set_transcript_window": "talk_window / do_window 上的命令；tail/range 互斥 + fail-loud",
+                                "resultsViewport": "{ tail? } | { rangeStart, rangeEnd } — search_window 的 matches 渲染窗口；同 transcript 结构但用 matches_* 前缀的 args 字段名",
+                                "DEFAULT_RESULTS_VIEWPORT": "search 默认 { tail: 50 }；可通过 set_results_window 调整",
+                                "set_results_window": "search_window 上的命令；args = { matches_tail | matches_start+matches_end }；互斥 + fail-loud",
                                 "overflow marker": "行数 / 列长超限时的标记字符串（file/knowledge），让 LLM 知道窗口外还有内容",
                                 "<transcript_viewport>": "talk/do render 的元节点；属性 total / tail|range_* / earlier_omitted",
+                                "<results_viewport>": "search render 的元节点；属性 total / tail|matches_start+matches_end / earlier_omitted",
                             },
-                            sources: [["src/executable/windows/_shared/viewport.ts | src/executable/windows/_shared/transcript-viewport.ts", "viewport 协议共享实现（file/knowledge 行列 + talk/do transcript）"]],
+                            sources: [["src/executable/windows/_shared/viewport.ts | src/executable/windows/_shared/transcript-viewport.ts | src/executable/windows/search/results-viewport.ts", "viewport 协议共享实现（file/knowledge 行列 + talk/do transcript + search matches）"]],
                             todo: [
-                                "其它 window type（search/program/plan/relation/command_exec）的信息量轴尚未实施",
+                                "其它 window type（program/plan/relation/command_exec）的信息量轴尚未实施",
                                 "viewport 默认值是否对'看长函数'场景过紧——待 AgentOfExperience 真实体验后回调",
                                 "transcriptViewport 默认 tail=20 是否对长对话过紧（用户多回合后看不到早期 context）——待真实使用回调",
                             ],
@@ -1375,7 +1406,7 @@ export const root: DocTreeNode = {
                         "program_window": "程序执行窗口",
                         "file_window": "文件内容窗口；含 viewport 字段（行+列范围）精细控制渲染体量；详见 patches.viewport_protocol",
                         "knowledge_window": "知识文档窗口；explicit 来源支持 viewport 同 file_window",
-                        "search_window": "搜索结果窗口",
+                        "search_window": "搜索结果窗口；含 resultsViewport（matches tail/range）精细控制渲染体量；详见 patches.viewport_protocol",
                         "plan_window": "行动计划窗口；可嵌套 sub plan; 复用 do_window.move sharing 协议共享给 sub thread",
                         "skill_index_window": "stone skills 索引窗口；每轮由 synthesizer 派生（10s TTL 缓存），列出 stones/<branch>/skills 与 stones/<branch>/objects/<self>/skills 下的所有 SKILL.md；空时不注入；详见 children.skill_index_window",
                     },

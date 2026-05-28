@@ -28,6 +28,12 @@ import {
   type SearchWindow,
 } from "../_shared/types.js";
 import { xmlElement, xmlText, type XmlNode } from "../../../thinkable/context/xml.js";
+import {
+  applyTranscriptViewport,
+  type TranscriptViewport,
+} from "../_shared/transcript-viewport.js";
+import { DEFAULT_RESULTS_VIEWPORT } from "./results-viewport.js";
+import { setResultsWindowCommandForSearch } from "./command.set-results-window.js";
 
 export const SEARCH_WINDOW_BASIC_PATH = "internal/windows/search/basic";
 export const SEARCH_WINDOW_CLOSE_BASIC = "internal/windows/search/close/basic";
@@ -45,10 +51,11 @@ open(parent_window_id="<search_window_id>", command="open_match", args={ index: 
 
 在该 match 对应的文件上 spawn 一个 file_window，便于继续阅读 / 编辑。
 
-| command    | 作用 |
-|------------|------|
-| open_match | 在指定 match 的 path 上 spawn 一个 file_window |
-| close      | 释放本搜索窗口 |
+| command            | 作用 |
+|--------------------|------|
+| open_match         | 在指定 match 的 path 上 spawn 一个 file_window |
+| set_results_window | 调整 matches 渲染视口（matches_tail / matches_start+matches_end；默认 tail=50） |
+| close              | 释放本搜索窗口 |
 
 提醒：
 - search_window.matches 截断到 200 条；如果 \`truncated=true\` 表示有更多结果未显示，
@@ -56,6 +63,8 @@ open(parent_window_id="<search_window_id>", command="open_match", args={ index: 
 - 想"翻页"或"改 query 重搜"目前都通过新建 search_window 完成，本期不提供 next_page / refine_query
 - grep kind 的 match 带 line + snippet；glob kind 只带 path
 - open_match grep 命中时，自动用 [match.line ± 40] 给 file_window 设置 lines 切片，便于看上下文
+- 渲染层默认按 resultsViewport={ tail: 50 } 只展示末 50 个 match；\`<results_viewport total=N tail=50 earlier_omitted=M/>\`
+  元节点暴露省略数；想看其它区间用 set_results_window；open_match 依然按完整 matches 的 index 寻址，不受 viewport 影响
 `.trim();
 
 const CLOSE_KNOWLEDGE = `
@@ -170,7 +179,7 @@ export async function executeSearchOpenMatch(
   return undefined;
 }
 
-/** search_window 的 renderXml hook：kind + query + matches。 */
+/** search_window 的 renderXml hook：kind + query + matches（按 resultsViewport 截取）。 */
 function renderSearchWindow(ctx: RenderContext): XmlNode[] {
   const window = ctx.window as SearchWindow;
   const children: XmlNode[] = [
@@ -181,7 +190,32 @@ function renderSearchWindow(ctx: RenderContext): XmlNode[] {
     children.push(xmlElement("search_root", {}, [xmlText(window.searchRoot)]));
   }
 
-  const matchNodes: XmlNode[] = window.matches.map((m) => {
+  const viewport: TranscriptViewport =
+    window.resultsViewport ?? DEFAULT_RESULTS_VIEWPORT;
+  const { visible, earlierCount } = applyTranscriptViewport(
+    window.matches,
+    viewport,
+  );
+
+  // 始终暴露 results_viewport 元节点（让 LLM 知道当前可见区间 + 前部省略数）
+  const viewportAttrs: Record<string, string> = {
+    total: String(window.matches.length),
+  };
+  if (typeof viewport.tail === "number") {
+    viewportAttrs.tail = String(viewport.tail);
+  } else if (
+    typeof viewport.rangeStart === "number" &&
+    typeof viewport.rangeEnd === "number"
+  ) {
+    viewportAttrs.matches_start = String(viewport.rangeStart);
+    viewportAttrs.matches_end = String(viewport.rangeEnd);
+  }
+  if (earlierCount > 0) {
+    viewportAttrs.earlier_omitted = String(earlierCount);
+  }
+  children.push(xmlElement("results_viewport", viewportAttrs));
+
+  const matchNodes: XmlNode[] = visible.map((m) => {
     const attrs: Record<string, string> = {
       index: String(m.index),
       path: m.path,
@@ -255,6 +289,7 @@ registerWindowType("search", {
   commands: {
     close: closeCommand,
     open_match: openMatchCommand,
+    set_results_window: setResultsWindowCommandForSearch,
   },
   renderXml: renderSearchWindow,
   compressView: compressSearchWindow,

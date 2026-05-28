@@ -1,4 +1,15 @@
 import type { BaseContextWindow } from "../_shared/types.js";
+import type { TranscriptViewport } from "../_shared/transcript-viewport.js";
+
+/**
+ * search_window 的 matches 渲染视口（R1b: 复用 TranscriptViewport 的 tail/range 协议）。
+ *
+ * - 默认 { tail: 50 } —— 仅渲染末 50 个 match
+ * - LLM 通过 set_results_window 命令切换：matches_tail / matches_start + matches_end
+ * - 算法复用 _shared/transcript-viewport.ts（applyTranscriptViewport<M>）
+ * - 详见 meta/object.doc.ts:executable.context_window.patches.viewport_protocol
+ */
+export type ResultsViewport = TranscriptViewport;
 
 /**
  * Search window — 把一次 glob / grep 的结果以持久 window 形式留在 context，
@@ -7,7 +18,8 @@ import type { BaseContextWindow } from "../_shared/types.js";
  * - kind 区分搜索类型；同一 type 下未来可加 ast-grep / structural search 等
  * - matches 截断到 200；超过则 truncated=true，LLM 可通过 refine_query 兜底
  * - grep kind 时 match 还携带 line + snippet；glob kind 只有 path
- * - 注册 command：open_match / close
+ * - resultsViewport: 默认 { tail: 50 } —— 用 set_results_window 调整可见区间
+ * - 注册 command：open_match / close / set_results_window
  */
 export interface SearchWindow extends BaseContextWindow {
   type: "search";
@@ -21,6 +33,12 @@ export interface SearchWindow extends BaseContextWindow {
   truncated: boolean;
   /** 仅 grep kind：搜索的根目录（便于 LLM 理解 match.path 的相对性） */
   searchRoot?: string;
+  /**
+   * matches 渲染视口；默认 { tail: 50 }；
+   * 通过 set_results_window 切换（语义同 transcript viewport，字段名前缀 matches_）。
+   * 详见 patches.viewport_protocol。
+   */
+  resultsViewport?: ResultsViewport;
 }
 
 export interface SearchMatch {

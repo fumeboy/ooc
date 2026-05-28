@@ -19,6 +19,7 @@ import {
   type GrepHit,
 } from "./command.grep.impl.js";
 import { resolveSessionPath } from "../_shared/session-path.js";
+import { DEFAULT_RESULTS_VIEWPORT } from "../search/results-viewport.js";
 
 export const grepCommand: CommandTableEntry = {
   paths: ["grep"],
@@ -89,6 +90,7 @@ export async function executeGrepCommand(
     matches: searchMatches,
     truncated,
     searchRoot: path,
+    resultsViewport: { ...DEFAULT_RESULTS_VIEWPORT },
   };
 
   if (ctx.manager) {
