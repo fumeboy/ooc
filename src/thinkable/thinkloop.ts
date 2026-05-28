@@ -10,10 +10,10 @@
  * 6. 错误 → status=failed + lastError
  */
 
-import type { LlmClient } from "./llm/types";
+import type { LlmClient, LlmTool } from "./llm/types";
 import type { ThinkThread } from "./think-thread";
 import type { ObjectRegistry } from "@src/executable/registry";
-import { invokeMethod } from "@src/executable/dispatcher";
+import { invokeMethod, listPublicMethods } from "@src/executable/dispatcher";
 
 /**
  * 执行 thread 的一轮 think。
@@ -37,12 +37,27 @@ export async function think(
     }
 
     try {
+        // 动态从 Object prototype 链收集 public methods，构建 LlmTool 定义传给 LLM。
+        // 若 objectUri 不在 registry（如测试中使用空 registry），安全降级为无工具。
+        let tools: LlmTool[] = [];
+        try {
+            const methodNames = listPublicMethods(registry, thread.objectUri);
+            tools = methodNames.map((name) => ({
+                name,
+                description: `Call the ${name} method on this object.`,
+                inputSchema: { type: "object", additionalProperties: true },
+            }));
+        } catch {
+            // registry 中不存在该 objectUri 时，不暴露 tool list 给 LLM
+        }
+
         const result = await llmClient.generate({
             input: thread.messages.map((m) => ({
                 type: "message" as const,
                 role: m.role,
                 content: m.content,
             })),
+            tools: tools.length > 0 ? tools : undefined,
             timeoutMs: thread.llmTimeoutMs,
         });
 

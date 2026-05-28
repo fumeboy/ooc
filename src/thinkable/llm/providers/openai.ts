@@ -37,7 +37,7 @@ function toOpenAiToolCalls(rawToolCalls: unknown): LlmToolCall[] {
 
     return {
       id: (item as { id?: string }).id ?? "",
-      name: (functionCall?.name ?? "wait") as LlmToolCall["name"],
+      name: functionCall?.name ?? "",
       arguments: JSON.parse(rawArguments)
     };
   });
@@ -116,7 +116,7 @@ function toOpenAiOutputItems(rawOutput: unknown): LlmInputItem[] {
       outputItems.push({
         type: "function_call" as const,
         call_id: (raw.call_id as string | undefined) ?? "",
-        name: ((raw.name as string | undefined) ?? "wait") as LlmToolCall["name"],
+        name: (raw.name as string | undefined) ?? "",
         arguments: JSON.parse((raw.arguments as string | undefined) ?? "{}")
       });
       continue;
@@ -292,7 +292,7 @@ export async function* streamWithOpenAi(
   for (const toolCall of [...toolCallBuffer.values()]) {
     const normalized = {
       id: toolCall.id,
-      name: toolCall.name as LlmToolCall["name"],
+      name: toolCall.name,
       arguments: JSON.parse(toolCall.arguments || "{}")
     };
 

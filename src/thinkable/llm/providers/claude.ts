@@ -19,7 +19,7 @@ function toClaudeToolCalls(content: unknown): LlmToolCall[] {
     .filter((item) => (item as { type?: string }).type === "tool_use")
     .map((item) => ({
       id: (item as { id?: string }).id ?? "",
-      name: ((item as { name?: string }).name ?? "wait") as LlmToolCall["name"],
+      name: (item as { name?: string }).name ?? "",
       arguments: (item as { input?: Record<string, unknown> }).input ?? {}
     }));
 }
@@ -43,7 +43,7 @@ function toClaudeOutputItems(content: unknown): LlmInputItem[] {
       outputItems.push({
         type: "function_call" as const,
         call_id: (item as { id?: string }).id ?? "",
-        name: ((item as { name?: string }).name ?? "wait") as LlmToolCall["name"],
+        name: (item as { name?: string }).name ?? "",
         arguments: (item as { input?: Record<string, unknown> }).input ?? {}
       });
     }

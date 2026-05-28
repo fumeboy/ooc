@@ -24,7 +24,7 @@ import { ObjectRegistry } from "@src/executable/registry";
 import { loadObjects } from "@src/executable/loader";
 import type { ThinkThread } from "@src/thinkable/think-thread";
 
-const hasApiKey = Boolean(process.env.ANTHROPIC_API_KEY);
+const hasApiKey = Boolean(process.env.OOC_API_KEY || process.env.ANTHROPIC_API_KEY);
 
 /**
  * Ensure OOC_* env vars are set so createLlmClient() won't throw.
