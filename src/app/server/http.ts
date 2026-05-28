@@ -12,6 +12,23 @@
  *
  *   POST /api/talk                     user→target 直投 talk；唤起 target LLM；返回 LLM 响应
  *
+ * P8 追加（UX surface 补全）：
+ *
+ *   GET  /api/sessions                 列出所有 sessions
+ *   GET  /api/stones                   列出 branch 下所有 stones
+ *   GET  /api/stones/:branch/:name     stone 元数据
+ *   GET  /api/stones/:branch/:name/self        self.md 内容
+ *   GET  /api/stones/:branch/:name/readme      readme.md 内容
+ *   GET  /api/stones/:branch/:name/server-source  server/index.ts 内容
+ *   POST /api/stones/:branch/:name/call-method    调用 stone public method
+ *   GET  /api/flows/:sessionId/objects             session 内 objects 列表
+ *   GET  /api/flows/:sessionId/objects/:objectName  object 摘要
+ *   GET  /api/flows/:sessionId/objects/:objectName/threads/:threadId  thread 状态
+ *   GET  /api/tree                     文件树（worldRoot 范围内）
+ *   GET  /api/file/read                读取文件内容（worldRoot 范围内）
+ *   GET  /api/objects/:scope/:name/client-source-url  客户端源文件 URL
+ *   GET  /api/world                    world 配置
+ *
  * Worker 由调用方（server entrypoint）传入；HTTP 层不构建 LlmClient。
  */
 
@@ -33,6 +50,78 @@ export interface HttpDeps {
      * 若不传，相关端点会尝试从 worker.worldRoot 扫描（仅在 stones 在 worldRoot 下时有效）。
      */
     registry?: ObjectRegistry;
+    /** stones branch，默认 "main" */
+    branch?: string;
+}
+
+/** 校验路径不跨出 worldRoot（安全边界）。 */
+function safeResolvePath(worldRoot: string, relative: string): string | null {
+    // 拒绝以 / 开头或含有 .. 的路径
+    if (!relative || relative.startsWith("/") || relative.includes("..")) {
+        return null;
+    }
+    const resolved = path.resolve(worldRoot, relative);
+    if (!resolved.startsWith(worldRoot)) {
+        return null;
+    }
+    return resolved;
+}
+
+/** 安全读取文件（worldRoot 范围内）；越界返回 null。 */
+async function safeReadFile(
+    worldRoot: string,
+    relativePath: string,
+    maxBytes = 1_000_000,
+): Promise<{ content: string; bytes: number; truncated: boolean } | null> {
+    const abs = safeResolvePath(worldRoot, relativePath);
+    if (!abs) return null;
+    let raw: Buffer;
+    try {
+        raw = await fs.readFile(abs);
+    } catch {
+        return null;
+    }
+    const truncated = raw.length > maxBytes;
+    const slice = truncated ? raw.slice(0, maxBytes) : raw;
+    return {
+        content: slice.toString("utf8"),
+        bytes: raw.length,
+        truncated,
+    };
+}
+
+/** 安全读取绝对路径文件（已校验在 worldRoot 内）。 */
+async function readFileOrNull(abs: string): Promise<string | null> {
+    try {
+        return await fs.readFile(abs, "utf8");
+    } catch {
+        return null;
+    }
+}
+
+/** 列出目录条目（不递归）。 */
+async function listDir(
+    dir: string,
+): Promise<Array<{ name: string; type: "file" | "dir" }>> {
+    try {
+        const entries = await fs.readdir(dir, { withFileTypes: true });
+        return entries.map((e) => ({
+            name: e.name,
+            type: e.isDirectory() ? "dir" : "file",
+        }));
+    } catch {
+        return [];
+    }
+}
+
+/** 判断文件是否存在。 */
+async function fileExists(p: string): Promise<boolean> {
+    try {
+        const stat = await fs.stat(p);
+        return stat.isFile();
+    } catch {
+        return false;
+    }
 }
 
 /**
@@ -42,6 +131,7 @@ export function buildApp(deps: HttpDeps): Elysia {
     const app = new Elysia();
     const { worker } = deps;
     const sharedRegistry = deps.registry;
+    const defaultBranch = deps.branch ?? "main";
 
     /* -------- health -------- */
 
@@ -50,7 +140,48 @@ export function buildApp(deps: HttpDeps): Elysia {
         worldRoot: worker.worldRoot,
     }));
 
+    /* -------- world config -------- */
+
+    app.get("/api/world", () => ({
+        ok: true,
+        worldRoot: worker.worldRoot,
+        branch: defaultBranch,
+    }));
+
     /* -------- sessions -------- */
+
+    /**
+     * GET /api/sessions
+     *
+     * 列出所有 sessions（扫描 flows/* 目录，读取 .session.json 或目录名）。
+     */
+    app.get("/api/sessions", async () => {
+        const flowsDir = path.join(worker.worldRoot, "flows");
+        const sessions: Array<{ sessionId: string; createdAt?: string; threadCount: number }> = [];
+        try {
+            const entries = await fs.readdir(flowsDir, { withFileTypes: true });
+            for (const entry of entries) {
+                if (!entry.isDirectory()) continue;
+                const sessionId = entry.name;
+                let createdAt: string | undefined;
+                // 尝试读取 .session.json
+                const sessionFile = path.join(flowsDir, sessionId, ".session.json");
+                try {
+                    const raw = await fs.readFile(sessionFile, "utf8");
+                    const meta = JSON.parse(raw) as { createdAt?: string };
+                    createdAt = meta.createdAt;
+                } catch {
+                    // 无 .session.json 则 createdAt 为 undefined
+                }
+                // 统计 worker queue 中此 session 的 thread 数
+                const threadCount = worker.list().filter((t) => t.sessionId === sessionId).length;
+                sessions.push({ sessionId, createdAt, threadCount });
+            }
+        } catch {
+            // flows/ 不存在时返回空数组
+        }
+        return { ok: true, sessions };
+    });
 
     /**
      * POST /api/sessions
@@ -182,6 +313,452 @@ export function buildApp(deps: HttpDeps): Elysia {
             );
         }
     });
+
+    /* -------- stones browsing -------- */
+
+    /**
+     * GET /api/stones?branch=main
+     *
+     * 列出 branch 下所有 stone objects。
+     * response: [{ uri, name, title, kind }]
+     */
+    app.get("/api/stones", async ({ query }) => {
+        const branch = typeof query?.branch === "string" ? query.branch : defaultBranch;
+        // 简单校验 branch 不含 ..
+        if (branch.includes("..") || branch.includes("\0")) {
+            return new Response(
+                JSON.stringify({ ok: false, error: "invalid branch" }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        const objectsDir = path.join(worker.worldRoot, "stones", branch, "objects");
+        const stones: Array<{ uri: string; name: string; title?: string; kind: string }> = [];
+        try {
+            const entries = await fs.readdir(objectsDir, { withFileTypes: true });
+            for (const entry of entries) {
+                if (!entry.isDirectory()) continue;
+                const name = entry.name;
+                const uri = `ooc://stones/${branch}/objects/${name}`;
+                // 尝试读 self.md title
+                let title: string | undefined;
+                const selfPath = path.join(objectsDir, name, "self.md");
+                try {
+                    const raw = await fs.readFile(selfPath, "utf8");
+                    const m = raw.match(/^title:\s*(.+)$/m);
+                    if (m) title = m[1]!.trim();
+                } catch {
+                    // ok
+                }
+                stones.push({ uri, name, title, kind: "persistent" });
+            }
+        } catch {
+            // objectsDir 不存在返回空
+        }
+        return { ok: true, branch, stones };
+    });
+
+    /**
+     * GET /api/stones/:branch/:name
+     *
+     * stone 元数据：paths, self frontmatter, readme content, flags。
+     */
+    app.get("/api/stones/:branch/:name", async ({ params }) => {
+        const { branch, name } = params;
+        if (branch.includes("..") || name.includes("..") || name.includes("/")) {
+            return new Response(
+                JSON.stringify({ ok: false, error: "invalid branch or name" }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        const stoneDir = path.join(worker.worldRoot, "stones", branch, "objects", name);
+        const uri = `ooc://stones/${branch}/objects/${name}`;
+
+        const selfContent = await readFileOrNull(path.join(stoneDir, "self.md"));
+        if (selfContent === null) {
+            return new Response(
+                JSON.stringify({ ok: false, error: `stone not found: ${uri}` }),
+                { status: 404, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        const readmeContent = await readFileOrNull(path.join(stoneDir, "readme.md"));
+        const hasServer = await fileExists(path.join(stoneDir, "server", "index.ts"));
+        const hasClient = await fileExists(path.join(stoneDir, "client", "index.tsx"))
+            || await fileExists(path.join(stoneDir, "client", "index.ts"));
+
+        return {
+            ok: true,
+            uri,
+            name,
+            branch,
+            paths: {
+                stone: stoneDir,
+                pool: path.join(worker.worldRoot, "pools", "objects", name),
+            },
+            self: selfContent,
+            readme: readmeContent,
+            hasServer,
+            hasClient,
+        };
+    });
+
+    /**
+     * GET /api/stones/:branch/:name/self
+     *
+     * 返回 self.md 内容。
+     */
+    app.get("/api/stones/:branch/:name/self", async ({ params }) => {
+        const { branch, name } = params;
+        if (branch.includes("..") || name.includes("..") || name.includes("/")) {
+            return new Response(
+                JSON.stringify({ ok: false, error: "invalid params" }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        const abs = path.join(worker.worldRoot, "stones", branch, "objects", name, "self.md");
+        const content = await readFileOrNull(abs);
+        if (content === null) {
+            return new Response(
+                JSON.stringify({ ok: false, error: "self.md not found" }),
+                { status: 404, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        return { ok: true, content };
+    });
+
+    /**
+     * GET /api/stones/:branch/:name/readme
+     *
+     * 返回 readme.md 内容。
+     */
+    app.get("/api/stones/:branch/:name/readme", async ({ params }) => {
+        const { branch, name } = params;
+        if (branch.includes("..") || name.includes("..") || name.includes("/")) {
+            return new Response(
+                JSON.stringify({ ok: false, error: "invalid params" }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        const abs = path.join(worker.worldRoot, "stones", branch, "objects", name, "readme.md");
+        const content = await readFileOrNull(abs);
+        if (content === null) {
+            return new Response(
+                JSON.stringify({ ok: false, error: "readme.md not found" }),
+                { status: 404, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        return { ok: true, content };
+    });
+
+    /**
+     * GET /api/stones/:branch/:name/server-source
+     *
+     * 返回 server/index.ts 内容。
+     */
+    app.get("/api/stones/:branch/:name/server-source", async ({ params }) => {
+        const { branch, name } = params;
+        if (branch.includes("..") || name.includes("..") || name.includes("/")) {
+            return new Response(
+                JSON.stringify({ ok: false, error: "invalid params" }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        const abs = path.join(
+            worker.worldRoot,
+            "stones",
+            branch,
+            "objects",
+            name,
+            "server",
+            "index.ts",
+        );
+        const content = await readFileOrNull(abs);
+        if (content === null) {
+            return new Response(
+                JSON.stringify({ ok: false, error: "server/index.ts not found" }),
+                { status: 404, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        return { ok: true, content };
+    });
+
+    /**
+     * POST /api/stones/:branch/:name/call-method
+     * body: { method: string; args?: unknown; sessionId?: string }
+     *
+     * 调用 stone public method（通过 dispatcher.invokeMethod）。
+     */
+    app.post("/api/stones/:branch/:name/call-method", async ({ params, body }) => {
+        const { branch, name } = params;
+        if (branch.includes("..") || name.includes("..") || name.includes("/")) {
+            return new Response(
+                JSON.stringify({ ok: false, error: "invalid params" }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        const b = body as Record<string, unknown>;
+        const method = typeof b?.method === "string" ? b.method : undefined;
+        if (!method) {
+            return new Response(
+                JSON.stringify({ ok: false, error: "method required" }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        const sessionId = typeof b?.sessionId === "string" ? b.sessionId : shortId("ses");
+        const objectUri = `ooc://stones/${branch}/objects/${name}`;
+
+        try {
+            const registry = new ObjectRegistry();
+            const records = await loadObjects({
+                worldRoot: worker.worldRoot,
+                branch,
+                sessionId,
+            });
+            for (const r of records) registry.set(r);
+
+            const ctx = { worldRoot: worker.worldRoot, sessionId, registry };
+            const result = await invokeMethod(registry, objectUri, method, b.args ?? {}, ctx);
+            return { ok: true, result };
+        } catch (error) {
+            return new Response(
+                JSON.stringify({ ok: false, error: (error as Error).message }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+    });
+
+    /* -------- flows / objects detail -------- */
+
+    /**
+     * GET /api/flows/:sessionId/objects
+     *
+     * 列出 session 内所有 objects（ephemeral + persistent active in session）。
+     */
+    app.get("/api/flows/:sessionId/objects", async ({ params }) => {
+        const { sessionId } = params;
+        const flowObjectsDir = path.join(worker.worldRoot, "flows", sessionId, "objects");
+        const objects: Array<{ name: string; uri: string; kind: string }> = [];
+        try {
+            const entries = await fs.readdir(flowObjectsDir, { withFileTypes: true });
+            for (const entry of entries) {
+                if (!entry.isDirectory()) continue;
+                const name = entry.name;
+                objects.push({
+                    name,
+                    uri: `ooc://flows/${sessionId}/objects/${name}`,
+                    kind: "ephemeral",
+                });
+            }
+        } catch {
+            // no objects dir yet
+        }
+        // Also include running thread object URIs from worker
+        const threadUris = worker
+            .list()
+            .filter((t) => t.sessionId === sessionId)
+            .map((t) => t.objectUri);
+        for (const uri of threadUris) {
+            const name = uri.split("/").pop()!;
+            if (!objects.find((o) => o.uri === uri)) {
+                objects.push({ name, uri, kind: "persistent" });
+            }
+        }
+        return { ok: true, sessionId, objects };
+    });
+
+    /**
+     * GET /api/flows/:sessionId/objects/:objectName
+     *
+     * object 摘要：plan + todos + recent talks + threads。
+     */
+    app.get("/api/flows/:sessionId/objects/:objectName", async ({ params }) => {
+        const { sessionId, objectName } = params;
+        const flowDir = path.join(worker.worldRoot, "flows", sessionId, "objects", objectName);
+
+        const plan = await readFileOrNull(path.join(flowDir, "plan.md"));
+        let todos: unknown = null;
+        try {
+            const todosRaw = await fs.readFile(path.join(flowDir, "todos.json"), "utf8");
+            todos = JSON.parse(todosRaw);
+        } catch {
+            // ok
+        }
+
+        // Recent talks: list talks/*.jsonl files
+        const talksDir = path.join(flowDir, "talks");
+        const talks: Array<{ peer: string; entries: unknown[] }> = [];
+        try {
+            const talkFiles = await fs.readdir(talksDir);
+            for (const f of talkFiles) {
+                if (!f.endsWith(".jsonl")) continue;
+                const raw = await fs.readFile(path.join(talksDir, f), "utf8");
+                const entries = raw
+                    .trim()
+                    .split("\n")
+                    .filter(Boolean)
+                    .map((line) => {
+                        try { return JSON.parse(line); } catch { return null; }
+                    })
+                    .filter(Boolean);
+                // peer slug: file name without .jsonl
+                const peerSlug = f.slice(0, -6);
+                talks.push({ peer: peerSlug, entries });
+            }
+        } catch {
+            // no talks yet
+        }
+
+        // Threads: list threads/ subdirs
+        const threadsDir = path.join(flowDir, "threads");
+        const threadIds: string[] = [];
+        try {
+            const entries = await fs.readdir(threadsDir, { withFileTypes: true });
+            for (const e of entries) {
+                if (e.isDirectory()) threadIds.push(e.name);
+            }
+        } catch {
+            // ok
+        }
+
+        // Worker thread snapshots for this object
+        const activeThreads = worker.list().filter(
+            (t) => t.sessionId === sessionId && t.objectUri.endsWith(`/${objectName}`),
+        );
+
+        return {
+            ok: true,
+            sessionId,
+            objectName,
+            plan,
+            todos,
+            talks,
+            threadIds,
+            activeThreads: activeThreads.map((t) => ({
+                id: t.id,
+                status: t.status,
+                ticks: t.ticks,
+                maxTicks: t.maxTicks,
+                messageCount: t.messages.length,
+                lastError: t.lastError,
+            })),
+        };
+    });
+
+    /**
+     * GET /api/flows/:sessionId/objects/:objectName/threads/:threadId
+     *
+     * thread 状态（从 worker queue 读，或从磁盘读）。
+     */
+    app.get("/api/flows/:sessionId/objects/:objectName/threads/:threadId", async ({ params }) => {
+        const { sessionId, objectName, threadId } = params;
+
+        // First check worker queue
+        const thread = worker.get(threadId);
+        if (thread && thread.sessionId === sessionId) {
+            return { ok: true, source: "memory", thread };
+        }
+
+        // Fall back to disk
+        const threadFile = path.join(
+            worker.worldRoot,
+            "flows",
+            sessionId,
+            "objects",
+            objectName,
+            "threads",
+            threadId,
+            "thread.json",
+        );
+        const raw = await readFileOrNull(threadFile);
+        if (raw === null) {
+            return new Response(
+                JSON.stringify({ ok: false, error: "thread not found" }),
+                { status: 404, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        try {
+            const persisted = JSON.parse(raw) as ThinkThread;
+            return { ok: true, source: "disk", thread: persisted };
+        } catch {
+            return new Response(
+                JSON.stringify({ ok: false, error: "thread.json parse error" }),
+                { status: 500, headers: { "Content-Type": "application/json" } },
+            );
+        }
+    });
+
+    /* -------- file tree & read -------- */
+
+    /**
+     * GET /api/tree?path=<relative>
+     *
+     * 列出 worldRoot 下 path 的文件/目录条目（不递归）。
+     * path 省略时列 worldRoot 本身。
+     */
+    app.get("/api/tree", async ({ query }) => {
+        const relPath = typeof query?.path === "string" ? query.path : "";
+        const abs = relPath
+            ? safeResolvePath(worker.worldRoot, relPath)
+            : worker.worldRoot;
+        if (!abs) {
+            return new Response(
+                JSON.stringify({ ok: false, error: "invalid path" }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        const entries = await listDir(abs);
+        return { ok: true, path: relPath || ".", entries };
+    });
+
+    /**
+     * GET /api/file/read?path=<relative>
+     *
+     * 读取 worldRoot 范围内的文件内容（最大 1 MB）。
+     */
+    app.get("/api/file/read", async ({ query }) => {
+        const relPath = typeof query?.path === "string" ? query.path : undefined;
+        if (!relPath) {
+            return new Response(
+                JSON.stringify({ ok: false, error: "path query param required" }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        const result = await safeReadFile(worker.worldRoot, relPath);
+        if (!result) {
+            return new Response(
+                JSON.stringify({ ok: false, error: "file not found or access denied" }),
+                { status: 404, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        return { ok: true, ...result };
+    });
+
+    /* -------- object client source URL -------- */
+
+    /**
+     * GET /api/objects/:scope/:name/client-source-url
+     *
+     * 返回 client/index.ts(x) 的 /@fs/ URL（供 vite dev + HMR），若无则 null。
+     * scope: branch name（e.g. "main"）
+     */
+    app.get("/api/objects/:scope/:name/client-source-url", async ({ params }) => {
+        const { scope, name } = params;
+        if (scope.includes("..") || name.includes("..") || name.includes("/")) {
+            return new Response(
+                JSON.stringify({ ok: false, error: "invalid params" }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        const stoneBase = path.join(worker.worldRoot, "stones", scope, "objects", name, "client");
+        for (const fname of ["index.tsx", "index.ts", "index.jsx", "index.js"]) {
+            const abs = path.join(stoneBase, fname);
+            if (await fileExists(abs)) {
+                return { ok: true, url: `/@fs${abs}` };
+            }
+        }
+        return { ok: true, url: null };
+    });
+
+    /* -------- talk -------- */
 
     /**
      * POST /api/talk
