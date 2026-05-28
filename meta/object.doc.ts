@@ -1243,7 +1243,7 @@ export const root: DocTreeNode = {
                             compressLevel 由系统/LLM 在整个 window 之间做"宏观压缩"；viewport 由 LLM 在单个
                             window 内部做"微观节流"。
 
-                            **当前已实施**（file_window / knowledge_window / talk_window / do_window / search_window）：
+                            **当前已实施**（file_window / knowledge_window / talk_window / do_window / search_window / program_window）：
 
                             **file / knowledge** —— 行+列 viewport：
 
@@ -1323,11 +1323,38 @@ export const root: DocTreeNode = {
                             核心算法直接复用 _shared/transcript-viewport.ts 的 applyTranscriptViewport<M> 与
                             mergeTranscriptViewport。
 
+                            **program_window** —— exec history viewport（按 exec 条数；复用 transcript-viewport 泛型算法）：
+
+                            \`historyViewport: { tail?: N } | { rangeStart, rangeEnd }\` — 创建 program_window
+                            时默认 **{ tail: 10 }**（只渲染末 10 次 exec）。LLM 通过 \`set_history_window\`
+                            命令切换：
+
+                            \`\`\`
+                            exec(window_id="<id>", command="set_history_window",
+                                 args={ history_tail: 30 })                          # 看末 30 次 exec
+                            exec(..., args={ history_start: 0, history_end: 5 })     # 看固定区间 [0, 5)
+                            \`\`\`
+
+                            字段名采用 program-specific 前缀 \`history_*\`（history_tail / history_start / history_end），
+                            语义与 transcript viewport 同（互斥、fail-loud、非负整数、必须成对）。
+
+                            **渲染元数据**：每次 render 输出 \`<history_viewport>\` 元节点，属性含
+                            \`total=<总数> tail=N\`（或 \`history_start=i history_end=j\`）+ 必要时
+                            \`earlier_omitted=<前部省略数>\`。\`<exec n=...>\` 的 \`n\` 仍是**完整 history 的绝对下标**，
+                            便于 LLM 引用某次 exec。
+
+                            **last_output 不受 viewport 影响**：viewport 仅截 \`<history>\` 摘要列表；
+                            \`<last_output exec_id=...>\` 始终是完整 history 的最后一条——最近一次 exec 是 LLM
+                            最常需要的反馈锚点。exec 命令仍正常 append 到完整 history（与 viewport 无关）。
+
+                            **共享实现**：program/history-viewport.ts 提供 DEFAULT_HISTORY_VIEWPORT /
+                            hasAnyHistoryViewportField / executeProgramSetHistoryViewport（薄包装层，
+                            字段名 history_* ↔ tail / range_* 翻译；fail-loud 错误信息也用 history_* 暴露给 LLM）；
+                            核心算法直接复用 _shared/transcript-viewport.ts。
+
                             **其它 window type 的信息量轴设计提案**（**未实施**，仅作 design proposal；
                             后续按需逐个落地）：
 
-                            - **program_window**：exec 历史区间 → \`set_history_window\` args = { history_tail?: N }；
-                              默认 tail=10
                             - **plan_window**：展开深度 / 当前 step 高亮 → \`focus_step\` (step_id) + \`set_depth\` (max_depth)；
                               默认全展开
                             - **relation_window**：sections 选择（peer_readme 收起 / self_long_term 展开）→
@@ -1356,13 +1383,17 @@ export const root: DocTreeNode = {
                                 "resultsViewport": "{ tail? } | { rangeStart, rangeEnd } — search_window 的 matches 渲染窗口；同 transcript 结构但用 matches_* 前缀的 args 字段名",
                                 "DEFAULT_RESULTS_VIEWPORT": "search 默认 { tail: 50 }；可通过 set_results_window 调整",
                                 "set_results_window": "search_window 上的命令；args = { matches_tail | matches_start+matches_end }；互斥 + fail-loud",
+                                "historyViewport": "{ tail? } | { rangeStart, rangeEnd } — program_window 的 exec history 渲染窗口；同 transcript 结构但用 history_* 前缀的 args 字段名",
+                                "DEFAULT_HISTORY_VIEWPORT": "program 默认 { tail: 10 }；可通过 set_history_window 调整",
+                                "set_history_window": "program_window 上的命令；args = { history_tail | history_start+history_end }；互斥 + fail-loud",
                                 "overflow marker": "行数 / 列长超限时的标记字符串（file/knowledge），让 LLM 知道窗口外还有内容",
                                 "<transcript_viewport>": "talk/do render 的元节点；属性 total / tail|range_* / earlier_omitted",
                                 "<results_viewport>": "search render 的元节点；属性 total / tail|matches_start+matches_end / earlier_omitted",
+                                "<history_viewport>": "program render 的元节点；属性 total / tail|history_start+history_end / earlier_omitted",
                             },
-                            sources: [["src/executable/windows/_shared/viewport.ts | src/executable/windows/_shared/transcript-viewport.ts | src/executable/windows/search/results-viewport.ts", "viewport 协议共享实现（file/knowledge 行列 + talk/do transcript + search matches）"]],
+                            sources: [["src/executable/windows/_shared/viewport.ts | src/executable/windows/_shared/transcript-viewport.ts | src/executable/windows/search/results-viewport.ts | src/executable/windows/program/history-viewport.ts", "viewport 协议共享实现（file/knowledge 行列 + talk/do transcript + search matches + program history）"]],
                             todo: [
-                                "其它 window type（program/plan/relation/command_exec）的信息量轴尚未实施",
+                                "其它 window type（plan/relation/command_exec）的信息量轴尚未实施",
                                 "viewport 默认值是否对'看长函数'场景过紧——待 AgentOfExperience 真实体验后回调",
                                 "transcriptViewport 默认 tail=20 是否对长对话过紧（用户多回合后看不到早期 context）——待真实使用回调",
                             ],
@@ -1380,7 +1411,7 @@ export const root: DocTreeNode = {
                     - do: 子 thread 的父侧窗口，展示子任务状态与 transcript。
                     - talk: 与 user 或其他 Object 的持续会话窗口。
                     - todo: 可见待办窗口。
-                    - program: 程序执行窗口，可多次 exec。
+                    - program: 程序执行窗口，可多次 exec；含 historyViewport 精细控制渲染体量。
                     - file: 文件内容窗口，支持 viewport / set_viewport / set_range（遗留）/ reload / edit / close。
                     - knowledge: 知识文档窗口，承载显式打开或协议合成的 knowledge；explicit 来源支持 viewport / set_viewport。
                     - search: glob / grep 搜索结果窗口，支持 open_match。
@@ -1403,7 +1434,7 @@ export const root: DocTreeNode = {
                         "do_window": "父 thread 观察和继续子 thread 的窗口；注册 continue/wait/close/move 命令；archive 时自动归还所有 borrowed owner windows（plan §do_window.move）",
                         "talk_window": "与 user 或其他 Object 对话的窗口",
                         "todo_window": "可见待办窗口",
-                        "program_window": "程序执行窗口",
+                        "program_window": "程序执行窗口；含 historyViewport（exec history tail/range）精细控制渲染体量；详见 patches.viewport_protocol",
                         "file_window": "文件内容窗口；含 viewport 字段（行+列范围）精细控制渲染体量；详见 patches.viewport_protocol",
                         "knowledge_window": "知识文档窗口；explicit 来源支持 viewport 同 file_window",
                         "search_window": "搜索结果窗口；含 resultsViewport（matches tail/range）精细控制渲染体量；详见 patches.viewport_protocol",
