@@ -91,8 +91,11 @@ describe("reflectable knowledge protocol injection", () => {
     expect(REFLECTABLE_KNOWLEDGE).toContain("sediment write contract");
     expect(REFLECTABLE_KNOWLEDGE).toContain("frontmatter");
     expect(REFLECTABLE_KNOWLEDGE).toContain("activates_on");
-    expect(REFLECTABLE_KNOWLEDGE).toContain("show_description_when");
-    expect(REFLECTABLE_KNOWLEDGE).toContain("show_content_when");
+    // 新 trigger map schema 标志（替代旧 show_description_when / show_content_when）
+    expect(REFLECTABLE_KNOWLEDGE).toContain("show_description");
+    expect(REFLECTABLE_KNOWLEDGE).toContain("show_content");
+    expect(REFLECTABLE_KNOWLEDGE).toContain("window::");
+    expect(REFLECTABLE_KNOWLEDGE).toContain("command::");
     // 强调"没有 frontmatter = silently 失效"
     expect(REFLECTABLE_KNOWLEDGE).toMatch(/永远无法激活|永远无法被|断裂/);
     // 完整模板 fence

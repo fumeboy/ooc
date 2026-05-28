@@ -20,8 +20,8 @@ import type { ThreadContext } from "../../src/thinkable/context";
 
 /**
  * 验证 knowledge 自动激活闭环：
- * - 预置一篇 knowledge 文档（activates_on.show_content_when = ["program.shell"]）
- * - Agent open program(language=shell) form → 下一轮 system XML 中应出现 <active_knowledge> 含该篇正文
+ * - 预置一篇 knowledge 文档（activates_on: { "command::root::program": "show_content" }）
+ * - Agent open program(language=shell) form → 下一轮 system XML 中应出现该篇正文（type=knowledge / source=activator）
  * - 用 marker-7xq9 这种中性字符串当指纹（避免 "SECRET" 触发模型 safety 模式）
  */
 describe.skipIf(!hasLlmEnv)("integration: knowledge-activation", () => {
@@ -36,7 +36,7 @@ describe.skipIf(!hasLlmEnv)("integration: knowledge-activation", () => {
     await cleanup();
   });
 
-  test("knowledge file with show_content_when=program.shell auto-activates", async () => {
+  test("knowledge file with command::root::program activates_on auto-activates", async () => {
     await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
     const poolRef = await createPoolObject({ baseDir: tempRoot, objectId: "agent" });
     const flow = await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
@@ -50,7 +50,7 @@ describe.skipIf(!hasLlmEnv)("integration: knowledge-activation", () => {
         "title: Shell 速查表",
         "description: 常用 shell 模式",
         "activates_on:",
-        "  show_content_when: [program.shell]",
+        '  "command::root::program": "show_content"',
         "---",
         "",
         "## marker-7xq9",

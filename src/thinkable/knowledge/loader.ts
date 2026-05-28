@@ -89,15 +89,15 @@ export async function loadKnowledgeIndex(refs: KnowledgeLoadRefs): Promise<Knowl
   // 顺序：root → immediate parent，更近的祖先后 set 自然 override 更远的。
   for (const { root, files } of ancestorFilesByRoot) {
     for (const f of files) {
-      const text = await readFile(f.path, "utf8");
-      const { frontmatter, body } = parseKnowledgeFile(text);
-      if (frontmatter.inheritable !== true) continue;
+      const parsed = await readAndParse(f.path);
+      if (!parsed) continue;
+      if (parsed.frontmatter.inheritable !== true) continue;
       const idPath = toIdPath(root, f.path);
       byPath.set(idPath, {
         path: idPath,
         file: f.path,
-        frontmatter,
-        body,
+        frontmatter: parsed.frontmatter,
+        body: parsed.body,
         mtime: f.mtime,
       });
     }
@@ -105,22 +105,22 @@ export async function loadKnowledgeIndex(refs: KnowledgeLoadRefs): Promise<Knowl
 
   // Step 2: self seed —— 自然 override 同 idPath 的祖先 knowledge。
   for (const f of stoneFiles) {
-    const text = await readFile(f.path, "utf8");
-    const { frontmatter, body } = parseKnowledgeFile(text);
+    const parsed = await readAndParse(f.path);
+    if (!parsed) continue;
     const idPath = toIdPath(stoneRoot, f.path);
     byPath.set(idPath, {
       path: idPath,
       file: f.path,
-      frontmatter,
-      body,
+      frontmatter: parsed.frontmatter,
+      body: parsed.body,
       mtime: f.mtime,
     });
   }
 
   // Step 3: self sediment —— 同 idPath 时覆盖 seed（含祖先 seed）并 warn。
   for (const f of poolFiles) {
-    const text = await readFile(f.path, "utf8");
-    const { frontmatter, body } = parseKnowledgeFile(text);
+    const parsed = await readAndParse(f.path);
+    if (!parsed) continue;
     const idPath = toIdPath(poolRoot, f.path);
     if (byPath.has(idPath)) {
       const prev = byPath.get(idPath)!;
@@ -131,8 +131,8 @@ export async function loadKnowledgeIndex(refs: KnowledgeLoadRefs): Promise<Knowl
     byPath.set(idPath, {
       path: idPath,
       file: f.path,
-      frontmatter,
-      body,
+      frontmatter: parsed.frontmatter,
+      body: parsed.body,
       mtime: f.mtime,
     });
   }
@@ -145,6 +145,35 @@ export async function loadKnowledgeIndex(refs: KnowledgeLoadRefs): Promise<Knowl
 /** 测试钩子：清空 loader 缓存。 */
 export function clearKnowledgeLoaderCache(): void {
   cache.clear();
+}
+
+/**
+ * 读 + 解析单篇 knowledge md。
+ *
+ * 解析失败（含旧 schema / 非法 trigger）→ console.warn 含文件路径，返回 undefined
+ * （让 loader 跳过这篇；不让一个写错 frontmatter 的 sediment 让整个 index 加载失败）。
+ *
+ * silent-swallow ban 立场：parser 已经 fail-loud；loader 把异常转换为带路径的
+ * warning 后跳过，"知情跳过" 而不是静默吞错。
+ */
+async function readAndParse(
+  filePath: string,
+): Promise<{ frontmatter: import("./types").KnowledgeFrontmatter; body: string } | undefined> {
+  let text: string;
+  try {
+    text = await readFile(filePath, "utf8");
+  } catch (err) {
+    console.warn(`[knowledge-loader] read failed ${filePath}: ${(err as Error).message}`);
+    return undefined;
+  }
+  try {
+    return parseKnowledgeFile(text);
+  } catch (err) {
+    console.warn(
+      `[knowledge-loader] parse failed ${filePath}: ${(err as Error).message}`,
+    );
+    return undefined;
+  }
 }
 
 /** 相对路径（去 .md 后缀，统一斜杠）作为 KnowledgeDoc.path 的 idPath。 */

@@ -161,8 +161,8 @@ open(type="talk", target="supervisor", initial_text="<你的需求>")
 /**
  * supervisor 的 seed knowledge 文件清单。
  *
- * 每篇含 frontmatter \`activates_on:{ show_content_when: ["root"] }\`,
- * 让 supervisor 任意 thread 任意轮都自动激活。
+ * 每篇含 frontmatter \`activates_on:{ "window::root": "show_content" }\`,
+ * 让 supervisor 任意 thread 任意轮都自动激活（root window 每个 thread 都有）。
  *
  * 所有内容**自包含**：不引用 OOC 部署外部的 \`meta/...\` / \`src/...\` 等源码文件。
  * 所有专有术语在 \`world-vocabulary.md\` 单点定义，其它文件直接以 vocabulary 语义使用。
@@ -174,8 +174,7 @@ export const SUPERVISOR_SEED_KNOWLEDGE: Record<string, string> = {
 title: World 系统术语权威表
 description: ContextWindow / 持久层 / 维度 / 协议 / 状态相关的所有专有术语单点定义
 activates_on:
-  show_description_when: [root]
-  show_content_when: [root]
+  "window::root": "show_content"
 ---
 
 # World 系统术语
@@ -233,7 +232,7 @@ activates_on:
 | **seed knowledge** | 写在 stone 里的初始知识库 \`stones/<branch>/objects/<id>/knowledge/<slug>.md\`，进 git review。每篇带 \`activates_on\` frontmatter（见下文）决定何时进 LLM 视野。 |
 | **sediment knowledge** | 写在 pool 里的运行时长期记忆 \`pools/objects/<id>/knowledge/{memory,relations}/...\`，不进 git。由 reflectable 维度通过 super flow 写入。 |
 | **super flow** | 一种特殊的反思 thread：在普通业务 thread 之上做经验沉淀。**唯一**合法写 sediment knowledge 的入口（直接写文件被协议拒）。 |
-| **activates_on** | seed / sediment knowledge 文件 frontmatter 中的字段，控制该篇何时被加入 LLM 视野。常用值：\`show_description_when: [root]\`（任意线程都列进知识索引）/ \`show_content_when: [root]\`（任意线程都展开正文）。 |
+| **activates_on** | seed / sediment knowledge 文件 frontmatter 中的字段，控制该篇何时被加入 LLM 视野。形态：\`{ "<trigger>": "show_description" \| "show_content" }\`。三类 trigger：\`"window::<type>"\`（任意 open 的该类 window 出现时命中；如 \`"window::root"\` 等价"任意线程都见"）/ \`"command::<window_type>::<command>"\`（某个 window 上正在开同名 command form 时命中）/ \`"super"\`（仅在 super flow 中命中）。多 trigger 命中取 max（show_content > show_description）。 |
 
 ---
 
@@ -307,8 +306,7 @@ World 第一次启动时一次性落盘的"必然存在"对象。后续启动 id
 title: 三分语义 - stone / pool / flow
 description: OOC 持久层三分边界, supervisor 管理 World 时的核心心智模型
 activates_on:
-  show_description_when: [root]
-  show_content_when: [root]
+  "window::root": "show_content"
 ---
 
 # 三分语义
@@ -371,8 +369,7 @@ OOC World 文件系统按三种持久性质分层。术语解释（stone-version
 title: 8 个能力维度速查
 description: thinkable/executable/collaborable/observable/reflectable/programmable/visible/persistable
 activates_on:
-  show_description_when: [root]
-  show_content_when: [root]
+  "window::root": "show_content"
 ---
 
 # 8 个能力维度
@@ -428,8 +425,7 @@ activates_on:
 title: 怎么创建新 OOC Object（协议详情）
 description: supervisor 用对话方式为用户创建 Agent 的具体协议
 activates_on:
-  show_description_when: [root]
-  show_content_when: [root]
+  "window::root": "show_content"
 ---
 
 # 创建新 OOC Object
@@ -562,8 +558,7 @@ Object 能响应，然后向用户回报新 Object 已就绪 + commit sha。
 title: supervisor 角色与边界（具体协议）
 description: 我作为 World 接口层的执行协议
 activates_on:
-  show_description_when: [root]
-  show_content_when: [root]
+  "window::root": "show_content"
 ---
 
 # supervisor 角色与边界

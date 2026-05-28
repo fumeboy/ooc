@@ -62,14 +62,22 @@ export const REFLECTABLE_KNOWLEDGE = `
 
 必填字段：
 - \`title\`: 一句话主题（便于 UI / sidebar 显示）
-- \`description\`: 一句话让下轮 LLM 决定是否相关（命中 show_description_when 时露这段）
-- \`activates_on.show_description_when\`: **至少一项**，命中后向 LLM 露 description 摘要
-- \`activates_on.show_content_when\`: **至少一项**，命中后向 LLM 露 full body
+- \`description\`: 一句话让下轮 LLM 决定是否相关（命中 \`show_description\` 级别时露这段）
+- \`activates_on\`: trigger map，**至少一项 entry**，否则永远无法激活
 
-allow 取值：
-- root command 名（如 \`talk\` / \`do\` / \`program\` / \`write_file\` / ...）
-- window-type 名（如 \`talk_window\` / \`do_window\` / \`file_window\` / ...）
-- 嵌套 command path（如 \`talk.wait\` / \`program.exec\`）
+\`activates_on\` 是 \`Record<trigger, "show_description" | "show_content">\`。三类 trigger：
+
+| trigger 形态 | 含义 | 例子 |
+|---|---|---|
+| \`"window::<type>"\` | 该 type 的 window 处于 open 时命中（root window 每个 thread 都有，故 \`"window::root"\` 等价"任何时候"） | \`"window::talk"\` / \`"window::root"\` |
+| \`"command::<window_type>::<command>"\` | 在 \`<window_type>\` 上打开同名 command form 时命中 | \`"command::root::talk"\` / \`"command::root::program"\` |
+| \`"super"\` | 仅在 super flow（反思 session）中命中 | \`"super"\` |
+
+value 取值：
+- \`"show_description"\` — 命中后向 LLM 露 description 摘要
+- \`"show_content"\` — 命中后向 LLM 露 full body
+
+多 trigger 命中时取 **max**（\`show_content\` > \`show_description\`）。
 
 完整模板（每篇 .md 写入时照此结构产出，**正文位置自由发挥**）：
 
@@ -78,8 +86,8 @@ allow 取值：
 title: <一句话主题>
 description: <一句话让下轮 LLM 决定是否相关>
 activates_on:
-  show_description_when: [<command_path 或 window-type，至少一项；如 root / talk / program>]
-  show_content_when: [<同上，至少一项；通常比 description 更精确>]
+  "<trigger 1>": "show_description"
+  "<trigger 2>": "show_content"
 ---
 
 <正文，可以是几句也可以是长文>
@@ -92,14 +100,14 @@ activates_on:
 title: 与 alice 协作时的对齐节奏
 description: alice 偏好先看小步原型再聊设计；先丢草稿再讨论效果好
 activates_on:
-  show_description_when: [talk]
-  show_content_when: [talk.wait, talk_window]
+  "command::root::talk": "show_description"
+  "window::talk": "show_content"
 ---
 
 每次跟 alice 起新讨论前，先用 program 跑一个最小可执行 demo……
 \`\`\`
 
-**自检**：写完 .md 之后，回想一下"下次哪个 command path / window type 出现时
+**自检**：写完 .md 之后，回想一下"下次哪个 window / command form 出现时
 我希望 LLM 想起这条沉淀？"——把它填进 activates_on。如果都填空，等于白写。
 `.trim();
 

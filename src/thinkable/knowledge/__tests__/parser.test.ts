@@ -2,16 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { parseKnowledgeFile } from "../parser";
 
 describe("parseKnowledgeFile", () => {
-  test("parses frontmatter and body", () => {
+  test("parses frontmatter (new trigger map) and body", () => {
     const text = `---
 filename: file-ops
 title: 文件操作
 description: shell 读写文件
 activates_on:
-  show_description_when:
-    - program
-  show_content_when:
-    - program.shell
+  "command::root::program": "show_description"
+  "window::program": "show_content"
 ---
 
 # 正文标题
@@ -21,8 +19,10 @@ activates_on:
     expect(frontmatter.filename).toBe("file-ops");
     expect(frontmatter.title).toBe("文件操作");
     expect(frontmatter.description).toBe("shell 读写文件");
-    expect(frontmatter.activates_on?.show_description_when).toEqual(["program"]);
-    expect(frontmatter.activates_on?.show_content_when).toEqual(["program.shell"]);
+    expect(frontmatter.activates_on).toEqual({
+      "command::root::program": "show_description",
+      "window::program": "show_content",
+    });
     expect(body).toContain("# 正文标题");
     expect(body).toContain("这是正文内容。");
   });
@@ -70,5 +70,39 @@ filename: only-fm
     const { frontmatter, body } = parseKnowledgeFile(text);
     expect(frontmatter.filename).toBe("only-fm");
     expect(body).toBe("");
+  });
+
+  test("legacy schema (show_description_when) fails loud", () => {
+    const text = `---
+title: legacy doc
+activates_on:
+  show_description_when: [root]
+  show_content_when: [program]
+---
+
+body`;
+    expect(() => parseKnowledgeFile(text)).toThrow(/legacy schema/);
+  });
+
+  test("unknown trigger expression fails loud", () => {
+    const text = `---
+title: bad trigger
+activates_on:
+  "not_a_valid_trigger": "show_content"
+---
+
+body`;
+    expect(() => parseKnowledgeFile(text)).toThrow(/Unknown trigger/);
+  });
+
+  test("invalid level value fails loud", () => {
+    const text = `---
+title: bad level
+activates_on:
+  "window::root": "always_on"
+---
+
+body`;
+    expect(() => parseKnowledgeFile(text)).toThrow();
   });
 });

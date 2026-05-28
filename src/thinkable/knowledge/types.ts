@@ -1,3 +1,25 @@
+/**
+ * Knowledge frontmatter 与索引类型。
+ *
+ * 2026-05-28: activates_on 由"path list 双桶"切换为 **trigger map**。
+ * 详见 `src/thinkable/knowledge/triggers.ts` 与 meta/object.doc.ts thinkable.knowledge。
+ */
+
+/** 激活级别——值越靠右越激进。 */
+export type ActivationLevel = "show_description" | "show_content";
+
+/**
+ * 激活规则：key 是 trigger 表达式，value 是该 trigger 命中后的最低激活级别。
+ *
+ * 支持三类 trigger 语法（详见 `triggers.ts`）：
+ * - `window::<type>` —— 任意 open 的 window 满足该 type 时命中
+ * - `command::<window_type>::<command>` —— 存在挂在该 window 类型上的同名 command_exec form
+ * - `super` —— 当前 thread 跑在 super session 中
+ *
+ * 多 trigger 命中取 **max**（show_content > show_description）。
+ */
+export type ActivatesOn = Record<string, ActivationLevel>;
+
 /** knowledge 文档的 yaml frontmatter 形式。所有字段可选（缺失时按默认值处理）。 */
 export interface KnowledgeFrontmatter {
   /** 文档化字段；以文件路径为准时仅作参考。 */
@@ -5,13 +27,8 @@ export interface KnowledgeFrontmatter {
   title?: string;
   /** 一句话描述；当 knowledge "可见但未激活"时仅 description 出现在 Context。 */
   description?: string;
-  /** 激活规则：根据 form 中的 command 路径决定何时进入 Context。 */
-  activates_on?: {
-    /** 命中时仅注入 description。 */
-    show_description_when?: string[];
-    /** 命中时注入完整正文。 */
-    show_content_when?: string[];
-  };
+  /** 激活规则：trigger 表达式 → 激活级别。详见 ActivatesOn。 */
+  activates_on?: ActivatesOn;
   /**
    * 是否允许被子 Agent 继承（B-tree 协议，2026-05-26）。
    *
@@ -56,5 +73,5 @@ export interface ActivationResult {
   /** 引用：渲染时直接读 doc。 */
   doc: KnowledgeDoc;
   /** 命中原因，供调试 / 后续 inject 注释；当前不暴露给 LLM。 */
-  reason: "pinned" | "command_path_full" | "command_path_summary";
+  reason: "pinned" | "trigger_full" | "trigger_summary";
 }

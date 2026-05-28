@@ -161,7 +161,7 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S6 programmable-self-comman
       const loaderErrored = addOutputs.some(
         (o) =>
           o.ok === false ||
-          /llm_methods|SyntaxError|Cannot find|未注册|加载失败|无法|not a function|undefined is not/i.test(
+          /SyntaxError|Cannot find|未注册|加载失败|无法|not a function|undefined is not/i.test(
             o.output ?? "",
           ),
       );

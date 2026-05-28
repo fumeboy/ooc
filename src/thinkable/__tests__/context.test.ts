@@ -331,7 +331,7 @@ describe("buildContext knowledge synthesis (activator → knowledge_window)", ()
     const root = poolKnowledgeDir(poolRef);
     await writeFile(
       join(root, "summary-only.md"),
-      `---\ndescription: 仅描述\nactivates_on:\n  show_description_when: [program]\n---\nbody summary-only`,
+      `---\ndescription: 仅描述\nactivates_on:\n  "command::root::program": "show_description"\n---\nbody summary-only`,
     );
 
     const thread = makeThread({
@@ -355,7 +355,7 @@ describe("buildContext knowledge synthesis (activator → knowledge_window)", ()
     const root = poolKnowledgeDir(poolRef);
     await writeFile(
       join(root, "full-doc.md"),
-      `---\ndescription: 全文\nactivates_on:\n  show_content_when: [program.shell]\n---\n这是 full-doc 正文`,
+      `---\ndescription: 全文\nactivates_on:\n  "command::root::program": "show_content"\n---\n这是 full-doc 正文`,
     );
 
     const thread = makeThread({

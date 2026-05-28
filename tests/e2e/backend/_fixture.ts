@@ -559,20 +559,25 @@ export function listMemoryFiles(baseDir: string, selfId: string): string[] {
 
 /**
  * 粗粒度校验一篇 sediment markdown 是否含合法 frontmatter：
- * 第一行 `---`，闭合 `---`，且 block 内含 title / description / activates_on。
- * （reflectable 协议要求：缺 frontmatter 的 memory 永远无法被 activator 激活。）
+ * 第一行 `---`，闭合 `---`，且 block 内含 title / description / activates_on，
+ * 且 activates_on 至少含一条新协议 trigger（`window::` / `command::` / `super`）。
+ *
+ * 2026-05-28 切换到 trigger map 后，旧 `show_description_when:` / `show_content_when:`
+ * 不再视为有效。（reflectable 协议要求：缺 frontmatter 或写错 schema 的 memory
+ * 永远无法被 activator 激活。）
  */
 export function hasValidFrontmatter(md: string): boolean {
   if (!md.startsWith("---")) return false;
   const close = md.indexOf("\n---", 3);
   if (close === -1) return false;
   const block = md.slice(0, close);
+  const hasTrigger =
+    /window::/.test(block) || /command::/.test(block) || /(^|\n)\s*super:/.test(block) || /"super"/.test(block);
   return (
     /(^|\n)title:/.test(block) &&
     /(^|\n)description:/.test(block) &&
     /(^|\n)activates_on:/.test(block) &&
-    /show_description_when:/.test(block) &&
-    /show_content_when:/.test(block)
+    hasTrigger
   );
 }
 

@@ -285,7 +285,8 @@ export const root: DocTreeNode = {
             ---
             description: 因子拆解的核心方法论
             activates_on:
-              show_content_when: ["create_factor", "talk"]
+              "command::root::create_factor": "show_content"
+              "window::talk": "show_content"
             ---
 
             # 因子拆解方法论
@@ -323,7 +324,7 @@ export const root: DocTreeNode = {
             文件自动作为 knowledge 出现在你的 context。
             `,
             named: {
-                "frontmatter activates_on.show_content_when": "command 名数组；命中这些 command 时激活该 markdown",
+                "frontmatter activates_on (trigger map)": "Record<triggerExpr, 'show_description'|'show_content'>；三类 trigger：window::<type> / command::<window_type>::<command> / super",
                 "stones/<self>/knowledge/memory/<slug>.md": "长期记忆；适合放方法论 / 协议 / 反思沉淀",
                 "stones/<self>/knowledge/relations/<peer>.md": "对某个 peer 的关系认知；与该 peer talk 时自动激活",
             },

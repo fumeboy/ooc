@@ -296,17 +296,23 @@ export const root: DocTreeNode = {
                     - frontmatter: yaml 头部，承载元信息字段。
                       - title: 知识标题。
                       - description: 一句话描述，让 LLM 知道这篇知识是否相关。
-                      - activates_on: 渐进式披露规则，结构为 { show_description_when?: string[]; show_content_when?: string[] }，命中前者只注入 description，命中后者注入完整正文。
+                      - activates_on: 渐进式披露规则（trigger map）。形态：
+                        \`Record<triggerExpr, "show_description" | "show_content">\`。
+                        三类 trigger（详见 src/thinkable/knowledge/triggers.ts）：
+                        - \`"window::<type>"\` — 任意 open 的该类 window 出现时命中（\`"window::root"\` 等价"任何时候"）
+                        - \`"command::<window_type>::<command>"\` — 该 window 上正在开同名 command form 时命中
+                        - \`"super"\` — 仅在 super flow 中命中
+                        多 trigger 命中取 **max**（show_content > show_description）。
                     - markdown body: frontmatter 之外的正文，构成 KnowledgeDoc.body。
 
                     Knowledge 的核心设计是渐进式激活:
                     LLM 还没进入某个行动路径时，只看到少量描述或完全看不到。
-                    当 LLM 打开某个 command_exec window，并逐步 refine 参数时，系统根据 command path 自动激活对应知识。
+                    当 LLM 打开某个 command_exec window，并逐步 refine 参数时，系统逐条 evaluate 各篇 knowledge 的 trigger map，命中级别取 max。
 
                     例如:
-                    - 打开 program command 时，激活程序执行相关知识。
-                    - 打开 talk.relation_update 路径时，激活关系更新相关知识。
-                    - 显式 open_knowledge 时，把某篇知识作为 knowledge_window 打开。
+                    - 在 root 上打开 program command form 时，\`"command::root::program"\` 命中。
+                    - 任何 talk_window open 时，\`"window::talk"\` 命中——seed 的"我跟人 talk 该露面"类型 knowledge 持续可见。
+                    - 显式 open_knowledge 时，把某篇知识作为 knowledge_window 打开（force-full）。
 
                     这样可以避免所有知识一股脑进入 Context，控制 token 体积，同时让 LLM 在需要时获得足够指导。
 
@@ -319,8 +325,9 @@ export const root: DocTreeNode = {
                     `,
                     named: {
                         "frontmatter": "markdown 文档头部的结构化元信息",
-                        "activates_on": "knowledge 声明自身何时进入 Context 的激活规则",
-                        "command path": "某个 command 的语义路径，如 talk.continue、talk.relation_update、program",
+                        "activates_on": "knowledge 声明自身何时进入 Context 的激活规则（trigger map: 表达式 → 级别）",
+                        "trigger": "activates_on 中的 key 表达式，三类：window::<type> / command::<window_type>::<command> / super",
+                        "show_description / show_content": "activates_on 的两种激活级别；多 trigger 命中取 max",
                         "knowledge_window": "把 knowledge 正文作为 ContextWindow 展示给 LLM 的窗口",
                         "seed knowledge": "stones/<self>/knowledge/，人类设计的初始知识库；进 git review",
                         "sediment knowledge": "pools/<id>/knowledge/{memory,relations}/，运行时沉淀；不进 git",
@@ -817,9 +824,12 @@ export const root: DocTreeNode = {
                     file_window: edit/reload/set_range/close；command_exec: refine/submit；custom: Object 自定义 ...）。
                     Object 自定义 commands 通过 server/index.ts 的 \`export const window\` 注册到 type=custom 的 self window 上。
 
-                    Command Path 是 command 与 knowledge 协作的关键。
-                    command 可以根据当前参数暴露更细的语义路径，比如 talk.continue、talk.wait、talk.relation_update。
-                    knowledge 通过 activates_on 声明自己关心哪些 path，从而实现按需激活。
+                    Command 与 knowledge 通过 trigger 协议协作：
+                    每个 command_exec form 在 thread 中处于 open 状态时，对应的
+                    \`"command::<parent_window_type>::<command>"\` trigger 进入命中状态；
+                    knowledge 的 frontmatter \`activates_on\` 中声明同样表达式即按需激活。
+                    （历史上 command 还会派生 commandPaths 子路径如 program.shell，但新 trigger
+                    模型只到 command 粒度；语言/参数分支由 knowledge 正文自己分支，不再走 path。）
                     `,
                     named: {
                         "root window": "每个 thread 隐含存在的根窗口，注册顶层 command",
@@ -1297,39 +1307,40 @@ export const root: DocTreeNode = {
                     content: `
                     Executable 与 Knowledge 的连接点是 knowledge activation。
 
-                    当 LLM 打开 command_exec window 时，系统根据 command 和当前参数计算 command path。
-                    每一次 refine 都可能改变 command path，从而触发新的 knowledge 激活。
+                    当 LLM 打开 command_exec window 时，对应的 \`command::<window_type>::<command>\`
+                    trigger 进入命中状态；当任何 type 的 window 处于 open 时，对应的
+                    \`window::<type>\` trigger 持续命中。
 
                     激活出来的 knowledge 会进入 Context，指导 LLM 如何继续填写参数或执行动作。
 
                     这形成一个闭环:
                     1. LLM open 一个 command。
-                    2. 系统展示该 command 的基础知识。
+                    2. 系统展示该 command 的基础知识（command trigger 命中）。
                     3. LLM refine 参数。
-                    4. 系统根据更具体的 command path 激活更具体的知识。
+                    4. 系统逐条 evaluate 各篇 knowledge 的 trigger map，max 出最终激活级别。
                     5. LLM submit 执行。
 
                     这个闭环让 OOC 可以把复杂能力拆成多步披露，而不是在一开始把所有说明都塞给 LLM。
 
-                    **activator union 路径来源**：
+                    **activator trigger 求值**（2026-05-28 起；详见 src/thinkable/knowledge/triggers.ts）：
 
-                    src/thinkable/knowledge/activator.ts:computeActivations 收集的 union 包括：
+                    src/thinkable/knowledge/activator.ts:computeActivations 对每篇 knowledge：
+                    1. 逐条解析 frontmatter.activates_on 的 trigger key
+                    2. 对每个 trigger 调 \`evaluateTrigger(trigger, thread)\` 求值
+                    3. 把命中 entries 的 level 取 max（show_content > show_description）作为该篇激活级别
 
-                    1. \`root\` — 永远在 union 中。允许 \`activates_on:[root]\` 类 seed knowledge
-                       在任意轮激活；这是 base path
-                    2. **任何 status="open" 的 window 类型** —— 持续 open 的 window 每轮贡献其
-                       \`type\` 作为 implicit path：talk / do / file / search / plan / relation 等。
-                       这让 "我在跟人 talk 就该看到 talk 知识" 的直觉成立
-                    3. command_exec window 的 commandPaths（form 进行中的细路径）
-                    4. program_window 最近一次 exec 推断的路径（program / program.<lang>）
-
-                    把 window 存在性视为 implicit command_path，使 activates_on 在窗口持续 open 期间始终命中。
+                    三类 trigger：
+                    - \`"window::<type>"\` — \`thread.contextWindows\` 含 status="open" 且 type === <type> 的 window 时命中。
+                      root window 每个 thread 都有，故 \`"window::root"\` 等价"任何时候"——这是旧 \`[root]\` 的自然替代。
+                    - \`"command::<window_type>::<command>"\` — \`thread.contextWindows\` 含 type="command_exec" 的 open form，
+                      其 parentWindow.type === <window_type> 且 form.command === <command> 时命中。
+                    - \`"super"\` — \`thread.persistence?.sessionId === SUPER_SESSION_ID\` 时命中（仅 super flow）。
                     `,
                     named: {
-                        "knowledge activation": "根据 command path 把相关 knowledge 注入 Context 的过程",
+                        "knowledge activation": "根据 trigger map 把相关 knowledge 注入 Context 的过程",
                         "progressive disclosure": "渐进式披露，只在需要时展示更具体的信息",
-                        "activator union": "root + open windows[type] + command_exec.paths + program 推断",
-                        "implicit command_path": "持续 open 的 window 的 type 自动作为 union path",
+                        "trigger": "activates_on 的 key 表达式；三类：window::<type> / command::<window_type>::<command> / super",
+                        "evaluateTrigger": "纯函数：(trigger, thread) -> boolean；activator 内部对每篇 knowledge 多 trigger 取 max",
                     },
                 },
             },
@@ -2147,16 +2158,21 @@ export const root: DocTreeNode = {
                     title: <一句话主题>
                     description: <让下轮 LLM 知道这篇是否相关的一句>
                     activates_on:
-                      show_description_when: [<command_path 或 window-type，至少一项>]
-                      show_content_when: [<同上，至少一项>]
+                      "<trigger 1>": "show_description"
+                      "<trigger 2>": "show_content"
                     ---
 
                     <正文，可以是几句也可以是长文>
                     \`\`\`
 
-                    没有 frontmatter 的 sediment 会被 thinkable.knowledge synthesizer 加载但
+                    activates_on 是 trigger map：key 是 trigger 表达式，value 是激活级别。
+                    三类 trigger：\`"window::<type>"\` / \`"command::<window_type>::<command>"\` / \`"super"\`
+                    （详见 thinkable.knowledge.named.trigger）。多 trigger 命中取 max。
+
+                    没有 frontmatter / 写错 schema 的 sediment 会被 thinkable.knowledge synthesizer 加载但
                     **永远无法被 activator 激活**——下轮新 thread 完全看不见这篇沉淀，
-                    自演化闭环 silently 断裂（dogfooding 协议级缺口）。
+                    自演化闭环 silently 断裂（dogfooding 协议级缺口）。loader 改后写错 schema
+                    会触发 parse error → console.warn 含路径 → 跳过该篇（fail-loud，不静默吞错）。
 
                     REFLECTABLE_KNOWLEDGE 必须显式把这条契约写进 LLM 协议提示，让 LLM 写 .md
                     时**始终包含合法 frontmatter**。模板示例可放在 reflectable basicKnowledge 末尾。
@@ -2167,7 +2183,7 @@ export const root: DocTreeNode = {
                         "sediment in pool": "knowledge/memory/* 与 knowledge/relations/* 落 pool（事实型，不进 git）",
                         "self.md / readme.md in stone": "身份文件留 stone（设计型，进 git review）",
                         "seed not in super flow": "stones/<self>/knowledge/ 是 seed knowledge，不在 super flow 默认写入面；走 PR-Issue + eval",
-                        "sediment write contract": "所有 super flow 写入的 .md 必须含 frontmatter（title/description/activates_on）；否则 activator 永远不命中，自演化闭环断裂",
+                        "sediment write contract": "所有 super flow 写入的 .md 必须含 frontmatter（title/description/activates_on trigger map）；否则 activator 永远不命中，自演化闭环断裂",
                     },
                 },
                 "metaprogramming": {

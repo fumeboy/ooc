@@ -58,7 +58,7 @@ describe("loadKnowledgeIndex (dual-source)", () => {
       `---
 description: A doc
 activates_on:
-  show_content_when: [program]
+  "command::root::program": "show_content"
 ---
 
 body A`,
