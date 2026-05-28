@@ -15,6 +15,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "bun:test";
 import { Worker } from "../worker";
 import { createLlmClient } from "../llm/client";
+import { ObjectRegistry } from "@src/executable/registry";
 import type { ThinkThread } from "../think-thread";
 
 function loadEnvFromFile(): void {
@@ -54,6 +55,7 @@ describe.skipIf(!shouldRun)("real LLM thinkloop integration", () => {
         const worker = new Worker(
             { worldRoot: "/tmp/ooc-real-llm-test", pollMs: 50 },
             llmClient,
+            new ObjectRegistry(),
         );
 
         const thread: ThinkThread = {

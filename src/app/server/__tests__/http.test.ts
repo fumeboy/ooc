@@ -12,6 +12,7 @@
 import { describe, expect, test } from "bun:test";
 import { buildApp } from "../http";
 import { Worker } from "@src/thinkable/worker";
+import { ObjectRegistry } from "@src/executable/registry";
 import type { LlmClient, LlmGenerateResult } from "@src/thinkable/llm/types";
 
 const mockLlm: LlmClient = {
@@ -28,7 +29,7 @@ const mockLlm: LlmClient = {
 };
 
 function makeTestWorker(worldRoot = "/tmp/ooc-test-http-world"): Worker {
-    return new Worker({ worldRoot, pollMs: 100 }, mockLlm);
+    return new Worker({ worldRoot, pollMs: 100 }, mockLlm, new ObjectRegistry());
 }
 
 async function json(response: Response): Promise<unknown> {

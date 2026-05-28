@@ -10,6 +10,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { Worker } from "../worker";
+import { ObjectRegistry } from "@src/executable/registry";
 import type { ThinkThread } from "../think-thread";
 import type { LlmClient, LlmGenerateResult } from "../llm/types";
 
@@ -32,7 +33,7 @@ function makeMockLlm(response: Partial<LlmGenerateResult> = {}): LlmClient {
 
 function makeWorker(pollMs = 10): { worker: Worker; llm: LlmClient } {
     const llm = makeMockLlm();
-    const worker = new Worker({ worldRoot: "/tmp/test-world", pollMs }, llm);
+    const worker = new Worker({ worldRoot: "/tmp/test-world", pollMs }, llm, new ObjectRegistry());
     return { worker, llm };
 }
 
@@ -142,7 +143,7 @@ describe("Worker: runUntilDone", () => {
             async generate() { throw new Error("always fails"); },
             stream: async function* () {},
         };
-        const worker = new Worker({ worldRoot: "/tmp/world", pollMs: 1 }, brokenLlm);
+        const worker = new Worker({ worldRoot: "/tmp/world", pollMs: 1 }, brokenLlm, new ObjectRegistry());
         const thread = makeThread("t_fail", { maxTicks: 3 });
         worker.submit(thread);
         await worker.runUntilDone(5000);

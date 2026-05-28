@@ -13,6 +13,7 @@
 
 import type { LlmClient } from "./llm/types";
 import type { ThinkThread } from "./think-thread";
+import type { ObjectRegistry } from "@src/executable/registry";
 import { think } from "./thinkloop";
 
 export interface WorkerConfig {
@@ -24,14 +25,16 @@ export interface WorkerConfig {
 export class Worker {
     readonly config: WorkerConfig;
     private readonly llmClient: LlmClient;
+    private readonly registry: ObjectRegistry;
     private readonly queue = new Map<string, ThinkThread>();
     private timer: ReturnType<typeof setInterval> | undefined;
     private running = false;
     private activeTick = false;  // 防止 tick 重入
 
-    constructor(config: WorkerConfig, llmClient: LlmClient) {
+    constructor(config: WorkerConfig, llmClient: LlmClient, registry: ObjectRegistry) {
         this.config = config;
         this.llmClient = llmClient;
+        this.registry = registry;
     }
 
     /** worldRoot 访问器——供 HTTP 层读取，无需 as any. */
@@ -98,7 +101,7 @@ export class Worker {
             const maxConcurrent = this.config.maxConcurrent ?? 1;
             const batch = running.slice(0, maxConcurrent);
 
-            await Promise.all(batch.map((thread) => think(thread, this.llmClient)));
+            await Promise.all(batch.map((thread) => think(thread, this.llmClient, this.registry, this.config.worldRoot)));
         } finally {
             this.activeTick = false;
         }
