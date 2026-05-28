@@ -19,13 +19,14 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
-    "web/src/**/*.ts",
-    "web/src/**/*.tsx",
     "meta/**/*.js",
     "meta/**/*.ts",
     "tests/**/*.ts",
     "stones/**/*.ts",
     "stones/**/*.tsx",
     ".ooc-world/stones/**/*.ts"
+  ],
+  "exclude": [
+    "web"
   ]
 }
