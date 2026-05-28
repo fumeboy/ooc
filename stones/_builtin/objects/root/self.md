@@ -16,7 +16,7 @@ description: |
 我的 server/index.ts 暴露了一组 public method，作为所有 OOC Object 的"出厂方法库"：
 
 - **协作类**: `talk` （peer 之间消息直投，flow 层 append + 唤起 target LLM）
-- **派生类**: `do` / `do_close` （内部 spawn sub-thread，flow 层独立 thread.json）
+- **派生类**: `do` / `do_close` （skeleton：在 flow 层写 thread.json 记录意图，但不自动派发 worker 执行——P6+ sub-thread worker loop 落地前，sub-thread 需调用方手动调度）
 - **任务类**: `todo_add` / `todo_check` / `todo_uncheck` / `todo_remove` / `todo_list` （flow 层 todos.json mutate）
 - **引导类**: `plan_set` / `plan_clear` （flow 层 plan.md 当前 thread 引导）
 - **搜索类**: `grep` / `glob` （创建 ephemeral search Object 到 flows/<session>/objects/）
