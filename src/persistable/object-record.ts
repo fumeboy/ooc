@@ -41,6 +41,9 @@ export type ObjectRecord = {
     kind: ObjectKind;
     /** self.md frontmatter */
     self: SelfFrontmatter;
+    /** 由 loader 动态 import server/index.ts 填充；自身没有 server 文件时为 undefined */
+    serverPublic?: Record<string, unknown>;
+    serverPrivate?: Record<string, unknown>;
 };
 
 /**

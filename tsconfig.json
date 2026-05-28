@@ -18,9 +18,12 @@
   },
   "include": [
     "src/**/*.ts",
+    "src/**/*.tsx",
     "meta/**/*.js",
     "meta/**/*.ts",
     "tests/**/*.ts",
+    "stones/**/*.ts",
+    "stones/**/*.tsx",
     ".ooc-world/stones/**/*.ts"
   ]
 }

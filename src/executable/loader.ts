@@ -6,12 +6,41 @@
 
 import { promises as fs } from "node:fs";
 import { join, relative } from "node:path";
+import * as path from "node:path";
 import * as yaml from "js-yaml";
 import {
     type ObjectRecord,
     type SelfFrontmatter,
 } from "../persistable/object-record";
 import { relativePathToURI } from "../persistable/uri";
+
+/**
+ * 尝试 dynamic import objectDir/server/index.ts 的 default export。
+ * 不存在则返回 null（不视为错误）。
+ */
+async function loadServerModule(
+    objectDir: string,
+): Promise<{ public: Record<string, unknown>; private: Record<string, unknown> } | null> {
+    const serverPath = path.join(objectDir, "server", "index.ts");
+    try {
+        await fs.access(serverPath);
+    } catch {
+        return null;
+    }
+    try {
+        const mod = await import(serverPath);
+        const def = mod.default;
+        if (!def || typeof def !== "object") return null;
+        const pub = def.public && typeof def.public === "object" ? def.public : {};
+        const priv = def.private && typeof def.private === "object" ? def.private : {};
+        return { public: pub, private: priv };
+    } catch (err) {
+        // bun import failure should surface, not silently swallow
+        throw new Error(
+            `Failed to import server module at ${serverPath}: ${(err as Error).message}`,
+        );
+    }
+}
 
 /**
  * Loader 输入：world root 与可选的 active branch / sessionId。
@@ -41,11 +70,14 @@ export async function loadObjects(config: LoaderConfig): Promise<ObjectRecord[]>
         for (const name of names) {
             const stonePath = join(builtinDir, name);
             const self = await readSelfMd(stonePath);
+            const server = await loadServerModule(stonePath);
             records.push({
                 uri: `ooc://stones/_builtin/objects/${name}`,
                 paths: { stone: stonePath },
                 kind: "builtin",
                 self,
+                serverPublic: server?.public,
+                serverPrivate: server?.private,
             });
         }
     }
@@ -64,11 +96,14 @@ export async function loadObjects(config: LoaderConfig): Promise<ObjectRecord[]>
                 const self = await readSelfMd(stonePath);
                 const uri = relativePathToURI(relFromWorld);
                 const poolPath = poolPathFor(config.worldRoot, stonePath, branchObjectsDir);
+                const server = await loadServerModule(stonePath);
                 records.push({
                     uri,
                     paths: { stone: stonePath, pool: poolPath },
                     kind: "persistent",
                     self,
+                    serverPublic: server?.public,
+                    serverPrivate: server?.private,
                 });
             }
         }
@@ -87,11 +122,14 @@ export async function loadObjects(config: LoaderConfig): Promise<ObjectRecord[]>
             for (const id of ids) {
                 const flowPath = join(flowObjectsDir, id);
                 const self = await readSelfMd(flowPath);
+                const server = await loadServerModule(flowPath);
                 records.push({
                     uri: `ooc://flows/${config.sessionId}/objects/${id}`,
                     paths: { flow: flowPath },
                     kind: "ephemeral",
                     self,
+                    serverPublic: server?.public,
+                    serverPrivate: server?.private,
                 });
             }
         }
