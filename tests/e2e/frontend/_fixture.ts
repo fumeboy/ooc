@@ -438,14 +438,47 @@ export function logScore(result: ScoreResult, observations?: Record<string, unkn
   console.log(`[e2e-score] ${JSON.stringify(payload)}`);
 }
 
-/** 抓取浏览器 console.error 列表；spec 用作 Good/Bad 的依据。 */
-export function collectConsoleErrors(page: Page): { errors: string[]; warnings: string[] } {
+/**
+ * 已知良性 warning allowlist —— 这些 warning 是源代码里**有意**发出的防御性提示
+ * （比如对 sentinel 行为做 dedup 提醒），不应让 e2e Good rule 误判。
+ *
+ * 加新条目前先核对：源码注释里有「无害」/「filtered」/「avoid noise」等明确说明，
+ * 或 Supervisor 已经裁决该 warning 不需要修源。其它真正的 warning（缺 prop、
+ * deprecated API、hydration mismatch 等）不进 allowlist，必须修源。
+ */
+export const KNOWN_BENIGN_WARNING_PATTERNS: RegExp[] = [
+  // web/src/domains/objects/query.ts:62-68 —— 非 stone object id（如 "user"）跳过
+  // stones/self 查询，源里 dedupped 过；纯防 404 噪声提示。
+  /\[objects\/query\] skip stones\/self lookup for non-stone object id/,
+];
+
+function isBenignWarning(text: string): boolean {
+  return KNOWN_BENIGN_WARNING_PATTERNS.some((re) => re.test(text));
+}
+
+/**
+ * 抓取浏览器 console.error / warning 列表；spec 用作 Good/Bad 的依据。
+ *
+ * `warnings` 已经把 `KNOWN_BENIGN_WARNING_PATTERNS` 命中条目过滤掉；
+ * `benignWarnings` 留作 observability，让 spec 想 dump 时也能看到。
+ */
+export function collectConsoleErrors(page: Page): {
+  errors: string[];
+  warnings: string[];
+  benignWarnings: string[];
+} {
   const errors: string[] = [];
   const warnings: string[] = [];
+  const benignWarnings: string[] = [];
   page.on("console", (msg) => {
-    if (msg.type() === "error") errors.push(msg.text());
-    else if (msg.type() === "warning") warnings.push(msg.text());
+    if (msg.type() === "error") {
+      errors.push(msg.text());
+    } else if (msg.type() === "warning") {
+      const text = msg.text();
+      if (isBenignWarning(text)) benignWarnings.push(text);
+      else warnings.push(text);
+    }
   });
   page.on("pageerror", (err) => errors.push(err.message));
-  return { errors, warnings };
+  return { errors, warnings, benignWarnings };
 }

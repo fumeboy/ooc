@@ -87,7 +87,10 @@ test("F1 SessionCreator → 首条 assistant 回复出现在 chat panel", async 
       { name: "callee.inbox 含 user 的 hi", check: () => calleeInboxHasReply },
       { name: "callee.outbox 含 assistant 回复", check: () => calleeOutboxHasReply },
       { name: "transcript 至少 2 条", check: () => transcriptCount >= 2 },
-      { name: "浏览器无 warning", check: () => consoleLog.warnings.length === 0 },
+      {
+        name: "浏览器无非已知无害 warning",
+        check: () => consoleLog.warnings.length === 0,
+      },
     ],
   });
 
@@ -101,6 +104,8 @@ test("F1 SessionCreator → 首条 assistant 回复出现在 chat panel", async 
     calleeOutboxLen: calleeThread?.outbox?.length ?? 0,
     consoleErrors: consoleLog.errors.length,
     consoleWarnings: consoleLog.warnings.length,
+    consoleWarningTexts: consoleLog.warnings.slice(0, 5),
+    consoleBenignWarnings: consoleLog.benignWarnings.length,
     hiCount: userThread ? countOccurrences(JSON.stringify(userThread.outbox ?? []), "hi") : 0,
   });
 
