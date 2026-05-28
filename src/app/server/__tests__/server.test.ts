@@ -3,8 +3,8 @@ import { readServerConfig } from "../bootstrap/config";
 import { buildServer } from "../index";
 
 describe("app server", () => {
-  test("readServerConfig uses explicit world cli arg before env base dir", () => {
-    const config = readServerConfig({
+  test("readServerConfig uses explicit world cli arg before env base dir", async () => {
+    const config = await readServerConfig({
       env: {
         OOC_APP_PORT: "3001",
         OOC_BASE_DIR: "/tmp/from-env",
@@ -18,8 +18,8 @@ describe("app server", () => {
     expect(config.workerEnabled).toBe(false);
   });
 
-  test("readServerConfig supports equals form for world dir", () => {
-    const config = readServerConfig({
+  test("readServerConfig supports equals form for world dir", async () => {
+    const config = await readServerConfig({
       env: {},
       argv: ["bun", "src/app/server/index.ts", "--world-dir=/tmp/ooc-world-equals"],
     });
@@ -29,7 +29,7 @@ describe("app server", () => {
 
   test("responds to GET /api/health", async () => {
     const app = buildServer({
-      ...readServerConfig(),
+      ...(await readServerConfig()),
       port: 0,
       baseDir: "/tmp/ooc-app-test",
       workerPollMs: 100,

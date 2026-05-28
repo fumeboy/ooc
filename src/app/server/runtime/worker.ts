@@ -41,7 +41,7 @@ const USER_OBJECT_ID = "user";
 
 export async function runJob(
   job: RuntimeJob,
-  config: Pick<ServerConfig, "baseDir" | "stonesBranch" | "workerMaxTicks">
+  config: Pick<ServerConfig, "baseDir" | "stonesBranch" | "workerMaxTicks" | "jobManager">
 ): Promise<RuntimeJobResult | void> {
   if (job.objectId === USER_OBJECT_ID) {
     // user object 是被动对象——所有思考由 web 用户在 UI 上完成，worker 不调度
@@ -75,6 +75,29 @@ export async function runJob(
   // (scheduler.emitChildEndNotifications 只覆盖 in-tree childThreads,无法跨 object)
   await syncCrossObjectCalleeEnds(rootThread, config.baseDir, job.sessionId, config.stonesBranch);
   await runScheduler(rootThread, createLlmClient(), { maxTicks: config.workerMaxTicks ?? 15 });
+
+  // scheduler yield 自唤醒：runScheduler 跑满 maxTicks 自然返回时, 若 thread 仍 running,
+  // 写一条 scheduler_yielded event + 主动再入队一次。否则在事件驱动 worker 模型下没有
+  // 任何 event source 会唤醒它(2026-05-24 根因 #5)。详见 meta/app.server.doc.ts § worker。
+  // 顺序: 先 writeThread 把事件落盘, 再 createRunThreadJob — 否则下个 worker tick 抢先
+  // read 时可能看不到这条 event。
+  if (rootThread.status === "running") {
+    const rounds = rootThread.events.filter(
+      (e) => e.category === "llm_interaction" && e.kind === "call_started",
+    ).length;
+    rootThread.events.push({
+      category: "context_change",
+      kind: "scheduler_yielded",
+      reason: "max_ticks",
+      rounds,
+    });
+    await writeThread(rootThread);
+    config.jobManager.createRunThreadJob({
+      sessionId: job.sessionId,
+      objectId: job.objectId,
+      threadId: job.threadId,
+    });
+  }
 
   // 根因 #4: scheduler 原地推进 rootThread 并落盘；返回其终态供 processQueuedJobs 对账。
   // thinkloop 把 LLM 超时/异常消化成 status="failed"（不抛），不对账就会被裸标 done。

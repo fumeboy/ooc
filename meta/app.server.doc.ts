@@ -394,6 +394,14 @@ worker **只跑队列**：从 jobManager 取 queued job 跑 → 成功标 done /
 - **end command**（无 result 时手工 notify creator；带 result 时通过内部 continue/say 自动 notify）
 - **resume**（HTTP resume-session）→ 显式 enqueue resume-thread job
 - **seedSession / createFlowObject(initialMessage)/ continueThread** → flows/service.ts 显式 enqueue
+- **scheduler yield**（runJob 单次跑满 \`workerMaxTicks\` 自然返回，且 thread.status 仍为 \`running\`）→
+  worker 出口主动 \`notifyThreadActivated\` 把自己再入队一次，让长任务跨 job 续跑。
+  设计取舍：长任务（如 supervisor 派单 + 验证多步链路）跑超过 15 轮是常态，
+  不能让 maxTicks 切片成"静默卡死"；切片本身保留是为了让多 thread 公平共享 worker
+  并避免单 thread 占用太久。"running 出 maxTicks → 自唤醒"是这两个目标的唯一兼容点。
+  observability：runner 退出前在 thread.events 写一条 \`scheduler_yielded\`
+  （category=context_change, kind=scheduler_yielded, reason=max_ticks），让 LLM 在下一个
+  job 入口的 context 里看到"我被切片了"，且历史可追溯（区别于"自然 done / paused / failed"）。
 
 启动期兜底（仅一次，非周期）：
 - buildServer(workerEnabled=true) 启动 worker 时调 \`enqueueRunningThreadsAtBootstrap\`，
@@ -401,9 +409,10 @@ worker **只跑队列**：从 jobManager 取 queued job 跑 → 成功标 done /
   仍 running 的 orphan thread"场景；不阻塞启动，失败 warn 不抛。
                     `.trim(),
                     named: {
-                        "workerMaxTicks": "单次 worker 调度允许推进的最大 tick 数，超出后线程留在中间态等待下一个 job",
-                        "notifyThreadActivated": "事件源（talk/do/issue/end）写完目标 inbox 后调用的薄通知；由 buildServer 注入 jobManager 后转成 createRunThreadJob",
+                        "workerMaxTicks": "单次 worker 调度允许推进的最大 tick 数。优先级：ServerConfig 显式字段 > env OOC_WORKER_MAX_TICKS > .world.json:workerMaxTicks > 默认 15。超出后线程留在中间态，若仍 running 则 runJob 出口自唤醒（见 scheduler yield）",
+                        "notifyThreadActivated": "事件源（talk/do/issue/end/scheduler-yield）写完目标 inbox / 退出 thinkloop 后调用的薄通知；由 buildServer 注入 jobManager 后转成 createRunThreadJob",
                         "enqueueRunningThreadsAtBootstrap": "buildServer 启动时一次性扫描入队 orphan running thread，替代旧的周期扫兜底",
+                        "scheduler_yielded": "thread.events 中的 context_change kind，由 runJob 在跑满 maxTicks 且 thread 仍 running 时写入；reason=max_ticks。LLM 下轮可见，区别于自然 done / paused / failed",
                     },
                 },
             },

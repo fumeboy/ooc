@@ -14,10 +14,10 @@ import { buildServer } from "../index";
  * - Bad #4 PUT 覆盖性写无护栏(X-Overwrite-Confirm 强制)
  */
 
-function makeApp() {
+async function makeApp() {
   const baseDir = mkdtempSync(join(tmpdir(), "ooc-issue-6-"));
   const app = buildServer({
-    ...readServerConfig(),
+    ...(await readServerConfig()),
     port: 0,
     baseDir,
     workerPollMs: 5,
@@ -28,7 +28,7 @@ function makeApp() {
 
 describe("Issue #6 Bad #1: silent-fabricate", () => {
   test("GET /api/stones/<nonexistent>/self → 404 NOT_FOUND", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
     const res = await app.handle(new Request("http://localhost/api/stones/_test_no_such_obj/self"));
     expect(res.status).toBe(404);
     const body = await res.json();
@@ -37,7 +37,7 @@ describe("Issue #6 Bad #1: silent-fabricate", () => {
   });
 
   test("GET /api/stones/<nonexistent>/readme → 404 NOT_FOUND", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
     const res = await app.handle(new Request("http://localhost/api/stones/_test_no_such_obj/readme"));
     expect(res.status).toBe(404);
     const body = await res.json();
@@ -45,25 +45,25 @@ describe("Issue #6 Bad #1: silent-fabricate", () => {
   });
 
   test("GET /api/stones/<nonexistent>/server-source → 404", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
     const res = await app.handle(new Request("http://localhost/api/stones/_test_no_such_obj/server-source"));
     expect(res.status).toBe(404);
   });
 
   test("GET /api/stones/<nonexistent> (root) → 404", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
     const res = await app.handle(new Request("http://localhost/api/stones/_test_no_such_obj"));
     expect(res.status).toBe(404);
   });
 
   test("GET /api/flows/<nonexistent_sid>/threads → 404", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
     const res = await app.handle(new Request("http://localhost/api/flows/_test_no_such_session/threads"));
     expect(res.status).toBe(404);
   });
 
   test("GET /api/stones (list) 父目录不存在仍返回 200 + []", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
     const res = await app.handle(new Request("http://localhost/api/stones"));
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -71,7 +71,7 @@ describe("Issue #6 Bad #1: silent-fabricate", () => {
   });
 
   test("GET /api/flows (list) 父目录不存在仍返回 200 + []", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
     const res = await app.handle(new Request("http://localhost/api/flows"));
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -81,7 +81,7 @@ describe("Issue #6 Bad #1: silent-fabricate", () => {
 
 describe("Issue #6 Bad #2: 错误 shape 统一为 { error: { code, message, details } }", () => {
   test("404 (not found) 返回 JSON shape", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
     const res = await app.handle(new Request("http://localhost/api/stones/_test_no_such/self"));
     expect(res.headers.get("content-type")).toContain("application/json");
     const body = await res.json();
@@ -91,7 +91,7 @@ describe("Issue #6 Bad #2: 错误 shape 统一为 { error: { code, message, deta
   });
 
   test("422 (schema validation) 返回相同 shape", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
     // POST /api/stones with malformed body 触发 schema validation 失败
     // (createStone schema 要求 objectId 是合法字符串;给 number 会触发 422)
     const res = await app.handle(
@@ -108,7 +108,7 @@ describe("Issue #6 Bad #2: 错误 shape 统一为 { error: { code, message, deta
   });
 
   test("AppServerError NOT_FOUND 不再是裸 text", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
     // 用 /api/stones/<nonexistent>/self 触发 NOT_FOUND（替代已下线的 issue 路由）
     const res = await app.handle(new Request("http://localhost/api/stones/_no_such_stone/self"));
     expect(res.headers.get("content-type")).toContain("application/json");
@@ -119,7 +119,7 @@ describe("Issue #6 Bad #2: 错误 shape 统一为 { error: { code, message, deta
 
 describe("Issue #6 Bad #3: URL 命名 — /api/sessions alias + deprecation", () => {
   test("GET /api/sessions 与 GET /api/flows 返回相同形状", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
     await app.handle(
       new Request("http://localhost/api/flows/", {
         method: "POST",
@@ -143,7 +143,7 @@ describe("Issue #6 Bad #3: URL 命名 — /api/sessions alias + deprecation", ()
 
 describe("Issue #6 Bad #4: PUT 覆盖性写无护栏", () => {
   test("PUT self 首次写入(目标不存在)不需要 confirm header", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
     await app.handle(
       new Request("http://localhost/api/stones", {
         method: "POST",
@@ -163,7 +163,7 @@ describe("Issue #6 Bad #4: PUT 覆盖性写无护栏", () => {
   });
 
   test("PUT self 覆盖已存在文件,无 confirm → 409 OVERWRITE_REQUIRES_CONFIRM", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
     await app.handle(
       new Request("http://localhost/api/stones", {
         method: "POST",
@@ -196,7 +196,7 @@ describe("Issue #6 Bad #4: PUT 覆盖性写无护栏", () => {
   });
 
   test("PUT readme 同样受 confirm 护栏保护", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
     await app.handle(
       new Request("http://localhost/api/stones", {
         method: "POST",
@@ -215,7 +215,7 @@ describe("Issue #6 Bad #4: PUT 覆盖性写无护栏", () => {
   });
 
   test("PUT server-source 覆盖已存在 → 409", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
     await app.handle(
       new Request("http://localhost/api/stones", {
         method: "POST",
@@ -244,7 +244,7 @@ describe("Issue #6 Bad #4: PUT 覆盖性写无护栏", () => {
   });
 
   test("PUT knowledge/files 覆盖已存在 → 409", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
     await app.handle(
       new Request("http://localhost/api/stones", {
         method: "POST",
@@ -270,7 +270,7 @@ describe("Issue #6 Bad #4: PUT 覆盖性写无护栏", () => {
   });
 
   test("PUT 对不存在的 stone → 404 (ensureStoneExists 先行)", async () => {
-    const { app } = makeApp();
+    const { app } = await makeApp();
     const res = await app.handle(
       new Request("http://localhost/api/stones/_test_never_created/self", {
         method: "PUT",

@@ -2,7 +2,7 @@ import type { LlmEnvConfig, LlmGenerateParams, LlmInputItem, LlmTool } from "../
 
 /**
  * inbox_message_arrived 事件在 processEventToItems 里被映射成 role=system 的 message，
- * content 形如 "[context_change:inbox_message_arrived] msg_id=X from=Y\n<真实正文>"。
+ * content 形如 "[context_change:inbox_message_arrived] msg_id=X source=talk from=ObjY window_id=W\n<真实正文>"。
  * Claude transport 边界识别这个前缀，把它从 system 上下文里挪出来作为 user 消息，
  * 让 Claude 看到一条真正的"用户对话起点"。
  * 详见 spec: docs/superpowers/specs/2026-05-17-wait-requires-dependency-design.md

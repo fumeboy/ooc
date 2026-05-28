@@ -186,7 +186,7 @@ describe("runtime listLoops service", () => {
 describe("GET /api/runtime/.../debug/loops HTTP", () => {
   async function makeApp(baseDir: string) {
     return buildServer({
-      ...readServerConfig(),
+      ...(await readServerConfig()),
       port: 0,
       baseDir,
       workerPollMs: 5,

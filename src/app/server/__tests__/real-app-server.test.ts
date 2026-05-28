@@ -48,7 +48,7 @@ describe.skipIf(!shouldRunRealTest)("real app server e2e", () => {
 
     const baseDir = mkdtempSync(join(tmpdir(), "ooc-app-server-real-"));
     const app = buildServer({
-      ...readServerConfig(),
+      ...(await readServerConfig()),
       port: 0,
       baseDir,
       workerPollMs: 50,

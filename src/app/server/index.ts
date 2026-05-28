@@ -172,7 +172,7 @@ function normalizeErrorToJson(
   };
 }
 
-export function buildServer(config: ServerConfig = readServerConfig()) {
+export function buildServer(config: ServerConfig) {
   setPauseChecker((thread) => {
     const sessionId = thread.persistence?.sessionId;
     return config.pauseStore.isGlobalPauseEnabled() || (sessionId ? config.pauseStore.isSessionPaused(sessionId) : false);
@@ -246,7 +246,7 @@ export function buildServer(config: ServerConfig = readServerConfig()) {
 }
 
 if (import.meta.main) {
-  const config = readServerConfig();
+  const config = await readServerConfig();
   // U1: stones/ git auto-init + 旧扁平布局迁移到 stones/main/。bare repo + linked
   // worktrees 模式：bare 仓库在 stones/.stones_repo/，main worktree 在 stones/main/。
   // 失败抛错并退出（启动期一次性副作用，无法静默继续）。

@@ -13,7 +13,7 @@ async function makeAppWithBaseDir() {
   const baseDir = mkdtempSync(join(tmpdir(), "ooc-app-server-routes-"));
   await ensureStoneRepo({ baseDir });
   const app = buildServer({
-    ...readServerConfig(),
+    ...(await readServerConfig()),
     port: 0,
     baseDir,
     workerPollMs: 5,

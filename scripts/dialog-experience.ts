@@ -37,7 +37,7 @@ const OBJECT_ID = "assistant";
 const THREAD_ID = "root";
 
 const app = buildServer({
-  ...readServerConfig(),
+  ...(await readServerConfig()),
   port: 0,
   baseDir: BASE_DIR,
   workerPollMs: 50,

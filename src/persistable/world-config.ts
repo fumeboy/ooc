@@ -65,6 +65,14 @@ export interface WorldConfig {
    */
   larkAppId?: string;
   larkAppSecret?: string;
+  /**
+   * 单次 worker 调度允许推进的最大 tick 数。缺省时由 ServerConfig 兜底为 15。
+   * 必须是正整数；非法值（非数字 / 非整数 / <=0）会被忽略并 console.warn。
+   *
+   * 与环境变量 `OOC_WORKER_MAX_TICKS` 的关系：env 优先级更高（dev 临时覆盖），
+   * 本字段是项目级配置基线（运维默认）。详见 src/app/server/bootstrap/config.ts。
+   */
+  workerMaxTicks?: number;
 }
 
 /** 原始 JSON 形态（解析前；字段全 optional + 大小写兼容写法）。 */
@@ -79,6 +87,8 @@ interface RawWorldConfig {
   LarkAppId?: unknown;
   larkAppSecret?: unknown;
   LarkAppSecret?: unknown;
+  workerMaxTicks?: unknown;
+  WorkerMaxTicks?: unknown;
 }
 
 interface CachedEntry {
@@ -135,6 +145,40 @@ function pickString(raw: RawWorldConfig, ...keys: (keyof RawWorldConfig)[]): str
 }
 
 /**
+ * 解析正整数字段：接受 number 或可转为 number 的 string；要求 Number.isInteger > 0。
+ * 非法值返回 undefined 并 console.warn（便于运维定位 .world.json 配错）。
+ */
+function pickPositiveInt(
+  raw: RawWorldConfig,
+  filePath: string,
+  ...keys: (keyof RawWorldConfig)[]
+): number | undefined {
+  for (const k of keys) {
+    const v = raw[k];
+    if (v === undefined) continue;
+    let n: number;
+    if (typeof v === "number") {
+      n = v;
+    } else if (typeof v === "string" && v.trim().length > 0) {
+      n = Number(v);
+    } else {
+      console.warn(
+        `[world-config] ${filePath} field '${String(k)}' has unsupported type ${typeof v}; ignoring`,
+      );
+      return undefined;
+    }
+    if (!Number.isInteger(n) || n <= 0) {
+      console.warn(
+        `[world-config] ${filePath} field '${String(k)}' = ${JSON.stringify(v)} is not a positive integer; ignoring`,
+      );
+      return undefined;
+    }
+    return n;
+  }
+  return undefined;
+}
+
+/**
  * 读取 `<baseDir>/.world.json`，返回解析 + 默认值填充后的 WorldConfig。
  *
  * 永不抛错（除非 fs 出现非 ENOENT 的硬故障，那应该让 server 异常感知）。
@@ -185,11 +229,13 @@ export async function readWorldConfig(baseDir: string): Promise<WorldConfig> {
   );
   const larkAppId = pickString(parsed, "larkAppId", "LarkAppId");
   const larkAppSecret = pickString(parsed, "larkAppSecret", "LarkAppSecret");
+  const workerMaxTicks = pickPositiveInt(parsed, filePath, "workerMaxTicks", "WorkerMaxTicks");
 
   const config: WorldConfig = { siteName, larkTenantHost };
   if (externalSkillsDir) config.externalSkillsDir = externalSkillsDir;
   if (larkAppId) config.larkAppId = larkAppId;
   if (larkAppSecret) config.larkAppSecret = larkAppSecret;
+  if (workerMaxTicks !== undefined) config.workerMaxTicks = workerMaxTicks;
   cacheSet(baseDir, config);
   return config;
 }

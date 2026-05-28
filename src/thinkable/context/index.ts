@@ -142,6 +142,21 @@ export type ProcessEvent = ProcessEventCommon & (
     }
   | {
       /**
+       * 事件来源：runJob 单次跑满 workerMaxTicks 自然返回，且 thread.status 仍为 running。
+       *
+       * 设计：meta/app.server.doc.ts § worker.scheduler_yielded。worker 出口在写完本事件后
+       * 调 jobManager.createRunThreadJob 让自己再入队一次，让长任务跨 job 续跑。
+       * LLM 下轮可见，区别于自然 done / paused / failed。
+       */
+      category: "context_change";
+      kind: "scheduler_yielded";
+      /** 触发原因：当前只有 max_ticks，未来可扩展（如 cooperative_yield）。 */
+      reason: "max_ticks";
+      /** 触发时已跑过的 LLM 轮数（call_started 计数），observability。 */
+      rounds?: number;
+    }
+  | {
+      /**
        * 事件来源：events 流中段折叠后形成的摘要节点。
        *
        * Design: docs/2026-05-25-context-compression-design.md §4.2 / §4.4
@@ -392,6 +407,29 @@ function findInboxMessage(thread: ThreadContext, msgId: string): ThreadMessage |
   return thread.inbox?.find((message) => message.id === msgId);
 }
 
+/**
+ * 推导 inbox 消息在接收方(当前 thread)视角下所属的 talk/do window id。
+ *
+ * 推导链:
+ * 1. inboxMessage.replyToWindowId — talk-delivery / worker.syncCrossObjectCalleeEnds
+ *    在跨 object 投递时已经写入,优先使用
+ * 2. fallback: 在 thread.contextWindows 中找一个 type="do" 且
+ *    targetThreadId === inboxMessage.fromThreadId 的 window;若多个,优先
+ *    isCreatorWindow=true(child 视角下的 creator do_window 是规范配对窗口)
+ * 3. 都没有 → undefined,header 中静默不输出 window_id KV
+ */
+function resolveInboxWindowId(thread: ThreadContext, inboxMessage: ThreadMessage): string | undefined {
+  if (inboxMessage.replyToWindowId) return inboxMessage.replyToWindowId;
+  const fromThreadId = inboxMessage.fromThreadId;
+  if (!fromThreadId) return undefined;
+  const candidates = thread.contextWindows.filter(
+    (w) => w.type === "do" && (w as { targetThreadId?: string }).targetThreadId === fromThreadId,
+  );
+  if (candidates.length === 0) return undefined;
+  const creator = candidates.find((w) => (w as { isCreatorWindow?: boolean }).isCreatorWindow === true);
+  return (creator ?? candidates[0])!.id;
+}
+
 function isErrorInject(text: string): boolean {
   return text.startsWith("[错误]") || text.includes("失败") || text.includes("Error") || text.includes("error");
 }
@@ -400,15 +438,45 @@ function isErrorInject(text: string): boolean {
 function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInputItem[] {
   if (event.category === "context_change" && event.kind === "inbox_message_arrived") {
     const inboxMessage = findInboxMessage(thread, event.msgId);
+
+    // header 行: KV 形式, 每个键只在有值时输出。
+    // 关键 contract: header 与 body 之间用单个 \n 分隔 — claude-transport.ts 的
+    // extractInboxContent 用第一个 \n 切分 header/body, 把 body 作为 user message,
+    // 不要破坏这个边界。
+    const headerParts = [`[context_change:${event.kind}] msg_id=${event.msgId}`];
+    if (inboxMessage) {
+      headerParts.push(`source=${inboxMessage.source}`);
+      const fromKey = inboxMessage.fromObjectId ?? inboxMessage.fromThreadId;
+      if (fromKey) {
+        headerParts.push(`from=${fromKey}`);
+      }
+      const windowId = resolveInboxWindowId(thread, inboxMessage);
+      if (windowId) {
+        headerParts.push(`window_id=${windowId}`);
+      }
+    }
+    const header = headerParts.join(" ");
+
+    // body: inbox 消息正文(不截断, 与 talk_window/do_window level 0 渲染对齐);
+    // 找不到 inbox 消息时(罕见, 防御性兜底)给 LLM 一条可读提示, 不抛错不打日志。
+    let body: string;
+    if (inboxMessage) {
+      body = inboxMessage.content;
+      // event.text 是 ProcessEvent 上的 optional 兼容字段; 当前没有写入点会真的填它,
+      // 但保留追加路径(在 content 之后, 用 \n 分隔), 以保持类型契约的向后兼容。
+      if (event.text) {
+        body = `${body}\n${event.text}`;
+      }
+    } else {
+      body = `(inbox message ${event.msgId} not found)`;
+    }
+
     return [
       {
-      type: "message",
-      role: "system",
-        content:
-          `[context_change:${event.kind}] msg_id=${event.msgId}` +
-          `${inboxMessage ? ` from=${inboxMessage.fromThreadId}` : ""}` +
-          `${event.text ? `\n${event.text}` : ""}`
-      }
+        type: "message",
+        role: "system",
+        content: `${header}\n${body}`,
+      },
     ];
   }
 
@@ -424,6 +492,19 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
           `[context_change:context_compressed] ${event.levelChange} ` +
           `window_ids=${target} reason=${event.reason}` +
           (event.scope ? ` scope=${event.scope}` : ""),
+      },
+    ];
+  }
+
+  if (event.category === "context_change" && event.kind === "scheduler_yielded") {
+    // worker 单次 runJob 跑满 workerMaxTicks 后自唤醒,LLM 下轮入口处看到本事件,
+    // 知道自己被切片了(区别于 done/paused/failed)。详见 meta/app.server.doc.ts § worker。
+    const roundsTag = event.rounds !== undefined ? ` rounds=${event.rounds}` : "";
+    return [
+      {
+        type: "message",
+        role: "system",
+        content: `[context_change:scheduler_yielded] reason=${event.reason}${roundsTag}`,
       },
     ];
   }

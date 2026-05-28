@@ -11,7 +11,7 @@ async function makeApp() {
   const baseDir = mkdtempSync(join(tmpdir(), "ooc-app-server-e2e-"));
   await ensureStoneRepo({ baseDir });
   const app = buildServer({
-    ...readServerConfig(),
+    ...(await readServerConfig()),
     port: 0,
     baseDir,
     workerPollMs: 5,

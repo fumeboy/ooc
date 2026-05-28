@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { createJobManager } from "../runtime/job-manager";
 import { createPauseStore } from "../runtime/pause-store";
-import { STONES_MAIN_BRANCH } from "@src/persistable";
+import { STONES_MAIN_BRANCH, readWorldConfig } from "@src/persistable";
 
 export interface ServerConfig {
   port: number;
@@ -58,7 +58,7 @@ function validateStonesBranch(value: string): string {
   return value;
 }
 
-export function readServerConfig(source: ConfigSource = {}): ServerConfig {
+export async function readServerConfig(source: ConfigSource = {}): Promise<ServerConfig> {
   const env = source.env ?? process.env;
   const argv = source.argv ?? process.argv;
   const explicitBaseDir = readFlagValue(argv, ["--world", "--world-dir", "--base-dir"]);
@@ -67,6 +67,7 @@ export function readServerConfig(source: ConfigSource = {}): ServerConfig {
   // 坏的 `/@fs.ooc-world/...` 让浏览器 import client page 失败。process.cwd() 默认值
   // 已是绝对，path.resolve 对其幂等。
   const rawBaseDir = explicitBaseDir ?? env.OOC_WORLD_DIR ?? env.OOC_BASE_DIR ?? process.cwd();
+  const absBaseDir = resolve(rawBaseDir);
   const explicitBranch = readFlagValue(argv, ["--stones-branch"]);
   const explicitPort = readFlagValue(argv, ["--port"]);
 
@@ -77,15 +78,27 @@ export function readServerConfig(source: ConfigSource = {}): ServerConfig {
     );
   }
 
+  // workerMaxTicks 优先级：env > .world.json > 15
+  // env 比 world-config 优先 — env 是 dev 临时覆盖，world-config 是项目级配置基线。
+  // 显式传给 ServerConfig 字段的更高优先级路径走调用方解构覆盖（e2e fixture 模式）。
+  const envMaxTicks = env.OOC_WORKER_MAX_TICKS;
+  let workerMaxTicks: number;
+  if (envMaxTicks !== undefined && envMaxTicks !== "") {
+    workerMaxTicks = Number(envMaxTicks);
+  } else {
+    const worldCfg = await readWorldConfig(absBaseDir).catch(() => undefined);
+    workerMaxTicks = worldCfg?.workerMaxTicks ?? 15;
+  }
+
   return {
     port,
-    baseDir: resolve(rawBaseDir),
+    baseDir: absBaseDir,
     stonesBranch: validateStonesBranch(
       explicitBranch ?? env.OOC_STONES_BRANCH ?? STONES_MAIN_BRANCH,
     ),
     workerPollMs: Number(env.OOC_WORKER_POLL_MS ?? 100),
     workerEnabled: env.OOC_WORKER_ENABLED !== "0",
-    workerMaxTicks: Number(env.OOC_WORKER_MAX_TICKS ?? 15),
+    workerMaxTicks,
     pauseStore: createPauseStore(),
     jobManager: createJobManager(),
   };

@@ -54,15 +54,176 @@ describe("buildContext (ContextWindow model)", () => {
     expect(out.input[0]).toEqual(
       expect.objectContaining({ type: "message", role: "system" }),
     );
-    expect(
-      out.input.some(
-        (item) =>
-          item.type === "message" &&
-          item.role === "system" &&
-          item.content.includes("[context_change:inbox_message_arrived]") &&
-          item.content.includes("msg_id=msg_in_1"),
-      ),
-    ).toBe(true);
+    const inboxItem = out.input.find(
+      (item) =>
+        item.type === "message" &&
+        item.role === "system" &&
+        item.content.includes("[context_change:inbox_message_arrived]"),
+    );
+    expect(inboxItem).toBeDefined();
+    const content = (inboxItem as { content: string }).content;
+    // header / body 之间用单个 \n 分隔(claude-transport.extractInboxContent 依赖此 contract)
+    const newlineIdx = content.indexOf("\n");
+    expect(newlineIdx).toBeGreaterThan(0);
+    const header = content.slice(0, newlineIdx);
+    const body = content.slice(newlineIdx + 1);
+    expect(header).toContain("msg_id=msg_in_1");
+    expect(header).toContain("source=system");
+    expect(header).toContain("from=t_user");
+    expect(body).toBe("新的用户输入");
+  });
+
+  it("inbox_message_arrived header uses fromObjectId when available", async () => {
+    const thread: ThreadContext = makeThread({
+      id: "t_obj",
+      events: [
+        { category: "context_change", kind: "inbox_message_arrived", msgId: "msg_obj" },
+      ],
+      inbox: [
+        {
+          id: "msg_obj",
+          fromThreadId: "t_caller",
+          fromObjectId: "ObjAlice",
+          toThreadId: "t_obj",
+          content: "hello from alice",
+          createdAt: 1,
+          source: "talk",
+        },
+      ],
+    });
+    const out = await buildInputItems(thread);
+    const item = out.input.find(
+      (i) => i.type === "message" && i.role === "system" && i.content.includes("[context_change:inbox_message_arrived]"),
+    ) as { content: string } | undefined;
+    expect(item).toBeDefined();
+    const [header, body] = item!.content.split("\n", 2);
+    // fromObjectId 优先于 fromThreadId
+    expect(header).toContain("from=ObjAlice");
+    expect(header).not.toContain("from=t_caller");
+    expect(header).toContain("source=talk");
+    expect(body).toBe("hello from alice");
+  });
+
+  it("inbox_message_arrived header includes window_id from replyToWindowId (case A)", async () => {
+    const thread: ThreadContext = makeThread({
+      id: "t_reply",
+      events: [
+        { category: "context_change", kind: "inbox_message_arrived", msgId: "msg_reply" },
+      ],
+      inbox: [
+        {
+          id: "msg_reply",
+          fromThreadId: "t_user",
+          toThreadId: "t_reply",
+          content: "回复内容",
+          createdAt: 1,
+          source: "talk",
+          replyToWindowId: "w_talk_42",
+        },
+      ],
+    });
+    const out = await buildInputItems(thread);
+    const item = out.input.find(
+      (i) => i.type === "message" && i.role === "system" && i.content.includes("[context_change:inbox_message_arrived]"),
+    ) as { content: string } | undefined;
+    const header = item!.content.split("\n", 2)[0]!;
+    expect(header).toContain("window_id=w_talk_42");
+  });
+
+  it("inbox_message_arrived falls back to creator do_window matching fromThreadId (case B)", async () => {
+    const thread: ThreadContext = makeThread({
+      id: "t_child",
+      events: [
+        { category: "context_change", kind: "inbox_message_arrived", msgId: "msg_from_creator" },
+      ],
+      inbox: [
+        {
+          id: "msg_from_creator",
+          fromThreadId: "t_creator",
+          toThreadId: "t_child",
+          content: "creator 派的消息",
+          createdAt: 1,
+          source: "do",
+        },
+      ],
+      extraWindows: [
+        // 普通 do_window(非 creator)同样指向 t_creator
+        {
+          id: "w_do_other",
+          type: "do",
+          parentWindowId: ROOT_WINDOW_ID,
+          title: "non-creator",
+          status: "running",
+          createdAt: 1,
+          targetThreadId: "t_creator",
+        },
+        // creator do_window 应被优先选中
+        {
+          id: "w_do_creator",
+          type: "do",
+          parentWindowId: ROOT_WINDOW_ID,
+          title: "creator",
+          status: "running",
+          createdAt: 1,
+          targetThreadId: "t_creator",
+          isCreatorWindow: true,
+        },
+      ],
+    });
+    const out = await buildInputItems(thread);
+    const item = out.input.find(
+      (i) => i.type === "message" && i.role === "system" && i.content.includes("[context_change:inbox_message_arrived]"),
+    ) as { content: string } | undefined;
+    const header = item!.content.split("\n", 2)[0]!;
+    expect(header).toContain("window_id=w_do_creator");
+    expect(header).not.toContain("window_id=w_do_other");
+  });
+
+  it("inbox_message_arrived omits window_id when no source available (case C)", async () => {
+    const thread: ThreadContext = makeThread({
+      id: "t_lonely",
+      events: [
+        { category: "context_change", kind: "inbox_message_arrived", msgId: "msg_lonely" },
+      ],
+      inbox: [
+        {
+          id: "msg_lonely",
+          fromThreadId: "t_unknown",
+          toThreadId: "t_lonely",
+          content: "无窗口归属",
+          createdAt: 1,
+          source: "system",
+        },
+      ],
+    });
+    const out = await buildInputItems(thread);
+    const item = out.input.find(
+      (i) => i.type === "message" && i.role === "system" && i.content.includes("[context_change:inbox_message_arrived]"),
+    ) as { content: string } | undefined;
+    const header = item!.content.split("\n", 2)[0]!;
+    expect(header).not.toContain("window_id=");
+  });
+
+  it("inbox_message_arrived falls back to defensive body when inbox lookup fails (case D)", async () => {
+    const thread: ThreadContext = makeThread({
+      id: "t_missing",
+      events: [
+        { category: "context_change", kind: "inbox_message_arrived", msgId: "msg_ghost" },
+      ],
+      // 故意不放对应 inbox 消息
+      inbox: [],
+    });
+    const out = await buildInputItems(thread);
+    const item = out.input.find(
+      (i) => i.type === "message" && i.role === "system" && i.content.includes("[context_change:inbox_message_arrived]"),
+    ) as { content: string } | undefined;
+    expect(item).toBeDefined();
+    const newlineIdx = item!.content.indexOf("\n");
+    const header = item!.content.slice(0, newlineIdx);
+    const body = item!.content.slice(newlineIdx + 1);
+    // header 仍然只输出 msg_id(无 inboxMessage 时其他 KV 不输出)
+    expect(header).toBe("[context_change:inbox_message_arrived] msg_id=msg_ghost");
+    expect(body).toBe("(inbox message msg_ghost not found)");
   });
 
   it("replays function_call and function_call_output into next input items", async () => {

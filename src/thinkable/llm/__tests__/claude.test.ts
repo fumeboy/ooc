@@ -119,7 +119,7 @@ describe("claude provider", () => {
           {
             type: "message",
             role: "system",
-            content: "[context_change:inbox_message_arrived] msg_id=m1 from=user\n请帮我数文件",
+            content: "[context_change:inbox_message_arrived] msg_id=m1 source=user from=user\n请帮我数文件",
           },
         ],
       },
@@ -160,7 +160,7 @@ describe("claude provider", () => {
           {
             type: "message",
             role: "system",
-            content: "[context_change:inbox_message_arrived] msg_id=m1 from=user\nhi",
+            content: "[context_change:inbox_message_arrived] msg_id=m1 source=user from=user window_id=w_talk\nhi",
           },
           {
             type: "function_call",
