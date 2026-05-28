@@ -349,23 +349,85 @@ export default defineObject({
             return { ok: true };
         },
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async grep(args: any, _ctx: ObjectContext) {
-            // TODO P6: 实装 ephemeral search Object 创建
-            if (!args.pattern) throw new Error("grep: missing pattern");
-            return { ok: true, status: "skeleton", _todo: "P6 implements ephemeral creation" };
+        async grep(args: any, ctx: ObjectContext) {
+            if (!args?.pattern) throw new Error("grep: args.pattern required");
+            const searchDir = args.path || ctx.worldRoot;
+            const resolved = path.resolve(searchDir);
+            if (!resolved.startsWith(path.resolve(ctx.worldRoot)) && resolved !== path.resolve(ctx.worldRoot)) {
+                throw new Error(`grep: path outside worldRoot: ${searchDir}`);
+            }
+            const results: Array<{ file: string; line: number; content: string }> = [];
+            const maxFiles = 200;
+            const maxMatches = 100;
+            let filesScanned = 0;
+            const re = new RegExp(args.pattern, "i");
+            async function walk(dir: string): Promise<void> {
+                if (results.length >= maxMatches) return;
+                if (filesScanned >= maxFiles) return;
+                const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+                for (const e of entries) {
+                    if (results.length >= maxMatches || filesScanned >= maxFiles) return;
+                    if (e.name.startsWith(".") || e.name === "node_modules") continue;
+                    const full = path.join(dir, e.name);
+                    if (e.isDirectory()) { await walk(full); continue; }
+                    if (e.isFile()) {
+                        filesScanned++;
+                        try {
+                            const body = await fs.readFile(full, "utf8");
+                            const lines = body.split("\n");
+                            for (let i = 0; i < lines.length; i++) {
+                                if (re.test(lines[i]!)) {
+                                    results.push({ file: full, line: i + 1, content: lines[i]!.slice(0, 200) });
+                                    if (results.length >= maxMatches) return;
+                                }
+                            }
+                        } catch { /* skip binary or unreadable */ }
+                    }
+                }
+            }
+            await walk(resolved);
+            return { ok: true, count: results.length, results: results.slice(0, 50) };
         },
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async glob(args: any, _ctx: ObjectContext) {
-            if (!args.pattern) throw new Error("glob: missing pattern");
-            return { ok: true, status: "skeleton", _todo: "P6" };
+        async glob(args: any, ctx: ObjectContext) {
+            if (!args?.pattern) throw new Error("glob: args.pattern required");
+            const searchDir = args.path || ctx.worldRoot;
+            const resolved = path.resolve(searchDir);
+            if (!resolved.startsWith(path.resolve(ctx.worldRoot))) {
+                throw new Error(`glob: path outside worldRoot`);
+            }
+            const patternStr = String(args.pattern);
+            const matches: string[] = [];
+            const maxMatches = 200;
+            async function walk(dir: string): Promise<void> {
+                if (matches.length >= maxMatches) return;
+                const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+                for (const e of entries) {
+                    if (e.name.startsWith(".") || e.name === "node_modules") continue;
+                    const full = path.join(dir, e.name);
+                    if (e.isDirectory()) { await walk(full); }
+                    else if (e.isFile() && fileMatchesPattern(e.name, patternStr)) {
+                        matches.push(full);
+                        if (matches.length >= maxMatches) return;
+                    }
+                }
+            }
+            await walk(resolved);
+            return { ok: true, count: matches.length, files: matches };
         },
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async open_file(args: any, _ctx: ObjectContext) {
-            if (!args.path) throw new Error("open_file: missing path");
-            return { ok: true, status: "skeleton", _todo: "P6" };
+        async open_file(args: any, ctx: ObjectContext) {
+            if (!args?.path) throw new Error("open_file: args.path required");
+            const target = path.resolve(args.path);
+            if (!target.startsWith(path.resolve(ctx.worldRoot))) {
+                throw new Error(`open_file: path outside worldRoot: ${args.path}`);
+            }
+            const body = await fs.readFile(target, "utf8");
+            const maxBytes = 50_000;
+            if (body.length > maxBytes) {
+                return { ok: true, path: args.path, truncated: true, content: body.slice(0, maxBytes), bytes: body.length };
+            }
+            return { ok: true, path: args.path, content: body, bytes: body.length };
         },
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -381,11 +443,16 @@ export default defineObject({
             return { ok: true, status: "skeleton", _todo: "P8 super flow" };
         },
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async write_file(args: any, _ctx: ObjectContext) {
-            if (!args.path) throw new Error("write_file: missing path");
-            if (typeof args.content !== "string") throw new Error("write_file: content required");
-            return { ok: true, status: "skeleton", _todo: "P5/P8: bounded write" };
+        async write_file(args: any, ctx: ObjectContext) {
+            if (!args?.path) throw new Error("write_file: args.path required");
+            if (typeof args.content !== "string") throw new Error("write_file: args.content (string) required");
+            const target = path.resolve(args.path);
+            if (!target.startsWith(path.resolve(ctx.worldRoot))) {
+                throw new Error(`write_file: path outside worldRoot: ${args.path}`);
+            }
+            await fs.mkdir(path.dirname(target), { recursive: true });
+            await fs.writeFile(target, args.content);
+            return { ok: true, path: args.path, bytes: Buffer.byteLength(args.content) };
         },
 
         async end(_args: unknown, _ctx: ObjectContext) {
@@ -398,6 +465,21 @@ export default defineObject({
 });
 
 /* -------------------- internal helpers -------------------- */
+
+/**
+ * Simple file name pattern matching for glob:
+ * - *.ext → matches any file ending with .ext
+ * - **\/*.ext or **\/*.ext → same (** prefix is stripped; we always walk recursively)
+ * - otherwise: exact name match or substring match
+ */
+function fileMatchesPattern(name: string, pattern: string): boolean {
+    // strip leading **/ or ** prefix
+    const cleaned = pattern.replace(/^\*\*\//, "").replace(/^\*\*/, "*");
+    if (cleaned.startsWith("*.")) {
+        return name.endsWith(cleaned.slice(1));
+    }
+    return name === cleaned || name.includes(cleaned);
+}
 
 async function readIfExists(p: string): Promise<string | null> {
     try {
