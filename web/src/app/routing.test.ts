@@ -43,6 +43,19 @@ describe("toPath: /flows/<view> + ?sessionId=&objectId=&threadId=", () => {
       "/files/stones/main/agent_of_x/self.md",
     );
   });
+  it("file path == stone client entry → shortcut /stones/<objectId> (post bare-repo reorg)", () => {
+    // 2026-05-21 stones repo 重组：client 入口路径是 stones/<branch>/objects/<id>/client/index.tsx
+    expect(
+      toPath({ kind: "file", path: "stones/main/objects/alpha/client/index.tsx" }),
+    ).toBe("/stones/alpha");
+  });
+  it("file path == legacy flat stone client → falls back to /files/* (no shortcut)", () => {
+    // 旧 flat layout (stones/<id>/client/index.tsx) 不再被 normalize 当 shortcut；
+    // 直接当普通文件渲染，保住老链接不炸。
+    expect(
+      toPath({ kind: "file", path: "stones/alpha/client/index.tsx" }),
+    ).toBe("/files/stones/alpha/client/index.tsx");
+  });
   it("file with thread context attaches sessionId/objectId/threadId", () => {
     expect(
       toPath({

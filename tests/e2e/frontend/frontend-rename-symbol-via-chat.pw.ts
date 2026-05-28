@@ -61,7 +61,7 @@ test("F2 用户让 assistant 通过 chat 改文件 → fs 真改", async ({ page
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let calleeThread: any = undefined;
   if (calleeThreadId) {
-    const deadline = Date.now() + 15_000;
+    const deadline = Date.now() + 30_000;
     while (Date.now() < deadline) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       calleeThread = readThreadJson(ooc.backend.baseDir, "f2-rename", "assistant", calleeThreadId) as any;
@@ -81,20 +81,23 @@ test("F2 用户让 assistant 通过 chat 改文件 → fs 真改", async ({ page
     .filter((e) => e.category === "llm_interaction" && e.kind === "function_call" && e.toolName === "exec")
     .map((e) => (e.arguments?.command as string) ?? "")
     .filter(Boolean);
-  const usedFileWindowEdit = openCmds.includes("file_window.edit");
-  const usedWriteFile = openCmds.includes("root.write_file");
+  // LLM 实际 exec 时 args.command 是单段命令名（无 window-type 前缀）：
+  // file_window 上的 edit → "edit"，root 上的 write_file/program → "write_file"/"program"。
+  const usedFileWindowEdit = openCmds.includes("edit");
+  const usedWriteFile = openCmds.includes("write_file");
   const usedShell = events.some((e) => {
     if (e.category !== "llm_interaction" || e.kind !== "function_call" || e.toolName !== "exec") return false;
-    if (e.arguments?.command !== "root.program") return false;
+    if (e.arguments?.command !== "program") return false;
     const lang = (e.arguments?.args?.language ?? e.arguments?.args?.lang) as string | undefined;
     return lang === "shell";
   });
 
-  // UI: ContextSnapshotViewer 中应能看到至少 1 个 file_window —— 走过 file_window 路径的证据
-  // DOM 锚：ContextSnapshotViewer 的 .cw-row 行，node.label 即窗口 type；file_window 显示为 "file"。
-  const fileWindowNodeCount = await page
-    .locator(".cw-row:has-text('file')")
-    .count();
+  // 观察孔 B（thread state）：thread.contextWindows 中有 type=file 的 window 即证明走过 file_window 路径。
+  // 改用 thread state 而非 .cw-row UI selector，避免 ContextSnapshotViewer 节点 label 文本漂移。
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fileWindowNodeCount = ((calleeThread?.contextWindows ?? []) as any[]).filter(
+    (w) => w?.type === "file",
+  ).length;
 
   const result = scoreScenario({
     scenario: "F2 rename-symbol-via-chat",

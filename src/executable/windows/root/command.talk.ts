@@ -21,6 +21,7 @@ import {
   generateWindowId,
   type TalkWindow,
 } from "../_shared/types.js";
+import { DEFAULT_TRANSCRIPT_VIEWPORT } from "../_shared/transcript-viewport.js";
 
 const TALK_BASIC_PATH = "internal/executable/talk/basic";
 const TALK_INPUT_PATH = "internal/executable/talk/input";
@@ -119,6 +120,7 @@ export async function executeTalkCommand(
     createdAt: Date.now(),
     target,
     conversationId: id,
+    transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT },
   };
 
   if (ctx.manager) {

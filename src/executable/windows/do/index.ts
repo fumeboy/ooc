@@ -13,7 +13,13 @@ import { continueCommand } from "./command.continue.js";
 import { waitCommand } from "./command.wait.js";
 import { closeCommand } from "./command.close.js";
 import { moveCommand } from "./command.move.js";
+import { setTranscriptWindowCommandForDo } from "./command.set-transcript-window.js";
 import { archiveDoWindowChild } from "./helpers.js";
+import {
+  DEFAULT_TRANSCRIPT_VIEWPORT,
+  applyTranscriptViewport,
+  type TranscriptViewport,
+} from "../_shared/transcript-viewport.js";
 import { xmlElement, xmlText, type XmlNode } from "../../../thinkable/context/xml.js";
 import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
 import type { DoWindow } from "./types.js";
@@ -49,12 +55,36 @@ function renderDoWindow(ctx: RenderContext): XmlNode[] {
     children.push(xmlElement("is_creator_window", {}, [xmlText("true")]));
   }
   const transcriptMessages = filterMessagesForDoWindow(window, ctx.thread);
-  if (transcriptMessages.length > 0) {
+  const viewport: TranscriptViewport =
+    window.transcriptViewport ?? DEFAULT_TRANSCRIPT_VIEWPORT;
+  const { visible, earlierCount } = applyTranscriptViewport(
+    transcriptMessages,
+    viewport,
+  );
+
+  const viewportAttrs: Record<string, string> = {
+    total: String(transcriptMessages.length),
+  };
+  if (typeof viewport.tail === "number") {
+    viewportAttrs.tail = String(viewport.tail);
+  } else if (
+    typeof viewport.rangeStart === "number" &&
+    typeof viewport.rangeEnd === "number"
+  ) {
+    viewportAttrs.range_start = String(viewport.rangeStart);
+    viewportAttrs.range_end = String(viewport.rangeEnd);
+  }
+  if (earlierCount > 0) {
+    viewportAttrs.earlier_omitted = String(earlierCount);
+  }
+  children.push(xmlElement("transcript_viewport", viewportAttrs));
+
+  if (visible.length > 0) {
     children.push(
       xmlElement(
         "transcript",
         {},
-        transcriptMessages.map((m) =>
+        visible.map((m) =>
           xmlElement(
             "message",
             { id: m.id, source: m.source },
@@ -138,6 +168,7 @@ registerWindowType("do", {
     wait: waitCommand,
     close: closeCommand,
     move: moveCommand,
+    set_transcript_window: setTranscriptWindowCommandForDo,
   },
   onClose: onCloseDoWindow,
   renderXml: renderDoWindow,

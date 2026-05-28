@@ -129,7 +129,10 @@ export function ClientWithSourceToggle({
  * 与 plan-003 §3.1 的两条 regex 一致。
  */
 export function matchClientTarget(path: string): ClientTarget | undefined {
-  const stone = /^stones\/([^/]+)\/client\/index\.tsx$/.exec(path);
+  // 2026-05-21 stones repo 重组：bare repo + linked worktrees，stone client 路径变成
+  // `stones/<stonesBranch>/objects/<objectId>/client/index.tsx`；第一段 branch 不捕获，
+  // 第二段 objects/<objectId> 才是 client 入口的 owner。
+  const stone = /^stones\/[^/]+\/objects\/([^/]+)\/client\/index\.tsx$/.exec(path);
   if (stone) return { scope: "stone", objectId: stone[1]! };
   const flow = /^flows\/([^/]+)\/objects\/([^/]+)\/client\/pages\/([A-Za-z0-9_-]+)\.tsx$/.exec(path);
   if (flow) {

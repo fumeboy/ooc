@@ -1,4 +1,5 @@
 import type { BaseContextWindow } from "../_shared/types.js";
+import type { Viewport } from "../_shared/viewport.js";
 
 /**
  * Knowledge window — 一段 knowledge 文本作为 window 出现在 context 中。
@@ -36,4 +37,11 @@ export interface KnowledgeWindow extends BaseContextWindow {
   presentation?: "full" | "summary";
   /** activator 来源时记录 doc.frontmatter.description，便于 summary 渲染。 */
   description?: string;
+  /**
+   * 渲染窗口大小 { lineStart, lineEnd, columnStart, columnEnd }；
+   * open_knowledge 创建 explicit 来源时填默认 0-200 / 0-200，可通过 `set_viewport` 命令调整。
+   *
+   * 详见 meta/object.doc.ts:executable.context_window.patches.viewport_protocol。
+   */
+  viewport?: Viewport;
 }

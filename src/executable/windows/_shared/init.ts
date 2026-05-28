@@ -25,6 +25,7 @@ import {
   type DoWindow,
   type TalkWindow,
 } from "./types.js";
+import { DEFAULT_TRANSCRIPT_VIEWPORT } from "./transcript-viewport.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 
 export interface InitContextWindowsOpts {
@@ -107,6 +108,7 @@ export function initContextWindows(
         createdAt: Date.now(),
         targetThreadId: creatorThreadId,
         isCreatorWindow: true,
+        transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT },
       } satisfies DoWindow)
     : ({
         id: creatorWindowId,
@@ -119,6 +121,7 @@ export function initContextWindows(
         targetThreadId: creatorThreadId,
         conversationId: creatorWindowId,
         isCreatorWindow: true,
+        transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT },
       } satisfies TalkWindow);
 
   thread.contextWindows = [creatorWindow, ...list];

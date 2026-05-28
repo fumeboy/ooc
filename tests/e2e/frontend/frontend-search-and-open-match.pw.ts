@@ -68,19 +68,22 @@ test("F3 grep → search_window 出现在 ContextSnapshotViewer", async ({ page,
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const events = (calleeThread?.events ?? []) as any[];
+  // LLM 实际 exec 时 args.command 是单段命令名（无 window-type 前缀）：
+  // root 上的 grep → "grep"。
   const usedGrep = events.some(
     (e) =>
       e.category === "llm_interaction" &&
       e.kind === "function_call" &&
       e.toolName === "exec" &&
-      e.arguments?.command === "root.grep",
+      e.arguments?.command === "grep",
   );
 
-  // UI: search_window 节点至少 1 个（DOM 锚：ContextSnapshotViewer 的 .cw-row 行，
-  // node.label 即窗口 type；search_window 显示为 "search"）。
-  const searchWindowCount = await page
-    .locator(".cw-row:has-text('search')")
-    .count();
+  // 观察孔 B（thread state）：thread.contextWindows 中有 type=search 的 window 即证明走过 grep 路径。
+  // 改用 thread state 而非 .cw-row UI selector，避免 ContextSnapshotViewer 节点 label 文本漂移。
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const searchWindowCount = ((calleeThread?.contextWindows ?? []) as any[]).filter(
+    (w) => w?.type === "search",
+  ).length;
 
   // assistant 文本中是否含正确数字
   // 真 DOM 锚（Round 17 后）：.chat-timeline .tui-block.tui-assistant（web/src/domains/chat/components/TuiBlock.tsx:9-13,455）

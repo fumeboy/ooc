@@ -18,10 +18,21 @@ import { registerWindowType, type RenderContext } from "../_shared/registry.js";
 import { runOneExec, type ProgramExecArgs } from "./runtime.js";
 import type { ProgramWindow } from "../_shared/types.js";
 import { xmlElement, xmlText, xmlComment, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
+import {
+  applyTranscriptViewport,
+  type TranscriptViewport,
+} from "../_shared/transcript-viewport.js";
+import {
+  DEFAULT_HISTORY_VIEWPORT,
+  executeProgramSetHistoryViewport,
+  hasAnyHistoryViewportField,
+} from "./history-viewport.js";
 
 const PROGRAM_WINDOW_EXEC_BASIC = "internal/windows/program/exec/basic";
 const PROGRAM_WINDOW_EXEC_INPUT = "internal/windows/program/exec/input";
 const PROGRAM_WINDOW_CLOSE_BASIC = "internal/windows/program/close/basic";
+const PROGRAM_WINDOW_SET_HISTORY_BASIC = "internal/windows/program/set_history_window/basic";
+const PROGRAM_WINDOW_SET_HISTORY_INPUT = "internal/windows/program/set_history_window/input";
 
 const EXEC_KNOWLEDGE = `
 program_window.exec 用于在已打开的 program_window 中再次执行一段 shell / ts / js 代码。
@@ -38,11 +49,41 @@ program_window.exec 用于在已打开的 program_window 中再次执行一段 s
 执行结果会追加到 program_window.history；窗口本身保留打开。
 
 要调任意 window 上的命令请直接用顶层 \`exec\` tool；program_window.exec 只用来跑代码。
+
+渲染层默认按 historyViewport={ tail: 10 } 只展示末 10 次 exec；\`<history_viewport total=N tail=10 earlier_omitted=M/>\`
+元节点暴露省略数；想看其它区间用 set_history_window；last_output 始终是最近一次 exec（不受 viewport 影响）。
 `.trim();
 
 const CLOSE_KNOWLEDGE = `
 program_window.close 等价于 close tool；释放 window 与 history。
 不会停止任何外部进程（每次 exec 都已经结束）。
+`.trim();
+
+const SET_HISTORY_KNOWLEDGE = `
+program_window.set_history_window 精细化调整 exec history 渲染视口。
+
+打开 program_window 时默认 historyViewport = { tail: 10 } —— 只渲染末 10 次 exec；
+更早的 exec 以 \`<history_viewport tail=10 total=42 earlier_omitted=32/>\` 形式提示前部还有多少条。
+
+参数（**择一传**，二选一）：
+- history_tail: 末 N 次（必须是正整数）
+- history_start + history_end: 固定区间 history[history_start, history_end)（非负整数；history_start ≤ history_end；必须同时出现）
+
+**history_tail 与 history_start/history_end 互斥**：传 history_tail 的 args 清空 range；传 range 的 args 清空 tail。
+
+约束（fail-loud）：
+- history_tail 必须是正整数（>= 1）
+- history_start / history_end 必须是非负整数
+- history_start ≤ history_end
+- history_start 与 history_end 必须同时出现
+
+例：
+- exec(window_id="<id>", command="set_history_window", args={ history_tail: 30 })          → 看末 30 次 exec
+- exec(..., args={ history_start: 0, history_end: 5 })                                     → 看前 5 次
+- exec(..., args={ history_start: 10, history_end: 20 })                                   → 看中间 10 次
+
+**注意**：viewport 只影响**渲染**给 LLM 的 history summary 与 last_output 锚点；
+后续 exec 仍正常追加到完整 history（不受 viewport 影响）。
 `.trim();
 
 const execCommand: CommandTableEntry = {
@@ -74,6 +115,23 @@ const closeCommand: CommandTableEntry = {
   match: () => ["close"],
   knowledge: (): CommandKnowledgeEntries => ({ [PROGRAM_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
   exec: () => undefined,
+};
+
+const setHistoryWindowCommand: CommandTableEntry = {
+  paths: ["set_history_window"],
+  match: () => ["set_history_window"],
+  knowledge: (args, formStatus): CommandKnowledgeEntries => {
+    const entries: CommandKnowledgeEntries = {
+      [PROGRAM_WINDOW_SET_HISTORY_BASIC]: SET_HISTORY_KNOWLEDGE,
+    };
+    if (formStatus === "open" && !hasAnyHistoryViewportField(args)) {
+      entries[PROGRAM_WINDOW_SET_HISTORY_INPUT] =
+        "set_history_window 至少需要传入 history_tail / history_start+history_end 之一。\n" +
+        "history_tail 与 history_start/history_end 互斥，请 refine 后 submit。";
+    }
+    return entries;
+  },
+  exec: (ctx) => executeProgramSetHistoryViewport(ctx),
 };
 
 /** program_window.exec：跑一次 exec，把 record append 到 window.history。 */
@@ -109,7 +167,7 @@ export async function executeProgramWindowExec(
   return undefined;
 }
 
-/** program_window 的 renderXml hook：history 摘要 + 最近一条 full output。 */
+/** program_window 的 renderXml hook：history 摘要（按 historyViewport 截取）+ 最近一条 full output。 */
 function renderProgramWindow(ctx: RenderContext): XmlNode[] {
   const window = ctx.window as ProgramWindow;
   const children: XmlNode[] = [];
@@ -117,7 +175,32 @@ function renderProgramWindow(ctx: RenderContext): XmlNode[] {
     children.push(xmlComment("(no exec yet)"));
     return children;
   }
-  const summary = window.history.map((rec, idx) =>
+
+  const viewport: TranscriptViewport =
+    window.historyViewport ?? DEFAULT_HISTORY_VIEWPORT;
+  // 按完整 history 的下标渲染（保留绝对 index n），但只对 visible 子集生成 summary 节点。
+  const indexed = window.history.map((rec, idx) => ({ rec, idx }));
+  const { visible, earlierCount } = applyTranscriptViewport(indexed, viewport);
+
+  // 始终暴露 history_viewport 元节点（让 LLM 知道当前可见区间 + 前部省略数）
+  const viewportAttrs: Record<string, string> = {
+    total: String(window.history.length),
+  };
+  if (typeof viewport.tail === "number") {
+    viewportAttrs.tail = String(viewport.tail);
+  } else if (
+    typeof viewport.rangeStart === "number" &&
+    typeof viewport.rangeEnd === "number"
+  ) {
+    viewportAttrs.history_start = String(viewport.rangeStart);
+    viewportAttrs.history_end = String(viewport.rangeEnd);
+  }
+  if (earlierCount > 0) {
+    viewportAttrs.earlier_omitted = String(earlierCount);
+  }
+  children.push(xmlElement("history_viewport", viewportAttrs));
+
+  const summary = visible.map(({ rec, idx }) =>
     xmlElement(
       "exec",
       { id: rec.execId, n: String(idx), kind: rec.language, ok: rec.ok ? "ok" : "fail" },
@@ -126,6 +209,8 @@ function renderProgramWindow(ctx: RenderContext): XmlNode[] {
   );
   children.push(xmlElement("history", {}, summary));
 
+  // last_output 始终用完整 history 的最后一条（不受 viewport 影响）——
+  // 最近一次 exec 是 LLM 最常需要的反馈锚点，viewport 只截"summary 列表"
   const last = window.history[window.history.length - 1]!;
   children.push(
     xmlElement(
@@ -141,6 +226,7 @@ registerWindowType("program", {
   commands: {
     exec: execCommand,
     close: closeCommand,
+    set_history_window: setHistoryWindowCommand,
   },
   renderXml: renderProgramWindow,
 });

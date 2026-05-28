@@ -432,7 +432,7 @@ export function AppShell() {
       mode={layoutMode}
       sidebar={<Sidebar scope={scope} flows={state.flows} tree={state.tree} activePath={activePath} activeSessionId={activeSessionId} activeSessionTitle={(() => { const f = state.flows.find((flow) => flow.sessionId === activeSessionId); return f ? flowTitle(f) : activeSessionId; })()} showSessions={showSessions} onToggleSessions={() => setShowSessions((prev) => !prev)} onShowWelcome={handleShowWelcome} onScope={handleScope} onNode={handleNode} onSession={handleSession} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
       main={<MainPanel route={route} isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} selfObjectId={activeObjectId} onUserReply={handleSend} onRefresh={refreshActiveView} threadHeader={activeObjectId ? <ThreadHeader objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} onSelectThread={handleSelectThread} /> : undefined} knownSessionIds={knownSessionIds} flowsReady={state.flowsHash !== undefined} layoutMode={layoutMode} onToggleLayoutMode={toggleLayoutMode} />}
-      right={activeSessionId && activeObjectId && activeThreadId ? <RightPanel sessionId={activeSessionId} objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} layoutMode={layoutMode} onToggleLayoutMode={toggleLayoutMode} onShowContextWindows={handleShowContextWindows} /> : undefined}
+      right={activeSessionId && activeObjectId && activeThreadId && !(activeObjectId === "user" && activeThreadId === "root") ? <RightPanel sessionId={activeSessionId} objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} layoutMode={layoutMode} onToggleLayoutMode={toggleLayoutMode} onShowContextWindows={handleShowContextWindows} /> : undefined}
     >
       <CreateStoneModal open={stoneModalOpen} draft={stoneDraft} onDraft={setStoneDraft} onClose={() => setStoneModalOpen(false)} onSubmit={handleCreateStone} />
       <CreateKnowledgeModal modal={knowledgeModal} draft={knowledgeDraft} onDraft={setKnowledgeDraft} onClose={() => setKnowledgeModal(undefined)} onSubmit={handleCreateKnowledge} />
@@ -451,7 +451,10 @@ function derivePathFromRoute(route: RouteState): string | undefined {
     case "file":
       return route.path;
     case "stoneClient":
-      return `stones/${route.objectId}/client/index.tsx`;
+      // 2026-05-21 stones repo 重组：bare repo + linked worktrees。frontend 暂硬编码
+      // `main` 与项目其它处（如 ContextSnapshotViewer / case docs）保持一致；多 branch
+      // 支持是另一项工作（需要 frontend 拿 stonesBranch 配置）。
+      return `stones/main/objects/${route.objectId}/client/index.tsx`;
     case "flowPage":
       return `flows/${route.sessionId}/objects/${route.objectId}/client/pages/${route.page}.tsx`;
     default:

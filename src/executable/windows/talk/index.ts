@@ -13,6 +13,12 @@ import { registerWindowType, type OnCloseContext, type RenderContext } from "../
 import { sayCommand } from "./command.say.js";
 import { waitCommand } from "./command.wait.js";
 import { closeCommand } from "./command.close.js";
+import { setTranscriptWindowCommandForTalk } from "./command.set-transcript-window.js";
+import {
+  DEFAULT_TRANSCRIPT_VIEWPORT,
+  applyTranscriptViewport,
+  type TranscriptViewport,
+} from "../_shared/transcript-viewport.js";
 import { xmlElement, xmlText, type XmlNode } from "../../../thinkable/context/xml.js";
 import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
 import type { TalkWindow } from "./types.js";
@@ -49,12 +55,32 @@ function renderTalkWindow(ctx: RenderContext): XmlNode[] {
     children.push(xmlElement("is_creator_window", {}, [xmlText("true")]));
   }
   const messages = filterMessagesForTalkWindow(window, ctx.thread);
-  if (messages.length > 0) {
+  const viewport: TranscriptViewport =
+    window.transcriptViewport ?? DEFAULT_TRANSCRIPT_VIEWPORT;
+  const { visible, earlierCount } = applyTranscriptViewport(messages, viewport);
+
+  // 始终暴露 viewport 元数据节点（让 LLM 知道当前渲染窗口 + 是否有省略）
+  const viewportAttrs: Record<string, string> = { total: String(messages.length) };
+  if (typeof viewport.tail === "number") {
+    viewportAttrs.tail = String(viewport.tail);
+  } else if (
+    typeof viewport.rangeStart === "number" &&
+    typeof viewport.rangeEnd === "number"
+  ) {
+    viewportAttrs.range_start = String(viewport.rangeStart);
+    viewportAttrs.range_end = String(viewport.rangeEnd);
+  }
+  if (earlierCount > 0) {
+    viewportAttrs.earlier_omitted = String(earlierCount);
+  }
+  children.push(xmlElement("transcript_viewport", viewportAttrs));
+
+  if (visible.length > 0) {
     children.push(
       xmlElement(
         "transcript",
         {},
-        messages.map((m) =>
+        visible.map((m) =>
           xmlElement("message", { id: m.id, source: m.source }, [
             xmlElement("from_thread_id", {}, [xmlText(m.fromThreadId)]),
             xmlElement("to_thread_id", {}, [xmlText(m.toThreadId)]),
@@ -177,6 +203,7 @@ registerWindowType("talk", {
     say: sayCommand,
     wait: waitCommand,
     close: closeCommand,
+    set_transcript_window: setTranscriptWindowCommandForTalk,
   },
   onClose: onCloseTalkWindow,
   renderXml: renderTalkWindow,

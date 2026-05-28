@@ -23,6 +23,7 @@ import {
   type ProgramWindow,
 } from "../_shared/types.js";
 import { runOneExec, type ProgramExecArgs } from "../program/runtime.js";
+import { DEFAULT_HISTORY_VIEWPORT } from "../program/history-viewport.js";
 
 const PROGRAM_BASIC_PATH = "internal/executable/program/basic";
 const PROGRAM_INPUT_PATH = "internal/executable/program/input";
@@ -159,6 +160,7 @@ export async function executeProgramCommand(
     status: "open",
     createdAt: Date.now(),
     history: [record],
+    historyViewport: DEFAULT_HISTORY_VIEWPORT,
   };
 
   if (ctx.manager) {

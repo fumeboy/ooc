@@ -28,6 +28,7 @@ import {
   type DoWindow,
   type SharingState,
 } from "../_shared/types.js";
+import { DEFAULT_TRANSCRIPT_VIEWPORT } from "../_shared/transcript-viewport.js";
 
 const DO_BASIC_PATH = "internal/executable/do/basic";
 const DO_INPUT_PATH = "internal/executable/do/input";
@@ -134,6 +135,7 @@ function buildChildInitialWindows(
     createdAt: Date.now(),
     targetThreadId: parentThreadId,
     isCreatorWindow: true,
+    transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT },
   };
   return [creatorWindow];
 }
@@ -216,6 +218,7 @@ export async function executeDoCommand(ctx: CommandExecutionContext): Promise<st
     status: "running",
     createdAt: Date.now(),
     targetThreadId: childId,
+    transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT },
   };
   if (ctx.manager) {
     ctx.manager.insertTypedWindow(doWindow);

@@ -63,11 +63,23 @@ test.describe("Web routing + FileTree client integration", () => {
     await world.startStack();
 
     await page.goto(getWebUrl(world));
-    // 切到 stones tab → URL 应变 /stones
-    await page.getByRole("button", { name: "Stones", exact: true }).click();
+    // 切到 stones tab → URL 应变 /stones（R6 #47 起 sidebar tabs 改用 <a href>，
+    // 浏览器右键/中键能用；getByRole("link") 而非 "button"）。
+    await page.getByRole("link", { name: "Stones", exact: true }).click();
     await expect(page).toHaveURL(/\/stones$/, { timeout: 10_000 });
 
-    // 等 stones tree 渲染出 beta 节点（refreshBasics 异步取数据）
+    // 2026-05-21 stones repo 重组：tree 结构变成
+    // stones → <branch>=main → objects → <objectId> → client → index.tsx
+    await expect(page.locator(".tree-button").filter({ hasText: "main" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.locator(".tree-button").filter({ hasText: "main" }).first().click();
+
+    await expect(page.locator(".tree-button").filter({ hasText: "objects" })).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.locator(".tree-button").filter({ hasText: "objects" }).first().click();
+
     await expect(page.locator(".tree-button").filter({ hasText: "beta" })).toBeVisible({
       timeout: 15_000,
     });
@@ -140,12 +152,13 @@ test.describe("Web routing + FileTree client integration", () => {
     await expect(page.getByTestId("epsilon")).toBeVisible({ timeout: 10_000 });
   });
 
-  test("FR5 /stones/<不存在> → ClientRenderer 显示 \"信息待产出...\"", async ({ page, world }) => {
+  test("FR5 /stones/<不存在> → StoneFallback 显示 \"Stone not found\"", async ({ page, world }) => {
     await world.startStack();
     // 没创建任何 stone
     await page.goto(`${getWebUrl(world)}/stones/nonexistent`);
-    // ClientWithSourceToggle 已挂上；render pane 显示 fallback
-    await expect(page.getByText("信息待产出...")).toBeVisible({ timeout: 15_000 });
+    // ClientWithSourceToggle 已挂上；StoneFallback 在 stone 不存在时
+    // 渲染 StoneNotFoundCard（Issue #5 Bad #2 fix）而非旧的 "信息待产出..."。
+    await expect(page.getByTestId("stone-not-found")).toBeVisible({ timeout: 15_000 });
     // 路由本身不应报 errorElement
     await expect(page.getByTestId("route-error")).toHaveCount(0);
   });

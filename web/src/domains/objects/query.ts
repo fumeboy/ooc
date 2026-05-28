@@ -63,7 +63,7 @@ function isLikelyStoneObjectId(objectId: string | undefined): boolean {
     if (!hasWarned(objectId)) {
       markWarned(objectId);
       // eslint-disable-next-line no-console
-      console.warn(
+      console.debug(
         `[objects/query] skip stones/self lookup for non-stone object id "${objectId}" (filtered to avoid 404 noise; see M-3 fix)`,
       );
     }

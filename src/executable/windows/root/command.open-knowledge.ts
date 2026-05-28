@@ -17,6 +17,7 @@ import {
   generateWindowId,
   type KnowledgeWindow,
 } from "../_shared/types.js";
+import { DEFAULT_VIEWPORT } from "../_shared/viewport.js";
 import { deriveStoneFromThread } from "../../../persistable/common.js";
 import { derivePoolFromThread } from "../../../persistable/pool-object.js";
 import { loadKnowledgeIndex } from "../../../thinkable/knowledge/index.js";
@@ -95,6 +96,7 @@ export async function executeOpenKnowledgeCommand(
     createdAt: Date.now(),
     path,
     source: "explicit",
+    viewport: { ...DEFAULT_VIEWPORT },
   };
 
   if (ctx.manager) {
