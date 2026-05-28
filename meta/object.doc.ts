@@ -1243,7 +1243,9 @@ export const root: DocTreeNode = {
                             compressLevel 由系统/LLM 在整个 window 之间做"宏观压缩"；viewport 由 LLM 在单个
                             window 内部做"微观节流"。
 
-                            **当前已实施**（file_window / knowledge_window）：
+                            **当前已实施**（file_window / knowledge_window / talk_window / do_window）：
+
+                            **file / knowledge** —— 行+列 viewport：
 
                             \`viewport: { lineStart, lineEnd, columnStart, columnEnd }\` — open 时默认
                             **0-200 / 0-200**（前 200 行 × 每行前 200 字符）。LLM 通过 \`set_viewport\` 命令
@@ -1269,12 +1271,32 @@ export const root: DocTreeNode = {
                             **共享实现**：src/executable/windows/_shared/viewport.ts 提供 DEFAULT_VIEWPORT /
                             mergeViewport / applyViewport / executeWindowSetViewport（被 file + knowledge 共用）。
 
+                            **talk / do** —— transcript viewport（按消息条数）：
+
+                            \`transcriptViewport: { tail?: N } | { rangeStart, rangeEnd }\` — 创建 talk/do
+                            window 时默认 **{ tail: 20 }**（只渲染末 20 条 transcript）。LLM 通过
+                            \`set_transcript_window\` 命令切换：
+
+                            \`\`\`
+                            exec(window_id="<id>", command="set_transcript_window",
+                                 args={ tail: 50 })                          # 看末 50 条
+                            exec(..., args={ range_start: 0, range_end: 30 }) # 看固定区间 [0, 30)
+                            \`\`\`
+
+                            **tail 与 range_* 互斥**——同一次 args 只传其一；新值清掉旧值。约束 fail-loud：
+                            tail 是正整数 / range_start ≤ range_end / 非负整数 / range_start 与 range_end 必须同时出现。
+
+                            **渲染元数据**：每次 render 都输出一条 \`<transcript_viewport>\` 元节点，
+                            属性含 \`total=<总数>\` + \`tail=N\` 或 \`range_start=i range_end=j\` + 必要时
+                            \`earlier_omitted=<前部省略数>\`，让 LLM 一眼看到当前窗口与被略过的量。
+
+                            **共享实现**：src/executable/windows/_shared/transcript-viewport.ts 提供
+                            DEFAULT_TRANSCRIPT_VIEWPORT / mergeTranscriptViewport / applyTranscriptViewport /
+                            executeWindowSetTranscriptViewport（被 talk + do 共用）。
+
                             **其它 window type 的信息量轴设计提案**（**未实施**，仅作 design proposal；
                             后续按需逐个落地）：
 
-                            - **talk_window / do_window**：transcript message range（最近 N 条 / idx 区间）→ 推荐
-                              \`set_transcript_window\` command，args = { messages_tail?: N, messages_range?: [i, j] }；
-                              默认 tail=20 条
                             - **search_window**：matches 区间 → \`set_results_window\` args = { matches_start, matches_end }；
                               默认 0-50
                             - **program_window**：exec 历史区间 → \`set_history_window\` args = { history_tail?: N }；
@@ -1298,15 +1320,20 @@ export const root: DocTreeNode = {
                               （强制 LLM 表态"我要看这么多"，避免悄悄塞满 context）。
                             `,
                             named: {
-                                "viewport": "{ lineStart, lineEnd, columnStart, columnEnd } — 单 window 的渲染窗口大小",
-                                "DEFAULT_VIEWPORT": "0-200 / 0-200；open 时填默认；可通过 set_viewport 调整",
+                                "viewport": "{ lineStart, lineEnd, columnStart, columnEnd } — file/knowledge window 的渲染窗口大小",
+                                "DEFAULT_VIEWPORT": "file/knowledge 默认 0-200 / 0-200；open 时填默认；可通过 set_viewport 调整",
                                 "set_viewport": "file_window / knowledge_window 上的命令；partial merge + fail-loud",
-                                "overflow marker": "行数 / 列长超限时的标记字符串，让 LLM 知道窗口外还有内容",
+                                "transcriptViewport": "{ tail? } | { rangeStart, rangeEnd } — talk/do_window 的 transcript 渲染窗口；tail/range 互斥",
+                                "DEFAULT_TRANSCRIPT_VIEWPORT": "talk/do 默认 { tail: 20 }；可通过 set_transcript_window 调整",
+                                "set_transcript_window": "talk_window / do_window 上的命令；tail/range 互斥 + fail-loud",
+                                "overflow marker": "行数 / 列长超限时的标记字符串（file/knowledge），让 LLM 知道窗口外还有内容",
+                                "<transcript_viewport>": "talk/do render 的元节点；属性 total / tail|range_* / earlier_omitted",
                             },
-                            sources: [["src/executable/windows/_shared/viewport.ts", "viewport 协议共享实现（types + helpers + exec 入口）"]],
+                            sources: [["src/executable/windows/_shared/viewport.ts | src/executable/windows/_shared/transcript-viewport.ts", "viewport 协议共享实现（file/knowledge 行列 + talk/do transcript）"]],
                             todo: [
-                                "其它 window type（talk/do/search/program/plan/relation/command_exec）的信息量轴尚未实施",
+                                "其它 window type（search/program/plan/relation/command_exec）的信息量轴尚未实施",
                                 "viewport 默认值是否对'看长函数'场景过紧——待 AgentOfExperience 真实体验后回调",
+                                "transcriptViewport 默认 tail=20 是否对长对话过紧（用户多回合后看不到早期 context）——待真实使用回调",
                             ],
                         },
                     },
@@ -1498,21 +1525,27 @@ export const root: DocTreeNode = {
 
                     do_window:
                     - 由 root.do command 派生子 thread 时创建。
-                    - 注册的 command: continue（向子线程追加消息）/ wait / close。
+                    - 注册的 command: continue（向子线程追加消息）/ wait / close / move / set_transcript_window。
                     - 消息 source = "do"。
                     - close 时把子线程切到 archived（initial creator do_window 拒绝 close）。
+                    - transcriptViewport 字段控制 transcript 渲染量；默认 { tail: 20 }；
+                      详见 executable.context_window.patches.viewport_protocol。
 
                     talk_window:
                     - 由 root.talk command 创建，target 是对端 flow object id（"user" 也是一个 flow object）。
-                    - 注册的 command: say / wait / close。
+                    - 注册的 command: say / wait / close / set_transcript_window。
                     - 消息 source = "talk"（LLM 发）或 "user"（控制面代用户发）。
                     - 同一对端复用同一 talk_window，不要每发一条消息就 close 再重开。
                     - close 时不通知对端，仅释放本地窗口；initial creator talk_window 拒绝 close。
+                    - transcriptViewport 字段控制 transcript 渲染量；默认 { tail: 20 }；
+                      详见 executable.context_window.patches.viewport_protocol。
                     `,
                     named: {
                         "isCreatorSelf": "判定 thread 的 creator 是否与自己同 object 的逻辑",
                         "continue": "do_window 上向子线程追加消息的 command",
                         "say": "talk_window 上向对端发消息的 command",
+                        "set_transcript_window": "talk/do_window 上调整 transcript 渲染窗口的 command（tail / range 互斥；默认 tail=20）",
+                        "transcriptViewport": "talk/do_window 的 transcript 渲染窗口字段；详见 _shared/transcript-viewport.ts",
                     },
                 },
                 "talk_delivery": {
