@@ -141,6 +141,10 @@ export async function startBackend(opts: {
         // 默认 worker tick 数偏低；前端 e2e 任务可能更长。
         OOC_WORKER_MAX_TICKS: "30",
         OOC_WORKER_POLL_MS: "50",
+        // Defense-in-depth：本机若设 http_proxy=Clash(7890)，子进程 curl/HTTP client
+        // 访问 localhost backend ↔ vite 时会被代理拦截。显式 bypass。
+        NO_PROXY: process.env.NO_PROXY ?? "localhost,127.0.0.1,::1",
+        no_proxy: process.env.no_proxy ?? "localhost,127.0.0.1,::1",
       },
       stdio: ["ignore", "pipe", "pipe"],
     },
@@ -180,17 +184,25 @@ export type WebHandle = SpawnedProcess & {
   url: string;
 };
 
-export async function startWeb(backendURL: string): Promise<WebHandle> {
+export async function startWeb(backendURL: string, worldDir: string): Promise<WebHandle> {
   const port = pickPort();
   const repoRoot = resolve(process.cwd());
+  // Bug A: bun 1.3.x 不识别 `bun --cwd <dir> run <script>`；正确顺序是 `bun run --cwd <dir> <script>`。
+  // Bug C: Vite 6 默认 bind `::` (IPv6)；强制 --host 127.0.0.1 让 Playwright/waitForHttp(127.0.0.1) 命中。
   const proc = spawn(
     "bun",
-    ["--cwd", "web", "run", "dev", "--", "--port", String(port), "--strictPort"],
+    ["run", "--cwd", "web", "dev", "--", "--port", String(port), "--strictPort", "--host", "127.0.0.1"],
     {
       cwd: repoRoot,
       env: {
         ...process.env,
         OOC_API_TARGET: backendURL,
+        // Bug B: web/vite.config.ts:47-52 OOC_WORLD_DIR 缺时 fail-loud。
+        // 与 backend 同 baseDir 才能让 ObjectClientRenderer 拼 `/@fs/${WORLD_ROOT}/...`。
+        OOC_WORLD_DIR: worldDir,
+        // Defense-in-depth：同 startBackend 注释。
+        NO_PROXY: process.env.NO_PROXY ?? "localhost,127.0.0.1,::1",
+        no_proxy: process.env.no_proxy ?? "localhost,127.0.0.1,::1",
       },
       stdio: ["ignore", "pipe", "pipe"],
     },
@@ -266,7 +278,7 @@ export const test = base.extend<{ ooc: OocFixture }>({
         if (seeded) throw new Error("seedScenario 每个 test 只能调一次");
         seeded = true;
         backend = await startBackend(opts);
-        web = await startWeb(backend.baseURL);
+        web = await startWeb(backend.baseURL, backend.baseDir);
       },
     };
 
@@ -306,7 +318,14 @@ export async function createSessionVia(
   await page.locator(".right-panel").waitFor({ state: "visible", timeout: 30_000 });
 }
 
-/** 等 ChatPanel 的 .chat-timeline 出现一条非空 assistant 消息（超过 since 之前的数量）。 */
+/**
+ * 等 ChatPanel 的 .chat-timeline 出现一条新的 assistant 消息（超过 since 之前的数量）。
+ *
+ * 真实 DOM（Round 17 后）：
+ *   .chat-timeline > .tui-thread > .tui-block.tui-{user|assistant|tool|notice}
+ * 详见 web/src/domains/chat/components/{ChatPanel,ThreadTimeline,TuiBlock}.tsx。
+ * 这里专挑 `.tui-assistant` 作为"assistant 回复"信号。
+ */
 export async function waitForReply(
   page: Page,
   opts: { sinceCount: number; timeoutMs?: number } = { sinceCount: 0 },
@@ -314,19 +333,16 @@ export async function waitForReply(
   const timeoutMs = opts.timeoutMs ?? 90_000;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    // ThreadTimeline 渲染的消息节点用 .timeline-message 或 .chat-message；多套兼容
-    const count = await page
-      .locator(".chat-timeline .timeline-message, .chat-timeline .message, .chat-timeline [data-role='assistant']")
-      .count();
+    const count = await page.locator(".chat-timeline .tui-block.tui-assistant").count();
     if (count > opts.sinceCount) return count;
     await page.waitForTimeout(500);
   }
   throw new Error(`waitForReply: 等 assistant 新回复超时（since=${opts.sinceCount}）`);
 }
 
-/** 在 right-panel composer 输入并 send；等回复条数增长。 */
+/** 在 right-panel composer 输入并 send；等 assistant 回复条数增长。 */
 export async function sendFollowup(page: Page, text: string): Promise<number> {
-  const before = await page.locator(".chat-timeline .timeline-message, .chat-timeline .message").count();
+  const before = await page.locator(".chat-timeline .tui-block.tui-assistant").count();
   await page.locator(".chat-composer-input").fill(text);
   await page.getByRole("button", { name: /send message/i }).click();
   return await waitForReply(page, { sinceCount: before });

@@ -67,9 +67,10 @@ test("F1 SessionCreator → 首条 assistant 回复出现在 chat panel", async 
   const calleeStatusOk = calleeThread?.status === "done" || calleeThread?.status === "waiting";
   const replyVisible = replyCount > 0;
 
-  // ContextSnapshotViewer 展开后 transcript 至少 2 条（user hi + assistant 一句）
+  // ChatPanel timeline 至少 2 条 message（user hi + assistant 一句）。
+  // Round 17 后 DOM：.chat-timeline > .tui-thread > .tui-block.tui-{user|assistant}。
   const transcriptCount = await page
-    .locator(".timeline-message, .chat-message, [data-role='assistant'], [data-role='user']")
+    .locator(".chat-timeline .tui-block.tui-user, .chat-timeline .tui-block.tui-assistant")
     .count();
 
   const result = scoreScenario({
