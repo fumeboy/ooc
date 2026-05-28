@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "strict": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@meta": ["meta/index.doc.js"],
+      "@meta/*": ["meta/*"],
+      "@src/*": ["src/*"]
+    },
+    "types": ["bun", "node"],
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "meta/**/*.js",
+    "meta/**/*.ts",
+    "tests/**/*.ts",
+    ".ooc-world/stones/**/*.ts"
+  ]
+}
