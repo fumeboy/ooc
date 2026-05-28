@@ -83,6 +83,7 @@ export async function readServerConfig(source: ConfigSource = {}): Promise<Serve
   if (envMaxTicks !== undefined && envMaxTicks !== "") {
     workerMaxTicks = Number(envMaxTicks);
   } else {
+    // intentional: .world.json is optional config — missing is normal
     const worldCfg = await readWorldConfig(absBaseDir).catch(() => undefined);
     workerMaxTicks = worldCfg?.workerMaxTicks ?? 15;
   }

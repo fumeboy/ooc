@@ -616,15 +616,20 @@ export function buildApp(deps: HttpDeps): Elysia {
         } catch {
             // no objects dir yet
         }
-        // Also include running thread object URIs from worker
+        // Also include running thread object URIs from worker.
+        // Deduplicate by name: prefer persistent URI over ephemeral when both exist.
         const threadUris = worker
             .list()
             .filter((t) => t.sessionId === sessionId)
             .map((t) => t.objectUri);
         for (const uri of threadUris) {
             const name = uri.split("/").pop()!;
-            if (!objects.find((o) => o.uri === uri)) {
+            const existingIdx = objects.findIndex((o) => o.name === name);
+            if (existingIdx === -1) {
                 objects.push({ name, uri, kind: "persistent" });
+            } else {
+                // Replace ephemeral entry with persistent URI (persistent is canonical)
+                objects[existingIdx] = { name, uri, kind: "persistent" };
             }
         }
         return { ok: true, sessionId, objects };
@@ -943,7 +948,7 @@ export function buildApp(deps: HttpDeps): Elysia {
                     {
                         type: "message" as const,
                         role: "system" as const,
-                        content: `You are an OOC Object at ${targetUri}. A user has sent you a message via talk. Respond to the user's message using your available methods, then call talk() to send your response back to the user (target: "${userUri}"). After sending your reply, call end() to terminate the conversation.`,
+                        content: `You are an OOC Object at ${targetUri}. A user has sent you a message via talk. Respond to the user's message using your available methods, then call talk() to send your response back to the user (target: "${userUri}"). After sending your reply, call end() to terminate the conversation. Don't call exploratory tools unless they are necessary for the user's request — trust your context.`,
                     },
                     {
                         type: "message" as const,
