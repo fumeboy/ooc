@@ -1,6 +1,4 @@
 import { resolve } from "node:path";
-import { createJobManager } from "../runtime/job-manager";
-import { createPauseStore } from "../runtime/pause-store";
 import { STONES_MAIN_BRANCH, readWorldConfig } from "@src/persistable";
 
 export interface ServerConfig {
@@ -15,8 +13,7 @@ export interface ServerConfig {
   workerEnabled: boolean;
   /** 单个 run-thread job 内 scheduler 最多 think 的轮次。超出即提前退出（thread 状态保留）。 */
   workerMaxTicks: number;
-  pauseStore: ReturnType<typeof createPauseStore>;
-  jobManager: ReturnType<typeof createJobManager>;
+  // _todo: P8+ implement pauseStore (global/session pause gate) and jobManager (job queue)
 }
 
 type ConfigSource = {
@@ -99,7 +96,5 @@ export async function readServerConfig(source: ConfigSource = {}): Promise<Serve
     workerPollMs: Number(env.OOC_WORKER_POLL_MS ?? 100),
     workerEnabled: env.OOC_WORKER_ENABLED !== "0",
     workerMaxTicks,
-    pauseStore: createPauseStore(),
-    jobManager: createJobManager(),
   };
 }

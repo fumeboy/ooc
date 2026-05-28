@@ -1,7 +1,10 @@
 /**
  * pause-store — P2 STUB
- * Minimal interface stub for config.ts dependency resolution.
- * Full implementation in ooc-3 server rebuild phase (P7+).
+ * Originally imported by config.ts for ServerConfig.pauseStore field.
+ * Import removed from config.ts in Drift 3 cleanup (2026-05-28).
+ *
+ * _todo: P8+ implement properly — global + per-session pause gate,
+ * plumbed into worker tick to gate LLM calls.
  */
 
 export interface PauseStore {

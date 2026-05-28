@@ -5,7 +5,9 @@
  * 原 ooc-2 实现依赖旧 Window 模型辅助函数（stone-object/stone-self/stone-readme/pr-issue）
  * 这些在 ooc-3 归一化架构下将被重新设计；P2 阶段先用 stub 保持 tsc 通过。
  *
- * 实际实现 → P5+（B 类字段实装 / programmable 维度）。
+ * _todo: P8+ implement properly as part of programmable/metaprog dimension.
+ * All exported functions throw at runtime. Only `pruneStaleWorktrees` is a safe
+ * no-op (called in stone-bootstrap under try/catch).
  */
 
 export const SUPERVISOR_OBJECT_ID = "supervisor";
