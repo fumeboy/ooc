@@ -55,6 +55,7 @@ import {
 } from "./stone-git";
 import { closePrIssue, createPrIssue, readPrIssue, type PrIssueRecord } from "./pr-issue";
 import { enqueueSessionWrite } from "./serial-queue";
+import { nestedObjectPath } from "./common";
 
 /** Supervisor 的 objectId（治理身份：rollback 仅 supervisor 可调；PR-Issue 默认收件人）。 */
 export const SUPERVISOR_OBJECT_ID = "supervisor";
@@ -96,10 +97,43 @@ function generateToken(): string {
   return `${t}${r}`;
 }
 
-/** 校验 objectId（同 stoneRefs：禁止 `..` / 路径分隔符 / 控制字符 / 空）。 */
+/** 单段 objectId 合法字符（同原 isValidObjectId：不含 `/`）。 */
+const OBJECT_ID_SEGMENT_PATTERN = /^[A-Za-z0-9_-][A-Za-z0-9_.-]*$/;
+
+/**
+ * 校验 objectId（含嵌套 child：`parent/child`、`a/b/c`）。
+ *
+ * 嵌套语义（task#16）：objectId 用 `/` 编码父子层级，物理落点经 nestedObjectPath
+ * 翻译成 `objects/parent/children/child/`。放开 `/` 后必须逐段严格校验，防 path
+ * traversal：
+ * - 整串长度 ≤ 64
+ * - 拆 `/` 后**每段**各自匹配单段 pattern（拒空段 → 过滤掉 `//`/前导/尾随 `/`）
+ * - 显式拒 `.` / `..` 段（pattern 允许 `.` 在非首位，故 `..` 能过 pattern——必须单独挡）
+ * - 至少 1 段
+ */
 function isValidObjectId(value: string): boolean {
   if (typeof value !== "string" || value.length === 0 || value.length > 64) return false;
-  return /^[A-Za-z0-9_-][A-Za-z0-9_.-]*$/.test(value);
+  const segments = value.split("/");
+  if (segments.length === 0) return false;
+  for (const seg of segments) {
+    if (seg === "" || seg === "." || seg === "..") return false;
+    if (!OBJECT_ID_SEGMENT_PATTERN.test(seg)) return false;
+  }
+  return true;
+}
+
+/**
+ * self-scope 自治区路径前缀。对嵌套 child 必须基于物理布局（nestedObjectPath），
+ * 而非直拼 `objects/${objectId}/`：
+ *   - flat `agent_of_x`   → `objects/agent_of_x/`
+ *   - nested `parent/child` → `objects/parent/children/child/`（物理路径）
+ *
+ * 直拼会让 nested child 改自己（物理在 objects/parent/children/child/）被误判为
+ * cross-scope。parent 的前缀 `objects/parent/` 仍正确覆盖整棵子树（含
+ * children/），故 parent 改 child 自动落 self-scope。
+ */
+function selfScopePrefix(authorObjectId: string): string {
+  return `objects/${nestedObjectPath(authorObjectId).join("/")}/`;
 }
 
 /* ---------------------------------------------------------------- *
@@ -215,9 +249,10 @@ export type ClassifyError =
 
 /**
  * 路径划界判定：branch 累积 diff vs main merge-base，每个文件路径必须以
- * `objects/${authorObjectId}/` 起头才算 self-scope（R5/R6）。supervisor 走同款
- * 路径判定——改自己 stones 是 self-scope（ff），改他人 stones 是 cross-scope
- * （自动开 PR-Issue，可由 supervisor 自审）。
+ * `selfScopePrefix(authorObjectId)` 起头才算 self-scope（R5/R6）。前缀对嵌套 child
+ * 基于物理布局（nestedObjectPath：`objects/parent/children/child/`），直拼会误判。
+ * supervisor 走同款路径判定——改自己 stones 是 self-scope（ff），改他人 stones 是
+ * cross-scope（自动开 PR-Issue，可由 supervisor 自审）。
  */
 export async function classifyWorktreeBranch(
   worktree: MetaprogWorktreeRef,
@@ -231,8 +266,8 @@ export async function classifyWorktreeBranch(
     const repo = repoDir(worktree.baseDir);
     const r = gitDiffNames(repo, STONES_MAIN_BRANCH, worktree.branch);
     if (!r.ok) return { ok: false, code: "GIT", gitCode: r.code, stderr: r.stderr } as const;
-    // 自治区路径 = `objects/<authorObjectId>/...`（2026-05-21 stones/main/objects/ 重组）
-    const prefix = `objects/${authorObjectId}/`;
+    // 自治区路径 = nestedObjectPath(authorObjectId) 物理前缀（嵌套 child 经 children/ 翻译）。
+    const prefix = selfScopePrefix(authorObjectId);
     const scope: ScopeClass = r.value.every((p) => p.startsWith(prefix)) ? "self-scope" : "cross-scope";
     return { ok: true, scope, paths: r.value } as const;
   });
@@ -281,7 +316,7 @@ export async function tryMergeSelf(
     // step 2: classify
     const diff = gitDiffNames(repo, STONES_MAIN_BRANCH, worktree.branch);
     if (!diff.ok) return { ok: false, code: "GIT", gitCode: diff.code, stderr: diff.stderr } as const;
-    const prefix = `objects/${authorObjectId}/`;
+    const prefix = selfScopePrefix(authorObjectId);
     const isSelf = diff.value.every((p) => p.startsWith(prefix));
     if (!isSelf) {
       return { ok: true, kind: "must-pr-issue", paths: diff.value } as const;
@@ -796,6 +831,7 @@ export const __testing = {
   generateToken,
   gitQueueKey,
   isValidObjectId,
+  selfScopePrefix,
   worktreePath,
   repoDir,
 };

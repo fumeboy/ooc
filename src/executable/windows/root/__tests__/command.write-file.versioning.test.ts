@@ -160,6 +160,39 @@ describe("write_file stone-versioning routing", () => {
     ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  test("nested child: 写自己 stones/<parent>/children/<child>/self.md → self-scope ff-merge", async () => {
+    // 嵌套 world：parent 含 children/child
+    const baseDir = await mkdtemp(join(tmpdir(), "ooc-write-file-versioning-nested-"));
+    tempRoots.push(baseDir);
+    for (const id of ["parent", "supervisor"]) {
+      await mkdir(join(baseDir, "stones", id), { recursive: true });
+      await writeFile(join(baseDir, "stones", id, "self.md"), `${id} v1\n`);
+    }
+    await mkdir(join(baseDir, "stones", "parent", "children", "child"), { recursive: true });
+    await writeFile(join(baseDir, "stones", "parent", "children", "child", "self.md"), "child v1\n");
+    await ensureStoneRepo({ baseDir });
+
+    // child 用完整 objectId "parent/child"；LLM 写路径用 "/" 编码 → resolveSessionPath
+    // 注入 objects/ + nestedObjectPath 物理翻译。
+    const ctx = ctxFor(baseDir, "parent/child", {
+      path: "stones/parent/children/child/self.md",
+      content: "child v2 via write_file\n",
+    });
+    const out = await executeWriteFileCommand(ctx);
+    expect(typeof out).toBe("object");
+    if (typeof out === "object" && out && out.ok === true) {
+      expect(out.result).toContain("合并回 main");
+    } else {
+      throw new Error(`expected success outcome, got ${JSON.stringify(out)}`);
+    }
+
+    const onMain = await readFile(
+      join(mainObjectsDir(baseDir), "parent", "children", "child", "self.md"),
+      "utf8",
+    );
+    expect(onMain).toBe("child v2 via write_file\n");
+  });
+
   test("fail-loud: 路径在 stones 自治区但 thread 缺 objectId → 不静默直写", async () => {
     const baseDir = await newWorld(["agent_of_x"]);
     const thread = {

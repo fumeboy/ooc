@@ -43,6 +43,25 @@ async function newWorld(extraAgents: string[] = []): Promise<string> {
   return baseDir;
 }
 
+/**
+ * 建一个带嵌套 child 的 world：parent 物理含 children/<child>/self.md。
+ * 迁移把整棵 parent 子树搬到 objects/parent/（含 children/），形成
+ * objects/parent/children/child/self.md 的嵌套物理布局（与 nestedObjectPath 对齐）。
+ */
+async function newNestedWorld(): Promise<string> {
+  const baseDir = await mkdtemp(join(tmpdir(), "ooc-stone-versioning-nested-"));
+  tempRoots.push(baseDir);
+  for (const id of ["parent", "supervisor"]) {
+    await mkdir(join(baseDir, "stones", id), { recursive: true });
+    await writeFile(join(baseDir, "stones", id, "self.md"), `${id} v1\n`);
+  }
+  // parent 下嵌套 child（物理 children/ marker）
+  await mkdir(join(baseDir, "stones", "parent", "children", "child"), { recursive: true });
+  await writeFile(join(baseDir, "stones", "parent", "children", "child", "self.md"), "child v1\n");
+  await ensureStoneRepo({ baseDir });
+  return baseDir;
+}
+
 describe("openMetaprogWorktree", () => {
   test("creates a worktree at stones/{branch}/ branched from main HEAD", async () => {
     const baseDir = await newWorld();
@@ -440,6 +459,166 @@ describe("supervisorCreateObject", () => {
       readmeMd: "y",
       knowledge: { "../escape.md": "bad" },
     });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("INVALID_INPUT");
+  });
+});
+
+describe("isValidObjectId (task#16: nested child + path-traversal defense)", () => {
+  const { isValidObjectId } = __testing;
+
+  test("accepts flat and nested objectIds", () => {
+    expect(isValidObjectId("agent_of_x")).toBe(true);
+    expect(isValidObjectId("parent/child")).toBe(true);
+    expect(isValidObjectId("a/b/c")).toBe(true);
+    expect(isValidObjectId("a-1/b_2/c.3")).toBe(true);
+  });
+
+  test("rejects path-traversal & empty-segment forms", () => {
+    expect(isValidObjectId("../etc")).toBe(false);
+    expect(isValidObjectId("a/../b")).toBe(false);
+    expect(isValidObjectId("a/..")).toBe(false);
+    expect(isValidObjectId("..")).toBe(false);
+    expect(isValidObjectId("a//b")).toBe(false);
+    expect(isValidObjectId("/x")).toBe(false);
+    expect(isValidObjectId("x/")).toBe(false);
+    expect(isValidObjectId("/")).toBe(false);
+    expect(isValidObjectId("a/./b")).toBe(false);
+    expect(isValidObjectId(".")).toBe(false);
+    expect(isValidObjectId("")).toBe(false);
+  });
+});
+
+describe("selfScopePrefix (task#16: nested child uses physical children/ layout)", () => {
+  const { selfScopePrefix } = __testing;
+
+  test("flat objectId → objects/<id>/", () => {
+    expect(selfScopePrefix("agent_of_x")).toBe("objects/agent_of_x/");
+  });
+
+  test("nested child → objects/parent/children/child/ (physical path, not direct splice)", () => {
+    expect(selfScopePrefix("parent/child")).toBe("objects/parent/children/child/");
+    expect(selfScopePrefix("a/b/c")).toBe("objects/a/children/b/children/c/");
+  });
+});
+
+describe("nested child metaprog (task#16)", () => {
+  test("openMetaprogWorktree accepts nested objectId; branch is multi-level", async () => {
+    const baseDir = await newNestedWorld();
+    const r = await openMetaprogWorktree({ baseDir, objectId: "parent/child", token: "n1" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.worktree.branch).toBe("metaprog/parent/child/n1");
+    // 工作树里能读到 child 的物理落点
+    const content = await readFile(
+      join(r.worktree.path, "objects", "parent", "children", "child", "self.md"),
+      "utf8",
+    );
+    expect(content).toBe("child v1\n");
+  });
+
+  test("① child edits its own subtree → self-scope ff-merge to main", async () => {
+    const baseDir = await newNestedWorld();
+    const open = await openMetaprogWorktree({ baseDir, objectId: "parent/child", token: "self" });
+    if (!open.ok) throw new Error("open failed");
+
+    await writeFile(
+      join(open.worktree.path, "objects", "parent", "children", "child", "self.md"),
+      "child v2\n",
+    );
+    const c = await commitWorktree({
+      worktree: open.worktree,
+      intent: "child self update",
+      authorObjectId: "parent/child",
+    });
+    expect(c.ok).toBe(true);
+
+    const cls = await classifyWorktreeBranch(open.worktree, "parent/child");
+    expect(cls.ok).toBe(true);
+    if (cls.ok) {
+      expect(cls.scope).toBe("self-scope");
+      expect(cls.paths).toEqual(["objects/parent/children/child/self.md"]);
+    }
+
+    const merge = await tryMergeSelf(open.worktree, "parent/child");
+    expect(merge.ok).toBe(true);
+    if (merge.ok) expect(merge.kind).toBe("merged");
+
+    const onMain = await readFile(
+      join(baseDir, "stones", "main", "objects", "parent", "children", "child", "self.md"),
+      "utf8",
+    );
+    expect(onMain).toBe("child v2\n");
+  });
+
+  test("② child edits parent (objects/parent/self.md) → cross-scope PR-Issue", async () => {
+    const baseDir = await newNestedWorld();
+    const open = await openMetaprogWorktree({ baseDir, objectId: "parent/child", token: "cross" });
+    if (!open.ok) throw new Error("open failed");
+
+    // 改 parent 自己的 self.md（objects/parent/self.md，不在 child 子树下）
+    await writeFile(join(open.worktree.path, "objects", "parent", "self.md"), "parent edited by child\n");
+    const c = await commitWorktree({
+      worktree: open.worktree,
+      intent: "child edits parent",
+      authorObjectId: "parent/child",
+    });
+    expect(c.ok).toBe(true);
+
+    const cls = await classifyWorktreeBranch(open.worktree, "parent/child");
+    expect(cls.ok).toBe(true);
+    if (cls.ok) {
+      expect(cls.scope).toBe("cross-scope");
+      expect(cls.paths).toEqual(["objects/parent/self.md"]);
+    }
+
+    const merge = await tryMergeSelf(open.worktree, "parent/child");
+    expect(merge.ok).toBe(true);
+    if (merge.ok) expect(merge.kind).toBe("must-pr-issue");
+
+    // main 上 parent/self.md 未被改
+    const onMain = await readFile(join(baseDir, "stones", "main", "objects", "parent", "self.md"), "utf8");
+    expect(onMain).toBe("parent v1\n");
+  });
+
+  test("③ parent edits child subtree → self-scope (parent prefix covers children/)", async () => {
+    const baseDir = await newNestedWorld();
+    const open = await openMetaprogWorktree({ baseDir, objectId: "parent", token: "p2c" });
+    if (!open.ok) throw new Error("open failed");
+
+    // parent 改 child 的物理落点（在 objects/parent/ 子树内）
+    await writeFile(
+      join(open.worktree.path, "objects", "parent", "children", "child", "self.md"),
+      "child edited by parent\n",
+    );
+    const c = await commitWorktree({
+      worktree: open.worktree,
+      intent: "parent edits child",
+      authorObjectId: "parent",
+    });
+    expect(c.ok).toBe(true);
+
+    const cls = await classifyWorktreeBranch(open.worktree, "parent");
+    expect(cls.ok).toBe(true);
+    if (cls.ok) {
+      expect(cls.scope).toBe("self-scope");
+      expect(cls.paths).toEqual(["objects/parent/children/child/self.md"]);
+    }
+
+    const merge = await tryMergeSelf(open.worktree, "parent");
+    expect(merge.ok).toBe(true);
+    if (merge.ok) expect(merge.kind).toBe("merged");
+
+    const onMain = await readFile(
+      join(baseDir, "stones", "main", "objects", "parent", "children", "child", "self.md"),
+      "utf8",
+    );
+    expect(onMain).toBe("child edited by parent\n");
+  });
+
+  test("rejects nested objectId with traversal segment at openMetaprogWorktree", async () => {
+    const baseDir = await newNestedWorld();
+    const r = await openMetaprogWorktree({ baseDir, objectId: "parent/../escape" });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("INVALID_INPUT");
   });
