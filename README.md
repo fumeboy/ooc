@@ -36,10 +36,53 @@ OOC (Object Oriented Context) 第 3 代实现——把 OOC Agent 与 Context Win
 
 `ooc-3` 是从空起步的 from-scratch 重建，不是 ooc-2 的 refactor。ooc-2 保留为 legacy reference。
 
-## 启动
+## 启动 / Dev Workflow
+
+### Backend only
 
 ```bash
-# 需要 ANTHROPIC_API_KEY 环境变量（real-LLM e2e）
-bun test                    # 全量单元测试
-bun src/app/server/index.ts --world ./.ooc-world  # 启动 HTTP 控制面
+# Start HTTP server on port 3000, world at ./.ooc-world
+bun src/app/server/index.ts --world ./.ooc-world
+# or via npm script:
+bun run server
+# custom port / branch:
+bun src/app/server/index.ts --world ./.ooc-world --port 3000 --stones-branch main
 ```
+
+Health check: `curl http://localhost:3000/api/health`
+
+### Backend + Frontend dev (full stack)
+
+```bash
+# Start both backend and vite dev server together:
+bash scripts/dev-start.sh
+# Custom world/port:
+bash scripts/dev-start.sh --world ./.ooc-world --port 3000 --vite-port 5173
+# UI: http://localhost:5173
+# API: http://localhost:3000/api/health
+
+# Or start separately:
+bun src/app/server/index.ts --world ./.ooc-world --port 3000
+# in another terminal:
+cd web && OOC_API_TARGET=http://localhost:3000 bunx vite --port 5173
+```
+
+### Tests
+
+```bash
+# Unit tests
+bun test
+
+# Real-LLM backend e2e (requires API key in .env)
+bun run test:e2e:backend
+
+# Frontend Playwright e2e (requires backend + vite running; requires API key)
+RUN_FRONTEND_E2E=1 bunx playwright test --config tests/e2e/frontend/playwright.config.ts
+```
+
+### Environment
+
+Copy `.env` and set:
+- `OOC_API_KEY` — API key for Claude (or set `ANTHROPIC_API_KEY`)
+- `OOC_BASE_URL` — Claude proxy URL (optional; defaults to Anthropic direct)
+- `OOC_MODEL` — model name (default: `claude-opus-4-7`)
