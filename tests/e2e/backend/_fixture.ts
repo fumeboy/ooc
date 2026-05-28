@@ -9,7 +9,7 @@
  * - Score 裁判把"Good/OK/Bad"三档落地为可读结构，由调用方传入 bad/good 规则集
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import type { ThreadContext, ProcessEvent, ThreadMessage } from "@src/thinkable/context";
@@ -19,6 +19,7 @@ import type { ContextWindow } from "@src/executable/windows/_shared/types";
 // 避免因 node_modules 未完整安装而连"能不能加载该 spec"都失败。
 type BuildServer = typeof import("@src/app/server")["buildServer"];
 type ReadThread = typeof import("@src/persistable")["readThread"];
+type EnsureStoneRepo = typeof import("@src/persistable")["ensureStoneRepo"];
 type CreatePauseStore = typeof import("@src/app/server/runtime/pause-store")["createPauseStore"];
 type CreateJobManager = typeof import("@src/app/server/runtime/job-manager")["createJobManager"];
 type StartJobWorker = typeof import("@src/app/server/runtime/worker")["startJobWorker"];
@@ -27,6 +28,7 @@ let _deps:
   | {
       buildServer: BuildServer;
       readThread: ReadThread;
+      ensureStoneRepo: EnsureStoneRepo;
       createPauseStore: CreatePauseStore;
       createJobManager: CreateJobManager;
       startJobWorker: StartJobWorker;
@@ -37,7 +39,7 @@ async function loadDeps() {
   if (_deps) return _deps;
   const [
     { buildServer },
-    { readThread },
+    { readThread, ensureStoneRepo },
     { createPauseStore },
     { createJobManager },
     { startJobWorker },
@@ -48,7 +50,7 @@ async function loadDeps() {
     import("@src/app/server/runtime/job-manager"),
     import("@src/app/server/runtime/worker"),
   ]);
-  _deps = { buildServer, readThread, createPauseStore, createJobManager, startJobWorker };
+  _deps = { buildServer, readThread, ensureStoneRepo, createPauseStore, createJobManager, startJobWorker };
   return _deps;
 }
 
@@ -118,8 +120,19 @@ export async function startApp(opts: {
   seedFiles?: SeedFile[];
   seedStones?: SeedStone[];
   workerMaxTicks?: number;
+  /**
+   * 显式跑一次 ensureStoneRepo（bare repo init + flat→main/objects/ 迁移）。
+   *
+   * 为什么需要：buildServer 本身不调 ensureStoneRepo（那是 src/app/server/index.ts
+   * 的 startOocServer 启动期副作用，本 fixture 走 buildServer 直调路径不经过它）。
+   * 涉及 stone-versioning 的场景（如 super flow 改 self.md 应进 git）必须置 true，
+   * 否则 seed 的扁平 stones/<id>/self.md 既不在 stones/main/objects/<id>/（resolveSessionPath
+   * 重写后的 read 路径），也没有 .stones_repo bare 供 git log 验证。
+   */
+  bootstrapStoneRepo?: boolean;
 } = {}): Promise<AppHandle> {
-  const { buildServer, createPauseStore, createJobManager, startJobWorker } = await loadDeps();
+  const { buildServer, ensureStoneRepo, createPauseStore, createJobManager, startJobWorker } =
+    await loadDeps();
   const baseDir = mkdtempSync(join(tmpdir(), "ooc-e2e-be-"));
 
   for (const file of opts.seedFiles ?? []) {
@@ -143,6 +156,12 @@ export async function startApp(opts: {
     if (stone.readme !== undefined) {
       writeFileSync(join(stoneDir, "readme.md"), stone.readme, "utf8");
     }
+  }
+
+  if (opts.bootstrapStoneRepo) {
+    // 迁移扁平 seed stone 到 stones/main/objects/<id>/ 并 init bare repo，
+    // 让 resolveSessionPath 重写后的 read 路径命中、且后续 versionedStoneWrite 有 repo 可 commit。
+    await ensureStoneRepo({ baseDir });
   }
 
   // 关键：每个测试用独立的 pauseStore/jobManager，避免 module-level 默认 store 串扰多场景。
@@ -397,6 +416,120 @@ export function findContextWindows(
   predicate: (w: ContextWindow) => boolean,
 ): ContextWindow[] {
   return (thread?.contextWindows ?? []).filter(predicate);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Stone-versioning / pool 文件观察 helpers（reflectable e2e 用）
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 列出某个 stone 文件（如 objects/<id>/self.md）在 stones bare repo 里的 commit 短 sha 列表。
+ *
+ * 走 `git -C <baseDir>/stones/.stones_repo log --oneline -- <relPathInBranch>`，
+ * 实证 super flow 改 self.md 是否真经 stone-versioning 进 git（task#17）。
+ * relPathInBranch 形如 `objects/assistant/self.md`（相对 branch worktree 根）。
+ * repo 不存在或无 commit 时返回空数组。
+ */
+export function stoneFileCommits(baseDir: string, relPathInBranch: string): string[] {
+  const bareDir = join(baseDir, "stones", ".stones_repo");
+  if (!existsSync(bareDir)) return [];
+  const res = Bun.spawnSync(
+    ["git", "-C", bareDir, "log", "--pretty=format:%h %an %s", "--", relPathInBranch],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  if (res.exitCode !== 0) return [];
+  const out = new TextDecoder().decode(res.stdout ?? new Uint8Array()).trim();
+  return out.length === 0 ? [] : out.split("\n");
+}
+
+/** baseDir 下相对路径是否存在（pool memory 文件落盘判定）。 */
+export function fileExists(baseDir: string, relPath: string): boolean {
+  return existsSync(join(baseDir, relPath));
+}
+
+/**
+ * 列出 super session 下某 object 的所有 thread id
+ * （flows/super/objects/<self>/threads/<threadId>/）。
+ * 用于实证 super flow 反思线程被创建。
+ */
+export function listSuperThreadIds(baseDir: string, selfId: string): string[] {
+  const threadsDir = join(baseDir, "flows", "super", "objects", selfId, "threads");
+  if (!existsSync(threadsDir)) return [];
+  try {
+    return readdirSync(threadsDir);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 等 super flow 反思线程跑到终态（done/failed），或超时返回最后状态。
+ *
+ * 为什么单独等：业务 thread 的 `say(target=super, wait=true)` 把反思派给一个**独立的
+ * super job**——`waitForJob(业务 job)` 在业务 thread 进入 waiting 时即返回，**不**覆盖
+ * super job 的执行。reflectable 的落盘副作用（写 memory / 改 self.md）发生在 super job
+ * 里，所以观察前必须显式等 super thread 收尾。
+ *
+ * 实现：先轮询 super thread 出现，再轮询其 status ∈ {done, failed}。
+ */
+export async function waitForSuperFlow(
+  baseDir: string,
+  selfId: string,
+  opts: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<{ threadId?: string; status?: string }> {
+  const { readThread } = await loadDeps();
+  const timeoutMs = opts.timeoutMs ?? 300_000;
+  const intervalMs = opts.intervalMs ?? 1_000;
+  const deadline = Date.now() + timeoutMs;
+  let last: { threadId?: string; status?: string } = {};
+  while (Date.now() < deadline) {
+    const threadIds = listSuperThreadIds(baseDir, selfId);
+    if (threadIds.length > 0) {
+      // 取最近创建的一条（id 含时间编码，字典序近似时间序——足够本场景单反思请求用）
+      const threadId = threadIds.slice().sort().at(-1)!;
+      const thread = await readThread(
+        { baseDir, sessionId: "super", objectId: selfId },
+        threadId,
+      );
+      last = { threadId, status: thread?.status };
+      if (thread?.status === "done" || thread?.status === "failed") return last;
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return last;
+}
+
+/**
+ * 列出 pools/objects/<self>/knowledge/memory/ 下的 .md 文件名（仅文件名，不含路径）。
+ * 用于实证 sediment 落对目录。
+ */
+export function listMemoryFiles(baseDir: string, selfId: string): string[] {
+  const memDir = join(baseDir, "pools", "objects", selfId, "knowledge", "memory");
+  if (!existsSync(memDir)) return [];
+  try {
+    return readdirSync(memDir).filter((n) => n.endsWith(".md"));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 粗粒度校验一篇 sediment markdown 是否含合法 frontmatter：
+ * 第一行 `---`，闭合 `---`，且 block 内含 title / description / activates_on。
+ * （reflectable 协议要求：缺 frontmatter 的 memory 永远无法被 activator 激活。）
+ */
+export function hasValidFrontmatter(md: string): boolean {
+  if (!md.startsWith("---")) return false;
+  const close = md.indexOf("\n---", 3);
+  if (close === -1) return false;
+  const block = md.slice(0, close);
+  return (
+    /(^|\n)title:/.test(block) &&
+    /(^|\n)description:/.test(block) &&
+    /(^|\n)activates_on:/.test(block) &&
+    /show_description_when:/.test(block) &&
+    /show_content_when:/.test(block)
+  );
 }
 
 // ────────────────────────────────────────────────────────────────────────────
