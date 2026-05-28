@@ -411,6 +411,50 @@ export function userInboxIntoCallee(calleeThread: ThreadContext | undefined): Th
     .sort((a, b) => a.createdAt - b.createdAt);
 }
 
+/**
+ * 找出 thread 中对 custom window（window_id="custom:<self>"）的 exec 调用记录。
+ *
+ * programmable 维度专用：LLM 调自定义命令走 `exec(window_id="custom:<self>", command=<name>, args)`，
+ * window_id 与 command 都在 function_call.arguments 里（见 src/executable/tools/exec.ts:91/188）。
+ * 返回每次命中的 { callId, command, args }，供后续与 function_call_output 配对取结果。
+ */
+export function customWindowInvocations(
+  thread: ThreadContext | undefined,
+  selfId: string,
+): Array<{ callId?: string; command?: string; args?: unknown }> {
+  if (!thread) return [];
+  const wantWindowId = `custom:${selfId}`;
+  const hits: Array<{ callId?: string; command?: string; args?: unknown }> = [];
+  for (const e of thread.events) {
+    if (!isFnCall(e) || e.toolName !== "exec") continue;
+    const a = (e.arguments ?? {}) as Record<string, unknown>;
+    if (a.window_id !== wantWindowId) continue;
+    hits.push({
+      callId: (e as { callId?: string }).callId,
+      command: typeof a.command === "string" ? a.command : undefined,
+      args: a.args,
+    });
+  }
+  return hits;
+}
+
+/**
+ * 取某个 function_call（按 callId）对应的 function_call_output 输出字符串。
+ * 用于实证 custom 命令真执行并把结果返回进 thread events（不是只发起了调用）。
+ */
+export function functionOutputFor(
+  thread: ThreadContext | undefined,
+  callId: string | undefined,
+): { output?: string; ok?: boolean } {
+  if (!thread || !callId) return {};
+  for (const e of thread.events) {
+    if (e.category !== "tool_runtime" || e.kind !== "function_call_output") continue;
+    if ((e as { callId?: string }).callId !== callId) continue;
+    return { output: (e as { output?: string }).output, ok: (e as { ok?: boolean }).ok };
+  }
+  return {};
+}
+
 export function findContextWindows(
   thread: ThreadContext | undefined,
   predicate: (w: ContextWindow) => boolean,
