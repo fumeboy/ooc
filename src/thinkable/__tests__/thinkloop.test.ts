@@ -367,12 +367,17 @@ describe("think", () => {
     expect(firstContent).toContain("<outbox>");
     expect(firstContent).toContain("先去检查日志");
     expect(firstContent).not.toContain("上一轮已经检查过日志");
-    // tool_use 和普通 inject 事件都不进 transcript，只保留结构化/必要事件。
+    // tool_use 不进 transcript；inject 全部进 transcript（silent-swallow ban）。
     expect(inputItems?.slice(1)).toEqual([
       {
         type: "message",
         role: "assistant",
         content: "上一轮已经检查过日志"
+      },
+      {
+        type: "message",
+        role: "system",
+        content: "[context_change:inject]\n系统注入了新的上下文"
       }
     ]);
   });

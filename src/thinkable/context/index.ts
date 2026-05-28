@@ -430,10 +430,6 @@ function resolveInboxWindowId(thread: ThreadContext, inboxMessage: ThreadMessage
   return (creator ?? candidates[0])!.id;
 }
 
-function isErrorInject(text: string): boolean {
-  return text.startsWith("[错误]") || text.includes("失败") || text.includes("Error") || text.includes("error");
-}
-
 /** 把过程事件转换为 Responses-first input items；返回空数组表示该事件不进 transcript。 */
 function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInputItem[] {
   if (event.category === "context_change" && event.kind === "inbox_message_arrived") {
@@ -522,7 +518,7 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
         type: "message",
         role: "system",
         content:
-          `[OOC events_summary count=${event.count}${idTag}${earliest}${latest}${quality}${scope}] ` +
+          `[context_change:events_summary count=${event.count}${idTag}${earliest}${latest}${quality}${scope}] ` +
           `${event.count} events folded, summary by LLM:\n${event.summary}`,
       },
     ];
@@ -569,15 +565,16 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
   }
 
   if (event.category === "context_change" && event.kind === "inject") {
-    if (!isErrorInject(event.text)) {
-      return [];
-    }
+    // 所有 inject 都进 transcript（silent-swallow ban）：包括 close 拒绝、deprecation 提醒、
+    // [interrupted] 恢复提示、end.result 兜底说明等。文案语义由各写入点的前缀
+    // ([错误] / [close 拒绝] / [interrupted] / [end.result] / [do] ...) 自带，render
+    // 层不再做二次分类。
     return [
       {
         type: "message",
         role: "system",
-        content: `[context_change:error]\n${event.text}`
-      }
+        content: `[context_change:inject]\n${event.text}`,
+      },
     ];
   }
 

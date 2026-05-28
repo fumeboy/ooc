@@ -411,12 +411,16 @@ describe("buildContext (ContextWindow model)", () => {
     });
     const messages = await buildContext(thread);
     expect(messages[0]?.role).toBe("system");
-    // tool_use 不进 transcript；普通 inject 不进 transcript；thinking 也不进 transcript（仅做记录用）
+    // tool_use 不进 transcript；thinking 也不进 transcript（仅做记录用）；inject 全部进 transcript（silent-swallow ban）。
     expect(messages.slice(1)).toEqual([
       { role: "assistant", content: "已经完成第一步" },
       {
         role: "system",
-        content: "[context_change:error]\n[错误] submit 失败：Form f_missing 不存在。",
+        content: "[context_change:inject]\n[refine] Form f_1 已累积参数。当前路径：talk。",
+      },
+      {
+        role: "system",
+        content: "[context_change:inject]\n[错误] submit 失败：Form f_missing 不存在。",
       },
     ]);
   });
