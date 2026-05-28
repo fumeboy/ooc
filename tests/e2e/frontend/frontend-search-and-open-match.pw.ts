@@ -76,14 +76,16 @@ test("F3 grep → search_window 出现在 ContextSnapshotViewer", async ({ page,
       e.arguments?.command === "root.grep",
   );
 
-  // UI: search_window 节点至少 1 个
+  // UI: search_window 节点至少 1 个（DOM 锚：ContextSnapshotViewer 的 .cw-row 行，
+  // node.label 即窗口 type；search_window 显示为 "search"）。
   const searchWindowCount = await page
-    .locator("[data-window-type='search'], .context-tree-node:has-text('SEARCH'), .context-tree-node:has-text('search_window')")
+    .locator(".cw-row:has-text('search')")
     .count();
 
   // assistant 文本中是否含正确数字
+  // 真 DOM 锚（Round 17 后）：.chat-timeline .tui-block.tui-assistant（web/src/domains/chat/components/TuiBlock.tsx:9-13,455）
   const lastReplyText = (await page
-    .locator(".chat-timeline .timeline-message, .chat-timeline .message")
+    .locator(".chat-timeline .tui-block.tui-assistant")
     .last()
     .textContent()) ?? "";
   const reportedExpected = lastReplyText.includes(String(EXPECTED_COUNT));

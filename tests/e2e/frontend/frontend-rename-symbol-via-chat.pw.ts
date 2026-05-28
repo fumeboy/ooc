@@ -56,10 +56,19 @@ test("F2 用户让 assistant 通过 chat 改文件 → fs 真改", async ({ page
   const calleeThreadId = await discoverCalleeThreadId(ooc.backend.baseDir, "f2-rename", "assistant").catch(
     () => "",
   );
+  // worker tick 把 status 从 running 翻到 done/waiting 需要时间；
+  // 等 UI 显示回复后 status 不一定已收敛，给 15s polling 窗口让其稳定。
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const calleeThread = calleeThreadId
-    ? (readThreadJson(ooc.backend.baseDir, "f2-rename", "assistant", calleeThreadId) as any)
-    : undefined;
+  let calleeThread: any = undefined;
+  if (calleeThreadId) {
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      calleeThread = readThreadJson(ooc.backend.baseDir, "f2-rename", "assistant", calleeThreadId) as any;
+      if (calleeThread?.status && calleeThread.status !== "running") break;
+      await page.waitForTimeout(500);
+    }
+  }
 
   const finalContent = readFsState(ooc.backend.baseDir, FILE_PATH);
   const helperACount = countOccurrences(finalContent, "helperA");
@@ -82,8 +91,9 @@ test("F2 用户让 assistant 通过 chat 改文件 → fs 真改", async ({ page
   });
 
   // UI: ContextSnapshotViewer 中应能看到至少 1 个 file_window —— 走过 file_window 路径的证据
+  // DOM 锚：ContextSnapshotViewer 的 .cw-row 行，node.label 即窗口 type；file_window 显示为 "file"。
   const fileWindowNodeCount = await page
-    .locator("[data-window-type='file'], .context-tree-node:has-text('file_window'), .context-tree-node:has-text('FILE')")
+    .locator(".cw-row:has-text('file')")
     .count();
 
   const result = scoreScenario({

@@ -36,34 +36,53 @@ test("F4 user.root.talk_window 详情内 inline composer 发出第二轮回复",
   });
   await waitForReply(page, { sinceCount: 0, timeoutMs: 90_000 });
 
-  // 切到 user.root —— 通过 ThreadHeader 的 .thread-switcher select
-  // value 是 "objectId/threadId"
-  await page.locator(".thread-switcher").selectOption("user/root");
+  // 切到 user.root thread_context 视图 —— 2026-05-27 路由重构：
+  // path=/flows/thread_context 决定 view，query 带 sessionId/objectId/threadId。
+  // ThreadHeader 的 .thread-switcher 主动过滤 user/root（ThreadHeader.tsx:31-33），
+  // 所以不能 selectOption 切，要直接 navigate。
+  const currentUrl = new URL(page.url());
+  currentUrl.pathname = "/flows/thread_context";
+  currentUrl.searchParams.set("objectId", "user");
+  currentUrl.searchParams.set("threadId", "root");
+  await page.goto(currentUrl.toString());
+  await page.waitForTimeout(500);
 
-  // 在 ContextSnapshotViewer 里找 target=assistant 的 talk_window 节点
-  // 节点本身或其周围会含 "assistant" / "talk" 文本；点开后右侧出现 .llm-input-talk-composer
-  await page
-    .locator(".context-tree-node:has-text('talk'), [data-window-type='talk']")
-    .first()
-    .click();
+  // 在 ContextSnapshotViewer 里找 target=assistant 的 talk_window 节点（DOM 锚：
+  // web/src/domains/files/components/ContextSnapshotViewer.tsx:200 .cw-row + data-cw-node-id）
+  // node.label 是 type（"talk"），summary 含 target=assistant，所以 row 文本里既有 talk 也有 assistant。
+  const talkRows = page.locator(".cw-row:has-text('talk')");
+  const talkRowCount = await talkRows.count();
+  // 优先选含 'assistant' 的 talk row（target=assistant 的 talk_window）
+  const targetTalkRow = page.locator(".cw-row:has-text('talk'):has-text('assistant')").first();
+  const targetExists = (await targetTalkRow.count()) > 0;
+  if (targetExists) {
+    await targetTalkRow.click();
+  } else if (talkRowCount > 0) {
+    await talkRows.first().click();
+  }
 
-  await page.locator(".llm-input-talk-composer").waitFor({ state: "visible", timeout: 10_000 });
+  await page.locator(".llm-input-talk-composer").waitFor({ state: "visible", timeout: 10_000 }).catch(() => undefined);
   const composerVisible = await page.locator(".llm-input-talk-composer-input").isVisible();
   const composerEnabled = await page.locator(".llm-input-talk-composer-input").isEnabled();
 
   const startedAt = Date.now();
-  await page.locator(".llm-input-talk-composer-input").fill("再说一句");
-  await page.locator(".llm-input-talk-composer-btn").click();
+  // composer 不可见时跳过填写（评分系统会按 composerVisible=false 判 Bad）
+  if (composerVisible) {
+    await page.locator(".llm-input-talk-composer-input").fill("再说一句");
+    await page.locator(".llm-input-talk-composer-btn").click();
+  }
 
-  // 等 60 秒看是否出现第二条 assistant 回复
+  // 等 60 秒看是否出现第二条 assistant 回复。
+  // user.root view + 已点开 talk_window：spec 期望第二回复在 ContextSnapshotViewer 的
+  // talk_window transcript 内可见（ContextSnapshotViewer.tsx:1246-1268 .llm-input-transcript-list .llm-input-transcript-item）。
+  // 一发一收 = 2 条，第二回复出现后 transcript >= 3。
   let secondReplyDeadline = Date.now() + 60_000;
   let sawSecondReply = false;
   while (Date.now() < secondReplyDeadline) {
-    // assistant 第二条回复会以 .timeline-message / talk transcript 形式出现
-    const count = await page
-      .locator(".timeline-message, .talk-transcript-message, .chat-timeline .message")
+    const transcriptCount = await page
+      .locator(".llm-input-transcript-list .llm-input-transcript-item")
       .count();
-    if (count >= 3) {
+    if (transcriptCount >= 3) {
       sawSecondReply = true;
       break;
     }
@@ -109,6 +128,8 @@ test("F4 user.root.talk_window 详情内 inline composer 发出第二轮回复",
 
   logScore(result, {
     elapsedMs,
+    talkRowCount,
+    targetExists,
     composerVisible,
     composerEnabled,
     sawSecondReply,
