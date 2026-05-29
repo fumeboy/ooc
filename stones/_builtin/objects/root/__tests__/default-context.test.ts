@@ -153,9 +153,10 @@ describe("root.defaultContext()", () => {
         expect(slices[0].kind).toBe("relations");
     });
 
-    test("pool_memory: 有 .md 文件 → pool_memory 切片", async () => {
+    test("pool_memory: 有 .md 文件 → pool_memory 切片（frontmatter 已剥离）", async () => {
         const ctx = makeCtx(world, "s_test", "ooc://stones/main/objects/agent_a");
         const memDir = path.join(world, "pools", "objects", "agent_a", "knowledge", "memory");
+        // Write files without frontmatter (plain content) — loadPoolMemory strips frontmatter if present
         await write(path.join(memDir, "fav-color.md"), "My favorite color is octarine.");
         await write(path.join(memDir, "note.md"), "Remember to greet users warmly.");
         const slices = await defaultContext(ctx);
@@ -166,6 +167,22 @@ describe("root.defaultContext()", () => {
         const favColor = items.find((i) => i.slug === "fav-color");
         expect(favColor).toBeDefined();
         expect(favColor!.content).toBe("My favorite color is octarine.");
+    });
+
+    test("pool_memory: frontmatter-wrapped .md 文件 → content 剥离后供 LLM 消费", async () => {
+        const ctx = makeCtx(world, "s_test", "ooc://stones/main/objects/agent_a");
+        const memDir = path.join(world, "pools", "objects", "agent_a", "knowledge", "memory");
+        const frontmatter = "---\ncreated_at: 2026-01-01T00:00:00.000Z\nsession_id: s_test\nobject_uri: ooc://stones/main/objects/agent_a\n---\n\n";
+        await write(path.join(memDir, "with-fm.md"), frontmatter + "The real content.");
+        const slices = await defaultContext(ctx);
+        const pm = slices.find((s) => s.kind === "pool_memory");
+        expect(pm).toBeDefined();
+        const items = pm!.payload as Array<{ slug: string; content: string }>;
+        const item = items.find((i) => i.slug === "with-fm");
+        expect(item).toBeDefined();
+        expect(item!.content).not.toContain("---");
+        expect(item!.content).not.toContain("created_at:");
+        expect(item!.content).toContain("The real content.");
     });
 
     test("pool_memory: 目录不存在 → 无 pool_memory 切片", async () => {
@@ -180,6 +197,7 @@ describe("root.defaultContext()", () => {
         const customPool = path.join(world, "custom-pool");
         (ctx.record.paths as { pool?: string }).pool = customPool;
         const memDir = path.join(customPool, "knowledge", "memory");
+        // Write plain content (no frontmatter)
         await write(path.join(memDir, "custom.md"), "Custom pool content.");
         const slices = await defaultContext(ctx);
         const pm = slices.find((s) => s.kind === "pool_memory");

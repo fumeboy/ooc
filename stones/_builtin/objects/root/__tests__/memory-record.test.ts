@@ -33,7 +33,7 @@ describe("root.memory_record", () => {
         await fs.rm(world, { recursive: true, force: true });
     });
 
-    test("writes .md file to synthesized pool memory dir", async () => {
+    test("writes .md file to synthesized pool memory dir with YAML frontmatter", async () => {
         const ctx = makeCtx();
         const result = (await rootServer.public.memory_record!(
             { slug: "fav-color", content: "My favorite color is octarine." },
@@ -44,8 +44,14 @@ describe("root.memory_record", () => {
         expect(result.slug).toBe("fav-color");
 
         const expectedDir = path.join(world, "pools", "objects", "agent_a", "knowledge", "memory");
-        const content = await fs.readFile(path.join(expectedDir, "fav-color.md"), "utf8");
-        expect(content).toBe("My favorite color is octarine.");
+        const raw = await fs.readFile(path.join(expectedDir, "fav-color.md"), "utf8");
+        // File must start with YAML frontmatter
+        expect(raw.startsWith("---")).toBe(true);
+        expect(raw).toContain("created_at:");
+        expect(raw).toContain("session_id:");
+        expect(raw).toContain("object_uri:");
+        // Content appears after frontmatter
+        expect(raw).toContain("My favorite color is octarine.");
     });
 
     test("normalizes slug to kebab-case", async () => {
@@ -67,8 +73,9 @@ describe("root.memory_record", () => {
             ctx,
         );
         const expectedFile = path.join(customPool, "knowledge", "memory", "test-slug.md");
-        const content = await fs.readFile(expectedFile, "utf8");
-        expect(content).toBe("test content");
+        const raw = await fs.readFile(expectedFile, "utf8");
+        expect(raw).toContain("test content");
+        expect(raw.startsWith("---")).toBe(true);
     });
 
     test("overwrites existing memory with same slug", async () => {
@@ -77,8 +84,30 @@ describe("root.memory_record", () => {
         await rootServer.public.memory_record!({ slug: "item", content: "v2" }, ctx);
 
         const expectedDir = path.join(world, "pools", "objects", "agent_a", "knowledge", "memory");
-        const content = await fs.readFile(path.join(expectedDir, "item.md"), "utf8");
-        expect(content).toBe("v2");
+        const raw = await fs.readFile(path.join(expectedDir, "item.md"), "utf8");
+        // Content is v2 (overwritten)
+        expect(raw).toContain("v2");
+        expect(raw).not.toContain("v1");
+    });
+
+    test("frontmatter is stripped when loadPoolMemory returns content to LLM", async () => {
+        const ctx = makeCtx();
+        await rootServer.public.memory_record!(
+            { slug: "strip-test", content: "The actual content." },
+            ctx,
+        );
+        // Use defaultContext to see what the LLM receives
+        const { defaultContext } = await import("../server/index");
+        const slices = await defaultContext({ ...ctx, record: { ...ctx.record, paths: { ...ctx.record.paths, flow: path.join(world, "flows", sessionId, "objects", "agent_a") } } });
+        const pm = slices.find((s) => s.kind === "pool_memory");
+        expect(pm).toBeDefined();
+        const items = pm!.payload as Array<{ slug: string; content: string }>;
+        const item = items.find((i) => i.slug === "strip-test");
+        expect(item).toBeDefined();
+        // LLM-facing content must not contain frontmatter delimiters
+        expect(item!.content).not.toContain("---");
+        expect(item!.content).not.toContain("created_at:");
+        expect(item!.content).toContain("The actual content.");
     });
 
     test("throws on missing slug", async () => {
