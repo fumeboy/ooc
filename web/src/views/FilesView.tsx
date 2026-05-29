@@ -112,7 +112,8 @@ export function FilesView() {
 
   async function loadDir(path: string | undefined): Promise<TreeNode[]> {
     const res = await getTree(path);
-    return res.entries.map((e) => buildNode(e, path ?? ""));
+    const entries = Array.isArray(res?.entries) ? res.entries : [];
+    return entries.map((e) => buildNode(e, path ?? ""));
   }
 
   async function loadRoot() {

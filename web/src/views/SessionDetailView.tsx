@@ -20,7 +20,7 @@ export function SessionDetailView() {
     setError(undefined);
     try {
       const res = await getFlowObjects(sessionId);
-      setObjects(res.objects);
+      setObjects(Array.isArray(res?.objects) ? res.objects : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

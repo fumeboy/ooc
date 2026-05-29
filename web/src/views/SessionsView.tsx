@@ -28,10 +28,12 @@ export function SessionsView() {
     setError(undefined);
     try {
       const [sessRes, stonesRes] = await Promise.all([listSessions(), listStones()]);
-      setSessions(sessRes.sessions);
-      setStones(stonesRes.stones);
-      if (!draft.objectUri && stonesRes.stones.length > 0) {
-        const first = stonesRes.stones[0]!;
+      const sessList = Array.isArray(sessRes?.sessions) ? sessRes.sessions : [];
+      const stoneList = Array.isArray(stonesRes?.stones) ? stonesRes.stones : [];
+      setSessions(sessList);
+      setStones(stoneList);
+      if (!draft.objectUri && stoneList.length > 0) {
+        const first = stoneList[0]!;
         setDraft((d) => ({ ...d, objectUri: `ooc://stones/main/objects/${first.name}` }));
       }
     } catch (e) {

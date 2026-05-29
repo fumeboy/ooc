@@ -18,7 +18,7 @@ export function StonesListView() {
     setError(undefined);
     try {
       const res = await listStones(b);
-      setStones(res.stones);
+      setStones(Array.isArray(res?.stones) ? res.stones : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

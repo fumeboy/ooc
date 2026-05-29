@@ -49,11 +49,16 @@ export function SessionObjectView() {
     setLoadingDetail(true);
     try {
       const res = await getFlowObject(sessionId, objectName);
-      setDetail(res);
-      if (res.threadIds.length > 0 && !activeThreadId) {
-        setActiveThreadId(res.threadIds[0]!);
-      } else if (res.activeThreads.length > 0 && !activeThreadId) {
-        setActiveThreadId(res.activeThreads[0]!.id);
+      const normalized = {
+        ...res,
+        threadIds: Array.isArray(res?.threadIds) ? res.threadIds : [],
+        activeThreads: Array.isArray(res?.activeThreads) ? res.activeThreads : [],
+      };
+      setDetail(normalized);
+      if (normalized.threadIds.length > 0 && !activeThreadId) {
+        setActiveThreadId(normalized.threadIds[0]!);
+      } else if (normalized.activeThreads.length > 0 && !activeThreadId) {
+        setActiveThreadId(normalized.activeThreads[0]!.id);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -88,7 +93,7 @@ export function SessionObjectView() {
   // Scroll to bottom on new messages
   useEffect(() => {
     timelineEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [thread?.messages.length]);
+  }, [thread?.messages?.length]);
 
   async function handleSend(text: string) {
     if (!text.trim() || !objectName || !sessionId) return;
