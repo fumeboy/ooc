@@ -67,11 +67,12 @@ const METHOD_SCHEMAS: Record<string, { description: string; properties?: Record<
         required: ["path", "content"],
     },
     exec_command: {
-        description: "Execute a shell command and capture stdout/stderr.",
+        description: "Execute a shell command and capture stdout/stderr. Optionally pass stdin text.",
         properties: {
             command: { type: "array", items: { type: "string" }, description: "Command as array, e.g., ['ls', '-la']" },
             cwd: { type: "string", description: "Optional cwd relative to world root" },
             timeout_ms: { type: "number" },
+            stdin: { type: "string", description: "Optional text to pass as stdin to the process" },
         },
         required: ["command"],
     },

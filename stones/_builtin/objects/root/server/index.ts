@@ -178,8 +178,10 @@ async function loadPoolMemory(ctx: ObjectContext): Promise<Array<{ slug: string;
     for (const e of entries) {
         if (!e.isFile() || !e.name.endsWith(".md")) continue;
         const slug = e.name.replace(/\.md$/, "");
-        const content = await readIfExists(path.join(memDir, e.name));
-        if (!content) continue;
+        const rawContent = await readIfExists(path.join(memDir, e.name));
+        if (!rawContent) continue;
+        // Strip YAML frontmatter (--- ... ---\n\n) before exposing to LLM
+        const content = stripFrontmatter(rawContent);
         // First, cap each file to PER_FILE_LIMIT independently so one large file
         // can't consume the entire budget.
         const perFileTrimmed = content.slice(0, PER_FILE_LIMIT);
@@ -446,7 +448,16 @@ export default defineObject({
             const memDir = poolMemoryDirForCtx(ctx);
             await fs.mkdir(memDir, { recursive: true });
             const filePath = path.join(memDir, `${slug}.md`);
-            await fs.writeFile(filePath, args.content);
+            // Wrap content with YAML frontmatter for audit metadata
+            const frontmatter = [
+                "---",
+                `created_at: ${new Date().toISOString()}`,
+                `session_id: ${ctx.sessionId ?? ""}`,
+                `object_uri: ${ctx.record.uri}`,
+                "---",
+                "",
+            ].join("\n");
+            await fs.writeFile(filePath, frontmatter + args.content);
             return { ok: true, slug, path: filePath };
         },
 
@@ -696,6 +707,7 @@ export default defineObject({
                 throw new Error(`exec_command: cwd outside worldRoot: ${args.cwd}`);
             }
             const timeoutMs = typeof args.timeout_ms === "number" ? Math.min(args.timeout_ms, 60_000) : 15_000;
+            const stdinInput = typeof args.stdin === "string" ? args.stdin : undefined;
 
             try {
                 const proc = Bun.spawn({
@@ -703,6 +715,7 @@ export default defineObject({
                     cwd,
                     stdout: "pipe",
                     stderr: "pipe",
+                    stdin: stdinInput !== undefined ? Buffer.from(stdinInput) : "ignore",
                     env: { ...process.env, PATH: process.env.PATH ?? "/usr/bin:/bin" },
                 });
 
@@ -1088,6 +1101,18 @@ function fileMatchesPattern(name: string, pattern: string): boolean {
         return name.endsWith(cleaned.slice(1));
     }
     return name === cleaned || name.includes(cleaned);
+}
+
+/**
+ * Strip YAML frontmatter (--- ... ---\n) from a markdown string.
+ * Returns the body after the closing --- delimiter, or the full string if no frontmatter.
+ */
+function stripFrontmatter(content: string): string {
+    if (!content.startsWith("---")) return content;
+    const second = content.indexOf("\n---", 3);
+    if (second === -1) return content;
+    // Skip past the closing --- and any following newlines
+    return content.slice(second + 4).replace(/^\n/, "");
 }
 
 async function readIfExists(p: string): Promise<string | null> {

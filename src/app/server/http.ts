@@ -225,7 +225,11 @@ export function buildApp(deps: HttpDeps): Elysia {
             );
         }
 
-        const sessionId = shortId("ses");
+        // Use caller-provided sessionId if it's a safe slug; otherwise auto-generate
+        const rawSessionId = typeof b?.sessionId === "string" ? b.sessionId.trim() : "";
+        const sessionId = rawSessionId && /^[a-zA-Z0-9_\-]{1,80}$/.test(rawSessionId)
+            ? rawSessionId
+            : shortId("ses");
 
         // Write .session.json (idempotent)
         const sessionMeta = { createdAt: new Date().toISOString(), objectUri };
