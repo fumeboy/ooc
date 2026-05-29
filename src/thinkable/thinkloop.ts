@@ -67,7 +67,7 @@ const METHOD_SCHEMAS: Record<string, { description: string; properties?: Record<
         required: ["path", "content"],
     },
     exec_command: {
-        description: "Execute a shell command and capture stdout/stderr. Optionally pass stdin text.",
+        description: "Execute a shell command and capture stdout/stderr. Optionally pass stdin text. NOTE: this tool can bypass write_file path restrictions; use with care. cwd is sandboxed to world root but absolute paths in shell commands are not.",
         properties: {
             command: { type: "array", items: { type: "string" }, description: "Command as array, e.g., ['ls', '-la']" },
             cwd: { type: "string", description: "Optional cwd relative to world root" },

@@ -60,6 +60,23 @@ export interface HttpDeps {
     sourceCwd?: string;
 }
 
+/** 安全 sessionId 校验正则：只允许字母数字 + _ - ，最长 80 字符。 */
+const SAFE_SESSION_ID = /^[a-zA-Z0-9_\-]{1,80}$/;
+
+/**
+ * 若 input 是合法 sessionId 则返回原值；字符串但不合法则抛 400 错误；
+ * 非字符串或空字符串则自动生成新 id。
+ */
+function validateOrGenerateSessionId(input: unknown): string {
+    if (typeof input === "string" && input.length > 0) {
+        if (!SAFE_SESSION_ID.test(input)) {
+            throw new Error(`invalid sessionId: must match ${SAFE_SESSION_ID}`);
+        }
+        return input;
+    }
+    return shortId("ses");
+}
+
 /** 校验路径不跨出 worldRoot（安全边界）。 */
 function safeResolvePath(worldRoot: string, relative: string): string | null {
     // 拒绝以 / 开头或含有 .. 的路径
@@ -225,11 +242,16 @@ export function buildApp(deps: HttpDeps): Elysia {
             );
         }
 
-        // Use caller-provided sessionId if it's a safe slug; otherwise auto-generate
-        const rawSessionId = typeof b?.sessionId === "string" ? b.sessionId.trim() : "";
-        const sessionId = rawSessionId && /^[a-zA-Z0-9_\-]{1,80}$/.test(rawSessionId)
-            ? rawSessionId
-            : shortId("ses");
+        // Validate or auto-generate sessionId
+        let sessionId: string;
+        try {
+            sessionId = validateOrGenerateSessionId(b?.sessionId);
+        } catch (e) {
+            return new Response(
+                JSON.stringify({ ok: false, error: (e as Error).message }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
 
         // Write .session.json (idempotent)
         const sessionMeta = { createdAt: new Date().toISOString(), objectUri };
@@ -916,7 +938,16 @@ export function buildApp(deps: HttpDeps): Elysia {
             );
         }
 
-        const sessionId = typeof b?.sessionId === "string" ? b.sessionId : shortId("ses");
+        // Validate or auto-generate sessionId (reject path-traversal attempts)
+        let sessionId: string;
+        try {
+            sessionId = validateOrGenerateSessionId(b?.sessionId);
+        } catch (e) {
+            return new Response(
+                JSON.stringify({ ok: false, error: (e as Error).message }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
         const userUri = "ooc://users/me";
         const targetName = targetUri.split("/").pop()!;
         const ts = new Date().toISOString();
