@@ -158,7 +158,7 @@ export async function fetchClaude(
       messages: toClaudeMessages(params.input),
       tools: toClaudeTools(params.tools),
       temperature: params.temperature,
-      max_tokens: params.maxTokens ?? 1024,
+      max_tokens: params.maxTokens ?? (process.env.OOC_LLM_MAX_TOKENS ? parseInt(process.env.OOC_LLM_MAX_TOKENS, 10) : 4096),
       stream
     })
   });
