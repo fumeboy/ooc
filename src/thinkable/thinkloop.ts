@@ -84,7 +84,22 @@ const METHOD_SCHEMAS: Record<string, { description: string; properties?: Record<
         required: ["intent"],
     },
     do_close: { description: "Close an active sub-thread.", properties: { thread_id: { type: "string" } }, required: ["thread_id"] },
-    metaprog: { description: "(Skeleton, P8+) Modify your own stone source.", properties: { intent: { type: "string" } }, required: ["intent"] },
+    memory_record: {
+        description: "Save a piece of long-term memory that persists across all sessions. Use this when you learn something important that should be remembered next time.",
+        properties: {
+            slug: { type: "string", description: "Short kebab-case identifier, e.g. 'user-favorite-color'" },
+            content: { type: "string" },
+        },
+        required: ["slug", "content"],
+    },
+    metaprog: {
+        description: "Read your own stone source file and get instructions to update it. Provide target_file relative to your stone dir (e.g., 'readme.md', 'server/index.ts'). Returns current content + path for write_file.",
+        properties: {
+            intent: { type: "string", description: "What you want to change/view" },
+            target_file: { type: "string", description: "File path relative to object stone dir" },
+        },
+        required: ["intent", "target_file"],
+    },
     open_knowledge: { description: "(Skeleton, P6+) Open a knowledge slug.", properties: { slug: { type: "string" } }, required: ["slug"] },
     end: { description: "End the conversation. Call this after you've sent your final reply via talk().", properties: {} },
 };
@@ -115,7 +130,25 @@ export async function think(
         // Done every tick so state changes (new todos, plan updates) are visible.
         // The context message is injected into the call input but NOT stored in thread.messages
         // (avoids ever-growing message history; treat it as ephemeral prompt injection).
-        let inputItems: LlmInputItem[] = thread.messages;
+
+        // Sliding window truncation: keep first 3 + last 30, drop middle if > 50 messages.
+        // Only applied to the LLM call input, NOT mutated into thread.messages (persisted state).
+        let inputItems: LlmInputItem[] = (() => {
+            const msgs = thread.messages;
+            const WINDOW_THRESHOLD = 50;
+            const KEEP_HEAD = 3;
+            const KEEP_TAIL = 30;
+            if (msgs.length <= WINDOW_THRESHOLD) return msgs;
+            const head = msgs.slice(0, KEEP_HEAD);
+            const tail = msgs.slice(msgs.length - KEEP_TAIL);
+            const droppedCount = msgs.length - KEEP_HEAD - KEEP_TAIL;
+            const truncationNotice: LlmInputItem = {
+                type: "message",
+                role: "system",
+                content: `... [${droppedCount} earlier messages truncated for context] ...`,
+            };
+            return [...head, truncationNotice, ...tail];
+        })();
         try {
             const record = registry.get(thread.objectUri);
             if (record) {

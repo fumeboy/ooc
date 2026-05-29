@@ -36,10 +36,17 @@ describe("root code-agent A-class methods", () => {
         expect(r.bytes).toBe(5);
     });
 
-    test("write_file rejects path outside worldRoot", async () => {
+    test("write_file rejects absolute path outside stone dir", async () => {
         const ctx = makeCtx();
         await expect(
             rootServer.public.write_file!({ path: "/etc/passwd-fake", content: "x" } as any, ctx),
+        ).rejects.toThrow(/stone dir/);
+    });
+
+    test("write_file rejects relative path outside worldRoot", async () => {
+        const ctx = makeCtx();
+        await expect(
+            rootServer.public.write_file!({ path: "../escape", content: "x" } as any, ctx),
         ).rejects.toThrow(/outside worldRoot/);
     });
 
