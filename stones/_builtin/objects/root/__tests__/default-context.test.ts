@@ -152,4 +152,41 @@ describe("root.defaultContext()", () => {
         expect(slices).toHaveLength(1);
         expect(slices[0].kind).toBe("relations");
     });
+
+    test("pool_memory: 有 .md 文件 → pool_memory 切片", async () => {
+        const ctx = makeCtx(world, "s_test", "ooc://stones/main/objects/agent_a");
+        const memDir = path.join(world, "pools", "objects", "agent_a", "knowledge", "memory");
+        await write(path.join(memDir, "fav-color.md"), "My favorite color is octarine.");
+        await write(path.join(memDir, "note.md"), "Remember to greet users warmly.");
+        const slices = await defaultContext(ctx);
+        const pm = slices.find((s) => s.kind === "pool_memory");
+        expect(pm).toBeDefined();
+        const items = pm!.payload as Array<{ slug: string; content: string }>;
+        expect(items.length).toBe(2);
+        const favColor = items.find((i) => i.slug === "fav-color");
+        expect(favColor).toBeDefined();
+        expect(favColor!.content).toBe("My favorite color is octarine.");
+    });
+
+    test("pool_memory: 目录不存在 → 无 pool_memory 切片", async () => {
+        const ctx = makeCtx(world, "s_test", "ooc://stones/main/objects/agent_a");
+        const slices = await defaultContext(ctx);
+        expect(slices.find((s) => s.kind === "pool_memory")).toBeUndefined();
+    });
+
+    test("pool_memory: 使用 ctx.record.paths.pool 合成路径", async () => {
+        const ctx = makeCtx(world, "s_test", "ooc://stones/main/objects/agent_a");
+        // Override pool path
+        const customPool = path.join(world, "custom-pool");
+        (ctx.record.paths as { pool?: string }).pool = customPool;
+        const memDir = path.join(customPool, "knowledge", "memory");
+        await write(path.join(memDir, "custom.md"), "Custom pool content.");
+        const slices = await defaultContext(ctx);
+        const pm = slices.find((s) => s.kind === "pool_memory");
+        expect(pm).toBeDefined();
+        const items = pm!.payload as Array<{ slug: string; content: string }>;
+        const custom = items.find((i) => i.slug === "custom");
+        expect(custom).toBeDefined();
+        expect(custom!.content).toBe("Custom pool content.");
+    });
 });

@@ -7,6 +7,7 @@
  *          defaultContext() 是真实实装（按 spec §3.5）。
  * P5 阶段: 11 个 B 类 method body 替换为真实 flow 层写入实装；
  *          其余 6 个 (grep/glob/open_file/open_knowledge/metaprog/write_file/end) 仍 skeleton (P6+)。
+ * P8 阶段: pool_memory 切片 + memory_record method + metaprog 最小实装 + maxTokens 提升。
  *
  * 详见 spec V2 §3 + meta/object.doc.ts:patches.b_class_collapse。
  */
@@ -31,7 +32,7 @@ import {
  * defaultContext slice 结构：每轮 LLM 调用前拼装的 context 部分。
  */
 export type DefaultContextSlice = {
-    kind: "plan" | "todos" | "threads" | "talks" | "relations";
+    kind: "plan" | "todos" | "threads" | "talks" | "relations" | "pool_memory";
     payload: unknown;
 };
 
@@ -119,7 +120,52 @@ export async function defaultContext(ctx: ObjectContext): Promise<DefaultContext
     // 5. relations (从 stone children/ + 同级扫描)
     slices.push({ kind: "relations", payload: computeRelations(ctx) });
 
+    // 6. pool_memory: 跨 session 沉淀知识（pools/objects/<self>/knowledge/memory/*.md）
+    const poolMemoryItems = await loadPoolMemory(ctx);
+    if (poolMemoryItems.length > 0) {
+        slices.push({ kind: "pool_memory", payload: poolMemoryItems });
+    }
+
     return slices;
+}
+
+/**
+ * 计算 pool memory 目录：pools/objects/<selfName>/knowledge/memory/
+ * 优先使用 ctx.record.paths.pool；否则合成。
+ */
+function poolMemoryDirForCtx(ctx: ObjectContext): string {
+    const selfName = nameFromUri(ctx.record.uri);
+    const poolBase = ctx.record.paths.pool
+        ?? path.join(ctx.worldRoot, "pools", "objects", selfName);
+    return path.join(poolBase, "knowledge", "memory");
+}
+
+/**
+ * 读取 pool_memory 目录下所有 .md 文件，返回 { slug, content } 数组。
+ * - 跳过目录不存在的情况
+ * - 总字符数不超过 8000
+ */
+async function loadPoolMemory(ctx: ObjectContext): Promise<Array<{ slug: string; content: string }>> {
+    const memDir = poolMemoryDirForCtx(ctx);
+    if (!(await directoryExists(memDir))) return [];
+
+    const entries = await fs.readdir(memDir, { withFileTypes: true }).catch(() => []);
+    const result: Array<{ slug: string; content: string }> = [];
+    let totalChars = 0;
+    const MAX_CHARS = 8000;
+
+    for (const e of entries) {
+        if (!e.isFile() || !e.name.endsWith(".md")) continue;
+        const slug = e.name.replace(/\.md$/, "");
+        const content = await readIfExists(path.join(memDir, e.name));
+        if (!content) continue;
+        const trimmed = content.slice(0, MAX_CHARS - totalChars);
+        result.push({ slug, content: trimmed });
+        totalChars += trimmed.length;
+        if (totalChars >= MAX_CHARS) break;
+    }
+
+    return result;
 }
 
 function computeRelations(ctx: ObjectContext): { siblings: string[]; children: string[] } {
@@ -355,6 +401,28 @@ export default defineObject({
             return { ok: true };
         },
 
+        async memory_record(args: any, ctx: ObjectContext) {
+            if (!args || typeof args.slug !== "string" || args.slug.trim() === "") {
+                throw new Error("memory_record: args.slug (non-empty string) required");
+            }
+            if (typeof args.content !== "string") {
+                throw new Error("memory_record: args.content (string) required");
+            }
+            // Normalize slug to kebab-case: lowercase, replace spaces/underscores with hyphens, strip unsafe chars
+            const slug = args.slug.trim()
+                .toLowerCase()
+                .replace(/[\s_]+/g, "-")
+                .replace(/[^a-z0-9\-]/g, "")
+                .replace(/-+/g, "-")
+                .replace(/^-|-$/g, "");
+            if (!slug) throw new Error("memory_record: slug normalizes to empty string");
+            const memDir = poolMemoryDirForCtx(ctx);
+            await fs.mkdir(memDir, { recursive: true });
+            const filePath = path.join(memDir, `${slug}.md`);
+            await fs.writeFile(filePath, args.content);
+            return { ok: true, slug, path: filePath };
+        },
+
         async grep(args: any, ctx: ObjectContext) {
             if (!args?.pattern) throw new Error("grep: args.pattern required");
             const searchDir = args.path
@@ -522,19 +590,69 @@ export default defineObject({
             return { ok: true, status: "skeleton", _todo: "P6" };
         },
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async metaprog(args: any, _ctx: ObjectContext) {
-            // TODO P8: 实装 super flow 协议
-            if (!args.intent) throw new Error("metaprog: missing intent");
-            return { ok: true, status: "skeleton", _todo: "P8 super flow" };
+        async metaprog(args: any, ctx: ObjectContext) {
+            if (!args.intent) throw new Error("metaprog: args.intent required");
+            if (!args.target_file || typeof args.target_file !== "string") {
+                throw new Error("metaprog: args.target_file (string, relative to object stone dir) required");
+            }
+            // Determine the object's stone dir for this branch.
+            // URI: ooc://stones/<branch>/objects/<name>
+            const uri = ctx.record.uri;
+            const stoneDir = ctx.record.paths.stone;
+            if (!stoneDir) {
+                throw new Error("metaprog: no stone path for this object");
+            }
+            // Safety: target_file must resolve within stones/<branch>/objects/<selfName>/
+            const resolved = path.resolve(stoneDir, args.target_file);
+            if (!resolved.startsWith(path.resolve(stoneDir))) {
+                throw new Error(`metaprog: target_file must be within stone dir (${stoneDir})`);
+            }
+            const content = await readIfExists(resolved);
+            if (content === null) {
+                // File doesn't exist yet; return empty content so LLM can create it via write_file
+                return {
+                    ok: true,
+                    intent: args.intent,
+                    target_file: args.target_file,
+                    resolved_path: resolved,
+                    current_content: null,
+                    instruction: `The file does not exist yet. Use write_file with path="${resolved}" to create it with the desired content.`,
+                };
+            }
+            return {
+                ok: true,
+                intent: args.intent,
+                target_file: args.target_file,
+                resolved_path: resolved,
+                current_content: content,
+                instruction: `Review the current content above. Then use write_file with path="${resolved}" to update the file with the requested changes (intent: ${args.intent}).`,
+            };
         },
 
         async write_file(args: any, ctx: ObjectContext) {
             if (!args?.path) throw new Error("write_file: args.path required");
             if (typeof args.content !== "string") throw new Error("write_file: args.content (string) required");
-            const target = path.resolve(ctx.worldRoot, args.path);
-            if (!target.startsWith(path.resolve(ctx.worldRoot))) {
-                throw new Error(`write_file: path outside worldRoot: ${args.path}`);
+            // Relative paths resolve relative to worldRoot.
+            // Absolute paths are allowed only within worldRoot OR within stone dir (metaprog workflow).
+            let target: string;
+            if (path.isAbsolute(args.path)) {
+                target = path.normalize(args.path);
+                const resolvedWorld = path.resolve(ctx.worldRoot);
+                const stoneDir = ctx.record.paths.stone;
+                const withinWorld = target.startsWith(resolvedWorld + path.sep) || target === resolvedWorld;
+                const withinStone = stoneDir && (target.startsWith(path.resolve(stoneDir) + path.sep) || target === path.resolve(stoneDir));
+                if (!withinWorld && !withinStone) {
+                    throw new Error(`write_file: absolute path must be within worldRoot or stone dir: ${args.path}`);
+                }
+                if (withinStone && !withinWorld) {
+                    // Audit log: writing to stone path via metaprog workflow
+                    console.log(`[write_file:stone] ${ctx.record.uri} → ${target}`);
+                }
+            } else {
+                target = path.resolve(ctx.worldRoot, args.path);
+                if (!target.startsWith(path.resolve(ctx.worldRoot))) {
+                    throw new Error(`write_file: path outside worldRoot: ${args.path}`);
+                }
             }
             await fs.mkdir(path.dirname(target), { recursive: true });
             await fs.writeFile(target, args.content);
