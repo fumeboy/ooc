@@ -1013,6 +1013,10 @@ export default defineObject({
             if (!target.startsWith(REPO_ROOT + path.sep) && target !== REPO_ROOT) {
                 throw new Error(`repo_write: path outside repo root: ${args.path}`);
             }
+            const rel = path.relative(REPO_ROOT, target);
+            if (rel === ".git" || rel.startsWith(".git" + path.sep) || rel.startsWith(".git/") || rel.startsWith(".git\\")) {
+                throw new Error(`repo_write: path inside .git/ is not allowed: ${args.path}`);
+            }
             await fs.mkdir(path.dirname(target), { recursive: true });
             await fs.writeFile(target, args.content);
             const bytes = Buffer.byteLength(args.content);
