@@ -995,7 +995,7 @@ export function buildApp(deps: HttpDeps): Elysia {
                     },
                 ],
                 status: "running",
-                maxTicks: typeof b?.maxTicks === "number" ? b.maxTicks : 12,
+                maxTicks: typeof b?.maxTicks === "number" ? b.maxTicks : 25,
                 ticks: 0,
                 llmTimeoutMs: typeof b?.llmTimeoutMs === "number" ? b.llmTimeoutMs : 120_000,
             };
