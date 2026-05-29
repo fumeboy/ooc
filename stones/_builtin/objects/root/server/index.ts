@@ -752,13 +752,20 @@ export default defineObject({
                 throw new Error(`repo_read: path outside repo root: ${args.path}`);
             }
             const body = await fs.readFile(target, "utf8");
+            const allLines = body.split("\n");
+            const lines_total = allLines.length;
+
+            // Default line cap: if no `lines` parameter provided and file > DEFAULT_MAX_LINES,
+            // auto-truncate to first DEFAULT_MAX_LINES lines to prevent analysis-paralysis from
+            // reading massive files. Use lines:[start,end] to read a specific range.
+            const DEFAULT_MAX_LINES = 200;
 
             // Optional `lines: [start, end]` partial-read (1-indexed, inclusive).
             // Out-of-range values clamp silently. Always returns lines_total so
             // callers can navigate large files without re-reading.
+            // Maximum range per single read is capped at 500 lines.
             if (Array.isArray(args.lines) && args.lines.length === 2) {
-                const allLines = body.split("\n");
-                const total = allLines.length;
+                const MAX_EXPLICIT_RANGE = 500;
                 const rawStart = Number(args.lines[0]);
                 const rawEnd = Number(args.lines[1]);
                 if (!Number.isFinite(rawStart) || !Number.isFinite(rawEnd)) {
@@ -768,8 +775,13 @@ export default defineObject({
                 let startN = Math.max(1, Math.floor(rawStart));
                 let endN = Math.max(1, Math.floor(rawEnd));
                 if (startN > endN) { const t = startN; startN = endN; endN = t; }
-                startN = Math.min(startN, total);
-                endN = Math.min(endN, total);
+                startN = Math.min(startN, lines_total);
+                endN = Math.min(endN, lines_total);
+                // Cap range to 500 lines max per read.
+                if (endN - startN + 1 > MAX_EXPLICIT_RANGE) {
+                    endN = startN + MAX_EXPLICIT_RANGE - 1;
+                    endN = Math.min(endN, lines_total);
+                }
                 const sliced = allLines.slice(startN - 1, endN).join("\n");
                 return {
                     ok: true,
@@ -777,15 +789,24 @@ export default defineObject({
                     content: sliced,
                     bytes: Buffer.byteLength(sliced),
                     lines: [startN, endN],
-                    lines_total: total,
+                    lines_total,
                 };
             }
 
-            const maxBytes = 50_000;
-            const lines_total = body.split("\n").length;
-            if (body.length > maxBytes) {
-                return { ok: true, path: target, truncated: true, content: body.slice(0, maxBytes), bytes: body.length, lines_total };
+            // No explicit lines range: auto-truncate to DEFAULT_MAX_LINES if file is larger.
+            if (lines_total > DEFAULT_MAX_LINES) {
+                const truncatedContent = allLines.slice(0, DEFAULT_MAX_LINES).join("\n");
+                return {
+                    ok: true,
+                    path: target,
+                    truncated: true,
+                    content: truncatedContent,
+                    bytes: body.length,
+                    lines_total,
+                    _note: `auto-truncated to first ${DEFAULT_MAX_LINES} lines; use lines:[start,end] to read more (max 500 per read)`,
+                };
             }
+
             return { ok: true, path: target, content: body, bytes: body.length, lines_total };
         },
 
