@@ -34,15 +34,21 @@ async function main(): Promise<void> {
     if (seeds.supervisor.created) console.log("[ooc-3] seeded supervisor stone");
     if (seeds.user.created) console.log("[ooc-3] seeded user stone");
 
-    // 3. Build registry: load builtin prototypes from source tree + branch stones from worldRoot
+    // 3. Build registry: load builtin prototypes + source-tree branch stones + user world stones
     const registry = new ObjectRegistry();
+    const cwd = process.cwd();
 
     // Load builtin prototypes from the source-tree stones/_builtin
-    const cwd = process.cwd();
     const builtinRecords = await loadObjects({ worldRoot: cwd });
     for (const r of builtinRecords) registry.set(r);
 
-    // Load persistent branch stones from --world
+    // Load source-tree branch stones (the 9 AgentOfX seeded in repo's stones/main/objects/)
+    // These are only in cwd, not in --world, so fresh worlds still see the full harness.
+    const cwdBranchRecords = await loadObjects({ worldRoot: cwd, branch });
+    for (const r of cwdBranchRecords) registry.set(r);
+
+    // Load user persistent stones from --world (supervisor, user, any user-added).
+    // User-defined stones override cwd defaults for the same URI (registry.set semantics).
     const persistentRecords = await loadObjects({ worldRoot, branch });
     for (const r of persistentRecords) registry.set(r);
 
@@ -64,7 +70,7 @@ async function main(): Promise<void> {
     }
 
     // 5. Start HTTP server
-    startHttpServer({ worker, registry, branch }, port);
+    startHttpServer({ worker, registry, branch, sourceCwd: cwd }, port);
     console.log(`[ooc-3] server listening on http://localhost:${port}`);
 
     // Graceful shutdown

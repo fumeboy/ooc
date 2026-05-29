@@ -61,7 +61,7 @@ describe("POST /api/sessions", () => {
         expect(res.status).toBe(400);
     });
 
-    test("创建 session → 返回 sessionId + threadId", async () => {
+    test("创建 session → 返回 sessionId（无 initPrompt 时不创建 thread）", async () => {
         const worker = makeTestWorker();
         const app = buildApp({ worker });
         const res = await app.handle(
@@ -70,6 +70,28 @@ describe("POST /api/sessions", () => {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     objectUri: "ooc://stones/main/objects/agent_a",
+                }),
+            }),
+        );
+        expect(res.status).toBe(200);
+        const body = (await json(res)) as { ok: boolean; sessionId: string; threadId?: string };
+        expect(body.ok).toBe(true);
+        expect(typeof body.sessionId).toBe("string");
+        // No init thread spawned without initPrompt
+        expect(body.threadId).toBeUndefined();
+        expect(worker.list().length).toBe(0);
+    });
+
+    test("传入 initPrompt → 创建 thread 并同步等待完成", async () => {
+        const worker = makeTestWorker();
+        const app = buildApp({ worker });
+        const res = await app.handle(
+            new Request("http://localhost/api/sessions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    objectUri: "ooc://stones/main/objects/root",
+                    initPrompt: "Hello, initialize.",
                     maxTicks: 2,
                 }),
             }),
@@ -78,24 +100,8 @@ describe("POST /api/sessions", () => {
         const body = (await json(res)) as { ok: boolean; sessionId: string; threadId: string };
         expect(body.ok).toBe(true);
         expect(typeof body.sessionId).toBe("string");
+        // threadId present when initPrompt was given
         expect(typeof body.threadId).toBe("string");
-        // thread 已加入 worker queue
-        expect(worker.get(body.threadId)).toBeDefined();
-    });
-
-    test("提交的 thread status=running", async () => {
-        const worker = makeTestWorker();
-        const app = buildApp({ worker });
-        const res = await app.handle(
-            new Request("http://localhost/api/sessions", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ objectUri: "ooc://stones/main/objects/root" }),
-            }),
-        );
-        const body = (await json(res)) as { threadId: string };
-        const thread = worker.get(body.threadId)!;
-        expect(thread.status).toBe("running");
     });
 });
 
@@ -111,19 +117,23 @@ describe("GET /api/sessions/:sessionId", () => {
         expect(body.threads).toEqual([]);
     });
 
-    test("已创建 session → threads 包含正确 thread", async () => {
+    test("已创建 session（含 initPrompt）→ threads 包含正确 thread", async () => {
         const worker = makeTestWorker();
         const app = buildApp({ worker });
 
-        // 先创建 session
+        // 先创建 session（带 initPrompt 才会产生 thread）
         const createRes = await app.handle(
             new Request("http://localhost/api/sessions", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ objectUri: "ooc://stones/main/objects/agent_a" }),
+                body: JSON.stringify({
+                    objectUri: "ooc://stones/main/objects/agent_a",
+                    initPrompt: "initialize",
+                }),
             }),
         );
         const created = (await json(createRes)) as { sessionId: string; threadId: string };
+        expect(typeof created.threadId).toBe("string");
 
         // 再查询
         const getRes = await app.handle(
@@ -149,14 +159,19 @@ describe("GET /api/threads/:threadId", () => {
         const worker = makeTestWorker();
         const app = buildApp({ worker });
 
+        // Use initPrompt to trigger thread creation
         const createRes = await app.handle(
             new Request("http://localhost/api/sessions", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ objectUri: "ooc://stones/main/objects/root" }),
+                body: JSON.stringify({
+                    objectUri: "ooc://stones/main/objects/root",
+                    initPrompt: "initialize",
+                }),
             }),
         );
         const created = (await json(createRes)) as { threadId: string };
+        expect(typeof created.threadId).toBe("string");
 
         const res = await app.handle(
             new Request(`http://localhost/api/threads/${created.threadId}`),

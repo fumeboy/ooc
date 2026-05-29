@@ -52,6 +52,12 @@ export interface HttpDeps {
     registry?: ObjectRegistry;
     /** stones branch，默认 "main" */
     branch?: string;
+    /**
+     * 源码仓库根目录（即 process.cwd()）。
+     * 用于 /api/stones 同时列出 cwd branch stones（如 9 个 AgentOfX）。
+     * 若不传，/api/stones 仅列出 worldRoot 下的 stones。
+     */
+    sourceCwd?: string;
 }
 
 /** 校验路径不跨出 worldRoot（安全边界）。 */
@@ -132,6 +138,7 @@ export function buildApp(deps: HttpDeps): Elysia {
     const { worker } = deps;
     const sharedRegistry = deps.registry;
     const defaultBranch = deps.branch ?? "main";
+    const sourceCwd = deps.sourceCwd;
 
     /* -------- global error → JSON -------- */
 
@@ -199,9 +206,14 @@ export function buildApp(deps: HttpDeps): Elysia {
 
     /**
      * POST /api/sessions
-     * body: { objectUri: string; systemPrompt?: string; maxTicks?: number }
+     * body: { objectUri: string; initPrompt?: string; systemPrompt?: string; maxTicks?: number }
      *
-     * 创建 session、提交 ThinkThread 到 worker queue、返回 sessionId + threadId。
+     * 创建 session 目录，返回 sessionId。
+     *
+     * 不再自动提交 init thread，避免与后续 /api/talk 产生竞争。
+     * 如需在创建 session 时立即运行 LLM，传入 initPrompt（可选）：
+     *   - 创建 init thread 并 runUntilThread 完成后再返回
+     *   - 适用于需要预热或一次性初始化任务的场景
      */
     app.post("/api/sessions", async ({ body }) => {
         const b = body as Record<string, unknown>;
@@ -214,25 +226,6 @@ export function buildApp(deps: HttpDeps): Elysia {
         }
 
         const sessionId = shortId("ses");
-        const threadId = shortId("t");
-        const maxTicks = typeof b?.maxTicks === "number" ? b.maxTicks : 12;
-        const systemPrompt = typeof b?.systemPrompt === "string"
-            ? b.systemPrompt
-            : `You are an OOC Object at ${objectUri}. Complete your task and stop.`;
-
-        const thread: ThinkThread = {
-            id: threadId,
-            sessionId,
-            objectUri,
-            messages: [
-                { type: "message" as const, role: "system" as const, content: systemPrompt },
-            ],
-            status: "running",
-            maxTicks,
-            ticks: 0,
-        };
-
-        worker.submit(thread);
 
         // Write .session.json (idempotent)
         const sessionMeta = { createdAt: new Date().toISOString(), objectUri };
@@ -246,10 +239,40 @@ export function buildApp(deps: HttpDeps): Elysia {
             await fs.writeFile(sessionFile, JSON.stringify(sessionMeta, null, 2));
         }
 
+        // Optional: run init thread synchronously if initPrompt provided
+        if (typeof b?.initPrompt === "string" && b.initPrompt.length > 0) {
+            const threadId = shortId("t");
+            const maxTicks = typeof b?.maxTicks === "number" ? b.maxTicks : 12;
+            const systemPrompt = typeof b?.systemPrompt === "string"
+                ? b.systemPrompt
+                : `You are an OOC Object at ${objectUri}. Complete your task and stop.`;
+
+            const thread: ThinkThread = {
+                id: threadId,
+                sessionId,
+                objectUri,
+                messages: [
+                    { type: "message" as const, role: "system" as const, content: systemPrompt },
+                    { type: "message" as const, role: "user" as const, content: b.initPrompt as string },
+                ],
+                status: "running",
+                maxTicks,
+                ticks: 0,
+            };
+
+            worker.submit(thread);
+            await worker.runUntilThread(threadId, 90_000);
+
+            return {
+                ok: true,
+                sessionId,
+                threadId,
+            };
+        }
+
         return {
             ok: true,
             sessionId,
-            threadId,
         };
     });
 
@@ -354,6 +377,8 @@ export function buildApp(deps: HttpDeps): Elysia {
      * GET /api/stones?branch=main
      *
      * 列出 branch 下所有 stone objects。
+     * 合并 sourceCwd branch stones（如 9 个 AgentOfX）与 worldRoot branch stones（supervisor/user）。
+     * worldRoot 同名 stone 覆盖 sourceCwd 同名 stone（URI 为 key）。
      * response: [{ uri, name, title, kind }]
      */
     app.get("/api/stones", async ({ query }) => {
@@ -365,29 +390,42 @@ export function buildApp(deps: HttpDeps): Elysia {
                 { status: 400, headers: { "Content-Type": "application/json" } },
             );
         }
-        const objectsDir = path.join(worker.worldRoot, "stones", branch, "objects");
-        const stones: Array<{ uri: string; name: string; title?: string; kind: string }> = [];
-        try {
-            const entries = await fs.readdir(objectsDir, { withFileTypes: true });
-            for (const entry of entries) {
-                if (!entry.isDirectory()) continue;
-                const name = entry.name;
-                const uri = `ooc://stones/${branch}/objects/${name}`;
-                // 尝试读 self.md title
-                let title: string | undefined;
-                const selfPath = path.join(objectsDir, name, "self.md");
-                try {
-                    const raw = await fs.readFile(selfPath, "utf8");
-                    const m = raw.match(/^title:\s*(.+)$/m);
-                    if (m) title = m[1]!.trim();
-                } catch {
-                    // ok
+
+        /** 从指定 root 扫描 stones，按 uri 为 key 返回 Map。 */
+        async function scanStones(root: string): Promise<Map<string, { uri: string; name: string; title?: string; kind: string }>> {
+            const result = new Map<string, { uri: string; name: string; title?: string; kind: string }>();
+            const objectsDir = path.join(root, "stones", branch, "objects");
+            try {
+                const entries = await fs.readdir(objectsDir, { withFileTypes: true });
+                for (const entry of entries) {
+                    if (!entry.isDirectory()) continue;
+                    const name = entry.name;
+                    const uri = `ooc://stones/${branch}/objects/${name}`;
+                    let title: string | undefined;
+                    const selfPath = path.join(objectsDir, name, "self.md");
+                    try {
+                        const raw = await fs.readFile(selfPath, "utf8");
+                        const m = raw.match(/^title:\s*(.+)$/m);
+                        if (m) title = m[1]!.trim();
+                    } catch {
+                        // ok
+                    }
+                    result.set(uri, { uri, name, title, kind: "persistent" });
                 }
-                stones.push({ uri, name, title, kind: "persistent" });
+            } catch {
+                // objectsDir 不存在时忽略
             }
-        } catch {
-            // objectsDir 不存在返回空
+            return result;
         }
+
+        // Start with cwd branch stones (AgentOfX from repo), then override with worldRoot stones
+        const stoneMap = new Map<string, { uri: string; name: string; title?: string; kind: string }>();
+        if (sourceCwd && sourceCwd !== worker.worldRoot) {
+            for (const [k, v] of await scanStones(sourceCwd)) stoneMap.set(k, v);
+        }
+        for (const [k, v] of await scanStones(worker.worldRoot)) stoneMap.set(k, v);
+
+        const stones = Array.from(stoneMap.values());
         return { ok: true, branch, stones };
     });
 
