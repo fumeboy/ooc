@@ -102,6 +102,49 @@ const METHOD_SCHEMAS: Record<string, { description: string; properties?: Record<
     },
     open_knowledge: { description: "(Skeleton, P6+) Open a knowledge slug.", properties: { slug: { type: "string" } }, required: ["slug"] },
     end: { description: "End the conversation. Call this after you've sent your final reply via talk().", properties: {} },
+    repo_read: {
+        description: "Read any file in the OOC-3 source tree (relative to repo root). Use this to understand the system's current implementation. Path must be relative to repo root (e.g., 'src/thinkable/thinkloop.ts', 'stones/main/objects/supervisor/readme.md').",
+        properties: {
+            path: { type: "string", description: "File path relative to repo root" },
+        },
+        required: ["path"],
+    },
+    repo_write: {
+        description: "Write to any file in the OOC-3 source tree (relative to repo root). Use this to modify the system's source code, frontend, configs, stones, or docs. WARNING: changes affect the live system. Always run repo_run_tsc after code changes and repo_run_tests after structural changes.",
+        properties: {
+            path: { type: "string", description: "File path relative to repo root" },
+            content: { type: "string", description: "Full file content to write" },
+        },
+        required: ["path", "content"],
+    },
+    repo_run_tests: {
+        description: "Run bun test [pattern] from repo root to verify changes. Returns stdout/stderr and exit code. Use after modifying source code to confirm nothing is broken. Skip in fast iterations; run before committing.",
+        properties: {
+            pattern: { type: "string", description: "Optional test file pattern or path to run specific tests" },
+        },
+    },
+    repo_run_tsc: {
+        description: "Run bunx tsc --noEmit from repo root to type-check the codebase. Returns error count and output. Run after any TypeScript source changes to catch type errors before testing.",
+        properties: {},
+    },
+    repo_git_diff: {
+        description: "Show git diff for the repo (or a specific path). Use to inspect what changed before committing.",
+        properties: {
+            path: { type: "string", description: "Optional file/dir path relative to repo root to diff" },
+        },
+    },
+    repo_git_status: {
+        description: "Show git status --short for the repo. Use to see which files were modified before committing.",
+        properties: {},
+    },
+    repo_git_commit: {
+        description: "Commit staged/changed files with a [ooc-iteration] prefix for traceability. Does NOT push (human will review). Appends Iterated-By footer automatically. Use only after verifying tsc + tests are green.",
+        properties: {
+            message: { type: "string", description: "Commit message. Will be prefixed with [ooc-iteration] if not already." },
+            files: { type: "array", items: { type: "string" }, description: "Optional list of files to stage. Omit to stage all changes." },
+        },
+        required: ["message"],
+    },
 };
 
 /**

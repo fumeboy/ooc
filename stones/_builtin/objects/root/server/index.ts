@@ -8,11 +8,13 @@
  * P5 阶段: 11 个 B 类 method body 替换为真实 flow 层写入实装；
  *          其余 6 个 (grep/glob/open_file/open_knowledge/metaprog/write_file/end) 仍 skeleton (P6+)。
  * P8 阶段: pool_memory 切片 + memory_record method + metaprog 最小实装 + maxTokens 提升。
+ * Round 10: repo_* methods — self-iteration capability (read/write repo source, tsc, tests, git).
  *
  * 详见 spec V2 §3 + meta/object.doc.ts:patches.b_class_collapse。
  */
 
 import { promises as fs } from "node:fs";
+import * as fsSync from "node:fs";
 import * as path from "node:path";
 import { defineObject, type ObjectContext } from "@src/executable/server";
 import {
@@ -25,6 +27,23 @@ import {
     threadDir,
     todosFile,
 } from "@src/persistable/flow-paths";
+
+/* -------------------- REPO_ROOT detection (walk-up to .git) -------------------- */
+
+function findRepoRoot(): string {
+    let dir = path.resolve(process.cwd());
+    while (true) {
+        try {
+            const stat = fsSync.statSync(path.join(dir, ".git"));
+            if (stat.isDirectory() || stat.isFile()) return dir;
+        } catch { /* not here */ }
+        const parent = path.dirname(dir);
+        if (parent === dir) throw new Error("repo root not found (no .git ancestor)");
+        dir = parent;
+    }
+}
+
+const REPO_ROOT = findRepoRoot();
 
 /* -------------------- defaultContext: 真实实装 -------------------- */
 
@@ -712,6 +731,192 @@ export default defineObject({
             // Returns a sentinel that thinkloop checks to terminate the thread.
             // Call this after sending your final reply via talk().
             return { ok: true, __ooc_thread_action: "end" };
+        },
+
+        /* -------------------- repo_* methods: self-iteration capability -------------------- */
+
+        async repo_read(args: any, _ctx: ObjectContext) {
+            if (!args?.path || typeof args.path !== "string" || args.path.trim() === "") {
+                throw new Error("repo_read: args.path (non-empty string) required");
+            }
+            const target = path.resolve(REPO_ROOT, args.path);
+            if (!target.startsWith(REPO_ROOT + path.sep) && target !== REPO_ROOT) {
+                throw new Error(`repo_read: path outside repo root: ${args.path}`);
+            }
+            const body = await fs.readFile(target, "utf8");
+            const maxBytes = 50_000;
+            if (body.length > maxBytes) {
+                return { ok: true, path: target, truncated: true, content: body.slice(0, maxBytes), bytes: body.length };
+            }
+            return { ok: true, path: target, content: body, bytes: body.length };
+        },
+
+        async repo_write(args: any, ctx: ObjectContext) {
+            if (!args?.path || typeof args.path !== "string" || args.path.trim() === "") {
+                throw new Error("repo_write: args.path (non-empty string) required");
+            }
+            if (typeof args.content !== "string") {
+                throw new Error("repo_write: args.content (string) required");
+            }
+            const target = path.resolve(REPO_ROOT, args.path);
+            if (!target.startsWith(REPO_ROOT + path.sep) && target !== REPO_ROOT) {
+                throw new Error(`repo_write: path outside repo root: ${args.path}`);
+            }
+            await fs.mkdir(path.dirname(target), { recursive: true });
+            await fs.writeFile(target, args.content);
+            const bytes = Buffer.byteLength(args.content);
+
+            // Audit log: flows/<sessionId>/objects/<self>/repo-writes.jsonl
+            if (ctx.sessionId) {
+                const selfName = nameFromUri(ctx.record.uri);
+                const auditDir = path.join(ctx.worldRoot, "flows", ctx.sessionId, "objects", selfName);
+                await fs.mkdir(auditDir, { recursive: true });
+                const auditEntry = JSON.stringify({ ts: new Date().toISOString(), path: target, bytes }) + "\n";
+                await fs.appendFile(path.join(auditDir, "repo-writes.jsonl"), auditEntry);
+            }
+
+            return { ok: true, path: target, bytes };
+        },
+
+        async repo_run_tests(args: any, _ctx: ObjectContext) {
+            const cmd = ["bun", "test"];
+            if (args?.pattern && typeof args.pattern === "string") {
+                cmd.push(args.pattern);
+            }
+            const timeoutMs = 120_000;
+            try {
+                const proc = Bun.spawn({
+                    cmd,
+                    cwd: REPO_ROOT,
+                    stdout: "pipe",
+                    stderr: "pipe",
+                    env: { ...process.env, PATH: process.env.PATH ?? "/usr/bin:/bin" },
+                });
+                const exitCode = await Promise.race([
+                    proc.exited,
+                    new Promise<number>((_, rej) =>
+                        setTimeout(() => { proc.kill(); rej(new Error("repo_run_tests: timeout")); }, timeoutMs),
+                    ),
+                ]);
+                const maxBytes = 8_192;
+                const stdoutText = (await new Response(proc.stdout as any).text().catch(() => "")).slice(0, maxBytes);
+                const stderrText = (await new Response(proc.stderr as any).text().catch(() => "")).slice(0, maxBytes);
+                return { ok: exitCode === 0, exit_code: exitCode, stdout: stdoutText, stderr: stderrText };
+            } catch (err) {
+                return { ok: false, exit_code: -1, stdout: "", stderr: String((err as Error).message) };
+            }
+        },
+
+        async repo_run_tsc(_args: any, _ctx: ObjectContext) {
+            const timeoutMs = 60_000;
+            try {
+                const proc = Bun.spawn({
+                    cmd: ["bunx", "tsc", "--noEmit"],
+                    cwd: REPO_ROOT,
+                    stdout: "pipe",
+                    stderr: "pipe",
+                    env: { ...process.env, PATH: process.env.PATH ?? "/usr/bin:/bin" },
+                });
+                const exitCode = await Promise.race([
+                    proc.exited,
+                    new Promise<number>((_, rej) =>
+                        setTimeout(() => { proc.kill(); rej(new Error("repo_run_tsc: timeout")); }, timeoutMs),
+                    ),
+                ]);
+                const maxBytes = 8_192;
+                const stdoutText = (await new Response(proc.stdout as any).text().catch(() => "")).slice(0, maxBytes);
+                const stderrText = (await new Response(proc.stderr as any).text().catch(() => "")).slice(0, maxBytes);
+                const combined = (stdoutText + stderrText);
+                const errorsCount = (combined.match(/error TS\d+/g) ?? []).length;
+                return { ok: exitCode === 0, exit_code: exitCode, errors_count: errorsCount, output: combined };
+            } catch (err) {
+                return { ok: false, exit_code: -1, errors_count: -1, output: String((err as Error).message) };
+            }
+        },
+
+        async repo_git_diff(args: any, _ctx: ObjectContext) {
+            const cmd = ["git", "diff"];
+            if (args?.path && typeof args.path === "string") {
+                const target = path.resolve(REPO_ROOT, args.path);
+                if (!target.startsWith(REPO_ROOT + path.sep) && target !== REPO_ROOT) {
+                    throw new Error(`repo_git_diff: path outside repo root: ${args.path}`);
+                }
+                cmd.push("--", target);
+            }
+            try {
+                const proc = Bun.spawnSync({
+                    cmd,
+                    cwd: REPO_ROOT,
+                    stdout: "pipe",
+                    stderr: "pipe",
+                });
+                const diff = (proc.stdout?.toString() ?? "").slice(0, 16_384);
+                return { ok: proc.exitCode === 0, diff };
+            } catch (err) {
+                return { ok: false, diff: "", error: String((err as Error).message) };
+            }
+        },
+
+        async repo_git_status(_args: any, _ctx: ObjectContext) {
+            try {
+                const proc = Bun.spawnSync({
+                    cmd: ["git", "status", "--short"],
+                    cwd: REPO_ROOT,
+                    stdout: "pipe",
+                    stderr: "pipe",
+                });
+                return { ok: proc.exitCode === 0, status: proc.stdout?.toString() ?? "" };
+            } catch (err) {
+                return { ok: false, status: "", error: String((err as Error).message) };
+            }
+        },
+
+        async repo_git_commit(args: any, ctx: ObjectContext) {
+            if (!args?.message || typeof args.message !== "string" || args.message.trim() === "") {
+                throw new Error("repo_git_commit: args.message (non-empty string) required");
+            }
+            // Mandatory [ooc-iteration] prefix
+            let message = args.message.trim();
+            if (!message.startsWith("[ooc-iteration]")) {
+                message = `[ooc-iteration] ${message}`;
+            }
+            // Append Iterated-By footer
+            const selfUri = ctx.record.uri;
+            message = `${message}\n\nIterated-By: ${selfUri}`;
+
+            // Stage files
+            const addArgs = (Array.isArray(args.files) && args.files.length > 0)
+                ? args.files.map((f: any) => String(f))
+                : ["."];
+            try {
+                const addProc = Bun.spawnSync({
+                    cmd: ["git", "add", ...addArgs],
+                    cwd: REPO_ROOT,
+                    stdout: "pipe",
+                    stderr: "pipe",
+                });
+                if (addProc.exitCode !== 0) {
+                    return { ok: false, commit_sha: null, message, error: addProc.stderr?.toString() ?? "git add failed" };
+                }
+
+                const commitProc = Bun.spawnSync({
+                    cmd: ["git", "commit", "-m", message],
+                    cwd: REPO_ROOT,
+                    stdout: "pipe",
+                    stderr: "pipe",
+                });
+                if (commitProc.exitCode !== 0) {
+                    return { ok: false, commit_sha: null, message, error: commitProc.stderr?.toString() ?? "git commit failed" };
+                }
+
+                // Extract commit SHA from output
+                const out = commitProc.stdout?.toString() ?? "";
+                const shaMatch = out.match(/\[[\w\-]+ ([0-9a-f]{7,})\]/);
+                const commit_sha = shaMatch ? shaMatch[1] : null;
+                return { ok: true, commit_sha, message };
+            } catch (err) {
+                return { ok: false, commit_sha: null, message, error: String((err as Error).message) };
+            }
         },
     },
     private: {
