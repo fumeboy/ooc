@@ -1,7 +1,13 @@
+/**
+ * FilesView — faithful port of ooc-2 files view visual style.
+ * Two-pane: tree sidebar + file viewer.
+ */
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ChevronRight, File, Folder, RefreshCw } from "lucide-react";
+import { File, Folder, FolderOpen, RefreshCw, ChevronRight, ChevronDown } from "lucide-react";
 import { getTree, readFile, type TreeEntry } from "../api";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface TreeNode {
   path: string;
@@ -16,63 +22,80 @@ function buildNode(entry: TreeEntry, parentPath: string): TreeNode {
   return { path, name: entry.name, type: entry.type };
 }
 
-function TreeRowItem({
-  node,
-  depth,
-  activePath,
-  expandedDirs,
-  onToggle,
-  onFileClick,
+function attachChildren(nodes: TreeNode[], targetPath: string, children: TreeNode[]): TreeNode[] {
+  return nodes.map((n) => {
+    if (n.path === targetPath) return { ...n, children, loaded: true };
+    if (n.children) return { ...n, children: attachChildren(n.children, targetPath, children) };
+    return n;
+  });
+}
+
+function fileExt(name: string): string {
+  return name.split(".").pop()?.toLowerCase() ?? "";
+}
+
+function isTextFile(path: string): boolean {
+  const ext = fileExt(path);
+  return ["ts", "tsx", "js", "jsx", "json", "md", "txt", "yaml", "yml", "sh", "css", "html", "toml", "lock", "gitignore", "env"].includes(ext);
+}
+
+function isMarkdown(path: string): boolean {
+  return fileExt(path) === "md";
+}
+
+function TreeNodeItem({
+  node, depth, activePath, expandedDirs, onToggle, onFileClick,
 }: {
-  node: TreeNode;
-  depth: number;
-  activePath: string | undefined;
+  node: TreeNode; depth: number; activePath?: string;
   expandedDirs: Set<string>;
-  onToggle: (node: TreeNode) => void;
-  onFileClick: (node: TreeNode) => void;
+  onToggle: (n: TreeNode) => void;
+  onFileClick: (n: TreeNode) => void;
 }) {
   const isExpanded = expandedDirs.has(node.path);
+  const selected = activePath === node.path;
   return (
-    <div>
+    <div className="tree-node">
       <button
-        className={`tree-row${activePath === node.path ? " active" : ""}`}
-        style={{ paddingLeft: 8 + depth * 14 }}
+        className={`tree-button ${selected ? "active" : ""}`}
+        style={{ paddingLeft: 6 + depth * 14 }}
+        title={node.name}
         onClick={() => node.type === "dir" ? onToggle(node) : onFileClick(node)}
       >
-        {node.type === "dir" ? (
-          <ChevronRight size={11} style={{ transform: isExpanded ? "rotate(90deg)" : "none", transition: "transform .14s ease", flexShrink: 0 }} />
-        ) : (
-          <span style={{ width: 11, flexShrink: 0 }} />
-        )}
-        {node.type === "dir" ? (
-          <Folder size={12} style={{ color: "var(--muted-fg)", flexShrink: 0 }} />
-        ) : (
-          <File size={12} style={{ color: "var(--muted-fg)", flexShrink: 0 }} />
-        )}
-        <span className="tree-row-name">{node.name}</span>
+        <span className="twisty">
+          {node.type === "dir"
+            ? (isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />)
+            : null}
+        </span>
+        {node.type === "dir"
+          ? (isExpanded ? <FolderOpen size={13} className="tree-icon folder" /> : <Folder size={13} className="tree-icon folder" />)
+          : <File size={13} className="tree-icon file" />}
+        <span className="tree-label" title={node.name}>{node.name}</span>
       </button>
       {node.type === "dir" && isExpanded && node.children && (
-        <div>
-          {node.children.map((child) => (
-            <TreeRowItem
-              key={child.path}
-              node={child}
-              depth={depth + 1}
-              activePath={activePath}
-              expandedDirs={expandedDirs}
-              onToggle={onToggle}
-              onFileClick={onFileClick}
-            />
-          ))}
-        </div>
+        node.children.map((child) => (
+          <TreeNodeItem
+            key={child.path}
+            node={child}
+            depth={depth + 1}
+            activePath={activePath}
+            expandedDirs={expandedDirs}
+            onToggle={onToggle}
+            onFileClick={onFileClick}
+          />
+        ))
       )}
     </div>
   );
 }
 
+function formatBytes(b: number): string {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function FilesView() {
   const navigate = useNavigate();
-  // path comes from the wildcard route /files/*
   const params = useParams();
   const filePath = (params["*"] as string | undefined) ?? "";
 
@@ -85,6 +108,7 @@ export function FilesView() {
   const [fileError, setFileError] = useState<string | undefined>();
   const [treeLoading, setTreeLoading] = useState(true);
   const [treeError, setTreeError] = useState<string | undefined>();
+  const [renderMd, setRenderMd] = useState(true);
 
   async function loadDir(path: string | undefined): Promise<TreeNode[]> {
     const res = await getTree(path);
@@ -97,9 +121,9 @@ export function FilesView() {
     try {
       const nodes = await loadDir(undefined);
       setRoots(nodes);
-      const dirMap = new Map(loadedDirs);
-      dirMap.set("", nodes);
-      setLoadedDirs(dirMap);
+      const dm = new Map(loadedDirs);
+      dm.set("", nodes);
+      setLoadedDirs(dm);
     } catch (e) {
       setTreeError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -109,15 +133,14 @@ export function FilesView() {
 
   useEffect(() => { void loadRoot(); }, []);
 
-  // Reload file if filePath param changes
   useEffect(() => {
     if (filePath) {
       setActivePath(filePath);
-      void loadFile(filePath);
+      void loadFileContent(filePath);
     }
   }, [filePath]);
 
-  async function loadFile(path: string) {
+  async function loadFileContent(path: string) {
     setFileLoading(true);
     setFileError(undefined);
     setFileContent(null);
@@ -139,66 +162,45 @@ export function FilesView() {
     } else {
       expanded.add(node.path);
       setExpandedDirs(expanded);
-      // Load children if not already loaded
       if (!loadedDirs.has(node.path)) {
         try {
           const children = await loadDir(node.path);
-          // Attach children to node
           setRoots((prev) => attachChildren(prev, node.path, children));
           const dm = new Map(loadedDirs);
           dm.set(node.path, children);
           setLoadedDirs(dm);
-        } catch {
-          // ignore
-        }
+        } catch { /* ignore */ }
       }
     }
-  }
-
-  function attachChildren(nodes: TreeNode[], targetPath: string, children: TreeNode[]): TreeNode[] {
-    return nodes.map((n) => {
-      if (n.path === targetPath) return { ...n, children, loaded: true };
-      if (n.children) return { ...n, children: attachChildren(n.children, targetPath, children) };
-      return n;
-    });
   }
 
   function handleFileClick(node: TreeNode) {
     setActivePath(node.path);
     navigate(`/files/${node.path}`);
-    void loadFile(node.path);
+    void loadFileContent(node.path);
   }
 
-  function formatBytes(b: number): string {
-    if (b < 1024) return `${b} B`;
-    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
-    return `${(b / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
-  const isText = (path: string) => {
-    const ext = path.split(".").pop()?.toLowerCase() ?? "";
-    return ["ts", "tsx", "js", "jsx", "json", "md", "txt", "yaml", "yml", "sh", "css", "html", "toml", "lock"].includes(ext);
-  };
+  const fileName = activePath ? activePath.split("/").pop() ?? activePath : undefined;
 
   return (
     <>
-      <div className="main-header">
+      <div className="header">
         <div style={{ flex: 1 }}>
-          <div className="main-title">Files</div>
-          {activePath && <div className="main-subtitle">{activePath}</div>}
+          <div className="header-title">Files</div>
+          {activePath && <div className="muted small" style={{ fontFamily: "monospace", fontSize: 11 }}>{activePath}</div>}
         </div>
         <button className="btn btn-sm" onClick={loadRoot} disabled={treeLoading}>
-          <RefreshCw size={12} />
+          <RefreshCw size={12} className={treeLoading ? "is-spinning" : ""} />
         </button>
       </div>
 
-      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "240px minmax(0,1fr)", gap: 0, minHeight: 0, overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "220px minmax(0,1fr)", gap: 0, minHeight: 0, overflow: "hidden" }}>
         {/* Tree panel */}
-        <div style={{ borderRight: "1px solid var(--border)", overflowY: "auto", padding: "8px 4px" }}>
-          {treeError && <div className="error-msg" style={{ margin: 8 }}>{treeError}</div>}
-          {treeLoading && <div className="loading" style={{ padding: 12 }}>Loading…</div>}
+        <div style={{ borderRight: "1px solid var(--border)", overflowY: "auto", padding: "6px 4px" }}>
+          {treeError && <div className="error" style={{ margin: 6, fontSize: 11 }}>{treeError}</div>}
+          {treeLoading && <div className="muted small" style={{ padding: 8 }}>Loading…</div>}
           {roots.map((node) => (
-            <TreeRowItem
+            <TreeNodeItem
               key={node.path}
               node={node}
               depth={0}
@@ -211,25 +213,45 @@ export function FilesView() {
         </div>
 
         {/* File viewer */}
-        <div style={{ overflowY: "auto", padding: "14px 16px" }}>
+        <div style={{ overflowY: "auto", padding: "12px 14px" }}>
           {!activePath && (
             <div className="empty">Click a file in the tree to view its contents.</div>
           )}
-          {fileLoading && <div className="loading">Loading file…</div>}
-          {fileError && <div className="error-msg">{fileError}</div>}
+          {fileLoading && <div className="empty">Loading file…</div>}
+          {fileError && <div className="error">{fileError}</div>}
           {fileContent && activePath && (
             <>
               <div className="row space-between" style={{ marginBottom: 10 }}>
-                <div className="breadcrumb">
-                  <span>{activePath.split("/").pop()}</span>
+                <div className="row" style={{ gap: 6 }}>
+                  <strong style={{ fontSize: 13 }}>{fileName}</strong>
+                  {fileContent.truncated && <span className="pill" style={{ fontSize: 10 }}>truncated</span>}
                 </div>
                 <div className="row" style={{ gap: 6 }}>
                   <span className="muted small">{formatBytes(fileContent.bytes)}</span>
-                  {fileContent.truncated && <span className="pill" style={{ fontSize: 10 }}>truncated</span>}
+                  {isMarkdown(activePath) && (
+                    <button
+                      className={`btn btn-sm${renderMd ? " primary" : ""}`}
+                      onClick={() => setRenderMd((p) => !p)}
+                    >
+                      {renderMd ? "Rendered" : "Source"}
+                    </button>
+                  )}
                 </div>
               </div>
-              {isText(activePath) ? (
-                <pre className="code-block">{fileContent.content}</pre>
+
+              {isMarkdown(activePath) && renderMd ? (
+                <div className="markdown-content">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{fileContent.content}</ReactMarkdown>
+                </div>
+              ) : isTextFile(activePath) ? (
+                <pre className="file-viewer" style={{
+                  margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word",
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+                  fontSize: 12, lineHeight: 1.58,
+                  background: "rgba(246,247,244,.95)",
+                  border: "1px solid rgba(224,227,220,.92)",
+                  borderRadius: 10, padding: "10px 12px",
+                }}>{fileContent.content}</pre>
               ) : (
                 <div className="empty muted">Binary file — preview not available.</div>
               )}

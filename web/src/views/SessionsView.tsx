@@ -1,23 +1,39 @@
+/**
+ * SessionsView — ooc-2-style welcome + create session form.
+ * Uses ooc-3 /api/sessions endpoints.
+ */
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Layers, Plus, RefreshCw } from "lucide-react";
-import { listSessions, createSession, type Session } from "../api";
+import { listSessions, createSession, listStones, type Session, type StoneListItem } from "../api";
+
+function defaultSessionId(): string {
+  return `web-${Date.now()}`;
+}
 
 export function SessionsView() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [stones, setStones] = useState<StoneListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>();
   const [creating, setCreating] = useState(false);
-  const [draft, setDraft] = useState({ objectUri: "ooc://stones/main/objects/supervisor", systemPrompt: "" });
-  const [showForm, setShowForm] = useState(false);
+  const [draft, setDraft] = useState({
+    sessionId: defaultSessionId(),
+    objectUri: "",
+    systemPrompt: "",
+  });
 
   async function load() {
     setLoading(true);
     setError(undefined);
     try {
-      const res = await listSessions();
-      setSessions(res.sessions);
+      const [sessRes, stonesRes] = await Promise.all([listSessions(), listStones()]);
+      setSessions(sessRes.sessions);
+      setStones(stonesRes.stones);
+      if (!draft.objectUri && stonesRes.stones.length > 0) {
+        const first = stonesRes.stones[0]!;
+        setDraft((d) => ({ ...d, objectUri: `ooc://stones/main/objects/${first.name}` }));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -36,9 +52,7 @@ export function SessionsView() {
         objectUri: draft.objectUri.trim(),
         systemPrompt: draft.systemPrompt.trim() || undefined,
       });
-      setShowForm(false);
-      setDraft({ objectUri: "", systemPrompt: "" });
-      navigate(`/sessions/${res.sessionId}`);
+      navigate(`/sessions/${encodeURIComponent(res.sessionId)}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -47,85 +61,123 @@ export function SessionsView() {
   }
 
   return (
-    <>
-      <div className="main-header">
-        <Layers size={16} className="muted" />
-        <div style={{ flex: 1 }}>
-          <div className="main-title">Sessions</div>
-          <div className="main-subtitle">{sessions.length} active session{sessions.length !== 1 ? "s" : ""}</div>
-        </div>
-        <button className="btn btn-sm" onClick={load} disabled={loading}>
-          <RefreshCw size={12} />
-          Refresh
-        </button>
-        <button className="btn btn-sm primary" onClick={() => setShowForm((p) => !p)}>
-          <Plus size={12} />
-          New
-        </button>
-      </div>
+    <div className="main-body">
+      <div className="welcome-shell">
+        <div className="welcome-stack">
+          <div className="welcome-hero">
+            <strong className="welcome-title">Welcome to OOC-3</strong>
+            <div className="welcome-copy">
+              Create your first session, or pick one from the sidebar to continue.
+            </div>
+          </div>
 
-      <div className="main-body">
-        {error && <div className="error-msg" style={{ marginBottom: 12 }}>{error}</div>}
+          {error && <div className="error">{error}</div>}
 
-        {showForm && (
-          <div className="card" style={{ marginBottom: 16 }}>
-            <div className="card-title">New Session</div>
-            <div className="stack">
-              <label className="field-label">
-                Object URI
+          <div className="panel ui-card welcome-card">
+            <div className="welcome-card-head">
+              <strong>Create session</strong>
+              <div className="muted small">
+                Choose an object and type your first message — we'll start a new session.
+              </div>
+            </div>
+
+            <fieldset className="welcome-form-grid welcome-form-fieldset" disabled={creating}>
+              <div className="welcome-form-field">
+                <label className="ui-label" htmlFor="session-id">Session ID</label>
                 <input
-                  className="input"
-                  value={draft.objectUri}
-                  onChange={(e) => setDraft({ ...draft, objectUri: e.target.value })}
-                  placeholder="ooc://stones/main/objects/supervisor"
+                  id="session-id"
+                  className="input ui-input"
+                  value={draft.sessionId}
+                  onChange={(e) => setDraft({ ...draft, sessionId: e.target.value })}
+                  placeholder="session id"
                 />
-              </label>
-              <label className="field-label">
-                System Prompt (optional)
+              </div>
+
+              <div className="welcome-form-field">
+                <label className="ui-label" htmlFor="object-uri">Talk to (object URI)</label>
+                {stones.length > 0 ? (
+                  <div className="ui-select-shell">
+                    <select
+                      id="object-uri"
+                      className="input ui-select"
+                      value={draft.objectUri}
+                      onChange={(e) => setDraft({ ...draft, objectUri: e.target.value })}
+                    >
+                      {stones.map((stone) => (
+                        <option
+                          key={stone.uri}
+                          value={`ooc://stones/main/objects/${stone.name}`}
+                        >
+                          {stone.title ?? stone.name}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="ui-select-icon">▾</span>
+                  </div>
+                ) : (
+                  <input
+                    id="object-uri"
+                    className="input ui-input"
+                    value={draft.objectUri}
+                    onChange={(e) => setDraft({ ...draft, objectUri: e.target.value })}
+                    placeholder="ooc://stones/main/objects/supervisor"
+                  />
+                )}
+              </div>
+
+              <div className="welcome-form-field">
+                <label className="ui-label" htmlFor="system-prompt">System Prompt (optional)</label>
                 <textarea
-                  className="textarea"
+                  id="system-prompt"
+                  className="textarea ui-textarea"
                   value={draft.systemPrompt}
                   onChange={(e) => setDraft({ ...draft, systemPrompt: e.target.value })}
                   placeholder="Override default system prompt…"
                 />
-              </label>
-              <div className="row">
-                <button className="btn btn-sm primary" onClick={handleCreate} disabled={creating || !draft.objectUri.trim()}>
-                  {creating ? "Creating…" : "Create"}
+              </div>
+
+              <div className="welcome-form-actions">
+                <button
+                  type="button"
+                  className="btn primary btn-lg welcome-submit-btn"
+                  disabled={creating || !draft.objectUri.trim() || !draft.sessionId.trim()}
+                  onClick={handleCreate}
+                >
+                  {creating ? "Creating…" : "Create session"}
                 </button>
-                <button className="btn btn-sm" onClick={() => setShowForm(false)}>Cancel</button>
+              </div>
+            </fieldset>
+          </div>
+
+          {!loading && sessions.length > 0 && (
+            <div className="panel ui-card welcome-card">
+              <div className="welcome-card-head">
+                <strong>Recent sessions</strong>
+                <div className="muted small">{sessions.length} session{sessions.length !== 1 ? "s" : ""}</div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {sessions.slice(0, 8).map((s) => (
+                  <button
+                    key={s.sessionId}
+                    className="list-button"
+                    onClick={() => navigate(`/sessions/${encodeURIComponent(s.sessionId)}`)}
+                  >
+                    <div style={{ fontSize: 12, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {s.sessionId}
+                    </div>
+                    {s.threadCount > 0 && (
+                      <div style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
+                        {s.threadCount} thread{s.threadCount !== 1 ? "s" : ""}
+                        {s.createdAt ? " · " + new Date(s.createdAt).toLocaleString() : ""}
+                      </div>
+                    )}
+                  </button>
+                ))}
               </div>
             </div>
-          </div>
-        )}
-
-        {loading && <div className="loading">Loading sessions…</div>}
-
-        {!loading && sessions.length === 0 && (
-          <div className="empty">
-            No sessions yet.<br />
-            <span className="small muted">Create one to start a conversation with an OOC Object.</span>
-          </div>
-        )}
-
-        {sessions.map((session) => (
-          <button
-            key={session.sessionId}
-            className="list-item"
-            style={{ width: "100%", marginBottom: 4 }}
-            onClick={() => navigate(`/sessions/${session.sessionId}`)}
-          >
-            <Layers size={14} className="muted" style={{ flexShrink: 0 }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="list-item-label">{session.sessionId}</div>
-              <div className="list-item-meta">
-                {session.threadCount > 0 && `${session.threadCount} thread${session.threadCount !== 1 ? "s" : ""} · `}
-                {session.createdAt ? new Date(session.createdAt).toLocaleString() : "no timestamp"}
-              </div>
-            </div>
-          </button>
-        ))}
+          )}
+        </div>
       </div>
-    </>
+    </div>
   );
 }

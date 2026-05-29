@@ -6,6 +6,7 @@ import { SessionObjectView } from "./views/SessionObjectView";
 import { StonesListView } from "./views/StonesListView";
 import { StoneDetailView } from "./views/StoneDetailView";
 import { FilesView } from "./views/FilesView";
+import { WorldView } from "./views/WorldView";
 
 const router = createBrowserRouter([
   {
@@ -19,6 +20,7 @@ const router = createBrowserRouter([
       { path: "stones", element: <StonesListView /> },
       { path: "stones/:name", element: <StoneDetailView /> },
       { path: "files/*", element: <FilesView /> },
+      { path: "world", element: <WorldView /> },
     ],
   },
 ]);
