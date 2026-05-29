@@ -997,7 +997,7 @@ export function buildApp(deps: HttpDeps): Elysia {
                 status: "running",
                 maxTicks: typeof b?.maxTicks === "number" ? b.maxTicks : 12,
                 ticks: 0,
-                llmTimeoutMs: 60_000,
+                llmTimeoutMs: typeof b?.llmTimeoutMs === "number" ? b.llmTimeoutMs : 120_000,
             };
 
             // 4. Submit and run worker until this specific thread is done
