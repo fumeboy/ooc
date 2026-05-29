@@ -72,7 +72,7 @@ export function AppShell() {
 
   // Refresh sessions list when on sessions tab or when location changes
   useEffect(() => {
-    void listSessions().then((res) => setSessions(res.sessions)).catch(() => {});
+    void listSessions().then((res) => setSessions(Array.isArray(res?.sessions) ? res.sessions : [])).catch(() => {});
   }, [location.pathname]);
 
   useEffect(() => {
@@ -236,7 +236,7 @@ function StonesQuickList({ onSelect }: { onSelect: (name: string) => void }) {
   const [stones, setStones] = useState<StoneListItem[]>([]);
 
   useEffect(() => {
-    void listStones().then((res) => setStones(res.stones)).catch(() => {});
+    void listStones().then((res) => setStones(Array.isArray(res?.stones) ? res.stones : [])).catch(() => {});
   }, []);
 
   if (stones.length === 0) return <div className="muted small" style={{ padding: "4px 8px" }}>No stones</div>;
