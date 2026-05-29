@@ -789,6 +789,96 @@ export default defineObject({
             return { ok: true, path: target, content: body, bytes: body.length, lines_total };
         },
 
+        async repo_search(args: any, _ctx: ObjectContext) {
+            if (!args?.pattern || typeof args.pattern !== "string" || args.pattern === "") {
+                throw new Error("repo_search: args.pattern (non-empty string) required");
+            }
+            let regex: RegExp;
+            try {
+                regex = new RegExp(args.pattern);
+            } catch (err) {
+                throw new Error(`repo_search: invalid regex pattern: ${(err as Error).message}`);
+            }
+            const maxResults = (typeof args.max_results === "number" && args.max_results > 0)
+                ? Math.floor(args.max_results)
+                : 100;
+
+            // Resolve and validate scan root.
+            const scanRoot = args?.path && typeof args.path === "string" && args.path.trim() !== ""
+                ? path.resolve(REPO_ROOT, args.path)
+                : REPO_ROOT;
+            if (!scanRoot.startsWith(REPO_ROOT + path.sep) && scanRoot !== REPO_ROOT) {
+                throw new Error(`repo_search: path outside repo root: ${args.path}`);
+            }
+
+            const SKIP_DIRS = new Set(["node_modules", ".git", "dist", ".ooc-world"]);
+            const matches: Array<{ file: string; line: number; content: string }> = [];
+            let total = 0;
+
+            async function walk(dir: string): Promise<void> {
+                if (matches.length >= maxResults) return;
+                let entries: import("node:fs").Dirent[];
+                try {
+                    entries = await fs.readdir(dir, { withFileTypes: true });
+                } catch {
+                    return;
+                }
+                for (const ent of entries) {
+                    if (matches.length >= maxResults) return;
+                    if (ent.isDirectory()) {
+                        if (SKIP_DIRS.has(ent.name)) continue;
+                        await walk(path.join(dir, ent.name));
+                        continue;
+                    }
+                    if (!ent.isFile()) continue;
+                    const filePath = path.join(dir, ent.name);
+                    let body: string;
+                    try {
+                        body = await fs.readFile(filePath, "utf8");
+                    } catch {
+                        continue; // binary or unreadable; skip
+                    }
+                    // Heuristic: skip files containing NUL bytes (binary).
+                    if (body.indexOf("\u0000") !== -1) continue;
+                    const lines = body.split("\n");
+                    for (let i = 0; i < lines.length; i++) {
+                        if (regex.test(lines[i] ?? "")) {
+                            total++;
+                            if (matches.length < maxResults) {
+                                matches.push({
+                                    file: path.relative(REPO_ROOT, filePath),
+                                    line: i + 1,
+                                    content: (lines[i] ?? "").slice(0, 500),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            const stat = await fs.stat(scanRoot).catch(() => null);
+            if (stat?.isFile()) {
+                const body = await fs.readFile(scanRoot, "utf8");
+                const lines = body.split("\n");
+                for (let i = 0; i < lines.length; i++) {
+                    if (regex.test(lines[i] ?? "")) {
+                        total++;
+                        if (matches.length < maxResults) {
+                            matches.push({
+                                file: path.relative(REPO_ROOT, scanRoot),
+                                line: i + 1,
+                                content: (lines[i] ?? "").slice(0, 500),
+                            });
+                        }
+                    }
+                }
+            } else {
+                await walk(scanRoot);
+            }
+
+            return { ok: true, matches, total };
+        },
+
         async repo_write(args: any, ctx: ObjectContext) {
             if (!args?.path || typeof args.path !== "string" || args.path.trim() === "") {
                 throw new Error("repo_write: args.path (non-empty string) required");

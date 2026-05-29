@@ -114,6 +114,15 @@ const METHOD_SCHEMAS: Record<string, { description: string; properties?: Record<
         },
         required: ["path"],
     },
+    repo_search: {
+        description: "Recursively search the repo for a regex pattern. Walks REPO_ROOT, skipping node_modules/.git/dist/.ooc-world, and returns line-level matches. Use this to locate code without reading entire files.",
+        properties: {
+            pattern: { type: "string", description: "Regex pattern (JS RegExp syntax) to search for." },
+            path: { type: "string", description: "Optional sub-path under repo root to limit the search (file or directory)." },
+            max_results: { type: "number", description: "Max matches returned (default 100)." },
+        },
+        required: ["pattern"],
+    },
     repo_write: {
         description: "Write to any file in the OOC-3 source tree (relative to repo root). Use this to modify the system's source code, frontend, configs, stones, or docs. WARNING: changes affect the live system. Always run repo_run_tsc after code changes and repo_run_tests after structural changes.",
         properties: {

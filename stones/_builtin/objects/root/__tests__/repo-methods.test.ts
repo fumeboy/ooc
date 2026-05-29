@@ -220,4 +220,59 @@ describe("root repo_* methods (Round 10)", () => {
             rootServer.public.repo_git_diff!({ path: "../../outside" } as any, ctx),
         ).rejects.toThrow(/outside repo root/);
     });
+
+    /* ---- repo_search ---- */
+
+    test("repo_search finds matches in real repo files", async () => {
+        const ctx = makeCtx();
+        const r = (await rootServer.public.repo_search!(
+            { pattern: "async repo_read", max_results: 5 } as any,
+            ctx,
+        )) as any;
+        expect(r.ok).toBe(true);
+        expect(Array.isArray(r.matches)).toBe(true);
+        expect(r.matches.length).toBeGreaterThan(0);
+        expect(r.matches.length).toBeLessThanOrEqual(5);
+        // Each match has file/line/content shape; line is 1-indexed positive int.
+        for (const m of r.matches) {
+            expect(typeof m.file).toBe("string");
+            expect(typeof m.line).toBe("number");
+            expect(m.line).toBeGreaterThan(0);
+            expect(typeof m.content).toBe("string");
+            expect(m.content).toMatch(/async repo_read/);
+        }
+        // The root server file should be among the matches.
+        const files = r.matches.map((m: any) => m.file);
+        expect(files.some((f: string) => f.includes("stones/_builtin/objects/root/server/index.ts"))).toBe(true);
+        expect(typeof r.total).toBe("number");
+        expect(r.total).toBeGreaterThanOrEqual(r.matches.length);
+    }, 30_000);
+
+    test("repo_search respects max_results cap and skips ignored dirs", async () => {
+        const ctx = makeCtx();
+        // A common token; cap to 3 to verify the cap.
+        const r = (await rootServer.public.repo_search!(
+            { pattern: "export", max_results: 3 } as any,
+            ctx,
+        )) as any;
+        expect(r.ok).toBe(true);
+        expect(r.matches.length).toBeLessThanOrEqual(3);
+        // No match should come from skipped directories.
+        for (const m of r.matches) {
+            expect(m.file.startsWith("node_modules/")).toBe(false);
+            expect(m.file.startsWith(".git/")).toBe(false);
+            expect(m.file.startsWith("dist/")).toBe(false);
+            expect(m.file.startsWith(".ooc-world/")).toBe(false);
+        }
+    }, 30_000);
+
+    test("repo_search rejects missing pattern and path-escape", async () => {
+        const ctx = makeCtx();
+        await expect(
+            rootServer.public.repo_search!({} as any, ctx),
+        ).rejects.toThrow(/pattern.*required/i);
+        await expect(
+            rootServer.public.repo_search!({ pattern: "x", path: "../../etc" } as any, ctx),
+        ).rejects.toThrow(/outside repo root/);
+    });
 });
