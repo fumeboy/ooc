@@ -6,7 +6,7 @@
  */
 
 import { mkdir } from "node:fs/promises";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
 import { readServerConfig } from "./bootstrap/config";
 import { runBootstrapSeeds } from "./bootstrap/seeds";
 import { ObjectRegistry } from "@src/executable/registry";
@@ -14,6 +14,7 @@ import { loadObjects } from "@src/executable/loader";
 import { Worker } from "@src/thinkable/worker";
 import { createLlmClient } from "@src/thinkable/llm/client";
 import { startHttpServer } from "./http";
+import { nameFromUri } from "@src/persistable/flow-paths";
 
 async function main(): Promise<void> {
     const config = await readServerConfig();
@@ -45,7 +46,14 @@ async function main(): Promise<void> {
     // Load source-tree branch stones (the 9 AgentOfX seeded in repo's stones/main/objects/)
     // These are only in cwd, not in --world, so fresh worlds still see the full harness.
     const cwdBranchRecords = await loadObjects({ worldRoot: cwd, branch });
-    for (const r of cwdBranchRecords) registry.set(r);
+    for (const r of cwdBranchRecords) {
+        // Redirect pool writes to user world, not source tree (defense in depth: Issue #9).
+        if (r.paths.pool) {
+            const name = nameFromUri(r.uri);
+            r.paths.pool = join(worldRoot, "pools", "objects", name);
+        }
+        registry.set(r);
+    }
 
     // Load user persistent stones from --world (supervisor, user, any user-added).
     // User-defined stones override cwd defaults for the same URI (registry.set semantics).

@@ -4,6 +4,8 @@ node_modules/
 .trae
 .ooc-world-test/
 .ooc-world/
+pools/
+flows/
 .claude/
 goal.md
 .agents
