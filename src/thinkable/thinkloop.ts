@@ -103,13 +103,13 @@ const METHOD_SCHEMAS: Record<string, { description: string; properties?: Record<
     open_knowledge: { description: "(Skeleton, P6+) Open a knowledge slug.", properties: { slug: { type: "string" } }, required: ["slug"] },
     end: { description: "End the conversation. Call this after you've sent your final reply via talk().", properties: {} },
     repo_read: {
-        description: "Read any file in the OOC-3 source tree (relative to repo root). Use this to understand the system's current implementation. Path must be relative to repo root (e.g., 'src/thinkable/thinkloop.ts', 'stones/main/objects/supervisor/readme.md').",
+        description: "Read any file in the OOC-3 source tree (relative to repo root). IMPORTANT: by default, files longer than 200 lines are auto-truncated to the first 200 lines (response includes truncated:true, lines_total). Use lines:[start,end] to read a specific range (max 500 lines per read). Prefer narrow reads once you know the target line from repo_search.",
         properties: {
             path: { type: "string", description: "File path relative to repo root" },
             lines: {
                 type: "array",
                 items: { type: "number" },
-                description: "Optional [start, end] (1-indexed, inclusive) to read only a line range. Out-of-range values are clamped silently. Response always includes lines_total.",
+                description: "Optional [start, end] (1-indexed, inclusive) to read only a line range. Max 500 lines per read. Out-of-range values are clamped silently. Response always includes lines_total.",
             },
         },
         required: ["path"],
@@ -206,6 +206,17 @@ export async function think(
             };
             return [...head, truncationNotice, ...tail];
         })();
+        // Mid-task decisiveness nudge: when past the halfway point, remind the agent to act
+        // if it already has enough information. Soft nudge only — does not force termination.
+        if (thread.maxTicks > 0 && thread.ticks > thread.maxTicks / 2) {
+            const nudge: LlmInputItem = {
+                type: "message",
+                role: "system",
+                content: `[system] You have used ${thread.ticks} of ${thread.maxTicks} ticks. If you have enough information to complete the task, do so now without further exploration.`,
+            };
+            inputItems = [...inputItems, nudge];
+        }
+
         try {
             const record = registry.get(thread.objectUri);
             if (record) {
