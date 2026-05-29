@@ -1002,8 +1002,10 @@ export function buildApp(deps: HttpDeps): Elysia {
 
             // 4. Submit and run worker until this specific thread is done
             // Use runUntilThread (not runUntilDone) to avoid blocking concurrent talk requests
+            // Wall-clock budget = maxTicks × per-LLM-timeout + 30s buffer
+            const wallClockMs = thread.maxTicks * (thread.llmTimeoutMs ?? 120_000) + 30_000;
             worker.submit(thread);
-            await worker.runUntilThread(threadId, 90_000);
+            await worker.runUntilThread(threadId, wallClockMs);
 
             // 5. Read target's talks file for out messages with ts > startTs (time-scoped to this request)
             const talksDir = path.join(worker.worldRoot, "flows", sessionId, "objects", targetName, "talks");
