@@ -77,6 +77,30 @@ function validateOrGenerateSessionId(input: unknown): string {
     return shortId("ses");
 }
 
+/**
+ * 校验 URL-param sessionId 合法性（拒绝路径穿越等）；不合法则抛错误。
+ * 与 validateOrGenerateSessionId 不同：URL-param 是必填的，不自动生成。
+ */
+function validateSessionIdParam(input: string, fieldName = "sessionId"): string {
+    if (!SAFE_SESSION_ID.test(input)) {
+        throw new Error(`invalid ${fieldName}: must match ${SAFE_SESSION_ID}`);
+    }
+    return input;
+}
+
+/** 安全 threadId 校验正则：形状与 sessionId 相同。 */
+const SAFE_THREAD_ID = /^[a-zA-Z0-9_\-]{1,80}$/;
+
+/**
+ * 校验 URL-param threadId 合法性；不合法则抛错误。
+ */
+function validateThreadIdParam(input: string): string {
+    if (!SAFE_THREAD_ID.test(input)) {
+        throw new Error(`invalid threadId: must match ${SAFE_THREAD_ID}`);
+    }
+    return input;
+}
+
 /** 校验路径不跨出 worldRoot（安全边界）。 */
 function safeResolvePath(worldRoot: string, relative: string): string | null {
     // 拒绝以 / 开头或含有 .. 的路径
@@ -308,7 +332,15 @@ export function buildApp(deps: HttpDeps): Elysia {
      * 返回 sessionId 下所有 thread 的快照。
      */
     app.get("/api/sessions/:sessionId", ({ params }) => {
-        const { sessionId } = params;
+        let sessionId: string;
+        try {
+            sessionId = validateSessionIdParam(params.sessionId);
+        } catch (e) {
+            return new Response(
+                JSON.stringify({ ok: false, error: (e as Error).message }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
         const threads = worker.list().filter((t) => t.sessionId === sessionId);
         return {
             ok: true,
@@ -350,7 +382,15 @@ export function buildApp(deps: HttpDeps): Elysia {
      * 复用 deps.registry（包含 builtins）避免原型链解析失败。
      */
     app.post("/api/sessions/:sessionId/invoke", async ({ params, body }) => {
-        const { sessionId } = params;
+        let sessionId: string;
+        try {
+            sessionId = validateSessionIdParam(params.sessionId);
+        } catch (e) {
+            return new Response(
+                JSON.stringify({ ok: false, error: (e as Error).message }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
         const b = body as Record<string, unknown>;
         const objectUri = typeof b?.objectUri === "string" ? b.objectUri : undefined;
         const method = typeof b?.method === "string" ? b.method : undefined;
@@ -645,7 +685,15 @@ export function buildApp(deps: HttpDeps): Elysia {
      * 匹配 slugified user URI 模式，如 "me"，"users__me" 等）。
      */
     app.get("/api/flows/:sessionId/objects", async ({ params }) => {
-        const { sessionId } = params;
+        let sessionId: string;
+        try {
+            sessionId = validateSessionIdParam(params.sessionId);
+        } catch (e) {
+            return new Response(
+                JSON.stringify({ ok: false, error: (e as Error).message }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
         const flowObjectsDir = path.join(worker.worldRoot, "flows", sessionId, "objects");
         const objects: Array<{ name: string; uri: string; kind: string }> = [];
         const registry = sharedRegistry;
@@ -706,7 +754,16 @@ export function buildApp(deps: HttpDeps): Elysia {
      * 若 object 目录不存在（且无 active worker thread）返回 404。
      */
     app.get("/api/flows/:sessionId/objects/:objectName", async ({ params }) => {
-        const { sessionId, objectName } = params;
+        let sessionId: string;
+        try {
+            sessionId = validateSessionIdParam(params.sessionId);
+        } catch (e) {
+            return new Response(
+                JSON.stringify({ ok: false, error: (e as Error).message }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        const { objectName } = params;
         const flowDir = path.join(worker.worldRoot, "flows", sessionId, "objects", objectName);
 
         // Check if object exists (flow dir or active thread)
@@ -802,7 +859,18 @@ export function buildApp(deps: HttpDeps): Elysia {
      * thread 状态（从 worker queue 读，或从磁盘读）。
      */
     app.get("/api/flows/:sessionId/objects/:objectName/threads/:threadId", async ({ params }) => {
-        const { sessionId, objectName, threadId } = params;
+        let sessionId: string;
+        let threadId: string;
+        try {
+            sessionId = validateSessionIdParam(params.sessionId);
+            threadId = validateThreadIdParam(params.threadId);
+        } catch (e) {
+            return new Response(
+                JSON.stringify({ ok: false, error: (e as Error).message }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        const { objectName } = params;
 
         // First check worker queue
         const thread = worker.get(threadId);
