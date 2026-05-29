@@ -148,7 +148,7 @@ export function SessionObjectView() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {thread && <StatusPill status={thread.status} />}
           {loadingThread && <span className="pill">updating…</span>}
-          {error && <span className="muted small" title={error}>error</span>}
+          {error && <span className="muted small">{error}</span>}
           <button
             className="refresh"
             onClick={() => { if (activeThreadId) void loadThread(activeThreadId); else void loadDetail(); }}

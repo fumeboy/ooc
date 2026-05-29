@@ -53,6 +53,7 @@ export function SessionsView() {
       const res = await createSession({
         objectUri: draft.objectUri.trim(),
         systemPrompt: draft.systemPrompt.trim() || undefined,
+        sessionId: draft.sessionId.trim() || undefined,
       });
       navigate(`/sessions/${encodeURIComponent(res.sessionId)}`);
     } catch (e) {

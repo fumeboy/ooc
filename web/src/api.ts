@@ -98,6 +98,7 @@ export interface CreateSessionInput {
   objectUri: string;
   systemPrompt?: string;
   maxTicks?: number;
+  sessionId?: string;
 }
 
 export interface CreatedSession {
@@ -221,10 +222,12 @@ export function getFlowObject(sessionId: string, objectName: string): Promise<Fl
 
 /* -------- threads -------- */
 
-export interface ThreadMessage {
-  role: "system" | "user" | "assistant" | "tool";
-  content: string | unknown;
-}
+export type ThreadMessage =
+  | { type: "message"; role: "system" | "user" | "assistant"; content: string }
+  | { type: "function_call"; call_id: string; name: string; arguments: Record<string, unknown> | string }
+  | { type: "function_call_output"; call_id: string; name?: string; output: string }
+  | { type: "reasoning"; text: string }
+  | { role: "system" | "user" | "assistant"; content: string }; // legacy shape backward compat
 
 export interface ThreadState {
   id: string;

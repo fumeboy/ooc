@@ -275,6 +275,9 @@ button { cursor: pointer; }
 .message.assistant, .message.action { border-left-color: #f2bd4b; }
 .message-role { font-size: 11px; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
 .tui-thread { gap: 10px; min-width: 0; width: 100%; }
+/* tool call / tool result blocks in ThreadTimeline */
+.tui-tool-call .tui-prefix, .tui-tool-call .tui-label { color: #c08020; }
+.tui-tool-result .tui-prefix, .tui-tool-result .tui-label { color: #3b8862; }
 .tui-block { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.6; min-width: 0; width: 100%; }
 .tui-block-head { display: flex; align-items: center; gap: 6px; color: var(--muted-foreground); }
 .tui-card-head { display: flex; align-items: center; gap: 6px; color: var(--muted-foreground); }
