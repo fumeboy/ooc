@@ -162,7 +162,8 @@ function poolMemoryDirForCtx(ctx: ObjectContext): string {
 /**
  * 读取 pool_memory 目录下所有 .md 文件，返回 { slug, content } 数组。
  * - 跳过目录不存在的情况
- * - 总字符数不超过 8000
+ * - 每个文件不超过 PER_FILE_LIMIT (2000) 字符，防止单个大文件饿死其他
+ * - 总字符数不超过 MAX_CHARS (8000)
  */
 async function loadPoolMemory(ctx: ObjectContext): Promise<Array<{ slug: string; content: string }>> {
     const memDir = poolMemoryDirForCtx(ctx);
@@ -172,13 +173,20 @@ async function loadPoolMemory(ctx: ObjectContext): Promise<Array<{ slug: string;
     const result: Array<{ slug: string; content: string }> = [];
     let totalChars = 0;
     const MAX_CHARS = 8000;
+    const PER_FILE_LIMIT = 2000;
 
     for (const e of entries) {
         if (!e.isFile() || !e.name.endsWith(".md")) continue;
         const slug = e.name.replace(/\.md$/, "");
         const content = await readIfExists(path.join(memDir, e.name));
         if (!content) continue;
-        const trimmed = content.slice(0, MAX_CHARS - totalChars);
+        // First, cap each file to PER_FILE_LIMIT independently so one large file
+        // can't consume the entire budget.
+        const perFileTrimmed = content.slice(0, PER_FILE_LIMIT);
+        // Then, fit within remaining total budget.
+        const remaining = MAX_CHARS - totalChars;
+        if (remaining <= 0) break;
+        const trimmed = perFileTrimmed.slice(0, remaining);
         result.push({ slug, content: trimmed });
         totalChars += trimmed.length;
         if (totalChars >= MAX_CHARS) break;
