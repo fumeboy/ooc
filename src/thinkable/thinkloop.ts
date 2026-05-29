@@ -106,6 +106,11 @@ const METHOD_SCHEMAS: Record<string, { description: string; properties?: Record<
         description: "Read any file in the OOC-3 source tree (relative to repo root). Use this to understand the system's current implementation. Path must be relative to repo root (e.g., 'src/thinkable/thinkloop.ts', 'stones/main/objects/supervisor/readme.md').",
         properties: {
             path: { type: "string", description: "File path relative to repo root" },
+            lines: {
+                type: "array",
+                items: { type: "number" },
+                description: "Optional [start, end] (1-indexed, inclusive) to read only a line range. Out-of-range values are clamped silently. Response always includes lines_total.",
+            },
         },
         required: ["path"],
     },

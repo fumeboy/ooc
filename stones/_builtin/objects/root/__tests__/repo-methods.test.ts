@@ -81,6 +81,65 @@ describe("root repo_* methods (Round 10)", () => {
         ).rejects.toThrow(/path.*required/i);
     });
 
+    /* ---- repo_read: lines parameter (partial reads) ---- */
+
+    test("repo_read with lines=[start,end] returns the correct slice and lines_total", async () => {
+        const ctx = makeCtx();
+        // Read the full file first to know what to expect.
+        const full = (await rootServer.public.repo_read!({ path: "package.json" } as any, ctx)) as any;
+        const allLines = (full.content as string).split("\n");
+        const total = allLines.length;
+        // Pick a small range that exists.
+        const start = 1;
+        const end = Math.min(3, total);
+        const expectedSlice = allLines.slice(start - 1, end).join("\n");
+
+        const r = (await rootServer.public.repo_read!(
+            { path: "package.json", lines: [start, end] } as any,
+            ctx,
+        )) as any;
+        expect(r.ok).toBe(true);
+        expect(r.content).toBe(expectedSlice);
+        expect(r.lines).toEqual([start, end]);
+        expect(r.lines_total).toBe(total);
+    });
+
+    test("repo_read with out-of-range lines clamps silently", async () => {
+        const ctx = makeCtx();
+        const full = (await rootServer.public.repo_read!({ path: "package.json" } as any, ctx)) as any;
+        const allLines = (full.content as string).split("\n");
+        const total = allLines.length;
+
+        // Way past end: both start and end should clamp to `total`.
+        const r = (await rootServer.public.repo_read!(
+            { path: "package.json", lines: [total + 100, total + 500] } as any,
+            ctx,
+        )) as any;
+        expect(r.ok).toBe(true);
+        expect(r.lines).toEqual([total, total]);
+        expect(r.lines_total).toBe(total);
+        // Should equal the last single line (slice of [total-1, total]).
+        expect(r.content).toBe(allLines[total - 1]);
+
+        // Negative start should clamp up to 1.
+        const r2 = (await rootServer.public.repo_read!(
+            { path: "package.json", lines: [-10, 2] } as any,
+            ctx,
+        )) as any;
+        expect(r2.ok).toBe(true);
+        expect(r2.lines).toEqual([1, Math.min(2, total)]);
+    });
+
+    test("repo_read lines_total equals total line count of the file (no lines arg)", async () => {
+        const ctx = makeCtx();
+        const r = (await rootServer.public.repo_read!({ path: "package.json" } as any, ctx)) as any;
+        expect(r.ok).toBe(true);
+        expect(typeof r.lines_total).toBe("number");
+        // Cross-check: split content ourselves and compare.
+        const expectedTotal = (r.content as string).split("\n").length;
+        expect(r.lines_total).toBe(expectedTotal);
+    });
+
     /* ---- repo_write ---- */
 
     test("repo_write creates a file in the repo and audit-logs it", async () => {

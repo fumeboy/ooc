@@ -752,11 +752,41 @@ export default defineObject({
                 throw new Error(`repo_read: path outside repo root: ${args.path}`);
             }
             const body = await fs.readFile(target, "utf8");
-            const maxBytes = 50_000;
-            if (body.length > maxBytes) {
-                return { ok: true, path: target, truncated: true, content: body.slice(0, maxBytes), bytes: body.length };
+
+            // Optional `lines: [start, end]` partial-read (1-indexed, inclusive).
+            // Out-of-range values clamp silently. Always returns lines_total so
+            // callers can navigate large files without re-reading.
+            if (Array.isArray(args.lines) && args.lines.length === 2) {
+                const allLines = body.split("\n");
+                const total = allLines.length;
+                const rawStart = Number(args.lines[0]);
+                const rawEnd = Number(args.lines[1]);
+                if (!Number.isFinite(rawStart) || !Number.isFinite(rawEnd)) {
+                    throw new Error("repo_read: args.lines must be [number, number]");
+                }
+                // Clamp to [1, total]; if start > end, swap silently.
+                let startN = Math.max(1, Math.floor(rawStart));
+                let endN = Math.max(1, Math.floor(rawEnd));
+                if (startN > endN) { const t = startN; startN = endN; endN = t; }
+                startN = Math.min(startN, total);
+                endN = Math.min(endN, total);
+                const sliced = allLines.slice(startN - 1, endN).join("\n");
+                return {
+                    ok: true,
+                    path: target,
+                    content: sliced,
+                    bytes: Buffer.byteLength(sliced),
+                    lines: [startN, endN],
+                    lines_total: total,
+                };
             }
-            return { ok: true, path: target, content: body, bytes: body.length };
+
+            const maxBytes = 50_000;
+            const lines_total = body.split("\n").length;
+            if (body.length > maxBytes) {
+                return { ok: true, path: target, truncated: true, content: body.slice(0, maxBytes), bytes: body.length, lines_total };
+            }
+            return { ok: true, path: target, content: body, bytes: body.length, lines_total };
         },
 
         async repo_write(args: any, ctx: ObjectContext) {
