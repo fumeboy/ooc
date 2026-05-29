@@ -207,4 +207,101 @@ describe("root.defaultContext()", () => {
         expect(custom).toBeDefined();
         expect(custom!.content).toBe("Custom pool content.");
     });
+
+    // ── self_identity slice tests ──────────────────────────────────────────────
+
+    test("self_identity: self.md with frontmatter + body → slice present with correct fields", async () => {
+        const ctx = makeCtx(world, "s_test", "ooc://stones/main/objects/agent_a");
+        const stoneDir = ctx.record.paths.stone!;
+        await write(
+            path.join(stoneDir, "self.md"),
+            [
+                "---",
+                "title: Test Agent",
+                "extends: root",
+                "description: A test agent for unit tests.",
+                "---",
+                "",
+                "# Test Agent",
+                "",
+                "I own the test dimension.",
+            ].join("\n"),
+        );
+        const slices = await defaultContext(ctx);
+        const si = slices.find((s) => s.kind === "self_identity");
+        expect(si).toBeDefined();
+        const p = si!.payload as { title?: string; description?: string; body?: string };
+        expect(p.title).toBe("Test Agent");
+        expect(p.description).toBe("A test agent for unit tests.");
+        expect(p.body).toContain("I own the test dimension.");
+    });
+
+    test("self_identity: self.md first in slice order (index 0)", async () => {
+        const ctx = makeCtx(world, "s_test", "ooc://stones/main/objects/agent_a");
+        const stoneDir = ctx.record.paths.stone!;
+        await write(
+            path.join(stoneDir, "self.md"),
+            "---\ntitle: Priority Agent\nextends: root\n---\n\nBody text.",
+        );
+        // Also create a plan so there are multiple slices
+        await write(path.join(ctx.record.paths.flow!, "plan.md"), "some plan");
+        const slices = await defaultContext(ctx);
+        expect(slices[0].kind).toBe("self_identity");
+    });
+
+    test("self_identity: missing self.md → no self_identity slice", async () => {
+        const ctx = makeCtx(world, "s_test", "ooc://stones/main/objects/agent_a");
+        // stone dir exists but no self.md
+        await fs.mkdir(ctx.record.paths.stone!, { recursive: true });
+        const slices = await defaultContext(ctx);
+        expect(slices.find((s) => s.kind === "self_identity")).toBeUndefined();
+    });
+
+    test("self_identity: frontmatter only (no body) → title + description, body empty string", async () => {
+        const ctx = makeCtx(world, "s_test", "ooc://stones/main/objects/agent_a");
+        const stoneDir = ctx.record.paths.stone!;
+        await write(
+            path.join(stoneDir, "self.md"),
+            "---\ntitle: Minimal Agent\nextends: root\ndescription: Just metadata.\n---\n",
+        );
+        const slices = await defaultContext(ctx);
+        const si = slices.find((s) => s.kind === "self_identity");
+        expect(si).toBeDefined();
+        const p = si!.payload as { title?: string; description?: string; body?: string };
+        expect(p.title).toBe("Minimal Agent");
+        expect(p.description).toBe("Just metadata.");
+        expect(p.body).toBe("");
+    });
+
+    test("self_identity: body > 1500 chars → truncated with marker", async () => {
+        const ctx = makeCtx(world, "s_test", "ooc://stones/main/objects/agent_a");
+        const stoneDir = ctx.record.paths.stone!;
+        const longBody = "x".repeat(2000);
+        await write(
+            path.join(stoneDir, "self.md"),
+            `---\ntitle: Long Agent\nextends: root\n---\n\n${longBody}`,
+        );
+        const slices = await defaultContext(ctx);
+        const si = slices.find((s) => s.kind === "self_identity");
+        expect(si).toBeDefined();
+        const p = si!.payload as { title?: string; description?: string; body?: string };
+        expect(p.body!.length).toBeLessThanOrEqual(1500 + "\n[...truncated...]".length);
+        expect(p.body).toContain("[...truncated...]");
+    });
+
+    test("self_identity: record.self has no title/description + no self.md → no slice", async () => {
+        const ctx: ObjectContext = {
+            record: {
+                uri: "ooc://stones/main/objects/x",
+                paths: { stone: path.join(world, "nonexistent-stone") },
+                kind: "persistent",
+                self: {},
+            },
+            worldRoot: world,
+            sessionId: "s_test",
+            registry: new ObjectRegistry(),
+        };
+        const slices = await defaultContext(ctx);
+        expect(slices.find((s) => s.kind === "self_identity")).toBeUndefined();
+    });
 });

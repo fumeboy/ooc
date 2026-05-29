@@ -230,7 +230,21 @@ export async function think(
                     const ctx = { record: ctxRecord, worldRoot, sessionId: thread.sessionId, registry };
                     const slices = await rootModule.defaultContext(ctx);
                     if (slices.length > 0) {
-                        const contextText = slices.map((s: { kind: string; payload: unknown }) => {
+                        // Sort so self_identity always appears first in context snapshot
+                    const sortedSlices = [...slices].sort((a, b) => {
+                        if (a.kind === "self_identity") return -1;
+                        if (b.kind === "self_identity") return 1;
+                        return 0;
+                    });
+                    const contextText = sortedSlices.map((s: { kind: string; payload: unknown }) => {
+                            if (s.kind === "self_identity") {
+                                const p = s.payload as { title?: string; description?: string; body?: string };
+                                const parts: string[] = [];
+                                if (p.title) parts.push(`# ${p.title}`);
+                                if (p.description) parts.push(p.description);
+                                if (p.body) parts.push(p.body);
+                                return `[identity]\n${parts.join("\n\n")}\n[/identity]`;
+                            }
                             const payload = typeof s.payload === "string"
                                 ? s.payload
                                 : JSON.stringify(s.payload, null, 2);

@@ -51,9 +51,93 @@ const REPO_ROOT = findRepoRoot();
  * defaultContext slice 结构：每轮 LLM 调用前拼装的 context 部分。
  */
 export type DefaultContextSlice = {
-    kind: "plan" | "todos" | "threads" | "talks" | "relations" | "pool_memory";
+    kind: "self_identity" | "plan" | "todos" | "threads" | "talks" | "relations" | "pool_memory";
     payload: unknown;
 };
+
+/**
+ * Parse a minimal YAML frontmatter block (--- ... ---) for specific string keys.
+ * Only handles simple `key: value` and `key: |\n  multi\n  line` forms.
+ * Returns a record of found string values; does not throw.
+ */
+function parseFrontmatterFields(raw: string): Record<string, string> {
+    const result: Record<string, string> = {};
+    if (!raw.startsWith("---")) return result;
+    const endIdx = raw.indexOf("\n---", 3);
+    if (endIdx === -1) return result;
+    const fmBlock = raw.slice(4, endIdx); // skip opening "---\n"
+    // Parse simple scalar: key: value (no quotes required)
+    // and block scalar: key: |\n  line1\n  line2
+    const lines = fmBlock.split("\n");
+    let i = 0;
+    while (i < lines.length) {
+        const line = lines[i]!;
+        const m = line.match(/^(\w[\w-]*)\s*:\s*(.*)/);
+        if (!m) { i++; continue; }
+        const key = m[1]!;
+        const rest = m[2]!.trim();
+        if (rest === "|") {
+            // block scalar: collect indented lines
+            const parts: string[] = [];
+            i++;
+            while (i < lines.length && (lines[i]!.startsWith("  ") || lines[i]!.trim() === "")) {
+                parts.push(lines[i]!.replace(/^  /, ""));
+                i++;
+            }
+            result[key] = parts.join("\n").trimEnd();
+        } else {
+            result[key] = rest;
+            i++;
+        }
+    }
+    return result;
+}
+
+/**
+ * Build the self_identity slice from the Object's self.md file.
+ * Reads title/description from self.md frontmatter directly (authoritative source),
+ * then falls back to record.self for fields not in self.md.
+ * Returns null if no title, description, or body is found.
+ */
+async function buildSelfIdentitySlice(ctx: ObjectContext): Promise<DefaultContextSlice | null> {
+    const record = ctx.record;
+    const recordFm = record.self ?? {};
+
+    // Start with record.self as fallback
+    let title = typeof recordFm.title === "string" ? recordFm.title : undefined;
+    let description = typeof recordFm.description === "string" ? recordFm.description : undefined;
+    let body = "";
+
+    if (record.paths.stone) {
+        const selfMdPath = path.join(record.paths.stone, "self.md");
+        try {
+            const raw = await fs.readFile(selfMdPath, "utf8");
+            // Parse frontmatter for title/description (overrides record.self)
+            const fm = parseFrontmatterFields(raw);
+            if (fm.title) title = fm.title;
+            if (fm.description) description = fm.description;
+            // Extract body (after closing ---)
+            if (raw.startsWith("---")) {
+                const endIdx = raw.indexOf("\n---", 3);
+                if (endIdx >= 0) {
+                    body = raw.slice(endIdx + 4).replace(/^\n+/, "");
+                }
+            } else {
+                body = raw;
+            }
+            if (body.length > 1500) body = body.slice(0, 1500) + "\n[...truncated...]";
+        } catch {
+            // self.md missing or unreadable; just use record.self frontmatter
+        }
+    }
+
+    if (!title && !description && !body) return null;
+
+    return {
+        kind: "self_identity",
+        payload: { title, description, body },
+    };
+}
 
 /**
  * defaultContext(): 从 active flow 读取并拼装当前 Object 的 context 切片。
@@ -62,9 +146,14 @@ export type DefaultContextSlice = {
  */
 export async function defaultContext(ctx: ObjectContext): Promise<DefaultContextSlice[]> {
     const slices: DefaultContextSlice[] = [];
+
+    // 0. self_identity: always inject first (highest LLM attention priority)
+    const selfIdentity = await buildSelfIdentitySlice(ctx);
+    if (selfIdentity) slices.push(selfIdentity);
+
     const flowPath = ctx.record.paths.flow;
     if (!flowPath) {
-        // 无 active flow → 只返回 relations (从 stone 推导)
+        // 无 active flow → only self_identity (if any) + relations (从 stone 推导)
         slices.push({ kind: "relations", payload: computeRelations(ctx) });
         return slices;
     }
