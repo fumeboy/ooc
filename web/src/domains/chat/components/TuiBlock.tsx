@@ -344,18 +344,19 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v);
 }
 
-/** Inline link button placed in tool card head (always visible, even when collapsed). */
+/**
+ * Inline link button placed in tool card head.
+ *
+ * ooc-3: liveWindowIds is always an empty Set (no contextWindows protocol),
+ * so this never renders a button — all window links are effectively dead.
+ * Kept for structural compatibility; returns null when no live id is found.
+ */
 function WindowLinkInline({ line, liveWindowIds }: { line: Extract<ChatLine, { kind: "tool" }>; liveWindowIds?: Set<string> }) {
   const id = extractTargetWindowId(line);
   if (!id) return null;
-  // 如果 ChatPanel 提供了 liveWindowIds, 且 id 不在其中 → 表示这个 window 已 auto_removed,
+  // ooc-3: liveWindowIds is always an empty Set → isLive always false → never render button
   const isLive = !liveWindowIds || liveWindowIds.has(id);
-  if (!isLive) {
-    return (
-      <>
-      </>
-    );
-  }
+  if (!isLive) return null;
   return (
     <button
       type="button"

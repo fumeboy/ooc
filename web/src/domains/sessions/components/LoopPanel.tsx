@@ -16,7 +16,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { requestJson } from "../../../transport/http";
 import { endpoints } from "../../../transport/endpoints";
-import type { LoopListEntry, LoopDebugRecord } from "./loop-types";
+import type { LoopListEntry, LoopDebugRecord, ContextSlice } from "./loop-types";
+import { ContextSnapshotView } from "./ContextSnapshotView";
 
 interface LoopPanelProps {
   sessionId: string;
@@ -40,6 +41,7 @@ interface LoopDetailResponse {
   input: unknown;
   output: unknown;
   meta: unknown;
+  contextSlices: ContextSlice[] | null;
 }
 
 function formatLatency(ms: number | undefined): string {
@@ -118,83 +120,170 @@ function LoopEntry({
   );
 }
 
-function LoopDetail({ detail }: { detail: LoopDebugRecord }) {
+type DetailTab = "context" | "meta" | "raw";
+
+function LoopDetail({ detail }: { detail: LoopDebugRecord & { _prevContextSlices?: ContextSlice[] | null } }) {
+  const [tab, setTab] = useState<DetailTab>("context");
   const [showInput, setShowInput] = useState(false);
   const [showOutput, setShowOutput] = useState(false);
 
+  const hasContext = detail.contextSlices !== null;
+
   return (
-    <div className="loop-detail" style={{ padding: 12, fontFamily: "monospace", fontSize: 12 }}>
-      {detail.meta && (
-        <div className="loop-meta" style={{ marginBottom: 12 }}>
-          <div className="muted small" style={{ marginBottom: 4 }}>Loop #{String(detail.loopIndex).padStart(4, "0")} meta</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
-            <div><span className="muted">latency</span> {formatLatency(detail.meta.latencyMs)}</div>
-            <div><span className="muted">status</span> {detail.meta.status}</div>
-            <div><span className="muted">messages</span> {detail.meta.messageCount}</div>
-            <div><span className="muted">tool calls</span> {detail.meta.toolCallCount}</div>
-            <div><span className="muted">ctx bytes</span> {detail.meta.contextBytes}</div>
-            <div><span className="muted">result bytes</span> {detail.meta.resultTextBytes}</div>
-            {detail.meta.model && (
-              <div style={{ gridColumn: "1/-1" }}><span className="muted">model</span> {detail.meta.model}</div>
-            )}
-            {detail.meta.error && (
-              <div style={{ gridColumn: "1/-1", color: "var(--error, #f44336)" }}>
-                <span className="muted">error</span> {detail.meta.error}
+    <div className="loop-detail" style={{ fontFamily: "monospace", fontSize: 12, height: "100%", display: "flex", flexDirection: "column" }}>
+      {/* Sub-tab bar */}
+      <div style={{
+        display: "flex",
+        gap: 4,
+        padding: "4px 10px",
+        borderBottom: "1px solid var(--border, rgba(255,255,255,0.1))",
+        flexShrink: 0,
+      }}>
+        <button
+          type="button"
+          onClick={() => setTab("context")}
+          style={{
+            fontSize: 11,
+            padding: "2px 8px",
+            background: tab === "context" ? "var(--active-bg, rgba(255,255,255,0.12))" : "none",
+            border: tab === "context" ? "1px solid var(--border, rgba(255,255,255,0.2))" : "1px solid transparent",
+            borderRadius: 3,
+            cursor: "pointer",
+            color: hasContext ? "var(--fg, #fff)" : "var(--muted, #888)",
+          }}
+        >
+          Context {!hasContext && "(no data)"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("meta")}
+          style={{
+            fontSize: 11,
+            padding: "2px 8px",
+            background: tab === "meta" ? "var(--active-bg, rgba(255,255,255,0.12))" : "none",
+            border: tab === "meta" ? "1px solid var(--border, rgba(255,255,255,0.2))" : "1px solid transparent",
+            borderRadius: 3,
+            cursor: "pointer",
+            color: "var(--fg, #fff)",
+          }}
+        >
+          Meta
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("raw")}
+          style={{
+            fontSize: 11,
+            padding: "2px 8px",
+            background: tab === "raw" ? "var(--active-bg, rgba(255,255,255,0.12))" : "none",
+            border: tab === "raw" ? "1px solid var(--border, rgba(255,255,255,0.2))" : "1px solid transparent",
+            borderRadius: 3,
+            cursor: "pointer",
+            color: "var(--fg, #fff)",
+          }}
+        >
+          Raw
+        </button>
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {/* Context tab — the main new view */}
+        {tab === "context" && (
+          <ContextSnapshotView
+            currentSlices={detail.contextSlices}
+            previousSlices={detail._prevContextSlices}
+            loopIndex={detail.loopIndex}
+          />
+        )}
+
+        {/* Meta tab */}
+        {tab === "meta" && (
+          <div style={{ padding: 12 }}>
+            {detail.meta ? (
+              <div className="loop-meta">
+                <div className="muted small" style={{ marginBottom: 4 }}>
+                  Loop #{String(detail.loopIndex).padStart(4, "0")} meta
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
+                  <div><span className="muted">latency</span> {formatLatency(detail.meta.latencyMs)}</div>
+                  <div><span className="muted">status</span> {detail.meta.status}</div>
+                  <div><span className="muted">messages</span> {detail.meta.messageCount}</div>
+                  <div><span className="muted">tool calls</span> {detail.meta.toolCallCount}</div>
+                  <div><span className="muted">ctx bytes</span> {detail.meta.contextBytes}</div>
+                  <div><span className="muted">result bytes</span> {detail.meta.resultTextBytes}</div>
+                  {detail.meta.model && (
+                    <div style={{ gridColumn: "1/-1" }}><span className="muted">model</span> {detail.meta.model}</div>
+                  )}
+                  {detail.meta.error && (
+                    <div style={{ gridColumn: "1/-1", color: "var(--error, #f44336)" }}>
+                      <span className="muted">error</span> {detail.meta.error}
+                    </div>
+                  )}
+                </div>
               </div>
+            ) : (
+              <span className="muted small">No meta available</span>
             )}
           </div>
-        </div>
-      )}
+        )}
 
-      {detail.input && (
-        <div style={{ marginBottom: 8 }}>
-          <button
-            type="button"
-            onClick={() => setShowInput((v) => !v)}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent, #7eb8f7)", fontSize: 12, padding: 0 }}
-          >
-            {showInput ? "▼" : "▶"} Input ({(detail.input as { inputItems?: unknown[] }).inputItems?.length ?? 0} items)
-          </button>
-          {showInput && (
-            <pre style={{
-              margin: "4px 0 0",
-              padding: 8,
-              background: "var(--code-bg, rgba(0,0,0,0.3))",
-              overflow: "auto",
-              maxHeight: 300,
-              fontSize: 11,
-              borderRadius: 4,
-            }}>
-              {JSON.stringify(detail.input, null, 2)}
-            </pre>
-          )}
-        </div>
-      )}
-
-      {detail.output && (
-        <div>
-          <button
-            type="button"
-            onClick={() => setShowOutput((v) => !v)}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent, #7eb8f7)", fontSize: 12, padding: 0 }}
-          >
-            {showOutput ? "▼" : "▶"} Output ({(detail.output as { outputItems?: unknown[] }).outputItems?.length ?? 0} items)
-          </button>
-          {showOutput && (
-            <pre style={{
-              margin: "4px 0 0",
-              padding: 8,
-              background: "var(--code-bg, rgba(0,0,0,0.3))",
-              overflow: "auto",
-              maxHeight: 300,
-              fontSize: 11,
-              borderRadius: 4,
-            }}>
-              {JSON.stringify(detail.output, null, 2)}
-            </pre>
-          )}
-        </div>
-      )}
+        {/* Raw tab — input/output JSON dumps */}
+        {tab === "raw" && (
+          <div style={{ padding: 12 }}>
+            {detail.input && (
+              <div style={{ marginBottom: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowInput((v) => !v)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent, #7eb8f7)", fontSize: 12, padding: 0 }}
+                >
+                  {showInput ? "▼" : "▶"} Input ({(detail.input as { inputItems?: unknown[] }).inputItems?.length ?? 0} items)
+                </button>
+                {showInput && (
+                  <pre style={{
+                    margin: "4px 0 0",
+                    padding: 8,
+                    background: "var(--code-bg, rgba(0,0,0,0.3))",
+                    overflow: "auto",
+                    maxHeight: 300,
+                    fontSize: 11,
+                    borderRadius: 4,
+                  }}>
+                    {JSON.stringify(detail.input, null, 2)}
+                  </pre>
+                )}
+              </div>
+            )}
+            {detail.output && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowOutput((v) => !v)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent, #7eb8f7)", fontSize: 12, padding: 0 }}
+                >
+                  {showOutput ? "▼" : "▶"} Output ({(detail.output as { outputItems?: unknown[] }).outputItems?.length ?? 0} items)
+                </button>
+                {showOutput && (
+                  <pre style={{
+                    margin: "4px 0 0",
+                    padding: 8,
+                    background: "var(--code-bg, rgba(0,0,0,0.3))",
+                    overflow: "auto",
+                    maxHeight: 300,
+                    fontSize: 11,
+                    borderRadius: 4,
+                  }}>
+                    {JSON.stringify(detail.output, null, 2)}
+                  </pre>
+                )}
+              </div>
+            )}
+            {!detail.input && !detail.output && (
+              <span className="muted small">No raw input/output available</span>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -203,7 +292,7 @@ export function LoopPanel({ sessionId, objectId, threadId }: LoopPanelProps) {
   const [loops, setLoops] = useState<LoopListEntry[]>([]);
   const [debugEnabled, setDebugEnabled] = useState<boolean | null>(null);
   const [selectedLoop, setSelectedLoop] = useState<number | null>(null);
-  const [detail, setDetail] = useState<LoopDebugRecord | null>(null);
+  const [detail, setDetail] = useState<(LoopDebugRecord & { _prevContextSlices?: ContextSlice[] | null }) | null>(null);
   const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -240,12 +329,26 @@ export function LoopPanel({ sessionId, objectId, threadId }: LoopPanelProps) {
         endpoints.runtimeGetLoopDebug(sessionId, objectId, threadId, loopIndex),
       );
       if (res.ok) {
+        // Also fetch previous loop's context for diffing (best-effort; non-fatal if loop 0)
+        let prevContextSlices: ContextSlice[] | null = null;
+        if (loopIndex > 0) {
+          try {
+            const prevRes = await requestJson<LoopDetailResponse>(
+              endpoints.runtimeGetLoopDebug(sessionId, objectId, threadId, loopIndex - 1),
+            );
+            if (prevRes.ok) prevContextSlices = prevRes.contextSlices;
+          } catch {
+            // prev loop may not exist — leave null
+          }
+        }
         setDetail({
           loopIndex: res.loopIndex,
           input: res.input as LoopDebugRecord["input"],
           output: res.output as LoopDebugRecord["output"],
           meta: res.meta as LoopDebugRecord["meta"],
-        });
+          contextSlices: res.contextSlices,
+          _prevContextSlices: prevContextSlices,
+        } as LoopDebugRecord & { _prevContextSlices: ContextSlice[] | null });
       }
     } catch (e) {
       setError((e as Error).message);
