@@ -4178,6 +4178,33 @@ export const root: DocTreeNode = {
                 "stones/<self>/client/index.tsx 与 flow client/pages/*.tsx 文件被 OOC 写下来，但仓库内没有提供配套的客户端渲染器；纯文档/纯仓库层面无法直接 '看见' UI 效果，必须由外部消费方接入渲染。",
             ],
         },
+        "readable": {
+            title: "OOC Agent readable 概念",
+            content: `
+            Readable 描述 Object 的对外展示能力——Object 如何出现在**其他** Object 的 LLM context 中。是 visible 的对偶（visible 对人类，readable 对 LLM）。
+
+            核心边界:
+            1. 只渲染"对外的脸": readable 仅在 Object X 作为 context 单元出现在另一个 Object Y 的 context 中时触发; X 自己的 context(自视)不经 readable, 那是 thinkable 的 ContextBuilder 组装的(X 的状态切片 + X 的各子对象各自的 readable())。
+            2. 两种形态: readable.md = 静态文本直接展示; readable.ts = 导出 readable() 函数, 读 Object 运行时字段动态算出 XML。
+            3. 沿原型链 fallback: X 无自定义 readable → 沿 self.md 的 extends 链向上找祖先 → root 兜底。
+            4. 与 visible 对偶: visible 是人类面(浏览器 UI), readable 是 agent 面(他者 LLM context 的 XML); 二者是 agent-native parity 公理在"展示"这件事上的一组范例。
+
+            readable 泛化了旧 ContextWindow 体系里 per-window-type 的 renderXml hook: 从"按 window type 注册渲染"升格为"按 Object、沿原型链解析"。当前为概念引入阶段(ooc-4 Increment 1), 代码实装(含 readme.md→readable.md 改名)见后续 increment(spec L1)。
+            `,
+            named: {
+                "readable": "Object 的对外展示能力: 控制自己出现在他者 LLM context 中的 XML 呈现",
+                "readable.md": "静态对外展示文本(将取代旧 readme.md; 改名在 L1 readable 层)",
+                "readable.ts": "导出 readable() 函数, 动态计算 Object 在他者 context 中的 XML",
+                "对外的脸": "readable 只渲染 Object 出现在他者 context 中的样子; 自己 context 的自视由 thinkable ContextBuilder 负责",
+            },
+            relations: [
+                [{ title: "visible", content: "readable 是 visible 的对偶：visible 渲染人类面 UI，readable 渲染 agent 面 context XML" }, "对偶维度：同是 Object 的自我展示面，分别面向人类与 LLM"],
+            ],
+            sources: [["src/executable/windows/_shared/registry.ts", "现有 per-window-type renderXml hook 是 readable 的前身；L1 将泛化为 per-object readable，沿 extends 链解析"]],
+            todo: [
+                "spec L1: 把 src/executable/windows/_shared/registry.ts 的 per-type renderXml 泛化为 per-object readable, 沿 extends 链解析; 并把 readme.md→readable.md 一并改名",
+            ],
+        },
         "extendable": {
             title: "extendable - 外接外部世界的集成层（非能力维度）",
             content: `
