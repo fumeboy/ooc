@@ -483,3 +483,206 @@ describe("GET /api/objects/:scope/:name/client-source-url", () => {
         expect(body.url).toBeNull();
     });
 });
+
+/* ========================= /api/tree depth ========================= */
+
+describe("GET /api/tree with depth param", () => {
+    let worldRoot: string;
+    beforeAll(async () => {
+        worldRoot = await makeTempWorld();
+        // Create nested structure: a/b/c.txt
+        await fs.mkdir(path.join(worldRoot, "a", "b"), { recursive: true });
+        await fs.writeFile(path.join(worldRoot, "a", "b", "c.txt"), "hello");
+        await fs.writeFile(path.join(worldRoot, "a", "top.txt"), "top");
+    });
+    afterAll(async () => {
+        await fs.rm(worldRoot, { recursive: true, force: true });
+    });
+
+    test("depth=0 returns flat entries (no children)", async () => {
+        const app = buildApp({ worker: makeWorker(worldRoot) });
+        const res = await app.handle(new Request("http://localhost/api/tree?path=a&depth=0"));
+        expect(res.status).toBe(200);
+        const body = (await json(res)) as { ok: boolean; entries: Array<{ name: string; type: string }>; root?: unknown };
+        expect(body.ok).toBe(true);
+        expect(Array.isArray(body.entries)).toBe(true);
+        // root absent for depth=0
+        expect(body.root).toBeUndefined();
+    });
+
+    test("depth=2 returns nested tree", async () => {
+        const app = buildApp({ worker: makeWorker(worldRoot) });
+        const res = await app.handle(new Request("http://localhost/api/tree?path=a&depth=2"));
+        expect(res.status).toBe(200);
+        const body = (await json(res)) as {
+            ok: boolean;
+            root?: { children: Array<{ name: string; type: string; children?: unknown[] }> };
+        };
+        expect(body.ok).toBe(true);
+        expect(body.root).toBeDefined();
+        expect(Array.isArray(body.root?.children)).toBe(true);
+        const bDir = body.root?.children?.find((c) => c.name === "b" && c.type === "dir");
+        expect(bDir).toBeDefined();
+        expect(Array.isArray(bDir?.children)).toBe(true);
+    });
+
+    test("recursive=true returns deep tree", async () => {
+        const app = buildApp({ worker: makeWorker(worldRoot) });
+        const res = await app.handle(new Request("http://localhost/api/tree?path=a&recursive=true"));
+        const body = (await json(res)) as { ok: boolean; root?: { children: unknown[] } };
+        expect(body.ok).toBe(true);
+        expect(body.root?.children?.length).toBeGreaterThan(0);
+    });
+});
+
+/* ========================= /api/flows rich list ========================= */
+
+describe("GET /api/flows", () => {
+    let worldRoot: string;
+    beforeAll(async () => {
+        worldRoot = await makeTempWorld();
+        const flowsDir = path.join(worldRoot, "flows", "ses_test1");
+        await fs.mkdir(flowsDir, { recursive: true });
+        await fs.writeFile(
+            path.join(flowsDir, ".session.json"),
+            JSON.stringify({ createdAt: new Date().toISOString(), objectUri: "ooc://stones/main/objects/supervisor", title: "Test Session" }),
+        );
+    });
+    afterAll(async () => {
+        await fs.rm(worldRoot, { recursive: true, force: true });
+    });
+
+    test("returns items array with title and timestamps", async () => {
+        const app = buildApp({ worker: makeWorker(worldRoot) });
+        const res = await app.handle(new Request("http://localhost/api/flows"));
+        expect(res.status).toBe(200);
+        const body = (await json(res)) as {
+            ok: boolean;
+            items: Array<{ sessionId: string; title: string; createdAt: number; updatedAt: number }>;
+            hash: string;
+        };
+        expect(body.ok).toBe(true);
+        expect(Array.isArray(body.items)).toBe(true);
+        const item = body.items.find((i) => i.sessionId === "ses_test1");
+        expect(item).toBeDefined();
+        expect(item?.title).toBe("Test Session");
+        expect(typeof item?.createdAt).toBe("number");
+        expect(typeof item?.updatedAt).toBe("number");
+        expect(typeof body.hash).toBe("string");
+    });
+});
+
+/* ========================= /api/flows/:sid/threads ========================= */
+
+describe("GET /api/flows/:sessionId/threads", () => {
+    let worldRoot: string;
+    beforeAll(async () => {
+        worldRoot = await makeTempWorld();
+        // Create a thread.json on disk
+        const threadDir = path.join(worldRoot, "flows", "ses_t1", "objects", "supervisor", "threads", "t_abc123");
+        await fs.mkdir(threadDir, { recursive: true });
+        await fs.writeFile(
+            path.join(threadDir, "thread.json"),
+            JSON.stringify({ id: "t_abc123", sessionId: "ses_t1", objectUri: "ooc://stones/main/objects/supervisor", status: "done", messages: [], maxTicks: 5, ticks: 5 }),
+        );
+    });
+    afterAll(async () => {
+        await fs.rm(worldRoot, { recursive: true, force: true });
+    });
+
+    test("returns disk threads for session", async () => {
+        const app = buildApp({ worker: makeWorker(worldRoot) });
+        const res = await app.handle(new Request("http://localhost/api/flows/ses_t1/threads"));
+        expect(res.status).toBe(200);
+        const body = (await json(res)) as { ok: boolean; items: Array<{ objectId: string; threadId: string; status?: string }> };
+        expect(body.ok).toBe(true);
+        expect(Array.isArray(body.items)).toBe(true);
+        const item = body.items.find((i) => i.threadId === "t_abc123");
+        expect(item).toBeDefined();
+        expect(item?.objectId).toBe("supervisor");
+        expect(item?.status).toBe("done");
+    });
+
+    test("invalid sessionId (special chars) returns 400", async () => {
+        const app = buildApp({ worker: makeWorker(worldRoot) });
+        const res = await app.handle(new Request("http://localhost/api/flows/bad%20id%21here/threads"));
+        expect(res.status).toBe(400);
+    });
+});
+
+/* ========================= /api/flows/:sid/pause + resume ========================= */
+
+describe("POST /api/flows/:sessionId/pause and /resume", () => {
+    let worldRoot: string;
+    beforeAll(async () => { worldRoot = await makeTempWorld(); });
+    afterAll(async () => { await fs.rm(worldRoot, { recursive: true, force: true }); });
+
+    test("pause returns paused: true", async () => {
+        const app = buildApp({ worker: makeWorker(worldRoot) });
+        const res = await app.handle(
+            new Request("http://localhost/api/flows/ses_abc/pause", { method: "POST" }),
+        );
+        expect(res.status).toBe(200);
+        const body = (await json(res)) as { ok: boolean; paused: boolean };
+        expect(body.ok).toBe(true);
+        expect(body.paused).toBe(true);
+    });
+
+    test("resume returns paused: false", async () => {
+        const app = buildApp({ worker: makeWorker(worldRoot) });
+        const res = await app.handle(
+            new Request("http://localhost/api/flows/ses_abc/resume", { method: "POST" }),
+        );
+        expect(res.status).toBe(200);
+        const body = (await json(res)) as { ok: boolean; paused: boolean; jobIds: string[] };
+        expect(body.ok).toBe(true);
+        expect(body.paused).toBe(false);
+        expect(Array.isArray(body.jobIds)).toBe(true);
+    });
+});
+
+/* ========================= /api/runtime/jobs/:jobId ========================= */
+
+describe("GET /api/runtime/jobs/:jobId", () => {
+    test("unknown jobId returns status: done (synthetic)", async () => {
+        const worldRoot = await makeTempWorld();
+        const app = buildApp({ worker: makeWorker(worldRoot) });
+        const res = await app.handle(
+            new Request("http://localhost/api/runtime/jobs/t_nonexistent"),
+        );
+        expect(res.status).toBe(200);
+        const body = (await json(res)) as { ok: boolean; status: string };
+        expect(body.ok).toBe(true);
+        expect(body.status).toBe("done");
+        await fs.rm(worldRoot, { recursive: true, force: true });
+    });
+});
+
+/* ========================= /api/world/config ========================= */
+
+describe("GET /api/world/config", () => {
+    test("returns default siteName when no .world.json", async () => {
+        const worldRoot = await makeTempWorld();
+        const app = buildApp({ worker: makeWorker(worldRoot) });
+        const res = await app.handle(new Request("http://localhost/api/world/config"));
+        expect(res.status).toBe(200);
+        const body = (await json(res)) as { ok: boolean; siteName: string; worldRoot: string };
+        expect(body.ok).toBe(true);
+        expect(typeof body.siteName).toBe("string");
+        expect(body.siteName.length).toBeGreaterThan(0);
+        await fs.rm(worldRoot, { recursive: true, force: true });
+    });
+
+    test("returns custom siteName from .world.json", async () => {
+        const worldRoot = await makeTempWorld();
+        await fs.writeFile(
+            path.join(worldRoot, ".world.json"),
+            JSON.stringify({ siteName: "My OOC World" }),
+        );
+        const app = buildApp({ worker: makeWorker(worldRoot) });
+        const res = await app.handle(new Request("http://localhost/api/world/config"));
+        const body = (await json(res)) as { siteName: string };
+        expect(body.siteName).toBe("My OOC World");
+        await fs.rm(worldRoot, { recursive: true, force: true });
+    });
+});

@@ -39,6 +39,7 @@ import { ObjectRegistry } from "@src/executable/registry";
 import { loadObjects } from "@src/executable/loader";
 import { invokeMethod } from "@src/executable/dispatcher";
 import type { ThinkThread } from "@src/thinkable/think-thread";
+import { createPauseStore, type PauseStore } from "./runtime/pause-store";
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
 
@@ -58,6 +59,12 @@ export interface HttpDeps {
      * 若不传，/api/stones 仅列出 worldRoot 下的 stones。
      */
     sourceCwd?: string;
+    /**
+     * PauseStore 实例（可选）。
+     * 若不传，buildApp 内部自动创建一个新实例（仅对该 app 实例有效）。
+     * server/index.ts 可传入共享实例以获得跨请求一致性。
+     */
+    pauseStore?: PauseStore;
 }
 
 /** 安全 sessionId 校验正则：只允许字母数字 + _ - ，最长 80 字符。 */
@@ -171,6 +178,55 @@ async function fileExists(p: string): Promise<boolean> {
     }
 }
 
+/** 判断目录是否存在。 */
+async function dirExists(p: string): Promise<boolean> {
+    try {
+        const stat = await fs.stat(p);
+        return stat.isDirectory();
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * 递归列出目录树。返回 FileTreeNode 兼容结构。
+ * depth=0 时只返回当前层（非递归）；depth>0 时递归展开。
+ * worldRoot 作安全边界——绝对路径不得在 worldRoot 外。
+ */
+interface FileTreeNode {
+    name: string;
+    type: "file" | "dir";
+    path: string;
+    children?: FileTreeNode[];
+}
+
+async function buildTree(
+    abs: string,
+    relativePath: string,
+    depth: number,
+): Promise<FileTreeNode[]> {
+    try {
+        const entries = await fs.readdir(abs, { withFileTypes: true });
+        const nodes: FileTreeNode[] = [];
+        for (const entry of entries) {
+            const childRel = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+            const childAbs = path.join(abs, entry.name);
+            if (entry.isDirectory()) {
+                const node: FileTreeNode = { name: entry.name, type: "dir", path: childRel };
+                if (depth > 0) {
+                    node.children = await buildTree(childAbs, childRel, depth - 1);
+                }
+                nodes.push(node);
+            } else {
+                nodes.push({ name: entry.name, type: "file", path: childRel });
+            }
+        }
+        return nodes;
+    } catch {
+        return [];
+    }
+}
+
 /**
  * 构建 Elysia app（不 listen，方便测试用 app.handle()）。
  */
@@ -180,6 +236,7 @@ export function buildApp(deps: HttpDeps): Elysia {
     const sharedRegistry = deps.registry;
     const defaultBranch = deps.branch ?? "main";
     const sourceCwd = deps.sourceCwd;
+    const pauseStore = deps.pauseStore ?? createPauseStore();
 
     /* -------- global error → JSON -------- */
 
@@ -910,9 +967,13 @@ export function buildApp(deps: HttpDeps): Elysia {
     /* -------- file tree & read -------- */
 
     /**
-     * GET /api/tree?path=<relative>
+     * GET /api/tree?path=<relative>&depth=<N>&recursive=<bool>
      *
-     * 列出 worldRoot 下 path 的文件/目录条目（不递归）。
+     * 列出 worldRoot 下 path 的文件/目录条目。
+     * - depth 参数：0=仅当前层（默认），N>0 递归展开 N 层，-1 完全递归（最多 10 层）。
+     * - recursive=true 等价于 depth=10（兼容 ooc-2 sidebar FileTree）。
+     * - 返回 entries[]（flat，兼容旧形状）+ root（tree 形状，含 children）。
+     *
      * path 省略时列 worldRoot 本身。
      */
     app.get("/api/tree", async ({ query }) => {
@@ -926,8 +987,27 @@ export function buildApp(deps: HttpDeps): Elysia {
                 { status: 400, headers: { "Content-Type": "application/json" } },
             );
         }
+        // Parse depth / recursive
+        const recursiveParam = query?.recursive === "true" || query?.recursive === "1";
+        let depth = 0;
+        if (typeof query?.depth === "string") {
+            const d = parseInt(query.depth, 10);
+            if (!isNaN(d)) depth = Math.min(Math.max(d, -1), 10);
+        }
+        if (recursiveParam && depth === 0) depth = 10;
+        if (depth < 0) depth = 10; // -1 = full recursive, capped at 10
+
+        // Build tree (depth>0) or flat list (depth=0)
+        const name = relPath ? path.basename(abs) : ".";
+        let rootNode: FileTreeNode | undefined;
+        if (depth > 0) {
+            const children = await buildTree(abs, relPath || "", depth - 1);
+            rootNode = { name, type: "dir", path: relPath || ".", children };
+        }
+
+        // Also return flat entries for backward compat
         const entries = await listDir(abs);
-        return { ok: true, path: relPath || ".", entries };
+        return { ok: true, path: relPath || ".", entries, root: rootNode };
     });
 
     /**
@@ -1166,6 +1246,391 @@ export function buildApp(deps: HttpDeps): Elysia {
                 { status: 500, headers: { "Content-Type": "application/json" } },
             );
         }
+    });
+
+    /* -------- /api/flows — rich sessions list (ooc-2 compat) -------- */
+
+    /**
+     * GET /api/flows
+     *
+     * 与 ooc-2 兼容的 session 列表，含 title / createdAt(ms) / updatedAt(ms)。
+     * ooc-2 前端 fetchFlows() 期望 { items: FlowSession[], hash }。
+     *
+     * createdAt: .session.json 中读
+     * updatedAt: flows/<sid>/ 目录下最新 thread.json 的 mtime（无则用 createdAt）
+     * title: .session.json 中 title 字段（可选）
+     */
+    app.get("/api/flows", async () => {
+        const flowsDir = path.join(worker.worldRoot, "flows");
+        const items: Array<{
+            sessionId: string;
+            title: string;
+            dir: string;
+            createdAt: number;
+            updatedAt: number;
+            paused?: boolean;
+        }> = [];
+        try {
+            const entries = await fs.readdir(flowsDir, { withFileTypes: true });
+            for (const entry of entries) {
+                if (!entry.isDirectory()) continue;
+                const sessionId = entry.name;
+                const sessionDir = path.join(flowsDir, sessionId);
+                let createdAt = Date.now();
+                let title = sessionId;
+                // Read .session.json
+                try {
+                    const raw = await fs.readFile(path.join(sessionDir, ".session.json"), "utf8");
+                    const meta = JSON.parse(raw) as { createdAt?: string; title?: string };
+                    if (meta.createdAt) createdAt = Date.parse(meta.createdAt) || createdAt;
+                    if (meta.title) title = meta.title;
+                } catch {
+                    // ok
+                }
+                // Derive updatedAt from most-recent thread.json mtime
+                let updatedAt = createdAt;
+                try {
+                    const objectsDir = path.join(sessionDir, "objects");
+                    const objDirs = await fs.readdir(objectsDir, { withFileTypes: true });
+                    for (const od of objDirs) {
+                        if (!od.isDirectory()) continue;
+                        const threadsDir = path.join(objectsDir, od.name, "threads");
+                        try {
+                            const tDirs = await fs.readdir(threadsDir, { withFileTypes: true });
+                            for (const td of tDirs) {
+                                if (!td.isDirectory()) continue;
+                                const tjPath = path.join(threadsDir, td.name, "thread.json");
+                                try {
+                                    const stat = await fs.stat(tjPath);
+                                    const mt = stat.mtimeMs;
+                                    if (mt > updatedAt) updatedAt = mt;
+                                } catch {
+                                    // ok
+                                }
+                            }
+                        } catch {
+                            // ok
+                        }
+                    }
+                } catch {
+                    // no objects dir
+                }
+                items.push({
+                    sessionId,
+                    title,
+                    dir: sessionDir,
+                    createdAt,
+                    updatedAt,
+                    paused: pauseStore.isSessionPaused(sessionId),
+                });
+            }
+        } catch {
+            // flows/ doesn't exist
+        }
+        // Sort newest first
+        items.sort((a, b) => b.updatedAt - a.updatedAt);
+        // Simple hash: stringify sorted ids+updatedAt
+        const hash = items.map((i) => `${i.sessionId}:${i.updatedAt}`).join("|");
+        return { ok: true, items, hash };
+    });
+
+    /* -------- /api/flows/:sessionId/threads -------- */
+
+    /**
+     * GET /api/flows/:sessionId/threads
+     *
+     * 列出 session 下所有 (objectId, threadId, status, createdAt?)。
+     * 数据来源：
+     *   1. 磁盘 flows/SID/objects/NAME/threads/TID/thread.json（已完成的）
+     *   2. 内存 worker queue（运行中的）
+     * 合并去重（worker queue 优先，以获取最新 status）。
+     *
+     * Response: { ok, items: ListThreadsItem[] }
+     * ListThreadsItem: { objectId, threadId, status?, createdAt? }
+     */
+    app.get("/api/flows/:sessionId/threads", async ({ params }) => {
+        let sessionId: string;
+        try {
+            sessionId = validateSessionIdParam(params.sessionId);
+        } catch (e) {
+            return new Response(
+                JSON.stringify({ ok: false, error: (e as Error).message }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+
+        const flowDir = path.join(worker.worldRoot, "flows", sessionId);
+        const objectsDir = path.join(flowDir, "objects");
+
+        // key = "objectId/threadId"
+        const threadMap = new Map<string, { objectId: string; threadId: string; status?: string; createdAt?: string }>();
+
+        // 1. Scan disk
+        try {
+            const objDirs = await fs.readdir(objectsDir, { withFileTypes: true });
+            for (const od of objDirs) {
+                if (!od.isDirectory()) continue;
+                const objectId = od.name;
+                const threadsDir = path.join(objectsDir, objectId, "threads");
+                try {
+                    const tDirs = await fs.readdir(threadsDir, { withFileTypes: true });
+                    for (const td of tDirs) {
+                        if (!td.isDirectory()) continue;
+                        const threadId = td.name;
+                        const key = `${objectId}/${threadId}`;
+                        let status: string | undefined;
+                        let createdAt: string | undefined;
+                        try {
+                            const raw = await fs.readFile(
+                                path.join(threadsDir, threadId, "thread.json"),
+                                "utf8",
+                            );
+                            const t = JSON.parse(raw) as { status?: string };
+                            status = t.status;
+                        } catch {
+                            // ok
+                        }
+                        threadMap.set(key, { objectId, threadId, status, createdAt });
+                    }
+                } catch {
+                    // no threads dir
+                }
+            }
+        } catch {
+            // no objects dir
+        }
+
+        // 2. Merge worker queue (overrides disk for running threads)
+        for (const t of worker.list()) {
+            if (t.sessionId !== sessionId) continue;
+            const objectId = t.objectUri.split("/").pop()!;
+            const key = `${objectId}/${t.id}`;
+            threadMap.set(key, {
+                objectId,
+                threadId: t.id,
+                status: t.status,
+            });
+        }
+
+        const items = Array.from(threadMap.values());
+        return { ok: true, items };
+    });
+
+    /* -------- pause / resume -------- */
+
+    /**
+     * POST /api/flows/:sessionId/pause
+     *
+     * 标记 session 为已暂停。Worker tick 通过 pauseStore.isSessionPaused()
+     * 判断跳过该 session 的 LLM 调用。
+     * TODO(P9): wire pauseStore into Worker.tick() loop to actually gate LLM calls.
+     */
+    app.post("/api/flows/:sessionId/pause", ({ params }) => {
+        let sessionId: string;
+        try {
+            sessionId = validateSessionIdParam(params.sessionId);
+        } catch (e) {
+            return new Response(
+                JSON.stringify({ ok: false, error: (e as Error).message }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        pauseStore.pauseSession(sessionId);
+        return { ok: true, sessionId, paused: true };
+    });
+
+    /**
+     * POST /api/flows/:sessionId/resume
+     *
+     * 取消 session 的暂停标记。返回空 jobIds（ooc-3 无异步 job 层；同步 talk 模式）。
+     * TODO(P9): wire pauseStore into Worker.tick() loop.
+     */
+    app.post("/api/flows/:sessionId/resume", ({ params }) => {
+        let sessionId: string;
+        try {
+            sessionId = validateSessionIdParam(params.sessionId);
+        } catch (e) {
+            return new Response(
+                JSON.stringify({ ok: false, error: (e as Error).message }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        pauseStore.resumeSession(sessionId);
+        return { ok: true, sessionId, paused: false, jobIds: [] as string[] };
+    });
+
+    /* -------- /api/flows/:sessionId/continue -------- */
+
+    /**
+     * POST /api/flows/:sessionId/continue
+     * body: { text: string; targetObjectId?: string; targetThreadId?: string }
+     *
+     * ooc-2 compat alias around /api/talk. Accepts the ooc-2 continue body shape
+     * and delegates to the same worker.submit + runUntilThread logic.
+     *
+     * Returns { ok, jobId, sessionId, threadId } where jobId == threadId
+     * (ooc-3 has no async job layer; jobId is a synthetic immediate-done marker).
+     *
+     * The frontend polls GET /api/runtime/jobs/:jobId — that endpoint returns
+     * { status: "done" } immediately since the talk already completed synchronously.
+     */
+    app.post("/api/flows/:sessionId/continue", async ({ params, body }) => {
+        let sessionId: string;
+        try {
+            sessionId = validateSessionIdParam(params.sessionId);
+        } catch (e) {
+            return new Response(
+                JSON.stringify({ ok: false, error: (e as Error).message }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+        const b = body as Record<string, unknown>;
+        const text = typeof b?.text === "string" ? b.text : undefined;
+        if (!text) {
+            return new Response(
+                JSON.stringify({ ok: false, error: "text required" }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+
+        // Derive targetUri from session's .session.json objectUri or body
+        let targetUri: string | undefined;
+        if (typeof b?.targetObjectId === "string" && b.targetObjectId.length > 0) {
+            // If targetObjectId looks like a full URI, use it directly; otherwise wrap
+            const t = b.targetObjectId as string;
+            targetUri = t.startsWith("ooc://") ? t : `ooc://stones/${defaultBranch}/objects/${t}`;
+        } else {
+            // Fall back: read .session.json for original objectUri
+            try {
+                const raw = await fs.readFile(
+                    path.join(worker.worldRoot, "flows", sessionId, ".session.json"),
+                    "utf8",
+                );
+                const meta = JSON.parse(raw) as { objectUri?: string };
+                if (meta.objectUri) targetUri = meta.objectUri;
+            } catch {
+                // ok
+            }
+        }
+
+        if (!targetUri) {
+            return new Response(
+                JSON.stringify({ ok: false, error: "cannot determine target object for session; provide targetObjectId or create session first" }),
+                { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+        }
+
+        // Delegate to /api/talk logic (inline, not HTTP redirect)
+        const userUri = "ooc://users/me";
+        const targetName = targetUri.split("/").pop()!;
+        const ts = new Date().toISOString();
+
+        try {
+            let registry: ObjectRegistry;
+            if (sharedRegistry) {
+                registry = sharedRegistry;
+                const flowRecords = await loadObjects({ worldRoot: worker.worldRoot, sessionId });
+                for (const r of flowRecords) {
+                    if (r.kind === "ephemeral") registry.set(r);
+                }
+            } else {
+                registry = new ObjectRegistry();
+                const records = await loadObjects({ worldRoot: worker.worldRoot, branch: defaultBranch, sessionId });
+                for (const r of records) registry.set(r);
+            }
+
+            await appendTalkEntry(worker.worldRoot, sessionId, targetName, {
+                ts,
+                direction: "in",
+                peer: userUri,
+                content: text,
+            });
+
+            const threadId = shortId("t");
+            const thread: ThinkThread = {
+                id: threadId,
+                sessionId,
+                objectUri: targetUri,
+                messages: [
+                    {
+                        type: "message" as const,
+                        role: "system" as const,
+                        content: `You are an OOC Object at ${targetUri}. A user has sent you a follow-up message. Respond via talk(), then call end().`,
+                    },
+                    {
+                        type: "message" as const,
+                        role: "user" as const,
+                        content: `[talk from ${userUri}]\n${text}\n[/talk]`,
+                    },
+                ],
+                status: "running",
+                maxTicks: typeof b?.maxTicks === "number" ? b.maxTicks : 25,
+                ticks: 0,
+                llmTimeoutMs: 120_000,
+            };
+
+            worker.submit(thread);
+            const wallClockMs = thread.maxTicks * (thread.llmTimeoutMs ?? 120_000) + 30_000;
+            await worker.runUntilThread(threadId, wallClockMs);
+
+            // Return jobId = threadId (immediate-done synthetic job)
+            return { ok: true, sessionId, threadId, jobId: threadId };
+        } catch (error) {
+            return new Response(
+                JSON.stringify({ ok: false, error: (error as Error).message }),
+                { status: 500, headers: { "Content-Type": "application/json" } },
+            );
+        }
+    });
+
+    /* -------- /api/runtime/jobs/:jobId -------- */
+
+    /**
+     * GET /api/runtime/jobs/:jobId
+     *
+     * ooc-2 frontend polls this after POST /continue to know when LLM is done.
+     * In ooc-3, /api/flows/:sid/continue is synchronous — the talk already
+     * completed before we returned jobId. So this always returns { status: "done" }.
+     *
+     * jobId = threadId (as returned by /continue). We verify the thread exists
+     * and return its actual status if available; otherwise "done" (safe fallback).
+     */
+    app.get("/api/runtime/jobs/:jobId", ({ params }) => {
+        const { jobId } = params;
+        // Check if it's a known thread
+        const thread = worker.get(jobId);
+        if (thread) {
+            const status = thread.status === "running" ? "running" : "done";
+            return { ok: true, jobId, status };
+        }
+        // Not in queue = already completed (persisted to disk)
+        return { ok: true, jobId, status: "done" };
+    });
+
+    /* -------- /api/world/config -------- */
+
+    /**
+     * GET /api/world/config
+     *
+     * ooc-2 compat alias for /api/world. Returns siteName from .world.json if present.
+     */
+    app.get("/api/world/config", async () => {
+        let siteName = "Oriented Object Context";
+        try {
+            const raw = await fs.readFile(path.join(worker.worldRoot, ".world.json"), "utf8");
+            const cfg = JSON.parse(raw) as { siteName?: string };
+            if (typeof cfg.siteName === "string" && cfg.siteName.trim().length > 0) {
+                siteName = cfg.siteName.trim();
+            }
+        } catch {
+            // ok — fallback to default
+        }
+        return {
+            ok: true,
+            worldRoot: worker.worldRoot,
+            branch: defaultBranch,
+            siteName,
+        };
     });
 
     return app;
