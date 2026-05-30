@@ -4283,7 +4283,7 @@ export const root: DocTreeNode = {
         "object_relations": {
             title: "对象关系三轴 + Supervisor=root parent + seed 信任链",
             content: `
-            OOC 里 Object 之间有三种关系轴，各有不同的权力语义:
+            OOC 里 Object 之间有三种**权力语义**关系轴（外加一条正交的 prototype 类型继承轴，见 root.patches.ooc4_object_model.children.prototype_chain）:
 
             1. 自我轴 — super（self-scoped）: Object 通过 sessionId="super" 的反思通道观察 / 修改"自己"。详见 reflectable。
             2. peer 平等轴 — talk / do / relation_window: 同级 Agent 之间平等协作，只能 talk（说服）不能直接改对方。详见 collaborable。
@@ -4295,7 +4295,7 @@ export const root: DocTreeNode = {
             Supervisor = world 级最顶层 parent object: harness 的"1 Supervisor + N Agent"即这棵 object 树的实例——Supervisor 是 root parent，AgentOfX 是一级 children。
 
             修改权 = **self-scope 自治**（唯一规则，对所有 object 一视同仁；复用 stone-versioning 的 self/cross 划界）:
-            - 任何 object 改自己子树 objects/<self>/...（含自己的 seed: self.md / readable.md / server / knowledge）= self-scope → 自治 ff-merge，无需任何人 review。
+            - 任何 object 改自己子树 objects/<self>/...（含自己的 seed: self.md / readable.(md|ts) / executable / visible / knowledge）= self-scope → 自治 ff-merge，无需任何人 review。
             - child 改自己（含自己 seed）= self-scope 自治，**不经 parent review**。
             - parent 改 child（child 物理在 objects/<parent>/children/<child>/，落在 parent 子树）= 对 parent 也是 self-scope → 自治。
             - cross-object（改不在自己子树的别人，如 child 改 parent）= cross-scope → PR-Issue review。
@@ -4316,6 +4316,79 @@ export const root: DocTreeNode = {
             todo: [
                 "self-scope 自治已由 task#17 落地（write_file 写 stones/ 经 stone-versioning，self 自动 ff-merge / cross 走 PR）；嵌套 child 用完整 objectId 自 metaprog 需放开 isValidObjectId 允许 \"/\"（见 persistable.stone-versioning todo）。",
             ],
+        },
+        "ooc4_object_model": {
+            title: "OOC-4 归一模型 — 单一 Object / 原型链 / A-B 分类 / context 树 / 方法可见性",
+            content: `
+            OOC-4 把"OOC Agent ↔ Context Window 二分"归一为单一 **OOC Object**: Context Window 只是 Object 出现在 LLM context 中的形态; window command 与 object method 合并为 **method**。
+
+            本 patch 收录 OOC-4 归一引入的五个架构概念(权威设计见 docs/superpowers/specs/2026-05-30-ooc-4-incremental-object-unification-design.md):
+            1. prototype 原型链(第 4 关系轴, 类型继承) —— children.prototype_chain
+            2. A/B 分类与塌缩(实体 vs 关系/状态) —— children.ab_classification
+            3. context/ 物理嵌套树(取代 thread.contextWindows[]) —— children.context_tree
+            4. 方法可见性(public / for_ui_access 两正交标记) —— children.method_visibility
+
+            **落地节奏**: 增量在 ooc-2 上小步推进(非 from-scratch)。已完成: 宪法(readable 第 9 维) / 目录归一 executable✓ readable.md✓。进行中/待办: visible(并入 L8 渲染层) / 原型链 / builtin objects / readable.ts 函数 / A-B 塌缩 / context 树。各概念"代码实装见后续 increment"。
+            `,
+            named: {
+                "OOC Object": "OOC-4 单一概念: LLM + 身份 + 方法 + 可选 readable/visible; Agent 与 Context Window 都是它的称谓",
+                "method": "window command 与 object method 归一后的统一名: Object 自己 executable/ 提供的可调用函数",
+            },
+            sources: [["docs/superpowers/specs/2026-05-30-ooc-4-incremental-object-unification-design.md", "OOC-4 归一重构权威 spec(伞文档); 本 patch 各子节点是其概念在宪法中的锚点"]],
+            children: {
+                "prototype_chain": {
+                    title: "prototype 原型链 — 第 4 关系轴(类型继承)",
+                    content: `
+                    与前三条权力语义轴(super/talk/parent-child)**完全正交**的第 4 轴: 类型继承。
+
+                    - 声明: self.md frontmatter \`extends: <proto>\`; 省略 = \`extends: root\`; root 的 extends = null(链终点)。
+                    - \`extends: search\` 简写解析为 ooc://stones/_builtin/objects/search; 引用 branch 内 Object 当原型则写完整 URI。
+                    - **方法 / visible / readable 三者共用同一套 resolve**: own 找不到则沿 extends 链向上, root 兜底。
+                    - 循环检测: build registry 时拓扑校验, 发现环拒载。
+                    - 不支持 override builtin(同名替换会让解析靠加载顺序, 引入 spooky action), 只支持 fork(extends 派生新命名原型)。
+
+                    与现有代码的关系: 泛化现有 src/executable/windows/_shared/registry.ts 的 per-window-type 注册为 per-object 沿链解析。代码实装见后续 increment(spec §3/§4.2)。
+                    `,
+                    todo: ["spec L2: self.md extends 解析 + ObjectRecord registry + resolveMethod/resolveClient/resolveReadable 共用链解析 + 环检测"],
+                },
+                "ab_classification": {
+                    title: "A/B 分类与塌缩 — 实体 vs 关系/状态",
+                    content: `
+                    塌缩判据: **实体(有自己的数据/生命周期)保留为 Object 原型; 关系/状态(依附 owner)塌缩为 owner 字段**。
+
+                    - A 类(实体)→ builtin object 原型: program / search / file / knowledge / command_exec / skill_index / custom。运行时由 method 创建即进 context, 落 context/ 嵌套树(见 context_tree)。
+                    - B 类(关系/状态)→ owner flow 字段 + root 方法 + 自视切片: talk(talks/<peer>.jsonl) / do(threads/<tid>/) / todo(todos.json) / plan(plan.md)。
+                    - relation 删除 → siblings + stone children/ 自动注入 context(原第 10 条)。
+
+                    注: B 类切片是 owner 的**自视**(自己 context 看到自己的状态), 由 thinkable ContextBuilder 渲染, **不走 readable**(readable 只渲染出现在他者 context 中的对外脸)。代码实装见后续 increment(spec §2.5/§5)。
+                    `,
+                    todo: ["spec L4-L6: A 类 window→builtin object 迁移; B 类 talk/do/todo/plan 塌缩为 flow 字段; relation 删除改 auto 注入"],
+                },
+                "context_tree": {
+                    title: "context/ 物理嵌套树 — 取代 thread.contextWindows[]",
+                    content: `
+                    运行时新建 Object 落 flows/<sid>/objects/<oid>/context/<newOid>/, 可递归 context/.../context/...。这是 context window 树的**物理表达**, 取代 ooc-2 的 thread.contextWindows[] 扁平数组 + parentWindowId。
+
+                    - 每个 window = 一个 context/<oid>/ 目录, 自带 self.md + 运行时状态文件。
+                    - thread.json 只保留 LLM 消息流(items/tool calls/results), 不再内嵌 window 数组。
+                    - ContextBuilder 每轮扫 owner 的 context/ 子树 + 自视切片实时组装。
+
+                    context 三来源(正交): ①自动注入 siblings/children ②运行时 A 类对象嵌 context/ ③owner B 类自视切片。代码实装见后续 increment(spec §6)。
+                    `,
+                    todo: ["spec L7: window 状态迁出 thread.json; 运行时对象嵌套落 context/<oid>/; ContextBuilder 扫物理树组装"],
+                },
+                "method_visibility": {
+                    title: "方法可见性 — public / for_ui_access 两正交标记",
+                    content: `
+                    Object 的每个 method(executable/ 提供)带两个正交布尔:
+                    - \`public?\`(默认 false): false=仅自己 context 可见可调; true=可被他人 / 跨 Object / LLM emit 调用。
+                    - \`for_ui_access?\`(默认 false): true=前端可直调(不经 LLM); 取代旧 ui_methods/llm_methods 概念。
+
+                    核心边界: public=暴露给世界, private=只给自己; 跨 Object 与 LLM emit 都视为外部。声明位置: executable/index.ts 导出方法时附 metadata。代码实装见后续 increment(spec §4)。
+                    `,
+                    todo: ["spec §4: executable/ 方法 metadata 加 public/for_ui_access; dispatcher 按 public 鉴权; 前端按钮直调按 for_ui_access 放行"],
+                },
+            },
         },
     },
     warnings: [
