@@ -147,19 +147,18 @@ function RightFooter({
 /**
  * 是否在 RightPanel 底部展示 message composer。
  *
- * 用户可以驱动消息发送的两类 thread：
- * - thread 的 owner 是 user 自己（典型：user.root，输入即触发 user.root.talk_window.say）
- * - thread 的 creator 是 user（典型：assistant 等被 user 通过 talk 派生的 callee thread；
- *   composer 走 user.root.talk_window 路由回到 callee）
+ * ooc-3 adaptation: In ooc-3 there are no contextWindows / creatorObjectId.
+ * Show composer for any object that is not "user" itself (user talks TO objects,
+ * not to itself). The target of /api/talk is the persistent stone, so any
+ * non-user object in the right panel gets a composer.
  *
- * 其他 thread（如 supervisor 内部 fork 的 child）不展示 composer——LLM 自己驱动，
- * user 没有发起消息的语义入口。
+ * Exception: if objectId is "user", no composer (user is the caller, not target).
  */
 function isUserOwnedOrCreated(objectId: string | undefined, thread: ThreadContext | undefined): boolean {
   if (objectId === "user") return true;
   if (thread?.creatorObjectId === "user") return true;
-  // 兼容旧 thread.json：缺 creatorObjectId 时看 creator window 是不是指向 user 的 talk_window
-  const creator = thread?.contextWindows?.find((w) => "isCreatorWindow" in w && w.isCreatorWindow);
-  if (creator && creator.type === "talk" && creator.target === "user") return true;
+  // ooc-3: no contextWindows, but we want composer for any non-user target
+  // Default to showing composer so user can always talk to the active stone/agent
+  if (objectId && objectId !== "user") return true;
   return false;
 }

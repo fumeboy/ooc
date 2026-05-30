@@ -62,6 +62,23 @@ export async function fetchSessionThreads(
 }
 
 /**
+ * HITL permission decision — stub for ooc-3 (permission system is Batch 5).
+ * TuiBlock's PermissionCard calls this; it's a no-op until backend support lands.
+ */
+export async function decideChatPermission(args: {
+  sessionId: string;
+  objectId: string;
+  threadId: string;
+  toolCallId?: string;
+  action: "approve" | "reject";
+}): Promise<{ ok?: boolean }> {
+  return requestJson<{ ok?: boolean }>(
+    endpoints.runtimeDecidePermission(args.sessionId, args.objectId, args.threadId),
+    { method: "POST", body: JSON.stringify({ action: args.action, ...(args.toolCallId ? { eventId: `${args.toolCallId}_ask` } : {}) }) },
+  );
+}
+
+/**
  * Wait for job to complete. In ooc-3, /continue is synchronous so jobId is always done.
  */
 export async function waitForJob(

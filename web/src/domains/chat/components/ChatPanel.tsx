@@ -1,10 +1,19 @@
-/**
- * ChatPanel — (Batch 2 placeholder)
- * Full TuiBlock-based chat timeline + composer implementation in Batch 2.
- */
 import type { ThreadContext } from "../model";
+import { useDisplayName } from "../../objects";
+import { ChatComposer } from "./ChatComposer";
+import { ThreadTimeline } from "./ThreadTimeline";
 import { ChatSendProvider } from "../../../shared/ui/ChatSendContext";
 
+/**
+ * ChatPanel — ooc-3 adaptation of ooc-2 ChatPanel.
+ *
+ * Uses ThreadTimeline → formatOoc3Thread → TuiBlock for rendering.
+ * thread is ThreadContext with _ooc3Thread (the raw ThinkThread) for formatting.
+ *
+ * Composer visibility: ooc-3 has no creatorObjectId or contextWindows to check,
+ * so we show the composer whenever showComposer=true (default). The parent
+ * (RightPanel) controls this based on objectId === "user" or session context.
+ */
 export function ChatPanel({
   sessionId,
   objectId,
@@ -17,39 +26,42 @@ export function ChatPanel({
   objectId?: string;
   threadId?: string;
   thread?: ThreadContext;
-  onSend?: (text: string) => Promise<void>;
+  onSend: (text: string) => Promise<void>;
   showComposer?: boolean;
 }) {
-  const send = onSend ?? (async () => {});
+  const { displayName: peerDisplayName } = useDisplayName(objectId);
+  // In ooc-3, thread paused = thread.status === "paused" (HITL/waiting)
+  const threadPaused = thread?.status === "paused";
   return (
-    <ChatSendProvider onSend={send}>
-      <div className="chat-panel" style={{ display: "flex", flexDirection: "column", height: "100%", padding: "0 12px" }}>
-        <div className="chat-timeline" style={{ flex: 1, overflowY: "auto" }}>
-          {thread?.messages?.length ? (
-            <div className="muted small" style={{ padding: "8px 0" }}>
-              Thread {objectId}/{threadId}: {thread.messages.length} messages — (Batch 2) full TuiBlock renderer coming.
+    <ChatSendProvider onSend={onSend}>
+      <div className="right-body chat-body gap-2">
+        {sessionId && objectId ? (
+          <>
+            <div className="chat-timeline panel">
+              <ThreadTimeline
+                thread={thread}
+                sessionId={sessionId}
+                objectId={objectId}
+                threadId={threadId}
+              />
             </div>
-          ) : (
-            <div className="muted small" style={{ padding: "8px 0" }}>
-              {sessionId ? `Session ${sessionId}` : "No session"} — no messages yet.
-            </div>
-          )}
-          {thread?.status && (
-            <div className="muted small">Status: {thread.status}</div>
-          )}
-        </div>
-        {showComposer && onSend && (
-          <ChatComposerPlaceholder onSend={onSend} />
+            {showComposer && (
+              <div className="chat-composer-shell">
+                <ChatComposer
+                  onSend={onSend}
+                  paused={threadPaused}
+                  peerObjectId={objectId}
+                  peerDisplayName={peerDisplayName}
+                />
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="chat-timeline panel">
+            <div className="empty">Select or create a session to chat.</div>
+          </div>
         )}
       </div>
     </ChatSendProvider>
-  );
-}
-
-function ChatComposerPlaceholder({ onSend }: { onSend: (text: string) => Promise<void> }) {
-  return (
-    <div style={{ borderTop: "1px solid var(--border)", padding: "8px 0" }}>
-      <div className="muted small">(Batch 2) Chat composer coming — send messages to agents here.</div>
-    </div>
   );
 }
