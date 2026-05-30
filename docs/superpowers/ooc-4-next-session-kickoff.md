@@ -39,13 +39,13 @@
 - 伞 spec + 宪法（`object.doc.ts`：readable 第 9 维 + `ooc4_object_model` patch 锁定全部架构概念）
 - Inc 1 `server/`→`executable/`、Inc 2 `readme.md`→`readable.md`（均 plan→review→执行→harness 闭环，1018 src 测试绿）
 - **L2 原型链 standalone 引擎**（commit `6dd10cf2`，`src/executable/prototype/`）：extends 解析 + ObjectRecord registry（重复/悬空/环三重拒载）+ 通用沿链 resolve（一套 walk 三 probe）。plan→review(GO)→执行→回归（1049 绿）闭环。
-- **L3 builtin objects loader**（`src/app/server/bootstrap/ensure-builtin-objects.ts` + `prototype/builtin-loader.ts`）：物化 8 原型骨架到 `stones/_builtin/objects/`（覆盖式重生、不进 git）+ 扫描入 L2 registry + 挂 live startup invariant。plan→review(GO-with-fixes)→执行→回归（1056 绿 + route-audit live e2e 绿）闭环。
+- **L3 builtin objects loader**（`src/extendable/base/<proto>/` 仓库源码 + `src/extendable/base/index.ts`）：8 原型骨架作 committed 源码（与 lark/ 同级 extendable 集成层，**不写 world、不碰 live startup**）+ `loadBuiltinRegistry` 经 `import.meta.dir` 扫描入 L2 registry；逻辑寻址保持 `ooc://stones/_builtin/objects/<p>`；L2 ObjectRecord ref→dir 泛化。plan→review(GO)→执行→回归（1053 绿 + route-audit live e2e 绿）闭环。 〔v1 曾用 ensure 写 world，经 Supervisor 纠正重构为源码方案，commit d5a840a7〕
 
 ### 架构层 roadmap（建议顺序）
 | 层 | 内容 | 依赖 | 状态 |
 |---|---|---|---|
 | ~~L2~~ | 原型链 extends 解析 + 共用链 resolve + 环检测 | — | ✅ 已落地 |
-| ~~L3~~ | builtin objects loader（`stones/_builtin/objects/<proto>/`，root + 7 A 类原型骨架） | L2 | ✅ 已落地（骨架；behavior 待 L4） |
+| ~~L3~~ | builtin objects loader（`src/extendable/base/<proto>/` 源码，root + 7 A 类原型骨架；逻辑寻址 `ooc://stones/_builtin/objects/<p>`） | L2 | ✅ 已落地（骨架源码；behavior 待 L4） |
 | **L4** | A 类迁移：7 个 window behavior 转写进 builtin 原型 executable/ + 接活 render·command resolve（per-type registry → 沿链 resolve）+ method 可见性（public/for_ui_access） | L3 | ← **下一层** |
 | L1 后半 | readable.ts 动态函数（renderXml 泛化为 per-object，headline 能力） | L2 | |
 | L5-6 | B 类塌缩（talk/do/todo/plan→owner 字段；relation 删除→auto 注入） | L4 | |
