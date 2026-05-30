@@ -20,3 +20,4 @@ todo.md
 .gitignore
 meta/case.factor-dev.doc.ts
 AGENT.md
+.idea
