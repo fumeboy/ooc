@@ -45,7 +45,7 @@ async function setupSelfThread(baseDir: string, opts: { withSuperTalk?: TalkWind
     createdAt: Date.now(),
     peerId: PEER,
     // 2026-05-27: peer_readme 撤回 R8-5 删除决定;default visibility 需要 peer 身份介绍
-    peerReadmePath: `stones/main/objects/${PEER}/readme.md`,
+    peerReadmePath: `stones/main/objects/${PEER}/readable.md`,
     peerReadmeExists: false,
     selfLongTermPath: `pools/${SELF}/knowledge/relations/${PEER}.md`,
     selfLongTermExists: false,

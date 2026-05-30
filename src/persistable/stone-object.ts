@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { stoneDir, STONE_CHILDREN_SUBDIR, STONE_OBJECTS_SUBDIR, toJson, type StoneObjectRef } from "./common";
 import { STONES_MAIN_BRANCH } from "./stone-bootstrap";
 import { selfFile } from "./stone-self";
-import { readmeFile } from "./stone-readme";
+import { readableFile } from "./stone-readable";
 
 export { stoneDir };
 
@@ -72,14 +72,14 @@ export function ancestorObjectIds(objectId: string): string[] {
 }
 
 /**
- * 创建 stone 的最小可见骨架：`.stone.json` + `self.md` + `readme.md`（**空文件占位**）。
+ * 创建 stone 的最小可见骨架：`.stone.json` + `self.md` + `readable.md`（**空文件占位**）。
  *
  * 创建的初始文件（2026-05-24 修订，visibility-first）:
  * - `.stone.json`：元数据
  * - `self.md`：**空文件**——`ls stoneDir` 可见；readSelf 返回 ""；
  *   `loadSelfInstructions` 视 empty 等价 undefined，故不会注入空 instructions。
  *   正文由 Object 后续主动 writeSelf 写入。
- * - `readme.md`：**空文件**——同上语义；正文由 Object 后续主动 writeReadme 写入。
+ * - `readable.md`：**空文件**——同上语义；正文由 Object 后续主动 writeReadable 写入。
  *
  * **不预创**的目录（按需 lazy 创建，避免 `ls` 看到一堆空目录引发"骨架不全"误判）:
  * - executable/  ← 写第一个 method 时由 stone-executable.ts 自动 mkdir
@@ -96,7 +96,7 @@ export async function createStoneObject(ref: StoneObjectRef): Promise<StoneObjec
   await writeFile(stoneMetadataFile(ref), toJson(metadata), "utf8");
 
   await writeFile(selfFile(ref), "", "utf8");
-  await writeFile(readmeFile(ref), "", "utf8");
+  await writeFile(readableFile(ref), "", "utf8");
 
   return ref;
 }

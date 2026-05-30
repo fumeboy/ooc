@@ -233,15 +233,15 @@ describe("deriveRelationWindow", () => {
 
   describe("peer_readme(spec 2026-05-27): peer stone readme 作为 RelationWindow 只读字段", () => {
     test("peer 有 readme 内容 → peerReadmeBody 含内容 + peerReadmeExists=true", async () => {
-      const { writeReadme } = await import("../../../persistable");
+      const { writeReadable } = await import("../../../persistable");
       await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
-      await writeReadme({ baseDir: tempRoot, objectId: "bob" }, "## bob\n是个评审 Agent");
+      await writeReadable({ baseDir: tempRoot, objectId: "bob" }, "## bob\n是个评审 Agent");
       const thread = selfThread(tempRoot, [talkTo("bob")]);
       const out = await deriveRelationWindow(thread);
       const bob = out.find((w) => w.peerId === "bob")!;
       expect(bob.peerReadmeExists).toBe(true);
       expect(bob.peerReadmeBody).toBe("## bob\n是个评审 Agent");
-      expect(bob.peerReadmePath).toMatch(/stones\/.*\/objects\/bob\/readme\.md$/);
+      expect(bob.peerReadmePath).toMatch(/stones\/.*\/objects\/bob\/readable\.md$/);
     });
 
     test("peer 没 readme 文件 → peerReadmeExists=false + peerReadmeBody undefined", async () => {

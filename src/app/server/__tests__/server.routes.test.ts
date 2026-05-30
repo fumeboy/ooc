@@ -252,7 +252,7 @@ describe("app server routes", () => {
     expect(escapeBody.error.code).toBe("INVALID_INPUT");
   });
 
-  test("POST /api/stones creates object with self and readme content (data.json 已迁到 flow 层)", async () => {
+  test("POST /api/stones creates object with self and readable content (data.json 已迁到 flow 层)", async () => {
     const { app, baseDir } = await makeAppWithBaseDir();
 
     const response = await app.handle(
@@ -262,7 +262,7 @@ describe("app server routes", () => {
         body: JSON.stringify({
           name: "writer",
           self: "# Writer\nI write notes.",
-          readme: "# Writer README",
+          readable: "# Writer README",
         }),
       })
     );
@@ -271,7 +271,7 @@ describe("app server routes", () => {
     expect(response.status).toBe(200);
     expect(body.objectId).toBe("writer");
     expect(await readFile(join(baseDir, "stones", "main", "objects", "writer", "self.md"), "utf8")).toBe("# Writer\nI write notes.");
-    expect(await readFile(join(baseDir, "stones", "main", "objects", "writer", "readme.md"), "utf8")).toBe("# Writer README");
+    expect(await readFile(join(baseDir, "stones", "main", "objects", "writer", "readable.md"), "utf8")).toBe("# Writer README");
     // 2026-05-23：stone 级 data.json 已删除；description 字段已从 schema 移除（无承载位置）。
     // name 在没有显式 self 时会写成 self.md 首行（display_name_from_self_md 协议）；
     // 本 case 显式传了 self，因此 self 优先。

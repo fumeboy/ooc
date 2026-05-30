@@ -354,7 +354,7 @@ function scopeEmptyState(scope: "stones" | "flows" | "world" | "pools"): { title
   if (scope === "stones") {
     return {
       title: "Select a stone",
-      detail: "Pick a stone from the left sidebar to view its self.md / readme.md / client.tsx and knowledge tree.",
+      detail: "Pick a stone from the left sidebar to view its self.md / readable.md / client.tsx and knowledge tree.",
     };
   }
   if (scope === "pools") {

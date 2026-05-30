@@ -389,7 +389,7 @@ describe("pruneStaleWorktrees", () => {
 });
 
 describe("supervisorCreateObject", () => {
-  test("creates new stone with self/readme/knowledge and commits to main", async () => {
+  test("creates new stone with self/readable/knowledge and commits to main", async () => {
     const baseDir = await newWorld();
     const r = await supervisorCreateObject({
       baseDir,

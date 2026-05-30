@@ -36,9 +36,9 @@ describe("Issue #6 Bad #1: silent-fabricate", () => {
     expect(body.error.message).toContain("_test_no_such_obj");
   });
 
-  test("GET /api/stones/<nonexistent>/readme → 404 NOT_FOUND", async () => {
+  test("GET /api/stones/<nonexistent>/readable → 404 NOT_FOUND", async () => {
     const { app } = await makeApp();
-    const res = await app.handle(new Request("http://localhost/api/stones/_test_no_such_obj/readme"));
+    const res = await app.handle(new Request("http://localhost/api/stones/_test_no_such_obj/readable"));
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.error.code).toBe("NOT_FOUND");
@@ -195,17 +195,17 @@ describe("Issue #6 Bad #4: PUT 覆盖性写无护栏", () => {
     expect(allowed.status).toBe(200);
   });
 
-  test("PUT readme 同样受 confirm 护栏保护", async () => {
+  test("PUT readable 同样受 confirm 护栏保护", async () => {
     const { app } = await makeApp();
     await app.handle(
       new Request("http://localhost/api/stones", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ objectId: "_test_executable_target_3", readme: "v1" }),
+        body: JSON.stringify({ objectId: "_test_executable_target_3", readable: "v1" }),
       })
     );
     const blocked = await app.handle(
-      new Request("http://localhost/api/stones/_test_executable_target_3/readme", {
+      new Request("http://localhost/api/stones/_test_executable_target_3/readable", {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ text: "v2" }),

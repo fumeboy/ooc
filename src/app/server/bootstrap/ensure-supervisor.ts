@@ -10,7 +10,7 @@
  * 列表丢失。supervisor 升格为 bootstrap invariant 后（PR-Issue 是 stone-versioning
  * 决议链路用的，不是已移除的 issue 看板）：
  *
- * 1. 第一启动自动建 supervisor stone（self.md / readme.md / 5 篇 seed knowledge）
+ * 1. 第一启动自动建 supervisor stone（self.md / readable.md / 5 篇 seed knowledge）
  * 2. 后续启动 idempotent skip（stone 已存在则跳过）
  * 3. recovery-check / metaprog R12 等所有依赖 supervisor 的协议都得到稳定锚点
  *
@@ -26,7 +26,7 @@ import {
   stoneKnowledgeDir,
   createStoneObject,
   writeSelf,
-  writeReadme,
+  writeReadable,
   STONES_MAIN_BRANCH,
   gitCommitAll,
 } from "@src/persistable";
@@ -75,7 +75,7 @@ async function supervisorStoneExists(baseDir: string, branch: string): Promise<b
  *
  * 流程：
  *   1. ref 用 stonesBranch="main"（main worktree path）
- *   2. createStoneObject + writeSelf + writeReadme + 写 seed knowledge
+ *   2. createStoneObject + writeSelf + writeReadable + 写 seed knowledge
  *   3. gitCommitAll 把 main worktree 全部新增 stage + commit（author=supervisor）
  *
  * 失败时抛错（启动期一次性副作用 — 与 ensureStoneRepo 同风格）。
@@ -83,11 +83,11 @@ async function supervisorStoneExists(baseDir: string, branch: string): Promise<b
 async function createSupervisorStone(baseDir: string, branch: string): Promise<string | undefined> {
   const ref = { baseDir, objectId: SUPERVISOR_OBJECT_ID, stonesBranch: branch };
 
-  // createStoneObject 预创 .stone.json + self.md (空) + readme.md (空)
+  // createStoneObject 预创 .stone.json + self.md (空) + readable.md (空)
   await createStoneObject(ref);
   // 覆盖空占位为真实内容
   await writeSelf(ref, SUPERVISOR_SELF_MD);
-  await writeReadme(ref, SUPERVISOR_README_MD);
+  await writeReadable(ref, SUPERVISOR_README_MD);
   // 写 seed knowledge：stones/<branch>/objects/supervisor/knowledge/<file>
   const knowledgeBaseDir = stoneKnowledgeDir(ref);
   await mkdir(knowledgeBaseDir, { recursive: true });

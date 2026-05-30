@@ -4,16 +4,16 @@
  * 设计动机（2026-05-25）：
  *   `user` 是真人用户在 OOC World 内的占位 Object：Object 通过
  *   `talk_window(target="user")` 向 user 发送的消息，会渲染到 web 控制面的 chat
- *   panel。其 `readme.md` 是面向其它 Object 的"对外公开介绍"，里面定义了
- *   `[[ui...ui]]` inline UI token 协议——其它 Object 通过读 user 的 readme 学到
+ *   panel。其 `readable.md` 是面向其它 Object 的"对外公开介绍"，里面定义了
+ *   `[[ui...ui]]` inline UI token 协议——其它 Object 通过读 user 的 readable 学到
  *   "我可以这样指给用户看一个文件"。
  *
  *   user 不是 LLM 驱动的 Agent（worker 主动 skip user 的 thread 调度，详见
  *   `src/app/server/runtime/worker.ts`），所以 self.md 留空——没有 LLM 视角需要
  *   注入 instructions。
  *
- *   把 user 的 readme 升格为 World bootstrap invariant，与 supervisor 同款语义：
- *   1. 第一启动自动建 user stone（空 self.md + 真实 readme.md）
+ *   把 user 的 readable 升格为 World bootstrap invariant，与 supervisor 同款语义：
+ *   1. 第一启动自动建 user stone（空 self.md + 真实 readable.md）
  *   2. 后续启动 idempotent skip
  *   3. 任何新 World 的 Object 都能立刻读到 inline UI token 协议
  */
@@ -22,7 +22,7 @@
 export const USER_OBJECT_ID = "user";
 
 /**
- * user 的 readme.md 内容（对外公开介绍；其它 Object 在 relation_window 中读到）。
+ * user 的 readable.md 内容（对外公开介绍；其它 Object 在 relation_window 中读到）。
  *
  * 内容覆盖 inline UI token 协议（`[[ui{...}ui]]`）——这是 Object → user 消息中
  * 唯一被前端识别的特殊语法。新组件接入时只需更新本文件 + 前端 InlineUiComponent 注册表。

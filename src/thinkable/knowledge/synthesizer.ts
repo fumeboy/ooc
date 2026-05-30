@@ -22,7 +22,7 @@
  * 内部的 commands / windows registry），故归位到 thinkable/knowledge。
  */
 
-import { deriveStoneFromThread, derivePoolFromThread, discoverStoneHierarchicalPeers, listBranchSkills, listObjectSkills, listExternalSkills, readPoolRelation, readFlowRelation, readReadme, readmeFile, readWorldConfig } from "../../persistable/index.js";
+import { deriveStoneFromThread, derivePoolFromThread, discoverStoneHierarchicalPeers, listBranchSkills, listObjectSkills, listExternalSkills, readPoolRelation, readFlowRelation, readReadable, readableFile, readWorldConfig } from "../../persistable/index.js";
 import type { ThreadContext } from "../context.js";
 import { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge.js";
 import { ROOT_BASIC_PATH, ROOT_COMMANDS, ROOT_KNOWLEDGE } from "../../executable/windows/root/index.js";
@@ -365,12 +365,12 @@ export async function deriveRelationWindow(
     const selfLongTermPath = `pools/${selfId}/knowledge/relations/${peerId}.md`;
     const selfSessionPath = `flows/${sessionId}/objects/${selfId}/knowledge/relations/${peerId}.md`;
     const peerStoneRef = { baseDir, objectId: peerId, stonesBranch: thread.persistence.stonesBranch };
-    const peerReadmePath = readmeFile(peerStoneRef);
+    const peerReadmePath = readableFile(peerStoneRef);
 
     let peerReadmeBody: string | undefined;
     let peerReadmeExists = false;
     try {
-      const text = await readReadme(peerStoneRef);
+      const text = await readReadable(peerStoneRef);
       if (text !== undefined && text.trim() !== "") {
         peerReadmeExists = true;
         peerReadmeBody = truncateKnowledgeBody(text);

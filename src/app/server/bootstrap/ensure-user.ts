@@ -2,12 +2,12 @@
  * ensureUserObject — World bootstrap invariant：确保 user stone 存在。
  *
  * 设计动机（2026-05-25）：
- *   `user` 是真人用户在 OOC World 中的占位 Object，其 `readme.md` 定义了
+ *   `user` 是真人用户在 OOC World 中的占位 Object，其 `readable.md` 定义了
  *   Object → user 消息的 inline UI token 协议（详见 `user-seed.ts`）。其它
  *   Object 通过读 user 的 readme（在 relation_window 中）学到这套语法。
  *
  *   把它升格为 bootstrap invariant 后：
- *   1. 第一启动自动建 user stone（空 self.md + 真实 readme.md，无 seed knowledge）
+ *   1. 第一启动自动建 user stone（空 self.md + 真实 readable.md，无 seed knowledge）
  *   2. 后续启动 idempotent skip（stone 已存在则跳过）
  *   3. 新 World 的 Object 立刻能读到 inline UI 协议，不需手动构造
  *
@@ -18,7 +18,7 @@
  *     （类比 ensureSupervisorObject 自身用 supervisor 做 author——bootstrap 一致性）
  *
  * 实现：直写 main worktree（与 ensureSupervisorObject 同款），bootstrap 期尚无
- * LLM 上下文运行 metaprog，最简方式是 createStoneObject + writeReadme + gitCommitAll。
+ * LLM 上下文运行 metaprog，最简方式是 createStoneObject + writeReadable + gitCommitAll。
  */
 
 import { stat } from "node:fs/promises";
@@ -26,7 +26,7 @@ import { join } from "node:path";
 import {
   stoneDir,
   createStoneObject,
-  writeReadme,
+  writeReadable,
   STONES_MAIN_BRANCH,
   SUPERVISOR_OBJECT_ID,
   gitCommitAll,
@@ -62,15 +62,15 @@ async function userStoneExists(baseDir: string, branch: string): Promise<boolean
  *
  * 流程（与 ensureSupervisorObject 同款，去掉 self.md 与 seed knowledge）：
  *   1. ref 用 stonesBranch="main"（main worktree path）
- *   2. createStoneObject 预创 .stone.json + 空 self.md + 空 readme.md
- *   3. writeReadme 覆盖空 readme 为真实内容（self.md 保持空——user 无 LLM instructions）
+ *   2. createStoneObject 预创 .stone.json + 空 self.md + 空 readable.md
+ *   3. writeReadable 覆盖空 readable 为真实内容（self.md 保持空——user 无 LLM instructions）
  *   4. gitCommitAll 把 main worktree 全部新增 stage + commit (author=supervisor)
  */
 async function createUserStone(baseDir: string, branch: string): Promise<string | undefined> {
   const ref = { baseDir, objectId: USER_OBJECT_ID, stonesBranch: branch };
 
   await createStoneObject(ref);
-  await writeReadme(ref, USER_README_MD);
+  await writeReadable(ref, USER_README_MD);
 
   const mainWorktreePath = join(baseDir, "stones", branch);
   const commit = gitCommitAll(mainWorktreePath, {

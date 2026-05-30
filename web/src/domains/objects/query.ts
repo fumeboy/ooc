@@ -270,7 +270,7 @@ export function __resetDisplayNameCacheForTest() {
 /* ----------------------------- peer readme ----------------------------- */
 
 /**
- * 取 stones/main/objects/<peerId>/readme.md 的全文（peer 公开自述）。
+ * 取 stones/main/objects/<peerId>/readable.md 的全文（peer 公开自述）。
  *
  * 用于：
  * - relation_window 详情面板展示对端身份介绍
@@ -297,7 +297,7 @@ async function loadReadme(objectId: string): Promise<string | null> {
     } else {
       try {
         const res = await requestJson<{ text?: string }>(
-          `/api/stones/${encodeURIComponent(objectId)}/readme`,
+          `/api/stones/${encodeURIComponent(objectId)}/readable`,
         );
         text = typeof res?.text === "string" ? res.text : null;
       } catch {
@@ -319,7 +319,7 @@ async function loadReadme(objectId: string): Promise<string | null> {
   return p;
 }
 
-/** `usePeerReadme(objectId)` —— 取 peer 的 readme.md；未命中先返回 loading。 */
+/** `usePeerReadme(objectId)` —— 取 peer 的 readable.md；未命中先返回 loading。 */
 export function usePeerReadme(objectId: string | undefined): {
   text: string | null;
   isLoading: boolean;

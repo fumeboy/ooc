@@ -384,7 +384,7 @@ function InlineTalkComposer({
  * Relation window 详情面板。
  *
  * 2026-05-27 修订（撤回 R8-5 + 删除占位文案）：
- * - peer_readme section 重新挂回（render: stones/<peer>/readme.md, 只读）；
+ * - peer_readme section 重新挂回（render: stones/<peer>/readable.md, 只读）；
  *   default visibility 让大量 sibling/child relation 自动派生，没 readme 内容
  *   则空壳，违背 default visibility 初衷
  * - 缺失的 section 不再渲染占位文案；exists=false 或 body 空直接跳过整段

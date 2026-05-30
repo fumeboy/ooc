@@ -37,7 +37,7 @@ export function AppShell() {
   const [state, setState] = useState<AppState>(initialState);
   const [showSessions, setShowSessions] = useState(true);
   const [stoneModalOpen, setStoneModalOpen] = useState(false);
-  const [stoneDraft, setStoneDraft] = useState({ name: "", description: "", self: "", readme: "" });
+  const [stoneDraft, setStoneDraft] = useState({ name: "", description: "", self: "", readable: "" });
   const [knowledgeModal, setKnowledgeModal] = useState<{ objectId: string; parentPath: string } | undefined>();
   const [knowledgeDraft, setKnowledgeDraft] = useState({ kind: "file" as "file" | "folder", path: "", content: "" });
   const [pauseBusy, setPauseBusy] = useState(false);
@@ -355,9 +355,9 @@ export function AppShell() {
     if (!name) return patch({ error: "Object name is required" });
     patch({ loading: true, error: undefined });
     try {
-      await createStone({ name, description: stoneDraft.description, self: stoneDraft.self, readme: stoneDraft.readme });
+      await createStone({ name, description: stoneDraft.description, self: stoneDraft.self, readable: stoneDraft.readable });
       setStoneModalOpen(false);
-      setStoneDraft({ name: "", description: "", self: "", readme: "" });
+      setStoneDraft({ name: "", description: "", self: "", readable: "" });
       await refreshBasics("stones");
     } catch (error) {
       patch({ error: messageFromError(error), loading: false });
@@ -462,9 +462,9 @@ function derivePathFromRoute(route: RouteState): string | undefined {
   }
 }
 
-function CreateStoneModal({ open, draft, onDraft, onClose, onSubmit }: { open: boolean; draft: { name: string; description: string; self: string; readme: string }; onDraft: (draft: { name: string; description: string; self: string; readme: string }) => void; onClose: () => void; onSubmit: () => void }) {
+function CreateStoneModal({ open, draft, onDraft, onClose, onSubmit }: { open: boolean; draft: { name: string; description: string; self: string; readable: string }; onDraft: (draft: { name: string; description: string; self: string; readable: string }) => void; onClose: () => void; onSubmit: () => void }) {
   if (!open) return null;
-  return <div className="modal-backdrop"><div className="modal-card"><div className="row space-between"><strong>Create object</strong><button className="btn" onClick={onClose}>Close</button></div><div className="stack"><label className="field-label">Name<input className="input" value={draft.name} onChange={(event) => onDraft({ ...draft, name: event.target.value })} placeholder="researcher" /></label><label className="field-label">Description<input className="input" value={draft.description} onChange={(event) => onDraft({ ...draft, description: event.target.value })} placeholder="What this object does" /></label><label className="field-label">self.md<textarea className="textarea code-textarea" value={draft.self} onChange={(event) => onDraft({ ...draft, self: event.target.value })} /></label><label className="field-label">readme.md<textarea className="textarea code-textarea" value={draft.readme} onChange={(event) => onDraft({ ...draft, readme: event.target.value })} /></label></div><div className="row space-between modal-actions"><span className="muted small">knowledge / memory / relations / server directories are initialized by the backend.</span><button className="btn primary" onClick={onSubmit}>Create</button></div></div></div>;
+  return <div className="modal-backdrop"><div className="modal-card"><div className="row space-between"><strong>Create object</strong><button className="btn" onClick={onClose}>Close</button></div><div className="stack"><label className="field-label">Name<input className="input" value={draft.name} onChange={(event) => onDraft({ ...draft, name: event.target.value })} placeholder="researcher" /></label><label className="field-label">Description<input className="input" value={draft.description} onChange={(event) => onDraft({ ...draft, description: event.target.value })} placeholder="What this object does" /></label><label className="field-label">self.md<textarea className="textarea code-textarea" value={draft.self} onChange={(event) => onDraft({ ...draft, self: event.target.value })} /></label><label className="field-label">readable.md<textarea className="textarea code-textarea" value={draft.readable} onChange={(event) => onDraft({ ...draft, readable: event.target.value })} /></label></div><div className="row space-between modal-actions"><span className="muted small">knowledge / memory / relations / server directories are initialized by the backend.</span><button className="btn primary" onClick={onSubmit}>Create</button></div></div></div>;
 }
 
 function CreateKnowledgeModal({ modal, draft, onDraft, onClose, onSubmit }: { modal?: { objectId: string; parentPath: string }; draft: { kind: "file" | "folder"; path: string; content: string }; onDraft: (draft: { kind: "file" | "folder"; path: string; content: string }) => void; onClose: () => void; onSubmit: () => void }) {

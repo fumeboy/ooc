@@ -7,7 +7,7 @@ export type CreateStoneInput = {
   name: string;
   description?: string;
   self?: string;
-  readme?: string;
+  readable?: string;
 };
 
 export type KnowledgeEntryInput = {

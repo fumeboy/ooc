@@ -84,7 +84,7 @@ export {
 } from "./flow-relation";
 
 export { readSelf, selfFile, writeSelf } from "./stone-self";
-export { readReadme, readmeFile, writeReadme } from "./stone-readme";
+export { readReadable, readableFile, writeReadable } from "./stone-readable";
 // stone-data 已删除（2026-05-23）：data.json 语义改为 session-scoped 落 flow（详见 ./flow-data）。
 export { readExecutableSource, executableIndexFile, writeExecutableSource } from "./stone-executable";
 

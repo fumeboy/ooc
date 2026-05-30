@@ -32,7 +32,7 @@ import { join } from "node:path";
 import { STONES_MAIN_BRANCH } from "./stone-bootstrap";
 import { createStoneObject, stoneDir, stoneKnowledgeDir } from "./stone-object";
 import { writeSelf } from "./stone-self";
-import { writeReadme } from "./stone-readme";
+import { writeReadable } from "./stone-readable";
 import {
   gitArchiveBranch,
   gitCheckout,
@@ -682,7 +682,7 @@ export type SupervisorCreateObjectResult =
   | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string };
 
 /**
- * supervisor 创建新 Object 的快捷路径：原子地落盘 stone 骨架（self/readme/
+ * supervisor 创建新 Object 的快捷路径：原子地落盘 stone 骨架（self/readable/
  * knowledge）+ gitCommitAll on main。等价于走 open_worktree → write → commit →
  * merge（cross-scope → PR-Issue → supervisor 自审 merge）的标准流程，但一次
  * 同步调用完成、零 PR-Issue 噪音。
@@ -699,7 +699,7 @@ export type SupervisorCreateObjectResult =
  * 流程：
  *   1. 校验 newObjectId（不能 `supervisor`、不能已存在）
  *   2. enqueueSessionWrite git 队列锁
- *   3. createStoneObject + writeSelf + writeReadme + 写 knowledge/*
+ *   3. createStoneObject + writeSelf + writeReadable + 写 knowledge/*
  *   4. gitCommitAll on main worktree, author = supervisor
  */
 export async function supervisorCreateObject(
@@ -744,7 +744,7 @@ export async function supervisorCreateObject(
 
     await createStoneObject(ref);
     await writeSelf(ref, input.selfMd);
-    await writeReadme(ref, input.readmeMd);
+    await writeReadable(ref, input.readmeMd);
 
     if (input.knowledge && Object.keys(input.knowledge).length > 0) {
       const kDir = stoneKnowledgeDir(ref);

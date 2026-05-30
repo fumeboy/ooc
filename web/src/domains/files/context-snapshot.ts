@@ -145,7 +145,7 @@ export type ContextWindow =
       peerId: string;
       // 2026-05-27: 撤回 R8-5 的 peerReadme 删除。default visibility 派生大量
       // sibling/child relation 后,没 peer 身份介绍则空壳;peer readme 重新挂回。
-      /** peer stone readme 路径(`stones/<branch>/objects/<peer>/readme.md`)。 */
+      /** peer stone readme 路径(`stones/<branch>/objects/<peer>/readable.md`)。 */
       peerReadmePath?: string;
       /** peer readme 正文(只读;文件缺失/空 → undefined)。 */
       peerReadmeBody?: string;

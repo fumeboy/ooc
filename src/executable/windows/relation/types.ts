@@ -17,7 +17,7 @@ import type { BaseContextWindow } from "../_shared/types.js";
  * **2026-05-27 撤回 R8-5 的 peerReadme 删除**:default visibility 让大量自动派生
  * 的 sibling / child relation_window 出现在 LLM 视野,但 self 大概率没写过它们的
  * relation note → window body 全空只剩 path。这违背 default visibility 的初衷
- * (让 Agent 一上场就知道身边有谁干什么)。把 peer readme(stones/<peer>/readme.md)
+ * (让 Agent 一上场就知道身边有谁干什么)。把 peer readme(stones/<peer>/readable.md)
  * 作为只读字段挂回来:LLM 一眼看到 peer 是谁,无须再 file_window open;同时不影响
  * self-relation 的可写双层(pools/flows)。维度上 RelationWindow 现在承担"peer 身份
  * 介绍 + self-relation 双层认知"两块,文档明确。
@@ -37,7 +37,7 @@ export interface RelationWindow extends BaseContextWindow {
   peerId: string;
 
   // ── peer 身份介绍(2026-05-27 撤回 R8-5 删除决定;详见上方 JSDoc)
-  /** peer stone readme 路径:`stones/<branch>/objects/<peer>/readme.md`。 */
+  /** peer stone readme 路径:`stones/<branch>/objects/<peer>/readable.md`。 */
   peerReadmePath: string;
   /** peer readme 正文;文件缺失 / 读失败 → undefined。截断后 ≤ 8KB。 */
   peerReadmeBody?: string;
