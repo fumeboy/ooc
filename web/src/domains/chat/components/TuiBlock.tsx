@@ -392,6 +392,9 @@ function ToolCardRouter({ line, liveWindowIds }: ToolCardShellProps) {
 export function TuiBlock({ line, loading = false, liveWindowIds, sessionId, objectId, threadId }: { line: ChatLine; loading?: boolean; liveWindowIds?: Set<string>; sessionId?: string; objectId?: string; threadId?: string }) {
   const config = ROLE_CONFIG[line.role];
   const PrefixIcon = config.icon;
+  // ooc-3 注入的 system context snapshot 体量很大，默认折叠避免淹没 timeline。
+  const isSystemNotice = line.kind === "notice" && line.title === "system";
+  const [noticeOpen, setNoticeOpen] = useState(!isSystemNotice);
 
   const renderHeader = (className = "tui-block-head", detail?: React.ReactNode, aside?: React.ReactNode, labelOverride?: string, showCopy = true, iconOverride?: LucideIcon) => {
     const HeaderIcon = iconOverride ?? PrefixIcon;
@@ -436,14 +439,26 @@ export function TuiBlock({ line, loading = false, liveWindowIds, sessionId, obje
     }
 
     if (line.kind === "notice") {
+      const toggle = isSystemNotice ? (
+        <button
+          type="button"
+          className="tui-collapse-toggle"
+          onClick={() => setNoticeOpen((v) => !v)}
+          aria-expanded={noticeOpen}
+        >
+          {noticeOpen ? "收起" : "展开"}
+        </button>
+      ) : undefined;
       return (
         <div className={`tui-notice-card is-${line.tone ?? "info"}`}>
           <div className="tui-notice-card-head">
-            {renderHeader("tui-card-head tui-card-head-embedded", <span className="tui-notice-title">{line.title}</span>)}
+            {renderHeader("tui-card-head tui-card-head-embedded", <span className="tui-notice-title">{line.title}</span>, toggle)}
           </div>
-          <div className="tui-notice-body">
-            <pre className="tui-pre tui-notice-pre">{line.content}</pre>
-          </div>
+          {noticeOpen && (
+            <div className="tui-notice-body">
+              <pre className="tui-pre tui-notice-pre">{line.content}</pre>
+            </div>
+          )}
         </div>
       );
     }
