@@ -1,6 +1,7 @@
 import { endpoints } from "../../transport/endpoints";
 import { requestJson } from "../../transport/http";
 import { threadToContext, type ThreadContext } from "./model";
+import type { ListThreadsResponse } from "../sessions/types";
 
 /**
  * Fetch a thread from ooc-3 backend and convert to ThreadContext shape.
@@ -76,6 +77,21 @@ export async function decideChatPermission(args: {
     endpoints.runtimeDecidePermission(args.sessionId, args.objectId, args.threadId),
     { method: "POST", body: JSON.stringify({ action: args.action, ...(args.toolCallId ? { eventId: `${args.toolCallId}_ask` } : {}) }) },
   );
+}
+
+/**
+ * Fetch session threads with full metadata shape for SessionThreadsIndex.
+ * In ooc-3, the backend returns minimal shape {objectId, threadId, status?};
+ * optional fields degrade gracefully via ListThreadsItem optional fields.
+ */
+export async function fetchSessionThreadsFull(
+  sessionId: string,
+): Promise<ListThreadsResponse> {
+  const res = await requestJson<{
+    ok: boolean;
+    items?: ListThreadsResponse["items"];
+  }>(endpoints.sessionThreads(sessionId));
+  return { items: res.items ?? [] };
 }
 
 /**

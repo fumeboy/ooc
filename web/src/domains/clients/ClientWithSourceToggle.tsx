@@ -1,8 +1,15 @@
 /**
- * ClientWithSourceToggle — (Batch 4 placeholder)
- * Full implementation in Batch 4 (secondary tabs).
+ * ClientWithSourceToggle — renders an Object's custom client UI.
+ *
+ * ooc-3: Uses ObjectClientRenderer which calls GET /api/objects/:scope/:name/client-source-url
+ * to resolve the /@fs/ URL. Falls back to StoneFallback if no client exists.
+ *
+ * The "source toggle" from ooc-2 is kept as a structural concept but simplified:
+ * ooc-3 always tries dynamic loading; the stone self/readme fallback is the StoneFallback.
  */
-import { EmptyState } from "../../shared/ui/EmptyState";
+
+import { ObjectClientRenderer, type ClientTarget as OcrTarget } from "./ObjectClientRenderer";
+import { StoneFallback } from "./StoneFallback";
 
 export interface ClientTarget {
   kind: "stone" | "flow";
@@ -29,10 +36,28 @@ export function ClientWithSourceToggle({
   target: ClientTarget;
   sourcePath: string;
 }) {
-  return (
-    <EmptyState
-      title={`Object client: ${target.objectId}`}
-      detail="(Batch 4) Object client renderer coming in Batch 4."
-    />
-  );
+  // Convert ClientTarget to ObjectClientRenderer's ClientTarget type
+  const ocrTarget: OcrTarget =
+    target.kind === "stone"
+      ? { scope: "stone", objectId: target.objectId }
+      : {
+          scope: "flow",
+          objectId: target.objectId,
+          sessionId: target.sessionId ?? "",
+          page: target.page ?? "index",
+        };
+
+  // For stones: use ObjectClientRenderer which will try dynamic loading
+  // and fall back to StoneFallback if no client file exists.
+  if (target.kind === "stone") {
+    return <ObjectClientRenderer target={ocrTarget} />;
+  }
+
+  // For flow objects: try ObjectClientRenderer; flow client pages are Batch 5 backend work
+  if (target.sessionId && target.page) {
+    return <ObjectClientRenderer target={ocrTarget} />;
+  }
+
+  // Fallback for stones without a custom client
+  return <StoneFallback objectId={target.objectId} />;
 }

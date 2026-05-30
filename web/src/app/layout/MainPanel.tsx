@@ -7,8 +7,8 @@ import type { Stone } from "../../domains/stones";
 import type { ThreadContext } from "../../domains/chat";
 import { useDisplayName } from "../../domains/objects";
 import { EmptyState } from "../../shared/ui/EmptyState";
-import { UserThreadHome } from "../../domains/sessions/components/UserThreadHome";
 import { ThreadDetailTabs } from "../../domains/sessions/components/ThreadDetailTabs";
+import { SessionThreadsIndex } from "../../domains/sessions/components/SessionThreadsIndex";
 import { Welcome } from "./Welcome";
 import {
   ClientWithSourceToggle,
@@ -180,11 +180,8 @@ export function MainPanel({
               detail="从左侧 sidebar 选一个 session，或在 welcome 页新建。"
             />
           ) : userHomeReady && route.kind === "flowsView" ? (
-            <UserThreadHome
+            <SessionThreadsIndex
               sessionId={route.sessionId!}
-              thread={thread}
-              selfObjectId={selfObjectId}
-              onUserReply={onUserReply}
             />
           ) : isThreadContextView && !threadContextReady ? (
             <EmptyState
