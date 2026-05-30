@@ -104,7 +104,7 @@ export type SeedFile = { path: string; content: string };
 export type SeedStone = {
   objectId: string;
   self?: string;
-  readme?: string;
+  readable?: string;
 };
 
 /**
@@ -153,8 +153,8 @@ export async function startApp(opts: {
     if (stone.self !== undefined) {
       writeFileSync(join(stoneDir, "self.md"), stone.self, "utf8");
     }
-    if (stone.readme !== undefined) {
-      writeFileSync(join(stoneDir, "readme.md"), stone.readme, "utf8");
+    if (stone.readable !== undefined) {
+      writeFileSync(join(stoneDir, "readable.md"), stone.readable, "utf8");
     }
   }
 

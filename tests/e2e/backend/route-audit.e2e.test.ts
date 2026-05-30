@@ -79,6 +79,9 @@ function buildRouteCases(): RouteCase[] {
 
     // Stones / pools (knowledge endpoint — pool 顶层没有 list endpoint, 走 knowledge prefix)
     { name: "stones.list", method: "GET", path: "/api/stones" },
+    // ooc-4 改名后的 stone 内容路由 (web 硬编码 URL 不走 endpoints.ts, 这里显式 gate 防漂移)
+    { name: "stones.readable.get", method: "GET", path: `/api/stones/${OBJECT_ID}/readable` },
+    { name: "stones.executable-source.get", method: "GET", path: `/api/stones/${OBJECT_ID}/executable-source` },
     {
       name: "pools.knowledge.directories",
       method: "POST",
