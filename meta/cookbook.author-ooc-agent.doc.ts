@@ -69,7 +69,7 @@ export const root: DocTreeNode = {
             \`\`\`
             stones/<id>/
             ├── self.md              # 第一人称身份；进 instructions
-            ├── readme.md            # 第三人称对外自述；其他 Object 看你时读这个
+            ├── readable.md          # 第三人称对外自述；其他 Object 看你时读这个
             ├── executable/index.ts  # custom self window + ui_methods（必备）
             ├── client/index.tsx     # 可选；对外的 web 单页入口（缺省走 Stone fallback）
             ├── data.json            # 自动维护；setData/getData 落盘
@@ -96,17 +96,17 @@ export const root: DocTreeNode = {
             \`\`\`
 
             \`\`\`md
-            # readme.md
+            # readable.md
             因子工作台（factor_workshop）：负责把因子需求拆解成实验脚本与回测任务。
             遇到 "新加因子 / 调参 / 跑回测" 类对话，可以 talk(target="factor_workshop") 找我。
             \`\`\`
 
-            self.md 是给自己看的（系统注入 instructions），readme.md 是给别人看的
+            self.md 是给自己看的（系统注入 instructions），readable.md 是给别人看的
             （别人和你 talk 时系统作为 relation knowledge 注入）。两份文件都用第一/第三
             人称即可，不需要 frontmatter。
             `,
             named: {
-                "self.md / readme.md": "身份文件；改它们立即影响下一轮 LLM",
+                "self.md / readable.md": "身份文件；改它们立即影响下一轮 LLM",
                 "knowledge/<topic>/<slug>.md": "长期 markdown 知识；frontmatter activates_on 决定何时激活",
                 "data.json": "不直接编辑；通过 self.setData(key, value) 落盘",
             },
@@ -304,7 +304,7 @@ export const root: DocTreeNode = {
             关系文件 \`knowledge/relations/<peerId>.md\`：当 thread 里出现
             \`talk_window(target=peerId)\` 时自动激活两条 knowledge：
 
-            - \`stones/<peer>/readme.md\`（peer 公开自述）
+            - \`stones/<peer>/readable.md\`（peer 公开自述）
             - \`stones/<self>/knowledge/relations/<peer>.md\`（你对该 peer 的认知）
 
             如果你还没写 relation，第二条会显示占位提示，引导你按上述路径写入。
@@ -364,14 +364,14 @@ export const root: DocTreeNode = {
             - \`callMethod(name, args)\` 调你 executable/index.ts 里 \`ui_methods[name]\` ——
               **不是 \`window.commands\`**（后者是给 LLM 的）
             - 没写 client/index.tsx 时 web 走 Stone fallback（自动展示
-              self.md / readme.md / knowledge / Recent flows）
+              self.md / readable.md / knowledge / Recent flows）
 
             Flow 级临时多页 \`flows/<sid>/objects/<self>/client/pages/<name>.tsx\` 用法相同。
             `,
             named: {
                 "client/index.tsx": "stone 级单页入口；缺省走 Stone fallback",
                 "callMethod (UI 路径)": "前端 props 注入；调 executable/index.ts 的 ui_methods 字典；HTTP /api/{flows,stones}/.../call_method",
-                "Stone fallback": "无 client/index.tsx 时 web 默认展示 self.md/readme.md/knowledge/Recent flows",
+                "Stone fallback": "无 client/index.tsx 时 web 默认展示 self.md/readable.md/knowledge/Recent flows",
             },
         },
         "step5b_skills": {

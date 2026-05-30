@@ -73,7 +73,7 @@ export const root: DocTreeNode = {
     **Context Window 是 Object 的形态**：LLM context 中出现的每个单元（旧称 Context Window）都是某个 OOC Object 在 context 中的呈现形式，不是独立概念。Window 的 command 与 Object 的 method 合并为统一的 **method**。一个 Object 由五件持久化组成：self.md（身份）/ executable/（方法）/ readable.(md|ts)（对外展示）/ visible/（人类 UI）/ children/（子对象）。
 
     Agent 具有 stone、pool、flow 三种持久层（World 级三分，2026-05-23 起）:
-    - stone: 象征"静"——持有 Object 的长期身份与设计源码（self.md / readme.md / server / client / knowledge 五件套），跨 session 共享，进 git review。其中 \`knowledge/\` 是 **seed knowledge**（人类设计的初始知识库），可挂 eval gate。
+    - stone: 象征"静"——持有 Object 的长期身份与设计源码（self.md / readable.md / server / client / knowledge 五件套），跨 session 共享，进 git review。其中 \`knowledge/\` 是 **seed knowledge**（人类设计的初始知识库），可挂 eval gate。
     - pool:  象征"积"——持有 Object 跨 session 累积的事实数据（data / knowledge / files 三件套），不进 git。data 用 csv（不用 sql；详见 persistable.pool.children.data_pool）；knowledge 是 **sediment knowledge**（运行时由 reflectable / collaborable 沉淀的 memory / relations）。
     - flow:  象征"动"——一个 Object 可以参与多个 session，每个 session 下有一个 flow，每个 flow 都有自己的 session 级数据字段和程序方法。
 
@@ -171,10 +171,10 @@ export const root: DocTreeNode = {
 
                     OOC 中的 Object 至少有两层身份文本:
                     1. self.md: Object 写给自己的身份说明，进入自己的 LLM instructions，用于定义目标、风格、知识背景、行为偏好。
-                    2. readme.md: Object 写给外部世界的介绍，用于让其他 Object 或 user 理解 "我是谁、我能做什么、什么时候该找我"。
+                    2. readable.md: Object 写给外部世界的介绍，用于让其他 Object 或 user 理解 "我是谁、我能做什么、什么时候该找我"。
 
                     self.md 偏内向，是 Object 的自我约束。
-                    readme.md 偏外向，是 Object 在协作网络中的名片。
+                    readable.md 偏外向，是 Object 在协作网络中的名片。
 
                     这两个文件共同决定 Object 在系统中的人格边界:
                     - Object 如何解释任务。
@@ -183,7 +183,7 @@ export const root: DocTreeNode = {
                     `,
                     named: {
                         "self.md": "Object 写给自己的身份文档，每轮进入自己的 LLM instructions",
-                        "readme.md": "Object 写给外部世界的介绍文档，供 user 和其他 Object 理解它的能力与边界",
+                        "readable.md": "Object 写给外部世界的介绍文档，供 user 和其他 Object 理解它的能力与边界",
                     },
                 },
                 "llm": {
@@ -370,7 +370,7 @@ export const root: DocTreeNode = {
                             stones/<branch>/objects/sentry/
                             ├── .stone.json
                             ├── self.md
-                            ├── readme.md
+                            ├── readable.md
                             ├── knowledge/
                             │   ├── sentry_intro.md      (frontmatter inheritable: true)
                             │   └── sentry_factor.md     (frontmatter inheritable: true)
@@ -975,7 +975,7 @@ export const root: DocTreeNode = {
                             - write_file
                             - relation_update
                             - program (shell) / program (ts/js)
-                            - super flow 中改 self.md / readme.md
+                            - super flow 中改 self.md / readable.md
                             - delete_* 任何删除类
 
                             deny (本轮硬拦):
@@ -1728,7 +1728,7 @@ export const root: DocTreeNode = {
                     default visibility 让大量自动派生的 sibling/child relation_window 出现在 LLM 视野，
                     但 self 大概率没写过它们的 relation note → window body 全空只剩 path。这违背
                     default visibility 的初衷（让 Agent 一上场就知道身边有谁干什么）。把 peer readme
-                    （\`stones/<branch>/objects/<peer>/readme.md\`）作为只读字段挂回 RelationWindow，
+                    （\`stones/<branch>/objects/<peer>/readable.md\`）作为只读字段挂回 RelationWindow，
                     LLM 一眼看到 peer 是谁，无须再 file_window open；同时不影响 self-relation 的可写
                     双层（pools/flows）。维度上 RelationWindow 现在承担"peer 身份介绍 + self-relation
                     双层认知"两块（不是严格的"只 self-relation"）。
@@ -1766,7 +1766,7 @@ export const root: DocTreeNode = {
                         "deriveRelationWindow": "按 talk_window peer 派生 RelationWindow 的函数",
                         "long_term relation": "pools/objects/<self>/knowledge/relations/<peer>.md，跨 session 长期；落 pool 不落 stone",
                         "session relation": "flows/<sid>/objects/<self>/knowledge/relations/<peer>.md，仅本 session",
-                        "peer readme + self-relation 双层": "RelationWindow 含 peer stone readme 只读（peerReadmePath/Body/Exists, synthesizer 注入 peer 的 stones/<branch>/objects/<peer>/readme.md）+ self-relation 双层（self 对 peer 的 long_term/session 认知, 可 edit）；2026-05-27 撤回了'只在 pools+flows'的删除",
+                        "peer readme + self-relation 双层": "RelationWindow 含 peer stone readme 只读（peerReadmePath/Body/Exists, synthesizer 注入 peer 的 stones/<branch>/objects/<peer>/readable.md）+ self-relation 双层（self 对 peer 的 long_term/session 认知, 可 edit）；2026-05-27 撤回了'只在 pools+flows'的删除",
                         "*Exists flag": "API caller 用 selfLongTermExists/selfSessionExists 区分 lazy-create vs read-fail",
                     },
                     children: {
@@ -2147,7 +2147,7 @@ export const root: DocTreeNode = {
             Object 可以反思自己、沉淀经验、修改自身的知识与方法。
             OOC 不为此专门设一套"反思 API"，而是复用既有协作设施 —— 通过一个名为
             "super" 的特殊 session 把 Object 引到一条专用反思线程上，在那里改写自身
-            stone 中的身份文件（self.md / readme.md）与 pool 中的 sediment knowledge
+            stone 中的身份文件（self.md / readable.md）与 pool 中的 sediment knowledge
             （pools/<self>/knowledge/memory / relations）。下一轮新 thread 自动看见这些落盘的新内容，
             行为随之自我演化。
 
@@ -2160,7 +2160,7 @@ export const root: DocTreeNode = {
             1. super session: 受保护的 sessionId（"super"），表示 Object 的反思通道。
             2. super alias target: talk_window.target === "super" 时被 talk-delivery 翻译为指向自己的 super 分身。
             3. Reflectable protocol knowledge: 当 thread.persistence.sessionId === "super" 时，synthesizer 自动注入 REFLECTABLE_KNOWLEDGE。
-            4. memory 写入: super flow 中允许写自身 stone 的身份文件（self.md / readme.md）与 pool 的 sediment knowledge
+            4. memory 写入: super flow 中允许写自身 stone 的身份文件（self.md / readable.md）与 pool 的 sediment knowledge
                （pools/objects/<self>/knowledge/memory/*.md、pools/objects/<self>/knowledge/relations/*.md）。
                注意 sediment knowledge 不进 git review（事实型，写就生效）；身份文件仍在 stone 进 git review；
                seed knowledge（stones/<self>/knowledge/）不在 super flow 默认面。
@@ -2250,7 +2250,7 @@ export const root: DocTreeNode = {
                     - 本轮做反思 / 沉淀，不是执行新业务任务。
                     - 读 inbox 中 caller 的反思请求；理解对方要你沉淀 / 调整什么。
                     - 写到 pools/objects/<self>/knowledge/memory/<slug>.md（slug 用 kebab-case 概括主题）。
-                    - 必要时（caller 明确要求改身份）允许写 stones/<self>/self.md / readme.md。
+                    - 必要时（caller 明确要求改身份）允许写 stones/<self>/self.md / readable.md。
                     - 通过 creator talk_window 回复结论 (say + close)。
                     - 用 end command 结束本轮 super 思考。
 
@@ -2314,7 +2314,7 @@ export const root: DocTreeNode = {
 
                     **stone 侧（设计型，进 git review）**：
                     - stones/<self>/self.md: 内部第一人称叙述（caller 明确要求改身份时）。
-                    - stones/<self>/readme.md: 对外公开自述（caller 明确要求改对外说明时）。
+                    - stones/<self>/readable.md: 对外公开自述（caller 明确要求改对外说明时）。
 
                     禁止动的路径（不在 super flow 的工作范围内）:
                     - stones/<self>/executable/ / client/ / .stone.json
@@ -2360,7 +2360,7 @@ export const root: DocTreeNode = {
                         "memory/<slug>.md": "长期记忆条目；一条记忆一个文件",
                         "kebab-case slug": "用短横线小写连字概括主题的命名风格",
                         "sediment in pool": "knowledge/memory/* 与 knowledge/relations/* 落 pool（事实型，不进 git）",
-                        "self.md / readme.md in stone": "身份文件留 stone（设计型，进 git review）",
+                        "self.md / readable.md in stone": "身份文件留 stone（设计型，进 git review）",
                         "seed not in super flow": "stones/<self>/knowledge/ 是 seed knowledge，不在 super flow 默认写入面；走 PR-Issue + eval",
                         "sediment write contract": "所有 super flow 写入的 .md 必须含 frontmatter（title/description/activates_on trigger map）；否则 activator 永远不命中，自演化闭环断裂",
                     },
@@ -2373,7 +2373,7 @@ export const root: DocTreeNode = {
                     1. 业务线程遇到值得沉淀的事情，open 一个 target='super' 的 talk_window，say 反思请求。
                     2. talk-delivery 把请求派送到 super flow 下的反思 thread；该 thread 看见 REFLECTABLE_KNOWLEDGE。
                     3. 反思 thread 通过 write_file 把结论落到 pools/objects/<self>/knowledge/memory/<slug>.md
-                       （或 stones/<self>/self.md / readme.md）。
+                       （或 stones/<self>/self.md / readable.md）。
                     4. 反思 thread 通过 creator talk_window 简短回复，然后 end。
                     5. 下次（同 Object 的任意新 thread）启动时，新写入的 memory 文件作为 knowledge 自动出现在 Context 中，
                        LLM 看见新认知 / 新约束，行为随之改变。
@@ -2381,7 +2381,7 @@ export const root: DocTreeNode = {
                     Reflectable 只负责"为什么 / 何时 / 在哪条线程上"做元编程，不定义"改的东西具体是什么形状":
                     - 修改自身函数方法（server method library 的形状、加载、调用约定、版本演化）→ 见 programmable 维度。
                     - 修改自身 UI 页面（stone client / flow client/pages 的形状、agent-native 访问）→ 见 visible 维度。
-                    - 修改自身身份与 sediment knowledge（stones/<self>/self.md/readme.md 与
+                    - 修改自身身份与 sediment knowledge（stones/<self>/self.md/readable.md 与
                       pools/objects/<self>/knowledge/{memory,relations}/）→ 这是 reflectable 默认覆盖的范围，
                       因为它们直接喂回 thinkable 的 context，闭环最短。
                     - 修改 seed knowledge（stones/<self>/knowledge/）→ **不在 reflectable 默认面**；
@@ -2418,7 +2418,7 @@ export const root: DocTreeNode = {
                     - 用 file_window.edit 改业务代码。
                     - 开任何 do command 派生子任务去执行业务。
 
-                    super flow 默认仅写 stone 中的 self.md / readme.md（身份）与 pool 中的
+                    super flow 默认仅写 stone 中的 self.md / readable.md（身份）与 pool 中的
                     sediment knowledge（knowledge/memory/* / knowledge/relations/*，长期事实）。
                     如果 caller 明确请求修改自身函数方法、UI 页面或 seed knowledge，应走对应维度定义的演化路径:
                     - 编辑 stones/<self>/executable/index.ts → 见 programmable.method_evolution。
@@ -2444,7 +2444,7 @@ export const root: DocTreeNode = {
             核心组成（**三层而非二分**，2026-05-23 起）:
             1. world root: \`{baseDir}/\`，包含 \`stones/\` / \`pools/\` / \`flows/\` 三棵子树。
             2. stone tree: 设计层（持久 + git 版本化）。\`stones/{branch}/objects/<objectId>/\` 持有
-               per-Object 长期身份与设计源码（self.md / readme.md / server / client / knowledge 五件套）；
+               per-Object 长期身份与设计源码（self.md / readable.md / server / client / knowledge 五件套）；
                未来挂在 \`stones/{branch}/\` 根的是 world-level 持久资源。
             3. pool tree: 事实层（持久 + 不版本化）。两类挂载（2026-05-24 拓宽）:
                - \`pools/objects/<objectId>/\`：per-Object 事实（data csv / knowledge / files 三件套）
@@ -2493,7 +2493,7 @@ export const root: DocTreeNode = {
                             <objectId>/
                               .stone.json            ← stone 元数据（type='stone', objectId）
                               self.md                ← 对内身份（写入 LlmGenerateParams.instructions）
-                              readme.md              ← 对外公开介绍
+                              readable.md            ← 对外公开介绍
                               executable/index.ts    ← stone server 源码
                               client/index.tsx       ← stone client 源码
                               knowledge/             ← seed knowledge：人类预置的初始知识库（2026-05-24）
@@ -2567,7 +2567,7 @@ export const root: DocTreeNode = {
 
                     子项与用途（五件套）:
                     - self.md (stone-self.ts): 对内身份；readSelf / writeSelf；buildInputItems 时读取并注入 LlmGenerateParams.instructions。
-                    - readme.md (stone-readme.ts): 对外公开介绍；其它 Object 在 collaborable.relation_window 的伴随 KnowledgeWindow 中会读到。
+                    - readable.md (stone-readable.ts): 对外公开介绍；其它 Object 在 collaborable.relation_window 的伴随 KnowledgeWindow 中会读到。
                     - executable/index.ts (stone-executable.ts): stone server 源码；readExecutableSource / writeExecutableSource，自动 mkdir。
                     - client/index.tsx (stone-client.ts): stone client 源码；readStoneClientSource / writeStoneClientSource。
                     - knowledge/ (2026-05-24 重纳): **seed knowledge**——人类设计的初始知识库；
@@ -2583,24 +2583,24 @@ export const root: DocTreeNode = {
                     |---|---|---|
                     | .stone.json | ✓ | createStoneObject |
                     | self.md | ✓（**空文件占位**） | createStoneObject |
-                    | readme.md | ✓（**空文件占位**） | createStoneObject |
+                    | readable.md | ✓（**空文件占位**） | createStoneObject |
                     | executable/ | ✗ | 首次 writeExecutableSource（自带 mkdir） |
                     | client/ | ✗ | 首次 writeStoneClientSource（自带 mkdir） |
                     | knowledge/ | ✗ | 首次 seed knowledge write_file（按需） |
 
                     理由（visibility-first）:
-                    - 预创 self.md / readme.md 空文件：让 \`ls stoneDir\` 立刻看到完整形态；
-                      readSelf / readReadme 返回 ""，被 loadSelfInstructions 等消费者
+                    - 预创 self.md / readable.md 空文件：让 \`ls stoneDir\` 立刻看到完整形态；
+                      readSelf / readReadable 返回 ""，被 loadSelfInstructions 等消费者
                       视为 empty 等价 undefined（语义零变更）。displayName 由 Object 后续主动 writeSelf 时设置。
                     - 不预创 server/ / client/ / knowledge/：空目录"骨架不全"的视觉噪音 > 预创价值；
                       对应 writer 都自带 mkdir 兜底，按需创建零成本。
                     `,
                     named: {
-                        "self.md / readme.md": "stone 的身份 + 公开介绍两件套",
+                        "self.md / readable.md": "stone 的身份 + 公开介绍两件套",
                         "stone server / client": "stone 自带的服务端 / 客户端源码",
                         "knowledge/": "stone 内 seed knowledge：人类设计的初始知识库；进 git review、可挂 eval gate",
                         "seed vs sediment": "seed 在 stone（设计型，review）vs sediment 在 pool（运行时，写就生效）",
-                        "createStoneObject": "创建 stone 物理骨架（.stone.json + self.md + readme.md 三件占位）；其它按需 lazy 创建",
+                        "createStoneObject": "创建 stone 物理骨架（.stone.json + self.md + readable.md 三件占位）；其它按需 lazy 创建",
                         "逻辑契约 vs 物理骨架": "五件套是逻辑契约（哪些可能存在）；createStoneObject 只预创 3 件可见小文件",
                         "self.md 第一行 = displayName": "UI 表层展示 objectId 时从 self.md 首行派生语义化标题；详见 visible.display_name_from_self_md",
                     },
@@ -3212,7 +3212,7 @@ export const root: DocTreeNode = {
 
                     **2026-05-23 起 git 追踪面收缩到设计层**（2026-05-24 修订五件套）:
                     sediment knowledge / data.json / files 已迁出 stone（详见 persistable.pool 与 persistable.stone）。
-                    stone 现在只有 self.md / readme.md / server / client / knowledge 五件套全部进 git
+                    stone 现在只有 self.md / readable.md / server / client / knowledge 五件套全部进 git
                     （其中 knowledge 是 seed knowledge——人类设计的初始知识库；2026-05-24 删除 database/ 后五件套定型）。
                     PR-Issue review 不再被 memory 写入这类高频脏 commit 淹没；
                     每个 commit 都是真正的设计演化（身份 / 源码 / seed knowledge）。
@@ -3229,7 +3229,7 @@ export const root: DocTreeNode = {
                         "recovery-check": "启动期自检；executable/index.ts 加载失败的 Object 自动开 [recovery-needed] PR-Issue 给 supervisor",
                         "Bootstrap commit": "首次启动 author=bootstrap 的一次性 squash commit，通过临时 clone scratch 灌入 bare repo 后 push",
                         "legacy-embedded": "已有 world 的非 bare 老式布局（main/.git/ 是目录）；ensureStoneRepo 兼容识别但不强制升级",
-                        "git 追踪面 = stone 五件套": "self.md / readme.md / server / client / knowledge（seed）；sediment knowledge / data.json / files 已迁出",
+                        "git 追踪面 = stone 五件套": "self.md / readable.md / server / client / knowledge（seed）；sediment knowledge / data.json / files 已迁出",
                     },
                     sources: [
                         [
@@ -3551,7 +3551,7 @@ export const root: DocTreeNode = {
 
                     **实现见**：
                     - \`src/app/server/modules/stones/versioning-helper.ts:wrapHttpWriteInWorktree\`
-                    - \`src/app/server/modules/stones/service.ts\`：createStone / putSelf / putReadme / putExecutableSource
+                    - \`src/app/server/modules/stones/service.ts\`：createStone / putSelf / putReadable / putExecutableSource
                       改调 helper
                     `,
                     named: {
@@ -4189,11 +4189,11 @@ export const root: DocTreeNode = {
             3. 沿原型链 fallback: X 无自定义 readable → 沿 self.md 的 extends 链向上找祖先 → root 兜底。
             4. 与 visible 对偶: visible 是人类面(浏览器 UI), readable 是 agent 面(他者 LLM context 的 XML); 二者是 agent-native parity 公理在"展示"这件事上的一组范例。
 
-            readable 泛化了旧 ContextWindow 体系里 per-window-type 的 renderXml hook: 从"按 window type 注册渲染"升格为"按 Object、沿原型链解析"。当前为概念引入阶段(ooc-4 Increment 1), 代码实装(含 readme.md→readable.md 改名)见后续 increment(spec L1)。
+            readable 泛化了旧 ContextWindow 体系里 per-window-type 的 renderXml hook: 从"按 window type 注册渲染"升格为"按 Object、沿原型链解析"。静态形态的 readme.md→readable.md 文件改名已落地(ooc-4 Increment 2); 动态 readable.ts 函数 + renderXml 泛化见后续 increment(spec L1)。
             `,
             named: {
                 "readable": "Object 的对外展示能力: 控制自己出现在他者 LLM context 中的 XML 呈现",
-                "readable.md": "静态对外展示文本(将取代旧 readme.md; 改名在 L1 readable 层)",
+                "readable.md": "静态对外展示文本(已取代旧 readme.md; 文件改名落地于 ooc-4 Increment 2)",
                 "readable.ts": "导出 readable() 函数, 动态计算 Object 在他者 context 中的 XML",
                 "对外的脸": "readable 只渲染 Object 出现在他者 context 中的样子; 自己 context 的自视由 thinkable ContextBuilder 负责",
             },
@@ -4202,7 +4202,7 @@ export const root: DocTreeNode = {
             ],
             sources: [["src/executable/windows/_shared/registry.ts", "现有 per-window-type renderXml hook 是 readable 的前身；L1 将泛化为 per-object readable，沿 extends 链解析"]],
             todo: [
-                "spec L1: 把 src/executable/windows/_shared/registry.ts 的 per-type renderXml 泛化为 per-object readable, 沿 extends 链解析; 并把 readme.md→readable.md 一并改名",
+                "spec L1: 把 src/executable/windows/_shared/registry.ts 的 per-type renderXml 泛化为 per-object readable, 沿 extends 链解析（静态 readme.md→readable.md 改名已于 Increment 2 落地）",
             ],
         },
         "extendable": {
@@ -4295,7 +4295,7 @@ export const root: DocTreeNode = {
             Supervisor = world 级最顶层 parent object: harness 的"1 Supervisor + N Agent"即这棵 object 树的实例——Supervisor 是 root parent，AgentOfX 是一级 children。
 
             修改权 = **self-scope 自治**（唯一规则，对所有 object 一视同仁；复用 stone-versioning 的 self/cross 划界）:
-            - 任何 object 改自己子树 objects/<self>/...（含自己的 seed: self.md / readme.md / server / knowledge）= self-scope → 自治 ff-merge，无需任何人 review。
+            - 任何 object 改自己子树 objects/<self>/...（含自己的 seed: self.md / readable.md / server / knowledge）= self-scope → 自治 ff-merge，无需任何人 review。
             - child 改自己（含自己 seed）= self-scope 自治，**不经 parent review**。
             - parent 改 child（child 物理在 objects/<parent>/children/<child>/，落在 parent 子树）= 对 parent 也是 self-scope → 自治。
             - cross-object（改不在自己子树的别人，如 child 改 parent）= cross-scope → PR-Issue review。

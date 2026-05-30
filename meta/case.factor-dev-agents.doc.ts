@@ -8,7 +8,7 @@
  * 维护原则：
  * 1. 本 case 文档**只描述 Agent 之间的协作 + 原子化分工 + skill 调用方式**, 不复述
  *    各 Agent 自己的 knowledge/memory/*.md 业务内容 (那些已迁到 stones/main/objects/<self>/knowledge/ 下)。
- * 2. 当任一 Agent 的 self/readme 协议变化、commands 增删、或 RPC 接入方式变化时, 本文档要同步。
+ * 2. 当任一 Agent 的 self/readable 协议变化、commands 增删、或 RPC 接入方式变化时, 本文档要同步。
  * 3. 与 `cookbook.add-new-agent.doc.ts` 区别: cookbook 教"怎么造新 Agent", 本 case 教"怎么把一组业务 skill
  *    用 Agent + skill 的方式表达"。两者互补。
  * 4. 本 case 的角色是**反推 OOC 设计是否够用**——如果遇到当前 OOC 协议表达不出来的细节,
@@ -296,7 +296,7 @@ export const root: DocTreeNode = {
             **为什么不做成 Agent 命令**:
             - psm-query 是无状态脚本 (PsmDataSource 数组 + AFS 检索), 没有需要在 stone 中沉淀的状态;
             - 多个 Agent (当前 3 个, 未来可能更多) 都可能用; 当 skill 比当 Agent 命令更通用;
-            - SKILL.md frontmatter 的 description 直接被 \`skill_index\` 渲染为发现入口, 比新写一个 Agent 的 self/readme 更轻量。
+            - SKILL.md frontmatter 的 description 直接被 \`skill_index\` 渲染为发现入口, 比新写一个 Agent 的 self/readable 更轻量。
 
             **psm-query 调的真实 HTTP**: AFS 检索接口 \`https://ecop.bytedance.net/api/governance_base/ecop/rpc/AgentAfs/AFSCommand\`,
             需要内网环境 + 鉴权。这个调用细节封装在 query.js 内, 上层 Agent 不需要关心。
@@ -423,7 +423,7 @@ export const root: DocTreeNode = {
             **目录结构**:
             - [ ] \`.ooc-world/stones/main/skills/psm-query/{SKILL.md, query.js}\` 就位
             - [ ] 3 个 stone 目录就位 \`stones/main/objects/{sentry_factor_dev, sentry_event_factor, sentry_factor_group}/\`,
-                 每个含 self.md / readme.md / executable/index.ts / data.json + knowledge/{memory, relations}/
+                 每个含 self.md / readable.md / executable/index.ts / data.json + knowledge/{memory, relations}/
 
             **类型与单测**:
             - [ ] \`bun tsc --noEmit\` baseline (不增加新 error)

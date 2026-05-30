@@ -217,7 +217,7 @@ export const root: DocTreeNode = {
             - 反思请求路径: 业务线程开 target='super' talk_window → talk-delivery 派送 → 反思 thread 看见 REFLECTABLE_KNOWLEDGE → 写 stones/<self>/knowledge/memory → 通过 creator talk_window 回复 + end。
             - 元编程闭环治理: 反思结论必须落到 memory 文件 (而不是只在 endSummary 里嘴上沉淀);确保下一轮 thread 真的能看见新认知。
             - memory 文档治理: kebab-case slug 规范、memory 文件命名一致性、过期/重复条目的合并与归档。
-            - relation 与 self.md / readme.md 的写入边界: 哪些请求够格触发 self.md / readme.md 修改 (caller 必须明确请求);哪些只是普通 memory。
+            - relation 与 self.md / readable.md 的写入边界: 哪些请求够格触发 self.md / readable.md 修改 (caller 必须明确请求);哪些只是普通 memory。
             - 与 AgentOfProgrammable / AgentOfVisible 的边界协调: super flow 默认不直接 patch server / client 产物,需要时走对应维度 Agent 定义的演化路径。
 
             内循环典型动作: 跑一遍 super flow 实测 → 检查 memory 是否真的落盘 + 内容是否够具体 → 发现 REFLECTABLE_KNOWLEDGE 漏洞 → 修协议 + 跑回归 e2e。

@@ -45,7 +45,7 @@ export const root: DocTreeNode = {
     步骤总览:
     1. 在 \`meta/object.doc.ts\` 与 \`meta/engineering.harness.doc.ts\` 加新维度的概念定义 (Supervisor 哲学层)
     2. 在 \`.ooc-world/stones/agent_of_<x>/\` 创建 stone 目录骨架
-    3. 写 \`self.md\` (Object 自己的身份) + \`readme.md\` (对外公开介绍)
+    3. 写 \`self.md\` (Object 自己的身份) + \`readable.md\` (对外公开介绍)
     4. (可选) 写 \`executable/index.ts\` (方法库) + \`client/index.tsx\` (自己的 UI)
     5. 验证: web 控制面能看到新 stone + displayName 正确派生
 
@@ -93,7 +93,7 @@ export const root: DocTreeNode = {
             \`\`\`
             .ooc-world/stones/agent_of_<x>/
             ├── self.md           # 留空 step 3 写
-            ├── readme.md         # 留空 step 3 写
+            ├── readable.md       # 留空 step 3 写
             ├── client/           # 可选, step 4
             ├── executable/       # 可选, step 4
             ├── files/            # Object 用户文件留存
@@ -109,7 +109,7 @@ export const root: DocTreeNode = {
               -H "Content-Type: application/json" \\
               -d '{"objectId":"agent_of_monitor"}'
             \`\`\`
-            这只会创建 \`.stone.json\` 与基础骨架, **不会**写 self.md / readme.md / data.json (照 \`createStoneObject\` 留白契约, 详见 \`meta/object.doc.ts:persistable.stone\`)。
+            这只会创建 \`.stone.json\` 与基础骨架, **不会**写 self.md / readable.md / data.json (照 \`createStoneObject\` 留白契约, 详见 \`meta/object.doc.ts:persistable.stone\`)。
 
             **objectId 命名约定**:
             - kebab_case 不允许; 用 snake_case
@@ -126,7 +126,7 @@ export const root: DocTreeNode = {
             },
         },
         step3_identity: {
-            title: "Step 3 - 写 self.md 与 readme.md (给 Agent 身份)",
+            title: "Step 3 - 写 self.md 与 readable.md (给 Agent 身份)",
             content: `
             这一步**新 Agent 的身份诞生**。displayName 派生 (\`meta/object.doc.ts:visible.display_name_from_self_md\`) 也在这一刻生效。
 
@@ -146,7 +146,7 @@ export const root: DocTreeNode = {
 
             **第一行约定**: \`# AgentOfMonitor （监控官）\` 是 displayName 派生的数据源。空 / 缺失 → web UI fallback 到原 objectId。
 
-            **readme.md** — 对外公开介绍 (其它 Object 在 collaborable.relation_knowledge 中读到):
+            **readable.md** — 对外公开介绍 (其它 Object 在 collaborable.relation_knowledge 中读到):
 
             \`\`\`markdown
             # AgentOfMonitor （监控官）
@@ -159,9 +159,9 @@ export const root: DocTreeNode = {
             详见: meta/engineering.harness.doc.ts:children.agent_of_monitor
             \`\`\`
 
-            **风格惯例** (参考已有 10 个 stone 的 self.md/readme.md):
+            **风格惯例** (参考已有 10 个 stone 的 self.md/readable.md):
             - self 写"我是谁、我做什么、我不做什么、谁定义我"
-            - readme 写"找我做什么、不要找我做什么、谁定义我"
+            - readable 写"找我做什么、不要找我做什么、谁定义我"
             - 第一行始终是 displayName 形态 (\`# <英文 PascalCase> （中文括号）\`)
             - 末尾指向 meta/engineering.harness.doc.ts 对应节点
 
@@ -226,13 +226,13 @@ export const root: DocTreeNode = {
             }
             \`\`\`
 
-            **如果你不写**: web 访问 stone detail 会走 Stone fallback (显示 self.md / readme.md / knowledge / Recent flows), 这是优雅的默认 — 不必为每个 Agent 强制写 client。
+            **如果你不写**: web 访问 stone detail 会走 Stone fallback (显示 self.md / readable.md / knowledge / Recent flows), 这是优雅的默认 — 不必为每个 Agent 强制写 client。
 
             **method 加载**: executable/index.ts 是 ESM 热加载 (mtime cache + ?t=mtime), 改完不需要重启 server, 详见 \`meta/object.doc.ts:programmable.method_evolution\`。
             `,
             named: {
                 "window.commands / ui_methods": "method 分流: 前者给 LLM (program command 调), 后者给 web UI (HTTP callMethod 调)",
-                "Stone fallback": "无 client/index.tsx 时 web 默认展示 self.md/readme.md/knowledge/Recent flows",
+                "Stone fallback": "无 client/index.tsx 时 web 默认展示 self.md/readable.md/knowledge/Recent flows",
             },
         },
         step5_verify: {
@@ -243,7 +243,7 @@ export const root: DocTreeNode = {
             **HTTP 层**:
             - [ ] \`curl http://localhost:3000/api/stones\` 列表含新 objectId
             - [ ] \`curl http://localhost:3000/api/stones/agent_of_monitor/self\` 返回 200 + self.md 内容
-            - [ ] \`curl http://localhost:3000/api/stones/agent_of_monitor/readme\` 返回 200 + readme.md
+            - [ ] \`curl http://localhost:3000/api/stones/agent_of_monitor/readable\` 返回 200 + readable.md
 
             **Web UI**:
             - [ ] 访问 \`http://localhost:5173/welcome\`, "Talk to" dropdown 应有 displayName 选项 (例: \`AgentOfMonitor （监控官）\`)

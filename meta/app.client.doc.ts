@@ -404,9 +404,9 @@ export const root: DocTreeNode = {
             退回原 MarkdownContent；含 token 时 \`parseInlineUiSegments\` 切分成
             \`[text, ui, text, ...]\` 段，分别渲染。
 
-            **协议来源**：\`stones/main/user/readme.md\` 是约定的权威文本——Agent 在 super
-            flow 注入到 LLM context 时通过读 user 的 readme 学习这套语法。新组件
-            注册时同步更新 readme 即可，Agent 端零改动。
+            **协议来源**：\`stones/main/user/readable.md\` 是约定的权威文本——Agent 在 super
+            flow 注入到 LLM context 时通过读 user 的 readable 学习这套语法。新组件
+            注册时同步更新 readable 即可，Agent 端零改动。
 
             **扩展点**：加新组件只需在 \`InlineUiContent.tsx\` 的 \`InlineUiComponent\`
             switch 加一条 case，更新 user readme 注册表。例子：未来可加
@@ -419,12 +419,12 @@ export const root: DocTreeNode = {
                 "InlineUiContent": "消息文本渲染入口，替代 TuiBlock 里直调的 MarkdownContent",
                 "parseInlineUiSegments": "把含 token 的文本切成 text / ui 段的纯函数（9 个单测）",
                 "FileLinkInline": "已注册组件之一；用 useLocation 续 thread 上下文到 file URL，让 chat 不消失",
-                "user readme 协议来源": "stones/main/user/readme.md 是 Agent 学这套语法的权威文档",
+                "user readme 协议来源": "stones/main/user/readable.md 是 Agent 学这套语法的权威文档",
             },
             sources: [
                 [
                     "web/src/shared/ui/InlineUiContent.tsx",
-                    "parseInlineUiSegments / InlineUiContent / InlineUiComponent dispatch / FileLinkInline 用 useLocation 续 thread context；TuiBlock 在 message 渲染处用 InlineUiContent 替换 MarkdownContent；样式 .inline-ui-container / .inline-ui-file-link / .inline-ui-unknown 在 web/src/styles.css；语法约定见 .ooc-world/stones/main/user/readme.md；测试 web/src/shared/ui/InlineUiContent.test.ts 9 项",
+                    "parseInlineUiSegments / InlineUiContent / InlineUiComponent dispatch / FileLinkInline 用 useLocation 续 thread context；TuiBlock 在 message 渲染处用 InlineUiContent 替换 MarkdownContent；样式 .inline-ui-container / .inline-ui-file-link / .inline-ui-unknown 在 web/src/styles.css；语法约定见 .ooc-world/stones/main/user/readable.md；测试 web/src/shared/ui/InlineUiContent.test.ts 9 项",
                 ],
             ],
         },
@@ -629,7 +629,7 @@ export const root: DocTreeNode = {
             - stone self / readme / data / executable-source 读写。
             `,
             todo: [
-                "若后续要把 stone self/readme/data 编辑、loop debug 等纳入 client，需先把对应 endpoint 在前端 transport 层登记。",
+                "若后续要把 stone self/readable/data 编辑、loop debug 等纳入 client，需先把对应 endpoint 在前端 transport 层登记。",
             ],
         },
     },
