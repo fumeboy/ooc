@@ -15,16 +15,19 @@
 4. docs/superpowers/ooc-4-next-session-kickoff.md（本指南：进度、roadmap、纪律）
 5. 你的项目记忆 project_ooc4_direction_increment1.md + feedback_agent_facing_voice
 
-已完成：宪法（readable 第 9 维 + ooc4 架构概念）、目录归一 executable/✓ readable.md✓、**L2 原型链引擎**（commit 6dd10cf2，src/executable/prototype/）、**L3 builtin objects**（commit d5a840a7，作 src/extendable/base/<proto>/ 源码、非 world、loadBuiltinRegistry 经 import.meta.dir 扫描入 L2 registry）。tsc 全仓 0 error。
+已完成：宪法 + 目录归一 + **L2 原型链引擎**(6dd10cf2) + **L3 builtin objects**(d5a840a7，src/extendable/base/<proto>/ 源码) + **L4.0 command→method 归一**(52beb485+7ecd71bf) + **L4.1 活路径机制+skill_index**(53ccb737，behavior.ts) + **L4.2 A 类 method 解析+转写 program/search/file/knowledge**(a912d7f2)。tsc 全仓 0 error，bun test src/ 1073 pass/0 fail/3 skip。机制详见项目记忆 project_ooc4_direction_increment1。
 
-本次目标：实装 **L4.0 — `command`→`method` 术语归一**（L4 设计 spec §4/§12 第一子增量）。三层同步改、行为不变：①内部符号（CommandTableEntry→MethodEntry / commands→methods / lookupCommandEntry→lookupMethodEntry / command-types.ts→method-types.ts / ROOT_COMMANDS→ROOT_METHODS）②form 原型 command_exec 是否随改 method_exec（agent-facing + base dir 改名）③**agent-facing 协议**（LLM emit 的 open(window, command, args) 的 command arg + 所有 knowledge 文本里的「command」措辞→「method」）。**凡 LLM 按字面 emit 的都 load-bearing、unit test 测不到、只在 harness 暴露**——必须三层同步，半改是陷阱（readme→readable 教训）。L4.0 后续是 L4.1（核心机制 + skill_index 端到端）/L4.2（转写其余 6 A 类）/L4.3（method 可见性）。
+本次目标：**L4.2-tail**（完成 A 类全上链）。两件：
+1. **command_exec→method_exec** 改名：WindowType 字面量 + `CommandExecWindow`→`MethodExecWindow` 接口 + `base/command_exec/`→`base/method_exec/` 目录（canonical id 随改）+ ~14 处 `form.type==="command_exec"` 守卫（manager/budget:18,149/thread-json/custom/render compressView）+ web `registerWindowDiffRenderer("command_exec")`/`CommandExecDiff` + **旧 thread.json type:"command_exec" 反序列化兼容**。gate 须含 agent-facing e2e（LLM 读 type=、COMMAND_EXEC_BASIC_KNOWLEDGE）。
+2. **custom 吸收**：custom window prototype = 其 object canonical id（extends 某 base proto）；链解析天然处理 own object executable→沿 extends→base proto→root，去掉 custom 特殊 type。这是新机制最优雅副产品（custom 是现存唯一 per-object 先例，正是终态特例）。
+之后 **L4.3**（method 可见性 public/for_ui_access，metadata 现在 base executable 里声明 + dispatcher 鉴权）。再之后 **L5-6**（B 类塌缩，**大语义重设计须独立 brainstorm**）。
 
 按这个节奏走，不要跳步：
-1. 用 superpowers:brainstorming 对齐 L4.0 开放点（command_exec 是否改名、agent-facing 字面量穷举清单），落 plan 前确认根决策。
+1. 用 superpowers:brainstorming 对齐本层开放点（command_exec 改名 ripple 清单 / custom 吸收的 prototype 绑定如何按 objectId 设字段），落 plan 前确认根决策。
 2. 用 superpowers:writing-plans 写 implementation plan，存 docs/superpowers/plans/。
 3. plan 写完**先派 feasibility reviewer 对抗式审查再执行**（硬纪律——每轮都抓 2+ Critical；尤其穷举 seed/knowledge/协议里的字面 command）。
 4. 执行：sub agent 派单（CLAUDE.md Supervisor 模型），派单 prompt 末尾注明「不要自己 commit」，由你整合提交；commit 带 co-author footer。
-5. harness 回归：bun test src/ 全绿（**当前基线 1053 pass**）+ RUN_BACKEND_E2E=1 NO_PROXY=localhost,127.0.0.1,::1 跑 route-audit 等确定性 e2e + agent-facing 协议 e2e + 新能力补 e2e。
+5. harness 回归：bun test src/ 全绿（**当前基线 1073 pass**）+ RUN_BACKEND_E2E=1 NO_PROXY=localhost,127.0.0.1,::1 跑 route-audit 等确定性 e2e + agent-facing 协议 e2e + 新能力补 e2e。
 6. 每改一个 meta/*.doc.ts 立刻 bun tsc --noEmit 验证。
 
 两条贯穿纪律：①改持久层/加载器约定或 agent-facing 协议的增量先 feasibility review 再执行；②给新增 HTTP 路由在 tests/e2e/backend/route-audit.e2e.test.ts 补永久 gate。
@@ -50,7 +53,8 @@
 | **L4** | 活路径 prototype-chain 解析 + command→method 归一 + method 可见性（设计 spec：`2026-05-30-ooc-4-L4-live-prototype-resolution-design.md`；Option A 拆 per-type registry，无永久 shim）。拆 4 子增量↓ | L2/L3 | 进行中 |
 | ├ ~~L4.0~~ | `command`→`method` 归一（内部符号 tsc 兜底 + agent-facing 措辞 + exec arg key command→method + loader 硬切防静默丢命令），行为不变 | — | ✅ 已落地（Pass A 52beb485 + Pass B 7ecd71bf；保留 command_exec 字面）|
 | ├ ~~L4.1~~ | 核心机制（renderXml + basicKnowledge 沿链 + skill_index 端到端 + in-character + loadSelfInstructions 剥 frontmatter）。**method 解析推迟 L4.2**（skill_index 无 method；避 refine 同步 async） | L4.0 | ✅ 已落地（commit 53ccb737；behavior.ts stat-before-import + 同步 chain-aware assert）|
-| ├ L4.2 | 转写其余 6 A 类（program/search/file/knowledge/**command_exec→method_exec**(type字面量+目录+canonical id 改名)/custom）behavior + in-character 文件 + **接 method 解析沿链**（lookupMethodEntry/callMethod/renderMethodsNode，含 refine 同步→async 传播） | L4.1 | ← **下一层** |
+| ├ L4.2 | A 类 method 解析沿链 + 转写 program/search/file/knowledge | L4.1 | ✅ 已落地（commit a912d7f2；method 消费点全接链 + refine/permissions sync→async）|
+| ├ L4.2-tail | command_exec→method_exec 改名 + custom 吸收（完成 A 类全上链） | L4.2 | ← **下一层** |
 | └ L4.3 | method 可见性 public/for_ui_access + dispatcher 鉴权 | L4.2 | 设计就绪 |
 | L1 后半 | readable.ts 动态函数（renderXml 泛化为 per-object，headline 能力） | L2 | |
 | L5-6 | B 类塌缩（talk/do/todo/plan→owner 字段；relation 删除→auto 注入）；registry 彻底删 | L4 | |
