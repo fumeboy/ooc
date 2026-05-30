@@ -70,12 +70,14 @@ export const root: DocTreeNode = {
 
     面向对象 是基础哲学，在具体实现中，不同领域可能会有自己的 Object 去进行实现。
 
+    **Context Window 是 Object 的形态**：LLM context 中出现的每个单元（旧称 Context Window）都是某个 OOC Object 在 context 中的呈现形式，不是独立概念。Window 的 command 与 Object 的 method 合并为统一的 **method**。一个 Object 由五件持久化组成：self.md（身份）/ executable/（方法）/ readable.(md|ts)（对外展示）/ visible/（人类 UI）/ children/（子对象）。
+
     Agent 具有 stone、pool、flow 三种持久层（World 级三分，2026-05-23 起）:
     - stone: 象征"静"——持有 Object 的长期身份与设计源码（self.md / readme.md / server / client / knowledge 五件套），跨 session 共享，进 git review。其中 \`knowledge/\` 是 **seed knowledge**（人类设计的初始知识库），可挂 eval gate。
     - pool:  象征"积"——持有 Object 跨 session 累积的事实数据（data / knowledge / files 三件套），不进 git。data 用 csv（不用 sql；详见 persistable.pool.children.data_pool）；knowledge 是 **sediment knowledge**（运行时由 reflectable / collaborable 沉淀的 memory / relations）。
     - flow:  象征"动"——一个 Object 可以参与多个 session，每个 session 下有一个 flow，每个 flow 都有自己的 session 级数据字段和程序方法。
 
-    Agent 由 8 个**内在能力维度**组合。判定一个东西是不是维度的标准是: 它是否**构成 Agent 的「自我」(self-constitutive)**（判定轴详见 patches.dimension_criterion）。按此标准 8 维度分两组:
+    Agent 由 9 个**内在能力维度**组合。判定一个东西是不是维度的标准是: 它是否**构成 Agent 的「自我」(self-constitutive)**（判定轴详见 patches.dimension_criterion）。按此标准 9 维度分两组:
 
     运行时底座（Agent 据以存在、思考、行动的基础）:
     - thinkable: 可以思考
@@ -84,27 +86,30 @@ export const root: DocTreeNode = {
     - observable: 可观测、记录、debug
     - persistable: 可以持久化存储
 
-    自我塑造三件套（Agent 改写"自己"的三个面，OOC 自我进化主张的载体）:
-    - reflectable: 自我反思、经验沉淀、元编程（改自己的知识）
-    - programmable: 为自己编写函数方法（改自己的方法 / server 方法库）
-    - visible: 为自己编写 UI 页面（改自己的界面）
+    自我塑造四件套（Agent 改写"自己"的四个面，OOC 自我进化主张的载体）:
+    - reflectable: 自我反思、经验沉淀、元编程（改自己的知识；落 self.md / knowledge/）
+    - programmable: 为自己编写函数方法（改自己的方法；落 executable/）
+    - visible: 为自己编写面向人类的 UI 页面（改自己的浏览器界面；落 visible/）
+    - readable: 为自己编写面向 LLM 的对外展示（改自己出现在他者 context 中的呈现；落 readable.md / readable.ts）
 
-    **extendable** 是**非维度的外接集成层**（不在 8 维度内）: 把外部世界（飞书 / notion / slack / github 等）按统一模板接入为可调用的 Window 与 command。它够的是**外部世界**，而外部系统不构成 Agent 自我，故不是维度（实现见 src/extendable/，首个 case 见 meta/case.feishu-integration.doc.ts，详见 children.extendable）。
+    **extendable** 是**非维度的外接集成层**（不在 9 维度内）: 把外部世界（飞书 / notion / slack / github 等）按统一模板接入为可调用的 Window 与 command。它够的是**外部世界**，而外部系统不构成 Agent 自我，故不是维度（实现见 src/extendable/，首个 case 见 meta/case.feishu-integration.doc.ts，详见 children.extendable）。
 
     两条贯穿全维度的横切设计:
     - 对象关系三轴（详见 patches.object_relations）: 自我(super) / peer 平等(talk) / parent-child 层级。Supervisor 即这棵 object 树的 root parent。
     - agent-native parity 公理（详见 patches.agent_native_parity）: 每个维度都有"人类面 / agent 面"两个消费方，设计时都要回答这两面分别是什么。
+      readable / visible 正是这条公理的一组范例：visible 是 Object 的人类面展示（浏览器 UI），readable 是 Object 的 agent 面展示（出现在他者 LLM context 中的 XML）。
     `,
     named: {
         "OOC": "Object Oriented Context, 以面向对象的方式组织上下文，以面向对象的方式构建 MultiAgent 系统",
         "OOC Agent": "OOC 系统中的 Object 模式的 Agent, 具有数据字段和程序方法",
         "thinkable": "OOC Agent 由几个维度组合，thinkable 是其中之一，定义 Agent 的思考能力",
-        "executable": "OOC Agent 由几个维度组合，executable 是其中之一，定义 Agent 的行动能力",
+        "executable": "OOC Agent 由几个维度组合，executable 是其中之一，定义 Agent 的行动能力（方法落 executable/ 目录）",
         "collaborable": "OOC Agent 由几个维度组合，collaborable 是其中之一，定义 Agent 的协作能力",
         "observable": "OOC Agent 由几个维度组合，observable 是其中之一，定义 Agent 的可观测能力",
         "reflectable": "OOC Agent 由几个维度组合，reflectable 是其中之一，定义 Agent 的元编程能力",
         "programmable": "OOC Agent 由几个维度组合，programmable 是其中之一，定义 Agent 持有/演化自身函数方法库的能力",
-        "visible": "OOC Agent 由几个维度组合，visible 是其中之一，定义 Agent 持有/演化自身 UI 页面的能力",
+        "visible": "OOC Agent 由几个维度组合，visible 是其中之一，定义 Agent 持有/演化面向人类的 UI 页面的能力",
+        "readable": "OOC Agent 由几个维度组合，readable 是其中之一，定义 Agent 持有/演化面向 LLM 的对外展示（出现在他者 context 中的呈现）的能力；与 visible 对偶",
         "persistable": "OOC Agent 由几个维度组合，persistable 是其中之一，定义 Agent 的持久化存储能力",
         "extendable": "非能力维度的外接集成层：把外部世界（飞书 / notion / slack 等）按统一模板接入为可调用的 Window 与 command；实现见 src/extendable/",
         "stone": "OOC 持久层之一（静）：长期身份与设计源码（含 seed knowledge），进 git review",
@@ -114,7 +119,7 @@ export const root: DocTreeNode = {
         "sediment knowledge": "Agent 运行时由 reflectable / collaborable 沉淀的知识（pools/<id>/knowledge/memory + relations）；写就生效，不进 git",
         "self-constitutive": "维度判定轴: 一个能力是否构成 Agent 的「自我」；是则为维度，否则为外接层/协议（详见 patches.dimension_criterion）",
         "运行时底座": "thinkable/executable/collaborable/observable/persistable，Agent 存在与运作的基础五维",
-        "自我塑造三件套": "reflectable/programmable/visible，Agent 改写自己知识/方法/界面的三维",
+        "自我塑造四件套": "reflectable/programmable/visible/readable，Agent 改写自己知识/方法/人类界面/对外展示的四维",
         "agent-native parity": "横切公理: 用户能做的事 agent 也能做；每维度都有人类面/agent 面两个消费方（详见 patches.agent_native_parity）",
         "对象关系三轴": "自我(super) / peer 平等(talk) / parent-child 层级，三种不同权力语义的关系（详见 patches.object_relations）",
         "Supervisor": "world 级最顶层 parent object；harness 的 1 Supervisor + N Agent 即 object 树的一个实例，Supervisor 是 root parent",
@@ -4210,9 +4215,11 @@ export const root: DocTreeNode = {
             - 弃用版: "维度 = 无法由组合其他维度得到的能力"。问题在于这是**静态实现快照**，会误砍掉"想发展的演化方向"——reflectable / visible 今天实现上确实寄生在别的维度上，但它们各自扛着"自我进化""GenUI"两条招牌演化轴。用"今天可不可组合"当尺子是错的。
             - 定稿版: 维度 = 构成 Agent「自我」的能力。即使实现寄生，只要它描述的是"Agent 自己的某个可演化面"，就是维度。
 
-            按此标准，8 维度分两组:
+            按此标准，9 维度分两组:
             - 运行时底座: thinkable / executable / collaborable / observable / persistable —— Agent 据以存在、思考、行动、协作、被观测、落盘的基础。
-            - 自我塑造三件套: reflectable（改知识/反思）/ programmable（改方法）/ visible（改界面）—— Agent 改写"自己"的三个面，是 OOC 自我进化主张的载体。
+            - 自我塑造四件套: reflectable（改知识/反思）/ programmable（改方法）/ visible（改人类界面）/ readable（改对外展示）—— Agent 改写"自己"的四个面，是 OOC 自我进化主张的载体。
+
+            readable 通过判据的理由: Object 控制"自己如何出现在他者 LLM context 中"，比人类 UI 更贴近自我本质——context 里的呈现就是它对推理者的全部存在。它与 visible 对偶（人类面/agent 面），同属自我塑造面，故为维度（ooc-4 新增，从 8 维 → 9 维）。
 
             extendable 被排除的**正面理由**: 它够的是**外部世界**（飞书/notion/...），外部系统不构成 Agent 自我，所以是"外接集成层"而非维度。
             注意: "寄生于 executable"**不是** extendable 被排除的真正理由（reflectable 也寄生于多个维度），真正的判据是"是否构成自我"。
@@ -4220,7 +4227,7 @@ export const root: DocTreeNode = {
             named: {
                 "self-constitutive": "维度判定轴: 一个能力是否构成 Agent 的「自我」；是则为维度，否则为外接层/协议",
                 "运行时底座": "thinkable/executable/collaborable/observable/persistable，Agent 存在与运作的基础五维",
-                "自我塑造三件套": "reflectable/programmable/visible，Agent 改写自己知识/方法/界面的三维",
+                "自我塑造四件套": "reflectable/programmable/visible/readable，Agent 改写自己知识/方法/人类界面/对外展示的四维",
             },
         },
         "agent_native_parity": {
