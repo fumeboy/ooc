@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { runScheduler } from "../../src/thinkable/scheduler";
-import { createFlowObject, createStoneObject, readServerSource, stoneDir } from "../../src/persistable";
+import { createFlowObject, createStoneObject, readExecutableSource, stoneDir } from "../../src/persistable";
 import { clearObservableDebugState, disableDebug, enableDebug } from "../../src/observable";
 import {
   bootstrapInboxFromPrompt,
@@ -78,7 +78,7 @@ describe.skipIf(!hasLlmEnv)("integration: meta-programming", () => {
 
     expect(root.status).toBe("done");
 
-    const sourceText = await readServerSource(stoneRef);
+    const sourceText = await readExecutableSource(stoneRef);
     expect(sourceText).toBeDefined();
     expect(sourceText).toContain("add");
 
