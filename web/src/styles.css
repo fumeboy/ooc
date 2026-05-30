@@ -275,9 +275,6 @@ button { cursor: pointer; }
 .message.assistant, .message.action { border-left-color: #f2bd4b; }
 .message-role { font-size: 11px; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
 .tui-thread { gap: 10px; min-width: 0; width: 100%; }
-/* tool call / tool result blocks in ThreadTimeline */
-.tui-tool-call .tui-prefix, .tui-tool-call .tui-label { color: #c08020; }
-.tui-tool-result .tui-prefix, .tui-tool-result .tui-label { color: #3b8862; }
 .tui-block { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.6; min-width: 0; width: 100%; }
 .tui-block-head { display: flex; align-items: center; gap: 6px; color: var(--muted-foreground); }
 .tui-card-head { display: flex; align-items: center; gap: 6px; color: var(--muted-foreground); }
@@ -1096,18 +1093,3 @@ a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color
 .cw-feishu-doc-link:hover { text-decoration: underline; }
 .cw-feishu-doc-expand { margin-top: 8px; padding: 4px 12px; font-size: 11px; border: 1px solid var(--border); border-radius: 999px; background: var(--background2); color: var(--foreground); cursor: pointer; font-family: inherit; }
 .cw-feishu-doc-expand:hover { background: var(--background); border-color: var(--foreground); }
-
-/* ====== ooc-3 extra utilities ====== */
-@keyframes spin { to { transform: rotate(360deg); } }
-.is-spinning { animation: spin 1s linear infinite; }
-/* sidebar gap helper — ooc-3 uses gap classes from Tailwind, but sidebar flex gap */
-.sidebar.gap-2 { gap: 6px; }
-/* main-panel / right-column gap helpers */
-.main-panel.gap-1 { gap: 4px; }
-.right-column.gap-1 { gap: 4px; }
-/* sidebar brand: use logo area */
-.sidebar-brand { padding: 20px 12px 14px; border-bottom: 1px solid rgba(224, 227, 220, .72); flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
-/* panel flex helpers used in JSX */
-.panel.flex { display: flex; }
-.panel.flex-col { flex-direction: column; }
-.panel.flex-grow { flex: 1 1 auto; min-height: 0; }
