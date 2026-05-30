@@ -7,6 +7,7 @@
  *
  * 当前子目录：
  * - lark/    飞书 (Lark Suite) 集成；通过 lark-cli 子进程 + ContextWindow 类型注册
+ * - base/    OOC-4 builtin 原型库（root + 7 A 类）；被动模块，loadBuiltinRegistry 按需 consumed，非 side-effect 注册
  *
  * 添加新外部集成时：
  * 1. 在本目录下建子目录（如 \`extendable/notion/\`）

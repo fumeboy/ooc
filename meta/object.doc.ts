@@ -4351,7 +4351,7 @@ export const root: DocTreeNode = {
                     `,
                     todo: [
                         "L2 已落地(src/executable/prototype/): standalone 引擎——self.md extends frontmatter 解析(parseSelfMeta/normalizeExtends) + ObjectRecord registry(buildObjectRegistry, 重复/悬空/环三重拒载) + 通用沿链 resolve(resolveAlongChain, 一套 walk 三 probe, own→沿 extends→终点兜底)。不接活路径(per-type windows/_shared/registry.ts 原样保留)。",
-                        "L3 已落地: ensureBuiltinObjects(src/app/server/bootstrap/) 物化 8 原型骨架到 stones/_builtin/objects/(root extends:null + 7 A 类 extends:root) + loadBuiltinRegistry(prototype/builtin-loader.ts) 扫描入 L2 registry。_builtin 是框架派生投影(覆盖式重生、不进 git), 挂 live startup 作 World invariant。behavior 转写(executable commands/真实 readable/visible) + 接活 render·command resolve 待 L4。",
+                        "L3 已落地: 8 builtin 原型作 src/extendable/base/<proto>/ 仓库源码(root extends:null + 7 A 类 extends:root; 与 lark/ 同级的 extendable 集成层, committed、不写 world、不碰 live startup) + loadBuiltinRegistry(src/extendable/base/index.ts) 经 import.meta.dir 扫描入 L2 registry。逻辑寻址 URI 仍 ooc://stones/_builtin/objects/<p>(地址⟂物理存储)。L2 ObjectRecord 由 ref:StoneObjectRef 泛化为 dir:string(对象目录绝对路径, world stone 与 src base 通用)。behavior 转写(executable commands/真实 readable/visible) + 接活 render·command resolve 待 L4。",
                     ],
                 },
                 "ab_classification": {

@@ -8,7 +8,7 @@ function rec(id: string, ext: string | null, has: Partial<ObjectRecord["has"]> =
   return {
     id,
     extends: ext,
-    ref: { baseDir: "/x", objectId: id, stonesBranch: "main" },
+    dir: `/x/${id}`,
     has: { executable: false, readable: false, visible: false, ...has },
   };
 }
