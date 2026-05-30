@@ -1,8 +1,8 @@
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 
 const DO_WINDOW_WAIT_BASIC = "internal/windows/do/wait/basic";
 const WAIT_KNOWLEDGE = `
@@ -11,7 +11,7 @@ do_window.wait：不向子线程发消息，仅把当前父线程切到 waiting 
 参数：无
 `.trim();
 
-async function executeDoWindowWait(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeDoWindowWait(ctx: MethodExecutionContext): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return undefined;
   thread.status = "waiting";
@@ -20,9 +20,9 @@ async function executeDoWindowWait(ctx: CommandExecutionContext): Promise<string
   return undefined;
 }
 
-export const waitCommand: CommandTableEntry = {
+export const waitCommand: MethodEntry = {
   paths: ["wait"],
   match: () => ["wait"],
-  knowledge: (): CommandKnowledgeEntries => ({ [DO_WINDOW_WAIT_BASIC]: WAIT_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [DO_WINDOW_WAIT_BASIC]: WAIT_KNOWLEDGE }),
   exec: (ctx) => executeDoWindowWait(ctx),
 };

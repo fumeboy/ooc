@@ -1,8 +1,8 @@
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import { notifyThreadActivated } from "../../../observable/index.js";
 import { appendInbox, findThreadInScope, makeMessage } from "./helpers.js";
 
@@ -29,7 +29,7 @@ open(parent_window_id="<do_window_id>", command="continue", title="追加任务"
 open(parent_window_id="<creator_do_window_id>", command="continue", args={ msg: "已处理完毕：见 memo/x.md" })
 `.trim();
 
-async function executeDoWindowContinue(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeDoWindowContinue(ctx: MethodExecutionContext): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return undefined;
   const window = ctx.parentWindow;
@@ -73,15 +73,15 @@ async function executeDoWindowContinue(ctx: CommandExecutionContext): Promise<st
   return undefined;
 }
 
-export const continueCommand: CommandTableEntry = {
+export const continueCommand: MethodEntry = {
   paths: ["continue", "continue.wait"],
   match: (args) => {
     const hit = ["continue"];
     if (args.wait === true) hit.push("continue.wait");
     return hit;
   },
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [DO_WINDOW_CONTINUE_BASIC]: CONTINUE_KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [DO_WINDOW_CONTINUE_BASIC]: CONTINUE_KNOWLEDGE };
     if (formStatus !== "open") return entries;
     if (typeof args.msg !== "string" || args.msg.trim().length === 0) {
       entries[DO_WINDOW_CONTINUE_INPUT] = "do_window.continue 需要 msg；用 refine(args={ msg: \"...\", wait: true|false })。";

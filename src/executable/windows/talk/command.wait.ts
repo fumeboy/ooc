@@ -1,8 +1,8 @@
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 
 const TALK_WINDOW_WAIT_BASIC = "internal/windows/talk/wait/basic";
 const WAIT_KNOWLEDGE = `
@@ -11,7 +11,7 @@ talk_window.wait：不发消息，仅把当前父线程切到 waiting，等对�
 参数：无
 `.trim();
 
-async function executeTalkWindowWait(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeTalkWindowWait(ctx: MethodExecutionContext): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[talk_window.wait] 缺少 thread context。";
   thread.status = "waiting";
@@ -20,9 +20,9 @@ async function executeTalkWindowWait(ctx: CommandExecutionContext): Promise<stri
   return undefined;
 }
 
-export const waitCommand: CommandTableEntry = {
+export const waitCommand: MethodEntry = {
   paths: ["wait"],
   match: () => ["wait"],
-  knowledge: (): CommandKnowledgeEntries => ({ [TALK_WINDOW_WAIT_BASIC]: WAIT_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [TALK_WINDOW_WAIT_BASIC]: WAIT_KNOWLEDGE }),
   exec: (ctx) => executeTalkWindowWait(ctx),
 };

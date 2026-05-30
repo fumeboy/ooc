@@ -15,10 +15,10 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import { registerWindowType, type RenderContext } from "../_shared/registry.js";
 import { isAbsolute, resolve } from "node:path";
 import {
@@ -90,20 +90,20 @@ open(parent_window_id="<search_window_id>", command="open_match",
 - 索引越界 / 缺 index 等错误返回字符串
 `.trim();
 
-const closeCommand: CommandTableEntry = {
+const closeCommand: MethodEntry = {
   paths: ["close"],
   match: () => ["close"],
-  knowledge: (): CommandKnowledgeEntries => ({
+  knowledge: (): MethodKnowledgeEntries => ({
     [SEARCH_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE,
   }),
   exec: () => undefined,
 };
 
-const openMatchCommand: CommandTableEntry = {
+const openMatchCommand: MethodEntry = {
   paths: ["open_match"],
   match: () => ["open_match"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = {
       [SEARCH_WINDOW_OPEN_MATCH_BASIC]: OPEN_MATCH_KNOWLEDGE,
     };
     if (formStatus !== "open") return entries;
@@ -130,7 +130,7 @@ const FILE_WINDOW_LINE_CONTEXT = 40;
  * 让 LLM 第一时间看到上下文；glob kind 的 match 没有 line，整体打开。
  */
 export async function executeSearchOpenMatch(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const window = ctx.parentWindow;
   if (!window || window.type !== "search") {
@@ -286,7 +286,7 @@ function compressSearchWindow(
 }
 
 registerWindowType("search", {
-  commands: {
+  methods: {
     close: closeCommand,
     open_match: openMatchCommand,
     set_results_window: setResultsWindowCommandForSearch,

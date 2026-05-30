@@ -13,7 +13,7 @@
  * 详见 meta/object.doc.ts:executable.context_window.patches.viewport_protocol。
  */
 
-import type { CommandExecutionContext } from "../_shared/command-types.js";
+import type { MethodExecutionContext } from "../_shared/method-types.js";
 import {
   mergeTranscriptViewport,
   type TranscriptViewport,
@@ -61,7 +61,7 @@ export function hasAnyResultsViewportField(
  * 错误信息中错误字段名替换回 matches_* 前缀，避免 LLM 困惑（merge 报的是 tail / range_*）。
  */
 export async function executeSearchSetResultsViewport(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const window = ctx.parentWindow;
   if (!window || window.type !== "search") {

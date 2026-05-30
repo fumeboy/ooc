@@ -34,17 +34,17 @@ import {
   type ContextWindow,
   type WindowType,
 } from "./types.js";
-import type { CommandTableEntry } from "./command-types.js";
+import type { MethodEntry } from "./method-types.js";
 
 /**
  * 用 entry.match() 直接计算 commandPaths；空 args 派生不出来时退化为 [command]。
  *
  * Step 2 重构后这个 helper 接收 entry 而不是 command 名 —— 修复了 Step 1 的 bug：
- * 之前 deriveCommandPaths 只查 ROOT_COMMANDS 表，导致 do_window/talk_window 等
+ * 之前 deriveCommandPaths 只查 ROOT_METHODS 表，导致 do_window/talk_window 等
  * 非 root 窗口上的 command（如 say.wait / continue.wait）无法被识别。
  */
 function computeCommandPaths(
-  entry: CommandTableEntry,
+  entry: MethodEntry,
   command: string,
   args: Record<string, unknown>,
 ): string[] {
@@ -73,18 +73,18 @@ function setSubset(a: string[], b: string[]): boolean {
 }
 
 /**
- * 从 parent command（root 上挂的 command）查找它注册到的 CommandTableEntry。
+ * 从 parent command（root 上挂的 command）查找它注册到的 MethodEntry。
  *
- * parent_window_id 决定查哪个 window 的 commands：
- * - "root" → root 注册到 WINDOW_REGISTRY 的 commands（来自 windows/root/index.ts）
- * - 其他 → 该 window 的 type definition.commands
+ * parent_window_id 决定查哪个 window 的 methods：
+ * - "root" → root 注册到 WINDOW_REGISTRY 的 methods（来自 windows/root/index.ts）
+ * - 其他 → 该 window 的 type definition.methods
  */
-function lookupCommandEntry(
+function lookupMethodEntry(
   parentWindow: ContextWindow,
   command: string,
-): CommandTableEntry | undefined {
+): MethodEntry | undefined {
   const def = getWindowTypeDefinition(parentWindow.type);
-  return def.commands[command];
+  return def.methods[command];
 }
 
 export class WindowManager {
@@ -160,7 +160,7 @@ export class WindowManager {
       }
     }
 
-    const entry = lookupCommandEntry(parent, opts.command);
+    const entry = lookupMethodEntry(parent, opts.command);
     if (!entry) {
       throw new Error(
         `openCommandExec: command "${opts.command}" not registered on window "${parent.type}" (id=${parent.id})`,
@@ -251,7 +251,7 @@ export class WindowManager {
     if (!form || form.type !== "command_exec") return false;
     if (form.status !== "open" && form.status !== "failed") return false;
     const parent = this.requireParent(form.parentWindowId);
-    const entry = lookupCommandEntry(parent, form.command);
+    const entry = lookupMethodEntry(parent, form.command);
     if (!entry) return false;
     const nextArgs = { ...form.accumulatedArgs, ...args };
     const nextPaths = computeCommandPaths(entry, form.command, nextArgs);
@@ -290,7 +290,7 @@ export class WindowManager {
     }
 
     const parent = this.requireParent(form.parentWindowId);
-    const entry = lookupCommandEntry(parent, form.command);
+    const entry = lookupMethodEntry(parent, form.command);
     if (!entry) {
       throw new Error(
         `submit: command "${form.command}" not registered on parent window type "${parent.type}"`,
@@ -303,7 +303,7 @@ export class WindowManager {
     let result: string | undefined;
     let isError = false;
     try {
-      const ctx: import("./command-types.js").CommandExecutionContext = {
+      const ctx: import("./method-types.js").MethodExecutionContext = {
         thread,
         form: executing,
         parentWindow: parent,
@@ -311,7 +311,7 @@ export class WindowManager {
         args: form.accumulatedArgs,
       };
       const raw = await entry.exec(ctx);
-      // 三种返回形态：CommandExecOutcome / string / undefined
+      // 三种返回形态：MethodExecOutcome / string / undefined
       // - outcome：显式 ok 标志，最权威
       // - undefined：成功无 result
       // - string：兼容旧约定——以 [<name>]/[command-error]/[error] 为前缀视为错误
@@ -460,7 +460,7 @@ export class WindowManager {
  * - \`[<command 名>] ...\`             — root command / window-level command 失败约定
  * - \`[<window>.<command>] ...\`        — 比如 [do_window.continue] / [talk_window.say]
  *
- * 新代码应改用 CommandExecOutcome（显式 ok 标志），避免依赖此启发式。
+ * 新代码应改用 MethodExecOutcome（显式 ok 标志），避免依赖此启发式。
  */
 function isLegacyErrorResult(result: string): boolean {
   return /^\[[\w_.-]+\]/.test(result.trimStart());

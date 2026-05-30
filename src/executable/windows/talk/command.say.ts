@@ -1,8 +1,8 @@
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import { deliverTalkMessage } from "./delivery.js";
 
 const TALK_WINDOW_SAY_BASIC = "internal/windows/talk/say/basic";
@@ -35,7 +35,7 @@ talk_window.say 用于向 talk 对端发送一条消息。
 时一步给齐，要么 refine 时把要累积的键值对显式列出来。
 `.trim();
 
-async function executeTalkWindowSay(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeTalkWindowSay(ctx: MethodExecutionContext): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[talk_window.say] 缺少 thread context。";
   const window = ctx.parentWindow;
@@ -66,15 +66,15 @@ async function executeTalkWindowSay(ctx: CommandExecutionContext): Promise<strin
   return undefined;
 }
 
-export const sayCommand: CommandTableEntry = {
+export const sayCommand: MethodEntry = {
   paths: ["say", "say.wait"],
   match: (args) => {
     const hit = ["say"];
     if (args.wait === true) hit.push("say.wait");
     return hit;
   },
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [TALK_WINDOW_SAY_BASIC]: SAY_KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [TALK_WINDOW_SAY_BASIC]: SAY_KNOWLEDGE };
     if (formStatus !== "open") return entries;
     if (typeof args.msg !== "string" || args.msg.trim().length === 0) {
       entries[TALK_WINDOW_SAY_INPUT] =

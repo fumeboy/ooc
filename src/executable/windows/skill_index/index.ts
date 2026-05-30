@@ -71,7 +71,7 @@ function onCloseSkillIndex(_ctx: OnCloseContext): boolean {
 }
 
 registerWindowType("skill_index", {
-  commands: {},
+  methods: {},
   onClose: onCloseSkillIndex,
   renderXml: renderSkillIndex,
   basicKnowledge: SKILL_INDEX_BASIC_KNOWLEDGE,

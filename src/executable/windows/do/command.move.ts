@@ -14,10 +14,10 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import type { ContextWindow, DoWindow, SharingState } from "../_shared/types.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 import { findChild } from "./helpers.js";
@@ -107,7 +107,7 @@ function resolvePeerThread(
   return null;
 }
 
-async function executeMove(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeMove(ctx: MethodExecutionContext): Promise<string | undefined> {
   const self = ctx.thread;
   if (!self) return "[do_window.move] 缺少 thread context。";
   const doWindow = ctx.parentWindow;
@@ -214,7 +214,7 @@ async function executeMove(ctx: CommandExecutionContext): Promise<string | undef
   return `[do_window.move] 已将 window "${window_id}" 移交给 thread "${peer.id}"（你这边变为 lent_out 临时只读，等其归还）。`;
 }
 
-export const moveCommand: CommandTableEntry = {
+export const moveCommand: MethodEntry = {
   paths: ["move", "move.ref", "move.move"],
   match: (args) => {
     const hit: string[] = ["move"];
@@ -222,7 +222,7 @@ export const moveCommand: CommandTableEntry = {
     if (args.mode === "move") hit.push("move.move");
     return hit;
   },
-  knowledge: (_args, _formStatus): CommandKnowledgeEntries => {
+  knowledge: (_args, _formStatus): MethodKnowledgeEntries => {
     // 单 key 返回；把 ref / move / return 三个分支说明合并到 basic body 里，
     // 避免 args.mode 变化引入新 knowledge key 阻断 manager 的 auto-execute 子集判定
     return {

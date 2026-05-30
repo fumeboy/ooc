@@ -36,12 +36,12 @@ describe("executeUserCode", () => {
   test("self argument is exposed to user code", async () => {
     const fakeSelf = {
       dir: "/tmp/x",
-      callCommand: async () => "called",
+      callMethod: async () => "called",
       getData: async () => undefined,
       setData: async () => {}
     };
     const result = await executeUserCode(
-      `_result_ = await self.callCommand("custom:x", "foo");`,
+      `_result_ = await self.callMethod("custom:x", "foo");`,
       fakeSelf
     );
     expect(result.success).toBe(true);

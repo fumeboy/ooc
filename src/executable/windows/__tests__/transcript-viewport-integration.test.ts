@@ -236,9 +236,9 @@ describe("do_window: transcript viewport render", () => {
 });
 
 describe("set_transcript_window command (talk)", () => {
-  let setCommand: ReturnType<typeof getWindowTypeDefinition>["commands"][string];
+  let setCommand: ReturnType<typeof getWindowTypeDefinition>["methods"][string];
   beforeAll(() => {
-    setCommand = getWindowTypeDefinition("talk").commands["set_transcript_window"]!;
+    setCommand = getWindowTypeDefinition("talk").methods["set_transcript_window"]!;
     expect(setCommand).toBeDefined();
   });
 
@@ -367,7 +367,7 @@ describe("set_transcript_window command (talk)", () => {
 
 describe("set_transcript_window command (do)", () => {
   it("works on do_window via shared helper", async () => {
-    const setCommand = getWindowTypeDefinition("do").commands["set_transcript_window"]!;
+    const setCommand = getWindowTypeDefinition("do").methods["set_transcript_window"]!;
     expect(setCommand).toBeDefined();
     const doWindow: DoWindow = {
       id: "w_do_set",
@@ -389,7 +389,7 @@ describe("set_transcript_window command (do)", () => {
 
   it("rejects when mounted on talk (cross-type)", async () => {
     // do's set_transcript_window expects 'do' only
-    const setCommand = getWindowTypeDefinition("do").commands["set_transcript_window"]!;
+    const setCommand = getWindowTypeDefinition("do").methods["set_transcript_window"]!;
     const talkWindow: TalkWindow = {
       id: "w_talk_x",
       type: "talk",

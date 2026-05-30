@@ -1,8 +1,8 @@
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 
 /**
  * command_exec.submit 命令 — 触发 form.command.exec。
@@ -18,7 +18,7 @@ import type {
  *
  * 这条命令本身不引入新 path/knowledge，走 exec tool 的 auto-execute 路径。
  */
-async function executeSubmit(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeSubmit(ctx: MethodExecutionContext): Promise<string | undefined> {
   const form = ctx.parentWindow;
   if (!form || form.type !== "command_exec") {
     return "[command_exec.submit] 必须挂在 command_exec form 上调用。";
@@ -45,10 +45,10 @@ async function executeSubmit(ctx: CommandExecutionContext): Promise<string | und
   }
 }
 
-export const submitCommand: CommandTableEntry = {
+export const submitCommand: MethodEntry = {
   paths: ["submit"],
   match: () => ["submit"],
-  knowledge: (_args, _formStatus): CommandKnowledgeEntries => ({
+  knowledge: (_args, _formStatus): MethodKnowledgeEntries => ({
     "internal/windows/command_exec/submit/basic": [
       "command_exec.submit 触发 form.command 真正执行；不接受新业务参数。",
       "调用：exec(window_id=<form_id>, command=\"submit\")",

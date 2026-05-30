@@ -32,7 +32,7 @@ describe("loadObjectRecord", () => {
     const dir = await tmpObjectDir();
     await writeFile(join(dir, "self.md"), "---\nextends: search\n---\nidentity body", "utf8");
     await mkdir(join(dir, "executable"), { recursive: true });
-    await writeFile(join(dir, "executable", "index.ts"), "export const window = { commands: {} };", "utf8");
+    await writeFile(join(dir, "executable", "index.ts"), "export const window = { methods: {} };", "utf8");
     const rec = await loadObjectRecord(dir, "ooc://test/y");
     expect(rec.extends).toBe("ooc://stones/_builtin/objects/search");
     expect(rec.has.executable).toBe(true);

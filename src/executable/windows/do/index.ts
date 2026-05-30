@@ -163,7 +163,7 @@ function onCloseDoWindow(ctx: OnCloseContext): boolean | void {
 }
 
 registerWindowType("do", {
-  commands: {
+  methods: {
     continue: continueCommand,
     wait: waitCommand,
     close: closeCommand,

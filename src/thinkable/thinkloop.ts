@@ -46,7 +46,7 @@ function buildBudgetWarningItem(warning: BudgetWarning): LlmInputItem {
  * - close / wait / compress: command = toolName 自身; windowId/args 视情况
  *
  * Q0b: 当前 exec 的 args 形态为 `{ command, window_id, args, ... }` (见 tools/exec.ts);
- * 解析失败 / 字段缺失时退化为 command=toolName, 由后续 decidePermission 走 CommandTableEntry
+ * 解析失败 / 字段缺失时退化为 command=toolName, 由后续 decidePermission 走 MethodEntry
  * fallback 链。
  */
 function buildPendingToolCall(toolCall: LlmToolCall): PendingToolCall {

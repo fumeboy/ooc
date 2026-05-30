@@ -1,4 +1,4 @@
-import type { CommandExecutionContext, CommandKnowledgeEntries, CommandTableEntry } from "../_shared/command-types.js";
+import type { MethodExecutionContext, MethodKnowledgeEntries, MethodEntry } from "../_shared/method-types.js";
 import type { ContextWindow, DoWindow, TalkWindow } from "../_shared/types.js";
 import { continueCommand } from "../do/command.continue.js";
 import { sayCommand } from "../talk/command.say.js";
@@ -38,13 +38,13 @@ export enum EndCommandPath {
 }
 
 /** end command 表项：当前只命中基础 end 路径。 */
-export const endCommand: CommandTableEntry = {
+export const endCommand: MethodEntry = {
   paths: [EndCommandPath.End],
   match: () => {
     return [EndCommandPath.End];
   },
   knowledge: () => {
-    const entries: CommandKnowledgeEntries = {
+    const entries: MethodKnowledgeEntries = {
       [END_BASIC_PATH]: KNOWLEDGE.trim(),
     };
     return entries;
@@ -58,7 +58,7 @@ export const endCommand: CommandTableEntry = {
  * 当前 init.ts 规则：do/talk window 才可能带 isCreatorWindow=true。其它类型即使设置了
  * 该字段也不视为合法 creator（防御）。
  */
-function findCreatorWindow(ctx: CommandExecutionContext): DoWindow | TalkWindow | undefined {
+function findCreatorWindow(ctx: MethodExecutionContext): DoWindow | TalkWindow | undefined {
   const list = ctx.thread?.contextWindows ?? [];
   for (const w of list) {
     if ((w.type === "do" || w.type === "talk") && w.isCreatorWindow === true) {
@@ -77,13 +77,13 @@ function findCreatorWindow(ctx: CommandExecutionContext): DoWindow | TalkWindow 
  * 但不阻断 end 流程（end 是终结动作，不应因为汇报失败回滚）。
  */
 async function autoReplyAndArchiveDo(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
   creator: DoWindow,
   result: string,
 ): Promise<void> {
   const thread = ctx.thread!;
   // 构造一个与 LLM 调用同构的 ctx：parentWindow = creator do_window
-  const continueCtx: CommandExecutionContext = {
+  const continueCtx: MethodExecutionContext = {
     thread,
     parentWindow: creator,
     manager: ctx.manager,
@@ -119,12 +119,12 @@ async function autoReplyAndArchiveDo(
  * talk 是恒在通道，自然由 caller / callee 各自 lifecycle 释放。
  */
 async function autoReplyTalk(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
   creator: TalkWindow,
   result: string,
 ): Promise<void> {
   const thread = ctx.thread!;
-  const sayCtx: CommandExecutionContext = {
+  const sayCtx: MethodExecutionContext = {
     thread,
     parentWindow: creator,
     manager: ctx.manager,
@@ -150,7 +150,7 @@ async function autoReplyTalk(
  *
  * 状态翻转顺序：先 reply（可能失败但不阻断）→ 写 endReason/endSummary → status=done。
  */
-export async function executeEndCommand(ctx: CommandExecutionContext): Promise<string | undefined> {
+export async function executeEndCommand(ctx: MethodExecutionContext): Promise<string | undefined> {
   if (!ctx.thread) return undefined;
 
   const reason = typeof ctx.args.reason === "string" ? ctx.args.reason : undefined;

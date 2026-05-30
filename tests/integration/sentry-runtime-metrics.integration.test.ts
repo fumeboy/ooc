@@ -24,14 +24,14 @@ describe("sentry_runtime_metrics action-type stone", () => {
     clearServerLoaderCache();
     const win = await loadObjectWindow(ref("sentry/sentry_runtime_metrics"));
     expect(win).toBeDefined();
-    const names = Object.keys(win!.commands ?? {}).sort();
+    const names = Object.keys(win!.methods ?? {}).sort();
     expect(names).toEqual(["metric_search", "query_metric", "tagk_list"]);
   });
 
   test("query_metric 缺 metric 参数立即返 ok=false（不调 bytedcli）", async () => {
     clearServerLoaderCache();
     const win = await loadObjectWindow(ref("sentry/sentry_runtime_metrics"));
-    const cmd = win!.commands!.query_metric!;
+    const cmd = win!.methods!.query_metric!;
     const r = (await cmd.exec({ args: {} } as never)) as { ok: boolean; result?: string };
     expect(r.ok).toBe(true); // exec wrapper 将 fn 返回 {ok:false,...} 再 stringify 为 result text
     // result 是 JSON 文本,内含原始 ok=false 的标记
@@ -42,7 +42,7 @@ describe("sentry_runtime_metrics action-type stone", () => {
   test("tagk_list 缺 metric 参数立即返 ok=false", async () => {
     clearServerLoaderCache();
     const win = await loadObjectWindow(ref("sentry/sentry_runtime_metrics"));
-    const cmd = win!.commands!.tagk_list!;
+    const cmd = win!.methods!.tagk_list!;
     const r = (await cmd.exec({ args: {} } as never)) as { ok: boolean; result?: string };
     expect(r.ok).toBe(true);
     expect(r.result).toContain('"ok": false');
@@ -51,7 +51,7 @@ describe("sentry_runtime_metrics action-type stone", () => {
   test("metric_search 缺 prefix 参数立即返 ok=false", async () => {
     clearServerLoaderCache();
     const win = await loadObjectWindow(ref("sentry/sentry_runtime_metrics"));
-    const cmd = win!.commands!.metric_search!;
+    const cmd = win!.methods!.metric_search!;
     const r = (await cmd.exec({ args: {} } as never)) as { ok: boolean; result?: string };
     expect(r.ok).toBe(true);
     expect(r.result).toContain('"ok": false');

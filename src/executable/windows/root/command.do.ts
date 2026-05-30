@@ -14,10 +14,10 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
 import type { ThreadPersistenceRef } from "../../../persistable/common.js";
 import {
@@ -64,15 +64,15 @@ export enum DoCommandPath {
 }
 
 /** root level 的 do command：仅 fork。continue 走 do_window 上的命令。 */
-export const doCommand: CommandTableEntry = {
+export const doCommand: MethodEntry = {
   paths: [DoCommandPath.Do, DoCommandPath.Wait],
   match: (args) => {
     const hit: string[] = [DoCommandPath.Do];
     if (args.wait === true) hit.push(DoCommandPath.Wait);
     return hit;
   },
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [DO_BASIC_PATH]: KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [DO_BASIC_PATH]: KNOWLEDGE };
     if (formStatus !== "open") return entries;
     if (typeof args.msg !== "string" || args.msg.trim().length === 0) {
       entries[DO_INPUT_PATH] =
@@ -156,7 +156,7 @@ function deriveTitle(msg: string, maxLen = 60): string {
  *
  * Step 1 限制：args.knowledge / args.threadId 不再支持。如收到这些参数会被忽略并写一条 inject。
  */
-export async function executeDoCommand(ctx: CommandExecutionContext): Promise<string | undefined> {
+export async function executeDoCommand(ctx: MethodExecutionContext): Promise<string | undefined> {
   const parent = ctx.thread;
   if (!parent) return "[do] 缺少 thread context。";
 

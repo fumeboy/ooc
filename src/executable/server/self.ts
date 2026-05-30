@@ -3,7 +3,7 @@ import { mergeFlowData, readFlowData } from "../../persistable";
 import type { ThreadContext } from "../../thinkable/context";
 import type { ProgramSelf } from "./types";
 import { getWindowTypeDefinition } from "../windows/_shared/registry";
-import type { CommandExecutionContext } from "../windows/_shared/command-types";
+import type { MethodExecutionContext } from "../windows/_shared/method-types";
 import { loadObjectWindow } from "./loader";
 import type { ObjectWindowDefinition } from "./window-types";
 
@@ -11,8 +11,8 @@ import type { ObjectWindowDefinition } from "./window-types";
  * 构造 program 模式注入的 self 对象（plan §6.5 / §5.5）。
  *
  * - dir：stone 目录绝对路径
- * - callCommand(windowId, command, args?)：在当前 thread.contextWindows 里 lookup
- *   window → 通过 WindowRegistry 取 commands[command] → exec(ctx)；type=custom
+ * - callMethod(windowId, command, args?)：在当前 thread.contextWindows 里 lookup
+ *   window → 通过 WindowRegistry 取 methods[command] → exec(ctx)；type=custom
  *   时 dispatcher 会把 self 注入到 ctx.self
  * - getData/setData：读写 flow object 的 `data.json`
  *   （`flows/<sid>/objects/<self>/data.json`；2026-05-23 起从 stone 迁到 flow，
@@ -28,7 +28,7 @@ export function createProgramSelf(
   const dir = stoneDir(stoneRef);
   const self: ProgramSelf = {
     dir,
-    async callCommand(windowId, command, args = {}) {
+    async callMethod(windowId, command, args = {}) {
       const window = thread.contextWindows.find((w) => w.id === windowId);
       if (!window) {
         const visible = thread.contextWindows.map((w) => `${w.id}(${w.type})`).join(", ") || "(无)";
@@ -37,11 +37,11 @@ export function createProgramSelf(
         );
       }
 
-      // 取该 window type 的 commands；type=custom 时 dispatcher 已 wrap exec 自动注入 self
+      // 取该 window type 的 methods；type=custom 时 dispatcher 已 wrap exec 自动注入 self
       const def = getWindowTypeDefinition(window.type);
-      let commands = def.commands;
+      let commands = def.methods;
 
-      // type=custom 走 ObjectWindowDefinition 直接拿 commands；这里不重复 dispatcher 的 self 注入
+      // type=custom 走 ObjectWindowDefinition 直接拿 methods；这里不重复 dispatcher 的 self 注入
       if (window.type === "custom") {
         const objectId = (window as { objectId?: string }).objectId;
         if (!objectId) {
@@ -51,7 +51,7 @@ export function createProgramSelf(
           ...stoneRef,
           objectId,
         });
-        commands = objWin?.commands ?? {};
+        commands = objWin?.methods ?? {};
       }
 
       const entry = commands[command];
@@ -62,7 +62,7 @@ export function createProgramSelf(
         );
       }
 
-      const ctx: CommandExecutionContext & { self: ProgramSelf } = {
+      const ctx: MethodExecutionContext & { self: ProgramSelf } = {
         thread,
         parentWindow: window,
         args,

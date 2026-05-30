@@ -13,10 +13,10 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -71,7 +71,7 @@ export enum ProgramCommandPath {
   JavaScript = "program.javascript",
 }
 
-export const programCommand: CommandTableEntry = {
+export const programCommand: MethodEntry = {
   paths: [
     ProgramCommandPath.Program,
     ProgramCommandPath.Shell,
@@ -86,8 +86,8 @@ export const programCommand: CommandTableEntry = {
     if (lang === "js" || lang === "javascript") hit.push(ProgramCommandPath.JavaScript);
     return hit;
   },
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [PROGRAM_BASIC_PATH]: KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [PROGRAM_BASIC_PATH]: KNOWLEDGE };
     const lang = (args.language ?? args.lang) as string | undefined;
     const code = typeof args.code === "string" ? args.code.trim() : "";
 
@@ -137,7 +137,7 @@ function deriveTitle(args: ProgramExecArgs, max = 60): string {
  * 失败时返回字符串 → WindowManager 把 form 留在 executed 状态。成功时副作用挂载完毕，返回 undefined。
  */
 export async function executeProgramCommand(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return undefined;

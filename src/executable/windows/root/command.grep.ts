@@ -1,8 +1,8 @@
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -21,11 +21,11 @@ import {
 import { resolveSessionPath } from "../_shared/session-path.js";
 import { DEFAULT_RESULTS_VIEWPORT } from "../search/results-viewport.js";
 
-export const grepCommand: CommandTableEntry = {
+export const grepCommand: MethodEntry = {
   paths: ["grep"],
   match: () => ["grep"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [GREP_BASIC_PATH]: KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [GREP_BASIC_PATH]: KNOWLEDGE };
     if (formStatus !== "open") return entries;
     if (typeof args.pattern !== "string" || args.pattern.length === 0) {
       entries[GREP_INPUT_PATH] =
@@ -39,7 +39,7 @@ export const grepCommand: CommandTableEntry = {
 };
 
 export async function executeGrepCommand(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[grep] 缺少 thread context。";

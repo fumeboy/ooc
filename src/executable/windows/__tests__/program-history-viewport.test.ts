@@ -334,12 +334,12 @@ describe("set_history_window command", () => {
 describe("set_history_window registered on program window", () => {
   it("program window definition has set_history_window command", () => {
     const def = getWindowTypeDefinition("program");
-    expect(def.commands["set_history_window"]).toBeDefined();
+    expect(def.methods["set_history_window"]).toBeDefined();
   });
 
   it("registered command executes via window registry", async () => {
     const def = getWindowTypeDefinition("program");
-    const cmd = def.commands["set_history_window"]!;
+    const cmd = def.methods["set_history_window"]!;
     const window = makeProgramWindow({
       history: makeHistory(5),
       historyViewport: { tail: 10 },

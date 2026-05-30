@@ -1,4 +1,4 @@
-import type { CommandExecutionContext } from "./command-types.js";
+import type { MethodExecutionContext } from "./method-types.js";
 
 /**
  * transcript viewport 协议 — talk_window / do_window 共享的"持续对话窗口节流"控制。
@@ -172,7 +172,7 @@ export function applyTranscriptViewport<M>(
  * - Object.assign 写回 window.transcriptViewport（按现有 set_viewport 的同模式）
  */
 export async function executeWindowSetTranscriptViewport(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
   expectedTypes: Array<"talk" | "do">,
 ): Promise<string | undefined> {
   const window = ctx.parentWindow;

@@ -15,9 +15,9 @@
  */
 
 import type {
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import { registerWindowType, type OnCloseContext, type RenderContext } from "../_shared/registry.js";
 import {
   DEFAULT_VIEWPORT,
@@ -69,25 +69,25 @@ knowledge_window.set_viewport 精细化调整渲染窗口（行+列）。
 protocol / activator / relation 来源的 knowledge_window 由系统按 description / full / summary 决定展示形态。
 `.trim();
 
-const reloadCommand: CommandTableEntry = {
+const reloadCommand: MethodEntry = {
   paths: ["reload"],
   match: () => ["reload"],
-  knowledge: (): CommandKnowledgeEntries => ({ [KNOWLEDGE_WINDOW_RELOAD_BASIC]: RELOAD_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [KNOWLEDGE_WINDOW_RELOAD_BASIC]: RELOAD_KNOWLEDGE }),
   exec: () => undefined,
 };
 
-const closeCommand: CommandTableEntry = {
+const closeCommand: MethodEntry = {
   paths: ["close"],
   match: () => ["close"],
-  knowledge: (): CommandKnowledgeEntries => ({ [KNOWLEDGE_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [KNOWLEDGE_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
   exec: () => undefined,
 };
 
-const setViewportCommand: CommandTableEntry = {
+const setViewportCommand: MethodEntry = {
   paths: ["set_viewport"],
   match: () => ["set_viewport"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = {
       [KNOWLEDGE_WINDOW_SET_VIEWPORT_BASIC]: SET_VIEWPORT_KNOWLEDGE,
     };
     if (formStatus === "open" && !hasAnyViewportField(args)) {
@@ -192,7 +192,7 @@ async function renderKnowledgeWindow(ctx: RenderContext): Promise<XmlNode[]> {
 }
 
 registerWindowType("knowledge", {
-  commands: {
+  methods: {
     reload: reloadCommand,
     close: closeCommand,
     set_viewport: setViewportCommand,

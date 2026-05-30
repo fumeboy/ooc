@@ -13,7 +13,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { execRootCommand, WindowManager } from "../../index";
+import { execRootMethod, WindowManager } from "../../index";
 import type { FileWindow, KnowledgeWindow } from "../types";
 import { createStoneObject, createPoolObject, poolKnowledgeDir } from "../../../../persistable";
 import { buildContext } from "../../../../thinkable/context";
@@ -27,7 +27,7 @@ describe("viewport: file_window integration", () => {
       const file = join(tempRoot, "x.txt");
       await writeFile(file, "hello\n");
       const thread = makeThread({ id: "t" });
-      await execRootCommand("open_file", { thread, args: { path: file, title: "x" } });
+      await execRootMethod("open_file", { thread, args: { path: file, title: "x" } });
       const fw = thread.contextWindows.find((w): w is FileWindow => w.type === "file");
       expect(fw).toBeDefined();
       expect(fw!.viewport).toEqual({
@@ -47,7 +47,7 @@ describe("viewport: file_window integration", () => {
       const file = join(tempRoot, "small.txt");
       await writeFile(file, "alpha\nbeta\ngamma\n");
       const thread = makeThread({ id: "t" });
-      await execRootCommand("open_file", { thread, args: { path: file, title: "s" } });
+      await execRootMethod("open_file", { thread, args: { path: file, title: "s" } });
       const messages = await buildContext(thread);
       const xml = messages[0]?.content ?? "";
       expect(xml).toContain("alpha");
@@ -66,7 +66,7 @@ describe("viewport: file_window integration", () => {
       const content = Array.from({ length: 300 }, (_, i) => `LINE_${i}`).join("\n");
       await writeFile(file, content);
       const thread = makeThread({ id: "t" });
-      await execRootCommand("open_file", { thread, args: { path: file, title: "b" } });
+      await execRootMethod("open_file", { thread, args: { path: file, title: "b" } });
       const messages = await buildContext(thread);
       const xml = messages[0]?.content ?? "";
       expect(xml).toContain("LINE_0");
@@ -84,7 +84,7 @@ describe("viewport: file_window integration", () => {
       const file = join(tempRoot, "f.txt");
       await writeFile(file, "x\n".repeat(500));
       const thread = makeThread({ id: "t" });
-      await execRootCommand("open_file", { thread, args: { path: file, title: "f" } });
+      await execRootMethod("open_file", { thread, args: { path: file, title: "f" } });
       const fw = thread.contextWindows.find((w): w is FileWindow => w.type === "file")!;
 
       const mgr = WindowManager.fromThread(thread);
@@ -116,7 +116,7 @@ describe("viewport: file_window integration", () => {
       const file = join(tempRoot, "f.txt");
       await writeFile(file, "a\n");
       const thread = makeThread({ id: "t" });
-      await execRootCommand("open_file", { thread, args: { path: file, title: "f" } });
+      await execRootMethod("open_file", { thread, args: { path: file, title: "f" } });
       const fw = thread.contextWindows.find((w): w is FileWindow => w.type === "file")!;
       const origViewport = { ...fw.viewport! };
 
@@ -149,7 +149,7 @@ describe("viewport: file_window integration", () => {
       const file = join(tempRoot, "wide.txt");
       await writeFile(file, "x".repeat(500) + "\n");
       const thread = makeThread({ id: "t" });
-      await execRootCommand("open_file", { thread, args: { path: file, title: "w" } });
+      await execRootMethod("open_file", { thread, args: { path: file, title: "w" } });
       const messages = await buildContext(thread);
       const xml = messages[0]?.content ?? "";
       expect(xml).toContain("…(+300 more)");
@@ -175,7 +175,7 @@ describe("viewport: knowledge_window integration", () => {
         id: "t",
         persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
       });
-      await execRootCommand("open_knowledge", { thread, args: { path: "longdoc", title: "long" } });
+      await execRootMethod("open_knowledge", { thread, args: { path: "longdoc", title: "long" } });
 
       const kw = thread.contextWindows.find(
         (w): w is KnowledgeWindow => w.type === "knowledge" && (w as KnowledgeWindow).source === "explicit",

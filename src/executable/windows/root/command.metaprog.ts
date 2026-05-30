@@ -17,10 +17,10 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import {
   commitWorktree,
   openMetaprogWorktree,
@@ -102,14 +102,14 @@ function asStringMap(v: unknown): Record<string, string> | undefined {
   return out;
 }
 
-export const metaprogCommand: CommandTableEntry = {
+export const metaprogCommand: MethodEntry = {
   paths: ["metaprog"],
   // Q0d: metaprog 是元编程入口 (open_worktree / commit / merge / resolve / rollback / create_object),
   // 全部触发 stones git 副作用 (修改 stones/<self>/ 下的 self.md / server / knowledge);
   // 等价 design §3 中的 "super flow 改 self.md / readable.md" + "delete_* 任何删除类"。
   match: () => ["metaprog"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [METAPROG_BASIC_PATH]: KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [METAPROG_BASIC_PATH]: KNOWLEDGE };
     if (formStatus !== "open") return entries;
     const action = asString(args.action) as MetaprogAction | undefined;
     if (!action) {
@@ -123,7 +123,7 @@ export const metaprogCommand: CommandTableEntry = {
   exec: (ctx) => executeMetaprog(ctx),
 };
 
-export async function executeMetaprog(ctx: CommandExecutionContext): Promise<string | undefined> {
+export async function executeMetaprog(ctx: MethodExecutionContext): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[metaprog] 缺少 thread context。";
   if (!thread.persistence) return "[metaprog] thread 无 persistence。";

@@ -4,17 +4,17 @@
  * 设计依据：docs/superpowers/specs/2026-05-14-context-window-unification-design.md §模型骨架
  *
  * 三个职责（每种 type 各自实现，互不依赖）：
- * 1. commands：该 window 注册的、LLM 可通过 open(parent_window_id, command, ...) 调用的 command 集合
+ * 1. methods：该 window 注册的、LLM 可通过 open(parent_window_id, command, ...) 调用的 method 集合
  * 2. onClose：close 触发时的副作用（do_window 的 archive、todo 的标 done 等）
  * 3. renderXml：把该 window 投影成 system context 的 XML 节点（实际 XmlNode 类型由渲染层定义）
  *
  * 注册原则：
  * - 同一 type 的所有 window 实例共享同一份契约（无实例 override）
- * - command 表沿用 src/executable/commands/types.ts 的 CommandTableEntry 形态
+ * - method 表沿用 src/executable/commands/types.ts 的 MethodEntry 形态
  * - 渲染层（src/thinkable/context/render.ts）负责把 renderXml 返回的 XmlNode 串成树
  */
 
-import type { CommandTableEntry } from "./command-types.js";
+import type { MethodEntry } from "./method-types.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 import type { XmlNode } from "../../../thinkable/context/xml.js";
 import type { ContextWindow, WindowType } from "./types.js";
@@ -69,14 +69,14 @@ export type CompressViewHook = (
 export interface WindowTypeDefinition {
   type: WindowType;
   /**
-   * 该 window 注册的 command 集合。
+   * 该 window 注册的 method 集合。
    *
    * - root：等于 src/executable/commands 目录全集（do/talk/program/plan/end/todo）
    * - command_exec：空（form 上不能再嵌套 open command）
    * - do：{ continue, wait, close }（具体实现由 windows/do.ts 提供，本注册表填回去）
-   * - todo：空（todo 没有可继续的 command；只能 close）
+   * - todo：空（todo 没有可继续的 method；只能 close）
    */
-  commands: Record<string, CommandTableEntry>;
+  methods: Record<string, MethodEntry>;
   /** close 触发时的副作用；缺省 = 无额外动作，window 直接从 contextWindows 移除。 */
   onClose?: OnCloseHook;
   /** 渲染 hook；缺省时渲染层用通用 fallback。 */
@@ -115,83 +115,83 @@ const REGISTRY: Map<WindowType, WindowTypeDefinition> = new Map();
 
 REGISTRY.set("root", {
   type: "root",
-  commands: {},
+  methods: {},
 });
 
 REGISTRY.set("command_exec", {
   type: "command_exec",
-  commands: {},
+  methods: {},
 });
 
 REGISTRY.set("do", {
   type: "do",
-  commands: {},
+  methods: {},
 });
 
 REGISTRY.set("todo", {
   type: "todo",
-  commands: {},
+  methods: {},
 });
 
 REGISTRY.set("talk", {
   type: "talk",
-  commands: {},
+  methods: {},
 });
 
 REGISTRY.set("program", {
   type: "program",
-  commands: {},
+  methods: {},
 });
 
 REGISTRY.set("file", {
   type: "file",
-  commands: {},
+  methods: {},
 });
 
 REGISTRY.set("knowledge", {
   type: "knowledge",
-  commands: {},
+  methods: {},
 });
 
 REGISTRY.set("search", {
   type: "search",
-  commands: {},
+  methods: {},
 });
 
 REGISTRY.set("relation", {
   type: "relation",
-  commands: {},
+  methods: {},
 });
 
 REGISTRY.set("custom", {
   type: "custom",
-  commands: {},
+  methods: {},
 });
 
 REGISTRY.set("skill_index", {
   type: "skill_index",
-  commands: {},
+  methods: {},
 });
 
 REGISTRY.set("feishu_chat", {
   type: "feishu_chat",
-  commands: {},
+  methods: {},
 });
 
 REGISTRY.set("feishu_doc", {
   type: "feishu_doc",
-  commands: {},
+  methods: {},
 });
 
 REGISTRY.set("plan", {
   type: "plan",
-  commands: {},
+  methods: {},
 });
 
 /**
  * 替换或合并某 type 的契约，用于 windows/do.ts、windows/todo.ts 在模块加载时注入实现。
  *
- * 合并策略：commands 浅合并（key 冲突时新值覆盖）；onClose / renderXml 直接覆盖。
+ * 合并策略：methods 浅合并（key 冲突时新值覆盖）；onClose / renderXml 直接覆盖。
  */
 export function registerWindowType(
   type: WindowType,
@@ -205,8 +205,8 @@ export function registerWindowType(
     ...existing,
     // 直接替换不展开:custom window 用 Proxy 做 dynamic dispatcher,
     // 展开 (...) 会触发 ownKeys() trap (返 []) → 丢掉所有动态 lookup 能力。
-    // 现实上每个 type 只 register 一次 + 给完整 commands,无 merge 需求。
-    commands: partial.commands !== undefined ? partial.commands : existing.commands,
+    // 现实上每个 type 只 register 一次 + 给完整 methods,无 merge 需求。
+    methods: partial.methods !== undefined ? partial.methods : existing.methods,
     onClose: partial.onClose ?? existing.onClose,
     renderXml: partial.renderXml ?? existing.renderXml,
     compressView: partial.compressView ?? existing.compressView,

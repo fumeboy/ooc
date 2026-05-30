@@ -65,7 +65,7 @@ const COMMAND_BRIEF_MAX = 80;
  * 为某 window 输出一段 `<commands>` 元数据，列出该 type 上注册的所有 command 名
  * 与简要说明（R2 #5 / R2 #10 修复）。
  *
- * 简要说明取自 `def.commands[name]` 的 paths 末尾或 — 因为 CommandTableEntry 没有
+ * 简要说明取自 `def.methods[name]` 的 paths 末尾或 — 因为 MethodEntry 没有
  * 独立的 "brief" 字段——我们以 command name 加上"通过 open/exec(parent_window_id=...,
  * command=...) 调用"的标准提示。具体的 knowledge 文本仍由 form 上下文 / basicKnowledge
  * 提供，本节点只做"命令面索引"。
@@ -75,15 +75,15 @@ const COMMAND_BRIEF_MAX = 80;
  * 压缩态(window.compressLevel ≥ 1)的 window 额外注入一条通用 `expand` command —
  * 不需要每个 type 自己注册;由 expand-command 模块在 exec 路径上响应(B5)。
  */
-function renderCommandsNode(window: ContextWindow): XmlNode | null {
+function renderMethodsNode(window: ContextWindow): XmlNode | null {
   const def = getWindowTypeDefinition(window.type);
-  const names = Object.keys(def.commands ?? {});
+  const names = Object.keys(def.methods ?? {});
   const isCompressed = (window.compressLevel ?? 0) >= 1;
   if (names.length === 0 && !isCompressed) return null;
   names.sort();
 
   const children: XmlNode[] = names.map((name) => {
-    const entry = def.commands[name];
+    const entry = def.methods[name];
     const paths = entry?.paths ?? [name];
     const brief = paths.join(", ").slice(0, COMMAND_BRIEF_MAX);
     return xmlElement(
@@ -157,7 +157,7 @@ async function renderWindowNode(
       children.push(...typeChildren);
     } else {
       // 通用 fallback: 仅输出 <compressed> 元节点;commands 末尾再追加 expand 由
-      // renderCommandsNode 注入(任何 compressLevel >= 1 的 window 都自动获得 expand)
+      // renderMethodsNode 注入(任何 compressLevel >= 1 的 window 都自动获得 expand)
       children.push(
         xmlElement(
           "compressed",
@@ -181,7 +181,7 @@ async function renderWindowNode(
   }
 
   // ── commands 元数据（R2 #5 / R2 #10）
-  appendNode(children, renderCommandsNode(renderedWindow));
+  appendNode(children, renderMethodsNode(renderedWindow));
 
   // ── 子 window 折叠
   const subWindows = allWindows.filter((w) => w.parentWindowId === window.id);

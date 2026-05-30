@@ -199,7 +199,7 @@ function onCloseTalkWindow(ctx: OnCloseContext): boolean | void {
 }
 
 registerWindowType("talk", {
-  commands: {
+  methods: {
     say: sayCommand,
     wait: waitCommand,
     close: closeCommand,

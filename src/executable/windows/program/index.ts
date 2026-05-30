@@ -10,10 +10,10 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import { registerWindowType, type RenderContext } from "../_shared/registry.js";
 import { runOneExec, type ProgramExecArgs } from "./runtime.js";
 import type { ProgramWindow } from "../_shared/types.js";
@@ -86,7 +86,7 @@ program_window.set_history_window 精细化调整 exec history 渲染视口。
 后续 exec 仍正常追加到完整 history（不受 viewport 影响）。
 `.trim();
 
-const execCommand: CommandTableEntry = {
+const execCommand: MethodEntry = {
   paths: ["exec", "exec.shell", "exec.ts", "exec.js"],
   match: (args) => {
     const hit: string[] = ["exec"];
@@ -96,8 +96,8 @@ const execCommand: CommandTableEntry = {
     if (lang === "js" || lang === "javascript") hit.push("exec.js");
     return hit;
   },
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [PROGRAM_WINDOW_EXEC_BASIC]: EXEC_KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [PROGRAM_WINDOW_EXEC_BASIC]: EXEC_KNOWLEDGE };
     if (formStatus !== "open") return entries;
     const lang = (args.language ?? args.lang) as string | undefined;
     const code = typeof args.code === "string" ? args.code.trim() : "";
@@ -110,18 +110,18 @@ const execCommand: CommandTableEntry = {
   exec: (ctx) => executeProgramWindowExec(ctx),
 };
 
-const closeCommand: CommandTableEntry = {
+const closeCommand: MethodEntry = {
   paths: ["close"],
   match: () => ["close"],
-  knowledge: (): CommandKnowledgeEntries => ({ [PROGRAM_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [PROGRAM_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
   exec: () => undefined,
 };
 
-const setHistoryWindowCommand: CommandTableEntry = {
+const setHistoryWindowCommand: MethodEntry = {
   paths: ["set_history_window"],
   match: () => ["set_history_window"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = {
       [PROGRAM_WINDOW_SET_HISTORY_BASIC]: SET_HISTORY_KNOWLEDGE,
     };
     if (formStatus === "open" && !hasAnyHistoryViewportField(args)) {
@@ -136,7 +136,7 @@ const setHistoryWindowCommand: CommandTableEntry = {
 
 /** program_window.exec：跑一次 exec，把 record append 到 window.history。 */
 export async function executeProgramWindowExec(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[program_window.exec] 缺少 thread context。";
@@ -223,7 +223,7 @@ function renderProgramWindow(ctx: RenderContext): XmlNode[] {
 }
 
 registerWindowType("program", {
-  commands: {
+  methods: {
     exec: execCommand,
     close: closeCommand,
     set_history_window: setHistoryWindowCommand,

@@ -6,10 +6,10 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../../../executable/windows/_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../../../executable/windows/_shared/method-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -37,11 +37,11 @@ open_feishu_doc 用于创建一个 feishu_doc_window（飞书文档作为 Contex
 open(command="open_feishu_doc", title="OOC 设计稿", args={ doc_token: "doccn5xxxxxx", doc_kind: "docx" })
 `.trim();
 
-export const openFeishuDocCommand: CommandTableEntry = {
+export const openFeishuDocCommand: MethodEntry = {
   paths: ["open_feishu_doc"],
   match: () => ["open_feishu_doc"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [OPEN_FEISHU_DOC_BASIC]: KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [OPEN_FEISHU_DOC_BASIC]: KNOWLEDGE };
     if (formStatus !== "open") return entries;
     if (typeof args.doc_token !== "string" || !args.doc_token) {
       entries[OPEN_FEISHU_DOC_INPUT] =
@@ -53,7 +53,7 @@ export const openFeishuDocCommand: CommandTableEntry = {
 };
 
 export async function executeOpenFeishuDoc(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[open_feishu_doc] 缺少 thread context。";

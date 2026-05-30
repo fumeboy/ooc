@@ -15,11 +15,11 @@ import { mkdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import type {
-  CommandExecOutcome,
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecOutcome,
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -88,7 +88,7 @@ function basename(path: string): string {
 }
 
 /** 写盘成功后在 thread 下挂一个 file_window 指向 path（stone 与 non-stone 路径共用）。 */
-function spawnFileWindow(ctx: CommandExecutionContext, path: string): void {
+function spawnFileWindow(ctx: MethodExecutionContext, path: string): void {
   const fileWindow: FileWindow = {
     id: generateWindowId("file"),
     type: "file",
@@ -105,11 +105,11 @@ function spawnFileWindow(ctx: CommandExecutionContext, path: string): void {
   }
 }
 
-export const writeFileCommand: CommandTableEntry = {
+export const writeFileCommand: MethodEntry = {
   paths: ["write_file"],
   match: () => ["write_file"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [WRITE_FILE_BASIC_PATH]: KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [WRITE_FILE_BASIC_PATH]: KNOWLEDGE };
     if (formStatus !== "open") return entries;
     const path = typeof args.path === "string" ? args.path : "";
     const hasContent = typeof args.content === "string";
@@ -128,8 +128,8 @@ export const writeFileCommand: CommandTableEntry = {
 };
 
 export async function executeWriteFileCommand(
-  ctx: CommandExecutionContext,
-): Promise<string | undefined | CommandExecOutcome> {
+  ctx: MethodExecutionContext,
+): Promise<string | undefined | MethodExecOutcome> {
   const thread = ctx.thread;
   if (!thread) return "[write_file] 缺少 thread context。";
   const rawPath = typeof ctx.args.path === "string" ? ctx.args.path : "";

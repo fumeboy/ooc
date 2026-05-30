@@ -9,10 +9,10 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import { stat } from "node:fs/promises";
 import { stoneDir } from "../../../persistable/index.js";
 import { SUPER_ALIAS_TARGET } from "../_shared/super-constants.js";
@@ -54,11 +54,11 @@ export enum TalkCommandPath {
 }
 
 /** root.talk command：创建 talk_window；不直接发消息。 */
-export const talkCommand: CommandTableEntry = {
+export const talkCommand: MethodEntry = {
   paths: [TalkCommandPath.Talk],
   match: () => [TalkCommandPath.Talk],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [TALK_BASIC_PATH]: KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [TALK_BASIC_PATH]: KNOWLEDGE };
     if (formStatus !== "open") return entries;
     const target = typeof args.target === "string" ? args.target.trim() : "";
     const title = typeof args.title === "string" ? args.title.trim() : "";
@@ -83,7 +83,7 @@ function deriveTitle(raw: string, max = 60): string {
 
 /** root.talk 执行入口：构建并挂载 talk_window。 */
 export async function executeTalkCommand(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[talk] 缺少 thread context。";

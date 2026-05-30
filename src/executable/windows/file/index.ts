@@ -17,10 +17,10 @@
 import { readFile, writeFile } from "node:fs/promises";
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import { registerWindowType, type RenderContext } from "../_shared/registry.js";
 import type { FileWindow } from "../_shared/types.js";
 import {
@@ -148,18 +148,18 @@ open(parent_window_id="<file_window_id>", command="edit",
 - 不要用 \`write_file\` 做"修改局部"——write_file 是整文件覆盖语义，详见 root.write_file 的 KNOWLEDGE
 `.trim();
 
-const setRangeCommand: CommandTableEntry = {
+const setRangeCommand: MethodEntry = {
   paths: ["set_range"],
   match: () => ["set_range"],
-  knowledge: (): CommandKnowledgeEntries => ({ [FILE_WINDOW_SET_RANGE_BASIC]: SET_RANGE_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [FILE_WINDOW_SET_RANGE_BASIC]: SET_RANGE_KNOWLEDGE }),
   exec: (ctx) => executeFileWindowSetRange(ctx),
 };
 
-const setViewportCommand: CommandTableEntry = {
+const setViewportCommand: MethodEntry = {
   paths: ["set_viewport"],
   match: () => ["set_viewport"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = {
       [FILE_WINDOW_SET_VIEWPORT_BASIC]: SET_VIEWPORT_KNOWLEDGE,
     };
     if (formStatus === "open" && !hasAnyViewportField(args)) {
@@ -172,25 +172,25 @@ const setViewportCommand: CommandTableEntry = {
   exec: (ctx) => executeWindowSetViewport(ctx, "file"),
 };
 
-const reloadCommand: CommandTableEntry = {
+const reloadCommand: MethodEntry = {
   paths: ["reload"],
   match: () => ["reload"],
-  knowledge: (): CommandKnowledgeEntries => ({ [FILE_WINDOW_RELOAD_BASIC]: RELOAD_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [FILE_WINDOW_RELOAD_BASIC]: RELOAD_KNOWLEDGE }),
   exec: () => undefined, // render 层每轮都会重读
 };
 
-const closeCommand: CommandTableEntry = {
+const closeCommand: MethodEntry = {
   paths: ["close"],
   match: () => ["close"],
-  knowledge: (): CommandKnowledgeEntries => ({ [FILE_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [FILE_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
   exec: () => undefined,
 };
 
-const editCommand: CommandTableEntry = {
+const editCommand: MethodEntry = {
   paths: ["edit"],
   match: () => ["edit"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [FILE_WINDOW_EDIT_BASIC]: EDIT_KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [FILE_WINDOW_EDIT_BASIC]: EDIT_KNOWLEDGE };
     if (formStatus !== "open") return entries;
     const single = isString(args.old) && isString(args.new);
     const batch = Array.isArray(args.edits) && args.edits.length > 0;
@@ -297,7 +297,7 @@ function applyEdits(
 
 /** 把 set_range 的 args 落到目标 file_window；通过 manager 操作以保证 toData() 写回。 */
 export async function executeFileWindowSetRange(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const window = ctx.parentWindow;
   if (!window || window.type !== "file") {
@@ -325,7 +325,7 @@ export async function executeFileWindowSetRange(
  * - 失败：不写盘；返回错误字符串（前缀 [file_window.edit]，便于 LLM 解析）
  */
 export async function executeFileWindowEdit(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const window = ctx.parentWindow;
   if (!window || window.type !== "file") {
@@ -462,7 +462,7 @@ async function compressFileWindow(
 }
 
 registerWindowType("file", {
-  commands: {
+  methods: {
     set_range: setRangeCommand,
     set_viewport: setViewportCommand,
     reload: reloadCommand,

@@ -10,9 +10,9 @@
  */
 
 import type {
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import {
   executeWindowSetTranscriptViewport,
   hasAnyTranscriptViewportField,
@@ -47,11 +47,11 @@ do_window.set_transcript_window 精细化调整 transcript 渲染窗口。
 **注意**：viewport 只影响**渲染**给 LLM 的内容；continue / wait / close / move 等命令仍基于完整 transcript。
 `.trim();
 
-export const setTranscriptWindowCommandForDo: CommandTableEntry = {
+export const setTranscriptWindowCommandForDo: MethodEntry = {
   paths: ["set_transcript_window"],
   match: () => ["set_transcript_window"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = {
       [DO_SET_TRANSCRIPT_BASIC]: KNOWLEDGE,
     };
     if (formStatus === "open" && !hasAnyTranscriptViewportField(args)) {

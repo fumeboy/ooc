@@ -62,7 +62,7 @@ describe.skip("sentry_event_factor", () => {
 
     const win = await loadObjectWindow(ref("sentry/sentry_event_factor"));
     expect(win).toBeDefined();
-    const cmd = win!.commands!.search_event_factors!;
+    const cmd = win!.methods!.search_event_factors!;
     const result = (await cmd.exec({ args: { eventId: 42, search: "abc", page: 1, size: 10 } } as never)) as {
       ok: boolean;
       result?: string;
@@ -84,7 +84,7 @@ describe.skip("sentry_event_factor", () => {
   test("search_event_factors 缺 USER_INFO env 给清晰错误", async () => {
     mockFetch(() => new Response("should-not-reach", { status: 200 }));
     const win = await loadObjectWindow(ref("sentry/sentry_event_factor"));
-    const cmd = win!.commands!.search_event_factors!;
+    const cmd = win!.methods!.search_event_factors!;
     const result = (await cmd.exec({ args: { eventId: 1 } } as never)) as { ok: boolean; error?: string };
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/USER_INFO/);
@@ -95,7 +95,7 @@ describe.skip("sentry_event_factor", () => {
     process.env.USER_INFO = "x";
     mockFetch(() => new Response("", { status: 200 }));
     const win = await loadObjectWindow(ref("sentry/sentry_event_factor"));
-    const cmd = win!.commands!.search_event_factors!;
+    const cmd = win!.methods!.search_event_factors!;
     const result = (await cmd.exec({ args: {} } as never)) as { ok: boolean; error?: string };
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/eventId/);
@@ -115,7 +115,7 @@ describe.skip("sentry_factor_group", () => {
 
     const win = await loadObjectWindow(ref("sentry/sentry_factor_group"));
     expect(win).toBeDefined();
-    const cmd = win!.commands!.get_factor_group_detail!;
+    const cmd = win!.methods!.get_factor_group_detail!;
     const result = (await cmd.exec({ args: { code: "fg_001" } } as never)) as {
       ok: boolean;
       result?: string;
@@ -130,7 +130,7 @@ describe.skip("sentry_factor_group", () => {
     process.env.USER_INFO = "u";
     mockFetch(() => new Response("auth failed", { status: 403 }));
     const win = await loadObjectWindow(ref("sentry/sentry_factor_group"));
-    const cmd = win!.commands!.search_factor_groups!;
+    const cmd = win!.methods!.search_factor_groups!;
     const result = (await cmd.exec({ args: { query: "x" } } as never)) as { ok: boolean; error?: string };
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/403/);
@@ -141,7 +141,7 @@ describe.skip("sentry_factor_dev", () => {
   test("dispatch_to_event_factor 返回派单 hint 文案", async () => {
     const win = await loadObjectWindow(ref("sentry_factor_dev"));
     expect(win).toBeDefined();
-    const cmd = win!.commands!.dispatch_to_event_factor!;
+    const cmd = win!.methods!.dispatch_to_event_factor!;
     expect(cmd).toBeDefined();
     const result = (await cmd.exec({
       args: { plan_path: "output/tech_plan.md" },
@@ -155,7 +155,7 @@ describe.skip("sentry_factor_dev", () => {
 
   test("commands 列表完整", async () => {
     const win = await loadObjectWindow(ref("sentry_factor_dev"));
-    const names = Object.keys(win?.commands ?? {});
+    const names = Object.keys(win?.methods ?? {});
     for (const expected of [
       "start_requirement",
       "analyze_requirement",

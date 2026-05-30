@@ -125,7 +125,7 @@ function ts(): string {
 
 beforeAll(() => {
   registerWindowType("root", {
-    commands: {
+    methods: {
       _test_q0c_safe: {
         paths: ["_test_q0c_safe"],
         match: () => ["_test_q0c_safe"],

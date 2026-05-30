@@ -1,4 +1,4 @@
-import type { CommandExecutionContext } from "./command-types.js";
+import type { MethodExecutionContext } from "./method-types.js";
 
 /**
  * viewport 协议 — file_window / knowledge_window 共享的"精细化窗口大小"控制。
@@ -141,7 +141,7 @@ export function applyViewport(raw: string, viewport: Viewport): string {
  * - Object.assign 写回 window（按现有 set_range 的同模式，保证 manager.toData() 写回持久层）
  */
 export async function executeWindowSetViewport(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
   expectedType: "file" | "knowledge",
 ): Promise<string | undefined> {
   const window = ctx.parentWindow;

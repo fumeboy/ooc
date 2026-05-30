@@ -8,10 +8,10 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -41,11 +41,11 @@ open_knowledge 用于显式打开一个 knowledge doc，作为 knowledge_window 
 open(command="open_knowledge", title="pin file-ops", args={ path: "build-tools/file-ops" })
 `.trim();
 
-export const openKnowledgeCommand: CommandTableEntry = {
+export const openKnowledgeCommand: MethodEntry = {
   paths: ["open_knowledge"],
   match: () => ["open_knowledge"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [OPEN_KNOWLEDGE_BASIC_PATH]: KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [OPEN_KNOWLEDGE_BASIC_PATH]: KNOWLEDGE };
     if (formStatus !== "open") return entries;
     const path = typeof args.path === "string" ? args.path : "";
     if (!path) {
@@ -65,7 +65,7 @@ function basename(path: string): string {
 }
 
 export async function executeOpenKnowledgeCommand(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[open_knowledge] 缺少 thread context。";

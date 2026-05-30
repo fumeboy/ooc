@@ -24,7 +24,7 @@ function renderTodoWindow(ctx: RenderContext): XmlNode[] {
 
 registerWindowType("todo", {
   // commands 留空：todo 没有可被 LLM 进一步调用的动作
-  commands: {},
+  methods: {},
   renderXml: renderTodoWindow,
   // onClose 无副作用：window 释放即完成
 });

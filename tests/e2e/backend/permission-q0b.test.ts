@@ -9,7 +9,7 @@
  *
  * 不走真 LLM: 直接调 think() 并 mock LlmClient 模拟 LLM 行为, 完整覆盖:
  *   A. Allow 默认 — command 未声明 permission → dispatchToolCall 正常触发
- *   B. Deny via CommandTableEntry — registerWindowType 注册 permission="deny" 的 fake command
+ *   B. Deny via MethodEntry — registerWindowType 注册 permission="deny" 的 fake command
  *   C. Deny via policies.json — stones/<branch>/objects/<id>/config/policies.json
  *   D. PermissionDecider 注入 — setPermissionDecider 覆盖前两者
  *   E. Ask 占位 — policies.json "ask" → permission_ask event + thread.status="paused"
@@ -121,7 +121,7 @@ function writePoliciesJson(ref: ThreadPersistenceRef, raw: string): void {
 // 注册仅供测试用的 root commands: "_test_q0b_danger" (deny), "_test_q0b_safe" (无声明)
 beforeAll(() => {
   registerWindowType("root", {
-    commands: {
+    methods: {
       _test_q0b_danger: {
         paths: ["_test_q0b_danger"],
         match: () => ["_test_q0b_danger"],
@@ -184,9 +184,9 @@ describe("[q0b] permission — A. Allow 默认", () => {
   });
 });
 
-// ─────────────────────────── B. Deny via CommandTableEntry ────────────────────
+// ─────────────────────────── B. Deny via MethodEntry ────────────────────
 
-describe("[q0b] permission — B. Deny via CommandTableEntry", () => {
+describe("[q0b] permission — B. Deny via MethodEntry", () => {
   it("permission='deny' 的 fake command → 写 permission_denied + 合成 function_call_output + 不分派", async () => {
     const thread = makeThread();
     const toolCall: LlmToolCall = {
@@ -222,7 +222,7 @@ describe("[q0b] permission — B. Deny via CommandTableEntry", () => {
     if (denyEvent.category === "permission" && denyEvent.kind === "permission_denied") {
       expect(denyEvent.toolCallId).toBe("call_deny_1");
       expect(denyEvent.command).toBe("_test_q0b_danger");
-      expect(denyEvent.reason).toContain("CommandTableEntry");
+      expect(denyEvent.reason).toContain("MethodEntry");
       expect(denyEvent.argsSummary).toContain("rm -rf");
     }
 
@@ -245,7 +245,7 @@ describe("[q0b] permission — B. Deny via CommandTableEntry", () => {
 // ─────────────────────────── C. Deny via policies.json ────────────────────────
 
 describe("[q0b] permission — C. Deny via policies.json", () => {
-  it("policies.json 设 deny → 即使 CommandTableEntry 是 allow 也被拒", async () => {
+  it("policies.json 设 deny → 即使 MethodEntry 是 allow 也被拒", async () => {
     const tmpRoot = mkdtempSync(join(tmpdir(), "ooc-q0b-policies-deny-"));
     try {
       const ref = setupPersistence(tmpRoot, "obj_q0b_c");
@@ -291,11 +291,11 @@ describe("[q0b] permission — C. Deny via policies.json", () => {
 // ─────────────────────────── D. PermissionDecider 注入 ────────────────────────
 
 describe("[q0b] permission — D. PermissionDecider 注入 (escape hatch)", () => {
-  it("setPermissionDecider 返回 deny → 覆盖 CommandTableEntry 与 policies.json", async () => {
+  it("setPermissionDecider 返回 deny → 覆盖 MethodEntry 与 policies.json", async () => {
     const tmpRoot = mkdtempSync(join(tmpdir(), "ooc-q0b-decider-"));
     try {
       const ref = setupPersistence(tmpRoot, "obj_q0b_d");
-      // policies 明确 allow, CommandTableEntry 也是 allow (safe), 但 decider 强制 deny
+      // policies 明确 allow, MethodEntry 也是 allow (safe), 但 decider 强制 deny
       writePoliciesJson(
         ref,
         JSON.stringify({ commands: { _test_q0b_safe: "allow" } }),
@@ -403,7 +403,7 @@ describe("[q0b] permission — E. Ask 路径占位", () => {
 // ─────────────────────────── F. 配置容错 ──────────────────────────────────────
 
 describe("[q0b] permission — F. 配置容错", () => {
-  it("空字符串 policies.json → fallback 到 CommandTableEntry, 不抛错", async () => {
+  it("空字符串 policies.json → fallback 到 MethodEntry, 不抛错", async () => {
     const tmpRoot = mkdtempSync(join(tmpdir(), "ooc-q0b-empty-"));
     try {
       const ref = setupPersistence(tmpRoot, "obj_q0b_f1");
@@ -466,12 +466,12 @@ describe("[q0b] permission — F. 配置容错", () => {
     }
   });
 
-  it("字段拼错 (comamnds) → fallback 到 CommandTableEntry, 不抛错", async () => {
+  it("字段拼错 (comamnds) → fallback 到 MethodEntry, 不抛错", async () => {
     const tmpRoot = mkdtempSync(join(tmpdir(), "ooc-q0b-typo-"));
     try {
       const ref = setupPersistence(tmpRoot, "obj_q0b_f3");
       // 故意拼错 "commands" → "comamnds"; loadPoliciesJson 应返回 {}
-      // 然后 _test_q0b_danger (CommandTableEntry.permission="deny") 应仍生效
+      // 然后 _test_q0b_danger (MethodEntry.permission="deny") 应仍生效
       writePoliciesJson(
         ref,
         JSON.stringify({ comamnds: { _test_q0b_danger: "allow" } }),
@@ -495,7 +495,7 @@ describe("[q0b] permission — F. 配置容错", () => {
       const llm = makeLlmClient(makeGenerateResult("", [toolCall]));
       await think(thread, llm);
 
-      // 字段拼错 → fallback → CommandTableEntry.permission="deny" 生效
+      // 字段拼错 → fallback → MethodEntry.permission="deny" 生效
       expect(dispatchSpy).not.toHaveBeenCalled();
       const denyEvents = thread.events.filter(
         (e) => e.category === "permission" && e.kind === "permission_denied",

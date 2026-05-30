@@ -5,7 +5,7 @@
  * 一次性拉到 catalog 后客户端按 type 索引即可,无需每次 getThread 都嵌入。
  *
  * 数据来源:src/executable/windows/_shared/registry.ts 里 registerWindowType 注入的 commands,
- * 加上 root window 的 ROOT_COMMANDS。两边都是静态注册,服务启动后不变。
+ * 加上 root window 的 ROOT_METHODS。两边都是静态注册,服务启动后不变。
  *
  * 每条 command 的 description:从 `entry.knowledge({}, "open")` 取 `*_BASIC` 路径的值
  * (按"path 以 /basic 结尾"约定挑;不命中时退化为返回值最长的那条)。description 是
@@ -17,7 +17,7 @@ import {
   getWindowTypeDefinition,
   listRegisteredWindowTypes,
 } from "../../../../executable/windows";
-import type { CommandTableEntry } from "../../../../executable/windows";
+import type { MethodEntry } from "../../../../executable/windows";
 
 export type WindowCommandEntry = {
   name: string;
@@ -40,7 +40,7 @@ export function listWindowTypesApi() {
       const types = listRegisteredWindowTypes();
       const items: WindowTypeCatalogEntry[] = types.map((type) => {
         const def = getWindowTypeDefinition(type);
-        const commands: WindowCommandEntry[] = Object.entries(def.commands)
+        const commands: WindowCommandEntry[] = Object.entries(def.methods)
           .map(([name, entry]) => {
             const description = extractBasicDescription(entry);
             const out: WindowCommandEntry = { name };
@@ -65,7 +65,7 @@ export function listWindowTypesApi() {
  *   2. 兜底取返回值最长的那条(input hint 通常更短)
  *   3. knowledge 调用抛错 → 返回 undefined,让 UI 退化成"只有 chip 名"
  */
-function extractBasicDescription(entry: CommandTableEntry): string | undefined {
+function extractBasicDescription(entry: MethodEntry): string | undefined {
   if (!entry.knowledge) return undefined;
   let map: Record<string, string>;
   try {

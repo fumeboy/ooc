@@ -14,10 +14,10 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../../../executable/windows/_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../../../executable/windows/_shared/method-types.js";
 import { registerWindowType, type RenderContext } from "../../../executable/windows/_shared/registry.js";
 import type { FeishuDocWindow } from "./types.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
@@ -139,25 +139,25 @@ feishu_doc.close 释放 window；不影响飞书一侧的文档。
 
 // ─────────────────────────── command 实现 ────────────────────────────
 
-const readCommand: CommandTableEntry = {
+const readCommand: MethodEntry = {
   paths: ["read"],
   match: () => ["read"],
-  knowledge: (): CommandKnowledgeEntries => ({ [READ_BASIC]: READ_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [READ_BASIC]: READ_KNOWLEDGE }),
   exec: (ctx) => executeRead(ctx),
 };
 
-const searchInDocCommand: CommandTableEntry = {
+const searchInDocCommand: MethodEntry = {
   paths: ["search_in_doc"],
   match: () => ["search_in_doc"],
-  knowledge: (): CommandKnowledgeEntries => ({ [SEARCH_BASIC]: SEARCH_IN_DOC_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [SEARCH_BASIC]: SEARCH_IN_DOC_KNOWLEDGE }),
   exec: (ctx) => executeSearchInDoc(ctx),
 };
 
-const appendCommand: CommandTableEntry = {
+const appendCommand: MethodEntry = {
   paths: ["append"],
   match: (args) => (args.confirm === true ? ["append", "append.confirmed"] : ["append"]),
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [APPEND_BASIC]: APPEND_KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [APPEND_BASIC]: APPEND_KNOWLEDGE };
     if (formStatus === "open" && args.confirm !== true) {
       entries[APPEND_DRY_RUN] = APPEND_DRY_RUN_KNOWLEDGE;
     }
@@ -166,11 +166,11 @@ const appendCommand: CommandTableEntry = {
   exec: (ctx) => executeAppend(ctx),
 };
 
-const patchBlockCommand: CommandTableEntry = {
+const patchBlockCommand: MethodEntry = {
   paths: ["patch_block"],
   match: (args) => (args.confirm === true ? ["patch_block", "patch_block.confirmed"] : ["patch_block"]),
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [PATCH_BASIC]: PATCH_KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [PATCH_BASIC]: PATCH_KNOWLEDGE };
     if (formStatus === "open" && args.confirm !== true) {
       entries[PATCH_DRY_RUN] = PATCH_DRY_RUN_KNOWLEDGE;
     }
@@ -179,18 +179,18 @@ const patchBlockCommand: CommandTableEntry = {
   exec: (ctx) => executePatchBlock(ctx),
 };
 
-const shareLinkCommand: CommandTableEntry = {
+const shareLinkCommand: MethodEntry = {
   paths: ["share_link"],
   match: () => ["share_link"],
-  knowledge: (): CommandKnowledgeEntries => ({ [SHARE_BASIC]: SHARE_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [SHARE_BASIC]: SHARE_KNOWLEDGE }),
   exec: (ctx) => executeShareLink(ctx),
 };
 
-const attachToChatCommand: CommandTableEntry = {
+const attachToChatCommand: MethodEntry = {
   paths: ["attach_to_chat"],
   match: (args) => (args.confirm === true ? ["attach_to_chat", "attach_to_chat.confirmed"] : ["attach_to_chat"]),
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [ATTACH_BASIC]: ATTACH_KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [ATTACH_BASIC]: ATTACH_KNOWLEDGE };
     if (formStatus === "open" && args.confirm !== true) {
       entries[ATTACH_DRY_RUN] = ATTACH_DRY_RUN_KNOWLEDGE;
     }
@@ -199,10 +199,10 @@ const attachToChatCommand: CommandTableEntry = {
   exec: (ctx) => executeAttachToChat(ctx),
 };
 
-const closeCommand: CommandTableEntry = {
+const closeCommand: MethodEntry = {
   paths: ["close"],
   match: () => ["close"],
-  knowledge: (): CommandKnowledgeEntries => ({ [CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
   exec: () => undefined,
 };
 
@@ -232,7 +232,7 @@ function extractMarkdownTitle(body: string): string | undefined {
   return t && t.length > 0 ? t : undefined;
 }
 
-async function executeRead(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeRead(ctx: MethodExecutionContext): Promise<string | undefined> {
   const window = ctx.parentWindow;
   if (!window || window.type !== "feishu_doc") {
     return "[feishu_doc.read] 未挂载在 feishu_doc_window 上。";
@@ -312,7 +312,7 @@ function pickDocument(raw: unknown): FetchedDoc | undefined {
   };
 }
 
-function executeSearchInDoc(ctx: CommandExecutionContext): string | undefined {
+function executeSearchInDoc(ctx: MethodExecutionContext): string | undefined {
   const window = ctx.parentWindow;
   if (!window || window.type !== "feishu_doc") {
     return "[feishu_doc.search_in_doc] 未挂载在 feishu_doc_window 上。";
@@ -337,7 +337,7 @@ function executeSearchInDoc(ctx: CommandExecutionContext): string | undefined {
     : `未命中 "${query}"。`;
 }
 
-async function executeAppend(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeAppend(ctx: MethodExecutionContext): Promise<string | undefined> {
   const window = ctx.parentWindow;
   if (!window || window.type !== "feishu_doc") {
     return "[feishu_doc.append] 未挂载在 feishu_doc_window 上。";
@@ -372,7 +372,7 @@ async function executeAppend(ctx: CommandExecutionContext): Promise<string | und
   return `已追加（doc=${window.docToken}, +${text.length} 字符）。`;
 }
 
-async function executePatchBlock(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executePatchBlock(ctx: MethodExecutionContext): Promise<string | undefined> {
   const window = ctx.parentWindow;
   if (!window || window.type !== "feishu_doc") {
     return "[feishu_doc.patch_block] 未挂载在 feishu_doc_window 上。";
@@ -436,7 +436,7 @@ async function executePatchBlock(ctx: CommandExecutionContext): Promise<string |
   return `已 patch（block_id=${blockId}, op=${op} → ${commandName}）。`;
 }
 
-async function executeShareLink(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeShareLink(ctx: MethodExecutionContext): Promise<string | undefined> {
   const window = ctx.parentWindow;
   if (!window || window.type !== "feishu_doc") {
     return "[feishu_doc.share_link] 未挂载在 feishu_doc_window 上。";
@@ -462,7 +462,7 @@ async function executeShareLink(ctx: CommandExecutionContext): Promise<string | 
   return `https://${tenantHost}/${slug}`;
 }
 
-async function executeAttachToChat(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeAttachToChat(ctx: MethodExecutionContext): Promise<string | undefined> {
   const window = ctx.parentWindow;
   if (!window || window.type !== "feishu_doc") {
     return "[feishu_doc.attach_to_chat] 未挂载在 feishu_doc_window 上。";
@@ -517,7 +517,7 @@ function renderFeishuDoc(ctx: RenderContext): XmlNode[] {
 }
 
 registerWindowType("feishu_doc", {
-  commands: {
+  methods: {
     read: readCommand,
     search_in_doc: searchInDocCommand,
     append: appendCommand,

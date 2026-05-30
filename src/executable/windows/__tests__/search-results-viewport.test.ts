@@ -318,12 +318,12 @@ describe("set_results_window command", () => {
 describe("set_results_window registered on search window", () => {
   it("search window definition has set_results_window command", () => {
     const def = getWindowTypeDefinition("search");
-    expect(def.commands["set_results_window"]).toBeDefined();
+    expect(def.methods["set_results_window"]).toBeDefined();
   });
 
   it("registered command executes via window registry", async () => {
     const def = getWindowTypeDefinition("search");
-    const cmd = def.commands["set_results_window"]!;
+    const cmd = def.methods["set_results_window"]!;
     const window = makeSearchWindow({
       matches: makeMatches(10),
       resultsViewport: { tail: 50 },
@@ -342,7 +342,7 @@ describe("set_results_window registered on search window", () => {
 describe("open_match honors full matches array (not viewport-clipped)", () => {
   it("can open a match whose index is outside visible viewport tail", async () => {
     const def = getWindowTypeDefinition("search");
-    const cmd = def.commands["open_match"]!;
+    const cmd = def.methods["open_match"]!;
     // 100 matches, tail=10 → visible 90..99；但 open_match(index=5) 仍应工作
     const window = makeSearchWindow({
       matches: makeMatches(100),

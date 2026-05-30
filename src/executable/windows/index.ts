@@ -47,10 +47,10 @@ export type {
 } from "./_shared/registry.js";
 
 export type {
-  CommandTableEntry,
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-} from "./_shared/command-types.js";
+  MethodEntry,
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+} from "./_shared/method-types.js";
 
 export { WindowManager } from "./_shared/manager.js";
 
@@ -59,16 +59,16 @@ export type { InitContextWindowsOpts } from "./_shared/init.js";
 
 // root commands 的工具函数（仅服务 root level；非 root window 的 command 通过 WINDOW_REGISTRY 查）
 export {
-  ROOT_COMMANDS,
+  ROOT_METHODS,
   getOpenableCommands,
-  deriveRootCommandPaths,
-  execRootCommand,
+  deriveRootMethodPaths,
+  execRootMethod,
 } from "./root/index.js";
 
 // Side-effect imports: each window type module 通过 registerWindowType 注入 commands / hooks。
 // 这些 import 必须在 WindowManager 之后 load，确保使用时表已就绪。
 //
-// root 必须最先 load，因为其它 window type 的 onClose / 注册可能间接依赖 ROOT_COMMANDS
+// root 必须最先 load，因为其它 window type 的 onClose / 注册可能间接依赖 ROOT_METHODS
 // （目前没有此依赖，但保留这一顺序更稳妥）。
 import "./root/index.js";
 import "./command_exec/index.js";

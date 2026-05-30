@@ -10,9 +10,9 @@
  */
 
 import type {
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import {
   executeSearchSetResultsViewport,
   hasAnyResultsViewportField,
@@ -50,11 +50,11 @@ search_window.set_results_window 精细化调整 matches 渲染视口。
 即使 match 不在 visible 区间，只要 index 合法就能 open。
 `.trim();
 
-export const setResultsWindowCommandForSearch: CommandTableEntry = {
+export const setResultsWindowCommandForSearch: MethodEntry = {
   paths: ["set_results_window"],
   match: () => ["set_results_window"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = {
       [SEARCH_SET_RESULTS_BASIC]: KNOWLEDGE,
     };
     if (formStatus === "open" && !hasAnyResultsViewportField(args)) {

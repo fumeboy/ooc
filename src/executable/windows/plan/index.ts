@@ -13,10 +13,10 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import {
   registerWindowType,
   type OnCloseContext,
@@ -133,7 +133,7 @@ function asStepStatus(v: unknown): PlanWindowStep["status"] | undefined {
 }
 
 /** 把 ctx.parentWindow 校验成 PlanWindow；失败返回错误字符串。 */
-function requirePlanWindow(ctx: CommandExecutionContext): PlanWindow | string {
+function requirePlanWindow(ctx: MethodExecutionContext): PlanWindow | string {
   const w = ctx.parentWindow;
   if (!w || w.type !== "plan") {
     return "[plan_window] 未挂载在 plan_window 上。";
@@ -142,7 +142,7 @@ function requirePlanWindow(ctx: CommandExecutionContext): PlanWindow | string {
 }
 
 /** 通过 manager 持久化更新（避免被 toData() 复原）；fallback 直接 mutate。 */
-function updatePlanWindow(ctx: CommandExecutionContext, next: PlanWindow): void {
+function updatePlanWindow(ctx: MethodExecutionContext, next: PlanWindow): void {
   if (ctx.manager) {
     ctx.manager.upsertWindow(next);
   } else {
@@ -153,14 +153,14 @@ function updatePlanWindow(ctx: CommandExecutionContext, next: PlanWindow): void 
 
 // ─────────────────────────── commands ─────────────────────────────────────────
 
-const updatePlanCommand: CommandTableEntry = {
+const updatePlanCommand: MethodEntry = {
   paths: ["update_plan"],
   match: () => ["update_plan"],
-  knowledge: (): CommandKnowledgeEntries => ({ [PLAN_WINDOW_UPDATE_PLAN_BASIC]: UPDATE_PLAN_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [PLAN_WINDOW_UPDATE_PLAN_BASIC]: UPDATE_PLAN_KNOWLEDGE }),
   exec: (ctx) => executeUpdatePlan(ctx),
 };
 
-async function executeUpdatePlan(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeUpdatePlan(ctx: MethodExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
   if (typeof w === "string") return w;
   const title = isString(ctx.args.title) ? ctx.args.title : undefined;
@@ -177,14 +177,14 @@ async function executeUpdatePlan(ctx: CommandExecutionContext): Promise<string |
   return undefined;
 }
 
-const addStepCommand: CommandTableEntry = {
+const addStepCommand: MethodEntry = {
   paths: ["add_step"],
   match: () => ["add_step"],
-  knowledge: (): CommandKnowledgeEntries => ({ [PLAN_WINDOW_ADD_STEP_BASIC]: ADD_STEP_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [PLAN_WINDOW_ADD_STEP_BASIC]: ADD_STEP_KNOWLEDGE }),
   exec: (ctx) => executeAddStep(ctx),
 };
 
-async function executeAddStep(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeAddStep(ctx: MethodExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
   if (typeof w === "string") return w;
   const text = isString(ctx.args.text) ? ctx.args.text.trim() : "";
@@ -200,14 +200,14 @@ async function executeAddStep(ctx: CommandExecutionContext): Promise<string | un
   return `added step ${step.id}`;
 }
 
-const updateStepCommand: CommandTableEntry = {
+const updateStepCommand: MethodEntry = {
   paths: ["update_step"],
   match: () => ["update_step"],
-  knowledge: (): CommandKnowledgeEntries => ({ [PLAN_WINDOW_UPDATE_STEP_BASIC]: UPDATE_STEP_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [PLAN_WINDOW_UPDATE_STEP_BASIC]: UPDATE_STEP_KNOWLEDGE }),
   exec: (ctx) => executeUpdateStep(ctx),
 };
 
-async function executeUpdateStep(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeUpdateStep(ctx: MethodExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
   if (typeof w === "string") return w;
   const stepId = isString(ctx.args.step_id) ? ctx.args.step_id : "";
@@ -232,14 +232,14 @@ async function executeUpdateStep(ctx: CommandExecutionContext): Promise<string |
   return undefined;
 }
 
-const expandStepCommand: CommandTableEntry = {
+const expandStepCommand: MethodEntry = {
   paths: ["expand_step"],
   match: () => ["expand_step"],
-  knowledge: (): CommandKnowledgeEntries => ({ [PLAN_WINDOW_EXPAND_STEP_BASIC]: EXPAND_STEP_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [PLAN_WINDOW_EXPAND_STEP_BASIC]: EXPAND_STEP_KNOWLEDGE }),
   exec: (ctx) => executeExpandStep(ctx),
 };
 
-async function executeExpandStep(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeExpandStep(ctx: MethodExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
   if (typeof w === "string") return w;
   if (!ctx.thread) return "[plan_window.expand_step] 缺少 thread context。";
@@ -283,16 +283,16 @@ async function executeExpandStep(ctx: CommandExecutionContext): Promise<string |
   return `expanded step ${stepId} into sub plan ${childId}`;
 }
 
-const collapseSubplanCommand: CommandTableEntry = {
+const collapseSubplanCommand: MethodEntry = {
   paths: ["collapse_subplan"],
   match: () => ["collapse_subplan"],
-  knowledge: (): CommandKnowledgeEntries => ({
+  knowledge: (): MethodKnowledgeEntries => ({
     [PLAN_WINDOW_COLLAPSE_SUBPLAN_BASIC]: COLLAPSE_SUBPLAN_KNOWLEDGE,
   }),
   exec: (ctx) => executeCollapseSubplan(ctx),
 };
 
-async function executeCollapseSubplan(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeCollapseSubplan(ctx: MethodExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
   if (typeof w === "string") return w;
   if (!ctx.thread) return "[plan_window.collapse_subplan] 缺少 thread context。";
@@ -331,14 +331,14 @@ async function executeCollapseSubplan(ctx: CommandExecutionContext): Promise<str
   return `collapsed sub plan ${childId} from step ${stepId}`;
 }
 
-const markDoneCommand: CommandTableEntry = {
+const markDoneCommand: MethodEntry = {
   paths: ["mark_done"],
   match: () => ["mark_done"],
-  knowledge: (): CommandKnowledgeEntries => ({ [PLAN_WINDOW_MARK_DONE_BASIC]: MARK_DONE_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [PLAN_WINDOW_MARK_DONE_BASIC]: MARK_DONE_KNOWLEDGE }),
   exec: (ctx) => executeMarkDone(ctx),
 };
 
-async function executeMarkDone(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeMarkDone(ctx: MethodExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
   if (typeof w === "string") return w;
   const next: PlanWindow = { ...w, status: "done" };
@@ -346,10 +346,10 @@ async function executeMarkDone(ctx: CommandExecutionContext): Promise<string | u
   return undefined;
 }
 
-const closeCommand: CommandTableEntry = {
+const closeCommand: MethodEntry = {
   paths: ["close"],
   match: () => ["close"],
-  knowledge: (): CommandKnowledgeEntries => ({ [PLAN_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [PLAN_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
   exec: () => undefined, // cascade 关闭由 onClose hook + WindowManager.close 自带级联完成
 };
 
@@ -462,7 +462,7 @@ renderXml: <plan_window>...<description?/><steps count><step id status sub_plan_
 // ─────────────────────────── register ────────────────────────────────────────
 
 registerWindowType("plan", {
-  commands: {
+  methods: {
     update_plan: updatePlanCommand,
     add_step: addStepCommand,
     update_step: updateStepCommand,

@@ -33,7 +33,7 @@ import { makeThread } from "../../__tests__/make-thread";
 describe("U1: SearchWindow type + render + basicKnowledge", () => {
   it("registry has 'search' definition with non-empty commands and basicKnowledge", () => {
     const def = getWindowTypeDefinition("search");
-    expect(Object.keys(def.commands).length).toBeGreaterThan(0);
+    expect(Object.keys(def.methods).length).toBeGreaterThan(0);
     expect(typeof def.basicKnowledge).toBe("string");
     expect((def.basicKnowledge as string).length).toBeGreaterThan(0);
   });

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { execRootCommand } from "../windows";
+import { execRootMethod } from "../windows";
 import { WindowManager } from "../windows";
 import {
   ROOT_WINDOW_ID,
@@ -38,7 +38,7 @@ describe("Step 2 window lifecycles", () => {
       await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
 
       // 创建 talk_window 指向 bob
-      await execRootCommand("talk", { thread, args: { target: "bob", title: "release plan" } });
+      await execRootMethod("talk", { thread, args: { target: "bob", title: "release plan" } });
       const talkWindow = thread.contextWindows.find((w): w is TalkWindow => w.type === "talk" && !w.isCreatorWindow);
       expect(talkWindow).toBeDefined();
       expect(talkWindow!.target).toBe("bob");
@@ -74,7 +74,7 @@ describe("Step 2 window lifecycles", () => {
   it("program_window: root.program runs first exec; window.exec appends to history", async () => {
     const thread = makeThread({ id: "t_root" });
 
-    await execRootCommand("program", {
+    await execRootMethod("program", {
       thread,
       args: { language: "shell", code: "echo first" },
     });
@@ -220,7 +220,7 @@ describe("Step 2 window lifecycles", () => {
       await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
 
       // assistant 创建 talk_window 指向 bob
-      await execRootCommand("talk", { thread: assistantThread, args: { target: "bob", title: "ask bob" } });
+      await execRootMethod("talk", { thread: assistantThread, args: { target: "bob", title: "ask bob" } });
       const talkToBob = assistantThread.contextWindows.find(
         (w): w is TalkWindow => w.type === "talk" && w.target === "bob",
       );

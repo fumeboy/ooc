@@ -12,10 +12,10 @@
 import { Glob } from "bun";
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -55,11 +55,11 @@ open(command="glob", title="找全部 TS",
 - 结果集 ≥ 200 时建议把 pattern 改更精确（本期不提供 next_page）
 `.trim();
 
-export const globCommand: CommandTableEntry = {
+export const globCommand: MethodEntry = {
   paths: ["glob"],
   match: () => ["glob"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [GLOB_BASIC_PATH]: KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [GLOB_BASIC_PATH]: KNOWLEDGE };
     if (formStatus !== "open") return entries;
     const pattern = typeof args.pattern === "string" ? args.pattern : "";
     if (!pattern) {
@@ -74,7 +74,7 @@ export const globCommand: CommandTableEntry = {
 };
 
 export async function executeGlobCommand(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[glob] 缺少 thread context。";

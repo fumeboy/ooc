@@ -25,7 +25,7 @@
 import { deriveStoneFromThread, derivePoolFromThread, discoverStoneHierarchicalPeers, listBranchSkills, listObjectSkills, listExternalSkills, readPoolRelation, readFlowRelation, readReadable, readableFile, readWorldConfig } from "../../persistable/index.js";
 import type { ThreadContext } from "../context.js";
 import { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge.js";
-import { ROOT_BASIC_PATH, ROOT_COMMANDS, ROOT_KNOWLEDGE } from "../../executable/windows/root/index.js";
+import { ROOT_BASIC_PATH, ROOT_METHODS, ROOT_KNOWLEDGE } from "../../executable/windows/root/index.js";
 import {
   END_REFLECTION_REMINDER_KNOWLEDGE,
   END_REFLECTION_REMINDER_PATH,
@@ -35,7 +35,7 @@ import {
   REFLECTABLE_METAPROG_PATH,
 } from "../reflectable/reflectable-knowledge.js";
 import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../../executable/windows/_shared/super-constants.js";
-import type { CommandKnowledgeEntries, CommandTableEntry } from "../../executable/windows/_shared/command-types.js";
+import type { MethodKnowledgeEntries, MethodEntry } from "../../executable/windows/_shared/method-types.js";
 import { getWindowTypeDefinition } from "../../executable/windows/_shared/registry.js";
 import type { CommandExecWindow, ContextWindow, KnowledgeWindow, RelationWindow, SkillIndexWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
 import { ROOT_WINDOW_ID, SKILL_INDEX_WINDOW_ID } from "../../executable/windows/_shared/types.js";
@@ -54,12 +54,12 @@ function samePaths(left: string[] | undefined, right: string[]): boolean {
  * 计算单个 command_exec form 关联的 knowledge entries。
  *
  * form 可能挂在任意 window 类型下（root / do_window / talk_window / ...），
- * 查找 entry 需按 parentWindowId 找到父 window 的 commands map，而非只看 ROOT_COMMANDS。
+ * 查找 entry 需按 parentWindowId 找到父 window 的 commands map，而非只看 ROOT_METHODS。
  */
 export async function computeFormKnowledgeEntries(
   form: CommandExecWindow,
   thread: ThreadContext,
-): Promise<CommandKnowledgeEntries> {
+): Promise<MethodKnowledgeEntries> {
   const entry = lookupFormEntry(form, thread);
   const knowledgeEntries = entry?.knowledge
     ? { ...entry.knowledge(form.accumulatedArgs, form.status) }
@@ -73,15 +73,15 @@ export async function computeFormKnowledgeEntries(
 function lookupFormEntry(
   form: CommandExecWindow,
   thread: ThreadContext,
-): CommandTableEntry | undefined {
+): MethodEntry | undefined {
   const parentId = form.parentWindowId;
   if (!parentId || parentId === "root") {
-    return ROOT_COMMANDS[form.command];
+    return ROOT_METHODS[form.command];
   }
   const parent = (thread.contextWindows ?? []).find((w) => w.id === parentId);
   if (!parent) return undefined;
   const def = getWindowTypeDefinition(parent.type);
-  return def.commands[form.command];
+  return def.methods[form.command];
 }
 
 /**
@@ -104,9 +104,9 @@ export async function enrichFormCommandKnowledge(
 export async function collectExecutableKnowledgeEntries(
   contextWindows: ContextWindow[] | undefined,
   thread: ThreadContext,
-): Promise<{ contextWindows: ContextWindow[] | undefined; knowledgeEntries: CommandKnowledgeEntries }> {
+): Promise<{ contextWindows: ContextWindow[] | undefined; knowledgeEntries: MethodKnowledgeEntries }> {
   // 1) protocol entries —— 全局 KNOWLEDGE + root 命令清单
-  const protocolEntries: CommandKnowledgeEntries = {
+  const protocolEntries: MethodKnowledgeEntries = {
     [BASIC_KNOWLEDGE_PATH]: KNOWLEDGE,
     [ROOT_BASIC_PATH]: ROOT_KNOWLEDGE,
   };

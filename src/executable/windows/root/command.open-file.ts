@@ -7,10 +7,10 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -39,11 +39,11 @@ open_file 用于把某个文件的内容作为 file_window 引入 context（持�
 open(command="open_file", title="读 README", args={ path: "README.md", lines: [0, 200] })
 `.trim();
 
-export const openFileCommand: CommandTableEntry = {
+export const openFileCommand: MethodEntry = {
   paths: ["open_file"],
   match: () => ["open_file"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [OPEN_FILE_BASIC_PATH]: KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [OPEN_FILE_BASIC_PATH]: KNOWLEDGE };
     if (formStatus !== "open") return entries;
     const path = typeof args.path === "string" ? args.path : "";
     if (!path) {
@@ -75,7 +75,7 @@ function basename(path: string): string {
 }
 
 export async function executeOpenFileCommand(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[open_file] 缺少 thread context。";

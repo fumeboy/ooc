@@ -6,10 +6,10 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../../../executable/windows/_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../../../executable/windows/_shared/method-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -35,11 +35,11 @@ open_feishu_chat 用于创建一个 feishu_chat_window（飞书群聊 / 单聊�
 open(command="open_feishu_chat", title="工程进展群", args={ chat_id: "oc_xxxxx", chat_type: "group", tail_count: 50 })
 `.trim();
 
-export const openFeishuChatCommand: CommandTableEntry = {
+export const openFeishuChatCommand: MethodEntry = {
   paths: ["open_feishu_chat"],
   match: () => ["open_feishu_chat"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [OPEN_FEISHU_CHAT_BASIC]: KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [OPEN_FEISHU_CHAT_BASIC]: KNOWLEDGE };
     if (formStatus !== "open") return entries;
     if (typeof args.chat_id !== "string" || !args.chat_id) {
       entries[OPEN_FEISHU_CHAT_INPUT] =
@@ -51,7 +51,7 @@ export const openFeishuChatCommand: CommandTableEntry = {
 };
 
 export async function executeOpenFeishuChat(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[open_feishu_chat] 缺少 thread context。";

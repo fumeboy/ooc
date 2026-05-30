@@ -17,10 +17,10 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -71,11 +71,11 @@ function hasAnyInput(args: Record<string, unknown>): boolean {
 }
 
 /** plan command 表项：当前只命中基础 plan 路径。 */
-export const planCommand: CommandTableEntry = {
+export const planCommand: MethodEntry = {
   paths: [PlanCommandPath.Plan],
   match: () => [PlanCommandPath.Plan],
-  knowledge: (args): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  knowledge: (args): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = {
       [PLAN_BASIC_PATH]: KNOWLEDGE,
     };
     if (!hasAnyInput(args)) {
@@ -128,7 +128,7 @@ function findRootPlanWindow(windows: ContextWindow[]): PlanWindow | undefined {
  * 返回 outcome.result = plan_window.id，便于 LLM 后续操作。
  */
 export async function executePlanCommand(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<{ ok: true; result: string } | { ok: false; error: string }> {
   const thread = ctx.thread;
   if (!thread) return { ok: false, error: "[plan] 缺少 thread context。" };

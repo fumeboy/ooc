@@ -2,13 +2,13 @@
  * server 层公共类型。
  *
  * D6 硬切后：旧的 `LlmMethods` / `ServerMethod` / `ServerMethodContext` 三件套被
- * 删除；LLM 路径上的"自定义方法"统一通过 `ObjectWindowDefinition.commands`
- * （见 `./window-types.ts`）以标准 `CommandTableEntry` 形态注册到 type=`custom`
+ * 删除；LLM 路径上的"自定义方法"统一通过 `ObjectWindowDefinition.methods`
+ * （见 `./window-types.ts`）以标准 `MethodEntry` 形态注册到 type=`custom`
  * 的 ContextWindow 上。
  *
  * 仅保留：
- * - `ProgramSelf` —— program 模式 ts/js sandbox 注入的 self；`callCommand`
- *   按 windowId 查 thread.contextWindows 并执行该 window 上的 command
+ * - `ProgramSelf` —— program 模式 ts/js sandbox 注入的 self；`callMethod`
+ *   按 windowId 查 thread.contextWindows 并执行该 window 上的 method
  * - UI 路径相关：`UiServerMethod` / `UiMethods` / `UiServerMethodContext` ——
  *   `ui_methods` 仍由 server/index.ts 平行导出（plan D3 完全保留）；HTTP
  *   `flows.callMethod` / `stones.callMethod` 路径只服务这一字典
@@ -18,23 +18,23 @@ import type { ThreadContext } from "../../thinkable/context";
 import type { StoneObjectRef } from "../../persistable";
 import type { ObjectWindowDefinition } from "./window-types";
 
-/** program 中注入的 self 对象，让用户代码能调用任意 window 上任意 command 与读写 data。 */
+/** program 中注入的 self 对象，让用户代码能调用任意 window 上任意 method 与读写 data。 */
 export interface ProgramSelf {
   /** stone 目录绝对路径。 */
   dir: string;
   /**
-   * 调用任意 window 上的任意已注册 command。
+   * 调用任意 window 上的任意已注册 method。
    *
    * - windowId：thread.contextWindows 中已存在的 window id（含 custom window）
-   * - command：该 window 的 commands 表中的命令名
-   * - args：command exec ctx.args 的内容
+   * - command：该 window 的 methods 表中的方法名
+   * - args：method exec ctx.args 的内容
    *
    * 行为：在当前 thread 的 contextWindows 里 lookup window → 通过 WindowRegistry 取
-   * commands[command] → 走 entry.exec（type=custom 时由 dispatcher 注入 self）。
+   * methods[command] → 走 entry.exec（type=custom 时由 dispatcher 注入 self）。
    *
-   * 找不到 windowId / command 时抛清晰错误（包含当前可见 window/command 列表）。
+   * 找不到 windowId / command 时抛清晰错误（包含当前可见 window/method 列表）。
    */
-  callCommand: (windowId: string, command: string, args?: Record<string, unknown>) => Promise<unknown>;
+  callMethod: (windowId: string, command: string, args?: Record<string, unknown>) => Promise<unknown>;
   /** 读 data.json 中的字段；不存在返回 undefined。 */
   getData: (key: string) => Promise<unknown>;
   /** 顶层 merge 写 data.json 中的字段。 */

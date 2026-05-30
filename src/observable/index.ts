@@ -67,7 +67,7 @@ export type PauseChecker = (thread: ThreadContext) => boolean | Promise<boolean>
  * meta/object.doc.ts:executable.children.permission)。
  *
  * 与 PauseChecker 完全独立 — 旧的全局 pause 路径保持向后兼容,新 per-command
- * 权限检查走 permission decider / policies.json / CommandTableEntry 三层。
+ * 权限检查走 permission decider / policies.json / MethodEntry 三层。
  *
  * 类型定义放在 src/executable/permissions.ts; 这里只持有 setter / getter,
  * 避免 observable 反向依赖 executable (executable 依赖 observable, 不能反过来)。
@@ -161,7 +161,7 @@ export function isPausing(thread: ThreadContext): Promise<boolean> | boolean {
 
 /**
  * 注入 permission decider (Q0b)。传 null 即清除注入,回到默认链
- * (policies.json + CommandTableEntry + allow)。
+ * (policies.json + MethodEntry + allow)。
  *
  * 与 setPauseChecker 完全独立 — pause 是旧的"全局开关"路径,permission 是新的
  * "per-command 三档"路径,两者互不干扰。

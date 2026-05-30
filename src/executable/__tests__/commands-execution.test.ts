@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { ROOT_COMMANDS, execRootCommand } from "../windows";
+import { ROOT_METHODS, execRootMethod } from "../windows";
 import { makeThread } from "../../__tests__/make-thread";
 
 /**
@@ -8,8 +8,8 @@ import { makeThread } from "../../__tests__/make-thread";
  * 注：do/todo 都改为产生 window 类型的产物；详见各自专门测试。
  */
 describe("command execution side effects", () => {
-  it("all commands expose knowledge via CommandTableEntry instead of exported KNOWLEDGE", async () => {
-    for (const [command, entry] of Object.entries(ROOT_COMMANDS)) {
+  it("all commands expose knowledge via MethodEntry instead of exported KNOWLEDGE", async () => {
+    for (const [command, entry] of Object.entries(ROOT_METHODS)) {
       const knowledge = entry.knowledge?.({}, "open");
       expect(knowledge?.[`internal/executable/${command}/basic`]).toBeString();
       expect(knowledge?.[`internal/executable/${command}/basic`].length).toBeGreaterThan(0);
@@ -30,7 +30,7 @@ describe("command execution side effects", () => {
   it("plan should create a root plan_window in contextWindows", async () => {
     const thread = makeThread({ id: "thread-plan" });
     // 2026-05-26: plan 升格为 plan_window；不再写 thread.plan 字段
-    await execRootCommand("plan", {
+    await execRootMethod("plan", {
       thread,
       args: { plan: "完成 thinkloop 真实测试\n\n先打通 tool call 与 command execute" },
     });
@@ -43,7 +43,7 @@ describe("command execution side effects", () => {
 
   it("todo should produce a todo_window in contextWindows", async () => {
     const thread = makeThread({ id: "thread-todo" });
-    await execRootCommand("todo", {
+    await execRootMethod("todo", {
       thread,
       args: {
         content: "补充 thinkloop 集成测试",
@@ -60,7 +60,7 @@ describe("command execution side effects", () => {
 
   it("end should mark thread as done and persist remaining fields", async () => {
     const thread = makeThread({ id: "thread-end" });
-    await execRootCommand("end", {
+    await execRootMethod("end", {
       thread,
       args: { reason: "done", summary: "真实测试可以继续往上叠" },
     });
@@ -95,7 +95,7 @@ describe("command execution side effects", () => {
     expect(creatorBefore?.type).toBe("do");
     expect((creatorBefore as { status: string }).status).toBe("running");
 
-    await execRootCommand("end", {
+    await execRootMethod("end", {
       thread: child,
       args: { reason: "done", result: "已完成：见 memo/x.md" },
     });
@@ -115,7 +115,7 @@ describe("command execution side effects", () => {
   it("end with result but no creator window warns and does not throw", async () => {
     const thread = makeThread({ id: "thread-end-noreply", skipCreatorWindow: true });
     // 没有 creator window；end 应 console.warn + 写 inject event，不抛错
-    await execRootCommand("end", {
+    await execRootMethod("end", {
       thread,
       args: { result: "孤立结果，应当被记一笔" },
     });
@@ -132,7 +132,7 @@ describe("command execution side effects", () => {
 
   it("talk(target=user, title) creates a talk_window in contextWindows", async () => {
     const thread = makeThread({ id: "thread-talk" });
-    const result = await execRootCommand("talk", {
+    const result = await execRootMethod("talk", {
       thread,
       args: { target: "user", title: "发布计划" },
     });
@@ -145,7 +145,7 @@ describe("command execution side effects", () => {
 
   it("talk accepts arbitrary objectId target (cross-object)", async () => {
     const thread = makeThread({ id: "thread-talk-other" });
-    const result = await execRootCommand("talk", {
+    const result = await execRootMethod("talk", {
       thread,
       args: { target: "researcher", title: "ask" },
     });
@@ -157,7 +157,7 @@ describe("command execution side effects", () => {
 
   it("talk rejects empty target", async () => {
     const thread = makeThread({ id: "thread-talk-empty" });
-    const result = await execRootCommand("talk", {
+    const result = await execRootMethod("talk", {
       thread,
       args: { target: "", title: "x" },
     });
@@ -168,7 +168,7 @@ describe("command execution side effects", () => {
 
   it("talk rejects empty title (with close+reopen hint)", async () => {
     const thread = makeThread({ id: "thread-talk-no-title" });
-    const result = await execRootCommand("talk", {
+    const result = await execRootMethod("talk", {
       thread,
       args: { target: "user", title: "" },
     });
@@ -179,7 +179,7 @@ describe("command execution side effects", () => {
 
   it("todo rejects empty content (with close+reopen hint)", async () => {
     const thread = makeThread({ id: "thread-todo-empty" });
-    const result = await execRootCommand("todo", {
+    const result = await execRootMethod("todo", {
       thread,
       args: { content: "" },
     });

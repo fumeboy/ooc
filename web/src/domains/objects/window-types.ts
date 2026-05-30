@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import { requestJson } from "../../transport/http";
 
-export type WindowCommandEntry = {
+export type WindowMethodEntry = {
   name: string;
   /** *_BASIC 路径下的 markdown 全文(可能 1KB+);hover 时按需展示。 */
   description?: string;
@@ -17,7 +17,8 @@ export type WindowCommandEntry = {
 
 export type WindowTypeCatalogEntry = {
   type: string;
-  commands: WindowCommandEntry[];
+  /** wire 字段保持 `commands`(后端 /api/windows/_shared/types 响应契约,L4.0 冻结)。 */
+  commands: WindowMethodEntry[];
   basicKnowledgeSummary?: string;
 };
 
@@ -61,7 +62,7 @@ export function useWindowTypes(): Record<string, WindowTypeCatalogEntry> | null 
   return cache;
 }
 
-/** 同步取某个 type 的 commands;catalog 未到位时返回 undefined。 */
-export function getWindowTypeCommands(type: string): WindowCommandEntry[] | undefined {
+/** 同步取某个 type 上注册的 window method 列表;catalog 未到位时返回 undefined。 */
+export function getWindowTypeCommands(type: string): WindowMethodEntry[] | undefined {
   return cache?.[type]?.commands;
 }

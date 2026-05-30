@@ -8,10 +8,10 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import { ROOT_WINDOW_ID, generateWindowId, type TodoWindow } from "../_shared/types.js";
 
 const TODO_BASIC_PATH = "internal/executable/todo/basic";
@@ -37,7 +37,7 @@ export enum TodoCommandPath {
   OnCommandPath = "todo.on_command_path",
 }
 
-export const todoCommand: CommandTableEntry = {
+export const todoCommand: MethodEntry = {
   paths: [TodoCommandPath.Todo, TodoCommandPath.OnCommandPath],
   match: (args) => {
     const hit: string[] = [TodoCommandPath.Todo];
@@ -50,8 +50,8 @@ export const todoCommand: CommandTableEntry = {
    * knowledge 仅在缺 content 时给出 input 提示；
    * content 已具备时不追加 entry → open 直接提交 form。
    */
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [TODO_BASIC_PATH]: KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [TODO_BASIC_PATH]: KNOWLEDGE };
     if (formStatus !== "open") return entries;
     if (typeof args.content !== "string" || args.content.trim().length === 0) {
       entries[TODO_INPUT_PATH] =
@@ -78,7 +78,7 @@ function deriveTitle(content: string, maxLen = 60): string {
  * 上层会再调用 toData() 重写父字段（保持一致由调用层串起来）。
  */
 export async function executeTodoCommand(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[todo] 缺少 thread context。";

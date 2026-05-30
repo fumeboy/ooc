@@ -1,8 +1,8 @@
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 
 /**
  * command_exec.refine 命令 — 把 ctx.args 整体 merge 到 form.accumulatedArgs。
@@ -17,7 +17,7 @@ import type {
  * 这条命令本身不引入新 path/knowledge，所以走 exec tool 的 auto-execute 路径，
  * 不会再创建嵌套 form。
  */
-async function executeRefine(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeRefine(ctx: MethodExecutionContext): Promise<string | undefined> {
   const form = ctx.parentWindow;
   if (!form || form.type !== "command_exec") {
     return "[command_exec.refine] 必须挂在 command_exec form 上调用。";
@@ -47,10 +47,10 @@ async function executeRefine(ctx: CommandExecutionContext): Promise<string | und
   return `Form ${form.id} 已累积参数${revived}。当前路径：${paths}。`;
 }
 
-export const refineCommand: CommandTableEntry = {
+export const refineCommand: MethodEntry = {
   paths: ["refine"],
   match: () => ["refine"],
-  knowledge: (_args, _formStatus): CommandKnowledgeEntries => ({
+  knowledge: (_args, _formStatus): MethodKnowledgeEntries => ({
     "internal/windows/command_exec/refine/basic": [
       "command_exec.refine 用于向 form 累积参数；ctx.args 整体作为要累积的键值对。",
       "调用：exec(window_id=<form_id>, command=\"refine\", args={ <要累积的键值对> })",

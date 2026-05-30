@@ -1,18 +1,18 @@
 import { describe, it, expect } from "bun:test";
-import { ROOT_COMMANDS, getOpenableCommands, deriveRootCommandPaths } from "../windows";
+import { ROOT_METHODS, getOpenableCommands, deriveRootMethodPaths } from "../windows";
 import { programCommand } from "../windows/root/command.program";
 
 describe("executable commands", () => {
   it("should have command table with all commands", () => {
-    expect(Object.keys(ROOT_COMMANDS)).toContain("talk");
-    expect(Object.keys(ROOT_COMMANDS)).toContain("do");
-    expect(Object.keys(ROOT_COMMANDS)).toContain("program");
-    expect(Object.keys(ROOT_COMMANDS)).toContain("plan");
-    expect(Object.keys(ROOT_COMMANDS)).toContain("todo");
-    expect(Object.keys(ROOT_COMMANDS)).toContain("end");
-    expect(Object.keys(ROOT_COMMANDS)).not.toContain("defer");
-    expect(Object.keys(ROOT_COMMANDS)).not.toContain("return");
-    expect(Object.keys(ROOT_COMMANDS)).not.toContain("compact");
+    expect(Object.keys(ROOT_METHODS)).toContain("talk");
+    expect(Object.keys(ROOT_METHODS)).toContain("do");
+    expect(Object.keys(ROOT_METHODS)).toContain("program");
+    expect(Object.keys(ROOT_METHODS)).toContain("plan");
+    expect(Object.keys(ROOT_METHODS)).toContain("todo");
+    expect(Object.keys(ROOT_METHODS)).toContain("end");
+    expect(Object.keys(ROOT_METHODS)).not.toContain("defer");
+    expect(Object.keys(ROOT_METHODS)).not.toContain("return");
+    expect(Object.keys(ROOT_METHODS)).not.toContain("compact");
   });
 
   it("should return sorted openable commands", () => {
@@ -26,7 +26,7 @@ describe("executable commands", () => {
   });
 
   it("should define openable commands in index instead of each command file", () => {
-    for (const entry of Object.values(ROOT_COMMANDS)) {
+    for (const entry of Object.values(ROOT_METHODS)) {
       expect("openable" in entry).toBe(false);
     }
     expect(getOpenableCommands()).toEqual([
@@ -48,7 +48,7 @@ describe("executable commands", () => {
   });
 
   it("should expose non-empty knowledge entries for every command", () => {
-    for (const [command, entry] of Object.entries(ROOT_COMMANDS)) {
+    for (const [command, entry] of Object.entries(ROOT_METHODS)) {
       const knowledge = entry.knowledge?.({}, "open");
       const basic = knowledge?.[`internal/executable/${command}/basic`];
       expect(typeof basic).toBe("string");
@@ -57,14 +57,14 @@ describe("executable commands", () => {
   });
 
   it("root.talk paths in new model: only [talk] (say/wait/close moved to talk_window)", () => {
-    expect(deriveRootCommandPaths("talk", { wait: true })).toEqual(["talk"]);
-    expect(deriveRootCommandPaths("talk", { target: "user", title: "x" })).toEqual(["talk"]);
+    expect(deriveRootMethodPaths("talk", { wait: true })).toEqual(["talk"]);
+    expect(deriveRootMethodPaths("talk", { target: "user", title: "x" })).toEqual(["talk"]);
   });
 
   it("removed legacy talk paths (talk_window has its own command paths)", () => {
     // 旧 talk.fork / talk.continue / talk.thread_creator / talk.relation_update / talk.question_form
     // 在 Step 2 后已下线；talk_window 上的 say/say.wait/wait/close 走 windows registry
-    const paths = deriveRootCommandPaths("talk", {
+    const paths = deriveRootMethodPaths("talk", {
       context: "continue",
       target: "creator",
       type: "relation_update",
@@ -73,32 +73,32 @@ describe("executable commands", () => {
   });
 
   it("root.do paths in new model: only do and do.wait (continue moved to do_window)", () => {
-    expect(deriveRootCommandPaths("do", { msg: "x" })).toEqual(["do"]);
-    expect(deriveRootCommandPaths("do", { msg: "x", wait: true })).toEqual([
+    expect(deriveRootMethodPaths("do", { msg: "x" })).toEqual(["do"]);
+    expect(deriveRootMethodPaths("do", { msg: "x", wait: true })).toEqual([
       "do",
       "do.wait",
     ]);
   });
 
   it("should keep program paths consistent with command docs", () => {
-    expect(deriveRootCommandPaths("program", { language: "ts" })).toEqual([
+    expect(deriveRootMethodPaths("program", { language: "ts" })).toEqual([
       "program",
       "program.typescript"
     ]);
-    expect(deriveRootCommandPaths("program", { language: "js" })).toEqual([
+    expect(deriveRootMethodPaths("program", { language: "js" })).toEqual([
       "program",
       "program.javascript"
     ]);
   });
 
   it("should return empty array for unknown command", () => {
-    const paths = deriveRootCommandPaths("unknown", {});
+    const paths = deriveRootMethodPaths("unknown", {});
     expect(paths).toEqual([]);
   });
 
   it("should derive todo reminder paths from args", () => {
-    expect(deriveRootCommandPaths("todo", { content: "补测试" })).toEqual(["todo"]);
-    expect(deriveRootCommandPaths("todo", { content: "补测试", on_command_path: ["program"] })).toEqual([
+    expect(deriveRootMethodPaths("todo", { content: "补测试" })).toEqual(["todo"]);
+    expect(deriveRootMethodPaths("todo", { content: "补测试", on_command_path: ["program"] })).toEqual([
       "todo",
       "todo.on_command_path"
     ]);

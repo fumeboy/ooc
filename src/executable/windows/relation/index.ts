@@ -12,10 +12,10 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../_shared/method-types.js";
 import { registerWindowType, type RenderContext } from "../_shared/registry.js";
 import { writeFlowRelation } from "../../../persistable/index.js";
 import { deliverTalkMessage } from "../talk/delivery.js";
@@ -79,7 +79,7 @@ scope="long_term" 的路径详解:
 3. 因此 long_term edit 是**异步**的:本 command 返回成功只代表消息已派送,文件落盘要等 super flow 跑完那一轮。
 `.trim();
 
-const editCommand: CommandTableEntry = {
+const editCommand: MethodEntry = {
   paths: ["edit", "edit.session", "edit.long_term"],
   match: (args) => {
     const scope = args.scope;
@@ -87,8 +87,8 @@ const editCommand: CommandTableEntry = {
     if (scope === "long_term") return ["edit", "edit.long_term"];
     return ["edit"];
   },
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [RELATION_EDIT_BASIC]: EDIT_KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [RELATION_EDIT_BASIC]: EDIT_KNOWLEDGE };
     if (args.scope === "long_term") {
       entries[RELATION_EDIT_LONGTERM] = EDIT_LONGTERM_DETAIL;
     }
@@ -106,7 +106,7 @@ const editCommand: CommandTableEntry = {
 };
 
 export async function executeRelationEdit(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[relation.edit] 缺少 thread context。";
@@ -213,7 +213,7 @@ function renderRelationWindow(ctx: RenderContext): XmlNode[] {
 }
 
 registerWindowType("relation", {
-  commands: {
+  methods: {
     edit: editCommand,
   },
   renderXml: renderRelationWindow,

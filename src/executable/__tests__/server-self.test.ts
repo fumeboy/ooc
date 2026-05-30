@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 
 describe("createProgramSelf", () => {
-  test("callCommand resolves and runs custom command on the self window", async () => {
+  test("callMethod resolves and runs custom method on the self window", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-self-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
 
@@ -30,7 +30,7 @@ describe("createProgramSelf", () => {
       ref,
       `export const window = {
         title: "alice",
-        commands: {
+        methods: {
           whoAmI: {
             paths: ["whoAmI"],
             match: () => ["whoAmI"],
@@ -59,19 +59,19 @@ describe("createProgramSelf", () => {
     };
 
     const self = createProgramSelf(ref, thread);
-    const result = await self.callCommand(customId, "whoAmI", {});
+    const result = await self.callMethod(customId, "whoAmI", {});
     expect(typeof result).toBe("object");
     const outcome = result as { ok: boolean; result: string };
     expect(outcome.result).toContain(ref.objectId);
     expect(outcome.result).toContain("t1");
   });
 
-  test("callCommand throws when command not found on the self window", async () => {
+  test("callMethod throws when method not found on the self window", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-self-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
     await writeExecutableSource(
       ref,
-      `export const window = { commands: {} }; export const ui_methods = {};`,
+      `export const window = { methods: {} }; export const ui_methods = {};`,
     );
     const thread: ThreadContext = makeThread({ id: "t1" });
     const customId = customWindowIdOf("alice");
@@ -90,7 +90,7 @@ describe("createProgramSelf", () => {
       threadId: "t1",
     };
     const self = createProgramSelf(ref, thread);
-    await expect(self.callCommand(customId, "nope", {})).rejects.toThrow(/不存在/);
+    await expect(self.callMethod(customId, "nope", {})).rejects.toThrow(/不存在/);
   });
 
   test("setData/getData round trip via flow-data mergeData (session-scoped)", async () => {

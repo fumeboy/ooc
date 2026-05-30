@@ -12,7 +12,7 @@
  */
 
 import { registerWindowType, type OnCloseContext, type RenderContext } from "../_shared/registry.js";
-import type { CommandTableEntry, CommandExecutionContext } from "../_shared/command-types.js";
+import type { MethodEntry, MethodExecutionContext } from "../_shared/method-types.js";
 import type { CustomWindow } from "../_shared/types.js";
 import { loadObjectWindow } from "../../server/loader.js";
 import { createProgramSelf } from "../../server/self.js";
@@ -33,10 +33,10 @@ function resolveStoneRef(window: CustomWindow, baseDir: string) {
 }
 
 /**
- * commands 字段是一个 Proxy 风格的"按需查"字典：每次 manager 拿一条 entry 时,
+ * methods 字段是一个 Proxy 风格的"按需查"字典：每次 manager 拿一条 entry 时,
  * dispatcher lazy load ObjectWindowDefinition，把对应 entry.exec 包一层，注入 self。
  *
- * 由于 manager 当前直接 .commands[name] 取 entry，我们用一个 Proxy 让"取 entry"
+ * 由于 manager 当前直接 .methods[name] 取 entry，我们用一个 Proxy 让"取 entry"
  * 这一步触发同步路径不可行（loader 是 async）。退化方案：在 entry.exec 内部 await
  * loadObjectWindow 现取 commands —— manager.submit 已经是 async，不影响。
  *
@@ -48,14 +48,14 @@ function resolveStoneRef(window: CustomWindow, baseDir: string) {
  * 落到 manager.submit 取 entry 这条链路上重写为 dispatcher（见 manager submit /
  * lookupFormEntry 分支处理 type=custom）。
  */
-const customCommandsDispatcher: Record<string, CommandTableEntry> = new Proxy({}, {
+const customCommandsDispatcher: Record<string, MethodEntry> = new Proxy({}, {
   get(_target, prop: string) {
     // manager / synthesizer / activator 拿任何字符串 key 时返回一个 dispatcher entry；
     // 实际不存在的 command 在 exec 内部抛错。
     if (typeof prop !== "string") return undefined;
     if (prop === "then") return undefined; // 防 await 误以为是 thenable
 
-    const wrapper: CommandTableEntry = {
+    const wrapper: MethodEntry = {
       paths: [prop],
       match: () => [prop],
       knowledge: (args, formStatus) => {
@@ -63,7 +63,7 @@ const customCommandsDispatcher: Record<string, CommandTableEntry> = new Proxy({}
         // 留个钩子表示"这条 command 来自 custom window"。
         return { [`internal/windows/custom/${prop}/basic`]: `custom command "${prop}"` };
       },
-      exec: async (ctx: CommandExecutionContext) => {
+      exec: async (ctx: MethodExecutionContext) => {
         const window = ctx.parentWindow;
         if (!window) return `[custom.${prop}] 缺少 parentWindow。`;
         const cw = customWindowOf(window);
@@ -80,13 +80,13 @@ const customCommandsDispatcher: Record<string, CommandTableEntry> = new Proxy({}
           return `[custom.${prop}] 加载失败：${(e as Error).message}`;
         }
         if (!def) return `[custom.${prop}] objectId=${cw.objectId} 没有 export const window`;
-        const entry = def.commands?.[prop];
+        const entry = def.methods?.[prop];
         if (!entry) {
-          const avail = Object.keys(def.commands ?? {}).join(", ") || "(无)";
+          const avail = Object.keys(def.methods ?? {}).join(", ") || "(无)";
           return `[custom.${prop}] 不存在；当前可用：${avail}`;
         }
         const self: ProgramSelf = createProgramSelf(stoneRef, thread);
-        return await entry.exec({ ...ctx, self } as CommandExecutionContext);
+        return await entry.exec({ ...ctx, self } as MethodExecutionContext);
       },
     };
     return wrapper;
@@ -153,7 +153,7 @@ function onCloseCustomWindow(ctx: OnCloseContext): boolean | void {
 }
 
 registerWindowType("custom", {
-  commands: customCommandsDispatcher,
+  methods: customCommandsDispatcher,
   renderXml: renderCustomWindow,
   onClose: onCloseCustomWindow,
 });

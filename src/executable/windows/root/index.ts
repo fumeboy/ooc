@@ -5,7 +5,7 @@
  * - 旧 src/executable/commands/index.ts 拆分到这里 + windows/_shared/registry.ts；
  *   commands/ 目录已迁到 windows/root/，体现 "root 是一种 window type" 的从属关系
  * - 通过 registerWindowType("root", { commands }) 注入；与其它 window type 形态一致
- * - 暴露的工具函数（getOpenableCommands / deriveRootCommandPaths）只服务于 root 上的命令
+ * - 暴露的工具函数（getOpenableCommands / deriveRootMethodPaths）只服务于 root 上的命令
  * - 暴露 ROOT_BASIC_PATH / ROOT_KNOWLEDGE：列出 root 注册的命令清单 + 用法摘要，
  *   由 src/executable/index.ts:collectExecutableKnowledgeEntries 合成为
  *   protocol 来源的 knowledge_window，每轮注入 context（参照 plan.ts 的 KNOWLEDGE 形态）
@@ -28,7 +28,7 @@ import { talkCommand } from "./command.talk.js";
 import { todoCommand } from "./command.todo.js";
 import { writeFileCommand } from "./command.write-file.js";
 import { metaprogCommand } from "./command.metaprog.js";
-import type { CommandTableEntry } from "../_shared/command-types.js";
+import type { MethodEntry } from "../_shared/method-types.js";
 
 /**
  * Root window 上注册的命令清单（核心数据）。
@@ -36,7 +36,7 @@ import type { CommandTableEntry } from "../_shared/command-types.js";
  * 当前所有 command 都允许通过 `open(parent_window_id?, command="X", ...)` 打开。
  * window-level 命令（如 do_window 上的 continue）由各自 windows/X.ts 注册到对应 type 上。
  */
-export const ROOT_COMMANDS: Record<string, CommandTableEntry> = {
+export const ROOT_METHODS: Record<string, MethodEntry> = {
   talk: talkCommand,
   do: doCommand,
   program: programCommand,
@@ -91,7 +91,7 @@ root window 是每个 thread 隐含的根窗口。在 root 上可用的 command 
 
 /** 返回所有 root 上可 open 的命令名称列表（已排序）。 */
 export function getOpenableCommands(): string[] {
-  return Object.keys(ROOT_COMMANDS).sort();
+  return Object.keys(ROOT_METHODS).sort();
 }
 
 /**
@@ -105,12 +105,12 @@ export function getOpenableCommands(): string[] {
  * - { ok: true, result } → result
  * - { ok: false, error } → error（与旧 string-failure 约定一致）
  */
-export async function execRootCommand(
+export async function execRootMethod(
   name: string,
-  ctx: import("../_shared/command-types.js").CommandExecutionContext,
+  ctx: import("../_shared/method-types.js").MethodExecutionContext,
 ): Promise<string | undefined> {
-  const entry = ROOT_COMMANDS[name];
-  if (!entry) throw new Error(`execRootCommand: unknown root command "${name}"`);
+  const entry = ROOT_METHODS[name];
+  if (!entry) throw new Error(`execRootMethod: unknown root command "${name}"`);
   const raw = await entry.exec(ctx);
   if (raw && typeof raw === "object" && "ok" in raw) {
     return raw.ok ? raw.result : raw.error;
@@ -125,11 +125,11 @@ export async function execRootCommand(
  *
  * @returns 点分路径数组；command 未定义时返回 []
  */
-export function deriveRootCommandPaths(
+export function deriveRootMethodPaths(
   command: string,
   args: Record<string, unknown>,
 ): string[] {
-  const entry = ROOT_COMMANDS[command];
+  const entry = ROOT_METHODS[command];
   if (!entry) return [];
   try {
     return entry.match(args);
@@ -150,4 +150,4 @@ function renderRoot(): import("../../../thinkable/context/xml.js").XmlNode[] {
 
 // 向 WindowRegistry 注入 root window type 的契约。
 // side-effect 注册：windows/index.ts 通过 import "./root/index.js" 触发本模块加载。
-registerWindowType("root", { commands: ROOT_COMMANDS, renderXml: renderRoot });
+registerWindowType("root", { methods: ROOT_METHODS, renderXml: renderRoot });

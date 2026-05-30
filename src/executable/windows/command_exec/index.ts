@@ -63,7 +63,7 @@ function renderCommandExec(ctx: RenderContext): XmlNode[] {
 }
 
 registerWindowType("command_exec", {
-  commands: {
+  methods: {
     refine: refineCommand,
     submit: submitCommand,
   },

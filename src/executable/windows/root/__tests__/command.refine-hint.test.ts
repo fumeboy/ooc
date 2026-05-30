@@ -8,9 +8,9 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { ROOT_COMMANDS } from "@src/executable/windows/root/index";
+import { ROOT_METHODS } from "@src/executable/windows/root/index";
 import { KNOWLEDGE as BASIC_KNOWLEDGE } from "@src/thinkable/knowledge/basic-knowledge";
-import type { CommandTableEntry } from "@src/executable/windows/_shared/command-types";
+import type { MethodEntry } from "@src/executable/windows/_shared/method-types";
 
 /**
  * 把 entries object 中所有 value 拼成单一字符串方便断言。
@@ -21,7 +21,7 @@ function flatten(entries: Record<string, string>): string {
 
 interface CmdCase {
   name: string;
-  cmd: CommandTableEntry;
+  cmd: MethodEntry;
   emptyArgs: Record<string, unknown>;
 }
 
@@ -41,8 +41,8 @@ const TARGETS = [
 
 function buildCases(): CmdCase[] {
   return TARGETS.map((name) => {
-    const cmd = ROOT_COMMANDS[name];
-    if (!cmd) throw new Error(`ROOT_COMMANDS missing: ${name}`);
+    const cmd = ROOT_METHODS[name];
+    if (!cmd) throw new Error(`ROOT_METHODS missing: ${name}`);
     return { name, cmd, emptyArgs: {} };
   });
 }

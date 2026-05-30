@@ -12,7 +12,7 @@
  * 决策链 (优先级从高到低):
  * 1. PermissionDecider (escape hatch; 由测试 fixture 或控制面通过 setPermissionDecider 注入)
  * 2. stones/<self>/objects/<id>/config/policies.json -> commands[<command>]
- * 3. CommandTableEntry.permission (各 command 作者声明)
+ * 3. MethodEntry.permission (各 command 作者声明)
  * 4. 缺省 → "allow"
  *
  * 不变量:
@@ -59,7 +59,7 @@ export type PendingToolCall = {
   windowId?: string;
 };
 
-/** PermissionDecider — escape hatch; 优先级高于 policies.json 与 CommandTableEntry。 */
+/** PermissionDecider — escape hatch; 优先级高于 policies.json 与 MethodEntry。 */
 export type PermissionDecider = (
   thread: ThreadContext,
   call: PendingToolCall,
@@ -117,12 +117,12 @@ export function loadPoliciesJson(thread: ThreadContext): Record<string, Permissi
 }
 
 /**
- * 在 WindowRegistry 中查找声明在 CommandTableEntry.permission 上的级别。
+ * 在 WindowRegistry 中查找声明在 MethodEntry.permission 上的级别。
  *
  * 查找路径 (优先匹配可能的具体 window type, 失败则尝试 root):
  * - 如果 call 指定了 windowId 且能在 thread.contextWindows 中找到该 window,
- *   优先查它的 type definition.commands[command].permission
- * - 否则查 root 的 commands[command].permission
+ *   优先查它的 type definition.methods[command].permission
+ * - 否则查 root 的 methods[command].permission
  * - 找不到 entry / 字段缺失 → undefined (调用方 fallback 到 allow)
  */
 function lookupDeclaredPermission(
@@ -135,7 +135,7 @@ function lookupDeclaredPermission(
   const tryWindow = (windowType: string): PermissionLevel | undefined => {
     try {
       const def = getWindowTypeDefinition(windowType as never);
-      const entry = def.commands[command];
+      const entry = def.methods[command];
       const fn = entry?.permission;
       if (!fn) return undefined;
       try {
@@ -168,7 +168,7 @@ function lookupDeclaredPermission(
  * 决策链 (优先级从高到低):
  * 1. PermissionDecider (若已通过 setPermissionDecider 注入)
  * 2. policies.json 中的 commands[<command>]
- * 3. CommandTableEntry.permission
+ * 3. MethodEntry.permission
  * 4. 默认 "allow"
  */
 export async function decidePermission(
@@ -198,10 +198,10 @@ export async function decidePermission(
     }
   }
 
-  // 3. CommandTableEntry 声明
+  // 3. MethodEntry 声明
   const declared = lookupDeclaredPermission(thread, call);
   if (declared) {
-    return levelToDecision(declared, "CommandTableEntry.permission");
+    return levelToDecision(declared, "MethodEntry.permission");
   }
 
   // 4. 默认放行

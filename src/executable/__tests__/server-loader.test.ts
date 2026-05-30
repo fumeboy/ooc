@@ -23,7 +23,7 @@ describe("loadObjectWindow", () => {
     expect(win).toBeUndefined();
   });
 
-  test("loads window.commands from executable/index.ts", async () => {
+  test("loads window.methods from executable/index.ts", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-srv-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "x" });
 
@@ -31,7 +31,7 @@ describe("loadObjectWindow", () => {
       ref,
       `export const window = {
         title: "x",
-        commands: {
+        methods: {
           echo: {
             paths: ["echo"],
             match: () => ["echo"],
@@ -42,8 +42,8 @@ describe("loadObjectWindow", () => {
     );
 
     const win = await loadObjectWindow(ref);
-    expect(Object.keys(win?.commands ?? {})).toEqual(["echo"]);
-    const result = await win!.commands!.echo!.exec({ args: { text: "hi" } } as never);
+    expect(Object.keys(win?.methods ?? {})).toEqual(["echo"]);
+    const result = await win!.methods!.echo!.exec({ args: { text: "hi" } } as never);
     expect((result as { result: string }).result).toBe("hi");
   });
 
@@ -53,19 +53,19 @@ describe("loadObjectWindow", () => {
 
     await writeExecutableSource(
       ref,
-      `export const window = { commands: { v1: { paths: ["v1"], match: () => ["v1"], exec: async () => ({ ok: true, result: "1" }) } } };`,
+      `export const window = { methods: { v1: { paths: ["v1"], match: () => ["v1"], exec: async () => ({ ok: true, result: "1" }) } } };`,
     );
     let win = await loadObjectWindow(ref);
-    expect(Object.keys(win?.commands ?? {})).toEqual(["v1"]);
+    expect(Object.keys(win?.methods ?? {})).toEqual(["v1"]);
 
     await new Promise((r) => setTimeout(r, 5));
     await writeExecutableSource(
       ref,
-      `export const window = { commands: { v2: { paths: ["v2"], match: () => ["v2"], exec: async () => ({ ok: true, result: "2" }) } } };`,
+      `export const window = { methods: { v2: { paths: ["v2"], match: () => ["v2"], exec: async () => ({ ok: true, result: "2" }) } } };`,
     );
 
     win = await loadObjectWindow(ref);
-    expect(Object.keys(win?.commands ?? {})).toEqual(["v2"]);
+    expect(Object.keys(win?.methods ?? {})).toEqual(["v2"]);
   });
 
   test("throws when llm_methods is present (D6 hard cutover)", async () => {
@@ -74,6 +74,17 @@ describe("loadObjectWindow", () => {
     await writeExecutableSource(ref, `export const llm_methods = { foo: { fn: async () => 1 } };`);
 
     await expect(loadObjectWindow(ref)).rejects.toThrow(/llm_methods/);
+  });
+
+  test("throws when legacy window.commands is present (OOC-4 L4.0 hard cutover)", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-srv-"));
+    const ref = await createStoneObject({ baseDir: tempRoot, objectId: "x" });
+    await writeExecutableSource(
+      ref,
+      `export const window = { commands: { echo: { paths: ["echo"], match: () => ["echo"], exec: async () => ({ ok: true }) } } };`,
+    );
+
+    await expect(loadObjectWindow(ref)).rejects.toThrow(/methods/);
   });
 
   test("loads ui_methods from executable/index.ts", async () => {

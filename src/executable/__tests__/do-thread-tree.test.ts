@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { execRootCommand } from "../windows";
+import { execRootMethod } from "../windows";
 import { WindowManager } from "../windows";
 import { creatorWindowIdOf, type DoWindow } from "../windows/_shared/types";
 import { makeThread } from "../../__tests__/make-thread";
@@ -16,7 +16,7 @@ import { makeThread } from "../../__tests__/make-thread";
 describe("do command (ContextWindow model)", () => {
   it("fork: 创建 child thread、父侧 do_window、child 的 creator do_window，并写消息", async () => {
     const parent = makeThread({ id: "t_parent" });
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: { msg: "处理日志中的错误", wait: true },
     });
@@ -54,7 +54,7 @@ describe("do command (ContextWindow model)", () => {
 
   it("do_window.continue 通过 WindowManager.openCommandExec 调用，追加 child inbox + 父 outbox", async () => {
     const parent = makeThread({ id: "t_parent" });
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: { msg: "首条消息" },
     });
@@ -84,7 +84,7 @@ describe("do command (ContextWindow model)", () => {
 
   it("close 父侧 do_window 归档子线程（B=ii archive）", async () => {
     const parent = makeThread({ id: "t_parent" });
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: { msg: "test" },
     });

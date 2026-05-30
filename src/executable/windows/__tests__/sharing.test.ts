@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { execRootCommand } from "../../windows";
+import { execRootMethod } from "../../windows";
 import { dispatchToolCall } from "../../tools";
 import { WindowManager } from "../../windows";
 import { makeThread } from "../../../__tests__/make-thread";
@@ -45,7 +45,7 @@ describe("root.do.share_windows", () => {
     const parent = makeThread({ id: "parent" });
     makeFileWindowFixture(parent, "w_file_1", "/tmp/a.txt");
 
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: {
         msg: "看 /tmp/a.txt",
@@ -74,7 +74,7 @@ describe("root.do.share_windows", () => {
     const parent = makeThread({ id: "parent" });
     makeFileWindowFixture(parent, "w_file_2", "/tmp/b.txt");
 
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: {
         msg: "改 /tmp/b.txt",
@@ -99,7 +99,7 @@ describe("WindowManager sharing 守门", () => {
   it("拒绝在 ref 状态 window 上 exec 命令（除 close）", async () => {
     const parent = makeThread({ id: "parent" });
     makeFileWindowFixture(parent, "w_file_3", "/tmp/c.txt");
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: { msg: "看", share_windows: [{ window_id: "w_file_3", mode: "ref" }] },
     });
@@ -119,7 +119,7 @@ describe("WindowManager sharing 守门", () => {
   it("拒绝在 lent_out 状态 window 上 exec 任何命令", async () => {
     const parent = makeThread({ id: "parent" });
     makeFileWindowFixture(parent, "w_file_4", "/tmp/d.txt");
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: { msg: "拿走", share_windows: [{ window_id: "w_file_4", mode: "move" }] },
     });
@@ -140,7 +140,7 @@ describe("do_window.move 归还路径", () => {
   it("子在 creator do_window 上 mode=move → 触发归还，父恢复 owner", async () => {
     const parent = makeThread({ id: "parent" });
     makeFileWindowFixture(parent, "w_file_5", "/tmp/e.txt");
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: { msg: "处理", share_windows: [{ window_id: "w_file_5", mode: "move" }] },
     });
@@ -185,7 +185,7 @@ describe("archiveDoWindowChild 自动归还", () => {
   it("close 父 do_window 时自动归还所有 borrowed owners", async () => {
     const parent = makeThread({ id: "parent" });
     makeFileWindowFixture(parent, "w_file_6", "/tmp/f.txt");
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: { msg: "处理", share_windows: [{ window_id: "w_file_6", mode: "move" }] },
     });

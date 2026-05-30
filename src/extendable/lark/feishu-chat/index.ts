@@ -17,10 +17,10 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
-} from "../../../executable/windows/_shared/command-types.js";
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodEntry,
+} from "../../../executable/windows/_shared/method-types.js";
 import { registerWindowType, type RenderContext } from "../../../executable/windows/_shared/registry.js";
 import type { FeishuChatWindow, FeishuChatMessage } from "./types.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
@@ -141,25 +141,25 @@ feishu_chat.close 释放 window；不影响飞书一侧的消息或会话。
 
 // ─────────────────────────── command 实现 ────────────────────────────
 
-const refreshCommand: CommandTableEntry = {
+const refreshCommand: MethodEntry = {
   paths: ["refresh"],
   match: () => ["refresh"],
-  knowledge: (): CommandKnowledgeEntries => ({ [FEISHU_CHAT_REFRESH_BASIC]: REFRESH_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [FEISHU_CHAT_REFRESH_BASIC]: REFRESH_KNOWLEDGE }),
   exec: (ctx) => executeRefresh(ctx),
 };
 
-const searchCommand: CommandTableEntry = {
+const searchCommand: MethodEntry = {
   paths: ["search"],
   match: () => ["search"],
-  knowledge: (): CommandKnowledgeEntries => ({ [FEISHU_CHAT_SEARCH_BASIC]: SEARCH_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [FEISHU_CHAT_SEARCH_BASIC]: SEARCH_KNOWLEDGE }),
   exec: (ctx) => executeSearch(ctx),
 };
 
-const sendCommand: CommandTableEntry = {
+const sendCommand: MethodEntry = {
   paths: ["send"],
   match: (args) => (args.confirm === true ? ["send", "send.confirmed"] : ["send"]),
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [FEISHU_CHAT_SEND_BASIC]: SEND_KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [FEISHU_CHAT_SEND_BASIC]: SEND_KNOWLEDGE };
     if (formStatus === "open" && args.confirm !== true) {
       entries[FEISHU_CHAT_SEND_DRY_RUN] = SEND_DRY_RUN_KNOWLEDGE;
     }
@@ -168,11 +168,11 @@ const sendCommand: CommandTableEntry = {
   exec: (ctx) => executeSend(ctx),
 };
 
-const replyCommand: CommandTableEntry = {
+const replyCommand: MethodEntry = {
   paths: ["reply"],
   match: (args) => (args.confirm === true ? ["reply", "reply.confirmed"] : ["reply"]),
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [FEISHU_CHAT_REPLY_BASIC]: REPLY_KNOWLEDGE };
+  knowledge: (args, formStatus): MethodKnowledgeEntries => {
+    const entries: MethodKnowledgeEntries = { [FEISHU_CHAT_REPLY_BASIC]: REPLY_KNOWLEDGE };
     if (formStatus === "open" && args.confirm !== true) {
       entries[FEISHU_CHAT_SEND_DRY_RUN] = SEND_DRY_RUN_KNOWLEDGE;
     }
@@ -181,17 +181,17 @@ const replyCommand: CommandTableEntry = {
   exec: (ctx) => executeReply(ctx),
 };
 
-const subscribeCommand: CommandTableEntry = {
+const subscribeCommand: MethodEntry = {
   paths: ["subscribe"],
   match: () => ["subscribe"],
-  knowledge: (): CommandKnowledgeEntries => ({ [FEISHU_CHAT_SUBSCRIBE_BASIC]: SUBSCRIBE_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [FEISHU_CHAT_SUBSCRIBE_BASIC]: SUBSCRIBE_KNOWLEDGE }),
   exec: (ctx) => executeSubscribe(ctx),
 };
 
-const closeCommand: CommandTableEntry = {
+const closeCommand: MethodEntry = {
   paths: ["close"],
   match: () => ["close"],
-  knowledge: (): CommandKnowledgeEntries => ({ [FEISHU_CHAT_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
+  knowledge: (): MethodKnowledgeEntries => ({ [FEISHU_CHAT_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
   exec: () => undefined,
 };
 
@@ -295,7 +295,7 @@ function pickText(m: Record<string, unknown>): string {
   return content;
 }
 
-async function executeRefresh(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeRefresh(ctx: MethodExecutionContext): Promise<string | undefined> {
   const window = ctx.parentWindow;
   if (!window || window.type !== "feishu_chat") {
     return "[feishu_chat.refresh] 未挂载在 feishu_chat_window 上。";
@@ -347,7 +347,7 @@ function extractCursor(raw: unknown): string | undefined {
   return undefined;
 }
 
-async function executeSearch(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeSearch(ctx: MethodExecutionContext): Promise<string | undefined> {
   const window = ctx.parentWindow;
   if (!window || window.type !== "feishu_chat") {
     return "[feishu_chat.search] 未挂载在 feishu_chat_window 上。";
@@ -387,7 +387,7 @@ async function executeSearch(ctx: CommandExecutionContext): Promise<string | und
   return `搜索 "${query}" 命中 ${hits.length} 条。`;
 }
 
-async function executeSend(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeSend(ctx: MethodExecutionContext): Promise<string | undefined> {
   const window = ctx.parentWindow;
   if (!window || window.type !== "feishu_chat") {
     return "[feishu_chat.send] 未挂载在 feishu_chat_window 上。";
@@ -422,7 +422,7 @@ async function executeSend(ctx: CommandExecutionContext): Promise<string | undef
   return `已发送（as=${as}, chat=${window.chatId}）。`;
 }
 
-async function executeReply(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeReply(ctx: MethodExecutionContext): Promise<string | undefined> {
   const window = ctx.parentWindow;
   if (!window || window.type !== "feishu_chat") {
     return "[feishu_chat.reply] 未挂载在 feishu_chat_window 上。";
@@ -447,7 +447,7 @@ async function executeReply(ctx: CommandExecutionContext): Promise<string | unde
   return `已回复（as=${as}, reply_to=${replyTo}）。`;
 }
 
-function executeSubscribe(ctx: CommandExecutionContext): string | undefined {
+function executeSubscribe(ctx: MethodExecutionContext): string | undefined {
   const window = ctx.parentWindow;
   if (!window || window.type !== "feishu_chat") {
     return "[feishu_chat.subscribe] 未挂载在 feishu_chat_window 上。";
@@ -515,7 +515,7 @@ function formatMessageLine(m: FeishuChatMessage): string {
 }
 
 registerWindowType("feishu_chat", {
-  commands: {
+  methods: {
     refresh: refreshCommand,
     search: searchCommand,
     send: sendCommand,

@@ -7,7 +7,7 @@
  * - title / description：进 basicKnowledge 与 LLM 视野
  * - renderXml / basicKnowledge / onClose：与 WindowRegistry 同语义，由 custom dispatcher
  *   按 `window.objectId` 路由到这里
- * - commands：标准 CommandTableEntry 字典；commands[name].exec 会在 custom dispatcher
+ * - methods：标准 MethodEntry 字典；methods[name].exec 会在 custom dispatcher
  *   层包一层"把 self: ProgramSelf 注入到 ctx"再执行
  *
  * `ServerMethod` / `LlmMethods` / `ServerMethodContext` 三件套（旧 llm_methods 时代
@@ -15,15 +15,15 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandTableEntry,
-} from "../windows/_shared/command-types.js";
+  MethodExecutionContext,
+  MethodEntry,
+} from "../windows/_shared/method-types.js";
 import type { OnCloseContext, RenderContext } from "../windows/_shared/registry.js";
 import type { XmlNode } from "../../thinkable/context/xml.js";
 import type { ProgramSelf } from "./types.js";
 
-/** custom window 的 commands[name].exec 收到的 ctx —— 标准 CommandExecutionContext + self。 */
-export type CustomCommandContext = CommandExecutionContext & { self: ProgramSelf };
+/** custom window 的 methods[name].exec 收到的 ctx —— 标准 MethodExecutionContext + self。 */
+export type CustomMethodContext = MethodExecutionContext & { self: ProgramSelf };
 
 /** Object 在 server/index.ts 里 `export const window` 的形状。 */
 export interface ObjectWindowDefinition {
@@ -40,6 +40,6 @@ export interface ObjectWindowDefinition {
   basicKnowledge?: string | ((ctx: { self: ProgramSelf }) => string);
   /** close 触发 hook；缺省 = 直接释放 */
   onClose?: (ctx: OnCloseContext) => boolean | void;
-  /** Object 自定义命令字典；exec ctx 会被 dispatcher 注入 `self`。 */
-  commands?: Record<string, CommandTableEntry>;
+  /** Object 自定义方法字典；exec ctx 会被 dispatcher 注入 `self`。 */
+  methods?: Record<string, MethodEntry>;
 }

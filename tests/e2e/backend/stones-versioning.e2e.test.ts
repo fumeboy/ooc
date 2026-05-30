@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests, readPrIssueIndex } from "@src/persistable";
 import { executeMetaprog } from "@src/executable/windows/root/command.metaprog";
 import { runRecoveryCheck } from "@src/app/server/bootstrap/recovery-check";
-import type { CommandExecutionContext } from "@src/executable/windows/_shared/command-types";
+import type { MethodExecutionContext } from "@src/executable/windows/_shared/method-types";
 import type { ThreadContext } from "@src/thinkable/context";
 
 let tempRoot: string | undefined;
@@ -44,7 +44,7 @@ function makeCtx(opts: {
   baseDir: string;
   callerId: string;
   args: Record<string, unknown>;
-}): CommandExecutionContext {
+}): MethodExecutionContext {
   const thread: ThreadContext = {
     id: "t-test",
     inbox: [],
@@ -62,7 +62,7 @@ function makeCtx(opts: {
     thread,
     args: opts.args,
     manager: undefined,
-  } as CommandExecutionContext;
+  } as MethodExecutionContext;
 }
 
 describe("e2e: metaprog command — AE1 self-scope ff merge", () => {

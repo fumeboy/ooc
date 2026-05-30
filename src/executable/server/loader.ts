@@ -25,7 +25,21 @@ async function loadServerEntry(stoneRef: StoneObjectRef): Promise<ServerLoaderEn
   // D6 硬切：旧 llm_methods 已不再支持；发现就抛清晰错误，避免静默吃掉
   if ("llm_methods" in mod) {
     throw new Error(
-      `${file}: 'llm_methods' 已被移除（plan D6）；请改写为 \`export const window: ObjectWindowDefinition = { commands: { ... } }\``,
+      `${file}: 'llm_methods' 已被移除（plan D6）；请改写为 \`export const window: ObjectWindowDefinition = { methods: { ... } }\``,
+    );
+  }
+
+  // OOC-4 L4.0 硬切：ObjectWindowDefinition.commands 已改名为 methods。
+  // 旧 commands 字段消费点改用可选链读 .methods 后会静默兜成空表 → 命令凭空消失；
+  // 这里 fail-loud（与 llm_methods 范式对称），把半改 teaching 显式暴露。
+  if (
+    mod.window &&
+    typeof mod.window === "object" &&
+    "commands" in (mod.window as object) &&
+    !("methods" in (mod.window as object))
+  ) {
+    throw new Error(
+      `${file}: ObjectWindowDefinition.commands 已改名为 methods（OOC-4 L4.0）；请改写 \`export const window = { methods: { ... } }\``,
     );
   }
 
