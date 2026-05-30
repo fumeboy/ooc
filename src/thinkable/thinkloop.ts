@@ -42,17 +42,17 @@ function buildBudgetWarningItem(warning: BudgetWarning): LlmInputItem {
 /**
  * 把 LlmToolCall 解析成 PermissionDecider 可消费的 PendingToolCall 载荷。
  *
- * - exec: 提取 args.command 作为实际 command 路径; args.window_id 作为目标 window
+ * - exec: 提取 args.method 作为实际 method 路径; args.window_id 作为目标 window
  * - close / wait / compress: command = toolName 自身; windowId/args 视情况
  *
- * Q0b: 当前 exec 的 args 形态为 `{ command, window_id, args, ... }` (见 tools/exec.ts);
+ * Q0b: 当前 exec 的 args 形态为 `{ method, window_id, args, ... }` (见 tools/exec.ts);
  * 解析失败 / 字段缺失时退化为 command=toolName, 由后续 decidePermission 走 MethodEntry
  * fallback 链。
  */
 function buildPendingToolCall(toolCall: LlmToolCall): PendingToolCall {
   const args = toolCall.arguments ?? {};
   if (toolCall.name === "exec") {
-    const innerCommand = typeof args.command === "string" ? args.command : undefined;
+    const innerCommand = typeof args.method === "string" ? args.method : undefined;
     const windowId = typeof args.window_id === "string" ? args.window_id : undefined;
     return {
       toolName: "exec",

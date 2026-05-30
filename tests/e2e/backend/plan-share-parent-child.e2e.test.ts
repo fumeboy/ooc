@@ -207,7 +207,7 @@ describe("[B6] plan_window share — Scenario A: move 模式完整闭环", () =>
       arguments: {
         title: "[test] 归还 plan",
         window_id: childCreator.id,
-        command: "move",
+        method: "move",
         args: { window_id: PW1, mode: "move" },
       },
     });
@@ -354,7 +354,7 @@ describe("[B6] plan_window share — Scenario C: 边界 / 错误路径", () => {
       arguments: {
         title: "[test] 重复 share",
         window_id: parentDo.id,
-        command: "move",
+        method: "move",
         args: { window_id: PW1, mode: "move" },
       },
     });

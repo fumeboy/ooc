@@ -164,7 +164,7 @@ describe("[q0c] permission HITL — A. approve 闭环", () => {
         name: "exec",
         arguments: {
           title: "ask-then-approve",
-          command: "_test_q0c_safe",
+          method: "_test_q0c_safe",
           args: { foo: "bar" },
         },
       };
@@ -273,7 +273,7 @@ describe("[q0c] permission HITL — B. reject 闭环", () => {
         name: "exec",
         arguments: {
           title: "ask-then-reject",
-          command: "_test_q0c_safe",
+          method: "_test_q0c_safe",
           args: { dangerous: true },
         },
       };

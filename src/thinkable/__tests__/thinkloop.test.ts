@@ -270,7 +270,7 @@ describe("think", () => {
               name: "exec",
               arguments: {
                 title: "登记 thinkloop 集成待办",
-                command: "todo",
+                method: "todo",
                 args: {
                   content: "补充 thinkloop 集成测试"
                 }

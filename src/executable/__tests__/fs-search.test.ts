@@ -363,7 +363,7 @@ async function dispatchWriteFile(thread: ReturnType<typeof makeThread>, args: Re
     name: "exec",
     arguments: {
       title: "write file",
-      command: "write_file",
+      method: "write_file",
       args,
     },
   });
@@ -470,7 +470,7 @@ async function dispatchGlob(thread: ReturnType<typeof makeThread>, args: Record<
     name: "exec",
     arguments: {
       title: "glob",
-      command: "glob",
+      method: "glob",
       args,
     },
   });
@@ -487,7 +487,7 @@ async function dispatchOpenMatch(
     arguments: {
       title: "open match",
       window_id: searchWindowId,
-      command: "open_match",
+      method: "open_match",
       args,
     },
   });
@@ -639,7 +639,7 @@ async function dispatchGrep(thread: ReturnType<typeof makeThread>, args: Record<
     name: "exec",
     arguments: {
       title: "grep",
-      command: "grep",
+      method: "grep",
       args,
     },
   });

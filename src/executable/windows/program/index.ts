@@ -3,7 +3,7 @@
  *
  * spec § program_window：
  * - 由 root.program 创建（首次 exec 已在 root.program submit 时跑完）
- * - 注册的 command：exec / close
+ * - 注册的 method：exec / close
  *   - exec：起独立 sandbox 运行（与首次 exec 同一路径），结果追加到 history
  *   - close：onClose 释放 window；不停止任何外部进程（每次 exec 都已结束）
  * - 跨 exec 的 ts/js 数据通过 thread.threadLocalData（self.getThreadLocal/setThreadLocal）
@@ -78,7 +78,7 @@ program_window.set_history_window 精细化调整 exec history 渲染视口。
 - history_start 与 history_end 必须同时出现
 
 例：
-- exec(window_id="<id>", command="set_history_window", args={ history_tail: 30 })          → 看末 30 次 exec
+- exec(window_id="<id>", method="set_history_window", args={ history_tail: 30 })          → 看末 30 次 exec
 - exec(..., args={ history_start: 0, history_end: 5 })                                     → 看前 5 次
 - exec(..., args={ history_start: 10, history_end: 20 })                                   → 看中间 10 次
 
@@ -150,7 +150,7 @@ export async function executeProgramWindowExec(
     code: ctx.args.code as string | undefined,
   };
   if (!(args.language && args.code)) {
-    return "[program_window.exec] 缺少执行参数。请重新 exec(window_id=\"<program_window_id>\", command=\"exec\", args={ language: \"shell\"|\"ts\"|\"js\", code: \"...\" }) 一次性给齐参数。";
+    return "[program_window.exec] 缺少执行参数。请重新 exec(window_id=\"<program_window_id>\", method=\"exec\", args={ language: \"shell\"|\"ts\"|\"js\", code: \"...\" }) 一次性给齐参数。";
   }
   const record = await runOneExec(thread, args);
 

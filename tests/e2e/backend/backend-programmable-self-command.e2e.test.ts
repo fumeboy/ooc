@@ -55,12 +55,12 @@ const SELF_ID = "assistant";
 const SEED_SELF = `你是用户的 CodeAgent，遵循 OOC 协议。
 
 你具备 programmable 能力：你在自己的 stone 里有一份 \`stones/${SELF_ID}/executable/index.ts\`，
-可以 \`export const window: ObjectWindowDefinition\` 给自己注册自定义命令（commands 字典）。
-写好后，你可以通过 \`exec(window_id="custom:${SELF_ID}", command="<名字>", args={...})\` 直接调用它们。
+可以 \`export const window: ObjectWindowDefinition\` 给自己注册自定义 method（methods 字典）。
+写好后，你可以通过 \`exec(window_id="custom:${SELF_ID}", method="<名字>", args={...})\` 直接调用它们。
 
 工作守则：
-- 写自定义命令时用 write_file 写 \`stones/${SELF_ID}/executable/index.ts\`。
-- 每条命令是一个 CommandTableEntry：必须有 \`exec: async (ctx) => { ... }\`，
+- 写自定义 method 时用 write_file 写 \`stones/${SELF_ID}/executable/index.ts\`。
+- 每条 method 是一个 MethodEntry：必须有 \`exec: async (ctx) => { ... }\`，
   返回值（字符串）会进入调用结果。可选 paths / match / knowledge。
 - ctx.args 是调用时传入的 args。
 `;
@@ -78,7 +78,7 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S6 programmable-self-comman
   });
 
   it.skipIf(!hasLlmEnv())(
-    "用户让 assistant 给自己写一条 add 命令 → 第二轮调用它，验证元编程闭环",
+    "用户让 assistant 给自己写一条 add method → 第二轮调用它，验证元编程闭环",
     async () => {
       handle = await startApp({
         seedStones: [{ objectId: SELF_ID, self: SEED_SELF }],
@@ -87,16 +87,16 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S6 programmable-self-comman
         workerMaxTicks: 60,
       });
 
-      // ── 轮 1：引导 assistant 给自己写一条 add 命令 ────────────────────────
+      // ── 轮 1：引导 assistant 给自己写一条 add method ────────────────────────
       const seeded = await seedSession(handle.app, {
         sessionId: "s6-programmable",
         targetObjectId: SELF_ID,
         initialMessage:
-          `请给你自己写一条自定义命令，名字叫 \`add\`，作用是把传入的两个数字相加并返回结果。` +
+          `请给你自己写一条自定义 method，名字叫 \`add\`，作用是把传入的两个数字相加并返回结果。` +
           `具体做法：用 write_file 写 \`stones/${SELF_ID}/executable/index.ts\`，` +
-          `\`export const window: ObjectWindowDefinition = { commands: { add: { exec: async (ctx) => { ` +
+          `\`export const window: ObjectWindowDefinition = { methods: { add: { exec: async (ctx) => { ` +
           `const { a, b } = ctx.args; return String(Number(a) + Number(b)); } } } }\`。` +
-          `写完告诉我命令已就绪。这一轮不要调用它。`,
+          `写完告诉我 method 已就绪。这一轮不要调用它。`,
       });
       const job1 = await waitForJob(handle.app, seeded.jobId, { timeoutMs: 300_000 });
 
@@ -119,8 +119,8 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S6 programmable-self-comman
       const cont = await continueThread(
         handle.app,
         seeded.sessionId,
-        `现在调用你刚写的 \`add\` 命令：` +
-          `\`exec(window_id="custom:${SELF_ID}", command="add", args={ a: 2, b: 3 })\`，` +
+        `现在调用你刚写的 \`add\` method：` +
+          `\`exec(window_id="custom:${SELF_ID}", method="add", args={ a: 2, b: 3 })\`，` +
           `把它返回的结果告诉我。`,
       );
       const job2 = await waitForJob(handle.app, cont.jobId, { timeoutMs: 300_000 });

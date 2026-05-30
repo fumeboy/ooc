@@ -1,5 +1,5 @@
 /**
- * root.do command — fork 子线程并产出一个 do_window。
+ * root.do method — fork 子线程并产出一个 do_window。
  *
  * spec § do_window：
  * - submit 副作用：
@@ -8,7 +8,7 @@
  *   3. 在 child.contextWindows 下挂初始 creator do_window（指向父）
  *   4. 写 child inbox + 父 outbox + 在 child 记 inbox_message_arrived 事件
  *   5. wait=true 则父进入 status="waiting"
- * - root.do 不再支持 context="continue"；continue 改走 do_window 上的 continue command
+ * - root.do 不再支持 context="continue"；continue 改走 do_window 上的 continue method
  *
  * 旧的 context="continue" / context="fork" 区分被取消（spec 简化模型）。
  */
@@ -41,11 +41,11 @@ do 用于在当前对象内部派生子线程，并在父线程下产生一个 d
 - wait: 可选，true 时父线程立刻进入 waiting，等子线程回写消息再唤醒
 - share_windows: 可选，要在子线程创建时一并分享的 windows 列表，每条形如
   { window_id: "<id>", mode: "ref" | "move" }；ref = 只读 snapshot；move = 移交所有权
-  内部展开为多次 do_window.move 命令；之后还可以随时通过 do_window.move 继续分享/归还
+  内部展开为多次 do_window.move method；之后还可以随时通过 do_window.move 继续分享/归还
 
 示例：
-exec(command="do", title="处理告警", args={ msg: "请检查 ERROR 日志", wait: true })
-exec(command="do", title="一起读 file_x", args={
+exec(method="do", title="处理告警", args={ msg: "请检查 ERROR 日志", wait: true })
+exec(method="do", title="一起读 file_x", args={
   msg: "看 file_x 第 100-200 行",
   share_windows: [{ window_id: "w_file_abc", mode: "ref" }]
 })
@@ -53,8 +53,8 @@ exec(command="do", title="一起读 file_x", args={
 submit 后：
 - 子线程创建并 running；初始消息进 child inbox
 - 父线程下挂 do_window（type=do, targetThreadId=<childId>）
-- 后续追加消息：exec(window_id="<do_window_id>", command="continue", args={ msg: "..." })
-- 后续分享 window：exec(window_id="<do_window_id>", command="move", args={ window_id, mode })
+- 后续追加消息：exec(window_id="<do_window_id>", method="continue", args={ msg: "..." })
+- 后续分享 window：exec(window_id="<do_window_id>", method="move", args={ window_id, mode })
 - 关闭对话：close(window_id="<do_window_id>")（子线程会被标记 archived；borrowed owner 自动归还）
 `.trim();
 
@@ -63,7 +63,7 @@ export enum DoCommandPath {
   Wait = "do.wait",
 }
 
-/** root level 的 do command：仅 fork。continue 走 do_window 上的命令。 */
+/** root level 的 do method：仅 fork。continue 走 do_window 上的 method。 */
 export const doCommand: MethodEntry = {
   paths: [DoCommandPath.Do, DoCommandPath.Wait],
   match: (args) => {

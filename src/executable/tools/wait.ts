@@ -5,7 +5,7 @@
  *
  * - `on` 必填：必须 resolve 到当前 contextWindows 一个 open 且可产生未来 IO 的 window
  *   （talk_window / do_window）。
- * - 没有任何合法 `on` 候选时 → reject，强 nudge 改 end command。
+ * - 没有任何合法 `on` 候选时 → reject，强 nudge 改 end method。
  * - thread.inboxSnapshotAtWait 仍用于 wakeup（Phase 1 wakeup 逻辑不变）；
  *   thread.waitingOn 仅作 observability，不参与 wakeup 决策。
  */
@@ -79,7 +79,7 @@ const successOutput = (message: string, on: string) =>
 /** 把候选列表渲染成 LLM 可读的多行 hint。 */
 function renderCandidates(candidates: WaitCandidate[]): string {
   if (candidates.length === 0) {
-    return "  （无可等待来源 —— 任务大概率已完成，请改用 end command 收尾）";
+    return "  （无可等待来源 —— 任务大概率已完成，请改用 end method 收尾）";
   }
   return candidates.map((c) => `  - ${c.id} (${c.type}) — ${c.hint}`).join("\n");
 }
@@ -90,7 +90,7 @@ export const WAIT_TOOL: LlmTool = {
     "声明你在等指定 window 上的未来 IO 事件，把当前 thread 切到 waiting。" +
     "on 必填且必须 resolve 到当前 contextWindows 里 open 状态的 talk_window / do_window" +
     "（这是允许产生未来 IO 的两种 window type）。没有合法 on 时不能 wait——" +
-    "意味着任务已完成 / 无 IO 预期，请改用 end command 收尾。",
+    "意味着任务已完成 / 无 IO 预期，请改用 end method 收尾。",
   inputSchema: {
     type: "object",
     properties: {
@@ -124,8 +124,8 @@ export async function handleWaitTool(
     return errorOutput(
       "[wait] 本 thread 没有任何可等待的 IO 来源——没有 creator talk_window、" +
         "没有 open 的 do_window、自建 talk_window 也没 say 过。\n" +
-        "这意味着任务已经完成且不期望更多输入。请改用 end command 收尾：\n" +
-        "  open(command=\"end\", title=\"...\", args={ summary: \"<本次工作结论>\" })",
+        "这意味着任务已经完成且不期望更多输入。请改用 end method 收尾：\n" +
+        "  exec(method=\"end\", title=\"...\", args={ summary: \"<本次工作结论>\" })",
     );
   }
 
@@ -187,7 +187,7 @@ export async function handleWaitTool(
     return errorOutput(
       `[wait] talk_window "${onRaw}" (target=${target.target}) 是你自建的，` +
         "但尚未 say 过任何消息——对端不知道有人在等回信。请先发出消息再 wait：\n" +
-        `  open(parent_window_id="${target.id}", command="say", title="...", args={ content: "..." })\n` +
+        `  open(parent_window_id="${target.id}", method="say", title="...", args={ content: "..." })\n` +
         "或换一个已建立通讯的 window：\n" +
         renderCandidates(candidates),
     );

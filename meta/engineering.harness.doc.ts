@@ -49,12 +49,12 @@ export const root: DocTreeNode = {
     模型: 1 个 Supervisor + 9 个 Agent (8 个 AgentOfX 对应 OOC 的能力维度,加 1 个 AgentOfExperience 体验官) — 见 meta/object.doc.ts:
     - Supervisor: 最高哲学设计层,思考 "OOC 应该是什么",输出 design 指引;不直接写代码。
     - AgentOfThinkable: 上下文构建、ThreadTree、思考循环的工程实现。
-    - AgentOfExecutable: tool 原语 / command / window registry 的工程实现。
+    - AgentOfExecutable: tool 原语 / method / window registry 的工程实现。
     - AgentOfCollaborable: ThreadMessage / talk-delivery / relation 协作机制的工程实现。
     - AgentOfPersistable: stone / flow 文件树、thread.json、relation 文件等持久化层的工程实现。
     - AgentOfVisible: stone client / flow client/pages / web 控制面 / 交互设计的工程实现。
     - AgentOfObservable: debug 落盘、ContextSnapshot、pause 协议、监控/日志的工程实现。
-    - AgentOfProgrammable: stone server method 库、loader 热更、program command 的工程实现。
+    - AgentOfProgrammable: stone server method 库、loader 热更、program method 的工程实现。
     - AgentOfReflectable: super flow 协议、memory 文档治理、元编程闭环的工程实现。
     - AgentOfExperience (体验官): 不绑定单一维度,以真用户视角横切体验 OOC、评估、发现问题、沉淀报告、产出 e2e 测试用例。
 
@@ -83,7 +83,7 @@ export const root: DocTreeNode = {
             职责:
             - 维护顶层设计文档: meta/object.doc.ts (8 个能力维度的概念边界与协作关系)、其它 meta/*.doc.ts (engineering.* 横切设计) 的裁决。
             - 应对各 AgentOfX 上报的根本性问题: 当某个 Agent 在执行层遇到 "这件事到底该不该做"、"X 维度与 Y 维度边界在哪" 时,把问题提到 Supervisor;Supervisor 的回答更新到对应 meta 文档。
-            - 不直接写 src/ 代码;不直接 review PR;不与单条 command / API / UI 细节绑定。
+            - 不直接写 src/ 代码;不直接 review PR;不与单条 method / API / UI 细节绑定。
 
             协作姿态:
             - 与 AgentOfX 之间是 "philosophical advisory" 关系: Supervisor 输出 design 指引,Agent 在执行中遇到的实践反馈反向喂给 Supervisor。
@@ -102,7 +102,7 @@ export const root: DocTreeNode = {
             - LLM 交互模块: provider 适配 (OpenAI / Claude)、Responses-first item 模型。
             - ContextBuilder: 把 thread + ContextWindow + knowledge 组装成 LLM 输入。
             - ThreadTree: thread 派生、scheduler 调度、ThinkLoop 一轮流程。
-            - Knowledge 渐进激活: activates_on / command path / synthesizer。
+            - Knowledge 渐进激活: activates_on / method path / synthesizer。
 
             内循环典型动作: 调研一个 ContextWindow 类型 → 在 src/thinkable/context/render.ts 加渲染逻辑 → 单测 → e2e。
 
@@ -115,11 +115,11 @@ export const root: DocTreeNode = {
             content: `
             负责思考如何把 OOC 的 executable 能力落到代码里。关注:
             - Tool 原语层稳定性 (open / refine / submit / close / wait): 不轻易加新 tool。
-            - Command 层: root commands (do / talk / program / ...) 与各 window 上的 commands。
+            - Method 层: root methods (do / talk / program / ...) 与各 window 上的 methods。
             - ContextWindow 体系: WindowRegistry / WindowManager / 新 window type 接入。
             - command_exec form 生命周期 + 渐进式参数披露。
 
-            内循环典型动作: 设计一个新 command → 决定它注册到哪个 window type → 写 knowledge() 函数 → 实现 exec → 单测 + e2e。
+            内循环典型动作: 设计一个新 method → 决定它注册到哪个 window type → 写 knowledge() 函数 → 实现 exec → 单测 + e2e。
 
             维度定义见 meta/object.doc.ts 的 executable child。
             `,
@@ -197,13 +197,13 @@ export const root: DocTreeNode = {
             title: "AgentOfProgrammable - programmable 维度的工程实现",
             content: `
             负责思考如何把 OOC 的 programmable 能力落到代码里。关注:
-            - CommandTableEntry schema (description / params / knowledge / fn) 与 window.commands / ui_methods 分流。
+            - MethodEntry schema (description / params / knowledge / fn) 与 window.methods / ui_methods 分流。
             - loader 热更: 按 mtime 缓存 + ?t=mtime 破坏 import cache。
             - ProgramSelf 注入: program ts/js sandbox 收到的 self 对象。
-            - program command 两条调用路径: exec 一行调 vs ts/js exec 里 self.callCommand。
+            - program method 两条调用路径: exec 一行调 vs ts/js exec 里 self.callMethod。
             - 元编程闭环: 配合 reflectable 在 super flow 改 executable/index.ts 后,下一次调用自动看见新方法。
 
-            内循环典型动作: 调研某个高频 LLM 操作的提取需求 → 设计 CommandTableEntry 形状与 knowledge() → 写到 stone executable/index.ts → 跑 e2e 确认 exec 路径能拿到结果。
+            内循环典型动作: 调研某个高频 LLM 操作的提取需求 → 设计 MethodEntry 形状与 knowledge() → 写到 stone executable/index.ts → 跑 e2e 确认 exec 路径能拿到结果。
 
             维度定义见 meta/object.doc.ts 的 programmable child。
             `,

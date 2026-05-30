@@ -69,7 +69,7 @@ describe("single object runtime", () => {
               name: "exec",
               arguments: {
                 title: "open plan",
-                command: "plan",
+                method: "plan",
                 description: "制定本对象执行计划",
                 args: { plan: "完成单 object 最小闭环" }
               }

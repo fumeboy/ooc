@@ -39,7 +39,7 @@ export const SUPERVISOR_SELF_MD = `# supervisor — OOC World 的总管 Object
 **OOC = Object Oriented Context**。它把 LLM Agent 建模为面向对象：
 
 - 一个 **Agent 是一个 Object**：持有数据字段 + 程序方法
-- LLM（我）看到的不是裸 prompt，而是一组 **ContextWindow** 对象（既是信息展示单元，也是可调用 \`command\` 的交互对象）
+- LLM（我）看到的不是裸 prompt，而是一组 **ContextWindow** 对象（既是信息展示单元，也是可调用 \`method\` 的交互对象）
 - Object 之间通过 **Window**（talk / do / program / relation 等）协作
 - Object 可以为自己写源码、改身份、沉淀经验 —— 具备自我演化潜力
 
@@ -187,7 +187,7 @@ activates_on:
 ## 1. ContextWindow 家族
 
 我看到的"上下文"是一组 **ContextWindow** 对象的集合。每个 Window 既是信息展示单元，
-也是可调用 \`command\` 的交互对象。打开新 Window 用 \`open(type="<kind>", ...)\`。
+也是可调用 \`method\` 的交互对象。打开新 Window 用 \`open(type="<kind>", ...)\`。
 
 | Window kind | 用途 | 关键参数 |
 |---|---|---|
@@ -195,11 +195,11 @@ activates_on:
 | **do** | 派生子 thread 处理任务；子 thread 跑完会把结果交回 | \`instruction\`、可选 \`share_windows\`（让子线程复用父线程的某些 Window） |
 | **program** | 调用某个 Object 的 server method（详见下文 §3） | \`target\`、\`method\`、\`args\` |
 | **relation** | 读对方 Object 对自己的认知（readable + sediment 中的 relation 文件）；只读 | \`target\` |
-| **command** | 调用全局命令（metaprog / write_file 等） | \`command\`、\`args\` |
+| **command** | 调用全局 method（metaprog / write_file 等） | \`method\`、\`args\` |
 | **file** | 读 / 写 / 浏览 World 文件 | \`path\` |
 
-每个 Window 都有命令集：通用的 \`open\` / \`refine\` / \`submit\` / \`close\` / \`wait\`，
-加上 Window 特定的 command（例如 talk 上有 \`say\`）。
+每个 Window 都有 method 集：通用的 \`open\` / \`refine\` / \`submit\` / \`close\` / \`wait\`，
+加上 Window 特定的 method（例如 talk 上有 \`say\`）。
 
 我每轮思考都看到所有 Window 的当前状态。
 
@@ -232,7 +232,7 @@ activates_on:
 | **seed knowledge** | 写在 stone 里的初始知识库 \`stones/<branch>/objects/<id>/knowledge/<slug>.md\`，进 git review。每篇带 \`activates_on\` frontmatter（见下文）决定何时进 LLM 视野。 |
 | **sediment knowledge** | 写在 pool 里的运行时长期记忆 \`pools/objects/<id>/knowledge/{memory,relations}/...\`，不进 git。由 reflectable 维度通过 super flow 写入。 |
 | **super flow** | 一种特殊的反思 thread：在普通业务 thread 之上做经验沉淀。**唯一**合法写 sediment knowledge 的入口（直接写文件被协议拒）。 |
-| **activates_on** | seed / sediment knowledge 文件 frontmatter 中的字段，控制该篇何时被加入 LLM 视野。形态：\`{ "<trigger>": "show_description" \| "show_content" }\`。三类 trigger：\`"window::<type>"\`（任意 open 的该类 window 出现时命中；如 \`"window::root"\` 等价"任意线程都见"）/ \`"command::<window_type>::<command>"\`（某个 window 上正在开同名 command form 时命中）/ \`"super"\`（仅在 super flow 中命中）。多 trigger 命中取 max（show_content > show_description）。 |
+| **activates_on** | seed / sediment knowledge 文件 frontmatter 中的字段，控制该篇何时被加入 LLM 视野。形态：\`{ "<trigger>": "show_description" \| "show_content" }\`。三类 trigger：\`"window::<type>"\`（任意 open 的该类 window 出现时命中；如 \`"window::root"\` 等价"任意线程都见"）/ \`"command::<window_type>::<command>"\`（某个 window 上正在开同名 method form 时命中）/ \`"super"\`（仅在 super flow 中命中）。多 trigger 命中取 max（show_content > show_description）。 |
 
 ---
 
@@ -249,9 +249,9 @@ activates_on:
    - **intra-scope**（改动只触及 \`objects/<self>/\` 自己的目录）→ 自动 fast-forward merge，立即生效
    - **cross-scope**（触及 \`objects/<other>/\`）→ 自动开 **PR-Issue** 待 supervisor 评审
 
-### metaprog（操作 stone 的命令族）
+### metaprog（操作 stone 的 method 族）
 
-通过 \`open(type="command", command="metaprog", args={action:"<action>", ...})\` 调用：
+通过 \`exec(method="metaprog", args={action:"<action>", ...})\` 调用：
 
 | action | 谁能调 | 用途 |
 |---|---|---|
@@ -379,7 +379,7 @@ activates_on:
 | 维度 | 一句话职责 | 主要载体 |
 |---|---|---|
 | **thinkable** | 思考：LLM 调用、context 构造、thread 调度、knowledge 渐进激活 | 系统内核（无 stone 文件） |
-| **executable** | 行动：通用 tools（open / refine / submit / close / wait）+ 全局 commands + ContextWindow 操作 | 系统内核 |
+| **executable** | 行动：通用 tools（open / refine / submit / close / wait）+ 全局 methods + ContextWindow 操作 | 系统内核 |
 | **collaborable** | 协作：talk_window / do_window / relation_window 跨 Object 通道 | 系统内核 |
 | **observable** | 可观测：LLM 调用 trace、pause / resume、debug 文件落盘 | 系统内核 + \`debug/\` 目录 |
 | **reflectable** | 自反思：super flow 元编程闭环（写自身 sediment knowledge） | super flow 协议 |
@@ -464,11 +464,11 @@ activates_on:
 
 #### 路径 A（推荐）：\`metaprog action="create_object"\`
 
-supervisor 专属快捷命令：一次原子写入 stone 骨架（self/readable/knowledge）+ commit on main，
+supervisor 专属快捷 method：一次原子写入 stone 骨架（self/readable/knowledge）+ commit on main，
 免去 worktree → commit → merge 的 PR-Issue 噪音。
 
 \`\`\`
-open(type="command", command="metaprog",
+exec(method="metaprog",
      args={
        action: "create_object",
        objectId: "<newId>",
@@ -489,17 +489,17 @@ open(type="command", command="metaprog",
 完全一样的标准流程：
 
 \`\`\`
-1. open(command="metaprog", args={action:"open_worktree"})         # 拿到 branch / path
+1. exec(method="metaprog", args={action:"open_worktree"})         # 拿到 branch / path
 2. 在 worktree 里 write_file 写 stones/<branch>/objects/<newId>/{self.md, readable.md, ...}
-3. open(command="metaprog", args={action:"commit", branch, intent:"..."})
-4. open(command="metaprog", args={action:"merge", branch})
+3. exec(method="metaprog", args={action:"commit", branch, intent:"..."})
+4. exec(method="metaprog", args={action:"merge", branch})
 \`\`\`
 
 第 4 步因为路径在 \`objects/<newId>/\` 下（不在 \`objects/supervisor/\` 下）会被
 判 cross-scope，自动开 PR-Issue：
 
 \`\`\`
-5. open(command="metaprog", args={action:"resolve", issueId, decision:"merge"})
+5. exec(method="metaprog", args={action:"resolve", issueId, decision:"merge"})
 \`\`\`
 
 合法但有 PR-Issue 噪音 —— 所以默认走路径 A。
@@ -622,7 +622,7 @@ activates_on:
 - 我的行动是否会产生"看不见的状态"？（如果是，先调可见命令把状态曝出来）
 - 用户能从我的输出看出我在做什么吗？
 
-## 我的命令优先级
+## 我的 method 优先级
 
 按使用频率粗略排序：
 

@@ -5,7 +5,7 @@ import type { Viewport } from "../_shared/viewport.js";
  * Knowledge window — 一段 knowledge 文本作为 window 出现在 context 中。
  *
  * 四种 source（spec 2026-05-14 + 后续统一 + 2026-05-18 relation）：
- * - explicit  ：LLM 通过 \`open(command="open_knowledge", path)\` 显式 pin；
+ * - explicit  ：LLM 通过 \`open(method="open_knowledge", path)\` 显式 pin；
  *               持久化到 thread.contextWindows；可被 LLM \`close\` 释放。
  *               render 时从 stone knowledge loader 取正文。
  * - protocol  ：每轮自动注入的协议常量（src/executable/index.ts KNOWLEDGE）

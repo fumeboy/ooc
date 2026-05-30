@@ -5,7 +5,7 @@ import type {
 } from "../_shared/method-types.js";
 
 /**
- * command_exec.refine 命令 — 把 ctx.args 整体 merge 到 form.accumulatedArgs。
+ * command_exec.refine method — 把 ctx.args 整体 merge 到 form.accumulatedArgs。
  *
  * 调用形态：exec(<form_id>, "refine", args={ msg: "..." })
  *
@@ -53,7 +53,7 @@ export const refineCommand: MethodEntry = {
   knowledge: (_args, _formStatus): MethodKnowledgeEntries => ({
     "internal/windows/command_exec/refine/basic": [
       "command_exec.refine 用于向 form 累积参数；ctx.args 整体作为要累积的键值对。",
-      "调用：exec(window_id=<form_id>, command=\"refine\", args={ <要累积的键值对> })",
+      "调用：exec(window_id=<form_id>, method=\"refine\", args={ <要累积的键值对> })",
       "多次调用会叠加；填齐参数后用 exec(form_id, \"submit\") 触发执行。",
       "Round 13: refine 也接受 status=failed 的 form (submit 失败后); 调 refine 会自动把 form 切回 open + 清旧 result, 可重 submit。这是首选的失败修复路径 (保留 form 上下文)。",
     ].join("\n"),

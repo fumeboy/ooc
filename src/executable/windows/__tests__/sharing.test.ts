@@ -162,7 +162,7 @@ describe("do_window.move 归还路径", () => {
       arguments: {
         title: "归还 file",
         window_id: creator!.id,
-        command: "move",
+        method: "move",
         args: { window_id: "w_file_5", mode: "move" },
       },
     });

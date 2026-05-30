@@ -1,5 +1,5 @@
 /**
- * root.write_file command — 创建或覆盖一个文件，并自动 spawn 一个 file_window 指向它。
+ * root.write_file method — 创建或覆盖一个文件，并自动 spawn 一个 file_window 指向它。
  *
  * - args: path（必填）, content（必填）
  * - 父目录不存在时自动 mkdir -p
@@ -46,7 +46,7 @@ write_file = **整文件覆盖**。只在下列两种场景使用：
 
 典型反模式（**不要这样做**）：
 - 用户说"把 src/foo.ts 里第一处 X 改成 Y" → 你 open_file 后直接 write_file 整篇
-  → 应该 \`open_file\` → \`open(parent_window_id=<file_window>, command="edit",
+  → 应该 \`open_file\` → \`open(parent_window_id=<file_window>, method="edit",
   args={old: "X 的局部唯一上下文", new: "Y 的对应上下文"})\`
 
 ## 参数
@@ -62,7 +62,7 @@ write_file = **整文件覆盖**。只在下列两种场景使用：
 ## 调用示例（合法场景：新建）
 
 \`\`\`
-open(command="write_file", title="新建测试文件",
+open(method="write_file", title="新建测试文件",
      args={ path: "tests/foo.test.ts", content: "import { it } from 'bun:test'; ..." })
 \`\`\`
 
@@ -218,7 +218,7 @@ export async function executeWriteFileCommand(
       result:
         `[write_file hint] 你刚整文件覆盖了已有文件 ${path}。如果你的意图是"修改局部"` +
         `（而不是完整重写），下次请改走 file_window.edit：先 open_file 把文件载入 file_window，` +
-        `再 open(parent_window_id=<file_window_id>, command="edit", args={ old, new })。` +
+        `再 open(parent_window_id=<file_window_id>, method="edit", args={ old, new })。` +
         `write_file 适合新建文件或确实要丢弃整个旧版本的场景。`,
     };
   }

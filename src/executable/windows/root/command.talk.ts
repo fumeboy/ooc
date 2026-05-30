@@ -1,5 +1,5 @@
 /**
- * root.talk command — 创建一个 talk_window，与另一个 flow object 持续会话。
+ * root.talk method — 创建一个 talk_window，与另一个 flow object 持续会话。
  *
  * - target 是任意 flow object 的 objectId（含 "user"）
  * - submit 副作用：在 thread.contextWindows 下挂 type=talk window，初始无 targetThreadId；
@@ -35,10 +35,10 @@ talk 用于开启一个对外的会话窗口（talk_window），与另一个 flo
 
 submit 后副作用：
 - 在 thread.contextWindows 下挂一个 type=talk 的 window（初始 targetThreadId 为空）
-- 首次发消息：open(parent_window_id="<talk_window_id>", command="say", args={ msg: "...", wait: true|false })
+- 首次发消息：open(parent_window_id="<talk_window_id>", method="say", args={ msg: "...", wait: true|false })
   - 若 callee thread 尚未存在，系统会在 flows/{sid}/objects/{target}/threads/ 下创建一条
   - 同时把消息追加到 callee.inbox + caller.outbox，callee 自动进入 running 等待 worker 调度
-- 等待回复：open(parent_window_id="<talk_window_id>", command="wait", args={})
+- 等待回复：open(parent_window_id="<talk_window_id>", method="wait", args={})
 - 关闭窗口：close(window_id="<talk_window_id>", reason="...")
 
 **重要：talk_window 是持续会话窗口，应该复用。**
@@ -53,7 +53,7 @@ export enum TalkCommandPath {
   Talk = "talk",
 }
 
-/** root.talk command：创建 talk_window；不直接发消息。 */
+/** root.talk method：创建 talk_window；不直接发消息。 */
 export const talkCommand: MethodEntry = {
   paths: [TalkCommandPath.Talk],
   match: () => [TalkCommandPath.Talk],

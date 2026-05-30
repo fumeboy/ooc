@@ -8,7 +8,7 @@
  * 维护原则：
  * 1. 本 case 文档**只描述 Agent 之间的协作 + 原子化分工 + skill 调用方式**, 不复述
  *    各 Agent 自己的 knowledge/memory/*.md 业务内容 (那些已迁到 stones/main/objects/<self>/knowledge/ 下)。
- * 2. 当任一 Agent 的 self/readable 协议变化、commands 增删、或 RPC 接入方式变化时, 本文档要同步。
+ * 2. 当任一 Agent 的 self/readable 协议变化、methods 增删、或 RPC 接入方式变化时, 本文档要同步。
  * 3. 与 `cookbook.add-new-agent.doc.ts` 区别: cookbook 教"怎么造新 Agent", 本 case 教"怎么把一组业务 skill
  *    用 Agent + skill 的方式表达"。两者互补。
  * 4. 本 case 的角色是**反推 OOC 设计是否够用**——如果遇到当前 OOC 协议表达不出来的细节,
@@ -73,7 +73,7 @@ export const root: DocTreeNode = {
 
     阅读本 case 之前先理解:
     - \`meta/object.doc.ts\` 的 \`thinkable\` (skill_index / knowledge auto-activation),
-      \`executable\` (custom window + commands), \`collaborable\` (talk_window / do_window.move).
+      \`executable\` (custom window + methods), \`collaborable\` (talk_window / do_window.move).
     - \`meta/cookbook.add-new-agent.doc.ts\` 中 stone 目录骨架。
 
     详细设计见 children: 协作图、3 个 Agent 各自分工、psm-query skill 用法、RPC 接入模板、
@@ -108,7 +108,7 @@ export const root: DocTreeNode = {
             \`\`\`
 
             **关键点**:
-            1. \`sentry_factor_dev\` **不直接调** sentry_event_factor / sentry_factor_group 的 commands; 全部通过
+            1. \`sentry_factor_dev\` **不直接调** sentry_event_factor / sentry_factor_group 的 methods; 全部通过
                \`talk_window\` 异步沟通 (派任务 / 等回报 / 处理阻塞)。这保证三个 Agent 各自的 do_window 不互相污染,
                也让流程可以在 Web UI 上以多个 chat 同时观察。
             2. \`sentry_factor_dev\` 通过 \`do_window.move(mode="ref")\` 把 \`output/tech_plan.md\`
@@ -133,7 +133,7 @@ export const root: DocTreeNode = {
             原项目 \`plugins_with_agent\` 共 15 个 SKILL.md, 平铺在 Claude Code 中。OOC 化时面临的关键设计选择:
 
             **方案 A — 1 个大 Agent (sentry_factor_assistant)** (拒绝):
-            - 把所有 15 个 skill 都堆进一个 stone 的 knowledge/, 一个 executable/index.ts 30+ commands。
+            - 把所有 15 个 skill 都堆进一个 stone 的 knowledge/, 一个 executable/index.ts 30+ methods。
             - 缺点: 违背 OOC "Object 即领域" 的哲学; 任意改一个 API 都要重新加载整个巨石 prompt;
               事件因子和因子组的开发知识互相干扰激活 (activates_on 难维护)。
 
@@ -144,7 +144,7 @@ export const root: DocTreeNode = {
               强制做 Agent 反而引入不必要的 stone 目录 / talk 协议负担。
 
             **方案 C — 3 Agent + 1 项目级 skill** ✅ (采纳):
-            - 业务领域 (事件因子 / 因子组) 各拆独立 Agent: 各自有自己的开发知识、API commands、状态机;
+            - 业务领域 (事件因子 / 因子组) 各拆独立 Agent: 各自有自己的开发知识、API methods、状态机;
               由领域专家维护时不互相影响。
             - 流程编排 (需求分析 / 方案 / 派开发) 单独 Agent: 它是**对外门面**, 用户从这里进入; 它有跨 session 状态
               (\`requirement.json\` / \`requirement_form.json\`)。
@@ -183,9 +183,9 @@ export const root: DocTreeNode = {
             - flow 级 \`output/requirement.json\` / \`output/requirement_form.json\` / \`output/tech_plan.md\`:
               单次需求分析的产物 (per-flow), 由其内部状态机切换。
 
-            **commands** (定义在 \`executable/index.ts\` 的 \`window: ObjectWindowDefinition\`):
+            **methods** (定义在 \`executable/index.ts\` 的 \`window: ObjectWindowDefinition\`):
 
-            | command | 用途 |
+            | method | 用途 |
             |---|---|
             | \`start_requirement(text)\` | 入口; 初始化 requirement.json |
             | \`analyze_requirement()\` | 启动需求分析 (8 题门禁), 产出因子清单 |
@@ -204,7 +204,7 @@ export const root: DocTreeNode = {
             chat_ui_markers / psm_query_usage; 详见各文件 frontmatter 的 \`activates_on\`。
 
             **不做的事**:
-            - 不直接调 sentry_event_factor / sentry_factor_group 的 commands; 一律通过 talk 派任务。
+            - 不直接调 sentry_event_factor / sentry_factor_group 的 methods; 一律通过 talk 派任务。
             - 不直接写事件因子 / 因子组的代码; 那是下游 Agent 的事。
             `,
             named: {
@@ -220,9 +220,9 @@ export const root: DocTreeNode = {
 
             **身份** (self.md): 事件因子领域 All-in-One Agent — 包揽该领域的 API 查询、知识沉淀、开发执行。
 
-            **commands**:
+            **methods**:
 
-            | command | 用途 | RPC method |
+            | method | 用途 | RPC method |
             |---|---|---|
             | \`search_event_factors(eventId, query?, page?, size?)\` | 列事件下的因子 | \`EventFactorList\` |
             | \`get_event_factor_detail(code)\` | 拿单个事件因子详情 | \`EventFactorDetail\` |
@@ -248,16 +248,16 @@ export const root: DocTreeNode = {
 
             **身份** (self.md): 因子组领域 All-in-One Agent — go / offline 两种实现都包揽。
 
-            **commands**:
+            **methods**:
 
-            | command | 用途 | RPC method |
+            | method | 用途 | RPC method |
             |---|---|---|
             | \`search_factor_groups(query?, page?, size?)\` | 列因子组 | \`FactorGroupSearch\` |
             | \`get_factor_group_detail(code)\` | 拿因子组详情 | \`FactorGroupDetail\` |
             | \`develop_factor_group(plan_path, mode)\` | 按方案开发; mode = "go" \\| "offline" | (无 RPC) |
 
             **mode 路由设计** (\`develop_factor_group\` 的 \`paths\` = \`["develop_factor_group", "develop_factor_group.go", "develop_factor_group.offline"]\`):
-            - 调用方传 \`mode="go"\` / \`mode="offline"\`, command 内根据 mode 命中不同子路径,
+            - 调用方传 \`mode="go"\` / \`mode="offline"\`, method 内根据 mode 命中不同子路径,
               对应激活不同 \`activates_on\` 的 knowledge (factor_group_dev_go.md vs factor_group_dev_offline.md)。
               这是 OOC \`thinkable.knowledge_activation\` + custom window 协议组合, 详见 \`object.doc.ts\`。
 
@@ -284,18 +284,18 @@ export const root: DocTreeNode = {
 
             \`\`\`
             1. 通过 skill_index window 列出可用 skill, 看到 psm-query
-            2. exec(command="open_file", path="<skill_dir>/SKILL.md")
+            2. exec(method="open_file", path="<skill_dir>/SKILL.md")
                读完整使用说明 (frontmatter description + body)
-            3. exec(command="program", args={
+            3. exec(method="program", args={
                  language: "shell",
                  code: "node <skill_dir>/query.js \\"<需求文本>\\""
                })
                拿到 JSON 输出 (候选 PSM/method 列表)
             \`\`\`
 
-            **为什么不做成 Agent 命令**:
+            **为什么不做成 Agent method**:
             - psm-query 是无状态脚本 (PsmDataSource 数组 + AFS 检索), 没有需要在 stone 中沉淀的状态;
-            - 多个 Agent (当前 3 个, 未来可能更多) 都可能用; 当 skill 比当 Agent 命令更通用;
+            - 多个 Agent (当前 3 个, 未来可能更多) 都可能用; 当 skill 比当 Agent method更通用;
             - SKILL.md frontmatter 的 description 直接被 \`skill_index\` 渲染为发现入口, 比新写一个 Agent 的 self/readable 更轻量。
 
             **psm-query 调的真实 HTTP**: AFS 检索接口 \`https://ecop.bytedance.net/api/governance_base/ecop/rpc/AgentAfs/AFSCommand\`,
@@ -353,7 +353,7 @@ export const root: DocTreeNode = {
             - 不抽公共 lib: 两份重复 (~30 行) 比强行抽到 src/ 拉外部依赖更轻; OOC 体系倾向于
               **stone 内自给自足** (objects/<self>/executable/ 应当独立可读)。
             - 错误**不抛**, 返回 \`{ ok, error }\` 让上游 LLM 自己判断是否要 retry / talk 用户;
-              这与 OOC \`executable.command_exec\` 协议一致 (commands 不抛异常, 用结构化结果)。
+              这与 OOC \`executable.command_exec\` 协议一致 (methods 不抛异常, 用结构化结果)。
             - **缺 USER_INFO 给清晰错误** (而不是 silent 失败), 方便用户在 web UI 上看到提示后补 env。
 
             **未来迁移到 lib 的信号**: 当第 3 个 Agent 也开始抄这段 helper 时, 应该把它抽到
@@ -369,9 +369,9 @@ export const root: DocTreeNode = {
             content: `
             **派任务协议** (sentry_factor_dev → 下游):
 
-            1. \`exec(command="talk", target="sentry_event_factor")\` 创建 talk_window;
-            2. \`exec(window_id=<talk>, command="say", text="...")\` 发派单消息, 内容含 plan_path + (factor_group 时还有 mode);
-            3. \`exec(command="do_window.move", target_thread=<下游 thread>, mode="ref", window_id=<file:tech_plan.md>)\`
+            1. \`exec(method="talk", target="sentry_event_factor")\` 创建 talk_window;
+            2. \`exec(window_id=<talk>, method="say", text="...")\` 发派单消息, 内容含 plan_path + (factor_group 时还有 mode);
+            3. \`exec(method="do_window.move", target_thread=<下游 thread>, mode="ref", window_id=<file:tech_plan.md>)\`
                把 plan file_window 共享给下游 (只读快照);
             4. wait 下游回报。
 
@@ -428,7 +428,7 @@ export const root: DocTreeNode = {
             **类型与单测**:
             - [ ] \`bun tsc --noEmit\` baseline (不增加新 error)
             - [ ] \`bun test src/\` 全绿
-            - [ ] 每个 Agent 至少 1 条 commands.exec 端到端单测, fetch mock
+            - [ ] 每个 Agent 至少 1 条 methods.exec 端到端单测, fetch mock
 
             **运行时**:
             - [ ] app server 启动 \`bun run --env-file=.env src/app/server/index.ts --world ./.ooc-world --stones-branch main\`
@@ -454,16 +454,16 @@ export const root: DocTreeNode = {
                OOC 暂无 \`stones/<branch>/lib/\` 或 stone 间共享代码的标准协议。短期 2 份重复可接受;
                长期需要补共享层定义 (object.doc.ts:executable + persistable)。
 
-            2. **multi-mode command 的可发现性** (thinkable + executable): \`develop_factor_group\` 用 \`paths\`
+            2. **multi-mode method 的可发现性** (thinkable + executable): \`develop_factor_group\` 用 \`paths\`
                根据 \`mode\` 路由到不同 knowledge; 但调用方 (LLM) 没有标准协议告知它"应该传 mode"。
-               现在靠 \`relations/sentry_factor_dev.md\` 文档约定, 长期应有 OOC 标准 (例如 commands schema 增 \`oneOf\` 描述)。
+               现在靠 \`relations/sentry_factor_dev.md\` 文档约定, 长期应有 OOC 标准 (例如 methods schema 增 \`oneOf\` 描述)。
 
             3. **跨 Agent 状态可见性** (observable): sentry_factor_dev 派任务后等回报时, 它**看不到**
                sentry_event_factor 内部 do_window 的进度; 需要下游主动 say 才知道。
                长期可能需要 \`observable.peer_progress\` 协议 (但要权衡 over-coupling 风险)。
 
             4. **skill 与 Agent 的发现协议统一性** (thinkable): 当前 skill_index 是独立 window 类型;
-               未来如果有 Object 同时提供"带状态命令"+"无状态 skill", 可能需要在 self.md 里同时声明两种入口。
+               未来如果有 Object 同时提供"带状态method"+"无状态 skill", 可能需要在 self.md 里同时声明两种入口。
 
             这些缺口**不阻塞本 case 落地**, 但作为反推 OOC 设计的输入, 应该在 \`meta/object.doc.ts\` 对应维度
             的 \`patches\` 节点中记录 (TODO)。

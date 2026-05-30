@@ -1,8 +1,8 @@
 /**
- * do_window.move 命令 —— 跨 thread 共享 / 移交 ContextWindow（plan §do_window.move）。
+ * do_window.move method —— 跨 thread 共享 / 移交 ContextWindow（plan §do_window.move）。
  *
  * 调用形态：
- *   exec(window_id=<do_window_id>, command="move", args={ window_id: <target_window>, mode: "ref" | "move" })
+ *   exec(window_id=<do_window_id>, method="move", args={ window_id: <target_window>, mode: "ref" | "move" })
  *
  * - do_window 是父子双向通道；父→子用父侧 do_window；子→父用 creator do_window（指向父）
  * - mode="ref"：对端获得只读 snapshot；自己保留 owner 继续 live

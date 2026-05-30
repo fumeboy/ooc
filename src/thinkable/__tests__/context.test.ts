@@ -235,7 +235,7 @@ describe("buildContext (ContextWindow model)", () => {
           kind: "function_call",
           callId: "call_1",
           toolName: "exec",
-          arguments: { command: "talk", title: "向用户回复" },
+          arguments: { method: "talk", title: "向用户回复" },
         },
         {
           category: "tool_runtime",
@@ -395,7 +395,7 @@ describe("buildContext (ContextWindow model)", () => {
           category: "llm_interaction",
           kind: "tool_use",
           toolName: "exec",
-          arguments: { command: "todo" },
+          arguments: { method: "todo" },
         },
         {
           category: "context_change",
@@ -435,7 +435,7 @@ describe("buildContext (ContextWindow model)", () => {
     expect(xml).toContain("wait(on");
     // 关键提示：思考空间 + talk 是与 user 唯一通道
     expect(xml).toContain("思考空间");
-    expect(xml).toContain('command="talk"');
+    expect(xml).toContain('method="talk"');
   });
 
   it("deduplicates identical knowledge entries across multiple forms", async () => {

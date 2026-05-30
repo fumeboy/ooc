@@ -7,7 +7,7 @@
  * - cookbook.add-new-agent.doc.ts：本仓库内"加一个 AgentOfX 角色"的工程清单
  *   （harness/interim_runtime 形态，sub agent + stone 目录）
  * - **本文件**：面向**通用 Agent 作者**——以 plan §6 升级后的新形态（type=custom
- *   self window + ObjectWindowDefinition.commands）说明 stone 结构、命令注册、
+ *   self window + ObjectWindowDefinition.methods）说明 stone 结构、method注册、
  *   调用路径、热更与演化。新建一个 OOC Agent 时来这里抄。
  *
  * 维护原则：
@@ -41,20 +41,20 @@ export const root: DocTreeNode = {
 
     - 旧：写 \`export const llm_methods = { ... }\`，LLM 通过 \`program.function\`
       间接调用 → 二等公民、无 form lifecycle、无 path 激活。
-    - 新：写 \`export const window: ObjectWindowDefinition = { commands: { ... } }\`，
-      LLM 通过 \`exec(window_id="custom:<self>", command="<name>", ...)\`
-      直接调用 → 与 do_window/talk_window 上的命令完全同构，享受 form/refine/submit
+    - 新：写 \`export const window: ObjectWindowDefinition = { methods: { ... } }\`，
+      LLM 通过 \`exec(window_id="custom:<self>", method="<name>", ...)\`
+      直接调用 → 与 do_window/talk_window 上的method完全同构，享受 form/refine/submit
       / path-based knowledge 激活 / submit 即执行的所有红利。
 
     \`ui_methods\` 字典保持不变（plan D3）：仍然给 web/agent-native 客户端通过
     HTTP \`callMethod\` 调用，与 LLM 路径完全解耦。
 
     Agent 自我演化的元编程闭环：
-      LLM → \`exec(command="write_file", path="stones/<self>/executable/index.ts", content="...")\`
-        → loader 看到 mtime 变化 → ?t=mtime 强制重 import → 下一次调命令立刻看到新形态。
+      LLM → \`exec(method="write_file", path="stones/<self>/executable/index.ts", content="...")\`
+        → loader 看到 mtime 变化 → ?t=mtime 强制重 import → 下一次调method立刻看到新形态。
     `,
     named: {
-        "stones/<id>/": "Agent 的 stone 目录；身份、知识、命令、UI 都在这里",
+        "stones/<id>/": "Agent 的 stone 目录；身份、知识、method、UI 都在这里",
         "ObjectWindowDefinition": "executable/index.ts 中 export const window 的形状（src/executable/server/window-types.ts）",
         "custom self window": "type=\"custom\" 的 ContextWindow，由 initContextWindows 在 thread.objectId === self 时幂等注入；id = `custom:<objectId>`",
         "ui_methods": "executable/index.ts 中给前端 / agent-native 客户端用的方法字典；走 HTTP callMethod，不影响 LLM 路径",
@@ -83,7 +83,7 @@ export const root: DocTreeNode = {
             另外 branch 级公共 skills 路径：\`stones/<branch>/skills/<skill-name>/SKILL.md\`
             （跨所有 Object 共享；与 \`stones/<branch>/objects/\` 平级）。
 
-            最小骨架命令（可以一次性跑完）:
+            最小骨架method（可以一次性跑完）:
             \`\`\`
             mkdir -p stones/factor_workshop/{executable,client,knowledge/memory,knowledge/relations}
             \`\`\`
@@ -131,15 +131,15 @@ export const root: DocTreeNode = {
 
               // 该 window 出现时合成的协议知识（每轮自动注入到 LLM context）
               basicKnowledge: () => \`
-            你是 factor_workshop。可用命令（通过 exec(window_id="custom:factor_workshop", command="<name>", args={...}) 调用）:
+            你是 factor_workshop。可用method（通过 exec(window_id="custom:factor_workshop", method="<name>", args={...}) 调用）:
 
-            | command         | 作用                       |
+            | method          | 作用                       |
             |-----------------|----------------------------|
             | create_factor   | 创建一个新因子草稿         |
             | publish_factor  | 把草稿提交到回测队列       |
               \`.trim(),
 
-              commands: {
+              methods: {
                 create_factor: {
                   paths: ["create_factor", "create_factor.draft"],
                   match: (args) => {
@@ -198,16 +198,16 @@ export const root: DocTreeNode = {
             };
             \`\`\`
 
-            **CommandTableEntry 字段语义**：
+            **MethodEntry 字段语义**：
 
-            - \`paths\`：本命令可能产出的所有 path 集合；用于 knowledge 反向激活索引。
-            - \`match(args)\`：返回当前 args 命中的 path 子集（必含 bare command 名）。
+            - \`paths\`：本method可能产出的所有 path 集合；用于 knowledge 反向激活索引。
+            - \`match(args)\`：返回当前 args 命中的 path 子集（必含 bare method 名）。
               path 越具体，激活的 knowledge 越精确。
             - \`knowledge(args, formStatus)\`：返回 \`{ pathName: text }\`。formStatus 是
               form 当前状态（"open" | "executing" | "executed"），可用来在不同阶段
               派发不同提示。
             - \`exec(ctx)\`：真正执行入口。\`ctx\` 形态：
-              - \`ctx.self\`: ProgramSelf（dir / callCommand / getData / setData / getThreadLocal / setThreadLocal）
+              - \`ctx.self\`: ProgramSelf（dir / callMethod / getData / setData / getThreadLocal / setThreadLocal）
               - \`ctx.thread\`: ThreadContext，可访问 contextWindows / events / inbox / outbox
               - \`ctx.parentWindow\`: 当前 custom window 自身
               - \`ctx.manager\`: WindowManager；要操作 contextWindows 走它，不要直接 mutate
@@ -216,22 +216,22 @@ export const root: DocTreeNode = {
               （也可返回裸 string / undefined，由 manager 兼容处理）。
             `,
             named: {
-                "ObjectWindowDefinition": "{ title?, description?, renderXml?, basicKnowledge?, onClose?, commands? }",
-                "CommandTableEntry": "{ paths, match, knowledge, exec } —— 与内置 window 命令完全同构",
+                "ObjectWindowDefinition": "{ title?, description?, renderXml?, basicKnowledge?, onClose?, methods? }",
+                "MethodEntry": "{ paths, match, knowledge, exec } —— 与内置 window method完全同构",
                 "CustomCommandContext": "exec 收到的 ctx；标准 CommandExecutionContext + self: ProgramSelf",
-                "ctx.self.callCommand": "在命令内部调本对象其它命令：\`await ctx.self.callCommand(\"custom:<self>\", \"<name>\", { ... })\`",
+                "ctx.self.callMethod": "在method内部调本对象其它method：\`await ctx.self.callMethod(\"custom:<self>\", \"<name>\", { ... })\`",
                 "ctx.self.getData/setData": "读写 stone 的 data.json；setData 是顶层 merge",
             },
         },
         "step3_invocation_paths": {
-            title: "Step 3 — LLM 如何调用你的命令",
+            title: "Step 3 — LLM 如何调用你的method",
             content: `
             LLM 看到你的 custom window 之后，有两条调用路径（plan §6.5）：
 
-            **路径 A：直接 open 命令（推荐）**
+            **路径 A：直接 open method（推荐）**
 
             \`\`\`
-            exec(window_id="custom:<self>", command="create_factor", args={ name: "动量因子", formula: "..." })
+            exec(window_id="custom:<self>", method="create_factor", args={ name: "动量因子", formula: "..." })
             refine(form_id=..., args={ ... })   # 可选：分步填参
             submit(form_id=...)
             \`\`\`
@@ -239,12 +239,12 @@ export const root: DocTreeNode = {
             与 do_window.continue / talk_window.say 完全同构；form 生命周期、knowledge
             激活、submit 即执行的所有机制都自动适用。
 
-            **路径 B：program.callCommand 通用元操作（脚本编排时用）**
+            **路径 B：program.callMethod 通用元操作（脚本编排时用）**
 
             \`\`\`
-            exec(command="program", args={
+            exec(method="program", args={
               window_id: "custom:<self>",
-              command: "create_factor",
+              method: "create_factor",
               args: { name: "动量因子", formula: "..." }
             })
             \`\`\`
@@ -252,13 +252,13 @@ export const root: DocTreeNode = {
             或者在 ts/js sandbox 里编排多次调用：
 
             \`\`\`
-            exec(command="program", args={
+            exec(method="program", args={
               language: "ts",
               code: \`
-                const r1 = await self.callCommand("custom:factor_workshop", "create_factor",
+                const r1 = await self.callMethod("custom:factor_workshop", "create_factor",
                   { name: "动量因子", formula: "..." });
                 if (r1.ok) {
-                  return await self.callCommand("custom:factor_workshop", "publish_factor",
+                  return await self.callMethod("custom:factor_workshop", "publish_factor",
                     { name: "动量因子" });
                 }
                 return r1;
@@ -266,14 +266,14 @@ export const root: DocTreeNode = {
             })
             \`\`\`
 
-            \`self.callCommand(windowId, command, args?)\` 不仅可调你自己的命令，还可调
-            thread 内任意 window 上的命令（do_window.continue / file_window.edit 等都可）——
-            把"调命令"统一成一个签名。
+            \`self.callMethod(windowId, method, args?)\` 不仅可调你自己的 method，还可调
+            thread 内任意 window 上的 method（do_window.continue / file_window.edit 等都可）——
+            把"调 method"统一成一个签名。
             `,
             named: {
                 "exec(window_id=\"custom:<self>\", ...)": "直接路径；form lifecycle 完整",
-                "program.callCommand": "脚本编排路径；可在 ts/js sandbox 里多步调命令",
-                "self.callCommand": "ProgramSelf 上的统一入口；与 program.callCommand 共享同一行为",
+                "program.callMethod": "脚本编排路径；可在 ts/js sandbox 里多步调method",
+                "self.callMethod": "ProgramSelf 上的统一入口；与 program.callMethod 共享同一行为",
             },
         },
         "step4_knowledge_and_relations": {
@@ -298,7 +298,7 @@ export const root: DocTreeNode = {
             \`\`\`
 
             把它写到 \`stones/<self>/knowledge/memory/factor-decomposition.md\`，下次
-            LLM 在 \`exec(command="create_factor")\` 或与你 talk 时，系统会自动把这段
+            LLM 在 \`exec(method="create_factor")\` 或与你 talk 时，系统会自动把这段
             knowledge 注入 context。
 
             关系文件 \`knowledge/relations/<peerId>.md\`：当 thread 里出现
@@ -319,8 +319,8 @@ export const root: DocTreeNode = {
             - 他对回测耗时敏感；如果回测超过 30 分钟，先 talk 给他确认再继续
             \`\`\`
 
-            形成新认知后通过 \`exec(command="write_file", path="stones/<self>/knowledge/relations/<peer>.md", content="...")\`
-            或 \`exec(command="open_file") + edit\` 增量更新即可。下次再与该 peer 对话时，
+            形成新认知后通过 \`exec(method="write_file", path="stones/<self>/knowledge/relations/<peer>.md", content="...")\`
+            或 \`exec(method="open_file") + edit\` 增量更新即可。下次再与该 peer 对话时，
             文件自动作为 knowledge 出现在你的 context。
             `,
             named: {
@@ -362,7 +362,7 @@ export const root: DocTreeNode = {
             **关键点**：
             - props 至少接 \`{ sessionId?, objectName?, callMethod? }\`
             - \`callMethod(name, args)\` 调你 executable/index.ts 里 \`ui_methods[name]\` ——
-              **不是 \`window.commands\`**（后者是给 LLM 的）
+              **不是 \`window.methods\`**（后者是给 LLM 的）
             - 没写 client/index.tsx 时 web 走 Stone fallback（自动展示
               self.md / readable.md / knowledge / Recent flows）
 
@@ -417,16 +417,16 @@ export const root: DocTreeNode = {
 
             **使用流程**（Agent 视角）:
             1. skill_index window 自动出现在 context（仅当至少有一个 skill 时）
-            2. Agent 看 skill_index 列表 + description，按需 \`exec(command="open_file", args={ path: "<skillFilePath>" })\` 打开 SKILL.md
+            2. Agent 看 skill_index 列表 + description，按需 \`exec(method="open_file", args={ path: "<skillFilePath>" })\` 打开 SKILL.md
             3. 进一步 \`open_file\` 读 references / scripts
             4. 按 SKILL.md 指引完成任务
 
             **何时写 skill 而不是 knowledge / server method**:
-            - knowledge：被动激活（按 command path 命中），适合"协议补全 / 行为习惯"
-            - server method（custom command）：调用即执行，适合"明确无歧义的函数操作"
+            - knowledge：被动激活（按 method path 命中），适合"协议补全 / 行为习惯"
+            - server method（custom method）：调用即执行，适合"明确无歧义的函数操作"
             - **skill**：主动选择（LLM 看索引判断要不要进入），适合"多步骤工作流 / 大块协议 / 需要辅助文件的复杂操作"
 
-            **演化路径**：与其它 stone 资源一样，通过 \`exec(command="write_file", path="stones/<self>/skills/<name>/SKILL.md", content="...")\`
+            **演化路径**：与其它 stone 资源一样，通过 \`exec(method="write_file", path="stones/<self>/skills/<name>/SKILL.md", content="...")\`
             写入；skill_index 在 10s 缓存窗口后自动刷新。
             `,
             named: {
@@ -441,7 +441,7 @@ export const root: DocTreeNode = {
             Agent 在运行中可以通过元编程自演化：
 
             \`\`\`
-            exec(command="write_file",
+            exec(method="write_file",
                  path="stones/<self>/executable/index.ts",
                  content="...")
             \`\`\`
@@ -449,20 +449,20 @@ export const root: DocTreeNode = {
             写完之后：
 
             1. loader 看到文件 mtime 变化 → ?t=mtime 强制重新 import
-            2. 下一次 \`exec(window_id="custom:<self>", command="<name>")\` 或
-               \`self.callCommand(...)\` 立即看到新命令
+            2. 下一次 \`exec(window_id="custom:<self>", method="<name>")\` 或
+               \`self.callMethod(...)\` 立即看到新method
             3. **不需要重启进程、不需要重新部署**
 
-            **增量演化更稳**：用 \`exec(command="open_file", args={path:...}) + edit\`
-            在 \`window.commands\` 字面量里追加一条 key，比每次重写整文件更安全。
+            **增量演化更稳**：用 \`exec(method="open_file", args={path:...}) + edit\`
+            在 \`window.methods\` 字面量里追加一条 key，比每次重写整文件更安全。
 
             **演化触发场景**：
-            - 业务 thread 里发现一类操作反复手写 → 抽成 command 沉淀
+            - 业务 thread 里发现一类操作反复手写 → 抽成 method 沉淀
             - super flow（反思场景）里发现一类问题反复出现 → 在 knowledge/memory/ 沉淀
             - 与 peer talk 时形成新认知 → 在 knowledge/relations/<peer>.md 沉淀
 
             **写权限边界**：
-            - 业务 thread 里轻改自己的 stone（加 command / 写 memory）→ 直接 write_file
+            - 业务 thread 里轻改自己的 stone（加 method / 写 memory）→ 直接 write_file
             - 结构性改动（改 self.md 身份、重组 server 模块、设计 client 主页）→
               通过 \`talk(target="super")\` 让 super 分身先帮你想清楚再写
             - 改别人的 stone：不允许直接 write_file；通过 metaprog 协议（PR-Issue / supervisor 评审）走
@@ -471,7 +471,7 @@ export const root: DocTreeNode = {
             适合"改 stone 但需要 review / rollback"的场景。
             `,
             named: {
-                "热更生效条件": "mtime 变化 → loader cache 失效 → 下一次调命令 re-import",
+                "热更生效条件": "mtime 变化 → loader cache 失效 → 下一次调method re-import",
                 "metaprog 协议": "结构性改动的安全路径；worktree + commit + merge；详见 reflectable.metaprogramming",
                 "增量 edit": "open_file + edit 比重写整文件更稳；保留 git-friendly diff",
             },
@@ -479,12 +479,12 @@ export const root: DocTreeNode = {
     },
     patches: {
         "ui_methods_isolation": {
-            title: "ui_methods 与 window.commands 是两条平行通道",
+            title: "ui_methods 与 window.methods 是两条平行通道",
             content: `
             两者表达的是不同维度的能力：
 
-            - \`window.commands\`（programmable / executable.context_window）：
-              给 LLM 的命令字典；通过 open/refine/submit 协议调用，享受 form lifecycle
+            - \`window.methods\`（programmable / executable.context_window）：
+              给 LLM 的method字典；通过 open/refine/submit 协议调用，享受 form lifecycle
               + path-based knowledge 激活。
 
             - \`ui_methods\`（visible）：
@@ -514,7 +514,7 @@ export const root: DocTreeNode = {
     },
     sources: [["src/executable/server/window-types.ts", "ObjectWindowDefinition 与 CustomCommandContext 的真值定义"]],
     todo: [
-        "params schema 校验：当前 CommandTableEntry.match/knowledge 不强制 args 类型；如果未来加上，本指南需要补 schema 字段说明。",
+        "params schema 校验：当前 MethodEntry.match/knowledge 不强制 args 类型；如果未来加上，本指南需要补 schema 字段说明。",
         "示例工程：建议在仓库中添加一个 minimal-agent 示例 stone，跟随本指南可以一键跑起来。",
     ],
 };

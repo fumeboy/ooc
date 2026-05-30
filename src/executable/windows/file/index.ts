@@ -3,7 +3,7 @@
  *
  * - 由 root.open_file / root.write_file 创建（args: path, lines?, columns?）
  *   open 时自动填默认 viewport = 0-200 行 / 0-200 字符（DEFAULT_VIEWPORT）
- * - 注册的 command：set_viewport / set_range / reload / edit / close
+ * - 注册的 method：set_viewport / set_range / reload / edit / close
  *   - **set_viewport（推荐）**：精细化调整渲染窗口（line_start/line_end/column_start/column_end）
  *   - set_range：遗留命令，调整 lines / columns 切片（保留向后兼容）
  *   - reload：重新读文件（render 层每轮都会读，所以 reload 主要是语义提示）
@@ -102,7 +102,7 @@ file_window 上下次 render 自然出现）、并且支持原子多点修改。
 ### 单次替换
 
 \`\`\`
-open(parent_window_id="<file_window_id>", command="edit",
+open(parent_window_id="<file_window_id>", method="edit",
      title="rename helper",
      args={ old: "function helperA(", new: "function helperB(" })
 \`\`\`
@@ -110,7 +110,7 @@ open(parent_window_id="<file_window_id>", command="edit",
 ### 一次提交多点替换（MultiEdit 风格，atomic-or-fail）
 
 \`\`\`
-open(parent_window_id="<file_window_id>", command="edit",
+open(parent_window_id="<file_window_id>", method="edit",
      title="batch rename",
      args={ edits: [
        { old: "function helperA(", new: "function helperB(" },

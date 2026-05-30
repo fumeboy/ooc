@@ -368,7 +368,7 @@ export function usedShellProgram(thread: ThreadContext | undefined): boolean {
   for (const e of thread.events) {
     if (!isFnCall(e) || e.toolName !== "exec") continue;
     const args = (e.arguments ?? {}) as Record<string, unknown>;
-    if (args.command !== "root.program") continue;
+    if (args.method !== "root.program") continue;
     const nested = (args.args as Record<string, unknown> | undefined) ?? {};
     const lang = nested.language ?? nested.lang ?? args.language ?? args.lang;
     if (lang === "shell") return true;

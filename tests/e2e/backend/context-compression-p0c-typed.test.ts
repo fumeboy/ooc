@@ -83,7 +83,7 @@ async function expandWindow(
     name: "exec",
     arguments: {
       window_id: windowId,
-      command: "expand",
+      method: "expand",
       title: `expand ${windowId}`,
     },
   });

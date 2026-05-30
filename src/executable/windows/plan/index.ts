@@ -6,7 +6,7 @@
  *
  * 职责（与 file/talk/do 同协议）：
  * - types: PlanWindow / PlanWindowStep（已在 types.ts）
- * - commands: update_plan / add_step / update_step / expand_step / collapse_subplan / mark_done / close
+ * - methods: update_plan / add_step / update_step / expand_step / collapse_subplan / mark_done / close
  * - renderXml: live 完整渲染（title / description / steps 列表）
  * - compressView: level 1 / level 2 折叠态
  * - onClose: cascade close 所有 sub plan_window
@@ -151,7 +151,7 @@ function updatePlanWindow(ctx: MethodExecutionContext, next: PlanWindow): void {
   }
 }
 
-// ─────────────────────────── commands ─────────────────────────────────────────
+// ─────────────────────────── methods ─────────────────────────────────────────
 
 const updatePlanCommand: MethodEntry = {
   paths: ["update_plan"],
@@ -445,9 +445,9 @@ function onClosePlanWindow(ctx: OnCloseContext): boolean | void {
 
 const PLAN_BASIC_KNOWLEDGE = `
 plan_window 是 thread 的行动计划窗口（first-class ContextWindow）。
-由 root.plan command 创建/更新；支持 sub plan 嵌套 + 通过 do.share_windows 共享给子 thread。
+由 root.plan method 创建/更新；支持 sub plan 嵌套 + 通过 do.share_windows 共享给子 thread。
 
-在 plan_window 上可调命令（通过 exec(parent_window_id="<plan_window_id>", command="X", args=...) 调用）：
+在 plan_window 上可调 method（通过 exec(parent_window_id="<plan_window_id>", method="X", args=...) 调用）：
 - update_plan: 更新 plan.title / description
 - add_step: 追加 step（参数 text 必填；status 可选，默认 pending）
 - update_step: 修改某 step 的 text / status（参数 step_id 必填）

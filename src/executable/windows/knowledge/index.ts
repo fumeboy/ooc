@@ -2,14 +2,14 @@
  * knowledge_window — 一段 knowledge 文本作为 window 出现在 context 中。
  *
  * 三种 source：
- * - explicit  ：LLM 显式 \`open(command="open_knowledge")\` 创建；持久化；可 close
+ * - explicit  ：LLM 显式 \`open(method="open_knowledge")\` 创建；持久化；可 close
  * - protocol  ：每轮自动注入的协议常量（KNOWLEDGE）+ 各 command_exec form 的 knowledge() 派生
  * - activator ：stones/{id}/knowledge/*.md 经 commandPaths 命中合成；带 presentation
  *
  * 后两种由 src/executable/index.ts: synthesizeKnowledgeWindows 在 buildInputItems 阶段
  * 合成到 thread.contextWindows 的副本上，不会持久化。
  *
- * 注册的 command：reload / close
+ * 注册的 method：reload / close
  * - reload：强制下一轮重新激活；loader 已按 mtime 失效缓存，主要是语义提示
  * - close：仅 explicit 来源可关闭；protocol / activator 由 onClose hook 拒绝
  */

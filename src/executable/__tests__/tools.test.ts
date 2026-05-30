@@ -28,14 +28,14 @@ describe("executable tools (ContextWindow model)", () => {
     expect(tools).toHaveLength(4);
   });
 
-  it("exec(command=plan) 创建 command_exec form 并预填 args（plan 缺 plan 文本时不会被立即提交）", async () => {
+  it("exec(method=plan) 创建 command_exec form 并预填 args（plan 缺 plan 文本时不会被立即提交）", async () => {
     const thread = makeThread();
     const output = await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
       arguments: {
         title: "制定计划",
-        command: "plan",
+        method: "plan",
         description: "拆解迁移工作",
       },
     });
@@ -57,7 +57,7 @@ describe("executable tools (ContextWindow model)", () => {
       name: "exec",
       arguments: {
         title: "立刻设定计划",
-        command: "plan",
+        method: "plan",
         args: { plan: "先 reshape，再迁移测试" },
       },
     });
@@ -76,7 +76,7 @@ describe("executable tools (ContextWindow model)", () => {
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生子线程", command: "do", description: "fork" },
+      arguments: { title: "派生子线程", method: "do", description: "fork" },
     });
     const formId = thread.contextWindows.find((w) => w.type === "command_exec")?.id ?? "";
     const output = await dispatchToolCall(thread, {
@@ -85,7 +85,7 @@ describe("executable tools (ContextWindow model)", () => {
       arguments: {
         title: "补 wait",
         window_id: formId,
-        command: "refine",
+        method: "refine",
         args: { wait: true },
       },
     });
@@ -101,7 +101,7 @@ describe("executable tools (ContextWindow model)", () => {
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", command: "do", description: "fork" },
+      arguments: { title: "派生", method: "do", description: "fork" },
     });
     const formId = thread.contextWindows.find((w) => w.type === "command_exec")?.id ?? "";
     await dispatchToolCall(thread, {
@@ -110,14 +110,14 @@ describe("executable tools (ContextWindow model)", () => {
       arguments: {
         title: "补 msg",
         window_id: formId,
-        command: "refine",
+        method: "refine",
         args: { msg: "处理日志" },
       },
     });
     const output = await dispatchToolCall(thread, {
       id: "call_3",
       name: "exec",
-      arguments: { title: "执行 fork", window_id: formId, command: "submit" },
+      arguments: { title: "执行 fork", window_id: formId, method: "submit" },
     });
 
     const parsed = JSON.parse(output);
@@ -131,13 +131,13 @@ describe("executable tools (ContextWindow model)", () => {
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", command: "do", description: "fork" },
+      arguments: { title: "派生", method: "do", description: "fork" },
     });
     const formId = thread.contextWindows.find((w) => w.type === "command_exec")?.id ?? "";
     await dispatchToolCall(thread, {
       id: "call_2",
       name: "exec",
-      arguments: { title: "执行", window_id: formId, command: "submit" },
+      arguments: { title: "执行", window_id: formId, method: "submit" },
     });
     const form = thread.contextWindows.find((w) => w.id === formId);
     expect(form?.type).toBe("command_exec");
@@ -150,7 +150,7 @@ describe("executable tools (ContextWindow model)", () => {
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", command: "do", description: "fork" },
+      arguments: { title: "派生", method: "do", description: "fork" },
     });
     const formId = thread.contextWindows.find((w) => w.type === "command_exec")?.id ?? "";
     const output = await dispatchToolCall(thread, {

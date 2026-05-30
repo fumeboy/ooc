@@ -119,9 +119,9 @@ describe("executable commands", () => {
   it("should describe program executing and failed knowledge without relying on inline form wording (Round 13)", () => {
     expect(
       programCommand.knowledge?.({ language: "shell", code: "ls" }, "executing")?.["internal/executable/program/form-status"]
-    ).toContain("对于 command program 的 executing 状态的 form");
+    ).toContain("对于 method program 的 executing 状态的 form");
     expect(
       programCommand.knowledge?.({ function: "readFile", args: { path: "a" } }, "failed")?.["internal/executable/program/form-status"]
-    ).toContain("对于 command program 的 failed 状态的 form");
+    ).toContain("对于 method program 的 failed 状态的 form");
   });
 });

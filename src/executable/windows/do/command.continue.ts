@@ -23,10 +23,10 @@ do_window.continue 用于向 do_window 关联的对端线程追加消息。
 - wait: 可选，true 时本 thread 进入 waiting，等对端回写消息再唤醒
 
 示例（父向子追加）：
-open(parent_window_id="<do_window_id>", command="continue", title="追加任务", args={ msg: "再处理一批", wait: true })
+open(parent_window_id="<do_window_id>", method="continue", title="追加任务", args={ msg: "再处理一批", wait: true })
 
 示例（子向父回报）：
-open(parent_window_id="<creator_do_window_id>", command="continue", args={ msg: "已处理完毕：见 memo/x.md" })
+open(parent_window_id="<creator_do_window_id>", method="continue", args={ msg: "已处理完毕：见 memo/x.md" })
 `.trim();
 
 async function executeDoWindowContinue(ctx: MethodExecutionContext): Promise<string | undefined> {

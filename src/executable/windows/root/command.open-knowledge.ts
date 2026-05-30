@@ -1,5 +1,5 @@
 /**
- * root.open_knowledge command — 显式打开一个 knowledge doc 作为 knowledge_window。
+ * root.open_knowledge method — 显式打开一个 knowledge doc 作为 knowledge_window。
  *
  * - args: path（必填，相对 stones/{objectId}/knowledge/ 的路径，不带 .md）
  * - 给齐 path 即直建 knowledge_window（open 立即提交 form）
@@ -38,7 +38,7 @@ open_knowledge 用于显式打开一个 knowledge doc，作为 knowledge_window 
 - 关闭：close(window_id="<knowledge_window_id>")
 
 调用示例：
-open(command="open_knowledge", title="pin file-ops", args={ path: "build-tools/file-ops" })
+open(method="open_knowledge", title="pin file-ops", args={ path: "build-tools/file-ops" })
 `.trim();
 
 export const openKnowledgeCommand: MethodEntry = {

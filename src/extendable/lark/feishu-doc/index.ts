@@ -41,9 +41,9 @@ const PROTOCOL_KNOWLEDGE = `
 feishu_doc_window 是 OOC 与飞书文档之间的 ContextWindow。
 
 每个 docToken 对应一个 window 实例。docKind 区分 doc / docx / sheet / base / wiki / drive_md，
-不同类型在 read / patch 行为上有差异（详见各 command 知识）。
+不同类型在 read / patch 行为上有差异（详见各 method 知识）。
 
-可用 command：
+可用 method：
 - read：拉全文到 window.content（mode=read）
 - search_in_doc：文档内查找（无副作用）
 - append：末尾追加（**有副作用，强制 dry-run gate**）
@@ -54,7 +54,7 @@ feishu_doc_window 是 OOC 与飞书文档之间的 ContextWindow。
 
 身份约定：默认 \`--as user\`（飞书文档读写通常依赖个人 scope）；attach_to_chat 默认 bot。
 
-注意：飞书文档的 patch 撤销成本高，所有写类命令必须经过 dry-run 预览 + 二次 confirm。
+注意：飞书文档的 patch 撤销成本高，所有写类 method 必须经过 dry-run 预览 + 二次 confirm。
 `.trim();
 
 const READ_KNOWLEDGE = `
@@ -65,7 +65,7 @@ feishu_doc.read 把飞书文档内容拉到 window.content（覆盖式）。
   - markdown：把文档转 markdown 文本（lark-cli markdown +fetch；适合 docx / drive_md / wiki 中的 docx 子节点）
   - blocks：拉块结构（lark-cli docs +read --include-blocks）；适合 patch_block 前确认 block_id
 
-调用：open(parent_window_id="<feishu_doc_window_id>", command="read", args={ format: "markdown" })
+调用：open(parent_window_id="<feishu_doc_window_id>", method="read", args={ format: "markdown" })
 
 副作用：仅本地 window 字段更新；不修改飞书一侧。
 `.trim();
@@ -94,7 +94,7 @@ const APPEND_DRY_RUN_KNOWLEDGE = `
 `.trim();
 
 const PATCH_KNOWLEDGE = `
-feishu_doc.patch_block 修改 / 插入特定 block。**最高风险命令**——强制 dry-run gate + version 检查。
+feishu_doc.patch_block 修改 / 插入特定 block。**最高风险 method**——强制 dry-run gate + version 检查。
 
 参数：
 - block_id: 必填，目标块 id（先 read --format=blocks 拿到）
@@ -137,7 +137,7 @@ const CLOSE_KNOWLEDGE = `
 feishu_doc.close 释放 window；不影响飞书一侧的文档。
 `.trim();
 
-// ─────────────────────────── command 实现 ────────────────────────────
+// ─────────────────────────── method 实现 ────────────────────────────
 
 const readCommand: MethodEntry = {
   paths: ["read"],

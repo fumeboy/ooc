@@ -47,7 +47,7 @@ export const root: DocTreeNode = {
     单元测试不归本树管 (沿用各模块 __tests__/ 下的 bun:test 自然规范)。
 
     核心组成:
-    1. 两个观察孔 (A/B): A=User story (任务是否真完成); B=OOC 机制 (LLM 走过的 windows / commands / talk-delivery 是否对)。两者同时通过才叫 e2e 通过。
+    1. 两个观察孔 (A/B): A=User story (任务是否真完成); B=OOC 机制 (LLM 走过的 windows / methods / talk-delivery 是否对)。两者同时通过才叫 e2e 通过。
     2. 三档评分基准 (Good / OK / Bad): 每个场景跑完根据可观察事实落到一档；通过门槛 >= OK；Bad 是真信号、OK 多发是黄信号。
     3. 入口分离: backend e2e (HTTP API + worker + LLM + 文件系统) 与 frontend e2e (Web UI + Playwright + 真后端 + 真 LLM) 各一份场景集，独立演进、共享策略。
     4. 横切政策: 真 LLM / mock LLM / 半真三种触发模式，env-gated；CI 单场景允许重试 1 次；OK/Good 趋势归档。
@@ -58,8 +58,8 @@ export const root: DocTreeNode = {
     named: {
         "e2e": "end-to-end 测试; OOC 上下文中特指 \"用户真把 OOC 当 CodeAgent\" 那条完整链路",
         "观察孔 A": "User story 视角: 任务是否完成、文件是否真改、对话是否回到 user",
-        "观察孔 B": "OOC 机制视角: LLM 走过的 commands / windows / talk-delivery 双写 / form 状态流转",
-        "Good": "系统按设计的最优路径完成 (推荐命令 + 无绕行)",
+        "观察孔 B": "OOC 机制视角: LLM 走过的 methods / windows / talk-delivery 双写 / form 状态流转",
+        "Good": "系统按设计的最优路径完成 (推荐 method + 无绕行)",
         "OK": "任务完成但有可观察的浪费或绕行 (容忍区, 需趋势观察)",
         "Bad": "任务没完成 / 用户看不到结果 / 机制状态错乱; 通过门槛是 >= OK",
         "真 LLM e2e": "走真模型, env-gated, 默认 skip; OOC 主线 e2e 形态",
@@ -368,7 +368,7 @@ export const root: DocTreeNode = {
             横切设计: e2e 的 "是否好用" 必须同时通过两个观察孔。
 
             - A. User story: 用户给一个真实任务 (如 "在 src/foo.ts 中把函数 X 改名为 Y"), 任务是否完成、文件是否真改、对话是否回到 user。视角: 用户。
-            - B. OOC 机制: LLM 走了什么 commands / 创建了什么 windows / talk-delivery 双写是否正确 / form 状态是否正常流转。视角: OOC 设计者。
+            - B. OOC 机制: LLM 走了什么 methods / 创建了什么 windows / talk-delivery 双写是否正确 / form 状态是否正常流转。视角: OOC 设计者。
 
             两孔同时通过才算 e2e 通过:
             - 只看 A 会漏 OOC 自身退化 (任务完成了但用 shell sed 而非 file_window.edit)
@@ -379,8 +379,8 @@ export const root: DocTreeNode = {
             title: "三档评分基准 Good / OK / Bad",
             content: `
             横切判定规则:
-            - Good: 系统按设计的最优路径完成 (thread.status=done; 用户能看到回复; 用了 OOC 推荐命令而非 shell; 无 form 重启 / talk_window 误关闭)。
-            - OK: 任务完成但有可观察的浪费或绕行 (多开 form 又关 / shell 改文件 / talk_window 被 close 又重开 / 命令重试多次后成功)。
+            - Good: 系统按设计的最优路径完成 (thread.status=done; 用户能看到回复; 用了 OOC 推荐 method 而非 shell; 无 form 重启 / talk_window 误关闭)。
+            - OK: 任务完成但有可观察的浪费或绕行 (多开 form 又关 / shell 改文件 / talk_window 被 close 又重开 / method 重试多次后成功)。
             - Bad: 任务没完成, 或完成但用户看不到结果, 或机制状态错乱 (thread 卡 running/waiting; user.root 收不到回复; on-disk 文件未变更; form 一直 executing; callee.inbox 与 caller.outbox 不一致)。
 
             判定规则:
@@ -410,7 +410,7 @@ export const root: DocTreeNode = {
             content: `
             真实 LLM 有方差。同一 prompt 跑两次可能选不同路径。本策略态度:
             - 不强求 Good — 通过门槛是 >= OK
-            - Bad 是真信号 — 几乎一定是 OOC 真错了 (协议文本误导 / 命令实现 bug / 通路断了), 不是 LLM 一次发挥
+            - Bad 是真信号 — 几乎一定是 OOC 真错了 (协议文本误导 / method 实现 bug / 通路断了), 不是 LLM 一次发挥
             - OK 多发是黄信号 — 连续 N 次都 OK 不到 Good, 说明 OOC 引导力在某处不够, 回看协议文本
             - 重试政策 — CI 上每个场景允许重试 1 次; 两次都 Bad 才视为失败; 重试需打日志记录原因
             - OK / Good 趋势归档 — 每次 CI 跑出来的 "命中档 + 关键观察值" 应留作 artifact, 便于人审查退化信号

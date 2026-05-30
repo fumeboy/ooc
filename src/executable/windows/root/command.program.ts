@@ -1,15 +1,15 @@
 /**
- * root.program command — 创建一个 program_window 并立即执行第一次 exec。
+ * root.program method — 创建一个 program_window 并立即执行第一次 exec。
  *
  * - submit 副作用：在 thread.contextWindows 下挂 type=program 的 window；
  *   args 中的 language+code 作为首次 exec 立即跑，结果进 history[0]
- * - 后续 exec：通过 program_window 上注册的 \`exec\` command（windows/program/index.ts）
+ * - 后续 exec：通过 program_window 上注册的 \`exec\` method（windows/program/index.ts）
  * - 跨 exec 共享数据通道：仅 ts/js sandbox 可读写 thread.threadLocalData
  *
- * args 含完整 language+code 时，exec(command="program") 立即执行。
+ * args 含完整 language+code 时，exec(method="program") 立即执行。
  *
- * 历史：旧 program 还支持 callCommand / function 模式（window_id+command 调命令），
- * 顶层 exec tool 上线后此模式已下线（plan exec-refactor）；要调命令直接用顶层 exec tool。
+ * 历史：旧 program 还支持 callMethod / function 模式（window_id+method 调 method），
+ * 顶层 exec tool 上线后此模式已下线（plan exec-refactor）；要调 method 直接用顶层 exec tool。
  */
 
 import type {
@@ -32,7 +32,7 @@ const PROGRAM_FORM_STATUS_PATH = "internal/executable/program/form-status";
 const KNOWLEDGE = `
 program 用于执行一段 shell / ts / js 代码；submit 后产出一个 program_window，
 首次 exec 立即跑完，结果进 program_window.history。后续 exec 通过该 window 的
-\`exec\` command 触发。
+\`exec\` method 触发。
 
 参数（首次 exec）：
 - language: shell / ts / js（与 code 配合，必填）
@@ -43,18 +43,18 @@ shell 环境变量：
 - 想读写自己的 stone 目录（self.dir），用 env $OOC_SELF_DIR
 
 ts/js 上下文：
-- self.dir / self.callCommand(windowId, command, args?) / self.getData / self.setData 可用
+- self.dir / self.callMethod(windowId, method, args?) / self.getData / self.setData 可用
 - 跨 exec 共享：self.getThreadLocal(key) / self.setThreadLocal(key, value)
 - shell 之间不共享 threadLocal（OS 进程隔离），需要时自行写入 stone data
 
 后续多次执行：
-- exec(window_id="<program_window_id>", command="exec", args={ language, code })
+- exec(window_id="<program_window_id>", method="exec", args={ language, code })
 
 调用示例：
-exec(command="program", title="统计 ts 文件数量", args={ language: "shell", code: "find src -name '*.ts' | wc -l" })
+exec(method="program", title="统计 ts 文件数量", args={ language: "shell", code: "find src -name '*.ts' | wc -l" })
 
-要调任意 window 上的命令请直接用顶层 \`exec\` tool（不再走 program）；
-ts/js sandbox 内仍可 \`await self.callCommand("custom:<self>", "<name>", {...})\` 编排多步调用。
+要调任意 window 上的 method 请直接用顶层 \`exec\` tool（不再走 program）；
+ts/js sandbox 内仍可 \`await self.callMethod("custom:<self>", "<name>", {...})\` 编排多步调用。
 
 ## 建议
 
@@ -92,16 +92,16 @@ export const programCommand: MethodEntry = {
     const code = typeof args.code === "string" ? args.code.trim() : "";
 
     if (formStatus === "executing") {
-      entries[PROGRAM_FORM_STATUS_PATH] = "对于 command program 的 executing 状态的 form，应等待 result 写入后再继续，不要再次 refine 或 submit。";
+      entries[PROGRAM_FORM_STATUS_PATH] = "对于 method program 的 executing 状态的 form，应等待 result 写入后再继续，不要再次 refine 或 submit。";
       return entries;
     }
     if (formStatus === "success") {
       // 理论上 success 后 form 已被自动移除; 这里保留兜底以防 render 时机问题。
-      entries[PROGRAM_FORM_STATUS_PATH] = "对于 command program 的 success 状态的 form，结果已成功生成；form 将自动从 context 移除。";
+      entries[PROGRAM_FORM_STATUS_PATH] = "对于 method program 的 success 状态的 form，结果已成功生成；form 将自动从 context 移除。";
       return entries;
     }
     if (formStatus === "failed") {
-      entries[PROGRAM_FORM_STATUS_PATH] = "对于 command program 的 failed 状态的 form，先阅读 result 排查错误：可 refine(form_id, args={ language, code }) 修正参数后重 submit（form 会自动切回 open），或 close(form_id, reason=...) 彻底放弃。";
+      entries[PROGRAM_FORM_STATUS_PATH] = "对于 method program 的 failed 状态的 form，先阅读 result 排查错误：可 refine(form_id, args={ language, code }) 修正参数后重 submit（form 会自动切回 open），或 close(form_id, reason=...) 彻底放弃。";
       return entries;
     }
 

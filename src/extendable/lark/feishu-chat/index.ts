@@ -10,7 +10,7 @@
  * - close：释放 window
  *
  * 不在本类型职责内：
- * - 创建群 / 加成员 / 撤回消息（走 raw `lark-cli api` 临时，不上升为 first-class command）
+ * - 创建群 / 加成员 / 撤回消息（走 raw `lark-cli api` 临时，不上升为 first-class method）
  * - 跨群转发（由 feishu_doc.attach_to_chat 等做引用，群聊 send 不直接搬内容）
  *
  * 鉴权：默认 send/reply 用 `--as bot`（supervisor 决策 §七.2），其它命令用 user。
@@ -45,9 +45,9 @@ const PROTOCOL_KNOWLEDGE = `
 feishu_chat_window 是 OOC 与飞书群聊 / 单聊之间的 ContextWindow。
 
 每个 chat_id 对应一个 window 实例。窗口持有最近 buffer（messages 切片），
-LLM 通过下列 command 操作；窗口本身不直接显示历史消息全文，过长会截断。
+LLM 通过下列 method 操作；窗口本身不直接显示历史消息全文，过长会截断。
 
-可用 command：
+可用 method：
 - refresh：拉最新 N 条（无副作用；改 mode=tail）
 - search：本群关键字搜索（无副作用；切 mode=search）
 - send：发新消息（**有副作用，强制 dry-run gate**）
@@ -70,7 +70,7 @@ feishu_chat.refresh 拉取本群最近的消息到 window.buffer。
 - count: 可选，期望条数，1..${MAX_TAIL}，缺省 ${DEFAULT_TAIL}
 - since_message_id: 可选，从该 id **之后**增量拉（用于轮询订阅）
 
-调用：open(parent_window_id="<feishu_chat_window_id>", command="refresh", args={ count: 50 })
+调用：open(parent_window_id="<feishu_chat_window_id>", method="refresh", args={ count: 50 })
 
 副作用：仅本地 window 字段更新；不发飞书消息。
 `.trim();
@@ -82,7 +82,7 @@ feishu_chat.search 在本群范围内按关键字搜索消息，临时把 window
 - query: 必填，搜索关键字（飞书算子如 from: / has:link / time:YYYY-MM-DD 可用）
 - limit: 可选，最多返回条数，1..${MAX_TAIL}，缺省 30
 
-调用：open(parent_window_id="<feishu_chat_window_id>", command="search", args={ query: "OOC 灰度", limit: 20 })
+调用：open(parent_window_id="<feishu_chat_window_id>", method="search", args={ query: "OOC 灰度", limit: 20 })
 
 切回最近消息：refresh（任意参数）。
 `.trim();
@@ -102,10 +102,10 @@ feishu_chat.send 在本群发一条新消息。**强制 dry-run gate**（supervi
 - text: 必填，纯文本（飞书 markdown 子集；@ 用 <at user_id="..."> ... </at>，详见 feishu_message_grammar 知识）
 - as: 可选，"bot" | "user"，缺省 bot
 - confirm: 必须 true 才真发；首次 submit 通常省略以触发 dry-run 预览
-- msg_type: 可选，缺省 "text"；如需富文本卡片走 raw API，本 command 暂不直接支持
+- msg_type: 可选，缺省 "text"；如需富文本卡片走 raw API，本 method 暂不直接支持
 
 调用流程：
-1. open(parent_window_id="<feishu_chat_window_id>", command="send", args={ text: "..." })
+1. open(parent_window_id="<feishu_chat_window_id>", method="send", args={ text: "..." })
 2. submit(form_id) → 看 dry_run 预览
 3. refine(form_id, { confirm: true }) → submit(form_id) → 真发
 `.trim();
@@ -139,7 +139,7 @@ const CLOSE_KNOWLEDGE = `
 feishu_chat.close 释放 window；不影响飞书一侧的消息或会话。
 `.trim();
 
-// ─────────────────────────── command 实现 ────────────────────────────
+// ─────────────────────────── method 实现 ────────────────────────────
 
 const refreshCommand: MethodEntry = {
   paths: ["refresh"],

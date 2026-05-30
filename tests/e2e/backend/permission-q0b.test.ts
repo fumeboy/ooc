@@ -156,7 +156,7 @@ describe("[q0b] permission — A. Allow 默认", () => {
       name: "exec",
       arguments: {
         title: "safe call",
-        command: "_test_q0b_safe",
+        method: "_test_q0b_safe",
         args: {},
       },
     };
@@ -194,7 +194,7 @@ describe("[q0b] permission — B. Deny via MethodEntry", () => {
       name: "exec",
       arguments: {
         title: "danger call",
-        command: "_test_q0b_danger",
+        method: "_test_q0b_danger",
         args: { payload: "rm -rf /" },
       },
     };
@@ -259,7 +259,7 @@ describe("[q0b] permission — C. Deny via policies.json", () => {
       const toolCall: LlmToolCall = {
         id: "call_deny_2",
         name: "exec",
-        arguments: { title: "safe but denied", command: "_test_q0b_safe", args: {} },
+        arguments: { title: "safe but denied", method: "_test_q0b_safe", args: {} },
       };
 
       spyOn(contextModule, "buildInputItems").mockResolvedValue({
@@ -310,7 +310,7 @@ describe("[q0b] permission — D. PermissionDecider 注入 (escape hatch)", () =
       const toolCall: LlmToolCall = {
         id: "call_decider_1",
         name: "exec",
-        arguments: { title: "decider blocks", command: "_test_q0b_safe", args: {} },
+        arguments: { title: "decider blocks", method: "_test_q0b_safe", args: {} },
       };
 
       spyOn(contextModule, "buildInputItems").mockResolvedValue({
@@ -357,7 +357,7 @@ describe("[q0b] permission — E. Ask 路径占位", () => {
       const toolCall: LlmToolCall = {
         id: "call_ask_1",
         name: "exec",
-        arguments: { title: "ask first", command: "_test_q0b_safe", args: { foo: 1 } },
+        arguments: { title: "ask first", method: "_test_q0b_safe", args: { foo: 1 } },
       };
 
       spyOn(contextModule, "buildInputItems").mockResolvedValue({
@@ -413,7 +413,7 @@ describe("[q0b] permission — F. 配置容错", () => {
       const toolCall: LlmToolCall = {
         id: "call_f1",
         name: "exec",
-        arguments: { title: "x", command: "_test_q0b_safe", args: {} },
+        arguments: { title: "x", method: "_test_q0b_safe", args: {} },
       };
 
       spyOn(contextModule, "buildInputItems").mockResolvedValue({
@@ -446,7 +446,7 @@ describe("[q0b] permission — F. 配置容错", () => {
       const toolCall: LlmToolCall = {
         id: "call_f2",
         name: "exec",
-        arguments: { title: "x", command: "_test_q0b_safe", args: {} },
+        arguments: { title: "x", method: "_test_q0b_safe", args: {} },
       };
 
       spyOn(contextModule, "buildInputItems").mockResolvedValue({
@@ -481,7 +481,7 @@ describe("[q0b] permission — F. 配置容错", () => {
       const toolCall: LlmToolCall = {
         id: "call_f3",
         name: "exec",
-        arguments: { title: "x", command: "_test_q0b_danger", args: {} },
+        arguments: { title: "x", method: "_test_q0b_danger", args: {} },
       };
 
       spyOn(contextModule, "buildInputItems").mockResolvedValue({

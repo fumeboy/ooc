@@ -11,7 +11,7 @@
  * - open_match — 在指定 match 的 path 上 spawn 一个 file_window，让结果可被进一步操作
  *
  * 该 window 不持有可被 LLM mutate 的状态：query / matches 在创建时定型；想换条件
- * 重新 open(command="glob"|"grep") 即可。
+ * 重新 open(method="glob"|"grep") 即可。
  */
 
 import type {
@@ -46,12 +46,12 @@ search_window 是一次 glob 或 grep 搜索的结果窗口，由 \`root.glob\` 
 每条 match 有一个稳定的 \`index\`，可以通过
 
 \`\`\`
-open(parent_window_id="<search_window_id>", command="open_match", args={ index: <N> })
+open(parent_window_id="<search_window_id>", method="open_match", args={ index: <N> })
 \`\`\`
 
 在该 match 对应的文件上 spawn 一个 file_window，便于继续阅读 / 编辑。
 
-| command            | 作用 |
+| method             | 作用 |
 |--------------------|------|
 | open_match         | 在指定 match 的 path 上 spawn 一个 file_window |
 | set_results_window | 调整 matches 渲染视口（matches_tail / matches_start+matches_end；默认 tail=50） |
@@ -79,7 +79,7 @@ search_window.open_match 在指定 match 对应的路径上 spawn 一个 file_wi
 
 调用：
 \`\`\`
-open(parent_window_id="<search_window_id>", command="open_match",
+open(parent_window_id="<search_window_id>", method="open_match",
      title="open match #2", args={ index: 2 })
 \`\`\`
 
@@ -138,7 +138,7 @@ export async function executeSearchOpenMatch(
   }
   const indexArg = ctx.args.index;
   if (typeof indexArg !== "number") {
-    return "[search_window.open_match] 缺少 index 参数（应是整数）。submit 后 form 已 executed, 请 close(form_id) 后重新 open(parent_window_id=\"<search_window_id>\", command=\"open_match\", args={ index: <整数> }) 一次性给齐; index 取自当前 search_window.matches[].index; 下次 open 时直接附 args 可避免失败回路。";
+    return "[search_window.open_match] 缺少 index 参数（应是整数）。submit 后 form 已 executed, 请 close(form_id) 后重新 open(parent_window_id=\"<search_window_id>\", method=\"open_match\", args={ index: <整数> }) 一次性给齐; index 取自当前 search_window.matches[].index; 下次 open 时直接附 args 可避免失败回路。";
   }
   const sw = window as SearchWindow;
   const match = sw.matches.find((m) => m.index === indexArg);

@@ -31,10 +31,10 @@ import { metaprogCommand } from "./command.metaprog.js";
 import type { MethodEntry } from "../_shared/method-types.js";
 
 /**
- * Root window 上注册的命令清单（核心数据）。
+ * Root window 上注册的 method 清单（核心数据）。
  *
- * 当前所有 command 都允许通过 `open(parent_window_id?, command="X", ...)` 打开。
- * window-level 命令（如 do_window 上的 continue）由各自 windows/X.ts 注册到对应 type 上。
+ * 当前所有 method 都允许通过 `open(parent_window_id?, method="X", ...)` 打开。
+ * window-level method（如 do_window 上的 continue）由各自 windows/X.ts 注册到对应 type 上。
  */
 export const ROOT_METHODS: Record<string, MethodEntry> = {
   talk: talkCommand,
@@ -57,20 +57,20 @@ export const ROOT_METHODS: Record<string, MethodEntry> = {
 export const ROOT_BASIC_PATH = "internal/windows/root/basic";
 
 /**
- * Root window 上可用 command 的清单 + 一行用途说明。
+ * Root window 上可用 method 的清单 + 一行用途说明。
  *
  * 每轮自动作为 protocol knowledge_window 注入，让 LLM 在没有任何 form 时也清楚
- * "我能在 root 上 open 哪些 command、每个 command 大致是干什么的"。
+ * "我能在 root 上 open 哪些 method、每个 method 大致是干什么的"。
  *
  * 形态对应 plan.ts 的 KNOWLEDGE：纯文本，由 collectExecutableKnowledgeEntries 包成
  * KnowledgeWindow（path=ROOT_BASIC_PATH, source=protocol）。
  */
 export const ROOT_KNOWLEDGE = `
-root window 是每个 thread 隐含的根窗口。在 root 上可用的 command 列表如下，
-通过 open(command="<name>", title="...", args={...}) 调用（args 给齐时部分 command 会立即提交 form
-而无需再额外 submit；这由各个具体 command 的实现自行控制）：
+root window 是每个 thread 隐含的根窗口。在 root 上可用的 method 列表如下，
+通过 open(method="<name>", title="...", args={...}) 调用（args 给齐时部分 method 会立即提交 form
+而无需再额外 submit；这由各个具体 method 的实现自行控制）：
 
-| command         | 作用                                          | 主要副作用                                 |
+| method          | 作用                                          | 主要副作用                                 |
 |-----------------|-----------------------------------------------|--------------------------------------------|
 | do              | 派生子线程                                    | 创建 child thread + do_window              |
 | talk            | 与其它对象（含人类 user 与其它 flow object）持续会话；同一对象复用同一 talk_window | 创建 talk_window；发消息走 talk_window.say |
@@ -86,7 +86,7 @@ root window 是每个 thread 隐含的根窗口。在 root 上可用的 command 
 | open_feishu_chat | 把飞书群聊 / 单聊作为 ContextWindow 引入        | 创建 feishu_chat_window；不立即拉取，建议随后 refresh |
 | open_feishu_doc  | 把飞书文档作为 ContextWindow 引入              | 创建 feishu_doc_window；不立即拉取，建议随后 read |
 
-每个 command 在进入 \`open\` 后，对应的知识会由系统自动激活；上面的清单只是入口索引。
+每个 method 在进入 \`open\` 后，对应的知识会由系统自动激活；上面的清单只是入口索引。
 `.trim();
 
 /** 返回所有 root 上可 open 的命令名称列表（已排序）。 */
@@ -141,8 +141,8 @@ export function deriveRootMethodPaths(
 /**
  * root window 的 renderXml hook。
  *
- * root 通常不显式渲染（外层包装 + commands 块已经足够说明 root 上可调命令），这里
- * 只返回空 children 数组，让调度器的 commands 子节点自然承担表达。
+ * root 通常不显式渲染（外层包装 + methods 块已经足够说明 root 上可调 method），这里
+ * 只返回空 children 数组，让调度器的 methods 子节点自然承担表达。
  */
 function renderRoot(): import("../../../thinkable/context/xml.js").XmlNode[] {
   return [];

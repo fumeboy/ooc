@@ -1,5 +1,5 @@
 /**
- * root.glob command — 用 Bun 内置 Glob 做文件名匹配，结果以 search_window 形式持久化。
+ * root.glob method — 用 Bun 内置 Glob 做文件名匹配，结果以 search_window 形式持久化。
  *
  * - args: pattern（必填）, cwd?（可选，默认 session baseDir；相对路径以 baseDir 为根）
  * - 命中条目按 path 字典序排序；超过 200 条截断（truncated=true）
@@ -40,13 +40,13 @@ glob 用于按文件名通配符（glob pattern）查找文件，并把结果作
 行为：
 - 用 Bun 内置 Glob 扫描文件系统；只返回文件（onlyFiles=true）
 - 命中按 path 字典序排序；超过 200 条截断，search_window.truncated=true
-- 命中之后用 \`open(parent_window_id="<search_window_id>", command="open_match", args={ index: <N> })\`
+- 命中之后用 \`open(parent_window_id="<search_window_id>", method="open_match", args={ index: <N> })\`
   在该 match 对应的文件上 spawn file_window
 
 调用示例：
 
 \`\`\`
-open(command="glob", title="找全部 TS",
+open(method="glob", title="找全部 TS",
      args={ pattern: "src/**/*.ts" })
 \`\`\`
 

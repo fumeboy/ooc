@@ -194,7 +194,7 @@ export const root: DocTreeNode = {
             export const window: ObjectWindowDefinition = {
                 title: "agent_of_monitor",
                 description: "监控 Agent 自我门面",
-                commands: {
+                methods: {
                     check_threshold: {
                         paths: ["check_threshold"],
                         match: () => ["check_threshold"],
@@ -231,7 +231,7 @@ export const root: DocTreeNode = {
             **method 加载**: executable/index.ts 是 ESM 热加载 (mtime cache + ?t=mtime), 改完不需要重启 server, 详见 \`meta/object.doc.ts:programmable.method_evolution\`。
             `,
             named: {
-                "window.commands / ui_methods": "method 分流: 前者给 LLM (program command 调), 后者给 web UI (HTTP callMethod 调)",
+                "window.methods / ui_methods": "method 分流: 前者给 LLM (exec 调), 后者给 web UI (HTTP callMethod 调)",
                 "Stone fallback": "无 client/index.tsx 时 web 默认展示 self.md/readable.md/knowledge/Recent flows",
             },
         },

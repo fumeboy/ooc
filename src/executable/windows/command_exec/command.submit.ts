@@ -5,7 +5,7 @@ import type {
 } from "../_shared/method-types.js";
 
 /**
- * command_exec.submit 命令 — 触发 form.command.exec。
+ * command_exec.submit method — 触发 form.command.exec。
  *
  * 调用形态：exec(<form_id>, "submit")
  *
@@ -51,7 +51,7 @@ export const submitCommand: MethodEntry = {
   knowledge: (_args, _formStatus): MethodKnowledgeEntries => ({
     "internal/windows/command_exec/submit/basic": [
       "command_exec.submit 触发 form.command 真正执行；不接受新业务参数。",
-      "调用：exec(window_id=<form_id>, command=\"submit\")",
+      "调用：exec(window_id=<form_id>, method=\"submit\")",
       "成功执行后系统自动从 context 移除该 form；失败则保留 result 字段，需要 close。",
     ].join("\n"),
   }),

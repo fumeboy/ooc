@@ -31,10 +31,10 @@ open_feishu_doc 用于创建一个 feishu_doc_window（飞书文档作为 Contex
 - doc_title: 可选，文档标题；缺省由 doc_token 派生（read 后覆盖为飞书一侧的真实标题）
 
 副作用：仅本地创建 window；不立即拉取内容。
-建议第一步：open(parent_window_id="<新 window id>", command="read", args={ format: "markdown" })。
+建议第一步：open(parent_window_id="<新 window id>", method="read", args={ format: "markdown" })。
 
 调用示例：
-open(command="open_feishu_doc", title="OOC 设计稿", args={ doc_token: "doccn5xxxxxx", doc_kind: "docx" })
+open(method="open_feishu_doc", title="OOC 设计稿", args={ doc_token: "doccn5xxxxxx", doc_kind: "docx" })
 `.trim();
 
 export const openFeishuDocCommand: MethodEntry = {
@@ -87,5 +87,5 @@ export async function executeOpenFeishuDoc(
   } else {
     thread.contextWindows = [...(thread.contextWindows ?? []), window];
   }
-  return `已创建 feishu_doc_window（id=${window.id}, doc_token=${docToken}, kind=${docKind}）；建议立即 open command=read 验证拉取链路。`;
+  return `已创建 feishu_doc_window（id=${window.id}, doc_token=${docToken}, kind=${docKind}）；建议立即 open method=read 验证拉取链路。`;
 }

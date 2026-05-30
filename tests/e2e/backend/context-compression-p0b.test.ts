@@ -119,7 +119,7 @@ describe("[p0b] context compression — compress(scope=windows) + expand 最小�
         name: "exec",
         arguments: {
           window_id: fileWindowId,
-          command: "expand",
+          method: "expand",
           title: "expand file window",
         },
       });

@@ -164,8 +164,8 @@ export async function collectExecutableKnowledgeEntries(
   }
 
   // 1.5) 按 thread.contextWindows 出现的 type 注入 type-level basicKnowledge——
-  //      让 LLM 在没有 open 任何 command_exec 的情况下也能知道每种 window 上有哪些 command。
-  //      防止"看到 talk_window 但只会试 root 上的 talk command"的常见误用。
+  //      让 LLM 在没有 open 任何 command_exec 的情况下也能知道每种 window 上有哪些 method。
+  //      防止"看到 talk_window 但只会试 root 上的 talk method"的常见误用。
   //      注：skill_index 在 §1.6 派生后再补一次（顺序原因）。
   const presentTypes = new Set<string>();
   for (const w of list) presentTypes.add(w.type);
@@ -462,7 +462,7 @@ function nextSyntheticId(): string {
 /**
  * 子→父 reply 协议（root cause #1）：构造一段 per-window 的 protocol knowledge，
  * 显式告诉子 thread LLM "你的 creator window id 是 X；想回报结果调它的
- * continue/say，end command 不是回报通道"。
+ * continue/say，end method 不是回报通道"。
  *
  * 为什么不放在 type-level basicKnowledge：
  * - 同一 type 的 creator vs 非 creator 视角不同；type-level 没法分视角。
@@ -480,16 +480,16 @@ function buildCreatorReplyKnowledge(window: ContextWindow): string {
       "**想把结果 / 状态 / 中间进展带回父线程，唯一通道**：",
       "",
       "```",
-      `exec(window_id="${window.id}", command="continue", args={ msg: "<结果或状态描述>" })`,
+      `exec(window_id="${window.id}", method="continue", args={ msg: "<结果或状态描述>" })`,
       "```",
       "",
       "这条消息会被自动 deliver 到父 thread 的 inbox，父 LLM 下一轮就能看到。",
       "",
       "**重要边界**：",
-      "- `end` command 只用于声明本轮**自己**结束，**不是回报通道**。",
+      "- `end` method 只用于声明本轮**自己**结束，**不是回报通道**。",
       "- 即便 end 接受 `result` 参数（便捷糖），它内部仍是模拟在 creator window 上调一次 continue；",
       "  多段对话 / 复杂状态汇报，请显式走 `creator_do_window.continue`，不要塞到 end 里。",
-      "- 不要 hallucinate \"reply\" / \"report\" / \"finish_with\" 等不存在的 command；只有 continue / say / wait / close。",
+      "- 不要 hallucinate \"reply\" / \"report\" / \"finish_with\" 等不存在的 method；只有 continue / say / wait / close。",
     ].join("\n");
   }
   // talk creator window
@@ -501,13 +501,13 @@ function buildCreatorReplyKnowledge(window: ContextWindow): string {
     "**想给 caller 回信，唯一通道**：",
     "",
     "```",
-    `exec(window_id="${window.id}", command="say", args={ msg: "<回复内容>", wait: false|true })`,
+    `exec(window_id="${window.id}", method="say", args={ msg: "<回复内容>", wait: false|true })`,
     "```",
     "",
     "这条消息会通过 talk-delivery 派送到 caller object 的对端 thread；caller 下一轮就能看到。",
     "",
     "**重要边界**：",
-    "- `end` command 只用于声明本轮**自己**结束，**不是回报通道**。",
+    "- `end` method 只用于声明本轮**自己**结束，**不是回报通道**。",
     "- 即便 end 接受 `result` 参数（便捷糖），它内部仍是模拟在 creator window 上调一次 say；",
     "  多轮往返 / 复杂确认，请显式走 `creator_talk_window.say`，不要塞到 end 里。",
     "- 不要 open 新的 talk_window 给同一个 caller；用现有的 creator talk_window 复用。",

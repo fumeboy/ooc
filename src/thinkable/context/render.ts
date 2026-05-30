@@ -3,16 +3,16 @@
  *
  * 设计哲学（根因 #4 接口 explicit；2026-05-24 fix-plan）：
  * - render.ts 只负责通用框架：外层 `<context><self/><thread>...</thread></context>` +
- *   每个 window 的 `<window id type status>` 外壳 + `<title>` + `<commands>` 元数据 +
+ *   每个 window 的 `<window id type status>` 外壳 + `<title>` + `<methods>` 元数据 +
  *   `<sub_windows>` 折叠 + sharing 属性 + 顶层 inbox/outbox 兜底
  * - 各 window type 的"内容渲染"作为 RenderHook 注册到 WindowRegistry，本文件按 type
  *   调度而不再 switch-by-case；缺 hook 会在启动期 fail-loud（registry.assertAll...）
  *
  * 修复点对照：
  * - R2 #1  : skill_index / custom 的 renderXml hook 不再被忽略 — 通过 def.renderXml 调度
- * - R2 #5  : 每个 window 末尾输出 `<commands>` 块（命令名 + 简要说明），LLM 直接看到该
- *            window 上可调用的命令面
- * - R2 #10 : 同上；不再需要让 LLM 翻 knowledge 文本去猜命令
+ * - R2 #5  : 每个 window 末尾输出 `<methods>` 块（method 名 + 简要说明），LLM 直接看到该
+ *            window 上可调用的 method 面
+ * - R2 #10 : 同上；不再需要让 LLM 翻 knowledge 文本去猜 method
  * - R3 #15 : talk_window transcript 已由 talk/index.ts:renderTalkWindow + filter 函数渲染
  * - R6 #46 : skill_index 通过通用调度器输出，不再被 switch 漏掉
  */
@@ -57,22 +57,22 @@ function renderMessagesNode(tag: "inbox" | "outbox", messages: ThreadMessage[] |
   );
 }
 
-// ─────────────────────────── commands 元数据节点 ──────────────────────────────
+// ─────────────────────────── methods 元数据节点 ──────────────────────────────
 
 const COMMAND_BRIEF_MAX = 80;
 
 /**
- * 为某 window 输出一段 `<commands>` 元数据，列出该 type 上注册的所有 command 名
+ * 为某 window 输出一段 `<methods>` 元数据，列出该 type 上注册的所有 method 名
  * 与简要说明（R2 #5 / R2 #10 修复）。
  *
  * 简要说明取自 `def.methods[name]` 的 paths 末尾或 — 因为 MethodEntry 没有
- * 独立的 "brief" 字段——我们以 command name 加上"通过 open/exec(parent_window_id=...,
- * command=...) 调用"的标准提示。具体的 knowledge 文本仍由 form 上下文 / basicKnowledge
- * 提供，本节点只做"命令面索引"。
+ * 独立的 "brief" 字段——我们以 method name 加上"通过 open/exec(parent_window_id=...,
+ * method=...) 调用"的标准提示。具体的 knowledge 文本仍由 form 上下文 / basicKnowledge
+ * 提供，本节点只做"method 面索引"。
  *
- * 空 commands 表的 window（如 todo / skill_index）不输出该节点，避免噪音。
+ * 空 methods 表的 window（如 todo / skill_index）不输出该节点，避免噪音。
  *
- * 压缩态(window.compressLevel ≥ 1)的 window 额外注入一条通用 `expand` command —
+ * 压缩态(window.compressLevel ≥ 1)的 window 额外注入一条通用 `expand` method —
  * 不需要每个 type 自己注册;由 expand-command 模块在 exec 路径上响应(B5)。
  */
 function renderMethodsNode(window: ContextWindow): XmlNode | null {
@@ -87,7 +87,7 @@ function renderMethodsNode(window: ContextWindow): XmlNode | null {
     const paths = entry?.paths ?? [name];
     const brief = paths.join(", ").slice(0, COMMAND_BRIEF_MAX);
     return xmlElement(
-      "command",
+      "method",
       { name },
       [xmlText(brief)],
     );
@@ -95,16 +95,16 @@ function renderMethodsNode(window: ContextWindow): XmlNode | null {
 
   if (isCompressed) {
     children.push(
-      xmlElement("command", { name: "expand" }, [
+      xmlElement("method", { name: "expand" }, [
         xmlText("expand: 把本 window 从压缩态恢复为完整态(compressLevel → 0)"),
       ]),
     );
   }
 
   return xmlElement(
-    "commands",
+    "methods",
     {
-      hint: `通过 open(parent_window_id="${window.id}", command="<name>", args={...}) 调用`,
+      hint: `通过 open(parent_window_id="${window.id}", method="<name>", args={...}) 调用`,
     },
     children,
   );
@@ -119,7 +119,7 @@ function renderMethodsNode(window: ContextWindow): XmlNode | null {
  *   <window id type status [sharing read_only]>
  *     <title>...</title>
  *     ...type-specific children (由 def.renderXml 提供)
- *     <commands hint="...">...</commands>
+ *     <methods hint="...">...</methods>
  *     <sub_windows>...</sub_windows>?
  *   </window>
  */
@@ -156,7 +156,7 @@ async function renderWindowNode(
       const typeChildren = await def.compressView(renderCtx, compressLevel);
       children.push(...typeChildren);
     } else {
-      // 通用 fallback: 仅输出 <compressed> 元节点;commands 末尾再追加 expand 由
+      // 通用 fallback: 仅输出 <compressed> 元节点;methods 末尾再追加 expand 由
       // renderMethodsNode 注入(任何 compressLevel >= 1 的 window 都自动获得 expand)
       children.push(
         xmlElement(
@@ -180,7 +180,7 @@ async function renderWindowNode(
     children.push(...typeChildren);
   }
 
-  // ── commands 元数据（R2 #5 / R2 #10）
+  // ── methods 元数据（R2 #5 / R2 #10）
   appendNode(children, renderMethodsNode(renderedWindow));
 
   // ── 子 window 折叠

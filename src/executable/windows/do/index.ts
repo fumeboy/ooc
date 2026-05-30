@@ -3,7 +3,7 @@
  *
  * spec § do_window：
  * - targetThreadId：fork 出的 child thread id；transcript 视图按它过滤 inbox/outbox
- * - 注册的 command：continue / wait / close
+ * - 注册的 method：continue / wait / close
  * - close 语义：B=ii archive — 把 child thread 标记为 archived；window 释放
  * - 特殊子类：初始 creator do_window（由 windows/_shared/init.ts 创建），不可被 LLM close
  */
