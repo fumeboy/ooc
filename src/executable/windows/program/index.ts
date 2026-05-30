@@ -14,7 +14,11 @@ import type {
   MethodKnowledgeEntries,
   MethodEntry,
 } from "../_shared/method-types.js";
-import { registerWindowType, type RenderContext } from "../_shared/registry.js";
+import {
+  registerWindowType,
+  markRenderXmlViaPrototype,
+  type RenderContext,
+} from "../_shared/registry.js";
 import { runOneExec, type ProgramExecArgs } from "./runtime.js";
 import type { ProgramWindow } from "../_shared/types.js";
 import { xmlElement, xmlText, xmlComment, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
@@ -86,7 +90,7 @@ program_window.set_history_window 精细化调整 exec history 渲染视口。
 后续 exec 仍正常追加到完整 history（不受 viewport 影响）。
 `.trim();
 
-const execCommand: MethodEntry = {
+export const execCommand: MethodEntry = {
   paths: ["exec", "exec.shell", "exec.ts", "exec.js"],
   match: (args) => {
     const hit: string[] = ["exec"];
@@ -110,14 +114,14 @@ const execCommand: MethodEntry = {
   exec: (ctx) => executeProgramWindowExec(ctx),
 };
 
-const closeCommand: MethodEntry = {
+export const closeCommand: MethodEntry = {
   paths: ["close"],
   match: () => ["close"],
   knowledge: (): MethodKnowledgeEntries => ({ [PROGRAM_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
   exec: () => undefined,
 };
 
-const setHistoryWindowCommand: MethodEntry = {
+export const setHistoryWindowCommand: MethodEntry = {
   paths: ["set_history_window"],
   match: () => ["set_history_window"],
   knowledge: (args, formStatus): MethodKnowledgeEntries => {
@@ -168,7 +172,7 @@ export async function executeProgramWindowExec(
 }
 
 /** program_window 的 renderXml hook：history 摘要（按 historyViewport 截取）+ 最近一条 full output。 */
-function renderProgramWindow(ctx: RenderContext): XmlNode[] {
+export function renderProgramWindow(ctx: RenderContext): XmlNode[] {
   const window = ctx.window as ProgramWindow;
   const children: XmlNode[] = [];
   if (window.history.length === 0) {
@@ -222,11 +226,8 @@ function renderProgramWindow(ctx: RenderContext): XmlNode[] {
   return children;
 }
 
-registerWindowType("program", {
-  methods: {
-    exec: execCommand,
-    close: closeCommand,
-    set_history_window: setHistoryWindowCommand,
-  },
-  renderXml: renderProgramWindow,
-});
+// OOC-4 L4.2：program 的 methods（exec/close/set_history_window）+ renderXml 已迁到
+// base/program/executable/index.ts，由活路径沿 base 原型链解析（_shared/behavior.ts）。
+// program 无 onClose / compressView，故 registry 入口为空（仅声明 renderXml 由链提供）。
+registerWindowType("program", {});
+markRenderXmlViaPrototype("program");

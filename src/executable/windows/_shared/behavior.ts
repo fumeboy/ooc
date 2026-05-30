@@ -25,6 +25,7 @@ import { join } from "node:path";
 import { loadBuiltinRegistry } from "../../../extendable/base/index.js";
 import { builtinProtoId, type ObjectRegistry } from "../../prototype/index.js";
 import type { ObjectWindowDefinition } from "../../server/window-types.js";
+import type { MethodEntry } from "./method-types.js";
 import type { RenderHook } from "./registry.js";
 
 let _registry: Promise<ObjectRegistry> | undefined;
@@ -86,6 +87,65 @@ async function resolveAspect<T>(
 /** 沿 base 原型链解析 renderXml；链未提供 → undefined（caller 回退 registry）。 */
 export async function resolveRenderXml(type: string): Promise<RenderHook | undefined> {
   return resolveAspect(type, (d) => d.renderXml);
+}
+
+/**
+ * 沿 base 原型链解析**单个** method（OOC-4 L4.2 / plan D1）。
+ *
+ * 语义同 resolveAspect：第一个提供 `methods[name]` 的 def 命中（子优先），全链 miss → undefined。
+ * caller（manager.lookupMethodEntry / self.callMethod / permissions / synthesizer.lookupFormEntry）
+ * 用 `(await resolveMethod(type, name)) ?? registry.methods[name]` 兜底。
+ * 非 base type（do/talk/custom 等）或链上无 executable → undefined → 回退 registry。
+ */
+export async function resolveMethod(
+  type: string,
+  name: string,
+): Promise<MethodEntry | undefined> {
+  return resolveAspect(type, (d) => d.methods?.[name]);
+}
+
+/**
+ * 沿 base 原型链解析**完整** method 集合（OOC-4 L4.2 / plan D1）。
+ *
+ * 与 resolveMethod 不同：需要合并整条链（root→own，子覆盖父），并区分两种「空」：
+ * - 链上**有**至少一个 proto 提供了 `executable`（methods 字段存在，哪怕是 `{}`）→ 返回 merged
+ *   （包括 `{}`，表示「已转写但本就无 method」，caller 用之、不回退 registry）。
+ * - 链上**没有**任何 proto 提供 executable（program 等骨架未转写、或非 base type）→ 返回 undefined
+ *   （sawExecutable=false），caller 回退 registry 的真方法表。
+ *
+ * 用于 render.renderMethodsNode / api.list-window-types catalog（需要遍历整张 method 表），
+ * 不能用「单点 resolveMethod 找不到就回退」——那会在 base 已转写但缺某 method 时错误回退。
+ */
+export async function resolveAllMethods(
+  type: string,
+): Promise<Record<string, MethodEntry> | undefined> {
+  const reg = await baseRegistry();
+  const protoId = builtinProtoId(type);
+  if (!reg.has(protoId)) return undefined;
+
+  // own→root 收集每层 def；后续 root→own 合并（子覆盖父）。
+  let curId: string | null = protoId;
+  const seen = new Set<string>();
+  const defsOwnToRoot: ObjectWindowDefinition[] = [];
+  while (curId !== null && !seen.has(curId)) {
+    seen.add(curId);
+    const rec = reg.get(curId);
+    if (!rec) break;
+    const def = await loadPrototypeDefinition(rec.dir);
+    if (def) defsOwnToRoot.push(def);
+    curId = rec.extends;
+  }
+
+  let sawExecutable = false;
+  const merged: Record<string, MethodEntry> = {};
+  // root→own 合并：reverse 后逐层 Object.assign，子层覆盖父层同名 method。
+  for (const def of defsOwnToRoot.slice().reverse()) {
+    if (def.methods !== undefined) {
+      sawExecutable = true;
+      Object.assign(merged, def.methods);
+    }
+  }
+  return sawExecutable ? merged : undefined;
 }
 
 /**

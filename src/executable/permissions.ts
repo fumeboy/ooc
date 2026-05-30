@@ -28,6 +28,7 @@ import { getPermissionDecider } from "../observable";
 import { deriveStoneFromThread, stoneDir } from "../persistable/common";
 import type { ThreadContext } from "../thinkable/context";
 import { getWindowTypeDefinition } from "./windows/_shared/registry";
+import { resolveMethod } from "./windows/_shared/behavior";
 
 /** 单档准入级别。 */
 export type PermissionLevel = "allow" | "ask" | "deny";
@@ -125,17 +126,19 @@ export function loadPoliciesJson(thread: ThreadContext): Record<string, Permissi
  * - 否则查 root 的 methods[command].permission
  * - 找不到 entry / 字段缺失 → undefined (调用方 fallback 到 allow)
  */
-function lookupDeclaredPermission(
+async function lookupDeclaredPermission(
   thread: ThreadContext,
   call: PendingToolCall,
-): PermissionLevel | undefined {
+): Promise<PermissionLevel | undefined> {
   const command = call.command;
   if (!command) return undefined;
 
-  const tryWindow = (windowType: string): PermissionLevel | undefined => {
+  // OOC-4 L4.2：MethodEntry 优先沿 base 原型链解析（resolveMethod），链未提供时回退 registry。
+  // 故 tryWindow 改 async（唯一调用者在本函数内 await）。
+  const tryWindow = async (windowType: string): Promise<PermissionLevel | undefined> => {
     try {
-      const def = getWindowTypeDefinition(windowType as never);
-      const entry = def.methods[command];
+      const fromChain = await resolveMethod(windowType, command);
+      const entry = fromChain ?? getWindowTypeDefinition(windowType as never).methods[command];
       const fn = entry?.permission;
       if (!fn) return undefined;
       try {
@@ -154,7 +157,7 @@ function lookupDeclaredPermission(
   if (call.windowId) {
     const target = thread.contextWindows?.find((w) => w.id === call.windowId);
     if (target) {
-      const fromTarget = tryWindow(target.type);
+      const fromTarget = await tryWindow(target.type);
       if (fromTarget) return fromTarget;
     }
   }
@@ -199,7 +202,7 @@ export async function decidePermission(
   }
 
   // 3. MethodEntry 声明
-  const declared = lookupDeclaredPermission(thread, call);
+  const declared = await lookupDeclaredPermission(thread, call);
   if (declared) {
     return levelToDecision(declared, "MethodEntry.permission");
   }

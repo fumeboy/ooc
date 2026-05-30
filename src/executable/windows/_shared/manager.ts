@@ -27,6 +27,7 @@
 
 import type { ThreadContext } from "../../../thinkable/context.js";
 import { getWindowTypeDefinition } from "./registry.js";
+import { resolveMethod } from "./behavior.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -78,13 +79,17 @@ function setSubset(a: string[], b: string[]): boolean {
  * parent_window_id 决定查哪个 window 的 methods：
  * - "root" → root 注册到 WINDOW_REGISTRY 的 methods（来自 windows/root/index.ts）
  * - 其他 → 该 window 的 type definition.methods
+ *
+ * OOC-4 L4.2：method 优先沿 base 原型链解析（resolveMethod），链未提供（骨架未转写 / 非 base type）
+ * 时回退 registry（graceful dispatch, plan D2）。故本 helper 改 async。
  */
-function lookupMethodEntry(
+async function lookupMethodEntry(
   parentWindow: ContextWindow,
   command: string,
-): MethodEntry | undefined {
-  const def = getWindowTypeDefinition(parentWindow.type);
-  return def.methods[command];
+): Promise<MethodEntry | undefined> {
+  const fromChain = await resolveMethod(parentWindow.type, command);
+  if (fromChain) return fromChain;
+  return getWindowTypeDefinition(parentWindow.type).methods[command];
 }
 
 export class WindowManager {
@@ -160,7 +165,7 @@ export class WindowManager {
       }
     }
 
-    const entry = lookupMethodEntry(parent, opts.command);
+    const entry = await lookupMethodEntry(parent, opts.command);
     if (!entry) {
       throw new Error(
         `openCommandExec: command "${opts.command}" not registered on window "${parent.type}" (id=${parent.id})`,
@@ -245,13 +250,16 @@ export class WindowManager {
    * - failed: 累积 args + 清旧 result + 状态切回 open（"复活"路径，新增）
    *
    * executing / success / 其它状态返回 false（success 已被自动移除, 理论不会触发）。
+   *
+   * OOC-4 L4.2：内部 lookupMethodEntry 改 async（method 沿链解析），故 refine 同步→async；
+   * 调用者（command_exec/command.refine.ts、manager-refine-failed.test.ts）已相应加 await。
    */
-  refine(formId: string, args: Record<string, unknown>): boolean {
+  async refine(formId: string, args: Record<string, unknown>): Promise<boolean> {
     const form = this.windows.get(formId);
     if (!form || form.type !== "command_exec") return false;
     if (form.status !== "open" && form.status !== "failed") return false;
     const parent = this.requireParent(form.parentWindowId);
-    const entry = lookupMethodEntry(parent, form.command);
+    const entry = await lookupMethodEntry(parent, form.command);
     if (!entry) return false;
     const nextArgs = { ...form.accumulatedArgs, ...args };
     const nextPaths = computeCommandPaths(entry, form.command, nextArgs);
@@ -290,7 +298,7 @@ export class WindowManager {
     }
 
     const parent = this.requireParent(form.parentWindowId);
-    const entry = lookupMethodEntry(parent, form.command);
+    const entry = await lookupMethodEntry(parent, form.command);
     if (!entry) {
       throw new Error(
         `submit: command "${form.command}" not registered on parent window type "${parent.type}"`,

@@ -21,7 +21,11 @@ import type {
   MethodKnowledgeEntries,
   MethodEntry,
 } from "../_shared/method-types.js";
-import { registerWindowType, type RenderContext } from "../_shared/registry.js";
+import {
+  registerWindowType,
+  markRenderXmlViaPrototype,
+  type RenderContext,
+} from "../_shared/registry.js";
 import type { FileWindow } from "../_shared/types.js";
 import {
   DEFAULT_VIEWPORT,
@@ -148,14 +152,14 @@ open(parent_window_id="<file_window_id>", method="edit",
 - 不要用 \`write_file\` 做"修改局部"——write_file 是整文件覆盖语义，详见 root.write_file 的 KNOWLEDGE
 `.trim();
 
-const setRangeCommand: MethodEntry = {
+export const setRangeCommand: MethodEntry = {
   paths: ["set_range"],
   match: () => ["set_range"],
   knowledge: (): MethodKnowledgeEntries => ({ [FILE_WINDOW_SET_RANGE_BASIC]: SET_RANGE_KNOWLEDGE }),
   exec: (ctx) => executeFileWindowSetRange(ctx),
 };
 
-const setViewportCommand: MethodEntry = {
+export const setViewportCommand: MethodEntry = {
   paths: ["set_viewport"],
   match: () => ["set_viewport"],
   knowledge: (args, formStatus): MethodKnowledgeEntries => {
@@ -172,21 +176,21 @@ const setViewportCommand: MethodEntry = {
   exec: (ctx) => executeWindowSetViewport(ctx, "file"),
 };
 
-const reloadCommand: MethodEntry = {
+export const reloadCommand: MethodEntry = {
   paths: ["reload"],
   match: () => ["reload"],
   knowledge: (): MethodKnowledgeEntries => ({ [FILE_WINDOW_RELOAD_BASIC]: RELOAD_KNOWLEDGE }),
   exec: () => undefined, // render 层每轮都会重读
 };
 
-const closeCommand: MethodEntry = {
+export const closeCommand: MethodEntry = {
   paths: ["close"],
   match: () => ["close"],
   knowledge: (): MethodKnowledgeEntries => ({ [FILE_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
   exec: () => undefined,
 };
 
-const editCommand: MethodEntry = {
+export const editCommand: MethodEntry = {
   paths: ["edit"],
   match: () => ["edit"],
   knowledge: (args, formStatus): MethodKnowledgeEntries => {
@@ -380,7 +384,7 @@ function sliceByLinesColumns(
 }
 
 /** file_window 的 renderXml hook：path + viewport + 文件正文（按 viewport 切片）。 */
-async function renderFileWindow(ctx: RenderContext): Promise<XmlNode[]> {
+export async function renderFileWindow(ctx: RenderContext): Promise<XmlNode[]> {
   const window = ctx.window as FileWindow;
   const children: XmlNode[] = [
     xmlElement("path", {}, [xmlText(window.path)]),
@@ -461,14 +465,11 @@ async function compressFileWindow(
   return children;
 }
 
+// OOC-4 L4.2：file 的 methods（set_range/set_viewport/reload/edit/close）+ renderXml 已迁到
+// base/file/executable/index.ts，由活路径沿 base 原型链解析（_shared/behavior.ts）。
+// compressView 是 L4 排除项、仍 registry-served（render.ts:156），故 registry 入口保留 compressView，
+// 不能误 trim（否则压缩态丢折叠渲染）。file 无 basicKnowledge / onClose。
 registerWindowType("file", {
-  methods: {
-    set_range: setRangeCommand,
-    set_viewport: setViewportCommand,
-    reload: reloadCommand,
-    edit: editCommand,
-    close: closeCommand,
-  },
-  renderXml: renderFileWindow,
   compressView: compressFileWindow,
 });
+markRenderXmlViaPrototype("file");

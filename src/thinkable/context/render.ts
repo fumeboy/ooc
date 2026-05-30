@@ -21,7 +21,7 @@ import {
   getWindowTypeDefinition,
   type RenderContext,
 } from "../../executable/windows/_shared/registry";
-import { resolveRenderXml } from "../../executable/windows/_shared/behavior";
+import { resolveRenderXml, resolveAllMethods } from "../../executable/windows/_shared/behavior";
 import { filterMessagesForDoWindow } from "../../executable/windows/do/index";
 import { filterMessagesForTalkWindow } from "../../executable/windows/talk/index";
 import type { ContextWindow } from "../../executable/windows/_shared/types";
@@ -76,15 +76,17 @@ const COMMAND_BRIEF_MAX = 80;
  * 压缩态(window.compressLevel ≥ 1)的 window 额外注入一条通用 `expand` method —
  * 不需要每个 type 自己注册;由 expand-command 模块在 exec 路径上响应(B5)。
  */
-function renderMethodsNode(window: ContextWindow): XmlNode | null {
+async function renderMethodsNode(window: ContextWindow): Promise<XmlNode | null> {
+  // OOC-4 L4.2：method 面索引优先沿 base 原型链解析（resolveAllMethods），链未提供时回退 registry。
   const def = getWindowTypeDefinition(window.type);
-  const names = Object.keys(def.methods ?? {});
+  const methods = (await resolveAllMethods(window.type)) ?? def.methods ?? {};
+  const names = Object.keys(methods);
   const isCompressed = (window.compressLevel ?? 0) >= 1;
   if (names.length === 0 && !isCompressed) return null;
   names.sort();
 
   const children: XmlNode[] = names.map((name) => {
-    const entry = def.methods[name];
+    const entry = methods[name];
     const paths = entry?.paths ?? [name];
     const brief = paths.join(", ").slice(0, COMMAND_BRIEF_MAX);
     return xmlElement(
@@ -186,7 +188,7 @@ async function renderWindowNode(
   }
 
   // ── methods 元数据（R2 #5 / R2 #10）
-  appendNode(children, renderMethodsNode(renderedWindow));
+  appendNode(children, await renderMethodsNode(renderedWindow));
 
   // ── 子 window 折叠
   const subWindows = allWindows.filter((w) => w.parentWindowId === window.id);

@@ -36,7 +36,7 @@ async function executeRefine(ctx: MethodExecutionContext): Promise<string | unde
   if (!ctx.manager) {
     return "[command_exec.refine] 缺少 manager 上下文。";
   }
-  const ok = ctx.manager.refine(form.id, incoming);
+  const ok = await ctx.manager.refine(form.id, incoming);
   if (!ok) {
     return `[command_exec.refine] refine 失败：form ${form.id} 不存在或不在 open / failed 状态。`;
   }

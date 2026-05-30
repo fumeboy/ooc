@@ -3,6 +3,7 @@ import { mergeFlowData, readFlowData } from "../../persistable";
 import type { ThreadContext } from "../../thinkable/context";
 import type { ProgramSelf } from "./types";
 import { getWindowTypeDefinition } from "../windows/_shared/registry";
+import { resolveMethod, resolveAllMethods } from "../windows/_shared/behavior";
 import type { MethodExecutionContext } from "../windows/_shared/method-types";
 import { loadObjectWindow } from "./loader";
 import type { ObjectWindowDefinition } from "./window-types";
@@ -41,7 +42,8 @@ export function createProgramSelf(
       const def = getWindowTypeDefinition(window.type);
       let commands = def.methods;
 
-      // type=custom 走 ObjectWindowDefinition 直接拿 methods；这里不重复 dispatcher 的 self 注入
+      // type=custom 走 ObjectWindowDefinition 直接拿 methods；这里不重复 dispatcher 的 self 注入。
+      // resolveMethod("custom") 返 undefined（base/custom 无 executable），故 custom 分支不被链解析抢占。
       if (window.type === "custom") {
         const objectId = (window as { objectId?: string }).objectId;
         if (!objectId) {
@@ -54,9 +56,12 @@ export function createProgramSelf(
         commands = objWin?.methods ?? {};
       }
 
-      const entry = commands[command];
+      // OOC-4 L4.2：非 custom type 优先沿 base 原型链解析 method，链未提供时回退 registry。
+      const entry = (await resolveMethod(window.type, command)) ?? commands[command];
       if (!entry) {
-        const available = Object.keys(commands).join(", ") || "(无)";
+        // 错误提示的「可用命令」也走 chain ?? registry（custom 直接用 commands）
+        const chainMethods = window.type === "custom" ? undefined : await resolveAllMethods(window.type);
+        const available = Object.keys(chainMethods ?? commands).join(", ") || "(无)";
         throw new Error(
           `windowId ${windowId} (${window.type}) 上不存在 command ${command}；当前可用：${available}`,
         );

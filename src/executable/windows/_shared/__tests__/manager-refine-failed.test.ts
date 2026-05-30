@@ -57,7 +57,7 @@ describe("Round 13 G2: manager.refine 支持 failed → open 复活", () => {
     expect(form.status).toBe("open");
 
     const mgr = WindowManager.fromThread(thread);
-    const ok = mgr.refine(form.id, { msg: "hello" });
+    const ok = await mgr.refine(form.id, { msg: "hello" });
     expect(ok).toBe(true);
 
     const after = mgr.get(form.id) as CommandExecWindow;
@@ -76,7 +76,7 @@ describe("Round 13 G2: manager.refine 支持 failed → open 复活", () => {
     expect(failed?.result).toContain("[do] 缺少 msg");
 
     const mgr = WindowManager.fromThread(thread);
-    const ok = mgr.refine(formId, { msg: "补齐的消息" });
+    const ok = await mgr.refine(formId, { msg: "补齐的消息" });
     expect(ok).toBe(true);
 
     const revived = mgr.get(formId) as CommandExecWindow;
@@ -112,14 +112,14 @@ describe("Round 13 G2: manager.refine 支持 failed → open 复活", () => {
     // 手工把 status 改成 executing 模拟中间态
     const mgr = WindowManager.fromThread(thread);
     mgr.upsertWindow({ ...form, status: "executing" });
-    const ok = mgr.refine(form.id, { msg: "试图 refine executing" });
+    const ok = await mgr.refine(form.id, { msg: "试图 refine executing" });
     expect(ok).toBe(false);
   });
 
   it("复活路径完整验证: failed → refine → open → submit → success → 自动移除", async () => {
     const { thread, formId } = await makeFailedForm();
     const mgr = WindowManager.fromThread(thread);
-    mgr.refine(formId, { msg: "终于补齐了" });
+    await mgr.refine(formId, { msg: "终于补齐了" });
     // 此时 form 已回 open, 可正常 submit
     const after = mgr.get(formId) as CommandExecWindow;
     expect(after.status).toBe("open");

@@ -13,7 +13,10 @@ import { describe, expect, it } from "bun:test";
 
 import "../program/index.js"; // 触发 registerWindowType side-effect import
 
-import { getWindowTypeDefinition } from "../_shared/registry.js";
+import {
+  resolveRenderXml,
+  resolveAllMethods,
+} from "../_shared/behavior.js";
 import {
   ROOT_WINDOW_ID,
   type ProgramExecRecord,
@@ -105,8 +108,8 @@ describe("program_window render: default tail=10", () => {
       historyViewport: { tail: 10 },
     });
     const thread = makeRenderThread(window);
-    const def = getWindowTypeDefinition("program");
-    const nodes = await def.renderXml!({ thread, window });
+    const renderXml = (await resolveRenderXml("program"))!;
+    const nodes = await renderXml({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain("<history_viewport");
     expect(xml).toContain('total="5"');
@@ -124,8 +127,8 @@ describe("program_window render: default tail=10", () => {
       historyViewport: { tail: 10 },
     });
     const thread = makeRenderThread(window);
-    const def = getWindowTypeDefinition("program");
-    const nodes = await def.renderXml!({ thread, window });
+    const renderXml = (await resolveRenderXml("program"))!;
+    const nodes = await renderXml({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('total="25"');
     expect(xml).toContain('tail="10"');
@@ -149,8 +152,8 @@ describe("program_window render: default tail=10", () => {
       // no historyViewport
     });
     const thread = makeRenderThread(window);
-    const def = getWindowTypeDefinition("program");
-    const nodes = await def.renderXml!({ thread, window });
+    const renderXml = (await resolveRenderXml("program"))!;
+    const nodes = await renderXml({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('tail="10"');
     expect(xml).toContain('earlier_omitted="5"');
@@ -161,8 +164,8 @@ describe("program_window render: default tail=10", () => {
       history: [],
     });
     const thread = makeRenderThread(window);
-    const def = getWindowTypeDefinition("program");
-    const nodes = await def.renderXml!({ thread, window });
+    const renderXml = (await resolveRenderXml("program"))!;
+    const nodes = await renderXml({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain("no exec yet");
     expect(xml).not.toContain("<history_viewport");
@@ -176,8 +179,8 @@ describe("program_window render: range mode", () => {
       historyViewport: { rangeStart: 5, rangeEnd: 10 },
     });
     const thread = makeRenderThread(window);
-    const def = getWindowTypeDefinition("program");
-    const nodes = await def.renderXml!({ thread, window });
+    const renderXml = (await resolveRenderXml("program"))!;
+    const nodes = await renderXml({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('history_start="5"');
     expect(xml).toContain('history_end="10"');
@@ -199,8 +202,8 @@ describe("program_window render: last_output unaffected by viewport", () => {
       historyViewport: { rangeStart: 0, rangeEnd: 3 },
     });
     const thread = makeRenderThread(window);
-    const def = getWindowTypeDefinition("program");
-    const nodes = await def.renderXml!({ thread, window });
+    const renderXml = (await resolveRenderXml("program"))!;
+    const nodes = await renderXml({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     // history summary clipped to [0, 3); last_output still shows exec_19
     expect(xml).toContain('exec_id="exec_19"');
@@ -329,17 +332,16 @@ describe("set_history_window command", () => {
   });
 });
 
-// ─────────────────────────── command registered on program type ──────
+// ─────────────────────────── command resolves on program type (via base chain) ──────
 
-describe("set_history_window registered on program window", () => {
-  it("program window definition has set_history_window command", () => {
-    const def = getWindowTypeDefinition("program");
-    expect(def.methods["set_history_window"]).toBeDefined();
+describe("set_history_window resolves on program window (L4.2 base chain)", () => {
+  it("program method set_history_window resolves via base prototype chain", async () => {
+    expect(await resolveAllMethods("program").then((m) => m?.["set_history_window"])).toBeDefined();
   });
 
-  it("registered command executes via window registry", async () => {
-    const def = getWindowTypeDefinition("program");
-    const cmd = def.methods["set_history_window"]!;
+  it("chain-resolved command executes", async () => {
+    const methods = (await resolveAllMethods("program"))!;
+    const cmd = methods["set_history_window"]!;
     const window = makeProgramWindow({
       history: makeHistory(5),
       historyViewport: { tail: 10 },

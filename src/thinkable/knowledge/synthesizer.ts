@@ -37,7 +37,7 @@ import {
 import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../../executable/windows/_shared/super-constants.js";
 import type { MethodKnowledgeEntries, MethodEntry } from "../../executable/windows/_shared/method-types.js";
 import { getWindowTypeDefinition } from "../../executable/windows/_shared/registry.js";
-import { resolveBasicKnowledge } from "../../executable/windows/_shared/behavior.js";
+import { resolveBasicKnowledge, resolveMethod } from "../../executable/windows/_shared/behavior.js";
 import type { CommandExecWindow, ContextWindow, KnowledgeWindow, RelationWindow, SkillIndexWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
 import { ROOT_WINDOW_ID, SKILL_INDEX_WINDOW_ID } from "../../executable/windows/_shared/types.js";
 import { computeActivations } from "./activator.js";
@@ -61,7 +61,7 @@ export async function computeFormKnowledgeEntries(
   form: CommandExecWindow,
   thread: ThreadContext,
 ): Promise<MethodKnowledgeEntries> {
-  const entry = lookupFormEntry(form, thread);
+  const entry = await lookupFormEntry(form, thread);
   const knowledgeEntries = entry?.knowledge
     ? { ...entry.knowledge(form.accumulatedArgs, form.status) }
     : {};
@@ -71,18 +71,23 @@ export async function computeFormKnowledgeEntries(
   );
 }
 
-function lookupFormEntry(
+async function lookupFormEntry(
   form: CommandExecWindow,
   thread: ThreadContext,
-): MethodEntry | undefined {
+): Promise<MethodEntry | undefined> {
   const parentId = form.parentWindowId;
   if (!parentId || parentId === "root") {
-    return ROOT_METHODS[form.command];
+    // root 在 base 链上无 executable（resolveMethod("root") → undefined），直接走 ROOT_METHODS。
+    return (await resolveMethod("root", form.command)) ?? ROOT_METHODS[form.command];
   }
   const parent = (thread.contextWindows ?? []).find((w) => w.id === parentId);
   if (!parent) return undefined;
-  const def = getWindowTypeDefinition(parent.type);
-  return def.methods[form.command];
+  // OOC-4 L4.2（C2）：parent 的 method 优先沿 base 原型链解析；链未提供时回退 registry。
+  // trim 后 program/search/file/knowledge 的 method 已迁链，若此处不接链则 form 的
+  // method-knowledge（EXEC_KNOWLEDGE / OPEN_MATCH_KNOWLEDGE / EDIT_KNOWLEDGE 等）静默丢失。
+  const fromChain = await resolveMethod(parent.type, form.command);
+  if (fromChain) return fromChain;
+  return getWindowTypeDefinition(parent.type).methods[form.command];
 }
 
 /**

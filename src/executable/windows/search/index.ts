@@ -19,7 +19,11 @@ import type {
   MethodKnowledgeEntries,
   MethodEntry,
 } from "../_shared/method-types.js";
-import { registerWindowType, type RenderContext } from "../_shared/registry.js";
+import {
+  registerWindowType,
+  markRenderXmlViaPrototype,
+  type RenderContext,
+} from "../_shared/registry.js";
 import { isAbsolute, resolve } from "node:path";
 import {
   ROOT_WINDOW_ID,
@@ -90,7 +94,7 @@ open(parent_window_id="<search_window_id>", method="open_match",
 - 索引越界 / 缺 index 等错误返回字符串
 `.trim();
 
-const closeCommand: MethodEntry = {
+export const closeCommand: MethodEntry = {
   paths: ["close"],
   match: () => ["close"],
   knowledge: (): MethodKnowledgeEntries => ({
@@ -99,7 +103,7 @@ const closeCommand: MethodEntry = {
   exec: () => undefined,
 };
 
-const openMatchCommand: MethodEntry = {
+export const openMatchCommand: MethodEntry = {
   paths: ["open_match"],
   match: () => ["open_match"],
   knowledge: (args, formStatus): MethodKnowledgeEntries => {
@@ -180,7 +184,7 @@ export async function executeSearchOpenMatch(
 }
 
 /** search_window 的 renderXml hook：kind + query + matches（按 resultsViewport 截取）。 */
-function renderSearchWindow(ctx: RenderContext): XmlNode[] {
+export function renderSearchWindow(ctx: RenderContext): XmlNode[] {
   const window = ctx.window as SearchWindow;
   const children: XmlNode[] = [
     xmlElement("kind", {}, [xmlText(window.kind)]),
@@ -285,13 +289,11 @@ function compressSearchWindow(
   return children;
 }
 
+// OOC-4 L4.2：search 的 methods（close/open_match/set_results_window）+ renderXml + basicKnowledge
+// 已迁到 base/search/executable/index.ts，由活路径沿 base 原型链解析（_shared/behavior.ts）。
+// compressView 是 L4 排除项、仍 registry-served（render.ts:156 在 compressLevel≥1 时取 def.compressView），
+// 故 registry 入口保留 compressView，不能误 trim（否则压缩态丢折叠渲染）。
 registerWindowType("search", {
-  methods: {
-    close: closeCommand,
-    open_match: openMatchCommand,
-    set_results_window: setResultsWindowCommandForSearch,
-  },
-  renderXml: renderSearchWindow,
   compressView: compressSearchWindow,
-  basicKnowledge: SEARCH_WINDOW_BASIC_KNOWLEDGE,
 });
+markRenderXmlViaPrototype("search");

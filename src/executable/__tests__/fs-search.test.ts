@@ -18,24 +18,29 @@ import { tmpdir } from "node:os";
 import "../windows/index";
 import {
   generateWindowId,
-  getWindowTypeDefinition,
   WindowManager,
   type SearchWindow,
 } from "../windows/index";
 import {
   SEARCH_WINDOW_BASIC_KNOWLEDGE,
 } from "../windows/search";
+import {
+  resolveAllMethods,
+  resolveBasicKnowledge,
+} from "../windows/_shared/behavior";
 import { renderContextXml } from "../../thinkable/context/render";
 import { makeThread } from "../../__tests__/make-thread";
 
 // ---------- U1 ----------
 
 describe("U1: SearchWindow type + render + basicKnowledge", () => {
-  it("registry has 'search' definition with non-empty commands and basicKnowledge", () => {
-    const def = getWindowTypeDefinition("search");
-    expect(Object.keys(def.methods).length).toBeGreaterThan(0);
-    expect(typeof def.basicKnowledge).toBe("string");
-    expect((def.basicKnowledge as string).length).toBeGreaterThan(0);
+  it("search 'search' behavior resolves via base chain: non-empty methods + basicKnowledge (L4.2)", async () => {
+    const methods = await resolveAllMethods("search");
+    expect(methods).toBeDefined();
+    expect(Object.keys(methods!).length).toBeGreaterThan(0);
+    const basicKnowledge = await resolveBasicKnowledge("search");
+    expect(typeof basicKnowledge).toBe("string");
+    expect((basicKnowledge as string).length).toBeGreaterThan(0);
   });
 
   it("generateWindowId('search') returns id starting with w_search_", () => {

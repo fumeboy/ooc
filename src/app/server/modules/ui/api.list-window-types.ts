@@ -18,6 +18,10 @@ import {
   listRegisteredWindowTypes,
 } from "../../../../executable/windows";
 import type { MethodEntry } from "../../../../executable/windows";
+import {
+  resolveAllMethods,
+  resolveBasicKnowledge,
+} from "../../../../executable/windows/_shared/behavior";
 
 export type WindowCommandEntry = {
   name: string;
@@ -36,24 +40,30 @@ export type WindowTypeCatalogEntry = {
 export function listWindowTypesApi() {
   return new Elysia({ name: "ooc.windows.api.list-types" }).get(
     "/windows/_shared/types",
-    (): { items: WindowTypeCatalogEntry[] } => {
+    async (): Promise<{ items: WindowTypeCatalogEntry[] }> => {
       const types = listRegisteredWindowTypes();
-      const items: WindowTypeCatalogEntry[] = types.map((type) => {
-        const def = getWindowTypeDefinition(type);
-        const commands: WindowCommandEntry[] = Object.entries(def.methods)
-          .map(([name, entry]) => {
-            const description = extractBasicDescription(entry);
-            const out: WindowCommandEntry = { name };
-            if (description) out.description = description;
-            return out;
-          })
-          .sort((a, b) => a.name.localeCompare(b.name));
-        const out: WindowTypeCatalogEntry = { type, commands };
-        if (def.basicKnowledge) {
-          out.basicKnowledgeSummary = summarize(def.basicKnowledge);
-        }
-        return out;
-      });
+      // OOC-4 L4.2（H2）：methods / basicKnowledge 优先沿 base 原型链解析，链未提供时回退 registry，
+      // 否则转写后 4 proto（program/search/file/knowledge）的方法 / 知识在 UI catalog 中丢失。
+      const items: WindowTypeCatalogEntry[] = await Promise.all(
+        types.map(async (type) => {
+          const def = getWindowTypeDefinition(type);
+          const methods = (await resolveAllMethods(type)) ?? def.methods;
+          const commands: WindowCommandEntry[] = Object.entries(methods)
+            .map(([name, entry]) => {
+              const description = extractBasicDescription(entry);
+              const out: WindowCommandEntry = { name };
+              if (description) out.description = description;
+              return out;
+            })
+            .sort((a, b) => a.name.localeCompare(b.name));
+          const out: WindowTypeCatalogEntry = { type, commands };
+          const basicKnowledge = (await resolveBasicKnowledge(type)) ?? def.basicKnowledge;
+          if (basicKnowledge) {
+            out.basicKnowledgeSummary = summarize(basicKnowledge);
+          }
+          return out;
+        }),
+      );
       return { items };
     },
   );
