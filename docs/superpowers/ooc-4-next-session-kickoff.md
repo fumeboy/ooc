@@ -38,16 +38,19 @@
 ### 已完成
 - 伞 spec + 宪法（`object.doc.ts`：readable 第 9 维 + `ooc4_object_model` patch 锁定全部架构概念）
 - Inc 1 `server/`→`executable/`、Inc 2 `readme.md`→`readable.md`（均 plan→review→执行→harness 闭环，1018 src 测试绿）
+- **L2 原型链 standalone 引擎**（commit `6dd10cf2`，`src/executable/prototype/`）：extends 解析 + ObjectRecord registry（重复/悬空/环三重拒载）+ 通用沿链 resolve（一套 walk 三 probe）。plan→review(GO)→执行→回归（1049 绿）闭环。
+- **L3 builtin objects loader**（`src/app/server/bootstrap/ensure-builtin-objects.ts` + `prototype/builtin-loader.ts`）：物化 8 原型骨架到 `stones/_builtin/objects/`（覆盖式重生、不进 git）+ 扫描入 L2 registry + 挂 live startup invariant。plan→review(GO-with-fixes)→执行→回归（1056 绿 + route-audit live e2e 绿）闭环。
 
-### 架构层 roadmap（建议顺序，各自 fresh 会话）
-| 层 | 内容 | 依赖 |
-|---|---|---|
-| **L2** | 原型链 extends 解析 + 共用链 resolve + 环检测 | — ← **下一层** |
-| L3 | builtin objects loader（`stones/_builtin/objects/<proto>/`，A 类 7 原型） | L2 |
-| L1 后半 | readable.ts 动态函数（renderXml 泛化为 per-object，headline 能力） | L2 |
-| L4-6 | A-B 塌缩（talk/do/todo/plan→owner 字段；relation 删除→auto 注入） | L3 |
-| L7 | context/ 物理树（window 状态迁出 thread.json） | L3 |
-| L8 | visible 渲染重做 + client→visible 改名（一起做；Inc 3 plan 留有 C1-C3/H3 输入） | L2/L3 |
+### 架构层 roadmap（建议顺序）
+| 层 | 内容 | 依赖 | 状态 |
+|---|---|---|---|
+| ~~L2~~ | 原型链 extends 解析 + 共用链 resolve + 环检测 | — | ✅ 已落地 |
+| ~~L3~~ | builtin objects loader（`stones/_builtin/objects/<proto>/`，root + 7 A 类原型骨架） | L2 | ✅ 已落地（骨架；behavior 待 L4） |
+| **L4** | A 类迁移：7 个 window behavior 转写进 builtin 原型 executable/ + 接活 render·command resolve（per-type registry → 沿链 resolve）+ method 可见性（public/for_ui_access） | L3 | ← **下一层** |
+| L1 后半 | readable.ts 动态函数（renderXml 泛化为 per-object，headline 能力） | L2 | |
+| L5-6 | B 类塌缩（talk/do/todo/plan→owner 字段；relation 删除→auto 注入） | L4 | |
+| L7 | context/ 物理树（window 状态迁出 thread.json） | L3 | |
+| L8 | visible 渲染重做 + client→visible 改名（一起做；Inc 3 plan 留有 C1-C3/H3 输入） | L2/L3 | |
 
 ### 切层时更新本文
-完成 L2 后，把「下一层」改为 L3，并把发起提示词里的「本次目标」段替换为 L3 的设计要点（参考宪法 `ab_classification`/对应 spec 段）。
+完成一层后，把该层标 ✅、「下一层」箭头移到后继层，并把发起提示词里的「本次目标」段替换为后继层的设计要点（参考宪法对应节点 / spec 对应段）。L4 要点：spec §4（方法可见性）+ §5.1（A 类迁移）+ 接活路径——把 L2 的 `resolveAlongChain` 真正接进 render/command dispatch，用 L3 物化的 builtin registry 兜底。

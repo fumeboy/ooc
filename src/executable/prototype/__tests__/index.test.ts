@@ -12,5 +12,6 @@ describe("prototype barrel", () => {
     expect(typeof proto.loadObjectRecord).toBe("function");
     expect(typeof proto.buildObjectRegistry).toBe("function");
     expect(typeof proto.resolveAlongChain).toBe("function");
+    expect(typeof proto.loadBuiltinRegistry).toBe("function");
   });
 });

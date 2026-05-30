@@ -34,7 +34,10 @@ const BOOTSTRAP_AUTHOR_EMAIL = "bootstrap@ooc.local";
 const BOOTSTRAP_COMMIT_MESSAGE = "chore(bootstrap): import existing stones/";
 
 /** 保留目录名，迁移时不会被搬到 main/ 下。 */
-const RESERVED_TOP_LEVEL = new Set([STONES_MAIN_BRANCH, STONES_BARE_REPO_DIR, ".git", ".gitignore"]);
+// "_builtin" = OOC-4 builtin 原型伪分支（stones/_builtin/objects/<proto>，见
+// src/executable/prototype/constants.ts BUILTIN_BRANCH）。是 world-level 伪分支，
+// 与 main 平级，migrateFlatToMain 永不应把它扫进 main/objects/（防 main 被手删的边界）。
+const RESERVED_TOP_LEVEL = new Set([STONES_MAIN_BRANCH, STONES_BARE_REPO_DIR, "_builtin", ".git", ".gitignore"]);
 
 /** ensureStoneRepo 的结果，用于日志与测试断言。 */
 export interface EnsureStoneRepoResult {

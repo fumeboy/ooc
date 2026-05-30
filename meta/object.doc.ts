@@ -4349,7 +4349,10 @@ export const root: DocTreeNode = {
 
                     与现有代码的关系: 泛化现有 src/executable/windows/_shared/registry.ts 的 per-window-type 注册为 per-object 沿链解析。代码实装见后续 increment(spec §3/§4.2)。
                     `,
-                    todo: ["L2 已落地(src/executable/prototype/): standalone 引擎——self.md extends frontmatter 解析(parseSelfMeta/normalizeExtends) + ObjectRecord registry(buildObjectRegistry, 重复/悬空/环三重拒载) + 通用沿链 resolve(resolveAlongChain, 一套 walk 三 probe, own→沿 extends→终点兜底)。不接活路径(per-type windows/_shared/registry.ts 原样保留); 真实 payload probe(resolveMethod/Visible/Readable)与活路径接入待 L3 builtin 原型物化。"],
+                    todo: [
+                        "L2 已落地(src/executable/prototype/): standalone 引擎——self.md extends frontmatter 解析(parseSelfMeta/normalizeExtends) + ObjectRecord registry(buildObjectRegistry, 重复/悬空/环三重拒载) + 通用沿链 resolve(resolveAlongChain, 一套 walk 三 probe, own→沿 extends→终点兜底)。不接活路径(per-type windows/_shared/registry.ts 原样保留)。",
+                        "L3 已落地: ensureBuiltinObjects(src/app/server/bootstrap/) 物化 8 原型骨架到 stones/_builtin/objects/(root extends:null + 7 A 类 extends:root) + loadBuiltinRegistry(prototype/builtin-loader.ts) 扫描入 L2 registry。_builtin 是框架派生投影(覆盖式重生、不进 git), 挂 live startup 作 World invariant。behavior 转写(executable commands/真实 readable/visible) + 接活 render·command resolve 待 L4。",
+                    ],
                 },
                 "ab_classification": {
                     title: "A/B 分类与塌缩 — 实体 vs 关系/状态",

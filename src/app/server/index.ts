@@ -8,6 +8,7 @@ import { checkStaleDatabaseDir } from "./bootstrap/check-stale-database-dir";
 import { checkFlowChildrenMigration } from "./bootstrap/check-flow-children-migration";
 import { ensureSupervisorObject } from "./bootstrap/ensure-supervisor";
 import { ensureUserObject } from "./bootstrap/ensure-user";
+import { ensureBuiltinObjects } from "./bootstrap/ensure-builtin-objects";
 import { AppServerError } from "./bootstrap/errors";
 import { healthModule } from "./modules/health";
 import { runtimeModule } from "./modules/runtime";
@@ -298,6 +299,17 @@ if (import.meta.main) {
     }
   } catch (e) {
     console.error(`[ooc-app-server] ensureUserObject FATAL: ${e instanceof Error ? e.message : e}`);
+    throw e;
+  }
+
+  // OOC-4 L3: builtin 原型是 World bootstrap invariant——物化 stones/_builtin/objects/<proto>/
+  // （8 原型骨架，root + 7 A 类）。框架派生投影，覆盖式重生，不进 git。失败 FATAL
+  //（原型链根缺失 = 原型系统不可用）。behavior 转写见 L4。
+  try {
+    const builtins = await ensureBuiltinObjects({ baseDir: config.baseDir });
+    console.log(`[ooc-app-server] builtin prototypes materialized: ${builtins.materialized.join(", ")}`);
+  } catch (e) {
+    console.error(`[ooc-app-server] ensureBuiltinObjects FATAL: ${e instanceof Error ? e.message : e}`);
     throw e;
   }
 
