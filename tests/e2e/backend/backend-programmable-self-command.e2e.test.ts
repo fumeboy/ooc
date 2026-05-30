@@ -7,7 +7,7 @@
  *
  * 本场景走真实用户路径验证 OOC「元编程」最核心的体验：
  *   轮 1：user 让 assistant 把一个高频小动作封装成一条自定义命令 →
- *         assistant 写 stones/<self>/server/index.ts（export const window，含 commands.<name>）。
+ *         assistant 写 stones/<self>/executable/index.ts（export const window，含 commands.<name>）。
  *   轮 2：user 让 assistant 调用刚写的那条命令 →
  *         assistant 走 exec(window_id="custom:<self>", command=<name>, args)，命令真执行返回结果。
  *
@@ -21,11 +21,11 @@
  * 观察孔:
  *   A（user story）: assistant 完成「定义命令 + 调用命令」并回 user 报告调用结果。
  *   B（机制）:
- *     ① stones/<self>/server/index.ts 落盘且经 stone-versioning 进 git（stoneFileCommits 验）
+ *     ① stones/<self>/executable/index.ts 落盘且经 stone-versioning 进 git（stoneFileCommits 验）
  *     ② loader 能加载该 ObjectWindowDefinition（第二轮调用不报 loader/TS 加载错误）
  *     ③ 第二轮 exec(window_id="custom:<self>", command=<新命令>) 真执行、结果进 thread events
  *
- * 关键观察：loader 热加载是否在同一 server 进程内生效——LLM 轮 1 写完 server/index.ts，
+ * 关键观察：loader 热加载是否在同一 server 进程内生效——LLM 轮 1 写完 executable/index.ts，
  * 轮 2（同一 worker 进程）能否直接调到新命令，无需重启。
  */
 
@@ -54,12 +54,12 @@ const SELF_ID = "assistant";
 
 const SEED_SELF = `你是用户的 CodeAgent，遵循 OOC 协议。
 
-你具备 programmable 能力：你在自己的 stone 里有一份 \`stones/${SELF_ID}/server/index.ts\`，
+你具备 programmable 能力：你在自己的 stone 里有一份 \`stones/${SELF_ID}/executable/index.ts\`，
 可以 \`export const window: ObjectWindowDefinition\` 给自己注册自定义命令（commands 字典）。
 写好后，你可以通过 \`exec(window_id="custom:${SELF_ID}", command="<名字>", args={...})\` 直接调用它们。
 
 工作守则：
-- 写自定义命令时用 write_file 写 \`stones/${SELF_ID}/server/index.ts\`。
+- 写自定义命令时用 write_file 写 \`stones/${SELF_ID}/executable/index.ts\`。
 - 每条命令是一个 CommandTableEntry：必须有 \`exec: async (ctx) => { ... }\`，
   返回值（字符串）会进入调用结果。可选 paths / match / knowledge。
 - ctx.args 是调用时传入的 args。
@@ -82,7 +82,7 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S6 programmable-self-comman
     async () => {
       handle = await startApp({
         seedStones: [{ objectId: SELF_ID, self: SEED_SELF }],
-        // 关键：写 stones/<self>/server/index.ts 走 stone-versioning，需 bare repo（见 _fixture S5 经验）。
+        // 关键：写 stones/<self>/executable/index.ts 走 stone-versioning，需 bare repo（见 _fixture S5 经验）。
         bootstrapStoneRepo: true,
         workerMaxTicks: 60,
       });
@@ -93,7 +93,7 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S6 programmable-self-comman
         targetObjectId: SELF_ID,
         initialMessage:
           `请给你自己写一条自定义命令，名字叫 \`add\`，作用是把传入的两个数字相加并返回结果。` +
-          `具体做法：用 write_file 写 \`stones/${SELF_ID}/server/index.ts\`，` +
+          `具体做法：用 write_file 写 \`stones/${SELF_ID}/executable/index.ts\`，` +
           `\`export const window: ObjectWindowDefinition = { commands: { add: { exec: async (ctx) => { ` +
           `const { a, b } = ctx.args; return String(Number(a) + Number(b)); } } } }\`。` +
           `写完告诉我命令已就绪。这一轮不要调用它。`,
@@ -109,10 +109,10 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S6 programmable-self-comman
       const turn1Replies = assistantRepliesToUser(calleeAfterTurn1);
       const turn1Commands = listOpenedCommands(calleeAfterTurn1);
 
-      // ① server/index.ts 是否经 stone-versioning 进 git
+      // ① executable/index.ts 是否经 stone-versioning 进 git
       const serverCommits = stoneFileCommits(
         handle.baseDir,
-        `objects/${SELF_ID}/server/index.ts`,
+        `objects/${SELF_ID}/executable/index.ts`,
       );
 
       // ── 轮 2：引导 assistant 调用刚写的 add 命令 ──────────────────────────
@@ -179,9 +179,9 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S6 programmable-self-comman
       const result = scoreScenario({
         scenario: "S6 programmable-self-command",
         bad: [
-          // server/index.ts 完全没进 git（既没写或没经 versioning）
+          // executable/index.ts 完全没进 git（既没写或没经 versioning）
           {
-            name: "server/index.ts 未进 git（未写或绕过 versioning）",
+            name: "executable/index.ts 未进 git（未写或绕过 versioning）",
             check: () => serverCommits.length === 0,
           },
           // 第二轮根本没调到 custom:<self> 的 add 命令
@@ -208,11 +208,11 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S6 programmable-self-comman
         ],
         good: [
           {
-            name: "轮 1 用 write_file 写 server/index.ts",
+            name: "轮 1 用 write_file 写 executable/index.ts",
             check: () => turn1Commands.includes("write_file"),
           },
           {
-            name: "server/index.ts 经 stone-versioning 进 git",
+            name: "executable/index.ts 经 stone-versioning 进 git",
             check: () => serverCommits.length >= 1,
           },
           {

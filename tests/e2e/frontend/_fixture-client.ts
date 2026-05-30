@@ -106,7 +106,7 @@ export interface WorldFixture {
     page: string;
     code: string;
   }): void;
-  /** 给 stone 写 server/index.ts；ui_methods 通过 callMethod 调到。 */
+  /** 给 stone 写 executable/index.ts；ui_methods 通过 callMethod 调到。 */
   writeStoneServer(objectId: string, code: string): void;
   /** 在 stones 目录下创建一个空 stone（.stone.json + 必要骨架）。 */
   createStone(objectId: string): void;
@@ -140,7 +140,7 @@ export const test = base.extend<{ world: WorldFixture }>({
         mkdirSync(dir, { recursive: true });
         mkdirSync(join(dir, "knowledge"), { recursive: true });
         mkdirSync(join(dir, "client"), { recursive: true });
-        mkdirSync(join(dir, "server"), { recursive: true });
+        mkdirSync(join(dir, "executable"), { recursive: true });
         writeFileSync(
           join(dir, ".stone.json"),
           JSON.stringify({ type: "stone", objectId }, null, 2),
@@ -158,7 +158,7 @@ export const test = base.extend<{ world: WorldFixture }>({
         writeFileSync(join(dir, `${page}.tsx`), code, "utf8");
       },
       writeStoneServer(objectId, code) {
-        const dir = join(baseDir, "stones", objectId, "server");
+        const dir = join(baseDir, "stones", objectId, "executable");
         mkdirSync(dir, { recursive: true });
         writeFileSync(join(dir, "index.ts"), code, "utf8");
       },
