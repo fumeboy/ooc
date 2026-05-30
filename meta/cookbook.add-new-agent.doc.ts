@@ -46,7 +46,7 @@ export const root: DocTreeNode = {
     1. 在 \`meta/object.doc.ts\` 与 \`meta/engineering.harness.doc.ts\` 加新维度的概念定义 (Supervisor 哲学层)
     2. 在 \`.ooc-world/stones/agent_of_<x>/\` 创建 stone 目录骨架
     3. 写 \`self.md\` (Object 自己的身份) + \`readme.md\` (对外公开介绍)
-    4. (可选) 写 \`server/index.ts\` (方法库) + \`client/index.tsx\` (自己的 UI)
+    4. (可选) 写 \`executable/index.ts\` (方法库) + \`client/index.tsx\` (自己的 UI)
     5. 验证: web 控制面能看到新 stone + displayName 正确派生
 
     每一步详见 children。
@@ -95,7 +95,7 @@ export const root: DocTreeNode = {
             ├── self.md           # 留空 step 3 写
             ├── readme.md         # 留空 step 3 写
             ├── client/           # 可选, step 4
-            ├── server/           # 可选, step 4
+            ├── executable/       # 可选, step 4
             ├── files/            # Object 用户文件留存
             └── knowledge/
                 ├── memory/       # 长期记忆
@@ -182,13 +182,13 @@ export const root: DocTreeNode = {
         step4_methods_and_ui: {
             title: "Step 4 (可选) - 写 server method 库 + client UI",
             content: `
-            如果新 Agent 需要被 LLM 或 UI 主动调用方法, 写 \`server/index.ts\` (方法库)。详见 \`meta/object.doc.ts:programmable\`。
+            如果新 Agent 需要被 LLM 或 UI 主动调用方法, 写 \`executable/index.ts\` (方法库)。详见 \`meta/object.doc.ts:programmable\`。
             如果新 Agent 需要自己的 UI 页面 (而不是用 Stone fallback), 写 \`client/index.tsx\`. 详见 \`meta/object.doc.ts:visible.stone_client\`。
 
-            **server/index.ts 模板**:
+            **executable/index.ts 模板**:
 
             \`\`\`ts
-            // stones/agent_of_monitor/server/index.ts
+            // stones/agent_of_monitor/executable/index.ts
             import type { ObjectWindowDefinition } from "ooc/executable/server/window-types";
 
             export const window: ObjectWindowDefinition = {
@@ -228,7 +228,7 @@ export const root: DocTreeNode = {
 
             **如果你不写**: web 访问 stone detail 会走 Stone fallback (显示 self.md / readme.md / knowledge / Recent flows), 这是优雅的默认 — 不必为每个 Agent 强制写 client。
 
-            **method 加载**: server/index.ts 是 ESM 热加载 (mtime cache + ?t=mtime), 改完不需要重启 server, 详见 \`meta/object.doc.ts:programmable.method_evolution\`。
+            **method 加载**: executable/index.ts 是 ESM 热加载 (mtime cache + ?t=mtime), 改完不需要重启 server, 详见 \`meta/object.doc.ts:programmable.method_evolution\`。
             `,
             named: {
                 "window.commands / ui_methods": "method 分流: 前者给 LLM (program command 调), 后者给 web UI (HTTP callMethod 调)",

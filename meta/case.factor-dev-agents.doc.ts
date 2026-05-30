@@ -133,7 +133,7 @@ export const root: DocTreeNode = {
             原项目 \`plugins_with_agent\` 共 15 个 SKILL.md, 平铺在 Claude Code 中。OOC 化时面临的关键设计选择:
 
             **方案 A — 1 个大 Agent (sentry_factor_assistant)** (拒绝):
-            - 把所有 15 个 skill 都堆进一个 stone 的 knowledge/, 一个 server/index.ts 30+ commands。
+            - 把所有 15 个 skill 都堆进一个 stone 的 knowledge/, 一个 executable/index.ts 30+ commands。
             - 缺点: 违背 OOC "Object 即领域" 的哲学; 任意改一个 API 都要重新加载整个巨石 prompt;
               事件因子和因子组的开发知识互相干扰激活 (activates_on 难维护)。
 
@@ -183,7 +183,7 @@ export const root: DocTreeNode = {
             - flow 级 \`output/requirement.json\` / \`output/requirement_form.json\` / \`output/tech_plan.md\`:
               单次需求分析的产物 (per-flow), 由其内部状态机切换。
 
-            **commands** (定义在 \`server/index.ts\` 的 \`window: ObjectWindowDefinition\`):
+            **commands** (定义在 \`executable/index.ts\` 的 \`window: ObjectWindowDefinition\`):
 
             | command | 用途 |
             |---|---|
@@ -229,7 +229,7 @@ export const root: DocTreeNode = {
             | \`search_events(query?)\` | 列业务事件 | \`EventSearch\` |
             | \`develop_event_factor(plan_path)\` | 按方案开发事件因子 (LLM 主导) | (无 RPC) |
 
-            **RPC 接入** (写在 \`server/index.ts\`): \`callDynamicRPC\` helper 调
+            **RPC 接入** (写在 \`executable/index.ts\`): \`callDynamicRPC\` helper 调
             \`https://aqomtm80.fn.bytedance.net?typ=DynamicRPC&nowrap=1&psm=ecom.governance.openmind&method=<...>\`,
             通过 env \`USER_INFO\` 鉴权; 详见 \`children.rpc_template\`。
 
@@ -309,7 +309,7 @@ export const root: DocTreeNode = {
         rpc_template: {
             title: "RPC 接入模板 — callDynamicRPC",
             content: `
-            \`sentry_event_factor\` / \`sentry_factor_group\` 的 \`server/index.ts\` 各自包含一份 \`callDynamicRPC\`
+            \`sentry_event_factor\` / \`sentry_factor_group\` 的 \`executable/index.ts\` 各自包含一份 \`callDynamicRPC\`
             helper (~30 行), 用于调哨兵平台的 \`ecom.governance.openmind\` PSM。
 
             **模板**:
@@ -351,7 +351,7 @@ export const root: DocTreeNode = {
 
             **设计取舍**:
             - 不抽公共 lib: 两份重复 (~30 行) 比强行抽到 src/ 拉外部依赖更轻; OOC 体系倾向于
-              **stone 内自给自足** (objects/<self>/server/ 应当独立可读)。
+              **stone 内自给自足** (objects/<self>/executable/ 应当独立可读)。
             - 错误**不抛**, 返回 \`{ ok, error }\` 让上游 LLM 自己判断是否要 retry / talk 用户;
               这与 OOC \`executable.command_exec\` 协议一致 (commands 不抛异常, 用结构化结果)。
             - **缺 USER_INFO 给清晰错误** (而不是 silent 失败), 方便用户在 web UI 上看到提示后补 env。
@@ -423,7 +423,7 @@ export const root: DocTreeNode = {
             **目录结构**:
             - [ ] \`.ooc-world/stones/main/skills/psm-query/{SKILL.md, query.js}\` 就位
             - [ ] 3 个 stone 目录就位 \`stones/main/objects/{sentry_factor_dev, sentry_event_factor, sentry_factor_group}/\`,
-                 每个含 self.md / readme.md / server/index.ts / data.json + knowledge/{memory, relations}/
+                 每个含 self.md / readme.md / executable/index.ts / data.json + knowledge/{memory, relations}/
 
             **类型与单测**:
             - [ ] \`bun tsc --noEmit\` baseline (不增加新 error)

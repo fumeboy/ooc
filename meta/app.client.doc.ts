@@ -626,7 +626,7 @@ export const root: DocTreeNode = {
 
             当前 **不**消费的 server 能力：
             - runtime: llm-config / jobs list / latest debug / loop debug。
-            - stone self / readme / data / server-source 读写。
+            - stone self / readme / data / executable-source 读写。
             `,
             todo: [
                 "若后续要把 stone self/readme/data 编辑、loop debug 等纳入 client，需先把对应 endpoint 在前端 transport 层登记。",

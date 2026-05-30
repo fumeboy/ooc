@@ -163,7 +163,7 @@ export const root: DocTreeNode = {
             content: `
             负责思考如何把 OOC 的 visible 能力落到代码里,同时也是 web 控制面 (app.client) 的实际操盘者。关注:
             - stone client (stones/<self>/client/index.tsx) 与 flow client/pages 的形状、读写、热更。
-            - ui_methods 通道: 客户端通过 HTTP callMethod 调 server/index.ts。
+            - ui_methods 通道: 客户端通过 HTTP callMethod 调 executable/index.ts。
             - web 控制面: 整体导航 (react-router URL state)、AppShell、ThreadHeader、SessionCreator、ContextSnapshotViewer 等核心组件。
             - agent-native UI: "任何用户能做的事 Agent 也能做" 的尚未落地的等价路径。
             - 客户端渲染入口 / object-client-renderer 的演化。
@@ -201,13 +201,13 @@ export const root: DocTreeNode = {
             - loader 热更: 按 mtime 缓存 + ?t=mtime 破坏 import cache。
             - ProgramSelf 注入: program ts/js sandbox 收到的 self 对象。
             - program command 两条调用路径: exec 一行调 vs ts/js exec 里 self.callCommand。
-            - 元编程闭环: 配合 reflectable 在 super flow 改 server/index.ts 后,下一次调用自动看见新方法。
+            - 元编程闭环: 配合 reflectable 在 super flow 改 executable/index.ts 后,下一次调用自动看见新方法。
 
-            内循环典型动作: 调研某个高频 LLM 操作的提取需求 → 设计 CommandTableEntry 形状与 knowledge() → 写到 stone server/index.ts → 跑 e2e 确认 exec 路径能拿到结果。
+            内循环典型动作: 调研某个高频 LLM 操作的提取需求 → 设计 CommandTableEntry 形状与 knowledge() → 写到 stone executable/index.ts → 跑 e2e 确认 exec 路径能拿到结果。
 
             维度定义见 meta/object.doc.ts 的 programmable child。
             `,
-            sources: [["src/executable/server/", "server method 加载与 ProgramSelf 注入;exec 路径入口见 src/executable/tools/exec.ts;server/index.ts 读写见 src/persistable/stone-server.ts;概念定义见 meta/object.doc.ts:children.programmable"]],
+            sources: [["src/executable/server/", "server method 加载与 ProgramSelf 注入;exec 路径入口见 src/executable/tools/exec.ts;executable/index.ts 读写见 src/persistable/stone-executable.ts;概念定义见 meta/object.doc.ts:children.programmable"]],
         },
         agent_of_reflectable: {
             title: "AgentOfReflectable - reflectable 维度的工程实现",
@@ -297,7 +297,7 @@ export const root: DocTreeNode = {
             这一选择带来三个推论:
 
             1. **每个 AgentOfX 都有自己的 stone**: stones/agent_of_thinkable/ / stones/agent_of_executable/ / ...
-               里面写 self.md (Agent 的工作风格)、knowledge/memory/ (沉淀)、server/index.ts (方法库)。
+               里面写 self.md (Agent 的工作风格)、knowledge/memory/ (沉淀)、executable/index.ts (方法库)。
 
             2. **AgentOfX 之间通过 collaborable 协作**: 跨 Agent 派任务走 talk_window,跨 Agent 共享 peer 关系/上下文走 relation_window 与 do_window.move。
                不需要为 "OOC 工程协作" 单独发明协议,直接复用 OOC 自己的协作语义。

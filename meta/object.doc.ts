@@ -832,7 +832,7 @@ export const root: DocTreeNode = {
 
                     其它 window 上也注册命令（do_window: continue/wait/close；talk_window: say/wait/close；
                     file_window: edit/reload/set_range/close；command_exec: refine/submit；custom: Object 自定义 ...）。
-                    Object 自定义 commands 通过 server/index.ts 的 \`export const window\` 注册到 type=custom 的 self window 上。
+                    Object 自定义 commands 通过 executable/index.ts 的 \`export const window\` 注册到 type=custom 的 self window 上。
 
                     Command 与 knowledge 通过 trigger 协议协作：
                     每个 command_exec form 在 thread 中处于 open 状态时，对应的
@@ -899,7 +899,7 @@ export const root: DocTreeNode = {
                     三档语义:
                     - **Allow** (默认): 无人工介入直接执行。适合纯读 / 控制流 (open_file, glob, grep, compress, close, wait, plan, end)。
                     - **Ask**: 触发 PauseChecker, thread 进 paused 状态, 等待人工 approve/reject。适合写副作用 (write_file, relation_update, program, super flow 改 self.md)。
-                    - **Deny**: 系统直接拒绝, 在 events 流写一条 function_call_output, 让 LLM 看见原因。适合"永远不该让 LLM 直接干"的事 (本轮: 程序自改 server/index.ts; 未来 plan mode 通过后再放开)。
+                    - **Deny**: 系统直接拒绝, 在 events 流写一条 function_call_output, 让 LLM 看见原因。适合"永远不该让 LLM 直接干"的事 (本轮: 程序自改 executable/index.ts; 未来 plan mode 通过后再放开)。
 
                     声明 + 配置 = 最终决定:
                     - **声明**: CommandTableEntry.permission 字段, 由 command 作者填写。
@@ -979,7 +979,7 @@ export const root: DocTreeNode = {
                             - delete_* 任何删除类
 
                             deny (本轮硬拦):
-                            - 程序自改 stones/<self>/server/index.ts (元编程闭环未成熟前)
+                            - 程序自改 stones/<self>/executable/index.ts (元编程闭环未成熟前)
 
                             这是 design 草案; 具体 command 名以仓库实际注册为准, 实施期 (Q0d) 校准。
                             未在表中的 command 默认 allow。
@@ -999,13 +999,13 @@ export const root: DocTreeNode = {
                     },
                     sources: [["docs/2026-05-25-permission-model-design.md", "完整 design (含 Q0a~Q0d 分阶段 + 默认 policy 草案 + 风险清单 + Supervisor 拍板记录)"]],
                     todo: [
-                        "Q0e 抽专用 program_self_modify command 或在 write_file exec 中加路径前缀检查 (stones/*/server/index.ts → deny); Plan Mode 落地前保持 deny",
+                        "Q0e 抽专用 program_self_modify command 或在 write_file exec 中加路径前缀检查 (stones/*/executable/index.ts → deny); Plan Mode 落地前保持 deny",
                         "Q0e Stone 作者的 permission 声明传递: programmable.loader 把 ObjectWindowDefinition.commands[*].permission 透传到 CommandTableEntry (custom window proxy 当前一律缺省 allow, 由 stone 作者自行声明)",
                         "远景: Auto Mode (AI 分类器) / Plan Mode (LLM plan + user approve) / OS-level Sandbox 集成——本轮全部不做",
                     ],
                     warnings: [
                         "Q0d 截止 2026-05-25 状态: 6 项 command 已填 ask (write_file / root.program / program_window.exec / file_window.edit / relation.edit / metaprog); deny 0 项 (列 Q0e); 其余 command 缺省 allow",
-                        "自改 stones/<self>/server/index.ts 当前**没有硬拦** — 通过 metaprog 整族 ask + write_file ask 形成弱约束; Q0e 需补硬 deny",
+                        "自改 stones/<self>/executable/index.ts 当前**没有硬拦** — 通过 metaprog 整族 ask + write_file ask 形成弱约束; Q0e 需补硬 deny",
                     ],
                 },
                 "context_window": {
@@ -1422,7 +1422,7 @@ export const root: DocTreeNode = {
                     - search: glob / grep 搜索结果窗口，支持 open_match。
                     - relation: 跨 Object 关系窗口；含 peer stone readme 只读 + self-relation 双层（见 children.relation_window）。
                     - skill_index: stone skills 索引窗口；每轮由 synthesizer 派生。
-                    - custom: Object 自定义窗口（server/index.ts \`export const window\` 注册的 self window）。
+                    - custom: Object 自定义窗口（executable/index.ts \`export const window\` 注册的 self window）。
                     - feishu_chat: 飞书群会话窗口。
                     - feishu_doc: 飞书文档窗口。
                     - plan: 行动计划窗口；支持 sub plan 嵌套 + 通过 do.share_windows 共享给子 thread (见 B 段设计)。
@@ -2317,7 +2317,7 @@ export const root: DocTreeNode = {
                     - stones/<self>/readme.md: 对外公开自述（caller 明确要求改对外说明时）。
 
                     禁止动的路径（不在 super flow 的工作范围内）:
-                    - stones/<self>/server/ / client/ / .stone.json
+                    - stones/<self>/executable/ / client/ / .stone.json
                       （源码演化是高赌注，需走 stone-versioning 的 PR-Issue 流程；不由 super flow 直接改）
                     - stones/<self>/knowledge/（**seed knowledge** 设计层；与 server / client 同级，
                       走 stone-versioning 的 PR-Issue 流程 + eval gate；不由 super flow 直接改）
@@ -2421,7 +2421,7 @@ export const root: DocTreeNode = {
                     super flow 默认仅写 stone 中的 self.md / readme.md（身份）与 pool 中的
                     sediment knowledge（knowledge/memory/* / knowledge/relations/*，长期事实）。
                     如果 caller 明确请求修改自身函数方法、UI 页面或 seed knowledge，应走对应维度定义的演化路径:
-                    - 编辑 stones/<self>/server/index.ts → 见 programmable.method_evolution。
+                    - 编辑 stones/<self>/executable/index.ts → 见 programmable.method_evolution。
                     - 编辑 stones/<self>/client/index.tsx 或 flow client/pages/*.tsx → 见 visible.client_evolution。
                     - 编辑 stones/<self>/knowledge/<slug>.md（**seed knowledge**）→ 走 stone-versioning 的 PR-Issue 流程
                       （seed 是 Object 的"先天能力基底"，改动应过 review + eval gate；详见 persistable.stone.children.seed_knowledge）。
@@ -2494,7 +2494,7 @@ export const root: DocTreeNode = {
                               .stone.json            ← stone 元数据（type='stone', objectId）
                               self.md                ← 对内身份（写入 LlmGenerateParams.instructions）
                               readme.md              ← 对外公开介绍
-                              server/index.ts        ← stone server 源码
+                              executable/index.ts    ← stone server 源码
                               client/index.tsx       ← stone client 源码
                               knowledge/             ← seed knowledge：人类预置的初始知识库（2026-05-24）
                                 <slug>.md            ← frontmatter + activates_on 渐进激活协议
@@ -2568,7 +2568,7 @@ export const root: DocTreeNode = {
                     子项与用途（五件套）:
                     - self.md (stone-self.ts): 对内身份；readSelf / writeSelf；buildInputItems 时读取并注入 LlmGenerateParams.instructions。
                     - readme.md (stone-readme.ts): 对外公开介绍；其它 Object 在 collaborable.relation_window 的伴随 KnowledgeWindow 中会读到。
-                    - server/index.ts (stone-server.ts): stone server 源码；readServerSource / writeServerSource，自动 mkdir。
+                    - executable/index.ts (stone-executable.ts): stone server 源码；readExecutableSource / writeExecutableSource，自动 mkdir。
                     - client/index.tsx (stone-client.ts): stone client 源码；readStoneClientSource / writeStoneClientSource。
                     - knowledge/ (2026-05-24 重纳): **seed knowledge**——人类设计的初始知识库；
                       与 pool 中的 sediment knowledge (memory / relations) 二分。seed 是 Object 的"先天能力基底"，
@@ -2584,7 +2584,7 @@ export const root: DocTreeNode = {
                     | .stone.json | ✓ | createStoneObject |
                     | self.md | ✓（**空文件占位**） | createStoneObject |
                     | readme.md | ✓（**空文件占位**） | createStoneObject |
-                    | server/ | ✗ | 首次 writeServerSource（自带 mkdir） |
+                    | executable/ | ✗ | 首次 writeExecutableSource（自带 mkdir） |
                     | client/ | ✗ | 首次 writeStoneClientSource（自带 mkdir） |
                     | knowledge/ | ✗ | 首次 seed knowledge write_file（按需） |
 
@@ -3072,7 +3072,7 @@ export const root: DocTreeNode = {
                     },
                     todo: [
                         "data pool runtime：csv 读写工具已落地于 src/persistable/csv-pool.ts（手写 RFC 4180 子集）；如未来需要 queryRows / bulk update / 索引，再增量加。",
-                        "params schema 校验（与 programmable.todo 重叠）：如未来需要，server method 命令的 params 类型可在 server/index.ts 内 inline 定义；当前不强制。",
+                        "params schema 校验（与 programmable.todo 重叠）：如未来需要，server method 命令的 params 类型可在 executable/index.ts 内 inline 定义；当前不强制。",
                         "**csv schema drift 可观测性**（AgentOfExperience 2026-05-24 反馈）：csv-pool 不校验 row.keys 与 header 一致性（务实选择——appendRow typo 会静默丢字段）。短期为 known-limitation；长期建议给 observable 维度加 'csv health' 诊断（启动期或 reflectable 主动扫一遍 row.keys 与 header 差异，warn 出异常 csv）。",
                     ],
                 },
@@ -3204,7 +3204,7 @@ export const root: DocTreeNode = {
                     (2) **rollback 的 supervisor-only 强制仍在**——rollback 是治理操作，src/persistable/stone-versioning.ts
                         强制 supervisorAuthor === SUPERVISOR_OBJECT_ID（FORBIDDEN），不属于 worktree 路径特殊化。
 
-                    错误自我编程的恢复（F3）：启动期 recovery-check 自检每个 Object 的 server/index.ts；
+                    错误自我编程的恢复（F3）：启动期 recovery-check 自检每个 Object 的 executable/index.ts；
                     加载失败的开 [recovery-needed] PR-Issue 给 supervisor，由 supervisor metaprog rollback。
 
                     布局演化兼容：早期非 bare 形态（\`stones/main/.git/\` 是目录）被识别为
@@ -3226,7 +3226,7 @@ export const root: DocTreeNode = {
                         "metaprog worktree": "Object 元编程的隔离工作树；branch 形态 metaprog/{objectId}/{token}",
                         "self-scope / cross-scope": "路径划界判定结果；前者自治 ff merge，后者必须经 PR-Issue",
                         "PR-Issue": "落在 super session 的 Issue（带 prPayload diff/branch/intent）；Supervisor 评审通道",
-                        "recovery-check": "启动期自检；server/index.ts 加载失败的 Object 自动开 [recovery-needed] PR-Issue 给 supervisor",
+                        "recovery-check": "启动期自检；executable/index.ts 加载失败的 Object 自动开 [recovery-needed] PR-Issue 给 supervisor",
                         "Bootstrap commit": "首次启动 author=bootstrap 的一次性 squash commit，通过临时 clone scratch 灌入 bare repo 后 push",
                         "legacy-embedded": "已有 world 的非 bare 老式布局（main/.git/ 是目录）；ensureStoneRepo 兼容识别但不强制升级",
                         "git 追踪面 = stone 五件套": "self.md / readme.md / server / client / knowledge（seed）；sediment knowledge / data.json / files 已迁出",
@@ -3304,7 +3304,7 @@ export const root: DocTreeNode = {
             content: `
             Programmable 描述 Object 持有并演化自身**自定义 ContextWindow + 命令表**的能力。
 
-            Object 在自己的 stone 里有一份 \`server/index.ts\`，导出 \`window: ObjectWindowDefinition\`
+            Object 在自己的 stone 里有一份 \`executable/index.ts\`，导出 \`window: ObjectWindowDefinition\`
             （type=\`"custom"\` 的 self window 定义）+ 可选的 \`ui_methods\` 字典（visible 维度的 UI 入口）。
             \`window.commands\` 是标准 \`CommandTableEntry\` 字典；LLM 通过
             \`exec(window_id="custom:<self>", command="<name>", args={...})\` 直接调用，
@@ -3321,8 +3321,8 @@ export const root: DocTreeNode = {
                幂等注入一个 \`custom:<objectId>\` window。
             4. ProgramSelf 注入: program ts/js sandbox 收到 self = { dir, callCommand, getData, setData, getThreadLocal, setThreadLocal }；
                \`callCommand(windowId, command, args?)\` 可调任意 thread 内 window 上的任意已注册命令。
-            5. 动态加载与热更: loader 按 \`server/index.ts\` 的 mtime 缓存；写文件后下一次调用自动重新 import。
-            6. 元编程闭环（与 reflectable 配合）: super flow 通过 write_file 写 server/index.ts → 下一次调命令时看到新形态。
+            5. 动态加载与热更: loader 按 \`executable/index.ts\` 的 mtime 缓存；写文件后下一次调用自动重新 import。
+            6. 元编程闭环（与 reflectable 配合）: super flow 通过 write_file 写 executable/index.ts → 下一次调命令时看到新形态。
 
             Programmable 不是新增 LLM tool 面，而是给 Object 一个**"自我门面 window"+其上一组命令**，
             让它把高频动作或复杂逻辑封装成命名命令；LLM 通过统一的 exec 协议直接调用，
@@ -3331,8 +3331,8 @@ export const root: DocTreeNode = {
             `,
             named: {
                 "Programmable": "Object 持有/演化自身自定义 ContextWindow + 命令表的能力维度",
-                "ObjectWindowDefinition": "server/index.ts 中 export const window 的形状：{ title?, description?, renderXml?, basicKnowledge?, onClose?, commands? }",
-                "ui_methods": "server/index.ts 导出的、给 UI/agent-native 通过 HTTP callMethod 调用的方法字典（plan D3 完全保留）",
+                "ObjectWindowDefinition": "executable/index.ts 中 export const window 的形状：{ title?, description?, renderXml?, basicKnowledge?, onClose?, commands? }",
+                "ui_methods": "executable/index.ts 导出的、给 UI/agent-native 通过 HTTP callMethod 调用的方法字典（plan D3 完全保留）",
                 "ProgramSelf": "program ts/js sandbox 注入的 self 对象，承载 callCommand / getData / setData / getThreadLocal",
                 "loadObjectWindow / loadUiServerMethods": "按 mtime 缓存、自动热更的 server 加载器",
                 "CustomCommandContext": "custom window 命令 exec 收到的 ctx：CommandExecutionContext + self: ProgramSelf",
@@ -3341,7 +3341,7 @@ export const root: DocTreeNode = {
                 "object_window_definition": {
                     title: "object_window_definition - custom self window 的形状",
                     content: `
-                    每个 Object 的 self window 定义在 \`stones/<self>/server/index.ts\` 中：
+                    每个 Object 的 self window 定义在 \`stones/<self>/executable/index.ts\` 中：
                     \`\`\`
                     export const window: ObjectWindowDefinition = {
                       title: "<self>",
@@ -3370,14 +3370,14 @@ export const root: DocTreeNode = {
                     knowledge(args, formStatus) / exec(ctx)。
                     `,
                     named: {
-                        "stones/<self>/server/index.ts": "self window + ui_methods 源码文件路径",
+                        "stones/<self>/executable/index.ts": "self window + ui_methods 源码文件路径",
                         "ObjectWindowDefinition.commands": "Object 自定义命令字典；dispatcher 自动注入 self 到 exec ctx",
                     },
                 },
                 "loader": {
                     title: "loader - 加载与热更",
                     content: `
-                    src/executable/server/loader.ts 负责按需 import server/index.ts，并按 mtime 缓存:
+                    src/executable/server/loader.ts 负责按需 import executable/index.ts，并按 mtime 缓存:
 
                     \`\`\`
                     const mod = await import(\`\${file}?t=\${mtime}\`);  // ?t=mtime 破坏 bun import cache
@@ -3405,7 +3405,7 @@ export const root: DocTreeNode = {
                             content: `
                             按 mtime 失效假设文件系统的 mtime 至少有毫秒精度。
                             某些 FS / NFS 只提供秒级精度，可能出现"写完立刻读还是旧版"的极短窗口。
-                            目前实现没有额外的 etag / hash 保护；如果遇到这种问题，可以在 writeServerSource 后 sleep 1ms 兜底。
+                            目前实现没有额外的 etag / hash 保护；如果遇到这种问题，可以在 writeExecutableSource 后 sleep 1ms 兜底。
                             `,
                         },
                     },
@@ -3478,7 +3478,7 @@ export const root: DocTreeNode = {
                     Object 演化自身 self window 的标准路径:
 
                     1. 触发点（典型: reflectable.metaprogramming 的反思请求）。
-                    2. super flow 中通过 \`exec(command="write_file", path="stones/<self>/server/index.ts", content="...")\` 重写 self window 源码。
+                    2. super flow 中通过 \`exec(command="write_file", path="stones/<self>/executable/index.ts", content="...")\` 重写 self window 源码。
                     3. 下一次 \`exec(window_id="custom:<self>", command=<new>)\` 或 \`self.callCommand(...)\` 触发时，
                        loader 看到 mtime 变化 → ?t=mtime 强制重新 import → 新形态立刻生效。
                     4. 不需要重启进程、不需要重新部署。
@@ -3490,7 +3490,7 @@ export const root: DocTreeNode = {
                     caller 的显式请求共同决定；programmable 本身只描述 *如何写* 才能生效，不规定 *谁可以写*。
                     `,
                     named: {
-                        "writeServerSource": "src/persistable/stone-server.ts，覆盖式写 server/index.ts",
+                        "writeExecutableSource": "src/persistable/stone-executable.ts，覆盖式写 executable/index.ts",
                         "热更生效条件": "mtime 变化 → loader cache 失效 → 下一次调命令重新 import",
                     },
                 },
@@ -3499,7 +3499,7 @@ export const root: DocTreeNode = {
                 "custom_window_vs_ui_methods": {
                     title: "custom window commands 与 ui_methods 的分流",
                     content: `
-                    同一份 server/index.ts 中两个导出服务不同调用方（plan D3）:
+                    同一份 executable/index.ts 中两个导出服务不同调用方（plan D3）:
 
                     - \`window.commands\` (custom dispatcher 路由): 给 LLM 通过 \`exec(window_id="custom:<self>", ...)\`
                       或 \`program.callCommand\` 调用。入参由 LLM 在 form 里填，返回值进 program_window.history 或
@@ -3514,7 +3514,7 @@ export const root: DocTreeNode = {
                 "per_object_isolation": {
                     title: "server 是 stone 级别，跨 session 共享",
                     content: `
-                    server/index.ts 位于 \`stones/<self>/\` 下，不是 \`flows/<sid>/objects/<obj>/\` 下。
+                    executable/index.ts 位于 \`stones/<self>/\` 下，不是 \`flows/<sid>/objects/<obj>/\` 下。
 
                     含义:
                     - 同一个 Object 在不同 session 里看见同一份 self window；不会"换 session 就丢命令"。
@@ -3531,7 +3531,7 @@ export const root: DocTreeNode = {
                     write in worktree → commitWorktree → tryMergeSelf 或 requestPrIssueReview。
 
                     **症状**：
-                    HTTP \`POST /api/stones\` / \`PUT /api/stones/:id/server-source\` 等 endpoint
+                    HTTP \`POST /api/stones\` / \`PUT /api/stones/:id/executable-source\` 等 endpoint
                     历史上**绕开** stone-versioning 直接 \`writeFile\`，导致：
                     - HTTP 创建的 stone 不入 git；\`openMetaprogWorktree\` 后 worktree 看不到该 stone
                     - 元编程协议在 dogfooding 场景**第一步崩**
@@ -3551,7 +3551,7 @@ export const root: DocTreeNode = {
 
                     **实现见**：
                     - \`src/app/server/modules/stones/versioning-helper.ts:wrapHttpWriteInWorktree\`
-                    - \`src/app/server/modules/stones/service.ts\`：createStone / putSelf / putReadme / putServerSource
+                    - \`src/app/server/modules/stones/service.ts\`：createStone / putSelf / putReadme / putExecutableSource
                       改调 helper
                     `,
                     named: {
@@ -3563,7 +3563,7 @@ export const root: DocTreeNode = {
                 "pool_methods": {
                     title: "pool_methods - server 暴露 pool 数据访问的命令形状",
                     content: `
-                    server/index.ts 里访问 pool 数据的 commands 遵循统一约束（2026-05-24 起 csv 替代 sql）：
+                    executable/index.ts 里访问 pool 数据的 commands 遵循统一约束（2026-05-24 起 csv 替代 sql）：
 
                     **1. 命名语义化**：
                     \`\`\`
@@ -3599,11 +3599,11 @@ export const root: DocTreeNode = {
                     如未来要支持自动参数检查 / 转换，需在 callCommand 路径 + ui callMethod 路径都加上（见 programmable.todo）。
                     `,
                     named: {
-                        "pool method": "server/index.ts 中 commands 字典里访问 pool 数据的语义命令",
+                        "pool method": "executable/index.ts 中 commands 字典里访问 pool 数据的语义命令",
                         "csv-based pool method": "用 fs + csv 解析库读写 pool/data/<name>.csv 的 server method",
                         "enqueueSessionWrite('data:...')": "csv 整文件写串行化键",
                     },
-                    sources: [["src/persistable/csv-pool.ts", "csv-based pool method 的实现路径——readCsv / writeCsv / appendRow API + write-then-rename + kebab-case name 校验；server method 在 stone server/index.ts 中以 fs API 调用本模块（或 papaparse 等等价 csv 库）。"]],
+                    sources: [["src/persistable/csv-pool.ts", "csv-based pool method 的实现路径——readCsv / writeCsv / appendRow API + write-then-rename + kebab-case name 校验；server method 在 stone executable/index.ts 中以 fs API 调用本模块（或 papaparse 等等价 csv 库）。"]],
                 },
             },
             todo: [
@@ -3618,23 +3618,23 @@ export const root: DocTreeNode = {
 
             Object 在自己的 stone 里可以有 \`client/index.tsx\`（单页入口）；
             在每个 flow object 下还可以有 \`client/pages/<page>.tsx\`（session 内的多页扩展）。
-            UI 通过 HTTP 调用 server/index.ts 暴露的 ui_methods 与 Object 交互（与 LLM 的调用通道并行）。
+            UI 通过 HTTP 调用 executable/index.ts 暴露的 ui_methods 与 Object 交互（与 LLM 的调用通道并行）。
 
             核心组成:
             1. stone client: stones/<self>/client/index.tsx，跨 session 稳定的单页入口。
             2. flow client pages: flows/<sid>/objects/<obj>/client/pages/<page>.tsx，session 内多页扩展。
-            3. ui_methods 通道: 客户端通过 HTTP（app/server flows.callMethod / stones.callMethod）调 server/index.ts 的 ui_methods。
+            3. ui_methods 通道: 客户端通过 HTTP（app/server flows.callMethod / stones.callMethod）调 executable/index.ts 的 ui_methods。
             4. 元编程闭环（与 reflectable 配合）: super flow 通过 write_file 改 *.tsx → 下一次客户端重新加载看到新 UI。
 
             与 programmable 的关系: programmable 定义方法库本身（含 ui_methods），visible 定义 UI 资源（tsx 文件）+ 调用通道。
-            两者共用 server/index.ts，但形状与消费方不同。
+            两者共用 executable/index.ts，但形状与消费方不同。
             `,
             named: {
                 "Visible": "Object 持有/演化自身 UI 页面的能力维度",
                 "stone client": "stones/<self>/client/index.tsx，单页入口",
                 "flow client pages": "flows/<sid>/objects/<obj>/client/pages/<page>.tsx，多页扩展",
                 "clientIndexFile / flowClientPageFile": "src/persistable/stone-client.ts 提供的路径函数",
-                "ui_methods": "server/index.ts 中给 UI 用的方法字典；详见 programmable.llm_vs_ui_methods",
+                "ui_methods": "executable/index.ts 中给 UI 用的方法字典；详见 programmable.llm_vs_ui_methods",
                 "callMethod": "app/server 暴露给客户端的 HTTP 入口，用于调用 ui_methods",
             },
             children: {
@@ -3693,7 +3693,7 @@ export const root: DocTreeNode = {
                     - 方法不存在 → \`METHOD_NOT_FOUND\`。
                     - 执行抛错 → 由 service 层兜底转 AppServerError 返回给 HTTP 调用方。
 
-                    这条路径与 LLM 的 \`program.callCommand\` 路径在同一份 server/index.ts 上分流（按 \`window.commands\` vs \`ui_methods\`），
+                    这条路径与 LLM 的 \`program.callCommand\` 路径在同一份 executable/index.ts 上分流（按 \`window.commands\` vs \`ui_methods\`），
                     互不干扰。
                     `,
                     named: {
@@ -3711,13 +3711,13 @@ export const root: DocTreeNode = {
                     2. super flow 中通过 \`exec(command="write_file", path="stones/<self>/client/index.tsx", content="...")\` 重写 stone client；
                        或写 flow 级 page \`exec(command="write_file", path="flows/<sid>/objects/<obj>/client/pages/<page>.tsx", content="...")\`。
                     3. 下次客户端加载该路径时拿到新 tsx 源码（具体打包/渲染管线由消费方实现）。
-                    4. 如果新 UI 要调用新方法，需要先把对应 ui_methods 写到 server/index.ts（程序面与界面面分别演化）。
+                    4. 如果新 UI 要调用新方法，需要先把对应 ui_methods 写到 executable/index.ts（程序面与界面面分别演化）。
 
                     与 programmable.method_evolution 的对应关系: 一个改方法、一个改界面；两者都通过 write_file + loader/打包 自然热更。
                     `,
                     named: {
                         "client tsx 演化": "write_file → 下次客户端加载看到新版",
-                        "界面与方法分离演化": "tsx 与 server/index.ts 是两份文件；界面要新能力时常需先扩 ui_methods",
+                        "界面与方法分离演化": "tsx 与 executable/index.ts 是两份文件；界面要新能力时常需先扩 ui_methods",
                     },
                 },
                 "loop_timeline": {

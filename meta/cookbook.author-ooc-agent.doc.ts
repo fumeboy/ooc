@@ -12,7 +12,7 @@
  *
  * 维护原则：
  * 1. 复制粘贴优先：每个 example 都是可运行的最小代码。
- * 2. 与代码同步：当 ObjectWindowDefinition / loader / dispatcher 形态变化时，先更新本文件再更新 server/index.ts 模板。
+ * 2. 与代码同步：当 ObjectWindowDefinition / loader / dispatcher 形态变化时，先更新本文件再更新 executable/index.ts 模板。
  * 3. 概念深挖在 object.doc.ts.programmable；本文件保持"做什么、改哪些文件"的清单视角。
  */
 
@@ -34,7 +34,7 @@ type DocTreeNode = {
 export const root: DocTreeNode = {
     title: "如何编写一个标准 OOC Agent",
     content: `
-    OOC Agent = stones/<id>/ 下一组持久文件 + 一份 server/index.ts 注册的
+    OOC Agent = stones/<id>/ 下一组持久文件 + 一份 executable/index.ts 注册的
     custom self window（plan §6 升级形态）。本指南覆盖从空目录到能跑的全流程。
 
     新形态对 Agent 作者的本质改变：
@@ -50,14 +50,14 @@ export const root: DocTreeNode = {
     HTTP \`callMethod\` 调用，与 LLM 路径完全解耦。
 
     Agent 自我演化的元编程闭环：
-      LLM → \`exec(command="write_file", path="stones/<self>/server/index.ts", content="...")\`
+      LLM → \`exec(command="write_file", path="stones/<self>/executable/index.ts", content="...")\`
         → loader 看到 mtime 变化 → ?t=mtime 强制重 import → 下一次调命令立刻看到新形态。
     `,
     named: {
         "stones/<id>/": "Agent 的 stone 目录；身份、知识、命令、UI 都在这里",
-        "ObjectWindowDefinition": "server/index.ts 中 export const window 的形状（src/executable/server/window-types.ts）",
+        "ObjectWindowDefinition": "executable/index.ts 中 export const window 的形状（src/executable/server/window-types.ts）",
         "custom self window": "type=\"custom\" 的 ContextWindow，由 initContextWindows 在 thread.objectId === self 时幂等注入；id = `custom:<objectId>`",
-        "ui_methods": "server/index.ts 中给前端 / agent-native 客户端用的方法字典；走 HTTP callMethod，不影响 LLM 路径",
+        "ui_methods": "executable/index.ts 中给前端 / agent-native 客户端用的方法字典；走 HTTP callMethod，不影响 LLM 路径",
         "热更": "loader 按 mtime 缓存；写文件后下一次调用自动 re-import",
     },
     children: {
@@ -70,7 +70,7 @@ export const root: DocTreeNode = {
             stones/<id>/
             ├── self.md              # 第一人称身份；进 instructions
             ├── readme.md            # 第三人称对外自述；其他 Object 看你时读这个
-            ├── server/index.ts      # custom self window + ui_methods（必备）
+            ├── executable/index.ts  # custom self window + ui_methods（必备）
             ├── client/index.tsx     # 可选；对外的 web 单页入口（缺省走 Stone fallback）
             ├── data.json            # 自动维护；setData/getData 落盘
             ├── knowledge/           # 长期记忆 / 协议知识；按 frontmatter activates_on 自动激活
@@ -85,7 +85,7 @@ export const root: DocTreeNode = {
 
             最小骨架命令（可以一次性跑完）:
             \`\`\`
-            mkdir -p stones/factor_workshop/{server,client,knowledge/memory,knowledge/relations}
+            mkdir -p stones/factor_workshop/{executable,client,knowledge/memory,knowledge/relations}
             \`\`\`
 
             身份文件可以从一句话起步：
@@ -112,9 +112,9 @@ export const root: DocTreeNode = {
             },
         },
         "step2_server_index_ts": {
-            title: "Step 2 — server/index.ts 写 custom self window",
+            title: "Step 2 — executable/index.ts 写 custom self window",
             content: `
-            这是新形态的核心。server/index.ts 默认 export 两个 binding：
+            这是新形态的核心。executable/index.ts 默认 export 两个 binding：
 
             - \`window\`（必备）：你的 custom self window 定义（type=custom）
             - \`ui_methods\`（按需）：给 web 前端用的 HTTP 方法字典
@@ -122,7 +122,7 @@ export const root: DocTreeNode = {
             最小可工作模板：
 
             \`\`\`ts
-            // stones/factor_workshop/server/index.ts
+            // stones/factor_workshop/executable/index.ts
             import type { ObjectWindowDefinition } from "ooc/executable/server/window-types";
 
             export const window: ObjectWindowDefinition = {
@@ -361,7 +361,7 @@ export const root: DocTreeNode = {
 
             **关键点**：
             - props 至少接 \`{ sessionId?, objectName?, callMethod? }\`
-            - \`callMethod(name, args)\` 调你 server/index.ts 里 \`ui_methods[name]\` ——
+            - \`callMethod(name, args)\` 调你 executable/index.ts 里 \`ui_methods[name]\` ——
               **不是 \`window.commands\`**（后者是给 LLM 的）
             - 没写 client/index.tsx 时 web 走 Stone fallback（自动展示
               self.md / readme.md / knowledge / Recent flows）
@@ -370,7 +370,7 @@ export const root: DocTreeNode = {
             `,
             named: {
                 "client/index.tsx": "stone 级单页入口；缺省走 Stone fallback",
-                "callMethod (UI 路径)": "前端 props 注入；调 server/index.ts 的 ui_methods 字典；HTTP /api/{flows,stones}/.../call_method",
+                "callMethod (UI 路径)": "前端 props 注入；调 executable/index.ts 的 ui_methods 字典；HTTP /api/{flows,stones}/.../call_method",
                 "Stone fallback": "无 client/index.tsx 时 web 默认展示 self.md/readme.md/knowledge/Recent flows",
             },
         },
@@ -442,7 +442,7 @@ export const root: DocTreeNode = {
 
             \`\`\`
             exec(command="write_file",
-                 path="stones/<self>/server/index.ts",
+                 path="stones/<self>/executable/index.ts",
                  content="...")
             \`\`\`
 
@@ -491,7 +491,7 @@ export const root: DocTreeNode = {
               给 web/agent-native 客户端的方法字典；通过 HTTP /call_method 调用，无
               form lifecycle，纯 RPC 形态。
 
-            两者在 server/index.ts 里平行 export；调用入口、调用方身份、错误呈现位置都不同。
+            两者在 executable/index.ts 里平行 export；调用入口、调用方身份、错误呈现位置都不同。
             一个动作到底该放哪个：**调用方是 LLM 还是用户/agent 客户端**。如果两者都需要，
             分别写两份。
             `,
@@ -507,7 +507,7 @@ export const root: DocTreeNode = {
             - 通过 self.getData/setData 持久化（落 data.json）
             - 通过 self.getThreadLocal/setThreadLocal 临时（不持久化）
 
-            **不要** fork 一份新的 server/index.ts 来做 session 特化——会破坏 mtime 缓存的
+            **不要** fork 一份新的 executable/index.ts 来做 session 特化——会破坏 mtime 缓存的
             正确性，也跟"stone 是跨 session 共享"的语义矛盾。
             `,
         },
