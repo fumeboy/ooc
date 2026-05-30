@@ -44,9 +44,9 @@ describe("Issue #6 Bad #1: silent-fabricate", () => {
     expect(body.error.code).toBe("NOT_FOUND");
   });
 
-  test("GET /api/stones/<nonexistent>/server-source → 404", async () => {
+  test("GET /api/stones/<nonexistent>/executable-source → 404", async () => {
     const { app } = await makeApp();
-    const res = await app.handle(new Request("http://localhost/api/stones/_test_no_such_obj/server-source"));
+    const res = await app.handle(new Request("http://localhost/api/stones/_test_no_such_obj/executable-source"));
     expect(res.status).toBe(404);
   });
 
@@ -214,7 +214,7 @@ describe("Issue #6 Bad #4: PUT 覆盖性写无护栏", () => {
     expect(blocked.status).toBe(409);
   });
 
-  test("PUT server-source 覆盖已存在 → 409", async () => {
+  test("PUT executable-source 覆盖已存在 → 409", async () => {
     const { app } = await makeApp();
     await app.handle(
       new Request("http://localhost/api/stones", {
@@ -225,7 +225,7 @@ describe("Issue #6 Bad #4: PUT 覆盖性写无护栏", () => {
     );
     // first PUT — 不存在,允许
     const first = await app.handle(
-      new Request("http://localhost/api/stones/_test_executable_target_4/server-source", {
+      new Request("http://localhost/api/stones/_test_executable_target_4/executable-source", {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ code: "export const a = 1;" }),
@@ -234,7 +234,7 @@ describe("Issue #6 Bad #4: PUT 覆盖性写无护栏", () => {
     expect(first.status).toBe(200);
     // 第二次 — 没 confirm 应被拒
     const blocked = await app.handle(
-      new Request("http://localhost/api/stones/_test_executable_target_4/server-source", {
+      new Request("http://localhost/api/stones/_test_executable_target_4/executable-source", {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ code: "export const a = 2;" }),

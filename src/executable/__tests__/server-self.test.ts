@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
-import { createStoneObject, readFlowData, writeServerSource } from "../../persistable";
+import { createStoneObject, readFlowData, writeExecutableSource } from "../../persistable";
 import { createProgramSelf } from "../server/self";
 import { clearServerLoaderCache } from "../server/loader";
 import type { ThreadContext } from "../../thinkable/context";
@@ -26,7 +26,7 @@ describe("createProgramSelf", () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-self-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
 
-    await writeServerSource(
+    await writeExecutableSource(
       ref,
       `export const window = {
         title: "alice",
@@ -69,7 +69,7 @@ describe("createProgramSelf", () => {
   test("callCommand throws when command not found on the self window", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-self-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
-    await writeServerSource(
+    await writeExecutableSource(
       ref,
       `export const window = { commands: {} }; export const ui_methods = {};`,
     );

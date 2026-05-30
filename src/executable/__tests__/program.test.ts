@@ -6,7 +6,7 @@ import { runOneExec } from "../windows/program/runtime";
 import { executeProgramCommand } from "../windows/root/command.program";
 import { executeProgramWindowExec } from "../windows/program";
 import type { ProgramWindow } from "../windows/_shared/types";
-import { createStoneObject, writeServerSource } from "../../persistable";
+import { createStoneObject, writeExecutableSource } from "../../persistable";
 import { clearServerLoaderCache } from "../server/loader";
 import { makeThread } from "../../__tests__/make-thread";
 

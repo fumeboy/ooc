@@ -20,9 +20,9 @@ export function stoneMetadataFile(ref: StoneObjectRef): string {
   return join(stoneDir(ref), ".stone.json");
 }
 
-/** stone 的 server 目录。 */
-export function serverDir(ref: StoneObjectRef): string {
-  return join(stoneDir(ref), "server");
+/** stone 的 executable 目录。 */
+export function executableDir(ref: StoneObjectRef): string {
+  return join(stoneDir(ref), "executable");
 }
 
 /** stone 的 client 目录。 */
@@ -82,7 +82,7 @@ export function ancestorObjectIds(objectId: string): string[] {
  * - `readme.md`：**空文件**——同上语义；正文由 Object 后续主动 writeReadme 写入。
  *
  * **不预创**的目录（按需 lazy 创建，避免 `ls` 看到一堆空目录引发"骨架不全"误判）:
- * - server/  ← 写第一个 server method 时由 stone-server.ts 自动 mkdir
+ * - executable/  ← 写第一个 method 时由 stone-executable.ts 自动 mkdir
  * - client/  ← 写第一个 client 入口时由 stone-client.ts 自动 mkdir
  * - knowledge/ ← seed knowledge 完全可选；首次 write_file 时 lazy mkdir
  *

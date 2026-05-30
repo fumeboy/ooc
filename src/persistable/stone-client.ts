@@ -9,7 +9,7 @@ import { clientDir } from "./stone-object";
  * - Stone：单页入口 `<stoneDir>/client/index.tsx`
  * - Flow：多页 `<objectDir>/client/pages/{pageName}.tsx`
  *
- * 设计对照 stone-server.ts：mkdir + writeFile + ENOENT 静默返回 undefined。
+ * 设计对照 stone-executable.ts：mkdir + writeFile + ENOENT 静默返回 undefined。
  * 不做语法校验、不做模板预填——把"约定文件路径"这一件事做干净就好。
  */
 

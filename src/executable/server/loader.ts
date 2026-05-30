@@ -1,12 +1,12 @@
 import { stat } from "node:fs/promises";
-import { serverIndexFile } from "../../persistable";
+import { executableIndexFile } from "../../persistable";
 import type { ServerLoaderEntry, StoneObjectRef, UiMethods } from "./types";
 import type { ObjectWindowDefinition } from "./window-types";
 
 const cache = new Map<string, ServerLoaderEntry>();
 
 async function loadServerEntry(stoneRef: StoneObjectRef): Promise<ServerLoaderEntry | undefined> {
-  const file = serverIndexFile(stoneRef);
+  const file = executableIndexFile(stoneRef);
   let stats;
   try {
     stats = await stat(file);

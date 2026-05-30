@@ -301,7 +301,7 @@ if (import.meta.main) {
     throw e;
   }
 
-  // U8: Recovery 自检——遍历 stones/main/{Object}/server/index.ts，加载失败的开 PR-Issue。
+  // U8: Recovery 自检——遍历 stones/main/{Object}/executable/index.ts，加载失败的开 PR-Issue。
   // 不阻塞启动；Supervisor 在自己的 super flow 看到 recovery-needed Issue 后决策回滚。
   try {
     const recovery = await runRecoveryCheck({ baseDir: config.baseDir });

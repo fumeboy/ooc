@@ -4,11 +4,11 @@ import {
   poolKnowledgeDir,
   readReadme,
   readSelf,
-  readServerSource,
+  readExecutableSource,
   stoneDir,
   writeReadme,
   writeSelf,
-  writeServerSource,
+  writeExecutableSource,
 } from "@src/persistable";
 import { loadUiServerMethods } from "@src/executable/server/loader";
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
@@ -223,15 +223,15 @@ export function createStonesService({ baseDir, stonesBranch }: { baseDir: string
       });
       return { ok: true, commitSha: versioned.commitSha, merged: versioned.merged, prIssueId: versioned.prIssueId };
     },
-    async getServerSource({ objectId }: { objectId: string }) {
+    async getExecutableSource({ objectId }: { objectId: string }) {
       await ensureStoneExists(objectId);
-      return { code: (await readServerSource(ref(objectId))) ?? "" };
+      return { code: (await readExecutableSource(ref(objectId))) ?? "" };
     },
-    async putServerSource({ objectId, code, confirmOverwrite = false }: { objectId: string; code: string; confirmOverwrite?: boolean }) {
+    async putExecutableSource({ objectId, code, confirmOverwrite = false }: { objectId: string; code: string; confirmOverwrite?: boolean }) {
       await ensureStoneExists(objectId);
-      await ensureOverwriteAllowed(join(dir(objectId), "server", "index.ts"), confirmOverwrite, { objectId, field: "server-source" });
-      const versioned = await runVersioned(objectId, `http:putServerSource ${objectId}`, async (branch) => {
-        await writeServerSource({ baseDir, objectId, stonesBranch: branch }, code);
+      await ensureOverwriteAllowed(join(dir(objectId), "executable", "index.ts"), confirmOverwrite, { objectId, field: "executable-source" });
+      const versioned = await runVersioned(objectId, `http:putExecutableSource ${objectId}`, async (branch) => {
+        await writeExecutableSource({ baseDir, objectId, stonesBranch: branch }, code);
       });
       return { ok: true, commitSha: versioned.commitSha, merged: versioned.merged, prIssueId: versioned.prIssueId };
     },

@@ -117,7 +117,7 @@ activates_on:
  *
  * 与 REFLECTABLE_KNOWLEDGE 的关系：
  * - 上一段是默认指引：写 memory 目录是 super flow 最常见的反思动作，无版本风险
- * - 本段是"重操作"指引：当 caller 请求改 server/index.ts、整篇 self.md 重写、
+ * - 本段是"重操作"指引：当 caller 请求改 executable/index.ts、整篇 self.md 重写、
  *   增删 server method 等可能导致 Object 加载不动的修改时，应当走 worktree
  *
  * 不强制——简单 memory 追加可以直接 write_file 落 main；只有"改身体"级修改才
@@ -128,14 +128,14 @@ export const REFLECTABLE_METAPROG_PATH = "internal/executable/reflectable/metapr
 export const REFLECTABLE_METAPROG_KNOWLEDGE = `
 # 元编程：用 worktree 安全地改自己的"身体"
 
-当 caller 的反思请求需要修改你的 \`server/index.ts\` / 整篇 \`self.md\` /
+当 caller 的反思请求需要修改你的 \`executable/index.ts\` / 整篇 \`self.md\` /
 \`readme.md\` 等"加载链路"上的文件时（即一旦写错下一轮启动就跑不起来的内容），
 **不要直接 write_file 落 main**。改用元编程协议：在 git worktree 沙箱里改、
 试运行、再合并。错了能直接丢 worktree、main 不被污染。
 
 ## 何时走 worktree（推荐）
 
-- 改 \`stones/<self>/server/index.ts\`（你的方法库；写错下一轮加载失败）
+- 改 \`stones/<self>/executable/index.ts\`（你的方法库；写错下一轮加载失败）
 - 整篇重写 \`stones/<self>/self.md\` 或 \`readme.md\`
 - 跨 Object 修改（涉及别人 stone 的内容）—— 必须走，会自动转 PR-Issue 给 supervisor
 - 一次同时改 3 个以上文件、需要互相一致

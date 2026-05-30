@@ -1,6 +1,6 @@
 /**
  * Recovery 启动自检（U8）—— Server 启动时遍历 `stones/main/objects/` 下所有 Object 目录，
- * 试加载它们的 `server/index.ts`；任何 Object 加载失败则在 super session 创一条
+ * 试加载它们的 `executable/index.ts`；任何 Object 加载失败则在 super session 创一条
  * `[recovery-needed]` PR-Issue（不带 prPayload，因为这不是元编程修改而是诊断信号），
  * 让 Supervisor 在自己的 super flow 中看到并决定是否触发 metaprog rollback。
  *
@@ -57,10 +57,10 @@ export async function runRecoveryCheck(opts: { baseDir: string }): Promise<Recov
   for (const e of entries) {
     const stoneRef = { baseDir: opts.baseDir, objectId: e.name, stonesBranch: STONES_MAIN_BRANCH };
     try {
-      // 试加载 server/index.ts；不存在/空文件视为正常（绝大多数 stone 没有 server 方法）
-      const serverFile = join(stonesObjectsDir, e.name, "server", "index.ts");
+      // 试加载 executable/index.ts；不存在/空文件视为正常（绝大多数 stone 没有 executable 方法）
+      const executableFile = join(stonesObjectsDir, e.name, "executable", "index.ts");
       try {
-        await stat(serverFile);
+        await stat(executableFile);
       } catch {
         continue;
       }
@@ -98,7 +98,7 @@ export async function runRecoveryCheck(opts: { baseDir: string }): Promise<Recov
       issue = await createRecoveryIssue({
         baseDir: opts.baseDir,
         title,
-        description: `Server startup self-check failed to load stones/main/objects/${b.objectId}/server/index.ts.\n\nReason:\n${b.reason}\n\nSupervisor: consider \`metaprog rollback\` to a previous commit, or directly fix the stone.`,
+        description: `Server startup self-check failed to load stones/main/objects/${b.objectId}/executable/index.ts.\n\nReason:\n${b.reason}\n\nSupervisor: consider \`metaprog rollback\` to a previous commit, or directly fix the stone.`,
         createdByObjectId: "supervisor",
       });
     } catch {

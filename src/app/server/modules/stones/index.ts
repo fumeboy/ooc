@@ -6,13 +6,13 @@ import { createKnowledgeFileApi } from "./api.create-knowledge-file";
 import { createStoneApi } from "./api.create-stone";
 import { getReadmeApi } from "./api.get-readme";
 import { getSelfApi } from "./api.get-self";
-import { getServerSourceApi } from "./api.get-server-source";
+import { getExecutableSourceApi } from "./api.get-executable-source";
 import { getStoneApi } from "./api.get-stone";
 import { listStonesApi } from "./api.list-stones";
 import { putReadmeApi } from "./api.put-readme";
 import { putKnowledgeFileApi } from "./api.put-knowledge-file";
 import { putSelfApi } from "./api.put-self";
-import { putServerSourceApi } from "./api.put-server-source";
+import { putExecutableSourceApi } from "./api.put-executable-source";
 import { createStonesService } from "./service";
 
 export function stonesModule(config: Pick<ServerConfig, "baseDir" | "stonesBranch">) {
@@ -28,7 +28,7 @@ export function stonesModule(config: Pick<ServerConfig, "baseDir" | "stonesBranc
     .use(putSelfApi(service))
     .use(getReadmeApi(service))
     .use(putReadmeApi(service))
-    .use(getServerSourceApi(service))
-    .use(putServerSourceApi(service))
+    .use(getExecutableSourceApi(service))
+    .use(putExecutableSourceApi(service))
     .use(callMethodApi(service));
 }

@@ -90,16 +90,16 @@ describe("write_file stone-versioning routing", () => {
     expect((ctx.thread as { contextWindows: unknown[] }).contextWindows.length).toBe(1);
   });
 
-  test("self-scope: 写自治区下的新子文件（server/index.ts）→ ff-merge 到 main", async () => {
+  test("self-scope: 写自治区下的新子文件（executable/index.ts）→ ff-merge 到 main", async () => {
     const baseDir = await newWorld(["agent_of_x"]);
     const ctx = ctxFor(baseDir, "agent_of_x", {
-      path: "stones/agent_of_x/server/index.ts",
+      path: "stones/agent_of_x/executable/index.ts",
       content: "export const methods = {};\n",
     });
     const out = await executeWriteFileCommand(ctx);
     expect(typeof out === "object" && out !== null && out !== undefined && out.ok === true).toBe(true);
     const onMain = await readFile(
-      join(mainObjectsDir(baseDir), "agent_of_x", "server", "index.ts"),
+      join(mainObjectsDir(baseDir), "agent_of_x", "executable", "index.ts"),
       "utf8",
     );
     expect(onMain).toBe("export const methods = {};\n");

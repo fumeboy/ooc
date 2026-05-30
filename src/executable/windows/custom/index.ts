@@ -3,7 +3,7 @@
  *
  * 注册一份固定 type=`"custom"` 的 WindowRegistry 契约；commands / renderXml /
  * onClose / basicKnowledge 全部在调用瞬间从 `ctx.window.objectId` 路由到对应
- * Object 的 `stones/<objectId>/server/index.ts` 的 `export const window`
+ * Object 的 `stones/<objectId>/executable/index.ts` 的 `export const window`
  * （ObjectWindowDefinition）。
  *
  * 关键约束（plan §8 风险 1）：

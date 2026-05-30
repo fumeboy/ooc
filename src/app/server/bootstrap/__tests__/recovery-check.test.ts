@@ -47,11 +47,11 @@ describe("runRecoveryCheck", () => {
     expect(r.newIssues).toEqual([]);
   });
 
-  test("creates [recovery-needed] issue when server/index.ts has syntax error", async () => {
+  test("creates [recovery-needed] issue when executable/index.ts has syntax error", async () => {
     const baseDir = await newWorld();
-    await mkdir(join(baseDir, "stones", "agent_of_x", "server"), { recursive: true });
+    await mkdir(join(baseDir, "stones", "agent_of_x", "executable"), { recursive: true });
     await writeFile(
-      join(baseDir, "stones", "agent_of_x", "server", "index.ts"),
+      join(baseDir, "stones", "agent_of_x", "executable", "index.ts"),
       "this is not valid typescript &^$@!\n",
     );
     await ensureStoneRepo({ baseDir });
@@ -67,9 +67,9 @@ describe("runRecoveryCheck", () => {
 
   test("idempotent: pre-existing recovery-needed issue is not duplicated", async () => {
     const baseDir = await newWorld();
-    await mkdir(join(baseDir, "stones", "agent_of_y", "server"), { recursive: true });
+    await mkdir(join(baseDir, "stones", "agent_of_y", "executable"), { recursive: true });
     await writeFile(
-      join(baseDir, "stones", "agent_of_y", "server", "index.ts"),
+      join(baseDir, "stones", "agent_of_y", "executable", "index.ts"),
       "still broken &^&^!\n",
     );
     await ensureStoneRepo({ baseDir });
@@ -91,10 +91,10 @@ describe("runRecoveryCheck", () => {
     expect(recoveryIssues.length).toBe(1);
   });
 
-  test("ignores Object without server/index.ts", async () => {
+  test("ignores Object without executable/index.ts", async () => {
     const baseDir = await newWorld();
     await mkdir(join(baseDir, "stones", "passive_agent"), { recursive: true });
-    await writeFile(join(baseDir, "stones", "passive_agent", "self.md"), "no server methods\n");
+    await writeFile(join(baseDir, "stones", "passive_agent", "self.md"), "no executable methods\n");
     await ensureStoneRepo({ baseDir });
 
     const r = await runRecoveryCheck({ baseDir });

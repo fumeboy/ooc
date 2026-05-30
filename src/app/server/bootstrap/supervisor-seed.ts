@@ -226,8 +226,8 @@ activates_on:
 
 | 术语 | 定义 |
 |---|---|
-| **server method** | Object 在自己 stone 的 \`server/index.ts\` 定义的一个函数。可被该 Object 自己的 LLM 通过 \`program_window\` 调用，也可被其 client 页面（\`client/index.tsx\`）调用。是 Object 的"自身函数库"，programmable 维度的核心载体。 |
-| **ui_method** | server method 的一种特例：由该 Object 的 client tsx 调用，而非 LLM 调用。同样写在 \`server/index.ts\`，承担前端 UI 与后端逻辑桥接（visible 维度）。 |
+| **server method** | Object 在自己 stone 的 \`executable/index.ts\` 定义的一个函数。可被该 Object 自己的 LLM 通过 \`program_window\` 调用，也可被其 client 页面（\`client/index.tsx\`）调用。是 Object 的"自身函数库"，programmable 维度的核心载体。 |
+| **ui_method** | server method 的一种特例：由该 Object 的 client tsx 调用，而非 LLM 调用。同样写在 \`executable/index.ts\`，承担前端 UI 与后端逻辑桥接（visible 维度）。 |
 | **client tsx** | Object 自己 stone 的 \`client/index.tsx\`，渲染该 Object 的专属 UI 页面（visible 维度）。 |
 | **seed knowledge** | 写在 stone 里的初始知识库 \`stones/<branch>/objects/<id>/knowledge/<slug>.md\`，进 git review。每篇带 \`activates_on\` frontmatter（见下文）决定何时进 LLM 视野。 |
 | **sediment knowledge** | 写在 pool 里的运行时长期记忆 \`pools/objects/<id>/knowledge/{memory,relations}/...\`，不进 git。由 reflectable 维度通过 super flow 写入。 |
@@ -298,8 +298,8 @@ World 第一次启动时一次性落盘的"必然存在"对象。后续启动 id
 | **thread** | session 中的一条对话/任务链，有唯一 threadId。一个 Object 可以同时跑多条 thread（例如同时被多个用户找）。\`root\` 是该 Object 的常驻主线程 id。 |
 | **inbox** | Object 收到但还未处理的跨 Object 消息队列（talk_window 推送 / do_window 子任务结果）。每轮思考自动可见。 |
 | **events** | 系统级事件（Object stone 变更 / 错误），进 visibility 通道供我观察。 |
-| **broken stone** | 启动期 recovery-check 发现的、\`server/index.ts\` 加载失败的 Object。系统自动开 \`[recovery-needed]\` PR-Issue 给我处理（决定回滚到哪个历史 commit / 或拒绝放行）。 |
-| **recovery-check** | 启动期自检：遍历 \`stones/<branch>/objects/*/server/index.ts\`，加载失败的 Object 走 broken stone 流程。不阻塞启动，只产出 PR-Issue。 |
+| **broken stone** | 启动期 recovery-check 发现的、\`executable/index.ts\` 加载失败的 Object。系统自动开 \`[recovery-needed]\` PR-Issue 给我处理（决定回滚到哪个历史 commit / 或拒绝放行）。 |
+| **recovery-check** | 启动期自检：遍历 \`stones/<branch>/objects/*/executable/index.ts\`，加载失败的 Object 走 broken stone 流程。不阻塞启动，只产出 PR-Issue。 |
 `,
 
   "three-fold-persistence.md": `---
@@ -324,7 +324,7 @@ OOC World 文件系统按三种持久性质分层。术语解释（stone-version
 
 \`stones/<branch>/objects/<id>/\`：
 - \`self.md\` / \`readme.md\`：身份（对内 + 对外）
-- \`server/index.ts\`：server method（含 ui_method）
+- \`executable/index.ts\`：server method（含 ui_method）
 - \`client/index.tsx\`：client UI 页面
 - \`knowledge/<slug>.md\`：seed knowledge（人类设计的初始知识库；带 \`activates_on\` frontmatter）
 
@@ -359,7 +359,7 @@ OOC World 文件系统按三种持久性质分层。术语解释（stone-version
 | 何时何处 | 哪一层 | 写什么 |
 |---|---|---|
 | 我创建该 Object | **stone** | \`stones/main/objects/pdf-extractor/{self.md, readme.md, knowledge/usage.md}\` |
-| pdf-extractor 后续写自己的方法 | **stone** | \`stones/main/objects/pdf-extractor/server/index.ts\` |
+| pdf-extractor 后续写自己的方法 | **stone** | \`stones/main/objects/pdf-extractor/executable/index.ts\` |
 | 用户传一份 pdf 让它提取 | **pool** | \`pools/objects/pdf-extractor/files/<uuid>.pdf\` + \`pools/objects/pdf-extractor/data/extractions.csv\` |
 | 它通过 super flow 总结"长 pdf 要分块" | **pool** | \`pools/objects/pdf-extractor/knowledge/memory/long-pdf-chunking.md\` |
 | 当下这次 user → pdf-extractor 的对话 | **flow** | \`flows/<sid>/objects/pdf-extractor/threads/<tid>/thread.json\` |
@@ -383,7 +383,7 @@ activates_on:
 | **collaborable** | 协作：talk_window / do_window / relation_window 跨 Object 通道 | 系统内核 |
 | **observable** | 可观测：LLM 调用 trace、pause / resume、debug 文件落盘 | 系统内核 + \`debug/\` 目录 |
 | **reflectable** | 自反思：super flow 元编程闭环（写自身 sediment knowledge） | super flow 协议 |
-| **programmable** | 自身函数方法库 | Object 自己的 \`stone/server/index.ts\` |
+| **programmable** | 自身函数方法库 | Object 自己的 \`stone/executable/index.ts\` |
 | **visible** | 自身 UI 页面 | Object 自己的 \`stone/client/index.tsx\` + 关联 ui_method |
 | **persistable** | 文件树：stone / pool / flow 三分 | 整个 World 文件系统 |
 
@@ -506,7 +506,7 @@ open(type="command", command="metaprog",
 
 ### 4. 自治区与权限
 
-我创建的新 Object **不属于自己的自治区** —— 后续写 \`server/index.ts\` /
+我创建的新 Object **不属于自己的自治区** —— 后续写 \`executable/index.ts\` /
 \`client/index.tsx\` 之类的代码，应由该 Object 自己通过常规 metaprog 流程
 （worktree → commit → merge）完成。supervisor 只负责"开 World 的接生"，不替
 后续维护。

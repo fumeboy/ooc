@@ -66,7 +66,7 @@ export {
 
 export {
   createStoneObject,
-  serverDir,
+  executableDir,
   clientDir,
   stoneKnowledgeDir,
   stoneChildrenDir,
@@ -86,7 +86,7 @@ export {
 export { readSelf, selfFile, writeSelf } from "./stone-self";
 export { readReadme, readmeFile, writeReadme } from "./stone-readme";
 // stone-data 已删除（2026-05-23）：data.json 语义改为 session-scoped 落 flow（详见 ./flow-data）。
-export { readServerSource, serverIndexFile, writeServerSource } from "./stone-server";
+export { readExecutableSource, executableIndexFile, writeExecutableSource } from "./stone-executable";
 
 export {
   // PR-Issue（stone-versioning 决策协议；issue 看板已 2026-05-26 移除）

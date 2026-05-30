@@ -5,7 +5,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { createStoneObject, stoneDir, stoneMetadataFile } from "../stone-object";
 import { readSelf, selfFile, writeSelf } from "../stone-self";
 import { readReadme, readmeFile, writeReadme } from "../stone-readme";
-import { readServerSource, serverIndexFile, writeServerSource } from "../stone-server";
+import { readExecutableSource, executableIndexFile, writeExecutableSource } from "../stone-executable";
 
 let tempRoot: string | undefined;
 
@@ -31,9 +31,9 @@ describe("createStoneObject", () => {
     expect(await readSelf(ref)).toBe("");
     expect(await readReadme(ref)).toBe("");
 
-    // 不预创的子目录：server / client / knowledge / files / database
-    // 由对应 IO 函数（writeServerSource / writeStoneClientSource / seed write_file 等）按需 lazy mkdir
-    for (const sub of ["server", "client", "knowledge", "files", "database"]) {
+    // 不预创的子目录：executable / client / knowledge / files / database
+    // 由对应 IO 函数（writeExecutableSource / writeStoneClientSource / seed write_file 等）按需 lazy mkdir
+    for (const sub of ["executable", "client", "knowledge", "files", "database"]) {
       await expect(stat(join(dir, sub))).rejects.toMatchObject({ code: "ENOENT" });
     }
   });
@@ -64,14 +64,14 @@ describe("stone file IO", () => {
 
   // data.json 迁到 flow 层；详见 src/persistable/__tests__/flow-data.test.ts（待补）。
 
-  test("server/index.ts round trip", async () => {
+  test("executable/index.ts round trip", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "dave" });
 
-    expect(await readServerSource(ref)).toBeUndefined();
+    expect(await readExecutableSource(ref)).toBeUndefined();
     const code = "export const window = { commands: { foo: { paths: ['foo'], match: () => ['foo'], exec: async () => ({ ok: true }) } } }; export const ui_methods = {};";
-    await writeServerSource(ref, code);
-    expect(await readServerSource(ref)).toBe(code);
-    expect(serverIndexFile(ref)).toBe(join(stoneDir(ref), "server", "index.ts"));
+    await writeExecutableSource(ref, code);
+    expect(await readExecutableSource(ref)).toBe(code);
+    expect(executableIndexFile(ref)).toBe(join(stoneDir(ref), "executable", "index.ts"));
   });
 });

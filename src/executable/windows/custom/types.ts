@@ -1,7 +1,7 @@
 import type { BaseContextWindow } from "../_shared/types.js";
 
 /**
- * Custom window — Object 自定义的 self window，由 `stones/<self>/server/index.ts`
+ * Custom window — Object 自定义的 self window，由 `stones/<self>/executable/index.ts`
  * 的 `export const window: ObjectWindowDefinition = {...}` 提供具体行为。
  *
  * plan §6.2 / D1 / D2：
@@ -12,6 +12,6 @@ import type { BaseContextWindow } from "../_shared/types.js";
 export interface CustomWindow extends BaseContextWindow {
   type: "custom";
   status: "open" | "closed";
-  /** 用来 dispatch 到 stones/<objectId>/server/index.ts 的 ObjectWindowDefinition。 */
+  /** 用来 dispatch 到 stones/<objectId>/executable/index.ts 的 ObjectWindowDefinition。 */
   objectId: string;
 }
