@@ -1,0 +1,103 @@
+/**
+ * behavior.ts — 活路径上「沿 base prototype 链解析 window 行为 aspect」的解析层（OOC-4 L4.1）。
+ *
+ * 当前只接 **renderXml + basicKnowledge** 两个 aspect（plan D1）：
+ * - method 解析（lookupMethodEntry/callMethod/renderMethodsNode）推迟到 L4.2；
+ * - onClose / compressView 仍走 registry（L4 排除）。
+ *
+ * 解析语义（plan D2 graceful dispatch）：
+ *   protoId = builtinProtoId(window.type)
+ *   - proto 不在 base registry（do/talk/feishu_* 等 B 类）→ undefined（caller 回退 registry）
+ *   - 在 base registry：沿 self.md frontmatter extends 链 walk，第一个提供该 aspect 的 def 命中；
+ *     全链 miss（program 等无 executable 的骨架）→ undefined（caller 回退 registry）
+ *
+ * proto def 加载（plan D3）：stat-before-import（fail-loud，**不吞 broken import**）。
+ * 动态 import 对「文件不存在」与「文件存在但内部 import 损坏」同抛 ERR_MODULE_NOT_FOUND，
+ * 故先 stat `executable/index.ts`：ENOENT → 骨架（undefined，正常回退）；存在则 import，
+ * 任何 import 错误向上抛（对齐 server/loader.ts:8-16 既有范式，遵守 silent-swallow ban）。
+ *
+ * 缓存（plan D6）：base registry module-level 单次缓存；proto def 按 dir 缓存。
+ * 提供 clearBehaviorCache() 测试钩子（对齐 server/loader.ts:74）。
+ */
+
+import { stat } from "node:fs/promises";
+import { join } from "node:path";
+import { loadBuiltinRegistry } from "../../../extendable/base/index.js";
+import { builtinProtoId, type ObjectRegistry } from "../../prototype/index.js";
+import type { ObjectWindowDefinition } from "../../server/window-types.js";
+import type { RenderHook } from "./registry.js";
+
+let _registry: Promise<ObjectRegistry> | undefined;
+function baseRegistry(): Promise<ObjectRegistry> {
+  if (!_registry) _registry = loadBuiltinRegistry();
+  return _registry;
+}
+
+const _defCache = new Map<string, Promise<ObjectWindowDefinition | undefined>>();
+async function loadPrototypeDefinition(dir: string): Promise<ObjectWindowDefinition | undefined> {
+  let p = _defCache.get(dir);
+  if (!p) {
+    p = (async () => {
+      const file = join(dir, "executable", "index.ts");
+      try {
+        await stat(file); // 存在性探测：ENOENT → 骨架原型，正常回退
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+        throw e;
+      }
+      // 文件存在 → import；import 错误向上抛（fail-loud，不静默吞 broken transitive import）
+      const mod = await import(file);
+      return (mod.window ?? undefined) as ObjectWindowDefinition | undefined;
+    })();
+    _defCache.set(dir, p);
+  }
+  return p;
+}
+
+/**
+ * 沿 extends 链 resolve 某 aspect；proto 不在 base registry 或链全 miss → undefined（回退 registry）。
+ *
+ * 不复用 L2 同步 resolveAlongChain——probe 需 async load proto def；手动沿 rec.extends walk，
+ * 同语义 + visited 防环（base registry build 已校验无环，这里 defense-in-depth）。
+ */
+async function resolveAspect<T>(
+  type: string,
+  pick: (def: ObjectWindowDefinition) => T | undefined,
+): Promise<T | undefined> {
+  const reg = await baseRegistry();
+  const protoId = builtinProtoId(type);
+  if (!reg.has(protoId)) return undefined;
+  let curId: string | null = protoId;
+  const seen = new Set<string>();
+  while (curId !== null && !seen.has(curId)) {
+    seen.add(curId);
+    const rec = reg.get(curId);
+    if (!rec) break;
+    const def = await loadPrototypeDefinition(rec.dir);
+    if (def) {
+      const v = pick(def);
+      if (v !== undefined) return v;
+    }
+    curId = rec.extends;
+  }
+  return undefined;
+}
+
+/** 沿 base 原型链解析 renderXml；链未提供 → undefined（caller 回退 registry）。 */
+export async function resolveRenderXml(type: string): Promise<RenderHook | undefined> {
+  return resolveAspect(type, (d) => d.renderXml);
+}
+
+/**
+ * 沿 base 原型链解析 basicKnowledge；链未提供 → undefined（caller 回退 registry）。
+ * basicKnowledge 类型是 string | ((ctx)=>string)；这里只取 string 形态（动态函数留 L4.2+）。
+ */
+export async function resolveBasicKnowledge(type: string): Promise<string | undefined> {
+  return resolveAspect(type, (d) => (typeof d.basicKnowledge === "string" ? d.basicKnowledge : undefined));
+}
+
+/** 测试钩子：清空 base registry + proto def 缓存。 */
+export function clearBehaviorCache(): void {
+  _registry = undefined;
+  _defCache.clear();
+}

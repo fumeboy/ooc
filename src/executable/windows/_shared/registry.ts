@@ -229,15 +229,36 @@ export function listRegisteredWindowTypes(): WindowType[] {
 }
 
 /**
- * Boot-time 校验：所有已注册的 window type 必须配齐 renderXml hook。
+ * 「renderXml 由 base 原型链提供」的声明集（OOC-4 L4.1 / plan D4）。
+ *
+ * 某些 window type 的 renderXml 已从 registry 移走、改由 base prototype 链解析
+ * （src/executable/windows/_shared/behavior.ts:resolveRenderXml），此处声明它们，
+ * 让同步的 assertAllRenderHooksRegistered 不把「registry 无 renderXml」误判为缺失。
+ *
+ * base proto 是否**真**提供 renderXml 由 behavior 行为等价测试 + 运行期 stat-before-import
+ * 兜底，不进 boot 同步路径（async load 会把 fail-loud 退化为 unhandled rejection）。
+ */
+const CHAIN_PROVIDED_RENDER = new Set<WindowType>();
+
+/** 声明某 type 的 renderXml 由 base 原型链提供（registry 已移走该 hook）。 */
+export function markRenderXmlViaPrototype(type: WindowType): void {
+  CHAIN_PROVIDED_RENDER.add(type);
+}
+
+/**
+ * Boot-time 校验：所有已注册的 window type 必须配齐 renderXml hook
+ * （或经 markRenderXmlViaPrototype 声明由 base 原型链提供）。
  *
  * 由 windows/index.ts 在所有 side-effect import 之后调用一次，把"缺 renderXml"的失误
  * 从 LLM context（空白 XML 难以察觉）提前到启动期，fail-loud（根因 #4）。
+ *
+ * **保持同步**（plan D4）：它是 windows/index.ts 顶层同步 boot 副作用，async 化会让
+ * fail-loud 退化为 unhandled rejection。chain-provided 判据用同步的 CHAIN_PROVIDED_RENDER 集。
  */
 export function assertAllRenderHooksRegistered(): void {
   const missing: WindowType[] = [];
   for (const [type, def] of REGISTRY) {
-    if (!def.renderXml) missing.push(type);
+    if (!def.renderXml && !CHAIN_PROVIDED_RENDER.has(type)) missing.push(type);
   }
   if (missing.length > 0) {
     throw new Error(

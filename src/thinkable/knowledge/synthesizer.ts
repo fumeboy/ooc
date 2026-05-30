@@ -37,6 +37,7 @@ import {
 import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../../executable/windows/_shared/super-constants.js";
 import type { MethodKnowledgeEntries, MethodEntry } from "../../executable/windows/_shared/method-types.js";
 import { getWindowTypeDefinition } from "../../executable/windows/_shared/registry.js";
+import { resolveBasicKnowledge } from "../../executable/windows/_shared/behavior.js";
 import type { CommandExecWindow, ContextWindow, KnowledgeWindow, RelationWindow, SkillIndexWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
 import { ROOT_WINDOW_ID, SKILL_INDEX_WINDOW_ID } from "../../executable/windows/_shared/types.js";
 import { computeActivations } from "./activator.js";
@@ -176,10 +177,13 @@ export async function collectExecutableKnowledgeEntries(
     } catch {
       continue;
     }
-    if (!def.basicKnowledge) continue;
+    // OOC-4 L4.1：basicKnowledge 优先沿 base 原型链解析，链未提供时回退 registry（plan D2 / Task 4）。
+    // 非 base / 骨架 type 链 miss → 回退 registry.basicKnowledge（harmless 且 forward-correct）。
+    const basicKnowledge = (await resolveBasicKnowledge(t)) ?? def.basicKnowledge;
+    if (!basicKnowledge) continue;
     const path = `internal/windows/${t}/basic`;
     if (!(path in protocolEntries)) {
-      protocolEntries[path] = def.basicKnowledge;
+      protocolEntries[path] = basicKnowledge;
     }
   }
 
@@ -233,12 +237,16 @@ export async function collectExecutableKnowledgeEntries(
         const existing = enriched.findIndex((w) => w.id === SKILL_INDEX_WINDOW_ID);
         if (existing >= 0) enriched[existing] = skillIndex;
         else enriched.push(skillIndex);
-        // 派生后补一次 type-level basicKnowledge（§1.5 是基于原 list 计算的，不含 skill_index）
+        // 派生后补一次 type-level basicKnowledge（§1.5 是基于原 list 计算的，不含 skill_index）。
+        // OOC-4 L4.1：skill_index 的 basicKnowledge 已从 registry 移到 base 原型链，
+        // 优先 resolveBasicKnowledge 拿 base 版，registry 兜底（plan D2 / Task 4 :241）。
         const skillIndexBasicPath = "internal/windows/skill_index/basic";
         if (!(skillIndexBasicPath in protocolEntries)) {
           try {
-            const def = getWindowTypeDefinition("skill_index");
-            if (def.basicKnowledge) protocolEntries[skillIndexBasicPath] = def.basicKnowledge;
+            const basicKnowledge =
+              (await resolveBasicKnowledge("skill_index")) ??
+              getWindowTypeDefinition("skill_index").basicKnowledge;
+            if (basicKnowledge) protocolEntries[skillIndexBasicPath] = basicKnowledge;
           } catch { /* skip */ }
         }
       }

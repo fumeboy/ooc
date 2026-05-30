@@ -47,10 +47,10 @@
 |---|---|---|---|
 | ~~L2~~ | 原型链 extends 解析 + 共用链 resolve + 环检测 | — | ✅ 已落地 |
 | ~~L3~~ | builtin objects loader（`src/extendable/base/<proto>/` 源码，root + 7 A 类原型骨架；逻辑寻址 `ooc://stones/_builtin/objects/<p>`） | L2 | ✅ 已落地（骨架源码；behavior 待 L4） |
-| **L4** | 活路径 prototype-chain 解析 + command→method 归一 + method 可见性（**已 brainstorm 定稿**，设计 spec：`2026-05-30-ooc-4-L4-live-prototype-resolution-design.md`；Option A 拆 per-type registry，无永久 shim）。拆 4 子增量↓ | L2/L3 | ← **下一层（从 L4.0 起）** |
-| ├ L4.0 | `command`→`method` 三层同步归一（内部符号 / form 原型 / agent-facing 协议），行为不变 | — | 设计就绪 |
-| ├ L4.1 | 核心机制：window.prototype + dir-based proto loader + resolveMethod/RenderXml/Readable/BasicKnowledge 沿链 + 热路径分流改写；最简原型 skill_index 端到端 + in-character 文件 + loadSelfInstructions 剥 frontmatter | L4.0 | 设计就绪 |
-| ├ L4.2 | 转写其余 6 A 类（program/search/file/knowledge/command_exec/custom）behavior + in-character 文件 | L4.1 | 设计就绪 |
+| **L4** | 活路径 prototype-chain 解析 + command→method 归一 + method 可见性（设计 spec：`2026-05-30-ooc-4-L4-live-prototype-resolution-design.md`；Option A 拆 per-type registry，无永久 shim）。拆 4 子增量↓ | L2/L3 | 进行中 |
+| ├ ~~L4.0~~ | `command`→`method` 归一（内部符号 tsc 兜底 + agent-facing 措辞 + exec arg key command→method + loader 硬切防静默丢命令），行为不变 | — | ✅ 已落地（Pass A 52beb485 + Pass B 7ecd71bf；保留 command_exec 字面）|
+| ├ L4.1 | 核心机制：window.prototype + dir-based proto loader + resolveMethod/RenderXml/Readable/BasicKnowledge 沿链 + 热路径分流改写；最简原型 skill_index 端到端 + in-character 文件 + loadSelfInstructions 剥 frontmatter | L4.0 | ← **下一层** |
+| ├ L4.2 | 转写其余 6 A 类（program/search/file/knowledge/**command_exec→method_exec**（含 type 字面量+目录+canonical id 改名）/custom）behavior + in-character 文件 | L4.1 | 设计就绪 |
 | └ L4.3 | method 可见性 public/for_ui_access + dispatcher 鉴权 | L4.2 | 设计就绪 |
 | L1 后半 | readable.ts 动态函数（renderXml 泛化为 per-object，headline 能力） | L2 | |
 | L5-6 | B 类塌缩（talk/do/todo/plan→owner 字段；relation 删除→auto 注入）；registry 彻底删 | L4 | |

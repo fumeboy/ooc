@@ -21,6 +21,7 @@ import {
   getWindowTypeDefinition,
   type RenderContext,
 } from "../../executable/windows/_shared/registry";
+import { resolveRenderXml } from "../../executable/windows/_shared/behavior";
 import { filterMessagesForDoWindow } from "../../executable/windows/do/index";
 import { filterMessagesForTalkWindow } from "../../executable/windows/talk/index";
 import type { ContextWindow } from "../../executable/windows/_shared/types";
@@ -171,12 +172,16 @@ async function renderWindowNode(
       );
     }
   } else {
-    if (!def.renderXml) {
+    // OOC-4 L4.1：renderXml 优先沿 base 原型链解析，链未提供时回退 registry（graceful dispatch, plan D2）。
+    // compressView 分支（上方）仍用 def.compressView，不动（L4 排除）。
+    const chainXml = await resolveRenderXml(renderedWindow.type);
+    const renderXml = chainXml ?? def.renderXml;
+    if (!renderXml) {
       throw new Error(
         `render.ts: window type "${renderedWindow.type}" 缺少 renderXml hook（接口契约）。`,
       );
     }
-    const typeChildren = await def.renderXml(renderCtx);
+    const typeChildren = await renderXml(renderCtx);
     children.push(...typeChildren);
   }
 

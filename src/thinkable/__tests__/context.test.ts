@@ -580,6 +580,24 @@ describe("buildInputItems self.md injection", () => {
     expect(xml).toContain('<self object_id="alice">');
   });
 
+  it("strips self.md frontmatter from instructions (OOC-4 L4.1 / Task 5)", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-self-"));
+    const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "carol" });
+    await writeSelf(
+      stoneRef,
+      "---\nextends: root\n---\nI am Carol, identity body only.",
+    );
+
+    const thread = makeThread({
+      id: "t_carol",
+      persistence: { baseDir: tempRoot, sessionId: "s", objectId: "carol", threadId: "t_carol" },
+    });
+    const out = await buildInputItems(thread);
+    expect(out.instructions).toBe("I am Carol, identity body only.");
+    expect(out.instructions).not.toContain("extends:");
+    expect(out.instructions).not.toContain("---");
+  });
+
   it("omits instructions and <self> when thread has no persistence", async () => {
     const thread = makeThread({ id: "t_in_memory" });
     const out = await buildInputItems(thread);

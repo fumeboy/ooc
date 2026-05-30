@@ -3,6 +3,7 @@ import { collectExecutableKnowledgeEntries } from "../../executable/index";
 import type { ContextWindow } from "../../executable/windows/_shared/types";
 import type { ThreadPersistenceRef } from "../../persistable/common";
 import { deriveStoneFromThread, objectDir, readSelf, stoneDir, threadDir } from "../../persistable";
+import { parseSelfMeta } from "../../executable/prototype";
 import { renderContextXml } from "./render";
 
 /**
@@ -717,12 +718,17 @@ function buildPathsItem(thread: ThreadContext): LlmInputItem | undefined {
  *
  * - 内存模式（无 persistence）→ undefined，保持现有测试契约
  * - self.md 不存在或为空 → undefined
- * - 否则返回原文（trim 后非空校验）
+ * - 否则注入 frontmatter 之后的正文（剥掉 extends 等元数据；OOC-4 L4.1 / Task 5）
+ *
+ * 注：当前 world-stone self.md 暂不带 frontmatter，本改是 forward-correct 防御
+ * （base 原型 self.md 已用 `extends:` frontmatter，world self.md 迟早会跟进）。
  */
 async function loadSelfInstructions(thread: ThreadContext): Promise<string | undefined> {
   if (!thread.persistence) return undefined;
   const stoneRef = deriveStoneFromThread(thread.persistence);
   const selfText = await readSelf(stoneRef);
   if (!selfText || !selfText.trim()) return undefined;
-  return selfText;
+  const body = parseSelfMeta(selfText).body;
+  if (!body.trim()) return undefined;
+  return body;
 }

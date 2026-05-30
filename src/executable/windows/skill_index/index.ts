@@ -13,11 +13,22 @@
  * UI 端类似——ContextSnapshotViewer 渲染时如果 skills 为空就不显示卡片。
  */
 
-import { registerWindowType, type OnCloseContext, type RenderContext } from "../_shared/registry.js";
+import {
+  registerWindowType,
+  markRenderXmlViaPrototype,
+  type OnCloseContext,
+  type RenderContext,
+} from "../_shared/registry.js";
 import type { SkillIndexWindow } from "./types.js";
 import { xmlElement, xmlText, type XmlNode } from "../../../thinkable/context/xml.js";
 
-const SKILL_INDEX_BASIC_KNOWLEDGE = `
+/**
+ * skill_index 的 basicKnowledge 协议文本。
+ *
+ * OOC-4 L4.1：行为真源迁到 base/skill_index/executable/index.ts（沿原型链解析），
+ * 本常量保留 export 供 base proto import 复用（逐字保真，避免 copy 漂移）。
+ */
+export const SKILL_INDEX_BASIC_KNOWLEDGE = `
 skill_index window 列出当前 stone 上可用的 skills——每个 skill 是一个独立目录（含
 SKILL.md + 任意辅助文件），用于复用某种操作模式或协议。
 
@@ -41,7 +52,7 @@ SKILL.md + 任意辅助文件），用于复用某种操作模式或协议。
  * 调度器（render.ts）会负责外层 `<window id type status>` + `<title>` + `<commands>`；
  * 本函数返回的是内层 `<hint>` + `<skills>` 子树。
  */
-function renderSkillIndex(ctx: RenderContext): XmlNode[] {
+export function renderSkillIndex(ctx: RenderContext): XmlNode[] {
   const window = ctx.window as SkillIndexWindow;
   const skills = window.skills ?? [];
   return [
@@ -70,9 +81,12 @@ function onCloseSkillIndex(_ctx: OnCloseContext): boolean {
   return false;
 }
 
+// OOC-4 L4.1：renderXml + basicKnowledge + methods 已从 registry 移走，
+// 改由 base/skill_index/executable/index.ts 沿原型链解析（behavior.ts:resolveRenderXml /
+// resolveBasicKnowledge）。registry 入口仅保留 onClose（L4 排除项，仍走 registry）。
 registerWindowType("skill_index", {
-  methods: {},
   onClose: onCloseSkillIndex,
-  renderXml: renderSkillIndex,
-  basicKnowledge: SKILL_INDEX_BASIC_KNOWLEDGE,
 });
+
+// 声明 renderXml 由 base 原型链提供，让同步的 assertAllRenderHooksRegistered 不误判缺失（plan D4）。
+markRenderXmlViaPrototype("skill_index");
