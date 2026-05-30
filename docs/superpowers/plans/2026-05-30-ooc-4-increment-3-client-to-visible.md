@@ -1,4 +1,17 @@
-# OOC-4 Increment 3：`client/` → `visible/` 归一 Implementation Plan
+> **状态：DEFERRED（经 feasibility review 判定不按此 scope 执行）**
+>
+> 两轮设计 + feasibility review 后结论：client→visible **不存在干净的「纯 naming 改名」切面**，与三处深度纠缠：
+> 1. **ooc:// 协议破坏**：`ooc://client/`→`ooc://visible/` 是 Agent-facing 寻址协议，须与 dir + routing regex + knowledge seed 同帧改（split-brain 风险）。
+> 2. **web 组件命名边界模糊**（review H1）：改组件符号名（ObjectClientRenderer→ObjectVisibleRenderer）但保留文件/目录名（domains/clients）自相矛盾；全改则 ~2000 LOC + 文件/目录/import 大量 churn；半改造成 `CLIENT_PREFIX="ooc://visible/"` 类半态。
+> 3. **与 visible 渲染逻辑重做同源**：ObjectClientRenderer 的原型链 fallback 解析（spec §5.2 / L8）就在这批文件里，naming 与 rendering 应一起重做。
+>
+> **决定**：client→visible 整体并入 **visible 渲染架构层（L8）**，与原型链 fallback 一起做，不作为独立 rename 增量。本文档的逐文件清单 + review 发现（C1 shell.tsx:457,459 反向映射 / C2 _fixture-client.ts:142,151,156 / C3 frontend-object-client-renderer.pw.ts / H2 注释漂移 / H3 route-audit 缺 visible-source gate）保留作 L8 执行时的输入。
+>
+> 目录归一三部曲现状：**executable/ ✓（Inc1）/ readable.md ✓（Inc2）/ visible 并入 L8**。
+>
+> ---
+
+# OOC-4 Increment 3：`client/` → `visible/` 归一 Implementation Plan（DEFERRED → L8）
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development 或 executing-plans。Steps 用 checkbox。
 
