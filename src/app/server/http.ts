@@ -40,6 +40,7 @@ import { loadObjects } from "@src/executable/loader";
 import { invokeMethod } from "@src/executable/dispatcher";
 import type { ThinkThread } from "@src/thinkable/think-thread";
 import { createPauseStore, type PauseStore } from "./runtime/pause-store";
+import { createDebugStore, type DebugStore, getGlobalDebugStore } from "./runtime/debug-store";
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
 
@@ -65,6 +66,11 @@ export interface HttpDeps {
      * server/index.ts 可传入共享实例以获得跨请求一致性。
      */
     pauseStore?: PauseStore;
+    /**
+     * DebugStore 实例（可选）。
+     * 若不传，使用全局单例（受 OOC_DEBUG_LOOPS 环境变量控制）。
+     */
+    debugStore?: DebugStore;
 }
 
 /** 安全 sessionId 校验正则：只允许字母数字 + _ - ，最长 80 字符。 */
@@ -237,6 +243,7 @@ export function buildApp(deps: HttpDeps): Elysia {
     const defaultBranch = deps.branch ?? "main";
     const sourceCwd = deps.sourceCwd;
     const pauseStore = deps.pauseStore ?? createPauseStore();
+    const debugStore = deps.debugStore ?? getGlobalDebugStore();
 
     /* -------- global error → JSON -------- */
 
@@ -1606,6 +1613,302 @@ export function buildApp(deps: HttpDeps): Elysia {
         // Not in queue = already completed (persisted to disk)
         return { ok: true, jobId, status: "done" };
     });
+
+    /* -------- /api/runtime/debug -------- */
+
+    /**
+     * GET /api/runtime/debug/status
+     *
+     * 返回 debug loop capture 是否启用。
+     */
+    app.get("/api/runtime/debug/status", () => ({
+        ok: true,
+        enabled: debugStore.isEnabled(),
+    }));
+
+    /**
+     * POST /api/runtime/debug/enable
+     *
+     * 运行时启用 debug loop capture（无需重启）。
+     */
+    app.post("/api/runtime/debug/enable", () => {
+        debugStore.enable();
+        return { ok: true, enabled: true };
+    });
+
+    /**
+     * POST /api/runtime/debug/disable
+     *
+     * 运行时禁用 debug loop capture。
+     */
+    app.post("/api/runtime/debug/disable", () => {
+        debugStore.disable();
+        return { ok: true, enabled: false };
+    });
+
+    /* -------- /api/runtime/flows/:s/objects/:o/threads/:t/debug/loops -------- */
+
+    /**
+     * 安全校验 object name (URL param) — 与 sessionId/threadId 规则相同。
+     */
+    function validateObjectNameParam(input: string): string {
+        const SAFE_NAME = /^[a-zA-Z0-9_\-]{1,80}$/;
+        if (!SAFE_NAME.test(input)) {
+            throw new Error(`invalid objectName: must match ${SAFE_NAME}`);
+        }
+        return input;
+    }
+
+    /**
+     * GET /api/runtime/flows/:s/objects/:o/threads/:t/debug/loops
+     *
+     * 列出 thread 下所有 loop debug 记录的索引（轻量，不含完整 payload）。
+     * 扫描 debug/ 目录下的 loop_NNNN.meta.json 文件。
+     *
+     * Response: { ok, loops: [{ loopIndex, hasInput, hasOutput, hasMeta, meta? }] }
+     */
+    app.get(
+        "/api/runtime/flows/:s/objects/:o/threads/:t/debug/loops",
+        async ({ params }) => {
+            let sessionId: string;
+            let objectName: string;
+            let threadId: string;
+            try {
+                sessionId = validateSessionIdParam(params.s);
+                objectName = validateObjectNameParam(params.o);
+                threadId = validateThreadIdParam(params.t);
+            } catch (e) {
+                return new Response(
+                    JSON.stringify({ ok: false, error: (e as Error).message }),
+                    { status: 400, headers: { "Content-Type": "application/json" } },
+                );
+            }
+
+            const debugDir = path.join(
+                worker.worldRoot,
+                "flows",
+                sessionId,
+                "objects",
+                objectName,
+                "threads",
+                threadId,
+                "debug",
+            );
+
+            // Scan for loop_NNNN.meta.json files
+            let entries: string[] = [];
+            try {
+                const all = await fs.readdir(debugDir);
+                entries = all.filter((f) => /^loop_\d{4}\.meta\.json$/.test(f));
+            } catch {
+                // debug dir doesn't exist yet — return empty
+            }
+
+            // Parse loop indices and load meta
+            const loops: Array<{
+                loopIndex: number;
+                hasInput: boolean;
+                hasOutput: boolean;
+                hasMeta: boolean;
+                meta?: unknown;
+            }> = [];
+
+            for (const metaFile of entries) {
+                const idxStr = metaFile.match(/^loop_(\d{4})\.meta\.json$/)?.[1];
+                if (!idxStr) continue;
+                const loopIndex = parseInt(idxStr, 10);
+
+                const [hasInput, hasOutput, meta] = await Promise.all([
+                    fileExists(path.join(debugDir, `loop_${idxStr}.input.json`)),
+                    fileExists(path.join(debugDir, `loop_${idxStr}.output.json`)),
+                    (async () => {
+                        try {
+                            const raw = await fs.readFile(path.join(debugDir, metaFile), "utf8");
+                            return JSON.parse(raw) as unknown;
+                        } catch {
+                            return undefined;
+                        }
+                    })(),
+                ]);
+
+                loops.push({ loopIndex, hasInput, hasOutput, hasMeta: true, meta });
+            }
+
+            loops.sort((a, b) => a.loopIndex - b.loopIndex);
+            return { ok: true, loops };
+        },
+    );
+
+    /**
+     * GET /api/runtime/flows/:s/objects/:o/threads/:t/debug/loops/:i
+     *
+     * 读取单个 loop 的 {input, output, meta}。
+     * :i は loop index (0-based integer as string).
+     */
+    app.get(
+        "/api/runtime/flows/:s/objects/:o/threads/:t/debug/loops/:i",
+        async ({ params }) => {
+            let sessionId: string;
+            let objectName: string;
+            let threadId: string;
+            try {
+                sessionId = validateSessionIdParam(params.s);
+                objectName = validateObjectNameParam(params.o);
+                threadId = validateThreadIdParam(params.t);
+            } catch (e) {
+                return new Response(
+                    JSON.stringify({ ok: false, error: (e as Error).message }),
+                    { status: 400, headers: { "Content-Type": "application/json" } },
+                );
+            }
+
+            const loopIdx = parseInt(params.i, 10);
+            if (isNaN(loopIdx) || loopIdx < 0) {
+                return new Response(
+                    JSON.stringify({ ok: false, error: "invalid loop index" }),
+                    { status: 400, headers: { "Content-Type": "application/json" } },
+                );
+            }
+
+            const idxStr = String(loopIdx).padStart(4, "0");
+            const debugDir = path.join(
+                worker.worldRoot,
+                "flows",
+                sessionId,
+                "objects",
+                objectName,
+                "threads",
+                threadId,
+                "debug",
+            );
+
+            const [inputRaw, outputRaw, metaRaw] = await Promise.all([
+                readFileOrNull(path.join(debugDir, `loop_${idxStr}.input.json`)),
+                readFileOrNull(path.join(debugDir, `loop_${idxStr}.output.json`)),
+                readFileOrNull(path.join(debugDir, `loop_${idxStr}.meta.json`)),
+            ]);
+
+            if (!metaRaw && !inputRaw && !outputRaw) {
+                return new Response(
+                    JSON.stringify({ ok: false, error: `loop ${loopIdx} debug files not found` }),
+                    { status: 404, headers: { "Content-Type": "application/json" } },
+                );
+            }
+
+            const parse = (raw: string | null): unknown => {
+                if (!raw) return null;
+                try { return JSON.parse(raw); } catch { return null; }
+            };
+
+            return {
+                ok: true,
+                loopIndex: loopIdx,
+                input: parse(inputRaw),
+                output: parse(outputRaw),
+                meta: parse(metaRaw),
+            };
+        },
+    );
+
+    /* -------- /api/runtime/flows/:s/objects/:o/threads/:t/permission -------- */
+
+    /**
+     * Permission HITL model for ooc-3:
+     *
+     * Observable-only implementation (v1):
+     *   - permission_ask records persist to
+     *     flows/<sid>/objects/<obj>/threads/<tid>/permissions/<eventId>.json
+     *   - Tool execution is NOT blocked by default (permissionMode defaults to "auto")
+     *   - This endpoint RECORDS approve/reject decisions but does NOT resume a paused thread
+     *     (pause-resume architecture is a future concern)
+     *
+     * The frontend can observe permission_ask events via thread polling,
+     * and submit decisions via this endpoint (stored to disk, visible in debug tools).
+     *
+     * To enable full pause-resume HITL: set permissionMode="ask" in session config
+     * and implement thread.status="waiting" + resume logic in the thinkloop (future).
+     */
+
+    /**
+     * POST /api/runtime/flows/:s/objects/:o/threads/:t/permission
+     * body: { eventId: string; action: "approve" | "reject"; reason?: string }
+     *
+     * Records a permission decision. In v1 (observable-only), this stores the decision
+     * to disk. In future versions this will resume a waiting thread.
+     */
+    app.post(
+        "/api/runtime/flows/:s/objects/:o/threads/:t/permission",
+        async ({ params, body }) => {
+            let sessionId: string;
+            let objectName: string;
+            let threadId: string;
+            try {
+                sessionId = validateSessionIdParam(params.s);
+                objectName = validateObjectNameParam(params.o);
+                threadId = validateThreadIdParam(params.t);
+            } catch (e) {
+                return new Response(
+                    JSON.stringify({ ok: false, error: (e as Error).message }),
+                    { status: 400, headers: { "Content-Type": "application/json" } },
+                );
+            }
+
+            const b = body as Record<string, unknown>;
+            const eventId = typeof b?.eventId === "string" ? b.eventId : undefined;
+            const action = b?.action === "approve" || b?.action === "reject" ? b.action : undefined;
+
+            if (!eventId || !action) {
+                return new Response(
+                    JSON.stringify({ ok: false, error: "eventId (string) and action (\"approve\"|\"reject\") required" }),
+                    { status: 400, headers: { "Content-Type": "application/json" } },
+                );
+            }
+
+            const reason = typeof b?.reason === "string" ? b.reason : undefined;
+
+            const permissionsDir = path.join(
+                worker.worldRoot,
+                "flows",
+                sessionId,
+                "objects",
+                objectName,
+                "threads",
+                threadId,
+                "permissions",
+            );
+
+            await fs.mkdir(permissionsDir, { recursive: true });
+
+            // Read existing record if present
+            const recordFile = path.join(permissionsDir, `${eventId}.json`);
+            let existing: Record<string, unknown> = {};
+            try {
+                const raw = await fs.readFile(recordFile, "utf8");
+                existing = JSON.parse(raw) as Record<string, unknown>;
+            } catch {
+                // new record
+            }
+
+            const updated = {
+                ...existing,
+                eventId,
+                status: action === "approve" ? "approved" : "rejected",
+                action,
+                reason,
+                decidedAt: new Date().toISOString(),
+            };
+
+            await fs.writeFile(recordFile, JSON.stringify(updated, null, 2), "utf8");
+
+            return {
+                ok: true,
+                eventId,
+                action,
+                status: updated.status,
+                note: "v1 observable-only: decision recorded; thread execution is not blocked/resumed in this version",
+            };
+        },
+    );
 
     /* -------- /api/world/config -------- */
 

@@ -12,8 +12,9 @@ import { ThreadTimeline } from "../../chat/components/ThreadTimeline";
 import { ChatComposer } from "../../chat/components/ChatComposer";
 import { ChatSendProvider } from "../../../shared/ui/ChatSendContext";
 import { useDisplayName } from "../../objects";
+import { LoopPanel } from "./LoopPanel";
 
-type Tab = "thread" | "meta";
+type Tab = "thread" | "loops" | "meta";
 
 export function ThreadDetailTabs({
   sessionId,
@@ -48,6 +49,13 @@ export function ThreadDetailTabs({
         </button>
         <button
           type="button"
+          className={`tab-btn${tab === "loops" ? " is-active" : ""}`}
+          onClick={() => setTab("loops")}
+        >
+          Loops
+        </button>
+        <button
+          type="button"
           className={`tab-btn${tab === "meta" ? " is-active" : ""}`}
           onClick={() => setTab("meta")}
         >
@@ -78,6 +86,15 @@ export function ThreadDetailTabs({
               )}
             </div>
           </ChatSendProvider>
+        )}
+        {tab === "loops" && (
+          <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <LoopPanel
+              sessionId={sessionId}
+              objectId={objectId}
+              threadId={threadId}
+            />
+          </div>
         )}
         {tab === "meta" && (
           <div className="section compact" style={{ padding: 16, overflowY: "auto" }}>

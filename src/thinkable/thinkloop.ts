@@ -19,6 +19,12 @@ import type { ThinkThread } from "./think-thread";
 import type { ObjectRegistry } from "@src/executable/registry";
 import { invokeMethod, listPublicMethods } from "@src/executable/dispatcher";
 import { nameFromUri } from "@src/persistable/flow-paths";
+import {
+    writeLoopDebugInput,
+    writeLoopDebugOutput,
+    writeLoopDebugMeta,
+} from "@src/persistable/debug-file";
+import { getGlobalDebugStore } from "@src/app/server/runtime/debug-store";
 
 /**
  * Known method schemas: provide typed descriptions + parameter schemas so the LLM doesn't waste
@@ -306,11 +312,61 @@ export async function think(
             // registry 中不存在该 objectUri 时，不暴露 tool list 给 LLM
         }
 
+        const loopIndex = thread.ticks;
+        const debugStore = getGlobalDebugStore();
+        const debugEnabled = debugStore.isEnabled();
+        const objectName = nameFromUri(thread.objectUri);
+        const debugRef = {
+            baseDir: worldRoot,
+            sessionId: thread.sessionId,
+            objectId: objectName,
+            threadId: thread.id,
+        };
+
+        if (debugEnabled) {
+            try {
+                await writeLoopDebugInput(debugRef, loopIndex, {
+                    threadId: thread.id,
+                    inputItems,
+                });
+            } catch {
+                // debug write failure is non-fatal
+            }
+        }
+
+        const loopStartedAt = Date.now();
         const result = await llmClient.generate({
             input: inputItems,
             tools: tools.length > 0 ? tools : undefined,
             timeoutMs: thread.llmTimeoutMs,
         });
+        const loopFinishedAt = Date.now();
+
+        if (debugEnabled) {
+            try {
+                await writeLoopDebugOutput(debugRef, loopIndex, {
+                    threadId: thread.id,
+                    outputItems: result.outputItems,
+                    model: result.model,
+                });
+                await writeLoopDebugMeta(debugRef, loopIndex, {
+                    threadId: thread.id,
+                    loopIndex,
+                    model: result.model,
+                    startedAt: loopStartedAt,
+                    finishedAt: loopFinishedAt,
+                    latencyMs: loopFinishedAt - loopStartedAt,
+                    messageCount: inputItems.length,
+                    toolCount: tools.length,
+                    toolCallCount: result.toolCalls.length,
+                    contextBytes: JSON.stringify(inputItems).length,
+                    resultTextBytes: (result.text ?? "").length,
+                    status: "ok",
+                });
+            } catch {
+                // debug write failure is non-fatal
+            }
+        }
 
         // 追加 LLM 文本回复到 messages（assistant message item）
         if (result.text) {
@@ -401,5 +457,35 @@ export async function think(
     } catch (error) {
         thread.status = "failed";
         thread.lastError = (error as Error).message;
+        // Write error meta if debug enabled
+        try {
+            const debugStore = getGlobalDebugStore();
+            if (debugStore.isEnabled()) {
+                const objectName = nameFromUri(thread.objectUri);
+                const debugRef = {
+                    baseDir: worldRoot,
+                    sessionId: thread.sessionId,
+                    objectId: objectName,
+                    threadId: thread.id,
+                };
+                const now = Date.now();
+                await writeLoopDebugMeta(debugRef, thread.ticks, {
+                    threadId: thread.id,
+                    loopIndex: thread.ticks,
+                    startedAt: now,
+                    finishedAt: now,
+                    latencyMs: 0,
+                    messageCount: thread.messages.length,
+                    toolCount: 0,
+                    toolCallCount: 0,
+                    contextBytes: 0,
+                    resultTextBytes: 0,
+                    status: "error",
+                    error: (error as Error).message,
+                });
+            }
+        } catch {
+            // non-fatal
+        }
     }
 }
