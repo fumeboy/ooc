@@ -230,12 +230,48 @@ describe("GET /api/runtime/flows/:s/objects/:o/threads/:t/debug/loops/:i", () =>
             input: unknown;
             output: unknown;
             meta: unknown;
+            contextSlices: unknown;
         };
         expect(body.ok).toBe(true);
         expect(body.loopIndex).toBe(0);
         expect(body.input).not.toBeNull();
         expect(body.output).not.toBeNull();
         expect(body.meta).not.toBeNull();
+        // contextSlices is null when no context.json file was written
+        expect(body.contextSlices).toBeNull();
+    });
+
+    test("returns contextSlices when loop_NNNN.context.json is present", async () => {
+        // Write a context.json for loop 0 in the existing worldRoot
+        const debugDir = path.join(
+            worldRoot, "flows", sessionId, "objects", objectName,
+            "threads", threadId, "debug",
+        );
+        const contextRecord = {
+            threadId,
+            loopIndex: 0,
+            slices: [
+                { kind: "self_identity", payload: { title: "Supervisor", description: "Test supervisor" } },
+                { kind: "plan", payload: "Build something" },
+                { kind: "todos", payload: [{ id: "t1", content: "item 1" }] },
+            ],
+        };
+        await fs.writeFile(path.join(debugDir, "loop_0000.context.json"), JSON.stringify(contextRecord));
+
+        const app = buildApp({ worker: makeWorker(worldRoot) });
+        const url = `http://localhost/api/runtime/flows/${sessionId}/objects/${objectName}/threads/${threadId}/debug/loops/0`;
+        const res = await app.handle(new Request(url));
+        expect(res.status).toBe(200);
+        const body = (await json(res)) as {
+            ok: boolean;
+            contextSlices: Array<{ kind: string; payload: unknown }> | null;
+        };
+        expect(body.ok).toBe(true);
+        expect(Array.isArray(body.contextSlices)).toBe(true);
+        expect(body.contextSlices).toHaveLength(3);
+        expect(body.contextSlices![0]!.kind).toBe("self_identity");
+        expect(body.contextSlices![1]!.kind).toBe("plan");
+        expect(body.contextSlices![2]!.kind).toBe("todos");
     });
 
     test("returns 404 for non-existent loop index", async () => {

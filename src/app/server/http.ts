@@ -1782,10 +1782,11 @@ export function buildApp(deps: HttpDeps): Elysia {
                 "debug",
             );
 
-            const [inputRaw, outputRaw, metaRaw] = await Promise.all([
+            const [inputRaw, outputRaw, metaRaw, contextRaw] = await Promise.all([
                 readFileOrNull(path.join(debugDir, `loop_${idxStr}.input.json`)),
                 readFileOrNull(path.join(debugDir, `loop_${idxStr}.output.json`)),
                 readFileOrNull(path.join(debugDir, `loop_${idxStr}.meta.json`)),
+                readFileOrNull(path.join(debugDir, `loop_${idxStr}.context.json`)),
             ]);
 
             if (!metaRaw && !inputRaw && !outputRaw) {
@@ -1800,12 +1801,18 @@ export function buildApp(deps: HttpDeps): Elysia {
                 try { return JSON.parse(raw); } catch { return null; }
             };
 
+            // Extract contextSlices from context.json for convenient frontend access.
+            // Falls back to null if the file wasn't written (e.g. empty slices or old loop).
+            const contextRecord = parse(contextRaw) as { slices?: Array<{ kind: string; payload: unknown }> } | null;
+            const contextSlices = contextRecord?.slices ?? null;
+
             return {
                 ok: true,
                 loopIndex: loopIdx,
                 input: parse(inputRaw),
                 output: parse(outputRaw),
                 meta: parse(metaRaw),
+                contextSlices,
             };
         },
     );

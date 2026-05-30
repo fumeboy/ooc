@@ -161,6 +161,11 @@ export function loopMetaFile(ref: ThreadPersistenceRef, loopIndex: number): stri
   return join(debugDir(ref), `loop_${formatLoopIndex(loopIndex)}.meta.json`);
 }
 
+/** 单轮 defaultContext slices debug 文件绝对路径。 */
+export function loopContextFile(ref: ThreadPersistenceRef, loopIndex: number): string {
+  return join(debugDir(ref), `loop_${formatLoopIndex(loopIndex)}.context.json`);
+}
+
 /** 写入最近一次 LLM 输入快照，覆盖旧文件。 */
 export async function writeDebugInput(
   ref: ThreadPersistenceRef,
@@ -222,4 +227,29 @@ export async function readLoopDebugMeta(
   } catch {
     return undefined;
   }
+}
+
+/**
+ * 单轮 defaultContext slices 快照记录。
+ *
+ * 在 thinkloop 调用 defaultContext() 后、flatten 成 system message 前写入磁盘，
+ * 使前端可以结构化展示每轮 LLM 看到的 context 切片，而无需解析 raw 系统 message 字符串。
+ */
+export interface LlmLoopContextRecord {
+  /** 触发本次请求的线程 ID。 */
+  threadId: string;
+  /** 当前线程内的第几轮 LLM 调用。 */
+  loopIndex: number;
+  /** defaultContext() 返回的原始 slices，kind 键入后完整保存。 */
+  slices: Array<{ kind: string; payload: unknown }>;
+}
+
+/** 写入单轮 defaultContext slices 快照。 */
+export async function writeLoopDebugContext(
+  ref: ThreadPersistenceRef,
+  loopIndex: number,
+  record: LlmLoopContextRecord
+): Promise<void> {
+  await mkdir(debugDir(ref), { recursive: true });
+  await writeFile(loopContextFile(ref, loopIndex), toJson(record), "utf8");
 }

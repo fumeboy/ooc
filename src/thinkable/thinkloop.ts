@@ -23,6 +23,7 @@ import {
     writeLoopDebugInput,
     writeLoopDebugOutput,
     writeLoopDebugMeta,
+    writeLoopDebugContext,
 } from "@src/persistable/debug-file";
 import { getGlobalDebugStore } from "@src/app/server/runtime/debug-store";
 
@@ -224,6 +225,10 @@ export async function think(
             inputItems = [...inputItems, nudge];
         }
 
+        // Capture structured defaultContext slices before they are flattened into the system message.
+        // Written to loop_NNNN.context.json alongside other debug files when debug is enabled.
+        let capturedContextSlices: Array<{ kind: string; payload: unknown }> = [];
+
         try {
             const record = registry.get(thread.objectUri);
             if (record) {
@@ -242,6 +247,9 @@ export async function think(
                         if (b.kind === "self_identity") return 1;
                         return 0;
                     });
+                    // Capture structured slices for debug inspection (written below with other debug files)
+                    // We stash them on a variable accessible in the debug block.
+                    capturedContextSlices = sortedSlices;
                     const contextText = sortedSlices.map((s: { kind: string; payload: unknown }) => {
                             if (s.kind === "self_identity") {
                                 const p = s.payload as { title?: string; description?: string; body?: string };
@@ -329,6 +337,13 @@ export async function think(
                     threadId: thread.id,
                     inputItems,
                 });
+                if (capturedContextSlices.length > 0) {
+                    await writeLoopDebugContext(debugRef, loopIndex, {
+                        threadId: thread.id,
+                        loopIndex,
+                        slices: capturedContextSlices,
+                    });
+                }
             } catch {
                 // debug write failure is non-fatal
             }
