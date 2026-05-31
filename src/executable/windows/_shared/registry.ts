@@ -177,11 +177,6 @@ REGISTRY.set("feishu_doc", {
   methods: {},
 });
 
-REGISTRY.set("plan", {
-  type: "plan",
-  methods: {},
-});
-
 /**
  * 替换或合并某 type 的契约，用于 windows/do.ts 等在模块加载时注入实现。
  *

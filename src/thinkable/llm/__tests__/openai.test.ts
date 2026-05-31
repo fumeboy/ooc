@@ -55,7 +55,7 @@ describe("openai provider", () => {
               type: "function_call",
               call_id: "call_1",
               name: "exec",
-              arguments: "{\"command\":\"plan\"}"
+              arguments: "{\"command\":\"plan_set\"}"
             }
           ]
         }))
@@ -92,7 +92,7 @@ describe("openai provider", () => {
       {
         id: "call_1",
         name: "exec",
-        arguments: { command: "plan" }
+        arguments: { command: "plan_set" }
       }
     ]);
     expect(result.outputItems).toEqual([
@@ -105,7 +105,7 @@ describe("openai provider", () => {
         type: "function_call",
         call_id: "call_1",
         name: "exec",
-        arguments: { command: "plan" }
+        arguments: { command: "plan_set" }
       }
     ]);
   });

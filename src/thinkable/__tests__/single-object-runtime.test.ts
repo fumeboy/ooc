@@ -7,6 +7,7 @@ import {
   llmInputFile,
   llmOutputFile,
   loopMetaFile,
+  readPlan,
   threadFile
 } from "../../persistable";
 import type { ThreadContext } from "../context";
@@ -62,16 +63,16 @@ describe("single object runtime", () => {
       async generate() {
         callCount += 1;
         if (callCount === 1) {
-          // args 给齐 plan 时 open 立即提交 form；下一轮无需再 submit
+          // args 给齐 content 时 open 立即提交 form；下一轮无需再 submit
           return makeResult("I will set the plan in one shot.", [
             {
               id: "tc1",
               name: "exec",
               arguments: {
                 title: "open plan",
-                method: "plan",
+                method: "plan_set",
                 description: "制定本对象执行计划",
-                args: { plan: "完成单 object 最小闭环" }
+                args: { content: "完成单 object 最小闭环" }
               }
             }
           ]);
@@ -100,16 +101,12 @@ describe("single object runtime", () => {
     // round 1 时 open 立即提交 form 执行 plan；round 2 没有任何工具调用，所以 outputItems 只有 message
     expect(loopMeta.loopIndex).toBe(2);
     expect(loopMeta.status).toBe("ok");
-    // 2026-05-26: plan 升格为 plan_window；旧 thread.plan 字段已废弃。
-    const rootPlanWindow = root.contextWindows.find((w) => w.type === "plan");
-    expect(rootPlanWindow?.type).toBe("plan");
-    expect(rootPlanWindow && rootPlanWindow.type === "plan" && rootPlanWindow.description).toBe(
-      "完成单 object 最小闭环",
-    );
-    const savedPlanWindow = (savedThread.contextWindows as Array<{ type: string; description?: string }>).find(
-      (w) => w.type === "plan",
-    );
-    expect(savedPlanWindow?.description).toBe("完成单 object 最小闭环");
+    // OOC-4 L5b: plan 塌缩为 owner flow plan.md（object-scoped），不再是 plan_window ContextWindow。
+    expect(root.contextWindows.find((w) => (w as { type: string }).type === "plan")).toBeUndefined();
+    expect(await readPlan(ref)).toBe("完成单 object 最小闭环");
+    expect(
+      (savedThread.contextWindows as Array<{ type: string }>).find((w) => w.type === "plan"),
+    ).toBeUndefined();
     expect(
       savedThread.events.some(
         (event: { category: string; kind: string }) =>

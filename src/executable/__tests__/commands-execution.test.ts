@@ -6,6 +6,7 @@ import { ROOT_METHODS, execRootMethod } from "../windows";
 import { makeThread } from "../../__tests__/make-thread";
 import {
   readTodos,
+  readPlan,
   createFlowObject,
   __resetSerialQueueForTests,
   type ThreadPersistenceRef,
@@ -85,18 +86,19 @@ describe("command execution side effects", () => {
     expect(listResult).toContain("[x]");
   });
 
-  it("plan should create a root plan_window in contextWindows", async () => {
-    const thread = makeThread({ id: "thread-plan" });
-    // 2026-05-26: plan 升格为 plan_window；不再写 thread.plan 字段
-    await execRootMethod("plan", {
+  it("plan_set writes plan.md (object-scoped); plan_clear empties it; no plan_window created", async () => {
+    const { thread, ref } = await makePersistedThread("thread-plan");
+    // OOC-4 L5b: plan 塌缩为 owner flow 文件 plan.md（不再是 plan_window ContextWindow）
+    await execRootMethod("plan_set", {
       thread,
-      args: { plan: "完成 thinkloop 真实测试\n\n先打通 tool call 与 command execute" },
+      args: { content: "# 计划\n\n- [ ] 打通 tool call 与 command execute\n- [ ] 完成 thinkloop 真实测试" },
     });
-    const planWindow = thread.contextWindows.find((w) => w.type === "plan");
-    expect(planWindow?.type).toBe("plan");
-    expect(planWindow && planWindow.type === "plan" && planWindow.description).toContain(
-      "完成 thinkloop 真实测试",
-    );
+    expect(await readPlan(ref)).toContain("完成 thinkloop 真实测试");
+    // 不再产生 plan_window（B 类塌缩）
+    expect(thread.contextWindows.find((w) => (w as { type: string }).type === "plan")).toBeUndefined();
+
+    await execRootMethod("plan_clear", { thread, args: {} });
+    expect(await readPlan(ref)).toBe("");
   });
 
   it("end should mark thread as done and persist remaining fields", async () => {

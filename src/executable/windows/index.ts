@@ -19,8 +19,6 @@ export type {
   SearchWindow,
   SearchMatch,
   RelationWindow,
-  PlanWindow,
-  PlanWindowStep,
 } from "./_shared/types.js";
 
 export {
@@ -80,7 +78,6 @@ import "./search/index.js";
 import "./relation/index.js";
 import "./custom/index.js";
 import "./skill_index/index.js";
-import "./plan/index.js";
 
 // Extendable 子系统 — 第三方 / 外部世界集成（lark 等）通过 barrel 自注册到 WindowRegistry。
 // 必须在 builtin window type 全部加载完成后、boot-time renderXml 校验之前 import。

@@ -8,7 +8,6 @@ import type { ThreadContext } from "@src/thinkable/context";
 import type {
   ContextWindow,
   TalkWindow,
-  PlanWindow,
 } from "@src/executable/windows/_shared/types";
 import { createJobManager } from "../../runtime/job-manager";
 import { createPauseStore } from "../../runtime/pause-store";
@@ -759,28 +758,30 @@ describe("flows service", () => {
         await service.createFlowObject({ sessionId: "s-shares", objectId: "owner" });
         await service.createFlowObject({ sessionId: "s-shares", objectId: "borrower" });
 
-        // 给 owner.root 手工挂一个 lent_out plan_window
+        // 给 owner.root 手工挂一个 lent_out 的可共享 window（用 talk_window 作 fixture；
+        // 共享 lentOut/holding 提取逻辑与 window type 无关，只看 sharing 字段 + id）
         const ownerThread = await readThread(
           { baseDir, sessionId: "s-shares", objectId: "owner" },
           "root",
         );
         expect(ownerThread).toBeDefined();
-        const planSnapshotBase: PlanWindow = {
-          id: "w_plan_share_1",
-          type: "plan",
-          title: "shared plan",
-          status: "active",
+        const sharedSnapshotBase: TalkWindow = {
+          id: "w_share_1",
+          type: "talk",
+          title: "shared window",
+          status: "open",
           createdAt: Date.now(),
-          steps: [],
+          target: "user",
+          conversationId: "w_share_1",
         };
-        const lentOutWindow: PlanWindow = {
-          ...planSnapshotBase,
+        const lentOutWindow: TalkWindow = {
+          ...sharedSnapshotBase,
           sharing: {
             kind: "lent_out",
             borrowerThreadId: "root",
             lentToWindowId: "w_do_xyz",
             sharedAt: Date.now(),
-            snapshot: planSnapshotBase,
+            snapshot: sharedSnapshotBase,
           },
         };
         ownerThread!.contextWindows = [
@@ -789,20 +790,20 @@ describe("flows service", () => {
         ];
         await writeThread(ownerThread!);
 
-        // 给 borrower.root 手工挂一个 ref 进来的 plan_window（同 id 配对）
+        // 给 borrower.root 手工挂一个 ref 进来的同 window（同 id 配对）
         const borrowerThread = await readThread(
           { baseDir, sessionId: "s-shares", objectId: "borrower" },
           "root",
         );
         expect(borrowerThread).toBeDefined();
-        const refWindow: PlanWindow = {
-          ...planSnapshotBase,
+        const refWindow: TalkWindow = {
+          ...sharedSnapshotBase,
           sharing: {
             kind: "ref",
             ownerThreadId: "root",
             lentByWindowId: "w_do_abc",
             sharedAt: Date.now(),
-            snapshot: planSnapshotBase,
+            snapshot: sharedSnapshotBase,
           },
         };
         borrowerThread!.contextWindows = [
@@ -818,14 +819,14 @@ describe("flows service", () => {
         expect(borrowerItem).toBeDefined();
 
         expect(ownerItem!.shares.lentOut.length).toBe(1);
-        expect(ownerItem!.shares.lentOut[0]!.windowId).toBe("w_plan_share_1");
+        expect(ownerItem!.shares.lentOut[0]!.windowId).toBe("w_share_1");
         expect(ownerItem!.shares.lentOut[0]!.borrowerThreadId).toBe("root");
         // borrowerObjectId 未持久化 → undefined（design 预留位）
         expect(ownerItem!.shares.lentOut[0]!.borrowerObjectId).toBeUndefined();
         expect(ownerItem!.shares.holding).toEqual([]);
 
         expect(borrowerItem!.shares.holding.length).toBe(1);
-        expect(borrowerItem!.shares.holding[0]!.windowId).toBe("w_plan_share_1");
+        expect(borrowerItem!.shares.holding[0]!.windowId).toBe("w_share_1");
         expect(borrowerItem!.shares.holding[0]!.kind).toBe("ref");
         expect(borrowerItem!.shares.holding[0]!.ownerThreadId).toBe("root");
         expect(borrowerItem!.shares.holding[0]!.ownerObjectId).toBeUndefined();

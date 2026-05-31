@@ -36,6 +36,12 @@ export {
 } from "./flow-todos";
 
 export {
+  planFile,
+  readPlan,
+  writePlan,
+} from "./flow-plan";
+
+export {
   createFlowSession,
   createFlowObject,
   flowMetadataFile,

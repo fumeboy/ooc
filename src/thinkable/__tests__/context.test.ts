@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "bun:test";
 import { buildContext, buildInputItems, type ThreadContext } from "../context";
 import { clearKnowledgeLoaderCache } from "../knowledge";
-import { createStoneObject, createPoolObject, createFlowObject, poolKnowledgeDir, writeSelf, writeTodos } from "../../persistable";
+import { createStoneObject, createPoolObject, createFlowObject, poolKnowledgeDir, writeSelf, writeTodos, writePlan } from "../../persistable";
 import {
   ROOT_WINDOW_ID,
   type CommandExecWindow,
@@ -261,27 +261,16 @@ describe("buildContext (ContextWindow model)", () => {
       id: "t_parent",
       creatorThreadId: "t_root",
     });
-    // 2026-05-26: thread.plan 字段已废弃；用 plan_window 验证 plan 已渲染。
-    const planId = `${thread.id}_plan`;
-    thread.contextWindows.push({
-      id: planId,
-      type: "plan",
-      title: "Plan",
-      status: "active",
-      createdAt: 0,
-      description: "先处理 inbox",
-      steps: [],
-    });
+    // OOC-4 L5b: plan 塌缩为 owner flow plan.md（不再是 plan_window ContextWindow）；
+    // 此处验证 <context_windows> 外壳 + creator do_window 渲染（A 类 window 区）。
     const messages = await buildContext(thread);
     expect(messages).toHaveLength(1);
     const xml = messages[0]!.content;
     expect(xml).toContain("<context>");
     expect(xml).toContain('<thread id="t_parent" status="running">');
     expect(xml).toContain("<creator_thread_id>t_root</creator_thread_id>");
-    expect(xml).toContain("<description>先处理 inbox</description>");
     expect(xml).toContain("<context_windows>");
     expect(xml).toContain('type="do"');
-    expect(xml).toContain('type="plan"');
     expect(xml).toContain("<is_creator_window>true</is_creator_window>");
   });
 
@@ -362,6 +351,70 @@ describe("buildContext (ContextWindow model)", () => {
       expect(xml).toContain("<self_view>");
       expect(xml).toContain("<todos>");
       expect(xml).toContain("对象级待办");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("renders active plan.md as <self_view><plan> slice (B 类塌缩自视); 空 plan 不渲", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-plan-"));
+    try {
+      await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
+      const ref = { baseDir: tempRoot, sessionId: "s", objectId: "agent" };
+      await writePlan(ref, "# 重构计划\n\n- [ ] 拆解 thinkloop\n- [x] 读完旧实现\n");
+      const thread = makeThread({
+        id: "t_plan",
+        persistence: { ...ref, threadId: "t_plan" },
+      });
+      const messages = await buildContext(thread);
+      const xml = messages[0]!.content;
+      // active plan markdown 进自视切片（plan 段在 todos 段之前）
+      expect(xml).toContain("<self_view>");
+      expect(xml).toContain("<plan>");
+      expect(xml).toContain("拆解 thinkloop");
+      // 不再以 plan_window 形式出现
+      expect(xml).not.toContain('type="plan"');
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("empty plan.md does NOT render <self_view><plan> (保持 context 紧凑)", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-plan-empty-"));
+    try {
+      await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
+      const ref = { baseDir: tempRoot, sessionId: "s", objectId: "agent" };
+      await writePlan(ref, "   \n  \n");
+      const thread = makeThread({
+        id: "t_plan_empty",
+        persistence: { ...ref, threadId: "t_plan_empty" },
+      });
+      const messages = await buildContext(thread);
+      const xml = messages[0]!.content;
+      expect(xml).not.toContain("<plan>");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("child do thread renders the SAME object-scoped plan.md (object-scoped, 取代 share_windows)", async () => {
+    // plan 属对象：child do thread 共享父的 objectId（deriveChildPersistence），
+    // 因此 child 的自视切片渲染同一份对象 plan。这取代了旧 plan_window 的 share_windows 跨 thread 共享。
+    const tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-plan-child-"));
+    try {
+      await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
+      const ref = { baseDir: tempRoot, sessionId: "s", objectId: "agent" };
+      await writePlan(ref, "- [ ] 对象级计划步骤");
+      // child thread：threadId 不同，objectId 相同（do fork 共享对象）
+      const childThread = makeThread({
+        id: "t_child_plan",
+        persistence: { ...ref, threadId: "t_child_plan" },
+      });
+      const messages = await buildContext(childThread);
+      const xml = messages[0]!.content;
+      expect(xml).toContain("<self_view>");
+      expect(xml).toContain("<plan>");
+      expect(xml).toContain("对象级计划步骤");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

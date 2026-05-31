@@ -495,25 +495,24 @@ export const root: DocTreeNode = {
                             `,
                         },
                         "thread_plan_deprecated": {
-                            title: "thread.plan 字段废弃 (P2)",
+                            title: "thread.plan 字段废弃 (P2) → plan_window (中途) → plan.md 塌缩 (终态)",
                             content: `
-                            **ThreadContext.plan: string 字段被废弃**。
+                            **ThreadContext.plan: string 字段早已废弃**，且其继任者 plan_window 也已删除。
 
-                            原因: 一个字符串 plan 不足以表达 sub plan 嵌套、跨 thread share、进度回流等更结构化的协作需求。
-                            升级路径: plan 升格为 first-class plan_window (详见 executable.children.context_window.children.plan_window)。
+                            演进史:
+                            - 旧: thread.plan: string 字段（一个字符串不足以表达多步骤计划，P2 废弃）。
+                            - 中途: 升格为 first-class plan_window（结构化 step + sub-plan + do.share_windows 跨 thread 共享）。
+                            - 终态（OOC-4 L5b）: B 类塌缩——plan_window 删除，plan 落成 owner flow 文件 plan.md
+                              （object-scoped markdown checklist + self_view 自视切片）。详见
+                              executable.children.context_window.children.plan。
 
                             迁移规则:
-                            - 新代码: **绝不**读写 thread.plan; 完全走 root.plan method 创建 plan_window
-                            - 旧代码 (如有): 在 B2 实施时一并扫除; ThreadContext type 中 plan 字段移除
-                            - thread.json 历史数据: 历史 plan 字符串数据丢弃 (无迁移; OOC 当前不承诺历史 thread 兼容)
+                            - 新代码: 完全走 root.plan_set / plan_clear method 读写对象级 plan.md；绝不读写 thread.plan，也不再有 plan_window。
+                            - thread.json 历史数据: 历史 plan 字符串 / plan_window 数据丢弃（无迁移; OOC 当前不承诺历史 thread 兼容）。
 
                             访问 plan 内容的新姿势:
-                            - LLM: 看 contextWindows 中 type==="plan" 的 PlanWindow
-                            - UI: ContextSnapshotViewer 渲染 PlanWindow tree
-                            - server method: 走标准 ContextWindow 查询（如 \`self.findWindowsByType("plan")\`）
-
-                            这是 P2 决策（user 拍板, 完全废弃 thread.plan 而非保留为 fallback summary）;
-                            原因: 维护两条 plan 数据源会产生不一致风险。
+                            - LLM: 看 <self_view><plan> 自视切片（每轮从 plan.md 渲染）。
+                            - server method / 持久化: 读 src/persistable/flow-plan.ts 的 readPlan(ref)。
                             `,
                         },
                         "subthread_vs_child_agent": {
@@ -690,8 +689,8 @@ export const root: DocTreeNode = {
 
             Executable 的核心分层:
             1. Tool 原语层: exec / close / wait / compress，是 LLM 直接看见的稳定接口（4 个）。
-            2. Method 层: do / talk / program / plan / todo / end / open_file / open_knowledge / write_file / glob / grep 等具体行动；form 自身的 refine / submit 也是 command_exec window 上的method。
-            3. ContextWindow 层: 行动产生或操作的上下文对象，比如 file_window、talk_window、program_window、do_window、plan_window、custom window。
+            2. Method 层: do / talk / program / plan_set / plan_clear / todo_* / end / open_file / open_knowledge / write_file / glob / grep 等具体行动；form 自身的 refine / submit 也是 command_exec window 上的method。
+            3. ContextWindow 层: 行动产生或操作的上下文对象，比如 file_window、talk_window、program_window、do_window、custom window。（plan / todo 已 B 类塌缩为 owner flow 文件 + self_view 自视切片，不再是 window。）
             4. Registry / Manager 层: 注册不同 window type 的 method、render、close hook、basicKnowledge。
             5. Knowledge Activation 层: 根据 method path 自动激活执行所需知识。
 
@@ -705,7 +704,7 @@ export const root: DocTreeNode = {
                 "Tool": "LLM 直接可调用的稳定原语：exec / close / wait",
                 "Method": "具体行动单元，挂在某 window 上注册；如 do/talk/program 在 root 上、refine/submit 在 command_exec 上",
                 "ContextWindow": "可展示、可操作、可挂载 method 的上下文窗口对象",
-                "WindowType": "ContextWindow 的类型分支，如 root/file/program/talk/do/knowledge/search/plan/custom",
+                "WindowType": "ContextWindow 的类型分支，如 root/file/program/talk/do/knowledge/search/custom",
                 "CommandExec": "一次 method 调用过程对应的临时窗口；自身注册 refine/submit method",
                 "WindowRegistry": "注册各类 window type 行为的机制",
                 "WindowManager": "管理 thread.contextWindows 增删改查和生命周期的机制",
@@ -805,13 +804,15 @@ export const root: DocTreeNode = {
                     LLM 通常不是直接 "调用 program 函数"，而是:
                     1. exec(method="program", args={ language: "shell", code: "..." }) → args 齐全立即执行
                     2. 或 exec(method="program") → 系统创建 form，后续 exec(form_id, "refine", args={...}) + exec(form_id, "submit")
-                    3. method 产生副作用，比如创建 program_window 或派生 plan_window。
+                    3. method 产生副作用，比如创建 program_window 或写 owner flow 文件（plan_set 写 plan.md）。
 
                     root window 注册一组顶层 method（与 src/executable/windows/root/index.ts ROOT_METHODS 一致）:
                     - do: 派生子 thread，创建 do_window。
                     - talk: 与 user 或其他 Object 对话，创建 talk_window。
                     - program: 执行 shell / javascript / typescript 程序，创建 program_window。
-                    - plan: 更新当前 thread 的 plan。
+                    - plan_set / plan_clear: 对象级行动计划的全量设置 / 清空
+                      （B 类塌缩：写 owner flow 的 plan.md，不再是 plan_window；LLM 用 markdown checklist
+                      \`- [ ]\` / \`- [x]\` 在 content 里自管 steps；非空 plan 每轮在 <self_view><plan> 自视切片常驻）。
                     - todo_add / todo_check / todo_uncheck / todo_remove / todo_list: 对象级待办的增/标完成/取消完成/删/列出
                       （B 类塌缩：写 owner flow 的 todos.json，不再是 todo_window；未完成待办每轮在 <self_view><todos> 自视切片常驻）。
                     - end: 标记当前 thread 完成。args = { reason?, summary?, result? }。其中 result 是子 thread
@@ -829,7 +830,7 @@ export const root: DocTreeNode = {
                     - open_feishu_chat: 把飞书群会话作为 feishu_chat_window 引入 Context。
                     - open_feishu_doc: 把飞书文档作为 feishu_doc_window 引入 Context。
 
-                    （共 18 个全局 method，与 src/executable/windows/root/index.ts ROOT_METHODS 一致。）
+                    （共 19 个全局 method，与 src/executable/windows/root/index.ts ROOT_METHODS 一致。）
 
                     其它 window 上也注册method（do_window: continue/wait/close；talk_window: say/wait/close；
                     file_window: edit/reload/set_range/close；command_exec: refine/submit；custom: Object 自定义 ...）。
@@ -847,7 +848,8 @@ export const root: DocTreeNode = {
                         "do": "派生子 thread 的 method",
                         "talk": "开启或继续对话的 method",
                         "program": "执行程序的 method",
-                        "plan": "创建 / 更新 plan_window 的 method（root.plan）",
+                        "plan_set": "全量设置对象级行动计划的 method（写 plan.md；markdown checklist 自管 steps；非空 plan 常驻 self_view 自视切片）",
+                        "plan_clear": "清空对象级行动计划的 method（写空 plan.md）",
                         "todo_add": "登记一条对象级待办的 method（写 todos.json；未完成待办常驻 self_view 自视切片）",
                         "todo_check / todo_uncheck": "切换待办 done 状态的 method（写 todos.json）",
                         "todo_remove": "删除一条待办的 method（写 todos.json）",
@@ -1171,68 +1173,42 @@ export const root: DocTreeNode = {
                             },
                             sources: [["src/persistable/stone-skills.ts", "skills 目录扫描器与 10s 缓存；listBranchSkills / listObjectSkills；clearStoneSkillsCache 测试钩子。SkillIndexWindow 派生在 src/thinkable/knowledge/synthesizer.ts:collectExecutableKnowledgeEntries §1.6"]],
                         },
-                        "plan_window": {
-                            title: "plan_window - 行动计划窗口（支持 sub plan + share to sub thread）",
+                        "plan": {
+                            title: "plan - 行动计划（B 类塌缩为 owner flow plan.md + self_view 自视切片）",
                             content: `
-                            plan_window 是 thread 的行动计划窗口，由 root.plan method 创建。
-                            plan 升格为 first-class ContextWindow（不再是 thread.plan 字符串字段；详见 patches.thread_plan_deprecated）。
+                            plan 不再是 ContextWindow（OOC-4 L5b 塌缩；旧 plan_window 已删除）。
+                            它落成对象级 owner flow 文件 \`flows/<sid>/objects/<oid>/plan.md\`（与 todos.json / data.json 同级），
+                            ContextBuilder 每轮读它渲染成 <self_view><plan> 段（plan 段置顶，在 todos 段之前）。
 
-                            **数据形态**（src/executable/windows/plan/types.ts）:
-                            \`\`\`
-                            type PlanWindowStep = {
-                              id: string;                  // plan 树内唯一稳定 id
-                              text: string;                // 步骤描述
-                              status: "pending" | "in-progress" | "done" | "blocked";
-                              subPlanWindowId?: string;    // 若该 step 展开为 sub plan，指向 child plan_window.id
-                            }
-                            type PlanWindow = BaseContextWindow & {
-                              type: "plan";
-                              title: string;
-                              description?: string;
-                              steps: PlanWindowStep[];
-                              parentPlanWindowId?: string; // 父 plan_window.id（root plan 无此字段）
-                              parentStepId?: string;       // 父 plan 中哪个 step 把当前 plan 作为 sub
-                              status: "active" | "done" | "archived";
-                            }
-                            \`\`\`
+                            **数据形态**：单一 markdown 文本（无结构化 step / sub-plan）。
+                            MVP 扁平：LLM 把步骤写成 markdown checklist（\`- [ ]\` 未完成 / \`- [x]\` 已完成）在 content 里自管。
+                            （旧的结构化 PlanWindowStep / 嵌套 sub-plan / expand_step / collapse_subplan 全部降级——
+                            「owner 维护自己的 plan 文档」比一堆 granular 方法更自然。）
 
-                            **methods**（注册到 plan_window）:
-                            - update_plan: 更新 title / description
-                            - add_step: 在 steps 末尾追加一个 step
-                            - update_step: 修改某 step 的 text / status
-                            - expand_step: 把某 step 展开为 sub plan_window（创建 child plan_window + 写回 subPlanWindowId）
-                            - collapse_subplan: 反向; archive sub plan_window + 清 subPlanWindowId
-                            - mark_done: plan_window status → "done"
-                            - close: 关闭 plan_window（cascade close 所有 sub plan）
+                            **root methods**（src/executable/windows/root/command.plan.ts）:
+                            - plan_set(content): 全量设置 plan.md（覆盖语义；推进时直接再 set 整份内容把某步从 [ ] 改成 [x]）。
+                            - plan_clear(): 清空 plan.md（self_view 不再渲染 plan 段）。
+                            （**仅 2 个**：MVP 下 plan_update 与 plan_set 等价冗余，不提供；与 todo 的 verb pairing 一致。）
 
-                            **sub plan 嵌套**:
-                            - sub plan_window 由 expand_step 自动创建，挂在父 plan 的某 step 上
-                            - 父子链由 parentPlanWindowId + parentStepId 维护（单向引用）
-                            - 嵌套深度无硬限制，但 renderXml 默认不内联渲染 sub plan（避免无限嵌套），LLM 通过 subPlanWindowId 单独 open
+                            **object-scoped（取代旧 share_windows 跨 thread 共享）**:
+                            - plan 属对象、不属单个 thread——该对象在本 session 下的所有 thread（root + child do threads，
+                              因 deriveChildPersistence 共享 objectId）自视都渲染同一份 plan.md。
+                            - 子 do-thread 无需任何显式 share 即可看到父对象 plan；子 plan_set 改动父也看得到（同一文件，进度自动回流）。
+                            - 旧 plan_window 的 do.share_windows（ref / lent_out 配对 + 归还）整套机制随之删除。
 
-                            **跨 thread sharing**（与 do_window.move 同协议）:
-                            - 父 thread 通过 \`exec(method="do", args={ task, share_windows: ["plan-window-abc"] })\` 派生子 thread
-                            - 复用现有 sharing kind="ref" / "lent_out"（meta/object.doc.ts:executable.context_window.children.sharing）
-                            - **ref 模式**: 子 thread 只读看父 plan（不能 exec method），适合"子看父 plan 但不改"
-                            - **move 模式**: 子拿 owner，父变 lent_out（临时只读）；子可 update_step + expand_step；do_window archive 时自动归还
-                            - **进度回流**: move 模式自动归还时父收到子改动后的最新 plan；ref 模式靠子用 talk 报告再让父自己 update_step
+                            **self_view 渲染**（src/thinkable/context/self-view.ts）:
+                            - 非空 plan.md → <self_view><plan>...markdown...</plan>（自视切片本身已是精简态，无单独压缩档位）。
+                            - 空 / 空白 plan.md → 不渲该段（nil-persistence / 无内容时 self_view 整体可能为 null）。
 
-                            **renderXml**（与 file / talk / do 同协议）:
-                            - level 0 (live): <plan_window id status><title/><description/><steps count><step id status sub_plan_window_id?/>...</steps><methods/></plan_window>
-                            - level 1 (folded): title + status + step count + done/total 比例
-                            - level 2 (snapshot): title + status
-
-                            **可被 share**: 是（在 executable.context_window.children.sharing 的可分享 type 列表里）。
-
-                            **持久化**: 走标准 ContextWindow 持久化（thread.json 内）；不单独 plan-file。
-                            完整设计见 docs/2026-05-26-remove-issue-add-subplan-design.md §3。
+                            **持久化**: owner flow 文件 plan.md（不进 thread.json）；写经 enqueueSessionWrite 串行化（仿 flow-todos）。
+                            塌缩设计见 docs/superpowers/plans/2026-05-31-ooc-4-L5b-plan-collapse.md。
                             `,
                             named: {
-                                "PlanWindowStep": "plan 内单个 step；含 id / text / status / subPlanWindowId?",
-                                "expand_step": "把某 step 展开为 child plan_window 的 method；写回 subPlanWindowId",
-                                "share_to_sub_thread": "通过 do.share_windows 把 plan_window 以 ref/move 模式传给子 thread；归还后父见到进度",
+                                "plan_set": "全量设置对象级 plan.md 的 root method（content = 整份 markdown，步骤用 - [ ]/- [x]）",
+                                "plan_clear": "清空对象级 plan.md 的 root method",
+                                "object_scoped": "plan 属对象不属 thread；同对象所有 thread 自视渲染同一 plan.md（取代旧 plan_window share_windows）",
                             },
-                            sources: [["src/executable/windows/plan/", "plan_window 实现；renderXml / methods / compressView 与 file/talk/do 同协议"]],
+                            sources: [["src/persistable/flow-plan.ts", "plan.md owner flow IO（planFile/readPlan/writePlan，object-scoped，serial-queue 写）；root method 见 src/executable/windows/root/command.plan.ts，自视渲染见 src/thinkable/context/self-view.ts"]],
                         },
                     },
                     patches: {
@@ -1364,8 +1340,6 @@ export const root: DocTreeNode = {
                             **其它 window type 的信息量轴设计提案**（**未实施**，仅作 design proposal；
                             后续按需逐个落地）：
 
-                            - **plan_window**：展开深度 / 当前 step 高亮 → \`focus_step\` (step_id) + \`set_depth\` (max_depth)；
-                              默认全展开
                             - **relation_window**：sections 选择（peer_readme 收起 / self_long_term 展开）→
                               \`set_sections\` args = { peer_readme: "full"|"summary"|"hidden", self_long_term: ... }
                             - **command_exec window**：args 显示（高频 refine 时多冗余）→ \`set_args_display\`
@@ -1414,12 +1388,11 @@ export const root: DocTreeNode = {
                     content: `
                     OOC 内置多种 ContextWindow type。
 
-                    这些 type 不是 UI 组件分类，而是 LLM 的上下文对象分类（共 14 种，与 src/executable/windows/_shared/types.ts WindowType 联合一致）:
+                    这些 type 不是 UI 组件分类，而是 LLM 的上下文对象分类（共 13 种，与 src/executable/windows/_shared/types.ts WindowType 联合一致）:
                     - root: 每个 thread 隐含存在的根 window，注册顶层 method。
                     - command_exec: 一次 method 调用的临时 form window。
                     - do: 子 thread 的父侧窗口，展示子任务状态与 transcript。
                     - talk: 与 user 或其他 Object 的持续会话窗口。
-                    - todo: 可见待办窗口。
                     - program: 程序执行窗口，可多次 exec；含 historyViewport 精细控制渲染体量。
                     - file: 文件内容窗口，支持 viewport / set_viewport / set_range（遗留）/ reload / edit / close。
                     - knowledge: 知识文档窗口，承载显式打开或协议合成的 knowledge；explicit 来源支持 viewport / set_viewport。
@@ -1429,7 +1402,7 @@ export const root: DocTreeNode = {
                     - custom: Object 自定义窗口（executable/index.ts \`export const window\` 注册的 self window）。
                     - feishu_chat: 飞书群会话窗口。
                     - feishu_doc: 飞书文档窗口。
-                    - plan: 行动计划窗口；支持 sub plan 嵌套 + 通过 do.share_windows 共享给子 thread (见 B 段设计)。
+                    （注：plan / todo 已 B 类塌缩为 owner flow 文件 + self_view 自视切片，不再是 WindowType；见 context_window.children.plan / executable.method 的 plan_set/plan_clear/todo_*。）
 
                     每个 window type 都应该回答四个问题:
                     1. 它在 Context 中如何渲染给 LLM？
@@ -1442,12 +1415,10 @@ export const root: DocTreeNode = {
                         "command_exec": "一次 method 调用的临时窗口",
                         "do_window": "父 thread 观察和继续子 thread 的窗口；注册 continue/wait/close/move method；archive 时自动归还所有 borrowed owner windows（plan §do_window.move）",
                         "talk_window": "与 user 或其他 Object 对话的窗口",
-                        "todo_window": "可见待办窗口",
                         "program_window": "程序执行窗口；含 historyViewport（exec history tail/range）精细控制渲染体量；详见 patches.viewport_protocol",
                         "file_window": "文件内容窗口；含 viewport 字段（行+列范围）精细控制渲染体量；详见 patches.viewport_protocol",
                         "knowledge_window": "知识文档窗口；explicit 来源支持 viewport 同 file_window",
                         "search_window": "搜索结果窗口；含 resultsViewport（matches tail/range）精细控制渲染体量；详见 patches.viewport_protocol",
-                        "plan_window": "行动计划窗口；可嵌套 sub plan; 复用 do_window.move sharing 协议共享给 sub thread",
                         "skill_index_window": "stone skills 索引窗口；每轮由 synthesizer 派生（10s TTL 缓存），列出 stones/<branch>/skills 与 stones/<branch>/objects/<self>/skills 下的所有 SKILL.md；空时不注入；详见 children.skill_index_window",
                     },
                 },
@@ -1845,8 +1816,10 @@ export const root: DocTreeNode = {
 
                     **id 协议**：跨 thread 时 window id 严格保持不变（用于配对识别 lent_out ↔ owner）。
 
-                    **可被 share 的 window 类型**：file / knowledge / search / program / todo / talk / plan / relation / custom；
+                    **可被 share 的 window 类型**：file / knowledge / search / program / talk / relation / custom；
                     do_window 自身、command_exec、root 不可分享（语义不合理）。
+                    （注：plan / todo 已 B 类塌缩为 object-scoped owner flow 文件——同对象所有 thread 自视天然共享，
+                    不再走 do.share_windows；见 context_window.children.plan。）
 
                     与 inbox/outbox 的关系：消息通道仍是协作的主路径；window 共享只是把"已经组织好的上下文"
                     一次性带过去，避免对端重复打开 file / search / knowledge 等。
@@ -3938,7 +3911,6 @@ export const root: DocTreeNode = {
                               当前 file_window 的 content 作为 current; 不重复算 unified diff text, 让前端库做)
                             - **talk_window**: 消息级 diff (按 message.id 配对; 新加绿底 / 修改 inline / 删除 strike)
                             - **do_window**: child status 变化 + transcript diff
-                            - **plan_window**: step-level diff (按 step.id 配对; status / text / subPlanWindowId 变化)
                             - **search_window**: match 集合 diff (按 path+line 配对)
                             - **knowledge_window**: body 文本 diff (复用 CodeMirror Merge unified)
                             - **program_window**: history 执行记录 diff (新增 exec / output 变化)

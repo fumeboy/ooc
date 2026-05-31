@@ -28,14 +28,14 @@ describe("executable tools (ContextWindow model)", () => {
     expect(tools).toHaveLength(4);
   });
 
-  it("exec(method=plan) 创建 command_exec form 并预填 args（plan 缺 plan 文本时不会被立即提交）", async () => {
+  it("exec(method=plan_set) 创建 command_exec form 并预填 args（plan_set 缺 content 时不会被立即提交）", async () => {
     const thread = makeThread();
     const output = await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
       arguments: {
         title: "制定计划",
-        method: "plan",
+        method: "plan_set",
         description: "拆解迁移工作",
       },
     });
@@ -47,28 +47,29 @@ describe("executable tools (ContextWindow model)", () => {
 
     const forms = thread.contextWindows.filter((w) => w.type === "command_exec");
     expect(forms).toHaveLength(1);
-    expect(forms[0]?.command).toBe("plan");
+    expect(forms[0]?.command).toBe("plan_set");
   });
 
-  it("args 给齐时 exec 立即执行：plan 给齐 plan 字段一次到位执行", async () => {
+  it("args 给齐时 exec 立即执行：plan_set 给齐 content 一次到位执行（B 类塌缩：写 plan.md，不再造 plan_window）", async () => {
     const thread = makeThread();
-    await dispatchToolCall(thread, {
+    const output = await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
       arguments: {
         title: "立刻设定计划",
-        method: "plan",
-        args: { plan: "先 reshape，再迁移测试" },
+        method: "plan_set",
+        args: { content: "- [ ] 先 reshape\n- [ ] 再迁移测试" },
       },
     });
+    // form 给齐 content 立即执行后被移除
     const forms = thread.contextWindows.filter((w) => w.type === "command_exec");
     expect(forms).toHaveLength(0);
-    // 2026-05-26: plan 升格为 plan_window；不再写 thread.plan 字段
-    const planWindow = thread.contextWindows.find((w) => w.type === "plan");
-    expect(planWindow?.type).toBe("plan");
-    expect(planWindow && planWindow.type === "plan" && planWindow.description).toBe(
-      "先 reshape，再迁移测试",
-    );
+    // OOC-4 L5b: plan 塌缩为 plan.md（owner flow）；不再创建任何 ContextWindow
+    expect(
+      thread.contextWindows.find((w) => (w as { type: string }).type === "plan"),
+    ).toBeUndefined();
+    // 内存 thread 无 persistence → nil-persistence note；工具调用本身成功
+    expect(JSON.parse(output).ok).toBe(true);
   });
 
   it("CommandExecWindow.refine 累积 args 并刷新 commandPaths（do 加 wait 触发 do.wait path）", async () => {

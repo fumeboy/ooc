@@ -415,7 +415,7 @@ export function applyNaturalDecay(
  * **不**精确——目的是给 emergency guard 一个"接近 budget"的相对量。规则:
  * - 把 thread 的关键字段 (contextWindows + events + inbox/outbox + threadLocalData)
  *   JSON.stringify 后取字符长度 / 4 (粗略 1 char ≈ 0.25 token, OpenAI tokenizer 经验值)
- *   (2026-05-26 起 thread.plan 字段已废弃，plan 走 plan_window in contextWindows)
+ *   (thread.plan 字段早废弃；OOC-4 L5b 起 plan 塌缩为 owner flow plan.md，不在 contextWindows)
  * - 不计 persistence / parent ref 等系统字段
  * - 单调:窗口/事件越多越大;压缩后窗口体积变小,本函数返回值也变小 (因为 compressLevel 影响
  *   渲染层而非数据,但 emergency guard 的级联跑 wave-2/3 时会推进 level,再次估算时由于 events

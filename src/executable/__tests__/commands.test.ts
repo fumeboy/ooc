@@ -7,7 +7,8 @@ describe("executable commands", () => {
     expect(Object.keys(ROOT_METHODS)).toContain("talk");
     expect(Object.keys(ROOT_METHODS)).toContain("do");
     expect(Object.keys(ROOT_METHODS)).toContain("program");
-    expect(Object.keys(ROOT_METHODS)).toContain("plan");
+    expect(Object.keys(ROOT_METHODS)).toContain("plan_set");
+    expect(Object.keys(ROOT_METHODS)).toContain("plan_clear");
     expect(Object.keys(ROOT_METHODS)).toContain("todo_add");
     expect(Object.keys(ROOT_METHODS)).toContain("end");
     expect(Object.keys(ROOT_METHODS)).not.toContain("defer");
@@ -39,7 +40,8 @@ describe("executable commands", () => {
       "open_feishu_doc",
       "open_file",
       "open_knowledge",
-      "plan",
+      "plan_clear",
+      "plan_set",
       "program",
       "talk",
       "todo_add",

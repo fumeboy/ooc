@@ -16,7 +16,8 @@ export interface ContextSnapshot {
   id: string;
   status?: string;
   /**
-   * @deprecated 2026-05-26 起 thread.plan 字段已废弃（plan 升格为 plan_window in contextWindows）。
+   * @deprecated thread.plan 字段早已废弃；OOC-4 L5b 起 plan 塌缩为 owner flow plan.md
+   * （object-scoped + self_view 自视切片，不在 contextWindows）。
    * 字段保留以兼容历史 llm.input.json，新写入永远是 undefined。
    */
   plan?: string;

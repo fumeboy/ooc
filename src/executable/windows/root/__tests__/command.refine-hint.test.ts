@@ -33,7 +33,7 @@ const TARGETS = [
   "grep",
   "glob",
   "program",
-  "plan",
+  "plan_set",
   "todo_add",
   "metaprog",
   "open_knowledge",

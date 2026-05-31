@@ -17,7 +17,7 @@
  */
 
 /** Window 类型枚举；新增类型必须同步在 WINDOW_REGISTRY 中注册。 */
-export type WindowType = "root" | "command_exec" | "do" | "talk" | "program" | "file" | "knowledge" | "search" | "relation" | "custom" | "skill_index" | "feishu_chat" | "feishu_doc" | "plan";
+export type WindowType = "root" | "command_exec" | "do" | "talk" | "program" | "file" | "knowledge" | "search" | "relation" | "custom" | "skill_index" | "feishu_chat" | "feishu_doc";
 
 /**
  * Window 状态值汇总。
@@ -138,7 +138,6 @@ export type { SearchWindow, SearchMatch } from "../search/types.js";
 export type { RelationWindow } from "../relation/types.js";
 export type { CustomWindow } from "../custom/types.js";
 export type { SkillIndexWindow, SkillEntry } from "../skill_index/types.js";
-export type { PlanWindow, PlanWindowStep } from "../plan/types.js";
 export type { FeishuChatWindow, FeishuChatMessage } from "../../../extendable/lark/feishu-chat/types.js";
 export type { FeishuDocWindow, FeishuDocBlock } from "../../../extendable/lark/feishu-doc/types.js";
 
@@ -154,7 +153,6 @@ import type { SearchWindow } from "../search/types.js";
 import type { RelationWindow } from "../relation/types.js";
 import type { CustomWindow } from "../custom/types.js";
 import type { SkillIndexWindow } from "../skill_index/types.js";
-import type { PlanWindow } from "../plan/types.js";
 import type { FeishuChatWindow } from "../../../extendable/lark/feishu-chat/types.js";
 import type { FeishuDocWindow } from "../../../extendable/lark/feishu-doc/types.js";
 
@@ -172,8 +170,7 @@ export type ContextWindow =
   | CustomWindow
   | SkillIndexWindow
   | FeishuChatWindow
-  | FeishuDocWindow
-  | PlanWindow;
+  | FeishuDocWindow;
 
 /** Root window 的固定 id。 */
 export const ROOT_WINDOW_ID = "root";
@@ -196,7 +193,6 @@ export function generateWindowId(type: Exclude<WindowType, "root">): string {
     skill_index: "w_skills",
     feishu_chat: "w_fschat",
     feishu_doc: "w_fsdoc",
-    plan: "w_plan",
   } as const)[type];
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }

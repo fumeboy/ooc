@@ -29,13 +29,13 @@ function makeForm(overrides: Partial<CommandExecWindow> = {}): CommandExecWindow
 
 describe("enrichProgramFormCommand", () => {
   test("enriches command knowledge paths even when command is not program", async () => {
-    const form = makeForm({ command: "plan" });
+    const form = makeForm({ command: "plan_set", commandPaths: ["plan_set"] });
     const thread = makeThread({ id: "t" });
     const result = await enrichProgramFormCommand(form, thread);
     expect(result).not.toBe(form);
     expect(result.commandKnowledgePaths).toEqual([
-      "internal/executable/plan/basic",
-      "internal/executable/plan/input",
+      "internal/executable/plan_set/basic",
+      "internal/executable/plan_set/input",
     ]);
   });
 
