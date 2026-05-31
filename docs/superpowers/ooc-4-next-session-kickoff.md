@@ -17,13 +17,12 @@
 
 已完成：宪法 + 目录归一 + **L2 原型链引擎**(6dd10cf2) + **L3 builtin objects**(d5a840a7，src/extendable/base/<proto>/ 源码) + **L4.0 command→method 归一**(52beb485+7ecd71bf) + **L4.1 活路径机制+skill_index**(53ccb737，behavior.ts) + **L4.2 A 类 method 解析+转写 program/search/file/knowledge**(a912d7f2)。tsc 全仓 0 error，bun test src/ 1073 pass/0 fail/3 skip。机制详见项目记忆 project_ooc4_direction_increment1。
 
-本次目标：**L4.2-tail**（完成 A 类全上链）。两件：
-1. **command_exec→method_exec** 改名：WindowType 字面量 + `CommandExecWindow`→`MethodExecWindow` 接口 + `base/command_exec/`→`base/method_exec/` 目录（canonical id 随改）+ ~14 处 `form.type==="command_exec"` 守卫（manager/budget:18,149/thread-json/custom/render compressView）+ web `registerWindowDiffRenderer("command_exec")`/`CommandExecDiff` + **旧 thread.json type:"command_exec" 反序列化兼容**。gate 须含 agent-facing e2e（LLM 读 type=、COMMAND_EXEC_BASIC_KNOWLEDGE）。
-2. **custom 吸收**：custom window prototype = 其 object canonical id（extends 某 base proto）；链解析天然处理 own object executable→沿 extends→base proto→root，去掉 custom 特殊 type。这是新机制最优雅副产品（custom 是现存唯一 per-object 先例，正是终态特例）。
-之后 **L4.3**（method 可见性 public/for_ui_access，metadata 现在 base executable 里声明 + dispatcher 鉴权）。再之后 **L5-6**（B 类塌缩，**大语义重设计须独立 brainstorm**）。
+本次目标：**L5a — 自视切片机制 + todo 塌缩**（L5-6 设计 spec `2026-05-31-ooc-4-L5-6-bclass-collapse-design.md` §7 第一增量）。**先完整读该 L5-6 设计 spec**（它定了 window-centric→flow-field+self-view 的根本模型重构、5 B 类塌缩表、do/scheduler 解耦、relation auto 注入、registry 终结、分解顺序）。L5a 两件：①新增 `ContextBuilder.renderSelfView(thread)` 骨架 + context `<self_view>` 段（替代散在 synthesizer 的 B 类 window 渲染）②todo 塌缩：`todos.json`（owner flow）+ root 方法 `todo_add/check/uncheck/remove/list`（写文件）+ 未完成 todos 自视切片 + 删 todo_window type/renderTodoWindow。on_command_path 强提醒改 ContextBuilder 查 todos.json。之后按 spec §7：L5b plan→L5c talk→L6a relation→**L6b do（最难，碰 scheduler，单独增量重 e2e）**→L6c registry 终结。
+
+> command_exec→method_exec / custom 吸收 / L4.3 method 可见性 均判 forward-looking（当前无消费者），延 registry 终结（L6c）按需做。
 
 按这个节奏走，不要跳步：
-1. 用 superpowers:brainstorming 对齐本层开放点（command_exec 改名 ripple 清单 / custom 吸收的 prototype 绑定如何按 objectId 设字段），落 plan 前确认根决策。
+1. 用 superpowers:brainstorming 对齐 L5a 开放点（todos.json schema + on_command_path 强提醒在 dispatch 时怎么触发 / 自视切片 XML 形态与 A 类 window 区如何并列 / 旧 thread.json 含 todo_window 的迁移=fail-loud 重生），落 plan 前确认根决策。
 2. 用 superpowers:writing-plans 写 implementation plan，存 docs/superpowers/plans/。
 3. plan 写完**先派 feasibility reviewer 对抗式审查再执行**（硬纪律——每轮都抓 2+ Critical；尤其穷举 seed/knowledge/协议里的字面 command）。
 4. 执行：sub agent 派单（CLAUDE.md Supervisor 模型），派单 prompt 末尾注明「不要自己 commit」，由你整合提交；commit 带 co-author footer。
