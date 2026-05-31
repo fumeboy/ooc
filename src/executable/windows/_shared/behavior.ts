@@ -1,9 +1,11 @@
 /**
  * behavior.ts — 活路径上「沿 base prototype 链解析 window 行为 aspect」的解析层（OOC-4 L4.1）。
  *
- * 当前只接 **renderXml + basicKnowledge** 两个 aspect（plan D1）：
- * - method 解析（lookupMethodEntry/callMethod/renderMethodsNode）推迟到 L4.2；
- * - onClose / compressView 仍走 registry（L4 排除）。
+ * 接 **renderXml + basicKnowledge + method + onClose + compressView** 五个 aspect：
+ * - method 解析（lookupMethodEntry/callMethod/renderMethodsNode）—— L4.2；
+ * - onClose / compressView 沿链解析（OOC-4 L6c-1）：A 类（knowledge/search/file/skill_index）
+ *   把 hook 实现搬进 base proto 的 window 定义，活路径 `resolveOnClose/resolveCompressView ?? registry`
+ *   兜底；do/talk 无 base proto，resolveX 返 undefined → 自动回退 registry（留到 L6c-2/3 擦除）。
  *
  * 解析语义（plan D2 graceful dispatch）：
  *   protoId = builtinProtoId(window.type)
@@ -26,7 +28,7 @@ import { loadBuiltinRegistry } from "../../../extendable/base/index.js";
 import { builtinProtoId, type ObjectRegistry } from "../../prototype/index.js";
 import type { ObjectWindowDefinition } from "../../server/window-types.js";
 import type { MethodEntry } from "./method-types.js";
-import type { RenderHook } from "./registry.js";
+import type { RenderHook, OnCloseHook, CompressViewHook } from "./registry.js";
 
 let _registry: Promise<ObjectRegistry> | undefined;
 function baseRegistry(): Promise<ObjectRegistry> {
@@ -87,6 +89,27 @@ async function resolveAspect<T>(
 /** 沿 base 原型链解析 renderXml；链未提供 → undefined（caller 回退 registry）。 */
 export async function resolveRenderXml(type: string): Promise<RenderHook | undefined> {
   return resolveAspect(type, (d) => d.renderXml);
+}
+
+/**
+ * 沿 base 原型链解析 onClose（OOC-4 L6c-1）；链未提供 → undefined（caller 回退 registry）。
+ *
+ * veto 语义（返 false 拒绝 close）跨链保持：manager.close 用
+ * `(await resolveOnClose(type)) ?? def.onClose` 兜底，链 miss 时走 registry 的 def.onClose，
+ * 语义完全相同。非 base type（do/talk）或链上无 executable → undefined → 回退 registry。
+ */
+export async function resolveOnClose(type: string): Promise<OnCloseHook | undefined> {
+  return resolveAspect(type, (d) => d.onClose);
+}
+
+/**
+ * 沿 base 原型链解析 compressView（OOC-4 L6c-1）；链未提供 → undefined（caller 回退 registry）。
+ *
+ * render.ts 在 compressLevel ≥ 1 时用 `(await resolveCompressView(type)) ?? def.compressView`
+ * 兜底；链 miss（do/talk 无 base proto，或链上无 compressView）→ 回退 registry 的 def.compressView。
+ */
+export async function resolveCompressView(type: string): Promise<CompressViewHook | undefined> {
+  return resolveAspect(type, (d) => d.compressView);
 }
 
 /**

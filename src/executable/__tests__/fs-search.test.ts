@@ -127,7 +127,7 @@ describe("U1: SearchWindow type + render + basicKnowledge", () => {
     expect(xml).toContain('truncated="true"');
   });
 
-  it("WindowManager.close removes a search_window", () => {
+  it("WindowManager.close removes a search_window", async () => {
     const thread = makeThread({ id: "t_close_search" });
     const sw: SearchWindow = {
       id: "w_search_to_close",
@@ -143,7 +143,7 @@ describe("U1: SearchWindow type + render + basicKnowledge", () => {
     };
     thread.contextWindows = [...thread.contextWindows, sw];
     const mgr = WindowManager.fromThread(thread);
-    expect(mgr.close(sw.id, thread)).toBe(true);
+    expect(await mgr.close(sw.id, thread)).toBe(true);
     thread.contextWindows = mgr.toData();
     expect(thread.contextWindows.find((w) => w.id === sw.id)).toBeUndefined();
   });

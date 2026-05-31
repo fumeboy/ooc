@@ -20,6 +20,8 @@ import {
   resolveBasicKnowledge,
   resolveMethod,
   resolveAllMethods,
+  resolveOnClose,
+  resolveCompressView,
   clearBehaviorCache,
 } from "../behavior";
 // OOC-4 L4.2c：proto 专属 behavior 物理 move 进 base/<proto>/executable；本等价门 import 改指 base。
@@ -27,6 +29,7 @@ import {
 import {
   renderSkillIndex,
   SKILL_INDEX_BASIC_KNOWLEDGE,
+  onCloseSkillIndex,
 } from "../../../../extendable/base/skill_index/executable/index";
 import {
   execCommand as programExec,
@@ -39,6 +42,7 @@ import {
   openMatchCommand as searchOpenMatch,
   renderSearchWindow,
   SEARCH_WINDOW_BASIC_KNOWLEDGE,
+  compressSearchWindow,
 } from "../../../../extendable/base/search/executable/index";
 import { setResultsWindowCommandForSearch } from "../../../../extendable/base/search/executable/command.set-results-window";
 import {
@@ -48,19 +52,20 @@ import {
   editCommand as fileEdit,
   closeCommand as fileClose,
   renderFileWindow,
+  compressFileWindow,
 } from "../../../../extendable/base/file/executable/index";
 import {
   reloadCommand as knowledgeReload,
   closeCommand as knowledgeClose,
   setViewportCommand as knowledgeSetViewport,
   renderKnowledgeWindow,
+  onCloseKnowledgeWindow,
 } from "../../../../extendable/base/knowledge/executable/index";
 // OOC-4 L4.2c M1：薄壳的 side-effect import 触发 registerWindowType（onClose/compressView 注册回 registry）。
 import "../../skill_index/index";
 import "../../knowledge/index";
 import "../../file/index";
 import "../../search/index";
-import { getWindowTypeDefinition } from "../registry";
 import type { RenderContext } from "../registry";
 import type { SkillIndexWindow } from "../types";
 import { SKILL_INDEX_WINDOW_ID } from "../types";
@@ -268,19 +273,38 @@ describe("L4.2 proto transcription equivalence (program/search/file/knowledge)",
   });
 });
 
-describe("L4.2c M1: registry-served hooks still registered (onClose/compressView body 搬 base，薄壳 import 回来注册)", () => {
-  // onClose/compressView 是 L4 排除项、仍 registry-served（manager close / render compressLevel≥1 取之）。
-  // 行为真源搬进 base 后，薄壳必须 import 回来注册——本门守住「薄壳没漏注册」。
-  test("knowledge.onClose registered via thin shell", () => {
-    expect(getWindowTypeDefinition("knowledge").onClose).toBeDefined();
+describe("L6c-1: onClose/compressView 沿 base 原型链解析（A 类迁出 registry）", () => {
+  // OOC-4 L6c-1：A 类（knowledge/search/file/skill_index）的 onClose/compressView 实现搬进
+  // base proto 的 window 定义；活路径改 resolveOnClose/resolveCompressView 沿链解析。
+  // import-reuse 天然保证行为等价：链解析到的 hook 与 base window 定义用的是同一函数引用。
+
+  test("knowledge.onClose resolves via chain === onCloseKnowledgeWindow", async () => {
+    expect(await resolveOnClose("knowledge")).toBe(onCloseKnowledgeWindow);
   });
-  test("skill_index.onClose registered via thin shell", () => {
-    expect(getWindowTypeDefinition("skill_index").onClose).toBeDefined();
+  test("skill_index.onClose resolves via chain === onCloseSkillIndex", async () => {
+    expect(await resolveOnClose("skill_index")).toBe(onCloseSkillIndex);
   });
-  test("file.compressView registered via thin shell", () => {
-    expect(getWindowTypeDefinition("file").compressView).toBeDefined();
+  test("search.compressView resolves via chain === compressSearchWindow", async () => {
+    expect(await resolveCompressView("search")).toBe(compressSearchWindow);
   });
-  test("search.compressView registered via thin shell", () => {
-    expect(getWindowTypeDefinition("search").compressView).toBeDefined();
+  test("file.compressView resolves via chain === compressFileWindow", async () => {
+    expect(await resolveCompressView("file")).toBe(compressFileWindow);
+  });
+
+  // do/talk 无 base proto → resolveX 返 undefined（caller 回退 registry，留到 L6c-2/3 擦除）。
+  test("do.onClose → undefined (留 registry)", async () => {
+    expect(await resolveOnClose("do")).toBeUndefined();
+  });
+  test("do.compressView → undefined (留 registry)", async () => {
+    expect(await resolveCompressView("do")).toBeUndefined();
+  });
+  test("talk.onClose / talk.compressView → undefined (无 base proto)", async () => {
+    expect(await resolveOnClose("talk")).toBeUndefined();
+    expect(await resolveCompressView("talk")).toBeUndefined();
+  });
+  // 非 base type（command_exec 有 base proto 但无 onClose/compressView）→ undefined。
+  test("command_exec.onClose / command_exec.compressView → undefined (链无该 aspect)", async () => {
+    expect(await resolveOnClose("command_exec")).toBeUndefined();
+    expect(await resolveCompressView("command_exec")).toBeUndefined();
   });
 });

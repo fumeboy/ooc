@@ -5,8 +5,8 @@
  * （物理 move 自 windows/knowledge/index.ts），由活路径沿 base 原型链解析
  * （src/executable/windows/_shared/behavior.ts）。
  *
- * onClose（拒绝 close 非 explicit 来源）是 L4 排除项、仍 registry-served：
- * windows/knowledge/index.ts 薄壳 import 本文件的 onCloseKnowledgeWindow 注册回 registry。
+ * onClose（拒绝 close 非 explicit 来源）已进 window 定义（OOC-4 L6c-1），由 manager.close
+ * 经 resolveOnClose 沿链解析；薄壳不再 registerWindowType onClose。
  *
  * knowledge 无 basicKnowledge（method-level knowledge 由各 entry.knowledge() 派生）。
  */
@@ -204,4 +204,5 @@ export const window: ObjectWindowDefinition = {
     set_viewport: setViewportCommand,
   },
   renderXml: renderKnowledgeWindow,
+  onClose: onCloseKnowledgeWindow,
 };

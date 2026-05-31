@@ -6,8 +6,8 @@
  * set_results_window 命令在同目录 command.set-results-window.ts。由活路径沿 base 原型链解析
  * （src/executable/windows/_shared/behavior.ts）。
  *
- * compressView 是 L4 排除项、仍 registry-served：windows/search/index.ts 薄壳 import 本文件的
- * compressSearchWindow 注册回 registry（render.ts:156 在 compressLevel ≥ 1 时取 def.compressView）。
+ * compressView 已进 window 定义（OOC-4 L6c-1），由 render.ts 经 resolveCompressView 沿链解析
+ * （compressLevel ≥ 1 时）；薄壳不再 registerWindowType compressView。
  *
  * **留 windows（被 root.glob/grep 创建器命令用 = 跨域共享）**，本目录 import 之：
  * - windows/search/results-viewport.ts（DEFAULT_RESULTS_VIEWPORT / executeSearchSetResultsViewport /
@@ -298,4 +298,5 @@ export const window: ObjectWindowDefinition = {
   },
   renderXml: renderSearchWindow,
   basicKnowledge: SEARCH_WINDOW_BASIC_KNOWLEDGE,
+  compressView: compressSearchWindow,
 };

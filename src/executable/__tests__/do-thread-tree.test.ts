@@ -94,7 +94,7 @@ describe("do command (ContextWindow model)", () => {
     )!.id;
 
     const mgr = WindowManager.fromThread(parent);
-    const closed = mgr.close(doWindowId, parent);
+    const closed = await mgr.close(doWindowId, parent);
     parent.contextWindows = mgr.toData();
     expect(closed).toBe(true);
 

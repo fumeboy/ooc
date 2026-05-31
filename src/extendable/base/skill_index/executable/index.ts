@@ -4,8 +4,8 @@
  * renderXml + basicKnowledge + onClose 的**实现**住这里（物理 move 自 windows/skill_index/index.ts）；
  * 由活路径沿 base 原型链解析（src/executable/windows/_shared/behavior.ts）。
  *
- * onClose 是 L4 排除项、仍 registry-served：windows/skill_index/index.ts 薄壳 import 本文件的
- * onCloseSkillIndex 注册回 registry（manager close 时取 def.onClose）。renderXml/basicKnowledge 不进 registry。
+ * onClose 已进 window 定义（OOC-4 L6c-1），由 manager.close 经 resolveOnClose 沿链解析；
+ * 薄壳不再 registerWindowType onClose。renderXml/basicKnowledge 同样不进 registry。
  *
  * skill_index 无 method（纯派生索引 window），故 methods 为空。
  */
@@ -86,4 +86,5 @@ export const window: ObjectWindowDefinition = {
   methods: {},
   renderXml: renderSkillIndex,
   basicKnowledge: SKILL_INDEX_BASIC_KNOWLEDGE,
+  onClose: onCloseSkillIndex,
 };

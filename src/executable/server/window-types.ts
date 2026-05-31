@@ -40,6 +40,11 @@ export interface ObjectWindowDefinition {
   basicKnowledge?: string | ((ctx: { self: ProgramSelf }) => string);
   /** close 触发 hook；缺省 = 直接释放 */
   onClose?: (ctx: OnCloseContext) => boolean | void;
+  /**
+   * 压缩态渲染 hook（同 WindowRegistry.compressView）；render.ts 在 compressLevel ≥ 1 时调度。
+   * 缺省时渲染层走通用 fallback（仅输出 `<compressed>` 元节点）。
+   */
+  compressView?: (ctx: RenderContext, level: 1 | 2) => XmlNode[] | Promise<XmlNode[]>;
   /** Object 自定义方法字典；exec ctx 会被 dispatcher 注入 `self`。 */
   methods?: Record<string, MethodEntry>;
 }

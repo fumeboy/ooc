@@ -27,7 +27,7 @@
 
 import type { ThreadContext } from "../../../thinkable/context.js";
 import { getWindowTypeDefinition } from "./registry.js";
-import { resolveMethod } from "./behavior.js";
+import { resolveMethod, resolveOnClose } from "./behavior.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -357,24 +357,27 @@ export class WindowManager {
    *
    * 流程：
    * 1. lookup window；不存在返回 false
-   * 2. 调用 type.onClose；返回 false 表示拒绝（如 creator do_window）→ 不删
+   * 2. 调用 type.onClose（沿 base 原型链解析，链未提供时回退 registry）；返回 false 表示拒绝（如 creator do_window）→ 不删
    * 3. 递归关闭所有 parentWindowId === window.id 的子 window
    * 4. 从 windows 表移除并释放 knowledge 引用
    */
-  close(windowId: string, thread: ThreadContext): boolean {
+  async close(windowId: string, thread: ThreadContext): Promise<boolean> {
     const window = this.windows.get(windowId);
     if (!window) return false;
 
+    // OOC-4 L6c-1：onClose 优先沿 base 原型链解析（A 类 knowledge/search/file/skill_index），
+    // 链未提供时回退 registry 的 def.onClose（do/talk 等无 base proto，留 registry 到 L6c-2/3）。
     const def = getWindowTypeDefinition(window.type);
-    if (def.onClose) {
-      const allowed = def.onClose({ thread, window });
+    const onClose = (await resolveOnClose(window.type)) ?? def.onClose;
+    if (onClose) {
+      const allowed = onClose({ thread, window });
       if (allowed === false) return false;
     }
 
     // 级联关闭子 window（先快照避免迭代时修改）
     const children = this.childrenOf(windowId);
     for (const child of children) {
-      this.close(child.id, thread);
+      await this.close(child.id, thread);
     }
 
     this.removeWindow(windowId);

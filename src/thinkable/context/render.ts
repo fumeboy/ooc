@@ -22,7 +22,7 @@ import {
   getWindowTypeDefinition,
   type RenderContext,
 } from "../../executable/windows/_shared/registry";
-import { resolveRenderXml, resolveAllMethods } from "../../executable/windows/_shared/behavior";
+import { resolveRenderXml, resolveAllMethods, resolveCompressView } from "../../executable/windows/_shared/behavior";
 import { filterMessagesForDoWindow } from "../../executable/windows/do/index";
 import type { ContextWindow } from "../../executable/windows/_shared/types";
 import { ROOT_WINDOW_ID } from "../../executable/windows/_shared/types";
@@ -156,8 +156,11 @@ async function renderWindowNode(
   const renderCtx: RenderContext = { thread, window: renderedWindow };
 
   if (compressLevel === 1 || compressLevel === 2) {
-    if (def.compressView) {
-      const typeChildren = await def.compressView(renderCtx, compressLevel);
+    // OOC-4 L6c-1：compressView 优先沿 base 原型链解析（A 类 search/file），链未提供时回退 registry
+    //   （do 等无 base proto，留 registry 到 L6c-3）。level 参数务必透传。
+    const compressView = (await resolveCompressView(renderedWindow.type)) ?? def.compressView;
+    if (compressView) {
+      const typeChildren = await compressView(renderCtx, compressLevel);
       children.push(...typeChildren);
     } else {
       // 通用 fallback: 仅输出 <compressed> 元节点;methods 末尾再追加 expand 由
@@ -176,7 +179,6 @@ async function renderWindowNode(
     }
   } else {
     // OOC-4 L4.1：renderXml 优先沿 base 原型链解析，链未提供时回退 registry（graceful dispatch, plan D2）。
-    // compressView 分支（上方）仍用 def.compressView，不动（L4 排除）。
     const chainXml = await resolveRenderXml(renderedWindow.type);
     const renderXml = chainXml ?? def.renderXml;
     if (!renderXml) {

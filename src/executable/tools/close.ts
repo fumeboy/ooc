@@ -49,7 +49,7 @@ export async function handleCloseTool(
   const existing = mgr.get(windowId);
   if (!existing) return errorOutput(`close 失败：window ${windowId} 不存在。`);
 
-  const closed = mgr.close(windowId, thread);
+  const closed = await mgr.close(windowId, thread);
   thread.contextWindows = mgr.toData();
   if (!closed) {
     return errorOutput(`close 被拒绝：window ${windowId} 类型不允许 close（如 creator do_window）。`);
