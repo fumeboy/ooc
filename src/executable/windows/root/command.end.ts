@@ -1,7 +1,7 @@
 import type { MethodExecutionContext, MethodKnowledgeEntries, MethodEntry } from "../_shared/method-types.js";
 import type { ContextWindow, DoWindow, TalkWindow } from "../_shared/types.js";
 import { continueCommand } from "../do/command.continue.js";
-import { sayCommand } from "../talk/command.say.js";
+import { deliverMessage } from "../talk/delivery.js";
 import { notifyThreadActivated } from "../../../observable/index.js";
 
 /** end method 暴露给 LLM 的知识说明。 */
@@ -113,10 +113,11 @@ async function autoReplyAndArchiveDo(
 }
 
 /**
- * 在 creator talk_window 上模拟一次 say：调 sayCommand.exec 派送给 caller。
+ * 在 creator talk_window 指向的 caller 上回报一次 result（OOC-4 L5c：window-free）。
  *
- * talk_window 无 archived 状态（status: open|closed），不做"auto-archive"——
- * talk 是恒在通道，自然由 caller / callee 各自 lifecycle 释放。
+ * say 方法已下线；这里直接经 window-free deliverMessage 把 result 派回 caller（target /
+ * targetThreadId / conversationId 取自 creator talk_window，行为与旧 say 等价）。
+ * talk 是恒在通道，无 archived 状态，不做 auto-archive。
  */
 async function autoReplyTalk(
   ctx: MethodExecutionContext,
@@ -124,18 +125,22 @@ async function autoReplyTalk(
   result: string,
 ): Promise<void> {
   const thread = ctx.thread!;
-  const sayCtx: MethodExecutionContext = {
-    thread,
-    parentWindow: creator,
-    manager: ctx.manager,
-    args: { msg: result },
-  };
-  const outcome = await sayCommand.exec(sayCtx);
-  if (typeof outcome === "string" && outcome.length > 0) {
+  if (!creator.target) return;
+  try {
+    await deliverMessage({
+      thread,
+      target: creator.target,
+      conversationId: creator.conversationId,
+      targetThreadId: creator.targetThreadId,
+      content: result,
+      source: "talk",
+      callerWindowId: creator.id,
+    });
+  } catch (err) {
     thread.events.push({
       category: "context_change",
       kind: "inject",
-      text: `[end.result] 自动 reply 到 creator talk_window 失败：${outcome}`,
+      text: `[end.result] 自动 reply 到 creator talk_window 失败：${(err as Error).message}`,
     });
   }
 }

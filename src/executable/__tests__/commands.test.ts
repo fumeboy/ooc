@@ -62,14 +62,18 @@ describe("executable commands", () => {
     }
   });
 
-  it("root.talk paths in new model: only [talk] (say/wait/close moved to talk_window)", () => {
-    expect(deriveRootMethodPaths("talk", { wait: true })).toEqual(["talk"]);
-    expect(deriveRootMethodPaths("talk", { target: "user", title: "x" })).toEqual(["talk"]);
+  it("root.talk paths (OOC-4 L5c): [talk] base + talk.wait when wait=true", () => {
+    // talk 塌缩为 root.talk(target, content, wait?)；wait=true 追加 talk.wait 路径
+    expect(deriveRootMethodPaths("talk", { target: "user", content: "x" })).toEqual(["talk"]);
+    expect(deriveRootMethodPaths("talk", { target: "user", content: "x", wait: true })).toEqual([
+      "talk",
+      "talk.wait",
+    ]);
   });
 
-  it("removed legacy talk paths (talk_window has its own command paths)", () => {
+  it("removed legacy talk paths (say/wait/close no longer methods)", () => {
     // 旧 talk.fork / talk.continue / talk.thread_creator / talk.relation_update / talk.question_form
-    // 在 Step 2 后已下线；talk_window 上的 say/say.wait/wait/close 走 windows registry
+    // 早已下线；OOC-4 L5c 后 say/wait/close 也不再是 method，root.talk 只产出 talk(.wait)。
     const paths = deriveRootMethodPaths("talk", {
       context: "continue",
       target: "creator",

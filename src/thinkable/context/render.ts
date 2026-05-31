@@ -13,7 +13,8 @@
  * - R2 #5  : 每个 window 末尾输出 `<methods>` 块（method 名 + 简要说明），LLM 直接看到该
  *            window 上可调用的 method 面
  * - R2 #10 : 同上；不再需要让 LLM 翻 knowledge 文本去猜 method
- * - R3 #15 : talk_window transcript 已由 talk/index.ts:renderTalkWindow + filter 函数渲染
+ * - R3 #15 : talk_window transcript 渲染已下线（OOC-4 L5c）——talk 会话改经 <self_view><talks>
+ *            自视切片呈现；render.ts 跳过 talk_window，agent 不再直接看 talk_window。
  * - R6 #46 : skill_index 通过通用调度器输出，不再被 switch 漏掉
  */
 
@@ -23,7 +24,6 @@ import {
 } from "../../executable/windows/_shared/registry";
 import { resolveRenderXml, resolveAllMethods } from "../../executable/windows/_shared/behavior";
 import { filterMessagesForDoWindow } from "../../executable/windows/do/index";
-import { filterMessagesForTalkWindow } from "../../executable/windows/talk/index";
 import type { ContextWindow } from "../../executable/windows/_shared/types";
 import { ROOT_WINDOW_ID } from "../../executable/windows/_shared/types";
 import type { ThreadContext, ThreadMessage } from "./index";
@@ -219,9 +219,15 @@ async function renderWindowNode(
   return xmlElement("window", attrs, children);
 }
 
-/** 渲染 thread.contextWindows 的整体节点，按 root 下的直接子 window 自顶向下展开。 */
+/**
+ * 渲染 thread.contextWindows 的整体节点，按 root 下的直接子 window 自顶向下展开。
+ *
+ * OOC-4 L5c：talk_window 不再渲染（agent 经 <self_view><talks> 自视切片看会话）；
+ * 这里直接从 all 里剔除 talk 窗口，使其既不作为顶层节点出现，也不作为某 window 的 sub_window 展开。
+ * （TalkWindow 类型仍存在：service.ts/前端/creator talk_window 路由仍用——Phase D 才整体擦除。）
+ */
 async function renderContextWindowsNode(thread: ThreadContext): Promise<XmlNode | null> {
-  const all = thread.contextWindows ?? [];
+  const all = (thread.contextWindows ?? []).filter((w) => w.type !== "talk");
   if (all.length === 0) return null;
 
   const topLevel = all.filter((w) => !w.parentWindowId || w.parentWindowId === ROOT_WINDOW_ID);
@@ -229,15 +235,25 @@ async function renderContextWindowsNode(thread: ThreadContext): Promise<XmlNode 
   return xmlElement("context_windows", {}, children);
 }
 
-/** 收集所有已被 window 视图收纳的消息 id；其余消息走顶层 inbox/outbox 兜底渲染。 */
+/**
+ * 收集所有已被自视切片 / window 视图收纳的消息 id；其余消息走顶层 inbox/outbox 兜底渲染。
+ *
+ * OOC-4 L5c：talk 会话消息（带 peerObjectId）由 <self_view><talks> 渲染，故标记为已收纳，
+ * 不再经顶层 inbox/outbox 重复出现；do_window 消息仍按 filterMessagesForDoWindow 收纳。
+ */
 function collectWindowConsumedMessageIds(thread: ThreadContext): Set<string> {
   const consumed = new Set<string>();
   for (const w of thread.contextWindows ?? []) {
     if (w.type === "do") {
       for (const m of filterMessagesForDoWindow(w, thread)) consumed.add(m.id);
-    } else if (w.type === "talk") {
-      for (const m of filterMessagesForTalkWindow(w, thread)) consumed.add(m.id);
     }
+  }
+  // talk 会话消息（window-free 派送写入 peerObjectId）由自视 talk 切片渲染，标记收纳避免兜底重复。
+  for (const m of thread.outbox ?? []) {
+    if (m.peerObjectId) consumed.add(m.id);
+  }
+  for (const m of thread.inbox ?? []) {
+    if (m.peerObjectId) consumed.add(m.id);
   }
   return consumed;
 }

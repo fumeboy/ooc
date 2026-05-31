@@ -6,8 +6,12 @@
  */
 
 import { describe, expect, it } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { handleWaitTool } from "../tools/wait";
 import { makeThread } from "../../__tests__/make-thread";
+import { createFlowObject, setTalkRoute } from "../../persistable";
 import type { ThreadContext } from "../../thinkable/context";
 import {
   generateWindowId,
@@ -69,7 +73,9 @@ describe("wait tool — explicit IO dependency (spec 2026-05-17)", () => {
     expect(out.error).toMatch(/talk_window|do_window/);
   });
 
-  it("R4: 自建 talk_window 未 say 过 → reject 并指引先 say", async () => {
+  it("R4: 非 creator talk_window（残留自建）→ reject 并指引改用 peer wait", async () => {
+    // OOC-4 L5c：agent 不再自建 talk_window；若仍残留一个非 creator talk_window，
+    // wait 拒绝它，指引用 on=<peer objectId>（talks.json peer）。
     const thread = makeThread();
     const talk: TalkWindow = {
       id: generateWindowId("talk"),
@@ -83,11 +89,10 @@ describe("wait tool — explicit IO dependency (spec 2026-05-17)", () => {
       // 注：未设 isCreatorWindow
     };
     thread.contextWindows = [...thread.contextWindows, talk];
-    // outbox 上没有 windowId=talk.id 的消息
     const out = await callWaitAsync(thread, { on: talk.id });
     expect(out.ok).toBe(false);
-    expect(out.error).toContain("say");
-    expect(out.error).toContain(talk.id);
+    expect(out.error).toContain("creator");
+    expect(out.error).toContain("peer");
   });
 
   it("R5: 无任何合法候选 → reject 并强 nudge end", async () => {
@@ -129,33 +134,29 @@ describe("wait tool — explicit IO dependency (spec 2026-05-17)", () => {
     expect(thread.status).toBe("waiting");
   });
 
-  it("happy: on=<自建 talk_window 但已 say 过> → 合法", async () => {
-    const thread = makeThread();
-    const talk: TalkWindow = {
-      id: generateWindowId("talk"),
-      type: "talk",
-      parentWindowId: ROOT_WINDOW_ID,
-      title: "assistant",
-      status: "open",
-      createdAt: Date.now(),
-      target: "assistant",
-      conversationId: "c2",
-    };
-    thread.contextWindows = [...thread.contextWindows, talk];
-    thread.outbox = [
-      {
-        id: "msg_1",
-        fromThreadId: thread.id,
-        toThreadId: "t_other",
-        content: "hi",
-        createdAt: Date.now(),
-        source: "talk",
-        windowId: talk.id,
-      },
-    ];
-    const out = await callWaitAsync(thread, { on: talk.id });
-    expect(out.ok).toBe(true);
-    expect(thread.waitingOn).toBe(talk.id);
+  it("happy: on=<talks.json peer objectId> → 合法（已开会话的 peer）", async () => {
+    // OOC-4 L5c：等某 peer 回信改为 on=<peer objectId>；候选来自 talks.json 路由。
+    const tempRoot = await mkdtemp(join(tmpdir(), "ooc-wait-peer-"));
+    try {
+      const flow = await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
+      // 写一条与 peer "bob" 的会话路由到 agent.talks.json
+      await setTalkRoute(
+        { baseDir: tempRoot, sessionId: "s", objectId: "agent" },
+        "bob",
+        { targetThreadId: "t_bob_1", conversationId: "conv_agent_bob_1" },
+      );
+      const thread = makeThread({
+        skipCreatorWindow: true,
+        persistence: { ...flow, threadId: "root" },
+      });
+      const out = await callWaitAsync(thread, { on: "bob" });
+      expect(out.ok).toBe(true);
+      expect(out.on).toBe("bob");
+      expect(thread.status).toBe("waiting");
+      expect(thread.waitingOn).toBe("bob");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
   });
 
   it("on=archived do_window → reject（do 的 alive 状态是 running）", async () => {

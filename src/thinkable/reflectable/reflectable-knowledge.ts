@@ -255,28 +255,20 @@ export const END_REFLECTION_REMINDER_KNOWLEDGE = `
   真正的长期记忆走 super flow → 写到 \`pools/<self>/knowledge/memory/<slug>.md\`,
   **下一轮新 thread 启动时, OOC 会通过 frontmatter 的 activates_on 自动激活这条记忆**, 你会"想起来"。
 
-## 如何开 super flow 反思 (两步)
+## 如何开 super flow 反思 (一步)
 
-**步骤 1**: 在你当前 thread 内创建一个指向 super 的 talk_window:
+向 super 自指别名 talk 一条反思请求, 带 \`wait: true\` 等回信:
 \`\`\`
-exec(command="talk", args={
+exec(method="talk", args={
   target: "super",        // 自指别名: 派送到自己的 super 分身, 不是另一个叫 super 的 Object
-  title: "<反思主题简述>"
-})
-\`\`\`
-返回创建好的 \`<talk_window_id>\` (形如 \`w_talk_xxx\`)。
-
-**步骤 2**: 通过该 talk_window 发出反思请求:
-\`\`\`
-exec(<talk_window_id>, "say", args={
-  msg: "请帮我沉淀: <具体内容, 越具体越容易形成单条 memory>",
+  content: "请帮我沉淀: <具体内容, 越具体越容易形成单条 memory>",
   wait: true              // 等 super 分身 reply 后再继续
 })
 \`\`\`
 
 super 分身 (同一身份, 另一脉络) 会看到 REFLECTABLE_KNOWLEDGE 指引,
-写一个 \`memory/<slug>.md\` 文件, 然后通过同一 talk_window reply 你。
-你看到 reply 后即可 close talk_window + 重开 end 表单。
+写一个 \`memory/<slug>.md\` 文件, 然后用 talk 回信给你 (出现在你的
+\`<self_view><talks>\` 自视切片里, peer="super")。看到 reply 后即可重开 end 表单。
 
 ## msg 写什么好
 
@@ -295,7 +287,7 @@ super 分身 (同一身份, 另一脉络) 会看到 REFLECTABLE_KNOWLEDGE 指引
 
 判断不需要 → 直接 submit end 即可。判断需要 →
 1. **close 当前 end form** (\`close(form_id)\`)
-2. 跑上面的 talk + say(wait=true) 流程
-3. 看到 super reply 后 close talk_window
+2. 跑上面的 talk(target="super", content=..., wait=true) 流程
+3. 看到 super reply (自视 talks 切片) 后
 4. 重新 \`open(command="end", args={...})\` 结束业务 thread
 `.trim();

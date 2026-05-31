@@ -280,7 +280,6 @@ export const root: DocTreeNode = {
                             OOC 则把这些内容建模为不同类型的 ContextWindow:
                             - file_window 展示文件。
                             - knowledge_window 展示知识。
-                            - talk_window 展示对话。
                             - do_window 展示子线程任务。
                             - program_window 展示程序执行过程。
                             - search_window 展示一次 glob / grep 的命中。
@@ -316,7 +315,7 @@ export const root: DocTreeNode = {
 
                     例如:
                     - 在 root 上打开 program method form 时，\`"command::root::program"\` 命中。
-                    - 任何 talk_window open 时，\`"window::talk"\` 命中——seed 的"我跟人 talk 该露面"类型 knowledge 持续可见。
+                    - 在 root 上打开 talk method form 时，\`"command::root::talk"\` 命中——seed 的"我要跟人 talk 该露面"类型 knowledge 可见。
                     - 显式 open_knowledge 时，把某篇知识作为 knowledge_window 打开（force-full）。
 
                     这样可以避免所有知识一股脑进入 Context，控制 token 体积，同时让 LLM 在需要时获得足够指导。
@@ -790,7 +789,7 @@ export const root: DocTreeNode = {
 
                             迁移后：open 并入 exec（exec 是唯一"调 method"原语）；refine/submit 不再是顶层 tool，
                             而是 CommandExecWindow 上注册的两条method；通过 \`exec(form_id, "refine", args={...})\` /
-                            \`exec(form_id, "submit")\` 调用，与 do_window.continue / talk_window.say / custom method同构。
+                            \`exec(form_id, "submit")\` 调用，与 do_window.continue / custom method同构。
                             LLM tool surface = exec / close / wait / compress（4 个），但行为表达力不变。
                             `,
                         },
@@ -808,7 +807,9 @@ export const root: DocTreeNode = {
 
                     root window 注册一组顶层 method（与 src/executable/windows/root/index.ts ROOT_METHODS 一致）:
                     - do: 派生子 thread，创建 do_window。
-                    - talk: 与 user 或其他 Object 对话，创建 talk_window。
+                    - talk: 向 user 或其他 Object 发一条消息，与之持续会话；args={ target, content, wait? }。
+                      （OOC-4 L5c：agent 不再创建/操作 talk_window，经 window-free deliverMessage 派送 +
+                      写 talks.json 路由；会话历史经 <self_view><talks> 自视切片呈现。wait=true 进 waiting。）
                     - program: 执行 shell / javascript / typescript 程序，创建 program_window。
                     - plan_set / plan_clear: 对象级行动计划的全量设置 / 清空
                       （B 类塌缩：写 owner flow 的 plan.md，不再是 plan_window；LLM 用 markdown checklist
@@ -832,8 +833,11 @@ export const root: DocTreeNode = {
 
                     （共 19 个全局 method，与 src/executable/windows/root/index.ts ROOT_METHODS 一致。）
 
-                    其它 window 上也注册method（do_window: continue/wait/close；talk_window: say/wait/close；
+                    其它 window 上也注册method（do_window: continue/wait/close/set_transcript_window/move；
                     file_window: edit/reload/set_range/close；command_exec: refine/submit；custom: Object 自定义 ...）。
+                    （OOC-4 L5c：talk_window 的 say/wait/close/set_transcript_window 已下线——agent 经 root.talk
+                    + talks.json + 自视 talks 切片交互；TalkWindow 类型本身仍保留，用于 service.ts user 入口与
+                    creator talk_window 路由占位。）
                     Object 自定义 methods 通过 executable/index.ts 的 \`export const window\` 注册到 type=custom 的 self window 上。
 
                     Method 与 knowledge 通过 trigger 协议协作：
@@ -846,7 +850,7 @@ export const root: DocTreeNode = {
                     named: {
                         "root window": "每个 thread 隐含存在的根窗口，注册顶层 method",
                         "do": "派生子 thread 的 method",
-                        "talk": "开启或继续对话的 method",
+                        "talk": "向 user/其他 Object 发消息并持续会话的 method（window-free，写 talks.json）",
                         "program": "执行程序的 method",
                         "plan_set": "全量设置对象级行动计划的 method（写 plan.md；markdown checklist 自管 steps；非空 plan 常驻 self_view 自视切片）",
                         "plan_clear": "清空对象级行动计划的 method（写空 plan.md）",
@@ -873,9 +877,8 @@ export const root: DocTreeNode = {
                             method path 是一种渐进式语义披露机制。
 
                             例:
-                            - exec(method="talk") 时，只激活 talk 基础知识。
-                            - refine({ context: "continue" }) 后，激活 talk.continue 知识。
-                            - refine({ type: "relation_update" }) 后，再激活 talk.relation_update 知识。
+                            - exec(method="program") 时，只激活 program 基础知识。
+                            - refine({ wait: true }) 在 talk 上时追加 talk.wait 路径（提示进 waiting 等回信）。
 
                             这样 LLM 只有在真正进入某条行动路径时，才看到该路径的完整操作说明。
                             `,
@@ -1196,9 +1199,13 @@ export const root: DocTreeNode = {
                             - 子 do-thread 无需任何显式 share 即可看到父对象 plan；子 plan_set 改动父也看得到（同一文件，进度自动回流）。
                             - 旧 plan_window 的 do.share_windows（ref / lent_out 配对 + 归还）整套机制随之删除。
 
-                            **self_view 渲染**（src/thinkable/context/self-view.ts）:
+                            **self_view 渲染**（src/thinkable/context/self-view.ts）。段序：plan → talks → todos：
                             - 非空 plan.md → <self_view><plan>...markdown...</plan>（自视切片本身已是精简态，无单独压缩档位）。
-                            - 空 / 空白 plan.md → 不渲该段（nil-persistence / 无内容时 self_view 整体可能为 null）。
+                            - talk 会话（OOC-4 L5c）→ <self_view><talks><conversation peer=... total=... [conversation_id] [earlier_omitted]>
+                              <message id dir="incoming|outgoing">...</message>...</conversation></talks>：从 inbox/outbox 按
+                              peer（conversationId 优先，回退 peerObjectId）分组，每组渲最近若干条；无 talk 消息 → 不渲该段。
+                            - 未完成 todos → <self_view><todos>...</todos>；全部完成 / 无待办 → 不渲该段。
+                            - 空 / 空白 plan.md + 无会话 + 无未完成 todo → 不渲该段（nil-persistence / 无内容时 self_view 整体为 null）。
 
                             **持久化**: owner flow 文件 plan.md（不进 thread.json）；写经 enqueueSessionWrite 串行化（仿 flow-todos）。
                             塌缩设计见 docs/superpowers/plans/2026-05-31-ooc-4-L5b-plan-collapse.md。
@@ -1256,11 +1263,13 @@ export const root: DocTreeNode = {
                             **共享实现**：src/executable/windows/_shared/viewport.ts 提供 DEFAULT_VIEWPORT /
                             mergeViewport / applyViewport / executeWindowSetViewport（被 file + knowledge 共用）。
 
-                            **talk / do** —— transcript viewport（按消息条数）：
+                            **do** —— transcript viewport（按消息条数）：
 
-                            \`transcriptViewport: { tail?: N } | { rangeStart, rangeEnd }\` — 创建 talk/do
+                            \`transcriptViewport: { tail?: N } | { rangeStart, rangeEnd }\` — 创建 do
                             window 时默认 **{ tail: 20 }**（只渲染末 20 条 transcript）。LLM 通过
                             \`set_transcript_window\` method切换：
+                            （OOC-4 L5c：talk_window 不再渲染 / 无 set_transcript_window；talk 会话经
+                            <self_view><talks> 自视切片呈现。本协议现仅服务 do_window。）
 
                             \`\`\`
                             exec(window_id="<id>", method="set_transcript_window",
@@ -1277,7 +1286,7 @@ export const root: DocTreeNode = {
 
                             **共享实现**：src/executable/windows/_shared/transcript-viewport.ts 提供
                             DEFAULT_TRANSCRIPT_VIEWPORT / mergeTranscriptViewport / applyTranscriptViewport /
-                            executeWindowSetTranscriptViewport（被 talk + do 共用）。
+                            executeWindowSetTranscriptViewport（do 用；talk 渲染已下线）。
 
                             **search_window** —— matches viewport（按 match 条数；复用 transcript-viewport 泛型算法）：
 
@@ -1360,9 +1369,9 @@ export const root: DocTreeNode = {
                                 "viewport": "{ lineStart, lineEnd, columnStart, columnEnd } — file/knowledge window 的渲染窗口大小",
                                 "DEFAULT_VIEWPORT": "file/knowledge 默认 0-200 / 0-200；open 时填默认；可通过 set_viewport 调整",
                                 "set_viewport": "file_window / knowledge_window 上的method；partial merge + fail-loud",
-                                "transcriptViewport": "{ tail? } | { rangeStart, rangeEnd } — talk/do_window 的 transcript 渲染窗口；tail/range 互斥",
-                                "DEFAULT_TRANSCRIPT_VIEWPORT": "talk/do 默认 { tail: 20 }；可通过 set_transcript_window 调整",
-                                "set_transcript_window": "talk_window / do_window 上的method；tail/range 互斥 + fail-loud",
+                                "transcriptViewport": "{ tail? } | { rangeStart, rangeEnd } — do_window 的 transcript 渲染窗口；tail/range 互斥（OOC-4 L5c：talk 渲染下线，仅 do 用）",
+                                "DEFAULT_TRANSCRIPT_VIEWPORT": "do 默认 { tail: 20 }；可通过 set_transcript_window 调整",
+                                "set_transcript_window": "do_window 上的method；tail/range 互斥 + fail-loud（talk_window 已下线该 method）",
                                 "resultsViewport": "{ tail? } | { rangeStart, rangeEnd } — search_window 的 matches 渲染窗口；同 transcript 结构但用 matches_* 前缀的 args 字段名",
                                 "DEFAULT_RESULTS_VIEWPORT": "search 默认 { tail: 50 }；可通过 set_results_window 调整",
                                 "set_results_window": "search_window 上的method；args = { matches_tail | matches_start+matches_end }；互斥 + fail-loud",
@@ -1370,11 +1379,11 @@ export const root: DocTreeNode = {
                                 "DEFAULT_HISTORY_VIEWPORT": "program 默认 { tail: 10 }；可通过 set_history_window 调整",
                                 "set_history_window": "program_window 上的method；args = { history_tail | history_start+history_end }；互斥 + fail-loud",
                                 "overflow marker": "行数 / 列长超限时的标记字符串（file/knowledge），让 LLM 知道窗口外还有内容",
-                                "<transcript_viewport>": "talk/do render 的元节点；属性 total / tail|range_* / earlier_omitted",
+                                "<transcript_viewport>": "do render 的元节点；属性 total / tail|range_* / earlier_omitted（talk 渲染已下线）",
                                 "<results_viewport>": "search render 的元节点；属性 total / tail|matches_start+matches_end / earlier_omitted",
                                 "<history_viewport>": "program render 的元节点；属性 total / tail|history_start+history_end / earlier_omitted",
                             },
-                            sources: [["src/executable/windows/_shared/viewport.ts | src/executable/windows/_shared/transcript-viewport.ts | src/executable/windows/search/results-viewport.ts | src/executable/windows/program/history-viewport.ts", "viewport 协议共享实现（file/knowledge 行列 + talk/do transcript + search matches + program history）"]],
+                            sources: [["src/executable/windows/_shared/viewport.ts | src/executable/windows/_shared/transcript-viewport.ts | src/executable/windows/search/results-viewport.ts | src/executable/windows/program/history-viewport.ts", "viewport 协议共享实现（file/knowledge 行列 + do transcript + search matches + program history；talk 渲染 L5c 下线）"]],
                             todo: [
                                 "其它 window type（plan/relation/command_exec）的信息量轴尚未实施",
                                 "viewport 默认值是否对'看长函数'场景过紧——待 AgentOfExperience 真实体验后回调",
@@ -1392,7 +1401,11 @@ export const root: DocTreeNode = {
                     - root: 每个 thread 隐含存在的根 window，注册顶层 method。
                     - command_exec: 一次 method 调用的临时 form window。
                     - do: 子 thread 的父侧窗口，展示子任务状态与 transcript。
-                    - talk: 与 user 或其他 Object 的持续会话窗口。
+                    - talk: 跨 Object 持续会话的类型标记。OOC-4 L5c Phase C：agent-facing 已下线
+                      （不渲染 / 无 say·wait·close·set_transcript_window method；agent 经 root.talk + talks.json
+                      路由 + <self_view><talks> 自视切片交互）。TalkWindow 类型 + WindowType "talk" 仍保留：
+                      service.ts user→object chat 入口仍建 talk_window；initContextWindows 仍给跨对象 callee
+                      注入 creator talk_window 作为 wait 兜底标记 + relation 播种（deriveRelationWindow）。Phase D 才整体擦除。
                     - program: 程序执行窗口，可多次 exec；含 historyViewport 精细控制渲染体量。
                     - file: 文件内容窗口，支持 viewport / set_viewport / set_range（遗留）/ reload / edit / close。
                     - knowledge: 知识文档窗口，承载显式打开或协议合成的 knowledge；explicit 来源支持 viewport / set_viewport。
@@ -1414,7 +1427,7 @@ export const root: DocTreeNode = {
                         "root": "thread 的隐含根窗口，提供顶层 method",
                         "command_exec": "一次 method 调用的临时窗口",
                         "do_window": "父 thread 观察和继续子 thread 的窗口；注册 continue/wait/close/move method；archive 时自动归还所有 borrowed owner windows（plan §do_window.move）",
-                        "talk_window": "与 user 或其他 Object 对话的窗口",
+                        "talk_window": "跨 Object 会话类型标记；agent-facing 已下线（OOC-4 L5c Phase C），保留类型供 service.ts user 入口 + creator 路由占位",
                         "program_window": "程序执行窗口；含 historyViewport（exec history tail/range）精细控制渲染体量；详见 patches.viewport_protocol",
                         "file_window": "文件内容窗口；含 viewport 字段（行+列范围）精细控制渲染体量；详见 patches.viewport_protocol",
                         "knowledge_window": "知识文档窗口；explicit 来源支持 viewport 同 file_window",

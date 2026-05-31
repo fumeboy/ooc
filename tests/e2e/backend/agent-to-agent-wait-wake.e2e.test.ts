@@ -6,11 +6,11 @@
  *
  * 为什么必须有：现有 backend-multi-turn-followup 只测 user→assistant 单向；agent↔agent
  * 路径（caller 是真 LLM agent 而非被动 user object）会经过两条会**静默断**的链路：
- *   1. caller agent `say(wait=true)` → status=waiting
- *   2. callee agent 回复 / end → caller 唤醒（worker.ts:syncCrossObjectCalleeEnds 的
- *      cross-object end-sync，或 deliverTalkMessage 写 caller.inbox + scheduler
- *      wakeWaitingThreadsOnInbox）
- * talk_window 塌缩后这两条链路若没改对，caller 会**永久卡死 waiting**——本测试是唯一网兜。
+ *   1. caller agent `talk(target=callee, content, wait=true)` → status=waiting（window-free，OOC-4 L5c Phase C）
+ *   2. callee agent 回复（`talk(target=caller, content)`）/ end → caller 唤醒
+ *      （worker.ts:syncCrossObjectCalleeEnds 读 talks.json 路由的 cross-object end-sync，
+ *       或 deliverMessage 写 caller.inbox + scheduler wakeWaitingThreadsOnInbox）
+ * talk 塌缩后这两条链路若没改对，caller 会**永久卡死 waiting**——本测试是唯一网兜。
  *
  * 评分（per meta/engineering/how_to_test/strategy.md §2）：
  * - Bad：caller 没向 callee 发出消息 / callee 没收到 / caller 卡死 waiting 从未唤醒
@@ -38,14 +38,13 @@ import {
 
 const COORDINATOR_SELF = `你是 coordinator，一个协调员 agent，遵循 OOC 协议。
 当用户要你向另一个对象问问题时：
-1. 用 talk 创建一个指向该对象的 talk_window（target=对方 objectId）。
-2. 用该 talk_window 的 say 发出问题，并带 wait:true 等对方回信。
-3. 收到对方回信后，用你的 creator talk_window（指向 user）say 把答案转告 user，然后 end。
-不要自己编造答案——必须真的去问对方。`;
+1. 用一次 talk(target=对方 objectId, content="<问题>", wait=true) 把问题发给对方并等回信。
+2. 收到对方回信后，用 talk(target="user", content="<答案>") 把答案转告 user，然后 end。
+不要自己编造答案——必须真的去问对方。不要创建/操作任何 talk_window——直接用 talk method 发消息。`;
 
 const HELPER_SELF = `你是 helper，一个知识 agent，遵循 OOC 协议。
-当有别的 agent（通过你的 creator talk_window）问你问题时，
-用该 creator talk_window 的 say 直接回答，然后 end。
+当有别的 agent 问你问题时（inbox 里会出现对方消息，from 是对方 objectId），
+用一次 talk(target=对方 objectId, content="<回答>") 直接回答，然后 end。
 你知道的事实：OOC 项目的吉祥物是一只叫 "Stone" 的石头。回答要包含 "Stone" 这个名字。`;
 
 /**

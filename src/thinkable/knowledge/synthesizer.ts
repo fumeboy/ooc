@@ -502,28 +502,29 @@ function buildCreatorReplyKnowledge(window: ContextWindow): string {
       "- `end` method 只用于声明本轮**自己**结束，**不是回报通道**。",
       "- 即便 end 接受 `result` 参数（便捷糖），它内部仍是模拟在 creator window 上调一次 continue；",
       "  多段对话 / 复杂状态汇报，请显式走 `creator_do_window.continue`，不要塞到 end 里。",
-      "- 不要 hallucinate \"reply\" / \"report\" / \"finish_with\" 等不存在的 method；只有 continue / say / wait / close。",
+      "- 不要 hallucinate \"reply\" / \"report\" / \"finish_with\" 等不存在的 method；只有 continue / wait / close。",
     ].join("\n");
   }
-  // talk creator window
+  // talk creator window —— OOC-4 L5c：回信经 root.talk(target=<caller objectId>)，不再用 talk_window.say。
+  const caller = (window as { target?: string }).target ?? "<caller objectId>";
   return [
-    "# 子→父 reply 协议（你的 creator talk_window）",
+    "# 跨对象回信协议（你是某个 caller 创建的 callee）",
     "",
-    `你当前 thread 的 creator window 是 \`${window.id}\`（type=talk_window，isCreatorWindow=true，不可被 close）。`,
+    `创建你的 caller object 是 \`${caller}\`。你与它的会话历史出现在 <self_view><talks> 自视切片（peer="${caller}"）。`,
     "",
-    "**想给 caller 回信，唯一通道**：",
+    "**想给 caller 回信，唯一通道**（window-free，直接用 root.talk 按 caller objectId 路由）：",
     "",
     "```",
-    `exec(window_id="${window.id}", method="say", args={ msg: "<回复内容>", wait: false|true })`,
+    `exec(method="talk", args={ target: "${caller}", content: "<回复内容>", wait: false|true })`,
     "```",
     "",
-    "这条消息会通过 talk-delivery 派送到 caller object 的对端 thread；caller 下一轮就能看到。",
+    "这条消息会通过 deliverMessage 派送回 caller object 的对端 thread；caller 下一轮就能看到。",
     "",
     "**重要边界**：",
     "- `end` method 只用于声明本轮**自己**结束，**不是回报通道**。",
-    "- 即便 end 接受 `result` 参数（便捷糖），它内部仍是模拟在 creator window 上调一次 say；",
-    "  多轮往返 / 复杂确认，请显式走 `creator_talk_window.say`，不要塞到 end 里。",
-    "- 不要 open 新的 talk_window 给同一个 caller；用现有的 creator talk_window 复用。",
+    `- 即便 end 接受 \`result\` 参数（便捷糖），它内部仍是模拟向 caller \`${caller}\` 回一条 talk；`,
+    `  多轮往返 / 复杂确认，请显式走 \`talk(target="${caller}", ...)\`，不要塞到 end 里。`,
+    "- 不需要创建任何 talk_window；同一 caller 的会话用同一 target 自动延续。",
   ].join("\n");
 }
 

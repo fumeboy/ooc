@@ -173,51 +173,37 @@ describe("command execution side effects", () => {
     expect(injected).toBeDefined();
   });
 
-  it("talk(target=user, title) creates a talk_window in contextWindows", async () => {
-    const thread = makeThread({ id: "thread-talk" });
-    const result = await execRootMethod("talk", {
-      thread,
-      args: { target: "user", title: "发布计划" },
-    });
-    expect(result).toBeUndefined();
-    const talkWindow = thread.contextWindows.find((w) => w.type === "talk");
-    expect(talkWindow?.type).toBe("talk");
-    expect(talkWindow && talkWindow.type === "talk" && talkWindow.target).toBe("user");
-    expect(talkWindow && talkWindow.type === "talk" && talkWindow.title).toBe("发布计划");
-  });
-
-  it("talk accepts arbitrary objectId target (cross-object)", async () => {
-    const thread = makeThread({ id: "thread-talk-other" });
-    const result = await execRootMethod("talk", {
-      thread,
-      args: { target: "researcher", title: "ask" },
-    });
-    expect(result).toBeUndefined();
-    const talkWindow = thread.contextWindows.find((w) => w.type === "talk");
-    expect(talkWindow?.type).toBe("talk");
-    expect(talkWindow && talkWindow.type === "talk" && talkWindow.target).toBe("researcher");
-  });
+  // OOC-4 L5c：root.talk 不再创建 talk_window；它经 window-free deliverMessage 派送。
+  // 完整跨对象派送（带真实 persistence）在 step2-windows.test.ts / talk-delivery.test.ts 覆盖；
+  // 这里只验证参数校验 + 无 persistence 的安全网，避免单测依赖磁盘 fixture。
 
   it("talk rejects empty target", async () => {
     const thread = makeThread({ id: "thread-talk-empty" });
     const result = await execRootMethod("talk", {
       thread,
-      args: { target: "", title: "x" },
+      args: { target: "", content: "x" },
     });
     expect(result).toContain("缺少 target");
-    expect(result).toContain("close");
-    expect(result).toContain("open");
+    expect(result).toContain("refine");
   });
 
-  it("talk rejects empty title (with close+reopen hint)", async () => {
-    const thread = makeThread({ id: "thread-talk-no-title" });
+  it("talk rejects empty content (with refine hint)", async () => {
+    const thread = makeThread({ id: "thread-talk-no-content" });
     const result = await execRootMethod("talk", {
       thread,
-      args: { target: "user", title: "" },
+      args: { target: "user", content: "" },
     });
-    expect(result).toContain("缺少 title");
-    expect(result).toContain("close");
-    expect(result).toContain("open");
+    expect(result).toContain("缺少 content");
+    expect(result).toContain("refine");
+  });
+
+  it("talk without persistence rejects (cannot cross-object deliver)", async () => {
+    const thread = makeThread({ id: "thread-talk-no-persist" });
+    const result = await execRootMethod("talk", {
+      thread,
+      args: { target: "user", content: "hi" },
+    });
+    expect(result).toContain("persistence");
   });
 
   it("todo_add rejects empty content (with refine/close hint)", async () => {
