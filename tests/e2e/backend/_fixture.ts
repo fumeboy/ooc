@@ -356,7 +356,8 @@ export function listOpenedCommands(thread: ThreadContext | undefined): string[] 
   const seen: string[] = [];
   for (const e of thread.events) {
     if (!isFnCall(e) || e.toolName !== "exec") continue;
-    const cmd = (e.arguments as { command?: unknown } | undefined)?.command;
+    // L4.0 后 exec 的 arg key 是 method（旧 key command 已废）；值是 bare method 名（getOpenableCommands）。
+    const cmd = (e.arguments as { method?: unknown } | undefined)?.method;
     if (typeof cmd === "string") seen.push(cmd);
   }
   return seen;
@@ -368,7 +369,8 @@ export function usedShellProgram(thread: ThreadContext | undefined): boolean {
   for (const e of thread.events) {
     if (!isFnCall(e) || e.toolName !== "exec") continue;
     const args = (e.arguments ?? {}) as Record<string, unknown>;
-    if (args.method !== "root.program") continue;
+    // method 值是 bare 名（getOpenableCommands 返回 Object.keys(ROOT_METHODS)），root.program 写法已不存在。
+    if (args.method !== "program") continue;
     const nested = (args.args as Record<string, unknown> | undefined) ?? {};
     const lang = nested.language ?? nested.lang ?? args.language ?? args.lang;
     if (lang === "shell") return true;
@@ -382,7 +384,7 @@ export function countCommandOpens(thread: ThreadContext | undefined, commandPath
   let n = 0;
   for (const e of thread.events) {
     if (!isFnCall(e) || e.toolName !== "exec") continue;
-    if ((e.arguments as { command?: unknown } | undefined)?.command === commandPath) n += 1;
+    if ((e.arguments as { method?: unknown } | undefined)?.method === commandPath) n += 1;
   }
   return n;
 }
@@ -431,7 +433,7 @@ export function customWindowInvocations(
     if (a.window_id !== wantWindowId) continue;
     hits.push({
       callId: (e as { callId?: string }).callId,
-      command: typeof a.command === "string" ? a.command : undefined,
+      command: typeof a.method === "string" ? a.method : undefined,
       args: a.args,
     });
   }
