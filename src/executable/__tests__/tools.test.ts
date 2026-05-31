@@ -2,6 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { OOC_TOOLS, buildAvailableTools } from "../tools/index";
 import { dispatchToolCall } from "../tools";
 import { makeThread } from "../../__tests__/make-thread";
+import { generateWindowId, ROOT_WINDOW_ID, type DoWindow } from "../windows/_shared/types";
 
 /**
  * tools.test — 3 原语在 ContextWindow 模型下的行为验证（plan exec-refactor）。
@@ -192,22 +193,30 @@ describe("executable tools (ContextWindow model)", () => {
   });
 
   it("wait 把线程切到 waiting 并记录 inboxSnapshotAtWait + waitingOn", async () => {
+    // OOC-4 L6b：等子线程改按子线程 id（childThreadId）；挂一个 running 子线程对话作合法来源。
     const thread = makeThread({ inbox: [] });
-    const creatorDo = thread.contextWindows.find(
-      (w) => w.type === "do" && w.isCreatorWindow,
-    );
-    expect(creatorDo).toBeDefined();
+    const childId = "t_child_wait";
+    const childDo: DoWindow = {
+      id: generateWindowId("do"),
+      type: "do",
+      parentWindowId: ROOT_WINDOW_ID,
+      title: "子线程任务",
+      status: "running",
+      createdAt: Date.now(),
+      targetThreadId: childId,
+    };
+    thread.contextWindows = [...thread.contextWindows, childDo];
     const output = await dispatchToolCall(thread, {
       id: "call_1",
       name: "wait",
-      arguments: { on: creatorDo!.id, reason: "等待 creator 回信" },
+      arguments: { on: childId, reason: "等待子线程回报" },
     });
     expect(thread.status).toBe("waiting");
     expect(thread.inboxSnapshotAtWait).toBe(0);
-    expect(thread.waitingOn).toBe(creatorDo!.id);
+    expect(thread.waitingOn).toBe(childId);
     const parsed = JSON.parse(output);
     expect(parsed.ok).toBe(true);
-    expect(parsed.on).toBe(creatorDo!.id);
+    expect(parsed.on).toBe(childId);
   });
 
   it("compress(scope=windows) 缺 target_ids 时返回结构化错误", async () => {

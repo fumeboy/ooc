@@ -27,6 +27,9 @@ import {
   type Todo,
 } from "../../persistable/index";
 import { SUPER_ALIAS_TARGET } from "../../executable/windows/_shared/super-constants";
+import { filterMessagesForDoWindow } from "../../executable/windows/do/index";
+import { findChild } from "../../executable/windows/do/helpers";
+import type { DoWindow } from "../../executable/windows/_shared/types";
 import { xmlElement, xmlText, type XmlNode } from "./xml";
 import type { ThreadContext, ThreadMessage } from "./index";
 
@@ -34,14 +37,20 @@ import type { ThreadContext, ThreadMessage } from "./index";
 const TALK_RECENT_PER_PEER = 6;
 /** talk 自视切片单条消息正文截断长度。 */
 const TALK_MESSAGE_TRUNCATE = 400;
+/** do 自视切片（active_children / parent_task）每个对端渲染的最近 transcript 条数。 */
+const DO_RECENT_PER_THREAD = 6;
+/** do 自视切片单条 transcript 正文截断长度。 */
+const DO_MESSAGE_TRUNCATE = 400;
 /** relations 自视切片各文本字段（peer readable / self relation）的字节截断长度。 */
 const RELATION_BODY_BYTES = 8192;
 
 /**
  * 渲染对象自视切片 `<self_view>`；无 persistence 或无内容时返回 null。
  *
- * 段序（L6a）：`<plan>`（active 行动计划）→ `<talks>`（按 peer 的进行中会话）→
- * `<relations>`（siblings/children + talk peer 的关系认知）→ `<todos>`（未完成待办）。
+ * 段序（L6b）：`<plan>`（active 行动计划）→ `<talks>`（按 peer 的进行中会话）→
+ * `<relations>`（siblings/children + talk peer 的关系认知）→
+ * `<active_children>`（parent 视角：进行中的子线程）→ `<parent_task>`（child 视角：parent 任务 + 回报口）
+ * → `<todos>`（未完成待办）。
  */
 export async function renderSelfView(thread: ThreadContext): Promise<XmlNode | null> {
   const ref = flowRefOf(thread);
@@ -57,6 +66,12 @@ export async function renderSelfView(thread: ThreadContext): Promise<XmlNode | n
 
   const relationsNode = await renderRelationsSlice(thread, ref);
   if (relationsNode) children.push(relationsNode);
+
+  const activeChildrenNode = renderActiveDoSlice(thread);
+  if (activeChildrenNode) children.push(activeChildrenNode);
+
+  const parentTaskNode = renderParentTaskSlice(thread);
+  if (parentTaskNode) children.push(parentTaskNode);
 
   const todosNode = await renderTodosSlice(ref);
   if (todosNode) children.push(todosNode);
@@ -289,4 +304,74 @@ export function renderTalksSlice(thread: ThreadContext): XmlNode | null {
     );
   }
   return xmlElement("talks", {}, conversations);
+}
+
+/** 把一个 do_window 的 transcript（filterMessagesForDoWindow）渲染成最近 N 条 `<message dir>` 列表。 */
+function renderDoTranscript(window: DoWindow, thread: ThreadContext): XmlNode[] {
+  const all = filterMessagesForDoWindow(window, thread);
+  const recent = all.slice(-DO_RECENT_PER_THREAD);
+  return recent.map((m) => {
+    // dir：本 thread 发出 = outgoing，收到 = incoming（按 from/to 与本 thread.id 判定）。
+    const dir = m.fromThreadId === thread.id ? "outgoing" : "incoming";
+    return xmlElement("message", { id: m.id, dir }, [xmlText(m.content.slice(0, DO_MESSAGE_TRUNCATE))]);
+  });
+}
+
+/**
+ * do 父视角自视切片 `<active_children>`：本 thread 派生的、仍在进行中的子线程列表（OOC-4 L6b）。
+ *
+ * 取 thread.contextWindows 里 `type==="do" && !isCreatorWindow` 的 do_window（= parent 对 child 的视图）。
+ * child status 从 findChild(thread, targetThreadId) 取；仅渲 child 仍 running 的（do_close 后 child=paused
+ * → 不在 active 列表，符合预期，残留开放点 #2）。每个渲最近 N 条往返 transcript。
+ * 空 → 不渲 `<active_children>`（返回 null）。
+ *
+ * 附 hint：追加消息 / 关闭子线程的 root 方法用法（替代被 render-skip 的父侧 do_window method 面）。
+ */
+export function renderActiveDoSlice(thread: ThreadContext): XmlNode | null {
+  const childNodes: XmlNode[] = [];
+  for (const w of thread.contextWindows ?? []) {
+    if (w.type !== "do" || w.isCreatorWindow) continue;
+    const child = findChild(thread, w.targetThreadId);
+    if (!child || child.status !== "running") continue;
+    childNodes.push(
+      xmlElement(
+        "child",
+        { thread_id: w.targetThreadId, status: child.status },
+        renderDoTranscript(w, thread),
+      ),
+    );
+  }
+  if (childNodes.length === 0) return null;
+  return xmlElement(
+    "active_children",
+    {
+      hint: "追加消息用 do_continue(target=<thread_id>, content=...)；关闭用 do_close(target=<thread_id>)",
+    },
+    childNodes,
+  );
+}
+
+/**
+ * do 子视角自视切片 `<parent_task>`：本 thread 由 parent 派生时，看 parent 的任务 + 回报口（OOC-4 L6b）。
+ *
+ * 取 thread.contextWindows 里 `type==="do" && isCreatorWindow` 的 creator do_window（= child 对 parent 的视图）。
+ * 渲 parent_thread_id + 最近 N 条往返 transcript。
+ * 无 creator do_window（self-driven root / 跨 object callee 的 creator 是 talk_window）→ 不渲（返回 null）。
+ *
+ * 附 hint：向 parent 回报用 do_continue(target=<parent_thread_id>, ...)，让 child 知道回报口
+ * （替代被 render-skip 的 creator do_window method 面）。
+ */
+export function renderParentTaskSlice(thread: ThreadContext): XmlNode | null {
+  const creator = (thread.contextWindows ?? []).find(
+    (w): w is DoWindow => w.type === "do" && w.isCreatorWindow === true,
+  );
+  if (!creator) return null;
+  return xmlElement(
+    "parent_task",
+    {
+      parent_thread_id: creator.targetThreadId,
+      hint: "向 parent 回报用 do_continue(target=<parent_thread_id>, content=...)",
+    },
+    renderDoTranscript(creator, thread),
+  );
 }

@@ -15,13 +15,13 @@
 4. docs/superpowers/ooc-4-next-session-kickoff.md（本指南：进度、roadmap、纪律）
 5. 你的项目记忆 project_ooc4_direction_increment1.md + feedback_agent_facing_voice
 
-已完成：宪法 + 目录归一 + **L2 原型链引擎**(6dd10cf2) + **L3 builtin objects**(d5a840a7) + **L4.0 command→method**(52beb485+7ecd71bf) + **L4.1 活路径机制+skill_index**(53ccb737) + **L4.2 A 类 method+转写**(a912d7f2) + **L4.2c windows→base 搬迁**(c499a8e5) + **L5a 自视切片机制+todo 塌缩**(b538d6ae) + **L5b plan 塌缩**(52d5b9b5)。tsc 全仓 0，bun test src/ **1094 pass/0 fail/3 skip**。机制详见 project_ooc4_direction_increment1。
+已完成：宪法 + 目录归一 + **L2 原型链引擎**(6dd10cf2) + **L3 builtin objects**(d5a840a7) + **L4.0 command→method**(52beb485+7ecd71bf) + **L4.1 活路径机制+skill_index**(53ccb737) + **L4.2 A 类 method+转写**(a912d7f2) + **L4.2c windows→base 搬迁**(c499a8e5) + **L5a 自视切片机制+todo 塌缩**(b538d6ae) + **L5b plan 塌缩**(52d5b9b5) + **L5c talk 塌缩 A+B+C**(edf920b2+0b4a97ff) + **L6a relation 塌缩**(4d1b3480) + **L6b do 塌缩**(本次)。tsc 全仓 0，bun test src/ **1078 pass/0 fail/3 skip**，后端 e2e（do reload-crossing 安全网 + agent↔agent + route-audit）全绿。机制详见 project_ooc4_direction_increment1。
 
-**B 类塌缩进度**：todo✓ plan✓（flow-todos.ts/flow-plan.ts + renderSelfView `<self_view>` 切片 + 删 window type 范式立住）。**剩 talk/relation/do（并发核心，专项 fresh 会话）**——dual review 揭示远比 spec 大：跨 object 唤醒在 **worker.ts:syncCrossObjectCalleeEnds 非 scheduler**（删 talk/do window 不改 worker → caller 永久卡死）；保留 TalkWindow 类型只删 behavior；tools/wait.ts/service.ts/前端 formatter/pairing(conversationId)/reflectable-knowledge 全在 scope；relation 耦合 talk（peer 集含 user/talk-peer + long_term 经 deliverMessage）故须 talk 后做。详见 L5c plan 的 POST-DUAL-REVIEW 修正 scope + L5-6 spec §2.5。
+**B 类塌缩进度**：todo✓ plan✓ talk✓ relation✓ do✓——**5 个 B 类全部 agent-facing 塌缩完成**（owner flow 文件 + renderSelfView `<self_view>` 切片 + root 方法 + render-skip 范式立住）。**剩 L6c registry 终结**：talk/do 走 **keep-not-delete**（TalkWindow/DoWindow 类型 + renderXml hook + continueCommand/filterMessagesForDoWindow + share/move + service.ts user 入口 + 前端 formatter 全保留作内部数据，L6c 才擦）。关键认知沉淀：跨 object 唤醒在 **worker.ts:syncCrossObjectCalleeEnds**（talk，已改读 talks.json）；do 是**同 object**（scheduler.emitChildEndNotifications 向下迭代 childThreads，reload 安全，不碰 worker）；do 的 child→parent 显式回报依赖运行时 `_parentThreadRef`，reload 后由 **readThread 在 persistable 层重建**（兑现 helpers.ts:52-53 契约）。
 
-本次目标：**talk 塌缩（L5c，并发核心专项）**。**先完整读**：①L5c plan `2026-05-31-ooc-4-L5c-talk-collapse.md` 的 **POST-DUAL-REVIEW 修正 scope**（最重要，纠正原设计：worker.ts 是真 cross-object wake、保留 TalkWindow 类型只删 behavior、talks.json routing-only、conversationId 配对、tools/wait.ts/service.ts/前端 formatter/reflectable-knowledge 全在 scope、必补 agent↔agent 双向 wait/wake e2e）②L5-6 spec §2.5（worker.ts 跨 object wake 认知修正）+ §4 talk。之后 relation（L6a，plan 草案已含 H1/M1-M3 输入 + 阻塞解除条件）→ **do（L6b，最难，同样碰 worker.ts cross-object wake）→ L6c registry 终结**。
+本次目标：**L6c registry 终结 + 类型擦除**。范围（综合 L5c Phase D + L6b keep-not-delete 残留）：①删 `getWindowTypeDefinition`/`WindowRegistry`（B 类塌缩后 per-type registry 已空壳）②**TalkWindow 类型全擦除**（service.ts 3 处 user chat 入口 + web/src/domains/chat/formatter.ts 迁 talks.json + creator talk_window 路由）③**DoWindow 类型 + renderDoWindow hook 擦除**（continueCommand/filterMessagesForDoWindow/share_windows/move 的 agent 面收编或删；do 的 share/move agent 入口迁移决策）④`onClose`/`compressView` 沿链解析（接 behavior.ts，脱离收缩 registry）⑤command_exec→method_exec 改名 + custom/feishu/root 原型吸收。**先读** L5-6 spec §5（registry 终结）+ L6b plan 的「review 消解表」（哪些 keep 到 L6c 擦）+ context-compression-p0c-typed.test.ts 的 talk/do compressView skip（L6c 擦 compressView 时一并清理：要么改直测 hook、要么随类型删）。
 
-> command_exec→method_exec / custom 吸收 / L4.3 method 可见性 均 forward-looking，延 L6c 按需。
+> command_exec→method_exec / custom 吸收 / L4.3 method 可见性 均 forward-looking，本就规划在 L6c 一并处理。L7（context/ 物理树，window 状态迁出 thread.json）会顺带根治 do 的 standalone-child 持久化 staleness（L6b 仅 readThread 重建 _parentThreadRef 覆盖主路径，truly-standalone 边缘靠 notify 兜底）。
 
 按这个节奏走，不要跳步：
 1. 用 superpowers:brainstorming 对齐 L5c 根决策（**worker.ts cross-object wake 怎么从 talks.json 读路由**=最关键 / callee 回信路由 talks.json[caller].targetThreadId / pairing 用 conversationId / talks.json routing-only vs message-log / 保留 TalkWindow 类型边界）。**这是并发核心，关键路径 agent↔agent wait/wake 无现有 e2e——务必先补双向 e2e 再改，否则 caller 卡死测不出。**
@@ -65,9 +65,9 @@
 | ~~L5c A+B~~ | window-free deliverMessage + talks.json 路由 + **worker.ts cross-object wake 改读 talks.json**（并发核心拆险，additive）| L5b | ✅ edf920b2（安全网 e2e Good）|
 | ~~L5c C~~ | talk agent-facing 塌缩（root.talk 合一 + 自视 talks 切片 + 删 say/wait/close/renderTalkWindow + wait.ts 重设计）| L5c-A/B | ✅ 0b4a97ff（安全网 e2e 仍 Good）|
 | L5c D | TalkWindow 类型全擦除 + service.ts user 入口 + 前端 formatter 迁 talks.json | L5c-C | 延 L6c（类型擦除连 registry 死）|
-| **L6a** | relation 删除→siblings/children+talks.json-peer auto 注入 + relation_note(deliverMessage)；阻塞已解（talk 塌缩后 talks.json peers 可用）| L5c | ← **下一层** |
-| L6b | do 塌缩（threads/ + root.do_* + worker.ts cross-object wake；最难）| L6a | 设计就绪(spec) |
-| L6c | registry 终结（onClose/compressView 接链 + command_exec/custom/feishu/root 收编 + 删 getWindowTypeDefinition）| L6b | 设计就绪(spec) |
+| ~~L6a~~ | relation 删除→siblings/children+talks.json-peer auto 注入 + relation_note(deliverMessage)| L5c | ✅ 4d1b3480 |
+| ~~L6b~~ | do agent-facing 塌缩（root.do_continue/do_close + 自视 active_children/parent_task 切片 + render-skip + wait 迁 childThreadId + readThread 重建 _parentThreadRef）；keep-not-delete（类型/hook/share/continueCommand 延 L6c）；同 object 不碰 worker | L6a | ✅ 本次（do reload-crossing 安全网 Good）|
+| **L6c** | registry 终结（删 getWindowTypeDefinition + TalkWindow/DoWindow 类型擦除 + renderXml hook 删 + onClose/compressView 接链 + command_exec→method_exec + custom/feishu/root 收编 + service.ts/前端 formatter 迁移 + compressView skip 清理）| L6b | ← **下一层**（设计 spec §5）|
 | L7 | context/ 物理树（window 状态迁出 thread.json） | L3 | |
 | L8 | visible 渲染重做 + client→visible 改名（一起做；Inc 3 plan 留有 C1-C3/H3 输入） | L2/L3 | |
 

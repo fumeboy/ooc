@@ -256,13 +256,15 @@ describe("buildContext (ContextWindow model)", () => {
     );
   });
 
-  it("renders <context_windows> in system XML and includes creator do_window", async () => {
+  it("renders <context_windows> shell but skips do_window (OOC-4 L6b: do agent-facing 塌缩)", async () => {
     const thread: ThreadContext = makeThread({
       id: "t_parent",
       creatorThreadId: "t_root",
     });
-    // OOC-4 L5b: plan 塌缩为 owner flow plan.md（不再是 plan_window ContextWindow）；
-    // 此处验证 <context_windows> 外壳 + creator do_window 渲染（A 类 window 区）。
+    // OOC-4 L5b: plan 塌缩为 owner flow plan.md（不再是 plan_window ContextWindow）。
+    // OOC-4 L6b: do_window 不再渲染进 <context_windows>——agent 经 <self_view><parent_task> /
+    // <active_children> 自视切片交互；creator do_window 仅作内部数据保留。
+    // 此处验证 <context_windows> 外壳仍在（含 protocol knowledge_window）且 do_window 被 render-skip。
     const messages = await buildContext(thread);
     expect(messages).toHaveLength(1);
     const xml = messages[0]!.content;
@@ -270,8 +272,9 @@ describe("buildContext (ContextWindow model)", () => {
     expect(xml).toContain('<thread id="t_parent" status="running">');
     expect(xml).toContain("<creator_thread_id>t_root</creator_thread_id>");
     expect(xml).toContain("<context_windows>");
-    expect(xml).toContain('type="do"');
-    expect(xml).toContain("<is_creator_window>true</is_creator_window>");
+    // do_window（含 creator do_window）已不再作为 <window type="do"> 渲染。
+    expect(xml).not.toContain('type="do"');
+    expect(xml).not.toContain("<is_creator_window>true</is_creator_window>");
   });
 
   it("renders command_exec form result only when status=failed (Round 13 四态机)", async () => {
@@ -420,7 +423,7 @@ describe("buildContext (ContextWindow model)", () => {
     }
   });
 
-  it("filters do_window transcript by targetThreadId; top-level inbox excludes consumed messages", async () => {
+  it("do_window 消息仍被 consumed（不双渲）：top-level inbox 排除 do 收纳的消息（OOC-4 L6b 保留 consumed 分支）", async () => {
     const thread = makeThread({
       id: "t_p",
       inbox: [
@@ -455,16 +458,16 @@ describe("buildContext (ContextWindow model)", () => {
     });
     const messages = await buildContext(thread);
     const xml = messages[0]!.content;
-    // creator window 也是一种 do_window，targetThreadId="__session__"，会过滤；t_other 没归入任何 do_window
-    expect(xml).toContain('<message id="msg_in_child"');
-    // top level inbox 应该不再含 msg_in_child（已被 w_do_child 收纳）
+    // OOC-4 L6b：do_window render-skip（不再出现在 <context_windows>），但 collectWindowConsumedMessageIds
+    // 仍保留 do 分支 → w_do_child 收纳的 msg_in_child 不落顶层 inbox 兜底（避免与自视切片双渲）；
+    // t_other 没归入任何 do_window，仍走顶层 inbox 兜底。
+    expect(xml).not.toContain('type="do"');
     const inboxStart = xml.indexOf("<inbox>");
-    if (inboxStart !== -1) {
-      const inboxEnd = xml.indexOf("</inbox>", inboxStart);
-      const inboxBlock = xml.slice(inboxStart, inboxEnd);
-      expect(inboxBlock).not.toContain("from child");
-      expect(inboxBlock).toContain("from other");
-    }
+    expect(inboxStart).not.toBe(-1);
+    const inboxEnd = xml.indexOf("</inbox>", inboxStart);
+    const inboxBlock = xml.slice(inboxStart, inboxEnd);
+    expect(inboxBlock).not.toContain("from child");
+    expect(inboxBlock).toContain("from other");
   });
 
   it("appends only meaningful process events after the system xml", async () => {

@@ -32,6 +32,8 @@ describe("executable commands", () => {
     }
     expect(getOpenableCommands()).toEqual([
       "do",
+      "do_close",
+      "do_continue",
       "end",
       "glob",
       "grep",

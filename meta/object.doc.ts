@@ -467,19 +467,21 @@ export const root: DocTreeNode = {
 
                     Thread 的典型状态:
                     - running: 可被 scheduler 选中执行下一轮 ThinkLoop。
-                    - waiting: 等待某个 talk_window 或 do_window 上的未来 IO。
+                    - waiting: 等待未来 IO（子线程回报，按子线程 id / creator talk_window / 已开会话 peer 回信）。
                     - done: 当前任务完成，但新 inbox 消息可以重新唤醒。
                     - failed: 发生严重错误，后续消息也可以让它重新进入 running。
                     - paused: 被控制面暂停，等待人工检查或 resume。
 
                     子线程通常由 do method 创建。
-                    父线程通过 do_window 观察子线程状态，子线程完成后通过 creator window 把结果回报给父线程。
+                    父线程通过 <self_view><active_children> 自视切片观察进行中的子线程，子线程通过
+                    root.do_continue(target=parent) 把结果回报给父线程（见 <self_view><parent_task>）。
+                    （OOC-4 L6b：do_window 不再是 agent 直接交互的 window，详见 collaborable.do_vs_talk.patches.do_agent_facing_collapse。）
                     `,
                     named: {
                         "Thread Tree": "一个 Object 在 session 中形成的线程树，根线程可以派生子线程",
                         "scheduler": "调度 running thread 的运行时组件",
-                        "do_window": "父线程中代表某个子线程任务的窗口",
-                        "creator window": "子线程用于向创建者回报结果的初始窗口",
+                        "do_window": "父线程中代表某个子线程任务的内部窗口（OOC-4 L6b：agent 经 self_view.active_children 自视切片看子线程，不再直接交互）",
+                        "creator window": "子线程用于向创建者回报结果的初始窗口（do：经 self_view.parent_task 切片 + root.do_continue 回报）",
                     },
                     patches: {
                         "no_shared_context": {
@@ -806,7 +808,17 @@ export const root: DocTreeNode = {
                     3. method 产生副作用，比如创建 program_window 或写 owner flow 文件（plan_set 写 plan.md）。
 
                     root window 注册一组顶层 method（与 src/executable/windows/root/index.ts ROOT_METHODS 一致）:
-                    - do: 派生子 thread，创建 do_window。
+                    - do: 派生子 thread。
+                      （OOC-4 L6b：agent 不再创建/操作 do_window；fork 出的子线程经 <self_view><active_children>
+                      自视切片呈现。do_window 仅作内部数据保留〔transcript 源 + 消息 consumed 标记 + 路由〕，
+                      不再渲染进 <context_windows>。wait=true 进 waiting。）
+                    - do_continue: 向子线程追加消息 / 向 parent 线程回报；args={ target, content, wait? }。
+                      （OOC-4 L6b：替代 do_window.continue 的 agent 面。target=子线程 id 则向子追加〔见
+                      <self_view><active_children>〕；target=parent 线程 id 则向 parent 回报〔见
+                      <self_view><parent_task>，这是子→父回报的唯一显式通道〕。）
+                    - do_close: 归档一个你派生的子线程对话；args={ target }。
+                      （OOC-4 L6b：替代 do_window.close 的 agent 面。子线程切 paused、借出 window 自动归还；
+                      不再出现在 <self_view><active_children>。parent 回报口不可被 do_close。）
                     - talk: 向 user 或其他 Object 发一条消息，与之持续会话；args={ target, content, wait? }。
                       （OOC-4 L5c：agent 不再创建/操作 talk_window，经 window-free deliverMessage 派送 +
                       写 talks.json 路由；会话历史经 <self_view><talks> 自视切片呈现。wait=true 进 waiting。）
@@ -831,13 +843,17 @@ export const root: DocTreeNode = {
                     - open_feishu_chat: 把飞书群会话作为 feishu_chat_window 引入 Context。
                     - open_feishu_doc: 把飞书文档作为 feishu_doc_window 引入 Context。
 
-                    （共 19 个全局 method，与 src/executable/windows/root/index.ts ROOT_METHODS 一致。）
+                    （共 21 个全局 method，与 src/executable/windows/root/index.ts ROOT_METHODS 一致。）
 
-                    其它 window 上也注册method（do_window: continue/wait/close/set_transcript_window/move；
-                    file_window: edit/reload/set_range/close；command_exec: refine/submit；custom: Object 自定义 ...）。
+                    其它 window 上仍注册 method 作内部数据（file_window: edit/reload/set_range/close；
+                    command_exec: refine/submit；custom: Object 自定义 ...）。
                     （OOC-4 L5c：talk_window 的 say/wait/close/set_transcript_window 已下线——agent 经 root.talk
                     + talks.json + 自视 talks 切片交互；TalkWindow 类型本身仍保留，用于 service.ts user 入口与
                     creator talk_window 路由占位。）
+                    （OOC-4 L6b：do_window 的 continue/wait/close/set_transcript_window/move method 注册仍保留
+                    作内部实现〔continue/close 走 end.result 与 onClose hook；render 已 skip do_window 故 agent
+                    够不到这些 method 面〕——agent 经 root.do_continue / do_close + 自视 active_children / parent_task
+                    切片交互；DoWindow 类型与 renderDoWindow hook 仍保留，L6c 才整体擦除。）
                     Object 自定义 methods 通过 executable/index.ts 的 \`export const window\` 注册到 type=custom 的 self window 上。
 
                     Method 与 knowledge 通过 trigger 协议协作：
@@ -849,7 +865,9 @@ export const root: DocTreeNode = {
                     `,
                     named: {
                         "root window": "每个 thread 隐含存在的根窗口，注册顶层 method",
-                        "do": "派生子 thread 的 method",
+                        "do": "派生子 thread 的 method（window-free，子线程经 self_view.active_children 自视切片呈现）",
+                        "do_continue": "向子线程追加消息 / 向 parent 回报的 method（target=子线程 id 或 parent 线程 id；替代 do_window.continue 的 agent 面）",
+                        "do_close": "归档一个你派生的子线程对话的 method（target=子线程 id；替代 do_window.close 的 agent 面）",
                         "talk": "向 user/其他 Object 发消息并持续会话的 method（window-free，写 talks.json）",
                         "program": "执行程序的 method",
                         "plan_set": "全量设置对象级行动计划的 method（写 plan.md；markdown checklist 自管 steps；非空 plan 常驻 self_view 自视切片）",
@@ -1577,11 +1595,13 @@ export const root: DocTreeNode = {
                     - thread.creatorObjectId 与 self 不同 → 创建关系是 "talk"，是跨 object 派生的 callee thread；
                       creator window 是 talk_window，target 指向 caller object。
 
-                    do_window:
+                    do_window（OOC-4 L6b：agent-facing 已塌缩——见 patches.do_agent_facing_collapse）:
                     - 由 root.do method 派生子 thread 时创建。
-                    - 注册的 method: continue（向子线程追加消息）/ wait / close / move / set_transcript_window。
-                    - 消息 source = "do"。
-                    - close 时把子线程切到 archived（initial creator do_window 拒绝 close）。
+                    - 注册的 method: continue / wait / close / move / set_transcript_window 仍存在作内部实现，
+                      但 do_window 已被 render skip（不渲染进 <context_windows>），agent 够不到这些 method 面；
+                      agent 改用 root.do_continue / do_close + 自视 active_children / parent_task 切片。
+                    - 消息 source = "do"，仍按 targetThreadId 过滤 transcript（consumed 标记保留，不双渲）。
+                    - 内部 close 仍把子线程切到 archived（initial creator do_window 拒绝 close）。
                     - transcriptViewport 字段控制 transcript 渲染量；默认 { tail: 20 }；
                       详见 executable.context_window.patches.viewport_protocol。
 
@@ -1596,10 +1616,39 @@ export const root: DocTreeNode = {
                     `,
                     named: {
                         "isCreatorSelf": "判定 thread 的 creator 是否与自己同 object 的逻辑",
-                        "continue": "do_window 上向子线程追加消息的 method",
+                        "continue": "do_window 上向子线程追加消息的 method（OOC-4 L6b：内部数据；agent 面改 root.do_continue）",
                         "say": "talk_window 上向对端发消息的 method",
                         "set_transcript_window": "talk/do_window 上调整 transcript 渲染窗口的 method（tail / range 互斥；默认 tail=20）",
                         "transcriptViewport": "talk/do_window 的 transcript 渲染窗口字段；详见 _shared/transcript-viewport.ts",
+                    },
+                    patches: {
+                        "do_agent_facing_collapse": {
+                            title: "do_window agent-facing 塌缩（OOC-4 L6b）",
+                            content: `
+                            do_window 的 **agent 交互面**已塌缩，镜像 L5c talk Phase C：
+
+                            - render 把 do_window 从 <context_windows> 过滤（src/thinkable/context/render.ts
+                              renderContextWindowsNode：\`w.type !== "talk" && w.type !== "do"\`），agent 不再直接看 do_window。
+                            - parent 视角：进行中的子线程经 <self_view><active_children><child thread_id status> 自视切片呈现
+                              （src/thinkable/context/self-view.ts renderActiveDoSlice，渲最近往返 transcript + do_continue/do_close hint）。
+                            - child 视角：parent 任务 + 回报口经 <self_view><parent_task parent_thread_id> 自视切片呈现
+                              （renderParentTaskSlice，附 do_continue(target=parent) 回报 hint）。
+                            - agent 面 method：root.do_continue（替 do_window.continue：父→子追加 / 子→父回报，按 target 线程 id）
+                              + root.do_close（替 do_window.close：归档子线程，按 target 子线程 id）。共享核心
+                              src/executable/windows/do/deliver.ts deliverDoMessage。
+                            - wait：等子线程改按子线程 id（childThreadId），不再按 do_window id
+                              （src/executable/tools/wait.ts；creator do_window 不作 wait 候选，它是 child 侧回报口）。
+
+                            **keep-not-delete**：do 的内部机制全部保留作内部数据/实现——continueCommand、renderDoWindow
+                            （dead hook，因 do 被 render 过滤永不调用）、filterMessagesForDoWindow（do 消息仍 consumed 标记，
+                            不落兜底 inbox）、do_window 的 continue/wait/close/move 注册、share_windows/applyInitialShare/
+                            archiveDoWindowChild、DoWindow 类型、creator do_window 注入。类型与 hook 擦除延 L6c。
+
+                            **并发模型不动**：child thread 树 + scheduler（emitChildEndNotifications 向下迭代 childThreads，
+                            reload 安全）完全保留。child→parent 显式回报依赖运行时 _parentThreadRef；reload 后由
+                            readThread 在 persistable 层重建该反向引用（src/persistable/thread-json.ts），不重写 do 持久化模型。
+                            `,
+                        },
                     },
                 },
                 "talk_delivery": {

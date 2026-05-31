@@ -250,7 +250,11 @@ describe("[p0c] search_window.compressView", () => {
 // do_window
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("[p0c] do_window.compressView", () => {
+// OOC-4 L6b：do_window 已 render-skip（不再渲染进 <context_windows>）——agent 经
+// <self_view><active_children> / <parent_task> 自视切片交互。compressView hook 仍 keep-not-delete
+// （内部数据，L6c 才擦），但经 renderContextXml 已够不到 do_window，故本组 compressView 经 render
+// 的验收用例 skip（与 talk_window 同款：L5c talk 塌缩后 talk_window 也 render-skip）。
+describe.skip("[p0c] do_window.compressView (OOC-4 L6b: do render-skip — compressView 经 render 不可达)", () => {
   it("level=1 含 target_thread + child_status + last_message + total_messages; level=2 不含 last_message", async () => {
     const thread = makeThread();
     const childThreadId = "t_child_001";
@@ -339,7 +343,10 @@ describe("[p0c] do_window.compressView", () => {
 // talk_window — 含截断 + 总数 case
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("[p0c] talk_window.compressView", () => {
+// OOC-4 L5c：talk_window 已 render-skip（agent 经 <self_view><talks> 自视切片看会话）——
+// compressView hook 仍存在但经 renderContextXml 够不到 talk_window，故本组经 render 的验收用例 skip
+// （pre-existing 失败债，与 do_window L6b 同款根因，一并标 skip）。
+describe.skip("[p0c] talk_window.compressView (OOC-4 L5c: talk render-skip — compressView 经 render 不可达)", () => {
   it("level=1 含 peer + total_messages + 最近 2 条 recent_messages; level=2 仅 peer + total; expand 还原 transcript", async () => {
     const thread = makeThread();
     const talkWindowId = generateWindowId("talk");

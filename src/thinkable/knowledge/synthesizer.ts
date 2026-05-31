@@ -330,24 +330,26 @@ function nextSyntheticId(): string {
  */
 function buildCreatorReplyKnowledge(window: ContextWindow): string {
   if (window.type === "do") {
+    // OOC-4 L6b：回报经 root.do_continue(target=<parent_thread_id>)，不再用 creator do_window.continue。
+    const parentThreadId = (window as { targetThreadId?: string }).targetThreadId ?? "<parent_thread_id>";
     return [
-      "# 子→父 reply 协议（你的 creator do_window）",
+      "# 子→父 reply 协议（你的 parent 任务）",
       "",
-      `你当前 thread 的 creator window 是 \`${window.id}\`（type=do_window，isCreatorWindow=true，不可被 close）。`,
+      `创建你的 parent 线程是 \`${parentThreadId}\`。你与它的任务往返出现在 <self_view><parent_task parent_thread_id="${parentThreadId}"> 自视切片。`,
       "",
-      "**想把结果 / 状态 / 中间进展带回父线程，唯一通道**：",
+      "**想把结果 / 状态 / 中间进展带回 parent 线程，唯一通道**（直接用 root.do_continue 按 parent 线程 id 路由）：",
       "",
       "```",
-      `exec(window_id="${window.id}", method="continue", args={ msg: "<结果或状态描述>" })`,
+      `exec(method="do_continue", args={ target: "${parentThreadId}", content: "<结果或状态描述>", wait: false|true })`,
       "```",
       "",
-      "这条消息会被自动 deliver 到父 thread 的 inbox，父 LLM 下一轮就能看到。",
+      "这条消息会被自动 deliver 到 parent 线程的 inbox，parent LLM 下一轮就能看到。",
       "",
       "**重要边界**：",
       "- `end` method 只用于声明本轮**自己**结束，**不是回报通道**。",
-      "- 即便 end 接受 `result` 参数（便捷糖），它内部仍是模拟在 creator window 上调一次 continue；",
-      "  多段对话 / 复杂状态汇报，请显式走 `creator_do_window.continue`，不要塞到 end 里。",
-      "- 不要 hallucinate \"reply\" / \"report\" / \"finish_with\" 等不存在的 method；只有 continue / wait / close。",
+      "- 即便 end 接受 `result` 参数（便捷糖），它内部仍是模拟向 parent 回一条 do_continue；",
+      `  多段对话 / 复杂状态汇报，请显式走 \`do_continue(target="${parentThreadId}", ...)\`，不要塞到 end 里。`,
+      "- 不要 hallucinate \"reply\" / \"report\" / \"finish_with\" 等不存在的 method；回报就用 do_continue。",
     ].join("\n");
   }
   // talk creator window —— OOC-4 L5c：回信经 root.talk(target=<caller objectId>)，不再用 talk_window.say。

@@ -19,6 +19,26 @@ export function threadFile(ref: ThreadPersistenceRef): string {
 }
 
 /**
+ * 递归重建 thread 树里每个 child 的 _parentThreadRef（运行时反向引用，不持久化）。
+ *
+ * 自顶向下遍历 childThreads；每个 child 的 _parentThreadRef 指向加载树里它的直接 parent。
+ * 与 command.do.ts fork 时建立的链等价，使 reload 后树内 child→parent 上行（findThreadInScope）可用。
+ */
+function rebuildParentThreadRefs(parent: ThreadContext): void {
+  const children = parent.childThreads;
+  if (!children) return;
+  for (const child of Object.values(children)) {
+    Object.defineProperty(child, "_parentThreadRef", {
+      value: parent,
+      enumerable: false,
+      writable: true,
+      configurable: true,
+    });
+    rebuildParentThreadRefs(child);
+  }
+}
+
+/**
  * 持久化前剥离 in-process 内存字段。
  *
  * 当前规则:
@@ -99,6 +119,14 @@ export async function readThread(
       contextWindows,
       persistence,
     };
+    // OOC-4 L6b / D5（Critical 4）：重建线程树里每个 child 的 _parentThreadRef 运行时反向引用。
+    //
+    // _parentThreadRef 是 root.do fork 时建立的运行时链（command.do.ts），thread.json 序列化时
+    // 被 strip（non-enumerable + 避免循环引用）。reload 后若不重建，树内 child→parent 的显式
+    // do_continue 回报会因 findThreadInScope 上行无路而静默断（helpers.ts:52-53 承认的预存 gap）。
+    // 这里在 persistable 层 supplement 该链——正是该注释指定的归属点。
+    // （truly-standalone child〔readThread(childId) 无 parent 树〕仍靠 deliverDoMessage 的 notify 兜底。）
+    rebuildParentThreadRefs(restored);
     // 兜底：缺 creator window 时补一个（spec § 初始 creator 对话 window）
     initContextWindows(restored, {
       creatorThreadId: restored.creatorThreadId,

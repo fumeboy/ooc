@@ -3,16 +3,17 @@
  *
  * spec: docs/superpowers/specs/2026-05-17-wait-requires-dependency-design.md
  * OOC-4 L5c（talk 塌缩）：agent 不再持有自建 talk_window；等某 peer 回信改为按 talks.json
- * peer objectId 指定（`on=<peerObjectId>`）。仍兼容两类 window-id 来源：
- *   - do_window（等子线程回报，`on=<do_window id>`，window 须 running）
- *   - 仍存在的 creator talk_window（callee thread 自带、指向 caller，`on=<window id>`）
+ * peer objectId 指定（`on=<peerObjectId>`）。
+ * OOC-4 L6b（do 塌缩）：do_window 已 render-skip；等子线程改按**子线程 id**（childThreadId）指定
+ * （`on=<childThreadId>`，子线程须 running）。仍兼容 creator talk_window（callee thread 自带、
+ * 指向 caller，`on=<window id>`）。
  *
- * - `on` 必填：必须 resolve 到合法来源（do_window id / creator talk_window id / talks.json peer id）。
+ * - `on` 必填：必须 resolve 到合法来源（子线程 id / creator talk_window id / talks.json peer id）。
  * - 没有任何合法 `on` 候选时 → reject，强 nudge 改 end method。
  * - thread.inboxSnapshotAtWait 仍用于 wakeup；thread.waitingOn 仅作 observability，不参与 wakeup 决策。
  *
  * **典型路径**：要给某 peer 发消息并等回信，优先用 `talk(target, content, wait:true)` 一步合一，
- * 不需要先 talk 再单独 wait。`wait` 工具用于：等子线程（do_window）、等 creator 发新消息、
+ * 不需要先 talk 再单独 wait。`wait` 工具用于：等子线程（on=<childThreadId>）、等 creator 发新消息、
  * 等某已开会话 peer 的下一条回信（按 peer objectId）。
  */
 
@@ -23,7 +24,7 @@ import { readTalks, type FlowObjectRef } from "../../persistable/index.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 interface WaitCandidate {
-  /** 候选 id：window id（do / creator-talk）或 talks.json peer objectId。 */
+  /** 候选 id：do 子线程 id（childThreadId）/ creator talk_window id / talks.json peer objectId。 */
   id: string;
   kind: "talk-window" | "talk-peer" | "do";
   hint: string;
@@ -38,22 +39,25 @@ function flowRefOf(thread: ThreadContext): FlowObjectRef | undefined {
 
 /**
  * 合法 IO 来源候选列表（附 hint 帮 LLM 自纠时选对）：
- * - do_window（running）：等子线程回报，按 window id。
+ * - do 子线程（running，非 creator）：等子线程回报，按子线程 id（childThreadId）。
  * - creator talk_window（仍存在）：等创建者发新消息，按 window id。
  * - talks.json peer：已与某 peer 开过会话，等该 peer 下一条回信，按 peer objectId。
  */
 async function listValidWaitTargets(thread: ThreadContext): Promise<WaitCandidate[]> {
   const out: WaitCandidate[] = [];
 
-  // 1) window 来源：do（running）/ creator talk_window（仍存在）。
+  // 1) window 来源：do 子线程（running）/ creator talk_window（仍存在）。
   for (const w of thread.contextWindows ?? []) {
     switch (w.type) {
       case "do": {
-        if (w.status !== "running") break;
+        // OOC-4 L6b：do_window 已 render-skip；wait 候选改按子线程 id（childThreadId=targetThreadId）。
+        // 仅非 creator 的 do_window（parent 侧，等子线程回报）；creator do_window 是 child 侧
+        // 回报口（do_continue(target=parent)），不作 wait child 用。
+        if (w.status !== "running" || w.isCreatorWindow) break;
         out.push({
-          id: w.id,
+          id: w.targetThreadId,
           kind: "do",
-          hint: `do (target_thread=${w.targetThreadId}) — 等子线程回报`,
+          hint: `child=${w.targetThreadId} — 等子线程回报`,
         });
         break;
       }
@@ -117,7 +121,7 @@ export const WAIT_TOOL: LlmTool = {
   name: "wait",
   description:
     "声明你在等指定来源上的未来 IO 事件，把当前 thread 切到 waiting。" +
-    "on 必填且必须 resolve 到合法来源：do_window id（等子线程）/ creator talk_window id（等创建者）/ " +
+    "on 必填且必须 resolve 到合法来源：子线程 id（等子线程回报）/ creator talk_window id（等创建者）/ " +
     "talks.json peer objectId（等已开会话的某 peer 回信）。没有合法 on 时不能 wait——" +
     "意味着任务已完成 / 无 IO 预期，请改用 end method 收尾。" +
     "提示：要给某 peer 发消息并等回信，优先用 talk(target,content,wait:true) 一步合一。",
@@ -128,8 +132,8 @@ export const WAIT_TOOL: LlmTool = {
       on: {
         type: "string",
         description:
-          "未来 IO 来源。可为：do_window id（子线程必须仍 running）；creator talk_window id；" +
-          "或 talks.json 里已开会话的 peer objectId（等该 peer 回信）。",
+          "未来 IO 来源。可为：子线程 id（你 do 出来的子线程，必须仍 running，见 <self_view><active_children>）；" +
+          "creator talk_window id；或 talks.json 里已开会话的 peer objectId（等该 peer 回信）。",
       },
       reason: {
         type: "string",
@@ -151,7 +155,7 @@ export async function handleWaitTool(
   // R5: thread 没有任何合法候选 → 强 nudge end，无论 on 给没给
   if (candidates.length === 0) {
     return errorOutput(
-      "[wait] 本 thread 没有任何可等待的 IO 来源——没有 open 的 do_window、" +
+      "[wait] 本 thread 没有任何可等待的 IO 来源——没有进行中的子线程、" +
         "没有 creator talk_window、talks.json 里也没有已开会话的 peer。\n" +
         "这意味着任务已经完成且不期望更多输入。请改用 end method 收尾：\n" +
         "  exec(method=\"end\", title=\"...\", args={ summary: \"<本次工作结论>\" })",
@@ -173,12 +177,19 @@ export async function handleWaitTool(
     return enterWaiting(thread, onRaw, args, `talk peer=${onRaw}`);
   }
 
+  // OOC-4 L6b：do 子线程按子线程 id（childThreadId）匹配——do_window 已 render-skip，
+  // 不再按 window id 寻址。
+  const doCandidate = candidates.find((c) => c.kind === "do" && c.id === onRaw);
+  if (doCandidate) {
+    return enterWaiting(thread, onRaw, args, `do child=${onRaw}`);
+  }
+
   const target = findWindow(thread, onRaw);
 
-  // R2: on resolve 失败（既非 window 也非已知 peer）
+  // R2: on resolve 失败（既非 window 也非已知 peer / 子线程）
   if (!target) {
     return errorOutput(
-      `[wait] on="${onRaw}" 未匹配到任何 window 或已开会话的 peer。\n` +
+      `[wait] on="${onRaw}" 未匹配到任何 window、已开会话的 peer 或进行中的子线程。\n` +
         "合法候选：\n" +
         renderCandidates(candidates),
     );
@@ -192,7 +203,7 @@ export async function handleWaitTool(
         : "";
     return errorOutput(
       `[wait] on="${onRaw}" 指向的是 ${target.type} window，不能作为 IO 来源——` +
-        "只有 do_window（等子线程）/ creator talk_window（等创建者）/ talks.json peer（等回信）" +
+        "只有子线程 id（等子线程）/ creator talk_window（等创建者）/ talks.json peer（等回信）" +
         "可被 wait 引用。" +
         typeSpecificHint +
         "\n当前合法候选：\n" +
@@ -208,10 +219,19 @@ export async function handleWaitTool(
         renderCandidates(candidates),
     );
   }
-  if (target.type === "do" && target.status !== "running") {
+  if (target.type === "do") {
+    // OOC-4 L6b：do_window 已 render-skip 且改按子线程 id 寻址。
+    // - archived（子线程已结束）→ 沿用原 reject 文案（archived / 非 running）。
+    // - running 却被按 window id 传入 → 指引改用子线程 id（childThreadId=targetThreadId）。
+    if (target.status !== "running") {
+      return errorOutput(
+        `[wait] do_window "${onRaw}" 状态是 ${target.status}（非 running），子线程已结束。\n` +
+          "当前合法候选：\n" +
+          renderCandidates(candidates),
+      );
+    }
     return errorOutput(
-      `[wait] do_window "${onRaw}" 状态是 ${target.status}（非 running），子线程已结束。\n` +
-        "当前合法候选：\n" +
+      `[wait] do 子线程改用子线程 id 等待（不再按 do_window id）。请用 on="${target.targetThreadId}"：\n` +
         renderCandidates(candidates),
     );
   }
@@ -225,11 +245,7 @@ export async function handleWaitTool(
     );
   }
 
-  const targetDesc =
-    target.type === "talk"
-      ? `creator talk (peer=${target.target})`
-      : `do (target_thread=${target.targetThreadId})`;
-  return enterWaiting(thread, onRaw, args, targetDesc);
+  return enterWaiting(thread, onRaw, args, `creator talk (peer=${target.target})`);
 }
 
 /** Happy path：进 waiting，写 inboxSnapshotAtWait + waitingOn（observability）。 */

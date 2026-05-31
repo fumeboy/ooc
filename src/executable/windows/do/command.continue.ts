@@ -3,8 +3,7 @@ import type {
   MethodKnowledgeEntries,
   MethodEntry,
 } from "../_shared/method-types.js";
-import { notifyThreadActivated } from "../../../observable/index.js";
-import { appendInbox, findThreadInScope, makeMessage } from "./helpers.js";
+import { deliverDoMessage } from "./deliver.js";
 
 const DO_WINDOW_CONTINUE_BASIC = "internal/windows/do/continue/basic";
 const DO_WINDOW_CONTINUE_INPUT = "internal/windows/do/continue/input";
@@ -36,41 +35,12 @@ async function executeDoWindowContinue(ctx: MethodExecutionContext): Promise<str
   if (!window || window.type !== "do") {
     return "[do_window.continue] 未挂载在 do_window 上，无法执行。";
   }
-  const targetThreadId = window.targetThreadId;
-  // 同时支持 parent→child（findChild 向下）与 child→parent（沿 _parentThreadRef 向上）
-  // 用法；后者是 root cause #1 子→父 reply 协议的实现基础。
-  const target = findThreadInScope(thread, targetThreadId);
-  if (!target) {
-    return `[do_window.continue] 找不到目标线程 ${targetThreadId}。`;
-  }
-
   const content = typeof ctx.args.msg === "string" ? ctx.args.msg : "";
   if (!content) return "[do_window.continue] 缺少 msg。";
 
-  const message = makeMessage(thread.id, targetThreadId, content);
-  appendInbox(target, message);
-  if (target.status === "done" || target.status === "failed") {
-    target.status = "running";
-  }
-  thread.outbox = [...(thread.outbox ?? []), message];
-
-  if (ctx.args.wait === true) {
-    thread.status = "waiting";
-    thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0;
-    thread.waitingOn = ctx.parentWindow?.id;
-  }
-
-  // 根因 #5：父→子 / 子→父 inbox 写入后通知 runtime 入队 target。
-  // target.persistence 可能缺失（child thread 在父 thread 内存树里时只挂在父 thread.json
-  // 上，没独立 ref）— 此时无需通知，target 与父在同一 thread.json，下一轮 runJob 自然处理。
-  if (target.persistence) {
-    notifyThreadActivated({
-      sessionId: target.persistence.sessionId,
-      objectId: target.persistence.objectId,
-      threadId: target.id,
-    });
-  }
-  return undefined;
+  // OOC-4 L6b：核心搬入 deliverDoMessage（共享给 root.do_continue）。do_window.continue 本身
+  // 保留作内部数据/end.result 路径（end.ts 仍 import continueCommand）；行为不变。
+  return deliverDoMessage(thread, window.targetThreadId, content, ctx.args.wait === true);
 }
 
 export const continueCommand: MethodEntry = {

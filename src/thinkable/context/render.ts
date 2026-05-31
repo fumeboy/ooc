@@ -222,12 +222,16 @@ async function renderWindowNode(
 /**
  * 渲染 thread.contextWindows 的整体节点，按 root 下的直接子 window 自顶向下展开。
  *
- * OOC-4 L5c：talk_window 不再渲染（agent 经 <self_view><talks> 自视切片看会话）；
- * 这里直接从 all 里剔除 talk 窗口，使其既不作为顶层节点出现，也不作为某 window 的 sub_window 展开。
- * （TalkWindow 类型仍存在：service.ts/前端/creator talk_window 路由仍用——Phase D 才整体擦除。）
+ * OOC-4 L5c：talk_window 不再渲染（agent 经 <self_view><talks> 自视切片看会话）。
+ * OOC-4 L6b：do_window 同样不再渲染——agent 经 <self_view><active_children>（parent 看子线程）
+ * 与 <self_view><parent_task>（child 看 parent 任务/回报口）自视切片交互；root.do_continue /
+ * do_close 替代 do_window 上的 continue / close method。
+ * 这里直接从 all 里剔除 talk + do 窗口，使其既不作为顶层节点出现，也不作为某 window 的 sub_window 展开。
+ * （TalkWindow / DoWindow 类型仍存在：service.ts/前端/creator window 路由 + do 消息 consumed 标记 +
+ * renderDoWindow hook 注册仍用——L6c 才整体擦除类型与 hook。）
  */
 async function renderContextWindowsNode(thread: ThreadContext): Promise<XmlNode | null> {
-  const all = (thread.contextWindows ?? []).filter((w) => w.type !== "talk");
+  const all = (thread.contextWindows ?? []).filter((w) => w.type !== "talk" && w.type !== "do");
   if (all.length === 0) return null;
 
   const topLevel = all.filter((w) => !w.parentWindowId || w.parentWindowId === ROOT_WINDOW_ID);

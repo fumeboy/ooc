@@ -29,6 +29,24 @@ function findCreatorDoWindow(thread: ThreadContext): DoWindow {
   return found;
 }
 
+/**
+ * 给 thread 挂一个 running 的非 creator do_window（= parent 侧子线程对话）。
+ * OOC-4 L6b：wait 候选改按子线程 id（childThreadId=targetThreadId），故返回 childThreadId。
+ */
+function addRunningChildDo(thread: ThreadContext, childThreadId = "t_child_running"): string {
+  const childDo: DoWindow = {
+    id: generateWindowId("do"),
+    type: "do",
+    parentWindowId: ROOT_WINDOW_ID,
+    title: "子线程任务",
+    status: "running",
+    createdAt: Date.now(),
+    targetThreadId: childThreadId,
+  };
+  thread.contextWindows = [...thread.contextWindows, childDo];
+  return childThreadId;
+}
+
 async function callWaitAsync(
   thread: ThreadContext,
   args: Record<string, unknown>,
@@ -40,23 +58,28 @@ async function callWaitAsync(
 describe("wait tool — explicit IO dependency (spec 2026-05-17)", () => {
   it("R1: 缺 on → reject 且枚举候选", async () => {
     const thread = makeThread();
+    // OOC-4 L6b：creator do_window 不再是 wait 候选（它是 child 侧回报口）；挂一个 running
+    // 子线程对话作合法候选，验证缺 on 时枚举出 do 候选。
+    const childId = addRunningChildDo(thread);
     const out = await callWaitAsync(thread, { reason: "等一下" });
     expect(out.ok).toBe(false);
     expect(out.error).toContain("on");
-    // makeThread 默认注入 creator do_window 作为候选
     expect(out.error).toMatch(/do/);
+    expect(out.error).toContain(childId);
   });
 
   it("R2: on 指向不存在的 window → reject 且枚举候选", async () => {
     const thread = makeThread();
+    addRunningChildDo(thread); // 提供合法候选，避免先撞 R5「无任何候选」兜底
     const out = await callWaitAsync(thread, { on: "w_nonexistent" });
     expect(out.ok).toBe(false);
     expect(out.error).toContain("w_nonexistent");
-    expect(out.error).toMatch(/找不到|未在|候选/);
+    expect(out.error).toMatch(/未匹配|找不到|未在|候选/);
   });
 
   it("R3: on 指向 file_window（非 talk/do） → reject 解释类型限制", async () => {
     const thread = makeThread();
+    addRunningChildDo(thread); // 提供合法候选，避免先撞 R5「无任何候选」兜底
     const fw: FileWindow = {
       id: generateWindowId("file"),
       type: "file",
@@ -77,6 +100,7 @@ describe("wait tool — explicit IO dependency (spec 2026-05-17)", () => {
     // OOC-4 L5c：agent 不再自建 talk_window；若仍残留一个非 creator talk_window，
     // wait 拒绝它，指引用 on=<peer objectId>（talks.json peer）。
     const thread = makeThread();
+    addRunningChildDo(thread); // 提供合法候选，确保走 R4 reject 而非 R5「无候选」兜底
     const talk: TalkWindow = {
       id: generateWindowId("talk"),
       type: "talk",
@@ -103,15 +127,26 @@ describe("wait tool — explicit IO dependency (spec 2026-05-17)", () => {
     expect(out.error).toMatch(/没有.*可等待|end method/);
   });
 
-  it("happy: on=<creator do_window> → status=waiting, waitingOn 写入", async () => {
+  it("happy: on=<子线程 id>（running 子线程对话）→ status=waiting, waitingOn 写入", async () => {
+    // OOC-4 L6b：等子线程改按子线程 id（childThreadId），不再按 do_window id；creator do_window
+    // 不作 wait child 用（它是 child→parent 回报口 do_continue(target=parent)）。
+    const thread = makeThread();
+    const childId = addRunningChildDo(thread);
+    const out = await callWaitAsync(thread, { on: childId, reason: "等子" });
+    expect(out.ok).toBe(true);
+    expect(out.on).toBe(childId);
+    expect(thread.status).toBe("waiting");
+    expect(thread.waitingOn).toBe(childId);
+    expect(thread.inboxSnapshotAtWait).toBe(0);
+  });
+
+  it("creator do_window 不再是 wait 候选（child 侧回报口走 do_continue(target=parent)）", async () => {
     const thread = makeThread();
     const creatorDo = findCreatorDoWindow(thread);
-    const out = await callWaitAsync(thread, { on: creatorDo.id, reason: "等子" });
-    expect(out.ok).toBe(true);
-    expect(out.on).toBe(creatorDo.id);
-    expect(thread.status).toBe("waiting");
-    expect(thread.waitingOn).toBe(creatorDo.id);
-    expect(thread.inboxSnapshotAtWait).toBe(0);
+    // 只有 creator do_window、无其它候选 → 撞 R5「无任何候选」兜底。
+    const out = await callWaitAsync(thread, { on: creatorDo.id });
+    expect(out.ok).toBe(false);
+    expect(out.error).toMatch(/没有.*可等待|end method/);
   });
 
   it("happy: on=<creator talk_window> → 合法（creator 一律允许）", async () => {
@@ -159,9 +194,10 @@ describe("wait tool — explicit IO dependency (spec 2026-05-17)", () => {
     }
   });
 
-  it("on=archived do_window → reject（do 的 alive 状态是 running）", async () => {
-    // 必须有另一个合法候选，否则会先撞 R5 "无任何候选" 兜底
+  it("on=<archived do_window id> → reject（do 的 alive 状态是 running）", async () => {
+    // 必须有另一个合法候选（running 子线程对话），否则会先撞 R5 "无任何候选" 兜底。
     const thread = makeThread();
+    addRunningChildDo(thread);
     const archived: DoWindow = {
       id: generateWindowId("do"),
       type: "do",
@@ -169,9 +205,11 @@ describe("wait tool — explicit IO dependency (spec 2026-05-17)", () => {
       title: "child task",
       status: "archived",
       createdAt: Date.now(),
-      targetThreadId: "t_child",
+      targetThreadId: "t_child_archived",
     };
     thread.contextWindows = [...thread.contextWindows, archived];
+    // OOC-4 L6b：archived do_window 不在候选里（按子线程 id 寻址），传它的 window id 命中
+    // findWindow → do 分支 reject（archived / 非 running）。
     const out = await callWaitAsync(thread, { on: archived.id });
     expect(out.ok).toBe(false);
     expect(out.error).toMatch(/archived|非 running/);
