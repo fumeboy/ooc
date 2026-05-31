@@ -30,7 +30,8 @@ import {
   hasAnyHistoryViewportField,
 } from "../program/history-viewport.js";
 import { executeProgramCommand } from "../root/command.program.js";
-import { executeProgramWindowExec } from "../program/index.js";
+// OOC-4 L4.2c：executeProgramWindowExec move 进 base；DEFAULT_HISTORY_VIEWPORT 等留 windows/program/history-viewport（上方 import 不变）。
+import { executeProgramWindowExec } from "../../../extendable/base/program/executable/index.js";
 import { makeThread } from "../../../__tests__/make-thread.js";
 
 const NOW = 1_700_000_000_000;

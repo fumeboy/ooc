@@ -22,23 +22,25 @@ import {
   resolveAllMethods,
   clearBehaviorCache,
 } from "../behavior";
+// OOC-4 L4.2c：proto 专属 behavior 物理 move 进 base/<proto>/executable；本等价门 import 改指 base。
+// 留 windows 的跨域共享 helper（runOneExec / DEFAULT_*_VIEWPORT）不在此 import，故无需改。
 import {
   renderSkillIndex,
   SKILL_INDEX_BASIC_KNOWLEDGE,
-} from "../../skill_index/index";
+} from "../../../../extendable/base/skill_index/executable/index";
 import {
   execCommand as programExec,
   closeCommand as programClose,
   setHistoryWindowCommand as programSetHistory,
   renderProgramWindow,
-} from "../../program/index";
+} from "../../../../extendable/base/program/executable/index";
 import {
   closeCommand as searchClose,
   openMatchCommand as searchOpenMatch,
   renderSearchWindow,
   SEARCH_WINDOW_BASIC_KNOWLEDGE,
-} from "../../search/index";
-import { setResultsWindowCommandForSearch } from "../../search/command.set-results-window";
+} from "../../../../extendable/base/search/executable/index";
+import { setResultsWindowCommandForSearch } from "../../../../extendable/base/search/executable/command.set-results-window";
 import {
   setRangeCommand as fileSetRange,
   setViewportCommand as fileSetViewport,
@@ -46,13 +48,19 @@ import {
   editCommand as fileEdit,
   closeCommand as fileClose,
   renderFileWindow,
-} from "../../file/index";
+} from "../../../../extendable/base/file/executable/index";
 import {
   reloadCommand as knowledgeReload,
   closeCommand as knowledgeClose,
   setViewportCommand as knowledgeSetViewport,
   renderKnowledgeWindow,
-} from "../../knowledge/index";
+} from "../../../../extendable/base/knowledge/executable/index";
+// OOC-4 L4.2c M1：薄壳的 side-effect import 触发 registerWindowType（onClose/compressView 注册回 registry）。
+import "../../skill_index/index";
+import "../../knowledge/index";
+import "../../file/index";
+import "../../search/index";
+import { getWindowTypeDefinition } from "../registry";
 import type { RenderContext } from "../registry";
 import type { SkillIndexWindow } from "../types";
 import { SKILL_INDEX_WINDOW_ID } from "../types";
@@ -257,5 +265,22 @@ describe("L4.2 proto transcription equivalence (program/search/file/knowledge)",
     const originalNodes = await renderProgramWindow(ctx);
     const wrap = (nodes: typeof chainNodes) => nodes.map((n) => serializeXml(n)).join("\n");
     expect(wrap(chainNodes)).toBe(wrap(originalNodes));
+  });
+});
+
+describe("L4.2c M1: registry-served hooks still registered (onClose/compressView body 搬 base，薄壳 import 回来注册)", () => {
+  // onClose/compressView 是 L4 排除项、仍 registry-served（manager close / render compressLevel≥1 取之）。
+  // 行为真源搬进 base 后，薄壳必须 import 回来注册——本门守住「薄壳没漏注册」。
+  test("knowledge.onClose registered via thin shell", () => {
+    expect(getWindowTypeDefinition("knowledge").onClose).toBeDefined();
+  });
+  test("skill_index.onClose registered via thin shell", () => {
+    expect(getWindowTypeDefinition("skill_index").onClose).toBeDefined();
+  });
+  test("file.compressView registered via thin shell", () => {
+    expect(getWindowTypeDefinition("file").compressView).toBeDefined();
+  });
+  test("search.compressView registered via thin shell", () => {
+    expect(getWindowTypeDefinition("search").compressView).toBeDefined();
   });
 });

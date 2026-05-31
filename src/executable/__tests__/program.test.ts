@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, test } from "bun:test";
 import { runOneExec } from "../windows/program/runtime";
 import { executeProgramCommand } from "../windows/root/command.program";
-import { executeProgramWindowExec } from "../windows/program";
+// OOC-4 L4.2c：executeProgramWindowExec move 进 base；runOneExec 留 windows/program/runtime（上方 import 不变）。
+import { executeProgramWindowExec } from "../../extendable/base/program/executable/index";
 import type { ProgramWindow } from "../windows/_shared/types";
 import { createStoneObject, writeExecutableSource } from "../../persistable";
 import { clearServerLoaderCache } from "../server/loader";

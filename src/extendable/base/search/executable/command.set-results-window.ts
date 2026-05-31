@@ -1,22 +1,24 @@
 /**
  * search_window.set_results_window — matches 渲染视口精细化调整（R1b）。
  *
+ * OOC-4 L4.2c：本命令实现物理 move 自 windows/search/command.set-results-window.ts（proto-only helper）。
+ *
  * - 默认 resultsViewport = { tail: 50 } —— 仅渲染末 50 个 match
  * - 通过 set_results_window 切换：
  *     args={ matches_tail: 30 }                       → 末 30 个
  *     args={ matches_start: 0, matches_end: 20 }      → 固定区间 [0, 20)
  * - matches_tail 与 matches_start/matches_end 互斥；同一次调用只传其一
- * - 详见 search/results-viewport.ts + _shared/transcript-viewport.ts
+ * - 详见 windows/search/results-viewport.ts（留 windows，本文件 import 之）+ _shared/transcript-viewport.ts
  */
 
 import type {
   MethodKnowledgeEntries,
   MethodEntry,
-} from "../_shared/method-types.js";
+} from "../../../../executable/windows/_shared/method-types.js";
 import {
   executeSearchSetResultsViewport,
   hasAnyResultsViewportField,
-} from "./results-viewport.js";
+} from "../../../../executable/windows/search/results-viewport.js";
 
 const SEARCH_SET_RESULTS_BASIC =
   "internal/windows/search/set_results_window/basic";

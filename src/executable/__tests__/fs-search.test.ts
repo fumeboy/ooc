@@ -21,9 +21,11 @@ import {
   WindowManager,
   type SearchWindow,
 } from "../windows/index";
+// OOC-4 L4.2c：search proto behavior（含 SEARCH_WINDOW_BASIC_KNOWLEDGE / executeSearchOpenMatch）
+// move 进 base/search/executable；results-viewport 留 windows（本文件未 import 它）。
 import {
   SEARCH_WINDOW_BASIC_KNOWLEDGE,
-} from "../windows/search";
+} from "../../extendable/base/search/executable/index";
 import {
   resolveAllMethods,
   resolveBasicKnowledge,
@@ -602,7 +604,7 @@ describe("U4: root.glob + search_window.open_match", () => {
   });
 
   it("open_match exec edge: missing index error message includes refine recovery hint", async () => {
-    const { executeSearchOpenMatch } = await import("../windows/search");
+    const { executeSearchOpenMatch } = await import("../../extendable/base/search/executable/index");
     const dir = await makeGlobFixtureDir("glob-no-idx-exec", ["a.ts"]);
     const thread = makeThread({ id: "t_open_match_exec_no_idx" });
     await dispatchGlob(thread, { pattern: "*.ts", cwd: dir });
