@@ -18,7 +18,6 @@ export type {
   KnowledgeWindow,
   SearchWindow,
   SearchMatch,
-  RelationWindow,
 } from "./_shared/types.js";
 
 export {
@@ -75,7 +74,6 @@ import "./program/index.js";
 import "./file/index.js";
 import "./knowledge/index.js";
 import "./search/index.js";
-import "./relation/index.js";
 import "./custom/index.js";
 import "./skill_index/index.js";
 

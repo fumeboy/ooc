@@ -62,8 +62,10 @@
 | L1 后半 | readable.ts 动态函数（renderXml 泛化为 per-object，headline 能力） | L2 | |
 | ~~L5a~~ | 自视切片机制 + todo 塌缩（todos.json + todo_* + `<self_view>`）| L4 | ✅ b538d6ae |
 | ~~L5b~~ | plan 塌缩（plan.md + plan_set/clear）| L5a | ✅ 52d5b9b5 |
-| **L5c** | talk 塌缩（talks.json routing + window-free deliverMessage + worker.ts cross-object wake 重写 + tools/wait + service.ts + 前端 + 自视切片）| L5b | ← **下一层（并发核心专项，dual-review 修正 scope 见 L5c plan）** |
-| L6a | relation 删除→siblings/children+talk-peer auto 注入（plan 草案已 review，阻塞=L5c）| L5c | 设计就绪 |
+| ~~L5c A+B~~ | window-free deliverMessage + talks.json 路由 + **worker.ts cross-object wake 改读 talks.json**（并发核心拆险，additive）| L5b | ✅ edf920b2（安全网 e2e Good）|
+| ~~L5c C~~ | talk agent-facing 塌缩（root.talk 合一 + 自视 talks 切片 + 删 say/wait/close/renderTalkWindow + wait.ts 重设计）| L5c-A/B | ✅ 0b4a97ff（安全网 e2e 仍 Good）|
+| L5c D | TalkWindow 类型全擦除 + service.ts user 入口 + 前端 formatter 迁 talks.json | L5c-C | 延 L6c（类型擦除连 registry 死）|
+| **L6a** | relation 删除→siblings/children+talks.json-peer auto 注入 + relation_note(deliverMessage)；阻塞已解（talk 塌缩后 talks.json peers 可用）| L5c | ← **下一层** |
 | L6b | do 塌缩（threads/ + root.do_* + worker.ts cross-object wake；最难）| L6a | 设计就绪(spec) |
 | L6c | registry 终结（onClose/compressView 接链 + command_exec/custom/feishu/root 收编 + 删 getWindowTypeDefinition）| L6b | 设计就绪(spec) |
 | L7 | context/ 物理树（window 状态迁出 thread.json） | L3 | |

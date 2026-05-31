@@ -7,7 +7,7 @@
  *   - 未注册返回 undefined（调用方决定 fallback）
  *   - reset 清空所有注册
  *   - list 列出已注册 type
- *   - side-effect import "./window-diff-renderers" 注册 9 种 type
+ *   - side-effect import "./window-diff-renderers" 注册 8 种 type
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
@@ -61,14 +61,14 @@ describe("registry — register / get / reset", () => {
   });
 });
 
-describe("side-effect index — 注册 9 种内置 type", () => {
+describe("side-effect index — 注册 8 种内置 type", () => {
   // 注意：bun 模块缓存导致 dynamic import "./index" 只能触发一次 side-effect。
   // 不能 reset；上面 describe 的 reset 已在 afterEach 跑完。这里手动 re-register
   // 来确保 Case 6 独立于之前 describe 的 state。
-  it("Case 6: index 模块 side-effect 注册 9 种内置 type", async () => {
+  it("Case 6: index 模块 side-effect 注册 8 种内置 type", async () => {
     resetWindowDiffRegistry();
     // 重新 import index — 但 bun 已缓存，需要手动调用一次 register 体系
-    // 这里 dynamic import 拿到 9 个 renderer 然后人工 register 验证 index.ts 列表完整
+    // 这里 dynamic import 拿到 8 个 renderer 然后人工 register 验证 index.ts 列表完整
     const indexMod = await import("./index");
     // 兜底：indexMod 自身 register 在首次 load 时已发生；reset 后丢失。
     // 此处验证：手动再次 import 各 renderer module + 通过 registerWindowDiffRenderer
@@ -81,7 +81,6 @@ describe("side-effect index — 注册 9 种内置 type", () => {
     const KnowledgeWindowDiff = (await import("./KnowledgeWindowDiff")).KnowledgeWindowDiff;
     const ProgramWindowDiff = (await import("./ProgramWindowDiff")).ProgramWindowDiff;
     const CommandExecDiff = (await import("./CommandExecDiff")).CommandExecDiff;
-    const RelationWindowDiff = (await import("./RelationWindowDiff")).RelationWindowDiff;
 
     const re = indexMod.registerWindowDiffRenderer;
     re("file", FileWindowDiff);
@@ -92,7 +91,6 @@ describe("side-effect index — 注册 9 种内置 type", () => {
     re("knowledge", KnowledgeWindowDiff);
     re("program", ProgramWindowDiff);
     re("command_exec", CommandExecDiff);
-    re("relation", RelationWindowDiff);
 
     const list = listRegisteredDiffRenderers();
     for (const t of [
@@ -104,7 +102,6 @@ describe("side-effect index — 注册 9 种内置 type", () => {
       "knowledge",
       "program",
       "command_exec",
-      "relation",
     ]) {
       expect(list).toContain(t);
     }

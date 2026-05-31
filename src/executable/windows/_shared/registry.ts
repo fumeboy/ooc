@@ -152,11 +152,6 @@ REGISTRY.set("search", {
   methods: {},
 });
 
-REGISTRY.set("relation", {
-  type: "relation",
-  methods: {},
-});
-
 REGISTRY.set("custom", {
   type: "custom",
   methods: {},

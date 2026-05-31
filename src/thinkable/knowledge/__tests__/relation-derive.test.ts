@@ -1,290 +1,165 @@
 /**
- * relation derive — 单元测试
+ * relations 自视切片 — 单元测试（OOC-4 L6a：relation_window 删除 → 自动注入）
  *
- * 覆盖 spec 2026-05-20 relation-window-design + 2026-05-25 R8-5:
- *   - deriveRelationWindow:为每个非 super peer 派生 RelationWindow,带
- *     selfLongTermBody/Exists + selfSessionBody/Exists 字段
- *     (R8-5 删 peer_readme/peerReadmePath: relation 只在 pools/flows;
- *      加 *Exists boolean 给 API caller 区分 lazy-create vs read-fail)
- *   - deriveRelationCompanionKnowledge:已废弃;返回 [](backward-compat shim)
- *
- * 矩阵:long_term × session 关键差分组合;super alias 跳过;多 peer;无 persistence。
+ * 旧 deriveRelationWindow（按 talk_window 派生 RelationWindow）已删；relations 改由
+ * renderSelfView 的 `<relations>` 切片每轮注入（src/thinkable/context/self-view.ts:
+ * renderRelationsSlice）。本测试覆盖：
+ *   - peer 集 = discoverStoneHierarchicalPeers（siblings/children）∪ talks.json peers。
+ *   - 每 peer 渲染 peer_readme（peer readable.md）+ self_long_term（pools relations）
+ *     + self_session（flows relations），exists 才渲。
+ *   - 无任何 peer → 不渲 `<relations>`；nil-persistence → renderSelfView 返回 null。
  */
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   createStoneObject,
   createPoolObject,
+  createFlowObject,
   poolKnowledgeRelationFile,
-  flowRelationFile,
+  writeFlowRelation,
+  writeReadable,
+  setTalkRoute,
   type PoolObjectRef,
   type FlowObjectRef,
 } from "../../../persistable";
 import { makeThread } from "../../../__tests__/make-thread";
-import type { TalkWindow } from "../../../executable/windows/_shared/types";
-import {
-  deriveRelationWindow,
-  deriveRelationCompanionKnowledge,
-  deriveRelationKnowledge,
-} from "../synthesizer";
+import { renderSelfView } from "../../context/self-view";
+import { serializeXml } from "../../context/xml";
 
 const SELF = "alice";
-const PEER = "critic";
 const SID = "s1";
 
-function talkTo(target: string, id = `w_talk_${target}`, createdAt = 1000): TalkWindow {
-  return {
-    id,
-    type: "talk",
-    parentWindowId: "root",
-    title: `talk to ${target}`,
-    status: "open",
-    createdAt,
-    target,
-    conversationId: id,
-  };
-}
-
-function selfThread(baseDir: string, windows: TalkWindow[]) {
-  return makeThread({
+async function selfViewXml(baseDir: string): Promise<string | null> {
+  const thread = makeThread({
     id: "t_root",
     persistence: { baseDir, sessionId: SID, objectId: SELF, threadId: "t_root" },
-    extraWindows: windows,
     skipCreatorWindow: true,
   });
+  const node = await renderSelfView(thread);
+  return node ? serializeXml(node) : null;
 }
 
-async function writeSessionRelation(ref: FlowObjectRef, peerId: string, content: string) {
-  const file = flowRelationFile(ref, peerId);
-  await mkdir(join(file, ".."), { recursive: true });
-  await writeFile(file, content, "utf8");
-}
-
-describe("deriveRelationWindow", () => {
+describe("renderSelfView <relations> 切片", () => {
   let tempRoot: string;
   let selfPoolRef: PoolObjectRef;
   let selfFlowRef: FlowObjectRef;
 
   beforeEach(async () => {
-    tempRoot = await mkdtemp(join(tmpdir(), "ooc-relation-derive-"));
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-relations-slice-"));
     selfPoolRef = { baseDir: tempRoot, objectId: SELF };
     selfFlowRef = { baseDir: tempRoot, sessionId: SID, objectId: SELF };
-    // 只创 self stone;不创 PEER 与 reviewer stone,避免 hierarchical sibling 扫描
-    // (spec 2026-05-27 default visibility) 把它们当默认 sibling 自动注入 relation_window,
-    // 干扰本测试只测 talk_window-derived 路径。
     await createStoneObject({ baseDir: tempRoot, objectId: SELF });
     await createPoolObject(selfPoolRef);
+    await createFlowObject({ baseDir: tempRoot, sessionId: SID, objectId: SELF });
   });
 
   afterEach(async () => {
     await rm(tempRoot, { recursive: true, force: true });
   });
 
-  test("每个非 super peer 派生 1 个 RelationWindow,id=w_rel_<peer>", async () => {
-    const thread = selfThread(tempRoot, [talkTo(PEER)]);
-    const out = await deriveRelationWindow(thread);
-    expect(out).toHaveLength(1);
-    expect(out[0]!.type).toBe("relation");
-    expect(out[0]!.peerId).toBe(PEER);
-    expect(out[0]!.id).toBe(`w_rel_${PEER}`);
-    expect(out[0]!.parentWindowId).toBe("root");
-    expect(out[0]!.status).toBe("open");
-    expect(out[0]!.title).toBe(`relation: ${PEER}`);
-    // 路径字段:始终给出,不论文件是否存在
-    // R8-5: peerReadmePath 已删除（relation 只在 pools/flows）
-    expect(out[0]!.selfLongTermPath).toBe(`pools/${SELF}/knowledge/relations/${PEER}.md`);
-    expect(out[0]!.selfSessionPath).toBe(`flows/${SID}/objects/${SELF}/knowledge/relations/${PEER}.md`);
-    // R8-5: 新增 exists flag
-    expect(out[0]!.selfLongTermExists).toBe(false);
-    expect(out[0]!.selfSessionExists).toBe(false);
+  test("无任何 peer（无 sibling/child、无 talks.json） → 不渲 <relations>", async () => {
+    const xml = await selfViewXml(tempRoot);
+    // 无 plan/todos/talks/relations → renderSelfView 整体返回 null
+    expect(xml).toBeNull();
   });
 
-  test("super alias 跳过:target='super' 不派生 RelationWindow", async () => {
-    const thread = selfThread(tempRoot, [talkTo("super")]);
-    const out = await deriveRelationWindow(thread);
-    expect(out).toHaveLength(0);
+  test("同级 sibling stone 自动进 relations 切片", async () => {
+    await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
+    const xml = await selfViewXml(tempRoot);
+    expect(xml).not.toBeNull();
+    expect(xml).toContain("<relations>");
+    expect(xml).toContain('<relation peer_id="bob">');
   });
 
-  test("同 peer 多 talk_window 去重为 1 个 RelationWindow", async () => {
-    const thread = selfThread(tempRoot, [
-      talkTo(PEER, "w_talk_critic_1"),
-      talkTo(PEER, "w_talk_critic_2"),
-    ]);
-    const out = await deriveRelationWindow(thread);
-    expect(out).toHaveLength(1);
-    expect(out[0]!.peerId).toBe(PEER);
+  test("一级 children stone 自动进 relations 切片；深层不递归", async () => {
+    await createStoneObject({ baseDir: tempRoot, objectId: `${SELF}/sub1` });
+    await createStoneObject({ baseDir: tempRoot, objectId: `${SELF}/sub1/grand` });
+    const xml = await selfViewXml(tempRoot);
+    expect(xml).toContain(`<relation peer_id="${SELF}/sub1">`);
+    expect(xml).not.toContain("grand");
   });
 
-  test("createdAt 取该 peer 最早的 talk_window.createdAt(stable across polls)", async () => {
-    const thread = selfThread(tempRoot, [
-      talkTo(PEER, "w_talk_critic_1", 5000),
-      talkTo(PEER, "w_talk_critic_2", 1000),
-      talkTo(PEER, "w_talk_critic_3", 3000),
-    ]);
-    const out = await deriveRelationWindow(thread);
-    expect(out).toHaveLength(1);
-    expect(out[0]!.createdAt).toBe(1000);
+  test("talks.json peer（含 user）自动进 relations 切片，即便不是 sibling/child", async () => {
+    // user 不是 Agent stone，但与之 talk 过 → 应进 relations
+    await setTalkRoute(selfFlowRef, "user", { conversationId: "conv_user_1", targetThreadId: "t_user" });
+    const xml = await selfViewXml(tempRoot);
+    expect(xml).toContain('<relation peer_id="user">');
   });
 
-  test("multi-peer:每个 peer 产出独立 RelationWindow", async () => {
-    const thread = selfThread(tempRoot, [talkTo(PEER), talkTo("reviewer")]);
-    const out = await deriveRelationWindow(thread);
-    expect(out).toHaveLength(2);
-    const ids = out.map((w) => w.id).sort();
-    expect(ids).toEqual([`w_rel_${PEER}`, "w_rel_reviewer"]);
+  test("super alias 不计入 relations（talks.json['super'] 跳过）", async () => {
+    await setTalkRoute(selfFlowRef, "super", { conversationId: "conv_super_1" });
+    const xml = await selfViewXml(tempRoot);
+    // 只有 super 路由、无其它 peer → 不渲 relations
+    expect(xml).toBeNull();
   });
 
-  test("无 persistence:返回空", async () => {
-    const thread = makeThread({
-      id: "t_root",
-      extraWindows: [talkTo(PEER)],
-      skipCreatorWindow: true,
-    });
-    const out = await deriveRelationWindow(thread);
-    expect(out).toHaveLength(0);
+  test("siblings/children ∪ talks.json peers 并集去重", async () => {
+    await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
+    await setTalkRoute(selfFlowRef, "bob", { conversationId: "conv_bob" });
+    await setTalkRoute(selfFlowRef, "critic", { conversationId: "conv_critic" });
+    const xml = await selfViewXml(tempRoot);
+    // bob 既是 sibling 又有 talk 路由 → 只出现一次
+    expect(xml!.match(/<relation peer_id="bob">/g)?.length).toBe(1);
+    expect(xml).toContain('<relation peer_id="critic">');
   });
 
-  describe("body + exists fields(R8-5: 删 peer_readme; 加 *Exists flag)", () => {
-    test("00: long_term 缺 + session 缺 → body undefined + exists=false", async () => {
-      const thread = selfThread(tempRoot, [talkTo(PEER)]);
-      const out = await deriveRelationWindow(thread);
-      expect(out).toHaveLength(1);
-      expect(out[0]!.selfLongTermBody).toBeUndefined();
-      expect(out[0]!.selfLongTermExists).toBe(false);
-      expect(out[0]!.selfSessionBody).toBeUndefined();
-      expect(out[0]!.selfSessionExists).toBe(false);
-    });
-
-    test("long_term + session 都在 → 两个 body 含实际内容 + exists=true", async () => {
-      await writeFile(poolKnowledgeRelationFile(selfPoolRef, PEER), "我对 critic 的长期认知", "utf8");
-      await writeSessionRelation(selfFlowRef, PEER, "本 session 临时认知");
-      const thread = selfThread(tempRoot, [talkTo(PEER)]);
-      const out = await deriveRelationWindow(thread);
-      expect(out[0]!.selfLongTermBody).toBe("我对 critic 的长期认知");
-      expect(out[0]!.selfLongTermExists).toBe(true);
-      expect(out[0]!.selfSessionBody).toBe("本 session 临时认知");
-      expect(out[0]!.selfSessionExists).toBe(true);
-    });
-
-    test("仅 session 存在 → long_term undefined+exists=false, session 含内容+exists=true", async () => {
-      await writeSessionRelation(selfFlowRef, PEER, "session-only 内容");
-      const thread = selfThread(tempRoot, [talkTo(PEER)]);
-      const out = await deriveRelationWindow(thread);
-      expect(out[0]!.selfLongTermBody).toBeUndefined();
-      expect(out[0]!.selfLongTermExists).toBe(false);
-      expect(out[0]!.selfSessionBody).toBe("session-only 内容");
-      expect(out[0]!.selfSessionExists).toBe(true);
-    });
-
-    test("multi-peer:每个 peer 的 body 字段独立", async () => {
-      const reviewerPoolRef: PoolObjectRef = { baseDir: tempRoot, objectId: "reviewer" };
-      await createPoolObject(reviewerPoolRef);
-      // 写两个 peer 的 long_term 到 self 的 pool, 验证 multi-peer 不串台
-      await writeFile(poolKnowledgeRelationFile(selfPoolRef, PEER), "对 critic 的认知", "utf8");
-      await writeFile(poolKnowledgeRelationFile(selfPoolRef, "reviewer"), "对 reviewer 的认知", "utf8");
-      const thread = selfThread(tempRoot, [talkTo(PEER), talkTo("reviewer")]);
-      const out = await deriveRelationWindow(thread);
-      const critic = out.find((w) => w.peerId === PEER)!;
-      const reviewer = out.find((w) => w.peerId === "reviewer")!;
-      expect(critic.selfLongTermBody).toBe("对 critic 的认知");
-      expect(reviewer.selfLongTermBody).toBe("对 reviewer 的认知");
-    });
+  test("peer readable.md 有内容 → 渲 peer_readme", async () => {
+    await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
+    await writeReadable({ baseDir: tempRoot, objectId: "bob" }, "## bob\n是个评审 Agent");
+    const xml = await selfViewXml(tempRoot);
+    expect(xml).toContain("<peer_readme");
+    expect(xml).toContain("是个评审 Agent");
   });
 
-  describe("default visibility(spec 2026-05-27): 同级 + 一级 children 默认派生 relation_window", () => {
-    test("top-level 同级 sibling 默认进 relation_window 列表", async () => {
-      // 同级 stone:bob; 一级 children 不存在
-      await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
-      const thread = selfThread(tempRoot, []);
-      const out = await deriveRelationWindow(thread);
-      const ids = out.map((w) => w.peerId).sort();
-      expect(ids).toEqual(["bob"]);
-    });
-
-    test("一级 children 默认进 relation_window 列表;深层不递归", async () => {
-      await createStoneObject({ baseDir: tempRoot, objectId: `${SELF}/sub1` });
-      await createStoneObject({ baseDir: tempRoot, objectId: `${SELF}/sub2` });
-      // 深层孙不算
-      await createStoneObject({ baseDir: tempRoot, objectId: `${SELF}/sub1/grand` });
-      const thread = selfThread(tempRoot, []);
-      const out = await deriveRelationWindow(thread);
-      const ids = out.map((w) => w.peerId).sort();
-      expect(ids).toEqual([`${SELF}/sub1`, `${SELF}/sub2`]);
-    });
-
-    test("user 永远不在 sibling 列表(passive object)", async () => {
-      await createStoneObject({ baseDir: tempRoot, objectId: "user" });
-      await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
-      const thread = selfThread(tempRoot, []);
-      const out = await deriveRelationWindow(thread);
-      expect(out.map((w) => w.peerId).sort()).toEqual(["bob"]);
-    });
-
-    test("talk_window 已有的 peer 优先用 talk createdAt(不被 hierarchical 覆盖)", async () => {
-      await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
-      const thread = selfThread(tempRoot, [talkTo("bob", "w_talk_bob", 1234)]);
-      const out = await deriveRelationWindow(thread);
-      const bob = out.find((w) => w.peerId === "bob")!;
-      expect(bob.createdAt).toBe(1234);
-    });
+  test("peer 无 readable / 空 readable → 不渲 peer_readme", async () => {
+    // createStoneObject 默认写空 readable.md
+    await createStoneObject({ baseDir: tempRoot, objectId: "empty" });
+    const xml = await selfViewXml(tempRoot);
+    expect(xml).toContain('<relation peer_id="empty">');
+    expect(xml).not.toContain("<peer_readme");
   });
 
-  describe("peer_readme(spec 2026-05-27): peer stone readme 作为 RelationWindow 只读字段", () => {
-    test("peer 有 readme 内容 → peerReadmeBody 含内容 + peerReadmeExists=true", async () => {
-      const { writeReadable } = await import("../../../persistable");
-      await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
-      await writeReadable({ baseDir: tempRoot, objectId: "bob" }, "## bob\n是个评审 Agent");
-      const thread = selfThread(tempRoot, [talkTo("bob")]);
-      const out = await deriveRelationWindow(thread);
-      const bob = out.find((w) => w.peerId === "bob")!;
-      expect(bob.peerReadmeExists).toBe(true);
-      expect(bob.peerReadmeBody).toBe("## bob\n是个评审 Agent");
-      expect(bob.peerReadmePath).toMatch(/stones\/.*\/objects\/bob\/readable\.md$/);
-    });
-
-    test("peer 没 readme 文件 → peerReadmeExists=false + peerReadmeBody undefined", async () => {
-      const thread = selfThread(tempRoot, [talkTo("ghost")]);
-      const out = await deriveRelationWindow(thread);
-      const ghost = out.find((w) => w.peerId === "ghost")!;
-      expect(ghost.peerReadmeExists).toBe(false);
-      expect(ghost.peerReadmeBody).toBeUndefined();
-    });
-
-    test("peer readme 是空文件 → exists=true 但 body=undefined(空文件不渲染)", async () => {
-      // createStoneObject 默认写空 readme
-      await createStoneObject({ baseDir: tempRoot, objectId: "empty" });
-      const thread = selfThread(tempRoot, [talkTo("empty")]);
-      const out = await deriveRelationWindow(thread);
-      const empty = out.find((w) => w.peerId === "empty")!;
-      expect(empty.peerReadmeExists).toBe(true);
-      expect(empty.peerReadmeBody).toBeUndefined();
-    });
-  });
-});
-
-describe("deriveRelationCompanionKnowledge / deriveRelationKnowledge(已废弃 shim)", () => {
-  let tempRoot: string;
-
-  beforeEach(async () => {
-    tempRoot = await mkdtemp(join(tmpdir(), "ooc-relation-derive-"));
-    await createStoneObject({ baseDir: tempRoot, objectId: SELF });
+  test("self_long_term + self_session 都存在 → 两段都渲", async () => {
+    await createStoneObject({ baseDir: tempRoot, objectId: "critic" });
+    await writeFile(poolKnowledgeRelationFile(selfPoolRef, "critic"), "我对 critic 的长期认知", "utf8");
+    await writeFlowRelation(selfFlowRef, "critic", "本 session 临时认知");
+    const xml = await selfViewXml(tempRoot);
+    expect(xml).toContain("<self_long_term");
+    expect(xml).toContain("我对 critic 的长期认知");
+    expect(xml).toContain("<self_session");
+    expect(xml).toContain("本 session 临时认知");
   });
 
-  afterEach(async () => {
-    await rm(tempRoot, { recursive: true, force: true });
+  test("仅 session relation 存在 → 渲 self_session，不渲 self_long_term", async () => {
+    await createStoneObject({ baseDir: tempRoot, objectId: "critic" });
+    await writeFlowRelation(selfFlowRef, "critic", "session-only 内容");
+    const xml = await selfViewXml(tempRoot);
+    expect(xml).toContain("<self_session");
+    expect(xml).toContain("session-only 内容");
+    expect(xml).not.toContain("<self_long_term");
   });
 
-  test("deriveRelationCompanionKnowledge 始终返回空数组", async () => {
-    const thread = selfThread(tempRoot, [talkTo(PEER)]);
-    const out = await deriveRelationCompanionKnowledge(thread);
-    expect(out).toEqual([]);
+  test("multi-peer：各 peer 的 relation 文件独立不串台", async () => {
+    await createStoneObject({ baseDir: tempRoot, objectId: "critic" });
+    await createStoneObject({ baseDir: tempRoot, objectId: "reviewer" });
+    await writeFile(poolKnowledgeRelationFile(selfPoolRef, "critic"), "对 critic 的认知", "utf8");
+    await writeFile(poolKnowledgeRelationFile(selfPoolRef, "reviewer"), "对 reviewer 的认知", "utf8");
+    const xml = await selfViewXml(tempRoot);
+    expect(xml).toContain("对 critic 的认知");
+    expect(xml).toContain("对 reviewer 的认知");
   });
 
-  test("deriveRelationKnowledge 始终返回空数组(老 alias)", async () => {
-    const thread = selfThread(tempRoot, [talkTo(PEER)]);
-    const out = await deriveRelationKnowledge(thread);
-    expect(out).toEqual([]);
+  test("self 不计入自身 relations（self 不与自己建关系）", async () => {
+    await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
+    const xml = await selfViewXml(tempRoot);
+    expect(xml).not.toContain(`<relation peer_id="${SELF}">`);
+  });
+
+  test("nil-persistence（无 objectId）→ renderSelfView 返回 null", async () => {
+    const thread = makeThread({ id: "t_root", skipCreatorWindow: true });
+    const node = await renderSelfView(thread);
+    expect(node).toBeNull();
   });
 });

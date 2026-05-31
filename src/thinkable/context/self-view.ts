@@ -14,7 +14,19 @@
  */
 
 import type { FlowObjectRef } from "../../persistable/common";
-import { readPlan, readTodos, type Todo } from "../../persistable/index";
+import {
+  readPlan,
+  readTodos,
+  readTalks,
+  discoverStoneHierarchicalPeers,
+  deriveStoneFromThread,
+  readReadable,
+  readableFile,
+  readPoolRelation,
+  readFlowRelation,
+  type Todo,
+} from "../../persistable/index";
+import { SUPER_ALIAS_TARGET } from "../../executable/windows/_shared/super-constants";
 import { xmlElement, xmlText, type XmlNode } from "./xml";
 import type { ThreadContext, ThreadMessage } from "./index";
 
@@ -22,11 +34,14 @@ import type { ThreadContext, ThreadMessage } from "./index";
 const TALK_RECENT_PER_PEER = 6;
 /** talk 自视切片单条消息正文截断长度。 */
 const TALK_MESSAGE_TRUNCATE = 400;
+/** relations 自视切片各文本字段（peer readable / self relation）的字节截断长度。 */
+const RELATION_BODY_BYTES = 8192;
 
 /**
  * 渲染对象自视切片 `<self_view>`；无 persistence 或无内容时返回 null。
  *
- * 段序（L5c）：`<plan>`（active 行动计划）→ `<talks>`（按 peer 的进行中会话）→ `<todos>`（未完成待办）。
+ * 段序（L6a）：`<plan>`（active 行动计划）→ `<talks>`（按 peer 的进行中会话）→
+ * `<relations>`（siblings/children + talk peer 的关系认知）→ `<todos>`（未完成待办）。
  */
 export async function renderSelfView(thread: ThreadContext): Promise<XmlNode | null> {
   const ref = flowRefOf(thread);
@@ -39,6 +54,9 @@ export async function renderSelfView(thread: ThreadContext): Promise<XmlNode | n
 
   const talksNode = renderTalksSlice(thread);
   if (talksNode) children.push(talksNode);
+
+  const relationsNode = await renderRelationsSlice(thread, ref);
+  if (relationsNode) children.push(relationsNode);
 
   const todosNode = await renderTodosSlice(ref);
   if (todosNode) children.push(todosNode);
@@ -55,6 +73,131 @@ async function renderPlanSlice(ref: FlowObjectRef): Promise<XmlNode | null> {
   const md = await readPlan(ref);
   if (md.trim().length === 0) return null;
   return xmlElement("plan", {}, [xmlText(md)]);
+}
+
+/**
+ * relations 自视切片 `<relations>`：自动注入 self 对身边各 peer 的关系认知。
+ *
+ * 设计（spec §5.3，L6a：relation_window 删除 → 自动注入）：
+ * - peer 集 = `discoverStoneHierarchicalPeers`（同级 siblings + 一级 children Agent）
+ *   **∪ talks.json peers**（`Object.keys(readTalks)`，含 user / critic 等 talk peer）。
+ *   含 talk peers 才不丢「与非 sibling/child 的 talk peer 的 relation 展示」。
+ * - 每 peer 渲染（移自旧 deriveRelationWindow + renderRelationWindow）：
+ *   - `peer_readme`：peer 的 `stones/<branch>/objects/<peer>/readable.md`（exists 且非空才渲，截断）。
+ *   - `self_long_term`：`pools/<self>/knowledge/relations/<peer>.md`（exists 才渲）。
+ *   - `self_session`：`flows/<sid>/objects/<self>/knowledge/relations/<peer>.md`（exists 才渲）。
+ * - super alias（"super"）跳过；self 自身跳过。
+ * - 无任何 peer → 返回 null（不渲 `<relations>`，保持 context 紧凑）。
+ * - IO 异常静默（console.debug），不让一次磁盘抖动拖垮热路径。
+ *
+ * 写侧（self 对 peer 的关系认知）由 root.relation_note（command.relation.ts）落盘。
+ */
+async function renderRelationsSlice(
+  thread: ThreadContext,
+  ref: FlowObjectRef,
+): Promise<XmlNode | null> {
+  const { baseDir, sessionId, objectId: selfId } = ref;
+
+  // 1) peer 集：hierarchical siblings/children ∪ talks.json peers。
+  const peers = new Set<string>();
+
+  // self 不是 user 时才扫层级 peer（user 是 passive flow object，无 stone 子树）。
+  if (selfId !== "user") {
+    try {
+      const { siblings, children } = await discoverStoneHierarchicalPeers(
+        deriveStoneFromThread({ baseDir, sessionId, objectId: selfId, threadId: thread.id, stonesBranch: ref.stonesBranch }),
+      );
+      for (const peer of [...siblings, ...children]) {
+        if (peer && peer !== selfId) peers.add(peer);
+      }
+    } catch (err) {
+      console.debug(`[relations] hierarchical peers io_error self=${selfId} msg=${(err as Error).message}`);
+    }
+  }
+
+  // talks.json peers：含 user / critic 等会话过的 peer；super alias 不算关系 peer。
+  try {
+    const routing = await readTalks({ baseDir, sessionId, objectId: selfId, stonesBranch: ref.stonesBranch });
+    for (const peer of Object.keys(routing)) {
+      if (peer && peer !== selfId && peer !== SUPER_ALIAS_TARGET) peers.add(peer);
+    }
+  } catch (err) {
+    console.debug(`[relations] talks routing io_error self=${selfId} msg=${(err as Error).message}`);
+  }
+
+  if (peers.size === 0) return null;
+
+  // 2) 逐 peer 渲染（peerId 排序，稳定输出）。
+  const relationNodes: XmlNode[] = [];
+  for (const peerId of [...peers].sort()) {
+    const node = await renderRelationPeer(baseDir, sessionId, selfId, peerId, ref.stonesBranch);
+    relationNodes.push(node);
+  }
+  return xmlElement("relations", {}, relationNodes);
+}
+
+/** 渲染单个 peer 的 `<relation peer_id=...>`：peer_readme + self_long_term + self_session（exists 才渲）。 */
+async function renderRelationPeer(
+  baseDir: string,
+  sessionId: string,
+  selfId: string,
+  peerId: string,
+  stonesBranch?: string,
+): Promise<XmlNode> {
+  const children: XmlNode[] = [];
+
+  // peer readable.md（对端身份介绍，只读）。
+  const peerStoneRef = { baseDir, objectId: peerId, stonesBranch };
+  try {
+    const text = await readReadable(peerStoneRef);
+    if (text !== undefined && text.trim() !== "") {
+      children.push(
+        xmlElement("peer_readme", { path: readableFile(peerStoneRef) }, [xmlText(truncateRelationBody(text))]),
+      );
+    }
+  } catch (err) {
+    console.debug(`[relations] peer_readme io_error ${peerId} msg=${(err as Error).message}`);
+  }
+
+  // self long_term relation（pools；跨 session 长期认知）。
+  try {
+    const text = await readPoolRelation({ baseDir, objectId: selfId }, peerId);
+    if (text !== undefined) {
+      children.push(
+        xmlElement("self_long_term", { path: `pools/${selfId}/knowledge/relations/${peerId}.md` }, [
+          xmlText(truncateRelationBody(text)),
+        ]),
+      );
+    }
+  } catch (err) {
+    console.debug(`[relations] long_term io_error ${peerId} msg=${(err as Error).message}`);
+  }
+
+  // self session relation（flows；仅本 session 生效）。
+  try {
+    const text = await readFlowRelation({ baseDir, sessionId, objectId: selfId }, peerId);
+    if (text !== undefined) {
+      children.push(
+        xmlElement(
+          "self_session",
+          { path: `flows/${sessionId}/objects/${selfId}/knowledge/relations/${peerId}.md` },
+          [xmlText(truncateRelationBody(text))],
+        ),
+      );
+    }
+  } catch (err) {
+    console.debug(`[relations] session io_error ${peerId} msg=${(err as Error).message}`);
+  }
+
+  return xmlElement("relation", { peer_id: peerId }, children);
+}
+
+/** relations 切片各文本字段的 8KB 截断（本地实现，避免反向 import render.ts）。 */
+function truncateRelationBody(body: string): string {
+  const bytes = new TextEncoder().encode(body);
+  if (bytes.length <= RELATION_BODY_BYTES) return body;
+  const head = new TextDecoder().decode(bytes.slice(0, RELATION_BODY_BYTES));
+  return `${head}...[truncated, original ${bytes.length} bytes]`;
 }
 
 /** 从 thread.persistence 派生对象级 FlowObjectRef；缺 objectId 返回 undefined。 */

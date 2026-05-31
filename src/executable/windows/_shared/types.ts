@@ -17,7 +17,7 @@
  */
 
 /** Window 类型枚举；新增类型必须同步在 WINDOW_REGISTRY 中注册。 */
-export type WindowType = "root" | "command_exec" | "do" | "talk" | "program" | "file" | "knowledge" | "search" | "relation" | "custom" | "skill_index" | "feishu_chat" | "feishu_doc";
+export type WindowType = "root" | "command_exec" | "do" | "talk" | "program" | "file" | "knowledge" | "search" | "custom" | "skill_index" | "feishu_chat" | "feishu_doc";
 
 /**
  * Window 状态值汇总。
@@ -135,7 +135,6 @@ export type { ProgramWindow, ProgramExecRecord } from "../program/types.js";
 export type { FileWindow } from "../file/types.js";
 export type { KnowledgeWindow } from "../knowledge/types.js";
 export type { SearchWindow, SearchMatch } from "../search/types.js";
-export type { RelationWindow } from "../relation/types.js";
 export type { CustomWindow } from "../custom/types.js";
 export type { SkillIndexWindow, SkillEntry } from "../skill_index/types.js";
 export type { FeishuChatWindow, FeishuChatMessage } from "../../../extendable/lark/feishu-chat/types.js";
@@ -150,7 +149,6 @@ import type { ProgramWindow } from "../program/types.js";
 import type { FileWindow } from "../file/types.js";
 import type { KnowledgeWindow } from "../knowledge/types.js";
 import type { SearchWindow } from "../search/types.js";
-import type { RelationWindow } from "../relation/types.js";
 import type { CustomWindow } from "../custom/types.js";
 import type { SkillIndexWindow } from "../skill_index/types.js";
 import type { FeishuChatWindow } from "../../../extendable/lark/feishu-chat/types.js";
@@ -166,7 +164,6 @@ export type ContextWindow =
   | FileWindow
   | KnowledgeWindow
   | SearchWindow
-  | RelationWindow
   | CustomWindow
   | SkillIndexWindow
   | FeishuChatWindow
@@ -188,7 +185,6 @@ export function generateWindowId(type: Exclude<WindowType, "root">): string {
     file: "w_file",
     knowledge: "w_kn",
     search: "w_search",
-    relation: "w_rel",
     custom: "w_custom",
     skill_index: "w_skills",
     feishu_chat: "w_fschat",

@@ -505,12 +505,14 @@ describe("flows service", () => {
    * 同输入两次必须返回相同 hash，否则前端会永远命中"内容变了"。
    *
    * 这是反复回归点：synthesizer 每轮 derive 出的合成 window（KnowledgeWindow /
-   * RelationWindow / SkillIndexWindow / Issue knowledge）带 ephemeral id+createdAt，
-   * 必须在 service.ts:stripVolatileForHash 里剔掉。任意一条没剔，hash 就翻动。
+   * SkillIndexWindow）带 ephemeral id+createdAt，必须在 service.ts:stripVolatileForHash
+   * 里剔掉。任意一条没剔，hash 就翻动。
    *
    * 历史踩过：
    * - 2026-05-25：skill_index 漏剔 createdAt（用户报告 supervisor thread hash 一直变）
    * - 之前：relation / issue / non-explicit knowledge 陆续补齐
+   *   （注：OOC-4 L6a 删 relation_window 后，relations 改走 <self_view> 自视切片，不再是合成 window；
+   *    relation 相关的 stripVolatileForHash 分支已随之移除。）
    */
   describe("getThread hash is stable for unchanged context", () => {
     test("hash unchanged across two calls with derived knowledge + relation windows", async () => {
@@ -522,7 +524,7 @@ describe("flows service", () => {
           jobManager: createJobManager(),
         });
         // seedSession：建 user.root + agent.root，user.root 上挂指向 agent 的 talk_window
-        // → agent.root 自带 creator talk_window；两边都会 derive RelationWindow + protocol knowledge。
+        // → agent.root 自带 creator talk_window；两边都会 derive protocol knowledge + skill_index。
         const seeded = await service.seedSession({
           sessionId: "s1",
           targetObjectId: "agent",

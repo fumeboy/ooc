@@ -9,7 +9,6 @@
  * 但 TalkWindow 类型 + WindowType "talk" 仍保留（Phase D 才整体擦除）：
  * - service.ts（HTTP user→object chat 入口）仍建 talk_window + deliverTalkMessage
  * - initContextWindows 仍给跨对象 callee 注入 creator talk_window（作为 wait 兜底标记）
- * - deriveRelationWindow（synthesizer.ts）仍按 talk_window 播种 relation（L6a 解耦）
  *
  * 故本模块只保留：
  * - onClose hook（creator talk_window 不可关闭，保护与 caller 的恒在通道）

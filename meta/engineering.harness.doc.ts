@@ -133,8 +133,7 @@ export const root: DocTreeNode = {
             - do_window (同 object fork 子线程) 与 talk_window (跨 object 持续会话) 的语义边界。
             - talk-delivery 跨 object 派送的 5 步流程与 callee thread 创建。
             - creator window 恒在通道 (isCreatorWindow + cascade close 拒绝)。
-            - relation_window peer 关系的专属 window type 与双 scope 编辑。
-            - relation_knowledge 自动派生 (peer readme + self relation 占位)。
+            - relations 自视切片 (siblings/children ∪ talk peers) 与 relation_note 双 scope 写 (OOC-4 L6a 塌缩自 relation_window)。
 
             内循环典型动作: 设计一种新协作模式 (例: 跨 object 广播) → 决定走 talk-delivery 还是新建一种 window → 实现 + 测试跨 object 派送的双写 / 状态翻转。
 
@@ -299,7 +298,7 @@ export const root: DocTreeNode = {
             1. **每个 AgentOfX 都有自己的 stone**: stones/agent_of_thinkable/ / stones/agent_of_executable/ / ...
                里面写 self.md (Agent 的工作风格)、knowledge/memory/ (沉淀)、executable/index.ts (方法库)。
 
-            2. **AgentOfX 之间通过 collaborable 协作**: 跨 Agent 派任务走 talk_window,跨 Agent 共享 peer 关系/上下文走 relation_window 与 do_window.move。
+            2. **AgentOfX 之间通过 collaborable 协作**: 跨 Agent 派任务走 talk_window,peer 关系认知走 relations 自视切片 + relation_note,跨 Agent 共享上下文走 do_window.move。
                不需要为 "OOC 工程协作" 单独发明协议,直接复用 OOC 自己的协作语义。
 
             3. **AgentOfX 的迭代走 reflectable**: Agent 完成一轮内循环后,通过 super flow 反思,把经验落到自己 stone 的 memory。

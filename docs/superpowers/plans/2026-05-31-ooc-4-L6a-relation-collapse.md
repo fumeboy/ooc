@@ -1,12 +1,12 @@
 # OOC-4 L6a：relation 删除 → 自动注入（自视 relations 切片）
 
-> **⛔ BLOCKED：先做 L5c（talk）再做本增量**。feasibility review 抓出本 plan 的解耦判定错误（C1/C2）：
-> - **C1**：relation 真实 peer 集 = talk peers（含主导的 `user`）∪ siblings ∪ children；`discoverStoneHierarchicalPeers` 过滤 user。siblings/children-only 会丢 user/talk-peer relation，破坏 relation-window-edit-session.e2e（断言 peerId="user"）+ relation-write-on-talk.integration（critic 是 talk peer）。→ relations 切片 peer 集**必须含 talk peers**（L5c 塌缩后 = talks/<peer>.jsonl 文件集）。
-> - **C2**：relation_note long_term 用 deliverTalkMessage（需 TalkWindow 类型，L5c 要删）→ 须等 L5c 提供 window-free deliverToSuper。
-> 故 **relation 耦合 talk，必须 L5c 后做**。本 plan 重写时：relations 切片 peer 集 = siblings/children ∪ talks/ 文件 peers；relation_note long_term 用 L5c 的 window-free deliver。
-> 〔下方原内容保留作 L6a 重写输入；H1（service.ts:135 type==="relation" tsc-break + compress.ts:406 w_rel_ 死逻辑）/H2（relation-derive.test 是重写非 migrate）/M1（deriveRelationWindow 合成的是 RelationWindow 非 KnowledgeWindow；删 derive+调用点 synthesizer:300-301+废 shim:444-459）/M2（web relation 渲染 + registry.test「9 种」+ OtherRenderers.test 不在后端 gate，须连带或显式 defer）/M3（meta relation_window DocTreeNode:1680-1780 + sources 指向被删文件）均为 L6a 重写必处理项。〕
+> ✅ **阻塞已解（L5c Phase C 完成 0b4a97ff）**：talk 塌缩后 **talks.json peers 可用**（`Object.keys(readTalks(ref))`）+ **window-free `deliverMessage` 已存在**（delivery.ts）。C1/C2 解法：
+> - **C1（peer 集）**：relations 切片 peer 集 = `discoverStoneHierarchicalPeers`（siblings/children）**∪ talks.json peers**（含主导的 user/critic 等 talk peer）。**含 talk peers**才不丢 relation-window-edit-session.e2e（user）+ relation-write-on-talk.integration（critic）。
+> - **C2（long_term deliver）**：relation_note long_term 用 **deliverMessage**（window-free，L5c 已落地）派 super——不再需 TalkWindow。
+> 必处理（前次 review）：**H1** service.ts:135 `type==="relation"` 删 type 后 tsc-break + compress.ts:406 `w_rel_` 死逻辑；**H2** relation-derive.test 是**重写非 migrate**（talk-peer 派生 + peer_readme 测试整段删，改 renderSelfView relations 切片测试）；**M1** deriveRelationWindow 推的是 **RelationWindow 非 KnowledgeWindow**——删 deriveRelationWindow（synthesizer.ts:330-442）+ 调用点（:300-301）+ 废 shim（:444-459）+ synthesizer.ts:41 RelationWindow/TalkWindow import；**M2** web relation 渲染（RelationWindowDiff + registry.test「9 种」+ OtherRenderers.test）不在后端 gate，须连带改或显式 defer（注「9→8 种」）；**M3** meta relation_window DocTreeNode（:1680-1780 + sources 指向被删 windows/relation/ → 改指 self-view.ts/command.relation.ts）。
+> **注**：L5c 仍保留 TalkWindow 类型（Phase D 才擦除），故删 RelationWindow 时确认 relation 不依赖 TalkWindow 擦除。
 
-> 执行 sub-agent **不要自己 commit**。复用 L5a/b 自视切片机制。
+> 执行 sub-agent **不要自己 commit**。复用 L5a/b 自视切片机制 + L5c talks.json/deliverMessage。
 
 **Goal:** 删 relation_window（每轮 derive 的 window type）+ deriveRelationWindow；改为 **siblings + stone children/ 自动注入自视 relations 切片**（spec §5.3，各 peer 走 readable.md + relations 文件）。relation.edit（window 方法）→ root 方法 `relation_note(peer, content, scope)`。
 

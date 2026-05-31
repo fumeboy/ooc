@@ -1,8 +1,9 @@
 /**
  * OtherRenderers.test — Round 10 F3.
  *
- * 覆盖剩余 5 个 renderer 的最小烟雾 / 4 态：DoWindowDiff / SearchWindowDiff /
- * KnowledgeWindowDiff / ProgramWindowDiff / CommandExecDiff / RelationWindowDiff。
+ * 覆盖剩余 renderer 的最小烟雾 / 4 态：DoWindowDiff / SearchWindowDiff /
+ * KnowledgeWindowDiff / ProgramWindowDiff / CommandExecDiff。
+ * （RelationWindowDiff 已随 OOC-4 L6a relation_window 删除而移除。）
  *
  * 每个 renderer 至少 1 个 changed + 1 个 added/removed 用例（验证 type-dispatch 后
  * UI 不崩 + 视觉编码 data-diff-status 落字段）。
@@ -14,7 +15,6 @@ import { SearchWindowDiff } from "./SearchWindowDiff";
 import { KnowledgeWindowDiff } from "./KnowledgeWindowDiff";
 import { ProgramWindowDiff } from "./ProgramWindowDiff";
 import { CommandExecDiff } from "./CommandExecDiff";
-import { RelationWindowDiff } from "./RelationWindowDiff";
 import { countByStatus } from "./test-utils";
 
 describe("DoWindowDiff", () => {
@@ -187,28 +187,3 @@ describe("CommandExecDiff", () => {
   });
 });
 
-describe("RelationWindowDiff", () => {
-  it("Case 1: peerId / status 字段变化 → 含 changed", () => {
-    // 注：selfLongTermBody 的 diff 由 MarkdownBodyDiff (CodeMirror Merge) 渲染，
-    // 走 hooks，需要 DOM env；本测试聚焦顶层字段 diff（peerId / status），
-    // body diff 留给 vite build smoke + 体验官真实验证。
-    const tree = RelationWindowDiff({
-      previous: { type: "relation", peerId: "alice", status: "open" },
-      current: { type: "relation", peerId: "bob", status: "closed" },
-      windowType: "relation",
-      windowId: "w_rel_1",
-    });
-    expect(countByStatus(tree, "changed")).toBeGreaterThanOrEqual(1);
-  });
-
-  it("Case 2: 不崩 (空 body)", () => {
-    expect(() =>
-      RelationWindowDiff({
-        previous: { type: "relation", peerId: "alice" },
-        current: { type: "relation", peerId: "alice" },
-        windowType: "relation",
-        windowId: "w_rel_2",
-      }),
-    ).not.toThrow();
-  });
-});

@@ -43,6 +43,7 @@ describe("executable commands", () => {
       "plan_clear",
       "plan_set",
       "program",
+      "relation_note",
       "talk",
       "todo_add",
       "todo_check",

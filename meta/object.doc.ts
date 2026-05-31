@@ -1013,7 +1013,7 @@ export const root: DocTreeNode = {
                         "远景: Auto Mode (AI 分类器) / Plan Mode (LLM plan + user approve) / OS-level Sandbox 集成——本轮全部不做",
                     ],
                     warnings: [
-                        "Q0d 截止 2026-05-25 状态: 6 项 method 已填 ask (write_file / root.program / program_window.exec / file_window.edit / relation.edit / metaprog); deny 0 项 (列 Q0e); 其余 method 缺省 allow",
+                        "Q0d 截止 2026-05-25 状态: 6 项 method 曾填 ask (write_file / root.program / program_window.exec / file_window.edit / relation.edit / metaprog); deny 0 项 (列 Q0e); 其余 method 缺省 allow。注（2026-05-31 OOC-4 L6a）：relation.edit 已删（relation_window 塌缩），其写能力转为 root.relation_note（缺省 allow——session 纯本地落盘 / long_term 经 super flow 受 reflectable 闭环约束）",
                         "自改 stones/<self>/executable/index.ts 当前**没有硬拦** — 通过 metaprog 整族 ask + write_file ask 形成弱约束; Q0e 需补硬 deny",
                     ],
                 },
@@ -1349,8 +1349,6 @@ export const root: DocTreeNode = {
                             **其它 window type 的信息量轴设计提案**（**未实施**，仅作 design proposal；
                             后续按需逐个落地）：
 
-                            - **relation_window**：sections 选择（peer_readme 收起 / self_long_term 展开）→
-                              \`set_sections\` args = { peer_readme: "full"|"summary"|"hidden", self_long_term: ... }
                             - **command_exec window**：args 显示（高频 refine 时多冗余）→ \`set_args_display\`
                               args = { mode: "full"|"summary" }
                             - **custom window**：交由 stone 作者决定（programmable 维度），不强加协议
@@ -1397,7 +1395,7 @@ export const root: DocTreeNode = {
                     content: `
                     OOC 内置多种 ContextWindow type。
 
-                    这些 type 不是 UI 组件分类，而是 LLM 的上下文对象分类（共 13 种，与 src/executable/windows/_shared/types.ts WindowType 联合一致）:
+                    这些 type 不是 UI 组件分类，而是 LLM 的上下文对象分类（共 12 种，与 src/executable/windows/_shared/types.ts WindowType 联合一致）:
                     - root: 每个 thread 隐含存在的根 window，注册顶层 method。
                     - command_exec: 一次 method 调用的临时 form window。
                     - do: 子 thread 的父侧窗口，展示子任务状态与 transcript。
@@ -1405,17 +1403,18 @@ export const root: DocTreeNode = {
                       （不渲染 / 无 say·wait·close·set_transcript_window method；agent 经 root.talk + talks.json
                       路由 + <self_view><talks> 自视切片交互）。TalkWindow 类型 + WindowType "talk" 仍保留：
                       service.ts user→object chat 入口仍建 talk_window；initContextWindows 仍给跨对象 callee
-                      注入 creator talk_window 作为 wait 兜底标记 + relation 播种（deriveRelationWindow）。Phase D 才整体擦除。
+                      注入 creator talk_window 作为 wait 兜底标记。Phase D 才整体擦除。
                     - program: 程序执行窗口，可多次 exec；含 historyViewport 精细控制渲染体量。
                     - file: 文件内容窗口，支持 viewport / set_viewport / set_range（遗留）/ reload / edit / close。
                     - knowledge: 知识文档窗口，承载显式打开或协议合成的 knowledge；explicit 来源支持 viewport / set_viewport。
                     - search: glob / grep 搜索结果窗口，支持 open_match。
-                    - relation: 跨 Object 关系窗口；含 peer stone readme 只读 + self-relation 双层（见 children.relation_window）。
                     - skill_index: stone skills 索引窗口；每轮由 synthesizer 派生。
                     - custom: Object 自定义窗口（executable/index.ts \`export const window\` 注册的 self window）。
                     - feishu_chat: 飞书群会话窗口。
                     - feishu_doc: 飞书文档窗口。
-                    （注：plan / todo 已 B 类塌缩为 owner flow 文件 + self_view 自视切片，不再是 WindowType；见 context_window.children.plan / executable.method 的 plan_set/plan_clear/todo_*。）
+                    （注：plan / todo / relation 已 B 类塌缩为 owner flow 文件 + self_view 自视切片，不再是 WindowType；
+                    见 context_window.children.plan / collaborable.children.relations / executable.method 的
+                    plan_set/plan_clear/todo_*/relation_note。）
 
                     每个 window type 都应该回答四个问题:
                     1. 它在 Context 中如何渲染给 LLM？
@@ -1690,110 +1689,86 @@ export const root: DocTreeNode = {
                         "子→父 reply 协议": "唯一通道是 creator window 上的 continue/say；end 不是回报通道",
                     },
                 },
-                "relation_window": {
-                    title: "relation_window - peer 关系的专属 window type",
+                "relations": {
+                    title: "relations - peer 关系认知（自视切片，OOC-4 L6a 塌缩自 relation_window）",
                     content: `
-                    当 thread.contextWindows 中存在指向某 peer 的 talk_window 时，
-                    每轮 render 时由 synthesizer 自动派生 RelationWindow，承载"你对该 peer 的关系认知":
+                    OOC-4 L6a：relation 不再是 window type（旧 relation_window 已删）。peer 关系认知改由
+                    renderSelfView 的 \`<self_view><relations>\` 自视切片每轮自动注入；写侧为 root 方法
+                    \`relation_note\`（见 children/relation_note）。
 
-                    **RelationWindow**（type="relation"，id 稳定 \`w_rel_<peerId>\`）：
-                    专属 window type，注册 \`edit\` method（详见 children/edit_command）。
-                    这是 relation 的method面入口——LLM 想更新 relation 不再依赖 write_file 弱 prompt。
-
-                    **default visibility 扩展**：
-                    除 talk_window 派生的 peer 外，每轮还**默认派生**两类 peer 的 relation_window，
-                    让 Agent 一上场就看见身边有谁，不必先 talk 才能写 relation：
+                    **自视切片 peer 集** = \`discoverStoneHierarchicalPeers\`（siblings + children）
+                    **∪ talks.json peers**（\`Object.keys(readTalks)\`）：
                     - **同级 Agent**: 与 self 同父的其它 OOC Agent（top-level 时 = 其它顶层 Agent）
                     - **一级 children Agent**: self 自身 children/ 下一级的 OOC Agent（不递归到孙）
+                    - **talk peers**: 与 self 有 talks.json 会话路由的对端（含 user / critic 等非 sibling/child
+                      的 talk peer——含 talk peers 才不丢"与会话过的 peer 的关系展示"）
 
-                    判定规则（见 src/persistable/stone-object.ts:discoverStoneHierarchicalPeers）：
-                    - 含 \`self.md\` 的 stone 目录视为 OOC Agent
-                    - \`user\` 永远过滤（passive object 不是 Agent）
-                    - 自身被排除
-                    - 已在 talk_window peer 列表中的不重复加，不覆盖 createdAt
+                    判定/跳过规则：
+                    - 含 \`self.md\` 的 stone 目录视为 OOC Agent（discoverStoneHierarchicalPeers）
+                    - self 自身 / \`super\` alias 永远排除；self 不是 user 时才扫层级 peer
+                    - 并集去重（同一 peer 既是 sibling 又有 talk 路由 → 只渲一次）
 
-                    **peer readme 挂回 RelationWindow**：
-                    default visibility 让大量自动派生的 sibling/child relation_window 出现在 LLM 视野，
-                    但 self 大概率没写过它们的 relation note → window body 全空只剩 path。这违背
-                    default visibility 的初衷（让 Agent 一上场就知道身边有谁干什么）。把 peer readme
-                    （\`stones/<branch>/objects/<peer>/readable.md\`）作为只读字段挂回 RelationWindow，
-                    LLM 一眼看到 peer 是谁，无须再 file_window open；同时不影响 self-relation 的可写
-                    双层（pools/flows）。维度上 RelationWindow 现在承担"peer 身份介绍 + self-relation
-                    双层认知"两块（不是严格的"只 self-relation"）。
+                    **每 peer 渲染** \`<relation peer_id=...>\`，子节点 exists 才渲（节点缺席即信号，不渲占位）：
+                    - \`peer_readme\`: peer 的 \`stones/<branch>/objects/<peer>/readable.md\`（对端身份介绍，
+                      只读；空文件不渲），让 Agent 一眼看到 peer 是谁，无须再 file_window open。
+                    - \`self_long_term\`: \`pools/<self>/knowledge/relations/<peer>.md\`（exists 才渲）。
+                    - \`self_session\`: \`flows/<sid>/objects/<self>/knowledge/relations/<peer>.md\`（exists 才渲）。
+                    - 无任何 peer → 不渲 \`<relations>\`；nil-persistence → renderSelfView 整体返回 null。
+                    - 文本字段超 8KB 截断。IO 异常静默（console.debug），不拖垮热路径。
 
-                    **渲染策略**：
-                    缺失的字段节点不再渲染占位文案（旧版 \`(暂无;通过 open(...) 写入)\`）。节点本身
-                    缺席就是信号；占位文案对 LLM 是噪声，basicKnowledge 已讲清楚 edit 用法不必重复。
-                    \`*Exists=false\` 或 body 为空时直接跳过该 XML 节点，render 出来的窗口只含真有内容
-                    的字段。
+                    段序：\`<plan>\` → \`<talks>\` → \`<relations>\` → \`<todos>\`（self-view.ts:renderSelfView）。
 
-                    RelationWindow 暴露字段:
-                    - \`peerId\`: 对端 objectId（去重 key）
-                    - \`peerReadmePath\` + \`peerReadmeBody?\` + \`peerReadmeExists\`:
-                      peer 身份介绍（只读；从 stone readme 派生）
-                    - \`selfLongTermPath\` + \`selfLongTermBody?\` + \`selfLongTermExists\`:
-                      pool 层长期 relation（懒创建；exists=false 时 body=undefined）
-                    - \`selfSessionPath\` + \`selfSessionBody?\` + \`selfSessionExists\`:
-                      flow 层 session 临时 relation
-
-                    **两层文件 (long_term × session)**:
-                    - long_term: \`pools/objects/<self>/knowledge/relations/<peer>.md\` —— 跨 session 长期认知；
-                      只能由 super flow 写入（保 reflectable 元编程闭环）。落在 pool 而非 stone：relation 是 sediment knowledge
-                      （运行时沉淀的事实），写就生效不进 git review/rollback；与 stone 中的 seed knowledge 二分。
+                    **两层文件 (long_term × session)**：
+                    - long_term: \`pools/<self>/knowledge/relations/<peer>.md\` —— 跨 session 长期认知；
+                      只能由 super flow 写入（保 reflectable 元编程闭环）。落 pool 而非 stone：relation 是
+                      sediment knowledge（运行时沉淀的事实），写就生效不进 git review/rollback。
                     - session: \`flows/<sid>/objects/<self>/knowledge/relations/<peer>.md\` —— 本 session 临时认知；
-                      由 relation_window.edit(scope="session") 直接落盘，不污染长期 relations。
-
-                    派生不持久化进 thread.contextWindows；id 稳定方便 UI 跨轮稳定。
-
-                    跳过规则（全部静默，仅 console.debug）:
-                    - target === SUPER_ALIAS_TARGET（super 自反）→ 完全跳过整组派生。
-                    - thread.persistence 缺失 → 完全跳过。
+                      由 relation_note(scope="session") 直接落盘，不污染长期 relations。
                     `,
                     named: {
-                        "RelationWindow": "type=\"relation\" 的 ContextWindow；relation method面入口",
-                        "deriveRelationWindow": "按 talk_window peer 派生 RelationWindow 的函数",
-                        "long_term relation": "pools/objects/<self>/knowledge/relations/<peer>.md，跨 session 长期；落 pool 不落 stone",
+                        "relations 切片": "renderSelfView 的 <self_view><relations> 段；不再是 window type",
+                        "renderRelationsSlice": "self-view.ts 渲染 relations 切片的函数（移自旧 deriveRelationWindow + renderRelationWindow）",
+                        "peer 集并集": "discoverStoneHierarchicalPeers（siblings/children）∪ talks.json peers（含 user/critic 等 talk peer）",
+                        "long_term relation": "pools/<self>/knowledge/relations/<peer>.md，跨 session 长期；落 pool 不落 stone",
                         "session relation": "flows/<sid>/objects/<self>/knowledge/relations/<peer>.md，仅本 session",
-                        "peer readme + self-relation 双层": "RelationWindow 含 peer stone readme 只读（peerReadmePath/Body/Exists, synthesizer 注入 peer 的 stones/<branch>/objects/<peer>/readable.md）+ self-relation 双层（self 对 peer 的 long_term/session 认知, 可 edit）；2026-05-27 撤回了'只在 pools+flows'的删除",
-                        "*Exists flag": "API caller 用 selfLongTermExists/selfSessionExists 区分 lazy-create vs read-fail",
                     },
                     children: {
-                        "edit_command": {
-                            title: "relation_window.edit - 双 scope 编辑",
+                        "relation_note": {
+                            title: "relation_note - root 方法（替换旧 relation_window.edit）",
                             content: `
-                            relation_window 注册唯一一个 method \`edit\`，参数:
+                            \`relation_note\` 是 root 方法（OOC-4 L6a，替换旧 relation_window.edit window 方法），参数：
+                            - \`peer\`: 必填，对端 objectId
                             - \`content\`: 必填，relation 文件完整正文（整文件替换语义，与 write_file 一致）
-                            - \`scope\`: 必填，\`"session"\` | \`"long_term"\`
+                            - \`scope\`: 可选，\`"session"\` | \`"long_term"\`，缺省 \`"session"\`
 
-                            行为按 scope 分路:
+                            行为按 scope 分路：
 
-                            **scope="session"**:
-                            直接通过 writeFlowRelation 写 \`flows/<sid>/objects/<self>/knowledge/relations/<peer>.md\`，
-                            下一轮 render 自动出现在伴随 KnowledgeWindow 的 \`## session\` 段。
-                            不动 stones/——本 session 临时认知不污染长期 relations。
+                            **scope="session"**：
+                            直接 writeFlowRelation 写 \`flows/<sid>/objects/<self>/knowledge/relations/<peer>.md\`，
+                            下一轮 \`<self_view><relations>\` 切片的 \`self_session\` 段反映新内容。
+                            不动 pools/stones——本 session 临时认知不污染长期 relations。
 
-                            **scope="long_term"**:
-                            必须经过 super flow（reflectable 维度的元编程闭环约束）。
-                            executeRelationEdit 优先复用 thread 已有的 talk_window(target=super)；
-                            没有则**构造临时 TalkWindow 对象**（不挂到 thread.contextWindows，避免常驻通道污染），
-                            调用 deliverTalkMessage 派一条 relation 更新请求到 super session 的 callee thread。
-                            super 收到后由 super flow 协议正常处理 pool 层 relation 的编辑
-                            （写 \`pools/objects/<self>/knowledge/relations/<peer>.md\`）。
+                            **scope="long_term"**：
+                            必须经过 super flow（reflectable 元编程闭环约束）。window-free \`deliverMessage\`
+                            （OOC-4 L5c 已落地，不再需 TalkWindow）派一条 relation 更新请求到 super session 的
+                            callee thread——target="super" 自指别名；复用 talks.json["super"] 既有会话路由
+                            （conversationId/targetThreadId）保持 super 会话连贯。super 收到后正常处理 pool 层
+                            relation 的编辑（写 \`pools/<self>/knowledge/relations/<peer>.md\`）。long_term 是
+                            **异步**的：返回成功只代表消息已派送，文件落盘要等 super flow 跑完那一轮。
 
-                            两种 scope 都不绕过 reflectable 协议:
-                            - session 是真正"局部认知"，本来就不属 reflectable 写入面；
-                            - long_term 严格走 super，相当于把 "write_file pools/.../relations/..." 替换为
-                              结构化的 talk 请求，super 仍是 long_term knowledge 写入的唯一通道。
+                            〔spec §1 表说 relation「无 root 方法」，但 write 能力须存（session 写 flows +
+                             long_term 经 super sediment），故落为 root.relation_note；spec §4 的 write_file
+                             不适用——relations 在 flows/pools 而非 stones。记此偏离。〕
                             `,
                             named: {
                                 "scope=session": "写 flow 层，立即生效，仅本 session 可见",
-                                "scope=long_term": "派给 super flow，由 super 写 pool 层 knowledge/relations",
-                                "临时 TalkWindow": "不挂到 thread 的一次性派送载体；避免 super 通道常驻 contextWindows",
+                                "scope=long_term": "deliverMessage 派 super flow，由 super 写 pool 层 knowledge/relations（异步）",
+                                "缺省 scope": "未给 scope 视为 session（最常用、纯本地落盘）",
                             },
-                            sources: [["src/executable/windows/relation/index.ts", "RelationWindow + edit method 注册与 executeRelationEdit；派送复用 src/executable/windows/talk/delivery.ts:deliverTalkMessage；scope=session 写盘 src/persistable/flow-relation.ts:writeFlowRelation"]],
+                            sources: [["src/executable/windows/root/command.relation.ts", "relationNoteCommand + executeRelationNote；scope=session 写盘 src/persistable/flow-relation.ts:writeFlowRelation；scope=long_term 经 src/executable/windows/talk/delivery.ts:deliverMessage 派 super"]],
                         },
                     },
-                    sources: [["src/executable/windows/relation/index.ts", "RelationWindow 与 edit method；派生函数 deriveRelationWindow（含 peer readme 注入）见 src/thinkable/knowledge/synthesizer.ts（deriveRelationCompanionKnowledge 已 @deprecated 返回空——KnowledgeWindow 合并进 RelationWindow 字段）；flow 层文件 IO 见 src/persistable/flow-relation.ts"]],
+                    sources: [["src/thinkable/context/self-view.ts", "renderRelationsSlice：peer 集 = discoverStoneHierarchicalPeers ∪ readTalks(ref) keys；每 peer 渲 peer_readme（readReadable）+ self_long_term（readPoolRelation）+ self_session（readFlowRelation）；写侧 root.relation_note 见 src/executable/windows/root/command.relation.ts"]],
                 },
             },
             patches: {
@@ -1857,13 +1832,13 @@ export const root: DocTreeNode = {
                 "parent_child_hierarchy": {
                     title: "parent-child 层级 - peer 之外的第三种关系轴",
                     content: `
-                    collaborable 的 talk / do / relation_window 主要承载 **peer 平等轴**（同级 Agent 平等协作，
+                    collaborable 的 talk / do / relations 主要承载 **peer 平等轴**（同级 Agent 平等协作，
                     只能说服不能支配）。但 Object 之间还有第三种关系轴: **parent-child 层级**（child Agent
                     物理嵌套在 parent 的 children/ 下）。完整语义见 root.patches.object_relations，这里只记
                     collaborable 侧的分工:
 
-                    - 可见性（已落地）: relation_window 每轮默认派生 self 的"同级 Agent"+"一级 children Agent"，
-                      让 Agent 一上场就看见身边有谁（见 relation_window；判定见
+                    - 可见性（已落地）: relations 自视切片每轮默认注入 self 的"同级 Agent"+"一级 children Agent"
+                      （∪ talk peers），让 Agent 一上场就看见身边有谁（见 relations；判定见
                       src/persistable/stone-object.ts:discoverStoneHierarchicalPeers，不递归到孙）。
                     - 修改权: **self-scope 自治**（见 root.patches.object_relations）。object 改自己子树（含自己 seed）
                       经 stone-versioning self-scope 自治 ff-merge、不经他人 review；cross-object（如 child 改 parent）
@@ -2299,8 +2274,8 @@ export const root: DocTreeNode = {
                     - pools/objects/<self>/knowledge/memory/<slug>.md: 长期记忆仓库；每条记忆一个文件，slug 用 kebab-case。
                       示例: ooc-collaboration-framework.md、tool-error-handling.md。
                     - pools/objects/<self>/knowledge/relations/<peer>.md: long_term relation 文件
-                      （与 collaborable.relation_window 联动；session 层另有
-                      flows/<sid>/objects/<self>/knowledge/relations/<peer>.md 由 relation_window.edit(scope="session") 直接写入）。
+                      （与 collaborable.relations 联动；session 层另有
+                      flows/<sid>/objects/<self>/knowledge/relations/<peer>.md 由 relation_note(scope="session") 直接写入）。
 
                     **stone 侧（设计型，进 git review）**：
                     - stones/<self>/self.md: 内部第一人称叙述（caller 明确要求改身份时）。
@@ -2557,7 +2532,7 @@ export const root: DocTreeNode = {
 
                     子项与用途（五件套）:
                     - self.md (stone-self.ts): 对内身份；readSelf / writeSelf；buildInputItems 时读取并注入 LlmGenerateParams.instructions。
-                    - readable.md (stone-readable.ts): 对外公开介绍；其它 Object 在 collaborable.relation_window 的伴随 KnowledgeWindow 中会读到。
+                    - readable.md (stone-readable.ts): 对外公开介绍；其它 Object 在 collaborable.relations 自视切片的 peer_readme 段中会读到。
                     - executable/index.ts (stone-executable.ts): stone server 源码；readExecutableSource / writeExecutableSource，自动 mkdir。
                     - client/index.tsx (stone-client.ts): stone client 源码；readStoneClientSource / writeStoneClientSource。
                     - knowledge/ (2026-05-24 重纳): **seed knowledge**——人类设计的初始知识库；
@@ -2659,7 +2634,7 @@ export const root: DocTreeNode = {
                     - \`threads/<threadId>/thread.json\`: thread 序列化（含 debug/ 子目录）。
                     - \`data.json\`: session 级结构化数据（详见 children/session_data，承载 ProgramSelf.getData/setData）。
                     - \`knowledge/relations/<peer>.md\`: session 层 relation（与 pool 的 long_term 配对；
-                      由 collaborable.relation_window.edit(scope="session") 直接写入）。
+                      由 collaborable.relations 的 relation_note(scope="session") 直接写入）。
                     - \`client/pages/<page>.tsx\`: flow 级 UI 页面（详见 visible.flow_client_pages）。
 
                     thread.json 的读写:
@@ -2839,7 +2814,7 @@ export const root: DocTreeNode = {
 
                             标准子目录（仅 sediment）:
                             - \`memory/<slug>.md\`: 长期记忆；reflectable 的主要写入位置，每条记忆一个文件，slug 用 kebab-case。
-                            - \`relations/<peer>.md\`: 对各 peer 的 long_term 关系认知；与 collaborable.relation_window 联动
+                            - \`relations/<peer>.md\`: 对各 peer 的 long_term 关系认知；与 collaborable.relations 联动
                               （session 层 relations 仍在 flows/<sid>/objects/<self>/knowledge/relations/）。
 
                             形态约束:
@@ -2852,7 +2827,7 @@ export const root: DocTreeNode = {
                               frontmatter / activates_on 协议统一，LLM 看到的不分来源。
                             - LLM 写入：reflectable.memory_layout 规定的写盘协议；通过 super flow 的 write_file method落盘。
                               注意 super flow **只写 sediment**——seed 改动属于设计变更，走 stone-versioning PR-Issue。
-                            - 直接读取：collaborable.relation_window 派生的伴随 KnowledgeWindow 读 long_term 段。
+                            - 直接读取：collaborable.relations 自视切片的 self_long_term 段渲染 long_term relation。
                             `,
                             named: {
                                 "memory/<slug>.md": "长期记忆条目；一条一文件（sediment）",
@@ -3928,8 +3903,9 @@ export const root: DocTreeNode = {
                             - **knowledge_window**: body 文本 diff (复用 CodeMirror Merge unified)
                             - **program_window**: history 执行记录 diff (新增 exec / output 变化)
                             - **command_exec**: args 字段级 diff (refine 累积)
-                            - **relation_window**: body 文本 diff (CodeMirror Merge unified)
                             - **root / skill_index / todo / custom**: FallbackJsonDiff (通用 JSON tree 高亮变化)
+                            （注：OOC-4 L6a 删 relation_window 后，RelationWindowDiff 已移除；relations 改由后端
+                            <self_view><relations> 自视切片渲染，不再是独立 window diff renderer。）
 
                             **数据获取策略** (hybrid):
                             - **file_window** (可能大文本): backend 预算 fileDiff 写进 snapshot;
@@ -4275,10 +4251,10 @@ export const root: DocTreeNode = {
             OOC 里 Object 之间有三种**权力语义**关系轴（外加一条正交的 prototype 类型继承轴，见 root.patches.ooc4_object_model.children.prototype_chain）:
 
             1. 自我轴 — super（self-scoped）: Object 通过 sessionId="super" 的反思通道观察 / 修改"自己"。详见 reflectable。
-            2. peer 平等轴 — talk / do / relation_window: 同级 Agent 之间平等协作，只能 talk（说服）不能直接改对方。详见 collaborable。
+            2. peer 平等轴 — talk / do / relations: 同级 Agent 之间平等协作，只能 talk（说服）不能直接改对方。详见 collaborable。
             3. parent-child 层级轴: child Agent 物理嵌套在 parent 的 children/ 下（objectId 用 "/" 编码）。此轴有三个侧面:
                - knowledge 继承（已有）: child 继承祖先 seed knowledge，见 thinkable.knowledge 的 B-tree 协议。
-               - 可见性（已有）: 每轮默认派生 sibling + 一级 child 的 relation_window，见 collaborable.relation_window。
+               - 可见性（已有）: 每轮默认在 relations 自视切片注入 sibling + 一级 child（∪ talk peers），见 collaborable.relations。
                - 修改权: **self-scope 自治**——object 改自己子树（含自己 seed）自治，cross-object 才 PR——见下。
 
             Supervisor = world 级最顶层 parent object: harness 的"1 Supervisor + N Agent"即这棵 object 树的实例——Supervisor 是 root parent，AgentOfX 是一级 children。

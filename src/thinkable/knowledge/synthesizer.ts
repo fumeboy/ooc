@@ -22,7 +22,7 @@
  * 内部的 commands / windows registry），故归位到 thinkable/knowledge。
  */
 
-import { deriveStoneFromThread, derivePoolFromThread, discoverStoneHierarchicalPeers, listBranchSkills, listObjectSkills, listExternalSkills, readPoolRelation, readFlowRelation, readReadable, readableFile, readWorldConfig } from "../../persistable/index.js";
+import { deriveStoneFromThread, derivePoolFromThread, listBranchSkills, listObjectSkills, listExternalSkills, readWorldConfig } from "../../persistable/index.js";
 import type { ThreadContext } from "../context.js";
 import { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge.js";
 import { ROOT_BASIC_PATH, ROOT_METHODS, ROOT_KNOWLEDGE } from "../../executable/windows/root/index.js";
@@ -34,11 +34,11 @@ import {
   REFLECTABLE_METAPROG_KNOWLEDGE,
   REFLECTABLE_METAPROG_PATH,
 } from "../reflectable/reflectable-knowledge.js";
-import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../../executable/windows/_shared/super-constants.js";
+import { SUPER_SESSION_ID } from "../../executable/windows/_shared/super-constants.js";
 import type { MethodKnowledgeEntries, MethodEntry } from "../../executable/windows/_shared/method-types.js";
 import { getWindowTypeDefinition } from "../../executable/windows/_shared/registry.js";
 import { resolveBasicKnowledge, resolveMethod } from "../../executable/windows/_shared/behavior.js";
-import type { CommandExecWindow, ContextWindow, KnowledgeWindow, RelationWindow, SkillIndexWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
+import type { CommandExecWindow, ContextWindow, KnowledgeWindow, SkillIndexWindow } from "../../executable/windows/_shared/types.js";
 import { ROOT_WINDOW_ID, SKILL_INDEX_WINDOW_ID } from "../../executable/windows/_shared/types.js";
 import { computeActivations } from "./activator.js";
 import { loadKnowledgeIndex } from "./loader.js";
@@ -293,169 +293,14 @@ export async function collectExecutableKnowledgeEntries(
     }
   }
 
-  // 4) relation 派生 → RelationWindow(2026-05-21 把伴随 KnowledgeWindow 内联到
-  //    RelationWindow 自身的 peerReadme / selfLongTermBody / selfSessionBody;
-  //    避免 UI 出现 relation_window 与 kn_rel_*_self / kn_rel_*_readme 三份重复)。
-  //    spec: meta/object/collaborable/relation_window;详见 deriveRelationWindow JSDoc
-  const relationWindows = await deriveRelationWindow(thread);
-  for (const rw of relationWindows) synthetic.push(rw);
+  // 4) relations 不再以 RelationWindow 派生（OOC-4 L6a 已删 relation_window）；
+  //    self 对身边 peer（siblings/children ∪ talk peers）的关系认知改由自视切片
+  //    `<self_view><relations>` 每轮注入，见 src/thinkable/context/self-view.ts:renderRelationsSlice。
 
   // 5) 返回时把 synthetic windows 附加到 enriched 的副本上
   const finalWindows = synthetic.length > 0 ? [...enriched, ...synthetic] : enriched;
 
   return { contextWindows: finalWindows, knowledgeEntries: protocolEntries };
-}
-
-/**
- * 按 thread 中存在的 talk_window 派生 RelationWindow(每个 peer 一条)。
- *
- * spec 2026-05-20 relation-window-design:relation 升级为专属 window type,
- * 自带 edit 命令面;不持久化,每轮 derive。id 稳定 `w_rel_<peerId>`。
- *
- * 2026-05-25 R8-5:
- * - 删除 peerReadme/peerReadmePath: relation 文档在设计中只存在于 pools 与 flows
- *   (self 视角的 self-relation), 不含 peer stone readme; peer readme 是
- *   collaborable.talk_window 维度的"对端身份介绍", 与 self-relation 是不同维度
- *   的资源, 不该被 RelationWindow 内联。需要 peer readme 时 LLM 走 file_window
- *   直接 open peer stone 路径即可。
- * - 加 selfLongTermExists / selfSessionExists boolean flag: 让 API caller 显式
- *   知道"懒创建未写"(exists=false, body=undefined) vs "读失败"(future scope)。
- *
- * 跳过规则:
- * - target === SUPER_ALIAS_TARGET → 跳过(super 自反不需要 relation)
- * - thread.persistence 缺失 → 全部跳过
- *
- * IO 错误规则:全部静默(console.debug),body 保持 undefined, exists 据 read 返回值判定。
- */
-export async function deriveRelationWindow(
-  thread: ThreadContext,
-): Promise<RelationWindow[]> {
-  if (!thread.persistence) return [];
-  const { baseDir, sessionId, objectId: selfId } = thread.persistence;
-
-  const talkWindows = (thread.contextWindows ?? []).filter(
-    (w): w is TalkWindow => w.type === "talk",
-  );
-  const peerEarliest = new Map<string, number>();
-  for (const w of talkWindows) {
-    if (!w.target) continue;
-    if (w.target === SUPER_ALIAS_TARGET) {
-      console.debug(`[relation] skip ${w.target} reason=super_alias`);
-      continue;
-    }
-    const prev = peerEarliest.get(w.target);
-    if (prev === undefined || w.createdAt < prev) peerEarliest.set(w.target, w.createdAt);
-  }
-
-  // 默认相邻 Agent（spec 2026-05-27 collaborable.relation_window default visibility）：
-  // 即使没主动 talk 过,也把同级 + 一级 children Agent 的 relation_window 默认可见,
-  // 让 Agent 一上场就知道身边有谁。已在 peerEarliest 的 peer 不覆盖 createdAt。
-  // 自身不是 user 时才扫(user 不是 Agent 也无 stone 子树)。
-  if (selfId !== "user") {
-    try {
-      const { siblings, children } = await discoverStoneHierarchicalPeers(
-        deriveStoneFromThread(thread.persistence),
-      );
-      const now = Date.now();
-      for (const peer of [...siblings, ...children]) {
-        if (peer === selfId) continue;
-        if (!peerEarliest.has(peer)) peerEarliest.set(peer, now);
-      }
-    } catch (err) {
-      console.debug(
-        `[relation] hierarchical peers io_error self=${selfId} msg=${(err as Error).message}`,
-      );
-    }
-  }
-
-  if (peerEarliest.size === 0) return [];
-
-  const out: RelationWindow[] = [];
-  const selfPoolRef = { baseDir, objectId: selfId };
-  const selfFlowRef = { baseDir, sessionId, objectId: selfId };
-
-  for (const [peerId, createdAt] of peerEarliest) {
-    const selfLongTermPath = `pools/${selfId}/knowledge/relations/${peerId}.md`;
-    const selfSessionPath = `flows/${sessionId}/objects/${selfId}/knowledge/relations/${peerId}.md`;
-    const peerStoneRef = { baseDir, objectId: peerId, stonesBranch: thread.persistence.stonesBranch };
-    const peerReadmePath = readableFile(peerStoneRef);
-
-    let peerReadmeBody: string | undefined;
-    let peerReadmeExists = false;
-    try {
-      const text = await readReadable(peerStoneRef);
-      if (text !== undefined && text.trim() !== "") {
-        peerReadmeExists = true;
-        peerReadmeBody = truncateKnowledgeBody(text);
-      } else if (text !== undefined) {
-        // 文件存在但空 — 当作 exists=true 但 body undefined（与"完全没文件"区分）
-        peerReadmeExists = true;
-      }
-    } catch (err) {
-      console.debug(`[relation] peer_readme io_error ${peerId} msg=${(err as Error).message}`);
-    }
-
-    let selfLongTermBody: string | undefined;
-    let selfLongTermExists = false;
-    try {
-      const text = await readPoolRelation(selfPoolRef, peerId);
-      if (text !== undefined) {
-        selfLongTermExists = true;
-        selfLongTermBody = truncateKnowledgeBody(text);
-      }
-    } catch (err) {
-      console.debug(`[relation] long_term io_error ${peerId} msg=${(err as Error).message}`);
-    }
-
-    let selfSessionBody: string | undefined;
-    let selfSessionExists = false;
-    try {
-      const text = await readFlowRelation(selfFlowRef, peerId);
-      if (text !== undefined) {
-        selfSessionExists = true;
-        selfSessionBody = truncateKnowledgeBody(text);
-      }
-    } catch (err) {
-      console.debug(`[relation] session io_error ${peerId} msg=${(err as Error).message}`);
-    }
-
-    out.push({
-      id: `w_rel_${peerId}`,
-      type: "relation",
-      parentWindowId: "root",
-      title: `relation: ${peerId}`,
-      status: "open",
-      createdAt,
-      peerId,
-      peerReadmePath,
-      peerReadmeBody,
-      peerReadmeExists,
-      selfLongTermPath,
-      selfLongTermBody,
-      selfLongTermExists,
-      selfSessionPath,
-      selfSessionBody,
-      selfSessionExists,
-    });
-  }
-  return out;
-}
-
-/**
- * @deprecated 2026-05-21:伴随 KnowledgeWindow 已被合并进 RelationWindow 字段;
- * 本函数保留为空数组返回的 backward-compat shim,避免外部调用方一并改。
- */
-export async function deriveRelationCompanionKnowledge(
-  _thread: ThreadContext,
-): Promise<KnowledgeWindow[]> {
-  return [];
-}
-
-/** @deprecated 2026-05-21:同 deriveRelationCompanionKnowledge,旧名保留为 backward-compat。 */
-export async function deriveRelationKnowledge(
-  _thread: ThreadContext,
-): Promise<KnowledgeWindow[]> {
-  return [];
 }
 
 /** 与 render 层共用的 8KB 截断；本地实现避免反向 import render.ts。 */

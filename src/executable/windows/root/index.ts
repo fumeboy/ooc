@@ -24,6 +24,7 @@ import { openFileCommand } from "./command.open-file.js";
 import { openKnowledgeCommand } from "./command.open-knowledge.js";
 import { planSetCommand, planClearCommand } from "./command.plan.js";
 import { programCommand } from "./command.program.js";
+import { relationNoteCommand } from "./command.relation.js";
 import { talkCommand } from "./command.talk.js";
 import {
   todoAddCommand,
@@ -53,6 +54,7 @@ export const ROOT_METHODS: Record<string, MethodEntry> = {
   todo_uncheck: todoUncheckCommand,
   todo_remove: todoRemoveCommand,
   todo_list: todoListCommand,
+  relation_note: relationNoteCommand,
   end: endCommand,
   open_file: openFileCommand,
   open_knowledge: openKnowledgeCommand,
@@ -93,6 +95,7 @@ root window 是每个 thread 隐含的根窗口。在 root 上可用的 method �
 | todo_uncheck    | 把已完成待办改回未完成                        | 写 todos.json（done=false）                |
 | todo_remove     | 删除一条待办                                  | 写 todos.json（移除该条）                  |
 | todo_list       | 列出当前对象的全部待办                        | 只读 todos.json，返回列表给 LLM            |
+| relation_note   | 记录/更新对某 peer 的关系认知（整文件替换）   | scope=session 写 flows relations；scope=long_term 派 super 写 pools relations（self_view.relations 切片消费） |
 | end             | 标记 thread 完成                              | 仅副作用                                   |
 | open_file       | 把指定文件引入 context                        | 创建 file_window；后续 set_range/reload    |
 | open_knowledge  | 显式打开 stone knowledge doc                  | 创建 knowledge_window（force-full 渲染）   |

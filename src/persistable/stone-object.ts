@@ -122,10 +122,10 @@ void readFile;
  * "OOC Agent" 判定：目录内含 `self.md`（Agent identity marker）。`user` 是 passive
  * flow object，不算 Agent，永远过滤掉（无论它出现在 sibling 还是 child 列表）。
  *
- * 用于 thinkable.deriveRelationWindow 每轮派生默认 relation_window，让 Agent 默认
- * 看见同级 + 一级 children 的关系窗口（spec 2026-05-27 collaborable.relation_window
- * default visibility）。任何路径异常（ENOENT / EACCES）静默回空，不抛——deriveRelationWindow
- * 是热路径，不能被一次磁盘抖动拖垮。
+ * 用于 self-view.ts:renderRelationsSlice 每轮注入 `<self_view><relations>` 自视切片，
+ * 让 Agent 默认看见同级 + 一级 children 的关系认知（OOC-4 L6a；spec §5.3 relation 塌缩）。
+ * 任何路径异常（ENOENT / EACCES）静默回空，不抛——relations 切片是热路径，
+ * 不能被一次磁盘抖动拖垮。
  */
 export async function discoverStoneHierarchicalPeers(
   ref: StoneObjectRef,

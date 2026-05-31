@@ -16,7 +16,6 @@ import { SearchWindowDiff } from "./SearchWindowDiff";
 import { KnowledgeWindowDiff } from "./KnowledgeWindowDiff";
 import { ProgramWindowDiff } from "./ProgramWindowDiff";
 import { CommandExecDiff } from "./CommandExecDiff";
-import { RelationWindowDiff } from "./RelationWindowDiff";
 
 // type name 与 ContextWindow type 字面量保持一致（见 web/src/domains/files/context-snapshot.ts）。
 registerWindowDiffRenderer("file", FileWindowDiff);
@@ -27,7 +26,6 @@ registerWindowDiffRenderer("search", SearchWindowDiff);
 registerWindowDiffRenderer("knowledge", KnowledgeWindowDiff);
 registerWindowDiffRenderer("program", ProgramWindowDiff);
 registerWindowDiffRenderer("command_exec", CommandExecDiff);
-registerWindowDiffRenderer("relation", RelationWindowDiff);
 
 export { FallbackJsonDiff } from "./FallbackJsonDiff";
 export { DiffRendererErrorBoundary } from "./ErrorBoundary";
