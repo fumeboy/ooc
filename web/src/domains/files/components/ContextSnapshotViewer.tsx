@@ -958,8 +958,8 @@ function WindowDetail({
         <>
           <div className="llm-input-attrs">
             <div className="llm-input-attr-row">
-              <span className="llm-input-attr-key">command</span>
-              <span className="llm-input-attr-value">{window.command}</span>
+              <span className="llm-input-attr-key">method</span>
+              <span className="llm-input-attr-value">{window.method}</span>
             </div>
             {window.description && (
               <div className="llm-input-attr-row">
@@ -976,8 +976,8 @@ function WindowDetail({
           </div>
           {(() => {
             const args = window.accumulatedArgs ?? {};
-            const isEdit = window.command === "edit";
-            const isWriteFile = window.command === "write_file";
+            const isEdit = window.method === "edit";
+            const isWriteFile = window.method === "write_file";
             // edit:渲染为 unified diff
             if (isEdit) {
               const pairs = parseEditArgs(args);

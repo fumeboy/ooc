@@ -5,7 +5,7 @@ import type {
 } from "../_shared/method-types.js";
 
 /**
- * command_exec.submit method — 触发 form.command.exec。
+ * command_exec.submit method — 触发 form.method.exec。
  *
  * 调用形态：exec(<form_id>, "submit")
  *
@@ -33,7 +33,7 @@ async function executeSubmit(ctx: MethodExecutionContext): Promise<string | unde
     const result = await ctx.manager.submit(form.id, ctx.thread);
     const after = ctx.manager.get(form.id);
     const removed = !after;
-    const title = form.command;
+    const title = form.method;
     // Round 13: removed = success 路径 (form 已自动从 contextWindows 移除);
     // 留下来的必然是 failed 状态 (open → executing → failed)。
     const messageBase = removed
@@ -50,7 +50,7 @@ export const submitCommand: MethodEntry = {
   match: () => ["submit"],
   knowledge: (_args, _formStatus): MethodKnowledgeEntries => ({
     "internal/windows/command_exec/submit/basic": [
-      "command_exec.submit 触发 form.command 真正执行；不接受新业务参数。",
+      "command_exec.submit 触发 form.method 真正执行；不接受新业务参数。",
       "调用：exec(window_id=<form_id>, method=\"submit\")",
       "成功执行后系统自动从 context 移除该 form；失败则保留 result 字段，需要 close。",
     ].join("\n"),

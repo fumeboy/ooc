@@ -48,7 +48,7 @@ describe("executable tools (ContextWindow model)", () => {
 
     const forms = thread.contextWindows.filter((w) => w.type === "command_exec");
     expect(forms).toHaveLength(1);
-    expect(forms[0]?.command).toBe("plan_set");
+    expect(forms[0]?.method).toBe("plan_set");
   });
 
   it("args 给齐时 exec 立即执行：plan_set 给齐 content 一次到位执行（B 类塌缩：写 plan.md，不再造 plan_window）", async () => {

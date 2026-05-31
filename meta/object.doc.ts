@@ -1511,7 +1511,7 @@ export const root: DocTreeNode = {
                     - \`"window::<type>"\` — \`thread.contextWindows\` 含 status="open" 且 type === <type> 的 window 时命中。
                       root window 每个 thread 都有，故 \`"window::root"\` 等价"任何时候"——这是旧 \`[root]\` 的自然替代。
                     - \`"command::<window_type>::<command>"\` — \`thread.contextWindows\` 含 type="command_exec" 的 open form，
-                      其 parentWindow.type === <window_type> 且 form.command === <command> 时命中。
+                      其 parentWindow.type === <window_type> 且 form.method === <command> 时命中。
                     - \`"super"\` — \`thread.persistence?.sessionId === SUPER_SESSION_ID\` 时命中（仅 super flow）。
                     `,
                     named: {
@@ -2289,7 +2289,7 @@ export const root: DocTreeNode = {
                     **门控条件** (synthesizer 内):
                     - \`thread.persistence?.sessionId !== SUPER_SESSION_ID\` — super flow 内 end 是反思自身的结束,
                       不该再提示反思 (避免无限套娃)
-                    - form.command === "end" — 只在 end 的 form 被打开 / 持续展示时激活
+                    - form.method === "end" — 只在 end 的 form 被打开 / 持续展示时激活
                     - 可选: \`thread.events.length > N\` (阈值默认未启用; 简单 thread 也允许提示, LLM 自己决定是否触发)
 
                     **不强制反思**: knowledge 只是 hint, 不是 deny gate。LLM 看完之后:
@@ -2303,7 +2303,7 @@ export const root: DocTreeNode = {
 
                     **实现位置**:
                     - 常量在 src/thinkable/reflectable/reflectable-knowledge.ts (与 REFLECTABLE_KNOWLEDGE 同文件)
-                    - 注入在 src/thinkable/knowledge/synthesizer.ts (检查 form.command === "end" + super 门控)
+                    - 注入在 src/thinkable/knowledge/synthesizer.ts (检查 form.method === "end" + super 门控)
 
                     完整 design / harness 循环优化记录见 docs/2026-05-27-end-reflection-reminder-design.md。
                     `,

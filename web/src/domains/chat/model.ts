@@ -35,7 +35,7 @@ export type ContextWindow =
       parentWindowId: string;
       title: string;
       status: "open" | "executing" | "success" | "failed";
-      command: string;
+      method: string;
       description?: string;
       accumulatedArgs?: Record<string, unknown>;
       commandPaths?: string[];

@@ -29,7 +29,7 @@ function form(overrides: Partial<CommandExecWindow>): CommandExecWindow {
     title: "x",
     status: "open",
     createdAt: 0,
-    command: "x",
+    method: "x",
     description: "",
     accumulatedArgs: {},
     commandPaths: [],
@@ -194,15 +194,15 @@ describe("evaluateTrigger", () => {
 
   test("command::root::program hits when form on root with command=program is open", () => {
     const t = parseTrigger("command::root::program");
-    const f = form({ command: "program", parentWindowId: "root" });
+    const f = form({ method: "program", parentWindowId: "root" });
     expect(evaluateTrigger(t, thread({ contextWindows: [f] }))).toBe(true);
 
     // wrong command
-    const otherForm = form({ command: "talk", parentWindowId: "root" });
+    const otherForm = form({ method: "talk", parentWindowId: "root" });
     expect(evaluateTrigger(t, thread({ contextWindows: [otherForm] }))).toBe(false);
 
     // failed form does not count as active
-    const failedForm = form({ command: "program", parentWindowId: "root", status: "failed" });
+    const failedForm = form({ method: "program", parentWindowId: "root", status: "failed" });
     expect(evaluateTrigger(t, thread({ contextWindows: [failedForm] }))).toBe(false);
   });
 
@@ -217,10 +217,10 @@ describe("evaluateTrigger", () => {
       createdAt: 0,
       target: "alice",
     } as ContextWindow;
-    const sayOnTalk = form({ id: "fs1", command: "say", parentWindowId: "wt" });
+    const sayOnTalk = form({ id: "fs1", method: "say", parentWindowId: "wt" });
     expect(evaluateTrigger(t, thread({ contextWindows: [talkW, sayOnTalk] }))).toBe(true);
 
-    const sayOnRoot = form({ id: "fs2", command: "say", parentWindowId: "root" });
+    const sayOnRoot = form({ id: "fs2", method: "say", parentWindowId: "root" });
     expect(evaluateTrigger(t, thread({ contextWindows: [sayOnRoot] }))).toBe(false);
   });
 });

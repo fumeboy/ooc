@@ -7,7 +7,7 @@
  * 1. 三类 trigger 语法的解析与校验（`parseTrigger`）：
  *    - `window::<type>` —— 任意 open 的 ContextWindow 满足 `type === <type>` 命中
  *    - `command::<window_type>::<command>` —— thread 中存在 type=command_exec 的
- *      form，且其 parentWindow 的 type === <window_type> 且 form.command === <command>
+ *      form，且其 parentWindow 的 type === <window_type> 且 form.method === <command>
  *    - `super` —— `thread.persistence?.sessionId === SUPER_SESSION_ID`
  *
  * 2. 单次求值（`evaluateTrigger`）：纯函数，输入 trigger + thread，输出 boolean。
@@ -148,7 +148,7 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
       for (const w of list) {
         if (w.type !== "command_exec") continue;
         const form = w as CommandExecWindow;
-        if (form.command !== trigger.command) continue;
+        if (form.method !== trigger.command) continue;
         // form 必须 open 才视为"该 command 当前活跃"——success/failed 不算
         if (!isOpen(form)) continue;
         const parentType = parentTypeOf(form, byId);

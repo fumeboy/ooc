@@ -2,7 +2,7 @@
  * CommandExecDiff — command_exec window 的 args 字段级 diff（design § 4.8）。
  *
  * command_exec 的 args 在 refine 阶段会累积；逐 loop 增量。
- * - command / status 字段顶部
+ * - method / status 字段顶部
  * - accumulatedArgs 按 key 逐项 diff（added / removed / changed / unchanged）
  * - result 字段（string）单独显示
  */
@@ -29,8 +29,8 @@ export function CommandExecDiff(props: WindowDiffRendererProps) {
 
   return (
     <div data-testid={`command-exec-diff-${windowId}`}>
-      <Section title="command" testId={`commandexec-fields-${windowId}`}>
-        <FieldDiffLine label="command" prev={readString(prev, "command")} cur={readString(cur, "command")} />
+      <Section title="method" testId={`commandexec-fields-${windowId}`}>
+        <FieldDiffLine label="method" prev={readString(prev, "method")} cur={readString(cur, "method")} />
         <FieldDiffLine label="status" prev={readString(prev, "status")} cur={readString(cur, "status")} />
         <FieldDiffLine
           label="description"

@@ -189,7 +189,7 @@ export class WindowManager {
       title: opts.title,
       status: "open",
       createdAt: Date.now(),
-      command: opts.command,
+      method: opts.command,
       description: opts.description ?? opts.title,
       accumulatedArgs: { ...args },
       commandPaths,
@@ -258,10 +258,10 @@ export class WindowManager {
     if (!form || form.type !== "command_exec") return false;
     if (form.status !== "open" && form.status !== "failed") return false;
     const parent = this.requireParent(form.parentWindowId);
-    const entry = await lookupMethodEntry(parent, form.command);
+    const entry = await lookupMethodEntry(parent, form.method);
     if (!entry) return false;
     const nextArgs = { ...form.accumulatedArgs, ...args };
-    const nextPaths = computeCommandPaths(entry, form.command, nextArgs);
+    const nextPaths = computeCommandPaths(entry, form.method, nextArgs);
     // failed → open 复活: 清 result, 把 status 切回 "open"。
     // open → open: 仅累积 args / 重算 paths。
     const next: CommandExecWindow = {
@@ -297,10 +297,10 @@ export class WindowManager {
     }
 
     const parent = this.requireParent(form.parentWindowId);
-    const entry = await lookupMethodEntry(parent, form.command);
+    const entry = await lookupMethodEntry(parent, form.method);
     if (!entry) {
       throw new Error(
-        `submit: command "${form.command}" not registered on parent window type "${parent.type}"`,
+        `submit: command "${form.method}" not registered on parent window type "${parent.type}"`,
       );
     }
 

@@ -230,7 +230,7 @@ supervisor 把 PR-Issue 标 \`reject\` 时，你的整个 branch 被存档到
  * 沉淀经验。
  *
  * 注入条件（参见 synthesizer.collectExecutableKnowledgeEntries）：
- * - thread 中存在 form.command === "end" 的 command_exec window
+ * - thread 中存在 form.method === "end" 的 command_exec window
  * - thread.persistence?.sessionId !== SUPER_SESSION_ID（避免 super flow 内
  *   end 时套娃提醒）
  *

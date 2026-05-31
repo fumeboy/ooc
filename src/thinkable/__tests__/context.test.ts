@@ -21,10 +21,10 @@ function execForm(overrides: Partial<CommandExecWindow>): CommandExecWindow {
     title: overrides.title ?? "form",
     status: overrides.status ?? "open",
     createdAt: overrides.createdAt ?? 1,
-    command: overrides.command ?? "program",
+    method: overrides.method ?? "program",
     description: overrides.description ?? "form description",
     accumulatedArgs: overrides.accumulatedArgs ?? {},
-    commandPaths: overrides.commandPaths ?? [overrides.command ?? "program"],
+    commandPaths: overrides.commandPaths ?? [overrides.method ?? "program"],
     loadedKnowledgePaths: overrides.loadedKnowledgePaths ?? [],
     commandKnowledgePaths: overrides.commandKnowledgePaths,
     result: overrides.result,
@@ -526,13 +526,13 @@ describe("buildContext (ContextWindow model)", () => {
   it("deduplicates identical knowledge entries across multiple forms", async () => {
     const f1 = execForm({
       id: "f_1",
-      command: "program",
+      method: "program",
       accumulatedArgs: { language: "shell", code: "pwd" },
       commandPaths: ["program", "program.shell"],
     });
     const f2 = execForm({
       id: "f_2",
-      command: "program",
+      method: "program",
       accumulatedArgs: { language: "shell", code: "ls" },
       commandPaths: ["program", "program.shell"],
     });
@@ -550,7 +550,7 @@ describe("buildContext (ContextWindow model)", () => {
       extraWindows: [
         execForm({
           id: "f_cdata",
-          command: "talk",
+          method: "talk",
           accumulatedArgs: { msg: 'say "hello" & <tag>' },
           commandPaths: ["talk"],
         }),
@@ -587,7 +587,7 @@ describe("buildContext knowledge synthesis (activator → knowledge_window)", ()
     const thread = makeThread({
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
-      extraWindows: [execForm({ id: "f1", command: "program", commandPaths: ["program"] })],
+      extraWindows: [execForm({ id: "f1", method: "program", commandPaths: ["program"] })],
     });
     const messages = await buildContext(thread);
     const xml = messages[0]?.content ?? "";
@@ -612,7 +612,7 @@ describe("buildContext knowledge synthesis (activator → knowledge_window)", ()
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
       extraWindows: [
-        execForm({ id: "f1", command: "program", commandPaths: ["program", "program.shell"] }),
+        execForm({ id: "f1", method: "program", commandPaths: ["program", "program.shell"] }),
       ],
     });
     const messages = await buildContext(thread);

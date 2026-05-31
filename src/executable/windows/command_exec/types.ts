@@ -19,7 +19,7 @@ import type { BaseContextWindow } from "../_shared/types.js";
 export interface CommandExecWindow extends BaseContextWindow {
   type: "command_exec";
   parentWindowId: string;
-  command: string;
+  method: string;
   description: string;
   accumulatedArgs: Record<string, unknown>;
   commandPaths: string[];

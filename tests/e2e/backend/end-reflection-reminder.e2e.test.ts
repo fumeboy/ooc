@@ -36,18 +36,18 @@ import type { ThreadPersistenceRef } from "@src/persistable/common";
 import "@src/executable/windows";
 
 function makeCommandExecWindow(
-  overrides: Partial<CommandExecWindow> & { command: string },
+  overrides: Partial<CommandExecWindow> & { method: string },
 ): CommandExecWindow {
   return {
     id: "f_test",
     type: "command_exec",
     parentWindowId: "root",
-    title: overrides.command,
+    title: overrides.method,
     status: "open",
     createdAt: 1,
     description: "",
     accumulatedArgs: {},
-    commandPaths: [overrides.command],
+    commandPaths: [overrides.method],
     loadedKnowledgePaths: [],
     ...overrides,
   };
@@ -99,7 +99,7 @@ describe("[round-11] end-reflection-reminder thread-level integration", () => {
         id: ref.threadId,
         persistence: ref,
         extraWindows: [
-          makeCommandExecWindow({ command: "end", id: "f_end_biz" }),
+          makeCommandExecWindow({ method: "end", id: "f_end_biz" }),
         ],
       });
 
@@ -141,7 +141,7 @@ describe("[round-11] end-reflection-reminder thread-level integration", () => {
         id: ref.threadId,
         persistence: ref,
         extraWindows: [
-          makeCommandExecWindow({ command: "end", id: "f_end_super" }),
+          makeCommandExecWindow({ method: "end", id: "f_end_super" }),
         ],
       });
 
@@ -170,7 +170,7 @@ describe("[round-11] end-reflection-reminder thread-level integration", () => {
         id: ref.threadId,
         persistence: ref,
         extraWindows: [
-          makeCommandExecWindow({ command: "talk", id: "f_talk_biz" }),
+          makeCommandExecWindow({ method: "talk", id: "f_talk_biz" }),
         ],
       });
 

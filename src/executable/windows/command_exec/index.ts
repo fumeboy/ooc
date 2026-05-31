@@ -3,7 +3,7 @@
  *
  * 注册的 methods：
  * - refine：累积参数到 form.accumulatedArgs，重算 commandPaths
- * - submit：触发 form.command 真正执行
+ * - submit：触发 form.method 真正执行
  *
  * basicKnowledge 在每轮"thread.contextWindows 出现至少一个 command_exec form"时
  * 自动作为 protocol KnowledgeWindow 注入到 LLM context，告诉 LLM 如何推进 form。
@@ -21,7 +21,7 @@ command_exec form 是 LLM 调用某个 method 时的临时 sub-window。两个 m
 | method | 作用 | 调用形态 |
 |--------|------|----------|
 | refine  | 累积/覆盖 form 的业务参数         | exec(window_id="<form_id>", method="refine", args={ <键值对> }) |
-| submit  | 触发 form.command 真正执行       | exec(window_id="<form_id>", method="submit") |
+| submit  | 触发 form.method 真正执行       | exec(window_id="<form_id>", method="submit") |
 
 **form 状态机 (Round 13)**: \`open → executing → success | failed\`
 
@@ -48,7 +48,7 @@ command_exec form 是 LLM 调用某个 method 时的临时 sub-window。两个 m
 function renderCommandExec(ctx: RenderContext): XmlNode[] {
   const form = ctx.window as CommandExecWindow;
   const children: XmlNode[] = [
-    xmlElement("command", {}, [xmlText(form.command)]),
+    xmlElement("method", {}, [xmlText(form.method)]),
     xmlElement("description", {}, [xmlText(form.description)]),
     xmlElement("accumulated_args", {}, [xmlText(JSON.stringify(form.accumulatedArgs))]),
   ];

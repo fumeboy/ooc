@@ -37,7 +37,7 @@ export type ContextWindow =
       parentWindowId: string;
       title: string;
       status: "open" | "executing" | "success" | "failed";
-      command: string;
+      method: string;
       description?: string;
       accumulatedArgs?: Record<string, unknown>;
       commandPaths?: string[];
@@ -361,7 +361,7 @@ function windowBadge(window: ContextWindow): string {
 function windowSummary(window: ContextWindow): string {
   switch (window.type) {
     case "command_exec":
-      return `${window.command} (${window.status})`;
+      return `${window.method} (${window.status})`;
     case "do":
       return `→ ${window.targetThreadId}${window.isCreatorWindow ? " · creator" : ""}`;
     case "todo":
@@ -398,7 +398,7 @@ function windowCharCount(window: ContextWindow): number {
   let n = window.title.length;
   switch (window.type) {
     case "command_exec":
-      n += window.command.length;
+      n += window.method.length;
       n += jsonChars(window.accumulatedArgs ?? {});
       n += (window.result ?? "").length;
       break;

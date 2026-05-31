@@ -18,7 +18,7 @@ function makeForm(overrides: Partial<CommandExecWindow> = {}): CommandExecWindow
     title: "test",
     status: "open",
     createdAt: 1,
-    command: "program",
+    method: "program",
     description: "test",
     accumulatedArgs: {},
     commandPaths: ["program"],
@@ -29,7 +29,7 @@ function makeForm(overrides: Partial<CommandExecWindow> = {}): CommandExecWindow
 
 describe("enrichProgramFormCommand", () => {
   test("enriches command knowledge paths even when command is not program", async () => {
-    const form = makeForm({ command: "plan_set", commandPaths: ["plan_set"] });
+    const form = makeForm({ method: "plan_set", commandPaths: ["plan_set"] });
     const thread = makeThread({ id: "t" });
     const result = await enrichProgramFormCommand(form, thread);
     expect(result).not.toBe(form);

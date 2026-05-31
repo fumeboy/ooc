@@ -23,7 +23,7 @@ function indexOf(...docs: KnowledgeDoc[]): KnowledgeIndex {
   return { byPath: new Map(docs.map((d) => [d.path, d])) };
 }
 
-/** 构造 command_exec window 的辅助；activator 内部走 evaluateTrigger，需 parentWindowId + command 字段。 */
+/** 构造 command_exec window 的辅助；activator 内部走 evaluateTrigger，需 parentWindowId + method 字段。 */
 function form(overrides: Partial<CommandExecWindow>): CommandExecWindow {
   return {
     id: "f",
@@ -32,7 +32,7 @@ function form(overrides: Partial<CommandExecWindow>): CommandExecWindow {
     title: "x",
     status: "open",
     createdAt: 0,
-    command: "x",
+    method: "x",
     description: "",
     accumulatedArgs: {},
     commandPaths: [],
@@ -63,7 +63,7 @@ describe("computeActivations (trigger map)", () => {
   test("command trigger matches when form on root with same command exists → full", () => {
     const index = indexOf(doc("a", "A", { "command::root::program": "show_content" }));
     const out = computeActivations(
-      thread({ contextWindows: [form({ command: "program" })] }),
+      thread({ contextWindows: [form({ method: "program" })] }),
       index,
     );
     expect(out).toHaveLength(1);
@@ -74,7 +74,7 @@ describe("computeActivations (trigger map)", () => {
   test("command trigger matches → show_description level renders as summary", () => {
     const index = indexOf(doc("a", "A", { "command::root::program": "show_description" }));
     const out = computeActivations(
-      thread({ contextWindows: [form({ command: "program" })] }),
+      thread({ contextWindows: [form({ method: "program" })] }),
       index,
     );
     expect(out).toHaveLength(1);
@@ -92,7 +92,7 @@ describe("computeActivations (trigger map)", () => {
     // 既有 root window（隐式由 contextWindows 中含 root window 模拟，但这里没显式塞 root window）
     // 让 program command trigger 命中即可
     const out = computeActivations(
-      thread({ contextWindows: [form({ command: "program" })] }),
+      thread({ contextWindows: [form({ method: "program" })] }),
       index,
     );
     expect(out).toHaveLength(1);
@@ -151,7 +151,7 @@ describe("computeActivations (trigger map)", () => {
       createdAt: 0,
       target: "alice",
     } as ContextWindow;
-    const sayForm = form({ id: "f_say", command: "say", parentWindowId: "w_talk" });
+    const sayForm = form({ id: "f_say", method: "say", parentWindowId: "w_talk" });
 
     const out = computeActivations(
       thread({ contextWindows: [talkWindow, sayForm] }),
@@ -160,7 +160,7 @@ describe("computeActivations (trigger map)", () => {
     expect(out).toHaveLength(1);
 
     // Same say form but parent is root → no match
-    const sayOnRoot = form({ id: "f_say_root", command: "say", parentWindowId: "root" });
+    const sayOnRoot = form({ id: "f_say_root", method: "say", parentWindowId: "root" });
     const out2 = computeActivations(
       thread({ contextWindows: [sayOnRoot] }),
       index,
@@ -171,7 +171,7 @@ describe("computeActivations (trigger map)", () => {
   test("doc without activates_on never auto-activates", () => {
     const index = indexOf(doc("a", "A", undefined));
     const out = computeActivations(
-      thread({ contextWindows: [form({ command: "program" })] }),
+      thread({ contextWindows: [form({ method: "program" })] }),
       index,
     );
     expect(out).toEqual([]);
@@ -180,7 +180,7 @@ describe("computeActivations (trigger map)", () => {
   test("non-matching triggers produce no result", () => {
     const index = indexOf(doc("a", "A", { "command::root::talk": "show_content" }));
     const out = computeActivations(
-      thread({ contextWindows: [form({ command: "program" })] }),
+      thread({ contextWindows: [form({ method: "program" })] }),
       index,
     );
     expect(out).toEqual([]);
@@ -192,7 +192,7 @@ describe("computeActivations (trigger map)", () => {
       docs.push(doc(`k${i}`, `desc ${i}`, { "command::root::program": "show_content" }));
     }
     const out = computeActivations(
-      thread({ contextWindows: [form({ command: "program" })] }),
+      thread({ contextWindows: [form({ method: "program" })] }),
       indexOf(...docs),
     );
     expect(out.length).toBe(20);
@@ -213,7 +213,7 @@ describe("computeActivations (trigger map)", () => {
         } as unknown as ActivatesOn),
       );
       const out = computeActivations(
-        thread({ contextWindows: [form({ command: "program" })] }),
+        thread({ contextWindows: [form({ method: "program" })] }),
         index,
       );
       expect(out).toHaveLength(1);

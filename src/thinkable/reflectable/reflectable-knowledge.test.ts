@@ -18,17 +18,17 @@ import { makeThread } from "../../__tests__/make-thread";
 import type { CommandExecWindow } from "../../executable/windows/_shared/types";
 
 /** 构造 command_exec window fixture（用于 G2 end-reflection-reminder 测试）。 */
-function makeCommandExecWindow(overrides: Partial<CommandExecWindow> & { command: string }): CommandExecWindow {
+function makeCommandExecWindow(overrides: Partial<CommandExecWindow> & { method: string }): CommandExecWindow {
   return {
     id: "f_test",
     type: "command_exec",
     parentWindowId: "root",
-    title: overrides.command,
+    title: overrides.method,
     status: "open",
     createdAt: 1,
     description: "",
     accumulatedArgs: {},
-    commandPaths: [overrides.command],
+    commandPaths: [overrides.method],
     loadedKnowledgePaths: [],
     ...overrides,
   };
@@ -116,7 +116,7 @@ describe("end-reflection-reminder injection (G2)", () => {
       persistence: {
         baseDir: "/tmp/test", sessionId: "web-test", objectId: "alice", threadId: "t_end_business",
       },
-      extraWindows: [makeCommandExecWindow({ command: "end", id: "f_end" })],
+      extraWindows: [makeCommandExecWindow({ method: "end", id: "f_end" })],
     });
     const out = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
     expect(out.knowledgeEntries[END_REFLECTION_REMINDER_PATH]).toBe(END_REFLECTION_REMINDER_KNOWLEDGE);
@@ -134,7 +134,7 @@ describe("end-reflection-reminder injection (G2)", () => {
       persistence: {
         baseDir: "/tmp/test", sessionId: "super", objectId: "alice", threadId: "t_end_super",
       },
-      extraWindows: [makeCommandExecWindow({ command: "end", id: "f_end" })],
+      extraWindows: [makeCommandExecWindow({ method: "end", id: "f_end" })],
     });
     const out = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
     expect(out.knowledgeEntries[END_REFLECTION_REMINDER_PATH]).toBeUndefined();
@@ -146,7 +146,7 @@ describe("end-reflection-reminder injection (G2)", () => {
       persistence: {
         baseDir: "/tmp/test", sessionId: "web-test", objectId: "alice", threadId: "t_talk_business",
       },
-      extraWindows: [makeCommandExecWindow({ command: "talk", id: "f_talk" })],
+      extraWindows: [makeCommandExecWindow({ method: "talk", id: "f_talk" })],
     });
     const out = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
     expect(out.knowledgeEntries[END_REFLECTION_REMINDER_PATH]).toBeUndefined();

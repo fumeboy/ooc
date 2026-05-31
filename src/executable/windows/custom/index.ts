@@ -44,7 +44,7 @@ function resolveStoneRef(window: CustomWindow, baseDir: string) {
  * window 上的具体 command 名是 Object 自定义的、动态的。WindowRegistry 当前的
  * `getOpenableCommands` 等 API 接受静态命令表。
  *
- * 折衷：实际"哪些命令可调用"由 LLM 通过 basicKnowledge 文本指引，从 form.command 名
+ * 折衷：实际"哪些命令可调用"由 LLM 通过 basicKnowledge 文本指引，从 form.method 名
  * 落到 manager.submit 取 entry 这条链路上重写为 dispatcher（见 manager submit /
  * lookupFormEntry 分支处理 type=custom）。
  */

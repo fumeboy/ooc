@@ -134,7 +134,7 @@ describe("viewport: file_window integration", () => {
       const after = thread.contextWindows.find((w): w is FileWindow => w.type === "file")!;
       expect(after.viewport).toEqual(origViewport);
       const failedForm = thread.contextWindows.find(
-        (w) => w.type === "command_exec" && (w as { command?: string }).command === "set_viewport",
+        (w) => w.type === "command_exec" && (w as { method?: string }).method === "set_viewport",
       ) as { status: string; result?: string } | undefined;
       expect(failedForm?.status).toBe("failed");
       expect(failedForm?.result ?? "").toContain("line_start");

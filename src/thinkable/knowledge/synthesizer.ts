@@ -78,16 +78,16 @@ async function lookupFormEntry(
   const parentId = form.parentWindowId;
   if (!parentId || parentId === "root") {
     // root 在 base 链上无 executable（resolveMethod("root") → undefined），直接走 ROOT_METHODS。
-    return (await resolveMethod("root", form.command)) ?? ROOT_METHODS[form.command];
+    return (await resolveMethod("root", form.method)) ?? ROOT_METHODS[form.method];
   }
   const parent = (thread.contextWindows ?? []).find((w) => w.id === parentId);
   if (!parent) return undefined;
   // OOC-4 L4.2（C2）：parent 的 method 优先沿 base 原型链解析；链未提供时回退 registry。
   // trim 后 program/search/file/knowledge 的 method 已迁链，若此处不接链则 form 的
   // method-knowledge（EXEC_KNOWLEDGE / OPEN_MATCH_KNOWLEDGE / EDIT_KNOWLEDGE 等）静默丢失。
-  const fromChain = await resolveMethod(parent.type, form.command);
+  const fromChain = await resolveMethod(parent.type, form.method);
   if (fromChain) return fromChain;
-  return getWindowTypeDefinition(parent.type).methods[form.command];
+  return getWindowTypeDefinition(parent.type).methods[form.method];
 }
 
 /**
@@ -152,13 +152,13 @@ export async function collectExecutableKnowledgeEntries(
     // flow 反思沉淀。
     //
     // 注入条件：
-    // - form.command === "end"
+    // - form.method === "end"
     // - thread.persistence?.sessionId !== SUPER_SESSION_ID（super flow 内不套娃）
     //
     // 注入位置：protocolEntries（与 REFLECTABLE_KNOWLEDGE 同档；不是 form-scoped）
     // 设计原则：非阻塞 hint，LLM 自由判断；与 command.end.ts 的 KNOWLEDGE 描述独立。
     try {
-      const isEndForm = enrichedForm.command === "end";
+      const isEndForm = enrichedForm.method === "end";
       const inSuperSession = thread.persistence?.sessionId === SUPER_SESSION_ID;
       if (isEndForm && !inSuperSession && !(END_REFLECTION_REMINDER_PATH in protocolEntries)) {
         protocolEntries[END_REFLECTION_REMINDER_PATH] = END_REFLECTION_REMINDER_KNOWLEDGE;

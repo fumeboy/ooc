@@ -105,14 +105,30 @@ export async function readThread(
     // Round 13 迁移: command_exec form.status="executed" 已被四态机替换为 success|failed;
     // 历史数据可能仍含 "executed" 字面值。把它们迁为 "failed" (保守路径; 让 LLM 能 refine 修复),
     // 与 unregistered type 同款 silent-swallow ban: warn 但不抛。
+    //
+    // L6c-5 迁移 (D4): command_exec 的 form 字段 "command" 已改名为 "method"。
+    // 历史 thread.json 可能仍含旧 .command 字段。读时透明迁移 .command → .method 并丢弃旧键
+    // (与 status 迁移同款 graceful-migration 范式; warn 但不抛)。两段迁移在同一 map pass 内串联。
     const contextWindows = filteredWindows.map((w) => {
-      if (w.type === "command_exec" && (w as { status?: string }).status === "executed") {
+      let next = w;
+      if (next.type === "command_exec" && (next as { status?: string }).status === "executed") {
         console.warn(
-          `[readThread] ${persistence.objectId}/${threadId}: migrated form ${w.id} status "executed" → "failed" (Round 13)`,
+          `[readThread] ${persistence.objectId}/${threadId}: migrated form ${next.id} status "executed" → "failed" (Round 13)`,
         );
-        return { ...w, status: "failed" as const };
+        next = { ...next, status: "failed" as const };
       }
-      return w;
+      if (
+        next.type === "command_exec" &&
+        (next as { command?: string }).command &&
+        !(next as { method?: string }).method
+      ) {
+        console.warn(
+          `[readThread] ${persistence.objectId}/${threadId}: migrated form ${next.id} field "command" → "method" (L6c-5 refactor)`,
+        );
+        const { command, ...rest } = next as typeof next & { command?: string };
+        next = { ...rest, method: command } as typeof next;
+      }
+      return next;
     });
     const restored: ThreadContext = {
       ...parsed,

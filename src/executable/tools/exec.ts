@@ -109,7 +109,8 @@ export async function handleExecTool(
     opened = await mgr.openCommandExec({
       thread,
       parentWindowId: windowId,
-      // 边界（L4.0）：输入 arg key 为 method；下游 form.command 字段名保留（L4.0b 再改）
+      // openCommandExec 参数名仍是 command（method 沿链解析的 dispatch key）；
+      // 写入 form 后字段名是 form.method（L6c-5 改名完成，与输入 arg key method 对齐）。
       command: method,
       title,
       description,
@@ -121,7 +122,7 @@ export async function handleExecTool(
 
   // program method 额外补 method 签名 knowledge（沿用旧 enrichProgramForm 行为）
   const targetForm = mgr.get(opened.formId);
-  if (targetForm && targetForm.type === "command_exec" && targetForm.command === "program") {
+  if (targetForm && targetForm.type === "command_exec" && targetForm.method === "program") {
     await enrichProgramFormCommand(targetForm, thread);
   }
 
