@@ -54,10 +54,12 @@
 | ├ ~~L4.0~~ | `command`→`method` 归一（内部符号 tsc 兜底 + agent-facing 措辞 + exec arg key command→method + loader 硬切防静默丢命令），行为不变 | — | ✅ 已落地（Pass A 52beb485 + Pass B 7ecd71bf；保留 command_exec 字面）|
 | ├ ~~L4.1~~ | 核心机制（renderXml + basicKnowledge 沿链 + skill_index 端到端 + in-character + loadSelfInstructions 剥 frontmatter）。**method 解析推迟 L4.2**（skill_index 无 method；避 refine 同步 async） | L4.0 | ✅ 已落地（commit 53ccb737；behavior.ts stat-before-import + 同步 chain-aware assert）|
 | ├ L4.2 | A 类 method 解析沿链 + 转写 program/search/file/knowledge | L4.1 | ✅ 已落地（commit a912d7f2；method 消费点全接链 + refine/permissions sync→async）|
-| ├ L4.2-tail | command_exec→method_exec 改名 + custom 吸收（完成 A 类全上链） | L4.2 | ← **下一层** |
+| ├ ~~L4.2c~~ | windows→base 实现搬迁（5 entity 原型 skill_index/program/search/file/knowledge 代码住 base，windows 退薄壳；共享 helper runtime/viewport 留 executable）| L4.2 | ✅ 已落地（commit c499a8e5；兑现「windows 大部分程序搬 base」方向）|
+| ├ L4.2-tail | command_exec→method_exec 改名 + custom 吸收（forward-looking，当前无消费者）| L4.2 | 延 registry endgame（≈L6）|
+| ├ L4.3 | method 可见性 public/for_ui_access（forward-looking，当前无跨 Object method 调用）| L4.2 | 延（按需）|
 | └ L4.3 | method 可见性 public/for_ui_access + dispatcher 鉴权 | L4.2 | 设计就绪 |
 | L1 后半 | readable.ts 动态函数（renderXml 泛化为 per-object，headline 能力） | L2 | |
-| L5-6 | B 类塌缩（talk/do/todo/plan→owner 字段；relation 删除→auto 注入）；registry 彻底删 | L4 | |
+| **L5-6** | B 类塌缩（talk/do/todo/plan→owner flow 字段+root 方法+自视切片；relation 删除→siblings/children auto 注入）；registry 彻底删 | L4 | ← **下一层（大语义重设计，先 brainstorm）** |
 | L7 | context/ 物理树（window 状态迁出 thread.json） | L3 | |
 | L8 | visible 渲染重做 + client→visible 改名（一起做；Inc 3 plan 留有 C1-C3/H3 输入） | L2/L3 | |
 
