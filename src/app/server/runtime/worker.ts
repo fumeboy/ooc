@@ -1,5 +1,5 @@
 import { createLlmClient } from "@src/thinkable/llm/client";
-import { readThread, writeThread, llmInputFile } from "@src/persistable";
+import { readThread, writeThread, llmInputFile, readTalks } from "@src/persistable";
 import { runScheduler } from "@src/thinkable/scheduler";
 import { detectInterruptedThread, markInterrupted } from "@src/thinkable/recovery";
 import { stat } from "node:fs/promises";
@@ -242,14 +242,17 @@ async function maybeMarkInterrupted(
  * 普通 talk peer)落在另一个 objectId 目录,不在 childThreads 树,end 时 caller
  * 无信号 → 卡死 waiting。
  *
- * 本函数在 caller thread 跑 scheduler 之前调用:扫 caller 的 talk_window 列表,
- * 对每个有 targetThreadId 的 talk_window,readThread 对端;若 callee 处于 done/failed
- * 且 caller 正 waiting 在该 talk_window 上,写一条 system message 到 caller.inbox +
- * 翻 caller 状态回 running + 持久化。
+ * OOC-4 L5c：peer 路由来源从 caller 的 talk_window 列表迁到 **talks.json**
+ * （object-scoped 会话路由，deliverMessage 双写）。为兼容仍持有 talk_window 的过渡态，
+ * 这里取 talks.json ∪ talk_window 的并集（按 targetThreadId 去重）。删 talk_window
+ * behavior 后 talks.json 仍能让 caller 醒来——否则 caller 永久卡死 waiting。
  *
- * 幂等:用 `[talk:<windowId>:<status>@<lastExecutedAt>]` marker 去重,避免每次扫
- * 都写同样消息。callee 重启(status 切回 running 又 end)会因 lastExecutedAt 变化
- * 产生新 marker,允许再唤醒一次。
+ * 对每个有 targetThreadId 的 peer 路由,readThread 对端;若 callee 处于 done/failed,
+ * 写一条 system message 到 caller.inbox + 翻 caller 状态回 running + 持久化。
+ *
+ * 幂等:用 `[talk:<targetThreadId>:<status>@<lastExecutedAt>]` marker 去重(按对端 thread id
+ * 而非 window id,与 window-free 路由一致),避免每次扫都写同样消息。callee 重启
+ * (status 切回 running 又 end)会因 lastExecutedAt 变化产生新 marker,允许再唤醒一次。
  */
 async function syncCrossObjectCalleeEnds(
   caller: ThreadContext,
@@ -258,23 +261,51 @@ async function syncCrossObjectCalleeEnds(
   stonesBranch?: string,
 ): Promise<void> {
   if (!caller.persistence) return;
-  const talkWindows = (caller.contextWindows ?? []).filter(
-    (w): w is TalkWindow => w.type === "talk" && Boolean(w.targetThreadId),
-  );
-  if (talkWindows.length === 0) return;
+  const callerObjectId = caller.persistence.objectId;
+
+  // peer 路由并集：talks.json（routing-only，权威）∪ talk_window（过渡兼容）。
+  // 每条 = { peer: 对端 objectId（"super" 为自指别名）, targetThreadId, windowId? }。
+  // 去重 key = targetThreadId（同一 callee thread 只唤醒一次）。
+  const byTargetThread = new Map<string, { peer: string; targetThreadId: string; windowId?: string }>();
+
+  try {
+    const routing = await readTalks({ baseDir, sessionId: callerSessionId, objectId: callerObjectId, stonesBranch });
+    for (const [peer, route] of Object.entries(routing)) {
+      if (!route?.targetThreadId) continue;
+      if (!byTargetThread.has(route.targetThreadId)) {
+        byTargetThread.set(route.targetThreadId, { peer, targetThreadId: route.targetThreadId });
+      }
+    }
+  } catch {
+    // talks.json 读失败（损坏等）不致命：退回 talk_window 路由。
+  }
+
+  for (const w of (caller.contextWindows ?? [])) {
+    if (w.type !== "talk") continue;
+    const tw = w as TalkWindow;
+    if (!tw.targetThreadId) continue;
+    const existing = byTargetThread.get(tw.targetThreadId);
+    if (existing) {
+      if (!existing.windowId) existing.windowId = tw.id;
+    } else {
+      byTargetThread.set(tw.targetThreadId, { peer: tw.target, targetThreadId: tw.targetThreadId, windowId: tw.id });
+    }
+  }
+
+  if (byTargetThread.size === 0) return;
 
   let mutated = false;
-  for (const w of talkWindows) {
+  for (const entry of byTargetThread.values()) {
     // super alias 是自指目标:派送到 caller 自身在 super session 下的 thread。
-    // 这里的 callee 解析必须与 talk-delivery.ts 严格一致 — 否则 readThread 会
-    // 读错路径(在 sessions/super/objects/super/ 找不到任何东西)。
-    const isSuperAlias = w.target === SUPER_ALIAS_TARGET;
-    const calleeObjectId = isSuperAlias ? caller.persistence.objectId : w.target;
+    // 这里的 callee 解析必须与 talk-delivery.ts (deliverMessage) 严格一致 — 否则 readThread
+    // 会读错路径(在 sessions/super/objects/super/ 找不到任何东西)。
+    const isSuperAlias = entry.peer === SUPER_ALIAS_TARGET;
+    const calleeObjectId = isSuperAlias ? callerObjectId : entry.peer;
     const calleeSessionId = isSuperAlias ? SUPER_SESSION_ID : callerSessionId;
     const calleeRef = { baseDir, sessionId: calleeSessionId, objectId: calleeObjectId, stonesBranch };
     let callee: ThreadContext | undefined;
     try {
-      callee = await readThread(calleeRef, w.targetThreadId!);
+      callee = await readThread(calleeRef, entry.targetThreadId);
     } catch {
       continue;
     }
@@ -282,7 +313,7 @@ async function syncCrossObjectCalleeEnds(
     if (callee.status !== "done" && callee.status !== "failed") continue;
 
     const tail = callee.lastExecutedAt ?? 0;
-    const marker = `[talk:${w.id}:${callee.status}@${tail}]`;
+    const marker = `[talk:${entry.targetThreadId}:${callee.status}@${tail}]`;
     const already = (caller.inbox ?? []).some((m) => (m.content ?? "").startsWith(marker));
     if (already) continue;
 
@@ -300,7 +331,9 @@ async function syncCrossObjectCalleeEnds(
         content: text,
         createdAt: Date.now(),
         source: "system",
-        replyToWindowId: w.id,
+        peerObjectId: entry.peer,
+        // legacy talk_window transcript 路由（若 caller 仍持有对应 talk_window）。
+        ...(entry.windowId ? { replyToWindowId: entry.windowId } : {}),
       },
     ];
     caller.events = [

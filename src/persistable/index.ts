@@ -41,6 +41,14 @@ export {
   writePlan,
 } from "./flow-plan";
 
+export type { TalkRoute, TalksRouting } from "./flow-talks";
+export {
+  talksFile,
+  readTalks,
+  writeTalks,
+  setTalkRoute,
+} from "./flow-talks";
+
 export {
   createFlowSession,
   createFlowObject,

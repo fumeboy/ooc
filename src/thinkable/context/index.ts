@@ -286,6 +286,23 @@ export type ThreadMessage = {
    * - render 层据此把消息归入对应 talk_window 的 transcript
    */
   replyToWindowId?: string;
+  /**
+   * 跨 object talk 会话配对键（OOC-4 L5c talk 塌缩）。
+   *
+   * window-free 派送下取代 windowId/replyToWindowId 作为会话归属标记：同一对
+   * (caller, callee) 的双向消息共享同一 conversationId，避免同 peer 多会话串话。
+   * deliverMessage 在 caller.outbox 与 callee.inbox 双写同一 conversationId。
+   * 旧 thread.json 缺该字段；自视 talk 切片在缺省时退化为按 peerObjectId 分组。
+   */
+  conversationId?: string;
+  /**
+   * 跨 object talk 的对端 object id（OOC-4 L5c talk 塌缩）。
+   *
+   * - outbox 消息：消息发往的对端（= talk target）。
+   * - inbox 消息：消息来自的对端（= fromObjectId）。
+   * 自视 talk 切片据此按 peer 分组渲染（不依赖 window）。旧 thread.json 缺该字段。
+   */
+  peerObjectId?: string;
 };
 
 /**
