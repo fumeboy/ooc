@@ -15,18 +15,20 @@
 4. docs/superpowers/ooc-4-next-session-kickoff.md（本指南：进度、roadmap、纪律）
 5. 你的项目记忆 project_ooc4_direction_increment1.md + feedback_agent_facing_voice
 
-已完成：宪法 + 目录归一 + **L2 原型链引擎**(6dd10cf2) + **L3 builtin objects**(d5a840a7，src/extendable/base/<proto>/ 源码) + **L4.0 command→method 归一**(52beb485+7ecd71bf) + **L4.1 活路径机制+skill_index**(53ccb737，behavior.ts) + **L4.2 A 类 method 解析+转写 program/search/file/knowledge**(a912d7f2)。tsc 全仓 0 error，bun test src/ 1073 pass/0 fail/3 skip。机制详见项目记忆 project_ooc4_direction_increment1。
+已完成：宪法 + 目录归一 + **L2 原型链引擎**(6dd10cf2) + **L3 builtin objects**(d5a840a7) + **L4.0 command→method**(52beb485+7ecd71bf) + **L4.1 活路径机制+skill_index**(53ccb737) + **L4.2 A 类 method+转写**(a912d7f2) + **L4.2c windows→base 搬迁**(c499a8e5) + **L5a 自视切片机制+todo 塌缩**(b538d6ae) + **L5b plan 塌缩**(52d5b9b5)。tsc 全仓 0，bun test src/ **1094 pass/0 fail/3 skip**。机制详见 project_ooc4_direction_increment1。
 
-本次目标：**L5a — 自视切片机制 + todo 塌缩**（L5-6 设计 spec `2026-05-31-ooc-4-L5-6-bclass-collapse-design.md` §7 第一增量）。**先完整读该 L5-6 设计 spec**（它定了 window-centric→flow-field+self-view 的根本模型重构、5 B 类塌缩表、do/scheduler 解耦、relation auto 注入、registry 终结、分解顺序）。L5a 两件：①新增 `ContextBuilder.renderSelfView(thread)` 骨架 + context `<self_view>` 段（替代散在 synthesizer 的 B 类 window 渲染）②todo 塌缩：`todos.json`（owner flow）+ root 方法 `todo_add/check/uncheck/remove/list`（写文件）+ 未完成 todos 自视切片 + 删 todo_window type/renderTodoWindow。on_command_path 强提醒改 ContextBuilder 查 todos.json。之后按 spec §7：L5b plan→L5c talk→L6a relation→**L6b do（最难，碰 scheduler，单独增量重 e2e）**→L6c registry 终结。
+**B 类塌缩进度**：todo✓ plan✓（flow-todos.ts/flow-plan.ts + renderSelfView `<self_view>` 切片 + 删 window type 范式立住）。**剩 talk/relation/do（并发核心，专项 fresh 会话）**——dual review 揭示远比 spec 大：跨 object 唤醒在 **worker.ts:syncCrossObjectCalleeEnds 非 scheduler**（删 talk/do window 不改 worker → caller 永久卡死）；保留 TalkWindow 类型只删 behavior；tools/wait.ts/service.ts/前端 formatter/pairing(conversationId)/reflectable-knowledge 全在 scope；relation 耦合 talk（peer 集含 user/talk-peer + long_term 经 deliverMessage）故须 talk 后做。详见 L5c plan 的 POST-DUAL-REVIEW 修正 scope + L5-6 spec §2.5。
 
-> command_exec→method_exec / custom 吸收 / L4.3 method 可见性 均判 forward-looking（当前无消费者），延 registry 终结（L6c）按需做。
+本次目标：**talk 塌缩（L5c，并发核心专项）**。**先完整读**：①L5c plan `2026-05-31-ooc-4-L5c-talk-collapse.md` 的 **POST-DUAL-REVIEW 修正 scope**（最重要，纠正原设计：worker.ts 是真 cross-object wake、保留 TalkWindow 类型只删 behavior、talks.json routing-only、conversationId 配对、tools/wait.ts/service.ts/前端 formatter/reflectable-knowledge 全在 scope、必补 agent↔agent 双向 wait/wake e2e）②L5-6 spec §2.5（worker.ts 跨 object wake 认知修正）+ §4 talk。之后 relation（L6a，plan 草案已含 H1/M1-M3 输入 + 阻塞解除条件）→ **do（L6b，最难，同样碰 worker.ts cross-object wake）→ L6c registry 终结**。
+
+> command_exec→method_exec / custom 吸收 / L4.3 method 可见性 均 forward-looking，延 L6c 按需。
 
 按这个节奏走，不要跳步：
-1. 用 superpowers:brainstorming 对齐 L5a 开放点（todos.json schema + on_command_path 强提醒在 dispatch 时怎么触发 / 自视切片 XML 形态与 A 类 window 区如何并列 / 旧 thread.json 含 todo_window 的迁移=fail-loud 重生），落 plan 前确认根决策。
+1. 用 superpowers:brainstorming 对齐 L5c 根决策（**worker.ts cross-object wake 怎么从 talks.json 读路由**=最关键 / callee 回信路由 talks.json[caller].targetThreadId / pairing 用 conversationId / talks.json routing-only vs message-log / 保留 TalkWindow 类型边界）。**这是并发核心，关键路径 agent↔agent wait/wake 无现有 e2e——务必先补双向 e2e 再改，否则 caller 卡死测不出。**
 2. 用 superpowers:writing-plans 写 implementation plan，存 docs/superpowers/plans/。
 3. plan 写完**先派 feasibility reviewer 对抗式审查再执行**（硬纪律——每轮都抓 2+ Critical；尤其穷举 seed/knowledge/协议里的字面 command）。
 4. 执行：sub agent 派单（CLAUDE.md Supervisor 模型），派单 prompt 末尾注明「不要自己 commit」，由你整合提交；commit 带 co-author footer。
-5. harness 回归：bun test src/ 全绿（**当前基线 1073 pass**）+ RUN_BACKEND_E2E=1 NO_PROXY=localhost,127.0.0.1,::1 跑 route-audit 等确定性 e2e + agent-facing 协议 e2e + 新能力补 e2e。
+5. harness 回归：bun test src/ 全绿（**当前基线 1094 pass**）+ RUN_BACKEND_E2E=1 NO_PROXY=localhost,127.0.0.1,::1 跑 route-audit + agent↔agent wait/wake e2e（新补）+ 确定性 e2e。
 6. 每改一个 meta/*.doc.ts 立刻 bun tsc --noEmit 验证。
 
 两条贯穿纪律：①改持久层/加载器约定或 agent-facing 协议的增量先 feasibility review 再执行；②给新增 HTTP 路由在 tests/e2e/backend/route-audit.e2e.test.ts 补永久 gate。
@@ -58,7 +60,12 @@
 | ├ L4.3 | method 可见性 public/for_ui_access（forward-looking，当前无跨 Object method 调用）| L4.2 | 延（按需）|
 | └ L4.3 | method 可见性 public/for_ui_access + dispatcher 鉴权 | L4.2 | 设计就绪 |
 | L1 后半 | readable.ts 动态函数（renderXml 泛化为 per-object，headline 能力） | L2 | |
-| **L5-6** | B 类塌缩（talk/do/todo/plan→owner flow 字段+root 方法+自视切片；relation 删除→siblings/children auto 注入）；registry 彻底删 | L4 | ← **下一层（大语义重设计，先 brainstorm）** |
+| ~~L5a~~ | 自视切片机制 + todo 塌缩（todos.json + todo_* + `<self_view>`）| L4 | ✅ b538d6ae |
+| ~~L5b~~ | plan 塌缩（plan.md + plan_set/clear）| L5a | ✅ 52d5b9b5 |
+| **L5c** | talk 塌缩（talks.json routing + window-free deliverMessage + worker.ts cross-object wake 重写 + tools/wait + service.ts + 前端 + 自视切片）| L5b | ← **下一层（并发核心专项，dual-review 修正 scope 见 L5c plan）** |
+| L6a | relation 删除→siblings/children+talk-peer auto 注入（plan 草案已 review，阻塞=L5c）| L5c | 设计就绪 |
+| L6b | do 塌缩（threads/ + root.do_* + worker.ts cross-object wake；最难）| L6a | 设计就绪(spec) |
+| L6c | registry 终结（onClose/compressView 接链 + command_exec/custom/feishu/root 收编 + 删 getWindowTypeDefinition）| L6b | 设计就绪(spec) |
 | L7 | context/ 物理树（window 状态迁出 thread.json） | L3 | |
 | L8 | visible 渲染重做 + client→visible 改名（一起做；Inc 3 plan 留有 C1-C3/H3 输入） | L2/L3 | |
 

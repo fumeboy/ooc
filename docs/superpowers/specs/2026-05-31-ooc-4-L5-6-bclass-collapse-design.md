@@ -44,6 +44,12 @@
 
 ---
 
+## §2.5 【POST-REVIEW 修正】跨 object 唤醒在 worker.ts 不在 scheduler（spec 最大认知盲点）
+
+L5c talk 双路 review 揭示：**talk/do 的跨 object 唤醒机制不在 scheduler，在 `src/app/server/runtime/worker.ts:syncCrossObjectCalleeEnds`（:254-325）**——它遍历 caller 的 `talk_window`（type==="talk" && targetThreadId），readThread 对端，callee done/failed 时写 system message 到 caller.inbox 唤醒。scheduler 的 `wakeWaitingThreadsOnInbox` 只在「inbox 已有新消息」后翻 waiting→running（只比 length，不读 waitingOn）。**故 talk/do 塌缩删 talk_window/do_window 后，worker.ts 的 cross-object end-sync 必须改为从 owner flow（talks.json 路由 / threads/）读 peer——否则 caller 永久卡死 waiting**。
+此外 `tools/wait.ts:listValidWaitTargets` 也硬依赖 talk/do window 作合法 wait 候选，须同步改。
+**talk/do 塌缩真实 scope = window 删除 + worker.ts cross-object wake 重写 + tools/wait.ts + service.ts(HTTP user 入口) + 前端 formatter + pairing(conversationId 替 windowId) + reflectable-knowledge——是并发核心多子系统大改，非「复用 scheduler」**。每个建议专项 fresh 会话 + 必补 agent↔agent 双向 wait/wake e2e（现无覆盖）。详见 L5c plan 的 POST-DUAL-REVIEW 修正 scope。
+
 ## §3 do ↔ scheduler 解耦（最难，单列增量）
 
 **现状**：child thread 作 `parent.childThreads[childId]` 树节点，scheduler（scheduler.ts）`collectRunningThreads` 扫树、`emitChildEndNotifications` 遍历 childThreads、`wakeWaitingThreadsOnInbox` 按 inbox 唤醒；do_window（父侧）+ creator do_window（子侧）是双向消息通道。
