@@ -250,49 +250,63 @@ describe("think", () => {
     ).toHaveLength(1);
   });
 
-  it("连续多轮 think 可以跑通 open（args 给齐时 open 立即提交 form）触发 todo_window 直建", async () => {
-    const thread: contextModule.ThreadContext = {
-      id: "thread-5",
-      status: "running",
-      events: [],
-      contextWindows: []
-    };
+  it("连续多轮 think 可以跑通 open（args 给齐时 open 立即提交 form）触发 todo_add 塌缩落盘", async () => {
+    // todo_add 写对象级 todos.json，需要 persistence；用临时 world 目录。
+    const { mkdtemp, rm } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const { createFlowObject, readTodos, __resetSerialQueueForTests } = await import("../../persistable");
+    __resetSerialQueueForTests();
+    const tempRoot = await mkdtemp(join(tmpdir(), "ooc-thinkloop-todo-"));
+    try {
+      await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
+      const thread: contextModule.ThreadContext = {
+        id: "thread-5",
+        status: "running",
+        events: [],
+        contextWindows: [],
+        persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "thread-5" }
+      };
 
-    let round = 0;
-    const llmClient: LlmClient = {
-      async generate() {
-        round += 1;
-        if (round === 1) {
-          // open 时给齐 args 且不引入新 path/knowledge，立即提交 form 直建 todo_window
-          return makeResult("openai", "gpt-test", "登记一个待办", [
-            {
-              id: "call_open",
-              name: "exec",
-              arguments: {
-                title: "登记 thinkloop 集成待办",
-                method: "todo",
-                args: {
-                  content: "补充 thinkloop 集成测试"
+      let round = 0;
+      const llmClient: LlmClient = {
+        async generate() {
+          round += 1;
+          if (round === 1) {
+            // open 时给齐 args 且不引入新 path/knowledge，立即提交 form 直接写 todos.json
+            return makeResult("openai", "gpt-test", "登记一个待办", [
+              {
+                id: "call_open",
+                name: "exec",
+                arguments: {
+                  title: "登记 thinkloop 集成待办",
+                  method: "todo_add",
+                  args: {
+                    content: "补充 thinkloop 集成测试"
+                  }
                 }
               }
-            }
-          ]);
+            ]);
+          }
+          return makeResult("openai", "gpt-test", "已完成", []);
+        },
+        async *stream() {
+          yield { type: "start", provider: "openai", model: "gpt-test" };
+          yield { type: "done", text: "", toolCalls: [] };
         }
-        return makeResult("openai", "gpt-test", "已完成", []);
-      },
-      async *stream() {
-        yield { type: "start", provider: "openai", model: "gpt-test" };
-        yield { type: "done", text: "", toolCalls: [] };
-      }
-    };
+      };
 
-    await think(thread, llmClient);
-    // 自动 submit 后直接产出 todo_window，不应留下 command_exec form
-    const todoWindows = thread.contextWindows.filter((w) => w.type === "todo");
-    expect(todoWindows).toHaveLength(1);
-    expect(todoWindows[0]?.type === "todo" && todoWindows[0].content).toBe("补充 thinkloop 集成测试");
-    const lingeringForms = thread.contextWindows.filter((w) => w.type === "command_exec");
-    expect(lingeringForms).toHaveLength(0);
+      await think(thread, llmClient);
+      // 自动 submit 后写入对象级 todos.json，不产生 todo_window，也不残留 command_exec form
+      const todos = await readTodos({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
+      expect(todos).toHaveLength(1);
+      expect(todos[0]?.content).toBe("补充 thinkloop 集成测试");
+      expect(thread.contextWindows.filter((w) => (w as { type: string }).type === "todo")).toHaveLength(0);
+      const lingeringForms = thread.contextWindows.filter((w) => w.type === "command_exec");
+      expect(lingeringForms).toHaveLength(0);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
   });
 
   it("buildInputItems 产出的 system xml 会进入 llm 输入", async () => {

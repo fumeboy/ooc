@@ -8,7 +8,7 @@ describe("executable commands", () => {
     expect(Object.keys(ROOT_METHODS)).toContain("do");
     expect(Object.keys(ROOT_METHODS)).toContain("program");
     expect(Object.keys(ROOT_METHODS)).toContain("plan");
-    expect(Object.keys(ROOT_METHODS)).toContain("todo");
+    expect(Object.keys(ROOT_METHODS)).toContain("todo_add");
     expect(Object.keys(ROOT_METHODS)).toContain("end");
     expect(Object.keys(ROOT_METHODS)).not.toContain("defer");
     expect(Object.keys(ROOT_METHODS)).not.toContain("return");
@@ -21,7 +21,7 @@ describe("executable commands", () => {
     expect(openable.length).toBeGreaterThan(0);
     expect(openable).toContain("talk");
     expect(openable).toContain("program");
-    expect(openable).toContain("todo");
+    expect(openable).toContain("todo_add");
     expect(openable).not.toContain("defer");
   });
 
@@ -42,7 +42,11 @@ describe("executable commands", () => {
       "plan",
       "program",
       "talk",
-      "todo",
+      "todo_add",
+      "todo_check",
+      "todo_list",
+      "todo_remove",
+      "todo_uncheck",
       "write_file",
     ]);
   });
@@ -96,11 +100,11 @@ describe("executable commands", () => {
     expect(paths).toEqual([]);
   });
 
-  it("should derive todo reminder paths from args", () => {
-    expect(deriveRootMethodPaths("todo", { content: "补测试" })).toEqual(["todo"]);
-    expect(deriveRootMethodPaths("todo", { content: "补测试", on_command_path: ["program"] })).toEqual([
-      "todo",
-      "todo.on_command_path"
+  it("should derive todo_add reminder paths from args", () => {
+    expect(deriveRootMethodPaths("todo_add", { content: "补测试" })).toEqual(["todo_add"]);
+    expect(deriveRootMethodPaths("todo_add", { content: "补测试", on_command_path: ["program"] })).toEqual([
+      "todo_add",
+      "todo_add.on_command_path"
     ]);
   });
 

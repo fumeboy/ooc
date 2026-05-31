@@ -1,13 +1,42 @@
-import { describe, expect, it } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { ROOT_METHODS, execRootMethod } from "../windows";
 import { makeThread } from "../../__tests__/make-thread";
+import {
+  readTodos,
+  createFlowObject,
+  __resetSerialQueueForTests,
+  type ThreadPersistenceRef,
+} from "../../persistable";
 
 /**
  * 验证 root level command 在 ContextWindow 模型下的副作用。
  *
- * 注：do/todo 都改为产生 window 类型的产物；详见各自专门测试。
+ * 注：do 仍产生 do_window；todo_* 已塌缩为写 todos.json（owner flow 文件，无 window）。
  */
 describe("command execution side effects", () => {
+  let tempRoot: string | undefined;
+
+  beforeEach(() => {
+    __resetSerialQueueForTests();
+  });
+
+  afterEach(async () => {
+    if (tempRoot) {
+      await rm(tempRoot, { recursive: true, force: true });
+      tempRoot = undefined;
+    }
+  });
+
+  /** 构造一个带 persistence 的 thread（todo_* 落盘需要）。 */
+  async function makePersistedThread(id: string): Promise<{ thread: ReturnType<typeof makeThread>; ref: ThreadPersistenceRef }> {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-cmd-exec-"));
+    await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
+    const ref: ThreadPersistenceRef = { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: id };
+    return { thread: makeThread({ id, persistence: ref }), ref };
+  }
   it("all commands expose knowledge via MethodEntry instead of exported KNOWLEDGE", async () => {
     for (const [command, entry] of Object.entries(ROOT_METHODS)) {
       const knowledge = entry.knowledge?.({}, "open");
@@ -27,6 +56,35 @@ describe("command execution side effects", () => {
     }
   });
 
+  it("todo_add writes a todo to todos.json (object-scoped); todo_check sets done; todo_list returns", async () => {
+    const { thread, ref } = await makePersistedThread("thread-todo");
+    const addResult = await execRootMethod("todo_add", {
+      thread,
+      args: {
+        content: "补充 thinkloop 集成测试",
+        on_command_path: ["program", "exec"],
+      },
+    });
+    // todo_add 返回新增 id 文本（已登记待办 <id>：...）
+    expect(addResult).toContain("补充 thinkloop 集成测试");
+
+    const after = await readTodos(ref);
+    expect(after).toHaveLength(1);
+    expect(after[0]?.content).toBe("补充 thinkloop 集成测试");
+    expect(after[0]?.done).toBe(false);
+    expect(after[0]?.onCommandPath).toEqual(["program", "exec"]);
+    // 不再产生 todo_window（B 类塌缩）
+    expect(thread.contextWindows.find((w) => (w as { type: string }).type === "todo")).toBeUndefined();
+
+    const id = after[0]!.id;
+    await execRootMethod("todo_check", { thread, args: { id } });
+    expect((await readTodos(ref))[0]?.done).toBe(true);
+
+    const listResult = await execRootMethod("todo_list", { thread, args: {} });
+    expect(listResult).toContain(id);
+    expect(listResult).toContain("[x]");
+  });
+
   it("plan should create a root plan_window in contextWindows", async () => {
     const thread = makeThread({ id: "thread-plan" });
     // 2026-05-26: plan 升格为 plan_window；不再写 thread.plan 字段
@@ -39,23 +97,6 @@ describe("command execution side effects", () => {
     expect(planWindow && planWindow.type === "plan" && planWindow.description).toContain(
       "完成 thinkloop 真实测试",
     );
-  });
-
-  it("todo should produce a todo_window in contextWindows", async () => {
-    const thread = makeThread({ id: "thread-todo" });
-    await execRootMethod("todo", {
-      thread,
-      args: {
-        content: "补充 thinkloop 集成测试",
-        on_command_path: ["program", "exec"],
-      },
-    });
-    const todoWindow = thread.contextWindows.find((w) => w.type === "todo");
-    expect(todoWindow?.type).toBe("todo");
-    expect(todoWindow && todoWindow.type === "todo" && todoWindow.content).toBe("补充 thinkloop 集成测试");
-    expect(
-      todoWindow && todoWindow.type === "todo" && todoWindow.onCommandPath,
-    ).toEqual(["program", "exec"]);
   });
 
   it("end should mark thread as done and persist remaining fields", async () => {
@@ -177,9 +218,9 @@ describe("command execution side effects", () => {
     expect(result).toContain("open");
   });
 
-  it("todo rejects empty content (with close+reopen hint)", async () => {
+  it("todo_add rejects empty content (with refine/close hint)", async () => {
     const thread = makeThread({ id: "thread-todo-empty" });
-    const result = await execRootMethod("todo", {
+    const result = await execRootMethod("todo_add", {
       thread,
       args: { content: "" },
     });

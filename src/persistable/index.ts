@@ -27,6 +27,14 @@ export {
   mergeData as mergeFlowData,
 } from "./flow-data";
 
+export type { Todo } from "./flow-todos";
+export {
+  todosFile,
+  readTodos,
+  writeTodos,
+  mutateTodos,
+} from "./flow-todos";
+
 export {
   createFlowSession,
   createFlowObject,

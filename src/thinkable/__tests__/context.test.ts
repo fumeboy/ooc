@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "bun:test";
 import { buildContext, buildInputItems, type ThreadContext } from "../context";
 import { clearKnowledgeLoaderCache } from "../knowledge";
-import { createStoneObject, createPoolObject, poolKnowledgeDir, writeSelf } from "../../persistable";
+import { createStoneObject, createPoolObject, createFlowObject, poolKnowledgeDir, writeSelf, writeTodos } from "../../persistable";
 import {
   ROOT_WINDOW_ID,
   type CommandExecWindow,
@@ -314,28 +314,57 @@ describe("buildContext (ContextWindow model)", () => {
     expect(sliceWindow("f_executing")).not.toContain("<result>");
   });
 
-  it("renders todo_window content + on_command_path", async () => {
-    const thread = makeThread({
-      id: "t_todo",
-      extraWindows: [
-        {
-          id: "w_todo_1",
-          type: "todo",
-          parentWindowId: ROOT_WINDOW_ID,
-          title: "记一笔",
-          status: "open",
-          createdAt: 1,
-          content: "记得加单测",
-          onCommandPath: ["program.shell"],
-        },
-      ],
-    });
-    const messages = await buildContext(thread);
-    const xml = messages[0]!.content;
-    expect(xml).toContain('type="todo"');
-    expect(xml).toContain("<content>记得加单测</content>");
-    expect(xml).toContain("<on_command_path>");
-    expect(xml).toContain("<path>program.shell</path>");
+  it("renders open todos as <self_view><todos> slice (B 类塌缩自视); done/empty 不渲", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-todo-"));
+    try {
+      await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
+      const ref = { baseDir: tempRoot, sessionId: "s", objectId: "agent" };
+      await writeTodos(ref, [
+        { id: "td1", content: "记得加单测", done: false, onCommandPath: ["program.shell"] },
+        { id: "td2", content: "已经做完了", done: true },
+      ]);
+      const thread = makeThread({
+        id: "t_todo",
+        persistence: { ...ref, threadId: "t_todo" },
+      });
+      const messages = await buildContext(thread);
+      const xml = messages[0]!.content;
+      // 未完成 todo 进自视切片
+      expect(xml).toContain("<self_view>");
+      expect(xml).toContain("<todos>");
+      expect(xml).toContain('id="td1"');
+      expect(xml).toContain("记得加单测");
+      expect(xml).toContain('on_command_path="program.shell"');
+      // 已完成 todo 不渲
+      expect(xml).not.toContain("已经做完了");
+      // 不再以 window 形式出现
+      expect(xml).not.toContain('type="todo"');
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("child do thread renders the SAME object-scoped todos (object-scoped, not per-thread)", async () => {
+    // todos 属对象：child do thread 共享父的 objectId（deriveChildPersistence），
+    // 因此 child 的自视切片也渲染同一份对象 todos。这是期望语义（spec L5-6 §4 / D1 H2）。
+    const tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-todo-child-"));
+    try {
+      await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
+      const ref = { baseDir: tempRoot, sessionId: "s", objectId: "agent" };
+      await writeTodos(ref, [{ id: "td1", content: "对象级待办", done: false }]);
+      // child thread：threadId 不同，objectId 相同（do fork 共享对象）
+      const childThread = makeThread({
+        id: "t_child",
+        persistence: { ...ref, threadId: "t_child" },
+      });
+      const messages = await buildContext(childThread);
+      const xml = messages[0]!.content;
+      expect(xml).toContain("<self_view>");
+      expect(xml).toContain("<todos>");
+      expect(xml).toContain("对象级待办");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
   });
 
   it("filters do_window transcript by targetThreadId; top-level inbox excludes consumed messages", async () => {
@@ -395,7 +424,7 @@ describe("buildContext (ContextWindow model)", () => {
           category: "llm_interaction",
           kind: "tool_use",
           toolName: "exec",
-          arguments: { method: "todo" },
+          arguments: { method: "todo_add" },
         },
         {
           category: "context_change",

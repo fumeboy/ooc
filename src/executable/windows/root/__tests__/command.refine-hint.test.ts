@@ -34,7 +34,7 @@ const TARGETS = [
   "glob",
   "program",
   "plan",
-  "todo",
+  "todo_add",
   "metaprog",
   "open_knowledge",
 ] as const;

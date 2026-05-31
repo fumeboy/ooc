@@ -27,6 +27,7 @@ import { filterMessagesForTalkWindow } from "../../executable/windows/talk/index
 import type { ContextWindow } from "../../executable/windows/_shared/types";
 import { ROOT_WINDOW_ID } from "../../executable/windows/_shared/types";
 import type { ThreadContext, ThreadMessage } from "./index";
+import { renderSelfView } from "./self-view";
 import {
   appendNode,
   optionalElement,
@@ -273,10 +274,17 @@ export async function renderContextXml(input: {
   appendNode(threadChildren, renderMessagesNode("inbox", fallbackInbox));
   appendNode(threadChildren, renderMessagesNode("outbox", fallbackOutbox));
 
-  const root = xmlElement("context", {}, [
-    ...renderSelfNodes(threadForRender),
+  // <self_view>：对象自视切片（owner flow 文件 → 自视状态），插在 <self> 之后、<thread> 之前。
+  // nil-persistence / 无自视内容时返回 null（renderSelfView 内部短路）。
+  const selfViewNode = await renderSelfView(threadForRender);
+
+  const contextChildren: XmlNode[] = [...renderSelfNodes(threadForRender)];
+  appendNode(contextChildren, selfViewNode);
+  contextChildren.push(
     xmlElement("thread", { id: threadForRender.id, status: threadForRender.status }, threadChildren),
-  ]);
+  );
+
+  const root = xmlElement("context", {}, contextChildren);
 
   return serializeXml(root);
 }

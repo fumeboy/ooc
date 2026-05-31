@@ -12,7 +12,6 @@ export type {
   RootWindow,
   CommandExecWindow,
   DoWindow,
-  TodoWindow,
   TalkWindow,
   ProgramWindow,
   FileWindow,
@@ -73,7 +72,6 @@ export {
 import "./root/index.js";
 import "./command_exec/index.js";
 import "./do/index.js";
-import "./todo/index.js";
 import "./talk/index.js";
 import "./program/index.js";
 import "./file/index.js";

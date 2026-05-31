@@ -12,7 +12,7 @@ import {
   type ProgramWindow,
   type TalkWindow,
 } from "../windows/_shared/types";
-import { createStoneObject, createPoolObject, poolKnowledgeDir } from "../../persistable";
+import { createStoneObject, createPoolObject, createFlowObject, poolKnowledgeDir, readTodos } from "../../persistable";
 import { buildContext } from "../../thinkable/context";
 import { clearKnowledgeLoaderCache } from "../../thinkable/knowledge";
 import { makeThread } from "../../__tests__/make-thread";
@@ -100,23 +100,33 @@ describe("Step 2 window lifecycles", () => {
     expect(reread.history[1]?.output).toContain("second");
   });
 
-  it("todo_window: created via one-shot open (args complete → submit immediately); close via close tool", async () => {
-    const thread = makeThread({ id: "t_root" });
-    const mgr = WindowManager.fromThread(thread);
-    await mgr.openCommandExec({
-      thread,
-      command: "todo",
-      title: "buy milk",
-      args: { content: "buy milk" },
-    });
-    thread.contextWindows = mgr.toData();
-    const todo = thread.contextWindows.find((w) => w.type === "todo")!;
-    expect(todo.type).toBe("todo");
-
-    const mgr2 = WindowManager.fromThread(thread);
-    expect(mgr2.close(todo.id, thread)).toBe(true);
-    thread.contextWindows = mgr2.toData();
-    expect(thread.contextWindows.find((w) => w.id === todo.id)).toBeUndefined();
+  it("todo_add: one-shot open (args complete → submit immediately) writes to todos.json; no window", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "ooc-todo-"));
+    try {
+      await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
+      const thread = makeThread({
+        id: "t_root",
+        persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t_root" },
+      });
+      const mgr = WindowManager.fromThread(thread);
+      const opened = await mgr.openCommandExec({
+        thread,
+        command: "todo_add",
+        title: "buy milk",
+        args: { content: "buy milk" },
+      });
+      thread.contextWindows = mgr.toData();
+      expect(opened.autoSubmitted).toBe(true);
+      // 不再产生 todo_window
+      expect(thread.contextWindows.find((w) => (w as { type: string }).type === "todo")).toBeUndefined();
+      // 写入对象级 todos.json
+      const todos = await readTodos({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
+      expect(todos).toHaveLength(1);
+      expect(todos[0]?.content).toBe("buy milk");
+      expect(todos[0]?.done).toBe(false);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
   });
 
   it("file_window: created via open_file (args complete → submit immediately); render reads file body", async () => {

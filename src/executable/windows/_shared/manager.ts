@@ -8,7 +8,7 @@
  * - 提供与 LLM 5 原语对齐的方法：
  *   - openCommandExec：在 parent window 下创建 command_exec sub-window；当 args 完整且不引入
  *     新协议知识时，会立刻提交 form（具体行为由各 command 自己控制）
- *   - openTypedWindow：创建非 form 的 window（do_window / todo_window 等）
+ *   - openTypedWindow：创建非 form 的 window（do_window 等）
  *   - refine：累积 command_exec 的 args 并重算 commandPaths
  *   - submit：执行 command；成功自动移除 form；失败保留 result
  *   - close：触发 type 的 onClose，级联关闭子 window
@@ -224,11 +224,10 @@ export class WindowManager {
   }
 
   /**
-   * 创建非 form 的 typed window（do_window / todo_window 等）。
+   * 创建非 form 的 typed window（do_window 等）。
    *
    * 用于 command.exec 的副作用：
-   * - root.do submit → openTypedWindow("do", ...) 产出 do_window
-   * - root.todo submit → openTypedWindow("todo", ...)
+   * - root.do submit → insertTypedWindow(do_window)
    * - 也用于 thread init 注入 creator do_window（parentWindowId 仍为 root）
    *
    * 返回新 window 的 id；调用方按需在 init 里追加 type 特有字段。

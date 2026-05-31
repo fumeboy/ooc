@@ -812,7 +812,8 @@ export const root: DocTreeNode = {
                     - talk: 与 user 或其他 Object 对话，创建 talk_window。
                     - program: 执行 shell / javascript / typescript 程序，创建 program_window。
                     - plan: 更新当前 thread 的 plan。
-                    - todo: 创建可见待办 todo_window。
+                    - todo_add / todo_check / todo_uncheck / todo_remove / todo_list: 对象级待办的增/标完成/取消完成/删/列出
+                      （B 类塌缩：写 owner flow 的 todos.json，不再是 todo_window；未完成待办每轮在 <self_view><todos> 自视切片常驻）。
                     - end: 标记当前 thread 完成。args = { reason?, summary?, result? }。其中 result 是子 thread
                       想带回父 thread 的一段文本——传 result 时 end 会**自动调用
                       creator window 的 continue/say** 把内容写入 transcript（等价于子主动 reply），并
@@ -828,7 +829,7 @@ export const root: DocTreeNode = {
                     - open_feishu_chat: 把飞书群会话作为 feishu_chat_window 引入 Context。
                     - open_feishu_doc: 把飞书文档作为 feishu_doc_window 引入 Context。
 
-                    （共 14 个全局 method，与 src/executable/windows/root/index.ts ROOT_METHODS 一致。）
+                    （共 18 个全局 method，与 src/executable/windows/root/index.ts ROOT_METHODS 一致。）
 
                     其它 window 上也注册method（do_window: continue/wait/close；talk_window: say/wait/close；
                     file_window: edit/reload/set_range/close；command_exec: refine/submit；custom: Object 自定义 ...）。
@@ -847,7 +848,10 @@ export const root: DocTreeNode = {
                         "talk": "开启或继续对话的 method",
                         "program": "执行程序的 method",
                         "plan": "创建 / 更新 plan_window 的 method（root.plan）",
-                        "todo": "创建待办窗口的 method",
+                        "todo_add": "登记一条对象级待办的 method（写 todos.json；未完成待办常驻 self_view 自视切片）",
+                        "todo_check / todo_uncheck": "切换待办 done 状态的 method（写 todos.json）",
+                        "todo_remove": "删除一条待办的 method（写 todos.json）",
+                        "todo_list": "列出当前对象全部待办的 method（只读 todos.json）",
                         "end": "结束当前 thread 的 method",
                         "open_file": "把文件载入 Context 的 method",
                         "open_knowledge": "把知识文档载入 Context 的 method",

@@ -5,7 +5,7 @@
  *
  * 三个职责（每种 type 各自实现，互不依赖）：
  * 1. methods：该 window 注册的、LLM 可通过 open(parent_window_id, command, ...) 调用的 method 集合
- * 2. onClose：close 触发时的副作用（do_window 的 archive、todo 的标 done 等）
+ * 2. onClose：close 触发时的副作用（do_window 的 archive 等）
  * 3. renderXml：把该 window 投影成 system context 的 XML 节点（实际 XmlNode 类型由渲染层定义）
  *
  * 注册原则：
@@ -71,10 +71,9 @@ export interface WindowTypeDefinition {
   /**
    * 该 window 注册的 method 集合。
    *
-   * - root：等于 src/executable/commands 目录全集（do/talk/program/plan/end/todo）
+   * - root：等于 src/executable/commands 目录全集（do/talk/program/plan/end/todo_*）
    * - command_exec：空（form 上不能再嵌套 open command）
    * - do：{ continue, wait, close }（具体实现由 windows/do.ts 提供，本注册表填回去）
-   * - todo：空（todo 没有可继续的 method；只能 close）
    */
   methods: Record<string, MethodEntry>;
   /** close 触发时的副作用；缺省 = 无额外动作，window 直接从 contextWindows 移除。 */
@@ -105,7 +104,7 @@ export interface WindowTypeDefinition {
  * 当前 step 1 / step 2 范围下的初始注册：
  * - root         — commands 由 windows/root/index.ts 通过 registerWindowType 注入
  * - command_exec — 无 commands、无 onClose（form 的释放语义由 WindowManager 统一处理）
- * - do、todo、talk、program、file、knowledge — 占位空表；具体 commands 与 onClose
+ * - do、talk、program、file、knowledge — 占位空表；具体 commands 与 onClose
  *   由各自 windows/X.ts 在初始化时通过 registerWindowType 注入
  *
  * 这种"先建空表、后注入"的写法避免 windows/registry.ts 直接 import 各 type 实现，
@@ -125,11 +124,6 @@ REGISTRY.set("command_exec", {
 
 REGISTRY.set("do", {
   type: "do",
-  methods: {},
-});
-
-REGISTRY.set("todo", {
-  type: "todo",
   methods: {},
 });
 
@@ -189,7 +183,7 @@ REGISTRY.set("plan", {
 });
 
 /**
- * 替换或合并某 type 的契约，用于 windows/do.ts、windows/todo.ts 在模块加载时注入实现。
+ * 替换或合并某 type 的契约，用于 windows/do.ts 等在模块加载时注入实现。
  *
  * 合并策略：methods 浅合并（key 冲突时新值覆盖）；onClose / renderXml 直接覆盖。
  */

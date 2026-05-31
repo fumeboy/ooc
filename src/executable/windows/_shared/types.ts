@@ -17,7 +17,7 @@
  */
 
 /** Window 类型枚举；新增类型必须同步在 WINDOW_REGISTRY 中注册。 */
-export type WindowType = "root" | "command_exec" | "do" | "todo" | "talk" | "program" | "file" | "knowledge" | "search" | "relation" | "custom" | "skill_index" | "feishu_chat" | "feishu_doc" | "plan";
+export type WindowType = "root" | "command_exec" | "do" | "talk" | "program" | "file" | "knowledge" | "search" | "relation" | "custom" | "skill_index" | "feishu_chat" | "feishu_doc" | "plan";
 
 /**
  * Window 状态值汇总。
@@ -27,7 +27,6 @@ export type WindowType = "root" | "command_exec" | "do" | "todo" | "talk" | "pro
  *   - 失败 (failed) 保留 result（错误信息）；可通过 refine 回 open 重 submit（"复活"路径），
  *     或 close 彻底放弃；refine-from-failed 是首选修复路径，保留 form 上下文
  * - do：running → archived（被 close 时切到 archived，对应 B=ii archive 语义）
- * - todo：open → done（被 close 时切到 done）
  * - talk：open → closed（close 释放，与对端无关）
  * - program：open → closed（close 释放）
  * - file / knowledge：open → closed（close 释放，可触发 reload）
@@ -131,7 +130,6 @@ export type SharingState =
 export type { RootWindow } from "../root/types.js";
 export type { CommandExecWindow } from "../command_exec/types.js";
 export type { DoWindow } from "../do/types.js";
-export type { TodoWindow } from "../todo/types.js";
 export type { TalkWindow } from "../talk/types.js";
 export type { ProgramWindow, ProgramExecRecord } from "../program/types.js";
 export type { FileWindow } from "../file/types.js";
@@ -148,7 +146,6 @@ export type { FeishuDocWindow, FeishuDocBlock } from "../../../extendable/lark/f
 import type { RootWindow } from "../root/types.js";
 import type { CommandExecWindow } from "../command_exec/types.js";
 import type { DoWindow } from "../do/types.js";
-import type { TodoWindow } from "../todo/types.js";
 import type { TalkWindow } from "../talk/types.js";
 import type { ProgramWindow } from "../program/types.js";
 import type { FileWindow } from "../file/types.js";
@@ -166,7 +163,6 @@ export type ContextWindow =
   | RootWindow
   | CommandExecWindow
   | DoWindow
-  | TodoWindow
   | TalkWindow
   | ProgramWindow
   | FileWindow
@@ -190,7 +186,6 @@ export function generateWindowId(type: Exclude<WindowType, "root">): string {
   const prefix = ({
     command_exec: "f",
     do: "w_do",
-    todo: "w_todo",
     talk: "w_talk",
     program: "w_prog",
     file: "w_file",
