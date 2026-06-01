@@ -20,3 +20,11 @@ todo.md
 .gitignore
 meta/case.factor-dev.doc.ts
 AGENT.md
+
+# Bun workspace: ignore runtime object packages, keep @ooc/ source packages
+packages/*
+!packages/@ooc/
+
+# Runtime state directories
+flows/
+pools/

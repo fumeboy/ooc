@@ -1,25 +1,41 @@
 {
-  "name": "ooc-2",
+  "name": "ooc-workspace",
   "type": "module",
   "private": true,
+  "workspaces": ["packages/**", "packages/**/children/**"],
   "scripts": {
     "test": "bun test",
-    "test:e2e:backend": "RUN_BACKEND_E2E=1 bun test tests/e2e/backend",
-    "test:e2e:frontend": "RUN_FRONTEND_E2E=1 bunx playwright test --config tests/e2e/frontend/playwright.config.ts",
+    "test:e2e:backend": "RUN_BACKEND_E2E=1 bun test packages/@ooc/tests/e2e/backend",
+    "test:e2e:frontend": "RUN_FRONTEND_E2E=1 bunx playwright test --config packages/@ooc/tests/e2e/frontend/playwright.config.ts",
     "check:tsc": "bash scripts/check-tsc.sh",
     "check:silent-swallow": "bash scripts/check-no-silent-swallow.sh",
     "check:deprecated-symbols": "bash scripts/check-no-deprecated-symbols.sh",
-    "verify": "bun run check:tsc && bun test src/ && bun run check:silent-swallow && bun run check:deprecated-symbols"
+    "verify": "bun run check:tsc && bun test packages/@ooc/core/ && bun run check:silent-swallow && bun run check:deprecated-symbols",
+    "dev": "bun run packages/@ooc/core/app/server/index.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
     "@types/bun": "latest",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.6.2",
+    "@types/react": "^19.2.15",
     "typescript": "^5.9.0"
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.65.0",
+    "@ooc/builtins/command_exec": "workspace:*",
+    "@ooc/builtins/custom": "workspace:*",
+    "@ooc/builtins/file": "workspace:*",
+    "@ooc/builtins/knowledge": "workspace:*",
+    "@ooc/builtins/plan": "workspace:*",
+    "@ooc/builtins/program": "workspace:*",
+    "@ooc/builtins/root": "workspace:*",
+    "@ooc/builtins/search": "workspace:*",
+    "@ooc/builtins/skill_index": "workspace:*",
+    "@ooc/builtins/todo": "workspace:*",
+    "@ooc/core": "workspace:*",
+    "@ooc/meta": "workspace:*",
+    "@ooc/web": "workspace:*",
     "elysia": "^1.4.28",
     "js-yaml": "^4.1.1",
     "openai": "^6.37.0"

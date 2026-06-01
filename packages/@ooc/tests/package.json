@@ -1,0 +1,10 @@
+{
+  "name": "@ooc/tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "ooc": {
+    "kind": "source-package",
+    "role": "tests"
+  }
+}

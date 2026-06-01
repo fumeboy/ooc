@@ -1,0 +1,21 @@
+{
+  "name": "@ooc/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ooc/builtins/command_exec": "workspace:*",
+    "@ooc/builtins/file": "workspace:*",
+    "@ooc/builtins/knowledge": "workspace:*",
+    "@ooc/builtins/plan": "workspace:*",
+    "@ooc/builtins/program": "workspace:*",
+    "@ooc/builtins/root": "workspace:*",
+    "@ooc/builtins/search": "workspace:*",
+    "@ooc/builtins/skill_index": "workspace:*",
+    "@ooc/builtins/todo": "workspace:*"
+  },
+  "ooc": {
+    "kind": "source-package",
+    "role": "core-runtime"
+  }
+}

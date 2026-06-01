@@ -1,0 +1,346 @@
+import { createLlmClient } from "@ooc/core/thinkable/llm/client";
+import { readThread, writeThread, llmInputFile } from "@ooc/core/persistable";
+import { runScheduler } from "@ooc/core/thinkable/scheduler";
+import { detectInterruptedThread, markInterrupted } from "@ooc/core/thinkable/recovery";
+import { stat } from "node:fs/promises";
+import type { ServerConfig } from "../bootstrap/config";
+import type { RuntimeJob } from "./types";
+import type { ThreadContext } from "@ooc/core/thinkable/context";
+import type { TalkWindow } from "@ooc/core/executable/windows/_shared/types";
+import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "@ooc/core/executable/windows/_shared/super-constants";
+import { resumePausedThread } from "./resume";
+import { scanRunningThreads } from "./thread-query";
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
+
+/**
+ * runner 返回的 thread 终态对账结果（observability 根因 #4，2026-05-27）。
+ *
+ * thinkloop 把 LLM 超时/异常**内部消化**（标 thread.status="failed" + 写 statusReason），
+ * 不向 runner 抛 → runner 正常返回。若不对账，processQueuedJobs 会把 job 裸标 "done"，
+ * 造成"job done 但 thread failed"的假成功。runner 返回 root thread 终态，让
+ * processQueuedJobs 据此把 job 标 failed（带 statusReason）。
+ *
+ * undefined 表示无需对账（user object 跳过 / resume-thread 路径 / thread 不存在已抛错）。
+ */
+export interface RuntimeJobResult {
+  threadStatus?: ThreadContext["status"];
+  threadStatusReason?: string;
+  threadLastError?: string;
+}
+
+export type RuntimeJobRunner = (job: RuntimeJob, config: ServerConfig) => Promise<RuntimeJobResult | void>;
+
+/**
+ * 约定值：user 是 web session 中的特殊 flow object，由控制面（人类）驱动；
+ * worker 跳过它，让任何针对 user object 的 thread 都不被 LLM 调度。
+ *
+ * collaborable § cross-object talk（spec 2026-05-15）。
+ */
+const USER_OBJECT_ID = "user";
+
+export async function runJob(
+  job: RuntimeJob,
+  config: Pick<ServerConfig, "baseDir" | "workerMaxTicks" | "jobManager">
+): Promise<RuntimeJobResult | void> {
+  if (job.objectId === USER_OBJECT_ID) {
+    // user object 是被动对象——所有思考由 web 用户在 UI 上完成，worker 不调度
+    return;
+  }
+
+  if (job.kind === "resume-thread") {
+    await resumePausedThread({
+      baseDir: config.baseDir,
+      sessionId: job.sessionId,
+      objectId: job.objectId,
+      threadId: job.threadId,
+    });
+    return;
+  }
+
+  const rootThread = await readThread(
+    {
+      baseDir: config.baseDir,
+      sessionId: job.sessionId,
+      objectId: job.objectId,
+    },
+    job.threadId
+  );
+  if (!rootThread) {
+    throw new Error(`thread not found: ${job.threadId}`);
+  }
+  // 跑 scheduler 前先把"caller waiting on 已结束的 cross-object callee" 唤醒
+  // (scheduler.emitChildEndNotifications 只覆盖 in-tree childThreads,无法跨 object)
+  await syncCrossObjectCalleeEnds(rootThread, config.baseDir, job.sessionId);
+  await runScheduler(rootThread, createLlmClient(), { maxTicks: config.workerMaxTicks ?? 15 });
+
+  // scheduler yield 自唤醒：runScheduler 跑满 maxTicks 自然返回时, 若 thread 仍 running,
+  // 写一条 scheduler_yielded event + 主动再入队一次。否则在事件驱动 worker 模型下没有
+  // 任何 event source 会唤醒它(2026-05-24 根因 #5)。详见 meta/app.server.doc.ts § worker。
+  // 顺序: 先 writeThread 把事件落盘, 再 createRunThreadJob — 否则下个 worker tick 抢先
+  // read 时可能看不到这条 event。
+  if (rootThread.status === "running") {
+    const rounds = rootThread.events.filter(
+      (e) => e.category === "llm_interaction" && e.kind === "call_started",
+    ).length;
+    rootThread.events.push({
+      category: "context_change",
+      kind: "scheduler_yielded",
+      reason: "max_ticks",
+      rounds,
+    });
+    await writeThread(rootThread);
+    config.jobManager.createRunThreadJob({
+      sessionId: job.sessionId,
+      objectId: job.objectId,
+      threadId: job.threadId,
+    });
+  }
+
+  // 根因 #4: scheduler 原地推进 rootThread 并落盘；返回其终态供 processQueuedJobs 对账。
+  // thinkloop 把 LLM 超时/异常消化成 status="failed"（不抛），不对账就会被裸标 done。
+  return {
+    threadStatus: rootThread.status,
+    threadStatusReason: rootThread.statusReason,
+    threadLastError: rootThread.lastError,
+  };
+}
+
+export async function processQueuedJobs(
+  config: ServerConfig,
+  runner: RuntimeJobRunner = runJob
+): Promise<void> {
+  // 根因 #5（worker 事件驱动改造，2026-05-24）：worker 不再周期扫 fs 兜底入队。
+  // 状态翻转（talk-delivery / do_window.continue / issue appendComment / resume /
+  // end auto-reply）由事件源在写完目标 inbox 后直接调 notifyThreadActivated
+  // → jobManager.createRunThreadJob。worker 只跑队列。
+  //
+  // 启动期兜底（捕获上次未跑完的 running thread）已迁到 bootstrap (enqueueRunningThreadsAtBootstrap)。
+  const jobs = config.jobManager.listJobs().filter((job) => job.status === "queued");
+
+  // **并行处理本批 queued jobs** (2026-05-20 修): 此前是 for-await 串行, 当 caller
+  // 在 thinkloop 内 await 跨 object talk 派生的 callee 回复时, callee 永远拿不到
+  // schedule (因为 caller job 占着 worker, processing guard 阻止下一 tick 进入)。
+  // 并行化让 caller / callee 同时跑 — LLM 调用是 IO bound, jobManager 用 atomic claim
+  // 保证多 tick 并发进入也不会重复 process 同一 job。
+  await Promise.all(
+    jobs.map(async (job) => {
+      // atomic claim — 如果别的并发 tick 已经 claim 这个 job, 跳过
+      const claimed = config.jobManager.tryClaimQueuedJob(job.jobId);
+      if (!claimed) return;
+
+      try {
+        const result = await runner(claimed, config);
+        // 根因 #4: thread 以 failed 收场时 job 不裸标 done — thinkloop 内部消化
+        // LLM 超时/异常（不向 runner 抛），裸标 done 会造成"job done 但 thread failed"
+        // 的假成功。对账 thread 终态：failed → job 标 failed + 带 statusReason。
+        if (result?.threadStatus === "failed") {
+          config.jobManager.updateJob(claimed.jobId, {
+            status: "failed",
+            finishedAt: Date.now(),
+            statusReason: result.threadStatusReason ?? "thread_failed",
+            error: result.threadLastError,
+          });
+        } else {
+          config.jobManager.updateJob(claimed.jobId, {
+            status: "done",
+            finishedAt: Date.now(),
+          });
+        }
+      } catch (error) {
+        config.jobManager.updateJob(claimed.jobId, {
+          status: "failed",
+          finishedAt: Date.now(),
+          statusReason: "runner_error",
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    })
+  );
+}
+
+/**
+ * Bootstrap-only：server 启动时调一次，把磁盘上 running/waiting 的 thread 入队。
+ *
+ * 用于：上次 server crash 留下的 orphan thread；workerEnabled=true 的 buildServer
+ * 启动后第一次扫一遍。**不**周期扫——周期扫已在根因 #5 中删除。
+ *
+ * 失败不抛，保证 server 启动不被磁盘异常拖垮。
+ */
+export async function enqueueRunningThreadsAtBootstrap(
+  config: Pick<ServerConfig, "baseDir" | "jobManager">,
+): Promise<{ enqueued: number }> {
+  let enqueued = 0;
+  try {
+    const sessionIds = await listSessionIds(config.baseDir);
+    for (const sessionId of sessionIds) {
+      const running = await scanRunningThreads(config.baseDir, sessionId);
+      for (const { objectId, threadId } of running) {
+        if (objectId === USER_OBJECT_ID) continue;
+        await maybeMarkInterrupted(config.baseDir, sessionId, objectId, threadId);
+        config.jobManager.createRunThreadJob({ sessionId, objectId, threadId });
+        enqueued += 1;
+      }
+    }
+  } catch (err) {
+    // bootstrap 期失败 warn 但不阻塞启动（silent-swallow ban → 显式 warn）
+    console.warn(
+      `[worker] enqueueRunningThreadsAtBootstrap failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  return { enqueued };
+}
+
+async function listSessionIds(baseDir: string): Promise<string[]> {
+  try {
+    const entries = await readdir(join(baseDir, "flows"), { withFileTypes: true });
+    return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Bootstrap recovery: 检测上次 server crash / LLM hang 留下的"中断 thread"，写一条
+ * inject event 告诉 LLM 上一轮 LLM 调用被打断，让 worker 把它正常入队后 LLM 看到
+ * 标记会重试。不删 debug 文件（observability 资产）；不改 status（让常规 enqueue
+ * 推进）。详见 src/thinkable/recovery.ts。
+ */
+async function maybeMarkInterrupted(
+  baseDir: string,
+  sessionId: string,
+  objectId: string,
+  threadId: string,
+): Promise<void> {
+  try {
+    const ref = { baseDir, sessionId, objectId, threadId };
+    const thread = await readThread(ref, threadId);
+    if (!thread) return;
+    let debugInputExists = false;
+    try {
+      await stat(llmInputFile(ref));
+      debugInputExists = true;
+    } catch {} // intentional: stat 仅探测 llm.input 是否存在；不存在(ENOENT)即 debugInputExists 保持 false
+    const detection = detectInterruptedThread(thread, { debugInputExists });
+    if (!detection.interrupted) return;
+    markInterrupted(thread);
+    await writeThread(thread);
+  } catch (err) {
+    console.warn(
+      `[worker] maybeMarkInterrupted failed for ${sessionId}/${objectId}/${threadId}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+/**
+ * 跨对象 callee end → caller 唤醒。
+ *
+ * 背景:scheduler.ts:emitChildEndNotifications 只处理 caller 自身 thread.childThreads
+ * 树里的子线程结束(典型 do_window fork)。跨对象 talk 派生的 callee(super flow /
+ * 普通 talk peer)落在另一个 objectId 目录,不在 childThreads 树,end 时 caller
+ * 无信号 → 卡死 waiting。
+ *
+ * 本函数在 caller thread 跑 scheduler 之前调用:扫 caller 的 talk_window 列表,
+ * 对每个有 targetThreadId 的 talk_window,readThread 对端;若 callee 处于 done/failed
+ * 且 caller 正 waiting 在该 talk_window 上,写一条 system message 到 caller.inbox +
+ * 翻 caller 状态回 running + 持久化。
+ *
+ * 幂等:用 `[talk:<windowId>:<status>@<lastExecutedAt>]` marker 去重,避免每次扫
+ * 都写同样消息。callee 重启(status 切回 running 又 end)会因 lastExecutedAt 变化
+ * 产生新 marker,允许再唤醒一次。
+ */
+async function syncCrossObjectCalleeEnds(
+  caller: ThreadContext,
+  baseDir: string,
+  callerSessionId: string,
+): Promise<void> {
+  if (!caller.persistence) return;
+  const talkWindows = (caller.contextWindows ?? []).filter(
+    (w): w is TalkWindow => w.type === "talk" && Boolean(w.targetThreadId),
+  );
+  if (talkWindows.length === 0) return;
+
+  let mutated = false;
+  for (const w of talkWindows) {
+    // super alias 是自指目标:派送到 caller 自身在 super session 下的 thread。
+    // 这里的 callee 解析必须与 talk-delivery.ts 严格一致 — 否则 readThread 会
+    // 读错路径(在 sessions/super/objects/super/ 找不到任何东西)。
+    const isSuperAlias = w.target === SUPER_ALIAS_TARGET;
+    const calleeObjectId = isSuperAlias ? caller.persistence.objectId : w.target;
+    const calleeSessionId = isSuperAlias ? SUPER_SESSION_ID : callerSessionId;
+    const calleeRef = { baseDir, sessionId: calleeSessionId, objectId: calleeObjectId };
+    let callee: ThreadContext | undefined;
+    try {
+      callee = await readThread(calleeRef, w.targetThreadId!);
+    } catch {
+      continue;
+    }
+    if (!callee) continue;
+    if (callee.status !== "done" && callee.status !== "failed") continue;
+
+    const tail = callee.lastExecutedAt ?? 0;
+    const marker = `[talk:${w.id}:${callee.status}@${tail}]`;
+    const already = (caller.inbox ?? []).some((m) => (m.content ?? "").startsWith(marker));
+    if (already) continue;
+
+    const summary = callee.endSummary ?? "(无 summary)";
+    const reason = callee.endReason ?? callee.status;
+    const text = `${marker} ${reason} - ${summary}`;
+    const msgId = `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    caller.inbox = [
+      ...(caller.inbox ?? []),
+      {
+        id: msgId,
+        fromThreadId: callee.id,
+        toThreadId: caller.id,
+        fromObjectId: calleeObjectId,
+        content: text,
+        createdAt: Date.now(),
+        source: "system",
+        replyToWindowId: w.id,
+      },
+    ];
+    caller.events = [
+      ...caller.events,
+      { category: "context_change", kind: "inbox_message_arrived", msgId },
+    ];
+    mutated = true;
+  }
+
+  if (!mutated) return;
+
+  // scheduler.wakeWaitingThreadsOnInbox 会在 runScheduler tick 内做 waiting → running 翻转,
+  // 但 caller 此时仍是 waiting 状态;为了让 scheduler 第一时间看到新消息后能立即调度,
+  // 这里也做一次翻转(等同于 scheduler 第一次 tick 的效果),并把 inboxSnapshotAtWait 清零
+  if (caller.status === "waiting") {
+    caller.status = "running";
+    caller.inboxSnapshotAtWait = undefined;
+    caller.waitingOn = undefined;
+  }
+
+  await writeThread(caller);
+}
+
+export function startJobWorker(config: ServerConfig): { stop(): void } {
+  // **每个 tick 独立并行进入** (2026-05-20 修): 此前 `if (processing) return` guard 让
+  // 当一个 tick 内 caller thinkloop 跑很久 (workerMaxTicks 默认 15 * LLM ~30s/tick) 时,
+  // 后续所有 tick 全部 skip, 跨 object talk 派生的 super callee 永远等不到 schedule。
+  // 改为允许多 tick 并发, jobManager.tryClaimQueuedJob 用 atomic claim 保证不重复处理.
+  const interval = setInterval(() => {
+    processQueuedJobs(config).catch((err) => {
+      // 不抛, 不让一次失败拖垮整个 setInterval
+      console.error("[worker] processQueuedJobs error:", err);
+    });
+  }, config.workerPollMs);
+
+  if (typeof interval.unref === "function") {
+    interval.unref();
+  }
+
+  return {
+    stop() {
+      clearInterval(interval);
+    },
+  };
+}
+

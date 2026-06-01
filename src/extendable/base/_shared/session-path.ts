@@ -1,5 +1,0 @@
-/**
- * Re-export from the canonical source at src/executable/windows/_shared/session-path.ts.
- * Phase 1 migration: new location exists as re-export; canonical source stays in old location.
- */
-export * from "../../../executable/windows/_shared/session-path";

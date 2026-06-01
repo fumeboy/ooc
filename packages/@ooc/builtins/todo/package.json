@@ -1,0 +1,14 @@
+{
+  "name": "@ooc/builtins/todo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "react": "^19.0.0"
+  },
+  "ooc": {
+    "objectId": "_builtin/todo",
+    "kind": "builtin",
+    "type": "object"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@ooc/builtins/program",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@codemirror/lang-json": "^6.0.2",
+    "@ooc/builtins/_shared": "workspace:*",
+    "@uiw/react-codemirror": "^4.25.8",
+    "react": "^19.0.0"
+  },
+  "ooc": {
+    "objectId": "_builtin/program",
+    "kind": "builtin",
+    "type": "object"
+  }
+}

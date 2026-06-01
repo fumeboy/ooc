@@ -7,20 +7,29 @@
     "allowJs": true,
     "strict": true,
     "noEmit": true,
+    "jsx": "react-jsx",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
     "paths": {
-      "@meta": ["meta/index.doc.js"],
-      "@meta/*": ["meta/*"],
-      "@src/*": ["src/*"]
+      "@meta": ["packages/@ooc/meta/index.doc.js"],
+      "@meta/*": ["packages/@ooc/meta/*"],
+      "@src/*": ["packages/@ooc/core/*"],
+      "@ooc/core/*": ["packages/@ooc/core/*"],
+      "@ooc/builtins/*": ["packages/@ooc/builtins/*"],
+      "@ooc/web/*": ["packages/@ooc/web/src/*"],
+      "@ooc/meta/*": ["packages/@ooc/meta/*"],
+      "@ooc/tests/*": ["packages/@ooc/tests/*"]
     },
     "types": ["bun", "node"],
     "skipLibCheck": true
   },
   "include": [
-    "src/**/*.ts",
-    "meta/**/*.js",
-    "meta/**/*.ts",
-    "tests/**/*.ts",
-    ".ooc-world/stones/**/*.ts"
+    "packages/@ooc/core/**/*.ts",
+    "packages/@ooc/meta/**/*.js",
+    "packages/@ooc/meta/**/*.ts",
+    "packages/@ooc/tests/**/*.ts",
+    "packages/*/**/*.ts",
+    "packages/*/**/*.tsx"
   ]
 }

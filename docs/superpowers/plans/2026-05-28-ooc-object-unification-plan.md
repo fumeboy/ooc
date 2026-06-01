@@ -5,6 +5,8 @@
 **基础分支：** ooc-2（当前 ooc-6 = ooc-2，干净起点）
 **原则：** 小步迭代，每步可回滚；Alias first，migrate one at a time；tests green between steps
 
+**本设计部分过时**: ooc-6 按照 bun monorepo 的方式进行了重构，重构后，builtin objects 不再放置在 `src/extendable/base/` 目录下，而是放在 ./packages/@ooc/builtins 目录下。
+
 ---
 
 ## Phase 0: Design & Meta Documentation Update
