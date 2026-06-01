@@ -13,8 +13,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests } from "@ooc/core/persistable";
-import { executeWriteFileCommand } from "../command.write-file";
-import type { CommandExecutionContext } from "../../_shared/command-types";
+import { executeWriteFileCommand } from "@ooc/builtins/root/executable/command.write-file";
+import type { CommandExecutionContext } from "@ooc/core/extendable/_shared/command-types";
 
 let tempRoots: string[] = [];
 

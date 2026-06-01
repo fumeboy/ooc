@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from "bun:test";
 
-import "../program/index.js"; // 触发 registerWindowType side-effect import
+import "@ooc/builtins/program"; // 触发 registerWindowType side-effect import
 
 import { getWindowTypeDefinition } from "../_shared/registry.js";
 import {
@@ -25,9 +25,9 @@ import {
   DEFAULT_HISTORY_VIEWPORT,
   executeProgramSetHistoryViewport,
   hasAnyHistoryViewportField,
-} from "../program/history-viewport.js";
-import { executeProgramCommand } from "../root/command.program.js";
-import { executeProgramWindowExec } from "../program/index.js";
+} from "@ooc/builtins/program";
+import { executeProgramCommand } from "@ooc/builtins/root/executable/command.program.js";
+import { executeProgramWindowExec } from "@ooc/builtins/program";
 import { makeThread } from "../../../__tests__/make-thread.js";
 
 const NOW = 1_700_000_000_000;

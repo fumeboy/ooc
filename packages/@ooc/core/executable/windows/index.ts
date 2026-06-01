@@ -82,7 +82,7 @@ export {
   getOpenableCommands,
   deriveRootCommandPaths,
   execRootCommand,
-} from "./root/index.js";
+} from "@ooc/builtins/root";
 
 // Side-effect imports: each window type module 通过 registerWindowType 注入 commands / hooks。
 // 这些 import 必须在 WindowManager 之后 load，确保使用时表已就绪。

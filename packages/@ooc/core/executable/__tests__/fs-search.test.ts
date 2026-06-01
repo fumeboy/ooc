@@ -24,7 +24,7 @@ import {
 } from "../windows/index";
 import {
   SEARCH_WINDOW_BASIC_KNOWLEDGE,
-} from "../windows/search";
+} from "@ooc/builtins/search";
 import { renderContextXml } from "../../thinkable/context/render";
 import { makeThread } from "../../__tests__/make-thread";
 
@@ -597,7 +597,7 @@ describe("U4: root.glob + search_window.open_match", () => {
   });
 
   it("open_match exec edge: missing index error message includes refine recovery hint", async () => {
-    const { executeSearchOpenMatch } = await import("../windows/search");
+    const { executeSearchOpenMatch } = await import("@ooc/builtins/search");
     const dir = await makeGlobFixtureDir("glob-no-idx-exec", ["a.ts"]);
     const thread = makeThread({ id: "t_open_match_exec_no_idx" });
     await dispatchGlob(thread, { pattern: "*.ts", cwd: dir });
@@ -631,7 +631,7 @@ describe("U4: root.glob + search_window.open_match", () => {
 
 // ---------- U5: root.grep ----------
 
-import { runJsFallback } from "../windows/root/command.grep.impl";
+import { runJsFallback } from "@ooc/builtins/root/executable/command.grep.impl";
 
 async function dispatchGrep(thread: ReturnType<typeof makeThread>, args: Record<string, unknown>) {
   return dispatchToolCall(thread, {
@@ -777,7 +777,7 @@ describe("U5: root.grep", () => {
 
 // ---------- U6: program anti-pattern note ----------
 
-import { programCommand } from "../windows/root/command.program";
+import { programCommand } from "@ooc/builtins/root/executable/command.program";
 
 describe("U6: program knowledge mentions file_window.edit", () => {
   it("program command knowledge text steers LLM toward file_window.edit + write_file", () => {

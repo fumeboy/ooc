@@ -16,6 +16,7 @@ import type {
 } from "@ooc/core/extendable/_shared/command-types.js";
 import { registerObjectType, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
 import { runOneExec, type ProgramExecArgs } from "./runtime.js";
+export { runOneExec, type ProgramExecArgs } from "./runtime.js";
 import type { ProgramWindow } from "../types.js";
 import { xmlElement, xmlText, xmlComment, truncateBytes, type XmlNode } from "@ooc/core/thinkable/context/xml.js";
 import {
@@ -23,6 +24,11 @@ import {
   type TranscriptViewport,
 } from "@ooc/core/extendable/_shared/transcript-viewport.js";
 import {
+  DEFAULT_HISTORY_VIEWPORT,
+  executeProgramSetHistoryViewport,
+  hasAnyHistoryViewportField,
+} from "./history-viewport.js";
+export {
   DEFAULT_HISTORY_VIEWPORT,
   executeProgramSetHistoryViewport,
   hasAnyHistoryViewportField,

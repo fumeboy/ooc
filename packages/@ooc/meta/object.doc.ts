@@ -84,12 +84,13 @@ export const root: DocTreeNode = {
     - observable: 可观测、记录、debug
     - persistable: 可以持久化存储
 
-    自我塑造三件套（Agent 改写"自己"的三个面，OOC 自我进化主张的载体）:
+    自我塑造（Agent 改写"自己"的多个面，OOC 自我进化主张的载体）:
     - reflectable: 自我反思、经验沉淀、元编程（改自己的知识）
     - programmable: 为自己编写函数方法（改自己的方法 / server 方法库）
     - visible: 为自己编写 UI 页面（改自己的界面）
+    - readable: 可被其他 Agent 阅读的 （能够进行自我介绍）
 
-    **extendable** 是**非维度的外接集成层**（不在 8 维度内）: 把外部世界（飞书 / notion / slack / github 等）按统一模板接入为可调用的 Window 与 command。它够的是**外部世界**，而外部系统不构成 Agent 自我，故不是维度（实现见 src/extendable/，首个 case 见 meta/case.feishu-integration.doc.ts，详见 children.extendable）。
+    **extendable** 是**非维度的外接集成层**（不在 8 维度内）: 把外部世界（飞书 / notion / slack / github 等）按统一模板接入为可调用的 Window 与 command。它够的是**外部世界**，而外部系统不构成 Agent 自我，故不是维度（实现见 packages/@ooc/core/extendable/，首个 case 见 meta/case.feishu-integration.doc.ts，详见 children.extendable）。
 
     两条贯穿全维度的横切设计:
     - 对象关系三轴（详见 patches.object_relations）: 自我(super) / peer 平等(talk) / parent-child 层级。Supervisor 即这棵 object 树的 root parent。
@@ -106,7 +107,7 @@ export const root: DocTreeNode = {
         "programmable": "OOC Agent 由几个维度组合，programmable 是其中之一，定义 Agent 持有/演化自身函数方法库的能力",
         "visible": "OOC Agent 由几个维度组合，visible 是其中之一，定义 Agent 持有/演化自身 UI 页面的能力",
         "persistable": "OOC Agent 由几个维度组合，persistable 是其中之一，定义 Agent 的持久化存储能力",
-        "extendable": "非能力维度的外接集成层：把外部世界（飞书 / notion / slack 等）按统一模板接入为可调用的 Window 与 command；实现见 src/extendable/",
+        "extendable": "非能力维度的外接集成层：把外部世界（飞书 / notion / slack 等）按统一模板接入为可调用的 Window 与 command；实现见 packages/@ooc/core/extendable/",
         "stone": "OOC 持久层之一（静）：长期身份与设计源码（含 seed knowledge），进 git review",
         "pool": "OOC 持久层之一（积）：跨 session 累积的事实数据（含 sediment knowledge），不进 git",
         "flow": "OOC 持久层之一（动）：session 级临时数据与程序",
@@ -133,8 +134,8 @@ export const root: DocTreeNode = {
 
             **ContextWindow = Object in Context（2026-05-28 归一化）**:
             ContextWindow 不再是独立于 Object 的数据结构，而是 Object 出现在当前 thread context 中的形态。每个 window 对应一个 Object:
-            - builtin objects（file/do/talk/program/... 位于 \`src/extendable/base/<type>/\`）
-            - user-defined objects（位于 \`stones/<branch>/objects/<id>/\`）
+            - builtin objects（file/knowledge/program/... 位于 \`packages/@ooc/builtins/<type>/\`）
+            - user-defined objects（位于 \`packages/<objectId>/\`，运行时通过 registerNewObjectType 注册）
             Object 的 readable 函数控制自己如何在 context 中以 XML 形式展示给 LLM；Object 的 executable 目录提供 methods；Object 的 visible 目录提供前端 UI。
 
             渐进式披露的多步 command 调用: LLM 调 exec(window_id, command, args)；若 args 不齐或会引入新 knowledge path，系统创建一个 command_exec form 并激活该 command 的初始知识，告诉 LLM 怎么填；LLM 通过 exec(form_id, "refine", args) 多次累积参数（每次可触发更细的知识激活），最后 exec(form_id, "submit") 执行。例如打开文件 = exec(command="open_file", args={path})，文件以 file 类型 ContextWindow 进入 LLM 输入。close 关闭一个 ContextWindow。
@@ -285,15 +286,15 @@ export const root: DocTreeNode = {
 
                             传统 prompt 往往把文件、搜索结果、任务说明、工具说明全部拼成文本。
                             OOC 则把这些内容建模为不同类型的 **Object**，每个 Object 以 ContextObject 形态出现在 context 中:
-                            - file_object 展示文件（builtin object，位于 \`src/extendable/base/file/\`）
-                            - knowledge_object 展示知识（builtin object，位于 \`src/extendable/base/knowledge/\`）
-                            - program_object 展示程序执行过程（builtin object，位于 \`src/extendable/base/program/\`）
-                            - search_object 展示一次 glob / grep 的命中（builtin object，位于 \`src/extendable/base/search/\`）
-                            - command_exec object 展示一次 method 调用的表单状态（builtin object，位于 \`src/extendable/base/command_exec/\`）
-                            - todo_object 展示待办事项（builtin object，位于 \`src/extendable/base/todo/\`）
-                            - plan_object 展示计划（builtin object，位于 \`src/extendable/base/plan/\`）
-                            - skill_index_object 展示技能索引（builtin object，位于 \`src/extendable/base/skill_index/\`）
-                            - custom object 用户自定义 object（位于 \`stones/<branch>/objects/<id>/\`）
+                            - file_object 展示文件（builtin object，位于 \`packages/@ooc/builtins/file/\`）
+                            - knowledge_object 展示知识（builtin object，位于 \`packages/@ooc/builtins/knowledge/\`）
+                            - program_object 展示程序执行过程（builtin object，位于 \`packages/@ooc/builtins/program/\`）
+                            - search_object 展示一次 glob / grep 的命中（builtin object，位于 \`packages/@ooc/builtins/search/\`）
+                            - command_exec object 展示一次 method 调用的表单状态（builtin object，位于 \`packages/@ooc/builtins/command_exec/\`）
+                            - todo_object 展示待办事项（builtin object，位于 \`packages/@ooc/builtins/todo/\`）
+                            - plan_object 展示计划（builtin object，位于 \`packages/@ooc/builtins/plan/\`）
+                            - skill_index_object 展示技能索引（builtin object，位于 \`packages/@ooc/builtins/skill_index/\`）
+                            - user-defined object 用户自定义 object（位于 \`packages/<objectId>/\`，运行时通过 registerNewObjectType 注册）
 
                             **重要澄清（2026-06-01）**：\`talk_object\` 和 \`do_object\` **不是**独立的 builtin object，而是**所有 OOC Object 的基础属性/能力**：
                             - \`talk_object\`：Object 与其他 Object 通信能力的上下文呈现（inbox/outbox/消息历史）
@@ -391,7 +392,7 @@ export const root: DocTreeNode = {
                             stones/<branch>/objects/sentry/
                             ├── .stone.json
                             ├── self.md
-                            ├── readme.md
+                            ├── readable.md
                             ├── knowledge/
                             │   ├── sentry_intro.md      (frontmatter inheritable: true)
                             │   └── sentry_factor.md     (frontmatter inheritable: true)
@@ -712,13 +713,13 @@ export const root: DocTreeNode = {
             **2026-05-28 ooc-6 归一化: Command 与 Object Method 合并**
             原 "Window Command" 与 "Object Method" 两个概念合并，统一称为 **Method**:
             - 原 window 上注册的 command 现在是 builtin object 的 method
-            - 原 stone object server/index.ts 中定义的方法现在也是 object 的 method
+            - 原 stone object executable/index.ts 中定义的方法现在也是 object 的 method
             - Method 有两个可见性标记: \`public?: boolean\`（对其他 Object 是否可见）、\`for_ui_access?: boolean\`（对前端 API 是否可调用）
 
             Executable 的核心分层:
             1. Tool 原语层: exec / close / wait / compress，是 LLM 直接看见的稳定接口（4 个）。
             2. Method 层: do / talk / program / plan / todo / end / open_file / open_knowledge / write_file / glob / grep 等具体行动；form 自身的 refine / submit 也是 command_exec object 上的 method。
-            3. ContextObject 层: 行动产生或操作的上下文对象，比如 file_object、talk_object、program_object、do_object、plan_object、custom object。每个 context object 背后都是一个 OOC Object（builtin 或 user-defined）。
+            3. ContextObject 层: 行动产生或操作的上下文对象，比如 file_object、talk_object、program_object、do_object、plan_object、user-defined object。每个 context object 背后都是一个 OOC Object（builtin 或 user-defined）。
             4. Registry / Manager 层: 注册不同 object type 的 method、readable、onClose hook、basicKnowledge。
             5. Knowledge Activation 层: 根据 method path 自动激活执行所需知识。
 
@@ -734,7 +735,7 @@ export const root: DocTreeNode = {
                 "Command": "Method 的旧称（2026-05-28 前），概念已与 Object Method 合并",
                 "ContextObject": "可展示、可操作、可挂载 method 的上下文对象；本质是 OOC Object 出现在 context 中的形态",
                 "ContextWindow": "ContextObject 的旧称（2026-05-28 前），概念已统一为 ContextObject",
-                "ObjectType": "ContextObject 的类型分支，如 root/file/program/talk/do/knowledge/search/plan/custom",
+                "ObjectType": "ContextObject 的类型分支，如 root/file/program/talk/do/knowledge/search/plan，以及运行时通过 registerNewObjectType 注册的任意字符串类型",
                 "WindowType": "ObjectType 的旧称（2026-05-28 前）",
                 "CommandExec": "一次 method 调用过程对应的临时对象（type=command_exec）；自身注册 refine/submit method",
                 "ObjectRegistry": "注册各类 object type 行为的机制（原 WindowRegistry）",
@@ -863,8 +864,8 @@ export const root: DocTreeNode = {
                     （共 14 个全局 command，与 src/executable/windows/root/index.ts ROOT_COMMANDS 一致。）
 
                     其它 window 上也注册命令（do_window: continue/wait/close；talk_window: say/wait/close；
-                    file_window: edit/reload/set_range/close；command_exec: refine/submit；custom: Object 自定义 ...）。
-                    Object 自定义 commands 通过 server/index.ts 的 \`export const window\` 注册到 type=custom 的 self window 上。
+                    file_window: edit/reload/set_range/close；command_exec: refine/submit；user-defined object: 自定义 methods ...）。
+                    Object 自定义 methods 通过 executable/index.ts 的 \`export const window\` 注册，运行时通过 registerNewObjectType 动态注册到 WindowRegistry。
 
                     Command 与 knowledge 通过 trigger 协议协作：
                     每个 command_exec form 在 thread 中处于 open 状态时，对应的
@@ -931,7 +932,7 @@ export const root: DocTreeNode = {
                     三档语义:
                     - **Allow** (默认): 无人工介入直接执行。适合纯读 / 控制流 (open_file, glob, grep, compress, close, wait, plan, end)。
                     - **Ask**: 触发 PauseChecker, thread 进 paused 状态, 等待人工 approve/reject。适合写副作用 (write_file, relation_update, program, super flow 改 self.md)。
-                    - **Deny**: 系统直接拒绝, 在 events 流写一条 function_call_output, 让 LLM 看见原因。适合"永远不该让 LLM 直接干"的事 (本轮: 程序自改 server/index.ts; 未来 plan mode 通过后再放开)。
+                    - **Deny**: 系统直接拒绝, 在 events 流写一条 function_call_output, 让 LLM 看见原因。适合"永远不该让 LLM 直接干"的事 (本轮: 程序自改 executable/index.ts; 未来 plan mode 通过后再放开)。
 
                     声明 + 配置 = 最终决定:
                     - **声明**: CommandTableEntry.permission 字段, 由 command 作者填写。
@@ -1011,7 +1012,7 @@ export const root: DocTreeNode = {
                             - delete_* 任何删除类
 
                             deny (本轮硬拦):
-                            - 程序自改 stones/<self>/server/index.ts (元编程闭环未成熟前)
+                            - 程序自改 stones/<self>/executable/index.ts (元编程闭环未成熟前)
 
                             这是 design 草案; 具体 command 名以仓库实际注册为准, 实施期 (Q0d) 校准。
                             未在表中的 command 默认 allow。
@@ -1031,13 +1032,13 @@ export const root: DocTreeNode = {
                     },
                     sources: [["docs/2026-05-25-permission-model-design.md", "完整 design (含 Q0a~Q0d 分阶段 + 默认 policy 草案 + 风险清单 + Supervisor 拍板记录)"]],
                     todo: [
-                        "Q0e 抽专用 program_self_modify command 或在 write_file exec 中加路径前缀检查 (stones/*/server/index.ts → deny); Plan Mode 落地前保持 deny",
+                        "Q0e 抽专用 program_self_modify command 或在 write_file exec 中加路径前缀检查 (stones/*/executable/index.ts → deny); Plan Mode 落地前保持 deny",
                         "Q0e Stone 作者的 permission 声明传递: programmable.loader 把 ObjectWindowDefinition.commands[*].permission 透传到 CommandTableEntry (custom window proxy 当前一律缺省 allow, 由 stone 作者自行声明)",
                         "远景: Auto Mode (AI 分类器) / Plan Mode (LLM plan + user approve) / OS-level Sandbox 集成——本轮全部不做",
                     ],
                     warnings: [
                         "Q0d 截止 2026-05-25 状态: 6 项 command 已填 ask (write_file / root.program / program_window.exec / file_window.edit / relation.edit / metaprog); deny 0 项 (列 Q0e); 其余 command 缺省 allow",
-                        "自改 stones/<self>/server/index.ts 当前**没有硬拦** — 通过 metaprog 整族 ask + write_file ask 形成弱约束; Q0e 需补硬 deny",
+                        "自改 stones/<self>/executable/index.ts 当前**没有硬拦** — 通过 metaprog 整族 ask + write_file ask 形成弱约束; Q0e 需补硬 deny",
                     ],
                 },
                 "context_window": {
@@ -1452,9 +1453,9 @@ export const root: DocTreeNode = {
                     - file: 文件内容窗口，支持 viewport / set_viewport / set_range（遗留）/ reload / edit / close。
                     - knowledge: 知识文档窗口，承载显式打开或协议合成的 knowledge；explicit 来源支持 viewport / set_viewport。
                     - search: glob / grep 搜索结果窗口，支持 open_match。
-                    - relation: 跨 Object 关系窗口；含 peer stone readme 只读 + self-relation 双层（见 children.relation_window）。
+                    - relation: **@deprecated** (ooc-6) 跨 Object 关系窗口；已被 peer Object 自动注入机制（derivePeerObjectWindows）替代。保留用于向后兼容已持久化的 thread 数据。
                     - skill_index: stone skills 索引窗口；每轮由 synthesizer 派生。
-                    - custom: Object 自定义窗口（server/index.ts \`export const window\` 注册的 self window）。
+                    - user-defined: 任意 Object 以自身 id 为 type 注册的窗口；通过 executable/index.ts \`export const window\` 定义，运行时 registerNewObjectType 注册。
                     - feishu_chat: 飞书群会话窗口。
                     - feishu_doc: 飞书文档窗口。
                     - plan: 行动计划窗口；支持 sub plan 嵌套 + 通过 do.share_windows 共享给子 thread (见 B 段设计)。
@@ -2179,12 +2180,12 @@ export const root: DocTreeNode = {
             Object 可以反思自己、沉淀经验、修改自身的知识与方法。
             OOC 不为此专门设一套"反思 API"，而是复用既有协作设施 —— 通过一个名为
             "super" 的特殊 session 把 Object 引到一条专用反思线程上，在那里改写自身
-            stone 中的身份文件（self.md / readme.md）与 pool 中的 sediment knowledge
+            stone 中的身份文件（self.md / readable.md）与 pool 中的 sediment knowledge
             （pools/<self>/knowledge/memory / relations）。下一轮新 thread 自动看见这些落盘的新内容，
             行为随之自我演化。
 
             注意 stone 中的 **seed knowledge**（\`stones/<self>/knowledge/\`，人类设计的初始知识库）
-            **不在 super flow 默认写入面**——它与 server / client 同属高赌注设计变更，
+            **不在 super flow 默认写入面**——它与 executable / visible 同属高赌注设计变更，
             走 stone-versioning 的 PR-Issue 流程（可挂 eval gate）。reflectable 只动 sediment（运行时沉淀），
             不直接改 seed（先天能力基底）。
 
@@ -2192,7 +2193,7 @@ export const root: DocTreeNode = {
             1. super session: 受保护的 sessionId（"super"），表示 Object 的反思通道。
             2. super alias target: talk_window.target === "super" 时被 talk-delivery 翻译为指向自己的 super 分身。
             3. Reflectable protocol knowledge: 当 thread.persistence.sessionId === "super" 时，synthesizer 自动注入 REFLECTABLE_KNOWLEDGE。
-            4. memory 写入: super flow 中允许写自身 stone 的身份文件（self.md / readme.md）与 pool 的 sediment knowledge
+            4. memory 写入: super flow 中允许写自身 stone 的身份文件（self.md / readable.md）与 pool 的 sediment knowledge
                （pools/objects/<self>/knowledge/memory/*.md、pools/objects/<self>/knowledge/relations/*.md）。
                注意 sediment knowledge 不进 git review（事实型，写就生效）；身份文件仍在 stone 进 git review；
                seed knowledge（stones/<self>/knowledge/）不在 super flow 默认面。
@@ -2209,7 +2210,7 @@ export const root: DocTreeNode = {
             （见 observable 的 agent 面），super 只是"读它们、据此调整自己"的场所。
 
             scope —— super 是 **self-scoped** 的: object A 的 super flow 只能观察 / 修改 A 自己
-            （talk_window.target="super" 是自指别名，见 super_alias_target）。改自身 stone（self.md / server /
+            （talk_window.target="super" 是自指别名，见 super_alias_target）。改自身 stone（self.md / executable /
             knowledge）经 write_file → stone-versioning 的 **self-scope 自治 ff-merge**，不经他人 review；
             cross-object（改别人子树）才 PR（详见 root.patches.object_relations）。super 本身从不跨 object。
             `,
@@ -2277,12 +2278,12 @@ export const root: DocTreeNode = {
                     同一 if 块注入两条：REFLECTABLE_BASIC_PATH（反思基础协议）+ REFLECTABLE_METAPROG_PATH
                     （元编程协议指引，教 LLM 何时走 worktree 沙箱）。
 
-                    REFLECTABLE_KNOWLEDGE（src/thinkable/reflectable/reflectable-knowledge.ts）告诉 LLM:
+                    REFLECTABLE_KNOWLEDGE（packages/@ooc/core/thinkable/reflectable/reflectable-knowledge.ts）告诉 LLM:
                     - 你还是同一个 Object，super flow 只是另一条会话脉络。
                     - 本轮做反思 / 沉淀，不是执行新业务任务。
                     - 读 inbox 中 caller 的反思请求；理解对方要你沉淀 / 调整什么。
                     - 写到 pools/objects/<self>/knowledge/memory/<slug>.md（slug 用 kebab-case 概括主题）。
-                    - 必要时（caller 明确要求改身份）允许写 stones/<self>/self.md / readme.md。
+                    - 必要时（caller 明确要求改身份）允许写 stones/<self>/self.md / readable.md。
                     - 通过 creator talk_window 回复结论 (say + close)。
                     - 用 end command 结束本轮 super 思考。
 
@@ -2320,8 +2321,8 @@ export const root: DocTreeNode = {
                     - 两者互补: 一个是反思入口提示, 一个是反思场景内的指引
 
                     **实现位置**:
-                    - 常量在 src/thinkable/reflectable/reflectable-knowledge.ts (与 REFLECTABLE_KNOWLEDGE 同文件)
-                    - 注入在 src/thinkable/knowledge/synthesizer.ts (检查 form.command === "end" + super 门控)
+                    - 常量在 packages/@ooc/core/thinkable/reflectable/reflectable-knowledge.ts (与 REFLECTABLE_KNOWLEDGE 同文件)
+                    - 注入在 packages/@ooc/core/thinkable/knowledge/synthesizer.ts (检查 form.command === "end" + super 门控)
 
                     完整 design / harness 循环优化记录见 docs/2026-05-27-end-reflection-reminder-design.md。
                     `,
@@ -2346,16 +2347,16 @@ export const root: DocTreeNode = {
 
                     **stone 侧（设计型，进 git review）**：
                     - stones/<self>/self.md: 内部第一人称叙述（caller 明确要求改身份时）。
-                    - stones/<self>/readme.md: 对外公开自述（caller 明确要求改对外说明时）。
+                    - stones/<self>/readable.md: 对外公开自述（caller 明确要求改对外说明时；原 readme.md，2026-05-28 ooc-6 重命名）。
 
                     禁止动的路径（不在 super flow 的工作范围内）:
-                    - stones/<self>/server/ / client/ / .stone.json
+                    - stones/<self>/executable/ / visible/ / .stone.json
                       （源码演化是高赌注，需走 stone-versioning 的 PR-Issue 流程；不由 super flow 直接改）
-                    - stones/<self>/knowledge/（**seed knowledge** 设计层；与 server / client 同级，
+                    - stones/<self>/knowledge/（**seed knowledge** 设计层；与 executable / visible 同级，
                       走 stone-versioning 的 PR-Issue 流程 + eval gate；不由 super flow 直接改）
                     - 任何业务 session 下的 thread.json
                     - 业务代码（program shell / file_window.edit 业务文件）
-                    - pool 的 data/ 与 files/（业务数据由 stone server method 维护，不由反思直接写）
+                    - pool 的 data/ 与 files/（业务数据由 stone executable method 维护，不由反思直接写）
 
                     写入方式: 通过 exec(command="write_file", path="...", content="...") 命令；
                     已存在的文件可用 open_file + edit 增量更新。
@@ -2377,7 +2378,8 @@ export const root: DocTreeNode = {
                     \`\`\`
 
                     activates_on 是 trigger map：key 是 trigger 表达式，value 是激活级别。
-                    三类 trigger：\`"window::<type>"\` / \`"command::<window_type>::<command>"\` / \`"super"\`
+                    新格式三类：\`"object::<type>"\` / \`"method::<object_type>::<method>"\` / \`"object_id::<id>"\`；
+                    旧格式 \`"window::<type>"\` / \`"command::<window_type>::<command>"\` 自动映射兼容
                     （详见 thinkable.knowledge.named.trigger）。多 trigger 命中取 max。
 
                     没有 frontmatter / 写错 schema 的 sediment 会被 thinkable.knowledge synthesizer 加载但
@@ -2392,7 +2394,7 @@ export const root: DocTreeNode = {
                         "memory/<slug>.md": "长期记忆条目；一条记忆一个文件",
                         "kebab-case slug": "用短横线小写连字概括主题的命名风格",
                         "sediment in pool": "knowledge/memory/* 与 knowledge/relations/* 落 pool（事实型，不进 git）",
-                        "self.md / readme.md in stone": "身份文件留 stone（设计型，进 git review）",
+                        "self.md / readable.md in stone": "身份文件留 stone（设计型，进 git review；readable.md 即原 readme.md）",
                         "seed not in super flow": "stones/<self>/knowledge/ 是 seed knowledge，不在 super flow 默认写入面；走 PR-Issue + eval",
                         "sediment write contract": "所有 super flow 写入的 .md 必须含 frontmatter（title/description/activates_on trigger map）；否则 activator 永远不命中，自演化闭环断裂",
                     },
@@ -2405,22 +2407,22 @@ export const root: DocTreeNode = {
                     1. 业务线程遇到值得沉淀的事情，open 一个 target='super' 的 talk_window，say 反思请求。
                     2. talk-delivery 把请求派送到 super flow 下的反思 thread；该 thread 看见 REFLECTABLE_KNOWLEDGE。
                     3. 反思 thread 通过 write_file 把结论落到 pools/objects/<self>/knowledge/memory/<slug>.md
-                       （或 stones/<self>/self.md / readme.md）。
+                       （或 stones/<self>/self.md / readable.md）。
                     4. 反思 thread 通过 creator talk_window 简短回复，然后 end。
                     5. 下次（同 Object 的任意新 thread）启动时，新写入的 memory 文件作为 knowledge 自动出现在 Context 中，
                        LLM 看见新认知 / 新约束，行为随之改变。
 
                     Reflectable 只负责"为什么 / 何时 / 在哪条线程上"做元编程，不定义"改的东西具体是什么形状":
-                    - 修改自身函数方法（server method library 的形状、加载、调用约定、版本演化）→ 见 programmable 维度。
-                    - 修改自身 UI 页面（stone client / flow client/pages 的形状、agent-native 访问）→ 见 visible 维度。
-                    - 修改自身身份与 sediment knowledge（stones/<self>/self.md/readme.md 与
+                    - 修改自身函数方法（executable method library 的形状、加载、调用约定、版本演化）→ 见 programmable 维度。
+                    - 修改自身 UI 页面（stone visible / flow visible/pages 的形状、agent-native 访问）→ 见 visible 维度。
+                    - 修改自身身份与 sediment knowledge（stones/<self>/self.md/readable.md 与
                       pools/objects/<self>/knowledge/{memory,relations}/）→ 这是 reflectable 默认覆盖的范围，
                       因为它们直接喂回 thinkable 的 context，闭环最短。
                     - 修改 seed knowledge（stones/<self>/knowledge/）→ **不在 reflectable 默认面**；
-                      与 server / client 同级走 stone-versioning 的 PR-Issue 流程（先天能力基底应过 review + eval）。
+                      与 executable / visible 同级走 stone-versioning 的 PR-Issue 流程（先天能力基底应过 review + eval）。
 
                     因此 super flow 的典型工作是写身份 / sediment 记忆 / 关系记录；如果 caller 显式请求改
-                    server / client / seed knowledge，需要走 programmable / visible 定义的演化路径或
+                    executable / visible / seed knowledge，需要走 programmable / visible 定义的演化路径或
                     stone-versioning 的 PR-Issue 流程（详见对应维度的 patches）。
                     `,
                     named: {
@@ -2450,11 +2452,11 @@ export const root: DocTreeNode = {
                     - 用 file_window.edit 改业务代码。
                     - 开任何 do command 派生子任务去执行业务。
 
-                    super flow 默认仅写 stone 中的 self.md / readme.md（身份）与 pool 中的
+                    super flow 默认仅写 stone 中的 self.md / readable.md（身份）与 pool 中的
                     sediment knowledge（knowledge/memory/* / knowledge/relations/*，长期事实）。
                     如果 caller 明确请求修改自身函数方法、UI 页面或 seed knowledge，应走对应维度定义的演化路径:
-                    - 编辑 stones/<self>/server/index.ts → 见 programmable.method_evolution。
-                    - 编辑 stones/<self>/client/index.tsx 或 flow client/pages/*.tsx → 见 visible.client_evolution。
+                    - 编辑 stones/<self>/executable/index.ts → 见 programmable.method_evolution。
+                    - 编辑 stones/<self>/visible/index.tsx 或 flow visible/pages/*.tsx → 见 visible.client_evolution。
                     - 编辑 stones/<self>/knowledge/<slug>.md（**seed knowledge**）→ 走 stone-versioning 的 PR-Issue 流程
                       （seed 是 Object 的"先天能力基底"，改动应过 review + eval gate；详见 persistable.stone.children.seed_knowledge）。
 
@@ -2476,7 +2478,7 @@ export const root: DocTreeNode = {
             核心组成（**三层而非二分**，2026-05-23 起）:
             1. world root: \`{baseDir}/\`，包含 \`stones/\` / \`pools/\` / \`flows/\` 三棵子树。
             2. stone tree: 设计层（持久 + git 版本化）。\`stones/{branch}/objects/<objectId>/\` 持有
-               per-Object 长期身份与设计源码（self.md / readme.md / server / client / knowledge 五件套）；
+               per-Object 长期身份与设计源码（self.md / readable.md / executable / visible / knowledge 五件套）；
                未来挂在 \`stones/{branch}/\` 根的是 world-level 持久资源。
             3. pool tree: 事实层（持久 + 不版本化）。两类挂载（2026-05-24 拓宽）:
                - \`pools/objects/<objectId>/\`：per-Object 事实（data csv / knowledge / files 三件套）
@@ -2513,7 +2515,7 @@ export const root: DocTreeNode = {
                 "world_layout": {
                     title: "world_layout - OOC world 目录结构",
                     content: `
-                    完整目录形态（参见 src/persistable/common.ts + flow-object.ts + stone-object.ts + debug-file.ts）:
+                    完整目录形态（参见 packages/@ooc/core/persistable/common.ts + flow-object.ts + stone-object.ts + debug-file.ts）:
 
                     \`\`\`
                     {baseDir}/
@@ -2525,9 +2527,10 @@ export const root: DocTreeNode = {
                             <objectId>/
                               .stone.json            ← stone 元数据（type='stone', objectId）
                               self.md                ← 对内身份（写入 LlmGenerateParams.instructions）
-                              readme.md              ← 对外公开介绍
-                              server/index.ts        ← stone server 源码
-                              client/index.tsx       ← stone client 源码
+                              readable.md            ← 对外公开介绍（原 readme.md，2026-05-28 ooc-6 重命名；迁移期 readme.md 双写保留作 fallback）
+                              readable.ts            ← 动态渲染函数（2026-05-28 ooc-6 新增，可选；存在则替代 readable.md）
+                              executable/index.ts    ← stone executable 方法源码（原 server/index.ts，2026-05-28 ooc-6 重命名）
+                              visible/index.tsx      ← stone visible UI 源码（原 client/index.tsx，2026-05-28 ooc-6 重命名）
                               knowledge/             ← seed knowledge：人类预置的初始知识库（2026-05-24）
                                 <slug>.md            ← frontmatter + activates_on 渐进激活协议
                           # （未来：world-level 资源放在 stones/<branch>/ 根本身，
@@ -2558,7 +2561,8 @@ export const root: DocTreeNode = {
                                 debug/               ← observable 落盘的 input/output/loop 文件
                               knowledge/
                                 relations/<peer>.md  ← session 层 relation（与 pool 的 long_term 配对）
-                              client/pages/          ← flow 级 client 页面
+                              visible/pages/         ← flow 级 visible UI 页面（原 client/pages/，2026-05-28 ooc-6 重命名）
+                              context/<childId>/     ← 运行时创建的 child Object 子树（Runtime Object Tree，2026-05-28 ooc-6）
                     \`\`\`
 
                     **关于 stones/<branch>/objects/ 中间层（2026-05-21 重组）**：
@@ -2579,7 +2583,7 @@ export const root: DocTreeNode = {
 
                     路径计算函数：objectDir / threadDir / stoneDir / sessionDir /
                     llmInputFile / llmOutputFile / loopInputFile / loopOutputFile / loopMetaFile / poolDir
-                    （poolDir 在 src/persistable/pool-object.ts）。
+                    （poolDir 在 packages/@ooc/core/persistable/pool-object.ts）。
                     `,
                     named: {
                         ".stone.json / .flow.json / .session.json / .pool.json": "四类元数据文件，标记目录类型与归属",
@@ -2589,7 +2593,7 @@ export const root: DocTreeNode = {
                 "stone": {
                     title: "stone - Object 的长期身份与设计源码",
                     content: `
-                    stone（src/persistable/stone-object.ts）是 Object 跨 session 持续存在的部分。
+                    stone（packages/@ooc/core/persistable/stone-object.ts）是 Object 跨 session 持续存在的部分。
                     无论 Object 参与了哪些 session，它的 stone 都是同一份。
 
                     **stone 是设计层（code），不是数据层（data）**：所有内容要么是身份声明，要么是源码 / schema 声明，
@@ -2597,11 +2601,11 @@ export const root: DocTreeNode = {
                     persistable.pool）；轨迹数据落 flow。这条边界让 stone-versioning 的 git review / PR-Issue
                     只看见真正值得审核的演化，而不是被 memory 写入这类高频脏 commit 淹没。
 
-                    子项与用途（五件套）:
+                    子项与用途（五件套；2026-05-28 ooc-6 命名归一）:
                     - self.md (stone-self.ts): 对内身份；readSelf / writeSelf；buildInputItems 时读取并注入 LlmGenerateParams.instructions。
-                    - readme.md (stone-readme.ts): 对外公开介绍；其它 Object 在 collaborable.relation_window 的伴随 KnowledgeWindow 中会读到。
-                    - server/index.ts (stone-server.ts): stone server 源码；readServerSource / writeServerSource，自动 mkdir。
-                    - client/index.tsx (stone-client.ts): stone client 源码；readStoneClientSource / writeStoneClientSource。
+                    - readable.md / readable.ts (stone-readme.ts): 对外公开介绍（原 readme.md，2026-05-28 重命名）；reader 优先 readable.md，fallback 到 readme.md；如存在 readable.ts（动态渲染函数）则替代静态 readable.md。其它 Object 在 peer/children 自动注入或 collaborable.relation_window 中会读到。
+                    - executable/index.ts (stone-server.ts): stone executable 方法源码（原 server/index.ts，2026-05-28 重命名）；readServerSource / writeServerSource 已切换到新路径，自动 mkdir。
+                    - visible/index.tsx (stone-client.ts): stone visible UI 源码（原 client/index.tsx，2026-05-28 重命名）；readStoneClientSource / writeStoneClientSource 已切换到新路径。
                     - knowledge/ (2026-05-24 重纳): **seed knowledge**——人类设计的初始知识库；
                       与 pool 中的 sediment knowledge (memory / relations) 二分。seed 是 Object 的"先天能力基底"，
                       进 git review、可挂 eval gate；sediment 是运行时沉淀的事实，写就生效不进 git。详见 children/seed_knowledge。
@@ -2615,24 +2619,24 @@ export const root: DocTreeNode = {
                     |---|---|---|
                     | .stone.json | ✓ | createStoneObject |
                     | self.md | ✓（**空文件占位**） | createStoneObject |
-                    | readme.md | ✓（**空文件占位**） | createStoneObject |
-                    | server/ | ✗ | 首次 writeServerSource（自带 mkdir） |
-                    | client/ | ✗ | 首次 writeStoneClientSource（自带 mkdir） |
+                    | readable.md | ✓（**空文件占位**） | createStoneObject |
+                    | executable/ | ✗ | 首次 writeServerSource（自带 mkdir） |
+                    | visible/ | ✗ | 首次 writeStoneClientSource（自带 mkdir） |
                     | knowledge/ | ✗ | 首次 seed knowledge write_file（按需） |
 
                     理由（visibility-first）:
-                    - 预创 self.md / readme.md 空文件：让 \`ls stoneDir\` 立刻看到完整形态；
-                      readSelf / readReadme 返回 ""，被 loadSelfInstructions 等消费者
+                    - 预创 self.md / readable.md 空文件：让 \`ls stoneDir\` 立刻看到完整形态；
+                      readSelf / readReadable 返回 ""，被 loadSelfInstructions 等消费者
                       视为 empty 等价 undefined（语义零变更）。displayName 由 Object 后续主动 writeSelf 时设置。
-                    - 不预创 server/ / client/ / knowledge/：空目录"骨架不全"的视觉噪音 > 预创价值；
+                    - 不预创 executable/ / visible/ / knowledge/：空目录"骨架不全"的视觉噪音 > 预创价值；
                       对应 writer 都自带 mkdir 兜底，按需创建零成本。
                     `,
                     named: {
-                        "self.md / readme.md": "stone 的身份 + 公开介绍两件套",
-                        "stone server / client": "stone 自带的服务端 / 客户端源码",
+                        "self.md / readable.md": "stone 的身份 + 公开介绍两件套（readable.md 即原 readme.md，2026-05-28 ooc-6 重命名）",
+                        "stone executable / visible": "stone 自带的方法 / UI 源码目录（原 server/ + client/，2026-05-28 ooc-6 重命名）",
                         "knowledge/": "stone 内 seed knowledge：人类设计的初始知识库；进 git review、可挂 eval gate",
                         "seed vs sediment": "seed 在 stone（设计型，review）vs sediment 在 pool（运行时，写就生效）",
-                        "createStoneObject": "创建 stone 物理骨架（.stone.json + self.md + readme.md 三件占位）；其它按需 lazy 创建",
+                        "createStoneObject": "创建 stone 物理骨架（.stone.json + self.md + readable.md 三件占位）；其它按需 lazy 创建",
                         "逻辑契约 vs 物理骨架": "五件套是逻辑契约（哪些可能存在）；createStoneObject 只预创 3 件可见小文件",
                         "self.md 第一行 = displayName": "UI 表层展示 objectId 时从 self.md 首行派生语义化标题；详见 visible.display_name_from_self_md",
                     },
@@ -2674,7 +2678,7 @@ export const root: DocTreeNode = {
                                 "双源扫描": "synthesizer 同时扫 stone seed 与 pool sediment",
                                 "eval gate": "seed 改动时 CI 跑能力评估测试（待落地）",
                             },
-                            sources: [["src/persistable/stone-object.ts", "stoneKnowledgeDir 返回 stones/<branch>/objects/<self>/knowledge/；createStoneObject 故意不预创该目录（seed 可选）。双源加载入口见 src/thinkable/knowledge/loader.ts:loadKnowledgeIndex，接受 { stone, pool } 两个 ref；同 idPath 冲突 sediment 胜出 + console.warn。"]],
+                            sources: [["packages/@ooc/core/persistable/stone-object.ts", "stoneKnowledgeDir 返回 stones/<branch>/objects/<self>/knowledge/；createStoneObject 故意不预创该目录（seed 可选）。双源加载入口见 packages/@ooc/core/thinkable/knowledge/loader.ts:loadKnowledgeIndex，接受 { stone, pool } 两个 ref；同 idPath 冲突 sediment 胜出 + console.warn。"]],
                             todo: [
                                 "eval gate 协议：seed 改动 PR 时如何挂能力评估？（未拍板）",
                             ],
@@ -3104,7 +3108,7 @@ export const root: DocTreeNode = {
                     },
                     todo: [
                         "data pool runtime：csv 读写工具已落地于 src/persistable/csv-pool.ts（手写 RFC 4180 子集）；如未来需要 queryRows / bulk update / 索引，再增量加。",
-                        "params schema 校验（与 programmable.todo 重叠）：如未来需要，server method 命令的 params 类型可在 server/index.ts 内 inline 定义；当前不强制。",
+                        "params schema 校验（与 programmable.todo 重叠）：如未来需要，Object method 命令的 params 类型可在 executable/index.ts 内 inline 定义；当前不强制。",
                         "**csv schema drift 可观测性**（AgentOfExperience 2026-05-24 反馈）：csv-pool 不校验 row.keys 与 header 一致性（务实选择——appendRow typo 会静默丢字段）。短期为 known-limitation；长期建议给 observable 维度加 'csv health' 诊断（启动期或 reflectable 主动扫一遍 row.keys 与 header 差异，warn 出异常 csv）。",
                     ],
                 },
@@ -3236,7 +3240,7 @@ export const root: DocTreeNode = {
                     (2) **rollback 的 supervisor-only 强制仍在**——rollback 是治理操作，src/persistable/stone-versioning.ts
                         强制 supervisorAuthor === SUPERVISOR_OBJECT_ID（FORBIDDEN），不属于 worktree 路径特殊化。
 
-                    错误自我编程的恢复（F3）：启动期 recovery-check 自检每个 Object 的 server/index.ts；
+                    错误自我编程的恢复（F3）：启动期 recovery-check 自检每个 Object 的 executable/index.ts；
                     加载失败的开 [recovery-needed] PR-Issue 给 supervisor，由 supervisor metaprog rollback。
 
                     布局演化兼容：早期非 bare 形态（\`stones/main/.git/\` 是目录）被识别为
@@ -3258,7 +3262,7 @@ export const root: DocTreeNode = {
                         "metaprog worktree": "Object 元编程的隔离工作树；branch 形态 metaprog/{objectId}/{token}",
                         "self-scope / cross-scope": "路径划界判定结果；前者自治 ff merge，后者必须经 PR-Issue",
                         "PR-Issue": "落在 super session 的 Issue（带 prPayload diff/branch/intent）；Supervisor 评审通道",
-                        "recovery-check": "启动期自检；server/index.ts 加载失败的 Object 自动开 [recovery-needed] PR-Issue 给 supervisor",
+                        "recovery-check": "启动期自检；executable/index.ts 加载失败的 Object 自动开 [recovery-needed] PR-Issue 给 supervisor",
                         "Bootstrap commit": "首次启动 author=bootstrap 的一次性 squash commit，通过临时 clone scratch 灌入 bare repo 后 push",
                         "legacy-embedded": "已有 world 的非 bare 老式布局（main/.git/ 是目录）；ensureStoneRepo 兼容识别但不强制升级",
                         "git 追踪面 = stone 五件套": "self.md / readme.md / server / client / knowledge（seed）；sediment knowledge / data.json / files 已迁出",
@@ -3336,7 +3340,7 @@ export const root: DocTreeNode = {
             content: `
             Programmable 描述 Object 持有并演化自身**自定义 ContextWindow + 命令表**的能力。
 
-            Object 在自己的 stone 里有一份 \`server/index.ts\`，导出 \`window: ObjectWindowDefinition\`
+            Object 在自己的 stone 里有一份 \`executable/index.ts\`，导出 \`window: ObjectWindowDefinition\`
             （type=\`"custom"\` 的 self window 定义）+ 可选的 \`ui_methods\` 字典（visible 维度的 UI 入口）。
             \`window.commands\` 是标准 \`CommandTableEntry\` 字典；LLM 通过
             \`exec(window_id="custom:<self>", command="<name>", args={...})\` 直接调用，
@@ -3353,8 +3357,8 @@ export const root: DocTreeNode = {
                幂等注入一个 \`custom:<objectId>\` window。
             4. ProgramSelf 注入: program ts/js sandbox 收到 self = { dir, callCommand, getData, setData, getThreadLocal, setThreadLocal }；
                \`callCommand(windowId, command, args?)\` 可调任意 thread 内 window 上的任意已注册命令。
-            5. 动态加载与热更: loader 按 \`server/index.ts\` 的 mtime 缓存；写文件后下一次调用自动重新 import。
-            6. 元编程闭环（与 reflectable 配合）: super flow 通过 write_file 写 server/index.ts → 下一次调命令时看到新形态。
+            5. 动态加载与热更: loader 按 \`executable/index.ts\` 的 mtime 缓存；写文件后下一次调用自动重新 import。
+            6. 元编程闭环（与 reflectable 配合）: super flow 通过 write_file 写 executable/index.ts → 下一次调命令时看到新形态。
 
             Programmable 不是新增 LLM tool 面，而是给 Object 一个**"自我门面 window"+其上一组命令**，
             让它把高频动作或复杂逻辑封装成命名命令；LLM 通过统一的 exec 协议直接调用，
@@ -3363,8 +3367,8 @@ export const root: DocTreeNode = {
             `,
             named: {
                 "Programmable": "Object 持有/演化自身自定义 ContextWindow + 命令表的能力维度",
-                "ObjectWindowDefinition": "server/index.ts 中 export const window 的形状：{ title?, description?, renderXml?, basicKnowledge?, onClose?, commands? }",
-                "ui_methods": "server/index.ts 导出的、给 UI/agent-native 通过 HTTP callMethod 调用的方法字典（plan D3 完全保留）",
+                "ObjectWindowDefinition": "executable/index.ts 中 export const window 的形状：{ title?, description?, renderXml?, basicKnowledge?, onClose?, commands? }",
+                "ui_methods": "executable/index.ts 导出的、给 UI/agent-native 通过 HTTP callMethod 调用的方法字典（plan D3 完全保留）",
                 "ProgramSelf": "program ts/js sandbox 注入的 self 对象，承载 callCommand / getData / setData / getThreadLocal",
                 "loadObjectWindow / loadUiServerMethods": "按 mtime 缓存、自动热更的 server 加载器",
                 "CustomCommandContext": "custom window 命令 exec 收到的 ctx：CommandExecutionContext + self: ProgramSelf",
@@ -3373,7 +3377,7 @@ export const root: DocTreeNode = {
                 "object_window_definition": {
                     title: "object_window_definition - custom self window 的形状",
                     content: `
-                    每个 Object 的 self window 定义在 \`stones/<self>/server/index.ts\` 中：
+                    每个 Object 的 self window 定义在 \`stones/<self>/executable/index.ts\` 中：
                     \`\`\`
                     export const window: ObjectWindowDefinition = {
                       title: "<self>",
@@ -3402,14 +3406,14 @@ export const root: DocTreeNode = {
                     knowledge(args, formStatus) / exec(ctx)。
                     `,
                     named: {
-                        "stones/<self>/server/index.ts": "self window + ui_methods 源码文件路径",
+                        "stones/<self>/executable/index.ts": "self window + ui_methods 源码文件路径",
                         "ObjectWindowDefinition.commands": "Object 自定义命令字典；dispatcher 自动注入 self 到 exec ctx",
                     },
                 },
                 "loader": {
                     title: "loader - 加载与热更",
                     content: `
-                    src/executable/server/loader.ts 负责按需 import server/index.ts，并按 mtime 缓存:
+                    packages/@ooc/core/executable/server/loader.ts 负责按需 import executable/index.ts，并按 mtime 缓存:
 
                     \`\`\`
                     const mod = await import(\`\${file}?t=\${mtime}\`);  // ?t=mtime 破坏 bun import cache
@@ -3510,7 +3514,7 @@ export const root: DocTreeNode = {
                     Object 演化自身 self window 的标准路径:
 
                     1. 触发点（典型: reflectable.metaprogramming 的反思请求）。
-                    2. super flow 中通过 \`exec(command="write_file", path="stones/<self>/server/index.ts", content="...")\` 重写 self window 源码。
+                    2. super flow 中通过 \`exec(command="write_file", path="stones/<self>/executable/index.ts", content="...")\` 重写 self window 源码。
                     3. 下一次 \`exec(window_id="custom:<self>", command=<new>)\` 或 \`self.callCommand(...)\` 触发时，
                        loader 看到 mtime 变化 → ?t=mtime 强制重新 import → 新形态立刻生效。
                     4. 不需要重启进程、不需要重新部署。
@@ -3522,7 +3526,7 @@ export const root: DocTreeNode = {
                     caller 的显式请求共同决定；programmable 本身只描述 *如何写* 才能生效，不规定 *谁可以写*。
                     `,
                     named: {
-                        "writeServerSource": "src/persistable/stone-server.ts，覆盖式写 server/index.ts",
+                        "writeServerSource": "packages/@ooc/core/persistable/stone-server.ts，覆盖式写 executable/index.ts",
                         "热更生效条件": "mtime 变化 → loader cache 失效 → 下一次调命令重新 import",
                     },
                 },
@@ -3531,7 +3535,7 @@ export const root: DocTreeNode = {
                 "custom_window_vs_ui_methods": {
                     title: "custom window commands 与 ui_methods 的分流",
                     content: `
-                    同一份 server/index.ts 中两个导出服务不同调用方（plan D3）:
+                    同一份 executable/index.ts 中两个导出服务不同调用方（plan D3）:
 
                     - \`window.commands\` (custom dispatcher 路由): 给 LLM 通过 \`exec(window_id="custom:<self>", ...)\`
                       或 \`program.callCommand\` 调用。入参由 LLM 在 form 里填，返回值进 program_window.history 或
@@ -3546,7 +3550,7 @@ export const root: DocTreeNode = {
                 "per_object_isolation": {
                     title: "server 是 stone 级别，跨 session 共享",
                     content: `
-                    server/index.ts 位于 \`stones/<self>/\` 下，不是 \`flows/<sid>/objects/<obj>/\` 下。
+                    executable/index.ts 位于 \`stones/<self>/\` 下，不是 \`flows/<sid>/objects/<obj>/\` 下。
 
                     含义:
                     - 同一个 Object 在不同 session 里看见同一份 self window；不会"换 session 就丢命令"。
@@ -3595,7 +3599,7 @@ export const root: DocTreeNode = {
                 "pool_methods": {
                     title: "pool_methods - server 暴露 pool 数据访问的命令形状",
                     content: `
-                    server/index.ts 里访问 pool 数据的 commands 遵循统一约束（2026-05-24 起 csv 替代 sql）：
+                    executable/index.ts 里访问 pool 数据的 commands 遵循统一约束（2026-05-24 起 csv 替代 sql）：
 
                     **1. 命名语义化**：
                     \`\`\`
@@ -3631,11 +3635,11 @@ export const root: DocTreeNode = {
                     如未来要支持自动参数检查 / 转换，需在 callCommand 路径 + ui callMethod 路径都加上（见 programmable.todo）。
                     `,
                     named: {
-                        "pool method": "server/index.ts 中 commands 字典里访问 pool 数据的语义命令",
+                        "pool method": "executable/index.ts 中 commands 字典里访问 pool 数据的语义命令",
                         "csv-based pool method": "用 fs + csv 解析库读写 pool/data/<name>.csv 的 server method",
                         "enqueueSessionWrite('data:...')": "csv 整文件写串行化键",
                     },
-                    sources: [["src/persistable/csv-pool.ts", "csv-based pool method 的实现路径——readCsv / writeCsv / appendRow API + write-then-rename + kebab-case name 校验；server method 在 stone server/index.ts 中以 fs API 调用本模块（或 papaparse 等等价 csv 库）。"]],
+                    sources: [["src/persistable/csv-pool.ts", "csv-based pool method 的实现路径——readCsv / writeCsv / appendRow API + write-then-rename + kebab-case name 校验；server method 在 stone executable/index.ts 中以 fs API 调用本模块（或 papaparse 等等价 csv 库）。"]],
                 },
             },
             todo: [
@@ -3648,32 +3652,32 @@ export const root: DocTreeNode = {
             content: `
             Visible 描述 Object 持有并演化自身 UI 页面的能力。
 
-            Object 在自己的 stone 里可以有 \`client/index.tsx\`（单页入口）；
-            在每个 flow object 下还可以有 \`client/pages/<page>.tsx\`（session 内的多页扩展）。
-            UI 通过 HTTP 调用 server/index.ts 暴露的 ui_methods 与 Object 交互（与 LLM 的调用通道并行）。
+            Object 在自己的 stone 里可以有 \`visible/index.tsx\`（单页入口）；
+            在每个 flow object 下还可以有 \`visible/pages/<page>.tsx\`（session 内的多页扩展）。
+            UI 通过 HTTP 调用 executable/index.ts 暴露的 ui_methods 与 Object 交互（与 LLM 的调用通道并行）。
 
             核心组成:
-            1. stone client: stones/<self>/client/index.tsx，跨 session 稳定的单页入口。
-            2. flow client pages: flows/<sid>/objects/<obj>/client/pages/<page>.tsx，session 内多页扩展。
-            3. ui_methods 通道: 客户端通过 HTTP（app/server flows.callMethod / stones.callMethod）调 server/index.ts 的 ui_methods。
+            1. stone client: stones/<self>/visible/index.tsx，跨 session 稳定的单页入口。
+            2. flow client pages: flows/<sid>/objects/<obj>/visible/pages/<page>.tsx，session 内多页扩展。
+            3. ui_methods 通道: 客户端通过 HTTP（app/server flows.callMethod / stones.callMethod）调 executable/index.ts 的 ui_methods。
             4. 元编程闭环（与 reflectable 配合）: super flow 通过 write_file 改 *.tsx → 下一次客户端重新加载看到新 UI。
 
             与 programmable 的关系: programmable 定义方法库本身（含 ui_methods），visible 定义 UI 资源（tsx 文件）+ 调用通道。
-            两者共用 server/index.ts，但形状与消费方不同。
+            两者共用 executable/index.ts，但形状与消费方不同。
             `,
             named: {
                 "Visible": "Object 持有/演化自身 UI 页面的能力维度",
-                "stone client": "stones/<self>/client/index.tsx，单页入口",
-                "flow client pages": "flows/<sid>/objects/<obj>/client/pages/<page>.tsx，多页扩展",
+                "stone client": "stones/<self>/visible/index.tsx，单页入口",
+                "flow client pages": "flows/<sid>/objects/<obj>/visible/pages/<page>.tsx，多页扩展",
                 "clientIndexFile / flowClientPageFile": "src/persistable/stone-client.ts 提供的路径函数",
-                "ui_methods": "server/index.ts 中给 UI 用的方法字典；详见 programmable.llm_vs_ui_methods",
+                "ui_methods": "executable/index.ts 中给 UI 用的方法字典；详见 programmable.llm_vs_ui_methods",
                 "callMethod": "app/server 暴露给客户端的 HTTP 入口，用于调用 ui_methods",
             },
             children: {
                 "stone_client": {
                     title: "stone_client - 跨 session 稳定的单页入口",
                     content: `
-                    路径: \`stones/<self>/client/index.tsx\`（src/persistable/stone-client.ts:17 clientIndexFile）。
+                    路径: \`stones/<self>/visible/index.tsx\`（src/persistable/stone-client.ts:17 clientIndexFile）。
 
                     读写接口（src/persistable/stone-client.ts:35-42）:
                     - readStoneClientSource(stoneRef): ENOENT 静默返回 undefined。
@@ -3685,14 +3689,14 @@ export const root: DocTreeNode = {
                     - 单页入口: 复杂的多页结构请用 flow_client_pages；stone client 适合放最稳定的"主页"。
                     `,
                     named: {
-                        "clientIndexFile": "stones/<self>/client/index.tsx 的绝对路径计算函数",
+                        "clientIndexFile": "stones/<self>/visible/index.tsx 的绝对路径计算函数",
                         "readStoneClientSource / writeStoneClientSource": "stone client 的读写接口",
                     },
                 },
                 "flow_client_pages": {
                     title: "flow_client_pages - session 内的多页扩展",
                     content: `
-                    路径: \`flows/<sid>/objects/<obj>/client/pages/<page>.tsx\`
+                    路径: \`flows/<sid>/objects/<obj>/visible/pages/<page>.tsx\`
                     （src/persistable/stone-client.ts:22-31 flowClientPagesDir / flowClientPageFile）。
 
                     设计定位:
@@ -3705,7 +3709,7 @@ export const root: DocTreeNode = {
                     - writeFlowClientPage(flowObjectRef, pageName, code): 同样有 pageName 安全校验 + mkdir。
                     `,
                     named: {
-                        "flowClientPagesDir": "flow object 的 client/pages 目录路径",
+                        "flowClientPagesDir": "flow object 的 visible/pages 目录路径",
                         "flowClientPageFile": "单个 page tsx 文件路径；带 pageName 安全校验",
                         "pageName 校验": "/^[A-Za-z0-9_-]+$/，防 path-traversal",
                     },
@@ -3725,7 +3729,7 @@ export const root: DocTreeNode = {
                     - 方法不存在 → \`METHOD_NOT_FOUND\`。
                     - 执行抛错 → 由 service 层兜底转 AppServerError 返回给 HTTP 调用方。
 
-                    这条路径与 LLM 的 \`program.callCommand\` 路径在同一份 server/index.ts 上分流（按 \`window.commands\` vs \`ui_methods\`），
+                    这条路径与 LLM 的 \`program.callCommand\` 路径在同一份 executable/index.ts 上分流（按 \`window.commands\` vs \`ui_methods\`），
                     互不干扰。
                     `,
                     named: {
@@ -3740,16 +3744,16 @@ export const root: DocTreeNode = {
                     Object 演化自身 UI 的标准路径:
 
                     1. 触发点（典型: caller 明确要求 'UI 需要加一个 X 视图' 类反思请求）。
-                    2. super flow 中通过 \`exec(command="write_file", path="stones/<self>/client/index.tsx", content="...")\` 重写 stone client；
+                    2. super flow 中通过 \`exec(command="write_file", path="stones/<self>/visible/index.tsx", content="...")\` 重写 stone client；
                        或写 flow 级 page \`exec(command="write_file", path="flows/<sid>/objects/<obj>/client/pages/<page>.tsx", content="...")\`。
                     3. 下次客户端加载该路径时拿到新 tsx 源码（具体打包/渲染管线由消费方实现）。
-                    4. 如果新 UI 要调用新方法，需要先把对应 ui_methods 写到 server/index.ts（程序面与界面面分别演化）。
+                    4. 如果新 UI 要调用新方法，需要先把对应 ui_methods 写到 executable/index.ts（程序面与界面面分别演化）。
 
                     与 programmable.method_evolution 的对应关系: 一个改方法、一个改界面；两者都通过 write_file + loader/打包 自然热更。
                     `,
                     named: {
                         "client tsx 演化": "write_file → 下次客户端加载看到新版",
-                        "界面与方法分离演化": "tsx 与 server/index.ts 是两份文件；界面要新能力时常需先扩 ui_methods",
+                        "界面与方法分离演化": "tsx 与 executable/index.ts 是两份文件；界面要新能力时常需先扩 ui_methods",
                     },
                 },
                 "loop_timeline": {
@@ -4207,7 +4211,7 @@ export const root: DocTreeNode = {
                 "客户端渲染入口（把 .tsx 真正渲染成可交互页面的 host）当前仓库内没有；OOC 仅提供 tsx 文件路径与读写接口，渲染管线由外部消费方实现。需要在文档与 README 里明示这一边界。",
             ],
             warnings: [
-                "stones/<self>/client/index.tsx 与 flow client/pages/*.tsx 文件被 OOC 写下来，但仓库内没有提供配套的客户端渲染器；纯文档/纯仓库层面无法直接 '看见' UI 效果，必须由外部消费方接入渲染。",
+                "stones/<self>/visible/index.tsx 与 flow client/pages/*.tsx 文件被 OOC 写下来，但仓库内没有提供配套的客户端渲染器；纯文档/纯仓库层面无法直接 '看见' UI 效果，必须由外部消费方接入渲染。",
             ],
         },
         "extendable": {
@@ -4246,7 +4250,7 @@ export const root: DocTreeNode = {
             概念合并:
             1. ContextWindow 不再是独立于 Object 的临时数据结构，每个 window 背后都对应一个 Object（builtin 或 user-defined）
             2. Window command 与 Object method 合并，统一称为 **Method**
-            3. 原 \`src/executable/windows/\` 下的各 window type 改为 builtin objects，位于 \`src/extendable/base/<type>/\`
+            3. 原 \`src/executable/windows/\` 下的各 window type 改为 builtin objects，位于 \`packages/@ooc/builtins/<type>/\`
             4. 原 stone object 的 \`server/\` → \`executable/\`（方法实现），\`client/\` → \`visible/\`（UI 实现），\`readme.md\` → \`readable.md\`（静态展示）
             5. 新增 \`readable.ts\`：动态上下文渲染函数，控制 Object 如何以 XML 形式展示给 LLM
             6. 新增 **prototype chain**：Object 之间可以继承 methods / UI / readable

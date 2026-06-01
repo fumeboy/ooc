@@ -16,11 +16,11 @@ describe("command execution side effects", () => {
     }
 
     const modules = await Promise.all([
-      import("../windows/root/command.do"),
-      import("../windows/root/command.end"),
-      import("../windows/root/command.plan"),
-      import("../windows/root/command.talk"),
-      import("../windows/root/command.todo"),
+      import("@ooc/builtins/root/executable/command.do"),
+      import("@ooc/builtins/root/executable/command.end"),
+      import("@ooc/builtins/root/executable/command.plan"),
+      import("@ooc/builtins/root/executable/command.talk"),
+      import("@ooc/builtins/root/executable/command.todo"),
     ]);
     for (const module of modules) {
       expect("KNOWLEDGE" in module).toBe(false);

@@ -22,8 +22,7 @@ import {
   generateWindowId,
   type ProgramWindow,
 } from "@ooc/core/extendable/_shared/types.js";
-import { runOneExec, type ProgramExecArgs } from "@ooc/builtins/program/executable/runtime.js";
-import { DEFAULT_HISTORY_VIEWPORT } from "@ooc/builtins/program/executable/history-viewport.js";
+import { runOneExec, type ProgramExecArgs, DEFAULT_HISTORY_VIEWPORT } from "@ooc/builtins/program";
 
 const PROGRAM_BASIC_PATH = "internal/executable/program/basic";
 const PROGRAM_INPUT_PATH = "internal/executable/program/input";

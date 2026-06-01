@@ -23,7 +23,7 @@ import {
   type SearchWindow,
 } from "@ooc/core/extendable/_shared/types.js";
 import { resolveSessionPath } from "@ooc/core/extendable/_shared/session-path.js";
-import { DEFAULT_RESULTS_VIEWPORT } from "@ooc/core/executable/windows/search/results-viewport.js";
+import { DEFAULT_RESULTS_VIEWPORT } from "@ooc/builtins/search/executable/results-viewport.js";
 
 const GLOB_BASIC_PATH = "internal/executable/glob/basic";
 const GLOB_INPUT_PATH = "internal/executable/glob/input";

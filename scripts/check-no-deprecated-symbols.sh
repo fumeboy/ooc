@@ -10,10 +10,10 @@
 #
 # 推荐挂到 pre-push hook 或 CI 入口。
 #
-# 例外：以下 3 个文件中允许出现 "llm_methods" 字面量：
-#   - src/executable/server/loader.ts        — D6 hard-cutover 抛错时引用
-#   - src/executable/server/window-types.ts  — 历史变更说明注释
-#   - src/executable/__tests__/server-loader.test.ts — 测试 D6 抛错路径
+# 例外：以下文件中允许出现 "llm_methods" / 旧符号字面量：
+#   - packages/@ooc/core/executable/server/loader.ts        — D6 hard-cutover 抛错时引用
+#   - packages/@ooc/core/executable/server/window-types.ts  — 历史变更说明注释
+#   - packages/@ooc/core/executable/__tests__/server-loader.test.ts — 测试 D6 抛错路径
 #
 # 注意：UiServerMethod / UiServerMethodContext 是合法符号（visible 维度，D3 保留），
 # 不在禁用名单。
@@ -40,13 +40,14 @@ declare -a FORBIDDEN_PATTERNS=(
 
 # 允许列表（D6 硬切的合法引用点 + 概念文档）
 ALLOW_LIST=(
-  "src/executable/server/loader.ts"
-  "src/executable/server/window-types.ts"
-  "src/executable/server/types.ts"
-  "src/executable/__tests__/server-loader.test.ts"
+  "packages/@ooc/core/executable/server/loader.ts"
+  "packages/@ooc/core/executable/server/window-types.ts"
+  "packages/@ooc/core/executable/server/types.ts"
+  "packages/@ooc/core/executable/__tests__/server-loader.test.ts"
+  "packages/@ooc/core/executable/windows/_shared/command-types.ts"  # 历史变更说明注释
   "scripts/check-no-deprecated-symbols.sh"
-  "meta/object.doc.ts"  # 概念文档需说明 D6 硬切
-  "meta/cookbook.author-ooc-agent.doc.ts"  # 新模式 cookbook 含迁移说明
+  "packages/@ooc/meta/object.doc.ts"  # 概念文档需说明 D6 硬切
+  "packages/@ooc/meta/cookbook.author-ooc-agent.doc.ts"  # 新模式 cookbook 含迁移说明
 )
 
 EXCLUDE_DIRS=(
@@ -70,7 +71,7 @@ is_allowed() {
 
 VIOLATIONS=0
 for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
-  args=(-rn -E "$pattern" src tests scripts web meta)
+  args=(-rn -E "$pattern" packages/@ooc scripts)
   for d in "${EXCLUDE_DIRS[@]}"; do
     args+=(--exclude-dir="$d")
   done

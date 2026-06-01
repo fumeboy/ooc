@@ -2,7 +2,7 @@ import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { packageDir, stoneDir, STONE_CHILDREN_SUBDIR, toJson, type StoneObjectRef } from "./common";
 import { selfFile } from "./stone-self";
-import { readmeFile, readableFile } from "./stone-readme";
+import { readableFile } from "./stone-readme";
 
 export { packageDir, stoneDir };
 
@@ -205,8 +205,6 @@ export async function createStoneObject(ref: StoneObjectRef): Promise<StoneObjec
 
   await writeFile(selfFile(ref), "", "utf8");
   await writeFile(readableFile(ref), "", "utf8");
-  // Legacy readme.md created for backward compatibility during migration
-  await writeFile(readmeFile(ref), "", "utf8");
 
   return ref;
 }

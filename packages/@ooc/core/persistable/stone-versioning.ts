@@ -32,7 +32,7 @@ import { join } from "node:path";
 import { STONES_MAIN_BRANCH } from "./stone-bootstrap";
 import { createStoneObject, stoneDir, stoneKnowledgeDir } from "./stone-object";
 import { writeSelf } from "./stone-self";
-import { writeReadme } from "./stone-readme";
+import { writeReadable } from "./stone-readme";
 import {
   gitArchiveBranch,
   gitCheckout,
@@ -719,8 +719,10 @@ export interface SupervisorCreateObjectInput {
   newObjectId: string;
   /** stone 的 self.md 全文。 */
   selfMd: string;
-  /** stone 的 readme.md 全文。 */
-  readmeMd: string;
+  /** stone 的 readable.md 全文。 */
+  readableMd: string;
+  /** @deprecated Use readableMd instead (2026-06-01 ooc-6). readme.md is being renamed to readable.md. */
+  readmeMd?: string;
   /** 可选 seed knowledge（filename → markdown content；写到 knowledge/ 目录）。 */
   knowledge?: Record<string, string>;
   /** commit message；缺省 `bootstrap: create <id> stone (supervisor)`。 */
@@ -745,7 +747,7 @@ export type SupervisorCreateObjectResult =
  * - 标准 metaprog 流程仍然完整保留并对 supervisor 开放（详见 stone-versioning
  *   模块注释）；create_object 是其上的**便利层**——为新 Object 这种"零参与方
  *   评审"的场景省掉自审 PR-Issue 噪音。
- * - 复用 `createSupervisorStone` 同款实现（writeSelf/Readme + knowledge +
+ * - 复用 `createSupervisorStone` 同款实现（writeSelf/WriteReadable + knowledge +
  *   gitCommitAll），author 永远 = supervisor，事后 git log 可追溯。
  *
  * 等价 LLM 命令：metaprog action='create_object'（仅 supervisor caller 允许）。
@@ -753,7 +755,7 @@ export type SupervisorCreateObjectResult =
  * 流程：
  *   1. 校验 newObjectId（不能 `supervisor`、不能已存在）
  *   2. enqueueSessionWrite git 队列锁
- *   3. createStoneObject + writeSelf + writeReadme + 写 knowledge/*
+ *   3. createStoneObject + writeSelf + writeReadable + 写 knowledge/*
  *   4. gitCommitAll on main worktree, author = supervisor
  */
 export async function supervisorCreateObject(
@@ -772,8 +774,9 @@ export async function supervisorCreateObject(
   if (typeof input.selfMd !== "string" || !input.selfMd.trim()) {
     return { ok: false, code: "INVALID_INPUT", message: "selfMd required (non-empty)." };
   }
-  if (typeof input.readmeMd !== "string" || !input.readmeMd.trim()) {
-    return { ok: false, code: "INVALID_INPUT", message: "readmeMd required (non-empty)." };
+  const readableMd = input.readableMd ?? input.readmeMd;
+  if (typeof readableMd !== "string" || !readableMd.trim()) {
+    return { ok: false, code: "INVALID_INPUT", message: "readableMd required (non-empty)." };
   }
 
   const branch = input.branch ?? STONES_MAIN_BRANCH;
@@ -798,7 +801,7 @@ export async function supervisorCreateObject(
 
     await createStoneObject(ref);
     await writeSelf(ref, input.selfMd);
-    await writeReadme(ref, input.readmeMd);
+    await writeReadable(ref, readableMd);
 
     if (input.knowledge && Object.keys(input.knowledge).length > 0) {
       const kDir = stoneKnowledgeDir(ref);

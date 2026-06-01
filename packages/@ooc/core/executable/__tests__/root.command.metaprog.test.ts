@@ -10,8 +10,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests } from "@ooc/core/persistable";
-import { executeMetaprog } from "@ooc/core/executable/windows/root/command.metaprog";
-import type { CommandExecutionContext } from "@ooc/core/executable/windows/_shared/command-types";
+import { executeMetaprog } from "@ooc/builtins/root/executable/command.metaprog";
+import type { CommandExecutionContext } from "@ooc/core/extendable/_shared/command-types";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 let tempRoot: string | undefined;
@@ -70,7 +70,7 @@ describe("metaprog action=create_object caller-guard", () => {
           action: "create_object",
           objectId: "hacker",
           selfMd: "# hacker\n",
-          readmeMd: "# hacker\n",
+          readableMd: "# hacker\n",
         },
       }),
     );
@@ -85,7 +85,7 @@ describe("metaprog action=create_object caller-guard", () => {
       makeCtx({
         baseDir,
         callerId: "supervisor",
-        args: { action: "create_object", selfMd: "x", readmeMd: "y" },
+        args: { action: "create_object", selfMd: "x", readableMd: "y" },
       }),
     );
     expect(r).toContain("[metaprog:create_object:INVALID_INPUT]");
@@ -97,7 +97,7 @@ describe("metaprog action=create_object caller-guard", () => {
       makeCtx({
         baseDir,
         callerId: "supervisor",
-        args: { action: "create_object", objectId: "weather", selfMd: "  ", readmeMd: "x" },
+        args: { action: "create_object", objectId: "weather", selfMd: "  ", readableMd: "x" },
       }),
     );
     expect(r).toContain("[metaprog:create_object:INVALID_INPUT]");
@@ -113,7 +113,7 @@ describe("metaprog action=create_object caller-guard", () => {
           action: "create_object",
           objectId: "weather",
           selfMd: "x",
-          readmeMd: "y",
+          readableMd: "y",
           knowledge: { "usage.md": 42 },
         },
       }),
@@ -127,7 +127,7 @@ describe("metaprog action=create_object caller-guard", () => {
       makeCtx({
         baseDir,
         callerId: "supervisor",
-        args: { action: "create_object", objectId: "supervisor", selfMd: "x", readmeMd: "y" },
+        args: { action: "create_object", objectId: "supervisor", selfMd: "x", readableMd: "y" },
       }),
     );
     expect(r).toContain("[metaprog:create_object:INVALID_INPUT]");

@@ -62,6 +62,8 @@ export async function readServerConfig(source: ConfigSource = {}): Promise<Serve
   if (envMaxTicks !== undefined && envMaxTicks !== "") {
     workerMaxTicks = Number(envMaxTicks);
   } else {
+    // intentional: world-config 不存在或 schema 错误时回退默认 15；这里只是配置读取，
+    // 缺失 / 损坏属于预期边界，不该让 server 启动失败。
     const worldCfg = await readWorldConfig(absBaseDir).catch(() => undefined);
     workerMaxTicks = worldCfg?.workerMaxTicks ?? 15;
   }

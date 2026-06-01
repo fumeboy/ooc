@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { ROOT_COMMANDS, getOpenableCommands, deriveRootCommandPaths } from "../windows";
-import { programCommand } from "../windows/root/command.program";
+import { programCommand } from "@ooc/builtins/root/executable/command.program";
 
 describe("executable commands", () => {
   it("should have command table with all commands", () => {

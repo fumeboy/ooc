@@ -19,7 +19,7 @@ import {
   type GrepHit,
 } from "./command.grep.impl.js";
 import { resolveSessionPath } from "@ooc/core/extendable/_shared/session-path.js";
-import { DEFAULT_RESULTS_VIEWPORT } from "@ooc/core/executable/windows/search/results-viewport.js";
+import { DEFAULT_RESULTS_VIEWPORT } from "@ooc/builtins/search/executable/results-viewport.js";
 
 export const grepCommand: CommandTableEntry = {
   paths: ["grep"],

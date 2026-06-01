@@ -138,34 +138,36 @@ export type SharingState =
 
 // ─────────────────────────── per-type interface re-exports ────────────────────
 
-export type { RootWindow } from "../root/types.js";
-export type { CommandExecWindow } from "../command_exec/types.js";
+export type { RootWindow } from "@ooc/builtins/root/types.js";
+export type { CommandExecWindow } from "@ooc/builtins/command_exec/types.js";
 export type { DoWindow } from "../do/types.js";
-export type { TodoWindow } from "../todo/types.js";
+export type { TodoWindow } from "@ooc/builtins/todo/types.js";
 export type { TalkWindow } from "../talk/types.js";
-export type { ProgramWindow, ProgramExecRecord } from "../program/types.js";
-export type { FileWindow } from "../file/types.js";
-export type { KnowledgeWindow } from "../knowledge/types.js";
-export type { SearchWindow, SearchMatch } from "../search/types.js";
+export type { ProgramWindow, ProgramExecRecord } from "@ooc/builtins/program/types.js";
+export type { FileWindow } from "@ooc/builtins/file/types.js";
+export type { KnowledgeWindow } from "@ooc/builtins/knowledge/types.js";
+export type { SearchWindow, SearchMatch } from "@ooc/builtins/search/types.js";
+/** @deprecated ooc-6: RelationWindow replaced by peer Object auto-injection (derivePeerObjectWindows). Kept for backward compat with persisted thread data; Phase 9 cleanup will remove. */
 export type { RelationWindow } from "../relation/types.js";
-export type { SkillIndexWindow, SkillEntry } from "../skill_index/types.js";
-export type { PlanWindow, PlanWindowStep } from "../plan/types.js";
+export type { SkillIndexWindow, SkillEntry } from "@ooc/builtins/skill_index/types.js";
+export type { PlanWindow, PlanWindowStep } from "@ooc/builtins/plan/types.js";
 export type { FeishuChatWindow, FeishuChatMessage } from "../../../extendable/lark/feishu-chat/types.js";
 export type { FeishuDocWindow, FeishuDocBlock } from "../../../extendable/lark/feishu-doc/types.js";
 
 // 用 import 形式拿到具体类型构造 ContextWindow union（type-only re-export 在 union 里不直接可见）
-import type { RootWindow } from "../root/types.js";
-import type { CommandExecWindow } from "../command_exec/types.js";
+import type { RootWindow } from "@ooc/builtins/root/types.js";
+import type { CommandExecWindow } from "@ooc/builtins/command_exec/types.js";
 import type { DoWindow } from "../do/types.js";
-import type { TodoWindow } from "../todo/types.js";
+import type { TodoWindow } from "@ooc/builtins/todo/types.js";
 import type { TalkWindow } from "../talk/types.js";
-import type { ProgramWindow } from "../program/types.js";
-import type { FileWindow } from "../file/types.js";
-import type { KnowledgeWindow } from "../knowledge/types.js";
-import type { SearchWindow } from "../search/types.js";
+import type { ProgramWindow } from "@ooc/builtins/program/types.js";
+import type { FileWindow } from "@ooc/builtins/file/types.js";
+import type { KnowledgeWindow } from "@ooc/builtins/knowledge/types.js";
+import type { SearchWindow } from "@ooc/builtins/search/types.js";
+/** @deprecated ooc-6: RelationWindow replaced by peer Object auto-injection. Kept for backward compat. */
 import type { RelationWindow } from "../relation/types.js";
-import type { SkillIndexWindow } from "../skill_index/types.js";
-import type { PlanWindow } from "../plan/types.js";
+import type { SkillIndexWindow } from "@ooc/builtins/skill_index/types.js";
+import type { PlanWindow } from "@ooc/builtins/plan/types.js";
 import type { FeishuChatWindow } from "../../../extendable/lark/feishu-chat/types.js";
 import type { FeishuDocWindow } from "../../../extendable/lark/feishu-doc/types.js";
 
@@ -181,6 +183,7 @@ export type ContextWindow =
   | FileWindow
   | KnowledgeWindow
   | SearchWindow
+  /** @deprecated ooc-6: replaced by peer Object auto-injection; kept for backward compat */
   | RelationWindow
   | SkillIndexWindow
   | FeishuChatWindow

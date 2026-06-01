@@ -34,8 +34,14 @@ PATTERNS=(
   '\.catch\([[:space:]]*\([[:space:]]*\)[[:space:]]*=>[[:space:]]*undefined[[:space:]]*\)'
 )
 
-# scan 范围：仅 src/（tests/ 与 scripts/ 自身允许吞噬测试夹具错误）
-SCAN_DIRS=("src")
+# scan 范围：packages/@ooc/{builtins,core,web} 下的运行代码
+# （packages/@ooc/tests/ 与 scripts/ 自身允许吞噬测试夹具错误，packages/@ooc/meta/
+# 是文档不是运行代码）
+SCAN_DIRS=(
+  "packages/@ooc/builtins"
+  "packages/@ooc/core"
+  "packages/@ooc/web"
+)
 
 VIOLATIONS=0
 for pattern in "${PATTERNS[@]}"; do
@@ -83,4 +89,4 @@ if [[ $VIOLATIONS -gt 0 ]]; then
   exit 1
 fi
 
-echo "OK: no silent-swallow violations in src/"
+echo "OK: no silent-swallow violations in packages/@ooc/"

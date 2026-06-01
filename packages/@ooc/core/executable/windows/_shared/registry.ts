@@ -186,6 +186,7 @@ REGISTRY.set("search", {
   commands: {},
 });
 
+/** @deprecated ooc-6: "relation" type replaced by peer Object auto-injection (derivePeerObjectWindows). Kept for backward compat with persisted thread data; Phase 9 cleanup will remove. */
 REGISTRY.set("relation", {
   type: "relation",
   commands: {},

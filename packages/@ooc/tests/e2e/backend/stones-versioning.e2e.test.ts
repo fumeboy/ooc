@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { __resetSerialQueueForTests, readPrIssueIndex } from "@ooc/core/persistable";
-import { executeMetaprog } from "@ooc/core/executable/windows/root/command.metaprog";
+import { executeMetaprog } from "@ooc/builtins/root/executable/command.metaprog";
 import { runRecoveryCheck } from "@ooc/core/app/server/bootstrap/recovery-check";
 import type { CommandExecutionContext } from "@ooc/core/executable/windows/_shared/command-types";
 import type { ThreadContext } from "@ooc/core/thinkable/context";

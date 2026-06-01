@@ -416,7 +416,7 @@ describe("supervisorCreateObject", () => {
       baseDir,
       newObjectId: "weather",
       selfMd: "# weather — query weather\n",
-      readmeMd: "# weather\n\nAsk for forecasts.\n",
+      readableMd: "# weather\n\nAsk for forecasts.\n",
       knowledge: { "usage.md": "Pass {city}.\n" },
       intent: "feat: introduce weather agent",
     });
@@ -438,14 +438,14 @@ describe("supervisorCreateObject", () => {
       baseDir,
       newObjectId: "weather",
       selfMd: "v1",
-      readmeMd: "v1",
+      readableMd: "v1",
     });
     expect(first.ok).toBe(true);
     const dup = await supervisorCreateObject({
       baseDir,
       newObjectId: "weather",
       selfMd: "v2",
-      readmeMd: "v2",
+      readableMd: "v2",
     });
     expect(dup.ok).toBe(false);
     if (!dup.ok) expect(dup.code).toBe("ALREADY_EXISTS");
@@ -457,17 +457,17 @@ describe("supervisorCreateObject", () => {
       baseDir,
       newObjectId: "supervisor",
       selfMd: "x",
-      readmeMd: "y",
+      readableMd: "y",
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("INVALID_INPUT");
   });
 
-  test("rejects empty selfMd / readmeMd", async () => {
+  test("rejects empty selfMd / readableMd", async () => {
     const baseDir = await newWorld();
-    const r1 = await supervisorCreateObject({ baseDir, newObjectId: "x", selfMd: "", readmeMd: "y" });
+    const r1 = await supervisorCreateObject({ baseDir, newObjectId: "x", selfMd: "", readableMd: "y" });
     expect(r1.ok).toBe(false);
-    const r2 = await supervisorCreateObject({ baseDir, newObjectId: "x", selfMd: "x", readmeMd: "  " });
+    const r2 = await supervisorCreateObject({ baseDir, newObjectId: "x", selfMd: "x", readableMd: "  " });
     expect(r2.ok).toBe(false);
   });
 
@@ -477,7 +477,7 @@ describe("supervisorCreateObject", () => {
       baseDir,
       newObjectId: "weather",
       selfMd: "x",
-      readmeMd: "y",
+      readableMd: "y",
       knowledge: { "../escape.md": "bad" },
     });
     expect(r.ok).toBe(false);

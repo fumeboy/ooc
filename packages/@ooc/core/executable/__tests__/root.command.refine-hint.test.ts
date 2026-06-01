@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { ROOT_COMMANDS } from "@ooc/core/executable/windows/root/index";
+import { ROOT_COMMANDS } from "@ooc/builtins/root";
 import { KNOWLEDGE as BASIC_KNOWLEDGE } from "@ooc/core/thinkable/knowledge/basic-knowledge";
 import type { CommandTableEntry } from "@ooc/core/executable/windows/_shared/command-types";
 

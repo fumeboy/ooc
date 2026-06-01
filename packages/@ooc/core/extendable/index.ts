@@ -27,5 +27,4 @@ import "@ooc/builtins/plan";
 import "@ooc/builtins/command_exec";
 import "@ooc/builtins/program";
 import "@ooc/builtins/root";
-import "@ooc/builtins/custom";
 import "./lark/index.js";

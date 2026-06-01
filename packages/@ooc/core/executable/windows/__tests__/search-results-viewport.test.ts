@@ -23,7 +23,7 @@ import {
   DEFAULT_RESULTS_VIEWPORT,
   executeSearchSetResultsViewport,
   hasAnyResultsViewportField,
-} from "../search/results-viewport.js";
+} from "@ooc/builtins/search/executable/results-viewport.js";
 
 const NOW = 1_700_000_000_000;
 
