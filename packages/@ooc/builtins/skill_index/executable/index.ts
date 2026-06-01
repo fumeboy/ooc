@@ -15,9 +15,8 @@
  * UI 端类似——ContextSnapshotViewer 渲染时如果 skills 为空就不显示卡片。
  */
 
-import { registerObjectType, type OnCloseContext, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
-import type { SkillIndexWindow } from "../types.js";
-import { xmlElement, xmlText, type XmlNode } from "@ooc/core/thinkable/context/xml.js";
+import { registerObjectType, type OnCloseContext } from "@ooc/core/extendable/_shared/registry.js";
+import { readable } from "../readable.js";
 
 const SKILL_INDEX_BASIC_KNOWLEDGE = `
 skill_index object 列出当前 stone 上可用的 skills——每个 skill 是一个独立目录（含
@@ -34,37 +33,7 @@ SKILL.md + 任意辅助文件），用于复用某种操作模式或协议。
 如果当前 stone 没有任何 skills，本 window 不会出现。
 `.trim();
 
-/**
- * skill_index 的 renderXml hook。
- *
- * 实际派生逻辑放在 synthesizer 里（异步 IO 不适合在 render 层做）；本函数只负责
- * 把已经填好的 window.skills 字段渲染成 XML 子节点序列。
- *
- * 调度器（render.ts）会负责外层 `<window id type status>` + `<title>` + `<commands>`；
- * 本函数返回的是内层 `<hint>` + `<skills>` 子树。
- */
-function renderSkillIndex(ctx: RenderContext): XmlNode[] {
-  const window = ctx.window as SkillIndexWindow;
-  const skills = window.skills ?? [];
-  return [
-    xmlElement("hint", {}, [
-      xmlText(
-        '使用 exec(command="open_file", args={ path: "<skillFilePath>" }) 打开具体 SKILL.md 阅读完整说明',
-      ),
-    ]),
-    xmlElement(
-      "skills",
-      { count: String(skills.length) },
-      skills.map((s) =>
-        xmlElement(
-          "skill",
-          { name: s.name, scope: s.scope, path: s.skillFilePath },
-          [xmlElement("description", {}, [xmlText(s.description)])],
-        ),
-      ),
-    ),
-  ];
-}
+/** skill_index 的 renderXml hook 已迁出到 ../readable.ts。 */
 
 function onCloseSkillIndex(_ctx: OnCloseContext): boolean {
   // skill_index 是 protocol 派生 window；理论上不会被 close（不入 thread.json，每轮重建）
@@ -75,6 +44,6 @@ function onCloseSkillIndex(_ctx: OnCloseContext): boolean {
 registerObjectType("skill_index", {
   commands: {},
   onClose: onCloseSkillIndex,
-  renderXml: renderSkillIndex,
+  readable,
   basicKnowledge: SKILL_INDEX_BASIC_KNOWLEDGE,
 });

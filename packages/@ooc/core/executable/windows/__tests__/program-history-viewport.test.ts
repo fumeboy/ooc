@@ -106,7 +106,7 @@ describe("program_window render: default tail=10", () => {
     });
     const thread = makeRenderThread(window);
     const def = getWindowTypeDefinition("program");
-    const nodes = await def.renderXml!({ thread, window });
+    const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain("<history_viewport");
     expect(xml).toContain('total="5"');
@@ -125,7 +125,7 @@ describe("program_window render: default tail=10", () => {
     });
     const thread = makeRenderThread(window);
     const def = getWindowTypeDefinition("program");
-    const nodes = await def.renderXml!({ thread, window });
+    const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('total="25"');
     expect(xml).toContain('tail="10"');
@@ -150,7 +150,7 @@ describe("program_window render: default tail=10", () => {
     });
     const thread = makeRenderThread(window);
     const def = getWindowTypeDefinition("program");
-    const nodes = await def.renderXml!({ thread, window });
+    const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('tail="10"');
     expect(xml).toContain('earlier_omitted="5"');
@@ -162,7 +162,7 @@ describe("program_window render: default tail=10", () => {
     });
     const thread = makeRenderThread(window);
     const def = getWindowTypeDefinition("program");
-    const nodes = await def.renderXml!({ thread, window });
+    const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain("no exec yet");
     expect(xml).not.toContain("<history_viewport");
@@ -177,7 +177,7 @@ describe("program_window render: range mode", () => {
     });
     const thread = makeRenderThread(window);
     const def = getWindowTypeDefinition("program");
-    const nodes = await def.renderXml!({ thread, window });
+    const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('history_start="5"');
     expect(xml).toContain('history_end="10"');
@@ -200,7 +200,7 @@ describe("program_window render: last_output unaffected by viewport", () => {
     });
     const thread = makeRenderThread(window);
     const def = getWindowTypeDefinition("program");
-    const nodes = await def.renderXml!({ thread, window });
+    const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     // history summary clipped to [0, 3); last_output still shows exec_19
     expect(xml).toContain('exec_id="exec_19"');

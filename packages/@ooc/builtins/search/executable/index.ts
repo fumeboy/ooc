@@ -34,6 +34,7 @@ import {
 } from "@ooc/core/extendable/_shared/transcript-viewport.js";
 import { DEFAULT_RESULTS_VIEWPORT } from "./results-viewport.js";
 import { setResultsWindowCommandForSearch } from "./command.set-results-window.js";
+import { readable } from "../readable.js";
 
 export const SEARCH_WINDOW_BASIC_PATH = "internal/windows/search/basic";
 export const SEARCH_WINDOW_CLOSE_BASIC = "internal/windows/search/close/basic";
@@ -179,63 +180,7 @@ export async function executeSearchOpenMatch(
   return undefined;
 }
 
-/** search_window 的 renderXml hook：kind + query + matches（按 resultsViewport 截取）。 */
-function renderSearchWindow(ctx: RenderContext): XmlNode[] {
-  const window = ctx.window as SearchWindow;
-  const children: XmlNode[] = [
-    xmlElement("kind", {}, [xmlText(window.kind)]),
-    xmlElement("query", {}, [xmlText(window.query)]),
-  ];
-  if (window.searchRoot) {
-    children.push(xmlElement("search_root", {}, [xmlText(window.searchRoot)]));
-  }
-
-  const viewport: TranscriptViewport =
-    window.resultsViewport ?? DEFAULT_RESULTS_VIEWPORT;
-  const { visible, earlierCount } = applyTranscriptViewport(
-    window.matches,
-    viewport,
-  );
-
-  // 始终暴露 results_viewport 元节点（让 LLM 知道当前可见区间 + 前部省略数）
-  const viewportAttrs: Record<string, string> = {
-    total: String(window.matches.length),
-  };
-  if (typeof viewport.tail === "number") {
-    viewportAttrs.tail = String(viewport.tail);
-  } else if (
-    typeof viewport.rangeStart === "number" &&
-    typeof viewport.rangeEnd === "number"
-  ) {
-    viewportAttrs.matches_start = String(viewport.rangeStart);
-    viewportAttrs.matches_end = String(viewport.rangeEnd);
-  }
-  if (earlierCount > 0) {
-    viewportAttrs.earlier_omitted = String(earlierCount);
-  }
-  children.push(xmlElement("results_viewport", viewportAttrs));
-
-  const matchNodes: XmlNode[] = visible.map((m) => {
-    const attrs: Record<string, string> = {
-      index: String(m.index),
-      path: m.path,
-    };
-    if (typeof m.line === "number") attrs.line = String(m.line);
-    return xmlElement("match", attrs, m.snippet ? [xmlText(m.snippet)] : []);
-  });
-
-  children.push(
-    xmlElement(
-      "matches",
-      {
-        count: String(window.matches.length),
-        truncated: window.truncated ? "true" : "false",
-      },
-      matchNodes,
-    ),
-  );
-  return children;
-}
+/** search_window 的 renderXml hook 已迁出到 ../readable.ts。 */
 
 const SEARCH_PREVIEW_COUNT = 3;
 const SEARCH_SNIPPET_TRUNCATE = 200;
@@ -291,7 +236,7 @@ registerObjectType("search", {
     open_match: openMatchCommand,
     set_results_window: setResultsWindowCommandForSearch,
   },
-  renderXml: renderSearchWindow,
+  readable,
   compressView: compressSearchWindow,
   basicKnowledge: SEARCH_WINDOW_BASIC_KNOWLEDGE,
 });

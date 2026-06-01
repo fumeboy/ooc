@@ -31,6 +31,7 @@ import {
   type Viewport,
 } from "@ooc/core/extendable/_shared/viewport.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/thinkable/context/xml.js";
+import { readable } from "../readable.js";
 
 const MAX_FILE_WINDOW_BYTES = 32768;
 
@@ -357,68 +358,6 @@ export async function executeFileWindowEdit(
   return undefined;
 }
 
-/** 按行/列范围切片文件正文；range 缺失则原样返回。 */
-function sliceByLinesColumns(
-  raw: string,
-  lines?: [number, number],
-  columns?: [number, number],
-): string {
-  let body = raw;
-  if (lines) {
-    const arr = body.split("\n");
-    const [start, end] = lines;
-    body = arr.slice(start, end).join("\n");
-  }
-  if (columns) {
-    const [start, end] = columns;
-    body = body
-      .split("\n")
-      .map((line) => line.slice(start, end))
-      .join("\n");
-  }
-  return body;
-}
-
-/** file_window 的 renderXml hook：path + viewport + 文件正文（按 viewport 切片）。 */
-async function renderFileWindow(ctx: RenderContext): Promise<XmlNode[]> {
-  const window = ctx.window as FileWindow;
-  const children: XmlNode[] = [
-    xmlElement("path", {}, [xmlText(window.path)]),
-  ];
-  const viewport: Viewport = window.viewport ?? DEFAULT_VIEWPORT;
-  children.push(
-    xmlElement(
-      "viewport",
-      {
-        line_start: String(viewport.lineStart),
-        line_end: String(viewport.lineEnd),
-        column_start: String(viewport.columnStart),
-        column_end: String(viewport.columnEnd),
-      },
-      [],
-    ),
-  );
-  // 兼容旧 lines/columns（遗留 set_range 路径）
-  if (window.lines) {
-    children.push(xmlElement("lines", {}, [xmlText(`${window.lines[0]}-${window.lines[1]}`)]));
-  }
-  if (window.columns) {
-    children.push(xmlElement("columns", {}, [xmlText(`${window.columns[0]}-${window.columns[1]}`)]));
-  }
-  try {
-    const raw = await readFile(window.path, "utf8");
-    // 优先按 viewport 切；如有遗留 lines/columns 在 viewport 之后再叠加（向后兼容）
-    let body = applyViewport(raw, viewport);
-    if (window.lines || window.columns) {
-      body = sliceByLinesColumns(body, window.lines, window.columns);
-    }
-    children.push(xmlElement("content", {}, [xmlText(truncateBytes(body, MAX_FILE_WINDOW_BYTES))]));
-  } catch (error) {
-    children.push(xmlElement("error", {}, [xmlText((error as Error).message)]));
-  }
-  return children;
-}
-
 /**
  * file_window 的 compressView hook（design: docs/2026-05-25-context-compression-design.md §4.1）。
  *
@@ -469,6 +408,6 @@ registerObjectType("file", {
     edit: editCommand,
     close: closeCommand,
   },
-  renderXml: renderFileWindow,
+  readable,
   compressView: compressFileWindow,
 });

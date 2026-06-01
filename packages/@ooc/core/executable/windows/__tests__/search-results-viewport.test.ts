@@ -103,7 +103,7 @@ describe("search_window render: default tail=50", () => {
     });
     const thread = makeThread(window);
     const def = getWindowTypeDefinition("search");
-    const nodes = await def.renderXml!({ thread, window });
+    const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain("<results_viewport");
     expect(xml).toContain('total="20"');
@@ -122,7 +122,7 @@ describe("search_window render: default tail=50", () => {
     });
     const thread = makeThread(window);
     const def = getWindowTypeDefinition("search");
-    const nodes = await def.renderXml!({ thread, window });
+    const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('total="120"');
     expect(xml).toContain('tail="50"');
@@ -145,7 +145,7 @@ describe("search_window render: default tail=50", () => {
     });
     const thread = makeThread(window);
     const def = getWindowTypeDefinition("search");
-    const nodes = await def.renderXml!({ thread, window });
+    const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('tail="50"');
     expect(xml).toContain('earlier_omitted="10"');
@@ -160,7 +160,7 @@ describe("search_window render: range mode", () => {
     });
     const thread = makeThread(window);
     const def = getWindowTypeDefinition("search");
-    const nodes = await def.renderXml!({ thread, window });
+    const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('matches_start="5"');
     expect(xml).toContain('matches_end="10"');
@@ -183,7 +183,7 @@ describe("search_window render: matches.count reflects full total (not visible)"
     });
     const thread = makeThread(window);
     const def = getWindowTypeDefinition("search");
-    const nodes = await def.renderXml!({ thread, window });
+    const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     // matches.count = 100 (全集)；results_viewport.total = 100；
     // visible 末 10 个：90..99

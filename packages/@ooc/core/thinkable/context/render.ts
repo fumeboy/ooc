@@ -127,9 +127,6 @@ async function resolveObjectReadable(
   renderCtx: RenderContext,
   thread: ThreadContext,
 ): Promise<XmlNode[] | undefined> {
-  const persistence = thread.persistence;
-  if (!persistence) return undefined;
-
   // ooc-6: For custom object types (not builtin), resolve readable via stone.
   // Window id = object id in the new design.
   const BUILTIN_TYPES = new Set([
@@ -138,50 +135,54 @@ async function resolveObjectReadable(
     "feishu_chat", "feishu_doc", "plan"
   ]);
 
-  if (!BUILTIN_TYPES.has(window.type)) {
-    const objectId = window.id; // window id = object id (new design)
-    const stoneRef: StoneObjectRef = {
-      baseDir: persistence.baseDir,
-      objectId,
-    };
-
-    // 1. Try ObjectWindowDefinition.readable (from export const window)
-    try {
-      const objWin = await loadObjectWindow(stoneRef);
-      if (objWin?.readable) {
-        return await objWin.readable(renderCtx);
-      }
-    } catch {
-      // 静默失败，继续尝试下一个优先级
+  // For builtin types, check registry definition's readable field first.
+  // Builtin readable lives in the registry itself; no persistence required.
+  if (BUILTIN_TYPES.has(window.type)) {
+    const def = getWindowTypeDefinition(window.type) as { readable?: (ctx: RenderContext) => XmlNode[] | Promise<XmlNode[]> };
+    if (def.readable) {
+      return await def.readable(renderCtx);
     }
-
-    // 2. Try readable.ts dynamic function
-    try {
-      const readableFn = await loadObjectReadable(stoneRef);
-      if (readableFn) {
-        return await readableFn(renderCtx);
-      }
-    } catch {
-      // 静默失败，继续尝试下一个优先级
-    }
-
-    // 3. Try readable.md static content
-    try {
-      const readableText = await readReadable(stoneRef);
-      if (readableText && readableText.trim().length > 0) {
-        return [xmlElement("readable", {}, [xmlText(readableText)])];
-      }
-    } catch {
-      // 静默失败，fallback 到 renderXml
-    }
-
     return undefined;
   }
 
-  // For builtin types, check registry definition's readable field
-  const def = getWindowTypeDefinition(window.type) as { readable?: (ctx: RenderContext) => XmlNode[] | Promise<XmlNode[]> };
-  if (def.readable) {
-    return await def.readable(renderCtx);
+  // For custom object types, stone-backed readable.* requires persistence to resolve.
+  const persistence = thread.persistence;
+  if (!persistence) return undefined;
+
+  const objectId = window.id; // window id = object id (new design)
+  const stoneRef: StoneObjectRef = {
+    baseDir: persistence.baseDir,
+    objectId,
+  };
+
+  // 1. Try ObjectWindowDefinition.readable (from export const window)
+  try {
+    const objWin = await loadObjectWindow(stoneRef);
+    if (objWin?.readable) {
+      return await objWin.readable(renderCtx);
+    }
+  } catch {
+    // 静默失败，继续尝试下一个优先级
+  }
+
+  // 2. Try readable.ts dynamic function
+  try {
+    const readableFn = await loadObjectReadable(stoneRef);
+    if (readableFn) {
+      return await readableFn(renderCtx);
+    }
+  } catch {
+    // 静默失败，继续尝试下一个优先级
+  }
+
+  // 3. Try readable.md static content
+  try {
+    const readableText = await readReadable(stoneRef);
+    if (readableText && readableText.trim().length > 0) {
+      return [xmlElement("readable", {}, [xmlText(readableText)])];
+    }
+  } catch {
+    // 静默失败，fallback 到 renderXml
   }
 
   return undefined;

@@ -14,15 +14,10 @@ import type {
   CommandKnowledgeEntries,
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/command-types.js";
-import { registerObjectType, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
+import { registerObjectType } from "@ooc/core/extendable/_shared/registry.js";
 import { runOneExec, type ProgramExecArgs } from "./runtime.js";
 export { runOneExec, type ProgramExecArgs } from "./runtime.js";
 import type { ProgramWindow } from "../types.js";
-import { xmlElement, xmlText, xmlComment, truncateBytes, type XmlNode } from "@ooc/core/thinkable/context/xml.js";
-import {
-  applyTranscriptViewport,
-  type TranscriptViewport,
-} from "@ooc/core/extendable/_shared/transcript-viewport.js";
 import {
   DEFAULT_HISTORY_VIEWPORT,
   executeProgramSetHistoryViewport,
@@ -33,6 +28,7 @@ export {
   executeProgramSetHistoryViewport,
   hasAnyHistoryViewportField,
 } from "./history-viewport.js";
+import { readable } from "../readable.js";
 
 const PROGRAM_WINDOW_EXEC_BASIC = "internal/windows/program/exec/basic";
 const PROGRAM_WINDOW_EXEC_INPUT = "internal/windows/program/exec/input";
@@ -173,60 +169,7 @@ export async function executeProgramWindowExec(
   return undefined;
 }
 
-/** program_window 的 renderXml hook：history 摘要（按 historyViewport 截取）+ 最近一条 full output。 */
-function renderProgramWindow(ctx: RenderContext): XmlNode[] {
-  const window = ctx.window as ProgramWindow;
-  const children: XmlNode[] = [];
-  if (window.history.length === 0) {
-    children.push(xmlComment("(no exec yet)"));
-    return children;
-  }
-
-  const viewport: TranscriptViewport =
-    window.historyViewport ?? DEFAULT_HISTORY_VIEWPORT;
-  // 按完整 history 的下标渲染（保留绝对 index n），但只对 visible 子集生成 summary 节点。
-  const indexed = window.history.map((rec, idx) => ({ rec, idx }));
-  const { visible, earlierCount } = applyTranscriptViewport(indexed, viewport);
-
-  // 始终暴露 history_viewport 元节点（让 LLM 知道当前可见区间 + 前部省略数）
-  const viewportAttrs: Record<string, string> = {
-    total: String(window.history.length),
-  };
-  if (typeof viewport.tail === "number") {
-    viewportAttrs.tail = String(viewport.tail);
-  } else if (
-    typeof viewport.rangeStart === "number" &&
-    typeof viewport.rangeEnd === "number"
-  ) {
-    viewportAttrs.history_start = String(viewport.rangeStart);
-    viewportAttrs.history_end = String(viewport.rangeEnd);
-  }
-  if (earlierCount > 0) {
-    viewportAttrs.earlier_omitted = String(earlierCount);
-  }
-  children.push(xmlElement("history_viewport", viewportAttrs));
-
-  const summary = visible.map(({ rec, idx }) =>
-    xmlElement(
-      "exec",
-      { id: rec.execId, n: String(idx), kind: rec.language, ok: rec.ok ? "ok" : "fail" },
-      [],
-    ),
-  );
-  children.push(xmlElement("history", {}, summary));
-
-  // last_output 始终用完整 history 的最后一条（不受 viewport 影响）——
-  // 最近一次 exec 是 LLM 最常需要的反馈锚点，viewport 只截"summary 列表"
-  const last = window.history[window.history.length - 1]!;
-  children.push(
-    xmlElement(
-      "last_output",
-      { exec_id: last.execId },
-      [xmlText(truncateBytes(last.output))],
-    ),
-  );
-  return children;
-}
+/** program_window 的 renderXml hook 已迁出到 ../readable.ts。 */
 
 registerObjectType("program", {
   commands: {
@@ -234,5 +177,5 @@ registerObjectType("program", {
     close: closeCommand,
     set_history_window: setHistoryWindowCommand,
   },
-  renderXml: renderProgramWindow,
+  readable,
 });

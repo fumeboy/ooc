@@ -21,21 +21,12 @@ import type {
   CommandKnowledgeEntries,
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/command-types.js";
-import { registerObjectType, type OnCloseContext, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
+import { registerObjectType, type OnCloseContext } from "@ooc/core/extendable/_shared/registry.js";
 import {
-  DEFAULT_VIEWPORT,
-  applyViewport,
   executeWindowSetViewport,
   hasAnyViewportField,
-  type Viewport,
 } from "@ooc/core/extendable/_shared/viewport.js";
-import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/thinkable/context/xml.js";
-import type { KnowledgeWindow } from "../types.js";
-import { deriveStoneFromThread } from "@ooc/core/persistable/common.js";
-import { derivePoolFromThread } from "@ooc/core/persistable/pool-object.js";
-import { loadKnowledgeIndex } from "@ooc/core/thinkable/knowledge/index.js";
-
-const MAX_KNOWLEDGE_BYTES = 8192;
+import { readable } from "../readable.js";
 
 const KNOWLEDGE_WINDOW_RELOAD_BASIC = "internal/windows/knowledge/reload/basic";
 const KNOWLEDGE_WINDOW_CLOSE_BASIC = "internal/windows/knowledge/close/basic";
@@ -118,81 +109,7 @@ function onCloseKnowledgeWindow(ctx: OnCloseContext): boolean | void {
   }
 }
 
-/**
- * knowledge_object 的 renderXml hook：path + 正文。
- *
- * 多 source 处理：
- * - source=protocol  : window.body 必填，直接渲染
- * - source=activator : presentation=full 时 window.body 含正文；summary 仅 description
- * - source=explicit  : window.body 通常为空 → 回退到 loader 拉取（兼容旧 thread.json）
- */
-async function renderKnowledgeWindow(ctx: RenderContext): Promise<XmlNode[]> {
-  const window = ctx.window as KnowledgeWindow;
-  const children: XmlNode[] = [
-    xmlElement("path", {}, [xmlText(window.path)]),
-  ];
-  if (window.source) {
-    children.push(xmlElement("source", {}, [xmlText(window.source)]));
-  }
-  if (window.presentation) {
-    children.push(xmlElement("presentation", {}, [xmlText(window.presentation)]));
-  }
-  if (window.description) {
-    children.push(xmlElement("description", {}, [xmlText(window.description)]));
-  }
-  // viewport 仅对 explicit 来源生效；其它来源（protocol/activator/relation）由系统决定 presentation
-  const useViewport = window.source === "explicit" || !window.source;
-  const viewport: Viewport | undefined = useViewport
-    ? window.viewport ?? DEFAULT_VIEWPORT
-    : undefined;
-  if (viewport) {
-    children.push(
-      xmlElement(
-        "viewport",
-        {
-          line_start: String(viewport.lineStart),
-          line_end: String(viewport.lineEnd),
-          column_start: String(viewport.columnStart),
-          column_end: String(viewport.columnEnd),
-        },
-        [],
-      ),
-    );
-  }
-  const renderBody = (raw: string): string => {
-    const sliced = viewport ? applyViewport(raw, viewport) : raw;
-    return truncateBytes(sliced, MAX_KNOWLEDGE_BYTES);
-  };
-  // body 已合成时直接用；否则（explicit 或旧数据）回退 loader
-  if (typeof window.body === "string" && window.body.length > 0) {
-    children.push(xmlElement("content", {}, [xmlText(renderBody(window.body))]));
-    return children;
-  }
-  if (window.presentation === "summary") {
-    return children;
-  }
-  if (!ctx.thread.persistence) {
-    children.push(xmlElement("error", {}, [xmlText("thread 无 persistence ref")]));
-    return children;
-  }
-  try {
-    const stoneRef = deriveStoneFromThread(ctx.thread.persistence);
-    const poolRef = derivePoolFromThread(ctx.thread.persistence);
-    const index = await loadKnowledgeIndex({ stone: stoneRef, pool: poolRef });
-    const doc = index.byPath.get(window.path);
-    if (!doc) {
-      children.push(xmlElement("error", {}, [xmlText(`knowledge "${window.path}" 不存在`)]));
-    } else {
-      if (doc.frontmatter.description && !window.description) {
-        children.push(xmlElement("description", {}, [xmlText(doc.frontmatter.description)]));
-      }
-      children.push(xmlElement("content", {}, [xmlText(renderBody(doc.body))]));
-    }
-  } catch (error) {
-    children.push(xmlElement("error", {}, [xmlText((error as Error).message)]));
-  }
-  return children;
-}
+/** knowledge_object 的 renderXml hook 已迁出到 ../readable.ts。 */
 
 registerObjectType("knowledge", {
   commands: {
@@ -201,5 +118,5 @@ registerObjectType("knowledge", {
     set_viewport: setViewportCommand,
   },
   onClose: onCloseKnowledgeWindow,
-  renderXml: renderKnowledgeWindow,
+  readable,
 });

@@ -33,6 +33,7 @@ import {
   xmlText,
   type XmlNode,
 } from "@ooc/core/thinkable/context/xml.js";
+import { readable } from "../readable.js";
 
 // ─────────────────────────── knowledge paths ──────────────────────────────────
 
@@ -354,35 +355,7 @@ const closeCommand: ObjectMethod = {
 };
 
 // ─────────────────────────── render ──────────────────────────────────────────
-
-function renderPlanWindow(ctx: RenderContext): XmlNode[] {
-  const w = ctx.window as PlanWindow;
-  const children: XmlNode[] = [];
-  if (w.description !== undefined) {
-    children.push(xmlElement("description", {}, [xmlText(w.description)]));
-  }
-  const stepNodes: XmlNode[] = w.steps.map((s) => {
-    const attrs: Record<string, string> = { id: s.id, status: s.status };
-    if (s.subPlanWindowId) attrs.sub_plan_window_id = s.subPlanWindowId;
-    return xmlElement("step", attrs, [xmlText(s.text)]);
-  });
-  children.push(
-    xmlElement(
-      "steps",
-      { count: String(w.steps.length) },
-      stepNodes,
-    ),
-  );
-  if (w.parentPlanWindowId) {
-    children.push(
-      xmlElement("parent_plan", {
-        plan_window_id: w.parentPlanWindowId,
-        step_id: w.parentStepId ?? "",
-      }),
-    );
-  }
-  return children;
-}
+// plan_window 的 renderXml hook 已迁出到 ../readable.ts。
 
 function compressPlanWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
   const w = ctx.window as PlanWindow;
@@ -472,7 +445,7 @@ registerObjectType("plan", {
     close: closeCommand,
   },
   onClose: onClosePlanWindow,
-  renderXml: renderPlanWindow,
+  readable,
   compressView: compressPlanWindow,
   basicKnowledge: PLAN_BASIC_KNOWLEDGE,
 });
