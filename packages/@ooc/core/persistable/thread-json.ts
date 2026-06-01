@@ -76,7 +76,13 @@ export async function readThread(
     // 打 console.warn 让运维知道发生了 silent drop, 符合 silent-swallow ban。)
     const rawWindows = Array.isArray(parsed.contextWindows) ? parsed.contextWindows : [];
     const known = new Set(listRegisteredWindowTypes());
-    const filteredWindows = rawWindows.filter((w) => known.has(w.type));
+    // ooc-6: self window 的 type === objectId（stone-backed type），它会在 synthesizer
+    // 的 ensureSelfObjectTypeRegistered 阶段才注册到 registry——读时还没注册。
+    // 所以放行 type === self objectId 的 window，避免被这里的 filter 误丢。
+    const selfTypeAllowance = persistence.objectId;
+    const filteredWindows = rawWindows.filter(
+      (w) => known.has(w.type) || w.type === selfTypeAllowance,
+    );
     if (filteredWindows.length !== rawWindows.length) {
       const dropped = rawWindows.filter((w) => !known.has(w.type));
       console.warn(

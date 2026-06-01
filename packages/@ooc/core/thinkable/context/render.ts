@@ -182,10 +182,31 @@ async function resolveObjectReadable(
       return [xmlElement("readable", {}, [xmlText(readableText)])];
     }
   } catch {
-    // 静默失败，fallback 到 renderXml
+    // 静默失败，fallback 到 readme
   }
 
-  return undefined;
+  // 4. Fallback：readme.md（对外身份说明）。supervisor 等 bootstrap object 默认
+  //    readable.md 为空但 readme.md 已写好；用 readme 顶上当 <readable> 内容，
+  //    避免抛 "缺少 renderXml hook"。
+  try {
+    const { readReadme } = await import("../../persistable/stone-readme.js");
+    const readmeText = await readReadme(stoneRef);
+    if (readmeText && readmeText.trim().length > 0) {
+      return [xmlElement("readable", { source: "readme" }, [xmlText(readmeText)])];
+    }
+  } catch {
+    // 静默失败，fallback 到 minimal placeholder
+  }
+
+  // 5. 最终 fallback：minimal placeholder。让任何 stone-backed object 都能进
+  //    context 显示，不破坏 thread 渲染。LLM 通过 type 名 + title 仍可识别此对象。
+  return [
+    xmlElement(
+      "readable",
+      { source: "placeholder" },
+      [xmlText(`Object "${objectId}" 没有可渲染的 readable 或 readme 内容。`)],
+    ),
+  ];
 }
 
 // ─────────────────────────── window 节点调度 ──────────────────────────────────

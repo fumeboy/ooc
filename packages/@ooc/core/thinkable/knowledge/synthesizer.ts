@@ -120,6 +120,10 @@ export async function collectExecutableKnowledgeEntries(
     protocolEntries[REFLECTABLE_METAPROG_PATH] = REFLECTABLE_METAPROG_KNOWLEDGE;
   }
 
+  // ooc-6: self objectId 是 stone-backed object type，必须在 render 前动态注册。
+  // 不放在 readThread 里，因为 readThread 同步且不必要每次 reload 触发 stone IO。
+  await ensureSelfObjectTypeRegistered(thread);
+
   const list = contextWindows ?? [];
   const enriched: ContextWindow[] = [];
   for (const window of list) {
@@ -453,6 +457,46 @@ export async function deriveRelationWindow(
  * relation 文件(pools/flows)仍然存在，但通过 peer object 的 `edit_relation` 方法访问，
  * 而不是 relation 窗口的 edit 命令。
  */
+/**
+ * 把 thread 自身持有方（self objectId）作为 stone-backed object type 动态注册。
+ *
+ * ooc-6 设计：thread.persistence.objectId 持有的 thread 默认带一个 self window
+ * （type === objectId），但 builtin registry 不知道 stone 上的对象类型——必须在
+ * 渲染前从 stone（readme/server/window/readable）动态加载并注册。peer 类型由
+ * derivePeerObjectWindows 处理；self 同款机制独立走这条路径，确保 supervisor
+ * 这种"Agent 自身"也能进 context render 而不抛 "type X not registered"。
+ *
+ * idempotent: 已注册则直接返回。
+ */
+export async function ensureSelfObjectTypeRegistered(
+  thread: ThreadContext,
+): Promise<void> {
+  const selfId = thread.persistence?.objectId;
+  if (!selfId || selfId === "user") return;
+  const registeredTypes = listRegisteredObjectTypes();
+  if (registeredTypes.includes(selfId as any)) return;
+  try {
+    const stoneRef = { baseDir: thread.persistence!.baseDir, objectId: selfId };
+    const objWin: ObjectWindowDefinition | undefined = await loadObjectWindow(stoneRef);
+    // 即便 stone 没显式 export const window，也要注册一个 minimal 占位条目，
+    // 这样 getWindowTypeDefinition 不抛；render 仍走 readable.ts/.md fallback。
+    registerNewObjectType(selfId as any, {
+      commands: objWin?.commands ?? {},
+      renderXml: objWin?.renderXml,
+      readable: objWin?.readable,
+      onClose: objWin?.onClose,
+      basicKnowledge: typeof objWin?.basicKnowledge === "string" ? objWin.basicKnowledge : undefined,
+      prototype: objWin?.prototype,
+    });
+  } catch (err) {
+    console.debug(
+      `[self-object] register io_error self=${selfId} msg=${(err as Error).message}`,
+    );
+    // fail-open：注册一个最 minimal 的条目，避免 render 抛
+    registerNewObjectType(selfId as any, { commands: {} });
+  }
+}
+
 export async function derivePeerObjectWindows(
   thread: ThreadContext,
 ): Promise<ContextWindow[]> {
@@ -467,6 +511,7 @@ export async function derivePeerObjectWindows(
   for (const w of talkWindows) {
     if (!w.target) continue;
     if (w.target === SUPER_ALIAS_TARGET) continue;
+    if (w.target === "user") continue; // user 是 passive object（同 step 2），不作为 Agent peer
     const prev = peerEarliest.get(w.target);
     if (prev === undefined || w.createdAt < prev) peerEarliest.set(w.target, w.createdAt);
   }
