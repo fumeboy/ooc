@@ -23,7 +23,7 @@ import {
 } from "../../executable/windows/_shared/registry";
 import { filterMessagesForDoWindow } from "../../executable/windows/do/index";
 import { filterMessagesForTalkWindow } from "../../executable/windows/talk/index";
-import type { ContextWindow } from "../../executable/windows/_shared/types";
+import type { ContextWindow, CustomWindow } from "../../executable/windows/_shared/types";
 import { ROOT_WINDOW_ID } from "../../executable/windows/_shared/types";
 import type { ThreadContext, ThreadMessage } from "./index";
 import {
@@ -35,6 +35,8 @@ import {
   xmlText,
   type XmlNode,
 } from "./xml";
+import { loadObjectReadable, loadObjectWindow } from "../../executable/server/loader.js";
+import { readReadable, type StoneObjectRef } from "../../persistable/index.js";
 
 // ─────────────────────────── helpers (顶层 inbox/outbox) ──────────────────────
 
@@ -110,6 +112,75 @@ function renderCommandsNode(window: ContextWindow): XmlNode | null {
   );
 }
 
+// ─── Readable Resolution (2026-05-28 ooc-6 Object Unification) ───
+
+/**
+ * 解析 Object 的 readable 渲染内容。优先级从高到低：
+ * 1. ObjectWindowDefinition.readable（custom window 的 export const window.readable）
+ * 2. readable.ts 导出的函数（动态渲染）
+ * 3. readable.md 内容（静态 markdown，作为 <readable> 文本节点）
+ *
+ * 返回 XmlNode[] 表示已解析到可读内容；返回 undefined 表示需要 fallback 到 renderXml。
+ */
+async function resolveObjectReadable(
+  window: ContextWindow,
+  renderCtx: RenderContext,
+  thread: ThreadContext,
+): Promise<XmlNode[] | undefined> {
+  const persistence = thread.persistence;
+  if (!persistence) return undefined;
+
+  // For custom windows with objectId, try stone-based resolution
+  if (window.type === "custom") {
+    const cw = window as CustomWindow;
+    const stoneRef: StoneObjectRef = {
+      baseDir: persistence.baseDir,
+      objectId: cw.objectId,
+      stonesBranch: undefined,
+    };
+
+    // 1. Try ObjectWindowDefinition.readable (from export const window)
+    try {
+      const objWin = await loadObjectWindow(stoneRef);
+      if (objWin?.readable) {
+        return await objWin.readable(renderCtx);
+      }
+    } catch {
+      // 静默失败，继续尝试下一个优先级
+    }
+
+    // 2. Try readable.ts dynamic function
+    try {
+      const readableFn = await loadObjectReadable(stoneRef);
+      if (readableFn) {
+        return await readableFn(renderCtx);
+      }
+    } catch {
+      // 静默失败，继续尝试下一个优先级
+    }
+
+    // 3. Try readable.md static content
+    try {
+      const readableText = await readReadable(stoneRef);
+      if (readableText && readableText.trim().length > 0) {
+        return [xmlElement("readable", {}, [xmlText(readableText)])];
+      }
+    } catch {
+      // 静默失败，fallback 到 renderXml
+    }
+
+    return undefined;
+  }
+
+  // For builtin types, check registry definition's readable field
+  const def = getWindowTypeDefinition(window.type) as { readable?: (ctx: RenderContext) => XmlNode[] | Promise<XmlNode[]> };
+  if (def.readable) {
+    return await def.readable(renderCtx);
+  }
+
+  return undefined;
+}
+
 // ─────────────────────────── window 节点调度 ──────────────────────────────────
 
 /**
@@ -171,13 +242,19 @@ async function renderWindowNode(
       );
     }
   } else {
-    if (!def.renderXml) {
-      throw new Error(
-        `render.ts: window type "${renderedWindow.type}" 缺少 renderXml hook（接口契约）。`,
-      );
+    // 2026-05-28 ooc-6 Object Unification: 优先尝试 readable 渲染
+    const readableChildren = await resolveObjectReadable(renderedWindow, renderCtx, thread);
+    if (readableChildren) {
+      children.push(...readableChildren);
+    } else {
+      if (!def.renderXml) {
+        throw new Error(
+          `render.ts: window type "${renderedWindow.type}" 缺少 renderXml hook（接口契约）。`,
+        );
+      }
+      const typeChildren = await def.renderXml(renderCtx);
+      children.push(...typeChildren);
     }
-    const typeChildren = await def.renderXml(renderCtx);
-    children.push(...typeChildren);
   }
 
   // ── commands 元数据（R2 #5 / R2 #10）

@@ -221,7 +221,7 @@ export async function executeDoCommand(ctx: CommandExecutionContext): Promise<st
     transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT },
   };
   if (ctx.manager) {
-    ctx.manager.insertTypedWindow(doWindow);
+    ctx.manager.insertTypedWindow(doWindow, ctx.thread);
   } else {
     parent.contextWindows = [...(parent.contextWindows ?? []), doWindow];
   }

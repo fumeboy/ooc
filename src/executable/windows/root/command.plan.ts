@@ -160,7 +160,7 @@ export async function executePlanCommand(
       steps: inputSteps !== undefined ? inputSteps : existing.steps,
     };
     if (ctx.manager) {
-      ctx.manager.upsertWindow(next);
+      ctx.manager.upsertWindow(next, ctx.thread);
     } else {
       const idx = all.findIndex((w) => w.id === existing.id);
       if (idx >= 0) {
@@ -185,7 +185,7 @@ export async function executePlanCommand(
     steps: inputSteps ?? [],
   };
   if (ctx.manager) {
-    ctx.manager.insertTypedWindow(plan);
+    ctx.manager.insertTypedWindow(plan, ctx.thread);
   } else {
     thread.contextWindows = [...all, plan];
   }

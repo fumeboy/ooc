@@ -71,9 +71,9 @@ export const root: DocTreeNode = {
     面向对象 是基础哲学，在具体实现中，不同领域可能会有自己的 Object 去进行实现。
 
     Agent 具有 stone、pool、flow 三种持久层（World 级三分，2026-05-23 起）:
-    - stone: 象征"静"——持有 Object 的长期身份与设计源码（self.md / readme.md / server / client / knowledge 五件套），跨 session 共享，进 git review。其中 \`knowledge/\` 是 **seed knowledge**（人类设计的初始知识库），可挂 eval gate。
+    - stone: 象征"静"——持有 Object 的长期身份与设计源码（self.md / readable.(md|ts) / executable / visible / knowledge 五件套，2026-05-28 ooc-6 归一化），跨 session 共享，进 git review。其中 \`knowledge/\` 是 **seed knowledge**（人类设计的初始知识库），可挂 eval gate。\`readable.md\` 是原 \`readme.md\` 重命名（静态展示），\`readable.ts\` 是新增动态渲染函数；\`executable/\` 是原 \`server/\` 重命名（方法实现）；\`visible/\` 是原 \`client/\` 重命名（UI 实现）。
     - pool:  象征"积"——持有 Object 跨 session 累积的事实数据（data / knowledge / files 三件套），不进 git。data 用 csv（不用 sql；详见 persistable.pool.children.data_pool）；knowledge 是 **sediment knowledge**（运行时由 reflectable / collaborable 沉淀的 memory / relations）。
-    - flow:  象征"动"——一个 Object 可以参与多个 session，每个 session 下有一个 flow，每个 flow 都有自己的 session 级数据字段和程序方法。
+    - flow:  象征"动"——一个 Object 可以参与多个 session，每个 session 下有一个 flow，每个 flow 都有自己的 session 级数据字段和程序方法。运行中创建的 context objects 以 \`context/<childId>/\` 嵌套目录持久化在 flow object 下。
 
     Agent 由 8 个**内在能力维度**组合。判定一个东西是不是维度的标准是: 它是否**构成 Agent 的「自我」(self-constitutive)**（判定轴详见 patches.dimension_criterion）。按此标准 8 维度分两组:
 
@@ -127,11 +127,15 @@ export const root: DocTreeNode = {
 
             核心组成:
             1. LLM 交互模块: 思考的核心是与 LLM 交互，常规需要适配 OpenAI 和 Claude provider，并以 Responses-first 的 item 模型表达消息、tool call 与 tool result。
-            2. ContextBuilder 模块: 设计如何构建 LLM 输入（context），通过统一的抽象信息单元 ContextWindow 来构建 context，ContextWindow 具有名为 command 的方法供 LLM 调用。
-            3. 函数调用模块: LLM 通过 4 个基础 tool 操作世界——exec（唯一的"调用 command"原语）/ close（关 window）/ wait（等 IO）/ compress（压上下文）。exec(window_id?, command, args?) 调某 window 上的 command，window_id 缺省为 root（全局 command）。
+            2. ContextBuilder 模块: 设计如何构建 LLM 输入（context），通过统一的抽象信息单元 **ContextWindow** 来构建 context。**2026-05-28 ooc-6 归一化: ContextWindow 就是 OOC Object 出现在 context 中的形态**——每个 window 背后都对应一个 Object（builtin 或 user-defined），window 上挂的 command 就是 Object 的 method。
+            3. 函数调用模块: LLM 通过 4 个基础 tool 操作世界——exec（唯一的"调用 method"原语）/ close（关 window / 从 context 移除 object 引用）/ wait（等 IO）/ compress（压上下文）。exec(object_id?, method, args?) 调某 object 上的 method，object_id 缺省为 root（全局 method）。
             4. 类 SubAgent 模式支持: 思考的过程通过 thread 承载，thread 可以派生子 thread，形成一个 Thread Tree，每个 thread 可以并行思考。
 
-            ContextWindow 是信息展示单元，也是可操作对象，挂载名为 command 的窗口方法供 LLM 交互。
+            **ContextWindow = Object in Context（2026-05-28 归一化）**:
+            ContextWindow 不再是独立于 Object 的数据结构，而是 Object 出现在当前 thread context 中的形态。每个 window 对应一个 Object:
+            - builtin objects（file/do/talk/program/... 位于 \`src/extendable/base/<type>/\`）
+            - user-defined objects（位于 \`stones/<branch>/objects/<id>/\`）
+            Object 的 readable 函数控制自己如何在 context 中以 XML 形式展示给 LLM；Object 的 executable 目录提供 methods；Object 的 visible 目录提供前端 UI。
 
             渐进式披露的多步 command 调用: LLM 调 exec(window_id, command, args)；若 args 不齐或会引入新 knowledge path，系统创建一个 command_exec form 并激活该 command 的初始知识，告诉 LLM 怎么填；LLM 通过 exec(form_id, "refine", args) 多次累积参数（每次可触发更细的知识激活），最后 exec(form_id, "submit") 执行。例如打开文件 = exec(command="open_file", args={path})，文件以 file 类型 ContextWindow 进入 LLM 输入。close 关闭一个 ContextWindow。
 
@@ -148,15 +152,19 @@ export const root: DocTreeNode = {
                 "identity": "Object 对自己的自我描述，以及对外暴露给其他 Object 的介绍",
                 "LLM": "Large Language Model, Object 思考时调用的模型服务",
                 "Context": "Object 每一轮思考时能看见的全部信息，是 Object 的世界边界",
-                "ContextWindow": "Context 的统一抽象信息单元，既是信息展示单元，也是可操作对象，挂载名为 command 的窗口方法",
+                "ContextWindow": "Context 的统一抽象信息单元，**本质是 OOC Object 出现在 context 中的形态**，既是信息展示单元，也是可操作对象，挂载 Object 的 method 供 LLM 交互",
+                "ContextObject": "ContextWindow 的别名，强调 window = object in context",
                 "Knowledge": "Object 持有的 markdown 知识文档，可按 command path 渐进激活进入 Context",
                 "Thread": "Object 思考过程的运行时节点，多个 thread 组成 Thread Tree",
                 "Thread Tree": "thread 派生子 thread 形成的树形结构，多个 thread 可并行思考",
                 "ThinkLoop": "单个 thread 内的一轮思考循环",
-                "Command": "ContextWindow 上挂载的窗口方法，由 LLM 通过 exec tool 调用（args 不齐时经 command_exec form 的 refine/submit 推进）",
-                "exec/close/wait/compress": "LLM 的 4 个基础 tool：exec 调某 window 上的 command（含 form 的 refine/submit）/ close 关 window / wait 等 IO / compress 压上下文",
-                "form ContextWindow": "执行 command 时由 open 创建的表单型 ContextWindow，承载渐进式参数填充与知识激活",
+                "Method": "Object 上挂载的可调用方法（原 Command 概念归一化），由 LLM 通过 exec tool 调用；有 public/for_ui_access 两个可见性标记",
+                "Command": "Method 的旧称（2026-05-28 前），概念已与 Object Method 合并",
+                "exec/close/wait/compress": "LLM 的 4 个基础 tool：exec 调某 object 上的 method（含 form 的 refine/submit）/ close 关 window / wait 等 IO / compress 压上下文",
+                "form ContextWindow": "执行 method 时由 open 创建的表单型 ContextWindow（type=command_exec），承载渐进式参数填充与知识激活",
                 "ProcessEvent": "thread 运行中产生的过程事件，包括 LLM 输出、tool 调用和上下文变化",
+                "public method": "Object method 的可见性标记，public=true 表示可被其他 Object 在其 context 中看见并调用",
+                "for_ui_access method": "Object method 的可见性标记，for_ui_access=true 表示可被前端 HTTP API 调用",
             },
             children: {
                 "identity": {
@@ -166,10 +174,11 @@ export const root: DocTreeNode = {
 
                     OOC 中的 Object 至少有两层身份文本:
                     1. self.md: Object 写给自己的身份说明，进入自己的 LLM instructions，用于定义目标、风格、知识背景、行为偏好。
-                    2. readme.md: Object 写给外部世界的介绍，用于让其他 Object 或 user 理解 "我是谁、我能做什么、什么时候该找我"。
+                    2. readable.md: Object 写给外部世界的介绍（原 readme.md，2026-05-28 重命名），用于让其他 Object 或 user 理解 "我是谁、我能做什么、什么时候该找我"。可被 readable.ts（动态渲染函数）替代。
 
                     self.md 偏内向，是 Object 的自我约束。
-                    readme.md 偏外向，是 Object 在协作网络中的名片。
+                    readable.md 偏外向，是 Object 在协作网络中的名片。
+                    readable.ts（可选）是动态函数，可以根据 Object 当前状态计算如何在 context 中展示。
 
                     这两个文件共同决定 Object 在系统中的人格边界:
                     - Object 如何解释任务。
@@ -178,7 +187,9 @@ export const root: DocTreeNode = {
                     `,
                     named: {
                         "self.md": "Object 写给自己的身份文档，每轮进入自己的 LLM instructions",
-                        "readme.md": "Object 写给外部世界的介绍文档，供 user 和其他 Object 理解它的能力与边界",
+                        "readme.md": "Object 写给外部世界的介绍文档（旧称，2026-05-28 起改名为 readable.md）",
+                        "readable.md": "Object 写给外部世界的介绍文档（2026-05-28 重命名，原 readme.md），供 user 和其他 Object 理解它的能力与边界",
+                        "readable.ts": "Object 的动态上下文渲染函数（2026-05-28 新增），根据当前状态计算 XML 展示给 LLM，优先级高于 readable.md",
                     },
                 },
                 "llm": {
@@ -267,22 +278,31 @@ export const root: DocTreeNode = {
                     },
                     children: {
                         "context_window_reference": {
-                            title: "Context 与 ContextWindow 的关系",
+                            title: "Context 与 ContextObject 的关系",
                             content: `
-                            ContextWindow 是 Context 中最重要的结构化单元。
+                            **2026-05-28 ooc-6 归一化: ContextWindow = Object in Context**
+                            ContextObject（原 ContextWindow）是 Context 中最重要的结构化单元。
 
                             传统 prompt 往往把文件、搜索结果、任务说明、工具说明全部拼成文本。
-                            OOC 则把这些内容建模为不同类型的 ContextWindow:
-                            - file_window 展示文件。
-                            - knowledge_window 展示知识。
-                            - talk_window 展示对话。
-                            - do_window 展示子线程任务。
-                            - program_window 展示程序执行过程。
-                            - search_window 展示一次 glob / grep 的命中。
-                            - command_exec window 展示一次 command 调用的表单状态。
+                            OOC 则把这些内容建模为不同类型的 **Object**，每个 Object 以 ContextObject 形态出现在 context 中:
+                            - file_object 展示文件（builtin object，位于 \`src/extendable/base/file/\`）
+                            - knowledge_object 展示知识（builtin object，位于 \`src/extendable/base/knowledge/\`）
+                            - program_object 展示程序执行过程（builtin object，位于 \`src/extendable/base/program/\`）
+                            - search_object 展示一次 glob / grep 的命中（builtin object，位于 \`src/extendable/base/search/\`）
+                            - command_exec object 展示一次 method 调用的表单状态（builtin object，位于 \`src/extendable/base/command_exec/\`）
+                            - todo_object 展示待办事项（builtin object，位于 \`src/extendable/base/todo/\`）
+                            - plan_object 展示计划（builtin object，位于 \`src/extendable/base/plan/\`）
+                            - skill_index_object 展示技能索引（builtin object，位于 \`src/extendable/base/skill_index/\`）
+                            - custom object 用户自定义 object（位于 \`stones/<branch>/objects/<id>/\`）
 
-                            因此 Context 不是一段字符串，而是一组可被打开、关闭、更新、执行 command 的窗口对象。
-                            ContextWindow 的完整行动语义归属于 executable。
+                            **重要澄清（2026-06-01）**：\`talk_object\` 和 \`do_object\` **不是**独立的 builtin object，而是**所有 OOC Object 的基础属性/能力**：
+                            - \`talk_object\`：Object 与其他 Object 通信能力的上下文呈现（inbox/outbox/消息历史）
+                            - \`do_object\`：Object 执行任务能力的上下文呈现（子线程/进度/执行状态）
+                            它们仍会以 context window 形式出现在 context 中，但这是 Object 自身状态的呈现，而非独立的 Object 实体。
+                            每个 Object 天然具备 talk 和 do 的方法，无需单独注册为 builtin object。
+
+                            因此 Context 不是一段字符串，而是一组可被打开、关闭、更新、执行 method 的 Object 集合。
+                            ContextObject 的完整行动语义归属于 executable。
                             `,
                         },
                     },
@@ -298,10 +318,15 @@ export const root: DocTreeNode = {
                       - description: 一句话描述，让 LLM 知道这篇知识是否相关。
                       - activates_on: 渐进式披露规则（trigger map）。形态：
                         \`Record<triggerExpr, "show_description" | "show_content">\`。
-                        三类 trigger（详见 src/thinkable/knowledge/triggers.ts）：
-                        - \`"window::<type>"\` — 任意 open 的该类 window 出现时命中（\`"window::root"\` 等价"任何时候"）
-                        - \`"command::<window_type>::<command>"\` — 该 window 上正在开同名 command form 时命中
-                        - \`"super"\` — 仅在 super flow 中命中
+                        **2026-05-28 ooc-6 更新: trigger 格式扩展**，新旧格式兼容到迁移完成:
+                        - 新格式（推荐）:
+                          - \`"object::<type>"\` — 任意 open 的该类 object 出现时命中（\`"object::root"\` 等价"任何时候"）
+                          - \`"method::<object_type>::<method>"\` — 该 object 上正在开同名 method form 时命中
+                          - \`"object_id::<objectId>"\` — 特定 id 的 object 出现时命中
+                          - \`"super"\` — 仅在 super flow 中命中
+                        - 旧格式（兼容）:
+                          - \`"window::<type>"\` → 自动映射为 \`object::<type>\`
+                          - \`"command::<window_type>::<command>"\` → 自动映射为 \`method::<type>::<command>\`
                         多 trigger 命中取 **max**（show_content > show_description）。
                     - markdown body: frontmatter 之外的正文，构成 KnowledgeDoc.body。
 
@@ -310,9 +335,9 @@ export const root: DocTreeNode = {
                     当 LLM 打开某个 command_exec window，并逐步 refine 参数时，系统逐条 evaluate 各篇 knowledge 的 trigger map，命中级别取 max。
 
                     例如:
-                    - 在 root 上打开 program command form 时，\`"command::root::program"\` 命中。
-                    - 任何 talk_window open 时，\`"window::talk"\` 命中——seed 的"我跟人 talk 该露面"类型 knowledge 持续可见。
-                    - 显式 open_knowledge 时，把某篇知识作为 knowledge_window 打开（force-full）。
+                    - 在 root 上打开 program method form 时，\`"method::root::program"\` 命中（旧格式 \`"command::root::program"\` 仍兼容）。
+                    - 任何 talk_object open 时，\`"object::talk"\` 命中——seed 的"我跟人 talk 该露面"类型 knowledge 持续可见。
+                    - 显式 open_knowledge 时，把某篇知识作为 knowledge_object 打开（force-full）。
 
                     这样可以避免所有知识一股脑进入 Context，控制 token 体积，同时让 LLM 在需要时获得足够指导。
 
@@ -326,9 +351,10 @@ export const root: DocTreeNode = {
                     named: {
                         "frontmatter": "markdown 文档头部的结构化元信息",
                         "activates_on": "knowledge 声明自身何时进入 Context 的激活规则（trigger map: 表达式 → 级别）",
-                        "trigger": "activates_on 中的 key 表达式，三类：window::<type> / command::<window_type>::<command> / super",
+                        "trigger": "activates_on 中的 key 表达式，新格式三类：object::<type> / method::<object_type>::<method> / object_id::<id>；旧格式 window::/command:: 兼容到迁移完成",
                         "show_description / show_content": "activates_on 的两种激活级别；多 trigger 命中取 max",
-                        "knowledge_window": "把 knowledge 正文作为 ContextWindow 展示给 LLM 的窗口",
+                        "knowledge_object": "把 knowledge 正文作为 ContextObject 展示给 LLM 的对象（原 knowledge_window）",
+                        "knowledge_window": "knowledge_object 的旧称",
                         "seed knowledge": "stones/<self>/knowledge/，人类设计的初始知识库；进 git review",
                         "sediment knowledge": "pools/<id>/knowledge/{memory,relations}/，运行时沉淀；不进 git",
                         "双源扫描": "synthesizer 同时扫 stone seed 与 pool sediment，统一渐进激活",
@@ -681,29 +707,40 @@ export const root: DocTreeNode = {
             Executable 描述 Object 的行动能力。
 
             Thinkable 让 Object 能思考，Executable 让 Object 能改变世界。
-            在 OOC 中，LLM 不直接调用任意函数，也不直接读写任意状态；它只能通过一组稳定的 tool 原语与 ContextWindow 交互。
+            在 OOC 中，LLM 不直接调用任意函数，也不直接读写任意状态；它只能通过一组稳定的 tool 原语与 ContextObject（= Object in Context）交互。
+
+            **2026-05-28 ooc-6 归一化: Command 与 Object Method 合并**
+            原 "Window Command" 与 "Object Method" 两个概念合并，统一称为 **Method**:
+            - 原 window 上注册的 command 现在是 builtin object 的 method
+            - 原 stone object server/index.ts 中定义的方法现在也是 object 的 method
+            - Method 有两个可见性标记: \`public?: boolean\`（对其他 Object 是否可见）、\`for_ui_access?: boolean\`（对前端 API 是否可调用）
 
             Executable 的核心分层:
             1. Tool 原语层: exec / close / wait / compress，是 LLM 直接看见的稳定接口（4 个）。
-            2. Command 层: do / talk / program / plan / todo / end / open_file / open_knowledge / write_file / glob / grep 等具体行动；form 自身的 refine / submit 也是 command_exec window 上的命令。
-            3. ContextWindow 层: 行动产生或操作的上下文对象，比如 file_window、talk_window、program_window、do_window、plan_window、custom window。
-            4. Registry / Manager 层: 注册不同 window type 的 command、render、close hook、basicKnowledge。
-            5. Knowledge Activation 层: 根据 command path 自动激活执行所需知识。
+            2. Method 层: do / talk / program / plan / todo / end / open_file / open_knowledge / write_file / glob / grep 等具体行动；form 自身的 refine / submit 也是 command_exec object 上的 method。
+            3. ContextObject 层: 行动产生或操作的上下文对象，比如 file_object、talk_object、program_object、do_object、plan_object、custom object。每个 context object 背后都是一个 OOC Object（builtin 或 user-defined）。
+            4. Registry / Manager 层: 注册不同 object type 的 method、readable、onClose hook、basicKnowledge。
+            5. Knowledge Activation 层: 根据 method path 自动激活执行所需知识。
 
             因此，Executable 不是 "给 LLM 一堆工具"。
-            它是一套以 ContextWindow 为中心的行动协议: LLM 通过 exec 在某 window 上调一条命令；
-            args 齐全立即执行，args 不齐时系统创建一个 command_exec form，LLM 后续通过
+            它是一套以 Object 为中心的行动协议: LLM 通过 exec 在某 object 上调一个 method；
+            args 齐全立即执行，args 不齐时系统创建一个 command_exec form（也是一个 builtin object），LLM 后续通过
             \`exec(form_id, "refine"/"submit")\` 推进。
             `,
             named: {
-                "Executable": "Object 的行动能力维度，定义 LLM 如何通过 tool、command、ContextWindow 改变系统状态",
-                "Tool": "LLM 直接可调用的稳定原语：exec / close / wait",
-                "Command": "具体行动单元，挂在某 window 上注册；如 do/talk/program 在 root 上、refine/submit 在 command_exec 上",
-                "ContextWindow": "可展示、可操作、可挂载 command 的上下文窗口对象",
-                "WindowType": "ContextWindow 的类型分支，如 root/file/program/talk/do/knowledge/search/plan/custom",
-                "CommandExec": "一次 command 调用过程对应的临时窗口；自身注册 refine/submit 命令",
-                "WindowRegistry": "注册各类 window type 行为的机制",
-                "WindowManager": "管理 thread.contextWindows 增删改查和生命周期的机制",
+                "Executable": "Object 的行动能力维度，定义 LLM 如何通过 tool、method、ContextObject 改变系统状态",
+                "Tool": "LLM 直接可调用的稳定原语：exec / close / wait / compress",
+                "Method": "具体行动单元（2026-05-28 归一化，原 Command 与 Object Method 合并），挂在某 object 上注册；如 do/talk/program 在 root 上、refine/submit 在 command_exec 上",
+                "Command": "Method 的旧称（2026-05-28 前），概念已与 Object Method 合并",
+                "ContextObject": "可展示、可操作、可挂载 method 的上下文对象；本质是 OOC Object 出现在 context 中的形态",
+                "ContextWindow": "ContextObject 的旧称（2026-05-28 前），概念已统一为 ContextObject",
+                "ObjectType": "ContextObject 的类型分支，如 root/file/program/talk/do/knowledge/search/plan/custom",
+                "WindowType": "ObjectType 的旧称（2026-05-28 前）",
+                "CommandExec": "一次 method 调用过程对应的临时对象（type=command_exec）；自身注册 refine/submit method",
+                "ObjectRegistry": "注册各类 object type 行为的机制（原 WindowRegistry）",
+                "ObjectManager": "管理 thread context objects 增删改查和生命周期的机制（原 WindowManager）",
+                "WindowRegistry": "ObjectRegistry 的旧称",
+                "WindowManager": "ObjectManager 的旧称",
             },
             children: {
                 "tools": {
@@ -4201,6 +4238,138 @@ export const root: DocTreeNode = {
         },
     },
     patches: {
+        "object_unification": {
+            title: "Object 归一化（ooc-6, 2026-05-28）: ContextWindow = Object in Context",
+            content: `
+            本次归一化的核心主张: **ContextWindow 就是 OOC Object 出现在 context 中的形态**。
+
+            概念合并:
+            1. ContextWindow 不再是独立于 Object 的临时数据结构，每个 window 背后都对应一个 Object（builtin 或 user-defined）
+            2. Window command 与 Object method 合并，统一称为 **Method**
+            3. 原 \`src/executable/windows/\` 下的各 window type 改为 builtin objects，位于 \`src/extendable/base/<type>/\`
+            4. 原 stone object 的 \`server/\` → \`executable/\`（方法实现），\`client/\` → \`visible/\`（UI 实现），\`readme.md\` → \`readable.md\`（静态展示）
+            5. 新增 \`readable.ts\`：动态上下文渲染函数，控制 Object 如何以 XML 形式展示给 LLM
+            6. 新增 **prototype chain**：Object 之间可以继承 methods / UI / readable
+            7. 新增 method 可见性标记: \`public?: boolean\`（对其他 Object 是否可见）、\`for_ui_access?: boolean\`（对前端 API 是否可调用）
+            8. 运行时创建的 objects 持久化在 \`flows/<sid>/objects/<oid>/context/<childId>/\`，形成 Context Object Tree
+            9. 取消 relation window，改为 peer/children 对象自动以引用形式进入 context
+
+            设计目标: 消除概念冗余，让 Object 成为 OOC 系统中唯一的一等实体。
+            实现原则: 小步迭代，每步可回滚；Alias first，migrate one at a time。
+
+            完整设计: docs/superpowers/specs/2026-05-28-ooc-object-unification-design.md
+            实施计划: docs/superpowers/plans/2026-05-28-ooc-object-unification-plan.md
+            `,
+            named: {
+                "object unification": "ooc-6 核心概念归一化: ContextWindow = Object in Context, Command = Method",
+                "Context Object Tree": "运行时创建的对象形成的嵌套结构，持久化在 context/ 目录下",
+            },
+        },
+        "prototype_chain": {
+            title: "Prototype Chain: Object 之间的方法/UI/readable 继承",
+            content: `
+            Object 可以通过 \`self.md\` frontmatter 声明 \`prototype: "<objectId>"\`，继承原型对象的：
+            - Methods（executable/ 下的方法）
+            - UI 组件（visible/ 下的组件）
+            - Readable 函数（readable.ts）
+
+            继承规则（类似 JavaScript 原型链）:
+            - 自身定义覆盖原型定义
+            - 方法查找顺序: self → prototype → prototype.prototype → ... → builtin base
+            - \`public\` 和 \`for_ui_access\` 标记在继承时保留，可被覆盖
+            - 循环引用检测: 注册时检测循环并抛错
+
+            用途:
+            - 同类 Object 共享基础方法（如所有 file-like object 继承 base_file 的 read/write 方法）
+            - Agent 专业化分层（base_agent → specialized_agent → concrete_agent）
+            - 减少重复代码，统一行为契约
+            `,
+            named: {
+                "prototype": "Object 的原型对象 id，用于继承 methods/UI/readable",
+                "prototype chain": "原型链查找路径: self → prototype → prototype.prototype → ...",
+            },
+        },
+        "readable_concept": {
+            title: "Readable: Object 控制自己在 Context 中的展示方式",
+            content: `
+            Readable 是 ooc-6 新增的概念，让 Object 可以控制自己如何在 Context 中以 XML 形式展示给 LLM。
+
+            两种形态:
+            1. \`readable.md\`：静态文本展示（对应原 readme.md，2026-05-28 重命名）
+            2. \`readable.ts\`：动态函数 \`(ctx) => XmlNode[] | Promise<XmlNode[]>\`
+
+            渲染优先级: readable.ts > readable.md > 默认渲染（title + status + methods 列表）
+
+            设计意图:
+            - 让 Object 有"自我表达"能力，而不是被外部渲染器决定如何展示
+            - 动态展示可以根据 Object 当前状态（如 file 的当前 viewport、program 的执行历史）调整展示内容
+            - readable.ts 与 visible/index.tsx 形成对称: 前者控制 LLM 看到的内容，后者控制人类看到的 UI
+            `,
+            named: {
+                "readable": "Object 的自我展示能力，含静态 readable.md 和动态 readable.ts 两种形态",
+                "readable.md": "Object 的静态展示文本（原 readme.md 重命名）",
+                "readable.ts": "Object 的动态展示函数，根据当前状态计算 XML 展示",
+            },
+        },
+        "method_visibility": {
+            title: "Method Visibility: public 与 for_ui_access 标记",
+            content: `
+            Object 的每个 method 有两个可选的可见性标记:
+
+            1. \`public?: boolean\`（默认 false）
+               - true: 该方法可以被其他 Object 在其 context 中看见并调用
+               - false: 仅在 Object 自己的 context 中展示该方法
+               - 用途: 区分"内部实现方法"和"对外协作接口"
+
+            2. \`for_ui_access?: boolean\`（默认 false）
+               - true: 该方法可以通过前端 HTTP API 调用（对应原 llm_methods 概念）
+               - false: 仅能被 LLM 通过 exec tool 调用
+               - 用途: 区分"LLM 内部操作方法"和"人类可通过 UI 触发的方法"
+
+            可见性过滤时机:
+            - Context 渲染时: 其他 Object 的方法列表仅展示 public=true 的
+            - HTTP API 调用时: 检查 for_ui_access=true，否则返回 403
+            - LLM 调用自己 Object 的方法时: 不过滤
+
+            设计原则: 默认私有（deny-by-default），需要暴露时显式标记。
+            `,
+            named: {
+                "public method": "对其他 Object 可见并可调用的方法",
+                "for_ui_access method": "可以通过前端 HTTP API 调用的方法",
+            },
+        },
+        "runtime_object_tree": {
+            title: "Runtime Object Tree: context/ 嵌套目录结构",
+            content: `
+            运行中创建的 Object 不再是匿名的内存数据结构，而是持久化在 flow 目录下，形成 **Context Object Tree**:
+
+            \`\`\`
+            flows/<sessionId>/objects/<objectId>/
+            ├── .flow.json
+            ├── context/                    # 本对象 context 中出现的子对象
+            │   ├── <newObjectId1>/         # 第一个子对象（如 file object）
+            │   │   ├── .flow.json
+            │   │   ├── state.json          # 对象状态（path/viewport/content 等）
+            │   │   └── context/            # 可继续嵌套
+            │   │       └── <newObjectId2>/
+            │   └── <newObjectId3>/
+            └── threads/
+                └── <threadId>/
+                    └── thread.json
+            \`\`\`
+
+            对应关系:
+            - 每个 \`context/<childId>/\` 对应原 \`thread.contextWindows[]\` 中的一个 window
+            - 嵌套结构对应原 \`parentWindowId\` 形成的树
+            - \`state.json\` 存储对象的运行时状态（type-specific 字段）
+
+            迁移策略: 双读→单写→最终移除旧字段。详见实施计划 Phase 5。
+            `,
+            named: {
+                "context/": "flow object 下的子目录，存放运行时创建的 context objects",
+                "state.json": "context object 的运行时状态文件",
+            },
+        },
         "dimension_criterion": {
             title: "维度判定轴 - self-constitutive",
             content: `

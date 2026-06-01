@@ -432,4 +432,36 @@ describe("app server routes", () => {
     const body = await res.json();
     expect(body.error.code).toBe("INVALID_INPUT");
   });
+
+  // ooc-6 Phase 7: window → object terminology migration. Both routes return identical content.
+  test("GET /api/windows/_shared/types and /api/objects/_shared/types return identical catalog", async () => {
+    const { app } = await makeAppWithBaseDir();
+
+    const [windowsRes, objectsRes] = await Promise.all([
+      app.handle(new Request("http://localhost/api/windows/_shared/types")),
+      app.handle(new Request("http://localhost/api/objects/_shared/types")),
+    ]);
+
+    expect(windowsRes.status).toBe(200);
+    expect(objectsRes.status).toBe(200);
+
+    const windowsBody = await windowsRes.json() as { items: Array<{ type: string }> };
+    const objectsBody = await objectsRes.json() as { items: Array<{ type: string }> };
+
+    expect(objectsBody.items.length).toBe(windowsBody.items.length);
+    const windowsTypes = windowsBody.items.map((i) => i.type).sort();
+    const objectsTypes = objectsBody.items.map((i) => i.type).sort();
+    expect(objectsTypes).toEqual(windowsTypes);
+    // Should include key builtin types
+    expect(objectsTypes).toContain("root");
+    expect(objectsTypes).toContain("command_exec");
+    expect(objectsTypes).toContain("custom");
+    expect(objectsTypes).toContain("todo");
+    expect(objectsTypes).toContain("file");
+    expect(objectsTypes).toContain("knowledge");
+    expect(objectsTypes).toContain("search");
+    expect(objectsTypes).toContain("skill_index");
+    expect(objectsTypes).toContain("plan");
+    expect(objectsTypes).toContain("program");
+  });
 });

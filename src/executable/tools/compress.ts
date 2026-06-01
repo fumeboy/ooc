@@ -409,7 +409,7 @@ export async function handleCompressTool(
       syntheticMissing.length > 0
         ? `\n注意: ${syntheticMissing.length} 个 missing id 是 synthetic window (每轮由 synthesizer 重新派生,不持久化到 thread.contextWindows),无法被 compress 命中:\n` +
           `  ${syntheticMissing.slice(0, 5).join(", ")}${syntheticMissing.length > 5 ? ", ..." : ""}\n` +
-          `relation_window 想减负请直接 close 对应的 talk_window(没有 talk_window 的 hierarchical default 不可关 — 它由 sibling/child stone 树推出);skill_index_window 由 skills 索引派生,改 stone 配置间接收敛。`
+          `relation_window 想减负请直接 close 对应的 talk_window(没有 talk_window 的 hierarchical default 不可关 — 它由 sibling/child stone 树推出);peer_object window 同样由 peer Object 自动派生,close 会在下一轮重新注入;skill_index_window 由 skills 索引派生,改 stone 配置间接收敛。`
         : "";
     return errorOutput(
       `compress: 无 window 实际被压缩 (missing=${result.missing.length}, alreadyAtLevel=${result.alreadyAtLevel.length}, rejected=${result.rejected.length})。` +

@@ -100,7 +100,7 @@ export async function executeOpenKnowledgeCommand(
   };
 
   if (ctx.manager) {
-    ctx.manager.insertTypedWindow(knowledgeWindow);
+    ctx.manager.insertTypedWindow(knowledgeWindow, ctx.thread);
   } else {
     thread.contextWindows = [...(thread.contextWindows ?? []), knowledgeWindow];
   }

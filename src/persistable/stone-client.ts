@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { objectDir, type FlowObjectRef, type StoneObjectRef } from "./common";
-import { clientDir } from "./stone-object";
+import { clientDir, visibleDir } from "./stone-object";
 
 /**
  * client 持久化薄壳。
@@ -14,8 +14,17 @@ import { clientDir } from "./stone-object";
  */
 
 /** Stone 的 client 入口 tsx 绝对路径。 */
+/** @deprecated Use visibleIndexFile instead (2026-05-28 ooc-6 Object Unification). client/ is being renamed to visible/. */
 export function clientIndexFile(ref: StoneObjectRef): string {
   return join(clientDir(ref), "index.tsx");
+}
+
+/**
+ * Stone 的 visible/index.tsx 绝对路径（原 client/index.tsx 重命名，2026-05-28 ooc-6）。
+ * 存放 Object 的 UI 组件实现。
+ */
+export function visibleIndexFile(ref: StoneObjectRef): string {
+  return join(visibleDir(ref), "index.tsx");
 }
 
 /** Flow object 的 client/pages 目录绝对路径。 */
@@ -32,15 +41,42 @@ export function flowClientPageFile(ref: FlowObjectRef, pageName: string): string
 }
 
 /** 读取 stone 的 client/index.tsx；不存在返回 undefined。 */
+/** @deprecated Use readVisibleSource instead (2026-05-28 ooc-6 Object Unification). */
 export async function readStoneClientSource(ref: StoneObjectRef): Promise<string | undefined> {
   return readSourceOrUndefined(clientIndexFile(ref));
 }
 
+/**
+ * 读取 stone 的 visible/index.tsx；不存在返回 undefined。
+ * 迁移期双读：优先 visible/，fallback 到 client/。
+ */
+export async function readVisibleSource(ref: StoneObjectRef): Promise<string | undefined> {
+  const result = await readSourceOrUndefined(visibleIndexFile(ref));
+  if (result !== undefined) return result;
+  // Migration fallback: try old client/ path
+  return readSourceOrUndefined(clientIndexFile(ref));
+}
+
 /** 写入 stone 的 client/index.tsx，自动 mkdir client/。 */
+/** @deprecated Use writeVisibleSource instead (2026-05-28 ooc-6 Object Unification). */
 export async function writeStoneClientSource(ref: StoneObjectRef, code: string): Promise<void> {
   const file = clientIndexFile(ref);
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, code, "utf8");
+}
+
+/**
+ * 写入 stone 的 visible/index.tsx，自动 mkdir visible/。
+ * 迁移期双写：同时写 visible/ 和 client/。
+ */
+export async function writeVisibleSource(ref: StoneObjectRef, code: string): Promise<void> {
+  const file = visibleIndexFile(ref);
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, code, "utf8");
+  // Migration dual-write: also write to old client/ path
+  const oldFile = clientIndexFile(ref);
+  await mkdir(dirname(oldFile), { recursive: true });
+  await writeFile(oldFile, code, "utf8");
 }
 
 /** 读取 flow object 的某个 page tsx；不存在返回 undefined。 */

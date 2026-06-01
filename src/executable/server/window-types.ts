@@ -17,15 +17,16 @@
 import type {
   CommandExecutionContext,
   CommandTableEntry,
+  ObjectMethod,
 } from "../windows/_shared/command-types.js";
-import type { OnCloseContext, RenderContext } from "../windows/_shared/registry.js";
+import type { OnCloseContext, ReadableFn, RenderContext } from "../windows/_shared/registry.js";
 import type { XmlNode } from "../../thinkable/context/xml.js";
 import type { ProgramSelf } from "./types.js";
 
 /** custom window 的 commands[name].exec 收到的 ctx —— 标准 CommandExecutionContext + self。 */
 export type CustomCommandContext = CommandExecutionContext & { self: ProgramSelf };
 
-/** Object 在 server/index.ts 里 `export const window` 的形状。 */
+/** Object 在 server/index.ts 里 `export const window` 的形状（2026-05-28 ooc-6 更新）。 */
 export interface ObjectWindowDefinition {
   /** 出现在 context 里的标题 */
   title?: string;
@@ -36,10 +37,25 @@ export interface ObjectWindowDefinition {
    * 返回 `XmlNode[]`——即 `<window ...>` 包裹的 children 序列。
    */
   renderXml?: (ctx: RenderContext) => XmlNode[] | Promise<XmlNode[]>;
+  /**
+   * 动态上下文渲染函数（2026-05-28 ooc-6 新增，对应 readable.ts）；
+   * 优先级高于 renderXml 和 readable.md。
+   */
+  readable?: ReadableFn;
   /** 该 window 出现时合成的协议知识；可静态字符串或动态函数 */
   basicKnowledge?: string | ((ctx: { self: ProgramSelf }) => string);
   /** close 触发 hook；缺省 = 直接释放 */
   onClose?: (ctx: OnCloseContext) => boolean | void;
-  /** Object 自定义命令字典；exec ctx 会被 dispatcher 注入 `self`。 */
-  commands?: Record<string, CommandTableEntry>;
+  /**
+   * 原型 object id（2026-05-28 ooc-6 新增）；
+   * 继承原型的 methods / UI / readable。
+   */
+  prototype?: string;
+  /** Object 自定义命令字典（2026-05-28 更新为 ObjectMethod，支持 public/for_ui_access）。 */
+  commands?: Record<string, ObjectMethod>;
+  /**
+   * Alias for commands（2026-05-28 ooc-6 过渡期间支持 `methods` 作为 `commands` 别名）。
+   * 某些已迁移 stones 使用 methods 字段；加载时会合并到 commands。
+   */
+  methods?: Record<string, ObjectMethod>;
 }

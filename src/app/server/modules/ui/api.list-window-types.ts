@@ -1,5 +1,7 @@
 /**
- * GET /api/windows/types — 列出所有已注册 window type 与其上的 commands。
+ * GET /api/windows/_shared/types — 列出所有已注册 window type 与其上的 commands。
+ * GET /api/objects/_shared/types — 别名(2026-05-28 ooc-6 Object Unification):window 语义
+ *   正在被 object 语义替代,两个路径返回相同内容。新代码优先使用 /api/objects/_shared/types。
  *
  * 用途:前端 WindowDetail 想展示某 window type 上能用的 command 清单(每个 type 不同),
  * 一次性拉到 catalog 后客户端按 type 索引即可,无需每次 getThread 都嵌入。
@@ -34,29 +36,30 @@ export type WindowTypeCatalogEntry = {
 };
 
 export function listWindowTypesApi() {
-  return new Elysia({ name: "ooc.windows.api.list-types" }).get(
-    "/windows/_shared/types",
-    (): { items: WindowTypeCatalogEntry[] } => {
-      const types = listRegisteredWindowTypes();
-      const items: WindowTypeCatalogEntry[] = types.map((type) => {
-        const def = getWindowTypeDefinition(type);
-        const commands: WindowCommandEntry[] = Object.entries(def.commands)
-          .map(([name, entry]) => {
-            const description = extractBasicDescription(entry);
-            const out: WindowCommandEntry = { name };
-            if (description) out.description = description;
-            return out;
-          })
-          .sort((a, b) => a.name.localeCompare(b.name));
-        const out: WindowTypeCatalogEntry = { type, commands };
-        if (def.basicKnowledge) {
-          out.basicKnowledgeSummary = summarize(def.basicKnowledge);
-        }
-        return out;
-      });
-      return { items };
-    },
-  );
+  const handler = (): { items: WindowTypeCatalogEntry[] } => {
+    const types = listRegisteredWindowTypes();
+    const items: WindowTypeCatalogEntry[] = types.map((type) => {
+      const def = getWindowTypeDefinition(type);
+      const commands: WindowCommandEntry[] = Object.entries(def.commands)
+        .map(([name, entry]) => {
+          const description = extractBasicDescription(entry);
+          const out: WindowCommandEntry = { name };
+          if (description) out.description = description;
+          return out;
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+      const out: WindowTypeCatalogEntry = { type, commands };
+      if (def.basicKnowledge) {
+        out.basicKnowledgeSummary = summarize(def.basicKnowledge);
+      }
+      return out;
+    });
+    return { items };
+  };
+
+  return new Elysia({ name: "ooc.windows.api.list-types" })
+    .get("/windows/_shared/types", handler)
+    .get("/objects/_shared/types", handler);
 }
 
 /**

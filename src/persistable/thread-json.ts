@@ -4,6 +4,7 @@ import { threadDir, toJson, type FlowObjectRef, type ThreadPersistenceRef } from
 import type { ThreadContext } from "../thinkable/context";
 import { initContextWindows } from "../executable/windows/_shared/init";
 import { listRegisteredWindowTypes } from "../executable/windows/_shared/registry";
+import { readContextObjectsRecursive } from "./flow-context";
 
 /**
  * thread.json 的最小读写。
@@ -99,6 +100,43 @@ export async function readThread(
       contextWindows,
       persistence,
     };
+    // 2026-05-28 ooc-6 Phase 5: 双读 context/ 目录，合并 runtime-created objects
+    // context/ 优先于 thread.contextWindows（新写入的更权威）
+    try {
+      const contextObjs = await readContextObjectsRecursive(ref);
+      if (contextObjs.size > 0) {
+        const knownTypes = new Set(listRegisteredWindowTypes());
+        const merged: typeof contextWindows = [];
+        const seenIds = new Set<string>();
+        // 先加 context/ 里的（更权威）
+        for (const win of contextObjs.values()) {
+          if (knownTypes.has(win.type)) {
+            merged.push(win);
+            seenIds.add(win.id);
+          } else {
+            console.warn(
+              `[readThread] context/ 中发现未注册 type: ${win.id}=${win.type}，跳过`,
+            );
+          }
+        }
+        // 再加 thread.contextWindows 里的（context/ 里没有的）
+        for (const win of contextWindows) {
+          if (!seenIds.has(win.id)) {
+            merged.push(win);
+          }
+        }
+        restored.contextWindows = merged;
+        if (contextObjs.size > 0) {
+          console.info(
+            `[readThread] 从 context/ 合并 ${contextObjs.size} 个 runtime object，合并后共 ${merged.length} 个窗口`,
+          );
+        }
+      }
+    } catch (e) {
+      console.warn(
+        `[readThread] 读取 context/ 目录失败（不阻塞）: ${(e as Error).message}`,
+      );
+    }
     // 兜底：缺 creator window 时补一个（spec § 初始 creator 对话 window）
     initContextWindows(restored, {
       creatorThreadId: restored.creatorThreadId,

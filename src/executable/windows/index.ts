@@ -22,6 +22,9 @@ export type {
   RelationWindow,
   PlanWindow,
   PlanWindowStep,
+  // 2026-05-28 ooc-6 Object Unification aliases
+  ObjectType,
+  ContextObject,
 } from "./_shared/types.js";
 
 export {
@@ -36,6 +39,16 @@ export {
   getWindowTypeDefinition,
   listRegisteredWindowTypes,
   assertAllRenderHooksRegistered,
+  // 2026-05-28 ooc-6 Object Unification aliases
+  registerObjectType,
+  getObjectDefinition,
+  listRegisteredObjectTypes,
+  assertAllObjectDefinitionsRegistered,
+  // Prototype chain & visibility (Phase 2)
+  parseObjectPrototype,
+  resolvePrototypeChain,
+  resolveObjectMethods,
+  filterMethodsByVisibility,
 } from "./_shared/registry.js";
 
 export type {
@@ -44,12 +57,18 @@ export type {
   OnCloseContext,
   RenderHook,
   RenderContext,
+  // 2026-05-28 ooc-6 Object Unification aliases
+  ObjectDefinition,
+  ReadableFn,
+  MethodVisibilityContext,
 } from "./_shared/registry.js";
 
 export type {
   CommandTableEntry,
   CommandExecutionContext,
   CommandKnowledgeEntries,
+  // 2026-05-28 ooc-6 Object Unification aliases
+  ObjectMethod,
 } from "./_shared/command-types.js";
 
 export { WindowManager } from "./_shared/manager.js";
@@ -70,25 +89,28 @@ export {
 //
 // root 必须最先 load，因为其它 window type 的 onClose / 注册可能间接依赖 ROOT_COMMANDS
 // （目前没有此依赖，但保留这一顺序更稳妥）。
-import "./root/index.js";
-import "./command_exec/index.js";
+// root 必须最先 load，因为其它 window type 的 onClose / 注册可能间接依赖 ROOT_COMMANDS
+// （目前没有此依赖，但保留这一顺序更稳妥）。
+// 2026-05-28 ooc-6: root 已迁移为 builtin object
+import "../../extendable/base/root/index.js";
+
+// do / talk 是所有 Object 的固有能力，不迁移为独立 builtin object（但仍以 context window 形态呈现）
 import "./do/index.js";
-import "./todo/index.js";
 import "./talk/index.js";
-import "./program/index.js";
-import "./file/index.js";
-import "./knowledge/index.js";
-import "./search/index.js";
+
+// relation window 将在 Phase 6 移除，替换为 peer/children 自动注入
 import "./relation/index.js";
-import "./custom/index.js";
-import "./skill_index/index.js";
-import "./plan/index.js";
+
+// 2026-05-28 ooc-6: 其余 builtin types 已迁移为 builtin objects，通过 extendable/index.js → base/index.js 加载
+// Extendable 子系统 — 第三方 / 外部世界集成（lark 等）通过 barrel 自注册到 WindowRegistry。
+// 必须在 builtin window type 全部加载完成后、boot-time renderXml 校验之前 import。
+import "../../extendable/index.js";
 
 // Extendable 子系统 — 第三方 / 外部世界集成（lark 等）通过 barrel 自注册到 WindowRegistry。
 // 必须在 builtin window type 全部加载完成后、boot-time renderXml 校验之前 import。
 import "../../extendable/index.js";
 
-// Boot-time 校验：所有 window type 必须配齐 renderXml hook（render.ts 调度器要求）。
-// 缺失会在此 fail-loud（根因 #4 接口 explicit），不让"空白 XML"问题流到 LLM。
-import { assertAllRenderHooksRegistered as _assertHooks } from "./_shared/registry.js";
+// Boot-time 校验：所有 window type 必须配齐 renderXml 或 readable hook（render.ts 调度器要求）。
+// 2026-05-28 ooc-6: 有 readable 的 object 可以缺省 renderXml。
+import { assertAllObjectDefinitionsRegistered as _assertHooks } from "./_shared/registry.js";
 _assertHooks();

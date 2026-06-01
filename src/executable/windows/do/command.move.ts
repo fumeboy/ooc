@@ -205,7 +205,7 @@ async function executeMove(ctx: CommandExecutionContext): Promise<string | undef
   selfWindows[sourceIdx] = lentOut;
   self.contextWindows = selfWindows;
   // 同步 mgr 状态（避免后续 toData() 把它恢复为旧 owner）
-  ctx.manager?.upsertWindow(lentOut);
+  ctx.manager?.upsertWindow(lentOut, ctx.thread);
   // peer 获得完整 owner 副本（不带 sharing）
   const ownerCopy: ContextWindow = { ...source };
   delete (ownerCopy as { sharing?: SharingState }).sharing;

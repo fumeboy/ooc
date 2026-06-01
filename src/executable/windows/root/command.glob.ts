@@ -116,7 +116,7 @@ export async function executeGlobCommand(
   };
 
   if (ctx.manager) {
-    ctx.manager.insertTypedWindow(sw);
+    ctx.manager.insertTypedWindow(sw, ctx.thread);
   } else {
     thread.contextWindows = [...(thread.contextWindows ?? []), sw];
   }

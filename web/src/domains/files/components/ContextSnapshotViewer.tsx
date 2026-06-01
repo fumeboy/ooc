@@ -59,7 +59,7 @@ import { dispatchNavigateToWindow, subscribeNavigateToWindow } from "../navigati
 import { FileEditDiffView, parseEditArgs } from "./FileEditDiffView";
 import { FileWindowContentView } from "./FileWindowContentView";
 import { MarkdownContent } from "../../../shared/ui/MarkdownContent";
-import { useDisplayName, useWindowTypes } from "../../objects";
+import { useDisplayName, useObjectTypes } from "../../objects";
 
 function previewText(value: string, limit = 88): string {
   const singleLine = value.replace(/\s+/g, " ").trim();
@@ -440,15 +440,15 @@ function RelationWindowDetail({
 }
 
 /**
- * Window 上可用的 command 清单(chips)。catalog 来自 `/api/windows/types`,缓存在
- * useWindowTypes 内,不随 thread polling 重拉。空数组(如 todo)隐藏整段;catalog
+ * Window 上可用的 command 清单(chips)。catalog 来自 `/api/objects/_shared/types`,缓存在
+ * useObjectTypes 内,不随 thread polling 重拉。空数组(如 todo)隐藏整段;catalog
  * 还没到位先不渲染,避免 "0 commands" 闪烁。
  *
  * Hover chip 时弹一个 markdown tooltip 展示 command 描述(取自后端 *_BASIC 路径,
  * 通常 200~1500 字符)。无 description 的 chip 退化成只显示名字。
  */
 function WindowCommandsChips({ type }: { type: string }) {
-  const catalog = useWindowTypes();
+  const catalog = useObjectTypes();
   const entry = catalog?.[type];
   if (!entry || entry.commands.length === 0) return null;
   // 历史上这里有一行 hint："commands open(parent_window_id=..., command=..., args={...})"

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { stoneDir, STONE_CHILDREN_SUBDIR, STONE_OBJECTS_SUBDIR, toJson, type StoneObjectRef } from "./common";
 import { STONES_MAIN_BRANCH } from "./stone-bootstrap";
 import { selfFile } from "./stone-self";
-import { readmeFile } from "./stone-readme";
+import { readmeFile, readableFile } from "./stone-readme";
 
 export { stoneDir };
 
@@ -21,13 +21,31 @@ export function stoneMetadataFile(ref: StoneObjectRef): string {
 }
 
 /** stone 的 server 目录。 */
+/** @deprecated Use executableDir instead (2026-05-28 ooc-6 Object Unification). server/ is being renamed to executable/. */
 export function serverDir(ref: StoneObjectRef): string {
   return join(stoneDir(ref), "server");
 }
 
+/**
+ * stone 的 executable 目录（原 server/ 重命名，2026-05-28 ooc-6）。
+ * 存放 Object 的 methods 实现。
+ */
+export function executableDir(ref: StoneObjectRef): string {
+  return join(stoneDir(ref), "executable");
+}
+
 /** stone 的 client 目录。 */
+/** @deprecated Use visibleDir instead (2026-05-28 ooc-6 Object Unification). client/ is being renamed to visible/. */
 export function clientDir(ref: StoneObjectRef): string {
   return join(stoneDir(ref), "client");
+}
+
+/**
+ * stone 的 visible 目录（原 client/ 重命名，2026-05-28 ooc-6）。
+ * 存放 Object 的 UI 组件实现。
+ */
+export function visibleDir(ref: StoneObjectRef): string {
+  return join(stoneDir(ref), "visible");
 }
 
 /**
@@ -72,18 +90,19 @@ export function ancestorObjectIds(objectId: string): string[] {
 }
 
 /**
- * 创建 stone 的最小可见骨架：`.stone.json` + `self.md` + `readme.md`（**空文件占位**）。
+ * 创建 stone 的最小可见骨架：`.stone.json` + `self.md` + `readable.md`（**空文件占位**）。
  *
- * 创建的初始文件（2026-05-24 修订，visibility-first）:
+ * 创建的初始文件（2026-05-28 修订，ooc-6 Object Unification）:
  * - `.stone.json`：元数据
  * - `self.md`：**空文件**——`ls stoneDir` 可见；readSelf 返回 ""；
  *   `loadSelfInstructions` 视 empty 等价 undefined，故不会注入空 instructions。
  *   正文由 Object 后续主动 writeSelf 写入。
- * - `readme.md`：**空文件**——同上语义；正文由 Object 后续主动 writeReadme 写入。
+ * - `readable.md`：**空文件**——同上语义；正文由 Object 后续主动 writeReadable 写入。
+ *   （原 readme.md 已重命名为 readable.md，2026-05-28）
  *
  * **不预创**的目录（按需 lazy 创建，避免 `ls` 看到一堆空目录引发"骨架不全"误判）:
- * - server/  ← 写第一个 server method 时由 stone-server.ts 自动 mkdir
- * - client/  ← 写第一个 client 入口时由 stone-client.ts 自动 mkdir
+ * - executable/（原 server/） ← 写第一个 executable method 时自动 mkdir
+ * - visible/（原 client/） ← 写第一个 visible 入口时自动 mkdir
  * - knowledge/ ← seed knowledge 完全可选；首次 write_file 时 lazy mkdir
  *
  * **不再创建** files/（2026-05-23 起迁到 pool；详见 createPoolObject）。
@@ -96,6 +115,8 @@ export async function createStoneObject(ref: StoneObjectRef): Promise<StoneObjec
   await writeFile(stoneMetadataFile(ref), toJson(metadata), "utf8");
 
   await writeFile(selfFile(ref), "", "utf8");
+  await writeFile(readableFile(ref), "", "utf8");
+  // Legacy readme.md created for backward compatibility during migration
   await writeFile(readmeFile(ref), "", "utf8");
 
   return ref;

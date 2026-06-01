@@ -1,4 +1,8 @@
 /**
+ * @deprecated 2026-05-28 ooc-6 Phase 6: relation_window 已被 peer Object 自动注入机制替代。
+ * peer/children Object 本身会作为 custom window 自动进入 context,通过 edit_relation 命令
+ * 替代原 relation_window.edit。本文件保留仅用于向后兼容,Phase 9 cleanup 时移除。
+ *
  * relation_window — peer 关系的专属 window type 与 edit 命令面。
  *
  * 设计依据:plan witty-bubbling-pebble.md / spec 2026-05-20 relation-window-design。

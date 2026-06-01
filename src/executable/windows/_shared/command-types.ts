@@ -36,6 +36,7 @@ export type CommandExecOutcome =
   | { ok: true; result?: string }
   | { ok: false; error: string };
 
+/** @deprecated Use ObjectMethod instead (2026-05-28 ooc-6 Object Unification). CommandTableEntry is being renamed to ObjectMethod. */
 export interface CommandTableEntry {
   /** 该 command 可能产出的所有 path 集合（用于反向索引建表 + 文档目录） */
   paths: string[];
@@ -81,6 +82,25 @@ export interface CommandTableEntry {
     | string
     | undefined
     | CommandExecOutcome;
+}
+
+/**
+ * Object Method 类型（原 CommandTableEntry 扩展，2026-05-28 ooc-6 Object Unification）。
+ * 合并了 Window Command 与 Object Server Method 的概念，增加可见性标记。
+ */
+export interface ObjectMethod extends CommandTableEntry {
+  /**
+   * 是否对其他 Object 可见并可调用。
+   * - true: 该方法在其他 Object 的 context 中展示，可被 exec 调用
+   * - false（默认）: 仅在 Object 自己的 context 中展示
+   */
+  public?: boolean;
+  /**
+   * 是否可通过前端 HTTP API 调用（对应原 llm_methods 概念）。
+   * - true: 可通过 POST /api/objects/:id/exec 调用
+   * - false（默认）: 仅能被 LLM 通过 exec tool 调用
+   */
+  for_ui_access?: boolean;
 }
 
 /**

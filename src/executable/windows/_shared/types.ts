@@ -17,7 +17,17 @@
  */
 
 /** Window 类型枚举；新增类型必须同步在 WINDOW_REGISTRY 中注册。 */
+/** @deprecated Use ObjectType instead (2026-05-28 ooc-6 Object Unification). WindowType is being renamed to ObjectType. */
 export type WindowType = "root" | "command_exec" | "do" | "todo" | "talk" | "program" | "file" | "knowledge" | "search" | "relation" | "custom" | "skill_index" | "feishu_chat" | "feishu_doc" | "plan";
+
+/**
+ * Object 类型枚举（原 WindowType 重命名，2026-05-28 ooc-6 Object Unification）。
+ *
+ * 注意："relation" 类型已在 Phase 6 被 peer Object 自动注入机制替代,保留仅用于向后兼容,
+ * Phase 9 cleanup 时移除。新代码不应使用 "relation" 类型,peer/children Object 会自动以
+ * type="custom"、objectId=<peerId> 的形式进入 context。
+ */
+export type ObjectType = Exclude<WindowType, "relation">;
 
 /**
  * Window 状态值汇总。
@@ -162,6 +172,7 @@ import type { FeishuChatWindow } from "../../../extendable/lark/feishu-chat/type
 import type { FeishuDocWindow } from "../../../extendable/lark/feishu-doc/types.js";
 
 /** 所有 ContextWindow 类型的 discriminated union。新增 type 后必须扩这里 + WINDOW_REGISTRY。 */
+/** @deprecated Use ContextObject instead (2026-05-28 ooc-6 Object Unification). ContextWindow is being renamed to ContextObject. */
 export type ContextWindow =
   | RootWindow
   | CommandExecWindow
@@ -178,6 +189,12 @@ export type ContextWindow =
   | FeishuChatWindow
   | FeishuDocWindow
   | PlanWindow;
+
+/**
+ * ContextObject 类型的 discriminated union（原 ContextWindow 重命名，2026-05-28 ooc-6）。
+ * 与 ContextWindow 完全等价，仅语义上强调"这是 Object 在 context 中的形态"。
+ */
+export type ContextObject = ContextWindow;
 
 /** Root window 的固定 id。 */
 export const ROOT_WINDOW_ID = "root";

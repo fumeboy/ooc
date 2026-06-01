@@ -99,7 +99,7 @@ function spawnFileWindow(ctx: CommandExecutionContext, path: string): void {
     path,
   };
   if (ctx.manager) {
-    ctx.manager.insertTypedWindow(fileWindow);
+    ctx.manager.insertTypedWindow(fileWindow, ctx.thread);
   } else if (ctx.thread) {
     ctx.thread.contextWindows = [...(ctx.thread.contextWindows ?? []), fileWindow];
   }

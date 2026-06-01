@@ -27,7 +27,8 @@ export type XmlNode =
     };
 
 /** 转义 XML 特殊字符，保证 context 内容不会破坏标签结构。 */
-export function escapeXml(text: string): string {
+export function escapeXml(text: string | undefined | null): string {
+  if (text === undefined || text === null) return "";
   return text
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")

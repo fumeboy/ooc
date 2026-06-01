@@ -35,6 +35,7 @@ import {
   type WindowType,
 } from "./types.js";
 import type { CommandTableEntry } from "./command-types.js";
+import { writeContextObject, deleteContextObject } from "../../../persistable/flow-context.js";
 
 /**
  * 用 entry.match() 直接计算 commandPaths；空 args 派生不出来时退化为 [command]。
@@ -195,6 +196,8 @@ export class WindowManager {
     };
     this.windows.set(formId, form);
     this.recordKnowledgeRefs(form);
+    // 2026-05-28 ooc-6 Phase 5: 双写到 context/ 目录
+    this.writeContextObjectForWindow(opts.thread, form).catch(() => {});
 
     // auto-submit 判定：
     // - args 非空（无 args 等价于 LLM 想观察 form 状态再决定，不应直接提交）—— 但
@@ -222,18 +225,24 @@ export class WindowManager {
    * 创建非 form 的 typed window（do_window / todo_window 等）。
    *
    * 用于 command.exec 的副作用：
-   * - root.do submit → openTypedWindow("do", ...) 产出 do_window
-   * - root.todo submit → openTypedWindow("todo", ...)
+   * - root.do submit → insertTypedWindow(doWindow, thread) 产出 do_window
+   * - root.todo submit → insertTypedWindow(todoWindow, thread)
    * - 也用于 thread init 注入 creator do_window（parentWindowId 仍为 root）
+   *
+   * thread 参数可选：提供时会异步写入 context/ 目录（2026-05-28 ooc-6 Phase 5）。
    *
    * 返回新 window 的 id；调用方按需在 init 里追加 type 特有字段。
    */
-  insertTypedWindow(window: ContextWindow): string {
+  insertTypedWindow(window: ContextWindow, thread?: ThreadContext): string {
     if (this.windows.has(window.id)) {
       throw new Error(`insertTypedWindow: window id "${window.id}" already exists`);
     }
     this.windows.set(window.id, window);
     this.recordKnowledgeRefs(window);
+    // 2026-05-28 ooc-6 Phase 5: 双写到 context/ 目录
+    if (thread) {
+      this.writeContextObjectForWindow(thread, window).catch(() => {});
+    }
     return window.id;
   }
 
@@ -335,7 +344,7 @@ export class WindowManager {
 
     if (!isError) {
       // 成功：自动从 contextWindows 移除（spec § submit）
-      this.removeWindow(formId);
+      this.removeWindow(formId, thread);
       return result;
     }
 
@@ -370,7 +379,7 @@ export class WindowManager {
       this.close(child.id, thread);
     }
 
-    this.removeWindow(windowId);
+    this.removeWindow(windowId, thread);
     return true;
   }
 
@@ -382,6 +391,39 @@ export class WindowManager {
   }
 
   // ---- 内部 helper ----
+
+  private persistRefFromThread(thread: ThreadContext): import("../../../persistable/common.js").FlowObjectRef | undefined {
+    if (!thread.persistence) return undefined;
+    return {
+      baseDir: thread.persistence.baseDir,
+      sessionId: thread.persistence.sessionId,
+      objectId: thread.persistence.objectId,
+      stonesBranch: thread.persistence.stonesBranch,
+    };
+  }
+
+  private async writeContextObjectForWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
+    const ref = this.persistRefFromThread(thread);
+    if (!ref) return;
+    // 跳过 root window（root 是隐含的，不属于任何 object 的 context）
+    if (window.id === ROOT_WINDOW_ID) return;
+    try {
+      await writeContextObject(ref, ref.objectId, window);
+    } catch (e) {
+      console.warn(`[WindowManager] writeContextObject failed for ${window.id}: ${(e as Error).message}`);
+    }
+  }
+
+  private async deleteContextObjectForWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
+    const ref = this.persistRefFromThread(thread);
+    if (!ref) return;
+    if (window.id === ROOT_WINDOW_ID) return;
+    try {
+      await deleteContextObject(ref, ref.objectId, window.id);
+    } catch (e) {
+      console.warn(`[WindowManager] deleteContextObject failed for ${window.id}: ${(e as Error).message}`);
+    }
+  }
 
   private requireParent(parentId: string): ContextWindow {
     if (parentId === ROOT_WINDOW_ID) {
@@ -425,11 +467,15 @@ export class WindowManager {
     }
   }
 
-  private removeWindow(windowId: string): void {
+  private removeWindow(windowId: string, thread?: ThreadContext): void {
     const window = this.windows.get(windowId);
     if (!window) return;
     this.releaseKnowledgeRefs(window);
     this.windows.delete(windowId);
+    // 2026-05-28 ooc-6 Phase 5: 从 context/ 目录删除
+    if (thread) {
+      this.deleteContextObjectForWindow(thread, window).catch(() => {});
+    }
   }
 
   /**
@@ -445,9 +491,13 @@ export class WindowManager {
   }
 
   /** 公开版 insert/update：command 直接构造好 sharing 状态后写回 mgr。 */
-  upsertWindow(window: ContextWindow): void {
+  upsertWindow(window: ContextWindow, thread?: ThreadContext): void {
     this.windows.set(window.id, window);
     this.recordKnowledgeRefs(window);
+    // 2026-05-28 ooc-6 Phase 5: 双写到 context/ 目录
+    if (thread) {
+      this.writeContextObjectForWindow(thread, window).catch(() => {});
+    }
   }
 }
 

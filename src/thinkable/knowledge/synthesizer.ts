@@ -37,7 +37,7 @@ import {
 import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../../executable/windows/_shared/super-constants.js";
 import type { CommandKnowledgeEntries, CommandTableEntry } from "../../executable/windows/_shared/command-types.js";
 import { getWindowTypeDefinition } from "../../executable/windows/_shared/registry.js";
-import type { CommandExecWindow, ContextWindow, KnowledgeWindow, RelationWindow, SkillIndexWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
+import type { CommandExecWindow, ContextWindow, CustomWindow, KnowledgeWindow, RelationWindow, SkillIndexWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
 import { ROOT_WINDOW_ID, SKILL_INDEX_WINDOW_ID } from "../../executable/windows/_shared/types.js";
 import { computeActivations } from "./activator.js";
 import { loadKnowledgeIndex } from "./loader.js";
@@ -280,10 +280,14 @@ export async function collectExecutableKnowledgeEntries(
     }
   }
 
-  // 4) relation 派生 → RelationWindow(2026-05-21 把伴随 KnowledgeWindow 内联到
-  //    RelationWindow 自身的 peerReadme / selfLongTermBody / selfSessionBody;
-  //    避免 UI 出现 relation_window 与 kn_rel_*_self / kn_rel_*_readme 三份重复)。
-  //    spec: meta/object/collaborable/relation_window;详见 deriveRelationWindow JSDoc
+  // 4) peer/children Object 自动注入 → CustomWindow (2026-05-28 ooc-6 Phase 6)
+  //    替换原 relation_window 机制: peer Object 本身作为 context window 进入 context,
+  //    通过 custom dispatcher 渲染 peer 的 readable/readme。
+  const peerWindows = await derivePeerObjectWindows(thread);
+  for (const pw of peerWindows) synthetic.push(pw);
+
+  // 4-legacy) relation 派生 → RelationWindow(保留向后兼容,新代码走 peer object 路径)
+  //    TODO: Phase 9 cleanup 移除
   const relationWindows = await deriveRelationWindow(thread);
   for (const rw of relationWindows) synthetic.push(rw);
 
@@ -294,6 +298,9 @@ export async function collectExecutableKnowledgeEntries(
 }
 
 /**
+ * @deprecated 2026-05-28 ooc-6 Phase 6: 已被 derivePeerObjectWindows 替代。
+ * 保留仅用于向后兼容;新代码使用 peer object 机制(peer Object 本身作为 context window)。
+ *
  * 按 thread 中存在的 talk_window 派生 RelationWindow(每个 peer 一条)。
  *
  * spec 2026-05-20 relation-window-design:relation 升级为专属 window type,
@@ -425,6 +432,91 @@ export async function deriveRelationWindow(
       selfSessionExists,
     });
   }
+  return out;
+}
+
+/**
+ * 2026-05-28 ooc-6 Phase 6: 派生 peer/children Object 作为 context window。
+ *
+ * 替换原 relation_window 机制：peer/children OOC Object 本身作为 context window
+ * 自然进入 self 的 context，而不是通过一个 synthetic relation 窗口。
+ *
+ * 机制：
+ * 1. 从 talk_window(target=peerId) 收集已交互过的 peer
+ * 2. 从 stone 层级结构收集默认可见的 sibling + 一级 children
+ * 3. 为每个 peer 创建一个 type="custom" 的 window，objectId=peerId
+ * 4. custom dispatcher 会自动路由到 peer 的 readable/readme/renderXml
+ *
+ * relation 文件(pools/flows)仍然存在，但通过 peer object 的 `edit_relation` 方法访问，
+ * 而不是 relation 窗口的 edit 命令。
+ */
+export async function derivePeerObjectWindows(
+  thread: ThreadContext,
+): Promise<CustomWindow[]> {
+  if (!thread.persistence) return [];
+  const { baseDir, sessionId, objectId: selfId } = thread.persistence;
+
+  // 1) 从 talk_window 收集 peer
+  const talkWindows = (thread.contextWindows ?? []).filter(
+    (w): w is TalkWindow => w.type === "talk",
+  );
+  const peerEarliest = new Map<string, number>();
+  for (const w of talkWindows) {
+    if (!w.target) continue;
+    if (w.target === SUPER_ALIAS_TARGET) continue;
+    const prev = peerEarliest.get(w.target);
+    if (prev === undefined || w.createdAt < prev) peerEarliest.set(w.target, w.createdAt);
+  }
+
+  // 2) 默认相邻 Agent（sibling + 一级 children）
+  if (selfId !== "user") {
+    try {
+      const { siblings, children } = await discoverStoneHierarchicalPeers(
+        deriveStoneFromThread(thread.persistence),
+      );
+      const now = Date.now();
+      for (const peer of [...siblings, ...children]) {
+        if (peer === selfId) continue;
+        if (!peerEarliest.has(peer)) peerEarliest.set(peer, now);
+      }
+    } catch (err) {
+      console.debug(
+        `[peer-objects] hierarchical peers io_error self=${selfId} msg=${(err as Error).message}`,
+      );
+    }
+  }
+
+  if (peerEarliest.size === 0) return [];
+
+  const out: CustomWindow[] = [];
+  for (const [peerId, createdAt] of peerEarliest) {
+    // 尝试读取 peer 的 title 从 readme frontmatter
+    let title = `peer: ${peerId}`;
+    try {
+      const peerStoneRef = { baseDir, objectId: peerId, stonesBranch: thread.persistence.stonesBranch };
+      const readme = await readReadme(peerStoneRef);
+      if (readme) {
+        const frontmatterMatch = readme.match(/^---\n([\s\S]*?)\n---/);
+        if (frontmatterMatch) {
+          const titleMatch = frontmatterMatch[1].match(/^title:\s*(.+)$/m);
+          if (titleMatch) title = titleMatch[1].trim();
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    out.push({
+      id: `w_peer_${peerId.replace(/[^a-zA-Z0-9_]/g, "_")}`,
+      type: "custom",
+      parentWindowId: "root",
+      title,
+      status: "active",
+      createdAt,
+      objectId: peerId,
+    });
+  }
+
   return out;
 }
 

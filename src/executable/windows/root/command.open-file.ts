@@ -109,7 +109,7 @@ export async function executeOpenFileCommand(
   };
 
   if (ctx.manager) {
-    ctx.manager.insertTypedWindow(fileWindow);
+    ctx.manager.insertTypedWindow(fileWindow, ctx.thread);
   } else {
     thread.contextWindows = [...(thread.contextWindows ?? []), fileWindow];
   }

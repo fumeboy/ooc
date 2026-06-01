@@ -124,7 +124,7 @@ export async function executeTalkCommand(
   };
 
   if (ctx.manager) {
-    ctx.manager.insertTypedWindow(talkWindow);
+    ctx.manager.insertTypedWindow(talkWindow, ctx.thread);
   } else {
     thread.contextWindows = [...(thread.contextWindows ?? []), talkWindow];
   }

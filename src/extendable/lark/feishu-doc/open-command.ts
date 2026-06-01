@@ -83,7 +83,7 @@ export async function executeOpenFeishuDoc(
   };
 
   if (ctx.manager) {
-    ctx.manager.insertTypedWindow(window);
+    ctx.manager.insertTypedWindow(window, ctx.thread);
   } else {
     thread.contextWindows = [...(thread.contextWindows ?? []), window];
   }

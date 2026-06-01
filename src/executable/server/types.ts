@@ -17,6 +17,7 @@
 import type { ThreadContext } from "../../thinkable/context";
 import type { StoneObjectRef } from "../../persistable";
 import type { ObjectWindowDefinition } from "./window-types";
+import type { ReadableFn } from "../windows/_shared/registry.js";
 
 /** program 中注入的 self 对象，让用户代码能调用任意 window 上任意 command 与读写 data。 */
 export interface ProgramSelf {
@@ -91,6 +92,8 @@ export interface ServerLoaderEntry {
   window: ObjectWindowDefinition | undefined;
   /** ui_methods 字典；server/index.ts 没有则为空对象 */
   uiMethods: UiMethods;
+  /** readable.ts 导出的动态渲染函数；不存在则为 undefined */
+  readable: ReadableFn | undefined;
 }
 
 export type { StoneObjectRef, ThreadContext };

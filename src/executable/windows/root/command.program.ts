@@ -164,7 +164,7 @@ export async function executeProgramCommand(
   };
 
   if (ctx.manager) {
-    ctx.manager.insertTypedWindow(programWindow);
+    ctx.manager.insertTypedWindow(programWindow, ctx.thread);
   } else {
     thread.contextWindows = [...(thread.contextWindows ?? []), programWindow];
   }

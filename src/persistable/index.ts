@@ -68,6 +68,8 @@ export {
   createStoneObject,
   serverDir,
   clientDir,
+  executableDir,
+  visibleDir,
   stoneKnowledgeDir,
   stoneChildrenDir,
   ancestorObjectIds,
@@ -83,10 +85,37 @@ export {
   writeFlowRelation,
 } from "./flow-relation";
 
+export {
+  // 2026-05-28 ooc-6 Object Unification: runtime context objects (Phase 5)
+  contextDir,
+  contextObjectDir,
+  contextObjectFile,
+  readContextObjects,
+  readContextObjectsRecursive,
+  writeContextObject,
+  deleteContextObject,
+  CONTEXT_SUBDIR,
+} from "./flow-context";
+
 export { readSelf, selfFile, writeSelf } from "./stone-self";
-export { readReadme, readmeFile, writeReadme } from "./stone-readme";
+export {
+  readReadme,
+  readmeFile,
+  writeReadme,
+  readReadable,
+  readableFile,
+  readableTsFile,
+  writeReadable,
+} from "./stone-readme";
 // stone-data 已删除（2026-05-23）：data.json 语义改为 session-scoped 落 flow（详见 ./flow-data）。
-export { readServerSource, serverIndexFile, writeServerSource } from "./stone-server";
+export {
+  readServerSource,
+  serverIndexFile,
+  writeServerSource,
+  readExecutableSource,
+  executableIndexFile,
+  writeExecutableSource,
+} from "./stone-server";
 
 export {
   // PR-Issue（stone-versioning 决策协议；issue 看板已 2026-05-26 移除）
@@ -183,6 +212,9 @@ export {
   readStoneClientSource,
   writeFlowClientPage,
   writeStoneClientSource,
+  visibleIndexFile,
+  readVisibleSource,
+  writeVisibleSource,
 } from "./stone-client";
 export type { SkillEntry } from "./stone-skills";
 export {
