@@ -36,6 +36,16 @@ import {
 } from "./types.js";
 import type { CommandTableEntry } from "./command-types.js";
 import { writeContextObject, deleteContextObject } from "../../../persistable/flow-context.js";
+import {
+  writeRuntimeObjectState,
+  deleteRuntimeObject,
+  readContextRegistry,
+  writeContextRegistry,
+  type ContextMember,
+  type ContextRegistry,
+  type ContextParams,
+} from "../../../persistable/index.js";
+import type { FlowObjectRef, ThreadPersistenceRef } from "../../../persistable/common.js";
 
 /**
  * 用 entry.match() 直接计算 commandPaths；空 args 派生不出来时退化为 [command]。
@@ -411,6 +421,9 @@ export class WindowManager {
     } catch (e) {
       console.warn(`[WindowManager] writeContextObject failed for ${window.id}: ${(e as Error).message}`);
     }
+    // ooc-6 P5'.1：在保留嵌套写的同时，并行写"扁平 runtime object" + 更新
+    // thread context registry。读路径切换（P5'.2）后，嵌套写就可以下线。
+    await this.writeRuntimeAndRegistryForWindow(thread, window);
   }
 
   private async deleteContextObjectForWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
@@ -421,6 +434,116 @@ export class WindowManager {
       await deleteContextObject(ref, ref.objectId, window.id);
     } catch (e) {
       console.warn(`[WindowManager] deleteContextObject failed for ${window.id}: ${(e as Error).message}`);
+    }
+    // ooc-6 P5'.1：从 thread registry 摘除该 member；按引用计数决定是否删扁平 object 目录。
+    await this.removeFromRuntimeAndRegistryForWindow(thread, window);
+  }
+
+  /**
+   * threadPersistRefFromThread — 从 thread.persistence 派生 ThreadPersistenceRef。
+   *
+   * thread.persistence 已经是 ThreadPersistenceRef 形态（含 threadId），但此处显式
+   * 复制确保引用稳定（避免外部 mutate）。
+   */
+  private threadPersistRefFromThread(thread: ThreadContext): ThreadPersistenceRef | undefined {
+    if (!thread.persistence) return undefined;
+    return {
+      baseDir: thread.persistence.baseDir,
+      sessionId: thread.persistence.sessionId,
+      objectId: thread.persistence.objectId,
+      threadId: thread.persistence.threadId,
+    };
+  }
+
+  /**
+   * 计算 runtime object 的 FlowObjectRef —— window.id 直接做 objectId（扁平布局）。
+   *
+   * 与 thread.persistence.objectId 不同：那是 thread 所属的 object（parent owner），
+   * 这里返回的是 window 自身作为独立 runtime object 的 ref。
+   */
+  private runtimeObjectRefForWindow(thread: ThreadContext, window: ContextWindow): FlowObjectRef | undefined {
+    if (!thread.persistence) return undefined;
+    return {
+      baseDir: thread.persistence.baseDir,
+      sessionId: thread.persistence.sessionId,
+      objectId: window.id,
+    };
+  }
+
+  /**
+   * P5'.1 写：扁平 runtime object state.json + thread context.json registry upsert。
+   *
+   * 新增成员 → push 到 registry.members 末尾（order = 当前长度）。
+   * 已存在成员 → 不重排，保留 params；若 view 字段需要刷新，应走 dedicated API。
+   */
+  private async writeRuntimeAndRegistryForWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
+    const ref = this.runtimeObjectRefForWindow(thread, window);
+    const tref = this.threadPersistRefFromThread(thread);
+    if (!ref || !tref) return;
+    if (window.id === ROOT_WINDOW_ID) return;
+    try {
+      await writeRuntimeObjectState(ref, window);
+    } catch (e) {
+      console.warn(`[WindowManager] writeRuntimeObjectState failed for ${window.id}: ${(e as Error).message}`);
+      return;
+    }
+    try {
+      const reg = await readContextRegistry(tref);
+      const params = pickContextParams(window);
+      const idx = reg.members.findIndex((m) => m.objectId === window.id);
+      let next: ContextRegistry;
+      if (idx >= 0) {
+        const cur = reg.members[idx]!;
+        // 已存在：仅在 params 真正变化时才更新写盘（fast-path 短路减少 IO）
+        const merged: ContextParams = mergeContextParams(cur.params, params);
+        if (paramsEqual(cur.params, merged)) return;
+        const members = reg.members.slice();
+        members[idx] = { objectId: cur.objectId, params: merged };
+        next = { version: 1, members };
+      } else {
+        const member: ContextMember = {
+          objectId: window.id,
+          params: { ...params, order: reg.members.length },
+        };
+        next = { version: 1, members: [...reg.members, member] };
+      }
+      await writeContextRegistry(tref, next);
+    } catch (e) {
+      console.warn(`[WindowManager] update registry failed for ${window.id}: ${(e as Error).message}`);
+    }
+  }
+
+  /**
+   * P5'.1 删：从 thread registry 摘除成员；
+   * 若该 object 不再被本 session 内任意 thread 引用，则 rm -rf 扁平 object 目录。
+   *
+   * **当前简化**：跨 thread 引用计数实现留给 P5'.2/.3 阶段（届时读路径切到 registry）。
+   * 此处 P5'.1 dual-write 期内只移除当前 thread 的 member，不做物理删除——避免
+   * 在迁移过渡期把还被嵌套布局依赖的目录提前清掉。物理删除沿用嵌套 deleteContextObject
+   * 的语义。
+   */
+  private async removeFromRuntimeAndRegistryForWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
+    const tref = this.threadPersistRefFromThread(thread);
+    if (!tref) return;
+    if (window.id === ROOT_WINDOW_ID) return;
+    try {
+      const reg = await readContextRegistry(tref);
+      const idx = reg.members.findIndex((m) => m.objectId === window.id);
+      if (idx < 0) return;
+      const members = reg.members.slice();
+      members.splice(idx, 1);
+      await writeContextRegistry(tref, { version: 1, members });
+    } catch (e) {
+      console.warn(`[WindowManager] remove from registry failed for ${window.id}: ${(e as Error).message}`);
+    }
+    // 扁平目录的物理删除：dual-write 期内只删与本 thread 同 owner 的目录，
+    // 由 deleteRuntimeObject 处理（与嵌套 deleteContextObject 同时调用，互不相干）。
+    const ref = this.runtimeObjectRefForWindow(thread, window);
+    if (!ref) return;
+    try {
+      await deleteRuntimeObject(ref);
+    } catch (e) {
+      console.warn(`[WindowManager] deleteRuntimeObject failed for ${window.id}: ${(e as Error).message}`);
     }
   }
 
@@ -525,4 +648,49 @@ function collectKnowledgePathsOf(window: ContextWindow): string[] {
     ];
   }
   return window.windowKnowledgePaths ?? [];
+}
+
+/**
+ * 从 ContextWindow 抽 thread-level 视角参数（compressLevel / decayMeta / parentObjectId）。
+ *
+ * 这些字段在 P5'.4 之后会从 ContextWindow 物理迁出（仅留在 registry.params）；
+ * 当前 P5'.1 dual-write 期，源仍然在 window 上，本函数只做单向投影。
+ *
+ * order 不在这里设置 —— 由 caller 决定（新增成员=members.length；已存在=保留旧值）。
+ */
+function pickContextParams(window: ContextWindow): ContextParams {
+  const w = window as ContextWindow & {
+    compressLevel?: number;
+    _decayMeta?: { lastTouchedAt: number; idleRounds: number } | null;
+    parentWindowId?: string;
+  };
+  const params: ContextParams = {};
+  if (typeof w.compressLevel === "number") params.compressLevel = w.compressLevel;
+  if (w._decayMeta !== undefined) params.decayMeta = w._decayMeta ?? null;
+  if (typeof w.parentWindowId === "string" && w.parentWindowId !== ROOT_WINDOW_ID) {
+    params.parentObjectId = w.parentWindowId;
+  }
+  return params;
+}
+
+/** 合并 caller 给的新 params 到 cur 上（同字段覆盖；保留 cur.order）。 */
+function mergeContextParams(cur: ContextParams, next: ContextParams): ContextParams {
+  return {
+    compressLevel: next.compressLevel ?? cur.compressLevel,
+    decayMeta: next.decayMeta !== undefined ? next.decayMeta : cur.decayMeta,
+    order: cur.order,
+    parentObjectId: next.parentObjectId ?? cur.parentObjectId,
+  };
+}
+
+/** 浅比较两个 ContextParams（短路 IO）。 */
+function paramsEqual(a: ContextParams, b: ContextParams): boolean {
+  if ((a.compressLevel ?? null) !== (b.compressLevel ?? null)) return false;
+  if ((a.order ?? null) !== (b.order ?? null)) return false;
+  if ((a.parentObjectId ?? null) !== (b.parentObjectId ?? null)) return false;
+  const ad = a.decayMeta ?? null;
+  const bd = b.decayMeta ?? null;
+  if (ad === bd) return true;
+  if (ad === null || bd === null) return false;
+  return ad.lastTouchedAt === bd.lastTouchedAt && ad.idleRounds === bd.idleRounds;
 }

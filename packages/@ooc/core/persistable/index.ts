@@ -107,6 +107,24 @@ export {
   CONTEXT_SUBDIR,
 } from "./flow-context";
 
+// 2026-06-01 ooc-6 Phase 5'.1: flat runtime object + thread context registry
+export {
+  runtimeObjectStateFile,
+  writeRuntimeObjectState,
+  readRuntimeObjectState,
+  deleteRuntimeObject,
+  createRuntimeObject,
+} from "./flow-runtime-object";
+export {
+  contextRegistryFile,
+  readContextRegistry,
+  writeContextRegistry,
+  EMPTY_REGISTRY,
+  type ContextRegistry,
+  type ContextMember,
+  type ContextParams,
+} from "./flow-context-registry";
+
 export { readSelf, selfFile, writeSelf } from "./stone-self";
 export {
   readReadme,

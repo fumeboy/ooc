@@ -105,6 +105,12 @@ export interface WindowTypeDefinition {
    * 缺省（undefined）= 不合成；root / command_exec 通常不需要。
    */
   basicKnowledge?: string;
+  /**
+   * 动态上下文渲染函数（2026-05-28 ooc-6 Object Unification）。
+   * 与 ObjectDefinition.readable 同形：优先级高于 readable.md 与默认 renderXml。
+   * 在 WindowTypeDefinition 上保留入口，方便 builtin type 在 registerObjectType 时直接注入。
+   */
+  readable?: ReadableFn;
 }
 
 /**
