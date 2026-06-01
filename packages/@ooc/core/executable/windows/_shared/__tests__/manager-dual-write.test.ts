@@ -1,13 +1,11 @@
 /**
- * ooc-6 P5'.1 — WindowManager dual-write 测试
+ * ooc-6 P5'.1/.3 — WindowManager 写：扁平 state.json + thread context.json registry
  *
  * 验证：
  * 1. insertTypedWindow 触发 flat runtime object state.json 写入 + 注册到 thread context.json
  * 2. close()（→ removeWindow）从 thread context.json 摘除 member + rm 扁平 object 目录
- * 3. 嵌套 context/ 写也仍然存在（dual-write 期内不破坏原路径）
+ * 3. P5'.3 起：嵌套 context/ 写已下线
  * 4. ROOT_WINDOW_ID 不被持久化（隐含 root）
- *
- * Phase 5'.1 不实现跨 thread 引用计数；本测试只覆盖单 thread 场景。
  */
 
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
@@ -94,7 +92,7 @@ describe("WindowManager dual-write — flat runtime object + thread context regi
     expect(reg.members[0]?.objectId).toBe("todo_dual_1");
     expect(reg.members[0]?.params.order).toBe(0);
 
-    // 3. 嵌套 context/ 写也存在（dual-write 兼容路径）
+    // 3. P5'.3 起：嵌套 context/<id>/window.json 路径已删除，扁平 state.json 是唯一路径
     const nestedFile = join(
       baseDir,
       "flows",
@@ -104,7 +102,7 @@ describe("WindowManager dual-write — flat runtime object + thread context regi
       "todo_dual_1",
       "window.json",
     );
-    expect(await exists(nestedFile)).toBe(true);
+    expect(await exists(nestedFile)).toBe(false);
   });
 
   it("close: 从 thread context.json 摘 member + 删除扁平 object 目录", async () => {

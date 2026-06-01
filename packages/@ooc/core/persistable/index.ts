@@ -95,19 +95,8 @@ export {
   writeFlowRelation,
 } from "./flow-relation";
 
-export {
-  // 2026-05-28 ooc-6 Object Unification: runtime context objects (Phase 5)
-  contextDir,
-  contextObjectDir,
-  contextObjectFile,
-  readContextObjects,
-  readContextObjectsRecursive,
-  writeContextObject,
-  deleteContextObject,
-  CONTEXT_SUBDIR,
-} from "./flow-context";
-
 // 2026-06-01 ooc-6 Phase 5'.1: flat runtime object + thread context registry
+// 2026-06-02 ooc-6 Phase 5'.3: nested flow-context.ts removed; this is the only path
 export {
   runtimeObjectStateFile,
   writeRuntimeObjectState,

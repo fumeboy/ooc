@@ -4,7 +4,6 @@ import { threadDir, toJson, type FlowObjectRef, type ThreadPersistenceRef } from
 import type { ThreadContext } from "../thinkable/context";
 import { initContextWindows } from "../executable/windows/_shared/init";
 import { listRegisteredWindowTypes } from "../executable/windows/_shared/registry";
-import { readContextObjectsRecursive } from "./flow-context";
 import { readContextRegistry } from "./flow-context-registry";
 import { readRuntimeObjectState } from "./flow-runtime-object";
 
@@ -102,9 +101,9 @@ export async function readThread(
       contextWindows,
       persistence,
     };
-    // 2026-06-02 ooc-6 Phase 5'.2: 优先从 thread context.json registry 读
-    // 顺序：registry (权威) > nested context/ (P5 双写过渡) > thread.contextWindows[] (legacy)
-    let registryHit = false;
+    // 2026-06-02 ooc-6 Phase 5'.2/.3: 从 thread context.json registry 读
+    // 顺序：registry (权威) > thread.contextWindows[] (legacy fallback for pre-P5'.1 数据)
+    // P5'.3 起：嵌套 context/<id>/window.json 路径已下线
     try {
       const registry = await readContextRegistry(persistence);
       if (registry.members.length > 0) {
@@ -154,49 +153,10 @@ export async function readThread(
           if (!seenIds.has(win.id)) merged.push(win);
         }
         restored.contextWindows = merged;
-        registryHit = true;
       }
     } catch (e) {
       console.warn(
         `[readThread] 读取 context.json registry 失败（不阻塞）: ${(e as Error).message}`,
-      );
-    }
-    // 2026-05-28 ooc-6 Phase 5: 双读 context/ 目录，合并 runtime-created objects
-    // context/ 优先于 thread.contextWindows（新写入的更权威）
-    // 仅当 registry 未命中时执行（registry 已是最新权威源）
-    if (!registryHit) try {
-      const contextObjs = await readContextObjectsRecursive(ref);
-      if (contextObjs.size > 0) {
-        const knownTypes = new Set(listRegisteredWindowTypes());
-        const merged: typeof contextWindows = [];
-        const seenIds = new Set<string>();
-        // 先加 context/ 里的（更权威）
-        for (const win of contextObjs.values()) {
-          if (knownTypes.has(win.type)) {
-            merged.push(win);
-            seenIds.add(win.id);
-          } else {
-            console.warn(
-              `[readThread] context/ 中发现未注册 type: ${win.id}=${win.type}，跳过`,
-            );
-          }
-        }
-        // 再加 thread.contextWindows 里的（context/ 里没有的）
-        for (const win of contextWindows) {
-          if (!seenIds.has(win.id)) {
-            merged.push(win);
-          }
-        }
-        restored.contextWindows = merged;
-        if (contextObjs.size > 0) {
-          console.info(
-            `[readThread] 从 context/ 合并 ${contextObjs.size} 个 runtime object，合并后共 ${merged.length} 个窗口`,
-          );
-        }
-      }
-    } catch (e) {
-      console.warn(
-        `[readThread] 读取 context/ 目录失败（不阻塞）: ${(e as Error).message}`,
       );
     }
     // 兜底：缺 creator window 时补一个（spec § 初始 creator 对话 window）

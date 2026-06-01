@@ -25,10 +25,10 @@ import { createFlowsService } from "@ooc/core/app/server/modules/flows/service";
 import { buildServer } from "@ooc/core/app/server";
 import { readServerConfig } from "@ooc/core/app/server/bootstrap/config";
 import {
-  readContextObjects,
-  readContextObjectsRecursive,
-  contextDir,
-} from "@ooc/core/persistable/flow-context";
+  readContextRegistry,
+  readRuntimeObjectState,
+  runtimeObjectStateFile,
+} from "@ooc/core/persistable";
 import {
   listRegisteredWindowTypes,
   getWindowTypeDefinition,
@@ -283,8 +283,8 @@ describe("ooc-6 Object Unification harness cycle", () => {
     expect(knowledge!.path).toBe("test/knowledge");
   });
 
-  // ── Point 9: Runtime objects persist in context/ directory ──────────────
-  it("9: context objects persist to flows/<sid>/objects/<oid>/context/<cid>/window.json", async () => {
+  // ── Point 9: Runtime objects persist to flat flows/<sid>/<oid>/state.json + thread context.json registry ──
+  it("9: context objects persist to flat flows/<sid>/<oid>/state.json + thread context.json registry", async () => {
     const thread = makeThread({
       id: "t_main",
       objectId,
@@ -308,62 +308,75 @@ describe("ooc-6 Object Unification harness cycle", () => {
     thread.contextWindows = mgr.toData();
 
     // Wait for async fire-and-forget write to complete
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 80));
 
-    // Verify context/ directory exists
-    const ctxDir = contextDir(
-      { baseDir, sessionId, objectId },
-      objectId,
-    );
+    // Verify flat state.json exists
+    const stateFile = runtimeObjectStateFile({
+      baseDir,
+      sessionId,
+      objectId: windowId,
+    });
     const { existsSync } = await import("node:fs");
-    expect(existsSync(ctxDir)).toBe(true);
+    expect(existsSync(stateFile)).toBe(true);
 
-    // Verify we can read it back
-    const contextObjs = await readContextObjects(
-      { baseDir, sessionId, objectId },
+    // Verify we can read it back via flat API
+    const flat = await readRuntimeObjectState({
+      baseDir,
+      sessionId,
+      objectId: windowId,
+    });
+    expect(flat).toBeDefined();
+    expect(flat!.type).toBe("knowledge");
+    expect((flat as any).path).toBe("test/persist");
+    expect(flat!.title).toBe("Persist Test Knowledge");
+
+    // Verify thread context registry tracks this object
+    const registry = await readContextRegistry({
+      baseDir,
+      sessionId,
       objectId,
-    );
-    expect(contextObjs.has(windowId)).toBe(true);
-    const readBack = contextObjs.get(windowId)!;
-    expect(readBack.type).toBe("knowledge");
-    expect((readBack as any).path).toBe("test/persist");
-    expect(readBack.title).toBe("Persist Test Knowledge");
-
-    // Verify recursive read works
-    const recursiveObjs = await readContextObjectsRecursive(
-      { baseDir, sessionId, objectId },
-    );
-    expect(recursiveObjs.has(windowId)).toBe(true);
+      threadId: "t_main",
+    });
+    expect(registry.members.find((m) => m.objectId === windowId)).toBeDefined();
 
     // Verify upsert updates the persisted copy
     const mgr2 = WindowManager.fromThread(thread);
     const updated = {
-      ...readBack,
+      ...flat!,
       title: "Updated Persistent Knowledge",
     };
     mgr2.upsertWindow(updated, thread);
     thread.contextWindows = mgr2.toData();
 
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 80));
 
-    const updatedObjs = await readContextObjects(
-      { baseDir, sessionId, objectId },
-      objectId,
-    );
-    expect(updatedObjs.get(windowId)!.title).toBe("Updated Persistent Knowledge");
+    const updatedFlat = await readRuntimeObjectState({
+      baseDir,
+      sessionId,
+      objectId: windowId,
+    });
+    expect(updatedFlat!.title).toBe("Updated Persistent Knowledge");
 
     // Verify delete removes from persistence
     const mgr3 = WindowManager.fromThread(thread);
     (mgr3 as any).removeWindow(windowId, thread);
     thread.contextWindows = mgr3.toData();
 
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 80));
 
-    const afterDelete = await readContextObjects(
-      { baseDir, sessionId, objectId },
+    const afterDelete = await readRuntimeObjectState({
+      baseDir,
+      sessionId,
+      objectId: windowId,
+    });
+    expect(afterDelete).toBeUndefined();
+    const regAfter = await readContextRegistry({
+      baseDir,
+      sessionId,
       objectId,
-    );
-    expect(afterDelete.has(windowId)).toBe(false);
+      threadId: "t_main",
+    });
+    expect(regAfter.members.find((m) => m.objectId === windowId)).toBeUndefined();
   });
 
   // ── Point 10: Peer objects auto-enter context ─────────────────────────

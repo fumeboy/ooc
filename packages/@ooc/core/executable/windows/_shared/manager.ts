@@ -35,7 +35,6 @@ import {
   type WindowType,
 } from "./types.js";
 import type { CommandTableEntry } from "./command-types.js";
-import { writeContextObject, deleteContextObject } from "../../../persistable/flow-context.js";
 import {
   writeRuntimeObjectState,
   deleteRuntimeObject,
@@ -416,13 +415,7 @@ export class WindowManager {
     if (!ref) return;
     // 跳过 root window（root 是隐含的，不属于任何 object 的 context）
     if (window.id === ROOT_WINDOW_ID) return;
-    try {
-      await writeContextObject(ref, ref.objectId, window);
-    } catch (e) {
-      console.warn(`[WindowManager] writeContextObject failed for ${window.id}: ${(e as Error).message}`);
-    }
-    // ooc-6 P5'.1：在保留嵌套写的同时，并行写"扁平 runtime object" + 更新
-    // thread context registry。读路径切换（P5'.2）后，嵌套写就可以下线。
+    // P5'.3：嵌套 context/<id>/window.json 路径已下线；扁平 state.json + 注册表是唯一路径。
     await this.writeRuntimeAndRegistryForWindow(thread, window);
   }
 
@@ -430,12 +423,7 @@ export class WindowManager {
     const ref = this.persistRefFromThread(thread);
     if (!ref) return;
     if (window.id === ROOT_WINDOW_ID) return;
-    try {
-      await deleteContextObject(ref, ref.objectId, window.id);
-    } catch (e) {
-      console.warn(`[WindowManager] deleteContextObject failed for ${window.id}: ${(e as Error).message}`);
-    }
-    // ooc-6 P5'.1：从 thread registry 摘除该 member；按引用计数决定是否删扁平 object 目录。
+    // P5'.3：嵌套 context/<id>/window.json 路径已下线；从 registry 摘除 + rm 扁平目录。
     await this.removeFromRuntimeAndRegistryForWindow(thread, window);
   }
 
@@ -517,10 +505,8 @@ export class WindowManager {
    * P5'.1 删：从 thread registry 摘除成员；
    * 若该 object 不再被本 session 内任意 thread 引用，则 rm -rf 扁平 object 目录。
    *
-   * **当前简化**：跨 thread 引用计数实现留给 P5'.2/.3 阶段（届时读路径切到 registry）。
-   * 此处 P5'.1 dual-write 期内只移除当前 thread 的 member，不做物理删除——避免
-   * 在迁移过渡期把还被嵌套布局依赖的目录提前清掉。物理删除沿用嵌套 deleteContextObject
-   * 的语义。
+   * **当前简化**：跨 thread 引用计数尚未实装；本函数无条件 rm -rf 扁平 object 目录。
+   * 一个 object 同时被多个 thread context 引用的场景出现后再补上 ref-count 扫描。
    */
   private async removeFromRuntimeAndRegistryForWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
     const tref = this.threadPersistRefFromThread(thread);
@@ -536,8 +522,7 @@ export class WindowManager {
     } catch (e) {
       console.warn(`[WindowManager] remove from registry failed for ${window.id}: ${(e as Error).message}`);
     }
-    // 扁平目录的物理删除：dual-write 期内只删与本 thread 同 owner 的目录，
-    // 由 deleteRuntimeObject 处理（与嵌套 deleteContextObject 同时调用，互不相干）。
+    // 扁平目录的物理删除（P5'.3 起：嵌套 context/ 路径已下线，扁平目录是唯一持久化路径）。
     const ref = this.runtimeObjectRefForWindow(thread, window);
     if (!ref) return;
     try {
