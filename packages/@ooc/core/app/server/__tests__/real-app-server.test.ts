@@ -72,7 +72,7 @@ describe.skipIf(!shouldRunRealTest)("real app server e2e", () => {
     expect(pauseSession.status).toBe(200);
 
     const createObject = await app.handle(
-      new Request("http://localhost/api/flows/real-app-session/objects/", {
+      new Request("http://localhost/api/flows/real-app-session/", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ objectId: "real-app-object", initialMessage: "hello" }),
