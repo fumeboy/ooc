@@ -5,6 +5,8 @@ import type { ThreadContext } from "../thinkable/context";
 import { initContextWindows } from "../executable/windows/_shared/init";
 import { listRegisteredWindowTypes } from "../executable/windows/_shared/registry";
 import { readContextObjectsRecursive } from "./flow-context";
+import { readContextRegistry } from "./flow-context-registry";
+import { readRuntimeObjectState } from "./flow-runtime-object";
 
 /**
  * thread.json 的最小读写。
@@ -100,9 +102,69 @@ export async function readThread(
       contextWindows,
       persistence,
     };
+    // 2026-06-02 ooc-6 Phase 5'.2: 优先从 thread context.json registry 读
+    // 顺序：registry (权威) > nested context/ (P5 双写过渡) > thread.contextWindows[] (legacy)
+    let registryHit = false;
+    try {
+      const registry = await readContextRegistry(persistence);
+      if (registry.members.length > 0) {
+        const knownTypes = new Set(listRegisteredWindowTypes());
+        const sorted = [...registry.members].sort((a, b) => {
+          const oa = a.params.order ?? Number.MAX_SAFE_INTEGER;
+          const ob = b.params.order ?? Number.MAX_SAFE_INTEGER;
+          return oa - ob;
+        });
+        const merged: typeof contextWindows = [];
+        const seenIds = new Set<string>();
+        for (const member of sorted) {
+          const win = await readRuntimeObjectState({
+            baseDir: ref.baseDir,
+            sessionId: ref.sessionId,
+            objectId: member.objectId,
+          });
+          if (!win) {
+            console.warn(
+              `[readThread] registry references missing object ${member.objectId} (state.json absent), skipping`,
+            );
+            continue;
+          }
+          if (!knownTypes.has(win.type)) {
+            console.warn(
+              `[readThread] registry: dropped object ${win.id} with unregistered type ${win.type}`,
+            );
+            continue;
+          }
+          // 把 registry params 投影回 in-memory ContextWindow
+          const projected = { ...win } as typeof win;
+          if (member.params.compressLevel !== undefined && member.params.compressLevel !== 0) {
+            (projected as { compressLevel?: number }).compressLevel = member.params.compressLevel;
+          }
+          if (member.params.decayMeta !== undefined && member.params.decayMeta !== null) {
+            (projected as { _decayMeta?: { lastTouchedAt: number; idleRounds: number } | null })
+              ._decayMeta = member.params.decayMeta;
+          }
+          if (member.params.parentObjectId !== undefined) {
+            (projected as { parentWindowId?: string }).parentWindowId = member.params.parentObjectId;
+          }
+          merged.push(projected);
+          seenIds.add(win.id);
+        }
+        // legacy fallback：把 thread.contextWindows[] 中尚未被 registry 覆盖的 window 兜底加进来
+        for (const win of contextWindows) {
+          if (!seenIds.has(win.id)) merged.push(win);
+        }
+        restored.contextWindows = merged;
+        registryHit = true;
+      }
+    } catch (e) {
+      console.warn(
+        `[readThread] 读取 context.json registry 失败（不阻塞）: ${(e as Error).message}`,
+      );
+    }
     // 2026-05-28 ooc-6 Phase 5: 双读 context/ 目录，合并 runtime-created objects
     // context/ 优先于 thread.contextWindows（新写入的更权威）
-    try {
+    // 仅当 registry 未命中时执行（registry 已是最新权威源）
+    if (!registryHit) try {
       const contextObjs = await readContextObjectsRecursive(ref);
       if (contextObjs.size > 0) {
         const knownTypes = new Set(listRegisteredWindowTypes());
