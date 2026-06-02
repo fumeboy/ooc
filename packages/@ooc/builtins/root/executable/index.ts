@@ -119,7 +119,14 @@ export async function execRootCommand(
   if (!entry) throw new Error(`execRootCommand: unknown root method "${name}"`);
   const raw = await entry.exec(ctx);
   if (raw && typeof raw === "object" && "ok" in raw) {
-    return raw.ok ? raw.result : raw.error;
+    if (raw.ok) {
+      // P6 (ooc-6) constructor outcome path: builtins flatten to a placeholder string;
+      // proper handling is in WindowManager.submit. execRootCommand 仍保留 string|undefined
+      // 兼容签名，构造器通常不通过本入口调用。
+      if ("object" in raw) return `Constructed ${raw.object.type} window ${raw.object.id}`;
+      return raw.result;
+    }
+    return raw.error;
   }
   return raw;
 }

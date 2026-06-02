@@ -88,7 +88,7 @@ describe("write_file stone-versioning routing", () => {
     const out = await executeWriteFileCommand(ctx);
     // 成功 outcome（object），带合并提示
     expect(typeof out).toBe("object");
-    if (typeof out === "object" && out && out.ok === true) {
+    if (typeof out === "object" && out && out.ok === true && "result" in out) {
       expect(out.result).toContain("已 commit 并合并");
     } else {
       throw new Error(`expected success outcome, got ${JSON.stringify(out)}`);
@@ -135,7 +135,7 @@ describe("write_file stone-versioning routing", () => {
 
     const out = await executeWriteFileCommand(ctx);
     expect(typeof out).toBe("object");
-    if (typeof out === "object" && out && out.ok === true) {
+    if (typeof out === "object" && out && out.ok === true && "result" in out) {
       expect(out.result).toContain("PR-Issue");
     } else {
       throw new Error(`expected success outcome, got ${JSON.stringify(out)}`);
@@ -235,7 +235,7 @@ describe("write_file stone-versioning routing", () => {
     });
     const out = await executeWriteFileCommand(ctx);
     expect(typeof out).toBe("object");
-    if (typeof out === "object" && out && out.ok === true) {
+    if (typeof out === "object" && out && out.ok === true && "result" in out) {
       expect(out.result).toContain("已 commit 并合并");
     } else {
       throw new Error(`expected success outcome, got ${JSON.stringify(out)}`);

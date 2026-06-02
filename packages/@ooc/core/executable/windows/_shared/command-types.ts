@@ -29,16 +29,18 @@ export type CommandKnowledgeEntries = MethodKnowledgeEntries;
  * 旧 exec 直接返回 `string | undefined`：undefined = 成功无 result；string = 多义（成功结果 / 失败 message
  * 都用 `[<name>] ...` 前缀），被 manager 用启发式识别。
  *
- * 推荐返回结构化 outcome，让 ok 与正文解耦。两种形态都被 WindowManager.submit 接受：
- * - undefined            → 成功
+ * 推荐返回结构化 outcome，让 ok 与正文解耦。三种形态都被 WindowManager.submit 接受：
+ * - undefined                → 成功
  * - "..."（不带 [tag] 前缀）→ 成功 + result 文本
- * - { ok: true, result }  → 成功 + result 文本
- * - { ok: false, error }  → 失败；form 保留 status=executed 等待 LLM close
+ * - { ok: true, result }     → 成功 + result 文本（regular method 返回）
+ * - { ok: true, object }     → 成功 + 构造出新 ContextWindow（constructor method 返回；P6 ooc-6）
+ * - { ok: false, error }     → 失败；form 保留 status=failed 等待 LLM refine/close
  *
  * 旧路径"返回 `[<name>] ...` string 即失败"仍兼容（manager 内部识别），但新代码应改用 outcome。
  */
 export type MethodOutcome =
   | { ok: true; result?: string }
+  | { ok: true; object: ContextWindow }
   | { ok: false; error: string };
 
 /** @deprecated Use MethodOutcome instead (2026-05-28 ooc-6 Object Unification). */
@@ -53,6 +55,11 @@ export type CommandExecOutcome = MethodOutcome;
  * 旧名仍以 `@deprecated` alias 形式 export。
  */
 export interface ObjectMethod {
+  /** P6 (ooc-6): Marks this method as the constructor of the Object class.
+   *  Constructor methods MUST return MethodOutcome of the form `{ ok: true, object: ContextWindow }`.
+   *  Manager handles mounting (in-memory map + thread.contextWindows + persistence).
+   *  Regular methods (kind undefined or "method") use the existing { ok, result?: string } form. */
+  kind?: "constructor" | "method";
   /** 该 method 可能产出的所有 path 集合（用于反向索引建表 + 文档目录） */
   paths: string[];
   /**
