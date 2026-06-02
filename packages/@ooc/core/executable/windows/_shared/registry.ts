@@ -117,6 +117,11 @@ export interface WindowTypeDefinition {
    * 是为了让 talk / do 通过 registerWindowType 注入 partial 时也能直接声明该字段。
    */
   isBuiltinFeature?: boolean;
+  /**
+   * P6.§7 (2026-06-02): 父类 id；method 解析在 self.type 上 miss 后沿父类链向上回退。
+   * 见 ObjectDefinition.parentClass 的完整 JSDoc——同语义、同三态约定。
+   */
+  parentClass?: string | null;
 }
 
 /**
@@ -165,6 +170,24 @@ export interface ObjectDefinition extends Omit<WindowTypeDefinition, "commands">
    * 默认 false（独立 flow object）。
    */
   isBuiltinFeature?: boolean;
+  /**
+   * P6.§7 (2026-06-02): 父类 id —— method 解析的继承链载体。
+   *
+   * 三态语义（undefined ≠ null）：
+   *   - **undefined**（缺省）→ 隐式继承 `"root"`：ObjectDefinition 默认拿到 root 上注册的所有
+   *     通用方法（talk / do / todo / plan / program / open_file / open_knowledge / write_file /
+   *     glob / grep / metaprog / open_feishu_chat / open_feishu_doc）。绝大多数 type 走这条。
+   *   - **`null`**（显式不继承）→ 完全独立，方法解析不沿父链回退。仅 `root` 自身与
+   *     `method_exec`（form lifecycle 内部 type，不应暴露 user-facing 方法）使用。
+   *   - **string**（具名父类）→ 必须是 object registry 中已注册的 ObjectType id；解析在自身
+   *     methods 上 miss 后跳到 `getObjectDefinition(parentClass).methods` 继续查，递归直到
+   *     `null` 或链长达到防御阈值。
+   *
+   * 与 `prototype`（self.md frontmatter 的字段）的关系：`prototype` 是 stone-side 的实例链，
+   * `parentClass` 是 registry-side 的 class 链。两者在 P6 时点尚未统一；本字段只参与
+   * `resolveMethod` 的 class-级方法解析，不影响 stone object 的 prototype chain 解析。
+   */
+  parentClass?: string | null;
 }
 
 /**
@@ -185,12 +208,17 @@ REGISTRY.set("root", {
   type: "root",
   commands: {},
   methods: {},
+  // P6.§7 (2026-06-02): root 是继承链的终点 —— 显式 null 截断默认 "root" 回退，避免 self → root → root 死循环。
+  parentClass: null,
 } as ObjectDefinition);
 
 REGISTRY.set("command_exec", {
   type: "command_exec",
   commands: {},
   methods: {},
+  // P6.§7 (2026-06-02): method_exec / command_exec 是 form lifecycle 内部 type，方法表只能含 refine/submit；
+  //                     不应继承 root 上 user-facing 的 talk/do/todo/...，故显式 null。
+  parentClass: null,
 } as ObjectDefinition);
 
 REGISTRY.set("do", {
@@ -294,6 +322,9 @@ export function registerWindowType(
     compressView: partial.compressView ?? existing.compressView,
     basicKnowledge: partial.basicKnowledge ?? existing.basicKnowledge,
     isBuiltinFeature: partial.isBuiltinFeature ?? existing.isBuiltinFeature,
+    // P6.§7: parentClass 用「key in partial」判定而非 `??`，因为 `null` 是有意义的
+    //        显式值（"完全不继承"），不能被 `??` 当成 nullish 而回退到 existing。
+    parentClass: "parentClass" in partial ? partial.parentClass : existing.parentClass,
   } as WindowTypeDefinition);
 }
 
@@ -329,6 +360,8 @@ export function registerObjectType(
     prototype: partial.prototype ?? existing.prototype,
     readable: partial.readable ?? existing.readable,
     isBuiltinFeature: partial.isBuiltinFeature ?? existing.isBuiltinFeature,
+    // P6.§7: 同 registerWindowType——`null` 是有意义的显式值，不能被 `??` 吞掉。
+    parentClass: "parentClass" in partial ? partial.parentClass : existing.parentClass,
   } as ObjectDefinition);
 }
 
@@ -397,6 +430,9 @@ export function isBuiltinFeatureType(type: ObjectType): boolean {
 /**
  * 在指定 parent ContextWindow 上查找 method（2026-05-28 ooc-6 Object Unification）。
  *
+ * P6.§7 (2026-06-02): 现在沿 class.parentClass 继承链向上回退（resolveMethod）；
+ * 在自身 type 上 miss 时跳到 parentClass 继续查，直到命中或链终止（null / 不存在）。
+ *
  * 优先读 `def.methods`（canonical 名）；若 methods 中未声明该名，回落到 `def.commands`
  * （@deprecated alias）以兼容尚未迁移的 caller。
  *
@@ -407,32 +443,67 @@ export function lookupMethod(
   parentWindow: { type: ObjectType },
   methodName: string,
 ): ObjectMethod | undefined {
-  const def = REGISTRY.get(parentWindow.type) as ObjectDefinition | undefined;
-  if (!def) return undefined;
-  return def.methods?.[methodName] ?? def.commands?.[methodName];
+  return resolveMethod(parentWindow.type, methodName);
 }
 
 /**
  * P6.§3 (2026-06-02): 同 `lookupMethod`，但额外返回 `declaringType`——即该 method 实际在
  * 哪个 Object class 上声明。manager.submit 在 dispatch 阶段用它做严格校验：method 必须
- * 由 parent.type 声明，否则拒绝执行（`[method-error] method "X" not declared on object class "Y"`）。
+ * 由 parent.type（或其父类链）声明，否则拒绝执行（`[method-error] method "X" not declared on object class "Y"`）。
  *
- * 直接匹配，不走原型链——继承解析在 §7 实装。本期仅需直接 type 匹配。
- *
- * 命中条件：`REGISTRY.get(parent.type).methods[methodName]` 存在；命中后 declaringType
- * 必然 === parent.type（lookup 路径就是按 type 索引的）。提供该 API 的目的是让 manager
- * 在调用前显式做 assert，把 "method 注册在错的 type 上" 这类编译期/启动期 bug 在 dispatch
- * 阶段 fail-loud，而不是让 method 体内自己写 self.type 校验。
+ * P6.§7 (2026-06-02): 沿 parentClass 链向上回退；declaringType 是命中处的 class id（可能是
+ * parent.type 的祖先，不一定 === parent.type）。语义保持「method 注册在错的 type 上」时
+ * fail-loud，但允许通过显式继承（parentClass: "root"）拿到 root 的 talk/do/todo/...。
  */
 export function lookupMethodEntry(
   parentWindow: { type: ObjectType },
   methodName: string,
 ): { entry: ObjectMethod; declaringType: ObjectType } | undefined {
-  const def = REGISTRY.get(parentWindow.type) as ObjectDefinition | undefined;
-  if (!def) return undefined;
-  const entry = def.methods?.[methodName] ?? def.commands?.[methodName];
-  if (!entry) return undefined;
-  return { entry, declaringType: parentWindow.type };
+  let cur: string | undefined = parentWindow.type;
+  const seen = new Set<string>();
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    const def = REGISTRY.get(cur as ObjectType) as ObjectDefinition | undefined;
+    if (!def) return undefined;
+    const entry = def.methods?.[methodName] ?? def.commands?.[methodName];
+    if (entry) return { entry, declaringType: cur as ObjectType };
+    // 三态语义：undefined → 默认 "root" 兜底；null → 显式不继承（链终止）；string → 沿父类继续查。
+    cur = def.parentClass === undefined ? "root" : def.parentClass ?? undefined;
+  }
+  return undefined;
+}
+
+/**
+ * P6.§7 (2026-06-02): 沿 class.parentClass 链向上找 method。
+ *
+ * Walk: cur = classId；while cur && !seen.has(cur)：mark seen，取 def = getObjectDefinition(cur)，
+ * 若 def.methods[methodName]（或 def.commands[methodName] 兼容旧字段）存在则返回；否则跳到
+ * `def.parentClass === undefined ? "root" : def.parentClass`，直到链终止或循环。
+ *
+ * **三态语义**（与 ObjectDefinition.parentClass 一致）：
+ *   - `undefined`（缺省）→ 默认隐式 "root"，让所有 type 自动拿到 root 的 talk/do/todo/...。
+ *   - `null`（显式不继承）→ 链终止，不再回退（仅 root 自身 + method_exec 用此模式）。
+ *   - `string`（具名父类）→ 跳到该 class 继续查；未注册时下一轮 getObjectDefinition 抛错→拦下。
+ *
+ * **环检测**：`seen` Set 兜底，避免误配置 parentClass A→B→A 引入死循环。
+ *
+ * 缺省 / 不存在均返回 undefined（caller fail-soft 决定是否 fall through 到错误响应）。
+ */
+export function resolveMethod(
+  classId: string,
+  methodName: string,
+): ObjectMethod | undefined {
+  let cur: string | undefined = classId;
+  const seen = new Set<string>();
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    const def = REGISTRY.get(cur as ObjectType) as ObjectDefinition | undefined;
+    if (!def) return undefined;
+    const entry = def.methods?.[methodName] ?? def.commands?.[methodName];
+    if (entry) return entry;
+    cur = def.parentClass === undefined ? "root" : def.parentClass ?? undefined;
+  }
+  return undefined;
 }
 
 /**

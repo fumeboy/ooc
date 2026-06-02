@@ -479,8 +479,10 @@ export class WindowManager {
     const ref = this.runtimeObjectRefForWindow(thread, window);
     if (!ref) return;
     try {
-      // .flow.json：标记目录是 flow object 实例（§7 会扩 class 字段；§6 仅写 type/sessionId/objectId）。
-      await createFlowObject(ref);
+      // .flow.json：标记目录是 flow object 实例。
+      // P6.§7 (2026-06-02): 写入 `class: window.type`，绑定方法继承链的载体；class 必须是已注册
+      // ObjectType（registerObjectType 入口都已注册），未注册时 createFlowObject 会抛 ClassNotFoundError。
+      await createFlowObject(ref, { class: window.type });
     } catch (e) {
       console.warn(`[WindowManager] createFlowObject failed for ${window.id}: ${(e as Error).message}`);
     }

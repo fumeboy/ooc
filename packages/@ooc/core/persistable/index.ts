@@ -42,6 +42,7 @@ export {
   flowMetadataFile,
   sessionDir,
   sessionMetadataFile,
+  ClassNotFoundError,
   type FlowSessionMetadata,
   type FlowObjectMetadata
 } from "./flow-object";
