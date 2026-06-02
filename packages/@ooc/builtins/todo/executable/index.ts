@@ -3,15 +3,105 @@
  *
  * 2026-05-28 ooc-6 Object Unification: 从 builtin window 迁移为 builtin object。
  * 2026-06-01 P5'.5: renderXml 抽到 readable.ts。
+ * 2026-06-02 P6.§4-§5: 新增 kind="constructor" todo method，root.todo 走 lookupConstructor 委托。
  *
- * - 没有 LLM 可调用的 method；唯一动作是 close（待办完成）
+ * - LLM 可调用的 method：todo（constructor）、close（待办完成）
  * - onClose 无副作用，window 直接释放
  */
 
 import { registerObjectType } from "@ooc/core/extendable/_shared/registry.js";
+import type {
+  CommandKnowledgeEntries,
+  ObjectMethod,
+} from "@ooc/core/extendable/_shared/command-types.js";
+import {
+  ROOT_WINDOW_ID,
+  generateWindowId,
+  type TodoWindow,
+} from "@ooc/core/extendable/_shared/types.js";
 import { readable } from "../readable.js";
 
+const TODO_CONSTRUCTOR_BASIC = "internal/objects/todo/constructor/basic";
+const TODO_CONSTRUCTOR_INPUT = "internal/objects/todo/constructor/input";
+
+const TODO_CONSTRUCTOR_KNOWLEDGE = `
+todo 用于登记一条可见待办，直接产生一个 todo_window 挂到当前 thread。
+
+参数：
+- content: 必填，待办内容
+- on_command_path: 可选，命中这些 command path 时强提醒（数组）
+
+示例：
+open(command="todo", title="补集成测试", args={ content: "补 program shell 集成测试", on_command_path: ["program.shell"] })
+
+提示：
+- args.content 给齐时 open 会立刻提交 form，不需要再 refine / submit
+- 完成或撤销时 close(window_id="<todo_window_id>")
+`.trim();
+
+function deriveTodoTitle(content: string, maxLen = 60): string {
+  const trimmed = content.trim();
+  if (trimmed.length <= maxLen) return trimmed;
+  return `${trimmed.slice(0, maxLen)}...`;
+}
+
+/**
+ * P6.§4-§5 constructor —— 创建 todo_window。
+ *
+ * 行为:
+ *  - 校验 content 非空
+ *  - 解析 on_command_path（可选）
+ *  - generateWindowId("todo") + build TodoWindow（status="open"）
+ *  - 返回 { ok: true, object: todoWindow }
+ */
+const todoConstructor: ObjectMethod = {
+  kind: "constructor",
+  paths: ["todo", "todo.on_command_path"],
+  match: (args) => {
+    const hit: string[] = ["todo"];
+    if (Array.isArray(args.on_command_path) && args.on_command_path.length > 0) {
+      hit.push("todo.on_command_path");
+    }
+    return hit;
+  },
+  knowledge: (args, formStatus): CommandKnowledgeEntries => {
+    const entries: CommandKnowledgeEntries = {
+      [TODO_CONSTRUCTOR_BASIC]: TODO_CONSTRUCTOR_KNOWLEDGE,
+    };
+    if (formStatus !== "open") return entries;
+    if (typeof args.content !== "string" || args.content.trim().length === 0) {
+      entries[TODO_CONSTRUCTOR_INPUT] =
+        "todo 还缺以下参数: content。\n" +
+        "请用 refine(form_id, args={ content: \"<待办内容>\", on_command_path?: [\"<cmd>\"] }) 补齐后 submit(form_id)。\n" +
+        "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
+    }
+    return entries;
+  },
+  permission: () => "allow",
+  exec: async (ctx) => {
+    if (!ctx.thread) return { ok: false, error: "[todo] 缺少 thread context。" };
+    const content = typeof ctx.args.content === "string" ? ctx.args.content : "";
+    if (!content) return { ok: false, error: "[todo] 缺少 content 参数。" };
+    const onCommandPath = Array.isArray(ctx.args.on_command_path)
+      ? (ctx.args.on_command_path as unknown[]).filter((v): v is string => typeof v === "string")
+      : undefined;
+    const todoWindow: TodoWindow = {
+      id: generateWindowId("todo"),
+      type: "todo",
+      parentWindowId: ROOT_WINDOW_ID,
+      title: deriveTodoTitle(content),
+      status: "open",
+      createdAt: Date.now(),
+      content,
+      onCommandPath,
+    };
+    return { ok: true, object: todoWindow };
+  },
+};
+
 registerObjectType("todo", {
-  commands: {},
+  commands: {
+    todo: todoConstructor,
+  },
   readable,
 });

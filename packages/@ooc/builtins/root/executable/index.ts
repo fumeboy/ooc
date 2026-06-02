@@ -30,6 +30,17 @@ import { writeFileCommand } from "./command.write-file.js";
 import { metaprogCommand } from "./command.metaprog.js";
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/command-types.js";
 
+// 2026-06-02 P6.§4-§5: root commands 现在是 thin delegator，需要对应 builtin object module
+// 通过 registerObjectType 注册 constructor。这里 side-effect import 各 builtin，确保
+// `lookupConstructor("file" | "plan" | "program" | "knowledge" | "search" | "todo")` 能命中。
+// （core 自带的 "talk" / "do" 仍由 windows/talk + windows/do 通过 windows/index.ts 触发注册。）
+import "@ooc/builtins/file";
+import "@ooc/builtins/plan";
+import "@ooc/builtins/program";
+import "@ooc/builtins/knowledge";
+import "@ooc/builtins/search";
+import "@ooc/builtins/todo";
+
 /**
  * Root window 上注册的 method 清单（核心数据；2026-05-28 ooc-6 Object Unification 改名）。
  *
@@ -109,6 +120,8 @@ export function getOpenableCommands(): string[] {
  *
  * 这里保持旧的"返回 string | undefined"签名以兼容大量测试断言；遇到 outcome 时压平：
  * - { ok: true, result } → result
+ * - { ok: true, object } → 把 object 挂到 thread.contextWindows（manager 缺省时）
+ *   并返回 placeholder string（与 manager.submit 一致）
  * - { ok: false, error } → error（与旧 string-failure 约定一致）
  */
 export async function execRootCommand(
@@ -120,10 +133,17 @@ export async function execRootCommand(
   const raw = await entry.exec(ctx);
   if (raw && typeof raw === "object" && "ok" in raw) {
     if (raw.ok) {
-      // P6 (ooc-6) constructor outcome path: builtins flatten to a placeholder string;
-      // proper handling is in WindowManager.submit. execRootCommand 仍保留 string|undefined
-      // 兼容签名，构造器通常不通过本入口调用。
-      if ("object" in raw) return `Constructed ${raw.object.type} window ${raw.object.id}`;
+      // P6 (ooc-6) constructor outcome path: 把构造出的 ContextWindow 挂到 thread。
+      // 优先通过 manager（保证 dual-write）；若调用方未注入 manager（测试常见），
+      // 退回直接 push 到 thread.contextWindows，与历史 root.* exec 内部 fallback 一致。
+      if ("object" in raw) {
+        if (ctx.manager && ctx.thread) {
+          ctx.manager.insertTypedWindow(raw.object, ctx.thread);
+        } else if (ctx.thread) {
+          ctx.thread.contextWindows = [...(ctx.thread.contextWindows ?? []), raw.object];
+        }
+        return `Constructed ${raw.object.type} window ${raw.object.id}`;
+      }
       return raw.result;
     }
     return raw.error;

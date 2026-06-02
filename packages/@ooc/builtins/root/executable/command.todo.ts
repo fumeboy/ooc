@@ -1,18 +1,24 @@
 /**
- * root.todo command — 一次 open 即直建一个 todo_window。
+ * root.todo command — 委托到 todo_object constructor。
  *
- * - open(command="todo", title="...", args={ content, on_command_path? })
- * - args.content 已具备时不追加任何新 knowledge，open 立刻提交 form
- * - submit 副作用：在父 thread.contextWindows 下挂一个 type=todo 的 window
- * - 不支持 refine 后 submit 的多步路径，但模型上仍然合法（只是用户体验上 LLM 一步即可）
+ * 2026-06-02 P6.§4-§5: 历史 root.todo 的构造逻辑已迁到 packages/@ooc/builtins/todo/executable/index.ts
+ * 的 kind="constructor" todo method。这里保留 root method 表项（knowledge / paths 仍在 root 维度暴露），
+ * exec 走 lookupConstructor("todo") 委托。
+ *
+ * 知识（KNOWLEDGE）保留在本文件作为 root protocol knowledge，避免 LLM 在还没 open form
+ * 时丢失"todo 在 root 上可调"的入口提示。
  */
 
 import type {
   CommandExecutionContext,
   CommandKnowledgeEntries,
   CommandTableEntry,
+  MethodOutcome,
 } from "@ooc/core/extendable/_shared/command-types.js";
-import { ROOT_WINDOW_ID, generateWindowId, type TodoWindow } from "@ooc/core/extendable/_shared/types.js";
+import { lookupConstructor } from "@ooc/core/extendable/_shared/registry.js";
+
+// 2026-06-02 P6.§4-§5: side-effect import 触发 todo_object constructor 注册
+import "@ooc/builtins/todo";
 
 const TODO_BASIC_PATH = "internal/executable/todo/basic";
 const TODO_INPUT_PATH = "internal/executable/todo/input";
@@ -46,10 +52,6 @@ export const todoCommand: CommandTableEntry = {
     }
     return hit;
   },
-  /**
-   * knowledge 仅在缺 content 时给出 input 提示；
-   * content 已具备时不追加 entry → open 直接提交 form。
-   */
   knowledge: (args, formStatus): CommandKnowledgeEntries => {
     const entries: CommandKnowledgeEntries = { [TODO_BASIC_PATH]: KNOWLEDGE };
     if (formStatus !== "open") return entries;
@@ -64,47 +66,17 @@ export const todoCommand: CommandTableEntry = {
   exec: (ctx) => executeTodoCommand(ctx),
 };
 
-/** 截断 title，保持 context 紧凑。 */
-function deriveTitle(content: string, maxLen = 60): string {
-  const trimmed = content.trim();
-  if (trimmed.length <= maxLen) return trimmed;
-  return `${trimmed.slice(0, maxLen)}...`;
-}
-
 /**
- * root.todo 执行入口：在 ctx.thread.contextWindows 下挂一个 todo_window。
+ * P6.§4-§5 thin delegator —— 委托给 todo_object constructor。
  *
- * 与 do command 同样直接 mutate ctx.thread.contextWindows；WindowManager.submit 完成后
- * 上层会再调用 toData() 重写父字段（保持一致由调用层串起来）。
+ * 直接返回 constructor 的 MethodOutcome；manager.submit 会走 §2 分支
+ * 用 insertTypedWindow 挂载 todoWindow。
  */
 export async function executeTodoCommand(
   ctx: CommandExecutionContext,
-): Promise<string | undefined> {
-  const thread = ctx.thread;
-  if (!thread) return "[todo] 缺少 thread context。";
-  const content = typeof ctx.args.content === "string" ? ctx.args.content : "";
-  if (!content) return "[todo] 缺少 content 参数。form 已 submit 失败 (status=failed)。**可以 refine 修正参数后重 submit**（推荐）: refine(form_id, args={ content: \"<待办内容>\", on_command_path: [\"<cmd>\"] }) 会自动把 form 切回 open, 再 submit; 或 close(form_id) 彻底放弃这次调用。";
-
-  const onCommandPath = Array.isArray(ctx.args.on_command_path)
-    ? (ctx.args.on_command_path as unknown[]).filter((v): v is string => typeof v === "string")
-    : undefined;
-
-  const todoWindow: TodoWindow = {
-    id: generateWindowId("todo"),
-    type: "todo",
-    parentWindowId: ROOT_WINDOW_ID,
-    title: deriveTitle(content),
-    status: "open",
-    createdAt: Date.now(),
-    content,
-    onCommandPath,
-  };
-  if (ctx.manager) {
-    // 优先通过 WindowManager 插入，避免被 toData() 覆盖
-    ctx.manager.insertTypedWindow(todoWindow, ctx.thread);
-  } else {
-    // fallback：无 manager 时直接 mutate thread（仅 executeCommand 直接调用场景）
-    thread.contextWindows = [...(thread.contextWindows ?? []), todoWindow];
-  }
-  return undefined;
+): Promise<MethodOutcome | string | undefined> {
+  const ctor = lookupConstructor("todo");
+  if (!ctor) return "[todo] todo_object constructor 未注册（registry 期望 kind=\"constructor\" 的 todo method）。";
+  const raw = await ctor.exec(ctx);
+  return raw;
 }

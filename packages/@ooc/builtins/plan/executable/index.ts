@@ -423,6 +423,109 @@ plan_window 是 thread 的行动计划窗口（first-class ContextWindow）。
 renderXml: <plan_window>...<description?/><steps count><step id status sub_plan_window_id?/>...</steps></plan_window>
 `.trim();
 
+// ─────────────────────────── constructor (P6.§4-§5) ──────────────────────────
+
+const PLAN_CONSTRUCTOR_BASIC = "internal/objects/plan/constructor/basic";
+const PLAN_CONSTRUCTOR_INPUT = "internal/objects/plan/constructor/input";
+
+const PLAN_CONSTRUCTOR_KNOWLEDGE = `
+plan 用于把当前任务拆成可执行步骤，并以 plan_window 形式持久挂在 context。
+
+调用形态:
+- 简单文本: open(command="plan", title="制定计划", args={ plan: "<计划描述>" })
+  → 创建一个 root plan_window（无 parentPlanWindowId），title 默认 "Plan"，description=<text>，steps=[]
+- 完整指定: open(command="plan", args={ title: "...", description?: "...", steps?: [{ id?, text, status? }, ...] })
+  → 完整创建 root plan_window
+
+创建之后:
+- 后续可通过 exec(<plan_window_id>, "add_step", args={ text: "..." }) 追加 step
+- 也可通过 exec(<plan_window_id>, "expand_step", args={ step_id }) 把 step 展开为 sub plan
+- 跨 thread 共享: do(task=..., share_windows=[<plan_window_id>]) 把 plan 借给子 thread
+`.trim();
+
+function constructorHasAnyInput(args: Record<string, unknown>): boolean {
+  return (
+    (isString(args.plan) && args.plan.trim().length > 0) ||
+    isString(args.title) ||
+    isString(args.description) ||
+    Array.isArray(args.steps)
+  );
+}
+
+function normalizeStepsInput(input: unknown): PlanWindowStep[] | undefined {
+  if (!Array.isArray(input)) return undefined;
+  const out: PlanWindowStep[] = [];
+  for (const raw of input) {
+    if (!raw || typeof raw !== "object") continue;
+    const obj = raw as Record<string, unknown>;
+    const text = isString(obj.text) ? obj.text : "";
+    if (!text) continue;
+    const status = asStepStatus(obj.status) ?? "pending";
+    const id = isString(obj.id) && obj.id.length > 0 ? obj.id : generateStepId();
+    out.push({ id, text, status });
+  }
+  return out;
+}
+
+/**
+ * P6.§4-§5 constructor —— 创建 root plan_window。
+ *
+ * 职责:
+ *  - 校验 args (plan / title / description / steps 至少一项)
+ *  - generateWindowId("plan")，build PlanWindow literal (无 parentPlanWindowId == root plan)
+ *  - 返回 { ok: true, object } —— manager.submit's §2 分支调用 insertTypedWindow 挂载
+ *
+ * args 接受:
+ *  - { plan: "<text>" } —— 简单文本，落入 description
+ *  - { title?, description?, steps?: PlanWindowStep[] } —— 完整指定
+ *
+ * 注意: 与旧 root.plan 不同,不再 idempotent 更新已存在 root plan_window;
+ * 每次调用都创建一个新的 plan_window。LLM 想改既有 plan 用 update_plan。
+ */
+const planConstructor: ObjectMethod = {
+  kind: "constructor",
+  paths: ["plan"],
+  match: () => ["plan"],
+  knowledge: (args, formStatus): CommandKnowledgeEntries => {
+    const entries: CommandKnowledgeEntries = {
+      [PLAN_CONSTRUCTOR_BASIC]: PLAN_CONSTRUCTOR_KNOWLEDGE,
+    };
+    if (formStatus === "open" && !constructorHasAnyInput(args)) {
+      entries[PLAN_CONSTRUCTOR_INPUT] =
+        "plan 还缺以下参数: plan 文本 (或 title / description / steps 任一)。\n" +
+        "请用 refine(form_id, args={ plan: \"<计划文本>\" }) 或 refine(form_id, args={ title: \"...\", description: \"...\", steps: [...] }) 补齐后 submit(form_id)。";
+    }
+    return entries;
+  },
+  permission: () => "allow",
+  exec: async (ctx) => {
+    if (!ctx.thread) return { ok: false, error: "[plan] 缺少 thread context。" };
+    const args = ctx.args;
+    if (!constructorHasAnyInput(args)) {
+      return {
+        ok: false,
+        error: "[plan] 需要 args.plan (简单文本) 或 args.title / args.description / args.steps 之一。",
+      };
+    }
+    const legacyPlanText = isString(args.plan) ? args.plan : undefined;
+    const inputTitle = isString(args.title) ? args.title : undefined;
+    const inputDescription = isString(args.description) ? args.description : legacyPlanText;
+    const inputSteps = normalizeStepsInput(args.steps);
+
+    const plan: PlanWindow = {
+      id: generateWindowId("plan"),
+      type: "plan",
+      parentWindowId: ROOT_WINDOW_ID,
+      title: inputTitle ?? "Plan",
+      status: "active",
+      createdAt: Date.now(),
+      description: inputDescription,
+      steps: inputSteps ?? [],
+    };
+    return { ok: true, object: plan };
+  },
+};
+
 // ─────────────────────────── register ────────────────────────────────────────
 
 registerObjectType("plan", {
@@ -434,6 +537,7 @@ registerObjectType("plan", {
     collapse_subplan: collapseSubplanCommand,
     mark_done: markDoneCommand,
     close: closeCommand,
+    plan: planConstructor,
   },
   onClose: onClosePlanWindow,
   readable,

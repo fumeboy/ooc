@@ -10,6 +10,14 @@
  */
 
 import { registerWindowType, type OnCloseContext, type RenderContext } from "../_shared/registry.js";
+import type { CommandKnowledgeEntries, ObjectMethod } from "../_shared/command-types.js";
+import { stat } from "node:fs/promises";
+import { stoneDir } from "../../../persistable/index.js";
+import { SUPER_ALIAS_TARGET } from "../_shared/super-constants.js";
+import {
+  ROOT_WINDOW_ID,
+  generateWindowId,
+} from "../_shared/types.js";
 import { sayCommand } from "./command.say.js";
 import { waitCommand } from "./command.wait.js";
 import { closeCommand } from "./command.close.js";
@@ -198,12 +206,121 @@ function onCloseTalkWindow(ctx: OnCloseContext): boolean | void {
   return true;
 }
 
+// ─────────────────────────── constructor (P6.§4-§5) ──────────────────────────
+
+const TALK_CONSTRUCTOR_BASIC = "internal/objects/talk/constructor/basic";
+const TALK_CONSTRUCTOR_INPUT = "internal/objects/talk/constructor/input";
+
+const TALK_CONSTRUCTOR_KNOWLEDGE = `
+talk 用于开启一个对外的会话窗口（talk_window），与另一个 flow object 持续会话。
+
+参数：
+- target: 必填，目标 flow object 的 objectId（"user" 也是一个 flow object）
+- title: 必填，本会话的简短主题（同一 caller 多窗口区分用）
+
+submit 后副作用：
+- 在 thread.contextWindows 下挂一个 type=talk 的 window（初始 targetThreadId 为空）
+- 首次发消息：open(parent_window_id="<talk_window_id>", command="say", args={ msg: "...", wait: true|false })
+  - 若 callee thread 尚未存在，系统会在 flows/{sid}/objects/{target}/threads/ 下创建一条
+  - 同时把消息追加到 callee.inbox + caller.outbox，callee 自动进入 running 等待 worker 调度
+- 等待回复：open(parent_window_id="<talk_window_id>", command="wait", args={})
+- 关闭窗口：close(window_id="<talk_window_id>", reason="...")
+
+**重要：talk_window 是持续会话窗口，应该复用。**
+- 同一个 target 在同一个 thread 内只需要一个 talk_window；后续消息全部从同一个 talk_window 的 say 走
+- 不要每发一条消息就 close，再下一轮 open 一个新的——这会丢失 conversation 关联，并产生大量噪声 window
+- 仅当与该对象的对话真正结束、明确不再需要回复时才 close
+
+允许同时打开多个 talk_window 来并行维护**不同 target / 不同主题**（不是为了重复同一对话）。
+`.trim();
+
+function deriveTalkTitle(raw: string, max = 60): string {
+  const trimmed = raw.trim();
+  return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max)}...`;
+}
+
+/**
+ * P6.§4-§5 constructor —— 创建 talk_window。
+ *
+ * 行为:
+ *  - 校验 target / title 必填
+ *  - 校验 target 对应的 stone object 存在（除 super alias）
+ *  - generateWindowId("talk") + build TalkWindow（conversationId = id）
+ *  - 返回 { ok: true, object: talkWindow }
+ *
+ * 不在此处发消息（首条消息走 talk_window.say）。
+ */
+const talkConstructor: ObjectMethod = {
+  kind: "constructor",
+  paths: ["talk"],
+  match: () => ["talk"],
+  knowledge: (args, formStatus): CommandKnowledgeEntries => {
+    const entries: CommandKnowledgeEntries = {
+      [TALK_CONSTRUCTOR_BASIC]: TALK_CONSTRUCTOR_KNOWLEDGE,
+    };
+    if (formStatus !== "open") return entries;
+    const target = typeof args.target === "string" ? args.target.trim() : "";
+    const title = typeof args.title === "string" ? args.title.trim() : "";
+    if (!target || !title) {
+      const missing: string[] = [];
+      if (!target) missing.push("target");
+      if (!title) missing.push("title");
+      entries[TALK_CONSTRUCTOR_INPUT] =
+        `talk 还缺以下参数: ${missing.join(", ")}。\n` +
+        "请用 refine(form_id, args={ target: \"<objectId>\", title: \"<会话主题>\" }) 补齐后 submit(form_id)。\n" +
+        "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
+    }
+    return entries;
+  },
+  permission: () => "allow",
+  exec: async (ctx) => {
+    const thread = ctx.thread;
+    if (!thread) return { ok: false, error: "[talk] 缺少 thread context。" };
+    const target = typeof ctx.args.target === "string" ? ctx.args.target.trim() : "";
+    if (!target) return { ok: false, error: "[talk] 缺少 target 参数。" };
+    const title = typeof ctx.args.title === "string" ? deriveTalkTitle(ctx.args.title) : "";
+    if (!title) return { ok: false, error: "[talk] 缺少 title 参数。" };
+
+    if (target !== SUPER_ALIAS_TARGET && thread.persistence?.baseDir) {
+      const dir = stoneDir({ baseDir: thread.persistence.baseDir, objectId: target });
+      let exists = false;
+      try {
+        const info = await stat(dir);
+        exists = info.isDirectory();
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+      }
+      if (!exists) {
+        return {
+          ok: false,
+          error: `[talk] target \`${target}\` 不存在(stones/${target}/ 目录未找到)。请检查 target 拼写是否正确;若是新对象,先创建 stone object 再 open talk_window。`,
+        };
+      }
+    }
+
+    const id = generateWindowId("talk");
+    const talkWindow: TalkWindow = {
+      id,
+      type: "talk",
+      parentWindowId: ROOT_WINDOW_ID,
+      title,
+      status: "open",
+      createdAt: Date.now(),
+      target,
+      conversationId: id,
+      transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT },
+    };
+    return { ok: true, object: talkWindow };
+  },
+};
+
 registerWindowType("talk", {
   commands: {
     say: sayCommand,
     wait: waitCommand,
     close: closeCommand,
     set_transcript_window: setTranscriptWindowCommandForTalk,
+    talk: talkConstructor,
   },
   onClose: onCloseTalkWindow,
   renderXml: renderTalkWindow,

@@ -1,28 +1,21 @@
 /**
- * root.program command — 创建一个 program_window 并立即执行第一次 exec。
+ * root.program command — 委托到 program_window constructor。
  *
- * - submit 副作用：在 thread.contextWindows 下挂 type=program 的 window；
- *   args 中的 language+code 作为首次 exec 立即跑，结果进 history[0]
- * - 后续 exec：通过 program_window 上注册的 \`exec\` command（windows/program/index.ts）
- * - 跨 exec 共享数据通道：仅 ts/js sandbox 可读写 thread.threadLocalData
- *
- * args 含完整 language+code 时，exec(command="program") 立即执行。
- *
- * 历史：旧 program 还支持 callCommand / function 模式（window_id+command 调命令），
- * 顶层 exec tool 上线后此模式已下线（plan exec-refactor）；要调命令直接用顶层 exec tool。
+ * 2026-06-02 P6.§4-§5: 历史 root.program 的构造逻辑（runOneExec + ProgramWindow build）已迁到
+ * packages/@ooc/builtins/program/executable/index.ts 的 kind="constructor" program method。
+ * 这里保留 root method 表项（knowledge / paths）；exec 走 lookupConstructor("program") 委托。
  */
 
 import type {
   CommandExecutionContext,
   CommandKnowledgeEntries,
   CommandTableEntry,
+  MethodOutcome,
 } from "@ooc/core/extendable/_shared/command-types.js";
-import {
-  ROOT_WINDOW_ID,
-  generateWindowId,
-  type ProgramWindow,
-} from "@ooc/core/extendable/_shared/types.js";
-import { runOneExec, type ProgramExecArgs, DEFAULT_HISTORY_VIEWPORT } from "@ooc/builtins/program";
+import { lookupConstructor } from "@ooc/core/extendable/_shared/registry.js";
+
+// 2026-06-02 P6.§4-§5: side-effect import 触发 program_window constructor 注册
+import "@ooc/builtins/program";
 
 const PROGRAM_BASIC_PATH = "internal/executable/program/basic";
 const PROGRAM_INPUT_PATH = "internal/executable/program/input";
@@ -95,7 +88,6 @@ export const programCommand: CommandTableEntry = {
       return entries;
     }
     if (formStatus === "success") {
-      // 理论上 success 后 form 已被自动移除; 这里保留兜底以防 render 时机问题。
       entries[PROGRAM_FORM_STATUS_PATH] = "对于 command program 的 success 状态的 form，结果已成功生成；form 将自动从 context 移除。";
       return entries;
     }
@@ -121,51 +113,13 @@ export const programCommand: CommandTableEntry = {
   exec: (ctx) => executeProgramCommand(ctx),
 };
 
-/** 截断 title。 */
-function deriveTitle(args: ProgramExecArgs, max = 60): string {
-  const summary =
-    args.language && args.code
-      ? `${args.language}: ${args.code.split("\n")[0] ?? ""}`
-      : "program";
-  return summary.length <= max ? summary : `${summary.slice(0, max)}...`;
-}
-
 /**
- * root.program 执行入口：创建 program_window + 跑首次 exec。
- *
- * 失败时返回字符串 → WindowManager 把 form 留在 executed 状态。成功时副作用挂载完毕，返回 undefined。
+ * P6.§4-§5 thin delegator —— 委托到 program_window constructor。
  */
 export async function executeProgramCommand(
   ctx: CommandExecutionContext,
-): Promise<string | undefined> {
-  const thread = ctx.thread;
-  if (!thread) return undefined;
-
-  // 首次 exec 的 args 即来自 form
-  const execArgs: ProgramExecArgs = {
-    language: ctx.args.language as ProgramExecArgs["language"],
-    code: ctx.args.code as string | undefined,
-  };
-  if (!(execArgs.language && execArgs.code)) {
-    return "[program] 缺少执行参数；需要 language+code。";
-  }
-
-  const record = await runOneExec(thread, execArgs);
-  const programWindow: ProgramWindow = {
-    id: generateWindowId("program"),
-    type: "program",
-    parentWindowId: ROOT_WINDOW_ID,
-    title: deriveTitle(execArgs),
-    status: "open",
-    createdAt: Date.now(),
-    history: [record],
-    historyViewport: DEFAULT_HISTORY_VIEWPORT,
-  };
-
-  if (ctx.manager) {
-    ctx.manager.insertTypedWindow(programWindow, ctx.thread);
-  } else {
-    thread.contextWindows = [...(thread.contextWindows ?? []), programWindow];
-  }
-  return undefined;
+): Promise<MethodOutcome | string | undefined> {
+  const ctor = lookupConstructor("program");
+  if (!ctor) return "[program] program_window constructor 未注册（registry 期望 kind=\"constructor\" 的 program method）。";
+  return await ctor.exec(ctx);
 }

@@ -86,12 +86,12 @@ describe("write_file stone-versioning routing", () => {
     });
 
     const out = await executeWriteFileCommand(ctx);
-    // 成功 outcome（object），带合并提示
+    // 成功 outcome（constructor object outcome；P6.§4-§5）
     expect(typeof out).toBe("object");
-    if (typeof out === "object" && out && out.ok === true && "result" in out) {
-      expect(out.result).toContain("已 commit 并合并");
+    if (typeof out === "object" && out && out.ok === true && "object" in out) {
+      expect(out.object.type).toBe("file");
     } else {
-      throw new Error(`expected success outcome, got ${JSON.stringify(out)}`);
+      throw new Error(`expected success constructor outcome, got ${JSON.stringify(out)}`);
     }
 
     // main 工作区已反映新内容（下一轮 loader 能读到）
@@ -107,8 +107,13 @@ describe("write_file stone-versioning routing", () => {
     expect(lastCommit).toContain("agent_of_x");
     expect(lastCommit).toContain("write_file objects/agent_of_x/self.md");
 
-    // file_window 已挂上
-    expect((ctx.thread as { contextWindows: unknown[] }).contextWindows.length).toBe(1);
+    // P6.§4-§5: constructor 只返回 { ok:true, object }；window 由 manager.submit 走 §2 分支
+    // 调 insertTypedWindow 挂载。这里直接调 delegator 没经过 manager，所以验证 outcome.object
+    // 形态而不是 thread.contextWindows 上的副作用。
+    if (typeof out === "object" && out && out.ok === true && "object" in out) {
+      expect(out.object.type).toBe("file");
+      expect((out.object as { path: string }).path).toContain("agent_of_x/self.md");
+    }
   });
 
   test("self-scope: 写自治区下的新子文件（server/index.ts）→ ff-merge 到 main", async () => {
@@ -135,10 +140,10 @@ describe("write_file stone-versioning routing", () => {
 
     const out = await executeWriteFileCommand(ctx);
     expect(typeof out).toBe("object");
-    if (typeof out === "object" && out && out.ok === true && "result" in out) {
-      expect(out.result).toContain("PR-Issue");
+    if (typeof out === "object" && out && out.ok === true && "object" in out) {
+      expect(out.object.type).toBe("file");
     } else {
-      throw new Error(`expected success outcome, got ${JSON.stringify(out)}`);
+      throw new Error(`expected success constructor outcome, got ${JSON.stringify(out)}`);
     }
 
     // main 工作区**未**被改（cross-scope 不直接落 main）
@@ -153,8 +158,13 @@ describe("write_file stone-versioning routing", () => {
       content: "a,b\n1,2\n",
     });
     const out = await executeWriteFileCommand(ctx);
-    // 新建文件 → undefined（无 overwrite hint）
-    expect(out).toBeUndefined();
+    // non-stone 新建：constructor outcome { ok: true, object } (P6.§4-§5)
+    expect(typeof out).toBe("object");
+    if (typeof out === "object" && out && out.ok === true && "object" in out) {
+      expect(out.object.type).toBe("file");
+    } else {
+      throw new Error(`expected success constructor outcome, got ${JSON.stringify(out)}`);
+    }
 
     // 文件落在 pools/agent_of_x/...（rewritePoolsPath 不再注入 objects/），不在 stones 树
     const written = await readFile(
@@ -172,8 +182,12 @@ describe("write_file stone-versioning routing", () => {
       content: "node_modules\n",
     });
     const out = await executeWriteFileCommand(ctx);
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("workspace-level");
+    expect(typeof out).toBe("object");
+    if (typeof out === "object" && out && out.ok === false) {
+      expect(out.error).toContain("workspace-level");
+    } else {
+      throw new Error(`expected failure outcome, got ${JSON.stringify(out)}`);
+    }
 
     // 没有静默直写：fail-loud 应当不创建该文件
     await expect(
@@ -235,10 +249,10 @@ describe("write_file stone-versioning routing", () => {
     });
     const out = await executeWriteFileCommand(ctx);
     expect(typeof out).toBe("object");
-    if (typeof out === "object" && out && out.ok === true && "result" in out) {
-      expect(out.result).toContain("已 commit 并合并");
+    if (typeof out === "object" && out && out.ok === true && "object" in out) {
+      expect(out.object.type).toBe("file");
     } else {
-      throw new Error(`expected success outcome, got ${JSON.stringify(out)}`);
+      throw new Error(`expected success constructor outcome, got ${JSON.stringify(out)}`);
     }
 
     const onMain = await readFile(
@@ -271,8 +285,12 @@ describe("write_file stone-versioning routing", () => {
     } as unknown as CommandExecutionContext;
 
     const out = await executeWriteFileCommand(ctx);
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("persistence.objectId");
+    expect(typeof out).toBe("object");
+    if (typeof out === "object" && out && out.ok === false) {
+      expect(out.error).toContain("persistence.objectId");
+    } else {
+      throw new Error(`expected failure outcome, got ${JSON.stringify(out)}`);
+    }
 
     // 自治区文件未被裸写
     const onMain = await readFile(join(mainObjectsDir(baseDir), "agent_of_x", "self.md"), "utf8");

@@ -149,20 +149,25 @@ describe("executeProgramCommand creates a program_window with first exec", () =>
       thread,
       args: { language: "shell", code: "echo hello" },
     });
-    expect(result).toBeUndefined();
-    const win = thread.contextWindows.find((w) => w.type === "program");
-    expect(win?.type).toBe("program");
-    if (win && win.type === "program") {
-      expect(win.history).toHaveLength(1);
-      expect(win.history[0]?.output).toContain("hello");
-      expect(win.history[0]?.ok).toBe(true);
-    }
+    // P6.§4-§5: root.program 是 constructor 委托——返回 {ok:true, object: programWindow}
+    expect(result).toBeDefined();
+    expect(typeof result).toBe("object");
+    const outcome = result as { ok: true; object: ProgramWindow };
+    expect(outcome.ok).toBe(true);
+    const win = outcome.object;
+    expect(win.type).toBe("program");
+    expect(win.history).toHaveLength(1);
+    expect(win.history[0]?.output).toContain("hello");
+    expect(win.history[0]?.ok).toBe(true);
   });
 
-  it("returns an error string when args are incomplete (manager keeps form executed)", async () => {
+  it("returns an error outcome when args are incomplete (manager keeps form executed)", async () => {
     const thread = makeThread({ id: "t" });
     const result = await executeProgramCommand({ thread, args: {} });
-    expect(typeof result).toBe("string");
+    // P6.§4-§5: 缺参直接返回 {ok:false, error: string}（不再是直接 string）
+    expect(typeof result).toBe("object");
+    expect((result as { ok: false; error: string }).ok).toBe(false);
+    expect((result as { ok: false; error: string }).error).toBeDefined();
     expect(thread.contextWindows.find((w) => w.type === "program")).toBeUndefined();
   });
 });

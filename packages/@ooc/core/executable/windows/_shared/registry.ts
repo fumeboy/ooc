@@ -391,6 +391,36 @@ export function lookupMethodEntry(
   return { entry, declaringType: parentWindow.type };
 }
 
+/**
+ * P6.§4 (2026-06-02): 在指定 Object type 的定义中查找 `kind: "constructor"` 的 ObjectMethod。
+ *
+ * 用途：root method（如 `talk` / `do` / `plan` / `program` / `open_file` 等）在 P6 退化为
+ * 「调对应 type 的 constructor」的薄分发器。本函数让 root method 不必自己缓存或硬编码
+ * constructor 引用——只需 `lookupConstructor("talk")` 就能拿到 talk 类型上注册的构造方法。
+ *
+ * 解析顺序：
+ *   1. 优先扫 `def.methods`（canonical），返回首个 `kind === "constructor"` 的 entry。
+ *   2. 回落 `def.commands`（@deprecated alias）以兼容尚未迁移的 caller。
+ *
+ * 不命中返回 undefined；root method 应据此返回结构化错误（不要 fail-soft 到默认实现）。
+ *
+ * 与 `lookupMethod`/`lookupMethodEntry` 的区别：后两者按方法**名**索引；本函数按
+ * `kind === "constructor"` **标记**索引——一个 type 的 constructor 不必与 type 同名（虽
+ * 然按惯例通常是同名，例如 talk type 的 constructor 注册在 methods["talk"]）。
+ */
+export function lookupConstructor(type: ObjectType): ObjectMethod | undefined {
+  const def = REGISTRY.get(type) as ObjectDefinition | undefined;
+  if (!def) return undefined;
+  const scan = (table: Record<string, ObjectMethod> | undefined) => {
+    if (!table) return undefined;
+    for (const entry of Object.values(table)) {
+      if (entry.kind === "constructor") return entry;
+    }
+    return undefined;
+  };
+  return scan(def.methods) ?? scan(def.commands);
+}
+
 /** 列出所有已注册 type，按字母序返回。 */
 /** @deprecated Use listRegisteredObjectTypes instead (2026-05-28 ooc-6 Object Unification). listRegisteredWindowTypes is being renamed to listRegisteredObjectTypes. */
 export function listRegisteredWindowTypes(): WindowType[] {

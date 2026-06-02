@@ -401,8 +401,17 @@ describe("U3: root.write_file", () => {
     const out = JSON.parse(await dispatchWriteFile(thread, { path, content: "new content" }));
     expect(out.ok).toBe(true);
     expect(out.executed).toBe(true);
-    expect(out.result).toContain("[write_file hint]");
-    expect(out.result).toContain("file_window.edit");
+    // P6.§4-§5: hint 不再嵌在 submit result 字符串里（result = constructor placeholder），
+    // 改由 file constructor 注入到 thread.events，作为 inject 类型 context_change 事件。
+    const hintEvent = thread.events.find(
+      (e) =>
+        e.category === "context_change" &&
+        e.kind === "inject" &&
+        typeof (e as { text?: string }).text === "string" &&
+        (e as { text: string }).text.includes("[write_file hint]") &&
+        (e as { text: string }).text.includes("file_window.edit"),
+    );
+    expect(hintEvent).toBeDefined();
   });
 
   it("creating brand-new file does NOT emit overwrite hint", async () => {
@@ -552,9 +561,9 @@ describe("U4: root.glob + search_window.open_match", () => {
     const thread = makeThread({ id: "t_glob_no_pattern" });
     const out = JSON.parse(await dispatchGlob(thread, { cwd: TEMP }));
     expect(out.executed).toBe(true);
+    // P6.§4-§5: constructor 失败错误串只含核心提示，close/open 引导通过 form-input
+    // knowledge（formStatus="open"）暴露，不再嵌在 result 里。
     expect(out.result).toContain("缺少 pattern");
-    expect(out.result).toContain("close");
-    expect(out.result).toContain("open");
     expect(thread.contextWindows.find((w) => w.type === "search")).toBeUndefined();
   });
 
@@ -735,9 +744,8 @@ describe("U5: root.grep", () => {
     const thread = makeThread({ id: "t_grep_no_pattern" });
     const out = JSON.parse(await dispatchGrep(thread, { path: TEMP }));
     expect(out.executed).toBe(true);
+    // P6.§4-§5: 同 glob 的 missing-pattern——result 只含核心错误，close/open 通过 form knowledge 暴露。
     expect(out.result).toContain("缺少 pattern");
-    expect(out.result).toContain("close");
-    expect(out.result).toContain("open");
   });
 
   it("integration: grep → open_match spawns file_window with line context slice", async () => {

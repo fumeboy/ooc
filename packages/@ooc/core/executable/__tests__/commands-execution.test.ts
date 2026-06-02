@@ -132,11 +132,12 @@ describe("command execution side effects", () => {
 
   it("talk(target=user, title) creates a talk_window in contextWindows", async () => {
     const thread = makeThread({ id: "thread-talk" });
-    const result = await execRootCommand("talk", {
+    // P6.§4-§5: execRootCommand 把 constructor outcome 的 object 挂到 thread.contextWindows，
+    // 并返回 placeholder string "Constructed talk window <id>"。这里只验证副作用。
+    await execRootCommand("talk", {
       thread,
       args: { target: "user", title: "发布计划" },
     });
-    expect(result).toBeUndefined();
     const talkWindow = thread.contextWindows.find((w) => w.type === "talk");
     expect(talkWindow?.type).toBe("talk");
     expect(talkWindow && talkWindow.type === "talk" && talkWindow.target).toBe("user");
@@ -145,11 +146,10 @@ describe("command execution side effects", () => {
 
   it("talk accepts arbitrary objectId target (cross-object)", async () => {
     const thread = makeThread({ id: "thread-talk-other" });
-    const result = await execRootCommand("talk", {
+    await execRootCommand("talk", {
       thread,
       args: { target: "researcher", title: "ask" },
     });
-    expect(result).toBeUndefined();
     const talkWindow = thread.contextWindows.find((w) => w.type === "talk");
     expect(talkWindow?.type).toBe("talk");
     expect(talkWindow && talkWindow.type === "talk" && talkWindow.target).toBe("researcher");
@@ -161,30 +161,26 @@ describe("command execution side effects", () => {
       thread,
       args: { target: "", title: "x" },
     });
+    // P6.§4-§5: constructor 失败时返回 {ok:false, error}; execRootCommand 把 error 直接 return。
+    // close/open 引导现在通过 form-input knowledge（formStatus="open"）暴露，不再嵌在错误串里。
     expect(result).toContain("缺少 target");
-    expect(result).toContain("close");
-    expect(result).toContain("open");
   });
 
-  it("talk rejects empty title (with close+reopen hint)", async () => {
+  it("talk rejects empty title", async () => {
     const thread = makeThread({ id: "thread-talk-no-title" });
     const result = await execRootCommand("talk", {
       thread,
       args: { target: "user", title: "" },
     });
     expect(result).toContain("缺少 title");
-    expect(result).toContain("close");
-    expect(result).toContain("open");
   });
 
-  it("todo rejects empty content (with close+reopen hint)", async () => {
+  it("todo rejects empty content", async () => {
     const thread = makeThread({ id: "thread-todo-empty" });
     const result = await execRootCommand("todo", {
       thread,
       args: { content: "" },
     });
     expect(result).toContain("缺少 content");
-    expect(result).toContain("close");
-    expect(result).toContain("open");
   });
 });

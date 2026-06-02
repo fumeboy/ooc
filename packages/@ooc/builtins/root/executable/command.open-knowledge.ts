@@ -1,26 +1,21 @@
 /**
- * root.open_knowledge command — 显式打开一个 knowledge doc 作为 knowledge_window。
+ * root.open_knowledge command — 委托到 knowledge_window constructor。
  *
- * - args: path（必填，相对 stones/{objectId}/knowledge/ 的路径，不带 .md）
- * - 给齐 path 即直建 knowledge_window（open 立即提交 form）
- * - knowledge activator 在算激活集合时把所有打开的 knowledge_window.path 视为 force-full
- * - render 层从 loader index 拿 doc 正文渲染
+ * 2026-06-02 P6.§4-§5: 历史 root.open_knowledge 的构造逻辑（path 校验 + KnowledgeWindow build）
+ * 已迁到 packages/@ooc/builtins/knowledge/executable/index.ts 的 kind="constructor" knowledge method。
+ * 这里保留 root method 表项（knowledge / paths）；exec 走 lookupConstructor("knowledge") 委托。
  */
 
 import type {
   CommandExecutionContext,
   CommandKnowledgeEntries,
   CommandTableEntry,
+  MethodOutcome,
 } from "@ooc/core/extendable/_shared/command-types.js";
-import {
-  ROOT_WINDOW_ID,
-  generateWindowId,
-  type KnowledgeWindow,
-} from "@ooc/core/extendable/_shared/types.js";
-import { DEFAULT_VIEWPORT } from "@ooc/core/extendable/_shared/viewport.js";
-import { deriveStoneFromThread } from "@ooc/core/persistable/common.js";
-import { derivePoolFromThread } from "@ooc/core/persistable/pool-object.js";
-import { loadKnowledgeIndex } from "@ooc/core/thinkable/knowledge/index.js";
+import { lookupConstructor } from "@ooc/core/extendable/_shared/registry.js";
+
+// 2026-06-02 P6.§4-§5: side-effect import 触发 knowledge_window constructor 注册
+import "@ooc/builtins/knowledge";
 
 const OPEN_KNOWLEDGE_BASIC_PATH = "internal/executable/open_knowledge/basic";
 const OPEN_KNOWLEDGE_INPUT_PATH = "internal/executable/open_knowledge/input";
@@ -59,50 +54,13 @@ export const openKnowledgeCommand: CommandTableEntry = {
   exec: (ctx) => executeOpenKnowledgeCommand(ctx),
 };
 
-function basename(path: string): string {
-  const idx = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
-  return idx >= 0 ? path.slice(idx + 1) : path;
-}
-
+/**
+ * P6.§4-§5 thin delegator —— 委托到 knowledge_window constructor。
+ */
 export async function executeOpenKnowledgeCommand(
   ctx: CommandExecutionContext,
-): Promise<string | undefined> {
-  const thread = ctx.thread;
-  if (!thread) return "[open_knowledge] 缺少 thread context。";
-  const path = typeof ctx.args.path === "string" ? ctx.args.path : "";
-  if (!path) return "[open_knowledge] 缺少 path。";
-
-  // silent-swallow ban (R6 #44): exec 层显式校验 path 存在性,
-  // 避免 render 层用 <error> 内联兜底报告 "knowledge 不存在"
-  if (thread.persistence) {
-    try {
-      const stoneRef = deriveStoneFromThread(thread.persistence);
-      const poolRef = derivePoolFromThread(thread.persistence);
-      const index = await loadKnowledgeIndex({ stone: stoneRef, pool: poolRef });
-      if (!index.byPath.has(path)) {
-        return `[open_knowledge] knowledge "${path}" 不存在 (index 没有该路径)。可用 grep 在 knowledge/ 下确认路径,或 refine 重新提交。`;
-      }
-    } catch (err) {
-      return `[open_knowledge] 校验 path 失败: ${(err as Error).message}`;
-    }
-  }
-
-  const knowledgeWindow: KnowledgeWindow = {
-    id: generateWindowId("knowledge"),
-    type: "knowledge",
-    parentWindowId: ROOT_WINDOW_ID,
-    title: basename(path),
-    status: "open",
-    createdAt: Date.now(),
-    path,
-    source: "explicit",
-    viewport: { ...DEFAULT_VIEWPORT },
-  };
-
-  if (ctx.manager) {
-    ctx.manager.insertTypedWindow(knowledgeWindow, ctx.thread);
-  } else {
-    thread.contextWindows = [...(thread.contextWindows ?? []), knowledgeWindow];
-  }
-  return undefined;
+): Promise<MethodOutcome | string | undefined> {
+  const ctor = lookupConstructor("knowledge");
+  if (!ctor) return "[open_knowledge] knowledge_window constructor 未注册（registry 期望 kind=\"constructor\" 的 knowledge method）。";
+  return await ctor.exec(ctx);
 }

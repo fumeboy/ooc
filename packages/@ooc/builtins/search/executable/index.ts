@@ -20,13 +20,16 @@ import type {
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/command-types.js";
 import { registerObjectType, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
+import { Glob } from "bun";
 import { isAbsolute, resolve } from "node:path";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
   type FileWindow,
+  type SearchMatch,
 } from "@ooc/core/extendable/_shared/types.js";
 import type { SearchWindow } from "../types.js";
+import { resolveSessionPath } from "@ooc/core/extendable/_shared/session-path.js";
 import { xmlElement, xmlText, type XmlNode } from "@ooc/core/thinkable/context/xml.js";
 import {
   applyTranscriptViewport,
@@ -34,6 +37,11 @@ import {
 } from "@ooc/core/extendable/_shared/transcript-viewport.js";
 import { DEFAULT_RESULTS_VIEWPORT } from "./results-viewport.js";
 import { setResultsWindowCommandForSearch } from "./command.set-results-window.js";
+import {
+  runRipgrep,
+  runJsFallback,
+  type GrepHit,
+} from "@ooc/builtins/root/executable/command.grep.impl.js";
 import { readable } from "../readable.js";
 
 export const SEARCH_WINDOW_BASIC_PATH = "internal/windows/search/basic";
@@ -237,4 +245,198 @@ registerObjectType("search", {
   readable,
   compressView: compressSearchWindow,
   basicKnowledge: SEARCH_WINDOW_BASIC_KNOWLEDGE,
+});
+
+// ─────────────────────────── constructor (P6.§4-§5) ──────────────────────────
+
+const SEARCH_GLOB_BASIC = "internal/objects/search/glob/basic";
+const SEARCH_GLOB_INPUT = "internal/objects/search/glob/input";
+const SEARCH_GREP_BASIC = "internal/objects/search/grep/basic";
+const SEARCH_GREP_INPUT = "internal/objects/search/grep/input";
+
+const SEARCH_GLOB_KNOWLEDGE = `
+glob 用于按文件名通配符（glob pattern）查找文件，并把结果作为 search_window 留在 context。
+
+参数：
+- pattern: 必填，glob 通配符。例：\`src/**/*.ts\`、\`*.md\`、\`tests/**/*\`
+- cwd: 可选，搜索根目录（相对路径以 session baseDir 为根）；缺省 = session baseDir
+
+行为：
+- 用 Bun 内置 Glob 扫描文件系统；只返回文件（onlyFiles=true）
+- 命中按 path 字典序排序；超过 200 条截断，search_window.truncated=true
+- 命中之后用 \`open(parent_window_id="<search_window_id>", command="open_match", args={ index: <N> })\`
+  在该 match 对应的文件上 spawn file_window
+
+调用示例：
+
+\`\`\`
+open(command="glob", title="找全部 TS",
+     args={ pattern: "src/**/*.ts" })
+\`\`\`
+
+注意：
+- 这是文件名匹配；要按文件**内容**搜索请用 \`grep\`
+- 结果集 ≥ 200 时建议把 pattern 改更精确（本期不提供 next_page）
+`.trim();
+
+const SEARCH_GREP_KNOWLEDGE = `
+grep 用于按文件**内容**（regex）搜索代码或文档，并把命中作为 search_window 留在 context。
+
+参数：
+- pattern: 必填 regex
+- path: 可选，搜索目录或文件；缺省 = session baseDir
+- glob: 可选，子文件名 glob 过滤（如 "*.ts"）
+- case_insensitive: 可选 boolean
+
+行为：
+- 优先调 ripgrep（rg --json）；失败回退到内置 JS 实现
+- 命中按 (path, line) 排序；超过 200 条截断
+- 命中通过 \`open(parent_window_id="<search_window_id>", command="open_match", args={ index })\` 直开 file_window
+`.trim();
+
+const SEARCH_MAX_MATCHES = 200;
+
+/**
+ * P6.§4-§5 constructor —— 创建 search_window（glob 或 grep）。
+ *
+ * dispatch 通过 ctx.form?.command:
+ *  - "glob"：调 Bun Glob，匹配文件名
+ *  - "grep"：先 runRipgrep，失败回退 runJsFallback
+ *
+ * 行为:
+ *  - 校验必填参数 (glob: pattern; grep: pattern)
+ *  - 跑搜索，sort + 截断到 200
+ *  - generateWindowId("search") + build SearchWindow
+ *  - 返回 { ok: true, object: searchWindow }
+ *
+ * P6 mark: kind="constructor"，manager.submit §2 分支挂载。
+ */
+const searchConstructor: ObjectMethod = {
+  kind: "constructor",
+  paths: ["glob", "grep"],
+  match: (args) => {
+    // 通过 args 形态推断 path（match() 看不到 ctx.form.command）。
+    // grep 特征参数：path / glob / case_insensitive；否则按 glob 处理。
+    const a = args as Record<string, unknown>;
+    if (typeof a.path === "string" || typeof a.glob === "string" || a.case_insensitive === true) {
+      return ["grep"];
+    }
+    return ["glob"];
+  },
+  knowledge: (args, formStatus): CommandKnowledgeEntries => {
+    const entries: CommandKnowledgeEntries = {
+      [SEARCH_GLOB_BASIC]: SEARCH_GLOB_KNOWLEDGE,
+      [SEARCH_GREP_BASIC]: SEARCH_GREP_KNOWLEDGE,
+    };
+    if (formStatus !== "open") return entries;
+    if (typeof args.pattern !== "string" || args.pattern.length === 0) {
+      entries[SEARCH_GLOB_INPUT] =
+        "glob 还缺以下参数: pattern。\n" +
+        "请用 refine(form_id, args={ pattern: \"<glob-string>\", cwd?: \"<dir>\" }) 补齐后 submit(form_id)。\n" +
+        "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
+      entries[SEARCH_GREP_INPUT] =
+        "grep 还缺以下参数: pattern。\n" +
+        "请用 refine(form_id, args={ pattern: \"<regex>\", path?: \"<dir-or-file>\", glob?: \"*.ts\", case_insensitive?: true }) 补齐后 submit(form_id)。";
+    }
+    return entries;
+  },
+  permission: () => "allow",
+  exec: async (ctx) => {
+    const thread = ctx.thread;
+    if (!thread) return { ok: false, error: "[search] 缺少 thread context。" };
+    const command = ctx.form?.command ?? "glob";
+    const pattern = typeof ctx.args.pattern === "string" ? ctx.args.pattern : "";
+    if (!pattern) return { ok: false, error: `[${command}] 缺少 pattern 参数。` };
+
+    if (command === "grep") {
+      const rawPath = typeof ctx.args.path === "string" ? ctx.args.path : "";
+      const path = rawPath
+        ? resolveSessionPath(thread, rawPath)
+        : resolveSessionPath(thread, ".");
+      const glob = typeof ctx.args.glob === "string" ? ctx.args.glob : undefined;
+      const caseInsensitive = ctx.args.case_insensitive === true;
+      const opts = { pattern, path, glob, caseInsensitive };
+
+      let matches: GrepHit[] | undefined;
+      try {
+        matches = await runRipgrep(opts);
+      } catch {
+        matches = undefined;
+      }
+      if (matches === undefined) {
+        try {
+          matches = await runJsFallback(opts);
+        } catch (err) {
+          return { ok: false, error: `[grep] 搜索失败：${(err as Error).message}` };
+        }
+      }
+      matches.sort((a, b) =>
+        a.path === b.path ? a.line - b.line : a.path.localeCompare(b.path),
+      );
+      const truncated = matches.length > SEARCH_MAX_MATCHES;
+      const head = truncated ? matches.slice(0, SEARCH_MAX_MATCHES) : matches;
+      const searchMatches: SearchMatch[] = head.map((m, index) => ({
+        index,
+        path: m.path,
+        line: m.line,
+        snippet: m.snippet,
+      }));
+      const sw: SearchWindow = {
+        id: generateWindowId("search"),
+        type: "search",
+        parentWindowId: ROOT_WINDOW_ID,
+        title: `grep ${pattern}`,
+        status: "open",
+        createdAt: Date.now(),
+        kind: "grep",
+        query: pattern,
+        matches: searchMatches,
+        truncated,
+        searchRoot: path,
+        resultsViewport: { ...DEFAULT_RESULTS_VIEWPORT },
+      };
+      return { ok: true, object: sw };
+    }
+
+    // glob path
+    const rawCwd = typeof ctx.args.cwd === "string" ? ctx.args.cwd : "";
+    const cwd = rawCwd ? resolveSessionPath(thread, rawCwd) : resolveSessionPath(thread, ".");
+    let matchesRaw: string[];
+    try {
+      const g = new Glob(pattern);
+      matchesRaw = Array.from(g.scanSync({ cwd, onlyFiles: true, absolute: false }));
+    } catch (err) {
+      return { ok: false, error: `[glob] 扫描失败：${(err as Error).message}` };
+    }
+    matchesRaw.sort();
+    const truncated = matchesRaw.length > SEARCH_MAX_MATCHES;
+    const head = truncated ? matchesRaw.slice(0, SEARCH_MAX_MATCHES) : matchesRaw;
+    const matches: SearchMatch[] = head.map((path, index) => ({ index, path }));
+    const sw: SearchWindow = {
+      id: generateWindowId("search"),
+      type: "search",
+      parentWindowId: ROOT_WINDOW_ID,
+      title: `glob ${pattern}`,
+      status: "open",
+      createdAt: Date.now(),
+      kind: "glob",
+      query: pattern,
+      matches,
+      truncated,
+      searchRoot: cwd,
+      resultsViewport: { ...DEFAULT_RESULTS_VIEWPORT },
+    };
+    return { ok: true, object: sw };
+  },
+};
+
+// 二次注册：把 constructor 加进 commands 表（registerObjectType 替换 methods）
+registerObjectType("search", {
+  commands: {
+    close: closeCommand,
+    open_match: openMatchCommand,
+    set_results_window: setResultsWindowCommandForSearch,
+    glob: searchConstructor,
+    grep: searchConstructor,
+  },
 });

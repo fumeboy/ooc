@@ -14,7 +14,8 @@
  * 详见 meta/object.doc.ts:executable.context_window.patches.viewport_protocol。
  */
 
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
 import type {
   CommandExecutionContext,
@@ -30,6 +31,15 @@ import {
   hasAnyViewportField,
   type Viewport,
 } from "@ooc/core/extendable/_shared/viewport.js";
+import {
+  ROOT_WINDOW_ID,
+  generateWindowId,
+} from "@ooc/core/extendable/_shared/types.js";
+import {
+  classifyStonesPath,
+  resolveSessionPath,
+} from "@ooc/core/extendable/_shared/session-path.js";
+import { versionedStoneWrite } from "@ooc/core/persistable/index.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/thinkable/context/xml.js";
 import { readable } from "../readable.js";
 
@@ -216,6 +226,11 @@ function asTuple(value: unknown): [number, number] | undefined {
   return undefined;
 }
 
+function basenameOfPath(p: string): string {
+  const idx = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+  return idx >= 0 ? p.slice(idx + 1) : p;
+}
+
 function isString(value: unknown): value is string {
   return typeof value === "string";
 }
@@ -396,6 +411,177 @@ async function compressFileWindow(
   return children;
 }
 
+// ─────────────────────────── constructor (P6.§4) ────────────────────────────
+
+/**
+ * P6.§4 (2026-06-02): Constructor for the `file` Object type.
+ *
+ * Encapsulates the construction of a `file_window` ContextWindow. The root
+ * methods `open_file` and `write_file` (in `@ooc/builtins/root`) become thin
+ * delegators that call this constructor via `lookupConstructor("file")`.
+ *
+ * Two `paths` are exposed because two root methods construct file windows:
+ *  - `open_file` — read-only window pointing at an existing file (path / lines / columns)
+ *  - `write_file` — write content to disk (with optional stone versioning) then spawn a window
+ *
+ * Dispatch on `ctx.form?.command`:
+ *  - command === "write_file": validate path + content, perform write (versioned for stones,
+ *    direct for non-stone), then construct a FileWindow.
+ *  - command === "open_file" (or anything else): validate path exists, then construct.
+ *
+ * Validation rules (per root method):
+ *  - open_file: `path` is a non-empty string; resolved against session baseDir; must exist.
+ *  - write_file: `path` is a non-empty string; `content` is a string (may be empty);
+ *    if path falls inside a stone-object subtree, route through versionedStoneWrite;
+ *    workspace-level packages/ paths are forbidden.
+ *
+ * Returns: `{ ok: true, object: FileWindow }` on success — manager.submit's §2 branch
+ * inserts the window. Failure → `{ ok: false, error }` (form stays in failed state).
+ */
+const fileConstructor: ObjectMethod = {
+  kind: "constructor",
+  paths: ["open_file", "write_file"],
+  match: (args) => {
+    // The match() return is the "active path" set; for constructors this drives knowledge
+    // activation/observability. We pick the path that matches the form.command—but match()
+    // doesn't see ctx.form, so we approximate by inspecting the args shape:
+    // - has `content` field → write_file
+    // - else → open_file
+    if (typeof args.content === "string") return ["write_file"];
+    return ["open_file"];
+  },
+  permission: () => "allow",
+  exec: async (ctx) => {
+    const thread = ctx.thread;
+    if (!thread) return { ok: false, error: "[file] 缺少 thread context。" };
+    const command = ctx.form?.command ?? "open_file";
+
+    if (command === "write_file") {
+      const rawPath = isString(ctx.args.path) ? ctx.args.path : "";
+      if (!rawPath) return { ok: false, error: "[write_file] 缺少 path 参数。" };
+      const content = ctx.args.content;
+      if (typeof content !== "string") {
+        return { ok: false, error: "[write_file] 缺少 content 参数（应是字符串，可为空）。" };
+      }
+      const path = resolveSessionPath(thread, rawPath);
+      const baseDir = thread.persistence?.baseDir;
+      const stoneClass = classifyStonesPath(path, baseDir, undefined);
+
+      // 历史 write_file 的 preExisted hint：覆盖已有文件时给一条提示，把"修改局部用 edit"
+      // 的规则推到 LLM 眼前。constructor outcome 不能返回 result 字符串（已被 manager 改成
+      // "Constructed file window <id>"），所以改写为 thread 事件 inject。
+      let preExisted = false;
+      if (stoneClass.kind !== "stone-object" && stoneClass.kind !== "stones-world") {
+        try {
+          const s = await stat(path);
+          preExisted = s.isFile();
+        } catch {
+          /* 不存在 → 新建 */
+        }
+      }
+
+      if (stoneClass.kind === "stone-object") {
+        const authorObjectId = thread.persistence?.objectId;
+        if (!baseDir || !authorObjectId) {
+          return {
+            ok: false,
+            error:
+              `[write_file] 路径落在 packages 自治区 (${path}) 需走 versioning，但当前 thread ` +
+              `缺少 ${!baseDir ? "persistence.baseDir" : "persistence.objectId"}，无法版本化写入。`,
+          };
+        }
+        const versioned = await versionedStoneWrite({
+          baseDir,
+          authorObjectId,
+          intent: `write_file ${stoneClass.relInObjects}`,
+          write: async (wt) => {
+            const target = join(wt.path, stoneClass.relInObjects);
+            await mkdir(dirname(target), { recursive: true });
+            await writeFile(target, content, "utf8");
+          },
+        });
+        if (!versioned.ok) {
+          return { ok: false, error: `[write_file] versioning 写入失败 (${versioned.code})：${versioned.message}` };
+        }
+        // versioning 信息走 thread.events.inject（constructor outcome 不能返 result 字符串）
+        const scopeNote = versioned.merged
+          ? `已 commit 并合并（commit ${versioned.commitSha.slice(0, 8)}）`
+          : `改动越出你的自治区，已开 PR-Issue #${versioned.prIssueId} 等 Supervisor 评审（暂未合并）`;
+        if (thread.events) {
+          thread.events.push({
+            category: "context_change",
+            kind: "inject",
+            text: `[write_file] ${path} 经 versioning ${scopeNote}。`,
+          });
+        }
+      } else if (stoneClass.kind === "stones-world") {
+        return {
+          ok: false,
+          error:
+            `[write_file] 路径 ${path} 落在 packages/ 根但不在某个 Object 的 ` +
+            `子目录内（workspace-level 资源）。这类资源不能通过 write_file 修改。`,
+        };
+      } else {
+        try {
+          await mkdir(dirname(path), { recursive: true });
+          await writeFile(path, content, "utf8");
+        } catch (err) {
+          return { ok: false, error: `[write_file] 写入 ${path} 失败：${(err as Error).message}` };
+        }
+      }
+      const fileWindow: FileWindow = {
+        id: generateWindowId("file"),
+        type: "file",
+        parentWindowId: ROOT_WINDOW_ID,
+        title: basenameOfPath(path),
+        status: "open",
+        createdAt: Date.now(),
+        path,
+      };
+      if (preExisted) {
+        if (thread.events) {
+          thread.events.push({
+            category: "context_change",
+            kind: "inject",
+            text:
+              `[write_file hint] 你刚整文件覆盖了已有文件 ${path}。如果你的意图是"修改局部"` +
+              `（而不是完整重写），下次请改走 file_window.edit：先 open_file 把文件载入 file_window，` +
+              `再 open(parent_window_id=<file_window_id>, command="edit", args={ old, new })。` +
+              `write_file 适合新建文件或确实要丢弃整个旧版本的场景。`,
+          });
+        }
+      }
+      return { ok: true, object: fileWindow };
+    }
+
+    // open_file path
+    const rawPath = isString(ctx.args.path) ? ctx.args.path : "";
+    if (!rawPath) return { ok: false, error: "[open_file] 缺少 path。" };
+    const path = resolveSessionPath(thread, rawPath);
+    try {
+      await stat(path);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        return { ok: false, error: `[open_file] 文件不存在: ${path}` };
+      }
+      return { ok: false, error: `[open_file] 校验 path 失败: ${(err as Error).message}` };
+    }
+    const fileWindow: FileWindow = {
+      id: generateWindowId("file"),
+      type: "file",
+      parentWindowId: ROOT_WINDOW_ID,
+      title: basenameOfPath(path),
+      status: "open",
+      createdAt: Date.now(),
+      path,
+      viewport: { ...DEFAULT_VIEWPORT },
+      lines: asTuple(ctx.args.lines),
+      columns: asTuple(ctx.args.columns),
+    };
+    return { ok: true, object: fileWindow };
+  },
+};
+
 registerObjectType("file", {
   commands: {
     set_range: setRangeCommand,
@@ -403,6 +589,7 @@ registerObjectType("file", {
     reload: reloadCommand,
     edit: editCommand,
     close: closeCommand,
+    file: fileConstructor,
   },
   readable,
   compressView: compressFileWindow,

@@ -15,6 +15,10 @@ import type {
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/command-types.js";
 import { registerObjectType } from "@ooc/core/extendable/_shared/registry.js";
+import {
+  ROOT_WINDOW_ID,
+  generateWindowId,
+} from "@ooc/core/extendable/_shared/types.js";
 import { runOneExec, type ProgramExecArgs } from "./runtime.js";
 export { runOneExec, type ProgramExecArgs } from "./runtime.js";
 import type { ProgramWindow } from "../types.js";
@@ -169,11 +173,148 @@ export async function executeProgramWindowExec(
 
 /** program_window 的 renderXml hook 已迁出到 ../readable.ts。 */
 
+// ─────────────────────────── constructor (P6.§4-§5) ──────────────────────────
+
+const PROGRAM_CONSTRUCTOR_BASIC = "internal/objects/program/constructor/basic";
+const PROGRAM_CONSTRUCTOR_INPUT = "internal/objects/program/constructor/input";
+const PROGRAM_CONSTRUCTOR_FORM_STATUS = "internal/objects/program/constructor/form-status";
+
+const PROGRAM_CONSTRUCTOR_KNOWLEDGE = `
+program 用于执行一段 shell / ts / js 代码；submit 后产出一个 program_window，
+首次 exec 立即跑完，结果进 program_window.history。后续 exec 通过该 window 的
+\`exec\` command 触发。
+
+参数（首次 exec）：
+- language: shell / ts / js（与 code 配合，必填）
+- code: 待执行代码字符串（必填）
+
+shell 环境变量：
+- shell 命令的 cwd 是 OOC 进程的工作目录
+- 想读写自己的 stone 目录（self.dir），用 env $OOC_SELF_DIR
+
+ts/js 上下文：
+- self.dir / self.callCommand(windowId, command, args?) / self.getData / self.setData 可用
+- 跨 exec 共享：self.getThreadLocal(key) / self.setThreadLocal(key, value)
+- shell 之间不共享 threadLocal（OS 进程隔离），需要时自行写入 stone data
+
+后续多次执行：
+- exec(window_id="<program_window_id>", command="exec", args={ language, code })
+
+调用示例：
+exec(command="program", title="统计 ts 文件数量", args={ language: "shell", code: "find src -name '*.ts' | wc -l" })
+
+要调任意 window 上的命令请直接用顶层 \`exec\` tool（不再走 program）；
+ts/js sandbox 内仍可 \`await self.callCommand("custom:<self>", "<name>", {...})\` 编排多步调用。
+
+## 建议
+
+- 修改已有文件优先使用 \`file_window.edit\`（在已 open 的 file_window 上做 oldString→newString 精确替换；支持 atomic 多点修改）
+- 新建文件优先使用 \`root.write_file\`（一步写盘 + 自动 spawn file_window）
+- 搜索文件名优先使用 \`root.glob\`；搜索文件内容优先使用 \`root.grep\`（结果是结构化 search_window，可被 open_match 直接打开）
+- \`program(language="shell")\` 适合临时计算 / 不修改 worktree 的探查（统计、查询版本、跑测试）；**不要用 shell sed / awk / cat-redirect 改文件**——会失去 file_window 的版本可见性，且转义容易出错
+`.trim();
+
+function deriveProgramTitle(args: ProgramExecArgs, max = 60): string {
+  const summary =
+    args.language && args.code
+      ? `${args.language}: ${args.code.split("\n")[0] ?? ""}`
+      : "program";
+  return summary.length <= max ? summary : `${summary.slice(0, max)}...`;
+}
+
+/**
+ * P6.§4-§5 constructor —— 创建 program_window + 跑首次 exec。
+ *
+ * args:
+ *  - language: "shell" | "ts" | "js" (必填)
+ *  - code: string (必填)
+ *
+ * 行为:
+ *  - validate language+code 两个参数都非空
+ *  - 调 runOneExec(thread, args) 跑第一次执行
+ *  - generateWindowId("program") + build ProgramWindow，history=[record]
+ *  - 返回 { ok: true, object: programWindow }
+ *
+ * P6 mark: kind="constructor"，manager.submit §2 分支挂载。
+ */
+const programConstructor: ObjectMethod = {
+  kind: "constructor",
+  paths: ["program", "program.shell", "program.ts", "program.js"],
+  match: (args) => {
+    const hit: string[] = ["program"];
+    const lang = (args.language ?? args.lang) as string | undefined;
+    if (lang === "shell") hit.push("program.shell");
+    if (lang === "ts" || lang === "typescript") hit.push("program.ts");
+    if (lang === "js" || lang === "javascript") hit.push("program.js");
+    return hit;
+  },
+  knowledge: (args, formStatus): CommandKnowledgeEntries => {
+    const entries: CommandKnowledgeEntries = {
+      [PROGRAM_CONSTRUCTOR_BASIC]: PROGRAM_CONSTRUCTOR_KNOWLEDGE,
+    };
+    const lang = (args.language ?? args.lang) as string | undefined;
+    const code = typeof args.code === "string" ? args.code.trim() : "";
+    if (formStatus === "executing") {
+      entries[PROGRAM_CONSTRUCTOR_FORM_STATUS] =
+        "对于 command program 的 executing 状态的 form，应等待 result 写入后再继续，不要再次 refine 或 submit。";
+      return entries;
+    }
+    if (formStatus === "success") {
+      entries[PROGRAM_CONSTRUCTOR_FORM_STATUS] =
+        "对于 command program 的 success 状态的 form，结果已成功生成；form 将自动从 context 移除。";
+      return entries;
+    }
+    if (formStatus === "failed") {
+      entries[PROGRAM_CONSTRUCTOR_FORM_STATUS] =
+        "对于 command program 的 failed 状态的 form，先阅读 result 排查错误：可 refine(form_id, args={ language, code }) 修正参数后重 submit（form 会自动切回 open），或 close(form_id, reason=...) 彻底放弃。";
+      return entries;
+    }
+    if (lang && code) {
+      entries[PROGRAM_CONSTRUCTOR_INPUT] =
+        "program 参数已具备；submit 即创建 program_window 并执行。";
+      return entries;
+    }
+    const missing: string[] = [];
+    if (!lang) missing.push("language");
+    if (!code) missing.push("code");
+    entries[PROGRAM_CONSTRUCTOR_INPUT] =
+      `program 还缺以下参数: ${missing.join(", ")}。\n` +
+      "请用 refine(form_id, args={ language: \"shell\" | \"ts\" | \"js\", code: \"<待执行代码>\" }) 补齐后 submit(form_id)。\n" +
+      "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
+    return entries;
+  },
+  permission: () => "allow",
+  exec: async (ctx) => {
+    const thread = ctx.thread;
+    if (!thread) return { ok: false, error: "[program] 缺少 thread context。" };
+    const execArgs: ProgramExecArgs = {
+      language: ctx.args.language as ProgramExecArgs["language"],
+      code: ctx.args.code as string | undefined,
+    };
+    if (!(execArgs.language && execArgs.code)) {
+      return { ok: false, error: "[program] 缺少执行参数；需要 language+code。" };
+    }
+    const record = await runOneExec(thread, execArgs);
+    const programWindow: ProgramWindow = {
+      id: generateWindowId("program"),
+      type: "program",
+      parentWindowId: ROOT_WINDOW_ID,
+      title: deriveProgramTitle(execArgs),
+      status: "open",
+      createdAt: Date.now(),
+      history: [record],
+      historyViewport: DEFAULT_HISTORY_VIEWPORT,
+    };
+    return { ok: true, object: programWindow };
+  },
+};
+
 registerObjectType("program", {
   commands: {
     exec: execCommand,
     close: closeCommand,
     set_history_window: setHistoryWindowCommand,
+    program: programConstructor,
   },
   readable,
 });

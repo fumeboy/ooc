@@ -25,7 +25,16 @@ import { registerObjectType, type OnCloseContext } from "@ooc/core/extendable/_s
 import {
   executeWindowSetViewport,
   hasAnyViewportField,
+  DEFAULT_VIEWPORT,
 } from "@ooc/core/extendable/_shared/viewport.js";
+import {
+  ROOT_WINDOW_ID,
+  generateWindowId,
+  type KnowledgeWindow,
+} from "@ooc/core/extendable/_shared/types.js";
+import { deriveStoneFromThread } from "@ooc/core/persistable/common.js";
+import { derivePoolFromThread } from "@ooc/core/persistable/pool-object.js";
+import { loadKnowledgeIndex } from "@ooc/core/thinkable/knowledge/index.js";
 import { readable } from "../readable.js";
 
 const KNOWLEDGE_WINDOW_RELOAD_BASIC = "internal/windows/knowledge/reload/basic";
@@ -111,11 +120,106 @@ function onCloseKnowledgeWindow(ctx: OnCloseContext): boolean | void {
 
 /** knowledge_object 的 renderXml hook 已迁出到 ../readable.ts。 */
 
+// ─────────────────────────── constructor (P6.§4-§5) ──────────────────────────
+
+const KNOWLEDGE_CONSTRUCTOR_BASIC = "internal/objects/knowledge/constructor/basic";
+const KNOWLEDGE_CONSTRUCTOR_INPUT = "internal/objects/knowledge/constructor/input";
+
+const KNOWLEDGE_CONSTRUCTOR_KNOWLEDGE = `
+open_knowledge 用于显式打开一个 knowledge doc，作为 knowledge_window 持续可见。
+
+参数：
+- path: 必填，knowledge 索引中的路径（不带 .md，例如 "build-tools/file-ops"）
+
+打开后该 knowledge 会强制以 full 形式渲染（绕过 activator 的 command-path 命中规则），
+直到显式 close。等价于旧 pinnedKnowledge。
+
+后续：
+- 关闭：close(window_id="<knowledge_window_id>")
+
+调用示例：
+open(command="open_knowledge", title="pin file-ops", args={ path: "build-tools/file-ops" })
+`.trim();
+
+function basenameOfPath(p: string): string {
+  const idx = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+  return idx >= 0 ? p.slice(idx + 1) : p;
+}
+
+/**
+ * P6.§4-§5 constructor —— 创建 explicit knowledge_window。
+ *
+ * 行为:
+ *  - 校验 args.path 非空
+ *  - 校验 thread.persistence 上的 knowledge index 含此 path（fail-loud）
+ *  - generateWindowId("knowledge") + build KnowledgeWindow（source="explicit"）
+ *  - 返回 { ok: true, object: knowledgeWindow }
+ *
+ * 注意: protocol / activator 来源的 knowledge_window 由系统每轮合成，不走该 constructor。
+ */
+const knowledgeConstructor: ObjectMethod = {
+  kind: "constructor",
+  paths: ["open_knowledge"],
+  match: () => ["open_knowledge"],
+  knowledge: (args, formStatus): CommandKnowledgeEntries => {
+    const entries: CommandKnowledgeEntries = {
+      [KNOWLEDGE_CONSTRUCTOR_BASIC]: KNOWLEDGE_CONSTRUCTOR_KNOWLEDGE,
+    };
+    if (formStatus !== "open") return entries;
+    const path = typeof args.path === "string" ? args.path : "";
+    if (!path) {
+      entries[KNOWLEDGE_CONSTRUCTOR_INPUT] =
+        "open_knowledge 还缺以下参数: path。\n" +
+        "请用 refine(form_id, args={ path: \"<knowledge-doc-path-不带.md>\" }) 补齐后 submit(form_id)。\n" +
+        "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
+    }
+    return entries;
+  },
+  permission: () => "allow",
+  exec: async (ctx) => {
+    const thread = ctx.thread;
+    if (!thread) return { ok: false, error: "[open_knowledge] 缺少 thread context。" };
+    const path = typeof ctx.args.path === "string" ? ctx.args.path : "";
+    if (!path) return { ok: false, error: "[open_knowledge] 缺少 path。" };
+
+    if (thread.persistence) {
+      try {
+        const stoneRef = deriveStoneFromThread(thread.persistence);
+        const poolRef = derivePoolFromThread(thread.persistence);
+        const index = await loadKnowledgeIndex({ stone: stoneRef, pool: poolRef });
+        if (!index.byPath.has(path)) {
+          return {
+            ok: false,
+            error:
+              `[open_knowledge] knowledge "${path}" 不存在 (index 没有该路径)。可用 grep 在 knowledge/ 下确认路径,或 refine 重新提交。`,
+          };
+        }
+      } catch (err) {
+        return { ok: false, error: `[open_knowledge] 校验 path 失败: ${(err as Error).message}` };
+      }
+    }
+
+    const knowledgeWindow: KnowledgeWindow = {
+      id: generateWindowId("knowledge"),
+      type: "knowledge",
+      parentWindowId: ROOT_WINDOW_ID,
+      title: basenameOfPath(path),
+      status: "open",
+      createdAt: Date.now(),
+      path,
+      source: "explicit",
+      viewport: { ...DEFAULT_VIEWPORT },
+    };
+    return { ok: true, object: knowledgeWindow };
+  },
+};
+
 registerObjectType("knowledge", {
   commands: {
     reload: reloadCommand,
     close: closeCommand,
     set_viewport: setViewportCommand,
+    open_knowledge: knowledgeConstructor,
   },
   onClose: onCloseKnowledgeWindow,
   readable,

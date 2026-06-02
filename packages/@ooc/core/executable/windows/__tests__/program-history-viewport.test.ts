@@ -382,11 +382,12 @@ describe("root.program creates program_window with DEFAULT_HISTORY_VIEWPORT", ()
       thread,
       args: { language: "shell", code: "echo hi" },
     });
-    expect(out).toBeUndefined();
-    const win = thread.contextWindows.find((w) => w.type === "program") as
-      | ProgramWindow
-      | undefined;
-    expect(win).toBeDefined();
-    expect(win!.historyViewport).toEqual({ tail: 10 });
+    // P6.§4-§5: root.program 现在是 constructor 委托——返回 { ok:true, object } 而非 undefined
+    expect(out).toBeDefined();
+    expect(typeof out).toBe("object");
+    const outcome = out as { ok: true; object: ProgramWindow };
+    expect(outcome.ok).toBe(true);
+    expect(outcome.object.type).toBe("program");
+    expect(outcome.object.historyViewport).toEqual({ tail: 10 });
   });
 });

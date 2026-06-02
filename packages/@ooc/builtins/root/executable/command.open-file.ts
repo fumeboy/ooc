@@ -1,24 +1,21 @@
 /**
- * root.open_file command — 创建一个 file_window，把指定文件内容引入 context。
+ * root.open_file command — 委托到 file_window constructor。
  *
- * - args: path（必填）, lines?, columns?
- * - 给齐 path 即直建 file_window（open 立即提交 form）
- * - file_window 自身的 set_range / reload / close 由 windows/file.ts 注册
+ * 2026-06-02 P6.§4-§5: 历史 root.open_file 的构造逻辑（path 校验 + FileWindow build）已迁到
+ * packages/@ooc/builtins/file/executable/index.ts 的 kind="constructor" file method（command 分发）。
+ * 这里保留 root method 表项（knowledge / paths）；exec 走 lookupConstructor("file") 委托。
  */
 
 import type {
   CommandExecutionContext,
   CommandKnowledgeEntries,
   CommandTableEntry,
+  MethodOutcome,
 } from "@ooc/core/extendable/_shared/command-types.js";
-import {
-  ROOT_WINDOW_ID,
-  generateWindowId,
-  type FileWindow,
-} from "@ooc/core/extendable/_shared/types.js";
-import { resolveSessionPath } from "@ooc/core/extendable/_shared/session-path.js";
-import { DEFAULT_VIEWPORT } from "@ooc/core/extendable/_shared/viewport.js";
-import { stat } from "node:fs/promises";
+import { lookupConstructor } from "@ooc/core/extendable/_shared/registry.js";
+
+// 2026-06-02 P6.§4-§5: side-effect import 触发 file_window constructor 注册
+import "@ooc/builtins/file";
 
 const OPEN_FILE_BASIC_PATH = "internal/executable/open_file/basic";
 const OPEN_FILE_INPUT_PATH = "internal/executable/open_file/input";
@@ -57,61 +54,19 @@ export const openFileCommand: CommandTableEntry = {
   exec: (ctx) => executeOpenFileCommand(ctx),
 };
 
-function asTuple(value: unknown): [number, number] | undefined {
-  if (
-    Array.isArray(value) &&
-    value.length === 2 &&
-    typeof value[0] === "number" &&
-    typeof value[1] === "number"
-  ) {
-    return [value[0], value[1]];
-  }
-  return undefined;
-}
-
-function basename(path: string): string {
-  const idx = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
-  return idx >= 0 ? path.slice(idx + 1) : path;
-}
-
+/**
+ * P6.§4-§5 thin delegator —— 委托到 file_window constructor（dispatch on form.command="open_file"）。
+ *
+ * 注入一个最小 form shim（{ command: "open_file" }）到 ctx，让 constructor 的
+ * dispatch 分支拿到正确的 command 名（生产链路里 manager.submit 会传完整 form）。
+ */
 export async function executeOpenFileCommand(
   ctx: CommandExecutionContext,
-): Promise<string | undefined> {
-  const thread = ctx.thread;
-  if (!thread) return "[open_file] 缺少 thread context。";
-  const rawPath = typeof ctx.args.path === "string" ? ctx.args.path : "";
-  if (!rawPath) return "[open_file] 缺少 path。";
-
-  // 相对路径以 session baseDir 为根（不再以 OOC 进程 cwd 为根）
-  const path = resolveSessionPath(thread, rawPath);
-
-  // silent-swallow ban: exec 层显式校验 path 存在性,避免 render 层 <error> 内联兜底
-  try {
-    await stat(path);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      return `[open_file] 文件不存在: ${path}`;
-    }
-    return `[open_file] 校验 path 失败: ${(err as Error).message}`;
-  }
-
-  const fileWindow: FileWindow = {
-    id: generateWindowId("file"),
-    type: "file",
-    parentWindowId: ROOT_WINDOW_ID,
-    title: basename(path),
-    status: "open",
-    createdAt: Date.now(),
-    path,
-    viewport: { ...DEFAULT_VIEWPORT },
-    lines: asTuple(ctx.args.lines),
-    columns: asTuple(ctx.args.columns),
-  };
-
-  if (ctx.manager) {
-    ctx.manager.insertTypedWindow(fileWindow, ctx.thread);
-  } else {
-    thread.contextWindows = [...(thread.contextWindows ?? []), fileWindow];
-  }
-  return undefined;
+): Promise<MethodOutcome | string | undefined> {
+  const ctor = lookupConstructor("file");
+  if (!ctor) return "[open_file] file_window constructor 未注册（registry 期望 kind=\"constructor\" 的 file method）。";
+  const ctxWithForm = ctx.form
+    ? ctx
+    : ({ ...ctx, form: { command: "open_file" } } as CommandExecutionContext);
+  return await ctor.exec(ctxWithForm);
 }

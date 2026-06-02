@@ -1,34 +1,25 @@
 /**
- * root.glob command — 用 Bun 内置 Glob 做文件名匹配，结果以 search_window 形式持久化。
+ * root.glob command — 委托到 search_window constructor。
  *
- * - args: pattern（必填）, cwd?（可选，默认 session baseDir；相对路径以 baseDir 为根）
- * - 命中条目按 path 字典序排序；超过 200 条截断（truncated=true）
- * - 失败（pattern 非法 / cwd 不可读）：返回错误字符串，不留 search_window
- *
- * 与 program(language="shell", code="find ...") 的差别：search_window 持久化结果，
- * LLM 后续可以 open_match(index) 直接打开命中文件，不必从裸 stdout 里 re-parse。
+ * 2026-06-02 P6.§4-§5: 历史 root.glob 的构造逻辑（Bun Glob scan + SearchWindow build）已迁到
+ * packages/@ooc/builtins/search/executable/index.ts 的 kind="constructor" search method
+ * （dispatch on form.command="glob"）。
+ * 这里保留 root method 表项（knowledge / paths）；exec 走 lookupConstructor("search") 委托。
  */
-
-import { Glob } from "bun";
 
 import type {
   CommandExecutionContext,
   CommandKnowledgeEntries,
   CommandTableEntry,
+  MethodOutcome,
 } from "@ooc/core/extendable/_shared/command-types.js";
-import {
-  ROOT_WINDOW_ID,
-  generateWindowId,
-  type SearchMatch,
-  type SearchWindow,
-} from "@ooc/core/extendable/_shared/types.js";
-import { resolveSessionPath } from "@ooc/core/extendable/_shared/session-path.js";
-import { DEFAULT_RESULTS_VIEWPORT } from "@ooc/builtins/search/executable/results-viewport.js";
+import { lookupConstructor } from "@ooc/core/extendable/_shared/registry.js";
+
+// 2026-06-02 P6.§4-§5: side-effect import 触发 search_window constructor 注册
+import "@ooc/builtins/search";
 
 const GLOB_BASIC_PATH = "internal/executable/glob/basic";
 const GLOB_INPUT_PATH = "internal/executable/glob/input";
-
-const MAX_MATCHES = 200;
 
 const KNOWLEDGE = `
 glob 用于按文件名通配符（glob pattern）查找文件，并把结果作为 search_window 留在 context。
@@ -73,49 +64,16 @@ export const globCommand: CommandTableEntry = {
   exec: (ctx) => executeGlobCommand(ctx),
 };
 
+/**
+ * P6.§4-§5 thin delegator —— 委托到 search_window constructor（dispatch on form.command="glob"）。
+ */
 export async function executeGlobCommand(
   ctx: CommandExecutionContext,
-): Promise<string | undefined> {
-  const thread = ctx.thread;
-  if (!thread) return "[glob] 缺少 thread context。";
-  const pattern = typeof ctx.args.pattern === "string" ? ctx.args.pattern : "";
-  if (!pattern) return "[glob] 缺少 pattern 参数。form 已 submit 失败 (status=failed)。**可以 refine 修正参数后重 submit**（推荐）: refine(form_id, args={ pattern: \"<glob-string>\", cwd: \"<dir>\" }) 会自动把 form 切回 open, 再 submit; 或 close(form_id) 彻底放弃这次调用。";
-  // 默认 cwd = session 的 baseDir (thread.persistence.baseDir)，不到则回退 process.cwd()
-  const rawCwd = typeof ctx.args.cwd === "string" ? ctx.args.cwd : "";
-  const cwd = rawCwd ? resolveSessionPath(thread, rawCwd) : resolveSessionPath(thread, ".");
-
-  let matchesRaw: string[];
-  try {
-    const glob = new Glob(pattern);
-    matchesRaw = Array.from(glob.scanSync({ cwd, onlyFiles: true, absolute: false }));
-  } catch (err) {
-    return `[glob] 扫描失败：${(err as Error).message}`;
-  }
-
-  matchesRaw.sort();
-  const truncated = matchesRaw.length > MAX_MATCHES;
-  const head = truncated ? matchesRaw.slice(0, MAX_MATCHES) : matchesRaw;
-  const matches: SearchMatch[] = head.map((path, index) => ({ index, path }));
-
-  const sw: SearchWindow = {
-    id: generateWindowId("search"),
-    type: "search",
-    parentWindowId: ROOT_WINDOW_ID,
-    title: `glob ${pattern}`,
-    status: "open",
-    createdAt: Date.now(),
-    kind: "glob",
-    query: pattern,
-    matches,
-    truncated,
-    searchRoot: cwd,
-    resultsViewport: { ...DEFAULT_RESULTS_VIEWPORT },
-  };
-
-  if (ctx.manager) {
-    ctx.manager.insertTypedWindow(sw, ctx.thread);
-  } else {
-    thread.contextWindows = [...(thread.contextWindows ?? []), sw];
-  }
-  return undefined;
+): Promise<MethodOutcome | string | undefined> {
+  const ctor = lookupConstructor("search");
+  if (!ctor) return "[glob] search_window constructor 未注册（registry 期望 kind=\"constructor\" 的 search method）。";
+  const ctxWithForm = ctx.form
+    ? ctx
+    : ({ ...ctx, form: { command: "glob" } } as CommandExecutionContext);
+  return await ctor.exec(ctxWithForm);
 }
