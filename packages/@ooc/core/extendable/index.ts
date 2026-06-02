@@ -24,7 +24,9 @@ import "@ooc/builtins/todo";
 import "@ooc/builtins/search";
 import "@ooc/builtins/skill_index";
 import "@ooc/builtins/plan";
-import "@ooc/builtins/command_exec";
+// P6.§9 (2026-06-02): command_exec 已下放到 core/executable/windows/method_exec/，
+//                     由 core/executable/windows/index.ts 直接 side-effect import；
+//                     此处不再 import @ooc/builtins/command_exec（form 是 Object 内置特性，不是独立 builtin object）。
 import "@ooc/builtins/program";
 import "@ooc/builtins/root";
 import "./lark/index.js";

@@ -106,6 +106,11 @@ import "@ooc/builtins/root";
 import "./do/index.js";
 import "./talk/index.js";
 
+// P6.§9 (2026-06-02): method_exec form 是 method 调用过程的临时载体（Object 内置特性）；
+// 从旧路径 builtins/command_exec/ 下放到这里，与 talk/do 同列。同时注册 "method_exec" canonical
+// 与 "command_exec" legacy alias 两个 type（一个 release 后移除 alias）。
+import "./method_exec/index.js";
+
 // relation window 将在 Phase 6 移除，替换为 peer/children 自动注入
 import "./relation/index.js";
 

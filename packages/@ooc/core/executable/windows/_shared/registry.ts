@@ -221,6 +221,17 @@ REGISTRY.set("command_exec", {
   parentClass: null,
 } as ObjectDefinition);
 
+// P6.§9 (2026-06-02): "method_exec" 是新的 canonical 名（OOP 命名归一化）；"command_exec" 保留为 legacy alias 一个 release。
+//                     两者注册同一份 methods/readable（见 core/executable/windows/method_exec/index.ts），
+//                     使得：(a) 旧持久化 type="command_exec" 的 form 仍可 hydrate 解析方法；
+//                          (b) 新代码可以直接用 type="method_exec"。
+REGISTRY.set("method_exec", {
+  type: "method_exec",
+  commands: {},
+  methods: {},
+  parentClass: null,
+} as ObjectDefinition);
+
 REGISTRY.set("do", {
   type: "do",
   commands: {},

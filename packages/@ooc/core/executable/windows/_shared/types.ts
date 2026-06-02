@@ -18,7 +18,7 @@
 
 /** Window 类型枚举；新增类型必须同步在 WINDOW_REGISTRY 中注册。 */
 /** @deprecated Use ObjectType instead (2026-05-28 ooc-6 Object Unification). WindowType is being renamed to ObjectType. */
-export type WindowType = "root" | "command_exec" | "do" | "todo" | "talk" | "program" | "file" | "knowledge" | "search" | "relation" | "skill_index" | "feishu_chat" | "feishu_doc" | "plan" | (string & {});
+export type WindowType = "root" | "method_exec" | "command_exec" | "do" | "todo" | "talk" | "program" | "file" | "knowledge" | "search" | "relation" | "skill_index" | "feishu_chat" | "feishu_doc" | "plan" | (string & {});
 
 /**
  * Object 类型枚举（原 WindowType 重命名，2026-05-28 ooc-6 Object Unification）。
@@ -140,6 +140,9 @@ export type SharingState =
 
 export type { RootWindow } from "@ooc/builtins/root/types.js";
 export type { CommandExecWindow } from "@ooc/builtins/command_exec/types.js";
+// P6.§9 (2026-06-02): canonical alias under the new "method_exec" type name.
+//                     CommandExecWindow remains as the structural type (one release alias).
+export type { CommandExecWindow as MethodExecWindow } from "@ooc/builtins/command_exec/types.js";
 export type { DoWindow } from "../do/types.js";
 export type { TodoWindow } from "@ooc/builtins/todo/types.js";
 export type { TalkWindow } from "../talk/types.js";
