@@ -104,4 +104,6 @@ registerObjectType("todo", {
     todo: todoConstructor,
   },
   readable,
+  // P6.§6: todo_window 是 Object 内置特性 —— 不写独立 dir，状态 inline 进所属 thread 的 context.json。
+  isBuiltinFeature: true,
 });

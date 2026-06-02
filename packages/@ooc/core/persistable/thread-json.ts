@@ -3,9 +3,11 @@ import { join } from "node:path";
 import { threadDir, toJson, type FlowObjectRef, type ThreadPersistenceRef } from "./common";
 import type { ThreadContext } from "../thinkable/context";
 import { initContextWindows } from "../executable/windows/_shared/init";
-import { listRegisteredWindowTypes } from "../executable/windows/_shared/registry";
+import { isBuiltinFeatureType, listRegisteredWindowTypes } from "../executable/windows/_shared/registry";
 import { readContextRegistry } from "./flow-context-registry";
 import { readRuntimeObjectState } from "./flow-runtime-object";
+import { readThreadContext, type ThreadContextEntry } from "./flow-thread-context";
+import type { ContextWindow } from "../executable/windows/_shared/types";
 
 /**
  * thread.json 的最小读写。
@@ -107,10 +109,87 @@ export async function readThread(
       contextWindows,
       persistence,
     };
+    // 2026-06-02 ooc-6 P6.§6: 新读路径 —— `<oid>/threads/<tid>/thread-context.json`
+    // 优先级：thread-context.json (P6.§6 权威) > legacy contextRegistry (P5'.1)
+    //         > thread.contextWindows[] (pre-P5'.1 legacy)
+    //
+    // thread-context.json 的 entry 形态：
+    //   - inline ContextWindow (builtin feature: talk/do/todo/method_exec)
+    //   - { id, type, _ref: true, refObjectId } —— 独立 flow object 的轻量 ref，
+    //     需要去 `<refObjectId>/state.json` 取自身字段。
+    //
+    // 命中后：构造 in-memory contextWindows 数组，覆盖 thread.contextWindows。
+    // 命中失败 / 不存在 → 回落到下面的 contextRegistry 老逻辑，保持向后兼容。
+    let hydratedFromThreadContext = false;
+    try {
+      const threadCtx = await readThreadContext(persistence);
+      if (threadCtx && Array.isArray(threadCtx.contextWindows)) {
+        const knownTypes = new Set(listRegisteredWindowTypes());
+        const merged: ContextWindow[] = [];
+        const seenIds = new Set<string>();
+        for (const entry of threadCtx.contextWindows as ThreadContextEntry[]) {
+          if (!entry || typeof entry !== "object") continue;
+          if ("_ref" in entry && (entry as { _ref?: unknown })._ref === true) {
+            // ref entry → 读 `<refObjectId>/state.json`
+            const refObjectId = (entry as { refObjectId?: string }).refObjectId
+              ?? (entry as { id?: string }).id;
+            if (!refObjectId) continue;
+            const win = await readRuntimeObjectState({
+              baseDir: ref.baseDir,
+              sessionId: ref.sessionId,
+              objectId: refObjectId,
+            });
+            if (!win) {
+              console.warn(
+                `[readThread] thread-context.json references missing object ${refObjectId} (state.json absent), skipping`,
+              );
+              continue;
+            }
+            if (!knownTypes.has(win.type) && win.type !== persistence.objectId) {
+              console.warn(
+                `[readThread] thread-context.json: dropped object ${win.id} with unregistered type ${win.type}`,
+              );
+              continue;
+            }
+            merged.push(win);
+            seenIds.add(win.id);
+          } else {
+            // inline ContextWindow（builtin feature）
+            const win = entry as ContextWindow;
+            if (!knownTypes.has(win.type) && win.type !== persistence.objectId) {
+              console.warn(
+                `[readThread] thread-context.json: dropped inline window ${win.id} with unregistered type ${win.type}`,
+              );
+              continue;
+            }
+            // Resilience: 若一个 builtin feature 类型在磁盘上意外存在 state.json
+            //   （旧布局残留），打 warn 不阻塞 —— state ≠ context 不变量靠新写盘端守门，
+            //   读端只警告。
+            if (isBuiltinFeatureType(win.type)) {
+              // 没有强校验副作用；保留 warn hook 以便后续 §10 cleanup 时定位。
+              // 注意：不主动 readRuntimeObjectState 探测（噪音太多）。
+            }
+            merged.push(win);
+            seenIds.add(win.id);
+          }
+        }
+        // legacy fallback：thread.contextWindows[] 中尚未被 thread-context.json 覆盖的
+        for (const win of contextWindows) {
+          if (!seenIds.has(win.id)) merged.push(win);
+        }
+        restored.contextWindows = merged;
+        hydratedFromThreadContext = true;
+      }
+    } catch (e) {
+      console.warn(
+        `[readThread] 读取 thread-context.json 失败（不阻塞，将回落到 contextRegistry）: ${(e as Error).message}`,
+      );
+    }
     // 2026-06-02 ooc-6 Phase 5'.2/.3: 从 thread context.json registry 读
     // 顺序：registry (权威) > thread.contextWindows[] (legacy fallback for pre-P5'.1 数据)
     // P5'.3 起：嵌套 context/<id>/window.json 路径已下线
-    try {
+    // P6.§6 起：thread-context.json 命中后跳过此分支（避免双源冲突）。
+    if (!hydratedFromThreadContext) try {
       const registry = await readContextRegistry(persistence);
       if (registry.members.length > 0) {
         const knownTypes = new Set(listRegisteredWindowTypes());

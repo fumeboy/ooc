@@ -111,6 +111,12 @@ export interface WindowTypeDefinition {
    * 在 WindowTypeDefinition 上保留入口，方便 builtin type 在 registerObjectType 时直接注入。
    */
   readable?: ReadableFn;
+  /**
+   * P6.§6 (2026-06-02): 该 type 是「Object 内置特性」（true）还是「独立 flow object」（false）。
+   * 见 ObjectDefinition.isBuiltinFeature 的完整 JSDoc。WindowTypeDefinition 上保留同名入口
+   * 是为了让 talk / do 通过 registerWindowType 注入 partial 时也能直接声明该字段。
+   */
+  isBuiltinFeature?: boolean;
 }
 
 /**
@@ -140,6 +146,25 @@ export interface ObjectDefinition extends Omit<WindowTypeDefinition, "commands">
    * 与 readable.ts 导出的函数类型一致。
    */
   readable?: ReadableFn;
+  /**
+   * P6.§6 (2026-06-02): 该 type 是「Object 内置特性」（true）还是「独立 flow object」（false）。
+   *
+   * 内置特性 (true) — 例：talk / do / todo / method_exec：
+   *   - 不写 `flows/<sid>/<id>/` 目录、不写 `.flow.json`、不写 `state.json`
+   *   - 实例的状态 inline 进所属 thread 的 `<parentOid>/threads/<tid>/context.json`
+   *   - 是任何 Object 都自带的能力（任何 Object 都能 talk/do；form 是某个 method 调用的临时载体）
+   *
+   * 独立 flow object (false / undefined) — 例：plan / program / file / knowledge / search /
+   *   skill_index / user / supervisor / 各 stone runtime 实例：
+   *   - 写 `flows/<sid>/<oid>/.flow.json` + `flows/<sid>/<oid>/state.json`（仅自身字段，不含 contextWindows）
+   *   - 在所属 thread 的 `context.json` 里以 `{ id, type, _ref: true, refObjectId }` 形态出现
+   *
+   * 关键不变量：state（object 维度，跨线程共享）和 context（thread 维度，每个 thread 一份）
+   * 必须分文件——`state.json` 不放 contextWindows，contextWindows 永远在 `<oid>/threads/<tid>/context.json`。
+   *
+   * 默认 false（独立 flow object）。
+   */
+  isBuiltinFeature?: boolean;
 }
 
 /**
@@ -268,6 +293,7 @@ export function registerWindowType(
     renderXml: partial.renderXml ?? existing.renderXml,
     compressView: partial.compressView ?? existing.compressView,
     basicKnowledge: partial.basicKnowledge ?? existing.basicKnowledge,
+    isBuiltinFeature: partial.isBuiltinFeature ?? existing.isBuiltinFeature,
   } as WindowTypeDefinition);
 }
 
@@ -302,6 +328,7 @@ export function registerObjectType(
     basicKnowledge: partial.basicKnowledge ?? existing.basicKnowledge,
     prototype: partial.prototype ?? existing.prototype,
     readable: partial.readable ?? existing.readable,
+    isBuiltinFeature: partial.isBuiltinFeature ?? existing.isBuiltinFeature,
   } as ObjectDefinition);
 }
 
@@ -348,6 +375,23 @@ export function getObjectDefinition(type: ObjectType): ObjectDefinition {
     throw new Error(`getObjectDefinition: object type "${type}" not registered`);
   }
   return entry;
+}
+
+/**
+ * P6.§6 (2026-06-02): 判定一个 Object type 是否为「内置特性」。
+ *
+ * - true → talk / do / todo / method_exec 等：不写独立 dir + state.json，
+ *   状态 inline 进所属 thread 的 `context.json`。
+ * - false → 独立 flow object（plan / program / file / ... / 各 stone runtime 实例）：
+ *   写 `<oid>/.flow.json` + `<oid>/state.json`，并在 thread `context.json` 里以 ref 出现。
+ *
+ * 未注册的 type 保守返回 false（按独立 flow object 处理；这样比错误地丢失状态更安全）。
+ * 已注册但未声明 isBuiltinFeature 的 type 也按 false 处理（默认是独立）。
+ */
+export function isBuiltinFeatureType(type: ObjectType): boolean {
+  const entry = REGISTRY.get(type) as ObjectDefinition | undefined;
+  if (!entry) return false;
+  return entry.isBuiltinFeature === true;
 }
 
 /**

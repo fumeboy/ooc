@@ -52,4 +52,7 @@ registerObjectType("command_exec", {
   },
   readable,
   basicKnowledge: COMMAND_EXEC_BASIC_KNOWLEDGE,
+  // P6.§6: command_exec form 是 method 调用过程的临时载体（Object 内置特性）—— 不写独立 dir，
+  //         状态 inline 进所属 thread 的 context.json。§9 将进一步搬迁到 core/method_exec/。
+  isBuiltinFeature: true,
 });

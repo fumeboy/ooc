@@ -26,7 +26,7 @@
  */
 
 import type { ThreadContext } from "../../../thinkable/context.js";
-import { getWindowTypeDefinition, lookupMethod, lookupMethodEntry } from "./registry.js";
+import { getWindowTypeDefinition, lookupMethod, lookupMethodEntry, isBuiltinFeatureType } from "./registry.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -43,6 +43,9 @@ import {
   type ContextMember,
   type ContextRegistry,
   type ContextParams,
+  writeThreadContext,
+  type ThreadContextEntry,
+  createFlowObject,
 } from "../../../persistable/index.js";
 import type { FlowObjectRef, ThreadPersistenceRef } from "../../../persistable/common.js";
 
@@ -438,20 +441,142 @@ export class WindowManager {
   }
 
   private async writeContextObjectForWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
-    const ref = this.persistRefFromThread(thread);
-    if (!ref) return;
-    // 跳过 root window（root 是隐含的，不属于任何 object 的 context）
+    // P6.§6 (2026-06-02): persistObjectAfterChange 是新的统一入口，按 isBuiltinFeature 分两条路径写盘。
+    // writeContextObjectForWindow 保留为薄 wrapper：兼容外部 caller，下个 release 删。
+    return this.persistObjectAfterChange(thread, window);
+  }
+
+  /**
+   * P6.§6 (2026-06-02) — 统一持久化入口：根据 window.type 是否「Object 内置特性」分两路落盘。
+   *
+   * 内置特性 (isBuiltinFeature=true) — talk / do / todo / method_exec：
+   *   - 不写 `flows/<sid>/<id>/` 目录、不写 .flow.json、不写 state.json
+   *   - 完整 inline 写到所属 thread 的 `<oid>/threads/<tid>/context.json`
+   *
+   * 独立 flow object (isBuiltinFeature=false) — plan / program / file / ... / 各 stone runtime：
+   *   - 写 `<wid>/.flow.json` + `<wid>/state.json`（state.json 已剥离 contextWindows）
+   *   - 在所属 thread 的 `<oid>/threads/<tid>/context.json` 里以 ref 形态出现：
+   *     `{ id, type, _ref: true, refObjectId }`
+   *   - 同时维护旧的 contextRegistry（向后兼容；§6 暂保留双写路径）
+   *
+   * 不变量：state（object 维度）和 context（thread 维度）严格分文件。
+   * state.json 只装 object 自身字段；contextWindows 一律落 context.json。
+   */
+  private async persistObjectAfterChange(thread: ThreadContext, window: ContextWindow): Promise<void> {
     if (window.id === ROOT_WINDOW_ID) return;
-    // P5'.3：嵌套 context/<id>/window.json 路径已下线；扁平 state.json + 注册表是唯一路径。
-    await this.writeRuntimeAndRegistryForWindow(thread, window);
+    const tref = this.threadPersistRefFromThread(thread);
+    if (!tref) return;
+
+    if (isBuiltinFeatureType(window.type)) {
+      // 路径 A：内置特性 —— 仅刷 thread context.json（含本 window 的 inline 状态）。
+      await this.writeThreadContextSnapshot(thread).catch((e) => {
+        console.warn(`[WindowManager] writeThreadContext failed for ${window.id}: ${(e as Error).message}`);
+      });
+      return;
+    }
+
+    // 路径 B：独立 flow object —— 写自己 dir 的 .flow.json + state.json，并把 ref 入 thread context.json。
+    const ref = this.runtimeObjectRefForWindow(thread, window);
+    if (!ref) return;
+    try {
+      // .flow.json：标记目录是 flow object 实例（§7 会扩 class 字段；§6 仅写 type/sessionId/objectId）。
+      await createFlowObject(ref);
+    } catch (e) {
+      console.warn(`[WindowManager] createFlowObject failed for ${window.id}: ${(e as Error).message}`);
+    }
+    try {
+      // state.json：object 自身字段（writeRuntimeObjectState 内部已 strip contextWindows）。
+      await writeRuntimeObjectState(ref, window);
+    } catch (e) {
+      console.warn(`[WindowManager] writeRuntimeObjectState failed for ${window.id}: ${(e as Error).message}`);
+      return;
+    }
+    // 旧 contextRegistry 双写（向后兼容；§6 暂留，后续可移除）。
+    try {
+      const reg = await readContextRegistry(tref);
+      const params = pickContextParams(window);
+      const idx = reg.members.findIndex((m) => m.objectId === window.id);
+      let next: ContextRegistry;
+      if (idx >= 0) {
+        const cur = reg.members[idx]!;
+        const merged: ContextParams = mergeContextParams(cur.params, params);
+        if (!paramsEqual(cur.params, merged)) {
+          const members = reg.members.slice();
+          members[idx] = { objectId: cur.objectId, params: merged };
+          next = { version: 1, members };
+          await writeContextRegistry(tref, next);
+        }
+      } else {
+        const member: ContextMember = {
+          objectId: window.id,
+          params: { ...params, order: reg.members.length },
+        };
+        next = { version: 1, members: [...reg.members, member] };
+        await writeContextRegistry(tref, next);
+      }
+    } catch (e) {
+      console.warn(`[WindowManager] update registry failed for ${window.id}: ${(e as Error).message}`);
+    }
+
+    // thread context.json：增量后整段重写（含本 window 的 ref 项 + 其他 window 的 inline / ref）。
+    await this.writeThreadContextSnapshot(thread).catch((e) => {
+      console.warn(`[WindowManager] writeThreadContext failed for ${window.id}: ${(e as Error).message}`);
+    });
+  }
+
+  /**
+   * P6.§6: 把 manager 内存里属于该 thread 的 contextWindows 状态，序列化成
+   * ThreadContextEntry[] 写到 `<oid>/threads/<tid>/context.json`。
+   *
+   * 序列化规则：
+   *  - root window 跳过（不属于任何 thread 的可见 contextWindows）
+   *  - isBuiltinFeature=true → 完整 inline（state 即 context）
+   *  - isBuiltinFeature=false → ref 项 `{ id, type, _ref: true, refObjectId: window.id }`
+   *
+   * 注：当前 manager 的 windows 表是 thread-local 的（每个 manager 由
+   * `WindowManager.fromThread(thread)` 构造），因此 `this.windows` 全量即为该 thread
+   * 的 contextWindows 集合，无需额外按 thread 过滤。
+   */
+  private async writeThreadContextSnapshot(thread: ThreadContext): Promise<void> {
+    const tref = this.threadPersistRefFromThread(thread);
+    if (!tref) return;
+    const entries: ThreadContextEntry[] = [];
+    for (const window of this.windows.values()) {
+      if (window.id === ROOT_WINDOW_ID) continue;
+      if (isBuiltinFeatureType(window.type)) {
+        entries.push(window);
+      } else {
+        entries.push({
+          id: window.id,
+          type: window.type,
+          _ref: true,
+          refObjectId: window.id,
+        });
+      }
+    }
+    await writeThreadContext(tref, entries);
   }
 
   private async deleteContextObjectForWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
     const ref = this.persistRefFromThread(thread);
     if (!ref) return;
     if (window.id === ROOT_WINDOW_ID) return;
-    // P5'.3：嵌套 context/<id>/window.json 路径已下线；从 registry 摘除 + rm 扁平目录。
+    // P6.§6: 内置特性没有独立 dir，删除时只需刷 thread context.json（已剥离该 entry）。
+    if (isBuiltinFeatureType(window.type)) {
+      await this.writeThreadContextSnapshot(thread).catch((e) => {
+        console.warn(
+          `[WindowManager] writeThreadContext failed during delete for ${window.id}: ${(e as Error).message}`,
+        );
+      });
+      return;
+    }
+    // 独立 flow object：从 registry 摘除 + rm -rf 扁平目录 + 刷 thread context.json（不再含本 ref）。
     await this.removeFromRuntimeAndRegistryForWindow(thread, window);
+    await this.writeThreadContextSnapshot(thread).catch((e) => {
+      console.warn(
+        `[WindowManager] writeThreadContext failed during delete for ${window.id}: ${(e as Error).message}`,
+      );
+    });
   }
 
   /**
@@ -483,49 +608,6 @@ export class WindowManager {
       sessionId: thread.persistence.sessionId,
       objectId: window.id,
     };
-  }
-
-  /**
-   * P5'.1 写：扁平 runtime object state.json + thread context.json registry upsert。
-   *
-   * 新增成员 → push 到 registry.members 末尾（order = 当前长度）。
-   * 已存在成员 → 不重排，保留 params；若 view 字段需要刷新，应走 dedicated API。
-   */
-  private async writeRuntimeAndRegistryForWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
-    const ref = this.runtimeObjectRefForWindow(thread, window);
-    const tref = this.threadPersistRefFromThread(thread);
-    if (!ref || !tref) return;
-    if (window.id === ROOT_WINDOW_ID) return;
-    try {
-      await writeRuntimeObjectState(ref, window);
-    } catch (e) {
-      console.warn(`[WindowManager] writeRuntimeObjectState failed for ${window.id}: ${(e as Error).message}`);
-      return;
-    }
-    try {
-      const reg = await readContextRegistry(tref);
-      const params = pickContextParams(window);
-      const idx = reg.members.findIndex((m) => m.objectId === window.id);
-      let next: ContextRegistry;
-      if (idx >= 0) {
-        const cur = reg.members[idx]!;
-        // 已存在：仅在 params 真正变化时才更新写盘（fast-path 短路减少 IO）
-        const merged: ContextParams = mergeContextParams(cur.params, params);
-        if (paramsEqual(cur.params, merged)) return;
-        const members = reg.members.slice();
-        members[idx] = { objectId: cur.objectId, params: merged };
-        next = { version: 1, members };
-      } else {
-        const member: ContextMember = {
-          objectId: window.id,
-          params: { ...params, order: reg.members.length },
-        };
-        next = { version: 1, members: [...reg.members, member] };
-      }
-      await writeContextRegistry(tref, next);
-    } catch (e) {
-      console.warn(`[WindowManager] update registry failed for ${window.id}: ${(e as Error).message}`);
-    }
   }
 
   /**

@@ -114,6 +114,16 @@ export {
   type ContextParams,
 } from "./flow-context-registry";
 
+// 2026-06-02 ooc-6 P6.§6: thread context.json (state vs context split)
+export {
+  threadContextFile,
+  writeThreadContext,
+  readThreadContext,
+  type ThreadContextRef,
+  type ThreadContextEntry,
+  type ThreadContextFile,
+} from "./flow-thread-context";
+
 export { readSelf, selfFile, writeSelf } from "./stone-self";
 export {
   readReadme,

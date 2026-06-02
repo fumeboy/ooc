@@ -1,5 +1,7 @@
 /**
  * ooc-6 P5'.1/.3 — WindowManager 写：扁平 state.json + thread context.json registry
+ * P6.§6 (2026-06-02) update: todo 改为 builtin feature；本测试改用 plan（independent flow object）
+ * 验证独立 flow object 的写盘 + thread context registry 维护行为。
  *
  * 验证：
  * 1. insertTypedWindow 触发 flat runtime object state.json 写入 + 注册到 thread context.json
@@ -14,7 +16,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WindowManager } from "../manager";
 import { makeThread } from "../../../../__tests__/make-thread";
-import { ROOT_WINDOW_ID, type TodoWindow } from "../types";
+import { ROOT_WINDOW_ID } from "../types";
+import type { PlanWindow } from "@ooc/builtins/plan/types.js";
 import {
   contextRegistryFile,
   readContextRegistry,
@@ -31,6 +34,19 @@ async function exists(file: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function makePlan(id: string, title: string, content: string, createdAt: number): PlanWindow {
+  return {
+    id,
+    type: "plan",
+    parentWindowId: ROOT_WINDOW_ID,
+    title,
+    status: "active",
+    createdAt,
+    content,
+    steps: [],
+  } as PlanWindow;
 }
 
 describe("WindowManager dual-write — flat runtime object + thread context registry", () => {
@@ -56,16 +72,8 @@ describe("WindowManager dual-write — flat runtime object + thread context regi
 
   it("insertTypedWindow: 同时写扁平 state.json 和 thread context.json", async () => {
     const mgr = WindowManager.fromThread(thread);
-    const todo: TodoWindow = {
-      id: "todo_dual_1",
-      type: "todo",
-      parentWindowId: ROOT_WINDOW_ID,
-      title: "demo",
-      status: "open",
-      createdAt: 1717000000000,
-      content: "dual write",
-    };
-    mgr.insertTypedWindow(todo, thread);
+    const plan = makePlan("plan_dual_1", "demo", "dual write", 1717000000000);
+    mgr.insertTypedWindow(plan, thread);
 
     // 等待 enqueueSessionWrite 链式 flush（writeRuntimeObjectState + writeContextRegistry）
     // 通过随便再写一次 / 读一次同 session key 来等到队列清空。
@@ -73,7 +81,7 @@ describe("WindowManager dual-write — flat runtime object + thread context regi
     const stateFile = runtimeObjectStateFile({
       baseDir,
       sessionId: "sess_dual",
-      objectId: "todo_dual_1",
+      objectId: "plan_dual_1",
     });
     const regFile = contextRegistryFile(persistence);
     for (let i = 0; i < 20; i++) {
@@ -83,13 +91,13 @@ describe("WindowManager dual-write — flat runtime object + thread context regi
 
     // 1. 扁平 state.json 内容 = 整个 ContextWindow
     const stateRaw = await readFile(stateFile, "utf8");
-    expect(JSON.parse(stateRaw)).toMatchObject({ id: "todo_dual_1", type: "todo", title: "demo" });
+    expect(JSON.parse(stateRaw)).toMatchObject({ id: "plan_dual_1", type: "plan", title: "demo" });
 
     // 2. thread context.json 包含该 member
     const reg = await readContextRegistry(persistence);
     expect(reg.version).toBe(1);
     expect(reg.members.length).toBe(1);
-    expect(reg.members[0]?.objectId).toBe("todo_dual_1");
+    expect(reg.members[0]?.objectId).toBe("plan_dual_1");
     expect(reg.members[0]?.params.order).toBe(0);
 
     // 3. P5'.3 起：嵌套 context/<id>/window.json 路径已删除，扁平 state.json 是唯一路径
@@ -99,7 +107,7 @@ describe("WindowManager dual-write — flat runtime object + thread context regi
       "sess_dual",
       "agent_x",
       "context",
-      "todo_dual_1",
+      "plan_dual_1",
       "window.json",
     );
     expect(await exists(nestedFile)).toBe(false);
@@ -107,21 +115,13 @@ describe("WindowManager dual-write — flat runtime object + thread context regi
 
   it("close: 从 thread context.json 摘 member + 删除扁平 object 目录", async () => {
     const mgr = WindowManager.fromThread(thread);
-    const todo: TodoWindow = {
-      id: "todo_dual_2",
-      type: "todo",
-      parentWindowId: ROOT_WINDOW_ID,
-      title: "to be closed",
-      status: "open",
-      createdAt: 1717000000001,
-      content: "close path",
-    };
-    mgr.insertTypedWindow(todo, thread);
+    const plan = makePlan("plan_dual_2", "to be closed", "close path", 1717000000001);
+    mgr.insertTypedWindow(plan, thread);
 
     const stateFile = runtimeObjectStateFile({
       baseDir,
       sessionId: "sess_dual",
-      objectId: "todo_dual_2",
+      objectId: "plan_dual_2",
     });
     const regFile = contextRegistryFile(persistence);
     for (let i = 0; i < 20; i++) {
@@ -131,10 +131,10 @@ describe("WindowManager dual-write — flat runtime object + thread context regi
 
     expect(await exists(stateFile)).toBe(true);
     let reg = await readContextRegistry(persistence);
-    expect(reg.members.map((m) => m.objectId)).toEqual(["todo_dual_2"]);
+    expect(reg.members.map((m) => m.objectId)).toEqual(["plan_dual_2"]);
 
     // close 会触发级联 onClose + removeWindow → 写 registry 删 + rm 扁平目录
-    mgr.close("todo_dual_2", thread);
+    mgr.close("plan_dual_2", thread);
 
     for (let i = 0; i < 20; i++) {
       const stillThere = await exists(stateFile);
@@ -149,14 +149,7 @@ describe("WindowManager dual-write — flat runtime object + thread context regi
 
   it("ROOT_WINDOW_ID 不被持久化（隐含 root，跳过双写）", async () => {
     const mgr = WindowManager.fromThread(thread);
-    const root: TodoWindow = {
-      id: ROOT_WINDOW_ID,
-      type: "todo",
-      title: "root proxy",
-      status: "open",
-      createdAt: 1717000000002,
-      content: "should not be persisted",
-    };
+    const root = makePlan(ROOT_WINDOW_ID, "root proxy", "should not be persisted", 1717000000002);
     // 把伪 root window 插进去，但因 id === ROOT_WINDOW_ID 不应触发任何持久化
     mgr.upsertWindow(root, thread);
     await Bun.sleep(80);
@@ -174,27 +167,10 @@ describe("WindowManager dual-write — flat runtime object + thread context regi
 
   it("两个 typed window 顺序 insert：order 递增", async () => {
     const mgr = WindowManager.fromThread(thread);
-    const w1: TodoWindow = {
-      id: "todo_a",
-      type: "todo",
-      parentWindowId: ROOT_WINDOW_ID,
-      title: "a",
-      status: "open",
-      createdAt: 1,
-      content: "a",
-    };
-    const w2: TodoWindow = {
-      id: "todo_b",
-      type: "todo",
-      parentWindowId: ROOT_WINDOW_ID,
-      title: "b",
-      status: "open",
-      createdAt: 2,
-      content: "b",
-    };
+    const w1 = makePlan("plan_a", "a", "a", 1);
+    const w2 = makePlan("plan_b", "b", "b", 2);
     mgr.insertTypedWindow(w1, thread);
     // 等第一次 registry flush 完成（order 才能拿到正确值）
-    const regFile = contextRegistryFile(persistence);
     for (let i = 0; i < 20; i++) {
       const reg = await readContextRegistry(persistence);
       if (reg.members.length === 1) break;
@@ -208,7 +184,7 @@ describe("WindowManager dual-write — flat runtime object + thread context regi
     }
 
     const reg = await readContextRegistry(persistence);
-    expect(reg.members.map((m) => m.objectId)).toEqual(["todo_a", "todo_b"]);
+    expect(reg.members.map((m) => m.objectId)).toEqual(["plan_a", "plan_b"]);
     expect(reg.members.map((m) => m.params.order)).toEqual([0, 1]);
   });
 });
