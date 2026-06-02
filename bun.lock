@@ -6,8 +6,8 @@
       "name": "ooc-2",
       "dependencies": {
         "@larksuiteoapi/node-sdk": "^1.65.0",
+        "@ooc/builtins/_shared": "workspace:*",
         "@ooc/builtins/command_exec": "workspace:*",
-        "@ooc/builtins/custom": "workspace:*",
         "@ooc/builtins/file": "workspace:*",
         "@ooc/builtins/knowledge": "workspace:*",
         "@ooc/builtins/plan": "workspace:*",
@@ -43,13 +43,6 @@
         "@codemirror/lang-json": "^6.0.2",
         "@ooc/builtins/_shared": "workspace:*",
         "@uiw/react-codemirror": "^4.25.8",
-        "react": "^19.0.0",
-      },
-    },
-    "packages/@ooc/builtins/custom": {
-      "name": "@ooc/builtins/custom",
-      "version": "0.1.0",
-      "dependencies": {
         "react": "^19.0.0",
       },
     },
@@ -118,7 +111,6 @@
       "version": "0.1.0",
       "dependencies": {
         "@ooc/builtins/command_exec": "workspace:*",
-        "@ooc/builtins/custom": "workspace:*",
         "@ooc/builtins/file": "workspace:*",
         "@ooc/builtins/knowledge": "workspace:*",
         "@ooc/builtins/plan": "workspace:*",
@@ -149,7 +141,6 @@
         "@codemirror/view": "^6.36.0",
         "@ooc/builtins/_shared": "workspace:*",
         "@ooc/builtins/command_exec": "workspace:*",
-        "@ooc/builtins/custom": "workspace:*",
         "@ooc/builtins/file": "workspace:*",
         "@ooc/builtins/knowledge": "workspace:*",
         "@ooc/builtins/plan": "workspace:*",
@@ -342,8 +333,6 @@
     "@ooc/builtins/_shared": ["@ooc/builtins/_shared@workspace:packages/@ooc/builtins/_shared"],
 
     "@ooc/builtins/command_exec": ["@ooc/builtins/command_exec@workspace:packages/@ooc/builtins/command_exec"],
-
-    "@ooc/builtins/custom": ["@ooc/builtins/custom@workspace:packages/@ooc/builtins/custom"],
 
     "@ooc/builtins/file": ["@ooc/builtins/file@workspace:packages/@ooc/builtins/file"],
 
