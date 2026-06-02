@@ -290,7 +290,7 @@ export const root: DocTreeNode = {
                             - knowledge_object 展示知识（builtin object，位于 \`packages/@ooc/builtins/knowledge/\`）
                             - program_object 展示程序执行过程（builtin object，位于 \`packages/@ooc/builtins/program/\`）
                             - search_object 展示一次 glob / grep 的命中（builtin object，位于 \`packages/@ooc/builtins/search/\`）
-                            - command_exec object 展示一次 method 调用的表单状态（builtin object，位于 \`packages/@ooc/builtins/command_exec/\`）
+                            - command_exec object 展示一次 method 调用的表单状态（builtin object；P6 ooc-6 起 canonical type=\"method_exec\"，注册于 \`packages/@ooc/core/executable/windows/method_exec/\`，旧 type=\"command_exec\" 作为 legacy alias 同 methods 注册一个 release）
                             - todo_object 展示待办事项（builtin object，位于 \`packages/@ooc/builtins/todo/\`）
                             - plan_object 展示计划（builtin object，位于 \`packages/@ooc/builtins/plan/\`）
                             - skill_index_object 展示技能索引（builtin object，位于 \`packages/@ooc/builtins/skill_index/\`）
@@ -731,13 +731,13 @@ export const root: DocTreeNode = {
             named: {
                 "Executable": "Object 的行动能力维度，定义 LLM 如何通过 tool、method、ContextObject 改变系统状态",
                 "Tool": "LLM 直接可调用的稳定原语：exec / close / wait / compress",
-                "Method": "具体行动单元（2026-05-28 归一化，原 Command 与 Object Method 合并），挂在某 object 上注册；如 do/talk/program 在 root 上、refine/submit 在 command_exec 上",
+                "Method": "具体行动单元（2026-05-28 归一化，原 Command 与 Object Method 合并），挂在某 object 上注册；如 do/talk/program 在 root 上、refine/submit 在 method_exec（旧名 command_exec）上",
                 "Command": "Method 的旧称（2026-05-28 前），概念已与 Object Method 合并",
                 "ContextObject": "可展示、可操作、可挂载 method 的上下文对象；本质是 OOC Object 出现在 context 中的形态",
                 "ContextWindow": "ContextObject 的旧称（2026-05-28 前），概念已统一为 ContextObject",
                 "ObjectType": "ContextObject 的类型分支，如 root/file/program/talk/do/knowledge/search/plan，以及运行时通过 registerNewObjectType 注册的任意字符串类型",
                 "WindowType": "ObjectType 的旧称（2026-05-28 前）",
-                "CommandExec": "一次 method 调用过程对应的临时对象（type=command_exec）；自身注册 refine/submit method",
+                "CommandExec": "一次 method 调用过程对应的临时对象（canonical type=\"method_exec\"，旧名 \"command_exec\" 仍以 alias 注册以兼容已落盘 form）；自身注册 refine/submit method",
                 "ObjectRegistry": "注册各类 object type 行为的机制（原 WindowRegistry）",
                 "ObjectManager": "管理 thread context objects 增删改查和生命周期的机制（原 WindowManager）",
                 "WindowRegistry": "ObjectRegistry 的旧称",
@@ -831,14 +831,15 @@ export const root: DocTreeNode = {
                     },
                 },
                 "commands": {
-                    title: "commands - 具体行动单元",
+                    title: "methods - 具体行动单元（原称 commands）",
                     content: `
-                    Command 是 LLM 通过 exec 间接调用的具体行动。
+                    Method 是 LLM 通过 exec 间接调用的具体行动（2026-05-28 ooc-6 命名归一前称 command；
+                    原 \`ObjectDefinition.commands\` 字段已重命名为 \`methods\`，旧名以 \`@deprecated\` alias 保留）。
 
                     LLM 通常不是直接 "调用 program 函数"，而是:
                     1. exec(command="program", args={ language: "shell", code: "..." }) → args 齐全立即执行
-                    2. 或 exec(command="program") → 系统创建 form，后续 exec(form_id, "refine", args={...}) + exec(form_id, "submit")
-                    3. command 产生副作用，比如创建 program_window 或派生 plan_window。
+                    2. 或 exec(command="program") → 系统创建 form（type="method_exec"，旧名 "command_exec"），后续 exec(form_id, "refine", args={...}) + exec(form_id, "submit")
+                    3. method 产生副作用，比如创建 program_window 或派生 plan_window。
 
                     root window 注册一组顶层 command（与 src/executable/windows/root/index.ts ROOT_COMMANDS 一致）:
                     - do: 派生子 thread，创建 do_window。
@@ -864,8 +865,8 @@ export const root: DocTreeNode = {
                     （共 14 个全局 command，与 src/executable/windows/root/index.ts ROOT_COMMANDS 一致。）
 
                     其它 window 上也注册命令（do_window: continue/wait/close；talk_window: say/wait/close；
-                    file_window: edit/reload/set_range/close；command_exec: refine/submit；user-defined object: 自定义 methods ...）。
-                    Object 自定义 methods 通过 executable/index.ts 的 \`export const window\` 注册，运行时通过 registerNewObjectType 动态注册到 WindowRegistry。
+                    file_window: edit/reload/set_range/close；method_exec（旧名 command_exec）: refine/submit；user-defined object: 自定义 methods ...）。
+                    Object 自定义 methods 通过 executable/index.ts 的 \`export const object\`（旧名 \`window\`）注册，运行时通过 \`registerNewObjectType\` 动态注册到 ObjectRegistry（即 \`REGISTRY\` Map in \`core/executable/windows/_shared/registry.ts\`）。
 
                     Command 与 knowledge 通过 trigger 协议协作：
                     每个 command_exec form 在 thread 中处于 open 状态时，对应的
@@ -1145,8 +1146,10 @@ export const root: DocTreeNode = {
                             title: "render dispatch - window type-dispatch 接口契约",
                             content: `
                             **设计原则**：context XML 的渲染采用 "接口 explicit" 契约：每个 window type
-                            必须在 \`WindowTypeDefinition.renderXml\` 上注册自己的渲染 hook；render.ts 退化为
+                            必须在 \`ObjectDefinition.renderXml\`（或 \`readable\`）上注册自己的渲染 hook；render.ts 退化为
                             纯调度器，不再 switch-by-case。
+                            （\`ObjectDefinition\` 即 P6 ooc-6 命名归一前的 \`WindowTypeDefinition\`，旧名仍以
+                            \`@deprecated\` alias 保留一个 release。）
 
                             **调度器职责**（src/thinkable/context/render.ts）：
                             - 通用外壳：\`<window id type status [sharing read_only]>\` + \`<title>\`
@@ -1160,10 +1163,10 @@ export const root: DocTreeNode = {
                             的问题流到 LLM context 才被发现。
                             `,
                             named: {
-                                "WindowTypeDefinition.renderXml": "RenderHook 类型 (ctx) => XmlNode[] | Promise<XmlNode[]>，注册到 WindowRegistry",
+                                "WindowTypeDefinition.renderXml": "RenderHook 类型 (ctx) => XmlNode[] | Promise<XmlNode[]>，注册到 ObjectRegistry（P6 后 canonical 名为 ObjectDefinition.renderXml）",
                                 "调度器": "src/thinkable/context/render.ts:renderWindowNode；无 switch，按 def.renderXml 调度",
                                 "<commands> 节点": "通用层为每个 window 输出的命令面索引；空 commands 表的 window 跳过该节点",
-                                "assertAllRenderHooksRegistered": "src/executable/windows/_shared/registry.ts；启动期校验所有 type 已配齐 renderXml",
+                                "assertAllRenderHooksRegistered": "src/executable/windows/_shared/registry.ts；启动期校验所有 type 已配齐 renderXml（P6 后由 assertAllObjectDefinitionsRegistered 替代，readable 也算配齐）",
                             },
                             sources: [["src/thinkable/context/render.ts", "调度器实现 + commands 元数据节点；接口契约（缺 hook 抛错）"]],
                         },
@@ -1481,31 +1484,176 @@ export const root: DocTreeNode = {
                     },
                 },
                 "registry_and_manager": {
-                    title: "WindowRegistry / WindowManager - window 行为注册与管理",
+                    title: "ObjectRegistry / ObjectManager - object type 行为注册与 thread 内 contextWindows 管理",
                     content: `
-                    WindowRegistry 和 WindowManager 是 ContextWindow 体系的运行时支撑。
+                    ObjectRegistry 和 ObjectManager 是 ContextWindow 体系的运行时支撑（2026-05-28 ooc-6 命名归一前
+                    分别叫 WindowRegistry / WindowManager；旧名仍以 \`@deprecated\` alias 保留一个 release）。
 
-                    WindowRegistry 负责注册每种 window type 的行为:
-                    - commands: 这个 window 上能调用哪些 command。
-                    - renderXml: 这个 window 如何渲染进 Context。
-                    - onClose: 关闭这个 window 时如何处理资源和约束。
-                    - basicKnowledge: 这个 window 出现时要注入哪些基础说明。
+                    ObjectRegistry（实现：\`REGISTRY\` Map in \`core/executable/windows/_shared/registry.ts\`，
+                    公共 API \`registerObjectType\` / \`getObjectDefinition\` / \`listRegisteredObjectTypes\` /
+                    \`lookupMethod\` / \`lookupMethodEntry\` / \`lookupConstructor\` / \`resolveMethod\`）
+                    负责注册每种 ObjectType 的契约 \`ObjectDefinition\`:
+                    - **methods**: 这个 object 注册的 \`ObjectMethod\` 字典（canonical 名；旧名 \`commands\` 是 @deprecated alias，registry 内部双写以保持读取兼容）。
+                    - **parentClass**: 父类 id；method 解析在 self.type miss 后沿父类链向上回退（详见 children.parent_class_inheritance）。
+                    - **isBuiltinFeature**: 该 type 是 Object 内置特性还是独立 flow object，决定持久化分支（详见 children.builtin_feature_split）。
+                    - **renderXml / readable**: 这个 object 如何渲染进 Context（任选其一即可启动期 fail-loud）。
+                    - **onClose**: 关闭这个 object 时如何处理资源和约束。
+                    - **basicKnowledge**: 这个 object 出现时要注入哪些基础说明。
 
-                    WindowManager 负责管理某个 thread 的 contextWindows:
-                    - 插入 window。
-                    - 查找 window。
-                    - 更新 window。
-                    - 关闭 window。
-                    - 根据 parentWindowId 维护窗口树关系。
+                    ObjectManager 负责管理某个 thread 的 contextWindows:
+                    - 插入 object（构造方法返回 \`{ ok: true, object }\` 时由 manager 自动 mount，详见 children.kind_constructor）。
+                    - 查找 object。
+                    - 更新 object。
+                    - 关闭 object。
+                    - 根据 parentWindowId 维护对象树关系。
+                    - 按 \`isBuiltinFeature\` 走两条持久化路径（state.json vs thread-context.json，详见 children.builtin_feature_split）。
 
-                    这两个机制让系统可以继续扩展新的 window type，而不需要把所有行为写死在一个巨大 switch 里。
+                    这两个机制让系统可以继续扩展新的 ObjectType，而不需要把所有行为写死在一个巨大 switch 里。
                     `,
                     named: {
-                        "WindowRegistry": "注册 window type 行为的中心",
-                        "WindowManager": "管理 thread.contextWindows 生命周期的组件",
-                        "renderXml": "window 渲染为 Context XML 的函数",
-                        "onClose": "window 关闭时执行的生命周期 hook",
-                        "basicKnowledge": "某个 window type 出现时自动注入给 LLM 的基础知识",
+                        "ObjectRegistry": "注册各类 object type 行为的中心；REGISTRY Map in _shared/registry.ts",
+                        "ObjectManager": "管理 thread.contextWindows 生命周期的组件（原 WindowManager）",
+                        "ObjectDefinition": "每个 object type 的契约：methods / parentClass / isBuiltinFeature / renderXml / readable / onClose / basicKnowledge",
+                        "registerObjectType": "在 ObjectRegistry 上更新某 type 的 partial ObjectDefinition；写入时 commands/methods 双写",
+                        "getObjectDefinition": "按 type 取 ObjectDefinition；未注册抛错（避免静默吞掉新 type）",
+                        "WindowRegistry": "ObjectRegistry 的 @deprecated 旧名（一个 release 后移除）",
+                        "WindowTypeDefinition": "ObjectDefinition 的 @deprecated 旧名",
+                        "renderXml": "object 渲染为 Context XML 的函数（与 readable 二选一）",
+                        "onClose": "object 关闭时执行的生命周期 hook",
+                        "basicKnowledge": "某个 object type 出现时自动注入给 LLM 的基础知识",
+                    },
+                    children: {
+                        "kind_constructor": {
+                            title: "kind: \"constructor\" - Object class 的构造方法",
+                            content: `
+                            \`ObjectMethod.kind?: "constructor" | "method"\`（缺省视为 "method"）—— 是 P6 ooc-6 引入的标记：
+                            带 \`kind: "constructor"\` 的 method 必须返回形如 \`{ ok: true, object: ContextWindow }\` 的
+                            \`MethodOutcome\`；manager.submit 看到该 outcome 后做三件事：
+                            1. 把 \`object\` 插进 thread 的 contextWindows（\`upsertWindow\`）。
+                            2. 按 \`isBuiltinFeature\` 分两条路径写盘（详见 builtin_feature_split）。
+                            3. 把构造好的 window 作为 form.result 反馈给 LLM。
+
+                            constructor 让"创建一个 object" 与 "调一个普通 method" 在 ObjectMethod 这一层统一——
+                            不再需要 root 上为每个 type 单独写一份 \`exec\` 重复构造逻辑。
+
+                            **委托模式**：root 上的 \`talk\` / \`do\` / \`todo\` / \`plan\` / \`program\` / \`open_file\` /
+                            \`open_knowledge\` / \`glob\` / \`grep\` 等 method 已退化为薄分发器——只保留 paths /
+                            knowledge / match 这些 LLM 视野所需字段，\`exec\` 体内调
+                            \`lookupConstructor("<type>").exec(ctx)\` 把工作委托给 type 自身上注册的 constructor
+                            method。constructor 命名按惯例与 type 同名（如 \`talk\` 类型的 constructor 注册在
+                            \`methods["talk"]\`），但 \`lookupConstructor\` 是按 \`kind === "constructor"\` 标记索引
+                            而非按名字索引。
+
+                            自定义 Agent 的 \`server/index.ts\` 想给自己加一个 "open <agent_name>" 入口，
+                            只需在 methods 表里挂一个 \`kind: "constructor"\` 的 ObjectMethod（详见
+                            \`meta/cookbook.add-new-agent.doc.ts:children.step4_methods_and_ui\`）。
+                            `,
+                            named: {
+                                "MethodOutcome": "{ ok: true, result?: string } | { ok: true, object: ContextWindow } | { ok: false, error: string }",
+                                "lookupConstructor": "在指定 ObjectType 的定义中按 kind === \"constructor\" 标记索引构造方法",
+                                "constructor delegation": "root.talk/do/todo/... 退化为 lookupConstructor(<type>).exec(ctx) 的薄分发器",
+                            },
+                            sources: [["packages/@ooc/core/executable/windows/_shared/command-types.ts:63 (kind field), :42 (MethodOutcome union)", "ObjectMethod.kind 标记 + MethodOutcome 三态联合（含 { ok: true, object }）"]],
+                        },
+                        "parent_class_inheritance": {
+                            title: "parentClass + class chain inheritance - method 解析沿父类链回退",
+                            content: `
+                            \`ObjectDefinition.parentClass?: string | null\` —— P6 ooc-6 引入的 method 继承机制载体。
+
+                            **三态语义**（undefined ≠ null）：
+                            - **undefined**（缺省）→ 隐式继承 \`"root"\`：ObjectDefinition 默认拿到 root 上注册的所有
+                              通用方法（talk / do / todo / plan / program / open_file / open_knowledge /
+                              write_file / glob / grep / metaprog / open_feishu_chat / open_feishu_doc）。
+                              绝大多数自定义 Agent 类走这条。
+                            - **\`null\`**（显式不继承）→ 完全独立，方法解析不沿父链回退。仅 \`root\` 自身与
+                              \`method_exec\`（form lifecycle 内部 type，不应暴露 user-facing 方法）使用。
+                            - **string**（具名父类）→ 必须是 ObjectRegistry 中已注册的 ObjectType id；解析在自身
+                              methods 上 miss 后跳到 \`getObjectDefinition(parentClass).methods\` 继续查。
+
+                            **解析过程**（\`resolveMethod\` / \`lookupMethodEntry\`）：
+                            \`\`\`
+                            cur = self.type; seen = ∅
+                            while cur && cur ∉ seen:
+                              seen.add(cur)
+                              def = getObjectDefinition(cur)
+                              if def.methods[name] exists → return entry
+                              cur = def.parentClass === undefined ? "root" : def.parentClass ?? null
+                            return undefined
+                            \`\`\`
+                            \`seen\` Set 兜底，避免误配置 \`parentClass A→B→A\` 引入死循环。\`lookupMethodEntry\` 还
+                            额外返回 \`declaringType\`——即命中处的 class id（可能是 self.type 的祖先），
+                            manager.submit 用它做严格校验：method 必须由 self.type 或其父类链声明，否则拒绝执行。
+
+                            **持久化**：每个独立 flow object 的 \`<oid>/.flow.json\` 写入 \`class\` 字段（绑定方法继承链
+                            的载体）；\`createFlowObject(ref, { class })\` 在 class 未注册时抛 \`ClassNotFoundError\`
+                            （\`code === "CLASS_NOT_FOUND"\`，携带 \`classId\`）——fail-loud 避免悬空 class 静默 miss。
+
+                            **与 prototype 的关系**：\`prototype\`（self.md frontmatter）是 stone-side 的实例链；
+                            \`parentClass\` 是 registry-side 的 class 链。两者在 P6 时点尚未统一；本字段只参与
+                            class-级方法解析。
+                            `,
+                            named: {
+                                "parentClass 三态": "undefined → 默认 \"root\"; null → 显式不继承; string → 具名父类",
+                                "resolveMethod": "沿 class.parentClass 链向上找 method（带环检测）",
+                                "lookupMethodEntry": "同 resolveMethod 但额外返回 declaringType，manager.submit 用它做严格校验",
+                                "ClassNotFoundError": "createFlowObject 接受到不存在的 class 时抛此错误；code === \"CLASS_NOT_FOUND\"，携带 classId",
+                                "FlowObjectMetadata.class": ".flow.json 的 class 字段；绑定方法继承链",
+                            },
+                            sources: [["packages/@ooc/core/executable/windows/_shared/registry.ts:503 (resolveMethod), :190 (parentClass JSDoc), :469 (lookupMethodEntry); packages/@ooc/core/persistable/flow-object.ts:34 (FlowObjectMetadata.class), :43 (ClassNotFoundError), :87 (createFlowObject opts)", "parentClass 字段 + resolveMethod 链解析 + .flow.json:class 持久化 + ClassNotFoundError fail-loud"]],
+                        },
+                        "builtin_feature_split": {
+                            title: "isBuiltinFeature - state(object 维度) vs context(thread 维度) 严格分文件",
+                            content: `
+                            \`ObjectDefinition.isBuiltinFeature?: boolean\` —— P6 ooc-6 引入的两条持久化路径选择器。
+                            未声明时默认 \`false\`（独立 flow object）。
+
+                            **关键不变量（用户拍板的核心规则）**：
+                            - **state 是 object 维度** —— \`<oid>/state.json\` 只放 object 自身字段，跨线程共享；
+                              **MUST NOT contain contextWindows**。
+                            - **context 是 thread 维度** —— \`<oid>/threads/<tid>/thread-context.json\` 放该 thread
+                              的 contextWindows 数组；每个 thread 各一份。
+
+                            **两条路径**（manager.persistObjectAfterChange 分支）：
+
+                            **路径 A：内置特性 (\`isBuiltinFeature: true\`)** —— talk / do / todo / method_exec：
+                            - 不写 \`flows/<sid>/<id>/\` 目录、不写 \`.flow.json\`、不写 \`state.json\`
+                            - 完整 inline 写到所属 thread 的 \`<parentOid>/threads/<tid>/thread-context.json\`
+                            - 因为它们是任何 Object 都自带的能力 + 临时载体（form 是 method 调用的临时对象），
+                              没有跨线程独立 state 的必要。
+
+                            **路径 B：独立 flow object (\`isBuiltinFeature: false\`)** —— plan / program / file /
+                            knowledge / search / skill_index / user / supervisor / 各 stone runtime 实例：
+                            - 写 \`<oid>/.flow.json\`（class 字段携带类继承链）+ \`<oid>/state.json\`（自身字段，
+                              \`writeRuntimeObjectState\` 守门 strip 掉任何残留的 \`contextWindows\` 字段）
+                            - 在所属 thread 的 \`thread-context.json\` 里以 ref 形态出现：
+                              \`{ id, type, _ref: true, refObjectId: <oid> }\`
+                            - hydrate 时按 ref 另读 \`<refObjectId>/state.json\` 拼回 ContextWindow。
+
+                            **为什么必须分文件**：早期实现把 thread 的 contextWindows 数组放在 state.json 同一文件，
+                            结果 state（object 维度）和 context（thread 维度）混在一起，导致跨 thread 共享同一
+                            object 时一边改另一边丢。现在按维度分到不同文件，写入端 \`writeRuntimeObjectState\`
+                            主动 strip \`contextWindows\` 是该不变量的最后一道闸门。
+
+                            **MethodExecutionContext 上的 reporter**：method 体里改完字段可以主动通知 manager 落盘——
+                            - \`ctx.reportStateEdit?.()\`：刷 state.json（仅独立 flow object 有效；builtin 自动 no-op）
+                            - \`ctx.reportContextEdit?.()\`：刷 thread-context.json（任何 thread 内动作都可调）
+                            两者都是 convenience helper，等价于 \`ctx.manager?.reportStateEdit(ownerFlowObjectRef)\` /
+                            \`ctx.manager?.reportContextEdit(thread)\`，无 ref / 无 thread 时自动 no-op。
+
+                            **filename 警示**：thread context 文件名是 \`thread-context.json\` 而非 \`context.json\`——
+                            后者已被 legacy contextRegistry（\`flow-context-registry.ts\`）占用；§10 cleanup 会合并。
+                            `,
+                            named: {
+                                "state 维度": "object 自身字段，跨线程共享；落 <oid>/state.json，不含 contextWindows",
+                                "context 维度": "thread 视角的 contextWindows 数组；落 <oid>/threads/<tid>/thread-context.json",
+                                "isBuiltinFeature=true": "talk/do/todo/method_exec：完整 inline 进 thread-context.json，无独立 state.json",
+                                "isBuiltinFeature=false": "独立 flow object：写自己 .flow.json + state.json；thread-context.json 里以 ref 出现",
+                                "ThreadContextEntry": "thread-context.json 中一条记录的形态：完整 ContextWindow（inline）或 { id, type, _ref:true, refObjectId }（ref）",
+                                "writeRuntimeObjectState": "state.json 写盘函数；strip contextWindows 字段是该不变量的写盘端实施点",
+                                "reportStateEdit / reportContextEdit": "MethodExecutionContext 上的 convenience helper；method 体改完字段可主动通知 manager 落盘",
+                            },
+                            sources: [["packages/@ooc/core/executable/windows/_shared/registry.ts:155 (isBuiltinFeature JSDoc), :435 (isBuiltinFeatureType); packages/@ooc/core/persistable/flow-thread-context.ts:35 (ThreadContextEntry), :64 (writeThreadContext); packages/@ooc/core/persistable/flow-runtime-object.ts:39 (writeRuntimeObjectState strips contextWindows), :61 (stripContextWindowsField)", "isBuiltinFeature 字段 + thread-context.json schema + state.json strip 守门"]],
+                        },
                     },
                 },
                 "knowledge_activation": {

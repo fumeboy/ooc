@@ -185,28 +185,65 @@ export const root: DocTreeNode = {
             如果新 Agent 需要被 LLM 或 UI 主动调用方法, 写 \`server/index.ts\` (方法库)。详见 \`meta/object.doc.ts:programmable\`。
             如果新 Agent 需要自己的 UI 页面 (而不是用 Stone fallback), 写 \`client/index.tsx\`. 详见 \`meta/object.doc.ts:visible.stone_client\`。
 
-            **server/index.ts 模板**:
+            **2026-06-02 ooc-6 P6 命名归一**: \`commands\` 字段已重命名为 \`methods\`；\`CommandTableEntry\` 类型重命名为 \`ObjectMethod\`。
+            旧名 \`commands\` / \`CommandTableEntry\` 仍以 \`@deprecated\` alias 形式存在一个 release，新代码应直接用 \`methods\` / \`ObjectMethod\`。
+
+            **server/index.ts 模板** (P6 形态):
 
             \`\`\`ts
             // stones/agent_of_monitor/server/index.ts
-            import type { ObjectWindowDefinition } from "ooc/executable/server/window-types";
+            import type { ObjectDefinition, ObjectMethod } from "@ooc/core/executable/windows";
 
-            export const window: ObjectWindowDefinition = {
+            // 普通 method —— 返回 { ok: true, result?: string } 或 { ok: false, error: string }
+            const checkThresholdMethod: ObjectMethod = {
+                paths: ["check_threshold"],
+                match: () => ["check_threshold"],
+                knowledge: () => ({
+                    "internal/windows/custom/check_threshold/basic":
+                        "查询某个指标是否越界 (metric: cpu/memory/latency)",
+                }),
+                exec: async (ctx) => {
+                    const metric = ctx.args.metric as string;
+                    // ctx.self 是 method 的 receiver window；ctx.thread 是当前 thread；
+                    // 修改了独立 flow object 自身字段后可调 await ctx.reportStateEdit?.();
+                    return { ok: true, result: \`metric=\${metric} ok\` };
+                },
+            };
+
+            // Constructor method —— kind: "constructor"，返回 { ok: true, object: ContextWindow }；
+            // manager 自动 mount 到 thread.contextWindows + 按 isBuiltinFeature 分两路落盘。
+            const monitorConstructor: ObjectMethod = {
+                kind: "constructor",
+                paths: ["agent_of_monitor"],
+                match: () => ["agent_of_monitor"],
+                exec: async (ctx) => {
+                    // 构造一个 ContextWindow 实例并交给 manager；不要在这里直接 mutate thread.contextWindows。
+                    return {
+                        ok: true,
+                        object: {
+                            id: \`agent_of_monitor:\${Date.now()}\`,
+                            type: "agent_of_monitor",
+                            title: "Monitor session",
+                            status: "active",
+                            createdAt: Date.now(),
+                        },
+                    };
+                },
+            };
+
+            export const object: Partial<ObjectDefinition> = {
                 title: "agent_of_monitor",
                 description: "监控 Agent 自我门面",
-                commands: {
-                    check_threshold: {
-                        paths: ["check_threshold"],
-                        match: () => ["check_threshold"],
-                        knowledge: () => ({
-                            "internal/windows/custom/check_threshold/basic":
-                                "查询某个指标是否越界 (metric: cpu/memory/latency)",
-                        }),
-                        exec: async (ctx) => {
-                            const metric = ctx.args.metric as string;
-                            return { ok: true, result: "..." };
-                        },
-                    },
+                // P6.§7: parentClass 缺省时隐式继承 "root"；表示 Agent 自动拿到 root 上注册的 talk / do /
+                // todo / plan / program / open_file / open_knowledge / write_file / glob / grep / metaprog /
+                // open_feishu_chat / open_feishu_doc 这一组通用 method，无需在 methods 表里再次声明。
+                // 想完全独立可显式 parentClass: null（仅 root / method_exec 这种系统类型这样做）。
+                parentClass: "root",
+                methods: {
+                    // 构造方法（与 type 同名是惯例；manager 通过 kind === "constructor" 标记定位）
+                    agent_of_monitor: monitorConstructor,
+                    // 普通方法
+                    check_threshold: checkThresholdMethod,
                 },
             };
 
@@ -217,6 +254,12 @@ export const root: DocTreeNode = {
                 },
             };
             \`\`\`
+
+            **关键点**:
+            - \`methods\` 字段是 canonical 名（\`commands\` 是 @deprecated alias，registry 内部双写以保持读取兼容）。
+            - \`ObjectMethod\` 类型来自 \`@ooc/core/executable/windows\` barrel；旧名 \`CommandTableEntry\` 仍可 import 但应迁移到 \`ObjectMethod\`。
+            - \`kind: "constructor"\` 的 method 必须返回 \`{ ok: true, object: ContextWindow }\`；manager 自动 mount，不要在 exec 里直接 \`thread.contextWindows.push(...)\`。
+            - \`parentClass: "root"\` 让自定义 Agent 类自动继承 root 的所有通用 method；不写也等价（registry 默认 \`undefined → "root"\`）。
 
             **client/index.tsx** (有了它会覆盖 Stone fallback):
 
@@ -231,7 +274,10 @@ export const root: DocTreeNode = {
             **method 加载**: server/index.ts 是 ESM 热加载 (mtime cache + ?t=mtime), 改完不需要重启 server, 详见 \`meta/object.doc.ts:programmable.method_evolution\`。
             `,
             named: {
-                "window.commands / ui_methods": "method 分流: 前者给 LLM (program command 调), 后者给 web UI (HTTP callMethod 调)",
+                "object.methods / ui_methods": "method 分流: 前者给 LLM (exec 调), 后者给 web UI (HTTP callMethod 调)",
+                "ObjectMethod": "method 类型；canonical 名（旧名 CommandTableEntry 是 @deprecated alias）",
+                "kind: \"constructor\"": "标记此 method 是 Object class 的构造方法；返回 { ok: true, object } 由 manager 自动 mount",
+                "parentClass": "registry 上 ObjectDefinition 的字段；缺省（undefined）= 隐式继承 \"root\"，让自定义 Agent 自动拿到 talk/do/todo/... 全套",
                 "Stone fallback": "无 client/index.tsx 时 web 默认展示 self.md/readme.md/knowledge/Recent flows",
             },
         },
