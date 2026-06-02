@@ -5,6 +5,9 @@
  */
 
 export type {
+  OOCObject,
+  ContextObject,
+  // 2026-05-28 ooc-6 Object Unification: @deprecated aliases
   ContextWindow,
   WindowType,
   WindowStatus,
@@ -24,7 +27,6 @@ export type {
   PlanWindowStep,
   // 2026-05-28 ooc-6 Object Unification aliases
   ObjectType,
-  ContextObject,
 } from "./_shared/types.js";
 
 export {

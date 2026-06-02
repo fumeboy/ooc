@@ -357,7 +357,7 @@ export class WindowManager {
       };
       const raw = await entry.exec(ctx);
       // 四种返回形态：MethodOutcome (constructor / regular / failed) / string / undefined
-      // - outcome.ok=true && "object" in: P6 (ooc-6) constructor —— mount 新 ContextWindow，
+      // - outcome.ok=true && "object" in: P6 (ooc-6) constructor —— mount 新 OOCObject，
       //   走与 insertTypedWindow 相同的 in-memory + persistence 路径
       // - outcome.ok=true && "result" in: regular method 成功 + 可选 result 文本
       // - outcome.ok=false: 失败
@@ -366,7 +366,7 @@ export class WindowManager {
       if (raw && typeof raw === "object" && "ok" in raw) {
         if (raw.ok) {
           if ("object" in raw) {
-            // Constructor outcome：把构造出的 ContextWindow 挂到 manager 与 thread 上。
+            // Constructor outcome：把构造出的 OOCObject 挂到 manager 与 thread 上。
             // 走 insertTypedWindow 相同路径以保证 in-memory map + thread.contextWindows
             // + 持久化（writeContextObjectForWindow）三处一致。
             this.insertTypedWindow(raw.object, thread);

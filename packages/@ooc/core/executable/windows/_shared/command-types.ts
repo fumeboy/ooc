@@ -14,7 +14,7 @@
  */
 
 import type { ThreadContext } from "../../../thinkable/context";
-import type { CommandExecWindow, ContextWindow } from "./types";
+import type { CommandExecWindow, OOCObject, ContextObject } from "./types";
 import type { WindowManager } from "./manager";
 import type { FlowObjectRef, ThreadPersistenceRef } from "../../../persistable/common";
 
@@ -34,14 +34,14 @@ export type CommandKnowledgeEntries = MethodKnowledgeEntries;
  * - undefined                → 成功
  * - "..."（不带 [tag] 前缀）→ 成功 + result 文本
  * - { ok: true, result }     → 成功 + result 文本（regular method 返回）
- * - { ok: true, object }     → 成功 + 构造出新 ContextWindow（constructor method 返回；P6 ooc-6）
+ * - { ok: true, object }     → 成功 + 构造出新 OOCObject（constructor method 返回；P6 ooc-6，object 是构造出来的 Object 自身）
  * - { ok: false, error }     → 失败；form 保留 status=failed 等待 LLM refine/close
  *
  * 旧路径"返回 `[<name>] ...` string 即失败"仍兼容（manager 内部识别），但新代码应改用 outcome。
  */
 export type MethodOutcome =
   | { ok: true; result?: string }
-  | { ok: true; object: ContextWindow }
+  | { ok: true; object: OOCObject }
   | { ok: false; error: string };
 
 /** @deprecated Use MethodOutcome instead (2026-05-28 ooc-6 Object Unification). */
@@ -57,7 +57,7 @@ export type CommandExecOutcome = MethodOutcome;
  */
 export interface ObjectMethod {
   /** P6 (ooc-6): Marks this method as the constructor of the Object class.
-   *  Constructor methods MUST return MethodOutcome of the form `{ ok: true, object: ContextWindow }`.
+   *  Constructor methods MUST return MethodOutcome of the form `{ ok: true, object: OOCObject }`.
    *  Manager handles mounting (in-memory map + thread.contextWindows + persistence).
    *  Regular methods (kind undefined or "method") use the existing { ok, result?: string } form. */
   kind?: "constructor" | "method";
@@ -132,7 +132,7 @@ export type CommandTableEntry = ObjectMethod;
  * 字段：
  * - thread：当前执行 method 的线程
  * - form：被 submit 消费的 form 自身（CommandExecWindow）
- * - self：method 被调用的 ContextWindow（receiver；OOP semantics）。
+ * - self：method 被调用的 ContextObject（receiver；OOP semantics）。
  *   2026-06-02 P6.§1 命名规范化：原 `parentWindow` 字段语义就是 receiver，
  *   按 OOP 习惯改名 `self`。`parentWindow` 保留为 `@deprecated` alias 同步赋值，
  *   过渡期间所有 caller 应迁移到 `ctx.self`。
@@ -144,10 +144,10 @@ export type CommandTableEntry = ObjectMethod;
  *   不要直接 mutate thread.contextWindows——否则 manager 完成 entry.exec 后调用 toData() 会覆盖
  * - args：最终参数（form.accumulatedArgs）
  */
-export interface MethodExecutionContext<TSelf extends ContextWindow = ContextWindow> {
+export interface MethodExecutionContext<TSelf extends ContextObject = ContextObject> {
   thread?: ThreadContext;
   form?: CommandExecWindow;
-  /** P6.§1 (2026-06-02): the ContextWindow receiver of this method (OOP `self`). */
+  /** P6.§1 (2026-06-02): the ContextObject receiver of this method (OOP `self`). */
   self?: TSelf;
   /** @deprecated 2026-06-02 P6.§1: use `self` instead. Manager populates both for transition. */
   parentWindow?: TSelf;

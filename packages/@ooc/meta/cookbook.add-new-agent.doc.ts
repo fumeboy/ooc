@@ -210,14 +210,14 @@ export const root: DocTreeNode = {
                 },
             };
 
-            // Constructor method —— kind: "constructor"，返回 { ok: true, object: ContextWindow }；
-            // manager 自动 mount 到 thread.contextWindows + 按 isBuiltinFeature 分两路落盘。
+            // Constructor method —— kind: "constructor"，返回 { ok: true, object: OOCObject }；
+            // manager 自动 mount 到 thread.contextWindows（作为 ContextObject） + 按 isBuiltinFeature 分两路落盘。
             const monitorConstructor: ObjectMethod = {
                 kind: "constructor",
                 paths: ["agent_of_monitor"],
                 match: () => ["agent_of_monitor"],
                 exec: async (ctx) => {
-                    // 构造一个 ContextWindow 实例并交给 manager；不要在这里直接 mutate thread.contextWindows。
+                    // 构造一个 OOCObject 实例并交给 manager；不要在这里直接 mutate thread.contextWindows。
                     return {
                         ok: true,
                         object: {
@@ -258,7 +258,7 @@ export const root: DocTreeNode = {
             **关键点**:
             - \`methods\` 字段是 canonical 名（\`commands\` 是 @deprecated alias，registry 内部双写以保持读取兼容）。
             - \`ObjectMethod\` 类型来自 \`@ooc/core/executable/windows\` barrel；旧名 \`CommandTableEntry\` 仍可 import 但应迁移到 \`ObjectMethod\`。
-            - \`kind: "constructor"\` 的 method 必须返回 \`{ ok: true, object: ContextWindow }\`；manager 自动 mount，不要在 exec 里直接 \`thread.contextWindows.push(...)\`。
+            - \`kind: "constructor"\` 的 method 必须返回 \`{ ok: true, object: OOCObject }\`；manager 自动 mount 到 thread 的 context（作为 ContextObject），不要在 exec 里直接 \`thread.contextWindows.push(...)\`。
             - \`parentClass: "root"\` 让自定义 Agent 类自动继承 root 的所有通用 method；不写也等价（registry 默认 \`undefined → "root"\`）。
 
             **client/index.tsx** (有了它会覆盖 Stone fallback):

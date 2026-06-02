@@ -133,7 +133,7 @@ export async function execRootCommand(
   const raw = await entry.exec(ctx);
   if (raw && typeof raw === "object" && "ok" in raw) {
     if (raw.ok) {
-      // P6 (ooc-6) constructor outcome path: 把构造出的 ContextWindow 挂到 thread。
+      // P6 (ooc-6) constructor outcome path: 把构造出的 OOCObject 挂到 thread。
       // 优先通过 manager（保证 dual-write）；若调用方未注入 manager（测试常见），
       // 退回直接 push 到 thread.contextWindows，与历史 root.* exec 内部 fallback 一致。
       if ("object" in raw) {

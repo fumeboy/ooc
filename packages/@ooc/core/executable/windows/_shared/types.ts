@@ -14,6 +14,12 @@
  * - 每个 builtin window type 的 interface 定义在 windows/<type>/types.ts
  * - 本文件保留：BaseContextWindow / WindowType / WindowStatus / ContextWindow union /
  *   公共常量与 id 工具函数 / re-export 各子目录 types.ts
+ *
+ * P6 ooc-6 命名分层（2026-06-02 用户反馈确认）：
+ *   OOCObject      = object 自身（persist 到 state.json，object 维度）
+ *   ContextObject = OOCObject 在 context 中的形态（persist 到 thread-context.json，thread 维度）
+ *   ContextWindow = 旧称（保留 @deprecated alias 一个 release）
+ *   constructor 构造返回 OOCObject（manager 再把它挂到 thread context）
  */
 
 /** Window 类型枚举；新增类型必须同步在 WINDOW_REGISTRY 中注册。 */
@@ -122,7 +128,7 @@ export type SharingState =
       /** 分享时刻 timestamp（ms）。 */
       sharedAt: number;
       /** 不带 sharing 字段的 freeze 副本；render / 渲染 knowledge 时使用。 */
-      snapshot: ContextWindow;
+      snapshot: ContextObject;
     }
   | {
       kind: "lent_out";
@@ -133,7 +139,7 @@ export type SharingState =
       /** 分享时刻 timestamp（ms）。 */
       sharedAt: number;
       /** 借出时刻的 freeze 副本；render 时自己用（自己看不到 latest，因为 latest 在 borrower 那边）。 */
-      snapshot: ContextWindow;
+      snapshot: ContextObject;
     };
 
 // ─────────────────────────── per-type interface re-exports ────────────────────
@@ -174,9 +180,8 @@ import type { PlanWindow } from "@ooc/builtins/plan/types.js";
 import type { FeishuChatWindow } from "../../../extendable/lark/feishu-chat/types.js";
 import type { FeishuDocWindow } from "../../../extendable/lark/feishu-doc/types.js";
 
-/** 所有 ContextWindow 类型的 discriminated union。新增 type 后必须扩这里 + WINDOW_REGISTRY。 */
-/** @deprecated Use ContextObject instead (2026-05-28 ooc-6 Object Unification). ContextWindow is being renamed to ContextObject. */
-export type ContextWindow =
+/** 所有 OOCObject 类型的 discriminated union（object 维度，persist 到 state.json / constructor 返回值）。新增 type 后必须扩这里 + REGISTRY。 */
+export type OOCObject =
   | RootWindow
   | CommandExecWindow
   | DoWindow
@@ -194,10 +199,20 @@ export type ContextWindow =
   | PlanWindow;
 
 /**
- * ContextObject 类型的 discriminated union（原 ContextWindow 重命名，2026-05-28 ooc-6）。
- * 与 ContextWindow 完全等价，仅语义上强调"这是 Object 在 context 中的形态"。
+ * ContextObject — OOCObject 在 thread context 中的形态（thread 维度，persist 到 thread-context.json）。
+ *
+ * 结构上与 OOCObject 等价；conceptually 区分的是：
+ *   - OOCObject：object 自身，constructor 返回它，writeRuntimeObjectState 写它到 state.json
+ *   - ContextObject：object 在当前 thread context 中出现，thread.contextWindows 数组持有它
+ *
+ * 未来 refinement 会把 context-only 生命周期字段 (parentWindowId / status /
+ * createdAt / windowKnowledgePaths / sharing / compressLevel / _decayMeta) 从 OOCObject
+ * 抽离出去，使两个 type 在结构上也真正分层；本期作为 alias 保留结构一致性。
  */
-export type ContextObject = ContextWindow;
+export type ContextObject = OOCObject;
+
+/** @deprecated Use ContextObject (or OOCObject for object-level semantics) instead (2026-05-28 ooc-6 Object Unification). ContextWindow is the pre-rename name. */
+export type ContextWindow = ContextObject;
 
 /** Root window 的固定 id。 */
 export const ROOT_WINDOW_ID = "root";

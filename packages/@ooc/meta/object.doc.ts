@@ -155,6 +155,7 @@ export const root: DocTreeNode = {
                 "Context": "Object 每一轮思考时能看见的全部信息，是 Object 的世界边界",
                 "ContextWindow": "Context 的统一抽象信息单元，**本质是 OOC Object 出现在 context 中的形态**，既是信息展示单元，也是可操作对象，挂载 Object 的 method 供 LLM 交互",
                 "ContextObject": "ContextWindow 的别名，强调 window = object in context",
+                "OOCObject": "2026-06-02 (ooc-6 P6): Object 自身（object 维度，persist 到 state.json）；constructor 返回 OOCObject，manager 再把它 mount 为 thread context 中的 ContextObject",
                 "Knowledge": "Object 持有的 markdown 知识文档，可按 command path 渐进激活进入 Context",
                 "Thread": "Object 思考过程的运行时节点，多个 thread 组成 Thread Tree",
                 "Thread Tree": "thread 派生子 thread 形成的树形结构，多个 thread 可并行思考",
@@ -1527,9 +1528,9 @@ export const root: DocTreeNode = {
                             title: "kind: \"constructor\" - Object class 的构造方法",
                             content: `
                             \`ObjectMethod.kind?: "constructor" | "method"\`（缺省视为 "method"）—— 是 P6 ooc-6 引入的标记：
-                            带 \`kind: "constructor"\` 的 method 必须返回形如 \`{ ok: true, object: ContextWindow }\` 的
+                            带 \`kind: "constructor"\` 的 method 必须返回形如 \`{ ok: true, object: OOCObject }\` 的
                             \`MethodOutcome\`；manager.submit 看到该 outcome 后做三件事：
-                            1. 把 \`object\` 插进 thread 的 contextWindows（\`upsertWindow\`）。
+                            1. 把 \`object\`（作为 ContextObject）插进 thread 的 contextWindows（\`upsertWindow\`）。
                             2. 按 \`isBuiltinFeature\` 分两条路径写盘（详见 builtin_feature_split）。
                             3. 把构造好的 window 作为 form.result 反馈给 LLM。
 
@@ -1549,7 +1550,7 @@ export const root: DocTreeNode = {
                             \`meta/cookbook.add-new-agent.doc.ts:children.step4_methods_and_ui\`）。
                             `,
                             named: {
-                                "MethodOutcome": "{ ok: true, result?: string } | { ok: true, object: ContextWindow } | { ok: false, error: string }",
+                                "MethodOutcome": "{ ok: true, result?: string } | { ok: true, object: OOCObject } | { ok: false, error: string }",
                                 "lookupConstructor": "在指定 ObjectType 的定义中按 kind === \"constructor\" 标记索引构造方法",
                                 "constructor delegation": "root.talk/do/todo/... 退化为 lookupConstructor(<type>).exec(ctx) 的薄分发器",
                             },
