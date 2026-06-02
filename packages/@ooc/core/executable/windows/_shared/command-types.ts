@@ -16,6 +16,7 @@
 import type { ThreadContext } from "../../../thinkable/context";
 import type { CommandExecWindow, ContextWindow } from "./types";
 import type { WindowManager } from "./manager";
+import type { FlowObjectRef, ThreadPersistenceRef } from "../../../persistable/common";
 
 /** Method knowledge entries（扁平结构，无嵌套子节点）。 */
 export type MethodKnowledgeEntries = Record<string, string>;
@@ -152,6 +153,30 @@ export interface MethodExecutionContext<TSelf extends ContextWindow = ContextWin
   parentWindow?: TSelf;
   manager?: WindowManager;
   args: Record<string, unknown>;
+  /**
+   * P6.§8 (2026-06-02): Set when the method runs on an independent flow object
+   * (`isBuiltinFeature=false`). Undefined for builtin features (talk / do / todo /
+   * method_exec) — they have no own state.json. Caller of `reportStateEdit` is the
+   * exec body; manager populates this from `self` + thread persistence.
+   */
+  ownerFlowObjectRef?: FlowObjectRef;
+  /**
+   * P6.§8 (2026-06-02): Set whenever the method runs in a real persisted thread; method
+   * bodies that mutate **thread-level state** (builtin feature inline state OR thread
+   * contextWindows refs) should call `reportContextEdit` after the mutation.
+   */
+  ownerThreadRef?: ThreadPersistenceRef;
+  /**
+   * P6.§8 (2026-06-02): Convenience helper; equivalent to
+   * `ctx.manager?.reportStateEdit(ctx.ownerFlowObjectRef!)`. No-op when
+   * `ownerFlowObjectRef` is undefined (builtin feature path).
+   */
+  reportStateEdit?: () => Promise<void>;
+  /**
+   * P6.§8 (2026-06-02): Convenience helper; equivalent to
+   * `ctx.manager?.reportContextEdit(ctx.thread!)`. No-op when no thread is attached.
+   */
+  reportContextEdit?: () => Promise<void>;
 }
 
 /** @deprecated Use MethodExecutionContext instead (2026-05-28 ooc-6 Object Unification). */

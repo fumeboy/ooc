@@ -339,6 +339,13 @@ export class WindowManager {
     let result: string | undefined;
     let isError = false;
     try {
+      // P6.§8 (2026-06-02): compute helper refs so method bodies can fire-and-forget flush.
+      // ownerFlowObjectRef is undefined for builtin features (no own state.json);
+      // ownerThreadRef tracks the thread + object pair for thread-context.json writes.
+      const ownerFlowObjectRef = isBuiltinFeatureType(parent.type)
+        ? undefined
+        : this.runtimeObjectRefForWindow(thread, parent);
+      const ownerThreadRef = this.threadPersistRefFromThread(thread);
       const ctx: import("./command-types.js").MethodExecutionContext = {
         thread,
         form: executing,
@@ -346,6 +353,14 @@ export class WindowManager {
         parentWindow: parent,
         manager: this,
         args: form.accumulatedArgs,
+        ownerFlowObjectRef,
+        ownerThreadRef,
+        reportStateEdit: ownerFlowObjectRef
+          ? () => this.reportStateEdit(ownerFlowObjectRef)
+          : () => Promise.resolve(),
+        reportContextEdit: ownerThreadRef
+          ? () => this.reportContextEdit(thread)
+          : () => Promise.resolve(),
       };
       const raw = await entry.exec(ctx);
       // 四种返回形态：MethodOutcome (constructor / regular / failed) / string / undefined
@@ -716,6 +731,43 @@ export class WindowManager {
     if (thread) {
       this.writeContextObjectForWindow(thread, window).catch(() => {});
     }
+  }
+
+  /**
+   * P6.§8 (2026-06-02): Reports that the **object's self-fields** changed; flushes state.json.
+   *
+   * Used by method bodies that mutate an independent flow object's own fields and want to
+   * persist the change without waiting for the next submit/upsert cycle. State is the
+   * **object dimension** (cross-thread shared) — no thread parameter needed.
+   *
+   * No-op for builtin features (talk / do / todo / method_exec): they live entirely in the
+   * thread's `thread-context.json` and have no own `state.json`. Callers operating on a
+   * builtin feature should use `reportContextEdit` instead.
+   *
+   * Concurrency: writes go through the same per-(session, objectId) serial queue as
+   * `writeRuntimeObjectState`, so concurrent reports for the same object are serialized.
+   */
+  public reportStateEdit(ref: FlowObjectRef): Promise<void> {
+    const window = this.windows.get(ref.objectId);
+    if (!window) return Promise.resolve();
+    if (isBuiltinFeatureType(window.type)) return Promise.resolve();
+    return writeRuntimeObjectState(ref, window);
+  }
+
+  /**
+   * P6.§8 (2026-06-02): Reports that the **thread's contextWindows** changed (builtin
+   * feature inline state OR independent object refs); flushes thread-context.json.
+   *
+   * Used by method bodies that mutate the thread's view of contextWindows — e.g.
+   * `method_exec.refine` accumulating args, `talk_window.say` appending a transcript entry,
+   * or any inserted/removed independent flow object ref. Context is the **thread dimension**
+   * (per-thread, contains inline builtin features + refs to independent objects).
+   *
+   * Takes the full ThreadContext rather than just a ref so we can reuse the in-memory
+   * `this.windows` snapshot (same source of truth used by `writeThreadContextSnapshot`).
+   */
+  public reportContextEdit(thread: ThreadContext): Promise<void> {
+    return this.writeThreadContextSnapshot(thread);
   }
 }
 

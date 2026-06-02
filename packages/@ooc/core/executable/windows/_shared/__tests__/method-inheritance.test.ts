@@ -25,10 +25,14 @@ const fakeMethod: ObjectMethod = {
   exec: async () => ({ ok: true, result: "dummy" }),
 };
 
+// 给测试用 type 配 stub readable，让 assertAllObjectDefinitionsRegistered 通过——
+// 该 assert 在其他测试文件 import windows/index.ts 时运行，会扫描整个 REGISTRY。
+const stubReadable = () => [];
+
 describe("resolveMethod + parentClass chain (P6.§7)", () => {
   test("undefined parentClass → defaults to \"root\" → finds talk", () => {
     const t = `__test_default_root_${Date.now()}`;
-    registerNewObjectType(t as never, { methods: {} });
+    registerNewObjectType(t as never, { methods: {}, readable: stubReadable });
     const found = resolveMethod(t, "talk");
     expect(found).toBeDefined();
     expect(found?.paths).toContain("talk");
@@ -36,14 +40,14 @@ describe("resolveMethod + parentClass chain (P6.§7)", () => {
 
   test("explicit parentClass: null → no inheritance → not found", () => {
     const t = `__test_no_inherit_${Date.now()}`;
-    registerNewObjectType(t as never, { methods: {}, parentClass: null });
+    registerNewObjectType(t as never, { methods: {}, parentClass: null, readable: stubReadable });
     const found = resolveMethod(t, "talk");
     expect(found).toBeUndefined();
   });
 
   test("explicit parentClass: \"root\" → resolves talk via parent", () => {
     const t = `__test_explicit_root_${Date.now()}`;
-    registerNewObjectType(t as never, { methods: {}, parentClass: "root" });
+    registerNewObjectType(t as never, { methods: {}, parentClass: "root", readable: stubReadable });
     const found = resolveMethod(t, "talk");
     expect(found).toBeDefined();
     expect(found?.paths).toContain("talk");
@@ -51,7 +55,7 @@ describe("resolveMethod + parentClass chain (P6.§7)", () => {
 
   test("nonexistent method on chain → undefined", () => {
     const t = `__test_missing_method_${Date.now()}`;
-    registerNewObjectType(t as never, { methods: {} });
+    registerNewObjectType(t as never, { methods: {}, readable: stubReadable });
     const found = resolveMethod(t, "no_such_method_anywhere");
     expect(found).toBeUndefined();
   });
@@ -59,8 +63,8 @@ describe("resolveMethod + parentClass chain (P6.§7)", () => {
   test("cycle detection: A→B→A → terminates and returns undefined", () => {
     const a = `__test_cycle_a_${Date.now()}`;
     const b = `__test_cycle_b_${Date.now()}`;
-    registerNewObjectType(a as never, { methods: {}, parentClass: b });
-    registerNewObjectType(b as never, { methods: {}, parentClass: a });
+    registerNewObjectType(a as never, { methods: {}, parentClass: b, readable: stubReadable });
+    registerNewObjectType(b as never, { methods: {}, parentClass: a, readable: stubReadable });
     const found = resolveMethod(a, "talk");
     expect(found).toBeUndefined();
   });
@@ -70,6 +74,7 @@ describe("resolveMethod + parentClass chain (P6.§7)", () => {
     registerNewObjectType(t as never, {
       methods: { my_local: fakeMethod },
       parentClass: "root",
+      readable: stubReadable,
     });
     const local = resolveMethod(t, "my_local");
     expect(local).toBe(fakeMethod);
@@ -80,7 +85,7 @@ describe("resolveMethod + parentClass chain (P6.§7)", () => {
 
   test("lookupMethod (parent.type API) walks chain identically", () => {
     const t = `__test_via_window_${Date.now()}`;
-    registerNewObjectType(t as never, { methods: {} });
+    registerNewObjectType(t as never, { methods: {}, readable: stubReadable });
     const found = lookupMethod({ type: t as never }, "talk");
     expect(found).toBeDefined();
     expect(found?.paths).toContain("talk");

@@ -39,6 +39,10 @@ async function executeRefine(ctx: CommandExecutionContext): Promise<string | und
   if (!ok) {
     return `[command_exec.refine] refine 失败：form ${form.id} 不存在或不在 open / failed 状态。`;
   }
+  // P6.§8 (2026-06-02): refine mutates accumulated args (form is a builtin feature →
+  // its state lives inline in the thread's thread-context.json); flush so the on-disk
+  // snapshot reflects the edit immediately. Fixes "refine 不写盘" in the plan.
+  await ctx.reportContextEdit?.();
   const updated = ctx.manager.get(form.id);
   const paths = updated && updated.type === "command_exec" ? updated.commandPaths.join(", ") : "";
   // Round 13: 如果是从 failed 复活, 标注一下让 LLM 知道 form 已切回 open。
