@@ -20,7 +20,6 @@
     "@codemirror/state": "^6.5.0",
     "@codemirror/view": "^6.36.0",
     "@ooc/builtins/_shared": "workspace:*",
-    "@ooc/builtins/command_exec": "workspace:*",
     "@ooc/builtins/file": "workspace:*",
     "@ooc/builtins/knowledge": "workspace:*",
     "@ooc/builtins/plan": "workspace:*",

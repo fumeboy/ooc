@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@ooc/builtins/command_exec": "workspace:*",
     "@ooc/builtins/file": "workspace:*",
     "@ooc/builtins/knowledge": "workspace:*",
     "@ooc/builtins/plan": "workspace:*",

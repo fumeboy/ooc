@@ -68,10 +68,10 @@ import { WindowDetail as TodoWindowDetail } from "@ooc/builtins/todo/visible/ind
 import { WindowDetail as SearchWindowDetail } from "@ooc/builtins/search/visible/index.tsx";
 import { WindowDetail as SkillIndexWindowDetail } from "@ooc/builtins/skill_index/visible/index.tsx";
 import { WindowDetail as PlanWindowDetail } from "@ooc/builtins/plan/visible/index.tsx";
-import { WindowDetail as CommandExecWindowDetail } from "@ooc/builtins/command_exec/visible/index.tsx";
+import { WindowDetail as CommandExecWindowDetail } from "./MethodExecWindowDetail";
 import { WindowDetail as ProgramWindowDetail } from "@ooc/builtins/program/visible/index.tsx";
 import { WindowDetail as RootWindowDetail } from "@ooc/builtins/root/visible/index.tsx";
-import type { CommandExecWindow } from "@ooc/builtins/command_exec";
+import type { CommandExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 import type { TodoWindow } from "@ooc/builtins/todo";
 import type { SkillIndexWindow } from "@ooc/builtins/skill_index";
 import type { PlanWindow } from "@ooc/builtins/plan";

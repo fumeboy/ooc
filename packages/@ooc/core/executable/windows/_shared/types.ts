@@ -139,10 +139,10 @@ export type SharingState =
 // ─────────────────────────── per-type interface re-exports ────────────────────
 
 export type { RootWindow } from "@ooc/builtins/root/types.js";
-export type { CommandExecWindow } from "@ooc/builtins/command_exec/types.js";
+export type { CommandExecWindow } from "../method_exec/types.js";
 // P6.§9 (2026-06-02): canonical alias under the new "method_exec" type name.
 //                     CommandExecWindow remains as the structural type (one release alias).
-export type { CommandExecWindow as MethodExecWindow } from "@ooc/builtins/command_exec/types.js";
+export type { MethodExecWindow } from "../method_exec/types.js";
 export type { DoWindow } from "../do/types.js";
 export type { TodoWindow } from "@ooc/builtins/todo/types.js";
 export type { TalkWindow } from "../talk/types.js";
@@ -159,7 +159,7 @@ export type { FeishuDocWindow, FeishuDocBlock } from "../../../extendable/lark/f
 
 // 用 import 形式拿到具体类型构造 ContextWindow union（type-only re-export 在 union 里不直接可见）
 import type { RootWindow } from "@ooc/builtins/root/types.js";
-import type { CommandExecWindow } from "@ooc/builtins/command_exec/types.js";
+import type { CommandExecWindow } from "../method_exec/types.js";
 import type { DoWindow } from "../do/types.js";
 import type { TodoWindow } from "@ooc/builtins/todo/types.js";
 import type { TalkWindow } from "../talk/types.js";

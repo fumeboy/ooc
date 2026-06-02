@@ -1,12 +1,18 @@
-import type { CommandExecWindow } from "../types.js";
+/**
+ * MethodExecWindowDetail — UI for the method_exec form.
+ *
+ * P6.§10 cleanup (2026-06-02): moved here from `@ooc/builtins/command_exec/visible/index.tsx`.
+ * The command_exec package is being deleted because form is an Object built-in feature
+ * managed in core, not a stand-alone builtin object.
+ */
+import type { CommandExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 import React from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { json as jsonLanguage } from "@codemirror/lang-json";
-import { parseEditArgs, FileEditDiffView } from "@ooc/web/src/domains/files/components/FileEditDiffView";
+import { parseEditArgs, FileEditDiffView } from "./FileEditDiffView";
 import { formatJson, statusToTone } from "@ooc/builtins/_shared/visible/utils";
 
-/** Command exec form 详情面板。 */
-export default function CommandExecWindowDetail({ window }: { window: CommandExecWindow }) {
+export default function MethodExecWindowDetail({ window }: { window: CommandExecWindow }) {
   return (
     <>
       <div className="llm-input-attrs">
@@ -31,7 +37,6 @@ export default function CommandExecWindowDetail({ window }: { window: CommandExe
         const args = window.accumulatedArgs ?? {};
         const isEdit = window.command === "edit";
         const isWriteFile = window.command === "write_file";
-        // edit:渲染为 unified diff
         if (isEdit) {
           const pairs = parseEditArgs(args);
           if (pairs) {
@@ -45,7 +50,6 @@ export default function CommandExecWindowDetail({ window }: { window: CommandExe
             );
           }
         }
-        // write_file:把 content 作为大段文本预览,其它字段平铺
         if (isWriteFile && typeof (args as Record<string, unknown>).content === "string") {
           const rec = args as Record<string, unknown>;
           return (
@@ -69,7 +73,6 @@ export default function CommandExecWindowDetail({ window }: { window: CommandExe
             </>
           );
         }
-        // 兜底:展示 JSON
         if (Object.keys(args).length > 0) {
           return (
             <CodeMirror
@@ -83,7 +86,6 @@ export default function CommandExecWindowDetail({ window }: { window: CommandExe
         }
         return null;
       })()}
-      {/* 仅 failed 状态保留 result 渲染 (success 已自动移除) */}
       {window.status === "failed" && window.result && (
         <pre className={`llm-input-pre llm-input-result-${statusToTone(window.status)}`}>{window.result}</pre>
       )}
@@ -91,4 +93,4 @@ export default function CommandExecWindowDetail({ window }: { window: CommandExe
   );
 }
 
-export { CommandExecWindowDetail as WindowDetail };
+export { MethodExecWindowDetail as WindowDetail };
