@@ -5,6 +5,7 @@ import { runRecoveryCheck } from "./bootstrap/recovery-check";
 import { checkStoneToPoolMigration, reportPoolMigration } from "./bootstrap/check-pool-migration";
 import { checkStaleDatabaseDir } from "./bootstrap/check-stale-database-dir";
 import { checkFlowChildrenMigration } from "./bootstrap/check-flow-children-migration";
+import { checkStateContextSplit } from "./bootstrap/check-state-context-split";
 import { ensureSupervisorObject } from "./bootstrap/ensure-supervisor";
 import { ensureUserObject } from "./bootstrap/ensure-user";
 import { ensureStoneRepo } from "@ooc/core/persistable";
@@ -332,6 +333,11 @@ if (import.meta.main) {
   // 幂等：已是 children/ 形态的不动。必须在 worker bootstrap 入队前跑（worker.scanRunningThreads
   // 期望 children/ 布局）。
   await checkFlowChildrenMigration(config.baseDir);
+
+  // 2026-06-02 (ooc-6 P6.§6): split state (object dim) vs context (thread dim).
+  // 把遗留的 talk/do/method_exec 独立目录与 state.json 中错置的 contextWindows 字段
+  // 一次性归位。幂等。
+  await checkStateContextSplit(config.baseDir);
 
   // hostname: "0.0.0.0" 显式 IPv4 监听（兼 IPv6 dual-stack on macOS）。
   // 之前默认 listen 在 macOS bun 上只绑 IPv6（lsof: `*:3000` 但 IPv6 only），
