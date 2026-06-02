@@ -319,18 +319,11 @@ export class WindowManager {
         `submit: command "${form.command}" not registered on parent window type "${parent.type}"`,
       );
     }
-    // P6.§3: 严格 self-type 校验——method 的 declaringType 必须等于 parent.type，
-    // 否则 manager 拒绝 dispatch（fail-loud），不进入 entry.exec。
-    // 直接匹配，无原型链回退（继承 §7 实装）。
-    if (resolved.declaringType !== parent.type) {
-      const failed: CommandExecWindow = {
-        ...form,
-        status: "failed",
-        result: `[method-error] method "${form.command}" not declared on object class "${parent.type}"`,
-      };
-      this.windows.set(formId, failed);
-      return failed.result;
-    }
+    // P6.§3 + §7 (2026-06-02): 校验由 lookupMethodEntry 完成——它沿 parentClass 链
+    // 向上找方法；找到则 declaringType 是命中类（可能是 parent.type 自己或祖先）。
+    // 找不到（resolved === undefined）就在上面已经 fail-loud 抛错。这里不再做
+    // declaringType !== parent.type 的严格相等校验，否则会反过来阻断 §7 设计的
+    // 继承调用（如 supervisor 借 root 拿 talk/do/...）。
     const entry = resolved.entry;
 
     const executing: CommandExecWindow = { ...form, status: "executing" };
