@@ -8,6 +8,8 @@ export {
   nestedObjectPath,
   STONE_OBJECTS_SUBDIR,
   STONE_CHILDREN_SUBDIR,
+  BUILTIN_OBJECT_IDS,
+  isBuiltinObjectId,
 } from "./common";
 
 export type { PoolObjectRef, PoolObjectMetadata } from "./pool-object";

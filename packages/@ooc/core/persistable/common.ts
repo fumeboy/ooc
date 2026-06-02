@@ -112,13 +112,25 @@ export interface StoneObjectRef {
  * objectId 中的 "/" 被翻译为 children/ 嵌套，与 workspace glob
  * `packages/**\/children/**` 精确匹配。
  *
- * Special case: objectId 以 "_builtin/" 开头的内置对象 → 解析到
- * `packages/@ooc/builtins/<type>/` 源包路径（而非 `packages/_builtin/children/<type>/`）。
+ * Special cases:
+ * - `_builtin/<type>` 前缀 → `packages/@ooc/builtins/<type>/` 源码仓内置包
+ * - `supervisor` / `user`（历史保留 id）→ 同样路由到 `packages/@ooc/builtins/<id>/`
  */
+export const BUILTIN_OBJECT_IDS = new Set(["supervisor", "user"]);
+
+/** 判断一个 objectId 是否指向 Builtin Object（运行时自带、Agent 不可改写）。 */
+export function isBuiltinObjectId(objectId: string): boolean {
+  if (objectId.startsWith("_builtin/")) return true;
+  return BUILTIN_OBJECT_IDS.has(objectId);
+}
+
 export function packageDir(ref: StoneObjectRef): string {
   if (ref.objectId.startsWith("_builtin/")) {
     const builtinType = ref.objectId.slice("_builtin/".length);
     return join(ref.baseDir, "packages", "@ooc", "builtins", builtinType);
+  }
+  if (BUILTIN_OBJECT_IDS.has(ref.objectId)) {
+    return join(ref.baseDir, "packages", "@ooc", "builtins", ref.objectId);
   }
   return join(
     ref.baseDir,

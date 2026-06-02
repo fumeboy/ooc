@@ -23,8 +23,9 @@
  * 自动开 PR-Issue。**supervisor 评审自己的 PR-Issue 是合法的**（自审是治理责任
  * 的一部分；git log 与 PR-Issue 链均保留事后审计线索）。唯一保留的特权是
  * `rollback`（只 supervisor 可调），属于治理操作而非 worktree 路径特殊化。
- * bootstrap 期的 supervisor stone 由 `ensureSupervisorObject` 直写 main——
- * 那时尚无 LLM 上下文运行 metaprog 命令，简化处理。
+ * bootstrap 期不再写 supervisor stone —— supervisor 与 user 都是 Builtin Object，
+ * 定义位于 `packages/@ooc/builtins/supervisor` 和 `packages/@ooc/builtins/user`，
+ * 随 OOC 代码仓发版，Agent 不可改写。
  */
 
 import { mkdir, rm, stat, writeFile, cp } from "node:fs/promises";
@@ -55,7 +56,7 @@ import {
 } from "./stone-git";
 import { closePrIssue, createPrIssue, readPrIssue, type PrIssueRecord } from "./pr-issue";
 import { enqueueSessionWrite } from "./serial-queue";
-import { nestedObjectPath, packageDir } from "./common";
+import { nestedObjectPath, packageDir, isBuiltinObjectId } from "./common";
 
 /** Supervisor 的 objectId（治理身份：rollback 仅 supervisor 可调；PR-Issue 默认收件人）。 */
 export const SUPERVISOR_OBJECT_ID = "supervisor";
@@ -735,6 +736,7 @@ export type SupervisorCreateObjectResult =
   | { ok: true; commitSha: string }
   | { ok: false; code: "INVALID_INPUT"; message: string }
   | { ok: false; code: "ALREADY_EXISTS"; message: string }
+  | { ok: false; code: "BUILTIN_CONFLICT"; message: string }
   | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string };
 
 /**
@@ -753,7 +755,7 @@ export type SupervisorCreateObjectResult =
  * 等价 LLM 命令：metaprog action='create_object'（仅 supervisor caller 允许）。
  *
  * 流程：
- *   1. 校验 newObjectId（不能 `supervisor`、不能已存在）
+ *   1. 校验 newObjectId（不能是 Builtin Object、不能已存在）
  *   2. enqueueSessionWrite git 队列锁
  *   3. createStoneObject + writeSelf + writeReadable + 写 knowledge/*
  *   4. gitCommitAll on main worktree, author = supervisor
@@ -764,11 +766,11 @@ export async function supervisorCreateObject(
   if (!isValidObjectId(input.newObjectId)) {
     return { ok: false, code: "INVALID_INPUT", message: `invalid newObjectId '${input.newObjectId}'` };
   }
-  if (input.newObjectId === SUPERVISOR_OBJECT_ID) {
+  if (isBuiltinObjectId(input.newObjectId)) {
     return {
       ok: false,
-      code: "INVALID_INPUT",
-      message: "supervisor stone is bootstrapped by ensureSupervisorObject, not created at runtime.",
+      code: "BUILTIN_CONFLICT",
+      message: `objectId '${input.newObjectId}' conflicts with a Builtin Object (supervisor/user/root/etc). Builtins are defined by OOC runtime and cannot be overwritten by create_object.`,
     };
   }
   if (typeof input.selfMd !== "string" || !input.selfMd.trim()) {

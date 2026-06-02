@@ -6,9 +6,7 @@ import { checkStoneToPoolMigration, reportPoolMigration } from "./bootstrap/chec
 import { checkStaleDatabaseDir } from "./bootstrap/check-stale-database-dir";
 import { checkFlowChildrenMigration } from "./bootstrap/check-flow-children-migration";
 import { checkStateContextSplit } from "./bootstrap/check-state-context-split";
-import { ensureSupervisorObject } from "./bootstrap/ensure-supervisor";
-import { ensureUserObject } from "./bootstrap/ensure-user";
-import { ensureStoneRepo } from "@ooc/core/persistable";
+import { ensureStoneRepo, createPoolObject, BUILTIN_OBJECT_IDS } from "@ooc/core/persistable";
 import { AppServerError } from "./bootstrap/errors";
 import { healthModule } from "./modules/health";
 import { runtimeModule } from "./modules/runtime";
@@ -264,40 +262,21 @@ if (import.meta.main) {
     throw e;
   }
 
-  // 2026-05-25: supervisor stone 是 World bootstrap invariant。
-  // 第一启动自动建（含 self.md / readme.md / 5 篇 seed knowledge），后续 idempotent skip。
-  // 是 R5 #32 (recovery-check 假设 supervisor 存在但空 world 没有) 的彻底解。
-  try {
-    const supervisor = await ensureSupervisorObject({ baseDir: config.baseDir });
-    if (supervisor.created) {
-      console.log(
-        `[ooc-app-server] supervisor package created — ` +
-          `OOC World bootstrap invariant: user 默认通过 supervisor 与系统交互`,
+  // 2026-06-02: Builtin Object（supervisor / user）的 pool 骨架 idempotent 预创。
+  // Builtin 的 stone/definition 随 OOC 代码仓发布（packages/@ooc/builtins/），不写 world；
+  // 但 pool 是 world 内的跨 session 沉淀层，仍然需要 pools/<id>/ 目录存在。
+  for (const objectId of BUILTIN_OBJECT_IDS) {
+    try {
+      await createPoolObject({ baseDir: config.baseDir, objectId });
+    } catch (e) {
+      console.error(
+        `[ooc-app-server] createPoolObject(${objectId}) FATAL: ${e instanceof Error ? e.message : e}`,
       );
+      throw e;
     }
-  } catch (e) {
-    // bootstrap invariant 失败不允许 server 跑下去——区别于后续的 advisory 类 check
-    console.error(`[ooc-app-server] ensureSupervisorObject FATAL: ${e instanceof Error ? e.message : e}`);
-    throw e;
   }
 
-  // 2026-05-25: user stone 也是 World bootstrap invariant。
-  // 它是真人用户的占位 Object，readme.md 定义 inline UI token 协议；其它 Object 通过
-  // relation_window 读到 user.readme，学到怎么用 [[ui...ui]] 指给用户看东西。
-  try {
-    const userStone = await ensureUserObject({ baseDir: config.baseDir });
-    if (userStone.created) {
-      console.log(
-        `[ooc-app-server] user package created — ` +
-          `OOC World bootstrap invariant: Object → user 消息渲染入口 + inline UI 协议`,
-      );
-    }
-  } catch (e) {
-    console.error(`[ooc-app-server] ensureUserObject FATAL: ${e instanceof Error ? e.message : e}`);
-    throw e;
-  }
-
-  // U8: Recovery 自检——遍历 stones/main/{Object}/server/index.ts，加载失败的开 PR-Issue。
+  // U8: Recovery 自检——遍历 stones/main/{Object}/executable/index.ts，加载失败的开 PR-Issue。
   // 不阻塞启动；Supervisor 在自己的 super flow 看到 recovery-needed Issue 后决策回滚。
   try {
     const recovery = await runRecoveryCheck({ baseDir: config.baseDir });

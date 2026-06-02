@@ -11,7 +11,9 @@
     "@ooc/builtins/root": "workspace:*",
     "@ooc/builtins/search": "workspace:*",
     "@ooc/builtins/skill_index": "workspace:*",
-    "@ooc/builtins/todo": "workspace:*"
+    "@ooc/builtins/supervisor": "workspace:*",
+    "@ooc/builtins/todo": "workspace:*",
+    "@ooc/builtins/user": "workspace:*"
   },
   "ooc": {
     "kind": "source-package",

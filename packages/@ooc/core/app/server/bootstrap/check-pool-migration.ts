@@ -15,9 +15,9 @@
  * - stone 下 `knowledge/<*.md>`（无 memory/relations 子目录）→ 这是 **seed knowledge**
  *   的合法形态，**不触发警告**。
  *
- * 配合 ensure-supervisor / ensure-user 现在在 bootstrap 时预创 pool skeleton
- * (pools/objects/<id>/{knowledge/{memory,relations},files}) ——这是 M-5 体验官报告的
- * /api/tree?scope=world&path=pools/objects/supervisor/knowledge 404 的根因解。
+ * 配合 server/index.ts 现在在 bootstrap 时为所有 Builtin Object（supervisor / user）
+ * 预创 pool skeleton（pools/<id>/{knowledge/{memory,relations},files,data}）——
+ * 这是 M-5 体验官报告的 /api/tree?scope=world&path=pools/supervisor/knowledge 404 的根因解。
  *
  * 不自动迁移（CLAUDE.md "不悄悄做"），不阻塞启动。
  */
