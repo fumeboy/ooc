@@ -50,6 +50,11 @@ function stripVolatileForPersist(thread: ThreadContext): ThreadContext {
         const { _decayMeta: _drop, ...rest } = next;
         next = rest as typeof next;
       }
+      // P6.§7: effectiveVisibleType 是每轮 enrichment 产物，不持久化。
+      if (next.effectiveVisibleType !== undefined) {
+        const { effectiveVisibleType: _drop, ...rest } = next;
+        next = rest as typeof next;
+      }
       return next;
     }),
   };

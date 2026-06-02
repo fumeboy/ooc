@@ -142,8 +142,10 @@ export interface ObjectDefinition extends Omit<WindowTypeDefinition, "commands">
    */
   commands: Record<string, ObjectMethod>;
   /**
-   * 原型 object id，用于继承 methods / UI / readable。
-   * 类似 JavaScript 原型链，自身定义覆盖原型定义。
+   * @deprecated Use `parentClass` instead (2026-06-02 P6.§7 inheritance unification).
+   * `prototype` was the stone self.md frontmatter field for specifying a parent;
+   * it is now normalized to `parentClass` at registration time. Kept as alias
+   * during transition; internally everything reads/writes `parentClass`.
    */
   prototype?: string;
   /**
@@ -171,21 +173,21 @@ export interface ObjectDefinition extends Omit<WindowTypeDefinition, "commands">
    */
   isBuiltinFeature?: boolean;
   /**
-   * P6.§7 (2026-06-02): 父类 id —— method 解析的继承链载体。
+   * P6.§7 (2026-06-02): 父类 id —— 统一的继承链载体（methods / readable / knowledge / visible 共用）。
    *
    * 三态语义（undefined ≠ null）：
    *   - **undefined**（缺省）→ 隐式继承 `"root"`：ObjectDefinition 默认拿到 root 上注册的所有
    *     通用方法（talk / do / todo / plan / program / open_file / open_knowledge / write_file /
    *     glob / grep / metaprog / open_feishu_chat / open_feishu_doc）。绝大多数 type 走这条。
-   *   - **`null`**（显式不继承）→ 完全独立，方法解析不沿父链回退。仅 `root` 自身与
+   *   - **`null`**（显式不继承）→ 完全独立，继承链不沿父链回退。仅 `root` 自身与
    *     `method_exec`（form lifecycle 内部 type，不应暴露 user-facing 方法）使用。
    *   - **string**（具名父类）→ 必须是 object registry 中已注册的 ObjectType id；解析在自身
-   *     methods 上 miss 后跳到 `getObjectDefinition(parentClass).methods` 继续查，递归直到
-   *     `null` 或链长达到防御阈值。
+   *     methods/readable/knowledge/visible 上 miss 后跳到 `getObjectDefinition(parentClass)`
+   *     继续查，递归直到 `null` 或链长达到防御阈值。
    *
-   * 与 `prototype`（self.md frontmatter 的字段）的关系：`prototype` 是 stone-side 的实例链，
-   * `parentClass` 是 registry-side 的 class 链。两者在 P6 时点尚未统一；本字段只参与
-   * `resolveMethod` 的 class-级方法解析，不影响 stone object 的 prototype chain 解析。
+   * 与 `prototype`（self.md frontmatter 的字段）的关系：`prototype` 在 P6.§7 已降级为
+   * `parentClass` 的配置别名。stone 动态注册时，若 `executable/index.ts` 未显式声明
+   * `parentClass`，则读取 self.md frontmatter 的 `prototype` 字段回填。
    */
   parentClass?: string | null;
 }
@@ -321,6 +323,8 @@ export function registerWindowType(
   }
   // 保持 commands/methods 双写一致：partial.commands → 同时写 methods
   const nextCommands = partial.commands !== undefined ? partial.commands : existing.commands;
+  // P6.§7: parentClass 三态 + prototype @deprecated alias 归一化（与 registerObjectType 一致）。
+  const nextParentClass = resolveEffectiveParentClass(partial, existing as ObjectDefinition);
   REGISTRY.set(type, {
     ...existing,
     // 直接替换不展开:custom window 用 Proxy 做 dynamic dispatcher,
@@ -333,9 +337,7 @@ export function registerWindowType(
     compressView: partial.compressView ?? existing.compressView,
     basicKnowledge: partial.basicKnowledge ?? existing.basicKnowledge,
     isBuiltinFeature: partial.isBuiltinFeature ?? existing.isBuiltinFeature,
-    // P6.§7: parentClass 用「key in partial」判定而非 `??`，因为 `null` 是有意义的
-    //        显式值（"完全不继承"），不能被 `??` 当成 nullish 而回退到 existing。
-    parentClass: "parentClass" in partial ? partial.parentClass : existing.parentClass,
+    parentClass: nextParentClass,
   } as WindowTypeDefinition);
 }
 
@@ -360,6 +362,9 @@ export function registerObjectType(
       : partial.commands !== undefined
         ? partial.commands
         : existing.methods;
+  // P6.§7: parentClass 三态判定 + prototype 别名归一化。
+  // 优先级：partial.parentClass（显式声明） > partial.prototype（@deprecated alias） > existing.parentClass。
+  const nextParentClass = resolveEffectiveParentClass(partial, existing);
   REGISTRY.set(type, {
     ...existing,
     commands: nextEntries,
@@ -368,11 +373,11 @@ export function registerObjectType(
     renderXml: partial.renderXml ?? existing.renderXml,
     compressView: partial.compressView ?? existing.compressView,
     basicKnowledge: partial.basicKnowledge ?? existing.basicKnowledge,
+    // prototype @deprecated: 保留字段以防外部还在读；内部统一用 parentClass。
     prototype: partial.prototype ?? existing.prototype,
     readable: partial.readable ?? existing.readable,
     isBuiltinFeature: partial.isBuiltinFeature ?? existing.isBuiltinFeature,
-    // P6.§7: 同 registerWindowType——`null` 是有意义的显式值，不能被 `??` 吞掉。
-    parentClass: "parentClass" in partial ? partial.parentClass : existing.parentClass,
+    parentClass: nextParentClass,
   } as ObjectDefinition);
 }
 
@@ -388,6 +393,9 @@ export function registerNewObjectType(
   definition: Partial<ObjectDefinition> & { commands?: Record<string, any>; methods?: Record<string, any> },
 ): void {
   const entries = definition.methods ?? definition.commands ?? {};
+  // P6.§7: parentClass 三态 + prototype 别名归一化。
+  // 优先级：definition.parentClass > definition.prototype（@deprecated alias）> undefined（隐式继承 root）。
+  const effectiveParentClass = resolveEffectiveParentClass(definition, undefined);
   REGISTRY.set(type, {
     type,
     onClose: undefined,
@@ -399,6 +407,7 @@ export function registerNewObjectType(
     ...definition,
     commands: entries,
     methods: entries,
+    parentClass: effectiveParentClass,
   } as ObjectDefinition);
 }
 
@@ -439,6 +448,58 @@ export function isBuiltinFeatureType(type: ObjectType): boolean {
 }
 
 /**
+ * P6.§7 (2026-06-02): 归一化 parentClass：统一处理 parentClass 三态 + prototype @deprecated alias。
+ *
+ * 优先级：input.parentClass（显式声明） → input.prototype（@deprecated alias） → fallback。
+ * fallback 是已有的定义（registerObjectType）或 undefined（registerNewObjectType，隐式继承 root）。
+ *
+ * "parentClass" in input 判定必须用 `in` 而非 `??`，因为 `null` 是有意义的显式值（"完全不继承"）。
+ * "prototype" in input 也用 `in`，同理。
+ */
+function resolveEffectiveParentClass(
+  input: { parentClass?: string | null; prototype?: string },
+  fallback: ObjectDefinition | undefined,
+): string | null | undefined {
+  if ("parentClass" in input) return input.parentClass;
+  if ("prototype" in input && input.prototype !== undefined) return input.prototype;
+  return fallback?.parentClass;
+}
+
+/**
+ * P6.§7 (2026-06-02): 统一的 parentClass 链 walker。
+ *
+ * 给定起始 type，按"最近祖先 → 更远祖先"顺序返回继承链上的 type id 列表（不含起始 type 自身）。
+ * 返回顺序 = 从 closest 到 farthest，方便后续"先找近的、命中即停"使用。
+ *
+ * 三态语义（与 ObjectDefinition.parentClass 一致）：
+ *   - undefined → 默认回退到 "root"（让所有未显式声明的 type 都继承 root）
+ *   - null → 链终止（不回退任何父类）
+ *   - string → 沿该父类继续查
+ *
+ * 环检测：seen Set 兜底，避免 A→B→A 死循环；链长上限 64 防御。
+ *
+ * 起始 type 未注册 → 返回空数组（不抛错，caller 决定是否 fail-loud）。
+ */
+export function resolveParentClassChain(startType: ObjectType): string[] {
+  const chain: string[] = [];
+  const seen = new Set<string>([startType]);
+  const MAX_DEPTH = 64;
+  let cur: string | undefined = startType;
+  while (cur && chain.length < MAX_DEPTH) {
+    const def = REGISTRY.get(cur as ObjectType) as ObjectDefinition | undefined;
+    if (!def) break;
+    // 三态语义：undefined → "root"；null → 终止；string → 命名父类
+    const next = def.parentClass === undefined ? "root" : def.parentClass ?? undefined;
+    if (!next) break;
+    if (seen.has(next)) break;
+    seen.add(next);
+    chain.push(next);
+    cur = next;
+  }
+  return chain;
+}
+
+/**
  * 在指定 parent ContextWindow 上查找 method（2026-05-28 ooc-6 Object Unification）。
  *
  * P6.§7 (2026-06-02): 现在沿 class.parentClass 继承链向上回退（resolveMethod）；
@@ -470,16 +531,17 @@ export function lookupMethodEntry(
   parentWindow: { type: ObjectType },
   methodName: string,
 ): { entry: ObjectMethod; declaringType: ObjectType } | undefined {
-  let cur: string | undefined = parentWindow.type;
-  const seen = new Set<string>();
-  while (cur && !seen.has(cur)) {
-    seen.add(cur);
-    const def = REGISTRY.get(cur as ObjectType) as ObjectDefinition | undefined;
-    if (!def) return undefined;
+  // 先查 self，再沿 parentClass 链向上回退（closest first）。
+  const selfDef = REGISTRY.get(parentWindow.type) as ObjectDefinition | undefined;
+  if (selfDef) {
+    const selfEntry = selfDef.methods?.[methodName] ?? selfDef.commands?.[methodName];
+    if (selfEntry) return { entry: selfEntry, declaringType: parentWindow.type };
+  }
+  for (const parentType of resolveParentClassChain(parentWindow.type)) {
+    const def = REGISTRY.get(parentType as ObjectType) as ObjectDefinition | undefined;
+    if (!def) continue;
     const entry = def.methods?.[methodName] ?? def.commands?.[methodName];
-    if (entry) return { entry, declaringType: cur as ObjectType };
-    // 三态语义：undefined → 默认 "root" 兜底；null → 显式不继承（链终止）；string → 沿父类继续查。
-    cur = def.parentClass === undefined ? "root" : def.parentClass ?? undefined;
+    if (entry) return { entry, declaringType: parentType as ObjectType };
   }
   return undefined;
 }
@@ -487,32 +549,23 @@ export function lookupMethodEntry(
 /**
  * P6.§7 (2026-06-02): 沿 class.parentClass 链向上找 method。
  *
- * Walk: cur = classId；while cur && !seen.has(cur)：mark seen，取 def = getObjectDefinition(cur)，
- * 若 def.methods[methodName]（或 def.commands[methodName] 兼容旧字段）存在则返回；否则跳到
- * `def.parentClass === undefined ? "root" : def.parentClass`，直到链终止或循环。
- *
- * **三态语义**（与 ObjectDefinition.parentClass 一致）：
- *   - `undefined`（缺省）→ 默认隐式 "root"，让所有 type 自动拿到 root 的 talk/do/todo/...。
- *   - `null`（显式不继承）→ 链终止，不再回退（仅 root 自身 + method_exec 用此模式）。
- *   - `string`（具名父类）→ 跳到该 class 继续查；未注册时下一轮 getObjectDefinition 抛错→拦下。
- *
- * **环检测**：`seen` Set 兜底，避免误配置 parentClass A→B→A 引入死循环。
- *
- * 缺省 / 不存在均返回 undefined（caller fail-soft 决定是否 fall through 到错误响应）。
+ * 先在 classId 自身查；miss 后沿 resolveParentClassChain（closest → farthest）向上回退，
+ * 直到命中或链终止。缺省 / 不存在均返回 undefined。
  */
 export function resolveMethod(
   classId: string,
   methodName: string,
 ): ObjectMethod | undefined {
-  let cur: string | undefined = classId;
-  const seen = new Set<string>();
-  while (cur && !seen.has(cur)) {
-    seen.add(cur);
-    const def = REGISTRY.get(cur as ObjectType) as ObjectDefinition | undefined;
-    if (!def) return undefined;
+  const selfDef = REGISTRY.get(classId as ObjectType) as ObjectDefinition | undefined;
+  if (selfDef) {
+    const selfEntry = selfDef.methods?.[methodName] ?? selfDef.commands?.[methodName];
+    if (selfEntry) return selfEntry;
+  }
+  for (const parentType of resolveParentClassChain(classId as ObjectType)) {
+    const def = REGISTRY.get(parentType as ObjectType) as ObjectDefinition | undefined;
+    if (!def) continue;
     const entry = def.methods?.[methodName] ?? def.commands?.[methodName];
     if (entry) return entry;
-    cur = def.parentClass === undefined ? "root" : def.parentClass ?? undefined;
   }
   return undefined;
 }
@@ -599,111 +652,35 @@ export function assertAllObjectDefinitionsRegistered(): void {
   }
 }
 
-// ─── Prototype Chain Resolution (2026-05-28 ooc-6 Object Unification) ───
-
-import type { StoneObjectRef } from "../../../persistable/common.js";
-import { readSelf } from "../../../persistable/stone-self.js";
-import { parseKnowledgeFile } from "../../../thinkable/knowledge/parser.js";
-
 /**
- * 从 self.md frontmatter 中解析 prototype 字段。
- * 返回 undefined 表示无 prototype。
- */
-export async function parseObjectPrototype(stoneRef: StoneObjectRef): Promise<string | undefined> {
-  const selfText = await readSelf(stoneRef);
-  if (!selfText) return undefined;
-  const { frontmatter } = parseKnowledgeFile(selfText);
-  const proto = (frontmatter as Record<string, unknown>).prototype;
-  return typeof proto === "string" && proto.trim().length > 0 ? proto.trim() : undefined;
-}
-
-/**
- * 解析 Object 的原型链，返回从 self 到 root prototype 的 id 列表。
- * 检测循环引用并抛错。
- */
-export async function resolvePrototypeChain(
-  objectId: string,
-  stoneRef: StoneObjectRef,
-  visited: Set<string> = new Set(),
-): Promise<string[]> {
-  if (visited.has(objectId)) {
-    throw new Error(`Prototype chain cycle detected: ${Array.from(visited).join(" → ")} → ${objectId}`);
-  }
-  visited.add(objectId);
-
-  const proto = await parseObjectPrototype(stoneRef);
-  if (!proto) return [objectId];
-
-  // For builtin objects, look up in registry
-  if (REGISTRY.has(proto as ObjectType)) {
-    const protoDef = REGISTRY.get(proto as ObjectType) as ObjectDefinition;
-    if (protoDef.prototype) {
-      // Recursively resolve builtin prototype chain
-      const chain = await resolveBuiltinPrototypeChain(protoDef.prototype, visited);
-      return [objectId, proto, ...chain];
-    }
-    return [objectId, proto];
-  }
-
-  // For user-defined objects, recursively resolve
-  // Note: This requires loading the prototype object's stone ref
-  // For now, we return what we have and assume the caller handles nested stone refs
-  return [objectId, proto];
-}
-
-async function resolveBuiltinPrototypeChain(
-  protoId: string,
-  visited: Set<string>,
-): Promise<string[]> {
-  if (visited.has(protoId)) {
-    throw new Error(`Prototype chain cycle detected: ${Array.from(visited).join(" → ")} → ${protoId}`);
-  }
-  visited.add(protoId);
-
-  if (!REGISTRY.has(protoId as ObjectType)) {
-    return [];
-  }
-  const def = REGISTRY.get(protoId as ObjectType) as ObjectDefinition;
-  if (def.prototype) {
-    const chain = await resolveBuiltinPrototypeChain(def.prototype, visited);
-    return [protoId, ...chain];
-  }
-  return [protoId];
-}
-
-/**
- * 解析 Object 的所有 methods，包括继承自 prototype chain 的 methods。
- * 自身定义的 method 覆盖原型的同名 method。
+ * P6.§7 (2026-06-02): 前端 ContextSnapshotViewer 能静态渲染的 type 集合。
  *
- * 读取 def.methods（canonical）；若 methods 缺省/为空则回落 def.commands（@deprecated alias）。
+ * 与 web/src/domains/files/components/ContextSnapshotViewer.tsx:HANDLED_WINDOW_TYPES 保持一致；
+ * 两端是 mirror（前端用这个 set 做 switch，后端用它做继承链回退）。
  */
-export async function resolveObjectMethods(
-  stoneRef: StoneObjectRef,
-  customCommands: Record<string, ObjectMethod> = {},
-): Promise<Record<string, ObjectMethod>> {
-  const allMethods: Record<string, ObjectMethod> = {};
+const RENDERABLE_VISIBLE_TYPES = new Set([
+  "root", "command_exec", "do", "todo", "talk", "program",
+  "file", "knowledge", "search", "relation", "skill_index",
+  "feishu_chat", "feishu_doc", "plan",
+]);
 
-  // First, collect from prototype chain (least specific first)
-  const chain = await resolvePrototypeChain(stoneRef.objectId, stoneRef);
-  // Reverse so we apply most specific (self) last, overriding ancestors
-  for (let i = chain.length - 1; i >= 0; i--) {
-    const protoId = chain[i];
-    if (REGISTRY.has(protoId as ObjectType)) {
-      const def = REGISTRY.get(protoId as ObjectType) as ObjectDefinition;
-      const protoMethods =
-        def.methods && Object.keys(def.methods).length > 0 ? def.methods : def.commands;
-      for (const [name, method] of Object.entries(protoMethods ?? {})) {
-        allMethods[name] = method as ObjectMethod;
-      }
-    }
+/**
+ * P6.§7 (2026-06-02): 沿 parentClass 继承链找"首个前端可渲染"的 type。
+ *
+ * 语义：
+ *   - 若 type 本身就在 RENDERABLE_VISIBLE_TYPES 中 → 返回 type 自身
+ *   - 否则沿 resolveParentClassChain（closest → farthest）找第一个在集合中的 ancestor
+ *   - 整条链都不在集合中 → 返回 undefined（前端按原 type 渲染，通常回退到 JSON）
+ *
+ * 自定义 stone 对象（type = objectId）可通过 parentClass 声明"我属于哪类 UI"，
+ * 例如 `parentClass: "plan"` 让前端按 plan 的 visible 组件渲染。
+ */
+export function resolveEffectiveVisibleType(type: ObjectType): string | undefined {
+  if (RENDERABLE_VISIBLE_TYPES.has(type)) return type;
+  for (const ancestor of resolveParentClassChain(type)) {
+    if (RENDERABLE_VISIBLE_TYPES.has(ancestor)) return ancestor;
   }
-
-  // Then apply self's custom commands (override everything)
-  for (const [name, method] of Object.entries(customCommands)) {
-    allMethods[name] = method;
-  }
-
-  return allMethods;
+  return undefined;
 }
 
 // ─── Method Visibility Filtering (2026-05-28 ooc-6 Object Unification) ───

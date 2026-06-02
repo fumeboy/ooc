@@ -86,6 +86,19 @@ export interface BaseContextWindow {
    */
   compressLevel?: 0 | 1 | 2;
   /**
+   * P6.§7 (2026-06-02): 该 window 的"有效可见渲染类型"——沿 parentClass 继承链回退后
+   * 首个能被前端 ContextSnapshotViewer 渲染的 type。
+   *
+   * 例：若 window.type = "my_custom_plan" 且 parentClass = "plan"，则
+   * effectiveVisibleType = "plan"，前端会按 plan 的 visible 组件渲染。
+   *
+   * undefined = 未计算（后端 enrichment 之前）或回退到原始 type。
+   *
+   * 该字段是运行时 enrichment 产物，不持久化：stripVolatileForHash 和
+   * stripVolatileForPersist 都应剥离它。
+   */
+  effectiveVisibleType?: string;
+  /**
    * 自然衰减元数据（design: docs/2026-05-25-context-compression-design.md §4.3,
    * meta/object.doc.ts:thinkable.children.context_budget.patches.natural_decay）。
    *

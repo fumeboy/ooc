@@ -698,6 +698,10 @@ function WindowDetail({
   selfObjectId?: string;
   onUserReply?: (text: string) => Promise<void>;
 }) {
+  // P6.§7: 渲染用 type —— 自身可渲染则用 window.type，否则用后端 enrichment 的 effectiveVisibleType。
+  // 交互判定（talk composer、form 检测等）仍使用原始 window.type。
+  const renderType = window.effectiveVisibleType ?? window.type;
+
   const rows: Array<[string, string]> = [
     ["id", window.id],
     ["type", window.type],
@@ -724,14 +728,14 @@ function WindowDetail({
           </div>
         ))}
       </div>
-      {window.type === "command_exec" && <CommandExecWindowDetail window={window as CommandExecWindow} />}
-      {window.type === "do" && (
+      {renderType === "command_exec" && <CommandExecWindowDetail window={window as CommandExecWindow} />}
+      {renderType === "do" && (
         <div className="llm-input-attrs">
           <div className="llm-input-attr-row">
             <span className="llm-input-attr-key">target_thread</span>
-            <span className="llm-input-attr-value">{window.targetThreadId}</span>
+            <span className="llm-input-attr-value">{(window as any).targetThreadId}</span>
           </div>
-          {window.isCreatorWindow && (
+          {(window as any).isCreatorWindow && (
             <div className="llm-input-attr-row">
               <span className="llm-input-attr-key">role</span>
               <span className="llm-input-attr-value">creator window（不可关闭）</span>
@@ -739,31 +743,31 @@ function WindowDetail({
           )}
         </div>
       )}
-      {window.type === "todo" && <TodoWindowDetail window={window as TodoWindow} />}
-      {window.type === "relation" && <RelationWindowDetail window={window} />}
-      {window.type === "skill_index" && <SkillIndexWindowDetail window={window as SkillIndexWindow} />}
-      {window.type === "feishu_chat" && <FeishuChatWindowDetail window={window} />}
-      {window.type === "feishu_doc" && <FeishuDocWindowDetail window={window} />}
-      {window.type === "plan" && <PlanWindowDetail window={window as PlanWindow} />}
-      {window.type === "talk" && (
+      {renderType === "todo" && <TodoWindowDetail window={window as TodoWindow} />}
+      {renderType === "relation" && <RelationWindowDetail window={window as any} />}
+      {renderType === "skill_index" && <SkillIndexWindowDetail window={window as SkillIndexWindow} />}
+      {renderType === "feishu_chat" && <FeishuChatWindowDetail window={window as any} />}
+      {renderType === "feishu_doc" && <FeishuDocWindowDetail window={window as any} />}
+      {renderType === "plan" && <PlanWindowDetail window={window as PlanWindow} />}
+      {renderType === "talk" && (
         <div className="llm-input-attrs">
           <div className="llm-input-attr-row">
             <span className="llm-input-attr-key">target</span>
-            <span className="llm-input-attr-value">{window.target}</span>
+            <span className="llm-input-attr-value">{(window as any).target}</span>
           </div>
           <div className="llm-input-attr-row">
             <span className="llm-input-attr-key">conversation</span>
-            <span className="llm-input-attr-value">{window.conversationId}</span>
+            <span className="llm-input-attr-value">{(window as any).conversationId}</span>
           </div>
         </div>
       )}
-      {window.type === "program" && <ProgramWindowDetail window={window as ProgramWindow} />}
-      {window.type === "file" && <FileWindowDetail window={window as FileWindow} />}
-      {window.type === "knowledge" && <KnowledgeWindowDetail window={window as KnowledgeWindow} />}
-      {window.type === "search" && <SearchWindowDetail window={window as SearchWindow} />}
+      {renderType === "program" && <ProgramWindowDetail window={window as ProgramWindow} />}
+      {renderType === "file" && <FileWindowDetail window={window as FileWindow} />}
+      {renderType === "knowledge" && <KnowledgeWindowDetail window={window as KnowledgeWindow} />}
+      {renderType === "search" && <SearchWindowDetail window={window as SearchWindow} />}
       {/* 未知 window 类型兜底：把整个对象按 JSON 显示，保证新增 type 即使前端没补
           专用渲染也能看到内容。已实现 case 的类型在这里被跳过，避免重复显示。 */}
-      {!HANDLED_WINDOW_TYPES.has(window.type) && (
+      {!HANDLED_WINDOW_TYPES.has(renderType) && (
         <CodeMirror
           className="code-editor is-readonly"
           value={formatJson(window)}

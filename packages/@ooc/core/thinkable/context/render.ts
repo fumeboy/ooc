@@ -19,6 +19,8 @@
 
 import {
   getWindowTypeDefinition,
+  getObjectDefinition,
+  resolveParentClassChain,
   type RenderContext,
 } from "../../executable/windows/_shared/registry";
 import { filterMessagesForDoWindow } from "../../executable/windows/do/index";
@@ -36,7 +38,7 @@ import {
   type XmlNode,
 } from "./xml";
 import { loadObjectReadable, loadObjectWindow } from "../../executable/server/loader.js";
-import { readReadable, type StoneObjectRef } from "../../persistable/index.js";
+import { readReadable, readReadme, type StoneObjectRef } from "../../persistable/index.js";
 
 // ─────────────────────────── helpers (顶层 inbox/outbox) ──────────────────────
 
@@ -112,15 +114,94 @@ function renderCommandsNode(window: ContextWindow): XmlNode | null {
   );
 }
 
-// ─── Readable Resolution (2026-05-28 ooc-6 Object Unification) ───
+// ─── Readable Resolution (2026-05-28 ooc-6 Object Unification; P6.§7 parentClass inheritance 2026-06-02) ───
 
 /**
- * 解析 Object 的 readable 渲染内容。优先级从高到低：
- * 1. ObjectWindowDefinition.readable（custom window 的 export const window.readable）
- * 2. readable.ts 导出的函数（动态渲染）
- * 3. readable.md 内容（静态 markdown，作为 <readable> 文本节点）
+ * 对单个 type 尝试解析 readable（不涉及继承链）。
  *
- * 返回 XmlNode[] 表示已解析到可读内容；返回 undefined 表示需要 fallback 到 renderXml。
+ * 返回 XmlNode[] 表示命中；返回 undefined 表示该 type 无 readable，需要继续回退。
+ *
+ * 优先级：
+ *   1. registry.def.readable（builtin types 在注册时直接注入）
+ *   2. ObjectWindowDefinition.readable（stone 的 executable/index.ts export const window.readable）
+ *   3. readable.ts 导出的函数（stone 侧动态渲染）
+ *   4. readable.md 静态内容
+ *   5. readme.md（身份说明 fallback）
+ *
+ * 只有 builtin types 会命中 #1；stone-backed types 走 #2–#5。
+ */
+async function resolveReadableForType(
+  classType: string,
+  window: ContextWindow,
+  renderCtx: RenderContext,
+  thread: ThreadContext,
+  persistence: { baseDir: string } | undefined,
+): Promise<XmlNode[] | undefined> {
+  // Step 1: registry.readable（builtin types 走这条，因为它们没有 stone 可读文件）
+  try {
+    const def = getObjectDefinition(classType as any);
+    if (def.readable) {
+      return await def.readable(renderCtx);
+    }
+  } catch {
+    // 未注册 → 静默继续，尝试 stone 路径
+  }
+
+  // Steps 2-5 都需要 stone/persistence。若无 persistence，直接 miss。
+  if (!persistence) return undefined;
+
+  const stoneRef: StoneObjectRef = { baseDir: persistence.baseDir, objectId: classType };
+
+  // Step 2: ObjectWindowDefinition.readable（stone executable/index.ts export const window.readable）
+  try {
+    const objWin = await loadObjectWindow(stoneRef);
+    if (objWin?.readable) {
+      return await objWin.readable(renderCtx);
+    }
+  } catch {
+    // 静默失败，继续
+  }
+
+  // Step 3: readable.ts 动态函数
+  try {
+    const readableFn = await loadObjectReadable(stoneRef);
+    if (readableFn) {
+      return await readableFn(renderCtx);
+    }
+  } catch {
+    // 静默失败，继续
+  }
+
+  // Step 4: readable.md 静态内容
+  try {
+    const readableText = await readReadable(stoneRef);
+    if (readableText && readableText.trim().length > 0) {
+      return [xmlElement("readable", {}, [xmlText(readableText)])];
+    }
+  } catch {
+    // 静默失败，fallback 到 readme
+  }
+
+  // Step 5: readme.md fallback
+  try {
+    const readmeText = await readReadme(stoneRef);
+    if (readmeText && readmeText.trim().length > 0) {
+      return [xmlElement("readable", { source: "readme" }, [xmlText(readmeText)])];
+    }
+  } catch {
+    // 静默失败
+  }
+
+  return undefined;
+}
+
+/**
+ * 解析 Object 的 readable 渲染内容。
+ *
+ * P6.§7 (2026-06-02): 先在自身 type 解析；miss 后沿 parentClass 继承链（closest → farthest）
+ * 逐个 ancestor 尝试；整条链都 miss 时返回 minimal placeholder。
+ *
+ * 返回 undefined 只在「builtin type + 无 persistence」等极少数路径出现（caller 会 fallback 到 renderXml）。
  */
 async function resolveObjectReadable(
   window: ContextWindow,
@@ -135,76 +216,33 @@ async function resolveObjectReadable(
     "feishu_chat", "feishu_doc", "plan"
   ]);
 
-  // For builtin types, check registry definition's readable field first.
-  // Builtin readable lives in the registry itself; no persistence required.
+  // Builtin types 无 persistence 也能解析（readable 在 registry 里）；
+  // 但如果它们 registry.readable 为空，也不需要 stone 路径 fallback——直接返回 undefined。
   if (BUILTIN_TYPES.has(window.type)) {
-    const def = getWindowTypeDefinition(window.type) as { readable?: (ctx: RenderContext) => XmlNode[] | Promise<XmlNode[]> };
-    if (def.readable) {
-      return await def.readable(renderCtx);
-    }
-    return undefined;
+    return resolveReadableForType(window.type, window, renderCtx, thread, undefined);
   }
 
-  // For custom object types, stone-backed readable.* requires persistence to resolve.
   const persistence = thread.persistence;
   if (!persistence) return undefined;
 
-  const objectId = window.id; // window id = object id (new design)
-  const stoneRef: StoneObjectRef = {
-    baseDir: persistence.baseDir,
-    objectId,
-  };
+  // Step A: 自身 type 尝试
+  const selfResult = await resolveReadableForType(window.type, window, renderCtx, thread, persistence);
+  if (selfResult) return selfResult;
 
-  // 1. Try ObjectWindowDefinition.readable (from export const window)
-  try {
-    const objWin = await loadObjectWindow(stoneRef);
-    if (objWin?.readable) {
-      return await objWin.readable(renderCtx);
-    }
-  } catch {
-    // 静默失败，继续尝试下一个优先级
+  // Step B: 沿 parentClass 继承链回退（closest → farthest）
+  for (const ancestorType of resolveParentClassChain(window.type as any)) {
+    const ancestorResult = await resolveReadableForType(
+      ancestorType, window, renderCtx, thread, persistence,
+    );
+    if (ancestorResult) return ancestorResult;
   }
 
-  // 2. Try readable.ts dynamic function
-  try {
-    const readableFn = await loadObjectReadable(stoneRef);
-    if (readableFn) {
-      return await readableFn(renderCtx);
-    }
-  } catch {
-    // 静默失败，继续尝试下一个优先级
-  }
-
-  // 3. Try readable.md static content
-  try {
-    const readableText = await readReadable(stoneRef);
-    if (readableText && readableText.trim().length > 0) {
-      return [xmlElement("readable", {}, [xmlText(readableText)])];
-    }
-  } catch {
-    // 静默失败，fallback 到 readme
-  }
-
-  // 4. Fallback：readme.md（对外身份说明）。supervisor 等 bootstrap object 默认
-  //    readable.md 为空但 readme.md 已写好；用 readme 顶上当 <readable> 内容，
-  //    避免抛 "缺少 renderXml hook"。
-  try {
-    const { readReadme } = await import("../../persistable/stone-readme.js");
-    const readmeText = await readReadme(stoneRef);
-    if (readmeText && readmeText.trim().length > 0) {
-      return [xmlElement("readable", { source: "readme" }, [xmlText(readmeText)])];
-    }
-  } catch {
-    // 静默失败，fallback 到 minimal placeholder
-  }
-
-  // 5. 最终 fallback：minimal placeholder。让任何 stone-backed object 都能进
-  //    context 显示，不破坏 thread 渲染。LLM 通过 type 名 + title 仍可识别此对象。
+  // Step C: 整条链都 miss → placeholder
   return [
     xmlElement(
       "readable",
       { source: "placeholder" },
-      [xmlText(`Object "${objectId}" 没有可渲染的 readable 或 readme 内容。`)],
+      [xmlText(`Object "${window.id}" 没有可渲染的 readable 或 readme 内容（包括 parentClass 继承链）。`)],
     ),
   ];
 }

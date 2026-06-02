@@ -49,10 +49,10 @@ export {
   lookupMethod,
   lookupMethodEntry,
   lookupConstructor,
-  // Prototype chain & visibility (Phase 2)
-  parseObjectPrototype,
-  resolvePrototypeChain,
-  resolveObjectMethods,
+  // P6.§7 unified inheritance chain
+  resolveParentClassChain,
+  resolveEffectiveVisibleType,
+  // Visibility
   filterMethodsByVisibility,
 } from "./_shared/registry.js";
 

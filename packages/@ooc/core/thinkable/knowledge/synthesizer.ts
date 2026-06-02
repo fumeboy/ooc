@@ -22,7 +22,7 @@
  * 内部的 commands / windows registry），故归位到 thinkable/knowledge。
  */
 
-import { deriveStoneFromThread, derivePoolFromThread, discoverStoneHierarchicalPeers, listBranchSkills, listObjectSkills, listExternalSkills, readPoolRelation, readFlowRelation, readReadme, readmeFile, readWorldConfig } from "../../persistable/index.js";
+import { deriveStoneFromThread, derivePoolFromThread, discoverStoneHierarchicalPeers, listBranchSkills, listObjectSkills, listExternalSkills, readPoolRelation, readFlowRelation, readReadme, readSelf, readmeFile, readWorldConfig } from "../../persistable/index.js";
 import type { ThreadContext } from "../context.js";
 import { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge.js";
 import { ROOT_BASIC_PATH, ROOT_METHODS, ROOT_KNOWLEDGE } from "@ooc/builtins/root";
@@ -37,15 +37,37 @@ import {
 import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../../executable/windows/_shared/super-constants.js";
 import type { CommandKnowledgeEntries, ObjectMethod } from "../../executable/windows/_shared/command-types.js";
 import { lookupMethod } from "../../executable/windows/_shared/registry.js";
-import { getWindowTypeDefinition, listRegisteredObjectTypes, registerNewObjectType } from "../../executable/windows/_shared/registry.js";
+import {
+  getWindowTypeDefinition,
+  listRegisteredObjectTypes,
+  registerNewObjectType,
+  resolveEffectiveVisibleType,
+} from "../../executable/windows/_shared/registry.js";
 import type { CommandExecWindow, ContextWindow, KnowledgeWindow, RelationWindow, SkillIndexWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
 import { ROOT_WINDOW_ID, SKILL_INDEX_WINDOW_ID } from "../../executable/windows/_shared/types.js";
 import { loadObjectWindow } from "../../executable/server/loader.js";
 import type { ObjectWindowDefinition } from "../../executable/server/window-types.js";
 import { computeActivations } from "./activator.js";
 import { loadKnowledgeIndex } from "./loader.js";
+import { parseKnowledgeFile } from "./parser.js";
 
 const KNOWLEDGE_BODY_BYTES = 8192;
+
+/**
+ * P6.§7 (2026-06-02): 从 self.md frontmatter 读 prototype 字段（@deprecated alias for parentClass）。
+ * 返回 undefined 表示 self.md 缺失或未声明 prototype。
+ */
+async function readSelfPrototype(stoneRef: { baseDir: string; objectId: string }): Promise<string | undefined> {
+  try {
+    const selfText = await readSelf(stoneRef);
+    if (!selfText) return undefined;
+    const { frontmatter } = parseKnowledgeFile(selfText);
+    const proto = (frontmatter as Record<string, unknown>).prototype;
+    return typeof proto === "string" && proto.trim().length > 0 ? proto.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 function samePaths(left: string[] | undefined, right: string[]): boolean {
   if (!left && right.length === 0) return true;
@@ -127,18 +149,28 @@ export async function collectExecutableKnowledgeEntries(
   const list = contextWindows ?? [];
   const enriched: ContextWindow[] = [];
   for (const window of list) {
+    // P6.§7: 所有 window 统一 enrichment effectiveVisibleType（沿 parentClass 继承链回退到可渲染 type）。
+    const effVis = resolveEffectiveVisibleType(window.type as any);
+    const withVis = effVis && effVis !== window.type
+      ? { ...window, effectiveVisibleType: effVis }
+      : window;
+
     if (window.type !== "command_exec") {
-      enriched.push(window);
+      enriched.push(withVis);
       continue;
     }
     // sharing 状态的 command_exec form 不参与 knowledge 派生（plan §do_window.move）：
     // ref 看 snapshot；lent_out 已离手；都不应触发活动 knowledge 激活
     if (window.sharing) {
-      enriched.push(window);
+      enriched.push(withVis);
       continue;
     }
     const enrichedForm = await enrichFormCommandKnowledge(window, thread);
-    enriched.push(enrichedForm);
+    // P6.§7: form 也需要 effectiveVisibleType（与非 command_exec window 一致）。
+    const finalForm = effVis && effVis !== enrichedForm.type
+      ? { ...enrichedForm, effectiveVisibleType: effVis }
+      : enrichedForm;
+    enriched.push(finalForm);
 
     const entries = await computeFormKnowledgeEntries(enrichedForm, thread);
     for (const [path, content] of Object.entries(entries)) {
@@ -478,6 +510,12 @@ export async function ensureSelfObjectTypeRegistered(
   try {
     const stoneRef = { baseDir: thread.persistence!.baseDir, objectId: selfId };
     const objWin: ObjectWindowDefinition | undefined = await loadObjectWindow(stoneRef);
+    // P6.§7: parentClass 优先级 executable/index.ts 的 parentClass > executable/index.ts 的 prototype（@deprecated alias） > self.md frontmatter prototype。
+    const frontmatterPrototype = await readSelfPrototype(stoneRef);
+    const parentClass: string | null | undefined =
+      objWin?.parentClass !== undefined ? objWin.parentClass :
+      objWin?.prototype !== undefined ? objWin.prototype :
+      frontmatterPrototype;
     // 即便 stone 没显式 export const window，也要注册一个 minimal 占位条目，
     // 这样 getWindowTypeDefinition 不抛；render 仍走 readable.ts/.md fallback。
     registerNewObjectType(selfId as any, {
@@ -486,7 +524,8 @@ export async function ensureSelfObjectTypeRegistered(
       readable: objWin?.readable,
       onClose: objWin?.onClose,
       basicKnowledge: typeof objWin?.basicKnowledge === "string" ? objWin.basicKnowledge : undefined,
-      prototype: objWin?.prototype,
+      prototype: objWin?.prototype ?? frontmatterPrototype,
+      parentClass,
     });
   } catch (err) {
     console.debug(
@@ -556,13 +595,20 @@ export async function derivePeerObjectWindows(
       const objWin: ObjectWindowDefinition | undefined = await loadObjectWindow(peerStoneRef);
       const registeredTypes = listRegisteredObjectTypes();
       if (!registeredTypes.includes(peerId as any) && objWin) {
+        // P6.§7: parentClass 优先级 executable/index.ts 的 parentClass > executable/index.ts 的 prototype（@deprecated alias） > self.md frontmatter prototype。
+        const frontmatterPrototype = await readSelfPrototype(peerStoneRef);
+        const parentClass: string | null | undefined =
+          objWin.parentClass !== undefined ? objWin.parentClass :
+          objWin.prototype !== undefined ? objWin.prototype :
+          frontmatterPrototype;
         registerNewObjectType(peerId as any, {
           commands: objWin.commands ?? {},
           renderXml: objWin.renderXml,
           readable: objWin.readable,
           onClose: objWin.onClose,
           basicKnowledge: typeof objWin.basicKnowledge === "string" ? objWin.basicKnowledge : undefined,
-          prototype: objWin.prototype,
+          prototype: objWin.prototype ?? frontmatterPrototype,
+          parentClass,
         });
       }
     } catch {

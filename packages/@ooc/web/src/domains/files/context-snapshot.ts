@@ -29,7 +29,7 @@
  */
 
 /** 后端 src/executable/windows/_shared/types.ts ContextWindow 在前端的最小镜像。 */
-export type ContextWindow =
+type _ContextWindowUnion =
   | { id: string; type: "root"; title: string; status?: string; createdAt?: number }
   | {
       id: string;
@@ -242,6 +242,15 @@ export type ContextWindow =
       parentStepId?: string;
       createdAt?: number;
     };
+
+/**
+ * P6.§7 (2026-06-02): ContextWindow 增加可选 enrichment 字段 effectiveVisibleType。
+ *
+ * 当 window.type 自身不在前端可渲染的 HANDLED_WINDOW_TYPES 集合中时，后端会沿
+ * parentClass 继承链回退，把首个可渲染的 ancestor type 填到 effectiveVisibleType。
+ * 前端渲染 switch 用 effectiveVisibleType ?? type 作为渲染 key。
+ */
+export type ContextWindow = _ContextWindowUnion & { effectiveVisibleType?: string };
 
 /** 与后端 ThreadMessage 同 shape；前端只读取关心的字段。 */
 export type ThreadMessage = {

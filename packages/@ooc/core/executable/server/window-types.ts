@@ -68,10 +68,22 @@ export interface ObjectWindowDefinition {
   /** close 触发 hook；缺省 = 直接释放 */
   onClose?: (ctx: OnCloseContext) => boolean | void;
   /**
-   * 原型 object id（2026-05-28 ooc-6 新增）；
-   * 继承原型的 methods / UI / readable。
+   * @deprecated Use `parentClass` instead (2026-06-02 P6.§7 inheritance unification).
+   * prototype 是 self.md frontmatter 里的旧字段，已降级为 parentClass 的配置别名；
+   * 注册时会归一化到 parentClass。过渡期保留作为 alias。
    */
   prototype?: string;
+  /**
+   * P6.§7 (2026-06-02): 父类 id —— 统一的继承链载体（methods / readable / knowledge / visible 共用）。
+   *
+   * 三态语义：
+   *   - undefined（缺省）→ 隐式继承 "root"
+   *   - null → 完全不继承（链终止）
+   *   - string → 沿指定父类继续继承
+   *
+   * 优先级高于 `prototype`（@deprecated alias）。
+   */
+  parentClass?: string | null;
   /** Object 自定义命令字典（2026-05-28 更新为 ObjectMethod，支持 public/for_ui_access）。 */
   commands?: Record<string, ObjectMethod>;
   /**

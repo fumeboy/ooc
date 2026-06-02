@@ -7,6 +7,7 @@ import {
   type PoolObjectRef,
   type StoneObjectRef,
 } from "../../persistable";
+import { resolveParentClassChain } from "../../executable/windows/_shared/registry.js";
 import { parseKnowledgeFile } from "./parser";
 import type { KnowledgeDoc, KnowledgeIndex } from "./types";
 
@@ -24,14 +25,17 @@ const cache = new Map<string, { index: KnowledgeIndex; signature: string }>();
 /**
  * 双源加载 Object 的 knowledge 索引（2026-05-24 起：stone seed + pool sediment 合并）。
  *
- * 两侧扫描 + 祖先继承（2026-05-26 起 B-tree 协议）：
- * - **祖先 seed**：`stones/<branch>/objects/<ancestor>/knowledge/` 下 frontmatter `inheritable: true`
+ * 四侧扫描 + 继承（P6.§7 2026-06-02 增加 parentClass 继承链）：
+ * - **目录祖先 seed**：`stones/<branch>/objects/<ancestor>/knowledge/` 下 frontmatter `inheritable: true`
  *   的文件，从 root 向 immediate parent 顺序加载；后加载者覆盖前者（更近的祖先 override 更远的）
+ * - **父类链 seed**：parentClass 继承链上各 class 的 `stones/<branch>/objects/<parentClass>/knowledge/`
+ *   下 frontmatter `inheritable: true` 的文件，closest → farthest 顺序加载；更近的父类 override 更远的
  * - **self seed**：`stones/<branch>/objects/<id>/knowledge/`（设计层；进 git review）
  * - **self sediment**：`pools/objects/<id>/knowledge/`（运行时认知；不进 git）
  *
- * 加载顺序（前面被后面覆盖）：祖先 seed → self seed → self sediment。
+ * 加载顺序（前面被后面覆盖）：目录祖先 seed → 父类链 seed → self seed → self sediment。
  * 这样保证：
+ * - 父类的 knowledge 覆盖目录祖先（类设计比目录位置更权威）
  * - 子 Agent 自己的 knowledge 永远 override 父级（CSS-cascade 语义）
  * - 运行时 sediment 仍 override 设计层 seed（保留原有行为）
  *
@@ -52,16 +56,27 @@ export async function loadKnowledgeIndex(refs: KnowledgeLoadRefs): Promise<Knowl
   const stoneRoot = stoneKnowledgeDir(refs.stone);
   const poolRoot = poolKnowledgeDir(refs.pool);
 
-  // 祖先 seed 目录列表（从 root → immediate parent）。
+  // 目录祖先 seed 目录列表（从 root → immediate parent）。
   const ancestorIds = ancestorObjectIds(refs.stone.objectId);
   const ancestorRoots = ancestorIds.map((id) =>
     stoneKnowledgeDir({ ...refs.stone, objectId: id }),
   );
 
-  // 收集所有 md 文件（祖先 + self stone + self pool）。
+  // P6.§7: parentClass 继承链 seed 目录列表（closest → farthest）。
+  // 自定义 stone 对象可能尚未注册 → resolveParentClassChain 返回 []，安全降级。
+  const parentClassChain = resolveParentClassChain(refs.stone.objectId as any);
+  const parentClassRoots = parentClassChain.map((id) =>
+    stoneKnowledgeDir({ ...refs.stone, objectId: id }),
+  );
+
+  // 收集所有 md 文件（目录祖先 + 父类链 + self stone + self pool）。
   const ancestorFilesByRoot: Array<{ root: string; files: Awaited<ReturnType<typeof collectMdFiles>> }> = [];
   for (const root of ancestorRoots) {
     ancestorFilesByRoot.push({ root, files: await collectMdFiles(root) });
+  }
+  const parentClassFilesByRoot: Array<{ root: string; files: Awaited<ReturnType<typeof collectMdFiles>> }> = [];
+  for (const root of parentClassRoots) {
+    parentClassFilesByRoot.push({ root, files: await collectMdFiles(root) });
   }
   const stoneFiles = await collectMdFiles(stoneRoot);
   const poolFiles = await collectMdFiles(poolRoot);
@@ -71,13 +86,17 @@ export async function loadKnowledgeIndex(refs: KnowledgeLoadRefs): Promise<Knowl
       `anc:${root}`,
       ...files.map((f) => `a:${f.path}@${f.mtime}`).sort(),
     ]),
+    ...parentClassFilesByRoot.flatMap(({ root, files }) => [
+      `pc:${root}`,
+      ...files.map((f) => `p:${f.path}@${f.mtime}`).sort(),
+    ]),
     `stone:${stoneRoot}`,
     ...stoneFiles.map((f) => `s:${f.path}@${f.mtime}`).sort(),
     `pool:${poolRoot}`,
     ...poolFiles.map((f) => `p:${f.path}@${f.mtime}`).sort(),
   ].join("|");
 
-  const cacheKey = [...ancestorRoots, stoneRoot, poolRoot].join("::");
+  const cacheKey = [...ancestorRoots, ...parentClassRoots, stoneRoot, poolRoot].join("::");
   const cached = cache.get(cacheKey);
   if (cached && cached.signature === signature) {
     return cached.index;
@@ -85,7 +104,7 @@ export async function loadKnowledgeIndex(refs: KnowledgeLoadRefs): Promise<Knowl
 
   const byPath = new Map<string, KnowledgeDoc>();
 
-  // Step 1: 祖先 seed —— 仅 frontmatter.inheritable === true 的文件。
+  // Step 1: 目录祖先 seed —— 仅 frontmatter.inheritable === true 的文件。
   // 顺序：root → immediate parent，更近的祖先后 set 自然 override 更远的。
   for (const { root, files } of ancestorFilesByRoot) {
     for (const f of files) {
@@ -103,7 +122,25 @@ export async function loadKnowledgeIndex(refs: KnowledgeLoadRefs): Promise<Knowl
     }
   }
 
-  // Step 2: self seed —— 自然 override 同 idPath 的祖先 knowledge。
+  // Step 1b: parentClass 继承链 seed —— 仅 frontmatter.inheritable === true 的文件。
+  // 顺序：closest parent → farthest parent，更近的父类后 set override 更远的。
+  for (const { root, files } of parentClassFilesByRoot) {
+    for (const f of files) {
+      const parsed = await readAndParse(f.path);
+      if (!parsed) continue;
+      if (parsed.frontmatter.inheritable !== true) continue;
+      const idPath = toIdPath(root, f.path);
+      byPath.set(idPath, {
+        path: idPath,
+        file: f.path,
+        frontmatter: parsed.frontmatter,
+        body: parsed.body,
+        mtime: f.mtime,
+      });
+    }
+  }
+
+  // Step 2: self seed —— 自然 override 同 idPath 的祖先 knowledge（目录祖先 + parentClass）。
   for (const f of stoneFiles) {
     const parsed = await readAndParse(f.path);
     if (!parsed) continue;
