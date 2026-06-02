@@ -36,7 +36,7 @@ export const endpoints = {
   readAnyFile: "/api/file/read",
   createFlowObject: (sessionId: string) => `/api/flows/${encodeURIComponent(sessionId)}/objects/`,
   thread: (sessionId: string, objectId: string, threadId = "root") =>
-    `/api/flows/${encodeURIComponent(sessionId)}/objects/${encodeURIComponent(objectId)}/threads/${encodeURIComponent(threadId)}`,
+    `/api/flows/${encodeURIComponent(sessionId)}/${encodeURIComponent(objectId)}/threads/${encodeURIComponent(threadId)}`,
   /** 控制面用户回复：固定走 user.root.talk_window；body 含 text + targetWindowId? */
   continueThread: (sessionId: string) => `/api/flows/${encodeURIComponent(sessionId)}/continue`,
   job: (jobId: string) => `/api/runtime/jobs/${encodeURIComponent(jobId)}`,
@@ -51,10 +51,10 @@ export const endpoints = {
    * 文件,按 loopIndex 升序返回; 不携带 input/output 全文,前端 lazy 展开时再走单条 endpoint。
    */
   runtimeListLoops: (sessionId: string, objectId: string, threadId: string) =>
-    `/api/runtime/flows/${encodeURIComponent(sessionId)}/objects/${encodeURIComponent(objectId)}/threads/${encodeURIComponent(threadId)}/debug/loops`,
+    `/api/runtime/flows/${encodeURIComponent(sessionId)}/${encodeURIComponent(objectId)}/threads/${encodeURIComponent(threadId)}/debug/loops`,
   /** R0c: 拉取指定 loopIndex 的完整 { input, output, meta } 三元组,展开 LoopEntry 时按需调用。 */
   runtimeGetLoopDebug: (sessionId: string, objectId: string, threadId: string, loopIndex: number) =>
-    `/api/runtime/flows/${encodeURIComponent(sessionId)}/objects/${encodeURIComponent(objectId)}/threads/${encodeURIComponent(threadId)}/debug/loops/${loopIndex}`,
+    `/api/runtime/flows/${encodeURIComponent(sessionId)}/${encodeURIComponent(objectId)}/threads/${encodeURIComponent(threadId)}/debug/loops/${loopIndex}`,
   /**
    * R0d (Agent-loop Visualizer): 对指定 permission_ask event 做 approve / reject 决议。
    * Body 形态: { eventId?: string, action: "approve"|"reject", reason?: string }。
@@ -62,13 +62,13 @@ export const endpoints = {
    * 详见 docs/2026-05-25-permission-model-design.md Q0c 段。
    */
   runtimeDecidePermission: (sessionId: string, objectId: string, threadId: string) =>
-    `/api/runtime/flows/${encodeURIComponent(sessionId)}/objects/${encodeURIComponent(objectId)}/threads/${encodeURIComponent(threadId)}/permission`,
+    `/api/runtime/flows/${encodeURIComponent(sessionId)}/${encodeURIComponent(objectId)}/threads/${encodeURIComponent(threadId)}/permission`,
   /** Stone 级 server ui_methods 调用入口。 */
   stoneCallMethod: (objectId: string) =>
     `/api/stones/${encodeURIComponent(objectId)}/call_method`,
   /** Flow object 级 server ui_methods 调用入口。 */
   flowCallMethod: (sessionId: string, objectId: string) =>
-    `/api/flows/${encodeURIComponent(sessionId)}/objects/${encodeURIComponent(objectId)}/call_method`,
+    `/api/flows/${encodeURIComponent(sessionId)}/${encodeURIComponent(objectId)}/call_method`,
   /** World 级配置（站名 / 是否配置外部 skills 目录），来自 \`<baseDir>/.world.json\`。 */
   worldConfig: "/api/world/config",
 };
