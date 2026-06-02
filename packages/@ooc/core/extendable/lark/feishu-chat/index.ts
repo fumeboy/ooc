@@ -296,7 +296,7 @@ function pickText(m: Record<string, unknown>): string {
 }
 
 async function executeRefresh(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "feishu_chat") {
     return "[feishu_chat.refresh] 未挂载在 feishu_chat_window 上。";
   }
@@ -348,7 +348,7 @@ function extractCursor(raw: unknown): string | undefined {
 }
 
 async function executeSearch(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "feishu_chat") {
     return "[feishu_chat.search] 未挂载在 feishu_chat_window 上。";
   }
@@ -388,7 +388,7 @@ async function executeSearch(ctx: CommandExecutionContext): Promise<string | und
 }
 
 async function executeSend(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "feishu_chat") {
     return "[feishu_chat.send] 未挂载在 feishu_chat_window 上。";
   }
@@ -423,7 +423,7 @@ async function executeSend(ctx: CommandExecutionContext): Promise<string | undef
 }
 
 async function executeReply(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "feishu_chat") {
     return "[feishu_chat.reply] 未挂载在 feishu_chat_window 上。";
   }
@@ -448,7 +448,7 @@ async function executeReply(ctx: CommandExecutionContext): Promise<string | unde
 }
 
 function executeSubscribe(ctx: CommandExecutionContext): string | undefined {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "feishu_chat") {
     return "[feishu_chat.subscribe] 未挂载在 feishu_chat_window 上。";
   }

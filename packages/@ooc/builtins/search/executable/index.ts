@@ -133,7 +133,7 @@ const FILE_WINDOW_LINE_CONTEXT = 40;
 export async function executeSearchOpenMatch(
   ctx: CommandExecutionContext,
 ): Promise<string | undefined> {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "search") {
     return "[search_window.open_match] 未挂载在 search_window 上。";
   }

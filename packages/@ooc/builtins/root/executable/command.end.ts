@@ -82,9 +82,10 @@ async function autoReplyAndArchiveDo(
   result: string,
 ): Promise<void> {
   const thread = ctx.thread!;
-  // 构造一个与 LLM 调用同构的 ctx：parentWindow = creator do_window
+  // 构造一个与 LLM 调用同构的 ctx：self = creator do_window（2026-06-02 P6.§1 字段从 parentWindow 改名）
   const continueCtx: CommandExecutionContext = {
     thread,
+    self: creator,
     parentWindow: creator,
     manager: ctx.manager,
     args: { msg: result },
@@ -126,6 +127,7 @@ async function autoReplyTalk(
   const thread = ctx.thread!;
   const sayCtx: CommandExecutionContext = {
     thread,
+    self: creator,
     parentWindow: creator,
     manager: ctx.manager,
     args: { msg: result },

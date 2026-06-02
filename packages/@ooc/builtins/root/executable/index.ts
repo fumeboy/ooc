@@ -31,12 +31,12 @@ import { metaprogCommand } from "./command.metaprog.js";
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/command-types.js";
 
 /**
- * Root window 上注册的命令清单（核心数据）。
+ * Root window 上注册的 method 清单（核心数据；2026-05-28 ooc-6 Object Unification 改名）。
  *
- * 当前所有 command 都允许通过 `open(parent_window_id?, command="X", ...)` 打开。
+ * 当前所有 method 都允许通过 `open(parent_window_id?, command="X", ...)` 调用。
  * window-level 命令（如 do_window 上的 continue）由各自 windows/X.ts 注册到对应 type 上。
  */
-export const ROOT_COMMANDS: Record<string, ObjectMethod> = {
+export const ROOT_METHODS: Record<string, ObjectMethod> = {
   talk: talkCommand,
   do: doCommand,
   program: programCommand,
@@ -52,6 +52,12 @@ export const ROOT_COMMANDS: Record<string, ObjectMethod> = {
   open_feishu_chat: openFeishuChatCommand,
   open_feishu_doc: openFeishuDocCommand,
 };
+
+/**
+ * @deprecated Use ROOT_METHODS instead (2026-05-28 ooc-6 Object Unification).
+ * 旧名指向同一对象，保留为过渡期 alias；§10 cleanup 时移除。
+ */
+export const ROOT_COMMANDS = ROOT_METHODS;
 
 /** Protocol knowledge path（与 plan.ts 等命令文件的 *_BASIC_PATH 形态一致）。 */
 export const ROOT_BASIC_PATH = "internal/windows/root/basic";
@@ -91,13 +97,13 @@ root window 是每个 thread 隐含的根窗口。在 root 上可用的 command 
 
 /** 返回所有 root 上可 open 的命令名称列表（已排序）。 */
 export function getOpenableCommands(): string[] {
-  return Object.keys(ROOT_COMMANDS).sort();
+  return Object.keys(ROOT_METHODS).sort();
 }
 
 /**
- * 测试 / 直接调用 root command 的便捷入口；不走 WindowManager。
+ * 测试 / 直接调用 root method 的便捷入口；不走 WindowManager。
  *
- * 仅供测试使用：单测希望验证 root command 的副作用而不必构造 form 生命周期。
+ * 仅供测试使用：单测希望验证 root method 的副作用而不必构造 form 生命周期。
  * 生产代码应通过 WindowManager.openCommandExec 触发；那条路径会注入 manager
  * 与 parentWindow 等完整 ctx，并走 outcome 识别。
  *
@@ -107,10 +113,10 @@ export function getOpenableCommands(): string[] {
  */
 export async function execRootCommand(
   name: string,
-  ctx: import("@ooc/core/extendable/_shared/command-types.js").CommandExecutionContext,
+  ctx: import("@ooc/core/extendable/_shared/command-types.js").MethodExecutionContext,
 ): Promise<string | undefined> {
-  const entry = ROOT_COMMANDS[name];
-  if (!entry) throw new Error(`execRootCommand: unknown root command "${name}"`);
+  const entry = ROOT_METHODS[name];
+  if (!entry) throw new Error(`execRootCommand: unknown root method "${name}"`);
   const raw = await entry.exec(ctx);
   if (raw && typeof raw === "object" && "ok" in raw) {
     return raw.ok ? raw.result : raw.error;
@@ -119,17 +125,17 @@ export async function execRootCommand(
 }
 
 /**
- * 从 (root command, args) 派生此次激活的 path 集合。
+ * 从 (root method, args) 派生此次激活的 path 集合。
  *
- * 仅服务 root level 的命令；非 root window 上的命令请直接通过 WINDOW_REGISTRY 查 entry.match()。
+ * 仅服务 root level 的 method；非 root window 上的 method 请直接通过 object registry 查 entry.match()。
  *
- * @returns 点分路径数组；command 未定义时返回 []
+ * @returns 点分路径数组；method 未定义时返回 []
  */
 export function deriveRootCommandPaths(
   command: string,
   args: Record<string, unknown>,
 ): string[] {
-  const entry = ROOT_COMMANDS[command];
+  const entry = ROOT_METHODS[command];
   if (!entry) return [];
   try {
     return entry.match(args);
@@ -141,6 +147,6 @@ export function deriveRootCommandPaths(
 /** root window 的 renderXml hook 已迁出到 ../readable.ts。 */
 import { readable } from "../readable.js";
 
-// 向 WindowRegistry 注入 root window type 的契约。
+// 向 object registry 注入 root window type 的契约。
 // side-effect 注册：windows/index.ts 通过 import "./root/index.js" 触发本模块加载。
-registerObjectType("root", { commands: ROOT_COMMANDS, readable });
+registerObjectType("root", { methods: ROOT_METHODS, readable });

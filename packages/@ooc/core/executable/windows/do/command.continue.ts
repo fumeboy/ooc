@@ -32,7 +32,7 @@ open(parent_window_id="<creator_do_window_id>", command="continue", args={ msg: 
 async function executeDoWindowContinue(ctx: CommandExecutionContext): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return undefined;
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "do") {
     return "[do_window.continue] 未挂载在 do_window 上，无法执行。";
   }
@@ -57,7 +57,7 @@ async function executeDoWindowContinue(ctx: CommandExecutionContext): Promise<st
   if (ctx.args.wait === true) {
     thread.status = "waiting";
     thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0;
-    thread.waitingOn = ctx.parentWindow?.id;
+    thread.waitingOn = ctx.self?.id;
   }
 
   // 根因 #5：父→子 / 子→父 inbox 写入后通知 runtime 入队 target。

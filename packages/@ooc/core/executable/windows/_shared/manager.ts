@@ -26,7 +26,7 @@
  */
 
 import type { ThreadContext } from "../../../thinkable/context.js";
-import { getWindowTypeDefinition } from "./registry.js";
+import { getWindowTypeDefinition, lookupMethod } from "./registry.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -34,7 +34,7 @@ import {
   type ContextWindow,
   type WindowType,
 } from "./types.js";
-import type { CommandTableEntry } from "./command-types.js";
+import type { ObjectMethod } from "./command-types.js";
 import {
   writeRuntimeObjectState,
   deleteRuntimeObject,
@@ -50,11 +50,11 @@ import type { FlowObjectRef, ThreadPersistenceRef } from "../../../persistable/c
  * 用 entry.match() 直接计算 commandPaths；空 args 派生不出来时退化为 [command]。
  *
  * Step 2 重构后这个 helper 接收 entry 而不是 command 名 —— 修复了 Step 1 的 bug：
- * 之前 deriveCommandPaths 只查 ROOT_COMMANDS 表，导致 do_window/talk_window 等
- * 非 root 窗口上的 command（如 say.wait / continue.wait）无法被识别。
+ * 之前 deriveCommandPaths 只查 ROOT_METHODS 表，导致 do_window/talk_window 等
+ * 非 root 窗口上的 method（如 say.wait / continue.wait）无法被识别。
  */
 function computeCommandPaths(
-  entry: CommandTableEntry,
+  entry: ObjectMethod,
   command: string,
   args: Record<string, unknown>,
 ): string[] {
@@ -83,18 +83,20 @@ function setSubset(a: string[], b: string[]): boolean {
 }
 
 /**
- * 从 parent command（root 上挂的 command）查找它注册到的 CommandTableEntry。
+ * 从 parent 上查找它注册到的 ObjectMethod。
  *
- * parent_window_id 决定查哪个 window 的 commands：
- * - "root" → root 注册到 WINDOW_REGISTRY 的 commands（来自 windows/root/index.ts）
- * - 其他 → 该 window 的 type definition.commands
+ * parent_window_id 决定查哪个 window 的 methods：
+ * - "root" → root 注册到 object registry 的 methods（来自 windows/root/index.ts）
+ * - 其他 → 该 window 的 type definition.methods（回落 commands 兼容旧名）
+ *
+ * 2026-05-28 ooc-6 Object Unification：现在通过 registry.lookupMethod 公共 API 检索，
+ * 内部已处理 methods/commands 双读兼容。本 helper 保留作为 backward-compat 入口。
  */
 function lookupCommandEntry(
   parentWindow: ContextWindow,
   command: string,
-): CommandTableEntry | undefined {
-  const def = getWindowTypeDefinition(parentWindow.type);
-  return def.commands[command];
+): ObjectMethod | undefined {
+  return lookupMethod(parentWindow, command);
 }
 
 export class WindowManager {
@@ -321,9 +323,10 @@ export class WindowManager {
     let result: string | undefined;
     let isError = false;
     try {
-      const ctx: import("./command-types.js").CommandExecutionContext = {
+      const ctx: import("./command-types.js").MethodExecutionContext = {
         thread,
         form: executing,
+        self: parent,
         parentWindow: parent,
         manager: this,
         args: form.accumulatedArgs,

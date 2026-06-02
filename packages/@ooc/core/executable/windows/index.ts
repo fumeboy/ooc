@@ -44,6 +44,7 @@ export {
   getObjectDefinition,
   listRegisteredObjectTypes,
   assertAllObjectDefinitionsRegistered,
+  lookupMethod,
   // Prototype chain & visibility (Phase 2)
   parseObjectPrototype,
   resolvePrototypeChain,
@@ -67,8 +68,12 @@ export type {
   CommandTableEntry,
   CommandExecutionContext,
   CommandKnowledgeEntries,
-  // 2026-05-28 ooc-6 Object Unification aliases
+  CommandExecOutcome,
+  // 2026-05-28 ooc-6 Object Unification — canonical names
   ObjectMethod,
+  MethodExecutionContext,
+  MethodKnowledgeEntries,
+  MethodOutcome,
 } from "./_shared/command-types.js";
 
 export { WindowManager } from "./_shared/manager.js";
@@ -76,9 +81,10 @@ export { WindowManager } from "./_shared/manager.js";
 export { initContextWindows } from "./_shared/init.js";
 export type { InitContextWindowsOpts } from "./_shared/init.js";
 
-// root commands 的工具函数（仅服务 root level；非 root window 的 command 通过 WINDOW_REGISTRY 查）
+// root commands 的工具函数（仅服务 root level；非 root window 的 command 通过 object registry 查）
 export {
   ROOT_COMMANDS,
+  ROOT_METHODS,
   getOpenableCommands,
   deriveRootCommandPaths,
   execRootCommand,

@@ -28,8 +28,23 @@ import type { OnCloseContext, ReadableFn, RenderContext } from "../windows/_shar
 import type { XmlNode } from "../../thinkable/context/xml.js";
 import type { ProgramSelf } from "./types.js";
 
-/** object window 的 commands[name].exec 收到的 ctx —— 标准 CommandExecutionContext + self。 */
-export type CustomCommandContext = CommandExecutionContext & { self: ProgramSelf };
+/**
+ * Object window 的 commands[name].exec 收到的 ctx —— 标准 MethodExecutionContext + programSelf。
+ *
+ * 2026-06-02 P6.§1 命名修正：原字段名 `self: ProgramSelf` 与
+ * `MethodExecutionContext.self: ContextWindow`（method 的 receiver，OOP 语义）冲突。
+ * 两个 `self` 是**不同概念**：
+ *   - `MethodExecutionContext.self`：method 被调用的 ContextWindow（receiver）
+ *   - `CustomCommandContext.programSelf`：Program object 的类型化自我数据（由 stone hydrator 注入）
+ * 为消歧，把 Program 维度的 self 改名为 `programSelf`；`self` 字段沿用 receiver 语义。
+ *
+ * 旧 stone 代码若仍写 `ctx.self.dir` 等 ProgramSelf 访问，应迁移为 `ctx.programSelf.*`。
+ * 由于 `self` 已被 receiver 占用，`programSelf` 不再以 `self` 作 alias——TS 编译会指出迁移点。
+ */
+export interface CustomCommandContext extends CommandExecutionContext {
+  /** P6.§1: Program object 的自我数据（dir / callCommand / getData / setData / getThreadLocal / setThreadLocal）。 */
+  programSelf: ProgramSelf;
+}
 
 /** Object 在 server/index.ts 里 `export const window` 的形状（2026-05-28 ooc-6 更新）。 */
 export interface ObjectWindowDefinition {
@@ -47,8 +62,9 @@ export interface ObjectWindowDefinition {
    * 优先级高于 renderXml 和 readable.md。
    */
   readable?: ReadableFn;
-  /** 该 window 出现时合成的协议知识；可静态字符串或动态函数 */
-  basicKnowledge?: string | ((ctx: { self: ProgramSelf }) => string);
+  /** 该 window 出现时合成的协议知识；可静态字符串或动态函数。
+   *  ctx 提供 `programSelf`（Program 维度的 ProgramSelf；2026-06-02 P6.§1 从 `self` 改名）。 */
+  basicKnowledge?: string | ((ctx: { programSelf: ProgramSelf }) => string);
   /** close 触发 hook；缺省 = 直接释放 */
   onClose?: (ctx: OnCloseContext) => boolean | void;
   /**

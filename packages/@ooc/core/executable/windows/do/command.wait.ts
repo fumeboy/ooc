@@ -16,7 +16,7 @@ async function executeDoWindowWait(ctx: CommandExecutionContext): Promise<string
   if (!thread) return undefined;
   thread.status = "waiting";
   thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0;
-  thread.waitingOn = ctx.parentWindow?.id;
+  thread.waitingOn = ctx.self?.id;
   return undefined;
 }
 

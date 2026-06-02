@@ -69,7 +69,7 @@ async function setupSelfThread(baseDir: string, opts: { withSuperTalk?: TalkWind
 }
 
 function execCtx(thread: ThreadContext, parent: RelationWindow, args: Record<string, unknown>): CommandExecutionContext {
-  return { thread, parentWindow: parent, args };
+  return { thread, parentWindow: parent, self: parent, args };
 }
 
 describe("executeRelationEdit", () => {
@@ -200,7 +200,7 @@ describe("executeRelationEdit", () => {
       // 用 root window 当 parent
       const root = thread.contextWindows!.find((w) => w.type === "root")!;
       const result = await executeRelationEdit(
-        { thread, parentWindow: root, args: { content: "x", scope: "session" } } as CommandExecutionContext,
+        { thread, parentWindow: root, self: root, args: { content: "x", scope: "session" } } as CommandExecutionContext,
       );
       expect(result).toContain("未挂载在 relation_window");
     } finally {

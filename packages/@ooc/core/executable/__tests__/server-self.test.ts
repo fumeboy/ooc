@@ -34,7 +34,7 @@ describe("createProgramSelf", () => {
           whoAmI: {
             paths: ["whoAmI"],
             match: () => ["whoAmI"],
-            exec: async (ctx) => ({ ok: true, result: ctx.self.dir + "::" + ctx.thread.id }),
+            exec: async (ctx) => ({ ok: true, result: ctx.programSelf.dir + "::" + ctx.thread.id }),
           },
         },
       };

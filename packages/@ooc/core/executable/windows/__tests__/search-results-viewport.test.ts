@@ -203,6 +203,7 @@ describe("set_results_window command", () => {
     const out = await executeSearchSetResultsViewport({
       args: { matches_tail: 100 },
       parentWindow: window,
+      self: window,
     });
     expect(out).toBeUndefined();
     expect(window.resultsViewport).toEqual({ tail: 100 });
@@ -216,6 +217,7 @@ describe("set_results_window command", () => {
     const out = await executeSearchSetResultsViewport({
       args: { matches_start: 0, matches_end: 5 },
       parentWindow: window,
+      self: window,
     });
     expect(out).toBeUndefined();
     expect(window.resultsViewport).toEqual({ rangeStart: 0, rangeEnd: 5 });
@@ -229,6 +231,7 @@ describe("set_results_window command", () => {
     const out = await executeSearchSetResultsViewport({
       args: { matches_tail: 10, matches_start: 0, matches_end: 5 },
       parentWindow: window,
+      self: window,
     });
     expect(typeof out).toBe("string");
     expect(out as string).toContain("互斥");
@@ -248,6 +251,7 @@ describe("set_results_window command", () => {
     const out = await executeSearchSetResultsViewport({
       args: { matches_tail: -5 },
       parentWindow: window,
+      self: window,
     });
     expect(typeof out).toBe("string");
     expect(out as string).toContain("matches_tail");
@@ -262,6 +266,7 @@ describe("set_results_window command", () => {
     const out = await executeSearchSetResultsViewport({
       args: { matches_start: 0 },
       parentWindow: window,
+      self: window,
     });
     expect(typeof out).toBe("string");
     expect(out as string).toContain("matches_start");
@@ -277,6 +282,7 @@ describe("set_results_window command", () => {
     const out = await executeSearchSetResultsViewport({
       args: { matches_start: 10, matches_end: 5 },
       parentWindow: window,
+      self: window,
     });
     expect(typeof out).toBe("string");
     expect(out as string).toContain("matches_start");
@@ -295,6 +301,7 @@ describe("set_results_window command", () => {
     const out = await executeSearchSetResultsViewport({
       args: { matches_tail: 10 },
       parentWindow: fake as never,
+      self: fake as never,
     });
     expect(typeof out).toBe("string");
     expect(out as string).toContain("未挂载");
@@ -307,6 +314,7 @@ describe("set_results_window command", () => {
     const out = await executeSearchSetResultsViewport({
       args: {},
       parentWindow: window,
+      self: window,
     });
     expect(typeof out).toBe("string");
     expect(out as string).toContain("至少需要");
@@ -331,6 +339,7 @@ describe("set_results_window registered on search window", () => {
     const out = await cmd.exec({
       args: { matches_tail: 25 },
       parentWindow: window,
+      self: window,
     });
     expect(out).toBeUndefined();
     expect(window.resultsViewport).toEqual({ tail: 25 });
@@ -352,6 +361,7 @@ describe("open_match honors full matches array (not viewport-clipped)", () => {
     const out = await cmd.exec({
       args: { index: 5 },
       parentWindow: window,
+      self: window,
       thread,
     });
     expect(out).toBeUndefined();

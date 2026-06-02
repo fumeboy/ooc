@@ -114,7 +114,7 @@ export async function executeRelationEdit(
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[relation.edit] 缺少 thread context。";
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "relation") {
     return "[relation.edit] 未挂载在 relation_window 上。";
   }

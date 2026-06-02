@@ -116,10 +116,19 @@ export interface WindowTypeDefinition {
 /**
  * Object Definition 类型（原 WindowTypeDefinition 扩展，2026-05-28 ooc-6 Object Unification）。
  * 合并了 WindowType 注册与 Object Method 定义，增加 prototype 和 readable 字段。
+ *
+ * methods（推荐）/ commands（@deprecated 别名）：
+ *   2026-05-28 ooc-6 之后 method 是 canonical 名；commands 是过渡期 alias。
+ *   读取时优先 methods，回落 commands；写入时双写两个字段保持一致。
  */
 export interface ObjectDefinition extends Omit<WindowTypeDefinition, "commands"> {
   type: ObjectType;
-  /** 该 object 注册的 method 集合（原 commands）。 */
+  /** 该 object 注册的 method 集合（canonical 名）。 */
+  methods: Record<string, ObjectMethod>;
+  /**
+   * @deprecated Use `methods` instead. Kept as alias during ooc-6 Object Unification transition;
+   * registry 内部双写以保持一致。
+   */
   commands: Record<string, ObjectMethod>;
   /**
    * 原型 object id，用于继承 methods / UI / readable。
@@ -150,73 +159,87 @@ const REGISTRY: Map<WindowType, WindowTypeDefinition> = new Map();
 REGISTRY.set("root", {
   type: "root",
   commands: {},
-});
+  methods: {},
+} as ObjectDefinition);
 
 REGISTRY.set("command_exec", {
   type: "command_exec",
   commands: {},
-});
+  methods: {},
+} as ObjectDefinition);
 
 REGISTRY.set("do", {
   type: "do",
   commands: {},
-});
+  methods: {},
+} as ObjectDefinition);
 
 REGISTRY.set("todo", {
   type: "todo",
   commands: {},
-});
+  methods: {},
+} as ObjectDefinition);
 
 REGISTRY.set("talk", {
   type: "talk",
   commands: {},
-});
+  methods: {},
+} as ObjectDefinition);
 
 REGISTRY.set("program", {
   type: "program",
   commands: {},
-});
+  methods: {},
+} as ObjectDefinition);
 
 REGISTRY.set("file", {
   type: "file",
   commands: {},
-});
+  methods: {},
+} as ObjectDefinition);
 
 REGISTRY.set("knowledge", {
   type: "knowledge",
   commands: {},
-});
+  methods: {},
+} as ObjectDefinition);
 
 REGISTRY.set("search", {
   type: "search",
   commands: {},
-});
+  methods: {},
+} as ObjectDefinition);
 
 /** @deprecated ooc-6: "relation" type replaced by peer Object auto-injection (derivePeerObjectWindows). Kept for backward compat with persisted thread data; Phase 9 cleanup will remove. */
 REGISTRY.set("relation", {
   type: "relation",
   commands: {},
-});
+  methods: {},
+} as ObjectDefinition);
 
 REGISTRY.set("skill_index", {
   type: "skill_index",
   commands: {},
-});
+  methods: {},
+} as ObjectDefinition);
 
 REGISTRY.set("feishu_chat", {
   type: "feishu_chat",
   commands: {},
-});
+  methods: {},
+} as ObjectDefinition);
 
 REGISTRY.set("feishu_doc", {
   type: "feishu_doc",
   commands: {},
-});
+  methods: {},
+} as ObjectDefinition);
 
 REGISTRY.set("plan", {
   type: "plan",
   commands: {},
-});
+  methods: {},
+} as ObjectDefinition);
 
 /**
  * 替换或合并某 type 的契约，用于 windows/do.ts、windows/todo.ts 在模块加载时注入实现。
@@ -232,12 +255,15 @@ export function registerWindowType(
   if (!existing) {
     throw new Error(`registerWindowType: unknown window type "${type}"`);
   }
+  // 保持 commands/methods 双写一致：partial.commands → 同时写 methods
+  const nextCommands = partial.commands !== undefined ? partial.commands : existing.commands;
   REGISTRY.set(type, {
     ...existing,
     // 直接替换不展开:custom window 用 Proxy 做 dynamic dispatcher,
     // 展开 (...) 会触发 ownKeys() trap (返 []) → 丢掉所有动态 lookup 能力。
     // 现实上每个 type 只 register 一次 + 给完整 commands,无 merge 需求。
-    commands: partial.commands !== undefined ? partial.commands : existing.commands,
+    commands: nextCommands,
+    methods: nextCommands,
     onClose: partial.onClose ?? existing.onClose,
     renderXml: partial.renderXml ?? existing.renderXml,
     compressView: partial.compressView ?? existing.compressView,
@@ -248,6 +274,8 @@ export function registerWindowType(
 /**
  * 注册或更新 Object 类型的契约（原 registerWindowType 重命名，2026-05-28 ooc-6）。
  * 支持 ObjectDefinition 的 prototype 和 readable 字段。
+ *
+ * methods（推荐）/ commands（@deprecated 别名）：partial 任一字段都接受，写入时同步双写两个字段。
  */
 export function registerObjectType(
   type: ObjectType,
@@ -257,9 +285,17 @@ export function registerObjectType(
   if (!existing) {
     throw new Error(`registerObjectType: unknown object type "${type}"`);
   }
+  // 读 partial 时优先 methods，回落 commands；写入时双写两个字段
+  const nextEntries =
+    partial.methods !== undefined
+      ? partial.methods
+      : partial.commands !== undefined
+        ? partial.commands
+        : existing.methods;
   REGISTRY.set(type, {
     ...existing,
-    commands: partial.commands !== undefined ? partial.commands : existing.commands,
+    commands: nextEntries,
+    methods: nextEntries,
     onClose: partial.onClose ?? existing.onClose,
     renderXml: partial.renderXml ?? existing.renderXml,
     compressView: partial.compressView ?? existing.compressView,
@@ -273,11 +309,14 @@ export function registerObjectType(
  * Dynamically register a completely new object type at runtime (2026-06-01 ooc-6).
  * Used for custom objects discovered at runtime (peer objects, runtime-created objects).
  * Unlike registerObjectType which updates existing entries, this adds a new entry.
+ *
+ * methods / commands 同步：定义中任一字段都接受，写入时双写两个字段。
  */
 export function registerNewObjectType(
   type: ObjectType,
-  definition: Partial<ObjectDefinition> & { commands: Record<string, any> },
+  definition: Partial<ObjectDefinition> & { commands?: Record<string, any>; methods?: Record<string, any> },
 ): void {
+  const entries = definition.methods ?? definition.commands ?? {};
   REGISTRY.set(type, {
     type,
     onClose: undefined,
@@ -287,6 +326,8 @@ export function registerNewObjectType(
     prototype: undefined,
     readable: undefined,
     ...definition,
+    commands: entries,
+    methods: entries,
   } as ObjectDefinition);
 }
 
@@ -307,6 +348,24 @@ export function getObjectDefinition(type: ObjectType): ObjectDefinition {
     throw new Error(`getObjectDefinition: object type "${type}" not registered`);
   }
   return entry;
+}
+
+/**
+ * 在指定 parent ContextWindow 上查找 method（2026-05-28 ooc-6 Object Unification）。
+ *
+ * 优先读 `def.methods`（canonical 名）；若 methods 中未声明该名，回落到 `def.commands`
+ * （@deprecated alias）以兼容尚未迁移的 caller。
+ *
+ * 等价于旧的 manager 内部 helper `lookupCommandEntry`，但作为 registry 公共 API 暴露，
+ * 使新代码（root method delegate / dispatch / synthesizer）可统一通过 lookupMethod 检索。
+ */
+export function lookupMethod(
+  parentWindow: { type: ObjectType },
+  methodName: string,
+): ObjectMethod | undefined {
+  const def = REGISTRY.get(parentWindow.type) as ObjectDefinition | undefined;
+  if (!def) return undefined;
+  return def.methods?.[methodName] ?? def.commands?.[methodName];
 }
 
 /** 列出所有已注册 type，按字母序返回。 */
@@ -436,6 +495,8 @@ async function resolveBuiltinPrototypeChain(
 /**
  * 解析 Object 的所有 methods，包括继承自 prototype chain 的 methods。
  * 自身定义的 method 覆盖原型的同名 method。
+ *
+ * 读取 def.methods（canonical）；若 methods 缺省/为空则回落 def.commands（@deprecated alias）。
  */
 export async function resolveObjectMethods(
   stoneRef: StoneObjectRef,
@@ -450,7 +511,9 @@ export async function resolveObjectMethods(
     const protoId = chain[i];
     if (REGISTRY.has(protoId as ObjectType)) {
       const def = REGISTRY.get(protoId as ObjectType) as ObjectDefinition;
-      for (const [name, method] of Object.entries(def.commands)) {
+      const protoMethods =
+        def.methods && Object.keys(def.methods).length > 0 ? def.methods : def.commands;
+      for (const [name, method] of Object.entries(protoMethods ?? {})) {
         allMethods[name] = method as ObjectMethod;
       }
     }

@@ -142,7 +142,7 @@ export async function executeProgramWindowExec(
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[program_window.exec] 缺少 thread context。";
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "program") {
     return "[program_window.exec] 未挂载在 program_window 上。";
   }

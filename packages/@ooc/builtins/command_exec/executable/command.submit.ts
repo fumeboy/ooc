@@ -10,7 +10,7 @@ import type {
  * 调用形态：exec(<form_id>, "submit")
  *
  * exec ctx 中：
- * - parentWindow = 该 form 自身（type=command_exec）
+ * - self = 该 form 自身（type=command_exec；2026-06-02 P6.§1 从 parentWindow 改名）
  * - ctx.thread / ctx.manager 是必需的
  *
  * 命令体走 manager.submit：状态 open → executing → success | failed (Round 13 升级)。
@@ -19,7 +19,7 @@ import type {
  * 这条命令本身不引入新 path/knowledge，走 exec tool 的 auto-execute 路径。
  */
 async function executeSubmit(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const form = ctx.parentWindow;
+  const form = ctx.self;
   if (!form || form.type !== "command_exec") {
     return "[command_exec.submit] 必须挂在 command_exec form 上调用。";
   }

@@ -166,7 +166,7 @@ export function applyTranscriptViewport<M>(
 /**
  * talk_window / do_window 共享的 set_transcript_window 执行入口。
  *
- * - 校验 ctx.parentWindow 是 expectedTypes 中某一种
+ * - 校验 ctx.self 是 expectedTypes 中某一种
  * - 校验至少有一个 tail / range_start / range_end 字段（否则 no-op + 提示）
  * - 合并 + fail-loud 校验
  * - Object.assign 写回 window.transcriptViewport（按现有 set_viewport 的同模式）
@@ -175,7 +175,7 @@ export async function executeWindowSetTranscriptViewport(
   ctx: CommandExecutionContext,
   expectedTypes: Array<"talk" | "do">,
 ): Promise<string | undefined> {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   const label = expectedTypes.map((t) => `${t}_window`).join("/");
   if (!window || !expectedTypes.includes(window.type as "talk" | "do")) {
     return `[${label}.set_transcript_window] 未挂载在 ${label} 上。`;

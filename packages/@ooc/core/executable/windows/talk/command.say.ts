@@ -38,7 +38,7 @@ talk_window.say 用于向 talk 对端发送一条消息。
 async function executeTalkWindowSay(ctx: CommandExecutionContext): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[talk_window.say] 缺少 thread context。";
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "talk") {
     return "[talk_window.say] 未挂载在 talk_window 上。";
   }

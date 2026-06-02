@@ -53,7 +53,7 @@ export function hasAnyResultsViewportField(
 /**
  * set_results_window 的执行入口。
  *
- * - 校验 ctx.parentWindow 必须是 search_window
+ * - 校验 ctx.self 必须是 search_window
  * - 校验至少有一个 matches_tail / matches_start / matches_end 字段
  * - 字段名翻译 → 调用 mergeTranscriptViewport（共享 fail-loud + 互斥逻辑）
  * - 写回 window.resultsViewport
@@ -63,7 +63,7 @@ export function hasAnyResultsViewportField(
 export async function executeSearchSetResultsViewport(
   ctx: CommandExecutionContext,
 ): Promise<string | undefined> {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "search") {
     return "[search_window.set_results_window] 未挂载在 search_window 上。";
   }

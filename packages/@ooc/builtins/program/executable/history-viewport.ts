@@ -56,7 +56,7 @@ export function hasAnyHistoryViewportField(
 /**
  * set_history_window 的执行入口。
  *
- * - 校验 ctx.parentWindow 必须是 program_window
+ * - 校验 ctx.self 必须是 program_window
  * - 校验至少有一个 history_tail / history_start / history_end 字段
  * - 字段名翻译 → 调用 mergeTranscriptViewport（共享 fail-loud + 互斥逻辑）
  * - 写回 window.historyViewport
@@ -66,7 +66,7 @@ export function hasAnyHistoryViewportField(
 export async function executeProgramSetHistoryViewport(
   ctx: CommandExecutionContext,
 ): Promise<string | undefined> {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "program") {
     return "[program_window.set_history_window] 未挂载在 program_window 上。";
   }

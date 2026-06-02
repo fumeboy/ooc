@@ -300,7 +300,7 @@ function applyEdits(
 export async function executeFileWindowSetRange(
   ctx: CommandExecutionContext,
 ): Promise<string | undefined> {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "file") {
     return "[file_window.set_range] 未挂载在 file_window 上。";
   }
@@ -328,7 +328,7 @@ export async function executeFileWindowSetRange(
 export async function executeFileWindowEdit(
   ctx: CommandExecutionContext,
 ): Promise<string | undefined> {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "file") {
     return "[file_window.edit] 未挂载在 file_window 上。";
   }

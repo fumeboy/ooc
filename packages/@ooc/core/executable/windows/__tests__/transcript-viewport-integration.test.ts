@@ -257,6 +257,7 @@ describe("set_transcript_window command (talk)", () => {
     const out = await setCommand.exec({
       args: { tail: 50 },
       parentWindow: talkWindow,
+      self: talkWindow,
     });
     expect(out).toBeUndefined();
     expect(talkWindow.transcriptViewport).toEqual({ tail: 50 });
@@ -277,6 +278,7 @@ describe("set_transcript_window command (talk)", () => {
     const out = await setCommand.exec({
       args: { range_start: 0, range_end: 10 },
       parentWindow: talkWindow,
+      self: talkWindow,
     });
     expect(out).toBeUndefined();
     expect(talkWindow.transcriptViewport).toEqual({
@@ -300,6 +302,7 @@ describe("set_transcript_window command (talk)", () => {
     const out = await setCommand.exec({
       args: { tail: 10, range_start: 0, range_end: 5 },
       parentWindow: talkWindow,
+      self: talkWindow,
     });
     expect(typeof out).toBe("string");
     expect(out as string).toContain("互斥");
@@ -322,6 +325,7 @@ describe("set_transcript_window command (talk)", () => {
     const out = await setCommand.exec({
       args: { tail: -5 },
       parentWindow: talkWindow,
+      self: talkWindow,
     });
     expect(typeof out).toBe("string");
     expect(out as string).toContain("tail");
@@ -340,6 +344,7 @@ describe("set_transcript_window command (talk)", () => {
     const out = await setCommand.exec({
       args: { tail: 10 },
       parentWindow: fake as never,
+      self: fake as never,
     });
     expect(typeof out).toBe("string");
     expect(out as string).toContain("未挂载");
@@ -359,6 +364,7 @@ describe("set_transcript_window command (talk)", () => {
     const out = await setCommand.exec({
       args: {},
       parentWindow: talkWindow,
+      self: talkWindow,
     });
     expect(typeof out).toBe("string");
     expect(out as string).toContain("至少需要");
@@ -382,6 +388,7 @@ describe("set_transcript_window command (do)", () => {
     const out = await setCommand.exec({
       args: { tail: 5 },
       parentWindow: doWindow,
+      self: doWindow,
     });
     expect(out).toBeUndefined();
     expect(doWindow.transcriptViewport).toEqual({ tail: 5 });
@@ -403,6 +410,7 @@ describe("set_transcript_window command (do)", () => {
     const out = await setCommand.exec({
       args: { tail: 10 },
       parentWindow: talkWindow as never,
+      self: talkWindow as never,
     });
     expect(typeof out).toBe("string");
     expect(out as string).toContain("未挂载");

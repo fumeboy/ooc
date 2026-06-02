@@ -11,7 +11,7 @@ import type { CommandExecutionContext } from "../windows/_shared/command-types";
  * - dir：stone 目录绝对路径
  * - callCommand(windowId, command, args?)：在当前 thread.contextWindows 里 lookup
  *   window → 通过 WindowRegistry 取 commands[command] → exec(ctx)；type=custom
- *   时 dispatcher 会把 self 注入到 ctx.self
+ *   时 dispatcher 会把 ProgramSelf 注入到 ctx.programSelf（2026-06-02 P6.§1 从 ctx.self 改名）
  * - getData/setData：读写 flow object 的 `data.json`
  *   （`flows/<sid>/objects/<self>/data.json`；2026-05-23 起从 stone 迁到 flow，
  *   详见 meta/object.doc.ts persistable.flow.session_data）。
@@ -47,11 +47,12 @@ export function createProgramSelf(
         );
       }
 
-      const ctx: CommandExecutionContext & { self: ProgramSelf } = {
+      const ctx: CommandExecutionContext & { programSelf: ProgramSelf } = {
         thread,
+        self: window,
         parentWindow: window,
         args,
-        self,
+        programSelf: self,
       };
       return entry.exec(ctx);
     },

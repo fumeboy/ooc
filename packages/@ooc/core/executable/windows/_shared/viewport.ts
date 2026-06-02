@@ -135,7 +135,7 @@ export function applyViewport(raw: string, viewport: Viewport): string {
 /**
  * file / knowledge window 共享的 set_viewport 执行入口。
  *
- * - 校验 ctx.parentWindow 是目标 type
+ * - 校验 ctx.self 是目标 type
  * - 校验至少有一个 viewport 字段（否则 no-op + 提示）
  * - 合并 + fail-loud 校验
  * - Object.assign 写回 window（按现有 set_range 的同模式，保证 manager.toData() 写回持久层）
@@ -144,7 +144,7 @@ export async function executeWindowSetViewport(
   ctx: CommandExecutionContext,
   expectedType: "file" | "knowledge",
 ): Promise<string | undefined> {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== expectedType) {
     return `[${expectedType}_window.set_viewport] 未挂载在 ${expectedType}_window 上。`;
   }

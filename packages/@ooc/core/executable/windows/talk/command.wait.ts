@@ -16,7 +16,7 @@ async function executeTalkWindowWait(ctx: CommandExecutionContext): Promise<stri
   if (!thread) return "[talk_window.wait] 缺少 thread context。";
   thread.status = "waiting";
   thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0;
-  thread.waitingOn = ctx.parentWindow?.id;
+  thread.waitingOn = ctx.self?.id;
   return undefined;
 }
 

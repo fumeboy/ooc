@@ -606,6 +606,7 @@ describe("U4: root.glob + search_window.open_match", () => {
       thread,
       args: {}, // missing index
       parentWindow: sw,
+      self: sw,
     });
     expect(typeof result).toBe("string");
     expect(result as string).toContain("缺少 index");

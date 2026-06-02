@@ -25,7 +25,7 @@
 import { deriveStoneFromThread, derivePoolFromThread, discoverStoneHierarchicalPeers, listBranchSkills, listObjectSkills, listExternalSkills, readPoolRelation, readFlowRelation, readReadme, readmeFile, readWorldConfig } from "../../persistable/index.js";
 import type { ThreadContext } from "../context.js";
 import { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge.js";
-import { ROOT_BASIC_PATH, ROOT_COMMANDS, ROOT_KNOWLEDGE } from "@ooc/builtins/root";
+import { ROOT_BASIC_PATH, ROOT_METHODS, ROOT_KNOWLEDGE } from "@ooc/builtins/root";
 import {
   END_REFLECTION_REMINDER_KNOWLEDGE,
   END_REFLECTION_REMINDER_PATH,
@@ -35,7 +35,8 @@ import {
   REFLECTABLE_METAPROG_PATH,
 } from "../reflectable/reflectable-knowledge.js";
 import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../../executable/windows/_shared/super-constants.js";
-import type { CommandKnowledgeEntries, CommandTableEntry } from "../../executable/windows/_shared/command-types.js";
+import type { CommandKnowledgeEntries, ObjectMethod } from "../../executable/windows/_shared/command-types.js";
+import { lookupMethod } from "../../executable/windows/_shared/registry.js";
 import { getWindowTypeDefinition, listRegisteredObjectTypes, registerNewObjectType } from "../../executable/windows/_shared/registry.js";
 import type { CommandExecWindow, ContextWindow, KnowledgeWindow, RelationWindow, SkillIndexWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
 import { ROOT_WINDOW_ID, SKILL_INDEX_WINDOW_ID } from "../../executable/windows/_shared/types.js";
@@ -75,15 +76,14 @@ export async function computeFormKnowledgeEntries(
 function lookupFormEntry(
   form: CommandExecWindow,
   thread: ThreadContext,
-): CommandTableEntry | undefined {
+): ObjectMethod | undefined {
   const parentId = form.parentWindowId;
   if (!parentId || parentId === "root") {
-    return ROOT_COMMANDS[form.command];
+    return ROOT_METHODS[form.command];
   }
   const parent = (thread.contextWindows ?? []).find((w) => w.id === parentId);
   if (!parent) return undefined;
-  const def = getWindowTypeDefinition(parent.type);
-  return def.commands[form.command];
+  return lookupMethod(parent, form.command);
 }
 
 /**

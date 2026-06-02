@@ -133,9 +133,9 @@ function asStepStatus(v: unknown): PlanWindowStep["status"] | undefined {
   return (VALID_STEP_STATUS as Set<string>).has(v) ? (v as PlanWindowStep["status"]) : undefined;
 }
 
-/** 把 ctx.parentWindow 校验成 PlanWindow；失败返回错误字符串。 */
+/** 把 ctx.self 校验成 PlanWindow；失败返回错误字符串。 */
 function requirePlanWindow(ctx: CommandExecutionContext): PlanWindow | string {
-  const w = ctx.parentWindow;
+  const w = ctx.self;
   if (!w || w.type !== "plan") {
     return "[plan_window] 未挂载在 plan_window 上。";
   }
@@ -148,7 +148,7 @@ function updatePlanWindow(ctx: CommandExecutionContext, next: PlanWindow): void 
     ctx.manager.upsertWindow(next, ctx.thread);
   } else {
     // fallback 路径：直接修改原 window 的字段（in-place）
-    Object.assign(ctx.parentWindow as PlanWindow, next);
+    Object.assign(ctx.self as PlanWindow, next);
   }
 }
 

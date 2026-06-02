@@ -183,6 +183,7 @@ describe("executeProgramWindowExec missing-args error path", () => {
       thread,
       args: {},
       parentWindow: programWindow,
+      self: programWindow,
     });
     expect(typeof result).toBe("string");
     expect(result as string).toContain("缺少执行参数");

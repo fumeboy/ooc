@@ -10,7 +10,7 @@ import type {
  * 调用形态：exec(<form_id>, "refine", args={ msg: "..." })
  *
  * exec ctx 中：
- * - parentWindow = 该 form 自身（type=command_exec）
+ * - self = 该 form 自身（type=command_exec；2026-06-02 P6.§1 从 parentWindow 改名）
  * - ctx.args = 要累积/覆盖到 form 上的键值对
  * - manager 用来调内部 refine 方法重算 commandPaths
  *
@@ -18,7 +18,7 @@ import type {
  * 不会再创建嵌套 form。
  */
 async function executeRefine(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const form = ctx.parentWindow;
+  const form = ctx.self;
   if (!form || form.type !== "command_exec") {
     return "[command_exec.refine] 必须挂在 command_exec form 上调用。";
   }

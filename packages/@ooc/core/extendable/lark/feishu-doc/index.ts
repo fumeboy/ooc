@@ -233,7 +233,7 @@ function extractMarkdownTitle(body: string): string | undefined {
 }
 
 async function executeRead(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "feishu_doc") {
     return "[feishu_doc.read] 未挂载在 feishu_doc_window 上。";
   }
@@ -313,7 +313,7 @@ function pickDocument(raw: unknown): FetchedDoc | undefined {
 }
 
 function executeSearchInDoc(ctx: CommandExecutionContext): string | undefined {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "feishu_doc") {
     return "[feishu_doc.search_in_doc] 未挂载在 feishu_doc_window 上。";
   }
@@ -338,7 +338,7 @@ function executeSearchInDoc(ctx: CommandExecutionContext): string | undefined {
 }
 
 async function executeAppend(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "feishu_doc") {
     return "[feishu_doc.append] 未挂载在 feishu_doc_window 上。";
   }
@@ -373,7 +373,7 @@ async function executeAppend(ctx: CommandExecutionContext): Promise<string | und
 }
 
 async function executePatchBlock(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "feishu_doc") {
     return "[feishu_doc.patch_block] 未挂载在 feishu_doc_window 上。";
   }
@@ -437,7 +437,7 @@ async function executePatchBlock(ctx: CommandExecutionContext): Promise<string |
 }
 
 async function executeShareLink(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "feishu_doc") {
     return "[feishu_doc.share_link] 未挂载在 feishu_doc_window 上。";
   }
@@ -463,7 +463,7 @@ async function executeShareLink(ctx: CommandExecutionContext): Promise<string | 
 }
 
 async function executeAttachToChat(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.parentWindow;
+  const window = ctx.self;
   if (!window || window.type !== "feishu_doc") {
     return "[feishu_doc.attach_to_chat] 未挂载在 feishu_doc_window 上。";
   }

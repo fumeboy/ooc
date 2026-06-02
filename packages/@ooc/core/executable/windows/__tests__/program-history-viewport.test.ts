@@ -219,6 +219,7 @@ describe("set_history_window command", () => {
     const out = await executeProgramSetHistoryViewport({
       args: { history_tail: 30 },
       parentWindow: window,
+      self: window,
     });
     expect(out).toBeUndefined();
     expect(window.historyViewport).toEqual({ tail: 30 });
@@ -232,6 +233,7 @@ describe("set_history_window command", () => {
     const out = await executeProgramSetHistoryViewport({
       args: { history_start: 0, history_end: 3 },
       parentWindow: window,
+      self: window,
     });
     expect(out).toBeUndefined();
     expect(window.historyViewport).toEqual({ rangeStart: 0, rangeEnd: 3 });
@@ -245,6 +247,7 @@ describe("set_history_window command", () => {
     const out = await executeProgramSetHistoryViewport({
       args: { history_tail: 5, history_start: 0, history_end: 3 },
       parentWindow: window,
+      self: window,
     });
     expect(typeof out).toBe("string");
     expect(out as string).toContain("互斥");
@@ -264,6 +267,7 @@ describe("set_history_window command", () => {
     const out = await executeProgramSetHistoryViewport({
       args: { history_tail: -1 },
       parentWindow: window,
+      self: window,
     });
     expect(typeof out).toBe("string");
     expect(out as string).toContain("history_tail");
@@ -278,6 +282,7 @@ describe("set_history_window command", () => {
     const out = await executeProgramSetHistoryViewport({
       args: { history_start: 0 },
       parentWindow: window,
+      self: window,
     });
     expect(typeof out).toBe("string");
     expect(out as string).toContain("history_start");
@@ -293,6 +298,7 @@ describe("set_history_window command", () => {
     const out = await executeProgramSetHistoryViewport({
       args: { history_start: 5, history_end: 2 },
       parentWindow: window,
+      self: window,
     });
     expect(typeof out).toBe("string");
     expect(out as string).toContain("history_start");
@@ -311,6 +317,7 @@ describe("set_history_window command", () => {
     const out = await executeProgramSetHistoryViewport({
       args: { history_tail: 10 },
       parentWindow: fake as never,
+      self: fake as never,
     });
     expect(typeof out).toBe("string");
     expect(out as string).toContain("未挂载");
@@ -323,6 +330,7 @@ describe("set_history_window command", () => {
     const out = await executeProgramSetHistoryViewport({
       args: {},
       parentWindow: window,
+      self: window,
     });
     expect(typeof out).toBe("string");
     expect(out as string).toContain("至少需要");
@@ -347,6 +355,7 @@ describe("set_history_window registered on program window", () => {
     const out = await cmd.exec({
       args: { history_tail: 25 },
       parentWindow: window,
+      self: window,
     });
     expect(out).toBeUndefined();
     expect(window.historyViewport).toEqual({ tail: 25 });
@@ -368,6 +377,7 @@ describe("program_window.exec is not affected by historyViewport", () => {
       thread,
       args: { language: "shell", code: "echo new" },
       parentWindow: window,
+      self: window,
     });
     expect(out).toBeUndefined();
     // history should now have 4 entries (3 original + 1 new)

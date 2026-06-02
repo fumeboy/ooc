@@ -110,7 +110,7 @@ function resolvePeerThread(
 async function executeMove(ctx: CommandExecutionContext): Promise<string | undefined> {
   const self = ctx.thread;
   if (!self) return "[do_window.move] 缺少 thread context。";
-  const doWindow = ctx.parentWindow;
+  const doWindow = ctx.self;
   if (!doWindow || doWindow.type !== "do") {
     return "[do_window.move] 必须挂载在 do_window 上调用。";
   }
