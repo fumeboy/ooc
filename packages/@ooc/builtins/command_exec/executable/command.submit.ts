@@ -3,6 +3,7 @@ import type {
   CommandKnowledgeEntries,
   CommandTableEntry,
 } from "@ooc/core/extendable/_shared/command-types.js";
+import type { CommandExecWindow } from "@ooc/core/extendable/_shared/types.js";
 
 /**
  * command_exec.submit 命令 — 触发 form.command.exec。
@@ -19,10 +20,8 @@ import type {
  * 这条命令本身不引入新 path/knowledge，走 exec tool 的 auto-execute 路径。
  */
 async function executeSubmit(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const form = ctx.self;
-  if (!form || form.type !== "command_exec") {
-    return "[command_exec.submit] 必须挂在 command_exec form 上调用。";
-  }
+  // P6.§3: manager 在 dispatch 阶段已保证 self.type === "command_exec"，method 体不再 re-check。
+  const form = ctx.self as CommandExecWindow;
   if (form.status !== "open") {
     return `[command_exec.submit] form ${form.id} 不在 open 状态（当前 ${form.status}）。`;
   }

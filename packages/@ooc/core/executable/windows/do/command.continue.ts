@@ -3,6 +3,7 @@ import type {
   CommandKnowledgeEntries,
   CommandTableEntry,
 } from "../_shared/command-types.js";
+import type { DoWindow } from "../_shared/types.js";
 import { notifyThreadActivated } from "../../../observable/index.js";
 import { appendInbox, findThreadInScope, makeMessage } from "./helpers.js";
 
@@ -32,10 +33,8 @@ open(parent_window_id="<creator_do_window_id>", command="continue", args={ msg: 
 async function executeDoWindowContinue(ctx: CommandExecutionContext): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return undefined;
-  const window = ctx.self;
-  if (!window || window.type !== "do") {
-    return "[do_window.continue] 未挂载在 do_window 上，无法执行。";
-  }
+  // P6.§3: manager 在 dispatch 阶段已保证 self.type === "do"，method 体不再 re-check。
+  const window = ctx.self as DoWindow;
   const targetThreadId = window.targetThreadId;
   // 同时支持 parent→child（findChild 向下）与 child→parent（沿 _parentThreadRef 向上）
   // 用法；后者是 root cause #1 子→父 reply 协议的实现基础。

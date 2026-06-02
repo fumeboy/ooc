@@ -332,23 +332,9 @@ describe("set_transcript_window command (talk)", () => {
     expect(talkWindow.transcriptViewport).toEqual({ tail: 20 });
   });
 
-  it("rejects when not mounted on talk_window", async () => {
-    const fake = {
-      id: "fake",
-      type: "root" as const,
-      parentWindowId: null,
-      title: "x",
-      status: "open" as const,
-      createdAt: NOW,
-    };
-    const out = await setCommand.exec({
-      args: { tail: 10 },
-      parentWindow: fake as never,
-      self: fake as never,
-    });
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("未挂载");
-  });
+  // P6.§3 (2026-06-02): self-type guard 已下放到 manager.submit；method 体不再 re-check。
+  // 旧测试 "rejects when not mounted on talk_window" 已删除，跨类型拒绝由
+  // manager-dispatch 测试覆盖（见 manager-method-dispatch.test.ts）。
 
   it("no viewport args returns helpful error", async () => {
     const talkWindow: TalkWindow = {
@@ -394,25 +380,8 @@ describe("set_transcript_window command (do)", () => {
     expect(doWindow.transcriptViewport).toEqual({ tail: 5 });
   });
 
-  it("rejects when mounted on talk (cross-type)", async () => {
-    // do's set_transcript_window expects 'do' only
-    const setCommand = getWindowTypeDefinition("do").commands["set_transcript_window"]!;
-    const talkWindow: TalkWindow = {
-      id: "w_talk_x",
-      type: "talk",
-      parentWindowId: ROOT_WINDOW_ID,
-      title: "test",
-      status: "open",
-      createdAt: NOW,
-      target: "bob",
-      conversationId: "w_talk_x",
-    };
-    const out = await setCommand.exec({
-      args: { tail: 10 },
-      parentWindow: talkWindow as never,
-      self: talkWindow as never,
-    });
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("未挂载");
-  });
+  // P6.§3 (2026-06-02): cross-type rejection 已上移到 manager.submit
+  // (lookupMethodEntry 直接 REGISTRY.get(parent.type) 必定返回 do 的 entry，
+  //  而 form 是从 do 上 open 的；构造一个 form.parentWindowId 指向 talk
+  //  但 form.command="set_transcript_window" 的场景由 manager 路径单独覆盖)。
 });

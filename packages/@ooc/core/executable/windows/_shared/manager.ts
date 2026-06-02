@@ -26,7 +26,7 @@
  */
 
 import type { ThreadContext } from "../../../thinkable/context.js";
-import { getWindowTypeDefinition, lookupMethod } from "./registry.js";
+import { getWindowTypeDefinition, lookupMethod, lookupMethodEntry } from "./registry.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -310,12 +310,25 @@ export class WindowManager {
     }
 
     const parent = this.requireParent(form.parentWindowId);
-    const entry = lookupCommandEntry(parent, form.command);
-    if (!entry) {
+    const resolved = lookupMethodEntry(parent, form.command);
+    if (!resolved) {
       throw new Error(
         `submit: command "${form.command}" not registered on parent window type "${parent.type}"`,
       );
     }
+    // P6.§3: 严格 self-type 校验——method 的 declaringType 必须等于 parent.type，
+    // 否则 manager 拒绝 dispatch（fail-loud），不进入 entry.exec。
+    // 直接匹配，无原型链回退（继承 §7 实装）。
+    if (resolved.declaringType !== parent.type) {
+      const failed: CommandExecWindow = {
+        ...form,
+        status: "failed",
+        result: `[method-error] method "${form.command}" not declared on object class "${parent.type}"`,
+      };
+      this.windows.set(formId, failed);
+      return failed.result;
+    }
+    const entry = resolved.entry;
 
     const executing: CommandExecWindow = { ...form, status: "executing" };
     this.windows.set(formId, executing);

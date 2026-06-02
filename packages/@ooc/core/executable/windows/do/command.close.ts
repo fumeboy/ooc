@@ -3,6 +3,7 @@ import type {
   CommandKnowledgeEntries,
   CommandTableEntry,
 } from "../_shared/command-types.js";
+import type { DoWindow } from "../_shared/types.js";
 import { archiveDoWindowChild } from "./helpers.js";
 
 const DO_WINDOW_CLOSE_BASIC = "internal/windows/do/close/basic";
@@ -12,10 +13,8 @@ do_window.close 等价于 close tool，但语义上明确表达"归档子线程�
 `.trim();
 
 async function executeDoWindowClose(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.self;
-  if (!window || window.type !== "do") {
-    return "[do_window.close] 未挂载在 do_window 上。";
-  }
+  // P6.§3: manager 在 dispatch 阶段已保证 self.type === "do"，method 体不再 re-check。
+  const window = ctx.self as DoWindow;
   archiveDoWindowChild(ctx.thread, window);
   return undefined;
 }

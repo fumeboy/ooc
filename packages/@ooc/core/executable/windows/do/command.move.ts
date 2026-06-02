@@ -110,10 +110,8 @@ function resolvePeerThread(
 async function executeMove(ctx: CommandExecutionContext): Promise<string | undefined> {
   const self = ctx.thread;
   if (!self) return "[do_window.move] 缺少 thread context。";
-  const doWindow = ctx.self;
-  if (!doWindow || doWindow.type !== "do") {
-    return "[do_window.move] 必须挂载在 do_window 上调用。";
-  }
+  // P6.§3: manager 在 dispatch 阶段已保证 self.type === "do"，method 体不再 re-check。
+  const doWindow = ctx.self as DoWindow;
   if (doWindow.status !== "running") {
     return `[do_window.move] do_window ${doWindow.id} 状态为 ${doWindow.status}（非 running），不能再分享 window。`;
   }

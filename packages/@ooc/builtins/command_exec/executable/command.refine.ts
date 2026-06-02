@@ -3,6 +3,7 @@ import type {
   CommandKnowledgeEntries,
   CommandTableEntry,
 } from "@ooc/core/extendable/_shared/command-types.js";
+import type { CommandExecWindow } from "@ooc/core/extendable/_shared/types.js";
 
 /**
  * command_exec.refine 命令 — 把 ctx.args 整体 merge 到 form.accumulatedArgs。
@@ -18,10 +19,8 @@ import type {
  * 不会再创建嵌套 form。
  */
 async function executeRefine(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const form = ctx.self;
-  if (!form || form.type !== "command_exec") {
-    return "[command_exec.refine] 必须挂在 command_exec form 上调用。";
-  }
+  // P6.§3: manager 在 dispatch 阶段已保证 self.type === "command_exec"，method 体不再 re-check。
+  const form = ctx.self as CommandExecWindow;
   // Round 13: 允许 open 或 failed (failed 上 refine 触发"复活"路径, 自动切回 open)
   if (form.status !== "open" && form.status !== "failed") {
     return `[command_exec.refine] form ${form.id} 不在 open / failed 状态（当前 ${form.status}）, 无法 refine。`;

@@ -296,10 +296,8 @@ function pickText(m: Record<string, unknown>): string {
 }
 
 async function executeRefresh(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.self;
-  if (!window || window.type !== "feishu_chat") {
-    return "[feishu_chat.refresh] 未挂载在 feishu_chat_window 上。";
-  }
+  // P6.§3: manager 已保证 self.type === "feishu_chat"。
+  const window = ctx.self as FeishuChatWindow;
   const count = clampCount(ctx.args.count, DEFAULT_TAIL);
   const sinceId = asString(ctx.args.since_message_id);
 
@@ -348,10 +346,8 @@ function extractCursor(raw: unknown): string | undefined {
 }
 
 async function executeSearch(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.self;
-  if (!window || window.type !== "feishu_chat") {
-    return "[feishu_chat.search] 未挂载在 feishu_chat_window 上。";
-  }
+  // P6.§3: manager 已保证 self.type === "feishu_chat"。
+  const window = ctx.self as FeishuChatWindow;
   const query = asString(ctx.args.query);
   if (!query) return "[feishu_chat.search] 缺少 query。";
   const limit = clampCount(ctx.args.limit, 30);
@@ -388,10 +384,8 @@ async function executeSearch(ctx: CommandExecutionContext): Promise<string | und
 }
 
 async function executeSend(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.self;
-  if (!window || window.type !== "feishu_chat") {
-    return "[feishu_chat.send] 未挂载在 feishu_chat_window 上。";
-  }
+  // P6.§3: manager 已保证 self.type === "feishu_chat"。
+  const window = ctx.self as FeishuChatWindow;
   const text = asString(ctx.args.text);
   if (!text) return "[feishu_chat.send] 缺少 text。";
   const as = (ctx.args.as === "user" ? "user" : "bot") as "bot" | "user";
@@ -423,10 +417,8 @@ async function executeSend(ctx: CommandExecutionContext): Promise<string | undef
 }
 
 async function executeReply(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.self;
-  if (!window || window.type !== "feishu_chat") {
-    return "[feishu_chat.reply] 未挂载在 feishu_chat_window 上。";
-  }
+  // P6.§3: manager 已保证 self.type === "feishu_chat"。
+  const window = ctx.self as FeishuChatWindow;
   const replyTo = asString(ctx.args.reply_to);
   const text = asString(ctx.args.text);
   if (!replyTo) return "[feishu_chat.reply] 缺少 reply_to（被回复消息的 message_id）。";
@@ -448,10 +440,8 @@ async function executeReply(ctx: CommandExecutionContext): Promise<string | unde
 }
 
 function executeSubscribe(ctx: CommandExecutionContext): string | undefined {
-  const window = ctx.self;
-  if (!window || window.type !== "feishu_chat") {
-    return "[feishu_chat.subscribe] 未挂载在 feishu_chat_window 上。";
-  }
+  // P6.§3: manager 已保证 self.type === "feishu_chat"。
+  const window = ctx.self as FeishuChatWindow;
   const interval = Number(ctx.args.interval_ms);
   if (!Number.isFinite(interval) || interval < 0) {
     return "[feishu_chat.subscribe] interval_ms 必须为 >=0 的数字（0 表示取消订阅）。";

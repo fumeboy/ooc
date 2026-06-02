@@ -368,6 +368,29 @@ export function lookupMethod(
   return def.methods?.[methodName] ?? def.commands?.[methodName];
 }
 
+/**
+ * P6.§3 (2026-06-02): 同 `lookupMethod`，但额外返回 `declaringType`——即该 method 实际在
+ * 哪个 Object class 上声明。manager.submit 在 dispatch 阶段用它做严格校验：method 必须
+ * 由 parent.type 声明，否则拒绝执行（`[method-error] method "X" not declared on object class "Y"`）。
+ *
+ * 直接匹配，不走原型链——继承解析在 §7 实装。本期仅需直接 type 匹配。
+ *
+ * 命中条件：`REGISTRY.get(parent.type).methods[methodName]` 存在；命中后 declaringType
+ * 必然 === parent.type（lookup 路径就是按 type 索引的）。提供该 API 的目的是让 manager
+ * 在调用前显式做 assert，把 "method 注册在错的 type 上" 这类编译期/启动期 bug 在 dispatch
+ * 阶段 fail-loud，而不是让 method 体内自己写 self.type 校验。
+ */
+export function lookupMethodEntry(
+  parentWindow: { type: ObjectType },
+  methodName: string,
+): { entry: ObjectMethod; declaringType: ObjectType } | undefined {
+  const def = REGISTRY.get(parentWindow.type) as ObjectDefinition | undefined;
+  if (!def) return undefined;
+  const entry = def.methods?.[methodName] ?? def.commands?.[methodName];
+  if (!entry) return undefined;
+  return { entry, declaringType: parentWindow.type };
+}
+
 /** 列出所有已注册 type，按字母序返回。 */
 /** @deprecated Use listRegisteredObjectTypes instead (2026-05-28 ooc-6 Object Unification). listRegisteredWindowTypes is being renamed to listRegisteredObjectTypes. */
 export function listRegisteredWindowTypes(): WindowType[] {

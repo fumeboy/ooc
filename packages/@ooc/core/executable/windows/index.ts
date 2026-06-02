@@ -45,6 +45,7 @@ export {
   listRegisteredObjectTypes,
   assertAllObjectDefinitionsRegistered,
   lookupMethod,
+  lookupMethodEntry,
   // Prototype chain & visibility (Phase 2)
   parseObjectPrototype,
   resolvePrototypeChain,

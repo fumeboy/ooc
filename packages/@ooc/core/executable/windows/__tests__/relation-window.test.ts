@@ -193,20 +193,9 @@ describe("executeRelationEdit", () => {
     }
   });
 
-  it("parent window 不是 relation 类型 → 返回 error 文本", async () => {
-    const tempRoot = await mkdtemp(join(tmpdir(), "ooc-rel-edit-"));
-    try {
-      const { thread } = await setupSelfThread(tempRoot);
-      // 用 root window 当 parent
-      const root = thread.contextWindows!.find((w) => w.type === "root")!;
-      const result = await executeRelationEdit(
-        { thread, parentWindow: root, self: root, args: { content: "x", scope: "session" } } as CommandExecutionContext,
-      );
-      expect(result).toContain("未挂载在 relation_window");
-    } finally {
-      await rm(tempRoot, { recursive: true, force: true });
-    }
-  });
+  // P6.§3 (2026-06-02): self-type guard 已下放到 manager.submit；method 体不再 re-check
+  // self.type === "relation_window"。旧测试 "parent window 不是 relation 类型" 已删除，
+  // 跨类型拒绝由 manager-dispatch 测试覆盖（见 manager-method-dispatch.test.ts）。
 
   it("缺 thread → 返回 error 文本", async () => {
     const result = await executeRelationEdit({ args: { content: "x", scope: "session" } });

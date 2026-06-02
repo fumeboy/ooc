@@ -142,10 +142,8 @@ export async function executeProgramWindowExec(
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[program_window.exec] 缺少 thread context。";
-  const window = ctx.self;
-  if (!window || window.type !== "program") {
-    return "[program_window.exec] 未挂载在 program_window 上。";
-  }
+  // P6.§3: manager 在 dispatch 阶段已保证 self.type === "program"，method 体不再 re-check。
+  const window = ctx.self as ProgramWindow;
 
   const args: ProgramExecArgs = {
     language: ctx.args.language as ProgramExecArgs["language"],

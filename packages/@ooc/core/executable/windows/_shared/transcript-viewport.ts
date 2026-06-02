@@ -1,4 +1,5 @@
 import type { CommandExecutionContext } from "./command-types.js";
+import type { ContextWindow } from "./types.js";
 
 /**
  * transcript viewport 协议 — talk_window / do_window 共享的"持续对话窗口节流"控制。
@@ -175,11 +176,9 @@ export async function executeWindowSetTranscriptViewport(
   ctx: CommandExecutionContext,
   expectedTypes: Array<"talk" | "do">,
 ): Promise<string | undefined> {
-  const window = ctx.self;
-  const label = expectedTypes.map((t) => `${t}_window`).join("/");
-  if (!window || !expectedTypes.includes(window.type as "talk" | "do")) {
-    return `[${label}.set_transcript_window] 未挂载在 ${label} 上。`;
-  }
+  // P6.§3: manager 在 dispatch 阶段已保证 self.type 是 caller 注册的 type 之一，
+  // method 体不再 re-check self 类型。expectedTypes 仅用于错误文案 label。
+  const window = ctx.self as ContextWindow;
   if (!hasAnyTranscriptViewportField(ctx.args)) {
     return `[${window.type}_window.set_transcript_window] 至少需要传入 tail / range_start+range_end 之一。`;
   }

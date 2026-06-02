@@ -233,10 +233,8 @@ function extractMarkdownTitle(body: string): string | undefined {
 }
 
 async function executeRead(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.self;
-  if (!window || window.type !== "feishu_doc") {
-    return "[feishu_doc.read] 未挂载在 feishu_doc_window 上。";
-  }
+  // P6.§3: manager 已保证 self.type === "feishu_doc"。
+  const window = ctx.self as FeishuDocWindow;
   const format = ctx.args.format === "blocks" ? "blocks" : "markdown";
 
   // 协议：docs +fetch --api-version v2 --doc <token> [--doc-format markdown] [--detail with-ids]
@@ -313,10 +311,8 @@ function pickDocument(raw: unknown): FetchedDoc | undefined {
 }
 
 function executeSearchInDoc(ctx: CommandExecutionContext): string | undefined {
-  const window = ctx.self;
-  if (!window || window.type !== "feishu_doc") {
-    return "[feishu_doc.search_in_doc] 未挂载在 feishu_doc_window 上。";
-  }
+  // P6.§3: manager 已保证 self.type === "feishu_doc"。
+  const window = ctx.self as FeishuDocWindow;
   const query = asString(ctx.args.query);
   if (!query) return "[feishu_doc.search_in_doc] 缺少 query。";
   const limit = Math.min(Math.max(Number(ctx.args.limit) || 10, 1), 100);
@@ -338,10 +334,8 @@ function executeSearchInDoc(ctx: CommandExecutionContext): string | undefined {
 }
 
 async function executeAppend(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.self;
-  if (!window || window.type !== "feishu_doc") {
-    return "[feishu_doc.append] 未挂载在 feishu_doc_window 上。";
-  }
+  // P6.§3: manager 已保证 self.type === "feishu_doc"。
+  const window = ctx.self as FeishuDocWindow;
   const text = asString(ctx.args.text);
   if (!text) return "[feishu_doc.append] 缺少 text。";
   const confirm = ctx.args.confirm === true;
@@ -373,10 +367,8 @@ async function executeAppend(ctx: CommandExecutionContext): Promise<string | und
 }
 
 async function executePatchBlock(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.self;
-  if (!window || window.type !== "feishu_doc") {
-    return "[feishu_doc.patch_block] 未挂载在 feishu_doc_window 上。";
-  }
+  // P6.§3: manager 已保证 self.type === "feishu_doc"。
+  const window = ctx.self as FeishuDocWindow;
   const blockId = asString(ctx.args.block_id);
   const op = asString(ctx.args.op);
   if (!blockId) return "[feishu_doc.patch_block] 缺少 block_id。";
@@ -437,10 +429,8 @@ async function executePatchBlock(ctx: CommandExecutionContext): Promise<string |
 }
 
 async function executeShareLink(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.self;
-  if (!window || window.type !== "feishu_doc") {
-    return "[feishu_doc.share_link] 未挂载在 feishu_doc_window 上。";
-  }
+  // P6.§3: manager 已保证 self.type === "feishu_doc"。
+  const window = ctx.self as FeishuDocWindow;
   // 租户 host 由 .world.json 的 LarkTenantHost 字段配置（默认 feishu.cn）。
   // 私有部署 / 公海版 / 国际版用户必须配，否则链接 404。
   const baseDir = ctx.thread?.persistence?.baseDir;
@@ -463,10 +453,8 @@ async function executeShareLink(ctx: CommandExecutionContext): Promise<string | 
 }
 
 async function executeAttachToChat(ctx: CommandExecutionContext): Promise<string | undefined> {
-  const window = ctx.self;
-  if (!window || window.type !== "feishu_doc") {
-    return "[feishu_doc.attach_to_chat] 未挂载在 feishu_doc_window 上。";
-  }
+  // P6.§3: manager 已保证 self.type === "feishu_doc"。
+  const window = ctx.self as FeishuDocWindow;
   const chatId = asString(ctx.args.chat_id);
   if (!chatId) return "[feishu_doc.attach_to_chat] 缺少 chat_id。";
   const comment = asString(ctx.args.comment);

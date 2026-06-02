@@ -133,10 +133,8 @@ const FILE_WINDOW_LINE_CONTEXT = 40;
 export async function executeSearchOpenMatch(
   ctx: CommandExecutionContext,
 ): Promise<string | undefined> {
-  const window = ctx.self;
-  if (!window || window.type !== "search") {
-    return "[search_window.open_match] 未挂载在 search_window 上。";
-  }
+  // P6.§3: manager 在 dispatch 阶段已保证 self.type === "search"，method 体不再 re-check。
+  const window = ctx.self as SearchWindow;
   const indexArg = ctx.args.index;
   if (typeof indexArg !== "number") {
     return "[search_window.open_match] 缺少 index 参数（应是整数）。submit 后 form 已 executed, 请 close(form_id) 后重新 open(parent_window_id=\"<search_window_id>\", command=\"open_match\", args={ index: <整数> }) 一次性给齐; index 取自当前 search_window.matches[].index; 下次 open 时直接附 args 可避免失败回路。";

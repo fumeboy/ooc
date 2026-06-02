@@ -133,13 +133,10 @@ function asStepStatus(v: unknown): PlanWindowStep["status"] | undefined {
   return (VALID_STEP_STATUS as Set<string>).has(v) ? (v as PlanWindowStep["status"]) : undefined;
 }
 
-/** 把 ctx.self 校验成 PlanWindow；失败返回错误字符串。 */
-function requirePlanWindow(ctx: CommandExecutionContext): PlanWindow | string {
-  const w = ctx.self;
-  if (!w || w.type !== "plan") {
-    return "[plan_window] 未挂载在 plan_window 上。";
-  }
-  return w;
+/** 把 ctx.self 校验成 PlanWindow。
+ *  P6.§3: manager 在 dispatch 阶段已保证 self.type === "plan"，本 helper 仅做类型 cast。 */
+function requirePlanWindow(ctx: CommandExecutionContext): PlanWindow {
+  return ctx.self as PlanWindow;
 }
 
 /** 通过 manager 持久化更新（避免被 toData() 复原）；fallback 直接 mutate。 */
@@ -163,7 +160,6 @@ const updatePlanCommand: ObjectMethod = {
 
 async function executeUpdatePlan(ctx: CommandExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
-  if (typeof w === "string") return w;
   const title = isString(ctx.args.title) ? ctx.args.title : undefined;
   const description = isString(ctx.args.description) ? ctx.args.description : undefined;
   if (title === undefined && description === undefined) {
@@ -187,7 +183,6 @@ const addStepCommand: ObjectMethod = {
 
 async function executeAddStep(ctx: CommandExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
-  if (typeof w === "string") return w;
   const text = isString(ctx.args.text) ? ctx.args.text.trim() : "";
   if (!text) return "[plan_window.add_step] 缺少 args.text（步骤描述）。";
   const status = asStepStatus(ctx.args.status) ?? "pending";
@@ -210,7 +205,6 @@ const updateStepCommand: ObjectMethod = {
 
 async function executeUpdateStep(ctx: CommandExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
-  if (typeof w === "string") return w;
   const stepId = isString(ctx.args.step_id) ? ctx.args.step_id : "";
   if (!stepId) return "[plan_window.update_step] 缺少 args.step_id。";
   const text = isString(ctx.args.text) ? ctx.args.text : undefined;
@@ -242,7 +236,6 @@ const expandStepCommand: ObjectMethod = {
 
 async function executeExpandStep(ctx: CommandExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
-  if (typeof w === "string") return w;
   if (!ctx.thread) return "[plan_window.expand_step] 缺少 thread context。";
   const stepId = isString(ctx.args.step_id) ? ctx.args.step_id : "";
   if (!stepId) return "[plan_window.expand_step] 缺少 args.step_id。";
@@ -295,7 +288,6 @@ const collapseSubplanCommand: ObjectMethod = {
 
 async function executeCollapseSubplan(ctx: CommandExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
-  if (typeof w === "string") return w;
   if (!ctx.thread) return "[plan_window.collapse_subplan] 缺少 thread context。";
   const stepId = isString(ctx.args.step_id) ? ctx.args.step_id : "";
   if (!stepId) return "[plan_window.collapse_subplan] 缺少 args.step_id。";
@@ -341,7 +333,6 @@ const markDoneCommand: ObjectMethod = {
 
 async function executeMarkDone(ctx: CommandExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
-  if (typeof w === "string") return w;
   const next: PlanWindow = { ...w, status: "done" };
   updatePlanWindow(ctx, next);
   return undefined;

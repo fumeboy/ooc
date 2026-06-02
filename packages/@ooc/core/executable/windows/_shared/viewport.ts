@@ -1,4 +1,5 @@
 import type { CommandExecutionContext } from "./command-types.js";
+import type { ContextWindow } from "./types.js";
 
 /**
  * viewport 协议 — file_window / knowledge_window 共享的"精细化窗口大小"控制。
@@ -144,10 +145,9 @@ export async function executeWindowSetViewport(
   ctx: CommandExecutionContext,
   expectedType: "file" | "knowledge",
 ): Promise<string | undefined> {
-  const window = ctx.self;
-  if (!window || window.type !== expectedType) {
-    return `[${expectedType}_window.set_viewport] 未挂载在 ${expectedType}_window 上。`;
-  }
+  // P6.§3: manager 在 dispatch 阶段已保证 self.type === expectedType（caller 注册的），
+  // method 体不再 re-check self 类型。expectedType 仅用于错误文案 label。
+  const window = ctx.self as ContextWindow;
   if (!hasAnyViewportField(ctx.args)) {
     return `[${expectedType}_window.set_viewport] 至少需要传入 line_start / line_end / column_start / column_end 之一。`;
   }

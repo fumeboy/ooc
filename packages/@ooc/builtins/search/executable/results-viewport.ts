@@ -63,10 +63,8 @@ export function hasAnyResultsViewportField(
 export async function executeSearchSetResultsViewport(
   ctx: CommandExecutionContext,
 ): Promise<string | undefined> {
-  const window = ctx.self;
-  if (!window || window.type !== "search") {
-    return "[search_window.set_results_window] 未挂载在 search_window 上。";
-  }
+  // P6.§3: manager 在 dispatch 阶段已保证 self.type === "search"，method 体不再 re-check。
+  const window = ctx.self as SearchWindow;
   if (!hasAnyResultsViewportField(ctx.args)) {
     return "[search_window.set_results_window] 至少需要传入 matches_tail / matches_start+matches_end 之一。";
   }

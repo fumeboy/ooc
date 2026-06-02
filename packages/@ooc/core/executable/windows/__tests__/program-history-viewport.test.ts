@@ -305,23 +305,9 @@ describe("set_history_window command", () => {
     expect(window.historyViewport).toEqual({ tail: 10 });
   });
 
-  it("rejects when not mounted on program_window", async () => {
-    const fake = {
-      id: "fake",
-      type: "root" as const,
-      parentWindowId: null,
-      title: "x",
-      status: "open" as const,
-      createdAt: NOW,
-    };
-    const out = await executeProgramSetHistoryViewport({
-      args: { history_tail: 10 },
-      parentWindow: fake as never,
-      self: fake as never,
-    });
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("未挂载");
-  });
+  // P6.§3 (2026-06-02): self-type guard 已下放到 manager.submit；method 体不再 re-check。
+  // 旧测试 "rejects when not mounted on program_window" 已删除，跨类型拒绝由
+  // manager-dispatch 测试覆盖（见 manager-method-dispatch.test.ts）。
 
   it("no viewport args returns helpful error", async () => {
     const window = makeProgramWindow({

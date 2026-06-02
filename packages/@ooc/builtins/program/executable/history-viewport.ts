@@ -66,10 +66,8 @@ export function hasAnyHistoryViewportField(
 export async function executeProgramSetHistoryViewport(
   ctx: CommandExecutionContext,
 ): Promise<string | undefined> {
-  const window = ctx.self;
-  if (!window || window.type !== "program") {
-    return "[program_window.set_history_window] 未挂载在 program_window 上。";
-  }
+  // P6.§3: manager 在 dispatch 阶段已保证 self.type === "program"，method 体不再 re-check。
+  const window = ctx.self as ProgramWindow;
   if (!hasAnyHistoryViewportField(ctx.args)) {
     return "[program_window.set_history_window] 至少需要传入 history_tail / history_start+history_end 之一。";
   }

@@ -114,10 +114,8 @@ export async function executeRelationEdit(
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[relation.edit] 缺少 thread context。";
-  const window = ctx.self;
-  if (!window || window.type !== "relation") {
-    return "[relation.edit] 未挂载在 relation_window 上。";
-  }
+  // P6.§3: manager 在 dispatch 阶段已保证 self.type === "relation"，method 体不再 re-check。
+  const window = ctx.self as RelationWindow;
   if (!thread.persistence) {
     return "[relation.edit] 当前 thread 无 persistence,无法写入。";
   }

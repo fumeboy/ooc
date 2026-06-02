@@ -300,10 +300,8 @@ function applyEdits(
 export async function executeFileWindowSetRange(
   ctx: CommandExecutionContext,
 ): Promise<string | undefined> {
-  const window = ctx.self;
-  if (!window || window.type !== "file") {
-    return "[file_window.set_range] 未挂载在 file_window 上。";
-  }
+  // P6.§3: manager 在 dispatch 阶段已保证 self.type === "file"，method 体不再 re-check。
+  const window = ctx.self as FileWindow;
   const lines = asTuple(ctx.args.lines);
   const columns = asTuple(ctx.args.columns);
   const next: FileWindow = {
@@ -328,10 +326,8 @@ export async function executeFileWindowSetRange(
 export async function executeFileWindowEdit(
   ctx: CommandExecutionContext,
 ): Promise<string | undefined> {
-  const window = ctx.self;
-  if (!window || window.type !== "file") {
-    return "[file_window.edit] 未挂载在 file_window 上。";
-  }
+  // P6.§3: manager 在 dispatch 阶段已保证 self.type === "file"，method 体不再 re-check。
+  const window = ctx.self as FileWindow;
   const edits = parseEdits(ctx.args);
   if (!edits) {
     return "[file_window.edit] 缺少 args={ old, new } 或 args={ edits: [{old, new}, ...] }。";

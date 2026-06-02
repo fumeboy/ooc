@@ -3,6 +3,7 @@ import type {
   CommandKnowledgeEntries,
   CommandTableEntry,
 } from "../_shared/command-types.js";
+import type { TalkWindow } from "../_shared/types.js";
 import { deliverTalkMessage } from "./delivery.js";
 
 const TALK_WINDOW_SAY_BASIC = "internal/windows/talk/say/basic";
@@ -38,10 +39,8 @@ talk_window.say 用于向 talk 对端发送一条消息。
 async function executeTalkWindowSay(ctx: CommandExecutionContext): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[talk_window.say] 缺少 thread context。";
-  const window = ctx.self;
-  if (!window || window.type !== "talk") {
-    return "[talk_window.say] 未挂载在 talk_window 上。";
-  }
+  // P6.§3: manager 在 dispatch 阶段已保证 self.type === "talk"，method 体不再 re-check。
+  const window = ctx.self as TalkWindow;
   if (!thread.persistence) {
     return "[talk_window.say] 当前 thread 无 persistence ref，无法跨对象派送。";
   }
