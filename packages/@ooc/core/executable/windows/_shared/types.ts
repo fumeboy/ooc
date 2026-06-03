@@ -52,6 +52,37 @@ export type ObjectType = Exclude<WindowType, "relation">;
 export type WindowStatus = "open" | "executing" | "success" | "failed" | "running" | "archived" | "done" | "active" | "closed";
 
 /**
+ * Why a ContextWindow is present in context. Set by the mechanism that created the window.
+ * unset = legacy / unknown (treated as "explicit" for safety — won't be auto-unloaded).
+ */
+export interface ContextWindowProvenance {
+  kind: "explicit" | "derived" | "system" | "related";
+  reason: {
+    mechanism:
+      | "user_open"
+      | "llm_exec"
+      | "intent_match"
+      | "peer_discovery"
+      | "form_bound"
+      | "session_constant";
+    sourceId?: string;
+    detail?: Record<string, unknown>;
+  };
+  createdAt: number;
+  lastTouchedAt: number;
+}
+
+/**
+ * Semantic importance of a ContextWindow, used by BudgetManager for overflow decisions.
+ * unset = computed at render time from defaults.
+ */
+export interface ContextWindowRelevance {
+  score: number;                          // 0.0–1.0
+  priorityHint?: "critical" | "high" | "normal" | "low";
+  signalCount: number;                    // decaying counter of recent references
+}
+
+/**
  * 所有 ContextWindow 共享的字段。
  *
  * - id：全局唯一稳定 ID（root 固定为 "root"，其它类型用 generateWindowId）
@@ -118,6 +149,21 @@ export interface BaseContextWindow {
     level1Rounds: number;
     lastSeenEventIdx: number;
   };
+  /**
+   * Provenance: why this window is present in context. Optional; set by the creating mechanism.
+   * unset = treated as "explicit" for safety (won't be auto-unloaded on intent changes).
+   */
+  provenance?: ContextWindowProvenance;
+  /**
+   * Semantic importance used by BudgetManager for overflow decisions.
+   * unset = computed at render time.
+   */
+  relevance?: ContextWindowRelevance;
+  /**
+   * If this window was derived from / is bound to a specific form (method_call), its formId.
+   * When the form's intent changes, non-explicit windows matching this boundFormId may be auto-unloaded.
+   */
+  boundFormId?: string;
 }
 
 /**

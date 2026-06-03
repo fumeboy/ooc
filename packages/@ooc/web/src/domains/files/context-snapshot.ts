@@ -45,6 +45,20 @@ type _ContextWindowUnion =
       commandKnowledgePaths?: string[];
       result?: string;
       createdAt?: number;
+      schema?: { args: Record<string, {
+        type: "string" | "number" | "boolean" | "array" | "object" | "any";
+        required?: boolean;
+        default?: unknown;
+        description?: string;
+        enum?: Array<string | number | boolean>;
+      }> };
+      fill?: Record<string, {
+        status: "missing" | "provided" | "invalid";
+        value?: unknown;
+        error?: string;
+        source: "initial" | "refine" | "default";
+        refinedAt?: number;
+      }>;
     }
   | {
       id: string;
@@ -241,6 +255,35 @@ type _ContextWindowUnion =
       parentPlanWindowId?: string;
       parentStepId?: string;
       createdAt?: number;
+    }
+  | {
+      /**
+       * Form guidance window (P6 Context+Knowledge redesign, 2026-06-03):
+       * Derived from onFormChange, rendered as a child of a method_exec form.
+       * Carries provenance/relevance for budget management and auto-unload.
+       */
+      id: string;
+      type: "form_guidance";
+      parentWindowId?: string;
+      title: string;
+      status?: string;
+      boundFormId?: string;
+      provenance?: {
+        kind: "explicit" | "derived" | "system" | "related";
+        reason: {
+          mechanism: string;
+          sourceId?: string;
+          detail?: Record<string, unknown>;
+        };
+        createdAt: number;
+        lastTouchedAt: number;
+      };
+      relevance?: {
+        score: number;
+        priorityHint?: "critical" | "high" | "normal" | "low";
+        signalCount: number;
+      };
+      createdAt?: number;
     };
 
 /**
@@ -249,8 +292,29 @@ type _ContextWindowUnion =
  * 当 window.type 自身不在前端可渲染的 HANDLED_WINDOW_TYPES 集合中时，后端会沿
  * parentClass 继承链回退，把首个可渲染的 ancestor type 填到 effectiveVisibleType。
  * 前端渲染 switch 用 effectiveVisibleType ?? type 作为渲染 key。
+ *
+ * P6 Context+Knowledge (2026-06-03): 增加 provenance / relevance / boundFormId
+ * enrichment 字段，用于 budget 管理、intent 驱动的自动卸载和调试 trace。
  */
-export type ContextWindow = _ContextWindowUnion & { effectiveVisibleType?: string };
+export type ContextWindow = _ContextWindowUnion & {
+  effectiveVisibleType?: string;
+  provenance?: {
+    kind: "explicit" | "derived" | "system" | "related";
+    reason: {
+      mechanism: string;
+      sourceId?: string;
+      detail?: Record<string, unknown>;
+    };
+    createdAt: number;
+    lastTouchedAt: number;
+  };
+  relevance?: {
+    score: number;
+    priorityHint?: "critical" | "high" | "normal" | "low";
+    signalCount: number;
+  };
+  boundFormId?: string;
+};
 
 /** 与后端 ThreadMessage 同 shape；前端只读取关心的字段。 */
 export type ThreadMessage = {

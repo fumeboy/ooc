@@ -83,6 +83,7 @@ import type { SearchWindow } from "@ooc/builtins/search";
 const WINDOW_TYPE_ICON: Partial<Record<string, LucideIcon>> = {
   root: PanelTop,
   command_exec: FileCheck,
+  form_guidance: FileCheck,
   do: Inbox,
   todo: ListChecks,
   talk: MessageSquare,
@@ -101,6 +102,7 @@ const WINDOW_TYPE_ICON: Partial<Record<string, LucideIcon>> = {
 const HANDLED_WINDOW_TYPES = new Set<string>([
   "root",
   "command_exec",
+  "form_guidance",
   "do",
   "todo",
   "talk",
@@ -765,6 +767,31 @@ function WindowDetail({
       {renderType === "file" && <FileWindowDetail window={window as FileWindow} />}
       {renderType === "knowledge" && <KnowledgeWindowDetail window={window as KnowledgeWindow} />}
       {renderType === "search" && <SearchWindowDetail window={window as SearchWindow} />}
+      {renderType === "form_guidance" && (
+        <div className="llm-input-guidance">
+          <div className="llm-input-attrs">
+            <div className="llm-input-attr-row">
+              <span className="llm-input-attr-key">bound_to_form</span>
+              <span className="llm-input-attr-value">
+                {(window as any).boundFormId ?? "—"}
+              </span>
+            </div>
+            <div className="llm-input-attr-row">
+              <span className="llm-input-attr-key">priority</span>
+              <span className="llm-input-attr-value">
+                {(window as any).relevance?.priorityHint ?? "normal"}
+              </span>
+            </div>
+            <div className="llm-input-attr-row">
+              <span className="llm-input-attr-key">source</span>
+              <span className="llm-input-attr-value">
+                {(window as any).provenance?.reason?.sourceId ?? "—"}
+              </span>
+            </div>
+          </div>
+          <div className="llm-input-guidance-title">{window.title}</div>
+        </div>
+      )}
       {/* 未知 window 类型兜底：把整个对象按 JSON 显示，保证新增 type 即使前端没补
           专用渲染也能看到内容。已实现 case 的类型在这里被跳过，避免重复显示。 */}
       {!HANDLED_WINDOW_TYPES.has(renderType) && (

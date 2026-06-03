@@ -4,12 +4,13 @@
  * 2026-05-28 起 knowledge frontmatter 的 `activates_on` 由"path list 双桶"切换
  * 为 trigger map。本模块提供：
  *
- * 1. 三类 trigger 语法的解析与校验（`parseTrigger`）：
+ * 1. 四类 trigger 语法的解析与校验（`parseTrigger`）：
  *    - `object::<type>` —— 任意 open 的该类 object 出现时命中
  *      （旧格式 `window::<type>` 自动映射，向后兼容）
  *    - `method::<object_type>::<method>` —— thread 中存在 type=command_exec 的
  *      form，且其 parentObject 的 type === <object_type> 且 form.command === <method>
  *      （旧格式 `command::<window_type>::<command>` 自动映射，向后兼容）
+ *    - `intent::<name>` —— 任一活跃 form 的 intent 集合匹配 <name> 时命中（支持 wildcard 后缀 "program.*"）
  *    - `object_id::<id>` —— 特定 objectId 的 object 出现在 context 中时命中
  *    - `super` —— `thread.persistence?.sessionId === SUPER_SESSION_ID`
  *
@@ -37,7 +38,8 @@ export type Trigger =
   | { kind: "object"; objectType: string }
   | { kind: "method"; objectType: string; method: string }
   | { kind: "objectId"; objectId: string }
-  | { kind: "super" };
+  | { kind: "super" }
+  | { kind: "intent"; intentName: string };
 
 /**
  * 解析 trigger 表达式字符串。
@@ -91,6 +93,15 @@ export function parseTrigger(expr: string): Trigger {
     return { kind: "method", objectType, method };
   }
 
+  // P5e: New intent::<name> format — matches when any active form has an intent matching <name>.
+  if (expr.startsWith("intent::")) {
+    const intentName = expr.slice("intent::".length);
+    if (intentName.length === 0 || intentName.includes("::")) {
+      throw new Error(`Invalid trigger: "${expr}" — expected intent::<name>`);
+    }
+    return { kind: "intent", intentName };
+  }
+
   if (expr.startsWith("object_id::")) {
     const objectId = expr.slice("object_id::".length);
     if (objectId.length === 0 || objectId.includes("::")) {
@@ -132,7 +143,7 @@ export function parseTrigger(expr: string): Trigger {
 
   throw new Error(
     `Unknown trigger expression: "${expr}". Supported: ` +
-      `"object::<type>" | "method::<object_type>::<method>" | "object_id::<id>" | "super" ` +
+      `"object::<type>" | "method::<object_type>::<method>" | "intent::<name>" | "object_id::<id>" | "super" ` +
       `(legacy: "window::<type>" | "command::<window_type>::<command>")`,
   );
 }
@@ -228,6 +239,21 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
       }
       return false;
     }
+
+    case "intent": {
+      // P5e: Check intentCache for any form whose intents match the pattern.
+      const cache = (thread as any).intentCache as
+        | Map<string, { intents?: Array<{ name: string }> }>
+        | undefined;
+      if (!cache) return false;
+      for (const entry of cache.values()) {
+        if (!entry.intents) continue;
+        for (const intent of entry.intents) {
+          if (matchesIntentName(intent.name, trigger.intentName)) return true;
+        }
+      }
+      return false;
+    }
   }
 }
 
@@ -251,6 +277,19 @@ function parentTypeOf(
   if (!pid || pid === "root") return "root";
   const parent = byId.get(pid);
   return parent?.type ?? "root";
+}
+
+/**
+ * P5e: Check if an intent name matches a pattern. Supports:
+ * - exact match: "program" matches "program"
+ * - wildcard suffix: "program.*" matches "program" and "program.shell"
+ */
+export function matchesIntentName(name: string, pattern: string): boolean {
+  if (pattern.endsWith(".*")) {
+    const prefix = pattern.slice(0, -2);
+    return name === prefix || name.startsWith(prefix + ".");
+  }
+  return name === pattern;
 }
 
 /**

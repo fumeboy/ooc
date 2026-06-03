@@ -32,6 +32,20 @@ export interface CommandExecWindow extends BaseContextWindow {
   commandKnowledgePaths?: string[];
   status: "open" | "executing" | "success" | "failed";
   result?: string;
+  /** Optional schema (from ObjectMethod.schema). Undefined if the method doesn't declare one. */
+  schema?: import("../../../thinkable/context/intent.js").MethodCallSchema;
+  /**
+   * Structured fill state derived from accumulatedArgs + schema.
+   * Undefined if schema is not declared.
+   * Populated by WindowManager.openCommandExec / refine / submit.
+   */
+  fill?: Record<string, {
+    status: "missing" | "provided" | "invalid";
+    value?: unknown;
+    error?: string;
+    source: "initial" | "refine" | "default";
+    refinedAt?: number;
+  }>;
 }
 
 /** P6.§9 canonical name. Structural alias for CommandExecWindow. */

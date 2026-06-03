@@ -26,6 +26,7 @@
  */
 
 import type { ThreadContext } from "../../../thinkable/context.js";
+import { hashArgs, diffArgs, type Intent, type IntentCache, type MethodCallSchema, type MethodArgSpec } from "../../../thinkable/context/intent.js";
 import { getWindowTypeDefinition, lookupMethod, lookupMethodEntry, isBuiltinFeatureType } from "./registry.js";
 import {
   ROOT_WINDOW_ID,
@@ -106,15 +107,27 @@ export class WindowManager {
   private windows: Map<string, ContextWindow> = new Map();
   /** knowledge path → 当前持有它的 window id 集合；用于引用计数。 */
   private knowledgeRefs: Map<string, Set<string>> = new Map();
+  /**
+   * Reference to the owning thread. Stored so sync methods (refine) can
+   * write to thread.intentCache without requiring a thread parameter.
+   * Manager is per-thread (fromThread factory), so this is safe.
+   */
+  private threadRef: ThreadContext | undefined;
 
   /** 从 thread.contextWindows 装载状态。 */
   static fromThread(thread: ThreadContext): WindowManager {
     const mgr = new WindowManager();
+    mgr.threadRef = thread;
     for (const window of thread.contextWindows ?? []) {
       mgr.windows.set(window.id, window);
       mgr.recordKnowledgeRefs(window);
     }
     return mgr;
+  }
+
+  /** Get the thread reference. */
+  private getThread(): ThreadContext | undefined {
+    return this.threadRef;
   }
 
   /** 导出为 thread.contextWindows 用的 flat 数组。 */
@@ -136,6 +149,155 @@ export class WindowManager {
   childrenOf(parentId: string): ContextWindow[] {
     return this.list().filter((w) => w.parentWindowId === parentId);
   }
+
+  // ── P4 schema + fill_state helpers ──
+
+  /**
+   * Build fill_state for a form given its schema and accumulated args.
+   * Fail-soft: validation errors are marked in fill_state but don't block refine.
+   */
+  private buildFillState(
+    schema: MethodCallSchema | undefined,
+    args: Record<string, unknown>,
+    existingFill?: CommandExecWindow["fill"],
+  ): CommandExecWindow["fill"] | undefined {
+    if (!schema) return undefined;
+    const fill: NonNullable<CommandExecWindow["fill"]> = {};
+    for (const [argName, spec] of Object.entries(schema.args)) {
+      const hasValue = argName in args && args[argName] !== undefined && args[argName] !== null && args[argName] !== "";
+      const prev = existingFill?.[argName];
+      if (!hasValue) {
+        // Missing — but check default
+        if (spec.default !== undefined) {
+          fill[argName] = {
+            status: "provided",
+            value: spec.default,
+            source: "default",
+            refinedAt: prev?.refinedAt ?? Date.now(),
+          };
+        } else {
+          fill[argName] = {
+            status: "missing",
+            source: prev?.source ?? "initial",
+            refinedAt: prev?.refinedAt,
+          };
+        }
+        continue;
+      }
+      // Has value — validate
+      const value = args[argName];
+      const error = this.validateArgValue(spec, value);
+      if (error) {
+        fill[argName] = {
+          status: "invalid",
+          value,
+          error,
+          source: prev?.source === "initial" ? "refine" : prev?.source ?? "refine",
+          refinedAt: Date.now(),
+        };
+      } else {
+        fill[argName] = {
+          status: "provided",
+          value,
+          source: prev?.source === "initial" ? "refine" : prev?.source ?? "refine",
+          refinedAt: prev?.refinedAt ?? Date.now(),
+        };
+      }
+    }
+    return fill;
+  }
+
+  private validateArgValue(spec: MethodArgSpec, value: unknown): string | undefined {
+    // Basic type check (loose — don't be too strict since accumulatedArgs comes from LLM JSON)
+    if (spec.enum && !spec.enum.includes(value as any)) {
+      return spec.validation?.customMessage ?? `值必须是: ${spec.enum.join(", ")}`;
+    }
+    if (spec.type === "string" && typeof value !== "string") {
+      return spec.validation?.customMessage ?? "需要字符串类型";
+    }
+    if (spec.type === "number" && typeof value !== "number") {
+      return spec.validation?.customMessage ?? "需要数字类型";
+    }
+    if (spec.type === "boolean" && typeof value !== "boolean") {
+      return spec.validation?.customMessage ?? "需要布尔类型";
+    }
+    if (spec.type === "array" && !Array.isArray(value)) {
+      return spec.validation?.customMessage ?? "需要数组类型";
+    }
+    if (spec.type === "object" && (typeof value !== "object" || value === null || Array.isArray(value))) {
+      return spec.validation?.customMessage ?? "需要对象类型";
+    }
+    // Validation rules
+    const v = spec.validation;
+    if (v && typeof value === "string") {
+      if (v.minLength !== undefined && value.length < v.minLength) {
+        return v.customMessage ?? `至少 ${v.minLength} 个字符`;
+      }
+      if (v.maxLength !== undefined && value.length > v.maxLength) {
+        return v.customMessage ?? `最多 ${v.maxLength} 个字符`;
+      }
+      if (v.pattern) {
+        try {
+          if (!new RegExp(v.pattern).test(value)) {
+            return v.customMessage ?? `格式不匹配: ${v.pattern}`;
+          }
+        } catch {
+          // Invalid regex — skip
+        }
+      }
+    }
+    if (v && typeof value === "number") {
+      if (v.minimum !== undefined && value < v.minimum) {
+        return v.customMessage ?? `不能小于 ${v.minimum}`;
+      }
+      if (v.maximum !== undefined && value > v.maximum) {
+        return v.customMessage ?? `不能大于 ${v.maximum}`;
+      }
+    }
+    return undefined;
+  }
+
+  // ── P5: status change dispatch helper ──
+
+  /**
+   * Fire onFormChange({ kind: "status_changed" }) and update intentCache status.
+   * Called by submit() at each lifecycle transition.
+   */
+  private fireStatusChanged(
+    fromForm: CommandExecWindow,
+    toForm: CommandExecWindow,
+    thread: ThreadContext,
+    parent: ContextWindow,
+    methodEntry: ObjectMethod,
+  ): void {
+    const cache: IntentCache | undefined = (thread as any).intentCache;
+    let intents: Intent[] = [{ name: toForm.command }];
+    if (cache) {
+      const existing = cache.get(toForm.id);
+      if (existing?.intents) intents = existing.intents;
+      cache.set(toForm.id, {
+        argsHash: existing?.argsHash ?? hashArgs(toForm.accumulatedArgs),
+        status: toForm.status,
+        intents,
+      });
+    }
+    if (methodEntry.onFormChange) {
+      const guidance = methodEntry.onFormChange(
+        { kind: "status_changed", from: fromForm.status, to: toForm.status },
+        { form: toForm, intents },
+      );
+      if (guidance && guidance.length > 0 && thread.contextWindows) {
+        thread.contextWindows.push(...guidance);
+        for (const gw of guidance) {
+          this.windows.set(gw.id, gw);
+        }
+      }
+    }
+  }
+
+  // ── End P5 helpers ──
+
+  // ── End P4 helpers ──
 
   /**
    * 在 parent_window_id 下打开一个 command_exec sub-window。
@@ -213,6 +375,26 @@ export class WindowManager {
     // 2026-05-28 ooc-6 Phase 5: 双写到 context/ 目录
     this.writeContextObjectForWindow(opts.thread, form).catch(() => {});
 
+    // ── P4 schema/fill + P5 intentCache write ──
+    const methodResolved = lookupMethodEntry(parent, opts.command);
+    if (methodResolved?.entry.schema) {
+      form.schema = methodResolved.entry.schema;
+      form.fill = this.buildFillState(form.schema, form.accumulatedArgs);
+    }
+    // Write initial intent cache entry
+    {
+      const cache: IntentCache = ((opts.thread as any).intentCache ??= new Map());
+      const defaultIntent: Intent = { name: opts.command };
+      const extraIntents = methodResolved?.entry.intent?.(form.accumulatedArgs) ?? [];
+      const intents = [defaultIntent, ...extraIntents];
+      cache.set(formId, {
+        argsHash: hashArgs(form.accumulatedArgs),
+        status: form.status,
+        intents,
+      });
+    }
+    // ── End P4/P5 write ──
+
     // auto-submit 判定：
     // - args 非空（无 args 等价于 LLM 想观察 form 状态再决定，不应直接提交）—— 但
     //   parent 是 command_exec 时除外（refine/submit 是 atomic 命令，无需观察）
@@ -268,6 +450,9 @@ export class WindowManager {
    * - failed: 累积 args + 清旧 result + 状态切回 open（"复活"路径，新增）
    *
    * executing / success / 其它状态返回 false（success 已被自动移除, 理论不会触发）。
+   *
+   * P4/P5: also recomputes fill_state, updates intentCache, dispatches onFormChange,
+   * and unloads stale derived windows bound to this form.
    */
   refine(formId: string, args: Record<string, unknown>): boolean {
     const form = this.windows.get(formId);
@@ -276,7 +461,15 @@ export class WindowManager {
     const parent = this.requireParent(form.parentWindowId);
     const entry = lookupCommandEntry(parent, form.command);
     if (!entry) return false;
+
+    // Diff args first — no actual change means no cache invalidation
+    const prevArgs = { ...form.accumulatedArgs };
     const nextArgs = { ...form.accumulatedArgs, ...args };
+    const { added, removed, changed } = diffArgs(prevArgs, nextArgs);
+    if (added.length === 0 && removed.length === 0 && changed.length === 0) {
+      return true;
+    }
+
     const nextPaths = computeCommandPaths(entry, form.command, nextArgs);
     // failed → open 复活: 清 result, 把 status 切回 "open"。
     // open → open: 仅累积 args / 重算 paths。
@@ -287,7 +480,80 @@ export class WindowManager {
       accumulatedArgs: nextArgs,
       commandPaths: nextPaths,
     };
+
+    // ── P4: recompute fill_state ──
+    if (form.schema) {
+      next.fill = this.buildFillState(form.schema, nextArgs, form.fill);
+      next.schema = form.schema;
+    }
+
     this.windows.set(formId, next);
+
+    // ── P5: intentCache update + onFormChange dispatch ──
+    const threadRef = this.getThread();
+    const methodResolved = lookupMethodEntry(parent, form.command);
+    if (methodResolved && threadRef) {
+      const cache: IntentCache = ((threadRef as any).intentCache ??= new Map());
+      const oldEntry = cache.get(form.id);
+      const newArgsHash = hashArgs(nextArgs);
+      const defaultIntent: Intent = { name: form.command };
+      const newIntents = [defaultIntent, ...(methodResolved.entry.intent?.(nextArgs) ?? [])];
+      const intentsChanged =
+        JSON.stringify(oldEntry?.intents ?? []) !== JSON.stringify(newIntents);
+
+      // Fire onFormChange
+      const guidanceWindows: ContextWindow[] = [];
+      if (methodResolved.entry.onFormChange) {
+        guidanceWindows.push(
+          ...(methodResolved.entry.onFormChange(
+            { kind: "args_refined", added, removed, changed, args: nextArgs },
+            { form: next, intents: newIntents },
+          ) ?? []),
+        );
+        if (intentsChanged) {
+          guidanceWindows.push(
+            ...(methodResolved.entry.onFormChange(
+              { kind: "intent_changed", from: oldEntry?.intents ?? [], to: newIntents },
+              { form: next, intents: newIntents },
+            ) ?? []),
+          );
+        }
+      }
+
+      // Unload stale derived windows bound to this form
+      const oldIntentNames = new Set((oldEntry?.intents ?? []).map((i) => i.name));
+      const newIntentNames = new Set(newIntents.map((i) => i.name));
+      if (threadRef.contextWindows) {
+        threadRef.contextWindows = threadRef.contextWindows.filter((w) => {
+          if (w.boundFormId !== form.id) return true;
+          if (w.provenance?.kind === "explicit") return true;
+          const sourceIntent = w.provenance?.reason?.sourceId;
+          if (!sourceIntent) return true;
+          return newIntentNames.has(sourceIntent);
+        });
+        // Sync manager windows from thread
+        for (const [id, w] of this.windows) {
+          if (w.boundFormId === form.id && !threadRef.contextWindows.find((tw) => tw.id === id)) {
+            this.windows.delete(id);
+          }
+        }
+        // Add new guidance windows
+        if (guidanceWindows.length > 0) {
+          threadRef.contextWindows.push(...guidanceWindows);
+          for (const gw of guidanceWindows) {
+            this.windows.set(gw.id, gw);
+          }
+        }
+      }
+
+      cache.set(form.id, {
+        argsHash: newArgsHash,
+        status: next.status,
+        intents: newIntents,
+      });
+    }
+    // ── End P5 ──
+
     return true;
   }
 
@@ -328,6 +594,9 @@ export class WindowManager {
 
     const executing: CommandExecWindow = { ...form, status: "executing" };
     this.windows.set(formId, executing);
+
+    // P5: fire status_changed (open → executing) + update intentCache
+    this.fireStatusChanged(form, executing, thread, parent, entry);
 
     let result: string | undefined;
     let isError = false;
@@ -391,12 +660,21 @@ export class WindowManager {
 
     if (!isError) {
       // 成功：自动从 contextWindows 移除（spec § submit）
+      // P5: fire status_changed (executing → success) + update intentCache
+      const successForm: CommandExecWindow = { ...executing, status: "success" };
+      this.fireStatusChanged(executing, successForm, thread, parent, entry);
+      // Also remove the intentCache entry since form is gone
+      const cache: IntentCache | undefined = (thread as any).intentCache;
+      cache?.delete(formId);
+
       this.removeWindow(formId, thread);
       return result;
     }
 
     // 失败：保留 failed + result；LLM 可 refine 修正后重 submit（首选）, 或 close 放弃
     const failed: CommandExecWindow = { ...executing, status: "failed", result };
+    // P5: fire status_changed (executing → failed) + update intentCache
+    this.fireStatusChanged(executing, failed, thread, parent, entry);
     this.windows.set(formId, failed);
     return result;
   }

@@ -326,7 +326,16 @@ export function filterMethodsByVisibility(
   return filtered;
 }
 
-/** module-level 默认实例——所有原 registry.ts 导出的 wrapper 函数委托给它。 */
+/**
+ * @deprecated New code should use the per-world `WorldRuntime.objects` registry or
+ *   create a standalone instance via `createObjectRegistry()`. The module-level
+ *   singleton does NOT receive stone type registrations from ObjectTypeRegistrar
+ *   (which operates on the per-world instance), so relying on it in multi-world
+ *   or stone-backed scenarios will miss custom object types.
+ *
+ * Kept for one release for backward compatibility with callers that import the
+ * standalone registry wrappers from executable/windows/_shared/registry.ts.
+ */
 export const defaultObjectRegistry = new ObjectRegistry();
 
 export function createObjectRegistry(): ObjectRegistry {

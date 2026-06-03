@@ -14,7 +14,8 @@
  */
 
 import type { ThreadContext } from "../../../thinkable/context";
-import type { CommandExecWindow, OOCObject, ContextObject } from "./types";
+import type { Intent, FormChangeEvent, MethodCallSchema } from "../../../thinkable/context/intent.js";
+import type { CommandExecWindow, OOCObject, ContextObject, ContextWindow } from "./types";
 import type { WindowManager } from "./manager";
 import type { FlowObjectRef, ThreadPersistenceRef } from "../../../persistable/common";
 
@@ -86,13 +87,35 @@ export interface ObjectMethod {
    * - 总是包含 bare method 名（如 "talk"）
    * - 各维度（wait、context、type 等）独立决定是否追加对应 path
    * - match 抛异常时退化为只返回 bare path
+   *
+   * @deprecated Use intent() instead for sub-intent disambiguation.
    */
   match: (args: Record<string, unknown>) => string[];
-  /** 基于当前参数与 form 生命周期状态派生 method 知识。 */
+  /**
+   * 基于当前参数与 form 生命周期状态派生 method 知识。
+   * @deprecated Use onFormChange() instead for form-bound guidance.
+   */
   knowledge?: (
     args: Record<string, unknown>,
     formStatus: CommandExecWindow["status"]
   ) => MethodKnowledgeEntries;
+  /**
+   * From args, infer sub-intents beyond the method name itself (e.g. program.shell).
+   * Return [] if the method has no sub-intent disambiguation.
+   * Successor to the semantic-disambiguation role of the deprecated match().
+   */
+  intent?(args: Record<string, unknown>): Intent[];
+  /**
+   * Called when the form meaningfully changes: args refined, status transitioned, or intent set changed.
+   * Returns ContextWindows rendered as <guidance> children of the form.
+   * Successor to the deprecated knowledge().
+   */
+  onFormChange?(
+    change: FormChangeEvent,
+    ctx: { form: import("../method_exec/types.js").MethodExecWindow; intents: Intent[] },
+  ): ContextWindow[];
+  /** Optional parameter schema for structured rendering and fail-soft validation. */
+  schema?: MethodCallSchema;
   /**
    * 执行该 method 的入口；WindowManager.submit 在 form 状态切到 executing 后调用。
    *

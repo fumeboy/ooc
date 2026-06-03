@@ -10,7 +10,7 @@ import React from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { json as jsonLanguage } from "@codemirror/lang-json";
 import { parseEditArgs, FileEditDiffView } from "./FileEditDiffView";
-import { formatJson, statusToTone } from "@ooc/builtins/_shared/visible/utils";
+import { formatJson, previewText, statusToTone } from "@ooc/builtins/_shared/visible/utils";
 
 export default function MethodExecWindowDetail({ window }: { window: CommandExecWindow }) {
   return (
@@ -33,6 +33,73 @@ export default function MethodExecWindowDetail({ window }: { window: CommandExec
           </div>
         )}
       </div>
+      {window.schema && window.fill && (
+        <div className="llm-input-schema">
+          <div className="llm-input-schema-title">Parameters</div>
+          <table className="llm-input-schema-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Status</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(window.schema.args).map(([name, spec]) => {
+                const fill = window.fill?.[name];
+                const statusClass = fill?.status === "invalid"
+                  ? "is-error"
+                  : fill?.status === "provided"
+                    ? "is-success"
+                    : "is-warning";
+                return (
+                  <tr key={name} className={`llm-input-schema-row ${statusClass}`}>
+                    <td className="llm-input-schema-name">
+                      <code>{name}</code>
+                    </td>
+                    <td className="llm-input-schema-type">{spec.type}</td>
+                    <td className="llm-input-schema-required">
+                      {spec.required ? "yes" : "no"}
+                    </td>
+                    <td className="llm-input-schema-status">{fill?.status ?? "missing"}</td>
+                    <td className="llm-input-schema-value">
+                      {fill?.error ? (
+                        <span className="llm-input-error">{fill.error}</span>
+                      ) : fill?.value !== undefined ? (
+                        <code>{previewText(String(fill.value), 60)}</code>
+                      ) : spec.description ? (
+                        <span className="llm-input-muted">{spec.description}</span>
+                      ) : (
+                        <span className="llm-input-muted">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {(() => {
+            const missing = Object.entries(window.schema.args)
+              .filter(([name, spec]) => spec.required && window.fill?.[name]?.status !== "provided")
+              .map(([name]) => name);
+            if (missing.length === 0) return null;
+            return (
+              <div className="llm-input-next-steps">
+                <strong>Next steps:</strong>
+                <ol>
+                  {missing.map((name, i) => (
+                    <li key={name}>
+                      Provide <code>{name}</code> parameter (priority {i + 1})
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            );
+          })()}
+        </div>
+      )}
       {(() => {
         const args = window.accumulatedArgs ?? {};
         const isEdit = window.command === "edit";

@@ -4,6 +4,23 @@ import type { ContextWindow } from "../../executable/windows/_shared/types";
 import type { ThreadPersistenceRef } from "../../persistable/common";
 import { deriveStoneFromThread, objectDir, readSelf, stoneDir, threadDir } from "../../persistable";
 import { renderContextXml } from "./render";
+import type { IntentCache } from "./intent.js";
+
+export type {
+  Intent,
+  FormChangeEvent,
+  MethodCallSchema,
+  MethodArgSpec,
+  IntentCache,
+  IntentCacheEntry,
+} from "./intent.js";
+export { hashArgs, diffArgs } from "./intent.js";
+
+export { BudgetManager } from "./budget.js";
+export type { ContextSnapshot } from "./snapshot.js";
+export { XmlRenderer, renderSnapshotToXml } from "./renderers/xml.js";
+export { JsonRenderer } from "./renderers/json.js";
+export { TraceRenderer } from "./renderers/trace.js";
 
 /**
  * ProcessEvent 共享的可选字段;所有 variants 都可承载它们。
@@ -398,6 +415,12 @@ export type ThreadContext = {
    * 见 docs/superpowers/specs/2026-05-17-wait-requires-dependency-design.md。
    */
   waitingOn?: string;
+  /**
+   * P5: Intent cache keyed by formId. Populated by WindowManager write path
+   * (openCommandExec / refine / submit) and read by ContextPipeline processors.
+   * Stored on ThreadContext as a runtime-only field; not persisted to disk.
+   */
+  intentCache?: IntentCache;
   /** 当前线程的持久化位置；缺失时系统只以内存模式运行。 */
   persistence?: ThreadPersistenceRef;
 };
@@ -640,6 +663,7 @@ export async function buildContext(thread: ThreadContext): Promise<LlmMessage[]>
 export async function buildInputItems(
   thread: ThreadContext
 ): Promise<{ instructions?: string; input: LlmInputItem[] }> {
+  // TODO(P5): migrate collectExecutableKnowledgeEntries call to ContextPipeline
   const executableState = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
   const content = await renderContextXml({
     thread,

@@ -25,6 +25,10 @@ import {
   type StoneRegistry,
 } from "./stone-registry.js";
 import { startHotReloadWatcher, type HotReloadWatcher } from "./hot-reload.js";
+import {
+  createObjectTypeRegistrar,
+  ObjectTypeRegistrar,
+} from "./object-type-registrar.js";
 
 export interface WorldRuntimeConfig {
   /** 绝对路径的 World 根目录。 */
@@ -40,6 +44,8 @@ export interface WorldRuntime {
   readonly serialQueue: SerialQueue;
   readonly serverLoader: ServerLoader;
   readonly stoneRegistry: StoneRegistry;
+  /** Resolves when the startup object-type registration pass is done. */
+  readonly typeRegistration: Promise<void>;
 
   dispose(): Promise<void>;
 }
@@ -64,9 +70,19 @@ export function createWorldRuntime(config: WorldRuntimeConfig): WorldRuntime {
   const serialQueue = createSerialQueue();
   const serverLoader = createServerLoader();
   const stoneRegistry = createStoneRegistry(config.worldPath, { autoDiscover: true });
+  const registrar = createObjectTypeRegistrar({
+    worldPath: config.worldPath,
+    registry: objects,
+    loader: serverLoader,
+    stones: stoneRegistry,
+  });
+  // P1: kick off background registration of stone-backed types.
+  // Callers who want to block can await runtime.typeRegistration.
+  const typeRegistration = registrar.start();
 
   let hotReload: HotReloadWatcher | null = null;
   let unsubRegistry: (() => void) | null = null;
+  let unsubRegistrarHotReload: (() => void) | null = null;
 
   if (config.dev) {
     // 文件变更 → executable/readable loader 缓存失效
@@ -76,6 +92,8 @@ export function createWorldRuntime(config: WorldRuntimeConfig): WorldRuntime {
           baseDir: config.worldPath,
           objectId: ev.objectId,
         });
+        // Hot-reload: re-register the changed stone's type definition
+        void registrar.registerStone(ev.objectId);
       }
     });
     hotReload = startHotReloadWatcher(config.worldPath, stoneRegistry);
@@ -88,6 +106,7 @@ export function createWorldRuntime(config: WorldRuntimeConfig): WorldRuntime {
     serialQueue,
     serverLoader,
     stoneRegistry,
+    typeRegistration,
     async dispose() {
       if (hotReload) {
         hotReload.stop();
@@ -96,6 +115,10 @@ export function createWorldRuntime(config: WorldRuntimeConfig): WorldRuntime {
       if (unsubRegistry) {
         unsubRegistry();
         unsubRegistry = null;
+      }
+      if (unsubRegistrarHotReload) {
+        unsubRegistrarHotReload();
+        unsubRegistrarHotReload = null;
       }
       serverLoader.clearCache();
       serialQueue.reset();

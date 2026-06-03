@@ -38,8 +38,9 @@ export function threadFile(ref: ThreadPersistenceRef): string {
  *   (issue 看板已整体移除)。
  */
 function stripVolatileForPersist(thread: ThreadContext): ThreadContext {
+  const { intentCache: _dropIntentCache, ...threadRest } = thread;
   return {
-    ...thread,
+    ...threadRest,
     contextWindows: thread.contextWindows.map((window) => {
       let next = window;
       if (!next.compressLevel) {
