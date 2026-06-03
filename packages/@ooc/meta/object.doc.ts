@@ -107,6 +107,7 @@ export const root: DocTreeNode = {
         "programmable": "OOC Agent 由几个维度组合，programmable 是其中之一，定义 Agent 持有/演化自身函数方法库的能力",
         "visible": "OOC Agent 由几个维度组合，visible 是其中之一，定义 Agent 持有/演化自身 UI 页面的能力",
         "persistable": "OOC Agent 由几个维度组合，persistable 是其中之一，定义 Agent 的持久化存储能力",
+        "readable": "OOC 第 9 个概念维度（自我塑造第四件）：Object 控制自己在 Context 中如何以 XML 形式展示给其他 Agent / LLM；实现为 readable.md（静态）或 readable.ts（动态渲染函数）。当前作为 root patches.readable_concept 记录，未单独列为 children。",
         "extendable": "非能力维度的外接集成层：把外部世界（飞书 / notion / slack 等）按统一模板接入为可调用的 Window 与 command；实现见 packages/@ooc/core/extendable/",
         "stone": "OOC 持久层之一（静）：长期身份与设计源码（含 seed knowledge），进 git review",
         "pool": "OOC 持久层之一（积）：跨 session 累积的事实数据（含 sediment knowledge），不进 git",
@@ -115,7 +116,7 @@ export const root: DocTreeNode = {
         "sediment knowledge": "Agent 运行时由 reflectable / collaborable 沉淀的知识（pools/<id>/knowledge/memory + relations）；写就生效，不进 git",
         "self-constitutive": "维度判定轴: 一个能力是否构成 Agent 的「自我」；是则为维度，否则为外接层/协议（详见 patches.dimension_criterion）",
         "运行时底座": "thinkable/executable/collaborable/observable/persistable，Agent 存在与运作的基础五维",
-        "自我塑造三件套": "reflectable/programmable/visible，Agent 改写自己知识/方法/界面的三维",
+        "自我塑造四件套": "reflectable/programmable/visible/readable，Agent 改写自己知识/方法/界面/对外展示的四维",
         "agent-native parity": "横切公理: 用户能做的事 agent 也能做；每维度都有人类面/agent 面两个消费方（详见 patches.agent_native_parity）",
         "对象关系三轴": "自我(super) / peer 平等(talk) / parent-child 层级，三种不同权力语义的关系（详见 patches.object_relations）",
         "Supervisor": "world 级最顶层 parent object；harness 的 1 Supervisor + N Agent 即 object 树的一个实例，Supervisor 是 root parent",
@@ -306,6 +307,43 @@ export const root: DocTreeNode = {
                             因此 Context 不是一段字符串，而是一组可被打开、关闭、更新、执行 method 的 Object 集合。
                             ContextObject 的完整行动语义归属于 executable。
                             `,
+                        },
+                    },
+                    patches: {
+                        "xml_null_safety": {
+                            title: "XML 渲染边界的空值安全契约",
+                            content: `
+                            Context 渲染输出 XML 文本给 LLM（thinkable.context → xml.ts 系列 helper）。
+                            这条链路的数据来源（磁盘 thread.json、跨 Agent 消息、用户输入）不受 TS 编译期保护，
+                            经常出现类型标注为 \`string\` 但实际值为 \`null/undefined\` 的情况。
+
+                            **契约（2026-06-03 起强制执行）**:
+                            所有在 XML 渲染边界被调用的字符串 helper 必须接受 \`string | undefined | null\`：
+                            - \`escapeXml(text)\` — 转义 XML 特殊字符。
+                            - \`wrapCdata(text)\` — 包 CDATA。
+                            - \`shouldUseCdata(text)\` — 判断是否需要 CDATA。
+                            - \`renderXmlTextValue(text)\` — CDATA 与 escape 二选一。
+                            - \`escapeXmlComment(text)\` — 注释转义。
+                            - \`xmlText(value)\` — 构造 text 节点。
+                            - \`xmlComment(value)\` — 构造 comment 节点。
+
+                            \`null/undefined\` 一律转 \`""\`（空字符串），绝不抛异常。
+
+                            **为什么这是最后一道防线而非唯一防线**:
+                            - 上游应做 normalize（例如 ThreadMessage 正文走 \`content ?? text ?? ""\`，详见 collaborable.messages.patches.field_alias_compat）。
+                            - 但上游 normalize 可能漏、可能是旧数据、可能有新的脏数据路径。
+                            - 渲染层崩溃（典型报错 \`undefined is not an object (evaluating 'text.replaceAll')\`）会让整个 thread 直接进入 failed 状态，代价极高。
+                            - 空串兜底虽然内容丢了，但线程仍能运行、UI 仍能展示、问题能被观察到。
+
+                            **与工程规约的关系**:
+                            这是 engineering.harness.doc.ts 中 "data_type_boundary_contract" 在 thinkable 渲染层的具体落地。
+                            `,
+                            named: {
+                                "xml helper null-safety": "渲染边界所有字符串处理函数必须接受 undefined/null，兜底为空串",
+                                "最后一道防线": "渲染层崩溃代价极高，空串兜底优于 crash",
+                                "text.replaceAll crash": "典型报错 — xmlText(undefined).value 为 undefined，下游 .replaceAll 崩溃",
+                            },
+                            sources: [["packages/@ooc/core/thinkable/context/xml.ts", "escapeXml / wrapCdata / shouldUseCdata / renderXmlTextValue / escapeXmlComment / xmlText / xmlComment 全部接受 string | null | undefined；上游 normalize 见 render.ts:messageBody()"]],
                         },
                     },
                 },
@@ -1762,6 +1800,45 @@ export const root: DocTreeNode = {
                         "replyToWindowId": "消息回复到的窗口 id（收件方视角）",
                         "inbox_message_arrived": "context_change 类的 ProcessEvent，告诉 LLM 新消息到达",
                     },
+                    patches: {
+                        "field_alias_compat": {
+                            title: "字段别名与数据边界契约（canonical vs legacy）",
+                            content: `
+                            ThreadMessage 在 TS 类型中标注了 canonical 字段，但磁盘 JSON / 手动 seed / 跨 Agent 消息
+                            都可能携带 legacy 别名。所有数据读取边界必须做运行时兼容。
+
+                            **Canonical 字段（写路径永远只用它）**:
+                            - \`content: string\` — 消息正文。
+                            - \`createdAt: number\` — 毫秒时间戳（不是 ISO 字符串）。
+                            - \`fromObjectId\` / \`toObjectId\` — 发送方 / 接收方 Object。
+                            - \`source\` — "do" / "talk" / "user" / "system"。
+                            - \`windowId\` — 归属 talk_window 的 id（formatter 用它映射到 target）。
+
+                            **Legacy 别名（只读兼容，写路径禁止使用）**:
+                            - \`text\` → \`content\` 的别名（旧 seed / 手动构造）。
+                            - \`targetObjectId\` → \`toObjectId\` 的别名（旧 talk-delivery 路径）。
+                            - \`createdAt\` 为 ISO string → 读取时应用端自行 Number() / Date.parse()。
+
+                            **Reader 契约（所有读边界必须遵守）**:
+                            - 正文: \`body = msg.content ?? msg.text ?? ""\`（见 render.ts:messageBody、formatter.ts）。
+                            - 目标对象: formatter 先查 \`talkWindowTargets[msg.windowId]\`，fallback 到 \`msg.targetObjectId ?? msg.toObjectId\`。
+                            - 时间: \`msg.createdAt ?? 0\`，若为 string 走 Date.parse()。
+
+                            **Writer 契约（seed/demo/test 强制执行）**:
+                            所有新写入（\`_seed_visible_demo.ts\` 等脚本、新 test fixture）只用 canonical 字段。
+                            Legacy 别名仅为兼容存量数据，不允许新代码产出。
+
+                            原则: TS 类型 ≠ 运行时真实数据；系统边界（磁盘读 / HTTP body / 跨 Agent 消息）必须做运行时归一化，
+                            不能信任类型标注。（详见 engineering.harness.doc.ts patches.data_type_boundary_contract）
+                            `,
+                            named: {
+                                "canonical 字段": "ThreadMessage 的权威字段名，写路径只能使用它",
+                                "legacy 别名": "text / targetObjectId / ISO string createdAt，仅读取兼容",
+                                "系统边界归一化": "磁盘读/HTTP/跨Agent消息等 TS 类型失效处，必须运行时兼容",
+                            },
+                            sources: [["packages/@ooc/core/thinkable/context/render.ts:messageBody + packages/@ooc/web/src/domains/chat/formatter.ts + packages/@ooc/meta/storybook/_seed_visible_demo.ts", "读取兼容: content ?? text；写出: 仅 canonical 字段。工程级规约见 engineering.harness.doc.ts patches.data_type_boundary_contract"]],
+                        },
+                    },
                 },
                 "do_vs_talk": {
                     title: "do vs talk - 同 object fork vs 跨 object 会话",
@@ -2727,6 +2804,14 @@ export const root: DocTreeNode = {
                     自动注入 branch 与 \`objects/\`）；只有 metaprog 协议 / scope 判定 /
                     bootstrap migration 等系统层显式知道 \`objects/\` 这一层。
 
+                    **关于 flat layout（2026-05-28 ooc-6, canonical）**:
+                    除了 versioning layout \`stones/<branch>/objects/<id>/\`，还存在更简单的
+                    **flat layout** \`stones/<objectId>/\` —— 没有 branch / objects 中间层。
+                    这是新的 canonical 形态：普通用户在 world 根下直接放 \`stones/supervisor/\`、
+                    \`stones/researcher/\` 等即可，不需要理解 git worktree。
+                    flat layout 由 StoneRegistry 以**最高优先级**解析（详见 stone.children.stone_registry）；
+                    versioning layout 保留给 metaprog / stone-versioning 的 git 工作流。
+
                     **关于 pools/ 不挂 branch**: 与 stones/ 的 \`<branch>/\` 中间层不同，pools/ 直接挂 \`objects/\`。
                     事实是单向积累的，不应跟着 metaprog branch 切来切去（详见 pool.no_branch patch）。
 
@@ -2737,6 +2822,38 @@ export const root: DocTreeNode = {
                     named: {
                         ".stone.json / .flow.json / .session.json / .pool.json": "四类元数据文件，标记目录类型与归属",
                         "objectDir / threadDir / stoneDir / sessionDir / poolDir": "路径计算函数，避免散落拼接",
+                        "flat layout": "stones/<id>/ 的扁平目录结构，ooc-6 canonical 形态",
+                        "versioning layout": "stones/<branch>/objects/<id>/ 的 git worktree 结构，metaprog 使用",
+                    },
+                    patches: {
+                        "stone_path_resolution": {
+                            title: "stone 路径解析与向后兼容",
+                            content: `
+                            stone 文件读写涉及三层路径兼容（2026-05-28 ooc-6 迁移结束后冻结）:
+
+                            **目录 fallback（resolveStoneDir 3-path）**:
+                            查找某个 objectId 的 stone 根目录时，优先级:
+                            1. flat layout: \`stones/<id>/\`
+                            2. versioning layout: \`stones/<branch>/objects/<id>/\`
+                            3. deprecated \`packages/<id>/\`（仅 fallback，命中时 console.warn）
+
+                            **文件 reader fallback（每个维度独立）**:
+                            - readable: \`readable.ts\` → \`readable.md\` → \`readme.md\`（deprecated）
+                            - executable: \`executable/index.ts\` → \`server/index.ts\`（deprecated）
+                            - visible: \`visible/index.tsx\` → \`client/index.tsx\`（deprecated）
+
+                            **Writer contract（迁移已结束，2026-05-28 起）**:
+                            所有 writer（writeReadable / writeExecutableSource / writeVisibleSource / createStoneObject）
+                            **只写 canonical 路径**（readable.md、executable/index.ts、visible/index.tsx）。
+                            不再双写 legacy 路径；reader fallback 只用于读取存量旧数据。
+                            `,
+                            named: {
+                                "3-path fallback": "resolveStoneDir 的三级目录查找顺序",
+                                "reader fallback chain": "每个维度读文件时的 canonical → legacy 降级链",
+                                "只写 canonical": "writer 不再双写 legacy 路径的硬性约定",
+                            },
+                            sources: [["packages/@ooc/core/persistable/stone-object.ts + stone-readme.ts + stone-server.ts + stone-client.ts", "resolveStoneDir 与各维度 reader/writer 的 fallback 链；createStoneObject 见 stone-object.ts:createStoneObject（仅写 readable.md，不再双写 readme.md）"]],
+                        },
                     },
                 },
                 "stone": {
@@ -2831,6 +2948,42 @@ export const root: DocTreeNode = {
                             todo: [
                                 "eval gate 协议：seed 改动 PR 时如何挂能力评估？（未拍板）",
                             ],
+                        },
+                        "stone_registry": {
+                            title: "stone_registry - stone 发现与优先级",
+                            content: `
+                            StoneRegistry（packages/@ooc/core/persistable/stone-registry.ts）是 OOC world 中所有 stone Object 的权威发现机制。
+
+                            **扫描范围（三类来源）**:
+                            - flat layout: \`stones/<objectId>/\` 下的 \`package.json\` （\`ooc.objectId\` 字段）。
+                            - versioning layout: \`stones/<branch>/objects/<objectId>/\` 下的 \`package.json\`。
+                            - builtins: \`node_modules/@ooc/builtins/<objectId>/\` （通过 node_modules resolution）。
+
+                            **优先级（first-seen wins）**:
+                            1. flat layout (\`stones/<id>/\`) — canonical，用户本地覆盖优先。
+                            2. versioning layout (\`stones/<branch>/objects/<id>/\`) — metaprog 分支产物。
+                            3. deprecated \`packages/<id>/\` — 旧命名，仅 fallback，有 console.warn。
+                            4. builtins (\`@ooc/builtins/<id>/\`) — 平台默认对象。
+
+                            这意味着用户可以在自己的 \`stones/supervisor/\` 下覆盖内置 supervisor，实现本地定制。
+
+                            **关键 API**:
+                            - \`rescan(worldBase)\`: 从头扫描三类来源，重写内部注册表。
+                            - \`invalidate(objectId, files?)\`: 单 object 失效（由 hot-reload watcher 触发）。
+                            - \`listStones()\`: 返回当前已知的所有 stone id + meta。
+                            - \`resolveStoneDir(objectId)\`: 按优先级返回该 objectId 的实际磁盘路径。
+
+                            与 hot-reload 的集成：\`HotReloadWatcher\` 检测到 stone 文件变更时调 \`stoneRegistry.invalidate()\`，
+                            WorldRuntime 订阅 \`stone:changed\` 事件同步失效 ServerLoader 缓存（详见 programmable.loader.patches.watcher_driven_invalidation）。
+                            `,
+                            named: {
+                                "StoneRegistry": "OOC world 的 stone Object 权威发现与缓存机制",
+                                "flat layout": "stones/<id>/ 的扁平目录结构，canonical 且优先级最高",
+                                "versioning layout": "stones/<branch>/objects/<id>/ 的 git worktree 结构，metaprog 使用",
+                                "resolveStoneDir": "按优先级查 stone 实际磁盘路径的函数",
+                                "用户覆盖 builtin": "用户在 stones/<id>/ 下放置与内置同名 object，本地优先",
+                            },
+                            sources: [["packages/@ooc/core/persistable/stone-registry.ts + packages/@ooc/core/persistable/stone-object.ts:resolveStoneDir", "StoneRegistry 实现与 resolveStoneDir 3-path fallback；hot-reload 集成见 packages/@ooc/core/runtime/hot-reload.ts:parseStoneChange + WorldRuntime.ts"]],
                         },
                     },
                     todo: [
@@ -3593,6 +3746,42 @@ export const root: DocTreeNode = {
                             目前实现没有额外的 etag / hash 保护；如果遇到这种问题，可以在 writeServerSource 后 sleep 1ms 兜底。
                             `,
                         },
+                        "watcher_driven_invalidation": {
+                            title: "Watcher 驱动的主动失效（hot-reload tier 1）",
+                            content: `
+                            lazy mtime 检查只在"下次 import"时生效——如果文件在两次 import 之间变了多次，
+                            中间版本都会被跳过且缓存条目不更新。tier 1 hot-reload 引入主动失效:
+
+                            **链路**:
+                            1. \`HotReloadWatcher\` 递归 \`fs.watch\` \`stones/\`（含 flat + versioning 两种 layout），50ms debounce。
+                            2. \`parseStoneChange(path)\` 把文件路径解析成 \`{ objectId, kind }\`（kind = executable / visible / knowledge / identity / etc.）。
+                            3. 对 world event bus emit \`stone:changed\`，payload 携带 objectId + 变更文件列表。
+                            4. WorldRuntime 订阅该事件:
+                               - 调 \`stoneRegistry.invalidate(objectId, files)\` 清 stone 元数据缓存。
+                               - 调 \`clearServerLoaderCache(objectId)\` 清 executable import 缓存。
+                            5. 下一次 \`loadObjectWindow()\` 走 \`?t=<newMtime>\` 重新 import。
+
+                            **为什么不直接 reimport 而是清缓存等下次懒加载**：
+                            - executable/index.ts 可能有 syntax error——在 watcher callback 里直接 import 会抛异常且难以定位。
+                            - 清缓存 + 下次懒加载把失败留给真正的消费者，错误栈更准确。
+
+                            这是 3-tier 架构的第 1 层（实现）:
+                            - Tier 1（done）: fs watch → registry + loader cache invalidation。
+                            - Tier 2（TODO）: 增量 knowledge re-synthesis，不重扫全部 knowledge。
+                            - Tier 3（TODO）: visible HMR，浏览器端不刷新即可看到 UI 变更。
+                            `,
+                            named: {
+                                "HotReloadWatcher": "递归 fs.watch stones/ 的 watcher，50ms debounce",
+                                "parseStoneChange": "把文件路径解析为 {objectId, kind} 的函数，支持 flat + versioning layout",
+                                "stone:changed event": "stone 文件变更事件，WorldRuntime 订阅以驱动缓存失效",
+                                "3-tier hot-reload": "tier 1 实现 + tier 2/3 TODO 的三层 hot-reload 架构",
+                            },
+                            sources: [["packages/@ooc/core/runtime/hot-reload.ts + WorldRuntime.ts", "HotReloadWatcher 实现与 WorldRuntime 的 stone:changed 订阅；ServerLoader 缓存见 packages/@ooc/core/executable/server/loader.ts"]],
+                            todo: [
+                                "Tier 2: knowledge 增量 re-synthesis（当前变一条 knowledge 会重扫全部 index）",
+                                "Tier 3: visible HMR（浏览器端热更新 .tsx，不需要 F5）",
+                            ],
+                        },
                     },
                 },
                 "program_self_injection": {
@@ -4354,6 +4543,85 @@ export const root: DocTreeNode = {
                     },
                     sources: [["src/persistable/stone-self.ts", "self.md 的读写接口；displayName 派生只需 readSelf 后取首行"]],
                 },
+                "frontend_security_boundary": {
+                    title: "前端安全边界 - Vite @fs 403 可执行代码保护",
+                    content: `
+                    Vite dev server 通过 \`/@fs/<绝对路径>/\` 把本地文件暴露给浏览器。stone 目录里既有 visible UI（应该可见），
+                    也有 executable 方法 / knowledge / data（不该被前端读到）。
+
+                    **保护机制（packages/@ooc/web/vite.config.ts:oocHotReload plugin）**:
+                    - 对请求路径匹配 \`/stones/*/{executable,server,knowledge,database,files}/**\` 的请求,直接返回 **403**。
+                    - \`visible/**\` 和 \`readable.*\` 正常放行。
+                    - 这是一条硬安全边界：executable/index.ts 里可能含 API key / 敏感逻辑 / 文件写入代码,绝不能被浏览器读到。
+
+                    **Storybook 测试中的行为（TC-VIS-02/03）**:
+                    当脚本使用临时 \`/tmp/...\` world 但 Vite 在另一个 world 下运行时,fs.allow 不包含临时目录,visible 文件也会 403。
+                    这种情况下 TC-VIS-02/03 应 SKIP 而非 FAIL。
+                    `,
+                    named: {
+                        "oocHotReload plugin": "Vite plugin,负责 @fs 路径的可执行代码过滤 + hot-reload signal",
+                        "403 on executable paths": "executable/server/knowledge/database/files 对浏览器一律拒绝访问",
+                        "fs.allow boundary": "Vite 的 fs.allow 决定了哪些本地文件可被 /@fs/ 代理",
+                    },
+                    sources: [["packages/@ooc/web/vite.config.ts", "oocHotReload Vite plugin 实现；TC-VIS-02/03/04 见 packages/@ooc/meta/storybook/_verify.ts"]],
+                },
+                "file_link_to_rendered_flow": {
+                    title: "文件链接 → 渲染态预览（visible entry 检测）",
+                    content: `
+                    用户在 FileViewer 里点开一个 stone 的 \`visible/index.tsx\` 文件时,不该只看到代码——
+                    应该能看到这个 React 组件**实际渲染出来的 UI**。
+
+                    **链路**（packages/@ooc/web/src/domains/files/components/FileViewer.tsx + client-path.ts）:
+                    1. FileViewer 收到路径后调 \`normalizeClientFilePath(path)\`。
+                    2. 该函数识别 4 种 visible entry 组合:
+                       - flat layout + canonical: \`stones/<id>/visible/index.tsx\`
+                       - flat layout + legacy:    \`stones/<id>/client/index.tsx\`
+                       - versioning + canonical:  \`stones/<branch>/objects/<id>/visible/index.tsx\`
+                       - versioning + legacy:     \`stones/<branch>/objects/<id>/client/index.tsx\`
+                    3. 命中 → 渲染 \`ClientWithSourceToggle\` 组件：左侧是运行态 React 组件,右侧有 source toggle 看源码。
+                    4. 不命中 → 普通代码文件查看器。
+
+                    **防递归保护**: \`_allowClientPreview\` flag 阻止 \`visible/index.tsx\` 渲染的组件内部又嵌套 FileViewer 导致无限递归。
+
+                    这让 "点一个文件 → 看到它渲染出来的样子" 成为 visible 维度的默认交互,
+                    与点击 stone 对象直接跳 \`/stones/<id>\` shortcut URL 的效果对称。
+                    `,
+                    named: {
+                        "normalizeClientFilePath": "4 路径形态统一识别函数,决定一个 .tsx 是否是 visible entry",
+                        "ClientWithSourceToggle": "rendered preview + source toggle 的双栏组件",
+                        "_allowClientPreview": "防止 visible 组件递归渲染 FileViewer 的守卫 flag",
+                    },
+                    sources: [["packages/@ooc/web/src/domains/clients/client-path.ts + FileViewer.tsx", "visible entry 检测逻辑与渲染态预览组件；shortcut URL 导航见 packages/@ooc/web/src/app/routing.ts:parseRoute /stones/:id 分支"]],
+                },
+                "thread_context_routing": {
+                    title: "Thread 上下文路由 - query params 跨视图传递",
+                    content: `
+                    用户在 UI 里点开一个 session 后,即使切换到 stone client 预览、file viewer、flow page 等不同视图,
+                    右侧 RightPanel（chat panel）应该继续显示同一个 thread 的对话。
+
+                    **实现契约**（packages/@ooc/web/src/app/routing.ts）:
+                    - Thread 上下文以 URL query params 编码: \`?sessionId=...&objectId=...&threadId=...\`。
+                    - 这组 query **对所有路由种类有效**,不是 flowsView 独享:
+                      - \`flowsView\`（/flows/index, /flows/thread_context）— canonical。
+                      - \`file\`（/files/<path>?sessionId=...）— 已存在。
+                      - \`stoneClient\`（/stones/<id>?sessionId=...&objectId=...&threadId=...）— 2026-06-03 新增。
+                      - \`flowPage\`（/flows/<s>/objects/<o>/pages/<p>?sessionId=...）— 2026-06-03 新增。
+                    - \`parseRoute\` 有两层解析: react-router params 优先,正则 fallback（用于 tests / 脱离 router 的直调）。
+                    - \`toPath\` 对 stoneClient / flowPage 往返保留 thread query。
+                    - AppShell 的 \`activeSessionId / activeObjectId / activeThreadId\` 从全部 4 种路由派生,
+                      使 RightPanel 显示条件（三者齐全 + 非 user/root）在所有视图下都能被触发。
+
+                    **设计原则**: URL 是唯一的导航真相（single source of truth）。thread 上下文不存本地 state,
+                    全部编码在 URL,刷新 / 分享链接 / 历史回退都恢复同一 thread。
+                    `,
+                    named: {
+                        "sessionId/objectId/threadId query": "thread 上下文在 URL 中的标准编码,跨所有路由种类",
+                        "RightPanel 显示条件": "activeSessionId && activeObjectId && activeThreadId && 非 user/root 空 thread",
+                        "URL = 导航真相": "所有导航状态编码在 URL,不存本地 state;刷新/分享都恢复同一状态",
+                        "parseRoute fallback regex": "脱离 react-router params 时的正则兜底解析,保证 tests/直调可用",
+                    },
+                    sources: [["packages/@ooc/web/src/app/routing.ts + shell.tsx", "parseRoute / toPath / extractThreadContext 的全部路由分支；AppShell activeSessionId/ObjectId/ThreadId 派生与 RightPanel 渲染条件"]],
+                },
             },
             todo: [
                 "agent-native parity 缺口（见 root.patches.agent_native_parity）：ui_methods 只经 HTTP 暴露给客户端，agent 端无等价 tool 路径。这是 parity 公理下的显式技术债，非可选演化。",
@@ -4446,6 +4714,8 @@ export const root: DocTreeNode = {
             title: "Readable: Object 控制自己在 Context 中的展示方式",
             content: `
             Readable 是 ooc-6 新增的概念，让 Object 可以控制自己如何在 Context 中以 XML 形式展示给 LLM。
+            **概念上是自我塑造第四件**（与 reflectable / programmable / visible 并列，四件套），
+            但当前实现足迹较小（仅 readable.md / readable.ts 两种形态），故作为 root patch 记录而非独立的 children 维度节点。
 
             两种形态:
             1. \`readable.md\`：静态文本展示（对应原 readme.md，2026-05-28 重命名）
@@ -4534,7 +4804,7 @@ export const root: DocTreeNode = {
 
             按此标准，8 维度分两组:
             - 运行时底座: thinkable / executable / collaborable / observable / persistable —— Agent 据以存在、思考、行动、协作、被观测、落盘的基础。
-            - 自我塑造三件套: reflectable（改知识/反思）/ programmable（改方法）/ visible（改界面）—— Agent 改写"自己"的三个面，是 OOC 自我进化主张的载体。
+            - 自我塑造四件套: reflectable（改知识/反思）/ programmable（改方法）/ visible（改界面）/ readable（改对外展示）—— Agent 改写"自己"的四个面，是 OOC 自我进化主张的载体。
 
             extendable 被排除的**正面理由**: 它够的是**外部世界**（飞书/notion/...），外部系统不构成 Agent 自我，所以是"外接集成层"而非维度。
             注意: "寄生于 executable"**不是** extendable 被排除的真正理由（reflectable 也寄生于多个维度），真正的判据是"是否构成自我"。
@@ -4542,7 +4812,7 @@ export const root: DocTreeNode = {
             named: {
                 "self-constitutive": "维度判定轴: 一个能力是否构成 Agent 的「自我」；是则为维度，否则为外接层/协议",
                 "运行时底座": "thinkable/executable/collaborable/observable/persistable，Agent 存在与运作的基础五维",
-                "自我塑造三件套": "reflectable/programmable/visible，Agent 改写自己知识/方法/界面的三维",
+                "自我塑造四件套": "reflectable/programmable/visible/readable，Agent 改写自己知识/方法/界面/对外展示的四维",
             },
         },
         "agent_native_parity": {
