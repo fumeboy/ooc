@@ -85,29 +85,44 @@ async function main() {
   if (!sbThreadDir || !userThreadDir) {
     console.error("could not find thread dirs — skipping manual reply injection");
   } else {
-    // 读取双方 thread.json，追加一条 source=sb_demo 的消息，再写回
+    // 从 sb_demo thread 上拿 talk window 的 id（window id = talk_window id，用于
+    // formatter 把 outbox 消息映射到 target）
+    const sbThread = JSON.parse(await readFile(join(sbThreadDir, "thread.json"), "utf8"));
+    const talkWindowId =
+      (sbThread.contextWindows ?? []).find((w: any) => w.type === "talk")?.id ??
+      (sbThread.creatorWindowId as string | undefined) ??
+      "";
+
+    // 读取双方 thread.json，追加一条符合 ThreadMessage 类型的消息。
+    // 字段用 canonical ThreadMessage 定义：content（不是 text）、createdAt（毫秒数字
+    // 不是 ISO 字符串）、source / fromObjectId / toObjectId / windowId。
+    const now = Date.now();
+    const msgId = "m_visible_demo_" + now + "_" + Math.random().toString(36).slice(2, 6);
     for (const td of [sbThreadDir, userThreadDir]) {
       const tfile = join(td, "thread.json");
       try {
         const data = JSON.parse(await readFile(tfile, "utf8"));
-        const msg = {
-          id: "m_visible_demo_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
-          sourceObjectId: TARGET,
-          targetObjectId: "user",
-          text: replyText,
-          createdAt: new Date().toISOString(),
-          role: "assistant",
+        const threadMsg = {
+          id: msgId,
+          fromThreadId: td === sbThreadDir ? sbThread.id : "root",
+          toThreadId: td === sbThreadDir ? "root" : sbThread.id,
+          fromObjectId: TARGET,
+          toObjectId: "user",
+          content: replyText,
+          createdAt: now,
+          source: "talk" as const,
+          windowId: talkWindowId,
         };
         if (!Array.isArray(data.messages)) data.messages = [];
-        data.messages.push(msg);
-        // 同时追加到 outbox（sb_demo thread）/ inbox（user thread）
+        data.messages.push(threadMsg);
+        // sb_demo 侧: outbox; user 侧: inbox
         if (td === sbThreadDir) {
           if (!Array.isArray(data.outbox)) data.outbox = [];
-          data.outbox.push({ ...msg, kind: "talk" });
+          data.outbox.push(threadMsg);
           data.status = "paused";
         } else {
           if (!Array.isArray(data.inbox)) data.inbox = [];
-          data.inbox.push({ ...msg, kind: "talk" });
+          data.inbox.push(threadMsg);
         }
         await mkdir(dirname(tfile), { recursive: true });
         await writeFile(tfile, JSON.stringify(data, null, 2) + "\n", "utf8");

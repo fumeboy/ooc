@@ -37,19 +37,23 @@ export function escapeXml(text: string | undefined | null): string {
     .replaceAll("'", "&apos;");
 }
 
-function shouldUseCdata(text: string): boolean {
+function shouldUseCdata(text: string | undefined | null): boolean {
+  if (text === undefined || text === null) return false;
   return escapeXml(text) !== text;
 }
 
-function wrapCdata(text: string): string {
+function wrapCdata(text: string | undefined | null): string {
+  if (text === undefined || text === null) return "<![CDATA[]]>";
   return `<![CDATA[${text.replaceAll("]]>", "]]]]><![CDATA[>")}]]>`;
 }
 
-function renderXmlTextValue(text: string): string {
+function renderXmlTextValue(text: string | undefined | null): string {
+  if (text === undefined || text === null) return "";
   return shouldUseCdata(text) ? wrapCdata(text) : escapeXml(text);
 }
 
-function escapeXmlComment(text: string): string {
+function escapeXmlComment(text: string | undefined | null): string {
+  if (text === undefined || text === null) return "";
   return text.replaceAll("--", "- -");
 }
 
@@ -62,14 +66,14 @@ export function xmlElement(
   return { kind: "element", tag, attrs, children };
 }
 
-/** 构造一个 text 节点。 */
-export function xmlText(value: string): XmlNode {
-  return { kind: "text", value };
+/** 构造一个 text 节点。null/undefined 转空字符串，避免下游 .replaceAll 崩溃。 */
+export function xmlText(value: string | undefined | null): XmlNode {
+  return { kind: "text", value: value ?? "" };
 }
 
-/** 构造一个 comment 节点。 */
-export function xmlComment(value: string): XmlNode {
-  return { kind: "comment", value };
+/** 构造一个 comment 节点。null/undefined 转空字符串。 */
+export function xmlComment(value: string | undefined | null): XmlNode {
+  return { kind: "comment", value: value ?? "" };
 }
 
 /** value 非空才生成一个 element 节点；否则返回 null。 */

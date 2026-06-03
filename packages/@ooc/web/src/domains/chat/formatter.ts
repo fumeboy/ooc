@@ -326,17 +326,24 @@ function buildOutboundMessageLinesForTargets(
 ): Array<{ createdAt: number; line: ChatLine }> {
   const items: Array<{ createdAt: number; line: ChatLine }> = [];
   for (const m of outbox) {
-    const target = m.windowId ? talkWindowTargets.get(m.windowId) : undefined;
+    // target 优先从 talk window 映射里取（windowId → target），fallback 到消息自己带的
+    // targetObjectId（手动构造 / 非 talk 路径的消息可能没有 windowId）。
+    const target =
+      (m.windowId ? talkWindowTargets.get(m.windowId) : undefined) ??
+      (m as any).targetObjectId ??
+      undefined;
     if (!target) continue;
     if (!targetFilter(target)) continue;
-    if (!m.content) continue;
+    // 兼容 canonical `content` 字段和 legacy `text` 字段
+    const body = (m as any).content ?? (m as any).text;
+    if (!body) continue;
     items.push({
       createdAt: m.createdAt ?? 0,
       line: {
         id: m.id ? `outbox-${m.id}` : `outbox-${target}-${m.createdAt ?? items.length}`,
         kind: "message",
         role: "assistant",
-        content: m.content,
+        content: body,
         senderLabel: `→ ${target}`,
       },
     });
@@ -443,14 +450,16 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
 
     if (category === "context_change" && kind === "inbox_message_arrived") {
       const message = findInboxMessage(thread, typeof event.msgId === "string" ? event.msgId : undefined);
-      if (message?.content) {
+      // 兼容 canonical `content` 字段和 legacy `text` 字段
+      const body = message && ((message as any).content ?? (message as any).text);
+      if (body) {
         // 先把所有早于这条 inbox 的 outbound→user 消息 push 进去,实现时间穿插
         if (message.createdAt !== undefined) flushOutboundUpTo(message.createdAt);
         lines.push({
           id: typeof event.msgId === "string" ? event.msgId : `event-${index}`,
           kind: "message",
           role: "user",
-          content: message.content,
+          content: body,
           senderLabel: senderLabelOf(message),
         });
       }

@@ -42,6 +42,15 @@ import { readReadable, readReadme, type StoneObjectRef } from "../../persistable
 
 // ─────────────────────────── helpers (顶层 inbox/outbox) ──────────────────────
 
+/**
+ * 从消息里取正文。兼容两种字段名：
+ * - `content`：ThreadMessage 类型定义里的 canonical 字段
+ * - `text`：历史遗留 / 手动构造消息时常用的别名
+ */
+function messageBody(message: ThreadMessage): string {
+  return (message as any).content ?? (message as any).text ?? "";
+}
+
 /** 渲染 inbox/outbox 的扁平消息列表（仅顶层兜底，未被 window 视图收纳的消息）。 */
 function renderMessagesNode(tag: "inbox" | "outbox", messages: ThreadMessage[] | undefined): XmlNode | null {
   if (!messages || messages.length === 0) return null;
@@ -53,7 +62,7 @@ function renderMessagesNode(tag: "inbox" | "outbox", messages: ThreadMessage[] |
       xmlElement("message", { id: message.id }, [
         xmlElement("from_thread_id", {}, [xmlText(message.fromThreadId)]),
         xmlElement("to_thread_id", {}, [xmlText(message.toThreadId)]),
-        xmlElement("content", {}, [xmlText(message.content)]),
+        xmlElement("content", {}, [xmlText(messageBody(message))]),
         xmlElement("source", {}, [xmlText(message.source)]),
         xmlElement("created_at", {}, [xmlText(String(message.createdAt))]),
       ]),
