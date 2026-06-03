@@ -1,0 +1,17 @@
+{
+  "name": "@ooc/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ooc": "src/index.ts"
+  },
+  "dependencies": {
+    "@ooc/core": "workspace:*",
+    "@ooc/web": "workspace:*"
+  },
+  "ooc": {
+    "kind": "source-package",
+    "role": "cli"
+  }
+}

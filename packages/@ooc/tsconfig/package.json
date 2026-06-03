@@ -1,0 +1,19 @@
+{
+  "name": "@ooc/tsconfig",
+  "version": "0.1.0",
+  "description": "Base tsconfig presets for OOC World and Stone packages.",
+  "private": false,
+  "license": "MIT",
+  "files": [
+    "tsconfig.stone.json",
+    "tsconfig.world.json",
+    "README.md"
+  ],
+  "exports": {
+    "./stone": "./tsconfig.stone.json",
+    "./world": "./tsconfig.world.json"
+  },
+  "peerDependencies": {
+    "typescript": "^5.9.0"
+  }
+}

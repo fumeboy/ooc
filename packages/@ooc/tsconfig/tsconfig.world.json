@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.stone.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "baseUrl": "."
+  }
+}

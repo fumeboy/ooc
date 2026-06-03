@@ -88,11 +88,30 @@
         "react": "^19.0.0",
       },
     },
+    "packages/@ooc/builtins/supervisor": {
+      "name": "@ooc/builtins/supervisor",
+      "version": "0.1.0",
+    },
     "packages/@ooc/builtins/todo": {
       "name": "@ooc/builtins/todo",
       "version": "0.1.0",
       "dependencies": {
         "react": "^19.0.0",
+      },
+    },
+    "packages/@ooc/builtins/user": {
+      "name": "@ooc/builtins/user",
+      "version": "0.1.0",
+    },
+    "packages/@ooc/cli": {
+      "name": "@ooc/cli",
+      "version": "0.1.0",
+      "bin": {
+        "ooc": "src/index.ts",
+      },
+      "dependencies": {
+        "@ooc/core": "workspace:*",
+        "@ooc/web": "workspace:*",
       },
     },
     "packages/@ooc/core": {
@@ -106,7 +125,9 @@
         "@ooc/builtins/root": "workspace:*",
         "@ooc/builtins/search": "workspace:*",
         "@ooc/builtins/skill_index": "workspace:*",
+        "@ooc/builtins/supervisor": "workspace:*",
         "@ooc/builtins/todo": "workspace:*",
+        "@ooc/builtins/user": "workspace:*",
       },
     },
     "packages/@ooc/meta": {
@@ -333,7 +354,13 @@
 
     "@ooc/builtins/skill_index": ["@ooc/builtins/skill_index@workspace:packages/@ooc/builtins/skill_index"],
 
+    "@ooc/builtins/supervisor": ["@ooc/builtins/supervisor@workspace:packages/@ooc/builtins/supervisor"],
+
     "@ooc/builtins/todo": ["@ooc/builtins/todo@workspace:packages/@ooc/builtins/todo"],
+
+    "@ooc/builtins/user": ["@ooc/builtins/user@workspace:packages/@ooc/builtins/user"],
+
+    "@ooc/cli": ["@ooc/cli@workspace:packages/@ooc/cli"],
 
     "@ooc/core": ["@ooc/core@workspace:packages/@ooc/core"],
 
