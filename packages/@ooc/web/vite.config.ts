@@ -62,6 +62,14 @@ const worldRoot = resolve(worldDir);
  *
  * 2. Vite HMR already natively handles /@fs/... tsx file changes as partial
  *    refreshes; no special handling is needed for visible components.
+ *
+ * 3. Stone tsconfig fallback: world/tsconfig.json extends "@ooc/tsconfig/world",
+ *    which cannot be resolved inside the world directory (no node_modules there).
+ *    We detect the specific "failed to resolve extends @ooc/tsconfig" error during
+ *    config load and replace the broken world tsconfig with an in-memory minimal
+ *    tsconfig that matches @ooc/tsconfig/world's intent (strict + react-jsx).
+ *    We do this via a `config` hook that patches Vite's esbuild options with a
+ *    tsconfig override keyed on stone file paths.
  */
 function oocHotReload(worldRoot: string): Plugin {
   const forbiddenSlashed = ["/executable/", "/server/", "/knowledge/", "/database/", "/files/"];

@@ -43,18 +43,31 @@ describe("toPath: /flows/<view> + ?sessionId=&objectId=&threadId=", () => {
       "/files/stones/main/agent_of_x/self.md",
     );
   });
-  it("file path == stone client entry → shortcut /stones/<objectId> (post bare-repo reorg)", () => {
-    // 2026-05-21 stones repo 重组：client 入口路径是 stones/<branch>/objects/<id>/client/index.tsx
+  it("file path == stone visible entry → shortcut /stones/<objectId> (canonical flat layout)", () => {
+    // M2 ooc-6: canonical path is stones/<id>/visible/index.tsx (flat layout).
+    expect(
+      toPath({ kind: "file", path: "stones/alpha/visible/index.tsx" }),
+    ).toBe("/stones/alpha");
+  });
+  it("file path == stone visible entry (versioning layout) → shortcut /stones/<objectId>", () => {
+    expect(
+      toPath({ kind: "file", path: "stones/main/objects/alpha/visible/index.tsx" }),
+    ).toBe("/stones/alpha");
+  });
+  it("file path == legacy stone client entry (flat) → shortcut /stones/<objectId> (backward compat)", () => {
+    expect(
+      toPath({ kind: "file", path: "stones/alpha/client/index.tsx" }),
+    ).toBe("/stones/alpha");
+  });
+  it("file path == legacy stone client entry (versioning) → shortcut /stones/<objectId> (backward compat)", () => {
     expect(
       toPath({ kind: "file", path: "stones/main/objects/alpha/client/index.tsx" }),
     ).toBe("/stones/alpha");
   });
-  it("file path == legacy flat stone client → falls back to /files/* (no shortcut)", () => {
-    // 旧 flat layout (stones/<id>/client/index.tsx) 不再被 normalize 当 shortcut；
-    // 直接当普通文件渲染，保住老链接不炸。
+  it("non-client tsx → plain /files/* (no shortcut)", () => {
     expect(
-      toPath({ kind: "file", path: "stones/alpha/client/index.tsx" }),
-    ).toBe("/files/stones/alpha/client/index.tsx");
+      toPath({ kind: "file", path: "stones/alpha/executable/index.ts" }),
+    ).toBe("/files/stones/alpha/executable/index.ts");
   });
   it("file with thread context attaches sessionId/objectId/threadId", () => {
     expect(

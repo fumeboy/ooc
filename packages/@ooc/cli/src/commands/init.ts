@@ -137,8 +137,28 @@ export default async function init(argv: string[]): Promise<void> {
   }, null, 2) + "\n");
 
   // tsconfig.json
+  // Inline compiler options matching @ooc/tsconfig/world so the generated world
+  // is self-contained — no runtime dependency on resolving @ooc/tsconfig via
+  // node_modules (which fails until the user runs `bun install` with all @ooc/*
+  // packages resolvable). Keeps Vite/esbuild stone tsx transforms working even
+  // in a freshly scaffolded world.
   await write(join(targetPath, "tsconfig.json"), JSON.stringify({
-    extends: "@ooc/tsconfig/world",
+    compilerOptions: {
+      target: "ES2022",
+      module: "ESNext",
+      moduleResolution: "Bundler",
+      allowImportingTsExtensions: true,
+      allowJs: true,
+      strict: true,
+      noEmit: true,
+      jsx: "react-jsx",
+      esModuleInterop: true,
+      allowSyntheticDefaultImports: true,
+      resolveJsonModule: true,
+      skipLibCheck: true,
+      baseUrl: ".",
+      types: ["bun", "node"],
+    },
     include: ["stones/**/*.ts", "stones/**/*.tsx"],
   }, null, 2) + "\n");
 

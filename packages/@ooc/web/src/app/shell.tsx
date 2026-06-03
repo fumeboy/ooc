@@ -18,6 +18,7 @@ import {
 import { Sidebar } from "./layout/Sidebar";
 import { ThreadHeader } from "./layout/ThreadHeader";
 import { initialState, type AppState, type SessionThread } from "./state";
+import { deriveClientPath } from "../domains/clients/client-path";
 import { scopeOf, toPath, useRouteState, type RouteState } from "./routing";
 
 /**
@@ -451,12 +452,16 @@ function derivePathFromRoute(route: RouteState): string | undefined {
     case "file":
       return route.path;
     case "stoneClient":
-      // 2026-05-21 stones repo 重组：bare repo + linked worktrees。frontend 暂硬编码
-      // `main` 与项目其它处（如 ContextSnapshotViewer / case docs）保持一致；多 branch
-      // 支持是另一项工作（需要 frontend 拿 stonesBranch 配置）。
-      return `stones/main/objects/${route.objectId}/client/index.tsx`;
+      // canonical flat layout + visible/ (M2 ooc-6 rename). Shared helper guarantees
+      // routing.ts normalizeClientFilePath and this derivation stay in sync.
+      return deriveClientPath({ scope: "stone", objectId: route.objectId });
     case "flowPage":
-      return `flows/${route.sessionId}/${route.objectId}/client/pages/${route.page}.tsx`;
+      return deriveClientPath({
+        scope: "flow",
+        sessionId: route.sessionId,
+        objectId: route.objectId,
+        page: route.page,
+      });
     default:
       return undefined;
   }

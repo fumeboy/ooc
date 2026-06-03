@@ -16,6 +16,9 @@ import {
 import { FileViewer } from "../files/components/FileViewer";
 import type { FileContent } from "../files";
 import { fetchFile } from "../files";
+// matchClientTarget + deriveClientPath moved to client-path.ts to share with
+// routing.ts (file-link shortcut) and FileViewer (visible preview dispatch).
+export { matchClientTarget, isClientEntryPath, deriveClientPath } from "./client-path";
 
 export interface ClientWithSourceToggleProps {
   target: ClientTarget;
@@ -118,30 +121,10 @@ export function ClientWithSourceToggle({
             <pre className="mt-2 text-xs whitespace-pre-wrap">{sourceError}</pre>
           </div>
         )}
-        {sourceFile && <FileViewer file={sourceFile} />}
+        {sourceFile && <FileViewer file={sourceFile} _allowClientPreview={false} />}
       </div>
     </div>
   );
 }
 
-/**
- * 把"world 相对路径"匹配到 ClientTarget；不命中返回 undefined。
- * 与 plan-003 §3.1 的两条 regex 一致。
- */
-export function matchClientTarget(path: string): ClientTarget | undefined {
-  // 2026-05-21 stones repo 重组：bare repo + linked worktrees，stone client 路径变成
-  // `stones/<stonesBranch>/objects/<objectId>/client/index.tsx`；第一段 branch 不捕获，
-  // 第二段 objects/<objectId> 才是 client 入口的 owner。
-  const stone = /^stones\/[^/]+\/objects\/([^/]+)\/client\/index\.tsx$/.exec(path);
-  if (stone) return { scope: "stone", objectId: stone[1]! };
-  const flow = /^flows\/([^/]+)\/objects\/([^/]+)\/client\/pages\/([A-Za-z0-9_-]+)\.tsx$/.exec(path);
-  if (flow) {
-    return {
-      scope: "flow",
-      sessionId: flow[1]!,
-      objectId: flow[2]!,
-      page: flow[3]!,
-    };
-  }
-  return undefined;
-}
+// matchClientTarget 已移到 ./client-path.ts，通过 re-export 暴露

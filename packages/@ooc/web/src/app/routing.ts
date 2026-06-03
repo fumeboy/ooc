@@ -25,6 +25,7 @@
 
 import { useMemo } from "react";
 import { useLocation, useParams } from "react-router";
+import { normalizeClientFilePath } from "../domains/clients/client-path";
 
 /**
  * Thread 上下文：附在路由上，让 chat panel 跨页面持续显示。在 query string 里编码为
@@ -116,22 +117,10 @@ export function toPath(state: RouteState): string {
   }
 }
 
-/**
- * 若 file path 是某 client 入口的完整路径，返回对应 shortcut URL；否则 undefined。
- * 与 ClientWithSourceToggle.matchClientTarget 同一组 regex。
- */
-export function normalizeClientFilePath(path: string): string | undefined {
-  // 2026-05-21 stones repo 重组：bare repo + linked worktrees，路径变成
-  // `stones/<stonesBranch>/objects/<objectId>/client/index.tsx`。第一段是 branch（不捕获），
-  // 第二段 objects/<objectId> 是 client 入口的 owner。
-  const stone = /^stones\/[^/]+\/objects\/([^/]+)\/client\/index\.tsx$/.exec(path);
-  if (stone) return `/stones/${encodeURIComponent(stone[1]!)}`;
-  const flow = /^flows\/([^/]+)\/([^/]+)\/client\/pages\/([A-Za-z0-9_-]+)\.tsx$/.exec(path);
-  if (flow) {
-    return `/flows/${encodeURIComponent(flow[1]!)}/${encodeURIComponent(flow[2]!)}/pages/${encodeURIComponent(flow[3]!)}`;
-  }
-  return undefined;
-}
+// normalizeClientFilePath moved to ../domains/clients/client-path.ts (shared with
+// ClientWithSourceToggle.matchClientTarget and FileViewer). Re-export here to keep
+// existing imports working.
+export { normalizeClientFilePath } from "../domains/clients/client-path";
 
 /**
  * 从当前 URL 派生 RouteState。靠 react-router 的 useParams 拿命名 params；

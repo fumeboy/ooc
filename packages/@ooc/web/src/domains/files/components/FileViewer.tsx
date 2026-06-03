@@ -14,6 +14,11 @@ import { CsvTableView } from "./CsvTableView";
 import { ImagePreview, isImagePath } from "./ImagePreview";
 import type { ThreadContext } from "../../chat";
 import type { ContextSnapshot } from "../context-snapshot";
+import {
+  isClientEntryPath,
+  matchClientTarget,
+} from "../../clients/client-path";
+import { ClientWithSourceToggle } from "../../clients/ClientWithSourceToggle";
 
 function extensionsFor(path: string) {
   if (path.endsWith(".md") || path.endsWith(".markdown")) return [markdown()];
@@ -54,6 +59,7 @@ export function FileViewer({
   thread,
   selfObjectId,
   onUserReply,
+  _allowClientPreview = true,
 }: {
   file?: FileContent;
   /**
@@ -70,6 +76,8 @@ export function FileViewer({
   thread?: ThreadContext;
   selfObjectId?: string;
   onUserReply?: (text: string) => Promise<void>;
+  /** Internal: false when called from ClientWithSourceToggle to prevent recursive preview. */
+  _allowClientPreview?: boolean;
 }) {
   // 必须 hooks 在条件分支前。snapshot 只随 thread ref 变化而变化；ref 稳定时
   // ContextSnapshotViewer 内部的 useMemo / useEffect 不会被重置 → 选中态/展开态保留。
@@ -95,6 +103,18 @@ export function FileViewer({
   }
   // 只读模式下按扩展名 dispatch 专用 viewer。editable 模式（knowledge 写入）仍用 CodeMirror。
   if (!editable) {
+    // Object visible entry (stones/*/visible/index.tsx or legacy client/index.tsx) —
+    // render the actual React component with a 已渲染/源码 toggle, exactly like
+    // /stones/<id> shortcut does. This is what makes [[ui file-link]] → visible
+    // preview work end-to-end.
+    // Guard: skip when called from inside ClientWithSourceToggle itself (the
+    // source pane's FileViewer) to avoid recursion.
+    if (_allowClientPreview && isClientEntryPath(file.path)) {
+      const target = matchClientTarget(file.path);
+      if (target) {
+        return <ClientWithSourceToggle target={target} sourcePath={file.path} />;
+      }
+    }
     const lower = file.path.toLowerCase();
     if (/\.(md|markdown)$/.test(lower)) {
       return (
