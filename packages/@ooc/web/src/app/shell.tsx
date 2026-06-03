@@ -59,7 +59,11 @@ export function AppShell() {
     if (route.kind === "flowsView" || route.kind === "flowPage") {
       return route.sessionId;
     }
-    // file 视图：query 里有 sessionId（chat 上下文）则用之；否则从 path 推断
+    // stoneClient / file 视图：query 里有 sessionId（chat 上下文）则用之；否则从 path 推断
+    if (route.kind === "stoneClient") {
+      if (route.thread?.sessionId) return route.thread.sessionId;
+      return undefined;
+    }
     if (route.kind === "file") {
       if (route.thread?.sessionId) return route.thread.sessionId;
       const m = route.path.match(/^flows\/([^/]+)/);
@@ -71,11 +75,18 @@ export function AppShell() {
   // 2026-05-27：缺省**不**自动补 "user" / "root"，只有 query 显式带才视为有 thread 上下文
   const activeObjectId = (() => {
     if (route.kind === "flowsView") return route.objectId;
+    if (route.kind === "stoneClient" && route.thread) return route.thread.objectId;
+    if (route.kind === "flowPage") {
+      // flowPage 路径自带 objectId（page 宿主），但 query thread.objectId 优先（chat 上下文）
+      return route.thread?.objectId ?? route.objectId;
+    }
     if (route.kind === "file" && route.thread) return route.thread.objectId;
     return undefined;
   })();
   const activeThreadId = (() => {
     if (route.kind === "flowsView") return route.threadId;
+    if (route.kind === "stoneClient" && route.thread) return route.thread.threadId;
+    if (route.kind === "flowPage" && route.thread) return route.thread.threadId;
     if (route.kind === "file" && route.thread) return route.thread.threadId;
     return undefined;
   })();

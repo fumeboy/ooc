@@ -43,8 +43,8 @@ export type RouteState =
   | { kind: "welcome" }
   | { kind: "scope"; scope: "stones" | "flows" | "world" | "pools" }
   | { kind: "file"; path: string; thread?: ThreadContext }
-  | { kind: "stoneClient"; objectId: string }
-  | { kind: "flowPage"; sessionId: string; objectId: string; page: string }
+  | { kind: "stoneClient"; objectId: string; thread?: ThreadContext }
+  | { kind: "flowPage"; sessionId: string; objectId: string; page: string; thread?: ThreadContext }
   | {
       kind: "flowsView";
       /** 视图类型：path 第二段（/flows/index 或 /flows/thread_context）。 */
@@ -90,10 +90,20 @@ export function toPath(state: RouteState): string {
         : "";
       return `${base}${qs}`;
     }
-    case "stoneClient":
-      return `/stones/${encodeURIComponent(state.objectId)}`;
-    case "flowPage":
-      return `/flows/${encodeURIComponent(state.sessionId)}/${encodeURIComponent(state.objectId)}/pages/${encodeURIComponent(state.page)}`;
+    case "stoneClient": {
+      const base = `/stones/${encodeURIComponent(state.objectId)}`;
+      const qs = state.thread
+        ? `?sessionId=${encodeURIComponent(state.thread.sessionId)}&objectId=${encodeURIComponent(state.thread.objectId)}&threadId=${encodeURIComponent(state.thread.threadId)}`
+        : "";
+      return `${base}${qs}`;
+    }
+    case "flowPage": {
+      const base = `/flows/${encodeURIComponent(state.sessionId)}/${encodeURIComponent(state.objectId)}/pages/${encodeURIComponent(state.page)}`;
+      const qs = state.thread
+        ? `?sessionId=${encodeURIComponent(state.thread.sessionId)}&objectId=${encodeURIComponent(state.thread.objectId)}&threadId=${encodeURIComponent(state.thread.threadId)}`
+        : "";
+      return `${base}${qs}`;
+    }
     case "flowsView": {
       const base = `/flows/${state.view}`;
       // 手拼 query 而非 URLSearchParams：后者把空格编成 `+`（form-urlencoded），
@@ -191,14 +201,34 @@ export function parseRoute(
     };
   }
 
-  // /flows/:sessionId/objects/:objectId/pages/:page —— flowPage 不变
+  // /flows/:sessionId/objects/:objectId/pages/:page —— flowPage
   if (params.sessionId && params.objectId && params.page) {
-    return {
+    const r: RouteState = {
       kind: "flowPage",
       sessionId: params.sessionId,
       objectId: params.objectId,
       page: params.page,
     };
+    if (qSessionId && qObjectId && qThreadId) {
+      return { ...r, thread: { sessionId: qSessionId, objectId: qObjectId, threadId: qThreadId } };
+    }
+    return r;
+  }
+  // /flows/:sessionId/objects/:objectId/pages/:page (fallback: parse from path when params not available)
+  {
+    const m = path.match(/^\/flows\/([^/]+)\/objects\/([^/]+)\/pages\/(.+)$/);
+    if (m) {
+      const r: RouteState = {
+        kind: "flowPage",
+        sessionId: decodeURIComponent(m[1]),
+        objectId: decodeURIComponent(m[2]),
+        page: decodeURIComponent(m[3]),
+      };
+      if (qSessionId && qObjectId && qThreadId) {
+        return { ...r, thread: { sessionId: qSessionId, objectId: qObjectId, threadId: qThreadId } };
+      }
+      return r;
+    }
   }
 
   // Legacy /flows/:sessionId[?objectId=&threadId=] —— 老形态：objectId !== "user" → thread_context；
@@ -223,7 +253,23 @@ export function parseRoute(
 
   // /stones/:objectId
   if (path.startsWith("/stones/") && params.objectId) {
-    return { kind: "stoneClient", objectId: params.objectId };
+    const r: RouteState = { kind: "stoneClient", objectId: params.objectId };
+    if (qSessionId && qObjectId && qThreadId) {
+      return { ...r, thread: { sessionId: qSessionId, objectId: qObjectId, threadId: qThreadId } };
+    }
+    return r;
+  }
+  // /stones/:objectId (fallback: derive objectId from path when react-router params not available)
+  if (path.startsWith("/stones/")) {
+    const parts = path.slice("/stones/".length).split("/");
+    if (parts.length >= 1 && parts[0]) {
+      const objectId = decodeURIComponent(parts[0]);
+      const r: RouteState = { kind: "stoneClient", objectId };
+      if (qSessionId && qObjectId && qThreadId) {
+        return { ...r, thread: { sessionId: qSessionId, objectId: qObjectId, threadId: qThreadId } };
+      }
+      return r;
+    }
   }
 
   // /stones
@@ -340,5 +386,7 @@ export function extractThreadContext(route: RouteState): ThreadContext | undefin
     };
   }
   if (route.kind === "file" && route.thread) return route.thread;
+  if (route.kind === "stoneClient" && route.thread) return route.thread;
+  if (route.kind === "flowPage" && route.thread) return route.thread;
   return undefined;
 }
