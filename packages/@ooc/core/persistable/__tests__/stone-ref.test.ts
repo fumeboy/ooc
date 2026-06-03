@@ -1,25 +1,27 @@
 import { describe, expect, test } from "bun:test";
 import { packageDir, stoneDir, deriveStoneFromThread, type StoneObjectRef, type ThreadPersistenceRef } from "../common";
 
-describe("packageDir resolves packages/{nestedPath(objectId)}", () => {
-  test("flat objectId resolves to packages/<id>", () => {
+// M2 (2026-06-03): "packages/" renamed to "stones/" as canonical user-stone path.
+// stoneDir is now canonical; packageDir is a @deprecated alias that delegates to stoneDir.
+describe("stoneDir resolves stones/{nestedPath(objectId)}", () => {
+  test("flat objectId resolves to stones/<id>", () => {
     const ref: StoneObjectRef = { baseDir: "/tmp/world", objectId: "agent_of_x" };
-    expect(packageDir(ref)).toBe("/tmp/world/packages/agent_of_x");
+    expect(stoneDir(ref)).toBe("/tmp/world/stones/agent_of_x");
   });
 
   test("nested objectId inserts children/ segments", () => {
     const ref: StoneObjectRef = { baseDir: "/tmp/world", objectId: "sentry/sentry_factor_dev" };
-    expect(packageDir(ref)).toBe("/tmp/world/packages/sentry/children/sentry_factor_dev");
+    expect(stoneDir(ref)).toBe("/tmp/world/stones/sentry/children/sentry_factor_dev");
   });
 
   test("deeply nested objectId inserts multiple children/ segments", () => {
     const ref: StoneObjectRef = { baseDir: "/tmp/world", objectId: "a/b/c" };
-    expect(packageDir(ref)).toBe("/tmp/world/packages/a/children/b/children/c");
+    expect(stoneDir(ref)).toBe("/tmp/world/stones/a/children/b/children/c");
   });
 
-  test("stoneDir is an alias for packageDir", () => {
+  test("packageDir is a deprecated alias for stoneDir", () => {
     const ref: StoneObjectRef = { baseDir: "/tmp/world", objectId: "agent_of_x" };
-    expect(stoneDir(ref)).toBe(packageDir(ref));
+    expect(packageDir(ref)).toBe(stoneDir(ref));
   });
 });
 
@@ -36,7 +38,7 @@ describe("deriveStoneFromThread", () => {
       baseDir: "/tmp/world",
       objectId: "agent_of_x",
     });
-    expect(packageDir(stoneRef)).toBe("/tmp/world/packages/agent_of_x");
+    expect(stoneDir(stoneRef)).toBe("/tmp/world/stones/agent_of_x");
   });
 
   test("nested threadRef derives correctly", () => {
@@ -48,6 +50,6 @@ describe("deriveStoneFromThread", () => {
     };
     const stoneRef = deriveStoneFromThread(threadRef);
     expect(stoneRef).toEqual({ baseDir: "/tmp/world", objectId: "a/b" });
-    expect(packageDir(stoneRef)).toBe("/tmp/world/packages/a/children/b");
+    expect(stoneDir(stoneRef)).toBe("/tmp/world/stones/a/children/b");
   });
 });

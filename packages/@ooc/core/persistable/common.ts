@@ -9,7 +9,7 @@ import { join } from "node:path";
  *   objectId="a/b/c"   → `{baseDir}/flows/{sessionId}/a/children/b/children/c`
  */
 export interface FlowObjectRef {
-  /** 包含 `flows/` 和 `packages/` 的 workspace 根目录。 */
+  /** 包含 `flows/` 和 `stones/` 的 workspace 根目录。 */
   baseDir: string;
   /** `flows/` 下的 session 目录名。 */
   sessionId: string;
@@ -33,7 +33,7 @@ export interface ThreadPersistenceRef extends FlowObjectRef {
  *
  * 物理布局示例（stone 与 flow 形态对齐）：
  *   objectId = "parent/child"
- *   → packages/parent/children/child
+ *   → stones/parent/children/child
  *   → flows/<sid>/parent/children/child
  *
  * 详见 meta/object.doc.ts:thinkable.children.knowledge.patches.domain_axis。
@@ -86,36 +86,33 @@ export function toJson(value: unknown): string {
 }
 
 /**
- * 标识磁盘上的单个 object package（原 stone 对象）。
+ * 标识磁盘上的单个 object stone 包。
  *
- * 路径形态：`{baseDir}/packages/{objectId}`
+ * M2 (2026-06-03): canonical 路径是 `{baseDir}/stones/{objectId}（扁平布局）。
+ * 嵌套 objectId（含 "/"）用 children/ marker 分隔。
  *
- * objectId 支持 "/" 编码嵌套层级：第 N 段（N≥2）会被插入 `STONE_CHILDREN_SUBDIR`
- * 作为父子边界。形态：`packages/<a>/children/<b>/children/<c>`。
+ * 兼容 fallback：若 stones/<id>/ 不存在时回落 packages/<id>/，并 console.warn。
+ * 这种双路径过渡期至少一个 release。
+ *
+ * 特殊路由规则：
+ * - `_stonesBranch` set → versioning worktree: stones/{_stonesBranch}/objects/{objectId}/（metaprog 版本化专用）
+ * - _builtin/<type> → builtin 包（源码仓 packages/@ooc/builtins/<type>或 world-level builtins/<type>
+ * - supervisor / user → 同上
  */
 export interface StoneObjectRef {
-  /** 包含 `packages/` 的 workspace 根目录。 */
+  /** 包含 `stones/` 的 workspace 根目录。 */
   baseDir: string;
-  /** `packages/` 下的 object 目录名。 */
+  /** `stones/` 下的 object 目录名。 */
   objectId: string;
   /**
-   * Internal: when set, stoneDir() routes to a worktree path
-   * `stones/{_stonesBranch}/objects/{objectId}/` instead of `packages/`.
-   * Used by the metaprog versioning system during writes.
+   * Internal: when set, stoneDir() routes to a git versioning worktree path
+   * `stones/{_stonesBranch}/objects/{objectId}/.
+   * Used by the metaprog versioning system.
    */
   _stonesBranch?: string;
 }
 
-/**
- * 计算 object package 目录绝对路径。
- *
- * objectId 中的 "/" 被翻译为 children/ 嵌套，与 workspace glob
- * `packages/**\/children/**` 精确匹配。
- *
- * Special cases:
- * - `_builtin/<type>` 前缀 → `packages/@ooc/builtins/<type>/` 源码仓内置包
- * - `supervisor` / `user`（历史保留 id）→ 同样路由到 `packages/@ooc/builtins/<id>/`
- */
+/** Builtin object IDs that route to packages/@ooc/builtins/<id> instead of stones/<id>. */
 export const BUILTIN_OBJECT_IDS = new Set(["supervisor", "user"]);
 
 /** 判断一个 objectId 是否指向 Builtin Object（运行时自带、Agent 不可改写）。 */
@@ -124,31 +121,16 @@ export function isBuiltinObjectId(objectId: string): boolean {
   return BUILTIN_OBJECT_IDS.has(objectId);
 }
 
-export function packageDir(ref: StoneObjectRef): string {
-  if (ref.objectId.startsWith("_builtin/")) {
-    const builtinType = ref.objectId.slice("_builtin/".length);
-    return join(ref.baseDir, "packages", "@ooc", "builtins", builtinType);
-  }
-  if (BUILTIN_OBJECT_IDS.has(ref.objectId)) {
-    return join(ref.baseDir, "packages", "@ooc", "builtins", ref.objectId);
-  }
-  return join(
-    ref.baseDir,
-    "packages",
-    ...nestedObjectPath(ref.objectId),
-  );
-}
-
 /**
- * @deprecated Use packageDir instead (2026-06-01 bun workspace migration).
- * Alias preserved for backward compatibility during codebase refactor.
+ * 计算 object stone 目录绝对路径（canonical，M2 2026-06-03）。
  *
- * Routing logic:
- * - If `ref._stonesBranch` is explicitly set (any value, including "main") →
- *   route to the versioning worktree path `stones/{_stonesBranch}/objects/{objectId}/`.
- *   This is used by the metaprog versioning system for writes that need git tracking.
- * - If `ref._stonesBranch` is undefined → route to `packages/{objectId}/` for runtime reads.
- *   After successful merges, changes are synced from stones/main/objects/ to packages/.
+ * Routing priority:
+ * 1. `_stonesBranch` set → versioning worktree: `stones/{_stonesBranch}/objects/{nestedPath}`
+ * 2. Builtin ids (_builtin/*, supervisor, user) → `packages/@ooc/builtins/<id>` in the repo or World node_modules
+ * 3. Flat stone path (default): `stones/{nestedPath}`
+ * 4. Fallback (deprecated): `packages/{nestedPath}` — warns on use, kept for one release
+ *
+ * `nestedPath` translates "/" in objectId into `children/` segments.
  */
 export function stoneDir(ref: StoneObjectRef): string {
   if (ref._stonesBranch != null) {
@@ -160,7 +142,91 @@ export function stoneDir(ref: StoneObjectRef): string {
       ...nestedObjectPath(ref.objectId),
     );
   }
-  return packageDir(ref);
+  if (ref.objectId.startsWith("_builtin/")) {
+    const builtinType = ref.objectId.slice("_builtin/".length);
+    return join(ref.baseDir, "packages", "@ooc", "builtins", builtinType);
+  }
+  if (BUILTIN_OBJECT_IDS.has(ref.objectId)) {
+    return join(ref.baseDir, "packages", "@ooc", "builtins", ref.objectId);
+  }
+  return join(
+    ref.baseDir,
+    "stones",
+    ...nestedObjectPath(ref.objectId),
+  );
+}
+
+/**
+ * @deprecated Use stoneDir instead (M2 2026-06-03: "packages/" renamed to "stones/" for World user stones).
+ * Alias preserved for backward compatibility during transition.
+ *
+ * Note: builtin routing still goes through `packages/@ooc/builtins/` because those are
+ * npm workspace packages, not user stones.
+ */
+export function packageDir(ref: StoneObjectRef): string {
+  return stoneDir(ref);
+}
+
+/**
+ * 计算 fallback package 路径（deprecated `packages/` layout），用于存在性检查。
+ * Internal helper for dual-path compatibility.
+ */
+export function _deprecatedPackageDir(ref: StoneObjectRef): string {
+  if (ref.objectId.startsWith("_builtin/") || BUILTIN_OBJECT_IDS.has(ref.objectId)) {
+    return stoneDir(ref);
+  }
+  if (ref._stonesBranch != null) return stoneDir(ref);
+  return join(
+    ref.baseDir,
+    "packages",
+    ...nestedObjectPath(ref.objectId),
+  );
+}
+
+/**
+ * Resolve an existing stone directory with dual-path fallback (M2 2026-06-03).
+ *
+ * Checks `stones/<id>/` first (new canonical layout). If that doesn't exist and
+ * `packages/<id>/` does, returns the packages path with a console warning.
+ * If neither exists, returns the canonical `stones/` path (caller handles ENOENT).
+ *
+ * Use this at I/O boundaries (ServerLoader, listStones, etc.) where we actually
+ * read from disk. Call sites that only need the path for string manipulation can
+ * keep using the synchronous `stoneDir()`.
+ */
+export async function resolveStoneDir(
+  ref: StoneObjectRef,
+  opts: { statFn?: (path: string) => Promise<{ isDirectory(): boolean }> } = {},
+): Promise<string> {
+  const { stat } = await import("node:fs/promises");
+  const doStat = opts.statFn ?? stat;
+
+  const canonical = stoneDir(ref);
+  try {
+    const s = await doStat(canonical);
+    if (s.isDirectory()) return canonical;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+  }
+
+  const fallback = _deprecatedPackageDir(ref);
+  if (fallback !== canonical) {
+    try {
+      const s = await doStat(fallback);
+      if (s.isDirectory()) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[stoneDir] deprecated: object '${ref.objectId}' found at '${fallback}' (packages/ layout). ` +
+          `Please migrate to '${canonical}' (stones/ layout). packages/ fallback will be removed.`,
+        );
+        return fallback;
+      }
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    }
+  }
+
+  return canonical;
 }
 
 /**

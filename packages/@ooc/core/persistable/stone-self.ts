@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { packageDir, stoneDir, type StoneObjectRef } from "./common";
+import { stoneDir, type StoneObjectRef } from "./common";
 
 /** stone 的身份说明文件 self.md 的绝对路径。 */
 export function selfFile(ref: StoneObjectRef): string {

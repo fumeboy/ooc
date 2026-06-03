@@ -1,15 +1,15 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { packageDir, stoneDir, type StoneObjectRef } from "./common";
+import { stoneDir, type StoneObjectRef } from "./common";
 import { parseKnowledgeFile } from "../thinkable/knowledge/parser";
 
 /**
  * stone skills 目录扫描（plan §skills 支持）。
  *
  * 双层 skills 目录：
- * - Workspace 级: `{baseDir}/packages/@ooc/skills/<skill-name>/SKILL.md`
+ * - Workspace 级: `{baseDir}/stones/@ooc/skills/<skill-name>/SKILL.md`
  *   跨 Object 共享的公共 skill 库（原 branch 级）
- * - Object 级: `{baseDir}/packages/{objectId}/skills/<skill-name>/SKILL.md`
+ * - Object 级: `{baseDir}/stones/{objectId}/skills/<skill-name>/SKILL.md`
  *   属于具体 Object 的私有 skill
  *
  * 每个 skill 子目录至少含 SKILL.md（带 frontmatter description）；
@@ -31,8 +31,8 @@ export interface SkillEntry {
   skillFilePath: string;
   /**
    * 来源 scope：
-   * - workspace — 公共：packages/@ooc/skills/<name>/SKILL.md（原 branch）
-   * - object  — 私有：packages/<objectId>/skills/<name>/SKILL.md
+   * - workspace — 公共：stones/@ooc/skills/<name>/SKILL.md（原 branch）
+   * - object  — 私有：stones/<objectId>/skills/<name>/SKILL.md
    * - external — 外部目录：由 .world.json 的 externalSkillsDir 指定（与 stone 无关）
    */
   scope: "workspace" | "object" | "external";
@@ -40,12 +40,12 @@ export interface SkillEntry {
 
 /** workspace 级 skills 目录绝对路径（原 branch 级）。 */
 export function branchSkillsDir(baseDir: string, _stonesBranch?: string): string {
-  return join(baseDir, "packages", "@ooc", "skills");
+  return join(baseDir, "stones", "@ooc", "skills");
 }
 
 /** object 级 skills 目录绝对路径。 */
 export function objectSkillsDir(ref: StoneObjectRef): string {
-  return join(packageDir(ref), "skills");
+  return join(stoneDir(ref), "skills");
 }
 
 interface CachedEntry {
@@ -119,7 +119,7 @@ async function scanSkillsDir(skillsDirPath: string, scope: "workspace" | "object
 /**
  * 列出 workspace 级 skills（跨 Object 共享，原 branch 级）。
  *
- * 路径：`{baseDir}/packages/@ooc/skills/<skill-name>/SKILL.md`
+ * 路径：`{baseDir}/stones/@ooc/skills/<skill-name>/SKILL.md`
  */
 export async function listBranchSkills(
   baseDir: string,
@@ -136,10 +136,10 @@ export async function listBranchSkills(
 /**
  * 列出 object 级 skills（仅属于该 Object）。
  *
- * 路径：`{baseDir}/packages/{objectId}/skills/<skill-name>/SKILL.md`
+ * 路径：`{baseDir}/stones/{objectId}/skills/<skill-name>/SKILL.md`
  */
 export async function listObjectSkills(ref: StoneObjectRef): Promise<SkillEntry[]> {
-  const cacheKey = `object:${packageDir(ref)}`;
+  const cacheKey = `object:${stoneDir(ref)}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
   const skills = await scanSkillsDir(objectSkillsDir(ref), "object");

@@ -256,7 +256,8 @@ export async function executeMetaprog(ctx: CommandExecutionContext): Promise<str
       if (!r.ok) {
         if (r.code === "INVALID_INPUT") return `[metaprog:create_object:INVALID_INPUT] ${r.message}`;
         if (r.code === "ALREADY_EXISTS") return `[metaprog:create_object:ALREADY_EXISTS] ${r.message}`;
-        return `[metaprog:create_object:GIT:${r.gitCode}] ${r.stderr}`;
+        if (r.code === "GIT") return `[metaprog:create_object:GIT:${r.gitCode}] ${r.stderr}`;
+        return `[metaprog:create_object:${r.code}] ${r.message}`;
       }
       return JSON.stringify({ ok: true, objectId: newObjectId, commitSha: r.commitSha });
     }

@@ -1,10 +1,10 @@
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { packageDir, stoneDir, STONE_CHILDREN_SUBDIR, toJson, type StoneObjectRef } from "./common";
+import { stoneDir, STONE_CHILDREN_SUBDIR, toJson, type StoneObjectRef } from "./common";
 import { selfFile } from "./stone-self";
 import { readableFile } from "./stone-readme";
 
-export { packageDir, stoneDir };
+export { stoneDir };
 
 /** 写入 `.stone.json` 的元数据。 */
 /** @deprecated Use package.json instead (2026-06-01 bun workspace migration) */
@@ -205,6 +205,7 @@ export async function createStoneObject(ref: StoneObjectRef): Promise<StoneObjec
 
   await writeFile(selfFile(ref), "", "utf8");
   await writeFile(readableFile(ref), "", "utf8");
+  await writeFile(join(stoneDir(ref), "readme.md"), "", "utf8");
 
   return ref;
 }

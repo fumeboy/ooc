@@ -241,7 +241,7 @@ describe("deriveRelationWindow", () => {
       const bob = out.find((w) => w.peerId === "bob")!;
       expect(bob.peerReadmeExists).toBe(true);
       expect(bob.peerReadmeBody).toBe("## bob\n是个评审 Agent");
-      expect(bob.peerReadmePath).toMatch(/packages\/bob\/readme\.md$/);
+      expect(bob.peerReadmePath).toMatch(/stones\/bob\/readme\.md$/);
     });
 
     test("peer 没 readme 文件 → peerReadmeExists=false + peerReadmeBody undefined", async () => {

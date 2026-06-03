@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { packageDir, stoneDir, type StoneObjectRef } from "./common";
+import { stoneDir, type StoneObjectRef } from "./common";
 
 /** stone 的对外说明文件 readme.md 的绝对路径。 */
 /** @deprecated Use readableFile instead (2026-05-28 ooc-6 Object Unification). readme.md is being renamed to readable.md. */
