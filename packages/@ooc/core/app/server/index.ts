@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { setPauseChecker, setThreadActivationNotifier } from "@ooc/core/observable";
+import { createWorldRuntime, type WorldRuntime } from "@ooc/core/runtime/world-runtime";
 import { readServerConfig, type ServerConfig } from "./bootstrap/config";
 import { runRecoveryCheck } from "./bootstrap/recovery-check";
 import { checkStoneToPoolMigration, reportPoolMigration } from "./bootstrap/check-pool-migration";
@@ -172,6 +173,15 @@ function normalizeErrorToJson(
 }
 
 export function buildServer(config: ServerConfig) {
+  // M1 (2026-06-02): 每个 buildServer 创建一个独立的 WorldRuntime 实例，
+  // 封装 object registry / observable state / serial queue / server loader。
+  // M2 (2026-06-03): 追加 stoneRegistry。
+  // 目前挂到 Elysia state 上，后续阶段把对默认 module-level 实例的引用逐步迁移到 runtime。
+  const runtime: WorldRuntime = createWorldRuntime({
+    worldPath: config.baseDir,
+    dev: config.dev,
+  });
+
   setPauseChecker((thread) => {
     const sessionId = thread.persistence?.sessionId;
     return config.pauseStore.isGlobalPauseEnabled() || (sessionId ? config.pauseStore.isSessionPaused(sessionId) : false);
@@ -199,6 +209,7 @@ export function buildServer(config: ServerConfig) {
     // Elysia 的 `code` 参数区分内置错误类型（NOT_FOUND / VALIDATION / PARSE /
     // INTERNAL_SERVER_ERROR / UNKNOWN），透传给 normalizeErrorToJson 以避免
     // Elysia 默认 not-found 被兜底成 INTERNAL_ERROR(R6 #49 / R5 #38 根因)。
+    .state("runtime", runtime)
     .onError(({ error, code, set, request, path }) => {
       const reqInfo = { path: path ?? (request ? new URL(request.url).pathname : undefined), method: request?.method };
       const { status, body } = normalizeErrorToJson(error, code, reqInfo);
@@ -207,7 +218,7 @@ export function buildServer(config: ServerConfig) {
     })
     .use(healthModule)
     .use(runtimeModule(config))
-    .use(stonesModule(config))
+    .use(stonesModule(config, runtime))
     .use(poolsModule(config))
     .use(uiModule(config))
     .use(flowsModule(config))
@@ -235,10 +246,13 @@ export function buildServer(config: ServerConfig) {
           `[ooc-app-server] startLarkEventRelay failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`,
         );
       });
-    app.onStop(() => {
+    app.onStop(async () => {
       worker.stop();
-      void stopLarkRelay();
+      await stopLarkRelay();
+      await runtime.dispose();
     });
+  } else {
+    app.onStop(() => runtime.dispose());
   }
 
   return app;

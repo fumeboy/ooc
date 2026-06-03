@@ -12,6 +12,8 @@ export interface ServerConfig {
   workerMaxTicks: number;
   pauseStore: ReturnType<typeof createPauseStore>;
   jobManager: ReturnType<typeof createJobManager>;
+  /** dev 模式：启用 hot-reload fs watcher、更详细的错误等。默认 false（生产安全）。 */
+  dev?: boolean;
 }
 
 type ConfigSource = {
@@ -76,5 +78,6 @@ export async function readServerConfig(source: ConfigSource = {}): Promise<Serve
     workerMaxTicks,
     pauseStore: createPauseStore(),
     jobManager: createJobManager(),
+    dev: env.OOC_DEV === "1" || env.OOC_DEV === "true",
   };
 }

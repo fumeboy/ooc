@@ -11,6 +11,7 @@ import {
   writeServerSource,
 } from "@ooc/core/persistable";
 import { loadUiServerMethods } from "@ooc/core/executable/server/loader";
+import type { StoneRegistry } from "@ooc/core/runtime/stone-registry";
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { AppServerError } from "../../bootstrap/errors";
@@ -55,7 +56,13 @@ function createHttpMethodContext(dir: string) {
   } as never;
 }
 
-export function createStonesService({ baseDir }: { baseDir: string }) {
+export function createStonesService({
+  baseDir,
+  stoneRegistry,
+}: {
+  baseDir: string;
+  stoneRegistry?: StoneRegistry;
+}) {
   const ref = (objectId: string) => ({ baseDir, objectId });
   const dir = (objectId: string) => stoneDir(ref(objectId));
 
@@ -142,44 +149,61 @@ export function createStonesService({ baseDir }: { baseDir: string }) {
 
   return {
     async listStones() {
-      try {
-        const packagesDir = `${baseDir}/packages`;
-        const items: { objectId: string; dir: string }[] = [];
+      if (stoneRegistry) {
+        await stoneRegistry.rescan();
+        return {
+          items: stoneRegistry
+            .listByKind("stone")
+            .map((s) => ({ objectId: s.objectId, dir: s.dir }))
+            .sort((a, b) => a.objectId.localeCompare(b.objectId)),
+        };
+      }
 
-        async function scan(currentDir: string, idSegments: string[]): Promise<void> {
-          const entries = await readdir(currentDir, { withFileTypes: true });
-          // Check if current dir is an object package (has package.json)
-          const hasPackageJson = entries.some((e) => e.isFile() && e.name === "package.json");
-          if (hasPackageJson && idSegments.length > 0) {
-            const objectId = idSegments.join("/");
-            items.push({ objectId, dir: dir(objectId) });
-          }
-          // Recurse into children/ subdir for nested objects
-          for (const e of entries) {
-            if (!e.isDirectory()) continue;
-            if (e.name.startsWith(".")) continue;
-            if (e.name.startsWith("@")) continue;
-            if (e.name === "children") {
-              const childrenDir = join(currentDir, "children");
-              const childEntries = await readdir(childrenDir, { withFileTypes: true });
-              for (const ce of childEntries) {
-                if (!ce.isDirectory() || ce.name.startsWith(".") || ce.name.startsWith("@")) continue;
-                await scan(join(childrenDir, ce.name), [...idSegments, ce.name]);
-              }
-            } else if (idSegments.length === 0) {
-              // Top-level directory under packages/ - could be an object
-              await scan(join(currentDir, e.name), [e.name]);
+      const items: { objectId: string; dir: string }[] = [];
+
+      async function scan(currentDir: string, idSegments: string[]): Promise<void> {
+        const entries = await readdir(currentDir, { withFileTypes: true });
+        const hasPackageJson = entries.some((e) => e.isFile() && e.name === "package.json");
+        if (hasPackageJson && idSegments.length > 0) {
+          const objectId = idSegments.join("/");
+          items.push({ objectId, dir: dir(objectId) });
+        }
+        for (const e of entries) {
+          if (!e.isDirectory()) continue;
+          if (e.name.startsWith(".")) continue;
+          if (e.name.startsWith("@")) continue;
+          if (e.name === "children") {
+            const childrenDir = join(currentDir, "children");
+            const childEntries = await readdir(childrenDir, { withFileTypes: true });
+            for (const ce of childEntries) {
+              if (!ce.isDirectory() || ce.name.startsWith(".") || ce.name.startsWith("@")) continue;
+              await scan(join(childrenDir, ce.name), [...idSegments, ce.name]);
             }
+          } else if (idSegments.length === 0) {
+            await scan(join(currentDir, e.name), [e.name]);
           }
         }
-
-        await scan(packagesDir, []);
-        return {
-          items: items.sort((a, b) => a.objectId.localeCompare(b.objectId)),
-        };
-      } catch {
-        return { items: [] };
       }
+
+      try {
+        await scan(`${baseDir}/stones`, []);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+      }
+      try {
+        await scan(`${baseDir}/packages`, []);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+      }
+      const seen = new Set<string>();
+      const deduped = items.filter((it) => {
+        if (seen.has(it.objectId)) return false;
+        seen.add(it.objectId);
+        return true;
+      });
+      return {
+        items: deduped.sort((a, b) => a.objectId.localeCompare(b.objectId)),
+      };
     },
     async createStone({
       objectId,

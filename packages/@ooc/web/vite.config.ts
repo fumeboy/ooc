@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import tsconfigPaths from "vite-tsconfig-paths";
@@ -53,8 +53,50 @@ if (!worldDir) {
 }
 const worldRoot = resolve(worldDir);
 
+/**
+ * M3 hot-reload + security plugin.
+ *
+ * 1. Security (design doc section 7.3): do not leak executable / knowledge sources
+ *    to the frontend. Any request under stones/<id>/executable or /knowledge or
+ *    /database or /files returns 403.
+ *
+ * 2. Vite HMR already natively handles /@fs/... tsx file changes as partial
+ *    refreshes; no special handling is needed for visible components.
+ */
+function oocHotReload(worldRoot: string): Plugin {
+  const forbiddenSlashed = ["/executable/", "/server/", "/knowledge/", "/database/", "/files/"];
+  const normalizedWorld = resolve(worldRoot);
+  return {
+    name: "ooc-hot-reload",
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        const url = req.url ?? "";
+        if (!url.startsWith("/@fs/")) return next();
+        // /@fs/abs/path → abs/path
+        const absPath = url.slice(4).split("?")[0].split("#")[0];
+        // 只拦截 world 内的 stone 路径
+        if (!absPath.startsWith(normalizedWorld)) return next();
+        // 在 stones/ 或 packages/ 子目录下才做防护
+        const relativeWithin = absPath.slice(normalizedWorld.length);
+        if (!relativeWithin.startsWith("/stones/") && !relativeWithin.startsWith("/packages/")) {
+          return next();
+        }
+        for (const seg of forbiddenSlashed) {
+          if (relativeWithin.includes(seg)) {
+            const res = _res as any;
+            res.statusCode = 403;
+            res.end("Forbidden: stone executable/knowledge paths are not served to the frontend");
+            return;
+          }
+        }
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), tsconfigPaths()],
+  plugins: [react(), tailwindcss(), tsconfigPaths(), oocHotReload(worldRoot)],
   define: {
     __OOC_WORLD_ROOT__: JSON.stringify(worldRoot),
   },

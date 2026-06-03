@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import type { ServerConfig } from "../../bootstrap/config";
+import type { WorldRuntime } from "@ooc/core/runtime";
 import { callMethodApi } from "./api.call-method";
 import { createKnowledgeDirectoryApi } from "./api.create-knowledge-directory";
 import { createKnowledgeFileApi } from "./api.create-knowledge-file";
@@ -15,8 +16,14 @@ import { putSelfApi } from "./api.put-self";
 import { putServerSourceApi } from "./api.put-server-source";
 import { createStonesService } from "./service";
 
-export function stonesModule(config: Pick<ServerConfig, "baseDir">) {
-  const service = createStonesService({ baseDir: config.baseDir });
+export function stonesModule(
+  config: Pick<ServerConfig, "baseDir">,
+  runtime?: Pick<WorldRuntime, "stoneRegistry">,
+) {
+  const service = createStonesService({
+    baseDir: config.baseDir,
+    stoneRegistry: runtime?.stoneRegistry,
+  });
   return new Elysia({ prefix: "/api", name: "ooc.stones" })
     .use(listStonesApi(service))
     .use(createStoneApi(service))
