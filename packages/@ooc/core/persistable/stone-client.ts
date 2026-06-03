@@ -67,16 +67,11 @@ export async function writeStoneClientSource(ref: StoneObjectRef, code: string):
 
 /**
  * 写入 stone 的 visible/index.tsx，自动 mkdir visible/。
- * 迁移期双写：同时写 visible/ 和 client/。
  */
 export async function writeVisibleSource(ref: StoneObjectRef, code: string): Promise<void> {
   const file = visibleIndexFile(ref);
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, code, "utf8");
-  // Migration dual-write: also write to old client/ path
-  const oldFile = clientIndexFile(ref);
-  await mkdir(dirname(oldFile), { recursive: true });
-  await writeFile(oldFile, code, "utf8");
 }
 
 /** 读取 flow object 的某个 page tsx；不存在返回 undefined。 */

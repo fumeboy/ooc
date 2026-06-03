@@ -205,7 +205,6 @@ export async function createStoneObject(ref: StoneObjectRef): Promise<StoneObjec
 
   await writeFile(selfFile(ref), "", "utf8");
   await writeFile(readableFile(ref), "", "utf8");
-  await writeFile(join(stoneDir(ref), "readme.md"), "", "utf8");
 
   return ref;
 }

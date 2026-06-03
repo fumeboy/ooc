@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { readdir } from "node:fs/promises";
 
 /**
  * 标识磁盘上的单个 flow object 目录。
@@ -184,11 +185,14 @@ export function _deprecatedPackageDir(ref: StoneObjectRef): string {
 }
 
 /**
- * Resolve an existing stone directory with dual-path fallback (M2 2026-06-03).
+ * Resolve an existing stone directory with multi-path fallback (M2 2026-06-03).
  *
- * Checks `stones/<id>/` first (new canonical layout). If that doesn't exist and
- * `packages/<id>/` does, returns the packages path with a console warning.
- * If neither exists, returns the canonical `stones/` path (caller handles ENOENT).
+ * Priority:
+ *   1. Flat layout:  stones/<id>/                    (canonical)
+ *   2. Versioning:   stones/<branch>/objects/<id>/   (git worktree, metaprog)
+ *   3. Deprecated:   packages/<id>/                  (legacy, console.warn)
+ *
+ * If none exist, returns the canonical flat path (caller handles ENOENT).
  *
  * Use this at I/O boundaries (ServerLoader, listStones, etc.) where we actually
  * read from disk. Call sites that only need the path for string manipulation can
@@ -201,6 +205,9 @@ export async function resolveStoneDir(
   const { stat } = await import("node:fs/promises");
   const doStat = opts.statFn ?? stat;
 
+  const idSegments = nestedObjectPath(ref.objectId);
+
+  // 1. Canonical flat layout
   const canonical = stoneDir(ref);
   try {
     const s = await doStat(canonical);
@@ -209,6 +216,26 @@ export async function resolveStoneDir(
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
   }
 
+  // 2. Versioning worktree layout: stones/<branch>/objects/<nestedId>
+  if (!ref.objectId.startsWith("_builtin/") && !BUILTIN_OBJECT_IDS.has(ref.objectId)) {
+    try {
+      const stonesEntries = await readdir(join(ref.baseDir, "stones"), { withFileTypes: true });
+      for (const e of stonesEntries) {
+        if (!e.isDirectory() || e.name.startsWith(".") || e.name.startsWith("@")) continue;
+        const candidate = join(ref.baseDir, "stones", e.name, "objects", ...idSegments);
+        try {
+          const s = await doStat(candidate);
+          if (s.isDirectory()) return candidate;
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+        }
+      }
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    }
+  }
+
+  // 3. Deprecated packages/ layout
   const fallback = _deprecatedPackageDir(ref);
   if (fallback !== canonical) {
     try {

@@ -62,9 +62,7 @@ export async function writeReadme(ref: StoneObjectRef, text: string): Promise<vo
   await writeFile(readmeFile(ref), text, "utf8");
 }
 
-/** 写入 readable.md，覆盖。迁移期双写：同时写 readable.md 和 readme.md。 */
+/** 写入 readable.md，覆盖。 */
 export async function writeReadable(ref: StoneObjectRef, text: string): Promise<void> {
   await writeFile(readableFile(ref), text, "utf8");
-  // Migration dual-write: also write to old readme.md path
-  await writeFile(readmeFile(ref), text, "utf8");
 }

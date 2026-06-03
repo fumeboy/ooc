@@ -58,12 +58,8 @@ export async function writeServerSource(ref: StoneObjectRef, code: string): Prom
 
 /**
  * 写入 executable/index.ts 源码，自动 mkdir executable/ 目录。
- * 迁移期双写：同时写 executable/ 和 server/。
  */
 export async function writeExecutableSource(ref: StoneObjectRef, code: string): Promise<void> {
   await mkdir(executableDir(ref), { recursive: true });
   await writeFile(executableIndexFile(ref), code, "utf8");
-  // Migration dual-write: also write to old server/ path
-  await mkdir(serverDir(ref), { recursive: true });
-  await writeFile(serverIndexFile(ref), code, "utf8");
 }

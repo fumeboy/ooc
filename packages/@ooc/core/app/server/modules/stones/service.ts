@@ -2,13 +2,13 @@ import {
   createStoneObject,
   createPoolObject,
   poolKnowledgeDir,
+  readExecutableSource,
   readReadme,
   readSelf,
-  readServerSource,
   stoneDir,
+  writeExecutableSource,
   writeReadme,
   writeSelf,
-  writeServerSource,
 } from "@ooc/core/persistable";
 import { loadUiServerMethods } from "@ooc/core/executable/server/loader";
 import type { StoneRegistry } from "@ooc/core/runtime/stone-registry";
@@ -273,13 +273,13 @@ export function createStonesService({
     },
     async getServerSource({ objectId }: { objectId: string }) {
       await ensureStoneExists(objectId);
-      return { code: (await readServerSource(ref(objectId))) ?? "" };
+      return { code: (await readExecutableSource(ref(objectId))) ?? "" };
     },
     async putServerSource({ objectId, code, confirmOverwrite = false }: { objectId: string; code: string; confirmOverwrite?: boolean }) {
       await ensureStoneExists(objectId);
-      await ensureOverwriteAllowed(join(dir(objectId), "server", "index.ts"), confirmOverwrite, { objectId, field: "server-source" });
+      await ensureOverwriteAllowed(join(dir(objectId), "executable", "index.ts"), confirmOverwrite, { objectId, field: "server-source" });
       const versioned = await runVersioned(objectId, `http:putServerSource ${objectId}`, async (branch) => {
-        await writeServerSource({ baseDir, objectId, _stonesBranch: branch }, code);
+        await writeExecutableSource({ baseDir, objectId, _stonesBranch: branch }, code);
       });
       return { ok: true, commitSha: versioned.commitSha, merged: versioned.merged, prIssueId: versioned.prIssueId };
     },

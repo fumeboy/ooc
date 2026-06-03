@@ -76,6 +76,7 @@ async function scanTree(
   rootDir: string,
   kind: StoneKind,
   stones: Map<string, StoneDefinition>,
+  allowOverwrite: boolean = true,
 ): Promise<void> {
   async function walk(currentDir: string, idSegments: string[]): Promise<void> {
     let entries;
@@ -109,12 +110,9 @@ async function scanTree(
           finalKind = "stone";
         }
         if (finalId) {
-          // 用户 world 的 stones/ 目录下的所有 object 都纳入（即使用户覆写了 supervisor/user 这类
-          // builtin id，也应该作为 stone 出现，以便走 override 链）。
-          // 只有 builtin 扫描路径需要走 BUILTIN_OBJECT_IDS 白名单，防止 node_modules 里的意外目录被纳入。
           if (kind === "builtin" && !BUILTIN_OBJECT_IDS.has(finalId) && !finalId.startsWith("_builtin/")) {
             // skip non-whitelist ids in builtin scan
-          } else {
+          } else if (allowOverwrite || !stones.has(finalId)) {
             stones.set(finalId, {
               objectId: finalId,
               kind: finalKind,
@@ -165,9 +163,12 @@ export function createStoneRegistry(
 
   async function rescan(): Promise<void> {
     stones.clear();
-    // Flat layout: stones/<objectId>/
+    // Scan order defines priority (first-seen wins on duplicate objectId):
+    //   1. Flat layout stones/<id>       (canonical, highest priority)
+    //   2. Versioning stones/<branch>/objects/<id>  (git worktree mirrors)
+    //   3. Deprecated packages/<id>       (lowest priority)
+    //   4. Builtins node_modules/@ooc/builtins/<id>
     await scanTree(join(worldPath, "stones"), "stone", stones);
-    // Versioning worktree layout: stones/<branch>/objects/<objectId>/
     try {
       const stonesEntries = await readdir(join(worldPath, "stones"), { withFileTypes: true });
       for (const e of stonesEntries) {
@@ -175,7 +176,7 @@ export function createStoneRegistry(
         if (e.name.startsWith("@")) continue;
         const objectsDir = join(worldPath, "stones", e.name, "objects");
         try {
-          await scanTree(objectsDir, "stone", stones);
+          await scanTree(objectsDir, "stone", stones, /*allowOverwrite=*/ false);
         } catch {
           // branch with no objects/ subdir — ignore
         }
@@ -183,8 +184,7 @@ export function createStoneRegistry(
     } catch {
       // stones/ doesn't exist — fine
     }
-    // Deprecated packages/ layout
-    await scanTree(join(worldPath, "packages"), "stone", stones);
+    await scanTree(join(worldPath, "packages"), "stone", stones, /*allowOverwrite=*/ false);
     await scanTree(join(worldPath, "node_modules", "@ooc", "builtins"), "builtin", stones);
   }
 
