@@ -478,6 +478,160 @@ export const root: DocTreeNode = {
                 "其他 docs/<date>-*.md (如 brainstorms/, plans/) 检查是否有未标记的 deprecated 内容, 按本模板补齐 (低优先, 触发条件出现时再处理)",
             ],
         },
+        commit_hygiene: {
+            title: "Commit 卫生 - 何时、以什么粒度、由谁触发 git commit",
+            content: `
+            **背景 (2026-06-03, session 1acc445b)**: 一次完整阶段 (fix thread crash +
+            missing outbox messages) 完成后 Agent 没有主动 commit, 连续三次被用户催促
+            "make git commit, 每次完成一阶段的变更后就进行一次 commit, 不要让我提醒你"。
+            暴露了两条缺规: (1) "阶段完成" 的定义在 Agent 侧不清晰, (2) commit 触发
+            被当作"用户显式请求"而非"工程 hygiene 默认行为"。
+
+            **规约 (2026-06-03 起强制执行)**:
+
+            1. **主动提交, 不需要用户提醒**: 任何一次"内循环"走完 (调研 → 设计 → 实现 →
+               测试 → 反馈全部闭环、tsc clean、测试相对 baseline 无新增回归) 之后,
+               Agent **必须立即提交**, 不需要等用户说 "make commit"。
+            2. **"阶段完成" 的判定标准 (满足任一即触发)**:
+               - 一个具体工单 / bug / small feature 端到端落地 (UI 或命令行真验证过);
+               - 一轮 tsc + bun test 跑完, 相对 baseline 无新增失败;
+               - 工作切换到不同主题 (例如从"修渲染 crash"切到"加 visible 组件"),
+                 前一个主题的改动必须先 commit;
+               - 用户在同一个会话中提出了新的、独立的指令方向。
+            3. **Commit 粒度**: 一次 commit = 一个单一变更主题。不要把"修 crash + 加 visible
+               组件 + 清理 builtins readable"揉在一次 commit 里 (session 1acc445b 前半段
+               这些改动其实已经跨阶段, 但被一次性塞进了 18efee6——这是反例)。
+            4. **Commit message 格式**: 延续仓库既有风格
+               \`feat(ooc-6 M<数字> + M<数字>): <50 字以内描述>\`, 正文用 bullet 列出每个文件的
+               行为变更; 不写"fix bug"这类空泛描述, 写清楚"修了什么、改了哪条链路"。
+            5. **例外**: 正在一个子任务中间、离可工作状态还差很远时, 不要为了 commit 而 commit;
+               但如果要离开超过 30 分钟 (或用户要求切题), 至少用 \`WIP: <主题>\` 先把工作存下来。
+
+            **Supervisor 派单模板加一条**:
+            > 每一阶段 (tsc clean + 测试无新增回归) 完成后**主动 commit**, 不要等我说 "make commit"。
+            > Commit 粒度 = 一个单一变更主题; message 用 feat(ooc-6 Mx): 前缀。
+            `,
+            named: {
+                "阶段完成": "满足 5 条判定标准之一, Agent 应主动 commit 的时点",
+                "主动提交": "commit 是 Agent 的默认行为, 不需要用户显式触发",
+                "单主题 commit": "一次 commit 只包含一个变更主题, 避免揉多个独立改动",
+            },
+            todo: [
+                "把这条规约同步到 CLAUDE.md / 各 AgentOfX 的 prompt 模板中, 避免每次 Supervisor 手工加",
+            ],
+        },
+        data_type_boundary_contract: {
+            title: "数据类型边界契约 - TS 类型 ≠ 磁盘/网络实际数据",
+            content: `
+            **背景 (2026-06-03, session 1acc445b)**: 前端展示 outbox 消息时崩溃于
+            \`undefined is not an object (evaluating 'text.replaceAll')\`。
+
+            根因不是单一 bug, 而是三条边界失守的叠加:
+            1. **TS 类型与磁盘真实数据脱节**: \`ThreadMessage.content: string\` 在类型上是必填,
+               但手动 seed 的脚本写入 \`text\` 字段 (legacy 别名) 且把 \`content\` 留 null;
+               磁盘 JSON 不经过 TS 编译期检查, 下游 render 信任了类型标注, 对 null 调
+               \`.replaceAll()\` 直接崩溃。见 commit 0492cf6。
+            2. **字段别名漂移**: 同一"消息正文"语义在链路里同时存在 \`content\` (canonical) 和
+               \`text\` (legacy) 两个名字; "目标对象"同时有 \`targetObjectId\` (seed 脚本用) 和
+               \`toObjectId\` (ThreadMessage canonical) 两个名字。各层消费者只实现了其中一个
+               分支, 消息能不能展示取决于走了哪条写入路径。
+            3. **底层构造器不做防御**: \`xmlText(value: string)\` 和 \`xmlComment(value: string)\`
+               的参数类型是 \`string\`, 但调用方传 \`null/undefined\` 时 TS 在 any-cast 边界被绕开,
+               函数内部也没兜底, 崩溃从最底层冒出, stack 离业务语义很远, 定位成本高。
+
+            **规约 (2026-06-03 起强制执行)**:
+
+            1. **所有"系统边界"的数据都要做运行时校验 / 兜底, 不能只靠 TS 类型**:
+               - 系统边界 = 从磁盘 JSON 读 (thread.json / .stone.json / relation 文件)、
+                 从 HTTP 请求 body 读、从别的 Agent / user 传来的消息。
+               - 校验形式三选一 (按优先级):
+                 (a) 有运行时 schema (zod / valibot / 手写 assert);
+                 (b) 读取函数里做字段归一化 (例: \`body = msg.content ?? msg.text ?? ""\`);
+                 (c) 最底层构造器兜底 (例: \`xmlText(v: string | null | undefined)\` 内部
+                 \`v ?? ""\`)——这是最后防线, 不能替代 (a)(b)。
+               - 禁忌: 看到 TS 类型写着 \`content: string\` 就默认运行时一定有值。
+            2. **字段别名必须集中声明 + 所有消费者统一实现**:
+               - 只要一个语义存在两个字段名 (canonical + legacy alias), 就必须在类型定义
+                 旁边写一个 comment 列出所有别名, 并提供一个**唯一的归一化函数**
+                 (如 \`normalizeThreadMessage(msg): ThreadMessage\`)。
+               - 所有消费者 (render / formatter / service) 只通过归一化函数读数据,
+                 不许在自己代码里随手写 \`msg.content ?? msg.text\` 这种散落在各处的兼容。
+                 (本次 0492cf6 作为 hotfix 允许散落写法, 下一阶段要集中到一个 normalize 函数。)
+            3. **底层 text / string 构造器必须接受 undefined/null**:
+               - 任何接收字符串并在内部调 \`.replaceAll\` / \`.replace\` / \`.split\` 的函数,
+                 参数类型都应放宽到 \`string | undefined | null\`, 并默认转空串。
+                 典型名单: \`escapeXml / wrapCdata / shouldUseCdata / renderXmlTextValue /
+                 escapeXmlComment / xmlText / xmlComment\` 系列 (已在 0492cf6 统一修完);
+                 未来加新的 text-helper 也照此。
+               - 理由: TS 的 any-cast 边界是客观存在的 (磁盘 JSON、跨进程消息、用户输入),
+                 让崩溃从底层冒出是最差的可观测性, 不如"空串兜底 + 上层肉眼看见内容为空"。
+            4. **写 seed / demo / test 数据时必须用 canonical 字段名**:
+               - \`_seed_visible_demo.ts\` 这类手写 \`thread.json\` 的脚本, 严禁继续使用 legacy
+                 字段。用什么字段名, 以 \`ThreadMessage\` / \`ContextWindow\` 等 TS interface 里
+                 的声明为准; createdAt 用毫秒数字 (不是 ISO string); source / windowId /
+                 fromObjectId / toObjectId 一个都不能缺。
+               - 如果不确定 canonical 字段名, **先 grep 类型定义**, 不要猜。
+            `,
+            named: {
+                "系统边界": "数据脱离 TS 编译期保护的地方: 磁盘 JSON / HTTP body / 跨 Agent 消息",
+                "字段别名漂移": "同一语义有多个字段名, 不同消费者各实现各的兼容分支",
+                "归一化函数": "集中处理字段别名 / 默认值 / 类型转换的唯一入口",
+                "canonical 字段名": "TS interface 中声明的权威字段名, seed / test / demo 必须用它",
+            },
+            sources: [["xml.ts + render.ts + formatter.ts + _seed_visible_demo.ts", "四层修复对应文件: core/thinkable/context/xml.ts (null-safe text helpers)、core/thinkable/context/render.ts (messageBody content/text fallback)、web/src/domains/chat/formatter.ts (content/text + windowId/targetObjectId)、meta/storybook/_seed_visible_demo.ts (canonical ThreadMessage fields)"]],
+            todo: [
+                "下一阶段: 把散落的 msg.content ?? msg.text / targetObjectId ?? toObjectId 兼容集中到一个 normalizeThreadMessage() 函数, 避免各层重复写",
+                "给 thread.json / .stone.json 的读取入口加 zod schema 或手写 assert, 防止脏数据静默通过",
+            ],
+        },
+        layer_parallel_fix_pattern: {
+            title: "跨层修复模式 - 一个数据问题的链路往往跨 server/core/web 三层",
+            content: `
+            **背景 (2026-06-03, session 1acc445b)**: 报告的是"outbox 消息没在页面上展示"。
+            排查后发现这不是单个 bug, 而是三层各有各的问题, 必须三层一起修才闭环:
+            - **core 渲染层** (\`packages/@ooc/core/thinkable/context/render.ts\` + \`xml.ts\`):
+              信任了 TS 类型, 对 null content 调 replaceAll → thread status 直接 failed,
+              整个上下文渲染中断。
+            - **后端 seed 层** (\`packages/@ooc/meta/storybook/_seed_visible_demo.ts\`):
+              手写的 thread.json 用了 legacy 字段名 (\`text\` / \`targetObjectId\` / ISO string
+              createdAt) 且缺 windowId, 导致下游 formatter 无法把消息映射到 user target。
+            - **前端展示层** (\`packages/@ooc/web/src/domains/chat/formatter.ts\`):
+              \`buildOutboundMessageLinesForTargets\` 只从 \`talkWindowTargets[windowId]\`
+              找 target, 且只认 \`m.content\`, 没 \`windowId\` / 字段是 legacy 名的消息直接被跳过。
+
+            只修其中任何一层, 用户在 UI 上依然看不到消息: 修 core 只是让线程不崩,
+            但 formatter 还是跳过; 修 formatter 只是兼容 legacy 字段, 但 core 已经崩了,
+            thread 根本到不了展示环节; 修 seed 也不够, 因为 formatter/core 对边界数据
+            的脆弱性仍在, 下次任何脏数据进来又会炸。
+
+            **规约 (2026-06-03 起, 所有跨层链路问题强制执行)**:
+
+            1. **修数据链路 bug, 先把三层都列出来再动手**: 任何"消息 / 文件 / 状态"类问题,
+               在动手前先强制列出三层:
+               - **生产层** (谁写数据 / 发请求 / seed 数据)
+               - **传输/渲染层** (core 中的 context render / service layer)
+               - **消费层** (web formatter / UI 组件)
+               缺任何一层都先回答"这一层会不会也有问题"再动手。
+            2. **三层修完才算闭环, 任何单层修复都不是 done**:
+               - 修消费层 (formatter) 兼容 legacy 字段 = 缓解但未根治;
+               - 修生产层 (seed) 用 canonical 字段 = 对新数据有效, 老数据仍会炸;
+               - 修传输/渲染层 (xml/render) 兜底 null = 不崩但可能内容为空。
+               三层都修完 = 老数据能退化展示、新数据严格规范、底层不崩溃。
+            3. **测试时分别验证三层**:
+               - 生产层: tsc + 跑 seed 脚本, 用 \`jq\` 或直接读 JSON 确认字段名与类型正确;
+               - 传输/渲染层: 喂一条故意带 legacy 字段 / null content 的消息,
+                 断言渲染不抛异常且 output 中能找到正文;
+               - 消费层: 构造一条缺 windowId 但有 targetObjectId 的 outbox 消息,
+                 断言 formatter 产出对应 ChatLine。
+            `,
+            named: {
+                "生产-传输-消费三层": "数据链路的三个天然切面, 链路问题要三层一起看",
+                "单层修复 ≠ done": "只修任何一层都会留下隐患, 三层都修复才算闭环",
+            },
+            todo: [
+                "把这个三层清单模板放进 Supervisor 派 sub agent 修 bug 的 prompt 里",
+            ],
+        },
     },
     warnings: [
         "AgentOfX 各 stone (stones/agent_of_thinkable/ 等) 当前仓库内并未创建; 这是预期的——短期通过 Claude Code sub agent 暂行,不需要 stone 目录 (详见 patches.interim_runtime)。stones 的真正创建发生在该 Agent 从 Claude Code 形态迁移到 OOC 内 Object 形态的那一刻。",
