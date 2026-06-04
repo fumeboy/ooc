@@ -6,6 +6,7 @@ node_modules/
 .ooc-world/
 .ooc-world-*
 .claude/
+.agent_context/
 goal.md
 .agents
 .coco
