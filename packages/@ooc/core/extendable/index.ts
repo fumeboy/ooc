@@ -11,11 +11,11 @@
  *
  * 添加新外部集成时：
  * 1. 在本目录下建子目录（如 \`extendable/notion/\`）
- * 2. 子目录的 index.ts 做 side-effect 注册（registerWindowType / 注册 root opener / 等）
+ * 2. 子目录的 index.ts 做 side-effect 注册（registerObjectType / 注册 root opener / 等）
  * 3. 在本文件追加 \`import "./<sub>/index.js";\`
  *
  * 这条 barrel 由 src/executable/windows/index.ts 在所有 builtin window type 加载完成后拉起，
- * 保证扩展类型在通用层 boot 校验（assertAllRenderHooksRegistered）之前注册到位。
+ * 保证扩展类型在通用层 boot 校验（assertAllObjectDefinitionsRegistered）之前注册到位。
  */
 
 import "@ooc/builtins/knowledge";

@@ -7,7 +7,7 @@ import {
 } from "../triggers";
 import type { ThreadContext } from "../../context";
 import {
-  CommandExecWindow,
+  MethodExecWindow,
   ContextWindow,
 } from "../../../executable/windows/_shared/types";
 
@@ -21,10 +21,10 @@ function thread(overrides: Partial<ThreadContext> = {}): ThreadContext {
   };
 }
 
-function form(overrides: Partial<CommandExecWindow>): CommandExecWindow {
+function form(overrides: Partial<MethodExecWindow>): MethodExecWindow {
   return {
     id: "f",
-    type: "command_exec",
+    type: "method_exec",
     parentWindowId: "root",
     title: "x",
     status: "open",

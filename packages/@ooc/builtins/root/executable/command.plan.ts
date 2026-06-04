@@ -10,12 +10,14 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
+  MethodExecutionContext,
+  ObjectMethod,
   MethodOutcome,
 } from "@ooc/core/extendable/_shared/command-types.js";
-import { lookupConstructor } from "@ooc/core/extendable/_shared/registry.js";
+import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
+import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 // 2026-06-02 P6.§4-§5: side-effect import 触发 plan_window constructor 注册
 import "@ooc/builtins/plan";
@@ -61,12 +63,48 @@ function hasAnyInput(args: Record<string, unknown>): boolean {
   );
 }
 
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
 /** plan command 表项：当前只命中基础 plan 路径。 */
-export const planCommand: CommandTableEntry = {
+export const planCommand: ObjectMethod = {
   paths: [PlanCommandPath.Plan],
-  match: () => [PlanCommandPath.Plan],
-  knowledge: (args): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  schema: {
+    args: {
+      plan: { type: "string", required: false, description: "计划文本（快捷方式）" },
+      title: { type: "string", required: false, description: "plan 标题" },
+      description: { type: "string", required: false, description: "plan 描述" },
+      steps: { type: "array", required: false, description: "步骤列表 [{ id?, text, status? }]" },
+    },
+  } as MethodCallSchema,
+  intent: (): Intent[] => [],
+  onFormChange(change, { form, intents }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const entries: Record<string, string> = {
       [PLAN_BASIC_PATH]: KNOWLEDGE,
     };
     if (!hasAnyInput(args)) {
@@ -75,7 +113,7 @@ export const planCommand: CommandTableEntry = {
         "请用 refine(form_id, args={ plan: \"<计划文本>\" }) 或 refine(form_id, args={ title: \"...\", description: \"...\", steps: [...] }) 补齐后 submit(form_id)。\n" +
         "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executePlanCommand(ctx),
 };
@@ -84,9 +122,9 @@ export const planCommand: CommandTableEntry = {
  * P6.§4-§5 thin delegator —— 委托到 plan_window constructor。
  */
 export async function executePlanCommand(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<MethodOutcome | string | undefined> {
-  const ctor = lookupConstructor("plan");
+  const ctor = (ctx.manager?.registry ?? builtinRegistry).lookupConstructor("plan");
   if (!ctor) return "[plan] plan_window constructor 未注册（registry 期望 kind=\"constructor\" 的 plan method）。";
   return await ctor.exec(ctx);
 }

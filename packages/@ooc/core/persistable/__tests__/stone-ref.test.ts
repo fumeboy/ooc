@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { packageDir, stoneDir, deriveStoneFromThread, type StoneObjectRef, type ThreadPersistenceRef } from "../common";
+import { stoneDir, deriveStoneFromThread, type StoneObjectRef, type ThreadPersistenceRef } from "../common";
 
 // M2 (2026-06-03): "packages/" renamed to "stones/" as canonical user-stone path.
-// stoneDir is now canonical; packageDir is a @deprecated alias that delegates to stoneDir.
 describe("stoneDir resolves stones/{nestedPath(objectId)}", () => {
   test("flat objectId resolves to stones/<id>", () => {
     const ref: StoneObjectRef = { baseDir: "/tmp/world", objectId: "agent_of_x" };
@@ -17,11 +16,6 @@ describe("stoneDir resolves stones/{nestedPath(objectId)}", () => {
   test("deeply nested objectId inserts multiple children/ segments", () => {
     const ref: StoneObjectRef = { baseDir: "/tmp/world", objectId: "a/b/c" };
     expect(stoneDir(ref)).toBe("/tmp/world/stones/a/children/b/children/c");
-  });
-
-  test("packageDir is a deprecated alias for stoneDir", () => {
-    const ref: StoneObjectRef = { baseDir: "/tmp/world", objectId: "agent_of_x" };
-    expect(packageDir(ref)).toBe(stoneDir(ref));
   });
 });
 

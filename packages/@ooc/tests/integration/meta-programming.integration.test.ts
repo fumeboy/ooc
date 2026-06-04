@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { runScheduler } from "@ooc/core/thinkable/scheduler";
-import { createFlowObject, createStoneObject, readServerSource, stoneDir } from "@ooc/core/persistable";
+import { createFlowObject, createStoneObject, readExecutableSource, stoneDir } from "@ooc/core/persistable";
 import { clearObservableDebugState, disableDebug, enableDebug } from "@ooc/core/observable";
 import {
   bootstrapInboxFromPrompt,
@@ -47,7 +47,7 @@ describe.skipIf(!hasLlmEnv)("integration: meta-programming", () => {
         "      commands: {",
         "        add: {",
         "          paths: ['add'],",
-        "          match: () => ['add'],",
+        "          intent: () => [],",
         "          exec: async ({ args }) => ({ ok: true, result: String(Number(args.a) + Number(args.b)) }),",
         "        },",
         "      },",
@@ -78,7 +78,7 @@ describe.skipIf(!hasLlmEnv)("integration: meta-programming", () => {
 
     expect(root.status).toBe("done");
 
-    const sourceText = await readServerSource(stoneRef);
+    const sourceText = await readExecutableSource(stoneRef);
     expect(sourceText).toBeDefined();
     expect(sourceText).toContain("add");
 

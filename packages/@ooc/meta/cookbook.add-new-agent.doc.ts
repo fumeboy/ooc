@@ -185,8 +185,8 @@ export const root: DocTreeNode = {
             如果新 Agent 需要被 LLM 或 UI 主动调用方法, 写 \`server/index.ts\` (方法库)。详见 \`meta/object.doc.ts:programmable\`。
             如果新 Agent 需要自己的 UI 页面 (而不是用 Stone fallback), 写 \`client/index.tsx\`. 详见 \`meta/object.doc.ts:visible.stone_client\`。
 
-            **2026-06-02 ooc-6 P6 命名归一**: \`commands\` 字段已重命名为 \`methods\`；\`CommandTableEntry\` 类型重命名为 \`ObjectMethod\`。
-            旧名 \`commands\` / \`CommandTableEntry\` 仍以 \`@deprecated\` alias 形式存在一个 release，新代码应直接用 \`methods\` / \`ObjectMethod\`。
+            **2026-06-02 ooc-6 P6 命名归一**: \`commands\` 字段已重命名为 \`methods\`；\`ObjectMethod\` 类型重命名为 \`ObjectMethod\`。
+            旧名 \`commands\` / \`ObjectMethod\` 仍以 \`@deprecated\` alias 形式存在一个 release，新代码应直接用 \`methods\` / \`ObjectMethod\`。
 
             **server/index.ts 模板** (P6 形态):
 
@@ -197,11 +197,8 @@ export const root: DocTreeNode = {
             // 普通 method —— 返回 { ok: true, result?: string } 或 { ok: false, error: string }
             const checkThresholdMethod: ObjectMethod = {
                 paths: ["check_threshold"],
-                match: () => ["check_threshold"],
-                knowledge: () => ({
-                    "internal/windows/custom/check_threshold/basic":
-                        "查询某个指标是否越界 (metric: cpu/memory/latency)",
-                }),
+                intent: () => [],
+                onFormChange: () => [],
                 exec: async (ctx) => {
                     const metric = ctx.args.metric as string;
                     // ctx.self 是 method 的 receiver window；ctx.thread 是当前 thread；
@@ -210,14 +207,14 @@ export const root: DocTreeNode = {
                 },
             };
 
-            // Constructor method —— kind: "constructor"，返回 { ok: true, object: OOCObject }；
+            // Constructor method —— kind: "constructor"，返回 { ok: true, object: ContextObject }；
             // manager 自动 mount 到 thread.contextWindows（作为 ContextObject） + 按 isBuiltinFeature 分两路落盘。
             const monitorConstructor: ObjectMethod = {
                 kind: "constructor",
                 paths: ["agent_of_monitor"],
-                match: () => ["agent_of_monitor"],
+                intent: () => [],
                 exec: async (ctx) => {
-                    // 构造一个 OOCObject 实例并交给 manager；不要在这里直接 mutate thread.contextWindows。
+                    // 构造一个 ContextObject 实例并交给 manager；不要在这里直接 mutate thread.contextWindows。
                     return {
                         ok: true,
                         object: {
@@ -257,8 +254,8 @@ export const root: DocTreeNode = {
 
             **关键点**:
             - \`methods\` 字段是 canonical 名（\`commands\` 是 @deprecated alias，registry 内部双写以保持读取兼容）。
-            - \`ObjectMethod\` 类型来自 \`@ooc/core/executable/windows\` barrel；旧名 \`CommandTableEntry\` 仍可 import 但应迁移到 \`ObjectMethod\`。
-            - \`kind: "constructor"\` 的 method 必须返回 \`{ ok: true, object: OOCObject }\`；manager 自动 mount 到 thread 的 context（作为 ContextObject），不要在 exec 里直接 \`thread.contextWindows.push(...)\`。
+            - \`ObjectMethod\` 类型来自 \`@ooc/core/executable/windows\` barrel；旧名 \`ObjectMethod\` 仍可 import 但应迁移到 \`ObjectMethod\`。
+            - \`kind: "constructor"\` 的 method 必须返回 \`{ ok: true, object: ContextObject }\`；manager 自动 mount 到 thread 的 context（作为 ContextObject），不要在 exec 里直接 \`thread.contextWindows.push(...)\`。
             - \`parentClass: "root"\` 让自定义 Agent 类自动继承 root 的所有通用 method；不写也等价（registry 默认 \`undefined → "root"\`）。
 
             **client/index.tsx** (有了它会覆盖 Stone fallback):
@@ -275,7 +272,7 @@ export const root: DocTreeNode = {
             `,
             named: {
                 "object.methods / ui_methods": "method 分流: 前者给 LLM (exec 调), 后者给 web UI (HTTP callMethod 调)",
-                "ObjectMethod": "method 类型；canonical 名（旧名 CommandTableEntry 是 @deprecated alias）",
+                "ObjectMethod": "method 类型；canonical 名（旧名 ObjectMethod 是 @deprecated alias）",
                 "kind: \"constructor\"": "标记此 method 是 Object class 的构造方法；返回 { ok: true, object } 由 manager 自动 mount",
                 "parentClass": "registry 上 ObjectDefinition 的字段；缺省（undefined）= 隐式继承 \"root\"，让自定义 Agent 自动拿到 talk/do/todo/... 全套",
                 "Stone fallback": "无 client/index.tsx 时 web 默认展示 self.md/readme.md/knowledge/Recent flows",

@@ -22,7 +22,7 @@ import type { ObjectRegistry } from "./object-registry.js";
 import { resolveStoneDir } from "../persistable/index.js";
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
-import type { StoneObjectRef } from "../executable/server/types.js";
+import type { ObjectWindowDefinition, StoneObjectRef } from "../executable/server/types.js";
 
 export interface ObjectTypeRegistrarDeps {
   readonly worldPath: string;
@@ -70,10 +70,10 @@ export class ObjectTypeRegistrar {
       const parentClass = await this.resolveParentClass(windowDef, stoneRef);
 
       // registerObjectType = merge into existing; registerNewObjectType = create new
+      const mergedMethods = { ...(windowDef?.methods ?? {}), ...(windowDef?.commands ?? {}) };
       if (this.deps.registry.has(objectId)) {
         this.deps.registry.registerObjectType(objectId as any, {
-          commands: windowDef?.commands,
-          methods: windowDef?.commands,
+          methods: mergedMethods,
           renderXml: windowDef?.renderXml,
           readable: windowDef?.readable,
           onClose: windowDef?.onClose,
@@ -85,8 +85,7 @@ export class ObjectTypeRegistrar {
         });
       } else {
         this.deps.registry.registerNewObjectType(objectId as any, {
-          commands: windowDef?.commands ?? {},
-          methods: windowDef?.commands ?? {},
+          methods: mergedMethods,
           renderXml: windowDef?.renderXml,
           readable: windowDef?.readable,
           onClose: windowDef?.onClose,
@@ -107,7 +106,6 @@ export class ObjectTypeRegistrar {
       if (!this.deps.registry.has(objectId)) {
         try {
           this.deps.registry.registerNewObjectType(objectId as any, {
-            commands: {},
             methods: {},
           });
         } catch {
@@ -140,9 +138,9 @@ export class ObjectTypeRegistrar {
    *  > self.md frontmatter prototype.
    */
   private async resolveParentClass(
-    windowDef: { parentClass?: string; prototype?: string } | undefined,
+    windowDef: ObjectWindowDefinition | undefined,
     stoneRef: StoneObjectRef,
-  ): Promise<string | undefined> {
+  ): Promise<string | null | undefined> {
     if (windowDef?.parentClass !== undefined) return windowDef.parentClass;
     if (windowDef?.prototype !== undefined) return windowDef.prototype;
     try {

@@ -8,9 +8,50 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { ROOT_COMMANDS } from "@ooc/builtins/root";
+import { ROOT_METHODS } from "@ooc/builtins/root";
 import { KNOWLEDGE as BASIC_KNOWLEDGE } from "@ooc/core/thinkable/knowledge/basic-knowledge";
-import type { CommandTableEntry } from "@ooc/core/executable/windows/_shared/command-types";
+import type { ObjectMethod } from "@ooc/core/executable/windows/_shared/command-types";
+import type { Intent } from "@ooc/core/thinkable/context/intent.js";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+
+/**
+ * Simulate the old `knowledge(args, status)` API using the new `onFormChange` interface.
+ */
+function callKnowledge(
+  cmd: { onFormChange?: unknown; intent?: (args: Record<string, unknown>) => Intent[] },
+  args: Record<string, unknown>,
+  status: "open" | "executing" | "success" | "failed",
+): Record<string, string> {
+  const fn = cmd.onFormChange as
+    | ((change: any, ctx: { form: MethodExecWindow; intents: Intent[] }) => ContextWindow[])
+    | undefined;
+  if (!fn) return {};
+  const form: MethodExecWindow = {
+    id: "test_form",
+    type: "method_exec",
+    parentWindowId: "root",
+    title: "test",
+    command: "test",
+    description: "",
+    accumulatedArgs: args,
+    commandPaths: [],
+    loadedKnowledgePaths: [],
+    status,
+    createdAt: 0,
+  };
+  const intents = cmd.intent?.(args) ?? [];
+  const change =
+    status !== "open"
+      ? { kind: "status_changed" as const, to: status, from: "open" as const }
+      : { kind: "args_refined" as const, args, added: [] as string[], removed: [] as string[], changed: [] as string[] };
+  const windows = fn(change, { form, intents });
+  const out: Record<string, string> = {};
+  for (const w of windows) {
+    out[w.title] = (w as any).content ?? "";
+  }
+  return out;
+}
 
 /**
  * 把 entries object 中所有 value 拼成单一字符串方便断言。
@@ -21,7 +62,7 @@ function flatten(entries: Record<string, string>): string {
 
 interface CmdCase {
   name: string;
-  cmd: CommandTableEntry;
+  cmd: ObjectMethod;
   emptyArgs: Record<string, unknown>;
 }
 
@@ -41,8 +82,8 @@ const TARGETS = [
 
 function buildCases(): CmdCase[] {
   return TARGETS.map((name) => {
-    const cmd = ROOT_COMMANDS[name];
-    if (!cmd) throw new Error(`ROOT_COMMANDS missing: ${name}`);
+    const cmd = ROOT_METHODS[name];
+    if (!cmd) throw new Error(`ROOT_METHODS missing: ${name}`);
     return { name, cmd, emptyArgs: {} };
   });
 }
@@ -53,17 +94,15 @@ describe("Round 12 refine-hint", () => {
   describe("knowledge() input prompt at status=open with missing args", () => {
     for (const c of CASES) {
       it(`${c.name}: contains "refine" string`, () => {
-        const fn = c.cmd.knowledge;
-        if (!fn) throw new Error(`${c.name} has no knowledge() handler`);
-        const entries = fn(c.emptyArgs, "open");
+        if (!c.cmd.onFormChange) throw new Error(`${c.name} has no onFormChange handler`);
+        const entries = callKnowledge(c.cmd, c.emptyArgs, "open");
         const text = flatten(entries);
         expect(text).toContain("refine");
       });
 
       it(`${c.name}: contains "不要 close" guidance (no close-reopen as default)`, () => {
-        const fn = c.cmd.knowledge;
-        if (!fn) throw new Error(`${c.name} has no knowledge() handler`);
-        const entries = fn(c.emptyArgs, "open");
+        if (!c.cmd.onFormChange) throw new Error(`${c.name} has no onFormChange handler`);
+        const entries = callKnowledge(c.cmd, c.emptyArgs, "open");
         const text = flatten(entries);
         expect(text).toContain("不要 close");
       });

@@ -155,8 +155,7 @@ export const root: DocTreeNode = {
                 "LLM": "Large Language Model, Object 思考时调用的模型服务",
                 "Context": "Object 每一轮思考时能看见的全部信息，是 Object 的世界边界",
                 "ContextWindow": "Context 的统一抽象信息单元，**本质是 OOC Object 出现在 context 中的形态**，既是信息展示单元，也是可操作对象，挂载 Object 的 method 供 LLM 交互",
-                "ContextObject": "ContextWindow 的别名，强调 window = object in context",
-                "OOCObject": "2026-06-02 (ooc-6 P6): Object 自身（object 维度，persist 到 state.json）；constructor 返回 OOCObject，manager 再把它 mount 为 thread context 中的 ContextObject",
+                "ContextObject": "ContextWindow 的别名，强调 window = object in context；同时也是 Object 自身（object 维度，persist 到 state.json）；constructor 返回 ContextObject，manager 再把它 mount 为 thread context 中的 ContextObject",
                 "Knowledge": "Object 持有的 markdown 知识文档，可按 command path 渐进激活进入 Context",
                 "Thread": "Object 思考过程的运行时节点，多个 thread 组成 Thread Tree",
                 "Thread Tree": "thread 派生子 thread 形成的树形结构，多个 thread 可并行思考",
@@ -673,7 +672,7 @@ export const root: DocTreeNode = {
                         "type_dispatch": {
                             title: "type-dispatch - 每个 window type 自负责 compressView",
                             content: `
-                            WindowTypeDefinition 加可选字段 compressView(window, level, ctx) → XmlNode[]。
+                            ObjectTypeDefinition 加可选字段 compressView(window, level, ctx) → XmlNode[]。
                             render.ts 调度器读 window.compressLevel: level=0 走 renderXml; level≥1 走 compressView,
                             缺省时 fallback 到通用 title-only 渲染。
                             绝不让一个全局算法压所有东西。
@@ -873,7 +872,7 @@ export const root: DocTreeNode = {
                     title: "methods - 具体行动单元（原称 commands）",
                     content: `
                     Method 是 LLM 通过 exec 间接调用的具体行动（2026-05-28 ooc-6 命名归一前称 command；
-                    原 \`ObjectDefinition.commands\` 字段已重命名为 \`methods\`，旧名以 \`@deprecated\` alias 保留）。
+                    原 \`ObjectDefinition.methods\` 字段已重命名为 \`methods\`，旧名以 \`@deprecated\` alias 保留）。
 
                     LLM 通常不是直接 "调用 program 函数"，而是:
                     1. exec(command="program", args={ language: "shell", code: "..." }) → args 齐全立即执行
@@ -966,7 +965,7 @@ export const root: DocTreeNode = {
                     OOC 元编程闭环让 Agent 可以改自己的 server / self / 文件系统;
                     每条 command 必须有"该不该让 LLM 直接执行"的三档判定。
                     按 OOC 本性,
-                    permission 是 CommandTableEntry 上的一个声明字段, 与 description / params / knowledge
+                    permission 是 ObjectMethod 上的一个声明字段, 与 description / params / knowledge
                     / fn 同层级, runtime 在 thinkloop 分派 tool call 之前查询。
 
                     三档语义:
@@ -975,9 +974,9 @@ export const root: DocTreeNode = {
                     - **Deny**: 系统直接拒绝, 在 events 流写一条 function_call_output, 让 LLM 看见原因。适合"永远不该让 LLM 直接干"的事 (本轮: 程序自改 executable/index.ts; 未来 plan mode 通过后再放开)。
 
                     声明 + 配置 = 最终决定:
-                    - **声明**: CommandTableEntry.permission 字段, 由 command 作者填写。
+                    - **声明**: ObjectMethod.permission 字段, 由 command 作者填写。
                     - **配置**: stones/<self>/objects/<id>/config/policies.json 可 override 任意 command 的 permission (用户/Supervisor 微调)。
-                    - **runtime 决定**: policies.json 优先, 否则用 CommandTableEntry 声明; 都没填默认 Allow (向后兼容)。
+                    - **runtime 决定**: policies.json 优先, 否则用 ObjectMethod 声明; 都没填默认 Allow (向后兼容)。
 
                     设计原则:
                     - **可见性**: 三档决策每一种都至少落一条 ProcessEvent (permission_allowed 不必落, allow 是默认; permission_ask / permission_denied 必须落)。
@@ -995,7 +994,7 @@ export const root: DocTreeNode = {
                     `,
                     named: {
                         "PermissionLevel": "\"allow\" | \"ask\" | \"deny\"",
-                        "CommandTableEntry.permission": "command 的声明字段; 缺省 allow",
+                        "ObjectMethod.permission": "command 的声明字段; 缺省 allow",
                         "policies.json": "stones/<self>/objects/<id>/config/policies.json; runtime 覆盖声明",
                         "PermissionDecider": "(thread, call) => Decision | Promise<Decision>; 通过 setPermissionDecider 注入",
                         "permission_denied / permission_ask": "ProcessEvent type; 落盘 + visibility-first",
@@ -1012,12 +1011,12 @@ export const root: DocTreeNode = {
                                - allow: 继续 dispatchToolCall;
                                - ask: 写 permission_ask ProcessEvent + thread.status="paused" + return (与现有 pause 时序一致);
                                - deny: 写 permission_denied ProcessEvent + 合成 function_call_output ("denied: <reason>") + 跳过分派, 让下一轮 LLM 看到。
-                            4. 没注入 PermissionDecider 时, 默认 policy 表生效 (CommandTableEntry.permission || allow)。
+                            4. 没注入 PermissionDecider 时, 默认 policy 表生效 (ObjectMethod.permission || allow)。
 
                             这种顺序复用了现有 pause 的"安全暂停点"——assistant output 已记录可被人查看, tool call 还没执行。
                             `,
                             named: {
-                                "decidePermission": "thinkloop 调用的查询函数; 内部走 policies.json + CommandTableEntry + Decider",
+                                "decidePermission": "thinkloop 调用的查询函数; 内部走 policies.json + ObjectMethod + Decider",
                                 "permission_ask 时序": "与现有 pause 复用; thread.status='paused' 后等控制面 approve/reject",
                             },
                         },
@@ -1073,7 +1072,7 @@ export const root: DocTreeNode = {
                     sources: [["docs/2026-05-25-permission-model-design.md", "完整 design (含 Q0a~Q0d 分阶段 + 默认 policy 草案 + 风险清单 + Supervisor 拍板记录)"]],
                     todo: [
                         "Q0e 抽专用 program_self_modify command 或在 write_file exec 中加路径前缀检查 (stones/*/executable/index.ts → deny); Plan Mode 落地前保持 deny",
-                        "Q0e Stone 作者的 permission 声明传递: programmable.loader 把 ObjectWindowDefinition.commands[*].permission 透传到 CommandTableEntry (custom window proxy 当前一律缺省 allow, 由 stone 作者自行声明)",
+                        "Q0e Stone 作者的 permission 声明传递: programmable.loader 把 ObjectWindowDefinition.methods[*].permission 透传到 ObjectMethod (custom window proxy 当前一律缺省 allow, 由 stone 作者自行声明)",
                         "远景: Auto Mode (AI 分类器) / Plan Mode (LLM plan + user approve) / OS-level Sandbox 集成——本轮全部不做",
                     ],
                     warnings: [
@@ -1187,7 +1186,7 @@ export const root: DocTreeNode = {
                             **设计原则**：context XML 的渲染采用 "接口 explicit" 契约：每个 window type
                             必须在 \`ObjectDefinition.renderXml\`（或 \`readable\`）上注册自己的渲染 hook；render.ts 退化为
                             纯调度器，不再 switch-by-case。
-                            （\`ObjectDefinition\` 即 P6 ooc-6 命名归一前的 \`WindowTypeDefinition\`，旧名仍以
+                            （\`ObjectDefinition\` 即 P6 ooc-6 命名归一前的 \`ObjectTypeDefinition\`，旧名仍以
                             \`@deprecated\` alias 保留一个 release。）
 
                             **调度器职责**（src/thinkable/context/render.ts）：
@@ -1198,14 +1197,14 @@ export const root: DocTreeNode = {
                             - 子 window 折叠（按 parentWindowId 嵌套到 \`<sub_windows>\`）
 
                             **启动期 fail-loud**：windows/index.ts 在所有 side-effect import 完成后调用
-                            \`assertAllRenderHooksRegistered()\`，缺 renderXml 的 type 立即抛错——不让"空白 XML"
+                            \`assertAllObjectDefinitionsRegistered()\`，缺 renderXml 的 type 立即抛错——不让"空白 XML"
                             的问题流到 LLM context 才被发现。
                             `,
                             named: {
-                                "WindowTypeDefinition.renderXml": "RenderHook 类型 (ctx) => XmlNode[] | Promise<XmlNode[]>，注册到 ObjectRegistry（P6 后 canonical 名为 ObjectDefinition.renderXml）",
+                                "ObjectTypeDefinition.renderXml": "RenderHook 类型 (ctx) => XmlNode[] | Promise<XmlNode[]>，注册到 ObjectRegistry（P6 后 canonical 名为 ObjectDefinition.renderXml）",
                                 "调度器": "src/thinkable/context/render.ts:renderWindowNode；无 switch，按 def.renderXml 调度",
                                 "<commands> 节点": "通用层为每个 window 输出的命令面索引；空 commands 表的 window 跳过该节点",
-                                "assertAllRenderHooksRegistered": "src/executable/windows/_shared/registry.ts；启动期校验所有 type 已配齐 renderXml（P6 后由 assertAllObjectDefinitionsRegistered 替代，readable 也算配齐）",
+                                "assertAllObjectDefinitionsRegistered": "src/executable/windows/_shared/registry.ts；启动期校验所有 type 已配齐 renderXml（P6 后由 assertAllObjectDefinitionsRegistered 替代，readable 也算配齐）",
                             },
                             sources: [["src/thinkable/context/render.ts", "调度器实现 + commands 元数据节点；接口契约（缺 hook 抛错）"]],
                         },
@@ -1485,7 +1484,7 @@ export const root: DocTreeNode = {
                     content: `
                     OOC 内置多种 ContextWindow type。
 
-                    这些 type 不是 UI 组件分类，而是 LLM 的上下文对象分类（共 14 种，与 src/executable/windows/_shared/types.ts WindowType 联合一致）:
+                    这些 type 不是 UI 组件分类，而是 LLM 的上下文对象分类（共 14 种，与 src/executable/windows/_shared/types.ts ObjectType 联合一致）:
                     - root: 每个 thread 隐含存在的根 window，注册顶层 command。
                     - command_exec: 一次 command 调用的临时 form window。
                     - do: 子 thread 的父侧窗口，展示子任务状态与 transcript。
@@ -1556,7 +1555,7 @@ export const root: DocTreeNode = {
                         "registerObjectType": "在 ObjectRegistry 上更新某 type 的 partial ObjectDefinition；写入时 commands/methods 双写",
                         "getObjectDefinition": "按 type 取 ObjectDefinition；未注册抛错（避免静默吞掉新 type）",
                         "WindowRegistry": "ObjectRegistry 的 @deprecated 旧名（一个 release 后移除）",
-                        "WindowTypeDefinition": "ObjectDefinition 的 @deprecated 旧名",
+                        "ObjectTypeDefinition": "ObjectDefinition 的 @deprecated 旧名",
                         "renderXml": "object 渲染为 Context XML 的函数（与 readable 二选一）",
                         "onClose": "object 关闭时执行的生命周期 hook",
                         "basicKnowledge": "某个 object type 出现时自动注入给 LLM 的基础知识",
@@ -1566,7 +1565,7 @@ export const root: DocTreeNode = {
                             title: "kind: \"constructor\" - Object class 的构造方法",
                             content: `
                             \`ObjectMethod.kind?: "constructor" | "method"\`（缺省视为 "method"）—— 是 P6 ooc-6 引入的标记：
-                            带 \`kind: "constructor"\` 的 method 必须返回形如 \`{ ok: true, object: OOCObject }\` 的
+                            带 \`kind: "constructor"\` 的 method 必须返回形如 \`{ ok: true, object: ContextObject }\` 的
                             \`MethodOutcome\`；manager.submit 看到该 outcome 后做三件事：
                             1. 把 \`object\`（作为 ContextObject）插进 thread 的 contextWindows（\`upsertWindow\`）。
                             2. 按 \`isBuiltinFeature\` 分两条路径写盘（详见 builtin_feature_split）。
@@ -1588,7 +1587,7 @@ export const root: DocTreeNode = {
                             \`meta/cookbook.add-new-agent.doc.ts:children.step4_methods_and_ui\`）。
                             `,
                             named: {
-                                "MethodOutcome": "{ ok: true, result?: string } | { ok: true, object: OOCObject } | { ok: false, error: string }",
+                                "MethodOutcome": "{ ok: true, result?: string } | { ok: true, object: ContextObject } | { ok: false, error: string }",
                                 "lookupConstructor": "在指定 ObjectType 的定义中按 kind === \"constructor\" 标记索引构造方法",
                                 "constructor delegation": "root.talk/do/todo/... 退化为 lookupConstructor(<type>).exec(ctx) 的薄分发器",
                             },
@@ -1726,7 +1725,7 @@ export const root: DocTreeNode = {
                     - \`"window::<type>"\` — \`thread.contextWindows\` 含 status="open" 且 type === <type> 的 window 时命中。
                       root window 每个 thread 都有，故 \`"window::root"\` 等价"任何时候"——这是旧 \`[root]\` 的自然替代。
                     - \`"command::<window_type>::<command>"\` — \`thread.contextWindows\` 含 type="command_exec" 的 open form，
-                      其 parentWindow.type === <window_type> 且 form.command === <command> 时命中。
+                      其 self.type === <window_type> 且 form.command === <command> 时命中。
                     - \`"super"\` — \`thread.persistence?.sessionId === SUPER_SESSION_ID\` 时命中（仅 super flow）。
                     `,
                     named: {
@@ -2258,7 +2257,7 @@ export const root: DocTreeNode = {
                             - **type-agnostic**: 不为每个 type 注册 hashContent; 统一
                               \`Bun.hash(JSON.stringify(stripVolatileWindow(window), Object.keys(stripped).sort()))\`
                             - **稳定 key 序**: 用 sorted keys 防止 V8 字段顺序变化漂移
-                            - **stripVolatile**: 剥离 in-process 字段 (_decayMeta / compressLevel 默认值 / 等),
+                            - **stripVolatile**: 剥离 in-process 字段 (compressLevel 默认值 / effectiveVisibleType 等),
                               与 src/persistable/thread-json.ts stripVolatileForPersist 同款规则
                             - **64-bit number → toString(36)**: 短编码
 
@@ -2272,7 +2271,7 @@ export const root: DocTreeNode = {
                             **测试关注点**:
                             - 同 window 反复 hash → 一致
                             - 不同 content (改 file_window.content) → 不同 hash
-                            - volatile 字段变化 (_decayMeta.idleRounds) → 同 hash (剥掉)
+                            - volatile 字段变化 (effectiveVisibleType 等 enrichment 产物) → 同 hash (剥掉)
                             - 字段顺序 (V8 内部 key insert order) → 同 hash (sortedKeys 防漂移)
                             `,
                         },
@@ -2713,7 +2712,7 @@ export const root: DocTreeNode = {
             4. flow tree: 运行层（ephemeral）。\`flows/{sessionId}/\` 由 \`objects/<objectId>/\`
                承载 per-Object 在该 session 的工作产物。
             5. ref 抽象: FlowObjectRef / ThreadPersistenceRef / StoneObjectRef / PoolObjectRef。
-            6. 序列化策略: 写盘前剥离 in-process 内存字段（_decayMeta 等），读盘时兜底补 creator window。
+            6. 序列化策略: 写盘前剥离 in-process 内存字段（effectiveVisibleType / compressLevel 默认值 等），读盘时兜底补 creator window。
 
             **stone vs pool vs flow 是 World 级别的三分**（不是 Agent 级别的）：
             - stone = 持久 + 版本化（跨 session 永存，过 git review）
@@ -3480,8 +3479,8 @@ export const root: DocTreeNode = {
                     title: "持久化前剥离 in-process 字段",
                     content: `
                     stripVolatileForPersist（src/persistable/thread-json.ts）在 writeThread 前剥离纯内存字段:
-                    - BaseContextWindow._decayMeta（P0d 自然衰减计数器，冷启动重算无副作用）
                     - compressLevel === 0 或 undefined（默认值不持久化）
+                    - effectiveVisibleType（每轮 enrichment 产物，冷启动重算）
 
                     持久化保留的下划线字段（与剥离相反）:
                     - ProcessEvent._foldedBy（P0f events fold 锚点）必须持久化，否则 reload 后丢失 fold 状态
@@ -3644,14 +3643,14 @@ export const root: DocTreeNode = {
 
             Object 在自己的 stone 里有一份 \`executable/index.ts\`，导出 \`window: ObjectWindowDefinition\`
             （type=\`"custom"\` 的 self window 定义）+ 可选的 \`ui_methods\` 字典（visible 维度的 UI 入口）。
-            \`window.commands\` 是标准 \`CommandTableEntry\` 字典；LLM 通过
+            \`window.methods\` 是标准 \`ObjectMethod\` 字典；LLM 通过
             \`exec(window_id="custom:<self>", command="<name>", args={...})\` 直接调用，
             与调 do_window.continue / talk_window.say 完全同构。
             UI / agent-native 客户端通过 HTTP \`callMethod\` 调用 \`ui_methods\`（与 LLM 路径完全解耦）。
 
             核心组成（plan §6.2 / §6.5）:
             1. ObjectWindowDefinition 形状: { title?, description?, renderXml?, basicKnowledge?, onClose?, commands? }；
-               commands 字典里每条 entry 是头等的 CommandTableEntry，与内置 window 上的命令同构。
+               commands 字典里每条 entry 是头等的 ObjectMethod，与内置 window 上的命令同构。
             2. type=custom dispatcher: WindowRegistry 注册一份固定 type=custom 的契约，行为按 \`window.objectId\`
                路由到对应 Object 的 ObjectWindowDefinition；commands dispatcher 在 entry.exec 包装层注入 self。
             3. 单例注入: 仅当 thread.persistence?.objectId 存在（thread 由该 Object 自己持有，见
@@ -3673,7 +3672,7 @@ export const root: DocTreeNode = {
                 "ui_methods": "executable/index.ts 导出的、给 UI/agent-native 通过 HTTP callMethod 调用的方法字典（plan D3 完全保留）",
                 "ProgramSelf": "program ts/js sandbox 注入的 self 对象，承载 callCommand / getData / setData / getThreadLocal",
                 "loadObjectWindow / loadUiServerMethods": "按 mtime 缓存、自动热更的 server 加载器",
-                "CustomCommandContext": "custom window 命令 exec 收到的 ctx：CommandExecutionContext + self: ProgramSelf",
+                "CustomCommandContext": "custom window 命令 exec 收到的 ctx：MethodExecutionContext + self: ProgramSelf",
             },
             children: {
                 "object_window_definition": {
@@ -3688,9 +3687,9 @@ export const root: DocTreeNode = {
                       commands: {
                         <name>: {
                           paths: ["<name>"],
-                          match: (args) => ["<name>"],
-                          knowledge: (args, formStatus) => ({ "internal/windows/custom/<name>/basic": "..." }),
-                          exec: async (ctx) => { /* ctx.self / ctx.thread / ctx.parentWindow / ctx.args */ },
+                          intent: (args) => [],
+                          onFormChange(change, { form }) { return []; },
+                          exec: async (ctx) => { /* ctx.self / ctx.thread / ctx.self / ctx.args */ },
                         },
                       },
                     };
@@ -3702,14 +3701,14 @@ export const root: DocTreeNode = {
                     - renderXml?: 渲染该 window 为 context XML（同 WindowRegistry.renderXml）
                     - basicKnowledge?: 该 window 出现时合成的协议知识；可静态字符串或 ({ self }) => string
                     - onClose?: close 触发 hook（同 WindowRegistry.OnCloseHook）
-                    - commands?: Record<string, CommandTableEntry> —— 命令字典；exec ctx 由 dispatcher 注入 self
+                    - commands?: Record<string, ObjectMethod> —— 命令字典；exec ctx 由 dispatcher 注入 self
 
-                    custom window 上的 commands 与内置 window（do/talk/...）上的命令完全同构：paths / match /
-                    knowledge(args, formStatus) / exec(ctx)。
+                    custom window 上的 commands 与内置 window（do/talk/...）上的命令完全同构：paths / intent(args) /
+                    onFormChange(change, { form, intents }) / exec(ctx)。
                     `,
                     named: {
                         "stones/<self>/executable/index.ts": "self window + ui_methods 源码文件路径",
-                        "ObjectWindowDefinition.commands": "Object 自定义命令字典；dispatcher 自动注入 self 到 exec ctx",
+                        "ObjectWindowDefinition.methods": "Object 自定义命令字典；dispatcher 自动注入 self 到 exec ctx",
                     },
                 },
                 "loader": {
@@ -3803,7 +3802,7 @@ export const root: DocTreeNode = {
                       跨 exec 共享（程序窗口同一线程内的 ts/js exec 之间），但不持久化（重启即丢）。
 
                     ProgramSelf 在两条路径上被使用:
-                    - program command ts/js exec: sandbox 把 self 注入到用户代码（详见 executable.commands.program 与 src/executable/program/sandbox/）。
+                    - program command ts/js exec: sandbox 把 self 注入到用户代码（详见 executable.methods.program 与 src/executable/program/sandbox/）。
                     - program.callCommand exec: runCallCommandProgram(thread, windowId, command, args) 构造 self 后调
                       \`entry.exec(ctx)\` 拿返回值。
                     `,
@@ -3838,7 +3837,7 @@ export const root: DocTreeNode = {
                     callCommand 不仅可调 custom window 的命令，也可调 do_window/talk_window/file_window 等任意 window
                     上的已注册命令——把"调 commands"统一成 \`(window_id, command, args)\` 一个签名。
 
-                    两条路径共享同一份 ObjectWindowDefinition.commands 字典；只是入口形态不同。
+                    两条路径共享同一份 ObjectWindowDefinition.methods 字典；只是入口形态不同。
                     `,
                     named: {
                         "program.callCommand": "program command 的 callCommand 模式；一行直接调任意 window 上的命令",
@@ -3857,7 +3856,7 @@ export const root: DocTreeNode = {
                        loader 看到 mtime 变化 → ?t=mtime 强制重新 import → 新形态立刻生效。
                     4. 不需要重启进程、不需要重新部署。
 
-                    写新命令时需要遵守 CommandTableEntry 形状（exec 必填）；paths / match / knowledge 可选但建议补全，
+                    写新命令时需要遵守 ObjectMethod 形状（exec 必填）；paths / match / knowledge 可选但建议补全，
                     因为 LLM 在 callCommand 模式下会看见对应的 knowledge entry，写得清楚直接影响调用质量。
 
                     更细的边界（路径权限、是否允许 super flow 自动写 server）由 reflectable.business_task_isolation 与
@@ -3875,13 +3874,13 @@ export const root: DocTreeNode = {
                     content: `
                     同一份 executable/index.ts 中两个导出服务不同调用方（plan D3）:
 
-                    - \`window.commands\` (custom dispatcher 路由): 给 LLM 通过 \`exec(window_id="custom:<self>", ...)\`
+                    - \`window.methods\` (custom dispatcher 路由): 给 LLM 通过 \`exec(window_id="custom:<self>", ...)\`
                       或 \`program.callCommand\` 调用。入参由 LLM 在 form 里填，返回值进 program_window.history 或
                       form.result 让 LLM 看到。
                     - \`ui_methods\`: 给 UI / agent-native 客户端通过 HTTP 调用；由 app/server flows.callMethod 或
                       stones.callMethod 路径走 loadUiServerMethods 拿到方法字典并执行。
 
-                    两套形状不同（CommandTableEntry vs UiServerMethod）；调用入口、调用方身份、错误呈现位置不同。
+                    两套形状不同（ObjectMethod vs UiServerMethod）；调用入口、调用方身份、错误呈现位置不同。
                     一个动作到底该放哪个，看的是"调用方是 LLM 还是用户/agent 客户端"。如果两者都需要，需要分别写两份。
                     `,
                 },
@@ -3969,7 +3968,7 @@ export const root: DocTreeNode = {
                     - 语义化封装（让 LLM 看见"upsert_factor"比"读 factors.csv 找一行改一行写回"更顺手）。
                     简单的"查看 / 偶尔小改"，LLM 直接 file_window.open / edit 即可，无需 server method 包装。
 
-                    **5. params schema 校验是 todo**：当前 CommandTableEntry 没强制 schema；
+                    **5. params schema 校验是 todo**：当前 ObjectMethod 没强制 schema；
                     如未来要支持自动参数检查 / 转换，需在 callCommand 路径 + ui callMethod 路径都加上（见 programmable.todo）。
                     `,
                     named: {
@@ -4067,7 +4066,7 @@ export const root: DocTreeNode = {
                     - 方法不存在 → \`METHOD_NOT_FOUND\`。
                     - 执行抛错 → 由 service 层兜底转 AppServerError 返回给 HTTP 调用方。
 
-                    这条路径与 LLM 的 \`program.callCommand\` 路径在同一份 executable/index.ts 上分流（按 \`window.commands\` vs \`ui_methods\`），
+                    这条路径与 LLM 的 \`program.callCommand\` 路径在同一份 executable/index.ts 上分流（按 \`window.methods\` vs \`ui_methods\`），
                     互不干扰。
                     `,
                     named: {
@@ -4641,19 +4640,19 @@ export const root: DocTreeNode = {
 
             统一模板:
             1. OAPI 调用收口到 \`src/extendable/lark/cli.ts\` 的 larkExec helper（凭据 / 超时 / as-user 统一处理）。
-            2. 每个外部系统建 \`src/extendable/<name>/\`，barrel（index.ts）自注册 WindowType + open command。
+            2. 每个外部系统建 \`src/extendable/<name>/\`，barrel（index.ts）自注册 ObjectType + open command。
             3. executable 侧（src/executable/windows/root/index.ts）通过 extendable barrel 拉 open command，不反向依赖。
 
-            新接一个外部世界（notion / slack / github）按相同模板建 \`src/extendable/<name>/\` 即可，不触碰 executable 核心（除非要新增 WindowType 字面量）。
+            新接一个外部世界（notion / slack / github）按相同模板建 \`src/extendable/<name>/\` 即可，不触碰 executable 核心（除非要新增 ObjectType 字面量）。
             完整 case 见 meta/case.feishu-integration.doc.ts。
             `,
             named: {
                 "extendable": "非能力维度的外接集成层：把外部世界按统一模板接入为可调用的 Window 与 command",
                 "larkExec": "所有飞书 OAPI 调用的收口 helper，定义于 src/extendable/lark/cli.ts",
-                "barrel 自注册": "每个 src/extendable/<name>/index.ts 导出 WindowType + open command，由 executable root 拉取注册",
+                "barrel 自注册": "每个 src/extendable/<name>/index.ts 导出 ObjectType + open command，由 executable root 拉取注册",
             },
             relations: [
-                [{ title: "executable", content: "extendable 寄生于 executable：新增 WindowType + open command 经 executable root 注册" }, "extendable 是 executable 的扩展点，物理隔离但逻辑挂载"],
+                [{ title: "executable", content: "extendable 寄生于 executable：新增 ObjectType + open command 经 executable root 注册" }, "extendable 是 executable 的扩展点，物理隔离但逻辑挂载"],
             ],
             sources: [["src/extendable/", "外接集成层实现根目录；lark barrel 见 src/extendable/lark/index.ts，OAPI helper 见 src/extendable/lark/cli.ts:larkExec；case 见 meta/case.feishu-integration.doc.ts"]],
         },

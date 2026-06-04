@@ -5,7 +5,7 @@
  * 1. reportStateEdit(ref) on a non-builtin (plan) flow object → state.json 反映内存里的最新状态
  * 2. reportStateEdit(ref) on a builtin feature (command_exec form) → 是 no-op；state.json 不存在
  * 3. reportContextEdit(thread) → thread-context.json 反映当前 contextWindows
- * 4. dispatch wiring: 通过 exec→openCommandExec(refine, args=...) auto-submit refine 后，
+ * 4. dispatch wiring: 通过 exec→openMethodExec(refine, args=...) auto-submit refine 后，
  *    thread-context.json 中对应 form 项的 accumulatedArgs 已含 refine 的新参数
  *    （证明 manager.submit 注入的 ctx.reportContextEdit() 被 refine.ts 内部调用）
  */
@@ -15,9 +15,10 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WindowManager } from "../manager";
+import { builtinRegistry } from "../registry";
 import { makeThread } from "../../../../__tests__/make-thread";
 import { ROOT_WINDOW_ID } from "../types";
-import type { CommandExecWindow } from "../types";
+import type { MethodExecWindow } from "../types";
 import type { PlanWindow } from "@ooc/builtins/plan/types.js";
 import {
   runtimeObjectStateFile,
@@ -73,7 +74,7 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
   });
 
   it("Test 1: reportStateEdit(ref) on plan (non-builtin) → state.json reflects in-memory state", async () => {
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const plan = makePlan("plan_r1", "demo", "initial content");
     mgr.insertTypedWindow(plan, thread);
 
@@ -109,9 +110,9 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
   });
 
   it("Test 2: reportStateEdit(ref) on builtin feature (command_exec form) → no-op, no state.json", async () => {
-    const mgr = WindowManager.fromThread(thread);
-    // open a real form via openCommandExec (parent=root, command=do; not auto-submit because no args.msg)
-    await mgr.openCommandExec({
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
+    // open a real form via openMethodExec (parent=root, command=do; not auto-submit because no args.msg)
+    await mgr.openMethodExec({
       thread,
       parentWindowId: ROOT_WINDOW_ID,
       command: "do",
@@ -119,13 +120,13 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
       description: "fork",
     });
     const form = thread.contextWindows.find(
-      (w): w is CommandExecWindow => w.type === "command_exec",
+      (w): w is MethodExecWindow => w.type === "method_exec",
     );
-    // openCommandExec returns formId via the result; but mgr.toData() reflects the in-memory map.
+    // openMethodExec returns formId via the result; but mgr.toData() reflects the in-memory map.
     // Use mgr's snapshot directly:
     thread.contextWindows = mgr.toData();
     const liveForm = mgr.toData().find(
-      (w): w is CommandExecWindow => w.type === "command_exec",
+      (w): w is MethodExecWindow => w.type === "method_exec",
     )!;
 
     const stateFile = runtimeObjectStateFile({
@@ -151,7 +152,7 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
   });
 
   it("Test 3: reportContextEdit(thread) → thread-context.json reflects current contextWindows", async () => {
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const plan = makePlan("plan_r3", "demo3", "for context flush");
     mgr.insertTypedWindow(plan, thread);
 
@@ -182,13 +183,13 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
       arguments: { title: "派生", command: "do", description: "fork" },
     });
     const form = thread.contextWindows.find(
-      (w): w is CommandExecWindow => w.type === "command_exec",
+      (w): w is MethodExecWindow => w.type === "method_exec",
     );
     expect(form).toBeDefined();
     expect(form!.status).toBe("open");
     const formId = form!.id;
 
-    // Wait for initial thread-context.json from openCommandExec persistence
+    // Wait for initial thread-context.json from openMethodExec persistence
     const tcFile = threadContextFile(persistence);
     for (let i = 0; i < 30; i++) {
       if (await exists(tcFile)) break;
@@ -211,7 +212,7 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
     for (let i = 0; i < 30; i++) {
       const f = await readThreadContext(persistence);
       const entry = f?.contextWindows.find((e) => e.id === formId) as
-        | CommandExecWindow
+        | MethodExecWindow
         | undefined;
       if (entry?.accumulatedArgs?.msg === "hello-from-refine") break;
       await Bun.sleep(20);
@@ -220,10 +221,10 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
     const f = await readThreadContext(persistence);
     expect(f).not.toBeNull();
     const entry = f!.contextWindows.find((e) => e.id === formId) as
-      | CommandExecWindow
+      | MethodExecWindow
       | undefined;
     expect(entry).toBeDefined();
-    expect(entry!.type).toBe("command_exec");
+    expect(entry!.type).toBe("method_exec");
     expect(entry!.accumulatedArgs).toMatchObject({ msg: "hello-from-refine" });
   });
 });

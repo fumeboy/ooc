@@ -2,13 +2,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
-import { createStoneObject, readFlowData, writeServerSource } from "../../persistable";
+import { createStoneObject, readFlowData, writeExecutableSource } from "../../persistable";
 import { createProgramSelf } from "../server/self";
 import { clearServerLoaderCache } from "../server/loader";
 import type { ThreadContext } from "../../thinkable/context";
 import { makeThread } from "../../__tests__/make-thread";
 import { loadObjectWindow } from "../server/loader";
-import { registerNewObjectType, listRegisteredObjectTypes } from "../windows/_shared/registry";
+import { builtinRegistry } from "../windows/_shared/registry";
 import type { ContextWindow } from "../windows/_shared/types";
 
 let tempRoot: string | undefined;
@@ -26,14 +26,14 @@ describe("createProgramSelf", () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-self-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
 
-    await writeServerSource(
+    await writeExecutableSource(
       ref,
       `export const window = {
         title: "alice",
-        commands: {
+        methods: {
           whoAmI: {
             paths: ["whoAmI"],
-            match: () => ["whoAmI"],
+            intent: () => [],
             exec: async (ctx) => ({ ok: true, result: ctx.programSelf.dir + "::" + ctx.thread.id }),
           },
         },
@@ -46,14 +46,14 @@ describe("createProgramSelf", () => {
     const objectId = "alice";
     // Load and register the object window definition dynamically
     const objWin = await loadObjectWindow(ref);
-    if (!listRegisteredObjectTypes().includes(objectId as any) && objWin) {
-      registerNewObjectType(objectId as any, {
-        commands: objWin.commands ?? {},
+    if (!builtinRegistry.listRegisteredObjectTypes().includes(objectId as any) && objWin) {
+      builtinRegistry.registerNewObjectType(objectId as any, {
+        methods: objWin.methods ?? {},
         renderXml: objWin.renderXml,
         readable: objWin.readable,
         onClose: objWin.onClose,
         basicKnowledge: typeof objWin.basicKnowledge === "string" ? objWin.basicKnowledge : undefined,
-        prototype: objWin.prototype,
+        parentClass: objWin?.parentClass,
       });
     }
     thread.contextWindows.push({
@@ -81,7 +81,7 @@ describe("createProgramSelf", () => {
   test("callCommand throws when command not found on the self window", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-self-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
-    await writeServerSource(
+    await writeExecutableSource(
       ref,
       `export const window = { commands: {} }; export const ui_methods = {};`,
     );
@@ -90,14 +90,14 @@ describe("createProgramSelf", () => {
     const objectId = "alice";
     // Load and register the object window definition dynamically
     const objWin = await loadObjectWindow(ref);
-    if (!listRegisteredObjectTypes().includes(objectId as any) && objWin) {
-      registerNewObjectType(objectId as any, {
-        commands: objWin.commands ?? {},
+    if (!builtinRegistry.listRegisteredObjectTypes().includes(objectId as any) && objWin) {
+      builtinRegistry.registerNewObjectType(objectId as any, {
+        methods: objWin.methods ?? {},
         renderXml: objWin.renderXml,
         readable: objWin.readable,
         onClose: objWin.onClose,
         basicKnowledge: typeof objWin.basicKnowledge === "string" ? objWin.basicKnowledge : undefined,
-        prototype: objWin.prototype,
+        parentClass: objWin?.parentClass,
       });
     }
     thread.contextWindows.push({

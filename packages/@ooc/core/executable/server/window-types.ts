@@ -12,7 +12,7 @@
  * - title / description：进 basicKnowledge 与 LLM 视野
  * - renderXml / basicKnowledge / onClose：与 WindowRegistry 同语义，由 registry
  *   按 `window.type` 路由到这里
- * - commands：标准 CommandTableEntry 字典；commands[name].exec 会在 dispatcher
+ * - commands：标准 ObjectMethod 字典；commands[name].exec 会在 dispatcher
  *   层包一层"把 self: ProgramSelf 注入到 ctx"再执行
  *
  * `ServerMethod` / `LlmMethods` / `ServerMethodContext` 三件套（旧 llm_methods 时代
@@ -20,8 +20,7 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandTableEntry,
+  MethodExecutionContext,
   ObjectMethod,
 } from "../windows/_shared/command-types.js";
 import type { OnCloseContext, ReadableFn, RenderContext } from "../windows/_shared/registry.js";
@@ -35,13 +34,13 @@ import type { ProgramSelf } from "./types.js";
  * `MethodExecutionContext.self: ContextWindow`（method 的 receiver，OOP 语义）冲突。
  * 两个 `self` 是**不同概念**：
  *   - `MethodExecutionContext.self`：method 被调用的 ContextWindow（receiver）
- *   - `CustomCommandContext.programSelf`：Program object 的类型化自我数据（由 stone hydrator 注入）
+ *   - `CustomMethodContext.programSelf`：Program object 的类型化自我数据（由 stone hydrator 注入）
  * 为消歧，把 Program 维度的 self 改名为 `programSelf`；`self` 字段沿用 receiver 语义。
  *
  * 旧 stone 代码若仍写 `ctx.self.dir` 等 ProgramSelf 访问，应迁移为 `ctx.programSelf.*`。
  * 由于 `self` 已被 receiver 占用，`programSelf` 不再以 `self` 作 alias——TS 编译会指出迁移点。
  */
-export interface CustomCommandContext extends CommandExecutionContext {
+export interface CustomMethodContext extends MethodExecutionContext {
   /** P6.§1: Program object 的自我数据（dir / callCommand / getData / setData / getThreadLocal / setThreadLocal）。 */
   programSelf: ProgramSelf;
 }

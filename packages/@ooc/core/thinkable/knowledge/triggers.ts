@@ -7,7 +7,7 @@
  * 1. 四类 trigger 语法的解析与校验（`parseTrigger`）：
  *    - `object::<type>` —— 任意 open 的该类 object 出现时命中
  *      （旧格式 `window::<type>` 自动映射，向后兼容）
- *    - `method::<object_type>::<method>` —— thread 中存在 type=command_exec 的
+ *    - `method::<object_type>::<method>` —— thread 中存在 type=method_exec 的
  *      form，且其 parentObject 的 type === <object_type> 且 form.command === <method>
  *      （旧格式 `command::<window_type>::<command>` 自动映射，向后兼容）
  *    - `intent::<name>` —— 任一活跃 form 的 intent 集合匹配 <name> 时命中（支持 wildcard 后缀 "program.*"）
@@ -27,7 +27,7 @@
  */
 
 import type { ThreadContext } from "../context";
-import type { CommandExecWindow, ContextWindow } from "../../executable/windows/_shared/types";
+import type { MethodExecWindow, ContextWindow } from "../../executable/windows/_shared/types";
 import { SUPER_SESSION_ID } from "../../executable/windows/_shared/super-constants";
 
 /** trigger 抽象语法树——parse 一次，evaluate 多次。
@@ -229,8 +229,8 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
       for (const w of list) byId.set(w.id, w);
 
       for (const w of list) {
-        if (w.type !== "command_exec") continue;
-        const form = w as CommandExecWindow;
+        if (w.type !== "method_exec") continue;
+        const form = w as MethodExecWindow;
         if (form.command !== trigger.method) continue;
         // form 必须 open 才视为"该 method 当前活跃"——success/failed 不算
         if (!isOpen(form)) continue;
@@ -270,7 +270,7 @@ function isOpen(w: ContextWindow): boolean {
 
 /** form 的 parent window type；parentWindowId === "root" 或 missing 时视为 "root"。 */
 function parentTypeOf(
-  form: CommandExecWindow,
+  form: MethodExecWindow,
   byId: Map<string, ContextWindow>,
 ): string {
   const pid = form.parentWindowId;

@@ -13,12 +13,11 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
+  MethodExecutionContext,
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/command-types.js";
 import {
-  registerObjectType,
+  builtinRegistry,
   type OnCloseContext,
   type RenderContext,
 } from "@ooc/core/extendable/_shared/registry.js";
@@ -34,6 +33,35 @@ import {
   type XmlNode,
 } from "@ooc/core/thinkable/context/xml.js";
 import { readable } from "../readable.js";
+
+import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as unknown as ContextWindow);
+  }
+  return out;
+}
 
 // ─────────────────────────── knowledge paths ──────────────────────────────────
 
@@ -135,12 +163,12 @@ function asStepStatus(v: unknown): PlanWindowStep["status"] | undefined {
 
 /** 把 ctx.self 校验成 PlanWindow。
  *  P6.§3: manager 在 dispatch 阶段已保证 self.type === "plan"，本 helper 仅做类型 cast。 */
-function requirePlanWindow(ctx: CommandExecutionContext): PlanWindow {
+function requirePlanWindow(ctx: MethodExecutionContext): PlanWindow {
   return ctx.self as PlanWindow;
 }
 
 /** 通过 manager 持久化更新（避免被 toData() 复原）；fallback 直接 mutate。 */
-function updatePlanWindow(ctx: CommandExecutionContext, next: PlanWindow): void {
+function updatePlanWindow(ctx: MethodExecutionContext, next: PlanWindow): void {
   if (ctx.manager) {
     ctx.manager.upsertWindow(next, ctx.thread);
   } else {
@@ -153,12 +181,21 @@ function updatePlanWindow(ctx: CommandExecutionContext, next: PlanWindow): void 
 
 const updatePlanCommand: ObjectMethod = {
   paths: ["update_plan"],
-  match: () => ["update_plan"],
-  knowledge: (): CommandKnowledgeEntries => ({ [PLAN_WINDOW_UPDATE_PLAN_BASIC]: UPDATE_PLAN_KNOWLEDGE }),
+  schema: {
+    args: {
+      title: { type: "string", description: "新 plan 标题" },
+      description: { type: "string", description: "新 plan 说明" },
+    },
+  },
+  intent: () => [],
+  onFormChange: (change, { form }) => {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    return guidanceWindows(form, { [PLAN_WINDOW_UPDATE_PLAN_BASIC]: UPDATE_PLAN_KNOWLEDGE });
+  },
   exec: (ctx) => executeUpdatePlan(ctx),
 };
 
-async function executeUpdatePlan(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeUpdatePlan(ctx: MethodExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
   const title = isString(ctx.args.title) ? ctx.args.title : undefined;
   const description = isString(ctx.args.description) ? ctx.args.description : undefined;
@@ -176,12 +213,25 @@ async function executeUpdatePlan(ctx: CommandExecutionContext): Promise<string |
 
 const addStepCommand: ObjectMethod = {
   paths: ["add_step"],
-  match: () => ["add_step"],
-  knowledge: (): CommandKnowledgeEntries => ({ [PLAN_WINDOW_ADD_STEP_BASIC]: ADD_STEP_KNOWLEDGE }),
+  schema: {
+    args: {
+      text: { type: "string", required: true, description: "步骤描述" },
+      status: {
+        type: "string",
+        enum: ["pending", "in-progress", "done", "blocked"],
+        description: "初始状态（默认 pending）",
+      },
+    },
+  },
+  intent: () => [],
+  onFormChange: (change, { form }) => {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    return guidanceWindows(form, { [PLAN_WINDOW_ADD_STEP_BASIC]: ADD_STEP_KNOWLEDGE });
+  },
   exec: (ctx) => executeAddStep(ctx),
 };
 
-async function executeAddStep(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeAddStep(ctx: MethodExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
   const text = isString(ctx.args.text) ? ctx.args.text.trim() : "";
   if (!text) return "[plan_window.add_step] 缺少 args.text（步骤描述）。";
@@ -198,12 +248,26 @@ async function executeAddStep(ctx: CommandExecutionContext): Promise<string | un
 
 const updateStepCommand: ObjectMethod = {
   paths: ["update_step"],
-  match: () => ["update_step"],
-  knowledge: (): CommandKnowledgeEntries => ({ [PLAN_WINDOW_UPDATE_STEP_BASIC]: UPDATE_STEP_KNOWLEDGE }),
+  schema: {
+    args: {
+      step_id: { type: "string", required: true, description: "目标 step id" },
+      text: { type: "string", description: "新文本" },
+      status: {
+        type: "string",
+        enum: ["pending", "in-progress", "done", "blocked"],
+        description: "新状态",
+      },
+    },
+  },
+  intent: () => [],
+  onFormChange: (change, { form }) => {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    return guidanceWindows(form, { [PLAN_WINDOW_UPDATE_STEP_BASIC]: UPDATE_STEP_KNOWLEDGE });
+  },
   exec: (ctx) => executeUpdateStep(ctx),
 };
 
-async function executeUpdateStep(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeUpdateStep(ctx: MethodExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
   const stepId = isString(ctx.args.step_id) ? ctx.args.step_id : "";
   if (!stepId) return "[plan_window.update_step] 缺少 args.step_id。";
@@ -229,12 +293,22 @@ async function executeUpdateStep(ctx: CommandExecutionContext): Promise<string |
 
 const expandStepCommand: ObjectMethod = {
   paths: ["expand_step"],
-  match: () => ["expand_step"],
-  knowledge: (): CommandKnowledgeEntries => ({ [PLAN_WINDOW_EXPAND_STEP_BASIC]: EXPAND_STEP_KNOWLEDGE }),
+  schema: {
+    args: {
+      step_id: { type: "string", required: true, description: "目标 step id" },
+      title: { type: "string", description: "sub plan 的 title；缺省 = 父 step 的 text" },
+      description: { type: "string", description: "sub plan 的描述" },
+    },
+  },
+  intent: () => [],
+  onFormChange: (change, { form }) => {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    return guidanceWindows(form, { [PLAN_WINDOW_EXPAND_STEP_BASIC]: EXPAND_STEP_KNOWLEDGE });
+  },
   exec: (ctx) => executeExpandStep(ctx),
 };
 
-async function executeExpandStep(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeExpandStep(ctx: MethodExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
   if (!ctx.thread) return "[plan_window.expand_step] 缺少 thread context。";
   const stepId = isString(ctx.args.step_id) ? ctx.args.step_id : "";
@@ -279,14 +353,22 @@ async function executeExpandStep(ctx: CommandExecutionContext): Promise<string |
 
 const collapseSubplanCommand: ObjectMethod = {
   paths: ["collapse_subplan"],
-  match: () => ["collapse_subplan"],
-  knowledge: (): CommandKnowledgeEntries => ({
-    [PLAN_WINDOW_COLLAPSE_SUBPLAN_BASIC]: COLLAPSE_SUBPLAN_KNOWLEDGE,
-  }),
+  schema: {
+    args: {
+      step_id: { type: "string", required: true, description: "目标 step id" },
+    },
+  },
+  intent: () => [],
+  onFormChange: (change, { form }) => {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    return guidanceWindows(form, {
+      [PLAN_WINDOW_COLLAPSE_SUBPLAN_BASIC]: COLLAPSE_SUBPLAN_KNOWLEDGE,
+    });
+  },
   exec: (ctx) => executeCollapseSubplan(ctx),
 };
 
-async function executeCollapseSubplan(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeCollapseSubplan(ctx: MethodExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
   if (!ctx.thread) return "[plan_window.collapse_subplan] 缺少 thread context。";
   const stepId = isString(ctx.args.step_id) ? ctx.args.step_id : "";
@@ -326,12 +408,15 @@ async function executeCollapseSubplan(ctx: CommandExecutionContext): Promise<str
 
 const markDoneCommand: ObjectMethod = {
   paths: ["mark_done"],
-  match: () => ["mark_done"],
-  knowledge: (): CommandKnowledgeEntries => ({ [PLAN_WINDOW_MARK_DONE_BASIC]: MARK_DONE_KNOWLEDGE }),
+  intent: () => [],
+  onFormChange: (change, { form }) => {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    return guidanceWindows(form, { [PLAN_WINDOW_MARK_DONE_BASIC]: MARK_DONE_KNOWLEDGE });
+  },
   exec: (ctx) => executeMarkDone(ctx),
 };
 
-async function executeMarkDone(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeMarkDone(ctx: MethodExecutionContext): Promise<string | undefined> {
   const w = requirePlanWindow(ctx);
   const next: PlanWindow = { ...w, status: "done" };
   updatePlanWindow(ctx, next);
@@ -340,8 +425,11 @@ async function executeMarkDone(ctx: CommandExecutionContext): Promise<string | u
 
 const closeCommand: ObjectMethod = {
   paths: ["close"],
-  match: () => ["close"],
-  knowledge: (): CommandKnowledgeEntries => ({ [PLAN_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
+  intent: () => [],
+  onFormChange: (change, { form }) => {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    return guidanceWindows(form, { [PLAN_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE });
+  },
   exec: () => undefined, // cascade 关闭由 onClose hook + WindowManager.close 自带级联完成
 };
 
@@ -485,9 +573,20 @@ function normalizeStepsInput(input: unknown): PlanWindowStep[] | undefined {
 const planConstructor: ObjectMethod = {
   kind: "constructor",
   paths: ["plan"],
-  match: () => ["plan"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  schema: {
+    args: {
+      plan: { type: "string", description: "简单文本（落入 description）；与 title/description/steps 二选一" },
+      title: { type: "string", description: "plan 标题" },
+      description: { type: "string", description: "plan 描述" },
+      steps: { type: "array", description: "steps 数组 [{id?, text, status?}, ...]" },
+    },
+  },
+  intent: () => [],
+  onFormChange: (change, { form }) => {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = {
       [PLAN_CONSTRUCTOR_BASIC]: PLAN_CONSTRUCTOR_KNOWLEDGE,
     };
     if (formStatus === "open" && !constructorHasAnyInput(args)) {
@@ -495,7 +594,7 @@ const planConstructor: ObjectMethod = {
         "plan 还缺以下参数: plan 文本 (或 title / description / steps 任一)。\n" +
         "请用 refine(form_id, args={ plan: \"<计划文本>\" }) 或 refine(form_id, args={ title: \"...\", description: \"...\", steps: [...] }) 补齐后 submit(form_id)。";
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   permission: () => "allow",
   exec: async (ctx) => {
@@ -528,8 +627,8 @@ const planConstructor: ObjectMethod = {
 
 // ─────────────────────────── register ────────────────────────────────────────
 
-registerObjectType("plan", {
-  commands: {
+builtinRegistry.registerObjectType("plan", {
+  methods: {
     update_plan: updatePlanCommand,
     add_step: addStepCommand,
     update_step: updateStepCommand,

@@ -18,11 +18,10 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
+  MethodExecutionContext,
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/command-types.js";
-import { registerObjectType, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
+import { builtinRegistry, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
 import type { FileWindow } from "../types.js";
 import {
   DEFAULT_VIEWPORT,
@@ -42,6 +41,36 @@ import {
 import { versionedStoneWrite } from "@ooc/core/persistable/index.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/thinkable/context/xml.js";
 import { readable } from "../readable.js";
+
+import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as unknown as ContextWindow);
+  }
+  return out;
+}
 
 const MAX_FILE_WINDOW_BYTES = 32768;
 
@@ -161,16 +190,36 @@ open(parent_window_id="<file_window_id>", command="edit",
 
 const setRangeCommand: ObjectMethod = {
   paths: ["set_range"],
-  match: () => ["set_range"],
-  knowledge: (): CommandKnowledgeEntries => ({ [FILE_WINDOW_SET_RANGE_BASIC]: SET_RANGE_KNOWLEDGE }),
+  schema: {
+    args: {
+      lines: { type: "array", description: "可选 [start, end]，调整可见行范围" },
+      columns: { type: "array", description: "可选 [start, end]，调整可见列范围" },
+    },
+  },
+  intent: () => [],
+  onFormChange: (change, { form }) => {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    return guidanceWindows(form, { [FILE_WINDOW_SET_RANGE_BASIC]: SET_RANGE_KNOWLEDGE });
+  },
   exec: (ctx) => executeFileWindowSetRange(ctx),
 };
 
 const setViewportCommand: ObjectMethod = {
   paths: ["set_viewport"],
-  match: () => ["set_viewport"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  schema: {
+    args: {
+      line_start: { type: "number", description: "起始行（含；从0开始）" },
+      line_end: { type: "number", description: "结束行（不含）" },
+      column_start: { type: "number", description: "起始字符列（含；从0开始）" },
+      column_end: { type: "number", description: "结束字符列（不含）" },
+    },
+  },
+  intent: () => [],
+  onFormChange: (change, { form }) => {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = {
       [FILE_WINDOW_SET_VIEWPORT_BASIC]: SET_VIEWPORT_KNOWLEDGE,
     };
     if (formStatus === "open" && !hasAnyViewportField(args)) {
@@ -178,38 +227,54 @@ const setViewportCommand: ObjectMethod = {
         "set_viewport 至少需要传入 line_start / line_end / column_start / column_end 之一。\n" +
         "未传字段保留当前值。请 refine 补齐后 submit。";
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeWindowSetViewport(ctx, "file"),
 };
 
 const reloadCommand: ObjectMethod = {
   paths: ["reload"],
-  match: () => ["reload"],
-  knowledge: (): CommandKnowledgeEntries => ({ [FILE_WINDOW_RELOAD_BASIC]: RELOAD_KNOWLEDGE }),
+  intent: () => [],
+  onFormChange: (change, { form }) => {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    return guidanceWindows(form, { [FILE_WINDOW_RELOAD_BASIC]: RELOAD_KNOWLEDGE });
+  },
   exec: () => undefined, // render 层每轮都会重读
 };
 
 const closeCommand: ObjectMethod = {
   paths: ["close"],
-  match: () => ["close"],
-  knowledge: (): CommandKnowledgeEntries => ({ [FILE_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
+  intent: () => [],
+  onFormChange: (change, { form }) => {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    return guidanceWindows(form, { [FILE_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE });
+  },
   exec: () => undefined,
 };
 
 const editCommand: ObjectMethod = {
   paths: ["edit"],
-  match: () => ["edit"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [FILE_WINDOW_EDIT_BASIC]: EDIT_KNOWLEDGE };
-    if (formStatus !== "open") return entries;
+  schema: {
+    args: {
+      old: { type: "string", description: "要替换的旧字符串（必须在文件中正好出现一次）" },
+      new: { type: "string", description: "替换后的新字符串" },
+      edits: { type: "array", description: "批量替换 [{old, new}, ...]，与 old/new 二选一" },
+    },
+  },
+  intent: () => [],
+  onFormChange: (change, { form }) => {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = { [FILE_WINDOW_EDIT_BASIC]: EDIT_KNOWLEDGE };
+    if (formStatus !== "open") return guidanceWindows(form, entries);
     const single = isString(args.old) && isString(args.new);
     const batch = Array.isArray(args.edits) && args.edits.length > 0;
     if (!single && !batch) {
       entries[FILE_WINDOW_EDIT_INPUT] =
         "file_window.edit 需要 args={ old, new } 或 args={ edits: [{old, new}, ...] }；二者择一。";
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeFileWindowEdit(ctx),
 };
@@ -313,7 +378,7 @@ function applyEdits(
 
 /** 把 set_range 的 args 落到目标 file_window；通过 manager 操作以保证 toData() 写回。 */
 export async function executeFileWindowSetRange(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   // P6.§3: manager 在 dispatch 阶段已保证 self.type === "file"，method 体不再 re-check。
   const window = ctx.self as FileWindow;
@@ -339,7 +404,7 @@ export async function executeFileWindowSetRange(
  * - 失败：不写盘；返回错误字符串（前缀 [file_window.edit]，便于 LLM 解析）
  */
 export async function executeFileWindowEdit(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   // P6.§3: manager 在 dispatch 阶段已保证 self.type === "file"，method 体不再 re-check。
   const window = ctx.self as FileWindow;
@@ -441,14 +506,17 @@ async function compressFileWindow(
 const fileConstructor: ObjectMethod = {
   kind: "constructor",
   paths: ["open_file", "write_file"],
-  match: (args) => {
-    // The match() return is the "active path" set; for constructors this drives knowledge
-    // activation/observability. We pick the path that matches the form.command—but match()
-    // doesn't see ctx.form, so we approximate by inspecting the args shape:
-    // - has `content` field → write_file
-    // - else → open_file
-    if (typeof args.content === "string") return ["write_file"];
-    return ["open_file"];
+  schema: {
+    args: {
+      path: { type: "string", required: true, description: "文件路径（相对 session baseDir）" },
+      content: { type: "string", description: "要写入的文件内容；提供时走 write_file 分支" },
+      lines: { type: "array", description: "可选 [start, end]，open_file 时指定可见行范围" },
+      columns: { type: "array", description: "可选 [start, end]，open_file 时指定可见列范围" },
+    },
+  },
+  intent: (args) => {
+    if (typeof args.content === "string") return [{ name: "write_file" }];
+    return [{ name: "open_file" }];
   },
   permission: () => "allow",
   exec: async (ctx) => {
@@ -582,8 +650,8 @@ const fileConstructor: ObjectMethod = {
   },
 };
 
-registerObjectType("file", {
-  commands: {
+builtinRegistry.registerObjectType("file", {
+  methods: {
     set_range: setRangeCommand,
     set_viewport: setViewportCommand,
     reload: reloadCommand,

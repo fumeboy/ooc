@@ -11,16 +11,12 @@ import { describe, expect, test } from "bun:test";
 // so resolveMethod chains can find them. Without this, the registry has the empty stub
 // from registry.ts:207 and "talk" lookups miss.
 import "@ooc/builtins/root/executable/index.js";
-import {
-  registerNewObjectType,
-  resolveMethod,
-  lookupMethod,
-} from "../registry";
+import { builtinRegistry } from "../registry";
 import type { ObjectMethod } from "../command-types";
 
 const fakeMethod: ObjectMethod = {
   paths: ["dummy"],
-  match: () => ["dummy"],
+  intent: () => [],
   permission: () => "allow",
   exec: async () => ({ ok: true, result: "dummy" }),
 };
@@ -32,69 +28,69 @@ const stubReadable = () => [];
 describe("resolveMethod + parentClass chain (P6.§7)", () => {
   test("undefined parentClass → defaults to \"root\" → finds talk", () => {
     const t = `__test_default_root_${Date.now()}`;
-    registerNewObjectType(t as never, { methods: {}, readable: stubReadable });
-    const found = resolveMethod(t, "talk");
+    builtinRegistry.registerNewObjectType(t as never, { methods: {}, readable: stubReadable });
+    const found = builtinRegistry.resolveMethod(t, "talk");
     expect(found).toBeDefined();
     expect(found?.paths).toContain("talk");
   });
 
   test("explicit parentClass: null → no inheritance → not found", () => {
     const t = `__test_no_inherit_${Date.now()}`;
-    registerNewObjectType(t as never, { methods: {}, parentClass: null, readable: stubReadable });
-    const found = resolveMethod(t, "talk");
+    builtinRegistry.registerNewObjectType(t as never, { methods: {}, parentClass: null, readable: stubReadable });
+    const found = builtinRegistry.resolveMethod(t, "talk");
     expect(found).toBeUndefined();
   });
 
   test("explicit parentClass: \"root\" → resolves talk via parent", () => {
     const t = `__test_explicit_root_${Date.now()}`;
-    registerNewObjectType(t as never, { methods: {}, parentClass: "root", readable: stubReadable });
-    const found = resolveMethod(t, "talk");
+    builtinRegistry.registerNewObjectType(t as never, { methods: {}, parentClass: "root", readable: stubReadable });
+    const found = builtinRegistry.resolveMethod(t, "talk");
     expect(found).toBeDefined();
     expect(found?.paths).toContain("talk");
   });
 
   test("nonexistent method on chain → undefined", () => {
     const t = `__test_missing_method_${Date.now()}`;
-    registerNewObjectType(t as never, { methods: {}, readable: stubReadable });
-    const found = resolveMethod(t, "no_such_method_anywhere");
+    builtinRegistry.registerNewObjectType(t as never, { methods: {}, readable: stubReadable });
+    const found = builtinRegistry.resolveMethod(t, "no_such_method_anywhere");
     expect(found).toBeUndefined();
   });
 
   test("cycle detection: A→B→A → terminates and returns undefined", () => {
     const a = `__test_cycle_a_${Date.now()}`;
     const b = `__test_cycle_b_${Date.now()}`;
-    registerNewObjectType(a as never, { methods: {}, parentClass: b, readable: stubReadable });
-    registerNewObjectType(b as never, { methods: {}, parentClass: a, readable: stubReadable });
-    const found = resolveMethod(a, "talk");
+    builtinRegistry.registerNewObjectType(a as never, { methods: {}, parentClass: b, readable: stubReadable });
+    builtinRegistry.registerNewObjectType(b as never, { methods: {}, parentClass: a, readable: stubReadable });
+    const found = builtinRegistry.resolveMethod(a, "talk");
     expect(found).toBeUndefined();
   });
 
   test("self-declared method wins over parent's", () => {
     const t = `__test_override_${Date.now()}`;
-    registerNewObjectType(t as never, {
+    builtinRegistry.registerNewObjectType(t as never, {
       methods: { my_local: fakeMethod },
       parentClass: "root",
       readable: stubReadable,
     });
-    const local = resolveMethod(t, "my_local");
+    const local = builtinRegistry.resolveMethod(t, "my_local");
     expect(local).toBe(fakeMethod);
-    const inherited = resolveMethod(t, "talk");
+    const inherited = builtinRegistry.resolveMethod(t, "talk");
     expect(inherited).toBeDefined();
     expect(inherited?.paths).toContain("talk");
   });
 
   test("lookupMethod (parent.type API) walks chain identically", () => {
     const t = `__test_via_window_${Date.now()}`;
-    registerNewObjectType(t as never, { methods: {}, readable: stubReadable });
-    const found = lookupMethod({ type: t as never }, "talk");
+    builtinRegistry.registerNewObjectType(t as never, { methods: {}, readable: stubReadable });
+    const found = builtinRegistry.lookupMethod({ type: t as never }, "talk");
     expect(found).toBeDefined();
     expect(found?.paths).toContain("talk");
   });
 
   test("root itself: parentClass null prevents infinite loop", () => {
-    const found = resolveMethod("root", "talk");
+    const found = builtinRegistry.resolveMethod("root", "talk");
     expect(found).toBeDefined();
-    const missing = resolveMethod("root", "no_method_at_all");
+    const missing = builtinRegistry.resolveMethod("root", "no_method_at_all");
     expect(missing).toBeUndefined();
   });
 });

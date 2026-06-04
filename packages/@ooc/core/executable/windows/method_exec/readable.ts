@@ -3,13 +3,11 @@
  *
  * P6.§9（2026-06-02）：源文件从 `packages/@ooc/builtins/command_exec/readable.ts`
  * 迁移到 `packages/@ooc/core/executable/windows/method_exec/readable.ts`。
- * 类型字符串 `"method_exec"` 为 canonical，`"command_exec"` 保留为 legacy alias 一个 release，
- * 因此本 hook 同时被两个 type 注册项复用（见 ./index.ts）。
  */
 
 import { type RenderContext } from "../_shared/registry.js";
 import { xmlElement, xmlText, renderPathList, appendNode, type XmlNode } from "../../../thinkable/context/xml.js";
-import type { CommandExecWindow as MethodExecWindow } from "../_shared/types.js";
+import type { MethodExecWindow } from "../_shared/types.js";
 
 export function readable(ctx: RenderContext): XmlNode[] {
   const form = ctx.window as MethodExecWindow;

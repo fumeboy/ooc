@@ -18,7 +18,15 @@ export {
 } from "./triggers";
 export { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge";
 export {
-  collectExecutableKnowledgeEntries,
   computeFormKnowledgeEntries,
-  enrichFormCommandKnowledge,
+  enrichFormMethodKnowledge,
+  derivePeerObjectWindows,
+  ensureSelfObjectTypeRegistered,
+  readSelfPrototype,
+  // @deprecated Phase F: use ContextPipeline instead
+  collectExecutableKnowledgeEntries,
+  // @deprecated Phase F: replaced by derivePeerObjectWindows; kept for test compat
+  deriveRelationWindow,
+  deriveRelationCompanionKnowledge,
+  deriveRelationKnowledge,
 } from "./synthesizer";

@@ -1,4 +1,4 @@
-import type { CommandExecutionContext } from "./command-types.js";
+import type { MethodExecutionContext } from "./command-types.js";
 import type { ContextWindow } from "./types.js";
 
 /**
@@ -173,7 +173,7 @@ export function applyTranscriptViewport<M>(
  * - Object.assign 写回 window.transcriptViewport（按现有 set_viewport 的同模式）
  */
 export async function executeWindowSetTranscriptViewport(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
   expectedTypes: Array<"talk" | "do">,
 ): Promise<string | undefined> {
   // P6.§3: manager 在 dispatch 阶段已保证 self.type 是 caller 注册的 type 之一，

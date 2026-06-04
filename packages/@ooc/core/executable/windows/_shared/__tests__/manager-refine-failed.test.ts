@@ -13,9 +13,10 @@
 
 import { describe, expect, it } from "bun:test";
 import { WindowManager } from "../manager";
+import { builtinRegistry } from "../registry";
 import { makeThread } from "../../../../__tests__/make-thread";
 import { dispatchToolCall } from "../../../tools";
-import type { CommandExecWindow } from "../types";
+import type { MethodExecWindow } from "../types";
 import type { ThreadContext } from "../../../../thinkable/context";
 
 /**
@@ -31,7 +32,7 @@ async function makeFailedForm(): Promise<{ thread: ThreadContext; formId: string
     arguments: { title: "派生", command: "do", description: "fork" },
   });
   const form = thread.contextWindows.find(
-    (w): w is CommandExecWindow => w.type === "command_exec",
+    (w): w is MethodExecWindow => w.type === "method_exec",
   );
   if (!form) throw new Error("expected command_exec form created (do with no msg)");
   // 2. submit → 失败 (do 缺 msg → form 进 failed)
@@ -52,15 +53,15 @@ describe("Round 13 G2: manager.refine 支持 failed → open 复活", () => {
       arguments: { title: "派生", command: "do", description: "fork" },
     });
     const form = thread.contextWindows.find(
-      (w): w is CommandExecWindow => w.type === "command_exec",
+      (w): w is MethodExecWindow => w.type === "method_exec",
     )!;
     expect(form.status).toBe("open");
 
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const ok = mgr.refine(form.id, { msg: "hello" });
     expect(ok).toBe(true);
 
-    const after = mgr.get(form.id) as CommandExecWindow;
+    const after = mgr.get(form.id) as MethodExecWindow;
     expect(after.status).toBe("open");
     expect(after.accumulatedArgs.msg).toBe("hello");
     expect(after.result).toBeUndefined();
@@ -69,17 +70,17 @@ describe("Round 13 G2: manager.refine 支持 failed → open 复活", () => {
   it("failed 状态 refine → 自动切回 open + 累积 args + 清旧 result（复活路径）", async () => {
     const { thread, formId } = await makeFailedForm();
     const failed = thread.contextWindows.find(
-      (w): w is CommandExecWindow => w.id === formId,
+      (w): w is MethodExecWindow => w.id === formId,
     );
     expect(failed?.status).toBe("failed");
     expect(failed?.result).toBeDefined();
     expect(failed?.result).toContain("[do] 缺少 msg");
 
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const ok = mgr.refine(formId, { msg: "补齐的消息" });
     expect(ok).toBe(true);
 
-    const revived = mgr.get(formId) as CommandExecWindow;
+    const revived = mgr.get(formId) as MethodExecWindow;
     expect(revived.status).toBe("open"); // 关键: failed → open
     expect(revived.accumulatedArgs.msg).toBe("补齐的消息"); // args 累积
     expect(revived.result).toBeUndefined(); // 旧 result 已清
@@ -87,7 +88,7 @@ describe("Round 13 G2: manager.refine 支持 failed → open 复活", () => {
 
   it("failed 状态再 submit → manager.submit 抛错（要求先 refine 回 open）", async () => {
     const { thread, formId } = await makeFailedForm();
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     // 直接对 failed 的 form submit 应抛错（manager 内部要求 open）
     let threw = false;
     try {
@@ -107,10 +108,10 @@ describe("Round 13 G2: manager.refine 支持 failed → open 复活", () => {
       arguments: { title: "派生", command: "do", description: "fork" },
     });
     const form = thread.contextWindows.find(
-      (w): w is CommandExecWindow => w.type === "command_exec",
+      (w): w is MethodExecWindow => w.type === "method_exec",
     )!;
     // 手工把 status 改成 executing 模拟中间态
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     mgr.upsertWindow({ ...form, status: "executing" });
     const ok = mgr.refine(form.id, { msg: "试图 refine executing" });
     expect(ok).toBe(false);
@@ -118,10 +119,10 @@ describe("Round 13 G2: manager.refine 支持 failed → open 复活", () => {
 
   it("复活路径完整验证: failed → refine → open → submit → success → 自动移除", async () => {
     const { thread, formId } = await makeFailedForm();
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     mgr.refine(formId, { msg: "终于补齐了" });
     // 此时 form 已回 open, 可正常 submit
-    const after = mgr.get(formId) as CommandExecWindow;
+    const after = mgr.get(formId) as MethodExecWindow;
     expect(after.status).toBe("open");
     await mgr.submit(formId, thread);
     thread.contextWindows = mgr.toData();

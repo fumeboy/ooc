@@ -1,7 +1,9 @@
 /**
- * CommandExecDiff — command_exec window 的 args 字段级 diff（design § 4.8）。
+ * MethodExecDiff — method_exec window 的 args 字段级 diff（design § 4.8）。
  *
- * command_exec 的 args 在 refine 阶段会累积；逐 loop 增量。
+ * Phase H rename: 原 CommandExecDiff,对应 type 字符串 "command_exec" → "method_exec"。
+ *
+ * method_exec 的 args 在 refine 阶段会累积；逐 loop 增量。
  * - command / status 字段顶部
  * - accumulatedArgs 按 key 逐项 diff（added / removed / changed / unchanged）
  * - result 字段（string）单独显示
@@ -16,7 +18,7 @@ import {
   readString,
 } from "./_shared";
 
-export function CommandExecDiff(props: WindowDiffRendererProps) {
+export function MethodExecDiff(props: WindowDiffRendererProps) {
   const { previous, current, windowId } = props;
   const prev = asRecord(previous);
   const cur = asRecord(current);
@@ -56,3 +58,6 @@ export function CommandExecDiff(props: WindowDiffRendererProps) {
     </div>
   );
 }
+
+/** @deprecated Phase H: renamed to MethodExecDiff. */
+export const CommandExecDiff = MethodExecDiff;

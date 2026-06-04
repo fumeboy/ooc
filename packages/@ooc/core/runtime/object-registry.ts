@@ -1,11 +1,15 @@
 /**
- * ObjectRegistry — per-world Object / Window 类型注册表。
+ * ObjectRegistry — per-world Object 类型注册表。
  *
  * M1 (2026-06-02): 从 executable/windows/_shared/registry.ts 抽出。
- * 原有 module-level 导出保留为对 `defaultObjectRegistry` 的 thin wrapper。
+ * 2026-06-03 ooc-6 cleanup Phase A：
+ *   - 已删除 ObjectType / ObjectTypeDefinition / ObjectMethod 类型引用
+ *   - 已删除 deprecated 方法：registerObjectType / getObjectDefinition /
+ *     listRegisteredObjectTypes / assertAllObjectDefinitionsRegistered
+ *   - 内部统一使用 ObjectType / ObjectDefinition / ObjectMethod
+ *   - ObjectDefinition 内部字段统一使用 methods / parentClass（不再兼容 commands / prototype）
  */
 import type {
-  CommandTableEntry,
   ObjectMethod,
 } from "../executable/windows/_shared/command-types.js";
 import type {
@@ -18,18 +22,13 @@ import type {
   ReadableFn,
   RenderContext,
   RenderHook,
-  WindowType,
-  WindowTypeDefinition,
 } from "../executable/windows/_shared/registry.js";
 import type { ContextWindow } from "../executable/windows/_shared/types.js";
 
 export type {
   ObjectDefinition,
   ObjectType,
-  WindowType,
-  WindowTypeDefinition,
   ObjectMethod,
-  CommandTableEntry,
   ContextWindow,
   OnCloseContext,
   OnCloseHook,
@@ -41,103 +40,70 @@ export type {
 };
 
 const RENDERABLE_VISIBLE_TYPES = new Set([
-  "root", "command_exec", "do", "todo", "talk", "program",
+  "root", "method_exec", "command_exec", "do", "todo", "talk", "program",
   "file", "knowledge", "search", "relation", "skill_index",
   "feishu_chat", "feishu_doc", "plan",
 ]);
 
 function resolveEffectiveParentClass(
-  input: { parentClass?: string | null; prototype?: string },
+  input: { parentClass?: string | null },
   fallback: ObjectDefinition | undefined,
 ): string | null | undefined {
-  if ("parentClass" in input) return input.parentClass;
-  if ("prototype" in input && input.prototype !== undefined) return input.prototype;
+  if (input.parentClass !== undefined) return input.parentClass;
   return fallback?.parentClass;
 }
 
 /** Base types seeded into every new ObjectRegistry. */
 const BASE_TYPE_DEFINITIONS: Array<[string, ObjectDefinition]> = [
-  ["root", {
-    type: "root", commands: {}, methods: {}, parentClass: null,
-  } as ObjectDefinition],
-  ["command_exec", {
-    type: "command_exec", commands: {}, methods: {}, parentClass: null,
-  } as ObjectDefinition],
-  ["method_exec", {
-    type: "method_exec", commands: {}, methods: {}, parentClass: null,
-  } as ObjectDefinition],
-  ["do", { type: "do", commands: {}, methods: {} } as ObjectDefinition],
-  ["todo", { type: "todo", commands: {}, methods: {} } as ObjectDefinition],
-  ["talk", { type: "talk", commands: {}, methods: {} } as ObjectDefinition],
-  ["program", { type: "program", commands: {}, methods: {} } as ObjectDefinition],
-  ["file", { type: "file", commands: {}, methods: {} } as ObjectDefinition],
-  ["knowledge", { type: "knowledge", commands: {}, methods: {} } as ObjectDefinition],
-  ["search", { type: "search", commands: {}, methods: {} } as ObjectDefinition],
-  ["relation", { type: "relation", commands: {}, methods: {} } as ObjectDefinition],
-  ["skill_index", { type: "skill_index", commands: {}, methods: {} } as ObjectDefinition],
-  ["feishu_chat", { type: "feishu_chat", commands: {}, methods: {} } as ObjectDefinition],
-  ["feishu_doc", { type: "feishu_doc", commands: {}, methods: {} } as ObjectDefinition],
-  ["plan", { type: "plan", commands: {}, methods: {} } as ObjectDefinition],
+  ["root", { type: "root", methods: {}, parentClass: null } as ObjectDefinition],
+  ["command_exec", { type: "command_exec", methods: {}, parentClass: null } as ObjectDefinition],
+  ["method_exec", { type: "method_exec", methods: {}, parentClass: null } as ObjectDefinition],
+  ["do", { type: "do", methods: {} } as ObjectDefinition],
+  ["todo", { type: "todo", methods: {} } as ObjectDefinition],
+  ["talk", { type: "talk", methods: {} } as ObjectDefinition],
+  ["program", { type: "program", methods: {} } as ObjectDefinition],
+  ["file", { type: "file", methods: {} } as ObjectDefinition],
+  ["knowledge", { type: "knowledge", methods: {} } as ObjectDefinition],
+  ["search", { type: "search", methods: {} } as ObjectDefinition],
+  ["relation", { type: "relation", methods: {} } as ObjectDefinition],
+  ["skill_index", { type: "skill_index", methods: {} } as ObjectDefinition],
+  ["feishu_chat", { type: "feishu_chat", methods: {} } as ObjectDefinition],
+  ["feishu_doc", { type: "feishu_doc", methods: {} } as ObjectDefinition],
+  ["plan", { type: "plan", methods: {} } as ObjectDefinition],
 ];
 
 export class ObjectRegistry {
-  private readonly store = new Map<WindowType, WindowTypeDefinition>();
+  private readonly store = new Map<ObjectType, ObjectDefinition>();
 
   constructor() {
     for (const [key, def] of BASE_TYPE_DEFINITIONS) {
-      this.store.set(key as WindowType, def as unknown as WindowTypeDefinition);
+      this.store.set(key as ObjectType, def);
     }
   }
 
-  /** @deprecated Use registerObjectType instead. */
-  registerWindowType(type: WindowType, partial: Partial<Omit<WindowTypeDefinition, "type">>): void {
-    const existing = this.store.get(type);
-    if (!existing) throw new Error(`registerWindowType: unknown window type "${type}"`);
-    const nextCommands = partial.commands !== undefined ? partial.commands : existing.commands;
-    const nextParentClass = resolveEffectiveParentClass(partial, existing as ObjectDefinition);
-    this.store.set(type, {
-      ...existing,
-      commands: nextCommands,
-      methods: nextCommands,
-      onClose: partial.onClose ?? existing.onClose,
-      renderXml: partial.renderXml ?? existing.renderXml,
-      compressView: partial.compressView ?? existing.compressView,
-      basicKnowledge: partial.basicKnowledge ?? existing.basicKnowledge,
-      isBuiltinFeature: partial.isBuiltinFeature ?? existing.isBuiltinFeature,
-      parentClass: nextParentClass,
-    } as WindowTypeDefinition);
-  }
-
   registerObjectType(type: ObjectType, partial: Partial<Omit<ObjectDefinition, "type">>): void {
-    const existing = this.store.get(type) as ObjectDefinition | undefined;
+    const existing = this.store.get(type);
     if (!existing) throw new Error(`registerObjectType: unknown object type "${type}"`);
-    const nextEntries =
-      partial.methods !== undefined
-        ? partial.methods
-        : partial.commands !== undefined
-          ? partial.commands
-          : existing.methods;
+    const nextMethods = partial.methods !== undefined ? partial.methods : existing.methods;
     const nextParentClass = resolveEffectiveParentClass(partial, existing);
     this.store.set(type, {
       ...existing,
-      commands: nextEntries,
-      methods: nextEntries,
+      methods: nextMethods,
       onClose: partial.onClose ?? existing.onClose,
       renderXml: partial.renderXml ?? existing.renderXml,
       compressView: partial.compressView ?? existing.compressView,
       basicKnowledge: partial.basicKnowledge ?? existing.basicKnowledge,
-      prototype: partial.prototype ?? existing.prototype,
       readable: partial.readable ?? existing.readable,
       isBuiltinFeature: partial.isBuiltinFeature ?? existing.isBuiltinFeature,
       parentClass: nextParentClass,
-    } as ObjectDefinition);
+    });
   }
 
   registerNewObjectType(
     type: ObjectType,
-    definition: Partial<ObjectDefinition> & { commands?: Record<string, any>; methods?: Record<string, any> },
+    definition: Partial<ObjectDefinition> & { methods?: Record<string, any> },
   ): void {
-    const entries = definition.methods ?? definition.commands ?? {};
+    const entries = definition.methods ?? {};
     const effectiveParentClass = resolveEffectiveParentClass(definition, undefined);
     this.store.set(type, {
       type,
@@ -145,34 +111,25 @@ export class ObjectRegistry {
       renderXml: undefined,
       compressView: undefined,
       basicKnowledge: undefined,
-      prototype: undefined,
       readable: undefined,
       ...definition,
-      commands: entries,
       methods: entries,
       parentClass: effectiveParentClass,
     } as ObjectDefinition);
   }
 
-  /** @deprecated Use getObjectDefinition instead. */
-  getWindowTypeDefinition(type: WindowType): WindowTypeDefinition {
-    const entry = this.store.get(type);
-    if (!entry) throw new Error(`getWindowTypeDefinition: window type "${type}" not registered`);
-    return entry;
-  }
-
   getObjectDefinition(type: ObjectType): ObjectDefinition {
-    const entry = this.store.get(type) as ObjectDefinition | undefined;
+    const entry = this.store.get(type);
     if (!entry) throw new Error(`getObjectDefinition: object type "${type}" not registered`);
     return entry;
   }
 
   has(type: string): boolean {
-    return this.store.has(type as WindowType);
+    return this.store.has(type as ObjectType);
   }
 
   isBuiltinFeatureType(type: ObjectType): boolean {
-    const entry = this.store.get(type) as ObjectDefinition | undefined;
+    const entry = this.store.get(type);
     if (!entry) return false;
     return entry.isBuiltinFeature === true;
   }
@@ -183,7 +140,7 @@ export class ObjectRegistry {
     const MAX_DEPTH = 64;
     let cur: string | undefined = startType;
     while (cur && chain.length < MAX_DEPTH) {
-      const def = this.store.get(cur as ObjectType) as ObjectDefinition | undefined;
+      const def = this.store.get(cur as ObjectType);
       if (!def) break;
       const next = def.parentClass === undefined ? "root" : def.parentClass ?? undefined;
       if (!next) break;
@@ -195,59 +152,52 @@ export class ObjectRegistry {
     return chain;
   }
 
-  lookupMethod(parentWindow: { type: ObjectType }, methodName: string): ObjectMethod | undefined {
-    return this.resolveMethod(parentWindow.type, methodName);
+  lookupMethod(self: { type: ObjectType }, methodName: string): ObjectMethod | undefined {
+    return this.resolveMethod(self.type, methodName);
   }
 
   lookupMethodEntry(
-    parentWindow: { type: ObjectType },
+    self: { type: ObjectType },
     methodName: string,
   ): { entry: ObjectMethod; declaringType: ObjectType } | undefined {
-    const selfDef = this.store.get(parentWindow.type) as ObjectDefinition | undefined;
+    const selfDef = this.store.get(self.type);
     if (selfDef) {
-      const selfEntry = selfDef.methods?.[methodName] ?? selfDef.commands?.[methodName];
-      if (selfEntry) return { entry: selfEntry, declaringType: parentWindow.type };
+      const selfEntry = selfDef.methods?.[methodName];
+      if (selfEntry) return { entry: selfEntry, declaringType: self.type };
     }
-    for (const parentType of this.resolveParentClassChain(parentWindow.type)) {
-      const def = this.store.get(parentType as ObjectType) as ObjectDefinition | undefined;
+    for (const parentType of this.resolveParentClassChain(self.type)) {
+      const def = this.store.get(parentType as ObjectType);
       if (!def) continue;
-      const entry = def.methods?.[methodName] ?? def.commands?.[methodName];
+      const entry = def.methods?.[methodName];
       if (entry) return { entry, declaringType: parentType as ObjectType };
     }
     return undefined;
   }
 
   resolveMethod(classId: string, methodName: string): ObjectMethod | undefined {
-    const selfDef = this.store.get(classId as ObjectType) as ObjectDefinition | undefined;
+    const selfDef = this.store.get(classId as ObjectType);
     if (selfDef) {
-      const selfEntry = selfDef.methods?.[methodName] ?? selfDef.commands?.[methodName];
+      const selfEntry = selfDef.methods?.[methodName];
       if (selfEntry) return selfEntry;
     }
     for (const parentType of this.resolveParentClassChain(classId as ObjectType)) {
-      const def = this.store.get(parentType as ObjectType) as ObjectDefinition | undefined;
+      const def = this.store.get(parentType as ObjectType);
       if (!def) continue;
-      const entry = def.methods?.[methodName] ?? def.commands?.[methodName];
+      const entry = def.methods?.[methodName];
       if (entry) return entry;
     }
     return undefined;
   }
 
   lookupConstructor(type: ObjectType): ObjectMethod | undefined {
-    const def = this.store.get(type) as ObjectDefinition | undefined;
+    const def = this.store.get(type);
     if (!def) return undefined;
-    const scan = (table: Record<string, ObjectMethod> | undefined) => {
-      if (!table) return undefined;
-      for (const entry of Object.values(table)) {
-        if (entry.kind === "constructor") return entry;
-      }
-      return undefined;
-    };
-    return scan(def.methods) ?? scan(def.commands);
-  }
-
-  /** @deprecated Use listRegisteredObjectTypes instead. */
-  listRegisteredWindowTypes(): WindowType[] {
-    return Array.from(this.store.keys()).sort();
+    const table = def.methods;
+    if (!table) return undefined;
+    for (const entry of Object.values(table)) {
+      if (entry.kind === "constructor") return entry;
+    }
+    return undefined;
   }
 
   listRegisteredObjectTypes(): ObjectType[] {
@@ -256,25 +206,11 @@ export class ObjectRegistry {
       .sort();
   }
 
-  /** @deprecated Use assertAllObjectDefinitionsRegistered instead. */
-  assertAllRenderHooksRegistered(): void {
-    const missing: WindowType[] = [];
-    for (const [type, def] of this.store) {
-      if (!def.renderXml) missing.push(type);
-    }
-    if (missing.length > 0) {
-      throw new Error(
-        `WindowRegistry: 以下 window type 缺少 renderXml hook: ${missing.join(", ")}`,
-      );
-    }
-  }
-
   assertAllObjectDefinitionsRegistered(): void {
     const missing: ObjectType[] = [];
     for (const [type, def] of this.store) {
       if (type === "relation") continue;
-      const objDef = def as ObjectDefinition;
-      if (!objDef.renderXml && !objDef.readable) missing.push(type);
+      if (!def.renderXml && !def.readable) missing.push(type);
     }
     if (missing.length > 0) {
       throw new Error(
@@ -292,7 +228,7 @@ export class ObjectRegistry {
   }
 
   /** Snapshot all entries (useful for tests or cloning). */
-  snapshot(): Array<[WindowType, WindowTypeDefinition]> {
+  snapshot(): Array<[ObjectType, ObjectDefinition]> {
     return Array.from(this.store.entries()).map(([k, v]) => [k, { ...v }]);
   }
 
@@ -300,7 +236,30 @@ export class ObjectRegistry {
   __resetForTests(): void {
     this.store.clear();
     for (const [key, def] of BASE_TYPE_DEFINITIONS) {
-      this.store.set(key as WindowType, def as unknown as WindowTypeDefinition);
+      this.store.set(key as ObjectType, def);
+    }
+  }
+
+  /** Copy all entries from another registry, merging methods/hooks. */
+  seedFrom(other: ObjectRegistry): void {
+    for (const [type, def] of other.snapshot()) {
+      const existing = this.store.get(type);
+      if (existing) {
+        // Merge: other's def takes priority for non-undefined fields
+        this.store.set(type, {
+          ...existing,
+          methods: { ...existing.methods, ...def.methods },
+          onClose: def.onClose ?? existing.onClose,
+          renderXml: def.renderXml ?? existing.renderXml,
+          compressView: def.compressView ?? existing.compressView,
+          basicKnowledge: def.basicKnowledge ?? existing.basicKnowledge,
+          readable: def.readable ?? existing.readable,
+          isBuiltinFeature: def.isBuiltinFeature ?? existing.isBuiltinFeature,
+          parentClass: def.parentClass !== undefined ? def.parentClass : existing.parentClass,
+        });
+      } else {
+        this.store.set(type, def);
+      }
     }
   }
 }
@@ -327,16 +286,21 @@ export function filterMethodsByVisibility(
 }
 
 /**
- * @deprecated New code should use the per-world `WorldRuntime.objects` registry or
- *   create a standalone instance via `createObjectRegistry()`. The module-level
- *   singleton does NOT receive stone type registrations from ObjectTypeRegistrar
- *   (which operates on the per-world instance), so relying on it in multi-world
- *   or stone-backed scenarios will miss custom object types.
+ * Module-level singleton holding builtin object type definitions (root, file,
+ * plan, program, todo, search, knowledge, skill_index, do, talk, method_exec,
+ * command_exec, feishu_chat, feishu_doc, relation).
  *
- * Kept for one release for backward compatibility with callers that import the
- * standalone registry wrappers from executable/windows/_shared/registry.ts.
+ * Builtin modules populate this via side-effect imports at module load time
+ * (e.g. `builtinRegistry.registerObjectType("file", {...})`).
+ *
+ * Each per-world `WorldRuntime.objects` seeds itself from this registry at
+ * construction time, so builtins are available in every world without being
+ * re-registered.
+ *
+ * Stone-backed user-defined types are NOT registered here — they are registered
+ * per-world by `ObjectTypeRegistrar`.
  */
-export const defaultObjectRegistry = new ObjectRegistry();
+export const builtinRegistry = new ObjectRegistry();
 
 export function createObjectRegistry(): ObjectRegistry {
   return new ObjectRegistry();

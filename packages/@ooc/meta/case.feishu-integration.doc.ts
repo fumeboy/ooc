@@ -296,17 +296,17 @@ export const root: DocTreeNode = {
                 ├── cli.ts                        # larkExec / larkCheckAuth / LarkCliError
                 ├── feishu-chat/
                 │   ├── types.ts                  # FeishuChatWindow / FeishuChatMessage 接口
-                │   ├── index.ts                  # registerWindowType + 6 个 command 实现 + render hook
+                │   ├── index.ts                  # registerObjectType + 6 个 command 实现 + render hook
                 │   └── open-command.ts           # root.open_feishu_chat
                 └── feishu-doc/
                     ├── types.ts                  # FeishuDocWindow / FeishuDocBlock 接口
-                    ├── index.ts                  # registerWindowType + 7 个 command 实现 + render hook
+                    ├── index.ts                  # registerObjectType + 7 个 command 实现 + render hook
                     └── open-command.ts           # root.open_feishu_doc
             \`\`\`
 
             **与 OOC core 的接口面**：
-            - \`src/executable/windows/_shared/types.ts\` — \`WindowType\` union 含 \`"feishu_chat" | "feishu_doc"\` 字面量；\`ContextWindow\` union 引用从 extendable 路径 re-export 的 FeishuChatWindow / FeishuDocWindow；\`generateWindowId\` 前缀表含两类。
-            - \`src/executable/windows/_shared/registry.ts\` — \`REGISTRY.set("feishu_chat" | "feishu_doc", { commands: {} })\` 占位（registerWindowType 要求 type 已存在；这是现有契约，未做更大重构）。
+            - \`src/executable/windows/_shared/types.ts\` — \`ObjectType\` union 含 \`"feishu_chat" | "feishu_doc"\` 字面量；\`ContextWindow\` union 引用从 extendable 路径 re-export 的 FeishuChatWindow / FeishuDocWindow；\`generateWindowId\` 前缀表含两类。
+            - \`src/executable/windows/_shared/registry.ts\` — \`REGISTRY.set("feishu_chat" | "feishu_doc", { commands: {} })\` 占位（registerObjectType 要求 type 已存在；这是现有契约，未做更大重构）。
             - \`src/executable/windows/index.ts\` — barrel 末尾 \`import "../../extendable/index.js"\` 拉起所有 extendable 子系统。
             - \`src/executable/windows/root/index.ts\` — 通过 \`extendable/lark\` barrel 拉 \`openFeishuChatCommand\` / \`openFeishuDocCommand\`。
 
@@ -314,7 +314,7 @@ export const root: DocTreeNode = {
             - \`stones/<...>/agent_of_feishu/\` — 按 §decisions.1 不建。
             - 单独的知识 markdown 文件 — 知识全部以 inline string 形式落在各 command 文件的 \`*_KNOWLEDGE\` / \`basicKnowledge\`，符合 OOC 现有 file/talk/program 等 builtin window 的惯例。
 
-            **后续扩展点**：新接外部世界（如 notion、slack、github）按相同模板建 \`src/extendable/<name>/\`，barrel 自注册即可，不需要触碰 \`executable/windows/_shared\`（除非要新增 WindowType 字面量）。
+            **后续扩展点**：新接外部世界（如 notion、slack、github）按相同模板建 \`src/extendable/<name>/\`，barrel 自注册即可，不需要触碰 \`executable/windows/_shared\`（除非要新增 ObjectType 字面量）。
             `,
         },
     },

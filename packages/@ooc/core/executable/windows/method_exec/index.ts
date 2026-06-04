@@ -17,7 +17,7 @@
  *          §9 把它下放到 core 因为 form 是 Object 内置特性，不该是独立 builtin object。
  */
 
-import { registerObjectType } from "../_shared/registry.js";
+import { builtinRegistry } from "../_shared/registry.js";
 import { refineMethod } from "./refine.js";
 import { submitMethod } from "./submit.js";
 import { readable } from "./readable.js";
@@ -57,7 +57,7 @@ const sharedMethods = {
 };
 
 // P6.§9: canonical type "method_exec"（OOP 命名归一）。
-registerObjectType("method_exec", {
+builtinRegistry.registerObjectType("method_exec", {
   methods: sharedMethods,
   readable,
   basicKnowledge: METHOD_EXEC_BASIC_KNOWLEDGE,
@@ -69,12 +69,13 @@ registerObjectType("method_exec", {
 });
 
 /**
- * P6.§9 alias: "command_exec" 是 "method_exec" 的 legacy 名称。Register both 让既有
- * on-disk state.json (type="command_exec") 仍能 hydrate；将在下个 release 删除（统一 migrate 后）。
+ * Phase H backward compat: "command_exec" 是 "method_exec" 的 legacy type string。
+ * 仍注册让既有 on-disk state.json (type="command_exec") 能 hydrate；
+ * thread-json.ts 读路径会把 "command_exec" → "method_exec" 迁移。
  *
  * 共享同一份 methods/readable/basicKnowledge——避免双源维护。
  */
-registerObjectType("command_exec", {
+builtinRegistry.registerObjectType("command_exec", {
   methods: sharedMethods,
   readable,
   basicKnowledge: METHOD_EXEC_BASIC_KNOWLEDGE,

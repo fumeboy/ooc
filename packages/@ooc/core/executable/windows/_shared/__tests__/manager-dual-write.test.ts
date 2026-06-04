@@ -15,6 +15,7 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WindowManager } from "../manager";
+import { builtinRegistry } from "../registry";
 import { makeThread } from "../../../../__tests__/make-thread";
 import { ROOT_WINDOW_ID } from "../types";
 import type { PlanWindow } from "@ooc/builtins/plan/types.js";
@@ -71,7 +72,7 @@ describe("WindowManager dual-write — flat runtime object + thread context regi
   });
 
   it("insertTypedWindow: 同时写扁平 state.json 和 thread context.json", async () => {
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const plan = makePlan("plan_dual_1", "demo", "dual write", 1717000000000);
     mgr.insertTypedWindow(plan, thread);
 
@@ -114,7 +115,7 @@ describe("WindowManager dual-write — flat runtime object + thread context regi
   });
 
   it("close: 从 thread context.json 摘 member + 删除扁平 object 目录", async () => {
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const plan = makePlan("plan_dual_2", "to be closed", "close path", 1717000000001);
     mgr.insertTypedWindow(plan, thread);
 
@@ -148,7 +149,7 @@ describe("WindowManager dual-write — flat runtime object + thread context regi
   });
 
   it("ROOT_WINDOW_ID 不被持久化（隐含 root，跳过双写）", async () => {
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const root = makePlan(ROOT_WINDOW_ID, "root proxy", "should not be persisted", 1717000000002);
     // 把伪 root window 插进去，但因 id === ROOT_WINDOW_ID 不应触发任何持久化
     mgr.upsertWindow(root, thread);
@@ -166,7 +167,7 @@ describe("WindowManager dual-write — flat runtime object + thread context regi
   });
 
   it("两个 typed window 顺序 insert：order 递增", async () => {
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const w1 = makePlan("plan_a", "a", "a", 1);
     const w2 = makePlan("plan_b", "b", "b", 2);
     mgr.insertTypedWindow(w1, thread);

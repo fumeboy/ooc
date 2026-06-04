@@ -6,15 +6,17 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
+  MethodExecutionContext,
+  ObjectMethod,
 } from "../../../executable/windows/_shared/command-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
   type FeishuDocWindow,
 } from "../../../executable/windows/_shared/types.js";
+import type { Intent } from "../../../thinkable/context/intent.js";
+import type { ContextWindow } from "../../../executable/windows/_shared/types.js";
+import type { MethodExecWindow } from "../../../executable/windows/method_exec/types.js";
 
 const OPEN_FEISHU_DOC_BASIC = "internal/executable/open_feishu_doc/basic";
 const OPEN_FEISHU_DOC_INPUT = "internal/executable/open_feishu_doc/input";
@@ -37,23 +39,52 @@ open_feishu_doc 用于创建一个 feishu_doc_window（飞书文档作为 Contex
 open(command="open_feishu_doc", title="OOC 设计稿", args={ doc_token: "doccn5xxxxxx", doc_kind: "docx" })
 `.trim();
 
-export const openFeishuDocCommand: CommandTableEntry = {
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
+export const openFeishuDocCommand: ObjectMethod = {
   paths: ["open_feishu_doc"],
-  match: () => ["open_feishu_doc"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [OPEN_FEISHU_DOC_BASIC]: KNOWLEDGE };
-    if (formStatus !== "open") return entries;
+  intent: (): Intent[] => [],
+  onFormChange(change, { form, intents }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = { [OPEN_FEISHU_DOC_BASIC]: KNOWLEDGE };
+    if (formStatus !== "open") return guidanceWindows(form, entries);
     if (typeof args.doc_token !== "string" || !args.doc_token) {
       entries[OPEN_FEISHU_DOC_INPUT] =
         "open_feishu_doc 缺少 doc_token；用 refine(args={ doc_token: \"doccnXXX\", doc_kind?: \"docx\", doc_title?: \"...\" })。";
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeOpenFeishuDoc(ctx),
 };
 
 export async function executeOpenFeishuDoc(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[open_feishu_doc] 缺少 thread context。";

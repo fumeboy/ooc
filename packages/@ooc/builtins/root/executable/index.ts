@@ -5,13 +5,13 @@
  * - 旧 src/executable/commands/index.ts 拆分到这里 + windows/_shared/registry.ts；
  *   commands/ 目录已迁到 windows/root/，体现 "root 是一种 window type" 的从属关系
  * - 通过 registerObjectType("root", { commands }) 注入；与其它 window type 形态一致
- * - 暴露的工具函数（getOpenableCommands / deriveRootCommandPaths）只服务于 root 上的命令
+ * - 暴露的工具函数（getOpenableMethods / deriveRootMethodPaths）只服务于 root 上的 method
  * - 暴露 ROOT_BASIC_PATH / ROOT_KNOWLEDGE：列出 root 注册的命令清单 + 用法摘要，
  *   由 src/executable/index.ts:collectExecutableKnowledgeEntries 合成为
  *   protocol 来源的 knowledge_window，每轮注入 context（参照 plan.ts 的 KNOWLEDGE 形态）
  */
 
-import { registerObjectType } from "@ooc/core/extendable/_shared/registry.js";
+import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
 import { doCommand } from "./command.do.js";
 import { endCommand } from "./command.end.js";
 import { globCommand } from "./command.glob.js";
@@ -29,6 +29,7 @@ import { todoCommand } from "./command.todo.js";
 import { writeFileCommand } from "./command.write-file.js";
 import { metaprogCommand } from "./command.metaprog.js";
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/command-types.js";
+import type { Intent } from "@ooc/core/thinkable/context/intent.js";
 
 // 2026-06-02 P6.§4-§5: root commands 现在是 thin delegator，需要对应 builtin object module
 // 通过 registerObjectType 注册 constructor。这里 side-effect import 各 builtin，确保
@@ -63,12 +64,6 @@ export const ROOT_METHODS: Record<string, ObjectMethod> = {
   open_feishu_chat: openFeishuChatCommand,
   open_feishu_doc: openFeishuDocCommand,
 };
-
-/**
- * @deprecated Use ROOT_METHODS instead (2026-05-28 ooc-6 Object Unification).
- * 旧名指向同一对象，保留为过渡期 alias；§10 cleanup 时移除。
- */
-export const ROOT_COMMANDS = ROOT_METHODS;
 
 /** Protocol knowledge path（与 plan.ts 等命令文件的 *_BASIC_PATH 形态一致）。 */
 export const ROOT_BASIC_PATH = "internal/windows/root/basic";
@@ -107,7 +102,7 @@ root window 是每个 thread 隐含的根窗口。在 root 上可用的 command 
 `.trim();
 
 /** 返回所有 root 上可 open 的命令名称列表（已排序）。 */
-export function getOpenableCommands(): string[] {
+export function getOpenableMethods(): string[] {
   return Object.keys(ROOT_METHODS).sort();
 }
 
@@ -116,7 +111,7 @@ export function getOpenableCommands(): string[] {
  *
  * 仅供测试使用：单测希望验证 root method 的副作用而不必构造 form 生命周期。
  * 生产代码应通过 WindowManager.openCommandExec 触发；那条路径会注入 manager
- * 与 parentWindow 等完整 ctx，并走 outcome 识别。
+ * 与 self 等完整 ctx，并走 outcome 识别。
  *
  * 这里保持旧的"返回 string | undefined"签名以兼容大量测试断言；遇到 outcome 时压平：
  * - { ok: true, result } → result
@@ -124,16 +119,16 @@ export function getOpenableCommands(): string[] {
  *   并返回 placeholder string（与 manager.submit 一致）
  * - { ok: false, error } → error（与旧 string-failure 约定一致）
  */
-export async function execRootCommand(
+export async function execRootMethod(
   name: string,
   ctx: import("@ooc/core/extendable/_shared/command-types.js").MethodExecutionContext,
 ): Promise<string | undefined> {
   const entry = ROOT_METHODS[name];
-  if (!entry) throw new Error(`execRootCommand: unknown root method "${name}"`);
+  if (!entry) throw new Error(`execRootMethod: unknown root method "${name}"`);
   const raw = await entry.exec(ctx);
   if (raw && typeof raw === "object" && "ok" in raw) {
     if (raw.ok) {
-      // P6 (ooc-6) constructor outcome path: 把构造出的 OOCObject 挂到 thread。
+      // P6 (ooc-6) constructor outcome path: 把构造出的 ContextObject 挂到 thread。
       // 优先通过 manager（保证 dual-write）；若调用方未注入 manager（测试常见），
       // 退回直接 push 到 thread.contextWindows，与历史 root.* exec 内部 fallback 一致。
       if ("object" in raw) {
@@ -154,18 +149,19 @@ export async function execRootCommand(
 /**
  * 从 (root method, args) 派生此次激活的 path 集合。
  *
- * 仅服务 root level 的 method；非 root window 上的 method 请直接通过 object registry 查 entry.match()。
+ * 仅服务 root level 的 method；非 root window 上的 method 请直接通过 object registry 查 entry.intent()。
  *
  * @returns 点分路径数组；method 未定义时返回 []
  */
-export function deriveRootCommandPaths(
+export function deriveRootMethodPaths(
   command: string,
   args: Record<string, unknown>,
 ): string[] {
   const entry = ROOT_METHODS[command];
   if (!entry) return [];
   try {
-    return entry.match(args);
+    const subIntents = entry.intent(args);
+    return [command, ...subIntents.map((i) => i.name)];
   } catch {
     return [command];
   }
@@ -176,4 +172,4 @@ import { readable } from "../readable.js";
 
 // 向 object registry 注入 root window type 的契约。
 // side-effect 注册：windows/index.ts 通过 import "./root/index.js" 触发本模块加载。
-registerObjectType("root", { methods: ROOT_METHODS, readable });
+builtinRegistry.registerObjectType("root", { methods: ROOT_METHODS, readable });

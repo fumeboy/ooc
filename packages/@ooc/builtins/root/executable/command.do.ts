@@ -7,12 +7,14 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
+  MethodExecutionContext,
+  ObjectMethod,
   MethodOutcome,
 } from "@ooc/core/extendable/_shared/command-types.js";
-import { lookupConstructor } from "@ooc/core/extendable/_shared/registry.js";
+import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
+import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 // 2026-06-02 P6.§4-§5: side-effect import 触发 do_window constructor 注册
 import "@ooc/core/executable/windows/do/index.js";
@@ -45,29 +47,65 @@ submit 后：
 - 关闭对话：close(window_id="<do_window_id>")（子线程会被标记 archived；borrowed owner 自动归还）
 `.trim();
 
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
 export enum DoCommandPath {
   Do = "do",
   Wait = "do.wait",
 }
 
 /** root level 的 do command：委托到 do_window constructor。 */
-export const doCommand: CommandTableEntry = {
+export const doCommand: ObjectMethod = {
   paths: [DoCommandPath.Do, DoCommandPath.Wait],
-  match: (args) => {
-    const hit: string[] = [DoCommandPath.Do];
-    if (args.wait === true) hit.push(DoCommandPath.Wait);
-    return hit;
+  schema: {
+    args: {
+      msg: { type: "string", required: true, description: "写入子线程 inbox 的初始消息" },
+      wait: { type: "boolean", required: false, description: "true 时父线程立刻进入 waiting，等子线程回写消息再唤醒" },
+      share_windows: { type: "array", required: false, description: "要在子线程创建时一并分享的 windows 列表" },
+    },
+  } as MethodCallSchema,
+  intent: (args): Intent[] => {
+    const r: Intent[] = [];
+    if (args.wait === true) r.push({ name: DoCommandPath.Wait });
+    return r;
   },
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [DO_BASIC_PATH]: KNOWLEDGE };
-    if (formStatus !== "open") return entries;
+  onFormChange(change, { form, intents }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = { [DO_BASIC_PATH]: KNOWLEDGE };
+    if (formStatus !== "open") return guidanceWindows(form, entries);
     if (typeof args.msg !== "string" || args.msg.trim().length === 0) {
       entries[DO_INPUT_PATH] =
         "do 还缺以下参数: msg。\n" +
         "请用 refine(form_id, args={ msg: \"<给子线程的初始消息>\", wait: true|false }) 补齐后 submit(form_id)。\n" +
         "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeDoCommand(ctx),
 };
@@ -76,9 +114,9 @@ export const doCommand: CommandTableEntry = {
  * P6.§4-§5 thin delegator —— 委托到 do_window constructor。
  */
 export async function executeDoCommand(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<MethodOutcome | string | undefined> {
-  const ctor = lookupConstructor("do");
+  const ctor = (ctx.manager?.registry ?? builtinRegistry).lookupConstructor("do");
   if (!ctor) return "[do] do_window constructor 未注册（registry 期望 kind=\"constructor\" 的 do method）。";
   return await ctor.exec(ctx);
 }

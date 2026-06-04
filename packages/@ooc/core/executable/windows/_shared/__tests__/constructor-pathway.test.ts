@@ -30,7 +30,7 @@ import { join } from "node:path";
 
 import { WindowManager } from "../manager";
 import { makeThread } from "../../../../__tests__/make-thread";
-import { ROOT_WINDOW_ID, type CommandExecWindow, type ContextWindow } from "../types";
+import { ROOT_WINDOW_ID, type MethodExecWindow, type ContextWindow } from "../types";
 import {
   ClassNotFoundError,
   createFlowObject,
@@ -46,7 +46,7 @@ import type { FlowObjectRef, ThreadPersistenceRef } from "../../../../persistabl
 import type { ThreadContext } from "../../../../thinkable/context";
 import type { PlanWindow } from "@ooc/builtins/plan/types.js";
 import { dispatchToolCall } from "../../../tools";
-import { lookupMethodEntry, registerNewObjectType, resolveMethod } from "../registry";
+import { builtinRegistry } from "../registry";
 
 async function exists(p: string): Promise<boolean> {
   try {
@@ -100,9 +100,9 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
 
   // ─── Test 1: builtin feature constructor (talk) → inlined into thread-context.json ──
   test("Test 1: talk constructor inlines into thread-context.json (no own dir, no contextWindows on parent state)", async () => {
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     // Drive the builtin feature via the auto-submit path on root.talk.
-    const opened = await mgr.openCommandExec({
+    const opened = await mgr.openMethodExec({
       thread,
       parentWindowId: ROOT_WINDOW_ID,
       command: "talk",
@@ -156,8 +156,8 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
 
   // ─── Test 2: independent flow object constructor (plan) → own dir + state.json + ref ──
   test("Test 2: plan constructor writes own dir + .flow.json:class=\"plan\" + state.json + thread context ref", async () => {
-    const mgr = WindowManager.fromThread(thread);
-    const opened = await mgr.openCommandExec({
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
+    const opened = await mgr.openMethodExec({
       thread,
       parentWindowId: ROOT_WINDOW_ID,
       command: "plan",
@@ -210,7 +210,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
 
   // ─── Test 3: reportStateEdit on independent object → state.json reflects mutation ──
   test("Test 3: reportStateEdit(ref) on plan flushes in-memory mutation to state.json", async () => {
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const plan: PlanWindow = {
       id: "plan_edit_target",
       type: "plan",
@@ -249,7 +249,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
 
   // ─── Test 4: reportContextEdit on thread → thread-context.json reflects current windows ──
   test("Test 4: reportContextEdit(thread) flushes in-memory contextWindows to thread-context.json", async () => {
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const plan: PlanWindow = {
       id: "plan_ctx_target",
       type: "plan",
@@ -298,25 +298,25 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
   test("Test 6: stub class with parentClass=\"root\" resolves \"talk\" via chain (smoke check at dispatch lookup)", async () => {
     // Register a brand-new ObjectType that defaults to inheriting from root.
     const stubType = `__test_stub_inherits_root_${Date.now()}`;
-    registerNewObjectType(stubType as never, {
+    builtinRegistry.registerNewObjectType(stubType as never, {
       methods: {},
       readable: () => [],
       // undefined parentClass → defaults to "root" per resolveMethod
     });
 
     // 1. Registry-level chain walk finds talk on root (this is what method-inheritance.test.ts also covers).
-    const resolved = resolveMethod(stubType, "talk");
+    const resolved = builtinRegistry.resolveMethod(stubType, "talk");
     expect(resolved).toBeDefined();
     expect(resolved!.paths).toContain("talk");
 
     // 2. Manager-level dispatch lookup finds the same entry — declaringType is the ancestor (root)
     //    where the method is declared. This is the wiring that submit() consults.
-    const entry = lookupMethodEntry({ type: stubType as never }, "talk");
+    const entry = builtinRegistry.lookupMethodEntry({ type: stubType as never }, "talk");
     expect(entry).toBeDefined();
     expect(entry!.declaringType).toBe("root");
     expect(entry!.entry.kind).toBeUndefined(); // root.talk is the delegator (not kind="constructor"; that's on the talk type)
 
-    // 3. End-to-end dispatch via openCommandExec on a stub-typed parent — verifies the wiring reaches
+    // 3. End-to-end dispatch via openMethodExec on a stub-typed parent — verifies the wiring reaches
     //    submit(). With the current §3 strict-equality guard, manager will fail the form with a
     //    [method-error] outcome (declaringType "root" !== parent.type stub). This still proves the
     //    dispatch lookup walked the chain successfully; the failure surface is the §3 guard, not the
@@ -331,15 +331,15 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
       createdAt: Date.now(),
     };
     thread.contextWindows = [stubParent as unknown as ContextWindow];
-    const mgr = WindowManager.fromThread(thread);
-    const opened = await mgr.openCommandExec({
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
+    const opened = await mgr.openMethodExec({
       thread,
       parentWindowId: stubParent.id,
       command: "talk",
       title: "stub talks alice",
       args: { target: "peer_alice", title: "stub-to-alice" },
     });
-    // openCommandExec already validated lookup succeeded (would throw otherwise) → chain walk worked.
+    // openMethodExec already validated lookup succeeded (would throw otherwise) → chain walk worked.
     // submit's §3 guard then either lets it through (after a §3 relaxation) or fails with [method-error].
     expect(opened.formId).toBeDefined();
   });
@@ -350,11 +350,11 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     // Then put that method's form on a DIFFERENT parent.type ("plan") — plan doesn't have "stub_only"
     // in its chain (plan inherits from root, not from stubX).
     const stubType = `__test_isolated_${Date.now()}`;
-    registerNewObjectType(stubType as never, {
+    builtinRegistry.registerNewObjectType(stubType as never, {
       methods: {
         stub_only: {
           paths: ["stub_only"],
-          match: () => ["stub_only"],
+          intent: () => [],
           permission: () => "allow",
           exec: async () => ({ ok: true, result: "should not get here" }),
         },
@@ -375,13 +375,13 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
       steps: [],
     };
     thread.contextWindows = [planWindow];
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
 
-    // openCommandExec will refuse to register the form because lookupCommandEntry can't find
+    // openMethodExec will refuse to register the form because lookupCommandEntry can't find
     // "stub_only" on plan's chain (plan → root → null, neither has stub_only).
     let caught: Error | undefined;
     try {
-      await mgr.openCommandExec({
+      await mgr.openMethodExec({
         thread,
         parentWindowId: planWindow.id,
         command: "stub_only",

@@ -470,7 +470,7 @@ export const root: DocTreeNode = {
             `,
             todo: [
                 "object.doc.ts:executable 加 patches.shared_lib_protocol — stone 间共享代码协议",
-                "object.doc.ts:executable.commands 加 multi-mode 描述协议讨论",
+                "object.doc.ts:executable.methods 加 multi-mode 描述协议讨论",
                 "object.doc.ts:observable 加 patches.peer_progress 讨论",
             ],
         },

@@ -10,13 +10,13 @@
  *   runtime.objects.registerObjectType(...);
  *   runtime.observable.enableDebug();
  *
- * 过渡期：module-level 默认实例（defaultObjectRegistry / defaultObservableStore /
+ * 过渡期：module-level 默认实例（defaultObservableStore /
  * defaultSerialQueue / defaultServerLoader）继续存在，保持向后兼容。
  */
 export { createWorldRuntime } from "./world-runtime.js";
 export type { WorldRuntime, WorldRuntimeConfig } from "./world-runtime.js";
 
-export { createObjectRegistry, defaultObjectRegistry, filterMethodsByVisibility } from "./object-registry.js";
+export { createObjectRegistry, builtinRegistry, filterMethodsByVisibility } from "./object-registry.js";
 export type { ObjectRegistry } from "./object-registry.js";
 
 export { createObservableStore, defaultObservableStore } from "./observable-store.js";

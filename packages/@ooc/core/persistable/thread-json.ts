@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { threadDir, toJson, type FlowObjectRef, type ThreadPersistenceRef } from "./common";
 import type { ThreadContext } from "../thinkable/context";
 import { initContextWindows } from "../executable/windows/_shared/init";
-import { isBuiltinFeatureType, listRegisteredWindowTypes } from "../executable/windows/_shared/registry";
+import type { ObjectRegistry } from "../executable/windows/_shared/registry";
+import { builtinRegistry } from "../executable/windows/index.js";
 import { readContextRegistry } from "./flow-context-registry";
 import { readRuntimeObjectState } from "./flow-runtime-object";
 import { readThreadContext, type ThreadContextEntry } from "./flow-thread-context";
@@ -28,8 +29,6 @@ export function threadFile(ref: ThreadPersistenceRef): string {
  * 当前规则:
  * - compressLevel = 0 / undefined 是默认值,不进 thread.json,避免在所有历史 window
  *   上增加噪音字段(design §risk)
- * - _decayMeta 是 budget.applyNaturalDecay 的运行时计数器(下划线前缀),不进 thread.json;
- *   下一次启动后从 0 重新计数即可——衰减语义是 "持续 N 轮无访问",冷启动重置不会引起错误折叠
  *
  * P0f note: ProcessEvent._foldedBy 同样下划线前缀但**保留**进 thread.json
  *   (fold 状态的唯一锚点,strip 掉会导致 reload 后折叠丢失)。
@@ -45,10 +44,6 @@ function stripVolatileForPersist(thread: ThreadContext): ThreadContext {
       let next = window;
       if (!next.compressLevel) {
         const { compressLevel: _drop, ...rest } = next;
-        next = rest as typeof next;
-      }
-      if (next._decayMeta !== undefined) {
-        const { _decayMeta: _drop, ...rest } = next;
         next = rest as typeof next;
       }
       // P6.§7: effectiveVisibleType 是每轮 enrichment 产物，不持久化。
@@ -73,17 +68,18 @@ export async function writeThread(thread: ThreadContext): Promise<void> {
 export async function readThread(
   ref: FlowObjectRef,
   threadId: string,
+  registry: ObjectRegistry = builtinRegistry,
 ): Promise<ThreadContext | undefined> {
   const persistence: ThreadPersistenceRef = { ...ref, threadId };
   try {
     const raw = await readFile(threadFile(persistence), "utf8");
     const parsed = JSON.parse(raw) as ThreadContext;
     // 过滤掉未注册 type 的 windows (Round 7 移除 issue 后, 历史 thread.json 可能含 type="issue"
-    // 等遗留 entries; 不过滤会让 getWindowTypeDefinition 抛 INTERNAL_ERROR 阻塞所有依赖 thread
+    // 等遗留 entries; 不过滤会让 getObjectDefinition 抛 INTERNAL_ERROR 阻塞所有依赖 thread
     // 的 API。过滤是上游 graceful skip — registry 仍 fail-loud, 但读历史 thread 时不 crash。
     // 打 console.warn 让运维知道发生了 silent drop, 符合 silent-swallow ban。)
     const rawWindows = Array.isArray(parsed.contextWindows) ? parsed.contextWindows : [];
-    const known = new Set(listRegisteredWindowTypes());
+    const known = new Set(registry.listRegisteredObjectTypes());
     // ooc-6: self window 的 type === objectId（stone-backed type），它会在 synthesizer
     // 的 ensureSelfObjectTypeRegistered 阶段才注册到 registry——读时还没注册。
     // 所以放行 type === self objectId 的 window，避免被这里的 filter 误丢。
@@ -101,14 +97,22 @@ export async function readThread(
     // Round 13 迁移: command_exec form.status="executed" 已被四态机替换为 success|failed;
     // 历史数据可能仍含 "executed" 字面值。把它们迁为 "failed" (保守路径; 让 LLM 能 refine 修复),
     // 与 unregistered type 同款 silent-swallow ban: warn 但不抛。
+    //
+    // Phase H 迁移: "command_exec" type string 已统一为 "method_exec"。
     const contextWindows = filteredWindows.map((w) => {
-      if (w.type === "command_exec" && (w as { status?: string }).status === "executed") {
-        console.warn(
-          `[readThread] ${persistence.objectId}/${threadId}: migrated form ${w.id} status "executed" → "failed" (Round 13)`,
-        );
-        return { ...w, status: "failed" as const };
+      let migrated: any = w;
+      // Phase H: type "command_exec" → "method_exec"
+      if (migrated.type === "command_exec") {
+        migrated = { ...migrated, type: "method_exec" as const };
       }
-      return w;
+      // Round 13: status "executed" → "failed"
+      if (migrated.type === "method_exec" && (migrated as { status?: string }).status === "executed") {
+        console.warn(
+          `[readThread] ${persistence.objectId}/${threadId}: migrated form ${migrated.id} status "executed" → "failed" (Round 13)`,
+        );
+        migrated = { ...migrated, status: "failed" as const };
+      }
+      return migrated;
     });
     const restored: ThreadContext = {
       ...parsed,
@@ -130,7 +134,7 @@ export async function readThread(
     try {
       const threadCtx = await readThreadContext(persistence);
       if (threadCtx && Array.isArray(threadCtx.contextWindows)) {
-        const knownTypes = new Set(listRegisteredWindowTypes());
+        const knownTypes = new Set(registry.listRegisteredObjectTypes());
         const merged: ContextWindow[] = [];
         const seenIds = new Set<string>();
         for (const entry of threadCtx.contextWindows as ThreadContextEntry[]) {
@@ -171,7 +175,7 @@ export async function readThread(
             // Resilience: 若一个 builtin feature 类型在磁盘上意外存在 state.json
             //   （旧布局残留），打 warn 不阻塞 —— state ≠ context 不变量靠新写盘端守门，
             //   读端只警告。
-            if (isBuiltinFeatureType(win.type)) {
+            if (registry.isBuiltinFeatureType(win.type)) {
               // 没有强校验副作用；保留 warn hook 以便后续 §10 cleanup 时定位。
               // 注意：不主动 readRuntimeObjectState 探测（噪音太多）。
             }
@@ -196,10 +200,10 @@ export async function readThread(
     // P5'.3 起：嵌套 context/<id>/window.json 路径已下线
     // P6.§6 起：thread-context.json 命中后跳过此分支（避免双源冲突）。
     if (!hydratedFromThreadContext) try {
-      const registry = await readContextRegistry(persistence);
-      if (registry.members.length > 0) {
-        const knownTypes = new Set(listRegisteredWindowTypes());
-        const sorted = [...registry.members].sort((a, b) => {
+      const ctxRegistry = await readContextRegistry(persistence);
+      if (ctxRegistry.members.length > 0) {
+        const knownTypes = new Set(registry.listRegisteredObjectTypes());
+        const sorted = [...ctxRegistry.members].sort((a, b) => {
           const oa = a.params.order ?? Number.MAX_SAFE_INTEGER;
           const ob = b.params.order ?? Number.MAX_SAFE_INTEGER;
           return oa - ob;
@@ -228,10 +232,6 @@ export async function readThread(
           const projected = { ...win } as typeof win;
           if (member.params.compressLevel !== undefined && member.params.compressLevel !== 0) {
             (projected as { compressLevel?: number }).compressLevel = member.params.compressLevel;
-          }
-          if (member.params.decayMeta !== undefined && member.params.decayMeta !== null) {
-            (projected as { _decayMeta?: { lastTouchedAt: number; idleRounds: number } | null })
-              ._decayMeta = member.params.decayMeta;
           }
           if (member.params.parentObjectId !== undefined) {
             (projected as { parentWindowId?: string }).parentWindowId = member.params.parentObjectId;

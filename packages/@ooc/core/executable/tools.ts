@@ -1,5 +1,7 @@
 import type { ThreadContext } from "../thinkable/context";
 import type { LlmTool, LlmToolCall } from "../thinkable/llm/types";
+import type { ObjectRegistry } from "./windows/_shared/registry";
+import { builtinRegistry } from "./windows/index.js";
 import { handleCloseTool } from "./tools/close";
 import { handleCompressTool } from "./tools/compress";
 import { buildAvailableTools } from "./tools/index";
@@ -7,7 +9,11 @@ import { handleExecTool } from "./tools/exec";
 import { handleWaitTool } from "./tools/wait";
 
 /** 单个 LLM tool 的运行时 handler 签名。 */
-type ToolHandler = (thread: ThreadContext, args: Record<string, unknown>) => Promise<string | void>;
+type ToolHandler = (
+  thread: ThreadContext,
+  args: Record<string, unknown>,
+  registry?: ObjectRegistry,
+) => Promise<string | void>;
 
 function successToolOutput(tool: string, message?: string) {
   return JSON.stringify(message ? { ok: true, tool, message } : { ok: true, tool });
@@ -33,14 +39,15 @@ export function getAvailableTools(thread: ThreadContext): LlmTool[] {
 /** 将 LLM tool call 分派给对应 handler，并返回可进入 function_call_output 的结果串。 */
 export async function dispatchToolCall(
   thread: ThreadContext,
-  toolCall: LlmToolCall
+  toolCall: LlmToolCall,
+  registry: ObjectRegistry = builtinRegistry,
 ): Promise<string> {
   const handler = TOOL_HANDLERS[toolCall.name];
   if (!handler) {
     const message = `[${toolCall.name}] tool 暂未实现。`;
     return errorToolOutput(toolCall.name, message);
   }
-  const output = await handler(thread, toolCall.arguments);
+  const output = await handler(thread, toolCall.arguments, registry);
   if (typeof output === "string") {
     return output;
   }

@@ -453,7 +453,7 @@ describe("app server routes", () => {
     expect(objectsTypes).toEqual(windowsTypes);
     // Should include key builtin types
     expect(objectsTypes).toContain("root");
-    expect(objectsTypes).toContain("command_exec");
+    expect(objectsTypes).toContain("method_exec");
     expect(objectsTypes).toContain("todo");
     expect(objectsTypes).toContain("file");
     expect(objectsTypes).toContain("knowledge");

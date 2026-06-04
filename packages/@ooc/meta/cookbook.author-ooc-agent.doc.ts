@@ -7,7 +7,7 @@
  * - cookbook.add-new-agent.doc.ts：本仓库内"加一个 AgentOfX 角色"的工程清单
  *   （harness/interim_runtime 形态，sub agent + stone 目录）
  * - **本文件**：面向**通用 Agent 作者**——以 plan §6 升级后的新形态（type=custom
- *   self window + ObjectWindowDefinition.commands）说明 stone 结构、命令注册、
+ *   self window + ObjectWindowDefinition.methods）说明 stone 结构、命令注册、
  *   调用路径、热更与演化。新建一个 OOC Agent 时来这里抄。
  *
  * 维护原则：
@@ -142,20 +142,21 @@ export const root: DocTreeNode = {
               commands: {
                 create_factor: {
                   paths: ["create_factor", "create_factor.draft"],
-                  match: (args) => {
-                    const hit = ["create_factor"];
-                    if (args.draft === true) hit.push("create_factor.draft");
-                    return hit;
+                  intent: (args) => {
+                    const out: { name: string }[] = [];
+                    if (args.draft === true) out.push({ name: "create_factor.draft" });
+                    return out;
                   },
-                  knowledge: (args, formStatus) => {
-                    if (formStatus === "open" && !args.name) {
-                      return {
+                  onFormChange(change, { form }) {
+                    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+                    if (!args.name) {
+                      return guidanceWindows(form, {
                         "internal/windows/custom/create_factor/input":
-                          "create_factor 需要 name 参数；refine(args={ name: \\"动量因子\\", formula: \\"...\\" }).",
-                      };
+                          "create_factor name 参数；refine(args={ name: \\"动量因子\\", formula: \\"...\\" }).",
+                      });
                     }
-                    return { "internal/windows/custom/create_factor/basic":
-                      "create_factor: 创建一个因子草稿。args: { name, formula, draft? }" };
+                    return guidanceWindows(form, { "internal/windows/custom/create_factor/basic":
+                      "create_factor: 创建一个因子草稿。args: { name, formula, draft? }" });
                   },
                   exec: async (ctx) => {
                     const name = String(ctx.args.name);
@@ -171,7 +172,7 @@ export const root: DocTreeNode = {
 
                 publish_factor: {
                   paths: ["publish_factor"],
-                  match: () => ["publish_factor"],
+                  intent: () => [],
                   exec: async (ctx) => {
                     const name = String(ctx.args.name);
                     const factors = (await ctx.self.getData("factors")) as
@@ -198,7 +199,7 @@ export const root: DocTreeNode = {
             };
             \`\`\`
 
-            **CommandTableEntry 字段语义**：
+            **ObjectMethod 字段语义**：
 
             - \`paths\`：本命令可能产出的所有 path 集合；用于 knowledge 反向激活索引。
             - \`match(args)\`：返回当前 args 命中的 path 子集（必含 bare command 名）。
@@ -209,7 +210,7 @@ export const root: DocTreeNode = {
             - \`exec(ctx)\`：真正执行入口。\`ctx\` 形态：
               - \`ctx.self\`: ProgramSelf（dir / callCommand / getData / setData / getThreadLocal / setThreadLocal）
               - \`ctx.thread\`: ThreadContext，可访问 contextWindows / events / inbox / outbox
-              - \`ctx.parentWindow\`: 当前 custom window 自身
+              - \`ctx.self\`: 当前 custom window 自身
               - \`ctx.manager\`: WindowManager；要操作 contextWindows 走它，不要直接 mutate
               - \`ctx.args\`: form 累积的参数
               返回值：\`{ ok: true, result?: string }\` 或 \`{ ok: false, error: string }\`
@@ -217,8 +218,8 @@ export const root: DocTreeNode = {
             `,
             named: {
                 "ObjectWindowDefinition": "{ title?, description?, renderXml?, basicKnowledge?, onClose?, commands? }",
-                "CommandTableEntry": "{ paths, match, knowledge, exec } —— 与内置 window 命令完全同构",
-                "CustomCommandContext": "exec 收到的 ctx；标准 CommandExecutionContext + self: ProgramSelf",
+                "ObjectMethod": "{ paths, match, knowledge, exec } —— 与内置 window 命令完全同构",
+                "CustomCommandContext": "exec 收到的 ctx；标准 MethodExecutionContext + self: ProgramSelf",
                 "ctx.self.callCommand": "在命令内部调本对象其它命令：\`await ctx.self.callCommand(\"custom:<self>\", \"<name>\", { ... })\`",
                 "ctx.self.getData/setData": "读写 stone 的 data.json；setData 是顶层 merge",
             },
@@ -362,7 +363,7 @@ export const root: DocTreeNode = {
             **关键点**：
             - props 至少接 \`{ sessionId?, objectName?, callMethod? }\`
             - \`callMethod(name, args)\` 调你 server/index.ts 里 \`ui_methods[name]\` ——
-              **不是 \`window.commands\`**（后者是给 LLM 的）
+              **不是 \`window.methods\`**（后者是给 LLM 的）
             - 没写 client/index.tsx 时 web 走 Stone fallback（自动展示
               self.md / readme.md / knowledge / Recent flows）
 
@@ -454,7 +455,7 @@ export const root: DocTreeNode = {
             3. **不需要重启进程、不需要重新部署**
 
             **增量演化更稳**：用 \`exec(command="open_file", args={path:...}) + edit\`
-            在 \`window.commands\` 字面量里追加一条 key，比每次重写整文件更安全。
+            在 \`window.methods\` 字面量里追加一条 key，比每次重写整文件更安全。
 
             **演化触发场景**：
             - 业务 thread 里发现一类操作反复手写 → 抽成 command 沉淀
@@ -479,11 +480,11 @@ export const root: DocTreeNode = {
     },
     patches: {
         "ui_methods_isolation": {
-            title: "ui_methods 与 window.commands 是两条平行通道",
+            title: "ui_methods 与 window.methods 是两条平行通道",
             content: `
             两者表达的是不同维度的能力：
 
-            - \`window.commands\`（programmable / executable.context_window）：
+            - \`window.methods\`（programmable / executable.context_window）：
               给 LLM 的命令字典；通过 open/refine/submit 协议调用，享受 form lifecycle
               + path-based knowledge 激活。
 
@@ -514,7 +515,7 @@ export const root: DocTreeNode = {
     },
     sources: [["src/executable/server/window-types.ts", "ObjectWindowDefinition 与 CustomCommandContext 的真值定义"]],
     todo: [
-        "params schema 校验：当前 CommandTableEntry.match/knowledge 不强制 args 类型；如果未来加上，本指南需要补 schema 字段说明。",
+        "params schema 校验：当前 ObjectMethod.match/knowledge 不强制 args 类型；如果未来加上，本指南需要补 schema 字段说明。",
         "示例工程：建议在仓库中添加一个 minimal-agent 示例 stone，跟随本指南可以一键跑起来。",
     ],
 };

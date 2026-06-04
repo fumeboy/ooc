@@ -5,6 +5,7 @@
  * M2 (2026-06-03): 追加 stoneRegistry（stones/ 扫描与元数据解析）。
  */
 import {
+  builtinRegistry,
   createObjectRegistry,
   ObjectRegistry,
 } from "./object-registry.js";
@@ -66,6 +67,9 @@ export interface WorldRuntime {
  */
 export function createWorldRuntime(config: WorldRuntimeConfig): WorldRuntime {
   const objects = createObjectRegistry();
+  // Seed builtin type definitions (root, file, plan, etc.) from the module-level
+  // builtinRegistry. Builtins register themselves via side-effect imports.
+  objects.seedFrom(builtinRegistry);
   const observable = createObservableStore();
   const serialQueue = createSerialQueue();
   const serverLoader = createServerLoader();

@@ -2,7 +2,7 @@
  * OOC Tool 定义（exec/close/wait —— 重构后 3 原语）
  *
  * 旧 open/refine/submit 三件套合并为单一 `exec`；refine/submit 下沉为
- * CommandExecWindow 上注册的命令，与 do_window/talk_window 上的命令同构。
+ * MethodExecWindow 上注册的命令，与 do_window/talk_window 上的命令同构。
  * 详见 plan: docs/plans/exec-tool-refactor.md
  */
 

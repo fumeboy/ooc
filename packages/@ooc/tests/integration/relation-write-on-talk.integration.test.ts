@@ -33,7 +33,7 @@ import {
   createStoneObject,
   createPoolObject,
   poolKnowledgeRelationFile,
-  writeReadme,
+  writeReadable,
 } from "@ooc/core/persistable";
 import { hasLlmEnv, llm, setupTempFlow } from "./_fixture";
 import { initContextWindows } from "@ooc/core/executable/windows";
@@ -80,7 +80,7 @@ describe.skipIf(!hasLlmEnv)("integration: backend-relation-self-write-on-talk", 
     await createStoneObject({ baseDir: tempRoot, objectId: "assistant" });
     await createStoneObject({ baseDir: tempRoot, objectId: "critic" });
     await createPoolObject({ baseDir: tempRoot, objectId: "assistant" });
-    await writeReadme({ baseDir: tempRoot, objectId: "critic" }, CRITIC_README);
+    await writeReadable({ baseDir: tempRoot, objectId: "critic" }, CRITIC_README);
 
     // 2) 建 assistant root thread,挂初始 prompt
     const assistantFlow = await createFlowObject({

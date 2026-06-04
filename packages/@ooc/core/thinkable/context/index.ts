@@ -1,9 +1,9 @@
 import type { LlmInputItem, LlmMessage } from "../llm/types";
-import { collectExecutableKnowledgeEntries } from "../../executable/index";
 import type { ContextWindow } from "../../executable/windows/_shared/types";
 import type { ThreadPersistenceRef } from "../../persistable/common";
 import { deriveStoneFromThread, objectDir, readSelf, stoneDir, threadDir } from "../../persistable";
-import { renderContextXml } from "./render";
+import { createDefaultPipeline } from "./pipeline.js";
+import { XmlRenderer } from "./renderers/xml.js";
 import type { IntentCache } from "./intent.js";
 
 export type {
@@ -21,6 +21,8 @@ export type { ContextSnapshot } from "./snapshot.js";
 export { XmlRenderer, renderSnapshotToXml } from "./renderers/xml.js";
 export { JsonRenderer } from "./renderers/json.js";
 export { TraceRenderer } from "./renderers/trace.js";
+export { ContextPipeline, createDefaultPipeline } from "./pipeline.js";
+export type { PipelinePhase, PipelineContext } from "./pipeline.js";
 
 /**
  * ProcessEvent 共享的可选字段;所有 variants 都可承载它们。
@@ -29,7 +31,7 @@ export { TraceRenderer } from "./renderers/trace.js";
  *   其他类型的 event 也可选地携带 id (用于 compress(scope=events, target_event_ids) 指定);
  *   旧 thread.json 没有 id 字段属于正常情况,渲染层会按数组下标 fallback。
  * - `_foldedBy` (P0f): 该事件已被某条 events_summary 折叠;渲染时跳过,实际数据仍在
- *   thread.events 中保留。下划线前缀但**保留**进 thread.json (与 _decayMeta 相反),
+ *   thread.events 中保留。下划线前缀但**保留**进 thread.json,
  *   因为它是 fold 状态的唯一持久化锚点。design §4.2 + 任务 F2/F3。
  */
 export type ProcessEventCommon = {
@@ -663,29 +665,21 @@ export async function buildContext(thread: ThreadContext): Promise<LlmMessage[]>
 export async function buildInputItems(
   thread: ThreadContext
 ): Promise<{ instructions?: string; input: LlmInputItem[] }> {
-  // TODO(P5): migrate collectExecutableKnowledgeEntries call to ContextPipeline
-  const executableState = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
-  const content = await renderContextXml({
-    thread,
-    contextWindows: executableState.contextWindows,
-    knowledgeEntries: executableState.knowledgeEntries,
-  });
+  // Phase F: ContextPipeline + XmlRenderer production path
+  const pipeline = createDefaultPipeline();
+  const snapshot = await pipeline.run(thread);
+  const renderer = new XmlRenderer();
+  const content = await renderer.render(snapshot, thread);
 
-  // P0f 渲染层 fold: 被 _foldedBy 标记的 event 跳过(实际数据仍在 thread.events 中,
-  // 持久化保留); 它们的位置由对应的 events_summary event 自身渲染为占位 system message。
-  // events_summary event 不带 _foldedBy 标记 — 它就是"代替被折叠区段"的渲染单元。
+  // P0f: fold _foldedBy events; events_summary renders as its own placeholder
   const transcript = thread.events.flatMap((event) =>
     event._foldedBy ? [] : processEventToItems(thread, event),
   );
 
-  // self.md 是 Object 的对内身份说明（identity.innerSelf，见
-  // meta/object/persistable/index.doc.ts stoneLayout）。这里把它作为顶层 instructions
-  // 注入 LLM，让多个 Object 在同一 Session 中持有可区分的身份；不存在则保持原行为。
+  // self.md instructions (Object identity.innerSelf)
   const instructions = await loadSelfInstructions(thread);
 
-  // [ooc:paths] 信息节点:把 Object 的持久化目录与 OOC world 路径告诉 LLM,
-  // 让元编程动作("write_file 到我的 stones/<self>/..." / "engineer 一个新 server method")
-  // 能落到正确路径。无 persistence(测试 fixture) 时不注入此节点。
+  // [ooc:paths] meta node for metaprogramming / path anchors
   const pathsItem = buildPathsItem(thread);
 
   return {

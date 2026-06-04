@@ -10,11 +10,13 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
+  MethodExecutionContext,
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/command-types.js";
-import { registerObjectType } from "@ooc/core/extendable/_shared/registry.js";
+import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -33,6 +35,32 @@ export {
   hasAnyHistoryViewportField,
 } from "./history-viewport.js";
 import { readable } from "../readable.js";
+
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
 
 const PROGRAM_WINDOW_EXEC_BASIC = "internal/windows/program/exec/basic";
 const PROGRAM_WINDOW_EXEC_INPUT = "internal/windows/program/exec/input";
@@ -94,40 +122,64 @@ program_window.set_history_window 精细化调整 exec history 渲染视口。
 
 const execCommand: ObjectMethod = {
   paths: ["exec", "exec.shell", "exec.ts", "exec.js"],
-  match: (args) => {
-    const hit: string[] = ["exec"];
-    const lang = (args.language ?? args.lang) as string | undefined;
-    if (lang === "shell") hit.push("exec.shell");
-    if (lang === "ts" || lang === "typescript") hit.push("exec.ts");
-    if (lang === "js" || lang === "javascript") hit.push("exec.js");
-    return hit;
+  schema: {
+    args: {
+      language: { type: "string", required: true, enum: ["shell", "ts", "js"], description: "Execution language" },
+      lang: { type: "string", enum: ["shell", "ts", "js", "typescript", "javascript"], description: "Alias for language" },
+      code: { type: "string", required: true, description: "Code string to execute" },
+    },
   },
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [PROGRAM_WINDOW_EXEC_BASIC]: EXEC_KNOWLEDGE };
-    if (formStatus !== "open") return entries;
+  intent: (args) => {
+    const intents: Intent[] = [];
+    const lang = (args.language ?? args.lang) as string | undefined;
+    if (lang === "shell") intents.push({ name: "exec.shell" });
+    if (lang === "ts" || lang === "typescript") intents.push({ name: "exec.ts" });
+    if (lang === "js" || lang === "javascript") intents.push({ name: "exec.js" });
+    return intents;
+  },
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = { [PROGRAM_WINDOW_EXEC_BASIC]: EXEC_KNOWLEDGE };
+    if (formStatus !== "open") return guidanceWindows(form, entries);
     const lang = (args.language ?? args.lang) as string | undefined;
     const code = typeof args.code === "string" ? args.code.trim() : "";
     if (!(lang && code)) {
       entries[PROGRAM_WINDOW_EXEC_INPUT] =
         "program_window.exec 缺少执行参数；refine(args={ language, code })。";
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeProgramWindowExec(ctx),
 };
 
 const closeCommand: ObjectMethod = {
   paths: ["close"],
-  match: () => ["close"],
-  knowledge: (): CommandKnowledgeEntries => ({ [PROGRAM_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
+  intent: () => [],
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const entries: Record<string, string> = { [PROGRAM_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE };
+    return guidanceWindows(form, entries);
+  },
   exec: () => undefined,
 };
 
 const setHistoryWindowCommand: ObjectMethod = {
   paths: ["set_history_window"],
-  match: () => ["set_history_window"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  schema: {
+    args: {
+      history_tail: { type: "number", description: "Show last N execs (positive integer; mutually exclusive with history_start/history_end)" },
+      history_start: { type: "number", description: "Start of range (non-negative integer; must pair with history_end)" },
+      history_end: { type: "number", description: "End of range (non-negative integer; must pair with history_start)" },
+    },
+  },
+  intent: () => [],
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = {
       [PROGRAM_WINDOW_SET_HISTORY_BASIC]: SET_HISTORY_KNOWLEDGE,
     };
     if (formStatus === "open" && !hasAnyHistoryViewportField(args)) {
@@ -135,14 +187,14 @@ const setHistoryWindowCommand: ObjectMethod = {
         "set_history_window 至少需要传入 history_tail / history_start+history_end 之一。\n" +
         "history_tail 与 history_start/history_end 互斥，请 refine 后 submit。";
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeProgramSetHistoryViewport(ctx),
 };
 
 /** program_window.exec：跑一次 exec，把 record append 到 window.history。 */
 export async function executeProgramWindowExec(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[program_window.exec] 缺少 thread context。";
@@ -240,16 +292,27 @@ function deriveProgramTitle(args: ProgramExecArgs, max = 60): string {
 const programConstructor: ObjectMethod = {
   kind: "constructor",
   paths: ["program", "program.shell", "program.ts", "program.js"],
-  match: (args) => {
-    const hit: string[] = ["program"];
-    const lang = (args.language ?? args.lang) as string | undefined;
-    if (lang === "shell") hit.push("program.shell");
-    if (lang === "ts" || lang === "typescript") hit.push("program.ts");
-    if (lang === "js" || lang === "javascript") hit.push("program.js");
-    return hit;
+  permission: () => "allow",
+  schema: {
+    args: {
+      language: { type: "string", required: true, enum: ["shell", "ts", "js"], description: "Execution language" },
+      lang: { type: "string", enum: ["shell", "ts", "js", "typescript", "javascript"], description: "Alias for language" },
+      code: { type: "string", required: true, description: "Code string to execute" },
+    },
   },
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  intent: (args) => {
+    const intents: Intent[] = [];
+    const lang = (args.language ?? args.lang) as string | undefined;
+    if (lang === "shell") intents.push({ name: "program.shell" });
+    if (lang === "ts" || lang === "typescript") intents.push({ name: "program.ts" });
+    if (lang === "js" || lang === "javascript") intents.push({ name: "program.js" });
+    return intents;
+  },
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = {
       [PROGRAM_CONSTRUCTOR_BASIC]: PROGRAM_CONSTRUCTOR_KNOWLEDGE,
     };
     const lang = (args.language ?? args.lang) as string | undefined;
@@ -257,22 +320,22 @@ const programConstructor: ObjectMethod = {
     if (formStatus === "executing") {
       entries[PROGRAM_CONSTRUCTOR_FORM_STATUS] =
         "对于 command program 的 executing 状态的 form，应等待 result 写入后再继续，不要再次 refine 或 submit。";
-      return entries;
+      return guidanceWindows(form, entries);
     }
     if (formStatus === "success") {
       entries[PROGRAM_CONSTRUCTOR_FORM_STATUS] =
         "对于 command program 的 success 状态的 form，结果已成功生成；form 将自动从 context 移除。";
-      return entries;
+      return guidanceWindows(form, entries);
     }
     if (formStatus === "failed") {
       entries[PROGRAM_CONSTRUCTOR_FORM_STATUS] =
         "对于 command program 的 failed 状态的 form，先阅读 result 排查错误：可 refine(form_id, args={ language, code }) 修正参数后重 submit（form 会自动切回 open），或 close(form_id, reason=...) 彻底放弃。";
-      return entries;
+      return guidanceWindows(form, entries);
     }
     if (lang && code) {
       entries[PROGRAM_CONSTRUCTOR_INPUT] =
         "program 参数已具备；submit 即创建 program_window 并执行。";
-      return entries;
+      return guidanceWindows(form, entries);
     }
     const missing: string[] = [];
     if (!lang) missing.push("language");
@@ -281,9 +344,8 @@ const programConstructor: ObjectMethod = {
       `program 还缺以下参数: ${missing.join(", ")}。\n` +
       "请用 refine(form_id, args={ language: \"shell\" | \"ts\" | \"js\", code: \"<待执行代码>\" }) 补齐后 submit(form_id)。\n" +
       "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
-    return entries;
+    return guidanceWindows(form, entries);
   },
-  permission: () => "allow",
   exec: async (ctx) => {
     const thread = ctx.thread;
     if (!thread) return { ok: false, error: "[program] 缺少 thread context。" };
@@ -309,8 +371,8 @@ const programConstructor: ObjectMethod = {
   },
 };
 
-registerObjectType("program", {
-  commands: {
+builtinRegistry.registerObjectType("program", {
+  methods: {
     exec: execCommand,
     close: closeCommand,
     set_history_window: setHistoryWindowCommand,

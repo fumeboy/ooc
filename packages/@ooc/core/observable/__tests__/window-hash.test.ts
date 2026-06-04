@@ -3,12 +3,11 @@
  *
  * 不变量验证清单（design § 6 + cookbook E2-1 测试清单 + Round 10 F2 fileDiff）：
  * 1. 同 window 两次 → 同 hash（确定性）
- * 2. _decayMeta 变化 → 同 hash（剥 volatile）
- * 3. 内容字段（如 file_window.path）变化 → 不同 hash
- * 4. 字段插入顺序变化 → 同 hash（sortedKeys 保护）
- * 5. compressLevel=0 vs undefined → 同 hash（默认值剥离）
- * 6. compressLevel=1 vs 0 → 不同 hash
- * 7. buildWindowsSnapshot 多 window → 数组顺序与输入一致
+ * 2. 内容字段（如 file_window.path）变化 → 不同 hash
+ * 3. 字段插入顺序变化 → 同 hash（sortedKeys 保护）
+ * 4. compressLevel=0 vs undefined → 同 hash（默认值剥离）
+ * 5. compressLevel=1 vs 0 → 不同 hash
+ * 6. buildWindowsSnapshot 多 window → 数组顺序与输入一致
  *
  * Round 10 F2 新增 fileDiff 用例（docs/2026-05-27-type-dispatch-window-diff-view-design.md § 4.1）：
  * 8. non-file window → 不含 fileDiff
@@ -53,15 +52,6 @@ describe("computeWindowContentHash — determinism & stability", () => {
     expect(computeWindowContentHash(w)).toBe(computeWindowContentHash(w));
   });
 
-  it("_decayMeta change → same hash (volatile stripped)", () => {
-    const base = makeFileWindow();
-    const withDecay = {
-      ...base,
-      _decayMeta: { idleRounds: 3, sinceExecRounds: 5, level1Rounds: 0, lastSeenEventIdx: 12 },
-    } as FileWindow;
-    expect(computeWindowContentHash(base)).toBe(computeWindowContentHash(withDecay));
-  });
-
   it("content field change → different hash", () => {
     // file_window 的 path 改了即视为内容变化
     const a = makeFileWindow({ path: "src/foo.ts" });
@@ -91,18 +81,15 @@ describe("computeWindowContentHash — determinism & stability", () => {
 
 describe("stripVolatileWindow — field policy", () => {
   it("does not mutate input window", () => {
-    const w = makeFileWindow({ compressLevel: 0 }) as FileWindow & { _decayMeta?: unknown };
-    w._decayMeta = { idleRounds: 1, sinceExecRounds: 0, level1Rounds: 0, lastSeenEventIdx: 0 };
+    const w = makeFileWindow({ compressLevel: 0 });
     const before = JSON.stringify(w);
     stripVolatileWindow(w);
     expect(JSON.stringify(w)).toBe(before);
   });
 
-  it("strips _decayMeta and compressLevel=0", () => {
-    const w = makeFileWindow({ compressLevel: 0 }) as FileWindow & { _decayMeta?: unknown };
-    w._decayMeta = { idleRounds: 1, sinceExecRounds: 0, level1Rounds: 0, lastSeenEventIdx: 0 };
+  it("strips compressLevel=0", () => {
+    const w = makeFileWindow({ compressLevel: 0 });
     const out = stripVolatileWindow(w);
-    expect("_decayMeta" in out).toBe(false);
     expect("compressLevel" in out).toBe(false);
   });
 

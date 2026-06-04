@@ -15,11 +15,13 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
+  MethodExecutionContext,
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/command-types.js";
-import { registerObjectType, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
+import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import { builtinRegistry, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
 import { Glob } from "bun";
 import { isAbsolute, resolve } from "node:path";
 import {
@@ -43,6 +45,32 @@ import {
   type GrepHit,
 } from "@ooc/builtins/root/executable/command.grep.impl.js";
 import { readable } from "../readable.js";
+
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
 
 export const SEARCH_WINDOW_BASIC_PATH = "internal/windows/search/basic";
 export const SEARCH_WINDOW_CLOSE_BASIC = "internal/windows/search/close/basic";
@@ -101,26 +129,38 @@ open(parent_window_id="<search_window_id>", command="open_match",
 
 const closeCommand: ObjectMethod = {
   paths: ["close"],
-  match: () => ["close"],
-  knowledge: (): CommandKnowledgeEntries => ({
-    [SEARCH_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE,
-  }),
+  intent: () => [],
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const entries: Record<string, string> = {
+      [SEARCH_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE,
+    };
+    return guidanceWindows(form, entries);
+  },
   exec: () => undefined,
 };
 
 const openMatchCommand: ObjectMethod = {
   paths: ["open_match"],
-  match: () => ["open_match"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  schema: {
+    args: {
+      index: { type: "number", required: true, description: "match index from search_window.matches[].index" },
+    },
+  },
+  intent: () => [],
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = {
       [SEARCH_WINDOW_OPEN_MATCH_BASIC]: OPEN_MATCH_KNOWLEDGE,
     };
-    if (formStatus !== "open") return entries;
+    if (formStatus !== "open") return guidanceWindows(form, entries);
     if (typeof args.index !== "number") {
       entries[SEARCH_WINDOW_OPEN_MATCH_INPUT] =
         "open_match 缺少 index；用 args={ index: <整数> }。index 取自当前 search_window.matches[].index。";
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeSearchOpenMatch(ctx),
 };
@@ -139,7 +179,7 @@ const FILE_WINDOW_LINE_CONTEXT = 40;
  * 让 LLM 第一时间看到上下文；glob kind 的 match 没有 line，整体打开。
  */
 export async function executeSearchOpenMatch(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   // P6.§3: manager 在 dispatch 阶段已保证 self.type === "search"，method 体不再 re-check。
   const window = ctx.self as SearchWindow;
@@ -236,8 +276,8 @@ function compressSearchWindow(
   return children;
 }
 
-registerObjectType("search", {
-  commands: {
+builtinRegistry.registerObjectType("search", {
+  methods: {
     close: closeCommand,
     open_match: openMatchCommand,
     set_results_window: setResultsWindowCommandForSearch,
@@ -314,21 +354,32 @@ const SEARCH_MAX_MATCHES = 200;
 const searchConstructor: ObjectMethod = {
   kind: "constructor",
   paths: ["glob", "grep"],
-  match: (args) => {
-    // 通过 args 形态推断 path（match() 看不到 ctx.form.command）。
-    // grep 特征参数：path / glob / case_insensitive；否则按 glob 处理。
+  permission: () => "allow",
+  schema: {
+    args: {
+      pattern: { type: "string", required: true, description: "glob pattern (for glob) or regex pattern (for grep)" },
+      cwd: { type: "string", description: "glob: search root directory (relative to session baseDir)" },
+      path: { type: "string", description: "grep: search directory or file" },
+      glob: { type: "string", description: "grep: filename glob filter (e.g. *.ts)" },
+      case_insensitive: { type: "boolean", description: "grep: case insensitive match" },
+    },
+  },
+  intent: (args) => {
     const a = args as Record<string, unknown>;
     if (typeof a.path === "string" || typeof a.glob === "string" || a.case_insensitive === true) {
-      return ["grep"];
+      return [{ name: "grep" }];
     }
-    return ["glob"];
+    return [{ name: "glob" }];
   },
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = {
       [SEARCH_GLOB_BASIC]: SEARCH_GLOB_KNOWLEDGE,
       [SEARCH_GREP_BASIC]: SEARCH_GREP_KNOWLEDGE,
     };
-    if (formStatus !== "open") return entries;
+    if (formStatus !== "open") return guidanceWindows(form, entries);
     if (typeof args.pattern !== "string" || args.pattern.length === 0) {
       entries[SEARCH_GLOB_INPUT] =
         "glob 还缺以下参数: pattern。\n" +
@@ -338,9 +389,8 @@ const searchConstructor: ObjectMethod = {
         "grep 还缺以下参数: pattern。\n" +
         "请用 refine(form_id, args={ pattern: \"<regex>\", path?: \"<dir-or-file>\", glob?: \"*.ts\", case_insensitive?: true }) 补齐后 submit(form_id)。";
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
-  permission: () => "allow",
   exec: async (ctx) => {
     const thread = ctx.thread;
     if (!thread) return { ok: false, error: "[search] 缺少 thread context。" };
@@ -431,8 +481,8 @@ const searchConstructor: ObjectMethod = {
 };
 
 // 二次注册：把 constructor 加进 commands 表（registerObjectType 替换 methods）
-registerObjectType("search", {
-  commands: {
+builtinRegistry.registerObjectType("search", {
+  methods: {
     close: closeCommand,
     open_match: openMatchCommand,
     set_results_window: setResultsWindowCommandForSearch,

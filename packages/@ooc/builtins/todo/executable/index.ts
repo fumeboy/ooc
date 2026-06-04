@@ -9,17 +9,46 @@
  * - onClose 无副作用，window 直接释放
  */
 
-import { registerObjectType } from "@ooc/core/extendable/_shared/registry.js";
+import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
 import type {
-  CommandKnowledgeEntries,
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/command-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
   type TodoWindow,
+  type ContextWindow,
 } from "@ooc/core/extendable/_shared/types.js";
 import { readable } from "../readable.js";
+
+import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as unknown as ContextWindow);
+  }
+  return out;
+}
 
 const TODO_CONSTRUCTOR_BASIC = "internal/objects/todo/constructor/basic";
 const TODO_CONSTRUCTOR_INPUT = "internal/objects/todo/constructor/input";
@@ -57,25 +86,33 @@ function deriveTodoTitle(content: string, maxLen = 60): string {
 const todoConstructor: ObjectMethod = {
   kind: "constructor",
   paths: ["todo", "todo.on_command_path"],
-  match: (args) => {
-    const hit: string[] = ["todo"];
-    if (Array.isArray(args.on_command_path) && args.on_command_path.length > 0) {
-      hit.push("todo.on_command_path");
-    }
-    return hit;
+  schema: {
+    args: {
+      content: { type: "string", required: true, description: "待办内容" },
+      on_command_path: { type: "array", description: "命中这些 command path 时强提醒" },
+    },
   },
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  intent: (args) => {
+    if (Array.isArray(args.on_command_path) && args.on_command_path.length > 0) {
+      return [{ name: "todo.on_command_path" }];
+    }
+    return [];
+  },
+  onFormChange: (change, { form }) => {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = {
       [TODO_CONSTRUCTOR_BASIC]: TODO_CONSTRUCTOR_KNOWLEDGE,
     };
-    if (formStatus !== "open") return entries;
+    if (formStatus !== "open") return guidanceWindows(form, entries);
     if (typeof args.content !== "string" || args.content.trim().length === 0) {
       entries[TODO_CONSTRUCTOR_INPUT] =
         "todo 还缺以下参数: content。\n" +
         "请用 refine(form_id, args={ content: \"<待办内容>\", on_command_path?: [\"<cmd>\"] }) 补齐后 submit(form_id)。\n" +
         "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   permission: () => "allow",
   exec: async (ctx) => {
@@ -99,8 +136,8 @@ const todoConstructor: ObjectMethod = {
   },
 };
 
-registerObjectType("todo", {
-  commands: {
+builtinRegistry.registerObjectType("todo", {
+  methods: {
     todo: todoConstructor,
   },
   readable,

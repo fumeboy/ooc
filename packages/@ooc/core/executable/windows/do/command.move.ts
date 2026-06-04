@@ -14,11 +14,12 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
+  MethodExecutionContext,
+  ObjectMethod,
 } from "../_shared/command-types.js";
+import type { Intent, MethodCallSchema } from "../../../thinkable/context/intent.js";
 import type { ContextWindow, DoWindow, SharingState } from "../_shared/types.js";
+import type { MethodExecWindow } from "../method_exec/types.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 import { findChild } from "./helpers.js";
 
@@ -65,6 +66,45 @@ do_window.move (return)：归还路径。
 系统按 id 自动识别 lent_out 配对：原 owner 恢复 live，吸收你的 latest 内容；你的副本被移除。
 `.trim();
 
+const MOVE_COMBINED_KNOWLEDGE = [
+  MOVE_BASIC_KNOWLEDGE,
+  "",
+  "## ref 模式",
+  MOVE_REF_KNOWLEDGE,
+  "",
+  "## move 模式",
+  MOVE_MOVE_KNOWLEDGE,
+  "",
+  "## 归还（return）模式",
+  MOVE_RETURN_KNOWLEDGE,
+].join("\n");
+
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
 interface MoveArgs {
   window_id: string;
   mode: "ref" | "move";
@@ -107,7 +147,7 @@ function resolvePeerThread(
   return null;
 }
 
-async function executeMove(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeMove(ctx: MethodExecutionContext): Promise<string | undefined> {
   const self = ctx.thread;
   if (!self) return "[do_window.move] 缺少 thread context。";
   // P6.§3: manager 在 dispatch 阶段已保证 self.type === "do"，method 体不再 re-check。
@@ -140,7 +180,7 @@ async function executeMove(ctx: CommandExecutionContext): Promise<string | undef
         : `已借出给 thread "${source.sharing.borrowerThreadId}"`;
     return `[do_window.move] window "${window_id}" 当前是 ${stateDesc}，不能再分享。`;
   }
-  if (source.id === doWindow.id || source.type === "do" || source.type === "command_exec" || source.type === "root") {
+  if (source.id === doWindow.id || source.type === "do" || source.type === "method_exec" || source.type === "root") {
     return `[do_window.move] window "${window_id}" 是 ${source.type} 类型，不允许分享（仅可分享数据 / 内容型 window）。`;
   }
 
@@ -212,31 +252,28 @@ async function executeMove(ctx: CommandExecutionContext): Promise<string | undef
   return `[do_window.move] 已将 window "${window_id}" 移交给 thread "${peer.id}"（你这边变为 lent_out 临时只读，等其归还）。`;
 }
 
-export const moveCommand: CommandTableEntry = {
+export const moveCommand: ObjectMethod = {
   paths: ["move", "move.ref", "move.move"],
-  match: (args) => {
-    const hit: string[] = ["move"];
-    if (args.mode === "ref") hit.push("move.ref");
-    if (args.mode === "move") hit.push("move.move");
+  schema: {
+    args: {
+      window_id: { type: "string", required: true, description: "要分享的 window id（必须在自己的 contextWindows 里且当前是 owner）" },
+      mode: { type: "string", required: true, enum: ["ref", "move"], description: '"ref" 只读 snapshot 分享；"move" 所有权移交' },
+    },
+  } as MethodCallSchema,
+  intent: (args): Intent[] => {
+    const hit: Intent[] = [];
+    if (args.mode === "ref") hit.push({ name: "move.ref" });
+    if (args.mode === "move") hit.push({ name: "move.move" });
     return hit;
   },
-  knowledge: (_args, _formStatus): CommandKnowledgeEntries => {
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
     // 单 key 返回；把 ref / move / return 三个分支说明合并到 basic body 里，
     // 避免 args.mode 变化引入新 knowledge key 阻断 manager 的 auto-execute 子集判定
-    return {
-      [MOVE_BASIC_PATH]: [
-        MOVE_BASIC_KNOWLEDGE,
-        "",
-        "## ref 模式",
-        MOVE_REF_KNOWLEDGE,
-        "",
-        "## move 模式",
-        MOVE_MOVE_KNOWLEDGE,
-        "",
-        "## 归还（return）模式",
-        MOVE_RETURN_KNOWLEDGE,
-      ].join("\n"),
+    const entries: Record<string, string> = {
+      [MOVE_BASIC_PATH]: MOVE_COMBINED_KNOWLEDGE,
     };
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeMove(ctx),
 };

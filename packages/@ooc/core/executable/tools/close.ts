@@ -11,7 +11,8 @@
 
 import type { LlmTool } from "../../thinkable/llm/types.js";
 import type { ThreadContext } from "../../thinkable/context.js";
-import { WindowManager } from "../windows/index.js";
+import { builtinRegistry, WindowManager } from "../windows/index.js";
+import type { ObjectRegistry } from "../windows/_shared/registry.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 export const CLOSE_TOOL: LlmTool = {
@@ -39,13 +40,14 @@ const errorOutput = (error: string) => JSON.stringify({ ok: false, tool: "close"
 export async function handleCloseTool(
   thread: ThreadContext,
   args: Record<string, unknown>,
+  registry: ObjectRegistry = builtinRegistry,
 ): Promise<string> {
   const reason = args.reason as string | undefined;
   if (!reason) return errorOutput("close 缺少 reason 参数。");
   const windowId = args.window_id as string | undefined;
   if (!windowId) return errorOutput("close 缺少 window_id 参数。");
 
-  const mgr = WindowManager.fromThread(thread);
+  const mgr = WindowManager.fromThread(thread, registry);
   const existing = mgr.get(windowId);
   if (!existing) return errorOutput(`close 失败：window ${windowId} 不存在。`);
 

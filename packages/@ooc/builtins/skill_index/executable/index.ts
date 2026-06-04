@@ -15,7 +15,7 @@
  * UI 端类似——ContextSnapshotViewer 渲染时如果 skills 为空就不显示卡片。
  */
 
-import { registerObjectType, type OnCloseContext } from "@ooc/core/extendable/_shared/registry.js";
+import { builtinRegistry, type OnCloseContext } from "@ooc/core/extendable/_shared/registry.js";
 import { readable } from "../readable.js";
 
 const SKILL_INDEX_BASIC_KNOWLEDGE = `
@@ -41,8 +41,8 @@ function onCloseSkillIndex(_ctx: OnCloseContext): boolean {
   return false;
 }
 
-registerObjectType("skill_index", {
-  commands: {},
+builtinRegistry.registerObjectType("skill_index", {
+  methods: {},
   onClose: onCloseSkillIndex,
   readable,
   basicKnowledge: SKILL_INDEX_BASIC_KNOWLEDGE,

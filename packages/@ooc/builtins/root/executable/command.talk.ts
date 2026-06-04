@@ -7,12 +7,14 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
+  MethodExecutionContext,
+  ObjectMethod,
   MethodOutcome,
 } from "@ooc/core/extendable/_shared/command-types.js";
-import { lookupConstructor } from "@ooc/core/extendable/_shared/registry.js";
+import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
+import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 // 2026-06-02 P6.§4-§5: side-effect import 触发 talk_window constructor 注册
 import "@ooc/core/executable/windows/talk/index.js";
@@ -43,17 +45,52 @@ submit 后副作用：
 允许同时打开多个 talk_window 来并行维护**不同 target / 不同主题**（不是为了重复同一对话）。
 `.trim();
 
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
 export enum TalkCommandPath {
   Talk = "talk",
 }
 
 /** root.talk command：委托到 talk_window constructor。 */
-export const talkCommand: CommandTableEntry = {
+export const talkCommand: ObjectMethod = {
   paths: [TalkCommandPath.Talk],
-  match: () => [TalkCommandPath.Talk],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [TALK_BASIC_PATH]: KNOWLEDGE };
-    if (formStatus !== "open") return entries;
+  schema: {
+    args: {
+      target: { type: "string", required: true, description: "目标 flow object 的 objectId" },
+      title: { type: "string", required: true, description: "本会话的简短主题" },
+    },
+  } as MethodCallSchema,
+  intent: (): Intent[] => [],
+  onFormChange(change, { form, intents }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = { [TALK_BASIC_PATH]: KNOWLEDGE };
+    if (formStatus !== "open") return guidanceWindows(form, entries);
     const target = typeof args.target === "string" ? args.target.trim() : "";
     const title = typeof args.title === "string" ? args.title.trim() : "";
     if (!target || !title) {
@@ -65,7 +102,7 @@ export const talkCommand: CommandTableEntry = {
         "请用 refine(form_id, args={ target: \"<objectId>\", title: \"<会话主题>\" }) 补齐后 submit(form_id)。\n" +
         "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeTalkCommand(ctx),
 };
@@ -74,9 +111,9 @@ export const talkCommand: CommandTableEntry = {
  * P6.§4-§5 thin delegator —— 委托到 talk_window constructor。
  */
 export async function executeTalkCommand(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<MethodOutcome | string | undefined> {
-  const ctor = lookupConstructor("talk");
+  const ctor = (ctx.manager?.registry ?? builtinRegistry).lookupConstructor("talk");
   if (!ctor) return "[talk] talk_window constructor 未注册（registry 期望 kind=\"constructor\" 的 talk method）。";
   return await ctor.exec(ctx);
 }

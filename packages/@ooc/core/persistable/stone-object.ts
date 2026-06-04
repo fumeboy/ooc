@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { stoneDir, STONE_CHILDREN_SUBDIR, toJson, type StoneObjectRef } from "./common";
 import { selfFile } from "./stone-self";
@@ -6,39 +6,12 @@ import { readableFile } from "./stone-readme";
 
 export { stoneDir };
 
-/** 写入 `.stone.json` 的元数据。 */
-/** @deprecated Use package.json instead (2026-06-01 bun workspace migration) */
-export interface StoneObjectMetadata {
-  /** 元数据判别字段，区分 .stone.json 与 .flow.json / .pool.json。 */
-  type: "stone";
-  /** 与 ref 同步的 objectId 副本，便于离线读取无需推断目录结构。 */
-  objectId: string;
-}
-
-/** stone 元数据文件 `.stone.json` 的绝对路径。 */
-/** @deprecated Use package.json in packageDir instead */
-export function stoneMetadataFile(ref: StoneObjectRef): string {
-  return join(stoneDir(ref), ".stone.json");
-}
-
-/** stone 的 server 目录。 */
-/** @deprecated Use executableDir instead (2026-05-28 ooc-6 Object Unification). server/ is being renamed to executable/. */
-export function serverDir(ref: StoneObjectRef): string {
-  return join(stoneDir(ref), "server");
-}
-
 /**
  * stone 的 executable 目录（原 server/ 重命名，2026-05-28 ooc-6）。
  * 存放 Object 的 methods 实现。
  */
 export function executableDir(ref: StoneObjectRef): string {
   return join(stoneDir(ref), "executable");
-}
-
-/** stone 的 client 目录。 */
-/** @deprecated Use visibleDir instead (2026-05-28 ooc-6 Object Unification). client/ is being renamed to visible/. */
-export function clientDir(ref: StoneObjectRef): string {
-  return join(stoneDir(ref), "client");
 }
 
 /**
@@ -155,20 +128,12 @@ export async function discoverStoneHierarchicalPeers(ref: StoneObjectRef): Promi
   return { siblings, children };
 }
 
-/** @deprecated Use discoverStoneHierarchicalPeers instead */
-export async function discoverPeerPackages(ref: StoneObjectRef): Promise<{
-  siblings: string[];
-  children: string[];
-}> {
-  return discoverStoneHierarchicalPeers(ref);
-}
-
 /**
  * 创建 stone 的最小可见骨架：`package.json` + `self.md` + `readable.md`（**空文件占位**）。
  *
  * 创建的初始文件（2026-06-01 bun workspace 修订）:
  * - `package.json`：bun workspace package metadata (ooc.objectId, ooc.kind="object")
- * - `self.md`：**空文件**——`ls packageDir` 可见；readSelf 返回 ""；
+ * - `self.md`：**空文件**——`ls stoneDir` 可见；readSelf 返回 ""；
  *   `loadSelfInstructions` 视 empty 等价 undefined，故不会注入空 instructions。
  *   正文由 Object 后续主动 writeSelf 写入。
  * - `readable.md`：**空文件**——同上语义；正文由 Object 后续主动 writeReadable 写入。
@@ -198,10 +163,6 @@ export async function createStoneObject(ref: StoneObjectRef): Promise<StoneObjec
     },
   };
   await writeFile(join(dir, "package.json"), toJson(pkgJson), "utf8");
-
-  // Write .stone.json for backward compat during migration
-  const metadata: StoneObjectMetadata = { type: "stone", objectId: ref.objectId };
-  await writeFile(stoneMetadataFile(ref), toJson(metadata), "utf8");
 
   await writeFile(selfFile(ref), "", "utf8");
   await writeFile(readableFile(ref), "", "utf8");

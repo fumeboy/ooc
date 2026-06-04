@@ -17,14 +17,16 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
+  MethodExecutionContext,
+  ObjectMethod,
 } from "../../../executable/windows/_shared/command-types.js";
-import { registerWindowType, type RenderContext } from "../../../executable/windows/_shared/registry.js";
+import { builtinRegistry, type RenderContext } from "../../../executable/windows/_shared/registry.js";
 import type { FeishuChatWindow, FeishuChatMessage } from "./types.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
 import { larkExec } from "../cli.js";
+import type { Intent } from "../../../thinkable/context/intent.js";
+import type { ContextWindow } from "../../../executable/windows/_shared/types.js";
+import type { MethodExecWindow } from "../../../executable/windows/method_exec/types.js";
 
 const FEISHU_CHAT_PROTOCOL_PATH = "internal/windows/feishu_chat/basic";
 const FEISHU_CHAT_REFRESH_BASIC = "internal/windows/feishu_chat/refresh/basic";
@@ -139,59 +141,103 @@ const CLOSE_KNOWLEDGE = `
 feishu_chat.close 释放 window；不影响飞书一侧的消息或会话。
 `.trim();
 
+// ─────────────────────────── guidance helper ────────────────────────────
+
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
 // ─────────────────────────── command 实现 ────────────────────────────
 
-const refreshCommand: CommandTableEntry = {
+const refreshCommand: ObjectMethod = {
   paths: ["refresh"],
-  match: () => ["refresh"],
-  knowledge: (): CommandKnowledgeEntries => ({ [FEISHU_CHAT_REFRESH_BASIC]: REFRESH_KNOWLEDGE }),
+  intent: (): Intent[] => [],
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    return guidanceWindows(form, { [FEISHU_CHAT_REFRESH_BASIC]: REFRESH_KNOWLEDGE });
+  },
   exec: (ctx) => executeRefresh(ctx),
 };
 
-const searchCommand: CommandTableEntry = {
+const searchCommand: ObjectMethod = {
   paths: ["search"],
-  match: () => ["search"],
-  knowledge: (): CommandKnowledgeEntries => ({ [FEISHU_CHAT_SEARCH_BASIC]: SEARCH_KNOWLEDGE }),
+  intent: (): Intent[] => [],
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    return guidanceWindows(form, { [FEISHU_CHAT_SEARCH_BASIC]: SEARCH_KNOWLEDGE });
+  },
   exec: (ctx) => executeSearch(ctx),
 };
 
-const sendCommand: CommandTableEntry = {
+const sendCommand: ObjectMethod = {
   paths: ["send"],
-  match: (args) => (args.confirm === true ? ["send", "send.confirmed"] : ["send"]),
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [FEISHU_CHAT_SEND_BASIC]: SEND_KNOWLEDGE };
-    if (formStatus === "open" && args.confirm !== true) {
+  intent: (args) => (args.confirm === true ? [{ name: "send.confirmed" }] : []),
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : (form as any).accumulatedArgs ?? {};
+    const entries: Record<string, string> = { [FEISHU_CHAT_SEND_BASIC]: SEND_KNOWLEDGE };
+    if (form.status === "open" && args.confirm !== true) {
       entries[FEISHU_CHAT_SEND_DRY_RUN] = SEND_DRY_RUN_KNOWLEDGE;
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeSend(ctx),
 };
 
-const replyCommand: CommandTableEntry = {
+const replyCommand: ObjectMethod = {
   paths: ["reply"],
-  match: (args) => (args.confirm === true ? ["reply", "reply.confirmed"] : ["reply"]),
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [FEISHU_CHAT_REPLY_BASIC]: REPLY_KNOWLEDGE };
-    if (formStatus === "open" && args.confirm !== true) {
+  intent: (args) => (args.confirm === true ? [{ name: "reply.confirmed" }] : []),
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : (form as any).accumulatedArgs ?? {};
+    const entries: Record<string, string> = { [FEISHU_CHAT_REPLY_BASIC]: REPLY_KNOWLEDGE };
+    if (form.status === "open" && args.confirm !== true) {
       entries[FEISHU_CHAT_SEND_DRY_RUN] = SEND_DRY_RUN_KNOWLEDGE;
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeReply(ctx),
 };
 
-const subscribeCommand: CommandTableEntry = {
+const subscribeCommand: ObjectMethod = {
   paths: ["subscribe"],
-  match: () => ["subscribe"],
-  knowledge: (): CommandKnowledgeEntries => ({ [FEISHU_CHAT_SUBSCRIBE_BASIC]: SUBSCRIBE_KNOWLEDGE }),
+  intent: (): Intent[] => [],
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    return guidanceWindows(form, { [FEISHU_CHAT_SUBSCRIBE_BASIC]: SUBSCRIBE_KNOWLEDGE });
+  },
   exec: (ctx) => executeSubscribe(ctx),
 };
 
-const closeCommand: CommandTableEntry = {
+const closeCommand: ObjectMethod = {
   paths: ["close"],
-  match: () => ["close"],
-  knowledge: (): CommandKnowledgeEntries => ({ [FEISHU_CHAT_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
+  intent: (): Intent[] => [],
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    return guidanceWindows(form, { [FEISHU_CHAT_CLOSE_BASIC]: CLOSE_KNOWLEDGE });
+  },
   exec: () => undefined,
 };
 
@@ -295,7 +341,7 @@ function pickText(m: Record<string, unknown>): string {
   return content;
 }
 
-async function executeRefresh(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeRefresh(ctx: MethodExecutionContext): Promise<string | undefined> {
   // P6.§3: manager 已保证 self.type === "feishu_chat"。
   const window = ctx.self as FeishuChatWindow;
   const count = clampCount(ctx.args.count, DEFAULT_TAIL);
@@ -345,7 +391,7 @@ function extractCursor(raw: unknown): string | undefined {
   return undefined;
 }
 
-async function executeSearch(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeSearch(ctx: MethodExecutionContext): Promise<string | undefined> {
   // P6.§3: manager 已保证 self.type === "feishu_chat"。
   const window = ctx.self as FeishuChatWindow;
   const query = asString(ctx.args.query);
@@ -383,7 +429,7 @@ async function executeSearch(ctx: CommandExecutionContext): Promise<string | und
   return `搜索 "${query}" 命中 ${hits.length} 条。`;
 }
 
-async function executeSend(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeSend(ctx: MethodExecutionContext): Promise<string | undefined> {
   // P6.§3: manager 已保证 self.type === "feishu_chat"。
   const window = ctx.self as FeishuChatWindow;
   const text = asString(ctx.args.text);
@@ -416,7 +462,7 @@ async function executeSend(ctx: CommandExecutionContext): Promise<string | undef
   return `已发送（as=${as}, chat=${window.chatId}）。`;
 }
 
-async function executeReply(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeReply(ctx: MethodExecutionContext): Promise<string | undefined> {
   // P6.§3: manager 已保证 self.type === "feishu_chat"。
   const window = ctx.self as FeishuChatWindow;
   const replyTo = asString(ctx.args.reply_to);
@@ -439,7 +485,7 @@ async function executeReply(ctx: CommandExecutionContext): Promise<string | unde
   return `已回复（as=${as}, reply_to=${replyTo}）。`;
 }
 
-function executeSubscribe(ctx: CommandExecutionContext): string | undefined {
+function executeSubscribe(ctx: MethodExecutionContext): string | undefined {
   // P6.§3: manager 已保证 self.type === "feishu_chat"。
   const window = ctx.self as FeishuChatWindow;
   const interval = Number(ctx.args.interval_ms);
@@ -504,8 +550,8 @@ function formatMessageLine(m: FeishuChatMessage): string {
   return `${ts} ${kind}${m.sender} (${m.messageId.slice(-8)})${reply}: ${m.text}`;
 }
 
-registerWindowType("feishu_chat", {
-  commands: {
+builtinRegistry.registerObjectType("feishu_chat", {
+  methods: {
     refresh: refreshCommand,
     search: searchCommand,
     send: sendCommand,

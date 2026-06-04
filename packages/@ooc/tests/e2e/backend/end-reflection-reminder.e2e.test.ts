@@ -29,18 +29,18 @@ import {
   END_REFLECTION_REMINDER_KNOWLEDGE,
   END_REFLECTION_REMINDER_PATH,
 } from "@ooc/core/thinkable/reflectable/reflectable-knowledge";
-import type { CommandExecWindow } from "@ooc/core/executable/windows/_shared/types";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/_shared/types";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 
 // 触发 windows/ 各 type 注册（root commands "end" / "talk" 等）
 import "@ooc/core/executable/windows";
 
-function makeCommandExecWindow(
-  overrides: Partial<CommandExecWindow> & { command: string },
-): CommandExecWindow {
+function makeMethodExecWindow(
+  overrides: Partial<MethodExecWindow> & { command: string },
+): MethodExecWindow {
   return {
     id: "f_test",
-    type: "command_exec",
+    type: "method_exec",
     parentWindowId: "root",
     title: overrides.command,
     status: "open",
@@ -99,7 +99,7 @@ describe("[round-11] end-reflection-reminder thread-level integration", () => {
         id: ref.threadId,
         persistence: ref,
         extraWindows: [
-          makeCommandExecWindow({ command: "end", id: "f_end_biz" }),
+          makeMethodExecWindow({ command: "end", id: "f_end_biz" }),
         ],
       });
 
@@ -141,7 +141,7 @@ describe("[round-11] end-reflection-reminder thread-level integration", () => {
         id: ref.threadId,
         persistence: ref,
         extraWindows: [
-          makeCommandExecWindow({ command: "end", id: "f_end_super" }),
+          makeMethodExecWindow({ command: "end", id: "f_end_super" }),
         ],
       });
 
@@ -170,7 +170,7 @@ describe("[round-11] end-reflection-reminder thread-level integration", () => {
         id: ref.threadId,
         persistence: ref,
         extraWindows: [
-          makeCommandExecWindow({ command: "talk", id: "f_talk_biz" }),
+          makeMethodExecWindow({ command: "talk", id: "f_talk_biz" }),
         ],
       });
 

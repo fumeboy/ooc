@@ -2,8 +2,9 @@ import { stoneDir, type StoneObjectRef } from "../../persistable";
 import { mergeFlowData, readFlowData } from "../../persistable";
 import type { ThreadContext } from "../../thinkable/context";
 import type { ProgramSelf } from "./types";
-import { getWindowTypeDefinition } from "../windows/_shared/registry";
-import type { CommandExecutionContext } from "../windows/_shared/command-types";
+import type { ObjectRegistry } from "../windows/_shared/registry";
+import { builtinRegistry } from "../windows/index.js";
+import type { MethodExecutionContext } from "../windows/_shared/command-types";
 
 /**
  * 构造 program 模式注入的 self 对象（plan §6.5 / §5.5）。
@@ -22,6 +23,7 @@ import type { CommandExecutionContext } from "../windows/_shared/command-types";
 export function createProgramSelf(
   stoneRef: StoneObjectRef,
   thread: ThreadContext,
+  registry: ObjectRegistry = builtinRegistry,
 ): ProgramSelf {
   const dir = stoneDir(stoneRef);
   const self: ProgramSelf = {
@@ -36,8 +38,8 @@ export function createProgramSelf(
       }
 
       // 取该 window type 的 commands
-      const def = getWindowTypeDefinition(window.type);
-      let commands = def.commands;
+      const def = registry.getObjectDefinition(window.type);
+      let commands = def.methods;
 
       const entry = commands[command];
       if (!entry) {
@@ -47,10 +49,9 @@ export function createProgramSelf(
         );
       }
 
-      const ctx: CommandExecutionContext & { programSelf: ProgramSelf } = {
+      const ctx: MethodExecutionContext & { programSelf: ProgramSelf } = {
         thread,
         self: window,
-        parentWindow: window,
         args,
         programSelf: self,
       };

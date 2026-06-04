@@ -22,7 +22,7 @@
 import { Elysia, t } from "elysia";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import { objectDir, stoneDir, visibleDir, clientDir } from "@ooc/core/persistable";
+import { objectDir, stoneDir, visibleDir } from "@ooc/core/persistable";
 import type { ServerConfig } from "../../bootstrap/config";
 import { AppServerError } from "../../bootstrap/errors";
 
@@ -56,11 +56,11 @@ export function clientSourceUrlApi(config: Pick<ServerConfig, "baseDir">) {
         absPath = join(visibleDir(stoneRef), "index.tsx");
         try {
           if (!(await stat(absPath)).isFile()) {
-            absPath = join(clientDir(stoneRef), "index.tsx");
+            absPath = join(stoneDir(stoneRef), "client", "index.tsx");
           }
         } catch {
           // visible/ doesn't exist — try legacy client/
-          absPath = join(clientDir(stoneRef), "index.tsx");
+          absPath = join(stoneDir(stoneRef), "client", "index.tsx");
         }
       } else {
         // flow scope 需要 sessionId + page

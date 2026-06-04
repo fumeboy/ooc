@@ -10,9 +10,11 @@
  */
 
 import type {
-  CommandKnowledgeEntries,
-  CommandTableEntry,
+  ObjectMethod,
 } from "../_shared/command-types.js";
+import type { Intent, MethodCallSchema } from "../../../thinkable/context/intent.js";
+import type { ContextWindow } from "../_shared/types.js";
+import type { MethodExecWindow } from "../method_exec/types.js";
 import {
   executeWindowSetTranscriptViewport,
   hasAnyTranscriptViewportField,
@@ -47,11 +49,47 @@ do_window.set_transcript_window 精细化调整 transcript 渲染窗口。
 **注意**：viewport 只影响**渲染**给 LLM 的内容；continue / wait / close / move 等命令仍基于完整 transcript。
 `.trim();
 
-export const setTranscriptWindowCommandForDo: CommandTableEntry = {
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
+export const setTranscriptWindowCommandForDo: ObjectMethod = {
   paths: ["set_transcript_window"],
-  match: () => ["set_transcript_window"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  schema: {
+    args: {
+      tail: { type: "number", required: false, description: "末 N 条（正整数，与 range_* 互斥）" },
+      range_start: { type: "number", required: false, description: "区间起点（非负整数，必须与 range_end 同时出现）" },
+      range_end: { type: "number", required: false, description: "区间终点（非负整数，必须与 range_start 同时出现）" },
+    },
+  } as MethodCallSchema,
+  intent: (): Intent[] => [],
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = {
       [DO_SET_TRANSCRIPT_BASIC]: KNOWLEDGE,
     };
     if (formStatus === "open" && !hasAnyTranscriptViewportField(args)) {
@@ -59,7 +97,7 @@ export const setTranscriptWindowCommandForDo: CommandTableEntry = {
         "set_transcript_window 至少需要传入 tail / range_start+range_end 之一。\n" +
         "tail 与 range_* 互斥，请 refine 后 submit。";
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeWindowSetTranscriptViewport(ctx, ["do"]),
 };

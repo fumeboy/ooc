@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import "../windows/index";
 import {
   generateWindowId,
-  getWindowTypeDefinition,
+  builtinRegistry,
   WindowManager,
   type SearchWindow,
 } from "../windows/index";
@@ -27,13 +27,54 @@ import {
 } from "@ooc/builtins/search";
 import { renderContextXml } from "../../thinkable/context/render";
 import { makeThread } from "../../__tests__/make-thread";
+import type { Intent } from "@ooc/core/thinkable/context/intent.js";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+
+/**
+ * Simulate the old `knowledge(args, status)` API using the new `onFormChange` interface.
+ */
+function callKnowledge(
+  cmd: { onFormChange?: unknown; intent?: (args: Record<string, unknown>) => Intent[] },
+  args: Record<string, unknown>,
+  status: "open" | "executing" | "success" | "failed",
+): Record<string, string> {
+  const fn = cmd.onFormChange as
+    | ((change: any, ctx: { form: MethodExecWindow; intents: Intent[] }) => ContextWindow[])
+    | undefined;
+  if (!fn) return {};
+  const form: MethodExecWindow = {
+    id: "test_form",
+    type: "method_exec",
+    parentWindowId: "root",
+    title: "test",
+    command: "test",
+    description: "",
+    accumulatedArgs: args,
+    commandPaths: [],
+    loadedKnowledgePaths: [],
+    status,
+    createdAt: 0,
+  };
+  const intents = cmd.intent?.(args) ?? [];
+  const change =
+    status !== "open"
+      ? { kind: "status_changed" as const, to: status, from: "open" as const }
+      : { kind: "args_refined" as const, args, added: [] as string[], removed: [] as string[], changed: [] as string[] };
+  const windows = fn(change, { form, intents });
+  const out: Record<string, string> = {};
+  for (const w of windows) {
+    out[w.title] = (w as any).content ?? "";
+  }
+  return out;
+}
 
 // ---------- U1 ----------
 
 describe("U1: SearchWindow type + render + basicKnowledge", () => {
   it("registry has 'search' definition with non-empty commands and basicKnowledge", () => {
-    const def = getWindowTypeDefinition("search");
-    expect(Object.keys(def.commands).length).toBeGreaterThan(0);
+    const def = builtinRegistry.getObjectDefinition("search");
+    expect(Object.keys(def.methods).length).toBeGreaterThan(0);
     expect(typeof def.basicKnowledge).toBe("string");
     expect((def.basicKnowledge as string).length).toBeGreaterThan(0);
   });
@@ -135,7 +176,7 @@ describe("U1: SearchWindow type + render + basicKnowledge", () => {
       truncated: false,
     };
     thread.contextWindows = [...thread.contextWindows, sw];
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     expect(mgr.close(sw.id, thread)).toBe(true);
     thread.contextWindows = mgr.toData();
     expect(thread.contextWindows.find((w) => w.id === sw.id)).toBeUndefined();
@@ -166,7 +207,7 @@ import type { FileWindow } from "../windows/index";
 
 /**
  * 创建一个临时文件 + 对应的 file_window + WindowManager，
- * 让 .edit 测试可以直接 openCommandExec("edit", args) 走完真实链路。
+ * 让 .edit 测试可以直接 openMethodExec("edit", args) 走完真实链路。
  */
 async function makeFileFixture(name: string, body: string) {
   const path = join(TEMP, name);
@@ -182,13 +223,13 @@ async function makeFileFixture(name: string, body: string) {
     path,
   };
   thread.contextWindows = [...thread.contextWindows, fw];
-  const mgr = WindowManager.fromThread(thread);
+  const mgr = WindowManager.fromThread(thread, builtinRegistry);
   return { thread, mgr, fileWindow: fw, path };
 }
 
 async function runEdit(name: string, body: string, args: Record<string, unknown>) {
   const { thread, mgr, fileWindow, path } = await makeFileFixture(name, body);
-  const opened = await mgr.openCommandExec({
+  const opened = await mgr.openMethodExec({
     thread,
     parentWindowId: fileWindow.id,
     command: "edit",
@@ -275,7 +316,7 @@ describe("U2: file_window.edit", () => {
       {} as Record<string, unknown>,
     );
     // 因为 args 不满足，C 规则不触发；form 留在 open 状态等 LLM refine
-    // openCommandExec 不会 submit，所以也不会有 submitResult；这是用户路径上的
+    // openMethodExec 不会 submit，所以也不会有 submitResult；这是用户路径上的
     // protocol guard，input knowledge 已经告诉 LLM 缺什么
     expect(opened.autoSubmitted).toBe(false);
   });
@@ -283,10 +324,10 @@ describe("U2: file_window.edit", () => {
   it("edge: parent is not a file_window → error '未挂载在 file_window 上'", async () => {
     // 在 root 上调 edit（root 没有 edit command），应被 lookup 拒绝
     const thread = makeThread({ id: "t_wrong_parent" });
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     let err: string | undefined;
     try {
-      await mgr.openCommandExec({
+      await mgr.openMethodExec({
         thread,
         parentWindowId: "root",
         command: "edit",
@@ -313,8 +354,8 @@ describe("U2: file_window.edit", () => {
       path: join(TEMP, "does-not-exist.txt"),
     };
     thread.contextWindows = [...thread.contextWindows, fw];
-    const mgr = WindowManager.fromThread(thread);
-    const opened = await mgr.openCommandExec({
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
+    const opened = await mgr.openMethodExec({
       thread,
       parentWindowId: fw.id,
       command: "edit",
@@ -614,7 +655,6 @@ describe("U4: root.glob + search_window.open_match", () => {
     const result = await executeSearchOpenMatch({
       thread,
       args: {}, // missing index
-      parentWindow: sw,
       self: sw,
     });
     expect(typeof result).toBe("string");
@@ -791,7 +831,7 @@ import { programCommand } from "@ooc/builtins/root/executable/command.program";
 describe("U6: program knowledge mentions file_window.edit", () => {
   it("program command knowledge text steers LLM toward file_window.edit + write_file", () => {
     // 用代表性 args 调 knowledge()——只需要 basic path 包含建议段落
-    const k = programCommand.knowledge!({ language: "shell", code: "ls" }, "open");
+    const k = callKnowledge(programCommand, { language: "shell", code: "ls" }, "open");
     const text = Object.values(k).join("\n");
     expect(text).toContain("file_window.edit");
     expect(text).toContain("write_file");

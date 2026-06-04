@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { execRootCommand } from "../windows";
-import { WindowManager } from "../windows";
+import { execRootMethod } from "../windows";
+import { WindowManager, builtinRegistry } from "../windows";
 import { creatorWindowIdOf, type DoWindow } from "../windows/_shared/types";
 import { makeThread } from "../../__tests__/make-thread";
 
@@ -16,7 +16,7 @@ import { makeThread } from "../../__tests__/make-thread";
 describe("do command (ContextWindow model)", () => {
   it("fork: 创建 child thread、父侧 do_window、child 的 creator do_window，并写消息", async () => {
     const parent = makeThread({ id: "t_parent" });
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: { msg: "处理日志中的错误", wait: true },
     });
@@ -52,9 +52,9 @@ describe("do command (ContextWindow model)", () => {
     expect(parent.inboxSnapshotAtWait).toBe(0);
   });
 
-  it("do_window.continue 通过 WindowManager.openCommandExec 调用，追加 child inbox + 父 outbox", async () => {
+  it("do_window.continue 通过 WindowManager.openMethodExec 调用，追加 child inbox + 父 outbox", async () => {
     const parent = makeThread({ id: "t_parent" });
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: { msg: "首条消息" },
     });
@@ -63,8 +63,8 @@ describe("do command (ContextWindow model)", () => {
       (w) => w.type === "do" && !(w as DoWindow).isCreatorWindow,
     )!.id;
 
-    const mgr = WindowManager.fromThread(parent);
-    const opened = await mgr.openCommandExec({
+    const mgr = WindowManager.fromThread(parent, builtinRegistry);
+    const opened = await mgr.openMethodExec({
       thread: parent,
       parentWindowId: doWindowId,
       command: "continue",
@@ -84,7 +84,7 @@ describe("do command (ContextWindow model)", () => {
 
   it("close 父侧 do_window 归档子线程（B=ii archive）", async () => {
     const parent = makeThread({ id: "t_parent" });
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: { msg: "test" },
     });
@@ -93,7 +93,7 @@ describe("do command (ContextWindow model)", () => {
       (w) => w.type === "do" && !(w as DoWindow).isCreatorWindow,
     )!.id;
 
-    const mgr = WindowManager.fromThread(parent);
+    const mgr = WindowManager.fromThread(parent, builtinRegistry);
     const closed = mgr.close(doWindowId, parent);
     parent.contextWindows = mgr.toData();
     expect(closed).toBe(true);
@@ -104,8 +104,8 @@ describe("do command (ContextWindow model)", () => {
 
   it("open(do, args={msg, wait:true}) 一次调用即完成 fork+wait（args 给齐时 open 立即提交 form）", async () => {
     const parent = makeThread({ id: "t_parent" });
-    const mgr = WindowManager.fromThread(parent);
-    const opened = await mgr.openCommandExec({
+    const mgr = WindowManager.fromThread(parent, builtinRegistry);
+    const opened = await mgr.openMethodExec({
       thread: parent,
       command: "do",
       title: "fork 子线程并等待",
@@ -118,7 +118,7 @@ describe("do command (ContextWindow model)", () => {
     expect(parent.status).toBe("waiting");
     expect(parent.inboxSnapshotAtWait).toBe(0);
     // form 成功后应已自动消失，仅留 do_window 与 creator window
-    expect(parent.contextWindows.find((w) => w.type === "command_exec")).toBeUndefined();
+    expect(parent.contextWindows.find((w) => w.type === "method_exec")).toBeUndefined();
     expect(parent.contextWindows.some((w) => w.type === "do" && !(w as DoWindow).isCreatorWindow)).toBe(true);
   });
 });

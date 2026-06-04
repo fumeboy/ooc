@@ -13,7 +13,7 @@
  *   - contentHash **不进** thread.json，只在 loop_NNNN.meta.json 的 windowsSnapshot 里
  *   - 算法 type-agnostic（统一 JSON hash），不为每个 window type 注册 hashContent
  *   - stripVolatile 与 src/persistable/thread-json.ts:stripVolatileForPersist 单 window 段保持一致：
- *     剥 _decayMeta；剥 compressLevel === 0/undefined
+ *     剥 compressLevel === 0/undefined
  *   - hash 稳定性靠 Object.keys(stripped).sort() 保证；字段插入顺序不影响 hash
  *   - fileDiff 字段只对 file_window 计算；previousContent 由 finishLlmLoop 读上一 loop meta 拿到
  *   - fileDiff 不进 thread.json（debug 视角派生数据），只落 loop_NNNN.meta.json
@@ -54,14 +54,12 @@ const FILE_DIFF_MAX_BYTES = 200 * 1024;
  * 剥离 in-process volatile 字段后的 window snapshot；用于 hash 计算。
  *
  * 规则（与 stripVolatileForPersist 同款，单 window 范围）：
- * - 删 _decayMeta（applyNaturalDecay 的运行时计数器）
  * - 删 compressLevel === 0 或 undefined（默认值不参与 hash，避免与历史 window 漂移）
  * - 其余字段（含 sharing / windowKnowledgePaths / status / type-specific 字段）原样保留
  */
 export function stripVolatileWindow(window: ContextWindow): Record<string, unknown> {
   // shallow clone 后剥字段；保证调用方传入对象不被改动（immutability）
   const rest: Record<string, unknown> = { ...(window as unknown as Record<string, unknown>) };
-  if ("_decayMeta" in rest) delete rest._decayMeta;
   if (!rest.compressLevel) {
     // undefined / 0 都视为默认值
     delete rest.compressLevel;

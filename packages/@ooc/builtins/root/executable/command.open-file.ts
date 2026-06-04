@@ -7,12 +7,14 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
+  MethodExecutionContext,
+  ObjectMethod,
   MethodOutcome,
 } from "@ooc/core/extendable/_shared/command-types.js";
-import { lookupConstructor } from "@ooc/core/extendable/_shared/registry.js";
+import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
+import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 // 2026-06-02 P6.§4-§5: side-effect import 触发 file_window constructor 注册
 import "@ooc/builtins/file";
@@ -36,12 +38,48 @@ open_file 用于把某个文件的内容作为 file_window 引入 context（持�
 open(command="open_file", title="读 README", args={ path: "README.md", lines: [0, 200] })
 `.trim();
 
-export const openFileCommand: CommandTableEntry = {
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
+export const openFileCommand: ObjectMethod = {
   paths: ["open_file"],
-  match: () => ["open_file"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [OPEN_FILE_BASIC_PATH]: KNOWLEDGE };
-    if (formStatus !== "open") return entries;
+  schema: {
+    args: {
+      path: { type: "string", required: true, description: "文件路径（绝对，或相对 session baseDir）" },
+      lines: { type: "array", required: false, description: "[start, end] 行范围" },
+      columns: { type: "array", required: false, description: "[start, end] 列范围" },
+    },
+  } as MethodCallSchema,
+  intent: (): Intent[] => [],
+  onFormChange(change, { form, intents }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = { [OPEN_FILE_BASIC_PATH]: KNOWLEDGE };
+    if (formStatus !== "open") return guidanceWindows(form, entries);
     const path = typeof args.path === "string" ? args.path : "";
     if (!path) {
       entries[OPEN_FILE_INPUT_PATH] =
@@ -49,7 +87,7 @@ export const openFileCommand: CommandTableEntry = {
         "请用 refine(form_id, args={ path: \"<file path>\", lines?: [start,end], columns?: [start,end] }) 补齐后 submit(form_id)。\n" +
         "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeOpenFileCommand(ctx),
 };
@@ -61,12 +99,12 @@ export const openFileCommand: CommandTableEntry = {
  * dispatch 分支拿到正确的 command 名（生产链路里 manager.submit 会传完整 form）。
  */
 export async function executeOpenFileCommand(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<MethodOutcome | string | undefined> {
-  const ctor = lookupConstructor("file");
+  const ctor = (ctx.manager?.registry ?? builtinRegistry).lookupConstructor("file");
   if (!ctor) return "[open_file] file_window constructor 未注册（registry 期望 kind=\"constructor\" 的 file method）。";
   const ctxWithForm = ctx.form
     ? ctx
-    : ({ ...ctx, form: { command: "open_file" } } as CommandExecutionContext);
+    : ({ ...ctx, form: { command: "open_file" } } as MethodExecutionContext);
   return await ctor.exec(ctxWithForm);
 }

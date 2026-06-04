@@ -6,7 +6,7 @@ import { runOneExec } from "@ooc/builtins/program";
 import { executeProgramCommand } from "@ooc/builtins/root/executable/command.program";
 import { executeProgramWindowExec } from "@ooc/builtins/program";
 import type { ProgramWindow } from "../windows/_shared/types";
-import { createStoneObject, writeServerSource } from "../../persistable";
+import { createStoneObject, writeExecutableSource } from "../../persistable";
 import { clearServerLoaderCache } from "../server/loader";
 import { makeThread } from "../../__tests__/make-thread";
 
@@ -187,7 +187,6 @@ describe("executeProgramWindowExec missing-args error path", () => {
     const result = await executeProgramWindowExec({
       thread,
       args: {},
-      parentWindow: programWindow,
       self: programWindow,
     });
     expect(typeof result).toBe("string");

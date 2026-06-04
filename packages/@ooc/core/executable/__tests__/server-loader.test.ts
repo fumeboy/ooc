@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
-import { createStoneObject, writeServerSource } from "../../persistable";
+import { createStoneObject, writeExecutableSource } from "../../persistable";
 import { clearServerLoaderCache, loadObjectWindow, loadUiServerMethods } from "../server/loader";
 
 let tempRoot: string | undefined;
@@ -23,18 +23,18 @@ describe("loadObjectWindow", () => {
     expect(win).toBeUndefined();
   });
 
-  test("loads window.commands from server/index.ts", async () => {
+  test("loads window.methods from server/index.ts", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-srv-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "x" });
 
-    await writeServerSource(
+    await writeExecutableSource(
       ref,
       `export const window = {
         title: "x",
-        commands: {
+        methods: {
           echo: {
             paths: ["echo"],
-            match: () => ["echo"],
+            intent: () => [],
             exec: async ({ args }) => ({ ok: true, result: String(args.text) }),
           },
         },
@@ -42,8 +42,8 @@ describe("loadObjectWindow", () => {
     );
 
     const win = await loadObjectWindow(ref);
-    expect(Object.keys(win?.commands ?? {})).toEqual(["echo"]);
-    const result = await win!.commands!.echo!.exec({ args: { text: "hi" } } as never);
+    expect(Object.keys(win?.methods ?? {})).toEqual(["echo"]);
+    const result = await win!.methods!.echo!.exec({ args: { text: "hi" } } as never);
     expect((result as { result: string }).result).toBe("hi");
   });
 
@@ -51,27 +51,27 @@ describe("loadObjectWindow", () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-srv-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "x" });
 
-    await writeServerSource(
+    await writeExecutableSource(
       ref,
-      `export const window = { commands: { v1: { paths: ["v1"], match: () => ["v1"], exec: async () => ({ ok: true, result: "1" }) } } };`,
+      `export const window = { commands: { v1: { paths: ["v1"], intent: () => [], exec: async () => ({ ok: true, result: "1" }) } } };`,
     );
     let win = await loadObjectWindow(ref);
-    expect(Object.keys(win?.commands ?? {})).toEqual(["v1"]);
+    expect(Object.keys(win?.methods ?? {})).toEqual(["v1"]);
 
     await new Promise((r) => setTimeout(r, 5));
-    await writeServerSource(
+    await writeExecutableSource(
       ref,
-      `export const window = { commands: { v2: { paths: ["v2"], match: () => ["v2"], exec: async () => ({ ok: true, result: "2" }) } } };`,
+      `export const window = { commands: { v2: { paths: ["v2"], intent: () => [], exec: async () => ({ ok: true, result: "2" }) } } };`,
     );
 
     win = await loadObjectWindow(ref);
-    expect(Object.keys(win?.commands ?? {})).toEqual(["v2"]);
+    expect(Object.keys(win?.methods ?? {})).toEqual(["v2"]);
   });
 
   test("throws when llm_methods is present (D6 hard cutover)", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-srv-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "x" });
-    await writeServerSource(ref, `export const llm_methods = { foo: { fn: async () => 1 } };`);
+    await writeExecutableSource(ref, `export const llm_methods = { foo: { fn: async () => 1 } };`);
 
     await expect(loadObjectWindow(ref)).rejects.toThrow(/llm_methods/);
   });
@@ -80,7 +80,7 @@ describe("loadObjectWindow", () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-srv-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "x" });
 
-    await writeServerSource(
+    await writeExecutableSource(
       ref,
       `export const ui_methods = {
         submit: {

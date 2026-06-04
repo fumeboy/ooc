@@ -4,7 +4,7 @@
  * Design: docs/2026-05-26-remove-issue-add-subplan-design.md §3
  * Meta:   meta/object.doc.ts:executable.children.context_window.children.plan_window
  *
- * 不真启 backend；用 execRootCommand + WindowManager 直接驱动 command 链：
+ * 不真启 backend；用 execRootMethod + WindowManager 直接驱动 command 链：
  * 1. root.plan 创建 root plan_window
  * 2. plan_window.add_step
  * 3. plan_window.update_step
@@ -21,7 +21,7 @@
 import { describe, expect, it } from "bun:test";
 // side-effect: 触发 windows 注册（含 plan）
 import "@ooc/core/executable/windows";
-import { execRootCommand, WindowManager } from "@ooc/core/executable/windows";
+import { execRootMethod, WindowManager, builtinRegistry } from "@ooc/core/executable/windows";
 import { renderContextXml } from "@ooc/core/thinkable/context/render";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import type {
@@ -44,15 +44,15 @@ function findPlanWindowById(thread: ThreadContext, id: string): PlanWindow | und
   return w && w.type === "plan" ? w : undefined;
 }
 
-/** 模拟 manager.openCommandExec 流程的极简化：直接调 entry.exec，并模拟 manager 状态。 */
+/** 模拟 manager.openMethodExec 流程的极简化：直接调 entry.exec，并模拟 manager 状态。 */
 async function execOnWindow(
   thread: ThreadContext,
   parentWindowId: string,
   command: string,
   args: Record<string, unknown>,
 ): Promise<string | undefined> {
-  const mgr = WindowManager.fromThread(thread);
-  const result = await mgr.openCommandExec({
+  const mgr = WindowManager.fromThread(thread, builtinRegistry);
+  const result = await mgr.openMethodExec({
     thread,
     parentWindowId,
     command,
@@ -69,7 +69,7 @@ async function execOnWindow(
 describe("[B4] plan_window — basic闭环", () => {
   it("step 1-2: root.plan 创建 plan_window；add_step 追加 step", async () => {
     const thread = makeThread({ id: "t_plan_1" });
-    const created = await execRootCommand("plan", {
+    const created = await execRootMethod("plan", {
       thread,
       args: { plan: "重构 thinkable" },
     });
@@ -81,7 +81,7 @@ describe("[B4] plan_window — basic闭环", () => {
     expect(plan.status).toBe("active");
 
     // 重复调 root.plan：幂等 update（不再新建）
-    await execRootCommand("plan", {
+    await execRootMethod("plan", {
       thread,
       args: { title: "Refactored Plan", description: "go!" },
     });
@@ -101,7 +101,7 @@ describe("[B4] plan_window — basic闭环", () => {
 
   it("step 3: update_step 切 status=done", async () => {
     const thread = makeThread({ id: "t_plan_2" });
-    await execRootCommand("plan", { thread, args: { plan: "p" } });
+    await execRootMethod("plan", { thread, args: { plan: "p" } });
     const plan = findPlanWindow(thread);
     await execOnWindow(thread, plan.id, "add_step", { text: "做 A" });
     const stepId = findPlanWindow(thread).steps[0]!.id;
@@ -113,7 +113,7 @@ describe("[B4] plan_window — basic闭环", () => {
 
   it("step 4: expand_step 创建 sub plan_window + 父 step.subPlanWindowId 回填", async () => {
     const thread = makeThread({ id: "t_plan_3" });
-    await execRootCommand("plan", { thread, args: { plan: "parent plan" } });
+    await execRootMethod("plan", { thread, args: { plan: "parent plan" } });
     const parent = findPlanWindow(thread);
     await execOnWindow(thread, parent.id, "add_step", { text: "do sub work" });
     const stepId = findPlanWindow(thread).steps[0]!.id;
@@ -138,7 +138,7 @@ describe("[B4] plan_window — basic闭环", () => {
 
   it("step 5: collapse_subplan archive sub plan + 清父 step.subPlanWindowId", async () => {
     const thread = makeThread({ id: "t_plan_4" });
-    await execRootCommand("plan", { thread, args: { plan: "p" } });
+    await execRootMethod("plan", { thread, args: { plan: "p" } });
     const parent = findPlanWindow(thread);
     await execOnWindow(thread, parent.id, "add_step", { text: "x" });
     const stepId = findPlanWindow(thread).steps[0]!.id;
@@ -154,7 +154,7 @@ describe("[B4] plan_window — basic闭环", () => {
 
   it("step 6: close plan_window cascade archive sub plan_window", async () => {
     const thread = makeThread({ id: "t_plan_5" });
-    await execRootCommand("plan", { thread, args: { plan: "p" } });
+    await execRootMethod("plan", { thread, args: { plan: "p" } });
     const parent = findPlanWindow(thread);
     await execOnWindow(thread, parent.id, "add_step", { text: "x" });
     const stepId = findPlanWindow(thread).steps[0]!.id;
@@ -162,7 +162,7 @@ describe("[B4] plan_window — basic闭环", () => {
     const subId = findPlanWindow(thread).steps[0]!.subPlanWindowId!;
 
     // 通过 mgr.close 触发 onClose hook（plan close cascade 把 sub archive）
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     mgr.close(parent.id, thread);
     thread.contextWindows = mgr.toData();
 
@@ -175,7 +175,7 @@ describe("[B4] plan_window — basic闭环", () => {
 
   it("step 7: renderContextXml 渲染 plan_window 含正确 steps 树", async () => {
     const thread = makeThread({ id: "t_plan_6" });
-    await execRootCommand("plan", {
+    await execRootMethod("plan", {
       thread,
       args: { title: "P", description: "desc", steps: [{ text: "a" }, { text: "b" }] },
     });
@@ -199,10 +199,10 @@ describe("[B4] plan_window — basic闭环", () => {
   it("step 8 (share): plan_window 通过 do_window.move 进入 lent_out 状态", async () => {
     // 父 thread 创建 plan_window，再用 root.do 派生子并 share plan_window (mode=move)
     const parent = makeThread({ id: "t_plan_share_parent" });
-    await execRootCommand("plan", { thread: parent, args: { plan: "shareable" } });
+    await execRootMethod("plan", { thread: parent, args: { plan: "shareable" } });
     const plan = findPlanWindow(parent);
 
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: {
         msg: "go work on plan",
@@ -229,7 +229,7 @@ describe("[B4] plan_window — basic闭环", () => {
 describe("[B2] plan_window — compressView (P0-2)", () => {
   it("level 1: title + status + step count + done/total ratio", async () => {
     const thread = makeThread({ id: "t_plan_compress_1" });
-    await execRootCommand("plan", {
+    await execRootMethod("plan", {
       thread,
       args: {
         title: "P",
@@ -253,7 +253,7 @@ describe("[B2] plan_window — compressView (P0-2)", () => {
 
   it("level 2: title + status only", async () => {
     const thread = makeThread({ id: "t_plan_compress_2" });
-    await execRootCommand("plan", { thread, args: { plan: "p" } });
+    await execRootMethod("plan", { thread, args: { plan: "p" } });
     const plan = findPlanWindow(thread);
     const compressedAll: ContextWindow[] = thread.contextWindows.map((w) =>
       w.id === plan.id ? { ...w, compressLevel: 2 as const } : w,

@@ -1,4 +1,4 @@
-import type { CommandExecutionContext } from "./command-types.js";
+import type { MethodExecutionContext } from "./command-types.js";
 import type { ContextWindow } from "./types.js";
 
 /**
@@ -142,7 +142,7 @@ export function applyViewport(raw: string, viewport: Viewport): string {
  * - Object.assign 写回 window（按现有 set_range 的同模式，保证 manager.toData() 写回持久层）
  */
 export async function executeWindowSetViewport(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
   expectedType: "file" | "knowledge",
 ): Promise<string | undefined> {
   // P6.§3: manager 在 dispatch 阶段已保证 self.type === expectedType（caller 注册的），

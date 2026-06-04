@@ -11,9 +11,9 @@
  */
 import { describe, expect, it } from "bun:test";
 
-import "@ooc/builtins/program"; // 触发 registerWindowType side-effect import
+import "@ooc/builtins/program"; // 触发 registerObjectType side-effect import
 
-import { getWindowTypeDefinition } from "../_shared/registry.js";
+import { builtinRegistry } from "../_shared/registry.js";
 import {
   ROOT_WINDOW_ID,
   type ProgramExecRecord,
@@ -105,7 +105,7 @@ describe("program_window render: default tail=10", () => {
       historyViewport: { tail: 10 },
     });
     const thread = makeRenderThread(window);
-    const def = getWindowTypeDefinition("program");
+    const def = builtinRegistry.getObjectDefinition("program");
     const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain("<history_viewport");
@@ -124,7 +124,7 @@ describe("program_window render: default tail=10", () => {
       historyViewport: { tail: 10 },
     });
     const thread = makeRenderThread(window);
-    const def = getWindowTypeDefinition("program");
+    const def = builtinRegistry.getObjectDefinition("program");
     const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('total="25"');
@@ -149,7 +149,7 @@ describe("program_window render: default tail=10", () => {
       // no historyViewport
     });
     const thread = makeRenderThread(window);
-    const def = getWindowTypeDefinition("program");
+    const def = builtinRegistry.getObjectDefinition("program");
     const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('tail="10"');
@@ -161,7 +161,7 @@ describe("program_window render: default tail=10", () => {
       history: [],
     });
     const thread = makeRenderThread(window);
-    const def = getWindowTypeDefinition("program");
+    const def = builtinRegistry.getObjectDefinition("program");
     const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain("no exec yet");
@@ -176,7 +176,7 @@ describe("program_window render: range mode", () => {
       historyViewport: { rangeStart: 5, rangeEnd: 10 },
     });
     const thread = makeRenderThread(window);
-    const def = getWindowTypeDefinition("program");
+    const def = builtinRegistry.getObjectDefinition("program");
     const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('history_start="5"');
@@ -199,7 +199,7 @@ describe("program_window render: last_output unaffected by viewport", () => {
       historyViewport: { rangeStart: 0, rangeEnd: 3 },
     });
     const thread = makeRenderThread(window);
-    const def = getWindowTypeDefinition("program");
+    const def = builtinRegistry.getObjectDefinition("program");
     const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     // history summary clipped to [0, 3); last_output still shows exec_19
@@ -218,7 +218,6 @@ describe("set_history_window command", () => {
     });
     const out = await executeProgramSetHistoryViewport({
       args: { history_tail: 30 },
-      parentWindow: window,
       self: window,
     });
     expect(out).toBeUndefined();
@@ -232,7 +231,6 @@ describe("set_history_window command", () => {
     });
     const out = await executeProgramSetHistoryViewport({
       args: { history_start: 0, history_end: 3 },
-      parentWindow: window,
       self: window,
     });
     expect(out).toBeUndefined();
@@ -246,7 +244,6 @@ describe("set_history_window command", () => {
     });
     const out = await executeProgramSetHistoryViewport({
       args: { history_tail: 5, history_start: 0, history_end: 3 },
-      parentWindow: window,
       self: window,
     });
     expect(typeof out).toBe("string");
@@ -266,7 +263,6 @@ describe("set_history_window command", () => {
     });
     const out = await executeProgramSetHistoryViewport({
       args: { history_tail: -1 },
-      parentWindow: window,
       self: window,
     });
     expect(typeof out).toBe("string");
@@ -281,7 +277,6 @@ describe("set_history_window command", () => {
     });
     const out = await executeProgramSetHistoryViewport({
       args: { history_start: 0 },
-      parentWindow: window,
       self: window,
     });
     expect(typeof out).toBe("string");
@@ -297,7 +292,6 @@ describe("set_history_window command", () => {
     });
     const out = await executeProgramSetHistoryViewport({
       args: { history_start: 5, history_end: 2 },
-      parentWindow: window,
       self: window,
     });
     expect(typeof out).toBe("string");
@@ -315,7 +309,6 @@ describe("set_history_window command", () => {
     });
     const out = await executeProgramSetHistoryViewport({
       args: {},
-      parentWindow: window,
       self: window,
     });
     expect(typeof out).toBe("string");
@@ -327,20 +320,19 @@ describe("set_history_window command", () => {
 
 describe("set_history_window registered on program window", () => {
   it("program window definition has set_history_window command", () => {
-    const def = getWindowTypeDefinition("program");
-    expect(def.commands["set_history_window"]).toBeDefined();
+    const def = builtinRegistry.getObjectDefinition("program");
+    expect(def.methods["set_history_window"]).toBeDefined();
   });
 
   it("registered command executes via window registry", async () => {
-    const def = getWindowTypeDefinition("program");
-    const cmd = def.commands["set_history_window"]!;
+    const def = builtinRegistry.getObjectDefinition("program");
+    const cmd = def.methods["set_history_window"]!;
     const window = makeProgramWindow({
       history: makeHistory(5),
       historyViewport: { tail: 10 },
     });
     const out = await cmd.exec({
       args: { history_tail: 25 },
-      parentWindow: window,
       self: window,
     });
     expect(out).toBeUndefined();
@@ -362,7 +354,6 @@ describe("program_window.exec is not affected by historyViewport", () => {
     const out = await executeProgramWindowExec({
       thread,
       args: { language: "shell", code: "echo new" },
-      parentWindow: window,
       self: window,
     });
     expect(out).toBeUndefined();

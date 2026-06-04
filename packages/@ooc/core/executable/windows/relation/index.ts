@@ -16,17 +16,19 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
+  MethodExecutionContext,
+  ObjectMethod,
 } from "../_shared/command-types.js";
-import { registerWindowType, type RenderContext } from "../_shared/registry.js";
+import { builtinRegistry, type RenderContext } from "../_shared/registry.js";
 import { writeFlowRelation } from "../../../persistable/index.js";
 import { deliverTalkMessage } from "../talk/delivery.js";
 import { SUPER_ALIAS_TARGET } from "../_shared/super-constants.js";
 import { generateWindowId, type TalkWindow } from "../_shared/types.js";
 import { xmlElement, xmlText, type XmlNode } from "../../../thinkable/context/xml.js";
 import type { RelationWindow } from "./types.js";
+import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 const RELATION_EDIT_BASIC = "internal/windows/relation/edit/basic";
 const RELATION_EDIT_INPUT = "internal/windows/relation/edit/input";
@@ -83,34 +85,63 @@ scope="long_term" 的路径详解:
 3. 因此 long_term edit 是**异步**的:本 command 返回成功只代表消息已派送,文件落盘要等 super flow 跑完那一轮。
 `.trim();
 
-const editCommand: CommandTableEntry = {
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
+const editCommand: ObjectMethod = {
   paths: ["edit", "edit.session", "edit.long_term"],
-  match: (args) => {
+  intent: (args): Intent[] => {
     const scope = args.scope;
-    if (scope === "session") return ["edit", "edit.session"];
-    if (scope === "long_term") return ["edit", "edit.long_term"];
-    return ["edit"];
+    if (scope === "session") return [{ name: "edit.session" }];
+    if (scope === "long_term") return [{ name: "edit.long_term" }];
+    return [];
   },
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [RELATION_EDIT_BASIC]: EDIT_KNOWLEDGE };
+  onFormChange: (change, { form }) => {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const entries: Record<string, string> = { [RELATION_EDIT_BASIC]: EDIT_KNOWLEDGE };
     if (args.scope === "long_term") {
       entries[RELATION_EDIT_LONGTERM] = EDIT_LONGTERM_DETAIL;
     }
-    if (formStatus !== "open") return entries;
-    const missing: string[] = [];
-    if (typeof args.content !== "string" || args.content.length === 0) missing.push("content");
-    if (args.scope !== "session" && args.scope !== "long_term") missing.push("scope");
-    if (missing.length > 0) {
-      entries[RELATION_EDIT_INPUT] =
-        `relation_window.edit 需要 ${missing.join(" + ")};用 refine(args={ content: "...", scope: "session" | "long_term" })。`;
+    if (form.status === "open") {
+      const missing: string[] = [];
+      if (typeof args.content !== "string" || args.content.length === 0) missing.push("content");
+      if (args.scope !== "session" && args.scope !== "long_term") missing.push("scope");
+      if (missing.length > 0) {
+        entries[RELATION_EDIT_INPUT] =
+          `relation_window.edit 需要 ${missing.join(" + ")};用 refine(args={ content: "...", scope: "session" | "long_term" })。`;
+      }
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeRelationEdit(ctx),
 };
 
 export async function executeRelationEdit(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[relation.edit] 缺少 thread context。";
@@ -214,8 +245,8 @@ function renderRelationWindow(ctx: RenderContext): XmlNode[] {
   return children;
 }
 
-registerWindowType("relation", {
-  commands: {
+builtinRegistry.registerObjectType("relation", {
+  methods: {
     edit: editCommand,
   },
   renderXml: renderRelationWindow,

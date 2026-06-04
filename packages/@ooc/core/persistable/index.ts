@@ -1,7 +1,6 @@
 export type { FlowObjectRef, ThreadPersistenceRef, StoneObjectRef } from "./common";
 export {
   objectDir,
-  packageDir,
   stoneDir,
   resolveStoneDir,
   _deprecatedPackageDir,
@@ -80,17 +79,12 @@ export {
 
 export {
   createStoneObject,
-  serverDir,
-  clientDir,
   executableDir,
   visibleDir,
   stoneKnowledgeDir,
   stoneChildrenDir,
   ancestorObjectIds,
   discoverStoneHierarchicalPeers,
-  discoverPeerPackages,
-  stoneMetadataFile,
-  type StoneObjectMetadata
 } from "./stone-object";
 
 export {
@@ -131,9 +125,6 @@ export {
 
 export { readSelf, selfFile, writeSelf } from "./stone-self";
 export {
-  readReadme,
-  readmeFile,
-  writeReadme,
   readReadable,
   readableFile,
   readableTsFile,
@@ -141,9 +132,6 @@ export {
 } from "./stone-readme";
 // stone-data 已删除（2026-05-23）：data.json 语义改为 session-scoped 落 flow（详见 ./flow-data）。
 export {
-  readServerSource,
-  serverIndexFile,
-  writeServerSource,
   readExecutableSource,
   executableIndexFile,
   writeExecutableSource,
@@ -237,13 +225,10 @@ export {
 export { parseMentions } from "./mention";
 
 export {
-  clientIndexFile,
   flowClientPageFile,
   flowClientPagesDir,
   readFlowClientPage,
-  readStoneClientSource,
   writeFlowClientPage,
-  writeStoneClientSource,
   visibleIndexFile,
   readVisibleSource,
   writeVisibleSource,

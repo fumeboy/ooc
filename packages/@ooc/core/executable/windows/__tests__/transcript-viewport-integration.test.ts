@@ -8,9 +8,9 @@
  */
 import { describe, expect, it, beforeAll } from "bun:test";
 
-import "../index.js"; // 触发 registerWindowType 的 side-effect import
+import "../index.js"; // 触发 registerObjectType 的 side-effect import
 
-import { getWindowTypeDefinition } from "../_shared/registry.js";
+import { builtinRegistry } from "../_shared/registry.js";
 import {
   ROOT_WINDOW_ID,
   type DoWindow,
@@ -86,7 +86,7 @@ describe("talk_window: transcript viewport render", () => {
       talkWindow,
       outboxMsgs: outbox,
     });
-    const def = getWindowTypeDefinition("talk");
+    const def = builtinRegistry.getObjectDefinition("talk");
     const nodes = await def.renderXml!({ thread, window: talkWindow });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain("<transcript_viewport");
@@ -120,7 +120,7 @@ describe("talk_window: transcript viewport render", () => {
       talkWindow,
       outboxMsgs: outbox,
     });
-    const def = getWindowTypeDefinition("talk");
+    const def = builtinRegistry.getObjectDefinition("talk");
     const nodes = await def.renderXml!({ thread, window: talkWindow });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('total="30"');
@@ -157,7 +157,7 @@ describe("talk_window: transcript viewport render", () => {
       talkWindow,
       outboxMsgs: outbox,
     });
-    const def = getWindowTypeDefinition("talk");
+    const def = builtinRegistry.getObjectDefinition("talk");
     const nodes = await def.renderXml!({ thread, window: talkWindow });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('tail="20"');
@@ -185,7 +185,7 @@ describe("talk_window: transcript viewport render", () => {
       talkWindow,
       outboxMsgs: outbox,
     });
-    const def = getWindowTypeDefinition("talk");
+    const def = builtinRegistry.getObjectDefinition("talk");
     const nodes = await def.renderXml!({ thread, window: talkWindow });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('range_start="2"');
@@ -226,7 +226,7 @@ describe("do_window: transcript viewport render", () => {
       doWindow,
       outboxMsgs: outbox,
     });
-    const def = getWindowTypeDefinition("do");
+    const def = builtinRegistry.getObjectDefinition("do");
     const nodes = await def.renderXml!({ thread, window: doWindow });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('total="25"');
@@ -236,9 +236,9 @@ describe("do_window: transcript viewport render", () => {
 });
 
 describe("set_transcript_window command (talk)", () => {
-  let setCommand: ReturnType<typeof getWindowTypeDefinition>["commands"][string];
+  let setCommand: ReturnType<typeof builtinRegistry.getObjectDefinition>["methods"][string];
   beforeAll(() => {
-    setCommand = getWindowTypeDefinition("talk").commands["set_transcript_window"]!;
+    setCommand = builtinRegistry.getObjectDefinition("talk").methods["set_transcript_window"]!;
     expect(setCommand).toBeDefined();
   });
 
@@ -256,7 +256,6 @@ describe("set_transcript_window command (talk)", () => {
     };
     const out = await setCommand.exec({
       args: { tail: 50 },
-      parentWindow: talkWindow,
       self: talkWindow,
     });
     expect(out).toBeUndefined();
@@ -277,7 +276,6 @@ describe("set_transcript_window command (talk)", () => {
     };
     const out = await setCommand.exec({
       args: { range_start: 0, range_end: 10 },
-      parentWindow: talkWindow,
       self: talkWindow,
     });
     expect(out).toBeUndefined();
@@ -301,7 +299,6 @@ describe("set_transcript_window command (talk)", () => {
     };
     const out = await setCommand.exec({
       args: { tail: 10, range_start: 0, range_end: 5 },
-      parentWindow: talkWindow,
       self: talkWindow,
     });
     expect(typeof out).toBe("string");
@@ -324,7 +321,6 @@ describe("set_transcript_window command (talk)", () => {
     };
     const out = await setCommand.exec({
       args: { tail: -5 },
-      parentWindow: talkWindow,
       self: talkWindow,
     });
     expect(typeof out).toBe("string");
@@ -349,7 +345,6 @@ describe("set_transcript_window command (talk)", () => {
     };
     const out = await setCommand.exec({
       args: {},
-      parentWindow: talkWindow,
       self: talkWindow,
     });
     expect(typeof out).toBe("string");
@@ -359,7 +354,7 @@ describe("set_transcript_window command (talk)", () => {
 
 describe("set_transcript_window command (do)", () => {
   it("works on do_window via shared helper", async () => {
-    const setCommand = getWindowTypeDefinition("do").commands["set_transcript_window"]!;
+    const setCommand = builtinRegistry.getObjectDefinition("do").methods["set_transcript_window"]!;
     expect(setCommand).toBeDefined();
     const doWindow: DoWindow = {
       id: "w_do_set",
@@ -373,7 +368,6 @@ describe("set_transcript_window command (do)", () => {
     };
     const out = await setCommand.exec({
       args: { tail: 5 },
-      parentWindow: doWindow,
       self: doWindow,
     });
     expect(out).toBeUndefined();

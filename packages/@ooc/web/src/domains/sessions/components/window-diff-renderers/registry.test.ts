@@ -91,7 +91,7 @@ describe("side-effect index — 注册 9 种内置 type", () => {
     re("search", SearchWindowDiff);
     re("knowledge", KnowledgeWindowDiff);
     re("program", ProgramWindowDiff);
-    re("command_exec", CommandExecDiff);
+    re("method_exec", CommandExecDiff);
     re("relation", RelationWindowDiff);
 
     const list = listRegisteredDiffRenderers();
@@ -103,7 +103,7 @@ describe("side-effect index — 注册 9 种内置 type", () => {
       "search",
       "knowledge",
       "program",
-      "command_exec",
+      "method_exec",
       "relation",
     ]) {
       expect(list).toContain(t);

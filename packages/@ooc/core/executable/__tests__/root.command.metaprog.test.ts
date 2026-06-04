@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests } from "@ooc/core/persistable";
 import { executeMetaprog } from "@ooc/builtins/root/executable/command.metaprog";
-import type { CommandExecutionContext } from "@ooc/core/extendable/_shared/command-types";
+import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/command-types";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 let tempRoot: string | undefined;
@@ -39,7 +39,7 @@ function makeCtx(opts: {
   baseDir: string;
   callerId: string;
   args: Record<string, unknown>;
-}): CommandExecutionContext {
+}): MethodExecutionContext {
   const thread: ThreadContext = {
     id: "t-test",
     inbox: [],
@@ -56,7 +56,7 @@ function makeCtx(opts: {
     thread,
     args: opts.args,
     manager: undefined,
-  } as CommandExecutionContext;
+  } as MethodExecutionContext;
 }
 
 describe("metaprog action=create_object caller-guard", () => {

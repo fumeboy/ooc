@@ -46,7 +46,7 @@ import { AppServerError } from "@ooc/core/app/server/bootstrap/errors";
 
 // 触发 windows 各 type 副作用注册
 import "@ooc/core/executable/windows";
-import { registerWindowType } from "@ooc/core/executable/windows/_shared/registry";
+import { builtinRegistry } from "@ooc/core/executable/windows/_shared/registry";
 
 // ─────────────────────────── helpers ──────────────────────────────────────────
 
@@ -124,11 +124,11 @@ function ts(): string {
 // ─────────────────────────── fixture: fake commands ───────────────────────────
 
 beforeAll(() => {
-  registerWindowType("root", {
-    commands: {
+  builtinRegistry.registerObjectType("root", {
+    methods: {
       _test_q0c_safe: {
         paths: ["_test_q0c_safe"],
-        match: () => ["_test_q0c_safe"],
+        intent: () => [],
         exec: () => ({ ok: true, result: "executed-q0c-safe" }),
       },
     },

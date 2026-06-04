@@ -3,11 +3,11 @@ import {
   createPoolObject,
   poolKnowledgeDir,
   readExecutableSource,
-  readReadme,
+  readReadable,
   readSelf,
   stoneDir,
   writeExecutableSource,
-  writeReadme,
+  writeReadable,
   writeSelf,
 } from "@ooc/core/persistable";
 import { loadUiServerMethods } from "@ooc/core/executable/server/loader";
@@ -232,7 +232,7 @@ export function createStonesService({
         } else if (name !== undefined) {
           await writeSelf(wtRef, name);
         }
-        if (readme !== undefined) await writeReadme(wtRef, readme);
+        if (readme !== undefined) await writeReadable(wtRef, readme);
       });
       return {
         objectId,
@@ -261,13 +261,13 @@ export function createStonesService({
     },
     async getReadme({ objectId }: { objectId: string }) {
       await ensureStoneExists(objectId);
-      return { text: (await readReadme(ref(objectId))) ?? "" };
+      return { text: (await readReadable(ref(objectId))) ?? "" };
     },
     async putReadme({ objectId, text, confirmOverwrite = false }: { objectId: string; text: string; confirmOverwrite?: boolean }) {
       await ensureStoneExists(objectId);
-      await ensureOverwriteAllowed(join(dir(objectId), "readme.md"), confirmOverwrite, { objectId, field: "readme" });
+      await ensureOverwriteAllowed(join(dir(objectId), "readable.md"), confirmOverwrite, { objectId, field: "readme" });
       const versioned = await runVersioned(objectId, `http:putReadme ${objectId}`, async (branch) => {
-        await writeReadme({ baseDir, objectId, _stonesBranch: branch }, text);
+        await writeReadable({ baseDir, objectId, _stonesBranch: branch }, text);
       });
       return { ok: true, commitSha: versioned.commitSha, merged: versioned.merged, prIssueId: versioned.prIssueId };
     },

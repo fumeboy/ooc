@@ -8,8 +8,9 @@
  * - 特殊子类：初始 creator do_window（由 windows/_shared/init.ts 创建），不可被 LLM close
  */
 
-import { registerWindowType, type OnCloseContext, type RenderContext } from "../_shared/registry.js";
-import type { CommandKnowledgeEntries, ObjectMethod } from "../_shared/command-types.js";
+import { builtinRegistry, type OnCloseContext, type RenderContext } from "../_shared/registry.js";
+import type { ObjectMethod } from "../_shared/command-types.js";
+import type { Intent, MethodCallSchema } from "../../../thinkable/context/intent.js";
 import {
   ROOT_WINDOW_ID,
   creatorWindowIdOf,
@@ -17,6 +18,7 @@ import {
   type ContextWindow,
   type SharingState,
 } from "../_shared/types.js";
+import type { MethodExecWindow } from "../method_exec/types.js";
 import type { ThreadPersistenceRef } from "../../../persistable/common.js";
 import { continueCommand } from "./command.continue.js";
 import { waitCommand } from "./command.wait.js";
@@ -201,6 +203,32 @@ submit 后：
 - 关闭对话：close(window_id="<do_window_id>")（子线程会被标记 archived；borrowed owner 自动归还）
 `.trim();
 
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
 function generateThreadId(): string {
   return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }
@@ -286,7 +314,7 @@ function applyInitialShare(
   if (source.sharing) {
     return `window "${entry.window_id}" 已是 sharing 状态，不能再分享`;
   }
-  if (source.type === "do" || source.type === "command_exec" || source.type === "root") {
+  if (source.type === "do" || source.type === "method_exec" || source.type === "root") {
     return `window "${entry.window_id}" 是 ${source.type} 类型，不允许分享`;
   }
 
@@ -356,25 +384,34 @@ function applyInitialShare(
 const doConstructor: ObjectMethod = {
   kind: "constructor",
   paths: ["do", "do.wait"],
-  match: (args) => {
-    const hit: string[] = ["do"];
-    if (args.wait === true) hit.push("do.wait");
+  permission: () => "allow",
+  schema: {
+    args: {
+      msg: { type: "string", required: true, description: "写入子线程 inbox 的初始消息" },
+      wait: { type: "boolean", required: false, default: false, description: "true 时父线程立刻进入 waiting，等子线程回写消息再唤醒" },
+      share_windows: { type: "array", required: false, description: '要在子线程创建时一并分享的 windows 列表，每条形如 { window_id: "<id>", mode: "ref" | "move" }' },
+    },
+  } as MethodCallSchema,
+  intent: (args): Intent[] => {
+    const hit: Intent[] = [];
+    if (args.wait === true) hit.push({ name: "do.wait" });
     return hit;
   },
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = {
       [DO_CONSTRUCTOR_BASIC]: DO_CONSTRUCTOR_KNOWLEDGE,
     };
-    if (formStatus !== "open") return entries;
-    if (typeof args.msg !== "string" || args.msg.trim().length === 0) {
+    if (formStatus === "open" && (typeof args.msg !== "string" || args.msg.trim().length === 0)) {
       entries[DO_CONSTRUCTOR_INPUT] =
         "do 还缺以下参数: msg。\n" +
         "请用 refine(form_id, args={ msg: \"<给子线程的初始消息>\", wait: true|false }) 补齐后 submit(form_id)。\n" +
         "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
-  permission: () => "allow",
   exec: async (ctx) => {
     const parent = ctx.thread;
     if (!parent) return { ok: false, error: "[do] 缺少 thread context。" };
@@ -464,8 +501,8 @@ const doConstructor: ObjectMethod = {
   },
 };
 
-registerWindowType("do", {
-  commands: {
+builtinRegistry.registerObjectType("do", {
+  methods: {
     continue: continueCommand,
     wait: waitCommand,
     close: closeCommand,

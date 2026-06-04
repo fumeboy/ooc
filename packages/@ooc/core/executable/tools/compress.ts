@@ -113,7 +113,7 @@ function normalizeLevel(args: Record<string, unknown>): 1 | 2 {
  * - changed         : 实际切档的 window id 集合
  * - missing         : target_ids 中找不到对应 window 的 id 集合
  * - alreadyAtLevel  : 已经处于目标 level,无需切的 window id
- * - rejected        : 类型上不允许压缩 (root / command_exec) 的 window id
+ * - rejected        : 类型上不允许压缩 (root / method_exec) 的 window id
  */
 function compressWindowsClean(
   thread: ThreadContext,
@@ -139,7 +139,7 @@ function compressWindowsClean(
       alreadyAtLevel.push(window.id);
       return window;
     }
-    if (window.type === "root" || window.type === "command_exec") {
+    if (window.type === "root" || window.type === "method_exec") {
       rejected.push(window.id);
       return window;
     }
@@ -414,7 +414,7 @@ export async function handleCompressTool(
     return errorOutput(
       `compress: 无 window 实际被压缩 (missing=${result.missing.length}, alreadyAtLevel=${result.alreadyAtLevel.length}, rejected=${result.rejected.length})。` +
         (result.rejected.length > 0
-          ? ` 被拒绝的 window 类型不允许压缩 (root / command_exec): ${result.rejected.join(",")}`
+          ? ` 被拒绝的 window 类型不允许压缩 (root / method_exec): ${result.rejected.join(",")}`
           : "") +
         syntheticHint,
     );

@@ -4,7 +4,8 @@ import { threadDir, toJson, type ThreadPersistenceRef } from "./common";
 import type { LlmGenerateResult, LlmInputItem, LlmMessage } from "../thinkable/llm/types";
 import type { ProcessEvent, ThreadContext, ThreadMessage } from "../thinkable/context";
 import type { ContextWindow } from "../executable/windows/_shared/types";
-import { resolveEffectiveVisibleType } from "../executable/windows/_shared/registry.js";
+import type { ObjectRegistry } from "../executable/windows/_shared/registry.js";
+import { builtinRegistry } from "../executable/windows/index.js";
 import type { WindowSnapshotEntry } from "@ooc/core/observable/window-hash";
 
 /**
@@ -16,11 +17,6 @@ import type { WindowSnapshotEntry } from "@ooc/core/observable/window-hash";
 export interface ContextSnapshot {
   id: string;
   status?: string;
-  /**
-   * @deprecated 2026-05-26 起 thread.plan 字段已废弃（plan 升格为 plan_window in contextWindows）。
-   * 字段保留以兼容历史 llm.input.json，新写入永远是 undefined。
-   */
-  plan?: string;
   contextWindows: ContextWindow[];
   inbox?: ThreadMessage[];
   outbox?: ThreadMessage[];
@@ -44,10 +40,13 @@ export interface LlmInputDebugRecord {
 }
 
 /** 从 thread 中抽取调用 LLM 时刻的快照子集。 */
-export function captureContextSnapshot(thread: ThreadContext): ContextSnapshot {
+export function captureContextSnapshot(
+  thread: ThreadContext,
+  registry: ObjectRegistry = builtinRegistry,
+): ContextSnapshot {
   const contextWindows = (thread.contextWindows ?? []).map((w) => {
     // P6.§7: enrichment effectiveVisibleType（沿 parentClass 继承链回退到可渲染 type）。
-    const effVis = resolveEffectiveVisibleType(w.type as any);
+    const effVis = registry.resolveEffectiveVisibleType(w.type as any);
     if (effVis && effVis !== w.type) {
       return { ...w, effectiveVisibleType: effVis };
     }

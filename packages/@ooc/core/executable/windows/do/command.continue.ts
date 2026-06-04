@@ -1,8 +1,10 @@
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
+  MethodExecutionContext,
+  ObjectMethod,
 } from "../_shared/command-types.js";
+import type { Intent, MethodCallSchema } from "../../../thinkable/context/intent.js";
+import type { ContextWindow } from "../_shared/types.js";
+import type { MethodExecWindow } from "../method_exec/types.js";
 import type { DoWindow } from "../_shared/types.js";
 import { notifyThreadActivated } from "../../../observable/index.js";
 import { appendInbox, findThreadInScope, makeMessage } from "./helpers.js";
@@ -30,7 +32,33 @@ open(parent_window_id="<do_window_id>", command="continue", title="追加任务"
 open(parent_window_id="<creator_do_window_id>", command="continue", args={ msg: "已处理完毕：见 memo/x.md" })
 `.trim();
 
-async function executeDoWindowContinue(ctx: CommandExecutionContext): Promise<string | undefined> {
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
+async function executeDoWindowContinue(ctx: MethodExecutionContext): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return undefined;
   // P6.§3: manager 在 dispatch 阶段已保证 self.type === "do"，method 体不再 re-check。
@@ -72,20 +100,28 @@ async function executeDoWindowContinue(ctx: CommandExecutionContext): Promise<st
   return undefined;
 }
 
-export const continueCommand: CommandTableEntry = {
+export const continueCommand: ObjectMethod = {
   paths: ["continue", "continue.wait"],
-  match: (args) => {
-    const hit = ["continue"];
-    if (args.wait === true) hit.push("continue.wait");
+  schema: {
+    args: {
+      msg: { type: "string", required: true, description: "要追加的消息" },
+      wait: { type: "boolean", required: false, default: false, description: "true 时本 thread 进入 waiting，等对端回写消息再唤醒" },
+    },
+  } as MethodCallSchema,
+  intent: (args): Intent[] => {
+    const hit: Intent[] = [];
+    if (args.wait === true) hit.push({ name: "continue.wait" });
     return hit;
   },
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [DO_WINDOW_CONTINUE_BASIC]: CONTINUE_KNOWLEDGE };
-    if (formStatus !== "open") return entries;
-    if (typeof args.msg !== "string" || args.msg.trim().length === 0) {
+  onFormChange(change, { form, intents: _intents }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = { [DO_WINDOW_CONTINUE_BASIC]: CONTINUE_KNOWLEDGE };
+    if (formStatus === "open" && (typeof args.msg !== "string" || args.msg.trim().length === 0)) {
       entries[DO_WINDOW_CONTINUE_INPUT] = "do_window.continue 需要 msg；用 refine(args={ msg: \"...\", wait: true|false })。";
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeDoWindowContinue(ctx),
 };

@@ -9,9 +9,9 @@
  */
 import { describe, expect, it } from "bun:test";
 
-import "../index.js"; // 触发 registerWindowType side-effect import
+import "../index.js"; // 触发 registerObjectType side-effect import
 
-import { getWindowTypeDefinition } from "../_shared/registry.js";
+import { builtinRegistry } from "../_shared/registry.js";
 import {
   ROOT_WINDOW_ID,
   type SearchMatch,
@@ -102,7 +102,7 @@ describe("search_window render: default tail=50", () => {
       resultsViewport: { tail: 50 },
     });
     const thread = makeThread(window);
-    const def = getWindowTypeDefinition("search");
+    const def = builtinRegistry.getObjectDefinition("search");
     const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain("<results_viewport");
@@ -121,7 +121,7 @@ describe("search_window render: default tail=50", () => {
       resultsViewport: { tail: 50 },
     });
     const thread = makeThread(window);
-    const def = getWindowTypeDefinition("search");
+    const def = builtinRegistry.getObjectDefinition("search");
     const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('total="120"');
@@ -144,7 +144,7 @@ describe("search_window render: default tail=50", () => {
       // no resultsViewport
     });
     const thread = makeThread(window);
-    const def = getWindowTypeDefinition("search");
+    const def = builtinRegistry.getObjectDefinition("search");
     const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('tail="50"');
@@ -159,7 +159,7 @@ describe("search_window render: range mode", () => {
       resultsViewport: { rangeStart: 5, rangeEnd: 10 },
     });
     const thread = makeThread(window);
-    const def = getWindowTypeDefinition("search");
+    const def = builtinRegistry.getObjectDefinition("search");
     const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('matches_start="5"');
@@ -182,7 +182,7 @@ describe("search_window render: matches.count reflects full total (not visible)"
       resultsViewport: { tail: 10 },
     });
     const thread = makeThread(window);
-    const def = getWindowTypeDefinition("search");
+    const def = builtinRegistry.getObjectDefinition("search");
     const nodes = await def.readable!({ thread, window });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     // matches.count = 100 (全集)；results_viewport.total = 100；
@@ -202,7 +202,6 @@ describe("set_results_window command", () => {
     });
     const out = await executeSearchSetResultsViewport({
       args: { matches_tail: 100 },
-      parentWindow: window,
       self: window,
     });
     expect(out).toBeUndefined();
@@ -216,7 +215,6 @@ describe("set_results_window command", () => {
     });
     const out = await executeSearchSetResultsViewport({
       args: { matches_start: 0, matches_end: 5 },
-      parentWindow: window,
       self: window,
     });
     expect(out).toBeUndefined();
@@ -230,7 +228,6 @@ describe("set_results_window command", () => {
     });
     const out = await executeSearchSetResultsViewport({
       args: { matches_tail: 10, matches_start: 0, matches_end: 5 },
-      parentWindow: window,
       self: window,
     });
     expect(typeof out).toBe("string");
@@ -250,7 +247,6 @@ describe("set_results_window command", () => {
     });
     const out = await executeSearchSetResultsViewport({
       args: { matches_tail: -5 },
-      parentWindow: window,
       self: window,
     });
     expect(typeof out).toBe("string");
@@ -265,7 +261,6 @@ describe("set_results_window command", () => {
     });
     const out = await executeSearchSetResultsViewport({
       args: { matches_start: 0 },
-      parentWindow: window,
       self: window,
     });
     expect(typeof out).toBe("string");
@@ -281,7 +276,6 @@ describe("set_results_window command", () => {
     });
     const out = await executeSearchSetResultsViewport({
       args: { matches_start: 10, matches_end: 5 },
-      parentWindow: window,
       self: window,
     });
     expect(typeof out).toBe("string");
@@ -299,7 +293,6 @@ describe("set_results_window command", () => {
     });
     const out = await executeSearchSetResultsViewport({
       args: {},
-      parentWindow: window,
       self: window,
     });
     expect(typeof out).toBe("string");
@@ -311,20 +304,19 @@ describe("set_results_window command", () => {
 
 describe("set_results_window registered on search window", () => {
   it("search window definition has set_results_window command", () => {
-    const def = getWindowTypeDefinition("search");
-    expect(def.commands["set_results_window"]).toBeDefined();
+    const def = builtinRegistry.getObjectDefinition("search");
+    expect(def.methods["set_results_window"]).toBeDefined();
   });
 
   it("registered command executes via window registry", async () => {
-    const def = getWindowTypeDefinition("search");
-    const cmd = def.commands["set_results_window"]!;
+    const def = builtinRegistry.getObjectDefinition("search");
+    const cmd = def.methods["set_results_window"]!;
     const window = makeSearchWindow({
       matches: makeMatches(10),
       resultsViewport: { tail: 50 },
     });
     const out = await cmd.exec({
       args: { matches_tail: 25 },
-      parentWindow: window,
       self: window,
     });
     expect(out).toBeUndefined();
@@ -336,8 +328,8 @@ describe("set_results_window registered on search window", () => {
 
 describe("open_match honors full matches array (not viewport-clipped)", () => {
   it("can open a match whose index is outside visible viewport tail", async () => {
-    const def = getWindowTypeDefinition("search");
-    const cmd = def.commands["open_match"]!;
+    const def = builtinRegistry.getObjectDefinition("search");
+    const cmd = def.methods["open_match"]!;
     // 100 matches, tail=10 → visible 90..99；但 open_match(index=5) 仍应工作
     const window = makeSearchWindow({
       matches: makeMatches(100),
@@ -346,7 +338,6 @@ describe("open_match honors full matches array (not viewport-clipped)", () => {
     const thread = makeThread(window);
     const out = await cmd.exec({
       args: { index: 5 },
-      parentWindow: window,
       self: window,
       thread,
     });

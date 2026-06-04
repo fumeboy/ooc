@@ -291,7 +291,7 @@ describe("think", () => {
     const todoWindows = thread.contextWindows.filter((w) => w.type === "todo");
     expect(todoWindows).toHaveLength(1);
     expect(todoWindows[0]?.type === "todo" && todoWindows[0].content).toBe("补充 thinkloop 集成测试");
-    const lingeringForms = thread.contextWindows.filter((w) => w.type === "command_exec");
+    const lingeringForms = thread.contextWindows.filter((w) => w.type === "method_exec");
     expect(lingeringForms).toHaveLength(0);
   });
 

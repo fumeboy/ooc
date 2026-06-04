@@ -1,14 +1,14 @@
 import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
 
 /**
- * MethodExec / CommandExec form — 调用某 method 时的临时 sub-window。
+ * MethodExec form — 调用某 method 时的临时 sub-window。
  *
  * P6.§9 (2026-06-02): 类型定义从 `@ooc/builtins/command_exec/types.ts` 搬到这里——form
  * 是 Object 内置特性的 lifecycle 抽象，不应当成独立 builtin object 维护。
  *
- * 命名归一（P6.§1 + §9）：
+ * 命名归一（P6.§1 + §9 + Phase H cleanup）：
  * - canonical type 字符串 = "method_exec"
- * - "command_exec" 保留为 legacy alias 一个 release，使旧持久化 state.json 仍可读
+ * - "command_exec" 已移除为 ObjectType literal；旧持久化数据在 thread-json.ts 读路径迁移
  *
  * 字段（与 ActiveForm 一一对应；plan §exec 升级后）：
  * - 由 `exec` tool 在 args 不齐全 / 引入新 path/knowledge 时创建
@@ -21,8 +21,8 @@ import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
  * - parentWindowId 是该 method 注册到的 window 的 id（root 命令时 = "root"；
  *   do_window 上的 continue 时 = 该 do_window 的 id）。
  */
-export interface CommandExecWindow extends BaseContextWindow {
-  type: "command_exec";
+export interface MethodExecWindow extends BaseContextWindow {
+  type: "method_exec";
   parentWindowId: string;
   command: string;
   description: string;
@@ -48,5 +48,3 @@ export interface CommandExecWindow extends BaseContextWindow {
   }>;
 }
 
-/** P6.§9 canonical name. Structural alias for CommandExecWindow. */
-export type MethodExecWindow = CommandExecWindow;

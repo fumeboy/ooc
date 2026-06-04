@@ -6,15 +6,17 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
+  MethodExecutionContext,
+  ObjectMethod,
 } from "../../../executable/windows/_shared/command-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
   type FeishuChatWindow,
 } from "../../../executable/windows/_shared/types.js";
+import type { Intent } from "../../../thinkable/context/intent.js";
+import type { ContextWindow } from "../../../executable/windows/_shared/types.js";
+import type { MethodExecWindow } from "../../../executable/windows/method_exec/types.js";
 
 const OPEN_FEISHU_CHAT_BASIC = "internal/executable/open_feishu_chat/basic";
 const OPEN_FEISHU_CHAT_INPUT = "internal/executable/open_feishu_chat/input";
@@ -35,23 +37,67 @@ open_feishu_chat 用于创建一个 feishu_chat_window（飞书群聊 / 单聊�
 open(command="open_feishu_chat", title="工程进展群", args={ chat_id: "oc_xxxxx", chat_type: "group", tail_count: 50 })
 `.trim();
 
-export const openFeishuChatCommand: CommandTableEntry = {
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
+export const openFeishuChatCommand: ObjectMethod = {
   paths: ["open_feishu_chat"],
-  match: () => ["open_feishu_chat"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [OPEN_FEISHU_CHAT_BASIC]: KNOWLEDGE };
-    if (formStatus !== "open") return entries;
+  intent: (): Intent[] => [],
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : (form as any).accumulatedArgs ?? {};
+    const entries: Record<string, string> = { [OPEN_FEISHU_CHAT_BASIC]: KNOWLEDGE };
+    if (change.kind === "status_changed") {
+      // formStatus check was `formStatus !== "open"` → don't add input guidance
+      // (entries already has BASIC; skip adding INPUT when status is not open)
+    } else {
+      if (typeof args.chat_id !== "string" || !args.chat_id) {
+        entries[OPEN_FEISHU_CHAT_INPUT] =
+          "open_feishu_chat 缺少 chat_id；用 refine(args={ chat_id: \"oc_xxx\", chat_name?: \"...\", chat_type?: \"group\", tail_count?: 30 })。";
+      }
+    }
+    // Re-evaluate: old logic: if formStatus !== "open" return just BASIC.
+    // If status IS open AND args changed (or initial args), check chat_id.
+    // Simpler: just use status from form.
+    const status: string = change.kind === "status_changed" ? change.to : form.status;
+    if (status !== "open") {
+      return guidanceWindows(form, { [OPEN_FEISHU_CHAT_BASIC]: KNOWLEDGE });
+    }
+    const finalEntries: Record<string, string> = { [OPEN_FEISHU_CHAT_BASIC]: KNOWLEDGE };
     if (typeof args.chat_id !== "string" || !args.chat_id) {
-      entries[OPEN_FEISHU_CHAT_INPUT] =
+      finalEntries[OPEN_FEISHU_CHAT_INPUT] =
         "open_feishu_chat 缺少 chat_id；用 refine(args={ chat_id: \"oc_xxx\", chat_name?: \"...\", chat_type?: \"group\", tail_count?: 30 })。";
     }
-    return entries;
+    return guidanceWindows(form, finalEntries);
   },
   exec: (ctx) => executeOpenFeishuChat(ctx),
 };
 
 export async function executeOpenFeishuChat(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[open_feishu_chat] 缺少 thread context。";

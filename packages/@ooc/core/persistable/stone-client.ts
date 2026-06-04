@@ -1,23 +1,17 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { objectDir, type FlowObjectRef, type StoneObjectRef } from "./common";
-import { clientDir, visibleDir } from "./stone-object";
+import { visibleDir, stoneDir } from "./stone-object";
 
 /**
  * client 持久化薄壳。
  *
- * - Stone：单页入口 `<packageDir>/client/index.tsx`
+ * - Stone：单页入口 `<stoneDir>/visible/index.tsx`
  * - Flow：多页 `<objectDir>/client/pages/{pageName}.tsx`
  *
  * 设计对照 stone-server.ts：mkdir + writeFile + ENOENT 静默返回 undefined。
  * 不做语法校验、不做模板预填——把"约定文件路径"这一件事做干净就好。
  */
-
-/** Stone 的 client 入口 tsx 绝对路径。 */
-/** @deprecated Use visibleIndexFile instead (2026-05-28 ooc-6 Object Unification). client/ is being renamed to visible/. */
-export function clientIndexFile(ref: StoneObjectRef): string {
-  return join(clientDir(ref), "index.tsx");
-}
 
 /**
  * Stone 的 visible/index.tsx 绝对路径（原 client/index.tsx 重命名，2026-05-28 ooc-6）。
@@ -40,29 +34,15 @@ export function flowClientPageFile(ref: FlowObjectRef, pageName: string): string
   return join(flowClientPagesDir(ref), `${pageName}.tsx`);
 }
 
-/** 读取 stone 的 client/index.tsx；不存在返回 undefined。 */
-/** @deprecated Use readVisibleSource instead (2026-05-28 ooc-6 Object Unification). */
-export async function readStoneClientSource(ref: StoneObjectRef): Promise<string | undefined> {
-  return readSourceOrUndefined(clientIndexFile(ref));
-}
-
 /**
  * 读取 stone 的 visible/index.tsx；不存在返回 undefined。
- * 迁移期双读：优先 visible/，fallback 到 client/。
+ * 迁移期双读：优先 visible/，fallback 到 client/（legacy path）。
  */
 export async function readVisibleSource(ref: StoneObjectRef): Promise<string | undefined> {
   const result = await readSourceOrUndefined(visibleIndexFile(ref));
   if (result !== undefined) return result;
   // Migration fallback: try old client/ path
-  return readSourceOrUndefined(clientIndexFile(ref));
-}
-
-/** 写入 stone 的 client/index.tsx，自动 mkdir client/。 */
-/** @deprecated Use writeVisibleSource instead (2026-05-28 ooc-6 Object Unification). */
-export async function writeStoneClientSource(ref: StoneObjectRef, code: string): Promise<void> {
-  const file = clientIndexFile(ref);
-  await mkdir(dirname(file), { recursive: true });
-  await writeFile(file, code, "utf8");
+  return readSourceOrUndefined(join(stoneDir(ref), "client", "index.tsx"));
 }
 
 /**

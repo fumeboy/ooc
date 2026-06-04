@@ -39,7 +39,7 @@ export interface ContextMember {
 export interface ContextParams {
   /** 压缩级别（替代 ContextWindow.compressLevel）。 */
   compressLevel?: number;
-  /** 自然衰减运行时计数（替代 ContextWindow._decayMeta）。 */
+  /** 自然衰减运行时计数（legacy 兼容；P6 BudgetManager 不再使用）。 */
   decayMeta?: { lastTouchedAt: number; idleRounds: number } | null;
   /** 在 context 中的展示顺序（取代 contextWindows[] 数组下标）。 */
   order?: number;

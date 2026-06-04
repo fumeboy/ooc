@@ -1,7 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { objectDir, toJson, type FlowObjectRef } from "./common";
-import { getObjectDefinition } from "../executable/windows/_shared/registry.js";
+import type { ObjectRegistry } from "../executable/windows/_shared/registry.js";
+import { builtinRegistry } from "../executable/windows/index.js";
 
 /** session 元数据，写入 `.session.json`。 */
 export interface FlowSessionMetadata {
@@ -87,12 +88,13 @@ export async function createFlowSession(baseDir: string, sessionId: string, titl
 export async function createFlowObject(
   ref: FlowObjectRef,
   opts?: { class?: string },
+  registry: ObjectRegistry = builtinRegistry,
 ): Promise<FlowObjectRef> {
   // class 存在性校验：未注册时 fail-loud。注意 try/catch — getObjectDefinition 未注册时抛错。
   if (opts?.class !== undefined) {
     let registered = false;
     try {
-      getObjectDefinition(opts.class as never);
+      registry.getObjectDefinition(opts.class as never);
       registered = true;
     } catch {
       registered = false;

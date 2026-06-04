@@ -9,15 +9,18 @@
  * - 视图：transcript 按 outbox.windowId === self.id || inbox.replyToWindowId === self.id 过滤
  */
 
-import { registerWindowType, type OnCloseContext, type RenderContext } from "../_shared/registry.js";
-import type { CommandKnowledgeEntries, ObjectMethod } from "../_shared/command-types.js";
+import { builtinRegistry, type OnCloseContext, type RenderContext } from "../_shared/registry.js";
+import type { ObjectMethod } from "../_shared/command-types.js";
+import type { Intent, MethodCallSchema } from "../../../thinkable/context/intent.js";
 import { stat } from "node:fs/promises";
 import { stoneDir } from "../../../persistable/index.js";
 import { SUPER_ALIAS_TARGET } from "../_shared/super-constants.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
+  type ContextWindow,
 } from "../_shared/types.js";
+import type { MethodExecWindow } from "../method_exec/types.js";
 import { sayCommand } from "./command.say.js";
 import { waitCommand } from "./command.wait.js";
 import { closeCommand } from "./command.close.js";
@@ -104,7 +107,7 @@ function renderTalkWindow(ctx: RenderContext): XmlNode[] {
 /**
  * talk_window 的 type-level basicKnowledge。
  *
- * 通过 registerWindowType 注入；只要 thread.contextWindows 里出现至少一个 talk_window，
+ * 通过 registerObjectType 注入；只要 thread.contextWindows 里出现至少一个 talk_window，
  * 全局基础知识合成阶段就会把这段文本作为一个 protocol KnowledgeWindow 注入到 context，
  * 让 LLM 在还没 open 任何 say/wait form 时就知道 talk_window 的命令面与典型用法。
  */
@@ -234,6 +237,32 @@ submit 后副作用：
 允许同时打开多个 talk_window 来并行维护**不同 target / 不同主题**（不是为了重复同一对话）。
 `.trim();
 
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
 function deriveTalkTitle(raw: string, max = 60): string {
   const trimmed = raw.trim();
   return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max)}...`;
@@ -253,26 +282,36 @@ function deriveTalkTitle(raw: string, max = 60): string {
 const talkConstructor: ObjectMethod = {
   kind: "constructor",
   paths: ["talk"],
-  match: () => ["talk"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = {
+  permission: () => "allow",
+  schema: {
+    args: {
+      target: { type: "string", required: true, description: '目标 flow object 的 objectId（"user" 也是一个 flow object）' },
+      title: { type: "string", required: true, description: "本会话的简短主题（同一 caller 多窗口区分用）" },
+    },
+  } as MethodCallSchema,
+  intent: (): Intent[] => [],
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = {
       [TALK_CONSTRUCTOR_BASIC]: TALK_CONSTRUCTOR_KNOWLEDGE,
     };
-    if (formStatus !== "open") return entries;
-    const target = typeof args.target === "string" ? args.target.trim() : "";
-    const title = typeof args.title === "string" ? args.title.trim() : "";
-    if (!target || !title) {
-      const missing: string[] = [];
-      if (!target) missing.push("target");
-      if (!title) missing.push("title");
-      entries[TALK_CONSTRUCTOR_INPUT] =
-        `talk 还缺以下参数: ${missing.join(", ")}。\n` +
-        "请用 refine(form_id, args={ target: \"<objectId>\", title: \"<会话主题>\" }) 补齐后 submit(form_id)。\n" +
-        "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
+    if (formStatus === "open") {
+      const target = typeof args.target === "string" ? args.target.trim() : "";
+      const title = typeof args.title === "string" ? args.title.trim() : "";
+      if (!target || !title) {
+        const missing: string[] = [];
+        if (!target) missing.push("target");
+        if (!title) missing.push("title");
+        entries[TALK_CONSTRUCTOR_INPUT] =
+          `talk 还缺以下参数: ${missing.join(", ")}。\n` +
+          "请用 refine(form_id, args={ target: \"<objectId>\", title: \"<会话主题>\" }) 补齐后 submit(form_id)。\n" +
+          "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
+      }
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
-  permission: () => "allow",
   exec: async (ctx) => {
     const thread = ctx.thread;
     if (!thread) return { ok: false, error: "[talk] 缺少 thread context。" };
@@ -314,8 +353,8 @@ const talkConstructor: ObjectMethod = {
   },
 };
 
-registerWindowType("talk", {
-  commands: {
+builtinRegistry.registerObjectType("talk", {
+  methods: {
     say: sayCommand,
     wait: waitCommand,
     close: closeCommand,

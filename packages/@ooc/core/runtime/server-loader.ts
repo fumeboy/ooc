@@ -104,13 +104,15 @@ export class ServerLoader {
     };
 
     if (entry.window) {
-      const winDef = entry.window as ObjectWindowDefinition & {
-        methods?: Record<string, ObjectMethod>;
-      };
-      if (winDef.methods && !winDef.commands) {
+      const winDef = entry.window;
+      const hasMethods = winDef.methods && Object.keys(winDef.methods).length > 0;
+      const hasCommands = winDef.commands && Object.keys(winDef.commands).length > 0;
+      if (hasMethods && !hasCommands) {
         winDef.commands = winDef.methods;
-      } else if (winDef.methods && winDef.commands) {
+      } else if (hasMethods && hasCommands) {
         winDef.commands = { ...winDef.methods, ...winDef.commands };
+      } else if (!hasMethods && hasCommands) {
+        winDef.methods = winDef.commands;
       }
     }
 

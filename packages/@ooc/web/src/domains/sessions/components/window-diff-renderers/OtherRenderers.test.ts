@@ -158,9 +158,9 @@ describe("ProgramWindowDiff", () => {
 describe("CommandExecDiff", () => {
   it("Case 1: args 新增 key → added", () => {
     const tree = CommandExecDiff({
-      previous: { type: "command_exec", command: "search", accumulatedArgs: { q: "x" } },
-      current: { type: "command_exec", command: "search", accumulatedArgs: { q: "x", limit: 10 } },
-      windowType: "command_exec",
+      previous: { type: "method_exec", command: "search", accumulatedArgs: { q: "x" } },
+      current: { type: "method_exec", command: "search", accumulatedArgs: { q: "x", limit: 10 } },
+      windowType: "method_exec",
       windowId: "w_ce_1",
     });
     expect(countByStatus(tree, "added")).toBeGreaterThanOrEqual(1);
@@ -168,9 +168,9 @@ describe("CommandExecDiff", () => {
 
   it("Case 2: args 改值 → changed", () => {
     const tree = CommandExecDiff({
-      previous: { type: "command_exec", command: "search", accumulatedArgs: { q: "x" } },
-      current: { type: "command_exec", command: "search", accumulatedArgs: { q: "y" } },
-      windowType: "command_exec",
+      previous: { type: "method_exec", command: "search", accumulatedArgs: { q: "x" } },
+      current: { type: "method_exec", command: "search", accumulatedArgs: { q: "y" } },
+      windowType: "method_exec",
       windowId: "w_ce_2",
     });
     expect(countByStatus(tree, "changed")).toBeGreaterThanOrEqual(1);
@@ -178,9 +178,9 @@ describe("CommandExecDiff", () => {
 
   it("Case 3: status 变 → changed (Round 13 四态机: open → failed)", () => {
     const tree = CommandExecDiff({
-      previous: { type: "command_exec", command: "search", status: "open" },
-      current: { type: "command_exec", command: "search", status: "failed" },
-      windowType: "command_exec",
+      previous: { type: "method_exec", command: "search", status: "open" },
+      current: { type: "method_exec", command: "search", status: "failed" },
+      windowType: "method_exec",
       windowId: "w_ce_3",
     });
     expect(countByStatus(tree, "changed")).toBeGreaterThanOrEqual(1);

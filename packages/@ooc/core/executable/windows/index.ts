@@ -1,19 +1,26 @@
 /**
- * windows/ 模块 barrel — 对外暴露 ContextWindow 抽象的所有公共入口。
+ * windows/ 模块 barrel — 对外暴露 ContextObject 抽象的所有公共入口。
  *
  * 见 spec docs/superpowers/specs/2026-05-14-context-window-unification-design.md
+ *
+ * 2026-06-03 ooc-6 cleanup Phase A：已删除所有 deprecated alias re-export
+ * （ObjectType / ContextObject / ObjectTypeDefinition / ObjectMethod /
+ *  MethodExecutionContext / MethodKnowledgeEntries / MethodOutcome）。
+ *
+ * 2026-06-04 ooc-6 cleanup Phase E：已删除 registry thin wrapper 函数的 re-export
+ * （registerObjectType / getObjectDefinition / listRegisteredObjectTypes /
+ *  assertAllObjectDefinitionsRegistered / lookupMethod / lookupMethodEntry /
+ *  lookupConstructor / resolveParentClassChain / resolveEffectiveVisibleType）。
+ * 调用方应直接使用 builtinRegistry.registerObjectType(...) 或 WorldRuntime.objects.*。
  */
 
 export type {
-  OOCObject,
   ContextObject,
-  // 2026-05-28 ooc-6 Object Unification: @deprecated aliases
   ContextWindow,
-  WindowType,
   WindowStatus,
   BaseContextWindow,
   RootWindow,
-  CommandExecWindow,
+  MethodExecWindow,
   DoWindow,
   TodoWindow,
   TalkWindow,
@@ -25,7 +32,7 @@ export type {
   RelationWindow,
   PlanWindow,
   PlanWindowStep,
-  // 2026-05-28 ooc-6 Object Unification aliases
+  GuidanceWindow,
   ObjectType,
 } from "./_shared/types.js";
 
@@ -37,43 +44,23 @@ export {
 } from "./_shared/types.js";
 
 export {
-  registerWindowType,
-  getWindowTypeDefinition,
-  listRegisteredWindowTypes,
-  assertAllRenderHooksRegistered,
-  // 2026-05-28 ooc-6 Object Unification aliases
-  registerObjectType,
-  getObjectDefinition,
-  listRegisteredObjectTypes,
-  assertAllObjectDefinitionsRegistered,
-  lookupMethod,
-  lookupMethodEntry,
-  lookupConstructor,
-  // P6.§7 unified inheritance chain
-  resolveParentClassChain,
-  resolveEffectiveVisibleType,
-  // Visibility
+  builtinRegistry,
+  createObjectRegistry,
   filterMethodsByVisibility,
 } from "./_shared/registry.js";
 
 export type {
-  WindowTypeDefinition,
+  ObjectDefinition,
+  ObjectRegistry,
   OnCloseHook,
   OnCloseContext,
   RenderHook,
   RenderContext,
-  // 2026-05-28 ooc-6 Object Unification aliases
-  ObjectDefinition,
   ReadableFn,
   MethodVisibilityContext,
 } from "./_shared/registry.js";
 
 export type {
-  CommandTableEntry,
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandExecOutcome,
-  // 2026-05-28 ooc-6 Object Unification — canonical names
   ObjectMethod,
   MethodExecutionContext,
   MethodKnowledgeEntries,
@@ -85,43 +72,33 @@ export { WindowManager } from "./_shared/manager.js";
 export { initContextWindows } from "./_shared/init.js";
 export type { InitContextWindowsOpts } from "./_shared/init.js";
 
-// root commands 的工具函数（仅服务 root level；非 root window 的 command 通过 object registry 查）
+// root methods 的工具函数（仅服务 root level；非 root window 的 method 通过 object registry 查）
 export {
-  ROOT_COMMANDS,
   ROOT_METHODS,
-  getOpenableCommands,
-  deriveRootCommandPaths,
-  execRootCommand,
+  getOpenableMethods,
+  deriveRootMethodPaths,
+  execRootMethod,
 } from "@ooc/builtins/root";
 
-// Side-effect imports: each window type module 通过 registerWindowType 注入 commands / hooks。
+// Side-effect imports: each window type module 通过 builtinRegistry.registerObjectType 注入 commands / hooks。
 // 这些 import 必须在 WindowManager 之后 load，确保使用时表已就绪。
 //
-// root 必须最先 load，因为其它 window type 的 onClose / 注册可能间接依赖 ROOT_COMMANDS
-// （目前没有此依赖，但保留这一顺序更稳妥）。
-// root 必须最先 load，因为其它 window type 的 onClose / 注册可能间接依赖 ROOT_COMMANDS
-// （目前没有此依赖，但保留这一顺序更稳妥）。
-// 2026-05-28 ooc-6: root 已迁移为 builtin object
+// root 必须最先 load。
 import "@ooc/builtins/root";
 
-// do / talk 是所有 Object 的固有能力，不迁移为独立 builtin object（但仍以 context window 形态呈现）
+// do / talk 是所有 Object 的固有能力。
 import "./do/index.js";
 import "./talk/index.js";
 
-// P6.§9 (2026-06-02): method_exec form 是 method 调用过程的临时载体（Object 内置特性）；
-// 从旧路径 builtins/command_exec/ 下放到这里，与 talk/do 同列。同时注册 "method_exec" canonical
-// 与 "command_exec" legacy alias 两个 type（一个 release 后移除 alias）。
+// P6.§9 (2026-06-02): method_exec form 是 method 调用过程的临时载体（Object 内置特性）。
 import "./method_exec/index.js";
 
 // relation window 将在 Phase 6 移除，替换为 peer/children 自动注入
 import "./relation/index.js";
 
-// 2026-05-28 ooc-6: 其余 builtin types 已迁移为 builtin objects，通过 extendable/index.js → base/index.js 加载
-// Extendable 子系统 — 第三方 / 外部世界集成（lark 等）通过 barrel 自注册到 WindowRegistry。
-// 必须在 builtin window type 全部加载完成后、boot-time renderXml 校验之前 import。
+// 其余 builtin types 通过 extendable/index.js 加载。
 import "../../extendable/index.js";
 
-// Boot-time 校验：所有 window type 必须配齐 renderXml 或 readable hook（render.ts 调度器要求）。
-// 2026-05-28 ooc-6: 有 readable 的 object 可以缺省 renderXml。
-import { assertAllObjectDefinitionsRegistered as _assertHooks } from "./_shared/registry.js";
-_assertHooks();
+// Boot-time 校验：所有 object type 必须配齐 renderXml 或 readable hook。
+import { builtinRegistry as _builtinReg } from "./_shared/registry.js";
+_builtinReg.assertAllObjectDefinitionsRegistered();

@@ -25,7 +25,7 @@ import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../_shared/super-constants
 import { initContextWindows } from "../_shared/init";
 import { ROOT_WINDOW_ID, type RelationWindow, type TalkWindow } from "../_shared/types";
 import type { ThreadContext } from "../../../thinkable/context";
-import type { CommandExecutionContext } from "../_shared/command-types";
+import type { MethodExecutionContext } from "../_shared/command-types";
 
 const SELF = "alice";
 const PEER = "critic";
@@ -68,8 +68,8 @@ async function setupSelfThread(baseDir: string, opts: { withSuperTalk?: TalkWind
   return { thread, relationWindow };
 }
 
-function execCtx(thread: ThreadContext, parent: RelationWindow, args: Record<string, unknown>): CommandExecutionContext {
-  return { thread, parentWindow: parent, self: parent, args };
+function execCtx(thread: ThreadContext, parent: RelationWindow, args: Record<string, unknown>): MethodExecutionContext {
+  return { thread, self: parent, args };
 }
 
 describe("executeRelationEdit", () => {

@@ -1,17 +1,14 @@
-import { mkdtemp, readFile, rm, stat, mkdir } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
-import { createStoneObject, stoneDir, stoneMetadataFile } from "../stone-object";
+import { createStoneObject, stoneDir } from "../stone-object";
 import { readSelf, selfFile, writeSelf } from "../stone-self";
-import { readReadme, readReadable, readableFile, readmeFile, writeReadable, writeReadme } from "../stone-readme";
+import { readReadable, readableFile, writeReadable } from "../stone-readme";
 import {
   executableIndexFile,
   readExecutableSource,
-  readServerSource,
-  serverIndexFile,
   writeExecutableSource,
-  writeServerSource,
 } from "../stone-server";
 
 let tempRoot: string | undefined;
@@ -24,15 +21,15 @@ afterEach(async () => {
 });
 
 describe("createStoneObject", () => {
-  test("creates minimal visible skeleton: .stone.json + self.md + readable.md (2026-06-03 ooc-6)", async () => {
+  test("creates minimal visible skeleton: package.json + self.md + readable.md (2026-06-03 ooc-6)", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
 
     const dir = stoneDir(ref);
 
-    // 预创的初始文件：.stone.json / self.md / readable.md
-    const metadata = JSON.parse(await readFile(stoneMetadataFile(ref), "utf8"));
-    expect(metadata).toEqual({ type: "stone", objectId: "alice" });
+    // 预创的初始文件：package.json / self.md / readable.md
+    const pkg = JSON.parse(await readFile(join(dir, "package.json"), "utf8"));
+    expect(pkg.ooc.objectId).toBe("alice");
 
     // 空文件占位：ls 可见，但 readSelf/readReadable 返回 ""（loadSelfInstructions 视 empty 等价 undefined）
     expect(await readSelf(ref)).toBe("");
@@ -69,18 +66,7 @@ describe("stone file IO", () => {
     expect(await readReadable(ref)).toBe("Hello visitors.");
     expect(readableFile(ref)).toBe(join(stoneDir(ref), "readable.md"));
     // 迁移完成：writeReadable 不再双写 readme.md
-    expect(await readReadme(ref)).toBeUndefined();
-  });
-
-  test("readme.md round trip (deprecated API)", async () => {
-    tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-"));
-    const ref = { baseDir: tempRoot, objectId: "bob" };
-
-    // deprecated writeReadme/readReadme 直接操作 readme.md 路径，不依赖预创
-    await mkdir(stoneDir(ref), { recursive: true });
-    await writeReadme(ref, "Legacy readme content.");
-    expect(await readReadme(ref)).toBe("Legacy readme content.");
-    expect(readmeFile(ref)).toBe(join(stoneDir(ref), "readme.md"));
+    await expect(stat(join(stoneDir(ref), "readme.md"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   // data.json 迁到 flow 层；详见 src/persistable/__tests__/flow-data.test.ts（待补）。
@@ -90,22 +76,11 @@ describe("stone file IO", () => {
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "dave" });
 
     expect(await readExecutableSource(ref)).toBeUndefined();
-    const code = "export const window = { commands: { foo: { paths: ['foo'], match: () => ['foo'], exec: async () => ({ ok: true }) } } }; export const ui_methods = {};";
+    const code = "export const window = { commands: { foo: { paths: ['foo'], intent: () => [], exec: async () => ({ ok: true }) } } }; export const ui_methods = {};";
     await writeExecutableSource(ref, code);
     expect(await readExecutableSource(ref)).toBe(code);
     expect(executableIndexFile(ref)).toBe(join(stoneDir(ref), "executable", "index.ts"));
     // 迁移完成：writeExecutableSource 不再双写 server/
-    expect(await readServerSource(ref)).toBeUndefined();
-  });
-
-  test("server/index.ts round trip (deprecated API)", async () => {
-    tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-"));
-    const ref = { baseDir: tempRoot, objectId: "eve" };
-
-    expect(await readServerSource(ref)).toBeUndefined();
-    const code = "export const window = { commands: { foo: { paths: ['foo'], match: () => ['foo'], exec: async () => ({ ok: true }) } } }; export const ui_methods = {};";
-    await writeServerSource(ref, code); // writeServerSource 自己 mkdir
-    expect(await readServerSource(ref)).toBe(code);
-    expect(serverIndexFile(ref)).toBe(join(stoneDir(ref), "server", "index.ts"));
+    await expect(stat(join(stoneDir(ref), "server", "index.ts"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 });

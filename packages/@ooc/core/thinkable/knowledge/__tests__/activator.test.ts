@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { computeActivations } from "../activator";
 import type { ActivatesOn, KnowledgeDoc, KnowledgeIndex } from "../types";
 import type { ThreadContext } from "../../context";
-import type { CommandExecWindow, ContextWindow } from "../../../executable/windows/_shared/types";
+import type { MethodExecWindow, ContextWindow } from "../../../executable/windows/_shared/types";
 
 function doc(
   path: string,
@@ -24,10 +24,10 @@ function indexOf(...docs: KnowledgeDoc[]): KnowledgeIndex {
 }
 
 /** 构造 command_exec window 的辅助；activator 内部走 evaluateTrigger，需 parentWindowId + command 字段。 */
-function form(overrides: Partial<CommandExecWindow>): CommandExecWindow {
+function form(overrides: Partial<MethodExecWindow>): MethodExecWindow {
   return {
     id: "f",
-    type: "command_exec",
+    type: "method_exec",
     parentWindowId: "root",
     title: "x",
     status: "open",

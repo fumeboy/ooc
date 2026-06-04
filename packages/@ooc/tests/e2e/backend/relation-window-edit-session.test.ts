@@ -110,7 +110,6 @@ describe("[e2e backend] relation-window-edit-session", () => {
     // edit(scope=session) 落盘验证
     const editResult = await executeRelationEdit({
       thread: calleeThread!,
-      parentWindow: userRel!,
       self: userRel!,
       args: { content: "## test session relation\n- 偏好简短\n", scope: "session" },
     });

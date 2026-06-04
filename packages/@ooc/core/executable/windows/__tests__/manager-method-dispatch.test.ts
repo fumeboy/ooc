@@ -16,6 +16,7 @@ import { describe, expect, it } from "bun:test";
 import "../index.js"; // registerObjectType side-effects
 
 import { WindowManager } from "../_shared/manager";
+import { builtinRegistry } from "../_shared/registry";
 import {
   createFlowObject,
   createFlowSession,
@@ -82,17 +83,17 @@ describe("WindowManager.submit — P6.§3 self-type guard", () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "ooc-mgr-disp-"));
     try {
       const { thread, talkWindow } = await setupThread(tempRoot);
-      const mgr = WindowManager.fromThread(thread);
+      const mgr = WindowManager.fromThread(thread, builtinRegistry);
 
       // 手工构造一个 form：parent = talk_window, command = "edit"（edit 只挂在 relation_window 上）。
-      // 走低阶 path（绕过 openCommandExec 的 lookupCommandEntry 早期校验）来构造严格
+      // 走低阶 path（绕过 openMethodExec 的 lookupCommandEntry 早期校验）来构造严格
       // 跨类型场景。这里直接 set 一个 command_exec form 进 manager 私有 windows 也可，
-      // 但更朴素的做法是用 openCommandExec 在合法 parent 上开 form 再人为换 parent。
+      // 但更朴素的做法是用 openMethodExec 在合法 parent 上开 form 再人为换 parent。
       //
-      // 简化：走 openCommandExec 在 relation_window 上开 form, 然后改 parentWindowId。
+      // 简化：走 openMethodExec 在 relation_window 上开 form, 然后改 parentWindowId。
       // 这样 form.command 能落到 registry 校验之外（用户构造的合法 form, 但被
       // re-targeted 到错类型 parent，模拟 §3 防御场景）。
-      const opened = await mgr.openCommandExec({
+      const opened = await mgr.openMethodExec({
         thread,
         parentWindowId: `w_rel_${PEER}`,
         command: "edit",
@@ -128,9 +129,9 @@ describe("WindowManager.submit — P6.§3 self-type guard", () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "ooc-mgr-disp-ok-"));
     try {
       const { thread } = await setupThread(tempRoot);
-      const mgr = WindowManager.fromThread(thread);
+      const mgr = WindowManager.fromThread(thread, builtinRegistry);
 
-      const opened = await mgr.openCommandExec({
+      const opened = await mgr.openMethodExec({
         thread,
         parentWindowId: `w_rel_${PEER}`,
         command: "edit",

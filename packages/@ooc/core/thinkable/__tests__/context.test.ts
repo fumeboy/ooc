@@ -7,16 +7,16 @@ import { clearKnowledgeLoaderCache } from "../knowledge";
 import { createStoneObject, createPoolObject, poolKnowledgeDir, writeSelf } from "../../persistable";
 import {
   ROOT_WINDOW_ID,
-  type CommandExecWindow,
+  type MethodExecWindow,
   type ContextWindow,
 } from "../../executable/windows/_shared/types";
 import { makeThread } from "../../__tests__/make-thread";
 
 /** 构造一个 command_exec window，便于 context render 测试 */
-function execForm(overrides: Partial<CommandExecWindow>): CommandExecWindow {
+function execForm(overrides: Partial<MethodExecWindow>): MethodExecWindow {
   return {
     id: overrides.id ?? "f_x",
-    type: "command_exec",
+    type: "method_exec",
     parentWindowId: ROOT_WINDOW_ID,
     title: overrides.title ?? "form",
     status: overrides.status ?? "open",
@@ -300,9 +300,9 @@ describe("buildContext (ContextWindow model)", () => {
     });
     const messages = await buildContext(thread);
     const xml = messages[0]!.content;
-    expect(xml).toContain('id="f_open" type="command_exec" status="open"');
-    expect(xml).toContain('id="f_executing" type="command_exec" status="executing"');
-    expect(xml).toContain('id="f_failed" type="command_exec" status="failed"');
+    expect(xml).toContain('id="f_open" type="method_exec" status="open"');
+    expect(xml).toContain('id="f_executing" type="method_exec" status="executing"');
+    expect(xml).toContain('id="f_failed" type="method_exec" status="failed"');
 
     function sliceWindow(id: string): string {
       const start = xml.indexOf(`id="${id}"`);

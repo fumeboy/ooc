@@ -1,8 +1,10 @@
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
+  MethodExecutionContext,
+  ObjectMethod,
 } from "../_shared/command-types.js";
+import type { Intent, MethodCallSchema } from "../../../thinkable/context/intent.js";
+import type { ContextWindow } from "../_shared/types.js";
+import type { MethodExecWindow } from "../method_exec/types.js";
 import type { DoWindow } from "../_shared/types.js";
 import { archiveDoWindowChild } from "./helpers.js";
 
@@ -12,16 +14,47 @@ do_window.close 等价于 close tool，但语义上明确表达"归档子线程�
 关闭后子线程会被标记为 archived，不再被 scheduler 选中执行。
 `.trim();
 
-async function executeDoWindowClose(ctx: CommandExecutionContext): Promise<string | undefined> {
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
+async function executeDoWindowClose(ctx: MethodExecutionContext): Promise<string | undefined> {
   // P6.§3: manager 在 dispatch 阶段已保证 self.type === "do"，method 体不再 re-check。
   const window = ctx.self as DoWindow;
   archiveDoWindowChild(ctx.thread, window);
   return undefined;
 }
 
-export const closeCommand: CommandTableEntry = {
+export const closeCommand: ObjectMethod = {
   paths: ["close"],
-  match: () => ["close"],
-  knowledge: (): CommandKnowledgeEntries => ({ [DO_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
+  schema: { args: {} } as MethodCallSchema,
+  intent: (): Intent[] => [],
+  onFormChange(change, { form }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const entries: Record<string, string> = { [DO_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE };
+    return guidanceWindows(form, entries);
+  },
   exec: (ctx) => executeDoWindowClose(ctx),
 };

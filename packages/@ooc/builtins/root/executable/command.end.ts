@@ -1,8 +1,10 @@
-import type { CommandExecutionContext, CommandKnowledgeEntries, CommandTableEntry } from "@ooc/core/extendable/_shared/command-types.js";
+import type { MethodExecutionContext, ObjectMethod } from "@ooc/core/extendable/_shared/command-types.js";
 import type { ContextWindow, DoWindow, TalkWindow } from "@ooc/core/extendable/_shared/types.js";
 import { continueCommand } from "@ooc/core/executable/windows/do/command.continue.js";
 import { sayCommand } from "@ooc/core/executable/windows/talk/command.say.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
+import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 /** end command 暴露给 LLM 的知识说明。 */
 const KNOWLEDGE = `
@@ -31,6 +33,32 @@ open(type="command", command="end", args={ reason: "done", result: "分析完成
 
 const END_BASIC_PATH = "internal/executable/end/basic";
 
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
 /** end command 的可匹配路径集合。 */
 export enum EndCommandPath {
   /** 基础 end 指令：标记当前线程完成。 */
@@ -38,16 +66,22 @@ export enum EndCommandPath {
 }
 
 /** end command 表项：当前只命中基础 end 路径。 */
-export const endCommand: CommandTableEntry = {
+export const endCommand: ObjectMethod = {
   paths: [EndCommandPath.End],
-  match: () => {
-    return [EndCommandPath.End];
-  },
-  knowledge: () => {
-    const entries: CommandKnowledgeEntries = {
+  schema: {
+    args: {
+      reason: { type: "string", required: false, description: "结束原因，例如 done / cancelled / blocked" },
+      summary: { type: "string", required: false, description: "需要沉淀的最终产物或结论（写入 thread.endSummary）" },
+      result: { type: "string", required: false, description: "便捷糖：end 之前模拟在 creator window 上调一次 continue/say 回报父线程" },
+    },
+  } as MethodCallSchema,
+  intent: (): Intent[] => [],
+  onFormChange(change, { form, intents }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const entries: Record<string, string> = {
       [END_BASIC_PATH]: KNOWLEDGE.trim(),
     };
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeEndCommand(ctx),
 };
@@ -58,7 +92,7 @@ export const endCommand: CommandTableEntry = {
  * 当前 init.ts 规则：do/talk window 才可能带 isCreatorWindow=true。其它类型即使设置了
  * 该字段也不视为合法 creator（防御）。
  */
-function findCreatorWindow(ctx: CommandExecutionContext): DoWindow | TalkWindow | undefined {
+function findCreatorWindow(ctx: MethodExecutionContext): DoWindow | TalkWindow | undefined {
   const list = ctx.thread?.contextWindows ?? [];
   for (const w of list) {
     if ((w.type === "do" || w.type === "talk") && w.isCreatorWindow === true) {
@@ -77,16 +111,15 @@ function findCreatorWindow(ctx: CommandExecutionContext): DoWindow | TalkWindow 
  * 但不阻断 end 流程（end 是终结动作，不应因为汇报失败回滚）。
  */
 async function autoReplyAndArchiveDo(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
   creator: DoWindow,
   result: string,
 ): Promise<void> {
   const thread = ctx.thread!;
-  // 构造一个与 LLM 调用同构的 ctx：self = creator do_window（2026-06-02 P6.§1 字段从 parentWindow 改名）
-  const continueCtx: CommandExecutionContext = {
+  // 构造一个与 LLM 调用同构的 ctx：self = creator do_window（2026-06-02 P6.§1 字段从 self 改名）
+  const continueCtx: MethodExecutionContext = {
     thread,
     self: creator,
-    parentWindow: creator,
     manager: ctx.manager,
     args: { msg: result },
   };
@@ -120,15 +153,14 @@ async function autoReplyAndArchiveDo(
  * talk 是恒在通道，自然由 caller / callee 各自 lifecycle 释放。
  */
 async function autoReplyTalk(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
   creator: TalkWindow,
   result: string,
 ): Promise<void> {
   const thread = ctx.thread!;
-  const sayCtx: CommandExecutionContext = {
+  const sayCtx: MethodExecutionContext = {
     thread,
     self: creator,
-    parentWindow: creator,
     manager: ctx.manager,
     args: { msg: result },
   };
@@ -152,7 +184,7 @@ async function autoReplyTalk(
  *
  * 状态翻转顺序：先 reply（可能失败但不阻断）→ 写 endReason/endSummary → status=done。
  */
-export async function executeEndCommand(ctx: CommandExecutionContext): Promise<string | undefined> {
+export async function executeEndCommand(ctx: MethodExecutionContext): Promise<string | undefined> {
   if (!ctx.thread) return undefined;
 
   const reason = typeof ctx.args.reason === "string" ? ctx.args.reason : undefined;

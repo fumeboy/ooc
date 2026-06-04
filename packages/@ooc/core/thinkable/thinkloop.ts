@@ -4,39 +4,54 @@ import { beginLlmLoop, finishLlmLoop, isPausing } from "../observable";
 import { writeThread } from "../persistable";
 import { buildInputItems, type ProcessEvent, type ThreadContext } from "./context";
 import {
-  applyEmergencyGuard,
-  applyNaturalDecay,
+  BudgetManager,
   loadBudgetThresholds,
-  loadDecayConfig,
-  type BudgetWarning,
+  type BudgetThresholds,
 } from "./context/budget";
 import type { LlmClient, LlmInputItem, LlmToolCall } from "./llm/types";
 import { LlmTimeoutError } from "./llm/timeout";
 
+/** Default per-window budget for BudgetManager.allocate (soft threshold from config). */
+const BUDGET_MANAGER = new BudgetManager();
+
 /**
- * 构造 P0e emergency guard 的临时警告 LlmInputItem。
+ * Construct a budget warning LlmInputItem for the current token estimate.
  *
- * 选型说明 (instruction E4):
- * - 选 "临时 system message" 而非 "临时 ContextWindow":
- *   1. ContextWindow 是 first-class object,渲染层会按 type-dispatch 调度;
- *      只为本轮警告新建一种 window type 太重,且要管理生命周期 (本轮注入 / 下轮清除)。
- *   2. system message 是 LLM input 协议自带的"环境信息"角色,与 [ooc:paths] 同档,
- *      天然符合"本轮 transient"语义——下一轮 buildInputItems 重新构造,不会残留。
- *   3. 不写入 thread.events 即满足"只本轮生效不污染历史"——避免下一轮看到"过期的旧警告"。
- *
- * 警告内容用 design §4.4 描述的 XML 形式 (<context_budget_warning current soft hard/>),
- * LLM 看到后**自行决定**是否主动调用 compress(scope=windows) 或继续推理 (兜底已由系统做完)。
+ * Uses the same XML format <context_budget_warning current soft hard/> that the legacy
+ * emergency guard used, so LLM behavior stays consistent.
  */
-function buildBudgetWarningItem(warning: BudgetWarning): LlmInputItem {
+function buildBudgetWarningItem(
+  currentTokens: number,
+  thresholds: BudgetThresholds,
+): LlmInputItem {
   return {
     type: "message",
     role: "system",
     content:
-      `<context_budget_warning current="${warning.current}" soft="${warning.soft}" hard="${warning.hard}"/>\n` +
-      `当前估算 token 接近预算上限 (current=${warning.current}, soft=${warning.soft}, hard=${warning.hard})。` +
-      `若超过 hard,系统已自动降级部分 window 与 events。你可主动 compress(scope=windows, target_ids=[...]) ` +
-      `进一步精简,或继续推进任务。`,
+      `<context_budget_warning current="${currentTokens}" soft="${thresholds.soft}" hard="${thresholds.hard}"/>\n` +
+      `当前估算 token 接近预算上限 (current=${currentTokens}, soft=${thresholds.soft}, hard=${thresholds.hard})。` +
+      `系统已通过 BudgetManager 将低相关性窗口排除在 context 之外。你可主动 compress(scope=windows, target_ids=[...]) ` +
+      `进一步精简，或继续推进任务。`,
   };
+}
+
+/**
+ * Estimate total tokens for a set of context windows using the same heuristic
+ * (JSON.stringify.length / 4) that BudgetManager uses internally.
+ * Returns the sum across all windows.
+ */
+function estimateWindowsTokens(
+  windows: import("../executable/windows/_shared/types").ContextWindow[],
+): number {
+  let total = 0;
+  for (const w of windows) {
+    try {
+      total += Math.ceil(JSON.stringify(w).length / 4);
+    } catch {
+      total += 100;
+    }
+  }
+  return total;
 }
 
 /**
@@ -46,17 +61,17 @@ function buildBudgetWarningItem(warning: BudgetWarning): LlmInputItem {
  * - close / wait / compress: command = toolName 自身; windowId/args 视情况
  *
  * Q0b: 当前 exec 的 args 形态为 `{ command, window_id, args, ... }` (见 tools/exec.ts);
- * 解析失败 / 字段缺失时退化为 command=toolName, 由后续 decidePermission 走 CommandTableEntry
+ * 解析失败 / 字段缺失时退化为 command=toolName, 由后续 decidePermission 走 ObjectMethod
  * fallback 链。
  */
 function buildPendingToolCall(toolCall: LlmToolCall): PendingToolCall {
   const args = toolCall.arguments ?? {};
   if (toolCall.name === "exec") {
-    const innerCommand = typeof args.command === "string" ? args.command : undefined;
+    const innerMethod = typeof args.command === "string" ? args.command : undefined;
     const windowId = typeof args.window_id === "string" ? args.window_id : undefined;
     return {
       toolName: "exec",
-      command: innerCommand ?? "exec",
+      command: innerMethod ?? "exec",
       args: args.args,
       windowId,
     };
@@ -270,27 +285,51 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
     // 渲染 + function_call_output, 决定下一步)。
     await processDecidedPermissionAsks(thread);
 
-    // P0d: 在 buildContext 前推进自然衰减计数器,可能写入若干 context_compressed 事件,
-    // 并把若干 idle/老旧 window 切到压缩态。design §4.3 / meta:context_budget.natural_decay。
-    // failure-safe: 衰减失败不应阻塞 think 一轮——但当前实现是纯内存操作,几乎不可能抛错。
-    const decayCfg = loadDecayConfig(thread);
-    applyNaturalDecay(thread, decayCfg);
+    // P6 BudgetManager: rank windows by relevance and trim to budget.
+    // Replaces legacy applyNaturalDecay (compressLevel advancement by rounds)
+    // and applyEmergencyGuard (three-wave hard thresholding).
+    // compressLevel is now exclusively controlled by explicit LLM compress/expand commands.
+    const thresholds = loadBudgetThresholds(thread);
+    const allocation = BUDGET_MANAGER.allocate(thread.contextWindows ?? [], thresholds.hard);
 
-    // P0e: emergency budget guard。tokens 估算 → soft 警告 → hard 三波兜底。
-    // design §4.4 / meta:context_budget.emergency_guard。warning 仅本轮生效,不持久化。
-    const guard = applyEmergencyGuard(thread, loadBudgetThresholds(thread));
+    // Replace thread.contextWindows with only the in-budget windows for this round.
+    // This is a transient effect — buildInputItems reads from thread.contextWindows,
+    // and the persistable layer will write the trimmed set back to thread.json.
+    // Overflow windows are tracked via a context_compressed visibility event so the
+    // LLM knows some windows were excluded (silent-swallow ban).
+    if (allocation.overflow.length > 0) {
+      thread.contextWindows = allocation.visible;
+      const overflowSummary = allocation.overflow
+        .map((o) => `${o.id}(relevance=${o.relevance.toFixed(2)})`)
+        .join(",");
+      thread.events.push({
+        category: "context_change",
+        kind: "context_compressed",
+        windowIds: allocation.overflow.map((o) => o.id),
+        levelChange: "budget_excluded",
+        reason: "budget_manager_allocation",
+        scope: "auto",
+      });
+    }
+
+    // P6 budget warning: if the in-budget windows still exceed soft threshold,
+    // inject a transient warning system message (not persisted to events,
+    // only affects this round's LLM input).
+    const currentTokens = estimateWindowsTokens(allocation.visible);
+    const budgetWarning = currentTokens > thresholds.soft
+      ? buildBudgetWarningItem(currentTokens, thresholds)
+      : undefined;
 
     // Context 模块先直接返回 LLM messages，避免中间层抽象。
     const llmInput = await buildInputItems(thread);
     const tools = getAvailableTools(thread);
 
-    // P0e: 若 guard 报告了警告,把一条 <context_budget_warning .../> system message
-    // 注入到 llmInput.input 顶部 (XML context message 之后),让 LLM 在本轮真的看见。
-    // **临时**注入:仅作用于本次 generate 调用,不写入 thread.events (下一轮重新评估)。
-    if (guard.warning) {
-      const warnItem = buildBudgetWarningItem(guard.warning);
+    // P6 budget warning: if budget soft threshold exceeded, inject a transient
+    // <context_budget_warning .../> system message. Only affects this round's
+    // LLM input — not persisted to thread.events.
+    if (budgetWarning) {
       // 插在第一条 (XML context system message) 之后,使 LLM 看到 context 后立即看到警告
-      llmInput.input = [llmInput.input[0], warnItem, ...llmInput.input.slice(1)];
+      llmInput.input = [llmInput.input[0], budgetWarning, ...llmInput.input.slice(1)];
     }
 
     // 输入输出记录点先挂到 observable 占位模块上。

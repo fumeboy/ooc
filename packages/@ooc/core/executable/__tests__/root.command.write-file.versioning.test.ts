@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests } from "@ooc/core/persistable";
 import { executeWriteFileCommand } from "@ooc/builtins/root/executable/command.write-file";
-import type { CommandExecutionContext } from "@ooc/core/extendable/_shared/command-types";
+import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/command-types";
 
 let tempRoots: string[] = [];
 
@@ -60,17 +60,17 @@ async function newWorld(agents: string[]): Promise<string> {
   return baseDir;
 }
 
-/** 构造最小 CommandExecutionContext（无 manager；thread 只带 persistence + contextWindows）。 */
+/** 构造最小 MethodExecutionContext（无 manager；thread 只带 persistence + contextWindows）。 */
 function ctxFor(
   baseDir: string,
   objectId: string,
   args: Record<string, unknown>,
-): CommandExecutionContext {
+): MethodExecutionContext {
   const thread = {
     persistence: { baseDir, objectId, sessionId: "s", threadId: "t" },
     contextWindows: [] as unknown[],
   };
-  return { thread, args } as unknown as CommandExecutionContext;
+  return { thread, args } as unknown as MethodExecutionContext;
 }
 
 function mainObjectsDir(baseDir: string): string {
@@ -282,7 +282,7 @@ describe("write_file stone-versioning routing", () => {
     const ctx = {
       thread,
       args: { path: "stones/agent_of_x/self.md", content: "x\n" },
-    } as unknown as CommandExecutionContext;
+    } as unknown as MethodExecutionContext;
 
     const out = await executeWriteFileCommand(ctx);
     expect(typeof out).toBe("object");

@@ -33,7 +33,7 @@ type _ContextWindowUnion =
   | { id: string; type: "root"; title: string; status?: string; createdAt?: number }
   | {
       id: string;
-      type: "command_exec";
+      type: "method_exec";
       parentWindowId: string;
       title: string;
       status: "open" | "executing" | "success" | "failed";
@@ -398,7 +398,7 @@ export function estimateTokens(chars: number): number {
 
 function windowBadge(window: ContextWindow): string {
   switch (window.type) {
-    case "command_exec": return "FORM";
+    case "method_exec": return "FORM";
     case "do":           return "DO";
     case "todo":         return "TODO";
     case "talk":         return "TALK";
@@ -422,7 +422,7 @@ function windowBadge(window: ContextWindow): string {
 
 function windowSummary(window: ContextWindow): string {
   switch (window.type) {
-    case "command_exec":
+    case "method_exec":
       return `${window.command} (${window.status})`;
     case "do":
       return `→ ${window.targetThreadId}${window.isCreatorWindow ? " · creator" : ""}`;
@@ -457,7 +457,7 @@ function windowSummary(window: ContextWindow): string {
 function windowCharCount(window: ContextWindow): number {
   let n = window.title.length;
   switch (window.type) {
-    case "command_exec":
+    case "method_exec":
       n += window.command.length;
       n += jsonChars(window.accumulatedArgs ?? {});
       n += (window.result ?? "").length;
@@ -665,7 +665,7 @@ function buildWindowNode(
 /** 在分组视图中,window type 之间的稳定显示顺序(语义优先级)。 */
 const WINDOW_TYPE_ORDER: ContextWindow["type"][] = [
   "root",
-  "command_exec",
+  "method_exec",
   "do",
   "talk",
   "relation",

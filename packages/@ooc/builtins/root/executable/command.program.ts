@@ -7,12 +7,14 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
+  MethodExecutionContext,
+  ObjectMethod,
   MethodOutcome,
 } from "@ooc/core/extendable/_shared/command-types.js";
-import { lookupConstructor } from "@ooc/core/extendable/_shared/registry.js";
+import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
+import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 // 2026-06-02 P6.§4-§5: side-effect import 触发 program_window constructor 注册
 import "@ooc/builtins/program";
@@ -63,42 +65,78 @@ export enum ProgramCommandPath {
   JavaScript = "program.javascript",
 }
 
-export const programCommand: CommandTableEntry = {
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
+export const programCommand: ObjectMethod = {
   paths: [
     ProgramCommandPath.Program,
     ProgramCommandPath.Shell,
     ProgramCommandPath.TypeScript,
     ProgramCommandPath.JavaScript,
   ],
-  match: (args) => {
-    const hit: string[] = [ProgramCommandPath.Program];
+  schema: {
+    args: {
+      language: { type: "string", required: true, description: "shell / ts / js", enum: ["shell", "ts", "typescript", "js", "javascript"] },
+      lang: { type: "string", required: false, description: "language 的别名" },
+      code: { type: "string", required: true, description: "待执行代码字符串" },
+    },
+  } as MethodCallSchema,
+  intent: (args): Intent[] => {
+    const r: Intent[] = [];
     const lang = (args.language ?? args.lang) as string | undefined;
-    if (lang === "shell") hit.push(ProgramCommandPath.Shell);
-    if (lang === "ts" || lang === "typescript") hit.push(ProgramCommandPath.TypeScript);
-    if (lang === "js" || lang === "javascript") hit.push(ProgramCommandPath.JavaScript);
-    return hit;
+    if (lang === "shell") r.push({ name: ProgramCommandPath.Shell });
+    if (lang === "ts" || lang === "typescript") r.push({ name: ProgramCommandPath.TypeScript });
+    if (lang === "js" || lang === "javascript") r.push({ name: ProgramCommandPath.JavaScript });
+    return r;
   },
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [PROGRAM_BASIC_PATH]: KNOWLEDGE };
+  onFormChange(change, { form, intents }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = { [PROGRAM_BASIC_PATH]: KNOWLEDGE };
     const lang = (args.language ?? args.lang) as string | undefined;
     const code = typeof args.code === "string" ? args.code.trim() : "";
 
     if (formStatus === "executing") {
       entries[PROGRAM_FORM_STATUS_PATH] = "对于 command program 的 executing 状态的 form，应等待 result 写入后再继续，不要再次 refine 或 submit。";
-      return entries;
+      return guidanceWindows(form, entries);
     }
     if (formStatus === "success") {
       entries[PROGRAM_FORM_STATUS_PATH] = "对于 command program 的 success 状态的 form，结果已成功生成；form 将自动从 context 移除。";
-      return entries;
+      return guidanceWindows(form, entries);
     }
     if (formStatus === "failed") {
       entries[PROGRAM_FORM_STATUS_PATH] = "对于 command program 的 failed 状态的 form，先阅读 result 排查错误：可 refine(form_id, args={ language, code }) 修正参数后重 submit（form 会自动切回 open），或 close(form_id, reason=...) 彻底放弃。";
-      return entries;
+      return guidanceWindows(form, entries);
     }
 
     if (lang && code) {
       entries[PROGRAM_INPUT_PATH] = "program 参数已具备；submit 即创建 program_window 并执行。";
-      return entries;
+      return guidanceWindows(form, entries);
     }
 
     const missing: string[] = [];
@@ -108,7 +146,7 @@ export const programCommand: CommandTableEntry = {
       `program 还缺以下参数: ${missing.join(", ")}。\n` +
       "请用 refine(form_id, args={ language: \"shell\" | \"ts\" | \"js\", code: \"<待执行代码>\" }) 补齐后 submit(form_id)。\n" +
       "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeProgramCommand(ctx),
 };
@@ -117,9 +155,9 @@ export const programCommand: CommandTableEntry = {
  * P6.§4-§5 thin delegator —— 委托到 program_window constructor。
  */
 export async function executeProgramCommand(
-  ctx: CommandExecutionContext,
+  ctx: MethodExecutionContext,
 ): Promise<MethodOutcome | string | undefined> {
-  const ctor = lookupConstructor("program");
+  const ctor = (ctx.manager?.registry ?? builtinRegistry).lookupConstructor("program");
   if (!ctor) return "[program] program_window constructor 未注册（registry 期望 kind=\"constructor\" 的 program method）。";
   return await ctor.exec(ctx);
 }

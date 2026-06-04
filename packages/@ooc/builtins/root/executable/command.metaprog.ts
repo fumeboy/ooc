@@ -17,9 +17,8 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
+  MethodExecutionContext,
+  ObjectMethod,
 } from "@ooc/core/extendable/_shared/command-types.js";
 import {
   commitWorktree,
@@ -33,6 +32,9 @@ import {
   type MetaprogWorktreeRef,
   type PrIssueDecision,
 } from "@ooc/core/persistable/index.js";
+import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 const METAPROG_BASIC_PATH = "internal/executable/metaprog/basic";
 const METAPROG_INPUT_PATH = "internal/executable/metaprog/input";
@@ -88,6 +90,32 @@ server / knowledge）通过这个命令族协调，错了能回退、合并需�
 
 type MetaprogAction = "open_worktree" | "commit" | "merge" | "resolve" | "rollback" | "create_object";
 
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
 function asString(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
@@ -102,15 +130,43 @@ function asStringMap(v: unknown): Record<string, string> | undefined {
   return out;
 }
 
-export const metaprogCommand: CommandTableEntry = {
+export const metaprogCommand: ObjectMethod = {
   paths: ["metaprog"],
+  schema: {
+    args: {
+      action: {
+        type: "string",
+        required: true,
+        description: "元编程动作",
+        enum: ["open_worktree", "commit", "merge", "resolve", "rollback", "create_object"],
+      },
+      branch: { type: "string", required: false, description: "从 open_worktree 拿到的 branch 名" },
+      intent: { type: "string", required: false, description: "commit 意图说明" },
+      issueId: { type: "number", required: false, description: "PR Issue id（resolve 用）" },
+      decision: {
+        type: "string",
+        required: false,
+        description: "resolve 决议",
+        enum: ["merge", "reject", "request-changes"],
+      },
+      objectId: { type: "string", required: false, description: "目标 objectId（rollback / create_object 用）" },
+      targetCommit: { type: "string", required: false, description: "回滚目标 commit sha（rollback 用）" },
+      selfMd: { type: "string", required: false, description: "新 object 的 self.md 内容（create_object 用）" },
+      readableMd: { type: "string", required: false, description: "新 object 的 readable.md 内容（create_object 用）" },
+      readmeMd: { type: "string", required: false, description: "readableMd 的向后兼容别名" },
+      knowledge: { type: "object", required: false, description: "{ filename: content } 的 string map" },
+    },
+  } as MethodCallSchema,
   // Q0d: metaprog 是元编程入口 (open_worktree / commit / merge / resolve / rollback / create_object),
   // 全部触发 stones git 副作用 (修改 stones/<self>/ 下的 self.md / server / knowledge);
   // 等价 design §3 中的 "super flow 改 self.md / readme.md" + "delete_* 任何删除类"。
-  match: () => ["metaprog"],
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [METAPROG_BASIC_PATH]: KNOWLEDGE };
-    if (formStatus !== "open") return entries;
+  intent: (): Intent[] => [],
+  onFormChange(change, { form, intents }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = { [METAPROG_BASIC_PATH]: KNOWLEDGE };
+    if (formStatus !== "open") return guidanceWindows(form, entries);
     const action = asString(args.action) as MetaprogAction | undefined;
     if (!action) {
       entries[METAPROG_INPUT_PATH] =
@@ -118,12 +174,12 @@ export const metaprogCommand: CommandTableEntry = {
         "请用 refine(form_id, args={ action: 'open_worktree' | 'commit' | 'merge' | 'resolve' | 'rollback' | 'create_object', ... }) 补齐后 submit(form_id)。\n" +
         "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeMetaprog(ctx),
 };
 
-export async function executeMetaprog(ctx: CommandExecutionContext): Promise<string | undefined> {
+export async function executeMetaprog(ctx: MethodExecutionContext): Promise<string | undefined> {
   const thread = ctx.thread;
   if (!thread) return "[metaprog] 缺少 thread context。";
   if (!thread.persistence) return "[metaprog] thread 无 persistence。";

@@ -29,11 +29,8 @@ import {
   readRuntimeObjectState,
   runtimeObjectStateFile,
 } from "@ooc/core/persistable";
-import {
-  listRegisteredWindowTypes,
-  getWindowTypeDefinition,
-} from "@ooc/core/executable/windows";
-import { createStoneObject, writeReadable, writeReadme } from "@ooc/core/persistable";
+import { builtinRegistry } from "@ooc/core/executable/windows";
+import { createStoneObject, writeReadable } from "@ooc/core/persistable";
 import { renderContextXml } from "@ooc/core/thinkable/context/render";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import {
@@ -47,7 +44,7 @@ import type {
   DoWindow,
   TodoWindow,
   KnowledgeWindow,
-  WindowType,
+  ObjectType,
 } from "@ooc/core/executable/windows/_shared/types";
 
 describe("ooc-6 Object Unification harness cycle", () => {
@@ -67,7 +64,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
       `---\ntitle: Test Agent\ndescription: A test agent for ooc-6 harness\n---\nI am a test agent.`,
       "utf8",
     );
-    await writeReadme(
+    await writeReadable(
       { baseDir, objectId },
       `---\ntitle: Test Agent\n---\nI am a test agent for ooc-6 Object Unification.`,
     );
@@ -76,7 +73,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
       `---\ntitle: Peer Agent\ndescription: A peer agent\n---\nI am a peer agent.`,
       "utf8",
     );
-    await writeReadme(
+    await writeReadable(
       { baseDir, objectId: peerId },
       `---\ntitle: Peer Agent\n---\nI am a peer of test_agent.`,
     );
@@ -114,7 +111,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     expect(doWindow!.isCreatorWindow).toBe(true);
 
     // Insert a todo window - should appear as object in context
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const todoId = mgr.insertTypedWindow({
       id: "w_todo_1",
       type: "todo",
@@ -140,17 +137,17 @@ describe("ooc-6 Object Unification harness cycle", () => {
 
   // ── Point 1: Builtin objects in src/extendable/base/ ─────────────────────
   it("1: builtin objects are registered from src/extendable/base/", () => {
-    const types = listRegisteredWindowTypes();
+    const types = builtinRegistry.listRegisteredObjectTypes();
 
     // All builtin types should be registered (11 core types, custom removed in ooc-6)
-    const expectedBuiltins: WindowType[] = [
-      "root", "command_exec", "todo", "file", "knowledge",
+    const expectedBuiltins: ObjectType[] = [
+      "root", "method_exec", "todo", "file", "knowledge",
       "search", "skill_index", "plan", "program",
       "do", "talk",
     ];
     for (const t of expectedBuiltins) {
       expect(types).toContain(t);
-      const def = getWindowTypeDefinition(t);
+      const def = builtinRegistry.getObjectDefinition(t);
       expect(def).toBeDefined();
     }
 
@@ -196,7 +193,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     });
 
     // Insert self window for the readable_test object (ooc-6 design)
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     mgr.insertTypedWindow({
       id: "readable_test",
       type: "readable_test" as any,
@@ -217,34 +214,34 @@ describe("ooc-6 Object Unification harness cycle", () => {
   // ── Point 7: Method visibility - commands per type ───────────────────────
   it("7: each object type has its own methods (commands) registered", () => {
     // Root should have many commands (including add_todo_item / toggle_todo_item)
-    const rootDef = getWindowTypeDefinition("root");
-    expect(Object.keys(rootDef.commands).length).toBeGreaterThan(5);
+    const rootDef = builtinRegistry.getObjectDefinition("root");
+    expect(Object.keys(rootDef.methods).length).toBeGreaterThan(5);
 
     // objectId type is no longer a separate builtin type (ooc-6); objects self-register
     // edit_relation command is now available on dynamically-registered object types
 
     // Todo has no LLM-callable commands (correct per design: only close action)
-    const todoDef = getWindowTypeDefinition("todo");
-    expect(Object.keys(todoDef.commands).length).toBe(0);
+    const todoDef = builtinRegistry.getObjectDefinition("todo");
+    expect(Object.keys(todoDef.methods).length).toBe(0);
 
     // File should have edit/reload/set_range commands
-    const fileDef = getWindowTypeDefinition("file");
-    expect(fileDef.commands["edit"]).toBeDefined();
-    expect(fileDef.commands["reload"]).toBeDefined();
+    const fileDef = builtinRegistry.getObjectDefinition("file");
+    expect(fileDef.methods["edit"]).toBeDefined();
+    expect(fileDef.methods["reload"]).toBeDefined();
 
     // Plan should have add_step / mark_done commands
-    const planDef = getWindowTypeDefinition("plan");
-    expect(planDef.commands["add_step"]).toBeDefined();
-    expect(planDef.commands["mark_done"]).toBeDefined();
+    const planDef = builtinRegistry.getObjectDefinition("plan");
+    expect(planDef.methods["add_step"]).toBeDefined();
+    expect(planDef.methods["mark_done"]).toBeDefined();
 
     // Skill_index has no LLM-callable commands (search is handled via program)
-    const skillDef = getWindowTypeDefinition("skill_index");
-    expect(Object.keys(skillDef.commands).length).toBe(0);
+    const skillDef = builtinRegistry.getObjectDefinition("skill_index");
+    expect(Object.keys(skillDef.methods).length).toBe(0);
 
     // Command_exec should have submit/refine/cancel commands
-    const execDef = getWindowTypeDefinition("command_exec");
-    expect(execDef.commands["submit"]).toBeDefined();
-    expect(execDef.commands["refine"]).toBeDefined();
+    const execDef = builtinRegistry.getObjectDefinition("method_exec");
+    expect(execDef.methods["submit"]).toBeDefined();
+    expect(execDef.methods["refine"]).toBeDefined();
   });
 
   // ── Point 8: Command exec creates objects that enter context ────────────
@@ -258,7 +255,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     const initialCount = thread.contextWindows.length;
 
     // Insert a knowledge window (simulating what open_knowledge command does)
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     mgr.insertTypedWindow({
       id: "w_knowledge_test",
       type: "knowledge",
@@ -292,7 +289,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     });
 
     // Insert a knowledge window with thread context (triggers persistence)
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const windowId = mgr.insertTypedWindow({
       id: "w_knowledge_persist",
       type: "knowledge",
@@ -340,7 +337,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     expect(registry.members.find((m) => m.objectId === windowId)).toBeDefined();
 
     // Verify upsert updates the persisted copy
-    const mgr2 = WindowManager.fromThread(thread);
+    const mgr2 = WindowManager.fromThread(thread, builtinRegistry);
     const updated = {
       ...flat!,
       title: "Updated Persistent Knowledge",
@@ -358,7 +355,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     expect(updatedFlat!.title).toBe("Updated Persistent Knowledge");
 
     // Verify delete removes from persistence
-    const mgr3 = WindowManager.fromThread(thread);
+    const mgr3 = WindowManager.fromThread(thread, builtinRegistry);
     (mgr3 as any).removeWindow(windowId, thread);
     thread.contextWindows = mgr3.toData();
 
@@ -488,7 +485,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     });
 
     // Simulate what synthesizer does: derive peer objects and add to context
-    const mgr = WindowManager.fromThread(thread);
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const peerWindows = await derivePeerObjectWindows(thread);
     for (const pw of peerWindows) {
       mgr.upsertWindow(pw, thread);

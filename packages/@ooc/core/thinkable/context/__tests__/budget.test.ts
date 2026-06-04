@@ -1,125 +1,233 @@
 /**
- * budget.test.ts — applyNaturalDecay 在 Round 16 精修豁免规则后的行为单测。
+ * budget.test.ts — BudgetManager (P6) unit tests.
  *
- * Round 16 (2026-05-27):
- * - command_exec.status ∈ {open, executing} 仍豁免衰减
- * - command_exec.status === "failed" **参与** idle-fold (IDLE_STATUS_SET 含 "failed")
+ * P6 (2026-06-03): Legacy applyNaturalDecay / applyEmergencyGuard / estimateThreadTokens
+ * have been removed. BudgetManager is the canonical budget API.
  *
- * Design: docs/2026-05-27-failed-form-gc-design.md
+ * Tests here cover:
+ * - score(): provenance/priority/recency/signal weighting
+ * - allocate(): ranking by relevance, budget overflow, guidance inherits form score
  */
 
 import { describe, expect, it } from "bun:test";
-import { applyNaturalDecay, DEFAULT_DECAY_CONFIG } from "../budget";
-import { ROOT_WINDOW_ID, type CommandExecWindow } from "../../../executable/windows/_shared/types";
-import { makeThread } from "../../../__tests__/make-thread";
+import { BudgetManager } from "../budget";
+import type {
+  ContextWindow,
+  ContextWindowProvenance,
+  ContextWindowRelevance,
+} from "../../../executable/windows/_shared/types";
 
-/** 构造一个 command_exec window 的 fixture (参考 context.test.ts 中 execForm 风格)。 */
-function execForm(overrides: Partial<CommandExecWindow> & { status: CommandExecWindow["status"] }): CommandExecWindow {
+const bm = new BudgetManager();
+
+// ─────────────────────────── helpers ─────────────────────────────────────────
+
+/** Build a structurally complete ContextWindowProvenance with sensible defaults. */
+function mkProv(
+  overrides: Partial<ContextWindowProvenance> & {
+    kind: ContextWindowProvenance["kind"];
+  },
+): ContextWindowProvenance {
+  const now = Date.now();
   return {
-    id: overrides.id ?? "f_test",
-    type: "command_exec",
-    parentWindowId: overrides.parentWindowId ?? ROOT_WINDOW_ID,
-    title: overrides.title ?? "failed form",
-    status: overrides.status,
-    createdAt: overrides.createdAt ?? 1,
-    command: overrides.command ?? "say",
-    description: overrides.description ?? "command_exec form for decay test",
-    accumulatedArgs: overrides.accumulatedArgs ?? {},
-    commandPaths: overrides.commandPaths ?? [overrides.command ?? "say"],
-    loadedKnowledgePaths: overrides.loadedKnowledgePaths ?? [],
-    commandKnowledgePaths: overrides.commandKnowledgePaths,
-    result: overrides.result,
+    reason: { mechanism: "user_open" },
+    createdAt: now,
+    lastTouchedAt: now,
+    ...overrides,
   };
 }
 
-describe("applyNaturalDecay — Round 16 豁免规则精修", () => {
-  it("command_exec status=failed 进 idle-fold (N 轮后 compressLevel 0→1)", () => {
-    const form = execForm({
-      id: "f_failed",
-      status: "failed",
-      result: "missing required field: content",
-    });
-    const thread = makeThread({
-      id: "t_failed_decay",
-      extraWindows: [form],
-    });
+/** Build a structurally complete ContextWindowRelevance with sensible defaults. */
+function mkRel(
+  overrides: Partial<ContextWindowRelevance> = {},
+): ContextWindowRelevance {
+  return {
+    score: 0.5,
+    signalCount: 0,
+    ...overrides,
+  };
+}
 
-    // 跑 5 轮 (默认 N=3, 加 buffer); 每轮都应累积 idleRounds
-    for (let i = 0; i < 5; i++) {
-      applyNaturalDecay(thread, DEFAULT_DECAY_CONFIG);
-    }
+/**
+ * Build a minimal test window using type "knowledge" (simplest builtin type
+ * for budget tests — BudgetManager does not read knowledge-specific fields).
+ */
+function mkWindow(
+  overrides: Partial<ContextWindow> & {
+    id: string;
+    title: string;
+  },
+): ContextWindow {
+  const now = Date.now();
+  return {
+    type: "knowledge",
+    parentWindowId: "root",
+    status: "open",
+    createdAt: now,
+    path: `stones/test/knowledge/${overrides.id}.md`,
+    ...overrides,
+  } as ContextWindow;
+}
 
-    const after = thread.contextWindows.find((w) => w.id === "f_failed");
-    expect(after).toBeDefined();
-    expect(after!.compressLevel).toBe(1);
+// ─────────────────────────── score tests ─────────────────────────────────────
 
-    // 断言: 落了 context_compressed reason=idle-fold 事件, windowIds 含 f_failed
-    const idleFoldEvents = thread.events.filter(
-      (e) =>
-        e.category === "context_change" &&
-        e.kind === "context_compressed" &&
-        (e as { reason?: string }).reason === "idle-fold",
-    );
-    expect(idleFoldEvents.length).toBeGreaterThan(0);
-    const allWindowIds = idleFoldEvents.flatMap(
-      (e) => (e as { windowIds?: string[] }).windowIds ?? [],
-    );
-    expect(allWindowIds).toContain("f_failed");
+describe("BudgetManager.score", () => {
+  it("uses provenance weight as base when no relevance.score is set", () => {
+    const w1 = mkWindow({ id: "w1", title: "explicit", provenance: mkProv({ kind: "explicit" }) });
+    const w2 = mkWindow({ id: "w2", title: "related", provenance: mkProv({ kind: "related" }) });
+    expect(bm.score(w1)).toBeGreaterThan(bm.score(w2));
   });
 
-  it("command_exec status=open 仍豁免 (跑多轮 compressLevel 保持 0)", () => {
-    const form = execForm({
-      id: "f_open",
+  it("uses existing relevance.score as baseline", () => {
+    const w = mkWindow({
+      id: "w1",
+      title: "t",
+      provenance: mkProv({ kind: "related" }),
+      relevance: mkRel({ score: 0.9 }),
+    });
+    // related default is 0.5; with score=0.9 baseline it should be much higher
+    expect(bm.score(w)).toBeGreaterThan(0.7);
+  });
+
+  it("priorityHint boosts score", () => {
+    // Use derived provenance (weight 0.7) as baseline so there is headroom for boosts.
+    const wNormal = mkWindow({ id: "w1", title: "n", provenance: mkProv({ kind: "derived" }) });
+    const wHigh = mkWindow({
+      id: "w2",
+      title: "h",
+      provenance: mkProv({ kind: "derived" }),
+      relevance: mkRel({ score: 0.7, priorityHint: "high" }),
+    });
+    const wCritical = mkWindow({
+      id: "w3",
+      title: "c",
+      provenance: mkProv({ kind: "derived" }),
+      relevance: mkRel({ score: 0.7, priorityHint: "critical" }),
+    });
+    expect(bm.score(wCritical)).toBeGreaterThan(bm.score(wHigh));
+    expect(bm.score(wHigh)).toBeGreaterThan(bm.score(wNormal));
+  });
+
+  it("recently touched windows get a small boost", () => {
+    const now = Date.now();
+    const wRecent = mkWindow({
+      id: "w1",
+      title: "r",
+      provenance: mkProv({ kind: "explicit", lastTouchedAt: now - 60_000 }),
+    });
+    const wOld = mkWindow({
+      id: "w2",
+      title: "o",
+      provenance: mkProv({ kind: "explicit", lastTouchedAt: now - 2 * 60 * 60 * 1000 }),
+    });
+    expect(bm.score(wRecent, now)).toBeGreaterThan(bm.score(wOld, now));
+  });
+
+  it("signalCount increases relevance", () => {
+    // Use derived provenance (0.7) as baseline so there is headroom for signal boost.
+    const w0 = mkWindow({
+      id: "w0",
+      title: "a",
+      provenance: mkProv({ kind: "derived" }),
+      relevance: mkRel({ score: 0.7, signalCount: 0 }),
+    });
+    const w5 = mkWindow({
+      id: "w5",
+      title: "b",
+      provenance: mkProv({ kind: "derived" }),
+      relevance: mkRel({ score: 0.7, signalCount: 5 }),
+    });
+    expect(bm.score(w5)).toBeGreaterThan(bm.score(w0));
+  });
+
+  it("score is clamped to [0, 1]", () => {
+    const w = mkWindow({
+      id: "w",
+      title: "t",
+      provenance: mkProv({ kind: "explicit", lastTouchedAt: Date.now() }),
+      relevance: mkRel({ score: 1.0, priorityHint: "critical", signalCount: 100 }),
+    });
+    expect(bm.score(w)).toBeLessThanOrEqual(1.0);
+    expect(bm.score(w)).toBeGreaterThanOrEqual(0.0);
+  });
+});
+
+// ─────────────────────────── allocate tests ──────────────────────────────────
+
+describe("BudgetManager.allocate", () => {
+  it("keeps all windows within budget", () => {
+    const windows = [
+      mkWindow({ id: "w1", title: "one", provenance: mkProv({ kind: "explicit" }) }),
+      mkWindow({ id: "w2", title: "two", provenance: mkProv({ kind: "explicit" }) }),
+    ];
+    const result = bm.allocate(windows, 1_000_000); // huge budget
+    expect(result.visible.length).toBe(2);
+    expect(result.overflow.length).toBe(0);
+  });
+
+  it("ranks windows by relevance and excludes overflow", () => {
+    // Use a tiny estimate function (1 token each) so budget controls everything
+    const windows = [
+      mkWindow({ id: "low", title: "low", provenance: mkProv({ kind: "related" }) }),
+      mkWindow({
+        id: "high",
+        title: "high",
+        provenance: mkProv({ kind: "explicit" }),
+        relevance: mkRel({ score: 1.0, priorityHint: "critical" }),
+      }),
+      mkWindow({ id: "med", title: "med", provenance: mkProv({ kind: "explicit" }) }),
+    ];
+    // budget = 2 tokens → keep top 2
+    const result = bm.allocate(windows, 2, () => 1);
+    expect(result.visible.length).toBe(2);
+    expect(result.overflow.length).toBe(1);
+    const visibleIds = result.visible.map(w => w.id);
+    expect(visibleIds).toContain("high");
+    expect(visibleIds).toContain("med");
+    expect(result.overflow[0].id).toBe("low");
+  });
+
+  it("marks single oversized window with window_too_large_for_budget", () => {
+    const windows = [
+      mkWindow({ id: "big", title: "big window", provenance: mkProv({ kind: "explicit" }) }),
+    ];
+    const result = bm.allocate(windows, 5, () => 100); // window costs 100, budget is 5
+    expect(result.overflow.length).toBe(1);
+    expect(result.overflow[0].reason).toBe("window_too_large_for_budget");
+  });
+
+  it("guidance window bound to a form inherits the form's relevance score", () => {
+    const form = mkWindow({
+      id: "form_1",
+      type: "method_exec",
+      title: "my form",
+      parentWindowId: "root",
       status: "open",
+      command: "say",
+      description: "",
+      accumulatedArgs: {},
+      commandPaths: ["say"],
+      loadedKnowledgePaths: [],
+      provenance: mkProv({ kind: "explicit" }),
+      relevance: mkRel({ score: 1.0, priorityHint: "critical" }),
     });
-    const thread = makeThread({
-      id: "t_open_exempt",
-      extraWindows: [form],
+    // Guidance with low own relevance but bound to form
+    const guidance = mkWindow({
+      id: "guidance_1",
+      type: "guidance",
+      title: "guidance",
+      parentWindowId: "form_1",
+      status: "open",
+      boundFormId: "form_1",
+      content: "fill the form",
+      summary: "fill the form",
+      provenance: mkProv({
+        kind: "related",
+        reason: { mechanism: "form_bound" },
+      }) as ContextWindowProvenance & { reason: { mechanism: "form_bound" } },
+      relevance: mkRel({ score: 0.1, signalCount: 0 }),
     });
-
-    for (let i = 0; i < 10; i++) {
-      applyNaturalDecay(thread, DEFAULT_DECAY_CONFIG);
-    }
-
-    const after = thread.contextWindows.find((w) => w.id === "f_open");
-    expect(after).toBeDefined();
-    // 豁免: level 应保持 0 / undefined
-    expect(after!.compressLevel ?? 0).toBe(0);
-
-    // 不应有针对该 form 的 idle-fold / age-fold 事件
-    const compressEvents = thread.events.filter(
-      (e) =>
-        e.category === "context_change" &&
-        e.kind === "context_compressed" &&
-        ((e as { windowIds?: string[] }).windowIds ?? []).includes("f_open"),
-    );
-    expect(compressEvents.length).toBe(0);
-  });
-
-  it("command_exec status=executing 仍豁免 (跑多轮 compressLevel 保持 0)", () => {
-    const form = execForm({
-      id: "f_executing",
-      status: "executing",
-    });
-    const thread = makeThread({
-      id: "t_executing_exempt",
-      extraWindows: [form],
-    });
-
-    for (let i = 0; i < 10; i++) {
-      applyNaturalDecay(thread, DEFAULT_DECAY_CONFIG);
-    }
-
-    const after = thread.contextWindows.find((w) => w.id === "f_executing");
-    expect(after).toBeDefined();
-    expect(after!.compressLevel ?? 0).toBe(0);
-
-    const compressEvents = thread.events.filter(
-      (e) =>
-        e.category === "context_change" &&
-        e.kind === "context_compressed" &&
-        ((e as { windowIds?: string[] }).windowIds ?? []).includes("f_executing"),
-    );
-    expect(compressEvents.length).toBe(0);
+    const result = bm.allocate([guidance, form], 2, () => 1);
+    // Both should rank near the top because guidance inherits form score
+    expect(result.visible.map(w => w.id)).toEqual(expect.arrayContaining(["form_1", "guidance_1"]));
   });
 });

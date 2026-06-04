@@ -60,7 +60,7 @@ const SEED_SELF = `你是用户的 CodeAgent，遵循 OOC 协议。
 
 工作守则：
 - 写自定义命令时用 write_file 写 \`stones/${SELF_ID}/server/index.ts\`。
-- 每条命令是一个 CommandTableEntry：必须有 \`exec: async (ctx) => { ... }\`，
+- 每条命令是一个 ObjectMethod：必须有 \`exec: async (ctx) => { ... }\`，
   返回值（字符串）会进入调用结果。可选 paths / match / knowledge。
 - ctx.args 是调用时传入的 args。
 `;

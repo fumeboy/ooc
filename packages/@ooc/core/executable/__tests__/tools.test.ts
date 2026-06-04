@@ -10,8 +10,8 @@ import { makeThread } from "../../__tests__/make-thread";
  * - tool 集合定义（exec / close / wait）
  * - exec 在 args 不齐全时创建 command_exec form
  * - args 给齐 + 不引入新 path/knowledge → 立即执行（auto-execute）
- * - exec(form_id, "refine", args=...) 通过 CommandExecWindow.refine 命令累加 args
- * - exec(form_id, "submit") 通过 CommandExecWindow.submit 命令触发执行
+ * - exec(form_id, "refine", args=...) 通过 MethodExecWindow.refine 命令累加 args
+ * - exec(form_id, "submit") 通过 MethodExecWindow.submit 命令触发执行
  * - close 释放任意 window
  * - wait 切到 waiting + 写 inboxSnapshotAtWait
  */
@@ -45,7 +45,7 @@ describe("executable tools (ContextWindow model)", () => {
     expect(parsed.tool).toBe("exec");
     expect(parsed.executed).toBe(false);
 
-    const forms = thread.contextWindows.filter((w) => w.type === "command_exec");
+    const forms = thread.contextWindows.filter((w) => w.type === "method_exec");
     expect(forms).toHaveLength(1);
     expect(forms[0]?.command).toBe("plan");
   });
@@ -61,7 +61,7 @@ describe("executable tools (ContextWindow model)", () => {
         args: { plan: "先 reshape，再迁移测试" },
       },
     });
-    const forms = thread.contextWindows.filter((w) => w.type === "command_exec");
+    const forms = thread.contextWindows.filter((w) => w.type === "method_exec");
     expect(forms).toHaveLength(0);
     // 2026-05-26: plan 升格为 plan_window；不再写 thread.plan 字段
     const planWindow = thread.contextWindows.find((w) => w.type === "plan");
@@ -71,14 +71,14 @@ describe("executable tools (ContextWindow model)", () => {
     );
   });
 
-  it("CommandExecWindow.refine 累积 args 并刷新 commandPaths（do 加 wait 触发 do.wait path）", async () => {
+  it("MethodExecWindow.refine 累积 args 并刷新 commandPaths（do 加 wait 触发 do.wait path）", async () => {
     const thread = makeThread();
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
       arguments: { title: "派生子线程", command: "do", description: "fork" },
     });
-    const formId = thread.contextWindows.find((w) => w.type === "command_exec")?.id ?? "";
+    const formId = thread.contextWindows.find((w) => w.type === "method_exec")?.id ?? "";
     const output = await dispatchToolCall(thread, {
       id: "call_2",
       name: "exec",
@@ -91,19 +91,19 @@ describe("executable tools (ContextWindow model)", () => {
     });
 
     const form = thread.contextWindows.find((w) => w.id === formId);
-    expect(form && form.type === "command_exec" && form.accumulatedArgs).toEqual({ wait: true });
-    expect(form && form.type === "command_exec" && form.commandPaths).toContain("do.wait");
+    expect(form && form.type === "method_exec" && form.accumulatedArgs).toEqual({ wait: true });
+    expect(form && form.type === "method_exec" && form.commandPaths).toContain("do.wait");
     expect(JSON.parse(output).ok).toBe(true);
   });
 
-  it("CommandExecWindow.submit 成功后 form 自动移除", async () => {
+  it("MethodExecWindow.submit 成功后 form 自动移除", async () => {
     const thread = makeThread();
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
       arguments: { title: "派生", command: "do", description: "fork" },
     });
-    const formId = thread.contextWindows.find((w) => w.type === "command_exec")?.id ?? "";
+    const formId = thread.contextWindows.find((w) => w.type === "method_exec")?.id ?? "";
     await dispatchToolCall(thread, {
       id: "call_2",
       name: "exec",
@@ -125,7 +125,7 @@ describe("executable tools (ContextWindow model)", () => {
     expect(thread.contextWindows.find((w) => w.id === formId)).toBeUndefined();
   });
 
-  it("CommandExecWindow.submit 失败时 form 保留 status=failed, 可 refine 复活 (Round 13)", async () => {
+  it("MethodExecWindow.submit 失败时 form 保留 status=failed, 可 refine 复活 (Round 13)", async () => {
     const thread = makeThread();
     // do 缺 msg 直接 submit 会失败
     await dispatchToolCall(thread, {
@@ -133,16 +133,16 @@ describe("executable tools (ContextWindow model)", () => {
       name: "exec",
       arguments: { title: "派生", command: "do", description: "fork" },
     });
-    const formId = thread.contextWindows.find((w) => w.type === "command_exec")?.id ?? "";
+    const formId = thread.contextWindows.find((w) => w.type === "method_exec")?.id ?? "";
     await dispatchToolCall(thread, {
       id: "call_2",
       name: "exec",
       arguments: { title: "执行", window_id: formId, command: "submit" },
     });
     const form = thread.contextWindows.find((w) => w.id === formId);
-    expect(form?.type).toBe("command_exec");
-    expect(form && form.type === "command_exec" && form.status).toBe("failed");
-    expect(form && form.type === "command_exec" && form.result).toContain("[do] 缺少 msg");
+    expect(form?.type).toBe("method_exec");
+    expect(form && form.type === "method_exec" && form.status).toBe("failed");
+    expect(form && form.type === "method_exec" && form.result).toContain("[do] 缺少 msg");
   });
 
   it("close 释放任意 window", async () => {
@@ -152,7 +152,7 @@ describe("executable tools (ContextWindow model)", () => {
       name: "exec",
       arguments: { title: "派生", command: "do", description: "fork" },
     });
-    const formId = thread.contextWindows.find((w) => w.type === "command_exec")?.id ?? "";
+    const formId = thread.contextWindows.find((w) => w.type === "method_exec")?.id ?? "";
     const output = await dispatchToolCall(thread, {
       id: "call_2",
       name: "close",

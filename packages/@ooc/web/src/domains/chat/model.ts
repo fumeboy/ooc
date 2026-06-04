@@ -31,7 +31,7 @@ export type ContextWindow =
     }
   | {
       id: string;
-      type: "command_exec";
+      type: "method_exec";
       parentWindowId: string;
       title: string;
       status: "open" | "executing" | "success" | "failed";

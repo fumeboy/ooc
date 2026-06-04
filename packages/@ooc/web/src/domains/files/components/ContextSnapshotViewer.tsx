@@ -68,10 +68,10 @@ import { WindowDetail as TodoWindowDetail } from "@ooc/builtins/todo/visible/ind
 import { WindowDetail as SearchWindowDetail } from "@ooc/builtins/search/visible/index.tsx";
 import { WindowDetail as SkillIndexWindowDetail } from "@ooc/builtins/skill_index/visible/index.tsx";
 import { WindowDetail as PlanWindowDetail } from "@ooc/builtins/plan/visible/index.tsx";
-import { WindowDetail as CommandExecWindowDetail } from "./MethodExecWindowDetail";
+import { WindowDetail as MethodExecWindowDetail } from "./MethodExecWindowDetail";
 import { WindowDetail as ProgramWindowDetail } from "@ooc/builtins/program/visible/index.tsx";
 import { WindowDetail as RootWindowDetail } from "@ooc/builtins/root/visible/index.tsx";
-import type { CommandExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 import type { TodoWindow } from "@ooc/builtins/todo";
 import type { SkillIndexWindow } from "@ooc/builtins/skill_index";
 import type { PlanWindow } from "@ooc/builtins/plan";
@@ -82,7 +82,7 @@ import type { SearchWindow } from "@ooc/builtins/search";
 
 const WINDOW_TYPE_ICON: Partial<Record<string, LucideIcon>> = {
   root: PanelTop,
-  command_exec: FileCheck,
+  method_exec: FileCheck,
   form_guidance: FileCheck,
   do: Inbox,
   todo: ListChecks,
@@ -101,7 +101,7 @@ const WINDOW_TYPE_ICON: Partial<Record<string, LucideIcon>> = {
 /** 已有专用渲染分支的 window type 集合；不在集合中的类型由 NodeDetail 末尾的 JSON 兜底渲染。 */
 const HANDLED_WINDOW_TYPES = new Set<string>([
   "root",
-  "command_exec",
+  "method_exec",
   "form_guidance",
   "do",
   "todo",
@@ -181,7 +181,7 @@ function TreeNodeImpl({
   const isExpanded = expanded.has(node.id);
   const hasChildren = node.children.length > 0;
   const { icon: Icon, tone, status } = nodeAffix(node);
-  const isExecuting = node.data.kind === "window" && node.data.window.type === "command_exec" && node.data.window.status === "executing";
+  const isExecuting = node.data.kind === "window" && node.data.window.type === "method_exec" && node.data.window.status === "executing";
   const renderDepth = Math.max(0, node.depth - depthOffset);
 
   return (
@@ -437,13 +437,13 @@ function RelationWindowDetail({
 function WindowCommandsChips({ type }: { type: string }) {
   const catalog = useObjectTypes();
   const entry = catalog?.[type];
-  if (!entry || entry.commands.length === 0) return null;
+  if (!entry || entry.methods.length === 0) return null;
   // 历史上这里有一行 hint："commands open(parent_window_id=..., command=..., args={...})"
   // 用户反馈：对真实使用是噪声（chips 已自带名字，hover 看 description 即可）。去掉。
   return (
     <div className="llm-input-commands">
       <div className="llm-input-commands-chips">
-        {entry.commands.map((cmd) => (
+        {entry.methods.map((cmd) => (
           <span key={cmd.name} className="llm-input-command-chip" tabIndex={0}>
             {cmd.name}
             {cmd.description && (
@@ -730,7 +730,7 @@ function WindowDetail({
           </div>
         ))}
       </div>
-      {renderType === "command_exec" && <CommandExecWindowDetail window={window as CommandExecWindow} />}
+      {renderType === "method_exec" && <MethodExecWindowDetail window={window as MethodExecWindow} />}
       {renderType === "do" && (
         <div className="llm-input-attrs">
           <div className="llm-input-attr-row">

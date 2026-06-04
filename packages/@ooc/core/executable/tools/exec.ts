@@ -6,27 +6,28 @@
  *
  * - window_id 缺省 = "root"；root 上注册了今天 commands/ 目录的全部 command
  * - command 必须是 target window 注册的某个 command 名
- * - args 齐全 + 不引入新 path/knowledge 时立即执行；否则创建 CommandExecWindow（form），
+ * - args 齐全 + 不引入新 path/knowledge 时立即执行；否则创建 MethodExecWindow（form），
  *   LLM 后续通过 \`exec(<form_id>, "refine"|"submit", ...)\` 推进
  *
  * 取代原 open / refine / submit 三件套：
  * - 旧 open 等价于 exec(parent_window_id, command, args)
- * - 旧 refine 现在是 CommandExecWindow 注册的 \`refine\` 命令，通过 exec(form_id, "refine", args={...}) 调
- * - 旧 submit 同理：CommandExecWindow.submit
+ * - 旧 refine 现在是 MethodExecWindow 注册的 \`refine\` 命令，通过 exec(form_id, "refine", args={...}) 调
+ * - 旧 submit 同理：MethodExecWindow.submit
  */
 
 import type { LlmTool } from "../../thinkable/llm/types.js";
 import type { ThreadContext, ProcessEvent } from "../../thinkable/context.js";
 import type { ContextWindow } from "../windows/_shared/types.js";
-import { getOpenableCommands, ROOT_WINDOW_ID, WindowManager } from "../windows/index.js";
-import { enrichProgramFormCommand } from "../server/enrich.js";
+import { builtinRegistry, getOpenableMethods, ROOT_WINDOW_ID, WindowManager } from "../windows/index.js";
+import type { ObjectRegistry } from "../windows/_shared/registry.js";
+import { enrichProgramFormMethod } from "../server/enrich.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 export const EXEC_TOOL: LlmTool = {
   name: "exec",
   description:
     "在某 window 上调用一条 command。window_id 缺省为 root（即 root 上的全局 command）。" +
-    "若 args 齐全，立即执行并返回结果；若不齐全，会创建一个 command_exec form，" +
+    "若 args 齐全，立即执行并返回结果；若不齐全，会创建一个 method_exec form，" +
     "你可以通过后续 exec(form_id, \"refine\", args={...}) 累积参数、exec(form_id, \"submit\") 触发执行。",
   inputSchema: {
     type: "object",
@@ -35,13 +36,13 @@ export const EXEC_TOOL: LlmTool = {
       window_id: {
         type: "string",
         description:
-          "目标 window 的 id；缺省 = root（当前 thread 的根 window）。也可指向已有的 command_exec form id 来调它的 refine/submit 命令。",
+          "目标 window 的 id；缺省 = root（当前 thread 的根 window）。也可指向已有的 method_exec form id 来调它的 refine/submit 命令。",
       },
       command: {
         type: "string",
         // root 上可调的命令；非 root 的 window 上的命令（如 do_window.continue / 自定义 custom commands /
-        // command_exec.refine|submit）通过 enum 之外的 string 传入即可——schema 不强约束。
-        enum: getOpenableCommands(),
+        // method_exec.refine|submit）通过 enum 之外的 string 传入即可——schema 不强约束。
+        enum: getOpenableMethods(),
         description:
           "要在 target window 上调用的 command 名。" +
           "root 上典型有 do/talk/program/plan/end/todo/open_file/open_knowledge/write_file/glob/grep/metaprog 等；" +
@@ -78,6 +79,7 @@ const errorOutput = (error: string) => JSON.stringify({ ok: false, tool: "exec",
 export async function handleExecTool(
   thread: ThreadContext,
   args: Record<string, unknown>,
+  registry: ObjectRegistry = builtinRegistry,
 ): Promise<string | void> {
   const command = args.command as string | undefined;
   if (!command) {
@@ -96,17 +98,17 @@ export async function handleExecTool(
   // 在 exec 路径上拦截 command="expand" 并对 target window 做 level → 0 的切换;
   // 落一条 context_compressed 事件,与 compress tool 同协议。
   if (command === "expand") {
-    return handleExpandCommand(thread, windowId);
+    return handleExpandMethod(thread, windowId);
   }
 
-  const mgr = WindowManager.fromThread(thread);
+  const mgr = WindowManager.fromThread(thread, registry);
   const beforeIds = new Set(
     (thread.contextWindows ?? []).map((w) => w?.id).filter(Boolean) as string[],
   );
 
   let opened: { formId: string; autoSubmitted: boolean; submitResult?: string };
   try {
-    opened = await mgr.openCommandExec({
+    opened = await mgr.openMethodExec({
       thread,
       parentWindowId: windowId,
       command,
@@ -120,8 +122,8 @@ export async function handleExecTool(
 
   // program command 额外补 method 签名 knowledge（沿用旧 enrichProgramForm 行为）
   const targetForm = mgr.get(opened.formId);
-  if (targetForm && targetForm.type === "command_exec" && targetForm.command === "program") {
-    await enrichProgramFormCommand(targetForm, thread);
+  if (targetForm && targetForm.type === "method_exec" && targetForm.command === "program") {
+    await enrichProgramFormMethod(targetForm, thread);
   }
 
   thread.contextWindows = mgr.toData();
@@ -156,7 +158,7 @@ export async function handleExecTool(
  * 切档不可变写回 thread.contextWindows,并落一条 context_compressed 事件
  * (reason="user-expand", levelChange="<old>→0")。
  */
-function handleExpandCommand(thread: ThreadContext, windowId: string): string {
+function handleExpandMethod(thread: ThreadContext, windowId: string): string {
   if (windowId === ROOT_WINDOW_ID) {
     return errorOutput("expand: 不能对 root window 调用 expand(root 永不压缩)。");
   }

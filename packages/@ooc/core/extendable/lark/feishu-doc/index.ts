@@ -14,15 +14,17 @@
  */
 
 import type {
-  CommandExecutionContext,
-  CommandKnowledgeEntries,
-  CommandTableEntry,
+  MethodExecutionContext,
+  ObjectMethod,
 } from "../../../executable/windows/_shared/command-types.js";
-import { registerWindowType, type RenderContext } from "../../../executable/windows/_shared/registry.js";
+import { builtinRegistry, type RenderContext } from "../../../executable/windows/_shared/registry.js";
 import type { FeishuDocWindow } from "./types.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
 import { larkExec } from "../cli.js";
 import { readWorldConfig, DEFAULT_LARK_TENANT_HOST } from "../../../persistable/index.js";
+import type { Intent } from "../../../thinkable/context/intent.js";
+import type { ContextWindow } from "../../../executable/windows/_shared/types.js";
+import type { MethodExecWindow } from "../../../executable/windows/method_exec/types.js";
 
 const READ_BASIC = "internal/windows/feishu_doc/read/basic";
 const SEARCH_BASIC = "internal/windows/feishu_doc/search_in_doc/basic";
@@ -139,70 +141,121 @@ feishu_doc.close 释放 window；不影响飞书一侧的文档。
 
 // ─────────────────────────── command 实现 ────────────────────────────
 
-const readCommand: CommandTableEntry = {
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
+const readCommand: ObjectMethod = {
   paths: ["read"],
-  match: () => ["read"],
-  knowledge: (): CommandKnowledgeEntries => ({ [READ_BASIC]: READ_KNOWLEDGE }),
+  intent: (): Intent[] => [],
+  onFormChange(change, { form, intents }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const entries: Record<string, string> = { [READ_BASIC]: READ_KNOWLEDGE };
+    return guidanceWindows(form, entries);
+  },
   exec: (ctx) => executeRead(ctx),
 };
 
-const searchInDocCommand: CommandTableEntry = {
+const searchInDocCommand: ObjectMethod = {
   paths: ["search_in_doc"],
-  match: () => ["search_in_doc"],
-  knowledge: (): CommandKnowledgeEntries => ({ [SEARCH_BASIC]: SEARCH_IN_DOC_KNOWLEDGE }),
+  intent: (): Intent[] => [],
+  onFormChange(change, { form, intents }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const entries: Record<string, string> = { [SEARCH_BASIC]: SEARCH_IN_DOC_KNOWLEDGE };
+    return guidanceWindows(form, entries);
+  },
   exec: (ctx) => executeSearchInDoc(ctx),
 };
 
-const appendCommand: CommandTableEntry = {
+const appendCommand: ObjectMethod = {
   paths: ["append"],
-  match: (args) => (args.confirm === true ? ["append", "append.confirmed"] : ["append"]),
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [APPEND_BASIC]: APPEND_KNOWLEDGE };
+  intent: (args) => (args.confirm === true ? [{ name: "append.confirmed" }] : []),
+  onFormChange(change, { form, intents }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = { [APPEND_BASIC]: APPEND_KNOWLEDGE };
     if (formStatus === "open" && args.confirm !== true) {
       entries[APPEND_DRY_RUN] = APPEND_DRY_RUN_KNOWLEDGE;
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeAppend(ctx),
 };
 
-const patchBlockCommand: CommandTableEntry = {
+const patchBlockCommand: ObjectMethod = {
   paths: ["patch_block"],
-  match: (args) => (args.confirm === true ? ["patch_block", "patch_block.confirmed"] : ["patch_block"]),
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [PATCH_BASIC]: PATCH_KNOWLEDGE };
+  intent: (args) => (args.confirm === true ? [{ name: "patch_block.confirmed" }] : []),
+  onFormChange(change, { form, intents }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = { [PATCH_BASIC]: PATCH_KNOWLEDGE };
     if (formStatus === "open" && args.confirm !== true) {
       entries[PATCH_DRY_RUN] = PATCH_DRY_RUN_KNOWLEDGE;
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executePatchBlock(ctx),
 };
 
-const shareLinkCommand: CommandTableEntry = {
+const shareLinkCommand: ObjectMethod = {
   paths: ["share_link"],
-  match: () => ["share_link"],
-  knowledge: (): CommandKnowledgeEntries => ({ [SHARE_BASIC]: SHARE_KNOWLEDGE }),
+  intent: (): Intent[] => [],
+  onFormChange(change, { form, intents }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const entries: Record<string, string> = { [SHARE_BASIC]: SHARE_KNOWLEDGE };
+    return guidanceWindows(form, entries);
+  },
   exec: (ctx) => executeShareLink(ctx),
 };
 
-const attachToChatCommand: CommandTableEntry = {
+const attachToChatCommand: ObjectMethod = {
   paths: ["attach_to_chat"],
-  match: (args) => (args.confirm === true ? ["attach_to_chat", "attach_to_chat.confirmed"] : ["attach_to_chat"]),
-  knowledge: (args, formStatus): CommandKnowledgeEntries => {
-    const entries: CommandKnowledgeEntries = { [ATTACH_BASIC]: ATTACH_KNOWLEDGE };
+  intent: (args) => (args.confirm === true ? [{ name: "attach_to_chat.confirmed" }] : []),
+  onFormChange(change, { form, intents }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    const formStatus = form.status;
+    const entries: Record<string, string> = { [ATTACH_BASIC]: ATTACH_KNOWLEDGE };
     if (formStatus === "open" && args.confirm !== true) {
       entries[ATTACH_DRY_RUN] = ATTACH_DRY_RUN_KNOWLEDGE;
     }
-    return entries;
+    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeAttachToChat(ctx),
 };
 
-const closeCommand: CommandTableEntry = {
+const closeCommand: ObjectMethod = {
   paths: ["close"],
-  match: () => ["close"],
-  knowledge: (): CommandKnowledgeEntries => ({ [CLOSE_BASIC]: CLOSE_KNOWLEDGE }),
+  intent: (): Intent[] => [],
+  onFormChange(change, { form, intents }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    const entries: Record<string, string> = { [CLOSE_BASIC]: CLOSE_KNOWLEDGE };
+    return guidanceWindows(form, entries);
+  },
   exec: () => undefined,
 };
 
@@ -232,7 +285,7 @@ function extractMarkdownTitle(body: string): string | undefined {
   return t && t.length > 0 ? t : undefined;
 }
 
-async function executeRead(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeRead(ctx: MethodExecutionContext): Promise<string | undefined> {
   // P6.§3: manager 已保证 self.type === "feishu_doc"。
   const window = ctx.self as FeishuDocWindow;
   const format = ctx.args.format === "blocks" ? "blocks" : "markdown";
@@ -310,7 +363,7 @@ function pickDocument(raw: unknown): FetchedDoc | undefined {
   };
 }
 
-function executeSearchInDoc(ctx: CommandExecutionContext): string | undefined {
+function executeSearchInDoc(ctx: MethodExecutionContext): string | undefined {
   // P6.§3: manager 已保证 self.type === "feishu_doc"。
   const window = ctx.self as FeishuDocWindow;
   const query = asString(ctx.args.query);
@@ -333,7 +386,7 @@ function executeSearchInDoc(ctx: CommandExecutionContext): string | undefined {
     : `未命中 "${query}"。`;
 }
 
-async function executeAppend(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeAppend(ctx: MethodExecutionContext): Promise<string | undefined> {
   // P6.§3: manager 已保证 self.type === "feishu_doc"。
   const window = ctx.self as FeishuDocWindow;
   const text = asString(ctx.args.text);
@@ -366,7 +419,7 @@ async function executeAppend(ctx: CommandExecutionContext): Promise<string | und
   return `已追加（doc=${window.docToken}, +${text.length} 字符）。`;
 }
 
-async function executePatchBlock(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executePatchBlock(ctx: MethodExecutionContext): Promise<string | undefined> {
   // P6.§3: manager 已保证 self.type === "feishu_doc"。
   const window = ctx.self as FeishuDocWindow;
   const blockId = asString(ctx.args.block_id);
@@ -428,7 +481,7 @@ async function executePatchBlock(ctx: CommandExecutionContext): Promise<string |
   return `已 patch（block_id=${blockId}, op=${op} → ${commandName}）。`;
 }
 
-async function executeShareLink(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeShareLink(ctx: MethodExecutionContext): Promise<string | undefined> {
   // P6.§3: manager 已保证 self.type === "feishu_doc"。
   const window = ctx.self as FeishuDocWindow;
   // 租户 host 由 .world.json 的 LarkTenantHost 字段配置（默认 feishu.cn）。
@@ -452,7 +505,7 @@ async function executeShareLink(ctx: CommandExecutionContext): Promise<string | 
   return `https://${tenantHost}/${slug}`;
 }
 
-async function executeAttachToChat(ctx: CommandExecutionContext): Promise<string | undefined> {
+async function executeAttachToChat(ctx: MethodExecutionContext): Promise<string | undefined> {
   // P6.§3: manager 已保证 self.type === "feishu_doc"。
   const window = ctx.self as FeishuDocWindow;
   const chatId = asString(ctx.args.chat_id);
@@ -504,8 +557,8 @@ function renderFeishuDoc(ctx: RenderContext): XmlNode[] {
   return children;
 }
 
-registerWindowType("feishu_doc", {
-  commands: {
+builtinRegistry.registerObjectType("feishu_doc", {
+  methods: {
     read: readCommand,
     search_in_doc: searchInDocCommand,
     append: appendCommand,

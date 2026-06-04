@@ -16,10 +16,11 @@
 
 import type {
   MethodExecutionContext,
-  MethodKnowledgeEntries,
   ObjectMethod,
 } from "../_shared/command-types.js";
-import type { CommandExecWindow as MethodExecWindow } from "../_shared/types.js";
+import type { MethodExecWindow } from "../_shared/types.js";
+import type { Intent } from "@ooc/core/thinkable/context/intent.js";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 
 async function executeSubmit(ctx: MethodExecutionContext): Promise<string | undefined> {
   // P6.§3: manager 在 dispatch 阶段已保证 self.type === "method_exec"，method 体不再 re-check。
@@ -46,18 +47,45 @@ async function executeSubmit(ctx: MethodExecutionContext): Promise<string | unde
   }
 }
 
+function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+  const out: ContextWindow[] = [];
+  for (const [path, text] of Object.entries(entries)) {
+    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
+    out.push({
+      id: "guidance_" + form.id + "_" + safe,
+      type: "guidance",
+      parentWindowId: form.id,
+      boundFormId: form.id,
+      title: path,
+      status: "open",
+      createdAt: 0,
+      relevance: { score: 0.8, signalCount: 1 },
+      provenance: {
+        kind: "derived",
+        reason: { mechanism: "form_bound", sourceId: form.command },
+        createdAt: 0,
+        lastTouchedAt: 0,
+      },
+      content: text,
+      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
+    } as ContextWindow);
+  }
+  return out;
+}
+
 export const submitMethod: ObjectMethod = {
   paths: ["submit"],
-  match: () => ["submit"],
-  knowledge: (_args, _formStatus): MethodKnowledgeEntries => ({
-    "internal/windows/method_exec/submit/basic": [
-      "method_exec.submit 触发 form.command 真正执行；不接受新业务参数。",
-      "调用：exec(window_id=<form_id>, command=\"submit\")",
-      "成功执行后系统自动从 context 移除该 form；失败则保留 result 字段，需要 close。",
-    ].join("\n"),
-  }),
+  intent: (): Intent[] => [],
+  onFormChange(change, { form, intents }) {
+    if (change.kind === "status_changed" && change.to !== "open") return [];
+    return guidanceWindows(form, {
+      "internal/windows/method_exec/submit/basic": [
+        "method_exec.submit 触发 form.command 真正执行；不接受新业务参数。",
+        "调用：exec(window_id=<form_id>, command=\"submit\")",
+        "成功执行后系统自动从 context 移除该 form；失败则保留 result 字段，需要 close。",
+      ].join("\n"),
+    });
+  },
   exec: (ctx) => executeSubmit(ctx),
 };
 
-/** @deprecated P6.§9 alias — use `submitMethod`. Kept one release for backward-compat with importers under the old name. */
-export const submitCommand = submitMethod;

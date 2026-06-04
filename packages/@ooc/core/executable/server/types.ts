@@ -2,8 +2,8 @@
  * server 层公共类型。
  *
  * D6 硬切后：旧的 `LlmMethods` / `ServerMethod` / `ServerMethodContext` 三件套被
- * 删除；LLM 路径上的"自定义方法"统一通过 `ObjectWindowDefinition.commands`
- * （见 `./window-types.ts`）以标准 `CommandTableEntry` 形态注册到 type=`custom`
+ * 删除；LLM 路径上的"自定义方法"统一通过 `ObjectWindowDefinition.methods`
+ * （见 `./window-types.ts`）以标准 `ObjectMethod` 形态注册到 type=`custom`
  * 的 ContextWindow 上。
  *
  * 仅保留：
@@ -18,6 +18,8 @@ import type { ThreadContext } from "../../thinkable/context";
 import type { StoneObjectRef } from "../../persistable";
 import type { ObjectWindowDefinition } from "./window-types";
 import type { ReadableFn } from "../windows/_shared/registry.js";
+
+export type { ObjectWindowDefinition };
 
 /** program 中注入的 self 对象，让用户代码能调用任意 window 上任意 command 与读写 data。 */
 export interface ProgramSelf {

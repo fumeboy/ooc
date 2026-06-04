@@ -26,7 +26,7 @@
  *
  * 测试自身的 session 卫生：
  *   - 内存 thread（makeThread fixture）；无 .ooc-world 落盘；无 long-running 进程
- *   - 不真启 backend；用 execRootCommand + dispatchToolCall 直驱
+ *   - 不真启 backend；用 execRootMethod + dispatchToolCall 直驱
  */
 
 import { describe, expect, it } from "bun:test";
@@ -34,7 +34,7 @@ import { describe, expect, it } from "bun:test";
 // side-effect: 触发 windows 注册（含 plan / do）
 import "@ooc/core/executable/windows";
 
-import { execRootCommand, WindowManager } from "@ooc/core/executable/windows";
+import { execRootMethod, WindowManager, builtinRegistry } from "@ooc/core/executable/windows";
 import { dispatchToolCall } from "@ooc/core/executable/tools";
 import { archiveDoWindowChild } from "@ooc/core/executable/windows/do/helpers";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
@@ -81,8 +81,8 @@ async function execOnPlanWindow(
   command: string,
   args: Record<string, unknown>,
 ): Promise<string | undefined> {
-  const mgr = WindowManager.fromThread(thread);
-  const result = await mgr.openCommandExec({
+  const mgr = WindowManager.fromThread(thread, builtinRegistry);
+  const result = await mgr.openMethodExec({
     thread,
     parentWindowId: planWindowId,
     command,
@@ -110,7 +110,7 @@ describe("[B6] plan_window share — Scenario A: move 模式完整闭环", () =>
     const parent = makeThread({ id: "_test_thinkable_b6_a_parent" });
 
     // 2. 父 exec(plan)
-    await execRootCommand("plan", {
+    await execRootMethod("plan", {
       thread: parent,
       args: { plan: "重构 thinkable 维度" },
     });
@@ -132,7 +132,7 @@ describe("[B6] plan_window share — Scenario A: move 模式完整闭环", () =>
     expect(s3).toBeDefined();
 
     // 6. 父 exec(do, share_windows=[{id:PW1, mode:move}])
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: {
         msg: "执行重构计划",
@@ -148,9 +148,9 @@ describe("[B6] plan_window share — Scenario A: move 模式完整闭环", () =>
     }
 
     // 父侧再 add_step 应被守门拒绝（lent_out 上所有命令都拒）
-    const parentMgr = WindowManager.fromThread(parent);
+    const parentMgr = WindowManager.fromThread(parent, builtinRegistry);
     await expect(
-      parentMgr.openCommandExec({
+      parentMgr.openMethodExec({
         thread: parent,
         parentWindowId: PW1,
         command: "add_step",
@@ -240,7 +240,7 @@ describe("[B6] plan_window share — Scenario A: move 模式完整闭环", () =>
 describe("[B6] plan_window share — Scenario B: ref 模式（子只读）", () => {
   it("父建 plan → share ref 给子 → 子改被拒 → 子 close 不影响父", async () => {
     const parent = makeThread({ id: "_test_thinkable_b6_b_parent" });
-    await execRootCommand("plan", {
+    await execRootMethod("plan", {
       thread: parent,
       args: { plan: "为 v2 做准备" },
     });
@@ -253,7 +253,7 @@ describe("[B6] plan_window share — Scenario B: ref 模式（子只读）", () 
     await execOnPlanWindow(parent, PW1, "add_step", { text: "step c" });
     const stepsBefore = findPlanWindowById(parent, PW1)!.steps.map((x) => x.id);
 
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: {
         msg: "看父 plan",
@@ -270,9 +270,9 @@ describe("[B6] plan_window share — Scenario B: ref 模式（子只读）", () 
     expect(childSide.sharing?.kind).toBe("ref");
 
     // 子在 ref 上尝试 update_step → 拒绝（守门：ref 上仅 close 允许）
-    const childMgr = WindowManager.fromThread(child);
+    const childMgr = WindowManager.fromThread(child, builtinRegistry);
     await expect(
-      childMgr.openCommandExec({
+      childMgr.openMethodExec({
         thread: child,
         parentWindowId: PW1,
         command: "update_step",
@@ -282,8 +282,8 @@ describe("[B6] plan_window share — Scenario B: ref 模式（子只读）", () 
     ).rejects.toThrow(/只读 ref/);
 
     // 子 close ref（只释放本地）
-    const closeMgr = WindowManager.fromThread(child);
-    await closeMgr.openCommandExec({
+    const closeMgr = WindowManager.fromThread(child, builtinRegistry);
+    await closeMgr.openMethodExec({
       thread: child,
       parentWindowId: PW1,
       command: "close",
@@ -305,7 +305,7 @@ describe("[B6] plan_window share — Scenario B: ref 模式（子只读）", () 
 describe("[B6] plan_window share — Scenario C: 边界 / 错误路径", () => {
   it("root + sub plan_window 都能被 share（都是 plan 类型实例）", async () => {
     const parent = makeThread({ id: "_test_thinkable_b6_c_parent" });
-    await execRootCommand("plan", { thread: parent, args: { plan: "p" } });
+    await execRootMethod("plan", { thread: parent, args: { plan: "p" } });
     const rootPlan = (parent.contextWindows ?? []).find(
       (w) => w.type === "plan",
     ) as PlanWindow;
@@ -316,7 +316,7 @@ describe("[B6] plan_window share — Scenario C: 边界 / 错误路径", () => {
     const subId = findPlanWindowById(parent, PW1)!.steps[0]!.subPlanWindowId!;
 
     // 直接 share sub plan_window 给子线程（不带 root plan）
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: {
         msg: "只看子 plan",
@@ -334,12 +334,12 @@ describe("[B6] plan_window share — Scenario C: 边界 / 错误路径", () => {
 
   it("已 lent_out 的 plan_window 再 share 给同一子被拒（do_window.move 守门）", async () => {
     const parent = makeThread({ id: "_test_thinkable_b6_c_dup" });
-    await execRootCommand("plan", { thread: parent, args: { plan: "p" } });
+    await execRootMethod("plan", { thread: parent, args: { plan: "p" } });
     const PW1 = ((parent.contextWindows ?? []).find(
       (w) => w.type === "plan",
     ) as PlanWindow).id;
 
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: {
         msg: "first share",
@@ -374,13 +374,13 @@ describe("[B6] plan_window share — Scenario C: 边界 / 错误路径", () => {
 
   it("mode=move 后强 archive 父 do_window → cascade 自动归还", async () => {
     const parent = makeThread({ id: "_test_thinkable_b6_c_cascade" });
-    await execRootCommand("plan", { thread: parent, args: { plan: "p" } });
+    await execRootMethod("plan", { thread: parent, args: { plan: "p" } });
     const PW1 = ((parent.contextWindows ?? []).find(
       (w) => w.type === "plan",
     ) as PlanWindow).id;
     await execOnPlanWindow(parent, PW1, "add_step", { text: "first" });
 
-    await execRootCommand("do", {
+    await execRootMethod("do", {
       thread: parent,
       args: {
         msg: "拿去做",

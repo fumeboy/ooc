@@ -2,8 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { execRootCommand } from "../windows";
-import { WindowManager } from "../windows";
+import { execRootMethod, WindowManager, builtinRegistry } from "../windows";
 import {
   ROOT_WINDOW_ID,
   creatorWindowIdOf,
@@ -38,14 +37,14 @@ describe("Step 2 window lifecycles", () => {
       await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
 
       // 创建 talk_window 指向 bob
-      await execRootCommand("talk", { thread, args: { target: "bob", title: "release plan" } });
+      await execRootMethod("talk", { thread, args: { target: "bob", title: "release plan" } });
       const talkWindow = thread.contextWindows.find((w): w is TalkWindow => w.type === "talk" && !w.isCreatorWindow);
       expect(talkWindow).toBeDefined();
       expect(talkWindow!.target).toBe("bob");
 
       // talk_window.say 在 args 给齐时 open 立即提交 form，派送一条消息到 bob
-      const mgr = WindowManager.fromThread(thread);
-      const opened = await mgr.openCommandExec({
+      const mgr = WindowManager.fromThread(thread, builtinRegistry);
+      const opened = await mgr.openMethodExec({
         thread,
         parentWindowId: talkWindow!.id,
         command: "say",
@@ -62,7 +61,7 @@ describe("Step 2 window lifecycles", () => {
       expect(updated?.targetThreadId).toBeDefined();
 
       // close（非 creator）允许
-      const mgr2 = WindowManager.fromThread(thread);
+      const mgr2 = WindowManager.fromThread(thread, builtinRegistry);
       expect(mgr2.close(talkWindow!.id, thread)).toBe(true);
       thread.contextWindows = mgr2.toData();
       expect(thread.contextWindows.find((w) => w.id === talkWindow!.id)).toBeUndefined();
@@ -74,7 +73,7 @@ describe("Step 2 window lifecycles", () => {
   it("program_window: root.program runs first exec; window.exec appends to history", async () => {
     const thread = makeThread({ id: "t_root" });
 
-    await execRootCommand("program", {
+    await execRootMethod("program", {
       thread,
       args: { language: "shell", code: "echo first" },
     });
@@ -86,8 +85,8 @@ describe("Step 2 window lifecycles", () => {
     expect(programWindow!.history[0]?.output).toContain("first");
 
     // 二次 exec 通过 program_window.exec
-    const mgr = WindowManager.fromThread(thread);
-    await mgr.openCommandExec({
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
+    await mgr.openMethodExec({
       thread,
       parentWindowId: programWindow!.id,
       command: "exec",
@@ -102,8 +101,8 @@ describe("Step 2 window lifecycles", () => {
 
   it("todo_window: created via one-shot open (args complete → submit immediately); close via close tool", async () => {
     const thread = makeThread({ id: "t_root" });
-    const mgr = WindowManager.fromThread(thread);
-    await mgr.openCommandExec({
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
+    await mgr.openMethodExec({
       thread,
       command: "todo",
       title: "buy milk",
@@ -113,7 +112,7 @@ describe("Step 2 window lifecycles", () => {
     const todo = thread.contextWindows.find((w) => w.type === "todo")!;
     expect(todo.type).toBe("todo");
 
-    const mgr2 = WindowManager.fromThread(thread);
+    const mgr2 = WindowManager.fromThread(thread, builtinRegistry);
     expect(mgr2.close(todo.id, thread)).toBe(true);
     thread.contextWindows = mgr2.toData();
     expect(thread.contextWindows.find((w) => w.id === todo.id)).toBeUndefined();
@@ -125,8 +124,8 @@ describe("Step 2 window lifecycles", () => {
       const file = join(tempRoot, "hello.txt");
       await writeFile(file, "alpha\nbeta\ngamma\n");
       const thread = makeThread({ id: "t_root" });
-      const mgr = WindowManager.fromThread(thread);
-      const opened = await mgr.openCommandExec({
+      const mgr = WindowManager.fromThread(thread, builtinRegistry);
+      const opened = await mgr.openMethodExec({
         thread,
         command: "open_file",
         title: "read hello",
@@ -164,8 +163,8 @@ describe("Step 2 window lifecycles", () => {
         id: "t",
         persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
       });
-      const mgr = WindowManager.fromThread(thread);
-      const opened = await mgr.openCommandExec({
+      const mgr = WindowManager.fromThread(thread, builtinRegistry);
+      const opened = await mgr.openMethodExec({
         thread,
         command: "open_knowledge",
         title: "pin manual",
@@ -220,15 +219,15 @@ describe("Step 2 window lifecycles", () => {
       await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
 
       // assistant 创建 talk_window 指向 bob
-      await execRootCommand("talk", { thread: assistantThread, args: { target: "bob", title: "ask bob" } });
+      await execRootMethod("talk", { thread: assistantThread, args: { target: "bob", title: "ask bob" } });
       const talkToBob = assistantThread.contextWindows.find(
         (w): w is TalkWindow => w.type === "talk" && w.target === "bob",
       );
       expect(talkToBob).toBeDefined();
 
       // assistant say → bob
-      const mgr1 = WindowManager.fromThread(assistantThread);
-      await mgr1.openCommandExec({
+      const mgr1 = WindowManager.fromThread(assistantThread, builtinRegistry);
+      await mgr1.openMethodExec({
         thread: assistantThread,
         parentWindowId: talkToBob!.id,
         command: "say",
@@ -252,8 +251,8 @@ describe("Step 2 window lifecycles", () => {
       expect(bobCreatorTalk).toBeDefined();
 
       // bob 通过 creator talk_window 回 assistant
-      const mgr2 = WindowManager.fromThread(bobThread);
-      await mgr2.openCommandExec({
+      const mgr2 = WindowManager.fromThread(bobThread, builtinRegistry);
+      await mgr2.openMethodExec({
         thread: bobThread,
         parentWindowId: bobCreatorTalk!.id,
         command: "say",

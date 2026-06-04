@@ -7,7 +7,8 @@ import {
   type PoolObjectRef,
   type StoneObjectRef,
 } from "../../persistable";
-import { resolveParentClassChain } from "../../executable/windows/_shared/registry.js";
+import type { ObjectRegistry } from "../../executable/windows/_shared/registry.js";
+import { builtinRegistry } from "../../executable/windows/index.js";
 import { parseKnowledgeFile } from "./parser";
 import type { KnowledgeDoc, KnowledgeIndex } from "./types";
 
@@ -52,7 +53,10 @@ const cache = new Map<string, { index: KnowledgeIndex; signature: string }>();
  *
  * Cache：以两侧目录路径联合签名为键；签名未变即返回上次索引（同对象引用）。
  */
-export async function loadKnowledgeIndex(refs: KnowledgeLoadRefs): Promise<KnowledgeIndex> {
+export async function loadKnowledgeIndex(
+  refs: KnowledgeLoadRefs,
+  registry: ObjectRegistry = builtinRegistry,
+): Promise<KnowledgeIndex> {
   const stoneRoot = stoneKnowledgeDir(refs.stone);
   const poolRoot = poolKnowledgeDir(refs.pool);
 
@@ -64,7 +68,7 @@ export async function loadKnowledgeIndex(refs: KnowledgeLoadRefs): Promise<Knowl
 
   // P6.§7: parentClass 继承链 seed 目录列表（closest → farthest）。
   // 自定义 stone 对象可能尚未注册 → resolveParentClassChain 返回 []，安全降级。
-  const parentClassChain = resolveParentClassChain(refs.stone.objectId as any);
+  const parentClassChain = registry.resolveParentClassChain(refs.stone.objectId as any);
   const parentClassRoots = parentClassChain.map((id) =>
     stoneKnowledgeDir({ ...refs.stone, objectId: id }),
   );

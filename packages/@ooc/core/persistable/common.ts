@@ -56,7 +56,7 @@ export const STONE_OBJECTS_SUBDIR = "objects";
  *   "a/b"     → ["a", "children", "b"]
  *   "a/b/c"   → ["a", "children", "b", "children", "c"]
  *
- * 与 packageDir / objectDir 共用，避免双份逻辑。
+ * 与 stoneDir / objectDir 共用，避免双份逻辑。
  */
 export function nestedObjectPath(objectId: string, childrenSubdir: string = STONE_CHILDREN_SUBDIR): string[] {
   const segments = objectId.split("/").filter(Boolean);
@@ -65,7 +65,7 @@ export function nestedObjectPath(objectId: string, childrenSubdir: string = STON
 
 /**
  * 计算 flow object 目录绝对路径。objectId 中的 "/" 被翻译为 children/ 嵌套
- * （与 packageDir 对称；详见 nestedObjectPath）。
+ * （与 stoneDir 对称；详见 nestedObjectPath）。
  */
 export function objectDir(ref: FlowObjectRef): string {
   return join(
@@ -155,17 +155,6 @@ export function stoneDir(ref: StoneObjectRef): string {
     "stones",
     ...nestedObjectPath(ref.objectId),
   );
-}
-
-/**
- * @deprecated Use stoneDir instead (M2 2026-06-03: "packages/" renamed to "stones/" for World user stones).
- * Alias preserved for backward compatibility during transition.
- *
- * Note: builtin routing still goes through `packages/@ooc/builtins/` because those are
- * npm workspace packages, not user stones.
- */
-export function packageDir(ref: StoneObjectRef): string {
-  return stoneDir(ref);
 }
 
 /**

@@ -12,7 +12,7 @@
  * 决策链 (优先级从高到低):
  * 1. PermissionDecider (escape hatch; 由测试 fixture 或控制面通过 setPermissionDecider 注入)
  * 2. stones/<self>/objects/<id>/config/policies.json -> commands[<command>]
- * 3. CommandTableEntry.permission (各 command 作者声明)
+ * 3. ObjectMethod.permission (各 command 作者声明)
  * 4. 缺省 → "allow"
  *
  * 不变量:
@@ -27,7 +27,8 @@ import { join } from "node:path";
 import { getPermissionDecider } from "../observable";
 import { deriveStoneFromThread, stoneDir } from "../persistable/common";
 import type { ThreadContext } from "../thinkable/context";
-import { getWindowTypeDefinition } from "./windows/_shared/registry";
+import type { ObjectRegistry } from "./windows/_shared/registry";
+import { builtinRegistry } from "./windows/index.js";
 
 /** 单档准入级别。 */
 export type PermissionLevel = "allow" | "ask" | "deny";
@@ -59,7 +60,7 @@ export type PendingToolCall = {
   windowId?: string;
 };
 
-/** PermissionDecider — escape hatch; 优先级高于 policies.json 与 CommandTableEntry。 */
+/** PermissionDecider — escape hatch; 优先级高于 policies.json 与 ObjectMethod。 */
 export type PermissionDecider = (
   thread: ThreadContext,
   call: PendingToolCall,
@@ -117,25 +118,26 @@ export function loadPoliciesJson(thread: ThreadContext): Record<string, Permissi
 }
 
 /**
- * 在 WindowRegistry 中查找声明在 CommandTableEntry.permission 上的级别。
+ * 在 WindowRegistry 中查找声明在 ObjectMethod.permission 上的级别。
  *
  * 查找路径 (优先匹配可能的具体 window type, 失败则尝试 root):
  * - 如果 call 指定了 windowId 且能在 thread.contextWindows 中找到该 window,
- *   优先查它的 type definition.commands[command].permission
+ *   优先查它的 type definition.methods[command].permission
  * - 否则查 root 的 commands[command].permission
  * - 找不到 entry / 字段缺失 → undefined (调用方 fallback 到 allow)
  */
 function lookupDeclaredPermission(
   thread: ThreadContext,
   call: PendingToolCall,
+  registry: ObjectRegistry,
 ): PermissionLevel | undefined {
   const command = call.command;
   if (!command) return undefined;
 
   const tryWindow = (windowType: string): PermissionLevel | undefined => {
     try {
-      const def = getWindowTypeDefinition(windowType as never);
-      const entry = def.commands[command];
+      const def = registry.getObjectDefinition(windowType as never);
+      const entry = def.methods[command];
       const fn = entry?.permission;
       if (!fn) return undefined;
       try {
@@ -168,12 +170,13 @@ function lookupDeclaredPermission(
  * 决策链 (优先级从高到低):
  * 1. PermissionDecider (若已通过 setPermissionDecider 注入)
  * 2. policies.json 中的 commands[<command>]
- * 3. CommandTableEntry.permission
+ * 3. ObjectMethod.permission
  * 4. 默认 "allow"
  */
 export async function decidePermission(
   thread: ThreadContext,
   call: PendingToolCall,
+  registry: ObjectRegistry = builtinRegistry,
 ): Promise<PermissionDecision> {
   // 1. 注入的 decider 优先 — escape hatch
   const decider = getPermissionDecider();
@@ -198,10 +201,10 @@ export async function decidePermission(
     }
   }
 
-  // 3. CommandTableEntry 声明
-  const declared = lookupDeclaredPermission(thread, call);
+  // 3. ObjectMethod 声明
+  const declared = lookupDeclaredPermission(thread, call, registry);
   if (declared) {
-    return levelToDecision(declared, "CommandTableEntry.permission");
+    return levelToDecision(declared, "ObjectMethod.permission");
   }
 
   // 4. 默认放行

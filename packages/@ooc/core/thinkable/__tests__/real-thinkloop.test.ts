@@ -52,9 +52,9 @@ describe.skipIf(!shouldRunRealTest)("real thinkloop integration", () => {
     spyOn(toolsModule, "getAvailableTools").mockReturnValue([EXEC_TOOL]);
 
     spyOn(contextModule, "buildContext").mockImplementation(async (currentThread) => {
-      const activeForm = currentThread.contextWindows.find((w) => w.type === "command_exec");
+      const activeForm = currentThread.contextWindows.find((w) => w.type === "method_exec");
 
-      if (!activeForm || activeForm.type !== "command_exec") {
+      if (!activeForm || activeForm.type !== "method_exec") {
         return [
           {
             role: "system",
@@ -82,7 +82,7 @@ describe.skipIf(!shouldRunRealTest)("real thinkloop integration", () => {
     });
 
     await think(thread, client);
-    const formsAfter = thread.contextWindows.filter((w) => w.type === "command_exec");
+    const formsAfter = thread.contextWindows.filter((w) => w.type === "method_exec");
     // end 命令在 args 给齐时 open 可能直接提交 form；这里只验证 think 跑过、且没崩
     expect(thread.events.some((event) => event.kind === "tool_use" && event.toolName === "exec")).toBe(true);
     void formsAfter;

@@ -6,7 +6,7 @@
  *
  * objectId == window.id（设计上扁平：不嵌套到 parent）。
  *
- * state.json 的内容使用 OOCObject 类型（含 type + 全部 type-specific 字段，object 维度）；
+ * state.json 的内容使用 ContextObject 类型（含 type + 全部 type-specific 字段，object 维度）；
  * context-lifecycle 字段（status / parentWindowId / createdAt 等）属于 thread-context.json，
  * 不进 state.json（由 writeRuntimeObjectState 的 stripContextWindowsField + manager 的
  * isBuiltinFeature 分流保证）。
@@ -19,7 +19,7 @@ import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { objectDir, toJson, type FlowObjectRef } from "./common";
 import { enqueueSessionWrite } from "./serial-queue";
-import type { OOCObject } from "../executable/windows/_shared/types.js";
+import type { ContextObject } from "../executable/windows/_shared/types.js";
 
 /** runtime object 状态文件路径 = `{objectDir(ref)}/state.json`。 */
 export function runtimeObjectStateFile(ref: FlowObjectRef): string {
@@ -40,7 +40,7 @@ export function runtimeObjectStateFile(ref: FlowObjectRef): string {
  */
 export async function writeRuntimeObjectState(
   ref: FlowObjectRef,
-  state: OOCObject,
+  state: ContextObject,
 ): Promise<void> {
   const file = runtimeObjectStateFile(ref);
   // P6.§6: strip contextWindows — 写 state.json 只保留 object 自身字段。
@@ -60,12 +60,12 @@ export async function writeRuntimeObjectState(
  * 结果 state（object 维度）和 context（thread 维度）混在一起。新布局下
  * contextWindows 改写到 `<oid>/threads/<tid>/context.json`；这里负责守门。
  */
-function stripContextWindowsField(state: OOCObject): OOCObject {
+function stripContextWindowsField(state: ContextObject): ContextObject {
   if (!("contextWindows" in (state as object))) return state;
-  const { contextWindows: _drop, ...rest } = state as OOCObject & {
+  const { contextWindows: _drop, ...rest } = state as ContextObject & {
     contextWindows?: unknown;
   };
-  return rest as OOCObject;
+  return rest as ContextObject;
 }
 
 /**
@@ -75,7 +75,7 @@ function stripContextWindowsField(state: OOCObject): OOCObject {
  */
 export async function readRuntimeObjectState(
   ref: FlowObjectRef,
-): Promise<OOCObject | undefined> {
+): Promise<ContextObject | undefined> {
   const file = runtimeObjectStateFile(ref);
   let raw: string;
   try {
@@ -84,7 +84,7 @@ export async function readRuntimeObjectState(
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw error;
   }
-  return JSON.parse(raw) as OOCObject;
+  return JSON.parse(raw) as ContextObject;
 }
 
 /**
@@ -111,7 +111,7 @@ export async function deleteRuntimeObject(ref: FlowObjectRef): Promise<void> {
  */
 export async function createRuntimeObject(
   ref: FlowObjectRef,
-  state: OOCObject,
+  state: ContextObject,
 ): Promise<void> {
   await writeRuntimeObjectState(ref, state);
 }

@@ -6,13 +6,13 @@ import { createStoneObject, stoneDir } from "../stone-object";
 import { createFlowObject } from "../flow-object";
 import { objectDir } from "../common";
 import {
-  clientIndexFile,
   flowClientPageFile,
   flowClientPagesDir,
   readFlowClientPage,
-  readStoneClientSource,
+  readVisibleSource,
   writeFlowClientPage,
-  writeStoneClientSource,
+  writeVisibleSource,
+  visibleIndexFile,
 } from "../stone-client";
 
 let tempRoot: string | undefined;
@@ -24,25 +24,27 @@ afterEach(async () => {
   }
 });
 
-describe("stone client persistable", () => {
-  test("stone client/index.tsx round trip", async () => {
+describe("stone visible persistable", () => {
+  test("stone visible/index.tsx round trip (canonical)", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-client-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alan" });
 
-    expect(await readStoneClientSource(ref)).toBeUndefined();
-    expect(clientIndexFile(ref)).toBe(join(stoneDir(ref), "client", "index.tsx"));
+    expect(await readVisibleSource(ref)).toBeUndefined();
+    expect(visibleIndexFile(ref)).toBe(join(stoneDir(ref), "visible", "index.tsx"));
 
     const tsx = `export default function View() { return <div>hi</div>; }`;
-    await writeStoneClientSource(ref, tsx);
-    expect(await readStoneClientSource(ref)).toBe(tsx);
+    await writeVisibleSource(ref, tsx);
+    expect(await readVisibleSource(ref)).toBe(tsx);
+    // 迁移完成：writeVisibleSource 不再双写 client/
+    await expect(stat(join(stoneDir(ref), "client", "index.tsx"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  test("stone writeStoneClientSource creates client/ if missing", async () => {
+  test("stone writeVisibleSource creates visible/ if missing", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-client-"));
     // 不调 createStoneObject —— 直接写盘也得过
     const ref = { baseDir: tempRoot, objectId: "no-skeleton" };
-    await writeStoneClientSource(ref, "x");
-    const stats = await stat(join(stoneDir(ref), "client", "index.tsx"));
+    await writeVisibleSource(ref, "x");
+    const stats = await stat(join(stoneDir(ref), "visible", "index.tsx"));
     expect(stats.isFile()).toBe(true);
   });
 });
