@@ -87,7 +87,24 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
 
   const isSuperAlias = isSuperSessionId(rawTarget);
   const calleeObjectId = isSuperAlias ? callerRef.objectId : rawTarget;
-  const calleeSessionId = isSuperAlias ? SUPER_SESSION_ID : callerRef.sessionId;
+  // session 解析：
+  // - super-alias（X→super）：派进 super session
+  // - 默认：派进 caller 自身 session（同 session 协作）
+  // - **cross-session creator reply**：当本次派送是「通过 creator talk_window 回报创建者」
+  //   且创建者在另一个 session（callerThread.creatorSessionId 与自身 session 不同，典型
+  //   super-alice 在 "super" session 回报 user-session 的创建者）→ 派回 creatorSessionId。
+  //   这条覆盖 reflectable super→origin 回报通道：creator talk_window 必须能跨 session
+  //   找到创建者 thread，否则 readThread(calleeSessionId=自身 session) 永远找不到对端。
+  const isCreatorReply = callerWindow.isCreatorWindow === true && callerWindow.target === callerRef.objectId;
+  const crossSessionCreatorReply =
+    isCreatorReply &&
+    callerThread.creatorSessionId !== undefined &&
+    callerThread.creatorSessionId !== callerRef.sessionId;
+  const calleeSessionId = isSuperAlias
+    ? SUPER_SESSION_ID
+    : crossSessionCreatorReply
+      ? callerThread.creatorSessionId!
+      : callerRef.sessionId;
 
   // 1) 解析 callee thread；首条消息时创建
   let calleeThreadId = callerWindow.targetThreadId;

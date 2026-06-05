@@ -132,6 +132,78 @@ describe("talk-delivery target='super' alias", () => {
     }
   });
 
+  // super→origin 回报通道回归（reflectable harness sweep [med] 修复）：
+  // super-alice（super session）通过 creator talk_window 回报创建者 alice（user session）。
+  // 修复前：creator window 被 init 误判为 do_window → do_window.continue/say 路由进自身
+  // （super）session → 永远找不到 user-session 的创建者 thread → 静默失败。
+  // 修复后：(1) init 给 cross-session creator 落 talk_window；(2) delivery 按 creatorSessionId
+  // 把回报派回 user session 的原始创建者 thread。
+  it("super->origin: creator talk_window reply routes back to caller's session", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "ooc-tdsa-"));
+    try {
+      // 1) user session 的 alice 创建者 root thread
+      await createFlowSession(tempRoot, "web-test");
+      const userFlow = await createFlowObject({
+        baseDir: tempRoot, sessionId: "web-test", objectId: "alice",
+      });
+      const userAliceRoot: ThreadContext = {
+        id: "root",
+        status: "waiting",
+        events: [],
+        contextWindows: [],
+        persistence: { ...userFlow, threadId: "root" },
+      };
+      initContextWindows(userAliceRoot, { initialTaskTitle: "user task" });
+      await writeThread(userAliceRoot);
+
+      // 2) super session 的 super-alice，creatorObjectId=alice + creatorSessionId="web-test"
+      await createFlowSession(tempRoot, SUPER_SESSION_ID);
+      const superFlow = await createFlowObject({
+        baseDir: tempRoot, sessionId: SUPER_SESSION_ID, objectId: "alice",
+      });
+      const superAlice: ThreadContext = {
+        id: "t_super_alice",
+        status: "running",
+        events: [],
+        contextWindows: [],
+        creatorThreadId: "root",
+        creatorObjectId: "alice",
+        creatorSessionId: "web-test",
+        persistence: { ...superFlow, threadId: "t_super_alice" },
+      };
+      // creator window 类型由 init 决定：cross-session 同 object → 必须是 talk（非 do）
+      initContextWindows(superAlice, { creatorThreadId: "root", initialTaskTitle: "reflect" });
+      const creator = superAlice.contextWindows.find((w) => (w as TalkWindow).isCreatorWindow);
+      expect(creator).toBeDefined();
+      expect(creator!.type).toBe("talk"); // ← 修复核心：cross-session creator 不是 do
+      expect((creator as TalkWindow).target).toBe("alice");
+      expect((creator as TalkWindow).targetThreadId).toBe("root");
+      await writeThread(superAlice);
+
+      // 3) super-alice 通过 creator talk_window 回报
+      const delivered = await deliverTalkMessage({
+        caller: { thread: superAlice, talkWindow: creator as TalkWindow },
+        content: "已沉淀：见 memory/x.md",
+        source: "talk",
+      });
+
+      // 4) 回报必须落到 user session 的原始创建者 thread（不是 super session）
+      expect(delivered.calleeObjectId).toBe("alice");
+      expect(delivered.calleeThreadId).toBe("root");
+      const userCallee = await readThread(
+        { baseDir: tempRoot, sessionId: "web-test", objectId: "alice" },
+        "root",
+      );
+      expect(userCallee).toBeDefined();
+      expect(userCallee!.persistence?.sessionId).toBe("web-test");
+      // 消息真的进了 user-alice 的 inbox（不是静默失败）
+      const arrived = (userCallee!.inbox ?? []).some((m) => m.content === "已沉淀：见 memory/x.md");
+      expect(arrived).toBe(true);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   // case-insensitive alias detection: 'Super' / ' super ' 等都触发 super 别名，
   // 防止与 service 层的 isSuperSessionId 守卫产生不一致（一边拒一边放过会让用户
   // 创建出名为 'Super' 的普通对象）。

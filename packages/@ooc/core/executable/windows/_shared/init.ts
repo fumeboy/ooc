@@ -33,13 +33,30 @@ export interface InitContextWindowsOpts {
   initialTaskTitle: string;
 }
 
-/** thread 的 creator 是否=自己（同 object）。缺省字段视为同 object，回退 do_window。 */
+/**
+ * thread 的 creator 是否=自己（同 object **且同 session**）。缺省字段视为同 object，回退 do_window。
+ *
+ * "同 object" 决定 do vs talk 的语义层；但 do_window 是**同 session 内进程内**的父子机制
+ * （findThreadInScope 只走内存 childThreads/_parentThreadRef 树），**无法跨 session 寻址**。
+ * super-alias 场景（super flow）callee 在 "super" session、caller 在 user session：objectId
+ * 相同但 session 不同——若按 do 处理，callee 用 do_window.continue / end({result}) 回报
+ * creator 时 findThreadInScope 永远找不到 caller（caller 在另一 session 的 thread.json 上，
+ * 不在本 job 内存树里）→ 静默失败。故 cross-session 必须落 talk_window（disk-based 派送，
+ * deliverTalkMessage 通过 readThread/writeThread 跨 session 寻址），与 reflectable knowledge
+ * "通过 creator talk_window 回复" 的指引一致。
+ *
+ * creatorSessionId 由 talk-delivery 在跨 session 创建 callee 时写入；缺省回退 self session（同 session）。
+ */
 function isCreatorSelf(thread: ThreadContext): boolean {
   const self = thread.persistence?.objectId;
   const creator = thread.creatorObjectId;
   if (!creator) return true;
   if (!self) return true;
-  return creator === self;
+  if (creator !== self) return false;
+  // same object：再看 session。cross-session（如 super-alias）不能走 do_window。
+  const selfSession = thread.persistence?.sessionId;
+  const creatorSession = thread.creatorSessionId ?? selfSession;
+  return creatorSession === selfSession;
 }
 
 /**
