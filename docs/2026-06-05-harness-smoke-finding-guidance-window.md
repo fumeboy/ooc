@@ -2,7 +2,16 @@
 
 > 来源：维度体验官 harness 冒烟（executable 维度，2026-06-05）首次真实运行即发现。
 > 报告目录 `docs/harness-reports/` gitignored，故把这条高价值发现 curate 进 docs/ 持久化。
-> 状态：**已确认根因，待修**（体验官报告不修，回流 AgentOfExecutable/AgentOfThinkable）。
+> 状态：**已修复**（commit `fix(thinkable): guidance window 不再作独立 <window> 渲染`）。
+> Supervisor 以 AgentOfThinkable 身份采用路径 C（渲染边界过滤，比 A/B 更小风险）：
+> `renderContextWindowsNode` 从渲染输入剔除 `type="guidance"`——guidance 是 transient
+> form-hint，内容经 `window-enrichment`（computeFormKnowledgeEntries，已证自足）投递为 form
+> knowledge，本就不该作独立 `<window>` 渲染（GuidanceWindow 类型注释亦云应作 form 块内
+> `<guidance>` 子节点）。不动 manager push（避免碰 knowledge 投递链）。
+> **验证**：回归测试 `context.test.ts` 复现崩溃场景→不抛；core 815→816 pass/0 fail；tsc 干净。
+> （harness 闭环重跑因 officer LLM 变异超时未出档位——修复生效后线程走 done、officer 探索更深
+> 更久超 600s；框架超时处理已正确触发+清理。修复以单元测试为准。）
+> 下方为原始发现记录（root cause / 证据 / 三条修复路径权衡）。
 
 ## 摘要
 体验官（一个 `claude -p` 进程）驱动真实 OOC server 让被测 agent 做文件编辑，发现一个
