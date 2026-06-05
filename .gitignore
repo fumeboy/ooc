@@ -27,6 +27,3 @@ AGENT.md
 packages/*
 !packages/@ooc/
 
-# Runtime state directories
-flows/
-pools/

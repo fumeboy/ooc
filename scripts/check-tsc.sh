@@ -16,11 +16,10 @@
 
 set -e
 
-# F3 baseline（ooc-6 重构 DD3 裁决推迟到 harness 阶段，见 docs/refactor_0604/DECISIONS.md）：
-# app/server/modules/{pools,flows} 目录从未存在（ooc-2 遗留功能缺失，被 index.ts import），
-# 连带前端 domains/flows、harness flows/service、shell.tsx jobId 类型级联。
-# 恢复 pools/flows（需对照前端契约 + 真实 server 验证返回值）后，必须清空此 baseline。
-BASELINE_PATTERNS='modules/pools|modules/flows|domains/flows|Cannot find module .\.\./\.\./flows.|jobId'
+# 不再有 baseline 错误。如果将来需要，往这里加 grep 模式（例如：
+# 'packages/@ooc/core/app/server/modules/ui/api\.list-flows\.ts')，正则 OR 用 |。
+# （F3 flows/pools 已于阶段三恢复，原 baseline 已清空。）
+BASELINE_PATTERNS=''
 
 LOG=$(mktemp)
 trap 'rm -f "$LOG"' EXIT
