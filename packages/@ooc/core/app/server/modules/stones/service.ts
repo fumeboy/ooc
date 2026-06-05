@@ -12,6 +12,7 @@ import {
 } from "@ooc/core/persistable";
 import { loadUiServerMethods } from "@ooc/core/runtime/server-loader";
 import type { StoneRegistry } from "@ooc/core/runtime/stone-registry";
+import { parseKnowledgeFile, parseActivatesOn } from "@ooc/core/thinkable/knowledge";
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { AppServerError } from "../../bootstrap/errors";
@@ -42,6 +43,51 @@ function ensureInside(root: string, target: string, details: Record<string, unkn
   const rel = relative(resolvedRoot, resolvedTarget);
   if (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel))) return resolvedTarget;
   throw new AppServerError("INVALID_INPUT", "knowledge path escapes knowledge directory", details);
+}
+
+/**
+ * 写入 knowledge 后的「活不活」体检（thinkable 维度，2026-06-05 harness sweep #1）。
+ *
+ * pool knowledge（sediment）只被 activator 来源消费：computeActivations 逐篇 evaluate
+ * 其 frontmatter.activates_on triggers。若一篇 knowledge **没有 activates_on**（或 map 为空），
+ * activator 直接 `continue` 跳过——除非使用者手动 open_knowledge pin，否则永不注入 context。
+ * 写入 API 此前 200 + {created:true} 无任何提示，使用者难察觉「知识写了但是死的」。
+ *
+ * 本函数不阻断写入（写入是合法操作；也许使用者就是要先占位再补 trigger），
+ * 而是返回一条 warning，让 response 带上诊断。返回 undefined 表示「这篇会被激活」。
+ *
+ * 三类情形产出 warning：
+ * 1. 无 frontmatter / 无 activates_on / activates_on 为空 map → 永不自动激活
+ * 2. frontmatter 解析抛错（旧 schema / 非法 YAML 结构）→ loader 会跳过整篇
+ * 3. activates_on triggers 全部非法（parseActivatesOn 抛错）→ 同样永不激活
+ */
+function knowledgeActivationWarning(content: string): string | undefined {
+  let parsed: ReturnType<typeof parseKnowledgeFile>;
+  try {
+    parsed = parseKnowledgeFile(content);
+  } catch (err) {
+    return (
+      `knowledge frontmatter 解析失败：${(err as Error).message}。` +
+      `loader 会跳过整篇，该 knowledge 永不进入 context。`
+    );
+  }
+  const on = parsed.frontmatter.activates_on;
+  const hasMap = on !== undefined && on !== null && typeof on === "object" && !Array.isArray(on);
+  if (!hasMap || Object.keys(on as Record<string, unknown>).length === 0) {
+    return (
+      `该 knowledge 无 activates_on trigger，将永不自动激活（除非被 open_knowledge 显式 pin）。` +
+      `如需自动注入，请在 frontmatter 补 activates_on（如 { "object::root": "show_content" }）。`
+    );
+  }
+  try {
+    parseActivatesOn(on, "<written knowledge>");
+  } catch (err) {
+    return (
+      `activates_on trigger 非法：${(err as Error).message}。` +
+      `该 knowledge 永不自动激活。`
+    );
+  }
+  return undefined;
 }
 
 function createHttpMethodContext(dir: string) {
@@ -311,7 +357,13 @@ export function createStonesService({
       const target = ensureInside(root, join(root, safePath), { objectId, path });
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, content, "utf8");
-      return { objectId, path: safePath.split(sep).join("/"), created: true };
+      const warning = knowledgeActivationWarning(content);
+      return {
+        objectId,
+        path: safePath.split(sep).join("/"),
+        created: true,
+        ...(warning ? { warning } : {}),
+      };
     },
     async putKnowledgeFile({ objectId, path, content = "", confirmOverwrite = false }: { objectId: string; path: string; content?: string; confirmOverwrite?: boolean }) {
       await ensureStoneExists(objectId);
@@ -321,7 +373,13 @@ export function createStonesService({
       await ensureOverwriteAllowed(target, confirmOverwrite, { objectId, path });
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, content, "utf8");
-      return { objectId, path: safePath.split(sep).join("/"), ok: true };
+      const warning = knowledgeActivationWarning(content);
+      return {
+        objectId,
+        path: safePath.split(sep).join("/"),
+        ok: true,
+        ...(warning ? { warning } : {}),
+      };
     },
     async callMethod({ objectId, method, args = {} }: { objectId: string; method: string; args?: Record<string, unknown> }) {
       await ensureStoneExists(objectId);

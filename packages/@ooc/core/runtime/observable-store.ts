@@ -289,9 +289,13 @@ export class ObservableStore {
         const prevMeta = await readLoopDebugMeta(thread.persistence, handle.loopIndex - 1);
         previousSnapshot = prevMeta?.windowsSnapshot;
       }
+      // Prefer the pipeline's rendered window set (base + derived: activator/protocol
+      // knowledge, peer Objects) so the snapshot mirrors what the LLM saw. Falls back
+      // to persisted contextWindows when no render happened this loop.
+      const snapshotWindows = (thread._renderedWindows ?? thread.contextWindows ?? []) as ContextWindow[];
       const windowsSnapshot = await buildWindowsSnapshot(
         // batch C narrowing(N4): contextWindows 契约层是 base[]；narrow 回 union[] 传入 buildWindowsSnapshot。
-        (thread.contextWindows ?? []) as ContextWindow[],
+        snapshotWindows,
         previousSnapshot,
       );
       await writeLoopDebugMeta(thread.persistence, handle.loopIndex, {

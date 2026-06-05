@@ -516,6 +516,19 @@ export type ThreadContext = {
    * Stored on ThreadContext as a runtime-only field; not persisted to disk.
    */
   intentCache?: IntentCache;
+  /**
+   * Transient observability mirror of the windows the ContextPipeline actually
+   * rendered into the LLM input on the latest buildInputItems pass (base windows
+   * PLUS pipeline-derived ones: protocol/system knowledge, activator knowledge,
+   * peer/children Objects, form-scoped knowledge).
+   *
+   * Populated at the end of buildInputItems; read by finishLlmLoop so that the
+   * loop debug windowsSnapshot reflects what the LLM saw — not just the persisted
+   * thread.contextWindows (which omits all derived windows, making activator/
+   * protocol knowledge look "未激活" in the debug snapshot). Runtime-only; never
+   * persisted. Undefined falls back to thread.contextWindows.
+   */
+  _renderedWindows?: ContextWindow[];
   /** 当前线程的持久化位置；缺失时系统只以内存模式运行。 */
   persistence?: ThreadPersistenceRef;
 };

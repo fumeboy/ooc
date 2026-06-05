@@ -279,6 +279,13 @@ export async function buildInputItems(
   const renderer = new XmlRenderer();
   const content = await renderer.render(snapshot, thread);
 
+  // Observability mirror: stash the pipeline's actually-rendered window set
+  // (base + derived: protocol/activator knowledge, peer Objects, form knowledge)
+  // so finishLlmLoop's windowsSnapshot reflects what the LLM saw, not just the
+  // persisted thread.contextWindows (which omits all derived windows). Transient,
+  // never persisted. See _shared/types/thread.ts:_renderedWindows.
+  thread._renderedWindows = snapshot.windows;
+
   // P0f: fold _foldedBy events; events_summary renders as its own placeholder
   const transcript = thread.events.flatMap((event) =>
     event._foldedBy ? [] : processEventToItems(thread, event),
