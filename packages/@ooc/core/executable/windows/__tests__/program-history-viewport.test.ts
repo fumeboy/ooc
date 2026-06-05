@@ -26,7 +26,7 @@ import {
   executeProgramSetHistoryViewport,
   hasAnyHistoryViewportField,
 } from "@ooc/builtins/program";
-import { executeProgramCommand } from "@ooc/builtins/root/executable/command.program.js";
+import { executeProgramCommand } from "@ooc/builtins/root/executable/method.program.js";
 import { executeProgramWindowExec } from "@ooc/builtins/program";
 import { makeThread } from "../../../__tests__/make-thread.js";
 

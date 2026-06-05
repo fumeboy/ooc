@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   derivePeerObjectWindows,
-  deriveRelationWindow,
 } from "../synthesizer.js";
 import { makeThread } from "../../../__tests__/make-thread";
 import {
@@ -137,27 +136,5 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
     const peerWindows = result.filter((w) => w.id === "agent_peer");
     expect(peerWindows.length).toBe(1);
     expect(peerWindows[0]!.createdAt).toBe(50);
-  });
-
-  it("runs alongside legacy deriveRelationWindow (backward compat)", async () => {
-    const thread = makePeerThread("agent_self", [
-      {
-        id: "w_talk_1",
-        type: "talk",
-        parentWindowId: "root",
-        title: "talk to peer1",
-        status: "open",
-        createdAt: 100,
-        target: "agent_peer1",
-        conversationId: "conv1",
-      },
-    ]);
-    const peerWindows = await derivePeerObjectWindows(thread);
-    const relationWindows = await deriveRelationWindow(thread);
-
-    expect(peerWindows.length).toBe(1);
-    expect(peerWindows[0]!.type).toBe("agent_peer1" as any);
-    expect(relationWindows.length).toBe(1);
-    expect(relationWindows[0]!.type).toBe("relation");
   });
 });

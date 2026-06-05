@@ -11,6 +11,7 @@ import {
 } from "../../persistable";
 import type { ThreadContext } from "../context";
 import type { LlmClient, LlmGenerateResult, LlmToolCall } from "../llm/types";
+import type { ContextWindow } from "../../executable/windows/_shared/types";
 import { runScheduler } from "../scheduler";
 import { clearObservableDebugState, disableDebug, enableDebug } from "../../observable";
 
@@ -101,7 +102,7 @@ describe("single object runtime", () => {
     expect(loopMeta.loopIndex).toBe(2);
     expect(loopMeta.status).toBe("ok");
     // 2026-05-26: plan 升格为 plan_window；旧 thread.plan 字段已废弃。
-    const rootPlanWindow = root.contextWindows.find((w) => w.type === "plan");
+    const rootPlanWindow = (root.contextWindows as ContextWindow[]).find((w) => w.type === "plan");
     expect(rootPlanWindow?.type).toBe("plan");
     expect(rootPlanWindow && rootPlanWindow.type === "plan" && rootPlanWindow.description).toBe(
       "完成单 object 最小闭环",

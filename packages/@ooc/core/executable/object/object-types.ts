@@ -14,9 +14,6 @@
  *   按 `window.type` 路由到这里
  * - commands：标准 ObjectMethod 字典；commands[name].exec 会在 dispatcher
  *   层包一层"把 self: ProgramSelf 注入到 ctx"再执行
- *
- * `ServerMethod` / `LlmMethods` / `ServerMethodContext` 三件套（旧 llm_methods 时代
- * 的概念）已硬切删除（plan D6）。
  */
 
 import type {

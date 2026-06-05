@@ -256,7 +256,7 @@ describe("observable persistable debug files", () => {
     const hashB1 = meta1.windowsSnapshot[1].contentHash;
 
     // Loop 2: 改 a 的 path（内容变化），删 b（close 关闭）
-    (thread.contextWindows[0] as { path: string }).path = "src/a-v2.ts";
+    (thread.contextWindows[0] as unknown as { path: string }).path = "src/a-v2.ts";
     thread.contextWindows = [thread.contextWindows[0]!];
     const h2 = await observableModule.beginLlmLoop(thread, inputItems, tools);
     await observableModule.finishLlmLoop(thread, h2, { result, status: "ok" });

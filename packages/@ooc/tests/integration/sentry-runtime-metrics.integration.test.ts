@@ -10,7 +10,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
-import { clearServerLoaderCache, loadObjectWindow } from "@ooc/core/executable/server/loader";
+import { clearServerLoaderCache, loadObjectWindow } from "@ooc/core/runtime/server-loader";
 import type { StoneObjectRef } from "@ooc/core/persistable";
 
 const baseDir = resolve(__dirname, "../../.ooc-world");

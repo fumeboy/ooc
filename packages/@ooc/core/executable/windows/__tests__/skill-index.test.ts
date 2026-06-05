@@ -13,7 +13,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { collectExecutableKnowledgeEntries } from "../../../thinkable/knowledge/synthesizer";
+import { synthesizeSkillIndex } from "../../../thinkable/context/skill-index";
 import { branchSkillsDir, clearStoneSkillsCache, objectSkillsDir } from "../../../persistable/stone-skills";
 import { makeThread } from "../../../__tests__/make-thread";
 import type { ContextWindow, SkillIndexWindow } from "../_shared/types";
@@ -48,8 +48,8 @@ describe("synthesizer skill_index 派生", () => {
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
     });
-    const result = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
-    expect(findSkillIndex(result.contextWindows)).toBeUndefined();
+    const result = await synthesizeSkillIndex(thread);
+    expect(findSkillIndex(result)).toBeUndefined();
   });
 
   test("branch + object skills 合并；object 同名优先", async () => {
@@ -64,8 +64,8 @@ describe("synthesizer skill_index 派生", () => {
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
     });
-    const result = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
-    const skillIndex = findSkillIndex(result.contextWindows);
+    const result = await synthesizeSkillIndex(thread);
+    const skillIndex = findSkillIndex(result);
     expect(skillIndex).toBeDefined();
     expect(skillIndex?.skills.length).toBe(3);
     const names = skillIndex!.skills.map((s) => s.name).sort();
@@ -84,8 +84,8 @@ describe("synthesizer skill_index 派生", () => {
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
     });
-    const result = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
-    const skillIndex = findSkillIndex(result.contextWindows);
+    const result = await synthesizeSkillIndex(thread);
+    const skillIndex = findSkillIndex(result);
     expect(skillIndex?.skills.length).toBe(1);
     expect(skillIndex?.skills[0]?.scope).toBe("workspace");
   });
@@ -99,8 +99,8 @@ describe("synthesizer skill_index 派生", () => {
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
     });
-    const result = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
-    const skillIndex = findSkillIndex(result.contextWindows);
+    const result = await synthesizeSkillIndex(thread);
+    const skillIndex = findSkillIndex(result);
     expect(skillIndex?.skills.length).toBe(1);
     expect(skillIndex?.skills[0]?.scope).toBe("object");
   });
@@ -108,7 +108,7 @@ describe("synthesizer skill_index 派生", () => {
   test("thread 无 persistence → 跳过派生（无法定位 stoneRef）", async () => {
     const thread = makeThread({ id: "t" });
     expect(thread.persistence).toBeUndefined();
-    const result = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
-    expect(findSkillIndex(result.contextWindows)).toBeUndefined();
+    const result = await synthesizeSkillIndex(thread);
+    expect(findSkillIndex(result)).toBeUndefined();
   });
 });

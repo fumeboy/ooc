@@ -47,6 +47,18 @@
 - **G4**（xml.ts 经 registry 抽象消除对 `executable/windows/{do,talk}` 的直接 import）**做**：给 `ObjectDefinition` 加 `consumedMessageIds?(window, thread)` hook，do/talk 注册指向各自 `filterMessagesFor*Window`，xml.ts 改走 registry 派发——破 batch C 残留的最后一处 thinkable→executable 渲染耦合。同一逻辑仅改派发方式，行为保留。
 - **G3**（estimateWindowsTokens 与 BudgetManager token 估算去重）**推迟到 harness 阶段**：token 估算直接影响 budget overflow / 压缩决策；两估算器若非逐字等价，合并会改渲染行为。需 live render 验证等价后再合并。
 
+## DD5 — 批次 A 残项 A8（BudgetManager 双分配）推迟，与 G3 合并
+
+**裁决（2026-06-05）**：A8 推迟到 harness 运行时阶段，与 DD4 推迟的 G3 合并为一个「budget/token 估算等价性 pass」。A9（thinkable 侧 3 处 `(thread as any).intentCache` cast）已完成；`manager.ts` 残留 4 处 cast 属 executable 跨模块访问 thinkable `intentCache`，不在 A9 声明范围，作已知妥协保留。
+
+**理由：**
+1. **不是纯冗余，两次 allocate 作用域不同**：`pipeline.ts:60` 的 allocate 只影响本轮 LLM input 渲染（transient）；`thinkloop.ts:424` 的 allocate 改写 `thread.contextWindows = allocation.visible` 并 push `context_compressed` 事件（persistent，影响下一轮起点 + 写回 thread.json）。合并须先厘清哪次截断该持久化。
+2. **等价性 tsc 测不出**：两处虽同用 `thresholds.hard`，但 thinkloop 用 module-singleton `BUDGET_MANAGER`、pipeline 用 per-call `new BudgetManager()`；若 BudgetManager 含内部状态，visible 集合可能不一致。只有 live render 能验证截断等价。
+3. **A8 的 estimateWindowsTokens 复用部分 == G3**（thinkable.md:128），G3 已于 DD4 推迟，二者同源应合并同做。
+4. **与 goal 一致**：改 LLM 可见 context 的合并属高风险运行时行为，在测试未修的当下引入性价比为负。
+
+**复做前提**：harness 就绪、能跑真实轮次比对两次 allocate 的 visible 集合等价后，作为独立 commit 合并（thinkloop 不再独立 allocate，直接复用 pipeline 输出的 allocation + tokens）。
+
 ## 已执行偏离汇总
 - **D6（logger 统一）** → 推迟到批次 F：依赖 F1（observable 并入 runtime）后才有 runtime 统一 logger API。
 - **D5（openMethodExec 更名）** → 跳过：计划自身建议"先保持现状"。

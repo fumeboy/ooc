@@ -3,11 +3,11 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
 import { createStoneObject, readFlowData, writeExecutableSource } from "../../persistable";
-import { createProgramSelf } from "../server/self";
-import { clearServerLoaderCache } from "../server/loader";
+import { createProgramSelf } from "../object/self";
+import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader";
 import type { ThreadContext } from "../../thinkable/context";
 import { makeThread } from "../../__tests__/make-thread";
-import { loadObjectWindow } from "../server/loader";
+import { loadObjectWindow } from "@ooc/core/runtime/server-loader";
 import { builtinRegistry } from "../windows/_shared/registry";
 import type { ContextWindow } from "../windows/_shared/types";
 

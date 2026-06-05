@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
 import { createStoneObject, writeExecutableSource } from "../../persistable";
-import { clearServerLoaderCache, loadObjectWindow, loadUiServerMethods } from "../server/loader";
+import { clearServerLoaderCache, loadObjectWindow, loadUiServerMethods } from "@ooc/core/runtime/server-loader";
 
 let tempRoot: string | undefined;
 

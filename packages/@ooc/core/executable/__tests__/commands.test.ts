@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { ROOT_METHODS, getOpenableMethods, deriveRootMethodPaths } from "../windows";
-import { programCommand } from "@ooc/builtins/root/executable/command.program";
+import { programCommand } from "@ooc/builtins/root/executable/method.program";
 import type { Intent } from "@ooc/core/thinkable/context/intent.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";

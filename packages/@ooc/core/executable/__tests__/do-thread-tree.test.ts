@@ -27,14 +27,14 @@ describe("do command (ContextWindow model)", () => {
 
     // 父侧 do_window 指向 child
     const doWindow = parent.contextWindows.find(
-      (w): w is DoWindow => w.type === "do" && !w.isCreatorWindow,
+      (w): w is DoWindow => w.type === "do" && !(w as DoWindow).isCreatorWindow,
     );
     expect(doWindow).toBeDefined();
     expect(doWindow!.targetThreadId).toBe(childId);
 
     // child 自己有 creator do_window 指向父
     const childCreatorWindow = child.contextWindows.find(
-      (w): w is DoWindow => w.type === "do" && w.isCreatorWindow === true,
+      (w): w is DoWindow => w.type === "do" && (w as DoWindow).isCreatorWindow === true,
     );
     expect(childCreatorWindow).toBeDefined();
     expect(childCreatorWindow!.id).toBe(creatorWindowIdOf(childId));

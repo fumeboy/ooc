@@ -30,6 +30,7 @@ import { makeThread } from "@ooc/core/__tests__/make-thread";
 import * as toolsModule from "@ooc/core/executable/tools";
 import * as observableModule from "@ooc/core/observable";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
+import { deriveStoneFromThread, stoneDir } from "@ooc/core/persistable/common";
 import * as contextModule from "@ooc/core/thinkable/context";
 import type {
   LlmClient,
@@ -79,11 +80,26 @@ function makeLlmClient(result: LlmGenerateResult): LlmClient {
  * 创建一份独立的 stone-style 持久化引用 (tmpRoot/stones/main/objects/<oid>/config/...)。
  * 测试用 — 不实际跑 worker, 只用来让 loadPoliciesJson 能找到 config 文件。
  */
+/**
+ * policies.json 的物理落点必须与 loadPoliciesJson 一致——后者走
+ * `stoneDir(deriveStoneFromThread(persistence))`。M2 (2026-06-03) canonical 布局后该路径
+ * 是 flat `stones/<objectId>/config/policies.json`（非旧 `stones/main/objects/<id>/`），
+ * 故直接用 stoneDir 推算，避免再次硬编码旧布局漂移。
+ */
+function policiesConfigDir(ref: ThreadPersistenceRef): string {
+  return join(stoneDir(deriveStoneFromThread(ref)), "config");
+}
+
 function setupPersistence(tmpRoot: string, objectId: string): ThreadPersistenceRef {
   const baseDir = tmpRoot;
-  // stones 目录结构 (loadPoliciesJson 走 deriveStoneFromThread + stoneDir)
-  const stoneConfigDir = join(baseDir, "stones", "main", "objects", objectId, "config");
-  mkdirSync(stoneConfigDir, { recursive: true });
+  const ref: ThreadPersistenceRef = {
+    baseDir,
+    sessionId: "test-session",
+    objectId,
+    threadId: "t_q0b",
+  };
+  // stones 目录结构 (loadPoliciesJson 走 deriveStoneFromThread + stoneDir → flat 布局)
+  mkdirSync(policiesConfigDir(ref), { recursive: true });
   // flow 目录(thread.persistence 自身需要的形态; 不实际写文件)
   const threadDir = join(
     baseDir,
@@ -95,24 +111,11 @@ function setupPersistence(tmpRoot: string, objectId: string): ThreadPersistenceR
     "t_q0b",
   );
   mkdirSync(threadDir, { recursive: true });
-  return {
-    baseDir,
-    sessionId: "test-session",
-    objectId,
-    threadId: "t_q0b",
-  };
+  return ref;
 }
 
 function writePoliciesJson(ref: ThreadPersistenceRef, raw: string): void {
-  const path = join(
-    ref.baseDir,
-    "stones",
-    "main",
-    "objects",
-    ref.objectId,
-    "config",
-    "policies.json",
-  );
+  const path = join(policiesConfigDir(ref), "policies.json");
   writeFileSync(path, raw, "utf8");
 }
 

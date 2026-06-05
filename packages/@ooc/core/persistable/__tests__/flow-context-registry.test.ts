@@ -9,7 +9,7 @@ import {
   EMPTY_REGISTRY,
   type ContextRegistry,
 } from "../flow-context-registry";
-import { __resetSerialQueueForTests } from "../serial-queue";
+import { __resetSerialQueueForTests } from "@ooc/core/runtime/serial-queue";
 import type { ThreadPersistenceRef } from "../common";
 
 describe("flow-context-registry — ooc-6 P5'.1 thread context.json", () => {

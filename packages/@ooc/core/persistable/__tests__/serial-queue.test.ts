@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { __resetSerialQueueForTests, enqueueSessionWrite } from "../serial-queue";
+import { __resetSerialQueueForTests, enqueueSessionWrite } from "@ooc/core/runtime/serial-queue";
 
 let tempBase: string | undefined;
 

@@ -470,7 +470,7 @@ export function findContextWindows(
   thread: ThreadContext | undefined,
   predicate: (w: ContextWindow) => boolean,
 ): ContextWindow[] {
-  return (thread?.contextWindows ?? []).filter(predicate);
+  return ((thread?.contextWindows ?? []) as ContextWindow[]).filter(predicate);
 }
 
 // ────────────────────────────────────────────────────────────────────────────

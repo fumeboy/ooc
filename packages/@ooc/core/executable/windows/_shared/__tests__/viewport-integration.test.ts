@@ -210,7 +210,7 @@ describe("viewport: knowledge_window integration", () => {
       thread.contextWindows = mgr.toData();
       expect(opened.autoSubmitted).toBe(true);
       const after = thread.contextWindows.find(
-        (w): w is KnowledgeWindow => w.type === "knowledge" && w.source === "explicit",
+        (w): w is KnowledgeWindow => w.type === "knowledge" && (w as KnowledgeWindow).source === "explicit",
       )!;
       expect(after.viewport).toEqual({
         lineStart: 0,

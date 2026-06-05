@@ -62,7 +62,7 @@ function findParentSideDoWindow(thread: ThreadContext): DoWindow {
     (w) => w.type === "do" && !(w as DoWindow).isCreatorWindow,
   );
   if (!win || win.type !== "do") throw new Error("expected parent-side do_window");
-  return win;
+  return win as DoWindow;
 }
 
 /** 通过子 thread 持有的 creator do_window 找到子→父归还通道。 */
@@ -71,7 +71,7 @@ function findChildCreatorDoWindow(child: ThreadContext): DoWindow {
     (w) => w.type === "do" && (w as DoWindow).isCreatorWindow,
   );
   if (!win || win.type !== "do") throw new Error("expected creator do_window on child");
-  return win;
+  return win as DoWindow;
 }
 
 /** child 通过其 WindowManager 在某 plan_window 上执行命令（owner 路径）。 */

@@ -31,7 +31,7 @@ import {
 } from "@ooc/core/persistable";
 import { builtinRegistry } from "@ooc/core/executable/windows";
 import { createStoneObject, writeReadable } from "@ooc/core/persistable";
-import { renderContextXml } from "@ooc/core/thinkable/context/render";
+import { renderContextXml } from "@ooc/core/__tests__/render-context-xml";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import {
   parseTrigger,
@@ -481,7 +481,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
           createdAt: Date.now(),
           content: "Complete harness test",
         },
-      ],
+      ] as ContextWindow[],
     });
 
     // Simulate what synthesizer does: derive peer objects and add to context

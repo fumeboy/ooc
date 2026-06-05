@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests } from "@ooc/core/persistable";
-import { executeWriteFileCommand } from "@ooc/builtins/root/executable/command.write-file";
+import { executeWriteFileCommand } from "@ooc/builtins/root/executable/method.write-file";
 import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
 
 let tempRoots: string[] = [];
@@ -112,7 +112,7 @@ describe("write_file stone-versioning routing", () => {
     // 形态而不是 thread.contextWindows 上的副作用。
     if (typeof out === "object" && out && out.ok === true && "object" in out) {
       expect(out.object.type).toBe("file");
-      expect((out.object as { path: string }).path).toContain("agent_of_x/self.md");
+      expect((out.object as unknown as { path: string }).path).toContain("agent_of_x/self.md");
     }
   });
 

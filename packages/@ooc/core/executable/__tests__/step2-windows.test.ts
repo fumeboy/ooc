@@ -38,7 +38,7 @@ describe("Step 2 window lifecycles", () => {
 
       // 创建 talk_window 指向 bob
       await execRootMethod("talk", { thread, args: { target: "bob", title: "release plan" } });
-      const talkWindow = thread.contextWindows.find((w): w is TalkWindow => w.type === "talk" && !w.isCreatorWindow);
+      const talkWindow = thread.contextWindows.find((w): w is TalkWindow => w.type === "talk" && !(w as TalkWindow).isCreatorWindow);
       expect(talkWindow).toBeDefined();
       expect(talkWindow!.target).toBe("bob");
 
@@ -221,7 +221,7 @@ describe("Step 2 window lifecycles", () => {
       // assistant 创建 talk_window 指向 bob
       await execRootMethod("talk", { thread: assistantThread, args: { target: "bob", title: "ask bob" } });
       const talkToBob = assistantThread.contextWindows.find(
-        (w): w is TalkWindow => w.type === "talk" && w.target === "bob",
+        (w): w is TalkWindow => w.type === "talk" && (w as TalkWindow).target === "bob",
       );
       expect(talkToBob).toBeDefined();
 
@@ -246,7 +246,7 @@ describe("Step 2 window lifecycles", () => {
       ))!;
       expect(bobThread).toBeTruthy();
       const bobCreatorTalk = bobThread.contextWindows.find(
-        (w): w is TalkWindow => w.type === "talk" && w.target === "assistant" && Boolean(w.isCreatorWindow),
+        (w): w is TalkWindow => w.type === "talk" && (w as TalkWindow).target === "assistant" && Boolean((w as TalkWindow).isCreatorWindow),
       );
       expect(bobCreatorTalk).toBeDefined();
 

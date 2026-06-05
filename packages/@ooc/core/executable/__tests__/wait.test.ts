@@ -19,7 +19,7 @@ import {
 
 function findCreatorDoWindow(thread: ThreadContext): DoWindow {
   const found = thread.contextWindows.find(
-    (w): w is DoWindow => w.type === "do" && w.isCreatorWindow === true,
+    (w): w is DoWindow => w.type === "do" && (w as DoWindow).isCreatorWindow === true,
   );
   if (!found) throw new Error("test setup: expected creator do_window");
   return found;

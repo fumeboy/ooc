@@ -3,6 +3,7 @@ import * as toolsModule from "../../executable/tools.ts";
 import * as observableModule from "../../observable/index.ts";
 import * as contextModule from "../context.ts";
 import type { LlmClient, LlmGenerateResult, LlmInputItem, LlmToolCall } from "../llm/types";
+import type { ContextWindow } from "../../executable/windows/_shared/types";
 import { think } from "../thinkloop.ts";
 import { LlmTimeoutError } from "../llm/timeout.ts";
 
@@ -288,7 +289,7 @@ describe("think", () => {
 
     await think(thread, llmClient);
     // 自动 submit 后直接产出 todo_window，不应留下 command_exec form
-    const todoWindows = thread.contextWindows.filter((w) => w.type === "todo");
+    const todoWindows = (thread.contextWindows as ContextWindow[]).filter((w) => w.type === "todo");
     expect(todoWindows).toHaveLength(1);
     expect(todoWindows[0]?.type === "todo" && todoWindows[0].content).toBe("补充 thinkloop 集成测试");
     const lingeringForms = thread.contextWindows.filter((w) => w.type === "method_exec");

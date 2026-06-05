@@ -86,7 +86,8 @@ export const programCommand: ObjectMethod = {
     return r;
   },
   onFormChange(change, { form, intents }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
+    // program 是 status_changed 特例：不同于其它 method（form 完成即移除、non-open 无需 guidance），
+    // program 在 executing/success/failed 各有专属引导（见下 formStatus 分支），故**不**早返回 non-open。
     // batch C narrowing(N1): onFormChange 的 form 在契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs（runtime 保证此 form 即 method_exec form）。
     const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;

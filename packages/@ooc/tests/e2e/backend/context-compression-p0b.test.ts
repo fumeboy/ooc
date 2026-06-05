@@ -26,7 +26,7 @@ import { join } from "node:path";
 
 import { dispatchToolCall } from "@ooc/core/executable/tools";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
-import { renderContextXml } from "@ooc/core/thinkable/context/render";
+import { renderContextXml } from "@ooc/core/__tests__/render-context-xml";
 import { generateWindowId } from "@ooc/core/executable/windows/_shared/types";
 import type { FileWindow } from "@ooc/core/executable/windows/_shared/types";
 

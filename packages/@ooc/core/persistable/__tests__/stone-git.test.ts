@@ -25,7 +25,7 @@ import {
   gitWorktreeRemove,
   isValidBranchName,
   __testing,
-} from "../stone-git";
+} from "@ooc/core/programmable/git";
 
 let tempRoots: string[] = [];
 

@@ -14,7 +14,7 @@ import { dispatchToolCall } from "../../tools";
 import { WindowManager, builtinRegistry } from "../../windows";
 import { makeThread } from "../../../__tests__/make-thread";
 import type { ThreadContext } from "../../../thinkable/context";
-import type { ContextWindow } from "../_shared/types";
+import type { ContextWindow, DoWindow, FileWindow } from "../_shared/types";
 
 function findChild(parent: ThreadContext): ThreadContext {
   const childId = (parent.childThreadIds ?? [])[0];
@@ -23,7 +23,7 @@ function findChild(parent: ThreadContext): ThreadContext {
 }
 
 function findDoWindow(thread: ThreadContext): { id: string } {
-  const win = (thread.contextWindows ?? []).find((w) => w.type === "do" && !w.isCreatorWindow);
+  const win = (thread.contextWindows ?? []).find((w) => w.type === "do" && !(w as DoWindow).isCreatorWindow);
   if (!win) throw new Error("expected do_window in parent");
   return { id: win.id };
 }
@@ -148,11 +148,11 @@ describe("do_window.move 归还路径", () => {
     // 子要修改 file path 模拟 latest 内容（实际场景是 file_window.edit 之类）
     const childFile = (child.contextWindows ?? []).find((w) => w.id === "w_file_5");
     if (childFile && childFile.type === "file") {
-      childFile.path = "/tmp/e-modified.txt";
+      (childFile as FileWindow).path = "/tmp/e-modified.txt";
     }
     // 子在 creator do_window 上发起归还
     const creator = (child.contextWindows ?? []).find(
-      (w) => w.type === "do" && w.isCreatorWindow,
+      (w) => w.type === "do" && (w as DoWindow).isCreatorWindow,
     );
     expect(creator).toBeDefined();
 
@@ -173,7 +173,7 @@ describe("do_window.move 归还路径", () => {
     const parentFile = (parent.contextWindows ?? []).find((w) => w.id === "w_file_5");
     expect(parentFile?.sharing).toBeUndefined();
     if (parentFile && parentFile.type === "file") {
-      expect(parentFile.path).toBe("/tmp/e-modified.txt");
+      expect((parentFile as FileWindow).path).toBe("/tmp/e-modified.txt");
     }
     // 子侧：副本被移除
     const childFileAfter = (child.contextWindows ?? []).find((w) => w.id === "w_file_5");
@@ -197,7 +197,7 @@ describe("archiveDoWindowChild 自动归还", () => {
     const doWindow = (parent.contextWindows ?? []).find((w) => w.id === doWindowId);
     expect(doWindow?.type).toBe("do");
     if (doWindow?.type === "do") {
-      archiveDoWindowChild(parent, doWindow);
+      archiveDoWindowChild(parent, doWindow as DoWindow);
     }
 
     // 父侧 file 恢复 owner（直接看 parent.contextWindows，不经 mgr）

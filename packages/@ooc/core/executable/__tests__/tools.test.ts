@@ -2,6 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { OOC_TOOLS, buildAvailableTools } from "../tools/index";
 import { dispatchToolCall } from "../tools";
 import { makeThread } from "../../__tests__/make-thread";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 
 /**
  * tools.test — 3 原语在 ContextWindow 模型下的行为验证（plan exec-refactor）。
@@ -45,7 +46,7 @@ describe("executable tools (ContextWindow model)", () => {
     expect(parsed.tool).toBe("exec");
     expect(parsed.executed).toBe(false);
 
-    const forms = thread.contextWindows.filter((w) => w.type === "method_exec");
+    const forms = (thread.contextWindows as ContextWindow[]).filter((w) => w.type === "method_exec");
     expect(forms).toHaveLength(1);
     expect(forms[0]?.command).toBe("plan");
   });
@@ -61,10 +62,10 @@ describe("executable tools (ContextWindow model)", () => {
         args: { plan: "先 reshape，再迁移测试" },
       },
     });
-    const forms = thread.contextWindows.filter((w) => w.type === "method_exec");
+    const forms = (thread.contextWindows as ContextWindow[]).filter((w) => w.type === "method_exec");
     expect(forms).toHaveLength(0);
     // 2026-05-26: plan 升格为 plan_window；不再写 thread.plan 字段
-    const planWindow = thread.contextWindows.find((w) => w.type === "plan");
+    const planWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "plan");
     expect(planWindow?.type).toBe("plan");
     expect(planWindow && planWindow.type === "plan" && planWindow.description).toBe(
       "先 reshape，再迁移测试",
@@ -78,7 +79,7 @@ describe("executable tools (ContextWindow model)", () => {
       name: "exec",
       arguments: { title: "派生子线程", command: "do", description: "fork" },
     });
-    const formId = thread.contextWindows.find((w) => w.type === "method_exec")?.id ?? "";
+    const formId = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "method_exec")?.id ?? "";
     const output = await dispatchToolCall(thread, {
       id: "call_2",
       name: "exec",
@@ -90,7 +91,7 @@ describe("executable tools (ContextWindow model)", () => {
       },
     });
 
-    const form = thread.contextWindows.find((w) => w.id === formId);
+    const form = (thread.contextWindows as ContextWindow[]).find((w) => w.id === formId);
     expect(form && form.type === "method_exec" && form.accumulatedArgs).toEqual({ wait: true });
     expect(form && form.type === "method_exec" && form.commandPaths).toContain("do.wait");
     expect(JSON.parse(output).ok).toBe(true);
@@ -103,7 +104,7 @@ describe("executable tools (ContextWindow model)", () => {
       name: "exec",
       arguments: { title: "派生", command: "do", description: "fork" },
     });
-    const formId = thread.contextWindows.find((w) => w.type === "method_exec")?.id ?? "";
+    const formId = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "method_exec")?.id ?? "";
     await dispatchToolCall(thread, {
       id: "call_2",
       name: "exec",
@@ -122,7 +123,7 @@ describe("executable tools (ContextWindow model)", () => {
 
     const parsed = JSON.parse(output);
     expect(parsed.ok).toBe(true);
-    expect(thread.contextWindows.find((w) => w.id === formId)).toBeUndefined();
+    expect((thread.contextWindows as ContextWindow[]).find((w) => w.id === formId)).toBeUndefined();
   });
 
   it("MethodExecWindow.submit 失败时 form 保留 status=failed, 可 refine 复活 (Round 13)", async () => {
@@ -133,13 +134,13 @@ describe("executable tools (ContextWindow model)", () => {
       name: "exec",
       arguments: { title: "派生", command: "do", description: "fork" },
     });
-    const formId = thread.contextWindows.find((w) => w.type === "method_exec")?.id ?? "";
+    const formId = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "method_exec")?.id ?? "";
     await dispatchToolCall(thread, {
       id: "call_2",
       name: "exec",
       arguments: { title: "执行", window_id: formId, command: "submit" },
     });
-    const form = thread.contextWindows.find((w) => w.id === formId);
+    const form = (thread.contextWindows as ContextWindow[]).find((w) => w.id === formId);
     expect(form?.type).toBe("method_exec");
     expect(form && form.type === "method_exec" && form.status).toBe("failed");
     expect(form && form.type === "method_exec" && form.result).toContain("[do] 缺少 msg");
@@ -152,13 +153,13 @@ describe("executable tools (ContextWindow model)", () => {
       name: "exec",
       arguments: { title: "派生", command: "do", description: "fork" },
     });
-    const formId = thread.contextWindows.find((w) => w.type === "method_exec")?.id ?? "";
+    const formId = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "method_exec")?.id ?? "";
     const output = await dispatchToolCall(thread, {
       id: "call_2",
       name: "close",
       arguments: { window_id: formId, reason: "不需要了" },
     });
-    expect(thread.contextWindows.find((w) => w.id === formId)).toBeUndefined();
+    expect((thread.contextWindows as ContextWindow[]).find((w) => w.id === formId)).toBeUndefined();
     expect(JSON.parse(output).ok).toBe(true);
   });
 
@@ -178,7 +179,7 @@ describe("executable tools (ContextWindow model)", () => {
 
   it("close creator do_window 时被拒绝并写 inject 事件", async () => {
     const thread = makeThread();
-    const creator = thread.contextWindows.find((w) => w.type === "do" && w.isCreatorWindow);
+    const creator = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "do" && w.isCreatorWindow);
     expect(creator).toBeDefined();
     const output = await dispatchToolCall(thread, {
       id: "call_1",
@@ -186,13 +187,13 @@ describe("executable tools (ContextWindow model)", () => {
       arguments: { window_id: creator!.id, reason: "尝试关闭" },
     });
     expect(JSON.parse(output).ok).toBe(false);
-    expect(thread.contextWindows.find((w) => w.id === creator!.id)).toBeDefined();
+    expect((thread.contextWindows as ContextWindow[]).find((w) => w.id === creator!.id)).toBeDefined();
     expect(thread.events.some((e) => e.kind === "inject" && e.text.includes("close 拒绝"))).toBe(true);
   });
 
   it("wait 把线程切到 waiting 并记录 inboxSnapshotAtWait + waitingOn", async () => {
     const thread = makeThread({ inbox: [] });
-    const creatorDo = thread.contextWindows.find(
+    const creatorDo = (thread.contextWindows as ContextWindow[]).find(
       (w) => w.type === "do" && w.isCreatorWindow,
     );
     expect(creatorDo).toBeDefined();

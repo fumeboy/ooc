@@ -7,6 +7,7 @@ import {
   makeRootThread,
   setupTempFlow,
 } from "./_fixture";
+import type { MethodExecWindow } from "@ooc/core/executable/windows/_shared/types";
 
 describe.skipIf(!hasLlmEnv)("integration: executed-form-cleanup", () => {
   let tempRoot: string;
@@ -38,7 +39,7 @@ describe.skipIf(!hasLlmEnv)("integration: executed-form-cleanup", () => {
     expect(countFormExecutions(root)).toBeGreaterThanOrEqual(1);
 
     const programForms = root.contextWindows.filter(
-      (w) => w.type === "method_exec" && w.command === "program",
+      (w) => w.type === "method_exec" && (w as MethodExecWindow).command === "program",
     );
     expect(programForms.length).toBe(0);
   }, 120_000);

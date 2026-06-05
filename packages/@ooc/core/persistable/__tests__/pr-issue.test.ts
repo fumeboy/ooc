@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { __resetSerialQueueForTests } from "../serial-queue";
+import { __resetSerialQueueForTests } from "@ooc/core/runtime/serial-queue";
 import {
   createPrIssue,
   createRecoveryIssue,

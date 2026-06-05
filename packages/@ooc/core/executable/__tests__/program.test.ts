@@ -3,11 +3,11 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, test } from "bun:test";
 import { runOneExec } from "@ooc/builtins/program";
-import { executeProgramCommand } from "@ooc/builtins/root/executable/command.program";
+import { executeProgramCommand } from "@ooc/builtins/root/executable/method.program";
 import { executeProgramWindowExec } from "@ooc/builtins/program";
 import type { ProgramWindow } from "../windows/_shared/types";
 import { createStoneObject, writeExecutableSource } from "../../persistable";
-import { clearServerLoaderCache } from "../server/loader";
+import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader";
 import { makeThread } from "../../__tests__/make-thread";
 
 /**

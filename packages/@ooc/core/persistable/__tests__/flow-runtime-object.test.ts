@@ -9,7 +9,7 @@ import {
   deleteRuntimeObject,
   createRuntimeObject,
 } from "../flow-runtime-object";
-import { __resetSerialQueueForTests } from "../serial-queue";
+import { __resetSerialQueueForTests } from "@ooc/core/runtime/serial-queue";
 import type { ContextWindow } from "../../executable/windows/_shared/types.js";
 import type { FlowObjectRef } from "../common";
 

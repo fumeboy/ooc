@@ -13,9 +13,9 @@ import {
   tryMergeSelf,
   pruneStaleWorktrees,
   __testing,
-} from "../stone-versioning";
-import { __resetSerialQueueForTests } from "../serial-queue";
-import { gitHead, gitRevParse } from "../stone-git";
+} from "@ooc/core/programmable/versioning";
+import { __resetSerialQueueForTests } from "@ooc/core/runtime/serial-queue";
+import { gitHead, gitRevParse } from "@ooc/core/programmable/git";
 import { readPrIssue } from "../pr-issue";
 
 let tempRoots: string[] = [];
@@ -428,8 +428,10 @@ describe("supervisorCreateObject", () => {
     expect(selfOnMain).toBe("# weather — query weather\n");
     const kn = await readFile(join(baseDir, "stones", "main", "objects", "weather", "knowledge", "usage.md"), "utf8");
     expect(kn).toBe("Pass {city}.\n");
-    const meta = await readFile(join(baseDir, "stones", "main", "objects", "weather", ".stone.json"), "utf8");
-    expect(JSON.parse(meta)).toMatchObject({ type: "stone", objectId: "weather" });
+    // 2026-06-01 ooc-6: createStoneObject 现写 package.json（bun workspace metadata）作为
+    // canonical stone marker，不再写 .stone.json。
+    const meta = await readFile(join(baseDir, "stones", "main", "objects", "weather", "package.json"), "utf8");
+    expect(JSON.parse(meta)).toMatchObject({ ooc: { objectId: "weather", kind: "object" } });
   });
 
   test("rejects when stone already exists", async () => {
@@ -451,7 +453,7 @@ describe("supervisorCreateObject", () => {
     if (!dup.ok) expect(dup.code).toBe("ALREADY_EXISTS");
   });
 
-  test("rejects supervisor itself (bootstrap path only)", async () => {
+  test("rejects supervisor itself (Builtin Object conflict)", async () => {
     const baseDir = await newWorld();
     const r = await supervisorCreateObject({
       baseDir,
@@ -460,7 +462,9 @@ describe("supervisorCreateObject", () => {
       readableMd: "y",
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("INVALID_INPUT");
+    // supervisor 现为 Builtin Object（packages/@ooc/builtins/supervisor）→ BUILTIN_CONFLICT
+    // （原 INVALID_INPUT 是 supervisor 成为 Builtin 前的旧契约）。
+    if (!r.ok) expect(r.code).toBe("BUILTIN_CONFLICT");
   });
 
   test("rejects empty selfMd / readableMd", async () => {

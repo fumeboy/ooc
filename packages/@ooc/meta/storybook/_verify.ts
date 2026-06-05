@@ -161,7 +161,7 @@ async function main() {
     ].join("\n"));
     await sleep(250);
 
-    const { loadObjectWindow } = await import("@ooc/core/executable/server/loader");
+    const { loadObjectWindow } = await import("@ooc/core/runtime/server-loader");
     const win = await loadObjectWindow({ baseDir: worldDir, objectId: id });
     const hasGreet = !!win?.methods?.greet;
     const pathsOk = JSON.stringify(win?.methods?.greet?.paths) === JSON.stringify(["greet"]);

@@ -22,7 +22,7 @@ import { describe, expect, it } from "bun:test";
 // side-effect: 触发 windows 注册（含 plan）
 import "@ooc/core/executable/windows";
 import { execRootMethod, WindowManager, builtinRegistry } from "@ooc/core/executable/windows";
-import { renderContextXml } from "@ooc/core/thinkable/context/render";
+import { renderContextXml } from "@ooc/core/__tests__/render-context-xml";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import type {
   ContextWindow,
@@ -36,12 +36,12 @@ import type { ThreadContext } from "@ooc/core/thinkable/context";
 function findPlanWindow(thread: ThreadContext): PlanWindow {
   const w = (thread.contextWindows ?? []).find((x) => x.type === "plan");
   if (!w || w.type !== "plan") throw new Error("expected plan_window in thread");
-  return w;
+  return w as PlanWindow;
 }
 
 function findPlanWindowById(thread: ThreadContext, id: string): PlanWindow | undefined {
   const w = (thread.contextWindows ?? []).find((x) => x.id === id);
-  return w && w.type === "plan" ? w : undefined;
+  return w && w.type === "plan" ? (w as PlanWindow) : undefined;
 }
 
 /** 模拟 manager.openMethodExec 流程的极简化：直接调 entry.exec，并模拟 manager 状态。 */
@@ -80,20 +80,21 @@ describe("[B4] plan_window — basic闭环", () => {
     expect(plan.steps).toHaveLength(0);
     expect(plan.status).toBe("active");
 
-    // 重复调 root.plan：幂等 update（不再新建）
+    // P6.§4-§5 (2026-06-02): root.plan 不再做 update 幂等——每次调用都新建一个
+    // plan_window（in-place 更新改走 exec(<plan_window_id>, "update_plan", ...)）。
     await execRootMethod("plan", {
       thread,
       args: { title: "Refactored Plan", description: "go!" },
     });
     const plans = thread.contextWindows.filter((w) => w.type === "plan");
-    expect(plans).toHaveLength(1);
-    const planAfter = findPlanWindow(thread);
-    expect(planAfter.title).toBe("Refactored Plan");
-    expect(planAfter.description).toBe("go!");
+    expect(plans).toHaveLength(2);
+    const secondPlan = plans.find((p) => (p as PlanWindow).title === "Refactored Plan") as PlanWindow;
+    expect(secondPlan).toBeDefined();
+    expect(secondPlan.description).toBe("go!");
 
-    // add_step
+    // add_step（作用在第一个 plan 上，验证 step 操作仍可定位到具体 plan_window）
     await execOnWindow(thread, plan.id, "add_step", { text: "step1: design" });
-    const plan2 = findPlanWindow(thread);
+    const plan2 = findPlanWindowById(thread, plan.id)!;
     expect(plan2.steps).toHaveLength(1);
     expect(plan2.steps[0]!.text).toBe("step1: design");
     expect(plan2.steps[0]!.status).toBe("pending");
@@ -242,7 +243,7 @@ describe("[B2] plan_window — compressView (P0-2)", () => {
     });
     const plan = findPlanWindow(thread);
     // 模拟压缩态
-    const compressedAll: ContextWindow[] = thread.contextWindows.map((w) =>
+    const compressedAll: ContextWindow[] = (thread.contextWindows as ContextWindow[]).map((w) =>
       w.id === plan.id ? { ...w, compressLevel: 1 as const } : w,
     );
     const xml = await renderContextXml({ thread, contextWindows: compressedAll });
@@ -255,7 +256,7 @@ describe("[B2] plan_window — compressView (P0-2)", () => {
     const thread = makeThread({ id: "t_plan_compress_2" });
     await execRootMethod("plan", { thread, args: { plan: "p" } });
     const plan = findPlanWindow(thread);
-    const compressedAll: ContextWindow[] = thread.contextWindows.map((w) =>
+    const compressedAll: ContextWindow[] = (thread.contextWindows as ContextWindow[]).map((w) =>
       w.id === plan.id ? { ...w, compressLevel: 2 as const } : w,
     );
     const xml = await renderContextXml({ thread, contextWindows: compressedAll });

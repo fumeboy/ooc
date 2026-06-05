@@ -5,7 +5,7 @@
  * === "super" 时注入 REFLECTABLE knowledge entry。
  */
 import { describe, expect, it } from "bun:test";
-import { collectExecutableKnowledgeEntries } from "../../executable/index";
+import { buildProtocolKnowledgeWindows, collectProtocolEntries } from "../context/protocol";
 import {
   END_REFLECTION_REMINDER_KNOWLEDGE,
   END_REFLECTION_REMINDER_PATH,
@@ -42,7 +42,7 @@ describe("reflectable knowledge protocol injection", () => {
         baseDir: "/tmp/test", sessionId: "super", objectId: "alice", threadId: "t_super_alice",
       },
     });
-    const out = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
+    const out = { knowledgeEntries: collectProtocolEntries(thread), contextWindows: buildProtocolKnowledgeWindows(thread) };
     expect(out.knowledgeEntries[REFLECTABLE_BASIC_PATH]).toBe(REFLECTABLE_KNOWLEDGE);
     // U7: metaprog 协议指引也在 super 注入
     expect(out.knowledgeEntries[REFLECTABLE_METAPROG_PATH]).toBe(REFLECTABLE_METAPROG_KNOWLEDGE);
@@ -66,14 +66,14 @@ describe("reflectable knowledge protocol injection", () => {
         baseDir: "/tmp/test", sessionId: "web-test", objectId: "alice", threadId: "t_normal",
       },
     });
-    const out = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
+    const out = { knowledgeEntries: collectProtocolEntries(thread), contextWindows: buildProtocolKnowledgeWindows(thread) };
     expect(out.knowledgeEntries[REFLECTABLE_BASIC_PATH]).toBeUndefined();
     expect(out.knowledgeEntries[REFLECTABLE_METAPROG_PATH]).toBeUndefined();
   });
 
   it("does NOT inject when thread has no persistence (in-memory mode)", async () => {
     const thread = makeThread({ id: "t_in_memory" });
-    const out = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
+    const out = { knowledgeEntries: collectProtocolEntries(thread), contextWindows: buildProtocolKnowledgeWindows(thread) };
     expect(out.knowledgeEntries[REFLECTABLE_BASIC_PATH]).toBeUndefined();
     expect(out.knowledgeEntries[REFLECTABLE_METAPROG_PATH]).toBeUndefined();
   });
@@ -118,7 +118,7 @@ describe("end-reflection-reminder injection (G2)", () => {
       },
       extraWindows: [makeMethodExecWindow({ command: "end", id: "f_end" })],
     });
-    const out = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
+    const out = { knowledgeEntries: collectProtocolEntries(thread), contextWindows: buildProtocolKnowledgeWindows(thread) };
     expect(out.knowledgeEntries[END_REFLECTION_REMINDER_PATH]).toBe(END_REFLECTION_REMINDER_KNOWLEDGE);
     // 合成的 KnowledgeWindow 也应出现，source=protocol
     const kn = (out.contextWindows ?? []).find(
@@ -136,7 +136,7 @@ describe("end-reflection-reminder injection (G2)", () => {
       },
       extraWindows: [makeMethodExecWindow({ command: "end", id: "f_end" })],
     });
-    const out = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
+    const out = { knowledgeEntries: collectProtocolEntries(thread), contextWindows: buildProtocolKnowledgeWindows(thread) };
     expect(out.knowledgeEntries[END_REFLECTION_REMINDER_PATH]).toBeUndefined();
   });
 
@@ -148,7 +148,7 @@ describe("end-reflection-reminder injection (G2)", () => {
       },
       extraWindows: [makeMethodExecWindow({ command: "talk", id: "f_talk" })],
     });
-    const out = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
+    const out = { knowledgeEntries: collectProtocolEntries(thread), contextWindows: buildProtocolKnowledgeWindows(thread) };
     expect(out.knowledgeEntries[END_REFLECTION_REMINDER_PATH]).toBeUndefined();
   });
 
@@ -159,7 +159,7 @@ describe("end-reflection-reminder injection (G2)", () => {
         baseDir: "/tmp/test", sessionId: "web-test", objectId: "alice", threadId: "t_no_form",
       },
     });
-    const out = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
+    const out = { knowledgeEntries: collectProtocolEntries(thread), contextWindows: buildProtocolKnowledgeWindows(thread) };
     expect(out.knowledgeEntries[END_REFLECTION_REMINDER_PATH]).toBeUndefined();
   });
 

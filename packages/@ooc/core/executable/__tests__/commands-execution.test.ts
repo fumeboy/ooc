@@ -65,11 +65,11 @@ describe("command execution side effects", () => {
     }
 
     const modules = await Promise.all([
-      import("@ooc/builtins/root/executable/command.do"),
-      import("@ooc/builtins/root/executable/command.end"),
-      import("@ooc/builtins/root/executable/command.plan"),
-      import("@ooc/builtins/root/executable/command.talk"),
-      import("@ooc/builtins/root/executable/command.todo"),
+      import("@ooc/builtins/root/executable/method.do"),
+      import("@ooc/builtins/root/executable/method.end"),
+      import("@ooc/builtins/root/executable/method.plan"),
+      import("@ooc/builtins/root/executable/method.talk"),
+      import("@ooc/builtins/root/executable/method.todo"),
     ]);
     for (const module of modules) {
       expect("KNOWLEDGE" in module).toBe(false);
@@ -83,7 +83,7 @@ describe("command execution side effects", () => {
       thread,
       args: { plan: "完成 thinkloop 真实测试\n\n先打通 tool call 与 command execute" },
     });
-    const planWindow = thread.contextWindows.find((w) => w.type === "plan");
+    const planWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "plan");
     expect(planWindow?.type).toBe("plan");
     expect(planWindow && planWindow.type === "plan" && planWindow.description).toContain(
       "完成 thinkloop 真实测试",
@@ -99,7 +99,7 @@ describe("command execution side effects", () => {
         on_command_path: ["program", "exec"],
       },
     });
-    const todoWindow = thread.contextWindows.find((w) => w.type === "todo");
+    const todoWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "todo");
     expect(todoWindow?.type).toBe("todo");
     expect(todoWindow && todoWindow.type === "todo" && todoWindow.content).toBe("补充 thinkloop 集成测试");
     expect(
@@ -187,7 +187,7 @@ describe("command execution side effects", () => {
       thread,
       args: { target: "user", title: "发布计划" },
     });
-    const talkWindow = thread.contextWindows.find((w) => w.type === "talk");
+    const talkWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "talk");
     expect(talkWindow?.type).toBe("talk");
     expect(talkWindow && talkWindow.type === "talk" && talkWindow.target).toBe("user");
     expect(talkWindow && talkWindow.type === "talk" && talkWindow.title).toBe("发布计划");
@@ -199,7 +199,7 @@ describe("command execution side effects", () => {
       thread,
       args: { target: "researcher", title: "ask" },
     });
-    const talkWindow = thread.contextWindows.find((w) => w.type === "talk");
+    const talkWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "talk");
     expect(talkWindow?.type).toBe("talk");
     expect(talkWindow && talkWindow.type === "talk" && talkWindow.target).toBe("researcher");
   });

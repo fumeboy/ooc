@@ -9,7 +9,7 @@ import {
   createRecoveryIssue,
 } from "@ooc/core/persistable";
 import { runRecoveryCheck } from "../recovery-check";
-import { clearServerLoaderCache } from "@ooc/core/executable/server/loader";
+import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader";
 
 let tempRoot: string | undefined;
 

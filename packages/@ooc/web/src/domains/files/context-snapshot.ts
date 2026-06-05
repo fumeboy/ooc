@@ -417,6 +417,9 @@ function windowBadge(window: ContextWindow): string {
       const doneN = window.steps.filter((s) => s.status === "done").length;
       return `PLAN ${doneN}/${total}`;
     }
+    // batch C 后 ContextWindow union 加宽，穷尽性不再封闭：未知类型给兜底 badge。
+    default:
+      return String((window as { type: string }).type).toUpperCase().slice(0, 6);
   }
 }
 
@@ -451,6 +454,9 @@ function windowSummary(window: ContextWindow): string {
     case "plan":
       // 一行摘要：plan title；description 留给详情面板渲染避免左树太宽。
       return window.title;
+    // batch C 后 ContextWindow union 加宽，穷尽性不再封闭：未知类型回退到 title。
+    default:
+      return (window as { title?: string }).title ?? "";
   }
 }
 

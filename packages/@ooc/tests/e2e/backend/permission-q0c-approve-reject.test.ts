@@ -29,6 +29,8 @@ import * as observableModule from "@ooc/core/observable";
 import {
   writeThread,
   readThread,
+  deriveStoneFromThread,
+  stoneDir,
   type ThreadPersistenceRef,
 } from "@ooc/core/persistable";
 import * as contextModule from "@ooc/core/thinkable/context";
@@ -80,9 +82,18 @@ function makeLlmClient(result: LlmGenerateResult): LlmClient {
   };
 }
 
+/**
+ * policies.json 物理落点必须与 loadPoliciesJson 一致（`stoneDir(deriveStoneFromThread(ref))`）。
+ * M2 (2026-06-03) canonical 布局后该路径是 flat `stones/<objectId>/config/`（非旧
+ * `stones/main/objects/<id>/`），直接用 stoneDir 推算避免布局漂移。
+ */
+function policiesConfigDir(ref: ThreadPersistenceRef): string {
+  return join(stoneDir(deriveStoneFromThread(ref)), "config");
+}
+
 function setupPersistence(tmpRoot: string, sessionId: string, objectId: string, threadId: string): ThreadPersistenceRef {
-  const stoneConfigDir = join(tmpRoot, "stones", "main", "objects", objectId, "config");
-  mkdirSync(stoneConfigDir, { recursive: true });
+  const ref: ThreadPersistenceRef = { baseDir: tmpRoot, sessionId, objectId, threadId };
+  mkdirSync(policiesConfigDir(ref), { recursive: true });
   const threadDir = join(
     tmpRoot,
     "flows",
@@ -93,19 +104,11 @@ function setupPersistence(tmpRoot: string, sessionId: string, objectId: string, 
     threadId,
   );
   mkdirSync(threadDir, { recursive: true });
-  return { baseDir: tmpRoot, sessionId, objectId, threadId };
+  return ref;
 }
 
 function writePoliciesJson(ref: ThreadPersistenceRef, raw: string): void {
-  const path = join(
-    ref.baseDir,
-    "stones",
-    "main",
-    "objects",
-    ref.objectId,
-    "config",
-    "policies.json",
-  );
+  const path = join(policiesConfigDir(ref), "policies.json");
   writeFileSync(path, raw, "utf8");
 }
 

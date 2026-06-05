@@ -790,7 +790,9 @@ export async function supervisorCreateObject(
 
   return enqueueSessionWrite(gitQueueKey(input.baseDir), async () => {
     // existence check (after lock 取得，防 race)
-    const marker = join(stoneDir(ref), ".stone.json");
+    // marker = package.json：createStoneObject 写 package.json + self.md + readable.md（不写 .stone.json），
+    // 与 discoverStoneHierarchicalPeers 的「package.json||self.md = object package」判定对齐。
+    const marker = join(stoneDir(ref), "package.json");
     try {
       const st = await stat(marker);
       if (st.isFile()) {

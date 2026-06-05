@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests } from "@ooc/core/persistable";
-import { executeMetaprog } from "@ooc/builtins/root/executable/command.metaprog";
+import { executeMetaprog } from "@ooc/builtins/root/executable/method.metaprog";
 import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 
@@ -121,7 +121,7 @@ describe("metaprog action=create_object caller-guard", () => {
     expect(r).toContain("[metaprog:create_object:INVALID_INPUT]");
   });
 
-  test("supervisor caller + objectId=supervisor → INVALID_INPUT（bootstrap path only）", async () => {
+  test("supervisor caller + objectId=supervisor → BUILTIN_CONFLICT（supervisor 是 Builtin Object）", async () => {
     const baseDir = await newWorld(["supervisor"]);
     const r = await executeMetaprog(
       makeCtx({
@@ -130,7 +130,9 @@ describe("metaprog action=create_object caller-guard", () => {
         args: { action: "create_object", objectId: "supervisor", selfMd: "x", readableMd: "y" },
       }),
     );
-    expect(r).toContain("[metaprog:create_object:INVALID_INPUT]");
+    // supervisor/user 现为 Builtin Object（packages/@ooc/builtins/<id>），create_object 不可覆写 →
+    // BUILTIN_CONFLICT（原 INVALID_INPUT 是 supervisor 成为 Builtin 前的旧契约）。
+    expect(r).toContain("[metaprog:create_object:BUILTIN_CONFLICT]");
   });
 
   test("supervisor caller + 全部参数合法 → 成功（commit 落 main）", async () => {

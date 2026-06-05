@@ -24,7 +24,7 @@ import { join } from "node:path";
 
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import { buildInputItems } from "@ooc/core/thinkable/context";
-import { collectExecutableKnowledgeEntries } from "@ooc/core/thinkable/knowledge/synthesizer";
+import { buildProtocolKnowledgeWindows, collectProtocolEntries } from "@ooc/core/thinkable/context/protocol";
 import {
   END_REFLECTION_REMINDER_KNOWLEDGE,
   END_REFLECTION_REMINDER_PATH,
@@ -104,7 +104,7 @@ describe("[round-11] end-reflection-reminder thread-level integration", () => {
       });
 
       // 1. 直接断 synthesizer entries 也含（与单测对齐，作为防御性 gate）
-      const collected = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
+      const collected = { knowledgeEntries: collectProtocolEntries(thread), contextWindows: buildProtocolKnowledgeWindows(thread) };
       expect(collected.knowledgeEntries[END_REFLECTION_REMINDER_PATH]).toBe(
         END_REFLECTION_REMINDER_KNOWLEDGE,
       );
@@ -145,7 +145,7 @@ describe("[round-11] end-reflection-reminder thread-level integration", () => {
         ],
       });
 
-      const collected = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
+      const collected = { knowledgeEntries: collectProtocolEntries(thread), contextWindows: buildProtocolKnowledgeWindows(thread) };
       expect(collected.knowledgeEntries[END_REFLECTION_REMINDER_PATH]).toBeUndefined();
 
       const items = await buildInputItems(thread);
@@ -174,7 +174,7 @@ describe("[round-11] end-reflection-reminder thread-level integration", () => {
         ],
       });
 
-      const collected = await collectExecutableKnowledgeEntries(thread.contextWindows, thread);
+      const collected = { knowledgeEntries: collectProtocolEntries(thread), contextWindows: buildProtocolKnowledgeWindows(thread) };
       expect(collected.knowledgeEntries[END_REFLECTION_REMINDER_PATH]).toBeUndefined();
 
       const items = await buildInputItems(thread);

@@ -4,7 +4,7 @@ import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { __testing } from "../_shared/session-path";
 
-const { rewritePackagesPath, rewritePoolsPath, classifyPackagesPath, classifyStonesPath } = __testing;
+const { rewritePackagesPath, rewritePoolsPath, classifyPackagesPath } = __testing;
 
 let tempRoot: string | undefined;
 
@@ -155,18 +155,5 @@ describe("classifyPackagesPath: package boundary detection", () => {
     const baseDir = tempRoot!;
     const abs = resolve(baseDir, "packages");
     expect(classifyPackagesPath(abs, baseDir).kind).toBe("non-package");
-  });
-});
-
-describe("classifyStonesPath: backward compat wrapper", () => {
-  test("stones/ paths auto-rewrite to packages/ classification", async () => {
-    const baseDir = tempRoot!;
-    await createObjectPackage(baseDir, "agent_of_x");
-    const abs = resolve(baseDir, "packages/agent_of_x/self.md");
-    const r = classifyStonesPath(abs, baseDir);
-    expect(r.kind).toBe("stone-object");
-    if (r.kind === "stone-object") {
-      expect(r.ownerObjectId).toBe("agent_of_x");
-    }
   });
 });

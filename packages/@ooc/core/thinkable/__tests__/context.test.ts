@@ -168,7 +168,7 @@ describe("buildContext (ContextWindow model)", () => {
           targetThreadId: "t_creator",
           isCreatorWindow: true,
         },
-      ],
+      ] as ContextWindow[],
     });
     const out = await buildInputItems(thread);
     const item = out.input.find(
@@ -271,7 +271,7 @@ describe("buildContext (ContextWindow model)", () => {
       createdAt: 0,
       description: "先处理 inbox",
       steps: [],
-    });
+    } as ContextWindow);
     const messages = await buildContext(thread);
     expect(messages).toHaveLength(1);
     const xml = messages[0]!.content;
@@ -328,7 +328,7 @@ describe("buildContext (ContextWindow model)", () => {
           content: "记得加单测",
           onCommandPath: ["program.shell"],
         },
-      ],
+      ] as ContextWindow[],
     });
     const messages = await buildContext(thread);
     const xml = messages[0]!.content;
@@ -369,7 +369,7 @@ describe("buildContext (ContextWindow model)", () => {
           createdAt: 1,
           targetThreadId: "t_child",
         },
-      ],
+      ] as ContextWindow[],
     });
     const messages = await buildContext(thread);
     const xml = messages[0]!.content;
