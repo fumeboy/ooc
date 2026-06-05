@@ -204,6 +204,11 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
       return thread.persistence?.sessionId === SUPER_SESSION_ID;
 
     case "object": {
+      // root 是每个 thread 的隐式父 window（manager 提供虚拟 root view，从不 push 进 contextWindows）。
+      // sediment-write-contract 把 `window::root` 文档化为「等价任何时候」（reflectable-knowledge.ts:72），
+      // agent 据此沉淀的 memory 都用 window::root。若按下方扫 contextWindows 匹配 type==="root" 则**永不命中**
+      // → 沉淀的 memory 永不激活、召回闭环静默断（harness reflectable 发现）。特判 root 为 always-on，坐实契约。
+      if (trigger.objectType === "root") return true;
       const list = (thread.contextWindows ?? []) as ContextWindow[]; // batch C narrowing(N4): base[] → union[] 以传入 isOpen/byId map（runtime 即 union 实例）。
       for (const w of list) {
         if (w.type !== trigger.objectType) continue;

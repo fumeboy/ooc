@@ -286,6 +286,18 @@ describe("evaluateTrigger", () => {
     expect(evaluateTrigger(t, thread({ contextWindows: [talkW] }))).toBe(true);
   });
 
+  // ── window::root = always-on（harness reflectable 召回断裂回归）──
+  test("window::root always hits（root 是隐式父，从不进 contextWindows；契约文档化为『任何时候』）", () => {
+    const t = parseTrigger("window::root");
+    expect(t).toEqual({ kind: "object", objectType: "root" });
+    // 空 contextWindows（无 type:root window）也命中——否则 sediment 的 memory 永不召回
+    expect(evaluateTrigger(t, thread())).toBe(true);
+    expect(evaluateTrigger(t, thread({ contextWindows: [] }))).toBe(true);
+    // 有其它 window 时同样命中
+    const todoW = { id: "w_t", type: "todo", parentWindowId: "root", title: "x", status: "open", createdAt: 0 } as ContextWindow;
+    expect(evaluateTrigger(t, thread({ contextWindows: [todoW] }))).toBe(true);
+  });
+
   // ── object_id:: 新格式 ──────────────────────────────────────────
   test("object_id::agent_alice hits when window with id=agent_alice is open (ooc-6 design)", () => {
     const t = parseTrigger("object_id::agent_alice");
