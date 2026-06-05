@@ -27,7 +27,7 @@
 1. **【真 gap·批次 C registry 收口未完成】builtinRegistry/ObjectRegistry 实例位置**
    - `_shared/types/registry.ts` 注释自称 canonical 拥有 `ObjectRegistry class`/`builtinRegistry singleton`/`createObjectRegistry`，但实际只 export `filterMethodsByVisibility`+类型；实例真身在 `runtime/object-registry.ts:284`（`new ObjectRegistry()`）。
    - 后果：`persistable/{debug-file,flow-object,thread-json}.ts` 通过 `executable/windows/index` re-export 拿 builtinRegistry（value import）→ `persistable → executable` **伪反向**；叠加既有 `runtime → persistable`（server-loader 等 5 处），形成 runtime↔persistable↔executable 的 registry 纠葛。
-   - **修复建议**：把 `ObjectRegistry` class + `builtinRegistry` 实例 + `createObjectRegistry` 迁入 `_shared/types/registry.ts`（注释已预告的 canonical 位置，最底层无环），runtime/executable 改 re-export。一次消除多处反向。属 batch C 深化，需确保 ObjectRegistry class 零业务（仅注册容器）后再迁。
+   - **核实修正**（2026-06-05，Supervisor 读 `_shared/types/registry.ts:5-7` 注释后）：batch C7 **有意**把 ObjectRegistry class / builtinRegistry singleton（含可变状态）留在 runtime，只下沉「类型 + 纯函数」到 `_shared`（_shared 零可变状态原则）。故此反向**不是「未迁 _shared」**，迁 class/singleton 到 _shared 会**违反 C7 设计**。真根因是：有状态 singleton（builtinRegistry）位置 + 既有 `runtime→persistable` 形成纠葛——persistable 需 builtinRegistry 却不能直接 `→runtime`（成环），遂绕 `executable` re-export 取。**正解**是依赖注入（builtinRegistry 由 WorldRuntime 注入 persistable 的加载函数）或职责调整（persistable 不直接持 registry，由调用方传入），属真正的架构设计问题，**留后续专门批次**，不可在 F3 收尾临时改。
 
 2. **【推迟项·E4】`persistable/thread-json.ts → executable/windows/_shared/init`（initContextWindows）**
    - thread rehydrate 逻辑（DD2 裁决 E4 推迟到 harness 阶段，session-loading 运行时敏感）。
@@ -49,4 +49,4 @@
 - 设计性运行时编排（#4，非债务）
 - 个别职责越界（#5，小修）
 
-彻底实现 §3.1 无环，需：①完成 `_shared/types/registry` 收编 builtinRegistry/ObjectRegistry ②落地 harness 阶段推迟项（E4/F1/D6）③下沉 parseKnowledgeFile。这些是 batch C 深化 + 推迟项落地，建议作为 ooc-6 后续单独批次，不与 F3 收尾混做（控制复杂度）。
+彻底实现 §3.1 无环，需：①用依赖注入/职责调整解开 builtinRegistry 的 persistable↔runtime 纠葛（**不是**迁 _shared——那违反 C7 零可变状态设计；见 #1 核实修正）②落地 harness 阶段推迟项（E4/F1/D6）③下沉 parseKnowledgeFile。这些属架构设计 + 推迟项落地，建议作为 ooc-6 后续单独批次，**不与 F3 收尾混做**（控制复杂度，且 #1 含运行时敏感的注入改造，需 live 验证）。
