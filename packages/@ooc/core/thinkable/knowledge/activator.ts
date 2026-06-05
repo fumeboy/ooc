@@ -6,6 +6,7 @@ import {
   type Trigger,
 } from "./triggers";
 import type { ActivationLevel, ActivationResult, KnowledgeIndex } from "./types";
+import type { KnowledgeWindow } from "@ooc/core/executable/windows/_shared/types.js";
 
 /** 激活集合上限，避免 context 爆炸。 */
 const MAX_RESULTS = 20;
@@ -30,7 +31,8 @@ export function computeActivations(
   const forced = new Set<string>();
   for (const window of thread.contextWindows ?? []) {
     if (window.type === "knowledge") {
-      forced.add(window.path);
+      // batch C narrowing(N1): window 契约层是 base；type==="knowledge" 后 narrow 回 KnowledgeWindow 读 path。
+      forced.add((window as KnowledgeWindow).path);
     }
   }
 

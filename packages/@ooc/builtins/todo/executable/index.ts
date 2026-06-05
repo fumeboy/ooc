@@ -76,7 +76,8 @@ const todoConstructor: ObjectMethod = {
   },
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = {
       [TODO_CONSTRUCTOR_BASIC]: TODO_CONSTRUCTOR_KNOWLEDGE,

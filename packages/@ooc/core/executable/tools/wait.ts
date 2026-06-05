@@ -24,7 +24,9 @@ interface WaitCandidate {
 /** open/可作为未来 IO 来源的 window 列表，附 hint 帮 LLM 自纠时选对。 */
 function listValidWaitTargets(thread: ThreadContext): WaitCandidate[] {
   const out: WaitCandidate[] = [];
-  for (const w of thread.contextWindows ?? []) {
+  // batch C narrowing(N1/N4): contextWindows 契约层是 base[]；narrow 回 union[]，
+  // switch(w.type) 才能 discriminant-narrow 到 TalkWindow / DoWindow 读 isCreatorWindow/target/targetThreadId。
+  for (const w of (thread.contextWindows ?? []) as ContextWindow[]) {
     // 每种 window 的"alive"状态不同——talk=open，do=running
     switch (w.type) {
       case "talk": {
@@ -67,7 +69,8 @@ function hasOutgoingSayOnTalk(thread: ThreadContext, talkId: string): boolean {
 }
 
 function findWindow(thread: ThreadContext, id: string): ContextWindow | undefined {
-  return (thread.contextWindows ?? []).find((w) => w.id === id);
+  // batch C narrowing(N4): contextWindows 契约层是 base[]；narrow find 结果回 union（runtime 即 union 实例）。
+  return (thread.contextWindows ?? []).find((w) => w.id === id) as ContextWindow | undefined;
 }
 
 const errorOutput = (error: string) =>

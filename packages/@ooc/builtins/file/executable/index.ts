@@ -194,7 +194,8 @@ const setViewportCommand: ObjectMethod = {
   intent: emptyIntent,
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = {
       [FILE_WINDOW_SET_VIEWPORT_BASIC]: SET_VIEWPORT_KNOWLEDGE,
@@ -241,7 +242,8 @@ const editCommand: ObjectMethod = {
   intent: emptyIntent,
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = { [FILE_WINDOW_EDIT_BASIC]: EDIT_KNOWLEDGE };
     if (formStatus !== "open") return buildGuidanceWindows(form, entries);
@@ -490,7 +492,8 @@ const fileConstructor: ObjectMethod = {
   exec: async (ctx) => {
     const thread = ctx.thread;
     if (!thread) return { ok: false, error: "[file] 缺少 thread context。" };
-    const command = ctx.form?.command ?? "open_file";
+    // batch C narrowing(N1): ctx.form 契约层是 base ContextWindow，narrow 回 MethodExecWindow 读 command。
+    const command = (ctx.form as MethodExecWindow | undefined)?.command ?? "open_file";
 
     if (command === "write_file") {
       const rawPath = isString(ctx.args.path) ? ctx.args.path : "";

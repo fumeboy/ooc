@@ -25,6 +25,7 @@ import { readWorldConfig, DEFAULT_LARK_TENANT_HOST } from "../../../persistable/
 import type { Intent } from "../../../thinkable/context/intent.js";
 import type { ContextWindow } from "../../../executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "../../../executable/windows/method_exec/types.js";
+import type { BaseContextWindow } from "@ooc/core/_shared";
 
 const READ_BASIC = "internal/windows/feishu_doc/read/basic";
 const SEARCH_BASIC = "internal/windows/feishu_doc/search_in_doc/basic";
@@ -141,7 +142,10 @@ feishu_doc.close 释放 window；不影响飞书一侧的文档。
 
 // ─────────────────────────── command 实现 ────────────────────────────
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
+  // batch C narrowing(N3): onFormChange 的 form 契约层是 base ContextWindow；本 helper 只读
+  // base `id` + 具体 form 的 command（作 provenance 标签），在此唯一处 narrow 回 MethodExecWindow。
+  const sourceId = (form as MethodExecWindow).command;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -156,7 +160,7 @@ function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>
       relevance: { score: 0.8, signalCount: 1 },
       provenance: {
         kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
+        reason: { mechanism: "form_bound", sourceId },
         createdAt: 0,
         lastTouchedAt: 0,
       },
@@ -194,7 +198,8 @@ const appendCommand: ObjectMethod = {
   intent: (args) => (args.confirm === true ? [{ name: "append.confirmed" }] : []),
   onFormChange(change, { form, intents }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = { [APPEND_BASIC]: APPEND_KNOWLEDGE };
     if (formStatus === "open" && args.confirm !== true) {
@@ -210,7 +215,8 @@ const patchBlockCommand: ObjectMethod = {
   intent: (args) => (args.confirm === true ? [{ name: "patch_block.confirmed" }] : []),
   onFormChange(change, { form, intents }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = { [PATCH_BASIC]: PATCH_KNOWLEDGE };
     if (formStatus === "open" && args.confirm !== true) {
@@ -237,7 +243,8 @@ const attachToChatCommand: ObjectMethod = {
   intent: (args) => (args.confirm === true ? [{ name: "attach_to_chat.confirmed" }] : []),
   onFormChange(change, { form, intents }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = { [ATTACH_BASIC]: ATTACH_KNOWLEDGE };
     if (formStatus === "open" && args.confirm !== true) {

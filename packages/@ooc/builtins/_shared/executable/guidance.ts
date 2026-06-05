@@ -16,11 +16,14 @@
  * but call `buildGuidanceWindows` for the final assembly.
  */
 
+// batch C 集成：helper 工作在 onFormChange/exec 契约层，用 _shared 的 base
+// ContextWindow / GuidanceWindow（与 ObjectMethod 契约一致），不引 executable 的
+// union 版——否则 base form 无法传入 union 参数。MethodExecWindow 仅用于内部 narrow。
 import type {
   ContextWindow,
   GuidanceWindow,
-  MethodExecWindow,
-} from "@ooc/core/extendable/_shared/types.js";
+} from "@ooc/core/_shared";
+import type { MethodExecWindow } from "@ooc/core/extendable/_shared/types.js";
 import type { FormChangeEvent } from "@ooc/core/thinkable/context/intent.js";
 
 /** guidance summary 截断长度——超过则 slice 并加省略号。 */
@@ -36,9 +39,13 @@ const GUIDANCE_SUMMARY_MAX = 200;
  * 以匹配 onFormChange 的契约签名。
  */
 export function buildGuidanceWindows(
-  form: MethodExecWindow,
+  form: ContextWindow,
   entries: Record<string, string>,
 ): ContextWindow[] {
+  // batch C 集成：onFormChange/exec 的 form 在零依赖层退化为 base ContextWindow；
+  // guidance 只读 base `id` + 具体 form 的 `command`（仅作 provenance 标签），
+  // 在此唯一处 narrow 回 MethodExecWindow（runtime 保证 form 即 method_exec form）。
+  const sourceId = (form as MethodExecWindow).command;
   const out: GuidanceWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -53,7 +60,7 @@ export function buildGuidanceWindows(
       relevance: { score: 0.8, signalCount: 1 },
       provenance: {
         kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
+        reason: { mechanism: "form_bound", sourceId },
         createdAt: 0,
         lastTouchedAt: 0,
       },
@@ -76,7 +83,7 @@ export function buildGuidanceWindows(
 export function makeBasicFormHandler(
   basicPath: string,
   knowledge: string,
-): (change: FormChangeEvent, ctx: { form: MethodExecWindow }) => ContextWindow[] {
+): (change: FormChangeEvent, ctx: { form: ContextWindow }) => ContextWindow[] {
   return (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
     return buildGuidanceWindows(form, { [basicPath]: knowledge });

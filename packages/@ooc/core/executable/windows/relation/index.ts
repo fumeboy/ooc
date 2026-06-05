@@ -29,6 +29,7 @@ import type { RelationWindow } from "./types.js";
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import type { BaseContextWindow } from "@ooc/core/_shared";
 
 const RELATION_EDIT_BASIC = "internal/windows/relation/edit/basic";
 const RELATION_EDIT_INPUT = "internal/windows/relation/edit/input";
@@ -85,7 +86,9 @@ scope="long_term" 的路径详解:
 3. 因此 long_term edit 是**异步**的:本 command 返回成功只代表消息已派送,文件落盘要等 super flow 跑完那一轮。
 `.trim();
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
+  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
+  const sourceId = (form as MethodExecWindow).command;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -100,7 +103,7 @@ function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>
       relevance: { score: 0.8, signalCount: 1 },
       provenance: {
         kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
+        reason: { mechanism: "form_bound", sourceId },
         createdAt: 0,
         lastTouchedAt: 0,
       },
@@ -121,7 +124,8 @@ const editCommand: ObjectMethod = {
   },
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const entries: Record<string, string> = { [RELATION_EDIT_BASIC]: EDIT_KNOWLEDGE };
     if (args.scope === "long_term") {
       entries[RELATION_EDIT_LONGTERM] = EDIT_LONGTERM_DETAIL;
@@ -176,7 +180,8 @@ export async function executeRelationEdit(
   // scope === "long_term":派 super flow
   // 1) 优先复用已有 super talk_window
   const existingSuperTalk = (thread.contextWindows ?? []).find(
-    (w): w is TalkWindow => w.type === "talk" && w.target === SUPER_ALIAS_TARGET,
+    // batch C narrowing(N1): contextWindows 元素契约层是 base；type==="talk" 后 narrow 回 TalkWindow 读 target。
+    (w): w is TalkWindow => w.type === "talk" && (w as TalkWindow).target === SUPER_ALIAS_TARGET,
   );
   // 2) 没有则构造一个临时 TalkWindow,不挂到 thread.contextWindows(避免常驻通道)
   const talkWindow: TalkWindow = existingSuperTalk ?? {

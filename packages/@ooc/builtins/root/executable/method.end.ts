@@ -70,7 +70,9 @@ export const endCommand: ObjectMethod = {
  * 该字段也不视为合法 creator（防御）。
  */
 function findCreatorWindow(ctx: MethodExecutionContext): DoWindow | TalkWindow | undefined {
-  const list = ctx.thread?.contextWindows ?? [];
+  // batch C narrowing(N4): thread.contextWindows 在契约层是 BaseContextWindow[]；
+  // narrow 回 union ContextWindow[] 以访问 isCreatorWindow 并匹配 DoWindow|TalkWindow 返回（runtime 即 union 实例）。
+  const list = (ctx.thread?.contextWindows ?? []) as ContextWindow[];
   for (const w of list) {
     if ((w.type === "do" || w.type === "talk") && w.isCreatorWindow === true) {
       return w;
@@ -113,7 +115,8 @@ async function autoReplyAndArchiveDo(
   // auto-archive：creator window status 切到 archived（DoWindow.status union 已含 archived）
   // 注意：直接 mutate window 字段；WindowManager.submit 在 entry.exec 完成后会 toData 重写
   // contextWindows——这里在同一轮 entry.exec 内 mutate 仍有效（与 do command 的做法一致）。
-  const list = thread.contextWindows;
+  // batch C narrowing(N4): contextWindows 契约层为 base[]，narrow 回 union[] 让 findIndex 谓词参数类型对齐。
+  const list = thread.contextWindows as ContextWindow[];
   const idx = list.findIndex((w: ContextWindow) => w.id === creator.id);
   if (idx >= 0) {
     const target = list[idx]!;

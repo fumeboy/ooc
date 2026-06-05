@@ -46,7 +46,8 @@ export class ContextPipeline {
     if (!thread.intentCache) {
       thread.intentCache = intentCache;
     }
-    const ctx: PipelineContext = { intentCache, windows: [...(thread.contextWindows ?? [])] };
+    // batch C narrowing(N4): contextWindows 契约层是 base[]；narrow 回 union[] 以匹配 PipelineContext.windows。
+    const ctx: PipelineContext = { intentCache, windows: [...(thread.contextWindows ?? [])] as ContextWindow[] };
 
     for (const phase of this.phases) {
       const result = await phase.run(thread, ctx);

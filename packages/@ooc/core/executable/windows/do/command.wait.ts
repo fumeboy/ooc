@@ -5,6 +5,7 @@ import type {
 import type { Intent } from "../../../thinkable/context/intent.js";
 import type { ContextWindow } from "../_shared/types.js";
 import type { MethodExecWindow } from "../method_exec/types.js";
+import type { BaseContextWindow } from "@ooc/core/_shared";
 
 const DO_WINDOW_WAIT_BASIC = "internal/windows/do/wait/basic";
 const WAIT_KNOWLEDGE = `
@@ -13,7 +14,9 @@ do_window.wait：不向子线程发消息，仅把当前父线程切到 waiting 
 参数：无
 `.trim();
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
+  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
+  const sourceId = (form as MethodExecWindow).command;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -28,7 +31,7 @@ function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>
       relevance: { score: 0.8, signalCount: 1 },
       provenance: {
         kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
+        reason: { mechanism: "form_bound", sourceId },
         createdAt: 0,
         lastTouchedAt: 0,
       },

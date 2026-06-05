@@ -21,6 +21,7 @@ import type {
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import type { WindowManager } from "@ooc/core/executable/windows/_shared/manager.js";
 import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
 import { emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
 import { builtinRegistry, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
@@ -127,7 +128,8 @@ const openMatchCommand: ObjectMethod = {
   intent: emptyIntent,
   onFormChange(change, { form }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = {
       [SEARCH_WINDOW_OPEN_MATCH_BASIC]: OPEN_MATCH_KNOWLEDGE,
@@ -196,7 +198,8 @@ export async function executeSearchOpenMatch(
   };
 
   if (ctx.manager) {
-    ctx.manager.insertTypedWindow(fileWindow, ctx.thread);
+    // batch C narrowing(N2): ctx.manager 契约层是 unknown，narrow 回 WindowManager 取 insertTypedWindow。
+    (ctx.manager as WindowManager).insertTypedWindow(fileWindow, ctx.thread);
   } else {
     thread.contextWindows = [...(thread.contextWindows ?? []), fileWindow];
   }
@@ -350,7 +353,8 @@ const searchConstructor: ObjectMethod = {
   },
   onFormChange(change, { form }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = {
       [SEARCH_GLOB_BASIC]: SEARCH_GLOB_KNOWLEDGE,
@@ -371,7 +375,8 @@ const searchConstructor: ObjectMethod = {
   exec: async (ctx) => {
     const thread = ctx.thread;
     if (!thread) return { ok: false, error: "[search] 缺少 thread context。" };
-    const command = ctx.form?.command ?? "glob";
+    // batch C narrowing(N1): ctx.form 契约层是 base ContextWindow，narrow 回 MethodExecWindow 读 command。
+    const command = (ctx.form as MethodExecWindow | undefined)?.command ?? "glob";
     const pattern = typeof ctx.args.pattern === "string" ? ctx.args.pattern : "";
     if (!pattern) return { ok: false, error: `[${command}] 缺少 pattern 参数。` };
 

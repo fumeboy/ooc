@@ -204,7 +204,7 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
       return thread.persistence?.sessionId === SUPER_SESSION_ID;
 
     case "object": {
-      const list = thread.contextWindows ?? [];
+      const list = (thread.contextWindows ?? []) as ContextWindow[]; // batch C narrowing(N4): base[] → union[] 以传入 isOpen/byId map（runtime 即 union 实例）。
       for (const w of list) {
         if (w.type !== trigger.objectType) continue;
         if (isOpen(w)) return true;
@@ -213,7 +213,7 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
     }
 
     case "objectId": {
-      const list = thread.contextWindows ?? [];
+      const list = (thread.contextWindows ?? []) as ContextWindow[]; // batch C narrowing(N4): base[] → union[] 以传入 isOpen/byId map（runtime 即 union 实例）。
       for (const w of list) {
         // ooc-6 Object Unification: window.id = objectId for custom objects
         if (w.id !== trigger.objectId) continue;
@@ -223,7 +223,7 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
     }
 
     case "method": {
-      const list = thread.contextWindows ?? [];
+      const list = (thread.contextWindows ?? []) as ContextWindow[]; // batch C narrowing(N4): base[] → union[] 以传入 isOpen/byId map（runtime 即 union 实例）。
       // 先做一次按 id 的 parent 索引，避免 O(n²)；通常 windows 量级小，O(n) 也无妨。
       const byId = new Map<string, ContextWindow>();
       for (const w of list) byId.set(w.id, w);

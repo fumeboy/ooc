@@ -5,6 +5,7 @@ import type {
 import type { Intent, MethodCallSchema } from "../../../thinkable/context/intent.js";
 import type { ContextWindow } from "../_shared/types.js";
 import type { MethodExecWindow } from "../method_exec/types.js";
+import type { BaseContextWindow } from "@ooc/core/_shared";
 import type { TalkWindow } from "../_shared/types.js";
 import { deliverTalkMessage } from "./delivery.js";
 
@@ -38,7 +39,9 @@ talk_window.say 用于向 talk 对端发送一条消息。
 时一步给齐，要么 refine 时把要累积的键值对显式列出来。
 `.trim();
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
+  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
+  const sourceId = (form as MethodExecWindow).command;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -53,7 +56,7 @@ function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>
       relevance: { score: 0.8, signalCount: 1 },
       provenance: {
         kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
+        reason: { mechanism: "form_bound", sourceId },
         createdAt: 0,
         lastTouchedAt: 0,
       },
@@ -108,7 +111,8 @@ export const sayCommand: ObjectMethod = {
   },
   onFormChange(change, { form }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = { [TALK_WINDOW_SAY_BASIC]: SAY_KNOWLEDGE };
     if (formStatus === "open" && (typeof args.msg !== "string" || args.msg.trim().length === 0)) {

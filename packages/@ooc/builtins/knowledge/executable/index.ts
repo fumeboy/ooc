@@ -111,7 +111,8 @@ const setViewportCommand: ObjectMethod = {
   intent: emptyIntent,
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = {
       [KNOWLEDGE_WINDOW_SET_VIEWPORT_BASIC]: SET_VIEWPORT_KNOWLEDGE,
@@ -128,8 +129,10 @@ const setViewportCommand: ObjectMethod = {
 
 /** 拒绝 close 非 explicit 来源的 knowledge_object（合成 window 不可关闭）。 */
 function onCloseKnowledgeWindow(ctx: OnCloseContext): boolean | void {
-  const w = ctx.window;
-  if (w.type !== "knowledge") return;
+  if (ctx.window.type !== "knowledge") return;
+  // batch C narrowing(N1): ctx.window 契约层是 base ContextWindow；type==="knowledge" 守卫后
+  // narrow 回 KnowledgeWindow 以读 source/path（runtime 保证此 window 即 knowledge 实例）。
+  const w = ctx.window as KnowledgeWindow;
   // 历史 window 没有 source 字段时按 explicit 处理（向后兼容）
   if (w.source && w.source !== "explicit") {
     ctx.thread.events.push({
@@ -186,7 +189,8 @@ const knowledgeConstructor: ObjectMethod = {
   intent: emptyIntent,
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = {
       [KNOWLEDGE_CONSTRUCTOR_BASIC]: KNOWLEDGE_CONSTRUCTOR_KNOWLEDGE,

@@ -204,7 +204,8 @@ async function renderWindowNode(
   registry: ObjectRegistry,
 ): Promise<XmlNode> {
   const sharingState = window.sharing;
-  const renderedWindow: ContextWindow = sharingState ? sharingState.snapshot : window;
+  // batch C narrowing(N4): sharing.snapshot 契约层是 base ContextWindow；narrow 回 union（snapshot 即原 window 的 union 实例）。
+  const renderedWindow: ContextWindow = sharingState ? (sharingState.snapshot as ContextWindow) : window;
 
   const titlePrefix = sharingState
     ? sharingState.kind === "ref"

@@ -17,6 +17,8 @@ import {
 import type { Intent } from "../../../thinkable/context/intent.js";
 import type { ContextWindow } from "../../../executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "../../../executable/windows/method_exec/types.js";
+import type { BaseContextWindow } from "@ooc/core/_shared";
+import type { WindowManager } from "../../../executable/windows/_shared/manager.js";
 
 const OPEN_FEISHU_CHAT_BASIC = "internal/executable/open_feishu_chat/basic";
 const OPEN_FEISHU_CHAT_INPUT = "internal/executable/open_feishu_chat/input";
@@ -37,7 +39,9 @@ open_feishu_chat 用于创建一个 feishu_chat_window（飞书群聊 / 单聊�
 open(command="open_feishu_chat", title="工程进展群", args={ chat_id: "oc_xxxxx", chat_type: "group", tail_count: 50 })
 `.trim();
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
+  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
+  const sourceId = (form as MethodExecWindow).command;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -52,7 +56,7 @@ function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>
       relevance: { score: 0.8, signalCount: 1 },
       provenance: {
         kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
+        reason: { mechanism: "form_bound", sourceId },
         createdAt: 0,
         lastTouchedAt: 0,
       },
@@ -132,7 +136,8 @@ export async function executeOpenFeishuChat(
   };
 
   if (ctx.manager) {
-    ctx.manager.insertTypedWindow(window, ctx.thread);
+    // batch C narrowing(N2): ctx.manager 契约层是 unknown，narrow 回 WindowManager 取 insertTypedWindow。
+    (ctx.manager as WindowManager).insertTypedWindow(window, ctx.thread);
   } else {
     thread.contextWindows = [...(thread.contextWindows ?? []), window];
   }

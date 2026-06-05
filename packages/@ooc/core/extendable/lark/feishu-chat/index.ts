@@ -27,6 +27,7 @@ import { larkExec } from "../cli.js";
 import type { Intent } from "../../../thinkable/context/intent.js";
 import type { ContextWindow } from "../../../executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "../../../executable/windows/method_exec/types.js";
+import type { BaseContextWindow } from "@ooc/core/_shared";
 
 const FEISHU_CHAT_PROTOCOL_PATH = "internal/windows/feishu_chat/basic";
 const FEISHU_CHAT_REFRESH_BASIC = "internal/windows/feishu_chat/refresh/basic";
@@ -143,7 +144,9 @@ feishu_chat.close 释放 window；不影响飞书一侧的消息或会话。
 
 // ─────────────────────────── guidance helper ────────────────────────────
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
+  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
+  const sourceId = (form as MethodExecWindow).command;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -158,7 +161,7 @@ function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>
       relevance: { score: 0.8, signalCount: 1 },
       provenance: {
         kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
+        reason: { mechanism: "form_bound", sourceId },
         createdAt: 0,
         lastTouchedAt: 0,
       },

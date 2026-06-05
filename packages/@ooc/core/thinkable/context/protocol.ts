@@ -139,7 +139,8 @@ export function buildProtocolKnowledgeWindows(
   }
 
   // 4) Creator-reply protocol knowledge
-  for (const w of thread.contextWindows ?? []) {
+  // batch C narrowing(N1/N4): contextWindows 契约层是 base[]；narrow 回 union[] 以读 isCreatorWindow 并传入 buildCreatorReplyKnowledge。
+  for (const w of (thread.contextWindows ?? []) as ContextWindow[]) {
     const isCreator = (w.type === "do" || w.type === "talk") && w.isCreatorWindow === true;
     if (!isCreator) continue;
     const path = `internal/windows/${w.type}/creator-reply/${w.id}`;

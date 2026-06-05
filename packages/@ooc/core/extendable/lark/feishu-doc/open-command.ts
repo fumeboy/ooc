@@ -17,6 +17,8 @@ import {
 import type { Intent } from "../../../thinkable/context/intent.js";
 import type { ContextWindow } from "../../../executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "../../../executable/windows/method_exec/types.js";
+import type { BaseContextWindow } from "@ooc/core/_shared";
+import type { WindowManager } from "../../../executable/windows/_shared/manager.js";
 
 const OPEN_FEISHU_DOC_BASIC = "internal/executable/open_feishu_doc/basic";
 const OPEN_FEISHU_DOC_INPUT = "internal/executable/open_feishu_doc/input";
@@ -39,7 +41,9 @@ open_feishu_doc 用于创建一个 feishu_doc_window（飞书文档作为 Contex
 open(command="open_feishu_doc", title="OOC 设计稿", args={ doc_token: "doccn5xxxxxx", doc_kind: "docx" })
 `.trim();
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
+  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
+  const sourceId = (form as MethodExecWindow).command;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -54,7 +58,7 @@ function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>
       relevance: { score: 0.8, signalCount: 1 },
       provenance: {
         kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
+        reason: { mechanism: "form_bound", sourceId },
         createdAt: 0,
         lastTouchedAt: 0,
       },
@@ -70,7 +74,8 @@ export const openFeishuDocCommand: ObjectMethod = {
   intent: (): Intent[] => [],
   onFormChange(change, { form, intents }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = { [OPEN_FEISHU_DOC_BASIC]: KNOWLEDGE };
     if (formStatus !== "open") return guidanceWindows(form, entries);
@@ -114,7 +119,8 @@ export async function executeOpenFeishuDoc(
   };
 
   if (ctx.manager) {
-    ctx.manager.insertTypedWindow(window, ctx.thread);
+    // batch C narrowing(N2): ctx.manager 契约层是 unknown，narrow 回 WindowManager 取 insertTypedWindow。
+    (ctx.manager as WindowManager).insertTypedWindow(window, ctx.thread);
   } else {
     thread.contextWindows = [...(thread.contextWindows ?? []), window];
   }

@@ -290,7 +290,11 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
     // and applyEmergencyGuard (three-wave hard thresholding).
     // compressLevel is now exclusively controlled by explicit LLM compress/expand commands.
     const thresholds = loadBudgetThresholds(thread);
-    const allocation = BUDGET_MANAGER.allocate(thread.contextWindows ?? [], thresholds.hard);
+    // batch C narrowing(N4): contextWindows 契约层是 base[]；narrow 回 union[] 以传入 BUDGET_MANAGER.allocate。
+    const allocation = BUDGET_MANAGER.allocate(
+      (thread.contextWindows ?? []) as import("../executable/windows/_shared/types").ContextWindow[],
+      thresholds.hard,
+    );
 
     // Replace thread.contextWindows with only the in-budget windows for this round.
     // This is a transient effect — buildInputItems reads from thread.contextWindows,

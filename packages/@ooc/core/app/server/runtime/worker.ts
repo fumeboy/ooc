@@ -256,7 +256,8 @@ async function syncCrossObjectCalleeEnds(
 ): Promise<void> {
   if (!caller.persistence) return;
   const talkWindows = (caller.contextWindows ?? []).filter(
-    (w): w is TalkWindow => w.type === "talk" && Boolean(w.targetThreadId),
+    // batch C narrowing(N1): contextWindows 元素契约层是 base；type==="talk" 后 narrow 回 TalkWindow 读 targetThreadId。
+    (w): w is TalkWindow => w.type === "talk" && Boolean((w as TalkWindow).targetThreadId),
   );
   if (talkWindows.length === 0) return;
 

@@ -17,6 +17,8 @@ import type {
   ObjectMethod,
 } from "../_shared/command-types.js";
 import type { MethodExecWindow } from "../_shared/types.js";
+import type { WindowManager } from "../_shared/manager.js";
+import type { BaseContextWindow } from "@ooc/core/_shared";
 import type { Intent } from "@ooc/core/thinkable/context/intent.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 
@@ -37,7 +39,9 @@ async function executeRefine(ctx: MethodExecutionContext): Promise<string | unde
   if (!ctx.manager) {
     return "[method_exec.refine] 缺少 manager 上下文。";
   }
-  const ok = ctx.manager.refine(form.id, incoming);
+  // batch C narrowing(N2): ctx.manager 契约层是 unknown，narrow 回 WindowManager（已过 null 检查）。
+  const manager = ctx.manager as WindowManager;
+  const ok = manager.refine(form.id, incoming);
   if (!ok) {
     return `[method_exec.refine] refine 失败：form ${form.id} 不存在或不在 open / failed 状态。`;
   }
@@ -45,14 +49,16 @@ async function executeRefine(ctx: MethodExecutionContext): Promise<string | unde
   // its state lives inline in the thread's thread-context.json); flush so the on-disk
   // snapshot reflects the edit immediately. Fixes "refine 不写盘" in the plan.
   await ctx.reportContextEdit?.();
-  const updated = ctx.manager.get(form.id);
+  const updated = manager.get(form.id);
   const paths = updated && updated.type === "method_exec" ? updated.commandPaths.join(", ") : "";
   // Round 13: 如果是从 failed 复活, 标注一下让 LLM 知道 form 已切回 open。
   const revived = form.status === "failed" ? "（form 从 failed 复活, 已切回 open, 可 submit）" : "";
   return `Form ${form.id} 已累积参数${revived}。当前路径：${paths}。`;
 }
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
+  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
+  const sourceId = (form as MethodExecWindow).command;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -67,7 +73,7 @@ function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>
       relevance: { score: 0.8, signalCount: 1 },
       provenance: {
         kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
+        reason: { mechanism: "form_bound", sourceId },
         createdAt: 0,
         lastTouchedAt: 0,
       },

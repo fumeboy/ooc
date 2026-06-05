@@ -19,6 +19,8 @@ import type {
   ObjectMethod,
 } from "../_shared/command-types.js";
 import type { MethodExecWindow } from "../_shared/types.js";
+import type { WindowManager } from "../_shared/manager.js";
+import type { BaseContextWindow } from "@ooc/core/_shared";
 import type { Intent } from "@ooc/core/thinkable/context/intent.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 
@@ -31,9 +33,11 @@ async function executeSubmit(ctx: MethodExecutionContext): Promise<string | unde
   if (!ctx.manager || !ctx.thread) {
     return "[method_exec.submit] 缺少 manager / thread 上下文。";
   }
+  // batch C narrowing(N2): ctx.manager 契约层是 unknown，narrow 回 WindowManager（已过 null 检查）。
+  const manager = ctx.manager as WindowManager;
   try {
-    const result = await ctx.manager.submit(form.id, ctx.thread);
-    const after = ctx.manager.get(form.id);
+    const result = await manager.submit(form.id, ctx.thread);
+    const after = manager.get(form.id);
     const removed = !after;
     const title = form.command;
     // Round 13: removed = success 路径 (form 已自动从 contextWindows 移除);
@@ -47,7 +51,9 @@ async function executeSubmit(ctx: MethodExecutionContext): Promise<string | unde
   }
 }
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
+  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
+  const sourceId = (form as MethodExecWindow).command;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -62,7 +68,7 @@ function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>
       relevance: { score: 0.8, signalCount: 1 },
       provenance: {
         kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
+        reason: { mechanism: "form_bound", sourceId },
         createdAt: 0,
         lastTouchedAt: 0,
       },

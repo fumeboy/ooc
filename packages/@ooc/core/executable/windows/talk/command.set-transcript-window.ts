@@ -15,6 +15,7 @@ import type {
 import type { Intent, MethodCallSchema } from "../../../thinkable/context/intent.js";
 import type { ContextWindow } from "../_shared/types.js";
 import type { MethodExecWindow } from "../method_exec/types.js";
+import type { BaseContextWindow } from "@ooc/core/_shared";
 import {
   executeWindowSetTranscriptViewport,
   hasAnyTranscriptViewportField,
@@ -49,7 +50,9 @@ talk_window.set_transcript_window 精细化调整 transcript 渲染窗口。
 **注意**：viewport 只影响**渲染**给 LLM 的内容；say / wait / close 等命令仍基于完整 transcript。
 `.trim();
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
+  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
+  const sourceId = (form as MethodExecWindow).command;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -64,7 +67,7 @@ function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>
       relevance: { score: 0.8, signalCount: 1 },
       provenance: {
         kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
+        reason: { mechanism: "form_bound", sourceId },
         createdAt: 0,
         lastTouchedAt: 0,
       },
@@ -87,7 +90,8 @@ export const setTranscriptWindowCommandForTalk: ObjectMethod = {
   intent: (): Intent[] => [],
   onFormChange(change, { form }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = {
       [TALK_SET_TRANSCRIPT_BASIC]: KNOWLEDGE,

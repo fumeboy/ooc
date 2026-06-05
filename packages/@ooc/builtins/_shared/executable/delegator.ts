@@ -49,13 +49,18 @@ export function makeRootDelegator(
   spec: RootDelegatorSpec,
 ): (ctx: MethodExecutionContext) => Promise<MethodOutcome | string | undefined> {
   return async (ctx) => {
-    const ctor = (ctx.manager?.registry ?? builtinRegistry).lookupConstructor(spec.constructorKind);
+    // batch C 集成：ctx.manager 在零依赖层是 unknown；narrow 到带 registry 的结构类型
+    // （runtime 注入的 WindowManager 保证 registry 存在），缺省回退 builtinRegistry。
+    const manager = ctx.manager as { registry?: typeof builtinRegistry } | undefined;
+    const ctor = (manager?.registry ?? builtinRegistry).lookupConstructor(spec.constructorKind);
     if (!ctor) {
       return `[${spec.command}] ${spec.objectLabel} constructor 未注册（registry 期望 kind="constructor" 的 ${spec.constructorKind} method）。`;
     }
+    // 直调路径的最小 form shim：只携带 command 供 constructor 分发消歧；
+    // 经 unknown 转换（partial form，runtime 链路才有完整 form）。
     const target =
       spec.formCommand && !ctx.form
-        ? ({ ...ctx, form: { command: spec.formCommand } } as MethodExecutionContext)
+        ? ({ ...ctx, form: { command: spec.formCommand } } as unknown as MethodExecutionContext)
         : ctx;
     return await ctor.exec(target);
   };

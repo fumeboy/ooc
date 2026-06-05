@@ -116,7 +116,8 @@ const execCommand: ObjectMethod = {
   },
   onFormChange(change, { form }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = { [PROGRAM_WINDOW_EXEC_BASIC]: EXEC_KNOWLEDGE };
     if (formStatus !== "open") return buildGuidanceWindows(form, entries);
@@ -154,7 +155,8 @@ const setHistoryWindowCommand: ObjectMethod = {
   intent: emptyIntent,
   onFormChange(change, { form }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = {
       [PROGRAM_WINDOW_SET_HISTORY_BASIC]: SET_HISTORY_KNOWLEDGE,
@@ -287,7 +289,8 @@ const programConstructor: ObjectMethod = {
   },
   onFormChange(change, { form }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = {
       [PROGRAM_CONSTRUCTOR_BASIC]: PROGRAM_CONSTRUCTOR_KNOWLEDGE,

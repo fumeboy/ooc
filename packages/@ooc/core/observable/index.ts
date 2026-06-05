@@ -27,6 +27,7 @@ import {
   writeLoopDebugOutput,
 } from "../persistable/index.js";
 import { buildWindowsSnapshot } from "./window-hash.js";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import {
   createObservableStore,
   defaultObservableStore,
@@ -190,7 +191,8 @@ export async function finishLlmLoop(
       previousSnapshot = prevMeta?.windowsSnapshot;
     }
     const windowsSnapshot = await buildWindowsSnapshot(
-      thread.contextWindows ?? [],
+      // batch C narrowing(N4): contextWindows 契约层是 base[]；narrow 回 union[] 传入 buildWindowsSnapshot。
+      (thread.contextWindows ?? []) as ContextWindow[],
       previousSnapshot,
     );
     const resultTextBytes = payload.result ? byteLength(payload.result.text) : 0;

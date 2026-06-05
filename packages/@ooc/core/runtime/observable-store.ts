@@ -23,6 +23,7 @@ import {
   writeLoopDebugOutput,
 } from "../persistable/index.js";
 import { buildWindowsSnapshot } from "../observable/window-hash.js";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 
 /** 一轮 LLM 观测的运行时句柄。 */
 export interface LlmLoopHandle {
@@ -289,7 +290,8 @@ export class ObservableStore {
         previousSnapshot = prevMeta?.windowsSnapshot;
       }
       const windowsSnapshot = await buildWindowsSnapshot(
-        thread.contextWindows ?? [],
+        // batch C narrowing(N4): contextWindows 契约层是 base[]；narrow 回 union[] 传入 buildWindowsSnapshot。
+        (thread.contextWindows ?? []) as ContextWindow[],
         previousSnapshot,
       );
       await writeLoopDebugMeta(thread.persistence, handle.loopIndex, {

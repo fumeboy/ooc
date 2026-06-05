@@ -20,6 +20,8 @@ import type {
 import type { Intent, MethodCallSchema } from "../../../thinkable/context/intent.js";
 import type { ContextWindow, DoWindow, SharingState } from "../_shared/types.js";
 import type { MethodExecWindow } from "../method_exec/types.js";
+import type { BaseContextWindow } from "@ooc/core/_shared";
+import type { WindowManager } from "../_shared/manager.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 import { findChild } from "./helpers.js";
 
@@ -79,7 +81,9 @@ const MOVE_COMBINED_KNOWLEDGE = [
   MOVE_RETURN_KNOWLEDGE,
 ].join("\n");
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
+  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
+  const sourceId = (form as MethodExecWindow).command;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -94,7 +98,7 @@ function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>
       relevance: { score: 0.8, signalCount: 1 },
       provenance: {
         kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
+        reason: { mechanism: "form_bound", sourceId },
         createdAt: 0,
         lastTouchedAt: 0,
       },
@@ -172,7 +176,9 @@ async function executeMove(ctx: MethodExecutionContext): Promise<string | undefi
   if (sourceIdx < 0) {
     return `[do_window.move] window "${window_id}" 不在当前 thread 的 contextWindows 里。`;
   }
-  const source = selfWindows[sourceIdx]!;
+  // batch C narrowing(N4): contextWindows 元素契约层是 base；narrow 回 union ContextWindow
+  // 以传入 makeSnapshot / 构造 ref/lent_out 副本（runtime 即 union 实例）。
+  const source = selfWindows[sourceIdx]! as ContextWindow;
   if (source.sharing) {
     const stateDesc =
       source.sharing.kind === "ref"
@@ -221,7 +227,8 @@ async function executeMove(ctx: MethodExecutionContext): Promise<string | undefi
       peerWindows[peerSameIdIdx] = returned;
       // 移除 self 的 owner 副本（同时通过 mgr 同步以避免被 toData() 复原）
       self.contextWindows = selfWindows.filter((_, i) => i !== sourceIdx);
-      ctx.manager?.removeWindowSilent(window_id);
+      // batch C narrowing(N2): ctx.manager 契约层是 unknown，narrow 回 WindowManager。
+      (ctx.manager as WindowManager | undefined)?.removeWindowSilent(window_id);
       peer.contextWindows = peerWindows;
       return `[do_window.move] 已归还 window "${window_id}" 给 thread "${peer.id}"（其 owner 状态已恢复）。`;
     }
@@ -243,7 +250,8 @@ async function executeMove(ctx: MethodExecutionContext): Promise<string | undefi
   selfWindows[sourceIdx] = lentOut;
   self.contextWindows = selfWindows;
   // 同步 mgr 状态（避免后续 toData() 把它恢复为旧 owner）
-  ctx.manager?.upsertWindow(lentOut, ctx.thread);
+  // batch C narrowing(N2): ctx.manager 契约层是 unknown，narrow 回 WindowManager。
+  (ctx.manager as WindowManager | undefined)?.upsertWindow(lentOut, ctx.thread);
   // peer 获得完整 owner 副本（不带 sharing）
   const ownerCopy: ContextWindow = { ...source };
   delete (ownerCopy as { sharing?: SharingState }).sharing;

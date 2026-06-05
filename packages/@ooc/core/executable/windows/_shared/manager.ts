@@ -151,7 +151,9 @@ export class WindowManager {
   static fromThread(thread: ThreadContext, registry: ObjectRegistry): WindowManager {
     const mgr = new WindowManager(registry);
     mgr.threadRef = thread;
-    for (const window of thread.contextWindows ?? []) {
+    // batch C narrowing(N4): contextWindows 契约层是 base[]；narrow 回 union[] 以填充 windows map
+    // / recordKnowledgeRefs（runtime 即 union 实例）。
+    for (const window of (thread.contextWindows ?? []) as ContextWindow[]) {
       mgr.windows.set(window.id, window);
       mgr.recordKnowledgeRefs(window);
     }
@@ -323,10 +325,12 @@ export class WindowManager {
       });
     }
     if (methodEntry.onFormChange) {
+      // batch C narrowing(N4): onFormChange 契约返回 base ContextObject[]；narrow 回 union[]
+      // 以推入 thread.contextWindows / windows map（runtime guidance 即 union 实例）。
       const guidance = methodEntry.onFormChange(
         { kind: "status_changed", from: fromForm.status, to: toForm.status },
         { form: toForm, intents },
-      );
+      ) as ContextWindow[];
       if (guidance && guidance.length > 0 && thread.contextWindows) {
         thread.contextWindows.push(...guidance);
         for (const gw of guidance) {
@@ -552,18 +556,19 @@ export class WindowManager {
       // Fire onFormChange
       const guidanceWindows: ContextWindow[] = [];
       if (methodResolved.entry.onFormChange) {
+        // batch C narrowing(N4): onFormChange 契约返回 base ContextObject[]；narrow 回 union[] 推入 guidanceWindows。
         guidanceWindows.push(
-          ...(methodResolved.entry.onFormChange(
+          ...((methodResolved.entry.onFormChange(
             { kind: "args_refined", added, removed, changed, args: nextArgs },
             { form: next, intents: newIntents },
-          ) ?? []),
+          ) ?? []) as ContextWindow[]),
         );
         if (intentsChanged) {
           guidanceWindows.push(
-            ...(methodResolved.entry.onFormChange(
+            ...((methodResolved.entry.onFormChange(
               { kind: "intent_changed", from: oldEntry?.intents ?? [], to: newIntents },
               { form: next, intents: newIntents },
-            ) ?? []),
+            ) ?? []) as ContextWindow[]),
           );
         }
       }
@@ -685,7 +690,8 @@ export class WindowManager {
             // Constructor outcome：把构造出的 ContextObject 挂到 manager 与 thread 上。
             // 走 insertTypedWindow 相同路径以保证 in-memory map + thread.contextWindows
             // + 持久化（writeContextObjectForWindow）三处一致。
-            this.insertTypedWindow(raw.object, thread);
+            // batch C narrowing(N4): raw.object 契约层是 base ContextObject；narrow 回 union 以匹配 insertTypedWindow。
+            this.insertTypedWindow(raw.object as ContextWindow, thread);
             result = `Constructed ${raw.object.type} window ${raw.object.id}`;
           } else {
             result = raw.result;

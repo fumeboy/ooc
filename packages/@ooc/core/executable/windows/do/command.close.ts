@@ -5,6 +5,7 @@ import type {
 import type { Intent, MethodCallSchema } from "../../../thinkable/context/intent.js";
 import type { ContextWindow } from "../_shared/types.js";
 import type { MethodExecWindow } from "../method_exec/types.js";
+import type { BaseContextWindow } from "@ooc/core/_shared";
 import type { DoWindow } from "../_shared/types.js";
 import { archiveDoWindowChild } from "./helpers.js";
 
@@ -14,7 +15,9 @@ do_window.close 等价于 close tool，但语义上明确表达"归档子线程�
 关闭后子线程会被标记为 archived，不再被 scheduler 选中执行。
 `.trim();
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
+function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
+  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
+  const sourceId = (form as MethodExecWindow).command;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -29,7 +32,7 @@ function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>
       relevance: { score: 0.8, signalCount: 1 },
       provenance: {
         kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
+        reason: { mechanism: "form_bound", sourceId },
         createdAt: 0,
         lastTouchedAt: 0,
       },

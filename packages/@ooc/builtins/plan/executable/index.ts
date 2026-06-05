@@ -36,6 +36,7 @@ import { readable } from "../readable.js";
 
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import type { WindowManager } from "@ooc/core/executable/windows/_shared/manager.js";
 import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
 import { isString, emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
 
@@ -143,7 +144,8 @@ function requirePlanWindow(ctx: MethodExecutionContext): PlanWindow {
 /** 通过 manager 持久化更新（避免被 toData() 复原）；fallback 直接 mutate。 */
 function updatePlanWindow(ctx: MethodExecutionContext, next: PlanWindow): void {
   if (ctx.manager) {
-    ctx.manager.upsertWindow(next, ctx.thread);
+    // batch C narrowing(N2): ctx.manager 契约层是 unknown，narrow 回 WindowManager 取 upsertWindow。
+    (ctx.manager as WindowManager).upsertWindow(next, ctx.thread);
   } else {
     // fallback 路径：直接修改原 window 的字段（in-place）
     Object.assign(ctx.self as PlanWindow, next);
@@ -317,7 +319,8 @@ async function executeExpandStep(ctx: MethodExecutionContext): Promise<string | 
   // 落地：父更新 + 子插入
   updatePlanWindow(ctx, nextParent);
   if (ctx.manager) {
-    ctx.manager.insertTypedWindow(child, ctx.thread);
+    // batch C narrowing(N2): ctx.manager 契约层是 unknown，narrow 回 WindowManager 取 insertTypedWindow。
+    (ctx.manager as WindowManager).insertTypedWindow(child, ctx.thread);
   } else {
     ctx.thread.contextWindows = [...(ctx.thread.contextWindows ?? []), child];
   }
@@ -364,11 +367,14 @@ async function executeCollapseSubplan(ctx: MethodExecutionContext): Promise<stri
   const all = ctx.thread.contextWindows ?? [];
   const childIdx = all.findIndex((c) => c.id === childId);
   if (childIdx >= 0) {
+    // batch C narrowing(N1): contextWindows 元素契约层是 base；type==="plan" 守卫后
+    // narrow 回 PlanWindow 以 spread 出含 steps 的完整 PlanWindow。
     const child = all[childIdx]!;
     if (child.type === "plan") {
-      const archivedChild: PlanWindow = { ...child, status: "archived" };
+      const archivedChild: PlanWindow = { ...(child as PlanWindow), status: "archived" };
       if (ctx.manager) {
-        ctx.manager.upsertWindow(archivedChild, ctx.thread);
+        // batch C narrowing(N2): ctx.manager 契约层是 unknown，narrow 回 WindowManager。
+        (ctx.manager as WindowManager).upsertWindow(archivedChild, ctx.thread);
       } else {
         const nextAll = all.slice();
         nextAll[childIdx] = archivedChild;
@@ -557,7 +563,8 @@ const planConstructor: ObjectMethod = {
   intent: emptyIntent,
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
+    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = {
       [PLAN_CONSTRUCTOR_BASIC]: PLAN_CONSTRUCTOR_KNOWLEDGE,

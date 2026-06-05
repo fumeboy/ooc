@@ -12,6 +12,8 @@
  */
 
 import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
+import type { WindowManager } from "@ooc/core/executable/windows/_shared/manager.js";
+import type { ContextObject } from "@ooc/core/executable/windows/_shared/types.js";
 import { doCommand } from "./method.do.js";
 import { endCommand } from "./method.end.js";
 import { globCommand } from "./method.glob.js";
@@ -133,7 +135,10 @@ export async function execRootMethod(
       // 退回直接 push 到 thread.contextWindows，与历史 root.* exec 内部 fallback 一致。
       if ("object" in raw) {
         if (ctx.manager && ctx.thread) {
-          ctx.manager.insertTypedWindow(raw.object, ctx.thread);
+          // batch C narrowing(N2): ctx.manager 在契约层是 unknown，narrow 回 WindowManager
+          // 取 insertTypedWindow（runtime 注入的就是 WindowManager 实例）。
+          // raw.object 是 base ContextObject（MethodOutcome 契约层）；narrow 回 union 以匹配 insertTypedWindow 形参。
+          (ctx.manager as WindowManager).insertTypedWindow(raw.object as ContextObject, ctx.thread);
         } else if (ctx.thread) {
           ctx.thread.contextWindows = [...(ctx.thread.contextWindows ?? []), raw.object];
         }

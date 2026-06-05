@@ -171,7 +171,8 @@ function handleExpandMethod(thread: ThreadContext, windowId: string): string {
     return errorOutput(`expand: window ${windowId} 已经是 live (compressLevel=0),无需 expand。`);
   }
 
-  const next: ContextWindow[] = (thread.contextWindows ?? []).map((w) =>
+  // batch C narrowing(N4): contextWindows 契约层是 base[]；narrow 回 union[] 以匹配 next 的 union 元素类型。
+  const next: ContextWindow[] = ((thread.contextWindows ?? []) as ContextWindow[]).map((w) =>
     w.id === windowId ? ({ ...w, compressLevel: 0 } as ContextWindow) : w,
   );
   thread.contextWindows = next;
