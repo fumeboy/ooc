@@ -10,6 +10,8 @@
  *
  * 注：内部用 fetch + NO_PROXY 绕 Clash。输出 JSON，体验官自行解析。
  */
+export {}; // module marker（启用 top-level await）
+
 process.env.NO_PROXY = "localhost,127.0.0.1";
 process.env.no_proxy = "localhost,127.0.0.1";
 
