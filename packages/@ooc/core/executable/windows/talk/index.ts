@@ -370,6 +370,10 @@ builtinRegistry.registerObjectType("talk", {
   renderXml: renderTalkWindow,
   compressView: compressTalkWindow,
   basicKnowledge: TALK_WINDOW_BASIC_KNOWLEDGE,
+  // G4: registry 派发的去重 hook —— 复用 filterMessagesForTalkWindow，让 renderer
+  // 无需直接 import 本模块即可拿到 talk_window transcript 消费的消息 id。
+  consumedMessageIds: (ctx) =>
+    filterMessagesForTalkWindow(ctx.window as TalkWindow, ctx.thread),
   // P6.§6: talk_window 是 Object 内置特性 —— 不写独立 dir，状态 inline 进所属 thread 的 context.json。
   isBuiltinFeature: true,
 });

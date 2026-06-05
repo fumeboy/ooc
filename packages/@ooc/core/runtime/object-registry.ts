@@ -93,6 +93,7 @@ export class ObjectRegistry {
       compressView: partial.compressView ?? existing.compressView,
       basicKnowledge: partial.basicKnowledge ?? existing.basicKnowledge,
       readable: partial.readable ?? existing.readable,
+      consumedMessageIds: partial.consumedMessageIds ?? existing.consumedMessageIds,
       isBuiltinFeature: partial.isBuiltinFeature ?? existing.isBuiltinFeature,
       parentClass: nextParentClass,
     });
@@ -253,6 +254,7 @@ export class ObjectRegistry {
           compressView: def.compressView ?? existing.compressView,
           basicKnowledge: def.basicKnowledge ?? existing.basicKnowledge,
           readable: def.readable ?? existing.readable,
+          consumedMessageIds: def.consumedMessageIds ?? existing.consumedMessageIds,
           isBuiltinFeature: def.isBuiltinFeature ?? existing.isBuiltinFeature,
           parentClass: def.parentClass !== undefined ? def.parentClass : existing.parentClass,
         });

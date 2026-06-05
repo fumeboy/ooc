@@ -519,6 +519,10 @@ builtinRegistry.registerObjectType("do", {
   onClose: onCloseDoWindow,
   renderXml: renderDoWindow,
   compressView: compressDoWindow,
+  // G4: registry 派发的去重 hook —— 复用 filterMessagesForDoWindow，让 renderer
+  // 无需直接 import 本模块即可拿到 do_window transcript 消费的消息 id。
+  consumedMessageIds: (ctx) =>
+    filterMessagesForDoWindow(ctx.window as DoWindow, ctx.thread),
   // P6.§6: do_window 是 Object 内置特性 —— 不写独立 dir，状态 inline 进所属 thread 的 context.json。
   isBuiltinFeature: true,
 });

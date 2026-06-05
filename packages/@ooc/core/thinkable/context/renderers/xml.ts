@@ -30,10 +30,9 @@ import { ROOT_WINDOW_ID } from "../../../executable/windows/_shared/types.js";
 import {
   type RenderContext,
   type ObjectRegistry,
+  type ObjectDefinition,
 } from "../../../executable/windows/_shared/registry.js";
 import { builtinRegistry } from "../../../executable/windows/index.js";
-import { filterMessagesForDoWindow } from "../../../executable/windows/do/index.js";
-import { filterMessagesForTalkWindow } from "../../../executable/windows/talk/index.js";
 import type { ThreadContext, ThreadMessage } from "../index.js";
 import { loadObjectReadable, loadObjectWindow } from "../../../runtime/server-loader.js";
 import { readReadable, type StoneObjectRef } from "../../../persistable/index.js";
@@ -293,13 +292,30 @@ async function renderContextWindowsNode(
   return xmlElement("context_windows", {}, children);
 }
 
-function collectWindowConsumedMessageIds(windows: ContextWindow[], thread: ThreadContext): Set<string> {
+/**
+ * 收集所有 window 在其 transcript 视图中已消费的 inbox/outbox 消息 id，用于去重
+ * 顶层 inbox/outbox fallback。
+ *
+ * G4: 改由 registry 派发——每个 window type 通过 ObjectDefinition.consumedMessageIds
+ * hook 自报已消费的消息（do/talk 复用各自的 filterMessagesFor*Window）。renderer 不再
+ * 直接 import executable/windows/{do,talk}，消除 thinkable→executable 反向耦合。
+ */
+function collectWindowConsumedMessageIds(
+  windows: ContextWindow[],
+  thread: ThreadContext,
+  registry: ObjectRegistry,
+): Set<string> {
   const consumed = new Set<string>();
   for (const w of windows ?? []) {
-    if (w.type === "do") {
-      for (const m of filterMessagesForDoWindow(w, thread)) consumed.add(m.id);
-    } else if (w.type === "talk") {
-      for (const m of filterMessagesForTalkWindow(w, thread)) consumed.add(m.id);
+    let def: ObjectDefinition | undefined;
+    try {
+      def = registry.getObjectDefinition(w.type as never);
+    } catch {
+      def = undefined;
+    }
+    if (!def?.consumedMessageIds) continue;
+    for (const m of def.consumedMessageIds({ thread, window: w })) {
+      consumed.add(m.id);
     }
   }
   return consumed;
@@ -340,7 +356,7 @@ export class XmlRenderer {
     }
 
     // Top-level inbox/outbox fallback
-    const consumedMsgIds = collectWindowConsumedMessageIds(windows, threadForRender);
+    const consumedMsgIds = collectWindowConsumedMessageIds(windows, threadForRender, this.registry);
     const fallbackInbox = (threadForRender.inbox ?? []).filter((m) => !consumedMsgIds.has(m.id));
     const fallbackOutbox = (threadForRender.outbox ?? []).filter((m) => !consumedMsgIds.has(m.id));
     appendNode(threadChildren, renderMessagesNode("inbox", fallbackInbox));

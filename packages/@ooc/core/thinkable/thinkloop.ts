@@ -8,7 +8,7 @@ import {
   loadBudgetThresholds,
   type BudgetThresholds,
 } from "./context/budget";
-import type { LlmClient, LlmInputItem, LlmToolCall } from "./llm/types";
+import type { LlmClient, LlmGenerateResult, LlmInputItem, LlmToolCall } from "./llm/types";
 import { LlmTimeoutError } from "./llm/timeout";
 
 /** Default per-window budget for BudgetManager.allocate (soft threshold from config). */
@@ -268,6 +268,136 @@ function latestAssistantText(thread: ThreadContext): string | undefined {
   return undefined;
 }
 
+/**
+ * G2: permission / tool dispatch 循环（从 think 主流程逐行提取，行为零变化）。
+ *
+ * 对本轮每个 pending tool call 依次做 permission 决策并派发：
+ *   - allow → dispatchToolCall（含 ok 字段解析 + 错误处理）
+ *   - ask   → 写 permission_ask event（含 pendingCall 序列化）+ paused + 中止本轮
+ *   - deny  → 写 permission_denied event + 合成 function_call_output + 跳过本 tool call
+ *
+ * Q0c 短路：历史已 approved 的 toolCallId 跳过 decidePermission 直接 allow，
+ * 避免"approve 后又被打回 ask"无限循环。
+ *
+ * 依赖（thread / result / loopHandle）显式传入，不靠闭包隐式捕获。
+ * 返回 outcome 让调用方决定后续：
+ *   - "completed" → 全部 dispatch 完，调用方写 finishLlmLoop(ok)
+ *   - "paused"    → ask 分支已 finishLlmLoop(paused) + 置 thread.status，调用方直接 return
+ *   - "error"     → dispatch 抛错分支已 finishLlmLoop(error) + 写 inject，调用方直接 return
+ */
+async function runToolDispatchLoop(
+  thread: ThreadContext,
+  result: LlmGenerateResult,
+  loopHandle: Awaited<ReturnType<typeof beginLlmLoop>>,
+): Promise<"completed" | "paused" | "error"> {
+  const approvedIds = collectApprovedToolCallIds(thread);
+
+  for (const toolCall of result.toolCalls) {
+    const pending = buildPendingToolCall(toolCall);
+    const decision = approvedIds.has(toolCall.id)
+      ? ({ decision: "allow" } as const)
+      : await decidePermission(thread, pending);
+
+    if (decision.decision === "deny") {
+      const denyEvent: ProcessEvent = {
+        category: "permission",
+        kind: "permission_denied",
+        toolCallId: toolCall.id,
+        command: pending.command ?? toolCall.name,
+        reason: decision.reason,
+        argsSummary: summarizeArgs(pending.args ?? toolCall.arguments),
+        windowId: pending.windowId,
+      };
+      thread.events.push(denyEvent);
+      // 合成 function_call_output, LLM 下一轮可以看到 (Deny 信息流不变量)
+      thread.events.push({
+        category: "tool_runtime",
+        kind: "function_call_output",
+        callId: toolCall.id,
+        toolName: toolCall.name,
+        output: JSON.stringify({
+          ok: false,
+          tool: toolCall.name,
+          error: `permission denied: ${decision.reason}`,
+        }),
+        ok: false,
+      });
+      continue;
+    }
+
+    if (decision.decision === "ask") {
+      // Q0c: pendingCall 序列化整条 tool call, 让 approve 后的 resume 路径
+      // (processDecidedPermissionAsks) 能直接重放, 不依赖 LLM 再次发起。
+      const askEvent: ProcessEvent = {
+        category: "permission",
+        kind: "permission_ask",
+        toolCallId: toolCall.id,
+        command: pending.command ?? toolCall.name,
+        argsSummary: summarizeArgs(pending.args ?? toolCall.arguments),
+        windowId: pending.windowId,
+        pendingCall: {
+          toolName: toolCall.name,
+          command: pending.command ?? toolCall.name,
+          args: toolCall.arguments,
+          windowId: pending.windowId,
+          toolCallId: toolCall.id,
+        },
+      };
+      thread.events.push(askEvent);
+      await finishLlmLoop(thread, loopHandle, { result, status: "paused" });
+      thread.status = "paused";
+      return "paused";
+    }
+
+    // allow → 继续走 dispatchToolCall
+    try {
+      const output = (await dispatchToolCall(thread, toolCall))
+        ?? JSON.stringify({ ok: true, tool: toolCall.name });
+      // 解析 handler 返回的 JSON output 中的 ok 字段;handler 用 {ok:false,...} 报业务错时,
+      // event.ok 也要跟着 false,以便 UI 和后续逻辑能正确识别失败。
+      // 旧实现硬写 ok:true 导致 LLM 端拿到错误消息但 event 显示 ok。
+      let ok = true;
+      try {
+        const parsed = JSON.parse(output);
+        if (parsed && typeof parsed === "object" && "ok" in parsed) {
+          ok = Boolean((parsed as Record<string, unknown>).ok);
+        }
+      } catch {
+        // output 不是 JSON 时默认认为成功(handler 没遵循 ok-shape)
+      }
+      thread.events.push({
+        category: "tool_runtime",
+        kind: "function_call_output",
+        callId: toolCall.id,
+        toolName: toolCall.name,
+        output,
+        ok,
+      });
+    } catch (error) {
+      thread.events.push({
+        category: "tool_runtime",
+        kind: "function_call_output",
+        callId: toolCall.id,
+        toolName: toolCall.name,
+        output: JSON.stringify({ ok: false, error: (error as Error).message }),
+        ok: false
+      });
+      await finishLlmLoop(thread, loopHandle, {
+        result,
+        status: "error",
+        error: (error as Error).message
+      });
+      thread.events.push({
+        category: "context_change",
+        kind: "inject",
+        text: (error as Error).message
+      });
+      return "error";
+    }
+  }
+  return "completed";
+}
+
 // think 是单轮执行器，只负责编排本轮顺序，不承担 scheduler 和持久化。
 export async function think(thread: ThreadContext, llmClient: LlmClient): Promise<void> {
   // 当前单轮执行只接受 running 状态，其他状态直接视为调用方错误。
@@ -394,7 +524,7 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
       return;
     }
 
-    // Q0b/Q0c: 在 dispatch 前对每个 pending tool call 做 permission 检查。
+    // Q0b/Q0c: 在 dispatch 前对每个 pending tool call 做 permission 检查 + 派发。
     // 三档语义 (design: docs/2026-05-25-permission-model-design.md):
     //   allow → 继续 dispatchToolCall
     //   ask   → 写 permission_ask event (含 pendingCall 序列化) + thread.status="paused" + return
@@ -403,113 +533,10 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
     //   deny  → 写 permission_denied event + 合成 function_call_output(让 LLM 看见,
     //           silent-swallow ban + Deny 信息流不变量) + 跳过本 tool call 的 dispatch
     //
-    // Q0c 短路: 历史已 approved 的 toolCallId 跳过 decidePermission 直接 allow,
-    // 避免"approve 后又被打回 ask"无限循环。
-    const approvedIds = collectApprovedToolCallIds(thread);
-
-    for (const toolCall of result.toolCalls) {
-      const pending = buildPendingToolCall(toolCall);
-      const decision = approvedIds.has(toolCall.id)
-        ? ({ decision: "allow" } as const)
-        : await decidePermission(thread, pending);
-
-      if (decision.decision === "deny") {
-        const denyEvent: ProcessEvent = {
-          category: "permission",
-          kind: "permission_denied",
-          toolCallId: toolCall.id,
-          command: pending.command ?? toolCall.name,
-          reason: decision.reason,
-          argsSummary: summarizeArgs(pending.args ?? toolCall.arguments),
-          windowId: pending.windowId,
-        };
-        thread.events.push(denyEvent);
-        // 合成 function_call_output, LLM 下一轮可以看到 (Deny 信息流不变量)
-        thread.events.push({
-          category: "tool_runtime",
-          kind: "function_call_output",
-          callId: toolCall.id,
-          toolName: toolCall.name,
-          output: JSON.stringify({
-            ok: false,
-            tool: toolCall.name,
-            error: `permission denied: ${decision.reason}`,
-          }),
-          ok: false,
-        });
-        continue;
-      }
-
-      if (decision.decision === "ask") {
-        // Q0c: pendingCall 序列化整条 tool call, 让 approve 后的 resume 路径
-        // (processDecidedPermissionAsks) 能直接重放, 不依赖 LLM 再次发起。
-        const askEvent: ProcessEvent = {
-          category: "permission",
-          kind: "permission_ask",
-          toolCallId: toolCall.id,
-          command: pending.command ?? toolCall.name,
-          argsSummary: summarizeArgs(pending.args ?? toolCall.arguments),
-          windowId: pending.windowId,
-          pendingCall: {
-            toolName: toolCall.name,
-            command: pending.command ?? toolCall.name,
-            args: toolCall.arguments,
-            windowId: pending.windowId,
-            toolCallId: toolCall.id,
-          },
-        };
-        thread.events.push(askEvent);
-        await finishLlmLoop(thread, loopHandle, { result, status: "paused" });
-        thread.status = "paused";
-        return;
-      }
-
-      // allow → 继续走 dispatchToolCall
-      try {
-        const output = (await dispatchToolCall(thread, toolCall))
-          ?? JSON.stringify({ ok: true, tool: toolCall.name });
-        // 解析 handler 返回的 JSON output 中的 ok 字段;handler 用 {ok:false,...} 报业务错时,
-        // event.ok 也要跟着 false,以便 UI 和后续逻辑能正确识别失败。
-        // 旧实现硬写 ok:true 导致 LLM 端拿到错误消息但 event 显示 ok。
-        let ok = true;
-        try {
-          const parsed = JSON.parse(output);
-          if (parsed && typeof parsed === "object" && "ok" in parsed) {
-            ok = Boolean((parsed as Record<string, unknown>).ok);
-          }
-        } catch {
-          // output 不是 JSON 时默认认为成功(handler 没遵循 ok-shape)
-        }
-        thread.events.push({
-          category: "tool_runtime",
-          kind: "function_call_output",
-          callId: toolCall.id,
-          toolName: toolCall.name,
-          output,
-          ok,
-        });
-      } catch (error) {
-        thread.events.push({
-          category: "tool_runtime",
-          kind: "function_call_output",
-          callId: toolCall.id,
-          toolName: toolCall.name,
-          output: JSON.stringify({ ok: false, error: (error as Error).message }),
-          ok: false
-        });
-        await finishLlmLoop(thread, loopHandle, {
-          result,
-          status: "error",
-          error: (error as Error).message
-        });
-        thread.events.push({
-          category: "context_change",
-          kind: "inject",
-          text: (error as Error).message
-        });
-        return;
-      }
-    }
+    // G2: 整段循环提取为 runToolDispatchLoop（行为零变化）；paused/error 分支已在内部
+    //     finishLlmLoop + 置 thread.status，这里据 outcome 决定是否提前返回。
+    const outcome = await runToolDispatchLoop(thread, result, loopHandle);
+    if (outcome !== "completed") return;
     await finishLlmLoop(thread, loopHandle, { result, status: "ok" });
   } catch (error) {
     const message = (error as Error).message;
