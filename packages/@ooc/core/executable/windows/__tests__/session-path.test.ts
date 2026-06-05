@@ -2,9 +2,34 @@ import { describe, expect, test, beforeEach, afterEach } from "bun:test";
 import { resolve, join } from "node:path";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { __testing } from "../_shared/session-path";
+import { __testing, resolveSessionPath } from "../_shared/session-path";
+import type { ThreadContext } from "../../../thinkable/context";
 
 const { rewritePackagesPath, rewritePoolsPath, classifyPackagesPath } = __testing;
+
+/** 构造带 persistence.baseDir 的最小 thread（resolveSessionPath 只读 baseDir）。 */
+function threadWithBase(baseDir: string): ThreadContext {
+  return { persistence: { baseDir, sessionId: "s", objectId: "o", threadId: "t" } } as ThreadContext;
+}
+
+describe("resolveSessionPath 安全：data 原语不得逃逸 world 根（harness executable 回归）", () => {
+  const BASE = "/tmp/ooc-world-x";
+  test("相对 ../ 逃逸 → 抛", () => {
+    expect(() => resolveSessionPath(threadWithBase(BASE), "../escape.txt")).toThrow(/逃逸/);
+    expect(() => resolveSessionPath(threadWithBase(BASE), "a/../../escape.txt")).toThrow(/逃逸/);
+  });
+  test("world 外绝对路径 → 抛", () => {
+    expect(() => resolveSessionPath(threadWithBase(BASE), "/etc/passwd")).toThrow(/逃逸/);
+  });
+  test("world 内相对/绝对路径 → 放行（解析在 baseDir 下）", () => {
+    expect(resolveSessionPath(threadWithBase(BASE), "hello.txt")).toBe(`${BASE}/hello.txt`);
+    expect(resolveSessionPath(threadWithBase(BASE), "packages/assistant/self.md")).toBe(`${BASE}/packages/assistant/self.md`);
+    expect(resolveSessionPath(threadWithBase(BASE), `${BASE}/inside.txt`)).toBe(`${BASE}/inside.txt`);
+  });
+  test("无 baseDir（纯内存测试）→ 保持旧行为不抛", () => {
+    expect(() => resolveSessionPath(undefined, "../x.txt")).not.toThrow();
+  });
+});
 
 let tempRoot: string | undefined;
 

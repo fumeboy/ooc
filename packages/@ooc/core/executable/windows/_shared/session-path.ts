@@ -35,13 +35,26 @@ import type { ThreadContext } from "../../../thinkable/context";
  * - 相对路径 + baseDir 未知：回退 process.cwd()（仅纯内存测试场景）
  */
 export function resolveSessionPath(thread: ThreadContext | undefined, p: string): string {
-  if (isAbsolute(p)) return p;
   const baseDir = thread?.persistence?.baseDir;
-  if (!baseDir) return resolve(process.cwd(), p);
+  if (!baseDir) {
+    // 无 world 根（纯内存测试场景）：无边界可 clamp，保持旧行为。
+    return isAbsolute(p) ? p : resolve(process.cwd(), p);
+  }
 
   const packagesRewritten = rewritePackagesPath(p);
   const rewritten = rewritePoolsPath(packagesRewritten);
-  return resolve(baseDir, rewritten);
+  const resolved = isAbsolute(rewritten) ? rewritten : resolve(baseDir, rewritten);
+
+  // 安全（harness executable 发现：`write_file{path:"../escape.txt"}` 写到 world 根之外，无拦截）：
+  // data 原语（grep / glob / write_file / open_file / file_window.edit）不得读写 world 目录之外。
+  // `../` 相对逃逸 + world 外绝对路径一律拒绝；需 world 外操作请用 program(shell)（另设的 raw escape hatch，不走这里）。
+  const rel = relative(baseDir, resolved);
+  if (rel === ".." || rel.startsWith(".." + sep) || isAbsolute(rel)) {
+    throw new Error(
+      `路径 "${p}" 逃逸出 world 根（解析为 "${resolved}"）；data 原语只能在 world 目录内读写。`,
+    );
+  }
+  return resolved;
 }
 
 /**
