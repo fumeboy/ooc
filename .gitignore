@@ -27,3 +27,6 @@ AGENT.md
 packages/*
 !packages/@ooc/
 
+
+# 维度体验 harness 的自动 run 产物（ephemeral；notable 发现手工 curate 进 docs/）
+docs/harness-reports/
