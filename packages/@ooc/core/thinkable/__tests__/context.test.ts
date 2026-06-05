@@ -285,6 +285,30 @@ describe("buildContext (ContextWindow model)", () => {
     expect(xml).toContain("<is_creator_window>true</is_creator_window>");
   });
 
+  it("guidance window 进 contextWindows 不让渲染崩（harness 冒烟回归：refine→guidance push→render crash）", async () => {
+    // manager 在 refine/status_changed 时把 onFormChange 产出的 guidance window push 进
+    // thread.contextWindows；guidance 无 renderXml/readable hook 且 "guidance" 非注册 object type，
+    // 修复前渲染会在 getObjectDefinition("guidance") 抛错 → 整轮 think loop failed（即便动作已成功）。
+    const thread: ThreadContext = makeThread({ id: "t_guidance" });
+    thread.contextWindows.push({
+      id: "guidance_f_x_internal_executable_end_basic",
+      type: "guidance",
+      parentWindowId: "f_x",
+      boundFormId: "f_x",
+      title: "internal/executable/end/basic",
+      status: "open",
+      createdAt: 0,
+      content: "Form 已累积参数。当前路径：end。",
+      summary: "end guidance",
+    } as unknown as ContextWindow);
+    // 修复前此处抛 'getObjectDefinition: object type "guidance" not registered'
+    const messages = await buildContext(thread);
+    const xml = messages[0]!.content;
+    expect(xml).toContain("<context>");
+    // guidance 是 transient form-hint，内容经 form knowledge 投递，不作独立 <window> 渲染
+    expect(xml).not.toContain('type="guidance"');
+  });
+
   it("renders command_exec form result only when status=failed (Round 13 四态机)", async () => {
     const thread = makeThread({
       id: "t_status",
