@@ -79,7 +79,7 @@ async function startBackend(): Promise<BackendHandle> {
   const proc = Bun.spawn(
     [
       "bun",
-      "src/app/server/index.ts",
+      "packages/@ooc/core/app/server/index.ts",
       "--world",
       "./.ooc-world",
       "--port",

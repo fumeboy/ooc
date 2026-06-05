@@ -10,7 +10,7 @@
  *   返回 404 / Elysia "route not found" 即视为 regression.
  *
  * 设计要点:
- *   - 选项 A (真 HTTP): 用 `bun src/app/server/index.ts --world <tmp> --port <free>`
+ *   - 选项 A (真 HTTP): 用 `bun packages/@ooc/core/app/server/index.ts --world <tmp> --port <free>`
  *     起真子进程, 而不是 `app.handle()`. 这是直接拦截 Elysia plugin .use() 顺序 /
  *     name 冲突 / router 规则冲突的唯一方式.
  *   - 只关心 routing 是否注册: 404 = fail, 其它状态(200/400/409/422/500)= pass.
@@ -94,22 +94,22 @@ function buildRouteCases(): RouteCase[] {
     {
       name: "C-2 runtime.debug.latest",
       method: "GET",
-      path: `/api/runtime/flows/${sid}/objects/${oid}/threads/${tid}/debug`,
+      path: `/api/runtime/flows/${sid}/${oid}/threads/${tid}/debug`,
     },
     {
       name: "C-2 runtime.debug.loops.list",
       method: "GET",
-      path: `/api/runtime/flows/${sid}/objects/${oid}/threads/${tid}/debug/loops`,
+      path: `/api/runtime/flows/${sid}/${oid}/threads/${tid}/debug/loops`,
     },
     {
       name: "C-2 runtime.debug.loops.single",
       method: "GET",
-      path: `/api/runtime/flows/${sid}/objects/${oid}/threads/${tid}/debug/loops/1`,
+      path: `/api/runtime/flows/${sid}/${oid}/threads/${tid}/debug/loops/1`,
     },
     {
       name: "C-1 runtime.permission",
       method: "POST",
-      path: `/api/runtime/flows/${sid}/objects/${oid}/threads/${tid}/permission`,
+      path: `/api/runtime/flows/${sid}/${oid}/threads/${tid}/permission`,
       body: { action: "approve" },
     },
   ];
@@ -169,7 +169,7 @@ async function startBackend(): Promise<BackendHandle> {
   const proc = Bun.spawn(
     [
       "bun",
-      "src/app/server/index.ts",
+      "packages/@ooc/core/app/server/index.ts",
       "--world",
       baseDir,
       "--port",
@@ -261,7 +261,7 @@ describe("backend route audit (真 HTTP server)", () => {
       }
 
       // 关键判定: 仅 "route not found: <METHOD> <PATH>" 文案 == route 未注册 (Elysia 默认
-      // NotFoundError, 详见 src/app/server/index.ts:normalizeErrorToJson elysiaCode==="NOT_FOUND"
+      // NotFoundError, 详见 packages/@ooc/core/app/server/index.ts:normalizeErrorToJson elysiaCode==="NOT_FOUND"
       // 分支). 业务层 throw 的 AppServerError({code:"NOT_FOUND"}) 走 ERROR_HTTP_STATUS 也是
       // 404, 但 message 是业务文案 (如 "thread 'xxx' not found", "debug file 'xxx' not found").
       // audit 不验业务可达性, 只验 routing 命中.
