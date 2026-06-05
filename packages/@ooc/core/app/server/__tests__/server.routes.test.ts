@@ -413,13 +413,13 @@ describe("app server routes", () => {
     expect(missBody.error.code).toBe("NOT_FOUND");
 
     // 创建 client/index.tsx (runtime reads go to stones/)
-    await mkdir(join(baseDir, "stones", "alice", "client"), { recursive: true });
-    await writeFile(join(baseDir, "stones", "alice", "client", "index.tsx"), "export default () => null;", "utf8");
+    await mkdir(join(baseDir, "stones", "main", "objects", "alice", "client"), { recursive: true });
+    await writeFile(join(baseDir, "stones", "main", "objects", "alice", "client", "index.tsx"), "export default () => null;", "utf8");
 
     const hit = await app.handle(new Request("http://localhost/api/objects/stone/alice/client-source-url"));
     expect(hit.status).toBe(200);
     const hitBody = await hit.json();
-    expect(hitBody.absPath).toBe(join(baseDir, "stones", "alice", "client", "index.tsx"));
+    expect(hitBody.absPath).toBe(join(baseDir, "stones", "main", "objects", "alice", "client", "index.tsx"));
     expect(hitBody.fsUrl).toBe(`/@fs${hitBody.absPath}`);
   });
 

@@ -58,18 +58,25 @@ export function resolveSessionPath(thread: ThreadContext | undefined, p: string)
 }
 
 /**
- * 形如 `packages/<id>/...` 的路径：保持原样（bun workspace 已经是 packages/ 扁平根）。
- * 嵌套 Object 通过 children/ 物理目录分隔，物理路径与 LLM 写的路径一致。
- *
- * 为兼容旧 `stones/` 前缀，自动转成 `packages/`。
+ * P1 路径收口（2026-06-05）：agent 的概念 stone 根 `stones/<self>/...` → 物理 canonical
+ * `stones/main/objects/<self>/...`（main 分支 worktree，stoneDir 默认）。
+ * 取代旧的 `stones/<id>` → `packages/<id>` rewrite（packages/ 空/deprecated，是布局分叉的根之一）。
+ * 已经是物理 `stones/main/objects/...` 的路径不重复映射；`packages/...`（builtin）保持原样。
+ * 嵌套 Object 通过 children/ 物理目录分隔——本 string 级映射只处理常见的单层 id（self 自身根）；
+ * 跨嵌套对象的 children/ 由后续 overlay/解析器层精化（P2/P3）。
  */
 function rewritePackagesPath(p: string): string {
   const norm = p.replace(/\\/g, "/").replace(/^\.\//, "");
-  // Legacy stones/ prefix → packages/
-  if (norm.startsWith("stones/")) {
-    return `packages/${norm.slice("stones/".length)}`;
+  // 显式 main 分支路径 stones/main/...（含 objects/<id>/ 与 main 根资源如 .gitignore）→ 原样。
+  // 避免对物理路径双重注入；main 根下非 objects/ 资源交给 classifyPackagesPath 判 workspace-level(fail-loud)。
+  if (norm.startsWith("stones/main/")) {
+    return p;
   }
-  // 已经是 packages/ → 直接使用
+  // agent 概念 stone 根 stones/<id>/... → 物理 canonical stones/main/objects/<id>/...（main worktree）
+  if (norm.startsWith("stones/")) {
+    return `stones/main/objects/${norm.slice("stones/".length)}`;
+  }
+  // packages/（builtin）→ 直接使用
   if (norm.startsWith("packages/")) {
     return p;
   }
@@ -109,54 +116,51 @@ export function classifyPackagesPath(
   baseDir: string | undefined,
 ): PackagesPathClass {
   if (!baseDir) return { kind: "non-package" };
-  const packagesRoot = resolve(baseDir, "packages");
-  const rel = relative(packagesRoot, resolve(absPath));
-  // 越出 packages/ 树（rel 以 .. 开头或为绝对路径）→ 非 package
-  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return { kind: "non-package" };
+  // P1 收口（2026-06-05）：canonical 对象根 = stones/main/objects/（main worktree），取代旧 packages/ 根。
+  // relInPackages 语义不变（相对对象根的路径，如 agent_of_x/self.md）——消费方 join(wt.path,"objects",relInPackages) 不受影响。
+  const objectsRoot = resolve(baseDir, "stones", "main", "objects");
+  const relObjects = relative(objectsRoot, resolve(absPath));
+  const underObjects = relObjects !== "" && !relObjects.startsWith("..") && !isAbsolute(relObjects);
 
-  const segs = rel.split(sep).filter(Boolean);
-  if (segs.length === 0) return { kind: "non-package" };
-
-  // Scan forward to find the deepest directory that contains a package.json (i.e., a valid object package)
-  // This handles both flat "supervisor" and nested "sentry/children/sentry_factor_dev" layouts
-  let currentPath = packagesRoot;
-  let objectIdSegments: string[] = [];
-  let foundPackage = false;
-  let i = 0;
-
-  while (i < segs.length) {
-    const seg = segs[i]!;
-    if (seg === "children" && i + 1 < segs.length) {
-      // children/ is a marker, not part of the objectId; skip it and take the next seg as objectId part
-      i++;
-      const childSeg = segs[i]!;
-      currentPath = join(currentPath, "children", childSeg);
-      objectIdSegments.push(childSeg);
-    } else {
-      currentPath = join(currentPath, seg);
-      if (objectIdSegments.length === 0) {
-        objectIdSegments.push(seg);
+  if (underObjects) {
+    const segs = relObjects.split(sep).filter(Boolean);
+    // 向前扫到最深含 package.json 的目录（flat "agent" 或 nested "a/children/b"）
+    let currentPath = objectsRoot;
+    const objectIdSegments: string[] = [];
+    let foundPackage = false;
+    let i = 0;
+    while (i < segs.length) {
+      const seg = segs[i]!;
+      if (seg === "children" && i + 1 < segs.length) {
+        i++;
+        const childSeg = segs[i]!;
+        currentPath = join(currentPath, "children", childSeg);
+        objectIdSegments.push(childSeg);
       } else {
-        // We've passed the object directory into its contents (file path inside object)
-        break;
+        currentPath = join(currentPath, seg);
+        if (objectIdSegments.length === 0) {
+          objectIdSegments.push(seg);
+        } else {
+          break; // 进入 object 目录内部的文件路径
+        }
       }
+      if (existsSync(join(currentPath, "package.json"))) foundPackage = true;
+      i++;
     }
-    // Check if this is a valid object package (has package.json)
-    if (existsSync(join(currentPath, "package.json"))) {
-      foundPackage = true;
+    if (foundPackage && objectIdSegments.length > 0) {
+      return { kind: "package-object", ownerObjectId: objectIdSegments.join("/"), relInPackages: relObjects };
     }
-    i++;
+    // objects/ 下但未命中 package.json（如 objects/ 根散落文件）→ workspace-level
+    return { kind: "packages-world", relInPackages: relObjects };
   }
 
-  if (foundPackage && objectIdSegments.length > 0) {
-    const ownerObjectId = objectIdSegments.join("/");
-    // relInPackages is the full relative path from packages/
-    const relInPackages = segs.join("/");
-    return { kind: "package-object", ownerObjectId, relInPackages };
+  // stones/main/ 下但不在 objects/（如 stones/main/.gitignore）→ workspace-level 资源（fail-loud）
+  const worktreeRoot = resolve(baseDir, "stones", "main");
+  const relWorktree = relative(worktreeRoot, resolve(absPath));
+  if (relWorktree !== "" && !relWorktree.startsWith("..") && !isAbsolute(relWorktree)) {
+    return { kind: "packages-world", relInPackages: relWorktree };
   }
-
-  // packages/ 下但不在某个 object 目录里 → workspace-level 资源
-  return { kind: "packages-world", relInPackages: segs.join("/") };
+  return { kind: "non-package" };
 }
 
 export const __testing = { rewritePackagesPath, rewritePoolsPath, classifyPackagesPath };

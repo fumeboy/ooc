@@ -46,7 +46,8 @@ afterEach(async () => {
 
 async function createObjectPackage(baseDir: string, objectId: string): Promise<void> {
   const segs = objectId.split("/");
-  let current = join(baseDir, "packages");
+  // P1 收口：对象在 canonical main worktree stones/main/objects/<nestedPath>/
+  let current = join(baseDir, "stones", "main", "objects");
   for (let i = 0; i < segs.length; i++) {
     if (i > 0) current = join(current, "children");
     current = join(current, segs[i]!);
@@ -55,20 +56,27 @@ async function createObjectPackage(baseDir: string, objectId: string): Promise<v
   await writeFile(join(current, "package.json"), JSON.stringify({ name: objectId, version: "0.1.0" }), "utf8");
 }
 
-describe("rewritePackagesPath: stones/ → packages/ backward compat", () => {
-  test("stones/<id>/foo → packages/<id>/foo", () => {
+describe("rewritePackagesPath: stones/<id>/ → stones/main/objects/<id>/ 收口（P1 2026-06-05）", () => {
+  test("stones/<id>/foo → stones/main/objects/<id>/foo", () => {
     expect(rewritePackagesPath("stones/agent_of_x/self.md")).toBe(
-      "packages/agent_of_x/self.md",
+      "stones/main/objects/agent_of_x/self.md",
     );
   });
 
-  test("nested stones/ path → packages/ with children/ injection", () => {
+  test("nested stones/ path → stones/main/objects/ 注入", () => {
     expect(rewritePackagesPath("stones/sentry/sentry_factor_dev/self.md")).toBe(
-      "packages/sentry/sentry_factor_dev/self.md",
+      "stones/main/objects/sentry/sentry_factor_dev/self.md",
     );
   });
 
-  test("already packages/ paths are left alone", () => {
+  test("显式 stones/main/... → 原样（不双重注入；含 main 根资源）", () => {
+    expect(rewritePackagesPath("stones/main/objects/agent_of_x/self.md")).toBe(
+      "stones/main/objects/agent_of_x/self.md",
+    );
+    expect(rewritePackagesPath("stones/main/.gitignore")).toBe("stones/main/.gitignore");
+  });
+
+  test("already packages/ paths（builtin）are left alone", () => {
     expect(rewritePackagesPath("packages/agent_of_x/self.md")).toBe(
       "packages/agent_of_x/self.md",
     );
@@ -81,13 +89,13 @@ describe("rewritePackagesPath: stones/ → packages/ backward compat", () => {
 
   test("'./stones/<id>' prefix is honored", () => {
     expect(rewritePackagesPath("./stones/agent_of_x/self.md")).toBe(
-      "packages/agent_of_x/self.md",
+      "stones/main/objects/agent_of_x/self.md",
     );
   });
 
   test("backslash separator normalized", () => {
     expect(rewritePackagesPath("stones\\agent_of_x\\self.md")).toBe(
-      "packages/agent_of_x/self.md",
+      "stones/main/objects/agent_of_x/self.md",
     );
   });
 });
@@ -126,10 +134,10 @@ describe("rewritePoolsPath: pools/ passthrough (no objects/ injection after bun 
 });
 
 describe("classifyPackagesPath: package boundary detection", () => {
-  test("packages/<id>/... → package-object（ownerObjectId + relInPackages）", async () => {
+  test("stones/main/objects/<id>/... → package-object（ownerObjectId + relInPackages）", async () => {
     const baseDir = tempRoot!;
     await createObjectPackage(baseDir, "agent_of_x");
-    const abs = resolve(baseDir, "packages/agent_of_x/self.md");
+    const abs = resolve(baseDir, "stones/main/objects/agent_of_x/self.md");
     const r = classifyPackagesPath(abs, baseDir);
     expect(r.kind).toBe("package-object");
     if (r.kind === "package-object") {
@@ -138,17 +146,17 @@ describe("classifyPackagesPath: package boundary detection", () => {
     }
   });
 
-  test("packages/@ooc/core/... → packages-world（source package under @ scope）", () => {
+  test("packages/@ooc/core/... → non-package（P1: packages/ 不再是对象树，不在 stones/main/ 内）", () => {
     const baseDir = tempRoot!;
     const abs = resolve(baseDir, "packages/@ooc/core/persistable/common.ts");
     const r = classifyPackagesPath(abs, baseDir);
-    expect(r.kind).toBe("packages-world");
+    expect(r.kind).toBe("non-package");
   });
 
-  test("嵌套子 Object packages/parent/children/child/... → owner = parent/child", async () => {
+  test("嵌套子 Object stones/main/objects/parent/children/child/... → owner = parent/child", async () => {
     const baseDir = tempRoot!;
     await createObjectPackage(baseDir, "parent/child");
-    const abs = resolve(baseDir, "packages/parent/children/child/self.md");
+    const abs = resolve(baseDir, "stones/main/objects/parent/children/child/self.md");
     const r = classifyPackagesPath(abs, baseDir);
     expect(r.kind).toBe("package-object");
     if (r.kind === "package-object") {
@@ -157,9 +165,9 @@ describe("classifyPackagesPath: package boundary detection", () => {
     }
   });
 
-  test("packages/ 根下非 object 资源 → packages-world", () => {
+  test("stones/main/ 根下非 objects/ 资源 → packages-world（workspace-level）", () => {
     const baseDir = tempRoot!;
-    const abs = resolve(baseDir, "packages/.gitkeep");
+    const abs = resolve(baseDir, "stones/main/.gitignore");
     const r = classifyPackagesPath(abs, baseDir);
     expect(r.kind).toBe("packages-world");
   });

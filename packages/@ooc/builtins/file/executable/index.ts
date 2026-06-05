@@ -557,7 +557,7 @@ const fileConstructor: ObjectMethod = {
         return {
           ok: false,
           error:
-            `[write_file] 路径 ${path} 落在 packages/ 根但不在某个 Object 的 ` +
+            `[write_file] 路径 ${path} 落在 stones/main/ 根但不在某个 Object 的 ` +
             `子目录内（workspace-level 资源）。这类资源不能通过 write_file 修改。`,
         };
       } else {

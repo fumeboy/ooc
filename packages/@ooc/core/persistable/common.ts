@@ -86,9 +86,14 @@ export function stoneDir(ref: StoneObjectRef): string {
   if (BUILTIN_OBJECT_IDS.has(ref.objectId)) {
     return join(ref.baseDir, "packages", "@ooc", "builtins", ref.objectId);
   }
+  // canonical = main 分支 worktree（P1 收口，2026-06-05；用户拍板：保留 stone git 分支设计，
+  // main = canonical）。等价 _stonesBranch="main"；对象 bootstrap 即落 stones/main/objects/。
+  // 取代旧的扁平 stones/<id>/ 默认（M2 声明但 bootstrap 未落实，三套布局分叉的根之一）。
   return join(
     ref.baseDir,
     "stones",
+    STONES_MAIN_BRANCH,
+    STONE_OBJECTS_SUBDIR,
     ...nestedObjectPath(ref.objectId),
   );
 }

@@ -91,7 +91,7 @@ describe("listObjectSkills", () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-skills-"));
     const ref = { baseDir: tempRoot, objectId: "agent_x" };
     const skillsDir = objectSkillsDir(ref);
-    expect(skillsDir).toContain("stones/agent_x/skills");
+    expect(skillsDir).toContain("stones/main/objects/agent_x/skills");
 
     await writeSkill(skillsDir, "private-skill", "description: only mine");
     const skills = await listObjectSkills(ref);
