@@ -65,7 +65,7 @@ describe("app server local e2e", () => {
     expect(session.sessionId).toBe("flow-e2e-session");
 
     const createFlowObject = await app.handle(
-      new Request("http://localhost/api/flows/flow-e2e-session/", {
+      new Request("http://localhost/api/flows/flow-e2e-session/objects/", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ objectId: "flow-e2e-object", initialMessage: "test" }),

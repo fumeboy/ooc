@@ -37,7 +37,7 @@ export const REFLECTABLE_KNOWLEDGE = `
    content="...")\` 写入。已存在的文件可以用 open_file + edit 增量更新。
 3. 必要时(caller 明确要求改身份/对外说明) 也允许写
    \`stones/<self>/self.md\`(内部第一人称叙述)或 \`stones/<self>/readme.md\`
-   (对外公开自述)。其它路径(server / client / files / .stone.json) 本轮不要碰。
+   (对外公开自述)。其它路径(server / client / files / package.json) 本轮不要碰。
 4. 通过 creator talk_window 回复你的简短结论(say + close)
 5. 用 \`open(end, summary="...")\` 结束本轮 super 思考
 

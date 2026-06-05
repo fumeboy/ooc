@@ -165,7 +165,7 @@ describe("app server routes", () => {
       })
     );
     await app.handle(
-      new Request("http://localhost/api/flows/s-call/", {
+      new Request("http://localhost/api/flows/s-call/objects/", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ objectId: "flow-no-methods" }),
@@ -271,7 +271,7 @@ describe("app server routes", () => {
     expect(response.status).toBe(200);
     expect(body.objectId).toBe("writer");
     expect(await readFile(join(baseDir, "stones", "main", "objects", "writer", "self.md"), "utf8")).toBe("# Writer\nI write notes.");
-    expect(await readFile(join(baseDir, "stones", "main", "objects", "writer", "readme.md"), "utf8")).toBe("# Writer README");
+    expect(await readFile(join(baseDir, "stones", "main", "objects", "writer", "readable.md"), "utf8")).toBe("# Writer README");
     // 2026-05-23：stone 级 data.json 已删除；description 字段已从 schema 移除（无承载位置）。
     // name 在没有显式 self 时会写成 self.md 首行（display_name_from_self_md 协议）；
     // 本 case 显式传了 self，因此 self 优先。

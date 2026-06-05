@@ -48,13 +48,13 @@ function scopePrefix(scope: TreeScope) {
  * 旧实现按 path-prefix 启发式判 marker（`stones/<id>` length===2 → stone）；
  * 2026-05-21 stones 重组（加 `<branch>/objects/` 中间层）后 4 段路径下启发式失效。
  *
- * 新实现：基于 backend 元数据文件存在性判 marker——目录下含
- *   - `.stone.json` → marker="stone"
+ * 新实现：基于 backend 元数据文件判 marker——目录下含
+ *   - `package.json`(ooc.kind="object") → marker="stone"（ooc-6 起 stone=bun workspace package，不再写 .stone.json）
  *   - `.pool.json`  → marker="pool"
  *   - `.session.json` 或 `.flow.json` → marker="flow"
  *
- * 元数据文件由 `src/persistable/{stone,pool,flow}-object.ts` 在 create 时写入；
- * 这里只检查存在性，不解析内容（便宜、解耦）。
+ * 元数据文件由 persistable/{stone,pool,flow}-object.ts 在 create 时写入；
+ * stone 验 package.json 内容(ooc.kind)，pool/flow 只查存在性。
  */
 async function fileExists(absPath: string): Promise<boolean> {
   try {
@@ -66,11 +66,22 @@ async function fileExists(absPath: string): Promise<boolean> {
 }
 
 async function markerFor(absDirPath: string): Promise<UiTreeNode["marker"] | undefined> {
-  if (await fileExists(join(absDirPath, ".stone.json"))) return "stone";
+  // stone marker：ooc-6 起 stone = bun workspace package（package.json 含 ooc.kind="object"），
+  // 不再写 .stone.json。验 package.json 内容而非仅存在性，避免误判普通 package.json。
+  if (await isOocObjectPackage(join(absDirPath, "package.json"))) return "stone";
   if (await fileExists(join(absDirPath, ".pool.json"))) return "pool";
   if (await fileExists(join(absDirPath, ".flow.json"))) return "flow";
   if (await fileExists(join(absDirPath, ".session.json"))) return "flow";
   return undefined;
+}
+
+async function isOocObjectPackage(pkgPath: string): Promise<boolean> {
+  try {
+    const pkg = JSON.parse(await readFile(pkgPath, "utf8")) as { ooc?: { kind?: string } };
+    return pkg?.ooc?.kind === "object";
+  } catch {
+    return false;
+  }
 }
 
 export function createUiService({ baseDir }: { baseDir: string }) {
