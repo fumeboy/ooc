@@ -1,6 +1,6 @@
 /**
  * Object Window 定义形态 —— 由 `stones/<self>/server/index.ts` 的
- * `export const window: ObjectWindowDefinition = { ... }` 提供，对应一个
+ * `export const window: StoneObjectDeclaration = { ... }` 提供，对应一个
  * type=objectId 的 ContextWindow（2026-06-01 ooc-6 Object Unification）。
  *
  * 新设计：
@@ -46,7 +46,7 @@ export interface CustomMethodContext extends MethodExecutionContext {
 }
 
 /** Object 在 server/index.ts 里 `export const window` 的形状（2026-05-28 ooc-6 更新）。 */
-export interface ObjectWindowDefinition {
+export interface StoneObjectDeclaration {
   /** 出现在 context 里的标题 */
   title?: string;
   /** 一行说明，会进 basicKnowledge */

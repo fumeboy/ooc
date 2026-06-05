@@ -2,8 +2,8 @@
  * server 层公共类型。
  *
  * D6 硬切后：旧的 `LlmMethods` / `ServerMethod` / `ServerMethodContext` 三件套被
- * 删除；LLM 路径上的"自定义方法"统一通过 `ObjectWindowDefinition.methods`
- * （见 `./window-types.ts`）以标准 `ObjectMethod` 形态注册到 type=`custom`
+ * 删除；LLM 路径上的"自定义方法"统一通过 `StoneObjectDeclaration.methods`
+ * （见 `./object-types.ts`）以标准 `ObjectMethod` 形态注册到 type=`custom`
  * 的 ContextWindow 上。
  *
  * 仅保留：
@@ -16,10 +16,10 @@
 
 import type { ThreadContext } from "../../thinkable/context";
 import type { StoneObjectRef } from "../../persistable";
-import type { ObjectWindowDefinition } from "./window-types";
+import type { StoneObjectDeclaration } from "./object-types";
 import type { ReadableFn } from "../windows/_shared/registry.js";
 
-export type { ObjectWindowDefinition };
+export type { StoneObjectDeclaration };
 
 /** program 中注入的 self 对象，让用户代码能调用任意 window 上任意 command 与读写 data。 */
 export interface ProgramSelf {
@@ -91,7 +91,7 @@ export type UiMethods = Record<string, UiServerMethod>;
 export interface ServerLoaderEntry {
   mtime: number;
   /** Object 自定义 custom window；server/index.ts 没有 `export const window` 时为 undefined */
-  window: ObjectWindowDefinition | undefined;
+  window: StoneObjectDeclaration | undefined;
   /** ui_methods 字典；server/index.ts 没有则为空对象 */
   uiMethods: UiMethods;
   /** readable.ts 导出的动态渲染函数；不存在则为 undefined */

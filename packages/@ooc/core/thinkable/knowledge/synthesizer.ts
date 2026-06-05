@@ -25,7 +25,7 @@ import { builtinRegistry } from "../../executable/windows/index.js";
 import type { ContextWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
 import { SUPER_ALIAS_TARGET } from "../../executable/windows/_shared/super-constants.js";
 import { loadObjectWindow } from "../../runtime/server-loader.js";
-import type { ObjectWindowDefinition } from "../../executable/server/window-types.js";
+import type { StoneObjectDeclaration } from "../../executable/object/object-types.js";
 import { parseKnowledgeFile } from "./parser.js";
 
 // ── Re-exports moved to window-enrichment.ts (kept for importer stability) ──
@@ -73,7 +73,7 @@ export async function ensureSelfObjectTypeRegistered(
   if (registeredTypes.includes(selfId as any)) return;
   try {
     const stoneRef = { baseDir: thread.persistence!.baseDir, objectId: selfId };
-    const objWin: ObjectWindowDefinition | undefined = await loadObjectWindow(stoneRef);
+    const objWin: StoneObjectDeclaration | undefined = await loadObjectWindow(stoneRef);
     const frontmatterPrototype = await readSelfPrototype(stoneRef);
     const parentClass: string | null | undefined =
       objWin?.parentClass !== undefined ? objWin.parentClass :
@@ -165,7 +165,7 @@ export async function derivePeerObjectWindows(
         }
       }
 
-      const objWin: ObjectWindowDefinition | undefined = await loadObjectWindow(peerStoneRef);
+      const objWin: StoneObjectDeclaration | undefined = await loadObjectWindow(peerStoneRef);
       const registeredTypes = registry.listRegisteredObjectTypes();
       if (!registeredTypes.includes(peerId as any) && objWin) {
         const frontmatterPrototype = await readSelfPrototype(peerStoneRef);

@@ -35,7 +35,7 @@ import {
   generateWindowId,
 } from "@ooc/core/extendable/_shared/types.js";
 import {
-  classifyStonesPath,
+  classifyPackagesPath,
   resolveSessionPath,
 } from "@ooc/core/extendable/_shared/session-path.js";
 import { versionedStoneWrite } from "@ooc/core/persistable/index.js";
@@ -504,13 +504,13 @@ const fileConstructor: ObjectMethod = {
       }
       const path = resolveSessionPath(thread, rawPath);
       const baseDir = thread.persistence?.baseDir;
-      const stoneClass = classifyStonesPath(path, baseDir, undefined);
+      const stoneClass = classifyPackagesPath(path, baseDir);
 
       // 历史 write_file 的 preExisted hint：覆盖已有文件时给一条提示，把"修改局部用 edit"
       // 的规则推到 LLM 眼前。constructor outcome 不能返回 result 字符串（已被 manager 改成
       // "Constructed file window <id>"），所以改写为 thread 事件 inject。
       let preExisted = false;
-      if (stoneClass.kind !== "stone-object" && stoneClass.kind !== "stones-world") {
+      if (stoneClass.kind !== "package-object" && stoneClass.kind !== "packages-world") {
         try {
           const s = await stat(path);
           preExisted = s.isFile();
@@ -519,7 +519,7 @@ const fileConstructor: ObjectMethod = {
         }
       }
 
-      if (stoneClass.kind === "stone-object") {
+      if (stoneClass.kind === "package-object") {
         const authorObjectId = thread.persistence?.objectId;
         if (!baseDir || !authorObjectId) {
           return {
@@ -532,9 +532,9 @@ const fileConstructor: ObjectMethod = {
         const versioned = await versionedStoneWrite({
           baseDir,
           authorObjectId,
-          intent: `write_file ${stoneClass.relInObjects}`,
+          intent: `write_file objects/${stoneClass.relInPackages}`,
           write: async (wt) => {
-            const target = join(wt.path, stoneClass.relInObjects);
+            const target = join(wt.path, "objects", stoneClass.relInPackages);
             await mkdir(dirname(target), { recursive: true });
             await writeFile(target, content, "utf8");
           },
@@ -553,7 +553,7 @@ const fileConstructor: ObjectMethod = {
             text: `[write_file] ${path} 经 versioning ${scopeNote}。`,
           });
         }
-      } else if (stoneClass.kind === "stones-world") {
+      } else if (stoneClass.kind === "packages-world") {
         return {
           ok: false,
           error:

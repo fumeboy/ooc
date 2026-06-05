@@ -86,32 +86,10 @@ function rewritePoolsPath(p: string): string {
  *   （workspace-level 资源，如 packages/package.json）→ caller fail-loud，不静默直写。
  * - kind="non-package"：不在 packages 树下（pools/ flows/ work/ 任意其它路径）→ 直写。
  */
-export type StonesPathClass =
-  | { kind: "stone-object"; ownerObjectId: string; relInObjects: string }
-  | { kind: "stones-world"; relInBranch: string }
-  | { kind: "non-stone" };
-
 export type PackagesPathClass =
   | { kind: "package-object"; ownerObjectId: string; relInPackages: string }
   | { kind: "packages-world"; relInPackages: string }
   | { kind: "non-package" };
-
-export function classifyStonesPath(
-  absPath: string,
-  baseDir: string | undefined,
-  _stonesBranch?: string,
-): StonesPathClass {
-  const result = classifyPackagesPath(absPath, baseDir);
-  // Map to old naming for backward compat
-  if (result.kind === "package-object") {
-    // relInObjects needs the "objects/" prefix for git worktree paths
-    return { kind: "stone-object", ownerObjectId: result.ownerObjectId, relInObjects: `objects/${result.relInPackages}` };
-  }
-  if (result.kind === "packages-world") {
-    return { kind: "stones-world", relInBranch: result.relInPackages };
-  }
-  return { kind: "non-stone" };
-}
 
 export function classifyPackagesPath(
   absPath: string,
@@ -168,4 +146,4 @@ export function classifyPackagesPath(
   return { kind: "packages-world", relInPackages: segs.join("/") };
 }
 
-export const __testing = { rewritePackagesPath, rewritePoolsPath, classifyPackagesPath, classifyStonesPath };
+export const __testing = { rewritePackagesPath, rewritePoolsPath, classifyPackagesPath };

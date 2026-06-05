@@ -20,7 +20,7 @@ import type { ThreadContext, ProcessEvent } from "../../thinkable/context.js";
 import type { ContextWindow } from "../windows/_shared/types.js";
 import { builtinRegistry, getOpenableMethods, ROOT_WINDOW_ID, WindowManager } from "../windows/index.js";
 import type { ObjectRegistry } from "../windows/_shared/registry.js";
-import { enrichProgramFormMethod } from "../server/enrich.js";
+import { enrichFormMethodKnowledge } from "../../thinkable/knowledge/index.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 export const EXEC_TOOL: LlmTool = {
@@ -123,7 +123,7 @@ export async function handleExecTool(
   // program command 额外补 method 签名 knowledge（沿用旧 enrichProgramForm 行为）
   const targetForm = mgr.get(opened.formId);
   if (targetForm && targetForm.type === "method_exec" && targetForm.command === "program") {
-    await enrichProgramFormMethod(targetForm, thread);
+    await enrichFormMethodKnowledge(targetForm, thread);
   }
 
   thread.contextWindows = mgr.toData();

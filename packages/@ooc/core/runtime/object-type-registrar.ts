@@ -22,7 +22,7 @@ import type { ObjectRegistry } from "./object-registry.js";
 import { resolveStoneDir } from "../persistable/index.js";
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
-import type { ObjectWindowDefinition, StoneObjectRef } from "../executable/server/types.js";
+import type { StoneObjectDeclaration, StoneObjectRef } from "../executable/object/types.js";
 
 export interface ObjectTypeRegistrarDeps {
   readonly worldPath: string;
@@ -138,7 +138,7 @@ export class ObjectTypeRegistrar {
    *  > self.md frontmatter prototype.
    */
   private async resolveParentClass(
-    windowDef: ObjectWindowDefinition | undefined,
+    windowDef: StoneObjectDeclaration | undefined,
     stoneRef: StoneObjectRef,
   ): Promise<string | null | undefined> {
     if (windowDef?.parentClass !== undefined) return windowDef.parentClass;

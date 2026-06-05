@@ -136,7 +136,7 @@ async function resolveReadableForType(
 
   const stoneRef: StoneObjectRef = { baseDir: persistence.baseDir, objectId: classType };
 
-  // Step 2: ObjectWindowDefinition.readable
+  // Step 2: StoneObjectDeclaration.readable
   try {
     const objWin = await loadObjectWindow(stoneRef);
     if (objWin?.readable) {

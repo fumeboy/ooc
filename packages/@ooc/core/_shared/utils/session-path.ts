@@ -4,19 +4,11 @@
  *
  * **留在 executable**（依赖 `existsSync` / `process.cwd()`，违反零 IO 原则）：
  * - `resolveSessionPath`（读 process.cwd() fallback + ThreadContext）
- * - `classifyPackagesPath` / `classifyStonesPath`（用 existsSync 探 package.json）
+ * - `classifyPackagesPath`（用 existsSync 探 package.json）
  * - `__testing` 导出
  *
  * **迁入本文件**：path 分类结果 union 类型 + 两个 rewrite 纯函数。
  */
-
-/**
- * stones-path 归属判定结果（旧命名兼容 union；write_file → versioning 路由用）。
- */
-export type StonesPathClass =
-  | { kind: "stone-object"; ownerObjectId: string; relInObjects: string }
-  | { kind: "stones-world"; relInBranch: string }
-  | { kind: "non-stone" };
 
 /**
  * packages-path 归属判定结果。

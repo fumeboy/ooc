@@ -4,7 +4,7 @@
  * 由 root.program 与 program_window.exec 共用：根据 args 路由到 shell / ts / js，
  * 把每次执行的输出包装成 ProgramExecRecord 追加到对应 window 的 history。
  *
- * 注意：thread.threadLocalData 的读写发生在 ProgramSelf 内部（src/executable/server/self.ts）；
+ * 注意：thread.threadLocalData 的读写发生在 ProgramSelf 内部（src/executable/object/self.ts）；
  * shell sandbox 通过 OOC_SELF_DIR env 访问 stone 目录，不接 threadLocal 通道。
  *
  * 历史：旧版本支持 callCommand / function 子模式，调任意 window 上的命令。
@@ -15,7 +15,7 @@
 
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
 import type { ProgramExecRecord } from "@ooc/core/extendable/_shared/types.js";
-import { createProgramSelf } from "@ooc/core/executable/server/self.js";
+import { createProgramSelf } from "@ooc/core/executable/object/self.js";
 import { deriveStoneFromThread } from "@ooc/core/persistable/index.js";
 import { executeUserCode } from "@ooc/core/executable/program/sandbox/executor.js";
 import { runShellProgram } from "@ooc/core/executable/program/shell.js";

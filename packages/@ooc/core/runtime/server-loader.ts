@@ -15,8 +15,8 @@ import type {
   ServerLoaderEntry,
   StoneObjectRef,
   UiMethods,
-} from "../executable/server/types.js";
-import type { ObjectWindowDefinition } from "../executable/server/window-types.js";
+} from "../executable/object/types.js";
+import type { StoneObjectDeclaration } from "../executable/object/object-types.js";
 
 export class ServerLoader {
   private readonly cache = new Map<string, ServerLoaderEntry>();
@@ -79,7 +79,7 @@ export class ServerLoader {
 
     if ("llm_methods" in mod) {
       throw new Error(
-        `${serverFile}: 'llm_methods' 已被移除；请改写为 \`export const window: ObjectWindowDefinition = { commands: { ... } }\``,
+        `${serverFile}: 'llm_methods' 已被移除；请改写为 \`export const window: StoneObjectDeclaration = { commands: { ... } }\``,
       );
     }
 
@@ -98,7 +98,7 @@ export class ServerLoader {
 
     const entry: ServerLoaderEntry = {
       mtime: serverMtime,
-      window: (mod.window ?? undefined) as ObjectWindowDefinition | undefined,
+      window: (mod.window ?? undefined) as StoneObjectDeclaration | undefined,
       uiMethods: (mod.ui_methods ?? {}) as UiMethods,
       readable,
     };
@@ -121,7 +121,7 @@ export class ServerLoader {
   }
 
   /** 动态加载 stone 的 `export const window`，按 mtime 缓存。 */
-  async loadObjectWindow(stoneRef: StoneObjectRef): Promise<ObjectWindowDefinition | undefined> {
+  async loadObjectWindow(stoneRef: StoneObjectRef): Promise<StoneObjectDeclaration | undefined> {
     return (await this.loadEntry(stoneRef))?.window;
   }
 
@@ -161,7 +161,7 @@ export function createServerLoader(): ServerLoader {
 /** 动态加载 stone 的 `export const window`，按 mtime 缓存（委托默认实例）。 */
 export async function loadObjectWindow(
   stoneRef: StoneObjectRef,
-): Promise<ObjectWindowDefinition | undefined> {
+): Promise<StoneObjectDeclaration | undefined> {
   return defaultServerLoader.loadObjectWindow(stoneRef);
 }
 
