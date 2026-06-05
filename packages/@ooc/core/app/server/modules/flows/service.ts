@@ -29,8 +29,7 @@ import type {
 } from "./model";
 import type { createJobManager } from "../../runtime/job-manager";
 import type { PauseStore } from "../../runtime/pause-store";
-import { scanPausedThreads } from "../../runtime/thread-query";
-import { applyResumeTransition, canResumeThread } from "../../runtime/thread-transition";
+import { resumePausedThreadsInSession } from "../../runtime/resume-orchestration";
 import { AppServerError } from "../../bootstrap/errors";
 import { hashJson } from "../../bootstrap/hash";
 import { readdir, readFile, stat } from "node:fs/promises";
@@ -860,26 +859,19 @@ export function createFlowsService(deps: {
     async resumeSession({ sessionId }: { sessionId: string }) {
       await ensureSessionExists(sessionId);
       deps.pauseStore.resumeSession(sessionId);
-      // 扫 paused threads 并各入队一个 resume-thread job
-      const paused = await scanPausedThreads(deps.baseDir, sessionId);
-      const jobIds: string[] = [];
-      const resumedThreadIds: string[] = [];
-      for (const { objectId, threadId } of paused) {
-        const ref = { baseDir: deps.baseDir, sessionId, objectId };
-        const thread = await readThread(ref, threadId);
-        if (!thread || !canResumeThread(thread)) {
-          continue;
-        }
-        await writeThread(applyResumeTransition(thread));
-        const job = deps.jobManager.createResumeThreadJob({
-          sessionId,
-          objectId,
-          threadId,
-        });
-        jobIds.push(job.jobId);
-        resumedThreadIds.push(`${objectId}/${threadId}`);
-      }
-      return { sessionId, paused: false, resumedThreadIds, jobIds };
+      // 扫 paused threads 并各入队一个 resume-thread job。
+      // 编排抽到 runtime/resume-orchestration，与 global-pause/disable 共用同一恢复路径
+      // （2026-06-05 修 pause 单向陷阱）。
+      const resumed = await resumePausedThreadsInSession(
+        { baseDir: deps.baseDir, jobManager: deps.jobManager },
+        sessionId,
+      );
+      return {
+        sessionId,
+        paused: false,
+        resumedThreadIds: resumed.map((r) => r.resumedThreadId),
+        jobIds: resumed.map((r) => r.jobId),
+      };
     },
     async callMethod({
       sessionId,

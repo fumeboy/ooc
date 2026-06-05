@@ -22,6 +22,7 @@ import { readLlmEnv } from "@ooc/core/thinkable/llm/env";
 import type { PauseStore } from "../../runtime/pause-store";
 import type { createJobManager } from "../../runtime/job-manager";
 import type { RuntimeJob } from "../../runtime/types";
+import { resumeAllPausedThreads } from "../../runtime/resume-orchestration";
 import { AppServerError } from "../../bootstrap/errors";
 
 /** 读 debug JSON：缺失 → 404 NOT_FOUND；损坏 → 500 INTERNAL_ERROR。 */
@@ -65,7 +66,18 @@ export interface RuntimeService {
   listJobs(): { items: RuntimeJob[] };
   getJob(jobId: string): RuntimeJob | undefined;
   enableGlobalPause(): { enabled: true };
-  disableGlobalPause(): { enabled: false };
+  /**
+   * 解除全局 pause：翻 flag + **扫所有 session 的 paused thread 入队 resume-thread job**
+   * （2026-06-05 修 pause 单向陷阱）。此前只翻内存 flag，已 paused 的 thread 永久搁浅。
+   *
+   * 返回 resumedThreadIds（`${objectId}/${threadId}`）/ jobIds 供控制面观测——但 HTTP 层
+   * 仍只暴露 { enabled: false }（保持 RuntimeModel.globalPauseResponse 契约 + 前端不破）。
+   */
+  disableGlobalPause(): Promise<{
+    enabled: false;
+    resumedThreadIds: string[];
+    jobIds: string[];
+  }>;
   getGlobalPauseStatus(): { enabled: boolean };
   enableDebug(): { enabled: true };
   disableDebug(): { enabled: false };
@@ -107,6 +119,7 @@ export interface RuntimeService {
 }
 
 export function createRuntimeService(deps: {
+  baseDir: string;
   pauseStore: PauseStore;
   jobManager: ReturnType<typeof createJobManager>;
 }): RuntimeService {
@@ -140,9 +153,20 @@ export function createRuntimeService(deps: {
       deps.pauseStore.enableGlobalPause();
       return { enabled: true as const };
     },
-    disableGlobalPause() {
+    async disableGlobalPause() {
       deps.pauseStore.disableGlobalPause();
-      return { enabled: false as const };
+      // 对称于 enable：global pause 跨 session 停 thread，解除也跨 session 恢复。
+      // 复用 flows.resumeSession 同款编排（scan paused → applyResumeTransition →
+      // createResumeThreadJob），worker 消费 resume-thread job 续跑。
+      const resumed = await resumeAllPausedThreads({
+        baseDir: deps.baseDir,
+        jobManager: deps.jobManager,
+      });
+      return {
+        enabled: false as const,
+        resumedThreadIds: resumed.map((r) => r.resumedThreadId),
+        jobIds: resumed.map((r) => r.jobId),
+      };
     },
     getGlobalPauseStatus() {
       return { enabled: deps.pauseStore.isGlobalPauseEnabled() };

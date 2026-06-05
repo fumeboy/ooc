@@ -27,6 +27,7 @@ type RuntimeModuleConfig = ServerConfig & {
 
 export function runtimeModule(config: RuntimeModuleConfig) {
   const service = createRuntimeService({
+    baseDir: config.baseDir,
     pauseStore: config.pauseStore ?? defaultPauseStore,
     jobManager: config.jobManager ?? defaultJobManager,
   });

@@ -112,8 +112,9 @@ function writePoliciesJson(ref: ThreadPersistenceRef, raw: string): void {
   writeFileSync(path, raw, "utf8");
 }
 
-function makeRuntimeService() {
+function makeRuntimeService(baseDir = "/tmp/ooc-runtime-test-nonexistent") {
   return createRuntimeService({
+    baseDir,
     pauseStore: createPauseStore(),
     jobManager: createJobManager(),
   });

@@ -18,8 +18,9 @@ afterEach(async () => {
   clearObservableDebugState();
 });
 
-function makeService() {
+function makeService(baseDir = "/tmp/ooc-runtime-test-nonexistent") {
   return createRuntimeService({
+    baseDir,
     pauseStore: createPauseStore(),
     jobManager: createJobManager(),
   });
@@ -29,6 +30,7 @@ describe("runtime service", () => {
   test("returns global pause status", () => {
     const pauseStore = createPauseStore();
     const service = createRuntimeService({
+      baseDir: "/tmp/ooc-runtime-test-nonexistent",
       pauseStore,
       jobManager: createJobManager(),
     });
@@ -36,6 +38,45 @@ describe("runtime service", () => {
     pauseStore.enableGlobalPause();
 
     expect(service.getGlobalPauseStatus()).toEqual({ enabled: true });
+  });
+
+  test("disableGlobalPause flips flag and re-enqueues paused threads across sessions", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-runtime-resume-"));
+    const pauseStore = createPauseStore();
+    const jobManager = createJobManager();
+    const service = createRuntimeService({ baseDir: tempRoot, pauseStore, jobManager });
+
+    // seed two paused threads in two sessions (+ one non-paused that must be skipped)
+    async function seedThread(
+      sessionId: string,
+      objectId: string,
+      threadId: string,
+      status: string,
+    ) {
+      const objDir = join(tempRoot!, "flows", sessionId, objectId);
+      const threadsDir = join(objDir, "threads", threadId);
+      await mkdir(threadsDir, { recursive: true });
+      await writeFile(join(objDir, ".flow.json"), JSON.stringify({ objectId }));
+      await writeFile(
+        join(threadsDir, "thread.json"),
+        JSON.stringify({ id: threadId, status, events: [], inbox: [] }),
+      );
+    }
+    await seedThread("s1", "agent", "root", "paused");
+    await seedThread("s2", "agent", "root", "paused");
+    await seedThread("s2", "agent", "other", "running"); // must be skipped
+
+    pauseStore.enableGlobalPause();
+    const out = await service.disableGlobalPause();
+
+    expect(out.enabled).toBe(false);
+    expect(pauseStore.isGlobalPauseEnabled()).toBe(false);
+    // both paused threads recovered; running one skipped
+    expect(out.resumedThreadIds.sort()).toEqual(["agent/root", "agent/root"].sort());
+    expect(out.jobIds.length).toBe(2);
+    // each enqueued a resume-thread job
+    const resumeJobs = jobManager.listJobs().filter((j) => j.kind === "resume-thread");
+    expect(resumeJobs.length).toBe(2);
   });
 
   test("toggles observable debug status", () => {

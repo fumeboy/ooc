@@ -33,6 +33,7 @@ afterEach(async () => {
 
 function makeService() {
   return createRuntimeService({
+    baseDir: "/tmp/ooc-runtime-test-nonexistent",
     pauseStore: createPauseStore(),
     jobManager: createJobManager(),
   });
