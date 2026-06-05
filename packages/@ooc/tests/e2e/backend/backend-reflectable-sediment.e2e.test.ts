@@ -6,7 +6,7 @@
  * 维度（super flow 自我反思 + memory 沉淀 + 元编程改 self.md）此前无 e2e 覆盖。
  *
  * 本场景走真实用户路径触发 super flow，借真链路实证两条刚落地的修复：
- *   1. memory 落 pools/objects/<self>/knowledge/memory/<slug>.md 且含合法 frontmatter
+ *   1. memory 落 pools/<self>/knowledge/memory/<slug>.md 且含合法 frontmatter
  *      （reflectable.memory_layout 的 sediment write contract）
  *   2. （若 super flow 改了 self.md）self.md 经 stone-versioning 进 git
  *      （task#17：write_file 落 stone 自治区 → versionedStoneWrite → ff-merge commit）
@@ -23,8 +23,8 @@
  * 观察孔:
  *   A（user story）: 反思请求被处理，assistant 回到 user（user.root inbox 有回复）。
  *   B（机制）:
- *     ① super session 反思线程被创建（flows/super/objects/<self>/threads/...）
- *     ② memory 文件落 pools/objects/<self>/knowledge/memory/<slug>.md 含合法 frontmatter
+ *     ① super session 反思线程被创建（flows/super/<self>/threads/...）
+ *     ② memory 文件落 pools/<self>/knowledge/memory/<slug>.md 含合法 frontmatter
  *     ③ 若 super flow 改 self.md → 在 stones bare repo 有 commit
  */
 
@@ -175,9 +175,14 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S5 reflectable-sediment", (
       );
 
       // ③ self.md 是否经 stone-versioning 进 git（task#17 实证）
-      // bootstrap commit 由 "bootstrap" 署名；super flow 改 self.md 的 commit 由 SELF_ID 署名。
+      // bootstrap commit 由 "bootstrap" 署名；createStone 的初始 commit 也署名 SELF_ID
+      // （`http:createStone <id>`），故仅凭 author 含 SELF_ID 会把建对象误判为"反思改了
+      // self.md"。只认 super flow 真改 self.md 的 commit（write_file / evolve_self），
+      // 排除 createStone / bootstrap 这两类非反思初始 commit。
       const selfCommits = stoneFileCommits(handle.baseDir, `objects/${SELF_ID}/self.md`);
-      const selfModifiedByAgent = selfCommits.some((line) => line.includes(SELF_ID));
+      const selfModifiedByAgent = selfCommits.some(
+        (line) => line.includes(SELF_ID) && !/createStone|bootstrap/.test(line),
+      );
 
       // ── 观察孔 A：user story ────────────────────────────────────────
       const replies = assistantRepliesToUser(calleeAfterTurn2);
