@@ -18,8 +18,7 @@
 
 import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { stoneDir } from "./common";
-import { STONES_MAIN_BRANCH } from "./stone-bootstrap";
+import { stoneDir, STONES_MAIN_BRANCH } from "./common";
 import { enqueueSessionWrite } from "../runtime/serial-queue.js";
 import { toJson } from "./common";
 

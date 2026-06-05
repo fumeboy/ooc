@@ -27,13 +27,15 @@
 import { existsSync, lstatSync } from "node:fs";
 import { cp, mkdir, readdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { STONE_OBJECTS_SUBDIR } from "./common";
+import {
+  STONE_OBJECTS_SUBDIR,
+  STONES_MAIN_BRANCH,
+  STONES_BARE_REPO_DIR,
+} from "../persistable/common.js";
 
-/** 默认主分支名，与 R5 的 fast-forward-to-main 语义对齐。 */
-export const STONES_MAIN_BRANCH = "main";
-
-/** bare 仓库目录名（plugins_worktrees 风格的 `.plugins_repo` 等价物）。 */
-export const STONES_BARE_REPO_DIR = ".stones_repo";
+// 常量 canonical 源已迁入 persistable/common（打破 pr-issue → bootstrap 反向依赖）；
+// 此处 re-export 保持旧 import 路径（`programmable/bootstrap`）可用。
+export { STONES_MAIN_BRANCH, STONES_BARE_REPO_DIR };
 
 const BOOTSTRAP_AUTHOR_NAME = "bootstrap";
 const BOOTSTRAP_AUTHOR_EMAIL = "bootstrap@ooc.local";

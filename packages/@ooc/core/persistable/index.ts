@@ -154,14 +154,19 @@ export {
 } from "./pr-issue";
 
 export { enqueueSessionWrite, __resetSerialQueueForTests } from "../runtime/serial-queue.js";
+
+// STONES_MAIN_BRANCH canonical 源已迁入 ./common（打破 pr-issue → bootstrap 反向依赖）。
+export { STONES_MAIN_BRANCH } from "./common";
+
+// ooc-6 批次 E1: git / versioning 编排迁入 @ooc/core/programmable。
+// persistable/index 继续 re-export 这些符号，保证 `@ooc/core/persistable` barrel 调用方零改动。
 export {
   ensureStoneRepo,
-  STONES_MAIN_BRANCH,
   type EnsureStoneRepoResult,
-} from "./stone-bootstrap";
+} from "../programmable/bootstrap.js";
 
 export {
-  // U3: git CLI 薄包装（仅供 stone-versioning 等高层编排使用）
+  // U3: git CLI 薄包装（仅供 versioning 等高层编排使用）
   isValidBranchName,
   gitInit,
   gitCurrentBranch,
@@ -188,10 +193,10 @@ export {
   type CommitInput,
   type WorktreeAddInput,
   type WorktreeEntry,
-} from "./stone-git";
+} from "../programmable/git.js";
 
 export {
-  // U4: 高层 stone-versioning 编排
+  // U4: 高层 versioning 编排
   openMetaprogWorktree,
   commitWorktree,
   classifyWorktreeBranch,
@@ -212,7 +217,7 @@ export {
   type TryMergeSelfResult,
   type RequestPrIssueResult,
   type ResolvePrIssueResult,
-} from "./stone-versioning";
+} from "../programmable/versioning.js";
 export {
   // versioned-write: 把"写一个 stone 文件"包进 versioning 流程的单一 owner
   versionedStoneWrite,
@@ -220,7 +225,7 @@ export {
   type VersionedWriteContext,
   type VersionedWriteOk,
   type VersionedWriteErr,
-} from "./versioned-write";
+} from "../programmable/versioned-write.js";
 
 export { parseMentions } from "./mention";
 

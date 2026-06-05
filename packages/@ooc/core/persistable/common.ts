@@ -34,6 +34,12 @@ import { BUILTIN_OBJECT_IDS, nestedObjectPath } from "../_shared/types/thread.js
  */
 export const STONE_OBJECTS_SUBDIR = "objects";
 
+/** stones git 主分支名常量，与 fast-forward-to-main 语义对齐。 */
+export const STONES_MAIN_BRANCH = "main";
+
+/** bare 仓库目录名（plugins_worktrees 风格的 `.plugins_repo` 等价物）。 */
+export const STONES_BARE_REPO_DIR = ".stones_repo";
+
 /**
  * 计算 flow object 目录绝对路径。objectId 中的 "/" 被翻译为 children/ 嵌套
  * （与 stoneDir 对称；详见 nestedObjectPath）。

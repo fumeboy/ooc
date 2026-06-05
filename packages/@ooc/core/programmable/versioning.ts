@@ -30,10 +30,9 @@
 
 import { mkdir, rm, stat, writeFile, cp } from "node:fs/promises";
 import { join } from "node:path";
-import { STONES_MAIN_BRANCH } from "./stone-bootstrap";
-import { createStoneObject, stoneDir, stoneKnowledgeDir } from "./stone-object";
-import { writeSelf } from "./stone-self";
-import { writeReadable } from "./stone-readme";
+import { createStoneObject, stoneDir, stoneKnowledgeDir } from "../persistable/stone-object.js";
+import { writeSelf } from "../persistable/stone-self.js";
+import { writeReadable } from "../persistable/stone-readme.js";
 import {
   gitArchiveBranch,
   gitCheckout,
@@ -53,10 +52,15 @@ import {
   isValidBranchName,
   type GitErrorCode,
   type GitResult,
-} from "./stone-git";
-import { closePrIssue, createPrIssue, readPrIssue, type PrIssueRecord } from "./pr-issue";
+} from "./git.js";
+import { closePrIssue, createPrIssue, readPrIssue, type PrIssueRecord } from "../persistable/pr-issue.js";
 import { enqueueSessionWrite } from "../runtime/serial-queue.js";
-import { nestedObjectPath, isBuiltinObjectId, STONE_OBJECTS_SUBDIR } from "./common";
+import {
+  nestedObjectPath,
+  isBuiltinObjectId,
+  STONE_OBJECTS_SUBDIR,
+  STONES_MAIN_BRANCH,
+} from "../persistable/common.js";
 
 /** Supervisor 的 objectId（治理身份：rollback 仅 supervisor 可调；PR-Issue 默认收件人）。 */
 export const SUPERVISOR_OBJECT_ID = "supervisor";

@@ -22,7 +22,7 @@ import {
   requestPrIssueReview,
   tryMergeSelf,
   type MetaprogWorktreeRef,
-} from "./stone-versioning";
+} from "./versioning.js";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
