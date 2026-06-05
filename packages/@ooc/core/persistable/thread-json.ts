@@ -9,6 +9,7 @@ import { readContextRegistry } from "./flow-context-registry";
 import { readRuntimeObjectState } from "./flow-runtime-object";
 import { readThreadContext, type ThreadContextEntry } from "./flow-thread-context";
 import type { ContextWindow } from "../executable/windows/_shared/types";
+import { isVolatileDerivedWindow } from "../executable/windows/_shared/types";
 
 /**
  * thread.json 的最小读写。
@@ -40,7 +41,11 @@ function stripVolatileForPersist(thread: ThreadContext): ThreadContext {
   const { intentCache: _dropIntentCache, ...threadRest } = thread;
   return {
     ...threadRest,
-    contextWindows: thread.contextWindows.map((window) => {
+    // volatile derived window（form-bound guidance）不落 thread.json：每轮 enrichment 重算，
+    // 持久化只会在 reload 时被当 unregistered type drop + 刷屏。
+    contextWindows: thread.contextWindows
+      .filter((window) => !isVolatileDerivedWindow(window))
+      .map((window) => {
       let next = window;
       if (!next.compressLevel) {
         const { compressLevel: _drop, ...rest } = next;

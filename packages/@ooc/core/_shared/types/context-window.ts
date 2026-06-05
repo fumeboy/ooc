@@ -211,3 +211,18 @@ export function generateWindowId(type: Exclude<ObjectType, "root">): string {
 export function creatorWindowIdOf(threadId: string): string {
   return `w_creator_${threadId}`;
 }
+
+/**
+ * volatile derived window —— 每轮 enrichment 重新派生、从不需要持久化的窗。
+ *
+ * 当前唯一成员是 form-bound guidance（type="guidance" + provenance.kind="derived"）：
+ * 由 computeFormKnowledgeEntries 每轮 onFormChange 重算生成，既非 inline builtin 也非
+ * 独立 flow object（无 state.json）。落进持久化只会变成指向缺失对象的死 _ref——
+ * reload 时刷屏 `references missing object ... skipping`、并随每轮 form 派生累积膨胀
+ * thread-context.json。写盘端用本谓词剔除，读端跳过历史污染。
+ *
+ * 双锚 type+provenance：防误伤未来可能出现的非 derived guidance / 其它 window。
+ */
+export function isVolatileDerivedWindow(window: BaseContextWindow): boolean {
+  return window.type === "guidance" && window.provenance?.kind === "derived";
+}
