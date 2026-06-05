@@ -74,11 +74,13 @@ export async function runJob(
   await syncCrossObjectCalleeEnds(rootThread, config.baseDir, job.sessionId);
   await runScheduler(rootThread, createLlmClient(), { maxTicks: config.workerMaxTicks ?? 15 });
 
-  // scheduler yield 自唤醒：runScheduler 跑满 maxTicks 自然返回时, 若 thread 仍 running,
-  // 写一条 scheduler_yielded event + 主动再入队一次。否则在事件驱动 worker 模型下没有
-  // 任何 event source 会唤醒它(2026-05-24 根因 #5)。详见 meta/app.server.doc.ts § worker。
-  // 顺序: 先 writeThread 把事件落盘, 再 createRunThreadJob — 否则下个 worker tick 抢先
-  // read 时可能看不到这条 event。
+  // scheduler yield 留痕：runScheduler 跑满 maxTicks 自然返回时, 若 thread 仍 running,
+  // 写一条 scheduler_yielded event 标记"还想继续但本批 tick 预算耗尽"。
+  //
+  // **续跑入队不在此处做**：此刻当前 job 仍是 running（processQueuedJobs 还没把它标 done），
+  // 若现在调 createRunThreadJob，其 dedupe(findRunning queued|running) 会命中当前 job
+  // 自己而吞掉续跑请求 → thread 永久冻结在 running（需外部 continue 才恢复；programmable
+  // 长任务 >maxTicks 必然踩中）。改由 processQueuedJobs 在把当前 job 标 done **之后**续跑。
   if (rootThread.status === "running") {
     const rounds = rootThread.events.filter(
       (e) => e.category === "llm_interaction" && e.kind === "call_started",
@@ -90,11 +92,6 @@ export async function runJob(
       rounds,
     });
     await writeThread(rootThread);
-    config.jobManager.createRunThreadJob({
-      sessionId: job.sessionId,
-      objectId: job.objectId,
-      threadId: job.threadId,
-    });
   }
 
   // 根因 #4: scheduler 原地推进 rootThread 并落盘；返回其终态供 processQueuedJobs 对账。
@@ -146,6 +143,17 @@ export async function processQueuedJobs(
             status: "done",
             finishedAt: Date.now(),
           });
+          // scheduler yield 续跑：thread 跑满 maxTicks 仍 running（runScheduler 已写
+          // scheduler_yielded 留痕）→ 当前 job 此刻已标 done，createRunThreadJob 的 dedupe
+          // 不再命中当前 job，续跑 job 得以入队，下个 worker poll drain 它继续推进。
+          // （放在 runJob 内当前 job 还 running 时入队会被 dedupe 自吞 → thread 冻结。）
+          if (result?.threadStatus === "running") {
+            config.jobManager.createRunThreadJob({
+              sessionId: claimed.sessionId,
+              objectId: claimed.objectId,
+              threadId: claimed.threadId,
+            });
+          }
         }
       } catch (error) {
         config.jobManager.updateJob(claimed.jobId, {
