@@ -2985,6 +2985,47 @@ export const root: DocTreeNode = {
                             sources: [["packages/@ooc/core/persistable/stone-registry.ts + packages/@ooc/core/persistable/stone-object.ts:resolveStoneDir", "StoneRegistry 实现与 resolveStoneDir 3-path fallback；hot-reload 集成见 packages/@ooc/core/runtime/hot-reload.ts:parseStoneChange + WorldRuntime.ts"]],
                         },
                     },
+                    patches: {
+                        "main_overlay_evolve_model": {
+                            title: "main = canonical / flow overlay 试验层 / super-flow evolve_self 合入",
+                            content: `
+                            stone identity 文件（self.md / readable.* / executable/** / visible/** / knowledge/**）
+                            遵循 **两层模型**（设计：docs/2026-06-05-stone-flow-overlay-versioning-design.md）:
+
+                            - **main 分支 = canonical stone**：Object 已提交的权威自我，唯一默认读源
+                              （\`stones/main/objects/<id>/\`，main git worktree；P1 路径收口后 stoneDir 默认即此）。
+                            - **flow session overlay = 会话内试验层**：普通业务 session（非 super、非控制面）里对
+                              上述 identity 文件的 write_file / file_window.edit **不即时改 main**，而是落
+                              \`flows/<sid>/<id>/overlay/<relWithinObject>\`（plain 目录，不走 versioning/不 commit）。
+                              本 session 内即时生效（读 overlay shadow main），main 不变、别 session 仍读旧版。
+                            - **super-flow evolve_self = 身份合入闸门**：把某业务 session 的 overlay 改动正式合入
+                              main——从 main 建实验分支应用 overlay 文件、self-scope ff-merge 回 main（署名 objectId，
+                              非 bootstrap），是身份从"试验"到"提交"的唯一 Object 自我演化通道。
+
+                            **读 overlay shadow**：loadSelfInstructions / open_file / file_window.edit 读 identity 文件时，
+                            普通业务 session 优先读该 session overlay（存在则用），否则透传 canonical main；
+                            super flow / 控制面不应用 shadow（它们操作 canonical 本身）。
+
+                            **两条进入 canonical 的合法通道**（互不经过对方）:
+                            - Object 自我演化：业务 session overlay → super-flow \`evolve_self\` 合入 main。
+                            - 外部权威写入：控制面 HTTP（putSelf / putServerSource）直写 main 经 versioning（不走 overlay）。
+
+                            **不在 overlay 模型内**：pool sediment（\`pools/<id>/knowledge/**\`）本就独立、直写、不进 git；
+                            super flow 反思写 memory 直接落 main 即可（详见 reflectable.memory_layout）。
+
+                            **生命周期**：overlay 随 session 目录存在，session 清理即消亡；未经 evolve_self 合入的
+                            overlay 改动不进 canonical——"试验不污染身份"。
+                            `,
+                            named: {
+                                "canonical main": "main 分支 worktree 的 stone，Object 权威自我、唯一默认读源",
+                                "flow session overlay": "业务 session 内对 identity 文件的试验改动，session 私有不污染 main",
+                                "evolve_self": "super flow 的身份合入命令：overlay → 实验分支 → ff-merge main",
+                                "overlay shadow": "业务 session 读 identity 文件时 overlay 存在则覆盖 canonical",
+                                "两条 canonical 通道": "Object 自演化（overlay+evolve_self）vs 外部权威写（控制面直写 main）",
+                            },
+                            sources: [["packages/@ooc/core/persistable/session-overlay.ts + packages/@ooc/core/programmable/evolve-self.ts", "overlay 路径/读写 shadow（overlayStoneFilePath / readStoneFileWithOverlay / sessionUsesOverlay）+ evolve_self 合入编排（evolveSelfDiff / evolveSelfMerge，复用 versionedStoneWrite）；写重定向在 @ooc/builtins/file/executable/index.ts（write_file/edit）、读 shadow 在 thinkable/context/index.ts:loadSelfInstructions、命令面在 @ooc/builtins/root/executable/method.evolve-self.ts"]],
+                        },
+                    },
                     todo: [
                         "存量数据迁移：已有 .ooc-world*/stones/<b>/objects/<id>/{knowledge/, files/} 通过 CLI 命令 migrate-stone-knowledge-to-pool 复制到 pools/objects/<id>/{knowledge/, files/}（命令已落地，仅复制不 git rm）。**注意**：2026-05-24 起 knowledge 改为 seed/sediment 二分，旧 CLI 把全部 knowledge 当 sediment 迁到 pool 是过度操作——用户在迁移后需自行判定哪些条目属于 seed 并迁回 stone（或在 worktree 内 git rm 并保留 stone 的新 seed 版本）。旧 data.json 不迁（语义已变为 session-scoped）。",
                         "存量 database/ 子目录清理：2026-05-23 创建过 stone database/ 骨架的 world 在 2026-05-24 简化中失去意义；需 CLI 检测并提示用户在 stones worktree 内 git rm（不强制，留空目录无害）。",

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "bun:test";
 import { buildContext, buildInputItems, type ThreadContext } from "../context";
 import { clearKnowledgeLoaderCache } from "../knowledge";
-import { createStoneObject, createPoolObject, poolKnowledgeDir, writeSelf } from "../../persistable";
+import { createStoneObject, createPoolObject, poolKnowledgeDir, writeSelf, writeOverlayFile } from "../../persistable";
 import {
   ROOT_WINDOW_ID,
   type MethodExecWindow,
@@ -631,6 +631,36 @@ describe("buildInputItems self.md injection", () => {
 
     const xml = (out.input[0] as { content: string }).content;
     expect(xml).not.toContain("<self ");
+  });
+
+  it("P2 overlay: business session reads overlay self.md (shadow main); other session reads main", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-self-"));
+    const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
+    await writeSelf(stoneRef, "canonical Alice");
+    // s1 写了 overlay 试验值
+    await writeOverlayFile(tempRoot, "s1", "alice", "self.md", "overlay Alice (experiment)");
+
+    // s1 读 overlay
+    const t1 = makeThread({
+      id: "t1",
+      persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "alice", threadId: "t1" },
+    });
+    expect((await buildInputItems(t1)).instructions).toBe("overlay Alice (experiment)");
+
+    // s2 没有 overlay → 读 canonical main
+    const t2 = makeThread({
+      id: "t2",
+      persistence: { baseDir: tempRoot, sessionId: "s2", objectId: "alice", threadId: "t2" },
+    });
+    expect((await buildInputItems(t2)).instructions).toBe("canonical Alice");
+
+    // super flow 读 canonical（不 shadow），即便 super 目录下有 overlay
+    await writeOverlayFile(tempRoot, "super", "alice", "self.md", "should be ignored");
+    const tSuper = makeThread({
+      id: "tS",
+      persistence: { baseDir: tempRoot, sessionId: "super", objectId: "alice", threadId: "tS" },
+    });
+    expect((await buildInputItems(tSuper)).instructions).toBe("canonical Alice");
   });
 
   it("omits instructions when self.md is missing or empty", async () => {

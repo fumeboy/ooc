@@ -1,5 +1,5 @@
 import type { LlmInputItem, LlmMessage } from "../llm/types";
-import { deriveStoneFromThread, objectDir, readSelf, stoneDir, threadDir } from "../../persistable";
+import { deriveStoneFromThread, objectDir, readSelf, readStoneFileWithOverlay, stoneDir, threadDir } from "../../persistable";
 import { createDefaultPipeline } from "./pipeline.js";
 import { XmlRenderer } from "./renderers/xml.js";
 import type { ProcessEvent, ThreadContext, ThreadMessage } from "../../_shared/types/thread.js";
@@ -355,7 +355,16 @@ function buildPathsItem(thread: ThreadContext): LlmInputItem | undefined {
 async function loadSelfInstructions(thread: ThreadContext): Promise<string | undefined> {
   if (!thread.persistence) return undefined;
   const stoneRef = deriveStoneFromThread(thread.persistence);
-  const selfText = await readSelf(stoneRef);
+  // overlay shadow main（design §3）：普通业务 session 内若改过 self.md，本 session 读 overlay
+  // 试验值；super flow / 控制面读 canonical main。
+  const { baseDir, sessionId, objectId } = thread.persistence;
+  const selfText = await readStoneFileWithOverlay(
+    baseDir,
+    sessionId,
+    objectId,
+    "self.md",
+    () => readSelf(stoneRef),
+  );
   if (!selfText || !selfText.trim()) return undefined;
   return selfText;
 }

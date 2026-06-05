@@ -30,6 +30,7 @@ import { talkCommand } from "./method.talk.js";
 import { todoCommand } from "./method.todo.js";
 import { writeFileCommand } from "./method.write-file.js";
 import { metaprogCommand } from "./method.metaprog.js";
+import { evolveSelfCommand } from "./method.evolve-self.js";
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import type { Intent } from "@ooc/core/thinkable/context/intent.js";
 
@@ -63,6 +64,7 @@ export const ROOT_METHODS: Record<string, ObjectMethod> = {
   glob: globCommand,
   grep: grepCommand,
   metaprog: metaprogCommand,
+  evolve_self: evolveSelfCommand,
   open_feishu_chat: openFeishuChatCommand,
   open_feishu_doc: openFeishuDocCommand,
 };

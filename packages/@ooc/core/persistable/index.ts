@@ -123,6 +123,16 @@ export {
   type ThreadContextFile,
 } from "./flow-thread-context";
 
+export {
+  OVERLAY_SUBDIR,
+  overlayStoneFilePath,
+  sessionUsesOverlay,
+  relWithinObjectFromPackages,
+  readOverlayFile,
+  writeOverlayFile,
+  readStoneFileWithOverlay,
+} from "./session-overlay";
+
 export { readSelf, selfFile, writeSelf } from "./stone-self";
 export {
   readReadable,
@@ -226,6 +236,21 @@ export {
   type VersionedWriteOk,
   type VersionedWriteErr,
 } from "../programmable/versioned-write.js";
+
+export {
+  // evolve-self: super-flow 身份合入闸门（overlay → main）
+  evolveSelfDiff,
+  evolveSelfMerge,
+  type EvolveSelfInput,
+  type EvolveSelfDiff,
+  type EvolveSelfMerged,
+  type EvolveSelfErr,
+} from "../programmable/evolve-self.js";
+
+export {
+  overlayRootDir,
+  listOverlayFiles,
+} from "./session-overlay";
 
 export { parseMentions } from "./mention";
 

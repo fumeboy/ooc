@@ -38,7 +38,13 @@ import {
   classifyPackagesPath,
   resolveSessionPath,
 } from "@ooc/core/extendable/_shared/session-path.js";
-import { versionedStoneWrite } from "@ooc/core/persistable/index.js";
+import {
+  versionedStoneWrite,
+  sessionUsesOverlay,
+  relWithinObjectFromPackages,
+  writeOverlayFile,
+  overlayStoneFilePath,
+} from "@ooc/core/persistable/index.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/thinkable/context/xml.js";
 import { readable } from "../readable.js";
 
@@ -373,6 +379,35 @@ export async function executeFileWindowSetRange(
  * - 成功：把新内容写回 window.path；返回 undefined
  * - 失败：不写盘；返回错误字符串（前缀 [file_window.edit]，便于 LLM 解析）
  */
+/**
+ * overlay 重定向决策（design §3）：当 file_window 指向 caller**自己 stone 自治区**的
+ * canonical 路径、且当前 session 是普通业务 session 时，stone identity 文件的读/写都
+ * 应落到 session overlay（试验层）。
+ *
+ * @returns
+ *  - undefined：不重定向（非自己 stone / 非业务 session / 已经指向 overlay 等）→ 直读直写 window.path。
+ *  - { readPath, writePath }：overlay 落点；读优先 overlay（不存在则 fallback canonical），写到 overlay。
+ */
+async function resolveStoneOverlayTarget(
+  ctx: MethodExecutionContext,
+  absPath: string,
+): Promise<{ readCanonical: string; overlayWrite: string } | undefined> {
+  const thread = ctx.thread;
+  const baseDir = thread?.persistence?.baseDir;
+  const sessionId = thread?.persistence?.sessionId;
+  const objectId = thread?.persistence?.objectId;
+  if (!baseDir || !objectId || !sessionUsesOverlay(sessionId)) return undefined;
+  const stoneClass = classifyPackagesPath(absPath, baseDir);
+  if (stoneClass.kind !== "package-object") return undefined;
+  if (stoneClass.ownerObjectId !== objectId) return undefined;
+  const rel = relWithinObjectFromPackages(objectId, stoneClass.relInPackages);
+  if (!rel) return undefined;
+  return {
+    readCanonical: absPath,
+    overlayWrite: overlayStoneFilePath(baseDir, sessionId!, objectId, rel),
+  };
+}
+
 export async function executeFileWindowEdit(
   ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
@@ -383,22 +418,51 @@ export async function executeFileWindowEdit(
     return "[file_window.edit] 缺少 args={ old, new } 或 args={ edits: [{old, new}, ...] }。";
   }
 
+  // overlay 重定向：若 window 指向 caller 自己 stone 的 canonical identity 文件且在业务
+  // session，读优先 overlay（试验层最新值），写回 overlay（不动 main）。
+  const overlay = await resolveStoneOverlayTarget(ctx, window.path);
+  let readPath = window.path;
+  let writePath = window.path;
+  let toOverlay = false;
+  if (overlay) {
+    writePath = overlay.overlayWrite;
+    toOverlay = true;
+    // 读源：overlay 存在则读 overlay（已在本 session 改过），否则读 canonical（首次改）
+    try {
+      await stat(overlay.overlayWrite);
+      readPath = overlay.overlayWrite;
+    } catch {
+      readPath = overlay.readCanonical;
+    }
+  }
+
   let buffer: string;
   try {
-    buffer = await readFile(window.path, "utf8");
+    buffer = await readFile(readPath, "utf8");
   } catch (err) {
-    return `[file_window.edit] 读取 ${window.path} 失败：${(err as Error).message}`;
+    return `[file_window.edit] 读取 ${readPath} 失败：${(err as Error).message}`;
   }
 
   const result = applyEdits(buffer, edits);
   if (result.ok === false) {
-    return `[file_window.edit] ${window.path}: ${result.error}`;
+    return `[file_window.edit] ${readPath}: ${result.error}`;
   }
 
   try {
-    await writeFile(window.path, result.result, "utf8");
+    if (toOverlay) await mkdir(dirname(writePath), { recursive: true });
+    await writeFile(writePath, result.result, "utf8");
   } catch (err) {
-    return `[file_window.edit] 写回 ${window.path} 失败：${(err as Error).message}`;
+    return `[file_window.edit] 写回 ${writePath} 失败：${(err as Error).message}`;
+  }
+
+  if (toOverlay && ctx.thread?.events) {
+    ctx.thread.events.push({
+      category: "context_change",
+      kind: "inject",
+      text:
+        `[file_window.edit] 改动落在本 session 的 overlay 试验层（${writePath}），main 未变。` +
+        `经 super flow evolve_self 合入 main 才永久生效。`,
+    });
   }
 
   return undefined;
@@ -529,6 +593,41 @@ const fileConstructor: ObjectMethod = {
               `缺少 ${!baseDir ? "persistence.baseDir" : "persistence.objectId"}，无法版本化写入。`,
           };
         }
+
+        // overlay 写重定向（design §3）：普通业务 session 对**自己 stone 自治区**的写
+        // → 落 session overlay（plain write，不走 versioning / 不 commit main）；本 session
+        // 内即时生效（读 overlay shadow），main 不变，经 super flow evolve_self 合入才永久。
+        // cross-scope（别人 stone）保持现有 versioning/PR-Issue 行为不变。
+        const sessionId = thread.persistence?.sessionId;
+        const isOwnStone = stoneClass.ownerObjectId === authorObjectId;
+        const relWithinObject = isOwnStone
+          ? relWithinObjectFromPackages(authorObjectId, stoneClass.relInPackages)
+          : undefined;
+        if (isOwnStone && sessionUsesOverlay(sessionId) && relWithinObject) {
+          await writeOverlayFile(baseDir, sessionId!, authorObjectId, relWithinObject, content);
+          const overlayPath = overlayStoneFilePath(baseDir, sessionId!, authorObjectId, relWithinObject);
+          if (thread.events) {
+            thread.events.push({
+              category: "context_change",
+              kind: "inject",
+              text:
+                `[write_file] ${path} 的改动落在本 session 的 overlay 试验层（${overlayPath}），` +
+                `main 未变。本 session 内即时生效；要把它沉淀为正式身份，去 super flow 调 ` +
+                `evolve_self 合入 main 才永久生效。`,
+            });
+          }
+          const overlayWindow: FileWindow = {
+            id: generateWindowId("file"),
+            type: "file",
+            parentWindowId: ROOT_WINDOW_ID,
+            title: basenameOfPath(path),
+            status: "open",
+            createdAt: Date.now(),
+            path: overlayPath,
+          };
+          return { ok: true, object: overlayWindow };
+        }
+
         const versioned = await versionedStoneWrite({
           baseDir,
           authorObjectId,
@@ -596,7 +695,18 @@ const fileConstructor: ObjectMethod = {
     // open_file path
     const rawPath = isString(ctx.args.path) ? ctx.args.path : "";
     if (!rawPath) return { ok: false, error: "[open_file] 缺少 path。" };
-    const path = resolveSessionPath(thread, rawPath);
+    let path = resolveSessionPath(thread, rawPath);
+    // overlay shadow（design §3）：在业务 session 打开自己 stone 的 identity 文件时，
+    // 若已有 session overlay 试验值，window 指向 overlay（读到试验层最新内容）；否则 canonical。
+    const openOverlay = await resolveStoneOverlayTarget(ctx, path);
+    if (openOverlay) {
+      try {
+        await stat(openOverlay.overlayWrite);
+        path = openOverlay.overlayWrite;
+      } catch {
+        /* overlay 不存在 → 保持 canonical */
+      }
+    }
     try {
       await stat(path);
     } catch (err) {

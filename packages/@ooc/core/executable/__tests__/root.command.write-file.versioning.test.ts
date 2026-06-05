@@ -78,7 +78,10 @@ function mainObjectsDir(baseDir: string): string {
 }
 
 describe("write_file stone-versioning routing", () => {
-  test("self-scope: 写 stones/<self>/self.md → commit + ff-merge，main 可读到新内容", async () => {
+  // P2 overlay（design §3）：业务 session（sessionId="s"）对**自己 stone 自治区**的写
+  // 不再即时 commit→main，而是落 session overlay（试验层）；main 不变，经 super flow
+  // evolve_self 合入才永久。下面两个 self-scope 测试相应改为断言 overlay 重定向。
+  test("self-scope（业务 session）: 写 stones/<self>/self.md → 落 overlay，main 不变", async () => {
     const baseDir = await newWorld(["agent_of_x"]);
     const ctx = ctxFor(baseDir, "agent_of_x", {
       path: "stones/agent_of_x/self.md",
@@ -90,33 +93,35 @@ describe("write_file stone-versioning routing", () => {
     expect(typeof out).toBe("object");
     if (typeof out === "object" && out && out.ok === true && "object" in out) {
       expect(out.object.type).toBe("file");
+      // window 指向 overlay 物理落点
+      expect((out.object as unknown as { path: string }).path).toContain(
+        join("flows", "s", "agent_of_x", "overlay", "self.md"),
+      );
     } else {
       throw new Error(`expected success constructor outcome, got ${JSON.stringify(out)}`);
     }
 
-    // main 工作区已反映新内容（下一轮 loader 能读到）
-    const onMain = await readFile(join(mainObjectsDir(baseDir), "agent_of_x", "self.md"), "utf8");
-    expect(onMain).toBe("agent_of_x v2 via write_file\n");
+    // overlay 文件写入新内容
+    const onOverlay = await readFile(
+      join(baseDir, "flows", "s", "agent_of_x", "overlay", "self.md"),
+      "utf8",
+    );
+    expect(onOverlay).toBe("agent_of_x v2 via write_file\n");
 
-    // git 有记录：最近一条 commit message 来自 write_file（即真的 commit 了，不是裸写）
-    const log = Bun.spawnSync(["git", "log", "-1", "--pretty=%an%x09%s"], {
+    // canonical main 未变（仍 v1）
+    const onMain = await readFile(join(mainObjectsDir(baseDir), "agent_of_x", "self.md"), "utf8");
+    expect(onMain).toBe("agent_of_x v1\n");
+
+    // 没有 write_file commit 进 main（overlay 不走 git）
+    const log = Bun.spawnSync(["git", "log", "-1", "--pretty=%s"], {
       cwd: join(baseDir, "stones", "main"),
       stdout: "pipe",
     });
     const lastCommit = new TextDecoder().decode(log.stdout).trim();
-    expect(lastCommit).toContain("agent_of_x");
-    expect(lastCommit).toContain("write_file objects/agent_of_x/self.md");
-
-    // P6.§4-§5: constructor 只返回 { ok:true, object }；window 由 manager.submit 走 §2 分支
-    // 调 insertTypedWindow 挂载。这里直接调 delegator 没经过 manager，所以验证 outcome.object
-    // 形态而不是 thread.contextWindows 上的副作用。
-    if (typeof out === "object" && out && out.ok === true && "object" in out) {
-      expect(out.object.type).toBe("file");
-      expect((out.object as unknown as { path: string }).path).toContain("agent_of_x/self.md");
-    }
+    expect(lastCommit).not.toContain("write_file objects/agent_of_x/self.md");
   });
 
-  test("self-scope: 写自治区下的新子文件（server/index.ts）→ ff-merge 到 main", async () => {
+  test("self-scope（业务 session）: 写自治区新子文件（server/index.ts）→ 落 overlay，main 无该文件", async () => {
     const baseDir = await newWorld(["agent_of_x"]);
     const ctx = ctxFor(baseDir, "agent_of_x", {
       path: "stones/agent_of_x/server/index.ts",
@@ -124,11 +129,36 @@ describe("write_file stone-versioning routing", () => {
     });
     const out = await executeWriteFileCommand(ctx);
     expect(typeof out === "object" && out !== null && out !== undefined && out.ok === true).toBe(true);
-    const onMain = await readFile(
-      join(mainObjectsDir(baseDir), "agent_of_x", "server", "index.ts"),
+    const onOverlay = await readFile(
+      join(baseDir, "flows", "s", "agent_of_x", "overlay", "server", "index.ts"),
       "utf8",
     );
-    expect(onMain).toBe("export const methods = {};\n");
+    expect(onOverlay).toBe("export const methods = {};\n");
+    // main 上没有该新文件（未合入）
+    await expect(
+      readFile(join(mainObjectsDir(baseDir), "agent_of_x", "server", "index.ts"), "utf8"),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  test("self-scope（super flow）: 仍走 versioning，commit + ff-merge 到 main（不落 overlay）", async () => {
+    const baseDir = await newWorld(["agent_of_x"]);
+    // super flow（sessionId="super"）操作 canonical 本身：保留旧 versioning 行为。
+    const ctx = ctxFor(baseDir, "agent_of_x", {
+      path: "stones/agent_of_x/self.md",
+      content: "agent_of_x v2 via super write_file\n",
+    });
+    (ctx.thread as unknown as { persistence: { sessionId: string } }).persistence.sessionId = "super";
+
+    const out = await executeWriteFileCommand(ctx);
+    expect(typeof out === "object" && out !== null && out.ok === true).toBe(true);
+
+    // main 已反映新内容
+    const onMain = await readFile(join(mainObjectsDir(baseDir), "agent_of_x", "self.md"), "utf8");
+    expect(onMain).toBe("agent_of_x v2 via super write_file\n");
+    // 没有 overlay 副本
+    await expect(
+      readFile(join(baseDir, "flows", "super", "agent_of_x", "overlay", "self.md"), "utf8"),
+    ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   test("cross-scope: 写别人 stone → 不合并 main，开 PR-Issue", async () => {
@@ -195,7 +225,7 @@ describe("write_file stone-versioning routing", () => {
     ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  test("nested child: 写自己 stones/<parent>/children/<child>/self.md → self-scope ff-merge", async () => {
+  test("nested child（业务 session）: 写自己 stones/<parent>/children/<child>/self.md → 落 overlay，main 不变", async () => {
     // 嵌套 world：parent 含 children/child
     const baseDir = await mkdtemp(join(tmpdir(), "ooc-write-file-versioning-nested-"));
     tempRoots.push(baseDir);
@@ -255,11 +285,18 @@ describe("write_file stone-versioning routing", () => {
       throw new Error(`expected success constructor outcome, got ${JSON.stringify(out)}`);
     }
 
+    // overlay 落点：flows/s/parent/children/child/overlay/self.md
+    const onOverlay = await readFile(
+      join(baseDir, "flows", "s", "parent", "children", "child", "overlay", "self.md"),
+      "utf8",
+    );
+    expect(onOverlay).toBe("child v2 via write_file\n");
+    // main 不变
     const onMain = await readFile(
       join(mainObjectsDir(baseDir), "parent", "children", "child", "self.md"),
       "utf8",
     );
-    expect(onMain).toBe("child v2 via write_file\n");
+    expect(onMain).toBe("child v1\n");
   });
 
   test("fail-loud: 路径在 stones 自治区但 thread 缺 objectId → 不静默直写", async () => {

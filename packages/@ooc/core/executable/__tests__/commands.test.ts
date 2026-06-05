@@ -77,6 +77,7 @@ describe("executable commands", () => {
     expect(getOpenableMethods()).toEqual([
       "do",
       "end",
+      "evolve_self",
       "glob",
       "grep",
       "metaprog",
