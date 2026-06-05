@@ -681,13 +681,16 @@ export function createFlowsService(deps: {
      */
     async listThreads({ sessionId }: { sessionId: string }): Promise<ListThreadsResponse> {
       await ensureSessionExists(sessionId);
-      const objectsDir = join(deps.baseDir, "flows", sessionId, "objects");
+      // F3 修复（harness 首轮 sweep X1，5 维度命中 list 端点恒空）：flow object 是
+      // `flows/<sid>/` 的**直接子目录**（objectDir = flows/<sid>/<nestedObjectPath>，无 `objects/` 段）。
+      // 旧 listThreads 沿用 9bd8640b^ 的 `flows/<sid>/objects/` 布局扫描 → 目录不存在 → items 恒空。
+      const sessionRoot = join(deps.baseDir, "flows", sessionId);
       const isSuperFlow = isSuperSessionId(sessionId) || undefined;
       const items: ListThreadsItem[] = [];
 
       // 递归扫嵌套子 object（与 thread-query.scanThreadsByStatus 同款 children/ marker
       // 协议）。一个目录是 flow object iff 直接含 .flow.json；递归只下到 children/ 子目录。
-      // objectId 由相对 objects/ 路径剥掉所有 children/ 段后用 "/" 拼。
+      // objectId 由相对 session 根的路径剥掉所有 children/ 段后用 "/" 拼。
       async function walkObjectDir(dir: string, idSegments: string[]): Promise<void> {
         let entries: import("node:fs").Dirent[];
         try {
@@ -740,14 +743,14 @@ export function createFlowsService(deps: {
 
       let topEntries: import("node:fs").Dirent[];
       try {
-        topEntries = await readdir(objectsDir, { withFileTypes: true });
+        topEntries = await readdir(sessionRoot, { withFileTypes: true });
       } catch {
         return { items: [] };
       }
       for (const entry of topEntries) {
         if (!entry.isDirectory()) continue;
         if (entry.name.startsWith(".")) continue;
-        await walkObjectDir(join(objectsDir, entry.name), [entry.name]);
+        await walkObjectDir(join(sessionRoot, entry.name), [entry.name]);
       }
 
       items.sort((a, b) =>

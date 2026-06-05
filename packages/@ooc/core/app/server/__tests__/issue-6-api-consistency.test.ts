@@ -64,6 +64,26 @@ describe("Issue #6 Bad #1: silent-fabricate", () => {
     expect(res.status).toBe(404);
   });
 
+  test("X1 回归：seed session 后 list threads 返回非空（flows/<sid>/<obj>/ flat 布局，非 objects/）", async () => {
+    // harness 首轮 sweep 横切发现：listThreads 沿用 9bd8640b^ 的 flows/<sid>/objects/ 布局扫描，
+    // 但实际 objectDir = flows/<sid>/<nestedObjectPath>（无 objects/ 段）→ list 端点恒返回空（5 维度命中）。
+    const { app } = await makeApp();
+    await app.handle(new Request("http://localhost/api/stones", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ objectId: "assistant", self: "# A" }),
+    }));
+    const seed = await app.handle(new Request("http://localhost/api/sessions", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId: "_test_x1_list", targetObjectId: "assistant", initialMessage: "hi" }),
+    }));
+    expect(seed.status).toBe(200);
+    const res = await app.handle(new Request("http://localhost/api/flows/_test_x1_list/threads"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items.length).toBeGreaterThan(0);
+    expect(body.items.some((t: { objectId: string }) => t.objectId === "assistant")).toBe(true);
+  });
+
   test("GET /api/stones (list) 父目录不存在仍返回 200 + []", async () => {
     const { app } = await makeApp();
     const res = await app.handle(new Request("http://localhost/api/stones"));
