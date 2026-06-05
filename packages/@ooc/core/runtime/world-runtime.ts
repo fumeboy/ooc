@@ -48,6 +48,14 @@ export interface WorldRuntime {
   /** Resolves when the startup object-type registration pass is done. */
   readonly typeRegistration: Promise<void>;
 
+  /**
+   * 显式注册（或刷新）一个运行时新建/改动的 stone 的 type 定义。
+   * API 写路径（createStone / putServerSource）调用——不依赖 dev-only 的 hot-reload fs.watch，
+   * 让非 dev server 里运行时创建的对象也能立即被其它对象的 think 上下文用上（修 collaborable
+   * 惰性注册 / programmable 自写方法 prod 不 re-register）。先 rescan 让 stoneRegistry 认得新 stone，再注册。
+   */
+  registerStone(objectId: string): Promise<void>;
+
   dispose(): Promise<void>;
 }
 
@@ -111,6 +119,13 @@ export function createWorldRuntime(config: WorldRuntimeConfig): WorldRuntime {
     serverLoader,
     stoneRegistry,
     typeRegistration,
+    async registerStone(objectId: string) {
+      // rescan 让 stoneRegistry 认得运行时新建的 stone（registrar.registerStone 内部 getDef 才不为空），
+      // 再注册其 type 定义进 ObjectRegistry。invalidate loader 缓存以拿到最新 self/server。
+      await stoneRegistry.rescan();
+      serverLoader.invalidateStone({ baseDir: config.worldPath, objectId });
+      await registrar.registerStone(objectId);
+    },
     async dispose() {
       if (hotReload) {
         hotReload.stop();
