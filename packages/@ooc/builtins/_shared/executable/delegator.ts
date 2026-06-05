@@ -1,0 +1,62 @@
+/**
+ * Shared root-command delegator factory.
+ *
+ * Batch B3 (2026-06-04): the 10 root.* command files (grep/glob/open_file/
+ * write_file/plan/todo/talk/program/do/open_knowledge) each carried a
+ * near-identical `execute<X>Command` thin delegator: look up the target
+ * constructor via the registry, fail-loud if unregistered, optionally inject a
+ * `{ command }` form shim, then forward to `ctor.exec`.
+ *
+ * `makeRootDelegator` collapses all 10 into one parameterised factory.
+ */
+
+import type {
+  MethodExecutionContext,
+  MethodOutcome,
+} from "@ooc/core/extendable/_shared/method-types.js";
+import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
+
+/** root delegator 工厂的配置项。 */
+export interface RootDelegatorSpec {
+  /** root command 名——用于错误信息前缀 `[<command>]`。 */
+  command: string;
+  /** lookupConstructor 的目标 kind（被委托的 constructor method 名）。 */
+  constructorKind: string;
+  /**
+   * 被委托对象的人类可读名（错误信息里 `<objectLabel> constructor 未注册`）。
+   * 例：plan→"plan_window"、todo→"todo_object"、search→"search_window"。
+   */
+  objectLabel: string;
+  /**
+   * 若设置，则在 ctx 缺 form 时注入一个最小 form shim `{ command: formCommand }`，
+   * 让 constructor 的 command 分发分支拿到正确名字（生产链路里 manager.submit 会
+   * 传完整 form；只有直调路径需要这个 shim）。
+   *
+   * 多个 root command 共用同一 constructor 时（grep/glob→search，
+   * open_file/write_file→file）必须用它消歧；一对一的 constructor 不需要。
+   */
+  formCommand?: string;
+}
+
+/**
+ * 构造一个 root 命令的 thin delegator exec。
+ *
+ * 行为：从 `ctx.manager?.registry ?? builtinRegistry` 取 `constructorKind` 对应的
+ * constructor，未注册返回 fail-loud 错误串；否则（按需注入 form shim 后）转发
+ * 到 `ctor.exec`。
+ */
+export function makeRootDelegator(
+  spec: RootDelegatorSpec,
+): (ctx: MethodExecutionContext) => Promise<MethodOutcome | string | undefined> {
+  return async (ctx) => {
+    const ctor = (ctx.manager?.registry ?? builtinRegistry).lookupConstructor(spec.constructorKind);
+    if (!ctor) {
+      return `[${spec.command}] ${spec.objectLabel} constructor 未注册（registry 期望 kind="constructor" 的 ${spec.constructorKind} method）。`;
+    }
+    const target =
+      spec.formCommand && !ctx.form
+        ? ({ ...ctx, form: { command: spec.formCommand } } as MethodExecutionContext)
+        : ctx;
+    return await ctor.exec(target);
+  };
+}

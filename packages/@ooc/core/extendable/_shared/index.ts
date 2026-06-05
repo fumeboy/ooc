@@ -6,7 +6,7 @@
  */
 
 export * from "./types";
-export * from "./command-types";
+export * from "./method-types";
 export * from "./registry";
 export * from "./manager";
 export * from "./init";

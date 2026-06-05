@@ -18,7 +18,7 @@
 import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { objectDir, toJson, type FlowObjectRef } from "./common";
-import { enqueueSessionWrite } from "./serial-queue";
+import { enqueueSessionWrite } from "../runtime/serial-queue.js";
 import type { ContextObject } from "../executable/windows/_shared/types.js";
 
 /** runtime object 状态文件路径 = `{objectDir(ref)}/state.json`。 */

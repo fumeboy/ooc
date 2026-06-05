@@ -18,7 +18,7 @@ import {
   readPrIssueIndex,
   type PrIssueRecord,
 } from "@ooc/core/persistable";
-import { loadObjectWindow } from "@ooc/core/executable/server/loader";
+import { loadObjectWindow } from "@ooc/core/runtime/server-loader";
 
 const RECOVERY_PREFIX = "[recovery-needed]";
 

@@ -11,7 +11,7 @@
 # 推荐挂到 pre-push hook 或 CI 入口。
 #
 # 例外：以下文件中允许出现 "llm_methods" / 旧符号字面量：
-#   - packages/@ooc/core/executable/server/loader.ts        — D6 hard-cutover 抛错时引用
+#   - packages/@ooc/core/runtime/server-loader.ts          — D6 hard-cutover 抛错时引用
 #   - packages/@ooc/core/executable/server/window-types.ts  — 历史变更说明注释
 #   - packages/@ooc/core/executable/__tests__/server-loader.test.ts — 测试 D6 抛错路径
 #
@@ -40,7 +40,7 @@ declare -a FORBIDDEN_PATTERNS=(
 
 # 允许列表（D6 硬切的合法引用点 + 概念文档）
 ALLOW_LIST=(
-  "packages/@ooc/core/executable/server/loader.ts"
+  "packages/@ooc/core/runtime/server-loader.ts"
   "packages/@ooc/core/executable/server/window-types.ts"
   "packages/@ooc/core/executable/server/types.ts"
   "packages/@ooc/core/executable/__tests__/server-loader.test.ts"

@@ -242,9 +242,7 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
 
     case "intent": {
       // P5e: Check intentCache for any form whose intents match the pattern.
-      const cache = (thread as any).intentCache as
-        | Map<string, { intents?: Array<{ name: string }> }>
-        | undefined;
+      const cache = thread.intentCache;
       if (!cache) return false;
       for (const entry of cache.values()) {
         if (!entry.intents) continue;

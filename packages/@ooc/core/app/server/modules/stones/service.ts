@@ -10,7 +10,7 @@ import {
   writeReadable,
   writeSelf,
 } from "@ooc/core/persistable";
-import { loadUiServerMethods } from "@ooc/core/executable/server/loader";
+import { loadUiServerMethods } from "@ooc/core/runtime/server-loader";
 import type { StoneRegistry } from "@ooc/core/runtime/stone-registry";
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";

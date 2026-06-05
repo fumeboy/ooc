@@ -1,10 +1,12 @@
-import type { MethodExecutionContext, ObjectMethod } from "@ooc/core/extendable/_shared/command-types.js";
+import type { MethodExecutionContext, ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import type { ContextWindow, DoWindow, TalkWindow } from "@ooc/core/extendable/_shared/types.js";
 import { continueCommand } from "@ooc/core/executable/windows/do/command.continue.js";
 import { sayCommand } from "@ooc/core/executable/windows/talk/command.say.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
+import { emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
 
 /** end command 暴露给 LLM 的知识说明。 */
 const KNOWLEDGE = `
@@ -33,31 +35,6 @@ open(type="command", command="end", args={ reason: "done", result: "分析完成
 
 const END_BASIC_PATH = "internal/executable/end/basic";
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
-  const out: ContextWindow[] = [];
-  for (const [path, text] of Object.entries(entries)) {
-    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
-    out.push({
-      id: "guidance_" + form.id + "_" + safe,
-      type: "guidance",
-      parentWindowId: form.id,
-      boundFormId: form.id,
-      title: path,
-      status: "open",
-      createdAt: 0,
-      relevance: { score: 0.8, signalCount: 1 },
-      provenance: {
-        kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
-        createdAt: 0,
-        lastTouchedAt: 0,
-      },
-      content: text,
-      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
-    } as ContextWindow);
-  }
-  return out;
-}
 
 /** end command 的可匹配路径集合。 */
 export enum EndCommandPath {
@@ -75,13 +52,13 @@ export const endCommand: ObjectMethod = {
       result: { type: "string", required: false, description: "便捷糖：end 之前模拟在 creator window 上调一次 continue/say 回报父线程" },
     },
   } as MethodCallSchema,
-  intent: (): Intent[] => [],
+  intent: emptyIntent,
   onFormChange(change, { form, intents }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
     const entries: Record<string, string> = {
       [END_BASIC_PATH]: KNOWLEDGE.trim(),
     };
-    return guidanceWindows(form, entries);
+    return buildGuidanceWindows(form, entries);
   },
   exec: (ctx) => executeEndCommand(ctx),
 };

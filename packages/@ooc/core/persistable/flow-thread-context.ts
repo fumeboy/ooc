@@ -24,7 +24,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { threadDir, toJson, type ThreadPersistenceRef } from "./common.js";
-import { enqueueSessionWrite } from "./serial-queue.js";
+import { enqueueSessionWrite } from "../runtime/serial-queue.js";
 import type { ContextWindow } from "../executable/windows/_shared/types.js";
 
 /**

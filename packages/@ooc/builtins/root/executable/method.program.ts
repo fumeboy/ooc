@@ -6,15 +6,12 @@
  * 这里保留 root method 表项（knowledge / paths）；exec 走 lookupConstructor("program") 委托。
  */
 
-import type {
-  MethodExecutionContext,
-  ObjectMethod,
-  MethodOutcome,
-} from "@ooc/core/extendable/_shared/command-types.js";
-import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
+import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
+import { makeRootDelegator } from "@ooc/builtins/_shared/executable/delegator.js";
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
 
 // 2026-06-02 P6.§4-§5: side-effect import 触发 program_window constructor 注册
 import "@ooc/builtins/program";
@@ -65,31 +62,6 @@ export enum ProgramCommandPath {
   JavaScript = "program.javascript",
 }
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
-  const out: ContextWindow[] = [];
-  for (const [path, text] of Object.entries(entries)) {
-    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
-    out.push({
-      id: "guidance_" + form.id + "_" + safe,
-      type: "guidance",
-      parentWindowId: form.id,
-      boundFormId: form.id,
-      title: path,
-      status: "open",
-      createdAt: 0,
-      relevance: { score: 0.8, signalCount: 1 },
-      provenance: {
-        kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
-        createdAt: 0,
-        lastTouchedAt: 0,
-      },
-      content: text,
-      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
-    } as ContextWindow);
-  }
-  return out;
-}
 
 export const programCommand: ObjectMethod = {
   paths: [
@@ -123,20 +95,20 @@ export const programCommand: ObjectMethod = {
 
     if (formStatus === "executing") {
       entries[PROGRAM_FORM_STATUS_PATH] = "对于 command program 的 executing 状态的 form，应等待 result 写入后再继续，不要再次 refine 或 submit。";
-      return guidanceWindows(form, entries);
+      return buildGuidanceWindows(form, entries);
     }
     if (formStatus === "success") {
       entries[PROGRAM_FORM_STATUS_PATH] = "对于 command program 的 success 状态的 form，结果已成功生成；form 将自动从 context 移除。";
-      return guidanceWindows(form, entries);
+      return buildGuidanceWindows(form, entries);
     }
     if (formStatus === "failed") {
       entries[PROGRAM_FORM_STATUS_PATH] = "对于 command program 的 failed 状态的 form，先阅读 result 排查错误：可 refine(form_id, args={ language, code }) 修正参数后重 submit（form 会自动切回 open），或 close(form_id, reason=...) 彻底放弃。";
-      return guidanceWindows(form, entries);
+      return buildGuidanceWindows(form, entries);
     }
 
     if (lang && code) {
       entries[PROGRAM_INPUT_PATH] = "program 参数已具备；submit 即创建 program_window 并执行。";
-      return guidanceWindows(form, entries);
+      return buildGuidanceWindows(form, entries);
     }
 
     const missing: string[] = [];
@@ -146,7 +118,7 @@ export const programCommand: ObjectMethod = {
       `program 还缺以下参数: ${missing.join(", ")}。\n` +
       "请用 refine(form_id, args={ language: \"shell\" | \"ts\" | \"js\", code: \"<待执行代码>\" }) 补齐后 submit(form_id)。\n" +
       "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
-    return guidanceWindows(form, entries);
+    return buildGuidanceWindows(form, entries);
   },
   exec: (ctx) => executeProgramCommand(ctx),
 };
@@ -154,10 +126,8 @@ export const programCommand: ObjectMethod = {
 /**
  * P6.§4-§5 thin delegator —— 委托到 program_window constructor。
  */
-export async function executeProgramCommand(
-  ctx: MethodExecutionContext,
-): Promise<MethodOutcome | string | undefined> {
-  const ctor = (ctx.manager?.registry ?? builtinRegistry).lookupConstructor("program");
-  if (!ctor) return "[program] program_window constructor 未注册（registry 期望 kind=\"constructor\" 的 program method）。";
-  return await ctor.exec(ctx);
-}
+export const executeProgramCommand = makeRootDelegator({
+  command: "program",
+  constructorKind: "program",
+  objectLabel: "program_window",
+});

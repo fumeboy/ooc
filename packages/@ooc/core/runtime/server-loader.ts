@@ -150,8 +150,32 @@ export class ServerLoader {
   }
 }
 
+/** module-level 默认实例——所有 module-level wrapper 函数委托给它。 */
 export const defaultServerLoader = new ServerLoader();
 
+/** 创建一个全新的独立 loader 实例（给 WorldRuntime 用）。 */
 export function createServerLoader(): ServerLoader {
   return new ServerLoader();
+}
+
+/** 动态加载 stone 的 `export const window`，按 mtime 缓存（委托默认实例）。 */
+export async function loadObjectWindow(
+  stoneRef: StoneObjectRef,
+): Promise<ObjectWindowDefinition | undefined> {
+  return defaultServerLoader.loadObjectWindow(stoneRef);
+}
+
+/** 动态加载 stone 的 server/index.ts 中 ui_methods（委托默认实例）。 */
+export async function loadUiServerMethods(stoneRef: StoneObjectRef): Promise<UiMethods> {
+  return defaultServerLoader.loadUiServerMethods(stoneRef);
+}
+
+/** 动态加载 stone 的 readable.ts 导出的渲染函数（委托默认实例）。 */
+export async function loadObjectReadable(stoneRef: StoneObjectRef): Promise<ReadableFn | undefined> {
+  return defaultServerLoader.loadObjectReadable(stoneRef);
+}
+
+/** 测试钩子：清空默认实例的 loader 缓存。 */
+export function clearServerLoaderCache(): void {
+  defaultServerLoader.clearCache();
 }

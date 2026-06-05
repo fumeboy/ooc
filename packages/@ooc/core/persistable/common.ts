@@ -2,66 +2,37 @@ import { join } from "node:path";
 import { readdir } from "node:fs/promises";
 
 /**
- * 标识磁盘上的单个 flow object 目录。
+ * flow/stone 引用类型 + 纯路径函数的 canonical 源已于 batch C5 迁入
+ * `@ooc/core/_shared/types/thread.ts`（零依赖层，打破 thinkable ↔ persistable 类型耦合）。
+ * 此处 re-export 保持旧 import 路径 (`persistable/common`) 可用。
  *
- * 路径形态（2026-06-01 bun workspace 迁移，移除 objects/ 中间层）：
- *   objectId="a"       → `{baseDir}/flows/{sessionId}/a`
- *   objectId="a/b"     → `{baseDir}/flows/{sessionId}/a/children/b`
- *   objectId="a/b/c"   → `{baseDir}/flows/{sessionId}/a/children/b/children/c`
+ * **留在本文件**的是带 IO / 路径路由的实现：objectDir / threadDir / stoneDir /
+ * _deprecatedPackageDir / resolveStoneDir（依赖 node:path / node:fs，不可下沉 `_shared`）
+ * 以及它们专用的 STONE_OBJECTS_SUBDIR 常量。
  */
-export interface FlowObjectRef {
-  /** 包含 `flows/` 和 `stones/` 的 workspace 根目录。 */
-  baseDir: string;
-  /** `flows/` 下的 session 目录名。 */
-  sessionId: string;
-  /** `flows/{sessionId}/` 下的 object 目录名。逻辑 id；嵌套 segment 由 children/ 物理隔开。 */
-  objectId: string;
-}
+export type {
+  FlowObjectRef,
+  ThreadPersistenceRef,
+  StoneObjectRef,
+} from "../_shared/types/thread.js";
+export {
+  STONE_CHILDREN_SUBDIR,
+  BUILTIN_OBJECT_IDS,
+  nestedObjectPath,
+  isBuiltinObjectId,
+  toJson,
+  deriveStoneFromThread,
+} from "../_shared/types/thread.js";
+
+import type { FlowObjectRef, ThreadPersistenceRef, StoneObjectRef } from "../_shared/types/thread.js";
+import { BUILTIN_OBJECT_IDS, nestedObjectPath } from "../_shared/types/thread.js";
 
 /**
- * 标识 flow object 内的单个线程持久化位置。
- *
- * 路径形态：`{objectDir(ref)}/threads/{threadId}`
- */
-export interface ThreadPersistenceRef extends FlowObjectRef {
-  /** `threads/` 下的线程目录名。 */
-  threadId: string;
-}
-
-/**
- * stone / flow 目录用来分隔嵌套子 Agent 的 marker 子目录名（B-tree 协议，2026-05-26
- * 起 stone；2026-05-27 起 flow 对齐）。
- *
- * 物理布局示例（stone 与 flow 形态对齐）：
- *   objectId = "parent/child"
- *   → stones/parent/children/child
- *   → flows/<sid>/parent/children/child
- *
- * 详见 meta/object.doc.ts:thinkable.children.knowledge.patches.domain_axis。
- */
-export const STONE_CHILDREN_SUBDIR = "children";
-
-/**
- * @deprecated Removed in bun workspace migration (2026-06-01).
- * Previously "objects" intermediate dir between stones/<branch>/ and objectId path.
- * No longer needed — objects resolve directly under packages/.
+ * Intermediate `objects/` dir in the versioning-worktree layout
+ * `stones/<branch>/objects/<id>`. The flat canonical layout (`stones/<id>`)
+ * omits it, but git metaprog worktrees and the main-branch mirror still use it.
  */
 export const STONE_OBJECTS_SUBDIR = "objects";
-
-/**
- * 把 "/" 分隔的 objectId 翻译成 children/ 嵌套的物理 path segments。
- *
- * 例：
- *   "a"       → ["a"]
- *   "a/b"     → ["a", "children", "b"]
- *   "a/b/c"   → ["a", "children", "b", "children", "c"]
- *
- * 与 stoneDir / objectDir 共用，避免双份逻辑。
- */
-export function nestedObjectPath(objectId: string, childrenSubdir: string = STONE_CHILDREN_SUBDIR): string[] {
-  const segments = objectId.split("/").filter(Boolean);
-  return segments.flatMap((seg, i) => (i === 0 ? [seg] : [childrenSubdir, seg]));
-}
 
 /**
  * 计算 flow object 目录绝对路径。objectId 中的 "/" 被翻译为 children/ 嵌套
@@ -81,47 +52,6 @@ export function threadDir(ref: ThreadPersistenceRef): string {
   return join(objectDir(ref), "threads", ref.threadId);
 }
 
-/** 序列化 JSON 的统一格式：两空格缩进 + 末尾换行。 */
-export function toJson(value: unknown): string {
-  return `${JSON.stringify(value, null, 2)}\n`;
-}
-
-/**
- * 标识磁盘上的单个 object stone 包。
- *
- * M2 (2026-06-03): canonical 路径是 `{baseDir}/stones/{objectId}（扁平布局）。
- * 嵌套 objectId（含 "/"）用 children/ marker 分隔。
- *
- * 兼容 fallback：若 stones/<id>/ 不存在时回落 packages/<id>/，并 console.warn。
- * 这种双路径过渡期至少一个 release。
- *
- * 特殊路由规则：
- * - `_stonesBranch` set → versioning worktree: stones/{_stonesBranch}/objects/{objectId}/（metaprog 版本化专用）
- * - _builtin/<type> → builtin 包（源码仓 packages/@ooc/builtins/<type>或 world-level builtins/<type>
- * - supervisor / user → 同上
- */
-export interface StoneObjectRef {
-  /** 包含 `stones/` 的 workspace 根目录。 */
-  baseDir: string;
-  /** `stones/` 下的 object 目录名。 */
-  objectId: string;
-  /**
-   * Internal: when set, stoneDir() routes to a git versioning worktree path
-   * `stones/{_stonesBranch}/objects/{objectId}/.
-   * Used by the metaprog versioning system.
-   */
-  _stonesBranch?: string;
-}
-
-/** Builtin object IDs that route to packages/@ooc/builtins/<id> instead of stones/<id>. */
-export const BUILTIN_OBJECT_IDS = new Set(["supervisor", "user"]);
-
-/** 判断一个 objectId 是否指向 Builtin Object（运行时自带、Agent 不可改写）。 */
-export function isBuiltinObjectId(objectId: string): boolean {
-  if (objectId.startsWith("_builtin/")) return true;
-  return BUILTIN_OBJECT_IDS.has(objectId);
-}
-
 /**
  * 计算 object stone 目录绝对路径（canonical，M2 2026-06-03）。
  *
@@ -139,7 +69,7 @@ export function stoneDir(ref: StoneObjectRef): string {
       ref.baseDir,
       "stones",
       ref._stonesBranch,
-      "objects",
+      STONE_OBJECTS_SUBDIR,
       ...nestedObjectPath(ref.objectId),
     );
   }
@@ -211,7 +141,7 @@ export async function resolveStoneDir(
       const stonesEntries = await readdir(join(ref.baseDir, "stones"), { withFileTypes: true });
       for (const e of stonesEntries) {
         if (!e.isDirectory() || e.name.startsWith(".") || e.name.startsWith("@")) continue;
-        const candidate = join(ref.baseDir, "stones", e.name, "objects", ...idSegments);
+        const candidate = join(ref.baseDir, "stones", e.name, STONE_OBJECTS_SUBDIR, ...idSegments);
         try {
           const s = await doStat(candidate);
           if (s.isDirectory()) return candidate;
@@ -243,14 +173,4 @@ export async function resolveStoneDir(
   }
 
   return canonical;
-}
-
-/**
- * 从 ThreadPersistenceRef 派生 StoneObjectRef，便于 program/server 模块复用。
- */
-export function deriveStoneFromThread(threadRef: ThreadPersistenceRef): StoneObjectRef {
-  return {
-    baseDir: threadRef.baseDir,
-    objectId: threadRef.objectId,
-  };
 }

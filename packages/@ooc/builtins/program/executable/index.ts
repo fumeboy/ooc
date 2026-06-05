@@ -12,10 +12,12 @@
 import type {
   MethodExecutionContext,
   ObjectMethod,
-} from "@ooc/core/extendable/_shared/command-types.js";
+} from "@ooc/core/extendable/_shared/method-types.js";
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
+import { emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
 import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
 import {
   ROOT_WINDOW_ID,
@@ -36,31 +38,6 @@ export {
 } from "./history-viewport.js";
 import { readable } from "../readable.js";
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
-  const out: ContextWindow[] = [];
-  for (const [path, text] of Object.entries(entries)) {
-    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
-    out.push({
-      id: "guidance_" + form.id + "_" + safe,
-      type: "guidance",
-      parentWindowId: form.id,
-      boundFormId: form.id,
-      title: path,
-      status: "open",
-      createdAt: 0,
-      relevance: { score: 0.8, signalCount: 1 },
-      provenance: {
-        kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
-        createdAt: 0,
-        lastTouchedAt: 0,
-      },
-      content: text,
-      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
-    } as ContextWindow);
-  }
-  return out;
-}
 
 const PROGRAM_WINDOW_EXEC_BASIC = "internal/windows/program/exec/basic";
 const PROGRAM_WINDOW_EXEC_INPUT = "internal/windows/program/exec/input";
@@ -142,25 +119,25 @@ const execCommand: ObjectMethod = {
     const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = { [PROGRAM_WINDOW_EXEC_BASIC]: EXEC_KNOWLEDGE };
-    if (formStatus !== "open") return guidanceWindows(form, entries);
+    if (formStatus !== "open") return buildGuidanceWindows(form, entries);
     const lang = (args.language ?? args.lang) as string | undefined;
     const code = typeof args.code === "string" ? args.code.trim() : "";
     if (!(lang && code)) {
       entries[PROGRAM_WINDOW_EXEC_INPUT] =
         "program_window.exec 缺少执行参数；refine(args={ language, code })。";
     }
-    return guidanceWindows(form, entries);
+    return buildGuidanceWindows(form, entries);
   },
   exec: (ctx) => executeProgramWindowExec(ctx),
 };
 
 const closeCommand: ObjectMethod = {
   paths: ["close"],
-  intent: () => [],
+  intent: emptyIntent,
   onFormChange(change, { form }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
     const entries: Record<string, string> = { [PROGRAM_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE };
-    return guidanceWindows(form, entries);
+    return buildGuidanceWindows(form, entries);
   },
   exec: () => undefined,
 };
@@ -174,7 +151,7 @@ const setHistoryWindowCommand: ObjectMethod = {
       history_end: { type: "number", description: "End of range (non-negative integer; must pair with history_start)" },
     },
   },
-  intent: () => [],
+  intent: emptyIntent,
   onFormChange(change, { form }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
     const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
@@ -187,7 +164,7 @@ const setHistoryWindowCommand: ObjectMethod = {
         "set_history_window 至少需要传入 history_tail / history_start+history_end 之一。\n" +
         "history_tail 与 history_start/history_end 互斥，请 refine 后 submit。";
     }
-    return guidanceWindows(form, entries);
+    return buildGuidanceWindows(form, entries);
   },
   exec: (ctx) => executeProgramSetHistoryViewport(ctx),
 };
@@ -320,22 +297,22 @@ const programConstructor: ObjectMethod = {
     if (formStatus === "executing") {
       entries[PROGRAM_CONSTRUCTOR_FORM_STATUS] =
         "对于 command program 的 executing 状态的 form，应等待 result 写入后再继续，不要再次 refine 或 submit。";
-      return guidanceWindows(form, entries);
+      return buildGuidanceWindows(form, entries);
     }
     if (formStatus === "success") {
       entries[PROGRAM_CONSTRUCTOR_FORM_STATUS] =
         "对于 command program 的 success 状态的 form，结果已成功生成；form 将自动从 context 移除。";
-      return guidanceWindows(form, entries);
+      return buildGuidanceWindows(form, entries);
     }
     if (formStatus === "failed") {
       entries[PROGRAM_CONSTRUCTOR_FORM_STATUS] =
         "对于 command program 的 failed 状态的 form，先阅读 result 排查错误：可 refine(form_id, args={ language, code }) 修正参数后重 submit（form 会自动切回 open），或 close(form_id, reason=...) 彻底放弃。";
-      return guidanceWindows(form, entries);
+      return buildGuidanceWindows(form, entries);
     }
     if (lang && code) {
       entries[PROGRAM_CONSTRUCTOR_INPUT] =
         "program 参数已具备；submit 即创建 program_window 并执行。";
-      return guidanceWindows(form, entries);
+      return buildGuidanceWindows(form, entries);
     }
     const missing: string[] = [];
     if (!lang) missing.push("language");
@@ -344,7 +321,7 @@ const programConstructor: ObjectMethod = {
       `program 还缺以下参数: ${missing.join(", ")}。\n` +
       "请用 refine(form_id, args={ language: \"shell\" | \"ts\" | \"js\", code: \"<待执行代码>\" }) 补齐后 submit(form_id)。\n" +
       "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
-    return guidanceWindows(form, entries);
+    return buildGuidanceWindows(form, entries);
   },
   exec: async (ctx) => {
     const thread = ctx.thread;

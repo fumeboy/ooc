@@ -12,23 +12,23 @@
  */
 
 import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
-import { doCommand } from "./command.do.js";
-import { endCommand } from "./command.end.js";
-import { globCommand } from "./command.glob.js";
-import { grepCommand } from "./command.grep.js";
+import { doCommand } from "./method.do.js";
+import { endCommand } from "./method.end.js";
+import { globCommand } from "./method.glob.js";
+import { grepCommand } from "./method.grep.js";
 import {
   openFeishuChatCommand,
   openFeishuDocCommand,
 } from "@ooc/core/extendable/lark/index.js";
-import { openFileCommand } from "./command.open-file.js";
-import { openKnowledgeCommand } from "./command.open-knowledge.js";
-import { planCommand } from "./command.plan.js";
-import { programCommand } from "./command.program.js";
-import { talkCommand } from "./command.talk.js";
-import { todoCommand } from "./command.todo.js";
-import { writeFileCommand } from "./command.write-file.js";
-import { metaprogCommand } from "./command.metaprog.js";
-import type { ObjectMethod } from "@ooc/core/extendable/_shared/command-types.js";
+import { openFileCommand } from "./method.open-file.js";
+import { openKnowledgeCommand } from "./method.open-knowledge.js";
+import { planCommand } from "./method.plan.js";
+import { programCommand } from "./method.program.js";
+import { talkCommand } from "./method.talk.js";
+import { todoCommand } from "./method.todo.js";
+import { writeFileCommand } from "./method.write-file.js";
+import { metaprogCommand } from "./method.metaprog.js";
+import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import type { Intent } from "@ooc/core/thinkable/context/intent.js";
 
 // 2026-06-02 P6.§4-§5: root commands 现在是 thin delegator，需要对应 builtin object module
@@ -121,7 +121,7 @@ export function getOpenableMethods(): string[] {
  */
 export async function execRootMethod(
   name: string,
-  ctx: import("@ooc/core/extendable/_shared/command-types.js").MethodExecutionContext,
+  ctx: import("@ooc/core/extendable/_shared/method-types.js").MethodExecutionContext,
 ): Promise<string | undefined> {
   const entry = ROOT_METHODS[name];
   if (!entry) throw new Error(`execRootMethod: unknown root method "${name}"`);

@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests } from "@ooc/core/persistable";
 import { executeWriteFileCommand } from "@ooc/builtins/root/executable/command.write-file";
-import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/command-types";
+import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
 
 let tempRoots: string[] = [];
 

@@ -19,7 +19,7 @@
 import type {
   MethodExecutionContext,
   ObjectMethod,
-} from "@ooc/core/extendable/_shared/command-types.js";
+} from "@ooc/core/extendable/_shared/method-types.js";
 import {
   commitWorktree,
   openMetaprogWorktree,
@@ -35,6 +35,8 @@ import {
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
+import { emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
 
 const METAPROG_BASIC_PATH = "internal/executable/metaprog/basic";
 const METAPROG_INPUT_PATH = "internal/executable/metaprog/input";
@@ -90,31 +92,6 @@ server / knowledge）通过这个命令族协调，错了能回退、合并需�
 
 type MetaprogAction = "open_worktree" | "commit" | "merge" | "resolve" | "rollback" | "create_object";
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
-  const out: ContextWindow[] = [];
-  for (const [path, text] of Object.entries(entries)) {
-    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
-    out.push({
-      id: "guidance_" + form.id + "_" + safe,
-      type: "guidance",
-      parentWindowId: form.id,
-      boundFormId: form.id,
-      title: path,
-      status: "open",
-      createdAt: 0,
-      relevance: { score: 0.8, signalCount: 1 },
-      provenance: {
-        kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
-        createdAt: 0,
-        lastTouchedAt: 0,
-      },
-      content: text,
-      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
-    } as ContextWindow);
-  }
-  return out;
-}
 
 function asString(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
@@ -160,13 +137,13 @@ export const metaprogCommand: ObjectMethod = {
   // Q0d: metaprog 是元编程入口 (open_worktree / commit / merge / resolve / rollback / create_object),
   // 全部触发 stones git 副作用 (修改 stones/<self>/ 下的 self.md / server / knowledge);
   // 等价 design §3 中的 "super flow 改 self.md / readme.md" + "delete_* 任何删除类"。
-  intent: (): Intent[] => [],
+  intent: emptyIntent,
   onFormChange(change, { form, intents }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
     const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = { [METAPROG_BASIC_PATH]: KNOWLEDGE };
-    if (formStatus !== "open") return guidanceWindows(form, entries);
+    if (formStatus !== "open") return buildGuidanceWindows(form, entries);
     const action = asString(args.action) as MetaprogAction | undefined;
     if (!action) {
       entries[METAPROG_INPUT_PATH] =
@@ -174,7 +151,7 @@ export const metaprogCommand: ObjectMethod = {
         "请用 refine(form_id, args={ action: 'open_worktree' | 'commit' | 'merge' | 'resolve' | 'rollback' | 'create_object', ... }) 补齐后 submit(form_id)。\n" +
         "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
-    return guidanceWindows(form, entries);
+    return buildGuidanceWindows(form, entries);
   },
   exec: (ctx) => executeMetaprog(ctx),
 };

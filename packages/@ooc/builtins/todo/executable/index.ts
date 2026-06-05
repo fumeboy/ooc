@@ -12,7 +12,7 @@
 import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
 import type {
   ObjectMethod,
-} from "@ooc/core/extendable/_shared/command-types.js";
+} from "@ooc/core/extendable/_shared/method-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -23,32 +23,8 @@ import { readable } from "../readable.js";
 
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
-  const out: ContextWindow[] = [];
-  for (const [path, text] of Object.entries(entries)) {
-    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
-    out.push({
-      id: "guidance_" + form.id + "_" + safe,
-      type: "guidance",
-      parentWindowId: form.id,
-      boundFormId: form.id,
-      title: path,
-      status: "open",
-      createdAt: 0,
-      relevance: { score: 0.8, signalCount: 1 },
-      provenance: {
-        kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
-        createdAt: 0,
-        lastTouchedAt: 0,
-      },
-      content: text,
-      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
-    } as unknown as ContextWindow);
-  }
-  return out;
-}
 
 const TODO_CONSTRUCTOR_BASIC = "internal/objects/todo/constructor/basic";
 const TODO_CONSTRUCTOR_INPUT = "internal/objects/todo/constructor/input";
@@ -105,14 +81,14 @@ const todoConstructor: ObjectMethod = {
     const entries: Record<string, string> = {
       [TODO_CONSTRUCTOR_BASIC]: TODO_CONSTRUCTOR_KNOWLEDGE,
     };
-    if (formStatus !== "open") return guidanceWindows(form, entries);
+    if (formStatus !== "open") return buildGuidanceWindows(form, entries);
     if (typeof args.content !== "string" || args.content.trim().length === 0) {
       entries[TODO_CONSTRUCTOR_INPUT] =
         "todo 还缺以下参数: content。\n" +
         "请用 refine(form_id, args={ content: \"<待办内容>\", on_command_path?: [\"<cmd>\"] }) 补齐后 submit(form_id)。\n" +
         "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
-    return guidanceWindows(form, entries);
+    return buildGuidanceWindows(form, entries);
   },
   permission: () => "allow",
   exec: async (ctx) => {

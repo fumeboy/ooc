@@ -11,40 +11,17 @@
 
 import type {
   ObjectMethod,
-} from "@ooc/core/extendable/_shared/command-types.js";
+} from "@ooc/core/extendable/_shared/method-types.js";
 import type { Intent } from "@ooc/core/thinkable/context/intent.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
+import { emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
 import {
   executeSearchSetResultsViewport,
   hasAnyResultsViewportField,
 } from "./results-viewport.js";
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
-  const out: ContextWindow[] = [];
-  for (const [path, text] of Object.entries(entries)) {
-    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
-    out.push({
-      id: "guidance_" + form.id + "_" + safe,
-      type: "guidance",
-      parentWindowId: form.id,
-      boundFormId: form.id,
-      title: path,
-      status: "open",
-      createdAt: 0,
-      relevance: { score: 0.8, signalCount: 1 },
-      provenance: {
-        kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
-        createdAt: 0,
-        lastTouchedAt: 0,
-      },
-      content: text,
-      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
-    } as ContextWindow);
-  }
-  return out;
-}
 
 const SEARCH_SET_RESULTS_BASIC =
   "internal/windows/search/set_results_window/basic";
@@ -87,7 +64,7 @@ export const setResultsWindowCommandForSearch: ObjectMethod = {
       matches_end: { type: "number", description: "End of range (non-negative integer; must pair with matches_start)" },
     },
   },
-  intent: () => [],
+  intent: emptyIntent,
   onFormChange(change, { form }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
     const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
@@ -100,7 +77,7 @@ export const setResultsWindowCommandForSearch: ObjectMethod = {
         "set_results_window 至少需要传入 matches_tail / matches_start+matches_end 之一。\n" +
         "matches_tail 与 matches_start/matches_end 互斥，请 refine 后 submit。";
     }
-    return guidanceWindows(form, entries);
+    return buildGuidanceWindows(form, entries);
   },
   exec: (ctx) => executeSearchSetResultsViewport(ctx),
 };

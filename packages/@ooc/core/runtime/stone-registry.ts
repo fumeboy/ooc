@@ -11,7 +11,7 @@
  */
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { BUILTIN_OBJECT_IDS, STONE_CHILDREN_SUBDIR } from "../persistable/common.js";
+import { BUILTIN_OBJECT_IDS, STONE_CHILDREN_SUBDIR, STONE_OBJECTS_SUBDIR } from "../persistable/common.js";
 
 export type StoneKind = "stone" | "builtin";
 
@@ -174,7 +174,7 @@ export function createStoneRegistry(
       for (const e of stonesEntries) {
         if (!e.isDirectory() || e.name.startsWith(".")) continue;
         if (e.name.startsWith("@")) continue;
-        const objectsDir = join(worldPath, "stones", e.name, "objects");
+        const objectsDir = join(worldPath, "stones", e.name, STONE_OBJECTS_SUBDIR);
         try {
           await scanTree(objectsDir, "stone", stones, /*allowOverwrite=*/ false);
         } catch {

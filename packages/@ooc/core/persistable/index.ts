@@ -153,7 +153,7 @@ export {
   type CreateRecoveryIssueInput,
 } from "./pr-issue";
 
-export { enqueueSessionWrite, __resetSerialQueueForTests } from "./serial-queue";
+export { enqueueSessionWrite, __resetSerialQueueForTests } from "../runtime/serial-queue.js";
 export {
   ensureStoneRepo,
   STONES_MAIN_BRANCH,

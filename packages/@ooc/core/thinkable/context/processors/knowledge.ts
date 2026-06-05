@@ -12,11 +12,10 @@
 import type { PipelinePhase, PipelineContext } from "../pipeline.js";
 import type { ThreadContext } from "../index.js";
 import type { ContextWindow } from "../../../executable/windows/_shared/types.js";
-import type { Intent, IntentCacheEntry } from "../intent.js";
-import { evaluateTrigger, parseTrigger, matchesIntentName } from "../../knowledge/triggers.js";
+import type { Intent, IntentCache, IntentCacheEntry } from "../intent.js";
+import { parseTrigger, matchesIntentName } from "../../knowledge/triggers.js";
 import type { KnowledgeIndex } from "../../knowledge/types.js";
-import { computeActivations } from "../../knowledge/activator.js";
-import { loadKnowledgeIndex, clearKnowledgeLoaderCache } from "../../knowledge/loader.js";
+import { loadKnowledgeIndex } from "../../knowledge/loader.js";
 import { deriveStoneFromThread, derivePoolFromThread } from "../../../persistable/index.js";
 
 /** Per-form processor cache — keyed by (formId, argsHash). */
@@ -33,7 +32,6 @@ function intentTriggerHits(
 ): ContextWindow[] {
   const results: ContextWindow[] = [];
   const now = Date.now();
-  const activeIntentNames = new Set(intents.map((i) => i.name));
 
   for (const doc of index.byPath.values()) {
     if (!doc.frontmatter.activates_on) continue;
@@ -77,8 +75,6 @@ function intentTriggerHits(
       break; // One activation per doc is enough
     }
   }
-  // suppress unused
-  void activeIntentNames;
   return results;
 }
 
@@ -86,7 +82,7 @@ export const KnowledgeProcessor: PipelinePhase = {
   name: "KnowledgeProcessor",
   async run(thread: ThreadContext, _ctx: PipelineContext): Promise<ContextWindow[]> {
     const out: ContextWindow[] = [];
-    const cache: Map<string, IntentCacheEntry> | undefined = (thread as any).intentCache;
+    const cache: IntentCache | undefined = thread.intentCache;
     if (!cache || cache.size === 0) return out;
 
     // Load knowledge index (uses internal caching in loader)
@@ -113,10 +109,6 @@ export const KnowledgeProcessor: PipelinePhase = {
       out.push(...derived);
     }
 
-    // suppress unused (existing computeActivations kept for future)
-    void computeActivations;
-    void clearKnowledgeLoaderCache;
-    void evaluateTrigger;
     return out;
   },
 };

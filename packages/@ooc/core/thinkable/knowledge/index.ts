@@ -23,10 +23,4 @@ export {
   derivePeerObjectWindows,
   ensureSelfObjectTypeRegistered,
   readSelfPrototype,
-  // @deprecated Phase F: use ContextPipeline instead
-  collectExecutableKnowledgeEntries,
-  // @deprecated Phase F: replaced by derivePeerObjectWindows; kept for test compat
-  deriveRelationWindow,
-  deriveRelationCompanionKnowledge,
-  deriveRelationKnowledge,
 } from "./synthesizer";

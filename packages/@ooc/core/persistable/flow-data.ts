@@ -12,7 +12,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { objectDir, toJson, type FlowObjectRef } from "./common";
-import { enqueueSessionWrite } from "./serial-queue";
+import { enqueueSessionWrite } from "../runtime/serial-queue.js";
 
 /** flow object 的数据文件 `data.json` 的绝对路径。 */
 export function flowDataFile(ref: FlowObjectRef): string {

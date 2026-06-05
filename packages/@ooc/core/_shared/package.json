@@ -1,0 +1,14 @@
+{
+  "name": "@ooc/core/_shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*",
+    "./*.ts": "./*.ts"
+  },
+  "ooc": {
+    "kind": "source-package",
+    "role": "shared-types"
+  }
+}

@@ -55,8 +55,8 @@ import {
   type GitResult,
 } from "./stone-git";
 import { closePrIssue, createPrIssue, readPrIssue, type PrIssueRecord } from "./pr-issue";
-import { enqueueSessionWrite } from "./serial-queue";
-import { nestedObjectPath, isBuiltinObjectId } from "./common";
+import { enqueueSessionWrite } from "../runtime/serial-queue.js";
+import { nestedObjectPath, isBuiltinObjectId, STONE_OBJECTS_SUBDIR } from "./common";
 
 /** Supervisor 的 objectId（治理身份：rollback 仅 supervisor 可调；PR-Issue 默认收件人）。 */
 export const SUPERVISOR_OBJECT_ID = "supervisor";
@@ -144,7 +144,7 @@ function selfScopePrefix(authorObjectId: string): string {
  * (stoneDir with _stonesBranch="main") go directly to packages/<nestedPath>/.
  */
 async function syncMergedObjectToPackages(baseDir: string, objectId: string): Promise<void> {
-  const source = join(baseDir, "stones", STONES_MAIN_BRANCH, "objects", ...nestedObjectPath(objectId));
+  const source = join(baseDir, "stones", STONES_MAIN_BRANCH, STONE_OBJECTS_SUBDIR, ...nestedObjectPath(objectId));
   const target = stoneDir({ baseDir, objectId });
   try {
     await stat(source);

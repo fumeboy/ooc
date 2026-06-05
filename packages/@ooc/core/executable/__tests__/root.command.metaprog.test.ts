@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests } from "@ooc/core/persistable";
 import { executeMetaprog } from "@ooc/builtins/root/executable/command.metaprog";
-import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/command-types";
+import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 let tempRoot: string | undefined;

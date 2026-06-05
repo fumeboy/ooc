@@ -10,20 +10,18 @@
  *   - ObjectDefinition 内部字段统一使用 methods / parentClass（不再兼容 commands / prototype）
  */
 import type {
-  ObjectMethod,
-} from "../executable/windows/_shared/command-types.js";
-import type {
   CompressViewHook,
   MethodVisibilityContext,
   ObjectDefinition,
-  ObjectType,
   OnCloseContext,
   OnCloseHook,
   ReadableFn,
   RenderContext,
   RenderHook,
-} from "../executable/windows/_shared/registry.js";
-import type { ContextWindow } from "../executable/windows/_shared/types.js";
+} from "../_shared/types/registry.js";
+import { filterMethodsByVisibility } from "../_shared/types/registry.js";
+import type { ObjectMethod } from "../_shared/types/method.js";
+import type { ContextWindow, ObjectType } from "../_shared/types/context-window.js";
 
 export type {
   ObjectDefinition,
@@ -38,6 +36,7 @@ export type {
   CompressViewHook,
   MethodVisibilityContext,
 };
+export { filterMethodsByVisibility };
 
 const RENDERABLE_VISIBLE_TYPES = new Set([
   "root", "method_exec", "command_exec", "do", "todo", "talk", "program",
@@ -264,26 +263,6 @@ export class ObjectRegistry {
   }
 }
 
-export function filterMethodsByVisibility(
-  methods: Record<string, ObjectMethod>,
-  ctx: MethodVisibilityContext,
-): Record<string, ObjectMethod> {
-  const filtered: Record<string, ObjectMethod> = {};
-  for (const [name, method] of Object.entries(methods)) {
-    switch (ctx.kind) {
-      case "self":
-        filtered[name] = method;
-        break;
-      case "peer":
-        if (method.public === true) filtered[name] = method;
-        break;
-      case "ui":
-        if (method.for_ui_access === true) filtered[name] = method;
-        break;
-    }
-  }
-  return filtered;
-}
 
 /**
  * Module-level singleton holding builtin object type definitions (root, file,

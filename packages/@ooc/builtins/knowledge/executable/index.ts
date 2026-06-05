@@ -19,7 +19,7 @@
 
 import type {
   ObjectMethod,
-} from "@ooc/core/extendable/_shared/command-types.js";
+} from "@ooc/core/extendable/_shared/method-types.js";
 import { builtinRegistry, type OnCloseContext } from "@ooc/core/extendable/_shared/registry.js";
 import {
   executeWindowSetViewport,
@@ -39,32 +39,9 @@ import { readable } from "../readable.js";
 
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
+import { basenameOfPath, emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
-  const out: ContextWindow[] = [];
-  for (const [path, text] of Object.entries(entries)) {
-    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
-    out.push({
-      id: "guidance_" + form.id + "_" + safe,
-      type: "guidance",
-      parentWindowId: form.id,
-      boundFormId: form.id,
-      title: path,
-      status: "open",
-      createdAt: 0,
-      relevance: { score: 0.8, signalCount: 1 },
-      provenance: {
-        kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
-        createdAt: 0,
-        lastTouchedAt: 0,
-      },
-      content: text,
-      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
-    } as unknown as ContextWindow);
-  }
-  return out;
-}
 
 const KNOWLEDGE_WINDOW_RELOAD_BASIC = "internal/windows/knowledge/reload/basic";
 const KNOWLEDGE_WINDOW_CLOSE_BASIC = "internal/windows/knowledge/close/basic";
@@ -103,20 +80,20 @@ protocol / activator / relation 来源的 knowledge_object 由系统按 descript
 
 const reloadCommand: ObjectMethod = {
   paths: ["reload"],
-  intent: () => [],
+  intent: emptyIntent,
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    return guidanceWindows(form, { [KNOWLEDGE_WINDOW_RELOAD_BASIC]: RELOAD_KNOWLEDGE });
+    return buildGuidanceWindows(form, { [KNOWLEDGE_WINDOW_RELOAD_BASIC]: RELOAD_KNOWLEDGE });
   },
   exec: () => undefined,
 };
 
 const closeCommand: ObjectMethod = {
   paths: ["close"],
-  intent: () => [],
+  intent: emptyIntent,
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    return guidanceWindows(form, { [KNOWLEDGE_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE });
+    return buildGuidanceWindows(form, { [KNOWLEDGE_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE });
   },
   exec: () => undefined,
 };
@@ -131,7 +108,7 @@ const setViewportCommand: ObjectMethod = {
       column_end: { type: "number", description: "结束字符列（不含）" },
     },
   },
-  intent: () => [],
+  intent: emptyIntent,
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
     const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
@@ -144,7 +121,7 @@ const setViewportCommand: ObjectMethod = {
         "set_viewport 至少需要传入 line_start / line_end / column_start / column_end 之一。\n" +
         "未传字段保留当前值。请 refine 补齐后 submit。";
     }
-    return guidanceWindows(form, entries);
+    return buildGuidanceWindows(form, entries);
   },
   exec: (ctx) => executeWindowSetViewport(ctx, "knowledge"),
 };
@@ -187,11 +164,6 @@ open_knowledge 用于显式打开一个 knowledge doc，作为 knowledge_window 
 open(command="open_knowledge", title="pin file-ops", args={ path: "build-tools/file-ops" })
 `.trim();
 
-function basenameOfPath(p: string): string {
-  const idx = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
-  return idx >= 0 ? p.slice(idx + 1) : p;
-}
-
 /**
  * P6.§4-§5 constructor —— 创建 explicit knowledge_window。
  *
@@ -211,7 +183,7 @@ const knowledgeConstructor: ObjectMethod = {
       path: { type: "string", required: true, description: "knowledge 索引中的路径（不带 .md）" },
     },
   },
-  intent: () => [],
+  intent: emptyIntent,
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
     const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
@@ -219,7 +191,7 @@ const knowledgeConstructor: ObjectMethod = {
     const entries: Record<string, string> = {
       [KNOWLEDGE_CONSTRUCTOR_BASIC]: KNOWLEDGE_CONSTRUCTOR_KNOWLEDGE,
     };
-    if (formStatus !== "open") return guidanceWindows(form, entries);
+    if (formStatus !== "open") return buildGuidanceWindows(form, entries);
     const path = typeof args.path === "string" ? args.path : "";
     if (!path) {
       entries[KNOWLEDGE_CONSTRUCTOR_INPUT] =
@@ -227,7 +199,7 @@ const knowledgeConstructor: ObjectMethod = {
         "请用 refine(form_id, args={ path: \"<knowledge-doc-path-不带.md>\" }) 补齐后 submit(form_id)。\n" +
         "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
-    return guidanceWindows(form, entries);
+    return buildGuidanceWindows(form, entries);
   },
   permission: () => "allow",
   exec: async (ctx) => {

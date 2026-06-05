@@ -35,7 +35,7 @@ import { builtinRegistry } from "../../../executable/windows/index.js";
 import { filterMessagesForDoWindow } from "../../../executable/windows/do/index.js";
 import { filterMessagesForTalkWindow } from "../../../executable/windows/talk/index.js";
 import type { ThreadContext, ThreadMessage } from "../index.js";
-import { loadObjectReadable, loadObjectWindow } from "../../../executable/server/loader.js";
+import { loadObjectReadable, loadObjectWindow } from "../../../runtime/server-loader.js";
 import { readReadable, type StoneObjectRef } from "../../../persistable/index.js";
 import {
   appendNode,
@@ -152,19 +152,11 @@ async function resolveReadableForType(
     }
   } catch { /* continue */ }
 
-  // Step 4: readable.md static content
+  // Step 4: readable.md static content (readReadable falls back to legacy readme.md internally)
   try {
     const readableText = await readReadable(stoneRef);
     if (readableText && readableText.trim().length > 0) {
       return [xmlElement("readable", {}, [xmlText(readableText)])];
-    }
-  } catch { /* continue */ }
-
-  // Step 5: readme.md fallback
-  try {
-    const readmeText = await readReadable(stoneRef);
-    if (readmeText && readmeText.trim().length > 0) {
-      return [xmlElement("readable", { source: "readme" }, [xmlText(readmeText)])];
     }
   } catch { /* continue */ }
 
@@ -390,9 +382,4 @@ export class XmlRenderer {
 
     return serializeXml(root);
   }
-}
-
-/** @deprecated Use the XmlRenderer class instead. Kept temporarily for test migrations. */
-export async function renderSnapshotToXml(snapshot: ContextSnapshot, thread: ThreadContext): Promise<string> {
-  return new XmlRenderer().render(snapshot, thread);
 }

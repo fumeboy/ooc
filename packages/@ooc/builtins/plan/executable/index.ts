@@ -15,7 +15,7 @@
 import type {
   MethodExecutionContext,
   ObjectMethod,
-} from "@ooc/core/extendable/_shared/command-types.js";
+} from "@ooc/core/extendable/_shared/method-types.js";
 import {
   builtinRegistry,
   type OnCloseContext,
@@ -36,32 +36,9 @@ import { readable } from "../readable.js";
 
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
+import { isString, emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
-  const out: ContextWindow[] = [];
-  for (const [path, text] of Object.entries(entries)) {
-    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
-    out.push({
-      id: "guidance_" + form.id + "_" + safe,
-      type: "guidance",
-      parentWindowId: form.id,
-      boundFormId: form.id,
-      title: path,
-      status: "open",
-      createdAt: 0,
-      relevance: { score: 0.8, signalCount: 1 },
-      provenance: {
-        kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
-        createdAt: 0,
-        lastTouchedAt: 0,
-      },
-      content: text,
-      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
-    } as unknown as ContextWindow);
-  }
-  return out;
-}
 
 // ─────────────────────────── knowledge paths ──────────────────────────────────
 
@@ -146,10 +123,6 @@ plan_window.close 关闭 plan_window；级联 close 所有 sub plan_window（onC
 
 // ─────────────────────────── helpers ──────────────────────────────────────────
 
-function isString(v: unknown): v is string {
-  return typeof v === "string";
-}
-
 function generateStepId(): string {
   return `step_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }
@@ -187,10 +160,10 @@ const updatePlanCommand: ObjectMethod = {
       description: { type: "string", description: "新 plan 说明" },
     },
   },
-  intent: () => [],
+  intent: emptyIntent,
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    return guidanceWindows(form, { [PLAN_WINDOW_UPDATE_PLAN_BASIC]: UPDATE_PLAN_KNOWLEDGE });
+    return buildGuidanceWindows(form, { [PLAN_WINDOW_UPDATE_PLAN_BASIC]: UPDATE_PLAN_KNOWLEDGE });
   },
   exec: (ctx) => executeUpdatePlan(ctx),
 };
@@ -223,10 +196,10 @@ const addStepCommand: ObjectMethod = {
       },
     },
   },
-  intent: () => [],
+  intent: emptyIntent,
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    return guidanceWindows(form, { [PLAN_WINDOW_ADD_STEP_BASIC]: ADD_STEP_KNOWLEDGE });
+    return buildGuidanceWindows(form, { [PLAN_WINDOW_ADD_STEP_BASIC]: ADD_STEP_KNOWLEDGE });
   },
   exec: (ctx) => executeAddStep(ctx),
 };
@@ -259,10 +232,10 @@ const updateStepCommand: ObjectMethod = {
       },
     },
   },
-  intent: () => [],
+  intent: emptyIntent,
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    return guidanceWindows(form, { [PLAN_WINDOW_UPDATE_STEP_BASIC]: UPDATE_STEP_KNOWLEDGE });
+    return buildGuidanceWindows(form, { [PLAN_WINDOW_UPDATE_STEP_BASIC]: UPDATE_STEP_KNOWLEDGE });
   },
   exec: (ctx) => executeUpdateStep(ctx),
 };
@@ -300,10 +273,10 @@ const expandStepCommand: ObjectMethod = {
       description: { type: "string", description: "sub plan 的描述" },
     },
   },
-  intent: () => [],
+  intent: emptyIntent,
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    return guidanceWindows(form, { [PLAN_WINDOW_EXPAND_STEP_BASIC]: EXPAND_STEP_KNOWLEDGE });
+    return buildGuidanceWindows(form, { [PLAN_WINDOW_EXPAND_STEP_BASIC]: EXPAND_STEP_KNOWLEDGE });
   },
   exec: (ctx) => executeExpandStep(ctx),
 };
@@ -358,10 +331,10 @@ const collapseSubplanCommand: ObjectMethod = {
       step_id: { type: "string", required: true, description: "目标 step id" },
     },
   },
-  intent: () => [],
+  intent: emptyIntent,
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    return guidanceWindows(form, {
+    return buildGuidanceWindows(form, {
       [PLAN_WINDOW_COLLAPSE_SUBPLAN_BASIC]: COLLAPSE_SUBPLAN_KNOWLEDGE,
     });
   },
@@ -408,10 +381,10 @@ async function executeCollapseSubplan(ctx: MethodExecutionContext): Promise<stri
 
 const markDoneCommand: ObjectMethod = {
   paths: ["mark_done"],
-  intent: () => [],
+  intent: emptyIntent,
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    return guidanceWindows(form, { [PLAN_WINDOW_MARK_DONE_BASIC]: MARK_DONE_KNOWLEDGE });
+    return buildGuidanceWindows(form, { [PLAN_WINDOW_MARK_DONE_BASIC]: MARK_DONE_KNOWLEDGE });
   },
   exec: (ctx) => executeMarkDone(ctx),
 };
@@ -425,10 +398,10 @@ async function executeMarkDone(ctx: MethodExecutionContext): Promise<string | un
 
 const closeCommand: ObjectMethod = {
   paths: ["close"],
-  intent: () => [],
+  intent: emptyIntent,
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    return guidanceWindows(form, { [PLAN_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE });
+    return buildGuidanceWindows(form, { [PLAN_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE });
   },
   exec: () => undefined, // cascade 关闭由 onClose hook + WindowManager.close 自带级联完成
 };
@@ -581,7 +554,7 @@ const planConstructor: ObjectMethod = {
       steps: { type: "array", description: "steps 数组 [{id?, text, status?}, ...]" },
     },
   },
-  intent: () => [],
+  intent: emptyIntent,
   onFormChange: (change, { form }) => {
     if (change.kind === "status_changed" && change.to !== "open") return [];
     const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
@@ -594,7 +567,7 @@ const planConstructor: ObjectMethod = {
         "plan 还缺以下参数: plan 文本 (或 title / description / steps 任一)。\n" +
         "请用 refine(form_id, args={ plan: \"<计划文本>\" }) 或 refine(form_id, args={ title: \"...\", description: \"...\", steps: [...] }) 补齐后 submit(form_id)。";
     }
-    return guidanceWindows(form, entries);
+    return buildGuidanceWindows(form, entries);
   },
   permission: () => "allow",
   exec: async (ctx) => {

@@ -27,6 +27,7 @@
 import { existsSync, lstatSync } from "node:fs";
 import { cp, mkdir, readdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { STONE_OBJECTS_SUBDIR } from "./common";
 
 /** 默认主分支名，与 R5 的 fast-forward-to-main 语义对齐。 */
 export const STONES_MAIN_BRANCH = "main";
@@ -77,7 +78,7 @@ async function migrateFlatToMain(stonesDir: string): Promise<boolean> {
     );
     if (toMigrate.length === 0) return false;
 
-    const mainObjectsDir = join(stonesDir, STONES_MAIN_BRANCH, "objects");
+    const mainObjectsDir = join(stonesDir, STONES_MAIN_BRANCH, STONE_OBJECTS_SUBDIR);
     await mkdir(mainObjectsDir, { recursive: true });
     for (const e of toMigrate) {
       const oldPath = join(stonesDir, e.name);

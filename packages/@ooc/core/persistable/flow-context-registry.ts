@@ -17,7 +17,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { threadDir, toJson, type ThreadPersistenceRef } from "./common";
-import { enqueueSessionWrite } from "./serial-queue";
+import { enqueueSessionWrite } from "../runtime/serial-queue.js";
 
 /**
  * v1 schema：

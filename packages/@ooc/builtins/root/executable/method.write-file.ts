@@ -7,15 +7,13 @@
  * 这里保留 root method 表项（knowledge / paths）；exec 走 lookupConstructor("file") 委托。
  */
 
-import type {
-  MethodExecutionContext,
-  ObjectMethod,
-  MethodOutcome,
-} from "@ooc/core/extendable/_shared/command-types.js";
-import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
+import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
+import { makeRootDelegator } from "@ooc/builtins/_shared/executable/delegator.js";
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
+import { emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
 
 // 2026-06-02 P6.§4-§5: side-effect import 触发 file_window constructor 注册（lookupConstructor("file") 命中）
 import "@ooc/builtins/file";
@@ -74,31 +72,6 @@ open(command="write_file", title="新建测试文件",
 file_window 的版本可见性，且转义容易出错。
 `.trim();
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
-  const out: ContextWindow[] = [];
-  for (const [path, text] of Object.entries(entries)) {
-    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
-    out.push({
-      id: "guidance_" + form.id + "_" + safe,
-      type: "guidance",
-      parentWindowId: form.id,
-      boundFormId: form.id,
-      title: path,
-      status: "open",
-      createdAt: 0,
-      relevance: { score: 0.8, signalCount: 1 },
-      provenance: {
-        kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
-        createdAt: 0,
-        lastTouchedAt: 0,
-      },
-      content: text,
-      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
-    } as ContextWindow);
-  }
-  return out;
-}
 
 export const writeFileCommand: ObjectMethod = {
   paths: ["write_file"],
@@ -108,13 +81,13 @@ export const writeFileCommand: ObjectMethod = {
       content: { type: "string", required: true, description: "要写入的完整文件内容" },
     },
   } as MethodCallSchema,
-  intent: (): Intent[] => [],
+  intent: emptyIntent,
   onFormChange(change, { form, intents }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
     const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = { [WRITE_FILE_BASIC_PATH]: KNOWLEDGE };
-    if (formStatus !== "open") return guidanceWindows(form, entries);
+    if (formStatus !== "open") return buildGuidanceWindows(form, entries);
     const path = typeof args.path === "string" ? args.path : "";
     const hasContent = typeof args.content === "string";
     if (!path || !hasContent) {
@@ -126,7 +99,7 @@ export const writeFileCommand: ObjectMethod = {
         "请用 refine(form_id, args={ path: \"<path>\", content: \"<完整文件内容, 可空串>\" }) 补齐后 submit(form_id)。\n" +
         "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
-    return guidanceWindows(form, entries);
+    return buildGuidanceWindows(form, entries);
   },
   exec: (ctx) => executeWriteFileCommand(ctx),
 };
@@ -137,13 +110,9 @@ export const writeFileCommand: ObjectMethod = {
  * 注入一个最小 form shim（{ command: "write_file" }）到 ctx，让 constructor 的
  * dispatch 分支拿到正确的 command 名（生产链路里 manager.submit 会传完整 form）。
  */
-export async function executeWriteFileCommand(
-  ctx: MethodExecutionContext,
-): Promise<MethodOutcome | string | undefined> {
-  const ctor = (ctx.manager?.registry ?? builtinRegistry).lookupConstructor("file");
-  if (!ctor) return "[write_file] file_window constructor 未注册（registry 期望 kind=\"constructor\" 的 file method）。";
-  const ctxWithForm = ctx.form
-    ? ctx
-    : ({ ...ctx, form: { command: "write_file" } } as MethodExecutionContext);
-  return await ctor.exec(ctxWithForm);
-}
+export const executeWriteFileCommand = makeRootDelegator({
+  command: "write_file",
+  constructorKind: "file",
+  objectLabel: "file_window",
+  formCommand: "write_file",
+});

@@ -17,10 +17,12 @@
 import type {
   MethodExecutionContext,
   ObjectMethod,
-} from "@ooc/core/extendable/_shared/command-types.js";
+} from "@ooc/core/extendable/_shared/method-types.js";
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
+import { emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
 import { builtinRegistry, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
 import { Glob } from "bun";
 import { isAbsolute, resolve } from "node:path";
@@ -38,39 +40,14 @@ import {
   type TranscriptViewport,
 } from "@ooc/core/extendable/_shared/transcript-viewport.js";
 import { DEFAULT_RESULTS_VIEWPORT } from "./results-viewport.js";
-import { setResultsWindowCommandForSearch } from "./command.set-results-window.js";
+import { setResultsWindowCommandForSearch } from "./method.set-results-window.js";
 import {
   runRipgrep,
   runJsFallback,
   type GrepHit,
-} from "@ooc/builtins/root/executable/command.grep.impl.js";
+} from "@ooc/builtins/root/executable/method.grep.impl.js";
 import { readable } from "../readable.js";
 
-function guidanceWindows(form: MethodExecWindow, entries: Record<string, string>): ContextWindow[] {
-  const out: ContextWindow[] = [];
-  for (const [path, text] of Object.entries(entries)) {
-    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
-    out.push({
-      id: "guidance_" + form.id + "_" + safe,
-      type: "guidance",
-      parentWindowId: form.id,
-      boundFormId: form.id,
-      title: path,
-      status: "open",
-      createdAt: 0,
-      relevance: { score: 0.8, signalCount: 1 },
-      provenance: {
-        kind: "derived",
-        reason: { mechanism: "form_bound", sourceId: form.command },
-        createdAt: 0,
-        lastTouchedAt: 0,
-      },
-      content: text,
-      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
-    } as ContextWindow);
-  }
-  return out;
-}
 
 export const SEARCH_WINDOW_BASIC_PATH = "internal/windows/search/basic";
 export const SEARCH_WINDOW_CLOSE_BASIC = "internal/windows/search/close/basic";
@@ -129,13 +106,13 @@ open(parent_window_id="<search_window_id>", command="open_match",
 
 const closeCommand: ObjectMethod = {
   paths: ["close"],
-  intent: () => [],
+  intent: emptyIntent,
   onFormChange(change, { form }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
     const entries: Record<string, string> = {
       [SEARCH_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE,
     };
-    return guidanceWindows(form, entries);
+    return buildGuidanceWindows(form, entries);
   },
   exec: () => undefined,
 };
@@ -147,7 +124,7 @@ const openMatchCommand: ObjectMethod = {
       index: { type: "number", required: true, description: "match index from search_window.matches[].index" },
     },
   },
-  intent: () => [],
+  intent: emptyIntent,
   onFormChange(change, { form }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
     const args = change.kind === "args_refined" ? change.args : form.accumulatedArgs;
@@ -155,12 +132,12 @@ const openMatchCommand: ObjectMethod = {
     const entries: Record<string, string> = {
       [SEARCH_WINDOW_OPEN_MATCH_BASIC]: OPEN_MATCH_KNOWLEDGE,
     };
-    if (formStatus !== "open") return guidanceWindows(form, entries);
+    if (formStatus !== "open") return buildGuidanceWindows(form, entries);
     if (typeof args.index !== "number") {
       entries[SEARCH_WINDOW_OPEN_MATCH_INPUT] =
         "open_match 缺少 index；用 args={ index: <整数> }。index 取自当前 search_window.matches[].index。";
     }
-    return guidanceWindows(form, entries);
+    return buildGuidanceWindows(form, entries);
   },
   exec: (ctx) => executeSearchOpenMatch(ctx),
 };
@@ -379,7 +356,7 @@ const searchConstructor: ObjectMethod = {
       [SEARCH_GLOB_BASIC]: SEARCH_GLOB_KNOWLEDGE,
       [SEARCH_GREP_BASIC]: SEARCH_GREP_KNOWLEDGE,
     };
-    if (formStatus !== "open") return guidanceWindows(form, entries);
+    if (formStatus !== "open") return buildGuidanceWindows(form, entries);
     if (typeof args.pattern !== "string" || args.pattern.length === 0) {
       entries[SEARCH_GLOB_INPUT] =
         "glob 还缺以下参数: pattern。\n" +
@@ -389,7 +366,7 @@ const searchConstructor: ObjectMethod = {
         "grep 还缺以下参数: pattern。\n" +
         "请用 refine(form_id, args={ pattern: \"<regex>\", path?: \"<dir-or-file>\", glob?: \"*.ts\", case_insensitive?: true }) 补齐后 submit(form_id)。";
     }
-    return guidanceWindows(form, entries);
+    return buildGuidanceWindows(form, entries);
   },
   exec: async (ctx) => {
     const thread = ctx.thread;

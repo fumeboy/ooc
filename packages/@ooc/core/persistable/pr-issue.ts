@@ -20,7 +20,7 @@ import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { stoneDir } from "./common";
 import { STONES_MAIN_BRANCH } from "./stone-bootstrap";
-import { enqueueSessionWrite } from "./serial-queue";
+import { enqueueSessionWrite } from "../runtime/serial-queue.js";
 import { toJson } from "./common";
 
 /** super session id（PR-Issue 落盘约定，不可改）。 */

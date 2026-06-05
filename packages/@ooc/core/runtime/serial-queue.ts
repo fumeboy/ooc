@@ -21,6 +21,7 @@ export class SerialQueue {
   enqueue<T>(key: string, task: () => Promise<T>): Promise<T> {
     const prev = this.tails.get(key) ?? Promise.resolve();
     const next = prev.then(task, task);
+    // intentional: tail 存 catch 过的 promise，吞掉 rejection 防毒化后续同 key task；真正的错误已经通过返回的 `next` 暴露给 caller。
     this.tails.set(key, next.catch(() => undefined));
     return next;
   }
@@ -37,4 +38,19 @@ export const defaultSerialQueue = new SerialQueue();
 /** 创建一个全新的独立队列实例（给 WorldRuntime 用）。 */
 export function createSerialQueue(): SerialQueue {
   return new SerialQueue();
+}
+
+/**
+ * 把 `task` 排到 key 对应的队尾, 串行执行后返回其结果（委托默认实例）。
+ *
+ * - 不同 key 的 task 并发跑; 相同 key 的 task 严格按入队顺序串行
+ * - task 抛错只影响该 caller 的 promise; 后续同 key task 仍能跑
+ */
+export function enqueueSessionWrite<T>(key: string, task: () => Promise<T>): Promise<T> {
+  return defaultSerialQueue.enqueue(key, task);
+}
+
+/** 测试用: 清空默认实例的所有队列状态。 */
+export function __resetSerialQueueForTests(): void {
+  defaultSerialQueue.reset();
 }

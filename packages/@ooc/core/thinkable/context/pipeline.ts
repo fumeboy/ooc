@@ -15,6 +15,7 @@
 import type { ThreadContext } from "./index.js";
 import type { ContextWindow } from "../../executable/windows/_shared/types.js";
 import type { ContextSnapshot } from "./snapshot.js";
+import type { IntentCache, Intent } from "./intent.js";
 import { BudgetManager, loadBudgetThresholds } from "./budget.js";
 import { SystemProcessor } from "./processors/system.js";
 import { MethodFormProcessor } from "./processors/method.js";
@@ -28,7 +29,7 @@ export interface PipelinePhase {
 }
 
 export interface PipelineContext {
-  intentCache: import("./intent.js").IntentCache;
+  intentCache: IntentCache;
   windows: ContextWindow[];  // accumulated so far
 }
 
@@ -41,9 +42,9 @@ export class ContextPipeline {
 
   async run(thread: ThreadContext): Promise<ContextSnapshot> {
     // Ensure thread.intentCache exists (lazy-init)
-    const intentCache = (thread as any).intentCache ?? new Map<string, any>();
-    if (!(thread as any).intentCache) {
-      (thread as any).intentCache = intentCache;
+    const intentCache: IntentCache = thread.intentCache ?? new Map();
+    if (!thread.intentCache) {
+      thread.intentCache = intentCache;
     }
     const ctx: PipelineContext = { intentCache, windows: [...(thread.contextWindows ?? [])] };
 
@@ -60,7 +61,7 @@ export class ContextPipeline {
     const { visible, overflow } = budget.allocate(ctx.windows, thresholds.hard);
 
     // Build trace from intentCache
-    const traceIntents: Record<string, import("./intent.js").Intent[]> = {};
+    const traceIntents: Record<string, Intent[]> = {};
     for (const [formId, entry] of intentCache) {
       traceIntents[formId] = entry.intents;
     }

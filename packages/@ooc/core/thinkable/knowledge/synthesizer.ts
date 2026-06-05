@@ -18,14 +18,13 @@
  * - thinkable/context/activator-windows.ts: activator-based knowledge windows
  */
 
-import { deriveStoneFromThread, derivePoolFromThread, discoverStoneHierarchicalPeers, listBranchSkills, listObjectSkills, listExternalSkills, readPoolRelation, readFlowRelation, readReadable, readSelf, readableFile, readWorldConfig } from "../../persistable/index.js";
+import { deriveStoneFromThread, discoverStoneHierarchicalPeers, readReadable, readSelf } from "../../persistable/index.js";
 import type { ThreadContext } from "../context.js";
-import type { MethodKnowledgeEntries } from "../../executable/windows/_shared/command-types.js";
 import type { ObjectRegistry } from "../../executable/windows/_shared/registry.js";
 import { builtinRegistry } from "../../executable/windows/index.js";
 import type { ContextWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
 import { SUPER_ALIAS_TARGET } from "../../executable/windows/_shared/super-constants.js";
-import { loadObjectWindow } from "../../executable/server/loader.js";
+import { loadObjectWindow } from "../../runtime/server-loader.js";
 import type { ObjectWindowDefinition } from "../../executable/server/window-types.js";
 import { parseKnowledgeFile } from "./parser.js";
 
@@ -199,135 +198,4 @@ export async function derivePeerObjectWindows(
   }
 
   return out;
-}
-
-// ── Backward-compat shims (Phase F; tests use these) ────────────────────────
-
-import { createDefaultPipeline } from "../context/pipeline.js";
-import { buildProtocolKnowledgeWindows, collectProtocolEntries } from "../context/protocol.js";
-import { enrichContextWindows } from "../context/window-enrichment.js";
-import { synthesizeSkillIndex, mergeSkillIndex } from "../context/skill-index.js";
-import { buildActivatorKnowledgeWindows } from "../context/activator-windows.js";
-import { getSkillIndexBasicPath } from "../context/skill-index.js";
-
-/**
- * @deprecated Phase F — use ContextPipeline (createDefaultPipeline().run(thread)) instead.
- *
- * Backward-compat shim: replicates the old collectExecutableKnowledgeEntries behavior
- * by running the same processor chain used by ContextPipeline.
- * Used exclusively by existing tests.
- */
-export async function collectExecutableKnowledgeEntries(
-  contextWindows: ContextWindow[] | undefined,
-  thread: ThreadContext,
-  registry: ObjectRegistry = builtinRegistry,
-): Promise<{ contextWindows: ContextWindow[] | undefined; knowledgeEntries: MethodKnowledgeEntries }> {
-  // Ensure self type registered
-  await ensureSelfObjectTypeRegistered(thread, registry);
-
-  // Step 1: enrich windows (effectiveVisibleType + form knowledge)
-  const threadForEnrich: ThreadContext = { ...thread, contextWindows: contextWindows ?? [] };
-  const { enrichedWindows, formKnowledgeEntries } = await enrichContextWindows(
-    contextWindows,
-    threadForEnrich,
-    registry,
-  );
-
-  // Step 2: protocol knowledge
-  const protocolWindows = buildProtocolKnowledgeWindows(threadForEnrich, registry);
-
-  // Step 3: skill index
-  const skillIndex = await synthesizeSkillIndex(thread);
-  const withSkill = mergeSkillIndex([...enrichedWindows, ...protocolWindows], skillIndex);
-
-  // Step 3b: skill_index basicKnowledge (if skill_index was injected)
-  if (skillIndex.length > 0) {
-    try {
-      const def = registry.getObjectDefinition("skill_index");
-      if (def.basicKnowledge) {
-        const path = getSkillIndexBasicPath();
-        const hasAlready = withSkill.some(
-          (w) => w.type === "knowledge" && (w as any).path === path,
-        );
-        if (!hasAlready) {
-          withSkill.push({
-            id: `kn_skill_idx_basic_${Date.now().toString(36)}`,
-            type: "knowledge",
-            parentWindowId: "root",
-            title: path,
-            status: "open",
-            createdAt: Date.now(),
-            path,
-            source: "protocol",
-            body: def.basicKnowledge,
-          } as any);
-        }
-      }
-    } catch { /* skip */ }
-  }
-
-  // Step 4: activator windows
-  const activatorWindows = await buildActivatorKnowledgeWindows(threadForEnrich);
-
-  // Step 5: peer windows
-  const peerWindows = await derivePeerObjectWindows(threadForEnrich, registry);
-
-  // Merge all
-  const finalWindows = [...withSkill, ...activatorWindows, ...peerWindows];
-
-  // Build knowledgeEntries map (for backward compat)
-  const entries: MethodKnowledgeEntries = { ...collectProtocolEntries(threadForEnrich, registry) };
-  for (const [k, v] of Object.entries(formKnowledgeEntries)) {
-    if (!(k in entries)) entries[k] = v;
-  }
-
-  return { contextWindows: finalWindows, knowledgeEntries: entries };
-}
-
-// suppress unused imports for lint
-void createDefaultPipeline;
-void deriveStoneFromThread;
-void derivePoolFromThread;
-void listBranchSkills;
-void listObjectSkills;
-void listExternalSkills;
-void readPoolRelation;
-void readFlowRelation;
-void readableFile;
-void readWorldConfig;
-
-// ── Deprecated relation-window stubs (Phase F cleanup; kept for test compat) ──
-
-import type {
-  KnowledgeWindow,
-  RelationWindow,
-} from "../../executable/windows/_shared/types.js";
-
-/**
- * @deprecated 2026-05-28 ooc-6 Phase 6: Replaced by derivePeerObjectWindows.
- * Relation windows are no longer used; peer Objects themselves enter context as windows.
- * Kept as an empty-array stub for existing test compatibility.
- */
-export async function deriveRelationWindow(
-  _thread: ThreadContext,
-): Promise<RelationWindow[]> {
-  return [];
-}
-
-/**
- * @deprecated 2026-05-21: Empty backward-compat shim.
- */
-export async function deriveRelationCompanionKnowledge(
-  _thread: ThreadContext,
-): Promise<KnowledgeWindow[]> {
-  return [];
-}
-
-/**
- * @deprecated 2026-05-21: Alias for deriveRelationCompanionKnowledge, empty shim.
- */
-export async function deriveRelationKnowledge(
-  _thread: ThreadContext,
-): Promise<KnowledgeWindow[]> {
-  return [];
 }

@@ -13,6 +13,7 @@
  */
 import { watch, type FSWatcher } from "node:fs";
 import { basename, dirname, relative, sep } from "node:path";
+import { STONE_OBJECTS_SUBDIR } from "../persistable/common.js";
 import type { StoneChangedEvent, StoneRegistry } from "./stone-registry.js";
 
 /** 被视为 identity 变更的文件名集合（影响 Object 身份/契约）。 */
@@ -68,7 +69,7 @@ export function parseStoneChange(
   const idSegments: string[] = [];
   let i = 1;
   // 检测并跳过 versioning 前缀: <branch>/objects/
-  if (parts.length >= 3 && parts[2] === "objects" && !parts[1].startsWith(".") && !parts[1].startsWith("@")) {
+  if (parts.length >= 3 && parts[2] === STONE_OBJECTS_SUBDIR && !parts[1].startsWith(".") && !parts[1].startsWith("@")) {
     i = 3;
   }
   while (i < parts.length) {

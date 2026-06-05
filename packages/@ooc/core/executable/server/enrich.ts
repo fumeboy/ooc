@@ -7,7 +7,7 @@
 
 import type { ThreadContext } from "../../thinkable/context.js";
 import type { MethodExecWindow } from "../windows/_shared/types.js";
-import { enrichFormMethodKnowledge } from "../index.js";
+import { enrichFormMethodKnowledge } from "../../thinkable/knowledge/index.js";
 
 /**
  * 计算 form 当前的 commandKnowledge keys 并就地写回 form（如果有变）。
