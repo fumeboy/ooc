@@ -73,7 +73,9 @@ describe("program runtime — runOneExec (shell)", () => {
         persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
       });
       const rec = await runOneExec(thread, { language: "shell", code: "echo \"$OOC_SELF_DIR\"" });
-      expect(rec.output).toContain(`${tempRoot}/stones/agent`);
+      // P1 收口后 canonical 是 stones/main/objects/<id>/（非旧孤儿 stones/<id>/）。
+      // OOC_SELF_DIR 经 stoneDir() 解析，与 [ooc:paths] 注入给 LLM 的 object_stone_dir 同源。
+      expect(rec.output).toContain(`${tempRoot}/stones/main/objects/agent`);
       expect(rec.output).toContain("[exit 0]");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
