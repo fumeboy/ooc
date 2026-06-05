@@ -40,6 +40,23 @@ cwd 语义对 Agent 不透明且与 playbook/cheatsheet 文档不符。叠加 X-
 (b) cheatsheet 的 poll 配方用了 X1 的坏端点；(c) collaborable 的 `talks.json` 反向路由落盘已不存在（改进 thread.json inbox/outbox）。
 → 我修 cheatsheet（见下）。
 
+## 修复进度（Supervisor 以 AgentOfX 身份逐项修，均验证+回归测试+push）
+
+**✅ 已修复（关键正确性 bug：崩溃/静默失败/安全/召回断裂类）**
+- **guidance window 渲染崩**（refine→failed thread）— commit 2cb17108
+- **X1 listThreads 列表端点恒空**（F3 回归，5 维度命中）— commit b758360f
+- **collaborable world 级 think 崩**（未注册 peer 渲染崩）— commit 8019765e（fail-soft 渲染）
+- **collaborable 新对象惰性注册**（非 dev 不注册）— commit 8cc5a499（createStone/putServerSource 显式注册）
+- **reflectable 召回断裂**（window::root 永不激活，memory 只写不读）— commit 72a5aa6c（root always-on）
+- **executable 路径逃逸 world 根**（`../`/绝对路径无拦截，安全）— commit e62bb20e（resolveSessionPath clamp）
+
+**⏳ 剩余 backlog（feature 补全 / 复杂区，宜单独 scope）**
+- **observable pause 单向陷阱**：resume 机制已存在（resumePausedThread/resume-thread job/resumeSession），缺 HTTP 触发 + global-pause/disable 的 re-enqueue 编排。落在 **F6 推迟项**（pause 两套抽象待合并）复杂区 → 随 F6 一并做。
+- **persistable versioning 缺口**：self.md/server 改动无 agent-facing version 命令，working dir 与 git 视图分叉。需新 method（executable 层）+ 厘清 stones/<id> vs stones/main 权威 → 设计性 feature。
+- **thinkable** knowledge 无 activates_on 静默永不激活（写入 API 应警告，med）。
+- **visible** Agent 开箱不知 canonical `visible/index.tsx` 路径致首产页 404（med，可由 self/readable 引导或 endpoint 兼容具名文件）。
+- **reflectable** self.md 改写失败却被 agent 当成功上报（false success claim）——与 persistable versioning 同源（写失败不可观测）。
+
 ## 各维度高严重度 Issue（回流 AgentOfX）
 
 - **executable**：`../` 逃逸 world 根写任意位置，无路径沙箱（high）→ AgentOfExecutable
