@@ -122,11 +122,21 @@ async function runDimension(
         SCHEMA_PATH: join(HARNESS_DIR, "report-schema.md"),
         REPORT_PATH: reportPath,
       });
+      // stream-json + verbose：officer 每个 event 一行 jsonl 实时输出（不再到退出才 flush）。
+      // 报告仍由 officer 自己写 reportPath，officer.log 仅供诊断，格式变化不影响报告收集。
       const officer = Bun.spawn({
-        cmd: ["claude", "-p", prompt, "--dangerously-skip-permissions", "--add-dir", world],
+        cmd: ["claude", "-p", prompt, "--dangerously-skip-permissions", "--add-dir", world,
+              "--output-format", "stream-json", "--verbose"],
         cwd: REPO_ROOT, env, stdout: "pipe", stderr: "pipe",
       });
-      const stdoutP = new Response(officer.stdout).text();
+      // 增量落盘 stdout+stderr：timeout kill 也保留已产出，让超时维度不再黑盒
+      // （旧逻辑只在退出后一次性 write，被 kill 丢失全部输出）。
+      const sink = Bun.file(officerLog).writer();
+      const pump = async (stream: ReadableStream<Uint8Array>) => {
+        try { for await (const chunk of stream) { sink.write(chunk); await sink.flush(); } }
+        catch { /* stream aborted on kill — 已 flush 的内容保留 */ }
+      };
+      const pumps = Promise.allSettled([pump(officer.stdout), pump(officer.stderr)]);
       let timer: Timer | undefined;
       const timeout = new Promise<"timeout">((r) => {
         timer = setTimeout(() => { try { officer.kill(); } catch {} r("timeout"); }, opts.timeoutMs);
@@ -135,7 +145,8 @@ async function runDimension(
       const r = await Promise.race([exit, timeout]);
       if (timer) clearTimeout(timer);
       if (r === "timeout") { res.timedOut = true; } else { res.officerExit = r; }
-      await Bun.write(officerLog, await stdoutP);
+      await pumps;
+      await sink.end();
     }
   } finally {
     try { serverProc.kill(); } catch {}
