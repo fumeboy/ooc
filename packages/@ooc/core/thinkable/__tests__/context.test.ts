@@ -309,6 +309,26 @@ describe("buildContext (ContextWindow model)", () => {
     expect(xml).not.toContain('type="guidance"');
   });
 
+  it("未注册 peer 对象 type 的 window 渲染不崩（harness collaborable 回归：world 级 think 崩）", async () => {
+    // PeerProcessor/derivePeerObjectWindows 造 type=peer objectId 的 window；若该 peer stone
+    // 未注册进 runtime registry（后台注册中 / 新建对象未被 target 命中），renderWindowNode 的
+    // getObjectDefinition(peerType) 修复前会抛 → think_error → 全 world 谁都不能 think。
+    // fail-soft：未注册 type 走 readable/占位渲染（坐实 registrar 契约「render handles unregistered gracefully」）。
+    const thread: ThreadContext = makeThread({ id: "t_peer" });
+    thread.contextWindows.push({
+      id: "w_peer_expert",
+      type: "expert", // 未注册的 peer stone 类型
+      title: "expert (peer)",
+      status: "open",
+      createdAt: 0,
+    } as unknown as ContextWindow);
+    // 修复前此处抛 'getObjectDefinition: object type "expert" not registered'
+    const messages = await buildContext(thread);
+    const xml = messages[0]!.content;
+    expect(xml).toContain("<context>");
+    expect(xml).toContain('type="expert"'); // 未注册 peer 仍以占位/可用形式渲染
+  });
+
   it("renders command_exec form result only when status=failed (Round 13 四态机)", async () => {
     const thread = makeThread({
       id: "t_status",

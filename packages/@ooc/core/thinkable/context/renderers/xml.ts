@@ -75,6 +75,9 @@ function renderMessagesNode(tag: "inbox" | "outbox", messages: ThreadMessage[] |
 const COMMAND_BRIEF_MAX = 80;
 
 function renderMethodsNode(window: ContextWindow, registry: ObjectRegistry): XmlNode | null {
+  // fail-soft：未注册 type（peer stone 后台注册中 / 新建对象未注册 / builtin 缺失）无 methods 节点。
+  // registrar 契约即「render paths handle unregistered types gracefully」——此处坐实，避免 getObjectDefinition 抛崩 think loop。
+  if (!registry.has(window.type)) return null;
   const def = registry.getObjectDefinition(window.type);
   const names = Object.keys(def.methods ?? {});
   const isCompressed = (window.compressLevel ?? 0) >= 1;
@@ -216,12 +219,20 @@ async function renderWindowNode(
     xmlElement("title", {}, [xmlText(titlePrefix + renderedWindow.title)]),
   ];
 
-  const def = registry.getObjectDefinition(renderedWindow.type as never);
+  // fail-soft：未注册 type（peer stone 后台注册中 / 新建对象 / builtin 缺失）→ def undefined，
+  // 走下方 resolveObjectReadable 从 stone 磁盘加载 readable 渲染，不在此 getObjectDefinition 抛崩 think loop。
+  // （collaborable world 级 think 崩根因：peer window 的 type=peer objectId，撞未注册 peer 即整轮 think_error。）
+  let def: ObjectDefinition | undefined;
+  try {
+    def = registry.getObjectDefinition(renderedWindow.type as never);
+  } catch {
+    def = undefined;
+  }
   const compressLevel = (renderedWindow.compressLevel ?? 0) as 0 | 1 | 2;
   const renderCtx: RenderContext = { thread, window: renderedWindow };
 
   if (compressLevel === 1 || compressLevel === 2) {
-    if (def.compressView) {
+    if (def?.compressView) {
       const typeChildren = await def.compressView(renderCtx, compressLevel);
       children.push(...typeChildren);
     } else {
@@ -241,6 +252,14 @@ async function renderWindowNode(
     const readableChildren = await resolveObjectReadable(renderedWindow, renderCtx, thread, registry);
     if (readableChildren) {
       children.push(...readableChildren);
+    } else if (!def) {
+      // fail-soft：未注册 type 且无 readable（无 persistence / 磁盘 readable 也取不到）——占位不崩。
+      // 仅对**已注册却缺 renderXml**（下方）才抛，那是真的接口契约违反。
+      children.push(
+        xmlElement("readable", { source: "unregistered" }, [
+          xmlText(`Object type "${renderedWindow.type}" 未注册且无 readable（stone 可能后台注册中或新建未就绪）。`),
+        ]),
+      );
     } else {
       if (!def.renderXml) {
         throw new Error(
