@@ -160,7 +160,7 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S5 reflectable-sediment", (
       // ② memory 文件落 pools/ 带 frontmatter
       const memoryFiles = listMemoryFiles(handle.baseDir, SELF_ID);
       const memoryContents = memoryFiles.map((name) =>
-        readFile(handle!.baseDir, `pools/objects/${SELF_ID}/knowledge/memory/${name}`),
+        readFile(handle!.baseDir, `pools/${SELF_ID}/knowledge/memory/${name}`),
       );
       const memoryWithFrontmatter = memoryContents.filter((md) => hasValidFrontmatter(md));
       // memory 是否真提到本次约定关键词（避免"写了个空 memory"假阳性）
