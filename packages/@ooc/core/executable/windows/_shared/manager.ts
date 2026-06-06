@@ -32,6 +32,7 @@ import {
   ROOT_WINDOW_ID,
   generateWindowId,
   isVolatileDerivedWindow,
+  isNonPersistedWindow,
   type MethodExecWindow,
   type ContextWindow,
   type ObjectType,
@@ -804,10 +805,10 @@ export class WindowManager {
    */
   private async persistObjectAfterChange(thread: ThreadContext, window: ContextWindow): Promise<void> {
     if (window.id === ROOT_WINDOW_ID) return;
-    // volatile derived window（form-bound guidance）从不持久化：它既非 inline builtin 也非
-    // 独立 flow object（无 state.json），走路径 B 只会抛 ClassNotFoundError 且写出指向缺失
-    // 对象的死 _ref。每轮 enrichment 重新派生，不需要落盘。
-    if (isVolatileDerivedWindow(window)) return;
+    // 不持久化窗（volatile derived guidance + self 门面窗）从不落盘：它们既非 inline builtin
+    // 也非独立 flow object（无 state.json），走路径 B 只会抛 ClassNotFoundError 且写出指向缺失
+    // 对象的死 _ref。每轮 enrichment/init 确定性重建，不需要落盘。
+    if (isNonPersistedWindow(window)) return;
     const tref = this.threadPersistRefFromThread(thread);
     if (!tref) return;
 
@@ -889,9 +890,9 @@ export class WindowManager {
     const entries: ThreadContextEntry[] = [];
     for (const window of this.windows.values()) {
       if (window.id === ROOT_WINDOW_ID) continue;
-      // volatile derived window（form-bound guidance）不进 thread-context.json：无 state.json，
+      // 不持久化窗（volatile derived guidance + self 门面窗）不进 thread-context.json：无 state.json，
       // 落成 _ref 后 reload 必报 missing object 并刷屏 + 随每轮 form 派生膨胀。
-      if (isVolatileDerivedWindow(window)) continue;
+      if (isNonPersistedWindow(window)) continue;
       if (this.registry.isBuiltinFeatureType(window.type)) {
         entries.push(window);
       } else {

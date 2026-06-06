@@ -172,6 +172,9 @@ function injectSelfWindowIfObjectThread(thread: ThreadContext): void {
     title: objectId,
     status: "open",
     createdAt: Date.now(),
+    // self 门面窗每次 init 幂等重注入、无独立 state.json → 标记为不持久化，
+    // 否则 thread-context.json 落死 _ref，reload 刷屏 `references missing object <id>`。
+    isSelfWindow: true,
   } as ContextWindow;
 
   // 紧跟 root 之后；creator window 仍由后续路径插到这之前/之后均可

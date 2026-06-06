@@ -154,6 +154,42 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     }
   });
 
+  // ─── Test 1b: self facade window (id=objectId) 不落 thread-context.json（死 _ref 刷屏根治）──
+  test("Test 1b: self facade window (isSelfWindow) 被排除出 thread-context.json", async () => {
+    // 模拟 initContextWindows 注入的 self 门面窗（id=type=objectId，标记 isSelfWindow）。
+    const selfWin = {
+      id: persistence.objectId,
+      type: persistence.objectId,
+      parentWindowId: ROOT_WINDOW_ID,
+      title: persistence.objectId,
+      status: "open",
+      createdAt: Date.now(),
+      isSelfWindow: true,
+    } as ContextWindow;
+    thread.contextWindows = [selfWin, ...(thread.contextWindows ?? [])];
+
+    const mgr = WindowManager.fromThread(thread, builtinRegistry);
+    // 任意 builtin feature 写都会触发 writeThreadContextSnapshot（遍历所有 window）。
+    await mgr.openMethodExec({
+      thread,
+      parentWindowId: ROOT_WINDOW_ID,
+      command: "talk",
+      title: "trigger ctx flush",
+      args: { target: "peer_alice", title: "hi" },
+    });
+
+    const tcFile = threadContextFile(persistence);
+    await waitFor(async () => exists(tcFile));
+    const file = await readThreadContext(persistence);
+    expect(file).not.toBeNull();
+    // self 门面窗既不作为 inline 也不作为 _ref 出现（否则 reload 找 <objectId>/state.json 死 ref 刷屏）。
+    const selfEntry = file!.contextWindows.find(
+      (e) => e.id === persistence.objectId ||
+        (e as { refObjectId?: string }).refObjectId === persistence.objectId,
+    );
+    expect(selfEntry).toBeUndefined();
+  });
+
   // ─── Test 2: independent flow object constructor (plan) → own dir + state.json + ref ──
   test("Test 2: plan constructor writes own dir + .flow.json:class=\"plan\" + state.json + thread context ref", async () => {
     const mgr = WindowManager.fromThread(thread, builtinRegistry);

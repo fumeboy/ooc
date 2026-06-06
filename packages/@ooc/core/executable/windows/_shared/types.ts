@@ -37,6 +37,7 @@ export {
   generateWindowId,
   creatorWindowIdOf,
   isVolatileDerivedWindow,
+  isNonPersistedWindow,
 } from "../../../_shared/types/context-window.js";
 
 // base ContextObject 仅供本文件 SharingState snapshot 兜底语义；具体 union 在下方覆盖 export

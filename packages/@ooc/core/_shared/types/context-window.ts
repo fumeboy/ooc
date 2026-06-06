@@ -123,6 +123,13 @@ export interface BaseContextWindow {
   provenance?: ContextWindowProvenance;
   relevance?: ContextWindowRelevance;
   boundFormId?: string;
+  /**
+   * Object 自我门面窗（id=type=objectId，由 initContextWindows 每次 thread 加载幂等重注入）。
+   * 它从对象身份确定性重建、无独立 state.json，**不应持久化**——否则 thread-context.json 落成
+   * 指向缺失 state.json 的死 _ref，reload 刷屏 `references missing object <id>`。
+   * 与 isVolatileDerivedWindow 同类「不持久化」语义，但 self 门面非 derived，单列标记。
+   */
+  isSelfWindow?: boolean;
 }
 
 /**
@@ -225,4 +232,13 @@ export function creatorWindowIdOf(threadId: string): string {
  */
 export function isVolatileDerivedWindow(window: BaseContextWindow): boolean {
   return window.type === "guidance" && window.provenance?.kind === "derived";
+}
+
+/**
+ * 不应持久化进 thread-context.json 的窗：volatile derived（form-bound guidance）+ self 门面窗。
+ * 二者都由 enrichment / init 每轮确定性重建，落盘只会变成死 _ref 刷屏（见各自标记）。
+ * 写盘端用本谓词统一剔除。
+ */
+export function isNonPersistedWindow(window: BaseContextWindow): boolean {
+  return isVolatileDerivedWindow(window) || window.isSelfWindow === true;
 }
