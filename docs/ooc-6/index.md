@@ -54,6 +54,12 @@
 - **[persistable 低] abandoned worktree GC**：写后未 evolve 的 session worktree 仅 evolve_self
   路径回收，长跑可能堆积。
 
+## 跨维度分析
+
+- [self-iteration-frontier.md](./self-iteration-frontier.md) —— OOC 设计哲学 + 是否足以「运行 OOC 迭代 OOC 源码」：
+  层次 A（Object 自我迭代）已闭环；层次 B（框架自我迭代）尚不成立，三缺口（边界/重载/治理）+
+  渐近路径（B 归约为 A）+ 最小 dogfooding 探针建议。
+
 ## 文档约定
 
 - **一次迭代一份**：下次某维度迭代写 `docs/ooc-6/<dim>/<date>-iteration-02.md`，不覆盖旧迭代——
