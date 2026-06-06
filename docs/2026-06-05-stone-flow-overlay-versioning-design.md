@@ -1,91 +1,150 @@
-# Stone/Flow Overlay 与 super-flow 身份合入设计
+# Stone/Flow 身份分层与演化设计（session worktree 模型）
 
-> 收口 stone 布局三套分叉假设，确立「main 分支 = canonical stone，flow session overlay = 会话内试验层，
-> super flow = 身份正式演化（分支→测→合 main）」。
-> 来源：harness 首轮 sweep persistable 高严重度发现 + 与用户的设计确认（2026-06-05）。
-> 状态：设计定稿，待审 → 分阶段实现。
+> 确立「main 分支 = canonical stone，business flow session = 从 main lazy 派生的 **git worktree
+> 分支**（完整工作副本，session 内试验身份），super flow = 把 session 分支 merge 回 main 的演化闸门」。
+> 来源：harness persistable/programmable/visible 高 severity 发现 + 与用户的多轮设计确认
+> （2026-06-05 plain overlay 初版 → 2026-06-06 升级为 worktree 统一模型）。
+> 状态：设计定稿（worktree 模型），P1 已落地，P2'/P3' 待落地。
 
 ## 0. 决策记录
-- **canonical stone = `stones/main/objects/<id>/`（main git 分支 worktree）**。git 分支设计**保留**（用户拍板）。
-- **默认所有 flow session 读 main 分支的 object 定义**（self.md / executable / visible / readable / seed-knowledge）。
-- **flow session 内对 self 文件的变更 → plain 目录 overlay**（决策 A，非每 session 一个 git 分支），不动 main；读取时 overlay shadow main。
-- **super flow = 身份演化唯一正式通道**：从 main 建实验分支 → 应用 overlay 变更 → 测 → merge 回 main。
-- **控制面 HTTP（putSelf/putServerSource）直写 main 经 versioning**（决策 B），不走 overlay（外部权威写入）。
+- **canonical stone = `stones/main/objects/<id>/`**（main git 分支 worktree）。git 分支设计保留。
+- 默认所有 flow session 读 main 分支的 object 定义（self.md / executable / visible / readable / seed-knowledge）。
+- **【2026-06-06 升级】business flow session 改 identity → 从 main lazy 派生一个 session git worktree
+  分支 `session-<sid>`，完整 checkout（非稀疏 plain overlay）。该 session 对该 object 的 identity
+  读写都指向这个 worktree。**
+- **super flow = 身份演化唯一正式通道**：commit session 分支 → merge 回 main（**不再新建独立实验分支**
+  ——session 分支本身即演化单元）。
+- 控制面 HTTP（putSelf/putServerSource/createStone）直写 main 经 versioning，**不走 session worktree**
+  （外部/人类权威写入）。
+
+### 0.1 为何从 plain overlay 升级为 worktree（升级动因）
+plain 稀疏 overlay（初版）= 只存改动的补丁层 → 读必须 shadow（overlay ?? main 逐文件叠加）。
+harness 暴露三个连锁问题：
+- **裸读死穴**：program shell（`$OOC_SELF_DIR`）裸读稀疏 overlay 看不到 main 未改文件；shadow 是
+  「两目录逻辑叠加」，无法用单一目录喂给裸进程。
+- **读写不对称**：写能用「一个路径」重定向，读只能「内容级逐文件 shadow」，统一访问层被迫拆两原语。
+- **实验分支冗余**：plain overlay 不是 git 分支，super flow 合入须先把补丁 apply 到一个新建实验分支
+  才能 merge。
+
+worktree（完整副本）一举消解三者：overlay 完整 → 读直接读它（无 shadow）→ 裸读看到全部 → 读写都指向
+一个目录 → session 分支本身可 merge（无须实验分支）。唯一代价（每 session 副本开销）用 **lazy 创建**
+（仅首次写 identity 才建）缓解。
 
 ## 1. 概念（锚定 object.doc.ts persistable 三分）
-`object.doc.ts`：Agent 持久层三分 **stone（静）/ pool（积）/ flow（动）**。
-- **stone**＝长期身份与设计源码（self.md / readable.(md|ts) / executable / visible / seed-knowledge 五件套），跨 session 共享、进 git review。
-- **flow**＝session 级运行态（每 session 一个 flow object，自己的 session 级数据与程序）。
-- **pool**＝跨 session 累积事实（sediment knowledge），不进 git。
+Agent 持久层三分 **stone（静）/ pool（积）/ flow（动）**：
+- **stone** = 长期身份与设计源码（self.md / readable.(md\|ts) / executable / visible / seed-knowledge），
+  跨 session 共享、进 git review。
+- **flow** = session 级运行态（每 session 一个 flow object）。
+- **pool** = 跨 session 累积事实（sediment knowledge），不进 git。
 
 本设计把 stone 的 git 分支语义与 flow 的会话性显式分层：
 - **main 分支 = canonical stone**：Object「已提交的权威自我」，唯一读源。
-- **flow session overlay**：会话内对 self 文件的试验性改动，session 私有、即时可见、不污染 canonical。
-- **super flow**：审视 overlay → 分支实验 → 合 main，是身份从「试验」到「提交」的唯一闸门。
+- **business flow session = 从 main 派生的 git worktree 分支**：session 内对 identity 的试验都在它上面，
+  完整、隔离、不污染 main。
+- **super flow = 把 session 分支 merge 回 main 的闸门**：身份从「动（试验）」到「静（提交）」的唯一关口。
 
-## 2. 路径收口（修 bug 的根）
-现状三套分叉（persistable agent 实测）：① 运行时读 `stones/main/objects/<id>/`（main worktree，事实权威）② session-path 把 `stones/<id>` rewrite 成 `packages/<id>`（deprecated，空）③ `stoneDir` 默认声明扁平 `stones/<id>/`（M2，但 bootstrap 没落这）。
+## 2. 路径收口（P1，已落地）
+canonical 读路径 = main 分支 worktree `stones/main/objects/<nestedObjectPath>/`。`stoneDir` 默认路由
+（无 `_stonesBranch`）返回 main worktree（非扁平 `stones/<id>/`、非 `packages/`）。`_stonesBranch` set
+时走 `stones/<branch>/objects/<id>/`（versioning worktree）。保留 `resolveSessionPath` 安全 clamp
+（不得逃逸 world 根）。这一阶段消除了历史三套路径分叉。
 
-**收口规则**：
-- canonical 读路径 = **main 分支 worktree** `stones/main/objects/<nestedObjectPath>/`。`stoneDir` 默认路由（无 `_stonesBranch`）改为返回 main worktree，而非扁平 `stones/<id>/`，也非 `packages/`。
-- `session-path.ts`：**删除 `stones/<id>`→`packages/<id>` 的 rewrite**（rewritePackagesPath 退役该分支）；agent 写的 `stones/<id>/...` 解析到 stone 解析器（见 §3 overlay 重定向），不再撞 packages/。
-- `_stonesBranch` set 时仍走 `stones/<branch>/objects/<id>/`（versioning worktree，super-flow 实验分支 + 控制面 versioned write 用）——分支设计保留。
-- 保留 §6 安全 clamp（resolveSessionPath 不得逃逸 world 根，已实现）。
+## 3. business flow session = lazy git worktree 分支
+**模型**：每个 business flow session 对某 object 的 identity 改动，发生在该 session 从 main 派生的
+**git worktree 分支** `session-<sid>` 上（完整 checkout，复用 stones bare repo）。
 
-## 3. Flow session overlay（决策 A：plain 目录）
-**落点**：`flows/<sessionId>/<objectId>/overlay/<相对 stone 根的路径>`。
-覆盖范围 = **stone identity 文件**：`self.md` / `readable.md` / `readable.ts` / `executable/**` / `visible/**`。（seed-knowledge 属设计源码，纳入；pool sediment 不在此——它本就独立、不进 git。）
+**lazy 创建**（缓解开销）：
+- session **不写 identity** → 不建 worktree，所有 identity 读直接走 main canonical（零开销；绝大多数对话如此）。
+- session **首次写 identity 文件** → `git worktree add` 从当前 main HEAD 建 `session-<sid>` 分支 worktree
+  （完整副本）；此后该 session 对该 object 的 identity 读写都指向 worktree。
 
-**写重定向**：flow session（非 super、非控制面）内 data 原语（write_file / open_file+edit）写到 stone identity 路径时：
-- 解析器识别「这是 stone identity 文件」→ 实际写到 `flows/<sid>/<objId>/overlay/...`，而非 main worktree。
-- 返回成功；该改动 session 内立即生效（见读 overlay），但 main 不变。
+**覆盖范围 = stone identity 文件**：`self.md` / `readable.*` / `executable/**` / `visible/**` /
+seed-knowledge。（pool sediment 不在内——它独立、不进 git。）
 
-**读 overlay（shadow main）**：所有读 stone identity 的入口——`loadSelfInstructions`（self.md 进 instructions）、executable/visible/readable loader、open_file 读 stone 文件——按序：
-1. 若当前 thread 的 session 有 overlay 副本 → 读 overlay。
-2. 否则读 canonical main worktree。
-即 overlay 存在则 shadow，否则透传 main。**super flow / 控制面不应用 overlay shadow**（它们操作 canonical 本身）。
+**统一访问层（读写对称，一个目录）** —— 核心：
+```
+resolveStoneIdentityDir(ref):
+  business session 且已建 worktree → 该 worktree 目录
+  business session 未建 worktree   → 读:main / 写:触发 lazy 建后返回 worktree
+  super flow / 控制面              → main（或 super 操作的目标分支）
+```
+所有 identity 访问通道**都过它**（结构上杜绝再漏接）：
+- `write_file` / `open_file`+edit → 写 `resolveStoneIdentityDir`。
+- executable / visible / readable loader、`loadSelfInstructions` → 读 `resolveStoneIdentityDir`
+  （worktree 完整，**无需 shadow**）。
+- **program shell `$OOC_SELF_DIR` = `resolveStoneIdentityDir`** → 业务 session 指 worktree（完整副本，
+  裸读裸写都对，program shell **完全可参与自我编程**，不再被迫退出 identity）。
+- 控制面 visible client-source-url endpoint：带 sessionId 时读该 session worktree，否则 main。
 
-**生命周期**：overlay 随 session 目录存在；session 结束/清理即消亡。未经 super-flow 合入的 overlay 变更不进 canonical——这是「试验不污染身份」的体现。
+**生命周期**：worktree 随 session 存在；session 内改动是 worktree 工作区的 **uncommitted** 改动
+（session 期间不 commit——commit 边界留给 evolve_self，见 §4.1）。session 结束/演化后 GC（§4.1）。
 
-## 4. super flow 身份合入（自我演化闸门）
-super flow（sessionId="super"，由业务 session talk(target="super") 触发，带 creatorSessionId）提供身份合入能力：
+## 4. super flow 演化闸门 = merge session 分支
+super flow（sessionId="super"，由 business session `talk(target="super")` 触发，带 creatorSessionId）
+把 session 分支的试验**正式合入 main**：
 
-**机制**：
-1. **审视**：super flow 读「触发它的业务 session（creatorSessionId）的 overlay」与 main 的 diff，呈现给 agent（你这次试验改了身份的哪些部分）。
-2. **分支实验**：agent 决定合入 → 系统从 main 建一个实验分支（`stones/<expBranch>/objects/<id>/`，复用现有 worktree 机制），把 overlay 变更应用进去。
-3. **测**：agent 可在实验分支 worktree 上 exercise 改动（读/跑改后的 self/executable）；branch 隔离，不影响 main 与其它 session。
-4. **合入**：验证 OK → merge 实验分支回 main（复用现有 ff-merge / versioned-write 机制，commit 署名 = self，非 bootstrap）。merge 后 main 更新，所有 session 下一轮见新身份；该业务 session 的 overlay 可标记已合入/清理。
+**机制（无独立实验分支）**：
+1. **审视**：对 creator session 的 `session-<sid>` 分支 vs main 求 diff，呈现给 agent。
+2. **commit**：agent 认可 → 把 session 分支 worktree 的 uncommitted 改动 commit（署名 = self）。
+3. **测**：可在 session 分支上 exercise 改动（分支已隔离）。
+4. **合入**：ff/三方 merge `session-<sid>` 回 main（复用现有 merge，commit 署名 self）。main 更新，
+   下一轮所有 session 见新身份。
+5. 冲突/失败 → 报错，session 分支保留、main 不变，可处理后重试。
 
-**命令面（初版，可迭代）**：super flow 的 root 注册一条 `evolve_self`（或 `commit_identity`）method：
-- `evolve_self()` 无参 → 列出 creator session overlay vs main 的 diff（哪些文件改了）。
-- `evolve_self(args={ files?: string[], message: string })` → 选定文件（缺省全部）建分支应用、测试、merge main，返回 commitSha。
-- 失败（冲突/测试不过）→ 返回错误，overlay 保留，main 不变。
+**命令面**：super flow root 注册 `evolve_self`：
+- `evolve_self()` 无参 → 列 creator session 分支 vs main 的 diff。
+- `evolve_self(args={ files?, message })` → commit（选定文件，缺省全部）+ merge main，返回 commitSha。
 
-> 这补上了 persistable 缺失的「agent-facing version 命令」——但它不是裸 git，而是有审视+分支隔离+测试的演化闸门，契合「身份演化是深思熟虑的反思行为」。
+> session 分支本身即演化单元——super flow 是对它执行 commit+merge 的**角色**，不再「新建分支应用补丁」。
 
-## 5. 控制面 HTTP（决策 B：直写 main）
-`putSelf` / `putServerSource` / `createStone` 等控制面写入是**外部/人类权威写入**：直接对 main 经现有 `runVersioned`（worktree→commit→ff-merge）落 canonical，立即生效，**不走 overlay**。它们与 super-flow 合入是两条进入 canonical 的合法通道（一条外部、一条 Object 自我演化），互不经过对方。
+### 4.1 三点厘清
+1. **super 自身的双重身份**：super flow（sessionId="super"）本身也是一个 session——它若也原生改
+   identity，也会有自己的 `session-super` worktree（作为「被演化的分支」）；但其本职是对 *别的*
+   business session 分支（creatorSessionId）执行 merge（作为「演化的执行者」）。两角色并存，按
+   creatorSessionId 区分操作对象。
+2. **commit 时机 = 闸门**：business session 期间 agent 在 worktree 写 identity 都是 uncommitted 工作区
+   改动；只有 evolve_self 才 commit（署名 self）+ merge。「未 commit = 仍是试验 / commit = 提交身份」
+   这条 git 边界天然对齐「动→静」闸门，无需额外状态机。
+3. **GC（worktree/分支生命周期）**：
+   - evolve_self 成功 merge 后：`git worktree remove` + 删 `session-<sid>` 分支（已并入 main）。
+   - session 结束但从未 evolve：worktree 是「被放弃的试验」——随 session 目录清理时 `git worktree remove`
+     + prune 分支（或保留一窗口供恢复）。
+   - 防泄漏：活跃 worktree 数 = 当前「正在做自我编程的 session」数，因 lazy 而受控。
 
-## 6. agent-facing 语义变化（须同步更新引导）
-当前 `basic-knowledge.ts` 引导「业务 thread 里轻改（临时 helper method）：直接 write_file」。新模型下：
-- 业务 thread 对 self 文件的改动 = 进 overlay（session 内试验），**不再即时进 canonical/git**。
-- 想把改动沉淀为正式身份 → 去 super flow `evolve_self`。
-更新引导：明确「self 文件改动在 session 内是试验层，正式生效须经 super flow 合入 main」；消除「直接 write_file 即永久改身份」的旧心智。
+## 5. 控制面 HTTP（直写 main）
+`putSelf` / `putServerSource` / `createStone` 是外部/人类权威写入：直接对 main 经 `runVersioned`
+（worktree→commit→ff-merge）落 canonical，立即生效，**不走 session worktree**。与 super-flow 合入是
+两条进入 canonical 的合法通道（一外部、一 Object 自我演化），互不经过对方。
 
-## 7. 分阶段实现（每阶段独立可验）
-- **P1 路径收口（修 bug，低风险高价值）**：`stoneDir` 默认→main worktree；删 session-path 的 packages rewrite；保留 clamp。验证：现有 .ooc-world 读 self/executable 命中 main；file/search/persistable 测试不回归。**这一阶段即消除三套分叉 + edit 写错地方。**
-- **P2 overlay 读写**：识别 stone identity 路径 → 写重定向到 `flows/<sid>/<objId>/overlay/`；读入口 overlay-shadow-main。验证：session 内改 self.md→本 session 读到新值、main 不变、别的 session 读到旧 main。
-- **P3 super-flow 合入**：`evolve_self` 命令（diff/branch/apply/test/merge main，复用 worktree+ff-merge）。验证：overlay→evolve_self→main 更新→新 session 见新身份；冲突/失败 overlay 保留。
-- **P4 引导 + 概念同步**：更新 `basic-knowledge.ts` 引导；更新 `meta/object.doc.ts` persistable 节点（stone main=canonical / flow overlay / super-flow 合入），改后 `bun tsc --noEmit meta/object.doc.ts` 验证。
+## 6. agent-facing 语义（引导更新）
+- business session 改 identity = 在 session worktree 上试验（完整副本，本 session 立即可用，
+  **program shell 也能读写完整 self**），**不进 main**。
+- 正式生效 → super flow `evolve_self`（commit + merge main）。
+- 消除「直接 write_file 即永久改身份」旧心智；明确「session 是 worktree 试验场，super flow 是合入闸门」。
+- **program shell 可正常自我编程**（`$OOC_SELF_DIR` 指 worktree 完整副本）——不再有「shell 改 method
+  落不到位 / 读不到完整 self」的坑。
+
+## 7. 分阶段实现
+- **P1 路径收口**（已落地）。
+- **P2'（worktree 重做）**：替换 plain overlay 为 lazy session worktree；落地统一 `resolveStoneIdentityDir`，
+  所有通道（write_file / loader / program shell `$OOC_SELF_DIR` / 控制面 visible endpoint）改走它。
+  验证：session 内改 self.md→worktree、program shell 裸读完整、main 不变、别的 session 读 main。
+- **P3'（演化重做）**：`evolve_self` = commit session 分支 + merge main（去实验分支）。验证：
+  session→evolve_self→main 更新→新 session 见新身份；多 session 并发 evolve 走 git 三方合并。
+- **P4 引导 + 概念同步**：更新 `basic-knowledge.ts`、`meta/object.doc.ts` persistable 节点。
+- **回收旧实现**：删 plain overlay（`session-overlay.ts` 的 overlay 路径读写、§3 旧重定向）；
+  `OOC_SELF_DIR` 从 main（止血 727a33a7）改指 worktree。
 
 ## 8. 边界与风险
-- **main 在 session 有 overlay 期间被控制面/别的 super-flow 改了** → overlay 仍 shadow（session 看自己的试验值）；evolve_self 合入时按当时 main 建分支，可能 merge 冲突 → 报错让 agent 处理（不静默覆盖）。
-- **super flow 读不读 overlay**：super flow 操作 canonical（建分支自 main），其自身 thread 不应用 overlay shadow；但它需能「读到 creator session 的 overlay 内容」作为合入输入（显式取 overlay，非 shadow）。
-- **「轻改」摩擦**：业务 thread 改 executable 加 helper 不再即时生效于其它 session（须 evolve_self）——这是有意的（身份演化要经闸门）。若高频轻改体验差，后续可加「session 内 overlay 的 executable 在本 session 即时可调」（overlay 的 executable 也参与本 session 的方法解析），已在 P2 读 overlay 覆盖。
-- **builtin objects（supervisor/user）**：走 `packages/@ooc/builtins/<id>`，不在 stones 分支模型内，overlay/演化不适用（保持现状）。
+- **main 漂移 = 快照隔离**：worktree 是创建时 main 快照；session 期间 main 被控制面/别的 super-flow 改
+  → worktree 不自动跟。evolve_self merge 时三方合并/冲突由 git 处理（不静默覆盖）。对「身份试验隔离」是优点。
+- **多 session 并发演化同一 object**：多个 session 分支并存，各自 evolve_self merge → 原生 git 三方合并/冲突。
+- **worktree 开销**：lazy 化 → 仅活跃自我编程 session 持 worktree；GC（§4.1）回收。
+- **builtin objects**（user 等）走 `packages/@ooc/builtins/<id>`，不在 stones 分支模型，无 worktree/演化。
 
 ## 9. 验收
-1. P1 后：无 packages rewrite；stone 读写单一权威 main worktree；现有测试 + harness persistable 复跑不再「working dir vs git 分叉」。
-2. P2 后：overlay 读写隔离正确（session 私有、shadow main）。
-3. P3 后：evolve_self 端到端（overlay→分支→测→合 main）；reflectable e2e 沉淀身份场景达 Good。
-4. 全程：core/app-server 测试不回归；tsc + silent-swallow + deprecated gate 绿。
+1. P2' 后：business session 改 identity 落 session worktree；program shell `$OOC_SELF_DIR` 裸读到完整
+   identity；main 不变；别的 session 读 main。
+2. P3' 后：`evolve_self`（commit+merge）端到端；多 session 并发 evolve 走 git 合并；reflectable 沉淀身份
+   场景达 Good。
+3. 全程 core/app-server 测试不回归；tsc + silent-swallow + deprecated gate 绿。
