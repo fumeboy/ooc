@@ -13,6 +13,7 @@ import { getLatestDebugApi } from "./api.get-latest-debug";
 import { getLlmConfigApi } from "./api.get-llm-config";
 import { getLoopDebugApi } from "./api.get-loop-debug";
 import { listJobsApi } from "./api.list-jobs";
+import { activityApi } from "./api.activity";
 import { listLoopDebugApi } from "./api.list-loop-debug";
 import { permissionDecisionApi } from "./api.permission-decision";
 import { createRuntimeService } from "./service";
@@ -35,6 +36,7 @@ export function runtimeModule(config: RuntimeModuleConfig) {
   return new Elysia({ prefix: "/api", name: "ooc.runtime" })
     .use(getLlmConfigApi(service))
     .use(listJobsApi(service))
+    .use(activityApi(service))
     .use(getJobApi(service))
     .use(enableGlobalPauseApi(service))
     .use(disableGlobalPauseApi(service))

@@ -66,6 +66,7 @@ function buildRouteCases(): RouteCase[] {
     { name: "runtime.global-pause.status", method: "GET", path: "/api/runtime/global-pause/status" },
     { name: "runtime.debug.status", method: "GET", path: "/api/runtime/debug/status" },
     { name: "runtime.llm-config", method: "GET", path: "/api/runtime/llm-config" },
+    { name: "runtime.activity", method: "GET", path: "/api/runtime/activity" },
 
     // Flows / sessions
     { name: "flows.list", method: "GET", path: "/api/flows" },

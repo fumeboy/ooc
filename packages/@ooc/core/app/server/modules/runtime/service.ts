@@ -6,6 +6,7 @@ import {
   getDebugStatus,
   notifyThreadActivated,
 } from "@ooc/core/observable";
+import { logPatternSnapshot, type LogPattern } from "@ooc/core/observable/log-aggregator";
 import {
   llmInputFile,
   llmOutputFile,
@@ -55,6 +56,24 @@ async function readDebugJson(file: string, label: string, details: Record<string
   }
 }
 
+/** 活动快照里的单个 job（RuntimeJob + 派生 ageMs）。 */
+export interface RuntimeActivityJob extends RuntimeJob {
+  /** 仅 running job：now - startedAt（ms），一眼看出跑了多久（定位长跑/卡住）。 */
+  ageMs?: number;
+}
+
+/** 系统活动快照（getActivity 返回）。 */
+export interface RuntimeActivitySnapshot {
+  /** 快照时刻（ms）。 */
+  now: number;
+  /** 在跑/排队/最近结束的 job（running 带 ageMs）。 */
+  jobs: RuntimeActivityJob[];
+  /** running job 数（快速判断系统是否在动）。 */
+  runningCount: number;
+  /** 主导日志模式（按次数降序 top-K），定位刷屏/重复事件。 */
+  logPatterns: LogPattern[];
+}
+
 export interface RuntimeService {
   getLlmConfig(): {
     configured: boolean;
@@ -65,6 +84,13 @@ export interface RuntimeService {
   };
   listJobs(): { items: RuntimeJob[] };
   getJob(jobId: string): RuntimeJob | undefined;
+  /**
+   * 系统活动快照（observable 诊断原语，2026-06-06）：一次读出服务端此刻全貌——
+   * 在跑/排队的 job（含 ageMs，定位「卡住多久」）+ 主导日志模式（来自 log-aggregator，
+   * 定位「被什么重复事件刷屏」）。供 /api/runtime/activity 端点 / harness 超时快照消费，
+   * 把「盲等到超时」变成「超时即可诊断」。
+   */
+  getActivity(): RuntimeActivitySnapshot;
   enableGlobalPause(): { enabled: true };
   /**
    * 解除全局 pause：翻 flag + **扫所有 session 的 paused thread 入队 resume-thread job**
@@ -148,6 +174,16 @@ export function createRuntimeService(deps: {
     },
     getJob(jobId: string) {
       return deps.jobManager.getJob(jobId);
+    },
+    getActivity() {
+      const now = Date.now();
+      const jobs: RuntimeActivityJob[] = deps.jobManager.listJobs().map((j) =>
+        j.status === "running" && j.startedAt != null
+          ? { ...j, ageMs: now - j.startedAt }
+          : { ...j },
+      );
+      const runningCount = jobs.filter((j) => j.status === "running").length;
+      return { now, jobs, runningCount, logPatterns: logPatternSnapshot() };
     },
     enableGlobalPause() {
       deps.pauseStore.enableGlobalPause();

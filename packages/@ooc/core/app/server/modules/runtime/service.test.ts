@@ -7,6 +7,7 @@ import { createPauseStore } from "../../runtime/pause-store";
 import { createRuntimeService } from "./service";
 import { AppServerError } from "../../bootstrap/errors";
 import { clearObservableDebugState } from "@ooc/core/observable";
+import { observeWarn, __resetLogAggregator } from "@ooc/core/observable/log-aggregator";
 
 let tempRoot: string | undefined;
 
@@ -77,6 +78,37 @@ describe("runtime service", () => {
     // each enqueued a resume-thread job
     const resumeJobs = jobManager.listJobs().filter((j) => j.kind === "resume-thread");
     expect(resumeJobs.length).toBe(2);
+  });
+
+  test("getActivity 汇总 running job(含 ageMs) + 主导日志模式", () => {
+    __resetLogAggregator();
+    const jobManager = createJobManager();
+    const service = createRuntimeService({
+      baseDir: "/tmp/ooc-runtime-test-nonexistent",
+      pauseStore: createPauseStore(),
+      jobManager,
+    });
+
+    // 一个 queued + 一个 claim 成 running 的 job
+    jobManager.createRunThreadJob({ sessionId: "s1", objectId: "a", threadId: "t1" });
+    const job2 = jobManager.createRunThreadJob({ sessionId: "s2", objectId: "b", threadId: "t2" });
+    jobManager.tryClaimQueuedJob(job2.jobId); // → running, startedAt 置位
+
+    // 模拟刷屏警告经聚合器
+    for (let i = 0; i < 5; i++) observeWarn("readThread.missing-object", "missing obj");
+
+    const act = service.getActivity();
+    expect(act.runningCount).toBe(1);
+    expect(typeof act.now).toBe("number");
+    const running = act.jobs.find((j) => j.status === "running");
+    expect(running?.objectId).toBe("b");
+    expect(typeof running?.ageMs).toBe("number"); // running 带 ageMs
+    expect(running!.ageMs!).toBeGreaterThanOrEqual(0);
+    const queued = act.jobs.find((j) => j.status === "queued");
+    expect(queued?.ageMs).toBeUndefined(); // 非 running 无 ageMs
+    // 主导日志模式可见
+    expect(act.logPatterns[0]).toMatchObject({ key: "readThread.missing-object", count: 5 });
+    __resetLogAggregator();
   });
 
   test("toggles observable debug status", () => {
