@@ -59,6 +59,9 @@
 - [self-iteration-frontier.md](./self-iteration-frontier.md) —— OOC 设计哲学 + 是否足以「运行 OOC 迭代 OOC 源码」：
   层次 A（Object 自我迭代）已闭环；层次 B（框架自我迭代）尚不成立，三缺口（边界/重载/治理）+
   渐近路径（B 归约为 A）+ 最小 dogfooding 探针建议。
+- [dogfooding-probe-design.md](./dogfooding-probe-design.md) —— 最小 dogfooding 探针实验设计：
+  trivial 核心改动（activity 加 probeMarker）+ 5 阶段插桩协议 + 预判结果矩阵（断点定位三缺口）+
+  可落地的确定性探针脚本。把"足以自我迭代"从断言变成有矩阵支撑的事实。
 
 ## 文档约定
 
