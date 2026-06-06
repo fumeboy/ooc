@@ -15,7 +15,7 @@
 
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import { stoneDir, STONES_MAIN_BRANCH, STONES_BARE_REPO_DIR } from "./common";
+import { stoneDir, STONES_MAIN_BRANCH, STONES_BARE_REPO_DIR, type StoneObjectRef } from "./common";
 import { gitWorktreeAdd } from "../programmable/git";
 import { SUPER_SESSION_ID } from "../_shared/types/constants";
 
@@ -32,7 +32,7 @@ function stonesBareRepoDir(baseDir: string): string {
 }
 
 /** session worktree 在磁盘的路径：`<baseDir>/stones/session-<sid>`（与 `_stonesBranch` 布局对齐）。 */
-function sessionWorktreePath(baseDir: string, sessionId: string): string {
+export function sessionWorktreePath(baseDir: string, sessionId: string): string {
   return join(baseDir, "stones", sessionStoneBranch(sessionId));
 }
 
@@ -91,16 +91,32 @@ export async function resolveStoneIdentityDir(
   ref: { baseDir: string; sessionId?: string; objectId: string },
   mode: "read" | "write",
 ): Promise<string> {
+  return stoneDir(await resolveStoneIdentityRef(ref, mode));
+}
+
+/**
+ * `resolveStoneIdentityDir` 的 ref 版：返回完整 `StoneObjectRef`，business session
+ * 命中 worktree 时带 `_stonesBranch="session-<sid>"`（否则裸 main ref）。
+ *
+ * 给 **ref-based 通道**用（loadSelfInstructions / ServerLoader feed / program shell）：
+ * 这些通道下游靠 `stoneDir(ref)` / `readSelf(ref)` 路由，传 worktree-aware ref 即可让
+ * 它们整体读 worktree 完整副本，无需各自手拼路径。路由语义与 `resolveStoneIdentityDir`
+ * 完全一致（同一实现）。
+ */
+export async function resolveStoneIdentityRef(
+  ref: { baseDir: string; sessionId?: string; objectId: string },
+  mode: "read" | "write",
+): Promise<StoneObjectRef> {
   const { baseDir, sessionId, objectId } = ref;
-  const mainDir = stoneDir({ baseDir, objectId });
-  if (!sessionUsesWorktree(sessionId)) return mainDir;
+  const mainRef: StoneObjectRef = { baseDir, objectId };
+  if (!sessionUsesWorktree(sessionId)) return mainRef;
 
   const wtPath = sessionWorktreePath(baseDir, sessionId!);
   let ready = await pathExists(wtPath);
   if (!ready) {
-    if (mode === "read") return mainDir; // 未建且只读 → 透传 main
+    if (mode === "read") return mainRef; // 未建且只读 → 透传 main
     ready = await ensureSessionWorktree(baseDir, sessionId!); // 写 → lazy 建
-    if (!ready) return mainDir; // 建失败兜底
+    if (!ready) return mainRef; // 建失败兜底
   }
-  return stoneDir({ baseDir, objectId, _stonesBranch: sessionStoneBranch(sessionId!) });
+  return { baseDir, objectId, _stonesBranch: sessionStoneBranch(sessionId!) };
 }

@@ -133,6 +133,16 @@ export {
   readStoneFileWithOverlay,
 } from "./session-overlay";
 
+export {
+  // stone-worktree: session identity 的 worktree 统一访问层（取代 plain overlay）
+  resolveStoneIdentityDir,
+  resolveStoneIdentityRef,
+  sessionStoneBranch,
+  sessionWorktreePath,
+  sessionUsesWorktree,
+  ensureSessionWorktree,
+} from "./stone-worktree";
+
 export { readSelf, selfFile, writeSelf } from "./stone-self";
 export {
   readReadable,
