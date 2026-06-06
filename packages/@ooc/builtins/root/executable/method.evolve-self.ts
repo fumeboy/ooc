@@ -2,7 +2,7 @@
  * root.evolve_self command —— super-flow 身份合入闸门（design §4 / P3）。
  *
  * 只在 super flow（sessionId="super"）里有意义：把「触发本 super 的业务 session
- * (creatorSessionId) 的 overlay 试验改动」正式合入 canonical main。
+ * (creatorSessionId) 的 worktree 试验改动」正式合入 canonical main。
  *
  * 两种用法：
  * - 无 args / 无 message → **diff 模式**：列出 creator session worktree 改了哪些 stone 文件。
@@ -100,7 +100,7 @@ export async function executeEvolveSelf(ctx: MethodExecutionContext): Promise<st
 
   const creatorSessionId = thread.creatorSessionId;
   if (!creatorSessionId || isSuperSessionId(creatorSessionId)) {
-    return "[evolve_self] 拿不到触发本 super flow 的业务 session（thread.creatorSessionId 缺失）。evolve_self 需要由某个业务 session talk(target=\"super\") 触发，才能定位要合入的 overlay。";
+    return "[evolve_self] 拿不到触发本 super flow 的业务 session（thread.creatorSessionId 缺失）。evolve_self 需要由某个业务 session talk(target=\"super\") 触发，才能定位要合入的 session worktree。";
   }
 
   const message = asString(ctx.args.message);
