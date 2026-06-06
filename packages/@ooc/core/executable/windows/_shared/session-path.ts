@@ -25,6 +25,7 @@
 import { existsSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep, join } from "node:path";
 import type { ThreadContext } from "../../../thinkable/context";
+import { nestedObjectPath } from "../../../_shared/types/thread";
 
 /**
  * 把 LLM 传入的路径解析为绝对路径：
@@ -161,6 +162,29 @@ export function classifyPackagesPath(
     return { kind: "packages-world", relInPackages: relWorktree };
   }
   return { kind: "non-package" };
+}
+
+/**
+ * 把 classifyPackagesPath 给出的 `relInPackages`（相对 `stones/main/objects/` 根，含 owner
+ * 段 + children/ marker，如 `a/children/b/self.md`）转成相对 object stone 根的
+ * `relWithinObject`（如 `self.md`），通过剥掉 owner 的 nestedObjectPath 物理前缀。
+ *
+ * 与 classifyPackagesPath 互逆，供 worktree 写重定向（file builtin write_file/edit）把
+ * 落点拼回该 session worktree 的 object 目录。
+ *
+ * @returns relWithinObject；若 relInPackages 不以 owner 物理前缀起头返回 undefined（防御）。
+ */
+export function relWithinObjectFromPackages(
+  ownerObjectId: string,
+  relInPackages: string,
+): string | undefined {
+  const prefixSegs = nestedObjectPath(ownerObjectId);
+  const segs = relInPackages.split("/").filter(Boolean);
+  if (segs.length < prefixSegs.length) return undefined;
+  for (let i = 0; i < prefixSegs.length; i += 1) {
+    if (segs[i] !== prefixSegs[i]) return undefined;
+  }
+  return segs.slice(prefixSegs.length).join("/");
 }
 
 export const __testing = { rewritePackagesPath, rewritePoolsPath, classifyPackagesPath };

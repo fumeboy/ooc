@@ -6,7 +6,7 @@
  *   `session-<sid>`（完整工作副本，复用 stones bare repo），读写都指向它。
  * - super flow / 控制面 → 直接 main canonical。
  *
- * 取代 plain overlay（session-overlay.ts）：worktree 是完整副本，读不需 shadow、裸读
+ * 取代旧 plain overlay 模型：worktree 是完整副本，读不需 shadow、裸读
  * （program shell $OOC_SELF_DIR）看得到完整 identity、读写都收敛到「一个目录」。
  *
  * 本文件只负责「解析 identity 目录 + lazy 建/检测 worktree」——不碰 commit/merge
@@ -38,7 +38,6 @@ export function sessionWorktreePath(baseDir: string, sessionId: string): string 
 
 /**
  * 该 session 是否走 worktree（business session 才走；super / 控制面 / 无 session 直接 main）。
- * 与 session-overlay.sessionUsesOverlay 同款判定，便于平滑切换。
  */
 export function sessionUsesWorktree(sessionId: string | undefined): boolean {
   if (!sessionId) return false;

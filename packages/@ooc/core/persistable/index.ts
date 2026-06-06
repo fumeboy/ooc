@@ -124,16 +124,6 @@ export {
 } from "./flow-thread-context";
 
 export {
-  OVERLAY_SUBDIR,
-  overlayStoneFilePath,
-  sessionUsesOverlay,
-  relWithinObjectFromPackages,
-  readOverlayFile,
-  writeOverlayFile,
-  readStoneFileWithOverlay,
-} from "./session-overlay";
-
-export {
   // stone-worktree: session identity 的 worktree 统一访问层（取代 plain overlay）
   resolveStoneIdentityDir,
   resolveStoneIdentityRef,
@@ -248,7 +238,7 @@ export {
 } from "../programmable/versioned-write.js";
 
 export {
-  // evolve-self: super-flow 身份合入闸门（overlay → main）
+  // evolve-self: super-flow 身份合入闸门（session worktree → main）
   evolveSelfDiff,
   evolveSelfMerge,
   type EvolveSelfInput,
@@ -256,11 +246,6 @@ export {
   type EvolveSelfMerged,
   type EvolveSelfErr,
 } from "../programmable/evolve-self.js";
-
-export {
-  overlayRootDir,
-  listOverlayFiles,
-} from "./session-overlay";
 
 export { parseMentions } from "./mention";
 

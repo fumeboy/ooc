@@ -36,12 +36,12 @@ import {
 } from "@ooc/core/extendable/_shared/types.js";
 import {
   classifyPackagesPath,
+  relWithinObjectFromPackages,
   resolveSessionPath,
 } from "@ooc/core/extendable/_shared/session-path.js";
 import {
   versionedStoneWrite,
   sessionUsesWorktree,
-  relWithinObjectFromPackages,
   resolveStoneIdentityRef,
 } from "@ooc/core/persistable/index.js";
 import { stoneDir } from "@ooc/core/persistable/common.js";
