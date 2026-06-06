@@ -22,3 +22,16 @@ export function resolveBuiltinDir(objectId: string): string | undefined {
     return undefined;
   }
 }
+
+/**
+ * 给五件套**读**路径用的 builtin 目录解析：ref 是 builtin 且非 session worktree（无
+ * `_stonesBranch`）时返回框架包目录，否则返回 undefined（caller 回退到 `stoneDir(ref)`）。
+ * worktree ref（业务 session 试验层）不走框架包——builtin 不参与 worktree 版本化。
+ */
+export function resolveBuiltinReadDir(ref: {
+  objectId: string;
+  _stonesBranch?: string | null;
+}): string | undefined {
+  if (ref._stonesBranch != null) return undefined;
+  return resolveBuiltinDir(ref.objectId);
+}
