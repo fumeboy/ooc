@@ -1,9 +1,9 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { readThread, writeThread } from "@ooc/core/persistable";
+import { readThread } from "@ooc/core/persistable";
 import type { createJobManager } from "./job-manager";
 import { scanPausedThreads } from "./thread-query";
-import { applyResumeTransition, canResumeThread } from "./thread-transition";
+import { canResumeThread } from "./thread-transition";
 
 /**
  * Resume 编排（2026-06-05，observable pause 单向陷阱修复）。
@@ -50,7 +50,12 @@ export async function resumePausedThreadsInSession(
     if (!thread || !canResumeThread(thread)) {
       continue;
     }
-    await writeThread(applyResumeTransition(thread));
+    // **不在此预翻转 paused→running**：实际 resume 转换由 resume-thread job handler
+    // (resume.ts) 做——它 readThread 后断言 canResumeThread(=paused)、再 applyResumeTransition、
+    // 读 saved LLM output 并 dispatch 暂停时那一轮的 tool calls。编排层若在此预翻转并落盘，
+    // handler 重读到 running → canResumeThread 失败抛 "is not paused" → thread 永久卡 running、
+    // 保存的 tool call 永不 dispatch（2026-06-05 resume-orchestration 抽取引入的回归）。
+    // 编排层只负责「发现 paused thread + 入队」，thread 保持 paused 落盘直到 handler 接手。
     const job = deps.jobManager.createResumeThreadJob({
       sessionId,
       objectId,
