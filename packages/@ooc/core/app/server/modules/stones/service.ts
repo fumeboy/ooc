@@ -1,4 +1,5 @@
 import {
+  BUILTIN_OBJECT_IDS,
   createStoneObject,
   createPoolObject,
   poolKnowledgeDir,
@@ -10,6 +11,33 @@ import {
   writeReadable,
   writeSelf,
 } from "@ooc/core/persistable";
+
+/**
+ * `user` 是 caller（发起 talk 的临时 Object），不是可被对话的目标；其余 builtin（当前即
+ * supervisor）是合法的 session 对话目标。supervisor 的 self.md 写明它是「user 与系统交互的
+ * 首选入口」——把它合入 listStones，让全新 world（尚无任何 stone）也能直接选 supervisor 发起
+ * 对话，不再撞「需要先创建至少一个 stone」的门槛。
+ */
+const BUILTIN_CALLER_OBJECT_IDS: ReadonlySet<string> = new Set(["user"]);
+const BUILTIN_TALK_TARGET_IDS: readonly string[] = [...BUILTIN_OBJECT_IDS].filter(
+  (id) => !BUILTIN_CALLER_OBJECT_IDS.has(id),
+);
+
+/**
+ * 把 builtin 对话目标（supervisor）并入 stone 列表：已存在同名 stone（用户自建覆盖）则不重复加，
+ * 否则补一条指向 builtin 目录的条目。结果按 objectId 排序，与原 listStones 输出契约一致。
+ */
+function withBuiltinTalkTargets(
+  items: { objectId: string; dir: string }[],
+  dirOf: (objectId: string) => string,
+): { objectId: string; dir: string }[] {
+  const present = new Set(items.map((it) => it.objectId));
+  const merged = [...items];
+  for (const id of BUILTIN_TALK_TARGET_IDS) {
+    if (!present.has(id)) merged.push({ objectId: id, dir: dirOf(id) });
+  }
+  return merged.sort((a, b) => a.objectId.localeCompare(b.objectId));
+}
 import { loadUiServerMethods } from "@ooc/core/runtime/server-loader";
 import type { StoneRegistry } from "@ooc/core/runtime/stone-registry";
 import { parseKnowledgeFile, parseActivatesOn } from "@ooc/core/thinkable/knowledge";
@@ -201,10 +229,10 @@ export function createStonesService({
       if (stoneRegistry) {
         await stoneRegistry.rescan();
         return {
-          items: stoneRegistry
-            .listByKind("stone")
-            .map((s) => ({ objectId: s.objectId, dir: s.dir }))
-            .sort((a, b) => a.objectId.localeCompare(b.objectId)),
+          items: withBuiltinTalkTargets(
+            stoneRegistry.listByKind("stone").map((s) => ({ objectId: s.objectId, dir: s.dir })),
+            dir,
+          ),
         };
       }
 
@@ -251,7 +279,7 @@ export function createStonesService({
         return true;
       });
       return {
-        items: deduped.sort((a, b) => a.objectId.localeCompare(b.objectId)),
+        items: withBuiltinTalkTargets(deduped, dir),
       };
     },
     async createStone({
