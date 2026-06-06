@@ -1,8 +1,31 @@
 # Worktree 模型实现接续指南（P2'/P3'）
 
 > 把 stone/flow 从 plain overlay 落地为 session-worktree 统一模型的**可执行接续清单**。
-> 下次会话照此施工即可。设计权威：`docs/2026-06-05-stone-flow-overlay-versioning-design.md`（worktree 模型）。
+> 设计权威：`docs/2026-06-05-stone-flow-overlay-versioning-design.md`（worktree 模型）。
 > 复盘背景：`docs/2026-06-06-harness-sweep-retrospective.md`。memory：`project_stone_flow_worktree_model`。
+
+## ✅ 实施完成状态（2026-06-06）
+
+§1-§4 已全部落地（commit c2d50665 / 726ab0e1 / db9e54ea / 881c800c / 328cea8e）：
+
+- **§1 main-commit**：真实运行路径（HTTP 控制面 versionedStoneWrite / bootstrap）已全 commit；
+  地基测试恢复 worktree 完整副本内容断言。
+- **§2 五通道全接入** `resolveStoneIdentityRef/Dir`：program shell `$OOC_SELF_DIR` /
+  write_file·edit·open（file builtin）/ loadSelfInstructions·object_stone_dir（context）/
+  visible endpoint（client-source-url）。**loader 通道经分析确认无需改**——executable 命令集 /
+  注册 readable 是全局 main-canonical（object 类型系统全局共享，per-session 改命令集走
+  evolve_self→main→重注册），不 per-session 路由。
+- **§3 evolve_self 重做**：commit `session-<sid>` 分支 → rebase→ff-merge main → GC（移除
+  worktree + 删分支）；session 分支即演化单元（删 files 子集）；复用 commitWorktree/tryMergeSelf。
+- **§4 回收 plain overlay**：删 session-overlay.ts + 单测；relWithinObjectFromPackages 移入
+  session-path.ts；object.doc.ts main_overlay_evolve_model → main_worktree_evolve_model。
+- **gate 全绿**：tsc / 855 core+builtins tests / silent-swallow / deprecated-symbols；
+  deterministic e2e（stones-versioning / client-parity）绿。
+- **剩余**：全维度 LLM harness（§5，operator 重跑获取 gitignored 体验）。
+
+---
+
+以下为原始施工清单（已完成，留作实现细节参考）。
 
 ## 0. 已就绪的地基（commit 19d39f16）
 - `packages/@ooc/core/persistable/stone-worktree.ts`：
