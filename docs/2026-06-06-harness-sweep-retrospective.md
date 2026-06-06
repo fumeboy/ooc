@@ -51,6 +51,9 @@ persistable/observable/visible；programmable 从 TIMEOUT 救活为可出报告*
 ## 4. 待办
 
 ### A. worktree 模型完整落地（P2'/P3'，大工程，地基已就绪）
+> **完整可执行接续清单见 `docs/2026-06-06-worktree-implementation-guide.md`**
+> （文件清单 + 每步改法 + 复用接口 + 建议实施顺序）。下次会话主线从那里进入。
+
 - **接 5 通道过 `resolveStoneIdentityDir`**：write_file 写 / executable·visible·readable loader 读 /
   `loadSelfInstructions` / program shell `$OOC_SELF_DIR`（从止血的 main 改指 worktree）/ 控制面 visible
   client-source-url endpoint（带 sessionId）。
@@ -86,3 +89,25 @@ persistable/observable/visible；programmable 从 TIMEOUT 救活为可出报告*
 - **harness 可观测先于诊断**：超时维度因 officer.log 黑盒不可诊断，先修可观测（stream-json）才看到真相。
 - **设计靠 grill 收敛**：overlay→worktree 的统一不是一次想到，是用户连续追问（"读呢"/"worktree 完整拷贝"）
   逐层逼出。
+
+## 6. 接续参考索引（下次会话从这里进入）
+- **worktree P2'/P3' 实现**（主线）：`docs/2026-06-06-worktree-implementation-guide.md` —— 可执行接续清单
+  （5 通道文件 + 改法 + main-commit 同步前置 + evolve_self 重做 + 回收 overlay + 实施顺序）。
+- **worktree 设计权威**：`docs/2026-06-05-stone-flow-overlay-versioning-design.md`（§3 访问 / §4 evolve_self / §8 约束）。
+- **memory**：`project_stone_flow_worktree_model`（模型 + 落地进度 + 基础设施速查）。
+- **地基代码**：`packages/@ooc/core/persistable/stone-worktree.ts`（+ `.test.ts`，commit 19d39f16）。
+- **harness 报告 gitignored** —— §4.C 各维度 med/low issue 细节需**重跑获取**：
+  ```
+  NO_PROXY=localhost,127.0.0.1 bun packages/@ooc/tests/harness/orchestrate.ts --dimensions <dim> --timeout 1500
+  ```
+  报告落 `docs/harness-reports/<ts>/<dim>.report.md`（含现象/复现/证据/建议）。playbook 在
+  `packages/@ooc/tests/harness/playbooks/<dim>.playbook.md`（场景定义，进 git，可直接读）。
+
+### executable [high] 裸路径逃逸（正交独立小修，不并入 worktree，细节内联防丢）
+- **现象**：带 `stones/` 前缀的写被 overlay/identity 解析捕获，**裸相对路径**（如 `a.txt`）逃出、落到
+  world 根并污染它；world 根 `../../` 逃逸已被拦，但对象自治区边界未强制。
+- **复现**：建 assistant → 让它 program shell `echo x > a.txt`（不带前缀）→ 查 world 根出现 `a.txt`。
+- **修向**：非 identity 的相对写应 clamp 到 flow 工作区 `flows/<sid>/<objId>/` 而非 world 根。
+  文件：`packages/@ooc/core/executable/windows/_shared/session-path.ts`（`resolveSessionPath` 已有
+  world 根 clamp，扩展为「相对写默认落对象 flow 工作区」）。
+
