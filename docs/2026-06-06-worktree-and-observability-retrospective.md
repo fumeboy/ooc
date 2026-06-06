@@ -44,3 +44,19 @@ persistable **Good**（S1 改 self 落 worktree/main 不变、S2 evolve_self 署
 - **[数据 bug, 高] `assistant` 死 `_ref`**：thread-context.json 引用无 state.json 的 self 对象 `assistant` → readThread 刷屏的**数据根因**。注意：会话一 `1fe94790` 的 `isVolatileDerivedWindow` 只剔除 **guidance 派生窗**（type="guidance"），不覆盖 self 对象 ref。observable 已止血（不刷屏+可见），数据 bug 待根治。
 - **[visible, 中] 落点契约可发现性**：agent 默认不知 `visible/index.tsx` 是唯一被 endpoint 解析的落点（首轮写到 `pools/.../Card.tsx`）；多页 `client/pages/<n>.tsx` flow scope 链路不通。
 - **[persistable, 低] abandoned worktree 无 GC**：写后未 evolve 的 session worktree 只有 evolve_self 路径会回收；生产长跑可能堆积，需启动 prune / session 清理回收入口。
+
+## 5. 修复循环（round 2）—— harness 发现 → 修 → 验证 → 沉淀
+
+按 `engineering.harness.doc.ts:experience_sedimentation` 循环，本会话续修并复跑 harness 验证：
+
+**已修**：
+- **C1 死 _ref 根治**（`524699fb`）：self 门面窗（id=objectId）被写成死 `_ref` 是 readThread 370× 刷屏的**数据根因**。加 `isSelfWindow` + `isNonPersistedWindow` 统一剔除。**复跑验证：三维度 server log 刷屏 0 行**（之前 370/370）。
+- **C2 知识对齐**（`56e29073`）：§4 回收 overlay 后 basic-knowledge / evolve_self 知识仍写旧 overlay 模型（每会话误导 LLM），全部对齐 worktree。
+- **playbook 回流**（本 commit）：visible S1 rubric 裸 endpoint → `?sessionId` worktree 预览（消除假阴性）；persistable 补 identity(闸门) vs pool(即时) 双轨说明。
+
+**round 2 复跑结果**：persistable=Good（issues 2→1）/ visible=OK / programmable=TIMEOUT。observability 三件套生效：programmable 超时 dashboard 自带 `running=0 无主导日志` 快照——**确诊为体验官(claude -p)自身慢，非 OOC 系统缺陷**（服务端无运行 job、无刷屏）。
+
+**新增未决跟进**（round 2 发现，记录待后续）：
+- **[observable, 中] stone executable 顶层 console 泄漏 server stdout**：agent 写的 `executable/index.ts` 含顶层 `console.log` 时，ServerLoader 在服务端进程 `import()` 即执行 → console 进 server stdout（未沙箱化、未捕获）。programmable round 2 server log 509 行多为此类源码泄漏。需把动态加载的 stone executable 的 console 路由/沙箱化。
+- **[visible, 中→设计边界] 多页持久 client 无 stone-scope endpoint**：`client/pages/<n>.tsx` 写进 stone worktree 当前无解析端点（stone scope 只单页、忽略 page）。按设计 stone=单页 `visible/index.tsx`、多页=flow 临时——已在 visible playbook 点明边界；若要支持多页持久门面需扩 endpoint（暂判非必要）。
+- **[harness, 低] programmable officer 节奏**：1500s 仍 TIMEOUT 且 running=0 → officer 侧慢。需缩 programmable playbook 场景或给 officer 时间预算引导（harness 调优，非系统 bug）。
