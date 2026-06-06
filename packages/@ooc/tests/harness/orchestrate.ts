@@ -68,6 +68,26 @@ async function waitReady(port: number, ms: number): Promise<boolean> {
   return false;
 }
 
+/**
+ * 超时诊断：抓 /api/runtime/activity 系统活动快照（server 此刻仍存活）。
+ * 把「超时只标 TIMEOUT 盲黑盒」变成「超时即附带：哪些 job 跑了多久、被什么重复日志刷屏」。
+ * best-effort——失败返回 null（诊断辅助，不应阻断 harness 收尾）。
+ */
+async function captureActivitySnapshot(port: number): Promise<any | null> {
+  try {
+    const p = Bun.spawn({
+      cmd: ["curl", "-s", "--noproxy", "*", "--max-time", "5",
+            `http://localhost:${port}/api/runtime/activity`],
+      stdout: "pipe", stderr: "ignore", env,
+    });
+    const out = await new Response(p.stdout).text();
+    await p.exited;
+    return out.trim() ? JSON.parse(out) : null;
+  } catch {
+    return null; // 诊断快照抓取失败不阻断收尾（server 可能已先于 kill 退出）
+  }
+}
+
 function buildOfficerPrompt(tpl: string, vars: Record<string, string>): string {
   return tpl.replace(/\{(\w+)\}/g, (m, k) => vars[k] ?? m);
 }
@@ -76,6 +96,8 @@ type Result = {
   dimension: string; port: number; world: string;
   serverReady: boolean; officerExit: number | null; timedOut: boolean;
   reportExists: boolean; tier: string; durationMs: number; error?: string;
+  /** 超时诊断备注（来自 activity 快照）：runningCount + 主导日志模式，展示在 dashboard 备注列。 */
+  note?: string;
 };
 
 async function runDimension(
@@ -144,7 +166,22 @@ async function runDimension(
       const exit = officer.exited.then((c) => c as number | "timeout");
       const r = await Promise.race([exit, timeout]);
       if (timer) clearTimeout(timer);
-      if (r === "timeout") { res.timedOut = true; } else { res.officerExit = r; }
+      if (r === "timeout") {
+        res.timedOut = true;
+        // 超时即抓系统活动快照（server 仍存活，下方 finally 才 kill）——让 TIMEOUT 可诊断
+        const snap = await captureActivitySnapshot(port);
+        if (snap) {
+          await Bun.write(join(runDir, `${dim}.timeout-snapshot.json`), JSON.stringify(snap, null, 2));
+          const top = snap.logPatterns?.[0];
+          res.note =
+            `TIMEOUT 快照: running=${snap.runningCount}` +
+            (top ? ` 主导日志=${top.key}×${top.count}` : " 无主导日志");
+        } else {
+          res.note = "TIMEOUT 快照抓取失败（server 可能已退）";
+        }
+      } else {
+        res.officerExit = r;
+      }
       await pumps;
       await sink.end();
     }
@@ -181,7 +218,7 @@ function writeDashboard(runDir: string, runTs: string, results: Result[], opts: 
   const rows = results.map((r) =>
     `| ${r.dimension} | ${r.tier} | ${r.serverReady ? "✓" : "✗"} | ` +
     `${r.timedOut ? "TIMEOUT" : r.officerExit ?? "—"} | ${r.reportExists ? "✓" : "✗"} | ` +
-    `${Math.round(r.durationMs / 1000)}s | ${r.error ?? ""} |`).join("\n");
+    `${Math.round(r.durationMs / 1000)}s | ${r.note ?? r.error ?? ""} |`).join("\n");
   const md = `# 维度体验 Harness Dashboard
 
 - run_ts: ${runTs}
