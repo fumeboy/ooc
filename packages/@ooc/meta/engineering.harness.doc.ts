@@ -286,7 +286,46 @@ export const root: DocTreeNode = {
                 "外循环": "Supervisor 驱动的全局循环",
                 "内循环": "各 AgentOfX 在工程任务上自跑的循环",
                 "汇总反馈": "外循环中各 Agent 把内循环结果回报给 Supervisor 的步骤",
+                "经验沉淀": "每轮 harness 后把发现固化为 docs + memory + playbook 的常设环节 (见 experience_sedimentation)",
             },
+        },
+        experience_sedimentation: {
+            title: "经验沉淀 - harness 循环的常设收尾环节",
+            content: `
+            harness 循环不止"发现 bug → 修 bug"; **每一轮都必须把发现固化成可复用知识**,否则
+            下一轮(或下一个会话/Agent)会重蹈同一坑——循环不复利。沉淀是 harness 外循环的常设收尾。
+
+            **每轮 harness 后的闭环节奏**:
+            \`\`\`
+            跑 harness → 收 Issue/快照 → 修问题 → 验证(gate+回归) → 沉淀 → 下一轮
+                                                                  ↑ 常设,不可跳过
+            \`\`\`
+
+            **沉淀去三处**(按知识性质分流):
+            1. **docs/ 复盘**: 一个会话/一轮 sweep 的成果 + 根因 + 设计决策 + 未决跟进,落
+               \`docs/<date>-*-retrospective.md\`(锚 commit/报告)。给"为什么这么改"留长期可读记录。
+            2. **memory**: 跨会话复用的认知——feedback(我该怎么工作,如方法论)/ project(在做什么)/
+               reference。一句话能说清的坑不写三句(见 feedback_doc_concise)。
+            3. **playbook / meta doc**: 若 harness 暴露的是"评判基线/概念描述已与实现漂移"(如 playbook
+               仍写旧 overlay 落点),回流改 playbook / object.doc——否则下轮体验官按旧基线误判。
+
+            **沉淀的判据**(什么值得沉淀): 非显然、会再次踩、改变了我的工作方式或系统的概念。
+            纯一次性的修复细节(git 已记)不必再沉淀;"超时是 observability 症状,该增强可观测而非干等"
+            这类方法论必须沉淀。
+
+            **机械支撑**: harness 超时/卡住时,orchestrate 自动抓 \`/api/runtime/activity\` 快照
+            (\`<dim>.timeout-snapshot.json\`)+ dashboard 备注,让"盲 TIMEOUT"自带诊断——沉淀的事实
+            基础不再靠事后 tail 日志。
+
+            与 dogfooding(bootstrapping)的关系: 长期态下"沉淀"即 AgentOfX 经 super flow 把经验写进
+            自己 stone 的 memory(reflectable 闭环);暂行态由主会话写 docs/ + memory 代偿。
+            `,
+            named: {
+                "经验沉淀": "把 harness 发现固化为 docs+memory+playbook 的常设收尾环节",
+                "闭环节奏": "跑 harness → 收 Issue/快照 → 修 → 验证 → 沉淀 → 下一轮",
+                "沉淀去三处": "docs 复盘 / memory(feedback·project) / playbook·meta doc 回流",
+            },
+            sources: [["packages/@ooc/tests/harness/orchestrate.ts + docs/2026-06-06-worktree-and-observability-retrospective.md", "超时快照机械支撑(captureActivitySnapshot→timeout-snapshot.json+dashboard 备注)+ 复盘文档范例;可观测三件套见 observable/log-aggregator.ts 与 /api/runtime/activity"]],
         },
         bootstrapping: {
             title: "自举 (dogfooding) - OOC 用自己构建自己 (长期目标)",
