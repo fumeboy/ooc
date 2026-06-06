@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureStoneRepo, stoneDir, visibleDir } from "@ooc/core/persistable";
+import { ensureStoneRepo, ensureSessionWorktree, stoneDir, visibleDir } from "@ooc/core/persistable";
 import { readServerConfig } from "../../../bootstrap/config";
 import { buildServer } from "../../../index";
 
@@ -60,6 +60,37 @@ describe("ui · client-source-url stone scope", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.absPath).toBe(join(dir, "index.tsx"));
+  });
+
+  test("worktree 模型：带 ?sessionId 时业务 session 预览读 worktree 的 visible/index.tsx", async () => {
+    const { app, baseDir } = await makeApp();
+    const objectId = "vis_wt";
+    // main 上的 canonical visible（须 commit，worktree 从 main HEAD checkout）
+    const mainVisDir = visibleDir({ baseDir, objectId, _stonesBranch: "main" });
+    await mkdir(mainVisDir, { recursive: true });
+    await writeFile(join(mainVisDir, "index.tsx"), "export default () => 'MAIN';\n");
+    const mainDir = join(baseDir, "stones", "main");
+    Bun.spawnSync(["git", "add", "-A"], { cwd: mainDir });
+    Bun.spawnSync(
+      ["git", "-c", "user.name=t", "-c", "user.email=t@ooc.local", "commit", "-m", "seed"],
+      { cwd: mainDir },
+    );
+    // 业务 session s1 建 worktree 并改 visible 产物
+    await ensureSessionWorktree(baseDir, "s1");
+    const wtVisDir = visibleDir({ baseDir, objectId, _stonesBranch: "session-s1" });
+    await mkdir(wtVisDir, { recursive: true });
+    await writeFile(join(wtVisDir, "index.tsx"), "export default () => 'WORKTREE';\n");
+
+    // 带 sessionId → worktree；不带 → main
+    const wtRes = await app.handle(
+      new Request(`http://localhost/api/objects/stone/${objectId}/client-source-url?sessionId=s1`),
+    );
+    expect(wtRes.status).toBe(200);
+    expect((await wtRes.json()).absPath).toBe(join(wtVisDir, "index.tsx"));
+
+    const mainRes = await fetchSource(app, objectId);
+    expect(mainRes.status).toBe(200);
+    expect((await mainRes.json()).absPath).toBe(join(mainVisDir, "index.tsx"));
   });
 
   test("stone-root named .tsx (e.g. Card.tsx) does NOT resolve → 404 (contract: write visible/index.tsx)", async () => {

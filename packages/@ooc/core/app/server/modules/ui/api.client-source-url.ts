@@ -22,7 +22,7 @@
 import { Elysia, t } from "elysia";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import { objectDir, stoneDir, visibleDir } from "@ooc/core/persistable";
+import { objectDir, resolveStoneIdentityRef, stoneDir, visibleDir } from "@ooc/core/persistable";
 import type { ServerConfig } from "../../bootstrap/config";
 import { AppServerError } from "../../bootstrap/errors";
 
@@ -51,7 +51,14 @@ export function clientSourceUrlApi(config: Pick<ServerConfig, "baseDir">) {
 
       let absPath: string;
       if (scope === "stone") {
-        const stoneRef = { baseDir: config.baseDir, objectId };
+        // worktree 模型：带 sessionId（业务 session 预览自己改的 visible 产物）时经
+        // resolveStoneIdentityRef(read) 路由——已建 worktree 读 worktree 的 visible/index.tsx，
+        // 未建/super/控制面读 main canonical。
+        const sessionId = query.sessionId;
+        if (sessionId) assertSafeIdentifier(sessionId, "sessionId");
+        const stoneRef = sessionId
+          ? await resolveStoneIdentityRef({ baseDir: config.baseDir, sessionId, objectId }, "read")
+          : { baseDir: config.baseDir, objectId };
         // M2 ooc-6: canonical is visible/index.tsx; legacy client/index.tsx supported as fallback
         absPath = join(visibleDir(stoneRef), "index.tsx");
         try {
