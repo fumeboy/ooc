@@ -10,6 +10,7 @@ import { readRuntimeObjectState } from "./flow-runtime-object";
 import { readThreadContext, type ThreadContextEntry } from "./flow-thread-context";
 import type { ContextWindow } from "../executable/windows/_shared/types";
 import { isVolatileDerivedWindow } from "../executable/windows/_shared/types";
+import { persistInboxMessages, readInboxMessages } from "./inbox-store";
 
 /**
  * thread.json 的最小读写。
@@ -38,7 +39,9 @@ export function threadFile(ref: ThreadPersistenceRef): string {
  *   (issue 看板已整体移除)。
  */
 function stripVolatileForPersist(thread: ThreadContext): ThreadContext {
-  const { intentCache: _dropIntentCache, ...threadRest } = thread;
+  // inbox 落独立 per-message 目录（inbox-store，append-only 并发安全），不进 thread.json——
+  // 否则 worker 的 stale in-memory inbox 整体覆盖会丢并发回报（collaborable 竞态根因）。
+  const { intentCache: _dropIntentCache, inbox: _dropInbox, ...threadRest } = thread;
   return {
     ...threadRest,
     // volatile derived window（form-bound guidance）不落 thread.json：每轮 enrichment 重算，
@@ -65,6 +68,8 @@ function stripVolatileForPersist(thread: ThreadContext): ThreadContext {
 export async function writeThread(thread: ThreadContext): Promise<void> {
   if (!thread.persistence) return;
   await mkdir(threadDir(thread.persistence), { recursive: true });
+  // inbox → 独立 per-message 目录（append-only，并发安全），再从 thread.json strip 掉。
+  await persistInboxMessages(thread.persistence, thread.inbox);
   const sanitized = stripVolatileForPersist(thread);
   await writeFile(threadFile(thread.persistence), toJson(sanitized), "utf8");
 }
@@ -124,6 +129,15 @@ export async function readThread(
       contextWindows,
       persistence,
     };
+    // inbox 从独立 per-message 目录读（append-only 并发安全存储，inbox-store）；以目录为权威，
+    // merge 历史 thread.json.inbox（平滑迁移：旧数据仍含 inbox 字段时按 id 去重并入，
+    // 下次 writeThread 会把它落进目录、并从 thread.json strip 掉）。
+    const dirInbox = await readInboxMessages(persistence);
+    const seenInbox = new Set(dirInbox.map((m) => m.id));
+    restored.inbox = [
+      ...dirInbox,
+      ...((parsed.inbox ?? []).filter((m) => !seenInbox.has(m.id))),
+    ];
     // 2026-06-02 ooc-6 P6.§6: 新读路径 —— `<oid>/threads/<tid>/thread-context.json`
     // 优先级：thread-context.json (P6.§6 权威) > legacy contextRegistry (P5'.1)
     //         > thread.contextWindows[] (pre-P5'.1 legacy)
