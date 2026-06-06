@@ -40,11 +40,11 @@ import {
 } from "@ooc/core/extendable/_shared/session-path.js";
 import {
   versionedStoneWrite,
-  sessionUsesOverlay,
+  sessionUsesWorktree,
   relWithinObjectFromPackages,
-  writeOverlayFile,
-  overlayStoneFilePath,
+  resolveStoneIdentityRef,
 } from "@ooc/core/persistable/index.js";
+import { stoneDir } from "@ooc/core/persistable/common.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/thinkable/context/xml.js";
 import { readable } from "../readable.js";
 
@@ -380,32 +380,36 @@ export async function executeFileWindowSetRange(
  * - 失败：不写盘；返回错误字符串（前缀 [file_window.edit]，便于 LLM 解析）
  */
 /**
- * overlay 重定向决策（design §3）：当 file_window 指向 caller**自己 stone 自治区**的
- * canonical 路径、且当前 session 是普通业务 session 时，stone identity 文件的读/写都
- * 应落到 session overlay（试验层）。
+ * worktree 重定向决策（worktree 统一模型）：当 file_window 指向 caller**自己 stone
+ * 自治区**的 main canonical 路径、且当前是普通业务 session 时，identity 文件的读/写都
+ * 应落到该 session 的 worktree（`stones/session-<sid>/objects/<id>/...`，main HEAD 完整副本）。
  *
  * @returns
- *  - undefined：不重定向（非自己 stone / 非业务 session / 已经指向 overlay 等）→ 直读直写 window.path。
- *  - { readPath, writePath }：overlay 落点；读优先 overlay（不存在则 fallback canonical），写到 overlay。
+ *  - undefined：不重定向 → 直读直写 window.path。命中以下任一即不重定向：
+ *    非自己 stone / 非业务 session / 已指向 worktree（worktree 路径 classify 为 non-package）/
+ *    worktree 不可建（回退 main，避免裸写绕过 versioning——交回 caller 走 window.path 原路）。
+ *  - string：worktree 内的目标绝对路径（读写同一路径——worktree 是完整副本，文件必在）。
  */
-async function resolveStoneOverlayTarget(
+async function resolveStoneWorktreeTarget(
   ctx: MethodExecutionContext,
   absPath: string,
-): Promise<{ readCanonical: string; overlayWrite: string } | undefined> {
+  mode: "read" | "write",
+): Promise<string | undefined> {
   const thread = ctx.thread;
   const baseDir = thread?.persistence?.baseDir;
   const sessionId = thread?.persistence?.sessionId;
   const objectId = thread?.persistence?.objectId;
-  if (!baseDir || !objectId || !sessionUsesOverlay(sessionId)) return undefined;
+  if (!baseDir || !objectId || !sessionUsesWorktree(sessionId)) return undefined;
   const stoneClass = classifyPackagesPath(absPath, baseDir);
   if (stoneClass.kind !== "package-object") return undefined;
   if (stoneClass.ownerObjectId !== objectId) return undefined;
   const rel = relWithinObjectFromPackages(objectId, stoneClass.relInPackages);
   if (!rel) return undefined;
-  return {
-    readCanonical: absPath,
-    overlayWrite: overlayStoneFilePath(baseDir, sessionId!, objectId, rel),
-  };
+  // mode=read（open_file）：worktree 已建才重定向，不为一次读主动建 worktree（惰性）。
+  // mode=write（edit）：lazy 建 worktree，写必落 worktree（保 versioning 边界，不裸写 main）。
+  const wtRef = await resolveStoneIdentityRef({ baseDir, sessionId, objectId }, mode);
+  if (!wtRef._stonesBranch) return undefined; // 未建/建失败回退 main → 不重定向
+  return join(stoneDir(wtRef), ...rel.split("/").filter(Boolean));
 }
 
 export async function executeFileWindowEdit(
@@ -418,22 +422,17 @@ export async function executeFileWindowEdit(
     return "[file_window.edit] 缺少 args={ old, new } 或 args={ edits: [{old, new}, ...] }。";
   }
 
-  // overlay 重定向：若 window 指向 caller 自己 stone 的 canonical identity 文件且在业务
-  // session，读优先 overlay（试验层最新值），写回 overlay（不动 main）。
-  const overlay = await resolveStoneOverlayTarget(ctx, window.path);
+  // worktree 重定向：若 window 指向 caller 自己 stone 的 main canonical identity 文件且在
+  // 业务 session，读写都落该 session 的 worktree（完整副本，含本 session 已改值），main 不动。
+  // worktree 是 main HEAD 的完整 checkout，文件必在——读写同一路径，无 shadow/fallback。
+  const wtTarget = await resolveStoneWorktreeTarget(ctx, window.path, "write");
   let readPath = window.path;
   let writePath = window.path;
-  let toOverlay = false;
-  if (overlay) {
-    writePath = overlay.overlayWrite;
-    toOverlay = true;
-    // 读源：overlay 存在则读 overlay（已在本 session 改过），否则读 canonical（首次改）
-    try {
-      await stat(overlay.overlayWrite);
-      readPath = overlay.overlayWrite;
-    } catch {
-      readPath = overlay.readCanonical;
-    }
+  let toWorktree = false;
+  if (wtTarget) {
+    readPath = wtTarget;
+    writePath = wtTarget;
+    toWorktree = true;
   }
 
   let buffer: string;
@@ -449,18 +448,18 @@ export async function executeFileWindowEdit(
   }
 
   try {
-    if (toOverlay) await mkdir(dirname(writePath), { recursive: true });
+    if (toWorktree) await mkdir(dirname(writePath), { recursive: true });
     await writeFile(writePath, result.result, "utf8");
   } catch (err) {
     return `[file_window.edit] 写回 ${writePath} 失败：${(err as Error).message}`;
   }
 
-  if (toOverlay && ctx.thread?.events) {
+  if (toWorktree && ctx.thread?.events) {
     ctx.thread.events.push({
       category: "context_change",
       kind: "inject",
       text:
-        `[file_window.edit] 改动落在本 session 的 overlay 试验层（${writePath}），main 未变。` +
+        `[file_window.edit] 改动落在本 session 的 worktree（${writePath}），main 未变。` +
         `经 super flow evolve_self 合入 main 才永久生效。`,
     });
   }
@@ -594,38 +593,48 @@ const fileConstructor: ObjectMethod = {
           };
         }
 
-        // overlay 写重定向（design §3）：普通业务 session 对**自己 stone 自治区**的写
-        // → 落 session overlay（plain write，不走 versioning / 不 commit main）；本 session
-        // 内即时生效（读 overlay shadow），main 不变，经 super flow evolve_self 合入才永久。
-        // cross-scope（别人 stone）保持现有 versioning/PR-Issue 行为不变。
+        // worktree 写重定向（worktree 统一模型）：普通业务 session 对**自己 stone 自治区**的
+        // 写 → 落该 session 的 worktree（`stones/session-<sid>/objects/<id>/...`，plain write，
+        // 不走 versioning / 不 commit main）；本 session 内即时生效（worktree 完整副本，读写同
+        // 一目录），main 不变，经 super flow evolve_self 合入才永久。cross-scope（别人 stone）
+        // 保持现有 versioning/PR-Issue 行为不变。worktree 建失败回退 main → fall through 到
+        // versionedStoneWrite（绝不裸写 main 绕过 versioning）。
         const sessionId = thread.persistence?.sessionId;
         const isOwnStone = stoneClass.ownerObjectId === authorObjectId;
         const relWithinObject = isOwnStone
           ? relWithinObjectFromPackages(authorObjectId, stoneClass.relInPackages)
           : undefined;
-        if (isOwnStone && sessionUsesOverlay(sessionId) && relWithinObject) {
-          await writeOverlayFile(baseDir, sessionId!, authorObjectId, relWithinObject, content);
-          const overlayPath = overlayStoneFilePath(baseDir, sessionId!, authorObjectId, relWithinObject);
-          if (thread.events) {
-            thread.events.push({
-              category: "context_change",
-              kind: "inject",
-              text:
-                `[write_file] ${path} 的改动落在本 session 的 overlay 试验层（${overlayPath}），` +
-                `main 未变。本 session 内即时生效；要把它沉淀为正式身份，去 super flow 调 ` +
-                `evolve_self 合入 main 才永久生效。`,
-            });
+        if (isOwnStone && sessionUsesWorktree(sessionId) && relWithinObject) {
+          const wtRef = await resolveStoneIdentityRef(
+            { baseDir, sessionId, objectId: authorObjectId },
+            "write",
+          );
+          if (wtRef._stonesBranch) {
+            const wtTarget = join(stoneDir(wtRef), ...relWithinObject.split("/").filter(Boolean));
+            await mkdir(dirname(wtTarget), { recursive: true });
+            await writeFile(wtTarget, content, "utf8");
+            if (thread.events) {
+              thread.events.push({
+                category: "context_change",
+                kind: "inject",
+                text:
+                  `[write_file] ${path} 的改动落在本 session 的 worktree（${wtTarget}），` +
+                  `main 未变。本 session 内即时生效；要把它沉淀为正式身份，去 super flow 调 ` +
+                  `evolve_self 合入 main 才永久生效。`,
+              });
+            }
+            const wtWindow: FileWindow = {
+              id: generateWindowId("file"),
+              type: "file",
+              parentWindowId: ROOT_WINDOW_ID,
+              title: basenameOfPath(path),
+              status: "open",
+              createdAt: Date.now(),
+              path: wtTarget,
+            };
+            return { ok: true, object: wtWindow };
           }
-          const overlayWindow: FileWindow = {
-            id: generateWindowId("file"),
-            type: "file",
-            parentWindowId: ROOT_WINDOW_ID,
-            title: basenameOfPath(path),
-            status: "open",
-            createdAt: Date.now(),
-            path: overlayPath,
-          };
-          return { ok: true, object: overlayWindow };
+          // worktree 不可建 → fall through 到 versionedStoneWrite（保 versioning 边界）。
         }
 
         const versioned = await versionedStoneWrite({
@@ -696,17 +705,11 @@ const fileConstructor: ObjectMethod = {
     const rawPath = isString(ctx.args.path) ? ctx.args.path : "";
     if (!rawPath) return { ok: false, error: "[open_file] 缺少 path。" };
     let path = resolveSessionPath(thread, rawPath);
-    // overlay shadow（design §3）：在业务 session 打开自己 stone 的 identity 文件时，
-    // 若已有 session overlay 试验值，window 指向 overlay（读到试验层最新内容）；否则 canonical。
-    const openOverlay = await resolveStoneOverlayTarget(ctx, path);
-    if (openOverlay) {
-      try {
-        await stat(openOverlay.overlayWrite);
-        path = openOverlay.overlayWrite;
-      } catch {
-        /* overlay 不存在 → 保持 canonical */
-      }
-    }
+    // worktree 重定向（worktree 统一模型）：在业务 session 打开自己 stone 的 identity 文件时，
+    // 若该 session 已建 worktree（改过 identity），window 指向 worktree 文件（读到本 session 最新
+    // 内容）；未建则保持 main canonical（read 模式不为一次读主动建 worktree）。
+    const openWtTarget = await resolveStoneWorktreeTarget(ctx, path, "read");
+    if (openWtTarget) path = openWtTarget;
     try {
       await stat(path);
     } catch (err) {

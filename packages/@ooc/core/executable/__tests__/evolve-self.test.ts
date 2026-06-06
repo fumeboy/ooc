@@ -1,18 +1,19 @@
 /**
- * P3 super-flow evolve_self —— 身份合入闸门端到端验证（design §4）。
+ * P3 super-flow evolve_self —— 身份合入闸门端到端验证（worktree 统一模型，design §4）。
  *
  * 场景：
- *  1. 业务 session 改 self.md → overlay（P2）。
+ *  1. 业务 session 改 self.md → 该 session 的 worktree（P2）。
  *  2. super flow（带 creatorSessionId=业务 session）调 evolve_self diff → 列出改动文件。
- *  3. evolve_self merge → main self.md 更新 + git commit（署名 = objectId，非 bootstrap）。
+ *  3. evolve_self merge → commit session 分支 + ff-merge main（署名 = objectId，非 bootstrap），
+ *     worktree GC（移除目录 + 删分支）。
  *  4. 新 session 读到新身份（canonical main）。
- *  5. 错误路径：非 super flow / 无 overlay → fail-loud，main 不变。
+ *  5. 错误路径：非 super flow / 无改动 → fail-loud，main 不变。
  */
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { ensureStoneRepo, __resetSerialQueueForTests, readStoneFileWithOverlay, readSelf } from "@ooc/core/persistable";
+import { ensureStoneRepo, __resetSerialQueueForTests, readSelf } from "@ooc/core/persistable";
 import { executeWriteFileCommand } from "@ooc/builtins/root/executable/method.write-file";
 import { executeEvolveSelf } from "@ooc/builtins/root/executable/method.evolve-self";
 import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
@@ -51,7 +52,7 @@ function mainSelf(baseDir: string, id: string): string {
   return join(baseDir, "stones", "main", "objects", id, "self.md");
 }
 
-/** 业务 session ctx（write_file 走 overlay）。 */
+/** 业务 session ctx（write_file 走 worktree）。 */
 function bizCtx(baseDir: string, objectId: string, sessionId: string, args: Record<string, unknown>) {
   return {
     thread: {
@@ -90,10 +91,10 @@ function gitLastAuthor(baseDir: string): string {
 }
 
 describe("evolve_self (P3)", () => {
-  test("diff mode lists overlay files; merge mode commits to main (author=objectId); new session sees it", async () => {
+  test("diff mode lists worktree files; merge mode commits to main (author=objectId); new session sees it", async () => {
     const baseDir = await newWorld(["alice"]);
 
-    // 1. 业务 session s1 改 self.md → overlay
+    // 1. 业务 session s1 改 self.md → worktree
     await executeWriteFileCommand(
       bizCtx(baseDir, "alice", "s1", { path: "stones/alice/self.md", content: "alice v2 (evolved)\n" }),
     );
@@ -122,14 +123,17 @@ describe("evolve_self (P3)", () => {
     // git commit 署名 = alice（非 bootstrap/supervisor）
     expect(gitLastAuthor(baseDir)).toBe("alice");
 
-    // 4. 新 session（s2，无 overlay）读 canonical main → 新身份
-    const got = await readStoneFileWithOverlay(baseDir, "s2", "alice", "self.md", () =>
-      readSelf({ baseDir, objectId: "alice" }),
-    );
+    // worktree 已 GC（merge 后移除目录）
+    await expect(
+      stat(join(baseDir, "stones", "session-s1")),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+
+    // 4. 新 session（s2，无 worktree）读 canonical main → 新身份
+    const got = await readSelf({ baseDir, objectId: "alice" });
     expect(got).toBe("alice v2 (evolved)\n");
   });
 
-  test("merge supports multiple files + files subset selection", async () => {
+  test("merge 合入整个 session 的多文件改动（session 分支即演化单元）", async () => {
     const baseDir = await newWorld(["alice"]);
     await executeWriteFileCommand(
       bizCtx(baseDir, "alice", "s1", { path: "stones/alice/self.md", content: "self v2\n" }),
@@ -145,18 +149,18 @@ describe("evolve_self (P3)", () => {
     const diff = JSON.parse((await executeEvolveSelf(superCtx(baseDir, "alice", "s1", {}))) as string);
     expect(diff.files.sort()).toEqual(["executable/index.ts", "self.md"]);
 
-    // merge only self.md
+    // merge 整个 session（不再支持挑文件子集）→ 两个文件都合入 main
     const merge = JSON.parse(
       (await executeEvolveSelf(
-        superCtx(baseDir, "alice", "s1", { message: "only self", files: ["self.md"] }),
+        superCtx(baseDir, "alice", "s1", { message: "evolve both" }),
       )) as string,
     );
-    expect(merge.files).toEqual(["self.md"]);
+    expect(merge.files.sort()).toEqual(["executable/index.ts", "self.md"]);
     expect(await readFile(mainSelf(baseDir, "alice"), "utf8")).toBe("self v2\n");
-    // executable 未合入 main
-    await expect(
-      readFile(join(baseDir, "stones", "main", "objects", "alice", "executable", "index.ts"), "utf8"),
-    ).rejects.toMatchObject({ code: "ENOENT" });
+    // executable 也已合入 main
+    expect(
+      await readFile(join(baseDir, "stones", "main", "objects", "alice", "executable", "index.ts"), "utf8"),
+    ).toBe("export const methods = {};\n");
   });
 
   test("fail-loud: not in super flow → error, main unchanged", async () => {
@@ -175,10 +179,10 @@ describe("evolve_self (P3)", () => {
     expect(out).toContain("creatorSessionId");
   });
 
-  test("no overlay to merge → NO_OVERLAY error, main unchanged", async () => {
+  test("no worktree changes to merge → NO_CHANGES error, main unchanged", async () => {
     const baseDir = await newWorld(["alice"]);
     const out = await executeEvolveSelf(superCtx(baseDir, "alice", "s1", { message: "x" }));
-    expect(out).toContain("[evolve_self:NO_OVERLAY]");
+    expect(out).toContain("[evolve_self:NO_CHANGES]");
     expect(await readFile(mainSelf(baseDir, "alice"), "utf8")).toBe("alice v1\n");
   });
 });

@@ -5,14 +5,15 @@
  * (creatorSessionId) 的 overlay 试验改动」正式合入 canonical main。
  *
  * 两种用法：
- * - 无 args / 无 message → **diff 模式**：列出 creator session overlay 改了哪些 stone 文件。
- * - args={ message, files? } → **合入模式**：从 main 建实验分支应用 overlay 文件、
- *   self-scope ff-merge 回 main，返回 commitSha（署名 = objectId，非 bootstrap）。
- *   失败（冲突 / git 错）→ 错误字符串，overlay 保留、main 不变。
+ * - 无 args / 无 message → **diff 模式**：列出 creator session worktree 改了哪些 stone 文件。
+ * - args={ message } → **合入模式**：commit creator session 的 `session-<sid>` worktree、
+ *   rebase→self-scope ff-merge 回 main，返回 commitSha（署名 = objectId，非 bootstrap），
+ *   并 GC（移除 worktree + 删分支）。失败（冲突 / git 错）→ 错误字符串，worktree 保留、main 不变。
  *
  * 与 metaprog 的分工：metaprog 是裸 worktree 协议（开/写/commit/merge 手动四步）；
- * evolve_self 是 overlay 模型下的「一键合入身份试验」——读 overlay → 应用 → 合 main，
- * 是 Object 身份从「session 试验」到「main 提交」的常规通道。
+ * evolve_self 是 worktree 模型下的「一键合入身份试验」——commit session worktree → 合 main，
+ * 是 Object 身份从「session 试验」到「main 提交」的常规通道。**session 分支即演化单元**
+ * （整个 session 的 identity 改动一并合入，不再支持挑文件子集）。
  */
 
 import type {
@@ -35,26 +36,27 @@ evolve_self = **身份合入闸门**（仅 super flow 内可用）。
 
 OOC 模型：你在普通业务 session 里对自己 self 文件（self.md / readable.* /
 executable/** / visible/** / knowledge/**）的改动**不会即时改 main**——它们落在
-那个 session 的 overlay 试验层，session 内即时生效，但 main（canonical 权威自我）不变。
+那个 session 的 worktree（\`stones/session-<sid>/objects/<self>/\`，main 的完整副本），
+session 内即时生效，但 main（canonical 权威自我）不变。
 
 要把试验沉淀为正式身份，须在 **super flow** 里调 evolve_self，把触发本次 super 的
-那个业务 session 的 overlay 改动合入 main（git commit + ff-merge，署名你自己）。
+那个业务 session 的 worktree 改动合入 main（commit session 分支 + ff-merge，署名你自己）。
+**session 分支即演化单元**：整个 session 的 identity 改动一并合入。
 
 ## 用法
 
 - **看 diff**（无参）：\`open(command="evolve_self")\`
-  → 列出 creator session overlay 改了哪些 stone 文件（你这次试验改了身份的哪些部分）。
-- **合入**：\`open(command="evolve_self", args={ message: "为什么改", files?: ["self.md", ...] })\`
+  → 列出 creator session worktree 改了哪些 stone 文件（你这次试验改了身份的哪些部分）。
+- **合入**：\`open(command="evolve_self", args={ message: "为什么改" })\`
   - message 必填（commit 说明）。
-  - files 缺省=overlay 下全部；传子集只合选定文件。
-  - 成功返回 \`{ ok:true, commitSha, files }\`，main 已更新——下一轮新 session 见新身份。
-  - 失败（冲突 / 无 overlay）返回错误字符串，overlay 保留、main 不变。
+  - 成功返回 \`{ ok:true, commitSha, files }\`，main 已更新——下一轮新 session 见新身份；
+    worktree 已 GC（移除目录 + 删分支）。
+  - 失败（冲突 / 无改动）返回错误字符串，worktree 保留、main 不变。
 
 ## 何时用
 
 - caller 在业务 session 试改了自己的 self.md / executable，想"这次定型，永久生效"。
 - 你在 super flow 审视后认可这些改动 → evolve_self 合入。
-- 若 overlay 文件无需全合，用 files 选子集。
 `.trim();
 
 function asString(v: unknown): string | undefined {
@@ -76,7 +78,6 @@ export const evolveSelfCommand: ObjectMethod = {
   schema: {
     args: {
       message: { type: "string", required: false, description: "合入 commit 说明（合入模式必填）" },
-      files: { type: "array", required: false, description: "选定合入的文件（relWithinObject）；缺省全部" },
     },
   },
   intent: emptyIntent,
@@ -103,13 +104,8 @@ export async function executeEvolveSelf(ctx: MethodExecutionContext): Promise<st
   }
 
   const message = asString(ctx.args.message);
-  const filesRaw = ctx.args.files;
-  const files = filesRaw === undefined ? undefined : asStringArray(filesRaw);
-  if (filesRaw !== undefined && !files) {
-    return "[evolve_self] files 必须是字符串数组（relWithinObject 列表），如 [\"self.md\", \"executable/index.ts\"]。";
-  }
 
-  // 无 message → diff 模式（呈现 overlay 改了哪些文件）
+  // 无 message → diff 模式（呈现 worktree 改了哪些文件）
   if (!message || !message.trim()) {
     const diff = await evolveSelfDiff(baseDir, objectId, creatorSessionId);
     if (diff.files.length === 0) {
@@ -117,7 +113,7 @@ export async function executeEvolveSelf(ctx: MethodExecutionContext): Promise<st
         ok: true,
         kind: "diff",
         files: [],
-        note: `业务 session '${creatorSessionId}' 没有 overlay 改动可合入。`,
+        note: `业务 session '${creatorSessionId}' 没有 worktree 改动可合入。`,
       });
     }
     return JSON.stringify({
@@ -125,12 +121,12 @@ export async function executeEvolveSelf(ctx: MethodExecutionContext): Promise<st
       kind: "diff",
       creatorSessionId,
       files: diff.files,
-      note: "传 args={ message: \"...\", files?: [...] } 合入选定文件（缺省全部）。",
+      note: "传 args={ message: \"...\" } 把整个 session 的 identity 改动合入 main。",
     });
   }
 
   // 合入模式
-  const r = await evolveSelfMerge({ baseDir, objectId, creatorSessionId, message, files });
+  const r = await evolveSelfMerge({ baseDir, objectId, creatorSessionId, message });
   if (!r.ok) {
     return `[evolve_self:${r.code}] ${r.message}`;
   }

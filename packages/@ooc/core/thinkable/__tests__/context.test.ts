@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "bun:test";
 import { buildContext, buildInputItems, type ThreadContext } from "../context";
 import { clearKnowledgeLoaderCache } from "../knowledge";
-import { createStoneObject, createPoolObject, poolKnowledgeDir, writeSelf, writeOverlayFile } from "../../persistable";
+import { createStoneObject, createPoolObject, poolKnowledgeDir, writeSelf, ensureStoneRepo, ensureSessionWorktree } from "../../persistable";
 import {
   ROOT_WINDOW_ID,
   type MethodExecWindow,
@@ -633,29 +633,40 @@ describe("buildInputItems self.md injection", () => {
     expect(xml).not.toContain("<self ");
   });
 
-  it("P2 overlay: business session reads overlay self.md (shadow main); other session reads main", async () => {
+  it("P2 worktree: business session reads worktree self.md; other session + super read main", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-self-"));
-    const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
-    await writeSelf(stoneRef, "canonical Alice");
-    // s1 写了 overlay 试验值
-    await writeOverlayFile(tempRoot, "s1", "alice", "self.md", "overlay Alice (experiment)");
+    await ensureStoneRepo({ baseDir: tempRoot });
+    await createStoneObject({ baseDir: tempRoot, objectId: "alice", _stonesBranch: "main" });
+    await writeSelf({ baseDir: tempRoot, objectId: "alice", _stonesBranch: "main" }, "canonical Alice");
+    // identity 入 main（worktree 从 main HEAD checkout 须先 commit）
+    const mainDir = join(tempRoot, "stones", "main");
+    Bun.spawnSync(["git", "add", "-A"], { cwd: mainDir });
+    Bun.spawnSync(
+      ["git", "-c", "user.name=t", "-c", "user.email=t@ooc.local", "commit", "-m", "seed"],
+      { cwd: mainDir },
+    );
+    // s1 建 worktree 并写试验值（模拟业务 session 改自己 self.md）
+    await ensureSessionWorktree(tempRoot, "s1");
+    await writeSelf(
+      { baseDir: tempRoot, objectId: "alice", _stonesBranch: "session-s1" },
+      "worktree Alice (experiment)",
+    );
 
-    // s1 读 overlay
+    // s1 读 worktree
     const t1 = makeThread({
       id: "t1",
       persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "alice", threadId: "t1" },
     });
-    expect((await buildInputItems(t1)).instructions).toBe("overlay Alice (experiment)");
+    expect((await buildInputItems(t1)).instructions).toBe("worktree Alice (experiment)");
 
-    // s2 没有 overlay → 读 canonical main
+    // s2 没有 worktree → 读 canonical main
     const t2 = makeThread({
       id: "t2",
       persistence: { baseDir: tempRoot, sessionId: "s2", objectId: "alice", threadId: "t2" },
     });
     expect((await buildInputItems(t2)).instructions).toBe("canonical Alice");
 
-    // super flow 读 canonical（不 shadow），即便 super 目录下有 overlay
-    await writeOverlayFile(tempRoot, "super", "alice", "self.md", "should be ignored");
+    // super flow 读 canonical（不走 worktree）
     const tSuper = makeThread({
       id: "tS",
       persistence: { baseDir: tempRoot, sessionId: "super", objectId: "alice", threadId: "tS" },

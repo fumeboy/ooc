@@ -1,5 +1,5 @@
 import type { LlmInputItem, LlmMessage } from "../llm/types";
-import { deriveStoneFromThread, objectDir, readSelf, readStoneFileWithOverlay, stoneDir, threadDir } from "../../persistable";
+import { objectDir, readSelf, resolveStoneIdentityRef, stoneDir, threadDir } from "../../persistable";
 import { createDefaultPipeline } from "./pipeline.js";
 import { XmlRenderer } from "./renderers/xml.js";
 import type { ProcessEvent, ThreadContext, ThreadMessage } from "../../_shared/types/thread.js";
@@ -295,7 +295,7 @@ export async function buildInputItems(
   const instructions = await loadSelfInstructions(thread);
 
   // [ooc:paths] meta node for metaprogramming / path anchors
-  const pathsItem = buildPathsItem(thread);
+  const pathsItem = await buildPathsItem(thread);
 
   return {
     ...(instructions ? { instructions } : {}),
@@ -324,10 +324,16 @@ export async function buildInputItems(
  * 之所以放在 system message 而非 instructions:每轮都需要稳定看到、不被对话历史挤占;
  * 用 system role 与 XML context message 平行 — 都属于"环境信息"。
  */
-function buildPathsItem(thread: ThreadContext): LlmInputItem | undefined {
+async function buildPathsItem(thread: ThreadContext): Promise<LlmInputItem | undefined> {
   const ref = thread.persistence;
   if (!ref) return undefined;
-  const stoneRef = deriveStoneFromThread(ref);
+  // worktree 模型：object_stone_dir 与 program shell $OOC_SELF_DIR 同源——business
+  // session 命中 worktree（已建）时显示 stones/session-<sid>/objects/<id>/，否则 main。
+  // 用 "read" 模式：被动每轮注入不应主动建 worktree（惰性，仅首次 identity 写才建）。
+  const stoneRef = await resolveStoneIdentityRef(
+    { baseDir: ref.baseDir, sessionId: ref.sessionId, objectId: ref.objectId },
+    "read",
+  );
   const lines = [
     "[ooc:paths]",
     `world_root: ${ref.baseDir}`,
@@ -354,17 +360,12 @@ function buildPathsItem(thread: ThreadContext): LlmInputItem | undefined {
  */
 async function loadSelfInstructions(thread: ThreadContext): Promise<string | undefined> {
   if (!thread.persistence) return undefined;
-  const stoneRef = deriveStoneFromThread(thread.persistence);
-  // overlay shadow main（design §3）：普通业务 session 内若改过 self.md，本 session 读 overlay
-  // 试验值；super flow / 控制面读 canonical main。
   const { baseDir, sessionId, objectId } = thread.persistence;
-  const selfText = await readStoneFileWithOverlay(
-    baseDir,
-    sessionId,
-    objectId,
-    "self.md",
-    () => readSelf(stoneRef),
-  );
+  // worktree 模型：business session 读自己 worktree 的 self.md（完整副本，含本 session
+  // 试验改动）；super flow / 控制面读 canonical main。worktree 未建（没改过 identity）则
+  // "read" 透传 main——无 shadow、单目录读。
+  const stoneRef = await resolveStoneIdentityRef({ baseDir, sessionId, objectId }, "read");
+  const selfText = await readSelf(stoneRef);
   if (!selfText || !selfText.trim()) return undefined;
   return selfText;
 }
