@@ -11,6 +11,7 @@ import { readThreadContext, type ThreadContextEntry } from "./flow-thread-contex
 import type { ContextWindow } from "../executable/windows/_shared/types";
 import { isVolatileDerivedWindow } from "../executable/windows/_shared/types";
 import { persistInboxMessages, readInboxMessages } from "./inbox-store";
+import { observeWarn } from "../observable/log-aggregator";
 
 /**
  * thread.json 的最小读写。
@@ -169,13 +170,15 @@ export async function readThread(
               objectId: refObjectId,
             });
             if (!win) {
-              console.warn(
+              observeWarn(
+                "readThread.thread-context.missing-object",
                 `[readThread] thread-context.json references missing object ${refObjectId} (state.json absent), skipping`,
               );
               continue;
             }
             if (!knownTypes.has(win.type) && win.type !== persistence.objectId) {
-              console.warn(
+              observeWarn(
+                "readThread.thread-context.unregistered-type",
                 `[readThread] thread-context.json: dropped object ${win.id} with unregistered type ${win.type}`,
               );
               continue;
@@ -186,7 +189,8 @@ export async function readThread(
             // inline ContextWindow（builtin feature）
             const win = entry as ContextWindow;
             if (!knownTypes.has(win.type) && win.type !== persistence.objectId) {
-              console.warn(
+              observeWarn(
+                "readThread.thread-context.unregistered-inline",
                 `[readThread] thread-context.json: dropped inline window ${win.id} with unregistered type ${win.type}`,
               );
               continue;
@@ -210,7 +214,8 @@ export async function readThread(
         hydratedFromThreadContext = true;
       }
     } catch (e) {
-      console.warn(
+      observeWarn(
+        "readThread.thread-context.read-failed",
         `[readThread] 读取 thread-context.json 失败（不阻塞，将回落到 contextRegistry）: ${(e as Error).message}`,
       );
     }
@@ -236,13 +241,15 @@ export async function readThread(
             objectId: member.objectId,
           });
           if (!win) {
-            console.warn(
+            observeWarn(
+              "readThread.registry.missing-object",
               `[readThread] registry references missing object ${member.objectId} (state.json absent), skipping`,
             );
             continue;
           }
           if (!knownTypes.has(win.type)) {
-            console.warn(
+            observeWarn(
+              "readThread.registry.unregistered-type",
               `[readThread] registry: dropped object ${win.id} with unregistered type ${win.type}`,
             );
             continue;
