@@ -141,6 +141,13 @@ super flow（sessionId="super"，由 business session `talk(target="super")` 触
 - **多 session 并发演化同一 object**：多个 session 分支并存，各自 evolve_self merge → 原生 git 三方合并/冲突。
 - **worktree 开销**：lazy 化 → 仅活跃自我编程 session 持 worktree；GC（§4.1）回收。
 - **builtin objects**（user 等）走 `packages/@ooc/builtins/<id>`，不在 stones 分支模型，无 worktree/演化。
+- **main git-commit 同步约束（2026-06-06 地基落地实测发现）**：session worktree 从 main 分支
+  **HEAD** checkout，故 identity 必须已 **git-commit 到 main 分支** 才被 session worktree 看到。
+  control-plane putSelf/createStone 经 `versionedStoneWrite` 会 commit ✓；但 P1 把 canonical 指向
+  main worktree **文件系统**（读不经 git），低层 `createStoneObject`/`writeSelf` 只写文件不 commit。
+  worktree 模型（与 plain overlay 不同）须补齐「凡进入 main 的 identity 写都 commit 到 main 分支」
+  这层同步，否则 session worktree 看不到未 commit 的 identity。**P2' 落地必须覆盖这条**——这是
+  worktree 模型相对 plain overlay 多出的核心实现约束。
 
 ## 9. 验收
 1. P2' 后：business session 改 identity 落 session worktree；program shell `$OOC_SELF_DIR` 裸读到完整
