@@ -62,7 +62,7 @@ export async function runOneExec(
       const output = `[program.shell] 缺少 code 参数`;
       return { execId, language: "shell", code, output, ok: false, startedAt };
     }
-    const output = await runShellProgram(code, buildProgramShellEnv(thread));
+    const output = await runShellProgram(code, await buildProgramShellEnv(thread));
     return { execId, language: "shell", code, output, ok: isOkResult(output), startedAt };
   }
 

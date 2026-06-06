@@ -6,7 +6,7 @@ import { runOneExec } from "@ooc/builtins/program";
 import { executeProgramCommand } from "@ooc/builtins/root/executable/method.program";
 import { executeProgramWindowExec } from "@ooc/builtins/program";
 import type { ProgramWindow } from "../windows/_shared/types";
-import { createStoneObject, writeExecutableSource } from "../../persistable";
+import { createStoneObject, writeExecutableSource, ensureStoneRepo, writeSelf } from "../../persistable";
 import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader";
 import { makeThread } from "../../__tests__/make-thread";
 
@@ -64,18 +64,28 @@ describe("program runtime — runOneExec (shell)", () => {
     expect(rec.ok).toBe(false);
   });
 
-  it("injects OOC_SELF_DIR pointing at stone dir when persistence is present", async () => {
+  it("injects OOC_SELF_DIR pointing at session worktree for business session", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "ooc-shell-self-"));
     try {
-      await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+      // worktree 模型：identity 须先 commit 到 main，business session 的 OOC_SELF_DIR
+      // 才能 lazy 建 worktree 并指向 stones/session-<sid>/objects/<id>/（完整副本，裸读裸写）。
+      await ensureStoneRepo({ baseDir: tempRoot });
+      await createStoneObject({ baseDir: tempRoot, objectId: "agent", _stonesBranch: "main" });
+      await writeSelf({ baseDir: tempRoot, objectId: "agent", _stonesBranch: "main" }, "# Agent\n");
+      const mainDir = join(tempRoot, "stones", "main");
+      Bun.spawnSync(["git", "add", "-A"], { cwd: mainDir });
+      Bun.spawnSync(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@ooc.local", "commit", "-m", "seed"],
+        { cwd: mainDir },
+      );
+
       const thread = makeThread({
         id: "t",
         persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
       });
       const rec = await runOneExec(thread, { language: "shell", code: "echo \"$OOC_SELF_DIR\"" });
-      // P1 收口后 canonical 是 stones/main/objects/<id>/（非旧孤儿 stones/<id>/）。
-      // OOC_SELF_DIR 经 stoneDir() 解析，与 [ooc:paths] 注入给 LLM 的 object_stone_dir 同源。
-      expect(rec.output).toContain(`${tempRoot}/stones/main/objects/agent`);
+      // business session → worktree object 目录（design §2 program shell 通道）。
+      expect(rec.output).toContain(`${tempRoot}/stones/session-s1/objects/agent`);
       expect(rec.output).toContain("[exit 0]");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
