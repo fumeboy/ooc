@@ -6,10 +6,16 @@
  */
 import { describe, expect, it } from "bun:test";
 import { runControlPlane as programmable } from "./programmable.story";
+import { runControlPlane as reflectable } from "./reflectable.story";
+import { runControlPlane as visible } from "./visible.story";
+import { runControlPlane as klass } from "./class.story";
 import type { StoryResult } from "../_harness/types";
 
 const STORIES: Array<[string, () => Promise<StoryResult>]> = [
   ["programmable", programmable],
+  ["reflectable", reflectable],
+  ["visible", visible],
+  ["class", klass],
 ];
 
 describe("storybook control-plane (Tier A)", () => {
