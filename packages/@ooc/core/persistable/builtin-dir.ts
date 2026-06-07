@@ -24,14 +24,19 @@ export function resolveBuiltinDir(objectId: string): string | undefined {
 }
 
 /**
- * 给五件套**读**路径用的 builtin 目录解析：ref 是 builtin 且非 session worktree（无
- * `_stonesBranch`）时返回框架包目录，否则返回 undefined（caller 回退到 `stoneDir(ref)`）。
- * worktree ref（业务 session 试验层）不走框架包——builtin 不参与 worktree 版本化。
+ * 给五件套**读**路径用的 builtin **class** 目录解析：仅当 ref.objectId 是 `_builtin/<id>`
+ * 显式 class 寻址（且非 worktree）时返回框架包目录，否则 undefined（caller 回退 stoneDir）。
+ *
+ * **bare builtin id（如 "supervisor"）不再走框架包**——它现在是 `objects/<id>` 下由 class
+ * 实例化的普通 object，五件套读自己的实例目录（其 self.md 是 class self.md 的拷贝）。
+ * 只有 class 本身（`_builtin/supervisor`）才读框架包。这避免了 instance 与 class 同名时
+ * 实例磁盘被框架遮蔽。
  */
 export function resolveBuiltinReadDir(ref: {
   objectId: string;
   _stonesBranch?: string | null;
 }): string | undefined {
   if (ref._stonesBranch != null) return undefined;
+  if (!ref.objectId.startsWith("_builtin/")) return undefined;
   return resolveBuiltinDir(ref.objectId);
 }

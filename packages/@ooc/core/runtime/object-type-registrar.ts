@@ -65,6 +65,15 @@ export class ObjectTypeRegistrar {
     try {
       const windowDef = await this.deps.loader.loadObjectWindow(stoneRef);
       const parentClass = this.resolveParentClass(windowDef, def);
+      // `_builtin/<id>` 框架 class（如 supervisor）无 world executable —— 注册为空 methods
+      // 隐式继承 root，让 instance 的 parentClass 链不断在未注册的 class 上。
+      if (
+        typeof parentClass === "string" &&
+        parentClass.startsWith("_builtin/") &&
+        !this.deps.registry.has(parentClass)
+      ) {
+        this.deps.registry.registerNewObjectType(parentClass as any, { methods: {} });
+      }
 
       // registerObjectType = merge into existing; registerNewObjectType = create new
       const mergedMethods = { ...(windowDef?.methods ?? {}), ...(windowDef?.commands ?? {}) };

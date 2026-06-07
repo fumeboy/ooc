@@ -79,12 +79,12 @@ export function stoneDir(ref: StoneObjectRef): string {
       ...nestedObjectPath(ref.objectId),
     );
   }
+  // `_builtin/<type>` 前缀 = 框架 class 的显式寻址（class 磁盘读实际走 resolveBuiltinDir
+  // 指向框架包；此处 world packages 路径为兼容残留）。bare builtin id（supervisor）不再
+  // 特殊解析——它现在是 objects/ 下由 class 实例化的普通 object（见 instantiate-classes）。
   if (ref.objectId.startsWith("_builtin/")) {
     const builtinType = ref.objectId.slice("_builtin/".length);
     return join(ref.baseDir, "packages", "@ooc", "builtins", builtinType);
-  }
-  if (BUILTIN_OBJECT_IDS.has(ref.objectId)) {
-    return join(ref.baseDir, "packages", "@ooc", "builtins", ref.objectId);
   }
   // canonical = main 分支 worktree（P1 收口，2026-06-05；用户拍板：保留 stone git 分支设计，
   // main = canonical）。等价 _stonesBranch="main"；对象 bootstrap 即落 stones/main/objects/。

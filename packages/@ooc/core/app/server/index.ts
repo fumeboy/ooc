@@ -7,6 +7,7 @@ import { checkStoneToPoolMigration, reportPoolMigration } from "./bootstrap/chec
 import { checkStaleDatabaseDir } from "./bootstrap/check-stale-database-dir";
 import { checkFlowChildrenMigration } from "./bootstrap/check-flow-children-migration";
 import { checkStateContextSplit } from "./bootstrap/check-state-context-split";
+import { instantiateBuiltinClassObjects } from "./bootstrap/instantiate-classes";
 import { ensureStoneRepo, createPoolObject, BUILTIN_OBJECT_IDS } from "@ooc/core/persistable";
 import { AppServerError } from "./bootstrap/errors";
 import { healthModule } from "./modules/health";
@@ -288,6 +289,21 @@ if (import.meta.main) {
       );
       throw e;
     }
+  }
+
+  // 2026-06-07: 把带 ooc.instantiate_with_new_world 的框架 builtin class（supervisor）
+  // 幂等实例化为 objects/<id> 可交互 object（拷贝 self.md + ooc.class=_builtin/<id>）。
+  // 让全新 world 自动拥有 supervisor object——不再靠 listStones 特殊逻辑合入。
+  try {
+    const inst = await instantiateBuiltinClassObjects({ baseDir: config.baseDir });
+    if (inst.instantiated.length > 0) {
+      console.log(`[ooc-app-server] instantiated builtin class object(s): ${inst.instantiated.join(", ")}`);
+    }
+  } catch (e) {
+    console.error(
+      `[ooc-app-server] instantiateBuiltinClassObjects FATAL: ${e instanceof Error ? e.message : e}`,
+    );
+    throw e;
   }
 
   // U8: Recovery 自检——遍历 stones/main/{Object}/executable/index.ts，加载失败的开 PR-Issue。

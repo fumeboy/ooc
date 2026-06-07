@@ -33,6 +33,23 @@ export {
   enrichFormMethodKnowledge,
 } from "../context/window-enrichment.js";
 
+/**
+ * 确保 `_builtin/<id>` 框架 class 已注册进 registry（供 instance 的 parentClass 链解析）。
+ *
+ * builtin class（如 supervisor）无 world 内 executable —— 注册为空 methods，parentClass 缺省
+ * 隐式继承 root。这样 instance（ooc.class="_builtin/supervisor"）的方法链
+ * `instance → _builtin/supervisor → root` 才不会断在未注册的 class 上。
+ * 非 `_builtin/` 父类（普通 stone class）由各自的注册路径负责，这里不处理。
+ */
+function ensureBuiltinClassRegistered(
+  registry: ObjectRegistry,
+  parentClass: string | null | undefined,
+): void {
+  if (typeof parentClass !== "string" || !parentClass.startsWith("_builtin/")) return;
+  if (registry.listRegisteredObjectTypes().includes(parentClass as any)) return;
+  registry.registerNewObjectType(parentClass as any, { methods: {} });
+}
+
 // ── ensureSelfObjectTypeRegistered ─────────────────────────────────────────
 
 /**
@@ -57,6 +74,7 @@ export async function ensureSelfObjectTypeRegistered(
     const objWin: StoneObjectDeclaration | undefined = await loadObjectWindow(stoneRef);
     const parentClass: string | null | undefined =
       objWin?.parentClass !== undefined ? objWin.parentClass : await readStoneClass(stoneRef);
+    ensureBuiltinClassRegistered(registry, parentClass);
     const mergedMethods = { ...(objWin?.methods ?? {}), ...(objWin?.commands ?? {}) };
     registry.registerNewObjectType(selfId as any, {
       methods: mergedMethods,
@@ -148,6 +166,7 @@ export async function derivePeerObjectWindows(
       if (!registeredTypes.includes(peerId as any) && objWin) {
         const parentClass: string | null | undefined =
           objWin.parentClass !== undefined ? objWin.parentClass : await readStoneClass(peerStoneRef);
+        ensureBuiltinClassRegistered(registry, parentClass);
         const mergedMethods = { ...(objWin.methods ?? {}), ...(objWin.commands ?? {}) };
         registry.registerNewObjectType(peerId as any, {
           methods: mergedMethods,

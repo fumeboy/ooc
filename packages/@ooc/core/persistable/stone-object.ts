@@ -146,11 +146,15 @@ export async function discoverStoneHierarchicalPeers(ref: StoneObjectRef): Promi
  * **不再创建** files/（2026-05-23 起迁到 pool；详见 createPoolObject）。
  * **不再创建** database/（2026-05-24 起删除；csv 替代 sql；详见 persistable.pool.children.data_pool）。
  */
-export async function createStoneObject(ref: StoneObjectRef): Promise<StoneObjectRef> {
+export async function createStoneObject(
+  ref: StoneObjectRef,
+  opts?: { class?: string },
+): Promise<StoneObjectRef> {
   const dir = stoneDir(ref);
   await mkdir(dir, { recursive: true });
 
-  // Write package.json for bun workspace
+  // Write package.json for bun workspace.
+  // opts.class（可选）写入 ooc.class —— object 的权威继承声明（class 实例化时设父类）。
   const pkgJson = {
     name: `@ooc-obj/${ref.objectId.replace(/\//g, "-").replace(/_/g, "-")}`,
     version: "0.1.0",
@@ -160,6 +164,7 @@ export async function createStoneObject(ref: StoneObjectRef): Promise<StoneObjec
       objectId: ref.objectId,
       kind: "object",
       type: "agent",
+      ...(opts?.class ? { class: opts.class } : {}),
     },
   };
   await writeFile(join(dir, "package.json"), toJson(pkgJson), "utf8");

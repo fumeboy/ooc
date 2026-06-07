@@ -84,12 +84,10 @@ describe("app server routes", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    // listStones 合入 builtin 对话目标（supervisor，见 withBuiltinTalkTargets）；
-    // 本用例只关心用户建的 stone，故过滤掉 builtin。
-    const userStoneIds = body.items
-      .map((item: { objectId: string }) => item.objectId)
-      .filter((id: string) => id !== "supervisor");
-    expect(userStoneIds).toEqual(["debug-object-a", "debug-object-b"]);
+    expect(body.items.map((item: { objectId: string }) => item.objectId)).toEqual([
+      "debug-object-a",
+      "debug-object-b",
+    ]);
   });
 
   test("POST /api/stones rejects missing object identity", async () => {
