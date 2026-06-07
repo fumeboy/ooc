@@ -9,7 +9,7 @@
 - TC-VIS-05：UI↔行为闭环 —— visible 组件存在 + callMethod 端点调通 executable。
 
 ## Tier B —— agent-native（真 LLM，env-gated）
-- 派「给对象做个 UI 页面」，断 visible/index.tsx 落 session worktree + client-source-url 可解析（浏览器渲染留 frontend e2e F3）。
+- supervisor 为对象搭好可见性前提（创建对象）；**注**：supervisor self.md「✗ 不直接编辑 UI（派 visible 维度 Agent）」，故 visible 页面**产出**由 visible 维度 agent 负责，确定性产物验证见 Tier A TC-VIS-01/05 + frontend e2e F3。
 - rubric（收编 `playbooks/visible.playbook.md`）：
   - **Good**：tsx 在 worktree、含 default export、endpoint 200。
   - **OK**：产出但语法瑕疵 / 路径偏。

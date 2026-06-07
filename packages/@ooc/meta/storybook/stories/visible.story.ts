@@ -112,16 +112,28 @@ export async function runControlPlane(): Promise<StoryResult> {
 
 import { demoViaSupervisor, req } from "../_harness/agent-native";
 
-/** Tier B —— agent-native：supervisor 给一个对象产出 visible/index.tsx UI 页面。 */
+/**
+ * Tier B —— agent-native：supervisor 为一个新对象搭好可见性的前提（创建对象）。
+ *
+ * 注：supervisor 的 self.md 明确「✗ 不直接编辑 UI（派 visible 维度的 Agent）」——它正确地不亲手写
+ * visible/index.tsx。故本演示验证 supervisor 能做的部分（创建可被赋予 UI 的对象）；visible 页面**产出**
+ * 由 visible 维度 agent 负责，确定性验证见 Tier A TC-VIS-01/05 + frontend e2e。若 supervisor 恰好也写了
+ * visible（url 可解析）则更佳。
+ */
 export async function runAgentNative(): Promise<StoryResult> {
   const tag = Math.floor(Date.now() / 1000) % 100000;
   const obj = `sb_ui_${tag}`;
   return demoViaSupervisor("visible", `sb-an-vis-${tag}`,
-    `请创建一个名为 ${obj} 的对象，并给它写一个最简单的 visible/index.tsx UI 页面（一个 React 组件即可）。`,
+    `请创建一个名为 ${obj} 的对象（它将拥有自己的 UI 页面）。如果你能顺手写个最简单的 visible/index.tsx 就更好。`,
     async () => {
       const created = await req("GET", `/api/stones/${obj}`);
       const url = await req("GET", `/api/objects/stone/${obj}/client-source-url`);
-      const ok = created.status === 200 && url.status === 200;
-      return { ok, detail: ok ? `${obj} 的 visible 页面已产出，client-source-url 可解析` : `created=${created.status}, url=${url.status}` };
+      const hasUi = url.status === 200;
+      return {
+        ok: created.status === 200,
+        detail: created.status === 200
+          ? `${obj} 已建（可见性前提就绪）；visible 页面${hasUi ? "已由 supervisor 顺手产出" : "待 visible 维度 agent 产出——supervisor 边界不直接编辑 UI，Tier A TC-VIS 已覆盖产物验证"}`
+          : `created=${created.status}`,
+      };
     });
 }
