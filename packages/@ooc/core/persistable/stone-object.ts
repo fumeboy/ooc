@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { stoneDir, STONE_CHILDREN_SUBDIR, toJson, type StoneObjectRef } from "./common";
 import { selfFile } from "./stone-self";
 import { readableFile } from "./stone-readme";
+import { resolveBuiltinReadDir } from "./builtin-dir";
 
 export { stoneDir };
 
@@ -32,7 +33,9 @@ export function visibleDir(ref: StoneObjectRef): string {
  * loader 双源扫描时统一加载、LLM 视角不分来源；同名冲突 sediment 胜出（详见 loader.ts loadKnowledgeIndex）。
  */
 export function stoneKnowledgeDir(ref: StoneObjectRef): string {
-  return join(stoneDir(ref), "knowledge");
+  // `_builtin/<id>` class 的 seed knowledge 从框架包读（供 instance 经 parentClass 链继承）；
+  // bare object id 走自己的 objects/ knowledge。
+  return join(resolveBuiltinReadDir(ref) ?? stoneDir(ref), "knowledge");
 }
 
 /**

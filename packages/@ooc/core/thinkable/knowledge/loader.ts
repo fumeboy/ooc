@@ -126,13 +126,14 @@ export async function loadKnowledgeIndex(
     }
   }
 
-  // Step 1b: parentClass 继承链 seed —— 仅 frontmatter.inheritable === true 的文件。
+  // Step 1b: parentClass 继承链 seed —— **无条件继承**（不门控 inheritable）。
+  // class 存在的意义就是被 object 继承，其 seed knowledge 应整体流向 instance；这与
+  // Step 1 的 B-tree 域祖先继承（child Agent opt-in，需 inheritable:true）是不同的轴。
   // 顺序：closest parent → farthest parent，更近的父类后 set override 更远的。
   for (const { root, files } of parentClassFilesByRoot) {
     for (const f of files) {
       const parsed = await readAndParse(f.path);
       if (!parsed) continue;
-      if (parsed.frontmatter.inheritable !== true) continue;
       const idPath = toIdPath(root, f.path);
       byPath.set(idPath, {
         path: idPath,
