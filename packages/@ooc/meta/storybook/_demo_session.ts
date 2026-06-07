@@ -23,21 +23,27 @@ async function req(method: string, path: string, body?: any, headers: Record<str
   try { return { status: r.status, json: JSON.parse(text), text }; } catch { return { status: r.status, text }; }
 }
 
-const LIVE_WORLD = "/Users/bytedance/x/ooc/ooc-2/.ooc-world-live";
+// stone 的 canonical 目录（从 createStone 响应捕获，不再硬编码 world 路径）。
+let STONE_DIR = "";
 
-async function writeStoneFile(id: string, relPath: string, content: string) {
-  const candidates = [
-    join(LIVE_WORLD, "stones", id, relPath),
-    join(LIVE_WORLD, "stones", "main", "objects", id, relPath),
-  ];
-  for (const full of candidates) {
-    try {
-      await mkdir(dirname(full), { recursive: true });
-      await writeFile(full, content, "utf8");
-      return full;
-    } catch {}
-  }
-  throw new Error("failed to write to any stone path");
+/** 直写 stone 目录下的文件（用于 visible —— 无 HTTP 写入口）。 */
+async function writeStoneFile(_id: string, relPath: string, content: string) {
+  if (!STONE_DIR) throw new Error("STONE_DIR not captured yet");
+  const full = join(STONE_DIR, relPath);
+  await mkdir(dirname(full), { recursive: true });
+  await writeFile(full, content, "utf8");
+  return full;
+}
+
+/**
+ * executable / self 一律经 HTTP API 写（统一走 worktree 版本化）。
+ * 单 stone 跨多 TC 时，直写未提交会和后续 worktree ff-merge 冲突——所以这两类走 API。
+ */
+async function putExec(id: string, code: string) {
+  return req("PUT", `/api/stones/${id}/server-source`, { code }, { "X-Overwrite-Confirm": "true" });
+}
+async function putSelfApi(id: string, text: string) {
+  return req("PUT", `/api/stones/${id}/self`, { text }, { "X-Overwrite-Confirm": "true" });
 }
 
 type StepResult = { id: string; name: string; status: "PASS" | "FAIL" | "SKIP"; detail?: string };
@@ -83,19 +89,22 @@ function mdReport(): string {
 }
 
 async function main() {
-  // 确保 target stone 存在
-  const probe = await req("GET", `/api/stones/${TARGET_ID}`);
+  // 确保 target stone 存在，并捕获其 canonical 目录（用于 visible 直写）。
+  let probe = await req("GET", `/api/stones/${TARGET_ID}`);
   if (probe.status !== 200) {
     await req("POST", "/api/stones", { objectId: TARGET_ID });
     await sleep(400);
+    probe = await req("GET", `/api/stones/${TARGET_ID}`);
   }
+  STONE_DIR = probe.json?.dir ?? "";
+  if (!STONE_DIR) throw new Error(`failed to resolve stone dir for ${TARGET_ID}: ${JSON.stringify(probe.json ?? probe.text)}`);
 
   // ═══ Programmable ═══
   console.log("\n— Programmable —");
 
   // TC-PROG-01
   {
-    await writeStoneFile(TARGET_ID, "executable/index.ts", [
+    await putExec(TARGET_ID,[
       `export const ui_methods = {`,
       `  echo: { description: "echoes args.text", fn: (ctx, args) => ({ youSaid: args.text }) },`,
       `};`,
@@ -109,7 +118,7 @@ async function main() {
 
   // TC-PROG-02: ctx.self.dir
   {
-    await writeStoneFile(TARGET_ID, "executable/index.ts", [
+    await putExec(TARGET_ID,[
       `import { statSync } from "node:fs";`,
       `export const ui_methods = {`,
       `  getMyDir: { fn: (ctx) => ({ myDir: ctx.self.dir, exists: (() => { try { return statSync(ctx.self.dir).isDirectory(); } catch { return false; } })() }) },`,
@@ -130,14 +139,14 @@ async function main() {
 
   // TC-PROG-04: 热更新
   {
-    await writeStoneFile(TARGET_ID, "executable/index.ts", [
+    await putExec(TARGET_ID,[
       `export const ui_methods = { ping: { fn: () => "v1" } };`,
       `export const window = { commands: {} };`,
     ].join("\n"));
     await sleep(400);
     const r1 = await req("POST", `/api/stones/${TARGET_ID}/call_method`, { method: "ping" });
     const v1 = r1.json?.returnValue;
-    await writeStoneFile(TARGET_ID, "executable/index.ts", [
+    await putExec(TARGET_ID,[
       `export const ui_methods = { ping: { fn: () => "v2" }, pong: { fn: () => "pong" } };`,
       `export const window = { commands: {} };`,
     ].join("\n"));
@@ -158,8 +167,8 @@ async function main() {
   // TC-REFL-01: 读 self.md
   {
     const selfContent = "# sb_demo\n我是 storybook 演示对象（reflectable 能力展示）。";
-    await writeStoneFile(TARGET_ID, "self.md", selfContent);
-    await writeStoneFile(TARGET_ID, "executable/index.ts", [
+    await putSelfApi(TARGET_ID, selfContent);
+    await putExec(TARGET_ID,[
       `import { readFileSync } from "node:fs";`,
       `import { join } from "node:path";`,
       `export const ui_methods = {`,
@@ -205,7 +214,7 @@ async function main() {
     const seedContent = "reflectable 自写的 seed knowledge（stone/knowledge/）。";
     const sedimentContent = "HTTP API 写入的 sediment knowledge（pool/knowledge/）。";
 
-    await writeStoneFile(TARGET_ID, "executable/index.ts", [
+    await putExec(TARGET_ID,[
       `import { mkdirSync, readFileSync, writeFileSync } from "node:fs";`,
       `import { dirname, join } from "node:path";`,
       `export const ui_methods = {`,
@@ -233,7 +242,7 @@ async function main() {
 
   // TC-REFL-06: reflectable × programmable 闭环
   {
-    await writeStoneFile(TARGET_ID, "executable/index.ts", [
+    await putExec(TARGET_ID,[
       `export const ui_methods = { version: { fn: () => "v1" } };`,
       `export const window = { commands: {} };`,
     ].join("\n"));
@@ -273,7 +282,7 @@ async function main() {
     let viteOk = false;
     try { viteOk = (await fetch("http://localhost:5173/api/health")).ok; } catch {}
     if (viteOk) {
-      const visiblePath = join(LIVE_WORLD, "stones", TARGET_ID, "visible", "index.tsx");
+      const visiblePath = join(STONE_DIR, "visible", "index.tsx");
       const resp = await fetch(`http://localhost:5173/@fs${visiblePath}`);
       const body = await resp.text();
       const ok = resp.status === 200 && body.includes("export default");
@@ -295,8 +304,8 @@ async function main() {
     let viteOk = false;
     try { viteOk = (await fetch("http://localhost:5173/api/health")).ok; } catch {}
     if (viteOk) {
-      await writeStoneFile(TARGET_ID, "executable/index.ts", `export const ui_methods = {};`);
-      const execPath = join(LIVE_WORLD, "stones", TARGET_ID, "executable", "index.ts");
+      await putExec(TARGET_ID,`export const ui_methods = {};`);
+      const execPath = join(STONE_DIR, "executable", "index.ts");
       const resp = await fetch(`http://localhost:5173/@fs${execPath}`);
       const body = await resp.text();
       const ok = resp.status === 403 && (body.includes("Forbidden") || body.includes("403 Restricted"));
@@ -315,7 +324,7 @@ async function main() {
       `  return null;`,
       `}`,
     ].join("\n"));
-    await writeStoneFile(TARGET_ID, "executable/index.ts", [
+    await putExec(TARGET_ID,[
       `export const ui_methods = { greet: { fn: (_ctx, args) => ({ hello: args.name }) } };`,
       `export const window = { commands: {} };`,
     ].join("\n"));
@@ -355,7 +364,7 @@ async function main() {
   }
 
   console.log(`\nDone. Session URL: http://localhost:5173/session/${SESSION_ID}`);
-  try { await rm(join(LIVE_WORLD, "stones", TARGET_ID, "knowledge"), { recursive: true, force: true }); } catch {}
+  try { await rm(join(STONE_DIR, "knowledge"), { recursive: true, force: true }); } catch {}
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
