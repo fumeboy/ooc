@@ -12,25 +12,28 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { CAPABILITIES, type CapabilityId, type StoryResult } from "./_harness/types";
 
-import { runControlPlane as thinkable } from "./stories/thinkable.story";
-import { runControlPlane as executable } from "./stories/executable.story";
-import { runControlPlane as collaborable } from "./stories/collaborable.story";
-import { runControlPlane as observable } from "./stories/observable.story";
-import { runControlPlane as reflectable } from "./stories/reflectable.story";
-import { runControlPlane as programmable, runAgentNative as programmableAN } from "./stories/programmable.story";
-import { runControlPlane as visible } from "./stories/visible.story";
-import { runControlPlane as persistable } from "./stories/persistable.story";
-import { runControlPlane as klass } from "./stories/class.story";
+import * as thinkableS from "./stories/thinkable.story";
+import * as executableS from "./stories/executable.story";
+import * as collaborableS from "./stories/collaborable.story";
+import * as observableS from "./stories/observable.story";
+import * as reflectableS from "./stories/reflectable.story";
+import * as programmableS from "./stories/programmable.story";
+import * as visibleS from "./stories/visible.story";
+import * as persistableS from "./stories/persistable.story";
+import * as classS from "./stories/class.story";
 import { backendReachable } from "./_harness/agent-native";
 
-const CONTROL_PLANE: Record<CapabilityId, () => Promise<StoryResult>> = {
-  thinkable, executable, collaborable, observable, reflectable, programmable, visible, persistable, class: klass,
+const MODULES: Record<CapabilityId, { runControlPlane: () => Promise<StoryResult>; runAgentNative: () => Promise<StoryResult> }> = {
+  thinkable: thinkableS, executable: executableS, collaborable: collaborableS, observable: observableS,
+  reflectable: reflectableS, programmable: programmableS, visible: visibleS, persistable: persistableS, class: classS,
 };
-
-/** 已实现 Tier B agent-native 的特性（逐步补齐；其余 runner 标「待补」）。 */
-const AGENT_NATIVE: Partial<Record<CapabilityId, () => Promise<StoryResult>>> = {
-  programmable: programmableAN,
-};
+const CONTROL_PLANE: Record<CapabilityId, () => Promise<StoryResult>> = Object.fromEntries(
+  CAPABILITIES.map((c) => [c, MODULES[c].runControlPlane]),
+) as Record<CapabilityId, () => Promise<StoryResult>>;
+/** 全 9 特性的 Tier B agent-native。 */
+const AGENT_NATIVE: Partial<Record<CapabilityId, () => Promise<StoryResult>>> = Object.fromEntries(
+  CAPABILITIES.map((c) => [c, MODULES[c].runAgentNative]),
+);
 
 const REPO_ROOT = join(import.meta.dir, "..", "..", "..", "..");
 const DOCS_DIR = join(REPO_ROOT, "docs", "ooc-6", "storybook");

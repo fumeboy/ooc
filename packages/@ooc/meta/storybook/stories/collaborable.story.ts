@@ -48,3 +48,17 @@ export async function runControlPlane(): Promise<StoryResult> {
   }
   return { capability: "collaborable", tier: "control-plane", tcs: rec.tcs, storyTier: rollupTier(rec.tcs) };
 }
+
+import { demoViaSupervisor, calleeReplied } from "../_harness/agent-native";
+
+/** Tier B —— agent-native：supervisor 建一个对象并经 talk 联系它，对端跑自己的 thinkloop 回应。 */
+export async function runAgentNative(): Promise<StoryResult> {
+  const tag = Math.floor(Date.now() / 1000) % 100000;
+  const peer = `sb_peer_${tag}`;
+  return demoViaSupervisor("collaborable", `sb-an-collab-${tag}`,
+    `请创建一个名为 ${peer} 的对象，然后通过 talk 联系它，请它做一次自我介绍，并把它的回应转述给我。`,
+    async ({ sid }) => {
+      const replied = await calleeReplied(sid, peer);
+      return { ok: replied, detail: replied ? `${peer} 在自己的 thinkloop 真实回应了（被 talk 激活）` : `${peer} 未回应（可能仍在进行）` };
+    });
+}

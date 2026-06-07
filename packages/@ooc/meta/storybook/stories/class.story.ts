@@ -67,3 +67,16 @@ export async function runControlPlane(): Promise<StoryResult> {
   }
   return { capability: "class", tier: "control-plane", tcs: rec.tcs, storyTier: rollupTier(rec.tcs) };
 }
+
+import { demoViaSupervisor } from "../_harness/agent-native";
+
+/** Tier B —— agent-native：supervisor（class 实例）加载了 self.md 设计身份（非即兴演）。 */
+export async function runAgentNative(): Promise<StoryResult> {
+  const tag = Math.floor(Date.now() / 1000) % 100000;
+  return demoViaSupervisor("class", `sb-an-class-${tag}`,
+    "你好 supervisor，请用一两句话说明你是谁、你的核心职责是什么。",
+    async ({ lastSay }) => {
+      const ok = /中枢|总管|入口|接待|分发|守护/.test(lastSay);
+      return { ok, detail: `身份复现：${lastSay.slice(0, 90)}` };
+    });
+}

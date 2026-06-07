@@ -109,3 +109,19 @@ export async function runControlPlane(): Promise<StoryResult> {
   }
   return { capability: "visible", tier: "control-plane", tcs: rec.tcs, storyTier: rollupTier(rec.tcs) };
 }
+
+import { demoViaSupervisor, req } from "../_harness/agent-native";
+
+/** Tier B —— agent-native：supervisor 给一个对象产出 visible/index.tsx UI 页面。 */
+export async function runAgentNative(): Promise<StoryResult> {
+  const tag = Math.floor(Date.now() / 1000) % 100000;
+  const obj = `sb_ui_${tag}`;
+  return demoViaSupervisor("visible", `sb-an-vis-${tag}`,
+    `请创建一个名为 ${obj} 的对象，并给它写一个最简单的 visible/index.tsx UI 页面（一个 React 组件即可）。`,
+    async () => {
+      const created = await req("GET", `/api/stones/${obj}`);
+      const url = await req("GET", `/api/objects/stone/${obj}/client-source-url`);
+      const ok = created.status === 200 && url.status === 200;
+      return { ok, detail: ok ? `${obj} 的 visible 页面已产出，client-source-url 可解析` : `created=${created.status}, url=${url.status}` };
+    });
+}

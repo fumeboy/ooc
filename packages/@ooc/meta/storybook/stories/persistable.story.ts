@@ -51,3 +51,18 @@ export async function runControlPlane(): Promise<StoryResult> {
   }
   return { capability: "persistable", tier: "control-plane", tcs: rec.tcs, storyTier: rollupTier(rec.tcs) };
 }
+
+import { demoViaSupervisor, req } from "../_harness/agent-native";
+
+/** Tier B —— agent-native：supervisor 建对象写身份，离开内存后经 HTTP 重读可恢复。 */
+export async function runAgentNative(): Promise<StoryResult> {
+  const tag = Math.floor(Date.now() / 1000) % 100000;
+  const obj = `sb_keep_${tag}`;
+  return demoViaSupervisor("persistable", `sb-an-pers-${tag}`,
+    `请创建一个名为 ${obj} 的对象，写好它的 self.md 身份，让它的身份能持久保存。`,
+    async () => {
+      const self = await req("GET", `/api/stones/${obj}/self`);
+      const ok = self.status === 200 && (self.json?.text ?? "").length > 20;
+      return { ok, detail: ok ? `${obj} 身份持久化（重读 self.md ${self.json.text.length} 字符，可恢复）` : `self=${self.status}, len=${(self.json?.text ?? "").length}` };
+    });
+}

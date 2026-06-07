@@ -46,3 +46,17 @@ export async function runControlPlane(): Promise<StoryResult> {
   }
   return { capability: "thinkable", tier: "control-plane", tcs: rec.tcs, storyTier: rollupTier(rec.tcs) };
 }
+
+import { demoViaSupervisor } from "../_harness/agent-native";
+
+/** Tier B —— agent-native：supervisor 用继承的 seed knowledge 回答（不靠即兴）。 */
+export async function runAgentNative(): Promise<StoryResult> {
+  const tag = Math.floor(Date.now() / 1000) % 100000;
+  return demoViaSupervisor("thinkable", `sb-an-think-${tag}`,
+    "请基于你掌握的知识，简述 OOC 的 8 个能力维度分别是什么。",
+    async ({ lastSay }) => {
+      const dims = ["thinkable", "executable", "collaborable", "observable", "reflectable", "programmable", "visible", "persistable"];
+      const hit = dims.filter((d) => lastSay.includes(d) || lastSay.includes("维度")).length;
+      return { ok: hit >= 2 || lastSay.includes("维度"), detail: `回复引用维度/知识：${lastSay.slice(0, 90)}` };
+    });
+}
