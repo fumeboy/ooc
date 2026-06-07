@@ -8,6 +8,7 @@ import { statSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { mkServer, postJson, writeStoneFile, StoryRecorder } from "../_harness/control-plane";
+import { seedTask, waitJob, processTrace, req } from "../_harness/agent-native";
 import { rollupTier, type StoryResult } from "../_harness/types";
 
 const EXEC = (body: string) => `${body}\nexport const window = { commands: {} };`;
@@ -76,4 +77,30 @@ export async function runControlPlane(): Promise<StoryResult> {
     await srv.cleanup();
   }
   return { capability: "programmable", tier: "control-plane", tcs: rec.tcs, storyTier: rollupTier(rec.tcs) };
+}
+
+/**
+ * Tier B —— agent-native：supervisor 在 thinkloop 里用 metaprog 亲手创建一个带身份+知识的对象。
+ * 过程作为可见动作留在 session；脚本核验产物（对象落盘 + self.md 非空）。需运行中的 world（含 supervisor）。
+ */
+export async function runAgentNative(): Promise<StoryResult> {
+  const tag = Math.floor(Date.now() / 1000) % 100000;
+  const id = `sb_prog_${tag}`;
+  const sid = `sb-an-prog-${tag}`;
+  const seed = await seedTask(sid, "supervisor",
+    `请为我创建一个名为 ${id} 的新 OOC Object，职责自定；给它写好 self.md（身份/能力）和一条 knowledge。创建好后用一句话告诉我你做了什么。`,
+    "storybook agent-native: programmable");
+  let trace: string[] = [];
+  let verified = false;
+  let detail = "seed 失败";
+  if (seed.ok && seed.threadId) {
+    await waitJob(seed.jobId!);
+    trace = await processTrace(sid, "supervisor", seed.threadId);
+    const created = await req("GET", `/api/stones/${id}`);
+    const self = await req("GET", `/api/stones/${id}/self`);
+    verified = created.status === 200 && (self.json?.text ?? "").length > 20;
+    detail = verified ? `${id} 已由 supervisor 亲手创建，self.md ${self.json.text.length} 字符` : `getStone=${created.status}, self.len=${(self.json?.text ?? "").length}`;
+  }
+  const tcs = [{ id: "AN-PROG-01", name: "supervisor 经 metaprog 亲手创建带身份+知识的对象", status: verified ? "PASS" as const : "FAIL" as const, detail }];
+  return { capability: "programmable", tier: "agent-native", tcs, storyTier: rollupTier(tcs), trace };
 }

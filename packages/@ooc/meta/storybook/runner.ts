@@ -17,13 +17,19 @@ import { runControlPlane as executable } from "./stories/executable.story";
 import { runControlPlane as collaborable } from "./stories/collaborable.story";
 import { runControlPlane as observable } from "./stories/observable.story";
 import { runControlPlane as reflectable } from "./stories/reflectable.story";
-import { runControlPlane as programmable } from "./stories/programmable.story";
+import { runControlPlane as programmable, runAgentNative as programmableAN } from "./stories/programmable.story";
 import { runControlPlane as visible } from "./stories/visible.story";
 import { runControlPlane as persistable } from "./stories/persistable.story";
 import { runControlPlane as klass } from "./stories/class.story";
+import { backendReachable } from "./_harness/agent-native";
 
 const CONTROL_PLANE: Record<CapabilityId, () => Promise<StoryResult>> = {
   thinkable, executable, collaborable, observable, reflectable, programmable, visible, persistable, class: klass,
+};
+
+/** 已实现 Tier B agent-native 的特性（逐步补齐；其余 runner 标「待补」）。 */
+const AGENT_NATIVE: Partial<Record<CapabilityId, () => Promise<StoryResult>>> = {
+  programmable: programmableAN,
 };
 
 const REPO_ROOT = join(import.meta.dir, "..", "..", "..", "..");
@@ -40,20 +46,29 @@ const TIER_MARK: Record<string, string> = { Good: "🟢 Good", OK: "🟡 OK", Ba
 
 async function main() {
   const agentEnabled = process.env.RUN_STORYBOOK_AGENT === "1";
-  console.log(`=== Storybook runner ===  Tier A: 确定性  |  Tier B(agent-native): ${agentEnabled ? "on" : "off (RUN_STORYBOOK_AGENT=1 启用)"}\n`);
+  const reachable = agentEnabled ? await backendReachable() : false;
+  console.log(`=== Storybook runner ===  Tier A: 确定性  |  Tier B(agent-native): ${agentEnabled ? (reachable ? "on" : "on 但 world 不可达，SKIP") : "off (RUN_STORYBOOK_AGENT=1 启用)"}\n`);
 
-  const results: Array<{ cap: CapabilityId; a: StoryResult }> = [];
+  const results: Array<{ cap: CapabilityId; a: StoryResult; b?: StoryResult }> = [];
   for (const cap of CAPABILITIES) {
     const a = await CONTROL_PLANE[cap]();
     const c = counts(a);
     console.log(`${TIER_MARK[a.storyTier]}  ${cap.padEnd(13)} Tier A: ${c.pass}P/${c.fail}F/${c.skip}S`);
-    results.push({ cap, a });
+    let b: StoryResult | undefined;
+    const an = AGENT_NATIVE[cap];
+    if (agentEnabled && reachable && an) {
+      b = await an();
+      console.log(`${TIER_MARK[b.storyTier]}  ${cap.padEnd(13)} Tier B: ${b.tcs[0]?.detail ?? ""}`);
+      (b.trace ?? []).forEach((l) => console.log(l));
+    }
+    results.push({ cap, a, b });
   }
 
   // 覆盖矩阵 markdown
-  const rows = results.map(({ cap, a }) => {
+  const rows = results.map(({ cap, a, b }) => {
     const c = counts(a);
-    return `| ${cap} | ${TIER_MARK[a.storyTier]} | ${c.pass}/${c.fail}/${c.skip} | ${agentEnabled ? "（见 Tier B 报告）" : "—（env-gated）"} |`;
+    const bCell = b ? TIER_MARK[b.storyTier] : (AGENT_NATIVE[cap] ? (agentEnabled ? "（world 不可达）" : "—（env-gated）") : "待补（Phase 2）");
+    return `| ${cap} | ${TIER_MARK[a.storyTier]} | ${c.pass}/${c.fail}/${c.skip} | ${bCell} |`;
   });
   const totalFail = results.reduce((n, r) => n + counts(r.a).fail, 0);
   const md = [

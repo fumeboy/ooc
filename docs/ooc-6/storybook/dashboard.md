@@ -7,14 +7,14 @@
 
 | 能力 | Tier A 档位 | A: PASS/FAIL/SKIP | Tier B（agent-native） |
 |---|---|---|---|
-| thinkable | 🟢 Good | 2/0/0 | —（env-gated） |
-| executable | 🟢 Good | 2/0/0 | —（env-gated） |
-| collaborable | 🟢 Good | 2/0/0 | —（env-gated） |
-| observable | 🟢 Good | 2/0/0 | —（env-gated） |
-| reflectable | 🟢 Good | 6/0/0 | —（env-gated） |
-| programmable | 🟢 Good | 4/0/0 | —（env-gated） |
-| visible | 🟡 OK | 3/0/2 | —（env-gated） |
-| persistable | 🟢 Good | 3/0/0 | —（env-gated） |
-| class | 🟢 Good | 4/0/0 | —（env-gated） |
+| thinkable | 🟢 Good | 2/0/0 | 待补（Phase 2） |
+| executable | 🟢 Good | 2/0/0 | 待补（Phase 2） |
+| collaborable | 🟢 Good | 2/0/0 | 待补（Phase 2） |
+| observable | 🟢 Good | 2/0/0 | 待补（Phase 2） |
+| reflectable | 🟢 Good | 6/0/0 | 待补（Phase 2） |
+| programmable | 🟢 Good | 4/0/0 | 🟢 Good |
+| visible | 🟡 OK | 3/0/2 | 待补（Phase 2） |
+| persistable | 🟢 Good | 3/0/0 | 待补（Phase 2） |
+| class | 🟢 Good | 4/0/0 | 待补（Phase 2） |
 
 _注：SKIP 多为环境依赖（如 visible 的 Vite serve 需 live Vite 指向同 world）。Tier B 质量判据见各 spec。_
