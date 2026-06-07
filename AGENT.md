@@ -81,3 +81,22 @@ tests/e2e/           # 端到端测试场景
 - TypeScript / bun runtime（不是 Node）
 - 测试用 `bun:test`；e2e 用 Playwright（前端）+ Elysia `app.handle` 直调（后端）
 - 文档树形结构而非自由 markdown——任何新概念优先想"放在 `meta/*.doc.ts` 哪个节点下"
+
+## Storybook —— 能力测试框架（验证 OOC 各项能力时先看这里）
+
+`packages/@ooc/meta/storybook/` 是 OOC 的**统一能力目录/测试框架**：8 维度 + class 共 9 个特性，每个一个
+可运行 story，同时给两层验证。**新增/改能力后，对应 story + spec 是更新的第一落点。**
+
+- **Tier A 控制面确定性**（零真 LLM、可进 CI）：`stories/<cap>.story.ts` 导出 `runControlPlane()`，
+  `stories/_control-plane.test.ts` 收为 `bun:test`。跑：`bun run test:storybook`（CI gate，应 0 FAIL）。
+  基座 `_harness/control-plane.ts` 的 `mkServer`=`ensureStoneRepo`+`buildServer`+`app.handle`。
+- **Tier B agent-native**（真 LLM、env-gated）：`runAgentNative()` 对**运行中的 world**派任务，agent 在
+  thinkloop 亲手行使能力、抽过程轨迹 + 确定性产物核验。跑：
+  `RUN_STORYBOOK_AGENT=1 OOC_BACKEND=http://127.0.0.1:3000 bun run packages/@ooc/meta/storybook/runner.ts`。
+- **规格单一来源** `specs/capability_<cap>.md`（已收编 harness playbook 场景 + Good/OK/Bad rubric）；
+  `runner.ts` 产出覆盖矩阵 → `docs/ooc-6/storybook/dashboard.md`。设计权威 `docs/ooc-6/storybook/framework-design.md`。
+- **三层测试边界**：storybook（能力目录）/ `tests/e2e`（S1-S6·F1-F7 用户任务场景）/ `tests/harness`
+  （体验官深度评估，orchestrate 已改读 storybook specs）。
+- **踩坑提醒**：versioning 写（self/readable/executable）**必经 HTTP API**（worktree commit），直写未提交会和
+  ff-merge 冲突；executable 热更需 `sleep(~350ms)` 等 fs.watch；进程内 agent-native 需 supervisor 时先
+  `instantiateBuiltinClassObjects({baseDir})`。
