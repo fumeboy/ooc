@@ -12,7 +12,7 @@ import { readFileSync, existsSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
-import { ensureStoneRepo } from "@ooc/core/persistable";
+import { ensureStoneRepo, stoneDir as realStoneDir } from "@ooc/core/persistable";
 import { readServerConfig } from "@ooc/core/app/server/bootstrap/config";
 import { buildServer } from "@ooc/core/app/server/index";
 
@@ -94,10 +94,10 @@ async function main() {
   }
 
   // Helper: 把文件写入实际磁盘上的 stone 目录。
-  // canonical 是 flat stones/<id>/；git worktree 也会在 stones/<branch>/objects/<id>/ 同步一份。
-  // 直接写 canonical flat 路径，runtime 的 resolveStoneDir 双路径都能识别。
+  // canonical 现为 versioning 布局 `stones/main/objects/<id>/`（worktree 模型，2026-06；
+  // 旧 flat `stones/<id>/` 已废弃）。直接复用 runtime 的 stoneDir 解析，避免布局漂移。
   function stoneDir(id: string): string {
-    return join(worldDir, "stones", id);
+    return realStoneDir({ baseDir: worldDir, objectId: id });
   }
   async function writeStoneFile(id: string, relPath: string, content: string): Promise<string> {
     const full = join(stoneDir(id), relPath);
@@ -210,19 +210,20 @@ async function main() {
   // TC-REFL-01
   {
     const id = "mirror";
-    await postJson("/api/stones", { objectId: id });
     const selfContent = "# Mirror\nI am a reflective agent";
-    // 注意：stone 目录已经通过 POST /api/stones 创建了，有 self.md（空）。覆写。
-    const selfPath = join(stoneDir(id), "self.md");
-    writeFileSync(selfPath, selfContent);
-    await writeStoneFile(id, "executable/index.ts", [
-      `import { readFileSync } from "node:fs";`,
-      `import { join } from "node:path";`,
-      `export const ui_methods = {`,
-      `  readSelf: { fn: (ctx) => readFileSync(join(ctx.self.dir, "self.md"), "utf8") },`,
-      `};`,
-      `export const window = { commands: {} };`,
-    ].join("\n"));
+    // 注：全部经 HTTP API 写入，统一走 worktree 版本化（main = canonical）。
+    // 不直写磁盘——直写未提交会和后续 REFL-02/04 的 worktree ff-merge 冲突（新系统设计）。
+    await postJson("/api/stones", { objectId: id, self: selfContent });
+    await putJson(`/api/stones/${id}/server-source`, {
+      code: [
+        `import { readFileSync } from "node:fs";`,
+        `import { join } from "node:path";`,
+        `export const ui_methods = {`,
+        `  readSelf: { fn: (ctx) => readFileSync(join(ctx.self.dir, "self.md"), "utf8") },`,
+        `};`,
+        `export const window = { commands: {} };`,
+      ].join("\n"),
+    }, { "X-Overwrite-Confirm": "true" });
     await sleep(250);
     const r = await postJson(`/api/stones/${id}/call_method`, { method: "readSelf" });
     await assertEq("self.md content", r.json?.returnValue, selfContent,
@@ -349,10 +350,13 @@ async function main() {
   {
     const id = "morph";
     await postJson("/api/stones", { objectId: id });
-    await writeStoneFile(id, "executable/index.ts", [
-      `export const ui_methods = { version: { fn: () => "v1" } };`,
-      `export const window = { commands: {} };`,
-    ].join("\n"));
+    // 初始 executable 也经 HTTP API 写（统一走 worktree；直写未提交会和后续 PUT 冲突）。
+    await putJson(`/api/stones/${id}/server-source`, {
+      code: [
+        `export const ui_methods = { version: { fn: () => "v1" } };`,
+        `export const window = { commands: {} };`,
+      ].join("\n"),
+    }, { "X-Overwrite-Confirm": "true" });
     await sleep(200);
     const r1 = await postJson(`/api/stones/${id}/call_method`, { method: "version" });
     const v1Ok = r1.json?.returnValue === "v1";
@@ -547,6 +551,77 @@ async function main() {
   }
 
   // ═══════════════════════════════════════════════════════════
+  // CAPABILITY 4: Class（2026-06-07 新增 —— class 一等继承抽象）
+  // ═══════════════════════════════════════════════════════════
+  console.log("\n— Class —");
+
+  // TC-CLASS-01: instantiate_with_new_world —— builtin class 幂等实例化为 objects/ object
+  {
+    const { instantiateBuiltinClassObjects } = await import("@ooc/core/app/server/bootstrap/instantiate-classes");
+    const res = await instantiateBuiltinClassObjects({ baseDir: worldDir });
+    const dir = realStoneDir({ baseDir: worldDir, objectId: "supervisor" });
+    const pkgOk = existsSync(join(dir, "package.json"))
+      && JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).ooc?.class === "_builtin/supervisor";
+    const selfOk = existsSync(join(dir, "self.md")) && readFileSync(join(dir, "self.md"), "utf8").includes("总管");
+    record({
+      id: "TC-CLASS-01",
+      name: "instantiate_with_new_world：supervisor class 幂等实例化为 objects/ object（拷贝 self.md + ooc.class）",
+      status: res.instantiated.includes("supervisor") && pkgOk && selfOk ? "PASS" : "FAIL",
+      detail: res.instantiated.includes("supervisor") && pkgOk && selfOk ? undefined
+        : `instantiated=${JSON.stringify(res.instantiated)}, pkgOk=${pkgOk}, selfOk=${selfOk}`,
+    });
+  }
+
+  // TC-CLASS-02: 幂等 —— 二次实例化跳过、不覆盖用户改动
+  {
+    const { instantiateBuiltinClassObjects } = await import("@ooc/core/app/server/bootstrap/instantiate-classes");
+    const dir = realStoneDir({ baseDir: worldDir, objectId: "supervisor" });
+    writeFileSync(join(dir, "self.md"), "# 用户改过的 supervisor", "utf8");
+    const res = await instantiateBuiltinClassObjects({ baseDir: worldDir });
+    const preserved = readFileSync(join(dir, "self.md"), "utf8").includes("用户改过");
+    record({
+      id: "TC-CLASS-02",
+      name: "实例化幂等：二次 bootstrap 跳过已存在 instance，保住用户改动",
+      status: res.skipped.includes("supervisor") && preserved ? "PASS" : "FAIL",
+      detail: res.skipped.includes("supervisor") && preserved ? undefined
+        : `skipped=${JSON.stringify(res.skipped)}, preserved=${preserved}`,
+    });
+  }
+
+  // TC-CLASS-03: instance 经 class 链继承框架 class 的 seed knowledge
+  {
+    const { loadKnowledgeIndex } = await import("@ooc/core/thinkable/knowledge/loader");
+    const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
+    const reg = createObjectRegistry();
+    reg.registerNewObjectType("_builtin/supervisor" as any, { methods: {} });
+    reg.registerNewObjectType("supervisor" as any, { methods: {}, parentClass: "_builtin/supervisor" });
+    const idx = await loadKnowledgeIndex(
+      { stone: { baseDir: worldDir, objectId: "supervisor" }, pool: { baseDir: worldDir, objectId: "supervisor" } }, reg);
+    const paths = [...idx.byPath.keys()];
+    const inherits = paths.some((p) => p.includes("eight-dimensions")) && paths.some((p) => p.includes("world-vocabulary"));
+    record({
+      id: "TC-CLASS-03",
+      name: "instance 经 class 链继承框架 class 的 seed knowledge（eight-dimensions / world-vocabulary）",
+      status: inherits ? "PASS" : "FAIL",
+      detail: inherits ? undefined : `inherited paths=${JSON.stringify(paths)}`,
+    });
+  }
+
+  // TC-CLASS-04: class 不可交互 —— seedSession 拒绝 _builtin/ class 目标
+  {
+    const r = await postJson("/api/sessions", {
+      sessionId: "tc-class-reject", targetObjectId: "_builtin/supervisor", initialMessage: "hi",
+    });
+    const rejected = r.status === 400 && /class/i.test(r.text ?? "");
+    record({
+      id: "TC-CLASS-04",
+      name: "class 不可交互：seedSession 拒绝 _builtin/ class 作为对话目标",
+      status: rejected ? "PASS" : "FAIL",
+      detail: rejected ? undefined : `status=${r.status}, body=${(r.text ?? "").slice(0, 120)}`,
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════
   // SUMMARY
   // ═══════════════════════════════════════════════════════════
   console.log("\n=== Summary ===");
@@ -554,8 +629,8 @@ async function main() {
   for (const r of results) byStatus[r.status]++;
   console.log(`PASS=${byStatus.PASS}  FAIL=${byStatus.FAIL}  SKIP=${byStatus.SKIP}  TOTAL=${results.length}`);
 
-  // Write JSON results file
-  const out = join("/Users/bytedance/x/ooc/ooc-2/packages/@ooc/meta/storybook/_results.json");
+  // Write JSON results file（落在脚本同目录，不再硬编码绝对路径）
+  const out = join(import.meta.dir, "_results.json");
   writeFileSync(out, JSON.stringify(results, null, 2) + "\n");
   console.log(`Detailed results written to: ${relative(process.cwd(), out)}`);
 
