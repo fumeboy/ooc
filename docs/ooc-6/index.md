@@ -74,6 +74,11 @@
   builtin=类 / world=实例、剔除 prototype、`instantiate_with_new_world` 自动实例化、knowledge 经
   class 链无条件继承。supervisor 从「即兴演角色」变为「真实例化、完整加载身份+知识」。
   含动机→设计→实现(commit 链)→端到端验证→维度落点→未决(generality backlog)。
+- [storybook/framework-design.md](./storybook/framework-design.md) —— 体系化系统端到端测试框架：
+  把 storybook 升级为 OOC**统一能力目录**，每个能力（8 维度 + class）一个可运行 story，同时给
+  **控制面确定性验证**（可 CI gate）+ **agent-native 过程可见演示**（真 LLM）。收编 harness playbook
+  场景、复用 e2e fixture/scoreScenario。Phase 1（9 特性 Tier A 全绿）已落；覆盖矩阵见
+  [storybook/dashboard.md](./storybook/dashboard.md)。
 
 ## 文档约定
 
