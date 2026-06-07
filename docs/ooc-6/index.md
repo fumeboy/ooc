@@ -37,6 +37,14 @@
    症状，应增强可观测而非干等）已纳入 harness 循环常设环节（`engineering.harness.doc.ts`
    `experience_sedimentation`）。
 
+3. **class 一等继承抽象**（2026-06-07，横切 persistable / thinkable / executable·collaborable /
+   visible）：把 `class` 提升为与 `object` 平级的一等概念、作为**唯一**继承机制（彻底剔除 prototype）；
+   builtin = 类（`_builtin/<id>` 寻址、从框架包解析），world = 实例（`objects/<id>`，`ooc.class`
+   继承）。`instantiate_with_new_world` 让 builtin class 在新 world 幂等实例化出可交互 object——
+   supervisor 现在是真实例，自动加载 self.md 身份 + 全部 seed knowledge（经 class 链继承），不再靠
+   LLM 即兴演角色；welcome 默认无门槛，移除 `withBuiltinTalkTargets` 过渡逻辑。详见
+   [class-abstraction.md](./class-abstraction.md)。
+
 ## 跨维度未决（backlog 聚合）
 
 各维度文档「边界与未决」的高价值跨切项：
@@ -62,6 +70,10 @@
 - [dogfooding-probe-design.md](./dogfooding-probe-design.md) —— 最小 dogfooding 探针实验设计：
   trivial 核心改动（activity 加 probeMarker）+ 5 阶段插桩协议 + 预判结果矩阵（断点定位三缺口）+
   可落地的确定性探针脚本。把"足以自我迭代"从断言变成有矩阵支撑的事实。
+- [class-abstraction.md](./class-abstraction.md) —— OOC Class 一等继承抽象（横切变更记录）：
+  builtin=类 / world=实例、剔除 prototype、`instantiate_with_new_world` 自动实例化、knowledge 经
+  class 链无条件继承。supervisor 从「即兴演角色」变为「真实例化、完整加载身份+知识」。
+  含动机→设计→实现(commit 链)→端到端验证→维度落点→未决(generality backlog)。
 
 ## 文档约定
 
