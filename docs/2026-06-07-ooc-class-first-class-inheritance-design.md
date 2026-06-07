@@ -178,3 +178,28 @@ seedSession（`flows/service.ts:388`）拿到 target id 后，经 registry 判 `
   builtin self 框架包解析、prototype 符号清除。
 - **gate**：tsc + deprecated-symbols(+prototype) + silent-swallow。
 - e2e（含真正加载 self.md 身份）放 Spec B（依赖实例化）。
+
+---
+
+## 实现纪要（as-built，2026-06-07）
+
+实现时相对本设计稿有若干务实调整，**以代码为准**：
+
+- **class 寻址用既有 `_builtin/<id>` 前缀**，而非新引入 `class:<id>`。复用 `_builtin/` 已有的
+  builtin 分类语义；磁盘读（`readSelf`/`readReadable`/`stoneKnowledgeDir`）对 `_builtin/` 走框架包
+  （`resolveBuiltinReadDir`/`resolveBuiltinDir`），registry 把 `_builtin/<id>` 注册为空 methods 隐式
+  继承 root（`ensureBuiltinClassRegistered`）。ObjectRegistry 的 store 原生支持任意字符串键，无需改数据结构（C1 解法）。
+- **instance/class 磁盘解析分离**：`stoneDir` 移除 bare builtin id 特殊解析（bare → `objects/`）；
+  `resolveBuiltinReadDir` 收窄为 `_builtin/` 前缀专用——避免 class 遮蔽同名 instance 磁盘。
+- **knowledge 继承**：`stoneKnowledgeDir` 对 `_builtin/<id>` 走框架包 knowledge/；loader Step 1b
+  （parentClass 链 seed）**移除 inheritable 门控**——class 存在即为被继承，其 seed knowledge 无条件
+  流向 instance（区别于 B-tree 域祖先继承的 opt-in）。
+- **prototype 彻底剔除**，`ooc.class`（package.json）成唯一继承声明。
+
+**已落地（每步绿，commit c44a0042→2efa7bb8）**：P0 builtin 源解析、prototype 剔除、class 实例化
+（Spec B）、ensureBuiltinClassRegistered、seedSession 拒绝 class、P2 meta doc、knowledge 链继承。
+实证：全新 world → supervisor 自动实例化为真 object → welcome 默认无门槛 → 对话加载完整身份+全部
+seed knowledge+root 命令。
+
+**剩余（generality，无当前 consumer，未阻塞 supervisor 目标）**：world 级用户自定义 `classes/`
+子树扫描/注册；visible/readable 沿 class 链回退。
