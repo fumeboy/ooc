@@ -19,9 +19,6 @@
 import type { ServerLoader } from "./server-loader.js";
 import type { StoneDefinition, StoneRegistry } from "./stone-registry.js";
 import type { ObjectRegistry } from "./object-registry.js";
-import { resolveStoneDir } from "../persistable/index.js";
-import { join } from "node:path";
-import { readFile } from "node:fs/promises";
 import type { StoneObjectDeclaration, StoneObjectRef } from "../executable/object/types.js";
 
 export interface ObjectTypeRegistrarDeps {
@@ -67,7 +64,7 @@ export class ObjectTypeRegistrar {
     const stoneRef: StoneObjectRef = { baseDir: this.deps.worldPath, objectId };
     try {
       const windowDef = await this.deps.loader.loadObjectWindow(stoneRef);
-      const parentClass = await this.resolveParentClass(windowDef, stoneRef);
+      const parentClass = this.resolveParentClass(windowDef, def);
 
       // registerObjectType = merge into existing; registerNewObjectType = create new
       const mergedMethods = { ...(windowDef?.methods ?? {}), ...(windowDef?.commands ?? {}) };
@@ -133,32 +130,15 @@ export class ObjectTypeRegistrar {
   }
 
   /**
-   * Resolve parentClass with the same priority used by ensureSelfObjectTypeRegistered:
-   *  executable/index.ts parentClass > executable/index.ts prototype (@deprecated)
-   *  > self.md frontmatter prototype.
+   * Resolve parentClass：executable `export const window` 的 `parentClass` 覆盖优先，
+   * 否则取 stone `package.json` 的权威继承声明 `ooc.class`。缺省 undefined → 隐式继承 root。
    */
-  private async resolveParentClass(
+  private resolveParentClass(
     windowDef: StoneObjectDeclaration | undefined,
-    stoneRef: StoneObjectRef,
-  ): Promise<string | null | undefined> {
+    def: StoneDefinition,
+  ): string | null | undefined {
     if (windowDef?.parentClass !== undefined) return windowDef.parentClass;
-    if (windowDef?.prototype !== undefined) return windowDef.prototype;
-    try {
-      const stoneDir = await resolveStoneDir(stoneRef);
-      const selfPath = join(stoneDir, "self.md");
-      const content = await readFile(selfPath, "utf-8");
-      // Minimal frontmatter parser: look for `prototype: <name>` in the YAML block
-      const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
-      if (fmMatch) {
-        const protoMatch = fmMatch[1].match(
-          /^\s*prototype\s*:\s*["']?([^\s"']+)["']?\s*$/m,
-        );
-        if (protoMatch) return protoMatch[1];
-      }
-    } catch {
-      // self.md missing or unreadable — no prototype
-    }
-    return undefined;
+    return def.oocMetadata?.class;
   }
 }
 

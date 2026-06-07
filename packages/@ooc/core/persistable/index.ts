@@ -134,6 +134,8 @@ export {
 } from "./stone-worktree";
 
 export { readSelf, selfFile, writeSelf } from "./stone-self";
+export { readStoneClass } from "./stone-class";
+export { resolveBuiltinDir, resolveBuiltinReadDir } from "./builtin-dir";
 export {
   readReadable,
   readableFile,

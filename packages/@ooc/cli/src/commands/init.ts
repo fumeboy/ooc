@@ -215,7 +215,7 @@ export default async function init(argv: string[]): Promise<void> {
     private: true,
     type: "module",
     peerDependencies: { "@ooc/core": DEFAULT_OOC_VERSION },
-    ooc: { objectId: exampleName, kind: "stone", type: "agent", prototype: "supervisor" },
+    ooc: { objectId: exampleName, kind: "stone", type: "agent", class: "supervisor" },
   };
   await write(join(targetPath, "stones", exampleName, "package.json"), JSON.stringify(examplePkg, null, 2) + "\n");
   await write(join(targetPath, "stones", exampleName, "self.md"), [

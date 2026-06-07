@@ -22,5 +22,4 @@ export {
   enrichFormMethodKnowledge,
   derivePeerObjectWindows,
   ensureSelfObjectTypeRegistered,
-  readSelfPrototype,
 } from "./synthesizer";

@@ -13,7 +13,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { BUILTIN_OBJECT_IDS, STONE_CHILDREN_SUBDIR, STONE_OBJECTS_SUBDIR } from "../persistable/common.js";
 
-export type StoneKind = "stone" | "builtin";
+export type StoneKind = "stone" | "builtin" | "class";
 
 export interface StoneDefinition {
   objectId: string;
@@ -24,7 +24,8 @@ export interface StoneDefinition {
     objectId?: string;
     kind?: StoneKind;
     type?: string;
-    prototype?: string;
+    /** 父类 id —— stone 的权威继承声明（替代已删除的 prototype）。 */
+    class?: string;
   };
   mtime: number;
 }

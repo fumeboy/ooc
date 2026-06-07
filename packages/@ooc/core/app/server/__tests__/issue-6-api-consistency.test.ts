@@ -84,12 +84,14 @@ describe("Issue #6 Bad #1: silent-fabricate", () => {
     expect(body.items.some((t: { objectId: string }) => t.objectId === "assistant")).toBe(true);
   });
 
-  test("GET /api/stones (list) 父目录不存在仍返回 200 + []", async () => {
+  test("GET /api/stones (list) 父目录不存在仍返回 200 + 无用户 stone", async () => {
     const { app } = await makeApp();
     const res = await app.handle(new Request("http://localhost/api/stones"));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.items).toEqual([]);
+    // listStones 合入 builtin 对话目标（supervisor）；用户 stone 仍为空。
+    const userStones = body.items.filter((it: { objectId: string }) => it.objectId !== "supervisor");
+    expect(userStones).toEqual([]);
   });
 
   test("GET /api/flows (list) 父目录不存在仍返回 200 + []", async () => {

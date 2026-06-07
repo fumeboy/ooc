@@ -9,7 +9,6 @@
  *   (used by SystemProcessor in the pipeline)
  * - derivePeerObjectWindows: peer/children Object auto-injection as context windows
  *   (used by PeerProcessor in the pipeline)
- * - readSelfPrototype: reads prototype field from self.md frontmatter
  *
  * The old logic has been extracted to:
  * - thinkable/context/protocol.ts: protocol knowledge windows
@@ -18,7 +17,8 @@
  * - thinkable/context/activator-windows.ts: activator-based knowledge windows
  */
 
-import { deriveStoneFromThread, discoverStoneHierarchicalPeers, readReadable, readSelf } from "../../persistable/index.js";
+import { deriveStoneFromThread, discoverStoneHierarchicalPeers, readReadable } from "../../persistable/index.js";
+import { readStoneClass } from "../../persistable/index.js";
 import type { ThreadContext } from "../context.js";
 import type { ObjectRegistry } from "../../executable/windows/_shared/registry.js";
 import { builtinRegistry } from "../../executable/windows/index.js";
@@ -26,31 +26,12 @@ import type { ContextWindow, TalkWindow } from "../../executable/windows/_shared
 import { SUPER_ALIAS_TARGET } from "../../executable/windows/_shared/super-constants.js";
 import { loadObjectWindow } from "../../runtime/server-loader.js";
 import type { StoneObjectDeclaration } from "../../executable/object/object-types.js";
-import { parseKnowledgeFile } from "./parser.js";
 
 // ── Re-exports moved to window-enrichment.ts (kept for importer stability) ──
 export {
   computeFormKnowledgeEntries,
   enrichFormMethodKnowledge,
 } from "../context/window-enrichment.js";
-
-// ── readSelfPrototype (P6.§7) ──────────────────────────────────────────────
-
-/**
- * P6.§7 (2026-06-02): Read prototype field from self.md frontmatter
- * (@deprecated alias for parentClass). Returns undefined if missing.
- */
-export async function readSelfPrototype(stoneRef: { baseDir: string; objectId: string }): Promise<string | undefined> {
-  try {
-    const selfText = await readSelf(stoneRef);
-    if (!selfText) return undefined;
-    const { frontmatter } = parseKnowledgeFile(selfText);
-    const proto = (frontmatter as Record<string, unknown>).prototype;
-    return typeof proto === "string" && proto.trim().length > 0 ? proto.trim() : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 // ── ensureSelfObjectTypeRegistered ─────────────────────────────────────────
 
@@ -74,11 +55,8 @@ export async function ensureSelfObjectTypeRegistered(
   try {
     const stoneRef = { baseDir: thread.persistence!.baseDir, objectId: selfId };
     const objWin: StoneObjectDeclaration | undefined = await loadObjectWindow(stoneRef);
-    const frontmatterPrototype = await readSelfPrototype(stoneRef);
     const parentClass: string | null | undefined =
-      objWin?.parentClass !== undefined ? objWin.parentClass :
-      objWin?.prototype !== undefined ? objWin.prototype :
-      frontmatterPrototype;
+      objWin?.parentClass !== undefined ? objWin.parentClass : await readStoneClass(stoneRef);
     const mergedMethods = { ...(objWin?.methods ?? {}), ...(objWin?.commands ?? {}) };
     registry.registerNewObjectType(selfId as any, {
       methods: mergedMethods,
@@ -168,11 +146,8 @@ export async function derivePeerObjectWindows(
       const objWin: StoneObjectDeclaration | undefined = await loadObjectWindow(peerStoneRef);
       const registeredTypes = registry.listRegisteredObjectTypes();
       if (!registeredTypes.includes(peerId as any) && objWin) {
-        const frontmatterPrototype = await readSelfPrototype(peerStoneRef);
         const parentClass: string | null | undefined =
-          objWin.parentClass !== undefined ? objWin.parentClass :
-          objWin.prototype !== undefined ? objWin.prototype :
-          frontmatterPrototype;
+          objWin.parentClass !== undefined ? objWin.parentClass : await readStoneClass(peerStoneRef);
         const mergedMethods = { ...(objWin.methods ?? {}), ...(objWin.commands ?? {}) };
         registry.registerNewObjectType(peerId as any, {
           methods: mergedMethods,
