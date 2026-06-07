@@ -11,7 +11,7 @@
  *    直写磁盘未提交会和后续 worktree ff-merge 冲突。直写仅用于非 versioning 的热更（writeStoneFile）。
  */
 import { mkdtemp, rm } from "node:fs/promises";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { ensureStoneRepo, stoneDir as realStoneDir } from "@ooc/core/persistable";
@@ -96,6 +96,20 @@ export function writeStoneFile(baseDir: string, objectId: string, relPath: strin
   mkdirSync(dirname(full), { recursive: true });
   writeFileSync(full, content, "utf8");
   return full;
+}
+
+/** stones/main 里某路径的 git 提交 sha 列表（versioning 持久化核验）。 */
+export function stoneCommits(baseDir: string, relPathInMain: string): string[] {
+  const r = Bun.spawnSync(["git", "-C", join(baseDir, "stones", "main"), "log", "--format=%H", "--", relPathInMain],
+    { stdout: "pipe", stderr: "pipe" });
+  return new TextDecoder().decode(r.stdout).trim().split("\n").filter(Boolean);
+}
+
+/** 读 flows/<sid>/<objectId>/threads/<tid>/thread.json（不存在返回 undefined）。 */
+export function readThreadJson(baseDir: string, sid: string, objectId: string, threadId: string): any | undefined {
+  const p = join(baseDir, "flows", sid, objectId, "threads", threadId, "thread.json");
+  if (!existsSync(p)) return undefined;
+  try { return JSON.parse(readFileSync(p, "utf8")); } catch { return undefined; }
 }
 
 /** 收集 TC 结果的小记录器。 */

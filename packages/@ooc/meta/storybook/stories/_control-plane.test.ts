@@ -5,16 +5,26 @@
  * 纯 story 模块（*.story.ts）同时被 runner.ts 直接 import 做聚合矩阵。
  */
 import { describe, expect, it } from "bun:test";
-import { runControlPlane as programmable } from "./programmable.story";
+import { runControlPlane as thinkable } from "./thinkable.story";
+import { runControlPlane as executable } from "./executable.story";
+import { runControlPlane as collaborable } from "./collaborable.story";
+import { runControlPlane as observable } from "./observable.story";
 import { runControlPlane as reflectable } from "./reflectable.story";
+import { runControlPlane as programmable } from "./programmable.story";
 import { runControlPlane as visible } from "./visible.story";
+import { runControlPlane as persistable } from "./persistable.story";
 import { runControlPlane as klass } from "./class.story";
 import type { StoryResult } from "../_harness/types";
 
 const STORIES: Array<[string, () => Promise<StoryResult>]> = [
-  ["programmable", programmable],
+  ["thinkable", thinkable],
+  ["executable", executable],
+  ["collaborable", collaborable],
+  ["observable", observable],
   ["reflectable", reflectable],
+  ["programmable", programmable],
   ["visible", visible],
+  ["persistable", persistable],
   ["class", klass],
 ];
 

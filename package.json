@@ -5,6 +5,7 @@
   "workspaces": ["packages/**", "packages/**/children/**"],
   "scripts": {
     "test": "bun test",
+    "test:storybook": "bun test packages/@ooc/meta/storybook/stories",
     "test:e2e:backend": "RUN_BACKEND_E2E=1 bun test packages/@ooc/tests/e2e/backend",
     "test:e2e:frontend": "RUN_FRONTEND_E2E=1 bunx playwright test --config packages/@ooc/tests/e2e/frontend/playwright.config.ts",
     "check:tsc": "bash scripts/check-tsc.sh",
