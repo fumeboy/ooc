@@ -392,6 +392,13 @@ export function createFlowsService(deps: {
           `targetObjectId cannot be "${USER_OBJECT_ID}"; pick the object the user wants to talk to`,
         );
       }
+      // class 不可交互（只供 object 继承）——`_builtin/<id>` 是 class 寻址，拒绝作为对话目标。
+      if (targetObjectId.startsWith("_builtin/")) {
+        throw new AppServerError(
+          "INVALID_INPUT",
+          `targetObjectId "${targetObjectId}" is a class, not an interactive object; talk to its instance instead`,
+        );
+      }
       if (!initialMessage.trim()) {
         throw new AppServerError("INVALID_INPUT", "initialMessage is required");
       }

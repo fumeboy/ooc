@@ -1626,9 +1626,12 @@ export const root: DocTreeNode = {
                             的载体）；\`createFlowObject(ref, { class })\` 在 class 未注册时抛 \`ClassNotFoundError\`
                             （\`code === "CLASS_NOT_FOUND"\`，携带 \`classId\`）——fail-loud 避免悬空 class 静默 miss。
 
-                            **与 prototype 的关系**：\`prototype\`（self.md frontmatter）是 stone-side 的实例链；
-                            \`parentClass\` 是 registry-side 的 class 链。两者在 P6 时点尚未统一；本字段只参与
-                            class-级方法解析。
+                            **class 是唯一继承机制**（2026-06-07）：原 \`prototype\`（self.md frontmatter，stone-side
+                            实例链）已**彻底剔除**——继承统一收敛到 \`class\`。stone 用 \`package.json\` 的
+                            \`ooc.class\` 声明父类（替代 prototype），registrar/synthesizer 读它设 \`parentClass\`。
+                            框架 builtin **class** 以 \`_builtin/<id>\` 寻址（磁盘读框架包、registry 注册为空 methods
+                            隐式继承 root），instance 经 \`ooc.class="_builtin/<id>"\` 继承之（链
+                            \`instance → _builtin/<id> → root\`）。详见 children.class_object。
                             `,
                             named: {
                                 "parentClass 三态": "undefined → 默认 \"root\"; null → 显式不继承; string → 具名父类",
@@ -1636,6 +1639,41 @@ export const root: DocTreeNode = {
                                 "lookupMethodEntry": "同 resolveMethod 但额外返回 declaringType，manager.submit 用它做严格校验",
                                 "ClassNotFoundError": "createFlowObject 接受到不存在的 class 时抛此错误；code === \"CLASS_NOT_FOUND\"，携带 classId",
                                 "FlowObjectMetadata.class": ".flow.json 的 class 字段；绑定方法继承链",
+                                "ooc.class": "stone package.json 的继承声明（替代已删除的 prototype）；object 的权威父类",
+                            },
+                            children: {
+                                "class_object": {
+                                    title: "class —— 与 object 平级的一等继承抽象（不可交互）",
+                                    content: `
+                                    **class 是一等概念**（2026-06-07，与 object 平级）：持有五件套（self.md /
+                                    readable / executable / visible / knowledge），但**不是可交互 Agent**——
+                                    不能被 talk、不跑 thinkloop，只供 object 继承。**单继承**。
+
+                                    **持久化对称**：object 在 \`stones/<branch>/objects/<id>/\`，class 在
+                                    \`stones/<branch>/classes/<id>/\`。框架 builtin class 不 vendor 进 world，
+                                    以 \`_builtin/<id>\` 从框架包 \`@ooc/builtins/<id>\` 解析（\`resolveBuiltinDir\`）。
+
+                                    **instantiate_with_new_world**：class 的 package.json 声明此 flag 为 true 时，
+                                    world bootstrap **幂等**实例化出 \`objects/<id>\` object（拷贝 class 的 self.md
+                                    为 own 身份、\`ooc.class=_builtin/<id>\`、commit on main；已存在则跳过）。
+                                    supervisor 即 \`instantiate_with_new_world=true\` 的 builtin class——每个新 world
+                                    自动拥有一个 supervisor object，不再需要 listStones 特殊逻辑。
+
+                                    **own-or-inherit**：object 只对 self.md 在实例化时拷贝快照（own 身份、不跟框架
+                                    升级）；方法经 parentClass 链活继承 class（→root）。class 不可作 talk 目标
+                                    （\`seedSession\` 拒绝 \`_builtin/\` 前缀目标）。
+
+                                    > 边界/未决（2026-06-07）：world 级 \`classes/\` 子树扫描、knowledge / visible /
+                                    > readable 沿 class 链回退尚未落地——当前 supervisor 经 self.md(own) + 方法(root)
+                                    > 即可工作；seed knowledge 继承是已知后续项。
+                                    `,
+                                    named: {
+                                        "class": "不可交互的一等继承抽象；五件套，仅供 object 继承；单继承",
+                                        "_builtin/<id>": "框架 builtin class 的寻址前缀；磁盘读框架包、registry 注册隐式继承 root",
+                                        "instantiate_with_new_world": "class package.json flag；true → world bootstrap 幂等实例化出同名 object",
+                                    },
+                                    sources: [["packages/@ooc/core/app/server/bootstrap/instantiate-classes.ts (实例化), packages/@ooc/core/persistable/builtin-dir.ts (resolveBuiltinDir/ReadDir), packages/@ooc/builtins/supervisor/package.json (kind=class + flag)", "class 一等抽象 + instantiate_with_new_world + _builtin/ 寻址"]],
+                                },
                             },
                             sources: [["packages/@ooc/core/executable/windows/_shared/registry.ts:503 (resolveMethod), :190 (parentClass JSDoc), :469 (lookupMethodEntry); packages/@ooc/core/persistable/flow-object.ts:34 (FlowObjectMetadata.class), :43 (ClassNotFoundError), :87 (createFlowObject opts)", "parentClass 字段 + resolveMethod 链解析 + .flow.json:class 持久化 + ClassNotFoundError fail-loud"]],
                         },
@@ -4716,7 +4754,7 @@ export const root: DocTreeNode = {
             3. 原 \`src/executable/windows/\` 下的各 window type 改为 builtin objects，位于 \`packages/@ooc/builtins/<type>/\`
             4. 原 stone object 的 \`server/\` → \`executable/\`（方法实现），\`client/\` → \`visible/\`（UI 实现），\`readme.md\` → \`readable.md\`（静态展示）
             5. 新增 \`readable.ts\`：动态上下文渲染函数，控制 Object 如何以 XML 形式展示给 LLM
-            6. 新增 **prototype chain**：Object 之间可以继承 methods / UI / readable
+            6. 新增 **class 继承**：Object 通过 ooc.class 继承 class 的 methods / UI / readable（原 prototype chain 已于 2026-06-07 收敛为 class，详见 executable.children.context_window.patches.parent_class_inheritance.children.class_object）
             7. 新增 method 可见性标记: \`public?: boolean\`（对其他 Object 是否可见）、\`for_ui_access?: boolean\`（对前端 API 是否可调用）
             8. 运行时创建的 objects 持久化在 \`flows/<sid>/objects/<oid>/context/<childId>/\`，形成 Context Object Tree
             9. 取消 relation window，改为 peer/children 对象自动以引用形式进入 context
@@ -4732,28 +4770,27 @@ export const root: DocTreeNode = {
                 "Context Object Tree": "运行时创建的对象形成的嵌套结构，持久化在 context/ 目录下",
             },
         },
-        "prototype_chain": {
-            title: "Prototype Chain: Object 之间的方法/UI/readable 继承",
+        "class_inheritance": {
+            title: "Class 继承：Object 之间的方法/UI/readable 继承（取代 prototype chain）",
             content: `
-            Object 可以通过 \`self.md\` frontmatter 声明 \`prototype: "<objectId>"\`，继承原型对象的：
+            **2026-06-07 收敛**：原 prototype chain（self.md frontmatter \`prototype:\`）已彻底剔除，
+            继承统一到 **class**——Object 通过 \`package.json\` 的 \`ooc.class="<classId>"\` 继承 class 的：
             - Methods（executable/ 下的方法）
             - UI 组件（visible/ 下的组件）
             - Readable 函数（readable.ts）
 
-            继承规则（类似 JavaScript 原型链）:
-            - 自身定义覆盖原型定义
-            - 方法查找顺序: self → prototype → prototype.prototype → ... → builtin base
-            - \`public\` 和 \`for_ui_access\` 标记在继承时保留，可被覆盖
-            - 循环引用检测: 注册时检测循环并抛错
+            继承规则:
+            - 自身定义覆盖 class 定义
+            - 方法查找顺序: self → class → class 的父 class → ... → root（builtin base）
+            - 环检测: \`resolveParentClassChain\` 的 seen Set + MAX_DEPTH 兜底
+            - 单继承（暂不支持多继承）
 
-            用途:
-            - 同类 Object 共享基础方法（如所有 file-like object 继承 base_file 的 read/write 方法）
-            - Agent 专业化分层（base_agent → specialized_agent → concrete_agent）
-            - 减少重复代码，统一行为契约
+            class 是与 object 平级的一等抽象（不可交互，仅供继承）；框架 builtin class 以
+            \`_builtin/<id>\` 寻址。详见 executable.children.context_window.patches.parent_class_inheritance.children.class_object。
             `,
             named: {
-                "prototype": "Object 的原型对象 id，用于继承 methods/UI/readable",
-                "prototype chain": "原型链查找路径: self → prototype → prototype.prototype → ...",
+                "ooc.class": "Object 在 package.json 声明的继承父类（取代 prototype）",
+                "class 链": "方法查找路径: self → class → class.parent → ... → root",
             },
         },
         "readable_concept": {
