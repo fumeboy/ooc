@@ -362,4 +362,31 @@ git commit -m "test(visible): thread_context 统一渲染 e2e(builtin 不回归 
 - ⚠️ 命名一致性：`BUILTIN_VISIBLE` / `resolveWindowVisibleKind` / `WindowVisible` / `enrichWindowSource` 跨 Task 引用须一致。
 - ⚠️ 与线 B 的冲突点：两条线都改 `BaseContextWindow`（线 B 加 `state`，线 A 加 `source*`）——串行实现，后跑的线 rebase 前一条。
 
-**风险点（实现时验证）**：① `isStone` 判定逻辑（Task 1 Step 4）——enrichment 上下文能否区分 user object 的 stone/flow 域；不足则默认 stone + 端到端修正。② `requestJson`/`resolveClientSource` helper 的确切导出路径（Task 3）——优先复用 `ObjectClientRenderer` 内部实现。③ `do`/`talk` 的视觉体从内联搬出后，与仍留在 viewer 的 transcript/composer 的边界（Task 2 Step 3）——只搬视觉体，交互留原处。
+**风险点（实现时验证）**：① `isStone` 判定逻辑（Task 1 Step 4）——见下方 Review 修订，已改为不依赖它。② `requestJson`/`resolveClientSource` helper 的确切导出路径（Task 3）——优先复用 `ObjectClientRenderer` 内部实现。③ `do`/`talk` 的视觉体从内联搬出后，与仍留在 viewer 的 transcript/composer 的边界（Task 2 Step 3）——只搬视觉体，交互留原处。
+
+---
+
+## Review 修订（Supervisor 拍板，2026-06-08 技术 review 后）
+
+技术 reviewer 实读源码后判定 Task 1 的后端 enrich 是**架构阻塞**（`enrichContextWindows(windows,thread,registry)` 的 per-window 循环 `:109-113` 拿不到 sessionId、也无 stone/flow 判别；"默认 stone"会让 flow object 的 visible 全部 404 降级）。以下修订**优先于上文，实现时按此**：
+
+**C4 — 取消后端 enrich（删除原 Task 1），改前端自洽。** 关键洞察：OOC object 的 visible 是其身份的一部分，写在 **stone scope** `stones/<obj>/visible/index.tsx`；session（flow）是 stone 的 lazy worktree 分支，`client-source-url` 的 stone 分支（`api.client-source-url.ts:53-71`）已用 `resolveStoneIdentityRef` 处理 worktree 路由（sessionId 可选）。所以 **scope 恒为 stone，无需判别**，flow 的 `client/pages` 是另一种 artifact（多页扩展），不参与 window 渲染。
+
+修订后的 **Task 1（前端化）**：
+- 不改后端 `window-enrichment.ts` / `debug-file.ts`，不加 window source 字段。
+- `ContextSnapshotViewer` 增加一个 `sessionId?: string` prop（从 thread_context 视图的 session 上下文 plumbing 进来，仅用于 stone worktree 路由；拿不到则读 committed visible）。viewer 已有 `selfObjectId`。
+- user-defined self-window 的 objectId 取 `window.type`（self-window linkage：`id===type===objectId`，`context-window.ts:126-132`）。self-window 判定优先用 `window.isSelfWindow` 字段（`BaseContextWindow` 已有）。
+
+修订后的 **Task 3 resolver 顺序（含 M3）**：
+1. `window.type` 是 builtin renderable（`BUILTIN_VISIBLE[window.type]` 直接命中，**不经继承**）→ 静态 builtin 组件。
+2. 否则（user-defined type）→ **优先动态加载该 object 自己的 visible**：`clientSourceUrl("stone", window.type, {sessionId})` → `import` default → `({window})` 渲染。**M3：object 自己的 visible 优先于继承的 builtin。**
+3. 动态加载 `notFound`（该 object 没写 visible）→ 回退到 `window.effectiveVisibleType` 的 builtin 组件（继承链 fallback）。
+4. 都没有 → JSON 兜底。
+
+> 即 `resolveWindowVisibleKind` 改为：先判 `BUILTIN_VISIBLE[window.type]`（注意用**原始 type 直命中**，不是 `effectiveVisibleType`，否则继承会抢在 object 自己的 visible 前面）；user-defined 返回 `{kind:"dynamic", objectId:window.type, scope:"stone", sessionId}`；dynamic 组件内部 notFound 时再 fallback `BUILTIN_VISIBLE[window.effectiveVisibleType]` 或 JSON。Task 3 单测相应调整：`{type:"my_doc", effectiveVisibleType:"file"}` 现在应解析为 `dynamic`（objectId=my_doc），**不再**直接静态 file。
+
+**M2 — 内联组件搬迁是线 A 最大机械风险（已规划但强调）。** 实存 `visible/index.tsx` 的 builtin 只有 8 个（file/knowledge/todo/search/skill_index/plan/program/root，均 `export default ({window})`）；method_exec（本地 `./MethodExecWindowDetail`）+ relation/feishu_chat/feishu_doc（viewer 内联组件）+ do/talk/form_guidance（内联 JSX）须手工抽成 `({window})=>JSX` 注册，reshape 时保留各自 props/closures。`supervisor`/`user` 不接 window prop 且返回 null、不在 `RENDERABLE_VISIBLE_TYPES`——不注册，自然落 JSON 兜底（无害）。
+
+**L2 — `resolveClientSource` 未导出（`ObjectClientRenderer.tsx:62` module-private）。** Task 3 内联其 `clientSourceUrl→requestJson→import(fsUrl)` 逻辑（`requestJson` 来自 `transport/http.ts:3`，`endpoints.clientSourceUrl` 来自 `endpoints.ts:14`，均已确认存在），或先把 `resolveClientSource` 导出再复用。
+
+> 净效果：线 A 不再触碰后端，纯前端改造（注册表 + resolver + viewer 接入 + sessionId plumbing），落地面更小、绕开 C4 阻塞。原 Task 1 的后端测试作废。
