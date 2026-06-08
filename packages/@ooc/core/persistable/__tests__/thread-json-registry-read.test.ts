@@ -10,10 +10,10 @@
  */
 
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeThread, readThread } from "../thread-json";
+import { writeThread, readThread, threadFile } from "../thread-json";
 import {
   writeRuntimeObjectState,
   writeContextRegistry,
@@ -165,5 +165,35 @@ describe("readThread — registry-priority read path (P5'.2)", () => {
     const restored = await readThread(flowRef, "t_main");
     const ids = restored!.contextWindows.map((w) => w.id);
     expect(ids).toContain("todo_legacy");
+  });
+
+  // 2026-06-09 回归 gate：self 门面窗不持久化进 thread.json（与 thread-context.json 写盘端
+  // 的 isNonPersistedWindow 过滤对齐，根治 thread.json 含 self / thread-context.json 不含 self
+  // 的双写漂移），但 reload 时由 readThread→initContextWindows→injectSelfWindowIfObjectThread
+  // 幂等重注入，行为不丢。
+  it("self window 不落 thread.json，reload 经 init 重现（双写漂移根治）", async () => {
+    // makeThread（不 skipCreatorWindow）经 initContextWindows 注入 self window（objectId=agent_p52，非 user）
+    const thread = makeThread({ id: "t_main", persistence });
+    const selfInMem = thread.contextWindows.find(
+      (w) => (w as { isSelfWindow?: boolean }).isSelfWindow === true,
+    );
+    expect(selfInMem?.id).toBe("agent_p52"); // 内存中确有 self 门面窗
+
+    await writeThread(thread);
+
+    // thread.json 落盘后不含 self window（isNonPersistedWindow 剔除）
+    const rawThreadJson = JSON.parse(await readFile(threadFile(persistence), "utf8")) as {
+      contextWindows?: Array<{ id: string; isSelfWindow?: boolean }>;
+    };
+    const selfPersisted = (rawThreadJson.contextWindows ?? []).find(
+      (w) => w.isSelfWindow === true || w.id === "agent_p52",
+    );
+    expect(selfPersisted).toBeUndefined();
+
+    // reload 后 self window 由 init 幂等重注入，不丢
+    const restored = await readThread(flowRef, "t_main");
+    const selfRestored = restored!.contextWindows.find((w) => w.id === "agent_p52");
+    expect(selfRestored).toBeDefined();
+    expect((selfRestored as { isSelfWindow?: boolean }).isSelfWindow).toBe(true);
   });
 });

@@ -9,7 +9,7 @@ import { readContextRegistry } from "./flow-context-registry";
 import { readRuntimeObjectState } from "./flow-runtime-object";
 import { readThreadContext, type ThreadContextEntry } from "./flow-thread-context";
 import type { ContextWindow } from "../executable/windows/_shared/types";
-import { isVolatileDerivedWindow } from "../executable/windows/_shared/types";
+import { isNonPersistedWindow } from "../executable/windows/_shared/types";
 import { persistInboxMessages, readInboxMessages } from "./inbox-store";
 import { observeWarn } from "../observable/log-aggregator";
 
@@ -45,10 +45,14 @@ function stripVolatileForPersist(thread: ThreadContext): ThreadContext {
   const { intentCache: _dropIntentCache, inbox: _dropInbox, ...threadRest } = thread;
   return {
     ...threadRest,
-    // volatile derived window（form-bound guidance）不落 thread.json：每轮 enrichment 重算，
-    // 持久化只会在 reload 时被当 unregistered type drop + 刷屏。
+    // 不持久化的窗（volatile derived guidance + self 门面窗）不落 thread.json：二者都由
+    // enrichment / init 每轮确定性重建（self window 经 readThread→initContextWindows→
+    // injectSelfWindowIfObjectThread 幂等重注入），持久化只会在 reload 时变死 _ref 刷屏，
+    // 且与 thread-context.json（写盘端已用 isNonPersistedWindow 剔除 self）内容集合漂移。
+    // 2026-06-09: 由 isVolatileDerivedWindow 收敛为 isNonPersistedWindow，与 thread-context
+    // 写盘端对齐，根治 thread.json(含 self) vs thread-context.json(不含 self) 的双写漂移。
     contextWindows: thread.contextWindows
-      .filter((window) => !isVolatileDerivedWindow(window))
+      .filter((window) => !isNonPersistedWindow(window))
       .map((window) => {
       let next = window;
       if (!next.compressLevel) {
