@@ -24,7 +24,7 @@ import {
   startApp,
   type AppHandle,
   usedShellProgram,
-  countCommandOpens,
+  countMethodOpens,
   listOpenedCommands,
   waitForJob,
 } from "./_fixture";
@@ -94,8 +94,8 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S1 rename-symbol-via-edit",
       const helperZCount = countOccurrences(finalFoo, "helperZ");
       const replies = assistantRepliesToUser(callee);
       const lastReply = replies[replies.length - 1]?.content ?? "";
-      const editOpens = countCommandOpens(callee, "edit");
-      const writeFileOpens = countCommandOpens(callee, "write_file");
+      const editOpens = countMethodOpens(callee, "edit");
+      const writeFileOpens = countMethodOpens(callee, "write_file");
       const usedShell = usedShellProgram(callee);
 
       const result = scoreScenario({

@@ -9,7 +9,7 @@
 import { afterEach, beforeAll, describe, expect, it } from "bun:test";
 import {
   assistantRepliesToUser,
-  countCommandOpens,
+  countMethodOpens,
   countOccurrences,
   hasLlmEnv,
   listOpenedCommands,
@@ -91,8 +91,8 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S4 invalid-edit-recovery", 
       const secondPreserved = /reset\s*\(\)\s*{[\s\S]*?let\s+count\s*=\s*0/.test(finalDup);
       const thirdPreserved = /reset2\s*\(\)\s*{[\s\S]*?let\s+count\s*=\s*0/.test(finalDup);
 
-      const editOpens = countCommandOpens(callee, "edit");
-      const writeFileOpens = countCommandOpens(callee, "write_file");
+      const editOpens = countMethodOpens(callee, "edit");
+      const writeFileOpens = countMethodOpens(callee, "write_file");
       const usedShell = usedShellProgram(callee);
       const replies = assistantRepliesToUser(callee);
       const lastReply = replies[replies.length - 1]?.content ?? "";

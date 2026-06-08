@@ -388,12 +388,12 @@ export function usedShellProgram(thread: ThreadContext | undefined): boolean {
 }
 
 /** function_call.toolName 出现的总次数（用于 OK 档"重试 ≥ N 次"判断）。 */
-export function countCommandOpens(thread: ThreadContext | undefined, commandPath: string): number {
+export function countMethodOpens(thread: ThreadContext | undefined, methodName: string): number {
   if (!thread) return 0;
   let n = 0;
   for (const e of thread.events) {
     if (!isFnCall(e) || e.toolName !== "exec") continue;
-    if ((e.arguments as { method?: unknown } | undefined)?.method === commandPath) n += 1;
+    if ((e.arguments as { method?: unknown } | undefined)?.method === methodName) n += 1;
   }
   return n;
 }

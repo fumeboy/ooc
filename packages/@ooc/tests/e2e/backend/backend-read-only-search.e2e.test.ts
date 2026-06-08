@@ -8,7 +8,7 @@
 import { afterEach, beforeAll, describe, expect, it } from "bun:test";
 import {
   assistantRepliesToUser,
-  countCommandOpens,
+  countMethodOpens,
   countOccurrences,
   hasLlmEnv,
   listOpenedCommands,
@@ -110,9 +110,9 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S2 read-only-search", () =>
 
       const replies = assistantRepliesToUser(callee);
       const lastReply = replies[replies.length - 1]?.content ?? "";
-      const grepOpens = countCommandOpens(callee, "grep");
-      const editOpens = countCommandOpens(callee, "edit");
-      const writeFileOpens = countCommandOpens(callee, "write_file");
+      const grepOpens = countMethodOpens(callee, "grep");
+      const editOpens = countMethodOpens(callee, "edit");
+      const writeFileOpens = countMethodOpens(callee, "write_file");
       const usedShell = usedShellProgram(callee);
       const reportedExpected = lastReply.includes(String(EXPECTED_DEPRECATED_COUNT));
 
