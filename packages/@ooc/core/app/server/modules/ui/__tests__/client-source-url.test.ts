@@ -104,4 +104,38 @@ describe("ui · client-source-url stone scope", () => {
     const res = await fetchSource(app, objectId);
     expect(res.status).toBe(404);
   });
+
+  test("?file=diff 命中 visible/diff.tsx 时返回 200 + 正确路径", async () => {
+    const { app, baseDir } = await makeApp();
+    const objectId = "vis_diff_present";
+    const dir = visibleDir({ baseDir, objectId });
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "diff.tsx"), "export default () => null;\n");
+
+    const res = await app.handle(
+      new Request(`http://localhost/api/objects/stone/${objectId}/client-source-url?file=diff`),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.absPath).toBe(join(dir, "diff.tsx"));
+    expect(body.fsUrl).toContain("/visible/diff.tsx");
+  });
+
+  test("?file=diff 且 visible/diff.tsx 缺失 → 404（无 legacy 回退）", async () => {
+    const { app, baseDir } = await makeApp();
+    const objectId = "vis_diff_absent";
+    // 写 visible/index.tsx 和 legacy client/index.tsx，但不写 diff.tsx
+    const visDir = visibleDir({ baseDir, objectId });
+    await mkdir(visDir, { recursive: true });
+    await writeFile(join(visDir, "index.tsx"), "export default () => null;\n");
+    const legacyDir = join(stoneDir({ baseDir, objectId }), "client");
+    await mkdir(legacyDir, { recursive: true });
+    await writeFile(join(legacyDir, "index.tsx"), "export default () => null;\n");
+
+    const res = await app.handle(
+      new Request(`http://localhost/api/objects/stone/${objectId}/client-source-url?file=diff`),
+    );
+    // diff 无 legacy 对应物；必须干净 404，不应回退到 index.tsx
+    expect(res.status).toBe(404);
+  });
 });

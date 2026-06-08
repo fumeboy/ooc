@@ -4395,13 +4395,13 @@ export const root: DocTreeNode = {
                             - **builtin 静态**: \`BUILTIN_DIFF[window.type]\` → builtin 自己的 diff 组件
                               (有 builtin 目录的 file/knowledge/search/program/plan 在 \`@ooc/builtins/<type>/visible/diff\`;
                               无目录的 talk/do/relation/method_exec 留 web 本地, 与线 A visible 注册表同款不对称)
-                            - **user diff (档 2, 后置)**: user-defined object 写了 \`visible/diff.tsx\` → 动态加载
-                              (依赖后端 client-source-url 支持 \`?file=diff\` 寻址; 未实现, 暂落 before-after)
-                            - **before-after (回退)**: object 有 \`visible/index.tsx\` → 用 \`WindowVisible\` 并列渲
+                            - **user diff (档 2)**: user-defined object 写了 \`visible/diff.tsx\` → 动态加载
+                              (后端 client-source-url \`?file=diff\` 白名单寻址, 无 legacy 回退; 缺失干净 404 → 回退 before-after)
+                            - **before-after (回退)**: object 没写 diff.tsx → 用 \`WindowVisible\` 并列渲
                               previous + current (复用线 A 动态加载, 让未写 diff 的 user object 也有有意义降级)
                             - **JSON 兜底**: \`FallbackJsonDiff\`
-                            LoopDiffView 在 row 展开时调 \`WindowDiff\`; ErrorBoundary 包裹, 抛错 fallback JSON + 提示。
-                            **MVP 收窄**: 档 2 未做; 且 user-defined type 直接 before-after, 不查 effectiveVisibleType
+                            LoopDiffView 在 row 展开时调 \`WindowDiff\`; ErrorBoundary 包裹, 抛错 fallback before-after/JSON。
+                            **MVP 收窄**: user-defined type 直接 dynamic-diff→before-after, 不查 effectiveVisibleType
                             继承 (线 A visible 查继承, diff 暂不对称)。
 
                             **type 设计**:
@@ -4445,7 +4445,8 @@ export const root: DocTreeNode = {
                                 "resolveWindowDiff": "web/.../window-diff/resolveWindowDiff.tsx; resolveWindowDiffKind 解析 + WindowDiff 渲染入口; 对称 resolveWindowVisible",
                                 "BUILTIN_DIFF": "web/.../window-diff/builtin-diff-registry.tsx; 9 type 静态注册表 (5 从 @ooc/builtins, 4 web 本地)",
                                 "WindowDiffProps": "{previous?: unknown; current?: unknown}; 类型 unknown 因形态可能是精简 WindowSnapshotEntry 或 fetch 来的完整 window",
-                                "before-after": "user-defined / 无 diff 组件时的回退; 用 WindowVisible 并列渲 previous + current",
+                                "dynamic-diff": "user-defined type 档: 动态加载 object 自己的 visible/diff.tsx (clientSourceUrl ?file=diff); notFound/失败回退 before-after",
+                                "before-after": "dynamic-diff 的 fallback (object 没写 diff.tsx 时); 用 WindowVisible 并列渲 previous + current",
                                 "FallbackJsonDiff": "通用 JSON tree diff; 最终兜底; 仍持有 WindowDiffRendererProps 类型供 ErrorBoundary 复用",
                                 "fileDiff": "WindowSnapshotEntry 上的可选字段; 仅 file 类填; 含 previousContent + currentContent + path + isBinary?/tooLarge?; file 走此 entry 免 fetch",
                                 "CodeMirror Merge unified": "@codemirror/merge ^6.0.0; unified 单栏行级 diff; file/visible/diff.tsx 直 import, builtins/file/package.json 声明依赖",

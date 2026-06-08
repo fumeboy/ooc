@@ -34,6 +34,7 @@ const paramsSchema = t.Object({
 const querySchema = t.Object({
   sessionId: t.Optional(t.String()),
   page: t.Optional(t.String()),
+  file: t.Optional(t.String()),
 });
 
 function assertSafeIdentifier(value: string, field: string): void {
@@ -59,15 +60,20 @@ export function clientSourceUrlApi(config: Pick<ServerConfig, "baseDir">) {
         const stoneRef = sessionId
           ? await resolveStoneIdentityRef({ baseDir: config.baseDir, sessionId, objectId }, "read")
           : { baseDir: config.baseDir, objectId };
-        // M2 ooc-6: canonical is visible/index.tsx; legacy client/index.tsx supported as fallback
-        absPath = join(visibleDir(stoneRef), "index.tsx");
-        try {
-          if (!(await stat(absPath)).isFile()) {
+        if (query.file === "diff") {
+          // diff 路径：只解析 visible/diff.tsx；无文件直接走 stat 失败 → 404（无 legacy 回退）
+          absPath = join(visibleDir(stoneRef), "diff.tsx");
+        } else {
+          // M2 ooc-6: canonical is visible/index.tsx; legacy client/index.tsx supported as fallback
+          absPath = join(visibleDir(stoneRef), "index.tsx");
+          try {
+            if (!(await stat(absPath)).isFile()) {
+              absPath = join(stoneDir(stoneRef), "client", "index.tsx");
+            }
+          } catch {
+            // visible/ doesn't exist — try legacy client/
             absPath = join(stoneDir(stoneRef), "client", "index.tsx");
           }
-        } catch {
-          // visible/ doesn't exist — try legacy client/
-          absPath = join(stoneDir(stoneRef), "client", "index.tsx");
         }
       } else {
         // flow scope 需要 sessionId + page
