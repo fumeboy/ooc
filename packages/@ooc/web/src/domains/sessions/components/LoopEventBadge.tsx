@@ -143,7 +143,7 @@ export function classifyLoopEvent(event: LoopEvent): LoopEventBadgeSpec | undefi
     ].filter(Boolean) as string[];
     return {
       icon: isError ? "⚠️" : "ℹ️",
-      color: isError ? "red" : "slate",
+      color: isError ? "red" : "gray",
       tooltip: tooltipParts.join(" · "),
       label: ev.errorCode ? ev.errorCode.slice(0, 20) : "inject",
     };

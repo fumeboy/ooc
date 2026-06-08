@@ -210,15 +210,16 @@ function injectSelfWindowIfObjectThread(thread: ThreadContext): void {
  * - IO 失败时静默吞掉（debug log），不阻塞 thread 启动
  */
 export async function injectPeerWindowsIfObjectThread(thread: ThreadContext): Promise<void> {
-  const selfId = thread.persistence?.objectId;
-  if (!selfId || selfId === "user") return;
+  const persistence = thread.persistence;
+  const selfId = persistence?.objectId;
+  if (!persistence || !selfId || selfId === "user") return;
   if (isBuiltinObjectId(selfId)) return;
 
   const list = thread.contextWindows ?? (thread.contextWindows = []);
   let peers: string[];
   try {
     const { siblings, children } = await discoverStoneHierarchicalPeers(
-      deriveStoneFromThread(thread.persistence),
+      deriveStoneFromThread(persistence),
     );
     peers = [...siblings, ...children].filter((p) => p !== selfId && p !== "user");
   } catch (err) {
