@@ -68,7 +68,7 @@ describe("program runtime — runOneExec (shell)", () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "ooc-shell-self-"));
     try {
       // worktree 模型：identity 须先 commit 到 main，business session 的 OOC_SELF_DIR
-      // 才能 lazy 建 worktree 并指向 stones/session-<sid>/objects/<id>/（完整副本，裸读裸写）。
+      // 才能建 worktree 并指向 flows/<sid>/objects/<id>/（方案 A，完整副本，裸读裸写）。
       await ensureStoneRepo({ baseDir: tempRoot });
       await createStoneObject({ baseDir: tempRoot, objectId: "agent", _stonesBranch: "main" });
       await writeSelf({ baseDir: tempRoot, objectId: "agent", _stonesBranch: "main" }, "# Agent\n");
@@ -85,7 +85,7 @@ describe("program runtime — runOneExec (shell)", () => {
       });
       const rec = await runOneExec(thread, { language: "shell", code: "echo \"$OOC_SELF_DIR\"" });
       // business session → worktree object 目录（design §2 program shell 通道）。
-      expect(rec.output).toContain(`${tempRoot}/stones/session-s1/objects/agent`);
+      expect(rec.output).toContain(`${tempRoot}/flows/s1/objects/agent`);
       expect(rec.output).toContain("[exit 0]");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });

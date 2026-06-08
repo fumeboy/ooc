@@ -13,6 +13,9 @@
  * 串行化（详见 stone-versioning.ts），保证同 repo 内 git 命令不交错。
  */
 
+import { rmSync } from "node:fs";
+import { join } from "node:path";
+
 const BRANCH_NAME_PATTERN = /^[A-Za-z0-9._/-]+$/;
 const SHA_PATTERN = /^[a-f0-9]{4,40}$/;
 
@@ -267,6 +270,26 @@ export function gitWorktreeRemove(repoDir: string, path: string, force: boolean 
     return failGeneric(r.stderr);
   }
   return { ok: true };
+}
+
+/**
+ * 解除 worktree 注册但**保留目录与文件内容**（方案 A：session worktree 物理合一专用 GC）。
+ *
+ * session worktree 物理就是 `flows/<sid>/`，与运行时数据（threads / .session.json / .flow.json）
+ * 共存。合入后若用 `gitWorktreeRemove --force` 会连运行时对话历史一并删 → session 在前端凭空消失。
+ * 改为：删 `<wtPath>/.git` link 文件解除 worktree 身份 + `git worktree prune` 清 bare repo stale
+ * 注册；**目录与运行时数据保留**（session 仍可见、可回看）。tracked 的 objects/ 旧副本留下无害——
+ * worktree 解除后该 session 的 stone read 透传 main canonical（isSessionWorktree 判 .git 已不存在）。
+ */
+export function gitWorktreeUnregister(repoDir: string, wtPath: string): GitResult {
+  if (typeof wtPath !== "string" || wtPath.length === 0) return failInput("empty path");
+  // 删 .git link 解除 worktree 身份。不存在（已解除 / 从未建）= 幂等成功。
+  try {
+    rmSync(join(wtPath, ".git"), { force: true });
+  } catch {
+    // fs 错不阻塞 prune；prune 自身会反映 bare repo 侧的清理结果。
+  }
+  return gitWorktreePrune(repoDir);
 }
 
 /** `git worktree list --porcelain` 解析。 */

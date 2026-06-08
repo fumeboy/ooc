@@ -6,7 +6,8 @@
  * 删除并行的 metaprog worktree 写路径（openMetaprogWorktree / supervisorCreateObject /
  * versionedStoneWrite）。stone 写只剩两个落点——
  * - **LLM session 内任何 stone 写**（改自己 + 改别人/建别人）落业务 session 的 worktree
- *   （`stones/session-<sid>/`，plain write），经 super flow `evolve_self` 合入 main。
+ *   （方案 A：物理 `flows/<sid>/`、branch `session-<sid>`，plain write），经 super flow
+ *   `evolve_self` 合入 main。
  * - **HTTP 控制面写**（人类已决策）经 `httpDirectMainWrite` 直写 `stones/main/` 并 commit。
  *
  * Caller 视角（保留的底层原语，供上述两路 + 治理复用）：
@@ -50,6 +51,7 @@ import {
   gitWorktreeList,
   gitWorktreePrune,
   gitWorktreeRemove,
+  gitWorktreeUnregister,
   isValidBranchName,
   type GitErrorCode,
   type GitResult,
@@ -61,6 +63,7 @@ import {
   isBuiltinObjectId,
   STONE_OBJECTS_SUBDIR,
   STONES_MAIN_BRANCH,
+  SESSION_BRANCH_PREFIX,
 } from "../persistable/common.js";
 
 /** Supervisor 的 objectId（治理身份：rollback 仅 supervisor 可调；PR-Issue 默认收件人）。 */
@@ -146,7 +149,16 @@ function repoDir(baseDir: string): string {
   return join(baseDir, "stones", STONES_MAIN_BRANCH);
 }
 
+/**
+ * worktree branch 名 → 磁盘物理路径。session 分支（`session-<sid>`）落 `flows/<sid>`
+ * （方案 A，2026-06-09，与 sessionWorktreePath / stoneDir 对齐）；其余 branch（metaprog
+ * 残留等）仍走 `stones/<branch>`。resolvePrIssue 的 worktree GC 依赖本映射定位真 worktree。
+ */
 function worktreePath(baseDir: string, branch: string): string {
+  if (branch.startsWith(SESSION_BRANCH_PREFIX)) {
+    const sid = branch.slice(SESSION_BRANCH_PREFIX.length);
+    return join(baseDir, "flows", sid);
+  }
   return join(baseDir, "stones", branch);
 }
 
@@ -390,8 +402,8 @@ export async function tryMergeSelf(
     const head = gitHead(repo);
     if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr } as const;
 
-    // step 4: cleanup worktree（移除目录 + branch + GC 空父目录）
-    const removeWt = gitWorktreeRemove(repo, worktree.path);
+    // step 4: cleanup worktree（解除注册，保留运行时数据；session worktree=flows/<sid> 物理合一）
+    const removeWt = gitWorktreeUnregister(repo, worktree.path);
     // silent-swallow ban: 失败不阻塞 ff 成功，但必须 warn 让运维知情（caller 可下次启动 prune）
     if (!removeWt.ok) {
       // eslint-disable-next-line no-console
@@ -557,7 +569,7 @@ export async function resolvePrIssue(input: ResolvePrIssueInput): Promise<Resolv
       if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr } as const;
 
       // cleanup worktree (best-effort) — silent-swallow ban: 失败 warn 但不阻塞 merge
-      const rmMerge = gitWorktreeRemove(repo, worktreePath(input.baseDir, branch));
+      const rmMerge = gitWorktreeUnregister(repo, worktreePath(input.baseDir, branch));
       if (!rmMerge.ok) {
         // eslint-disable-next-line no-console
         console.warn(
@@ -589,7 +601,7 @@ export async function resolvePrIssue(input: ResolvePrIssueInput): Promise<Resolv
     }
 
     // reject — silent-swallow ban: 失败 warn 但不阻塞 reject
-    const rmReject = gitWorktreeRemove(repo, worktreePath(input.baseDir, branch));
+    const rmReject = gitWorktreeUnregister(repo, worktreePath(input.baseDir, branch));
     if (!rmReject.ok) {
       // eslint-disable-next-line no-console
       console.warn(

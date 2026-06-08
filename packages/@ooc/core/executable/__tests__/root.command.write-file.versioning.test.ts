@@ -79,7 +79,7 @@ function mainObjectsDir(baseDir: string): string {
 
 describe("write_file stone-versioning routing", () => {
   // worktree 统一模型：业务 session（sessionId="s"）对**自己 stone 自治区**的写
-  // 不再即时 commit→main，而是落该 session 的 worktree（`stones/session-s/objects/<id>/`）；
+  // 不再即时 commit→main，而是落该 session 的 worktree（方案 A：`flows/s/objects/<id>/`）；
   // main 不变，经 super flow evolve_self 合入才永久。下面 self-scope 测试断言 worktree 重定向。
   test("self-scope（业务 session）: 写 stones/<self>/self.md → 落 worktree，main 不变", async () => {
     const baseDir = await newWorld(["agent_of_x"]);
@@ -93,9 +93,9 @@ describe("write_file stone-versioning routing", () => {
     expect(typeof out).toBe("object");
     if (typeof out === "object" && out && out.ok === true && "object" in out) {
       expect(out.object.type).toBe("file");
-      // window 指向 worktree 物理落点
+      // window 指向 worktree 物理落点（方案 A：flows/s/objects/...）
       expect((out.object as unknown as { path: string }).path).toContain(
-        join("stones", "session-s", "objects", "agent_of_x", "self.md"),
+        join("flows", "s", "objects", "agent_of_x", "self.md"),
       );
     } else {
       throw new Error(`expected success constructor outcome, got ${JSON.stringify(out)}`);
@@ -103,7 +103,7 @@ describe("write_file stone-versioning routing", () => {
 
     // worktree 文件写入新内容
     const onWorktree = await readFile(
-      join(baseDir, "stones", "session-s", "objects", "agent_of_x", "self.md"),
+      join(baseDir, "flows", "s", "objects", "agent_of_x", "self.md"),
       "utf8",
     );
     expect(onWorktree).toBe("agent_of_x v2 via write_file\n");
@@ -130,7 +130,7 @@ describe("write_file stone-versioning routing", () => {
     const out = await executeWriteFileMethod(ctx);
     expect(typeof out === "object" && out !== null && out !== undefined && out.ok === true).toBe(true);
     const onWorktree = await readFile(
-      join(baseDir, "stones", "session-s", "objects", "agent_of_x", "server", "index.ts"),
+      join(baseDir, "flows", "s", "objects", "agent_of_x", "server", "index.ts"),
       "utf8",
     );
     expect(onWorktree).toBe("export const methods = {};\n");
@@ -211,9 +211,10 @@ describe("write_file stone-versioning routing", () => {
   test("stones-world: 写 stones/main/ 根下非 objects/ 资源 → fail-loud，不静默直写", async () => {
     const baseDir = await newWorld(["agent_of_x"]);
     const ctx = ctxFor(baseDir, "agent_of_x", {
-      // 显式 main/ 前缀 → resolveSessionPath 不再注入 objects/，落在 stones/main/ 根
-      path: "stones/main/.gitignore",
-      content: "node_modules\n",
+      // 显式 main/ 前缀 → resolveSessionPath 不再注入 objects/，落在 stones/main/ 根。
+      // 用 README.md（非 bootstrap 产物；.gitignore 现由 bootstrap 在 main 根落，不能复用）。
+      path: "stones/main/README.md",
+      content: "workspace doc\n",
     });
     const out = await executeWriteFileMethod(ctx);
     expect(typeof out).toBe("object");
@@ -225,7 +226,7 @@ describe("write_file stone-versioning routing", () => {
 
     // 没有静默直写：fail-loud 应当不创建该文件
     await expect(
-      readFile(join(baseDir, "stones", "main", ".gitignore"), "utf8"),
+      readFile(join(baseDir, "stones", "main", "README.md"), "utf8"),
     ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
@@ -289,9 +290,9 @@ describe("write_file stone-versioning routing", () => {
       throw new Error(`expected success constructor outcome, got ${JSON.stringify(out)}`);
     }
 
-    // worktree 落点：stones/session-s/objects/parent/children/child/self.md
+    // worktree 落点（方案 A）：flows/s/objects/parent/children/child/self.md
     const onWorktree = await readFile(
-      join(baseDir, "stones", "session-s", "objects", "parent", "children", "child", "self.md"),
+      join(baseDir, "flows", "s", "objects", "parent", "children", "child", "self.md"),
       "utf8",
     );
     expect(onWorktree).toBe("child v2 via write_file\n");

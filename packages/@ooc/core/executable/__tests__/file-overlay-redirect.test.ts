@@ -69,9 +69,9 @@ function mainObjectsDir(baseDir: string): string {
   return join(baseDir, "stones", "main", "objects");
 }
 
-/** session worktree 内某 object 的目录：`stones/session-<sid>/objects/<id>`。 */
+/** session worktree 内某 object 的目录：`flows/<sid>/objects/<id>`（方案 A，2026-06-09）。 */
 function worktreeObjDir(baseDir: string, sessionId: string, objectId: string): string {
-  return join(baseDir, "stones", `session-${sessionId}`, "objects", objectId);
+  return join(baseDir, "flows", sessionId, "objects", objectId);
 }
 
 function asFileWindow(out: unknown): FileWindow {

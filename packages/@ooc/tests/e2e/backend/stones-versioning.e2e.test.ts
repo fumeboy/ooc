@@ -12,7 +12,7 @@
  * 不依赖真 LLM，直接调 method exec（绕过 LLM 解析）；fixture 用 mkdtemp 的干净 world。
  */
 
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -137,11 +137,9 @@ describe("e2e: AE1 self-scope ff merge（write_file → evolve_self）", () => {
     expect(merged.ok).toBe(true);
     expect(merged.kind).toBe("merged");
 
-    // 3. main 上 self.md 是 v2，worktree 已 GC
+    // 3. main 上 self.md 是 v2；session worktree 身份解除（.git link 删）、运行时目录保留（对话不随 evolve 丢失）
     expect(await readFile(join(baseDir, "stones", "main", "objects", "agent_of_x", "self.md"), "utf8")).toBe("v2\n");
-    await expect(readFile(join(baseDir, "stones", "session-s1", "objects", "agent_of_x", "self.md"), "utf8")).rejects.toMatchObject({
-      code: "ENOENT",
-    });
+    await expect(stat(join(baseDir, "flows", "s1", ".git"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
 

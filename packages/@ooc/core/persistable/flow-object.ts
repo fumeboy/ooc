@@ -66,7 +66,14 @@ export function sessionMetadataFile(baseDir: string, sessionId: string): string 
   return join(sessionDir(baseDir, sessionId), ".session.json");
 }
 
-/** 创建 flow session 根目录并写入 `.session.json`。 */
+/**
+ * 创建 flow session 根目录并写入 `.session.json`。
+ *
+ * 方案 A（2026-06-09）：business session 的 `flows/<sid>` 由调用方先经
+ * `ensureSessionWorktree` eager 建成 git worktree（空目录要求），本函数的 `mkdir recursive`
+ * 此时对已存在的 worktree 目录幂等 no-op，只补写 `.session.json`（运行时数据，被 .gitignore
+ * 排除）。super / 无 worktree 的 session 走普通 mkdir。
+ */
 export async function createFlowSession(baseDir: string, sessionId: string, title?: string): Promise<void> {
   await mkdir(sessionDir(baseDir, sessionId), { recursive: true });
   const metadata: FlowSessionMetadata = {

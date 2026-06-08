@@ -124,9 +124,10 @@ describe("evolve_self (P3)", () => {
     // git commit 署名 = alice（非 bootstrap/supervisor）
     expect(gitLastAuthor(baseDir)).toBe("alice");
 
-    // worktree 已 GC（merge 后移除目录）
+    // worktree 身份解除（.git link 删），flows/s1 运行时目录保留——方案 A 物理合一，对话不丢
+    expect((await stat(join(baseDir, "flows", "s1"))).isDirectory()).toBe(true);
     await expect(
-      stat(join(baseDir, "stones", "session-s1")),
+      stat(join(baseDir, "flows", "s1", ".git")),
     ).rejects.toMatchObject({ code: "ENOENT" });
 
     // 4. 新 session（s2，无 worktree）读 canonical main → 新身份

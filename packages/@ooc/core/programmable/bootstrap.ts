@@ -41,6 +41,16 @@ const BOOTSTRAP_AUTHOR_NAME = "bootstrap";
 const BOOTSTRAP_AUTHOR_EMAIL = "bootstrap@ooc.local";
 const BOOTSTRAP_COMMIT_MESSAGE = "chore(bootstrap): import existing stones/";
 
+/**
+ * main 分支根的 .gitignore 内容（方案 A，2026-06-09）。
+ *
+ * session worktree（`flows/<sid>`）从 main checkout 时继承它：白名单 `objects/`
+ * （tracked stone 文件），排除其余顶层运行时产物（`flows/<sid>/<objectId>` 运行时目录、
+ * `.session.json` / `.flow.json` / `threads/` …）。让 `git status` / evolve diff 只看见
+ * `objects/` 改动，不被运行时数据污染。`.gitignore` 自身保留 tracked。
+ */
+const STONE_MAIN_GITIGNORE = "/*\n!/objects/\n!/.gitignore\n";
+
 /** 保留目录名，迁移时不会被搬到 main/ 下。 */
 const RESERVED_TOP_LEVEL = new Set([STONES_MAIN_BRANCH, STONES_BARE_REPO_DIR, ".git", ".gitignore"]);
 
@@ -135,11 +145,13 @@ async function createBareRepoWithMainWorktree(opts: {
     throw new Error(`git clone failed: ${new TextDecoder().decode(clone.stderr ?? new Uint8Array())}`);
   }
 
-  // 写 .gitkeep 占位（main worktree 初始需要至少一个 commit）
-  const gitkeepPath = join(scratchDir, ".gitkeep");
-  await Bun.write(gitkeepPath, "");
+  // 写 main 根 .gitignore（方案 A）：session worktree 从 main checkout 继承它，把
+  // flows/<sid> 下运行时产物排除出 git，只 track objects/。随初始 commit 落入 main——
+  // 它本身白名单（`!/.gitignore`）也是初始 commit 的内容载体，无需额外 .gitkeep 占位
+  //（`.gitkeep` 会被 `/*` 规则忽略，git add 反而失败）。
+  await Bun.write(join(scratchDir, ".gitignore"), STONE_MAIN_GITIGNORE);
 
-  const add = Bun.spawnSync(["git", "add", ".gitkeep"], {
+  const add = Bun.spawnSync(["git", "add", ".gitignore"], {
     cwd: scratchDir,
     stdout: "pipe",
     stderr: "pipe",
@@ -202,6 +214,44 @@ async function createBareRepoWithMainWorktree(opts: {
   }
 
   return commitSha;
+}
+
+/**
+ * 幂等确保 main 分支根有 .gitignore（方案 A）。
+ *
+ * 已有 .gitignore → 不动（避免覆盖人工/演化改动）；缺失则写入白名单内容并 commit 到 main。
+ * 服务于本次迁移前已 bootstrap 的旧 world（其初始 commit 没带 .gitignore）。
+ * best-effort：写/commit 失败不抛（不阻塞启动），但 warn 让运维知情。
+ */
+async function ensureMainGitignore(mainDir: string): Promise<void> {
+  const gitignorePath = join(mainDir, ".gitignore");
+  if (existsSync(gitignorePath)) return;
+  try {
+    await Bun.write(gitignorePath, STONE_MAIN_GITIGNORE);
+    const add = Bun.spawnSync(["git", "add", ".gitignore"], { cwd: mainDir, stdout: "pipe", stderr: "pipe" });
+    if (add.exitCode !== 0) {
+      console.warn(`[bootstrap] ensureMainGitignore git add failed: ${new TextDecoder().decode(add.stderr ?? new Uint8Array())}`);
+      return;
+    }
+    const commit = Bun.spawnSync(
+      [
+        "git",
+        "-c",
+        `user.name=${BOOTSTRAP_AUTHOR_NAME}`,
+        "-c",
+        `user.email=${BOOTSTRAP_AUTHOR_EMAIL}`,
+        "commit",
+        "-m",
+        "chore(bootstrap): add main .gitignore (whitelist objects/)",
+      ],
+      { cwd: mainDir, stdout: "pipe", stderr: "pipe" },
+    );
+    if (commit.exitCode !== 0) {
+      console.warn(`[bootstrap] ensureMainGitignore git commit failed: ${new TextDecoder().decode(commit.stderr ?? new Uint8Array())}`);
+    }
+  } catch (err) {
+    console.warn(`[bootstrap] ensureMainGitignore failed: ${(err as Error).message}`);
+  }
 }
 
 /**
@@ -362,6 +412,9 @@ export async function ensureStoneRepo(opts: { baseDir: string }): Promise<Ensure
       }
     }
   }
+
+  // 幂等确保 main 根 .gitignore 存在（新 bootstrap 的初始 commit 已带；旧 world 在此补齐）。
+  await ensureMainGitignore(mainDir);
 
   return { initialized, migrated, bootstrapCommit, layout: "bare" };
 }

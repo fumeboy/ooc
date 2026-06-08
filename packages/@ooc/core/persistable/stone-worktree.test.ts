@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { ensureStoneRepo, createStoneObject, writeSelf } from "@ooc/core/persistable";
 import {
   resolveStoneIdentityDir,
-  sessionStoneBranch,
   sessionUsesWorktree,
   ensureSessionWorktree,
 } from "./stone-worktree";
@@ -70,10 +69,11 @@ describe("stone-worktree", () => {
         { baseDir, sessionId: "s1", objectId: "assistant" },
         "write",
       );
-      expect(wtDir).toContain(join("stones", sessionStoneBranch("s1"), "objects", "assistant"));
+      // 方案 A（2026-06-09）：worktree 物理落 flows/<sid>（branch 名仍 session-<sid>，解耦）。
+      expect(wtDir).toContain(join("flows", "s1", "objects", "assistant"));
 
-      // worktree 分支目录已物理建出（从 main 完整 checkout）
-      const wtRoot = join(baseDir, "stones", sessionStoneBranch("s1"));
+      // worktree 目录已物理建出（从 main 完整 checkout，物理在 flows/<sid>）
+      const wtRoot = join(baseDir, "flows", "s1");
       expect((await stat(wtRoot)).isDirectory()).toBe(true);
 
       // worktree 是 main 的完整副本：main 已 commit 的 self.md 在 worktree 内可裸读

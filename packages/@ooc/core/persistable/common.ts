@@ -41,6 +41,13 @@ export const STONES_MAIN_BRANCH = "main";
 export const STONES_BARE_REPO_DIR = ".stones_repo";
 
 /**
+ * business session 的 stone 分支名前缀：branch = `session-<sid>`（git branch 名，与物理
+ * worktree 路径 `flows/<sid>` 解耦）。canonical 源放本文件，供 stoneDir 路由与
+ * stone-worktree 的 sessionStoneBranch 共用，避免前缀字面量分散两处漂移。
+ */
+export const SESSION_BRANCH_PREFIX = "session-";
+
+/**
  * 计算 flow object 目录绝对路径。objectId 中的 "/" 被翻译为 children/ 嵌套
  * （与 stoneDir 对称；详见 nestedObjectPath）。
  */
@@ -71,6 +78,20 @@ export function threadDir(ref: ThreadPersistenceRef): string {
  */
 export function stoneDir(ref: StoneObjectRef): string {
   if (ref._stonesBranch != null) {
+    // session worktree（branch `session-<sid>`）物理落 `flows/<sid>`（方案 A，2026-06-09）——
+    // 与 sessionWorktreePath 对齐。worktree 内 tracked stone 仍在 `objects/` 子目录下，与
+    // 运行时数据（objectDir：flows/<sid>/<objectId>，无 objects/ 前缀）顶层不冲突。
+    // 其他 _stonesBranch（metaprog 去除后理论不再有，防御保留）仍走 `stones/<branch>/`。
+    if (ref._stonesBranch.startsWith(SESSION_BRANCH_PREFIX)) {
+      const sid = ref._stonesBranch.slice(SESSION_BRANCH_PREFIX.length);
+      return join(
+        ref.baseDir,
+        "flows",
+        sid,
+        STONE_OBJECTS_SUBDIR,
+        ...nestedObjectPath(ref.objectId),
+      );
+    }
     return join(
       ref.baseDir,
       "stones",

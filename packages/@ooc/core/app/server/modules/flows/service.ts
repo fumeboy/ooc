@@ -1,6 +1,7 @@
 import {
   createFlowObject,
   createFlowSession,
+  ensureSessionWorktree,
   objectDir,
   readThread,
   threadDir,
@@ -323,6 +324,22 @@ export function createFlowsService(deps: {
     }
   }
 
+  /**
+   * business session 创建入口：eager 建 session worktree（`flows/<sid>` = 从 main 派生的
+   * git worktree，方案 A 2026-06-09）。**必须在写任何运行时数据（.session.json / threads/）
+   * 前调用**——`git worktree add` 要求目标空目录。失败 → fail-loud（决策 4），不静默回退。
+   */
+  async function eagerEnsureSessionWorktree(sessionId: string): Promise<void> {
+    const ok = await ensureSessionWorktree(deps.baseDir, sessionId);
+    if (!ok) {
+      throw new AppServerError(
+        "INTERNAL_ERROR",
+        `failed to create session worktree for '${sessionId}' (git worktree add flows/${sessionId} failed); session not created`,
+        { sessionId },
+      );
+    }
+  }
+
   return {
     async listFlows() {
       const flowsDir = join(deps.baseDir, "flows");
@@ -352,6 +369,8 @@ export function createFlowsService(deps: {
     },
     async createSession({ sessionId, title }: { sessionId: string; title?: string }) {
       assertNotSuperSessionId(sessionId);
+      // 先 eager 建 worktree（空目录要求）再写 .session.json（运行时数据）。
+      await eagerEnsureSessionWorktree(sessionId);
       await createFlowSession(deps.baseDir, sessionId, title);
       return {
         sessionId,
@@ -403,7 +422,8 @@ export function createFlowsService(deps: {
         throw new AppServerError("INVALID_INPUT", "initialMessage is required");
       }
 
-      // 1) session
+      // 1) session —— 先 eager 建 worktree（空目录要求）再写运行时数据
+      await eagerEnsureSessionWorktree(sessionId);
       await createFlowSession(deps.baseDir, sessionId, title);
 
       // 2) user flow object + user.root thread + 指向 target 的 talk_window
